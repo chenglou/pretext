@@ -12,7 +12,7 @@
   },
   "scripts": {
     "check": "tsc && oxlint --type-aware src",
-    "serve": "bun pages/demo.html pages/accuracy.html pages/benchmark.html pages/interleaving.html"
+    "start": "bun pages/*.html"
   },
   "dependencies": {
     "harfbuzzjs": "^0.10.0"

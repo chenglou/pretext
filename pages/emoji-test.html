@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Emoji Width: Canvas vs DOM</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: system-ui; background: #0a0a0a; color: #e0e0e0; padding: 24px; }
+  h1 { font-size: 20px; margin-bottom: 16px; }
+  #output { font: 13px "SF Mono", monospace; white-space: pre-wrap; background: #111; border: 1px solid #222; border-radius: 8px; padding: 16px; }
+  .match { color: #81c784; }
+  .mismatch { color: #ef5350; }
+</style>
+</head>
+<body>
+<h1>Emoji Width: Canvas vs DOM Sweep</h1>
+<div id="output">Running...</div>
+<script>
+const emoji = [
+  // Basic smileys
+  '😀','😂','🥲','😍','🤔','😴','🤯','🥳',
+  // Hand gestures
+  '👍','👎','👏','🤝','✌️','🤞','🫶',
+  // People
+  '👶','👦','👩','👴','🧑‍💻','👨‍👩‍👧‍👦','🧑‍🤝‍🧑',
+  // Animals
+  '🦊','🐕','🐱','🦁','🐘','🦋','🐍',
+  // Nature
+  '🌸','🌍','⭐','🔥','💧','❄️','🌈',
+  // Food
+  '🍎','🍕','🍣','🧁','☕','🍺',
+  // Objects
+  '🏠','🚀','🎯','💡','📱','🔑','💎',
+  // Flags
+  '🇺🇸','🇯🇵','🇫🇷','🇩🇪','🇨🇳','🇧🇷',
+  // Skin tone variants
+  '👍🏻','👍🏽','👍🏿',
+  // ZWJ sequences
+  '👨‍💻','👩‍🔬','🏳️‍🌈','🏴‍☠️',
+  // Keycap
+  '#️⃣','1️⃣','*️⃣',
+  // Misc
+  '©️','®️','™️','♻️','⚠️','❌','✅','❤️','💔',
+];
+
+const sizes = [10, 12, 14, 15, 16, 18, 20, 24, 28, 32];
+const font = '"Helvetica Neue", Helvetica, Arial, sans-serif';
+
+const canvas = new OffscreenCanvas(1, 1);
+const ctx = canvas.getContext('2d');
+
+const container = document.createElement('div');
+container.style.cssText = 'position:absolute;top:-9999px;visibility:hidden;white-space:nowrap';
+document.body.appendChild(container);
+
+let out = '';
+let totalTests = 0;
+let totalMismatch = 0;
+const uniqueDiffs = new Map(); // diff → count
+
+for (const sz of sizes) {
+  ctx.font = `${sz}px ${font}`;
+  let mismatches = 0;
+  const details = [];
+
+  // Batch: create all spans
+  const spans = [];
+  for (const e of emoji) {
+    const span = document.createElement('span');
+    span.style.font = `${sz}px ${font}`;
+    span.style.display = 'inline-block';
+    span.textContent = e;
+    container.appendChild(span);
+    spans.push(span);
+  }
+
+  // Read all
+  for (let i = 0; i < emoji.length; i++) {
+    const canvasW = ctx.measureText(emoji[i]).width;
+    const domW = spans[i].getBoundingClientRect().width;
+    const diff = canvasW - domW;
+    totalTests++;
+
+    if (Math.abs(diff) >= 0.5) {
+      mismatches++;
+      totalMismatch++;
+      const key = `${diff.toFixed(1)}@${sz}px`;
+      uniqueDiffs.set(key, (uniqueDiffs.get(key) || 0) + 1);
+      details.push(`  ${emoji[i].padEnd(6)} canvas=${canvasW.toFixed(1)} dom=${domW.toFixed(1)} diff=${diff > 0 ? '+' : ''}${diff.toFixed(1)}`);
+    }
+  }
+
+  container.innerHTML = '';
+
+  const cls = mismatches === 0 ? 'match' : 'mismatch';
+  out += `<span class="${cls}">${sz}px: ${emoji.length - mismatches}/${emoji.length} match</span>`;
+  if (mismatches > 0) {
+    out += ` (${mismatches} mismatch)\n`;
+    // Show unique diff values for this size
+    const diffSet = new Set(details.map(d => d.match(/diff=([^\s]+)/)?.[1]));
+    out += `  unique diffs: ${[...diffSet].join(', ')}\n`;
+    // Show first few
+    for (const d of details.slice(0, 5)) out += d + '\n';
+    if (details.length > 5) out += `  ... and ${details.length - 5} more\n`;
+  }
+  out += '\n';
+}
+
+out += `\nTotal: ${totalTests - totalMismatch}/${totalTests} match\n\n`;
+out += 'Unique diff values across all sizes:\n';
+for (const [key, count] of [...uniqueDiffs].sort()) {
+  out += `  ${key}: ${count} emoji\n`;
+}
+
+document.body.removeChild(container);
+document.getElementById('output').innerHTML = out;
+</script>
+</body>
+</html>

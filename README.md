@@ -62,12 +62,9 @@ const { height, lineCount } = layout(block, containerWidth)
 5. **Bidi classification**: characters are classified into bidi types, embedding levels are computed. Pure LTR text skips this entirely.
 6. **Layout** (per resize): walk the cached widths, accumulate per line, break when exceeding `maxWidth`. Trailing whitespace hangs past the edge (CSS behavior). Punctuation overflow triggers break before the last word. Segments wider than `maxWidth` are broken at grapheme boundaries. Bidi reordering is applied per completed line.
 
-## What we tried and rejected
+## Research
 
-- **Full-line `measureText()` in layout**: measures the candidate line as a single string on every word addition. Pixel-perfect but 250-1000x slower (27-136ms for 500 comments) due to O(n²) string concatenation. Actually less accurate than word-by-word in practice.
-- **DOM-based measurement in `prepare()`**: measures words via hidden `<span>` elements instead of canvas. Guarantees font resolution matches rendering. But reintroduces DOM read/write interleaving — the exact problem this library exists to solve.
-- **SVG `getComputedTextLength()`**: still a DOM read, no auto-wrapping. Strictly worse than canvas for our use case.
-- **`@napi-rs/canvas` server-side**: works for Latin text but gives wrong metrics for CJK/emoji without explicit font registration. Different font engine than the browser — measurements won't match.
+See [RESEARCH.md](RESEARCH.md) for the full exploration log: every approach we tried, benchmarks, the system-ui font discovery, punctuation accumulation error analysis, emoji width tables, HarfBuzz RTL bug, server-side engine comparison, and what Sebastian already knew.
 
 ## Credits
 
@@ -77,7 +74,7 @@ Based on [Sebastian Markbage's text-layout](https://github.com/reactjs/text-layo
 
 ```bash
 bun install
-bun run serve    # http://localhost:3000 — demo pages
+bun start        # http://localhost:3000 — demo pages
 bun run check    # typecheck + lint
 bun test         # headless accuracy tests (HarfBuzz)
 ```
