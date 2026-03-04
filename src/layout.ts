@@ -366,7 +366,6 @@ export function prepare(text: string, font: string, lineHeight?: number): Prepar
   const emojiCanvasW = ctx.measureText('\u{1F600}').width
   const emojiCorrection = emojiCanvasW > fontSize + 0.5 ? emojiCanvasW - fontSize : 0
 
-  const segmenter = sharedWordSegmenter
   // CSS white-space: normal collapses newlines to spaces. For pre-wrap behavior,
   // callers should split on \n and prepare each paragraph separately.
   const normalized = text.replace(/\n/g, ' ')
@@ -375,9 +374,7 @@ export function prepare(text: string, font: string, lineHeight?: number): Prepar
     return { paraData: [], lineHeight }
   }
 
-  // Reuse a single grapheme segmenter (construction is cheap but no need to repeat)
-  const graphemeSegmenter = sharedGraphemeSegmenter
-  const segments = segmenter.segment(normalized)
+  const segments = sharedWordSegmenter.segment(normalized)
   const widths: number[] = []
   const isWordLike: boolean[] = []
   const isSpace: boolean[] = []
@@ -405,13 +402,14 @@ export function prepare(text: string, font: string, lineHeight?: number): Prepar
     }
   }
 
-  for (const seg of merged) {
+  for (let mi = 0; mi < merged.length; mi++) {
+    const seg = merged[mi]!
     if (seg.isWordLike && isCJK(seg.text)) {
       // Split CJK words into individual graphemes for per-character line breaks,
       // but apply kinsoku shori: merge line-start prohibited chars (，。etc.)
       // with the preceding grapheme, and line-end prohibited chars (（「etc.)
       // with the following grapheme. This prevents them from being separated.
-      const graphemes = [...graphemeSegmenter.segment(seg.text)]
+      const graphemes = [...sharedGraphemeSegmenter.segment(seg.text)]
       const units: { text: string, start: number }[] = []
       for (let gi = 0; gi < graphemes.length; gi++) {
         const g = graphemes[gi]!.segment
@@ -426,7 +424,8 @@ export function prepare(text: string, font: string, lineHeight?: number): Prepar
           units.push({ text: g, start: graphemes[gi]!.index })
         }
       }
-      for (const u of units) {
+      for (let ui = 0; ui < units.length; ui++) {
+        const u = units[ui]!
         let w = measureSegment(u.text, cache)
         if (emojiCorrection > 0 && isEmojiGrapheme(u.text)) {
           w -= emojiCorrection
@@ -440,7 +439,7 @@ export function prepare(text: string, font: string, lineHeight?: number): Prepar
     } else {
       let w = measureSegment(seg.text, cache)
       if (emojiCorrection > 0 && emojiPresentationRe.test(seg.text)) {
-        const ec = countEmojiGraphemes(seg.text, graphemeSegmenter)
+        const ec = countEmojiGraphemes(seg.text, sharedGraphemeSegmenter)
         w -= ec * emojiCorrection
       }
       widths.push(w)
@@ -448,7 +447,7 @@ export function prepare(text: string, font: string, lineHeight?: number): Prepar
       isSpace.push(seg.isSpace)
       segStarts.push(seg.start)
       if (seg.isWordLike && seg.text.length > 1) {
-        const graphemes = [...graphemeSegmenter.segment(seg.text)]
+        const graphemes = [...sharedGraphemeSegmenter.segment(seg.text)]
         if (graphemes.length > 1) {
           const gWidths = new Array<number>(graphemes.length)
           for (let gi = 0; gi < graphemes.length; gi++) {

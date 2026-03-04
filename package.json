@@ -12,7 +12,7 @@
   },
   "scripts": {
     "check": "tsc && oxlint --type-aware src",
-    "start": "bun pages/*.html"
+    "start": "bun --no-hmr pages/*.html"
   },
   "dependencies": {
     "harfbuzzjs": "^0.10.0"

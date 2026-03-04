@@ -33,6 +33,8 @@ Sebastian's 30ms breakdown:
 - Safari: createRunList 1ms + breakLine 27ms
 - The measurement calls dominate. Word-width caching eliminates them on resize.
 
+CJK scaling: prepare() cost scales linearly with segment count (~1 segment per CJK character vs ~1 per word for Latin). See `/benchmark` page for live numbers.
+
 ## Approach 2 (rejected): Full-line measureText in layout
 
 Instead of summing cached word widths, measure the full candidate line as a single string during layout. Should be pixel-perfect since it captures inter-word kerning.

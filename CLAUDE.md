@@ -38,6 +38,7 @@ Chrome 99.9%, Safari 98.8%, HarfBuzz 100%. See [README.md](README.md) for detail
 ### TODO
 
 - Locale switch: segmenters are hoisted with the default locale. Expose a function to reinitialize them with a new locale without requiring a page refresh (e.g. `setLocale('ja')`). Should also clear the word cache since segmentation boundaries change per locale.
+- Latin fast path: ASCII-only text (`/^[\x20-\x7E]+$/`) could skip CJK check, kinsoku, bidi, and emoji correction. Most comment feeds are >90% ASCII.
 - Benchmark page: measurement methodology needs review (visible vs hidden containers, prepare cold vs warm).
 - Demo page: visual side-by-side comparison of library vs DOM rendering.
 - Interleaving page: realistic DOM interleaving demo.
