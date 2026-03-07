@@ -1,4 +1,10 @@
-import { prepare, layout, clearCache } from '../src/layout.ts'
+import {
+  clearCache,
+  layout,
+  layoutWithLines,
+  prepareWithSegments,
+  type PreparedTextWithSegments,
+} from '../src/layout.ts'
 import { TEXTS, SIZES, WIDTHS } from '../src/test-data.ts'
 
 const FONTS = [
@@ -19,6 +25,69 @@ type Mismatch = {
   diagnostic?: string
 }
 
+const diagnosticGraphemeSegmenter = new Intl.Segmenter(undefined, { granularity: 'grapheme' })
+
+type DiagnosticUnit = {
+  text: string
+  start: number
+  end: number
+}
+
+function getDiagnosticUnits(prepared: PreparedTextWithSegments): DiagnosticUnit[] {
+  const units: DiagnosticUnit[] = []
+  let offset = 0
+
+  for (let i = 0; i < prepared.segments.length; i++) {
+    const segText = prepared.segments[i]!
+    if (prepared.breakableWidths[i] !== null) {
+      let localOffset = 0
+      for (const g of diagnosticGraphemeSegmenter.segment(segText)) {
+        const start = offset + localOffset
+        localOffset += g.segment.length
+        units.push({ text: g.segment, start, end: offset + localOffset })
+      }
+    } else {
+      units.push({ text: segText, start: offset, end: offset + segText.length })
+    }
+    offset += segText.length
+  }
+
+  return units
+}
+
+function getBrowserLines(
+  prepared: PreparedTextWithSegments,
+  div: HTMLDivElement,
+): string[] {
+  const textNode = div.firstChild
+  if (!(textNode instanceof Text)) return []
+
+  const units = getDiagnosticUnits(prepared)
+  const range = document.createRange()
+  const browserLines: string[] = []
+  let currentLine = ''
+  let lastTop: number | null = null
+
+  for (const unit of units) {
+    range.setStart(textNode, unit.start)
+    range.setEnd(textNode, unit.end)
+    const rects = range.getClientRects()
+    const rectTop: number | null = rects.length > 0 ? rects[0]!.top : lastTop
+
+    if (rectTop !== null && lastTop !== null && rectTop > lastTop + 0.5) {
+      browserLines.push(currentLine)
+      currentLine = unit.text
+    } else {
+      currentLine += unit.text
+    }
+
+    if (rectTop !== null) lastTop = rectTop
+  }
+
+  if (currentLine) browserLines.push(currentLine)
+  return browserLines
+}
+
 function runSweep(): { total: number, mismatches: Mismatch[] } {
   const container = document.createElement('div')
   container.style.cssText = 'position:absolute;top:-9999px;left:-9999px;visibility:hidden'
@@ -35,7 +104,7 @@ function runSweep(): { total: number, mismatches: Mismatch[] } {
 
       for (const maxWidth of WIDTHS) {
         const divs: HTMLDivElement[] = []
-        const prepared: ReturnType<typeof prepare>[] = []
+        const prepared: PreparedTextWithSegments[] = []
 
         for (const { text } of TEXTS) {
           const div = document.createElement('div')
@@ -47,7 +116,7 @@ function runSweep(): { total: number, mismatches: Mismatch[] } {
           div.textContent = text
           container.appendChild(div)
           divs.push(div)
-          prepared.push(prepare(text, font, lineHeight))
+          prepared.push(prepareWithSegments(text, font, lineHeight))
         }
 
         for (let i = 0; i < TEXTS.length; i++) {
@@ -56,70 +125,20 @@ function runSweep(): { total: number, mismatches: Mismatch[] } {
           const predicted = layout(prepared[i]!, maxWidth).height
           total++
           if (Math.abs(actual - predicted) >= 1) {
-            // Diagnose: detect where the browser actually breaks lines
-            // by wrapping each word in a span and comparing offsetTop
-            const diagDiv = document.createElement('div')
-            diagDiv.style.font = font
-            diagDiv.style.lineHeight = `${lineHeight}px`
-            diagDiv.style.width = `${maxWidth}px`
-            diagDiv.style.wordWrap = 'break-word'
-            diagDiv.style.overflowWrap = 'break-word'
-
-            const normalized = text.replace(/\n/g, ' ')
-            const segmenter = new Intl.Segmenter(undefined, { granularity: 'word' })
-            const segs = [...segmenter.segment(normalized)]
-            for (const seg of segs) {
-              const span = document.createElement('span')
-              span.textContent = seg.segment
-              diagDiv.appendChild(span)
-            }
-            container.appendChild(diagDiv)
-
-            // Read offsetTops to detect browser line breaks
-            const spans = diagDiv.querySelectorAll('span')
-            const browserLines: string[] = []
-            let currentLine = ''
-            let lastTop = -1
-            for (let si = 0; si < spans.length; si++) {
-              const top = spans[si]!.offsetTop
-              if (lastTop >= 0 && top > lastTop) {
-                browserLines.push(currentLine)
-                currentLine = spans[si]!.textContent ?? ''
-              } else {
-                currentLine += spans[si]!.textContent ?? ''
-              }
-              lastTop = top
-            }
-            if (currentLine) browserLines.push(currentLine)
-            container.removeChild(diagDiv)
-
-            // Build our algorithm's lines for comparison
-            const diagCtx = (new OffscreenCanvas(1,1)).getContext('2d')!
-            diagCtx.font = font
-            let diagLine = ''
-            const ourLines: string[] = []
-            for (const seg of segs) {
-              const candidate = diagLine + seg.segment
-              if (diagLine && diagCtx.measureText(candidate).width > maxWidth && (seg.isWordLike ?? false)) {
-                ourLines.push(diagLine)
-                diagLine = seg.segment
-              } else {
-                diagLine = candidate
-              }
-            }
-            if (diagLine) ourLines.push(diagLine)
+            const browserLines = getBrowserLines(prepared[i]!, divs[i]!)
+            const ourLayout = layoutWithLines(prepared[i]!, maxWidth)
 
             const lineDetails: string[] = []
-            const maxLines = Math.max(browserLines.length, ourLines.length)
+            const maxLines = Math.max(browserLines.length, ourLayout.lines.length)
             for (let li = 0; li < maxLines; li++) {
-              const ours = (ourLines[li] ?? '').trimEnd()
+              const ours = (ourLayout.lines[li]?.text ?? '').trimEnd()
               const theirs = (browserLines[li] ?? '').trimEnd()
               if (ours !== theirs) {
                 lineDetails.push(`L${li+1} ours="${ours.slice(0,40)}" browser="${theirs.slice(0,40)}"`)
               }
             }
-            if (lineDetails.length === 0 && browserLines.length !== ourLines.length) {
-              lineDetails.push(`ours=${ourLines.length}L browser=${browserLines.length}L (same content, different count?)`)
+            if (lineDetails.length === 0 && browserLines.length !== ourLayout.lines.length) {
+              lineDetails.push(`ours=${ourLayout.lines.length}L browser=${browserLines.length}L (same content, different count?)`)
             }
 
             mismatches.push({

@@ -340,28 +340,28 @@ export type PreparedText = {
   lineHeight: number
 }
 
+export type PreparedTextWithSegments = PreparedText & {
+  segments: string[]
+}
+
 export type LayoutResult = {
   lineCount: number
   height: number
 }
 
+export type LayoutLine = {
+  text: string
+  width: number
+}
+
+export type LayoutLinesResult = LayoutResult & {
+  lineHeight: number
+  lines: LayoutLine[]
+}
+
 // --- Public API ---
 
-// Prepare text for layout. Segments the text, measures each segment via canvas,
-// and stores the widths for fast relayout at any width. Call once per text block
-// (e.g. when a comment first appears). The result is width-independent — the
-// same PreparedText can be laid out at any maxWidth via layout().
-//
-// Steps:
-//   1. Normalize newlines to spaces (CSS white-space: normal behavior)
-//   2. Segment via Intl.Segmenter (handles CJK, Thai, etc.)
-//   3. Merge punctuation into preceding word ("better." as one unit)
-//   4. Split CJK words into individual graphemes (per-character line breaks)
-//   5. Measure each segment via canvas measureText, cache by (segment, font)
-//   6. Pre-measure graphemes of long words (for overflow-wrap: break-word)
-//   7. Correct emoji canvas inflation (auto-detected per font size)
-//   8. Compute bidi embedding levels for mixed-direction text
-export function prepare(text: string, font: string, lineHeight?: number): PreparedText {
+function prepareInternal(text: string, font: string, lineHeight: number | undefined, includeSegments: boolean): PreparedText | PreparedTextWithSegments {
   ctx.font = font
   const cache = getWordCache(font)
   const fontSize = parseFontSize(font)
@@ -376,6 +376,9 @@ export function prepare(text: string, font: string, lineHeight?: number): Prepar
   const normalized = text.replace(/\n/g, ' ')
 
   if (normalized.length === 0 || normalized.trim().length === 0) {
+    if (includeSegments) {
+      return { widths: [], isSpace: [], segLevels: null, breakableWidths: [], lineHeight, segments: [] }
+    }
     return { widths: [], isSpace: [], segLevels: null, breakableWidths: [], lineHeight }
   }
 
@@ -384,6 +387,7 @@ export function prepare(text: string, font: string, lineHeight?: number): Prepar
   const isSpace: boolean[] = []
   const segStarts: number[] = []
   const breakableWidths: (number[] | null)[] = []
+  const segments = includeSegments ? [] as string[] : null
 
   // Phase 1: merge punctuation into preceding word-like segments.
   // Iterate the segmenter directly — no intermediate array allocation.
@@ -464,6 +468,7 @@ export function prepare(text: string, font: string, lineHeight?: number): Prepar
         isSpace.push(false)
         segStarts.push(segStart + unitStart)
         breakableWidths.push(null)
+        if (segments !== null) segments.push(unitText)
       }
     } else {
       let w = measureSegment(segText, cache)
@@ -490,6 +495,7 @@ export function prepare(text: string, font: string, lineHeight?: number): Prepar
       } else {
         breakableWidths.push(null)
       }
+      if (segments !== null) segments.push(segText)
     }
   }
 
@@ -503,7 +509,34 @@ export function prepare(text: string, font: string, lineHeight?: number): Prepar
     }
   }
 
+  if (segments !== null) {
+    return { widths, isSpace, segLevels, breakableWidths, lineHeight, segments }
+  }
   return { widths, isSpace, segLevels, breakableWidths, lineHeight }
+}
+
+// Prepare text for layout. Segments the text, measures each segment via canvas,
+// and stores the widths for fast relayout at any width. Call once per text block
+// (e.g. when a comment first appears). The result is width-independent — the
+// same PreparedText can be laid out at any maxWidth via layout().
+//
+// Steps:
+//   1. Normalize newlines to spaces (CSS white-space: normal behavior)
+//   2. Segment via Intl.Segmenter (handles CJK, Thai, etc.)
+//   3. Merge punctuation into preceding word ("better." as one unit)
+//   4. Split CJK words into individual graphemes (per-character line breaks)
+//   5. Measure each segment via canvas measureText, cache by (segment, font)
+//   6. Pre-measure graphemes of long words (for overflow-wrap: break-word)
+//   7. Correct emoji canvas inflation (auto-detected per font size)
+//   8. Compute bidi embedding levels for mixed-direction text
+export function prepare(text: string, font: string, lineHeight?: number): PreparedText {
+  return prepareInternal(text, font, lineHeight, false) as PreparedText
+}
+
+// Rich variant used by callers that need enough information to render the
+// laid-out lines themselves.
+export function prepareWithSegments(text: string, font: string, lineHeight?: number): PreparedTextWithSegments {
+  return prepareInternal(text, font, lineHeight, true) as PreparedTextWithSegments
 }
 
 // Layout prepared text at a given max width. Pure arithmetic on cached widths —
@@ -516,7 +549,6 @@ export function prepare(text: string, font: string, lineHeight?: number): Prepar
 //   - Segments wider than maxWidth are broken at grapheme boundaries
 export function layout(prepared: PreparedText, maxWidth: number, lineHeight?: number): LayoutResult {
   if (lineHeight === undefined) lineHeight = prepared.lineHeight
-
   const { widths, isSpace: isSp, breakableWidths } = prepared
   if (widths.length === 0) return { lineCount: 0, height: 0 }
 
@@ -582,6 +614,105 @@ export function layout(prepared: PreparedText, maxWidth: number, lineHeight?: nu
   }
 
   return { lineCount, height: lineCount * lineHeight }
+}
+
+// Rich layout API for callers that want the actual line contents and widths.
+// Mirrors layout()'s break decisions, but keeps extra per-line bookkeeping so it
+// should stay off the resize hot path.
+export function layoutWithLines(prepared: PreparedTextWithSegments, maxWidth: number, lineHeight?: number): LayoutLinesResult {
+  if (lineHeight === undefined) lineHeight = prepared.lineHeight
+  const { widths, isSpace: isSp, breakableWidths, segments } = prepared
+  const lines: LayoutLine[] = []
+  if (widths.length === 0) return { lineCount: 0, height: 0, lineHeight, lines }
+
+  let lineCount = 0
+  let lineW = 0
+  let hasContent = false
+  let currentLine = ''
+
+  function pushCurrentLine(): void {
+    lines.push({ text: currentLine, width: lineW })
+    currentLine = ''
+  }
+
+  function layoutBreakableSegment(segIndex: number, closeExistingLine: boolean): void {
+    const gWidths = breakableWidths[segIndex]!
+    const gTexts: string[] = []
+    let gTextCount = 0
+    for (const gs of sharedGraphemeSegmenter.segment(segments[segIndex]!)) {
+      gTexts[gTextCount] = gs.segment
+      gTextCount++
+    }
+
+    if (closeExistingLine) pushCurrentLine()
+
+    lineW = 0
+    currentLine = ''
+
+    for (let g = 0; g < gWidths.length; g++) {
+      const gw = gWidths[g]!
+      const gText = gTexts[g]!
+
+      if (lineW > 0 && lineW + gw > maxWidth) {
+        pushCurrentLine()
+        lineCount++
+        lineW = gw
+        currentLine = gText
+      } else {
+        if (lineW === 0) {
+          lineCount++
+          lineW = gw
+          currentLine = gText
+        } else {
+          lineW += gw
+          currentLine += gText
+        }
+      }
+    }
+  }
+
+  for (let i = 0; i < widths.length; i++) {
+    const w = widths[i]!
+    const segText = segments[i]!
+
+    if (!hasContent) {
+      if (w > maxWidth && breakableWidths[i] !== null) {
+        layoutBreakableSegment(i, false)
+      } else {
+        lineW = w
+        lineCount++
+        currentLine = segText
+      }
+      hasContent = true
+      continue
+    }
+
+    const newW = lineW + w
+
+    if (newW > maxWidth) {
+      if (isSp[i]) continue
+
+      if (w > maxWidth && breakableWidths[i] !== null) {
+        layoutBreakableSegment(i, true)
+      } else {
+        pushCurrentLine()
+        lineCount++
+        lineW = w
+        currentLine = segText
+      }
+    } else {
+      lineW = newW
+      currentLine += segText
+    }
+  }
+
+  if (!hasContent) {
+    lineCount++
+  } else {
+    pushCurrentLine()
+  }
+
+  return { lineCount, height: lineCount * lineHeight, lineHeight, lines }
 }
 
 export function clearCache(): void {
