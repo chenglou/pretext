@@ -254,7 +254,13 @@ function layoutColumn(
     const bandTop = lineTop
     const bandBottom = lineTop + lineHeight
     const blocked: Interval[] = []
-    for (const obstacle of obstacles) blocked.push(...getObstacleIntervals(obstacle, bandTop, bandBottom))
+    for (let obstacleIndex = 0; obstacleIndex < obstacles.length; obstacleIndex++) {
+      const obstacle = obstacles[obstacleIndex]!
+      const intervals = getObstacleIntervals(obstacle, bandTop, bandBottom)
+      for (let intervalIndex = 0; intervalIndex < intervals.length; intervalIndex++) {
+        blocked.push(intervals[intervalIndex]!)
+      }
+    }
 
     const slots = carveTextLineSlots(
       { left: region.x, right: region.x + region.width },
@@ -265,14 +271,22 @@ function layoutColumn(
       continue
     }
 
-    const slot = slots.reduce((best, candidate) => {
-      const bestWidth = best.right - best.left
+    let slot = slots[0]!
+    for (let slotIndex = 1; slotIndex < slots.length; slotIndex++) {
+      const candidate = slots[slotIndex]!
+      const bestWidth = slot.right - slot.left
       const candidateWidth = candidate.right - candidate.left
-      if (candidateWidth > bestWidth) return candidate
-      if (candidateWidth < bestWidth) return best
-      if (side === 'left') return candidate.left > best.left ? candidate : best
-      return candidate.left < best.left ? candidate : best
-    })
+      if (candidateWidth > bestWidth) {
+        slot = candidate
+        continue
+      }
+      if (candidateWidth < bestWidth) continue
+      if (side === 'left') {
+        if (candidate.left > slot.left) slot = candidate
+        continue
+      }
+      if (candidate.left < slot.left) slot = candidate
+    }
     const width = slot.right - slot.left
     const line = layoutNextLine(prepared, cursor, width)
     if (line === null) break
@@ -310,7 +324,8 @@ function projectHeadlineLines(lines: PositionedLine[], font: string, lineHeight:
     return element
   }, domCache.headline)
 
-  for (const [index, line] of lines.entries()) {
+  for (let index = 0; index < lines.length; index++) {
+    const line = lines[index]!
     const element = domCache.headlineLines[index]!
     element.textContent = line.text
     element.style.left = `${line.x}px`
@@ -321,7 +336,8 @@ function projectHeadlineLines(lines: PositionedLine[], font: string, lineHeight:
 }
 
 function projectBodyLines(lines: PositionedLine[], className: string, font: string, lineHeight: number, startIndex: number): number {
-  for (const [offset, line] of lines.entries()) {
+  for (let offset = 0; offset < lines.length; offset++) {
+    const line = lines[offset]!
     const element = domCache.bodyLines[startIndex + offset]!
     element.className = className
     element.textContent = line.text
@@ -532,11 +548,11 @@ function evaluateLayout(
   )
   const headlineLines = headlineResult.lines
   const headlineRects = headlineLines.map(line => ({
-    x: line.x,
-    y: line.y,
-    width: Math.ceil(line.width),
-    height: layout.headlineLineHeight,
-  }))
+      x: line.x,
+      y: line.y,
+      width: Math.ceil(line.width),
+      height: layout.headlineLineHeight,
+    }))
   const headlineBottom = headlineLines.length === 0
     ? layout.headlineRegion.y
     : Math.max(...headlineLines.map(line => line.y + layout.headlineLineHeight))
@@ -580,7 +596,8 @@ function evaluateLayout(
     creditBlocked,
   )
   let creditLeft = creditRegion.x
-  for (const slot of creditSlots) {
+  for (let index = 0; index < creditSlots.length; index++) {
+    const slot = creditSlots[index]!
     if (slot.right - slot.left >= creditWidth) {
       creditLeft = Math.round(slot.left)
       break

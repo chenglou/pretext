@@ -37,8 +37,8 @@ export function getWrapHull(src: string, options: WrapHullOptions): Promise<Poin
 export function transformWrapPoints(points: Point[], rect: Rect, angle: number): Point[] {
   if (angle === 0) {
     return points.map(point => ({
-      x: rect.x + point.x * rect.width,
-      y: rect.y + point.y * rect.height,
+        x: rect.x + point.x * rect.width,
+        y: rect.y + point.y * rect.height,
     }))
   }
 
@@ -107,7 +107,8 @@ export function getRectIntervalsForBand(
   verticalPadding: number,
 ): Interval[] {
   const intervals: Interval[] = []
-  for (const rect of rects) {
+  for (let index = 0; index < rects.length; index++) {
+    const rect = rects[index]!
     if (bandBottom <= rect.y - verticalPadding || bandTop >= rect.y + rect.height + verticalPadding) continue
     intervals.push({
       left: rect.x - horizontalPadding,
@@ -135,9 +136,11 @@ export function getRectIntervalsForBand(
 export function carveTextLineSlots(base: Interval, blocked: Interval[]): Interval[] {
   let slots: Interval[] = [base]
 
-  for (const interval of blocked) {
+  for (let blockedIndex = 0; blockedIndex < blocked.length; blockedIndex++) {
+    const interval = blocked[blockedIndex]!
     const next: Interval[] = []
-    for (const slot of slots) {
+    for (let slotIndex = 0; slotIndex < slots.length; slotIndex++) {
+      const slot = slots[slotIndex]!
       if (interval.right <= slot.left || interval.left >= slot.right) {
         next.push(slot)
         continue
@@ -202,7 +205,8 @@ async function makeWrapHull(src: string, options: WrapHullOptions): Promise<Poin
   let boundRight = -Infinity
   const boundTop = validRows[0]!
   const boundBottom = validRows[validRows.length - 1]!
-  for (const y of validRows) {
+  for (let index = 0; index < validRows.length; index++) {
+    const y = validRows[index]!
     const left = lefts[y]!
     const right = rights[y]!
     if (left < boundLeft) boundLeft = left
@@ -214,7 +218,8 @@ async function makeWrapHull(src: string, options: WrapHullOptions): Promise<Poin
   const smoothedLefts: number[] = new Array(height).fill(0)
   const smoothedRights: number[] = new Array(height).fill(0)
 
-  for (const y of validRows) {
+  for (let index = 0; index < validRows.length; index++) {
+    const y = validRows[index]!
     let leftSum = 0
     let rightSum = 0
     let count = 0
@@ -258,7 +263,8 @@ async function makeWrapHull(src: string, options: WrapHullOptions): Promise<Poin
   if (sampledRows[sampledRows.length - 1] !== lastRow) sampledRows.push(lastRow)
 
   const points: Point[] = []
-  for (const y of sampledRows) {
+  for (let index = 0; index < sampledRows.length; index++) {
+    const y = sampledRows[index]!
     points.push({
       x: (smoothedLefts[y]! - boundLeft) / boundWidth,
       y: ((y + 0.5) - boundTop) / boundHeight,
@@ -303,7 +309,8 @@ function makeConvexHull(points: Point[]): Point[] {
   if (points.length <= 3) return points
   const sorted = [...points].sort((a, b) => (a.x - b.x) || (a.y - b.y))
   const lower: Point[] = []
-  for (const point of sorted) {
+  for (let index = 0; index < sorted.length; index++) {
+    const point = sorted[index]!
     while (lower.length >= 2 && cross(lower[lower.length - 2]!, lower[lower.length - 1]!, point) <= 0) {
       lower.pop()
     }
