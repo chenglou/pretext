@@ -4,6 +4,8 @@ Pure JavaScript/TypeScript library for text measurement & layout. Fast, accurate
 
 Pretext completely side-steps the need for DOM measurements (e.g. `getBoundingClientRect`, `offsetHeight`), which trigger layout reflow, one of the most expensive operations in the browser. See demos for layout out The Great Gatsby & other international books at >1000fps.
 
+We're using AI to reimplement a subset of the font stack in userland, with the ground truth verifier that is browser rendering!
+
 ## API
 
 You can use Pretext in two distinct ways.
