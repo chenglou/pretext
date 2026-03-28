@@ -268,7 +268,7 @@ export function walkPreparedLines(
   }
 
   function continueSoftHyphenBreakableSegment(segmentIndex: number): boolean {
-    const gWidths = breakableWidths[segmentIndex]!
+    const gWidths = breakableWidths[segmentIndex] ?? null
     if (gWidths === null) return false
     const fitWidths = engineProfile.preferPrefixWidthsForBreakableRuns
       ? breakablePrefixWidths[segmentIndex] ?? gWidths

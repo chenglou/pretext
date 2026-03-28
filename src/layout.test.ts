@@ -406,6 +406,16 @@ describe('layout invariants', () => {
     expect(result.lines.map(line => line.text).join('')).toBe('According to محمد الأحمد, the results improved.')
   })
 
+  test('astral RTL characters produce bidi metadata on the rich path', () => {
+    // U+1E900 Adlam Capital Letter Alif — supplementary-plane RTL script
+    const prepared = prepareWithSegments('Hello \u{1E900}\u{1E922}\u{1E923}\u{1E921}\u{1E924} world', FONT)
+    expect(prepared.segLevels).not.toBeNull()
+
+    const result = layoutWithLines(prepared, 200, LINE_HEIGHT)
+    expect(result.lineCount).toBeGreaterThanOrEqual(1)
+    expect(result.lines.map(line => line.text).join('')).toBe('Hello \u{1E900}\u{1E922}\u{1E923}\u{1E921}\u{1E924} world')
+  })
+
   test('layoutNextLine reproduces layoutWithLines exactly', () => {
     const prepared = prepareWithSegments('foo trans\u00ADatlantic said "hello" to 世界 and waved.', FONT)
     const width = prepared.widths[0]! + prepared.widths[1]! + prepared.widths[2]! + prepared.breakableWidths[4]![0]! + prepared.discretionaryHyphenWidth + 0.1

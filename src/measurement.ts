@@ -249,4 +249,5 @@ export function clearMeasurementCaches(): void {
   sharedGraphemeSegmenter = null
   lastContextFont = null
   warnedFonts.clear()
+  cachedEngineProfile = null
 }
