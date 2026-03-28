@@ -183,7 +183,11 @@ For `prepareWithSegments()`, Pretext computes Unicode Bidirectional Algorithm em
 
 ### Language Coverage
 
-CJK (Chinese, Japanese, Korean, Hangul) — per-grapheme breaking with kinsoku. Arabic, Hebrew, Urdu — correct segmentation, bidi metadata on rich path. Thai, Lao, Khmer, Myanmar — dictionary-based segmentation via `Intl.Segmenter`. Emoji — grapheme-aware with per-font canvas/DOM correction. All of the above mixed freely in a single paragraph.
+- **CJK** (Chinese, Japanese, Korean, Hangul) — per-grapheme breaking with kinsoku
+- **Arabic, Hebrew, Urdu** — correct segmentation, bidi metadata on rich path
+- **Thai, Lao, Khmer, Myanmar** — dictionary-based segmentation via `Intl.Segmenter`
+- **Emoji** — grapheme-aware with per-font canvas/DOM correction
+- All of the above mixed freely in a single paragraph
 
 ## Caveats
 
