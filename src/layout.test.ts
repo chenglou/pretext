@@ -503,6 +503,20 @@ describe('layout invariants', () => {
     expect(layout(largeTabs, width, LINE_HEIGHT).lineCount).toBe(2)
   })
 
+  test('pre-wrap mode treats consecutive tabs as distinct tab stops', () => {
+    const prepared = prepareWithSegments('a\t\tb', FONT, { whiteSpace: 'pre-wrap' })
+    const spaceWidth = measureWidth(' ', FONT)
+    const prefixWidth = measureWidth('a', FONT)
+    const firstTabAdvance = nextTabAdvance(prefixWidth, spaceWidth, 8)
+    const afterFirstTab = prefixWidth + firstTabAdvance
+    const secondTabAdvance = nextTabAdvance(afterFirstTab, spaceWidth, 8)
+    const width = prefixWidth + firstTabAdvance + secondTabAdvance - 0.1
+
+    const lines = layoutWithLines(prepared, width, LINE_HEIGHT)
+    expect(lines.lines.map(line => line.text)).toEqual(['a\t\t', 'b'])
+    expect(layout(prepared, width, LINE_HEIGHT).lineCount).toBe(2)
+  })
+
   test('layoutNextLine stays aligned with layoutWithLines in pre-wrap mode', () => {
     const prepared = prepareWithSegments('foo\n  bar baz\nquux', FONT, { whiteSpace: 'pre-wrap' })
     const width = measureWidth('  bar', FONT) + 0.1

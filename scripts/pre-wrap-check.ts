@@ -110,6 +110,13 @@ const ORACLE_CASES: OracleCase[] = [
     lineHeight: 32,
   },
   {
+    label: 'preserved space run',
+    text: 'foo    bar',
+    width: 126,
+    font: '18px serif',
+    lineHeight: 32,
+  },
+  {
     label: 'mixed script indent',
     text: 'AGI 春天到了\n  بدأت الرحلة 🚀',
     width: 260,
@@ -141,6 +148,13 @@ const ORACLE_CASES: OracleCase[] = [
     font: '18px serif',
     lineHeight: 32,
     tabSize: 4,
+  },
+  {
+    label: 'double tabs',
+    text: 'a\t\tb',
+    width: 130,
+    font: '18px serif',
+    lineHeight: 32,
   },
 ]
 
