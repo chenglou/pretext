@@ -59,6 +59,10 @@ function classifyChar(charCode: number): BidiType {
   if (0x0590 <= charCode && charCode <= 0x05f4) return 'R'
   if (0x0600 <= charCode && charCode <= 0x06ff) return arabicTypes[charCode & 0xff]!
   if (0x0700 <= charCode && charCode <= 0x08AC) return 'AL'
+  // Astral RTL/AL ranges (supplementary plane)
+  if (0x10800 <= charCode && charCode <= 0x10FFF) return 'R'
+  if (0x1E800 <= charCode && charCode <= 0x1EDFF) return 'R'
+  if (0x1EE00 <= charCode && charCode <= 0x1EEFF) return 'AL'
   return 'L'
 }
 
@@ -71,9 +75,15 @@ function computeBidiLevels(str: string): Int8Array | null {
   let numBidi = 0
 
   for (let i = 0; i < len; i++) {
-    const t = classifyChar(str.charCodeAt(i))
+    const code = str.codePointAt(i)!
+    const t = classifyChar(code)
     if (t === 'R' || t === 'AL' || t === 'AN') numBidi++
     types[i] = t
+    // Surrogate pair: assign same bidi type to both code units
+    if (code > 0xFFFF) {
+      i++
+      types[i] = t
+    }
   }
 
   if (numBidi === 0) return null

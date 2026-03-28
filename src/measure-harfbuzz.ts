@@ -23,6 +23,7 @@ export async function init(): Promise<void> {
 export function loadFont(name: string, path: string): void {
   if (hb === null) throw new Error('Call init() first')
   if (fonts.has(name)) return
+  // Node/Bun only — bundlers targeting browsers should exclude this module.
   const data = require('fs').readFileSync(path) as Buffer
   const blob = hb.createBlob(new Uint8Array(data))
   const face = hb.createFace(blob, 0)

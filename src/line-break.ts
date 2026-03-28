@@ -86,6 +86,9 @@ export function normalizeLineStart(
   return { segmentIndex, graphemeIndex: 0 }
 }
 
+// Specialized hot-path counter that mirrors walkPreparedLines break semantics
+// without tracking cursors/widths. Must stay aligned — see layout.test.ts
+// "countPreparedLines stays aligned with the walked line counter".
 export function countPreparedLines(prepared: PreparedLineBreakData, maxWidth: number): number {
   const { widths, kinds, breakableWidths, breakablePrefixWidths } = prepared
   if (widths.length === 0) return 0
@@ -265,7 +268,7 @@ export function walkPreparedLines(
   }
 
   function continueSoftHyphenBreakableSegment(segmentIndex: number): boolean {
-    const gWidths = breakableWidths[segmentIndex]!
+    const gWidths = breakableWidths[segmentIndex] ?? null
     if (gWidths === null) return false
     const fitWidths = engineProfile.preferPrefixWidthsForBreakableRuns
       ? breakablePrefixWidths[segmentIndex] ?? gWidths

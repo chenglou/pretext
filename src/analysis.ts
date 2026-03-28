@@ -362,7 +362,7 @@ function mergeUrlLikeRuns(segmentation: MergedSegmentation): MergedSegmentation 
   const starts = segmentation.starts.slice()
 
   for (let i = 0; i < segmentation.len; i++) {
-    if (kinds[i] !== 'text' || !isUrlLikeRunStart(segmentation, i)) continue
+    if (texts[i]!.length === 0 || kinds[i] !== 'text' || !isUrlLikeRunStart(segmentation, i)) continue
 
     let j = i + 1
     while (j < segmentation.len && kinds[j] !== 'space' && kinds[j] !== 'zero-width-break') {
@@ -699,10 +699,8 @@ function mergeGlueConnectedTextRuns(segmentation: MergedSegmentation): MergedSeg
 }
 
 function carryTrailingForwardStickyAcrossCJKBoundary(segmentation: MergedSegmentation): MergedSegmentation {
-  const texts = segmentation.texts.slice()
-  const isWordLike = segmentation.isWordLike.slice()
-  const kinds = segmentation.kinds.slice()
-  const starts = segmentation.starts.slice()
+  // Mutate in-place — array length is unchanged and the input is not referenced again.
+  const { texts, starts, kinds } = segmentation
 
   for (let i = 0; i < texts.length - 1; i++) {
     if (kinds[i] !== 'text' || kinds[i + 1] !== 'text') continue
@@ -716,13 +714,7 @@ function carryTrailingForwardStickyAcrossCJKBoundary(segmentation: MergedSegment
     starts[i + 1] = starts[i]! + split.head.length
   }
 
-  return {
-    len: texts.length,
-    texts,
-    isWordLike,
-    kinds,
-    starts,
-  }
+  return segmentation
 }
 
 
