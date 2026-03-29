@@ -55,6 +55,7 @@ import {
   getSegmentGraphemePrefixWidths,
   getSegmentGraphemeWidths,
   getSegmentMetrics,
+  setMeasureFunction,
   textMayContainEmoji,
 } from './measurement.js'
 import {
@@ -715,3 +716,5 @@ export function setLocale(locale?: string): void {
   setAnalysisLocale(locale)
   clearCache()
 }
+
+export { setMeasureFunction }
