@@ -10,6 +10,7 @@ const LINE_HEIGHT = 19
 
 type LayoutModule = typeof import('./layout.ts')
 type LineBreakModule = typeof import('./line-break.ts')
+type AnalysisModule = typeof import('./analysis.ts')
 
 let prepare: LayoutModule['prepare']
 let prepareWithSegments: LayoutModule['prepareWithSegments']
@@ -21,6 +22,7 @@ let clearCache: LayoutModule['clearCache']
 let setLocale: LayoutModule['setLocale']
 let countPreparedLines: LineBreakModule['countPreparedLines']
 let walkPreparedLines: LineBreakModule['walkPreparedLines']
+let isCJK: AnalysisModule['isCJK']
 
 const emojiPresentationRe = /\p{Emoji_Presentation}/u
 const punctuationRe = /[.,!?;:%)\]}'"”’»›…—-]/u
@@ -98,8 +100,11 @@ class TestOffscreenCanvas {
 
 beforeAll(async () => {
   Reflect.set(globalThis, 'OffscreenCanvas', TestOffscreenCanvas)
-  const mod = await import('./layout.ts')
-  const lineBreakMod = await import('./line-break.ts')
+  const [mod, lineBreakMod, analysisMod] = await Promise.all([
+    import('./layout.ts'),
+    import('./line-break.ts'),
+    import('./analysis.ts'),
+  ])
   ;({
     prepare,
     prepareWithSegments,
@@ -111,6 +116,7 @@ beforeAll(async () => {
     setLocale,
   } = mod)
   ;({ countPreparedLines, walkPreparedLines } = lineBreakMod)
+  ;({ isCJK } = analysisMod)
 })
 
 beforeEach(() => {
@@ -119,6 +125,15 @@ beforeEach(() => {
 })
 
 describe('prepare invariants', () => {
+  test('isCJK keeps its direct classification surface stable', () => {
+    expect(isCJK('')).toBe(false)
+    expect(isCJK('hello')).toBe(false)
+    expect(isCJK('字')).toBe(true)
+    expect(isCJK('𠀀')).toBe(true)
+    expect(isCJK('Ａ')).toBe(true)
+    expect(isCJK('hello世界')).toBe(true)
+  })
+
   test('whitespace-only input stays empty', () => {
     const prepared = prepare('  \t\n  ', FONT)
     expect(layout(prepared, 200, LINE_HEIGHT)).toEqual({ lineCount: 0, height: 0 })
