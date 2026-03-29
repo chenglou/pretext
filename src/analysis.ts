@@ -333,12 +333,18 @@ function classifySegmentBreakChar(ch: string, whiteSpaceProfile: WhiteSpaceProfi
   return 'text'
 }
 
+// All characters that classifySegmentBreakChar maps to a non-'text' kind.
+const breakCharRe = /[\x20\t\n\xA0\xAD\u200B\u202F\u2060\uFEFF]/
+
 function splitSegmentByBreakKind(
   segment: string,
   isWordLike: boolean,
   start: number,
   whiteSpaceProfile: WhiteSpaceProfile,
 ): SegmentationPiece[] {
+  if (!breakCharRe.test(segment)) {
+    return [{ text: segment, isWordLike, kind: 'text', start }]
+  }
   const pieces: SegmentationPiece[] = []
   let currentKind: SegmentBreakKind | null = null
   let currentText = ''
