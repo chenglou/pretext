@@ -416,6 +416,35 @@ describe('layout invariants', () => {
     }])
   })
 
+  test('trailing collapsible spaces hang consistently across layout APIs', () => {
+    // Regression: countPreparedLines and walkPreparedLines must agree on
+    // lineCount when trailing collapsible whitespace overflows the line edge.
+    // Construct synthetic segments: [text:40px] [space:5px] [text:3px]
+    // At maxWidth=42: text(40) fits, text+space(45) overflows, but the space
+    // should hang (CSS-correct) and the 3px segment should stay on line 1.
+    // Without the fix, the walk path breaks at the space and puts the 3px
+    // segment on line 2.
+    const prepared = {
+      widths: [40, 5, 3],
+      lineEndFitAdvances: [40, 5, 3],
+      lineEndPaintAdvances: [40, 5, 3],
+      kinds: ['text' as const, 'space' as const, 'text' as const],
+      simpleLineWalkFastPath: true,
+      breakableWidths: [null, null, null],
+      breakablePrefixWidths: [null, null, null],
+      discretionaryHyphenWidth: 0,
+      tabStopAdvance: 0,
+      chunks: [{ startSegmentIndex: 0, endSegmentIndex: 3, consumedEndSegmentIndex: 3 }],
+    }
+
+    // maxWidth=44: text(40) fits, text+space(45) overflows, text+text2(43) fits
+    const countResult = countPreparedLines(prepared, 44)
+    const walkResult = walkPreparedLines(prepared, 44)
+
+    expect(countResult).toBe(1)
+    expect(walkResult).toBe(countResult)
+  })
+
   test('breaks long words at grapheme boundaries and keeps both layout APIs aligned', () => {
     const prepared = prepareWithSegments('Superlongword', FONT)
     const graphemeWidths = prepared.breakableWidths[0]!
