@@ -214,8 +214,8 @@ function measureAnalysis(
   const breakableWidths: (number[] | null)[] = []
   const breakablePrefixWidths: (number[] | null)[] = []
   const segments = includeSegments ? [] as string[] : null
-  const preparedStartByAnalysisIndex = Array.from<number>({ length: analysis.len })
-  const preparedEndByAnalysisIndex = Array.from<number>({ length: analysis.len })
+  const preparedStartByAnalysisIndex = new Array<number>(analysis.len)
+  const preparedEndByAnalysisIndex = new Array<number>(analysis.len)
 
   function pushMeasuredSegment(
     text: string,
