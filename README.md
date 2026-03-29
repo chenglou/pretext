@@ -138,6 +138,11 @@ Pretext doesn't try to be a full font rendering engine (yet?). It currently targ
 - `system-ui` is unsafe for `layout()` accuracy on macOS. Use a named font.
 - Because the default target includes `overflow-wrap: break-word`, very narrow widths can still break inside words, but only at grapheme boundaries.
 
+## Integration Tips
+
+- `prepare()` is the one-time expensive step. `layout()` is the cheap hot path. Re-run `prepare()` when the text or font changes, not on every resize, and keep the `font` / `lineHeight` you pass synced with the CSS `font` / `line-height` used for that text.
+- Start with `prepare()` + `layout()` for height prediction and resize handling. Switch to `prepareWithSegments()` and the rich line APIs only when you need actual line contents or manual layout behavior.
+
 ## Develop
 
 See [DEVELOPMENT.md](DEVELOPMENT.md) for the dev setup and commands.
