@@ -10,6 +10,8 @@ Pretext side-steps the need for DOM measurements (e.g. `getBoundingClientRect`, 
 npm install @chenglou/pretext
 ```
 
+> For a hands-on walkthrough with React hooks, Canvas rendering, shrink-wrapping, and multi-column patterns, see the **[Usage Guide](./USAGE.md)**.
+
 ## Demos
 
 Clone the repo, run `bun install`, then `bun start`, and open the `/demos` in your browser (no trailing slash. Bun devserver bugs on those)
