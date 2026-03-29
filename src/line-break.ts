@@ -92,11 +92,18 @@ function fitSoftHyphenBreak(
 }
 
 function findChunkIndexForStart(prepared: PreparedLineBreakData, segmentIndex: number): number {
-  for (let i = 0; i < prepared.chunks.length; i++) {
-    const chunk = prepared.chunks[i]!
-    if (segmentIndex < chunk.consumedEndSegmentIndex) return i
+  const chunks = prepared.chunks
+  let lo = 0
+  let hi = chunks.length - 1
+  while (lo <= hi) {
+    const mid = (lo + hi) >>> 1
+    if (segmentIndex < chunks[mid]!.consumedEndSegmentIndex) {
+      hi = mid - 1
+    } else {
+      lo = mid + 1
+    }
   }
-  return -1
+  return lo < chunks.length ? lo : -1
 }
 
 export function normalizeLineStart(
