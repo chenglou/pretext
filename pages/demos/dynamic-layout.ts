@@ -344,7 +344,7 @@ function projectHeadlineLines(lines: PositionedLine[], font: string, lineHeight:
   for (let index = 0; index < lines.length; index++) {
     const line = lines[index]!
     const element = domCache.headlineLines[index]!
-    element.textContent = line.text
+    if (element.textContent !== line.text) element.textContent = line.text
     element.style.left = `${line.x}px`
     element.style.top = `${line.y}px`
     element.style.font = font
@@ -357,7 +357,7 @@ function projectBodyLines(lines: PositionedLine[], className: string, font: stri
     const line = lines[offset]!
     const element = domCache.bodyLines[startIndex + offset]!
     element.className = className
-    element.textContent = line.text
+    if (element.textContent !== line.text) element.textContent = line.text
     element.title = ''
     element.style.left = `${line.x}px`
     element.style.top = `${line.y}px`

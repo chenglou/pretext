@@ -811,7 +811,7 @@ function render(now: number): boolean {
   for (let index = 0; index < headlineLines.length; index++) {
     const element = domCache.headlineLines[index]!
     const line = headlineLines[index]!
-    element.textContent = line.text
+    if (element.textContent !== line.text) element.textContent = line.text
     element.style.left = `${gutter}px`
     element.style.top = `${gutter + line.y}px`
     element.style.font = headlineFont
@@ -825,7 +825,7 @@ function render(now: number): boolean {
   for (let index = 0; index < allBodyLines.length; index++) {
     const element = domCache.bodyLines[index]!
     const line = allBodyLines[index]!
-    element.textContent = line.text
+    if (element.textContent !== line.text) element.textContent = line.text
     element.style.left = `${line.x}px`
     element.style.top = `${line.y}px`
     element.style.font = BODY_FONT
@@ -847,7 +847,7 @@ function render(now: number): boolean {
     for (let lineIndex = 0; lineIndex < pullquote.lines.length; lineIndex++) {
       const element = domCache.pullquoteLines[pullquoteLineIndex]!
       const line = pullquote.lines[lineIndex]!
-      element.textContent = line.text
+      if (element.textContent !== line.text) element.textContent = line.text
       element.style.left = `${line.x}px`
       element.style.top = `${line.y}px`
       element.style.font = PQ_FONT
