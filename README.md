@@ -127,6 +127,16 @@ clearCache(): void // clears Pretext's shared internal caches used by prepare() 
 setLocale(locale?: string): void // optional (by default we use the current locale). Sets locale for future prepare() and prepareWithSegments(). Internally, it also calls clearCache(). Setting a new locale doesn't affect existing prepare() and prepareWithSegments() states (no mutations to them)
 ```
 
+## Browser Requirements
+
+Pretext uses [`Intl.Segmenter`](https://developer.mozilla.org/en-US/docs/Web/API/Intl/Segmenter) for word segmentation and the Canvas 2D API (`measureText`) for font metrics. Both are required at runtime.
+
+- Chrome/Edge 87+
+- Firefox 125+ (April 2024)
+- Safari 15+
+
+Older browsers — including Firefox before 125 — will throw `Intl.Segmenter is not a constructor`. There is no polyfill path currently.
+
 ## Caveats
 
 Pretext doesn't try to be a full font rendering engine (yet?). It currently targets the common text setup:
