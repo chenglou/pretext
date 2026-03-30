@@ -1,7 +1,7 @@
 import {
-  prepareWithSegments, layoutWithLines, layoutNextLine, walkLineRanges,
-  type PreparedTextWithSegments, type LayoutCursor, type LayoutLine,
-} from '../src/layout.ts'
+  prepareWithSegments, layoutNextLine,
+  type PreparedTextWithSegments, type LayoutCursor,
+} from '../../src/layout.ts'
 
 // ── Text content ────────────────────────────────
 // Challenging mix of short and long words for justification stress testing.
@@ -15,8 +15,6 @@ const PARAGRAPHS: string[] = [
 
   `Modern CSS justification operates on a strictly greedy, line-by-line basis: the browser fills each line with as many words as will fit, then distributes the remaining space uniformly between words. This approach requires no lookahead and executes quickly, but it produces wildly inconsistent spacing — particularly in narrow columns where a single long word can force enormous gaps across the preceding line. The result: rivers of white space that would have horrified any compositor working with metal type.`,
 ]
-
-const ALL_TEXT = PARAGRAPHS.join('\n\n')
 
 // ── Typography ──────────────────────────────────
 
@@ -81,7 +79,6 @@ const HYPHEN_EXCEPTIONS: Record<string, string[]> = {
   'constructs': ['con','structs'],
   'feasible': ['fea','si','ble'],
   'breakpoints': ['break','points'],
-  'combination': ['com','bi','na','tion'],
   'produces': ['pro','du','ces'],
   'uniform': ['u','ni','form'],
   'throughout': ['through','out'],
@@ -686,7 +683,7 @@ function qualityClass(avgDev: number): string {
   return 'bad'
 }
 
-function renderMetrics(el: HTMLElement, m: QualityMetrics, isCSS: boolean): void {
+function renderMetrics(el: HTMLElement, m: QualityMetrics): void {
   const avgPct = (m.avgDeviation * 100).toFixed(1)
   const maxPct = (m.maxDeviation * 100).toFixed(1)
   const cls = qualityClass(m.avgDeviation)
@@ -778,7 +775,7 @@ function render(): void {
   // CSS handles its own rendering. We just size it.
   // River highlighting is deferred to after layout reflow (below).
   const cssMetrics = computeCSSMetrics(colWidth)
-  renderMetrics(m0, cssMetrics, true)
+  renderMetrics(m0, cssMetrics)
 
   // ── Column 2: Pretext + Hyphenation ───────────
   let t0 = performance.now()
@@ -788,7 +785,7 @@ function render(): void {
   renderJustifiedColumn(c2, hyphenLines, colWidth)
   const hyphenMetrics = computeMetrics(hyphenLines)
   hyphenMetrics.layoutMs = hyphenMs
-  renderMetrics(m2, hyphenMetrics, false)
+  renderMetrics(m2, hyphenMetrics)
 
   // ── Column 3: Optimal (Knuth-Plass) ─────────────
   t0 = performance.now()
@@ -798,7 +795,7 @@ function render(): void {
   renderJustifiedColumn(c3, optimalLines, colWidth)
   const optimalMetrics = computeMetrics(optimalLines)
   optimalMetrics.layoutMs = optimalMs
-  renderMetrics(m3, optimalMetrics, false)
+  renderMetrics(m3, optimalMetrics)
 
   // Highlight CSS rivers after browser reflows the text
   requestAnimationFrame(() => highlightCSSRivers())

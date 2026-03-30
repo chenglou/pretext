@@ -38,6 +38,7 @@ Useful pages:
 - `/demos/accordion`
 - `/demos/bubbles`
 - `/demos/dynamic-layout`
+- `/demos/justification-comparison`
 - `/accuracy`
 - `/benchmark`
 - `/corpus`
