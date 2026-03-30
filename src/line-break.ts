@@ -45,7 +45,7 @@ function isSimpleCollapsibleSpace(kind: SegmentBreakKind): boolean {
   return kind === 'space'
 }
 
-function getTabAdvance(lineWidth: number, tabStopAdvance: number): number {
+export function getTabAdvance(lineWidth: number, tabStopAdvance: number): number {
   if (tabStopAdvance <= 0) return 0
 
   const remainder = lineWidth % tabStopAdvance

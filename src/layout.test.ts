@@ -17,6 +17,8 @@ let layout: LayoutModule['layout']
 let layoutWithLines: LayoutModule['layoutWithLines']
 let layoutNextLine: LayoutModule['layoutNextLine']
 let walkLineRanges: LayoutModule['walkLineRanges']
+let minContentWidth: LayoutModule['minContentWidth']
+let maxContentWidth: LayoutModule['maxContentWidth']
 let clearCache: LayoutModule['clearCache']
 let setLocale: LayoutModule['setLocale']
 let countPreparedLines: LineBreakModule['countPreparedLines']
@@ -107,6 +109,8 @@ beforeAll(async () => {
     layoutWithLines,
     layoutNextLine,
     walkLineRanges,
+    minContentWidth,
+    maxContentWidth,
     clearCache,
     setLocale,
   } = mod)
@@ -623,5 +627,97 @@ describe('layout invariants', () => {
         expect(counted).toBe(walked)
       }
     }
+  })
+})
+
+describe('intrinsic width invariants', () => {
+  test('empty text returns 0 for both', () => {
+    const prepared = prepare('', FONT)
+    expect(minContentWidth(prepared)).toBe(0)
+    expect(maxContentWidth(prepared)).toBe(0)
+  })
+
+  test('whitespace-only text returns 0 for both', () => {
+    const prepared = prepare('  \t\n  ', FONT)
+    expect(minContentWidth(prepared)).toBe(0)
+    expect(maxContentWidth(prepared)).toBe(0)
+  })
+
+  test('single word: min equals max equals word width', () => {
+    const prepared = prepareWithSegments('Superlongword', FONT)
+    const min = minContentWidth(prepared)
+    const max = maxContentWidth(prepared)
+    expect(min).toBe(prepared.widths[0]!)
+    expect(max).toBe(prepared.widths[0]!)
+    expect(min).toBe(max)
+  })
+
+  test('multiple words: min is the widest word', () => {
+    const prepared = prepareWithSegments('hi Superlongword ok', FONT)
+    const min = minContentWidth(prepared)
+    expect(min).toBe(prepared.widths[2]!) // 'Superlongword' is widest
+  })
+
+  test('multiple words: max is the full single-line width', () => {
+    const prepared = prepareWithSegments('hello world', FONT)
+    const max = maxContentWidth(prepared)
+    expect(max).toBe(prepared.widths[0]! + prepared.widths[1]! + prepared.widths[2]!)
+  })
+
+  test('max excludes trailing whitespace', () => {
+    const withSpace = prepare('hello ', FONT)
+    const without = prepare('hello', FONT)
+    expect(maxContentWidth(withSpace)).toBe(maxContentWidth(without))
+  })
+
+  test('min accounts for soft hyphen discretionary width', () => {
+    const prepared = prepareWithSegments('trans\u00ADatlantic', FONT)
+    const min = minContentWidth(prepared)
+    const transWithHyphen = prepared.widths[0]! + prepared.discretionaryHyphenWidth
+    const atlantic = prepared.widths[2]!
+    expect(min).toBe(Math.max(transWithHyphen, atlantic))
+  })
+
+  test('max excludes invisible soft hyphens', () => {
+    const prepared = prepareWithSegments('trans\u00ADatlantic', FONT)
+    const max = maxContentWidth(prepared)
+    expect(max).toBe(prepared.widths[0]! + prepared.widths[2]!)
+  })
+
+  test('layout at maxContentWidth fits on one line', () => {
+    const prepared = prepare('The quick brown fox jumps over the lazy dog', FONT)
+    const max = maxContentWidth(prepared)
+    expect(layout(prepared, max, LINE_HEIGHT).lineCount).toBe(1)
+  })
+
+  test('layout at minContentWidth produces no grapheme-level word breaks', () => {
+    const prepared = prepareWithSegments('The quick brown fox', FONT)
+    const min = minContentWidth(prepared)
+    const result = layoutWithLines(prepared, min, LINE_HEIGHT)
+    for (const line of result.lines) {
+      expect(line.start.graphemeIndex).toBe(0)
+      expect(line.end.graphemeIndex).toBe(0)
+    }
+  })
+
+  test('pre-wrap hard breaks: max is the widest chunk', () => {
+    const prepared = prepareWithSegments('short\nlongerword', FONT, { whiteSpace: 'pre-wrap' })
+    const max = maxContentWidth(prepared)
+    expect(max).toBe(Math.max(prepared.widths[0]!, prepared.widths[2]!))
+  })
+
+  test('works with both prepare and prepareWithSegments', () => {
+    const plain = prepare('hello world', FONT)
+    const rich = prepareWithSegments('hello world', FONT)
+    expect(minContentWidth(plain)).toBe(minContentWidth(rich))
+    expect(maxContentWidth(plain)).toBe(maxContentWidth(rich))
+  })
+
+  test('CJK: min is the widest grapheme unit', () => {
+    const prepared = prepareWithSegments('中文测试', FONT)
+    const min = minContentWidth(prepared)
+    const max = maxContentWidth(prepared)
+    expect(min).toBeGreaterThan(0)
+    expect(max).toBeGreaterThan(min)
   })
 })
