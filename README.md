@@ -41,6 +41,13 @@ On the current checked-in benchmark snapshot:
 - `prepare()` is about `19ms` for the shared 500-text batch
 - `layout()` is about `0.09ms` for that same batch
 
+Performance notes:
+- If every string is unique and you only lay it out once, that is already the correct usage shape. In that workload, almost all the time is in `prepare()`, not `layout()`.
+- If the same text will be laid out at multiple widths or line-heights, cache the prepared handle and only rerun `layout()`.
+- `{ whiteSpace: 'pre-wrap' }` preserves ordinary spaces, `\t` tabs, and `\n` hard breaks, so it does more work than the default mode.
+- Pretext is optimized for browser-like mixed-script correctness, not just ASCII-only packing. A narrower ASCII-only helper can be faster on a narrow workload because it is solving less.
+- For current benchmark numbers and the split `analyze()` / `measure()` rows, see `STATUS.md` and `benchmarks/*.json`.
+
 We support all the languages you can imagine, including emojis and mixed-bidi, and caters to specific browser quirks
 
 The returned height is the crucial last piece for unlocking web UI's:
