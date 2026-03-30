@@ -1,0 +1,14 @@
+{
+  "font": "system-ui",
+  "platform": "macOS",
+  "results": [
+    { "startSizePx": 10, "endSizePx": 10, "match": false, "mismatchPct": 2.9 },
+    { "startSizePx": 11, "endSizePx": 11, "match": false, "mismatchPct": 6.9 },
+    { "startSizePx": 12, "endSizePx": 12, "match": false, "mismatchPct": 11.3 },
+    { "startSizePx": 13, "endSizePx": 13, "match": true },
+    { "startSizePx": 14, "endSizePx": 14, "match": false, "mismatchPct": 14.5 },
+    { "startSizePx": 15, "endSizePx": 25, "match": true },
+    { "startSizePx": 26, "endSizePx": 26, "match": false, "mismatchPct": 12.4 },
+    { "startSizePx": 27, "endSizePx": 28, "match": true }
+  ]
+}

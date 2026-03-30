@@ -24,8 +24,9 @@ bun run corpus-sweep         # coarse corpus width sweep
 bun run corpus-font-matrix   # same corpus under alternate fonts
 bun run corpus-taxonomy      # classify a corpus mismatch field into steering buckets
 bun run corpus-representative
-bun run corpus-status        # rebuild corpora/STATUS.md from checked-in JSON snapshots
+bun run corpus-status        # rebuild corpora/dashboard.json from checked-in JSON snapshots
 bun run corpus-status:refresh
+bun run status-dashboard     # rebuild status/dashboard.json from checked-in JSON snapshots
 bun run gatsby-check         # slow detailed Gatsby diagnosis
 bun run gatsby-sweep         # coarse Gatsby width sweep
 ```
@@ -48,12 +49,14 @@ Useful pages:
 ## Current Sources Of Truth
 
 Use these for the current picture:
-- [STATUS.md](STATUS.md) — compact browser accuracy + benchmark dashboard
+- [STATUS.md](STATUS.md) — prose pointers for the main status files
+- [status/dashboard.json](status/dashboard.json) — machine-readable main status dashboard
 - [accuracy/chrome.json](accuracy/chrome.json), [accuracy/safari.json](accuracy/safari.json), [accuracy/firefox.json](accuracy/firefox.json) — checked-in raw browser accuracy rows
 - [benchmarks/chrome.json](benchmarks/chrome.json), [benchmarks/safari.json](benchmarks/safari.json) — checked-in benchmark snapshots
-- [corpora/STATUS.md](corpora/STATUS.md) — compact long-form corpus snapshot
+- [corpora/STATUS.md](corpora/STATUS.md) — prose pointers for long-form corpus status
+- [corpora/dashboard.json](corpora/dashboard.json) — machine-readable long-form corpus dashboard
 - [corpora/representative.json](corpora/representative.json) — machine-readable anchor subset
-- [corpora/chrome-sampled.json](corpora/chrome-sampled.json), [corpora/chrome-step10.json](corpora/chrome-step10.json) — checked-in Chrome corpus sweep snapshots backing the top tables in `corpora/STATUS.md`
+- [corpora/chrome-sampled.json](corpora/chrome-sampled.json), [corpora/chrome-step10.json](corpora/chrome-step10.json) — checked-in Chrome corpus sweep snapshots
 - [RESEARCH.md](RESEARCH.md) — the exploration log and the durable conclusions behind the current model
 
 ## Deep Profiling

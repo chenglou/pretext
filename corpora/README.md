@@ -107,8 +107,8 @@ Current bundle:
 Machine-readable metadata lives in `sources.json`.
 
 Current sweep status lives in `STATUS.md`.
-The generated top tables there are backed by `representative.json`,
-`chrome-sampled.json`, and `chrome-step10.json`.
+Machine-readable corpus status lives in `dashboard.json`, and its main snapshot
+inputs are `representative.json`, `chrome-sampled.json`, and `chrome-step10.json`.
 Mismatch taxonomy and steering vocabulary live in `TAXONOMY.md`.
 
 Useful commands:
