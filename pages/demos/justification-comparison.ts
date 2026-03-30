@@ -555,6 +555,7 @@ function renderJustifiedColumn(
   canvas: HTMLCanvasElement,
   allLines: JustifiedLine[][],
   colWidth: number,
+  showIndicators: boolean,
 ): void {
   // Assign Y positions
   let y = PAD
@@ -641,7 +642,7 @@ function renderJustifiedColumn(
       for (const seg of line.segments) {
         if (seg.isSpace) {
           // Highlight rivers
-          if (isRiver) {
+          if (showIndicators && isRiver) {
             const intensity = Math.min(1, (justifiedSpace / NORMAL_SPACE_W - 1.5) / 1.5)
             const r = Math.round(220 + intensity * 35)
             const g = Math.round(180 - intensity * 80)
@@ -700,9 +701,10 @@ function renderMetrics(el: HTMLElement, m: QualityMetrics): void {
 
 // ── CSS river highlighting ───────────────────────
 
-function highlightCSSRivers(): void {
+function highlightCSSRivers(showIndicators: boolean): void {
   const overlay = document.getElementById('cssRiverOverlay')!
   overlay.innerHTML = ''
+  if (!showIndicators) return
   const colRect = cssCol.getBoundingClientRect()
 
   // Walk each <p> in the CSS text
@@ -746,6 +748,7 @@ function highlightCSSRivers(): void {
 // ── Main render ─────────────────────────────────
 
 const slider = document.getElementById('widthSlider') as HTMLInputElement
+const showIndicators = document.getElementById('showIndicators') as HTMLInputElement
 const widthVal = document.getElementById('widthVal')!
 const cssText = document.getElementById('cssText')!
 const cssCol = document.getElementById('cssCol')!
@@ -762,6 +765,7 @@ cssText.innerHTML = PARAGRAPHS.map((p, i) =>
 
 function render(): void {
   const colWidth = parseInt(slider.value)
+  const indicatorsEnabled = showIndicators.checked
   widthVal.textContent = colWidth + 'px'
 
   const innerWidth = colWidth - PAD * 2
@@ -782,7 +786,7 @@ function render(): void {
   const hyphenLines = hyphenatedGreedyLayout(innerWidth)
   const hyphenMs = performance.now() - t0
 
-  renderJustifiedColumn(c2, hyphenLines, colWidth)
+  renderJustifiedColumn(c2, hyphenLines, colWidth, indicatorsEnabled)
   const hyphenMetrics = computeMetrics(hyphenLines)
   hyphenMetrics.layoutMs = hyphenMs
   renderMetrics(m2, hyphenMetrics)
@@ -792,13 +796,13 @@ function render(): void {
   const optimalLines = hyphenatedPrepared.map(p => optimalLayout(p, innerWidth))
   const optimalMs = performance.now() - t0
 
-  renderJustifiedColumn(c3, optimalLines, colWidth)
+  renderJustifiedColumn(c3, optimalLines, colWidth, indicatorsEnabled)
   const optimalMetrics = computeMetrics(optimalLines)
   optimalMetrics.layoutMs = optimalMs
   renderMetrics(m3, optimalMetrics)
 
   // Highlight CSS rivers after browser reflows the text
-  requestAnimationFrame(() => highlightCSSRivers())
+  requestAnimationFrame(() => highlightCSSRivers(indicatorsEnabled))
 }
 
 // ── Events ──────────────────────────────────────
@@ -814,6 +818,7 @@ function scheduleRender(): void {
 }
 
 slider.addEventListener('input', scheduleRender)
+showIndicators.addEventListener('input', scheduleRender)
 window.addEventListener('resize', scheduleRender)
 
 render()

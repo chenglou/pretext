@@ -32,6 +32,18 @@
     .controls input[type="range"] {
       width: 220px; accent-color: #5a4f40;
     }
+    .toggle {
+      display: inline-flex; align-items: center; gap: 8px;
+      cursor: pointer;
+    }
+    .toggle input[type="checkbox"] {
+      margin: 0;
+      accent-color: #5a4f40;
+    }
+    .toggle span {
+      font: 500 11px/1 "Helvetica Neue", Helvetica, Arial, sans-serif;
+      color: #8a7f70; text-transform: uppercase; letter-spacing: 0.5px;
+    }
     .width-val {
       font: 600 13px/1 "Helvetica Neue", Helvetica, Arial, sans-serif;
       color: #5a4f40; min-width: 42px;
@@ -122,12 +134,16 @@
   </div>
   <div class="page">
     <h1 style="text-align:center">Justification Algorithms Compared</h1>
-    <p class="subtitle" style="text-align:center">The same passage, three approaches. Narrow the column to reveal the differences.</p>
+    <p class="subtitle" style="text-align:center">Visualizes typography rivers, spacing variance, and how hyphenation and global line-breaking change justified text.</p>
 
     <div class="controls">
       <label for="widthSlider">Column width</label>
       <input type="range" id="widthSlider" min="200" max="600" value="364">
       <span class="width-val" id="widthVal">364px</span>
+      <label class="toggle" for="showIndicators">
+        <input type="checkbox" id="showIndicators" checked>
+        <span>Toggle red visualizers</span>
+      </label>
     </div>
 
     <div class="columns" id="columns">
@@ -140,7 +156,6 @@
           <div class="css-river-overlay" id="cssRiverOverlay"></div>
         </div>
         <div class="metrics" id="metrics0"></div>
-        <div class="col-note">CSS and greedy line-breaking produce similar results — both fill each line left-to-right and break when the line overflows. The differences emerge with hyphenation and global optimization.</div>
       </div>
 
       <!-- Column 2: Pretext + Hyphenation -->
