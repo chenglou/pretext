@@ -13,6 +13,7 @@ const entrypoints = [
   'pages/demos/masonry/index.html',
   'pages/demos/rich-note.html',
   'pages/demos/variable-typographic-ascii.html',
+  'pages/demos/virtual-chat.html',
 ]
 
 const result = Bun.spawnSync(
@@ -38,6 +39,7 @@ const targets = [
   { source: 'masonry/index.html', target: 'masonry/index.html' },
   { source: 'rich-note.html', target: 'rich-note/index.html' },
   { source: 'variable-typographic-ascii.html', target: 'variable-typographic-ascii/index.html' },
+  { source: 'virtual-chat.html', target: 'virtual-chat/index.html' },
 ]
 
 for (let index = 0; index < targets.length; index++) {
