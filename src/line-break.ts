@@ -333,6 +333,13 @@ function walkPreparedLinesSimple(
 
     const newW = lineW + w
     if (newW > maxWidth + lineFitEpsilon) {
+      // CSS behavior: trailing collapsible space hangs past the line edge
+      // without triggering a line break — matches countPreparedLinesSimple
+      if (isSimpleCollapsibleSpace(kind)) {
+        i++
+        continue
+      }
+
       if (canBreakAfter(kind)) {
         appendWholeSegment(i, w)
         emitCurrentLine(i + 1, 0, lineW - w)
@@ -1029,6 +1036,12 @@ function layoutNextLineRangeSimple(
 
     const newW = lineW + w
     if (newW > maxWidth + lineFitEpsilon) {
+      // CSS behavior: trailing collapsible space hangs past the line edge
+      // without triggering a line break — matches countPreparedLinesSimple
+      if (isSimpleCollapsibleSpace(kind)) {
+        continue
+      }
+
       if (canBreakAfter(kind)) {
         appendWholeSegment(i, w)
         return finishLine(i + 1, 0, lineW - w)
