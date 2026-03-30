@@ -42,7 +42,9 @@ function isWideCharacter(ch: string): boolean {
     (code >= 0x2B740 && code <= 0x2B81F) ||
     (code >= 0x2B820 && code <= 0x2CEAF) ||
     (code >= 0x2CEB0 && code <= 0x2EBEF) ||
+    (code >= 0x2EBF0 && code <= 0x2F7FF) ||
     (code >= 0x30000 && code <= 0x3134F) ||
+    (code >= 0x31350 && code <= 0x323AF) ||
     (code >= 0x3000 && code <= 0x303F) ||
     (code >= 0x3040 && code <= 0x309F) ||
     (code >= 0x30A0 && code <= 0x30FF) ||
@@ -367,6 +369,13 @@ describe('prepare invariants', () => {
   test('treats astral CJK ideographs as CJK break units', () => {
     expect(prepareWithSegments('𠀀𠀁', FONT).segments).toEqual(['𠀀', '𠀁'])
     expect(prepareWithSegments('𠀀。', FONT).segments).toEqual(['𠀀。'])
+  })
+
+  test('treats CJK Extension H and I ideographs as CJK break units', () => {
+    const extH = String.fromCodePoint(0x31350) // CJK Extension H (Unicode 15.0)
+    const extI = String.fromCodePoint(0x2EBF0) // CJK Extension I (Unicode 15.1)
+    expect(prepareWithSegments(extH + extI, FONT).segments).toEqual([extH, extI])
+    expect(prepareWithSegments(extH + '。', FONT).segments).toEqual([extH + '。'])
   })
 
   test('prepare and prepareWithSegments agree on layout behavior', () => {
