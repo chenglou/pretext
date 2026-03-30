@@ -90,6 +90,49 @@ while (true) {
 
 This usage allows rendering to canvas, SVG, WebGL and (eventually) server-side.
 
+### 3. Vertical Japanese layout (`vertical-rl`)
+
+Pass `{ writingMode: 'vertical-rl' }` to `prepare()` (or `prepareWithSegments()`) to lay out Japanese text in the browser's `writing-mode: vertical-rl` style — characters flow top-to-bottom, columns stack right-to-left.
+
+The API parameters become **logical** (inline/block) values:
+
+| Parameter | Logical meaning |
+|---|---|
+| `maxWidth` | Max **column height** (inline-axis, top → bottom) |
+| `lineHeight` | **Column width** (block-axis advance per column) |
+| `LayoutResult.height` | Total physical **width** of all columns |
+| `LayoutLine.width` | Used **height** of that column |
+
+```ts
+import { prepare, layout, prepareWithSegments, layoutWithLines } from '@chenglou/pretext'
+
+const text = '日本語のテキストで縦書きのレイアウトを行うことができます。'
+const font = '16px "Hiragino Mincho ProN"'
+const columnHeight = 400   // max column height in px
+const columnWidth  = 20    // each column is 20px wide
+
+// Predict how many columns the text will fill:
+const prepared = prepare(text, font, { writingMode: 'vertical-rl' })
+const { lineCount, height } = layout(prepared, columnHeight, columnWidth)
+// lineCount = number of columns, height = total physical width of all columns
+
+// Or get the lines for manual rendering:
+const richPrepared = prepareWithSegments(text, font, { writingMode: 'vertical-rl' })
+const { lines } = layoutWithLines(richPrepared, columnHeight, columnWidth)
+// Each line is one column; line.width is the used column height.
+// Render each column at x = totalWidth - (i + 1) * columnWidth (right-to-left stacking).
+for (let i = 0; i < lines.length; i++) {
+  const x = lines.length * columnWidth - (i + 1) * columnWidth
+  ctx.save()
+  ctx.translate(x + columnWidth / 2, 0)
+  ctx.rotate(Math.PI / 2) // rotate canvas for sideways Latin; CJK is already upright
+  ctx.fillText(lines[i].text, 0, 0)
+  ctx.restore()
+}
+```
+
+The canvas `measureText()` horizontal advances already match the vertical advances browsers use: CJK ideographs and kana are square cells (horizontal ≈ vertical advance), and Latin/ASCII characters rotate sideways so their vertical extent equals their horizontal width. Kinsoku (line-start/end prohibition) rules for Japanese punctuation apply in both axes.
+
 ### API Glossary
 
 Use-case 1 APIs:

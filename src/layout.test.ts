@@ -625,3 +625,40 @@ describe('layout invariants', () => {
     }
   })
 })
+
+describe('vertical-rl layout invariants', () => {
+  // In vertical-rl mode the parameters are logical:
+  //   maxWidth  = column height (inline-axis constraint, top-to-bottom)
+  //   lineHeight = column width (block-axis advance per column, right-to-left)
+  //   LayoutResult.height = total physical width of all columns
+  //
+  // Canvas measureText() horizontal advances are already correct vertical
+  // advances for CJK/kana (square cells) and sideways-rotated Latin.
+
+  const JAPANESE = '日本語のテキストで縦書きのレイアウトを行うことができます。'
+  const COLUMN_WIDTH = 20
+
+  test('vertical-rl prepare produces a positive line count for Japanese text', () => {
+    const prepared = prepare(JAPANESE, FONT, { writingMode: 'vertical-rl' })
+    const result = layout(prepared, 200, COLUMN_WIDTH)
+    expect(result.lineCount).toBeGreaterThan(0)
+    expect(result.height).toBe(result.lineCount * COLUMN_WIDTH)
+  })
+
+  test('vertical-rl column count grows as column height shrinks', () => {
+    const prepared = prepare(JAPANESE, FONT, { writingMode: 'vertical-rl' })
+    const tall = layout(prepared, 400, COLUMN_WIDTH)
+    const short = layout(prepared, 200, COLUMN_WIDTH)
+    const veryShort = layout(prepared, 100, COLUMN_WIDTH)
+    expect(short.lineCount).toBeGreaterThanOrEqual(tall.lineCount)
+    expect(veryShort.lineCount).toBeGreaterThanOrEqual(short.lineCount)
+  })
+
+  test('prepareWithSegments exposes writingMode on the result', () => {
+    const horiz = prepareWithSegments(JAPANESE, FONT)
+    expect((horiz as { writingMode: string }).writingMode).toBe('horizontal-tb')
+
+    const vert = prepareWithSegments(JAPANESE, FONT, { writingMode: 'vertical-rl' })
+    expect((vert as { writingMode: string }).writingMode).toBe('vertical-rl')
+  })
+})

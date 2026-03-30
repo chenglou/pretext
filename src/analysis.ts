@@ -1,5 +1,7 @@
 export type WhiteSpaceMode = 'normal' | 'pre-wrap'
 
+export type WritingMode = 'horizontal-tb' | 'vertical-rl'
+
 export type SegmentBreakKind =
   | 'text'
   | 'space'
