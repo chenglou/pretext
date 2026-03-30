@@ -22,7 +22,8 @@ See `DEVELOPMENT.md` for the current command surface and packaging/release check
 - `accuracy/chrome.json` / `accuracy/safari.json` / `accuracy/firefox.json` — checked-in raw accuracy rows backing `STATUS.md`
 - `pages/benchmark.ts` — performance comparisons
 - `benchmarks/chrome.json` / `benchmarks/safari.json` — checked-in current benchmark snapshots backing `STATUS.md`
-- `corpora/representative.json` — checked-in representative corpus anchor rows backing `corpora/STATUS.md`
+- `corpora/representative.json` — checked-in representative corpus anchor rows used by `corpora/STATUS.md`
+- `corpora/chrome-sampled.json` / `corpora/chrome-step10.json` — checked-in Chrome corpus sweep snapshots backing the generated top tables in `corpora/STATUS.md`
 - `pages/diagnostic-utils.ts` — shared grapheme-safe diagnostic helpers used by the browser check pages
 - `scripts/pre-wrap-check.ts` — small permanent browser-oracle sweep for the non-default `{ whiteSpace: 'pre-wrap' }` mode
 - `pages/demos/index.html` — public static demo landing page used as the GitHub Pages site root
@@ -95,6 +96,7 @@ See `DEVELOPMENT.md` for the current command surface and packaging/release check
 - Current line-fit tolerance is `0.005` for Chromium/Gecko and `1/64` for Safari/WebKit. That bump was justified by the remaining Arabic fine-width field and did not move the solved browser corpus or Gatsby coarse canary.
 - Refresh `accuracy/chrome.json`, `accuracy/safari.json`, and `accuracy/firefox.json` when a diff changes the browser sweep methodology or the main text engine behavior (`src/analysis.ts`, `src/measurement.ts`, `src/line-break.ts`, `src/layout.ts`, `src/bidi.ts`, or `pages/accuracy.ts`).
 - Refresh `corpora/representative.json` when a diff intentionally changes one of the tracked representative canaries or their canonical anchor behavior. Keep it compact: anchors and designated fragile-width sentinels, not every exploratory sweep result.
+- Refresh `corpora/chrome-sampled.json`, `corpora/chrome-step10.json`, and then regenerate `corpora/STATUS.md` when the corpus sweep methodology or long-form canary behavior changes in a way that moves the dashboard counts.
 
 ### Open questions
 

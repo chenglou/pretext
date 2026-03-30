@@ -44,6 +44,8 @@
     "corpus-font-matrix": "bun run scripts/corpus-font-matrix.ts",
     "corpus-font-matrix:safari": "CORPUS_CHECK_BROWSER=safari bun run scripts/corpus-font-matrix.ts",
     "corpus-representative": "bun run scripts/corpus-representative.ts --output=corpora/representative.json",
+    "corpus-status": "bun run scripts/corpus-status.ts",
+    "corpus-status:refresh": "bun run scripts/corpus-sweep.ts --all --samples=9 --output=corpora/chrome-sampled.json && bun run scripts/corpus-sweep.ts --all --start=300 --end=900 --step=10 --output=corpora/chrome-step10.json && bun run scripts/corpus-status.ts",
     "corpus-sweep": "bun run scripts/corpus-sweep.ts",
     "corpus-sweep:safari": "CORPUS_CHECK_BROWSER=safari bun run scripts/corpus-sweep.ts",
     "corpus-taxonomy": "bun run scripts/corpus-taxonomy.ts",

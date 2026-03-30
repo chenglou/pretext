@@ -1,0 +1,860 @@
+[
+  {
+    "corpusId": "mixed-app-text",
+    "language": "mul",
+    "title": "Mixed app text",
+    "browser": "chrome",
+    "start": 300,
+    "end": 900,
+    "step": 10,
+    "samples": null,
+    "widthCount": 61,
+    "exactCount": 60,
+    "mismatches": [
+      {
+        "width": 710,
+        "diffPx": -30,
+        "predictedHeight": 500,
+        "actualHeight": 530,
+        "predictedLineCount": 14,
+        "browserLineCount": 15
+      }
+    ]
+  },
+  {
+    "corpusId": "ja-rashomon",
+    "language": "ja",
+    "title": "羅生門",
+    "browser": "chrome",
+    "start": 300,
+    "end": 900,
+    "step": 10,
+    "samples": null,
+    "widthCount": 61,
+    "exactCount": 55,
+    "mismatches": [
+      {
+        "width": 320,
+        "diffPx": 32,
+        "predictedHeight": 15344,
+        "actualHeight": 15312,
+        "predictedLineCount": 477,
+        "browserLineCount": 476
+      },
+      {
+        "width": 330,
+        "diffPx": 32,
+        "predictedHeight": 15216,
+        "actualHeight": 15184,
+        "predictedLineCount": 473,
+        "browserLineCount": 472
+      },
+      {
+        "width": 370,
+        "diffPx": 32,
+        "predictedHeight": 13072,
+        "actualHeight": 13040,
+        "predictedLineCount": 406,
+        "browserLineCount": 405
+      },
+      {
+        "width": 460,
+        "diffPx": 32,
+        "predictedHeight": 9680,
+        "actualHeight": 9648,
+        "predictedLineCount": 300,
+        "browserLineCount": 299
+      },
+      {
+        "width": 750,
+        "diffPx": 32,
+        "predictedHeight": 5584,
+        "actualHeight": 5552,
+        "predictedLineCount": 172,
+        "browserLineCount": 171
+      },
+      {
+        "width": 890,
+        "diffPx": 32,
+        "predictedHeight": 4624,
+        "actualHeight": 4592,
+        "predictedLineCount": 142,
+        "browserLineCount": 141
+      }
+    ]
+  },
+  {
+    "corpusId": "ja-kumo-no-ito",
+    "language": "ja",
+    "title": "蜘蛛の糸",
+    "browser": "chrome",
+    "start": 300,
+    "end": 900,
+    "step": 10,
+    "samples": null,
+    "widthCount": 61,
+    "exactCount": 56,
+    "mismatches": [
+      {
+        "width": 310,
+        "diffPx": 32,
+        "predictedHeight": 8496,
+        "actualHeight": 8464,
+        "predictedLineCount": 263,
+        "browserLineCount": 262
+      },
+      {
+        "width": 330,
+        "diffPx": 32,
+        "predictedHeight": 7760,
+        "actualHeight": 7728,
+        "predictedLineCount": 240,
+        "browserLineCount": 239
+      },
+      {
+        "width": 410,
+        "diffPx": 32,
+        "predictedHeight": 5840,
+        "actualHeight": 5808,
+        "predictedLineCount": 180,
+        "browserLineCount": 179
+      },
+      {
+        "width": 450,
+        "diffPx": 32,
+        "predictedHeight": 5200,
+        "actualHeight": 5168,
+        "predictedLineCount": 160,
+        "browserLineCount": 159
+      },
+      {
+        "width": 630,
+        "diffPx": 32,
+        "predictedHeight": 3504,
+        "actualHeight": 3472,
+        "predictedLineCount": 107,
+        "browserLineCount": 106
+      }
+    ]
+  },
+  {
+    "corpusId": "ko-unsu-joh-eun-nal",
+    "language": "ko",
+    "title": "운수 좋은 날",
+    "browser": "chrome",
+    "start": 300,
+    "end": 900,
+    "step": 10,
+    "samples": null,
+    "widthCount": 61,
+    "exactCount": 61,
+    "mismatches": []
+  },
+  {
+    "corpusId": "zh-zhufu",
+    "language": "zh",
+    "title": "祝福",
+    "browser": "chrome",
+    "start": 300,
+    "end": 900,
+    "step": 10,
+    "samples": null,
+    "widthCount": 61,
+    "exactCount": 42,
+    "mismatches": [
+      {
+        "width": 300,
+        "diffPx": 32,
+        "predictedHeight": 27440,
+        "actualHeight": 27408,
+        "predictedLineCount": 855,
+        "browserLineCount": 854
+      },
+      {
+        "width": 310,
+        "diffPx": 32,
+        "predictedHeight": 27248,
+        "actualHeight": 27216,
+        "predictedLineCount": 849,
+        "browserLineCount": 848
+      },
+      {
+        "width": 320,
+        "diffPx": 32,
+        "predictedHeight": 25232,
+        "actualHeight": 25200,
+        "predictedLineCount": 786,
+        "browserLineCount": 785
+      },
+      {
+        "width": 330,
+        "diffPx": 64,
+        "predictedHeight": 24976,
+        "actualHeight": 24912,
+        "predictedLineCount": 778,
+        "browserLineCount": 776
+      },
+      {
+        "width": 340,
+        "diffPx": 32,
+        "predictedHeight": 23280,
+        "actualHeight": 23248,
+        "predictedLineCount": 725,
+        "browserLineCount": 724
+      },
+      {
+        "width": 350,
+        "diffPx": 64,
+        "predictedHeight": 23056,
+        "actualHeight": 22992,
+        "predictedLineCount": 718,
+        "browserLineCount": 716
+      },
+      {
+        "width": 360,
+        "diffPx": 32,
+        "predictedHeight": 21584,
+        "actualHeight": 21552,
+        "predictedLineCount": 672,
+        "browserLineCount": 671
+      },
+      {
+        "width": 420,
+        "diffPx": 32,
+        "predictedHeight": 17776,
+        "actualHeight": 17744,
+        "predictedLineCount": 553,
+        "browserLineCount": 552
+      },
+      {
+        "width": 450,
+        "diffPx": 32,
+        "predictedHeight": 16624,
+        "actualHeight": 16592,
+        "predictedLineCount": 517,
+        "browserLineCount": 516
+      },
+      {
+        "width": 460,
+        "diffPx": 32,
+        "predictedHeight": 15888,
+        "actualHeight": 15856,
+        "predictedLineCount": 494,
+        "browserLineCount": 493
+      },
+      {
+        "width": 470,
+        "diffPx": 32,
+        "predictedHeight": 15728,
+        "actualHeight": 15696,
+        "predictedLineCount": 489,
+        "browserLineCount": 488
+      },
+      {
+        "width": 490,
+        "diffPx": -32,
+        "predictedHeight": 14928,
+        "actualHeight": 14960,
+        "predictedLineCount": 464,
+        "browserLineCount": 465
+      },
+      {
+        "width": 510,
+        "diffPx": 32,
+        "predictedHeight": 14224,
+        "actualHeight": 14192,
+        "predictedLineCount": 442,
+        "browserLineCount": 441
+      },
+      {
+        "width": 550,
+        "diffPx": 32,
+        "predictedHeight": 13008,
+        "actualHeight": 12976,
+        "predictedLineCount": 404,
+        "browserLineCount": 403
+      },
+      {
+        "width": 660,
+        "diffPx": 32,
+        "predictedHeight": 10416,
+        "actualHeight": 10384,
+        "predictedLineCount": 323,
+        "browserLineCount": 322
+      },
+      {
+        "width": 760,
+        "diffPx": 32,
+        "predictedHeight": 8880,
+        "actualHeight": 8848,
+        "predictedLineCount": 275,
+        "browserLineCount": 274
+      },
+      {
+        "width": 770,
+        "diffPx": 32,
+        "predictedHeight": 8816,
+        "actualHeight": 8784,
+        "predictedLineCount": 273,
+        "browserLineCount": 272
+      },
+      {
+        "width": 850,
+        "diffPx": 32,
+        "predictedHeight": 7888,
+        "actualHeight": 7856,
+        "predictedLineCount": 244,
+        "browserLineCount": 243
+      },
+      {
+        "width": 870,
+        "diffPx": 32,
+        "predictedHeight": 7696,
+        "actualHeight": 7664,
+        "predictedLineCount": 238,
+        "browserLineCount": 237
+      }
+    ]
+  },
+  {
+    "corpusId": "zh-guxiang",
+    "language": "zh",
+    "title": "故鄉",
+    "browser": "chrome",
+    "start": 300,
+    "end": 900,
+    "step": 10,
+    "samples": null,
+    "widthCount": 61,
+    "exactCount": 54,
+    "mismatches": [
+      {
+        "width": 300,
+        "diffPx": 64,
+        "predictedHeight": 16592,
+        "actualHeight": 16528,
+        "predictedLineCount": 516,
+        "browserLineCount": 514
+      },
+      {
+        "width": 330,
+        "diffPx": 96,
+        "predictedHeight": 14960,
+        "actualHeight": 14864,
+        "predictedLineCount": 465,
+        "browserLineCount": 462
+      },
+      {
+        "width": 360,
+        "diffPx": 32,
+        "predictedHeight": 13008,
+        "actualHeight": 12976,
+        "predictedLineCount": 404,
+        "browserLineCount": 403
+      },
+      {
+        "width": 450,
+        "diffPx": 32,
+        "predictedHeight": 9936,
+        "actualHeight": 9904,
+        "predictedLineCount": 308,
+        "browserLineCount": 307
+      },
+      {
+        "width": 510,
+        "diffPx": 32,
+        "predictedHeight": 8528,
+        "actualHeight": 8496,
+        "predictedLineCount": 264,
+        "browserLineCount": 263
+      },
+      {
+        "width": 670,
+        "diffPx": 32,
+        "predictedHeight": 6192,
+        "actualHeight": 6160,
+        "predictedLineCount": 191,
+        "browserLineCount": 190
+      },
+      {
+        "width": 700,
+        "diffPx": 32,
+        "predictedHeight": 5872,
+        "actualHeight": 5840,
+        "predictedLineCount": 181,
+        "browserLineCount": 180
+      }
+    ]
+  },
+  {
+    "corpusId": "th-nithan-vetal-story-1",
+    "language": "th",
+    "title": "นิทานเวตาล/เรื่องที่ 1",
+    "browser": "chrome",
+    "start": 300,
+    "end": 900,
+    "step": 10,
+    "samples": null,
+    "widthCount": 61,
+    "exactCount": 59,
+    "mismatches": [
+      {
+        "width": 370,
+        "diffPx": 32,
+        "predictedHeight": 34064,
+        "actualHeight": 34032,
+        "predictedLineCount": 1062,
+        "browserLineCount": 1061
+      },
+      {
+        "width": 490,
+        "diffPx": 32,
+        "predictedHeight": 23664,
+        "actualHeight": 23632,
+        "predictedLineCount": 737,
+        "browserLineCount": 736
+      }
+    ]
+  },
+  {
+    "corpusId": "th-nithan-vetal-story-7",
+    "language": "th",
+    "title": "นิทานเวตาล เรื่องที่ ๗",
+    "browser": "chrome",
+    "start": 300,
+    "end": 900,
+    "step": 10,
+    "samples": null,
+    "widthCount": 61,
+    "exactCount": 60,
+    "mismatches": [
+      {
+        "width": 320,
+        "diffPx": 32,
+        "predictedHeight": 37712,
+        "actualHeight": 37680,
+        "predictedLineCount": 1176,
+        "browserLineCount": 1175
+      }
+    ]
+  },
+  {
+    "corpusId": "my-cunning-heron-teacher",
+    "language": "my",
+    "title": "စဉ်းလဲသော ဗျိုင်း (ဆရာ)",
+    "browser": "chrome",
+    "start": 300,
+    "end": 900,
+    "step": 10,
+    "samples": null,
+    "widthCount": 61,
+    "exactCount": 56,
+    "mismatches": [
+      {
+        "width": 340,
+        "diffPx": -32,
+        "predictedHeight": 3120,
+        "actualHeight": 3152,
+        "predictedLineCount": 95,
+        "browserLineCount": 96
+      },
+      {
+        "width": 350,
+        "diffPx": -32,
+        "predictedHeight": 2960,
+        "actualHeight": 2992,
+        "predictedLineCount": 90,
+        "browserLineCount": 91
+      },
+      {
+        "width": 480,
+        "diffPx": -32,
+        "predictedHeight": 2000,
+        "actualHeight": 2032,
+        "predictedLineCount": 60,
+        "browserLineCount": 61
+      },
+      {
+        "width": 690,
+        "diffPx": -32,
+        "predictedHeight": 1296,
+        "actualHeight": 1328,
+        "predictedLineCount": 38,
+        "browserLineCount": 39
+      },
+      {
+        "width": 710,
+        "diffPx": -32,
+        "predictedHeight": 1264,
+        "actualHeight": 1296,
+        "predictedLineCount": 37,
+        "browserLineCount": 38
+      }
+    ]
+  },
+  {
+    "corpusId": "my-bad-deeds-return-to-you-teacher",
+    "language": "my",
+    "title": "မကောင်းမှုဒဏ် ကိုယ့်ထံပြန် (ဆရာ)",
+    "browser": "chrome",
+    "start": 300,
+    "end": 900,
+    "step": 10,
+    "samples": null,
+    "widthCount": 61,
+    "exactCount": 57,
+    "mismatches": [
+      {
+        "width": 340,
+        "diffPx": -32,
+        "predictedHeight": 2064,
+        "actualHeight": 2096,
+        "predictedLineCount": 62,
+        "browserLineCount": 63
+      },
+      {
+        "width": 400,
+        "diffPx": -32,
+        "predictedHeight": 1648,
+        "actualHeight": 1680,
+        "predictedLineCount": 49,
+        "browserLineCount": 50
+      },
+      {
+        "width": 470,
+        "diffPx": -32,
+        "predictedHeight": 1360,
+        "actualHeight": 1392,
+        "predictedLineCount": 40,
+        "browserLineCount": 41
+      },
+      {
+        "width": 580,
+        "diffPx": -32,
+        "predictedHeight": 1072,
+        "actualHeight": 1104,
+        "predictedLineCount": 31,
+        "browserLineCount": 32
+      }
+    ]
+  },
+  {
+    "corpusId": "km-prachum-reuang-preng-khmer-volume-7-stories-1-10",
+    "language": "km",
+    "title": "ប្រជុំរឿងព្រេងខ្មែរ/ភាគទី៧ (រឿង ១-១០)",
+    "browser": "chrome",
+    "start": 300,
+    "end": 900,
+    "step": 10,
+    "samples": null,
+    "widthCount": 61,
+    "exactCount": 61,
+    "mismatches": []
+  },
+  {
+    "corpusId": "ar-risalat-al-ghufran-part-1",
+    "language": "ar",
+    "title": "رسالة الغفران/الجزء الأول",
+    "browser": "chrome",
+    "start": 300,
+    "end": 900,
+    "step": 10,
+    "samples": null,
+    "widthCount": 61,
+    "exactCount": 61,
+    "mismatches": []
+  },
+  {
+    "corpusId": "ar-al-bukhala",
+    "language": "ar",
+    "title": "البخلاء",
+    "browser": "chrome",
+    "start": 300,
+    "end": 900,
+    "step": 10,
+    "samples": null,
+    "widthCount": 61,
+    "exactCount": 61,
+    "mismatches": []
+  },
+  {
+    "corpusId": "hi-eidgah",
+    "language": "hi",
+    "title": "प्रेमचंद की सर्वश्रेष्ठ कहानियां/ईदगाह",
+    "browser": "chrome",
+    "start": 300,
+    "end": 900,
+    "step": 10,
+    "samples": null,
+    "widthCount": 61,
+    "exactCount": 61,
+    "mismatches": []
+  },
+  {
+    "corpusId": "he-masaot-binyamin-metudela",
+    "language": "he",
+    "title": "מסעות בנימין מטודלה",
+    "browser": "chrome",
+    "start": 300,
+    "end": 900,
+    "step": 10,
+    "samples": null,
+    "widthCount": 61,
+    "exactCount": 61,
+    "mismatches": []
+  },
+  {
+    "corpusId": "ur-chughd",
+    "language": "ur",
+    "title": "چغد",
+    "browser": "chrome",
+    "start": 300,
+    "end": 900,
+    "step": 10,
+    "samples": null,
+    "widthCount": 61,
+    "exactCount": 31,
+    "mismatches": [
+      {
+        "width": 300,
+        "diffPx": -76,
+        "predictedHeight": 18586,
+        "actualHeight": 18662,
+        "predictedLineCount": 487,
+        "browserLineCount": 489
+      },
+      {
+        "width": 310,
+        "diffPx": -152,
+        "predictedHeight": 17750,
+        "actualHeight": 17902,
+        "predictedLineCount": 465,
+        "browserLineCount": 469
+      },
+      {
+        "width": 320,
+        "diffPx": -190,
+        "predictedHeight": 16952,
+        "actualHeight": 17142,
+        "predictedLineCount": 444,
+        "browserLineCount": 449
+      },
+      {
+        "width": 330,
+        "diffPx": -38,
+        "predictedHeight": 16192,
+        "actualHeight": 16230,
+        "predictedLineCount": 424,
+        "browserLineCount": 425
+      },
+      {
+        "width": 340,
+        "diffPx": -38,
+        "predictedHeight": 15622,
+        "actualHeight": 15660,
+        "predictedLineCount": 409,
+        "browserLineCount": 410
+      },
+      {
+        "width": 360,
+        "diffPx": -114,
+        "predictedHeight": 14368,
+        "actualHeight": 14482,
+        "predictedLineCount": 376,
+        "browserLineCount": 379
+      },
+      {
+        "width": 370,
+        "diffPx": -114,
+        "predictedHeight": 13912,
+        "actualHeight": 14026,
+        "predictedLineCount": 364,
+        "browserLineCount": 367
+      },
+      {
+        "width": 380,
+        "diffPx": -38,
+        "predictedHeight": 13418,
+        "actualHeight": 13456,
+        "predictedLineCount": 351,
+        "browserLineCount": 352
+      },
+      {
+        "width": 390,
+        "diffPx": -38,
+        "predictedHeight": 12962,
+        "actualHeight": 13000,
+        "predictedLineCount": 339,
+        "browserLineCount": 340
+      },
+      {
+        "width": 400,
+        "diffPx": -38,
+        "predictedHeight": 12544,
+        "actualHeight": 12582,
+        "predictedLineCount": 328,
+        "browserLineCount": 329
+      },
+      {
+        "width": 420,
+        "diffPx": -38,
+        "predictedHeight": 11784,
+        "actualHeight": 11822,
+        "predictedLineCount": 308,
+        "browserLineCount": 309
+      },
+      {
+        "width": 430,
+        "diffPx": -76,
+        "predictedHeight": 11328,
+        "actualHeight": 11404,
+        "predictedLineCount": 296,
+        "browserLineCount": 298
+      },
+      {
+        "width": 440,
+        "diffPx": -76,
+        "predictedHeight": 11100,
+        "actualHeight": 11176,
+        "predictedLineCount": 290,
+        "browserLineCount": 292
+      },
+      {
+        "width": 450,
+        "diffPx": -38,
+        "predictedHeight": 10796,
+        "actualHeight": 10834,
+        "predictedLineCount": 282,
+        "browserLineCount": 283
+      },
+      {
+        "width": 470,
+        "diffPx": -38,
+        "predictedHeight": 10188,
+        "actualHeight": 10226,
+        "predictedLineCount": 266,
+        "browserLineCount": 267
+      },
+      {
+        "width": 480,
+        "diffPx": -38,
+        "predictedHeight": 9960,
+        "actualHeight": 9998,
+        "predictedLineCount": 260,
+        "browserLineCount": 261
+      },
+      {
+        "width": 490,
+        "diffPx": -38,
+        "predictedHeight": 9656,
+        "actualHeight": 9694,
+        "predictedLineCount": 252,
+        "browserLineCount": 253
+      },
+      {
+        "width": 510,
+        "diffPx": -38,
+        "predictedHeight": 9238,
+        "actualHeight": 9276,
+        "predictedLineCount": 241,
+        "browserLineCount": 242
+      },
+      {
+        "width": 520,
+        "diffPx": -76,
+        "predictedHeight": 9010,
+        "actualHeight": 9086,
+        "predictedLineCount": 235,
+        "browserLineCount": 237
+      },
+      {
+        "width": 530,
+        "diffPx": -38,
+        "predictedHeight": 8782,
+        "actualHeight": 8820,
+        "predictedLineCount": 229,
+        "browserLineCount": 230
+      },
+      {
+        "width": 550,
+        "diffPx": -38,
+        "predictedHeight": 8402,
+        "actualHeight": 8440,
+        "predictedLineCount": 219,
+        "browserLineCount": 220
+      },
+      {
+        "width": 570,
+        "diffPx": -38,
+        "predictedHeight": 8060,
+        "actualHeight": 8098,
+        "predictedLineCount": 210,
+        "browserLineCount": 211
+      },
+      {
+        "width": 580,
+        "diffPx": -38,
+        "predictedHeight": 7870,
+        "actualHeight": 7908,
+        "predictedLineCount": 205,
+        "browserLineCount": 206
+      },
+      {
+        "width": 590,
+        "diffPx": -38,
+        "predictedHeight": 7718,
+        "actualHeight": 7756,
+        "predictedLineCount": 201,
+        "browserLineCount": 202
+      },
+      {
+        "width": 620,
+        "diffPx": -38,
+        "predictedHeight": 7300,
+        "actualHeight": 7338,
+        "predictedLineCount": 190,
+        "browserLineCount": 191
+      },
+      {
+        "width": 650,
+        "diffPx": -38,
+        "predictedHeight": 6920,
+        "actualHeight": 6958,
+        "predictedLineCount": 180,
+        "browserLineCount": 181
+      },
+      {
+        "width": 730,
+        "diffPx": -38,
+        "predictedHeight": 6046,
+        "actualHeight": 6084,
+        "predictedLineCount": 157,
+        "browserLineCount": 158
+      },
+      {
+        "width": 770,
+        "diffPx": -38,
+        "predictedHeight": 5704,
+        "actualHeight": 5742,
+        "predictedLineCount": 148,
+        "browserLineCount": 149
+      },
+      {
+        "width": 840,
+        "diffPx": -38,
+        "predictedHeight": 5172,
+        "actualHeight": 5210,
+        "predictedLineCount": 134,
+        "browserLineCount": 135
+      },
+      {
+        "width": 900,
+        "diffPx": -38,
+        "predictedHeight": 4792,
+        "actualHeight": 4830,
+        "predictedLineCount": 124,
+        "browserLineCount": 125
+      }
+    ]
+  }
+]
