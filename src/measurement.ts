@@ -16,6 +16,7 @@ export type EngineProfile = {
 }
 
 let measureContext: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D | null = null
+let customContext: CanvasRenderingContext2D | null = null
 const segmentMetricCaches = new Map<string, Map<string, SegmentMetrics>>()
 let cachedEngineProfile: EngineProfile | null = null
 
@@ -25,6 +26,7 @@ let sharedGraphemeSegmenter: Intl.Segmenter | null = null
 const emojiCorrectionCache = new Map<string, number>()
 
 export function getMeasureContext(): CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D {
+  if (customContext !== null) return customContext
   if (measureContext !== null) return measureContext
 
   if (typeof OffscreenCanvas !== 'undefined') {
@@ -38,6 +40,10 @@ export function getMeasureContext(): CanvasRenderingContext2D | OffscreenCanvasR
   }
 
   throw new Error('Text measurement requires OffscreenCanvas or a DOM canvas context.')
+}
+
+export function setCustomContext(ctx: CanvasRenderingContext2D): void {
+  customContext = ctx
 }
 
 export function getSegmentMetricCache(font: string): Map<string, SegmentMetrics> {
