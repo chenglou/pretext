@@ -26,10 +26,10 @@ Current bundle:
   - URL: <https://ja.wikisource.org/wiki/%E8%9C%98%E8%9B%9B%E3%81%AE%E7%B3%B8>
   - Acquisition: Wikisource `parse` API, trimmed to the story body with ruby fallout and public-domain/license scaffolding removed
 
-- `ko-unsu-joh-eun-nal.txt`
+- `ko-sonagi.txt`
   - Language: Korean
-  - Source: Hyun Jin-geon, `운수 좋은 날`
-  - URL: <https://ko.wikisource.org/wiki/%EC%9A%B4%EC%88%98_%EC%A2%8B%EC%9D%80_%EB%82%A0>
+  - Source: Hwang Sun-won, `소나기`
+  - URL: <https://ko.wikisource.org/wiki/%EC%86%8C%EB%82%98%EA%B8%B0>
   - Acquisition: Wikisource `extracts` API, lightly cleaned
 
 - `zh-zhufu.txt`
@@ -111,7 +111,7 @@ Mismatch taxonomy and steering vocabulary live in `TAXONOMY.md`.
 
 Useful commands:
 
-- `bun run corpus-check --id=ko-unsu-joh-eun-nal 300 600 800`
+- `bun run corpus-check --id=ko-sonagi 300 600 800`
 - `bun run corpus-check --id=ar-risalat-al-ghufran-part-1 --diagnose 300`
 - `bun run corpus-sweep --id=hi-eidgah --start=300 --end=900 --step=10`
 - `bun run corpus-sweep --id=ar-al-bukhala --samples=9`

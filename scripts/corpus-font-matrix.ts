@@ -103,7 +103,7 @@ const FONT_MATRIX: Record<string, FontVariant[]> = {
       lineHeight: 32,
     },
   ],
-  'ko-unsu-joh-eun-nal': [
+  'ko-sonagi': [
     {
       id: 'default',
       label: 'Apple SD Gothic Neo',
