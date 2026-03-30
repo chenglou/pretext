@@ -1,0 +1,23 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__github__issue_read",
+      "Bash(git fetch:*)",
+      "Bash(git remote:*)",
+      "Bash(git checkout:*)",
+      "Bash(npm test:*)",
+      "Bash(npm run:*)",
+      "Bash(bun install:*)",
+      "Bash(npm install:*)",
+      "Bash(npx tsc:*)",
+      "Bash(git add:*)",
+      "Bash(git commit -m \"perf: optimize line-break calculations with pre-computed effectiveMaxWidth:*)",
+      "Bash(git push:*)",
+      "mcp__github__fork_repository",
+      "Bash(git config:*)",
+      "mcp__github__get_me",
+      "mcp__github__create_pull_request",
+      "Bash(git commit:*)"
+    ]
+  }
+}
