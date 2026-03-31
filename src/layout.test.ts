@@ -24,6 +24,21 @@ let walkPreparedLines: LineBreakModule['walkPreparedLines']
 
 const emojiPresentationRe = /\p{Emoji_Presentation}/u
 const punctuationRe = /[.,!?;:%)\]}'"”’»›…—-]/u
+const graphemeSegmenter = new Intl.Segmenter(undefined, { granularity: 'grapheme' })
+
+type TestLayoutCursor = {
+  segmentIndex: number
+  graphemeIndex: number
+}
+
+type TestPreparedTextWithSegments = {
+  segments: string[]
+}
+
+type TestLayoutLine = {
+  start: TestLayoutCursor
+  end: TestLayoutCursor
+}
 
 function parseFontSize(font: string): number {
   const match = font.match(/(\d+(?:\.\d+)?)\s*px/)
@@ -78,6 +93,77 @@ function nextTabAdvance(lineWidth: number, spaceWidth: number, tabSize = 8): num
   const tabStopAdvance = spaceWidth * tabSize
   const remainder = lineWidth % tabStopAdvance
   return remainder === 0 ? tabStopAdvance : tabStopAdvance - remainder
+}
+
+function getSegmentGraphemes(text: string): string[] {
+  return Array.from(graphemeSegmenter.segment(text), segment => segment.segment)
+}
+
+function slicePreparedText(
+  prepared: TestPreparedTextWithSegments,
+  start: TestLayoutCursor,
+  end: TestLayoutCursor,
+): string {
+  if (start.segmentIndex === end.segmentIndex) {
+    const segment = prepared.segments[start.segmentIndex]
+    if (segment === undefined) return ''
+    return getSegmentGraphemes(segment).slice(start.graphemeIndex, end.graphemeIndex).join('')
+  }
+
+  let result = ''
+  for (let segmentIndex = start.segmentIndex; segmentIndex < end.segmentIndex; segmentIndex++) {
+    const segment = prepared.segments[segmentIndex]
+    if (segment === undefined) break
+    if (segmentIndex === start.segmentIndex && start.graphemeIndex > 0) {
+      result += getSegmentGraphemes(segment).slice(start.graphemeIndex).join('')
+    } else {
+      result += segment
+    }
+  }
+
+  if (end.graphemeIndex > 0) {
+    const segment = prepared.segments[end.segmentIndex]
+    if (segment !== undefined) {
+      result += getSegmentGraphemes(segment).slice(0, end.graphemeIndex).join('')
+    }
+  }
+
+  return result
+}
+
+function reconstructFromLineBoundaries(
+  prepared: TestPreparedTextWithSegments,
+  lines: TestLayoutLine[],
+): string {
+  return lines.map(line => slicePreparedText(prepared, line.start, line.end)).join('')
+}
+
+function collectStreamedLines(
+  prepared: TestPreparedTextWithSegments,
+  width: number,
+): TestLayoutLine[] {
+  const lines: TestLayoutLine[] = []
+  let cursor = { segmentIndex: 0, graphemeIndex: 0 }
+
+  while (true) {
+    const line = layoutNextLine(prepared as Parameters<typeof layoutNextLine>[0], cursor, width)
+    if (line === null) break
+    lines.push(line)
+    cursor = line.end
+  }
+
+  return lines
+}
+
+function reconstructFromWalkedRanges(
+  prepared: TestPreparedTextWithSegments,
+  width: number,
+): string {
+  const slices: string[] = []
+  walkLineRanges(prepared as Parameters<typeof walkLineRanges>[0], width, line => {
+    slices.push(slicePreparedText(prepared, line.start, line.end))
+  })
+  return slices.join('')
 }
 
 class TestCanvasRenderingContext2D {
@@ -456,6 +542,47 @@ describe('layout invariants', () => {
     }
 
     expect(actual).toEqual(expected.lines)
+  })
+
+  test('rich line boundary cursors reconstruct normalized source text exactly', () => {
+    const cases = [
+      'a b c',
+      '  Hello\t \n  World  ',
+      'foo trans\u00ADatlantic said "hello" to 世界 and waved.',
+      'According to محمد الأحمد, the results improved.',
+      'see https://example.com/reports/q3?lang=ar&mode=full now',
+      'alpha\u200Bbeta gamma',
+    ]
+    const widths = [40, 80, 120, 200]
+
+    for (const text of cases) {
+      const prepared = prepareWithSegments(text, FONT)
+      const expected = prepared.segments.join('')
+
+      for (const width of widths) {
+        const batched = layoutWithLines(prepared, width, LINE_HEIGHT)
+        const streamed = collectStreamedLines(prepared, width)
+
+        expect(reconstructFromLineBoundaries(prepared, batched.lines)).toBe(expected)
+        expect(reconstructFromLineBoundaries(prepared, streamed)).toBe(expected)
+        expect(reconstructFromWalkedRanges(prepared, width)).toBe(expected)
+      }
+    }
+  })
+
+  test('soft-hyphen round-trip uses source slices instead of rendered line text', () => {
+    const prepared = prepareWithSegments('foo trans\u00ADatlantic', FONT)
+    const width =
+      prepared.widths[0]! +
+      prepared.widths[1]! +
+      prepared.widths[2]! +
+      prepared.breakableWidths[4]![0]! +
+      prepared.discretionaryHyphenWidth +
+      0.1
+    const result = layoutWithLines(prepared, width, LINE_HEIGHT)
+
+    expect(result.lines.map(line => line.text).join('')).toBe('foo trans-atlantic')
+    expect(reconstructFromLineBoundaries(prepared, result.lines)).toBe('foo trans\u00ADatlantic')
   })
 
   test('pre-wrap mode keeps hanging spaces visible at line end', () => {

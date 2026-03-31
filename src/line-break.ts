@@ -622,7 +622,9 @@ export function walkPreparedLines(
         }
 
         if (pendingBreakSegmentIndex >= 0 && pendingBreakFitWidth <= maxWidth + lineFitEpsilon) {
-          emitCurrentLine(pendingBreakSegmentIndex, 0, pendingBreakPaintWidth)
+          const nextSegmentIndex = pendingBreakSegmentIndex
+          emitCurrentLine(nextSegmentIndex, 0, pendingBreakPaintWidth)
+          i = nextSegmentIndex
           continue
         }
 
