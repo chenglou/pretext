@@ -343,7 +343,12 @@ function walkPreparedLinesSimple(
       }
 
       if (pendingBreakSegmentIndex >= 0) {
+        const resumeAt = pendingBreakSegmentIndex
         emitCurrentLine(pendingBreakSegmentIndex, 0, pendingBreakPaintWidth)
+        // Resume from the break point, not the current overflow segment.
+        // Segments between the break point and i were appended to lineW but
+        // excluded from the emitted line — they must be re-laid. See #50.
+        i = resumeAt
         continue
       }
 
