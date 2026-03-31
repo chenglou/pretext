@@ -40,12 +40,6 @@ type GatsbyReport = {
   diffPx?: number
   predictedLineCount?: number
   browserLineCount?: number
-  ourJoinedMatchesText?: boolean
-  browserJoinedMatchesText?: boolean
-  ourJoinedDiffOffset?: number | null
-  browserJoinedDiffOffset?: number | null
-  ourJoinedDiff?: JoinedTextDiff | null
-  browserJoinedDiff?: JoinedTextDiff | null
   mismatchCount?: number
   firstMismatch?: GatsbyLineMismatch | null
   firstBreakMismatch?: GatsbyBreakMismatch | null
@@ -153,12 +147,6 @@ type SegmentSpan = {
   width: number
   isSpace: boolean
   breakable: boolean
-}
-
-type JoinedTextDiff = {
-  offset: number
-  expectedContext: string
-  actualContext: string
 }
 
 declare global {
@@ -598,29 +586,6 @@ function getFirstBreakMismatch(
   return null
 }
 
-function getJoinedTextMismatchOffset(lines: DiagnosticLine[]): number | null {
-  const joined = lines.map(line => normalizedText.slice(line.start, line.end)).join('')
-  const limit = Math.min(joined.length, normalizedText.length)
-  for (let i = 0; i < limit; i++) {
-    if (joined.charCodeAt(i) !== normalizedText.charCodeAt(i)) {
-      return i
-    }
-  }
-  return joined.length === normalizedText.length ? null : limit
-}
-
-function getJoinedTextDiff(lines: DiagnosticLine[]): JoinedTextDiff | null {
-  const joined = lines.map(line => normalizedText.slice(line.start, line.end)).join('')
-  const offset = getJoinedTextMismatchOffset(lines)
-  if (offset === null) return null
-
-  return {
-    offset,
-    expectedContext: formatBreakContext(normalizedText, offset),
-    actualContext: formatBreakContext(joined, offset),
-  }
-}
-
 function buildReport(width: number, predictedHeight: number, actualHeight: number, diagnosticHeight: number): GatsbyReport {
   if (!reportMode) {
     return withRequestId({
@@ -649,10 +614,6 @@ function buildReport(width: number, predictedHeight: number, actualHeight: numbe
 
   const ourLines = getOurLines(prepared, contentWidth)
   const browserLines = getBrowserLines(prepared, diagnosticDiv)
-  const ourJoinedDiffOffset = getJoinedTextMismatchOffset(ourLines)
-  const browserJoinedDiffOffset = getJoinedTextMismatchOffset(browserLines)
-  const ourJoinedDiff = getJoinedTextDiff(ourLines)
-  const browserJoinedDiff = getJoinedTextDiff(browserLines)
 
   let mismatchCount = 0
   let firstMismatch: GatsbyLineMismatch | null = null
@@ -679,12 +640,6 @@ function buildReport(width: number, predictedHeight: number, actualHeight: numbe
     diffPx: predictedHeight - actualHeight,
     predictedLineCount: ourLines.length,
     browserLineCount: browserLines.length,
-    ourJoinedMatchesText: ourJoinedDiffOffset === null,
-    browserJoinedMatchesText: browserJoinedDiffOffset === null,
-    ourJoinedDiffOffset,
-    browserJoinedDiffOffset,
-    ourJoinedDiff,
-    browserJoinedDiff,
     mismatchCount,
     firstMismatch,
     firstBreakMismatch: getFirstBreakMismatch(contentWidth, ourLines, browserLines),

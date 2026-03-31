@@ -25,12 +25,6 @@ type GatsbyReport = {
   diffPx?: number
   predictedLineCount?: number
   browserLineCount?: number
-  ourJoinedMatchesText?: boolean
-  browserJoinedMatchesText?: boolean
-  ourJoinedDiffOffset?: number | null
-  browserJoinedDiffOffset?: number | null
-  ourJoinedDiff?: JoinedTextDiff | null
-  browserJoinedDiff?: JoinedTextDiff | null
   mismatchCount?: number
   firstMismatch?: GatsbyLineMismatch | null
   firstBreakMismatch?: GatsbyBreakMismatch | null
@@ -84,12 +78,6 @@ type GatsbyBreakSegment = {
   browserInside: boolean
 }
 
-type JoinedTextDiff = {
-  offset: number
-  expectedContext: string
-  actualContext: string
-}
-
 const widths = process.argv.slice(2)
   .map(arg => Number.parseInt(arg, 10))
   .filter(width => Number.isFinite(width))
@@ -130,19 +118,6 @@ function printReport(report: GatsbyReport): void {
     : '-'
 
   console.log(`width ${width}: diff ${diff > 0 ? '+' : ''}${Math.round(diff)}px | height ${predicted}/${actual} | lines ${lines}`)
-  if (report.ourJoinedMatchesText === false || report.browserJoinedMatchesText === false) {
-    console.log(
-      `  joined text: ours ${report.ourJoinedMatchesText ? 'ok' : `drift@${report.ourJoinedDiffOffset ?? '?'}`} | browser ${report.browserJoinedMatchesText ? 'ok' : `drift@${report.browserJoinedDiffOffset ?? '?'}`}`,
-    )
-    if (report.ourJoinedDiff !== null && report.ourJoinedDiff !== undefined) {
-      console.log(`  ours joined expected: ${report.ourJoinedDiff.expectedContext}`)
-      console.log(`  ours joined actual:   ${report.ourJoinedDiff.actualContext}`)
-    }
-    if (report.browserJoinedDiff !== null && report.browserJoinedDiff !== undefined) {
-      console.log(`  browser joined expected: ${report.browserJoinedDiff.expectedContext}`)
-      console.log(`  browser joined actual:   ${report.browserJoinedDiff.actualContext}`)
-    }
-  }
   if (report.firstBreakMismatch !== null && report.firstBreakMismatch !== undefined) {
     const mismatch = report.firstBreakMismatch
     console.log(`  break L${mismatch.line} | ours ${mismatch.oursEnd} | browser ${mismatch.browserEnd}`)
