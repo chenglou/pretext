@@ -37,6 +37,36 @@ function runAppleScript(lines: string[]): string {
   ).trim()
 }
 
+function getFrontmostApplicationName(): string | null {
+  try {
+    return runAppleScript([
+      'tell application "System Events"',
+      'return name of first application process whose frontmost is true',
+      'end tell',
+    ])
+  } catch {
+    return null
+  }
+}
+
+function restoreFrontmostApplication(name: string | null): void {
+  if (name === null || name.length === 0) return
+  try {
+    runAppleScript([`tell application ${JSON.stringify(name)} to activate`])
+  } catch {
+    // Best effort restore only.
+  }
+}
+
+function runBackgroundAppleScript(lines: string[]): string {
+  const frontmost = getFrontmostApplicationName()
+  try {
+    return runAppleScript(lines)
+  } finally {
+    restoreFrontmostApplication(frontmost)
+  }
+}
+
 export function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms))
 }
@@ -365,14 +395,22 @@ async function initializeFirefoxSession(): Promise<FirefoxSessionState> {
   }
 }
 
-function createSafariSession(_options: BrowserSessionOptions): BrowserSession {
-  const windowIdRaw = runAppleScript([
-    'tell application "Safari" to activate',
-    'tell application "Safari"',
-    'set targetDocument to make new document with properties {URL:"about:blank"}',
-    'return id of front window as string',
-    'end tell',
-  ])
+function createSafariSession(options: BrowserSessionOptions): BrowserSession {
+  const scriptLines = ['tell application "Safari"']
+
+  if (options.foreground === true) {
+    scriptLines.unshift('tell application "Safari" to activate')
+  }
+
+  scriptLines.push('set targetDocument to make new document with properties {URL:"about:blank"}')
+  if (options.foreground === true) {
+    scriptLines.push('set targetWindow to front window')
+    scriptLines.push('set index of targetWindow to 1')
+  }
+  scriptLines.push('return id of front window as string')
+  scriptLines.push('end tell')
+
+  const windowIdRaw = options.foreground === true ? runAppleScript(scriptLines) : runBackgroundAppleScript(scriptLines)
 
   const windowId = Number.parseInt(windowIdRaw, 10)
   if (!Number.isFinite(windowId)) {
@@ -381,15 +419,21 @@ function createSafariSession(_options: BrowserSessionOptions): BrowserSession {
 
   return {
     navigate(url) {
-      runAppleScript([
-        'tell application "Safari" to activate',
+      const navigateLines = [
         'tell application "Safari"',
         `set targetWindow to first window whose id is ${windowId}`,
-        'set index of targetWindow to 1',
-        `set current tab of targetWindow to current tab of targetWindow`,
-        `set URL of current tab of targetWindow to ${JSON.stringify(url)}`,
-        'end tell',
-      ])
+      ]
+      if (options.foreground === true) {
+        navigateLines.unshift('tell application "Safari" to activate')
+        navigateLines.push('set index of targetWindow to 1')
+      }
+      navigateLines.push(`set URL of current tab of targetWindow to ${JSON.stringify(url)}`)
+      navigateLines.push('end tell')
+      if (options.foreground === true) {
+        runAppleScript(navigateLines)
+      } else {
+        runBackgroundAppleScript(navigateLines)
+      }
     },
     readLocationUrl() {
       try {
@@ -432,7 +476,7 @@ function createChromeSession(options: BrowserSessionOptions): BrowserSession {
   scriptLines.push('return (id of targetWindow as string) & "," & (id of targetTab as string)')
   scriptLines.push('end tell')
 
-  const identifiers = runAppleScript(scriptLines)
+  const identifiers = options.foreground === true ? runAppleScript(scriptLines) : runBackgroundAppleScript(scriptLines)
 
   const [windowIdRaw, tabIdRaw] = identifiers.split(',')
   const windowId = Number.parseInt(windowIdRaw ?? '', 10)
@@ -443,12 +487,17 @@ function createChromeSession(options: BrowserSessionOptions): BrowserSession {
 
   return {
     navigate(url) {
-      runAppleScript([
+      const navigateLines = [
         'tell application "Google Chrome"',
         `set targetWindow to first window whose id is ${windowId}`,
         `set URL of (first tab of targetWindow whose id is ${tabId}) to ${JSON.stringify(url)}`,
         'end tell',
-      ])
+      ]
+      if (options.foreground === true) {
+        runAppleScript(navigateLines)
+      } else {
+        runBackgroundAppleScript(navigateLines)
+      }
     },
     readLocationUrl() {
       try {
