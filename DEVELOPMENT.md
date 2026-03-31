@@ -27,8 +27,8 @@ bun run corpus-representative
 bun run corpus-status        # rebuild corpora/dashboard.json from checked-in JSON snapshots
 bun run corpus-status:refresh
 bun run status-dashboard     # rebuild status/dashboard.json from checked-in JSON snapshots
-bun run gatsby-check         # slow detailed Gatsby diagnosis
-bun run gatsby-sweep         # coarse Gatsby width sweep
+bun run gatsby-check         # compatibility alias for corpus-check --id=en-gatsby-opening --diagnose
+bun run gatsby-sweep         # compatibility alias for corpus-sweep --id=en-gatsby-opening
 ```
 
 Packaging notes:

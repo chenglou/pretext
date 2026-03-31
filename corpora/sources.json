@@ -18,6 +18,24 @@
     "notes": "Synthetic mixed-script app-text stress corpus covering URLs, quotes, RTL runs, emoji ZWJ, hard spaces, word joiners, zero-width breaks, and soft hyphens."
   },
   {
+    "id": "en-gatsby-opening",
+    "language": "en",
+    "direction": "ltr",
+    "title": "The Great Gatsby opening",
+    "source_url": "https://www.gutenberg.org/ebooks/64317",
+    "output": "corpora/en-gatsby-opening.txt",
+    "font_family": "Georgia, \"Times New Roman\", serif",
+    "font_size_px": 16,
+    "line_height_px": 26,
+    "default_width": 600,
+    "min_width": 300,
+    "max_width": 900,
+    "characters": 279291,
+    "lines": 3285,
+    "acquired_via": "copy",
+    "notes": "English long-form opening excerpt kept as a browser canary for long prose flow and break-boundary diagnostics; routed through the shared corpus tooling."
+  },
+  {
     "id": "ja-rashomon",
     "language": "ja",
     "direction": "ltr",

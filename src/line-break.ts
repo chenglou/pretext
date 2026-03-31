@@ -341,6 +341,13 @@ function walkPreparedLinesSimple(
       }
 
       if (pendingBreakSegmentIndex >= 0) {
+        if (
+          lineEndSegmentIndex > pendingBreakSegmentIndex ||
+          (lineEndSegmentIndex === pendingBreakSegmentIndex && lineEndGraphemeIndex > 0)
+        ) {
+          emitCurrentLine()
+          continue
+        }
         emitCurrentLine(pendingBreakSegmentIndex, 0, pendingBreakPaintWidth)
         continue
       }
@@ -622,6 +629,13 @@ export function walkPreparedLines(
         }
 
         if (pendingBreakSegmentIndex >= 0 && pendingBreakFitWidth <= maxWidth + lineFitEpsilon) {
+          if (
+            lineEndSegmentIndex > pendingBreakSegmentIndex ||
+            (lineEndSegmentIndex === pendingBreakSegmentIndex && lineEndGraphemeIndex > 0)
+          ) {
+            emitCurrentLine()
+            continue
+          }
           const nextSegmentIndex = pendingBreakSegmentIndex
           emitCurrentLine(nextSegmentIndex, 0, pendingBreakPaintWidth)
           i = nextSegmentIndex
@@ -890,6 +904,12 @@ export function layoutNextLineRange(
       }
 
       if (pendingBreakSegmentIndex >= 0 && pendingBreakFitWidth <= maxWidth + lineFitEpsilon) {
+        if (
+          lineEndSegmentIndex > pendingBreakSegmentIndex ||
+          (lineEndSegmentIndex === pendingBreakSegmentIndex && lineEndGraphemeIndex > 0)
+        ) {
+          return finishLine()
+        }
         return finishLine(pendingBreakSegmentIndex, 0, pendingBreakPaintWidth)
       }
 
@@ -1037,6 +1057,12 @@ function layoutNextLineRangeSimple(
       }
 
       if (pendingBreakSegmentIndex >= 0) {
+        if (
+          lineEndSegmentIndex > pendingBreakSegmentIndex ||
+          (lineEndSegmentIndex === pendingBreakSegmentIndex && lineEndGraphemeIndex > 0)
+        ) {
+          return finishLine()
+        }
         return finishLine(pendingBreakSegmentIndex, 0, pendingBreakPaintWidth)
       }
 

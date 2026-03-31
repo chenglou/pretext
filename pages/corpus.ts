@@ -15,6 +15,7 @@ import { clearNavigationReport, publishNavigationPhase, publishNavigationReport 
 import sourcesData from '../corpora/sources.json' with { type: 'json' }
 import arAlBukhala from '../corpora/ar-al-bukhala.txt' with { type: 'text' }
 import arRisalatAlGhufranPart1 from '../corpora/ar-risalat-al-ghufran-part-1.txt' with { type: 'text' }
+import enGatsbyOpening from '../corpora/en-gatsby-opening.txt' with { type: 'text' }
 import heMasaotBinyaminMetudela from '../corpora/he-masaot-binyamin-metudela.txt' with { type: 'text' }
 import hiEidgah from '../corpora/hi-eidgah.txt' with { type: 'text' }
 import jaKumoNoIto from '../corpora/ja-kumo-no-ito.txt' with { type: 'text' }
@@ -1004,6 +1005,8 @@ async function loadText(meta: CorpusMeta): Promise<string> {
       return arAlBukhala
     case 'ar-risalat-al-ghufran-part-1':
       return arRisalatAlGhufranPart1
+    case 'en-gatsby-opening':
+      return enGatsbyOpening
     case 'he-masaot-binyamin-metudela':
       return heMasaotBinyaminMetudela
     case 'hi-eidgah':

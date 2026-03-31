@@ -14,6 +14,12 @@ Current bundle:
   - Source: synthetic corpus kept in-repo
   - Acquisition: hand-curated stress text covering URLs, quote clusters, mixed RTL/LTR runs, emoji ZWJ, hard spaces, word joiners, zero-width breaks, and soft hyphens
 
+- `en-gatsby-opening.txt`
+  - Language: English
+  - Source: F. Scott Fitzgerald, `The Great Gatsby` opening
+  - URL: <https://www.gutenberg.org/ebooks/64317>
+  - Acquisition: checked-in copy of the long-form Gatsby canary text, now routed through the shared corpus tooling
+
 - `ja-rashomon.txt`
   - Language: Japanese
   - Source: 芥川龍之介, `羅生門`
@@ -123,3 +129,7 @@ The corpus page is also available locally at `/corpus?id=<corpus-id>`.
 
 For very large corpora, `--samples=<n>` checks evenly spaced widths across the
 requested range instead of visiting every `step`.
+
+The legacy `gatsby-check` and `gatsby-sweep` commands still exist as compatibility
+aliases, but they now route through `corpus-check --id=en-gatsby-opening` and
+`corpus-sweep --id=en-gatsby-opening`.

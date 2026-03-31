@@ -83,6 +83,7 @@ type CorpusRepresentativeSnapshot = {
 
 const CORPUS_IDS = [
   'mixed-app-text',
+  'en-gatsby-opening',
   'ja-kumo-no-ito',
   'ja-rashomon',
   'zh-guxiang',

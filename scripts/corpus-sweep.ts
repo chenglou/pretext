@@ -1,5 +1,5 @@
 import { writeFileSync } from 'node:fs'
-import { type ChildProcess } from 'node:child_process'
+import { spawnSync, type ChildProcess } from 'node:child_process'
 import {
   acquireBrowserAutomationLock,
   createBrowserSession,
@@ -76,6 +76,8 @@ type SweepOptions = {
   samples: number | null
   font: string | null
   lineHeight: number | null
+  diagnose: boolean
+  diagnoseLimit: number
 }
 
 function parseStringFlag(name: string): string | null {
@@ -149,6 +151,8 @@ function parseOptions(): SweepOptions {
     samples,
     font: parseStringFlag('font'),
     lineHeight: parseOptionalNumberFlag('lineHeight'),
+    diagnose: hasFlag('diagnose'),
+    diagnoseLimit: parseNumberFlag('diagnose-limit', 6),
   }
 }
 
@@ -221,6 +225,41 @@ function getSweepRows(report: CorpusSweepReport, corpusId: string): CorpusSweepR
     throw new Error(`Corpus sweep report was missing rows for ${corpusId}`)
   }
   return report.rows
+}
+
+function runDetailedDiagnose(meta: CorpusMeta, mismatches: SweepMismatch[], options: SweepOptions): void {
+  if (!options.diagnose || mismatches.length === 0) return
+
+  const widths = mismatches
+    .slice(0, options.diagnoseLimit)
+    .map(mismatch => String(mismatch.width))
+
+  console.log(`diagnosing ${meta.id} at ${widths.length} widths: ${widths.join(', ')}`)
+
+  const args = ['run', 'scripts/corpus-check.ts', `--id=${meta.id}`, '--diagnose', ...widths]
+  if (options.font !== null) {
+    args.push(`--font=${options.font}`)
+  }
+  if (options.lineHeight !== null) {
+    args.push(`--lineHeight=${options.lineHeight}`)
+  }
+
+  const result = spawnSync('bun', args, {
+    cwd: process.cwd(),
+    env: {
+      ...process.env,
+      CORPUS_CHECK_BROWSER: options.browser,
+      CORPUS_CHECK_PORT: String(options.port),
+      CORPUS_CHECK_TIMEOUT_MS: String(options.timeoutMs),
+    },
+    encoding: 'utf8',
+  })
+
+  if (result.stdout.length > 0) process.stdout.write(result.stdout)
+  if (result.stderr.length > 0) process.stderr.write(result.stderr)
+  if (result.status !== 0) {
+    throw new Error(`corpus-check exited with status ${result.status ?? 'unknown'}`)
+  }
 }
 
 const options = parseOptions()
@@ -309,6 +348,7 @@ try {
     }
     summaries.push(summary)
     printSummary(summary)
+    runDetailedDiagnose(meta, mismatches, options)
   }
 
   if (options.output !== null) {

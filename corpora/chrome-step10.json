@@ -22,6 +22,108 @@
     ]
   },
   {
+    "corpusId": "en-gatsby-opening",
+    "language": "en",
+    "title": "The Great Gatsby opening",
+    "browser": "chrome",
+    "start": 300,
+    "end": 900,
+    "step": 10,
+    "samples": null,
+    "widthCount": 61,
+    "exactCount": 50,
+    "mismatches": [
+      {
+        "width": 300,
+        "diffPx": -26,
+        "predictedHeight": 243882,
+        "actualHeight": 243908,
+        "predictedLineCount": 9377,
+        "browserLineCount": 9378
+      },
+      {
+        "width": 320,
+        "diffPx": -26,
+        "predictedHeight": 221834,
+        "actualHeight": 221860,
+        "predictedLineCount": 8529,
+        "browserLineCount": 8530
+      },
+      {
+        "width": 340,
+        "diffPx": -26,
+        "predictedHeight": 203244,
+        "actualHeight": 203270,
+        "predictedLineCount": 7814,
+        "browserLineCount": 7815
+      },
+      {
+        "width": 360,
+        "diffPx": -26,
+        "predictedHeight": 187800,
+        "actualHeight": 187826,
+        "predictedLineCount": 7220,
+        "browserLineCount": 7221
+      },
+      {
+        "width": 370,
+        "diffPx": -78,
+        "predictedHeight": 180832,
+        "actualHeight": 180910,
+        "predictedLineCount": 6952,
+        "browserLineCount": 6955
+      },
+      {
+        "width": 390,
+        "diffPx": -52,
+        "predictedHeight": 168326,
+        "actualHeight": 168378,
+        "predictedLineCount": 6471,
+        "browserLineCount": 6473
+      },
+      {
+        "width": 430,
+        "diffPx": 26,
+        "predictedHeight": 148150,
+        "actualHeight": 148124,
+        "predictedLineCount": 5695,
+        "browserLineCount": 5694
+      },
+      {
+        "width": 460,
+        "diffPx": -26,
+        "predictedHeight": 135670,
+        "actualHeight": 135696,
+        "predictedLineCount": 5215,
+        "browserLineCount": 5216
+      },
+      {
+        "width": 470,
+        "diffPx": -26,
+        "predictedHeight": 131952,
+        "actualHeight": 131978,
+        "predictedLineCount": 5072,
+        "browserLineCount": 5073
+      },
+      {
+        "width": 500,
+        "diffPx": -26,
+        "predictedHeight": 122072,
+        "actualHeight": 122098,
+        "predictedLineCount": 4692,
+        "browserLineCount": 4693
+      },
+      {
+        "width": 580,
+        "diffPx": -26,
+        "predictedHeight": 101818,
+        "actualHeight": 101844,
+        "predictedLineCount": 3913,
+        "browserLineCount": 3914
+      }
+    ]
+  },
+  {
     "corpusId": "ja-rashomon",
     "language": "ja",
     "title": "羅生門",

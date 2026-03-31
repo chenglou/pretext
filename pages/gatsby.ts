@@ -21,7 +21,7 @@ const slider = document.getElementById('slider') as HTMLInputElement
 const valLabel = document.getElementById('val')!
 const stats = document.getElementById('stats')!
 
-import text from './gatsby.txt' with { type: 'text' }
+import text from '../corpora/en-gatsby-opening.txt' with { type: 'text' }
 
 type GatsbyLineMismatch = {
   line: number

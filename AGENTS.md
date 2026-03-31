@@ -64,8 +64,8 @@ See `DEVELOPMENT.md` for the current command surface and packaging/release check
 - `system-ui` is unsafe for accuracy; canvas and DOM can resolve different fonts on macOS.
 - Accuracy pages and checkers are now expected to be green in all three installed browsers on fresh runs; if a page disagrees, suspect stale tabs/servers before changing the algorithm.
 - The browser automation lock is self-healing for stale dead-owner files now, but it is still single-owner per browser. If a checker times out on the lock, confirm a live checker process still owns it before changing the algorithm.
-- Accuracy/corpus/Gatsby checkers can use background-safe browser automation, but benchmark runs should stay foreground. Do not “optimize away” benchmark focus; throttled/background tabs make the numbers less trustworthy.
-- Accuracy and the coarse corpus/Gatsby sweep paths now batch widths in-page after a single navigation. Prefer those sweep entrypoints over userland “navigate once per width” loops, and keep the slow single-width checkers for diagnosis.
+- Accuracy and corpus checkers can use background-safe browser automation, but benchmark runs should stay foreground. Do not “optimize away” benchmark focus; throttled/background tabs make the numbers less trustworthy.
+- Accuracy and the coarse corpus sweep paths now batch widths in-page after a single navigation. Prefer those sweep entrypoints over userland “navigate once per width” loops, and keep the slow single-width checkers for diagnosis. `gatsby-check` / `gatsby-sweep` are now compatibility aliases onto the English corpus entry.
 - Keep the transport split deliberate: small automation reports can ride the hash, but large batched reports should use the local POST side channel instead of stuffing every row into `#report=...`.
 - Browser-automation timeouts now report the last page phase they saw (`loading`, `measuring`, or `posting`). Treat `posting` timeouts as transport-side clues first; they usually point at the report side channel rather than the text engine.
 - For deep perf or memory work, prefer an isolated debuggable Chrome over a pure Bun microbenchmark. Bun is fine for quick hypotheses, but Chrome profiling is the better source of truth for CPU hotspots, allocation churn, and retained-heap checks.
@@ -74,7 +74,7 @@ See `DEVELOPMENT.md` for the current command surface and packaging/release check
 - Do not run multiple browser corpus/sweep/font-matrix jobs in parallel against the same browser. The automation session and temporary page server paths interfere with each other and can make a healthy corpus look hung or flaky.
 - An `ERR_CONNECTION_REFUSED` tab on `localhost:3210` or a similar temporary checker port usually means you caught a per-run Bun server after teardown. That is expected after the script exits; it is not, by itself, evidence of a bad measurement.
 - Keep `src/layout.test.ts` small and durable. For browser-specific or narrow hypothesis work, prefer throwaway probes/scripts and promote only the stable invariants into permanent tests.
-- For Gatsby canary work, sweep widths cheaply first and only diagnose the mismatching widths in detail. The slow detailed checker is for narrowing root causes, not for every width by default.
+- For long-form corpus canary work, sweep widths cheaply first and only diagnose the mismatching widths in detail. The slow detailed checker is for narrowing root causes, not for every width by default.
 - For Arabic corpus/probe work, use normalized slices, the exact corpus font, and the RTL `Range`-based diagnostics. Raw offsets or rough fallback fonts will mislead you.
 - For `pre-wrap` probe work, Safari span extraction is currently a better cross-check than Safari `Range` extraction around preserved spaces and hard breaks. Keep using `Range` for the default `white-space: normal` diagnostics unless the mode itself is the thing under test.
 - For Southeast Asian and Arabic/Urdu raw-diagnostic work, keep using the script-appropriate extractor instead of forcing one Safari rule everywhere.
@@ -95,7 +95,7 @@ See `DEVELOPMENT.md` for the current command surface and packaging/release check
   - Japanese: kana iteration marks are CJK line-start-prohibited
   - Chinese: the remaining broad Chrome-positive field is real and not obviously another punctuation bug
 - The corpus diagnostics should derive our candidate lines from `layoutWithLines()`, not from a second local line-walker. That avoids SHY and future custom-break drift between the hot path and the diagnostic path.
-- Current line-fit tolerance is `0.005` for Chromium/Gecko and `1/64` for Safari/WebKit. That bump was justified by the remaining Arabic fine-width field and did not move the solved browser corpus or Gatsby coarse canary.
+- Current line-fit tolerance is `0.005` for Chromium/Gecko and `1/64` for Safari/WebKit. That bump was justified by the remaining Arabic fine-width field and did not move the solved browser corpus or the legacy Gatsby English canary.
 - Refresh `accuracy/chrome.json`, `accuracy/safari.json`, and `accuracy/firefox.json` when a diff changes the browser sweep methodology or the main text engine behavior (`src/analysis.ts`, `src/measurement.ts`, `src/line-break.ts`, `src/layout.ts`, `src/bidi.ts`, or `pages/accuracy.ts`).
 - Refresh `corpora/representative.json` when a diff intentionally changes one of the tracked representative canaries or their canonical anchor behavior. Keep it compact: anchors and designated fragile-width sentinels, not every exploratory sweep result.
 - Refresh `corpora/chrome-sampled.json`, `corpora/chrome-step10.json`, and then regenerate `corpora/dashboard.json` when the corpus sweep methodology or long-form canary behavior changes in a way that moves the dashboard counts.

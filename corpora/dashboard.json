@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-03-30T11:36:42.971Z",
+  "generatedAt": "2026-03-31T10:07:49.046Z",
   "sources": {
     "accuracy": {
       "chrome": "accuracy/chrome.json",
@@ -61,6 +61,44 @@
     }
   ],
   "longForm": [
+    {
+      "id": "en-gatsby-opening",
+      "title": "The Great Gatsby opening",
+      "language": "en",
+      "chromeAnchors": {
+        "exactWidths": [
+          600,
+          800
+        ],
+        "mismatches": [
+          {
+            "width": 300,
+            "diffPx": -26
+          }
+        ]
+      },
+      "safariAnchors": {
+        "exactWidths": [
+          600,
+          800
+        ],
+        "mismatches": [
+          {
+            "width": 300,
+            "diffPx": -26
+          }
+        ]
+      },
+      "chromeSampled": {
+        "exactCount": 8,
+        "widthCount": 9
+      },
+      "chromeStep10": {
+        "exactCount": 50,
+        "widthCount": 61
+      },
+      "notes": "legacy Gatsby long-form canary; broad narrow-width negative field with one local positive flip"
+    },
     {
       "id": "ja-kumo-no-ito",
       "title": "蜘蛛の糸",

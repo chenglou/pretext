@@ -450,6 +450,26 @@ describe('prepare invariants', () => {
     expect(prepareWithSegments('테스트입니다.', FONT).segments.at(-1)).toBe('다.')
   })
 
+  test('adjacent CJK text units stay breakable after visible text, not only after spaces', () => {
+    const prepared = prepareWithSegments('foo 世界 bar', FONT)
+    expect(prepared.segments).toEqual(['foo', ' ', '世', '界', ' ', 'bar'])
+
+    const width = prepared.widths[0]! + prepared.widths[1]! + prepared.widths[2]! + 0.1
+    const batched = layoutWithLines(prepared, width, LINE_HEIGHT)
+    expect(batched.lines.map(line => line.text)).toEqual(['foo 世', '界 bar'])
+
+    const streamed = []
+    let cursor = { segmentIndex: 0, graphemeIndex: 0 }
+    while (true) {
+      const line = layoutNextLine(prepared, cursor, width)
+      if (line === null) break
+      streamed.push(line.text)
+      cursor = line.end
+    }
+    expect(streamed).toEqual(['foo 世', '界 bar'])
+    expect(layout(prepared, width, LINE_HEIGHT)).toEqual({ lineCount: 2, height: LINE_HEIGHT * 2 })
+  })
+
   test('treats astral CJK ideographs as CJK break units', () => {
     expect(prepareWithSegments('𠀀𠀁', FONT).segments).toEqual(['𠀀', '𠀁'])
     expect(prepareWithSegments('𠀀。', FONT).segments).toEqual(['𠀀。'])
