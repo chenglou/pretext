@@ -240,13 +240,28 @@ async function resolveBaseUrl(port: number, pathname: string): Promise<string | 
   return null
 }
 
+function formatObservedLocation(url: string): string | null {
+  const trimmed = url.trim()
+  if (trimmed.length === 0) return null
+
+  try {
+    const parsed = new URL(trimmed)
+    parsed.hash = ''
+    return parsed.toString()
+  } catch {
+    return trimmed.length <= 160 ? trimmed : `${trimmed.slice(0, 157)}...`
+  }
+}
+
 function getTimeoutMessage(
   browser: BrowserKind,
   target: 'report' | 'posted report',
   lastPhase: NavigationPhase | null,
+  observedUrl: string | null = null,
 ): string {
   if (lastPhase === null) {
-    return `Timed out waiting for ${target} from ${browser}`
+    const locationLabel = observedUrl === null ? '' : `; last URL: ${observedUrl}`
+    return `Timed out waiting for ${target} from ${browser} (no navigation feedback${locationLabel})`
   }
   return `Timed out waiting for ${target} from ${browser} (last phase: ${lastPhase})`
 }
@@ -645,7 +660,8 @@ export async function loadHashReport<T extends { requestId?: string }>(
   if (lastPhase === null) {
     lastPhase = await readLastNavigationPhase(session, expectedRequestId)
   }
-  throw new Error(getTimeoutMessage(browser, 'report', lastPhase))
+  const observedUrl = formatObservedLocation(await session.readLocationUrl())
+  throw new Error(getTimeoutMessage(browser, 'report', lastPhase, observedUrl))
 }
 
 export async function loadPostedReport<T extends { requestId?: string }>(
@@ -694,5 +710,6 @@ export async function loadPostedReport<T extends { requestId?: string }>(
     throw reportError
   }
 
-  throw new Error(getTimeoutMessage(browser, 'posted report', lastPhase))
+  const observedUrl = formatObservedLocation(await session.readLocationUrl())
+  throw new Error(getTimeoutMessage(browser, 'posted report', lastPhase, observedUrl))
 }
