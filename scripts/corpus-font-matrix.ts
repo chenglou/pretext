@@ -5,9 +5,10 @@ import {
   createBrowserSession,
   ensurePageServer,
   getAvailablePort,
-  loadHashReport,
+  loadPostedReport,
   type BrowserKind,
 } from './browser-automation.ts'
+import { startPostedReportServer } from './report-server.ts'
 
 type CorpusMeta = {
   id: string
@@ -18,17 +19,23 @@ type CorpusMeta = {
   default_width?: number
 }
 
-type CorpusReport = {
+type CorpusSweepRow = {
+  width: number
+  contentWidth: number
+  predictedHeight: number
+  actualHeight: number
+  diffPx: number
+  predictedLineCount: number
+  browserLineCount: number
+}
+
+type CorpusSweepReport = {
   status: 'ready' | 'error'
   requestId?: string
   corpusId?: string
   title?: string
-  width?: number
-  predictedHeight?: number
-  actualHeight?: number
-  diffPx?: number
-  predictedLineCount?: number
-  browserLineCount?: number
+  rows?: CorpusSweepRow[]
+  exactCount?: number
   message?: string
 }
 
@@ -434,44 +441,54 @@ try {
   const variantResults: VariantResult[] = []
 
   for (const variant of variants) {
-    const mismatches: VariantResult['mismatches'] = []
-    let exactCount = 0
+    const requestId = `${Date.now()}-${variant.id}-${Math.random().toString(36).slice(2)}`
+    const reportServer = await startPostedReportServer<CorpusSweepReport>(requestId)
+    const url =
+      `${baseUrl}?id=${encodeURIComponent(meta.id)}` +
+      `&widths=${encodeURIComponent(widths.join(','))}` +
+      `&report=1` +
+      `&requestId=${encodeURIComponent(requestId)}` +
+      `&font=${encodeURIComponent(variant.font)}` +
+      `&lineHeight=${variant.lineHeight}` +
+      `&reportEndpoint=${encodeURIComponent(reportServer.endpoint)}`
 
-    for (let i = 0; i < widths.length; i++) {
-      const width = widths[i]!
-      const requestId = `${Date.now()}-${variant.id}-${width}-${Math.random().toString(36).slice(2)}`
-      const url =
-        `${baseUrl}?id=${encodeURIComponent(meta.id)}` +
-        `&width=${width}` +
-        `&report=1` +
-        `&requestId=${encodeURIComponent(requestId)}` +
-        `&font=${encodeURIComponent(variant.font)}` +
-        `&lineHeight=${variant.lineHeight}`
-
-      const report = await loadHashReport<CorpusReport>(session, url, requestId, options.browser, options.timeoutMs)
-      if (report.status === 'error') {
-        throw new Error(`Corpus page returned error for ${meta.id} (${variant.id}) @ ${width}: ${report.message ?? 'unknown error'}`)
+    const report = await (async () => {
+      try {
+        return await loadPostedReport(
+          session,
+          url,
+          () => reportServer.waitForReport(null),
+          requestId,
+          options.browser,
+          options.timeoutMs,
+        )
+      } finally {
+        reportServer.close()
       }
-
-      const diffPx = Math.round(report.diffPx ?? 0)
-      if (diffPx === 0) {
-        exactCount++
-      } else {
-        mismatches.push({
-          width,
-          diffPx,
-          predictedHeight: Math.round(report.predictedHeight ?? 0),
-          actualHeight: Math.round(report.actualHeight ?? 0),
-        })
-      }
+    })()
+    if (report.status === 'error') {
+      throw new Error(`Corpus page returned error for ${meta.id} (${variant.id}): ${report.message ?? 'unknown error'}`)
     }
+    if (report.rows === undefined) {
+      throw new Error(`Corpus font matrix report was missing rows for ${meta.id} (${variant.id})`)
+    }
+
+    const mismatches: VariantResult['mismatches'] = report.rows
+      .filter(row => Math.round(row.diffPx) !== 0)
+      .map(row => ({
+        width: row.width,
+        diffPx: Math.round(row.diffPx),
+        predictedHeight: Math.round(row.predictedHeight),
+        actualHeight: Math.round(row.actualHeight),
+      }))
+    const exactCount = report.exactCount ?? (report.rows.length - mismatches.length)
 
     variantResults.push({
       id: variant.id,
       label: variant.label,
       font: variant.font,
       lineHeight: variant.lineHeight,
-      widthCount: widths.length,
+      widthCount: report.rows.length,
       exactCount,
       mismatches,
     })

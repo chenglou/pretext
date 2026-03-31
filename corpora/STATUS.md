@@ -1,11 +1,10 @@
 # Corpus Status
 
-Current sweep snapshot for the checked-in canaries.
+Machine-readable long-form corpus status lives in JSON.
 
-This is the compact status page. Historical reasoning, failed experiments, and
-why the numbers moved live in `RESEARCH.md`. The shared mismatch vocabulary now
-lives in `TAXONOMY.md`. Current machine-readable representative rows live in
-`representative.json`.
+This file is prose-only. Historical reasoning, failed experiments, and why the
+numbers moved live in [RESEARCH.md](/Users/chenglou/github/pretext/RESEARCH.md).
+The shared mismatch vocabulary lives in [TAXONOMY.md](/Users/chenglou/github/pretext/corpora/TAXONOMY.md).
 
 Conventions:
 - "anchors" means `300 / 600 / 800` unless noted otherwise
@@ -13,13 +12,13 @@ Conventions:
 - "step=10" means `300..900`
 - values are the last recorded results on this machine, not a claim of universal permanence
 
-## Browser Regression Gate
+## Machine-Readable Sources
 
-| Sweep | Status |
-|---|---|
-| Official browser corpus (Chrome) | `7680/7680` |
-| Official browser corpus (Safari) | `7680/7680` |
-| Official browser corpus (Firefox) | `7680/7680` |
+- Corpus dashboard: [dashboard.json](/Users/chenglou/github/pretext/corpora/dashboard.json)
+- Anchor rows: [representative.json](/Users/chenglou/github/pretext/corpora/representative.json)
+- Chrome sampled sweep snapshot: [chrome-sampled.json](/Users/chenglou/github/pretext/corpora/chrome-sampled.json)
+- Chrome coarse `step=10` sweep snapshot: [chrome-step10.json](/Users/chenglou/github/pretext/corpora/chrome-step10.json)
+- Browser regression gate snapshots: [accuracy/chrome.json](/Users/chenglou/github/pretext/accuracy/chrome.json), [accuracy/safari.json](/Users/chenglou/github/pretext/accuracy/safari.json), [accuracy/firefox.json](/Users/chenglou/github/pretext/accuracy/firefox.json)
 
 ## Product-Shaped Canary
 
@@ -83,6 +82,8 @@ These are sampled, not exhaustive.
 Useful commands:
 
 ```sh
+bun run status-dashboard
+bun run corpus-status:refresh
 bun run corpus-taxonomy --id=ja-rashomon 330 450
 bun run corpus-taxonomy --id=zh-zhufu 300 450
 bun run corpus-taxonomy --id=ur-chughd 300 340 600

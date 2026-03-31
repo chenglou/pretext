@@ -5,9 +5,10 @@ import {
   createBrowserSession,
   ensurePageServer,
   getAvailablePort,
-  loadHashReport,
+  loadPostedReport,
   type BrowserKind,
 } from './browser-automation.ts'
+import { startPostedReportServer } from './report-server.ts'
 
 type CorpusMeta = {
   id: string
@@ -17,17 +18,25 @@ type CorpusMeta = {
   max_width?: number
 }
 
-type CorpusReport = {
+type CorpusSweepRow = {
+  width: number
+  contentWidth: number
+  predictedHeight: number
+  actualHeight: number
+  diffPx: number
+  predictedLineCount: number
+  browserLineCount: number
+}
+
+type CorpusSweepReport = {
   status: 'ready' | 'error'
   requestId?: string
   corpusId?: string
   title?: string
-  width?: number
-  predictedHeight?: number
-  actualHeight?: number
-  diffPx?: number
-  predictedLineCount?: number
-  browserLineCount?: number
+  language?: string
+  widthCount?: number
+  exactCount?: number
+  rows?: CorpusSweepRow[]
   message?: string
 }
 
@@ -207,6 +216,13 @@ function printSummary(summary: SweepSummary): void {
   console.log(`  ${bucketMismatches(summary.mismatches)}`)
 }
 
+function getSweepRows(report: CorpusSweepReport, corpusId: string): CorpusSweepRow[] {
+  if (report.rows === undefined) {
+    throw new Error(`Corpus sweep report was missing rows for ${corpusId}`)
+  }
+  return report.rows
+}
+
 const options = parseOptions()
 options.port = await getAvailablePort(options.port === 0 ? null : options.port)
 const sources = await loadSources()
@@ -236,43 +252,47 @@ try {
 
   for (const meta of targets) {
     const widths = getSweepWidths(meta, options)
-    const mismatches: SweepMismatch[] = []
-    let exactCount = 0
+    const requestId = `${Date.now()}-${meta.id}-${Math.random().toString(36).slice(2)}`
+    let url =
+      `${baseUrl}?id=${encodeURIComponent(meta.id)}` +
+      `&widths=${encodeURIComponent(widths.join(','))}` +
+      `&report=1` +
+      `&requestId=${encodeURIComponent(requestId)}`
+    url = appendOverrideParams(url, options)
 
-    for (let i = 0; i < widths.length; i++) {
-      const width = widths[i]!
-      if (i > 0 && i % 50 === 0) {
-        console.log(`${meta.id}: progress ${i}/${widths.length}`)
+    const reportServer = await startPostedReportServer<CorpusSweepReport>(requestId)
+    url += `&reportEndpoint=${encodeURIComponent(reportServer.endpoint)}`
+
+    const report = await (async () => {
+      try {
+        return await loadPostedReport(
+          session,
+          url,
+          () => reportServer.waitForReport(null),
+          requestId,
+          options.browser,
+          options.timeoutMs,
+        )
+      } finally {
+        reportServer.close()
       }
-
-      const requestId = `${Date.now()}-${width}-${Math.random().toString(36).slice(2)}`
-      let url =
-        `${baseUrl}?id=${encodeURIComponent(meta.id)}` +
-        `&width=${width}` +
-        `&report=1` +
-        `&requestId=${encodeURIComponent(requestId)}`
-      url = appendOverrideParams(url, options)
-
-      const report = await loadHashReport<CorpusReport>(session, url, requestId, options.browser, options.timeoutMs)
-      if (report.status === 'error') {
-        throw new Error(`Corpus page returned error for ${meta.id} @ ${width}: ${report.message ?? 'unknown error'}`)
-      }
-
-      const diffPx = Math.round(report.diffPx ?? 0)
-      if (diffPx === 0) {
-        exactCount++
-        continue
-      }
-
-      mismatches.push({
-        width,
-        diffPx,
-        predictedHeight: Math.round(report.predictedHeight ?? 0),
-        actualHeight: Math.round(report.actualHeight ?? 0),
-        predictedLineCount: report.predictedLineCount ?? null,
-        browserLineCount: report.browserLineCount ?? null,
-      })
+    })()
+    if (report.status === 'error') {
+      throw new Error(`Corpus page returned error for ${meta.id}: ${report.message ?? 'unknown error'}`)
     }
+
+    const rows = getSweepRows(report, meta.id)
+    const mismatches: SweepMismatch[] = rows
+      .filter(row => Math.round(row.diffPx) !== 0)
+      .map(row => ({
+        width: row.width,
+        diffPx: Math.round(row.diffPx),
+        predictedHeight: Math.round(row.predictedHeight),
+        actualHeight: Math.round(row.actualHeight),
+        predictedLineCount: row.predictedLineCount,
+        browserLineCount: row.browserLineCount,
+      }))
+    const exactCount = report.exactCount ?? (rows.length - mismatches.length)
 
     const summary: SweepSummary = {
       corpusId: meta.id,
@@ -283,7 +303,7 @@ try {
       end: options.end,
       step: options.step,
       samples: options.samples,
-      widthCount: widths.length,
+      widthCount: rows.length,
       exactCount,
       mismatches,
     }

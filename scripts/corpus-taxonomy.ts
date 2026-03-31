@@ -4,9 +4,10 @@ import {
   createBrowserSession,
   ensurePageServer,
   getAvailablePort,
-  loadHashReport,
+  loadPostedReport,
   type BrowserKind,
 } from './browser-automation.ts'
+import { startPostedReportServer } from './report-server.ts'
 
 type CorpusMeta = {
   id: string
@@ -24,16 +25,18 @@ type CorpusBreakMismatch = {
   browserContext: string
 }
 
-type CorpusReport = {
-  status: 'ready' | 'error'
-  requestId?: string
-  width?: number
-  diffPx?: number
-  predictedHeight?: number
-  actualHeight?: number
+type CorpusSweepRow = {
+  width: number
+  diffPx: number
   browserLineMethod?: 'span-probe' | 'range'
   maxLineWidthDrift?: number
   firstBreakMismatch?: CorpusBreakMismatch | null
+}
+
+type CorpusSweepReport = {
+  status: 'ready' | 'error'
+  requestId?: string
+  rows?: CorpusSweepRow[]
   message?: string
 }
 
@@ -121,8 +124,8 @@ function appendOverrideParams(url: string, font: string | null, lineHeight: numb
 
 const quoteOrPunctuationRe = /["'“”‘’«»‹›「」『』（）()［］【】。，、！？!?,.;:—-]/
 
-function classifyTaxonomy(report: CorpusReport): TaxonomyCategory {
-  const mismatch = report.firstBreakMismatch
+function classifyTaxonomy(row: CorpusSweepRow): TaxonomyCategory {
+  const mismatch = row.firstBreakMismatch
   const reason = mismatch?.reasonGuess ?? ''
 
   if (reason.includes('only') && reason.includes('overflow')) {
@@ -131,7 +134,7 @@ function classifyTaxonomy(report: CorpusReport): TaxonomyCategory {
   if (reason.includes('segment sum drifts')) {
     return 'shaping-context'
   }
-  if (report.browserLineMethod === 'span-probe' && (report.maxLineWidthDrift ?? 0) === 0 && mismatch === null) {
+  if (row.browserLineMethod === 'span-probe' && (row.maxLineWidthDrift ?? 0) === 0 && mismatch === null) {
     return 'diagnostic-sensitivity'
   }
   if (mismatch != null && quoteOrPunctuationRe.test(mismatch.deltaText)) {
@@ -202,31 +205,48 @@ try {
   const entries: TaxonomyEntry[] = []
 
   console.log(`${meta.id} (${meta.language}) — ${meta.title}`)
+  const requestId = `${Date.now()}-${meta.id}-${Math.random().toString(36).slice(2)}`
+  const reportServer = await startPostedReportServer<CorpusSweepReport>(requestId)
+  let url =
+    `${baseUrl}?id=${encodeURIComponent(meta.id)}` +
+    `&widths=${encodeURIComponent(widths.join(','))}` +
+    `&report=1` +
+    `&diagnostic=full` +
+    `&requestId=${encodeURIComponent(requestId)}` +
+    `&reportEndpoint=${encodeURIComponent(reportServer.endpoint)}`
+  url = appendOverrideParams(url, font, lineHeight)
 
-  for (const width of widths) {
-    const requestId = `${Date.now()}-${width}-${Math.random().toString(36).slice(2)}`
-    let url =
-      `${baseUrl}?id=${encodeURIComponent(meta.id)}` +
-      `&width=${width}` +
-      `&report=1` +
-      `&diagnostic=full` +
-      `&requestId=${encodeURIComponent(requestId)}`
-    url = appendOverrideParams(url, font, lineHeight)
-
-    const report = await loadHashReport<CorpusReport>(session, url, requestId, browser, timeoutMs)
-    if (report.status === 'error') {
-      throw new Error(`Corpus page returned error for ${meta.id} @ ${width}: ${report.message ?? 'unknown error'}`)
+  const report = await (async () => {
+    try {
+      return await loadPostedReport(
+        session,
+        url,
+        () => reportServer.waitForReport(null),
+        requestId,
+        browser,
+        timeoutMs,
+      )
+    } finally {
+      reportServer.close()
     }
+  })()
+  if (report.status === 'error') {
+    throw new Error(`Corpus page returned error for ${meta.id}: ${report.message ?? 'unknown error'}`)
+  }
+  if (report.rows === undefined) {
+    throw new Error(`Corpus taxonomy report was missing rows for ${meta.id}`)
+  }
 
-    const diffPx = Math.round(report.diffPx ?? 0)
+  for (const row of report.rows) {
+    const diffPx = Math.round(row.diffPx)
     if (diffPx === 0) continue
 
     entries.push({
-      width,
+      width: row.width,
       diffPx,
-      category: classifyTaxonomy(report),
-      reason: report.firstBreakMismatch?.reasonGuess ?? 'no break diagnostic',
-      deltaText: report.firstBreakMismatch?.deltaText ?? '',
+      category: classifyTaxonomy(row),
+      reason: row.firstBreakMismatch?.reasonGuess ?? 'no break diagnostic',
+      deltaText: row.firstBreakMismatch?.deltaText ?? '',
     })
   }
 

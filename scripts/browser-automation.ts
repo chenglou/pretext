@@ -1,14 +1,18 @@
 import { execFileSync, spawn, type ChildProcess } from 'node:child_process'
-import { closeSync, mkdirSync, openSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
-import { createServer as createNetServer } from 'node:net'
+import { closeSync, mkdirSync, mkdtempSync, openSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { createConnection, createServer as createNetServer } from 'node:net'
+import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { readNavigationPhaseState, readNavigationReportText, type NavigationPhase } from '../shared/navigation-state.ts'
 
-export type BrowserKind = 'chrome' | 'safari'
-export type AutomationBrowserKind = BrowserKind | 'firefox'
+export type BrowserKind = 'chrome' | 'safari' | 'firefox'
+export type AutomationBrowserKind = BrowserKind
+
+type MaybePromise<T> = T | Promise<T>
 
 export type BrowserSession = {
-  navigate: (url: string) => void
-  readReportText: () => string
+  navigate: (url: string) => MaybePromise<void>
+  readLocationUrl: () => MaybePromise<string>
   close: () => void
 }
 
@@ -35,6 +39,28 @@ function runAppleScript(lines: string[]): string {
 
 export function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms))
+}
+
+async function waitForPort(port: number): Promise<void> {
+  for (let i = 0; i < 200; i++) {
+    const open = await new Promise<boolean>(resolve => {
+      const socket = createConnection({ host: '127.0.0.1', port })
+      let settled = false
+
+      const finish = (value: boolean): void => {
+        if (settled) return
+        settled = true
+        socket.destroy()
+        resolve(value)
+      }
+
+      socket.once('connect', () => finish(true))
+      socket.once('error', () => finish(false))
+    })
+    if (open) return
+    await sleep(100)
+  }
+  throw new Error(`Timed out waiting for local port ${port}`)
 }
 
 export async function getAvailablePort(requestedPort: number | null = null): Promise<number> {
@@ -184,10 +210,159 @@ async function resolveBaseUrl(port: number, pathname: string): Promise<string | 
   return null
 }
 
-function extractReportTextFromUrl(url: string): string {
-  const hashIndex = url.indexOf('#report=')
-  if (hashIndex === -1) return ''
-  return decodeURIComponent(url.slice(hashIndex + '#report='.length))
+function getTimeoutMessage(
+  browser: BrowserKind,
+  target: 'report' | 'posted report',
+  lastPhase: NavigationPhase | null,
+): string {
+  if (lastPhase === null) {
+    return `Timed out waiting for ${target} from ${browser}`
+  }
+  return `Timed out waiting for ${target} from ${browser} (last phase: ${lastPhase})`
+}
+
+async function readLastNavigationPhase(
+  session: BrowserSession,
+  expectedRequestId: string,
+): Promise<NavigationPhase | null> {
+  const currentUrl = await session.readLocationUrl()
+  const phaseState = readNavigationPhaseState(currentUrl)
+  if (phaseState === null) return null
+  if (phaseState.requestId !== undefined && phaseState.requestId !== expectedRequestId) {
+    return null
+  }
+  return phaseState.phase
+}
+
+type BidiResponse = {
+  id: number
+  result?: unknown
+  error?: string
+  message?: string
+  type?: string
+}
+
+type FirefoxBidiClient = {
+  send: (method: string, params?: Record<string, unknown>) => Promise<BidiResponse>
+  close: () => void
+}
+
+type FirefoxSessionState = {
+  bidi: FirefoxBidiClient
+  context: string
+  firefoxProcess: ChildProcess
+  profileDir: string
+}
+
+async function connectFirefoxBidi(port: number): Promise<FirefoxBidiClient> {
+  const ws = new WebSocket(`ws://127.0.0.1:${port}/session`)
+  const pending = new Map<number, (message: BidiResponse) => void>()
+  let nextId = 1
+
+  ws.onmessage = event => {
+    const message = JSON.parse(String(event.data)) as BidiResponse
+    if (message.id === undefined) return
+    const resolve = pending.get(message.id)
+    if (resolve !== undefined) {
+      pending.delete(message.id)
+      resolve(message)
+    }
+  }
+
+  await new Promise<void>((resolve, reject) => {
+    ws.onopen = () => resolve()
+    ws.onerror = event => reject(new Error(String((event as ErrorEvent).message ?? 'Firefox WebSocket error')))
+  })
+
+  return {
+    async send(method: string, params: Record<string, unknown> = {}): Promise<BidiResponse> {
+      const id = nextId++
+      ws.send(JSON.stringify({ id, method, params }))
+      return await new Promise<BidiResponse>(resolve => pending.set(id, resolve))
+    },
+    close() {
+      ws.close()
+    },
+  }
+}
+
+function getBidiStringValue(response: BidiResponse): string {
+  const remoteResult = response.result as {
+    type?: string
+    result?: {
+      type?: string
+      value?: unknown
+    }
+  } | undefined
+
+  const value = remoteResult?.result?.value
+  return typeof value === 'string' ? value : ''
+}
+
+function closeFirefoxSessionState(state: FirefoxSessionState): void {
+  state.bidi.close()
+  try {
+    state.firefoxProcess.kill('SIGTERM')
+  } catch {
+    // Best effort cleanup.
+  }
+  rmSync(state.profileDir, { recursive: true, force: true })
+}
+
+async function initializeFirefoxSession(): Promise<FirefoxSessionState> {
+  const bidiPort = await getAvailablePort()
+  const profileDir = mkdtempSync(join(tmpdir(), 'pretext-firefox-'))
+  const firefoxProcess = spawn('/Applications/Firefox.app/Contents/MacOS/firefox', [
+    '--headless',
+    '--new-instance',
+    '--profile',
+    profileDir,
+    '--remote-debugging-port',
+    String(bidiPort),
+    'about:blank',
+  ], {
+    cwd: process.cwd(),
+    stdio: 'ignore',
+  })
+
+  let bidi: FirefoxBidiClient | null = null
+
+  try {
+    await waitForPort(bidiPort)
+    bidi = await connectFirefoxBidi(bidiPort)
+
+    const session = await bidi.send('session.new', { capabilities: { alwaysMatch: {} } })
+    if (session.error !== undefined) {
+      throw new Error(session.message ?? session.error)
+    }
+
+    const tree = await bidi.send('browsingContext.getTree', {})
+    if (tree.error !== undefined) {
+      throw new Error(tree.message ?? tree.error)
+    }
+
+    const contexts = (tree.result as { contexts: Array<{ context: string }> }).contexts
+    const context = contexts[0]?.context
+    if (context === undefined) {
+      throw new Error('Firefox BiDi returned no browsing context')
+    }
+
+    return {
+      bidi,
+      context,
+      firefoxProcess,
+      profileDir,
+    }
+  } catch (error) {
+    bidi?.close()
+    try {
+      firefoxProcess.kill('SIGTERM')
+    } catch {
+      // Best effort cleanup.
+    }
+    rmSync(profileDir, { recursive: true, force: true })
+    throw error
+  }
 }
 
 function createSafariSession(_options: BrowserSessionOptions): BrowserSession {
@@ -216,14 +391,13 @@ function createSafariSession(_options: BrowserSessionOptions): BrowserSession {
         'end tell',
       ])
     },
-    readReportText() {
+    readLocationUrl() {
       try {
-        const url = runAppleScript([
+        return runAppleScript([
           'tell application "Safari"',
           `return URL of current tab of (first window whose id is ${windowId})`,
           'end tell',
         ])
-        return extractReportTextFromUrl(url)
       } catch {
         return ''
       }
@@ -276,15 +450,14 @@ function createChromeSession(options: BrowserSessionOptions): BrowserSession {
         'end tell',
       ])
     },
-    readReportText() {
+    readLocationUrl() {
       try {
-        const url = runAppleScript([
+        return runAppleScript([
           'tell application "Google Chrome"',
           `set targetWindow to first window whose id is ${windowId}`,
           `return URL of (first tab of targetWindow whose id is ${tabId})`,
           'end tell',
         ])
-        return extractReportTextFromUrl(url)
       } catch {
         return ''
       }
@@ -304,11 +477,63 @@ function createChromeSession(options: BrowserSessionOptions): BrowserSession {
   }
 }
 
+function createFirefoxSession(_options: BrowserSessionOptions): BrowserSession {
+  let statePromise: Promise<FirefoxSessionState> | null = null
+  let closed = false
+
+  function ensureState(): Promise<FirefoxSessionState> {
+    if (closed) {
+      return Promise.reject(new Error('Firefox automation session already closed'))
+    }
+    statePromise ??= initializeFirefoxSession()
+    return statePromise
+  }
+
+  return {
+    async navigate(url) {
+      const state = await ensureState()
+      const navigate = await state.bidi.send('browsingContext.navigate', {
+        context: state.context,
+        url,
+        wait: 'none',
+      })
+      if (navigate.error !== undefined) {
+        throw new Error(navigate.message ?? navigate.error)
+      }
+    },
+    async readLocationUrl() {
+      try {
+        const state = await ensureState()
+        const evaluation = await state.bidi.send('script.evaluate', {
+          expression: 'location.href',
+          target: { context: state.context },
+          awaitPromise: true,
+          resultOwnership: 'none',
+        })
+        if (evaluation.error !== undefined) {
+          return ''
+        }
+        return getBidiStringValue(evaluation)
+      } catch {
+        return ''
+      }
+    },
+    close() {
+      if (closed) return
+      closed = true
+      if (statePromise === null) return
+      void statePromise.then(closeFirefoxSessionState, () => {})
+    },
+  }
+}
+
 export function createBrowserSession(
   browser: BrowserKind,
   options: BrowserSessionOptions = {},
 ): BrowserSession {
-  return browser === 'safari' ? createSafariSession(options) : createChromeSession(options)
+  if (browser === 'safari') return createSafariSession(options)
+  if (browser === 'firefox') return createFirefoxSession(options)
+  return createChromeSession(options)
 }
 
 export async function ensurePageServer(
@@ -345,12 +570,21 @@ export async function loadHashReport<T extends { requestId?: string }>(
   browser: BrowserKind,
   timeoutMs = 60_000,
 ): Promise<T> {
-  session.navigate(url)
+  await session.navigate(url)
 
   const attempts = Math.max(1, Math.ceil(timeoutMs / 100))
+  let lastPhase: NavigationPhase | null = null
   for (let i = 0; i < attempts; i++) {
     await sleep(100)
-    const reportJson = session.readReportText()
+    const currentUrl = await session.readLocationUrl()
+    const phase = readNavigationPhaseState(currentUrl)
+    if (
+      phase !== null &&
+      (phase.requestId === undefined || phase.requestId === expectedRequestId)
+    ) {
+      lastPhase = phase.phase
+    }
+    const reportJson = readNavigationReportText(currentUrl)
     if (reportJson === '' || reportJson === 'null') continue
 
     const report = JSON.parse(reportJson) as T
@@ -359,5 +593,57 @@ export async function loadHashReport<T extends { requestId?: string }>(
     }
   }
 
-  throw new Error(`Timed out waiting for report from ${browser}`)
+  if (lastPhase === null) {
+    lastPhase = await readLastNavigationPhase(session, expectedRequestId)
+  }
+  throw new Error(getTimeoutMessage(browser, 'report', lastPhase))
+}
+
+export async function loadPostedReport<T extends { requestId?: string }>(
+  session: BrowserSession,
+  url: string,
+  waitForReport: () => Promise<T>,
+  expectedRequestId: string,
+  browser: BrowserKind,
+  timeoutMs = 60_000,
+): Promise<T> {
+  await session.navigate(url)
+
+  let resolvedReport: T | null = null
+  let reportError: unknown = null
+
+  void waitForReport().then(
+    value => {
+      resolvedReport = value
+    },
+    error => {
+      reportError = error
+    },
+  )
+
+  const attempts = Math.max(1, Math.ceil(timeoutMs / 100))
+  let lastPhase: NavigationPhase | null = null
+  for (let i = 0; i < attempts; i++) {
+    await sleep(100)
+    if (resolvedReport !== null) {
+      return resolvedReport
+    }
+    if (reportError !== null) {
+      throw reportError
+    }
+
+    const phase = await readLastNavigationPhase(session, expectedRequestId)
+    if (phase !== null) {
+      lastPhase = phase
+    }
+  }
+
+  if (resolvedReport !== null) {
+    return resolvedReport
+  }
+  if (reportError !== null) {
+    throw reportError
+  }
+
+  throw new Error(getTimeoutMessage(browser, 'posted report', lastPhase))
 }

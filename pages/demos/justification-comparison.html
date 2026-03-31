@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Side-by-side comparison of CSS/greedy, hyphenated, and optimal (Knuth-Plass) justification algorithms — powered by Pretext.">
+  <title>Justification Algorithms Compared — Pretext Demo</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; }
+    html, body { min-height: 100%; background: #faf8f5; color: #2a2520; overflow-x: auto; }
+    body { font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; }
+
+    .page { max-width: 1140px; margin: 0 auto; padding: 32px 24px 80px; overflow: visible; }
+
+    h1 {
+      font: 300 32px/1.2 Georgia, "Times New Roman", serif;
+      color: #1a1714; letter-spacing: -0.5px; margin-bottom: 8px;
+    }
+    .subtitle {
+      font: 400 13px/1.4 "Helvetica Neue", Helvetica, Arial, sans-serif;
+      color: #8a7f70; margin-bottom: 20px;
+    }
+
+    .controls {
+      display: flex; align-items: center; gap: 16px;
+      margin-bottom: 24px; flex-wrap: wrap; justify-content: center;
+    }
+    .controls label {
+      font: 500 11px/1 "Helvetica Neue", Helvetica, Arial, sans-serif;
+      color: #8a7f70; text-transform: uppercase; letter-spacing: 0.5px;
+    }
+    .controls input[type="range"] {
+      width: 220px; accent-color: #5a4f40;
+    }
+    .toggle {
+      display: inline-flex; align-items: center; gap: 8px;
+      cursor: pointer;
+    }
+    .toggle input[type="checkbox"] {
+      margin: 0;
+      accent-color: #5a4f40;
+    }
+    .toggle span {
+      font: 500 11px/1 "Helvetica Neue", Helvetica, Arial, sans-serif;
+      color: #8a7f70; text-transform: uppercase; letter-spacing: 0.5px;
+    }
+    .width-val {
+      font: 600 13px/1 "Helvetica Neue", Helvetica, Arial, sans-serif;
+      color: #5a4f40; min-width: 42px;
+    }
+
+    .columns {
+      display: flex; gap: 24px; padding-bottom: 16px;
+      justify-content: center;
+    }
+    .column {
+      flex: 0 0 auto; min-width: 200px;
+    }
+    .col-header {
+      font: 600 11px/1 "Helvetica Neue", Helvetica, Arial, sans-serif;
+      color: #5a4f40; text-transform: uppercase; letter-spacing: 0.8px;
+      margin-bottom: 4px;
+    }
+    .col-desc {
+      font: 400 11px/1.3 "Helvetica Neue", Helvetica, Arial, sans-serif;
+      color: #a09888; margin-bottom: 12px;
+    }
+
+    .col-canvas-wrap {
+      position: relative; border: 1px solid #e8e0d4; border-radius: 3px;
+      background: #fff; overflow: hidden;
+    }
+    .col-canvas-wrap canvas { display: block; }
+
+    .css-col {
+      position: relative;
+      border: 1px solid #e8e0d4; border-radius: 3px;
+      background: #fff; overflow: hidden;
+    }
+    .css-text {
+      font: 15px/24px Georgia, "Times New Roman", serif;
+      text-align: justify;
+      padding: 12px;
+      hyphens: none; -webkit-hyphens: none;
+      word-break: normal; overflow-wrap: break-word;
+      text-align-last: left;
+    }
+    .css-river-overlay {
+      position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+      pointer-events: none;
+    }
+
+    .metrics {
+      margin-top: 8px; padding: 8px 10px;
+      background: #f5f2ed; border-radius: 3px;
+      font: 400 11px/1.5 "Helvetica Neue", Helvetica, Arial, sans-serif;
+      color: #6a6055;
+    }
+    .metrics .metric-row { display: flex; justify-content: space-between; }
+    .metrics .metric-label { color: #8a7f70; }
+    .metrics .metric-value { font-weight: 600; color: #5a4f40; }
+    .metrics .metric-value.bad { color: #c44; }
+    .metrics .metric-value.ok { color: #b87020; }
+    .metrics .metric-value.good { color: #2a8a4a; }
+
+    .topbar {
+      padding: 12px 16px; text-align: center;
+      font: 400 11px/1 "Helvetica Neue", Helvetica, Arial, sans-serif;
+      color: rgba(120,110,95,0.6);
+    }
+    .topbar a { color: rgba(100,90,75,0.7); text-decoration: none; border-bottom: 1px solid rgba(100,90,75,0.25); }
+    .topbar a:hover { color: #555; border-bottom-color: #aaa; }
+
+    .footer {
+      text-align: center; padding: 40px 24px 32px;
+      font: 400 12px/1.5 "Helvetica Neue", Helvetica, Arial, sans-serif;
+      color: #b0a898;
+    }
+    .footer a {
+      color: #8a7f70; text-decoration: none;
+    }
+    .footer a:hover { text-decoration: underline; }
+    .footer .sep { margin: 0 8px; }
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <div>Built with <em>Pretext</em> by <a href="https://dearlarry.co" target="_blank">Maxwell Ingham</a> &nbsp;&nbsp;&nbsp;&nbsp; <a href="https://github.com/somnai-dreams" target="_blank">GitHub</a> &nbsp;&nbsp;&nbsp;&nbsp; <a href="https://twitter.com/somnai_dreams" target="_blank">Twitter</a></div>
+  </div>
+  <div class="page">
+    <h1 style="text-align:center">Justification Algorithms Compared</h1>
+    <p class="subtitle" style="text-align:center">Visualizes typography rivers, spacing variance, and how hyphenation and global line-breaking change justified text.</p>
+
+    <div class="controls">
+      <label for="widthSlider">Column width</label>
+      <input type="range" id="widthSlider" min="200" max="600" value="364">
+      <span class="width-val" id="widthVal">364px</span>
+      <label class="toggle" for="showIndicators">
+        <input type="checkbox" id="showIndicators" checked>
+        <span>Toggle red visualizers</span>
+      </label>
+    </div>
+
+    <div class="columns" id="columns">
+      <!-- Column 1: CSS / Greedy -->
+      <div class="column" id="col0">
+        <div class="col-header">CSS / Greedy</div>
+        <div class="col-desc">Native browser justification</div>
+        <div class="css-col" id="cssCol">
+          <div class="css-text" id="cssText"></div>
+          <div class="css-river-overlay" id="cssRiverOverlay"></div>
+        </div>
+        <div class="metrics" id="metrics0"></div>
+      </div>
+
+      <!-- Column 2: Pretext + Hyphenation -->
+      <div class="column" id="col2">
+        <div class="col-header">Pretext (Hyphenation)</div>
+        <div class="col-desc">Greedy with syllable-level hyphenation</div>
+        <div class="col-canvas-wrap"><canvas id="c2"></canvas></div>
+        <div class="metrics" id="metrics2"></div>
+      </div>
+
+      <!-- Column 3: Optimal (Knuth-Plass) -->
+      <div class="column" id="col3">
+        <div class="col-header">Pretext (Knuth-Plass)</div>
+        <div class="col-desc">Optimal global line-breaking with syllable hyphenation</div>
+        <div class="col-canvas-wrap"><canvas id="c3"></canvas></div>
+        <div class="metrics" id="metrics3"></div>
+      </div>
+    </div>
+  </div>
+
+  <footer class="footer">
+    Built with Pretext<span class="sep">&middot;</span><a href="https://github.com/somnai-dreams" target="_blank">GitHub</a><span class="sep">&middot;</span><a href="https://twitter.com/somnai_dreams" target="_blank">@somnai_dreams</a>
+  </footer>
+
+<script type="module" src="./justification-comparison.ts"></script>
+</body>
+</html>

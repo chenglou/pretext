@@ -10,6 +10,11 @@ import {
   getLineContent,
   measureCanvasTextWidth,
 } from './diagnostic-utils.ts'
+import {
+  clearNavigationReport,
+  publishNavigationPhase,
+  publishNavigationReport as publishHashReport,
+} from './report-utils.ts'
 
 const book = document.getElementById('book')!
 const slider = document.getElementById('slider') as HTMLInputElement
@@ -44,6 +49,10 @@ type GatsbyReport = {
   mismatchCount?: number
   firstMismatch?: GatsbyLineMismatch | null
   firstBreakMismatch?: GatsbyBreakMismatch | null
+  widths?: number[]
+  widthCount?: number
+  exactCount?: number
+  rows?: GatsbySweepRow[]
   message?: string
 }
 
@@ -51,6 +60,8 @@ type GatsbyNavigationReport = {
   status: 'ready' | 'error'
   requestId?: string
   width?: number
+  widthCount?: number
+  exactCount?: number
   predictedHeight?: number
   actualHeight?: number
   diffPx?: number
@@ -60,6 +71,18 @@ type GatsbyNavigationReport = {
   firstMismatch?: GatsbyLineMismatch | null
   firstBreakMismatch?: Pick<GatsbyBreakMismatch, 'line' | 'deltaText' | 'oursContext' | 'browserContext' | 'reasonGuess'> | null
   message?: string
+}
+
+type GatsbySweepRow = {
+  width: number
+  predictedHeight: number
+  actualHeight: number
+  diffPx: number
+  predictedLineCount: number | null
+  browserLineCount: number | null
+  mismatchCount: number | null
+  firstMismatch?: GatsbyLineMismatch | null
+  firstBreakMismatch?: Pick<GatsbyBreakMismatch, 'line' | 'deltaText' | 'oursContext' | 'browserContext' | 'reasonGuess'> | null
 }
 
 type GatsbyBreakMismatch = {
@@ -140,7 +163,6 @@ type JoinedTextDiff = {
 
 declare global {
   interface Window {
-    __GATSBY_READY__?: boolean
     __GATSBY_REPORT__?: GatsbyReport
   }
 }
@@ -190,19 +212,30 @@ diagnosticDiv.style.overflowWrap = 'break-word'
 diagnosticDiv.textContent = normalizedText
 document.body.appendChild(diagnosticDiv)
 
-const reportEl = document.createElement('pre')
-reportEl.id = 'gatsby-report'
-reportEl.hidden = true
-reportEl.dataset['ready'] = '0'
-document.body.appendChild(reportEl)
-
 const params = new URLSearchParams(location.search)
 const reportMode = params.get('report') === '1'
 const diagnosticMode = params.get('diagnostic') ?? 'full'
 const requestId = params.get('requestId') ?? undefined
+const reportEndpoint = params.get('reportEndpoint')
+const requestedWidths = parseWidthList(params.get('widths'))
 const prepared = prepareWithSegments(text, FONT)
 const segmentSpans = buildSegmentSpans(prepared)
 const segmentSpansByStart = new Map(segmentSpans.map(span => [span.start, span] as const))
+
+function parseWidthList(raw: string | null): number[] | null {
+  if (raw === null) return null
+
+  const widths = raw
+    .split(',')
+    .map(part => Number.parseInt(part.trim(), 10))
+    .filter(width => Number.isFinite(width))
+
+  if (widths.length === 0) {
+    throw new Error(`Invalid widths parameter: ${raw}`)
+  }
+
+  return [...new Set(widths)]
+}
 
 function parseInitialWidth(): number {
   const requested = Number.parseInt(params.get('width') ?? '', 10)
@@ -229,6 +262,8 @@ function toNavigationReport(report: GatsbyReport): GatsbyNavigationReport {
     status: report.status,
     ...(report.requestId === undefined ? {} : { requestId: report.requestId }),
     ...(report.width === undefined ? {} : { width: report.width }),
+    ...(report.widthCount === undefined ? {} : { widthCount: report.widthCount }),
+    ...(report.exactCount === undefined ? {} : { exactCount: report.exactCount }),
     ...(report.predictedHeight === undefined ? {} : { predictedHeight: report.predictedHeight }),
     ...(report.actualHeight === undefined ? {} : { actualHeight: report.actualHeight }),
     ...(report.diffPx === undefined ? {} : { diffPx: report.diffPx }),
@@ -254,8 +289,27 @@ function toNavigationReport(report: GatsbyReport): GatsbyNavigationReport {
 
 function publishNavigationReport(report: GatsbyReport): void {
   const navigationReport = toNavigationReport(report)
-  const encoded = encodeURIComponent(JSON.stringify(navigationReport))
-  history.replaceState(null, '', `${location.pathname}${location.search}#report=${encoded}`)
+  publishHashReport(navigationReport)
+}
+
+function setReport(report: GatsbyReport): void {
+  window.__GATSBY_REPORT__ = report
+  if (reportEndpoint !== null) {
+    publishNavigationPhase('posting', requestId)
+    void (async () => {
+      try {
+        await fetch(reportEndpoint, {
+          method: 'POST',
+          body: JSON.stringify(report),
+        })
+        publishNavigationReport(report)
+      } catch {
+        // Best-effort side channel for larger sweep reports.
+      }
+    })()
+    return
+  }
+  publishNavigationReport(report)
 }
 
 function buildSegmentSpans(preparedText: PreparedTextWithSegments): SegmentSpan[] {
@@ -637,7 +691,10 @@ function buildReport(width: number, predictedHeight: number, actualHeight: numbe
   })
 }
 
-function setWidth(width: number) {
+function measureWidth(
+  width: number,
+  options: { publish?: boolean, updateStats?: boolean } = {},
+): GatsbyReport {
   slider.value = String(width)
   valLabel.textContent = `${width}px`
 
@@ -656,27 +713,83 @@ function setWidth(width: number) {
 
   const predictedHeight = predicted.height + PADDING * 2
   const report = buildReport(width, predictedHeight, actualHeight, diagnosticHeight)
-  const diff = report.diffPx ?? 0
-  const diffStr = diff === 0 ? 'exact' : `${diff > 0 ? '+' : ''}${Math.round(diff)}px`
+  if (options.updateStats !== false) {
+    const diff = report.diffPx ?? 0
+    const diffStr = diff === 0 ? 'exact' : `${diff > 0 ? '+' : ''}${Math.round(diff)}px`
 
-  if (reportMode && report.status === 'ready') {
-    const linesText = report.predictedLineCount !== undefined && report.browserLineCount !== undefined
-      ? ` | Lines: ${report.predictedLineCount}/${report.browserLineCount}`
-      : ''
-    const breakText = report.firstBreakMismatch !== null && report.firstBreakMismatch !== undefined
-      ? ` | Break L${report.firstBreakMismatch.line}: ${report.firstBreakMismatch.reasonGuess}`
-      : ''
-    stats.textContent = `Pretext: ${msPretext.toFixed(2)}ms (${Math.round(predictedHeight)}px) | DOM: ${msDOM.toFixed(1)}ms (${Math.round(actualHeight)}px) | Diff: ${diffStr}${linesText}${breakText}`
-  } else {
-    stats.textContent = `Pretext: ${msPretext.toFixed(2)}ms (${Math.round(predictedHeight)}px) | DOM: ${msDOM.toFixed(1)}ms (${Math.round(actualHeight)}px) | Diff: ${diffStr} | ${text.length.toLocaleString()} chars`
+    if (reportMode && report.status === 'ready') {
+      const linesText = report.predictedLineCount !== undefined && report.browserLineCount !== undefined
+        ? ` | Lines: ${report.predictedLineCount}/${report.browserLineCount}`
+        : ''
+      const breakText = report.firstBreakMismatch !== null && report.firstBreakMismatch !== undefined
+        ? ` | Break L${report.firstBreakMismatch.line}: ${report.firstBreakMismatch.reasonGuess}`
+        : ''
+      stats.textContent = `Pretext: ${msPretext.toFixed(2)}ms (${Math.round(predictedHeight)}px) | DOM: ${msDOM.toFixed(1)}ms (${Math.round(actualHeight)}px) | Diff: ${diffStr}${linesText}${breakText}`
+    } else {
+      stats.textContent = `Pretext: ${msPretext.toFixed(2)}ms (${Math.round(predictedHeight)}px) | DOM: ${msDOM.toFixed(1)}ms (${Math.round(actualHeight)}px) | Diff: ${diffStr} | ${text.length.toLocaleString()} chars`
+    }
   }
 
-  const reportJson = JSON.stringify(report)
-  reportEl.textContent = reportJson
-  reportEl.dataset['ready'] = '1'
-  window.__GATSBY_REPORT__ = report
-  window.__GATSBY_READY__ = true
-  publishNavigationReport(report)
+  if (options.publish !== false) {
+    setReport(report)
+  }
+  return report
+}
+
+function toSweepRow(report: GatsbyReport): GatsbySweepRow {
+  if (
+    report.width === undefined ||
+    report.predictedHeight === undefined ||
+    report.actualHeight === undefined ||
+    report.diffPx === undefined
+  ) {
+    throw new Error('Gatsby report was missing sweep row fields')
+  }
+
+  return {
+    width: report.width,
+    predictedHeight: report.predictedHeight,
+    actualHeight: report.actualHeight,
+    diffPx: report.diffPx,
+    predictedLineCount: report.predictedLineCount ?? null,
+    browserLineCount: report.browserLineCount ?? null,
+    mismatchCount: report.mismatchCount ?? null,
+    ...(report.firstMismatch === undefined ? {} : { firstMismatch: report.firstMismatch }),
+    ...(report.firstBreakMismatch === undefined
+      ? {}
+      : report.firstBreakMismatch === null
+        ? { firstBreakMismatch: null }
+        : {
+            firstBreakMismatch: {
+              line: report.firstBreakMismatch.line,
+              deltaText: report.firstBreakMismatch.deltaText,
+              oursContext: report.firstBreakMismatch.oursContext,
+              browserContext: report.firstBreakMismatch.browserContext,
+              reasonGuess: report.firstBreakMismatch.reasonGuess,
+            },
+          }),
+  }
+}
+
+function runSweep(widths: number[]): void {
+  const rows = widths.map(width => toSweepRow(measureWidth(width, { publish: false, updateStats: false })))
+  const exactCount = rows.filter(row => Math.round(row.diffPx) === 0).length
+
+  stats.textContent =
+    `Gatsby | Sweep: ${exactCount}/${rows.length} exact | ${rows.length - exactCount} nonzero` +
+    ` | ${text.length.toLocaleString()} chars`
+
+  setReport(withRequestId({
+    status: 'ready',
+    widths,
+    widthCount: rows.length,
+    exactCount,
+    rows,
+  }))
+}
+
+function setWidth(width: number) {
+  measureWidth(width)
 }
 
 slider.addEventListener('input', () => {
@@ -693,11 +806,10 @@ controlsEl.addEventListener('mousemove', (e) => {
   setWidth(width)
 })
 
-window.__GATSBY_READY__ = false
 window.__GATSBY_REPORT__ = withRequestId({ status: 'error', message: 'Pending initial layout' })
-reportEl.textContent = ''
 stats.textContent = 'Loading...'
-history.replaceState(null, '', `${location.pathname}${location.search}`)
+clearNavigationReport()
+publishNavigationPhase('loading', requestId)
 
 const initialWidth = parseInitialWidth()
 
@@ -706,17 +818,18 @@ async function init() {
     if ('fonts' in document) {
       await document.fonts.ready
     }
+    publishNavigationPhase('measuring', requestId)
     diagnosticCtx.font = FONT
+    if (requestedWidths !== null) {
+      runSweep(requestedWidths)
+      return
+    }
     setWidth(initialWidth)
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     stats.textContent = `Error: ${message}`
     const report = withRequestId({ status: 'error', message } satisfies GatsbyReport)
-    reportEl.textContent = JSON.stringify(report)
-    reportEl.dataset['ready'] = '1'
-    window.__GATSBY_REPORT__ = report
-    window.__GATSBY_READY__ = true
-    publishNavigationReport(report)
+    setReport(report)
   }
 }
 

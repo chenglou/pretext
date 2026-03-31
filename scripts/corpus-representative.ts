@@ -6,11 +6,22 @@ import {
   createBrowserSession,
   ensurePageServer,
   getAvailablePort,
-  loadHashReport,
+  loadPostedReport,
   type BrowserKind,
 } from './browser-automation.ts'
+import { startPostedReportServer } from './report-server.ts'
 
-type CorpusReport = {
+type CorpusSweepRow = {
+  width: number
+  contentWidth: number
+  predictedHeight: number
+  actualHeight: number
+  diffPx: number
+  predictedLineCount: number
+  browserLineCount: number
+}
+
+type CorpusSweepReport = {
   status: 'ready' | 'error'
   requestId?: string
   environment?: {
@@ -36,15 +47,9 @@ type CorpusReport = {
   title?: string
   language?: string
   direction?: string
-  width?: number
-  contentWidth?: number
   font?: string
   lineHeight?: number
-  predictedHeight?: number
-  actualHeight?: number
-  diffPx?: number
-  predictedLineCount?: number
-  browserLineCount?: number
+  rows?: CorpusSweepRow[]
   message?: string
 }
 
@@ -65,7 +70,7 @@ type RepresentativeRow = {
 }
 
 type BrowserSnapshot = {
-  environment: NonNullable<CorpusReport['environment']>
+  environment: NonNullable<CorpusSweepReport['environment']>
   rows: RepresentativeRow[]
 }
 
@@ -112,21 +117,17 @@ function parseBrowsers(value: string | null): BrowserKind[] {
   throw new Error(`Unsupported --browser ${value}; expected chrome, safari, or all`)
 }
 
-function toRepresentativeRow(report: CorpusReport): RepresentativeRow {
+function toRepresentativeRow(
+  report: CorpusSweepReport,
+  row: CorpusSweepRow,
+): RepresentativeRow {
   if (
     report.corpusId === undefined ||
     report.title === undefined ||
     report.language === undefined ||
     report.direction === undefined ||
-    report.width === undefined ||
-    report.contentWidth === undefined ||
     report.font === undefined ||
-    report.lineHeight === undefined ||
-    report.predictedHeight === undefined ||
-    report.actualHeight === undefined ||
-    report.diffPx === undefined ||
-    report.predictedLineCount === undefined ||
-    report.browserLineCount === undefined
+    report.lineHeight === undefined
   ) {
     throw new Error('Corpus report was missing representative snapshot fields')
   }
@@ -136,15 +137,15 @@ function toRepresentativeRow(report: CorpusReport): RepresentativeRow {
     title: report.title,
     language: report.language,
     direction: report.direction,
-    width: report.width,
-    contentWidth: report.contentWidth,
+    width: row.width,
+    contentWidth: row.contentWidth,
     font: report.font,
     lineHeight: report.lineHeight,
-    predictedHeight: report.predictedHeight,
-    actualHeight: report.actualHeight,
-    diffPx: report.diffPx,
-    predictedLineCount: report.predictedLineCount,
-    browserLineCount: report.browserLineCount,
+    predictedHeight: row.predictedHeight,
+    actualHeight: row.actualHeight,
+    diffPx: row.diffPx,
+    predictedLineCount: row.predictedLineCount,
+    browserLineCount: row.browserLineCount,
   }
 }
 
@@ -177,23 +178,41 @@ try {
       let environment: BrowserSnapshot['environment'] | null = null
 
       for (const corpusId of CORPUS_IDS) {
-        for (const width of WIDTHS) {
-          const requestId = `${Date.now()}-${browser}-${corpusId}-${width}-${Math.random().toString(36).slice(2)}`
-          const url =
-            `${baseUrl}?id=${encodeURIComponent(corpusId)}` +
-            `&width=${width}` +
-            `&report=1` +
-            `&diagnostic=light` +
-            `&requestId=${encodeURIComponent(requestId)}`
+        const requestId = `${Date.now()}-${browser}-${corpusId}-${Math.random().toString(36).slice(2)}`
+        const reportServer = await startPostedReportServer<CorpusSweepReport>(requestId)
+        const url =
+          `${baseUrl}?id=${encodeURIComponent(corpusId)}` +
+          `&widths=${encodeURIComponent(WIDTHS.join(','))}` +
+          `&report=1` +
+          `&diagnostic=light` +
+          `&requestId=${encodeURIComponent(requestId)}` +
+          `&reportEndpoint=${encodeURIComponent(reportServer.endpoint)}`
 
-          const report = await loadHashReport<CorpusReport>(session, url, requestId, browser, timeoutMs)
-          if (report.status === 'error') {
-            throw new Error(report.message ?? `Corpus report failed for ${corpusId} @ ${width}`)
+        const report = await (async () => {
+          try {
+            return await loadPostedReport(
+              session,
+              url,
+              () => reportServer.waitForReport(null),
+              requestId,
+              browser,
+              timeoutMs,
+            )
+          } finally {
+            reportServer.close()
           }
-          if (report.environment !== undefined) {
-            environment = report.environment
-          }
-          rows.push(toRepresentativeRow(report))
+        })()
+        if (report.status === 'error') {
+          throw new Error(report.message ?? `Corpus report failed for ${corpusId}`)
+        }
+        if (report.environment !== undefined) {
+          environment = report.environment
+        }
+        if (report.rows === undefined) {
+          throw new Error(`Corpus representative report was missing rows for ${corpusId}`)
+        }
+        for (const row of report.rows) {
+          rows.push(toRepresentativeRow(report, row))
         }
       }
 

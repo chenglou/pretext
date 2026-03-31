@@ -15,8 +15,9 @@ Useful command:
 bun run corpus-taxonomy --id=ja-rashomon 330 450
 ```
 
-That runner is intentionally rough. It is there to turn repeated browser diagnostics
-into a steering summary, not to replace manual judgment on a new mismatch.
+That runner is intentionally rough. It now batches widths inside one corpus page load
+and is there to turn repeated browser diagnostics into a steering summary, not to
+replace manual judgment on a new mismatch.
 
 ## Categories
 

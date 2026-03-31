@@ -56,16 +56,11 @@ The important keep was architectural, not algorithmic:
 
 Canvas and DOM resolve `system-ui` to different font variants on macOS at certain sizes:
 
-| Size | Canvas/DOM match |
-|---|---|
-| 10px | MISMATCH (2.9%) |
-| 11px | MISMATCH (6.9%) |
-| 12px | MISMATCH (11.3%) |
-| 13px | OK |
-| 14px | MISMATCH (14.5%) |
-| 15-25px | OK |
-| 26px | MISMATCH (12.4%) |
-| 27-28px | OK |
+Machine-readable scan:
+- [research-data/system-ui-size-scan.json](/Users/chenglou/github/pretext/research-data/system-ui-size-scan.json)
+
+In the recorded scan, mismatches clustered at `10-12px`, `14px`, and `26px`.
+`13px`, `15-25px`, and `27-28px` were exact.
 
 macOS uses SF Pro Text at smaller sizes and SF Pro Display at larger sizes. Canvas and DOM switch between them at different thresholds.
 

@@ -10,6 +10,11 @@ import {
 } from '../src/layout.ts'
 import type { PreparedText, PreparedTextWithSegments } from '../src/layout.ts'
 import { TEXTS } from '../src/test-data.ts'
+import {
+  clearNavigationReport,
+  publishNavigationPhase,
+  publishNavigationReport as publishHashReport,
+} from './report-utils.ts'
 import arRisalatAlGhufranPart1 from '../corpora/ar-risalat-al-ghufran-part-1.txt' with { type: 'text' }
 import hiEidgah from '../corpora/hi-eidgah.txt' with { type: 'text' }
 import jaKumoNoIto from '../corpora/ja-kumo-no-ito.txt' with { type: 'text' }
@@ -197,7 +202,6 @@ for (let i = 0; i < COUNT; i++) {
 
 declare global {
   interface Window {
-    __BENCHMARK_READY__?: boolean
     __BENCHMARK_REPORT__?: BenchmarkReport
   }
 }
@@ -241,16 +245,11 @@ function withRequestId<T extends BenchmarkReport>(report: T): BenchmarkReport {
 
 function publishNavigationReport(report: BenchmarkReport): void {
   if (!reportMode) return
-  const encoded = encodeURIComponent(JSON.stringify(report))
-  history.replaceState(null, '', `${location.pathname}${location.search}#report=${encoded}`)
+  publishHashReport(report)
 }
 
 function setReport(report: BenchmarkReport): void {
-  const reportEl = document.getElementById('benchmark-report')!
-  reportEl.textContent = JSON.stringify(report)
-  reportEl.dataset['ready'] = '1'
   window.__BENCHMARK_REPORT__ = report
-  window.__BENCHMARK_READY__ = true
   publishNavigationReport(report)
 }
 
@@ -400,14 +399,9 @@ function renderBenchmarkTable(results: BenchmarkResult[], treatFirstAsSetup: boo
 
 async function run() {
   const root = document.getElementById('root')!
-  const reportEl = document.createElement('pre')
-  reportEl.id = 'benchmark-report'
-  reportEl.hidden = true
-  reportEl.dataset['ready'] = '0'
-  document.body.appendChild(reportEl)
-  window.__BENCHMARK_READY__ = false
   window.__BENCHMARK_REPORT__ = withRequestId({ status: 'error', message: 'Pending benchmark run' })
-  history.replaceState(null, '', `${location.pathname}${location.search}`)
+  clearNavigationReport()
+  publishNavigationPhase('loading', requestId)
 
   let topLayoutSink = 0
   let scalingLayoutSink = 0
@@ -442,6 +436,7 @@ async function run() {
 
   const results: BenchmarkResult[] = []
   const richTexts = texts.slice(0, RICH_COUNT)
+  publishNavigationPhase('measuring', requestId)
 
   // --- 1. prepare() ---
   root.innerHTML = '<p>Benchmarking prepare()...</p>'

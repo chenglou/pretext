@@ -11,6 +11,7 @@ import {
   measureCanvasTextWidth,
   measureDomTextWidth,
 } from './diagnostic-utils.ts'
+import { clearNavigationReport, publishNavigationPhase, publishNavigationReport } from './report-utils.ts'
 
 type ProbeLine = {
   text: string
@@ -82,7 +83,6 @@ type ProbeReport = {
 
 declare global {
   interface Window {
-    __PROBE_READY__?: boolean
     __PROBE_REPORT__?: ProbeReport
   }
 }
@@ -103,12 +103,6 @@ const cssWhiteSpace = whiteSpace === 'pre-wrap' ? 'pre-wrap' : 'normal'
 
 const stats = document.getElementById('stats')!
 const book = document.getElementById('book')!
-
-const reportEl = document.createElement('pre')
-reportEl.id = 'probe-report'
-reportEl.hidden = true
-reportEl.dataset['ready'] = '0'
-document.body.appendChild(reportEl)
 
 const diagnosticDiv = document.createElement('div')
 diagnosticDiv.style.position = 'absolute'
@@ -132,11 +126,8 @@ function withRequestId<T extends ProbeReport>(report: T): ProbeReport {
 }
 
 function publishReport(report: ProbeReport): void {
-  reportEl.textContent = JSON.stringify(report)
-  reportEl.dataset['ready'] = '1'
   window.__PROBE_REPORT__ = report
-  window.__PROBE_READY__ = true
-  history.replaceState(null, '', `${location.pathname}${location.search}#report=${encodeURIComponent(JSON.stringify(report))}`)
+  publishNavigationReport(report)
 }
 
 function setError(message: string): void {
@@ -422,6 +413,7 @@ function getFirstBreakMismatch(
 
 function init(): void {
   try {
+    publishNavigationPhase('measuring', requestId)
     document.title = 'Pretext — Text Probe'
     document.documentElement.lang = lang
     document.documentElement.dir = direction
@@ -495,10 +487,9 @@ function init(): void {
   }
 }
 
-window.__PROBE_READY__ = false
 window.__PROBE_REPORT__ = withRequestId({ status: 'error', message: 'Pending initial layout' })
-reportEl.textContent = ''
-history.replaceState(null, '', `${location.pathname}${location.search}`)
+clearNavigationReport()
+publishNavigationPhase('loading', requestId)
 if ('fonts' in document) {
   void document.fonts.ready.then(init)
 } else {

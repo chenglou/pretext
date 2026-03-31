@@ -6,6 +6,7 @@ import {
   type PreparedTextWithSegments,
 } from '../src/layout.ts'
 import { getDiagnosticUnits } from './diagnostic-utils.ts'
+import { clearNavigationReport, publishNavigationPhase, publishNavigationReport } from './report-utils.ts'
 import { TEXTS, SIZES, WIDTHS } from '../src/test-data.ts'
 
 const FONTS = [
@@ -51,7 +52,14 @@ type AccuracyReport = {
   message?: string
 }
 
-type AccuracyNavigationReport = AccuracyReport
+type AccuracyNavigationReport = {
+  status: 'ready' | 'error'
+  requestId?: string
+  total?: number
+  matchCount?: number
+  mismatchCount?: number
+  message?: string
+}
 
 type EnvironmentFingerprint = {
   userAgent: string
@@ -75,7 +83,6 @@ type EnvironmentFingerprint = {
 
 declare global {
   interface Window {
-    __ACCURACY_READY__?: boolean
     __ACCURACY_REPORT__?: AccuracyReport
   }
 }
@@ -84,11 +91,6 @@ const params = new URLSearchParams(location.search)
 const requestId = params.get('requestId') ?? undefined
 const includeFullRows = params.get('full') === '1'
 const reportEndpoint = params.get('reportEndpoint')
-const reportEl = document.createElement('pre')
-reportEl.id = 'accuracy-report'
-reportEl.hidden = true
-reportEl.dataset['ready'] = '0'
-document.body.appendChild(reportEl)
 
 function withRequestId<T extends AccuracyReport>(report: T): AccuracyReport {
   return requestId === undefined ? report : { ...report, requestId }
@@ -118,29 +120,42 @@ function getEnvironmentFingerprint(): EnvironmentFingerprint {
 
 function publishReport(report: AccuracyReport): void {
   const reportJson = JSON.stringify(report)
-  reportEl.textContent = reportJson
-  reportEl.dataset['ready'] = '1'
   window.__ACCURACY_REPORT__ = report
-  window.__ACCURACY_READY__ = true
-  if (!includeFullRows) {
-    publishNavigationReport(report)
-  }
   if (reportEndpoint !== null) {
-    void fetch(reportEndpoint, {
-      method: 'POST',
-      body: reportJson,
-    }).catch(() => {
-      // Best-effort side channel for large reports.
-    })
+    publishNavigationPhase('posting', requestId)
+    void (async () => {
+      try {
+        await fetch(reportEndpoint, {
+          method: 'POST',
+          body: reportJson,
+        })
+        publishNavigationReport(toNavigationReport(report))
+      } catch {
+        // Best-effort side channel for large reports.
+      }
+    })()
+    return
+  }
+  publishNavigationReport(toNavigationReport(report))
+}
+
+function toNavigationReport(report: AccuracyReport): AccuracyNavigationReport {
+  if (report.status === 'error') {
+    return {
+      status: report.status,
+      ...(report.requestId === undefined ? {} : { requestId: report.requestId }),
+      ...(report.message === undefined ? {} : { message: report.message }),
+    }
+  }
+
+  return {
+    status: report.status,
+    ...(report.requestId === undefined ? {} : { requestId: report.requestId }),
+    ...(report.total === undefined ? {} : { total: report.total }),
+    ...(report.matchCount === undefined ? {} : { matchCount: report.matchCount }),
+    ...(report.mismatchCount === undefined ? {} : { mismatchCount: report.mismatchCount }),
   }
 }
-
-function publishNavigationReport(report: AccuracyReport): void {
-  const navigationReport: AccuracyNavigationReport = report
-  const encoded = encodeURIComponent(JSON.stringify(navigationReport))
-  history.replaceState(null, '', `${location.pathname}${location.search}#report=${encoded}`)
-}
-
 function getBrowserLines(
   prepared: PreparedTextWithSegments,
   div: HTMLDivElement,
@@ -266,14 +281,13 @@ function runSweep(): { total: number, mismatches: Mismatch[], rows: AccuracyRow[
 function render() {
   const root = document.getElementById('root')!
   root.innerHTML = '<p>Running sweep...</p>'
-  window.__ACCURACY_READY__ = false
   window.__ACCURACY_REPORT__ = withRequestId({ status: 'error', message: 'Pending sweep' })
-  reportEl.textContent = ''
-  reportEl.dataset['ready'] = '0'
-  history.replaceState(null, '', `${location.pathname}${location.search}`)
+  clearNavigationReport()
+  publishNavigationPhase('loading', requestId)
 
   requestAnimationFrame(() => {
     try {
+      publishNavigationPhase('measuring', requestId)
       const { total, mismatches, rows } = runSweep()
       const matchCount = total - mismatches.length
       const pct = ((matchCount / total) * 100).toFixed(2)

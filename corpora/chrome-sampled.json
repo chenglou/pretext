@@ -1,0 +1,344 @@
+[
+  {
+    "corpusId": "mixed-app-text",
+    "language": "mul",
+    "title": "Mixed app text",
+    "browser": "chrome",
+    "start": 300,
+    "end": 900,
+    "step": 10,
+    "samples": 9,
+    "widthCount": 9,
+    "exactCount": 9,
+    "mismatches": []
+  },
+  {
+    "corpusId": "ja-rashomon",
+    "language": "ja",
+    "title": "羅生門",
+    "browser": "chrome",
+    "start": 300,
+    "end": 900,
+    "step": 10,
+    "samples": 9,
+    "widthCount": 9,
+    "exactCount": 5,
+    "mismatches": [
+      {
+        "width": 375,
+        "diffPx": 32,
+        "predictedHeight": 13072,
+        "actualHeight": 13040,
+        "predictedLineCount": 406,
+        "browserLineCount": 405
+      },
+      {
+        "width": 525,
+        "diffPx": 32,
+        "predictedHeight": 8368,
+        "actualHeight": 8336,
+        "predictedLineCount": 259,
+        "browserLineCount": 258
+      },
+      {
+        "width": 750,
+        "diffPx": 32,
+        "predictedHeight": 5584,
+        "actualHeight": 5552,
+        "predictedLineCount": 172,
+        "browserLineCount": 171
+      },
+      {
+        "width": 825,
+        "diffPx": 32,
+        "predictedHeight": 5008,
+        "actualHeight": 4976,
+        "predictedLineCount": 154,
+        "browserLineCount": 153
+      }
+    ]
+  },
+  {
+    "corpusId": "ja-kumo-no-ito",
+    "language": "ja",
+    "title": "蜘蛛の糸",
+    "browser": "chrome",
+    "start": 300,
+    "end": 900,
+    "step": 10,
+    "samples": 9,
+    "widthCount": 9,
+    "exactCount": 8,
+    "mismatches": [
+      {
+        "width": 450,
+        "diffPx": 32,
+        "predictedHeight": 5200,
+        "actualHeight": 5168,
+        "predictedLineCount": 160,
+        "browserLineCount": 159
+      }
+    ]
+  },
+  {
+    "corpusId": "ko-unsu-joh-eun-nal",
+    "language": "ko",
+    "title": "운수 좋은 날",
+    "browser": "chrome",
+    "start": 300,
+    "end": 900,
+    "step": 10,
+    "samples": 9,
+    "widthCount": 9,
+    "exactCount": 9,
+    "mismatches": []
+  },
+  {
+    "corpusId": "zh-zhufu",
+    "language": "zh",
+    "title": "祝福",
+    "browser": "chrome",
+    "start": 300,
+    "end": 900,
+    "step": 10,
+    "samples": 9,
+    "widthCount": 9,
+    "exactCount": 7,
+    "mismatches": [
+      {
+        "width": 300,
+        "diffPx": 32,
+        "predictedHeight": 27440,
+        "actualHeight": 27408,
+        "predictedLineCount": 855,
+        "browserLineCount": 854
+      },
+      {
+        "width": 450,
+        "diffPx": 32,
+        "predictedHeight": 16624,
+        "actualHeight": 16592,
+        "predictedLineCount": 517,
+        "browserLineCount": 516
+      }
+    ]
+  },
+  {
+    "corpusId": "zh-guxiang",
+    "language": "zh",
+    "title": "故鄉",
+    "browser": "chrome",
+    "start": 300,
+    "end": 900,
+    "step": 10,
+    "samples": 9,
+    "widthCount": 9,
+    "exactCount": 6,
+    "mismatches": [
+      {
+        "width": 300,
+        "diffPx": 64,
+        "predictedHeight": 16592,
+        "actualHeight": 16528,
+        "predictedLineCount": 516,
+        "browserLineCount": 514
+      },
+      {
+        "width": 450,
+        "diffPx": 32,
+        "predictedHeight": 9936,
+        "actualHeight": 9904,
+        "predictedLineCount": 308,
+        "browserLineCount": 307
+      },
+      {
+        "width": 675,
+        "diffPx": 32,
+        "predictedHeight": 6192,
+        "actualHeight": 6160,
+        "predictedLineCount": 191,
+        "browserLineCount": 190
+      }
+    ]
+  },
+  {
+    "corpusId": "th-nithan-vetal-story-1",
+    "language": "th",
+    "title": "นิทานเวตาล/เรื่องที่ 1",
+    "browser": "chrome",
+    "start": 300,
+    "end": 900,
+    "step": 10,
+    "samples": 9,
+    "widthCount": 9,
+    "exactCount": 9,
+    "mismatches": []
+  },
+  {
+    "corpusId": "th-nithan-vetal-story-7",
+    "language": "th",
+    "title": "นิทานเวตาล เรื่องที่ ๗",
+    "browser": "chrome",
+    "start": 300,
+    "end": 900,
+    "step": 10,
+    "samples": 9,
+    "widthCount": 9,
+    "exactCount": 9,
+    "mismatches": []
+  },
+  {
+    "corpusId": "my-cunning-heron-teacher",
+    "language": "my",
+    "title": "စဉ်းလဲသော ဗျိုင်း (ဆရာ)",
+    "browser": "chrome",
+    "start": 300,
+    "end": 900,
+    "step": 10,
+    "samples": 9,
+    "widthCount": 9,
+    "exactCount": 9,
+    "mismatches": []
+  },
+  {
+    "corpusId": "my-bad-deeds-return-to-you-teacher",
+    "language": "my",
+    "title": "မကောင်းမှုဒဏ် ကိုယ့်ထံပြန် (ဆရာ)",
+    "browser": "chrome",
+    "start": 300,
+    "end": 900,
+    "step": 10,
+    "samples": 9,
+    "widthCount": 9,
+    "exactCount": 8,
+    "mismatches": [
+      {
+        "width": 675,
+        "diffPx": -32,
+        "predictedHeight": 912,
+        "actualHeight": 944,
+        "predictedLineCount": 26,
+        "browserLineCount": 27
+      }
+    ]
+  },
+  {
+    "corpusId": "km-prachum-reuang-preng-khmer-volume-7-stories-1-10",
+    "language": "km",
+    "title": "ប្រជុំរឿងព្រេងខ្មែរ/ភាគទី៧ (រឿង ១-១០)",
+    "browser": "chrome",
+    "start": 300,
+    "end": 900,
+    "step": 10,
+    "samples": 9,
+    "widthCount": 9,
+    "exactCount": 9,
+    "mismatches": []
+  },
+  {
+    "corpusId": "ar-risalat-al-ghufran-part-1",
+    "language": "ar",
+    "title": "رسالة الغفران/الجزء الأول",
+    "browser": "chrome",
+    "start": 300,
+    "end": 900,
+    "step": 10,
+    "samples": 9,
+    "widthCount": 9,
+    "exactCount": 9,
+    "mismatches": []
+  },
+  {
+    "corpusId": "ar-al-bukhala",
+    "language": "ar",
+    "title": "البخلاء",
+    "browser": "chrome",
+    "start": 300,
+    "end": 900,
+    "step": 10,
+    "samples": 9,
+    "widthCount": 9,
+    "exactCount": 9,
+    "mismatches": []
+  },
+  {
+    "corpusId": "hi-eidgah",
+    "language": "hi",
+    "title": "प्रेमचंद की सर्वश्रेष्ठ कहानियां/ईदगाह",
+    "browser": "chrome",
+    "start": 300,
+    "end": 900,
+    "step": 10,
+    "samples": 9,
+    "widthCount": 9,
+    "exactCount": 9,
+    "mismatches": []
+  },
+  {
+    "corpusId": "he-masaot-binyamin-metudela",
+    "language": "he",
+    "title": "מסעות בנימין מטודלה",
+    "browser": "chrome",
+    "start": 300,
+    "end": 900,
+    "step": 10,
+    "samples": 9,
+    "widthCount": 9,
+    "exactCount": 9,
+    "mismatches": []
+  },
+  {
+    "corpusId": "ur-chughd",
+    "language": "ur",
+    "title": "چغد",
+    "browser": "chrome",
+    "start": 300,
+    "end": 900,
+    "step": 10,
+    "samples": 9,
+    "widthCount": 9,
+    "exactCount": 4,
+    "mismatches": [
+      {
+        "width": 300,
+        "diffPx": -76,
+        "predictedHeight": 18586,
+        "actualHeight": 18662,
+        "predictedLineCount": 487,
+        "browserLineCount": 489
+      },
+      {
+        "width": 375,
+        "diffPx": -38,
+        "predictedHeight": 13646,
+        "actualHeight": 13684,
+        "predictedLineCount": 357,
+        "browserLineCount": 358
+      },
+      {
+        "width": 450,
+        "diffPx": -38,
+        "predictedHeight": 10796,
+        "actualHeight": 10834,
+        "predictedLineCount": 282,
+        "browserLineCount": 283
+      },
+      {
+        "width": 525,
+        "diffPx": -38,
+        "predictedHeight": 8896,
+        "actualHeight": 8934,
+        "predictedLineCount": 232,
+        "browserLineCount": 233
+      },
+      {
+        "width": 900,
+        "diffPx": -38,
+        "predictedHeight": 4792,
+        "actualHeight": 4830,
+        "predictedLineCount": 124,
+        "browserLineCount": 125
+      }
+    ]
+  }
+]

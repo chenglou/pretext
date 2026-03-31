@@ -11,6 +11,7 @@ import {
   measureCanvasTextWidth,
   measureDomTextWidth,
 } from './diagnostic-utils.ts'
+import { clearNavigationReport, publishNavigationPhase, publishNavigationReport } from './report-utils.ts'
 import sourcesData from '../corpora/sources.json' with { type: 'json' }
 import arAlBukhala from '../corpora/ar-al-bukhala.txt' with { type: 'text' }
 import arRisalatAlGhufranPart1 from '../corpora/ar-risalat-al-ghufran-part-1.txt' with { type: 'text' }
@@ -88,7 +89,30 @@ type CorpusReport = {
       isSpace: boolean
     }>
   } | null
+  widths?: number[]
+  widthCount?: number
+  exactCount?: number
+  rows?: CorpusSweepRow[]
   message?: string
+}
+
+type CorpusSweepRow = {
+  width: number
+  contentWidth: number
+  predictedHeight: number
+  actualHeight: number
+  diffPx: number
+  predictedLineCount: number
+  browserLineCount: number
+  browserLineMethod?: 'span-probe' | 'range'
+  maxLineWidthDrift?: number
+  firstBreakMismatch?: {
+    line: number
+    deltaText: string
+    reasonGuess: string
+    oursContext: string
+    browserContext: string
+  } | null
 }
 
 type CorpusLineMismatch = {
@@ -162,7 +186,6 @@ type EnvironmentFingerprint = {
 
 declare global {
   interface Window {
-    __CORPUS_READY__?: boolean
     __CORPUS_REPORT__?: CorpusReport
     __CORPUS_DEBUG__?: {
       corpusId: string
@@ -196,12 +219,8 @@ const requestedFont = params.get('font')
 const requestedLineHeight = Number.parseInt(params.get('lineHeight') ?? '', 10)
 const requestedSliceStart = Number.parseInt(params.get('sliceStart') ?? '', 10)
 const requestedSliceEnd = Number.parseInt(params.get('sliceEnd') ?? '', 10)
-
-const reportEl = document.createElement('pre')
-reportEl.id = 'corpus-report'
-reportEl.hidden = true
-reportEl.dataset['ready'] = '0'
-document.body.appendChild(reportEl)
+const reportEndpoint = params.get('reportEndpoint')
+const requestedWidths = parseWidthList(params.get('widths'))
 
 const diagnosticCanvas = document.createElement('canvas')
 const diagnosticCtx = diagnosticCanvas.getContext('2d')!
@@ -240,8 +259,29 @@ let currentPrepared: PreparedTextWithSegments | null = null
 let currentSliceStart: number | null = null
 let currentSliceEnd: number | null = null
 
+function parseWidthList(raw: string | null): number[] | null {
+  if (raw === null) return null
+
+  const widths = raw
+    .split(',')
+    .map(part => Number.parseInt(part.trim(), 10))
+    .filter(width => Number.isFinite(width))
+
+  if (widths.length === 0) {
+    throw new Error(`Invalid widths parameter: ${raw}`)
+  }
+
+  return [...new Set(widths)]
+}
+
 function withRequestId<T extends CorpusReport>(report: T): CorpusReport {
   return requestId === undefined ? report : { ...report, requestId }
+}
+
+function toNavigationReport(report: CorpusReport): CorpusReport {
+  if (report.rows === undefined) return report
+  const { rows: _rows, ...navigationReport } = report
+  return navigationReport
 }
 
 function getEnvironmentFingerprint(): EnvironmentFingerprint {
@@ -264,11 +304,6 @@ function getEnvironmentFingerprint(): EnvironmentFingerprint {
       pixelDepth: window.screen.pixelDepth,
     },
   }
-}
-
-function publishNavigationReport(report: CorpusReport): void {
-  const encoded = encodeURIComponent(JSON.stringify(report))
-  history.replaceState(null, '', `${location.pathname}${location.search}#report=${encoded}`)
 }
 
 function buildFont(meta: CorpusMeta): string {
@@ -573,11 +608,23 @@ function getFirstBreakMismatch(
 }
 
 function setReport(report: CorpusReport): void {
-  reportEl.textContent = JSON.stringify(report)
-  reportEl.dataset['ready'] = '1'
   window.__CORPUS_REPORT__ = report
-  window.__CORPUS_READY__ = true
-  publishNavigationReport(report)
+  if (reportEndpoint !== null) {
+    publishNavigationPhase('posting', requestId)
+    void (async () => {
+      try {
+        await fetch(reportEndpoint, {
+          method: 'POST',
+          body: JSON.stringify(report),
+        })
+        publishNavigationReport(toNavigationReport(report))
+      } catch {
+        // Best-effort side channel for larger sweep reports.
+      }
+    })()
+    return
+  }
+  publishNavigationReport(toNavigationReport(report))
 }
 
 function setError(message: string): void {
@@ -616,6 +663,14 @@ function getInitialWidth(meta: CorpusMeta): number {
   const fallback = meta.default_width ?? 600
   const width = Number.isFinite(requestedWidth) ? requestedWidth : fallback
   return Math.max(min, Math.min(max, width))
+}
+
+function getRequestedSweepWidths(meta: CorpusMeta): number[] | null {
+  if (requestedWidths === null) return null
+
+  const min = meta.min_width ?? 300
+  const max = meta.max_width ?? 900
+  return requestedWidths.map(width => Math.max(min, Math.min(max, width)))
 }
 
 function buildReadyReport(
@@ -784,9 +839,12 @@ function updateStats(report: CorpusReport, msPretext: number, msDOM: number): vo
     ` | ${currentText.length.toLocaleString()} chars`
 }
 
-function setWidth(width: number): void {
+function measureWidth(
+  width: number,
+  options: { publish?: boolean, updateStats?: boolean } = {},
+): CorpusReport | null {
   if (currentMeta === null || currentPrepared === null) {
-    return
+    return null
   }
 
   const font = buildFont(currentMeta)
@@ -834,8 +892,95 @@ function setWidth(width: number): void {
     layoutWithLines: nextWidth => layoutWithLines(prepared, nextWidth - PADDING * 2, lineHeight),
   }
 
-  updateStats(report, msPretext, msDOM)
-  setReport(report)
+  if (options.updateStats !== false) {
+    updateStats(report, msPretext, msDOM)
+  }
+  if (options.publish !== false) {
+    setReport(report)
+  }
+
+  return report
+}
+
+function toSweepRow(report: CorpusReport): CorpusSweepRow {
+  if (
+    report.width === undefined ||
+    report.contentWidth === undefined ||
+    report.predictedHeight === undefined ||
+    report.actualHeight === undefined ||
+    report.diffPx === undefined ||
+    report.predictedLineCount === undefined ||
+    report.browserLineCount === undefined
+  ) {
+    throw new Error('Corpus report was missing sweep row fields')
+  }
+
+  return {
+    width: report.width,
+    contentWidth: report.contentWidth,
+    predictedHeight: report.predictedHeight,
+    actualHeight: report.actualHeight,
+    diffPx: report.diffPx,
+    predictedLineCount: report.predictedLineCount,
+    browserLineCount: report.browserLineCount,
+    ...(report.browserLineMethod === undefined ? {} : { browserLineMethod: report.browserLineMethod }),
+    ...(report.maxLineWidthDrift === undefined ? {} : { maxLineWidthDrift: report.maxLineWidthDrift }),
+    ...(report.firstBreakMismatch === undefined
+      ? {}
+      : report.firstBreakMismatch === null
+        ? { firstBreakMismatch: null }
+        : {
+            firstBreakMismatch: {
+              line: report.firstBreakMismatch.line,
+              deltaText: report.firstBreakMismatch.deltaText,
+              reasonGuess: report.firstBreakMismatch.reasonGuess,
+              oursContext: report.firstBreakMismatch.oursContext,
+              browserContext: report.firstBreakMismatch.browserContext,
+            },
+          }),
+  }
+}
+
+function runSweep(widths: number[]): void {
+  if (currentMeta === null || currentPrepared === null) {
+    return
+  }
+
+  const font = buildFont(currentMeta)
+  const lineHeight = getLineHeight(currentMeta)
+  const rows = widths.map(width => {
+    const report = measureWidth(width, { publish: false, updateStats: false })
+    if (report === null || report.status === 'error') {
+      throw new Error(report?.message ?? `Failed to measure ${currentMeta?.id ?? 'corpus'} @ ${width}`)
+    }
+    return toSweepRow(report)
+  })
+  const exactCount = rows.filter(row => Math.round(row.diffPx) === 0).length
+
+  stats.textContent =
+    `${currentMeta.title} | Sweep: ${exactCount}/${rows.length} exact | ${rows.length - exactCount} nonzero` +
+    ` | ${currentText.length.toLocaleString()} chars`
+
+  setReport(withRequestId({
+    status: 'ready',
+    environment: getEnvironmentFingerprint(),
+    corpusId: currentMeta.id,
+    sliceStart: currentSliceStart,
+    sliceEnd: currentSliceEnd,
+    title: currentMeta.title,
+    language: currentMeta.language,
+    direction: getDirection(currentMeta),
+    font,
+    lineHeight,
+    widths,
+    widthCount: rows.length,
+    exactCount,
+    rows,
+  }))
+}
+
+function setWidth(width: number): void {
+  measureWidth(width)
 }
 
 function populateSelect(selectedId: string): void {
@@ -908,6 +1053,7 @@ async function loadCorpus(meta: CorpusMeta): Promise<void> {
     await document.fonts.ready
   }
 
+  publishNavigationPhase('measuring', requestId)
   const fullPrepared = prepareWithSegments(rawText, font)
   const fullNormalizedText = fullPrepared.segments.join('')
   const requestedSlice = getRequestedSlice(fullNormalizedText.length)
@@ -938,6 +1084,12 @@ async function loadCorpus(meta: CorpusMeta): Promise<void> {
   lineProbeDiv.style.padding = `${PADDING}px`
   lineProbeDiv.lang = meta.language
   lineProbeDiv.dir = direction
+  const sweepWidths = getRequestedSweepWidths(meta)
+  if (sweepWidths !== null) {
+    runSweep(sweepWidths)
+    return
+  }
+
   setWidth(getInitialWidth(meta))
 }
 
@@ -959,11 +1111,10 @@ select.addEventListener('change', () => {
   navigateToCorpus(select.value)
 })
 
-window.__CORPUS_READY__ = false
 window.__CORPUS_REPORT__ = withRequestId({ status: 'error', message: 'Pending initial layout' })
-reportEl.textContent = ''
 stats.textContent = 'Loading...'
-history.replaceState(null, '', `${location.pathname}${location.search}`)
+clearNavigationReport()
+publishNavigationPhase('loading', requestId)
 
 async function init(): Promise<void> {
   try {
