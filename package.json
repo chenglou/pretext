@@ -19,14 +19,7 @@
     "./package.json": "./package.json"
   },
   "files": [
-    "CHANGELOG.md",
-    "dist",
-    "src",
-    "!src/layout.test.ts",
-    "!src/test-data.ts",
-    "pages/demos",
-    "pages/assets",
-    "LICENSE"
+    "dist"
   ],
   "scripts": {
     "accuracy-check": "bun run scripts/accuracy-check.ts",
