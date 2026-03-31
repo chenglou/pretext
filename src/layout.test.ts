@@ -625,3 +625,93 @@ describe('layout invariants', () => {
     }
   })
 })
+
+describe('host config', () => {
+  test('createPretext binds prepare/layout to an injected measurement host', async () => {
+    const hostMod = await import('./host.ts') as {
+      createPretext: (config: {
+        measurement: {
+          clearMeasurementCaches(): void
+          getSegmentMetrics(seg: string, cache: Map<string, unknown>): { width: number, containsCJK: boolean }
+          getEngineProfile(): {
+            lineFitEpsilon: number
+            carryCJKAfterClosingQuote: boolean
+            preferPrefixWidthsForBreakableRuns: boolean
+            preferEarlySoftHyphenBreak: boolean
+          }
+          getCorrectedSegmentWidth(
+            seg: string,
+            metrics: { width: number, containsCJK: boolean },
+            emojiCorrection: number,
+          ): number
+          getSegmentGraphemeWidths(): null
+          getSegmentGraphemePrefixWidths(): null
+          getFontMeasurementState(font: string, needsEmojiCorrection: boolean): {
+            cache: Map<string, unknown>
+            fontSize: number
+            emojiCorrection: number
+          }
+          textMayContainEmoji(text: string): boolean
+        }
+      }) => {
+        prepare(text: string, font: string): ReturnType<LayoutModule['prepare']>
+        layout(prepared: ReturnType<LayoutModule['prepare']>, maxWidth: number, lineHeight: number): ReturnType<LayoutModule['layout']>
+        clearCache(): void
+      }
+    }
+
+    let cleared = 0
+    const measuredSegments: string[] = []
+    const cache = new Map<string, unknown>()
+    const api = hostMod.createPretext({
+      measurement: {
+        clearMeasurementCaches() {
+          cleared++
+          cache.clear()
+        },
+        getSegmentMetrics(seg: string) {
+          measuredSegments.push(seg)
+          return {
+            width: measureWidth(seg, FONT),
+            containsCJK: seg.length > 0 && isWideCharacter(seg[0]!),
+          }
+        },
+        getEngineProfile() {
+          return {
+            lineFitEpsilon: 0.005,
+            carryCJKAfterClosingQuote: false,
+            preferPrefixWidthsForBreakableRuns: false,
+            preferEarlySoftHyphenBreak: false,
+          }
+        },
+        getCorrectedSegmentWidth(_seg, metrics) {
+          return metrics.width
+        },
+        getSegmentGraphemeWidths() {
+          return null
+        },
+        getSegmentGraphemePrefixWidths() {
+          return null
+        },
+        getFontMeasurementState(font: string, _needsEmojiCorrection: boolean) {
+          return {
+            cache,
+            fontSize: parseFontSize(font),
+            emojiCorrection: 0,
+          }
+        },
+        textMayContainEmoji() {
+          return false
+        },
+      },
+    })
+
+    const prepared = api.prepare('Hello world', FONT)
+    expect(api.layout(prepared, 60, LINE_HEIGHT).lineCount).toBeGreaterThan(0)
+    expect(measuredSegments).toContain('Hello')
+    expect(measuredSegments).toContain('world')
+
+    api.clearCache()
+    expect(cleared).toBe(1)
+  })
+})
