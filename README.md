@@ -24,7 +24,7 @@ Pretext serves 2 use cases:
 ```ts
 import { prepare, layout } from '@chenglou/pretext'
 
-const prepared = prepare('AGI 春天到了. بدأت الرحلة 🚀', '16px Inter')
+const prepared = prepare('AGI 春天到了. بدأت الرحلة 🚀‎', '16px Inter')
 const { height, lineCount } = layout(prepared, textWidth, 20) // pure arithmetics. No DOM layout & reflow!
 ```
 
