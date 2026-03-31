@@ -31,12 +31,33 @@ type State = {
   cards: Card[]
 }
 
+const htmlEntityReplacements: Record<string, string> = {
+  '&amp;': '&',
+  '&gt;': '>',
+  '&lt;': '<',
+  '&quot;': '"',
+  '&#39;': "'",
+  '&#x27;': "'",
+  '&nbsp;': '\u00A0',
+}
+
+function sanitizeCardText(text: string): string {
+  const decoded = text.replace(
+    /&(amp|gt|lt|quot|#39|#x27|nbsp);/g,
+    match => htmlEntityReplacements[match] ?? match
+  )
+  return decoded.replace(/\*([^*\n]+)\*/g, '$1')
+}
+
 // --- prepare all texts upfront ---
 const st: State = {
-  cards: rawThoughts.map(text => ({
-    text,
-    prepared: prepare(text, font),
-  })),
+  cards: rawThoughts.map(rawText => {
+    const text = sanitizeCardText(rawText)
+    return {
+      text,
+      prepared: prepare(text, font),
+    }
+  }),
 }
 
 type DomCache = {
