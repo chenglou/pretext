@@ -2,6 +2,7 @@
   "name": "@chenglou/pretext",
   "version": "0.0.3",
   "license": "MIT",
+  "repository": "github:chenglou/pretext",
   "type": "module",
   "publishConfig": {
     "access": "public"
