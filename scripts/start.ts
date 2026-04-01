@@ -278,7 +278,6 @@ const server = Bun.serve({
   fetch(req) {
     const pathname = new URL(req.url).pathname;
     const redirectRoute = getrediRectRoute(pathname, routeEntries)
-    console.log("===pathname", pathname, redirectRoute)
     // Redirect demos -> demos/ | demos/masonry -> demos/masonry/ 
     if (redirectRoute) { return Response.redirect(redirectRoute.route, 301); }
     const filePath = resolveFile(pagesDir, pathname);
