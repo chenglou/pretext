@@ -13,6 +13,15 @@ npm install @chenglou/pretext
 ## Demos
 
 Clone the repo, run `bun install`, then `bun start`, and open the `/demos` in your browser (no trailing slash. Bun devserver bugs on those)
+
+On Windows, if `bun start` doesn't serve nested demo routes correctly, run:
+
+```sh
+npx --yes vite pages --host 127.0.0.1 --port 3000
+```
+
+Then open `http://127.0.0.1:3000/demos/` (or `http://127.0.0.1:3000/demos/index.html`).
+
 Alternatively, see them live at [chenglou.me/pretext](https://chenglou.me/pretext/). Some more at [somnai-dreams.github.io/pretext-demos](https://somnai-dreams.github.io/pretext-demos/)
 
 ## API
