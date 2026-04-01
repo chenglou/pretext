@@ -44,6 +44,7 @@ const CREDIT_FONT = '12px "Helvetica Neue", Helvetica, Arial, sans-serif'
 const CREDIT_LINE_HEIGHT = 16
 const HEADLINE_TEXT = 'SITUATIONAL AWARENESS: THE DECADE AHEAD'
 const HEADLINE_FONT_FAMILY = '"Iowan Old Style", "Palatino Linotype", "Book Antiqua", Palatino, serif'
+const HEADLINE_PRELOAD_FONT = `700 96px ${HEADLINE_FONT_FAMILY}`
 const HINT_PILL_SAFE_TOP = 72
 const NARROW_BREAKPOINT = 760
 const NARROW_COLUMN_MAX_WIDTH = 430
@@ -199,6 +200,20 @@ function createLogo(className: string, alt: string, src: string): HTMLImageEleme
   return element
 }
 
+async function waitForInitialLayoutAssets(): Promise<void> {
+  // `document.fonts.ready` only waits for faces currently used in the DOM.
+  // Our measured title/body text is mounted after this await, so preload the
+  // exact faces we measure with canvas before the first render.
+  if ('fonts' in document) {
+    await Promise.all([
+      document.fonts.ready,
+      document.fonts.load(BODY_FONT, BODY_COPY.slice(0, 96)),
+      document.fonts.load(CREDIT_FONT, CREDIT_TEXT),
+      document.fonts.load(HEADLINE_PRELOAD_FONT, HEADLINE_TEXT),
+    ])
+  }
+}
+
 function mountStaticNodes(): void {
   stage.append(
     domCache.headline,
@@ -209,7 +224,7 @@ function mountStaticNodes(): void {
 }
 
 const [, openaiLayout, claudeLayout, openaiHit, claudeHit] = await Promise.all([
-  document.fonts.ready,
+  waitForInitialLayoutAssets(),
   getWrapHull(OPENAI_LOGO_SRC, { smoothRadius: 6, mode: 'mean' }),
   getWrapHull(CLAUDE_LOGO_SRC, { smoothRadius: 6, mode: 'mean' }),
   getWrapHull(OPENAI_LOGO_SRC, { smoothRadius: 3, mode: 'mean' }),
