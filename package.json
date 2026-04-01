@@ -25,8 +25,7 @@
     "!src/layout.test.ts",
     "!src/test-data.ts",
     "pages/demos",
-    "pages/assets",
-    "LICENSE"
+    "pages/assets"
   ],
   "scripts": {
     "accuracy-check": "bun run scripts/accuracy-check.ts",
