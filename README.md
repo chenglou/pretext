@@ -61,6 +61,44 @@ const { height, lineCount } = useMemo(
 
 The same idea applies outside React too: cache the `prepare()` result based on text/font inputs, then rerun `layout()` when width changes.
 
+Vue (Composition API) example:
+
+```ts
+import { computed } from 'vue'
+import { prepare, layout } from '@chenglou/pretext'
+
+const prepared = computed(() =>
+  prepare(text.value, font.value, whiteSpace.value ? { whiteSpace: whiteSpace.value } : undefined)
+)
+
+const measured = computed(() =>
+  layout(prepared.value, width.value, lineHeight.value)
+)
+
+const { height, lineCount } = measured.value
+```
+
+Angular (signals) example:
+
+```ts
+import { computed, signal } from '@angular/core'
+import { prepare, layout } from '@chenglou/pretext'
+
+const text = signal('Hello world')
+const font = signal('16px Inter')
+const whiteSpace = signal<'normal' | 'pre-wrap'>('normal')
+const width = signal(320)
+const lineHeight = signal(20)
+
+const prepared = computed(() =>
+  prepare(text(), font(), whiteSpace() === 'normal' ? undefined : { whiteSpace: whiteSpace() })
+)
+
+const measured = computed(() =>
+  layout(prepared(), width(), lineHeight())
+)
+```
+
 ## Demos
 
 Clone the repo, run `bun install`, then `bun start`, and open `/demos/index` in your browser. On Windows, use `bun run start:windows`.
@@ -70,7 +108,7 @@ Good first pages:
 
 - [chenglou.me/pretext/](https://chenglou.me/pretext/) — main demo page
 - [chenglou.me/pretext/justification-comparison](https://chenglou.me/pretext/justification-comparison) — a stable example page in the main demo set
-- [chenglou.me/pretext/accuracy](https://chenglou.me/pretext/accuracy) — browser-vs-library accuracy sweep
+- [chenglou.me/pretext/dynamic-layout](https://chenglou.me/pretext/dynamic-layout) — a practical multiline layout example
 - [somnai-dreams.github.io/pretext-demos](https://somnai-dreams.github.io/pretext-demos/) — extra exploratory demos, including richer custom layouts
 
 ## Which API should I start with?
