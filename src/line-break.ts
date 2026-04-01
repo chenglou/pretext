@@ -46,8 +46,16 @@ function canBreakAfter(kind: SegmentBreakKind): boolean {
   )
 }
 
-function isSimpleCollapsibleSpace(kind: SegmentBreakKind): boolean {
-  return kind === 'space'
+function normalizeSimpleLineStartSegmentIndex(
+  prepared: PreparedLineBreakData,
+  segmentIndex: number,
+): number {
+  while (segmentIndex < prepared.widths.length) {
+    const kind = prepared.kinds[segmentIndex]!
+    if (kind !== 'space' && kind !== 'zero-width-break' && kind !== 'soft-hyphen') break
+    segmentIndex++
+  }
+  return segmentIndex
 }
 
 function getTabAdvance(lineWidth: number, tabStopAdvance: number): number {
@@ -163,67 +171,7 @@ export function countPreparedLines(prepared: PreparedLineBreakData, maxWidth: nu
 }
 
 function countPreparedLinesSimple(prepared: PreparedLineBreakData, maxWidth: number): number {
-  const { widths, kinds, breakableWidths, breakablePrefixWidths } = prepared
-  if (widths.length === 0) return 0
-
-  const engineProfile = getEngineProfile()
-  const lineFitEpsilon = engineProfile.lineFitEpsilon
-
-  let lineCount = 0
-  let lineW = 0
-  let hasContent = false
-
-  function placeOnFreshLine(segmentIndex: number): void {
-    const w = widths[segmentIndex]!
-    if (w > maxWidth && breakableWidths[segmentIndex] !== null) {
-      const gWidths = breakableWidths[segmentIndex]!
-      const gPrefixWidths = breakablePrefixWidths[segmentIndex] ?? null
-      lineW = 0
-      for (let g = 0; g < gWidths.length; g++) {
-        const gw = getBreakableAdvance(
-          gWidths,
-          gPrefixWidths,
-          g,
-          engineProfile.preferPrefixWidthsForBreakableRuns,
-        )
-        if (lineW > 0 && lineW + gw > maxWidth + lineFitEpsilon) {
-          lineCount++
-          lineW = gw
-        } else {
-          if (lineW === 0) lineCount++
-          lineW += gw
-        }
-      }
-    } else {
-      lineW = w
-      lineCount++
-    }
-    hasContent = true
-  }
-
-  for (let i = 0; i < widths.length; i++) {
-    const w = widths[i]!
-    const kind = kinds[i]!
-
-    if (!hasContent) {
-      placeOnFreshLine(i)
-      continue
-    }
-
-    const newW = lineW + w
-    if (newW > maxWidth + lineFitEpsilon) {
-      if (isSimpleCollapsibleSpace(kind)) continue
-      lineW = 0
-      hasContent = false
-      placeOnFreshLine(i)
-      continue
-    }
-
-    lineW = newW
-  }
-
-  if (!hasContent) return lineCount + 1
-  return lineCount
+  return walkPreparedLinesSimple(prepared, maxWidth)
 }
 
 function walkPreparedLinesSimple(
@@ -342,6 +290,11 @@ function walkPreparedLinesSimple(
 
   let i = 0
   while (i < widths.length) {
+    if (!hasContent) {
+      i = normalizeSimpleLineStartSegmentIndex(prepared, i)
+      if (i >= widths.length) break
+    }
+
     const w = widths[i]!
     const kind = kinds[i]!
 
