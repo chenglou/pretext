@@ -188,6 +188,15 @@ const CORPORA = [
     sampleWidths: [240, 300, 360] as const,
   },
   {
+    id: 'synthetic-long-breakable-runs',
+    label: 'Long breakable runs (synthetic)',
+    text: buildLongBreakableStressText(220),
+    font: FONT,
+    lineHeight: LINE_HEIGHT,
+    width: 300,
+    sampleWidths: [220, 300, 380] as const,
+  },
+  {
     id: 'ar-risalat-al-ghufran-part-1',
     label: 'Arabic prose',
     text: arRisalatAlGhufranPart1,
@@ -203,6 +212,24 @@ const commentTexts = TEXTS.filter(t => t.text.trim().length > 1)
 const texts: string[] = []
 for (let i = 0; i < COUNT; i++) {
   texts.push(commentTexts[i % commentTexts.length]!.text)
+}
+
+function buildLongBreakableStressText(repeatCount: number): string {
+  const parts: string[] = []
+  for (let i = 0; i < repeatCount; i++) {
+    const startHour = String(i % 24).padStart(2, '0')
+    const endHour = String((i + 5) % 24).padStart(2, '0')
+    const minute = String((i * 7) % 60).padStart(2, '0')
+    const second = String((i * 11) % 60).padStart(2, '0')
+    parts.push(
+      `https://bench.example.com/releases/2026/04/${i}/artifact-alpha-beta-gamma-delta-epsilon-${i.toString(36)}?build=${1200 + i}&cursor=sha${(0xabcde + i).toString(16)}&channel=stable`,
+      `cacheKey_v${i}_AlphaBetaGammaDeltaEpsilonZetaEtaThetaIotaKappaLambdaMuNuXiOmicronPiRhoSigmaTauUpsilonPhiChiPsiOmega`,
+      `metrics\u00A0pipeline\u00A0phase\u00A0${i % 17}\u00A0snapshot\u00A0${(i * 13) % 97}`,
+      `window:${startHour}:${minute}-${endHour}:${second}`,
+      `module::worker::queue::flush::retry::recover::ship::${i}`,
+    )
+  }
+  return parts.join(' ')
 }
 
 function buildPreWrapChunkStressText(seed: number, lineCount: number): string {
@@ -709,7 +736,7 @@ async function run() {
         </tr>
       `).join('')}
     </table>
-    <p class="note">Long-form rows split cold prepare into text analysis and measurement phases for one full corpus text, then report one hot layout pass over the prepared result. They are intended to catch script-specific prepare regressions that the short shared corpus can hide.</p>
+    <p class="note">Long-form rows split cold prepare into text analysis and measurement phases for one full corpus text, then report one hot layout pass over the prepared result. They are intended to catch script-specific prepare regressions and long-breakable-run measurement costs that the short shared corpus can hide.</p>
   `
   root.dataset['topLayoutSink'] = String(topLayoutSink)
   root.dataset['scalingLayoutSink'] = String(scalingLayoutSink)
