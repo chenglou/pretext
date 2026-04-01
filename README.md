@@ -10,10 +10,78 @@ Pretext side-steps the need for DOM measurements (e.g. `getBoundingClientRect`, 
 npm install @chenglou/pretext
 ```
 
+## Quick Start
+
+If you're coming from React, Vue, Angular, or plain DOM code, the core mental model is:
+
+1. `prepare()` once when the text or font changes
+2. `layout()` whenever the available width changes
+3. use the returned `height` / `lineCount` to drive your UI
+
+In other words: **prepare once, layout many times**.
+
+Start with the simplest question:
+
+- "I just need the paragraph height" -> use `prepare()` + `layout()`
+- "I need the actual wrapped lines for custom rendering" -> use `prepareWithSegments()` + one of the rich line APIs
+
+### Common app pattern
+
+This is the most common integration shape for app UIs:
+
+```ts
+import { prepare, layout } from '@chenglou/pretext'
+
+const prepared = prepare(text, font)
+const { height, lineCount } = layout(prepared, width, lineHeight)
+```
+
+In a framework, the same rule applies:
+
+- recompute `prepare()` only when `text`, `font`, or whitespace mode changes
+- recompute `layout()` when width or line height changes
+- do **not** rerun `prepare()` on every resize
+
+React example:
+
+```ts
+import { useMemo } from 'react'
+import { prepare, layout } from '@chenglou/pretext'
+
+const prepared = useMemo(
+  () => prepare(text, font, whiteSpace ? { whiteSpace } : undefined),
+  [text, font, whiteSpace]
+)
+
+const { height, lineCount } = useMemo(
+  () => layout(prepared, width, lineHeight),
+  [prepared, width, lineHeight]
+)
+```
+
+The same idea applies outside React too: cache the `prepare()` result based on text/font inputs, then rerun `layout()` when width changes.
+
 ## Demos
 
 Clone the repo, run `bun install`, then `bun start`, and open `/demos/index` in your browser. On Windows, use `bun run start:windows`.
 Alternatively, see them live at [chenglou.me/pretext](https://chenglou.me/pretext/). Some more at [somnai-dreams.github.io/pretext-demos](https://somnai-dreams.github.io/pretext-demos/)
+
+Good first pages:
+
+- [chenglou.me/pretext/](https://chenglou.me/pretext/) — main demo page
+- [chenglou.me/pretext/justification-comparison](https://chenglou.me/pretext/justification-comparison) — a stable example page in the main demo set
+- [chenglou.me/pretext/accuracy](https://chenglou.me/pretext/accuracy) — browser-vs-library accuracy sweep
+- [somnai-dreams.github.io/pretext-demos](https://somnai-dreams.github.io/pretext-demos/) — extra exploratory demos, including richer custom layouts
+
+## Which API should I start with?
+
+| If you need... | Start with... |
+| --- | --- |
+| height prediction for ordinary app text | `prepare()` + `layout()` |
+| visible spaces / tabs / line breaks like a textarea | `prepare(..., { whiteSpace: 'pre-wrap' })` + `layout()` |
+| custom line rendering to canvas / SVG / WebGL | `prepareWithSegments()` + `layoutWithLines()` |
+| streaming or variable-width line routing | `prepareWithSegments()` + `layoutNextLine()` |
+| shrink-wrap / widest-line geometry without building line strings | `prepareWithSegments()` + `walkLineRanges()` |
 
 ## API
 
