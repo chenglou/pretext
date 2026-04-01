@@ -14,6 +14,11 @@
       "import": "./dist/layout.js",
       "default": "./dist/layout.js"
     },
+    "./host": {
+      "types": "./dist/host.d.ts",
+      "import": "./dist/host.js",
+      "default": "./dist/host.js"
+    },
     "./demos/*": "./pages/demos/*",
     "./assets/*": "./pages/assets/*",
     "./package.json": "./package.json"
