@@ -121,6 +121,7 @@ function createResponse(filePath: string): Response {
 
 // Support access to directory
 const PUBLIC_DIRS = [
+  "src",
   "shared",
   "status",
   "research-data",
@@ -129,24 +130,15 @@ const PUBLIC_DIRS = [
   "accuracy"
 ];
 
-function resolveSrc(pathname: string) {
-  if (!pathname.startsWith("/src/")) return null;
-
-  let abs = path.join(process.cwd(), pathname.slice(1));
-
-  if (abs.endsWith(".js") && !isFile(abs)) {
-    const ts = abs.replace(/\.js$/, ".ts");
-    if (isFile(ts)) abs = ts;
-  }
-
-  return isFile(abs) ? abs : null;
-}
-
-// 👉 新增：统一处理 public dirs
+// Unified handling of non-pages folders
 function resolvePublicDirs(pathname: string) {
   for (const dir of PUBLIC_DIRS) {
     if (pathname.startsWith(`/${dir}/`)) {
-      const abs = path.join(process.cwd(), pathname.slice(1));
+      let abs = path.join(process.cwd(), pathname.slice(1));
+      if (abs.endsWith(".js") && !isFile(abs)) {
+        const ts = abs.replace(/\.js$/, ".ts");
+        if (isFile(ts)) abs = ts;
+      }
       return isFile(abs) ? abs : null;
     }
   }
@@ -172,7 +164,6 @@ function resolvePages(pagesDir: string, pathname: string) {
 
 function resolveFile(pagesDir: string, pathname: string) {
   return (
-    resolveSrc(pathname) ||
     resolvePublicDirs(pathname) ||
     resolvePages(pagesDir, pathname)
   );
