@@ -14,6 +14,11 @@
       "import": "./dist/layout.js",
       "default": "./dist/layout.js"
     },
+    "./compat": {
+      "types": "./dist/compat/layout.d.ts",
+      "import": "./dist/compat/layout.js",
+      "default": "./dist/compat/layout.js"
+    },
     "./demos/*": "./pages/demos/*",
     "./assets/*": "./pages/assets/*",
     "./package.json": "./package.json"
