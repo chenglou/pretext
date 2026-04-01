@@ -21,7 +21,6 @@ const SHORT_LINE_RATIO = 0.6
 const RIVER_THRESHOLD = 1.5
 const INFEASIBLE_SPACE_RATIO = 0.4
 const OVERFLOW_SPACE_RATIO = 0.2
-const MIN_READABLE_SPACE_RATIO = 0.75
 const TIGHT_SPACE_RATIO = 0.65
 
 export type DemoControls = {
@@ -589,11 +588,10 @@ function getDisplaySpacing(line: MeasuredLine, normalSpaceWidth: number): LineSp
   const rawJustifiedSpace = (line.maxWidth - line.wordWidth) / line.spaceCount
   if (rawJustifiedSpace < normalSpaceWidth * OVERFLOW_SPACE_RATIO) return { kind: 'overflow' }
 
-  const width = Math.max(rawJustifiedSpace, normalSpaceWidth * MIN_READABLE_SPACE_RATIO)
   return {
     kind: 'justified',
-    width,
-    isRiver: width > normalSpaceWidth * RIVER_THRESHOLD,
+    width: rawJustifiedSpace,
+    isRiver: rawJustifiedSpace > normalSpaceWidth * RIVER_THRESHOLD,
   }
 }
 
