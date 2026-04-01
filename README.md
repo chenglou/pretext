@@ -75,7 +75,8 @@ const measured = computed(() =>
   layout(prepared.value, width.value, lineHeight.value)
 )
 
-const { height, lineCount } = measured.value
+const height = computed(() => measured.value.height)
+const lineCount = computed(() => measured.value.lineCount)
 ```
 
 Angular (signals) example:
@@ -97,6 +98,9 @@ const prepared = computed(() =>
 const measured = computed(() =>
   layout(prepared(), width(), lineHeight())
 )
+
+const height = computed(() => measured().height)
+const lineCount = computed(() => measured().lineCount)
 ```
 
 ## Demos
