@@ -119,6 +119,43 @@ beforeEach(() => {
 })
 
 describe('prepare invariants', () => {
+  test('package exposes a compat entrypoint with the layout API', async () => {
+    const pkg = await Bun.file(new URL('../package.json', import.meta.url)).json() as {
+      exports?: Record<string, unknown>
+    }
+
+    expect(pkg.exports?.['./compat']).toBeDefined()
+
+    const compatMod = await import('./compat/layout.ts')
+    expect(typeof compatMod.prepare).toBe('function')
+    expect(typeof compatMod.prepareWithSegments).toBe('function')
+    expect(typeof compatMod.layout).toBe('function')
+    expect(typeof compatMod.layoutWithLines).toBe('function')
+    expect(typeof compatMod.layoutNextLine).toBe('function')
+    expect(typeof compatMod.walkLineRanges).toBe('function')
+    expect(typeof compatMod.clearCache).toBe('function')
+    expect(typeof compatMod.setLocale).toBe('function')
+  })
+
+  test('compat entrypoint matches the default layout behavior for representative text', async () => {
+    const compatMod = await import('./compat/layout.ts')
+    const text = 'Hello مرحبا world 👋'
+    const maxWidth = 90
+
+    const prepared = prepareWithSegments(text, FONT)
+    const compatPrepared = compatMod.prepareWithSegments(text, FONT)
+
+    expect(compatPrepared.segments).toEqual(prepared.segments)
+    expect(compatPrepared.kinds).toEqual(prepared.kinds)
+    expect(compatPrepared.segLevels).toEqual(prepared.segLevels)
+    expect(compatMod.layout(compatPrepared, maxWidth, LINE_HEIGHT)).toEqual(
+      layout(prepared, maxWidth, LINE_HEIGHT),
+    )
+    expect(compatMod.layoutWithLines(compatPrepared, maxWidth, LINE_HEIGHT)).toEqual(
+      layoutWithLines(prepared, maxWidth, LINE_HEIGHT),
+    )
+  })
+
   test('whitespace-only input stays empty', () => {
     const prepared = prepare('  \t\n  ', FONT)
     expect(layout(prepared, 200, LINE_HEIGHT)).toEqual({ lineCount: 0, height: 0 })
