@@ -46,6 +46,7 @@ import {
   type SegmentBreakKind,
   type TextAnalysis,
   type WhiteSpaceMode,
+  type WritingMode,
 } from './analysis.js'
 import {
   clearMeasurementCaches,
@@ -92,6 +93,7 @@ type PreparedCore = {
   discretionaryHyphenWidth: number // Visible width added when a soft hyphen is chosen as the break
   tabStopAdvance: number // Absolute advance between tab stops for pre-wrap tab segments
   chunks: PreparedLineChunk[] // Precompiled hard-break chunks for line walking
+  writingMode: WritingMode // CSS writing-mode the text was prepared for; affects caller geometry interpretation
 }
 
 // Keep the main prepared handle opaque so the public API does not accidentally
@@ -146,7 +148,10 @@ export type PrepareProfile = {
 
 export type PrepareOptions = {
   whiteSpace?: WhiteSpaceMode
+  writingMode?: WritingMode
 }
+
+export { type WritingMode }
 
 export type PreparedLineChunk = {
   startSegmentIndex: number
@@ -156,7 +161,7 @@ export type PreparedLineChunk = {
 
 // --- Public API ---
 
-function createEmptyPrepared(includeSegments: boolean): InternalPreparedText | PreparedTextWithSegments {
+function createEmptyPrepared(includeSegments: boolean, writingMode: WritingMode): InternalPreparedText | PreparedTextWithSegments {
   if (includeSegments) {
     return {
       widths: [],
@@ -170,6 +175,7 @@ function createEmptyPrepared(includeSegments: boolean): InternalPreparedText | P
       discretionaryHyphenWidth: 0,
       tabStopAdvance: 0,
       chunks: [],
+      writingMode,
       segments: [],
     } as unknown as PreparedTextWithSegments
   }
@@ -185,6 +191,7 @@ function createEmptyPrepared(includeSegments: boolean): InternalPreparedText | P
     discretionaryHyphenWidth: 0,
     tabStopAdvance: 0,
     chunks: [],
+    writingMode,
   } as unknown as InternalPreparedText
 }
 
@@ -192,6 +199,7 @@ function measureAnalysis(
   analysis: TextAnalysis,
   font: string,
   includeSegments: boolean,
+  writingMode: WritingMode = 'horizontal-tb',
 ): InternalPreparedText | PreparedTextWithSegments {
   const graphemeSegmenter = getSharedGraphemeSegmenter()
   const engineProfile = getEngineProfile()
@@ -203,7 +211,7 @@ function measureAnalysis(
   const spaceWidth = getCorrectedSegmentWidth(' ', getSegmentMetrics(' ', cache), emojiCorrection)
   const tabStopAdvance = spaceWidth * 8
 
-  if (analysis.len === 0) return createEmptyPrepared(includeSegments)
+  if (analysis.len === 0) return createEmptyPrepared(includeSegments, writingMode)
 
   const widths: number[] = []
   const lineEndFitAdvances: number[] = []
@@ -373,6 +381,7 @@ function measureAnalysis(
       discretionaryHyphenWidth,
       tabStopAdvance,
       chunks,
+      writingMode,
       segments,
     } as unknown as PreparedTextWithSegments
   }
@@ -388,6 +397,7 @@ function measureAnalysis(
     discretionaryHyphenWidth,
     tabStopAdvance,
     chunks,
+    writingMode,
   } as unknown as InternalPreparedText
 }
 
@@ -428,7 +438,7 @@ function prepareInternal(
   options?: PrepareOptions,
 ): InternalPreparedText | PreparedTextWithSegments {
   const analysis = analyzeText(text, getEngineProfile(), options?.whiteSpace)
-  return measureAnalysis(analysis, font, includeSegments)
+  return measureAnalysis(analysis, font, includeSegments, options?.writingMode ?? 'horizontal-tb')
 }
 
 // Diagnostic-only helper used by the browser benchmark harness to separate the
@@ -437,7 +447,7 @@ export function profilePrepare(text: string, font: string, options?: PrepareOpti
   const t0 = performance.now()
   const analysis = analyzeText(text, getEngineProfile(), options?.whiteSpace)
   const t1 = performance.now()
-  const prepared = measureAnalysis(analysis, font, false) as InternalPreparedText
+  const prepared = measureAnalysis(analysis, font, false, options?.writingMode ?? 'horizontal-tb') as InternalPreparedText
   const t2 = performance.now()
 
   let breakableSegments = 0
@@ -492,6 +502,11 @@ function getInternalPrepared(prepared: PreparedText): InternalPreparedText {
 //   - Break before any non-space segment that would overflow the line
 //   - Trailing whitespace hangs past the line edge (doesn't trigger breaks)
 //   - Segments wider than maxWidth are broken at grapheme boundaries
+//
+// Vertical layout (writingMode: 'vertical-rl'):
+//   Parameters are logical — maxWidth is the max column height (inline-axis
+//   constraint) and lineHeight is the column width (block-axis advance).
+//   LayoutResult.height is the total physical width of all columns.
 export function layout(prepared: PreparedText, maxWidth: number, lineHeight: number): LayoutResult {
   // Keep the resize hot path specialized. `layoutWithLines()` shares the same
   // break semantics but also tracks line ranges; the extra bookkeeping is too
@@ -666,6 +681,8 @@ function materializeLine(
 
 // Batch low-level line geometry pass. This is the non-materializing counterpart
 // to layoutWithLines(), useful for shrinkwrap and other aggregate geometry work.
+// For vertical-rl text, maxWidth is the column height and LayoutLineRange.width
+// is the used column height for each column.
 export function walkLineRanges(
   prepared: PreparedTextWithSegments,
   maxWidth: number,
@@ -678,6 +695,8 @@ export function walkLineRanges(
   })
 }
 
+// Streaming single-line step. For vertical-rl text, maxWidth is the column
+// height and LayoutLine.width is the used column height for that column.
 export function layoutNextLine(
   prepared: PreparedTextWithSegments,
   start: LayoutCursor,
@@ -692,6 +711,9 @@ export function layoutNextLine(
 // Caller still supplies lineHeight at layout time. Mirrors layout()'s break
 // decisions, but keeps extra per-line bookkeeping so it should stay off the
 // resize hot path.
+// For vertical-rl text, maxWidth is the column height, lineHeight is the column
+// width, LayoutLinesResult.height is the total physical width of all columns,
+// and each LayoutLine.width is the used column height for that column.
 export function layoutWithLines(prepared: PreparedTextWithSegments, maxWidth: number, lineHeight: number): LayoutLinesResult {
   const lines: LayoutLine[] = []
   if (prepared.widths.length === 0) return { lineCount: 0, height: 0, lines }
