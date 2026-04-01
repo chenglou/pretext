@@ -279,7 +279,47 @@ function measureAnalysis(
 
     const segMetrics = getSegmentMetrics(segText, cache)
 
-    if (segKind === 'text' && segMetrics.containsCJK && wordBreak !== 'keep-all') {
+    // keep-all: merge consecutive CJK text segments into one unbreakable unit
+    // with per-grapheme overflow-wrap fallback. The segmenter's word boundaries
+    // between CJK words (e.g. ['你好', '世界']) are an intermediate artifact of
+    // Intl.Segmenter — they only existed to feed the grapheme decomposition that
+    // keep-all skips. Merging rewinds those false break opportunities.
+    if (segKind === 'text' && segMetrics.containsCJK && wordBreak === 'keep-all') {
+      let mergedText = segText
+      let mergedEnd = mi
+      while (mergedEnd + 1 < analysis.len) {
+        const nextKind = analysis.kinds[mergedEnd + 1]!
+        if (nextKind !== 'text') break
+        const nextText = analysis.texts[mergedEnd + 1]!
+        const nextMetrics = getSegmentMetrics(nextText, cache)
+        if (!nextMetrics.containsCJK) break
+        mergedText += nextText
+        mergedEnd++
+      }
+
+      const mergedMetrics = getSegmentMetrics(mergedText, cache)
+      const w = getCorrectedSegmentWidth(mergedText, mergedMetrics, emojiCorrection)
+      const graphemeWidths = mergedText.length > 1
+        ? getSegmentGraphemeWidths(mergedText, mergedMetrics, cache, emojiCorrection)
+        : null
+      const graphemePrefixWidths =
+        graphemeWidths !== null && engineProfile.preferPrefixWidthsForBreakableRuns
+          ? getSegmentGraphemePrefixWidths(mergedText, mergedMetrics, cache, emojiCorrection)
+          : null
+
+      pushMeasuredSegment(mergedText, w, w, w, 'text', segStart, graphemeWidths, graphemePrefixWidths)
+
+      for (let j = mi + 1; j <= mergedEnd; j++) {
+        preparedStartByAnalysisIndex[j] = preparedStartByAnalysisIndex[mi]!
+      }
+      for (let j = mi; j <= mergedEnd; j++) {
+        preparedEndByAnalysisIndex[j] = widths.length
+      }
+      mi = mergedEnd
+      continue
+    }
+
+    if (segKind === 'text' && segMetrics.containsCJK) {
       let unitText = ''
       let unitStart = 0
 
@@ -440,7 +480,7 @@ export function profilePrepare(text: string, font: string, options?: PrepareOpti
   const t0 = performance.now()
   const analysis = analyzeText(text, getEngineProfile(), options?.whiteSpace)
   const t1 = performance.now()
-  const prepared = measureAnalysis(analysis, font, false) as InternalPreparedText
+  const prepared = measureAnalysis(analysis, font, false, options?.wordBreak) as InternalPreparedText
   const t2 = performance.now()
 
   let breakableSegments = 0

@@ -791,25 +791,34 @@ describe('word-break: keep-all', () => {
     expect(keepAllTextSegments).toEqual(['안녕하세요', '세계'])
   })
 
-  test('Chinese text stays as word-level segments, not grapheme-split', () => {
-    const normal = prepareWithSegments('你好世界', FONT)
+  test('Chinese text merges into one segment and does not break between words', () => {
     const keepAll = prepareWithSegments('你好世界', FONT, { wordBreak: 'keep-all' })
+    const textSegments = keepAll.segments.filter(s => s.trim().length > 0)
 
-    const normalTextSegments = normal.segments.filter(s => s.trim().length > 0)
-    const keepAllTextSegments = keepAll.segments.filter(s => s.trim().length > 0)
+    // Segmenter produces ['你好', '世界']; keep-all merges into one unit
+    expect(textSegments).toEqual(['你好世界'])
 
-    // Normal mode grapheme-splits CJK; keep-all keeps them together
-    expect(keepAllTextSegments.length).toBeLessThan(normalTextSegments.length)
+    // At a width that fits 2 characters but not 4, normal would break mid-word;
+    // keep-all forces overflow-wrap grapheme fallback instead of a word break
+    // Each CJK char = 16px. Width 35 fits 2 chars.
+    const lines = layoutWithLines(keepAll, 35, LINE_HEIGHT)
+    expect(lines.lines[0]!.text).toBe('你好')
+    expect(lines.lines[1]!.text).toBe('世界')
   })
 
-  test('Japanese text stays as word-level segments, not grapheme-split', () => {
-    const normal = prepareWithSegments('こんにちは世界', FONT)
+  test('Japanese text merges into one segment and does not break between words', () => {
     const keepAll = prepareWithSegments('こんにちは世界', FONT, { wordBreak: 'keep-all' })
+    const textSegments = keepAll.segments.filter(s => s.trim().length > 0)
 
-    const normalTextSegments = normal.segments.filter(s => s.trim().length > 0)
-    const keepAllTextSegments = keepAll.segments.filter(s => s.trim().length > 0)
+    // Segmenter produces ['こんにちは', '世界']; keep-all merges into one unit
+    expect(textSegments).toEqual(['こんにちは世界'])
 
-    expect(keepAllTextSegments.length).toBeLessThan(normalTextSegments.length)
+    // Width that fits 3 chars: normal would break at the word boundary;
+    // keep-all forces overflow-wrap grapheme fallback
+    const lines = layoutWithLines(keepAll, 50, LINE_HEIGHT)
+    expect(lines.lines[0]!.text).toBe('こんに')
+    expect(lines.lines[1]!.text).toBe('ちは世')
+    expect(lines.lines[2]!.text).toBe('界')
   })
 
   test('CJK punctuation attachment (kinsoku) still works under keep-all', () => {
