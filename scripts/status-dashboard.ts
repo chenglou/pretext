@@ -32,6 +32,7 @@ type CorpusBenchmarkResult = {
 type BenchmarkReport = {
   results?: BenchmarkResult[]
   richResults?: BenchmarkResult[]
+  richPreWrapResults?: BenchmarkResult[]
   richLongResults?: BenchmarkResult[]
   corpusResults?: CorpusBenchmarkResult[]
 }
@@ -95,12 +96,14 @@ const dashboard = {
     chrome: {
       topLevel: indexResults(chromeBenchmarks.results),
       richShared: indexResults(chromeBenchmarks.richResults),
+      richPreWrap: indexResults(chromeBenchmarks.richPreWrapResults),
       richLong: indexResults(chromeBenchmarks.richLongResults),
       longFormCorpusStress: chromeBenchmarks.corpusResults ?? [],
     },
     safari: {
       topLevel: indexResults(safariBenchmarks.results),
       richShared: indexResults(safariBenchmarks.richResults),
+      richPreWrap: indexResults(safariBenchmarks.richPreWrapResults),
       richLong: indexResults(safariBenchmarks.richLongResults),
       longFormCorpusStress: safariBenchmarks.corpusResults ?? [],
     },
