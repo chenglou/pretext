@@ -31,6 +31,11 @@ export type InternalLayoutLine = {
   width: number
 }
 
+type NormalizedLineStart = {
+  cursor: LineBreakCursor
+  chunkIndex: number
+}
+
 function canBreakAfter(kind: SegmentBreakKind): boolean {
   return (
     kind === 'space' ||
@@ -92,42 +97,62 @@ function fitSoftHyphenBreak(
 }
 
 function findChunkIndexForStart(prepared: PreparedLineBreakData, segmentIndex: number): number {
-  for (let i = 0; i < prepared.chunks.length; i++) {
-    const chunk = prepared.chunks[i]!
-    if (segmentIndex < chunk.consumedEndSegmentIndex) return i
+  let lo = 0
+  let hi = prepared.chunks.length
+
+  while (lo < hi) {
+    const mid = Math.floor((lo + hi) / 2)
+    if (segmentIndex < prepared.chunks[mid]!.consumedEndSegmentIndex) {
+      hi = mid
+    } else {
+      lo = mid + 1
+    }
   }
-  return -1
+
+  return lo < prepared.chunks.length ? lo : -1
 }
 
-export function normalizeLineStart(
+function normalizeLineStartWithChunk(
   prepared: PreparedLineBreakData,
   start: LineBreakCursor,
-): LineBreakCursor | null {
+): NormalizedLineStart | null {
   let segmentIndex = start.segmentIndex
   const graphemeIndex = start.graphemeIndex
 
   if (segmentIndex >= prepared.widths.length) return null
-  if (graphemeIndex > 0) return start
 
   const chunkIndex = findChunkIndexForStart(prepared, segmentIndex)
   if (chunkIndex < 0) return null
+  if (graphemeIndex > 0) {
+    return { cursor: start, chunkIndex }
+  }
 
   const chunk = prepared.chunks[chunkIndex]!
   if (chunk.startSegmentIndex === chunk.endSegmentIndex && segmentIndex === chunk.startSegmentIndex) {
-    return { segmentIndex, graphemeIndex: 0 }
+    return { cursor: { segmentIndex, graphemeIndex: 0 }, chunkIndex }
   }
 
   if (segmentIndex < chunk.startSegmentIndex) segmentIndex = chunk.startSegmentIndex
   while (segmentIndex < chunk.endSegmentIndex) {
     const kind = prepared.kinds[segmentIndex]!
     if (kind !== 'space' && kind !== 'zero-width-break' && kind !== 'soft-hyphen') {
-      return { segmentIndex, graphemeIndex: 0 }
+      return { cursor: { segmentIndex, graphemeIndex: 0 }, chunkIndex }
     }
     segmentIndex++
   }
 
   if (chunk.consumedEndSegmentIndex >= prepared.widths.length) return null
-  return { segmentIndex: chunk.consumedEndSegmentIndex, graphemeIndex: 0 }
+  return {
+    cursor: { segmentIndex: chunk.consumedEndSegmentIndex, graphemeIndex: 0 },
+    chunkIndex: chunkIndex + 1,
+  }
+}
+
+export function normalizeLineStart(
+  prepared: PreparedLineBreakData,
+  start: LineBreakCursor,
+): LineBreakCursor | null {
+  return normalizeLineStartWithChunk(prepared, start)?.cursor ?? null
 }
 
 export function countPreparedLines(prepared: PreparedLineBreakData, maxWidth: number): number {
@@ -675,17 +700,14 @@ export function layoutNextLineRange(
   start: LineBreakCursor,
   maxWidth: number,
 ): InternalLayoutLine | null {
-  const normalizedStart = normalizeLineStart(prepared, start)
-  if (normalizedStart === null) return null
+  const normalized = normalizeLineStartWithChunk(prepared, start)
+  if (normalized === null) return null
 
   if (prepared.simpleLineWalkFastPath) {
-    return layoutNextLineRangeSimple(prepared, normalizedStart, maxWidth)
+    return layoutNextLineRangeSimple(prepared, normalized.cursor, maxWidth)
   }
 
-  const chunkIndex = findChunkIndexForStart(prepared, normalizedStart.segmentIndex)
-  if (chunkIndex < 0) return null
-
-  const chunk = prepared.chunks[chunkIndex]!
+  const chunk = prepared.chunks[normalized.chunkIndex]!
   if (chunk.startSegmentIndex === chunk.endSegmentIndex) {
     return {
       startSegmentIndex: chunk.startSegmentIndex,
@@ -711,8 +733,8 @@ export function layoutNextLineRange(
 
   let lineW = 0
   let hasContent = false
-  const lineStartSegmentIndex = normalizedStart.segmentIndex
-  const lineStartGraphemeIndex = normalizedStart.graphemeIndex
+  const lineStartSegmentIndex = normalized.cursor.segmentIndex
+  const lineStartGraphemeIndex = normalized.cursor.graphemeIndex
   let lineEndSegmentIndex = lineStartSegmentIndex
   let lineEndGraphemeIndex = lineStartGraphemeIndex
   let pendingBreakSegmentIndex = -1
@@ -851,9 +873,9 @@ export function layoutNextLineRange(
     return null
   }
 
-  for (let i = normalizedStart.segmentIndex; i < chunk.endSegmentIndex; i++) {
+  for (let i = normalized.cursor.segmentIndex; i < chunk.endSegmentIndex; i++) {
     const kind = kinds[i]!
-    const startGraphemeIndex = i === normalizedStart.segmentIndex ? normalizedStart.graphemeIndex : 0
+    const startGraphemeIndex = i === normalized.cursor.segmentIndex ? normalized.cursor.graphemeIndex : 0
     const w = kind === 'tab' ? getTabAdvance(lineW, tabStopAdvance) : widths[i]!
 
     if (kind === 'soft-hyphen' && startGraphemeIndex === 0) {
