@@ -112,7 +112,7 @@ export function isCJK(s: string): boolean {
         (c >= 0x2B740 && c <= 0x2B81F) ||
         (c >= 0x2B820 && c <= 0x2CEAF) ||
         (c >= 0x2CEB0 && c <= 0x2EBEF) ||
-        (c >= 0x2EBF0 && c <= 0x2F7FF) ||
+        (c >= 0x2EBF0 && c <= 0x2EE5F) ||
         (c >= 0x30000 && c <= 0x3134F) ||
         (c >= 0x31350 && c <= 0x323AF) ||
         (c >= 0xF900 && c <= 0xFAFF) ||
