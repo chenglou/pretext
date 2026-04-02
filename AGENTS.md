@@ -27,6 +27,7 @@ See `DEVELOPMENT.md` for the current command surface and packaging/release check
 - `corpora/representative.json` — checked-in representative corpus anchor rows
 - `corpora/chrome-sampled.json` / `corpora/chrome-step10.json` — checked-in Chrome corpus sweep snapshots
 - `pages/diagnostic-utils.ts` — shared grapheme-safe diagnostic helpers used by the browser check pages
+- `scripts/keep-all-check.ts` — small permanent browser-oracle sweep for the `{ wordBreak: 'keep-all' }` mode
 - `scripts/pre-wrap-check.ts` — small permanent browser-oracle sweep for the non-default `{ whiteSpace: 'pre-wrap' }` mode
 - `pages/demos/index.html` — public static demo landing page used as the GitHub Pages site root
 - `pages/demos/bubbles.ts` — bubble shrinkwrap demo using the rich non-materializing line-range walker
@@ -60,6 +61,7 @@ See `DEVELOPMENT.md` for the current command surface and packaging/release check
 - Supported CSS target is still the common app-text configuration: `white-space: normal`, `word-break: normal`, `overflow-wrap: break-word`, `line-break: auto`.
 - There is now a second explicit whitespace mode, `{ whiteSpace: 'pre-wrap' }`, for ordinary spaces, `\t` tabs, and `\n` hard breaks. Tabs follow the default browser-style tab stops. Treat it as editor/input-oriented, not the whole CSS `pre-wrap` surface.
 - Keep the permanent `pre-wrap` coverage small and explicit. A one-time raw-source validation was useful, but the standing repo coverage should stay a compact oracle set rather than a giant sweep over wiki scaffolding.
+- `{ wordBreak: 'keep-all' }` prevents line breaks between CJK characters, matching the CSS `word-break: keep-all` behavior. CJK text only breaks at spaces or punctuation; when no break opportunity fits, overflow-wrap grapheme fallback still applies. Non-CJK text is unaffected.
 - That default target means narrow widths may still break inside words, but only at grapheme boundaries. Keep the core engine honest to that behavior; if an editorial page wants stricter whole-word handling, layer it on top in userland instead of quietly changing the library default.
 - `system-ui` is unsafe for accuracy; canvas and DOM can resolve different fonts on macOS.
 - Accuracy pages and checkers are now expected to be green in all three installed browsers on fresh runs; if a page disagrees, suspect stale tabs/servers before changing the algorithm.
@@ -109,7 +111,7 @@ See `DEVELOPMENT.md` for the current command surface and packaging/release check
 - The browser demos should increasingly dogfood `layoutNextLine()` rather than depending on `layoutWithLines()` for whole-paragraph materialization. That keeps the streaming userland path honest.
 - ASCII fast path could skip some CJK, bidi, and emoji overhead.
 - Benchmark methodology still needs review.
-- Additional CSS configs are still untested: `break-all`, `keep-all`, `strict`, `loose`, `anywhere`.
+- Additional CSS configs are still untested: `break-all`, `strict`, `loose`, `anywhere`.
 
 ### Related
 

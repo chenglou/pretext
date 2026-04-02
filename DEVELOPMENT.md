@@ -18,6 +18,8 @@ bun run accuracy-snapshot:safari
 bun run accuracy-snapshot:firefox
 bun run benchmark-check      # Chrome benchmark snapshot
 bun run benchmark-check:safari
+bun run keep-all-check       # small browser-oracle sweep for { wordBreak: 'keep-all' }
+bun run keep-all-check:safari
 bun run pre-wrap-check       # small browser-oracle sweep for { whiteSpace: 'pre-wrap' }
 bun run corpus-check         # diagnose one corpus at one or a few widths
 bun run corpus-sweep         # coarse corpus width sweep

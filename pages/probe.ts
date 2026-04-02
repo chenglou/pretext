@@ -59,6 +59,7 @@ type ProbeReport = {
   requestId?: string
   text?: string
   whiteSpace?: 'normal' | 'pre-wrap'
+  wordBreak?: 'normal' | 'keep-all'
   width?: number
   contentWidth?: number
   font?: string
@@ -99,7 +100,9 @@ const lang = params.get('lang') ?? (direction === 'rtl' ? 'ar' : 'en')
 const browserLineMethod = params.get('method') === 'span' ? 'span' : 'range'
 const verbose = params.get('verbose') === '1'
 const whiteSpace = params.get('whiteSpace') === 'pre-wrap' ? 'pre-wrap' : 'normal'
+const wordBreak = params.get('wordBreak') === 'keep-all' ? 'keep-all' : 'normal'
 const cssWhiteSpace = whiteSpace === 'pre-wrap' ? 'pre-wrap' : 'normal'
+const cssWordBreak = wordBreak === 'keep-all' ? 'keep-all' : 'normal'
 
 const stats = document.getElementById('stats')!
 const book = document.getElementById('book')!
@@ -112,6 +115,7 @@ diagnosticDiv.style.visibility = 'hidden'
 diagnosticDiv.style.pointerEvents = 'none'
 diagnosticDiv.style.boxSizing = 'border-box'
 diagnosticDiv.style.whiteSpace = cssWhiteSpace
+diagnosticDiv.style.wordBreak = cssWordBreak
 diagnosticDiv.style.wordWrap = 'break-word'
 diagnosticDiv.style.overflowWrap = 'break-word'
 diagnosticDiv.style.padding = `${PADDING}px`
@@ -426,6 +430,7 @@ function init(): void {
     book.style.padding = `${PADDING}px`
     book.style.width = `${width}px`
     book.style.whiteSpace = cssWhiteSpace
+    book.style.wordBreak = cssWordBreak
 
     diagnosticDiv.textContent = text
     diagnosticDiv.lang = lang
@@ -435,8 +440,9 @@ function init(): void {
     diagnosticDiv.style.padding = `${PADDING}px`
     diagnosticDiv.style.width = `${width}px`
     diagnosticDiv.style.whiteSpace = cssWhiteSpace
+    diagnosticDiv.style.wordBreak = cssWordBreak
 
-    const prepared = prepareWithSegments(text, font, { whiteSpace })
+    const prepared = prepareWithSegments(text, font, { whiteSpace, wordBreak })
     const normalizedText = prepared.segments.join('')
     const contentWidth = width - PADDING * 2
     const predicted = layout(prepared, contentWidth, lineHeight)
@@ -456,6 +462,7 @@ function init(): void {
       status: 'ready',
       text,
       whiteSpace,
+      wordBreak,
       width,
       contentWidth,
       font,
