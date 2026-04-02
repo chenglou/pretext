@@ -224,33 +224,58 @@ export function getFontMeasurementState(font: string, needsEmojiCorrection: bool
   return { cache, fontSize, emojiCorrection }
 }
 
-// Arabic/Hebrew shaping correction: canvas measureText and the DOM rendering
-// engine use different text shaping pipelines. For complex scripts, the DOM
-// applies full HarfBuzz shaping (contextual alternates, ligatures, GPOS
-// kerning) while canvas often measures with a simpler pipeline.
+// Canvas-to-DOM shaping correction.  Canvas measureText and the browser's DOM
+// rendering engine use different text shaping pipelines.  The DOM applies full
+// HarfBuzz shaping (contextual alternates, ligatures, GPOS kerning) while
+// canvas often uses a simpler pipeline.  The divergence varies by script —
+// Arabic joining, Thai shaping, and Latin kerning all produce different deltas.
 //
-// Like emoji correction, we measure a short representative Arabic sample once
-// per font via DOM and derive a ratio (domWidth / canvasWidth). This ratio is
-// cached and applied to all bidi segment widths. The correction is approximate
-// but keeps prepare() O(1)-DOM-cost per font regardless of text length.
+// Rather than hardcoding script-specific samples, we derive the correction
+// from a small sample of the actual segments being prepared.  This naturally
+// adapts to whatever script the text contains.  The sample text is concatenated
+// and measured once via a hidden DOM span (one reflow), then compared against
+// canvas measureText on the same string.  The resulting ratio is cached by
+// (font, sampleText) so repeated prepare() calls on similar content hit cache.
 //
-// The sample includes common Arabic letter forms in initial, medial, final,
-// and isolated positions to capture a representative average of the shaping
-// divergence.
+// Cost: 1 DOM read per unique (font, sample) pair, then cached.
 
-const bidiCorrectionCache = new Map<string, number>()
+const shapingRatioCache = new Map<string, number>()
 
-// Sample covering common joining forms: initial/medial/final/isolated + spaces
-const BIDI_SAMPLE = 'واحد اثنان ثلاثة أربعة خمسة ستة سبعة ثمانية تسعة عشرة'
+// Maximum chars to include in the sample (keeps DOM measurement fast)
+const SAMPLE_CHAR_LIMIT = 200
+// Number of segments to sample (spread across the text)
+const SAMPLE_SEG_COUNT = 8
 
-export function getBidiCorrection(font: string): number {
-  let ratio = bidiCorrectionCache.get(font)
-  if (ratio !== undefined) return ratio
+export function getShapingRatio(
+  font: string,
+  segments: string[],
+  kinds: string[],
+): number {
+  // Build a sample from actual segments: pick up to SAMPLE_SEG_COUNT non-space
+  // segments spread evenly across the text.
+  const candidates: string[] = []
+  for (let i = 0; i < segments.length; i++) {
+    if (kinds[i] === 'space' || kinds[i] === 'tab' || kinds[i] === 'hard-break' ||
+        kinds[i] === 'soft-hyphen' || kinds[i] === 'zero-width-break') continue
+    candidates.push(segments[i]!)
+  }
+  if (candidates.length === 0) return 1
 
-  ratio = 1 // default: no correction
+  let sample = ''
+  const step = Math.max(1, Math.floor(candidates.length / SAMPLE_SEG_COUNT))
+  for (let i = 0; i < candidates.length && sample.length < SAMPLE_CHAR_LIMIT; i += step) {
+    if (sample.length > 0) sample += ' '
+    sample += candidates[i]!
+  }
+
+  const cacheKey = font + '\0' + sample
+  const cached = shapingRatioCache.get(cacheKey)
+  if (cached !== undefined) return cached
+
   const ctx = getMeasureContext()
   ctx.font = font
-  const canvasW = ctx.measureText(BIDI_SAMPLE).width
+  const canvasW = ctx.measureText(sample).width
+  let ratio = 1
 
   if (
     canvasW > 0 &&
@@ -263,22 +288,20 @@ export function getBidiCorrection(font: string): number {
     span.style.visibility = 'hidden'
     span.style.position = 'absolute'
     span.style.whiteSpace = 'pre'
-    span.textContent = BIDI_SAMPLE
+    span.textContent = sample
     document.body.appendChild(span)
     const domW = span.getBoundingClientRect().width
     document.body.removeChild(span)
-    if (domW > 0) {
-      ratio = domW / canvasW
-    }
+    if (domW > 0) ratio = domW / canvasW
   }
 
-  bidiCorrectionCache.set(font, ratio)
+  shapingRatioCache.set(cacheKey, ratio)
   return ratio
 }
 
 export function clearMeasurementCaches(): void {
   segmentMetricCaches.clear()
   emojiCorrectionCache.clear()
-  bidiCorrectionCache.clear()
+  shapingRatioCache.clear()
   sharedGraphemeSegmenter = null
 }

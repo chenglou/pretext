@@ -49,8 +49,8 @@ import {
 } from './analysis.js'
 import {
   clearMeasurementCaches,
-  getBidiCorrection,
   getCorrectedSegmentWidth,
+  getShapingRatio,
   getEngineProfile,
   getFontMeasurementState,
   getSegmentGraphemePrefixWidths,
@@ -373,49 +373,63 @@ function measureAnalysis(
   const chunks = mapAnalysisChunksToPreparedChunks(analysis.chunks, preparedStartByAnalysisIndex, preparedEndByAnalysisIndex)
   const segLevels = segStarts === null ? null : computeSegmentLevels(analysis.normalized, segStarts)
   
-  // When bidi content is detected, apply a per-font shaping correction ratio
-  // to canvas-measured widths.  Canvas measureText and the browser's DOM
-  // rendering engine use different text shaping pipelines — for complex
-  // scripts (Arabic cursive joining, Hebrew ligatures, etc.) the DOM is
-  // authoritative.  Rather than measuring every segment via DOM (which would
-  // be O(n) reflows and prohibitively slow for long texts), we measure one
-  // short Arabic sample per font and derive a correction ratio, mirroring
-  // the emoji-correction pattern.  O(1) DOM cost per font, cached.
-  if (segLevels !== null) {
-    const ratio = getBidiCorrection(font)
-    if (ratio !== 1) {
-      for (let i = 0; i < widths.length; i++) {
-        const kind = kinds[i]!
-        if (
-          kind === 'soft-hyphen' ||
-          kind === 'hard-break' ||
-          kind === 'tab' ||
-          kind === 'zero-width-break' ||
-          kind === 'space'
-        ) continue
+  // Apply shaping correction to RTL segments only.  Canvas measureText
+  // diverges from DOM for scripts with contextual shaping (Arabic cursive
+  // joining, Hebrew ligatures) but is already accurate for context-free
+  // scripts (CJK, Latin, Thai).  Applying a blanket ratio would distort
+  // CJK/Latin widths.  So we:
+  //   1. Only activate when bidi content is detected (segLevels !== null)
+  //   2. Sample only from RTL segments (odd bidi level) to derive the ratio
+  //   3. Apply the ratio only to those RTL segments
+  // Cost: 1 DOM read per unique (font, rtlSample) pair, then cached.
+  if (segLevels !== null && segments !== null) {
+    // Collect RTL segments for sampling
+    const rtlSegments: string[] = []
+    const rtlKinds: string[] = []
+    for (let i = 0; i < segments.length; i++) {
+      if ((segLevels[i]! & 1) === 1) {
+        rtlSegments.push(segments[i]!)
+        rtlKinds.push(kinds[i]!)
+      }
+    }
 
-        const corrected = widths[i]! * ratio
+    if (rtlSegments.length > 0) {
+      const ratio = getShapingRatio(font, rtlSegments, rtlKinds)
+      if (Math.abs(ratio - 1) > 1e-6) {
+        for (let i = 0; i < widths.length; i++) {
+          // Only correct RTL segments
+          if ((segLevels[i]! & 1) !== 1) continue
 
-        widths[i] = corrected
+          const kind = kinds[i]!
+          if (
+            kind === 'soft-hyphen' ||
+            kind === 'hard-break' ||
+            kind === 'tab' ||
+            kind === 'zero-width-break' ||
+            kind === 'space'
+          ) continue
 
-        if (kind === 'preserved-space') {
-          lineEndPaintAdvances[i] = corrected
-        } else {
-          lineEndFitAdvances[i] = corrected
-          lineEndPaintAdvances[i] = corrected
-        }
+          const corrected = widths[i]! * ratio
+          widths[i] = corrected
 
-        // Scale grapheme widths proportionally
-        const gWidths = breakableWidths[i]
-        if (gWidths !== null) {
-          for (let g = 0; g < gWidths.length; g++) {
-            gWidths[g]! *= ratio
+          if (kind === 'preserved-space') {
+            lineEndPaintAdvances[i] = corrected
+          } else {
+            lineEndFitAdvances[i] = corrected
+            lineEndPaintAdvances[i] = corrected
           }
-        }
-        const gPrefixWidths = breakablePrefixWidths[i]
-        if (gPrefixWidths !== null) {
-          for (let g = 0; g < gPrefixWidths.length; g++) {
-            gPrefixWidths[g]! *= ratio
+
+          const gWidths = breakableWidths[i]
+          if (gWidths !== null) {
+            for (let g = 0; g < gWidths.length; g++) {
+              gWidths[g]! *= ratio
+            }
+          }
+          const gPrefixWidths = breakablePrefixWidths[i]
+          if (gPrefixWidths !== null) {
+            for (let g = 0; g < gPrefixWidths.length; g++) {
+              gPrefixWidths[g]! *= ratio
+            }
           }
         }
       }
