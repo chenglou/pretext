@@ -8,13 +8,16 @@ Current priorities:
 
 2. Next engine work
 
-- Use the split `analyze()` / `measure()` benchmark rows to steer any remaining `prepare()` work instead of reopening generic profiling.
+- Use the split `analyze()` / `measure()` benchmark rows to steer any remaining `prepare()` work, and use the chunk-heavy rich benchmark rows to steer `layoutNextLine()` work, instead of reopening generic profiling.
+- Use the synthetic long-breakable-run canary to steer any Safari prefix-width work; naive cache-space cleanups there can trade retained heap for meaningfully slower `prepare()`.
 - Expand mixed app text only when it adds a real product-shaped class, e.g. URL/query runs, mixed bidi with numbers, emoji ZWJ runs, or `NBSP` / `ZWSP` / `WJ` behavior.
 - Broaden canaries only when the source text is clean.
 - If we add another Southeast Asian canary, prefer a clean source text that broadens the class instead of another wrapped/legal/raw-source artifact.
 - Expand the sampled font matrix only where a canary still looks genuinely imperfect.
 - Treat strongly font-sensitive or shaping-sensitive misses as boundary-finding for the current architecture, not automatic invitations for another local glue rule.
 - Keep the hot `layout()` path simple and allocation-light while the rich path absorbs more userland layout needs.
+- If chunk-heavy manual layout keeps growing, consider a stateful streaming variant or a cursor-carried chunk hint so sequential `layoutNextLine()` flows can stay overall linear instead of paying a lookup per emitted line.
+- If arbitrary interior rich cursors become common, consider a compact `segmentIndex -> chunkIndex` side table, ideally only on rich prepared handles or only when `chunks.length > 1`.
 
 3. Demo work
 

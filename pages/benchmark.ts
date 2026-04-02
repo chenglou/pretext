@@ -45,6 +45,10 @@ const DOM_INTERLEAVED_SAMPLE_REPEATS = 1
 const RICH_COUNT = 60
 const RICH_LAYOUT_SAMPLE_REPEATS = 40
 const RICH_LAYOUT_SAMPLE_WIDTHS = [180, 220, 260] as const
+const RICH_PRE_WRAP_COUNT = 12
+const RICH_PRE_WRAP_LINE_COUNT = 320
+const RICH_PRE_WRAP_SAMPLE_REPEATS = 20
+const RICH_PRE_WRAP_SAMPLE_WIDTHS = [220, 260, 320] as const
 const RICH_LONG_REPEAT = 8
 const RICH_LONG_SAMPLE_WIDTHS = [240, 300, 360] as const
 const CORPUS_LAYOUT_SAMPLE_REPEATS = 200
@@ -73,6 +77,7 @@ type BenchmarkReport = {
   requestId?: string
   results?: BenchmarkResult[]
   richResults?: BenchmarkResult[]
+  richPreWrapResults?: BenchmarkResult[]
   richLongResults?: BenchmarkResult[]
   corpusResults?: CorpusBenchmarkResult[]
   message?: string
@@ -183,6 +188,15 @@ const CORPORA = [
     sampleWidths: [240, 300, 360] as const,
   },
   {
+    id: 'synthetic-long-breakable-runs',
+    label: 'Long breakable runs (synthetic)',
+    text: buildLongBreakableStressText(220),
+    font: FONT,
+    lineHeight: LINE_HEIGHT,
+    width: 300,
+    sampleWidths: [220, 300, 380] as const,
+  },
+  {
     id: 'ar-risalat-al-ghufran-part-1',
     label: 'Arabic prose',
     text: arRisalatAlGhufranPart1,
@@ -198,6 +212,55 @@ const commentTexts = TEXTS.filter(t => t.text.trim().length > 1)
 const texts: string[] = []
 for (let i = 0; i < COUNT; i++) {
   texts.push(commentTexts[i % commentTexts.length]!.text)
+}
+
+function buildLongBreakableStressText(repeatCount: number): string {
+  const parts: string[] = []
+  for (let i = 0; i < repeatCount; i++) {
+    const startHour = String(i % 24).padStart(2, '0')
+    const endHour = String((i + 5) % 24).padStart(2, '0')
+    const minute = String((i * 7) % 60).padStart(2, '0')
+    const second = String((i * 11) % 60).padStart(2, '0')
+    parts.push(
+      `https://bench.example.com/releases/2026/04/${i}/artifact-alpha-beta-gamma-delta-epsilon-${i.toString(36)}?build=${1200 + i}&cursor=sha${(0xabcde + i).toString(16)}&channel=stable`,
+      `cacheKey_v${i}_AlphaBetaGammaDeltaEpsilonZetaEtaThetaIotaKappaLambdaMuNuXiOmicronPiRhoSigmaTauUpsilonPhiChiPsiOmega`,
+      `metrics\u00A0pipeline\u00A0phase\u00A0${i % 17}\u00A0snapshot\u00A0${(i * 13) % 97}`,
+      `window:${startHour}:${minute}-${endHour}:${second}`,
+      `module::worker::queue::flush::retry::recover::ship::${i}`,
+    )
+  }
+  return parts.join(' ')
+}
+
+function buildPreWrapChunkStressText(seed: number, lineCount: number): string {
+  const lines: string[] = []
+  const seedOffset = seed * lineCount
+
+  for (let i = 0; i < lineCount; i++) {
+    const n = seedOffset + i
+    switch (i % 6) {
+      case 0:
+        lines.push(`section ${n}\talpha ${n % 11}`)
+        break
+      case 1:
+        lines.push('  ')
+        break
+      case 2:
+        lines.push(`entry ${n}  `)
+        break
+      case 3:
+        lines.push('')
+        break
+      case 4:
+        lines.push(`col\t${n % 97}\t${(n * 3) % 101}`)
+        break
+      default:
+        lines.push(`note ${n} x`)
+        break
+    }
+  }
+
+  return lines.join('\n')
 }
 
 declare global {
@@ -315,6 +378,7 @@ function buildRichBenchmarks(
   lineHeight: number,
   labelPrefix: string,
   descSuffix: string,
+  sampleRepeats = RICH_LAYOUT_SAMPLE_REPEATS,
 ): BenchmarkResult[] {
   let richSink = 0
 
@@ -326,7 +390,7 @@ function buildRichBenchmarks(
       sum += result.lineCount + result.height + result.lines.length
     }
     richSink += sum + repeatIndex
-  }, RICH_LAYOUT_SAMPLE_REPEATS)
+  }, sampleRepeats)
 
   const walkLineRangesMs = bench(repeatIndex => {
     const width = widths[repeatIndex % widths.length]!
@@ -337,7 +401,7 @@ function buildRichBenchmarks(
       })
     }
     richSink += sum + repeatIndex
-  }, RICH_LAYOUT_SAMPLE_REPEATS)
+  }, sampleRepeats)
 
   const layoutNextLineMs = bench(repeatIndex => {
     const width = widths[repeatIndex % widths.length]!
@@ -352,7 +416,7 @@ function buildRichBenchmarks(
       }
     }
     richSink += sum + repeatIndex
-  }, RICH_LAYOUT_SAMPLE_REPEATS)
+  }, sampleRepeats)
 
   document.body.dataset[`${labelPrefix}RichSink`] = String(richSink)
 
@@ -436,6 +500,10 @@ async function run() {
 
   const results: BenchmarkResult[] = []
   const richTexts = texts.slice(0, RICH_COUNT)
+  const richPreWrapTexts = Array.from(
+    { length: RICH_PRE_WRAP_COUNT },
+    (_, index) => buildPreWrapChunkStressText(index, RICH_PRE_WRAP_LINE_COUNT),
+  )
   publishNavigationPhase('measuring', requestId)
 
   // --- 1. prepare() ---
@@ -510,6 +578,22 @@ async function run() {
     `${RICH_COUNT}-text shared-corpus batch across widths ${RICH_LAYOUT_SAMPLE_WIDTHS.join('/')}px`,
   )
 
+  // --- Rich pre-wrap chunk stress ---
+  root.innerHTML = '<p>Benchmarking pre-wrap rich line APIs...</p>'
+  await nextFrame()
+  clearCache()
+  const richPreWrapPrepared = richPreWrapTexts.map(text =>
+    prepareWithSegments(text, FONT, { whiteSpace: 'pre-wrap' }),
+  )
+  const richPreWrapResults = buildRichBenchmarks(
+    richPreWrapPrepared,
+    RICH_PRE_WRAP_SAMPLE_WIDTHS,
+    LINE_HEIGHT,
+    'preWrap',
+    `${RICH_PRE_WRAP_COUNT} generated pre-wrap texts with ${RICH_PRE_WRAP_LINE_COUNT} hard-break chunks across widths ${RICH_PRE_WRAP_SAMPLE_WIDTHS.join('/')}px`,
+    RICH_PRE_WRAP_SAMPLE_REPEATS,
+  )
+
   // --- Rich long-form stress ---
   root.innerHTML = '<p>Benchmarking long-form rich line APIs...</p>'
   await nextFrame()
@@ -554,6 +638,11 @@ async function run() {
     <h2 style="color:#4fc3f7;font-family:monospace;font-size:16px;margin:24px 0 8px">Rich line APIs (shared corpus)</h2>
     ${renderBenchmarkTable(richResults, false)}
     <p class="note">${RICH_COUNT} shared-corpus texts prepared with segments. Median ms per batch across widths ${RICH_LAYOUT_SAMPLE_WIDTHS.join('/')}px. This tracks the richer APIs used by shrinkwrap, custom layout, and manual reflow.</p>
+  `
+  root.innerHTML += `
+    <h2 style="color:#4fc3f7;font-family:monospace;font-size:16px;margin:24px 0 8px">Rich line APIs (pre-wrap chunk stress)</h2>
+    ${renderBenchmarkTable(richPreWrapResults, false)}
+    <p class="note">${RICH_PRE_WRAP_COUNT} generated texts in <code>pre-wrap</code> mode, each with ${RICH_PRE_WRAP_LINE_COUNT} explicit hard-break chunks plus tabs, blank lines, and trailing spaces. This is the chunk-heavy canary for manual line layout.</p>
   `
   root.innerHTML += `
     <h2 style="color:#4fc3f7;font-family:monospace;font-size:16px;margin:24px 0 8px">Rich line APIs (Arabic long-form stress)</h2>
@@ -647,7 +736,7 @@ async function run() {
         </tr>
       `).join('')}
     </table>
-    <p class="note">Long-form rows split cold prepare into text analysis and measurement phases for one full corpus text, then report one hot layout pass over the prepared result. They are intended to catch script-specific prepare regressions that the short shared corpus can hide.</p>
+    <p class="note">Long-form rows split cold prepare into text analysis and measurement phases for one full corpus text, then report one hot layout pass over the prepared result. They are intended to catch script-specific prepare regressions and long-breakable-run measurement costs that the short shared corpus can hide.</p>
   `
   root.dataset['topLayoutSink'] = String(topLayoutSink)
   root.dataset['scalingLayoutSink'] = String(scalingLayoutSink)
@@ -659,6 +748,7 @@ async function run() {
     status: 'ready',
     results,
     richResults,
+    richPreWrapResults,
     richLongResults,
     corpusResults,
   }))

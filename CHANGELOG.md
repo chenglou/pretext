@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+## 0.0.4 - 2026-04-02
+
+### Added
+
+- A justification comparison demo that shows native CSS justification, greedy hyphenation, and a Knuth-Plass-style paragraph layout side by side.
+- Machine-readable status dashboards under `status/dashboard.json` and `corpora/dashboard.json` for tooling and release-time inspection.
+
+### Changed
+
+- Browser automation and reporting are more robust: batched sweep transport, phase-aware timeout diagnostics, background-safe correctness runs, and unified Firefox accuracy automation.
+- Rich-line benchmark coverage now includes chunk-heavy and long-breakable stress cases, and chunk lookup in the rich path now uses binary search.
+
+### Fixed
+
+- `layout()`, `layoutWithLines()`, and `layoutNextLine()` stay aligned on narrow `ZWSP` / grapheme-breaking edge cases.
+- The justification comparison demo no longer paints justified lines wider than their column.
+
 ## 0.0.3 - 2026-03-29
 
 ### Changed

@@ -36,6 +36,7 @@ type BenchmarkReport = {
   requestId?: string
   results?: BenchmarkResult[]
   richResults?: BenchmarkResult[]
+  richPreWrapResults?: BenchmarkResult[]
   richLongResults?: BenchmarkResult[]
   corpusResults?: CorpusBenchmarkResult[]
   message?: string
@@ -79,6 +80,13 @@ function printReport(report: BenchmarkReport): void {
   if ((report.richResults ?? []).length > 0) {
     console.log('Rich line APIs (shared corpus):')
     for (const result of report.richResults ?? []) {
+      console.log(`  ${result.label}: ${result.ms < 0.01 ? '<0.01' : result.ms.toFixed(2)}ms`)
+    }
+  }
+
+  if ((report.richPreWrapResults ?? []).length > 0) {
+    console.log('Rich line APIs (pre-wrap chunk stress):')
+    for (const result of report.richPreWrapResults ?? []) {
       console.log(`  ${result.label}: ${result.ms < 0.01 ? '<0.01' : result.ms.toFixed(2)}ms`)
     }
   }

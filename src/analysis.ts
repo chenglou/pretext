@@ -335,6 +335,10 @@ function classifySegmentBreakChar(ch: string, whiteSpaceProfile: WhiteSpaceProfi
   return 'text'
 }
 
+function joinTextParts(parts: string[]): string {
+  return parts.length === 1 ? parts[0]! : parts.join('')
+}
+
 function splitSegmentByBreakKind(
   segment: string,
   isWordLike: boolean,
@@ -343,7 +347,7 @@ function splitSegmentByBreakKind(
 ): SegmentationPiece[] {
   const pieces: SegmentationPiece[] = []
   let currentKind: SegmentBreakKind | null = null
-  let currentText = ''
+  let currentTextParts: string[] = []
   let currentStart = start
   let currentWordLike = false
   let offset = 0
@@ -353,14 +357,14 @@ function splitSegmentByBreakKind(
     const wordLike = kind === 'text' && isWordLike
 
     if (currentKind !== null && kind === currentKind && wordLike === currentWordLike) {
-      currentText += ch
+      currentTextParts.push(ch)
       offset += ch.length
       continue
     }
 
     if (currentKind !== null) {
       pieces.push({
-        text: currentText,
+        text: joinTextParts(currentTextParts),
         isWordLike: currentWordLike,
         kind: currentKind,
         start: currentStart,
@@ -368,7 +372,7 @@ function splitSegmentByBreakKind(
     }
 
     currentKind = kind
-    currentText = ch
+    currentTextParts = [ch]
     currentStart = start + offset
     currentWordLike = wordLike
     offset += ch.length
@@ -376,7 +380,7 @@ function splitSegmentByBreakKind(
 
   if (currentKind !== null) {
     pieces.push({
-      text: currentText,
+      text: joinTextParts(currentTextParts),
       isWordLike: currentWordLike,
       kind: currentKind,
       start: currentStart,
@@ -421,9 +425,10 @@ function mergeUrlLikeRuns(segmentation: MergedSegmentation): MergedSegmentation 
   for (let i = 0; i < segmentation.len; i++) {
     if (kinds[i] !== 'text' || !isUrlLikeRunStart(segmentation, i)) continue
 
+    const mergedParts = [texts[i]!]
     let j = i + 1
     while (j < segmentation.len && !isTextRunBoundary(kinds[j]!)) {
-      texts[i] += texts[j]!
+      mergedParts.push(texts[j]!)
       isWordLike[i] = true
       const endsQueryPrefix = texts[j]!.includes('?')
       kinds[j] = 'text'
@@ -431,6 +436,7 @@ function mergeUrlLikeRuns(segmentation: MergedSegmentation): MergedSegmentation 
       j++
       if (endsQueryPrefix) break
     }
+    texts[i] = joinTextParts(mergedParts)
   }
 
   let compactLen = 0
@@ -483,16 +489,16 @@ function mergeUrlQueryRuns(segmentation: MergedSegmentation): MergedSegmentation
       continue
     }
 
-    let queryText = ''
+    const queryParts: string[] = []
     const queryStart = segmentation.starts[nextIndex]!
     let j = nextIndex
     while (j < segmentation.len && !isTextRunBoundary(segmentation.kinds[j]!)) {
-      queryText += segmentation.texts[j]!
+      queryParts.push(segmentation.texts[j]!)
       j++
     }
 
-    if (queryText.length > 0) {
-      texts.push(queryText)
+    if (queryParts.length > 0) {
+      texts.push(joinTextParts(queryParts))
       isWordLike.push(true)
       kinds.push('text')
       starts.push(queryStart)
@@ -545,18 +551,18 @@ function mergeNumericRuns(segmentation: MergedSegmentation): MergedSegmentation 
     const kind = segmentation.kinds[i]!
 
     if (kind === 'text' && isNumericRunSegment(text) && segmentContainsDecimalDigit(text)) {
-      let mergedText = text
+      const mergedParts = [text]
       let j = i + 1
       while (
         j < segmentation.len &&
         segmentation.kinds[j] === 'text' &&
         isNumericRunSegment(segmentation.texts[j]!)
       ) {
-        mergedText += segmentation.texts[j]!
+        mergedParts.push(segmentation.texts[j]!)
         j++
       }
 
-      texts.push(mergedText)
+      texts.push(joinTextParts(mergedParts))
       isWordLike.push(true)
       kinds.push('text')
       starts.push(segmentation.starts[i]!)
@@ -591,21 +597,24 @@ function mergeAsciiPunctuationChains(segmentation: MergedSegmentation): MergedSe
     const wordLike = segmentation.isWordLike[i]!
 
     if (kind === 'text' && wordLike && asciiPunctuationChainSegmentRe.test(text)) {
-      let mergedText = text
+      const mergedParts = [text]
+      let endsWithJoiners = asciiPunctuationChainTrailingJoinersRe.test(text)
       let j = i + 1
 
       while (
-        asciiPunctuationChainTrailingJoinersRe.test(mergedText) &&
+        endsWithJoiners &&
         j < segmentation.len &&
         segmentation.kinds[j] === 'text' &&
         segmentation.isWordLike[j] &&
         asciiPunctuationChainSegmentRe.test(segmentation.texts[j]!)
       ) {
-        mergedText += segmentation.texts[j]!
+        const nextText = segmentation.texts[j]!
+        mergedParts.push(nextText)
+        endsWithJoiners = asciiPunctuationChainTrailingJoinersRe.test(nextText)
         j++
       }
 
-      texts.push(mergedText)
+      texts.push(joinTextParts(mergedParts))
       isWordLike.push(true)
       kinds.push('text')
       starts.push(segmentation.starts[i]!)
@@ -689,22 +698,24 @@ function mergeGlueConnectedTextRuns(segmentation: MergedSegmentation): MergedSeg
 
   let read = 0
   while (read < segmentation.len) {
-    let text = segmentation.texts[read]!
+    const textParts = [segmentation.texts[read]!]
     let wordLike = segmentation.isWordLike[read]!
     let kind = segmentation.kinds[read]!
     let start = segmentation.starts[read]!
 
     if (kind === 'glue') {
-      let glueText = text
+      const glueParts = [textParts[0]!]
       const glueStart = start
       read++
       while (read < segmentation.len && segmentation.kinds[read] === 'glue') {
-        glueText += segmentation.texts[read]!
+        glueParts.push(segmentation.texts[read]!)
         read++
       }
+      const glueText = joinTextParts(glueParts)
 
       if (read < segmentation.len && segmentation.kinds[read] === 'text') {
-        text = glueText + segmentation.texts[read]!
+        textParts[0] = glueText
+        textParts.push(segmentation.texts[read]!)
         wordLike = segmentation.isWordLike[read]!
         kind = 'text'
         start = glueStart
@@ -722,24 +733,25 @@ function mergeGlueConnectedTextRuns(segmentation: MergedSegmentation): MergedSeg
 
     if (kind === 'text') {
       while (read < segmentation.len && segmentation.kinds[read] === 'glue') {
-        let glueText = ''
+        const glueParts: string[] = []
         while (read < segmentation.len && segmentation.kinds[read] === 'glue') {
-          glueText += segmentation.texts[read]!
+          glueParts.push(segmentation.texts[read]!)
           read++
         }
+        const glueText = joinTextParts(glueParts)
 
         if (read < segmentation.len && segmentation.kinds[read] === 'text') {
-          text += glueText + segmentation.texts[read]!
+          textParts.push(glueText, segmentation.texts[read]!)
           wordLike = wordLike || segmentation.isWordLike[read]!
           read++
           continue
         }
 
-        text += glueText
+        textParts.push(glueText)
       }
     }
 
-    texts.push(text)
+    texts.push(joinTextParts(textParts))
     isWordLike.push(wordLike)
     kinds.push(kind)
     starts.push(start)

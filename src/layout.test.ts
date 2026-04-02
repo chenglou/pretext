@@ -36,6 +36,8 @@ type TestPreparedTextWithSegments = {
 }
 
 type TestLayoutLine = {
+  text: string
+  width: number
   start: TestLayoutCursor
   end: TestLayoutCursor
 }
@@ -141,15 +143,41 @@ function reconstructFromLineBoundaries(
 function collectStreamedLines(
   prepared: TestPreparedTextWithSegments,
   width: number,
+  start: TestLayoutCursor = { segmentIndex: 0, graphemeIndex: 0 },
 ): TestLayoutLine[] {
   const lines: TestLayoutLine[] = []
-  let cursor = { segmentIndex: 0, graphemeIndex: 0 }
+  let cursor = { ...start }
 
   while (true) {
     const line = layoutNextLine(prepared as Parameters<typeof layoutNextLine>[0], cursor, width)
     if (line === null) break
     lines.push(line)
     cursor = line.end
+  }
+
+  return lines
+}
+
+function collectStreamedLinesWithWidths(
+  prepared: TestPreparedTextWithSegments,
+  widths: number[],
+  start: TestLayoutCursor = { segmentIndex: 0, graphemeIndex: 0 },
+): TestLayoutLine[] {
+  const lines: TestLayoutLine[] = []
+  let cursor = { ...start }
+  let widthIndex = 0
+
+  while (true) {
+    const width = widths[widthIndex]
+    if (width === undefined) {
+      throw new Error('collectStreamedLinesWithWidths requires enough widths to finish the paragraph')
+    }
+
+    const line = layoutNextLine(prepared as Parameters<typeof layoutNextLine>[0], cursor, width)
+    if (line === null) break
+    lines.push(line)
+    cursor = line.end
+    widthIndex++
   }
 
   return lines
@@ -164,6 +192,15 @@ function reconstructFromWalkedRanges(
     slices.push(slicePreparedText(prepared, line.start, line.end))
   })
   return slices.join('')
+}
+
+function compareCursors(a: TestLayoutCursor, b: TestLayoutCursor): number {
+  if (a.segmentIndex !== b.segmentIndex) return a.segmentIndex - b.segmentIndex
+  return a.graphemeIndex - b.graphemeIndex
+}
+
+function terminalCursor(prepared: TestPreparedTextWithSegments): TestLayoutCursor {
+  return { segmentIndex: prepared.segments.length, graphemeIndex: 0 }
 }
 
 class TestCanvasRenderingContext2D {
@@ -564,6 +601,54 @@ describe('layout invariants', () => {
     expect(actual).toEqual(expected.lines)
   })
 
+  test('mixed-script canary keeps layoutWithLines and layoutNextLine aligned across CJK, RTL, and emoji', () => {
+    const prepared = prepareWithSegments('Hello 世界 مرحبا 🌍 test', FONT)
+    const width = 80
+    const expected = layoutWithLines(prepared, width, LINE_HEIGHT)
+
+    expect(expected.lines.map(line => line.text)).toEqual(['Hello 世', '界 مرحبا ', '🌍 test'])
+
+    const actual = collectStreamedLines(prepared, width)
+    expect(actual).toEqual(expected.lines)
+  })
+
+  test('layout and layoutWithLines stay aligned when ZWSP triggers narrow grapheme breaking', () => {
+    const cases = [
+      'alpha\u200Bbeta',
+      'alpha\u200Bbeta\u200Cgamma',
+    ]
+
+    for (const text of cases) {
+      const plain = prepare(text, FONT)
+      const rich = prepareWithSegments(text, FONT)
+      const width = 10
+
+      expect(layout(plain, width, LINE_HEIGHT).lineCount).toBe(layoutWithLines(rich, width, LINE_HEIGHT).lineCount)
+    }
+  })
+
+  test('layoutWithLines strips leading collapsible space after a ZWSP break the same way as layoutNextLine', () => {
+    const prepared = prepareWithSegments('生活就像海洋\u200B 只有意志坚定的人才能到达彼岸', FONT)
+    const width = prepared.widths[0]! - 1
+
+    expect(layoutWithLines(prepared, width, LINE_HEIGHT).lines).toEqual(collectStreamedLines(prepared, width))
+  })
+
+  test('layoutNextLine can resume from any fixed-width line start without hidden state', () => {
+    const prepared = prepareWithSegments('foo trans\u00ADatlantic said "hello" to 世界 and waved. alpha\u200Bbeta 🚀', FONT)
+    const width = 90
+    const expected = layoutWithLines(prepared, width, LINE_HEIGHT)
+
+    expect(expected.lines.length).toBeGreaterThan(2)
+
+    for (let i = 0; i < expected.lines.length; i++) {
+      const suffix = collectStreamedLines(prepared, width, expected.lines[i]!.start)
+      expect(suffix).toEqual(expected.lines.slice(i))
+    }
+
+    expect(layoutNextLine(prepared, terminalCursor(prepared), width)).toBeNull()
+  })
+
   test('rich line boundary cursors reconstruct normalized source text exactly', () => {
     const cases = [
       'a b c',
@@ -603,6 +688,53 @@ describe('layout invariants', () => {
 
     expect(result.lines.map(line => line.text).join('')).toBe('foo trans-atlantic')
     expect(reconstructFromLineBoundaries(prepared, result.lines)).toBe('foo trans\u00ADatlantic')
+  })
+
+  test('layoutNextLine variable-width streaming stays contiguous and reconstructs normalized text', () => {
+    const prepared = prepareWithSegments(
+      'foo trans\u00ADatlantic said "hello" to 世界 and waved. According to محمد الأحمد, alpha\u200Bbeta 🚀',
+      FONT,
+    )
+    const widths = [140, 72, 108, 64, 160, 84, 116, 70, 180, 92, 128, 76]
+    const lines = collectStreamedLinesWithWidths(prepared, widths)
+    const expected = prepared.segments.join('')
+
+    expect(lines.length).toBeGreaterThan(2)
+    expect(lines[0]!.start).toEqual({ segmentIndex: 0, graphemeIndex: 0 })
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i]!
+      expect(compareCursors(line.end, line.start)).toBeGreaterThan(0)
+      if (i > 0) {
+        expect(line.start).toEqual(lines[i - 1]!.end)
+      }
+    }
+
+    expect(lines.at(-1)!.end).toEqual(terminalCursor(prepared))
+    expect(reconstructFromLineBoundaries(prepared, lines)).toBe(expected)
+    expect(layoutNextLine(prepared, terminalCursor(prepared), widths.at(-1)!)).toBeNull()
+  })
+
+  test('layoutNextLine variable-width streaming stays contiguous in pre-wrap mode', () => {
+    const prepared = prepareWithSegments('foo\n  bar baz\n\tquux quuz', FONT, { whiteSpace: 'pre-wrap' })
+    const widths = [200, 62, 80, 200, 72, 200]
+    const lines = collectStreamedLinesWithWidths(prepared, widths)
+    const expected = prepared.segments.join('')
+
+    expect(lines.length).toBeGreaterThanOrEqual(4)
+    expect(lines[0]!.start).toEqual({ segmentIndex: 0, graphemeIndex: 0 })
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i]!
+      expect(compareCursors(line.end, line.start)).toBeGreaterThan(0)
+      if (i > 0) {
+        expect(line.start).toEqual(lines[i - 1]!.end)
+      }
+    }
+
+    expect(lines.at(-1)!.end).toEqual(terminalCursor(prepared))
+    expect(reconstructFromLineBoundaries(prepared, lines)).toBe(expected)
+    expect(layoutNextLine(prepared, terminalCursor(prepared), widths.at(-1)!)).toBeNull()
   })
 
   test('pre-wrap mode keeps hanging spaces visible at line end', () => {
