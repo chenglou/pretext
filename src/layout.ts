@@ -678,6 +678,17 @@ export function walkLineRanges(
   })
 }
 
+// Intrinsic-width helper for rich/userland layout work. This asks "how wide is
+// the prepared text when container width is not the thing forcing wraps?".
+// Explicit hard breaks still count, so this returns the widest forced line.
+export function measureNaturalWidth(prepared: PreparedTextWithSegments): number {
+  let maxWidth = 0
+  walkLineRanges(prepared, Number.POSITIVE_INFINITY, line => {
+    if (line.width > maxWidth) maxWidth = line.width
+  })
+  return maxWidth
+}
+
 export function layoutNextLine(
   prepared: PreparedTextWithSegments,
   start: LayoutCursor,

@@ -90,6 +90,28 @@ while (true) {
 
 This usage allows rendering to canvas, SVG, WebGL and (eventually) server-side.
 
+If your manual layout needs a small helper for mixed inline runs, atomic pills, and browser-like boundary whitespace collapse, there is an experimental alpha sidecar at `@chenglou/pretext/inline-flow`. It stays inline-only and `white-space: normal`-only on purpose:
+
+```ts
+import { prepareInlineFlow, walkInlineFlowLines } from '@chenglou/pretext/inline-flow'
+
+const prepared = prepareInlineFlow([
+  { text: 'Ship ', font: '500 17px Inter' },
+  { text: '@maya', font: '700 12px Inter', break: 'never', extraWidth: 22 },
+  { text: "'s rich-note", font: '500 17px Inter' },
+])
+
+walkInlineFlowLines(prepared, 320, line => {
+  // each fragment keeps its source item index, text slice, gapBefore, and cursors
+})
+```
+
+It is intentionally narrow:
+- raw text in, including boundary spaces
+- caller-owned `extraWidth` for padding/border chrome
+- `break: 'never'` for atomic items like chips
+- no nested markup tree, no `pre-wrap`, no attempt to be a general CSS inline formatting engine
+
 ### API Glossary
 
 Use-case 1 APIs:
@@ -103,6 +125,7 @@ Use-case 2 APIs:
 prepareWithSegments(text: string, font: string, options?: { whiteSpace?: 'normal' | 'pre-wrap' }): PreparedTextWithSegments // same as `prepare()`, but returns a richer structure for manual line layouts needs
 layoutWithLines(prepared: PreparedTextWithSegments, maxWidth: number, lineHeight: number): { height: number, lineCount: number, lines: LayoutLine[] } // high-level api for manual layout needs. Accepts a fixed max width for all lines. Similar to `layout()`'s return, but additionally returns the lines info
 walkLineRanges(prepared: PreparedTextWithSegments, maxWidth: number, onLine: (line: LayoutLineRange) => void): number // low-level api for manual layout needs. Accepts a fixed max width for all lines. Calls `onLine` once per line with its actual calculated line width and start/end cursors, without building line text strings. Very useful for certain cases where you wanna speculatively test a few width and height boundaries (e.g. binary search a nice width value by repeatedly calling walkLineRanges and checking the line count, and therefore height, is "nice" too. You can have text messages shrinkwrap and balanced text layout this way). After walkLineRanges calls, you'd call layoutWithLines once, with your satisfying max width, to get the actual lines info.
+measureNaturalWidth(prepared: PreparedTextWithSegments): number // intrinsic-width helper for manual layouts. Returns the widest forced line when width itself is not the thing causing wraps
 layoutNextLine(prepared: PreparedTextWithSegments, start: LayoutCursor, maxWidth: number): LayoutLine | null // iterator-like api for laying out each line with a different width! Returns the LayoutLine starting from `start`, or `null` when the paragraph's exhausted. Pass the previous line's `end` cursor as the next `start`.
 type LayoutLine = {
   text: string // Full text content of this line, e.g. 'hello world'
@@ -118,6 +141,38 @@ type LayoutLineRange = {
 type LayoutCursor = {
   segmentIndex: number // Segment index in prepareWithSegments' prepared rich segment stream
   graphemeIndex: number // Grapheme index within that segment; `0` at segment boundaries
+}
+```
+
+Experimental inline-flow sidecar:
+```ts
+prepareInlineFlow(items: InlineFlowItem[]): PreparedInlineFlow // compile raw inline items with their original text. The compiler owns cross-item collapsed whitespace and caches each item's natural width
+layoutNextInlineFlowLine(prepared: PreparedInlineFlow, maxWidth: number, start?: InlineFlowCursor): InlineFlowLine | null // stream one line at a time through an inline item sequence
+walkInlineFlowLines(prepared: PreparedInlineFlow, maxWidth: number, onLine: (line: InlineFlowLine) => void): number // low-level line walker for inline fragment streams
+measureInlineFlow(prepared: PreparedInlineFlow, maxWidth: number, lineHeight: number): { height: number, lineCount: number } // line counter for inline fragment streams
+type InlineFlowItem = {
+  text: string // raw author text, including leading/trailing collapsible spaces
+  font: string // canvas font shorthand for this item
+  break?: 'normal' | 'never' // `never` keeps the item atomic, like a chip
+  extraWidth?: number // caller-owned horizontal chrome, e.g. padding + border width
+}
+type InlineFlowCursor = {
+  itemIndex: number
+  segmentIndex: number
+  graphemeIndex: number
+}
+type InlineFlowFragment = {
+  itemIndex: number // index back into the original InlineFlowItem array
+  text: string
+  gapBefore: number // collapsed boundary gap paid before this fragment on this line
+  occupiedWidth: number // text width plus extraWidth
+  start: LayoutCursor
+  end: LayoutCursor
+}
+type InlineFlowLine = {
+  fragments: InlineFlowFragment[]
+  width: number
+  end: InlineFlowCursor
 }
 ```
 

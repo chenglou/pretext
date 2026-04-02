@@ -14,6 +14,11 @@
       "import": "./dist/layout.js",
       "default": "./dist/layout.js"
     },
+    "./inline-flow": {
+      "types": "./dist/inline-flow.d.ts",
+      "import": "./dist/inline-flow.js",
+      "default": "./dist/inline-flow.js"
+    },
     "./demos/*": "./pages/demos/*",
     "./assets/*": "./pages/assets/*",
     "./package.json": "./package.json"
