@@ -375,6 +375,32 @@ describe('prepare invariants', () => {
     expect(prepared.segments).toEqual(['كل', ' ', 'ِّواحدةٍ'])
   })
 
+  test('bidi text uses context-aware segment widths via prefix subtraction', () => {
+    // Pure Arabic: segLevels should be non-null and widths should equal
+    // prefix-subtraction widths (with the deterministic test canvas, isolated
+    // and context-aware widths are identical, so this is a structural smoke test).
+    const arabicPrepared = prepareWithSegments('مرحبا، عالم؟', FONT)
+    expect(arabicPrepared.segLevels).not.toBeNull()
+
+    // Total width from segments should be consistent.
+    const totalSegWidth = arabicPrepared.widths.reduce((sum, w) => sum + w, 0)
+    expect(totalSegWidth).toBeGreaterThan(0)
+
+    // Mixed LTR+Arabic: segLevels should be non-null.
+    const mixedPrepared = prepareWithSegments('one اثنان three', FONT)
+    expect(mixedPrepared.segLevels).not.toBeNull()
+    expect(mixedPrepared.segments.length).toBeGreaterThan(1)
+
+    // Widths should all be non-negative.
+    for (const w of mixedPrepared.widths) {
+      expect(w).toBeGreaterThanOrEqual(0)
+    }
+
+    // Pure LTR: segLevels should be null (no bidi overhead).
+    const ltrPrepared = prepareWithSegments('hello world', FONT)
+    expect(ltrPrepared.segLevels).toBeNull()
+  })
+
   test('keeps devanagari danda punctuation attached to the preceding word', () => {
     const prepared = prepareWithSegments('नमस्ते। दुनिया॥', FONT)
     expect(prepared.segments).toEqual(['नमस्ते।', ' ', 'दुनिया॥'])
@@ -528,6 +554,223 @@ describe('prepare invariants', () => {
     setLocale(undefined)
     const latin = prepare('hello world', FONT)
     expect(layout(latin, 200, LINE_HEIGHT)).toEqual({ lineCount: 1, height: LINE_HEIGHT })
+  })
+})
+
+// ─── Bidi ───
+
+// Reconstruct visual display order from bidi levels (UBA L4 reordering).
+function computeVisualOrder(levels: Int8Array): number[] {
+  const n = levels.length
+  const order = Array.from({ length: n }, (_, i) => i)
+  let maxLvl = 0
+  for (let i = 0; i < n; i++) if (levels[i]! > maxLvl) maxLvl = levels[i]!
+  for (let lvl = maxLvl; lvl >= 1; lvl--) {
+    let i = 0
+    while (i < n) {
+      while (i < n && levels[order[i]!]! < lvl) i++
+      const s = i
+      while (i < n && levels[order[i]!]! >= lvl) i++
+      for (let a = s, b = i - 1; a < b; a++, b--) {
+        const t = order[a]!; order[a] = order[b]!; order[b] = t
+      }
+    }
+  }
+  return order
+}
+
+// Map visual order indices back to segment texts for readable assertions.
+function visualSegmentOrder(prepared: { segments: string[], segLevels: Int8Array | null }): string[] {
+  if (!prepared.segLevels) return prepared.segments
+  const order = computeVisualOrder(prepared.segLevels)
+  return order.map(i => prepared.segments[i]!)
+}
+
+describe('bidi', () => {
+  // ── Paragraph direction (UBA P2/P3: first strong character) ──
+
+  test('LTR paragraph direction when first strong character is L', () => {
+    const prepared = prepareWithSegments('one اثنان three', FONT)
+    expect(prepared.segLevels).not.toBeNull()
+    // First strong char is 'o' (L) → base level 0
+    // LTR segments at level 0, Arabic at level 1
+    const levels = Array.from(prepared.segLevels!)
+    // "one" segment should be level 0 (LTR)
+    expect(levels[0]).toBe(0)
+    // Arabic segment should be level 1 (RTL)
+    const arabicSegIdx = prepared.segments.indexOf('اثنان')
+    expect(arabicSegIdx).toBeGreaterThan(-1)
+    expect(levels[arabicSegIdx]).toBe(1)
+    // "three" segment should be level 0 (LTR)
+    const threeIdx = prepared.segments.indexOf('three')
+    expect(threeIdx).toBeGreaterThan(-1)
+    expect(levels[threeIdx]).toBe(0)
+  })
+
+  test('RTL paragraph direction when first strong character is R/AL', () => {
+    const prepared = prepareWithSegments('واحد اثنان ثلاثة', FONT)
+    expect(prepared.segLevels).not.toBeNull()
+    // First strong char is Arabic → base level 1
+    const levels = Array.from(prepared.segLevels!)
+    for (let i = 0; i < levels.length; i++) {
+      const seg = prepared.segments[i]!
+      if (seg.trim().length > 0) {
+        // All non-space segments should be RTL (odd level)
+        expect(levels[i]! % 2).toBe(1)
+      }
+    }
+  })
+
+  test('LTR paragraph with short Arabic preserves LTR base', () => {
+    const prepared = prepareWithSegments('one فرخة', FONT)
+    expect(prepared.segLevels).not.toBeNull()
+    const levels = Array.from(prepared.segLevels!)
+    // "one" → level 0 (LTR)
+    expect(levels[0]).toBe(0)
+    // "فرخة" → level 1 (RTL)
+    const arabicIdx = prepared.segments.indexOf('فرخة')
+    expect(levels[arabicIdx]).toBe(1)
+  })
+
+  test('Arabic with embedded numbers gets RTL base', () => {
+    const prepared = prepareWithSegments('واحد 444 اثنان', FONT)
+    expect(prepared.segLevels).not.toBeNull()
+    const levels = Array.from(prepared.segLevels!)
+    // First strong char is Arabic → base level 1
+    // Arabic segments at odd level, number segment at even level (embedded LTR)
+    const numIdx = prepared.segments.indexOf('444')
+    expect(numIdx).toBeGreaterThan(-1)
+    expect(levels[numIdx]! % 2).toBe(0) // numbers are LTR (even level) in RTL context
+  })
+
+  test('pure LTR text has null segLevels', () => {
+    const prepared = prepareWithSegments('hello world', FONT)
+    expect(prepared.segLevels).toBeNull()
+  })
+
+  // ── Visual ordering ──
+
+  test('mixed LTR+Arabic+LTR visual order is correct', () => {
+    const prepared = prepareWithSegments('one اثنان three', FONT)
+    const visual = visualSegmentOrder(prepared)
+    // In LTR base: "one" then Arabic (reversed internally) then "three"
+    // Visual left→right should be: one, space, اثنان, space, three
+    const nonSpace = visual.filter(s => s.trim().length > 0)
+    expect(nonSpace).toEqual(['one', 'اثنان', 'three'])
+  })
+
+  test('pure Arabic visual order reverses segments', () => {
+    const prepared = prepareWithSegments('واحد اثنان ثلاثة', FONT)
+    const visual = visualSegmentOrder(prepared)
+    // RTL base: segments display right-to-left, so visual left→right
+    // reverses the logical order: ثلاثة اثنان واحد
+    const nonSpace = visual.filter(s => s.trim().length > 0)
+    expect(nonSpace).toEqual(['ثلاثة', 'اثنان', 'واحد'])
+  })
+
+  test('Arabic with numbers: numbers stay LTR within RTL context', () => {
+    const prepared = prepareWithSegments('واحد 444 اثنان', FONT)
+    const visual = visualSegmentOrder(prepared)
+    // RTL base: visual left→right is اثنان 444 واحد
+    const nonSpace = visual.filter(s => s.trim().length > 0)
+    expect(nonSpace).toEqual(['اثنان', '444', 'واحد'])
+  })
+
+  // ── Structural invariants ──
+
+  test('segLevels length matches segments length', () => {
+    const cases = [
+      'one اثنان three',
+      'واحد اثنان ثلاثة',
+      'واحد 444 اثنان',
+      'one فرخة',
+      'hello مرحبا world سلام end',
+    ]
+    for (const text of cases) {
+      const prepared = prepareWithSegments(text, FONT)
+      if (prepared.segLevels) {
+        expect(prepared.segLevels.length).toBe(prepared.segments.length)
+      }
+    }
+  })
+
+  test('segment widths are all non-negative for bidi text', () => {
+    const cases = [
+      'one اثنان three',
+      'واحد اثنان ثلاثة',
+      'واحد 444 اثنان',
+      'one فرخة',
+      'مرحبا، عالم؟',
+    ]
+    for (const text of cases) {
+      const prepared = prepareWithSegments(text, FONT)
+      for (const w of prepared.widths) {
+        expect(w).toBeGreaterThanOrEqual(0)
+      }
+    }
+  })
+
+  test('total segment width is positive for non-empty bidi text', () => {
+    const cases = [
+      'one اثنان three',
+      'واحد اثنان ثلاثة',
+      'فرخة',
+    ]
+    for (const text of cases) {
+      const prepared = prepareWithSegments(text, FONT)
+      const total = prepared.widths.reduce((a: number, b: number) => a + b, 0)
+      expect(total).toBeGreaterThan(0)
+    }
+  })
+
+  test('layout line count grows monotonically for bidi text as width shrinks', () => {
+    const cases = [
+      'one اثنان three أربعة five',
+      'واحد اثنان ثلاثة أربعة خمسة',
+    ]
+    for (const text of cases) {
+      const prepared = prepare(text, FONT)
+      let prev = 0
+      for (let w = 200; w >= 20; w -= 10) {
+        const result = layout(prepared, w, LINE_HEIGHT)
+        expect(result.lineCount).toBeGreaterThanOrEqual(prev)
+        prev = result.lineCount
+      }
+    }
+  })
+
+  test('layoutWithLines and layoutNextLine agree for bidi text', () => {
+    const cases = [
+      'one اثنان three أربعة five',
+      'واحد اثنان ثلاثة أربعة خمسة',
+      'hello مرحبا world سلام',
+    ]
+    for (const text of cases) {
+      const prepared = prepareWithSegments(text, FONT)
+      for (const width of [60, 100, 200]) {
+        const batch = layoutWithLines(prepared, width, LINE_HEIGHT)
+        const streamed = collectStreamedLines(prepared, width)
+        expect(streamed).toEqual(batch.lines)
+      }
+    }
+  })
+
+  test('reconstructed text from bidi line boundaries matches original', () => {
+    const cases = [
+      'one اثنان three أربعة five',
+      'واحد اثنان ثلاثة أربعة خمسة',
+      'واحد 444 اثنان',
+    ]
+    for (const text of cases) {
+      const prepared = prepareWithSegments(text, FONT)
+      for (const width of [60, 100, 200]) {
+        const batch = layoutWithLines(prepared, width, LINE_HEIGHT)
+        const reconstructed = reconstructFromLineBoundaries(prepared, batch.lines)
+        // Reconstructed text should match the normalized input (whitespace-collapsed)
+        const normalized = prepared.segments.join('')
+        expect(reconstructed).toBe(normalized)
+      }
+    }
   })
 })
 

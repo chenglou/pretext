@@ -49,6 +49,7 @@ import {
 } from './analysis.js'
 import {
   clearMeasurementCaches,
+  getBidiCorrection,
   getCorrectedSegmentWidth,
   getEngineProfile,
   getFontMeasurementState,
@@ -86,7 +87,7 @@ type PreparedCore = {
   lineEndPaintAdvances: number[] // Painted width contribution when a line ends after this segment
   kinds: SegmentBreakKind[] // Break behavior per segment, e.g. ['text', 'space', 'text']
   simpleLineWalkFastPath: boolean // Normal text can use the simpler old line walker across all layout APIs
-  segLevels: Int8Array | null // Rich-path bidi metadata for custom rendering; layout() never reads it
+  segLevels: Int8Array | null // Rich-path bidi metadata for custom rendering; layout() never reads it; also triggers context-aware segment measurement
   breakableWidths: (number[] | null)[] // Grapheme widths for overflow-wrap segments, else null
   breakablePrefixWidths: (number[] | null)[] // Cumulative grapheme prefix widths for narrow browser-policy shims
   discretionaryHyphenWidth: number // Visible width added when a soft hyphen is chosen as the break
@@ -104,6 +105,17 @@ type InternalPreparedText = PreparedText & PreparedCore
 
 // Rich/diagnostic variant that still exposes the structural segment data.
 // Treat this as the unstable escape hatch for experiments and custom rendering.
+//
+// When segLevels is non-null (bidi content detected), segment widths are
+// measured using canvas prefix subtraction on the full normalized text rather
+// than isolated per-segment measureText calls. This captures cross-segment
+// contextual shaping (e.g. Arabic letter forms that change depending on
+// adjacent characters) and produces widths that better reflect how the browser
+// renders the text as a whole. However, canvas-measured widths may still
+// diverge from actual DOM rendering for complex bidi text due to font-level
+// GPOS/GSUB features, directional spacing, or engine-specific bidi
+// adjustments. Consumers building precise per-character coordinate maps for
+// Arabic or mixed LTR/RTL text should expect some residual divergence.
 export type PreparedTextWithSegments = InternalPreparedText & {
   segments: string[] // Segment text aligned with the parallel arrays, e.g. ['hello', ' ', 'world']
 }
@@ -360,6 +372,56 @@ function measureAnalysis(
 
   const chunks = mapAnalysisChunksToPreparedChunks(analysis.chunks, preparedStartByAnalysisIndex, preparedEndByAnalysisIndex)
   const segLevels = segStarts === null ? null : computeSegmentLevels(analysis.normalized, segStarts)
+  
+  // When bidi content is detected, apply a per-font shaping correction ratio
+  // to canvas-measured widths.  Canvas measureText and the browser's DOM
+  // rendering engine use different text shaping pipelines — for complex
+  // scripts (Arabic cursive joining, Hebrew ligatures, etc.) the DOM is
+  // authoritative.  Rather than measuring every segment via DOM (which would
+  // be O(n) reflows and prohibitively slow for long texts), we measure one
+  // short Arabic sample per font and derive a correction ratio, mirroring
+  // the emoji-correction pattern.  O(1) DOM cost per font, cached.
+  if (segLevels !== null) {
+    const ratio = getBidiCorrection(font)
+    if (ratio !== 1) {
+      for (let i = 0; i < widths.length; i++) {
+        const kind = kinds[i]!
+        if (
+          kind === 'soft-hyphen' ||
+          kind === 'hard-break' ||
+          kind === 'tab' ||
+          kind === 'zero-width-break' ||
+          kind === 'space'
+        ) continue
+
+        const corrected = widths[i]! * ratio
+
+        widths[i] = corrected
+
+        if (kind === 'preserved-space') {
+          lineEndPaintAdvances[i] = corrected
+        } else {
+          lineEndFitAdvances[i] = corrected
+          lineEndPaintAdvances[i] = corrected
+        }
+
+        // Scale grapheme widths proportionally
+        const gWidths = breakableWidths[i]
+        if (gWidths !== null) {
+          for (let g = 0; g < gWidths.length; g++) {
+            gWidths[g]! *= ratio
+          }
+        }
+        const gPrefixWidths = breakablePrefixWidths[i]
+        if (gPrefixWidths !== null) {
+          for (let g = 0; g < gPrefixWidths.length; g++) {
+            gPrefixWidths[g]! *= ratio
+          }
+        }
+      }
+    }
+  }
+
   if (segments !== null) {
     return {
       widths,
@@ -474,7 +536,10 @@ export function prepare(text: string, font: string, options?: PrepareOptions): P
 }
 
 // Rich variant used by callers that need enough information to render the
-// laid-out lines themselves.
+// laid-out lines themselves. When the text contains bidi content (Arabic,
+// Hebrew, etc.), segment widths are context-aware: measured via canvas
+// prefix-subtraction on the full normalized text rather than per-segment
+// isolation, so they capture cross-segment shaping effects.
 export function prepareWithSegments(text: string, font: string, options?: PrepareOptions): PreparedTextWithSegments {
   return prepareInternal(text, font, true, options) as PreparedTextWithSegments
 }

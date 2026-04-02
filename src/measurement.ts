@@ -224,8 +224,61 @@ export function getFontMeasurementState(font: string, needsEmojiCorrection: bool
   return { cache, fontSize, emojiCorrection }
 }
 
+// Arabic/Hebrew shaping correction: canvas measureText and the DOM rendering
+// engine use different text shaping pipelines. For complex scripts, the DOM
+// applies full HarfBuzz shaping (contextual alternates, ligatures, GPOS
+// kerning) while canvas often measures with a simpler pipeline.
+//
+// Like emoji correction, we measure a short representative Arabic sample once
+// per font via DOM and derive a ratio (domWidth / canvasWidth). This ratio is
+// cached and applied to all bidi segment widths. The correction is approximate
+// but keeps prepare() O(1)-DOM-cost per font regardless of text length.
+//
+// The sample includes common Arabic letter forms in initial, medial, final,
+// and isolated positions to capture a representative average of the shaping
+// divergence.
+
+const bidiCorrectionCache = new Map<string, number>()
+
+// Sample covering common joining forms: initial/medial/final/isolated + spaces
+const BIDI_SAMPLE = 'واحد اثنان ثلاثة أربعة خمسة ستة سبعة ثمانية تسعة عشرة'
+
+export function getBidiCorrection(font: string): number {
+  let ratio = bidiCorrectionCache.get(font)
+  if (ratio !== undefined) return ratio
+
+  ratio = 1 // default: no correction
+  const ctx = getMeasureContext()
+  ctx.font = font
+  const canvasW = ctx.measureText(BIDI_SAMPLE).width
+
+  if (
+    canvasW > 0 &&
+    typeof document !== 'undefined' &&
+    document.body !== null
+  ) {
+    const span = document.createElement('span')
+    span.style.font = font
+    span.style.display = 'inline-block'
+    span.style.visibility = 'hidden'
+    span.style.position = 'absolute'
+    span.style.whiteSpace = 'pre'
+    span.textContent = BIDI_SAMPLE
+    document.body.appendChild(span)
+    const domW = span.getBoundingClientRect().width
+    document.body.removeChild(span)
+    if (domW > 0) {
+      ratio = domW / canvasW
+    }
+  }
+
+  bidiCorrectionCache.set(font, ratio)
+  return ratio
+}
+
 export function clearMeasurementCaches(): void {
   segmentMetricCaches.clear()
   emojiCorrectionCache.clear()
+  bidiCorrectionCache.clear()
   sharedGraphemeSegmenter = null
 }

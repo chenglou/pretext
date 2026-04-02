@@ -78,7 +78,15 @@ function computeBidiLevels(str: string): Int8Array | null {
 
   if (numBidi === 0) return null
 
-  const startLevel = (len / numBidi) < 0.3 ? 0 : 1
+  // Determine paragraph embedding level using the first strong character
+  // (UBA rules P2/P3). This replaces the broken ratio heuristic
+  // ((len / numBidi) < 0.3 was always false since len >= numBidi).
+  let startLevel = 0
+  for (let i = 0; i < len; i++) {
+    const t = types[i]!
+    if (t === 'L') { startLevel = 0; break }
+    if (t === 'R' || t === 'AL') { startLevel = 1; break }
+  }
   const levels = new Int8Array(len)
   for (let i = 0; i < len; i++) levels[i] = startLevel
 
