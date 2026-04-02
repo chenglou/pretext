@@ -63,6 +63,8 @@ const { lines } = layoutWithLines(prepared, 320, 26) // 320px max width, 26px li
 for (let i = 0; i < lines.length; i++) ctx.fillText(lines[i].text, 0, i * 26)
 ```
 
+Each rich line also carries `sourceOffset` / `sourceLength`, so callers can map a rendered line back to the original input without reconstructing whitespace normalization themselves.
+
 - `walkLineRanges()` gives you line widths and cursors without building the text strings:
 
 ```ts
@@ -88,6 +90,16 @@ while (true) {
 }
 ```
 
+- `cursorToSourceOffset()` / `cursorRangeToSourceSpan()` convert rich cursors back into original-source offsets:
+
+```ts
+const line = layoutNextLine(prepared, cursor, width)
+if (line) {
+  const start = cursorToSourceOffset(prepared, line.start)
+  const { sourceOffset, sourceLength } = cursorRangeToSourceSpan(prepared, line.start, line.end)
+}
+```
+
 This usage allows rendering to canvas, SVG, WebGL and (eventually) server-side.
 
 ### API Glossary
@@ -109,6 +121,8 @@ type LayoutLine = {
   width: number // Measured width of this line, e.g. 87.5
   start: LayoutCursor // Inclusive start cursor in prepared segments/graphemes
   end: LayoutCursor // Exclusive end cursor in prepared segments/graphemes
+  sourceOffset: number // Source offset in the original input covered by this line
+  sourceLength: number // Source span length in the original input covered by this line
 }
 type LayoutLineRange = {
   width: number // Measured width of this line, e.g. 87.5
@@ -125,6 +139,8 @@ Other helpers:
 ```ts
 clearCache(): void // clears Pretext's shared internal caches used by prepare() and prepareWithSegments(). Useful if your app cycles through many different fonts or text variants and you want to release the accumulated cache
 setLocale(locale?: string): void // optional (by default we use the current locale). Sets locale for future prepare() and prepareWithSegments(). Internally, it also calls clearCache(). Setting a new locale doesn't affect existing prepare() and prepareWithSegments() states (no mutations to them)
+cursorToSourceOffset(prepared: PreparedTextWithSegments, cursor: LayoutCursor): number // converts a rich cursor back into an offset in the original input text
+cursorRangeToSourceSpan(prepared: PreparedTextWithSegments, start: LayoutCursor, end: LayoutCursor): { sourceOffset: number, sourceLength: number } // converts a rich cursor range back into the original input span
 ```
 
 ## Caveats

@@ -106,6 +106,8 @@ type InternalPreparedText = PreparedText & PreparedCore
 // Treat this as the unstable escape hatch for experiments and custom rendering.
 export type PreparedTextWithSegments = InternalPreparedText & {
   segments: string[] // Segment text aligned with the parallel arrays, e.g. ['hello', ' ', 'world']
+  segmentSourceOffsets: number[] // Source offset per segment in the original input
+  segmentSourceLengths: number[] // Source span length per segment in the original input
 }
 
 export type LayoutCursor = {
@@ -123,6 +125,8 @@ export type LayoutLine = {
   width: number // Measured width of this line, e.g. 87.5
   start: LayoutCursor // Inclusive start cursor in prepared segments/graphemes
   end: LayoutCursor // Exclusive end cursor in prepared segments/graphemes
+  sourceOffset: number // Source offset of the covered text in the original input
+  sourceLength: number // Source span length of the covered text in the original input
 }
 
 export type LayoutLineRange = {
@@ -171,6 +175,8 @@ function createEmptyPrepared(includeSegments: boolean): InternalPreparedText | P
       tabStopAdvance: 0,
       chunks: [],
       segments: [],
+      segmentSourceOffsets: [],
+      segmentSourceLengths: [],
     } as unknown as PreparedTextWithSegments
   }
   return {
@@ -214,6 +220,9 @@ function measureAnalysis(
   const breakableWidths: (number[] | null)[] = []
   const breakablePrefixWidths: (number[] | null)[] = []
   const segments = includeSegments ? [] as string[] : null
+  const segmentSourceOffsets = includeSegments ? [] as number[] : null
+  const segmentSourceLengths = includeSegments ? [] as number[] : null
+  const sourceBoundaries = includeSegments ? analysis.sourceBoundaries ?? null : null
   const preparedStartByAnalysisIndex = Array.from<number>({ length: analysis.len })
   const preparedEndByAnalysisIndex = Array.from<number>({ length: analysis.len })
 
@@ -224,6 +233,8 @@ function measureAnalysis(
     lineEndPaintAdvance: number,
     kind: SegmentBreakKind,
     start: number,
+    sourceOffset: number,
+    sourceLength: number,
     breakable: number[] | null,
     breakablePrefix: number[] | null,
   ): void {
@@ -238,6 +249,10 @@ function measureAnalysis(
     breakableWidths.push(breakable)
     breakablePrefixWidths.push(breakablePrefix)
     if (segments !== null) segments.push(text)
+    if (segmentSourceOffsets !== null && segmentSourceLengths !== null) {
+      segmentSourceOffsets.push(sourceOffset)
+      segmentSourceLengths.push(sourceLength)
+    }
   }
 
   for (let mi = 0; mi < analysis.len; mi++) {
@@ -246,6 +261,9 @@ function measureAnalysis(
     const segWordLike = analysis.isWordLike[mi]!
     const segKind = analysis.kinds[mi]!
     const segStart = analysis.starts[mi]!
+    const segSourceOffset = sourceBoundaries?.[segStart] ?? segStart
+    const segSourceEnd = sourceBoundaries?.[segStart + segText.length] ?? (segStart + segText.length)
+    const segSourceLength = segSourceEnd - segSourceOffset
 
     if (segKind === 'soft-hyphen') {
       pushMeasuredSegment(
@@ -255,6 +273,8 @@ function measureAnalysis(
         discretionaryHyphenWidth,
         segKind,
         segStart,
+        segSourceOffset,
+        segSourceLength,
         null,
         null,
       )
@@ -263,13 +283,13 @@ function measureAnalysis(
     }
 
     if (segKind === 'hard-break') {
-      pushMeasuredSegment(segText, 0, 0, 0, segKind, segStart, null, null)
+      pushMeasuredSegment(segText, 0, 0, 0, segKind, segStart, segSourceOffset, segSourceLength, null, null)
       preparedEndByAnalysisIndex[mi] = widths.length
       continue
     }
 
     if (segKind === 'tab') {
-      pushMeasuredSegment(segText, 0, 0, 0, segKind, segStart, null, null)
+      pushMeasuredSegment(segText, 0, 0, 0, segKind, segStart, segSourceOffset, segSourceLength, null, null)
       preparedEndByAnalysisIndex[mi] = widths.length
       continue
     }
@@ -303,7 +323,9 @@ function measureAnalysis(
 
         const unitMetrics = getSegmentMetrics(unitText, cache)
         const w = getCorrectedSegmentWidth(unitText, unitMetrics, emojiCorrection)
-        pushMeasuredSegment(unitText, w, w, w, 'text', segStart + unitStart, null, null)
+        const unitSourceOffset = sourceBoundaries?.[segStart + unitStart] ?? (segStart + unitStart)
+        const unitSourceEnd = sourceBoundaries?.[segStart + unitStart + unitText.length] ?? (segStart + unitStart + unitText.length)
+        pushMeasuredSegment(unitText, w, w, w, 'text', segStart + unitStart, unitSourceOffset, unitSourceEnd - unitSourceOffset, null, null)
 
         unitText = grapheme
         unitStart = gs.index
@@ -312,7 +334,9 @@ function measureAnalysis(
       if (unitText.length > 0) {
         const unitMetrics = getSegmentMetrics(unitText, cache)
         const w = getCorrectedSegmentWidth(unitText, unitMetrics, emojiCorrection)
-        pushMeasuredSegment(unitText, w, w, w, 'text', segStart + unitStart, null, null)
+        const unitSourceOffset = sourceBoundaries?.[segStart + unitStart] ?? (segStart + unitStart)
+        const unitSourceEnd = sourceBoundaries?.[segStart + unitStart + unitText.length] ?? (segStart + unitStart + unitText.length)
+        pushMeasuredSegment(unitText, w, w, w, 'text', segStart + unitStart, unitSourceOffset, unitSourceEnd - unitSourceOffset, null, null)
       }
       preparedEndByAnalysisIndex[mi] = widths.length
       continue
@@ -340,6 +364,8 @@ function measureAnalysis(
         lineEndPaintAdvance,
         segKind,
         segStart,
+        segSourceOffset,
+        segSourceLength,
         graphemeWidths,
         graphemePrefixWidths,
       )
@@ -351,6 +377,8 @@ function measureAnalysis(
         lineEndPaintAdvance,
         segKind,
         segStart,
+        segSourceOffset,
+        segSourceLength,
         null,
         null,
       )
@@ -374,6 +402,8 @@ function measureAnalysis(
       tabStopAdvance,
       chunks,
       segments,
+      segmentSourceOffsets,
+      segmentSourceLengths,
     } as unknown as PreparedTextWithSegments
   }
   return {
@@ -427,7 +457,7 @@ function prepareInternal(
   includeSegments: boolean,
   options?: PrepareOptions,
 ): InternalPreparedText | PreparedTextWithSegments {
-  const analysis = analyzeText(text, getEngineProfile(), options?.whiteSpace)
+  const analysis = analyzeText(text, getEngineProfile(), options?.whiteSpace, includeSegments)
   return measureAnalysis(analysis, font, includeSegments)
 }
 
@@ -526,6 +556,55 @@ function getLineTextCache(prepared: PreparedTextWithSegments): Map<number, strin
   return cache
 }
 
+function getPreparedSourceEnd(prepared: PreparedTextWithSegments): number {
+  const lastIndex = prepared.segmentSourceOffsets.length - 1
+  if (lastIndex < 0) return 0
+  return prepared.segmentSourceOffsets[lastIndex]! + prepared.segmentSourceLengths[lastIndex]!
+}
+
+function cursorToSourceOffsetWithCache(
+  prepared: PreparedTextWithSegments,
+  cache: Map<number, string[]>,
+  cursor: LayoutCursor,
+): number {
+  if (prepared.segments.length === 0) return 0
+  if (cursor.segmentIndex <= 0 && cursor.graphemeIndex <= 0) {
+    return prepared.segmentSourceOffsets[0]!
+  }
+  if (cursor.segmentIndex >= prepared.segments.length) {
+    return getPreparedSourceEnd(prepared)
+  }
+
+  const segmentIndex = cursor.segmentIndex
+  const segmentSourceOffset = prepared.segmentSourceOffsets[segmentIndex]!
+  const segmentSourceLength = prepared.segmentSourceLengths[segmentIndex]!
+  if (cursor.graphemeIndex <= 0) return segmentSourceOffset
+
+  const graphemes = getSegmentGraphemes(segmentIndex, prepared.segments, cache)
+  if (cursor.graphemeIndex >= graphemes.length) {
+    return segmentSourceOffset + segmentSourceLength
+  }
+
+  let sourceDelta = 0
+  for (let i = 0; i < cursor.graphemeIndex; i++) {
+    sourceDelta += graphemes[i]!.length
+  }
+  return segmentSourceOffset + Math.min(sourceDelta, segmentSourceLength)
+}
+
+function cursorRangeToSourceSpanWithCache(
+  prepared: PreparedTextWithSegments,
+  cache: Map<number, string[]>,
+  start: LayoutCursor,
+  end: LayoutCursor,
+): { sourceOffset: number; sourceLength: number } {
+  const sourceStart = cursorToSourceOffsetWithCache(prepared, cache, start)
+  const sourceEnd = cursorToSourceOffsetWithCache(prepared, cache, end)
+  return sourceStart <= sourceEnd
+    ? { sourceOffset: sourceStart, sourceLength: sourceEnd - sourceStart }
+    : { sourceOffset: sourceEnd, sourceLength: sourceStart - sourceEnd }
+}
+
 function lineHasDiscretionaryHyphen(
   kinds: SegmentBreakKind[],
   startSegmentIndex: number,
@@ -587,6 +666,18 @@ function createLayoutLine(
   endSegmentIndex: number,
   endGraphemeIndex: number,
 ): LayoutLine {
+  const sourceSpan = cursorRangeToSourceSpanWithCache(
+    prepared,
+    cache,
+    {
+      segmentIndex: startSegmentIndex,
+      graphemeIndex: startGraphemeIndex,
+    },
+    {
+      segmentIndex: endSegmentIndex,
+      graphemeIndex: endGraphemeIndex,
+    },
+  )
   return {
     text: buildLineTextFromRange(
       prepared.segments,
@@ -606,6 +697,8 @@ function createLayoutLine(
       segmentIndex: endSegmentIndex,
       graphemeIndex: endGraphemeIndex,
     },
+    sourceOffset: sourceSpan.sourceOffset,
+    sourceLength: sourceSpan.sourceLength,
   }
 }
 
@@ -676,6 +769,21 @@ export function walkLineRanges(
   return walkPreparedLines(getInternalPrepared(prepared), maxWidth, line => {
     onLine(toLayoutLineRange(line))
   })
+}
+
+export function cursorToSourceOffset(
+  prepared: PreparedTextWithSegments,
+  cursor: LayoutCursor,
+): number {
+  return cursorToSourceOffsetWithCache(prepared, getLineTextCache(prepared), cursor)
+}
+
+export function cursorRangeToSourceSpan(
+  prepared: PreparedTextWithSegments,
+  start: LayoutCursor,
+  end: LayoutCursor,
+): { sourceOffset: number; sourceLength: number } {
+  return cursorRangeToSourceSpanWithCache(prepared, getLineTextCache(prepared), start, end)
 }
 
 export function layoutNextLine(

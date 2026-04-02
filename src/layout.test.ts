@@ -17,6 +17,8 @@ let layout: LayoutModule['layout']
 let layoutWithLines: LayoutModule['layoutWithLines']
 let layoutNextLine: LayoutModule['layoutNextLine']
 let walkLineRanges: LayoutModule['walkLineRanges']
+let cursorToSourceOffset: LayoutModule['cursorToSourceOffset']
+let cursorRangeToSourceSpan: LayoutModule['cursorRangeToSourceSpan']
 let clearCache: LayoutModule['clearCache']
 let setLocale: LayoutModule['setLocale']
 let countPreparedLines: LineBreakModule['countPreparedLines']
@@ -230,6 +232,8 @@ beforeAll(async () => {
     layoutWithLines,
     layoutNextLine,
     walkLineRanges,
+    cursorToSourceOffset,
+    cursorRangeToSourceSpan,
     clearCache,
     setLocale,
   } = mod)
@@ -250,6 +254,8 @@ describe('prepare invariants', () => {
   test('collapses ordinary whitespace runs and trims the edges', () => {
     const prepared = prepareWithSegments('  Hello\t \n  World  ', FONT)
     expect(prepared.segments).toEqual(['Hello', ' ', 'World'])
+    expect(prepared.segmentSourceOffsets).toEqual([2, 7, 12])
+    expect(prepared.segmentSourceLengths).toEqual([5, 5, 5])
   })
 
   test('pre-wrap mode keeps ordinary spaces instead of collapsing them', () => {
@@ -268,6 +274,11 @@ describe('prepare invariants', () => {
     const prepared = prepareWithSegments('Hello\r\nWorld', FONT, { whiteSpace: 'pre-wrap' })
     expect(prepared.segments).toEqual(['Hello', '\n', 'World'])
     expect(prepared.kinds).toEqual(['text', 'hard-break', 'text'])
+  })
+
+  test('pre-wrap mode also normalizes CRLF on the simple prepare path', () => {
+    const prepared = prepare('Hello\r\nWorld', FONT, { whiteSpace: 'pre-wrap' })
+    expect(layout(prepared, 200, LINE_HEIGHT).lineCount).toBe(2)
   })
 
   test('pre-wrap mode keeps tabs as explicit segments', () => {
@@ -556,6 +567,8 @@ describe('layout invariants', () => {
       width: widthOfHello,
       start: { segmentIndex: 0, graphemeIndex: 0 },
       end: { segmentIndex: 1, graphemeIndex: 0 },
+      sourceOffset: 0,
+      sourceLength: 5,
     }])
   })
 
@@ -573,6 +586,22 @@ describe('layout invariants', () => {
     expect(rich.lines.map(line => line.text).join('')).toBe('Superlongword')
     expect(rich.lines[0]!.start).toEqual({ segmentIndex: 0, graphemeIndex: 0 })
     expect(rich.lines.at(-1)!.end).toEqual({ segmentIndex: 1, graphemeIndex: 0 })
+    expect(cursorToSourceOffset(prepared, rich.lines[0]!.end)).toBe(rich.lines[0]!.sourceOffset + rich.lines[0]!.sourceLength)
+  })
+
+  test('rich lines preserve source spans through collapsed whitespace normalization', () => {
+    const source = '  foo   bar  '
+    const prepared = prepareWithSegments(source, FONT)
+    const lines = layoutWithLines(prepared, 200, LINE_HEIGHT)
+    expect(lines.lines).toHaveLength(1)
+    expect(lines.lines[0]!.text).toBe('foo bar')
+    expect(lines.lines[0]!.sourceOffset).toBe(2)
+    expect(lines.lines[0]!.sourceLength).toBe(9)
+    expect(source.slice(lines.lines[0]!.sourceOffset, lines.lines[0]!.sourceOffset + lines.lines[0]!.sourceLength)).toBe('foo   bar')
+    expect(cursorRangeToSourceSpan(prepared, lines.lines[0]!.start, lines.lines[0]!.end)).toEqual({
+      sourceOffset: 2,
+      sourceLength: 9,
+    })
   })
 
   test('mixed-direction text is a stable smoke test', () => {
@@ -866,6 +895,7 @@ describe('layout invariants', () => {
       start: { segmentIndex: number, graphemeIndex: number }
       end: { segmentIndex: number, graphemeIndex: number }
     }> = []
+    const sourceSpans: Array<{ sourceOffset: number, sourceLength: number }> = []
 
     const lineCount = walkLineRanges(prepared, width, line => {
       actual.push({
@@ -873,6 +903,7 @@ describe('layout invariants', () => {
         start: { ...line.start },
         end: { ...line.end },
       })
+      sourceSpans.push(cursorRangeToSourceSpan(prepared, line.start, line.end))
     })
 
     expect(lineCount).toBe(expected.lineCount)
@@ -880,6 +911,10 @@ describe('layout invariants', () => {
       width: line.width,
       start: line.start,
       end: line.end,
+    })))
+    expect(sourceSpans).toEqual(expected.lines.map(line => ({
+      sourceOffset: line.sourceOffset,
+      sourceLength: line.sourceLength,
     })))
   })
 
