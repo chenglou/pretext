@@ -1,0 +1,22 @@
+{
+  "name": "pretext-masonry-next",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "next dev -p 3001",
+    "build": "next build",
+    "start": "next start -p 3001",
+    "build:e2e": "NEXT_DIST_DIR=.next-e2e next build",
+    "test:e2e": "node ./scripts/run-playwright.mjs",
+    "test:e2e:headed": "PLAYWRIGHT_HEADED=1 node ./scripts/run-playwright.mjs",
+    "verify": "npm run build:e2e && npm run test:e2e"
+  },
+  "dependencies": {
+    "next": "14.2.35",
+    "react": "18.2.0",
+    "react-dom": "18.2.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.57.0"
+  }
+}

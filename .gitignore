@@ -6,6 +6,12 @@ out
 dist
 site
 *.tgz
+.next
+masonry-next/.next
+masonry-next/.next-e2e
+masonry-next/data/*.sqlite
+masonry-next/playwright-report
+masonry-next/test-results
 
 # code coverage
 coverage

@@ -1,0 +1,30 @@
+name: Masonry Next E2E
+
+on:
+  push:
+    paths:
+      - 'masonry-next/**'
+      - '.github/workflows/masonry-next-e2e.yml'
+  pull_request:
+    paths:
+      - 'masonry-next/**'
+      - '.github/workflows/masonry-next-e2e.yml'
+  workflow_dispatch:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: masonry-next
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: masonry-next/package.json
+      - run: sudo apt-get update && sudo apt-get install -y sqlite3
+      - run: npm install
+      - run: npx playwright install --with-deps chromium
+      - run: npm run verify
