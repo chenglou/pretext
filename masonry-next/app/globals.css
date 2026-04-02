@@ -8,6 +8,14 @@
   --shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
   --accent: #bb5a2c;
   --accent-soft: rgba(187, 90, 44, 0.12);
+  --card-padding-x: 16px;
+  --card-padding-top: 12px;
+  --card-padding-bottom: 16px;
+  --card-actions-height: 44px;
+  --card-font-size: 15px;
+  --card-line-height: 22px;
+  --card-action-button-size: 30px;
+  --card-action-icon-size: 16px;
 }
 
 * {
@@ -112,7 +120,7 @@ body {
 .masonry-card {
   position: absolute;
   margin: 0;
-  padding: 12px 16px 16px;
+  padding: var(--card-padding-top) var(--card-padding-x) var(--card-padding-bottom);
   border-radius: 16px;
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), #fffdf9 100%);
   border: 1px solid var(--card-border);
@@ -135,11 +143,12 @@ body {
   justify-content: flex-end;
   gap: 6px;
   margin-bottom: 10px;
+  min-height: var(--card-actions-height);
 }
 
 .card-action-button {
-  width: 30px;
-  height: 30px;
+  width: var(--card-action-button-size);
+  height: var(--card-action-button-size);
   border: 0;
   padding: 0;
   border-radius: 999px;
@@ -169,8 +178,8 @@ body {
 }
 
 .card-action-icon {
-  width: 16px;
-  height: 16px;
+  width: var(--card-action-icon-size);
+  height: var(--card-action-icon-size);
   display: block;
 }
 
@@ -180,8 +189,8 @@ body {
 
 .card-text {
   margin: 0;
-  font-size: 15px;
-  line-height: 22px;
+  font-size: var(--card-font-size);
+  line-height: var(--card-line-height);
 }
 
 @media (max-width: 640px) {

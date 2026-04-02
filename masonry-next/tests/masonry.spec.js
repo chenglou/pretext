@@ -3,6 +3,7 @@ import { expect, test } from '@playwright/test'
 const FIRST_THOUGHT =
   "Men's public restrooms are laid out all wrong. It should be urinal, stall, urinal, stall, urinal instead of urinal, urinal, urinal, stall, stall."
 const LAST_THOUGHT = 'ELI5: What exactly is "time blindness" and how is it an actual thing?'
+const ZOOM_MODIFIER = process.platform === 'darwin' ? 'Meta' : 'Control'
 
 test.beforeEach(async ({ request, context }) => {
   await request.post('/api/thoughts/reset')
@@ -139,5 +140,39 @@ test.describe('masonry page', () => {
 
     const laterRenderedCount = await page.getByTestId('masonry-card').count()
     expect(laterRenderedCount).toBeLessThan(140)
+  })
+
+  test('supports keyboard zoom shortcuts with crisp layout recomputation', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 1200 })
+    await page.goto('/')
+
+    const root = page.getByTestId('masonry-root')
+    const firstCard = page.getByTestId('masonry-card').first()
+    const firstText = firstCard.locator('.card-text')
+
+    await expect(firstCard).toBeVisible()
+    await expect(root).toHaveAttribute('data-zoom-level', '100')
+    await expect(page.getByTestId('zoom-level')).toContainText('100%')
+
+    const initialCardBox = await firstCard.boundingBox()
+    const initialFontSize = await firstText.evaluate(node => window.getComputedStyle(node).fontSize)
+
+    await page.keyboard.press(`${ZOOM_MODIFIER}+=`)
+
+    await expect(root).toHaveAttribute('data-zoom-level', '110')
+    await expect(page.getByTestId('zoom-level')).toContainText('110%')
+    await expect(page.getByTestId('status-message')).toContainText('Zoom 110%')
+
+    const zoomedCardBox = await firstCard.boundingBox()
+    const zoomedFontSize = await firstText.evaluate(node => window.getComputedStyle(node).fontSize)
+    expect(zoomedCardBox.height).toBeGreaterThan(initialCardBox.height)
+    expect(Number.parseFloat(zoomedFontSize)).toBeGreaterThan(Number.parseFloat(initialFontSize))
+
+    await page.keyboard.press(`${ZOOM_MODIFIER}+-`)
+    await expect(root).toHaveAttribute('data-zoom-level', '100')
+
+    await page.keyboard.press(`${ZOOM_MODIFIER}+0`)
+    await expect(root).toHaveAttribute('data-zoom-level', '100')
+    await expect(page.getByTestId('zoom-level')).toContainText('100%')
   })
 })

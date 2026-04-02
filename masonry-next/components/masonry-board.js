@@ -2,14 +2,22 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 
-const FONT = '15px "Helvetica Neue", Helvetica, Arial, sans-serif'
-const CARD_PADDING = 16
-const CARD_ACTIONS_HEIGHT = 44
-const GAP = 12
-const LINE_HEIGHT = 22
-const MAX_COLUMN_WIDTH = 400
-const SINGLE_COLUMN_MAX_VIEWPORT_WIDTH = 520
-const VIEWPORT_BUFFER = 300
+const FONT_FAMILY = '"Helvetica Neue", Helvetica, Arial, sans-serif'
+const BASE_FONT_SIZE = 15
+const BASE_CARD_PADDING_X = 16
+const BASE_CARD_PADDING_TOP = 12
+const BASE_CARD_PADDING_BOTTOM = 16
+const BASE_CARD_ACTIONS_HEIGHT = 44
+const BASE_GAP = 12
+const BASE_LINE_HEIGHT = 22
+const BASE_MAX_COLUMN_WIDTH = 400
+const BASE_SINGLE_COLUMN_MAX_VIEWPORT_WIDTH = 520
+const BASE_VIEWPORT_BUFFER = 300
+const ZOOM_STEP = 0.1
+const MIN_ZOOM = 0.8
+const MAX_ZOOM = 1.8
+const DEFAULT_ZOOM = 1
+const ZOOM_STORAGE_KEY = 'masonry-next-zoom'
 
 function IconButton({ label, pressed, onClick, children, testId }) {
   return (
@@ -85,10 +93,36 @@ function HideIcon() {
   )
 }
 
-function createMeasureContext() {
+function clampZoom(zoom) {
+  return Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, Number(zoom.toFixed(2))))
+}
+
+function getNextZoom(currentZoom, direction) {
+  return clampZoom(currentZoom + ZOOM_STEP * direction)
+}
+
+function getMetrics(zoom) {
+  return {
+    zoom,
+    fontSize: BASE_FONT_SIZE * zoom,
+    font: `${BASE_FONT_SIZE * zoom}px ${FONT_FAMILY}`,
+    cardPaddingX: BASE_CARD_PADDING_X * zoom,
+    cardPaddingTop: BASE_CARD_PADDING_TOP * zoom,
+    cardPaddingBottom: BASE_CARD_PADDING_BOTTOM * zoom,
+    cardActionsHeight: BASE_CARD_ACTIONS_HEIGHT * zoom,
+    gap: BASE_GAP * zoom,
+    lineHeight: BASE_LINE_HEIGHT * zoom,
+    maxColumnWidth: BASE_MAX_COLUMN_WIDTH * zoom,
+    singleColumnMaxViewportWidth: BASE_SINGLE_COLUMN_MAX_VIEWPORT_WIDTH * zoom,
+    viewportBuffer: BASE_VIEWPORT_BUFFER * zoom,
+    minTextWidth: 120 * zoom,
+  }
+}
+
+function createMeasureContext(font) {
   const canvas = document.createElement('canvas')
   const context = canvas.getContext('2d')
-  context.font = FONT
+  context.font = font
   return context
 }
 
@@ -134,36 +168,43 @@ function measureWrappedLines(text, maxWidth, context) {
   return Math.max(1, lineCount)
 }
 
-function computeLayout(thoughts, windowWidth, heightCache, context) {
+function computeLayout(thoughts, windowWidth, heightCache, context, metrics) {
   let columnCount
   let columnWidth
 
-  if (windowWidth <= SINGLE_COLUMN_MAX_VIEWPORT_WIDTH) {
+  if (windowWidth <= metrics.singleColumnMaxViewportWidth) {
     columnCount = 1
-    columnWidth = Math.min(MAX_COLUMN_WIDTH, windowWidth - GAP * 2)
+    columnWidth = Math.min(metrics.maxColumnWidth, windowWidth - metrics.gap * 2)
   } else {
     const minColumnWidth = 100 + windowWidth * 0.1
-    columnCount = Math.max(2, Math.floor((windowWidth + GAP) / (minColumnWidth + GAP)))
-    columnWidth = Math.min(MAX_COLUMN_WIDTH, (windowWidth - (columnCount + 1) * GAP) / columnCount)
+    columnCount = Math.max(2, Math.floor((windowWidth + metrics.gap) / (minColumnWidth + metrics.gap)))
+    columnWidth = Math.min(
+      metrics.maxColumnWidth,
+      (windowWidth - (columnCount + 1) * metrics.gap) / columnCount,
+    )
   }
 
-  const textWidth = Math.max(120, columnWidth - CARD_PADDING * 2)
-  const contentWidth = columnCount * columnWidth + (columnCount - 1) * GAP
+  const textWidth = Math.max(metrics.minTextWidth, columnWidth - metrics.cardPaddingX * 2)
+  const contentWidth = columnCount * columnWidth + (columnCount - 1) * metrics.gap
   const offsetLeft = (windowWidth - contentWidth) / 2
   const columnHeights = new Float64Array(columnCount)
   const positionedCards = []
 
   for (let index = 0; index < columnCount; index += 1) {
-    columnHeights[index] = GAP
+    columnHeights[index] = metrics.gap
   }
 
   for (const thought of thoughts) {
-    const cacheKey = `${thought.id}:${Math.round(textWidth)}`
+    const cacheKey = `${thought.id}:${Math.round(textWidth)}:${metrics.zoom}`
     let cardHeight = heightCache.get(cacheKey)
 
     if (cardHeight == null) {
       const lineCount = measureWrappedLines(thought.body, textWidth, context)
-      cardHeight = lineCount * LINE_HEIGHT + CARD_PADDING * 2 + CARD_ACTIONS_HEIGHT
+      cardHeight =
+        lineCount * metrics.lineHeight +
+        metrics.cardPaddingTop +
+        metrics.cardPaddingBottom +
+        metrics.cardActionsHeight
       heightCache.set(cacheKey, cardHeight)
     }
 
@@ -176,13 +217,13 @@ function computeLayout(thoughts, windowWidth, heightCache, context) {
 
     positionedCards.push({
       ...thought,
-      x: offsetLeft + shortestColumn * (columnWidth + GAP),
+      x: offsetLeft + shortestColumn * (columnWidth + metrics.gap),
       y: columnHeights[shortestColumn],
       height: cardHeight,
       width: columnWidth,
     })
 
-    columnHeights[shortestColumn] += cardHeight + GAP
+    columnHeights[shortestColumn] += cardHeight + metrics.gap
   }
 
   return {
@@ -201,6 +242,9 @@ export default function MasonryBoard() {
   const [viewport, setViewport] = useState({ top: 0, height: 0 })
   const [filter, setFilter] = useState('all')
   const [statusMessage, setStatusMessage] = useState('')
+  const [zoom, setZoom] = useState(DEFAULT_ZOOM)
+
+  const metrics = useMemo(() => getMetrics(zoom), [zoom])
 
   const hiddenCount = useMemo(
     () => thoughts.reduce((count, thought) => count + (thought.isHidden ? 1 : 0), 0),
@@ -244,6 +288,70 @@ export default function MasonryBoard() {
   }, [])
 
   useEffect(() => {
+    if (typeof window === 'undefined') return
+
+    const storedZoom = window.localStorage.getItem(ZOOM_STORAGE_KEY)
+    if (!storedZoom) return
+
+    const parsedZoom = Number.parseFloat(storedZoom)
+    if (!Number.isFinite(parsedZoom)) return
+    setZoom(clampZoom(parsedZoom))
+  }, [])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    window.localStorage.setItem(ZOOM_STORAGE_KEY, String(zoom))
+  }, [zoom])
+
+  useEffect(() => {
+    function handleKeydown(event) {
+      const isModifierPressed = event.metaKey || event.ctrlKey
+      if (!isModifierPressed || event.altKey) return
+
+      const target = event.target
+      if (target instanceof HTMLElement) {
+        const tagName = target.tagName
+        if (target.isContentEditable || tagName === 'INPUT' || tagName === 'TEXTAREA' || tagName === 'SELECT') {
+          return
+        }
+      }
+
+      if (event.key === '+' || event.key === '=') {
+        event.preventDefault()
+        setZoom(currentZoom => {
+          const nextZoom = getNextZoom(currentZoom, 1)
+          setStatusMessage(`Zoom ${Math.round(nextZoom * 100)}%`)
+          return nextZoom
+        })
+        return
+      }
+
+      if (event.key === '-' || event.key === '_') {
+        event.preventDefault()
+        setZoom(currentZoom => {
+          const nextZoom = getNextZoom(currentZoom, -1)
+          setStatusMessage(`Zoom ${Math.round(nextZoom * 100)}%`)
+          return nextZoom
+        })
+        return
+      }
+
+      if (event.key === '0') {
+        event.preventDefault()
+        setZoom(() => {
+          setStatusMessage(`Zoom ${Math.round(DEFAULT_ZOOM * 100)}%`)
+          return DEFAULT_ZOOM
+        })
+      }
+    }
+
+    window.addEventListener('keydown', handleKeydown)
+    return () => {
+      window.removeEventListener('keydown', handleKeydown)
+    }
+  }, [])
+
+  useEffect(() => {
     if (activeThoughts.length === 0) {
       setLayout(current => ({
         ...current,
@@ -254,7 +362,7 @@ export default function MasonryBoard() {
       return
     }
 
-    measureContextRef.current = createMeasureContext()
+    measureContextRef.current = createMeasureContext(metrics.font)
 
     function updateLayout() {
       const nextLayout = computeLayout(
@@ -262,6 +370,7 @@ export default function MasonryBoard() {
         document.documentElement.clientWidth,
         heightCacheRef.current,
         measureContextRef.current,
+        metrics,
       )
       setLayout(nextLayout)
       setViewport({
@@ -285,10 +394,10 @@ export default function MasonryBoard() {
       window.removeEventListener('resize', updateLayout)
       window.removeEventListener('scroll', updateViewport)
     }
-  }, [activeThoughts])
+  }, [activeThoughts, metrics])
 
-  const visibleTop = viewport.top - VIEWPORT_BUFFER
-  const visibleBottom = viewport.top + viewport.height + VIEWPORT_BUFFER
+  const visibleTop = viewport.top - metrics.viewportBuffer
+  const visibleBottom = viewport.top + viewport.height + metrics.viewportBuffer
   const visibleCards = layout.positionedCards.filter(card => {
     return card.y < visibleBottom && card.y + card.height > visibleTop
   })
@@ -349,10 +458,36 @@ export default function MasonryBoard() {
     setStatusMessage('Permalink copied')
   }
 
+  function handleZoom(direction) {
+    setZoom(currentZoom => {
+      const nextZoom = getNextZoom(currentZoom, direction)
+      setStatusMessage(`Zoom ${Math.round(nextZoom * 100)}%`)
+      return nextZoom
+    })
+  }
+
+  function handleResetZoom() {
+    setZoom(DEFAULT_ZOOM)
+    setStatusMessage(`Zoom ${Math.round(DEFAULT_ZOOM * 100)}%`)
+  }
+
   const favoriteCount = thoughts.reduce((count, thought) => count + (thought.isFavorite ? 1 : 0), 0)
+  const zoomPercent = Math.round(zoom * 100)
 
   return (
-    <main className="page-shell">
+    <main
+      className="page-shell"
+      style={{
+        '--card-padding-x': `${metrics.cardPaddingX}px`,
+        '--card-padding-top': `${metrics.cardPaddingTop}px`,
+        '--card-padding-bottom': `${metrics.cardPaddingBottom}px`,
+        '--card-actions-height': `${metrics.cardActionsHeight}px`,
+        '--card-font-size': `${metrics.fontSize}px`,
+        '--card-line-height': `${metrics.lineHeight}px`,
+        '--card-action-button-size': `${30 * zoom}px`,
+        '--card-action-icon-size': `${16 * zoom}px`,
+      }}
+    >
       <div className="page-toolbar">
         <div className="page-toolbar-group">
           <button
@@ -373,6 +508,32 @@ export default function MasonryBoard() {
           </button>
         </div>
         <div className="page-toolbar-group">
+          <button
+            type="button"
+            className="toolbar-pill"
+            data-testid="zoom-out"
+            onClick={() => handleZoom(-1)}
+            disabled={zoom <= MIN_ZOOM}
+          >
+            Zoom out
+          </button>
+          <button
+            type="button"
+            className="toolbar-pill is-active"
+            data-testid="zoom-level"
+            onClick={handleResetZoom}
+          >
+            Zoom <span>{zoomPercent}%</span>
+          </button>
+          <button
+            type="button"
+            className="toolbar-pill"
+            data-testid="zoom-in"
+            onClick={() => handleZoom(1)}
+            disabled={zoom >= MAX_ZOOM}
+          >
+            Zoom in
+          </button>
           <button
             type="button"
             className="toolbar-pill"
@@ -408,6 +569,7 @@ export default function MasonryBoard() {
         data-testid="masonry-root"
         data-column-count={layout.columnCount ?? 0}
         data-card-count={activeThoughts.length}
+        data-zoom-level={zoomPercent}
         style={{ height: `${layout.contentHeight}px` }}
       >
         {visibleCards.map(card => (

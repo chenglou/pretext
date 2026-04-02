@@ -11,6 +11,11 @@ cd /Users/shyam.suthar/Documents/personal-github/pretext-worklog/masonry-next
 
 Open `http://127.0.0.1:3001`.
 
+Keyboard shortcuts:
+- `Cmd/Ctrl +` zoom in
+- `Cmd/Ctrl -` zoom out
+- `Cmd/Ctrl 0` reset zoom
+
 ## Build
 
 ```sh
