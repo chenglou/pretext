@@ -42,6 +42,7 @@ export type AnalysisProfile = {
   carryCJKAfterClosingQuote: boolean
 }
 
+const collapsibleWhitespaceRunRe = /[ \t\n\r\f]+/g
 const needsWhitespaceNormalizationRe = /[\t\n\r\f]| {2,}|^ | $/
 
 type WhiteSpaceProfile = {
@@ -58,7 +59,16 @@ function getWhiteSpaceProfile(whiteSpace?: WhiteSpaceMode): WhiteSpaceProfile {
 }
 
 export function normalizeWhitespaceNormal(text: string): string {
-  return normalizeWhitespaceNormalWithSourceBoundaries(text).text
+  if (!needsWhitespaceNormalizationRe.test(text)) return text
+
+  let normalized = text.replace(collapsibleWhitespaceRunRe, ' ')
+  if (normalized.charCodeAt(0) === 0x20) {
+    normalized = normalized.slice(1)
+  }
+  if (normalized.length > 0 && normalized.charCodeAt(normalized.length - 1) === 0x20) {
+    normalized = normalized.slice(0, -1)
+  }
+  return normalized
 }
 
 function normalizeWhitespaceNormalWithSourceBoundaries(text: string): NormalizedTextWithSourceBoundaries {
@@ -118,6 +128,13 @@ function normalizeWhitespacePreWrapWithSourceBoundaries(text: string): Normalize
       .replace(/[\r\f]/g, '\n'),
     sourceBoundaries: buildPreWrapSourceBoundaries(text),
   }
+}
+
+function normalizeWhitespacePreWrap(text: string): string {
+  if (!/[\r\f]/.test(text)) return text
+  return text
+    .replace(/\r\n/g, '\n')
+    .replace(/[\r\f]/g, '\n')
 }
 
 function buildPreWrapSourceBoundaries(text: string): number[] {
@@ -1055,10 +1072,19 @@ export function analyzeText(
   includeSourceBoundaries = false,
 ): TextAnalysis {
   const whiteSpaceProfile = getWhiteSpaceProfile(whiteSpace)
-  const normalizedResult = whiteSpaceProfile.mode === 'pre-wrap'
-    ? normalizeWhitespacePreWrapWithSourceBoundaries(text)
-    : normalizeWhitespaceNormalWithSourceBoundaries(text)
-  const normalized = normalizedResult.text
+  const normalizedResult = includeSourceBoundaries
+    ? (whiteSpaceProfile.mode === 'pre-wrap'
+        ? normalizeWhitespacePreWrapWithSourceBoundaries(text)
+        : normalizeWhitespaceNormalWithSourceBoundaries(text))
+    : null
+  const normalized = normalizedResult
+    ? normalizedResult.text
+    : (whiteSpaceProfile.mode === 'pre-wrap'
+        ? normalizeWhitespacePreWrap(text)
+        : normalizeWhitespaceNormal(text))
+  const sourceBoundariesPayload = normalizedResult
+    ? { sourceBoundaries: normalizedResult.sourceBoundaries }
+    : {}
   if (normalized.length === 0) {
     return {
       normalized,
@@ -1068,14 +1094,14 @@ export function analyzeText(
       isWordLike: [],
       kinds: [],
       starts: [],
-      ...(includeSourceBoundaries ? { sourceBoundaries: normalizedResult.sourceBoundaries } : {}),
+      ...sourceBoundariesPayload,
     }
   }
   const segmentation = buildMergedSegmentation(normalized, profile, whiteSpaceProfile)
   return {
     normalized,
     chunks: compileAnalysisChunks(segmentation, whiteSpaceProfile),
-    ...(includeSourceBoundaries ? { sourceBoundaries: normalizedResult.sourceBoundaries } : {}),
+    ...sourceBoundariesPayload,
     ...segmentation,
   }
 }
