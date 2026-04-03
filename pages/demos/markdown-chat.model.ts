@@ -30,9 +30,9 @@ const MESSAGE_GAP = 12
 const BUBBLE_MAX_RATIO = 0.78
 export const BUBBLE_PADDING_X = 16
 const BUBBLE_PADDING_Y = 10
-const BODY_LINE_HEIGHT = 24
-const HEADING_ONE_LINE_HEIGHT = 30
-const HEADING_TWO_LINE_HEIGHT = 28
+const BODY_LINE_HEIGHT = 22
+const HEADING_ONE_LINE_HEIGHT = 28
+const HEADING_TWO_LINE_HEIGHT = 25
 const HARD_BREAK_GAP = 4
 const BLOCK_GAP = 12
 const RICH_BLOCK_GAP = 2
@@ -40,19 +40,19 @@ const LIST_ITEM_GAP = 4
 const LIST_NESTING_INDENT = 18
 const BLOCKQUOTE_INDENT = 18
 const LIST_MARKER_GAP = 10
-export const CODE_LINE_HEIGHT = 20
+export const CODE_LINE_HEIGHT = 18
 export const CODE_BLOCK_PADDING_X = 12
 export const CODE_BLOCK_PADDING_Y = 8
 const RULE_HEIGHT = 18
 const RAIL_OFFSET = 5
-const SANS_FAMILY = '"Helvetica Neue", Helvetica, Arial, sans-serif'
+const SANS_FAMILY = '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif'
 const SERIF_FAMILY = '"Iowan Old Style", Georgia, "Times New Roman", serif'
 const MONO_FAMILY = '"SF Mono", ui-monospace, Menlo, Monaco, monospace'
-const INLINE_CODE_FONT = `600 13px ${MONO_FAMILY}`
-const INLINE_CODE_EXTRA_WIDTH = 14
-const IMAGE_FONT = `700 12px ${SANS_FAMILY}`
-const IMAGE_EXTRA_WIDTH = 18
-const MARKER_FONT = `600 12px ${MONO_FAMILY}`
+const INLINE_CODE_FONT = `600 12px ${MONO_FAMILY}`
+const INLINE_CODE_EXTRA_WIDTH = 12
+const IMAGE_FONT = `700 11px ${SANS_FAMILY}`
+const IMAGE_EXTRA_WIDTH = 14
+const MARKER_FONT = `600 11px ${MONO_FAMILY}`
 
 type InlineVariant = 'body' | 'heading-1' | 'heading-2'
 
@@ -505,7 +505,7 @@ function buildCodeBlock(text: string, ctx: ParseContext): PreparedCodeBlock {
     ...createBlockBase(ctx),
     kind: 'code',
     lineHeight: CODE_LINE_HEIGHT,
-    prepared: prepareWithSegments(stripSingleTrailingNewline(text), `500 13px ${MONO_FAMILY}`, {
+    prepared: prepareWithSegments(stripSingleTrailingNewline(text), `500 12px ${MONO_FAMILY}`, {
       whiteSpace: 'pre-wrap',
     }),
   }
@@ -703,17 +703,17 @@ function resolveTextFont(variant: InlineVariant, marks: MarkState): string {
   switch (variant) {
     case 'heading-1': {
       const weight = marks.bold ? 800 : 700
-      return `${italicPrefix}${weight} 22px ${SERIF_FAMILY}`
+      return `${italicPrefix}${weight} 20px ${SERIF_FAMILY}`
     }
 
     case 'heading-2': {
       const weight = marks.bold ? 800 : 700
-      return `${italicPrefix}${weight} 18px ${SERIF_FAMILY}`
+      return `${italicPrefix}${weight} 17px ${SERIF_FAMILY}`
     }
 
     case 'body': {
       const weight = marks.bold ? 700 : marks.href === null ? 400 : 500
-      return `${italicPrefix}${weight} 15px ${SANS_FAMILY}`
+      return `${italicPrefix}${weight} 14px ${SANS_FAMILY}`
     }
   }
 }

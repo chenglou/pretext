@@ -8,17 +8,17 @@
   <style>
     * { box-sizing: border-box; margin: 0; }
     :root {
-      color-scheme: light;
-      --page: #ececf1;
-      --panel: #ffffff;
-      --ink: #202123;
-      --muted: #6b7280;
-      --rule: #ececf1;
-      --accent: #4b5563;
-      --user-bubble: #ececf1;
-      --user-bubble-border: rgba(32, 33, 35, 0.05);
-      --assistant-code: #f3f4f6;
-      --user-code: #e7e8ec;
+      color-scheme: dark;
+      --page: #333740;
+      --panel: #333740;
+      --ink: #d5d9e1;
+      --muted: #9ea6b2;
+      --rule: #454b55;
+      --accent: #b7c0cf;
+      --user-bubble: #394048;
+      --user-bubble-border: rgba(255, 255, 255, 0.04);
+      --assistant-code: #313840;
+      --user-code: #323840;
       --chat-width: 860px;
       --message-side-padding: 22px;
       --occlusion-banner-height: 92px;
@@ -31,7 +31,7 @@
     body {
       min-height: 100vh;
       overflow: hidden;
-      font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     }
     .chat-shell {
       position: relative;
@@ -78,34 +78,52 @@
       justify-content: flex-end;
       align-items: flex-start;
       padding: 18px 20px;
+      background:
+        linear-gradient(
+          to bottom,
+          var(--page) 0%,
+          var(--page) 68%,
+          rgb(51 55 64 / 0.92) 82%,
+          rgb(51 55 64 / 0.62) 92%,
+          rgb(51 55 64 / 0) 100%
+        );
       box-shadow: 0 1px 0 rgba(32, 33, 35, 0.03);
     }
     .occlusion-banner--bottom {
       bottom: 0;
+      background:
+        linear-gradient(
+          to top,
+          var(--page) 0%,
+          var(--page) 68%,
+          rgb(51 55 64 / 0.92) 82%,
+          rgb(51 55 64 / 0.62) 92%,
+          rgb(51 55 64 / 0) 100%
+        );
       box-shadow: 0 -1px 0 rgba(32, 33, 35, 0.03);
     }
     .chat-shell[data-visualization="on"] .occlusion-banner {
-      background: rgb(236 236 241 / 0.68);
+      background: rgb(51 55 64 / 0.58);
       box-shadow:
-        0 0 0 1px rgb(32 33 35 / 0.06),
-        0 10px 28px rgb(32 33 35 / 0.04);
-      backdrop-filter: blur(2px);
+        0 0 0 1px rgb(255 255 255 / 0.02),
+        0 8px 18px rgb(0 0 0 / 0.12);
+      backdrop-filter: blur(1px);
     }
     .virtualization-toggle {
       pointer-events: auto;
       appearance: none;
-      border: 1px solid rgba(32, 33, 35, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.06);
       border-radius: 999px;
       padding: 10px 14px;
-      background: rgb(255 255 255 / 0.82);
+      background: rgb(57 64 72 / 0.92);
       color: var(--accent);
       font: 600 12px/1 "SF Mono", ui-monospace, Menlo, monospace;
       letter-spacing: 0.01em;
       cursor: pointer;
-      box-shadow: 0 8px 22px rgb(32 33 35 / 0.05);
+      box-shadow: 0 8px 18px rgb(0 0 0 / 0.14);
     }
     .chat-shell[data-visualization="on"] .virtualization-toggle {
-      background: rgb(255 255 255 / 0.92);
+      background: rgb(57 64 72 / 0.98);
     }
     .msg {
       position: absolute;
@@ -128,7 +146,7 @@
     .msg--user .msg-bubble {
       border: 1px solid var(--user-bubble-border);
       background: var(--user-bubble);
-      box-shadow: 0 6px 14px rgb(32 33 35 / 0.025);
+      box-shadow: 0 6px 14px rgb(0 0 0 / 0.09);
     }
     .msg--assistant .msg-bubble {
       border: 0;
@@ -150,13 +168,13 @@
       bottom: 0;
       width: 3px;
       border-radius: 999px;
-      background: rgb(107 114 128 / 0.18);
+      background: rgb(158 166 178 / 0.18);
     }
     .block-marker {
       position: absolute;
       white-space: pre;
       color: var(--muted);
-      font: 600 12px/1 "SF Mono", ui-monospace, Menlo, monospace;
+      font: 600 11px/1 "SF Mono", ui-monospace, Menlo, monospace;
     }
     .block-marker--task {
       color: var(--muted);
@@ -176,34 +194,34 @@
       vertical-align: baseline;
     }
     .frag--body {
-      font: 400 15px/1 "Helvetica Neue", Helvetica, Arial, sans-serif;
+      font: 400 14px/1 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     }
     .frag--heading-1 {
-      font: 700 21px/1 "Iowan Old Style", Georgia, "Times New Roman", serif;
+      font: 700 20px/1 "Iowan Old Style", Georgia, "Times New Roman", serif;
       letter-spacing: -0.01em;
     }
     .frag--heading-2 {
-      font: 700 18px/1 "Iowan Old Style", Georgia, "Times New Roman", serif;
+      font: 700 17px/1 "Iowan Old Style", Georgia, "Times New Roman", serif;
       letter-spacing: -0.01em;
     }
     .frag--code {
-      padding: 2px 7px 3px;
+      padding: 2px 6px 3px;
       border-radius: 8px;
-      background: rgba(32, 33, 35, 0.08);
-      font: 600 13px/1 "SF Mono", ui-monospace, Menlo, monospace;
+      background: rgb(49 56 64 / 1);
+      font: 600 12px/1 "SF Mono", ui-monospace, Menlo, monospace;
     }
     .msg--user .frag--code {
-      background: rgba(32, 33, 35, 0.08);
+      background: rgb(49 56 64 / 1);
     }
     .frag--chip {
       display: inline-flex;
       align-items: center;
-      padding: 0 8px;
-      min-height: 20px;
+      padding: 0 7px;
+      min-height: 18px;
       border-radius: 999px;
-      background: rgba(32, 33, 35, 0.08);
+      background: rgb(49 56 64 / 1);
       color: var(--accent);
-      font: 700 12px/1 "Helvetica Neue", Helvetica, Arial, sans-serif;
+      font: 700 11px/1 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       transform: translateY(1px);
     }
     .is-link {
@@ -223,8 +241,8 @@
       top: 0;
       border-radius: 10px;
       background: var(--assistant-code);
-      border: 1px solid rgba(32, 33, 35, 0.045);
-      box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.28);
+      border: 1px solid rgba(255, 255, 255, 0.035);
+      box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.02);
     }
     .msg--user .code-box {
       background: var(--user-code);
@@ -232,13 +250,13 @@
     .code-line {
       position: absolute;
       white-space: pre;
-      font: 500 13px/20px "SF Mono", ui-monospace, Menlo, Monaco, monospace;
+      font: 500 12px/18px "SF Mono", ui-monospace, Menlo, Monaco, monospace;
       color: var(--ink);
     }
     .rule-line {
       position: absolute;
       height: 1px;
-      background: color-mix(in srgb, var(--rule) 88%, white 12%);
+      background: color-mix(in srgb, var(--rule) 86%, white 14%);
     }
     @media (max-width: 720px) {
       .virtualization-toggle {
