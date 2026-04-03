@@ -10,6 +10,7 @@ site
 masonry-next/.next
 masonry-next/.next-e2e
 masonry-next/data/*.sqlite
+masonry-next/current-layout.png
 masonry-next/playwright-report
 masonry-next/test-results
 
