@@ -1,0 +1,268 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="A full-screen virtualized markdown chat demo using marked for parsing, Pretext inline-flow for paragraph layout, and Pretext pre-wrap measurement for fenced code.">
+  <title>Markdown Chat</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; }
+    :root {
+      color-scheme: light;
+      --page: #ececf1;
+      --panel: #ffffff;
+      --ink: #202123;
+      --muted: #6b7280;
+      --rule: #ececf1;
+      --accent: #4b5563;
+      --user-bubble: #ececf1;
+      --user-bubble-border: rgba(32, 33, 35, 0.05);
+      --assistant-code: #f3f4f6;
+      --user-code: #e7e8ec;
+      --chat-width: 860px;
+      --message-side-padding: 22px;
+      --occlusion-banner-height: 92px;
+    }
+    html, body {
+      min-height: 100%;
+      background: var(--page);
+      color: var(--ink);
+    }
+    body {
+      min-height: 100vh;
+      overflow: hidden;
+      font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+    }
+    .chat-shell {
+      position: relative;
+      width: 100vw;
+      height: 100vh;
+      background: var(--panel);
+      overflow: clip;
+    }
+    .chat-viewport {
+      position: absolute;
+      inset: 0;
+      overflow: auto;
+    }
+    .chat-canvas {
+      position: relative;
+      width: var(--chat-width);
+      min-height: 100%;
+      margin: 0 auto;
+    }
+    .occlusion-layer {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      left: 50%;
+      width: min(100%, var(--chat-width));
+      transform: translateX(-50%);
+      z-index: 4;
+      pointer-events: none;
+    }
+    .occlusion-banner {
+      position: absolute;
+      left: 0;
+      right: 0;
+      height: var(--occlusion-banner-height);
+      background: var(--page);
+      transition:
+        background-color 140ms ease,
+        box-shadow 140ms ease,
+        border-color 140ms ease;
+    }
+    .occlusion-banner--top {
+      top: 0;
+      display: flex;
+      justify-content: flex-end;
+      align-items: flex-start;
+      padding: 18px 20px;
+      box-shadow: 0 1px 0 rgba(32, 33, 35, 0.03);
+    }
+    .occlusion-banner--bottom {
+      bottom: 0;
+      box-shadow: 0 -1px 0 rgba(32, 33, 35, 0.03);
+    }
+    .chat-shell[data-visualization="on"] .occlusion-banner {
+      background: rgb(236 236 241 / 0.68);
+      box-shadow:
+        0 0 0 1px rgb(32 33 35 / 0.06),
+        0 10px 28px rgb(32 33 35 / 0.04);
+      backdrop-filter: blur(2px);
+    }
+    .virtualization-toggle {
+      pointer-events: auto;
+      appearance: none;
+      border: 1px solid rgba(32, 33, 35, 0.08);
+      border-radius: 999px;
+      padding: 10px 14px;
+      background: rgb(255 255 255 / 0.82);
+      color: var(--accent);
+      font: 600 12px/1 "SF Mono", ui-monospace, Menlo, monospace;
+      letter-spacing: 0.01em;
+      cursor: pointer;
+      box-shadow: 0 8px 22px rgb(32 33 35 / 0.05);
+    }
+    .chat-shell[data-visualization="on"] .virtualization-toggle {
+      background: rgb(255 255 255 / 0.92);
+    }
+    .msg {
+      position: absolute;
+      left: 0;
+      width: 100%;
+      padding-inline: var(--message-side-padding);
+      display: flex;
+    }
+    .msg--assistant { justify-content: flex-start; }
+    .msg--user { justify-content: flex-end; }
+    .msg-stack {
+      max-width: 100%;
+    }
+    .msg-bubble {
+      position: relative;
+      width: 100%;
+      border-radius: 16px;
+      background: transparent;
+    }
+    .msg--user .msg-bubble {
+      border: 1px solid var(--user-bubble-border);
+      background: var(--user-bubble);
+      box-shadow: 0 6px 14px rgb(32 33 35 / 0.025);
+    }
+    .msg--assistant .msg-bubble {
+      border: 0;
+      border-radius: 0;
+      box-shadow: none;
+    }
+    .msg-bubble-inner {
+      position: relative;
+      padding: 0;
+    }
+    .block {
+      position: absolute;
+      left: 0;
+      width: 100%;
+    }
+    .quote-rail {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      width: 3px;
+      border-radius: 999px;
+      background: rgb(107 114 128 / 0.18);
+    }
+    .block-marker {
+      position: absolute;
+      white-space: pre;
+      color: var(--muted);
+      font: 600 12px/1 "SF Mono", ui-monospace, Menlo, monospace;
+    }
+    .block-marker--task {
+      color: var(--muted);
+    }
+    .line-row {
+      position: absolute;
+      display: flex;
+      align-items: center;
+      gap: 0;
+      width: max-content;
+    }
+    .frag {
+      display: inline-block;
+      white-space: pre;
+      line-height: 1;
+      color: var(--ink);
+      vertical-align: baseline;
+    }
+    .frag--body {
+      font: 400 15px/1 "Helvetica Neue", Helvetica, Arial, sans-serif;
+    }
+    .frag--heading-1 {
+      font: 700 21px/1 "Iowan Old Style", Georgia, "Times New Roman", serif;
+      letter-spacing: -0.01em;
+    }
+    .frag--heading-2 {
+      font: 700 18px/1 "Iowan Old Style", Georgia, "Times New Roman", serif;
+      letter-spacing: -0.01em;
+    }
+    .frag--code {
+      padding: 2px 7px 3px;
+      border-radius: 8px;
+      background: rgba(32, 33, 35, 0.08);
+      font: 600 13px/1 "SF Mono", ui-monospace, Menlo, monospace;
+    }
+    .msg--user .frag--code {
+      background: rgba(32, 33, 35, 0.08);
+    }
+    .frag--chip {
+      display: inline-flex;
+      align-items: center;
+      padding: 0 8px;
+      min-height: 20px;
+      border-radius: 999px;
+      background: rgba(32, 33, 35, 0.08);
+      color: var(--accent);
+      font: 700 12px/1 "Helvetica Neue", Helvetica, Arial, sans-serif;
+      transform: translateY(1px);
+    }
+    .is-link {
+      color: var(--accent);
+      text-decoration: underline;
+      text-decoration-thickness: 1px;
+      text-underline-offset: 0.14em;
+    }
+    .msg--user .is-link {
+      color: var(--accent);
+    }
+    .is-em { font-style: italic; }
+    .is-strong { font-weight: 700; }
+    .is-del { text-decoration: line-through; text-decoration-thickness: 1px; }
+    .code-box {
+      position: absolute;
+      top: 0;
+      border-radius: 10px;
+      background: var(--assistant-code);
+      border: 1px solid rgba(32, 33, 35, 0.045);
+      box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.28);
+    }
+    .msg--user .code-box {
+      background: var(--user-code);
+    }
+    .code-line {
+      position: absolute;
+      white-space: pre;
+      font: 500 13px/20px "SF Mono", ui-monospace, Menlo, Monaco, monospace;
+      color: var(--ink);
+    }
+    .rule-line {
+      position: absolute;
+      height: 1px;
+      background: color-mix(in srgb, var(--rule) 88%, white 12%);
+    }
+    @media (max-width: 720px) {
+      .virtualization-toggle {
+        padding: 9px 12px;
+        font-size: 11px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="chat-shell" id="chat-shell" data-visualization="off">
+    <div class="chat-viewport" id="chat-viewport">
+      <div class="chat-canvas" id="chat-canvas"></div>
+    </div>
+
+    <div class="occlusion-layer">
+      <div class="occlusion-banner occlusion-banner--top" id="top-banner">
+        <button class="virtualization-toggle" id="virtualization-toggle" type="button" aria-pressed="false">
+          Show virtualization mask
+        </button>
+      </div>
+      <div class="occlusion-banner occlusion-banner--bottom" id="bottom-banner"></div>
+    </div>
+  </main>
+  <script type="module" src="./markdown-chat.ts"></script>
+</body>
+</html>

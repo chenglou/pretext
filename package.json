@@ -70,6 +70,7 @@
   },
   "devDependencies": {
     "@types/bun": "latest",
+    "marked": "^17.0.5",
     "oxlint": "^1.51.0",
     "oxlint-tsgolint": "^0.15.0",
     "tsgolint": "^0.0.1",
