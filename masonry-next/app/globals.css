@@ -40,6 +40,7 @@ body {
 
 .page-shell {
   min-height: 100vh;
+  padding-bottom: 32px;
 }
 
 .page-toolbar-shell {
@@ -59,6 +60,7 @@ body {
   display: flex;
   justify-content: space-between;
   gap: 16px;
+  align-items: flex-start;
 }
 
 .page-toolbar-group {
@@ -117,6 +119,7 @@ body {
 .masonry-root {
   position: relative;
   width: 100%;
+  isolation: isolate;
 }
 
 .masonry-card {
@@ -133,6 +136,15 @@ body {
   overflow: hidden;
   white-space: normal;
   word-break: break-word;
+  transform-origin: center center;
+  transition:
+    top 380ms cubic-bezier(0.22, 1, 0.36, 1),
+    left 380ms cubic-bezier(0.22, 1, 0.36, 1),
+    width 220ms ease,
+    height 220ms ease,
+    opacity 220ms ease,
+    transform 220ms ease,
+    box-shadow 220ms ease;
 }
 
 .masonry-card.is-favorite {
@@ -140,6 +152,16 @@ body {
   box-shadow:
     var(--shadow),
     0 0 0 1px rgba(187, 90, 44, 0.08);
+}
+
+.masonry-card.is-shuffling {
+  opacity: 0.42;
+  transform: translateY(-10px) scale(0.97) rotate(-1.4deg);
+  box-shadow: 0 14px 36px rgba(120, 100, 84, 0.16);
+}
+
+.masonry-card.is-settling {
+  animation: card-settle 420ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .card-actions {
@@ -197,6 +219,23 @@ body {
   flex: 1 1 auto;
   font-size: var(--card-font-size);
   line-height: var(--card-line-height);
+}
+
+@keyframes card-settle {
+  0% {
+    opacity: 0.7;
+    transform: translateY(12px) scale(0.98);
+  }
+
+  60% {
+    opacity: 1;
+    transform: translateY(-4px) scale(1.01);
+  }
+
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 
 @media (max-width: 640px) {

@@ -18,6 +18,8 @@ const MIN_ZOOM = 0.8
 const MAX_ZOOM = 1.8
 const DEFAULT_ZOOM = 1
 const ZOOM_STORAGE_KEY = 'masonry-next-zoom'
+const SHUFFLE_ANIMATION_MS = 260
+const SHUFFLE_SETTLE_MS = 420
 const DEFAULT_CHROME_OFFSETS = {
   contentTop: 148,
   statusTop: 128,
@@ -135,6 +137,33 @@ function getChromeOffsets(toolbarElement) {
     statusTop,
     feedbackTop: statusTop + 56,
   }
+}
+
+function arraysMatchById(first, second) {
+  if (first.length !== second.length) return false
+
+  for (let index = 0; index < first.length; index += 1) {
+    if (first[index].id !== second[index].id) return false
+  }
+
+  return true
+}
+
+function shuffleThoughts(currentThoughts) {
+  if (currentThoughts.length < 2) return currentThoughts
+
+  const nextThoughts = [...currentThoughts]
+
+  for (let index = nextThoughts.length - 1; index > 0; index -= 1) {
+    const swapIndex = Math.floor(Math.random() * (index + 1))
+    ;[nextThoughts[index], nextThoughts[swapIndex]] = [nextThoughts[swapIndex], nextThoughts[index]]
+  }
+
+  if (arraysMatchById(currentThoughts, nextThoughts)) {
+    ;[nextThoughts[0], nextThoughts[1]] = [nextThoughts[1], nextThoughts[0]]
+  }
+
+  return nextThoughts
 }
 
 function createMeasureContext(font) {
@@ -256,6 +285,8 @@ export default function MasonryBoard() {
   const heightCacheRef = useRef(new Map())
   const measureContextRef = useRef(null)
   const toolbarShellRef = useRef(null)
+  const shuffleTimeoutRef = useRef(null)
+  const settleTimeoutRef = useRef(null)
   const [thoughts, setThoughts] = useState([])
   const [layout, setLayout] = useState({ contentHeight: 0, positionedCards: [], columnCount: 0 })
   const [viewport, setViewport] = useState({ top: 0, height: 0 })
@@ -263,6 +294,8 @@ export default function MasonryBoard() {
   const [statusMessage, setStatusMessage] = useState('')
   const [zoom, setZoom] = useState(DEFAULT_ZOOM)
   const [chromeOffsets, setChromeOffsets] = useState(DEFAULT_CHROME_OFFSETS)
+  const [isShuffling, setIsShuffling] = useState(false)
+  const [isShuffleSettling, setIsShuffleSettling] = useState(false)
 
   const metrics = useMemo(() => getMetrics(zoom), [zoom])
 
@@ -290,6 +323,13 @@ export default function MasonryBoard() {
       window.clearTimeout(timeoutId)
     }
   }, [statusMessage])
+
+  useEffect(() => {
+    return () => {
+      if (shuffleTimeoutRef.current) window.clearTimeout(shuffleTimeoutRef.current)
+      if (settleTimeoutRef.current) window.clearTimeout(settleTimeoutRef.current)
+    }
+  }, [])
 
   useEffect(() => {
     let cancelled = false
@@ -530,6 +570,28 @@ export default function MasonryBoard() {
     setStatusMessage(`Zoom ${Math.round(DEFAULT_ZOOM * 100)}%`)
   }
 
+  function handleRandomize() {
+    if (isShuffling || thoughts.length < 2) return
+
+    if (shuffleTimeoutRef.current) window.clearTimeout(shuffleTimeoutRef.current)
+    if (settleTimeoutRef.current) window.clearTimeout(settleTimeoutRef.current)
+
+    setIsShuffleSettling(false)
+    setIsShuffling(true)
+    setStatusMessage('Shuffling thoughts...')
+
+    shuffleTimeoutRef.current = window.setTimeout(() => {
+      setThoughts(currentThoughts => shuffleThoughts(currentThoughts))
+      setIsShuffling(false)
+      setIsShuffleSettling(true)
+      setStatusMessage('Thoughts shuffled')
+
+      settleTimeoutRef.current = window.setTimeout(() => {
+        setIsShuffleSettling(false)
+      }, SHUFFLE_SETTLE_MS)
+    }, SHUFFLE_ANIMATION_MS)
+  }
+
   const favoriteCount = thoughts.reduce((count, thought) => count + (thought.isFavorite ? 1 : 0), 0)
   const zoomPercent = Math.round(zoom * 100)
 
@@ -537,6 +599,7 @@ export default function MasonryBoard() {
     <main
       className="page-shell"
       style={{
+        paddingTop: `${chromeOffsets.contentTop}px`,
         '--card-padding-x': `${metrics.cardPaddingX}px`,
         '--card-padding-top': `${metrics.cardPaddingTop}px`,
         '--card-padding-bottom': `${metrics.cardPaddingBottom}px`,
@@ -568,6 +631,15 @@ export default function MasonryBoard() {
             </button>
           </div>
           <div className="page-toolbar-group">
+            <button
+              type="button"
+              className={`toolbar-pill${isShuffling ? ' is-active' : ''}`}
+              data-testid="randomize-thoughts"
+              onClick={handleRandomize}
+              disabled={isShuffling || activeThoughts.length < 2}
+            >
+              Randomize
+            </button>
             <button
               type="button"
               className="toolbar-pill"
@@ -631,16 +703,16 @@ export default function MasonryBoard() {
         data-column-count={layout.columnCount ?? 0}
         data-card-count={activeThoughts.length}
         data-zoom-level={zoomPercent}
+        data-shuffle-state={isShuffling ? 'shuffling' : isShuffleSettling ? 'settling' : 'idle'}
         style={{
           height: `${layout.contentHeight}px`,
-          marginTop: `${chromeOffsets.contentTop}px`,
         }}
       >
         {visibleCards.map(card => (
           <article
             key={card.id}
             id={`thought-${card.id}`}
-            className={`masonry-card${card.isFavorite ? ' is-favorite' : ''}`}
+            className={`masonry-card${card.isFavorite ? ' is-favorite' : ''}${isShuffling ? ' is-shuffling' : ''}${isShuffleSettling ? ' is-settling' : ''}`}
             data-testid="masonry-card"
             data-card-id={card.id}
             data-favorite={card.isFavorite ? 'true' : 'false'}

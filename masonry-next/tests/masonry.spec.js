@@ -87,6 +87,25 @@ test.describe('masonry page', () => {
     await expectMasonryBelowToolbar()
   })
 
+  test('keeps the top toolbar fixed while the page body scrolls', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 1200 })
+    await page.goto('/')
+    await expect(page.getByTestId('masonry-card').first()).toBeVisible()
+
+    const toolbar = page.locator('.page-toolbar-shell')
+    const initialBox = await toolbar.boundingBox()
+
+    await page.evaluate(() => {
+      window.scrollTo(0, 1800)
+    })
+
+    await page.waitForTimeout(150)
+
+    const scrolledBox = await toolbar.boundingBox()
+    expect(scrolledBox.y).toBeCloseTo(initialBox.y, 1)
+    expect(scrolledBox.height).toBeCloseTo(initialBox.height, 1)
+  })
+
   test('serves the full SQLite-backed dataset through the API', async ({ request }) => {
     const response = await request.get('/api/thoughts')
     expect(response.ok()).toBeTruthy()
@@ -160,6 +179,31 @@ test.describe('masonry page', () => {
     await expect(page.locator('body')).not.toContainText(
       "The 'richest people' list in actuality is the 'legally richest people', which is only close to the actual richest people list. There are tons of illegal super rich people.",
     )
+  })
+
+  test('randomize animates and reshuffles the visible thought order', async ({ page }) => {
+    await page.goto('/')
+
+    const root = page.getByTestId('masonry-root')
+    await expect(page.getByTestId('masonry-card').first()).toBeVisible()
+
+    const initialIds = await page.locator('[data-testid="masonry-card"]').evaluateAll(nodes =>
+      nodes.slice(0, 6).map(node => node.getAttribute('data-card-id')),
+    )
+
+    await page.getByTestId('randomize-thoughts').click()
+
+    await expect(root).toHaveAttribute('data-shuffle-state', 'shuffling')
+    await expect(page.getByTestId('status-message')).toContainText('Shuffling thoughts...')
+    await expect(root).toHaveAttribute('data-shuffle-state', 'settling')
+    await expect(page.getByTestId('status-message')).toContainText('Thoughts shuffled')
+    await expect(root).toHaveAttribute('data-shuffle-state', 'idle')
+
+    const shuffledIds = await page.locator('[data-testid="masonry-card"]').evaluateAll(nodes =>
+      nodes.slice(0, 6).map(node => node.getAttribute('data-card-id')),
+    )
+
+    expect(shuffledIds.join(',')).not.toBe(initialIds.join(','))
   })
 
   test('copy and permalink actions work on a card', async ({ page }) => {
