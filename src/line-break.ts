@@ -311,6 +311,11 @@ function walkPreparedLinesSimple(
 
     const newW = lineW + w
     if (newW > maxWidth + lineFitEpsilon) {
+      if (isSimpleCollapsibleSpace(kind)) {
+        i++
+        continue
+      }
+
       if (canBreakAfter(kind)) {
         appendWholeSegment(i, w)
         emitCurrentLine(i + 1, 0, lineW - w)
