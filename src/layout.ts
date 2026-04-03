@@ -664,6 +664,13 @@ function materializeLine(
   )
 }
 
+export function materializeLineRange(
+  prepared: PreparedTextWithSegments,
+  line: LayoutLineRange,
+): LayoutLine {
+  return materializeLine(prepared, line)
+}
+
 // Batch low-level line geometry pass. This is the non-materializing counterpart
 // to layoutWithLines(), useful for shrinkwrap and other aggregate geometry work.
 export function walkLineRanges(
@@ -694,9 +701,17 @@ export function layoutNextLine(
   start: LayoutCursor,
   maxWidth: number,
 ): LayoutLine | null {
-  const line = stepLineRange(prepared, start, maxWidth)
+  const line = layoutNextLineRange(prepared, start, maxWidth)
   if (line === null) return null
-  return materializeLine(prepared, line)
+  return materializeLineRange(prepared, line)
+}
+
+export function layoutNextLineRange(
+  prepared: PreparedTextWithSegments,
+  start: LayoutCursor,
+  maxWidth: number,
+): LayoutLineRange | null {
+  return stepLineRange(prepared, start, maxWidth)
 }
 
 // Rich layout API for callers that want the actual line contents and widths.

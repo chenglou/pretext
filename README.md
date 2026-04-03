@@ -126,7 +126,9 @@ prepareWithSegments(text: string, font: string, options?: { whiteSpace?: 'normal
 layoutWithLines(prepared: PreparedTextWithSegments, maxWidth: number, lineHeight: number): { height: number, lineCount: number, lines: LayoutLine[] } // high-level api for manual layout needs. Accepts a fixed max width for all lines. Similar to `layout()`'s return, but additionally returns the lines info
 walkLineRanges(prepared: PreparedTextWithSegments, maxWidth: number, onLine: (line: LayoutLineRange) => void): number // low-level api for manual layout needs. Accepts a fixed max width for all lines. Calls `onLine` once per line with its actual calculated line width and start/end cursors, without building line text strings. Very useful for certain cases where you wanna speculatively test a few width and height boundaries (e.g. binary search a nice width value by repeatedly calling walkLineRanges and checking the line count, and therefore height, is "nice" too. You can have text messages shrinkwrap and balanced text layout this way). After walkLineRanges calls, you'd call layoutWithLines once, with your satisfying max width, to get the actual lines info.
 measureNaturalWidth(prepared: PreparedTextWithSegments): number // intrinsic-width helper for manual layouts. Returns the widest forced line when width itself is not the thing causing wraps
+layoutNextLineRange(prepared: PreparedTextWithSegments, start: LayoutCursor, maxWidth: number): LayoutLineRange | null // iterator-like geometry API for variable-width layouts, without building line text strings
 layoutNextLine(prepared: PreparedTextWithSegments, start: LayoutCursor, maxWidth: number): LayoutLine | null // iterator-like api for laying out each line with a different width! Returns the LayoutLine starting from `start`, or `null` when the paragraph's exhausted. Pass the previous line's `end` cursor as the next `start`.
+materializeLineRange(prepared: PreparedTextWithSegments, line: LayoutLineRange): LayoutLine // turns one previously computed line range back into a full line with text
 type LayoutLine = {
   text: string // Full text content of this line, e.g. 'hello world'
   width: number // Measured width of this line, e.g. 87.5
@@ -147,8 +149,11 @@ type LayoutCursor = {
 Experimental inline-flow sidecar:
 ```ts
 prepareInlineFlow(items: InlineFlowItem[]): PreparedInlineFlow // compile raw inline items with their original text. The compiler owns cross-item collapsed whitespace and caches each item's natural width
+layoutNextInlineFlowLineRange(prepared: PreparedInlineFlow, maxWidth: number, start?: InlineFlowCursor): InlineFlowLineRange | null // stream one inline-flow line at a time without building fragment text strings
 layoutNextInlineFlowLine(prepared: PreparedInlineFlow, maxWidth: number, start?: InlineFlowCursor): InlineFlowLine | null // stream one line at a time through an inline item sequence
+walkInlineFlowLineRanges(prepared: PreparedInlineFlow, maxWidth: number, onLine: (line: InlineFlowLineRange) => void): number // non-materializing line walker for shrinkwrap/aggregate geometry work
 walkInlineFlowLines(prepared: PreparedInlineFlow, maxWidth: number, onLine: (line: InlineFlowLine) => void): number // low-level line walker for inline fragment streams
+measureInlineFlowGeometry(prepared: PreparedInlineFlow, maxWidth: number): { lineCount: number, maxLineWidth: number } // aggregate geometry helper for callers that only need line count and widest line
 measureInlineFlow(prepared: PreparedInlineFlow, maxWidth: number, lineHeight: number): { height: number, lineCount: number } // line counter for inline fragment streams
 type InlineFlowItem = {
   text: string // raw author text, including leading/trailing collapsible spaces
@@ -171,6 +176,18 @@ type InlineFlowFragment = {
 }
 type InlineFlowLine = {
   fragments: InlineFlowFragment[]
+  width: number
+  end: InlineFlowCursor
+}
+type InlineFlowFragmentRange = {
+  itemIndex: number // index back into the original InlineFlowItem array
+  gapBefore: number // collapsed boundary gap paid before this fragment on this line
+  occupiedWidth: number // text width plus extraWidth
+  start: LayoutCursor
+  end: LayoutCursor
+}
+type InlineFlowLineRange = {
+  fragments: InlineFlowFragmentRange[]
   width: number
   end: InlineFlowCursor
 }

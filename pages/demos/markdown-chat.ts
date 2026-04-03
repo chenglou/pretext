@@ -3,15 +3,17 @@ import {
   CODE_BLOCK_PADDING_X,
   CODE_BLOCK_PADDING_Y,
   CODE_LINE_HEIGHT,
-  type ConversationFrame,
   createPreparedChatTemplates,
   findVisibleRange,
   getMaxChatWidth,
+  materializeTemplateLayout,
   MESSAGE_SIDE_PADDING,
   OCCLUSION_BANNER_HEIGHT,
   type BlockLayout,
+  type ChatMessageInstance,
+  type ConversationFrame,
   type InlineFragmentLayout,
-  type TemplateLayout,
+  type TemplateFrame,
 } from './markdown-chat.model.ts'
 
 type State = {
@@ -20,7 +22,6 @@ type State = {
   }
   frame: ConversationFrame | null
   isVisualizationOn: boolean
-  lastViewportWidth: number
 }
 
 const domCache = {
@@ -28,8 +29,6 @@ const domCache = {
   shell: getRequiredElement('chat-shell'),
   viewport: getRequiredDiv('chat-viewport'),
   canvas: getRequiredDiv('chat-canvas'),
-  topBanner: getRequiredDiv('top-banner'),
-  bottomBanner: getRequiredDiv('bottom-banner'),
   toggleButton: getRequiredButton('virtualization-toggle'),
   rows: new Map<string, HTMLElement>(), // cache lifetime: on visibility changes
 }
@@ -41,7 +40,6 @@ const st: State = {
   },
   frame: null,
   isVisualizationOn: false,
-  lastViewportWidth: 0,
 }
 
 let scheduledRaf: number | null = null
@@ -90,84 +88,63 @@ function render(): void {
   const viewportWidth = domCache.viewport.clientWidth
   const viewportHeight = domCache.viewport.clientHeight
   const scrollTop = domCache.viewport.scrollTop
-  const topBannerHeight = domCache.topBanner.offsetHeight
-  const bottomBannerHeight = domCache.bottomBanner.offsetHeight
 
   let isVisualizationOn = st.isVisualizationOn
   if (st.events.toggleVisualization) isVisualizationOn = !isVisualizationOn
 
   const chatWidth = getMaxChatWidth(viewportWidth)
   const previousFrame = st.frame
-  const previousDistanceFromBottom = previousFrame === null
-    ? 0
-    : Math.max(0, previousFrame.totalHeight - viewportHeight - scrollTop)
-  const needsRelayout =
-    previousFrame === null ||
-    previousFrame.chatWidth !== chatWidth ||
-    viewportWidth !== st.lastViewportWidth
+  const canReuseFrame = previousFrame !== null && previousFrame.chatWidth === chatWidth
+  const frame = canReuseFrame
+    ? previousFrame
+    : buildConversationFrame(templates, chatWidth)
+  const needsRelayout = !canReuseFrame
 
-  let frame = previousFrame
-  let nextScrollTop: number | null = null
-  if (needsRelayout) {
-    frame = buildConversationFrame(templates, chatWidth)
-    nextScrollTop = previousFrame === null || previousDistanceFromBottom < 24
-      ? Math.max(0, frame.totalHeight - viewportHeight)
-      : Math.max(0, frame.totalHeight - viewportHeight - previousDistanceFromBottom)
-  }
-
-  if (frame === null) return
-
-  const effectiveScrollTop = nextScrollTop ?? scrollTop
   const { start, end } = findVisibleRange(
     frame,
-    effectiveScrollTop,
+    scrollTop,
     viewportHeight,
-    topBannerHeight,
-    bottomBannerHeight,
+    OCCLUSION_BANNER_HEIGHT,
+    OCCLUSION_BANNER_HEIGHT,
   )
 
   st.frame = frame
   st.isVisualizationOn = isVisualizationOn
-  st.lastViewportWidth = viewportWidth
   st.events.toggleVisualization = false
 
   domCache.root.style.setProperty('--chat-width', `${frame.chatWidth}px`)
   domCache.shell.dataset['visualization'] = isVisualizationOn ? 'on' : 'off'
-  domCache.canvas.style.width = `${frame.chatWidth}px`
   domCache.canvas.style.height = `${frame.totalHeight}px`
   domCache.toggleButton.textContent = isVisualizationOn
     ? 'Hide virtualization mask'
     : 'Show virtualization mask'
   domCache.toggleButton.setAttribute('aria-pressed', String(isVisualizationOn))
 
-  if (needsRelayout) clearRowCache()
-  projectVisibleRows(frame, start, end)
-
-  if (nextScrollTop !== null && domCache.viewport.scrollTop !== nextScrollTop) {
-    domCache.viewport.scrollTop = nextScrollTop
-  }
+  projectVisibleRows(frame, start, end, needsRelayout)
 }
 
-function clearRowCache(): void {
-  for (const node of domCache.rows.values()) {
-    node.remove()
-  }
-  domCache.rows.clear()
-}
-
-function projectVisibleRows(frame: ConversationFrame, start: number, end: number): void {
+function projectVisibleRows(
+  frame: ConversationFrame,
+  start: number,
+  end: number,
+  needsRelayout: boolean,
+): void {
   const visibleKeys = new Set<string>()
 
   for (let index = start; index < end; index++) {
     const message = frame.messages[index]!
     const key = message.key
-    const layout = frame.templateLayouts[message.templateIndex]!
     let node = domCache.rows.get(key)
+    if (needsRelayout && node !== undefined) {
+      node.remove()
+      domCache.rows.delete(key)
+      node = undefined
+    }
     if (node === undefined) {
-      node = createMessageNode(layout, message)
+      node = createMessageNode(message)
       domCache.rows.set(key, node)
     }
-    projectMessageNode(node, layout, frame.messageTops[index]!)
+    projectMessageNode(node, message.frame, message.top)
     visibleKeys.add(key)
     domCache.canvas.append(node)
   }
@@ -179,12 +156,10 @@ function projectVisibleRows(frame: ConversationFrame, start: number, end: number
   }
 }
 
-function createMessageNode(
-  layout: TemplateLayout,
-  message: ConversationFrame['messages'][number],
-): HTMLElement {
+function createMessageNode(message: ChatMessageInstance): HTMLElement {
+  const layout = materializeTemplateLayout(message)
   const row = document.createElement('article')
-  row.className = `msg msg--${message.role}`
+  row.className = `msg msg--${layout.role}`
 
   const stack = document.createElement('div')
   stack.className = 'msg-stack'
@@ -207,22 +182,22 @@ function createMessageNode(
 
 function projectMessageNode(
   row: HTMLElement,
-  layout: TemplateLayout,
+  frame: TemplateFrame,
   top: number,
 ): void {
   row.style.top = `${top}px`
-  row.style.height = `${layout.totalHeight}px`
+  row.style.height = `${frame.totalHeight}px`
 
   const stack = row.firstElementChild
   if (!(stack instanceof HTMLDivElement)) throw new Error('Missing .msg-stack')
-  stack.style.width = `${layout.frameWidth}px`
+  stack.style.width = `${frame.frameWidth}px`
 
   const bubble = stack.firstElementChild
   if (!(bubble instanceof HTMLDivElement)) throw new Error('Missing .msg-bubble')
 
   const inner = bubble.firstElementChild
   if (!(inner instanceof HTMLDivElement)) throw new Error('Missing .msg-bubble-inner')
-  inner.style.height = `${layout.bubbleHeight}px`
+  inner.style.height = `${frame.bubbleHeight}px`
 }
 
 function renderBlock(block: BlockLayout, contentInsetX: number): HTMLElement {

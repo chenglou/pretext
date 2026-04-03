@@ -10,6 +10,7 @@ const LINE_HEIGHT = 19
 
 type LayoutModule = typeof import('./layout.ts')
 type LineBreakModule = typeof import('./line-break.ts')
+type InlineFlowModule = typeof import('./inline-flow.ts')
 
 let prepare: LayoutModule['prepare']
 let prepareWithSegments: LayoutModule['prepareWithSegments']
@@ -21,6 +22,11 @@ let clearCache: LayoutModule['clearCache']
 let setLocale: LayoutModule['setLocale']
 let countPreparedLines: LineBreakModule['countPreparedLines']
 let walkPreparedLines: LineBreakModule['walkPreparedLines']
+let prepareInlineFlow: InlineFlowModule['prepareInlineFlow']
+let measureInlineFlowGeometry: InlineFlowModule['measureInlineFlowGeometry']
+let walkInlineFlowLineRanges: InlineFlowModule['walkInlineFlowLineRanges']
+let walkInlineFlowLines: InlineFlowModule['walkInlineFlowLines']
+let measureInlineFlow: InlineFlowModule['measureInlineFlow']
 
 const emojiPresentationRe = /\p{Emoji_Presentation}/u
 const punctuationRe = /[.,!?;:%)\]}'"”’»›…—-]/u
@@ -223,6 +229,7 @@ beforeAll(async () => {
   Reflect.set(globalThis, 'OffscreenCanvas', TestOffscreenCanvas)
   const mod = await import('./layout.ts')
   const lineBreakMod = await import('./line-break.ts')
+  const inlineFlowMod = await import('./inline-flow.ts')
   ;({
     prepare,
     prepareWithSegments,
@@ -234,6 +241,7 @@ beforeAll(async () => {
     setLocale,
   } = mod)
   ;({ countPreparedLines, walkPreparedLines } = lineBreakMod)
+  ;({ prepareInlineFlow, measureInlineFlowGeometry, walkInlineFlowLineRanges, walkInlineFlowLines, measureInlineFlow } = inlineFlowMod)
 })
 
 beforeEach(() => {
@@ -528,6 +536,88 @@ describe('prepare invariants', () => {
     setLocale(undefined)
     const latin = prepare('hello world', FONT)
     expect(layout(latin, 200, LINE_HEIGHT)).toEqual({ lineCount: 1, height: LINE_HEIGHT })
+  })
+})
+
+describe('inline-flow invariants', () => {
+  test('non-materializing range walker matches materialized line walker', () => {
+    const prepared = prepareInlineFlow([
+      { text: 'Ship ', font: FONT },
+      { text: '@maya', font: '700 12px Test Sans', break: 'never', extraWidth: 18 },
+      { text: "'s rich note wraps cleanly", font: FONT },
+    ])
+    const rangedLines: Array<{
+      end: TestLayoutCursor & { itemIndex: number }
+      fragments: Array<{
+        end: TestLayoutCursor
+        gapBefore: number
+        itemIndex: number
+        occupiedWidth: number
+        start: TestLayoutCursor
+      }>
+      width: number
+    }> = []
+    const materializedLines: Array<{
+      end: TestLayoutCursor & { itemIndex: number }
+      fragments: Array<{
+        end: TestLayoutCursor
+        gapBefore: number
+        itemIndex: number
+        occupiedWidth: number
+        start: TestLayoutCursor
+        text: string
+      }>
+      width: number
+    }> = []
+
+    const rangeLineCount = walkInlineFlowLineRanges(prepared, 120, line => {
+      rangedLines.push({
+        end: line.end,
+        fragments: line.fragments.map(fragment => ({
+          end: fragment.end,
+          gapBefore: fragment.gapBefore,
+          itemIndex: fragment.itemIndex,
+          occupiedWidth: fragment.occupiedWidth,
+          start: fragment.start,
+        })),
+        width: line.width,
+      })
+    })
+    const materializedLineCount = walkInlineFlowLines(prepared, 120, line => {
+      materializedLines.push({
+        end: line.end,
+        fragments: line.fragments.map(fragment => ({
+          end: fragment.end,
+          gapBefore: fragment.gapBefore,
+          itemIndex: fragment.itemIndex,
+          occupiedWidth: fragment.occupiedWidth,
+          start: fragment.start,
+          text: fragment.text,
+        })),
+        width: line.width,
+      })
+    })
+
+    expect(rangeLineCount).toBe(materializedLineCount)
+    expect(measureInlineFlowGeometry(prepared, 120)).toEqual({
+      lineCount: rangeLineCount,
+      maxLineWidth: Math.max(...rangedLines.map(line => line.width)),
+    })
+    expect(measureInlineFlow(prepared, 120, LINE_HEIGHT)).toEqual({
+      height: rangeLineCount * LINE_HEIGHT,
+      lineCount: rangeLineCount,
+    })
+    expect(rangedLines).toHaveLength(materializedLines.length)
+
+    for (let index = 0; index < rangedLines.length; index++) {
+      const rangeLine = rangedLines[index]!
+      const materializedLine = materializedLines[index]!
+      expect(rangeLine.width).toBe(materializedLine.width)
+      expect(rangeLine.end).toEqual(materializedLine.end)
+      expect(rangeLine.fragments).toEqual(
+        materializedLine.fragments.map(({ text: _text, ...fragment }) => fragment),
+      )
+    }
   })
 })
 

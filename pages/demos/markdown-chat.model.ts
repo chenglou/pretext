@@ -1,6 +1,7 @@
 import { marked, type Token, type Tokens } from 'marked'
 
 import {
+  walkLineRanges,
   layoutWithLines,
   measureNaturalWidth,
   prepareWithSegments,
@@ -8,7 +9,7 @@ import {
   type PreparedTextWithSegments,
 } from '../../src/layout.ts'
 import {
-  measureInlineFlow,
+  measureInlineFlowGeometry,
   prepareInlineFlow,
   walkInlineFlowLines,
   type PreparedInlineFlow,
@@ -112,18 +113,41 @@ export type PreparedChatTemplate = {
   role: 'assistant' | 'user'
 }
 
-export type ChatMessageInstance = {
-  key: string
-  role: 'assistant' | 'user'
-  templateIndex: number
-}
-
 export type InlineFragmentLayout = {
   className: string
   href: string | null
   leadingGap: number
   text: string
 }
+
+type BlockFrameBase = {
+  contentLeft: number
+  height: number
+  markerClassName: string | null
+  markerLeft: number | null
+  markerText: string | null
+  quoteRailLefts: number[]
+  top: number
+}
+
+type InlineBlockFrame = BlockFrameBase & {
+  kind: 'inline'
+  lineHeight: number
+  usedWidth: number
+}
+
+type CodeBlockFrame = BlockFrameBase & {
+  kind: 'code'
+  lineHeight: number
+  width: number
+}
+
+type RuleBlockFrame = BlockFrameBase & {
+  kind: 'rule'
+  width: number
+}
+
+type BlockFrame = InlineBlockFrame | CodeBlockFrame | RuleBlockFrame
 
 type InlineBlockLayout = {
   contentLeft: number
@@ -170,6 +194,16 @@ type RuleBlockLayout = {
 
 export type BlockLayout = InlineBlockLayout | CodeBlockLayout | RuleBlockLayout
 
+export type TemplateFrame = {
+  blocks: BlockFrame[]
+  bubbleHeight: number
+  contentInsetX: number
+  frameWidth: number
+  layoutContentWidth: number
+  role: 'assistant' | 'user'
+  totalHeight: number
+}
+
 export type TemplateLayout = {
   blocks: BlockLayout[]
   bubbleHeight: number
@@ -179,12 +213,17 @@ export type TemplateLayout = {
   totalHeight: number
 }
 
+export type ChatMessageInstance = {
+  bottom: number
+  key: string
+  prepared: PreparedChatTemplate
+  frame: TemplateFrame
+  top: number
+}
+
 export type ConversationFrame = {
   chatWidth: number
-  messageBottoms: number[]
-  messageTops: number[]
   messages: ChatMessageInstance[]
-  templateLayouts: TemplateLayout[]
   totalHeight: number
 }
 
@@ -217,29 +256,27 @@ export function buildConversationFrame(
   const messageCount = TOTAL_MESSAGE_COUNT
   const userFrameWidth = Math.max(240, Math.floor(chatWidth * BUBBLE_MAX_RATIO))
   const assistantFrameWidth = Math.max(120, chatWidth - MESSAGE_SIDE_PADDING * 2)
-  const templateLayouts = templates.map(template => {
-    const contentInsetX = template.role === 'assistant' ? 0 : BUBBLE_PADDING_X
-    const frameWidth = template.role === 'assistant' ? assistantFrameWidth : userFrameWidth
-    const contentWidth = Math.max(120, frameWidth - contentInsetX * 2)
-    return layoutTemplate(template, frameWidth, contentWidth, contentInsetX)
-  })
   const messages: ChatMessageInstance[] = new Array(messageCount)
-  const messageTops: number[] = new Array(messageCount)
-  const messageBottoms: number[] = new Array(messageCount)
 
   let y = CHAT_TOP_PADDING
   for (let ordinal = 0; ordinal < messageCount; ordinal++) {
     const templateIndex = ordinal % templates.length
-    const layout = templateLayouts[templateIndex]!
+    const template = templates[templateIndex]!
+    const contentInsetX = template.role === 'assistant' ? 0 : BUBBLE_PADDING_X
+    const frameWidth = template.role === 'assistant' ? assistantFrameWidth : userFrameWidth
+    const contentWidth = Math.max(120, frameWidth - contentInsetX * 2)
+    const messageFrame = layoutTemplateFrame(template, frameWidth, contentWidth, contentInsetX)
+    const top = y
+    const bottom = top + messageFrame.totalHeight
 
     messages[ordinal] = {
+      bottom,
+      frame: messageFrame,
       key: String(ordinal),
-      role: templates[templateIndex]!.role,
-      templateIndex,
+      prepared: template,
+      top,
     }
-    messageTops[ordinal] = y
-    y += layout.totalHeight
-    messageBottoms[ordinal] = y
+    y = bottom
     y += MESSAGE_GAP
   }
 
@@ -250,10 +287,7 @@ export function buildConversationFrame(
 
   return {
     chatWidth,
-    messageBottoms,
-    messageTops,
     messages,
-    templateLayouts,
     totalHeight,
   }
 }
@@ -273,11 +307,11 @@ export function findVisibleRange(
   const minY = Math.max(0, scrollTop + topOcclusionHeight)
   const maxY = Math.max(minY, scrollTop + viewportHeight - bottomOcclusionHeight)
   let low = 0
-  let high = frame.messageBottoms.length
+  let high = frame.messages.length
 
   while (low < high) {
     const mid = (low + high) >> 1
-    if (frame.messageBottoms[mid]! > minY) {
+    if (frame.messages[mid]!.bottom > minY) {
       high = mid
     } else {
       low = mid + 1
@@ -286,10 +320,10 @@ export function findVisibleRange(
   const start = low
 
   low = start
-  high = frame.messageTops.length
+  high = frame.messages.length
   while (low < high) {
     const mid = (low + high) >> 1
-    if (frame.messageTops[mid]! >= maxY) {
+    if (frame.messages[mid]!.top >= maxY) {
       high = mid
     } else {
       low = mid + 1
@@ -858,23 +892,23 @@ function stripSingleTrailingNewline(text: string): string {
   return text.endsWith('\n') ? text.slice(0, -1) : text
 }
 
-function layoutTemplate(
+function layoutTemplateFrame(
   template: PreparedChatTemplate,
   maxFrameWidth: number,
   maxContentWidth: number,
   contentInsetX: number,
-): TemplateLayout {
+): TemplateFrame {
   let y = BUBBLE_PADDING_Y
-  const blocks: BlockLayout[] = []
+  const blocks: BlockFrame[] = []
   let usedContentWidth = 0
 
   for (let index = 0; index < template.blocks.length; index++) {
     const block = template.blocks[index]!
     y += block.marginTop
-    const layout = layoutBlock(block, maxContentWidth, y)
-    blocks.push(layout)
-    y += layout.height
-    usedContentWidth = Math.max(usedContentWidth, getUsedBlockWidth(layout))
+    const blockFrame = layoutBlockFrame(block, maxContentWidth, y)
+    blocks.push(blockFrame)
+    y += blockFrame.height
+    usedContentWidth = Math.max(usedContentWidth, getUsedBlockWidth(blockFrame))
   }
 
   const bubbleHeight = y + BUBBLE_PADDING_Y
@@ -886,65 +920,54 @@ function layoutTemplate(
     bubbleHeight,
     contentInsetX,
     frameWidth,
+    layoutContentWidth: maxContentWidth,
     role: template.role,
     totalHeight: bubbleHeight,
   }
 }
 
-function layoutBlock(
+function layoutBlockFrame(
   block: PreparedBlock,
   contentWidth: number,
   top: number,
-): BlockLayout {
+): BlockFrame {
   switch (block.kind) {
     case 'inline': {
       const lineWidth = Math.max(1, contentWidth - block.contentLeft)
-      const lines: Array<{ fragments: InlineFragmentLayout[]; width: number }> = []
-      let usedWidth = 0
-      walkInlineFlowLines(block.flow, lineWidth, line => {
-        usedWidth = Math.max(usedWidth, line.width)
-        lines.push({
-          fragments: line.fragments.map(fragment => ({
-            className: block.classNames[fragment.itemIndex]!,
-            href: block.hrefs[fragment.itemIndex] ?? null,
-            leadingGap: fragment.gapBefore,
-            text: fragment.text,
-          })),
-          width: line.width,
-        })
-      })
-      const { height } = measureInlineFlow(block.flow, lineWidth, block.lineHeight)
+      const { lineCount, maxLineWidth } = measureInlineFlowGeometry(block.flow, lineWidth)
       return {
         contentLeft: block.contentLeft,
-        height,
+        height: lineCount * block.lineHeight,
         kind: 'inline',
         lineHeight: block.lineHeight,
-        lines,
         markerClassName: block.markerClassName,
         markerLeft: block.markerLeft,
         markerText: block.markerText,
         quoteRailLefts: block.quoteRailLefts,
         top,
-        usedWidth,
+        usedWidth: maxLineWidth,
       }
     }
 
     case 'code': {
       const boxWidth = Math.max(1, contentWidth - block.contentLeft)
       const innerWidth = Math.max(1, boxWidth - CODE_BLOCK_PADDING_X * 2)
-      const layout = layoutWithLines(block.prepared, innerWidth, block.lineHeight)
-      const widestLine = layout.lines.reduce((max, line) => Math.max(max, line.width), 0)
+      let lineCount = 0
+      let widestLine = 0
+      walkLineRanges(block.prepared, innerWidth, line => {
+        lineCount++
+        widestLine = Math.max(widestLine, line.width)
+      })
       return {
         contentLeft: block.contentLeft,
-        height: layout.height + CODE_BLOCK_PADDING_Y * 2,
+        height: lineCount * block.lineHeight + CODE_BLOCK_PADDING_Y * 2,
         kind: 'code',
-        lines: layout.lines,
+        lineHeight: block.lineHeight,
         markerClassName: block.markerClassName,
         markerLeft: block.markerLeft,
         markerText: block.markerText,
         quoteRailLefts: block.quoteRailLefts,
         top,
-        usedWidth: widestLine + CODE_BLOCK_PADDING_X * 2,
         width: widestLine + CODE_BLOCK_PADDING_X * 2,
       }
     }
@@ -965,13 +988,102 @@ function layoutBlock(
   }
 }
 
-function getUsedBlockWidth(block: BlockLayout): number {
+function getUsedBlockWidth(block: BlockFrame): number {
   switch (block.kind) {
     case 'inline':
       return block.contentLeft + block.usedWidth
     case 'code':
-      return block.contentLeft + block.usedWidth
+      return block.contentLeft + block.width
     case 'rule':
       return block.contentLeft + block.width
+  }
+}
+
+export function materializeTemplateLayout(message: ChatMessageInstance): TemplateLayout {
+  const blocks = message.prepared.blocks.map((block, index) =>
+    materializeBlockLayout(block, message.frame.blocks[index]!, message.frame.layoutContentWidth),
+  )
+
+  return {
+    blocks,
+    bubbleHeight: message.frame.bubbleHeight,
+    contentInsetX: message.frame.contentInsetX,
+    frameWidth: message.frame.frameWidth,
+    role: message.frame.role,
+    totalHeight: message.frame.totalHeight,
+  }
+}
+
+function materializeBlockLayout(
+  block: PreparedBlock,
+  frame: BlockFrame,
+  contentWidth: number,
+): BlockLayout {
+  switch (frame.kind) {
+    case 'inline': {
+      if (block.kind !== 'inline') throw new Error('Inline block/frame mismatch')
+      const lineWidth = Math.max(1, contentWidth - frame.contentLeft)
+      const lines: Array<{ fragments: InlineFragmentLayout[]; width: number }> = []
+      walkInlineFlowLines(block.flow, lineWidth, line => {
+        lines.push({
+          fragments: line.fragments.map(fragment => ({
+            className: block.classNames[fragment.itemIndex]!,
+            href: block.hrefs[fragment.itemIndex] ?? null,
+            leadingGap: fragment.gapBefore,
+            text: fragment.text,
+          })),
+          width: line.width,
+        })
+      })
+
+      return {
+        contentLeft: frame.contentLeft,
+        height: frame.height,
+        kind: 'inline',
+        lineHeight: frame.lineHeight,
+        lines,
+        markerClassName: frame.markerClassName,
+        markerLeft: frame.markerLeft,
+        markerText: frame.markerText,
+        quoteRailLefts: frame.quoteRailLefts,
+        top: frame.top,
+        usedWidth: frame.usedWidth,
+      }
+    }
+
+    case 'code': {
+      if (block.kind !== 'code') throw new Error('Code block/frame mismatch')
+      const boxWidth = Math.max(1, contentWidth - frame.contentLeft)
+      const innerWidth = Math.max(1, boxWidth - CODE_BLOCK_PADDING_X * 2)
+      const layout = layoutWithLines(block.prepared, innerWidth, frame.lineHeight)
+      return {
+        contentLeft: frame.contentLeft,
+        height: frame.height,
+        kind: 'code',
+        lines: layout.lines,
+        markerClassName: frame.markerClassName,
+        markerLeft: frame.markerLeft,
+        markerText: frame.markerText,
+        quoteRailLefts: frame.quoteRailLefts,
+        top: frame.top,
+        usedWidth: frame.width,
+        width: frame.width,
+      }
+    }
+
+    case 'rule': {
+      if (block.kind !== 'rule') throw new Error('Rule block/frame mismatch')
+      return {
+        contentLeft: frame.contentLeft,
+        height: frame.height,
+        kind: 'rule',
+        markerClassName: frame.markerClassName,
+        markerLeft: frame.markerLeft,
+        markerText: frame.markerText,
+        quoteRailLefts: frame.quoteRailLefts,
+        top: frame.top,
+        width: frame.width,
+      }
+    }
   }
 }

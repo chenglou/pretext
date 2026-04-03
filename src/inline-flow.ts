@@ -1,8 +1,10 @@
 import {
-  layoutNextLine,
+  layoutNextLineRange,
+  materializeLineRange,
   measureNaturalWidth,
   prepareWithSegments,
   type LayoutCursor,
+  type LayoutLineRange,
   type LayoutResult,
   type PreparedTextWithSegments,
 } from './layout.js'
@@ -42,14 +44,34 @@ export type InlineFlowFragment = {
   end: LayoutCursor // End cursor within the item's prepared text
 }
 
+export type InlineFlowFragmentRange = {
+  itemIndex: number // Index into the original InlineFlowItem array
+  gapBefore: number // Collapsed inter-item gap paid before this fragment on this line
+  occupiedWidth: number // Text width plus the item's extraWidth contribution
+  start: LayoutCursor // Start cursor within the item's prepared text
+  end: LayoutCursor // End cursor within the item's prepared text
+}
+
 export type InlineFlowLine = {
   fragments: InlineFlowFragment[]
   width: number
   end: InlineFlowCursor
 }
 
+export type InlineFlowLineRange = {
+  fragments: InlineFlowFragmentRange[]
+  width: number
+  end: InlineFlowCursor
+}
+
+export type InlineFlowGeometry = {
+  lineCount: number
+  maxLineWidth: number
+}
+
 type InternalPreparedInlineFlow = PreparedInlineFlow & {
   items: PreparedInlineFlowItem[]
+  itemsBySourceItemIndex: Array<PreparedInlineFlowItem | undefined>
 }
 
 type PreparedInlineFlowItem = {
@@ -57,7 +79,6 @@ type PreparedInlineFlowItem = {
   end: LayoutCursor
   extraWidth: number
   gapBefore: number
-  naturalText: string
   naturalWidth: number
   prepared: PreparedTextWithSegments
   sourceItemIndex: number
@@ -114,14 +135,32 @@ function getCollapsedSpaceWidth(font: string, cache: Map<string, number>): numbe
 
 function prepareWholeItemLine(prepared: PreparedTextWithSegments): {
   end: LayoutCursor
-  text: string
   width: number
 } | null {
-  return layoutNextLine(prepared, EMPTY_LAYOUT_CURSOR, Number.POSITIVE_INFINITY)
+  const range = layoutNextLineRange(prepared, EMPTY_LAYOUT_CURSOR, Number.POSITIVE_INFINITY)
+  if (range === null) return null
+  return {
+    end: range.end,
+    width: range.width,
+  }
+}
+
+type InlineFlowFragmentCollector = (
+  item: PreparedInlineFlowItem,
+  gapBefore: number,
+  occupiedWidth: number,
+  start: LayoutCursor,
+  end: LayoutCursor,
+) => void
+
+type InlineFlowStep = {
+  end: InlineFlowCursor
+  width: number
 }
 
 export function prepareInlineFlow(items: InlineFlowItem[]): PreparedInlineFlow {
   const preparedItems: PreparedInlineFlowItem[] = []
+  const itemsBySourceItemIndex = Array.from<PreparedInlineFlowItem | undefined>({ length: items.length })
   const collapsedSpaceWidthCache = new Map<string, number>()
   let pendingGapWidth = 0
 
@@ -153,35 +192,36 @@ export function prepareInlineFlow(items: InlineFlowItem[]): PreparedInlineFlow {
       continue
     }
 
-    preparedItems.push({
+    const preparedItem = {
       break: item.break ?? 'normal',
       end: wholeLine.end,
       extraWidth: item.extraWidth ?? 0,
       gapBefore,
-      naturalText: wholeLine.text,
       naturalWidth: wholeLine.width,
       prepared,
       sourceItemIndex: index,
-    })
+    } satisfies PreparedInlineFlowItem
+    preparedItems.push(preparedItem)
+    itemsBySourceItemIndex[index] = preparedItem
 
     pendingGapWidth = hasTrailingWhitespace ? getCollapsedSpaceWidth(item.font, collapsedSpaceWidthCache) : 0
   }
 
   return {
     items: preparedItems,
+    itemsBySourceItemIndex,
   } as InternalPreparedInlineFlow
 }
 
-export function layoutNextInlineFlowLine(
-  prepared: PreparedInlineFlow,
+function stepInlineFlowLine(
+  flow: InternalPreparedInlineFlow,
   maxWidth: number,
-  start: InlineFlowCursor = FLOW_START_CURSOR,
-): InlineFlowLine | null {
-  const flow = getInternalPreparedInlineFlow(prepared)
+  start: InlineFlowCursor,
+  collectFragment?: InlineFlowFragmentCollector,
+): InlineFlowStep | null {
   if (flow.items.length === 0 || start.itemIndex >= flow.items.length) return null
 
   const safeWidth = Math.max(1, maxWidth)
-  const fragments: InlineFlowFragment[] = []
   let lineWidth = 0
   let remainingWidth = safeWidth
   let itemIndex = start.itemIndex
@@ -199,7 +239,7 @@ export function layoutNextInlineFlowLine(
       continue
     }
 
-    const gapBefore = fragments.length === 0 ? 0 : item.gapBefore
+    const gapBefore = lineWidth === 0 ? 0 : item.gapBefore
     const atItemStart = isLineStartCursor(textCursor)
 
     if (item.break === 'never') {
@@ -211,16 +251,15 @@ export function layoutNextInlineFlowLine(
 
       const occupiedWidth = item.naturalWidth + item.extraWidth
       const totalWidth = gapBefore + occupiedWidth
-      if (fragments.length > 0 && totalWidth > remainingWidth) break lineLoop
+      if (lineWidth > 0 && totalWidth > remainingWidth) break lineLoop
 
-      fragments.push({
-        itemIndex: item.sourceItemIndex,
-        text: item.naturalText,
+      collectFragment?.(
+        item,
         gapBefore,
         occupiedWidth,
-        start: cloneCursor(EMPTY_LAYOUT_CURSOR),
-        end: cloneCursor(item.end),
-      })
+        cloneCursor(EMPTY_LAYOUT_CURSOR),
+        cloneCursor(item.end),
+      )
       lineWidth += totalWidth
       remainingWidth = Math.max(0, safeWidth - lineWidth)
       itemIndex++
@@ -229,19 +268,18 @@ export function layoutNextInlineFlowLine(
     }
 
     const reservedWidth = gapBefore + item.extraWidth
-    if (fragments.length > 0 && reservedWidth >= remainingWidth) break lineLoop
+    if (lineWidth > 0 && reservedWidth >= remainingWidth) break lineLoop
 
     if (atItemStart) {
       const totalWidth = reservedWidth + item.naturalWidth
       if (totalWidth <= remainingWidth) {
-        fragments.push({
-          itemIndex: item.sourceItemIndex,
-          text: item.naturalText,
+        collectFragment?.(
+          item,
           gapBefore,
-          occupiedWidth: item.naturalWidth + item.extraWidth,
-          start: cloneCursor(EMPTY_LAYOUT_CURSOR),
-          end: cloneCursor(item.end),
-        })
+          item.naturalWidth + item.extraWidth,
+          cloneCursor(EMPTY_LAYOUT_CURSOR),
+          cloneCursor(item.end),
+        )
         lineWidth += totalWidth
         remainingWidth = Math.max(0, safeWidth - lineWidth)
         itemIndex++
@@ -251,7 +289,7 @@ export function layoutNextInlineFlowLine(
     }
 
     const availableWidth = Math.max(1, remainingWidth - reservedWidth)
-    const line = layoutNextLine(item.prepared, textCursor, availableWidth)
+    const line = layoutNextLineRange(item.prepared, textCursor, availableWidth)
     if (line === null) {
       itemIndex++
       textCursor = EMPTY_LAYOUT_CURSOR
@@ -268,8 +306,8 @@ export function layoutNextInlineFlowLine(
     // keep whole-word-style boundaries when they exist. But once the current
     // line can consume a real breakable unit from the item, stay greedy and
     // keep filling the line.
-    if (atItemStart && fragments.length > 0 && gapBefore > 0 && endsInsideFirstSegment(line.end)) {
-      const freshLine = layoutNextLine(
+    if (lineWidth > 0 && atItemStart && gapBefore > 0 && endsInsideFirstSegment(line.end)) {
+      const freshLine = layoutNextLineRange(
         item.prepared,
         EMPTY_LAYOUT_CURSOR,
         Math.max(1, safeWidth - item.extraWidth),
@@ -279,14 +317,13 @@ export function layoutNextInlineFlowLine(
       }
     }
 
-    fragments.push({
-      itemIndex: item.sourceItemIndex,
-      text: line.text,
+    collectFragment?.(
+      item,
       gapBefore,
-      occupiedWidth: line.width + item.extraWidth,
-      start: cloneCursor(textCursor),
-      end: cloneCursor(line.end),
-    })
+      line.width + item.extraWidth,
+      cloneCursor(textCursor),
+      cloneCursor(line.end),
+    )
     lineWidth += gapBefore + line.width + item.extraWidth
     remainingWidth = Math.max(0, safeWidth - lineWidth)
 
@@ -300,16 +337,115 @@ export function layoutNextInlineFlowLine(
     break
   }
 
-  if (fragments.length === 0) return null
+  if (lineWidth === 0) return null
 
   return {
-    fragments,
     width: lineWidth,
     end: {
       itemIndex,
       segmentIndex: textCursor.segmentIndex,
       graphemeIndex: textCursor.graphemeIndex,
     },
+  }
+}
+
+export function layoutNextInlineFlowLineRange(
+  prepared: PreparedInlineFlow,
+  maxWidth: number,
+  start: InlineFlowCursor = FLOW_START_CURSOR,
+): InlineFlowLineRange | null {
+  const flow = getInternalPreparedInlineFlow(prepared)
+  const fragments: InlineFlowFragmentRange[] = []
+  const step = stepInlineFlowLine(flow, maxWidth, start, (item, gapBefore, occupiedWidth, fragmentStart, fragmentEnd) => {
+    fragments.push({
+      itemIndex: item.sourceItemIndex,
+      gapBefore,
+      occupiedWidth,
+      start: fragmentStart,
+      end: fragmentEnd,
+    })
+  })
+  if (step === null) return null
+
+  return {
+    fragments,
+    width: step.width,
+    end: step.end,
+  }
+}
+
+function materializeFragmentText(
+  item: PreparedInlineFlowItem,
+  fragment: InlineFlowFragmentRange,
+): string {
+  const line = materializeLineRange(item.prepared, {
+    width: fragment.occupiedWidth - item.extraWidth,
+    start: fragment.start,
+    end: fragment.end,
+  } satisfies LayoutLineRange)
+  return line.text
+}
+
+export function layoutNextInlineFlowLine(
+  prepared: PreparedInlineFlow,
+  maxWidth: number,
+  start: InlineFlowCursor = FLOW_START_CURSOR,
+): InlineFlowLine | null {
+  const flow = getInternalPreparedInlineFlow(prepared)
+  const line = layoutNextInlineFlowLineRange(prepared, maxWidth, start)
+  if (line === null) return null
+
+  return {
+    fragments: line.fragments.map(fragment => {
+      const item = flow.itemsBySourceItemIndex[fragment.itemIndex]
+      if (item === undefined) throw new Error('Missing inline-flow item for fragment')
+      return {
+        ...fragment,
+        text: materializeFragmentText(item, fragment),
+      }
+    }),
+    width: line.width,
+    end: line.end,
+  }
+}
+
+export function walkInlineFlowLineRanges(
+  prepared: PreparedInlineFlow,
+  maxWidth: number,
+  onLine: (line: InlineFlowLineRange) => void,
+): number {
+  let lineCount = 0
+  let cursor = FLOW_START_CURSOR
+
+  while (true) {
+    const line = layoutNextInlineFlowLineRange(prepared, maxWidth, cursor)
+    if (line === null) return lineCount
+    onLine(line)
+    lineCount++
+    cursor = line.end
+  }
+}
+
+export function measureInlineFlowGeometry(
+  prepared: PreparedInlineFlow,
+  maxWidth: number,
+): InlineFlowGeometry {
+  const flow = getInternalPreparedInlineFlow(prepared)
+  let lineCount = 0
+  let maxLineWidth = 0
+  let cursor = FLOW_START_CURSOR
+
+  while (true) {
+    const line = stepInlineFlowLine(flow, maxWidth, cursor)
+    if (line === null) {
+      return {
+        lineCount,
+        maxLineWidth,
+      }
+    }
+    lineCount++
+    if (line.width > maxLineWidth) maxLineWidth = line.width
+    cursor = line.end
   }
 }
 
@@ -335,7 +471,7 @@ export function measureInlineFlow(
   maxWidth: number,
   lineHeight: number,
 ): LayoutResult {
-  const lineCount = walkInlineFlowLines(prepared, maxWidth, () => {})
+  const { lineCount } = measureInlineFlowGeometry(prepared, maxWidth)
   return {
     lineCount,
     height: lineCount * lineHeight,
