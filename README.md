@@ -25,9 +25,6 @@ Pre-compute message height before rendering to prevent jumpy UI.
 const prepared = prepare(message, '16px Inter')
 const { height } = layout(prepared, chatWidth, 20)
 
-
-
-
 ## Best Practices
 
 - Call `prepare()` only once per text + font combination  
@@ -35,14 +32,12 @@ const { height } = layout(prepared, chatWidth, 20)
 - Cache prepared objects to improve performance  
 - Avoid calling `prepare()` inside loops or frequent re-renders  
 
-
 ## Performance Comparison
 
 | Method | Time (1000 items) | Reflow |
 |--------|------------------|--------|
 | DOM (getBoundingClientRect) | ~90ms | Yes |
 | Pretext | ~0.05ms | No |
-
 
 
 ## API
