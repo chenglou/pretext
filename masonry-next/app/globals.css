@@ -44,11 +44,12 @@ body {
 
 .page-toolbar-shell {
   position: fixed;
-  inset: 0 0 auto 0;
+  inset: 16px 24px auto;
   z-index: 12;
   padding: 18px 24px 16px;
   background: linear-gradient(180deg, rgba(245, 241, 235, 0.96), rgba(245, 241, 235, 0.8));
-  border-bottom: 1px solid rgba(125, 108, 96, 0.1);
+  border: 1px solid rgba(125, 108, 96, 0.1);
+  border-radius: 24px;
   backdrop-filter: blur(18px);
 }
 
@@ -111,18 +112,11 @@ body {
 }
 
 .page-status {
-  top: 112px;
-}
-
-.masonry-loading,
-.empty-state {
-  top: 168px;
 }
 
 .masonry-root {
   position: relative;
   width: 100%;
-  padding-top: 132px;
 }
 
 .masonry-card {
@@ -207,6 +201,7 @@ body {
 
 @media (max-width: 640px) {
   .page-toolbar-shell {
+    inset: 12px 14px auto;
     padding: 14px 14px 16px;
   }
 
@@ -219,18 +214,5 @@ body {
   .masonry-loading,
   .empty-state {
     left: 14px;
-  }
-
-  .page-status {
-    top: 172px;
-  }
-
-  .masonry-loading,
-  .empty-state {
-    top: 224px;
-  }
-
-  .masonry-root {
-    padding-top: 192px;
   }
 }

@@ -11,6 +11,82 @@ test.beforeEach(async ({ request, context }) => {
 })
 
 test.describe('masonry page', () => {
+  test('loads without hydration or runtime errors', async ({ page }) => {
+    const consoleErrors = []
+    const pageErrors = []
+
+    page.on('console', message => {
+      if (message.type() === 'error') {
+        consoleErrors.push(message.text())
+      }
+    })
+
+    page.on('pageerror', error => {
+      pageErrors.push(error.message)
+    })
+
+    await page.goto('/')
+    await expect(page.getByTestId('masonry-card').first()).toBeVisible()
+
+    const combinedErrors = [...consoleErrors, ...pageErrors]
+    const hydrationErrors = combinedErrors.filter(message =>
+      /hydration failed|did not match what was rendered on the server|expected server html/i.test(message),
+    )
+
+    expect(hydrationErrors).toEqual([])
+    expect(pageErrors).toEqual([])
+  })
+
+  test('keeps masonry content below the fixed toolbar across viewport sizes', async ({ page }) => {
+    async function getChromeLayout() {
+      return page.evaluate(() => {
+        const toolbar = document.querySelector('.page-toolbar-shell')
+        const root = document.querySelector('[data-testid="masonry-root"]')
+        const firstCard = document.querySelector('[data-testid="masonry-card"]')
+
+        if (!toolbar || !root || !firstCard) {
+          return null
+        }
+
+        return {
+          toolbarBottom: toolbar.getBoundingClientRect().bottom,
+          rootTop: root.getBoundingClientRect().top,
+          firstCardTop: firstCard.getBoundingClientRect().top,
+        }
+      })
+    }
+
+    async function expectMasonryBelowToolbar() {
+      await page.waitForFunction(() => {
+        const toolbar = document.querySelector('.page-toolbar-shell')
+        const root = document.querySelector('[data-testid="masonry-root"]')
+        const firstCard = document.querySelector('[data-testid="masonry-card"]')
+
+        if (!toolbar || !root || !firstCard) return false
+
+        const toolbarBottom = toolbar.getBoundingClientRect().bottom
+        const rootTop = root.getBoundingClientRect().top
+        const firstCardTop = firstCard.getBoundingClientRect().top
+
+        return rootTop >= toolbarBottom + 20 && firstCardTop > toolbarBottom
+      })
+
+      const chromeLayout = await getChromeLayout()
+      expect(chromeLayout).not.toBeNull()
+      expect(chromeLayout.rootTop).toBeGreaterThanOrEqual(chromeLayout.toolbarBottom + 20)
+      expect(chromeLayout.firstCardTop).toBeGreaterThan(chromeLayout.toolbarBottom)
+    }
+
+    await page.setViewportSize({ width: 1440, height: 1200 })
+    await page.goto('/')
+    await expect(page.getByTestId('masonry-card').first()).toBeVisible()
+    await expectMasonryBelowToolbar()
+
+    await page.setViewportSize({ width: 430, height: 932 })
+    await expect(page.getByTestId('masonry-card').first()).toBeVisible()
+    await expectMasonryBelowToolbar()
+  })
+
   test('serves the full SQLite-backed dataset through the API', async ({ request }) => {
     const response = await request.get('/api/thoughts')
     expect(response.ok()).toBeTruthy()

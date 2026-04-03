@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 
 const FONT_FAMILY = '"Helvetica Neue", Helvetica, Arial, sans-serif'
 const BASE_FONT_SIZE = 15
@@ -18,6 +18,11 @@ const MIN_ZOOM = 0.8
 const MAX_ZOOM = 1.8
 const DEFAULT_ZOOM = 1
 const ZOOM_STORAGE_KEY = 'masonry-next-zoom'
+const DEFAULT_CHROME_OFFSETS = {
+  contentTop: 148,
+  statusTop: 128,
+  feedbackTop: 184,
+}
 
 function IconButton({ label, pressed, onClick, children, testId }) {
   return (
@@ -116,6 +121,19 @@ function getMetrics(zoom) {
     singleColumnMaxViewportWidth: BASE_SINGLE_COLUMN_MAX_VIEWPORT_WIDTH * zoom,
     viewportBuffer: BASE_VIEWPORT_BUFFER * zoom,
     minTextWidth: 120 * zoom,
+  }
+}
+
+function getChromeOffsets(toolbarElement) {
+  if (!toolbarElement) return DEFAULT_CHROME_OFFSETS
+
+  const toolbarBottom = Math.ceil(toolbarElement.getBoundingClientRect().bottom)
+  const statusTop = toolbarBottom + 16
+
+  return {
+    contentTop: toolbarBottom + 24,
+    statusTop,
+    feedbackTop: statusTop + 56,
   }
 }
 
@@ -237,12 +255,14 @@ function computeLayout(thoughts, windowWidth, heightCache, context, metrics) {
 export default function MasonryBoard() {
   const heightCacheRef = useRef(new Map())
   const measureContextRef = useRef(null)
+  const toolbarShellRef = useRef(null)
   const [thoughts, setThoughts] = useState([])
   const [layout, setLayout] = useState({ contentHeight: 0, positionedCards: [], columnCount: 0 })
   const [viewport, setViewport] = useState({ top: 0, height: 0 })
   const [filter, setFilter] = useState('all')
   const [statusMessage, setStatusMessage] = useState('')
   const [zoom, setZoom] = useState(DEFAULT_ZOOM)
+  const [chromeOffsets, setChromeOffsets] = useState(DEFAULT_CHROME_OFFSETS)
 
   const metrics = useMemo(() => getMetrics(zoom), [zoom])
 
@@ -302,6 +322,45 @@ export default function MasonryBoard() {
     if (typeof window === 'undefined') return
     window.localStorage.setItem(ZOOM_STORAGE_KEY, String(zoom))
   }, [zoom])
+
+  useLayoutEffect(() => {
+    if (typeof window === 'undefined') return undefined
+
+    const toolbarElement = toolbarShellRef.current
+    if (!toolbarElement) return undefined
+
+    let animationFrameId = 0
+    function updateChromeOffsets() {
+      window.cancelAnimationFrame(animationFrameId)
+      animationFrameId = window.requestAnimationFrame(() => {
+        setChromeOffsets(currentOffsets => {
+          const nextOffsets = getChromeOffsets(toolbarElement)
+          if (
+            currentOffsets.contentTop === nextOffsets.contentTop &&
+            currentOffsets.statusTop === nextOffsets.statusTop &&
+            currentOffsets.feedbackTop === nextOffsets.feedbackTop
+          ) {
+            return currentOffsets
+          }
+          return nextOffsets
+        })
+      })
+    }
+
+    const resizeObserver = new ResizeObserver(() => {
+      updateChromeOffsets()
+    })
+
+    resizeObserver.observe(toolbarElement)
+    updateChromeOffsets()
+    window.addEventListener('resize', updateChromeOffsets)
+
+    return () => {
+      window.cancelAnimationFrame(animationFrameId)
+      window.removeEventListener('resize', updateChromeOffsets)
+      resizeObserver.disconnect()
+    }
+  }, [])
 
   useEffect(() => {
     function handleKeydown(event) {
@@ -488,7 +547,7 @@ export default function MasonryBoard() {
         '--card-action-icon-size': `${16 * zoom}px`,
       }}
     >
-      <div className="page-toolbar-shell">
+      <div className="page-toolbar-shell" ref={toolbarShellRef}>
         <div className="page-toolbar">
           <div className="page-toolbar-group">
             <button
@@ -549,19 +608,19 @@ export default function MasonryBoard() {
       </div>
 
       {statusMessage ? (
-        <div className="page-status" data-testid="status-message">
+        <div className="page-status" data-testid="status-message" style={{ top: `${chromeOffsets.statusTop}px` }}>
           {statusMessage}
         </div>
       ) : null}
 
       {thoughts.length === 0 ? (
-        <div className="masonry-loading" data-testid="loading-indicator">
+        <div className="masonry-loading" data-testid="loading-indicator" style={{ top: `${chromeOffsets.feedbackTop}px` }}>
           Loading thoughts...
         </div>
       ) : null}
 
       {thoughts.length > 0 && activeThoughts.length === 0 ? (
-        <div className="empty-state" data-testid="empty-state">
+        <div className="empty-state" data-testid="empty-state" style={{ top: `${chromeOffsets.feedbackTop}px` }}>
           No thoughts match this view yet.
         </div>
       ) : null}
@@ -572,7 +631,10 @@ export default function MasonryBoard() {
         data-column-count={layout.columnCount ?? 0}
         data-card-count={activeThoughts.length}
         data-zoom-level={zoomPercent}
-        style={{ height: `${layout.contentHeight}px` }}
+        style={{
+          height: `${layout.contentHeight}px`,
+          marginTop: `${chromeOffsets.contentTop}px`,
+        }}
       >
         {visibleCards.map(card => (
           <article
