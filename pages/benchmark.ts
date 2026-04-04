@@ -3,6 +3,7 @@ import {
   prepareWithSegments,
   layout,
   layoutNextLine,
+  measureLineGeometry,
   layoutWithLines,
   walkLineRanges,
   clearCache,
@@ -448,6 +449,16 @@ function buildRichBenchmarks(
 ): BenchmarkResult[] {
   let richSink = 0
 
+  const measureLineGeometryMs = bench(repeatIndex => {
+    const width = widths[repeatIndex % widths.length]!
+    let sum = 0
+    for (let i = 0; i < prepared.length; i++) {
+      const result = measureLineGeometry(prepared[i]!, width)
+      sum += result.lineCount + result.maxLineWidth
+    }
+    richSink += sum + repeatIndex
+  }, sampleRepeats)
+
   const layoutWithLinesMs = bench(repeatIndex => {
     const width = widths[repeatIndex % widths.length]!
     let sum = 0
@@ -487,6 +498,11 @@ function buildRichBenchmarks(
   document.body.dataset[`${labelPrefix}RichSink`] = String(richSink)
 
   return [
+    {
+      label: 'Our library: measureLineGeometry()',
+      ms: measureLineGeometryMs,
+      desc: `${descSuffix}; aggregate geometry only`,
+    },
     {
       label: 'Our library: layoutWithLines()',
       ms: layoutWithLinesMs,

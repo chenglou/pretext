@@ -31,16 +31,6 @@ export type InternalLayoutLine = {
   width: number
 }
 
-function canBreakAfter(kind: SegmentBreakKind): boolean {
-  return (
-    kind === 'space' ||
-    kind === 'preserved-space' ||
-    kind === 'tab' ||
-    kind === 'zero-width-break' ||
-    kind === 'soft-hyphen'
-  )
-}
-
 function normalizeSimpleLineStartSegmentIndex(
   prepared: PreparedLineBreakData,
   segmentIndex: number,
@@ -103,18 +93,13 @@ function findChunkIndexForStart(prepared: PreparedLineBreakData, segmentIndex: n
   return lo < prepared.chunks.length ? lo : -1
 }
 
-function normalizeLineStartChunkIndex(
+function normalizeLineStartInChunk(
   prepared: PreparedLineBreakData,
+  chunkIndex: number,
   cursor: LineBreakCursor,
 ): number {
   let segmentIndex = cursor.segmentIndex
-  const graphemeIndex = cursor.graphemeIndex
-
-  if (segmentIndex >= prepared.widths.length) return -1
-
-  const chunkIndex = findChunkIndexForStart(prepared, segmentIndex)
-  if (chunkIndex < 0) return -1
-  if (graphemeIndex > 0) return chunkIndex
+  if (cursor.graphemeIndex > 0) return chunkIndex
 
   const chunk = prepared.chunks[chunkIndex]!
   if (chunk.startSegmentIndex === chunk.endSegmentIndex && segmentIndex === chunk.startSegmentIndex) {
@@ -138,6 +123,35 @@ function normalizeLineStartChunkIndex(
   cursor.segmentIndex = chunk.consumedEndSegmentIndex
   cursor.graphemeIndex = 0
   return chunkIndex + 1
+}
+
+function normalizeLineStartChunkIndex(
+  prepared: PreparedLineBreakData,
+  cursor: LineBreakCursor,
+): number {
+  if (cursor.segmentIndex >= prepared.widths.length) return -1
+
+  const chunkIndex = findChunkIndexForStart(prepared, cursor.segmentIndex)
+  if (chunkIndex < 0) return -1
+  return normalizeLineStartInChunk(prepared, chunkIndex, cursor)
+}
+
+function normalizeLineStartChunkIndexFromHint(
+  prepared: PreparedLineBreakData,
+  chunkIndex: number,
+  cursor: LineBreakCursor,
+): number {
+  if (cursor.segmentIndex >= prepared.widths.length) return -1
+
+  let nextChunkIndex = chunkIndex
+  while (
+    nextChunkIndex < prepared.chunks.length &&
+    cursor.segmentIndex >= prepared.chunks[nextChunkIndex]!.consumedEndSegmentIndex
+  ) {
+    nextChunkIndex++
+  }
+  if (nextChunkIndex >= prepared.chunks.length) return -1
+  return normalizeLineStartInChunk(prepared, nextChunkIndex, cursor)
 }
 
 export function normalizeLineStart(
@@ -364,6 +378,7 @@ export function walkPreparedLines(
   const engineProfile = getEngineProfile()
   const lineFitEpsilon = engineProfile.lineFitEpsilon
   const preferPrefixWidths = engineProfile.preferPrefixWidthsForBreakableRuns
+  const fitLimit = maxWidth + lineFitEpsilon
 
   let lineCount = 0
   let lineW = 0
@@ -430,14 +445,19 @@ export function walkPreparedLines(
     lineEndGraphemeIndex = 0
   }
 
-  function updatePendingBreakForWholeSegment(segmentIndex: number, segmentWidth: number): void {
-    if (!canBreakAfter(kinds[segmentIndex]!)) return
-    const fitAdvance = kinds[segmentIndex] === 'tab' ? 0 : lineEndFitAdvances[segmentIndex]!
-    const paintAdvance = kinds[segmentIndex] === 'tab' ? segmentWidth : lineEndPaintAdvances[segmentIndex]!
+  function updatePendingBreakForWholeSegment(
+    kind: SegmentBreakKind,
+    breakAfter: boolean,
+    segmentIndex: number,
+    segmentWidth: number,
+  ): void {
+    if (!breakAfter) return
+    const fitAdvance = kind === 'tab' ? 0 : lineEndFitAdvances[segmentIndex]!
+    const paintAdvance = kind === 'tab' ? segmentWidth : lineEndPaintAdvances[segmentIndex]!
     pendingBreakSegmentIndex = segmentIndex + 1
     pendingBreakFitWidth = lineW - segmentWidth + fitAdvance
     pendingBreakPaintWidth = lineW - segmentWidth + paintAdvance
-    pendingBreakKind = kinds[segmentIndex]!
+    pendingBreakKind = kind
   }
 
   function appendBreakableSegment(segmentIndex: number): void {
@@ -446,43 +466,25 @@ export function walkPreparedLines(
 
   function appendBreakableSegmentFrom(segmentIndex: number, startGraphemeIndex: number): void {
     const gWidths = breakableWidths[segmentIndex]!
-    const gPrefixWidths = breakablePrefixWidths[segmentIndex] ?? null
-    if (preferPrefixWidths && gPrefixWidths !== null) {
-      for (let g = startGraphemeIndex; g < gWidths.length; g++) {
-        const gw = gPrefixWidths[g]! - (g > 0 ? gPrefixWidths[g - 1]! : 0)
+    const gPrefixWidths = preferPrefixWidths ? breakablePrefixWidths[segmentIndex] ?? null : null
+    let previousPrefixWidth =
+      gPrefixWidths === null || startGraphemeIndex === 0 ? 0 : gPrefixWidths[startGraphemeIndex - 1]!
 
-        if (!hasContent) {
-          startLineAtGrapheme(segmentIndex, g, gw)
-          continue
-        }
+    for (let g = startGraphemeIndex; g < gWidths.length; g++) {
+      const gw = gPrefixWidths === null ? gWidths[g]! : gPrefixWidths[g]! - previousPrefixWidth
 
-        if (lineW + gw > maxWidth + lineFitEpsilon) {
-          emitCurrentLine()
-          startLineAtGrapheme(segmentIndex, g, gw)
-        } else {
-          lineW += gw
-          lineEndSegmentIndex = segmentIndex
-          lineEndGraphemeIndex = g + 1
-        }
+      if (!hasContent) {
+        startLineAtGrapheme(segmentIndex, g, gw)
+      } else if (lineW + gw > fitLimit) {
+        emitCurrentLine()
+        startLineAtGrapheme(segmentIndex, g, gw)
+      } else {
+        lineW += gw
+        lineEndSegmentIndex = segmentIndex
+        lineEndGraphemeIndex = g + 1
       }
-    } else {
-      for (let g = startGraphemeIndex; g < gWidths.length; g++) {
-        const gw = gWidths[g]!
 
-        if (!hasContent) {
-          startLineAtGrapheme(segmentIndex, g, gw)
-          continue
-        }
-
-        if (lineW + gw > maxWidth + lineFitEpsilon) {
-          emitCurrentLine()
-          startLineAtGrapheme(segmentIndex, g, gw)
-        } else {
-          lineW += gw
-          lineEndSegmentIndex = segmentIndex
-          lineEndGraphemeIndex = g + 1
-        }
-      }
+      if (gPrefixWidths !== null) previousPrefixWidth = gPrefixWidths[g]!
     }
 
     if (hasContent && lineEndSegmentIndex === segmentIndex && lineEndGraphemeIndex === gWidths.length) {
@@ -559,6 +561,7 @@ export function walkPreparedLines(
     let i = chunk.startSegmentIndex
     while (i < chunk.endSegmentIndex) {
       const kind = kinds[i]!
+      const breakAfter = kind === 'space' || kind === 'preserved-space' || kind === 'tab' || kind === 'zero-width-break' || kind === 'soft-hyphen'
       const w = kind === 'tab' ? getTabAdvance(lineW, tabStopAdvance) : widths[i]!
 
       if (kind === 'soft-hyphen') {
@@ -580,20 +583,20 @@ export function walkPreparedLines(
         } else {
           startLineAtSegment(i, w)
         }
-        updatePendingBreakForWholeSegment(i, w)
+        updatePendingBreakForWholeSegment(kind, breakAfter, i, w)
         i++
         continue
       }
 
       const newW = lineW + w
-      if (newW > maxWidth + lineFitEpsilon) {
+      if (newW > fitLimit) {
         const currentBreakFitWidth = lineW + (kind === 'tab' ? 0 : lineEndFitAdvances[i]!)
         const currentBreakPaintWidth = lineW + (kind === 'tab' ? w : lineEndPaintAdvances[i]!)
 
         if (
           pendingBreakKind === 'soft-hyphen' &&
           engineProfile.preferEarlySoftHyphenBreak &&
-          pendingBreakFitWidth <= maxWidth + lineFitEpsilon
+          pendingBreakFitWidth <= fitLimit
         ) {
           emitCurrentLine(pendingBreakSegmentIndex, 0, pendingBreakPaintWidth)
           continue
@@ -604,14 +607,14 @@ export function walkPreparedLines(
           continue
         }
 
-        if (canBreakAfter(kind) && currentBreakFitWidth <= maxWidth + lineFitEpsilon) {
+        if (breakAfter && currentBreakFitWidth <= fitLimit) {
           appendWholeSegment(i, w)
           emitCurrentLine(i + 1, 0, currentBreakPaintWidth)
           i++
           continue
         }
 
-        if (pendingBreakSegmentIndex >= 0 && pendingBreakFitWidth <= maxWidth + lineFitEpsilon) {
+        if (pendingBreakSegmentIndex >= 0 && pendingBreakFitWidth <= fitLimit) {
           if (
             lineEndSegmentIndex > pendingBreakSegmentIndex ||
             (lineEndSegmentIndex === pendingBreakSegmentIndex && lineEndGraphemeIndex > 0)
@@ -637,7 +640,7 @@ export function walkPreparedLines(
       }
 
       appendWholeSegment(i, w)
-      updatePendingBreakForWholeSegment(i, w)
+      updatePendingBreakForWholeSegment(kind, breakAfter, i, w)
       i++
     }
 
@@ -679,6 +682,7 @@ function stepPreparedChunkLineGeometry(
   const engineProfile = getEngineProfile()
   const lineFitEpsilon = engineProfile.lineFitEpsilon
   const preferPrefixWidths = engineProfile.preferPrefixWidthsForBreakableRuns
+  const fitLimit = maxWidth + lineFitEpsilon
 
   let lineW = 0
   let hasContent = false
@@ -731,29 +735,34 @@ function stepPreparedChunkLineGeometry(
     lineEndGraphemeIndex = 0
   }
 
-  function updatePendingBreakForWholeSegment(segmentIndex: number, segmentWidth: number): void {
-    if (!canBreakAfter(kinds[segmentIndex]!)) return
-    const fitAdvance = kinds[segmentIndex] === 'tab' ? 0 : lineEndFitAdvances[segmentIndex]!
-    const paintAdvance = kinds[segmentIndex] === 'tab' ? segmentWidth : lineEndPaintAdvances[segmentIndex]!
+  function updatePendingBreakForWholeSegment(
+    kind: SegmentBreakKind,
+    breakAfter: boolean,
+    segmentIndex: number,
+    segmentWidth: number,
+  ): void {
+    if (!breakAfter) return
+    const fitAdvance = kind === 'tab' ? 0 : lineEndFitAdvances[segmentIndex]!
+    const paintAdvance = kind === 'tab' ? segmentWidth : lineEndPaintAdvances[segmentIndex]!
     pendingBreakSegmentIndex = segmentIndex + 1
     pendingBreakFitWidth = lineW - segmentWidth + fitAdvance
     pendingBreakPaintWidth = lineW - segmentWidth + paintAdvance
-    pendingBreakKind = kinds[segmentIndex]!
+    pendingBreakKind = kind
   }
 
   function appendBreakableSegmentFrom(segmentIndex: number, startGraphemeIndex: number): number | null {
     const gWidths = breakableWidths[segmentIndex]!
-    const gPrefixWidths = breakablePrefixWidths[segmentIndex] ?? null
-    if (preferPrefixWidths && gPrefixWidths !== null) {
-      for (let g = startGraphemeIndex; g < gWidths.length; g++) {
-        const gw = gPrefixWidths[g]! - (g > 0 ? gPrefixWidths[g - 1]! : 0)
+    const gPrefixWidths = preferPrefixWidths ? breakablePrefixWidths[segmentIndex] ?? null : null
+    let previousPrefixWidth =
+      gPrefixWidths === null || startGraphemeIndex === 0 ? 0 : gPrefixWidths[startGraphemeIndex - 1]!
 
-        if (!hasContent) {
-          startLineAtGrapheme(segmentIndex, g, gw)
-          continue
-        }
+    for (let g = startGraphemeIndex; g < gWidths.length; g++) {
+      const gw = gPrefixWidths === null ? gWidths[g]! : gPrefixWidths[g]! - previousPrefixWidth
 
-        if (lineW + gw > maxWidth + lineFitEpsilon) {
+      if (!hasContent) {
+        startLineAtGrapheme(segmentIndex, g, gw)
+      } else {
+        if (lineW + gw > fitLimit) {
           return finishLine()
         }
 
@@ -761,23 +770,8 @@ function stepPreparedChunkLineGeometry(
         lineEndSegmentIndex = segmentIndex
         lineEndGraphemeIndex = g + 1
       }
-    } else {
-      for (let g = startGraphemeIndex; g < gWidths.length; g++) {
-        const gw = gWidths[g]!
 
-        if (!hasContent) {
-          startLineAtGrapheme(segmentIndex, g, gw)
-          continue
-        }
-
-        if (lineW + gw > maxWidth + lineFitEpsilon) {
-          return finishLine()
-        }
-
-        lineW += gw
-        lineEndSegmentIndex = segmentIndex
-        lineEndGraphemeIndex = g + 1
-      }
+      if (gPrefixWidths !== null) previousPrefixWidth = gPrefixWidths[g]!
     }
 
     if (hasContent && lineEndSegmentIndex === segmentIndex && lineEndGraphemeIndex === gWidths.length) {
@@ -822,7 +816,7 @@ function stepPreparedChunkLineGeometry(
       }
     }
 
-    if (pendingBreakFitWidth <= maxWidth + lineFitEpsilon) {
+    if (pendingBreakFitWidth <= fitLimit) {
       return finishLine(pendingBreakSegmentIndex, 0, pendingBreakPaintWidth)
     }
 
@@ -831,6 +825,7 @@ function stepPreparedChunkLineGeometry(
 
   for (let i = cursor.segmentIndex; i < chunk.endSegmentIndex; i++) {
     const kind = kinds[i]!
+    const breakAfter = kind === 'space' || kind === 'preserved-space' || kind === 'tab' || kind === 'zero-width-break' || kind === 'soft-hyphen'
     const startGraphemeIndex = i === cursor.segmentIndex ? cursor.graphemeIndex : 0
     const w = kind === 'tab' ? getTabAdvance(lineW, tabStopAdvance) : widths[i]!
 
@@ -856,19 +851,19 @@ function stepPreparedChunkLineGeometry(
       } else {
         startLineAtSegment(i, w)
       }
-      updatePendingBreakForWholeSegment(i, w)
+      updatePendingBreakForWholeSegment(kind, breakAfter, i, w)
       continue
     }
 
     const newW = lineW + w
-    if (newW > maxWidth + lineFitEpsilon) {
+    if (newW > fitLimit) {
       const currentBreakFitWidth = lineW + (kind === 'tab' ? 0 : lineEndFitAdvances[i]!)
       const currentBreakPaintWidth = lineW + (kind === 'tab' ? w : lineEndPaintAdvances[i]!)
 
       if (
         pendingBreakKind === 'soft-hyphen' &&
         engineProfile.preferEarlySoftHyphenBreak &&
-        pendingBreakFitWidth <= maxWidth + lineFitEpsilon
+        pendingBreakFitWidth <= fitLimit
       ) {
         return finishLine(pendingBreakSegmentIndex, 0, pendingBreakPaintWidth)
       }
@@ -876,12 +871,12 @@ function stepPreparedChunkLineGeometry(
       const softBreakLine = maybeFinishAtSoftHyphen(i)
       if (softBreakLine !== null) return softBreakLine
 
-      if (canBreakAfter(kind) && currentBreakFitWidth <= maxWidth + lineFitEpsilon) {
+      if (breakAfter && currentBreakFitWidth <= fitLimit) {
         appendWholeSegment(i, w)
         return finishLine(i + 1, 0, currentBreakPaintWidth)
       }
 
-      if (pendingBreakSegmentIndex >= 0 && pendingBreakFitWidth <= maxWidth + lineFitEpsilon) {
+      if (pendingBreakSegmentIndex >= 0 && pendingBreakFitWidth <= fitLimit) {
         if (
           lineEndSegmentIndex > pendingBreakSegmentIndex ||
           (lineEndSegmentIndex === pendingBreakSegmentIndex && lineEndGraphemeIndex > 0)
@@ -902,7 +897,7 @@ function stepPreparedChunkLineGeometry(
     }
 
     appendWholeSegment(i, w)
-    updatePendingBreakForWholeSegment(i, w)
+    updatePendingBreakForWholeSegment(kind, breakAfter, i, w)
   }
 
   if (pendingBreakSegmentIndex === chunk.consumedEndSegmentIndex && lineEndGraphemeIndex === 0) {
@@ -1091,6 +1086,26 @@ export function measurePreparedLineGeometry(
   }
   let lineCount = 0
   let maxLineWidth = 0
+
+  if (!prepared.simpleLineWalkFastPath) {
+    let chunkIndex = normalizeLineStartChunkIndex(prepared, cursor)
+    while (chunkIndex >= 0) {
+      const lineWidth = stepPreparedChunkLineGeometry(prepared, cursor, chunkIndex, maxWidth)
+      if (lineWidth === null) {
+        return {
+          lineCount,
+          maxLineWidth,
+        }
+      }
+      lineCount++
+      if (lineWidth > maxLineWidth) maxLineWidth = lineWidth
+      chunkIndex = normalizeLineStartChunkIndexFromHint(prepared, chunkIndex, cursor)
+    }
+    return {
+      lineCount,
+      maxLineWidth,
+    }
+  }
 
   while (true) {
     const lineWidth = stepPreparedLineGeometry(prepared, cursor, maxWidth)
