@@ -1,8 +1,10 @@
 # Pretext
 
-Pure JavaScript/TypeScript library for multiline text measurement & layout. Fast, accurate & supports all the languages you didn't even know about. Allows rendering to DOM, Canvas, SVG and soon, server-side.
+Pure JavaScript/TypeScript multiline text measurement and layout for browser-grounded typography.
 
-Pretext side-steps the need for DOM measurements (e.g. `getBoundingClientRect`, `offsetHeight`), which trigger layout reflow, one of the most expensive operations in the browser. It implements its own text measurement logic, using the browsers' own font engine as ground truth (very AI-friendly iteration method).
+Call `prepare()` once, then keep relayout cheap with `layout()`: no DOM reads, no reflow, no canvas calls in the hot path. It handles mixed scripts, emoji, bidi-heavy app text, and the browser's annoying little line-breaking habits much better than "count chars and pray".
+
+Pretext side-steps DOM measurement APIs like `getBoundingClientRect()` and `offsetHeight`, which can force synchronous layout. It treats the browser's own font engine as ground truth during prepare time, then keeps resize work arithmetic-only. That's the missing piece for things like virtualization, scroll anchoring, shrinkwrap bubbles, editor-ish textareas, and custom editorial layouts.
 
 ## Installation
 
@@ -12,85 +14,114 @@ npm install @chenglou/pretext
 
 ## Demos
 
-Clone the repo, run `bun install`, then `bun start`, and open the `/demos` in your browser (no trailing slash. Bun devserver bugs on those)
-Alternatively, see them live at [chenglou.me/pretext](https://chenglou.me/pretext/). Some more at [somnai-dreams.github.io/pretext-demos](https://somnai-dreams.github.io/pretext-demos/)
+Clone the repo, run `bun install`, then `bun start`, and open `/demos/index` locally.
 
-## API
+Live demos:
+- [chenglou.me/pretext](https://chenglou.me/pretext/)
+- [somnai-dreams.github.io/pretext-demos](https://somnai-dreams.github.io/pretext-demos/)
 
-Pretext serves 2 use cases:
+Useful stops:
+- `/demos/bubbles` for multiline shrinkwrap with `walkLineRanges()`
+- `/demos/dynamic-layout` for obstacle-aware streaming layout with `layoutNextLine()`
+- `/demos/markdown-chat` for virtualized rich chat layout
+- `/demos/rich-note` for mixed inline runs, chips, and the inline-flow sidecar
+- `/accuracy` and `/benchmark` for the browser-oracle and performance pages
 
-### 1. Measure a paragraph's height _without ever touching DOM_
+## Mental Model
+
+- `prepare()` and `prepareWithSegments()` do the one-time work: normalize whitespace, segment text, apply glue rules, and measure with canvas.
+- `layout()` and the rich line APIs consume that prepared handle at whatever width and `lineHeight` you need.
+- `prepare()` is the opaque fast path. `prepareWithSegments()` is the richer escape hatch for custom rendering, cursor-based reflow, geometry-only line walking, and bidi-aware manual layout.
+- If width changed but text/font/options did not, rerun `layout()`, not `prepare()`.
+
+## 1. Fast Height Prediction
 
 ```ts
 import { prepare, layout } from '@chenglou/pretext'
 
 const prepared = prepare('AGI 春天到了. بدأت الرحلة 🚀‎', '16px Inter')
-const { height, lineCount } = layout(prepared, textWidth, 20) // pure arithmetics. No DOM layout & reflow!
+const { height, lineCount } = layout(prepared, textWidth, 20)
 ```
 
-`prepare()` does the one-time work: normalize whitespace, segment the text, apply glue rules, measure the segments with canvas, and return an opaque handle. `layout()` is the cheap hot path after that: pure arithmetic over cached widths. Do not rerun `prepare()` for the same text and configs; that'd defeat its precomputation. For example, on resize, only rerun `layout()`.
+`prepare()` is width-independent. Do it once when the text or font changes. `layout()` is the cheap resize-time pass after that.
 
-If you want textarea-like text where ordinary spaces, `\t` tabs, and `\n` hard breaks stay visible, pass `{ whiteSpace: 'pre-wrap' }` to `prepare()`:
+If you want textarea-like text where ordinary spaces, `\t` tabs, and `\n` hard breaks stay visible, pass `{ whiteSpace: 'pre-wrap' }`:
 
 ```ts
 const prepared = prepare(textareaValue, '16px Inter', { whiteSpace: 'pre-wrap' })
 const { height } = layout(prepared, textareaWidth, 20)
 ```
 
-On the current checked-in benchmark snapshot:
-- `prepare()` is about `19ms` for the shared 500-text batch
-- `layout()` is about `0.09ms` for that same batch
+This is the path for:
+- virtualization without DOM measuring loops
+- scroll anchoring when late text arrives
+- browser-free overflow checks during development
+- UI layout systems that need text height as an input instead of a side effect
 
-We support all the languages you can imagine, including emojis and mixed-bidi, and caters to specific browser quirks
+Current accuracy and benchmark snapshots live in [STATUS.md](STATUS.md) and [status/dashboard.json](status/dashboard.json). Keep numeric claims there, not hard-coded into app code or old README prose.
 
-The returned height is the crucial last piece for unlocking web UI's:
-- proper virtualization/occlusion without guesstimates & caching
-- fancy userland layouts: masonry, JS-driven flexbox-like implementations, nudging a few layout values without CSS hacks (imagine that), etc.
-- _development time_ verification (especially now with AI) that labels on e.g. buttons don't overflow to the next line, browser-free
-- prevent layout shift when new text loads and you wanna re-anchor the scroll position
+## 2. Rich Line Layout And Manual Reflow
 
-### 2. Lay out the paragraph lines manually yourself
+When you need actual lines, stable cursors, or variable-width flow, switch to `prepareWithSegments()`.
 
-Switch out `prepare` with `prepareWithSegments`, then:
-
-- `layoutWithLines()` gives you all the lines at a fixed width:
+Fixed-width layout:
 
 ```ts
 import { prepareWithSegments, layoutWithLines } from '@chenglou/pretext'
 
 const prepared = prepareWithSegments('AGI 春天到了. بدأت الرحلة 🚀', '18px "Helvetica Neue"')
-const { lines } = layoutWithLines(prepared, 320, 26) // 320px max width, 26px line height
-for (let i = 0; i < lines.length; i++) ctx.fillText(lines[i].text, 0, i * 26)
+const { lines } = layoutWithLines(prepared, 320, 26)
+
+for (let i = 0; i < lines.length; i++) {
+  ctx.fillText(lines[i].text, 0, i * 26)
+}
 ```
 
-- `walkLineRanges()` gives you line widths and cursors without building the text strings:
+Geometry-only layout, no line strings:
 
 ```ts
-let maxW = 0
-walkLineRanges(prepared, 320, line => { if (line.width > maxW) maxW = line.width })
-// maxW is now the widest line — the tightest container width that still fits the text! This multiline "shrink wrap" has been missing from web
+import { measureLineGeometry, walkLineRanges } from '@chenglou/pretext'
+
+const { lineCount, maxLineWidth } = measureLineGeometry(prepared, 320)
+let maxWidth = 0
+
+walkLineRanges(prepared, 320, line => {
+  if (line.width > maxWidth) maxWidth = line.width
+})
 ```
 
-- `layoutNextLine()` lets you route text one row at a time when width changes as you go:
+Streaming layout when width changes as you go:
 
 ```ts
-let cursor = { segmentIndex: 0, graphemeIndex: 0 }
+import {
+  layoutNextLineRange,
+  materializeLineRange,
+  prepareWithSegments,
+  type LayoutCursor,
+} from '@chenglou/pretext'
+
+const prepared = prepareWithSegments(article, BODY_FONT)
+let cursor: LayoutCursor = { segmentIndex: 0, graphemeIndex: 0 }
 let y = 0
 
-// Flow text around a floated image: lines beside the image are narrower
 while (true) {
   const width = y < image.bottom ? columnWidth - image.width : columnWidth
-  const line = layoutNextLine(prepared, cursor, width)
-  if (line === null) break
+  const range = layoutNextLineRange(prepared, cursor, width)
+  if (range === null) break
+
+  const line = materializeLineRange(prepared, range)
   ctx.fillText(line.text, 0, y)
-  cursor = line.end
+
+  cursor = range.end
   y += 26
 }
 ```
 
-This usage allows rendering to canvas, SVG, WebGL and (eventually) server-side.
+The rich APIs all carry line boundary cursors (`start` / `end`), so you can keep flowing text through columns, obstacles, or custom renderers without falling back to string offsets.
 
-If your manual layout needs a small helper for mixed inline runs, atomic pills, and browser-like boundary whitespace collapse, there is an experimental alpha sidecar at `@chenglou/pretext/inline-flow`. It stays inline-only and `white-space: normal`-only on purpose:
+## 3. Experimental Inline-Flow Sidecar
+
+If your "rich text" problem is really "a few inline runs with different fonts, plus some atomic chips and browser-like boundary whitespace collapse", there is a deliberately small sidecar at `@chenglou/pretext/inline-flow`.
 
 ```ts
 import { prepareInlineFlow, walkInlineFlowLines } from '@chenglou/pretext/inline-flow'
@@ -107,86 +138,199 @@ walkInlineFlowLines(prepared, 320, line => {
 ```
 
 It is intentionally narrow:
-- raw text in, including boundary spaces
-- caller-owned `extraWidth` for padding/border chrome
-- `break: 'never'` for atomic items like chips
-- no nested markup tree, no `pre-wrap`, no attempt to be a general CSS inline formatting engine
+- raw inline text in, including boundary spaces
+- caller-owned `extraWidth` for pill chrome
+- `break: 'never'` for atomic items like chips and mentions
+- `white-space: normal` only
+- not a nested markup tree and not a general CSS inline formatting engine
 
-### API Glossary
+## API Reference
 
-Use-case 1 APIs:
+### Core Fast Path
+
 ```ts
-prepare(text: string, font: string, options?: { whiteSpace?: 'normal' | 'pre-wrap' }): PreparedText // one-time text analysis + measurement pass, returns an opaque value to pass to `layout()`. Make sure `font` is synced with your css `font` declaration shorthand (e.g. size, weight, style, family) for the text you're measuring. `font` is the same format as what you'd use for `myCanvasContext.font = ...`, e.g. `16px Inter`.
-layout(prepared: PreparedText, maxWidth: number, lineHeight: number): { height: number, lineCount: number } // calculates text height given a max width and lineHeight. Make sure `lineHeight` is synced with your css `line-height` declaration for the text you're measuring.
+prepare(
+  text: string,
+  font: string,
+  options?: { whiteSpace?: 'normal' | 'pre-wrap' },
+): PreparedText
+
+layout(
+  prepared: PreparedText,
+  maxWidth: number,
+  lineHeight: number,
+): { height: number, lineCount: number }
 ```
 
-Use-case 2 APIs:
+### Rich Layout
+
 ```ts
-prepareWithSegments(text: string, font: string, options?: { whiteSpace?: 'normal' | 'pre-wrap' }): PreparedTextWithSegments // same as `prepare()`, but returns a richer structure for manual line layouts needs
-layoutWithLines(prepared: PreparedTextWithSegments, maxWidth: number, lineHeight: number): { height: number, lineCount: number, lines: LayoutLine[] } // high-level api for manual layout needs. Accepts a fixed max width for all lines. Similar to `layout()`'s return, but additionally returns the lines info
-walkLineRanges(prepared: PreparedTextWithSegments, maxWidth: number, onLine: (line: LayoutLineRange) => void): number // low-level api for manual layout needs. Accepts a fixed max width for all lines. Calls `onLine` once per line with its actual calculated line width and start/end cursors, without building line text strings. Very useful for certain cases where you wanna speculatively test a few width and height boundaries (e.g. binary search a nice width value by repeatedly calling walkLineRanges and checking the line count, and therefore height, is "nice" too. You can have text messages shrinkwrap and balanced text layout this way). After walkLineRanges calls, you'd call layoutWithLines once, with your satisfying max width, to get the actual lines info.
-measureLineGeometry(prepared: PreparedTextWithSegments, maxWidth: number): { lineCount: number, maxLineWidth: number } // aggregate geometry helper for callers that only need line count and widest wrapped line
-measureNaturalWidth(prepared: PreparedTextWithSegments): number // intrinsic-width helper for manual layouts. Returns the widest forced line when width itself is not the thing causing wraps
-layoutNextLineRange(prepared: PreparedTextWithSegments, start: LayoutCursor, maxWidth: number): LayoutLineRange | null // iterator-like geometry API for variable-width layouts, without building line text strings
-layoutNextLine(prepared: PreparedTextWithSegments, start: LayoutCursor, maxWidth: number): LayoutLine | null // iterator-like api for laying out each line with a different width! Returns the LayoutLine starting from `start`, or `null` when the paragraph's exhausted. Pass the previous line's `end` cursor as the next `start`.
-materializeLineRange(prepared: PreparedTextWithSegments, line: LayoutLineRange): LayoutLine // turns one previously computed line range back into a full line with text
-type LayoutLine = {
-  text: string // Full text content of this line, e.g. 'hello world'
-  width: number // Measured width of this line, e.g. 87.5
-  start: LayoutCursor // Inclusive start cursor in prepared segments/graphemes
-  end: LayoutCursor // Exclusive end cursor in prepared segments/graphemes
+prepareWithSegments(
+  text: string,
+  font: string,
+  options?: { whiteSpace?: 'normal' | 'pre-wrap' },
+): PreparedTextWithSegments
+
+layoutWithLines(
+  prepared: PreparedTextWithSegments,
+  maxWidth: number,
+  lineHeight: number,
+): { height: number, lineCount: number, lines: LayoutLine[] }
+
+walkLineRanges(
+  prepared: PreparedTextWithSegments,
+  maxWidth: number,
+  onLine: (line: LayoutLineRange) => void,
+): number
+
+measureLineGeometry(
+  prepared: PreparedTextWithSegments,
+  maxWidth: number,
+): { lineCount: number, maxLineWidth: number }
+
+measureNaturalWidth(
+  prepared: PreparedTextWithSegments,
+): number
+
+layoutNextLineRange(
+  prepared: PreparedTextWithSegments,
+  start: LayoutCursor,
+  maxWidth: number,
+): LayoutLineRange | null
+
+materializeLineRange(
+  prepared: PreparedTextWithSegments,
+  line: LayoutLineRange,
+): LayoutLine
+
+layoutNextLine(
+  prepared: PreparedTextWithSegments,
+  start: LayoutCursor,
+  maxWidth: number,
+): LayoutLine | null
+```
+
+### Inline-Flow Sidecar
+
+```ts
+prepareInlineFlow(items: InlineFlowItem[]): PreparedInlineFlow
+
+layoutNextInlineFlowLineRange(
+  prepared: PreparedInlineFlow,
+  maxWidth: number,
+  start?: InlineFlowCursor,
+): InlineFlowLineRange | null
+
+layoutNextInlineFlowLine(
+  prepared: PreparedInlineFlow,
+  maxWidth: number,
+  start?: InlineFlowCursor,
+): InlineFlowLine | null
+
+walkInlineFlowLineRanges(
+  prepared: PreparedInlineFlow,
+  maxWidth: number,
+  onLine: (line: InlineFlowLineRange) => void,
+): number
+
+walkInlineFlowLines(
+  prepared: PreparedInlineFlow,
+  maxWidth: number,
+  onLine: (line: InlineFlowLine) => void,
+): number
+
+measureInlineFlowGeometry(
+  prepared: PreparedInlineFlow,
+  maxWidth: number,
+): { lineCount: number, maxLineWidth: number }
+
+measureInlineFlow(
+  prepared: PreparedInlineFlow,
+  maxWidth: number,
+  lineHeight: number,
+): { height: number, lineCount: number }
+```
+
+### Diagnostics And Maintenance
+
+```ts
+profilePrepare(
+  text: string,
+  font: string,
+  options?: { whiteSpace?: 'normal' | 'pre-wrap' },
+): {
+  analysisMs: number
+  measureMs: number
+  totalMs: number
+  analysisSegments: number
+  preparedSegments: number
+  breakableSegments: number
 }
-type LayoutLineRange = {
-  width: number // Measured width of this line, e.g. 87.5
-  start: LayoutCursor // Inclusive start cursor in prepared segments/graphemes
-  end: LayoutCursor // Exclusive end cursor in prepared segments/graphemes
-}
+
+clearCache(): void
+
+setLocale(locale?: string): void
+```
+
+`profilePrepare()` is mainly for benchmark and diagnostic work. It splits `prepare()` into analysis and measurement phases without changing the public data model.
+
+### Useful Public Types
+
+```ts
 type LayoutCursor = {
-  segmentIndex: number // Segment index in prepareWithSegments' prepared rich segment stream
-  graphemeIndex: number // Grapheme index within that segment; `0` at segment boundaries
+  segmentIndex: number
+  graphemeIndex: number
 }
-```
 
-Experimental inline-flow sidecar:
-```ts
-prepareInlineFlow(items: InlineFlowItem[]): PreparedInlineFlow // compile raw inline items with their original text. The compiler owns cross-item collapsed whitespace and caches each item's natural width
-layoutNextInlineFlowLineRange(prepared: PreparedInlineFlow, maxWidth: number, start?: InlineFlowCursor): InlineFlowLineRange | null // stream one inline-flow line at a time without building fragment text strings
-layoutNextInlineFlowLine(prepared: PreparedInlineFlow, maxWidth: number, start?: InlineFlowCursor): InlineFlowLine | null // stream one line at a time through an inline item sequence
-walkInlineFlowLineRanges(prepared: PreparedInlineFlow, maxWidth: number, onLine: (line: InlineFlowLineRange) => void): number // non-materializing line walker for shrinkwrap/aggregate geometry work
-walkInlineFlowLines(prepared: PreparedInlineFlow, maxWidth: number, onLine: (line: InlineFlowLine) => void): number // low-level line walker for inline fragment streams
-measureInlineFlowGeometry(prepared: PreparedInlineFlow, maxWidth: number): { lineCount: number, maxLineWidth: number } // aggregate geometry helper for callers that only need line count and widest line
-measureInlineFlow(prepared: PreparedInlineFlow, maxWidth: number, lineHeight: number): { height: number, lineCount: number } // line counter for inline fragment streams
-type InlineFlowItem = {
-  text: string // raw author text, including leading/trailing collapsible spaces
-  font: string // canvas font shorthand for this item
-  break?: 'normal' | 'never' // `never` keeps the item atomic, like a chip
-  extraWidth?: number // caller-owned horizontal chrome, e.g. padding + border width
+type LayoutLine = {
+  text: string
+  width: number
+  start: LayoutCursor
+  end: LayoutCursor
 }
+
+type LayoutLineRange = {
+  width: number
+  start: LayoutCursor
+  end: LayoutCursor
+}
+
+type InlineFlowItem = {
+  text: string
+  font: string
+  break?: 'normal' | 'never'
+  extraWidth?: number
+}
+
 type InlineFlowCursor = {
   itemIndex: number
   segmentIndex: number
   graphemeIndex: number
 }
+
 type InlineFlowFragment = {
-  itemIndex: number // index back into the original InlineFlowItem array
+  itemIndex: number
   text: string
-  gapBefore: number // collapsed boundary gap paid before this fragment on this line
-  occupiedWidth: number // text width plus extraWidth
+  gapBefore: number
+  occupiedWidth: number
   start: LayoutCursor
   end: LayoutCursor
 }
+
 type InlineFlowLine = {
   fragments: InlineFlowFragment[]
   width: number
   end: InlineFlowCursor
 }
+
 type InlineFlowFragmentRange = {
-  itemIndex: number // index back into the original InlineFlowItem array
-  gapBefore: number // collapsed boundary gap paid before this fragment on this line
-  occupiedWidth: number // text width plus extraWidth
+  itemIndex: number
+  gapBefore: number
+  occupiedWidth: number
   start: LayoutCursor
   end: LayoutCursor
 }
+
 type InlineFlowLineRange = {
   fragments: InlineFlowFragmentRange[]
   width: number
@@ -194,27 +338,33 @@ type InlineFlowLineRange = {
 }
 ```
 
-Other helpers:
-```ts
-clearCache(): void // clears Pretext's shared internal caches used by prepare() and prepareWithSegments(). Useful if your app cycles through many different fonts or text variants and you want to release the accumulated cache
-setLocale(locale?: string): void // optional (by default we use the current locale). Sets locale for future prepare() and prepareWithSegments(). Internally, it also calls clearCache(). Setting a new locale doesn't affect existing prepare() and prepareWithSegments() states (no mutations to them)
-```
+Notes:
+- `PreparedText` is the opaque fast-path handle. `PreparedTextWithSegments` is the richer manual-layout handle.
+- `LayoutCursor` is a segment/grapheme cursor, not a raw string offset.
+- If a soft hyphen wins the break, rich `line.text` materialization includes the visible trailing `-`.
+- `measureNaturalWidth()` returns the widest forced line. Hard breaks still count.
+- `prepare()` and `prepareWithSegments()` do horizontal-only work. `lineHeight` stays a layout-time input.
 
 ## Caveats
 
-Pretext doesn't try to be a full font rendering engine (yet?). It currently targets the common text setup:
+Pretext is not trying to be a full browser inline formatting engine. The current target is:
 - `white-space: normal`
 - `word-break: normal`
 - `overflow-wrap: break-word`
 - `line-break: auto`
-- If you pass `{ whiteSpace: 'pre-wrap' }`, ordinary spaces, `\t` tabs, and `\n` hard breaks are preserved instead of collapsed. Tabs follow the default browser-style `tab-size: 8`. The other wrapping defaults stay the same: `word-break: normal`, `overflow-wrap: break-word`, and `line-break: auto`.
-- `system-ui` is unsafe for `layout()` accuracy on macOS. Use a named font.
-- Because the default target includes `overflow-wrap: break-word`, very narrow widths can still break inside words, but only at grapheme boundaries.
+
+If you pass `{ whiteSpace: 'pre-wrap' }`, ordinary spaces, `\t` tabs, and `\n` hard breaks are preserved instead of collapsed. Tabs follow the default browser-style `tab-size: 8`. The other wrapping defaults stay the same.
+
+Other important caveats:
+- `system-ui` is unsafe for accuracy on macOS. Canvas and DOM can resolve different optical variants.
+- Very narrow widths can still break inside words, but only at grapheme boundaries. That's the `overflow-wrap: break-word` part.
+- The inline-flow sidecar is intentionally `white-space: normal`-only.
+- Browser environments are the supported target today. Server canvas is still "maybe later", not a documented promise.
 
 ## Develop
 
-See [DEVELOPMENT.md](DEVELOPMENT.md) for the dev setup and commands.
+See [DEVELOPMENT.md](DEVELOPMENT.md) for commands and [STATUS.md](STATUS.md) for the checked-in browser-accuracy and benchmark snapshots.
 
 ## Credits
 
-Sebastian Markbage first planted the seed with [text-layout](https://github.com/chenglou/text-layout) last decade. His design — canvas `measureText` for shaping, bidi from pdf.js, streaming line breaking — informed the architecture we kept pushing forward here.
+Sebastian Markbage first planted the seed with [text-layout](https://github.com/chenglou/text-layout) last decade. Canvas `measureText` for shaping, bidi from pdf.js, and streaming line breaking were the original spark. Pretext kept the basic instinct, then pushed much harder on browser-oracle accuracy, preprocessing, and userland layout APIs.

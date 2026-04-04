@@ -1,31 +1,23 @@
 # Corpus Status
 
-Machine-readable long-form corpus status lives in JSON.
+This file is the prose pointer map for the checked-in long-form canaries.
 
-This file is prose-only. Historical reasoning, failed experiments, and why the
-numbers moved live in [RESEARCH.md](/Users/chenglou/github/pretext/RESEARCH.md).
-The shared mismatch vocabulary lives in [TAXONOMY.md](/Users/chenglou/github/pretext/corpora/TAXONOMY.md).
+Historical reasoning and failed experiments live in [RESEARCH.md](../RESEARCH.md).
+Shared mismatch vocabulary lives in [TAXONOMY.md](TAXONOMY.md).
 
 Conventions:
 - "anchors" means `300 / 600 / 800` unless noted otherwise
 - "sampled" usually means `--samples=9`
 - "step=10" means `300..900`
-- values are the last recorded results on this machine, not a claim of universal permanence
+- values are the last recorded results on this machine, not a promise of universal permanence
 
 ## Machine-Readable Sources
 
-- Corpus dashboard: [dashboard.json](/Users/chenglou/github/pretext/corpora/dashboard.json)
-- Anchor rows: [representative.json](/Users/chenglou/github/pretext/corpora/representative.json)
-- Chrome sampled sweep snapshot: [chrome-sampled.json](/Users/chenglou/github/pretext/corpora/chrome-sampled.json)
-- Chrome coarse `step=10` sweep snapshot: [chrome-step10.json](/Users/chenglou/github/pretext/corpora/chrome-step10.json)
-- Browser regression gate snapshots: [accuracy/chrome.json](/Users/chenglou/github/pretext/accuracy/chrome.json), [accuracy/safari.json](/Users/chenglou/github/pretext/accuracy/safari.json), [accuracy/firefox.json](/Users/chenglou/github/pretext/accuracy/firefox.json)
-
-The corpus dashboard JSON carries:
-- browser regression gate counts
-- product-shaped canary status
-- long-form corpus anchor and sweep status
-- fine-sweep notes
-- font-matrix notes
+- [dashboard.json](dashboard.json) — browser regression gate counts, product-shaped canaries, anchor/sweep status, fine-sweep notes, and font-matrix notes
+- [representative.json](representative.json) — compact anchor subset
+- [chrome-sampled.json](chrome-sampled.json) — Chrome sampled sweep snapshot
+- [chrome-step10.json](chrome-step10.json) — Chrome coarse `step=10` sweep snapshot
+- [../accuracy/chrome.json](../accuracy/chrome.json), [../accuracy/safari.json](../accuracy/safari.json), [../accuracy/firefox.json](../accuracy/firefox.json) — browser regression gate snapshots
 
 ## Recompute
 

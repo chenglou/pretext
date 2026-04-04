@@ -16,6 +16,7 @@ See `DEVELOPMENT.md` for the current command surface and packaging/release check
 - `src/measurement.ts` — canvas measurement runtime, segment metrics cache, emoji correction, and engine-profile shims
 - `src/line-break.ts` — internal line-walking core shared by the rich layout APIs and the hot-path line counter
 - `src/bidi.ts` — simplified bidi metadata helper for the rich `prepareWithSegments()` path
+- `src/inline-flow.ts` — experimental inline-only sidecar for mixed fonts, atomic pills, and boundary whitespace collapse
 - `src/test-data.ts` — shared corpus for browser accuracy pages/checkers and benchmarks
 - `src/layout.test.ts` — small durable invariant tests for the exported prepare/layout APIs
 - `pages/accuracy.ts` — browser sweep plus per-line diagnostics
@@ -31,6 +32,8 @@ See `DEVELOPMENT.md` for the current command surface and packaging/release check
 - `pages/demos/index.html` — public static demo landing page used as the GitHub Pages site root
 - `pages/demos/bubbles.ts` — bubble shrinkwrap demo using the rich non-materializing line-range walker
 - `pages/demos/dynamic-layout.ts` — fixed-height editorial spread with a continuous two-column flow, obstacle-aware title routing, and live logo-driven reflow
+- `pages/demos/markdown-chat.ts` — rich chat virtualization demo that stress-tests prepared templates and manual block layout
+- `pages/demos/rich-note.ts` — inline-rich-note demo that dogfoods the `@chenglou/pretext/inline-flow` sidecar
 
 ### Implementation notes
 
@@ -39,7 +42,9 @@ See `DEVELOPMENT.md` for the current command surface and packaging/release check
 - `prepare()` / `prepareWithSegments()` do horizontal-only work. `layout()` / `layoutWithLines()` take explicit `lineHeight`.
 - `setLocale(locale?)` retargets the hoisted word segmenter for future `prepare()` calls and clears shared caches. Use it before preparing new text when the app wants a specific `Intl.Segmenter` locale instead of the runtime default.
 - `prepare()` should stay the opaque fast-path handle. If a page/script needs segment arrays, that should usually flow through `prepareWithSegments()` instead of re-exposing internals on the main prepared type.
+- The rich public surface is intentionally split between geometry-only helpers (`walkLineRanges()`, `measureLineGeometry()`, `layoutNextLineRange()`) and text-materializing helpers (`layoutWithLines()`, `layoutNextLine()`, `materializeLineRange()`). Keep their break semantics aligned.
 - `walkLineRanges()` is the rich-path batch geometry API: no string materialization, but still browser-like line widths/cursors/discretionary-hyphen state. Prefer it over private line walkers for shrinkwrap or aggregate layout work.
+- `profilePrepare()` is public for benchmark/diagnostic work, but it is not a license to grow a second public prepare surface. Keep it narrowly diagnostic.
 - `prepare()` is internally split into a text-analysis phase and a measurement phase; keep that seam clear, but keep the public API simple unless requirements force a change.
 - The internal segment model now distinguishes at least eight break kinds: normal text, collapsible spaces, preserved spaces, tabs, non-breaking glue (`NBSP` / `NNBSP` / `WJ`-like runs), zero-width break opportunities, soft hyphens, and hard breaks. Do not collapse those back into one boolean unless the model gets richer in a better way.
 - `layout()` is the resize hot path: no DOM reads, no canvas calls, no string work, and avoid gratuitous allocations.
@@ -106,6 +111,7 @@ See `DEVELOPMENT.md` for the current command surface and packaging/release check
 - If a future Arabic corpus still exposes misses after preprocessing and corpus cleanup, decide whether that needs a richer break-policy model or a truly shaping-aware architecture beyond segment-sum layout.
 - `layoutWithLines()` now returns line boundary cursors (`start` / `end`) in addition to `{ text, width }`; keep that data model useful for future manual reflow work, especially for the richer editorial demos.
 - The dynamic-layout demo is the current real consumer of the rich line API. If a future custom-layout page wants more metadata, make it prove that need there before expanding the rich API again.
+- The inline-flow sidecar is intentionally narrow. If a future mixed-inline page can be expressed there, prefer extending that sidecar over bloating the core paragraph API.
 - The browser demos should increasingly dogfood `layoutNextLine()` rather than depending on `layoutWithLines()` for whole-paragraph materialization. That keeps the streaming userland path honest.
 - ASCII fast path could skip some CJK, bidi, and emoji overhead.
 - Benchmark methodology still needs review.
