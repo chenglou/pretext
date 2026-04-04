@@ -78,7 +78,21 @@ function computeBidiLevels(str: string): Int8Array | null {
 
   if (numBidi === 0) return null
 
-  const startLevel = (len / numBidi) < 0.3 ? 0 : 1
+  // Use the first strong character to pick the paragraph base direction.
+  // Rich-path bidi metadata is only an approximation, but this keeps mixed
+  // LTR/RTL text aligned with the common UBA paragraph rule.
+  let startLevel = 0
+  for (let i = 0; i < len; i++) {
+    const t = types[i]!
+    if (t === 'L') {
+      startLevel = 0
+      break
+    }
+    if (t === 'R' || t === 'AL') {
+      startLevel = 1
+      break
+    }
+  }
   const levels = new Int8Array(len)
   for (let i = 0; i < len; i++) levels[i] = startLevel
 

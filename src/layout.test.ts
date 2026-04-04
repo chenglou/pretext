@@ -43,6 +43,7 @@ type TestLayoutCursor = {
 
 type TestPreparedTextWithSegments = {
   segments: string[]
+  segLevels?: Int8Array | null
 }
 
 type TestLayoutLine = {
@@ -211,6 +212,20 @@ function compareCursors(a: TestLayoutCursor, b: TestLayoutCursor): number {
 
 function terminalCursor(prepared: TestPreparedTextWithSegments): TestLayoutCursor {
   return { segmentIndex: prepared.segments.length, graphemeIndex: 0 }
+}
+
+function getNonSpaceSegmentLevels(
+  prepared: TestPreparedTextWithSegments,
+): Array<{ level: number, text: string }> {
+  if (prepared.segLevels === null || prepared.segLevels === undefined) return []
+
+  const levels: Array<{ level: number, text: string }> = []
+  for (let i = 0; i < prepared.segments.length; i++) {
+    const text = prepared.segments[i]!
+    if (text.trim().length === 0) continue
+    levels.push({ level: prepared.segLevels[i]!, text })
+  }
+  return levels
 }
 
 class TestCanvasRenderingContext2D {
@@ -542,6 +557,30 @@ describe('prepare invariants', () => {
     setLocale(undefined)
     const latin = prepare('hello world', FONT)
     expect(layout(latin, 200, LINE_HEIGHT)).toEqual({ lineCount: 1, height: LINE_HEIGHT })
+  })
+
+  test('pure LTR text skips rich bidi metadata', () => {
+    expect(prepareWithSegments('hello world', FONT).segLevels).toBeNull()
+  })
+
+  test('rich bidi metadata uses the first strong character for paragraph direction', () => {
+    const ltrFirst = prepareWithSegments('one اثنان three', FONT)
+    expect(ltrFirst.segLevels).not.toBeNull()
+    expect(ltrFirst.segLevels).toHaveLength(ltrFirst.segments.length)
+    expect(getNonSpaceSegmentLevels(ltrFirst)).toEqual([
+      { text: 'one', level: 0 },
+      { text: 'اثنان', level: 1 },
+      { text: 'three', level: 0 },
+    ])
+
+    const rtlFirst = prepareWithSegments('123 واحد three', FONT)
+    expect(rtlFirst.segLevels).not.toBeNull()
+    expect(rtlFirst.segLevels).toHaveLength(rtlFirst.segments.length)
+    expect(getNonSpaceSegmentLevels(rtlFirst)).toEqual([
+      { text: '123', level: 2 },
+      { text: 'واحد', level: 1 },
+      { text: 'three', level: 2 },
+    ])
   })
 })
 
