@@ -215,7 +215,6 @@ export type TemplateLayout = {
 
 export type ChatMessageInstance = {
   bottom: number
-  key: string
   prepared: PreparedChatTemplate
   frame: TemplateFrame
   top: number
@@ -272,7 +271,6 @@ export function buildConversationFrame(
     messages[ordinal] = {
       bottom,
       frame: messageFrame,
-      key: String(ordinal),
       prepared: template,
       top,
     }

@@ -17,11 +17,14 @@ let prepareWithSegments: LayoutModule['prepareWithSegments']
 let layout: LayoutModule['layout']
 let layoutWithLines: LayoutModule['layoutWithLines']
 let layoutNextLine: LayoutModule['layoutNextLine']
+let layoutNextLineRange: LayoutModule['layoutNextLineRange']
 let measureLineGeometry: LayoutModule['measureLineGeometry']
 let walkLineRanges: LayoutModule['walkLineRanges']
 let clearCache: LayoutModule['clearCache']
 let setLocale: LayoutModule['setLocale']
 let countPreparedLines: LineBreakModule['countPreparedLines']
+let measurePreparedLineGeometry: LineBreakModule['measurePreparedLineGeometry']
+let stepPreparedLineGeometry: LineBreakModule['stepPreparedLineGeometry']
 let walkPreparedLines: LineBreakModule['walkPreparedLines']
 let prepareInlineFlow: InlineFlowModule['prepareInlineFlow']
 let measureInlineFlowGeometry: InlineFlowModule['measureInlineFlowGeometry']
@@ -237,12 +240,13 @@ beforeAll(async () => {
     layout,
     layoutWithLines,
     layoutNextLine,
+    layoutNextLineRange,
     measureLineGeometry,
     walkLineRanges,
     clearCache,
     setLocale,
   } = mod)
-  ;({ countPreparedLines, walkPreparedLines } = lineBreakMod)
+  ;({ countPreparedLines, measurePreparedLineGeometry, stepPreparedLineGeometry, walkPreparedLines } = lineBreakMod)
   ;({ prepareInlineFlow, measureInlineFlowGeometry, walkInlineFlowLineRanges, walkInlineFlowLines, measureInlineFlow } = inlineFlowMod)
 })
 
@@ -990,6 +994,34 @@ describe('layout invariants', () => {
       lineCount: walkedLineCount,
       maxLineWidth: walkedMaxLineWidth,
     })
+  })
+
+  test('line-break geometry helpers stay aligned with streamed line ranges', () => {
+    const prepared = prepareWithSegments('foo trans\u00ADatlantic said "hello" to 世界 and waved.', FONT)
+    const widths = [48, 72, 120]
+
+    for (let index = 0; index < widths.length; index++) {
+      const width = widths[index]!
+      const cursor = { segmentIndex: 0, graphemeIndex: 0 }
+      const streamedWidths: number[] = []
+
+      while (true) {
+        const line = layoutNextLineRange(prepared, cursor, width)
+        const geometryCursor = { ...cursor }
+        const geometryWidth = stepPreparedLineGeometry(prepared, geometryCursor, width)
+        expect(geometryWidth).toBe(line?.width ?? null)
+        if (line === null) break
+        expect(geometryCursor).toEqual(line.end)
+        streamedWidths.push(line.width)
+        cursor.segmentIndex = line.end.segmentIndex
+        cursor.graphemeIndex = line.end.graphemeIndex
+      }
+
+      expect(measurePreparedLineGeometry(prepared, width)).toEqual({
+        lineCount: streamedWidths.length,
+        maxLineWidth: Math.max(0, ...streamedWidths),
+      })
+    }
   })
 
   test('countPreparedLines stays aligned with the walked line counter', () => {

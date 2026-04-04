@@ -1,5 +1,4 @@
 import {
-  layoutNextLineRange,
   materializeLineRange,
   measureNaturalWidth,
   prepareWithSegments,
@@ -8,6 +7,11 @@ import {
   type LayoutResult,
   type PreparedTextWithSegments,
 } from './layout.js'
+import {
+  layoutNextLineRange as stepPreparedLineRange,
+  type LineBreakCursor,
+  stepPreparedLineGeometry,
+} from './line-break.js'
 
 // Experimental sidecar for mixed inline runs under `white-space: normal`.
 // It keeps the core layout API low-level while taking over the boring shared
@@ -76,7 +80,8 @@ type InternalPreparedInlineFlow = PreparedInlineFlow & {
 
 type PreparedInlineFlowItem = {
   break: 'normal' | 'never'
-  end: LayoutCursor
+  endGraphemeIndex: number
+  endSegmentIndex: number
   extraWidth: number
   gapBefore: number
   naturalWidth: number
@@ -109,19 +114,6 @@ function isLineStartCursor(cursor: LayoutCursor): boolean {
   return cursor.segmentIndex === 0 && cursor.graphemeIndex === 0
 }
 
-function cursorsMatch(a: LayoutCursor, b: LayoutCursor): boolean {
-  return a.segmentIndex === b.segmentIndex && a.graphemeIndex === b.graphemeIndex
-}
-
-function compareCursors(a: LayoutCursor, b: LayoutCursor): number {
-  if (a.segmentIndex !== b.segmentIndex) return a.segmentIndex - b.segmentIndex
-  return a.graphemeIndex - b.graphemeIndex
-}
-
-function endsInsideFirstSegment(cursor: LayoutCursor): boolean {
-  return cursor.segmentIndex === 0 && cursor.graphemeIndex > 0
-}
-
 function getCollapsedSpaceWidth(font: string, cache: Map<string, number>): number {
   const cached = cache.get(font)
   if (cached !== undefined) return cached
@@ -134,14 +126,16 @@ function getCollapsedSpaceWidth(font: string, cache: Map<string, number>): numbe
 }
 
 function prepareWholeItemLine(prepared: PreparedTextWithSegments): {
-  end: LayoutCursor
+  endGraphemeIndex: number
+  endSegmentIndex: number
   width: number
 } | null {
-  const range = layoutNextLineRange(prepared, EMPTY_LAYOUT_CURSOR, Number.POSITIVE_INFINITY)
-  if (range === null) return null
+  const line = stepPreparedLineRange(prepared, EMPTY_LAYOUT_CURSOR, Number.POSITIVE_INFINITY)
+  if (line === null) return null
   return {
-    end: range.end,
-    width: range.width,
+    endGraphemeIndex: line.endGraphemeIndex,
+    endSegmentIndex: line.endSegmentIndex,
+    width: line.width,
   }
 }
 
@@ -153,9 +147,8 @@ type InlineFlowFragmentCollector = (
   end: LayoutCursor,
 ) => void
 
-type InlineFlowStep = {
-  end: InlineFlowCursor
-  width: number
+function endsInsideFirstSegment(segmentIndex: number, graphemeIndex: number): boolean {
+  return segmentIndex === 0 && graphemeIndex > 0
 }
 
 export function prepareInlineFlow(items: InlineFlowItem[]): PreparedInlineFlow {
@@ -194,7 +187,8 @@ export function prepareInlineFlow(items: InlineFlowItem[]): PreparedInlineFlow {
 
     const preparedItem = {
       break: item.break ?? 'normal',
-      end: wholeLine.end,
+      endGraphemeIndex: wholeLine.endGraphemeIndex,
+      endSegmentIndex: wholeLine.endSegmentIndex,
       extraWidth: item.extraWidth ?? 0,
       gapBefore,
       naturalWidth: wholeLine.width,
@@ -216,26 +210,31 @@ export function prepareInlineFlow(items: InlineFlowItem[]): PreparedInlineFlow {
 function stepInlineFlowLine(
   flow: InternalPreparedInlineFlow,
   maxWidth: number,
-  start: InlineFlowCursor,
+  cursor: InlineFlowCursor,
   collectFragment?: InlineFlowFragmentCollector,
-): InlineFlowStep | null {
-  if (flow.items.length === 0 || start.itemIndex >= flow.items.length) return null
+): number | null {
+  if (flow.items.length === 0 || cursor.itemIndex >= flow.items.length) return null
 
   const safeWidth = Math.max(1, maxWidth)
   let lineWidth = 0
   let remainingWidth = safeWidth
-  let itemIndex = start.itemIndex
-  let textCursor: LayoutCursor = {
-    segmentIndex: start.segmentIndex,
-    graphemeIndex: start.graphemeIndex,
+  let itemIndex = cursor.itemIndex
+  const textCursor: LineBreakCursor = {
+    segmentIndex: cursor.segmentIndex,
+    graphemeIndex: cursor.graphemeIndex,
   }
 
   lineLoop:
   while (itemIndex < flow.items.length) {
     const item = flow.items[itemIndex]!
-    if (!isLineStartCursor(textCursor) && cursorsMatch(textCursor, item.end)) {
+    if (
+      !isLineStartCursor(textCursor) &&
+      textCursor.segmentIndex === item.endSegmentIndex &&
+      textCursor.graphemeIndex === item.endGraphemeIndex
+    ) {
       itemIndex++
-      textCursor = EMPTY_LAYOUT_CURSOR
+      textCursor.segmentIndex = 0
+      textCursor.graphemeIndex = 0
       continue
     }
 
@@ -245,7 +244,8 @@ function stepInlineFlowLine(
     if (item.break === 'never') {
       if (!atItemStart) {
         itemIndex++
-        textCursor = EMPTY_LAYOUT_CURSOR
+        textCursor.segmentIndex = 0
+        textCursor.graphemeIndex = 0
         continue
       }
 
@@ -258,12 +258,16 @@ function stepInlineFlowLine(
         gapBefore,
         occupiedWidth,
         cloneCursor(EMPTY_LAYOUT_CURSOR),
-        cloneCursor(item.end),
+        {
+          segmentIndex: item.endSegmentIndex,
+          graphemeIndex: item.endGraphemeIndex,
+        },
       )
       lineWidth += totalWidth
       remainingWidth = Math.max(0, safeWidth - lineWidth)
       itemIndex++
-      textCursor = EMPTY_LAYOUT_CURSOR
+      textCursor.segmentIndex = 0
+      textCursor.graphemeIndex = 0
       continue
     }
 
@@ -278,26 +282,35 @@ function stepInlineFlowLine(
           gapBefore,
           item.naturalWidth + item.extraWidth,
           cloneCursor(EMPTY_LAYOUT_CURSOR),
-          cloneCursor(item.end),
+          {
+            segmentIndex: item.endSegmentIndex,
+            graphemeIndex: item.endGraphemeIndex,
+          },
         )
         lineWidth += totalWidth
         remainingWidth = Math.max(0, safeWidth - lineWidth)
         itemIndex++
-        textCursor = EMPTY_LAYOUT_CURSOR
+        textCursor.segmentIndex = 0
+        textCursor.graphemeIndex = 0
         continue
       }
     }
 
     const availableWidth = Math.max(1, remainingWidth - reservedWidth)
-    const line = layoutNextLineRange(item.prepared, textCursor, availableWidth)
+    const line = stepPreparedLineRange(item.prepared, textCursor, availableWidth)
     if (line === null) {
       itemIndex++
-      textCursor = EMPTY_LAYOUT_CURSOR
+      textCursor.segmentIndex = 0
+      textCursor.graphemeIndex = 0
       continue
     }
-    if (cursorsMatch(textCursor, line.end)) {
+    if (
+      textCursor.segmentIndex === line.endSegmentIndex &&
+      textCursor.graphemeIndex === line.endGraphemeIndex
+    ) {
       itemIndex++
-      textCursor = EMPTY_LAYOUT_CURSOR
+      textCursor.segmentIndex = 0
+      textCursor.graphemeIndex = 0
       continue
     }
 
@@ -306,13 +319,27 @@ function stepInlineFlowLine(
     // keep whole-word-style boundaries when they exist. But once the current
     // line can consume a real breakable unit from the item, stay greedy and
     // keep filling the line.
-    if (lineWidth > 0 && atItemStart && gapBefore > 0 && endsInsideFirstSegment(line.end)) {
-      const freshLine = layoutNextLineRange(
+    if (
+      lineWidth > 0 &&
+      atItemStart &&
+      gapBefore > 0 &&
+      endsInsideFirstSegment(line.endSegmentIndex, line.endGraphemeIndex)
+    ) {
+      const freshLine = stepPreparedLineRange(
         item.prepared,
         EMPTY_LAYOUT_CURSOR,
         Math.max(1, safeWidth - item.extraWidth),
       )
-      if (freshLine !== null && compareCursors(freshLine.end, line.end) > 0) {
+      if (
+        freshLine !== null &&
+        (
+          freshLine.endSegmentIndex > line.endSegmentIndex ||
+          (
+            freshLine.endSegmentIndex === line.endSegmentIndex &&
+            freshLine.endGraphemeIndex > line.endGraphemeIndex
+          )
+        )
+      ) {
         break lineLoop
       }
     }
@@ -322,31 +349,168 @@ function stepInlineFlowLine(
       gapBefore,
       line.width + item.extraWidth,
       cloneCursor(textCursor),
-      cloneCursor(line.end),
+      {
+        segmentIndex: line.endSegmentIndex,
+        graphemeIndex: line.endGraphemeIndex,
+      },
     )
     lineWidth += gapBefore + line.width + item.extraWidth
     remainingWidth = Math.max(0, safeWidth - lineWidth)
 
-    if (cursorsMatch(line.end, item.end)) {
+    if (
+      line.endSegmentIndex === item.endSegmentIndex &&
+      line.endGraphemeIndex === item.endGraphemeIndex
+    ) {
       itemIndex++
-      textCursor = EMPTY_LAYOUT_CURSOR
+      textCursor.segmentIndex = 0
+      textCursor.graphemeIndex = 0
       continue
     }
 
-    textCursor = line.end
+    textCursor.segmentIndex = line.endSegmentIndex
+    textCursor.graphemeIndex = line.endGraphemeIndex
     break
   }
 
   if (lineWidth === 0) return null
 
-  return {
-    width: lineWidth,
-    end: {
-      itemIndex,
-      segmentIndex: textCursor.segmentIndex,
-      graphemeIndex: textCursor.graphemeIndex,
-    },
+  cursor.itemIndex = itemIndex
+  cursor.segmentIndex = textCursor.segmentIndex
+  cursor.graphemeIndex = textCursor.graphemeIndex
+  return lineWidth
+}
+
+function stepInlineFlowLineGeometry(
+  flow: InternalPreparedInlineFlow,
+  maxWidth: number,
+  cursor: InlineFlowCursor,
+): number | null {
+  if (flow.items.length === 0 || cursor.itemIndex >= flow.items.length) return null
+
+  const safeWidth = Math.max(1, maxWidth)
+  let lineWidth = 0
+  let remainingWidth = safeWidth
+  let itemIndex = cursor.itemIndex
+
+  lineLoop:
+  while (itemIndex < flow.items.length) {
+    const item = flow.items[itemIndex]!
+    if (
+      !isLineStartCursor(cursor) &&
+      cursor.segmentIndex === item.endSegmentIndex &&
+      cursor.graphemeIndex === item.endGraphemeIndex
+    ) {
+      itemIndex++
+      cursor.segmentIndex = 0
+      cursor.graphemeIndex = 0
+      continue
+    }
+
+    const gapBefore = lineWidth === 0 ? 0 : item.gapBefore
+    const atItemStart = isLineStartCursor(cursor)
+
+    if (item.break === 'never') {
+      if (!atItemStart) {
+        itemIndex++
+        cursor.segmentIndex = 0
+        cursor.graphemeIndex = 0
+        continue
+      }
+
+      const occupiedWidth = item.naturalWidth + item.extraWidth
+      const totalWidth = gapBefore + occupiedWidth
+      if (lineWidth > 0 && totalWidth > remainingWidth) break lineLoop
+
+      lineWidth += totalWidth
+      remainingWidth = Math.max(0, safeWidth - lineWidth)
+      itemIndex++
+      cursor.segmentIndex = 0
+      cursor.graphemeIndex = 0
+      continue
+    }
+
+    const reservedWidth = gapBefore + item.extraWidth
+    if (lineWidth > 0 && reservedWidth >= remainingWidth) break lineLoop
+
+    if (atItemStart) {
+      const totalWidth = reservedWidth + item.naturalWidth
+      if (totalWidth <= remainingWidth) {
+        lineWidth += totalWidth
+        remainingWidth = Math.max(0, safeWidth - lineWidth)
+        itemIndex++
+        cursor.segmentIndex = 0
+        cursor.graphemeIndex = 0
+        continue
+      }
+    }
+
+    const availableWidth = Math.max(1, remainingWidth - reservedWidth)
+    const lineEnd: LineBreakCursor = {
+      segmentIndex: cursor.segmentIndex,
+      graphemeIndex: cursor.graphemeIndex,
+    }
+    const lineWidthForItem = stepPreparedLineGeometry(item.prepared, lineEnd, availableWidth)
+    if (lineWidthForItem === null) {
+      itemIndex++
+      cursor.segmentIndex = 0
+      cursor.graphemeIndex = 0
+      continue
+    }
+    if (cursor.segmentIndex === lineEnd.segmentIndex && cursor.graphemeIndex === lineEnd.graphemeIndex) {
+      itemIndex++
+      cursor.segmentIndex = 0
+      cursor.graphemeIndex = 0
+      continue
+    }
+
+    if (
+      lineWidth > 0 &&
+      atItemStart &&
+      gapBefore > 0 &&
+      endsInsideFirstSegment(lineEnd.segmentIndex, lineEnd.graphemeIndex)
+    ) {
+      const freshLineEnd: LineBreakCursor = {
+        segmentIndex: 0,
+        graphemeIndex: 0,
+      }
+      const freshLineWidth = stepPreparedLineGeometry(
+        item.prepared,
+        freshLineEnd,
+        Math.max(1, safeWidth - item.extraWidth),
+      )
+      if (
+        freshLineWidth !== null &&
+        (
+          freshLineEnd.segmentIndex > lineEnd.segmentIndex ||
+          (
+            freshLineEnd.segmentIndex === lineEnd.segmentIndex &&
+            freshLineEnd.graphemeIndex > lineEnd.graphemeIndex
+          )
+        )
+      ) {
+        break lineLoop
+      }
+    }
+
+    lineWidth += gapBefore + lineWidthForItem + item.extraWidth
+    remainingWidth = Math.max(0, safeWidth - lineWidth)
+
+    if (lineEnd.segmentIndex === item.endSegmentIndex && lineEnd.graphemeIndex === item.endGraphemeIndex) {
+      itemIndex++
+      cursor.segmentIndex = 0
+      cursor.graphemeIndex = 0
+      continue
+    }
+
+    cursor.segmentIndex = lineEnd.segmentIndex
+    cursor.graphemeIndex = lineEnd.graphemeIndex
+    break
   }
+
+  if (lineWidth === 0) return null
+
+  cursor.itemIndex = itemIndex
+  return lineWidth
 }
 
 export function layoutNextInlineFlowLineRange(
@@ -355,8 +519,13 @@ export function layoutNextInlineFlowLineRange(
   start: InlineFlowCursor = FLOW_START_CURSOR,
 ): InlineFlowLineRange | null {
   const flow = getInternalPreparedInlineFlow(prepared)
+  const end: InlineFlowCursor = {
+    itemIndex: start.itemIndex,
+    segmentIndex: start.segmentIndex,
+    graphemeIndex: start.graphemeIndex,
+  }
   const fragments: InlineFlowFragmentRange[] = []
-  const step = stepInlineFlowLine(flow, maxWidth, start, (item, gapBefore, occupiedWidth, fragmentStart, fragmentEnd) => {
+  const width = stepInlineFlowLine(flow, maxWidth, end, (item, gapBefore, occupiedWidth, fragmentStart, fragmentEnd) => {
     fragments.push({
       itemIndex: item.sourceItemIndex,
       gapBefore,
@@ -365,12 +534,12 @@ export function layoutNextInlineFlowLineRange(
       end: fragmentEnd,
     })
   })
-  if (step === null) return null
+  if (width === null) return null
 
   return {
     fragments,
-    width: step.width,
-    end: step.end,
+    width,
+    end,
   }
 }
 
@@ -433,19 +602,22 @@ export function measureInlineFlowGeometry(
   const flow = getInternalPreparedInlineFlow(prepared)
   let lineCount = 0
   let maxLineWidth = 0
-  let cursor = FLOW_START_CURSOR
+  const cursor: InlineFlowCursor = {
+    itemIndex: 0,
+    segmentIndex: 0,
+    graphemeIndex: 0,
+  }
 
   while (true) {
-    const line = stepInlineFlowLine(flow, maxWidth, cursor)
-    if (line === null) {
+    const lineWidth = stepInlineFlowLineGeometry(flow, maxWidth, cursor)
+    if (lineWidth === null) {
       return {
         lineCount,
         maxLineWidth,
       }
     }
     lineCount++
-    if (line.width > maxLineWidth) maxLineWidth = line.width
-    cursor = line.end
+    if (lineWidth > maxLineWidth) maxLineWidth = lineWidth
   }
 }
 

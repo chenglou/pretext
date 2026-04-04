@@ -30,7 +30,9 @@ const domCache = {
   viewport: getRequiredDiv('chat-viewport'),
   canvas: getRequiredDiv('chat-canvas'),
   toggleButton: getRequiredButton('virtualization-toggle'),
-  rows: new Map<string, HTMLElement>(), // cache lifetime: on visibility changes
+  rows: [] as Array<HTMLElement | undefined>, // cache lifetime: on visibility changes
+  mountedStart: 0, // cache lifetime: on visibility changes
+  mountedEnd: 0, // cache lifetime: on visibility changes
 }
 
 const templates = createPreparedChatTemplates()
@@ -129,31 +131,47 @@ function projectVisibleRows(
   end: number,
   needsRelayout: boolean,
 ): void {
-  const visibleKeys = new Set<string>()
+  if (needsRelayout) {
+    for (let index = domCache.mountedStart; index < domCache.mountedEnd; index++) {
+      const node = domCache.rows[index]
+      if (node === undefined) continue
+      node.remove()
+      domCache.rows[index] = undefined
+    }
+    domCache.mountedStart = 0
+    domCache.mountedEnd = 0
+  }
+
+  const previousStart = domCache.mountedStart
+  const previousEnd = domCache.mountedEnd
+
+  for (let index = previousStart; index < Math.min(previousEnd, start); index++) {
+    const node = domCache.rows[index]
+    if (node === undefined) continue
+    node.remove()
+    domCache.rows[index] = undefined
+  }
+
+  for (let index = Math.max(previousStart, end); index < previousEnd; index++) {
+    const node = domCache.rows[index]
+    if (node === undefined) continue
+    node.remove()
+    domCache.rows[index] = undefined
+  }
 
   for (let index = start; index < end; index++) {
     const message = frame.messages[index]!
-    const key = message.key
-    let node = domCache.rows.get(key)
-    if (needsRelayout && node !== undefined) {
-      node.remove()
-      domCache.rows.delete(key)
-      node = undefined
-    }
+    let node = domCache.rows[index]
     if (node === undefined) {
       node = createMessageNode(message)
-      domCache.rows.set(key, node)
+      domCache.rows[index] = node
     }
     projectMessageNode(node, message.frame, message.top)
-    visibleKeys.add(key)
     domCache.canvas.append(node)
   }
 
-  for (const [key, node] of domCache.rows) {
-    if (visibleKeys.has(key)) continue
-    node.remove()
-    domCache.rows.delete(key)
-  }
+  domCache.mountedStart = start
+  domCache.mountedEnd = end
 }
 
 function createMessageNode(message: ChatMessageInstance): HTMLElement {

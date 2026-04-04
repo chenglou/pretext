@@ -60,6 +60,7 @@ import {
 import {
   countPreparedLines,
   layoutNextLineRange as stepPreparedLineRange,
+  measurePreparedLineGeometry,
   walkPreparedLines,
   type InternalLayoutLine,
 } from './line-break.js'
@@ -694,22 +695,7 @@ export function measureLineGeometry(
   prepared: PreparedTextWithSegments,
   maxWidth: number,
 ): LineGeometry {
-  if (prepared.widths.length === 0) {
-    return {
-      lineCount: 0,
-      maxLineWidth: 0,
-    }
-  }
-
-  let maxLineWidth = 0
-  const lineCount = walkPreparedLines(getInternalPrepared(prepared), maxWidth, line => {
-    if (line.width > maxLineWidth) maxLineWidth = line.width
-  })
-
-  return {
-    lineCount,
-    maxLineWidth,
-  }
+  return measurePreparedLineGeometry(getInternalPrepared(prepared), maxWidth)
 }
 
 // Intrinsic-width helper for rich/userland layout work. This asks "how wide is
