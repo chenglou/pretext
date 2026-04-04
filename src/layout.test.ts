@@ -541,9 +541,15 @@ describe('prepare invariants', () => {
     expect(prepared.segments).toEqual(['foo\u00A0', '世', '界'])
   })
 
-  test('keep-all keeps dictionary-segmented CJK and Hangul runs intact', () => {
+  test('keep-all keeps CJK-leading no-space runs cohesive without swallowing preceding latin runs', () => {
     expect(prepareWithSegments('中文，测试。', FONT, { wordBreak: 'keep-all' }).segments).toEqual(['中文，', '测试。'])
     expect(prepareWithSegments('한국어테스트', FONT, { wordBreak: 'keep-all' }).segments).toEqual(['한국어테스트'])
+
+    for (const text of ['日本語foo-bar', '日本語foo.bar', '日本語foo—bar']) {
+      expect(prepareWithSegments(text, FONT, { wordBreak: 'keep-all' }).segments).toEqual([text])
+    }
+
+    expect(prepareWithSegments('foo-bar日本語', FONT, { wordBreak: 'keep-all' }).segments).toEqual(['foo-', 'bar', '日本語'])
     expect(prepareWithSegments('foo\u00A0世界', FONT, { wordBreak: 'keep-all' }).segments).toEqual(['foo\u00A0', '世界'])
   })
 
@@ -1079,6 +1085,16 @@ describe('layout invariants', () => {
     expect(layoutWithLines(normal, width, LINE_HEIGHT).lines[0]?.text).toBe('A 中')
     expect(layoutWithLines(keepAll, width, LINE_HEIGHT).lines[0]?.text).toBe('A ')
     expect(layout(keepAll, width, LINE_HEIGHT).lineCount).toBeGreaterThan(layout(normal, width, LINE_HEIGHT).lineCount)
+  })
+
+  test('keep-all lets mixed no-space CJK runs break through the script boundary', () => {
+    const text = '日本語foo-bar'
+    const normal = prepareWithSegments(text, FONT)
+    const keepAll = prepareWithSegments(text, FONT, { wordBreak: 'keep-all' })
+    const width = measureWidth('日本語f', FONT) + 0.1
+
+    expect(layoutWithLines(normal, width, LINE_HEIGHT).lines[0]?.text).toBe('日本語')
+    expect(layoutWithLines(keepAll, width, LINE_HEIGHT).lines[0]?.text).toBe('日本語f')
   })
 
   test('walkLineRanges reproduces layoutWithLines geometry without materializing text', () => {

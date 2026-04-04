@@ -34,7 +34,7 @@ bun install
 - `bun run benchmark-check` — Chrome benchmark snapshot
 - `bun run benchmark-check:safari`
 - `bun run pre-wrap-check` — compact browser oracle for `{ whiteSpace: 'pre-wrap' }`
-- `bun run keep-all-check` — compact browser oracle for `{ wordBreak: 'keep-all' }`
+- `bun run keep-all-check` — compact browser oracle for `{ wordBreak: 'keep-all' }`, including mixed-script no-space canaries
 - `bun run probe-check` — smaller browser probe/diagnostic entrypoint
 - `bun run probe-check:safari`
 

@@ -146,28 +146,33 @@ export function isCJK(s: string): boolean {
   return false
 }
 
-function startsWithCJKText(text: string): boolean {
-  for (const ch of text) return isCJK(ch)
-  return false
-}
-
-function endsWithCJKText(text: string): boolean {
-  let last = ''
-  for (const ch of text) last = ch
-  return last.length > 0 && isCJK(last)
-}
-
 function endsWithLineStartProhibitedText(text: string): boolean {
   let last = ''
   for (const ch of text) last = ch
   return last.length > 0 && (kinsokuStart.has(last) || leftStickyPunctuation.has(last))
 }
 
-export function canMergeKeepAllTextBoundary(previousText: string, nextText: string): boolean {
+const keepAllGlueChars = new Set([
+  '\u00A0',
+  '\u202F',
+  '\u2060',
+  '\uFEFF',
+])
+
+function containsCJKText(text: string): boolean {
+  return isCJK(text)
+}
+
+function endsWithKeepAllGlueText(text: string): boolean {
+  let last = ''
+  for (const ch of text) last = ch
+  return last.length > 0 && keepAllGlueChars.has(last)
+}
+
+export function canContinueKeepAllTextRun(previousText: string): boolean {
   return (
-    endsWithCJKText(previousText) &&
-    startsWithCJKText(nextText) &&
-    !endsWithLineStartProhibitedText(previousText)
+    !endsWithLineStartProhibitedText(previousText) &&
+    !endsWithKeepAllGlueText(previousText)
   )
 }
 
@@ -1085,7 +1090,8 @@ function mergeKeepAllTextSegments(segmentation: MergedSegmentation): MergedSegme
       kind === 'text' &&
       previousIndex >= 0 &&
       kinds[previousIndex] === 'text' &&
-      canMergeKeepAllTextBoundary(texts[previousIndex]!, text)
+      canContinueKeepAllTextRun(texts[previousIndex]!) &&
+      containsCJKText(texts[previousIndex]!)
     ) {
       texts[previousIndex] += text
       isWordLike[previousIndex] = isWordLike[previousIndex]! || wordLike

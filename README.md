@@ -52,7 +52,7 @@ const prepared = prepare(textareaValue, '16px Inter', { whiteSpace: 'pre-wrap' }
 const { height } = layout(prepared, textareaWidth, 20)
 ```
 
-If you want CSS-style `word-break: keep-all` behavior for CJK/Hangul text, pass `{ wordBreak: 'keep-all' }`:
+If you want CSS-style `word-break: keep-all` behavior for CJK/Hangul text and CJK-leading no-space mixed-script runs, pass `{ wordBreak: 'keep-all' }`:
 
 ```ts
 const prepared = prepare(headline, '16px Inter', { wordBreak: 'keep-all' })
@@ -361,7 +361,7 @@ Pretext is not trying to be a full browser inline formatting engine. The current
 
 If you pass `{ whiteSpace: 'pre-wrap' }`, ordinary spaces, `\t` tabs, and `\n` hard breaks are preserved instead of collapsed. Tabs follow the default browser-style `tab-size: 8`. The other wrapping defaults stay the same.
 
-If you pass `{ wordBreak: 'keep-all' }`, Pretext suppresses ordinary CJK/Hangul intra-word breaks to match CSS `word-break: keep-all`, while keeping the same `overflow-wrap: break-word` fallback for overlong runs.
+If you pass `{ wordBreak: 'keep-all' }`, Pretext suppresses ordinary CJK/Hangul intra-word breaks and keeps CJK-leading no-space mixed-script runs cohesive, while keeping the same `overflow-wrap: break-word` fallback for overlong runs.
 
 Other important caveats:
 - `system-ui` is unsafe for accuracy on macOS. Canvas and DOM can resolve different optical variants.

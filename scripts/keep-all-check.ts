@@ -19,6 +19,13 @@ type ProbeReport = {
   diffPx?: number
   predictedLineCount?: number
   browserLineCount?: number
+  firstBreakMismatch?: {
+    line: number
+    deltaText: string
+    reasonGuess: string
+    oursText: string
+    browserText: string
+  } | null
   extractorSensitivity?: string | null
   message?: string
 }
@@ -77,7 +84,7 @@ const ORACLE_CASES: OracleCase[] = [
   {
     label: 'cjk punctuation boundary',
     text: '中文，测试。下一句。',
-    width: 160,
+    width: 190,
     font: '18px serif',
     lineHeight: 32,
     lang: 'zh',
@@ -89,6 +96,14 @@ const ORACLE_CASES: OracleCase[] = [
     font: '20px serif',
     lineHeight: 34,
     lang: 'ko',
+  },
+  {
+    label: 'mixed no-space cjk plus latin run',
+    text: '日本語foo-bar',
+    width: 110,
+    font: '18px serif',
+    lineHeight: 32,
+    lang: 'ja',
   },
 ]
 
@@ -125,6 +140,15 @@ function printCaseResult(browser: AutomationBrowserKind, testCase: OracleCase, r
   console.log(
     `${browser} | ${testCase.label}: diff ${report.diffPx}px | lines ${report.predictedLineCount}/${report.browserLineCount} | height ${report.predictedHeight}/${report.actualHeight}${sensitivity}`,
   )
+
+  if (report.firstBreakMismatch !== null && report.firstBreakMismatch !== undefined) {
+    console.log(
+      `  break L${report.firstBreakMismatch.line}: ${report.firstBreakMismatch.reasonGuess} | ` +
+      `delta ${JSON.stringify(report.firstBreakMismatch.deltaText)} | ` +
+      `ours ${JSON.stringify(report.firstBreakMismatch.oursText)} | ` +
+      `browser ${JSON.stringify(report.firstBreakMismatch.browserText)}`,
+    )
+  }
 }
 
 function reportIsExact(report: ProbeReport): boolean {
@@ -132,7 +156,8 @@ function reportIsExact(report: ProbeReport): boolean {
     report.status === 'ready' &&
     report.diffPx === 0 &&
     report.predictedLineCount === report.browserLineCount &&
-    report.predictedHeight === report.actualHeight
+    report.predictedHeight === report.actualHeight &&
+    report.firstBreakMismatch === null
   )
 }
 

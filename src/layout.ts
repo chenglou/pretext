@@ -35,7 +35,7 @@
 import { computeSegmentLevels } from './bidi.js'
 import {
   analyzeText,
-  canMergeKeepAllTextBoundary,
+  canContinueKeepAllTextRun,
   clearAnalysisCaches,
   endsWithClosingQuote,
   isCJK,
@@ -254,7 +254,7 @@ function buildBaseCjkUnits(
   return units
 }
 
-function mergeKeepAllCjkUnits(units: MeasuredTextUnit[]): MeasuredTextUnit[] {
+function mergeKeepAllTextUnits(units: MeasuredTextUnit[]): MeasuredTextUnit[] {
   if (units.length <= 1) return units
 
   const merged: MeasuredTextUnit[] = [{ ...units[0]! }]
@@ -262,7 +262,10 @@ function mergeKeepAllCjkUnits(units: MeasuredTextUnit[]): MeasuredTextUnit[] {
     const next = units[i]!
     const previous = merged[merged.length - 1]!
 
-    if (canMergeKeepAllTextBoundary(previous.text, next.text)) {
+    if (
+      canContinueKeepAllTextRun(previous.text) &&
+      isCJK(previous.text)
+    ) {
       previous.text += next.text
       continue
     }
@@ -409,7 +412,7 @@ function measureAnalysis(
     if (segKind === 'text' && segMetrics.containsCJK) {
       const baseUnits = buildBaseCjkUnits(segText, engineProfile)
       const measuredUnits = wordBreak === 'keep-all'
-        ? mergeKeepAllCjkUnits(baseUnits)
+        ? mergeKeepAllTextUnits(baseUnits)
         : baseUnits
 
       for (let i = 0; i < measuredUnits.length; i++) {
