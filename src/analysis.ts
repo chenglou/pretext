@@ -103,23 +103,39 @@ function containsArabicScript(text: string): boolean {
 }
 
 export function isCJK(s: string): boolean {
-  for (const ch of s) {
-    const c = ch.codePointAt(0)!
-    if ((c >= 0x4E00 && c <= 0x9FFF) ||
-        (c >= 0x3400 && c <= 0x4DBF) ||
-        (c >= 0x20000 && c <= 0x2A6DF) ||
-        (c >= 0x2A700 && c <= 0x2B73F) ||
-        (c >= 0x2B740 && c <= 0x2B81F) ||
-        (c >= 0x2B820 && c <= 0x2CEAF) ||
-        (c >= 0x2CEB0 && c <= 0x2EBEF) ||
-        (c >= 0x30000 && c <= 0x3134F) ||
-        (c >= 0xF900 && c <= 0xFAFF) ||
-        (c >= 0x2F800 && c <= 0x2FA1F) ||
-        (c >= 0x3000 && c <= 0x303F) ||
-        (c >= 0x3040 && c <= 0x309F) ||
-        (c >= 0x30A0 && c <= 0x30FF) ||
-        (c >= 0xAC00 && c <= 0xD7AF) ||
-        (c >= 0xFF00 && c <= 0xFFEF)) {
+  for (let i = 0; i < s.length; i++) {
+    const first = s.charCodeAt(i)
+    if (first < 0x3000) continue
+
+    if (first >= 0xD800 && first <= 0xDBFF && i + 1 < s.length) {
+      const second = s.charCodeAt(i + 1)
+      if (second >= 0xDC00 && second <= 0xDFFF) {
+        const codePoint = ((first - 0xD800) << 10) + (second - 0xDC00) + 0x10000
+        if ((codePoint >= 0x20000 && codePoint <= 0x2A6DF) ||
+            (codePoint >= 0x2A700 && codePoint <= 0x2B73F) ||
+            (codePoint >= 0x2B740 && codePoint <= 0x2B81F) ||
+            (codePoint >= 0x2B820 && codePoint <= 0x2CEAF) ||
+            (codePoint >= 0x2CEB0 && codePoint <= 0x2EBEF) ||
+            (codePoint >= 0x2EBF0 && codePoint <= 0x2EE5D) ||
+            (codePoint >= 0x2F800 && codePoint <= 0x2FA1F) ||
+            (codePoint >= 0x30000 && codePoint <= 0x3134F) ||
+            (codePoint >= 0x31350 && codePoint <= 0x323AF) ||
+            (codePoint >= 0x323B0 && codePoint <= 0x33479)) {
+          return true
+        }
+        i++
+        continue
+      }
+    }
+
+    if ((first >= 0x4E00 && first <= 0x9FFF) ||
+        (first >= 0x3400 && first <= 0x4DBF) ||
+        (first >= 0xF900 && first <= 0xFAFF) ||
+        (first >= 0x3000 && first <= 0x303F) ||
+        (first >= 0x3040 && first <= 0x309F) ||
+        (first >= 0x30A0 && first <= 0x30FF) ||
+        (first >= 0xAC00 && first <= 0xD7AF) ||
+        (first >= 0xFF00 && first <= 0xFFEF)) {
       return true
     }
   }
@@ -333,6 +349,9 @@ function classifySegmentBreakChar(ch: string, whiteSpaceProfile: WhiteSpaceProfi
   return 'text'
 }
 
+// All characters that classifySegmentBreakChar maps to a non-'text' kind.
+const breakCharRe = /[\x20\t\n\xA0\xAD\u200B\u202F\u2060\uFEFF]/
+
 function joinTextParts(parts: string[]): string {
   return parts.length === 1 ? parts[0]! : parts.join('')
 }
@@ -343,6 +362,10 @@ function splitSegmentByBreakKind(
   start: number,
   whiteSpaceProfile: WhiteSpaceProfile,
 ): SegmentationPiece[] {
+  if (!breakCharRe.test(segment)) {
+    return [{ text: segment, isWordLike, kind: 'text', start }]
+  }
+
   const pieces: SegmentationPiece[] = []
   let currentKind: SegmentBreakKind | null = null
   let currentTextParts: string[] = []

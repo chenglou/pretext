@@ -11,6 +11,7 @@ const LINE_HEIGHT = 19
 type LayoutModule = typeof import('./layout.ts')
 type LineBreakModule = typeof import('./line-break.ts')
 type InlineFlowModule = typeof import('./inline-flow.ts')
+type AnalysisModule = typeof import('./analysis.ts')
 
 let prepare: LayoutModule['prepare']
 let prepareWithSegments: LayoutModule['prepareWithSegments']
@@ -31,6 +32,7 @@ let measureInlineFlowGeometry: InlineFlowModule['measureInlineFlowGeometry']
 let walkInlineFlowLineRanges: InlineFlowModule['walkInlineFlowLineRanges']
 let walkInlineFlowLines: InlineFlowModule['walkInlineFlowLines']
 let measureInlineFlow: InlineFlowModule['measureInlineFlow']
+let isCJK: AnalysisModule['isCJK']
 
 const emojiPresentationRe = /\p{Emoji_Presentation}/u
 const punctuationRe = /[.,!?;:%)\]}'"”’»›…—-]/u
@@ -70,7 +72,10 @@ function isWideCharacter(ch: string): boolean {
     (code >= 0x2B740 && code <= 0x2B81F) ||
     (code >= 0x2B820 && code <= 0x2CEAF) ||
     (code >= 0x2CEB0 && code <= 0x2EBEF) ||
+    (code >= 0x2EBF0 && code <= 0x2EE5D) ||
     (code >= 0x30000 && code <= 0x3134F) ||
+    (code >= 0x31350 && code <= 0x323AF) ||
+    (code >= 0x323B0 && code <= 0x33479) ||
     (code >= 0x3000 && code <= 0x303F) ||
     (code >= 0x3040 && code <= 0x309F) ||
     (code >= 0x30A0 && code <= 0x30FF) ||
@@ -246,9 +251,13 @@ class TestOffscreenCanvas {
 
 beforeAll(async () => {
   Reflect.set(globalThis, 'OffscreenCanvas', TestOffscreenCanvas)
-  const mod = await import('./layout.ts')
-  const lineBreakMod = await import('./line-break.ts')
-  const inlineFlowMod = await import('./inline-flow.ts')
+  const [analysisMod, mod, lineBreakMod, inlineFlowMod] = await Promise.all([
+    import('./analysis.ts'),
+    import('./layout.ts'),
+    import('./line-break.ts'),
+    import('./inline-flow.ts'),
+  ])
+  ;({ isCJK } = analysisMod)
   ;({
     prepare,
     prepareWithSegments,
@@ -539,6 +548,13 @@ describe('prepare invariants', () => {
   test('treats astral CJK ideographs as CJK break units', () => {
     expect(prepareWithSegments('𠀀𠀁', FONT).segments).toEqual(['𠀀', '𠀁'])
     expect(prepareWithSegments('𠀀。', FONT).segments).toEqual(['𠀀。'])
+  })
+
+  test('isCJK covers the newer CJK extension blocks', () => {
+    expect(isCJK('\u{2EBF0}')).toBe(true)
+    expect(isCJK('\u{31350}')).toBe(true)
+    expect(isCJK('\u{323B0}')).toBe(true)
+    expect(isCJK('hello')).toBe(false)
   })
 
   test('prepare and prepareWithSegments agree on layout behavior', () => {

@@ -221,7 +221,6 @@ function measureAnalysis(
   const breakablePrefixWidths: (number[] | null)[] = []
   const segments = includeSegments ? [] as string[] : null
   const preparedStartByAnalysisIndex = Array.from<number>({ length: analysis.len })
-  const preparedEndByAnalysisIndex = Array.from<number>({ length: analysis.len })
 
   function pushMeasuredSegment(
     text: string,
@@ -264,19 +263,16 @@ function measureAnalysis(
         null,
         null,
       )
-      preparedEndByAnalysisIndex[mi] = widths.length
       continue
     }
 
     if (segKind === 'hard-break') {
       pushMeasuredSegment(segText, 0, 0, 0, segKind, segStart, null, null)
-      preparedEndByAnalysisIndex[mi] = widths.length
       continue
     }
 
     if (segKind === 'tab') {
       pushMeasuredSegment(segText, 0, 0, 0, segKind, segStart, null, null)
-      preparedEndByAnalysisIndex[mi] = widths.length
       continue
     }
 
@@ -320,7 +316,6 @@ function measureAnalysis(
         const w = getCorrectedSegmentWidth(unitText, unitMetrics, emojiCorrection)
         pushMeasuredSegment(unitText, w, w, w, 'text', segStart + unitStart, null, null)
       }
-      preparedEndByAnalysisIndex[mi] = widths.length
       continue
     }
 
@@ -361,10 +356,9 @@ function measureAnalysis(
         null,
       )
     }
-    preparedEndByAnalysisIndex[mi] = widths.length
   }
 
-  const chunks = mapAnalysisChunksToPreparedChunks(analysis.chunks, preparedStartByAnalysisIndex, preparedEndByAnalysisIndex)
+  const chunks = mapAnalysisChunksToPreparedChunks(analysis.chunks, preparedStartByAnalysisIndex, widths.length)
   const segLevels = segStarts === null ? null : computeSegmentLevels(analysis.normalized, segStarts)
   if (segments !== null) {
     return {
@@ -400,7 +394,7 @@ function measureAnalysis(
 function mapAnalysisChunksToPreparedChunks(
   chunks: AnalysisChunk[],
   preparedStartByAnalysisIndex: number[],
-  preparedEndByAnalysisIndex: number[],
+  preparedEndSegmentIndex: number,
 ): PreparedLineChunk[] {
   const preparedChunks: PreparedLineChunk[] = []
   for (let i = 0; i < chunks.length; i++) {
@@ -408,15 +402,15 @@ function mapAnalysisChunksToPreparedChunks(
     const startSegmentIndex =
       chunk.startSegmentIndex < preparedStartByAnalysisIndex.length
         ? preparedStartByAnalysisIndex[chunk.startSegmentIndex]!
-        : preparedEndByAnalysisIndex[preparedEndByAnalysisIndex.length - 1] ?? 0
+        : preparedEndSegmentIndex
     const endSegmentIndex =
       chunk.endSegmentIndex < preparedStartByAnalysisIndex.length
         ? preparedStartByAnalysisIndex[chunk.endSegmentIndex]!
-        : preparedEndByAnalysisIndex[preparedEndByAnalysisIndex.length - 1] ?? 0
+        : preparedEndSegmentIndex
     const consumedEndSegmentIndex =
       chunk.consumedEndSegmentIndex < preparedStartByAnalysisIndex.length
         ? preparedStartByAnalysisIndex[chunk.consumedEndSegmentIndex]!
-        : preparedEndByAnalysisIndex[preparedEndByAnalysisIndex.length - 1] ?? 0
+        : preparedEndSegmentIndex
 
     preparedChunks.push({
       startSegmentIndex,
