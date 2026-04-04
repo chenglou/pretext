@@ -38,6 +38,7 @@ import {
   clearAnalysisCaches,
   endsWithClosingQuote,
   isCJK,
+  isNumericRunSegment,
   kinsokuEnd,
   kinsokuStart,
   leftStickyPunctuation,
@@ -331,7 +332,8 @@ function measureAnalysis(
 
     if (segWordLike && segText.length > 1) {
       const graphemeWidths = getSegmentGraphemeWidths(segText, segMetrics, cache, emojiCorrection)
-      const graphemePrefixWidths = engineProfile.preferPrefixWidthsForBreakableRuns
+      const graphemePrefixWidths =
+        engineProfile.preferPrefixWidthsForBreakableRuns || isNumericRunSegment(segText)
         ? getSegmentGraphemePrefixWidths(segText, segMetrics, cache, emojiCorrection)
         : null
       pushMeasuredSegment(

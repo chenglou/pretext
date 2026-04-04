@@ -36,6 +36,7 @@ let isCJK: AnalysisModule['isCJK']
 
 const emojiPresentationRe = /\p{Emoji_Presentation}/u
 const punctuationRe = /[.,!?;:%)\]}'"”’»›…—-]/u
+const decimalDigitRe = /\p{Nd}/u
 const graphemeSegmenter = new Intl.Segmenter(undefined, { granularity: 'grapheme' })
 
 type TestLayoutCursor = {
@@ -87,20 +88,30 @@ function isWideCharacter(ch: string): boolean {
 function measureWidth(text: string, font: string): number {
   const fontSize = parseFontSize(font)
   let width = 0
+  let previousWasDecimalDigit = false
 
   for (const ch of text) {
     if (ch === ' ') {
       width += fontSize * 0.33
+      previousWasDecimalDigit = false
     } else if (ch === '\t') {
       width += fontSize * 1.32
+      previousWasDecimalDigit = false
     } else if (emojiPresentationRe.test(ch) || ch === '\uFE0F') {
       width += fontSize
+      previousWasDecimalDigit = false
+    } else if (decimalDigitRe.test(ch)) {
+      width += fontSize * (previousWasDecimalDigit ? 0.48 : 0.52)
+      previousWasDecimalDigit = true
     } else if (isWideCharacter(ch)) {
       width += fontSize
+      previousWasDecimalDigit = false
     } else if (punctuationRe.test(ch)) {
       width += fontSize * 0.4
+      previousWasDecimalDigit = false
     } else {
       width += fontSize * 0.6
+      previousWasDecimalDigit = false
     }
   }
 
@@ -546,8 +557,20 @@ describe('prepare invariants', () => {
   })
 
   test('treats astral CJK ideographs as CJK break units', () => {
-    expect(prepareWithSegments('𠀀𠀁', FONT).segments).toEqual(['𠀀', '𠀁'])
-    expect(prepareWithSegments('𠀀。', FONT).segments).toEqual(['𠀀。'])
+    const samples = ['𠀀', '\u{2EBF0}', '\u{31350}', '\u{323B0}']
+
+    for (let i = 0; i < samples.length; i++) {
+      const sample = samples[i]!
+      expect(prepareWithSegments(`${sample}${sample}`, FONT).segments).toEqual([sample, sample])
+      expect(prepareWithSegments(`${sample}。`, FONT).segments).toEqual([`${sample}。`])
+    }
+  })
+
+  test('isCJK covers the newer CJK extension blocks', () => {
+    expect(isCJK('\u{2EBF0}')).toBe(true)
+    expect(isCJK('\u{31350}')).toBe(true)
+    expect(isCJK('\u{323B0}')).toBe(true)
+    expect(isCJK('hello')).toBe(false)
   })
 
   test('isCJK covers the newer CJK extension blocks', () => {
@@ -596,6 +619,14 @@ describe('prepare invariants', () => {
       { text: '123', level: 2 },
       { text: 'واحد', level: 1 },
       { text: 'three', level: 2 },
+    ])
+
+    const astralRtlFirst = prepareWithSegments('𞤀𞤁 abc', FONT)
+    expect(astralRtlFirst.segLevels).not.toBeNull()
+    expect(astralRtlFirst.segLevels).toHaveLength(astralRtlFirst.segments.length)
+    expect(getNonSpaceSegmentLevels(astralRtlFirst)).toEqual([
+      { text: '𞤀𞤁', level: 1 },
+      { text: 'abc', level: 2 },
     ])
   })
 })
@@ -1006,6 +1037,26 @@ describe('layout invariants', () => {
     const streamed = layoutNextLine(prepared, { segmentIndex: 0, graphemeIndex: 0 }, width)
     expect(streamed?.text).toBe('foo ')
     expect(layout(prepared, width, LINE_HEIGHT).lineCount).toBe(batched.lineCount)
+  })
+
+  test('mixed CJK-plus-numeric runs use cumulative widths when breaking the numeric suffix', () => {
+    const prepared = prepareWithSegments('中文11111111111111111', FONT)
+    const width = measureWidth('11111', FONT) + 0.1
+
+    expect(prepared.segments).toEqual(['中', '文', '11111111111111111'])
+
+    const batched = layoutWithLines(prepared, width, LINE_HEIGHT)
+    expect(batched.lines.map(line => line.text)).toEqual([
+      '中文',
+      '11111',
+      '11111',
+      '11111',
+      '11',
+    ])
+
+    const streamed = collectStreamedLines(prepared, width)
+    expect(streamed).toEqual(batched.lines)
+    expect(layout(prepared, width, LINE_HEIGHT)).toEqual({ lineCount: 5, height: LINE_HEIGHT * 5 })
   })
 
   test('walkLineRanges reproduces layoutWithLines geometry without materializing text', () => {

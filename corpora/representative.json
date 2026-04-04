@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-03-31T10:06:56.170Z",
+  "generatedAt": "2026-04-04T17:39:36.828Z",
   "corpora": [
     "mixed-app-text",
     "en-gatsby-opening",
@@ -24,16 +24,16 @@
         "devicePixelRatio": 2,
         "viewport": {
           "innerWidth": 1512,
-          "innerHeight": 762,
+          "innerHeight": 757,
           "outerWidth": 1512,
-          "outerHeight": 849,
+          "outerHeight": 844,
           "visualViewportScale": 1
         },
         "screen": {
           "width": 1512,
           "height": 982,
           "availWidth": 1512,
-          "availHeight": 849,
+          "availHeight": 851,
           "colorDepth": 30,
           "pixelDepth": 30
         }
@@ -497,16 +497,16 @@
         "devicePixelRatio": 2,
         "viewport": {
           "innerWidth": 1512,
-          "innerHeight": 759,
+          "innerHeight": 761,
           "outerWidth": 1512,
-          "outerHeight": 849,
+          "outerHeight": 851,
           "visualViewportScale": 1
         },
         "screen": {
           "width": 1512,
           "height": 982,
           "availWidth": 1512,
-          "availHeight": 849,
+          "availHeight": 851,
           "colorDepth": 24,
           "pixelDepth": 24
         }

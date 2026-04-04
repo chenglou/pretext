@@ -54,11 +54,25 @@ const arabicTypes: BidiType[] = [
   'AL','AL','AL','AL','AL','AL','AL','AL','AL'
 ]
 
-function classifyChar(charCode: number): BidiType {
-  if (charCode <= 0x00ff) return baseTypes[charCode]!
-  if (0x0590 <= charCode && charCode <= 0x05f4) return 'R'
-  if (0x0600 <= charCode && charCode <= 0x06ff) return arabicTypes[charCode & 0xff]!
-  if (0x0700 <= charCode && charCode <= 0x08AC) return 'AL'
+const approximateBidiRanges: Array<{ start: number, end: number, type: BidiType }> = [
+  { start: 0x0590, end: 0x05F4, type: 'R' },
+  { start: 0x0700, end: 0x08AC, type: 'AL' },
+  { start: 0xFB1D, end: 0xFB4F, type: 'R' },
+  { start: 0xFB50, end: 0xFDFF, type: 'AL' },
+  { start: 0xFE70, end: 0xFEFF, type: 'AL' },
+  { start: 0x1E900, end: 0x1E95F, type: 'R' },
+  { start: 0x1EE00, end: 0x1EEFF, type: 'AL' },
+]
+
+function classifyCodePoint(codePoint: number): BidiType {
+  if (codePoint <= 0x00ff) return baseTypes[codePoint]!
+  if (0x0600 <= codePoint && codePoint <= 0x06ff) return arabicTypes[codePoint & 0xff]!
+
+  for (let i = 0; i < approximateBidiRanges.length; i++) {
+    const range = approximateBidiRanges[i]!
+    if (codePoint >= range.start && codePoint <= range.end) return range.type
+  }
+
   return 'L'
 }
 
@@ -68,15 +82,33 @@ function computeBidiLevels(str: string): Int8Array | null {
 
   // eslint-disable-next-line unicorn/no-new-array
   const types: BidiType[] = new Array(len)
-  let numBidi = 0
+  let sawBidi = false
 
-  for (let i = 0; i < len; i++) {
-    const t = classifyChar(str.charCodeAt(i))
-    if (t === 'R' || t === 'AL' || t === 'AN') numBidi++
-    types[i] = t
+  // Keep the resolved bidi classes aligned to UTF-16 code-unit offsets,
+  // because the rich prepared segments index back into the normalized string
+  // with JavaScript string offsets.
+  for (let i = 0; i < len;) {
+    const first = str.charCodeAt(i)
+    let codePoint = first
+    let codeUnitLength = 1
+
+    if (first >= 0xD800 && first <= 0xDBFF && i + 1 < len) {
+      const second = str.charCodeAt(i + 1)
+      if (second >= 0xDC00 && second <= 0xDFFF) {
+        codePoint = ((first - 0xD800) << 10) + (second - 0xDC00) + 0x10000
+        codeUnitLength = 2
+      }
+    }
+
+    const t = classifyCodePoint(codePoint)
+    if (t === 'R' || t === 'AL' || t === 'AN') sawBidi = true
+    for (let j = 0; j < codeUnitLength; j++) {
+      types[i + j] = t
+    }
+    i += codeUnitLength
   }
 
-  if (numBidi === 0) return null
+  if (!sawBidi) return null
 
   // Use the first strong character to pick the paragraph base direction.
   // Rich-path bidi metadata is only an approximation, but this keeps mixed

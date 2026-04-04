@@ -187,7 +187,6 @@ function walkPreparedLinesSimple(
 
   const engineProfile = getEngineProfile()
   const lineFitEpsilon = engineProfile.lineFitEpsilon
-  const preferPrefixWidths = engineProfile.preferPrefixWidthsForBreakableRuns
   const fitLimit = maxWidth + lineFitEpsilon
 
   let lineCount = 0
@@ -257,7 +256,7 @@ function walkPreparedLinesSimple(
 
   function appendBreakableSegmentFrom(segmentIndex: number, startGraphemeIndex: number): void {
     const gWidths = breakableWidths[segmentIndex]!
-    const gPrefixWidths = preferPrefixWidths ? breakablePrefixWidths[segmentIndex] ?? null : null
+    const gPrefixWidths = breakablePrefixWidths[segmentIndex] ?? null
     let previousPrefixWidth =
       gPrefixWidths === null || startGraphemeIndex === 0 ? 0 : gPrefixWidths[startGraphemeIndex - 1]!
 
@@ -377,7 +376,6 @@ export function walkPreparedLines(
 
   const engineProfile = getEngineProfile()
   const lineFitEpsilon = engineProfile.lineFitEpsilon
-  const preferPrefixWidths = engineProfile.preferPrefixWidthsForBreakableRuns
   const fitLimit = maxWidth + lineFitEpsilon
 
   let lineCount = 0
@@ -466,7 +464,7 @@ export function walkPreparedLines(
 
   function appendBreakableSegmentFrom(segmentIndex: number, startGraphemeIndex: number): void {
     const gWidths = breakableWidths[segmentIndex]!
-    const gPrefixWidths = preferPrefixWidths ? breakablePrefixWidths[segmentIndex] ?? null : null
+    const gPrefixWidths = breakablePrefixWidths[segmentIndex] ?? null
     let previousPrefixWidth =
       gPrefixWidths === null || startGraphemeIndex === 0 ? 0 : gPrefixWidths[startGraphemeIndex - 1]!
 
@@ -497,9 +495,7 @@ export function walkPreparedLines(
     if (pendingBreakKind !== 'soft-hyphen') return false
     const gWidths = breakableWidths[segmentIndex]!
     if (gWidths === null) return false
-    const fitWidths = engineProfile.preferPrefixWidthsForBreakableRuns
-      ? breakablePrefixWidths[segmentIndex] ?? gWidths
-      : gWidths
+    const fitWidths = breakablePrefixWidths[segmentIndex] ?? gWidths
     const usesPrefixWidths = fitWidths !== gWidths
     const { fitCount, fittedWidth } = fitSoftHyphenBreak(
       fitWidths,
@@ -681,7 +677,6 @@ function stepPreparedChunkLineGeometry(
   } = prepared
   const engineProfile = getEngineProfile()
   const lineFitEpsilon = engineProfile.lineFitEpsilon
-  const preferPrefixWidths = engineProfile.preferPrefixWidthsForBreakableRuns
   const fitLimit = maxWidth + lineFitEpsilon
 
   let lineW = 0
@@ -752,7 +747,7 @@ function stepPreparedChunkLineGeometry(
 
   function appendBreakableSegmentFrom(segmentIndex: number, startGraphemeIndex: number): number | null {
     const gWidths = breakableWidths[segmentIndex]!
-    const gPrefixWidths = preferPrefixWidths ? breakablePrefixWidths[segmentIndex] ?? null : null
+    const gPrefixWidths = breakablePrefixWidths[segmentIndex] ?? null
     let previousPrefixWidth =
       gPrefixWidths === null || startGraphemeIndex === 0 ? 0 : gPrefixWidths[startGraphemeIndex - 1]!
 
@@ -786,9 +781,7 @@ function stepPreparedChunkLineGeometry(
 
     const gWidths = breakableWidths[segmentIndex] ?? null
     if (gWidths !== null) {
-      const fitWidths = engineProfile.preferPrefixWidthsForBreakableRuns
-        ? breakablePrefixWidths[segmentIndex] ?? gWidths
-        : gWidths
+      const fitWidths = breakablePrefixWidths[segmentIndex] ?? gWidths
       const usesPrefixWidths = fitWidths !== gWidths
       const { fitCount, fittedWidth } = fitSoftHyphenBreak(
         fitWidths,
@@ -915,7 +908,6 @@ function stepPreparedSimpleLineGeometry(
   const { widths, kinds, breakableWidths, breakablePrefixWidths } = prepared
   const engineProfile = getEngineProfile()
   const lineFitEpsilon = engineProfile.lineFitEpsilon
-  const preferPrefixWidths = engineProfile.preferPrefixWidthsForBreakableRuns
   const fitLimit = maxWidth + lineFitEpsilon
 
   let lineW = 0
@@ -935,7 +927,7 @@ function stepPreparedSimpleLineGeometry(
     if (!hasContent) {
       if (startGraphemeIndex > 0 || (w > maxWidth && breakableWidth !== null)) {
         const gWidths = breakableWidth!
-        const gPrefixWidths = preferPrefixWidths ? breakablePrefixWidths[i] ?? null : null
+        const gPrefixWidths = breakablePrefixWidths[i] ?? null
         let previousPrefixWidth =
           gPrefixWidths === null || startGraphemeIndex === 0
             ? 0
