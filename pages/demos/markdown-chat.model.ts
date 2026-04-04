@@ -25,8 +25,10 @@ export const OCCLUSION_BANNER_HEIGHT = 92
 export const PAGE_MARGIN = 28
 export const MESSAGE_SIDE_PADDING = 22
 
-const CHAT_TOP_PADDING = OCCLUSION_BANNER_HEIGHT + 14
-const CHAT_BOTTOM_PADDING = OCCLUSION_BANNER_HEIGHT + 10
+const COMPACT_OCCLUSION_BANNER_HEIGHT = 64
+const COMPACT_OCCLUSION_VIEWPORT_HEIGHT = 460
+const CHAT_TOP_PADDING_OFFSET = 14
+const CHAT_BOTTOM_PADDING_OFFSET = 10
 const MESSAGE_GAP = 12
 const BUBBLE_MAX_RATIO = 0.78
 export const BUBBLE_PADDING_X = 16
@@ -214,6 +216,7 @@ export type ChatMessageInstance = {
 export type ConversationFrame = {
   chatWidth: number
   messages: ChatMessageInstance[]
+  occlusionBannerHeight: number
   totalHeight: number
 }
 
@@ -242,14 +245,17 @@ export function getMaxChatWidth(viewportWidth: number): number {
 export function buildConversationFrame(
   templates: readonly PreparedChatTemplate[],
   chatWidth: number,
+  occlusionBannerHeight: number = OCCLUSION_BANNER_HEIGHT,
 ): ConversationFrame {
   const messageCount = TOTAL_MESSAGE_COUNT
   const laneWidth = Math.max(120, chatWidth - MESSAGE_SIDE_PADDING * 2)
   const userFrameWidth = Math.min(laneWidth, Math.max(240, Math.floor(chatWidth * BUBBLE_MAX_RATIO)))
   const assistantFrameWidth = laneWidth
   const messages: ChatMessageInstance[] = new Array(messageCount)
+  const chatTopPadding = occlusionBannerHeight + CHAT_TOP_PADDING_OFFSET
+  const chatBottomPadding = occlusionBannerHeight + CHAT_BOTTOM_PADDING_OFFSET
 
-  let y = CHAT_TOP_PADDING
+  let y = chatTopPadding
   for (let ordinal = 0; ordinal < messageCount; ordinal++) {
     const templateIndex = ordinal % templates.length
     const template = templates[templateIndex]!
@@ -272,14 +278,21 @@ export function buildConversationFrame(
 
   const totalHeight =
     messages.length === 0
-      ? CHAT_TOP_PADDING + CHAT_BOTTOM_PADDING
-      : y - MESSAGE_GAP + CHAT_BOTTOM_PADDING
+      ? chatTopPadding + chatBottomPadding
+      : y - MESSAGE_GAP + chatBottomPadding
 
   return {
     chatWidth,
     messages,
+    occlusionBannerHeight,
     totalHeight,
   }
+}
+
+export function getOcclusionBannerHeight(viewportHeight: number): number {
+  return viewportHeight <= COMPACT_OCCLUSION_VIEWPORT_HEIGHT
+    ? COMPACT_OCCLUSION_BANNER_HEIGHT
+    : OCCLUSION_BANNER_HEIGHT
 }
 
 export function findVisibleRange(
