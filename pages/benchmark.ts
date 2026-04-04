@@ -9,6 +9,15 @@ import {
   profilePrepare,
 } from '../src/layout.ts'
 import type { PreparedText, PreparedTextWithSegments } from '../src/layout.ts'
+import {
+  layoutNextInlineFlowLine,
+  measureInlineFlowGeometry,
+  prepareInlineFlow,
+  walkInlineFlowLineRanges,
+  walkInlineFlowLines,
+  type InlineFlowItem,
+  type PreparedInlineFlow,
+} from '../src/inline-flow.ts'
 import { TEXTS } from '../src/test-data.ts'
 import {
   clearNavigationReport,
@@ -30,6 +39,7 @@ import zhZhufu from '../corpora/zh-zhufu.txt' with { type: 'text' }
 
 const COUNT = 500
 const FONT_FAMILY = '"Helvetica Neue", Helvetica, Arial, sans-serif'
+const MONO_FONT_FAMILY = '"SF Mono", ui-monospace, Menlo, Monaco, monospace'
 const FONT_SIZE = 16
 const FONT = `${FONT_SIZE}px ${FONT_FAMILY}`
 const LINE_HEIGHT = Math.round(FONT_SIZE * 1.2)
@@ -45,6 +55,9 @@ const DOM_INTERLEAVED_SAMPLE_REPEATS = 1
 const RICH_COUNT = 60
 const RICH_LAYOUT_SAMPLE_REPEATS = 40
 const RICH_LAYOUT_SAMPLE_WIDTHS = [180, 220, 260] as const
+const INLINE_FLOW_COUNT = 36
+const INLINE_FLOW_SAMPLE_REPEATS = 40
+const INLINE_FLOW_SAMPLE_WIDTHS = [180, 220, 260] as const
 const RICH_PRE_WRAP_COUNT = 12
 const RICH_PRE_WRAP_LINE_COUNT = 320
 const RICH_PRE_WRAP_SAMPLE_REPEATS = 20
@@ -54,6 +67,11 @@ const RICH_LONG_SAMPLE_WIDTHS = [240, 300, 360] as const
 const CORPUS_LAYOUT_SAMPLE_REPEATS = 200
 const CORPUS_WARMUP = 1
 const CORPUS_RUNS = 7
+const INLINE_FLOW_CODE_FONT = `600 12px ${MONO_FONT_FAMILY}`
+const INLINE_FLOW_CHIP_FONT = `700 11px ${FONT_FAMILY}`
+const INLINE_FLOW_EMPHASIS_FONT = `italic ${FONT_SIZE}px ${FONT_FAMILY}`
+const INLINE_FLOW_CODE_EXTRA_WIDTH = 12
+const INLINE_FLOW_CHIP_EXTRA_WIDTH = 14
 
 type BenchmarkResult = { label: string, ms: number, desc: string }
 type CorpusBenchmarkResult = {
@@ -77,6 +95,7 @@ type BenchmarkReport = {
   requestId?: string
   results?: BenchmarkResult[]
   richResults?: BenchmarkResult[]
+  inlineFlowResults?: BenchmarkResult[]
   richPreWrapResults?: BenchmarkResult[]
   richLongResults?: BenchmarkResult[]
   corpusResults?: CorpusBenchmarkResult[]
@@ -230,6 +249,53 @@ function buildLongBreakableStressText(repeatCount: number): string {
     )
   }
   return parts.join(' ')
+}
+
+function buildInlineFlowStressItems(text: string): InlineFlowItem[] {
+  const tokens = text.match(/\S+|\s+/g) ?? [text]
+  const items: InlineFlowItem[] = []
+  let styledTokenIndex = 0
+
+  for (let index = 0; index < tokens.length; index++) {
+    const token = tokens[index]!
+    if (/^\s+$/.test(token)) {
+      items.push({
+        font: FONT,
+        text: token,
+      })
+      continue
+    }
+
+    const styleIndex = styledTokenIndex % 9
+    styledTokenIndex++
+
+    if (styleIndex === 2 && token.length <= 18) {
+      items.push({
+        break: 'never',
+        extraWidth: INLINE_FLOW_CODE_EXTRA_WIDTH,
+        font: INLINE_FLOW_CODE_FONT,
+        text: token,
+      })
+      continue
+    }
+
+    if (styleIndex === 5 && token.length <= 12) {
+      items.push({
+        break: 'never',
+        extraWidth: INLINE_FLOW_CHIP_EXTRA_WIDTH,
+        font: INLINE_FLOW_CHIP_FONT,
+        text: token,
+      })
+      continue
+    }
+
+    items.push({
+      font: styleIndex === 7 ? INLINE_FLOW_EMPHASIS_FONT : FONT,
+      text: token,
+    })
+  }
+
+  return items
 }
 
 function buildPreWrapChunkStressText(seed: number, lineCount: number): string {
@@ -439,6 +505,95 @@ function buildRichBenchmarks(
   ]
 }
 
+function buildInlineFlowBenchmarks(
+  prepared: PreparedInlineFlow[],
+  widths: readonly number[],
+  descSuffix: string,
+  sampleRepeats = INLINE_FLOW_SAMPLE_REPEATS,
+): BenchmarkResult[] {
+  let inlineFlowSink = 0
+
+  const measureInlineFlowGeometryMs = bench(repeatIndex => {
+    const width = widths[repeatIndex % widths.length]!
+    let sum = 0
+    for (let i = 0; i < prepared.length; i++) {
+      const result = measureInlineFlowGeometry(prepared[i]!, width)
+      sum += result.lineCount + result.maxLineWidth
+    }
+    inlineFlowSink += sum + repeatIndex
+  }, sampleRepeats)
+
+  const walkInlineFlowLineRangesMs = bench(repeatIndex => {
+    const width = widths[repeatIndex % widths.length]!
+    let sum = 0
+    for (let i = 0; i < prepared.length; i++) {
+      sum += walkInlineFlowLineRanges(prepared[i]!, width, line => {
+        sum += line.width + line.fragments.length + line.end.itemIndex
+      })
+    }
+    inlineFlowSink += sum + repeatIndex
+  }, sampleRepeats)
+
+  const walkInlineFlowLinesMs = bench(repeatIndex => {
+    const width = widths[repeatIndex % widths.length]!
+    let sum = 0
+    for (let i = 0; i < prepared.length; i++) {
+      sum += walkInlineFlowLines(prepared[i]!, width, line => {
+        sum += line.width + line.fragments.length + line.end.itemIndex
+        for (let fragmentIndex = 0; fragmentIndex < line.fragments.length; fragmentIndex++) {
+          const fragment = line.fragments[fragmentIndex]!
+          sum += fragment.text.length + fragment.itemIndex
+        }
+      })
+    }
+    inlineFlowSink += sum + repeatIndex
+  }, sampleRepeats)
+
+  const layoutNextInlineFlowLineMs = bench(repeatIndex => {
+    const width = widths[repeatIndex % widths.length]!
+    let sum = 0
+    for (let i = 0; i < prepared.length; i++) {
+      let cursor = { itemIndex: 0, segmentIndex: 0, graphemeIndex: 0 }
+      while (true) {
+        const line = layoutNextInlineFlowLine(prepared[i]!, width, cursor)
+        if (line === null) break
+        sum += line.width + line.fragments.length + line.end.itemIndex
+        for (let fragmentIndex = 0; fragmentIndex < line.fragments.length; fragmentIndex++) {
+          const fragment = line.fragments[fragmentIndex]!
+          sum += fragment.text.length + fragment.itemIndex
+        }
+        cursor = line.end
+      }
+    }
+    inlineFlowSink += sum + repeatIndex
+  }, sampleRepeats)
+
+  document.body.dataset['inlineFlowSink'] = String(inlineFlowSink)
+
+  return [
+    {
+      label: 'Our library: measureInlineFlowGeometry()',
+      ms: measureInlineFlowGeometryMs,
+      desc: `${descSuffix}; aggregate geometry only`,
+    },
+    {
+      label: 'Our library: walkInlineFlowLineRanges()',
+      ms: walkInlineFlowLineRangesMs,
+      desc: `${descSuffix}; per-line geometry with fragment ranges, no text strings`,
+    },
+    {
+      label: 'Our library: walkInlineFlowLines()',
+      ms: walkInlineFlowLinesMs,
+      desc: `${descSuffix}; per-line materialization through the batch walker`,
+    },
+    {
+      label: 'Our library: layoutNextInlineFlowLine()',
+      ms: layoutNextInlineFlowLineMs,
+      desc: `${descSuffix}; streaming per-line materialization`,
+    },
+  ]
+}
+
 function renderBenchmarkTable(results: BenchmarkResult[], treatFirstAsSetup: boolean): string {
   const comparable = treatFirstAsSetup ? results.filter(r => r.label !== results[0]?.label) : results
   const fastest = Math.min(...comparable.map(r => r.ms))
@@ -578,6 +733,19 @@ async function run() {
     `${RICH_COUNT}-text shared-corpus batch across widths ${RICH_LAYOUT_SAMPLE_WIDTHS.join('/')}px`,
   )
 
+  // --- Inline-flow mixed-inline stress ---
+  root.innerHTML = '<p>Benchmarking inline-flow APIs...</p>'
+  await nextFrame()
+  clearCache()
+  const inlineFlowPrepared = richTexts
+    .slice(0, INLINE_FLOW_COUNT)
+    .map(text => prepareInlineFlow(buildInlineFlowStressItems(text)))
+  const inlineFlowResults = buildInlineFlowBenchmarks(
+    inlineFlowPrepared,
+    INLINE_FLOW_SAMPLE_WIDTHS,
+    `${INLINE_FLOW_COUNT} mixed-inline shared-corpus texts across widths ${INLINE_FLOW_SAMPLE_WIDTHS.join('/')}px`,
+  )
+
   // --- Rich pre-wrap chunk stress ---
   root.innerHTML = '<p>Benchmarking pre-wrap rich line APIs...</p>'
   await nextFrame()
@@ -638,6 +806,11 @@ async function run() {
     <h2 style="color:#4fc3f7;font-family:monospace;font-size:16px;margin:24px 0 8px">Rich line APIs (shared corpus)</h2>
     ${renderBenchmarkTable(richResults, false)}
     <p class="note">${RICH_COUNT} shared-corpus texts prepared with segments. Median ms per batch across widths ${RICH_LAYOUT_SAMPLE_WIDTHS.join('/')}px. This tracks the richer APIs used by shrinkwrap, custom layout, and manual reflow.</p>
+  `
+  root.innerHTML += `
+    <h2 style="color:#4fc3f7;font-family:monospace;font-size:16px;margin:24px 0 8px">Inline-flow APIs (mixed inline shared corpus)</h2>
+    ${renderBenchmarkTable(inlineFlowResults, false)}
+    <p class="note">${INLINE_FLOW_COUNT} shared-corpus texts split into deterministic mixed inline items with collapsible boundary whitespace, atomic mono/code pills, and badge-like chips. Median ms per batch across widths ${INLINE_FLOW_SAMPLE_WIDTHS.join('/')}px. This is the benchmark canary for the alpha rich inline primitive.</p>
   `
   root.innerHTML += `
     <h2 style="color:#4fc3f7;font-family:monospace;font-size:16px;margin:24px 0 8px">Rich line APIs (pre-wrap chunk stress)</h2>
@@ -748,6 +921,7 @@ async function run() {
     status: 'ready',
     results,
     richResults,
+    inlineFlowResults,
     richPreWrapResults,
     richLongResults,
     corpusResults,
