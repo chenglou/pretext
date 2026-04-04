@@ -15,6 +15,12 @@ npm install @chenglou/pretext
 Clone the repo, run `bun install`, then `bun start`, and open the `/demos` in your browser (no trailing slash. Bun devserver bugs on those)
 Alternatively, see them live at [chenglou.me/pretext](https://chenglou.me/pretext/). Some more at [somnai-dreams.github.io/pretext-demos](https://somnai-dreams.github.io/pretext-demos/)
 
+- [**Masonry**](https://chenglou.me/pretext/masonry/) — Occlusion (virtualization) of hundreds of thousands of text boxes, each with differing height, without DOM measurement. The visibility check is a single linear cache-less traversal of heights, scrolling & resizing at 120fps.
+- [**Bubbles**](https://chenglou.me/pretext/bubbles/) — Shrinkwrapped chat bubbles using `walkLineRanges()` to find the tightest container width.
+- [**Dynamic Layout**](https://chenglou.me/pretext/dynamic-layout) — Multi-column magazine layout, but _responsive_ and dynamic. Fixed-height editorial spread with continuous two-column flow, obstacle-aware title routing, and live logo-driven reflow.
+- [**Variable Typographic ASCII**](https://chenglou.me/pretext/variable-typographic-ascii) — Variable font width ASCII art, because why not, it's easy now.
+- [**Accordion**](https://chenglou.me/pretext/accordion/) — Your typical auto-growing text area, accordion, multi-line text centering, pure canvas multiline text, and all other things that used to be real CSS challenges, now reduced to a boring footnote.
+
 ## API
 
 Pretext serves 2 use cases:
@@ -199,6 +205,62 @@ Other helpers:
 clearCache(): void // clears Pretext's shared internal caches used by prepare() and prepareWithSegments(). Useful if your app cycles through many different fonts or text variants and you want to release the accumulated cache
 setLocale(locale?: string): void // optional (by default we use the current locale). Sets locale for future prepare() and prepareWithSegments(). Internally, it also calls clearCache(). Setting a new locale doesn't affect existing prepare() and prepareWithSegments() states (no mutations to them)
 ```
+
+## How It Works
+
+Two-phase architecture: expensive one-time `prepare()`, then cheap per-resize `layout()`.
+
+### Prepare Phase
+
+`prepare(text, font)` does all the heavy lifting upfront and returns an opaque handle.
+
+**Text analysis** (no canvas yet):
+1. **Normalize whitespace.** In `'normal'` mode, collapse runs of spaces/tabs/newlines to single spaces, strip leading/trailing. In `'pre-wrap'` mode, preserve spaces, tabs, and `\n` hard breaks; only normalize `\r\n` to `\n`.
+2. **Segment via `Intl.Segmenter`.** The browser's locale-aware word boundary algorithm. Handles CJK (per-character boundaries), Thai (no-space script), Arabic, and every other script the browser knows.
+3. **Classify segments.** Each segment gets a break kind: `text`, `space`, `preserved-space`, `tab`, `glue` (NBSP/NNBSP/word joiner), `zero-width-break` (ZWSP), `soft-hyphen`, or `hard-break`.
+4. **Apply glue rules.** Merge closing punctuation (`.`, `,`, `!`, `)`, etc.) into the preceding word so `"better."` is one unit. Merge opening quotes into the following word. Keep NBSP-style glue attached to adjacent text. Keep URL-like runs and numeric/time-range runs together.
+5. **CJK grapheme splitting + kinsoku.** CJK text is split into per-grapheme segments (one per ideograph/kana), then [kinsoku shori](https://en.wikipedia.org/wiki/Line_breaking_rules_in_East_Asian_languages) rules re-merge line-start-prohibited punctuation (。、！ etc.) with the preceding grapheme and line-end-prohibited punctuation (「【 etc.) with the following.
+6. **Script-specific fixes.** Arabic no-space punctuation clusters, Myanmar medial glue, escaped quote clusters, and similar edge cases are handled in preprocessing so the line breaker stays simple.
+
+**Measurement** (canvas):
+1. **Measure each segment** via `canvas.measureText()`. Cache results in a shared `Map<font, Map<segment, metrics>>` so repeated words across texts are free.
+2. **Emoji correction.** Chrome/Firefox on macOS inflate emoji widths in canvas at font sizes below ~24px. Pretext auto-detects this by comparing one canvas measurement against one cached DOM read per font, then subtracts the constant per-emoji-grapheme correction. Safari doesn't need it.
+3. **Pre-measure grapheme widths** for segments that might need overflow-wrap word breaking (long words wider than `maxWidth`). These are measured lazily and cached alongside the segment.
+4. **Detect browser engine quirks.** A one-time engine profile captures line-fit epsilon (Safari 1/64px vs Chrome/Firefox 0.005px), whether CJK carries after closing quotes (Chromium), and whether prefix-sum widths are more accurate for breakable runs (Safari).
+
+The output is a set of parallel arrays (widths, break kinds, line-end advances, grapheme widths) packed into the opaque `PreparedText` handle. In `'pre-wrap'` mode, the text is also pre-split into chunks at hard-break boundaries.
+
+### Layout Phase
+
+`layout(prepared, maxWidth, lineHeight)` walks cached segment widths with pure arithmetic. No DOM reads, no canvas calls, no string work, no allocations beyond the return value. ~0.0002ms per text.
+
+The line breaker implements CSS `white-space: normal`, `word-break: normal`, `overflow-wrap: break-word`, `line-break: auto`:
+
+- **Greedy left-to-right.** Accumulate segment widths. At each break opportunity (after spaces, ZWSP, soft hyphens), record a pending break point. When the line overflows, take the last pending break.
+- **Overflow-wrap fallback.** If a single word is wider than the line and there's no pending break, break at the last grapheme boundary that fits.
+- **Trailing whitespace hangs** past the line edge without triggering breaks (CSS behavior). The algorithm tracks both fit-width (for break decisions) and paint-width (for reported line width).
+- **Hard breaks** (`\n` in pre-wrap) force an unconditional line break.
+- **Tabs** advance to the next 8-character tab stop.
+- **Soft hyphens** are zero-width; if the break is taken, a visible `-` is added to the line width.
+- **Line-fit tolerance.** A small epsilon (browser-specific) prevents false breaks from floating-point drift.
+
+There's a **fast path** for the common case (no soft hyphens, tabs, or preserved whitespace) and a **full path** for everything else.
+
+### Caching
+
+Segment metrics are cached `Map<font, Map<segmentText, metrics>>`, shared across all `prepare()` calls. Emoji correction is cached once per font. `clearCache()` releases everything. `setLocale()` also clears caches since locale changes can alter word boundaries.
+
+### Bidi
+
+For `prepareWithSegments()`, Pretext computes Unicode Bidirectional Algorithm embedding levels per segment. These are metadata for custom rendering (reordering glyphs in Canvas/WebGL). Line breaking itself doesn't read bidi levels — it operates on visual order from `Intl.Segmenter`.
+
+### Language Coverage
+
+- **CJK** (Chinese, Japanese, Korean, Hangul) — per-grapheme breaking with kinsoku
+- **Arabic, Hebrew, Urdu** — correct segmentation, bidi metadata on rich path
+- **Thai, Lao, Khmer, Myanmar** — dictionary-based segmentation via `Intl.Segmenter`
+- **Emoji** — grapheme-aware with per-font canvas/DOM correction
+- All of the above mixed freely in a single paragraph
 
 ## Caveats
 
