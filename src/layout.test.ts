@@ -17,6 +17,7 @@ let prepareWithSegments: LayoutModule['prepareWithSegments']
 let layout: LayoutModule['layout']
 let layoutWithLines: LayoutModule['layoutWithLines']
 let layoutNextLine: LayoutModule['layoutNextLine']
+let measureLineGeometry: LayoutModule['measureLineGeometry']
 let walkLineRanges: LayoutModule['walkLineRanges']
 let clearCache: LayoutModule['clearCache']
 let setLocale: LayoutModule['setLocale']
@@ -236,6 +237,7 @@ beforeAll(async () => {
     layout,
     layoutWithLines,
     layoutNextLine,
+    measureLineGeometry,
     walkLineRanges,
     clearCache,
     setLocale,
@@ -971,6 +973,23 @@ describe('layout invariants', () => {
       start: line.start,
       end: line.end,
     })))
+  })
+
+  test('measureLineGeometry matches walked line count and widest line', () => {
+    const prepared = prepareWithSegments('foo trans\u00ADatlantic said "hello" to 世界 and waved.', FONT)
+    const width = prepared.widths[0]! + prepared.widths[1]! + prepared.widths[2]! + prepared.breakableWidths[4]![0]! + prepared.discretionaryHyphenWidth + 0.1
+    let walkedLineCount = 0
+    let walkedMaxLineWidth = 0
+
+    walkLineRanges(prepared, width, line => {
+      walkedLineCount++
+      walkedMaxLineWidth = Math.max(walkedMaxLineWidth, line.width)
+    })
+
+    expect(measureLineGeometry(prepared, width)).toEqual({
+      lineCount: walkedLineCount,
+      maxLineWidth: walkedMaxLineWidth,
+    })
   })
 
   test('countPreparedLines stays aligned with the walked line counter', () => {

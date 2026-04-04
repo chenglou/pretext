@@ -118,6 +118,11 @@ export type LayoutResult = {
   height: number // Total block height, e.g. lineCount * lineHeight = 57
 }
 
+export type LineGeometry = {
+  lineCount: number
+  maxLineWidth: number
+}
+
 export type LayoutLine = {
   text: string // Full text content of this line, e.g. 'hello world'
   width: number // Measured width of this line, e.g. 87.5
@@ -683,6 +688,28 @@ export function walkLineRanges(
   return walkPreparedLines(getInternalPrepared(prepared), maxWidth, line => {
     onLine(toLayoutLineRange(line))
   })
+}
+
+export function measureLineGeometry(
+  prepared: PreparedTextWithSegments,
+  maxWidth: number,
+): LineGeometry {
+  if (prepared.widths.length === 0) {
+    return {
+      lineCount: 0,
+      maxLineWidth: 0,
+    }
+  }
+
+  let maxLineWidth = 0
+  const lineCount = walkPreparedLines(getInternalPrepared(prepared), maxWidth, line => {
+    if (line.width > maxLineWidth) maxLineWidth = line.width
+  })
+
+  return {
+    lineCount,
+    maxLineWidth,
+  }
 }
 
 // Intrinsic-width helper for rich/userland layout work. This asks "how wide is

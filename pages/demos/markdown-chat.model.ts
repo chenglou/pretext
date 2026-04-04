@@ -1,8 +1,8 @@
 import { marked, type Token, type Tokens } from 'marked'
 
 import {
-  walkLineRanges,
   layoutWithLines,
+  measureLineGeometry,
   measureNaturalWidth,
   prepareWithSegments,
   type LayoutLine,
@@ -952,12 +952,7 @@ function layoutBlockFrame(
     case 'code': {
       const boxWidth = Math.max(1, contentWidth - block.contentLeft)
       const innerWidth = Math.max(1, boxWidth - CODE_BLOCK_PADDING_X * 2)
-      let lineCount = 0
-      let widestLine = 0
-      walkLineRanges(block.prepared, innerWidth, line => {
-        lineCount++
-        widestLine = Math.max(widestLine, line.width)
-      })
+      const { lineCount, maxLineWidth } = measureLineGeometry(block.prepared, innerWidth)
       return {
         contentLeft: block.contentLeft,
         height: lineCount * block.lineHeight + CODE_BLOCK_PADDING_Y * 2,
@@ -968,7 +963,7 @@ function layoutBlockFrame(
         markerText: block.markerText,
         quoteRailLefts: block.quoteRailLefts,
         top,
-        width: widestLine + CODE_BLOCK_PADDING_X * 2,
+        width: maxLineWidth + CODE_BLOCK_PADDING_X * 2,
       }
     }
 
