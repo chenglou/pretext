@@ -6,7 +6,7 @@ import {
   createPreparedChatTemplates,
   findVisibleRange,
   getMaxChatWidth,
-  materializeTemplateLayout,
+  materializeTemplateBlocks,
   MESSAGE_SIDE_PADDING,
   OCCLUSION_BANNER_HEIGHT,
   type BlockLayout,
@@ -24,13 +24,19 @@ type State = {
   isVisualizationOn: boolean
 }
 
+type CachedRow = {
+  inner: HTMLDivElement
+  row: HTMLElement
+  stack: HTMLDivElement
+}
+
 const domCache = {
   root: document.documentElement,
   shell: getRequiredElement('chat-shell'),
   viewport: getRequiredDiv('chat-viewport'),
   canvas: getRequiredDiv('chat-canvas'),
   toggleButton: getRequiredButton('virtualization-toggle'),
-  rows: [] as Array<HTMLElement | undefined>, // cache lifetime: on visibility changes
+  rows: [] as Array<CachedRow | undefined>, // cache lifetime: on visibility changes
   mountedStart: 0, // cache lifetime: on visibility changes
   mountedEnd: 0, // cache lifetime: on visibility changes
 }
@@ -131,53 +137,79 @@ function projectVisibleRows(
   end: number,
   needsRelayout: boolean,
 ): void {
-  if (needsRelayout) {
-    for (let index = domCache.mountedStart; index < domCache.mountedEnd; index++) {
-      const node = domCache.rows[index]
-      if (node === undefined) continue
-      node.remove()
-      domCache.rows[index] = undefined
-    }
-    domCache.mountedStart = 0
-    domCache.mountedEnd = 0
-  }
-
   const previousStart = domCache.mountedStart
   const previousEnd = domCache.mountedEnd
+  const overlapStart = Math.max(start, previousStart)
+  const overlapEnd = Math.min(end, previousEnd)
 
   for (let index = previousStart; index < Math.min(previousEnd, start); index++) {
     const node = domCache.rows[index]
     if (node === undefined) continue
-    node.remove()
+    node.row.remove()
     domCache.rows[index] = undefined
   }
 
   for (let index = Math.max(previousStart, end); index < previousEnd; index++) {
     const node = domCache.rows[index]
     if (node === undefined) continue
-    node.remove()
+    node.row.remove()
     domCache.rows[index] = undefined
   }
 
-  for (let index = start; index < end; index++) {
-    const message = frame.messages[index]!
-    let node = domCache.rows[index]
-    if (node === undefined) {
-      node = createMessageNode(message)
-      domCache.rows[index] = node
+  if (overlapStart >= overlapEnd) {
+    for (let index = start; index < end; index++) {
+      const cachedRow = prepareRow(frame.messages[index]!, index, needsRelayout)
+      projectMessageNode(cachedRow, frame.messages[index]!.frame, frame.messages[index]!.top)
+      if (cachedRow.row.parentNode === null) domCache.canvas.append(cachedRow.row)
     }
-    projectMessageNode(node, message.frame, message.top)
-    domCache.canvas.append(node)
+  } else {
+    let anchorRow = domCache.rows[overlapStart]?.row ?? null
+    for (let index = overlapStart - 1; index >= start; index--) {
+      const cachedRow = prepareRow(frame.messages[index]!, index, needsRelayout)
+      projectMessageNode(cachedRow, frame.messages[index]!.frame, frame.messages[index]!.top)
+      if (anchorRow === null) {
+        if (cachedRow.row.parentNode === null) domCache.canvas.append(cachedRow.row)
+      } else if (cachedRow.row.parentNode !== domCache.canvas || cachedRow.row.nextSibling !== anchorRow) {
+        domCache.canvas.insertBefore(cachedRow.row, anchorRow)
+      }
+      anchorRow = cachedRow.row
+    }
+
+    for (let index = overlapStart; index < overlapEnd; index++) {
+      const cachedRow = prepareRow(frame.messages[index]!, index, needsRelayout)
+      projectMessageNode(cachedRow, frame.messages[index]!.frame, frame.messages[index]!.top)
+    }
+
+    for (let index = overlapEnd; index < end; index++) {
+      const cachedRow = prepareRow(frame.messages[index]!, index, needsRelayout)
+      projectMessageNode(cachedRow, frame.messages[index]!.frame, frame.messages[index]!.top)
+      if (cachedRow.row.parentNode === null) domCache.canvas.append(cachedRow.row)
+    }
   }
 
   domCache.mountedStart = start
   domCache.mountedEnd = end
 }
 
-function createMessageNode(message: ChatMessageInstance): HTMLElement {
-  const layout = materializeTemplateLayout(message)
+function prepareRow(
+  message: ChatMessageInstance,
+  index: number,
+  needsRelayout: boolean,
+): CachedRow {
+  let cachedRow = domCache.rows[index]
+  if (cachedRow === undefined) {
+    cachedRow = createMessageShell(message.frame.role)
+    domCache.rows[index] = cachedRow
+    renderMessageContents(cachedRow.inner, message)
+    return cachedRow
+  }
+  if (needsRelayout) renderMessageContents(cachedRow.inner, message)
+  return cachedRow
+}
+
+function createMessageShell(role: ChatMessageInstance['frame']['role']): CachedRow {
   const row = document.createElement('article')
-  row.className = `msg msg--${layout.role}`
+  row.className = `msg msg--${role}`
 
   const stack = document.createElement('div')
   stack.className = 'msg-stack'
@@ -188,34 +220,33 @@ function createMessageNode(message: ChatMessageInstance): HTMLElement {
   const inner = document.createElement('div')
   inner.className = 'msg-bubble-inner'
 
-  for (let index = 0; index < layout.blocks.length; index++) {
-    inner.append(renderBlock(layout.blocks[index]!, layout.contentInsetX))
-  }
-
   bubble.append(inner)
   stack.append(bubble)
   row.append(stack)
-  return row
+  return { inner, row, stack }
+}
+
+function renderMessageContents(
+  inner: HTMLDivElement,
+  message: ChatMessageInstance,
+): void {
+  const blocks = materializeTemplateBlocks(message)
+  const fragment = document.createDocumentFragment()
+  for (let index = 0; index < blocks.length; index++) {
+    fragment.append(renderBlock(blocks[index]!, message.frame.contentInsetX))
+  }
+  inner.replaceChildren(fragment)
 }
 
 function projectMessageNode(
-  row: HTMLElement,
+  cachedRow: CachedRow,
   frame: TemplateFrame,
   top: number,
 ): void {
-  row.style.top = `${top}px`
-  row.style.height = `${frame.totalHeight}px`
-
-  const stack = row.firstElementChild
-  if (!(stack instanceof HTMLDivElement)) throw new Error('Missing .msg-stack')
-  stack.style.width = `${frame.frameWidth}px`
-
-  const bubble = stack.firstElementChild
-  if (!(bubble instanceof HTMLDivElement)) throw new Error('Missing .msg-bubble')
-
-  const inner = bubble.firstElementChild
-  if (!(inner instanceof HTMLDivElement)) throw new Error('Missing .msg-bubble-inner')
-  inner.style.height = `${frame.bubbleHeight}px`
+  cachedRow.row.style.top = `${top}px`
+  cachedRow.row.style.height = `${frame.totalHeight}px`
+  cachedRow.stack.style.width = `${frame.frameWidth}px`
+  cachedRow.inner.style.height = `${frame.bubbleHeight}px`
 }
 
 function renderBlock(block: BlockLayout, contentInsetX: number): HTMLElement {

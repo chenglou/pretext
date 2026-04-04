@@ -204,15 +204,6 @@ export type TemplateFrame = {
   totalHeight: number
 }
 
-export type TemplateLayout = {
-  blocks: BlockLayout[]
-  bubbleHeight: number
-  contentInsetX: number
-  frameWidth: number
-  role: 'assistant' | 'user'
-  totalHeight: number
-}
-
 export type ChatMessageInstance = {
   bottom: number
   prepared: PreparedChatTemplate
@@ -992,19 +983,10 @@ function getUsedBlockWidth(block: BlockFrame): number {
   }
 }
 
-export function materializeTemplateLayout(message: ChatMessageInstance): TemplateLayout {
-  const blocks = message.prepared.blocks.map((block, index) =>
+export function materializeTemplateBlocks(message: ChatMessageInstance): BlockLayout[] {
+  return message.prepared.blocks.map((block, index) =>
     materializeBlockLayout(block, message.frame.blocks[index]!, message.frame.layoutContentWidth),
   )
-
-  return {
-    blocks,
-    bubbleHeight: message.frame.bubbleHeight,
-    contentInsetX: message.frame.contentInsetX,
-    frameWidth: message.frame.frameWidth,
-    role: message.frame.role,
-    totalHeight: message.frame.totalHeight,
-  }
 }
 
 function materializeBlockLayout(
