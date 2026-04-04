@@ -22,6 +22,10 @@
       --chat-width: 860px;
       --message-side-padding: 22px;
       --occlusion-banner-height: 92px;
+      --occlusion-banner-padding-block: 18px;
+      --virtualization-toggle-padding-block: 10px;
+      --virtualization-toggle-padding-inline: 14px;
+      --virtualization-toggle-font-size: 12px;
     }
     html, body {
       min-height: 100%;
@@ -30,6 +34,7 @@
     }
     body {
       min-height: 100vh;
+      min-height: 100dvh;
       overflow: hidden;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     }
@@ -37,6 +42,7 @@
       position: relative;
       width: 100vw;
       height: 100vh;
+      height: 100dvh;
       background: var(--panel);
       overflow: clip;
     }
@@ -77,7 +83,7 @@
       display: flex;
       justify-content: center;
       align-items: flex-start;
-      padding: 18px 20px;
+      padding: var(--occlusion-banner-padding-block) 20px;
       background:
         linear-gradient(
           to bottom,
@@ -114,10 +120,19 @@
       appearance: none;
       border: 1px solid rgba(255, 255, 255, 0.06);
       border-radius: 999px;
-      padding: 10px 14px;
+      padding:
+        var(--virtualization-toggle-padding-block)
+        var(--virtualization-toggle-padding-inline);
       background: rgb(57 64 72 / 0.92);
       color: var(--accent);
-      font: 600 12px/1 "SF Mono", ui-monospace, Menlo, monospace;
+      font:
+        600
+        var(--virtualization-toggle-font-size)
+        /1
+        "SF Mono",
+        ui-monospace,
+        Menlo,
+        monospace;
       letter-spacing: 0.01em;
       cursor: pointer;
       box-shadow: 0 8px 18px rgb(0 0 0 / 0.14);
@@ -252,12 +267,6 @@
       position: absolute;
       height: 1px;
       background: color-mix(in srgb, var(--rule) 86%, white 14%);
-    }
-    @media (max-width: 720px) {
-      .virtualization-toggle {
-        padding: 9px 12px;
-        font-size: 11px;
-      }
     }
   </style>
 </head>

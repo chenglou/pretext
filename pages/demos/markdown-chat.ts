@@ -6,6 +6,7 @@ import {
   createPreparedChatTemplates,
   findVisibleRange,
   getMaxChatWidth,
+  getOcclusionBannerHeight,
   materializeTemplateBlocks,
   MESSAGE_SIDE_PADDING,
   OCCLUSION_BANNER_HEIGHT,
@@ -52,7 +53,6 @@ const st: State = {
 let scheduledRaf: number | null = null
 
 domCache.root.style.setProperty('--message-side-padding', `${MESSAGE_SIDE_PADDING}px`)
-domCache.root.style.setProperty('--occlusion-banner-height', `${OCCLUSION_BANNER_HEIGHT}px`)
 
 domCache.toggleButton.addEventListener('click', () => {
   st.events.toggleVisualization = true
@@ -95,24 +95,29 @@ function render(): void {
   const viewportWidth = domCache.viewport.clientWidth
   const viewportHeight = domCache.viewport.clientHeight
   const scrollTop = domCache.viewport.scrollTop
+  const occlusionBannerHeight = getOcclusionBannerHeight(viewportHeight)
+  const isCompactOcclusionChrome = occlusionBannerHeight < OCCLUSION_BANNER_HEIGHT
 
   let isVisualizationOn = st.isVisualizationOn
   if (st.events.toggleVisualization) isVisualizationOn = !isVisualizationOn
 
   const chatWidth = getMaxChatWidth(viewportWidth)
   const previousFrame = st.frame
-  const canReuseFrame = previousFrame !== null && previousFrame.chatWidth === chatWidth
+  const canReuseFrame =
+    previousFrame !== null
+    && previousFrame.chatWidth === chatWidth
+    && previousFrame.occlusionBannerHeight === occlusionBannerHeight
   const frame = canReuseFrame
     ? previousFrame
-    : buildConversationFrame(templates, chatWidth)
+    : buildConversationFrame(templates, chatWidth, occlusionBannerHeight)
   const needsRelayout = !canReuseFrame
 
   const { start, end } = findVisibleRange(
     frame,
     scrollTop,
     viewportHeight,
-    OCCLUSION_BANNER_HEIGHT,
-    OCCLUSION_BANNER_HEIGHT,
+    occlusionBannerHeight,
+    occlusionBannerHeight,
   )
 
   st.frame = frame
@@ -120,6 +125,11 @@ function render(): void {
   st.events.toggleVisualization = false
 
   domCache.root.style.setProperty('--chat-width', `${frame.chatWidth}px`)
+  domCache.root.style.setProperty('--occlusion-banner-height', `${occlusionBannerHeight}px`)
+  domCache.root.style.setProperty('--occlusion-banner-padding-block', isCompactOcclusionChrome ? '10px' : '18px')
+  domCache.root.style.setProperty('--virtualization-toggle-padding-block', isCompactOcclusionChrome ? '8px' : '10px')
+  domCache.root.style.setProperty('--virtualization-toggle-padding-inline', isCompactOcclusionChrome ? '12px' : '14px')
+  domCache.root.style.setProperty('--virtualization-toggle-font-size', isCompactOcclusionChrome ? '11px' : '12px')
   domCache.shell.dataset['visualization'] = isVisualizationOn ? 'on' : 'off'
   domCache.canvas.style.height = `${frame.totalHeight}px`
   domCache.toggleButton.textContent = isVisualizationOn
