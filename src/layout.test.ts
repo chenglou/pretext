@@ -1012,4 +1012,37 @@ describe('layout invariants', () => {
       }
     }
   })
+
+  test('trailing collapsible space hangs without breaking across count and walk paths', () => {
+    // Regression test for issue #11: countPreparedLinesSimple (used by layout())
+    // and walkPreparedLinesSimple (used by layoutWithLines()) returned different
+    // lineCount when a trailing collapsible space overflowed the line edge.
+    //
+    // CSS white-space: normal behavior: trailing collapsible whitespace hangs
+    // past the line edge without triggering a line break.
+    //
+    // We craft internal data directly because the fake measurement system's
+    // proportions (space=0.33x, char>=0.4x) can't produce the divergence
+    // condition: word + space > maxWidth but word + nextSegment <= maxWidth.
+    const prepared = {
+      widths: [40, 5, 1],
+      lineEndFitAdvances: [40, 0, 1],
+      lineEndPaintAdvances: [40, 0, 1],
+      kinds: ['text' as const, 'space' as const, 'text' as const],
+      simpleLineWalkFastPath: true,
+      breakableWidths: [null, null, null],
+      breakablePrefixWidths: [null, null, null],
+      discretionaryHyphenWidth: 5,
+      tabStopAdvance: 0,
+      chunks: [{ startSegmentIndex: 0, endSegmentIndex: 3, consumedEndSegmentIndex: 3 }],
+    }
+
+    // 40 + 5 = 45 > 42: space overflows
+    // 40 + 1 = 41 <= 42: next segment fits if space just hangs
+    const maxWidth = 42
+    const counted = countPreparedLines(prepared, maxWidth)
+    const walked = walkPreparedLines(prepared, maxWidth)
+    expect(counted).toBe(1)
+    expect(walked).toBe(counted)
+  })
 })
