@@ -25,9 +25,8 @@ type State = {
 }
 
 type CachedRow = {
-  inner: HTMLDivElement
+  bubble: HTMLDivElement
   row: HTMLElement
-  stack: HTMLDivElement
 }
 
 const domCache = {
@@ -200,10 +199,10 @@ function prepareRow(
   if (cachedRow === undefined) {
     cachedRow = createMessageShell(message.frame.role)
     domCache.rows[index] = cachedRow
-    renderMessageContents(cachedRow.inner, message)
+    renderMessageContents(cachedRow.bubble, message)
     return cachedRow
   }
-  if (needsRelayout) renderMessageContents(cachedRow.inner, message)
+  if (needsRelayout) renderMessageContents(cachedRow.bubble, message)
   return cachedRow
 }
 
@@ -211,23 +210,15 @@ function createMessageShell(role: ChatMessageInstance['frame']['role']): CachedR
   const row = document.createElement('article')
   row.className = `msg msg--${role}`
 
-  const stack = document.createElement('div')
-  stack.className = 'msg-stack'
-
   const bubble = document.createElement('div')
   bubble.className = 'msg-bubble'
 
-  const inner = document.createElement('div')
-  inner.className = 'msg-bubble-inner'
-
-  bubble.append(inner)
-  stack.append(bubble)
-  row.append(stack)
-  return { inner, row, stack }
+  row.append(bubble)
+  return { bubble, row }
 }
 
 function renderMessageContents(
-  inner: HTMLDivElement,
+  bubble: HTMLDivElement,
   message: ChatMessageInstance,
 ): void {
   const blocks = materializeTemplateBlocks(message)
@@ -235,7 +226,7 @@ function renderMessageContents(
   for (let index = 0; index < blocks.length; index++) {
     fragment.append(renderBlock(blocks[index]!, message.frame.contentInsetX))
   }
-  inner.replaceChildren(fragment)
+  bubble.replaceChildren(fragment)
 }
 
 function projectMessageNode(
@@ -245,8 +236,8 @@ function projectMessageNode(
 ): void {
   cachedRow.row.style.top = `${top}px`
   cachedRow.row.style.height = `${frame.totalHeight}px`
-  cachedRow.stack.style.width = `${frame.frameWidth}px`
-  cachedRow.inner.style.height = `${frame.bubbleHeight}px`
+  cachedRow.bubble.style.width = `${frame.frameWidth}px`
+  cachedRow.bubble.style.height = `${frame.bubbleHeight}px`
 }
 
 function renderBlock(block: BlockLayout, contentInsetX: number): HTMLElement {
