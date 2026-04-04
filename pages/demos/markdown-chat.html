@@ -75,7 +75,7 @@
     .occlusion-banner--top {
       top: 0;
       display: flex;
-      justify-content: flex-end;
+      justify-content: center;
       align-items: flex-start;
       padding: 18px 20px;
       background:
@@ -134,28 +134,23 @@
     }
     .msg--assistant { justify-content: flex-start; }
     .msg--user { justify-content: flex-end; }
-    .msg-stack {
-      max-width: 100%;
-    }
     .msg-bubble {
       position: relative;
-      width: 100%;
+      flex: 0 0 auto;
+      max-width: 100%;
       border-radius: 16px;
       background: transparent;
     }
     .msg--user .msg-bubble {
-      border: 1px solid var(--user-bubble-border);
       background: var(--user-bubble);
-      box-shadow: 0 6px 14px rgb(0 0 0 / 0.09);
+      box-shadow:
+        inset 0 0 0 1px var(--user-bubble-border),
+        0 6px 14px rgb(0 0 0 / 0.09);
     }
     .msg--assistant .msg-bubble {
       border: 0;
       border-radius: 0;
       box-shadow: none;
-    }
-    .msg-bubble-inner {
-      position: relative;
-      padding: 0;
     }
     .block {
       position: absolute;
