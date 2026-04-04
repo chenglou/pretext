@@ -4,73 +4,29 @@
 // segments for custom rendering. The line-breaking engine does not consume
 // these levels.
 
-type BidiType = 'L' | 'R' | 'AL' | 'AN' | 'EN' | 'ES' | 'ET' | 'CS' |
-                'ON' | 'BN' | 'B' | 'S' | 'WS' | 'NSM'
-
-const baseTypes: BidiType[] = [
-  'BN','BN','BN','BN','BN','BN','BN','BN','BN','S','B','S','WS',
-  'B','BN','BN','BN','BN','BN','BN','BN','BN','BN','BN','BN','BN',
-  'BN','BN','B','B','B','S','WS','ON','ON','ET','ET','ET','ON',
-  'ON','ON','ON','ON','ON','CS','ON','CS','ON','EN','EN','EN',
-  'EN','EN','EN','EN','EN','EN','EN','ON','ON','ON','ON','ON',
-  'ON','ON','L','L','L','L','L','L','L','L','L','L','L','L','L',
-  'L','L','L','L','L','L','L','L','L','L','L','L','L','ON','ON',
-  'ON','ON','ON','ON','L','L','L','L','L','L','L','L','L','L',
-  'L','L','L','L','L','L','L','L','L','L','L','L','L','L','L',
-  'L','ON','ON','ON','ON','BN','BN','BN','BN','BN','BN','B','BN',
-  'BN','BN','BN','BN','BN','BN','BN','BN','BN','BN','BN','BN',
-  'BN','BN','BN','BN','BN','BN','BN','BN','BN','BN','BN','BN',
-  'BN','CS','ON','ET','ET','ET','ET','ON','ON','ON','ON','L','ON',
-  'ON','ON','ON','ON','ET','ET','EN','EN','ON','L','ON','ON','ON',
-  'EN','L','ON','ON','ON','ON','ON','L','L','L','L','L','L','L',
-  'L','L','L','L','L','L','L','L','L','L','L','L','L','L','L',
-  'L','ON','L','L','L','L','L','L','L','L','L','L','L','L','L',
-  'L','L','L','L','L','L','L','L','L','L','L','L','L','L','L',
-  'L','L','L','ON','L','L','L','L','L','L','L','L'
-]
-
-const arabicTypes: BidiType[] = [
-  'AL','AL','AL','AL','AL','AL','AL','AL','AL','AL','AL','AL',
-  'CS','AL','ON','ON','NSM','NSM','NSM','NSM','NSM','NSM','AL',
-  'AL','AL','AL','AL','AL','AL','AL','AL','AL','AL','AL','AL',
-  'AL','AL','AL','AL','AL','AL','AL','AL','AL','AL','AL','AL',
-  'AL','AL','AL','AL','AL','AL','AL','AL','AL','AL','AL','AL',
-  'AL','AL','AL','AL','AL','AL','AL','AL','AL','AL','AL','AL',
-  'AL','AL','AL','AL','NSM','NSM','NSM','NSM','NSM','NSM','NSM',
-  'NSM','NSM','NSM','NSM','NSM','NSM','NSM','AL','AL','AL','AL',
-  'AL','AL','AL','AN','AN','AN','AN','AN','AN','AN','AN','AN',
-  'AN','ET','AN','AN','AL','AL','AL','NSM','AL','AL','AL','AL',
-  'AL','AL','AL','AL','AL','AL','AL','AL','AL','AL','AL','AL',
-  'AL','AL','AL','AL','AL','AL','AL','AL','AL','AL','AL','AL',
-  'AL','AL','AL','AL','AL','AL','AL','AL','AL','AL','AL','AL',
-  'AL','AL','AL','AL','AL','AL','AL','AL','AL','AL','AL','AL',
-  'AL','AL','AL','AL','AL','AL','AL','AL','AL','AL','AL','AL',
-  'AL','AL','AL','AL','AL','AL','AL','AL','AL','AL','AL','AL',
-  'AL','AL','AL','AL','AL','AL','AL','AL','AL','AL','AL','AL',
-  'AL','AL','AL','AL','AL','AL','AL','AL','AL','AL','AL','AL',
-  'AL','NSM','NSM','NSM','NSM','NSM','NSM','NSM','NSM','NSM','NSM',
-  'NSM','NSM','NSM','NSM','NSM','NSM','NSM','NSM','NSM','ON','NSM',
-  'NSM','NSM','NSM','AL','AL','AL','AL','AL','AL','AL','AL','AL',
-  'AL','AL','AL','AL','AL','AL','AL','AL','AL'
-]
-
-const approximateBidiRanges: Array<{ start: number, end: number, type: BidiType }> = [
-  { start: 0x0590, end: 0x05F4, type: 'R' },
-  { start: 0x0700, end: 0x08AC, type: 'AL' },
-  { start: 0xFB1D, end: 0xFB4F, type: 'R' },
-  { start: 0xFB50, end: 0xFDFF, type: 'AL' },
-  { start: 0xFE70, end: 0xFEFF, type: 'AL' },
-  { start: 0x1E900, end: 0x1E95F, type: 'R' },
-  { start: 0x1EE00, end: 0x1EEFF, type: 'AL' },
-]
+import {
+  latin1BidiTypes,
+  nonLatin1BidiRanges,
+  type GeneratedBidiType as BidiType,
+} from './generated/bidi-data.js'
 
 function classifyCodePoint(codePoint: number): BidiType {
-  if (codePoint <= 0x00ff) return baseTypes[codePoint]!
-  if (0x0600 <= codePoint && codePoint <= 0x06ff) return arabicTypes[codePoint & 0xff]!
+  if (codePoint <= 0x00FF) return latin1BidiTypes[codePoint]!
 
-  for (let i = 0; i < approximateBidiRanges.length; i++) {
-    const range = approximateBidiRanges[i]!
-    if (codePoint >= range.start && codePoint <= range.end) return range.type
+  let lo = 0
+  let hi = nonLatin1BidiRanges.length - 1
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1
+    const range = nonLatin1BidiRanges[mid]!
+    if (codePoint < range[0]) {
+      hi = mid - 1
+      continue
+    }
+    if (codePoint > range[1]) {
+      lo = mid + 1
+      continue
+    }
+    return range[2]
   }
 
   return 'L'

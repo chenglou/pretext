@@ -96,8 +96,11 @@ async function smokeTypeScript(tarballPath: string): Promise<void> {
     [
       "import { layout, prepare } from '@chenglou/pretext'",
       "const prepared = prepare('hello', '16px Inter')",
+      "const keepAllPrepared = prepare('안녕하세요 세계', '16px Inter', { wordBreak: 'keep-all' })",
       'const result = layout(prepared, 100, 20)',
+      'const keepAllResult = layout(keepAllPrepared, 100, 20)',
       'result.height satisfies number',
+      'keepAllResult.lineCount satisfies number',
       '',
     ].join('\n'),
   )

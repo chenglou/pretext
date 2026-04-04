@@ -19,6 +19,7 @@ bun install
 - `bun run build:package` — emit `dist/` for the published ESM package
 - `bun run package-smoke-test` — pack the tarball and verify temporary JS + TS consumers
 - `bun run site:build` — build the static demo site into `site/`
+- `bun run generate:bidi-data` — refresh the checked-in simplified Unicode bidi ranges
 
 `prepack` also rebuilds `dist/` through plain `tsc`, so keep runtime `.js` specifiers honest in source imports.
 
@@ -33,6 +34,7 @@ bun install
 - `bun run benchmark-check` — Chrome benchmark snapshot
 - `bun run benchmark-check:safari`
 - `bun run pre-wrap-check` — compact browser oracle for `{ whiteSpace: 'pre-wrap' }`
+- `bun run keep-all-check` — compact browser oracle for `{ wordBreak: 'keep-all' }`
 - `bun run probe-check` — smaller browser probe/diagnostic entrypoint
 - `bun run probe-check:safari`
 

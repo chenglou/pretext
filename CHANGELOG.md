@@ -6,6 +6,17 @@
 
 - Documentation now matches the current public API surface more closely, including `profilePrepare()`, the geometry-first rich line APIs, and the `@chenglou/pretext/inline-flow` sidecar.
 
+### Added
+
+- `{ wordBreak: 'keep-all' }` support on `prepare()` / `prepareWithSegments()` for CJK and Hangul text, plus a small standing `keep-all` browser oracle.
+- A checked-in generated Unicode bidi range table with a manual `bun run generate:bidi-data` refresh path.
+
+### Fixed
+
+- Mixed CJK-plus-numeric runs now use cumulative widths when breaking the numeric suffix, matching the browser more closely.
+- Rich-path bidi metadata and CJK detection now handle the relevant astral Unicode ranges correctly.
+- The probe page now reports line content end offsets correctly when a line range steps past a hard break omitted from rendered line text.
+
 ## 0.0.4 - 2026-04-02
 
 ### Added

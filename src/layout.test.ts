@@ -536,6 +536,17 @@ describe('prepare invariants', () => {
     expect(prepareWithSegments('테스트입니다.', FONT).segments.at(-1)).toBe('다.')
   })
 
+  test('keeps non-CJK glue-connected runs intact before CJK text', () => {
+    const prepared = prepareWithSegments('foo\u00A0世界', FONT)
+    expect(prepared.segments).toEqual(['foo\u00A0', '世', '界'])
+  })
+
+  test('keep-all keeps dictionary-segmented CJK and Hangul runs intact', () => {
+    expect(prepareWithSegments('中文，测试。', FONT, { wordBreak: 'keep-all' }).segments).toEqual(['中文，', '测试。'])
+    expect(prepareWithSegments('한국어테스트', FONT, { wordBreak: 'keep-all' }).segments).toEqual(['한국어테스트'])
+    expect(prepareWithSegments('foo\u00A0世界', FONT, { wordBreak: 'keep-all' }).segments).toEqual(['foo\u00A0', '世界'])
+  })
+
   test('adjacent CJK text units stay breakable after visible text, not only after spaces', () => {
     const prepared = prepareWithSegments('foo 世界 bar', FONT)
     expect(prepared.segments).toEqual(['foo', ' ', '世', '界', ' ', 'bar'])
@@ -1057,6 +1068,17 @@ describe('layout invariants', () => {
     const streamed = collectStreamedLines(prepared, width)
     expect(streamed).toEqual(batched.lines)
     expect(layout(prepared, width, LINE_HEIGHT)).toEqual({ lineCount: 5, height: LINE_HEIGHT * 5 })
+  })
+
+  test('keep-all suppresses ordinary CJK intra-word breaks after existing line content', () => {
+    const text = 'A 中文测试'
+    const normal = prepareWithSegments(text, FONT)
+    const keepAll = prepareWithSegments(text, FONT, { wordBreak: 'keep-all' })
+    const width = measureWidth('A 中', FONT) + 0.1
+
+    expect(layoutWithLines(normal, width, LINE_HEIGHT).lines[0]?.text).toBe('A 中')
+    expect(layoutWithLines(keepAll, width, LINE_HEIGHT).lines[0]?.text).toBe('A ')
+    expect(layout(keepAll, width, LINE_HEIGHT).lineCount).toBeGreaterThan(layout(normal, width, LINE_HEIGHT).lineCount)
   })
 
   test('walkLineRanges reproduces layoutWithLines geometry without materializing text', () => {

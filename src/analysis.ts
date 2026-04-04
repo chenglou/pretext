@@ -1,4 +1,5 @@
 export type WhiteSpaceMode = 'normal' | 'pre-wrap'
+export type WordBreakMode = 'normal' | 'keep-all'
 
 export type SegmentBreakKind =
   | 'text'
@@ -143,6 +144,31 @@ export function isCJK(s: string): boolean {
     if (isCJKCodePoint(first)) return true
   }
   return false
+}
+
+function startsWithCJKText(text: string): boolean {
+  for (const ch of text) return isCJK(ch)
+  return false
+}
+
+function endsWithCJKText(text: string): boolean {
+  let last = ''
+  for (const ch of text) last = ch
+  return last.length > 0 && isCJK(last)
+}
+
+function endsWithLineStartProhibitedText(text: string): boolean {
+  let last = ''
+  for (const ch of text) last = ch
+  return last.length > 0 && (kinsokuStart.has(last) || leftStickyPunctuation.has(last))
+}
+
+export function canMergeKeepAllTextBoundary(previousText: string, nextText: string): boolean {
+  return (
+    endsWithCJKText(previousText) &&
+    startsWithCJKText(nextText) &&
+    !endsWithLineStartProhibitedText(previousText)
+  )
 }
 
 export const kinsokuStart = new Set([
@@ -1040,10 +1066,52 @@ function compileAnalysisChunks(segmentation: MergedSegmentation, whiteSpaceProfi
   return chunks
 }
 
+function mergeKeepAllTextSegments(segmentation: MergedSegmentation): MergedSegmentation {
+  if (segmentation.len <= 1) return segmentation
+
+  const texts: string[] = []
+  const isWordLike: boolean[] = []
+  const kinds: SegmentBreakKind[] = []
+  const starts: number[] = []
+
+  for (let i = 0; i < segmentation.len; i++) {
+    const text = segmentation.texts[i]!
+    const kind = segmentation.kinds[i]!
+    const wordLike = segmentation.isWordLike[i]!
+    const start = segmentation.starts[i]!
+    const previousIndex = texts.length - 1
+
+    if (
+      kind === 'text' &&
+      previousIndex >= 0 &&
+      kinds[previousIndex] === 'text' &&
+      canMergeKeepAllTextBoundary(texts[previousIndex]!, text)
+    ) {
+      texts[previousIndex] += text
+      isWordLike[previousIndex] = isWordLike[previousIndex]! || wordLike
+      continue
+    }
+
+    texts.push(text)
+    isWordLike.push(wordLike)
+    kinds.push(kind)
+    starts.push(start)
+  }
+
+  return {
+    len: texts.length,
+    texts,
+    isWordLike,
+    kinds,
+    starts,
+  }
+}
+
 export function analyzeText(
   text: string,
   profile: AnalysisProfile,
   whiteSpace: WhiteSpaceMode = 'normal',
+  wordBreak: WordBreakMode = 'normal',
 ): TextAnalysis {
   const whiteSpaceProfile = getWhiteSpaceProfile(whiteSpace)
   const normalized = whiteSpaceProfile.mode === 'pre-wrap'
@@ -1060,7 +1128,9 @@ export function analyzeText(
       starts: [],
     }
   }
-  const segmentation = buildMergedSegmentation(normalized, profile, whiteSpaceProfile)
+  const segmentation = wordBreak === 'keep-all'
+    ? mergeKeepAllTextSegments(buildMergedSegmentation(normalized, profile, whiteSpaceProfile))
+    : buildMergedSegmentation(normalized, profile, whiteSpaceProfile)
   return {
     normalized,
     chunks: compileAnalysisChunks(segmentation, whiteSpaceProfile),

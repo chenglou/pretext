@@ -57,6 +57,8 @@
     "gatsby-check:safari": "GATSBY_CHECK_BROWSER=safari bun run scripts/gatsby-check.ts",
     "gatsby-sweep": "bun run scripts/gatsby-sweep.ts",
     "gatsby-sweep:safari": "GATSBY_CHECK_BROWSER=safari bun run scripts/gatsby-sweep.ts",
+    "generate:bidi-data": "bun run scripts/generate-bidi-data.ts",
+    "keep-all-check": "bun run scripts/keep-all-check.ts",
     "package-smoke-test": "bun run scripts/package-smoke-test.ts",
     "prepack": "rm -rf dist && tsc -p tsconfig.build.json",
     "pre-wrap-check": "bun run scripts/pre-wrap-check.ts",

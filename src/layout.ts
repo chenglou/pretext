@@ -35,6 +35,7 @@
 import { computeSegmentLevels } from './bidi.js'
 import {
   analyzeText,
+  canMergeKeepAllTextBoundary,
   clearAnalysisCaches,
   endsWithClosingQuote,
   isCJK,
@@ -47,6 +48,7 @@ import {
   type SegmentBreakKind,
   type TextAnalysis,
   type WhiteSpaceMode,
+  type WordBreakMode as AnalysisWordBreakMode,
 } from './analysis.js'
 import {
   clearMeasurementCaches,
@@ -151,8 +153,11 @@ export type PrepareProfile = {
   breakableSegments: number
 }
 
+export type WordBreakMode = AnalysisWordBreakMode
+
 export type PrepareOptions = {
   whiteSpace?: WhiteSpaceMode
+  wordBreak?: WordBreakMode
 }
 
 export type PreparedLineChunk = {
@@ -195,12 +200,85 @@ function createEmptyPrepared(includeSegments: boolean): InternalPreparedText | P
   } as unknown as InternalPreparedText
 }
 
+type MeasuredTextUnit = {
+  text: string
+  start: number
+}
+
+function buildBaseCjkUnits(
+  segText: string,
+  engineProfile: ReturnType<typeof getEngineProfile>,
+): MeasuredTextUnit[] {
+  const units: MeasuredTextUnit[] = []
+  let unitText = ''
+  let unitStart = 0
+
+  function pushUnit(): void {
+    if (unitText.length === 0) return
+    units.push({ text: unitText, start: unitStart })
+    unitText = ''
+  }
+
+  for (const gs of getSharedGraphemeSegmenter().segment(segText)) {
+    const grapheme = gs.segment
+
+    if (unitText.length === 0) {
+      unitText = grapheme
+      unitStart = gs.index
+      continue
+    }
+
+    if (
+      kinsokuEnd.has(unitText) ||
+      kinsokuStart.has(grapheme) ||
+      leftStickyPunctuation.has(grapheme) ||
+      (engineProfile.carryCJKAfterClosingQuote &&
+        isCJK(grapheme) &&
+        endsWithClosingQuote(unitText))
+    ) {
+      unitText += grapheme
+      continue
+    }
+
+    if (!isCJK(unitText) && !isCJK(grapheme)) {
+      unitText += grapheme
+      continue
+    }
+
+    pushUnit()
+    unitText = grapheme
+    unitStart = gs.index
+  }
+
+  pushUnit()
+  return units
+}
+
+function mergeKeepAllCjkUnits(units: MeasuredTextUnit[]): MeasuredTextUnit[] {
+  if (units.length <= 1) return units
+
+  const merged: MeasuredTextUnit[] = [{ ...units[0]! }]
+  for (let i = 1; i < units.length; i++) {
+    const next = units[i]!
+    const previous = merged[merged.length - 1]!
+
+    if (canMergeKeepAllTextBoundary(previous.text, next.text)) {
+      previous.text += next.text
+      continue
+    }
+
+    merged.push({ ...next })
+  }
+
+  return merged
+}
+
 function measureAnalysis(
   analysis: TextAnalysis,
   font: string,
   includeSegments: boolean,
+  wordBreak: WordBreakMode,
 ): InternalPreparedText | PreparedTextWithSegments {
-  const graphemeSegmenter = getSharedGraphemeSegmenter()
   const engineProfile = getEngineProfile()
   const { cache, emojiCorrection } = getFontMeasurementState(
     font,
@@ -246,6 +324,55 @@ function measureAnalysis(
     if (segments !== null) segments.push(text)
   }
 
+  function pushMeasuredTextSegment(
+    text: string,
+    kind: SegmentBreakKind,
+    start: number,
+    wordLike: boolean,
+    allowOverflowBreaks: boolean,
+  ): void {
+    const textMetrics = getSegmentMetrics(text, cache)
+    const width = getCorrectedSegmentWidth(text, textMetrics, emojiCorrection)
+    const lineEndFitAdvance =
+      kind === 'space' || kind === 'preserved-space' || kind === 'zero-width-break'
+        ? 0
+        : width
+    const lineEndPaintAdvance =
+      kind === 'space' || kind === 'zero-width-break'
+        ? 0
+        : width
+
+    if (allowOverflowBreaks && wordLike && text.length > 1) {
+      const graphemeWidths = getSegmentGraphemeWidths(text, textMetrics, cache, emojiCorrection)
+      const graphemePrefixWidths =
+        engineProfile.preferPrefixWidthsForBreakableRuns || isNumericRunSegment(text)
+          ? getSegmentGraphemePrefixWidths(text, textMetrics, cache, emojiCorrection)
+          : null
+      pushMeasuredSegment(
+        text,
+        width,
+        lineEndFitAdvance,
+        lineEndPaintAdvance,
+        kind,
+        start,
+        graphemeWidths,
+        graphemePrefixWidths,
+      )
+      return
+    }
+
+    pushMeasuredSegment(
+      text,
+      width,
+      lineEndFitAdvance,
+      lineEndPaintAdvance,
+      kind,
+      start,
+      null,
+      null,
+    )
+  }
+
   for (let mi = 0; mi < analysis.len; mi++) {
     preparedStartByAnalysisIndex[mi] = widths.length
     const segText = analysis.texts[mi]!
@@ -280,84 +407,25 @@ function measureAnalysis(
     const segMetrics = getSegmentMetrics(segText, cache)
 
     if (segKind === 'text' && segMetrics.containsCJK) {
-      let unitText = ''
-      let unitStart = 0
+      const baseUnits = buildBaseCjkUnits(segText, engineProfile)
+      const measuredUnits = wordBreak === 'keep-all'
+        ? mergeKeepAllCjkUnits(baseUnits)
+        : baseUnits
 
-      for (const gs of graphemeSegmenter.segment(segText)) {
-        const grapheme = gs.segment
-
-        if (unitText.length === 0) {
-          unitText = grapheme
-          unitStart = gs.index
-          continue
-        }
-
-        if (
-          kinsokuEnd.has(unitText) ||
-          kinsokuStart.has(grapheme) ||
-          leftStickyPunctuation.has(grapheme) ||
-          (engineProfile.carryCJKAfterClosingQuote &&
-            isCJK(grapheme) &&
-            endsWithClosingQuote(unitText))
-        ) {
-          unitText += grapheme
-          continue
-        }
-
-        const unitMetrics = getSegmentMetrics(unitText, cache)
-        const w = getCorrectedSegmentWidth(unitText, unitMetrics, emojiCorrection)
-        pushMeasuredSegment(unitText, w, w, w, 'text', segStart + unitStart, null, null)
-
-        unitText = grapheme
-        unitStart = gs.index
-      }
-
-      if (unitText.length > 0) {
-        const unitMetrics = getSegmentMetrics(unitText, cache)
-        const w = getCorrectedSegmentWidth(unitText, unitMetrics, emojiCorrection)
-        pushMeasuredSegment(unitText, w, w, w, 'text', segStart + unitStart, null, null)
+      for (let i = 0; i < measuredUnits.length; i++) {
+        const unit = measuredUnits[i]!
+        pushMeasuredTextSegment(
+          unit.text,
+          'text',
+          segStart + unit.start,
+          segWordLike,
+          wordBreak === 'keep-all' || !isCJK(unit.text),
+        )
       }
       continue
     }
 
-    const w = getCorrectedSegmentWidth(segText, segMetrics, emojiCorrection)
-    const lineEndFitAdvance =
-      segKind === 'space' || segKind === 'preserved-space' || segKind === 'zero-width-break'
-        ? 0
-        : w
-    const lineEndPaintAdvance =
-      segKind === 'space' || segKind === 'zero-width-break'
-        ? 0
-        : w
-
-    if (segWordLike && segText.length > 1) {
-      const graphemeWidths = getSegmentGraphemeWidths(segText, segMetrics, cache, emojiCorrection)
-      const graphemePrefixWidths =
-        engineProfile.preferPrefixWidthsForBreakableRuns || isNumericRunSegment(segText)
-        ? getSegmentGraphemePrefixWidths(segText, segMetrics, cache, emojiCorrection)
-        : null
-      pushMeasuredSegment(
-        segText,
-        w,
-        lineEndFitAdvance,
-        lineEndPaintAdvance,
-        segKind,
-        segStart,
-        graphemeWidths,
-        graphemePrefixWidths,
-      )
-    } else {
-      pushMeasuredSegment(
-        segText,
-        w,
-        lineEndFitAdvance,
-        lineEndPaintAdvance,
-        segKind,
-        segStart,
-        null,
-        null,
-      )
-    }
+    pushMeasuredTextSegment(segText, segKind, segStart, segWordLike, true)
   }
 
   const chunks = mapAnalysisChunksToPreparedChunks(analysis.chunks, preparedStartByAnalysisIndex, widths.length)
@@ -429,17 +497,19 @@ function prepareInternal(
   includeSegments: boolean,
   options?: PrepareOptions,
 ): InternalPreparedText | PreparedTextWithSegments {
-  const analysis = analyzeText(text, getEngineProfile(), options?.whiteSpace)
-  return measureAnalysis(analysis, font, includeSegments)
+  const wordBreak = options?.wordBreak ?? 'normal'
+  const analysis = analyzeText(text, getEngineProfile(), options?.whiteSpace, wordBreak)
+  return measureAnalysis(analysis, font, includeSegments, wordBreak)
 }
 
 // Diagnostic-only helper used by the browser benchmark harness to separate the
 // text-analysis and measurement phases without duplicating the prepare logic.
 export function profilePrepare(text: string, font: string, options?: PrepareOptions): PrepareProfile {
   const t0 = performance.now()
-  const analysis = analyzeText(text, getEngineProfile(), options?.whiteSpace)
+  const wordBreak = options?.wordBreak ?? 'normal'
+  const analysis = analyzeText(text, getEngineProfile(), options?.whiteSpace, wordBreak)
   const t1 = performance.now()
-  const prepared = measureAnalysis(analysis, font, false) as InternalPreparedText
+  const prepared = measureAnalysis(analysis, font, false, wordBreak) as InternalPreparedText
   const t2 = performance.now()
 
   let breakableSegments = 0
