@@ -244,8 +244,9 @@ export function buildConversationFrame(
   chatWidth: number,
 ): ConversationFrame {
   const messageCount = TOTAL_MESSAGE_COUNT
-  const userFrameWidth = Math.max(240, Math.floor(chatWidth * BUBBLE_MAX_RATIO))
-  const assistantFrameWidth = Math.max(120, chatWidth - MESSAGE_SIDE_PADDING * 2)
+  const laneWidth = Math.max(120, chatWidth - MESSAGE_SIDE_PADDING * 2)
+  const userFrameWidth = Math.min(laneWidth, Math.max(240, Math.floor(chatWidth * BUBBLE_MAX_RATIO)))
+  const assistantFrameWidth = laneWidth
   const messages: ChatMessageInstance[] = new Array(messageCount)
 
   let y = CHAT_TOP_PADDING
