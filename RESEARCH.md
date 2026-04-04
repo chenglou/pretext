@@ -57,7 +57,7 @@ The important keep was architectural, not algorithmic:
 Canvas and DOM resolve `system-ui` to different font variants on macOS at certain sizes:
 
 Machine-readable scan:
-- [research-data/system-ui-size-scan.json](/Users/chenglou/github/pretext/research-data/system-ui-size-scan.json)
+- [research-data/system-ui-size-scan.json](research-data/system-ui-size-scan.json)
 
 In the recorded scan, mismatches clustered at `10-12px`, `14px`, and `26px`.
 `13px`, `15-25px`, and `27-28px` were exact.
