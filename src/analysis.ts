@@ -26,6 +26,11 @@ export type MergedSegmentation = {
   starts: number[]
 }
 
+type PieceMergeDecision =
+  | 'push'
+  | 'merge'
+  | 'merge-and-force-word-like'
+
 export type AnalysisChunk = {
   startSegmentIndex: number
   endSegmentIndex: number
@@ -518,31 +523,13 @@ function mergeUrlLikeRuns(segmentation: MergedSegmentation): MergedSegmentation 
     texts[i] = joinTextParts(mergedParts)
   }
 
-  let compactLen = 0
-  for (let read = 0; read < texts.length; read++) {
-    const text = texts[read]!
-    if (text.length === 0) continue
-    if (compactLen !== read) {
-      texts[compactLen] = text
-      isWordLike[compactLen] = isWordLike[read]!
-      kinds[compactLen] = kinds[read]!
-      starts[compactLen] = starts[read]!
-    }
-    compactLen++
-  }
-
-  texts.length = compactLen
-  isWordLike.length = compactLen
-  kinds.length = compactLen
-  starts.length = compactLen
-
-  return {
-    len: compactLen,
+  return compactSegmentation({
+    len: texts.length,
     texts,
     isWordLike,
     kinds,
     starts,
-  }
+  })
 }
 
 function mergeUrlQueryRuns(segmentation: MergedSegmentation): MergedSegmentation {
@@ -872,6 +859,208 @@ function carryTrailingForwardStickyAcrossCJKBoundary(segmentation: MergedSegment
   }
 }
 
+function mergePieceIntoPreviousText(
+  segmentation: MergedSegmentation,
+  text: string,
+  isWordLike: boolean,
+  forceWordLike = false,
+): void {
+  mergeTextIntoIndex(segmentation, segmentation.len - 1, text, isWordLike, forceWordLike)
+}
+
+function mergeTextIntoIndex(
+  segmentation: MergedSegmentation,
+  index: number,
+  text: string,
+  isWordLike: boolean,
+  forceWordLike = false,
+): void {
+  segmentation.texts[index] += text
+  segmentation.isWordLike[index] =
+    forceWordLike || segmentation.isWordLike[index]! || isWordLike
+}
+
+function pushPiece(segmentation: MergedSegmentation, piece: SegmentationPiece): void {
+  segmentation.texts[segmentation.len] = piece.text
+  segmentation.isWordLike[segmentation.len] = piece.isWordLike
+  segmentation.kinds[segmentation.len] = piece.kind
+  segmentation.starts[segmentation.len] = piece.start
+  segmentation.len++
+}
+
+function getPieceMergeDecision(
+  segmentation: MergedSegmentation,
+  piece: SegmentationPiece,
+  profile: AnalysisProfile,
+): PieceMergeDecision {
+  if (
+    piece.kind !== 'text' ||
+    segmentation.len === 0 ||
+    segmentation.kinds[segmentation.len - 1] !== 'text'
+  ) {
+    return 'push'
+  }
+
+  const previousText = segmentation.texts[segmentation.len - 1]!
+  const previousWordLike = segmentation.isWordLike[segmentation.len - 1]!
+
+  if (
+    profile.carryCJKAfterClosingQuote &&
+    isCJK(piece.text) &&
+    isCJK(previousText) &&
+    endsWithClosingQuote(previousText)
+  ) {
+    return 'merge'
+  }
+
+  if (
+    isCJKLineStartProhibitedSegment(piece.text) &&
+    isCJK(previousText)
+  ) {
+    return 'merge'
+  }
+
+  if (endsWithMyanmarMedialGlue(previousText)) {
+    return 'merge'
+  }
+
+  if (
+    piece.isWordLike &&
+    containsArabicScript(piece.text) &&
+    endsWithArabicNoSpacePunctuation(previousText)
+  ) {
+    return 'merge-and-force-word-like'
+  }
+
+  if (
+    !piece.isWordLike &&
+    piece.text.length === 1 &&
+    piece.text !== '-' &&
+    piece.text !== '—' &&
+    isRepeatedSingleCharRun(previousText, piece.text)
+  ) {
+    return 'merge'
+  }
+
+  if (
+    !piece.isWordLike &&
+    (
+      isLeftStickyPunctuationSegment(piece.text) ||
+      (piece.text === '-' && previousWordLike)
+    )
+  ) {
+    return 'merge'
+  }
+
+  return 'push'
+}
+
+function mergeEscapedQuoteClosersIntoPreviousText(segmentation: MergedSegmentation): void {
+  for (let i = 1; i < segmentation.len; i++) {
+    if (
+      segmentation.kinds[i] === 'text' &&
+      !segmentation.isWordLike[i]! &&
+      isEscapedQuoteClusterSegment(segmentation.texts[i]!) &&
+      segmentation.kinds[i - 1] === 'text'
+    ) {
+      mergeTextIntoIndex(segmentation, i - 1, segmentation.texts[i]!, segmentation.isWordLike[i]!)
+      segmentation.texts[i] = ''
+    }
+  }
+}
+
+function carryForwardStickyClusters(segmentation: MergedSegmentation): void {
+  for (let i = segmentation.len - 2; i >= 0; i--) {
+    if (
+      segmentation.kinds[i] === 'text' &&
+      !segmentation.isWordLike[i]! &&
+      isForwardStickyClusterSegment(segmentation.texts[i]!)
+    ) {
+      let j = i + 1
+      while (j < segmentation.len && segmentation.texts[j] === '') j++
+      if (j < segmentation.len && segmentation.kinds[j] === 'text') {
+        segmentation.texts[j] = segmentation.texts[i]! + segmentation.texts[j]!
+        segmentation.starts[j] = segmentation.starts[i]!
+        segmentation.texts[i] = ''
+      }
+    }
+  }
+}
+
+function compactSegmentation(segmentation: MergedSegmentation): MergedSegmentation {
+  const { texts, isWordLike, kinds, starts } = segmentation
+  let compactLen = 0
+  for (let read = 0; read < segmentation.len; read++) {
+    const text = texts[read]!
+    if (text.length === 0) continue
+    if (compactLen !== read) {
+      texts[compactLen] = text
+      isWordLike[compactLen] = isWordLike[read]!
+      kinds[compactLen] = kinds[read]!
+      starts[compactLen] = starts[read]!
+    }
+    compactLen++
+  }
+
+  texts.length = compactLen
+  isWordLike.length = compactLen
+  kinds.length = compactLen
+  starts.length = compactLen
+
+  return {
+    len: compactLen,
+    texts,
+    isWordLike,
+    kinds,
+    starts,
+  }
+}
+
+function fixArabicLeadingMarksAfterSpaces(segmentation: MergedSegmentation): MergedSegmentation {
+  for (let i = 0; i < segmentation.len - 1; i++) {
+    const split = splitLeadingSpaceAndMarks(segmentation.texts[i]!)
+    if (split === null) continue
+    if (
+      (segmentation.kinds[i] !== 'space' && segmentation.kinds[i] !== 'preserved-space') ||
+      segmentation.kinds[i + 1] !== 'text' ||
+      !containsArabicScript(segmentation.texts[i + 1]!)
+    ) {
+      continue
+    }
+
+    segmentation.texts[i] = split.space
+    segmentation.isWordLike[i] = false
+    segmentation.kinds[i] = segmentation.kinds[i] === 'preserved-space' ? 'preserved-space' : 'space'
+    segmentation.texts[i + 1] = split.marks + segmentation.texts[i + 1]!
+    segmentation.starts[i + 1] = segmentation.starts[i]! + split.space.length
+  }
+
+  return segmentation
+}
+
+function applyPostSegmentationPasses(segmentation: MergedSegmentation): MergedSegmentation {
+  // Keep the pass order explicit. Future script-specific quirks should still be
+  // straightforward local edits here rather than a separate rule engine.
+  mergeEscapedQuoteClosersIntoPreviousText(segmentation)
+  carryForwardStickyClusters(segmentation)
+
+  return fixArabicLeadingMarksAfterSpaces(
+    carryTrailingForwardStickyAcrossCJKBoundary(
+      mergeAsciiPunctuationChains(
+        splitHyphenatedNumericRuns(
+          mergeNumericRuns(
+            mergeUrlQueryRuns(
+              mergeUrlLikeRuns(
+                mergeGlueConnectedTextRuns(compactSegmentation(segmentation)),
+              ),
+            ),
+          ),
+        ),
+      ),
+    ),
+  )
+}
+
 
 function buildMergedSegmentation(
   normalized: string,
@@ -879,161 +1068,28 @@ function buildMergedSegmentation(
   whiteSpaceProfile: WhiteSpaceProfile,
 ): MergedSegmentation {
   const wordSegmenter = getSharedWordSegmenter()
-  let mergedLen = 0
-  const mergedTexts: string[] = []
-  const mergedWordLike: boolean[] = []
-  const mergedKinds: SegmentBreakKind[] = []
-  const mergedStarts: number[] = []
+  const merged: MergedSegmentation = {
+    len: 0,
+    texts: [],
+    isWordLike: [],
+    kinds: [],
+    starts: [],
+  }
 
   for (const s of wordSegmenter.segment(normalized)) {
     for (const piece of splitSegmentByBreakKind(s.segment, s.isWordLike ?? false, s.index, whiteSpaceProfile)) {
-      const isText = piece.kind === 'text'
-
-      if (
-        profile.carryCJKAfterClosingQuote &&
-        isText &&
-        mergedLen > 0 &&
-        mergedKinds[mergedLen - 1] === 'text' &&
-        isCJK(piece.text) &&
-        isCJK(mergedTexts[mergedLen - 1]!) &&
-        endsWithClosingQuote(mergedTexts[mergedLen - 1]!)
-      ) {
-        mergedTexts[mergedLen - 1] += piece.text
-        mergedWordLike[mergedLen - 1] = mergedWordLike[mergedLen - 1]! || piece.isWordLike
-      } else if (
-        isText &&
-        mergedLen > 0 &&
-        mergedKinds[mergedLen - 1] === 'text' &&
-        isCJKLineStartProhibitedSegment(piece.text) &&
-        isCJK(mergedTexts[mergedLen - 1]!)
-      ) {
-        mergedTexts[mergedLen - 1] += piece.text
-        mergedWordLike[mergedLen - 1] = mergedWordLike[mergedLen - 1]! || piece.isWordLike
-      } else if (
-        isText &&
-        mergedLen > 0 &&
-        mergedKinds[mergedLen - 1] === 'text' &&
-        endsWithMyanmarMedialGlue(mergedTexts[mergedLen - 1]!)
-      ) {
-        mergedTexts[mergedLen - 1] += piece.text
-        mergedWordLike[mergedLen - 1] = mergedWordLike[mergedLen - 1]! || piece.isWordLike
-      } else if (
-        isText &&
-        mergedLen > 0 &&
-        mergedKinds[mergedLen - 1] === 'text' &&
-        piece.isWordLike &&
-        containsArabicScript(piece.text) &&
-        endsWithArabicNoSpacePunctuation(mergedTexts[mergedLen - 1]!)
-      ) {
-        mergedTexts[mergedLen - 1] += piece.text
-        mergedWordLike[mergedLen - 1] = true
-      } else if (
-        isText &&
-        !piece.isWordLike &&
-        mergedLen > 0 &&
-        mergedKinds[mergedLen - 1] === 'text' &&
-        piece.text.length === 1 &&
-        piece.text !== '-' &&
-        piece.text !== '—' &&
-        isRepeatedSingleCharRun(mergedTexts[mergedLen - 1]!, piece.text)
-      ) {
-        mergedTexts[mergedLen - 1] += piece.text
-      } else if (
-        isText &&
-        !piece.isWordLike &&
-        mergedLen > 0 &&
-        mergedKinds[mergedLen - 1] === 'text' &&
-        (
-          isLeftStickyPunctuationSegment(piece.text) ||
-          (piece.text === '-' && mergedWordLike[mergedLen - 1]!)
-        )
-      ) {
-        mergedTexts[mergedLen - 1] += piece.text
+      const mergeDecision = getPieceMergeDecision(merged, piece, profile)
+      if (mergeDecision === 'merge') {
+        mergePieceIntoPreviousText(merged, piece.text, piece.isWordLike)
+      } else if (mergeDecision === 'merge-and-force-word-like') {
+        mergePieceIntoPreviousText(merged, piece.text, piece.isWordLike, true)
       } else {
-        mergedTexts[mergedLen] = piece.text
-        mergedWordLike[mergedLen] = piece.isWordLike
-        mergedKinds[mergedLen] = piece.kind
-        mergedStarts[mergedLen] = piece.start
-        mergedLen++
+        pushPiece(merged, piece)
       }
     }
   }
 
-  for (let i = 1; i < mergedLen; i++) {
-    if (
-      mergedKinds[i] === 'text' &&
-      !mergedWordLike[i]! &&
-      isEscapedQuoteClusterSegment(mergedTexts[i]!) &&
-      mergedKinds[i - 1] === 'text'
-    ) {
-      mergedTexts[i - 1] += mergedTexts[i]!
-      mergedWordLike[i - 1] = mergedWordLike[i - 1]! || mergedWordLike[i]!
-      mergedTexts[i] = ''
-    }
-  }
-
-  for (let i = mergedLen - 2; i >= 0; i--) {
-    if (mergedKinds[i] === 'text' && !mergedWordLike[i]! && isForwardStickyClusterSegment(mergedTexts[i]!)) {
-      let j = i + 1
-      while (j < mergedLen && mergedTexts[j] === '') j++
-      if (j < mergedLen && mergedKinds[j] === 'text') {
-        mergedTexts[j] = mergedTexts[i]! + mergedTexts[j]!
-        mergedStarts[j] = mergedStarts[i]!
-        mergedTexts[i] = ''
-      }
-    }
-  }
-
-  let compactLen = 0
-  for (let read = 0; read < mergedLen; read++) {
-    const text = mergedTexts[read]!
-    if (text.length === 0) continue
-    if (compactLen !== read) {
-      mergedTexts[compactLen] = text
-      mergedWordLike[compactLen] = mergedWordLike[read]!
-      mergedKinds[compactLen] = mergedKinds[read]!
-      mergedStarts[compactLen] = mergedStarts[read]!
-    }
-    compactLen++
-  }
-
-  mergedTexts.length = compactLen
-  mergedWordLike.length = compactLen
-  mergedKinds.length = compactLen
-  mergedStarts.length = compactLen
-
-  const compacted = mergeGlueConnectedTextRuns({
-    len: compactLen,
-    texts: mergedTexts,
-    isWordLike: mergedWordLike,
-    kinds: mergedKinds,
-    starts: mergedStarts,
-  })
-  const withMergedUrls = carryTrailingForwardStickyAcrossCJKBoundary(
-    mergeAsciiPunctuationChains(
-      splitHyphenatedNumericRuns(mergeNumericRuns(mergeUrlQueryRuns(mergeUrlLikeRuns(compacted)))),
-    ),
-  )
-
-  for (let i = 0; i < withMergedUrls.len - 1; i++) {
-    const split = splitLeadingSpaceAndMarks(withMergedUrls.texts[i]!)
-    if (split === null) continue
-    if (
-      (withMergedUrls.kinds[i] !== 'space' && withMergedUrls.kinds[i] !== 'preserved-space') ||
-      withMergedUrls.kinds[i + 1] !== 'text' ||
-      !containsArabicScript(withMergedUrls.texts[i + 1]!)
-    ) {
-      continue
-    }
-
-    withMergedUrls.texts[i] = split.space
-    withMergedUrls.isWordLike[i] = false
-    withMergedUrls.kinds[i] = withMergedUrls.kinds[i] === 'preserved-space' ? 'preserved-space' : 'space'
-    withMergedUrls.texts[i + 1] = split.marks + withMergedUrls.texts[i + 1]!
-    withMergedUrls.starts[i + 1] = withMergedUrls.starts[i]! + split.space.length
-  }
-
-  return withMergedUrls
+  return applyPostSegmentationPasses(merged)
 }
 
 function compileAnalysisChunks(segmentation: MergedSegmentation, whiteSpaceProfile: WhiteSpaceProfile): AnalysisChunk[] {
