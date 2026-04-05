@@ -365,6 +365,7 @@ If you pass `{ wordBreak: 'keep-all' }`, Pretext suppresses ordinary CJK/Hangul 
 
 Other important caveats:
 - `system-ui` is unsafe for accuracy on macOS. Canvas and DOM can resolve different optical variants.
+- Variable fonts only help insofar as the active axes are reflected in the canvas font string (for example via weight). `font-variation-settings` is not a separate measurement contract here.
 - Very narrow widths can still break inside words, but only at grapheme boundaries. That's the `overflow-wrap: break-word` part.
 - The inline-flow sidecar is intentionally `white-space: normal`-only.
 - Browser environments are the supported target today. Server canvas is still "maybe later", not a documented promise.
