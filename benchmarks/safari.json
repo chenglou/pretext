@@ -13,12 +13,12 @@
     },
     {
       "label": "DOM batch",
-      "ms": 90.00000000000011,
+      "ms": 87,
       "desc": "Single 400→300px batch resize: write all, then read all"
     },
     {
       "label": "DOM interleaved",
-      "ms": 156.50000000000023,
+      "ms": 151.00000000000023,
       "desc": "Single 400→300px batch resize: write + read per div"
     }
   ],
@@ -40,14 +40,14 @@
     },
     {
       "label": "Our library: layoutNextLine()",
-      "ms": 0.05,
+      "ms": 0.04999999999998864,
       "desc": "60-text shared-corpus batch across widths 180/220/260px; streaming line-by-line layout"
     }
   ],
   "richInlineResults": [
     {
       "label": "Our library: measureRichInlineStats()",
-      "ms": 0.024999999999988632,
+      "ms": 0.025,
       "desc": "36 rich-text inline flow shared-corpus texts across widths 180/220/260px; stats only"
     },
     {
@@ -74,7 +74,7 @@
     },
     {
       "label": "Our library: layoutWithLines()",
-      "ms": 0.4,
+      "ms": 0.5,
       "desc": "12 generated pre-wrap texts with 320 hard-break chunks across widths 220/260/320px; materializes text lines"
     },
     {
@@ -84,29 +84,29 @@
     },
     {
       "label": "Our library: layoutNextLine()",
-      "ms": 0.75,
+      "ms": 0.8999999999999999,
       "desc": "12 generated pre-wrap texts with 320 hard-break chunks across widths 220/260/320px; streaming line-by-line layout"
     }
   ],
   "richLongResults": [
     {
       "label": "Our library: measureLineStats()",
-      "ms": 1.45,
+      "ms": 1.4500000000000113,
       "desc": "8 Arabic long-form texts across widths 240/300/360px; stats only"
     },
     {
       "label": "Our library: layoutWithLines()",
-      "ms": 4.337499999999989,
+      "ms": 4.275,
       "desc": "8 Arabic long-form texts across widths 240/300/360px; materializes text lines"
     },
     {
       "label": "Our library: walkLineRanges()",
-      "ms": 2.362500000000023,
+      "ms": 2.375,
       "desc": "8 Arabic long-form texts across widths 240/300/360px; line ranges only, no line text strings"
     },
     {
       "label": "Our library: layoutNextLine()",
-      "ms": 3.775,
+      "ms": 3.675,
       "desc": "8 Arabic long-form texts across widths 240/300/360px; streaming line-by-line layout"
     }
   ],
@@ -121,9 +121,9 @@
       "breakableSegments": 0,
       "width": 300,
       "lineCount": 193,
-      "analysisMs": 3,
-      "measureMs": 9,
-      "prepareMs": 12,
+      "analysisMs": 2,
+      "measureMs": 6.999999999996362,
+      "prepareMs": 8.999999999998181,
       "layoutMs": 0.02
     },
     {
@@ -136,9 +136,9 @@
       "breakableSegments": 1,
       "width": 300,
       "lineCount": 380,
-      "analysisMs": 3.999999999998181,
-      "measureMs": 7.000000000001819,
-      "prepareMs": 11.000000000001819,
+      "analysisMs": 4,
+      "measureMs": 6,
+      "prepareMs": 10,
       "layoutMs": 0.04
     },
     {
@@ -152,8 +152,8 @@
       "width": 300,
       "lineCount": 428,
       "analysisMs": 3,
-      "measureMs": 9,
-      "prepareMs": 12,
+      "measureMs": 7.999999999998181,
+      "prepareMs": 10,
       "layoutMs": 0.08
     },
     {
@@ -169,7 +169,7 @@
       "analysisMs": 6,
       "measureMs": 13,
       "prepareMs": 19,
-      "layoutMs": 0.065
+      "layoutMs": 0.060000000000009095
     },
     {
       "id": "zh-guxiang",
@@ -182,9 +182,9 @@
       "width": 300,
       "lineCount": 375,
       "analysisMs": 3,
-      "measureMs": 8,
-      "prepareMs": 13,
-      "layoutMs": 0.04
+      "measureMs": 6,
+      "prepareMs": 10,
+      "layoutMs": 0.039999999999990904
     },
     {
       "id": "th-nithan-vetal-story-1",
@@ -196,9 +196,9 @@
       "breakableSegments": 8087,
       "width": 300,
       "lineCount": 1024,
-      "analysisMs": 7,
-      "measureMs": 27,
-      "prepareMs": 34,
+      "analysisMs": 6.000000000001819,
+      "measureMs": 26,
+      "prepareMs": 33,
       "layoutMs": 0.095
     },
     {
@@ -212,8 +212,8 @@
       "width": 300,
       "lineCount": 81,
       "analysisMs": 1,
-      "measureMs": 4,
-      "prepareMs": 4.999999999998181,
+      "measureMs": 3.000000000001819,
+      "prepareMs": 4,
       "layoutMs": 0.005
     },
     {
@@ -226,9 +226,9 @@
       "breakableSegments": 274,
       "width": 300,
       "lineCount": 54,
-      "analysisMs": 0.999999999998181,
-      "measureMs": 3,
-      "prepareMs": 3.999999999998181,
+      "analysisMs": 0,
+      "measureMs": 4,
+      "prepareMs": 4,
       "layoutMs": 0.005
     },
     {
@@ -242,8 +242,8 @@
       "width": 300,
       "lineCount": 351,
       "analysisMs": 2,
-      "measureMs": 45.99999999999636,
-      "prepareMs": 48,
+      "measureMs": 43,
+      "prepareMs": 45,
       "layoutMs": 0.045
     },
     {
@@ -256,8 +256,8 @@
       "breakableSegments": 4003,
       "width": 300,
       "lineCount": 591,
-      "analysisMs": 5.999999999998181,
-      "measureMs": 16.00000000000182,
+      "analysisMs": 6,
+      "measureMs": 15.999999999996362,
       "prepareMs": 22,
       "layoutMs": 0.085
     },
@@ -271,9 +271,9 @@
       "breakableSegments": 4088,
       "width": 300,
       "lineCount": 653,
-      "analysisMs": 4,
-      "measureMs": 36.00000000000182,
-      "prepareMs": 40.00000000000182,
+      "analysisMs": 3,
+      "measureMs": 33.99999999999818,
+      "prepareMs": 37,
       "layoutMs": 0.075
     },
     {
@@ -286,10 +286,10 @@
       "breakableSegments": 1760,
       "width": 300,
       "lineCount": 2860,
-      "analysisMs": 9,
-      "measureMs": 224,
-      "prepareMs": 234,
-      "layoutMs": 0.455
+      "analysisMs": 8,
+      "measureMs": 211,
+      "prepareMs": 219,
+      "layoutMs": 0.45000000000001816
     },
     {
       "id": "ar-risalat-al-ghufran-part-1",
@@ -301,11 +301,11 @@
       "breakableSegments": 18745,
       "width": 300,
       "lineCount": 2644,
-      "analysisMs": 14,
-      "measureMs": 206,
-      "prepareMs": 223,
-      "layoutMs": 0.2800000000000182
+      "analysisMs": 13,
+      "measureMs": 188.00000000000364,
+      "prepareMs": 201.00000000000364,
+      "layoutMs": 0.28
     }
   ],
-  "requestId": "1775371194372-khr8hfsjngs"
+  "requestId": "1775408865191-10kasolcwp2"
 }
