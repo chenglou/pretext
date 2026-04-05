@@ -1,7 +1,8 @@
 ## Pretext
 
-Internal notes for contributors and agents. Use `README.md` as the public source of truth for API examples and user-facing limitations. See `DEVELOPMENT.md` for the current command surface and the canonical dashboards/snapshots to consult before making browser-accuracy or benchmark claims. Use `TODO.md` for the current priorities.
+Use `README.md` as the public source of truth for API examples and user-facing limitations. See `DEVELOPMENT.md` for the current command surface and the canonical dashboards/snapshots to consult before making browser-accuracy or benchmark claims. Use `TODO.md` for the current priorities.
 Do not change the existing tone of the documents unless they're wrong.
+Do `bun install` if you're in a fresh worktree.
 
 ### Commands
 
@@ -119,7 +120,3 @@ See `DEVELOPMENT.md` for the current command surface and packaging/release check
 - ASCII fast path could skip some CJK, bidi, and emoji overhead.
 - Benchmark methodology still needs review.
 - Additional CSS configs are still untested: `break-all`, `strict`, `loose`, `anywhere`.
-
-### Related
-
-- `../text-layout/` — Sebastian Markbage's original prototype + our old variants.
