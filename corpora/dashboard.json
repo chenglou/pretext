@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-04-04T17:40:48.705Z",
+  "generatedAt": "2026-04-05T16:06:11.411Z",
   "sources": {
     "accuracy": {
       "chrome": "accuracy/chrome.json",
@@ -97,7 +97,7 @@
         "exactCount": 50,
         "widthCount": 61
       },
-      "notes": "legacy Gatsby long-form canary; broad narrow-width negative field with one local positive flip"
+      "notes": "English long-form canary; broad narrow-width negative field with one local positive flip"
     },
     {
       "id": "ja-kumo-no-ito",

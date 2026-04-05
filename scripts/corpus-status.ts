@@ -66,7 +66,7 @@ const PRODUCT_SHAPED: CorpusDashboardMeta[] = [
 const LONG_FORM: CorpusDashboardMeta[] = [
   {
     id: 'en-gatsby-opening',
-    notes: 'legacy Gatsby long-form canary; broad narrow-width negative field with one local positive flip',
+    notes: 'English long-form canary; broad narrow-width negative field with one local positive flip',
   },
   {
     id: 'ja-kumo-no-ito',

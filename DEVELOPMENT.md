@@ -50,10 +50,6 @@ bun install
 - `bun run corpus-representative` — rebuild `corpora/representative.json`
 - `bun run corpus-status` — rebuild `corpora/dashboard.json`
 - `bun run corpus-status:refresh` — refresh representative rows, sampled sweep, coarse sweep, then the corpus dashboard
-- `bun run gatsby-check` — compatibility alias for `corpus-check --id=en-gatsby-opening --diagnose`
-- `bun run gatsby-check:safari`
-- `bun run gatsby-sweep` — compatibility alias for `corpus-sweep --id=en-gatsby-opening`
-- `bun run gatsby-sweep:safari`
 
 ### Status Dashboards
 

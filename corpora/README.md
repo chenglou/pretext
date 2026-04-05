@@ -129,7 +129,3 @@ The corpus page is also available locally at `/corpus?id=<corpus-id>`.
 
 For very large corpora, `--samples=<n>` checks evenly spaced widths across the
 requested range instead of visiting every `step`.
-
-The legacy `gatsby-check` and `gatsby-sweep` commands still exist as compatibility
-aliases, but they now route through `corpus-check --id=en-gatsby-opening` and
-`corpus-sweep --id=en-gatsby-opening`.
