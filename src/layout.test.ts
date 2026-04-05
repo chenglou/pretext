@@ -727,6 +727,61 @@ describe('rich-inline invariants', () => {
 })
 
 describe('layout invariants', () => {
+  test('letterSpacing increases segment widths by graphemeCount * spacing', () => {
+    const base = prepareWithSegments('Hello World', FONT)
+    const spaced = prepareWithSegments('Hello World', FONT, { letterSpacing: 2 })
+
+    // "Hello" = 5 graphemes, " " = 1 grapheme, "World" = 5 graphemes
+    expect(spaced.widths[0]).toBeCloseTo(base.widths[0]! + 5 * 2, 5)
+    expect(spaced.widths[1]).toBeCloseTo(base.widths[1]! + 1 * 2, 5)
+    expect(spaced.widths[2]).toBeCloseTo(base.widths[2]! + 5 * 2, 5)
+  })
+
+  test('letterSpacing zero produces identical widths to no option', () => {
+    const base = prepareWithSegments('Hello World', FONT)
+    const zero = prepareWithSegments('Hello World', FONT, { letterSpacing: 0 })
+
+    expect(zero.widths).toEqual(base.widths)
+  })
+
+  test('letterSpacing causes more line breaks at narrow widths', () => {
+    const base = prepare('The quick brown fox', FONT)
+    const spaced = prepare('The quick brown fox', FONT, { letterSpacing: 5 })
+
+    const baseLines = layout(base, 200, LINE_HEIGHT).lineCount
+    const spacedLines = layout(spaced, 200, LINE_HEIGHT).lineCount
+    expect(spacedLines).toBeGreaterThanOrEqual(baseLines)
+  })
+
+  test('negative letterSpacing tightens text and reduces line count', () => {
+    const base = prepare('The quick brown fox jumps over', FONT)
+    const tight = prepare('The quick brown fox jumps over', FONT, { letterSpacing: -1 })
+
+    const baseLines = layout(base, 120, LINE_HEIGHT).lineCount
+    const tightLines = layout(tight, 120, LINE_HEIGHT).lineCount
+    expect(tightLines).toBeLessThanOrEqual(baseLines)
+  })
+
+  test('letterSpacing applies to CJK text', () => {
+    const base = prepareWithSegments('春天到了', FONT)
+    const spaced = prepareWithSegments('春天到了', FONT, { letterSpacing: 4 })
+
+    let baseTotal = 0
+    let spacedTotal = 0
+    for (let i = 0; i < base.widths.length; i++) baseTotal += base.widths[i]!
+    for (let i = 0; i < spaced.widths.length; i++) spacedTotal += spaced.widths[i]!
+    expect(spacedTotal).toBeGreaterThan(baseTotal)
+  })
+
+  test('letterSpacing works with pre-wrap mode', () => {
+    const base = prepare('Hello\nWorld', FONT, { whiteSpace: 'pre-wrap' })
+    const spaced = prepare('Hello\nWorld', FONT, { whiteSpace: 'pre-wrap', letterSpacing: 3 })
+
+    const baseLines = layout(base, 200, LINE_HEIGHT).lineCount
+    const spacedLines = layout(spaced, 200, LINE_HEIGHT).lineCount
+    expect(spacedLines).toBeGreaterThanOrEqual(baseLines)
+  })
+
   test('line count grows monotonically as width shrinks', () => {
     const prepared = prepare('The quick brown fox jumps over the lazy dog', FONT)
     let previous = 0
