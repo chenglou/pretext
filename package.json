@@ -1,6 +1,16 @@
 {
   "name": "@chenglou/pretext",
   "version": "0.0.4",
+  "description": "Fast, accurate & comprehensive text measurement & layout",
+  "keywords": [
+    "text-layout",
+    "text-measurement",
+    "line-breaking",
+    "typography",
+    "canvas",
+    "svg",
+    "unicode"
+  ],
   "license": "MIT",
   "repository": {
     "type": "git",
