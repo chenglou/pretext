@@ -10,7 +10,7 @@ const LINE_HEIGHT = 19
 
 type LayoutModule = typeof import('./layout.ts')
 type LineBreakModule = typeof import('./line-break.ts')
-type InlineFlowModule = typeof import('./inline-flow.ts')
+type RichInlineModule = typeof import('./rich-inline.ts')
 type AnalysisModule = typeof import('./analysis.ts')
 
 let prepare: LayoutModule['prepare']
@@ -19,7 +19,7 @@ let layout: LayoutModule['layout']
 let layoutWithLines: LayoutModule['layoutWithLines']
 let layoutNextLine: LayoutModule['layoutNextLine']
 let layoutNextLineRange: LayoutModule['layoutNextLineRange']
-let measureLineGeometry: LayoutModule['measureLineGeometry']
+let measureLineStats: LayoutModule['measureLineStats']
 let walkLineRanges: LayoutModule['walkLineRanges']
 let clearCache: LayoutModule['clearCache']
 let setLocale: LayoutModule['setLocale']
@@ -27,11 +27,11 @@ let countPreparedLines: LineBreakModule['countPreparedLines']
 let measurePreparedLineGeometry: LineBreakModule['measurePreparedLineGeometry']
 let stepPreparedLineGeometry: LineBreakModule['stepPreparedLineGeometry']
 let walkPreparedLines: LineBreakModule['walkPreparedLines']
-let prepareInlineFlow: InlineFlowModule['prepareInlineFlow']
-let measureInlineFlowGeometry: InlineFlowModule['measureInlineFlowGeometry']
-let walkInlineFlowLineRanges: InlineFlowModule['walkInlineFlowLineRanges']
-let walkInlineFlowLines: InlineFlowModule['walkInlineFlowLines']
-let measureInlineFlow: InlineFlowModule['measureInlineFlow']
+let prepareRichInline: RichInlineModule['prepareRichInline']
+let measureRichInlineStats: RichInlineModule['measureRichInlineStats']
+let walkRichInlineLineRanges: RichInlineModule['walkRichInlineLineRanges']
+let walkRichInlineLines: RichInlineModule['walkRichInlineLines']
+let measureRichInline: RichInlineModule['measureRichInline']
 let isCJK: AnalysisModule['isCJK']
 
 const emojiPresentationRe = /\p{Emoji_Presentation}/u
@@ -262,11 +262,11 @@ class TestOffscreenCanvas {
 
 beforeAll(async () => {
   Reflect.set(globalThis, 'OffscreenCanvas', TestOffscreenCanvas)
-  const [analysisMod, mod, lineBreakMod, inlineFlowMod] = await Promise.all([
+  const [analysisMod, mod, lineBreakMod, richInlineMod] = await Promise.all([
     import('./analysis.ts'),
     import('./layout.ts'),
     import('./line-break.ts'),
-    import('./inline-flow.ts'),
+    import('./rich-inline.ts'),
   ])
   ;({ isCJK } = analysisMod)
   ;({
@@ -276,13 +276,13 @@ beforeAll(async () => {
     layoutWithLines,
     layoutNextLine,
     layoutNextLineRange,
-    measureLineGeometry,
+    measureLineStats,
     walkLineRanges,
     clearCache,
     setLocale,
   } = mod)
   ;({ countPreparedLines, measurePreparedLineGeometry, stepPreparedLineGeometry, walkPreparedLines } = lineBreakMod)
-  ;({ prepareInlineFlow, measureInlineFlowGeometry, walkInlineFlowLineRanges, walkInlineFlowLines, measureInlineFlow } = inlineFlowMod)
+  ;({ prepareRichInline, measureRichInlineStats, walkRichInlineLineRanges, walkRichInlineLines, measureRichInline } = richInlineMod)
 })
 
 beforeEach(() => {
@@ -648,9 +648,9 @@ describe('prepare invariants', () => {
   })
 })
 
-describe('inline-flow invariants', () => {
+describe('rich-inline invariants', () => {
   test('non-materializing range walker matches materialized line walker', () => {
-    const prepared = prepareInlineFlow([
+    const prepared = prepareRichInline([
       { text: 'Ship ', font: FONT },
       { text: '@maya', font: '700 12px Test Sans', break: 'never', extraWidth: 18 },
       { text: "'s rich note wraps cleanly", font: FONT },
@@ -679,7 +679,7 @@ describe('inline-flow invariants', () => {
       width: number
     }> = []
 
-    const rangeLineCount = walkInlineFlowLineRanges(prepared, 120, line => {
+    const rangeLineCount = walkRichInlineLineRanges(prepared, 120, line => {
       rangedLines.push({
         end: line.end,
         fragments: line.fragments.map(fragment => ({
@@ -692,7 +692,7 @@ describe('inline-flow invariants', () => {
         width: line.width,
       })
     })
-    const materializedLineCount = walkInlineFlowLines(prepared, 120, line => {
+    const materializedLineCount = walkRichInlineLines(prepared, 120, line => {
       materializedLines.push({
         end: line.end,
         fragments: line.fragments.map(fragment => ({
@@ -708,11 +708,11 @@ describe('inline-flow invariants', () => {
     })
 
     expect(rangeLineCount).toBe(materializedLineCount)
-    expect(measureInlineFlowGeometry(prepared, 120)).toEqual({
+    expect(measureRichInlineStats(prepared, 120)).toEqual({
       lineCount: rangeLineCount,
       maxLineWidth: Math.max(...rangedLines.map(line => line.width)),
     })
-    expect(measureInlineFlow(prepared, 120, LINE_HEIGHT)).toEqual({
+    expect(measureRichInline(prepared, 120, LINE_HEIGHT)).toEqual({
       height: rangeLineCount * LINE_HEIGHT,
       lineCount: rangeLineCount,
     })
@@ -1123,7 +1123,7 @@ describe('layout invariants', () => {
     })))
   })
 
-  test('measureLineGeometry matches walked line count and widest line', () => {
+  test('measureLineStats matches walked line count and widest line', () => {
     const prepared = prepareWithSegments('foo trans\u00ADatlantic said "hello" to 世界 and waved.', FONT)
     const width = prepared.widths[0]! + prepared.widths[1]! + prepared.widths[2]! + prepared.breakableWidths[4]![0]! + prepared.discretionaryHyphenWidth + 0.1
     let walkedLineCount = 0
@@ -1134,7 +1134,7 @@ describe('layout invariants', () => {
       walkedMaxLineWidth = Math.max(walkedMaxLineWidth, line.width)
     })
 
-    expect(measureLineGeometry(prepared, width)).toEqual({
+    expect(measureLineStats(prepared, width)).toEqual({
       lineCount: walkedLineCount,
       maxLineWidth: walkedMaxLineWidth,
     })

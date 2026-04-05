@@ -13,34 +13,34 @@ import {
   stepPreparedLineGeometry,
 } from './line-break.js'
 
-// Experimental sidecar for mixed inline runs under `white-space: normal`.
+// Experimental helper for mixed inline runs under `white-space: normal`.
 // It keeps the core layout API low-level while taking over the boring shared
 // work that rich inline demos kept reimplementing in userland:
 // - collapsed boundary whitespace across item boundaries
 // - atomic inline boxes like pills
 // - per-item extra horizontal chrome such as padding/borders
 
-declare const preparedInlineFlowBrand: unique symbol
+declare const preparedRichInlineBrand: unique symbol
 
-export type InlineFlowItem = {
+export type RichInlineItem = {
   text: string // Raw author text, including any leading/trailing collapsible spaces
   font: string // Canvas font shorthand used to prepare and measure this item
   break?: 'normal' | 'never' // `never` keeps the item atomic, like a pill or mention chip
   extraWidth?: number // Caller-owned horizontal chrome, e.g. padding + border width
 }
 
-export type PreparedInlineFlow = {
-  readonly [preparedInlineFlowBrand]: true
+export type PreparedRichInline = {
+  readonly [preparedRichInlineBrand]: true
 }
 
-export type InlineFlowCursor = {
+export type RichInlineCursor = {
   itemIndex: number
   segmentIndex: number
   graphemeIndex: number
 }
 
-export type InlineFlowFragment = {
-  itemIndex: number // Index into the original InlineFlowItem array
+export type RichInlineFragment = {
+  itemIndex: number // Index into the original RichInlineItem array
   text: string // Text slice for this fragment
   gapBefore: number // Collapsed inter-item gap paid before this fragment on this line
   occupiedWidth: number // Text width plus the item's extraWidth contribution
@@ -48,37 +48,37 @@ export type InlineFlowFragment = {
   end: LayoutCursor // End cursor within the item's prepared text
 }
 
-export type InlineFlowFragmentRange = {
-  itemIndex: number // Index into the original InlineFlowItem array
+export type RichInlineFragmentRange = {
+  itemIndex: number // Index into the original RichInlineItem array
   gapBefore: number // Collapsed inter-item gap paid before this fragment on this line
   occupiedWidth: number // Text width plus the item's extraWidth contribution
   start: LayoutCursor // Start cursor within the item's prepared text
   end: LayoutCursor // End cursor within the item's prepared text
 }
 
-export type InlineFlowLine = {
-  fragments: InlineFlowFragment[]
+export type RichInlineLine = {
+  fragments: RichInlineFragment[]
   width: number
-  end: InlineFlowCursor
+  end: RichInlineCursor
 }
 
-export type InlineFlowLineRange = {
-  fragments: InlineFlowFragmentRange[]
+export type RichInlineLineRange = {
+  fragments: RichInlineFragmentRange[]
   width: number
-  end: InlineFlowCursor
+  end: RichInlineCursor
 }
 
-export type InlineFlowGeometry = {
+export type RichInlineStats = {
   lineCount: number
   maxLineWidth: number
 }
 
-type InternalPreparedInlineFlow = PreparedInlineFlow & {
-  items: PreparedInlineFlowItem[]
-  itemsBySourceItemIndex: Array<PreparedInlineFlowItem | undefined>
+type InternalPreparedRichInline = PreparedRichInline & {
+  items: PreparedRichInlineItem[]
+  itemsBySourceItemIndex: Array<PreparedRichInlineItem | undefined>
 }
 
-type PreparedInlineFlowItem = {
+type PreparedRichInlineItem = {
   break: 'normal' | 'never'
   endGraphemeIndex: number
   endSegmentIndex: number
@@ -93,14 +93,14 @@ const COLLAPSIBLE_BOUNDARY_RE = /[ \t\n\f\r]+/
 const LEADING_COLLAPSIBLE_BOUNDARY_RE = /^[ \t\n\f\r]+/
 const TRAILING_COLLAPSIBLE_BOUNDARY_RE = /[ \t\n\f\r]+$/
 const EMPTY_LAYOUT_CURSOR: LayoutCursor = { segmentIndex: 0, graphemeIndex: 0 }
-const FLOW_START_CURSOR: InlineFlowCursor = {
+const RICH_INLINE_START_CURSOR: RichInlineCursor = {
   itemIndex: 0,
   segmentIndex: 0,
   graphemeIndex: 0,
 }
 
-function getInternalPreparedInlineFlow(prepared: PreparedInlineFlow): InternalPreparedInlineFlow {
-  return prepared as InternalPreparedInlineFlow
+function getInternalPreparedRichInline(prepared: PreparedRichInline): InternalPreparedRichInline {
+  return prepared as InternalPreparedRichInline
 }
 
 function cloneCursor(cursor: LayoutCursor): LayoutCursor {
@@ -139,8 +139,8 @@ function prepareWholeItemLine(prepared: PreparedTextWithSegments): {
   }
 }
 
-type InlineFlowFragmentCollector = (
-  item: PreparedInlineFlowItem,
+type RichInlineFragmentCollector = (
+  item: PreparedRichInlineItem,
   gapBefore: number,
   occupiedWidth: number,
   start: LayoutCursor,
@@ -151,9 +151,9 @@ function endsInsideFirstSegment(segmentIndex: number, graphemeIndex: number): bo
   return segmentIndex === 0 && graphemeIndex > 0
 }
 
-export function prepareInlineFlow(items: InlineFlowItem[]): PreparedInlineFlow {
-  const preparedItems: PreparedInlineFlowItem[] = []
-  const itemsBySourceItemIndex = Array.from<PreparedInlineFlowItem | undefined>({ length: items.length })
+export function prepareRichInline(items: RichInlineItem[]): PreparedRichInline {
+  const preparedItems: PreparedRichInlineItem[] = []
+  const itemsBySourceItemIndex = Array.from<PreparedRichInlineItem | undefined>({ length: items.length })
   const collapsedSpaceWidthCache = new Map<string, number>()
   let pendingGapWidth = 0
 
@@ -194,7 +194,7 @@ export function prepareInlineFlow(items: InlineFlowItem[]): PreparedInlineFlow {
       naturalWidth: wholeLine.width,
       prepared,
       sourceItemIndex: index,
-    } satisfies PreparedInlineFlowItem
+    } satisfies PreparedRichInlineItem
     preparedItems.push(preparedItem)
     itemsBySourceItemIndex[index] = preparedItem
 
@@ -204,14 +204,14 @@ export function prepareInlineFlow(items: InlineFlowItem[]): PreparedInlineFlow {
   return {
     items: preparedItems,
     itemsBySourceItemIndex,
-  } as InternalPreparedInlineFlow
+  } as InternalPreparedRichInline
 }
 
-function stepInlineFlowLine(
-  flow: InternalPreparedInlineFlow,
+function stepRichInlineLine(
+  flow: InternalPreparedRichInline,
   maxWidth: number,
-  cursor: InlineFlowCursor,
-  collectFragment?: InlineFlowFragmentCollector,
+  cursor: RichInlineCursor,
+  collectFragment?: RichInlineFragmentCollector,
 ): number | null {
   if (flow.items.length === 0 || cursor.itemIndex >= flow.items.length) return null
 
@@ -380,10 +380,10 @@ function stepInlineFlowLine(
   return lineWidth
 }
 
-function stepInlineFlowLineGeometry(
-  flow: InternalPreparedInlineFlow,
+function stepRichInlineLineStats(
+  flow: InternalPreparedRichInline,
   maxWidth: number,
-  cursor: InlineFlowCursor,
+  cursor: RichInlineCursor,
 ): number | null {
   if (flow.items.length === 0 || cursor.itemIndex >= flow.items.length) return null
 
@@ -513,19 +513,19 @@ function stepInlineFlowLineGeometry(
   return lineWidth
 }
 
-export function layoutNextInlineFlowLineRange(
-  prepared: PreparedInlineFlow,
+export function layoutNextRichInlineLineRange(
+  prepared: PreparedRichInline,
   maxWidth: number,
-  start: InlineFlowCursor = FLOW_START_CURSOR,
-): InlineFlowLineRange | null {
-  const flow = getInternalPreparedInlineFlow(prepared)
-  const end: InlineFlowCursor = {
+  start: RichInlineCursor = RICH_INLINE_START_CURSOR,
+): RichInlineLineRange | null {
+  const flow = getInternalPreparedRichInline(prepared)
+  const end: RichInlineCursor = {
     itemIndex: start.itemIndex,
     segmentIndex: start.segmentIndex,
     graphemeIndex: start.graphemeIndex,
   }
-  const fragments: InlineFlowFragmentRange[] = []
-  const width = stepInlineFlowLine(flow, maxWidth, end, (item, gapBefore, occupiedWidth, fragmentStart, fragmentEnd) => {
+  const fragments: RichInlineFragmentRange[] = []
+  const width = stepRichInlineLine(flow, maxWidth, end, (item, gapBefore, occupiedWidth, fragmentStart, fragmentEnd) => {
     fragments.push({
       itemIndex: item.sourceItemIndex,
       gapBefore,
@@ -544,8 +544,8 @@ export function layoutNextInlineFlowLineRange(
 }
 
 function materializeFragmentText(
-  item: PreparedInlineFlowItem,
-  fragment: InlineFlowFragmentRange,
+  item: PreparedRichInlineItem,
+  fragment: RichInlineFragmentRange,
 ): string {
   const line = materializeLineRange(item.prepared, {
     width: fragment.occupiedWidth - item.extraWidth,
@@ -555,19 +555,19 @@ function materializeFragmentText(
   return line.text
 }
 
-export function layoutNextInlineFlowLine(
-  prepared: PreparedInlineFlow,
+export function layoutNextRichInlineLine(
+  prepared: PreparedRichInline,
   maxWidth: number,
-  start: InlineFlowCursor = FLOW_START_CURSOR,
-): InlineFlowLine | null {
-  const flow = getInternalPreparedInlineFlow(prepared)
-  const line = layoutNextInlineFlowLineRange(prepared, maxWidth, start)
+  start: RichInlineCursor = RICH_INLINE_START_CURSOR,
+): RichInlineLine | null {
+  const flow = getInternalPreparedRichInline(prepared)
+  const line = layoutNextRichInlineLineRange(prepared, maxWidth, start)
   if (line === null) return null
 
   return {
     fragments: line.fragments.map(fragment => {
       const item = flow.itemsBySourceItemIndex[fragment.itemIndex]
-      if (item === undefined) throw new Error('Missing inline-flow item for fragment')
+      if (item === undefined) throw new Error('Missing rich-inline item for fragment')
       return {
         ...fragment,
         text: materializeFragmentText(item, fragment),
@@ -578,16 +578,16 @@ export function layoutNextInlineFlowLine(
   }
 }
 
-export function walkInlineFlowLineRanges(
-  prepared: PreparedInlineFlow,
+export function walkRichInlineLineRanges(
+  prepared: PreparedRichInline,
   maxWidth: number,
-  onLine: (line: InlineFlowLineRange) => void,
+  onLine: (line: RichInlineLineRange) => void,
 ): number {
   let lineCount = 0
-  let cursor = FLOW_START_CURSOR
+  let cursor = RICH_INLINE_START_CURSOR
 
   while (true) {
-    const line = layoutNextInlineFlowLineRange(prepared, maxWidth, cursor)
+    const line = layoutNextRichInlineLineRange(prepared, maxWidth, cursor)
     if (line === null) return lineCount
     onLine(line)
     lineCount++
@@ -595,21 +595,21 @@ export function walkInlineFlowLineRanges(
   }
 }
 
-export function measureInlineFlowGeometry(
-  prepared: PreparedInlineFlow,
+export function measureRichInlineStats(
+  prepared: PreparedRichInline,
   maxWidth: number,
-): InlineFlowGeometry {
-  const flow = getInternalPreparedInlineFlow(prepared)
+): RichInlineStats {
+  const flow = getInternalPreparedRichInline(prepared)
   let lineCount = 0
   let maxLineWidth = 0
-  const cursor: InlineFlowCursor = {
+  const cursor: RichInlineCursor = {
     itemIndex: 0,
     segmentIndex: 0,
     graphemeIndex: 0,
   }
 
   while (true) {
-    const lineWidth = stepInlineFlowLineGeometry(flow, maxWidth, cursor)
+    const lineWidth = stepRichInlineLineStats(flow, maxWidth, cursor)
     if (lineWidth === null) {
       return {
         lineCount,
@@ -621,16 +621,16 @@ export function measureInlineFlowGeometry(
   }
 }
 
-export function walkInlineFlowLines(
-  prepared: PreparedInlineFlow,
+export function walkRichInlineLines(
+  prepared: PreparedRichInline,
   maxWidth: number,
-  onLine: (line: InlineFlowLine) => void,
+  onLine: (line: RichInlineLine) => void,
 ): number {
   let lineCount = 0
-  let cursor = FLOW_START_CURSOR
+  let cursor = RICH_INLINE_START_CURSOR
 
   while (true) {
-    const line = layoutNextInlineFlowLine(prepared, maxWidth, cursor)
+    const line = layoutNextRichInlineLine(prepared, maxWidth, cursor)
     if (line === null) return lineCount
     onLine(line)
     lineCount++
@@ -638,12 +638,12 @@ export function walkInlineFlowLines(
   }
 }
 
-export function measureInlineFlow(
-  prepared: PreparedInlineFlow,
+export function measureRichInline(
+  prepared: PreparedRichInline,
   maxWidth: number,
   lineHeight: number,
 ): LayoutResult {
-  const { lineCount } = measureInlineFlowGeometry(prepared, maxWidth)
+  const { lineCount } = measureRichInlineStats(prepared, maxWidth)
   return {
     lineCount,
     height: lineCount * lineHeight,

@@ -2,18 +2,18 @@ import { marked, type Token, type Tokens } from 'marked'
 
 import {
   layoutWithLines,
-  measureLineGeometry,
+  measureLineStats,
   measureNaturalWidth,
   prepareWithSegments,
   type LayoutLine,
   type PreparedTextWithSegments,
 } from '../../src/layout.ts'
 import {
-  measureInlineFlowGeometry,
-  prepareInlineFlow,
-  walkInlineFlowLines,
-  type PreparedInlineFlow,
-} from '../../src/inline-flow.ts'
+  measureRichInlineStats,
+  prepareRichInline,
+  walkRichInlineLines,
+  type PreparedRichInline,
+} from '../../src/rich-inline.ts'
 import { BASE_MESSAGE_SPECS, type MarkdownChatSeed } from './markdown-chat.data.ts'
 
 export const MIN_CHAT_WIDTH = 360
@@ -92,7 +92,7 @@ type PreparedBlockBase = {
 type PreparedInlineBlock = PreparedBlockBase & {
   kind: 'inline'
   classNames: string[]
-  flow: PreparedInlineFlow
+  flow: PreparedRichInline
   hrefs: Array<string | null>
   lineHeight: number
 }
@@ -525,7 +525,7 @@ function buildPreparedInlineBlock(
   return {
     ...createBlockBase(ctx),
     classNames: pieces.map(piece => piece.className),
-    flow: prepareInlineFlow(pieces.map(piece => ({
+    flow: prepareRichInline(pieces.map(piece => ({
       text: piece.text,
       font: piece.font,
       break: piece.breakMode,
@@ -937,7 +937,7 @@ function layoutBlockFrame(
   switch (block.kind) {
     case 'inline': {
       const lineWidth = Math.max(1, contentWidth - block.contentLeft)
-      const { lineCount, maxLineWidth } = measureInlineFlowGeometry(block.flow, lineWidth)
+      const { lineCount, maxLineWidth } = measureRichInlineStats(block.flow, lineWidth)
       return {
         contentLeft: block.contentLeft,
         height: lineCount * block.lineHeight,
@@ -955,7 +955,7 @@ function layoutBlockFrame(
     case 'code': {
       const boxWidth = Math.max(1, contentWidth - block.contentLeft)
       const innerWidth = Math.max(1, boxWidth - CODE_BLOCK_PADDING_X * 2)
-      const { lineCount, maxLineWidth } = measureLineGeometry(block.prepared, innerWidth)
+      const { lineCount, maxLineWidth } = measureLineStats(block.prepared, innerWidth)
       return {
         contentLeft: block.contentLeft,
         height: lineCount * block.lineHeight + CODE_BLOCK_PADDING_Y * 2,
@@ -1013,7 +1013,7 @@ function materializeBlockLayout(
       if (block.kind !== 'inline') throw new Error('Inline block/frame mismatch')
       const lineWidth = Math.max(1, contentWidth - frame.contentLeft)
       const lines: Array<{ fragments: InlineFragmentLayout[]; width: number }> = []
-      walkInlineFlowLines(block.flow, lineWidth, line => {
+      walkRichInlineLines(block.flow, lineWidth, line => {
         lines.push({
           fragments: line.fragments.map(fragment => ({
             className: block.classNames[fragment.itemIndex]!,

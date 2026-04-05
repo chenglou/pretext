@@ -14,10 +14,10 @@
       "import": "./dist/layout.js",
       "default": "./dist/layout.js"
     },
-    "./inline-flow": {
-      "types": "./dist/inline-flow.d.ts",
-      "import": "./dist/inline-flow.js",
-      "default": "./dist/inline-flow.js"
+    "./rich-inline": {
+      "types": "./dist/rich-inline.d.ts",
+      "import": "./dist/rich-inline.js",
+      "default": "./dist/rich-inline.js"
     },
     "./demos/*": "./pages/demos/*",
     "./assets/*": "./pages/assets/*",

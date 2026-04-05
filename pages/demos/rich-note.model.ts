@@ -1,11 +1,11 @@
 import {
-  prepareInlineFlow,
-  walkInlineFlowLines,
-  type PreparedInlineFlow,
-} from '../../src/inline-flow.ts'
+  prepareRichInline,
+  walkRichInlineLines,
+  type PreparedRichInline,
+} from '../../src/rich-inline.ts'
 
 // Local layout model for this demo. It keeps the page readable and shows how
-// the inline-flow sidecar composes with caller-owned classes, fonts, and
+// the rich-inline helper composes with caller-owned classes, fonts, and
 // chrome widths. This is local userland structure, not a new core abstraction.
 
 export type TextStyleName = 'body' | 'link' | 'code'
@@ -21,9 +21,9 @@ type TextStyleModel = {
   font: string
 }
 
-export type PreparedRichInlineFlow = {
+export type PreparedRichInlineNote = {
   classNames: string[]
-  flow: PreparedInlineFlow
+  flow: PreparedRichInline
 }
 
 export type RichLineFragment = {
@@ -112,16 +112,16 @@ export const DEFAULT_RICH_NOTE_SPECS: RichInlineSpec[] = [
   { kind: 'text', text: '.', style: 'body' },
 ]
 
-export function prepareRichInlineFlow(
+export function prepareRichInlineNote(
   specs: RichInlineSpec[] = DEFAULT_RICH_NOTE_SPECS,
-): PreparedRichInlineFlow {
+): PreparedRichInlineNote {
   const classNames = specs.map(spec =>
     spec.kind === 'chip'
       ? CHIP_CLASS_NAMES[spec.tone]
       : TEXT_STYLES[spec.style].className,
   )
 
-  const flow = prepareInlineFlow(
+  const flow = prepareRichInline(
     specs.map(spec => {
       if (spec.kind === 'chip') {
         return {
@@ -145,11 +145,11 @@ export function prepareRichInlineFlow(
 }
 
 export function layoutRichInlineItems(
-  prepared: PreparedRichInlineFlow,
+  prepared: PreparedRichInlineNote,
   maxWidth: number,
 ): RichLine[] {
   const lines: RichLine[] = []
-  walkInlineFlowLines(prepared.flow, maxWidth, line => {
+  walkRichInlineLines(prepared.flow, maxWidth, line => {
     lines.push({
       fragments: line.fragments.map(fragment => ({
         className: prepared.classNames[fragment.itemIndex]!,
@@ -179,7 +179,7 @@ export function resolveRichNoteBodyWidth(
 }
 
 export function layoutRichNote(
-  prepared: PreparedRichInlineFlow,
+  prepared: PreparedRichInlineNote,
   bodyWidth: number,
 ): RichNoteLayout {
   const lines = layoutRichInlineItems(prepared, bodyWidth)

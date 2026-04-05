@@ -36,7 +36,7 @@ type BenchmarkReport = {
   requestId?: string
   results?: BenchmarkResult[]
   richResults?: BenchmarkResult[]
-  inlineFlowResults?: BenchmarkResult[]
+  richInlineResults?: BenchmarkResult[]
   richPreWrapResults?: BenchmarkResult[]
   richLongResults?: BenchmarkResult[]
   corpusResults?: CorpusBenchmarkResult[]
@@ -85,9 +85,9 @@ function printReport(report: BenchmarkReport): void {
     }
   }
 
-  if ((report.inlineFlowResults ?? []).length > 0) {
-    console.log('Inline-flow APIs (mixed inline shared corpus):')
-    for (const result of report.inlineFlowResults ?? []) {
+  if ((report.richInlineResults ?? []).length > 0) {
+    console.log('Rich-inline APIs (mixed inline shared corpus):')
+    for (const result of report.richInlineResults ?? []) {
       console.log(`  ${result.label}: ${result.ms < 0.01 ? '<0.01' : result.ms.toFixed(2)}ms`)
     }
   }

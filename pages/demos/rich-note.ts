@@ -2,7 +2,7 @@ import {
   BODY_DEFAULT_WIDTH,
   BODY_MIN_WIDTH,
   DEFAULT_RICH_NOTE_SPECS,
-  prepareRichInlineFlow,
+  prepareRichInlineNote,
   layoutRichNote,
   LINE_HEIGHT,
   resolveRichNoteBodyWidth,
@@ -23,7 +23,7 @@ const domCache = {
   widthValue: getRequiredSpan('width-value'), // cache lifetime: page
 }
 
-const richInline = prepareRichInlineFlow(DEFAULT_RICH_NOTE_SPECS)
+const richInline = prepareRichInlineNote(DEFAULT_RICH_NOTE_SPECS)
 
 const st: State = {
   events: {

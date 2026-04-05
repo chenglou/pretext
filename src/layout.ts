@@ -122,7 +122,7 @@ export type LayoutResult = {
   height: number // Total block height, e.g. lineCount * lineHeight = 57
 }
 
-export type LineGeometry = {
+export type LineStats = {
   lineCount: number
   maxLineWidth: number
 }
@@ -505,8 +505,9 @@ function prepareInternal(
   return measureAnalysis(analysis, font, includeSegments, wordBreak)
 }
 
-// Diagnostic-only helper used by the browser benchmark harness to separate the
-// text-analysis and measurement phases without duplicating the prepare logic.
+// Exported only for benchmark/diagnostic work. This is not meant to be a
+// second general-purpose prepare API; it just separates analysis vs measurement
+// for pages like `/benchmark` without duplicating the prepare logic.
 export function profilePrepare(text: string, font: string, options?: PrepareOptions): PrepareProfile {
   const t0 = performance.now()
   const wordBreak = options?.wordBreak ?? 'normal'
@@ -746,8 +747,8 @@ export function materializeLineRange(
   return materializeLine(prepared, line)
 }
 
-// Batch low-level line geometry pass. This is the non-materializing counterpart
-// to layoutWithLines(), useful for shrinkwrap and other aggregate geometry work.
+// Batch low-level line-range pass. This is the non-materializing counterpart
+// to layoutWithLines(), useful for shrinkwrap and other aggregate stats work.
 export function walkLineRanges(
   prepared: PreparedTextWithSegments,
   maxWidth: number,
@@ -760,10 +761,10 @@ export function walkLineRanges(
   })
 }
 
-export function measureLineGeometry(
+export function measureLineStats(
   prepared: PreparedTextWithSegments,
   maxWidth: number,
-): LineGeometry {
+): LineStats {
   return measurePreparedLineGeometry(getInternalPrepared(prepared), maxWidth)
 }
 
