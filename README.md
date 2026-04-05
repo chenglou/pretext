@@ -126,6 +126,17 @@ while (true) {
 
 The rich APIs all carry line boundary cursors (`start` / `end`), so you can keep flowing text through columns, obstacles, or custom renderers without falling back to string offsets.
 
+### Hyphenation With Manual Layout
+
+If you are using `prepareWithSegments()` plus `layoutNextLineRange()` / `layoutNextLine()` for manual layout, the intended hyphenation interoperability path today is manual soft hyphens in the source text.
+
+A few practical rules:
+- If a soft hyphen wins the break, rich `line.text` materialization includes the visible trailing `-`.
+- If the line does not break there, the soft hyphen stays invisible.
+- For mixed-language, user-generated app text, conservative selective hyphenation is usually safer than aggressive pattern-based hyphenation.
+- For editorial or locale-scoped text, do hyphenation before `prepare()` / `prepareWithSegments()` and pass the resulting soft hyphens through.
+- Automatic hyphenation beyond manual soft hyphen is still an open design question, not a promised built-in feature.
+
 ## 3. Experimental Inline-Flow Sidecar
 
 If your "rich text" problem is really "a few inline runs with different fonts, plus some atomic chips and browser-like boundary whitespace collapse", there is a deliberately small sidecar at `@chenglou/pretext/inline-flow`.
