@@ -4,7 +4,7 @@
 
 ### Changed
 
-- Documentation now matches the current public API surface more closely, including `profilePrepare()`, the geometry-first rich line APIs, and the `@chenglou/pretext/inline-flow` sidecar.
+- Documentation now matches the current public API surface more closely, including `profilePrepare()`, the geometry-first rich line APIs, and the `@chenglou/pretext/inline-flow` helper module.
 
 ### Added
 
