@@ -782,6 +782,16 @@ describe('layout invariants', () => {
     expect(spacedLines).toBeGreaterThanOrEqual(baseLines)
   })
 
+  test('letterSpacing trims trailing spacing at wrapped CJK line ends', () => {
+    const options = { letterSpacing: 4 }
+    const singleLine = layoutWithLines(prepareWithSegments('春天', FONT, options), 200, LINE_HEIGHT)
+    const wrapWidth = singleLine.lines[0]!.width
+
+    const wrapped = layoutWithLines(prepareWithSegments('春天到了', FONT, options), wrapWidth, LINE_HEIGHT)
+    expect(wrapped.lineCount).toBe(2)
+    expect(wrapped.lines[0]!.text).toBe('春天')
+  })
+
   test('line count grows monotonically as width shrinks', () => {
     const prepared = prepare('The quick brown fox jumps over the lazy dog', FONT)
     let previous = 0

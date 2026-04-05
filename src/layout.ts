@@ -348,13 +348,15 @@ function measureAnalysis(
         engineProfile.preferPrefixWidthsForBreakableRuns || isNumericRunSegment(text)
           ? getSegmentGraphemePrefixWidths(text, textMetrics, cache, emojiCorrection)
           : null
-      const gc = letterSpacing !== 0 && graphemeWidths !== null ? graphemeWidths.length : 0
+      const gc = letterSpacing !== 0
+        ? graphemeWidths !== null ? graphemeWidths.length : countGraphemes(text)
+        : 0
       const width = gc > 0 ? baseWidth + gc * letterSpacing : baseWidth
       if (gc > 0 && graphemeWidths !== null) {
-        graphemeWidths = graphemeWidths.map(w => w + letterSpacing)
+        graphemeWidths = graphemeWidths.map((w, i) => w + (i < gc - 1 ? letterSpacing : 0))
       }
       if (gc > 0 && graphemePrefixWidths !== null) {
-        graphemePrefixWidths = graphemePrefixWidths.map((w, i) => w + (i + 1) * letterSpacing)
+        graphemePrefixWidths = graphemePrefixWidths.map((w, i) => w + i * letterSpacing)
       }
       pushMeasuredSegment(
         text,
