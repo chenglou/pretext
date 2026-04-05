@@ -36,6 +36,9 @@ bun install
 - `bun run keep-all-check` — compact browser oracle for `{ wordBreak: 'keep-all' }`, including mixed-script no-space canaries
 - `bun run probe-check` — smaller browser probe/diagnostic entrypoint
 - `bun run probe-check:safari`
+  On a first-break mismatch, probe output now includes a small break trace.
+  `sN:gM` means segment/grapheme position, `unit` is that unit's width, `fit` is the cumulative fitted width from the current line start, and `[ours]` / `[browser]` mark the competing break boundaries.
+  For Safari URL/query misses or other extractor-sensitive cases, cross-check `--method=span` before changing the engine.
 
 ### Corpus Tooling
 
