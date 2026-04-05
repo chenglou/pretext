@@ -76,8 +76,7 @@
     "probe-check:safari": "PROBE_CHECK_BROWSER=safari bun run scripts/probe-check.ts",
     "status-dashboard": "bun run scripts/status-dashboard.ts",
     "site:build": "rm -rf site && bun run scripts/build-demo-site.ts",
-    "start": "HOST=${HOST:-127.0.0.1}; PORT=3000; pids=$(lsof -tiTCP:$PORT -sTCP:LISTEN 2>/dev/null); if [ -n \"$pids\" ]; then echo \"Freeing port $PORT: terminating $pids\"; kill $pids 2>/dev/null || true; sleep 1; pids=$(lsof -tiTCP:$PORT -sTCP:LISTEN 2>/dev/null); if [ -n \"$pids\" ]; then echo \"Port $PORT still busy: killing $pids\"; kill -9 $pids 2>/dev/null || true; fi; fi; bun pages/*.html pages/demos/*.html pages/demos/*/index.html --host=$HOST:$PORT",
-    "start:lan": "HOST=0.0.0.0 bun run start"
+    "start": "HOST=${HOST:-0.0.0.0}; PORT=3000; pids=$(lsof -tiTCP:$PORT -sTCP:LISTEN 2>/dev/null); if [ -n \"$pids\" ]; then echo \"Freeing port $PORT: terminating $pids\"; kill $pids 2>/dev/null || true; sleep 1; pids=$(lsof -tiTCP:$PORT -sTCP:LISTEN 2>/dev/null); if [ -n \"$pids\" ]; then echo \"Port $PORT still busy: killing $pids\"; kill -9 $pids 2>/dev/null || true; fi; fi; bun pages/*.html pages/demos/*.html pages/demos/*/index.html --host=$HOST:$PORT"
   },
   "devDependencies": {
     "@types/bun": "latest",

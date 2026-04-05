@@ -9,7 +9,6 @@ bun install
 ### Day-To-Day
 
 - `bun start` — stable local page server at <http://localhost:3000>
-- `bun run start:lan` — same server, but reachable from other devices on your LAN
 - `bun run check` — typecheck plus lint
 - `bun test` — small durable invariant suite
 
