@@ -347,6 +347,8 @@ type InlineFlowLineRange = {
 Notes:
 - `PreparedText` is the opaque fast-path handle. `PreparedTextWithSegments` is the richer manual-layout handle.
 - `LayoutCursor` is a segment/grapheme cursor, not a raw string offset.
+- `segLevels` is rich-path custom-rendering metadata only. The line-breaking APIs do not use it, and it is not a DOM-faithful glyph-positioning contract.
+- Segment widths come from browser canvas measurement of the prepared segments. They are good enough for line breaking, but they should not be treated as exact bidi x-coordinates for custom Arabic or mixed-direction rendering.
 - If a soft hyphen wins the break, rich `line.text` materialization includes the visible trailing `-`.
 - `measureNaturalWidth()` returns the widest forced line. Hard breaks still count.
 - `prepare()` and `prepareWithSegments()` do horizontal-only work. `lineHeight` stays a layout-time input.
