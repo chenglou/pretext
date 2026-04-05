@@ -2,7 +2,10 @@
   "name": "@chenglou/pretext",
   "version": "0.0.4",
   "license": "MIT",
-  "repository": "github:chenglou/pretext",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/chenglou/pretext.git"
+  },
   "type": "module",
   "publishConfig": {
     "access": "public"
