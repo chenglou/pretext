@@ -9,6 +9,7 @@ bun install
 ### Day-To-Day
 
 - `bun start` — stable local page server at <http://localhost:3000>
+- `bun run start:windows` — Windows-friendly fallback without automatic port cleanup
 - `bun run check` — typecheck plus lint
 - `bun test` — small durable invariant suite
 

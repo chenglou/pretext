@@ -12,7 +12,7 @@ npm install @chenglou/pretext
 
 ## Demos
 
-Clone the repo, run `bun install`, then `bun start`, and open `/demos/index` in your browser.
+Clone the repo, run `bun install`, then `bun start`, and open `/demos/index` in your browser. On Windows, use `bun run start:windows`.
 Alternatively, see them live at [chenglou.me/pretext](https://chenglou.me/pretext/). Some more at [somnai-dreams.github.io/pretext-demos](https://somnai-dreams.github.io/pretext-demos/)
 
 ## API
