@@ -465,6 +465,16 @@ describe('prepare invariants', () => {
     expect(prepared.segments).toEqual(['say', ' ', String.raw`\"hello\"`, ' ', 'there'])
   })
 
+  test('keeps prefix currency symbols attached to the following number', () => {
+    const prepared = prepareWithSegments('costs $500 today', FONT)
+    expect(prepared.segments).toEqual(['costs', ' ', '$500', ' ', 'today'])
+  })
+
+  test('keeps postfix currency symbols attached to the preceding number', () => {
+    const prepared = prepareWithSegments('price 500€ each', FONT)
+    expect(prepared.segments).toEqual(['price', ' ', '500€', ' ', 'each'])
+  })
+
   test('keeps URL-like runs together as one breakable segment', () => {
     const prepared = prepareWithSegments('see https://example.com/reports/q3?lang=ar&mode=full now', FONT)
     expect(prepared.segments).toEqual([
