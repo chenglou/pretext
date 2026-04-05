@@ -46,6 +46,24 @@ type ProbeBreakMismatch = {
   browserFullWidth: number
 }
 
+type ProbeBreakTraceEntry = {
+  label: string
+  start: number
+  end: number
+  text: string
+  kind: string
+  unitWidth: number
+  lineFitWidth: number
+  marker: 'ours' | 'browser' | 'ours+browser' | null
+}
+
+type ProbeBreakTrace = {
+  line: number
+  lineStart: number
+  contentWidth: number
+  entries: ProbeBreakTraceEntry[]
+}
+
 type ProbeLineSummary = {
   line: number
   text: string
@@ -76,6 +94,7 @@ type ProbeReport = {
   alternateBrowserLineCount?: number
   alternateFirstBreakMismatch?: ProbeBreakMismatch | null
   extractorSensitivity?: string | null
+  breakTrace?: ProbeBreakTrace | null
   ourLines?: ProbeLineSummary[]
   browserLines?: ProbeLineSummary[]
   alternateBrowserLines?: ProbeLineSummary[]
@@ -105,6 +124,7 @@ const cssWhiteSpace = whiteSpace === 'pre-wrap' ? 'pre-wrap' : 'normal'
 const cssWordBreak = wordBreak === 'keep-all' ? 'keep-all' : 'normal'
 
 const stats = document.getElementById('stats')!
+const details = document.getElementById('details') as HTMLPreElement | null
 const book = document.getElementById('book')!
 
 const diagnosticDiv = document.createElement('div')
@@ -136,6 +156,7 @@ function publishReport(report: ProbeReport): void {
 
 function setError(message: string): void {
   stats.textContent = `Error: ${message}`
+  if (details !== null) details.textContent = `Error: ${message}`
   publishReport(withRequestId({ status: 'error', message }))
 }
 
@@ -337,6 +358,19 @@ function summarizeLines(lines: ProbeLine[]): ProbeLineSummary[] {
   }))
 }
 
+function buildSegmentRanges(prepared: PreparedTextWithSegments): { start: number, end: number }[] {
+  const ranges: { start: number, end: number }[] = []
+  let start = 0
+
+  for (const segment of prepared.segments) {
+    const end = start + segment.length
+    ranges.push({ start, end })
+    start = end
+  }
+
+  return ranges
+}
+
 function computeOffsetFromCursor(prepared: PreparedTextWithSegments, cursor: { segmentIndex: number, graphemeIndex: number }): number {
   let offset = 0
   for (let i = 0; i < cursor.segmentIndex; i++) offset += prepared.segments[i]!.length
@@ -415,6 +449,136 @@ function getFirstBreakMismatch(
   return null
 }
 
+function getBreakTrace(
+  prepared: PreparedTextWithSegments,
+  measuredFont: string,
+  contentWidth: number,
+  ourLine: ProbeLine | undefined,
+  browserLine: ProbeLine | undefined,
+  mismatch: ProbeBreakMismatch | null,
+): ProbeBreakTrace | null {
+  if (mismatch === null) return null
+
+  const units = getDiagnosticUnits(prepared)
+  if (units.length === 0) return null
+
+  const lineStart = Math.min(ourLine?.start ?? browserLine?.start ?? 0, browserLine?.start ?? ourLine?.start ?? 0)
+  const oursEnd = ourLine?.contentEnd ?? mismatch.oursEnd
+  const browserEnd = browserLine?.contentEnd ?? mismatch.browserEnd
+  const segmentRanges = buildSegmentRanges(prepared)
+
+  const firstLineUnitIndex = units.findIndex(unit => unit.end > lineStart)
+  if (firstLineUnitIndex < 0) return null
+
+  const oursBoundaryIndex = units.findIndex(unit => unit.end >= oursEnd)
+  const browserBoundaryIndex = units.findIndex(unit => unit.end >= browserEnd)
+  const boundaryStart = Math.max(firstLineUnitIndex, Math.min(
+    oursBoundaryIndex < 0 ? units.length - 1 : oursBoundaryIndex,
+    browserBoundaryIndex < 0 ? units.length - 1 : browserBoundaryIndex,
+  ) - 4)
+  const boundaryEnd = Math.min(
+    units.length,
+    Math.max(
+      oursBoundaryIndex < 0 ? units.length - 1 : oursBoundaryIndex,
+      browserBoundaryIndex < 0 ? units.length - 1 : browserBoundaryIndex,
+    ) + 5,
+  )
+
+  const entries: ProbeBreakTraceEntry[] = []
+  let segmentIndex = 0
+  const graphemeOrdinalBySegment = new Map<number, number>()
+
+  for (let i = boundaryStart; i < boundaryEnd; i++) {
+    const unit = units[i]!
+    while (segmentIndex < segmentRanges.length && unit.start >= segmentRanges[segmentIndex]!.end) {
+      segmentIndex++
+    }
+    if (segmentIndex >= segmentRanges.length) break
+
+    const range = segmentRanges[segmentIndex]!
+    const wholeSegment = unit.start === range.start && unit.end === range.end
+    const unitWidth = measurePreparedSlice(prepared, unit.start, unit.end, measuredFont)
+    const lineSliceWidth = measurePreparedSlice(prepared, lineStart, unit.end, measuredFont)
+    const lineFitWidth = wholeSegment
+      ? lineSliceWidth - prepared.widths[segmentIndex]! + prepared.lineEndFitAdvances[segmentIndex]!
+      : lineSliceWidth
+    const graphemeOrdinal = (graphemeOrdinalBySegment.get(segmentIndex) ?? 0) + 1
+    graphemeOrdinalBySegment.set(segmentIndex, graphemeOrdinal)
+
+    entries.push({
+      label: wholeSegment ? `s${segmentIndex}` : `s${segmentIndex}:g${graphemeOrdinal}`,
+      start: unit.start,
+      end: unit.end,
+      text: unit.text,
+      kind: prepared.kinds[segmentIndex]!,
+      unitWidth,
+      lineFitWidth,
+      marker:
+        unit.end === oursEnd && unit.end === browserEnd
+          ? 'ours+browser'
+          : unit.end === oursEnd
+            ? 'ours'
+            : unit.end === browserEnd
+              ? 'browser'
+              : null,
+    })
+  }
+
+  return {
+    line: mismatch.line,
+    lineStart,
+    contentWidth,
+    entries,
+  }
+}
+
+function formatBreakTrace(trace: ProbeBreakTrace | null | undefined): string[] {
+  if (trace === null || trace === undefined || trace.entries.length === 0) return []
+
+  return [
+    `Trace L${trace.line} from offset ${trace.lineStart} (content width ${trace.contentWidth}px):`,
+    ...trace.entries.map(entry =>
+      `  ${entry.label.padEnd(7)} ${String(entry.start).padStart(4)}-${String(entry.end).padEnd(4)} ` +
+      `${JSON.stringify(entry.text).padEnd(12)} kind=${entry.kind.padEnd(15)} ` +
+      `unit=${entry.unitWidth.toFixed(3).padStart(7)} fit=${entry.lineFitWidth.toFixed(3).padStart(8)}` +
+      (entry.marker === null ? '' : ` [${entry.marker}]`),
+    ),
+  ]
+}
+
+function formatReportDetails(report: ProbeReport): string {
+  if (report.status === 'error') return `Error: ${report.message ?? 'unknown error'}`
+
+  const lines = [
+    `Width ${report.width}px | method ${report.browserLineMethod ?? '-'} | Pretext ${report.predictedLineCount} lines | DOM ${report.browserLineCount} lines | diff ${report.diffPx}px`,
+  ]
+
+  if (report.extractorSensitivity !== null && report.extractorSensitivity !== undefined) {
+    lines.push(`Extractor sensitivity: ${report.extractorSensitivity}`)
+  }
+
+  if (report.firstBreakMismatch === null || report.firstBreakMismatch === undefined) {
+    lines.push('No first-break mismatch.')
+    return lines.join('\n')
+  }
+
+  const mismatch = report.firstBreakMismatch
+  lines.push(`Break mismatch L${mismatch.line}: ${mismatch.reasonGuess}`)
+  lines.push(`Offsets: ours ${mismatch.oursStart}-${mismatch.oursEnd} | browser ${mismatch.browserStart}-${mismatch.browserEnd}`)
+  lines.push(`Delta: ${JSON.stringify(mismatch.deltaText)}`)
+  lines.push(`Ours text:    ${JSON.stringify(mismatch.oursText)}`)
+  lines.push(`Browser text: ${JSON.stringify(mismatch.browserText)}`)
+  lines.push(`Ours ctx:     ${mismatch.oursContext}`)
+  lines.push(`Browser ctx:  ${mismatch.browserContext}`)
+  lines.push(
+    `Widths: ours sum/dom/full ${mismatch.oursSumWidth.toFixed(3)}/${mismatch.oursDomWidth.toFixed(3)}/${mismatch.oursFullWidth.toFixed(3)} | ` +
+    `browser dom/full ${mismatch.browserDomWidth.toFixed(3)}/${mismatch.browserFullWidth.toFixed(3)}`,
+  )
+  lines.push(...formatBreakTrace(report.breakTrace))
+
+  return lines.join('\n')
+}
+
 function init(): void {
   try {
     publishNavigationPhase('measuring', requestId)
@@ -453,6 +617,16 @@ function init(): void {
     const alternateBrowserLines = getBrowserLines(prepared, font, direction, alternateBrowserLineMethod)
     const firstBreakMismatch = getFirstBreakMismatch(normalizedText, contentWidth, ourLines, browserLines)
     const alternateFirstBreakMismatch = getFirstBreakMismatch(normalizedText, contentWidth, ourLines, alternateBrowserLines)
+    const breakTrace = firstBreakMismatch === null
+      ? null
+      : getBreakTrace(
+          prepared,
+          font,
+          contentWidth,
+          ourLines[firstBreakMismatch.line - 1],
+          browserLines[firstBreakMismatch.line - 1],
+          firstBreakMismatch,
+        )
     const extractorSensitivity =
       firstBreakMismatch !== null && alternateFirstBreakMismatch === null
         ? `${browserLineMethod} mismatch disappears with ${alternateBrowserLineMethod}`
@@ -479,6 +653,7 @@ function init(): void {
       alternateBrowserLineCount: alternateBrowserLines.length,
       alternateFirstBreakMismatch,
       extractorSensitivity,
+      breakTrace,
       ...(verbose ? {
         ourLines: summarizeLines(ourLines),
         browserLines: summarizeLines(browserLines),
@@ -488,6 +663,7 @@ function init(): void {
 
     stats.textContent =
       `Width ${width}px | Pretext ${report.predictedLineCount} lines | DOM ${report.browserLineCount} lines | Diff ${report.diffPx}px`
+    if (details !== null) details.textContent = formatReportDetails(report)
     publishReport(report)
   } catch (error) {
     setError(error instanceof Error ? error.message : String(error))

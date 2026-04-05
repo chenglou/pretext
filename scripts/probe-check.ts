@@ -44,6 +44,21 @@ type ProbeReport = {
   alternateBrowserLineCount?: number
   alternateFirstBreakMismatch?: object | null
   extractorSensitivity?: string | null
+  breakTrace?: {
+    line: number
+    lineStart: number
+    contentWidth: number
+    entries: {
+      label: string
+      start: number
+      end: number
+      text: string
+      kind: string
+      unitWidth: number
+      lineFitWidth: number
+      marker: 'ours' | 'browser' | 'ours+browser' | null
+    }[]
+  } | null
   message?: string
 }
 
@@ -113,6 +128,17 @@ function printReport(report: ProbeReport): void {
     console.log(
       `  widths: ours sum/dom/full ${mismatch.oursSumWidth.toFixed(3)}/${mismatch.oursDomWidth.toFixed(3)}/${mismatch.oursFullWidth.toFixed(3)} | browser dom/full ${mismatch.browserDomWidth.toFixed(3)}/${mismatch.browserFullWidth.toFixed(3)}`,
     )
+    if (report.breakTrace !== null && report.breakTrace !== undefined && report.breakTrace.entries.length > 0) {
+      console.log(`  trace L${report.breakTrace.line} from offset ${report.breakTrace.lineStart} (content width ${report.breakTrace.contentWidth}px):`)
+      for (const entry of report.breakTrace.entries) {
+        console.log(
+          `    ${entry.label.padEnd(7)} ${String(entry.start).padStart(4)}-${String(entry.end).padEnd(4)} ` +
+          `${JSON.stringify(entry.text).padEnd(12)} kind=${entry.kind.padEnd(15)} ` +
+          `unit=${entry.unitWidth.toFixed(3).padStart(7)} fit=${entry.lineFitWidth.toFixed(3).padStart(8)}` +
+          (entry.marker === null ? '' : ` [${entry.marker}]`),
+        )
+      }
+    }
   }
 }
 

@@ -24,6 +24,19 @@
     margin-bottom: 16px;
     max-width: 980px;
   }
+  #details {
+    font-family: "SF Mono", monospace;
+    font-size: 12px;
+    color: #bcbcbc;
+    background: #141414;
+    border: 1px solid #252525;
+    border-radius: 8px;
+    padding: 16px;
+    margin-bottom: 16px;
+    width: min(980px, 100%);
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
   #book {
     color: #d4d4d4;
     background: #1a1a1a;
@@ -39,6 +52,7 @@
 <h1>Text Probe</h1>
 <p class="sub">Single-snippet browser line-break probe.</p>
 <div class="stats" id="stats">Loading...</div>
+<pre id="details"></pre>
 <div id="book"></div>
 <script type="module" src="./probe.ts"></script>
 </body>
