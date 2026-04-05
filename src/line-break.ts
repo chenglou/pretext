@@ -168,13 +168,9 @@ export function normalizeLineStart(
 
 export function countPreparedLines(prepared: PreparedLineBreakData, maxWidth: number): number {
   if (prepared.simpleLineWalkFastPath) {
-    return countPreparedLinesSimple(prepared, maxWidth)
+    return walkPreparedLinesSimple(prepared, maxWidth)
   }
   return walkPreparedLines(prepared, maxWidth)
-}
-
-function countPreparedLinesSimple(prepared: PreparedLineBreakData, maxWidth: number): number {
-  return walkPreparedLinesSimple(prepared, maxWidth)
 }
 
 function walkPreparedLinesSimple(
@@ -250,10 +246,6 @@ function walkPreparedLinesSimple(
     lineEndGraphemeIndex = 0
   }
 
-  function appendBreakableSegment(segmentIndex: number): void {
-    appendBreakableSegmentFrom(segmentIndex, 0)
-  }
-
   function appendBreakableSegmentFrom(segmentIndex: number, startGraphemeIndex: number): void {
     const gWidths = breakableWidths[segmentIndex]!
     const gPrefixWidths = breakablePrefixWidths[segmentIndex] ?? null
@@ -296,7 +288,7 @@ function walkPreparedLinesSimple(
 
     if (!hasContent) {
       if (w > maxWidth && breakableWidths[i] !== null) {
-        appendBreakableSegment(i)
+        appendBreakableSegmentFrom(i, 0)
       } else {
         startLineAtSegment(i, w)
       }
@@ -331,7 +323,7 @@ function walkPreparedLinesSimple(
 
       if (w > maxWidth && breakableWidths[i] !== null) {
         emitCurrentLine()
-        appendBreakableSegment(i)
+        appendBreakableSegmentFrom(i, 0)
         i++
         continue
       }
@@ -458,10 +450,6 @@ export function walkPreparedLines(
     pendingBreakKind = kind
   }
 
-  function appendBreakableSegment(segmentIndex: number): void {
-    appendBreakableSegmentFrom(segmentIndex, 0)
-  }
-
   function appendBreakableSegmentFrom(segmentIndex: number, startGraphemeIndex: number): void {
     const gWidths = breakableWidths[segmentIndex]!
     const gPrefixWidths = breakablePrefixWidths[segmentIndex] ?? null
@@ -575,7 +563,7 @@ export function walkPreparedLines(
 
       if (!hasContent) {
         if (w > maxWidth && breakableWidths[i] !== null) {
-          appendBreakableSegment(i)
+          appendBreakableSegmentFrom(i, 0)
         } else {
           startLineAtSegment(i, w)
         }
@@ -626,7 +614,7 @@ export function walkPreparedLines(
 
         if (w > maxWidth && breakableWidths[i] !== null) {
           emitCurrentLine()
-          appendBreakableSegment(i)
+          appendBreakableSegmentFrom(i, 0)
           i++
           continue
         }
