@@ -682,17 +682,7 @@ function toLayoutLineRange(line: InternalLayoutLine): LayoutLineRange {
   }
 }
 
-function stepLineRange(
-  prepared: PreparedTextWithSegments,
-  start: LayoutCursor,
-  maxWidth: number,
-): LayoutLineRange | null {
-  const line = stepPreparedLineRange(prepared, start, maxWidth)
-  if (line === null) return null
-  return toLayoutLineRange(line)
-}
-
-function materializeLine(
+export function materializeLineRange(
   prepared: PreparedTextWithSegments,
   line: LayoutLineRange,
 ): LayoutLine {
@@ -705,13 +695,6 @@ function materializeLine(
     line.end.segmentIndex,
     line.end.graphemeIndex,
   )
-}
-
-export function materializeLineRange(
-  prepared: PreparedTextWithSegments,
-  line: LayoutLineRange,
-): LayoutLine {
-  return materializeLine(prepared, line)
 }
 
 // Batch low-level line-range pass. This is the non-materializing counterpart
@@ -761,7 +744,9 @@ export function layoutNextLineRange(
   start: LayoutCursor,
   maxWidth: number,
 ): LayoutLineRange | null {
-  return stepLineRange(prepared, start, maxWidth)
+  const line = stepPreparedLineRange(prepared, start, maxWidth)
+  if (line === null) return null
+  return toLayoutLineRange(line)
 }
 
 // Rich layout API for callers that want the actual line contents and widths.
