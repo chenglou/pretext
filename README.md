@@ -369,6 +369,20 @@ Other important caveats:
 - The inline-flow sidecar is intentionally `white-space: normal`-only.
 - Browser environments are the supported target today. Server canvas is still "maybe later", not a documented promise.
 
+## FAQ
+
+### Does this only run in a browser?
+
+Browser environments are the supported target today. Pretext relies on browser-grounded measurement, and server canvas is still "maybe later", not a documented promise.
+
+### Does it work with arbitrary CSS and custom fonts?
+
+Custom fonts are fine once the browser has loaded them. Arbitrary CSS is not the target. The current target is the common app-text configuration listed above: `white-space: normal`, `word-break: normal`, `overflow-wrap: break-word`, and `line-break: auto`, plus the explicit `{ whiteSpace: 'pre-wrap' }` and `{ wordBreak: 'keep-all' }` modes.
+
+### How fast is it compared with Satori?
+
+Check the current snapshots in [STATUS.md](STATUS.md), [status/dashboard.json](status/dashboard.json), and the local `/benchmark` page instead of relying on fixed prose here. The benchmark methodology is still being refined, so the checked-in snapshots are the source of truth.
+
 ## Develop
 
 See [DEVELOPMENT.md](DEVELOPMENT.md) for commands and [STATUS.md](STATUS.md) for the checked-in browser-accuracy and benchmark snapshots.
