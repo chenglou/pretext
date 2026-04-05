@@ -351,6 +351,16 @@ Notes:
 - `measureNaturalWidth()` returns the widest forced line. Hard breaks still count.
 - `prepare()` and `prepareWithSegments()` do horizontal-only work. `lineHeight` stays a layout-time input.
 
+## Browser Requirements
+
+Pretext uses [`Intl.Segmenter`](https://developer.mozilla.org/en-US/docs/Web/API/Intl/Segmenter) for word segmentation and the Canvas 2D API (`measureText`) for font metrics. Both are required at runtime.
+
+- Chrome/Edge 87+
+- Firefox 125+ (April 2024)
+- Safari 15+
+
+Older browsers — including Firefox before 125 — will throw `Intl.Segmenter is not a constructor`. There is no polyfill path currently.
+
 ## Caveats
 
 Pretext is not trying to be a full browser inline formatting engine. The current target is:
