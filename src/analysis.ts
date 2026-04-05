@@ -26,11 +26,6 @@ export type MergedSegmentation = {
   starts: number[]
 }
 
-type PieceMergeDecision =
-  | 'push'
-  | 'merge'
-  | 'merge-and-force-word-like'
-
 export type AnalysisChunk = {
   startSegmentIndex: number
   endSegmentIndex: number
@@ -859,102 +854,6 @@ function carryTrailingForwardStickyAcrossCJKBoundary(segmentation: MergedSegment
   }
 }
 
-function mergePieceIntoPreviousText(
-  segmentation: MergedSegmentation,
-  text: string,
-  isWordLike: boolean,
-  forceWordLike = false,
-): void {
-  mergeTextIntoIndex(segmentation, segmentation.len - 1, text, isWordLike, forceWordLike)
-}
-
-function mergeTextIntoIndex(
-  segmentation: MergedSegmentation,
-  index: number,
-  text: string,
-  isWordLike: boolean,
-  forceWordLike = false,
-): void {
-  segmentation.texts[index] += text
-  segmentation.isWordLike[index] =
-    forceWordLike || segmentation.isWordLike[index]! || isWordLike
-}
-
-function pushPiece(segmentation: MergedSegmentation, piece: SegmentationPiece): void {
-  segmentation.texts[segmentation.len] = piece.text
-  segmentation.isWordLike[segmentation.len] = piece.isWordLike
-  segmentation.kinds[segmentation.len] = piece.kind
-  segmentation.starts[segmentation.len] = piece.start
-  segmentation.len++
-}
-
-function getPieceMergeDecision(
-  segmentation: MergedSegmentation,
-  piece: SegmentationPiece,
-  profile: AnalysisProfile,
-): PieceMergeDecision {
-  if (
-    piece.kind !== 'text' ||
-    segmentation.len === 0 ||
-    segmentation.kinds[segmentation.len - 1] !== 'text'
-  ) {
-    return 'push'
-  }
-
-  const previousText = segmentation.texts[segmentation.len - 1]!
-  const previousWordLike = segmentation.isWordLike[segmentation.len - 1]!
-
-  if (
-    profile.carryCJKAfterClosingQuote &&
-    isCJK(piece.text) &&
-    isCJK(previousText) &&
-    endsWithClosingQuote(previousText)
-  ) {
-    return 'merge'
-  }
-
-  if (
-    isCJKLineStartProhibitedSegment(piece.text) &&
-    isCJK(previousText)
-  ) {
-    return 'merge'
-  }
-
-  if (endsWithMyanmarMedialGlue(previousText)) {
-    return 'merge'
-  }
-
-  if (
-    piece.isWordLike &&
-    containsArabicScript(piece.text) &&
-    endsWithArabicNoSpacePunctuation(previousText)
-  ) {
-    return 'merge-and-force-word-like'
-  }
-
-  if (
-    !piece.isWordLike &&
-    piece.text.length === 1 &&
-    piece.text !== '-' &&
-    piece.text !== '—' &&
-    isRepeatedSingleCharRun(previousText, piece.text)
-  ) {
-    return 'merge'
-  }
-
-  if (
-    !piece.isWordLike &&
-    (
-      isLeftStickyPunctuationSegment(piece.text) ||
-      (piece.text === '-' && previousWordLike)
-    )
-  ) {
-    return 'merge'
-  }
-
-  return 'push'
-}
-
 function mergeEscapedQuoteClosersIntoPreviousText(segmentation: MergedSegmentation): void {
   for (let i = 1; i < segmentation.len; i++) {
     if (
@@ -963,7 +862,8 @@ function mergeEscapedQuoteClosersIntoPreviousText(segmentation: MergedSegmentati
       isEscapedQuoteClusterSegment(segmentation.texts[i]!) &&
       segmentation.kinds[i - 1] === 'text'
     ) {
-      mergeTextIntoIndex(segmentation, i - 1, segmentation.texts[i]!, segmentation.isWordLike[i]!)
+      segmentation.texts[i - 1] += segmentation.texts[i]!
+      segmentation.isWordLike[i - 1] = segmentation.isWordLike[i - 1]! || segmentation.isWordLike[i]!
       segmentation.texts[i] = ''
     }
   }
@@ -1078,14 +978,67 @@ function buildMergedSegmentation(
 
   for (const s of wordSegmenter.segment(normalized)) {
     for (const piece of splitSegmentByBreakKind(s.segment, s.isWordLike ?? false, s.index, whiteSpaceProfile)) {
-      const mergeDecision = getPieceMergeDecision(merged, piece, profile)
-      if (mergeDecision === 'merge') {
-        mergePieceIntoPreviousText(merged, piece.text, piece.isWordLike)
-      } else if (mergeDecision === 'merge-and-force-word-like') {
-        mergePieceIntoPreviousText(merged, piece.text, piece.isWordLike, true)
-      } else {
-        pushPiece(merged, piece)
+      const previousIndex = merged.len - 1
+      const previousIsText = previousIndex >= 0 && merged.kinds[previousIndex] === 'text'
+
+      if (piece.kind === 'text' && previousIsText) {
+        const previousText = merged.texts[previousIndex]!
+        const previousWordLike = merged.isWordLike[previousIndex]!
+
+        // No-space script-specific keeps that should stay in the first merge pass.
+        if (
+          (
+            profile.carryCJKAfterClosingQuote &&
+            isCJK(piece.text) &&
+            isCJK(previousText) &&
+            endsWithClosingQuote(previousText)
+          ) ||
+          (isCJKLineStartProhibitedSegment(piece.text) && isCJK(previousText)) ||
+          endsWithMyanmarMedialGlue(previousText)
+        ) {
+          merged.texts[previousIndex] += piece.text
+          merged.isWordLike[previousIndex] = previousWordLike || piece.isWordLike
+          continue
+        }
+
+        if (
+          piece.isWordLike &&
+          containsArabicScript(piece.text) &&
+          endsWithArabicNoSpacePunctuation(previousText)
+        ) {
+          merged.texts[previousIndex] += piece.text
+          merged.isWordLike[previousIndex] = true
+          continue
+        }
+
+        // Generic punctuation glue that depends on the surrounding text run.
+        if (
+          (
+            !piece.isWordLike &&
+            piece.text.length === 1 &&
+            piece.text !== '-' &&
+            piece.text !== '—' &&
+            isRepeatedSingleCharRun(previousText, piece.text)
+          ) ||
+          (
+            !piece.isWordLike &&
+            (
+              isLeftStickyPunctuationSegment(piece.text) ||
+              (piece.text === '-' && previousWordLike)
+            )
+          )
+        ) {
+          merged.texts[previousIndex] += piece.text
+          merged.isWordLike[previousIndex] = previousWordLike || piece.isWordLike
+          continue
+        }
       }
+
+      merged.texts[merged.len] = piece.text
+      merged.isWordLike[merged.len] = piece.isWordLike
+      merged.kinds[merged.len] = piece.kind
+      merged.starts[merged.len] = piece.start
+      merged.len++
     }
   }
 
