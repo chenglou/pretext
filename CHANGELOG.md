@@ -4,7 +4,7 @@
 
 ### Changed
 
-- Documentation now matches the current public API surface more closely, including the line-stats/range rich line APIs and the `@chenglou/pretext/rich-inline` helper.
+- Documentation now matches the current public API surface more closely, including the line-stats/range rich line APIs and the `@chenglou/pretext/rich-inline` helper for rich-text inline flow.
 
 ### Added
 

@@ -37,7 +37,7 @@ const prepared = prepare(textareaValue, '16px Inter', { whiteSpace: 'pre-wrap' }
 const { height } = layout(prepared, textareaWidth, 20)
 ```
 
-If you want CSS-like `word-break: keep-all` behavior for CJK/Hangul text and CJK-leading no-space mixed-script runs, pass `{ wordBreak: 'keep-all' }` to `prepare()` instead
+If you want CSS-like `word-break: keep-all`, pass `{ wordBreak: 'keep-all' }` to `prepare()` too.
 
 The returned height is the crucial last piece for unlocking web UI's:
 - proper virtualization/occlusion without guesstimates & caching
@@ -94,7 +94,7 @@ while (true) {
 
 This usage allows rendering to canvas, SVG, WebGL and (eventually) server-side. See the `/demos/dynamic-layout` demo for a richer example.
 
-If your manual layout needs a small helper for mixed inline runs, atomic pills, and browser-like boundary whitespace collapse, there is an experimental helper at `@chenglou/pretext/rich-inline`. It stays inline-only and `white-space: normal`-only on purpose:
+If your manual layout needs a small helper for rich-text inline flow, code spans, mentions, chips, and browser-like boundary whitespace collapse, there is a helper at `@chenglou/pretext/rich-inline`. It stays inline-only and `white-space: normal`-only on purpose:
 
 ```ts
 import { prepareRichInline, walkRichInlineLines } from '@chenglou/pretext/rich-inline'
@@ -129,12 +129,16 @@ Use-case 2 APIs:
 ```ts
 prepareWithSegments(text: string, font: string, options?: { whiteSpace?: 'normal' | 'pre-wrap', wordBreak?: 'normal' | 'keep-all' }): PreparedTextWithSegments // same as `prepare()`, but returns a richer structure for manual line layouts needs
 layoutWithLines(prepared: PreparedTextWithSegments, maxWidth: number, lineHeight: number): { height: number, lineCount: number, lines: LayoutLine[] } // high-level api for manual layout needs. Accepts a fixed max width for all lines. Similar to `layout()`'s return, but additionally returns the lines info
-walkLineRanges(prepared: PreparedTextWithSegments, maxWidth: number, onLine: (line: LayoutLineRange) => void): number // fixed-width line walker. Gives you each line's width and cursors, but avoids building line strings.
+walkLineRanges(prepared: PreparedTextWithSegments, maxWidth: number, onLine: (line: LayoutLineRange) => void): number // low-level api for manual layout needs. Accepts a fixed max width for all lines. Calls `onLine` once per line with its actual calculated line width and start/end cursors, without building line text strings. Very useful for certain cases where you wanna speculatively test a few width and height boundaries (e.g. binary search a nice width value by repeatedly calling walkLineRanges and checking the line count, and therefore height, is "nice" too. You can have text messages shrinkwrap and balanced text layout this way). After walkLineRanges calls, you'd call layoutWithLines once, with your satisfying max width, to get the actual lines info.
 measureLineStats(prepared: PreparedTextWithSegments, maxWidth: number): { lineCount: number, maxLineWidth: number } // returns only how many lines this width produces, and how wide the widest one is. Avoids line/string allocations.
-measureNaturalWidth(prepared: PreparedTextWithSegments): number // returns the width you'd need if you want this text to stop wrapping, while still respecting hard breaks
-layoutNextLineRange(prepared: PreparedTextWithSegments, start: LayoutCursor, maxWidth: number): LayoutLineRange | null // one-line-at-a-time version for variable-width layouts. Gives width plus start/end cursors, but avoids line-string allocations.
+measureNaturalWidth(prepared: PreparedTextWithSegments): number // returns the widest forced line when width itself is not the thing causing wraps
+layoutNextLineRange(prepared: PreparedTextWithSegments, start: LayoutCursor, maxWidth: number): LayoutLineRange | null // iterator-like api for variable-width layouts, without building line text strings
 layoutNextLine(prepared: PreparedTextWithSegments, start: LayoutCursor, maxWidth: number): LayoutLine | null // iterator-like api for laying out each line with a different width! Returns the LayoutLine starting from `start`, or `null` when the paragraph's exhausted. Pass the previous line's `end` cursor as the next `start`.
 materializeLineRange(prepared: PreparedTextWithSegments, line: LayoutLineRange): LayoutLine // turns one previously computed line range back into a full line with text
+type LineStats = {
+  lineCount: number // Number of wrapped lines, e.g. 3
+  maxLineWidth: number // Widest wrapped line, e.g. 192.5
+}
 type LayoutLine = {
   text: string // Full text content of this line, e.g. 'hello world'
   width: number // Measured width of this line, e.g. 87.5
@@ -152,12 +156,12 @@ type LayoutCursor = {
 }
 ```
 
-Experimental rich-inline helper:
+Helper for rich-text inline flow:
 ```ts
 prepareRichInline(items: RichInlineItem[]): PreparedRichInline // compile raw inline items with their original text. The compiler owns cross-item collapsed whitespace and caches each item's natural width
-layoutNextRichInlineLineRange(prepared: PreparedRichInline, maxWidth: number, start?: RichInlineCursor): RichInlineLineRange | null // one rich-inline line at a time, but avoids fragment-text allocations
+layoutNextRichInlineLineRange(prepared: PreparedRichInline, maxWidth: number, start?: RichInlineCursor): RichInlineLineRange | null // stream one line of rich-text inline flow at a time without building fragment text strings
 layoutNextRichInlineLine(prepared: PreparedRichInline, maxWidth: number, start?: RichInlineCursor): RichInlineLine | null // stream one line at a time through an inline item sequence
-walkRichInlineLineRanges(prepared: PreparedRichInline, maxWidth: number, onLine: (line: RichInlineLineRange) => void): number // fixed-width rich-inline walker for shrinkwrap or width probing. Avoids fragment-text allocations.
+walkRichInlineLineRanges(prepared: PreparedRichInline, maxWidth: number, onLine: (line: RichInlineLineRange) => void): number // non-materializing line walker for rich-text inline flow shrinkwrap/stats work
 walkRichInlineLines(prepared: PreparedRichInline, maxWidth: number, onLine: (line: RichInlineLine) => void): number // low-level line walker for inline fragment streams
 measureRichInlineStats(prepared: PreparedRichInline, maxWidth: number): { lineCount: number, maxLineWidth: number } // returns only how many lines this width produces, and how wide the widest one is. Avoids fragment-text allocations.
 measureRichInline(prepared: PreparedRichInline, maxWidth: number, lineHeight: number): { height: number, lineCount: number } // line counter for inline fragment streams
@@ -168,34 +172,38 @@ type RichInlineItem = {
   extraWidth?: number // caller-owned horizontal chrome, e.g. padding + border width
 }
 type RichInlineCursor = {
-  itemIndex: number
-  segmentIndex: number
-  graphemeIndex: number
+  itemIndex: number // Which source RichInlineItem this cursor is currently in
+  segmentIndex: number // Segment index within that item's prepared text
+  graphemeIndex: number // Grapheme index within that segment; `0` at segment boundaries
 }
 type RichInlineFragment = {
   itemIndex: number // index back into the original RichInlineItem array
-  text: string
+  text: string // Text slice for this fragment
   gapBefore: number // collapsed boundary gap paid before this fragment on this line
   occupiedWidth: number // text width plus extraWidth
-  start: LayoutCursor
-  end: LayoutCursor
+  start: LayoutCursor // Start cursor within the item's prepared text
+  end: LayoutCursor // End cursor within the item's prepared text
 }
 type RichInlineLine = {
-  fragments: RichInlineFragment[]
-  width: number
-  end: RichInlineCursor
+  fragments: RichInlineFragment[] // Materialized fragments on this line
+  width: number // Measured width of this line, including gapBefore/extraWidth
+  end: RichInlineCursor // Exclusive end cursor for continuing the next line
 }
 type RichInlineFragmentRange = {
   itemIndex: number // index back into the original RichInlineItem array
   gapBefore: number // collapsed boundary gap paid before this fragment on this line
   occupiedWidth: number // text width plus extraWidth
-  start: LayoutCursor
-  end: LayoutCursor
+  start: LayoutCursor // Start cursor within the item's prepared text
+  end: LayoutCursor // End cursor within the item's prepared text
 }
 type RichInlineLineRange = {
-  fragments: RichInlineFragmentRange[]
-  width: number
-  end: RichInlineCursor
+  fragments: RichInlineFragmentRange[] // Non-materialized fragment ownership/ranges on this line
+  width: number // Measured width of this line, including gapBefore/extraWidth
+  end: RichInlineCursor // Exclusive end cursor for continuing the next line
+}
+type RichInlineStats = {
+  lineCount: number // Number of wrapped lines, e.g. 3
+  maxLineWidth: number // Widest wrapped line, e.g. 192.5
 }
 ```
 
@@ -213,7 +221,7 @@ Pretext doesn't try to be a full font rendering engine (yet?). It currently targ
 - `overflow-wrap: break-word`. Very narrow widths can still break inside words, but only at grapheme boundaries.
 - `line-break: auto`
 - Tabs follow the default browser-style `tab-size: 8`
-- For `{ wordBreak: 'keep-all' }`, Pretext suppresses ordinary CJK/Hangul intra-word breaks and keeps CJK-leading no-space mixed-script runs cohesive, while keeping the same `overflow-wrap: break-word` fallback for overlong runs.
+- `{ wordBreak: 'keep-all' }` is supported too. It behaves like you'd expect for CJK/Hangul text, while keeping the same `overflow-wrap: break-word` fallback for overlong runs.
 - `system-ui` is unsafe for `layout()` accuracy on macOS. Use a named font.
 
 ## Develop

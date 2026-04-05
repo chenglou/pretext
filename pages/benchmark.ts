@@ -749,8 +749,8 @@ async function run() {
     `${RICH_COUNT}-text shared-corpus batch across widths ${RICH_LAYOUT_SAMPLE_WIDTHS.join('/')}px`,
   )
 
-  // --- Rich-inline mixed-inline stress ---
-  root.innerHTML = '<p>Benchmarking rich-inline APIs...</p>'
+  // --- Rich-inline rich-text inline flow stress ---
+  root.innerHTML = '<p>Benchmarking rich-text inline flow APIs...</p>'
   await nextFrame()
   clearCache()
   const richInlinePrepared = richTexts
@@ -759,7 +759,7 @@ async function run() {
   const richInlineResults = buildRichInlineBenchmarks(
     richInlinePrepared,
     RICH_INLINE_SAMPLE_WIDTHS,
-    `${RICH_INLINE_COUNT} mixed-inline shared-corpus texts across widths ${RICH_INLINE_SAMPLE_WIDTHS.join('/')}px`,
+    `${RICH_INLINE_COUNT} rich-text inline flow shared-corpus texts across widths ${RICH_INLINE_SAMPLE_WIDTHS.join('/')}px`,
   )
 
   // --- Rich pre-wrap chunk stress ---
@@ -824,9 +824,9 @@ async function run() {
     <p class="note">${RICH_COUNT} shared-corpus texts prepared with segments. Median ms per batch across widths ${RICH_LAYOUT_SAMPLE_WIDTHS.join('/')}px. This tracks the richer APIs used by shrinkwrap, custom layout, and manual reflow.</p>
   `
   root.innerHTML += `
-    <h2 style="color:#4fc3f7;font-family:monospace;font-size:16px;margin:24px 0 8px">Rich-inline APIs (mixed inline shared corpus)</h2>
+    <h2 style="color:#4fc3f7;font-family:monospace;font-size:16px;margin:24px 0 8px">Rich-text inline flow APIs (shared corpus)</h2>
     ${renderBenchmarkTable(richInlineResults, false)}
-    <p class="note">${RICH_INLINE_COUNT} shared-corpus texts split into deterministic mixed inline items with collapsible boundary whitespace, atomic mono/code pills, and badge-like chips. Median ms per batch across widths ${RICH_INLINE_SAMPLE_WIDTHS.join('/')}px. This is the benchmark canary for the rich-inline helper.</p>
+    <p class="note">${RICH_INLINE_COUNT} shared-corpus texts split into deterministic rich-text inline items with collapsible boundary whitespace, atomic mono/code pills, and badge-like chips. Median ms per batch across widths ${RICH_INLINE_SAMPLE_WIDTHS.join('/')}px. This is the benchmark canary for the rich-text inline flow helper.</p>
   `
   root.innerHTML += `
     <h2 style="color:#4fc3f7;font-family:monospace;font-size:16px;margin:24px 0 8px">Rich line APIs (pre-wrap chunk stress)</h2>

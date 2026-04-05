@@ -13,7 +13,7 @@ import {
   stepPreparedLineGeometry,
 } from './line-break.js'
 
-// Experimental helper for mixed inline runs under `white-space: normal`.
+// Helper for rich-text inline flow under `white-space: normal`.
 // It keeps the core layout API low-level while taking over the boring shared
 // work that rich inline demos kept reimplementing in userland:
 // - collapsed boundary whitespace across item boundaries
@@ -567,7 +567,7 @@ export function layoutNextRichInlineLine(
   return {
     fragments: line.fragments.map(fragment => {
       const item = flow.itemsBySourceItemIndex[fragment.itemIndex]
-      if (item === undefined) throw new Error('Missing rich-inline item for fragment')
+      if (item === undefined) throw new Error('Missing rich-text inline item for fragment')
       return {
         ...fragment,
         text: materializeFragmentText(item, fragment),

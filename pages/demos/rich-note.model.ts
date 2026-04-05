@@ -5,7 +5,7 @@ import {
 } from '../../src/rich-inline.ts'
 
 // Local layout model for this demo. It keeps the page readable and shows how
-// the rich-inline helper composes with caller-owned classes, fonts, and
+// the rich-text inline flow helper composes with caller-owned classes, fonts, and
 // chrome widths. This is local userland structure, not a new core abstraction.
 
 export type TextStyleName = 'body' | 'link' | 'code'
