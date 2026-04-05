@@ -126,7 +126,7 @@ function render(): void {
 
   domCache.root.style.setProperty('--chat-width', `${frame.chatWidth}px`)
   domCache.root.style.setProperty('--occlusion-banner-height', `${occlusionBannerHeight}px`)
-  domCache.root.style.setProperty('--occlusion-banner-padding-block', isCompactOcclusionChrome ? '10px' : '18px')
+  domCache.root.style.setProperty('--occlusion-banner-padding-block', isCompactOcclusionChrome ? '6px' : '12px')
   domCache.root.style.setProperty('--virtualization-toggle-padding-block', isCompactOcclusionChrome ? '8px' : '10px')
   domCache.root.style.setProperty('--virtualization-toggle-padding-inline', isCompactOcclusionChrome ? '12px' : '14px')
   domCache.root.style.setProperty('--virtualization-toggle-font-size', isCompactOcclusionChrome ? '11px' : '12px')
