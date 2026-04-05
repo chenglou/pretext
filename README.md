@@ -97,7 +97,7 @@ This usage allows rendering to canvas, SVG, WebGL and (eventually) server-side. 
 If your manual layout needs a small helper for rich-text inline flow, code spans, mentions, chips, and browser-like boundary whitespace collapse, there is a helper at `@chenglou/pretext/rich-inline`. It stays inline-only and `white-space: normal`-only on purpose:
 
 ```ts
-import { prepareRichInline, walkRichInlineLines } from '@chenglou/pretext/rich-inline'
+import { materializeRichInlineLineRange, prepareRichInline, walkRichInlineLineRanges } from '@chenglou/pretext/rich-inline'
 
 const prepared = prepareRichInline([
   { text: 'Ship ', font: '500 17px Inter' },
@@ -105,7 +105,8 @@ const prepared = prepareRichInline([
   { text: "'s rich-note", font: '500 17px Inter' },
 ])
 
-walkRichInlineLines(prepared, 320, line => {
+walkRichInlineLineRanges(prepared, 320, range => {
+  const line = materializeRichInlineLineRange(prepared, range)
   // each fragment keeps its source item index, text slice, gapBefore, and cursors
 })
 ```
@@ -160,11 +161,9 @@ Helper for rich-text inline flow:
 ```ts
 prepareRichInline(items: RichInlineItem[]): PreparedRichInline // compile raw inline items with their original text. The compiler owns cross-item collapsed whitespace and caches each item's natural width
 layoutNextRichInlineLineRange(prepared: PreparedRichInline, maxWidth: number, start?: RichInlineCursor): RichInlineLineRange | null // stream one line of rich-text inline flow at a time without building fragment text strings
-layoutNextRichInlineLine(prepared: PreparedRichInline, maxWidth: number, start?: RichInlineCursor): RichInlineLine | null // stream one line at a time through an inline item sequence
 walkRichInlineLineRanges(prepared: PreparedRichInline, maxWidth: number, onLine: (line: RichInlineLineRange) => void): number // non-materializing line walker for rich-text inline flow shrinkwrap/stats work
-walkRichInlineLines(prepared: PreparedRichInline, maxWidth: number, onLine: (line: RichInlineLine) => void): number // low-level line walker for inline fragment streams
+materializeRichInlineLineRange(prepared: PreparedRichInline, line: RichInlineLineRange): RichInlineLine // turns one previously computed rich-inline line range back into full fragment text
 measureRichInlineStats(prepared: PreparedRichInline, maxWidth: number): { lineCount: number, maxLineWidth: number } // returns only how many lines this width produces, and how wide the widest one is. Avoids fragment-text allocations.
-measureRichInline(prepared: PreparedRichInline, maxWidth: number, lineHeight: number): { height: number, lineCount: number } // line counter for inline fragment streams
 type RichInlineItem = {
   text: string // raw author text, including leading/trailing collapsible spaces
   font: string // canvas font shorthand for this item

@@ -7,15 +7,16 @@ import {
   layoutWithLines,
   walkLineRanges,
   clearCache,
-  profilePrepare,
 } from '../src/layout.ts'
 import type { PreparedText, PreparedTextWithSegments } from '../src/layout.ts'
+import { analyzeText } from '../src/analysis.ts'
+import { getEngineProfile } from '../src/measurement.ts'
 import {
-  layoutNextRichInlineLine,
+  layoutNextRichInlineLineRange,
+  materializeRichInlineLineRange,
   measureRichInlineStats,
   prepareRichInline,
   walkRichInlineLineRanges,
-  walkRichInlineLines,
   type RichInlineItem,
   type PreparedRichInline,
 } from '../src/rich-inline.ts'
@@ -101,6 +102,13 @@ type BenchmarkReport = {
   richLongResults?: BenchmarkResult[]
   corpusResults?: CorpusBenchmarkResult[]
   message?: string
+}
+
+type PrepareProfile = {
+  analysisMs: number
+  measureMs: number
+  totalMs: number
+  analysisSegments: number
 }
 
 const params = new URLSearchParams(location.search)
@@ -383,6 +391,28 @@ function setReport(report: BenchmarkReport): void {
   publishNavigationReport(report)
 }
 
+// Keep this local to `/benchmark` so `layout.ts` does not grow a second public
+// prepare API just to expose timing splits for one internal page.
+function profilePrepareForBenchmark(text: string, font: string): PrepareProfile {
+  const t0 = performance.now()
+  const analysis = analyzeText(text, getEngineProfile())
+  const t1 = performance.now()
+
+  const totalStart = performance.now()
+  prepare(text, font)
+  const totalEnd = performance.now()
+
+  const totalMs = totalEnd - totalStart
+  const analysisMs = t1 - t0
+
+  return {
+    analysisMs,
+    measureMs: Math.max(0, totalMs - analysisMs),
+    totalMs,
+    analysisSegments: analysis.len,
+  }
+}
+
 function buildCorpusBenchmarks(): CorpusBenchmarkResult[] {
   const corpusResults: CorpusBenchmarkResult[] = []
   let corpusLayoutSink = 0
@@ -394,7 +424,7 @@ function buildCorpusBenchmarks(): CorpusBenchmarkResult[] {
 
     for (let i = 0; i < CORPUS_WARMUP + CORPUS_RUNS; i++) {
       clearCache()
-      const profile = profilePrepare(corpus.text, corpus.font)
+      const profile = profilePrepareForBenchmark(corpus.text, corpus.font)
       if (i >= CORPUS_WARMUP) {
         analysisSamples.push(profile.analysisMs)
         measureSamples.push(profile.measureMs)
@@ -407,7 +437,7 @@ function buildCorpusBenchmarks(): CorpusBenchmarkResult[] {
     const prepareMs = median(prepareSamples)
 
     clearCache()
-    const metadataProfile = profilePrepare(corpus.text, corpus.font)
+    const metadataProfile = profilePrepareForBenchmark(corpus.text, corpus.font)
     clearCache()
     const prepared = prepareWithSegments(corpus.text, corpus.font)
     const lineCount = layout(prepared, corpus.width, corpus.lineHeight).lineCount
@@ -550,11 +580,12 @@ function buildRichInlineBenchmarks(
     richInlineSink += sum + repeatIndex
   }, sampleRepeats)
 
-  const walkRichInlineLinesMs = bench(repeatIndex => {
+  const materializeRichInlineLineRangeMs = bench(repeatIndex => {
     const width = widths[repeatIndex % widths.length]!
     let sum = 0
     for (let i = 0; i < prepared.length; i++) {
-      sum += walkRichInlineLines(prepared[i]!, width, line => {
+      sum += walkRichInlineLineRanges(prepared[i]!, width, range => {
+        const line = materializeRichInlineLineRange(prepared[i]!, range)
         sum += line.width + line.fragments.length + line.end.itemIndex
         for (let fragmentIndex = 0; fragmentIndex < line.fragments.length; fragmentIndex++) {
           const fragment = line.fragments[fragmentIndex]!
@@ -565,14 +596,15 @@ function buildRichInlineBenchmarks(
     richInlineSink += sum + repeatIndex
   }, sampleRepeats)
 
-  const layoutNextRichInlineLineMs = bench(repeatIndex => {
+  const layoutNextRichInlineLineRangeMs = bench(repeatIndex => {
     const width = widths[repeatIndex % widths.length]!
     let sum = 0
     for (let i = 0; i < prepared.length; i++) {
       let cursor = { itemIndex: 0, segmentIndex: 0, graphemeIndex: 0 }
       while (true) {
-        const line = layoutNextRichInlineLine(prepared[i]!, width, cursor)
-        if (line === null) break
+        const range = layoutNextRichInlineLineRange(prepared[i]!, width, cursor)
+        if (range === null) break
+        const line = materializeRichInlineLineRange(prepared[i]!, range)
         sum += line.width + line.fragments.length + line.end.itemIndex
         for (let fragmentIndex = 0; fragmentIndex < line.fragments.length; fragmentIndex++) {
           const fragment = line.fragments[fragmentIndex]!
@@ -598,14 +630,14 @@ function buildRichInlineBenchmarks(
       desc: `${descSuffix}; per-line ranges with fragment ownership, no text strings`,
     },
     {
-      label: 'Our library: walkRichInlineLines()',
-      ms: walkRichInlineLinesMs,
-      desc: `${descSuffix}; per-line materialization through the batch walker`,
+      label: 'Our library: materializeRichInlineLineRange()',
+      ms: materializeRichInlineLineRangeMs,
+      desc: `${descSuffix}; range walker plus per-line materialization`,
     },
     {
-      label: 'Our library: layoutNextRichInlineLine()',
-      ms: layoutNextRichInlineLineMs,
-      desc: `${descSuffix}; streaming per-line materialization`,
+      label: 'Our library: layoutNextRichInlineLineRange() + materializeRichInlineLineRange()',
+      ms: layoutNextRichInlineLineRangeMs,
+      desc: `${descSuffix}; streaming range walk plus per-line materialization`,
     },
   ]
 }

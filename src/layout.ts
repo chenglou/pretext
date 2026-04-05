@@ -144,15 +144,6 @@ export type LayoutLinesResult = LayoutResult & {
   lines: LayoutLine[] // Per-line text/width pairs for custom rendering
 }
 
-export type PrepareProfile = {
-  analysisMs: number
-  measureMs: number
-  totalMs: number
-  analysisSegments: number
-  preparedSegments: number
-  breakableSegments: number
-}
-
 export type WordBreakMode = AnalysisWordBreakMode
 
 export type PrepareOptions = {
@@ -160,7 +151,9 @@ export type PrepareOptions = {
   wordBreak?: WordBreakMode
 }
 
-export type PreparedLineChunk = {
+// Internal hard-break chunk hint for the line walker. Not public because
+// callers should not depend on the current chunking representation.
+type PreparedLineChunk = {
   startSegmentIndex: number
   endSegmentIndex: number
   consumedEndSegmentIndex: number
@@ -503,32 +496,6 @@ function prepareInternal(
   const wordBreak = options?.wordBreak ?? 'normal'
   const analysis = analyzeText(text, getEngineProfile(), options?.whiteSpace, wordBreak)
   return measureAnalysis(analysis, font, includeSegments, wordBreak)
-}
-
-// Exported only for benchmark/diagnostic work. This is not meant to be a
-// second general-purpose prepare API; it just separates analysis vs measurement
-// for pages like `/benchmark` without duplicating the prepare logic.
-export function profilePrepare(text: string, font: string, options?: PrepareOptions): PrepareProfile {
-  const t0 = performance.now()
-  const wordBreak = options?.wordBreak ?? 'normal'
-  const analysis = analyzeText(text, getEngineProfile(), options?.whiteSpace, wordBreak)
-  const t1 = performance.now()
-  const prepared = measureAnalysis(analysis, font, false, wordBreak) as InternalPreparedText
-  const t2 = performance.now()
-
-  let breakableSegments = 0
-  for (const widths of prepared.breakableWidths) {
-    if (widths !== null) breakableSegments++
-  }
-
-  return {
-    analysisMs: t1 - t0,
-    measureMs: t2 - t1,
-    totalMs: t2 - t0,
-    analysisSegments: analysis.len,
-    preparedSegments: prepared.widths.length,
-    breakableSegments,
-  }
 }
 
 // Prepare text for layout. Segments the text, measures each segment via canvas,

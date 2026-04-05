@@ -9,9 +9,10 @@ import {
   type PreparedTextWithSegments,
 } from '../../src/layout.ts'
 import {
+  materializeRichInlineLineRange,
   measureRichInlineStats,
   prepareRichInline,
-  walkRichInlineLines,
+  walkRichInlineLineRanges,
   type PreparedRichInline,
 } from '../../src/rich-inline.ts'
 import { BASE_MESSAGE_SPECS, type MarkdownChatSeed } from './markdown-chat.data.ts'
@@ -1013,7 +1014,8 @@ function materializeBlockLayout(
       if (block.kind !== 'inline') throw new Error('Inline block/frame mismatch')
       const lineWidth = Math.max(1, contentWidth - frame.contentLeft)
       const lines: Array<{ fragments: InlineFragmentLayout[]; width: number }> = []
-      walkRichInlineLines(block.flow, lineWidth, line => {
+      walkRichInlineLineRanges(block.flow, lineWidth, range => {
+        const line = materializeRichInlineLineRange(block.flow, range)
         lines.push({
           fragments: line.fragments.map(fragment => ({
             className: block.classNames[fragment.itemIndex]!,

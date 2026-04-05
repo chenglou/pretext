@@ -45,7 +45,7 @@ See `DEVELOPMENT.md` for the current command surface and packaging/release check
 - `prepare()` should stay the opaque fast-path handle. If a page/script needs segment arrays, that should usually flow through `prepareWithSegments()` instead of re-exposing internals on the main prepared type.
 - The rich public surface is intentionally split between stats/range helpers (`walkLineRanges()`, `measureLineStats()`, `layoutNextLineRange()`) and text-materializing helpers (`layoutWithLines()`, `layoutNextLine()`, `materializeLineRange()`). Keep their break semantics aligned.
 - `walkLineRanges()` is the rich-path batch range API: no string materialization, but still browser-like line widths/cursors/discretionary-hyphen state. Prefer it over private line walkers for shrinkwrap or aggregate layout work.
-- `profilePrepare()` is public for benchmark/diagnostic work, but it is not a license to grow a second public prepare surface. Keep it narrowly diagnostic.
+- Keep prepare-time diagnostics internal to benchmark tooling. Do not grow a second public prepare surface just to expose timing splits.
 - `prepare()` is internally split into a text-analysis phase and a measurement phase; keep that seam clear, but keep the public API simple unless requirements force a change.
 - The internal segment model now distinguishes at least eight break kinds: normal text, collapsible spaces, preserved spaces, tabs, non-breaking glue (`NBSP` / `NNBSP` / `WJ`-like runs), zero-width break opportunities, soft hyphens, and hard breaks. Do not collapse those back into one boolean unless the model gets richer in a better way.
 - `layout()` is the resize hot path: no DOM reads, no canvas calls, no string work, and avoid gratuitous allocations.

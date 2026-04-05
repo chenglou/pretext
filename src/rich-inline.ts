@@ -4,7 +4,6 @@ import {
   prepareWithSegments,
   type LayoutCursor,
   type LayoutLineRange,
-  type LayoutResult,
   type PreparedTextWithSegments,
 } from './layout.js'
 import {
@@ -555,15 +554,14 @@ function materializeFragmentText(
   return line.text
 }
 
-export function layoutNextRichInlineLine(
+// Bridge from cheap range walking to full fragment text. Lets callers do
+// shrinkwrap/virtualization/probing work first, then only pay for text on the
+// lines they actually render.
+export function materializeRichInlineLineRange(
   prepared: PreparedRichInline,
-  maxWidth: number,
-  start: RichInlineCursor = RICH_INLINE_START_CURSOR,
-): RichInlineLine | null {
+  line: RichInlineLineRange,
+): RichInlineLine {
   const flow = getInternalPreparedRichInline(prepared)
-  const line = layoutNextRichInlineLineRange(prepared, maxWidth, start)
-  if (line === null) return null
-
   return {
     fragments: line.fragments.map(fragment => {
       const item = flow.itemsBySourceItemIndex[fragment.itemIndex]
@@ -618,34 +616,5 @@ export function measureRichInlineStats(
     }
     lineCount++
     if (lineWidth > maxLineWidth) maxLineWidth = lineWidth
-  }
-}
-
-export function walkRichInlineLines(
-  prepared: PreparedRichInline,
-  maxWidth: number,
-  onLine: (line: RichInlineLine) => void,
-): number {
-  let lineCount = 0
-  let cursor = RICH_INLINE_START_CURSOR
-
-  while (true) {
-    const line = layoutNextRichInlineLine(prepared, maxWidth, cursor)
-    if (line === null) return lineCount
-    onLine(line)
-    lineCount++
-    cursor = line.end
-  }
-}
-
-export function measureRichInline(
-  prepared: PreparedRichInline,
-  maxWidth: number,
-  lineHeight: number,
-): LayoutResult {
-  const { lineCount } = measureRichInlineStats(prepared, maxWidth)
-  return {
-    lineCount,
-    height: lineCount * lineHeight,
   }
 }

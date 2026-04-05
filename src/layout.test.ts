@@ -28,10 +28,9 @@ let measurePreparedLineGeometry: LineBreakModule['measurePreparedLineGeometry']
 let stepPreparedLineGeometry: LineBreakModule['stepPreparedLineGeometry']
 let walkPreparedLines: LineBreakModule['walkPreparedLines']
 let prepareRichInline: RichInlineModule['prepareRichInline']
+let materializeRichInlineLineRange: RichInlineModule['materializeRichInlineLineRange']
 let measureRichInlineStats: RichInlineModule['measureRichInlineStats']
 let walkRichInlineLineRanges: RichInlineModule['walkRichInlineLineRanges']
-let walkRichInlineLines: RichInlineModule['walkRichInlineLines']
-let measureRichInline: RichInlineModule['measureRichInline']
 let isCJK: AnalysisModule['isCJK']
 
 const emojiPresentationRe = /\p{Emoji_Presentation}/u
@@ -282,7 +281,7 @@ beforeAll(async () => {
     setLocale,
   } = mod)
   ;({ countPreparedLines, measurePreparedLineGeometry, stepPreparedLineGeometry, walkPreparedLines } = lineBreakMod)
-  ;({ prepareRichInline, measureRichInlineStats, walkRichInlineLineRanges, walkRichInlineLines, measureRichInline } = richInlineMod)
+  ;({ prepareRichInline, materializeRichInlineLineRange, measureRichInlineStats, walkRichInlineLineRanges } = richInlineMod)
 })
 
 beforeEach(() => {
@@ -649,7 +648,7 @@ describe('prepare invariants', () => {
 })
 
 describe('rich-inline invariants', () => {
-  test('non-materializing range walker matches materialized line walker', () => {
+  test('non-materializing range walker matches range materialization', () => {
     const prepared = prepareRichInline([
       { text: 'Ship ', font: FONT },
       { text: '@maya', font: '700 12px Test Sans', break: 'never', extraWidth: 18 },
@@ -692,7 +691,8 @@ describe('rich-inline invariants', () => {
         width: line.width,
       })
     })
-    const materializedLineCount = walkRichInlineLines(prepared, 120, line => {
+    const materializedLineCount = walkRichInlineLineRanges(prepared, 120, range => {
+      const line = materializeRichInlineLineRange(prepared, range)
       materializedLines.push({
         end: line.end,
         fragments: line.fragments.map(fragment => ({
@@ -711,10 +711,6 @@ describe('rich-inline invariants', () => {
     expect(measureRichInlineStats(prepared, 120)).toEqual({
       lineCount: rangeLineCount,
       maxLineWidth: Math.max(...rangedLines.map(line => line.width)),
-    })
-    expect(measureRichInline(prepared, 120, LINE_HEIGHT)).toEqual({
-      height: rangeLineCount * LINE_HEIGHT,
-      lineCount: rangeLineCount,
     })
     expect(rangedLines).toHaveLength(materializedLines.length)
 

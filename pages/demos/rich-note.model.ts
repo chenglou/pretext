@@ -1,6 +1,7 @@
 import {
+  materializeRichInlineLineRange,
   prepareRichInline,
-  walkRichInlineLines,
+  walkRichInlineLineRanges,
   type PreparedRichInline,
 } from '../../src/rich-inline.ts'
 
@@ -149,7 +150,8 @@ export function layoutRichInlineItems(
   maxWidth: number,
 ): RichLine[] {
   const lines: RichLine[] = []
-  walkRichInlineLines(prepared.flow, maxWidth, line => {
+  walkRichInlineLineRanges(prepared.flow, maxWidth, range => {
+    const line = materializeRichInlineLineRange(prepared.flow, range)
     lines.push({
       fragments: line.fragments.map(fragment => ({
         className: prepared.classNames[fragment.itemIndex]!,
