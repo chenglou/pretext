@@ -1,13 +1,13 @@
 {
-  "generatedAt": "2026-04-06T04:20:28.716Z",
+  "generatedAt": "2026-04-06T04:37:07.868Z",
   "sources": {
     "accuracy": {
       "chrome": "accuracy/chrome.json",
       "safari": "accuracy/safari.json",
       "firefox": "accuracy/firefox.json"
     },
-    "representative": "corpora/representative.json",
     "chromeStep10": "corpora/chrome-step10.json",
+    "safariStep10": "corpora/safari-step10.json",
     "taxonomy": "corpora/TAXONOMY.md"
   },
   "browserRegressionGate": {
@@ -52,6 +52,10 @@
         "exactCount": 60,
         "widthCount": 61
       },
+      "safariStep10": {
+        "exactCount": 61,
+        "widthCount": 61
+      },
       "notes": "remaining Chrome-only `710px` miss is SHY / extractor-sensitive; Safari is exact there again in height/line count"
     }
   ],
@@ -88,6 +92,10 @@
         "exactCount": 50,
         "widthCount": 61
       },
+      "safariStep10": {
+        "exactCount": 58,
+        "widthCount": 61
+      },
       "notes": "English long-form canary; broad narrow-width negative field with one local positive flip"
     },
     {
@@ -112,6 +120,10 @@
       },
       "chromeStep10": {
         "exactCount": 56,
+        "widthCount": 61
+      },
+      "safariStep10": {
+        "exactCount": 61,
         "widthCount": 61
       },
       "notes": "second Japanese canary; same broad one-line positive edge-fit field as `羅生門`, but smaller"
@@ -140,6 +152,10 @@
         "exactCount": 55,
         "widthCount": 61
       },
+      "safariStep10": {
+        "exactCount": 61,
+        "widthCount": 61
+      },
       "notes": "real Japanese canary; remaining field is mostly opening-quote / punctuation compression plus a few one-line edge fits"
     },
     {
@@ -154,8 +170,19 @@
         ],
         "mismatches": []
       },
-      "safariAnchors": null,
+      "safariAnchors": {
+        "exactWidths": [
+          300,
+          600,
+          800
+        ],
+        "mismatches": []
+      },
       "chromeStep10": {
+        "exactCount": 61,
+        "widthCount": 61
+      },
+      "safariStep10": {
         "exactCount": 61,
         "widthCount": 61
       },
@@ -189,6 +216,10 @@
         "exactCount": 54,
         "widthCount": 61
       },
+      "safariStep10": {
+        "exactCount": 61,
+        "widthCount": 61
+      },
       "notes": "second Chinese canary; same Chrome-positive / Safari-clean split as `祝福`, but slightly healthier overall"
     },
     {
@@ -219,6 +250,10 @@
         "exactCount": 42,
         "widthCount": 61
       },
+      "safariStep10": {
+        "exactCount": 60,
+        "widthCount": 61
+      },
       "notes": "real Chinese canary; broad positive one-line field in Chrome, exact Safari anchors"
     },
     {
@@ -245,6 +280,10 @@
         "exactCount": 59,
         "widthCount": 61
       },
+      "safariStep10": {
+        "exactCount": 61,
+        "widthCount": 61
+      },
       "notes": "two remaining step10 one-line misses"
     },
     {
@@ -259,9 +298,20 @@
         ],
         "mismatches": []
       },
-      "safariAnchors": null,
+      "safariAnchors": {
+        "exactWidths": [
+          300,
+          600,
+          800
+        ],
+        "mismatches": []
+      },
       "chromeStep10": {
         "exactCount": 60,
+        "widthCount": 61
+      },
+      "safariStep10": {
+        "exactCount": 61,
         "widthCount": 61
       },
       "notes": "second Thai canary stays healthy"
@@ -278,8 +328,19 @@
         ],
         "mismatches": []
       },
-      "safariAnchors": null,
+      "safariAnchors": {
+        "exactWidths": [
+          300,
+          600,
+          800
+        ],
+        "mismatches": []
+      },
       "chromeStep10": {
+        "exactCount": 61,
+        "widthCount": 61
+      },
+      "safariStep10": {
         "exactCount": 61,
         "widthCount": 61
       },
@@ -309,6 +370,10 @@
         "exactCount": 56,
         "widthCount": 61
       },
+      "safariStep10": {
+        "exactCount": 59,
+        "widthCount": 61
+      },
       "notes": "real residual Myanmar canary; quote/follower and phrase-break classes remain"
     },
     {
@@ -333,6 +398,10 @@
       },
       "chromeStep10": {
         "exactCount": 57,
+        "widthCount": 61
+      },
+      "safariStep10": {
+        "exactCount": 59,
         "widthCount": 61
       },
       "notes": "healthier than the first Myanmar text, but still shows the same broad quote+follower class in Chrome"
@@ -369,6 +438,10 @@
         "exactCount": 31,
         "widthCount": 61
       },
+      "safariStep10": {
+        "exactCount": 31,
+        "widthCount": 61
+      },
       "notes": "real Nastaliq/Naskh canary; broad negative field at narrow widths and local shaping/context drift"
     },
     {
@@ -383,8 +456,19 @@
         ],
         "mismatches": []
       },
-      "safariAnchors": null,
+      "safariAnchors": {
+        "exactWidths": [
+          300,
+          600,
+          800
+        ],
+        "mismatches": []
+      },
       "chromeStep10": {
+        "exactCount": 61,
+        "widthCount": 61
+      },
+      "safariStep10": {
         "exactCount": 61,
         "widthCount": 61
       },
@@ -402,8 +486,19 @@
         ],
         "mismatches": []
       },
-      "safariAnchors": null,
+      "safariAnchors": {
+        "exactWidths": [
+          300,
+          600,
+          800
+        ],
+        "mismatches": []
+      },
       "chromeStep10": {
+        "exactCount": 61,
+        "widthCount": 61
+      },
+      "safariStep10": {
         "exactCount": 61,
         "widthCount": 61
       },
@@ -421,8 +516,19 @@
         ],
         "mismatches": []
       },
-      "safariAnchors": null,
+      "safariAnchors": {
+        "exactWidths": [
+          300,
+          600,
+          800
+        ],
+        "mismatches": []
+      },
       "chromeStep10": {
+        "exactCount": 61,
+        "widthCount": 61
+      },
+      "safariStep10": {
         "exactCount": 61,
         "widthCount": 61
       },
@@ -440,8 +546,19 @@
         ],
         "mismatches": []
       },
-      "safariAnchors": null,
+      "safariAnchors": {
+        "exactWidths": [
+          300,
+          600,
+          800
+        ],
+        "mismatches": []
+      },
       "chromeStep10": {
+        "exactCount": 61,
+        "widthCount": 61
+      },
+      "safariStep10": {
         "exactCount": 61,
         "widthCount": 61
       },

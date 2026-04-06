@@ -27,8 +27,7 @@ See `DEVELOPMENT.md` for the current command surface and packaging/release check
 - `pages/benchmark.ts` — performance comparisons
 - `benchmarks/chrome.json` / `benchmarks/safari.json` — checked-in current benchmark snapshots
 - `corpora/dashboard.json` — machine-readable long-form corpus dashboard derived from the corpus snapshots and notes
-- `corpora/representative.json` — checked-in representative corpus anchor rows
-- `corpora/chrome-step10.json` — checked-in Chrome `step=10` corpus sweep snapshot
+- `corpora/chrome-step10.json` / `corpora/safari-step10.json` — checked-in browser `step=10` corpus sweep snapshots
 - `pages/diagnostic-utils.ts` — shared grapheme-safe diagnostic helpers used by the browser check pages
 - `scripts/pre-wrap-check.ts` — small permanent browser-oracle sweep for the non-default `{ whiteSpace: 'pre-wrap' }` mode
 - `pages/demos/index.html` — public static demo landing page used as the GitHub Pages site root
@@ -106,8 +105,8 @@ See `DEVELOPMENT.md` for the current command surface and packaging/release check
 - The corpus diagnostics should derive our candidate lines from `layoutWithLines()`, not from a second local line-walker. That avoids SHY and future custom-break drift between the hot path and the diagnostic path.
 - Current line-fit tolerance is `0.005` for Chromium/Gecko and `1/64` for Safari/WebKit. That bump was justified by the remaining Arabic fine-width field and did not move the solved browser corpus or the English long-form canary.
 - Refresh `accuracy/chrome.json`, `accuracy/safari.json`, and `accuracy/firefox.json` when a diff changes the browser sweep methodology or the main text engine behavior (`src/analysis.ts`, `src/measurement.ts`, `src/line-break.ts`, `src/layout.ts`, `src/bidi.ts`, or `pages/accuracy.ts`).
-- Refresh `corpora/representative.json` when a diff intentionally changes one of the tracked representative canaries or their canonical anchor behavior. Keep it compact: anchors and designated fragile-width sentinels, not every exploratory sweep result.
 - Refresh `corpora/chrome-step10.json` and then regenerate `corpora/dashboard.json` when the corpus sweep methodology or long-form canary behavior changes in a way that moves the dashboard counts.
+- Refresh `corpora/safari-step10.json` alongside `corpora/chrome-step10.json` when the corpus sweep methodology or long-form canary behavior changes in a way that moves the dashboard counts.
 
 ### Open questions
 

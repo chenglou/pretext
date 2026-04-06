@@ -13,8 +13,8 @@ Conventions:
 ## Machine-Readable Sources
 
 - [dashboard.json](dashboard.json) — browser regression gate counts, product-shaped canaries, anchor/sweep status, fine-sweep notes, and font-matrix notes
-- [representative.json](representative.json) — Safari anchor subset
 - [chrome-step10.json](chrome-step10.json) — Chrome `step=10` sweep snapshot
+- [safari-step10.json](safari-step10.json) — Safari `step=10` sweep snapshot
 - [../accuracy/chrome.json](../accuracy/chrome.json), [../accuracy/safari.json](../accuracy/safari.json), [../accuracy/firefox.json](../accuracy/firefox.json) — browser regression gate snapshots
 
 ## Recompute
@@ -44,5 +44,5 @@ bun run corpus-check --id=ur-chughd 300 600 800
 bun run corpus-sweep --id=ur-chughd --start=300 --end=900 --step=10
 bun run corpus-font-matrix --id=my-bad-deeds-return-to-you-teacher --samples=5
 bun run corpus-font-matrix --id=ur-chughd --samples=5
-bun run corpus-representative
+bun run corpus-sweep:safari --all --start=300 --end=900 --step=10 --output=corpora/safari-step10.json
 ```

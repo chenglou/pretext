@@ -1,24 +1,10 @@
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
 
-type BrowserKind = 'chrome' | 'safari' | 'firefox'
-
 type AccuracySnapshot = {
   total?: number
   matchCount?: number
   mismatchCount?: number
-}
-
-type RepresentativeRow = {
-  corpusId: string
-  width: number
-  diffPx: number
-}
-
-type RepresentativeSnapshot = {
-  browsers: Partial<Record<BrowserKind, {
-    rows: RepresentativeRow[]
-  }>>
 }
 
 type SweepSummary = {
@@ -237,37 +223,8 @@ async function loadJson<T>(path: string): Promise<T> {
   return await Bun.file(path).json()
 }
 
-function indexRepresentativeRows(
-  snapshot: RepresentativeSnapshot,
-  browser: BrowserKind,
-): Map<string, RepresentativeRow[]> {
-  const rows = snapshot.browsers[browser]?.rows ?? []
-  const byCorpus = new Map<string, RepresentativeRow[]>()
-  for (const row of rows) {
-    const bucket = byCorpus.get(row.corpusId)
-    if (bucket === undefined) {
-      byCorpus.set(row.corpusId, [row])
-    } else {
-      bucket.push(row)
-    }
-  }
-  return byCorpus
-}
-
 function indexSweepSummaries(summaries: SweepSummary[]): Map<string, SweepSummary> {
   return new Map(summaries.map(summary => [summary.corpusId, summary] as const))
-}
-
-function summarizeAnchors(rows: RepresentativeRow[] | undefined): AnchorSummary | null {
-  if (rows === undefined || rows.length === 0) return null
-
-  const sorted = [...rows].sort((a, b) => a.width - b.width)
-  return {
-    exactWidths: sorted.filter(row => Math.round(row.diffPx) === 0).map(row => row.width),
-    mismatches: sorted
-      .filter(row => Math.round(row.diffPx) !== 0)
-      .map(row => ({ width: row.width, diffPx: Math.round(row.diffPx) })),
-  }
 }
 
 const ANCHOR_WIDTHS = [300, 600, 800] as const
@@ -306,14 +263,14 @@ function summarizeAccuracy(snapshot: AccuracySnapshot) {
 }
 
 const output = parseStringFlag('output') ?? 'corpora/dashboard.json'
-const representative = await loadJson<RepresentativeSnapshot>('corpora/representative.json')
 const chromeStep10 = await loadJson<SweepSummary[]>('corpora/chrome-step10.json')
+const safariStep10 = await loadJson<SweepSummary[]>('corpora/safari-step10.json')
 const chromeAccuracy = await loadJson<AccuracySnapshot>('accuracy/chrome.json')
 const safariAccuracy = await loadJson<AccuracySnapshot>('accuracy/safari.json')
 const firefoxAccuracy = await loadJson<AccuracySnapshot>('accuracy/firefox.json')
 
-const safariRepresentativeByCorpus = indexRepresentativeRows(representative, 'safari')
 const step10ByCorpus = indexSweepSummaries(chromeStep10)
+const safariStep10ByCorpus = indexSweepSummaries(safariStep10)
 
 const dashboard = {
   generatedAt: new Date().toISOString(),
@@ -323,8 +280,8 @@ const dashboard = {
       safari: 'accuracy/safari.json',
       firefox: 'accuracy/firefox.json',
     },
-    representative: 'corpora/representative.json',
     chromeStep10: 'corpora/chrome-step10.json',
+    safariStep10: 'corpora/safari-step10.json',
     taxonomy: 'corpora/TAXONOMY.md',
   },
   browserRegressionGate: {
@@ -339,8 +296,12 @@ const dashboard = {
       title: step10?.title ?? meta.id,
       language: step10?.language ?? '',
       chromeAnchors: summarizeStep10Anchors(step10),
-      safariAnchors: summarizeAnchors(safariRepresentativeByCorpus.get(meta.id)),
+      safariAnchors: summarizeStep10Anchors(safariStep10ByCorpus.get(meta.id)),
       chromeStep10: step10 === undefined ? null : { exactCount: step10.exactCount, widthCount: step10.widthCount },
+      safariStep10: safariStep10ByCorpus.get(meta.id) === undefined ? null : {
+        exactCount: safariStep10ByCorpus.get(meta.id)!.exactCount,
+        widthCount: safariStep10ByCorpus.get(meta.id)!.widthCount,
+      },
       notes: meta.notes,
     }
   }),
@@ -351,8 +312,12 @@ const dashboard = {
       title: step10?.title ?? meta.id,
       language: step10?.language ?? '',
       chromeAnchors: summarizeStep10Anchors(step10),
-      safariAnchors: summarizeAnchors(safariRepresentativeByCorpus.get(meta.id)),
+      safariAnchors: summarizeStep10Anchors(safariStep10ByCorpus.get(meta.id)),
       chromeStep10: step10 === undefined ? null : { exactCount: step10.exactCount, widthCount: step10.widthCount },
+      safariStep10: safariStep10ByCorpus.get(meta.id) === undefined ? null : {
+        exactCount: safariStep10ByCorpus.get(meta.id)!.exactCount,
+        widthCount: safariStep10ByCorpus.get(meta.id)!.widthCount,
+      },
       notes: meta.notes,
     }
   }),
