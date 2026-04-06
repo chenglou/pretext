@@ -44,5 +44,5 @@ bun run corpus-check --id=ur-chughd 300 600 800
 bun run corpus-sweep --id=ur-chughd --start=300 --end=900 --step=10
 bun run corpus-font-matrix --id=my-bad-deeds-return-to-you-teacher --samples=5
 bun run corpus-font-matrix --id=ur-chughd --samples=5
-bun run corpus-sweep:safari --all --start=300 --end=900 --step=10 --output=corpora/safari-step10.json
+bun run corpus-sweep --browser=safari --all --start=300 --end=900 --step=10 --output=corpora/safari-step10.json
 ```

@@ -44,8 +44,8 @@ bun install
 
 - `bun run corpus-check` — diagnose one corpus at one or a few widths
 - `bun run corpus-check:safari`
-- `bun run corpus-sweep` — Chrome `step=10` corpus width sweep
-- `bun run corpus-sweep:safari`
+- `bun run corpus-sweep` — maintained Chrome `step=10` corpus width sweep
+- `bun run corpus-sweep:safari` — maintained Safari `step=10` corpus width sweep
 - `bun run corpus-font-matrix` — same corpus under alternate fonts
 - `bun run corpus-font-matrix:safari`
 - `bun run corpus-taxonomy` — classify a mismatch field into steering buckets
