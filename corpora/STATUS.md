@@ -7,16 +7,14 @@ Shared mismatch vocabulary lives in [TAXONOMY.md](TAXONOMY.md).
 
 Conventions:
 - "anchors" means `300 / 600 / 800` unless noted otherwise
-- "sampled" usually means `--samples=9`
 - "step=10" means `300..900`
 - values are the last recorded results on this machine, not a promise of universal permanence
 
 ## Machine-Readable Sources
 
 - [dashboard.json](dashboard.json) — browser regression gate counts, product-shaped canaries, anchor/sweep status, fine-sweep notes, and font-matrix notes
-- [representative.json](representative.json) — compact anchor subset
-- [chrome-sampled.json](chrome-sampled.json) — Chrome sampled sweep snapshot
-- [chrome-step10.json](chrome-step10.json) — Chrome coarse `step=10` sweep snapshot
+- [representative.json](representative.json) — Safari anchor subset
+- [chrome-step10.json](chrome-step10.json) — Chrome `step=10` sweep snapshot
 - [../accuracy/chrome.json](../accuracy/chrome.json), [../accuracy/safari.json](../accuracy/safari.json), [../accuracy/firefox.json](../accuracy/firefox.json) — browser regression gate snapshots
 
 ## Recompute
@@ -40,7 +38,7 @@ bun run corpus-sweep --id=ja-rashomon --start=300 --end=900 --step=10
 bun run corpus-sweep --id=zh-zhufu --start=300 --end=900 --step=10
 bun run corpus-font-matrix --id=zh-guxiang --samples=5
 bun run corpus-sweep --id=my-cunning-heron-teacher --start=300 --end=900 --step=10
-bun run corpus-sweep --id=my-bad-deeds-return-to-you-teacher --samples=9
+bun run corpus-sweep --id=my-bad-deeds-return-to-you-teacher --start=300 --end=900 --step=10
 bun run corpus-font-matrix --id=zh-zhufu --samples=5
 bun run corpus-check --id=ur-chughd 300 600 800
 bun run corpus-sweep --id=ur-chughd --start=300 --end=900 --step=10

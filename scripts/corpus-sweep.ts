@@ -57,7 +57,6 @@ type SweepSummary = {
   start: number
   end: number
   step: number
-  samples: number | null
   widthCount: number
   exactCount: number
   mismatches: SweepMismatch[]
@@ -73,7 +72,6 @@ type SweepOptions = {
   browser: BrowserKind
   output: string | null
   timeoutMs: number
-  samples: number | null
   font: string | null
   lineHeight: number | null
   diagnose: boolean
@@ -128,14 +126,8 @@ function parseOptions(): SweepOptions {
   const step = parseNumberFlag('step', 10)
   if (step <= 0) throw new Error('--step must be > 0')
   if (end < start) throw new Error('--end must be >= --start')
-  const samplesRaw = parseStringFlag('samples')
-  let samples: number | null = null
-  if (samplesRaw !== null) {
-    const parsedSamples = Number.parseInt(samplesRaw, 10)
-    if (!Number.isFinite(parsedSamples) || parsedSamples <= 0) {
-      throw new Error(`Invalid value for --samples: ${samplesRaw}`)
-    }
-    samples = parsedSamples
+  if (parseStringFlag('samples') !== null) {
+    throw new Error('--samples is obsolete for corpus-sweep; use the default step-based sweep or sampled font-matrix/taxonomy runs instead')
   }
 
   return {
@@ -148,7 +140,6 @@ function parseOptions(): SweepOptions {
     browser: parseBrowser(parseStringFlag('browser')),
     output: parseStringFlag('output'),
     timeoutMs: parseNumberFlag('timeout', Number.parseInt(process.env['CORPUS_CHECK_TIMEOUT_MS'] ?? '180000', 10)),
-    samples,
     font: parseStringFlag('font'),
     lineHeight: parseOptionalNumberFlag('lineHeight'),
     diagnose: hasFlag('diagnose'),
@@ -170,22 +161,6 @@ function appendOverrideParams(url: string, options: SweepOptions): string {
 function getSweepWidths(meta: CorpusMeta, options: SweepOptions): number[] {
   const min = Math.max(options.start, meta.min_width ?? options.start)
   const max = Math.min(options.end, meta.max_width ?? options.end)
-
-  if (options.samples !== null) {
-    const samples = options.samples
-    if (samples === 1) {
-      const middle = Math.round((min + max) / 2)
-      return [middle]
-    }
-
-    const sampled = new Set<number>()
-    for (let i = 0; i < samples; i++) {
-      const ratio = i / (samples - 1)
-      const width = Math.round(min + (max - min) * ratio)
-      sampled.add(width)
-    }
-    return [...sampled].sort((a, b) => a - b)
-  }
 
   const widths: number[] = []
   for (let width = min; width <= max; width += options.step) {
@@ -341,7 +316,6 @@ try {
       start: options.start,
       end: options.end,
       step: options.step,
-      samples: options.samples,
       widthCount: rows.length,
       exactCount,
       mismatches,

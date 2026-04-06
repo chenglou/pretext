@@ -25,8 +25,14 @@ type SweepSummary = {
   corpusId: string
   language: string
   title: string
+  start: number
+  end: number
   widthCount: number
   exactCount: number
+  mismatches?: Array<{
+    width: number
+    diffPx: number
+  }>
 }
 
 type AnchorSummary = {
@@ -78,7 +84,7 @@ const LONG_FORM: CorpusDashboardMeta[] = [
   },
   {
     id: 'ko-unsu-joh-eun-nal',
-    notes: 'Korean coarse corpus is clean',
+    notes: 'Korean step10 sweep is clean',
   },
   {
     id: 'zh-guxiang',
@@ -90,7 +96,7 @@ const LONG_FORM: CorpusDashboardMeta[] = [
   },
   {
     id: 'th-nithan-vetal-story-1',
-    notes: 'two remaining coarse one-line misses',
+    notes: 'two remaining step10 one-line misses',
   },
   {
     id: 'th-nithan-vetal-story-7',
@@ -98,7 +104,7 @@ const LONG_FORM: CorpusDashboardMeta[] = [
   },
   {
     id: 'km-prachum-reuang-preng-khmer-volume-7-stories-1-10',
-    notes: 'full `step=10` is slower; sampled check is the preferred first pass',
+    notes: 'step10 sweep is fully exact on this machine',
   },
   {
     id: 'my-cunning-heron-teacher',
@@ -114,11 +120,11 @@ const LONG_FORM: CorpusDashboardMeta[] = [
   },
   {
     id: 'hi-eidgah',
-    notes: 'Hindi coarse corpus is clean',
+    notes: 'Hindi step10 sweep is clean',
   },
   {
     id: 'ar-risalat-al-ghufran-part-1',
-    notes: 'Arabic coarse corpus is clean; fine sweep still has a small positive one-line field',
+    notes: 'Arabic step10 sweep is clean; fine sweep still has a small positive one-line field',
   },
   {
     id: 'ar-al-bukhala',
@@ -126,7 +132,7 @@ const LONG_FORM: CorpusDashboardMeta[] = [
   },
   {
     id: 'he-masaot-binyamin-metudela',
-    notes: 'Hebrew coarse corpus is clean',
+    notes: 'Hebrew step10 sweep is clean',
   },
 ]
 
@@ -264,6 +270,33 @@ function summarizeAnchors(rows: RepresentativeRow[] | undefined): AnchorSummary 
   }
 }
 
+const ANCHOR_WIDTHS = [300, 600, 800] as const
+
+function summarizeStep10Anchors(summary: SweepSummary | undefined): AnchorSummary | null {
+  if (summary === undefined) return null
+
+  const mismatchesByWidth = new Map(
+    (summary.mismatches ?? []).map(row => [row.width, Math.round(row.diffPx)] as const),
+  )
+  const exactWidths: number[] = []
+  const mismatches: AnchorSummary['mismatches'] = []
+
+  for (const width of ANCHOR_WIDTHS) {
+    if (width < summary.start || width > summary.end) continue
+    const diffPx = mismatchesByWidth.get(width)
+    if (diffPx === undefined || diffPx === 0) {
+      exactWidths.push(width)
+    } else {
+      mismatches.push({ width, diffPx })
+    }
+  }
+
+  return {
+    exactWidths,
+    mismatches,
+  }
+}
+
 function summarizeAccuracy(snapshot: AccuracySnapshot) {
   return {
     total: snapshot.total ?? 0,
@@ -274,15 +307,12 @@ function summarizeAccuracy(snapshot: AccuracySnapshot) {
 
 const output = parseStringFlag('output') ?? 'corpora/dashboard.json'
 const representative = await loadJson<RepresentativeSnapshot>('corpora/representative.json')
-const chromeSampled = await loadJson<SweepSummary[]>('corpora/chrome-sampled.json')
 const chromeStep10 = await loadJson<SweepSummary[]>('corpora/chrome-step10.json')
 const chromeAccuracy = await loadJson<AccuracySnapshot>('accuracy/chrome.json')
 const safariAccuracy = await loadJson<AccuracySnapshot>('accuracy/safari.json')
 const firefoxAccuracy = await loadJson<AccuracySnapshot>('accuracy/firefox.json')
 
-const chromeRepresentativeByCorpus = indexRepresentativeRows(representative, 'chrome')
 const safariRepresentativeByCorpus = indexRepresentativeRows(representative, 'safari')
-const sampledByCorpus = indexSweepSummaries(chromeSampled)
 const step10ByCorpus = indexSweepSummaries(chromeStep10)
 
 const dashboard = {
@@ -294,7 +324,6 @@ const dashboard = {
       firefox: 'accuracy/firefox.json',
     },
     representative: 'corpora/representative.json',
-    chromeSampled: 'corpora/chrome-sampled.json',
     chromeStep10: 'corpora/chrome-step10.json',
     taxonomy: 'corpora/TAXONOMY.md',
   },
@@ -304,29 +333,25 @@ const dashboard = {
     firefox: summarizeAccuracy(firefoxAccuracy),
   },
   productShaped: PRODUCT_SHAPED.map(meta => {
-    const sampled = sampledByCorpus.get(meta.id)
     const step10 = step10ByCorpus.get(meta.id)
     return {
       id: meta.id,
-      title: step10?.title ?? sampled?.title ?? meta.id,
-      language: step10?.language ?? sampled?.language ?? '',
-      chromeAnchors: summarizeAnchors(chromeRepresentativeByCorpus.get(meta.id)),
+      title: step10?.title ?? meta.id,
+      language: step10?.language ?? '',
+      chromeAnchors: summarizeStep10Anchors(step10),
       safariAnchors: summarizeAnchors(safariRepresentativeByCorpus.get(meta.id)),
-      chromeSampled: sampled === undefined ? null : { exactCount: sampled.exactCount, widthCount: sampled.widthCount },
       chromeStep10: step10 === undefined ? null : { exactCount: step10.exactCount, widthCount: step10.widthCount },
       notes: meta.notes,
     }
   }),
   longForm: LONG_FORM.map(meta => {
-    const sampled = sampledByCorpus.get(meta.id)
     const step10 = step10ByCorpus.get(meta.id)
     return {
       id: meta.id,
-      title: step10?.title ?? sampled?.title ?? meta.id,
-      language: step10?.language ?? sampled?.language ?? '',
-      chromeAnchors: summarizeAnchors(chromeRepresentativeByCorpus.get(meta.id)),
+      title: step10?.title ?? meta.id,
+      language: step10?.language ?? '',
+      chromeAnchors: summarizeStep10Anchors(step10),
       safariAnchors: summarizeAnchors(safariRepresentativeByCorpus.get(meta.id)),
-      chromeSampled: sampled === undefined ? null : { exactCount: sampled.exactCount, widthCount: sampled.widthCount },
       chromeStep10: step10 === undefined ? null : { exactCount: step10.exactCount, widthCount: step10.widthCount },
       notes: meta.notes,
     }

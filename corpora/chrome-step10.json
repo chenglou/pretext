@@ -7,7 +7,6 @@
     "start": 300,
     "end": 900,
     "step": 10,
-    "samples": null,
     "widthCount": 61,
     "exactCount": 60,
     "mismatches": [
@@ -29,7 +28,6 @@
     "start": 300,
     "end": 900,
     "step": 10,
-    "samples": null,
     "widthCount": 61,
     "exactCount": 50,
     "mismatches": [
@@ -131,7 +129,6 @@
     "start": 300,
     "end": 900,
     "step": 10,
-    "samples": null,
     "widthCount": 61,
     "exactCount": 55,
     "mismatches": [
@@ -193,7 +190,6 @@
     "start": 300,
     "end": 900,
     "step": 10,
-    "samples": null,
     "widthCount": 61,
     "exactCount": 56,
     "mismatches": [
@@ -247,7 +243,6 @@
     "start": 300,
     "end": 900,
     "step": 10,
-    "samples": null,
     "widthCount": 61,
     "exactCount": 61,
     "mismatches": []
@@ -260,7 +255,6 @@
     "start": 300,
     "end": 900,
     "step": 10,
-    "samples": null,
     "widthCount": 61,
     "exactCount": 42,
     "mismatches": [
@@ -426,7 +420,6 @@
     "start": 300,
     "end": 900,
     "step": 10,
-    "samples": null,
     "widthCount": 61,
     "exactCount": 54,
     "mismatches": [
@@ -496,7 +489,6 @@
     "start": 300,
     "end": 900,
     "step": 10,
-    "samples": null,
     "widthCount": 61,
     "exactCount": 59,
     "mismatches": [
@@ -526,7 +518,6 @@
     "start": 300,
     "end": 900,
     "step": 10,
-    "samples": null,
     "widthCount": 61,
     "exactCount": 60,
     "mismatches": [
@@ -548,7 +539,6 @@
     "start": 300,
     "end": 900,
     "step": 10,
-    "samples": null,
     "widthCount": 61,
     "exactCount": 56,
     "mismatches": [
@@ -602,7 +592,6 @@
     "start": 300,
     "end": 900,
     "step": 10,
-    "samples": null,
     "widthCount": 61,
     "exactCount": 57,
     "mismatches": [
@@ -648,7 +637,6 @@
     "start": 300,
     "end": 900,
     "step": 10,
-    "samples": null,
     "widthCount": 61,
     "exactCount": 61,
     "mismatches": []
@@ -661,7 +649,6 @@
     "start": 300,
     "end": 900,
     "step": 10,
-    "samples": null,
     "widthCount": 61,
     "exactCount": 61,
     "mismatches": []
@@ -674,7 +661,6 @@
     "start": 300,
     "end": 900,
     "step": 10,
-    "samples": null,
     "widthCount": 61,
     "exactCount": 61,
     "mismatches": []
@@ -687,7 +673,6 @@
     "start": 300,
     "end": 900,
     "step": 10,
-    "samples": null,
     "widthCount": 61,
     "exactCount": 61,
     "mismatches": []
@@ -700,7 +685,6 @@
     "start": 300,
     "end": 900,
     "step": 10,
-    "samples": null,
     "widthCount": 61,
     "exactCount": 61,
     "mismatches": []
@@ -713,7 +697,6 @@
     "start": 300,
     "end": 900,
     "step": 10,
-    "samples": null,
     "widthCount": 61,
     "exactCount": 31,
     "mismatches": [
