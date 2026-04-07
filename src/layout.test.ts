@@ -385,7 +385,7 @@ describe('prepare invariants', () => {
       prefixed.widths[0]! +
       prefixed.widths[1]! +
       prefixed.widths[2]! +
-      prefixed.breakableWidths[4]![0]! +
+      prefixed.breakableFitAdvances[4]![0]! +
       prefixed.discretionaryHyphenWidth +
       0.1
     const continued = layoutWithLines(prefixed, continuedSoftBreakWidth, LINE_HEIGHT)
@@ -768,7 +768,7 @@ describe('layout invariants', () => {
 
   test('breaks long words at grapheme boundaries and keeps both layout APIs aligned', () => {
     const prepared = prepareWithSegments('Superlongword', FONT)
-    const graphemeWidths = prepared.breakableWidths[0]!
+    const graphemeWidths = prepared.breakableFitAdvances[0]!
     const maxWidth = graphemeWidths[0]! + graphemeWidths[1]! + graphemeWidths[2]! + 0.1
 
     const plain = layout(prepared, maxWidth, LINE_HEIGHT)
@@ -793,7 +793,7 @@ describe('layout invariants', () => {
 
   test('layoutNextLine reproduces layoutWithLines exactly', () => {
     const prepared = prepareWithSegments('foo trans\u00ADatlantic said "hello" to 世界 and waved.', FONT)
-    const width = prepared.widths[0]! + prepared.widths[1]! + prepared.widths[2]! + prepared.breakableWidths[4]![0]! + prepared.discretionaryHyphenWidth + 0.1
+    const width = prepared.widths[0]! + prepared.widths[1]! + prepared.widths[2]! + prepared.breakableFitAdvances[4]![0]! + prepared.discretionaryHyphenWidth + 0.1
     const expected = layoutWithLines(prepared, width, LINE_HEIGHT)
 
     const actual = []
@@ -888,7 +888,7 @@ describe('layout invariants', () => {
       prepared.widths[0]! +
       prepared.widths[1]! +
       prepared.widths[2]! +
-      prepared.breakableWidths[4]![0]! +
+      prepared.breakableFitAdvances[4]![0]! +
       prepared.discretionaryHyphenWidth +
       0.1
     const result = layoutWithLines(prepared, width, LINE_HEIGHT)
@@ -1052,7 +1052,7 @@ describe('layout invariants', () => {
   test('overlong breakable segments wrap onto a fresh line when the current line already has content', () => {
     const prepared = prepareWithSegments('foo abcdefghijk', FONT)
     const prefixWidth = prepared.widths[0]! + prepared.widths[1]!
-    const wordBreaks = prepared.breakableWidths[2]!
+    const wordBreaks = prepared.breakableFitAdvances[2]!
     const width = prefixWidth + wordBreaks[0]! + wordBreaks[1]! + 0.1
 
     const batched = layoutWithLines(prepared, width, LINE_HEIGHT)
@@ -1107,7 +1107,7 @@ describe('layout invariants', () => {
 
   test('walkLineRanges reproduces layoutWithLines geometry without materializing text', () => {
     const prepared = prepareWithSegments('foo trans\u00ADatlantic said "hello" to 世界 and waved.', FONT)
-    const width = prepared.widths[0]! + prepared.widths[1]! + prepared.widths[2]! + prepared.breakableWidths[4]![0]! + prepared.discretionaryHyphenWidth + 0.1
+    const width = prepared.widths[0]! + prepared.widths[1]! + prepared.widths[2]! + prepared.breakableFitAdvances[4]![0]! + prepared.discretionaryHyphenWidth + 0.1
     const expected = layoutWithLines(prepared, width, LINE_HEIGHT)
     const actual: Array<{
       width: number
@@ -1133,7 +1133,7 @@ describe('layout invariants', () => {
 
   test('measureLineStats matches walked line count and widest line', () => {
     const prepared = prepareWithSegments('foo trans\u00ADatlantic said "hello" to 世界 and waved.', FONT)
-    const width = prepared.widths[0]! + prepared.widths[1]! + prepared.widths[2]! + prepared.breakableWidths[4]![0]! + prepared.discretionaryHyphenWidth + 0.1
+    const width = prepared.widths[0]! + prepared.widths[1]! + prepared.widths[2]! + prepared.breakableFitAdvances[4]![0]! + prepared.discretionaryHyphenWidth + 0.1
     let walkedLineCount = 0
     let walkedMaxLineWidth = 0
 

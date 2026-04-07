@@ -4,8 +4,7 @@ export type SegmentMetrics = {
   width: number
   containsCJK: boolean
   emojiCount?: number
-  graphemeWidths?: number[] | null
-  graphemePrefixWidths?: number[] | null
+  breakableFitAdvances?: number[] | null
 }
 
 export type EngineProfile = {
@@ -14,6 +13,8 @@ export type EngineProfile = {
   preferPrefixWidthsForBreakableRuns: boolean
   preferEarlySoftHyphenBreak: boolean
 }
+
+export type BreakableFitMode = 'sum-graphemes' | 'segment-prefixes' | 'pair-context'
 
 let measureContext: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D | null = null
 const segmentMetricCaches = new Map<string, Map<string, SegmentMetrics>>()
@@ -173,12 +174,9 @@ export function getCorrectedSegmentWidth(seg: string, metrics: SegmentMetrics, e
 
 export function getSegmentGraphemeWidths(
   seg: string,
-  metrics: SegmentMetrics,
   cache: Map<string, SegmentMetrics>,
   emojiCorrection: number,
 ): number[] | null {
-  if (metrics.graphemeWidths !== undefined) return metrics.graphemeWidths
-
   const widths: number[] = []
   const graphemeSegmenter = getSharedGraphemeSegmenter()
   for (const gs of graphemeSegmenter.segment(seg)) {
@@ -186,29 +184,67 @@ export function getSegmentGraphemeWidths(
     widths.push(getCorrectedSegmentWidth(gs.segment, graphemeMetrics, emojiCorrection))
   }
 
-  metrics.graphemeWidths = widths.length > 1 ? widths : null
-  return metrics.graphemeWidths
+  return widths.length > 1 ? widths : null
 }
 
-export function getSegmentGraphemePrefixWidths(
+export function getSegmentBreakableFitAdvances(
   seg: string,
   metrics: SegmentMetrics,
   cache: Map<string, SegmentMetrics>,
   emojiCorrection: number,
+  mode: BreakableFitMode,
 ): number[] | null {
-  if (metrics.graphemePrefixWidths !== undefined) return metrics.graphemePrefixWidths
+  if (metrics.breakableFitAdvances !== undefined) return metrics.breakableFitAdvances
 
-  const prefixWidths: number[] = []
-  const graphemeSegmenter = getSharedGraphemeSegmenter()
-  let prefix = ''
-  for (const gs of graphemeSegmenter.segment(seg)) {
-    prefix += gs.segment
-    const prefixMetrics = getSegmentMetrics(prefix, cache)
-    prefixWidths.push(getCorrectedSegmentWidth(prefix, prefixMetrics, emojiCorrection))
+  if (mode === 'sum-graphemes') {
+    metrics.breakableFitAdvances = getSegmentGraphemeWidths(seg, cache, emojiCorrection)
+    return metrics.breakableFitAdvances
   }
 
-  metrics.graphemePrefixWidths = prefixWidths.length > 1 ? prefixWidths : null
-  return metrics.graphemePrefixWidths
+  if (mode === 'pair-context') {
+    const advances: number[] = []
+    const graphemeSegmenter = getSharedGraphemeSegmenter()
+    let previousGrapheme: string | null = null
+    let previousWidth = 0
+
+    for (const gs of graphemeSegmenter.segment(seg)) {
+      const graphemeMetrics = getSegmentMetrics(gs.segment, cache)
+      const currentWidth = getCorrectedSegmentWidth(gs.segment, graphemeMetrics, emojiCorrection)
+
+      if (previousGrapheme === null) {
+        advances.push(currentWidth)
+      } else {
+        const pair = previousGrapheme + gs.segment
+        const pairMetrics = getSegmentMetrics(pair, cache)
+        advances.push(getCorrectedSegmentWidth(pair, pairMetrics, emojiCorrection) - previousWidth)
+      }
+
+      previousGrapheme = gs.segment
+      previousWidth = currentWidth
+    }
+
+    metrics.breakableFitAdvances = advances.length > 1 ? advances : null
+    return metrics.breakableFitAdvances
+  }
+
+  const ctx = getMeasureContext()
+  const advances: number[] = []
+  const graphemeSegmenter = getSharedGraphemeSegmenter()
+  let prefix = ''
+  let prefixWidth = 0
+  let prefixEmojiCount = 0
+
+  for (const gs of graphemeSegmenter.segment(seg)) {
+    prefix += gs.segment
+    if (emojiCorrection !== 0 && isEmojiGrapheme(gs.segment)) prefixEmojiCount++
+
+    const nextPrefixWidth = ctx.measureText(prefix).width - prefixEmojiCount * emojiCorrection
+    advances.push(nextPrefixWidth - prefixWidth)
+    prefixWidth = nextPrefixWidth
+  }
+
+  metrics.breakableFitAdvances = advances.length > 1 ? advances : null
+  return metrics.breakableFitAdvances
 }
 
 export function getFontMeasurementState(font: string, needsEmojiCorrection: boolean): {

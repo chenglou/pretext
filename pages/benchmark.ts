@@ -455,7 +455,7 @@ function buildCorpusBenchmarks(): CorpusBenchmarkResult[] {
       chars: corpus.text.length,
       analysisSegments: metadataProfile.analysisSegments,
       segments: prepared.widths.length,
-      breakableSegments: prepared.breakableWidths.filter(widths => widths !== null).length,
+      breakableSegments: prepared.breakableFitAdvances.filter(widths => widths !== null).length,
       width: corpus.width,
       lineCount,
       analysisMs,

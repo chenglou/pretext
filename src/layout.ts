@@ -51,12 +51,12 @@ import {
   type WordBreakMode as AnalysisWordBreakMode,
 } from './analysis.js'
 import {
+  type BreakableFitMode,
   clearMeasurementCaches,
   getCorrectedSegmentWidth,
+  getSegmentBreakableFitAdvances,
   getEngineProfile,
   getFontMeasurementState,
-  getSegmentGraphemePrefixWidths,
-  getSegmentGraphemeWidths,
   getSegmentMetrics,
   textMayContainEmoji,
 } from './measurement.js'
@@ -91,8 +91,7 @@ type PreparedCore = {
   kinds: SegmentBreakKind[] // Break behavior per segment, e.g. ['text', 'space', 'text']
   simpleLineWalkFastPath: boolean // Normal text can use the simpler old line walker across all layout APIs
   segLevels: Int8Array | null // Rich-path bidi metadata for custom rendering; layout() never reads it
-  breakableWidths: (number[] | null)[] // Grapheme widths for overflow-wrap segments, else null
-  breakablePrefixWidths: (number[] | null)[] // Cumulative grapheme prefix widths for narrow browser-policy shims
+  breakableFitAdvances: (number[] | null)[] // Per-grapheme fit advances for breakable segments, else null
   discretionaryHyphenWidth: number // Visible width added when a soft hyphen is chosen as the break
   tabStopAdvance: number // Absolute advance between tab stops for pre-wrap tab segments
   chunks: PreparedLineChunk[] // Precompiled hard-break chunks for line walking
@@ -170,8 +169,7 @@ function createEmptyPrepared(includeSegments: boolean): InternalPreparedText | P
       kinds: [],
       simpleLineWalkFastPath: true,
       segLevels: null,
-      breakableWidths: [],
-      breakablePrefixWidths: [],
+      breakableFitAdvances: [],
       discretionaryHyphenWidth: 0,
       tabStopAdvance: 0,
       chunks: [],
@@ -185,8 +183,7 @@ function createEmptyPrepared(includeSegments: boolean): InternalPreparedText | P
     kinds: [],
     simpleLineWalkFastPath: true,
     segLevels: null,
-    breakableWidths: [],
-    breakablePrefixWidths: [],
+    breakableFitAdvances: [],
     discretionaryHyphenWidth: 0,
     tabStopAdvance: 0,
     chunks: [],
@@ -309,8 +306,7 @@ function measureAnalysis(
   const kinds: SegmentBreakKind[] = []
   let simpleLineWalkFastPath = analysis.chunks.length <= 1
   const segStarts = includeSegments ? [] as number[] : null
-  const breakableWidths: (number[] | null)[] = []
-  const breakablePrefixWidths: (number[] | null)[] = []
+  const breakableFitAdvances: (number[] | null)[] = []
   const segments = includeSegments ? [] as string[] : null
   const preparedStartByAnalysisIndex = Array.from<number>({ length: analysis.len })
 
@@ -321,8 +317,7 @@ function measureAnalysis(
     lineEndPaintAdvance: number,
     kind: SegmentBreakKind,
     start: number,
-    breakable: number[] | null,
-    breakablePrefix: number[] | null,
+    breakableFitAdvance: number[] | null,
   ): void {
     if (kind !== 'text' && kind !== 'space' && kind !== 'zero-width-break') {
       simpleLineWalkFastPath = false
@@ -332,8 +327,7 @@ function measureAnalysis(
     lineEndPaintAdvances.push(lineEndPaintAdvance)
     kinds.push(kind)
     segStarts?.push(start)
-    breakableWidths.push(breakable)
-    breakablePrefixWidths.push(breakablePrefix)
+    breakableFitAdvances.push(breakableFitAdvance)
     if (segments !== null) segments.push(text)
   }
 
@@ -356,11 +350,19 @@ function measureAnalysis(
         : width
 
     if (allowOverflowBreaks && wordLike && text.length > 1) {
-      const graphemeWidths = getSegmentGraphemeWidths(text, textMetrics, cache, emojiCorrection)
-      const graphemePrefixWidths =
-        engineProfile.preferPrefixWidthsForBreakableRuns || isNumericRunSegment(text)
-          ? getSegmentGraphemePrefixWidths(text, textMetrics, cache, emojiCorrection)
-          : null
+      let fitMode: BreakableFitMode = 'sum-graphemes'
+      if (isNumericRunSegment(text)) {
+        fitMode = 'pair-context'
+      } else if (engineProfile.preferPrefixWidthsForBreakableRuns) {
+        fitMode = 'segment-prefixes'
+      }
+      const fitAdvances = getSegmentBreakableFitAdvances(
+        text,
+        textMetrics,
+        cache,
+        emojiCorrection,
+        fitMode,
+      )
       pushMeasuredSegment(
         text,
         width,
@@ -368,8 +370,7 @@ function measureAnalysis(
         lineEndPaintAdvance,
         kind,
         start,
-        graphemeWidths,
-        graphemePrefixWidths,
+        fitAdvances,
       )
       return
     }
@@ -381,7 +382,6 @@ function measureAnalysis(
       lineEndPaintAdvance,
       kind,
       start,
-      null,
       null,
     )
   }
@@ -402,18 +402,17 @@ function measureAnalysis(
         segKind,
         segStart,
         null,
-        null,
       )
       continue
     }
 
     if (segKind === 'hard-break') {
-      pushMeasuredSegment(segText, 0, 0, 0, segKind, segStart, null, null)
+      pushMeasuredSegment(segText, 0, 0, 0, segKind, segStart, null)
       continue
     }
 
     if (segKind === 'tab') {
-      pushMeasuredSegment(segText, 0, 0, 0, segKind, segStart, null, null)
+      pushMeasuredSegment(segText, 0, 0, 0, segKind, segStart, null)
       continue
     }
 
@@ -451,8 +450,7 @@ function measureAnalysis(
       kinds,
       simpleLineWalkFastPath,
       segLevels,
-      breakableWidths,
-      breakablePrefixWidths,
+      breakableFitAdvances,
       discretionaryHyphenWidth,
       tabStopAdvance,
       chunks,
@@ -466,8 +464,7 @@ function measureAnalysis(
     kinds,
     simpleLineWalkFastPath,
     segLevels,
-    breakableWidths,
-    breakablePrefixWidths,
+    breakableFitAdvances,
     discretionaryHyphenWidth,
     tabStopAdvance,
     chunks,
