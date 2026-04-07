@@ -97,6 +97,7 @@ export function setAnalysisLocale(locale?: string): void {
 
 const arabicScriptRe = /\p{Script=Arabic}/u
 const combiningMarkRe = /\p{M}/u
+const currencySymbolRe = /\p{Sc}/u
 const decimalDigitRe = /\p{Nd}/u
 
 function containsArabicScript(text: string): boolean {
@@ -270,7 +271,7 @@ function isLeftStickyPunctuationSegment(segment: string): boolean {
   if (isEscapedQuoteClusterSegment(segment)) return true
   let sawPunctuation = false
   for (const ch of segment) {
-    if (leftStickyPunctuation.has(ch)) {
+    if (leftStickyPunctuation.has(ch) || currencySymbolRe.test(ch)) {
       sawPunctuation = true
       continue
     }
@@ -290,7 +291,7 @@ function isCJKLineStartProhibitedSegment(segment: string): boolean {
 function isForwardStickyClusterSegment(segment: string): boolean {
   if (isEscapedQuoteClusterSegment(segment)) return true
   for (const ch of segment) {
-    if (!kinsokuEnd.has(ch) && !forwardStickyGlue.has(ch) && !combiningMarkRe.test(ch)) return false
+    if (!kinsokuEnd.has(ch) && !forwardStickyGlue.has(ch) && !combiningMarkRe.test(ch) && !currencySymbolRe.test(ch)) return false
   }
   return segment.length > 0
 }
