@@ -149,6 +149,7 @@ export type WordBreakMode = AnalysisWordBreakMode
 export type PrepareOptions = {
   whiteSpace?: WhiteSpaceMode
   wordBreak?: WordBreakMode
+  letterSpacing?: number
 }
 
 // Internal hard-break chunk hint for the line walker. Not public because
@@ -274,6 +275,7 @@ function measureAnalysis(
   font: string,
   includeSegments: boolean,
   wordBreak: WordBreakMode,
+  letterSpacing: number = 0,
 ): InternalPreparedText | PreparedTextWithSegments {
   const engineProfile = getEngineProfile()
   const { cache, emojiCorrection } = getFontMeasurementState(
@@ -283,6 +285,14 @@ function measureAnalysis(
   const discretionaryHyphenWidth = getCorrectedSegmentWidth('-', getSegmentMetrics('-', cache), emojiCorrection)
   const spaceWidth = getCorrectedSegmentWidth(' ', getSegmentMetrics(' ', cache), emojiCorrection)
   const tabStopAdvance = spaceWidth * 8
+
+  const graphemeSegmenter = letterSpacing !== 0 ? getSharedGraphemeSegmenter() : null
+  function countGraphemes(text: string): number {
+    if (graphemeSegmenter === null) return 0
+    let count = 0
+    for (const _ of graphemeSegmenter.segment(text)) count++
+    return count
+  }
 
   if (analysis.len === 0) return createEmptyPrepared(includeSegments)
 
@@ -328,27 +338,31 @@ function measureAnalysis(
     allowOverflowBreaks: boolean,
   ): void {
     const textMetrics = getSegmentMetrics(text, cache)
-    const width = getCorrectedSegmentWidth(text, textMetrics, emojiCorrection)
-    const lineEndFitAdvance =
-      kind === 'space' || kind === 'preserved-space' || kind === 'zero-width-break'
-        ? 0
-        : width
-    const lineEndPaintAdvance =
-      kind === 'space' || kind === 'zero-width-break'
-        ? 0
-        : width
+    const baseWidth = getCorrectedSegmentWidth(text, textMetrics, emojiCorrection)
+    const isTrailingTrimmed = kind === 'space' || kind === 'preserved-space' || kind === 'zero-width-break'
+    const paintZero = kind === 'space' || kind === 'zero-width-break'
 
     if (allowOverflowBreaks && wordLike && text.length > 1) {
-      const graphemeWidths = getSegmentGraphemeWidths(text, textMetrics, cache, emojiCorrection)
-      const graphemePrefixWidths =
+      let graphemeWidths = getSegmentGraphemeWidths(text, textMetrics, cache, emojiCorrection)
+      let graphemePrefixWidths =
         engineProfile.preferPrefixWidthsForBreakableRuns || isNumericRunSegment(text)
           ? getSegmentGraphemePrefixWidths(text, textMetrics, cache, emojiCorrection)
           : null
+      const gc = letterSpacing !== 0
+        ? graphemeWidths !== null ? graphemeWidths.length : countGraphemes(text)
+        : 0
+      const width = gc > 0 ? baseWidth + gc * letterSpacing : baseWidth
+      if (gc > 0 && graphemeWidths !== null) {
+        graphemeWidths = graphemeWidths.map((w, i) => w + (i < gc - 1 ? letterSpacing : 0))
+      }
+      if (gc > 0 && graphemePrefixWidths !== null) {
+        graphemePrefixWidths = graphemePrefixWidths.map((w, i) => w + i * letterSpacing)
+      }
       pushMeasuredSegment(
         text,
         width,
-        lineEndFitAdvance,
-        lineEndPaintAdvance,
+        isTrailingTrimmed ? 0 : width - (gc > 0 ? letterSpacing : 0),
+        paintZero ? 0 : width,
         kind,
         start,
         graphemeWidths,
@@ -357,11 +371,13 @@ function measureAnalysis(
       return
     }
 
+    const gc = letterSpacing !== 0 ? countGraphemes(text) : 0
+    const width = gc > 0 ? baseWidth + gc * letterSpacing : baseWidth
     pushMeasuredSegment(
       text,
       width,
-      lineEndFitAdvance,
-      lineEndPaintAdvance,
+      isTrailingTrimmed ? 0 : width - (gc > 0 ? letterSpacing : 0),
+      paintZero ? 0 : width,
       kind,
       start,
       null,
@@ -494,8 +510,9 @@ function prepareInternal(
   options?: PrepareOptions,
 ): InternalPreparedText | PreparedTextWithSegments {
   const wordBreak = options?.wordBreak ?? 'normal'
+  const letterSpacing = options?.letterSpacing ?? 0
   const analysis = analyzeText(text, getEngineProfile(), options?.whiteSpace, wordBreak)
-  return measureAnalysis(analysis, font, includeSegments, wordBreak)
+  return measureAnalysis(analysis, font, includeSegments, wordBreak, letterSpacing)
 }
 
 // Prepare text for layout. Segments the text, measures each segment via canvas,
