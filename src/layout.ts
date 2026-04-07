@@ -250,22 +250,39 @@ function buildBaseCjkUnits(
 function mergeKeepAllTextUnits(units: MeasuredTextUnit[]): MeasuredTextUnit[] {
   if (units.length <= 1) return units
 
-  const merged: MeasuredTextUnit[] = [{ ...units[0]! }]
+  const merged: MeasuredTextUnit[] = []
+  let currentTextParts = [units[0]!.text]
+  let currentStart = units[0]!.start
+  let currentContainsCJK = isCJK(units[0]!.text)
+  let currentCanContinue = canContinueKeepAllTextRun(units[0]!.text)
+
+  function flushCurrent(): void {
+    merged.push({
+      text: currentTextParts.length === 1 ? currentTextParts[0]! : currentTextParts.join(''),
+      start: currentStart,
+    })
+  }
+
   for (let i = 1; i < units.length; i++) {
     const next = units[i]!
-    const previous = merged[merged.length - 1]!
+    const nextContainsCJK = isCJK(next.text)
+    const nextCanContinue = canContinueKeepAllTextRun(next.text)
 
-    if (
-      canContinueKeepAllTextRun(previous.text) &&
-      isCJK(previous.text)
-    ) {
-      previous.text += next.text
+    if (currentContainsCJK && currentCanContinue) {
+      currentTextParts.push(next.text)
+      currentContainsCJK = currentContainsCJK || nextContainsCJK
+      currentCanContinue = nextCanContinue
       continue
     }
 
-    merged.push({ ...next })
+    flushCurrent()
+    currentTextParts = [next.text]
+    currentStart = next.start
+    currentContainsCJK = nextContainsCJK
+    currentCanContinue = nextCanContinue
   }
 
+  flushCurrent()
   return merged
 }
 

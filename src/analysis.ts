@@ -147,9 +147,8 @@ export function isCJK(s: string): boolean {
 }
 
 function endsWithLineStartProhibitedText(text: string): boolean {
-  let last = ''
-  for (const ch of text) last = ch
-  return last.length > 0 && (kinsokuStart.has(last) || leftStickyPunctuation.has(last))
+  const last = getLastCodePoint(text)
+  return last !== null && (kinsokuStart.has(last) || leftStickyPunctuation.has(last))
 }
 
 const keepAllGlueChars = new Set([
@@ -164,9 +163,8 @@ function containsCJKText(text: string): boolean {
 }
 
 function endsWithKeepAllGlueText(text: string): boolean {
-  let last = ''
-  for (const ch of text) last = ch
-  return last.length > 0 && keepAllGlueChars.has(last)
+  const last = getLastCodePoint(text)
+  return last !== null && keepAllGlueChars.has(last)
 }
 
 export function canContinueKeepAllTextRun(previousText: string): boolean {
@@ -1143,30 +1141,56 @@ function mergeKeepAllTextSegments(segmentation: MergedSegmentation): MergedSegme
   const kinds: SegmentBreakKind[] = []
   const starts: number[] = []
 
+  let pendingTextParts: string[] | null = null
+  let pendingWordLike = false
+  let pendingStart = 0
+  let pendingContainsCJK = false
+  let pendingCanContinue = false
+
+  function flushPendingText(): void {
+    if (pendingTextParts === null) return
+    texts.push(joinTextParts(pendingTextParts))
+    isWordLike.push(pendingWordLike)
+    kinds.push('text')
+    starts.push(pendingStart)
+    pendingTextParts = null
+  }
+
   for (let i = 0; i < segmentation.len; i++) {
     const text = segmentation.texts[i]!
     const kind = segmentation.kinds[i]!
     const wordLike = segmentation.isWordLike[i]!
     const start = segmentation.starts[i]!
-    const previousIndex = texts.length - 1
 
-    if (
-      kind === 'text' &&
-      previousIndex >= 0 &&
-      kinds[previousIndex] === 'text' &&
-      canContinueKeepAllTextRun(texts[previousIndex]!) &&
-      containsCJKText(texts[previousIndex]!)
-    ) {
-      texts[previousIndex] += text
-      isWordLike[previousIndex] = isWordLike[previousIndex]! || wordLike
+    if (kind === 'text') {
+      const textContainsCJK = containsCJKText(text)
+      const textCanContinue = canContinueKeepAllTextRun(text)
+
+      if (pendingTextParts !== null && pendingContainsCJK && pendingCanContinue) {
+        pendingTextParts.push(text)
+        pendingWordLike = pendingWordLike || wordLike
+        pendingContainsCJK = pendingContainsCJK || textContainsCJK
+        pendingCanContinue = textCanContinue
+        continue
+      }
+
+      flushPendingText()
+      pendingTextParts = [text]
+      pendingWordLike = wordLike
+      pendingStart = start
+      pendingContainsCJK = textContainsCJK
+      pendingCanContinue = textCanContinue
       continue
     }
 
+    flushPendingText()
     texts.push(text)
     isWordLike.push(wordLike)
     kinds.push(kind)
     starts.push(start)
   }
+
+  flushPendingText()
 
   return {
     len: texts.length,

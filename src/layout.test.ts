@@ -554,6 +554,7 @@ describe('prepare invariants', () => {
   test('keep-all keeps CJK-leading no-space runs cohesive without swallowing preceding latin runs', () => {
     expect(prepareWithSegments('中文，测试。', FONT, { wordBreak: 'keep-all' }).segments).toEqual(['中文，', '测试。'])
     expect(prepareWithSegments('한국어테스트', FONT, { wordBreak: 'keep-all' }).segments).toEqual(['한국어테스트'])
+    expect(prepareWithSegments('漢'.repeat(256), FONT, { wordBreak: 'keep-all' }).segments).toEqual(['漢'.repeat(256)])
 
     for (const text of ['日本語foo-bar', '日本語foo.bar', '日本語foo—bar']) {
       expect(prepareWithSegments(text, FONT, { wordBreak: 'keep-all' }).segments).toEqual([text])
