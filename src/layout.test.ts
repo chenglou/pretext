@@ -530,6 +530,12 @@ describe('prepare invariants', () => {
     expect(prepared.segments).toEqual(['===', ' ', 'heading', ' ', '==='])
   })
 
+  test('keeps long repeated punctuation runs coalesced', () => {
+    const text = '('.repeat(256)
+    const prepared = prepareWithSegments(text, FONT)
+    expect(prepared.segments).toEqual([text])
+  })
+
   test('applies CJK and Hangul punctuation attachment rules', () => {
     expect(prepareWithSegments('中文，测试。', FONT).segments).toEqual(['中', '文，', '测', '试。'])
     expect(prepareWithSegments('테스트입니다.', FONT).segments.at(-1)).toBe('다.')
