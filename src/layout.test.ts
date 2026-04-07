@@ -536,6 +536,11 @@ describe('prepare invariants', () => {
     expect(prepared.segments).toEqual([text])
   })
 
+  test('keeps repeated punctuation runs attachable to trailing closing punctuation', () => {
+    const prepared = prepareWithSegments('((()', FONT)
+    expect(prepared.segments).toEqual(['((()'])
+  })
+
   test('applies CJK and Hangul punctuation attachment rules', () => {
     expect(prepareWithSegments('中文，测试。', FONT).segments).toEqual(['中', '文，', '测', '试。'])
     expect(prepareWithSegments('테스트입니다.', FONT).segments.at(-1)).toBe('다.')

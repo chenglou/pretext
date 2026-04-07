@@ -362,6 +362,24 @@ function getRepeatableSingleCharRunChar(
     : null
 }
 
+function materializeDeferredSingleCharRun(
+  texts: string[],
+  chars: (string | null)[],
+  lengths: number[],
+  index: number,
+): string {
+  const ch = chars[index]
+  const text = texts[index]!
+  if (ch == null) return text
+
+  const length = lengths[index]!
+  if (text.length === length) return text
+
+  const materialized = ch.repeat(length)
+  texts[index] = materialized
+  return materialized
+}
+
 function endsWithArabicNoSpacePunctuation(segment: string): boolean {
   if (!containsArabicScript(segment) || segment.length === 0) return false
   const lastCodePoint = getLastCodePoint(segment)
@@ -888,11 +906,13 @@ function buildMergedSegmentation(
   // Track repeatable single-char punctuation runs structurally so identical
   // merges stay O(1) instead of re-scanning the accumulated segment each time.
   const mergedSingleCharRunChars: (string | null)[] = []
+  const mergedSingleCharRunLengths: number[] = []
 
   for (const s of wordSegmenter.segment(normalized)) {
     for (const piece of splitSegmentByBreakKind(s.segment, s.isWordLike ?? false, s.index, whiteSpaceProfile)) {
       const isText = piece.kind === 'text'
       const repeatableSingleCharRunChar = getRepeatableSingleCharRunChar(piece.text, piece.isWordLike, piece.kind)
+      const prevIndex = mergedLen - 1
 
       // First-pass keeps: no-space script-specific joins and punctuation glue
       // that depend on the immediately preceding text run.
@@ -900,71 +920,103 @@ function buildMergedSegmentation(
         profile.carryCJKAfterClosingQuote &&
         isText &&
         mergedLen > 0 &&
-        mergedKinds[mergedLen - 1] === 'text' &&
+        mergedKinds[prevIndex] === 'text' &&
         isCJK(piece.text) &&
-        isCJK(mergedTexts[mergedLen - 1]!) &&
-        endsWithClosingQuote(mergedTexts[mergedLen - 1]!)
+        isCJK(mergedTexts[prevIndex]!) &&
+        endsWithClosingQuote(mergedTexts[prevIndex]!)
       ) {
-        mergedTexts[mergedLen - 1] += piece.text
-        mergedWordLike[mergedLen - 1] = mergedWordLike[mergedLen - 1]! || piece.isWordLike
-        mergedSingleCharRunChars[mergedLen - 1] = null
+        mergedTexts[prevIndex] = materializeDeferredSingleCharRun(
+          mergedTexts,
+          mergedSingleCharRunChars,
+          mergedSingleCharRunLengths,
+          prevIndex,
+        ) + piece.text
+        mergedWordLike[prevIndex] = mergedWordLike[prevIndex]! || piece.isWordLike
+        mergedSingleCharRunChars[prevIndex] = null
       } else if (
         isText &&
         mergedLen > 0 &&
-        mergedKinds[mergedLen - 1] === 'text' &&
+        mergedKinds[prevIndex] === 'text' &&
         isCJKLineStartProhibitedSegment(piece.text) &&
-        isCJK(mergedTexts[mergedLen - 1]!)
+        isCJK(mergedTexts[prevIndex]!)
       ) {
-        mergedTexts[mergedLen - 1] += piece.text
-        mergedWordLike[mergedLen - 1] = mergedWordLike[mergedLen - 1]! || piece.isWordLike
-        mergedSingleCharRunChars[mergedLen - 1] = null
+        mergedTexts[prevIndex] = materializeDeferredSingleCharRun(
+          mergedTexts,
+          mergedSingleCharRunChars,
+          mergedSingleCharRunLengths,
+          prevIndex,
+        ) + piece.text
+        mergedWordLike[prevIndex] = mergedWordLike[prevIndex]! || piece.isWordLike
+        mergedSingleCharRunChars[prevIndex] = null
       } else if (
         isText &&
         mergedLen > 0 &&
-        mergedKinds[mergedLen - 1] === 'text' &&
-        endsWithMyanmarMedialGlue(mergedTexts[mergedLen - 1]!)
+        mergedKinds[prevIndex] === 'text' &&
+        endsWithMyanmarMedialGlue(mergedTexts[prevIndex]!)
       ) {
-        mergedTexts[mergedLen - 1] += piece.text
-        mergedWordLike[mergedLen - 1] = mergedWordLike[mergedLen - 1]! || piece.isWordLike
-        mergedSingleCharRunChars[mergedLen - 1] = null
+        mergedTexts[prevIndex] = materializeDeferredSingleCharRun(
+          mergedTexts,
+          mergedSingleCharRunChars,
+          mergedSingleCharRunLengths,
+          prevIndex,
+        ) + piece.text
+        mergedWordLike[prevIndex] = mergedWordLike[prevIndex]! || piece.isWordLike
+        mergedSingleCharRunChars[prevIndex] = null
       } else if (
         isText &&
         mergedLen > 0 &&
-        mergedKinds[mergedLen - 1] === 'text' &&
+        mergedKinds[prevIndex] === 'text' &&
         piece.isWordLike &&
         containsArabicScript(piece.text) &&
-        endsWithArabicNoSpacePunctuation(mergedTexts[mergedLen - 1]!)
+        endsWithArabicNoSpacePunctuation(mergedTexts[prevIndex]!)
       ) {
-        mergedTexts[mergedLen - 1] += piece.text
-        mergedWordLike[mergedLen - 1] = true
-        mergedSingleCharRunChars[mergedLen - 1] = null
+        mergedTexts[prevIndex] = materializeDeferredSingleCharRun(
+          mergedTexts,
+          mergedSingleCharRunChars,
+          mergedSingleCharRunLengths,
+          prevIndex,
+        ) + piece.text
+        mergedWordLike[prevIndex] = true
+        mergedSingleCharRunChars[prevIndex] = null
       } else if (
         repeatableSingleCharRunChar !== null &&
         mergedLen > 0 &&
-        mergedKinds[mergedLen - 1] === 'text' &&
-        mergedSingleCharRunChars[mergedLen - 1] === repeatableSingleCharRunChar
+        mergedKinds[prevIndex] === 'text' &&
+        mergedSingleCharRunChars[prevIndex] === repeatableSingleCharRunChar
       ) {
-        mergedTexts[mergedLen - 1] += piece.text
+        mergedSingleCharRunLengths[prevIndex] = (mergedSingleCharRunLengths[prevIndex] ?? 1) + 1
       } else if (
         isText &&
         !piece.isWordLike &&
         mergedLen > 0 &&
-        mergedKinds[mergedLen - 1] === 'text' &&
+        mergedKinds[prevIndex] === 'text' &&
         (
           isLeftStickyPunctuationSegment(piece.text) ||
-          (piece.text === '-' && mergedWordLike[mergedLen - 1]!)
+          (piece.text === '-' && mergedWordLike[prevIndex]!)
         )
       ) {
-        mergedTexts[mergedLen - 1] += piece.text
-        mergedSingleCharRunChars[mergedLen - 1] = null
+        mergedTexts[prevIndex] = materializeDeferredSingleCharRun(
+          mergedTexts,
+          mergedSingleCharRunChars,
+          mergedSingleCharRunLengths,
+          prevIndex,
+        ) + piece.text
+        mergedSingleCharRunChars[prevIndex] = null
       } else {
         mergedTexts[mergedLen] = piece.text
         mergedWordLike[mergedLen] = piece.isWordLike
         mergedKinds[mergedLen] = piece.kind
         mergedStarts[mergedLen] = piece.start
         mergedSingleCharRunChars[mergedLen] = repeatableSingleCharRunChar
+        mergedSingleCharRunLengths[mergedLen] = repeatableSingleCharRunChar === null ? 0 : 1
         mergedLen++
       }
+    }
+  }
+
+  for (let i = 0; i < mergedLen; i++) {
+    if (mergedSingleCharRunChars[i] !== null) {
+      materializeDeferredSingleCharRun(mergedTexts, mergedSingleCharRunChars, mergedSingleCharRunLengths, i)
     }
   }
 
