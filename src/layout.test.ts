@@ -897,6 +897,15 @@ describe('layout invariants', () => {
     expect(reconstructFromLineBoundaries(prepared, result.lines)).toBe('foo trans\u00ADatlantic')
   })
 
+  test('soft-hyphen fallback does not crash when overflow happens on a later space', () => {
+    const prepared = prepareWithSegments('foo trans\u00ADatlantic labels', FONT)
+    const width = measureWidth('foo transatlantic', FONT) + 0.1
+    const result = layoutWithLines(prepared, width, LINE_HEIGHT)
+
+    expect(result.lines.map(line => line.text)).toEqual(['foo transatlantic ', 'labels'])
+    expect(layout(prepared, width, LINE_HEIGHT).lineCount).toBe(result.lineCount)
+  })
+
   test('layoutNextLine variable-width streaming stays contiguous and reconstructs normalized text', () => {
     const prepared = prepareWithSegments(
       'foo trans\u00ADatlantic said "hello" to 世界 and waved. According to محمد الأحمد, alpha\u200Bbeta 🚀',

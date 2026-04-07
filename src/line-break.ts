@@ -466,7 +466,8 @@ export function walkPreparedLines(
 
   function continueSoftHyphenBreakableSegment(segmentIndex: number): boolean {
     if (pendingBreakKind !== 'soft-hyphen') return false
-    const fitWidths = breakableFitAdvances[segmentIndex]!
+    const fitWidths = breakableFitAdvances[segmentIndex]
+    if (fitWidths == null) return false
     const { fitCount, fittedWidth } = fitSoftHyphenBreak(
       fitWidths,
       lineW,

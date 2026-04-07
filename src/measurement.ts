@@ -227,18 +227,15 @@ export function getSegmentBreakableFitAdvances(
     return metrics.breakableFitAdvances
   }
 
-  const ctx = getMeasureContext()
   const advances: number[] = []
   const graphemeSegmenter = getSharedGraphemeSegmenter()
   let prefix = ''
   let prefixWidth = 0
-  let prefixEmojiCount = 0
 
   for (const gs of graphemeSegmenter.segment(seg)) {
     prefix += gs.segment
-    if (emojiCorrection !== 0 && isEmojiGrapheme(gs.segment)) prefixEmojiCount++
-
-    const nextPrefixWidth = ctx.measureText(prefix).width - prefixEmojiCount * emojiCorrection
+    const prefixMetrics = getSegmentMetrics(prefix, cache)
+    const nextPrefixWidth = getCorrectedSegmentWidth(prefix, prefixMetrics, emojiCorrection)
     advances.push(nextPrefixWidth - prefixWidth)
     prefixWidth = nextPrefixWidth
   }
