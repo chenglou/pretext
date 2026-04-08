@@ -126,6 +126,8 @@ prepare(text: string, font: string, options?: { whiteSpace?: 'normal' | 'pre-wra
 layout(prepared: PreparedText, maxWidth: number, lineHeight: number): { height: number, lineCount: number } // calculates text height given a max width and lineHeight. Make sure `lineHeight` is synced with your css `line-height` declaration for the text you're measuring.
 ```
 
+> **Empty text:** `layout(prepare('', font), maxWidth, lineHeight)` returns `{ lineCount: 0, height: 0 }`. Browsers render an empty block element at `lineHeight` height (one line). If you need container sizing that matches browser behavior for empty content, use `Math.max(1, lineCount) * lineHeight` instead of `height`.
+
 Use-case 2 APIs:
 ```ts
 prepareWithSegments(text: string, font: string, options?: { whiteSpace?: 'normal' | 'pre-wrap', wordBreak?: 'normal' | 'keep-all' }): PreparedTextWithSegments // same as `prepare()`, but returns a richer structure for manual line layouts needs
