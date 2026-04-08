@@ -68,7 +68,7 @@ export function normalizeWhitespaceNormal(text: string): string {
 }
 
 function normalizeWhitespacePreWrap(text: string): string {
-  if (!/[\r\f]/.test(text)) return text.replace(/\r\n/g, '\n')
+  if (!/[\r\f]/.test(text)) return text
   return text
     .replace(/\r\n/g, '\n')
     .replace(/[\r\f]/g, '\n')

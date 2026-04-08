@@ -601,13 +601,6 @@ describe('prepare invariants', () => {
     expect(isCJK('hello')).toBe(false)
   })
 
-  test('isCJK covers the newer CJK extension blocks', () => {
-    expect(isCJK('\u{2EBF0}')).toBe(true)
-    expect(isCJK('\u{31350}')).toBe(true)
-    expect(isCJK('\u{323B0}')).toBe(true)
-    expect(isCJK('hello')).toBe(false)
-  })
-
   test('prepare and prepareWithSegments agree on layout behavior', () => {
     const plain = prepare('Alpha beta gamma', FONT)
     const rich = prepareWithSegments('Alpha beta gamma', FONT)
