@@ -20,6 +20,12 @@ let measureContext: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D
 const segmentMetricCaches = new Map<string, Map<string, SegmentMetrics>>()
 let cachedEngineProfile: EngineProfile | null = null
 
+// Safari's prefix-fit policy is useful for ordinary word-sized runs, but letting
+// it measure every growing prefix of a giant segment recreates a pathological
+// superlinear prepare-time path. Past this size, switch to the cheaper
+// pair-context model and keep the public behavior linear.
+const MAX_PREFIX_FIT_GRAPHEMES = 96
+
 const emojiPresentationRe = /\p{Emoji_Presentation}/u
 const maybeEmojiRe = /[\p{Emoji_Presentation}\p{Extended_Pictographic}\p{Regional_Indicator}\uFE0F\u20E3]/u
 let sharedGraphemeSegmenter: Intl.Segmenter | null = null
@@ -196,51 +202,64 @@ export function getSegmentBreakableFitAdvances(
 ): number[] | null {
   if (metrics.breakableFitAdvances !== undefined) return metrics.breakableFitAdvances
 
-  if (mode === 'sum-graphemes') {
-    metrics.breakableFitAdvances = getSegmentGraphemeWidths(seg, cache, emojiCorrection)
+  const graphemeSegmenter = getSharedGraphemeSegmenter()
+  const graphemes: string[] = []
+  for (const gs of graphemeSegmenter.segment(seg)) {
+    graphemes.push(gs.segment)
+  }
+  if (graphemes.length <= 1) {
+    metrics.breakableFitAdvances = null
     return metrics.breakableFitAdvances
   }
 
-  if (mode === 'pair-context') {
+  if (mode === 'sum-graphemes') {
     const advances: number[] = []
-    const graphemeSegmenter = getSharedGraphemeSegmenter()
+    for (const grapheme of graphemes) {
+      const graphemeMetrics = getSegmentMetrics(grapheme, cache)
+      advances.push(getCorrectedSegmentWidth(grapheme, graphemeMetrics, emojiCorrection))
+    }
+    metrics.breakableFitAdvances = advances
+    return metrics.breakableFitAdvances
+  }
+
+  if (mode === 'pair-context' || graphemes.length > MAX_PREFIX_FIT_GRAPHEMES) {
+    const advances: number[] = []
     let previousGrapheme: string | null = null
     let previousWidth = 0
 
-    for (const gs of graphemeSegmenter.segment(seg)) {
-      const graphemeMetrics = getSegmentMetrics(gs.segment, cache)
-      const currentWidth = getCorrectedSegmentWidth(gs.segment, graphemeMetrics, emojiCorrection)
+    for (const grapheme of graphemes) {
+      const graphemeMetrics = getSegmentMetrics(grapheme, cache)
+      const currentWidth = getCorrectedSegmentWidth(grapheme, graphemeMetrics, emojiCorrection)
 
       if (previousGrapheme === null) {
         advances.push(currentWidth)
       } else {
-        const pair = previousGrapheme + gs.segment
+        const pair = previousGrapheme + grapheme
         const pairMetrics = getSegmentMetrics(pair, cache)
         advances.push(getCorrectedSegmentWidth(pair, pairMetrics, emojiCorrection) - previousWidth)
       }
 
-      previousGrapheme = gs.segment
+      previousGrapheme = grapheme
       previousWidth = currentWidth
     }
 
-    metrics.breakableFitAdvances = advances.length > 1 ? advances : null
+    metrics.breakableFitAdvances = advances
     return metrics.breakableFitAdvances
   }
 
   const advances: number[] = []
-  const graphemeSegmenter = getSharedGraphemeSegmenter()
   let prefix = ''
   let prefixWidth = 0
 
-  for (const gs of graphemeSegmenter.segment(seg)) {
-    prefix += gs.segment
+  for (const grapheme of graphemes) {
+    prefix += grapheme
     const prefixMetrics = getSegmentMetrics(prefix, cache)
     const nextPrefixWidth = getCorrectedSegmentWidth(prefix, prefixMetrics, emojiCorrection)
     advances.push(nextPrefixWidth - prefixWidth)
     prefixWidth = nextPrefixWidth
   }
 
-  metrics.breakableFitAdvances = advances.length > 1 ? advances : null
+  metrics.breakableFitAdvances = advances
   return metrics.breakableFitAdvances
 }
 
