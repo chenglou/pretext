@@ -90,6 +90,24 @@
     "notes": "Starter long-form stress corpus from Wikisource."
   },
   {
+    "id": "ko-sonagi",
+    "language": "ko",
+    "direction": "ltr",
+    "title": "소나기",
+    "source_url": "https://ko.wikisource.org/wiki/%EC%86%8C%EB%82%98%EA%B8%B0",
+    "output": "corpora/ko-sonagi.txt",
+    "font_family": "\"Apple SD Gothic Neo\", \"Malgun Gothic\", \"Noto Sans CJK KR\", sans-serif",
+    "font_size_px": 18,
+    "line_height_px": 30,
+    "default_width": 600,
+    "min_width": 300,
+    "max_width": 900,
+    "characters": 8021,
+    "lines": 217,
+    "acquired_via": "extract",
+    "notes": "Second Korean prose stress corpus from Wikisource, reformatted to remove fixed-width source wrapping."
+  },
+  {
     "id": "zh-zhufu",
     "language": "zh",
     "direction": "ltr",

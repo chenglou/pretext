@@ -232,7 +232,7 @@ The keep:
 
 Result:
 - two Thai prose corpora are healthy at anchor widths
-- sampled sweeps stayed clean enough that Thai now looks broader than one lucky story
+- maintained step10 sweeps stayed clean enough that Thai now looks broader than one lucky story
 
 ### Khmer
 
@@ -242,7 +242,7 @@ The keep:
 - preserve explicit zero-width separators from the source text
 
 Result:
-- anchors and sampled sweeps were clean enough to keep Khmer as a real canary
+- anchor widths and the maintained step10 sweep were clean enough to keep Khmer as a real canary
 
 ### Lao (rejected)
 
@@ -283,7 +283,7 @@ So Japanese stays as a canary, not as a place to keep stacking narrow punctuatio
 Chinese is now the clearest active CJK canary.
 
 What we learned:
-- Safari is clean at the anchor widths
+- Safari is clean on the maintained step10 sweep
 - Chrome keeps a broader narrow-width positive field
 - the field changes with font choice (`Songti SC` vs `PingFang SC`)
 

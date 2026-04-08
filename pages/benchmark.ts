@@ -33,6 +33,7 @@ import jaRashomon from '../corpora/ja-rashomon.txt' with { type: 'text' }
 import kmPrachumReuangPrengKhmerVolume7Stories1To10 from '../corpora/km-prachum-reuang-preng-khmer-volume-7-stories-1-10.txt' with { type: 'text' }
 import myBadDeedsReturnToYouTeacher from '../corpora/my-bad-deeds-return-to-you-teacher.txt' with { type: 'text' }
 import myCunningHeronTeacher from '../corpora/my-cunning-heron-teacher.txt' with { type: 'text' }
+import koSonagi from '../corpora/ko-sonagi.txt' with { type: 'text' }
 import koUnsuJohEunNal from '../corpora/ko-unsu-joh-eun-nal.txt' with { type: 'text' }
 import thNithanVetalStory1 from '../corpora/th-nithan-vetal-story-1.txt' with { type: 'text' }
 import urChughd from '../corpora/ur-chughd.txt' with { type: 'text' }
@@ -138,6 +139,15 @@ const CORPORA = [
     id: 'ko-unsu-joh-eun-nal',
     label: 'Korean prose',
     text: koUnsuJohEunNal,
+    font: '18px "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans CJK KR", sans-serif',
+    lineHeight: 30,
+    width: 300,
+    sampleWidths: [240, 300, 360] as const,
+  },
+  {
+    id: 'ko-sonagi',
+    label: 'Korean prose (story 2)',
+    text: koSonagi,
     font: '18px "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans CJK KR", sans-serif',
     lineHeight: 30,
     width: 300,

@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-04-06T04:37:07.868Z",
+  "generatedAt": "2026-04-08T02:26:58.651Z",
   "sources": {
     "accuracy": {
       "chrome": "accuracy/chrome.json",
@@ -187,6 +187,36 @@
         "widthCount": 61
       },
       "notes": "Korean step10 sweep is clean"
+    },
+    {
+      "id": "ko-sonagi",
+      "title": "소나기",
+      "language": "ko",
+      "chromeAnchors": {
+        "exactWidths": [
+          300,
+          600,
+          800
+        ],
+        "mismatches": []
+      },
+      "safariAnchors": {
+        "exactWidths": [
+          300,
+          600,
+          800
+        ],
+        "mismatches": []
+      },
+      "chromeStep10": {
+        "exactCount": 61,
+        "widthCount": 61
+      },
+      "safariStep10": {
+        "exactCount": 61,
+        "widthCount": 61
+      },
+      "notes": "second Korean canary; step10 sweep is clean"
     },
     {
       "id": "zh-guxiang",
@@ -605,6 +635,11 @@
     },
     {
       "corpusId": "ko-unsu-joh-eun-nal",
+      "status": "clean on sampled matrix",
+      "notes": "`Apple SD Gothic Neo`, `AppleMyungjo`"
+    },
+    {
+      "corpusId": "ko-sonagi",
       "status": "clean on sampled matrix",
       "notes": "`Apple SD Gothic Neo`, `AppleMyungjo`"
     },

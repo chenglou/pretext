@@ -73,6 +73,10 @@ const LONG_FORM: CorpusDashboardMeta[] = [
     notes: 'Korean step10 sweep is clean',
   },
   {
+    id: 'ko-sonagi',
+    notes: 'second Korean canary; step10 sweep is clean',
+  },
+  {
     id: 'zh-guxiang',
     notes: 'second Chinese canary; same Chrome-positive / Safari-clean split as `祝福`, but slightly healthier overall',
   },
@@ -153,6 +157,11 @@ const FONT_MATRIX_NOTES: FontMatrixNote[] = [
   },
   {
     corpusId: 'ko-unsu-joh-eun-nal',
+    status: 'clean on sampled matrix',
+    notes: '`Apple SD Gothic Neo`, `AppleMyungjo`',
+  },
+  {
+    corpusId: 'ko-sonagi',
     status: 'clean on sampled matrix',
     notes: '`Apple SD Gothic Neo`, `AppleMyungjo`',
   },
