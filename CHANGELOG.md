@@ -2,18 +2,25 @@
 
 ## Unreleased
 
-### Changed
-
-- Documentation now matches the current public API surface more closely, including the line-stats/range rich line APIs and the `@chenglou/pretext/rich-inline` helper for rich-text inline flow.
+## 0.0.5 - 2026-04-09
 
 ### Added
 
+- Geometry-first rich line helpers for manual layout work: `measureLineStats()`, `measureNaturalWidth()`, `layoutNextLineRange()`, and `materializeLineRange()`.
+- `@chenglou/pretext/rich-inline`, a narrow helper for inline-only rich text, mentions/chips, and browser-like boundary whitespace collapse.
 - `{ wordBreak: 'keep-all' }` support on `prepare()` / `prepareWithSegments()` for CJK and Hangul text, plus a small standing `keep-all` browser oracle.
-- A checked-in generated Unicode bidi range table with a manual `bun run generate:bidi-data` refresh path.
+- A virtualized markdown chat demo that dogfoods the rich-inline helper and `pre-wrap` text measurement.
+
+### Changed
+
+- Documentation now matches the current public API surface and user-facing limitations more closely.
+- The maintained corpus/status workflow now centers on checked-in Chrome and Safari `step=10` sweeps instead of the older representative/sample reports.
+- Prepare-time analysis is more resilient on long mixed-script, CJK, Arabic, repeated-punctuation, and other degenerate inputs.
+- `bun start` now binds to LAN by default, and `bun run start:windows` provides a Windows-friendly fallback.
 
 ### Fixed
 
-- Mixed CJK-plus-numeric runs now use cumulative widths when breaking the numeric suffix, matching the browser more closely.
+- Mixed CJK-plus-numeric runs, keep-all mixed-script boundaries, and long breakable runs now stay closer to browser behavior.
 - Rich-path bidi metadata and CJK detection now handle the relevant astral Unicode ranges correctly.
 - The probe page now reports line content end offsets correctly when a line range steps past a hard break omitted from rendered line text.
 
