@@ -433,6 +433,15 @@ function joinTextParts(parts: string[]): string {
   return parts.length === 1 ? parts[0]! : parts.join('')
 }
 
+function joinReversedPrefixParts(prefixParts: string[], tail: string): string {
+  const parts: string[] = []
+  for (let i = prefixParts.length - 1; i >= 0; i--) {
+    parts.push(prefixParts[i]!)
+  }
+  parts.push(tail)
+  return joinTextParts(parts)
+}
+
 function splitSegmentByBreakKind(
   segment: string,
   isWordLike: boolean,
@@ -1054,16 +1063,35 @@ function buildMergedSegmentation(
     }
   }
 
-  for (let i = mergedLen - 2; i >= 0; i--) {
-    if (mergedKinds[i] === 'text' && !mergedWordLike[i]! && isForwardStickyClusterSegment(mergedTexts[i]!)) {
-      let j = i + 1
-      while (j < mergedLen && mergedTexts[j] === '') j++
-      if (j < mergedLen && mergedKinds[j] === 'text') {
-        mergedTexts[j] = mergedTexts[i]! + mergedTexts[j]!
-        mergedStarts[j] = mergedStarts[i]!
-        mergedTexts[i] = ''
-      }
+  const forwardStickyPrefixParts: (string[] | null)[] = Array.from({ length: mergedLen }, () => null)
+  let nextLiveIndex = -1
+
+  for (let i = mergedLen - 1; i >= 0; i--) {
+    const text = mergedTexts[i]!
+    if (text.length === 0) continue
+
+    if (
+      mergedKinds[i] === 'text' &&
+      !mergedWordLike[i]! &&
+      isForwardStickyClusterSegment(text) &&
+      nextLiveIndex >= 0 &&
+      mergedKinds[nextLiveIndex] === 'text'
+    ) {
+      const prefixParts = forwardStickyPrefixParts[nextLiveIndex] ?? []
+      prefixParts.push(text)
+      forwardStickyPrefixParts[nextLiveIndex] = prefixParts
+      mergedStarts[nextLiveIndex] = mergedStarts[i]!
+      mergedTexts[i] = ''
+      continue
     }
+
+    nextLiveIndex = i
+  }
+
+  for (let i = 0; i < mergedLen; i++) {
+    const prefixParts = forwardStickyPrefixParts[i]
+    if (prefixParts == null) continue
+    mergedTexts[i] = joinReversedPrefixParts(prefixParts, mergedTexts[i]!)
   }
 
   let compactLen = 0

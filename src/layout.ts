@@ -200,44 +200,72 @@ function buildBaseCjkUnits(
   engineProfile: ReturnType<typeof getEngineProfile>,
 ): MeasuredTextUnit[] {
   const units: MeasuredTextUnit[] = []
-  let unitText = ''
+  let unitParts: string[] = []
   let unitStart = 0
+  let unitContainsCJK = false
+  let unitEndsWithClosingQuote = false
+  let unitIsSingleKinsokuEnd = false
 
   function pushUnit(): void {
-    if (unitText.length === 0) return
-    units.push({ text: unitText, start: unitStart })
-    unitText = ''
+    if (unitParts.length === 0) return
+    units.push({
+      text: unitParts.length === 1 ? unitParts[0]! : unitParts.join(''),
+      start: unitStart,
+    })
+    unitParts = []
+    unitContainsCJK = false
+    unitEndsWithClosingQuote = false
+    unitIsSingleKinsokuEnd = false
+  }
+
+  function startUnit(grapheme: string, start: number, graphemeContainsCJK: boolean): void {
+    unitParts = [grapheme]
+    unitStart = start
+    unitContainsCJK = graphemeContainsCJK
+    unitEndsWithClosingQuote = endsWithClosingQuote(grapheme)
+    unitIsSingleKinsokuEnd = kinsokuEnd.has(grapheme)
+  }
+
+  function appendToUnit(grapheme: string, graphemeContainsCJK: boolean): void {
+    unitParts.push(grapheme)
+    unitContainsCJK = unitContainsCJK || graphemeContainsCJK
+    const graphemeEndsWithClosingQuote = endsWithClosingQuote(grapheme)
+    if (grapheme.length === 1 && leftStickyPunctuation.has(grapheme)) {
+      unitEndsWithClosingQuote = unitEndsWithClosingQuote || graphemeEndsWithClosingQuote
+    } else {
+      unitEndsWithClosingQuote = graphemeEndsWithClosingQuote
+    }
+    unitIsSingleKinsokuEnd = false
   }
 
   for (const gs of getSharedGraphemeSegmenter().segment(segText)) {
     const grapheme = gs.segment
+    const graphemeContainsCJK = isCJK(grapheme)
 
-    if (unitText.length === 0) {
-      unitText = grapheme
-      unitStart = gs.index
+    if (unitParts.length === 0) {
+      startUnit(grapheme, gs.index, graphemeContainsCJK)
       continue
     }
 
     if (
-      kinsokuEnd.has(unitText) ||
+      unitIsSingleKinsokuEnd ||
       kinsokuStart.has(grapheme) ||
       leftStickyPunctuation.has(grapheme) ||
       (engineProfile.carryCJKAfterClosingQuote &&
-        isCJK(grapheme) &&
-        endsWithClosingQuote(unitText))
+        graphemeContainsCJK &&
+        unitEndsWithClosingQuote)
     ) {
-      unitText += grapheme
+      appendToUnit(grapheme, graphemeContainsCJK)
       continue
     }
 
-    if (!isCJK(unitText) && !isCJK(grapheme)) {
-      unitText += grapheme
+    if (!unitContainsCJK && !graphemeContainsCJK) {
+      appendToUnit(grapheme, graphemeContainsCJK)
       continue
     }
 
     pushUnit()
-    unitText = grapheme
-    unitStart = gs.index
+    startUnit(grapheme, gs.index, graphemeContainsCJK)
   }
 
   pushUnit()

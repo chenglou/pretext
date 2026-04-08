@@ -4,9 +4,9 @@
     "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36",
     "devicePixelRatio": 2,
     "viewport": {
-      "innerWidth": 1510,
+      "innerWidth": 1512,
       "innerHeight": 757,
-      "outerWidth": 1510,
+      "outerWidth": 1512,
       "outerHeight": 844,
       "visualViewportScale": 1
     },
@@ -76825,5 +76825,5 @@
       "diff": 0
     }
   ],
-  "requestId": "1775293308620-zttbpv"
+  "requestId": "1775661149155-ro1npb"
 }

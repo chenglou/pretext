@@ -465,6 +465,12 @@ describe('prepare invariants', () => {
     expect(prepared.segments).toEqual(['say', ' ', String.raw`\"hello\"`, ' ', 'there'])
   })
 
+  test('keeps escaped quote clusters attached through preceding opening punctuation', () => {
+    const text = String.raw`((\"\"word`
+    const prepared = prepareWithSegments(text, FONT)
+    expect(prepared.segments).toEqual([text])
+  })
+
   test('keeps URL-like runs together as one breakable segment', () => {
     const prepared = prepareWithSegments('see https://example.com/reports/q3?lang=ar&mode=full now', FONT)
     expect(prepared.segments).toEqual([
