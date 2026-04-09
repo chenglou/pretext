@@ -30,6 +30,14 @@ export type InternalLayoutLine = {
   width: number
 }
 
+type InternalLineVisitor = (
+  width: number,
+  startSegmentIndex: number,
+  startGraphemeIndex: number,
+  endSegmentIndex: number,
+  endGraphemeIndex: number,
+) => void
+
 function normalizeSimpleLineStartSegmentIndex(
   prepared: PreparedLineBreakData,
   segmentIndex: number,
@@ -163,16 +171,13 @@ export function normalizeLineStart(
 }
 
 export function countPreparedLines(prepared: PreparedLineBreakData, maxWidth: number): number {
-  if (prepared.simpleLineWalkFastPath) {
-    return walkPreparedLinesSimple(prepared, maxWidth)
-  }
-  return walkPreparedLines(prepared, maxWidth)
+  return walkPreparedLinesRaw(prepared, maxWidth)
 }
 
 function walkPreparedLinesSimple(
   prepared: PreparedLineBreakData,
   maxWidth: number,
-  onLine?: (line: InternalLayoutLine) => void,
+  onLine?: InternalLineVisitor,
 ): number {
   const { widths, kinds, breakableFitAdvances } = prepared
   if (widths.length === 0) return 0
@@ -202,13 +207,13 @@ function walkPreparedLinesSimple(
     width = lineW,
   ): void {
     lineCount++
-    onLine?.({
-      startSegmentIndex: lineStartSegmentIndex,
-      startGraphemeIndex: lineStartGraphemeIndex,
+    onLine?.(
+      width,
+      lineStartSegmentIndex,
+      lineStartGraphemeIndex,
       endSegmentIndex,
       endGraphemeIndex,
-      width,
-    })
+    )
     lineW = 0
     hasContent = false
     clearPendingBreak()
@@ -335,10 +340,10 @@ function walkPreparedLinesSimple(
   return lineCount
 }
 
-export function walkPreparedLines(
+export function walkPreparedLinesRaw(
   prepared: PreparedLineBreakData,
   maxWidth: number,
-  onLine?: (line: InternalLayoutLine) => void,
+  onLine?: InternalLineVisitor,
 ): number {
   if (prepared.simpleLineWalkFastPath) {
     return walkPreparedLinesSimple(prepared, maxWidth, onLine)
@@ -385,13 +390,13 @@ export function walkPreparedLines(
     width = lineW,
   ): void {
     lineCount++
-    onLine?.({
-      startSegmentIndex: lineStartSegmentIndex,
-      startGraphemeIndex: lineStartGraphemeIndex,
+    onLine?.(
+      width,
+      lineStartSegmentIndex,
+      lineStartGraphemeIndex,
       endSegmentIndex,
       endGraphemeIndex,
-      width,
-    })
+    )
     lineW = 0
     hasContent = false
     clearPendingBreak()
@@ -499,13 +504,7 @@ export function walkPreparedLines(
 
   function emitEmptyChunk(chunk: { startSegmentIndex: number, consumedEndSegmentIndex: number }): void {
     lineCount++
-    onLine?.({
-      startSegmentIndex: chunk.startSegmentIndex,
-      startGraphemeIndex: 0,
-      endSegmentIndex: chunk.consumedEndSegmentIndex,
-      endGraphemeIndex: 0,
-      width: 0,
-    })
+    onLine?.(0, chunk.startSegmentIndex, 0, chunk.consumedEndSegmentIndex, 0)
     clearPendingBreak()
   }
 
@@ -620,6 +619,28 @@ export function walkPreparedLines(
   }
 
   return lineCount
+}
+
+export function walkPreparedLines(
+  prepared: PreparedLineBreakData,
+  maxWidth: number,
+  onLine?: (line: InternalLayoutLine) => void,
+): number {
+  if (onLine === undefined) return walkPreparedLinesRaw(prepared, maxWidth)
+
+  return walkPreparedLinesRaw(
+    prepared,
+    maxWidth,
+    (width, startSegmentIndex, startGraphemeIndex, endSegmentIndex, endGraphemeIndex) => {
+      onLine({
+        startSegmentIndex,
+        startGraphemeIndex,
+        endSegmentIndex,
+        endGraphemeIndex,
+        width,
+      })
+    },
+  )
 }
 
 function stepPreparedChunkLineGeometry(

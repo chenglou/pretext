@@ -62,10 +62,10 @@ import {
 } from './measurement.js'
 import {
   countPreparedLines,
-  layoutNextLineRange as stepPreparedLineRange,
   measurePreparedLineGeometry,
-  walkPreparedLines,
-  type InternalLayoutLine,
+  normalizeLineStart,
+  stepPreparedLineGeometry,
+  walkPreparedLinesRaw,
 } from './line-break.js'
 
 let sharedGraphemeSegmenter: Intl.Segmenter | null = null
@@ -694,32 +694,22 @@ function createLayoutLine(
   }
 }
 
-function materializeLayoutLine(
-  prepared: PreparedTextWithSegments,
-  cache: Map<number, string[]>,
-  line: InternalLayoutLine,
-): LayoutLine {
-  return createLayoutLine(
-    prepared,
-    cache,
-    line.width,
-    line.startSegmentIndex,
-    line.startGraphemeIndex,
-    line.endSegmentIndex,
-    line.endGraphemeIndex,
-  )
-}
-
-function toLayoutLineRange(line: InternalLayoutLine): LayoutLineRange {
+function createLayoutLineRange(
+  width: number,
+  startSegmentIndex: number,
+  startGraphemeIndex: number,
+  endSegmentIndex: number,
+  endGraphemeIndex: number,
+): LayoutLineRange {
   return {
-    width: line.width,
+    width,
     start: {
-      segmentIndex: line.startSegmentIndex,
-      graphemeIndex: line.startGraphemeIndex,
+      segmentIndex: startSegmentIndex,
+      graphemeIndex: startGraphemeIndex,
     },
     end: {
-      segmentIndex: line.endSegmentIndex,
-      graphemeIndex: line.endGraphemeIndex,
+      segmentIndex: endSegmentIndex,
+      graphemeIndex: endGraphemeIndex,
     },
   }
 }
@@ -748,9 +738,19 @@ export function walkLineRanges(
 ): number {
   if (prepared.widths.length === 0) return 0
 
-  return walkPreparedLines(getInternalPrepared(prepared), maxWidth, line => {
-    onLine(toLayoutLineRange(line))
-  })
+  return walkPreparedLinesRaw(
+    getInternalPrepared(prepared),
+    maxWidth,
+    (width, startSegmentIndex, startGraphemeIndex, endSegmentIndex, endGraphemeIndex) => {
+      onLine(createLayoutLineRange(
+        width,
+        startSegmentIndex,
+        startGraphemeIndex,
+        endSegmentIndex,
+        endGraphemeIndex,
+      ))
+    },
+  )
 }
 
 export function measureLineStats(
@@ -776,9 +776,26 @@ export function layoutNextLine(
   start: LayoutCursor,
   maxWidth: number,
 ): LayoutLine | null {
-  const line = layoutNextLineRange(prepared, start, maxWidth)
-  if (line === null) return null
-  return materializeLineRange(prepared, line)
+  const internal = getInternalPrepared(prepared)
+  const normalizedStart = normalizeLineStart(internal, start)
+  if (normalizedStart === null) return null
+
+  const end = {
+    segmentIndex: normalizedStart.segmentIndex,
+    graphemeIndex: normalizedStart.graphemeIndex,
+  }
+  const width = stepPreparedLineGeometry(internal, end, maxWidth)
+  if (width === null) return null
+
+  return createLayoutLine(
+    prepared,
+    getLineTextCache(prepared),
+    width,
+    normalizedStart.segmentIndex,
+    normalizedStart.graphemeIndex,
+    end.segmentIndex,
+    end.graphemeIndex,
+  )
 }
 
 export function layoutNextLineRange(
@@ -786,9 +803,24 @@ export function layoutNextLineRange(
   start: LayoutCursor,
   maxWidth: number,
 ): LayoutLineRange | null {
-  const line = stepPreparedLineRange(prepared, start, maxWidth)
-  if (line === null) return null
-  return toLayoutLineRange(line)
+  const internal = getInternalPrepared(prepared)
+  const normalizedStart = normalizeLineStart(internal, start)
+  if (normalizedStart === null) return null
+
+  const end = {
+    segmentIndex: normalizedStart.segmentIndex,
+    graphemeIndex: normalizedStart.graphemeIndex,
+  }
+  const width = stepPreparedLineGeometry(internal, end, maxWidth)
+  if (width === null) return null
+
+  return createLayoutLineRange(
+    width,
+    normalizedStart.segmentIndex,
+    normalizedStart.graphemeIndex,
+    end.segmentIndex,
+    end.graphemeIndex,
+  )
 }
 
 // Rich layout API for callers that want the actual line contents and widths.
@@ -800,9 +832,21 @@ export function layoutWithLines(prepared: PreparedTextWithSegments, maxWidth: nu
   if (prepared.widths.length === 0) return { lineCount: 0, height: 0, lines }
 
   const graphemeCache = getLineTextCache(prepared)
-  const lineCount = walkPreparedLines(getInternalPrepared(prepared), maxWidth, line => {
-    lines.push(materializeLayoutLine(prepared, graphemeCache, line))
-  })
+  const lineCount = walkPreparedLinesRaw(
+    getInternalPrepared(prepared),
+    maxWidth,
+    (width, startSegmentIndex, startGraphemeIndex, endSegmentIndex, endGraphemeIndex) => {
+      lines.push(createLayoutLine(
+        prepared,
+        graphemeCache,
+        width,
+        startSegmentIndex,
+        startGraphemeIndex,
+        endSegmentIndex,
+        endGraphemeIndex,
+      ))
+    },
+  )
 
   return { lineCount, height: lineCount * lineHeight, lines }
 }

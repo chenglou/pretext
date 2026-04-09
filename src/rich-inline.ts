@@ -2,12 +2,11 @@ import {
   materializeLineRange,
   measureNaturalWidth,
   prepareWithSegments,
+  type PreparedTextWithSegments,
   type LayoutCursor,
   type LayoutLineRange,
-  type PreparedTextWithSegments,
 } from './layout.js'
 import {
-  layoutNextLineRange as stepPreparedLineRange,
   type LineBreakCursor,
   stepPreparedLineGeometry,
 } from './line-break.js'
@@ -129,12 +128,13 @@ function prepareWholeItemLine(prepared: PreparedTextWithSegments): {
   endSegmentIndex: number
   width: number
 } | null {
-  const line = stepPreparedLineRange(prepared, EMPTY_LAYOUT_CURSOR, Number.POSITIVE_INFINITY)
-  if (line === null) return null
+  const end: LineBreakCursor = { segmentIndex: 0, graphemeIndex: 0 }
+  const width = stepPreparedLineGeometry(prepared, end, Number.POSITIVE_INFINITY)
+  if (width === null) return null
   return {
-    endGraphemeIndex: line.endGraphemeIndex,
-    endSegmentIndex: line.endSegmentIndex,
-    width: line.width,
+    endGraphemeIndex: end.graphemeIndex,
+    endSegmentIndex: end.segmentIndex,
+    width,
   }
 }
 
@@ -296,16 +296,20 @@ function stepRichInlineLine(
     }
 
     const availableWidth = Math.max(1, remainingWidth - reservedWidth)
-    const line = stepPreparedLineRange(item.prepared, textCursor, availableWidth)
-    if (line === null) {
+    const lineEnd: LineBreakCursor = {
+      segmentIndex: textCursor.segmentIndex,
+      graphemeIndex: textCursor.graphemeIndex,
+    }
+    const lineWidthForItem = stepPreparedLineGeometry(item.prepared, lineEnd, availableWidth)
+    if (lineWidthForItem === null) {
       itemIndex++
       textCursor.segmentIndex = 0
       textCursor.graphemeIndex = 0
       continue
     }
     if (
-      textCursor.segmentIndex === line.endSegmentIndex &&
-      textCursor.graphemeIndex === line.endGraphemeIndex
+      textCursor.segmentIndex === lineEnd.segmentIndex &&
+      textCursor.graphemeIndex === lineEnd.graphemeIndex
     ) {
       itemIndex++
       textCursor.segmentIndex = 0
@@ -322,20 +326,21 @@ function stepRichInlineLine(
       lineWidth > 0 &&
       atItemStart &&
       gapBefore > 0 &&
-      endsInsideFirstSegment(line.endSegmentIndex, line.endGraphemeIndex)
+      endsInsideFirstSegment(lineEnd.segmentIndex, lineEnd.graphemeIndex)
     ) {
-      const freshLine = stepPreparedLineRange(
+      const freshLineEnd: LineBreakCursor = { segmentIndex: 0, graphemeIndex: 0 }
+      const freshLineWidth = stepPreparedLineGeometry(
         item.prepared,
-        EMPTY_LAYOUT_CURSOR,
+        freshLineEnd,
         Math.max(1, safeWidth - item.extraWidth),
       )
       if (
-        freshLine !== null &&
+        freshLineWidth !== null &&
         (
-          freshLine.endSegmentIndex > line.endSegmentIndex ||
+          freshLineEnd.segmentIndex > lineEnd.segmentIndex ||
           (
-            freshLine.endSegmentIndex === line.endSegmentIndex &&
-            freshLine.endGraphemeIndex > line.endGraphemeIndex
+            freshLineEnd.segmentIndex === lineEnd.segmentIndex &&
+            freshLineEnd.graphemeIndex > lineEnd.graphemeIndex
           )
         )
       ) {
@@ -346,19 +351,19 @@ function stepRichInlineLine(
     collectFragment?.(
       item,
       gapBefore,
-      line.width + item.extraWidth,
+      lineWidthForItem + item.extraWidth,
       cloneCursor(textCursor),
       {
-        segmentIndex: line.endSegmentIndex,
-        graphemeIndex: line.endGraphemeIndex,
+        segmentIndex: lineEnd.segmentIndex,
+        graphemeIndex: lineEnd.graphemeIndex,
       },
     )
-    lineWidth += gapBefore + line.width + item.extraWidth
+    lineWidth += gapBefore + lineWidthForItem + item.extraWidth
     remainingWidth = Math.max(0, safeWidth - lineWidth)
 
     if (
-      line.endSegmentIndex === item.endSegmentIndex &&
-      line.endGraphemeIndex === item.endGraphemeIndex
+      lineEnd.segmentIndex === item.endSegmentIndex &&
+      lineEnd.graphemeIndex === item.endGraphemeIndex
     ) {
       itemIndex++
       textCursor.segmentIndex = 0
@@ -366,8 +371,8 @@ function stepRichInlineLine(
       continue
     }
 
-    textCursor.segmentIndex = line.endSegmentIndex
-    textCursor.graphemeIndex = line.endGraphemeIndex
+    textCursor.segmentIndex = lineEnd.segmentIndex
+    textCursor.graphemeIndex = lineEnd.graphemeIndex
     break
   }
 
