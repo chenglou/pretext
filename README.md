@@ -233,6 +233,20 @@ Pretext doesn't try to be a full font rendering engine (yet?). It currently targ
 - `{ wordBreak: 'keep-all' }` is supported too. It behaves like you'd expect for CJK/Hangul text, while keeping the same `overflow-wrap: break-word` fallback for overlong runs.
 - `system-ui` is unsafe for `layout()` accuracy on macOS. Use a named font.
 
+## FAQ
+
+### Does this only run in a browser?
+
+Browser environments are the supported target today. Pretext relies on browser-grounded measurement, and server canvas is still "maybe later", not a documented promise.
+
+### Does it work with arbitrary CSS and custom fonts?
+
+Custom fonts are fine once the browser has loaded them. Arbitrary CSS is not the target. The current target is the common app-text configuration listed above: `white-space: normal`, `word-break: normal`, `overflow-wrap: break-word`, and `line-break: auto`, plus the explicit `{ whiteSpace: 'pre-wrap' }` and `{ wordBreak: 'keep-all' }` modes.
+
+### How fast is it compared with Satori?
+
+Check the current snapshots in [STATUS.md](STATUS.md), [status/dashboard.json](status/dashboard.json), and the local `/benchmark` page instead of relying on fixed prose here. The benchmark methodology is still being refined, so the checked-in snapshots are the source of truth.
+
 ## Develop
 
 See [DEVELOPMENT.md](DEVELOPMENT.md) for the dev setup and commands.
