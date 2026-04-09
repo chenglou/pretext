@@ -1,11 +1,13 @@
 import {
-  materializeLineRange,
   measureNaturalWidth,
   prepareWithSegments,
   type PreparedTextWithSegments,
   type LayoutCursor,
-  type LayoutLineRange,
 } from './layout.js'
+import {
+  buildLineTextFromRange,
+  getLineTextCache,
+} from './line-text.js'
 import {
   type LineBreakCursor,
   stepPreparedLineGeometry,
@@ -551,12 +553,14 @@ function materializeFragmentText(
   item: PreparedRichInlineItem,
   fragment: RichInlineFragmentRange,
 ): string {
-  const line = materializeLineRange(item.prepared, {
-    width: fragment.occupiedWidth - item.extraWidth,
-    start: fragment.start,
-    end: fragment.end,
-  } satisfies LayoutLineRange)
-  return line.text
+  return buildLineTextFromRange(
+    item.prepared,
+    getLineTextCache(item.prepared),
+    fragment.start.segmentIndex,
+    fragment.start.graphemeIndex,
+    fragment.end.segmentIndex,
+    fragment.end.graphemeIndex,
+  )
 }
 
 // Bridge from cheap range walking to full fragment text. Lets callers do
@@ -567,15 +571,24 @@ export function materializeRichInlineLineRange(
   line: RichInlineLineRange,
 ): RichInlineLine {
   const flow = getInternalPreparedRichInline(prepared)
+  const fragments: RichInlineFragment[] = []
+
+  for (let i = 0; i < line.fragments.length; i++) {
+    const fragment = line.fragments[i]!
+    const item = flow.itemsBySourceItemIndex[fragment.itemIndex]
+    if (item === undefined) throw new Error('Missing rich-text inline item for fragment')
+    fragments.push({
+      itemIndex: fragment.itemIndex,
+      text: materializeFragmentText(item, fragment),
+      gapBefore: fragment.gapBefore,
+      occupiedWidth: fragment.occupiedWidth,
+      start: fragment.start,
+      end: fragment.end,
+    })
+  }
+
   return {
-    fragments: line.fragments.map(fragment => {
-      const item = flow.itemsBySourceItemIndex[fragment.itemIndex]
-      if (item === undefined) throw new Error('Missing rich-text inline item for fragment')
-      return {
-        ...fragment,
-        text: materializeFragmentText(item, fragment),
-      }
-    }),
+    fragments,
     width: line.width,
     end: line.end,
   }

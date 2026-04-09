@@ -67,11 +67,13 @@ import {
   stepPreparedLineGeometry,
   walkPreparedLinesRaw,
 } from './line-break.js'
+import {
+  buildLineTextFromRange,
+  clearLineTextCaches,
+  getLineTextCache,
+} from './line-text.js'
 
 let sharedGraphemeSegmenter: Intl.Segmenter | null = null
-// Rich-path only. Reuses grapheme splits while materializing multiple lines
-// from the same prepared handle, without pushing that cache into the API.
-let sharedLineTextCaches = new WeakMap<PreparedTextWithSegments, Map<number, string[]>>()
 
 function getSharedGraphemeSegmenter(): Intl.Segmenter {
   if (sharedGraphemeSegmenter === null) {
@@ -585,84 +587,6 @@ export function layout(prepared: PreparedText, maxWidth: number, lineHeight: num
   return { lineCount, height: lineCount * lineHeight }
 }
 
-function getSegmentGraphemes(
-  segmentIndex: number,
-  segments: string[],
-  cache: Map<number, string[]>,
-): string[] {
-  let graphemes = cache.get(segmentIndex)
-  if (graphemes !== undefined) return graphemes
-
-  graphemes = []
-  const graphemeSegmenter = getSharedGraphemeSegmenter()
-  for (const gs of graphemeSegmenter.segment(segments[segmentIndex]!)) {
-    graphemes.push(gs.segment)
-  }
-  cache.set(segmentIndex, graphemes)
-  return graphemes
-}
-
-function getLineTextCache(prepared: PreparedTextWithSegments): Map<number, string[]> {
-  let cache = sharedLineTextCaches.get(prepared)
-  if (cache !== undefined) return cache
-
-  cache = new Map<number, string[]>()
-  sharedLineTextCaches.set(prepared, cache)
-  return cache
-}
-
-function lineHasDiscretionaryHyphen(
-  kinds: SegmentBreakKind[],
-  startSegmentIndex: number,
-  startGraphemeIndex: number,
-  endSegmentIndex: number,
-): boolean {
-  return (
-    endSegmentIndex > 0 &&
-    kinds[endSegmentIndex - 1] === 'soft-hyphen' &&
-    !(startSegmentIndex === endSegmentIndex && startGraphemeIndex > 0)
-  )
-}
-
-function buildLineTextFromRange(
-  segments: string[],
-  kinds: SegmentBreakKind[],
-  cache: Map<number, string[]>,
-  startSegmentIndex: number,
-  startGraphemeIndex: number,
-  endSegmentIndex: number,
-  endGraphemeIndex: number,
-): string {
-  let text = ''
-  const endsWithDiscretionaryHyphen = lineHasDiscretionaryHyphen(
-    kinds,
-    startSegmentIndex,
-    startGraphemeIndex,
-    endSegmentIndex,
-  )
-
-  for (let i = startSegmentIndex; i < endSegmentIndex; i++) {
-    if (kinds[i] === 'soft-hyphen' || kinds[i] === 'hard-break') continue
-    if (i === startSegmentIndex && startGraphemeIndex > 0) {
-      text += getSegmentGraphemes(i, segments, cache).slice(startGraphemeIndex).join('')
-    } else {
-      text += segments[i]!
-    }
-  }
-
-  if (endGraphemeIndex > 0) {
-    if (endsWithDiscretionaryHyphen) text += '-'
-    text += getSegmentGraphemes(endSegmentIndex, segments, cache).slice(
-      startSegmentIndex === endSegmentIndex ? startGraphemeIndex : 0,
-      endGraphemeIndex,
-    ).join('')
-  } else if (endsWithDiscretionaryHyphen) {
-    text += '-'
-  }
-
-  return text
-}
-
 function createLayoutLine(
   prepared: PreparedTextWithSegments,
   cache: Map<number, string[]>,
@@ -674,8 +598,7 @@ function createLayoutLine(
 ): LayoutLine {
   return {
     text: buildLineTextFromRange(
-      prepared.segments,
-      prepared.kinds,
+      prepared,
       cache,
       startSegmentIndex,
       startGraphemeIndex,
@@ -765,8 +688,8 @@ export function measureLineStats(
 // Explicit hard breaks still count, so this returns the widest forced line.
 export function measureNaturalWidth(prepared: PreparedTextWithSegments): number {
   let maxWidth = 0
-  walkLineRanges(prepared, Number.POSITIVE_INFINITY, line => {
-    if (line.width > maxWidth) maxWidth = line.width
+  walkPreparedLinesRaw(getInternalPrepared(prepared), Number.POSITIVE_INFINITY, width => {
+    if (width > maxWidth) maxWidth = width
   })
   return maxWidth
 }
@@ -854,7 +777,7 @@ export function layoutWithLines(prepared: PreparedTextWithSegments, maxWidth: nu
 export function clearCache(): void {
   clearAnalysisCaches()
   sharedGraphemeSegmenter = null
-  sharedLineTextCaches = new WeakMap<PreparedTextWithSegments, Map<number, string[]>>()
+  clearLineTextCaches()
   clearMeasurementCaches()
 }
 
