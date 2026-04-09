@@ -524,6 +524,15 @@ function isUrlQueryBoundarySegment(text: string): boolean {
 }
 
 function mergeUrlLikeRuns(segmentation: MergedSegmentation): MergedSegmentation {
+  let hasUrlStart = false
+  for (let i = 0; i < segmentation.len; i++) {
+    if (segmentation.kinds[i] === 'text' && isUrlLikeRunStart(segmentation, i)) {
+      hasUrlStart = true
+      break
+    }
+  }
+  if (!hasUrlStart) return segmentation
+
   const texts = segmentation.texts.slice()
   const isWordLike = segmentation.isWordLike.slice()
   const kinds = segmentation.kinds.slice()
@@ -574,6 +583,17 @@ function mergeUrlLikeRuns(segmentation: MergedSegmentation): MergedSegmentation 
 }
 
 function mergeUrlQueryRuns(segmentation: MergedSegmentation): MergedSegmentation {
+  // Conservative guard: if no text segment looks like a URL query boundary,
+  // this pass cannot produce any change.
+  let hasQueryBoundary = false
+  for (let i = 0; i < segmentation.len; i++) {
+    if (segmentation.kinds[i] === 'text' && isUrlQueryBoundarySegment(segmentation.texts[i]!)) {
+      hasQueryBoundary = true
+      break
+    }
+  }
+  if (!hasQueryBoundary) return segmentation
+
   const texts: string[] = []
   const isWordLike: boolean[] = []
   const kinds: SegmentBreakKind[] = []
@@ -648,6 +668,16 @@ export function isNumericRunSegment(text: string): boolean {
 }
 
 function mergeNumericRuns(segmentation: MergedSegmentation): MergedSegmentation {
+  let hasNumericRun = false
+  for (let i = 0; i < segmentation.len; i++) {
+    const text = segmentation.texts[i]!
+    if (segmentation.kinds[i] === 'text' && isNumericRunSegment(text) && segmentContainsDecimalDigit(text)) {
+      hasNumericRun = true
+      break
+    }
+  }
+  if (!hasNumericRun) return segmentation
+
   const texts: string[] = []
   const isWordLike: boolean[] = []
   const kinds: SegmentBreakKind[] = []
@@ -693,6 +723,21 @@ function mergeNumericRuns(segmentation: MergedSegmentation): MergedSegmentation 
 }
 
 function mergeAsciiPunctuationChains(segmentation: MergedSegmentation): MergedSegmentation {
+  let hasChain = false
+  for (let i = 0; i < segmentation.len - 1; i++) {
+    if (
+      segmentation.kinds[i] === 'text' &&
+      segmentation.isWordLike[i] &&
+      asciiPunctuationChainTrailingJoinersRe.test(segmentation.texts[i]!) &&
+      segmentation.kinds[i + 1] === 'text' &&
+      segmentation.isWordLike[i + 1]
+    ) {
+      hasChain = true
+      break
+    }
+  }
+  if (!hasChain) return segmentation
+
   const texts: string[] = []
   const isWordLike: boolean[] = []
   const kinds: SegmentBreakKind[] = []
@@ -745,6 +790,16 @@ function mergeAsciiPunctuationChains(segmentation: MergedSegmentation): MergedSe
 }
 
 function splitHyphenatedNumericRuns(segmentation: MergedSegmentation): MergedSegmentation {
+  let hasHyphenatedNumeric = false
+  for (let i = 0; i < segmentation.len; i++) {
+    const text = segmentation.texts[i]!
+    if (segmentation.kinds[i] === 'text' && text.includes('-') && segmentContainsDecimalDigit(text)) {
+      hasHyphenatedNumeric = true
+      break
+    }
+  }
+  if (!hasHyphenatedNumeric) return segmentation
+
   const texts: string[] = []
   const isWordLike: boolean[] = []
   const kinds: SegmentBreakKind[] = []
@@ -874,6 +929,20 @@ function mergeGlueConnectedTextRuns(segmentation: MergedSegmentation): MergedSeg
 }
 
 function carryTrailingForwardStickyAcrossCJKBoundary(segmentation: MergedSegmentation): MergedSegmentation {
+  let hasAdjacentCjkText = false
+  for (let i = 0; i < segmentation.len - 1; i++) {
+    if (
+      segmentation.kinds[i] === 'text' &&
+      segmentation.kinds[i + 1] === 'text' &&
+      isCJK(segmentation.texts[i]!) &&
+      isCJK(segmentation.texts[i + 1]!)
+    ) {
+      hasAdjacentCjkText = true
+      break
+    }
+  }
+  if (!hasAdjacentCjkText) return segmentation
+
   const texts = segmentation.texts.slice()
   const isWordLike = segmentation.isWordLike.slice()
   const kinds = segmentation.kinds.slice()
