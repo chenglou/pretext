@@ -19,7 +19,7 @@ Alternatively, see them live at [chenglou.me/pretext](https://chenglou.me/pretex
 
 Pretext serves 2 use cases:
 
-### 1. Measure a paragraph's height _without ever touching DOM_
+### 1. Measure paragraph's height _without ever touching DOM_
 
 ```ts
 import { prepare, layout } from '@chenglou/pretext'
