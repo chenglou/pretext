@@ -59,8 +59,6 @@ const { height, lineCount } = useMemo(
 )
 ```
 
-The same idea applies outside React too: cache the `prepare()` result based on text/font inputs, then rerun `layout()` when width changes.
-
 Vue (Composition API) example:
 
 ```ts
@@ -107,23 +105,6 @@ const lineCount = computed(() => measured().lineCount)
 
 Clone the repo, run `bun install`, then `bun start`, and open `/demos/index` in your browser. On Windows, use `bun run start:windows`.
 Alternatively, see them live at [chenglou.me/pretext](https://chenglou.me/pretext/). Some more at [somnai-dreams.github.io/pretext-demos](https://somnai-dreams.github.io/pretext-demos/)
-
-Good first pages:
-
-- [chenglou.me/pretext/](https://chenglou.me/pretext/) — main demo page
-- [chenglou.me/pretext/justification-comparison](https://chenglou.me/pretext/justification-comparison) — a stable example page in the main demo set
-- [chenglou.me/pretext/dynamic-layout](https://chenglou.me/pretext/dynamic-layout) — a practical multiline layout example
-- [somnai-dreams.github.io/pretext-demos](https://somnai-dreams.github.io/pretext-demos/) — extra exploratory demos, including richer custom layouts
-
-## Which API should I start with?
-
-| If you need... | Start with... |
-| --- | --- |
-| height prediction for ordinary app text | `prepare()` + `layout()` |
-| visible spaces / tabs / line breaks like a textarea | `prepare(..., { whiteSpace: 'pre-wrap' })` + `layout()` |
-| custom line rendering to canvas / SVG / WebGL | `prepareWithSegments()` + `layoutWithLines()` |
-| streaming or variable-width line routing | `prepareWithSegments()` + `layoutNextLine()` |
-| shrink-wrap / widest-line geometry without building line strings | `prepareWithSegments()` + `walkLineRanges()` |
 
 ## API
 
