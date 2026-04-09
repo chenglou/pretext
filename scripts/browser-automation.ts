@@ -3,6 +3,7 @@ import { closeSync, mkdirSync, mkdtempSync, openSync, readFileSync, rmSync, writ
 import { createConnection, createServer as createNetServer } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import type { Browser as PlaywrightBrowser, BrowserContext as PlaywrightBrowserContext, Page as PlaywrightPage } from 'playwright-core'
 import { readNavigationPhaseState, readNavigationReportText, type NavigationPhase } from '../shared/navigation-state.ts'
 
 export type BrowserKind = 'chrome' | 'safari' | 'firefox'
@@ -28,6 +29,20 @@ export type PageServer = {
 export type BrowserAutomationLock = {
   release: () => void
 }
+
+type ChromeAutomationDriver = 'apple-script' | 'playwright'
+
+type PlaywrightChromeSessionState = {
+  browser: PlaywrightBrowser
+  context: PlaywrightBrowserContext
+  page: PlaywrightPage
+}
+
+const PLAYWRIGHT_CHROME_EXECUTABLE = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
+const PLAYWRIGHT_CHROME_VIEWPORT = { width: 1512, height: 762 } as const
+const PLAYWRIGHT_CHROME_SCREEN = { width: 1512, height: 982 } as const
+const PLAYWRIGHT_CHROME_DEVICE_SCALE_FACTOR = 2
+const PLAYWRIGHT_CHROME_SCREEN_INFO = '--screen-info={3024x1964 devicePixelRatio=2}'
 
 function runAppleScript(lines: string[]): string {
   return execFileSync(
@@ -65,6 +80,23 @@ function runBackgroundAppleScript(lines: string[]): string {
   } finally {
     restoreFrontmostApplication(frontmost)
   }
+}
+
+function getChromeAutomationDriver(options: BrowserSessionOptions): ChromeAutomationDriver {
+  const raw = (process.env['CHROME_AUTOMATION_DRIVER'] ?? 'apple-script').trim().toLowerCase()
+
+  if (raw === '' || raw === 'apple-script') {
+    return 'apple-script'
+  }
+
+  if (raw === 'playwright') {
+    if (options.foreground === true) {
+      throw new Error('CHROME_AUTOMATION_DRIVER=playwright does not support foreground runs; use AppleScript for benchmarks')
+    }
+    return 'playwright'
+  }
+
+  throw new Error(`Unsupported CHROME_AUTOMATION_DRIVER=${raw}; expected apple-script or playwright`)
 }
 
 export function sleep(ms: number): Promise<void> {
@@ -410,6 +442,125 @@ async function initializeFirefoxSession(): Promise<FirefoxSessionState> {
   }
 }
 
+async function loadPlaywrightChromium(): Promise<{
+  launch: (options: {
+    headless: boolean
+    executablePath: string
+    args: string[]
+  }) => Promise<PlaywrightBrowser>
+}> {
+  try {
+    const module = await import('playwright-core')
+    return module.chromium
+  } catch (error) {
+    throw new Error(
+      `CHROME_AUTOMATION_DRIVER=playwright requires playwright-core to be installed: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    )
+  }
+}
+
+type PlaywrightChromeEnvironment = {
+  innerWidth: number
+  innerHeight: number
+  screenWidth: number
+  screenHeight: number
+  dpr: number
+}
+
+async function readPlaywrightChromeEnvironment(page: PlaywrightPage): Promise<PlaywrightChromeEnvironment> {
+  return await page.evaluate(() => ({
+    innerWidth: window.innerWidth,
+    innerHeight: window.innerHeight,
+    screenWidth: window.screen.width,
+    screenHeight: window.screen.height,
+    dpr: window.devicePixelRatio,
+  }))
+}
+
+function formatPlaywrightChromeEnvironment(env: PlaywrightChromeEnvironment): string {
+  return `${env.innerWidth}x${env.innerHeight} screen=${env.screenWidth}x${env.screenHeight} dpr=${env.dpr}`
+}
+
+async function assertPlaywrightChromeEnvironment(page: PlaywrightPage): Promise<void> {
+  const env = await readPlaywrightChromeEnvironment(page)
+  const matches =
+    env.innerWidth === PLAYWRIGHT_CHROME_VIEWPORT.width &&
+    env.innerHeight === PLAYWRIGHT_CHROME_VIEWPORT.height &&
+    env.screenWidth === PLAYWRIGHT_CHROME_SCREEN.width &&
+    env.screenHeight === PLAYWRIGHT_CHROME_SCREEN.height &&
+    env.dpr === PLAYWRIGHT_CHROME_DEVICE_SCALE_FACTOR
+
+  if (matches) return
+
+  throw new Error(
+    `Pinned Playwright Chrome environment mismatch: expected ${PLAYWRIGHT_CHROME_VIEWPORT.width}x${PLAYWRIGHT_CHROME_VIEWPORT.height} screen=${PLAYWRIGHT_CHROME_SCREEN.width}x${PLAYWRIGHT_CHROME_SCREEN.height} dpr=${PLAYWRIGHT_CHROME_DEVICE_SCALE_FACTOR}, got ${formatPlaywrightChromeEnvironment(env)}`,
+  )
+}
+
+async function initializePlaywrightChromeSession(): Promise<PlaywrightChromeSessionState> {
+  const chromium = await loadPlaywrightChromium()
+  const browser = await chromium.launch({
+    headless: true,
+    executablePath: PLAYWRIGHT_CHROME_EXECUTABLE,
+    args: [PLAYWRIGHT_CHROME_SCREEN_INFO],
+  })
+
+  try {
+    const context = await browser.newContext({
+      viewport: PLAYWRIGHT_CHROME_VIEWPORT,
+      screen: PLAYWRIGHT_CHROME_SCREEN,
+      deviceScaleFactor: PLAYWRIGHT_CHROME_DEVICE_SCALE_FACTOR,
+    })
+    const page = await context.newPage()
+    return { browser, context, page }
+  } catch (error) {
+    await browser.close().catch(() => {})
+    throw error
+  }
+}
+
+function closePlaywrightChromeSessionState(state: PlaywrightChromeSessionState): void {
+  void state.context.close().catch(() => {})
+  void state.browser.close().catch(() => {})
+}
+
+function createPlaywrightChromeSession(): BrowserSession {
+  let statePromise: Promise<PlaywrightChromeSessionState> | null = null
+  let closed = false
+
+  function ensureState(): Promise<PlaywrightChromeSessionState> {
+    if (closed) {
+      return Promise.reject(new Error('Playwright Chrome automation session already closed'))
+    }
+    statePromise ??= initializePlaywrightChromeSession()
+    return statePromise
+  }
+
+  return {
+    async navigate(url) {
+      const state = await ensureState()
+      await state.page.goto(url, { waitUntil: 'load' })
+      await assertPlaywrightChromeEnvironment(state.page)
+    },
+    async readLocationUrl() {
+      try {
+        const state = await ensureState()
+        return state.page.url()
+      } catch {
+        return ''
+      }
+    },
+    close() {
+      if (closed) return
+      closed = true
+      if (statePromise === null) return
+      void statePromise.then(closePlaywrightChromeSessionState, () => {})
+    },
+  }
+}
+
 function createSafariSession(options: BrowserSessionOptions): BrowserSession {
   const scriptLines = ['tell application "Safari"']
 
@@ -476,6 +627,10 @@ function createSafariSession(options: BrowserSessionOptions): BrowserSession {
 }
 
 function createChromeSession(options: BrowserSessionOptions): BrowserSession {
+  if (getChromeAutomationDriver(options) === 'playwright') {
+    return createPlaywrightChromeSession()
+  }
+
   const scriptLines = [
     'tell application "Google Chrome"',
     'if (count of windows) = 0 then make new window',

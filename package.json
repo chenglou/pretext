@@ -83,6 +83,7 @@
     "marked": "^17.0.5",
     "oxlint": "^1.51.0",
     "oxlint-tsgolint": "^0.15.0",
+    "playwright-core": "^1.59.1",
     "tsgolint": "^0.0.1",
     "typescript": "6.0.2"
   }
