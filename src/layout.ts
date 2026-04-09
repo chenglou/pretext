@@ -62,6 +62,7 @@ import {
 } from './measurement.js'
 import {
   countPreparedLines,
+  getTabAdvance,
   layoutNextLineRange as stepPreparedLineRange,
   measurePreparedLineGeometry,
   walkPreparedLines,
@@ -805,6 +806,73 @@ export function layoutWithLines(prepared: PreparedTextWithSegments, maxWidth: nu
   })
 
   return { lineCount, height: lineCount * lineHeight, lines }
+}
+
+// Narrowest container width where no word needs grapheme-level breaking.
+// Pure arithmetic over cached segment widths — no DOM reads, no canvas calls.
+// Matches CSS min-content behavior for the targeted white-space / overflow-wrap config.
+export function minContentWidth(prepared: PreparedText): number {
+  const p = getInternalPrepared(prepared)
+  let max = 0
+  for (let i = 0; i < p.widths.length; i++) {
+    const kind = p.kinds[i]!
+    if (
+      kind === 'space' ||
+      kind === 'preserved-space' ||
+      kind === 'tab' ||
+      kind === 'zero-width-break' ||
+      kind === 'soft-hyphen' ||
+      kind === 'hard-break'
+    ) {
+      continue
+    }
+    let w = p.widths[i]!
+    if (i + 1 < p.kinds.length && p.kinds[i + 1] === 'soft-hyphen') {
+      w += p.discretionaryHyphenWidth
+    }
+    if (w > max) max = w
+  }
+  return max
+}
+
+// Single-line width when no soft wrapping occurs, excluding trailing whitespace.
+// For pre-wrap text with hard breaks, returns the widest hard-break-separated chunk.
+// Pure arithmetic over cached segment widths — no DOM reads, no canvas calls.
+// Matches CSS max-content behavior for the targeted white-space / overflow-wrap config.
+export function maxContentWidth(prepared: PreparedText): number {
+  const p = getInternalPrepared(prepared)
+  if (p.widths.length === 0) return 0
+
+  let maxWidth = 0
+  let lineWidth = 0
+  let contentWidth = 0
+
+  for (let i = 0; i < p.widths.length; i++) {
+    const kind = p.kinds[i]!
+
+    if (kind === 'hard-break') {
+      if (contentWidth > maxWidth) maxWidth = contentWidth
+      lineWidth = 0
+      contentWidth = 0
+      continue
+    }
+
+    if (kind === 'soft-hyphen') continue
+
+    if (kind === 'tab') {
+      lineWidth += getTabAdvance(lineWidth, p.tabStopAdvance)
+      continue
+    }
+
+    lineWidth += p.widths[i]!
+
+    if (kind !== 'space' && kind !== 'preserved-space' && kind !== 'zero-width-break') {
+      contentWidth = lineWidth
+    }
+  }
+
+  if (contentWidth > maxWidth) maxWidth = contentWidth
+  return maxWidth
 }
 
 export function clearCache(): void {
