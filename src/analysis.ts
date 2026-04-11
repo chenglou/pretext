@@ -98,9 +98,32 @@ export function setAnalysisLocale(locale?: string): void {
 const arabicScriptRe = /\p{Script=Arabic}/u
 const combiningMarkRe = /\p{M}/u
 const decimalDigitRe = /\p{Nd}/u
+// Korean app/product labels often mix Hangul with ASCII letters/digits and
+// lightweight token punctuation, but URL/query/key-value separators should
+// remain structural boundaries instead of being folded into one token.
+const keepAllTextRunSeparators = new Set(['/', '?', '&', '=', ':'])
+const koreanKeepAllInnerPunctuation = new Set(['.', '-', '_', '(', ')'])
 
 function containsArabicScript(text: string): boolean {
   return arabicScriptRe.test(text)
+}
+
+function isHangulCodePoint(codePoint: number): boolean {
+  return (
+    (codePoint >= 0xAC00 && codePoint <= 0xD7AF) ||
+    (codePoint >= 0x1100 && codePoint <= 0x11FF) ||
+    (codePoint >= 0x3130 && codePoint <= 0x318F) ||
+    (codePoint >= 0xA960 && codePoint <= 0xA97F) ||
+    (codePoint >= 0xD7B0 && codePoint <= 0xD7FF)
+  )
+}
+
+function isAsciiAlphaNumericCodePoint(codePoint: number): boolean {
+  return (
+    (codePoint >= 0x30 && codePoint <= 0x39) ||
+    (codePoint >= 0x41 && codePoint <= 0x5A) ||
+    (codePoint >= 0x61 && codePoint <= 0x7A)
+  )
 }
 
 function isCJKCodePoint(codePoint: number): boolean {
@@ -146,6 +169,47 @@ export function isCJK(s: string): boolean {
   return false
 }
 
+function containsHangulText(text: string): boolean {
+  for (const ch of text) {
+    if (isHangulCodePoint(ch.codePointAt(0)!)) return true
+  }
+  return false
+}
+
+export function containsKeepAllTextRunSeparator(text: string): boolean {
+  for (const ch of text) {
+    if (keepAllTextRunSeparators.has(ch)) return true
+  }
+  return false
+}
+
+function containsBlockingKeepAllTextRunEntrySeparator(text: string): boolean {
+  let offset = 0
+  for (const ch of text) {
+    offset += ch.length
+    if (!keepAllTextRunSeparators.has(ch)) continue
+    if ((ch === '?' || ch === ':') && offset === text.length) continue
+    return true
+  }
+  return false
+}
+
+function isKoreanKeepAllCompactText(text: string): boolean {
+  if (text.length === 0) return false
+  for (const ch of text) {
+    const codePoint = ch.codePointAt(0)!
+    if (
+      isHangulCodePoint(codePoint) ||
+      isAsciiAlphaNumericCodePoint(codePoint) ||
+      koreanKeepAllInnerPunctuation.has(ch)
+    ) {
+      continue
+    }
+    return false
+  }
+  return true
+}
+
 function endsWithLineStartProhibitedText(text: string): boolean {
   const last = getLastCodePoint(text)
   return last !== null && (kinsokuStart.has(last) || leftStickyPunctuation.has(last))
@@ -172,6 +236,23 @@ export function canContinueKeepAllTextRun(previousText: string): boolean {
     !endsWithLineStartProhibitedText(previousText) &&
     !endsWithKeepAllGlueText(previousText)
   )
+}
+
+export function canContinueKeepAllTextRunAcrossBoundary(previousText: string, nextText: string): boolean {
+  const hasHangulBoundary = containsHangulText(previousText) || containsHangulText(nextText)
+  if (!hasHangulBoundary) return canContinueKeepAllTextRun(previousText)
+
+  return (
+    canContinueKeepAllTextRun(previousText) &&
+    !containsKeepAllTextRunSeparator(previousText) &&
+    !containsBlockingKeepAllTextRunEntrySeparator(nextText)
+  )
+}
+
+export function canContinueKeepAllTextRunForKorean(previousText: string, nextText: string): boolean {
+  if (!canContinueKeepAllTextRunAcrossBoundary(previousText, nextText)) return false
+  if (!containsHangulText(previousText) && !containsHangulText(nextText)) return false
+  return isKoreanKeepAllCompactText(previousText) && isKoreanKeepAllCompactText(nextText)
 }
 
 export const kinsokuStart = new Set([
@@ -1194,14 +1275,18 @@ function mergeKeepAllTextSegments(segmentation: MergedSegmentation): MergedSegme
   let pendingStart = 0
   let pendingContainsCJK = false
   let pendingCanContinue = false
+  let pendingStartedAfterKeepAllSeparator = false
+  let previousTextHadKeepAllSeparator = false
 
   function flushPendingText(): void {
     if (pendingTextParts === null) return
-    texts.push(joinTextParts(pendingTextParts))
+    const text = joinTextParts(pendingTextParts)
+    texts.push(text)
     isWordLike.push(pendingWordLike)
     kinds.push('text')
     starts.push(pendingStart)
     pendingTextParts = null
+    previousTextHadKeepAllSeparator = containsKeepAllTextRunSeparator(text)
   }
 
   for (let i = 0; i < segmentation.len; i++) {
@@ -1214,12 +1299,25 @@ function mergeKeepAllTextSegments(segmentation: MergedSegmentation): MergedSegme
       const textContainsCJK = containsCJKText(text)
       const textCanContinue = canContinueKeepAllTextRun(text)
 
-      if (pendingTextParts !== null && pendingContainsCJK && pendingCanContinue) {
-        pendingTextParts.push(text)
-        pendingWordLike = pendingWordLike || wordLike
-        pendingContainsCJK = pendingContainsCJK || textContainsCJK
-        pendingCanContinue = textCanContinue
-        continue
+      if (pendingTextParts !== null) {
+        const previousText = pendingTextParts[pendingTextParts.length - 1]!
+        const canContinueAcrossBoundary = canContinueKeepAllTextRunAcrossBoundary(previousText, text)
+        const canUseDefaultCJKKeepAll =
+          pendingContainsCJK &&
+          pendingCanContinue &&
+          canContinueAcrossBoundary &&
+          (!pendingStartedAfterKeepAllSeparator || textContainsCJK)
+        const canUseKoreanKeepAll =
+          !pendingStartedAfterKeepAllSeparator &&
+          canContinueKeepAllTextRunForKorean(previousText, text)
+
+        if (canUseDefaultCJKKeepAll || canUseKoreanKeepAll) {
+          pendingTextParts.push(text)
+          pendingWordLike = pendingWordLike || wordLike
+          pendingContainsCJK = pendingContainsCJK || textContainsCJK
+          pendingCanContinue = textCanContinue
+          continue
+        }
       }
 
       flushPendingText()
@@ -1228,6 +1326,7 @@ function mergeKeepAllTextSegments(segmentation: MergedSegmentation): MergedSegme
       pendingStart = start
       pendingContainsCJK = textContainsCJK
       pendingCanContinue = textCanContinue
+      pendingStartedAfterKeepAllSeparator = previousTextHadKeepAllSeparator
       continue
     }
 
@@ -1236,6 +1335,7 @@ function mergeKeepAllTextSegments(segmentation: MergedSegmentation): MergedSegme
     isWordLike.push(wordLike)
     kinds.push(kind)
     starts.push(start)
+    previousTextHadKeepAllSeparator = false
   }
 
   flushPendingText()

@@ -36,7 +36,10 @@ import { computeSegmentLevels } from './bidi.js'
 import {
   analyzeText,
   canContinueKeepAllTextRun,
+  canContinueKeepAllTextRunAcrossBoundary,
+  canContinueKeepAllTextRunForKorean,
   clearAnalysisCaches,
+  containsKeepAllTextRunSeparator,
   endsWithClosingQuote,
   isCJK,
   isNumericRunSegment,
@@ -282,20 +285,34 @@ function mergeKeepAllTextUnits(units: MeasuredTextUnit[]): MeasuredTextUnit[] {
   let currentStart = units[0]!.start
   let currentContainsCJK = isCJK(units[0]!.text)
   let currentCanContinue = canContinueKeepAllTextRun(units[0]!.text)
+  let currentStartedAfterKeepAllSeparator = false
+  let previousTextHadKeepAllSeparator = false
 
   function flushCurrent(): void {
+    const text = currentTextParts.length === 1 ? currentTextParts[0]! : currentTextParts.join('')
     merged.push({
-      text: currentTextParts.length === 1 ? currentTextParts[0]! : currentTextParts.join(''),
+      text,
       start: currentStart,
     })
+    previousTextHadKeepAllSeparator = containsKeepAllTextRunSeparator(text)
   }
 
   for (let i = 1; i < units.length; i++) {
     const next = units[i]!
     const nextContainsCJK = isCJK(next.text)
     const nextCanContinue = canContinueKeepAllTextRun(next.text)
+    const previousText = currentTextParts[currentTextParts.length - 1]!
+    const canContinueAcrossBoundary = canContinueKeepAllTextRunAcrossBoundary(previousText, next.text)
+    const canUseDefaultCJKKeepAll =
+      currentContainsCJK &&
+      currentCanContinue &&
+      canContinueAcrossBoundary &&
+      (!currentStartedAfterKeepAllSeparator || nextContainsCJK)
+    const canUseKoreanKeepAll =
+      !currentStartedAfterKeepAllSeparator &&
+      canContinueKeepAllTextRunForKorean(previousText, next.text)
 
-    if (currentContainsCJK && currentCanContinue) {
+    if (canUseDefaultCJKKeepAll || canUseKoreanKeepAll) {
       currentTextParts.push(next.text)
       currentContainsCJK = currentContainsCJK || nextContainsCJK
       currentCanContinue = nextCanContinue
@@ -307,6 +324,7 @@ function mergeKeepAllTextUnits(units: MeasuredTextUnit[]): MeasuredTextUnit[] {
     currentStart = next.start
     currentContainsCJK = nextContainsCJK
     currentCanContinue = nextCanContinue
+    currentStartedAfterKeepAllSeparator = previousTextHadKeepAllSeparator
   }
 
   flushCurrent()
