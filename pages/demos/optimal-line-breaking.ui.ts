@@ -31,7 +31,11 @@ export function renderFrame(
         x += seg.width
       } else {
         let spaceWidth = normalSpaceWidth
-        if (!isLastLine && spaceStretch !== 0) {
+        if (isLastLine) {
+          if (line.spaceCount < 2) {
+            spaceWidth = 0
+          }
+        } else if (spaceStretch !== 0) {
           spaceWidth = line.justifiedSpace
         }
         x += spaceWidth

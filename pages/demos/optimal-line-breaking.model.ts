@@ -98,6 +98,7 @@ function computeLineStats(
   candidates: BreakCandidate[],
   fromIdx: number,
   toIdx: number,
+  maxWidth: number,
   normalSpaceWidth: number
 ): LineStats {
   const from = candidates[fromIdx]!.segIndex
@@ -130,12 +131,12 @@ function computeLineStats(
   let badness = 0
 
   if (isLastLine) {
-    badness = wordWidth > candidates[toIdx]!.segIndex ? HUGE_BADNESS : 0
+    badness = naturalWidth > maxWidth ? HUGE_BADNESS : 0
   } else if (spaceCount <= 0) {
-    const slack = naturalWidth - wordWidth
+    const slack = maxWidth - wordWidth
     badness = slack < 0 ? HUGE_BADNESS : slack * slack * 10
   } else {
-    justifiedSpace = (naturalWidth - wordWidth + spaceCount * normalSpaceWidth - wordWidth) / spaceCount
+    justifiedSpace = (maxWidth - wordWidth) / spaceCount
 
     if (justifiedSpace < normalSpaceWidth * INFEASIBLE_SPACE_RATIO) {
       badness = HUGE_BADNESS
@@ -198,6 +199,7 @@ export function analyzeParagraphOptimal(
         candidates,
         fromCandidate,
         toCandidate,
+        maxWidth,
         normalSpaceWidth
       )
 
@@ -225,6 +227,7 @@ export function analyzeParagraphOptimal(
           candidates,
           previous[current]!,
           current,
+          maxWidth,
           normalSpaceWidth
         )
         lineStats.unshift(stats)
