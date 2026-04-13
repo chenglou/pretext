@@ -818,6 +818,30 @@ describe('layout invariants', () => {
     expect(actual).toEqual(expected.lines)
   })
 
+  test('streaming canary preserves exact continuation cursors after a ZWSP break opportunity', () => {
+    const text = 'بام  \u200DB     bا \u00ADb\u060C b\f \u061F🚀\u061Fع ر 本 \u061F\na a A\u200B 語 語\u200Dح'
+    const prepared = prepareWithSegments(text, FONT)
+    const width = 56.57
+    const expected = layoutWithLines(prepared, width, LINE_HEIGHT)
+
+    expect(collectStreamedLines(prepared, width)).toEqual(expected.lines)
+
+    const streamedRanges = []
+    let cursor = { segmentIndex: 0, graphemeIndex: 0 }
+    while (true) {
+      const line = layoutNextLineRange(prepared, cursor, width)
+      if (line === null) break
+      streamedRanges.push(line)
+      cursor = line.end
+    }
+
+    expect(streamedRanges).toEqual(expected.lines.map(line => ({
+      width: line.width,
+      start: line.start,
+      end: line.end,
+    })))
+  })
+
   test('layout and layoutWithLines stay aligned when ZWSP triggers narrow grapheme breaking', () => {
     const cases = [
       'alpha\u200Bbeta',

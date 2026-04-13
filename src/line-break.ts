@@ -42,6 +42,8 @@ function normalizeSimpleLineStartSegmentIndex(
   prepared: PreparedLineBreakData,
   segmentIndex: number,
 ): number {
+  if (segmentIndex > 0) return segmentIndex
+
   while (segmentIndex < prepared.widths.length) {
     const kind = prepared.kinds[segmentIndex]!
     if (kind !== 'space' && kind !== 'zero-width-break' && kind !== 'soft-hyphen') break
@@ -113,6 +115,12 @@ function normalizeLineStartInChunk(
   }
 
   if (segmentIndex < chunk.startSegmentIndex) segmentIndex = chunk.startSegmentIndex
+  if (segmentIndex > chunk.startSegmentIndex) {
+    cursor.segmentIndex = segmentIndex
+    cursor.graphemeIndex = 0
+    return chunkIndex
+  }
+
   while (segmentIndex < chunk.endSegmentIndex) {
     const kind = prepared.kinds[segmentIndex]!
     if (kind !== 'space' && kind !== 'zero-width-break' && kind !== 'soft-hyphen') {
