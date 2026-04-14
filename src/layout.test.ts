@@ -735,6 +735,60 @@ describe('rich-inline invariants', () => {
       )
     }
   })
+
+  test('CJK inline-rich items do not overflow maxWidth', () => {
+    // Regression test for https://github.com/chenglou/pretext/issues/120
+    // When CJK text is split across multiple rich inline items, the
+    // line-break engine's "always place at least one unit" guarantee can
+    // push a line past maxWidth if the rich inline stepper doesn't guard
+    // against overflow when starting a new item mid-line.
+    const maxWidth = 100
+    const prepared = prepareRichInline([
+      { text: '你好世界测试', font: FONT },
+      { text: '引号里的重点', font: FONT },
+      { text: '和括号里的补充', font: FONT },
+    ])
+
+    const lines: Array<{ width: number }> = []
+    walkRichInlineLineRanges(prepared, maxWidth, range => {
+      const line = materializeRichInlineLineRange(prepared, range)
+      lines.push({ width: line.width })
+    })
+
+    expect(lines.length).toBeGreaterThan(0)
+    for (const line of lines) {
+      expect(line.width).toBeLessThanOrEqual(maxWidth + 0.5) // allow lineFitEpsilon
+    }
+
+    // Also verify stats path stays consistent
+    const stats = measureRichInlineStats(prepared, maxWidth)
+    expect(stats.lineCount).toBe(lines.length)
+    expect(stats.maxLineWidth).toBeLessThanOrEqual(maxWidth + 0.5)
+  })
+
+  test('CJK inline-rich items with inter-item gap do not overflow', () => {
+    // CJK items separated by whitespace-only items (collapsed to gaps)
+    const maxWidth = 80
+    const prepared = prepareRichInline([
+      { text: '测试文本 ', font: FONT },
+      { text: ' 中文排版', font: FONT },
+      { text: ' 溢出修复', font: FONT },
+    ])
+
+    const lines: Array<{ width: number }> = []
+    walkRichInlineLineRanges(prepared, maxWidth, range => {
+      const line = materializeRichInlineLineRange(prepared, range)
+      lines.push({ width: line.width })
+    })
+
+    expect(lines.length).toBeGreaterThan(0)
+    for (const line of lines) {
+      expect(line.width).toBeLessThanOrEqual(maxWidth + 0.5)
+    }
+
+    const stats = measureRichInlineStats(prepared, maxWidth)
+    expect(stats.lineCount).toBe(lines.length)
+  })
 })
 
 describe('layout invariants', () => {
