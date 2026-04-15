@@ -1043,6 +1043,37 @@ describe('layout invariants', () => {
     expect(actual).toEqual(expected.lines)
   })
 
+  test('pre-wrap soft-hyphen does not preempt a closer breakAfter opportunity', () => {
+    // When a soft-hyphen pending break and a preserved-space breakAfter are
+    // both available, the breakAfter (which allows more content on the line)
+    // should win — matching the batch walker's check order.
+    const prepared = prepareWithSegments('A\nbا \u00ADb، b', FONT, { whiteSpace: 'pre-wrap' })
+    const width = measureWidth('bا', FONT) + measureWidth(' ', FONT) + measureWidth('b،', FONT) + measureWidth(' ', FONT) + 0.1
+    const expected = layoutWithLines(prepared, width, LINE_HEIGHT)
+    expect(collectStreamedLines(prepared, width)).toEqual(expected.lines)
+  })
+
+  test('layoutNextLine keeps leading space inside a non-simple chunk when the batch walker does', () => {
+    // After a ZWSP + space break, the chunked batch walker starts the next
+    // line at the space segment without stripping it.  The streaming stepper
+    // must match by not normalizing away that leading space.
+    const prepared = prepareWithSegments('a a A\u200B 語 語\u200Dح', FONT)
+    const width = measureWidth('a', FONT) + measureWidth(' ', FONT) + measureWidth('a', FONT) + measureWidth(' ', FONT) + measureWidth('A', FONT) + measureWidth('', FONT) + 0.1
+    const expected = layoutWithLines(prepared, width, LINE_HEIGHT)
+    expect(collectStreamedLines(prepared, width)).toEqual(expected.lines)
+  })
+
+  test('mixed-script Arabic+CJK text keeps streaming aligned with batch layout', () => {
+    // Full round-trip alignment check using the reproducer from issue #121.
+    const text = 'بام  \u200DB     bا \u00ADb\u060C b\f \u061F\uD83D\uDE80\u061F\u0639 \u0631 \u672C \u061F\na a A\u200B \u8A9E \u8A9E\u200D\u062D'
+    for (const whiteSpace of ['normal', 'pre-wrap'] as const) {
+      const prepared = prepareWithSegments(text, FONT, { whiteSpace })
+      const width = 56.57
+      const expected = layoutWithLines(prepared, width, LINE_HEIGHT)
+      expect(collectStreamedLines(prepared, width)).toEqual(expected.lines)
+    }
+  })
+
   test('pre-wrap mode keeps empty lines from consecutive hard breaks', () => {
     const prepared = prepareWithSegments('\n\n', FONT, { whiteSpace: 'pre-wrap' })
     const lines = layoutWithLines(prepared, 200, LINE_HEIGHT)

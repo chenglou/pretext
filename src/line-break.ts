@@ -113,9 +113,16 @@ function normalizeLineStartInChunk(
   }
 
   if (segmentIndex < chunk.startSegmentIndex) segmentIndex = chunk.startSegmentIndex
+  // The simple fast path skips collapsible whitespace (space, zero-width-break,
+  // soft-hyphen) at line starts, matching `normalizeSimpleLineStartSegmentIndex`
+  // and the simple batch walker.  The chunked path only skips zero-width and
+  // soft-hyphen markers; regular spaces are kept because the chunked batch
+  // walker (`walkPreparedLinesRaw` non-simple branch) starts new lines at
+  // whatever segment follows the break without stripping spaces.
+  const skipSpace = prepared.simpleLineWalkFastPath
   while (segmentIndex < chunk.endSegmentIndex) {
     const kind = prepared.kinds[segmentIndex]!
-    if (kind !== 'space' && kind !== 'zero-width-break' && kind !== 'soft-hyphen') {
+    if (kind !== 'zero-width-break' && kind !== 'soft-hyphen' && (kind !== 'space' || !skipSpace)) {
       cursor.segmentIndex = segmentIndex
       cursor.graphemeIndex = 0
       return chunkIndex
@@ -791,10 +798,10 @@ function stepPreparedChunkLineGeometry(
       }
     }
 
-    if (pendingBreakFitWidth <= fitLimit) {
-      return finishLine(pendingBreakSegmentIndex, 0, pendingBreakPaintWidth)
-    }
-
+    // Do not fall back to the pending soft-hyphen break here; let the
+    // caller's general pending-break check handle it so that a closer
+    // breakAfter opportunity (e.g. a preserved-space) is tried first,
+    // matching the batch walker's check order.
     return null
   }
 
