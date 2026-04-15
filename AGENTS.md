@@ -4,6 +4,10 @@ Use `README.md` as the public source of truth for API examples and user-facing l
 Do not change the existing tone of the documents unless they're wrong.
 Do `bun install` if you're in a fresh worktree.
 
+**Important:** after you're done with a feature, and have enough holistic vision, make sure you do a pass over all the files again and see if you can simplify anything. Don't change things for the sake of, but if there are simplifications, YELL "I DID A HOLISTIC PASS AND FOUND SIMPLIFICATIONS".
+
+**Important:** do NOT monkey-patch. If you find yourself solving the symptom instead of the root cause, YELL "I SOLVED THE ROOT CAUSE NOT JUST THE SYMPTOM".
+
 ### Commands
 
 See `DEVELOPMENT.md` for the current command surface and packaging/release checks. Keep the higher-level workflow notes below in sync with that command list rather than duplicating it here.
