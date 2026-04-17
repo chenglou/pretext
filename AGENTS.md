@@ -8,6 +8,8 @@ Do `bun install` if you're in a fresh worktree.
 
 **Important:** do NOT monkey-patch. If you find yourself solving the symptom instead of the root cause, YELL **I SOLVED THE ROOT CAUSE NOT JUST THE SYMPTOM**.
 
+Changelog updates guideline: don't add dev-facing notes, only user-facing ones. Refer to closed PR numbers.
+
 ### Commands
 
 See `DEVELOPMENT.md` for the current command surface and packaging/release checks. Keep the higher-level workflow notes below in sync with that command list rather than duplicating it here.
