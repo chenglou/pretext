@@ -622,6 +622,16 @@ describe('prepare invariants', () => {
     expect(isCJK('hello')).toBe(false)
   })
 
+  test('kinsoku ー units preserve full-segment width sum', () => {
+    // "コーヒー" splits into CJK units ["コー", "ヒー"] via kinsoku merging.
+    // The sum of unit widths must equal the full segment width to prevent drift.
+    // With 16px Test Sans, each wide char = 16px, so "コーヒー" = 64px.
+    // At width 65, it must fit on one line (no premature break from drift).
+    const p = prepare('コーヒー', FONT)
+    const result = layout(p, 65, LINE_HEIGHT)
+    expect(result.lineCount).toBe(1)
+  })
+
   test('prepare and prepareWithSegments agree on layout behavior', () => {
     const plain = prepare('Alpha beta gamma', FONT)
     const rich = prepareWithSegments('Alpha beta gamma', FONT)
