@@ -367,9 +367,10 @@ function measureAnalysis(
     start: number,
     wordLike: boolean,
     allowOverflowBreaks: boolean,
+    overrideWidth?: number,
   ): void {
     const textMetrics = getSegmentMetrics(text, cache)
-    const width = getCorrectedSegmentWidth(text, textMetrics, emojiCorrection)
+    const width = overrideWidth ?? getCorrectedSegmentWidth(text, textMetrics, emojiCorrection)
     const lineEndFitAdvance =
       kind === 'space' || kind === 'preserved-space' || kind === 'zero-width-break'
         ? 0
@@ -454,14 +455,28 @@ function measureAnalysis(
         ? mergeKeepAllTextUnits(baseUnits)
         : baseUnits
 
+      // Derive each unit's width from prefix measurements of the original
+      // segment text. This captures cross-unit shaping context that
+      // independent per-unit measureText() calls miss, preventing the
+      // accumulated drift that causes premature CJK line breaks.
+      let prefix = ''
+      let prevPrefixWidth = 0
+
       for (let i = 0; i < measuredUnits.length; i++) {
         const unit = measuredUnits[i]!
+        prefix += unit.text
+        const prefixMetrics = getSegmentMetrics(prefix, cache)
+        const prefixWidth = getCorrectedSegmentWidth(prefix, prefixMetrics, emojiCorrection)
+        const unitWidth = prefixWidth - prevPrefixWidth
+        prevPrefixWidth = prefixWidth
+
         pushMeasuredTextSegment(
           unit.text,
           'text',
           segStart + unit.start,
           segWordLike,
           wordBreak === 'keep-all' || !isCJK(unit.text),
+          unitWidth,
         )
       }
       continue
