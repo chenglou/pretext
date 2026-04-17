@@ -4,9 +4,9 @@ Use `README.md` as the public source of truth for API examples and user-facing l
 Do not change the existing tone of the documents unless they're wrong.
 Do `bun install` if you're in a fresh worktree.
 
-**Important:** after you're done with a feature, and have enough holistic vision, make sure you do a pass over all the files again and see if you can simplify anything. Don't change things for the sake of, but if there are simplifications, YELL "I DID A HOLISTIC PASS AND FOUND SIMPLIFICATIONS".
+**Important:** after you're done with a feature, and have enough holistic vision, make sure you do a pass over all the files again and see if you can simplify anything. Don't change things for the sake of, but if there are simplifications, YELL **I DID A HOLISTIC PASS AND FOUND SIMPLIFICATIONS**.
 
-**Important:** do NOT monkey-patch. If you find yourself solving the symptom instead of the root cause, YELL "I SOLVED THE ROOT CAUSE NOT JUST THE SYMPTOM".
+**Important:** do NOT monkey-patch. If you find yourself solving the symptom instead of the root cause, YELL **I SOLVED THE ROOT CAUSE NOT JUST THE SYMPTOM**.
 
 ### Commands
 
@@ -111,15 +111,3 @@ See `DEVELOPMENT.md` for the current command surface and packaging/release check
 - Refresh `accuracy/chrome.json`, `accuracy/safari.json`, and `accuracy/firefox.json` when a diff changes the browser sweep methodology or the main text engine behavior (`src/analysis.ts`, `src/measurement.ts`, `src/line-break.ts`, `src/layout.ts`, `src/bidi.ts`, or `pages/accuracy.ts`).
 - Refresh `corpora/chrome-step10.json` and then regenerate `corpora/dashboard.json` when the corpus sweep methodology or long-form canary behavior changes in a way that moves the dashboard counts.
 - Refresh `corpora/safari-step10.json` alongside `corpora/chrome-step10.json` when the corpus sweep methodology or long-form canary behavior changes in a way that moves the dashboard counts.
-
-### Open questions
-
-- Decide whether line-fit tolerance should stay as a browser-specific shim or move to runtime calibration alongside emoji correction.
-- If a future Arabic corpus still exposes misses after preprocessing and corpus cleanup, decide whether that needs a richer break-policy model or a truly shaping-aware architecture beyond segment-sum layout.
-- `layoutWithLines()` now returns line boundary cursors (`start` / `end`) in addition to `{ text, width }`; keep that data model useful for future manual reflow work, especially for the richer editorial demos.
-- The dynamic-layout demo is the current real consumer of the rich line API. If a future custom-layout page wants more metadata, make it prove that need there before expanding the rich API again.
-- The rich-text inline flow helper at `@chenglou/pretext/rich-inline` is intentionally narrow. If a future rich-text inline page can be expressed there, prefer extending that helper over bloating the core paragraph API.
-- The browser demos should increasingly dogfood `layoutNextLine()` rather than depending on `layoutWithLines()` for whole-paragraph materialization. That keeps the streaming userland path honest.
-- ASCII fast path could skip some CJK, bidi, and emoji overhead.
-- Benchmark methodology still needs review.
-- Additional CSS configs are still untested: `break-all`, `strict`, `loose`, `anywhere`.
