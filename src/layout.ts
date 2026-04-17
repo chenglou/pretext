@@ -97,6 +97,7 @@ type PreparedCore = {
   discretionaryHyphenWidth: number // Visible width added when a soft hyphen is chosen as the break
   tabStopAdvance: number // Absolute advance between tab stops for pre-wrap tab segments
   chunks: PreparedLineChunk[] // Precompiled hard-break chunks for line walking
+  chunkBySegment: Uint32Array | null // Compact segmentIndex -> chunkIndex side table for streaming/rich layouts
 }
 
 // Keep the main prepared handle opaque so the public API does not accidentally
@@ -175,6 +176,7 @@ function createEmptyPrepared(includeSegments: boolean): InternalPreparedText | P
       discretionaryHyphenWidth: 0,
       tabStopAdvance: 0,
       chunks: [],
+      chunkBySegment: null,
       segments: [],
     } as unknown as PreparedTextWithSegments
   }
@@ -189,6 +191,7 @@ function createEmptyPrepared(includeSegments: boolean): InternalPreparedText | P
     discretionaryHyphenWidth: 0,
     tabStopAdvance: 0,
     chunks: [],
+    chunkBySegment: null,
   } as unknown as InternalPreparedText
 }
 
@@ -472,6 +475,19 @@ function measureAnalysis(
 
   const chunks = mapAnalysisChunksToPreparedChunks(analysis.chunks, preparedStartByAnalysisIndex, widths.length)
   const segLevels = segStarts === null ? null : computeSegmentLevels(analysis.normalized, segStarts)
+
+  let chunkBySegment: Uint32Array | null = null
+  if (includeSegments && chunks.length > 1) {
+    chunkBySegment = new Uint32Array(widths.length)
+    let c = 0
+    for (let i = 0; i < widths.length; i++) {
+      while (c < chunks.length && i >= chunks[c]!.consumedEndSegmentIndex) {
+        c++
+      }
+      chunkBySegment[i] = c
+    }
+  }
+
   if (segments !== null) {
     return {
       widths,
@@ -484,6 +500,7 @@ function measureAnalysis(
       discretionaryHyphenWidth,
       tabStopAdvance,
       chunks,
+      chunkBySegment,
       segments,
     } as unknown as PreparedTextWithSegments
   }
@@ -498,6 +515,7 @@ function measureAnalysis(
     discretionaryHyphenWidth,
     tabStopAdvance,
     chunks,
+    chunkBySegment,
   } as unknown as InternalPreparedText
 }
 

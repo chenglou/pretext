@@ -16,8 +16,6 @@ Current priorities:
 - Expand the sampled font matrix only where a canary still looks genuinely imperfect.
 - Treat strongly font-sensitive or shaping-sensitive misses as boundary-finding for the current architecture, not automatic invitations for another local glue rule.
 - Keep the hot `layout()` path simple and allocation-light while the rich path absorbs more userland layout needs.
-- If chunk-heavy manual layout keeps growing, consider a stateful streaming variant or a cursor-carried chunk hint so sequential `layoutNextLine()` flows can stay overall linear instead of paying a lookup per emitted line.
-- If arbitrary interior rich cursors become common, consider a compact `segmentIndex -> chunkIndex` side table, ideally only on rich prepared handles or only when `chunks.length > 1`.
 
 3. Demo work
 
