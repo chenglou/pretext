@@ -19,7 +19,9 @@ let layout: LayoutModule['layout']
 let layoutWithLines: LayoutModule['layoutWithLines']
 let layoutNextLine: LayoutModule['layoutNextLine']
 let layoutNextLineRange: LayoutModule['layoutNextLineRange']
+let materializeLineRange: LayoutModule['materializeLineRange']
 let measureLineStats: LayoutModule['measureLineStats']
+let measureNaturalWidth: LayoutModule['measureNaturalWidth']
 let walkLineRanges: LayoutModule['walkLineRanges']
 let clearCache: LayoutModule['clearCache']
 let setLocale: LayoutModule['setLocale']
@@ -28,6 +30,7 @@ let measurePreparedLineGeometry: LineBreakModule['measurePreparedLineGeometry']
 let stepPreparedLineGeometry: LineBreakModule['stepPreparedLineGeometry']
 let walkPreparedLines: LineBreakModule['walkPreparedLines']
 let prepareRichInline: RichInlineModule['prepareRichInline']
+let layoutNextRichInlineLineRange: RichInlineModule['layoutNextRichInlineLineRange']
 let materializeRichInlineLineRange: RichInlineModule['materializeRichInlineLineRange']
 let measureRichInlineStats: RichInlineModule['measureRichInlineStats']
 let walkRichInlineLineRanges: RichInlineModule['walkRichInlineLineRanges']
@@ -276,13 +279,15 @@ beforeAll(async () => {
     layoutWithLines,
     layoutNextLine,
     layoutNextLineRange,
+    materializeLineRange,
     measureLineStats,
+    measureNaturalWidth,
     walkLineRanges,
     clearCache,
     setLocale,
   } = mod)
   ;({ countPreparedLines, measurePreparedLineGeometry, stepPreparedLineGeometry, walkPreparedLines } = lineBreakMod)
-  ;({ prepareRichInline, materializeRichInlineLineRange, measureRichInlineStats, walkRichInlineLineRanges } = richInlineMod)
+  ;({ prepareRichInline, layoutNextRichInlineLineRange, materializeRichInlineLineRange, measureRichInlineStats, walkRichInlineLineRanges } = richInlineMod)
 })
 
 beforeEach(() => {
@@ -674,6 +679,71 @@ describe('prepare invariants', () => {
 })
 
 describe('rich-inline invariants', () => {
+  test('layoutNextRichInlineLineRange streams ranges that materialize into the same line sequence', () => {
+    const prepared = prepareRichInline([
+      { text: 'Ship ', font: FONT },
+      { text: '@maya', font: '700 12px Test Sans', break: 'never', extraWidth: 18 },
+      { text: "'s rich note wraps cleanly", font: FONT },
+    ])
+    const expected: Array<{
+      end: TestLayoutCursor & { itemIndex: number }
+      fragments: Array<{
+        end: TestLayoutCursor
+        gapBefore: number
+        itemIndex: number
+        occupiedWidth: number
+        start: TestLayoutCursor
+        text: string
+      }>
+      width: number
+    }> = []
+
+    walkRichInlineLineRanges(prepared, 120, range => {
+      const line = materializeRichInlineLineRange(prepared, range)
+      expected.push({
+        end: line.end,
+        fragments: line.fragments.map(fragment => ({
+          end: fragment.end,
+          gapBefore: fragment.gapBefore,
+          itemIndex: fragment.itemIndex,
+          occupiedWidth: fragment.occupiedWidth,
+          start: fragment.start,
+          text: fragment.text,
+        })),
+        width: line.width,
+      })
+    })
+
+    const actual: typeof expected = []
+    let cursor = { itemIndex: 0, segmentIndex: 0, graphemeIndex: 0 }
+
+    while (true) {
+      const range = layoutNextRichInlineLineRange(prepared, 120, cursor)
+      if (range === null) break
+      const line = materializeRichInlineLineRange(prepared, range)
+      actual.push({
+        end: line.end,
+        fragments: line.fragments.map(fragment => ({
+          end: fragment.end,
+          gapBefore: fragment.gapBefore,
+          itemIndex: fragment.itemIndex,
+          occupiedWidth: fragment.occupiedWidth,
+          start: fragment.start,
+          text: fragment.text,
+        })),
+        width: line.width,
+      })
+      expect(line.end.itemIndex).toBeGreaterThanOrEqual(cursor.itemIndex)
+      cursor = line.end
+    }
+
+    expect(actual).toEqual(expected)
+    expect(measureRichInlineStats(prepared, 120)).toEqual({
+      lineCount: actual.length,
+      maxLineWidth: Math.max(...actual.map(line => line.width)),
+    })
+  })
+
   test('non-materializing range walker matches range materialization', () => {
     const prepared = prepareRichInline([
       { text: 'Ship ', font: FONT },
@@ -1179,6 +1249,23 @@ describe('layout invariants', () => {
     })))
   })
 
+  test('materializeLineRange reproduces the matching layoutWithLines entry', () => {
+    const prepared = prepareWithSegments('foo trans\u00ADatlantic said "hello" to 世界 and waved.', FONT)
+    const width = prepared.widths[0]! + prepared.widths[1]! + prepared.widths[2]! + prepared.breakableFitAdvances[4]![0]! + prepared.discretionaryHyphenWidth + 0.1
+    const expected = layoutWithLines(prepared, width, LINE_HEIGHT).lines
+    const actual = expected.map((_, index) => {
+      const range = layoutNextLineRange(
+        prepared,
+        index === 0 ? { segmentIndex: 0, graphemeIndex: 0 } : expected[index - 1]!.end,
+        width,
+      )
+      expect(range).not.toBeNull()
+      return materializeLineRange(prepared, range!)
+    })
+
+    expect(actual).toEqual(expected)
+  })
+
   test('measureLineStats matches walked line count and widest line', () => {
     const prepared = prepareWithSegments('foo trans\u00ADatlantic said "hello" to 世界 and waved.', FONT)
     const width = prepared.widths[0]! + prepared.widths[1]! + prepared.widths[2]! + prepared.breakableFitAdvances[4]![0]! + prepared.discretionaryHyphenWidth + 0.1
@@ -1194,6 +1281,12 @@ describe('layout invariants', () => {
       lineCount: walkedLineCount,
       maxLineWidth: walkedMaxLineWidth,
     })
+  })
+
+  test('measureNaturalWidth returns the widest forced line across hard breaks', () => {
+    const prepared = prepareWithSegments('wide line\nfit\nmid', FONT, { whiteSpace: 'pre-wrap' })
+
+    expect(measureNaturalWidth(prepared)).toBe(measureWidth('wide line', FONT))
   })
 
   test('line-break geometry helpers stay aligned with streamed line ranges', () => {
