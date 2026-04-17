@@ -1068,6 +1068,21 @@ describe('layout invariants', () => {
     expect(actual).toEqual(expected.lines)
   })
 
+  test('pre-wrap soft hyphen does not preempt a closer preserved-space break', () => {
+    const prepared = prepareWithSegments('A\nbا \u00ADb، b', FONT, { whiteSpace: 'pre-wrap' })
+    const width =
+      measureWidth('bا', FONT) +
+      measureWidth(' ', FONT) +
+      measureWidth('b،', FONT) +
+      measureWidth(' ', FONT) +
+      0.1
+    const expected = layoutWithLines(prepared, width, LINE_HEIGHT)
+
+    expect(expected.lines.map(line => line.text)).toEqual(['A', 'bا b، ', 'b'])
+    expect(collectStreamedLines(prepared, width)).toEqual(expected.lines)
+    expect(layout(prepared, width, LINE_HEIGHT).lineCount).toBe(expected.lineCount)
+  })
+
   test('pre-wrap mode keeps empty lines from consecutive hard breaks', () => {
     const prepared = prepareWithSegments('\n\n', FONT, { whiteSpace: 'pre-wrap' })
     const lines = layoutWithLines(prepared, 200, LINE_HEIGHT)
