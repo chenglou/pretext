@@ -38,13 +38,28 @@ type InternalLineVisitor = (
   endGraphemeIndex: number,
 ) => void
 
-function normalizeSimpleLineStartSegmentIndex(
+function consumesAtLineStart(kind: SegmentBreakKind): boolean {
+  return kind === 'space' || kind === 'zero-width-break' || kind === 'soft-hyphen'
+}
+
+function breaksAfter(kind: SegmentBreakKind): boolean {
+  return (
+    kind === 'space' ||
+    kind === 'preserved-space' ||
+    kind === 'tab' ||
+    kind === 'zero-width-break' ||
+    kind === 'soft-hyphen'
+  )
+}
+
+function normalizeLineStartSegmentIndex(
   prepared: PreparedLineBreakData,
   segmentIndex: number,
+  endSegmentIndex = prepared.widths.length,
 ): number {
-  while (segmentIndex < prepared.widths.length) {
+  while (segmentIndex < endSegmentIndex) {
     const kind = prepared.kinds[segmentIndex]!
-    if (kind !== 'space' && kind !== 'zero-width-break' && kind !== 'soft-hyphen') break
+    if (!consumesAtLineStart(kind)) break
     segmentIndex++
   }
   return segmentIndex
@@ -113,14 +128,11 @@ function normalizeLineStartInChunk(
   }
 
   if (segmentIndex < chunk.startSegmentIndex) segmentIndex = chunk.startSegmentIndex
-  while (segmentIndex < chunk.endSegmentIndex) {
-    const kind = prepared.kinds[segmentIndex]!
-    if (kind !== 'space' && kind !== 'zero-width-break' && kind !== 'soft-hyphen') {
-      cursor.segmentIndex = segmentIndex
-      cursor.graphemeIndex = 0
-      return chunkIndex
-    }
-    segmentIndex++
+  segmentIndex = normalizeLineStartSegmentIndex(prepared, segmentIndex, chunk.endSegmentIndex)
+  if (segmentIndex < chunk.endSegmentIndex) {
+    cursor.segmentIndex = segmentIndex
+    cursor.graphemeIndex = 0
+    return chunkIndex
   }
 
   if (chunk.consumedEndSegmentIndex >= prepared.widths.length) return -1
@@ -274,13 +286,13 @@ function walkPreparedLinesSimple(
   let i = 0
   while (i < widths.length) {
     if (!hasContent) {
-      i = normalizeSimpleLineStartSegmentIndex(prepared, i)
+      i = normalizeLineStartSegmentIndex(prepared, i)
       if (i >= widths.length) break
     }
 
     const w = widths[i]!
     const kind = kinds[i]!
-    const breakAfter = kind === 'space' || kind === 'preserved-space' || kind === 'tab' || kind === 'zero-width-break' || kind === 'soft-hyphen'
+    const breakAfter = breaksAfter(kind)
 
     if (!hasContent) {
       if (w > maxWidth && breakableFitAdvances[i] !== null) {
@@ -525,8 +537,13 @@ export function walkPreparedLinesRaw(
 
     let i = chunk.startSegmentIndex
     while (i < chunk.endSegmentIndex) {
+      if (!hasContent) {
+        i = normalizeLineStartSegmentIndex(prepared, i, chunk.endSegmentIndex)
+        if (i >= chunk.endSegmentIndex) break
+      }
+
       const kind = kinds[i]!
-      const breakAfter = kind === 'space' || kind === 'preserved-space' || kind === 'tab' || kind === 'zero-width-break' || kind === 'soft-hyphen'
+      const breakAfter = breaksAfter(kind)
       const w = kind === 'tab' ? getTabAdvance(lineW, tabStopAdvance) : widths[i]!
 
       if (kind === 'soft-hyphen') {
@@ -800,7 +817,7 @@ function stepPreparedChunkLineGeometry(
 
   for (let i = cursor.segmentIndex; i < chunk.endSegmentIndex; i++) {
     const kind = kinds[i]!
-    const breakAfter = kind === 'space' || kind === 'preserved-space' || kind === 'tab' || kind === 'zero-width-break' || kind === 'soft-hyphen'
+    const breakAfter = breaksAfter(kind)
     const startGraphemeIndex = i === cursor.segmentIndex ? cursor.graphemeIndex : 0
     const w = kind === 'tab' ? getTabAdvance(lineW, tabStopAdvance) : widths[i]!
 
@@ -902,7 +919,7 @@ function stepPreparedSimpleLineGeometry(
   for (let i = cursor.segmentIndex; i < widths.length; i++) {
     const w = widths[i]!
     const kind = kinds[i]!
-    const breakAfter = kind === 'space' || kind === 'preserved-space' || kind === 'tab' || kind === 'zero-width-break' || kind === 'soft-hyphen'
+    const breakAfter = breaksAfter(kind)
     const startGraphemeIndex = i === cursor.segmentIndex ? cursor.graphemeIndex : 0
     const breakableFitAdvance = breakableFitAdvances[i]
 
