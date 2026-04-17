@@ -121,6 +121,7 @@ function isCJKCodePoint(codePoint: number): boolean {
     (codePoint >= 0x3000 && codePoint <= 0x303F) ||
     (codePoint >= 0x3040 && codePoint <= 0x309F) ||
     (codePoint >= 0x30A0 && codePoint <= 0x30FF) ||
+    (codePoint >= 0x3130 && codePoint <= 0x318F) ||
     (codePoint >= 0xAC00 && codePoint <= 0xD7AF) ||
     (codePoint >= 0xFF00 && codePoint <= 0xFFEF)
   )
