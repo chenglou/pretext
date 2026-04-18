@@ -632,6 +632,16 @@ describe('prepare invariants', () => {
     expect(result.lineCount).toBe(1)
   })
 
+  test('opening bracket after CJK stays with next segment, not previous', () => {
+    // "서울(Seoul)" — the "(" should attach to "Seoul)", not "서울"
+    // Browser breaks: "서울" | "(Seoul)" — not "서울(" | "Seoul)"
+    const prepared = prepareWithSegments('서울(Seoul)', FONT)
+    expect(prepared.segments[0]).toBe('서')
+    expect(prepared.segments[1]).toBe('울')
+    const bracketSegIdx = prepared.segments.indexOf('(Seoul)')
+    expect(bracketSegIdx).toBeGreaterThan(1)
+  })
+
   test('prepare and prepareWithSegments agree on layout behavior', () => {
     const plain = prepare('Alpha beta gamma', FONT)
     const rich = prepareWithSegments('Alpha beta gamma', FONT)
