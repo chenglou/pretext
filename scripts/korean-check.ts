@@ -203,6 +203,32 @@ const ORACLE_CASES: OracleCase[] = [
     lang: 'ko',
     whiteSpace: 'pre-wrap',
   },
+
+  // F: Chat/messenger patterns
+  { label: 'F1: jamo-only long run', text: 'ㅋㅋㅋㅋㅋㅋㅋㅋㅋㅋ', width: 120, font: '20px serif', lineHeight: 34, lang: 'ko' },
+  { label: 'F2: jamo+syllable mixed', text: 'ㅎㅎ네ㅋㅋ진짜ㅋㅋㅋ', width: 150, font: '20px serif', lineHeight: 34, lang: 'ko' },
+  { label: 'F3: syllable then jamo+question', text: '오늘 뭐해?ㅋㅋ', width: 120, font: '20px serif', lineHeight: 34, lang: 'ko' },
+  { label: 'F4: Korean+emoji no space', text: '안녕😊잘지내?', width: 150, font: '20px serif', lineHeight: 34, lang: 'ko' },
+  { label: 'F5: jamo abbreviations + spaces', text: 'ㄴㄴ ㅇㅇ ㄱㄱ', width: 100, font: '20px serif', lineHeight: 34, lang: 'ko' },
+  { label: 'F6: jamo-syllable-jamo transitions', text: 'ㅋㅋㅋㅋㅋ재밌다ㅋㅋㅋ아진짜', width: 130, font: '20px serif', lineHeight: 34, lang: 'ko' },
+  { label: 'F7: syllable+jamo+tilde', text: '네네ㅎㅎ 감사합니다~', width: 150, font: '20px serif', lineHeight: 34, lang: 'ko' },
+
+  // G: SNS/URL patterns
+  { label: 'G1: hashtag + Korean', text: '#한글태그 다음텍스트', width: 150, font: '20px serif', lineHeight: 34, lang: 'ko' },
+  { label: 'G2: URL sandwiched in Korean', text: '자세한건https://example.com/path?q=검색 참고', width: 200, font: '20px serif', lineHeight: 34, lang: 'ko' },
+  { label: 'G3: number+Korean no space', text: '가격은10,000원입니다', width: 150, font: '20px serif', lineHeight: 34, lang: 'ko' },
+  { label: 'G4: parenthesized English in Korean', text: '서울(Seoul)과 부산(Busan)', width: 180, font: '20px serif', lineHeight: 34, lang: 'ko' },
+
+  // H: Unicode boundary cases
+  { label: 'H1: Hangul Jamo U+1100 standalone', text: 'ᄀᄂᄃᄅᄆᄇ', width: 120, font: '20px serif', lineHeight: 34, lang: 'ko' },
+  { label: 'H2: ZWSP between Korean', text: '한\u200B글\u200B테\u200B스\u200B트', width: 100, font: '20px serif', lineHeight: 34, lang: 'ko' },
+  { label: 'H3: NBSP between Korean', text: '한\u00A0글\u00A0테스트', width: 100, font: '20px serif', lineHeight: 34, lang: 'ko' },
+  { label: 'H4: smart quotes + Korean', text: '\u201C한글 인용문\u201D과 텍스트', width: 150, font: '20px serif', lineHeight: 34, lang: 'ko' },
+
+  // I: keep-all extended
+  { label: 'I1: keep-all long sentence', text: '대한민국은 민주공화국이다 모든 권력은 국민으로부터 나온다', width: 150, font: '20px serif', lineHeight: 34, lang: 'ko', wordBreak: 'keep-all' },
+  { label: 'I2: keep-all Korean+English', text: 'React와 Vue는 프론트엔드 프레임워크입니다', width: 160, font: '20px serif', lineHeight: 34, lang: 'ko', wordBreak: 'keep-all' },
+  { label: 'I3: keep-all pure syllables no words', text: '가나다라마바사아자차카타파하', width: 80, font: '20px serif', lineHeight: 34, lang: 'ko', wordBreak: 'keep-all' },
 ]
 
 function parseStringFlag(name: string): string | null {

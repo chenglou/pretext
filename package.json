@@ -67,6 +67,7 @@
     "corpus-sweep:safari": "CORPUS_CHECK_BROWSER=safari bun run scripts/corpus-sweep.ts",
     "corpus-taxonomy": "bun run scripts/corpus-taxonomy.ts",
     "generate:bidi-data": "bun run scripts/generate-bidi-data.ts",
+    "japanese-check": "bun run scripts/japanese-check.ts",
     "keep-all-check": "bun run scripts/keep-all-check.ts",
     "package-smoke-test": "bun run scripts/package-smoke-test.ts",
     "prepack": "rm -rf dist && tsc -p tsconfig.build.json",
