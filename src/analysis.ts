@@ -1008,6 +1008,7 @@ function buildMergedSegmentation(
         !piece.isWordLike &&
         mergedLen > 0 &&
         mergedKinds[prevIndex] === 'text' &&
+        !mergedContainsCJK[prevIndex] &&
         (
           isLeftStickyPunctuationSegment(piece.text) ||
           (piece.text === '-' && mergedWordLike[prevIndex]!)
@@ -1056,7 +1057,8 @@ function buildMergedSegmentation(
       mergedKinds[i] === 'text' &&
       !mergedWordLike[i]! &&
       isEscapedQuoteClusterSegment(mergedTexts[i]!) &&
-      mergedKinds[i - 1] === 'text'
+      mergedKinds[i - 1] === 'text' &&
+      !mergedContainsCJK[i - 1]
     ) {
       mergedTexts[i - 1] += mergedTexts[i]!
       mergedWordLike[i - 1] = mergedWordLike[i - 1]! || mergedWordLike[i]!
