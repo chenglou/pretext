@@ -25,7 +25,7 @@ Pretext serves 2 use cases:
 import { prepare, layout } from '@chenglou/pretext'
 
 const prepared = prepare('AGI 春天到了. بدأت الرحلة 🚀‎', '16px Inter')
-const { height, lineCount } = layout(prepared, textWidth, 20) // pure arithmetics. No DOM layout & reflow!
+const { height, lineCount } = layout(prepared, 320, 20) // pure arithmetic. No DOM layout & reflow!
 ```
 
 `prepare()` does the one-time work: normalize whitespace, segment the text, apply glue rules, measure the segments with canvas, and return an opaque handle. `layout()` is the cheap hot path after that: pure arithmetic over cached widths. Do not rerun `prepare()` for the same text and configs; that'd defeat its precomputation. For example, on resize, only rerun `layout()`.
@@ -39,7 +39,7 @@ const { height } = layout(prepared, textareaWidth, 20)
 
 If you want CSS-like `word-break: keep-all`, pass `{ wordBreak: 'keep-all' }` to `prepare()` too.
 
-The returned height is the crucial last piece for unlocking web UI's:
+The returned height is the crucial last piece for unlocking web UIs:
 - proper virtualization/occlusion without guesstimates & caching
 - fancy userland layouts: masonry, JS-driven flexbox-like implementations, nudging a few layout values without CSS hacks (imagine that), etc.
 - _development time_ verification (especially now with AI) that labels on e.g. buttons don't overflow to the next line, browser-free
@@ -94,6 +94,8 @@ while (true) {
 
 This usage allows rendering to canvas, SVG, WebGL and (eventually) server-side. See the `/demos/dynamic-layout` demo for a richer example.
 
+For manual hyphenation, add soft hyphens to the source text before `prepare()` / `prepareWithSegments()`. They stay invisible unless the engine chooses that break, in which case materialized line text includes the visible trailing `-`. For mixed-language or user-generated app text, conservative selective hyphenation is usually safer than aggressive pattern-based hyphenation; automatic hyphenation is not built in today.
+
 If your manual layout needs a small helper for rich-text inline flow, code spans, mentions, chips, and browser-like boundary whitespace collapse, there is a helper at `@chenglou/pretext/rich-inline`. It stays inline-only and `white-space: normal`-only on purpose:
 
 ```ts
@@ -128,9 +130,9 @@ layout(prepared: PreparedText, maxWidth: number, lineHeight: number): { height: 
 
 Use-case 2 APIs:
 ```ts
-prepareWithSegments(text: string, font: string, options?: { whiteSpace?: 'normal' | 'pre-wrap', wordBreak?: 'normal' | 'keep-all' }): PreparedTextWithSegments // same as `prepare()`, but returns a richer structure for manual line layouts needs
+prepareWithSegments(text: string, font: string, options?: { whiteSpace?: 'normal' | 'pre-wrap', wordBreak?: 'normal' | 'keep-all' }): PreparedTextWithSegments // same as `prepare()`, but returns a richer structure for manual line layout needs
 layoutWithLines(prepared: PreparedTextWithSegments, maxWidth: number, lineHeight: number): { height: number, lineCount: number, lines: LayoutLine[] } // high-level api for manual layout needs. Accepts a fixed max width for all lines. Similar to `layout()`'s return, but additionally returns the lines info
-walkLineRanges(prepared: PreparedTextWithSegments, maxWidth: number, onLine: (line: LayoutLineRange) => void): number // low-level api for manual layout needs. Accepts a fixed max width for all lines. Calls `onLine` once per line with its actual calculated line width and start/end cursors, without building line text strings. Very useful for certain cases where you wanna speculatively test a few width and height boundaries (e.g. binary search a nice width value by repeatedly calling walkLineRanges and checking the line count, and therefore height, is "nice" too. You can have text messages shrinkwrap and balanced text layout this way). After walkLineRanges calls, you'd call layoutWithLines once, with your satisfying max width, to get the actual lines info.
+walkLineRanges(prepared: PreparedTextWithSegments, maxWidth: number, onLine: (line: LayoutLineRange) => void): number // low-level api for manual layout needs. Accepts a fixed max width for all lines. Calls `onLine` once per line with its actual calculated line width and start/end cursors, without building line text strings. Very useful for certain cases where you wanna speculatively test a few width and height boundaries (e.g. binary search a nice width value by repeatedly calling walkLineRanges and checking the line count, and therefore height, is "nice" too). You can have text messages shrinkwrap and balanced text layout this way. After walkLineRanges calls, you'd call layoutWithLines once, with your satisfying max width, to get the actual lines info.
 measureLineStats(prepared: PreparedTextWithSegments, maxWidth: number): { lineCount: number, maxLineWidth: number } // returns only how many lines this width produces, and how wide the widest one is. Avoids line/string allocations.
 measureNaturalWidth(prepared: PreparedTextWithSegments): number // returns the widest forced line when width itself is not the thing causing wraps
 layoutNextLine(prepared: PreparedTextWithSegments, start: LayoutCursor, maxWidth: number): LayoutLine | null // iterator-like api for laying out each line with a different width! Returns the LayoutLine starting from `start`, or `null` when the paragraph's exhausted. Pass the previous line's `end` cursor as the next `start`.
@@ -232,6 +234,8 @@ Pretext doesn't try to be a full font rendering engine (yet?). It currently targ
 - Tabs follow the default browser-style `tab-size: 8`
 - `{ wordBreak: 'keep-all' }` is supported too. It behaves like you'd expect for CJK/Hangul text, while keeping the same `overflow-wrap: break-word` fallback for overlong runs.
 - `system-ui` is unsafe for `layout()` accuracy on macOS. Use a named font.
+- Runtime requires `Intl.Segmenter` and Canvas 2D text measurement. Browsers or runtimes without `Intl.Segmenter` are not supported by the main package today.
+- CSS text features outside the canvas `font` shorthand, such as `letter-spacing`, `font-optical-sizing`, `font-feature-settings`, and standalone `font-variation-settings`, are not modeled separately. Variable-font axes only help when the active axis is reflected in the canvas font string, for example via weight.
 
 ## Develop
 
