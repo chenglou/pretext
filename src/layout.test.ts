@@ -622,6 +622,14 @@ describe('prepare invariants', () => {
     expect(isCJK('hello')).toBe(false)
   })
 
+  test('keeps opening brackets after CJK attached to following annotation text', () => {
+    expect(prepareWithSegments('서울(Seoul)과', FONT).segments).toEqual(['서', '울', '(Seoul)', '과'])
+    expect(prepareWithSegments('東京(Tokyo)と', FONT).segments).toEqual(['東', '京', '(Tokyo)', 'と'])
+    expect(prepareWithSegments('北京(Beijing)和', FONT).segments).toEqual(['北', '京', '(Beijing)', '和'])
+    expect(prepareWithSegments('참조[1]와', FONT).segments).toEqual(['참', '조', '[1]', '와'])
+    expect(prepareWithSegments('AB(CD)', FONT).segments).toEqual(['AB(', 'CD)'])
+  })
+
   test('prepare and prepareWithSegments agree on layout behavior', () => {
     const plain = prepare('Alpha beta gamma', FONT)
     const rich = prepareWithSegments('Alpha beta gamma', FONT)
