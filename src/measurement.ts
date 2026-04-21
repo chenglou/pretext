@@ -200,6 +200,11 @@ export function getSegmentBreakableFitAdvances(
   emojiCorrection: number,
   mode: BreakableFitMode,
 ): number[] | null {
+  // The cached result is mode-agnostic: the current call sites guarantee that
+  // a given segment text always arrives with the same mode, because mode is
+  // determined by isNumericRunSegment(text) (text-deterministic) and the
+  // session-invariant engine profile.  If a future caller breaks this
+  // invariant, the cache will silently return the wrong advances.
   if (metrics.breakableFitAdvances !== undefined) return metrics.breakableFitAdvances
 
   const graphemeSegmenter = getSharedGraphemeSegmenter()
