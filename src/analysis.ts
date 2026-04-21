@@ -38,8 +38,8 @@ export type AnalysisProfile = {
   carryCJKAfterClosingQuote: boolean
 }
 
-const collapsibleWhitespaceRunRe = /[ \t\n\r\f]+/g
-const needsWhitespaceNormalizationRe = /[\t\n\r\f]| {2,}|^ | $/
+const collapsibleWhitespaceRunRe = /[ \t\n\r\f\v\u0085\u2028\u2029]+/g
+const needsWhitespaceNormalizationRe = /[\t\n\r\f\v\u0085\u2028\u2029]| {2,}|^ | $/
 
 type WhiteSpaceProfile = {
   mode: WhiteSpaceMode
@@ -68,10 +68,10 @@ export function normalizeWhitespaceNormal(text: string): string {
 }
 
 function normalizeWhitespacePreWrap(text: string): string {
-  if (!/[\r\f]/.test(text)) return text
+  if (!/[\r\f\v\u0085\u2028\u2029]/.test(text)) return text
   return text
     .replace(/\r\n/g, '\n')
-    .replace(/[\r\f]/g, '\n')
+    .replace(/[\r\f\v\u0085\u2028\u2029]/g, '\n')
 }
 
 let sharedWordSegmenter: Intl.Segmenter | null = null
@@ -416,7 +416,12 @@ function classifySegmentBreakChar(ch: string, whiteSpaceProfile: WhiteSpaceProfi
   if (whiteSpaceProfile.preserveOrdinarySpaces || whiteSpaceProfile.preserveHardBreaks) {
     if (ch === ' ') return 'preserved-space'
     if (ch === '\t') return 'tab'
-    if (whiteSpaceProfile.preserveHardBreaks && ch === '\n') return 'hard-break'
+    if (
+      whiteSpaceProfile.preserveHardBreaks &&
+      (ch === '\n' || ch === '\v' || ch === '\u0085' || ch === '\u2028' || ch === '\u2029')
+    ) {
+      return 'hard-break'
+    }
   }
   if (ch === ' ') return 'space'
   if (ch === '\u00A0' || ch === '\u202F' || ch === '\u2060' || ch === '\uFEFF') {
@@ -428,7 +433,7 @@ function classifySegmentBreakChar(ch: string, whiteSpaceProfile: WhiteSpaceProfi
 }
 
 // All characters that classifySegmentBreakChar maps to a non-'text' kind.
-const breakCharRe = /[\x20\t\n\xA0\xAD\u200B\u202F\u2060\uFEFF]/
+const breakCharRe = /[\x20\t\n\v\xA0\xAD\u0085\u200B\u2028\u2029\u202F\u2060\uFEFF]/
 
 function joinTextParts(parts: string[]): string {
   return parts.length === 1 ? parts[0]! : parts.join('')
