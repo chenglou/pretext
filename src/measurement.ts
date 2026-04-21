@@ -266,6 +266,9 @@ export function getSegmentBreakableFitAdvances(
   return metrics.breakableFitAdvances
 }
 
+// Sets ctx.font and ctx.letterSpacing on the shared canvas context. Downstream
+// measurement functions (getSegmentMetrics, getSegmentBreakableFitAdvances) read
+// from this shared context, so this must be called before any measurement batch.
 export function getFontMeasurementState(font: string, needsEmojiCorrection: boolean, letterSpacing?: string): {
   cache: Map<string, SegmentMetrics>
   fontSize: number

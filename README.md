@@ -241,6 +241,8 @@ Pretext doesn't try to be a full font rendering engine (yet?). It currently targ
   const prepared = prepare(text, font, { letterSpacing: '2px' })
   ```
 
+  The value is a CSS `<length>` string (e.g. `'1px'`, `'0.05em'`). Invalid values are silently ignored by the Canvas API, falling back to no spacing.
+
   Other CSS text features outside the canvas `font` shorthand, such as `font-optical-sizing`, `font-feature-settings`, and standalone `font-variation-settings`, are not modeled separately. These properties are not in the Canvas 2D spec. Variable-font axes only help when the active axis is reflected in the canvas font string, for example via weight.
 
 ## Develop
