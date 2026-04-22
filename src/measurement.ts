@@ -20,6 +20,7 @@ export type BreakableFitMode = 'sum-graphemes' | 'segment-prefixes' | 'pair-cont
 let measureContext: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D | null = null
 const segmentMetricCaches = new Map<string, Map<string, SegmentMetrics>>()
 let cachedEngineProfile: EngineProfile | null = null
+let customMeasureFn: ((text: string) => number) | null = null
 
 // Safari's prefix-fit policy is useful for ordinary word-sized runs, but letting
 // it measure every growing prefix of a giant segment recreates a pathological
@@ -31,6 +32,17 @@ const emojiPresentationRe = /\p{Emoji_Presentation}/u
 const maybeEmojiRe = /[\p{Emoji_Presentation}\p{Extended_Pictographic}\p{Regional_Indicator}\uFE0F\u20E3]/u
 let sharedGraphemeSegmenter: Intl.Segmenter | null = null
 const emojiCorrectionCache = new Map<string, number>()
+
+/**
+ * Register a custom text measurement function for non-browser environments.
+ * When set, all segment measurement bypasses Canvas and uses this function
+ * instead. Set it to null to restore the default Canvas-based measurement.
+ */
+export function setMeasureFunction(fn: ((text: string) => number) | null): void {
+  customMeasureFn = fn
+  clearMeasurementCaches()
+  cachedEngineProfile = null
+}
 
 export function getMeasureContext(): CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D {
   if (measureContext !== null) return measureContext
@@ -60,9 +72,11 @@ export function getSegmentMetricCache(font: string): Map<string, SegmentMetrics>
 export function getSegmentMetrics(seg: string, cache: Map<string, SegmentMetrics>): SegmentMetrics {
   let metrics = cache.get(seg)
   if (metrics === undefined) {
-    const ctx = getMeasureContext()
+    const width = customMeasureFn !== null
+      ? customMeasureFn(seg)
+      : getMeasureContext().measureText(seg).width
     metrics = {
-      width: ctx.measureText(seg).width,
+      width,
       containsCJK: isCJK(seg),
     }
     cache.set(seg, metrics)
@@ -73,7 +87,7 @@ export function getSegmentMetrics(seg: string, cache: Map<string, SegmentMetrics
 export function getEngineProfile(): EngineProfile {
   if (cachedEngineProfile !== null) return cachedEngineProfile
 
-  if (typeof navigator === 'undefined') {
+  if (typeof navigator === 'undefined' || typeof navigator.userAgent !== 'string') {
     cachedEngineProfile = {
       lineFitEpsilon: 0.005,
       carryCJKAfterClosingQuote: false,
@@ -272,11 +286,14 @@ export function getFontMeasurementState(font: string, needsEmojiCorrection: bool
   fontSize: number
   emojiCorrection: number
 } {
-  const ctx = getMeasureContext()
-  ctx.font = font
+  if (customMeasureFn === null) {
+    const ctx = getMeasureContext()
+    ctx.font = font
+  }
   const cache = getSegmentMetricCache(font)
   const fontSize = parseFontSize(font)
-  const emojiCorrection = needsEmojiCorrection ? getEmojiCorrection(font, fontSize) : 0
+  // When a custom measure function is active, it should handle emoji correction if needed
+  const emojiCorrection = customMeasureFn === null && needsEmojiCorrection ? getEmojiCorrection(font, fontSize) : 0
   return { cache, fontSize, emojiCorrection }
 }
 
