@@ -584,6 +584,74 @@ describe('prepare invariants', () => {
     expect(prepareWithSegments('foo\u00A0世界', FONT, { wordBreak: 'keep-all' }).segments).toEqual(['foo\u00A0', '世界'])
   })
 
+  test('keep-all keeps compact Korean mixed-script tokens together', () => {
+    for (const text of [
+      'AI정보공학과',
+      'README카드생성기',
+      'api문서v2가이드',
+      '2026학년도공지',
+      '한글ABC123혼합문장',
+      'GitHubREADME한글가이드',
+      '공지사항v2업데이트',
+    ]) {
+      expect(prepareWithSegments(text, FONT, { wordBreak: 'keep-all' }).segments).toEqual([text])
+    }
+  })
+
+  test('keep-all does not merge Korean text across path and query separators', () => {
+    expect(prepareWithSegments('검색어?정렬=최신', FONT, { wordBreak: 'keep-all' }).segments).toEqual([
+      '검색어?',
+      '정렬',
+      '=',
+      '최신',
+    ])
+    expect(prepareWithSegments('docs/README한글가이드', FONT, { wordBreak: 'keep-all' }).segments).toEqual([
+      'docs',
+      '/',
+      'README',
+      '한글가이드',
+    ])
+    expect(prepareWithSegments('hello:한글테스트', FONT, { wordBreak: 'keep-all' }).segments).toEqual([
+      'hello:',
+      '한글테스트',
+    ])
+    expect(prepareWithSegments('path/to/한글문서', FONT, { wordBreak: 'keep-all' }).segments).toEqual([
+      'path',
+      '/',
+      'to',
+      '/',
+      '한글문서',
+    ])
+    expect(prepareWithSegments('key=value한글', FONT, { wordBreak: 'keep-all' }).segments).toEqual([
+      'key',
+      '=',
+      'value',
+      '한글',
+    ])
+    expect(prepareWithSegments('한글&영문조합', FONT, { wordBreak: 'keep-all' }).segments).toEqual([
+      '한글',
+      '&',
+      '영문조합',
+    ])
+  })
+
+  test('keep-all preserves Korean mixed-punctuation token behavior', () => {
+    for (const text of [
+      '공지사항(수정본)',
+      'v2.1한글업데이트',
+      '한글-영문-혼합',
+      '한글_영문_조합',
+    ]) {
+      expect(prepareWithSegments(text, FONT, { wordBreak: 'keep-all' }).segments).toEqual([text])
+    }
+
+    expect(prepareWithSegments('AI\u200B정보공학과', FONT, { wordBreak: 'keep-all' }).segments).toEqual([
+      'AI',
+      '\u200B',
+      '정보공학과',
+    ])
+  })
+
   test('adjacent CJK text units stay breakable after visible text, not only after spaces', () => {
     const prepared = prepareWithSegments('foo 世界 bar', FONT)
     expect(prepared.segments).toEqual(['foo', ' ', '世', '界', ' ', 'bar'])
