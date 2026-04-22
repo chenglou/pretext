@@ -398,139 +398,6 @@ function stepRichInlineLine(
   return lineWidth
 }
 
-function stepRichInlineLineStats(
-  flow: InternalPreparedRichInline,
-  maxWidth: number,
-  cursor: RichInlineCursor,
-): number | null {
-  if (flow.items.length === 0 || cursor.itemIndex >= flow.items.length) return null
-
-  const safeWidth = Math.max(1, maxWidth)
-  let lineWidth = 0
-  let remainingWidth = safeWidth
-  let itemIndex = cursor.itemIndex
-
-  lineLoop:
-  while (itemIndex < flow.items.length) {
-    const item = flow.items[itemIndex]!
-    if (
-      !isLineStartCursor(cursor) &&
-      cursor.segmentIndex === item.endSegmentIndex &&
-      cursor.graphemeIndex === item.endGraphemeIndex
-    ) {
-      itemIndex++
-      cursor.segmentIndex = 0
-      cursor.graphemeIndex = 0
-      continue
-    }
-
-    const gapBefore = lineWidth === 0 ? 0 : item.gapBefore
-    const atItemStart = isLineStartCursor(cursor)
-
-    if (item.break === 'never') {
-      if (!atItemStart) {
-        itemIndex++
-        cursor.segmentIndex = 0
-        cursor.graphemeIndex = 0
-        continue
-      }
-
-      const occupiedWidth = item.naturalWidth + item.extraWidth
-      const totalWidth = gapBefore + occupiedWidth
-      if (lineWidth > 0 && totalWidth > remainingWidth) break lineLoop
-
-      lineWidth += totalWidth
-      remainingWidth = Math.max(0, safeWidth - lineWidth)
-      itemIndex++
-      cursor.segmentIndex = 0
-      cursor.graphemeIndex = 0
-      continue
-    }
-
-    const reservedWidth = gapBefore + item.extraWidth
-    if (lineWidth > 0 && reservedWidth >= remainingWidth) break lineLoop
-
-    if (atItemStart) {
-      const totalWidth = reservedWidth + item.naturalWidth
-      if (totalWidth <= remainingWidth) {
-        lineWidth += totalWidth
-        remainingWidth = Math.max(0, safeWidth - lineWidth)
-        itemIndex++
-        cursor.segmentIndex = 0
-        cursor.graphemeIndex = 0
-        continue
-      }
-    }
-
-    const availableWidth = Math.max(1, remainingWidth - reservedWidth)
-    const lineEnd: LineBreakCursor = {
-      segmentIndex: cursor.segmentIndex,
-      graphemeIndex: cursor.graphemeIndex,
-    }
-    const lineWidthForItem = stepPreparedLineGeometry(item.prepared, lineEnd, availableWidth)
-    if (lineWidthForItem === null) {
-      itemIndex++
-      cursor.segmentIndex = 0
-      cursor.graphemeIndex = 0
-      continue
-    }
-    if (cursor.segmentIndex === lineEnd.segmentIndex && cursor.graphemeIndex === lineEnd.graphemeIndex) {
-      itemIndex++
-      cursor.segmentIndex = 0
-      cursor.graphemeIndex = 0
-      continue
-    }
-
-    if (
-      lineWidth > 0 &&
-      atItemStart &&
-      gapBefore > 0 &&
-      endsInsideFirstSegment(lineEnd.segmentIndex, lineEnd.graphemeIndex)
-    ) {
-      const freshLineEnd: LineBreakCursor = {
-        segmentIndex: 0,
-        graphemeIndex: 0,
-      }
-      const freshLineWidth = stepPreparedLineGeometry(
-        item.prepared,
-        freshLineEnd,
-        Math.max(1, safeWidth - item.extraWidth),
-      )
-      if (
-        freshLineWidth !== null &&
-        (
-          freshLineEnd.segmentIndex > lineEnd.segmentIndex ||
-          (
-            freshLineEnd.segmentIndex === lineEnd.segmentIndex &&
-            freshLineEnd.graphemeIndex > lineEnd.graphemeIndex
-          )
-        )
-      ) {
-        break lineLoop
-      }
-    }
-
-    lineWidth += gapBefore + lineWidthForItem + item.extraWidth
-    remainingWidth = Math.max(0, safeWidth - lineWidth)
-
-    if (lineEnd.segmentIndex === item.endSegmentIndex && lineEnd.graphemeIndex === item.endGraphemeIndex) {
-      itemIndex++
-      cursor.segmentIndex = 0
-      cursor.graphemeIndex = 0
-      continue
-    }
-
-    cursor.segmentIndex = lineEnd.segmentIndex
-    cursor.graphemeIndex = lineEnd.graphemeIndex
-    break
-  }
-
-  if (lineWidth === 0) return null
-
-  cursor.itemIndex = itemIndex
-  return lineWidth
-}
-
 export function layoutNextRichInlineLineRange(
   prepared: PreparedRichInline,
   maxWidth: number,
@@ -637,7 +504,7 @@ export function measureRichInlineStats(
   }
 
   while (true) {
-    const lineWidth = stepRichInlineLineStats(flow, maxWidth, cursor)
+    const lineWidth = stepRichInlineLine(flow, maxWidth, cursor)
     if (lineWidth === null) {
       return {
         lineCount,

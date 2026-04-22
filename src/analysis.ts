@@ -159,10 +159,6 @@ const keepAllGlueChars = new Set([
   '\uFEFF',
 ])
 
-function containsCJKText(text: string): boolean {
-  return isCJK(text)
-}
-
 function endsWithKeepAllGlueText(text: string): boolean {
   const last = getLastCodePoint(text)
   return last !== null && keepAllGlueChars.has(last)
@@ -1214,7 +1210,7 @@ function mergeKeepAllTextSegments(segmentation: MergedSegmentation): MergedSegme
     const start = segmentation.starts[i]!
 
     if (kind === 'text') {
-      const textContainsCJK = containsCJKText(text)
+      const textContainsCJK = isCJK(text)
       const textCanContinue = canContinueKeepAllTextRun(text)
 
       if (pendingTextParts !== null && pendingContainsCJK && pendingCanContinue) {
