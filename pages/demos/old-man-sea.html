@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>The Old Man and the Sea — Pretext Reflow Demo</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; }
+
+    :root {
+      color-scheme: light;
+      --paper: #f8f4ec;
+      --ink: #1a1612;
+      --muted: #6b5f52;
+      --accent: #8b4c2a;
+      --rule: #d4c8b8;
+      --pq-bg: rgba(139, 76, 42, 0.07);
+    }
+
+    html, body {
+      background: var(--paper);
+      color: var(--ink);
+      min-height: 100%;
+    }
+
+    body {
+      font-family: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Palatino, serif;
+    }
+
+    #stage {
+      position: relative;
+      width: min(660px, calc(100vw - 48px));
+      margin: 0 auto;
+      padding: 48px 0 80px;
+    }
+
+    .chapter-label {
+      position: absolute;
+      left: 0;
+      font: 600 12px/1.2 "Helvetica Neue", Helvetica, Arial, sans-serif;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: var(--accent);
+      user-select: text;
+    }
+
+    .chapter-title {
+      position: absolute;
+      left: 0;
+      margin: 0;
+      font-weight: 700;
+      color: var(--ink);
+      letter-spacing: -0.01em;
+      user-select: text;
+    }
+
+    .chapter-rule {
+      position: absolute;
+      left: 0;
+      height: 1px;
+      background: var(--rule);
+    }
+
+    .drop-cap {
+      position: absolute;
+      font-weight: 700;
+      color: var(--accent);
+      user-select: text;
+      pointer-events: none;
+      z-index: 2;
+    }
+
+    .body-line {
+      position: absolute;
+      white-space: pre;
+      color: var(--ink);
+      user-select: text;
+      cursor: text;
+      z-index: 1;
+    }
+
+    .pullquote-box {
+      position: absolute;
+      border-left: 3px solid var(--accent);
+      background: var(--pq-bg);
+      border-radius: 0 6px 6px 0;
+      z-index: 0;
+    }
+
+    .pullquote-line {
+      position: absolute;
+      white-space: pre;
+      font-style: italic;
+      color: var(--accent);
+      user-select: text;
+      z-index: 1;
+    }
+
+    .pullquote-attr {
+      position: absolute;
+      white-space: pre;
+      font: 11px/1.2 "Helvetica Neue", Helvetica, Arial, sans-serif;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--muted);
+      user-select: text;
+      z-index: 1;
+    }
+
+    .perf-pill {
+      position: fixed;
+      bottom: 16px;
+      right: 16px;
+      padding: 6px 12px;
+      border-radius: 999px;
+      background: rgba(26, 22, 18, 0.88);
+      color: rgba(248, 244, 236, 0.85);
+      font: 11px/1.2 "SF Mono", ui-monospace, monospace;
+      white-space: nowrap;
+      pointer-events: none;
+      z-index: 100;
+    }
+
+    .hint-pill {
+      position: fixed;
+      top: 16px;
+      left: 50%;
+      transform: translateX(-50%);
+      padding: 8px 16px;
+      border-radius: 999px;
+      background: rgba(26, 22, 18, 0.88);
+      color: rgba(248, 244, 236, 0.85);
+      font: 12px/1.2 "Helvetica Neue", Helvetica, Arial, sans-serif;
+      white-space: nowrap;
+      pointer-events: none;
+      z-index: 100;
+    }
+
+    @media (max-width: 600px) {
+      #stage {
+        width: calc(100vw - 28px);
+        padding: 28px 0 60px;
+      }
+      .hint-pill { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="hint-pill">Resize the window — text reflows with zero DOM reads</div>
+  <div id="stage"></div>
+  <div id="perf" class="perf-pill"></div>
+
+  <script type="module" src="./old-man-sea.ts"></script>
+</body>
+</html>
