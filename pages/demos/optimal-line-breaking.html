@@ -1,0 +1,217 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Full Knuth-Plass implementation with badness, penalties, fitness classification, and river detection — powered by Pretext.">
+  <title>Optimal Line Breaking — Pretext Demo</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; }
+    html, body { min-height: 100%; background: #faf8f5; color: #2a2520; }
+    body { font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; }
+
+    .page { max-width: 900px; margin: 0 auto; padding: 32px 24px 80px; }
+
+    h1 {
+      font: 300 32px/1.2 Georgia, "Times New Roman", serif;
+      color: #1a1714; letter-spacing: -0.5px; margin-bottom: 8px;
+    }
+    .subtitle {
+      font: 400 13px/1.4 "Helvetica Neue", Helvetica, Arial, sans-serif;
+      color: #8a7f70; margin-bottom: 20px; max-width: 65ch;
+    }
+
+    .controls {
+      display: flex; align-items: center; gap: 20px;
+      margin-bottom: 24px; flex-wrap: wrap; justify-content: center;
+    }
+    .controls label {
+      font: 500 11px/1 "Helvetica Neue", Helvetica, Arial, sans-serif;
+      color: #8a7f70; text-transform: uppercase; letter-spacing: 0.5px;
+    }
+    .controls input[type="range"] {
+      width: 220px; accent-color: #5a4f40;
+    }
+    .controls input[type="checkbox"] {
+      accent-color: #5a4f40;
+    }
+    .controls select {
+      padding: 4px 8px;
+      border: 1px solid #d8cec3;
+      border-radius: 4px;
+      background: #fff;
+      font: 400 12px/1 "Helvetica Neue", Helvetica, Arial, sans-serif;
+      color: #2a2520;
+    }
+    .width-val {
+      font: 600 13px/1 "Helvetica Neue", Helvetica, Arial, sans-serif;
+      color: #5a4f40; min-width: 42px;
+    }
+
+    .demo-area {
+      display: flex; gap: 24px; justify-content: center;
+    }
+    .canvas-wrap {
+      border: 1px solid #e8e0d4; border-radius: 3px;
+      background: #fff; box-shadow: 0 4px 12px rgba(54, 40, 23, 0.06);
+    }
+    .canvas-wrap canvas { display: block; }
+
+    .legend {
+      margin-top: 16px; padding: 12px;
+      background: #f5f2ed; border-radius: 3px;
+      font: 400 11px/1.5 "Helvetica Neue", Helvetica, Arial, sans-serif;
+      color: #6a6055;
+    }
+    .legend h3 {
+      font: 600 11px/1 "Helvetica Neue", Helvetica, Arial, sans-serif;
+      color: #5a4f40; text-transform: uppercase; letter-spacing: 0.5px;
+      margin-bottom: 8px;
+    }
+    .legend-item {
+      display: flex; align-items: center; gap: 8px;
+      margin-bottom: 4px;
+    }
+    .legend-color {
+      width: 24px; height: 4px; border-radius: 2px;
+    }
+    .legend-color.badness {
+      background: linear-gradient(90deg, rgba(220,80,80,0.4), rgba(220,160,80,0.4));
+    }
+    .legend-color.tight { background: rgba(180, 60, 60, 0.5); }
+    .legend-color.decent { background: rgba(60, 180, 100, 0.5); }
+    .legend-color.loose { background: rgba(200, 160, 60, 0.5); }
+    .legend-color.very-loose { background: rgba(200, 80, 60, 0.5); }
+
+    .info-box {
+      margin-top: 24px; padding: 16px;
+      background: #fff; border: 1px solid #e8e0d4; border-radius: 3px;
+      font: 400 12px/1.6 "Helvetica Neue", Helvetica, Arial, sans-serif;
+      color: #6a6055;
+    }
+    .info-box h3 {
+      font: 600 12px/1 "Helvetica Neue", Helvetica, Arial, sans-serif;
+      color: #5a4f40; margin-bottom: 8px;
+    }
+    .info-box p { margin-bottom: 8px; }
+    .info-box p:last-child { margin-bottom: 0; }
+
+    .topbar {
+      padding: 12px 16px; text-align: center;
+      font: 400 11px/1 "Helvetica Neue", Helvetica, Arial, sans-serif;
+      color: rgba(120,110,95,0.6);
+    }
+    .topbar a { color: rgba(100,90,75,0.7); text-decoration: none; border-bottom: 1px solid rgba(100,90,75,0.25); }
+    .topbar a:hover { color: #555; border-bottom-color: #aaa; }
+
+    .footer {
+      text-align: center; padding: 40px 24px 32px;
+      font: 400 12px/1.5 "Helvetica Neue", Helvetica, Arial, sans-serif;
+      color: #b0a898;
+    }
+    .footer a { color: #8a7f70; text-decoration: none; }
+    .footer a:hover { text-decoration: underline; }
+    .footer .sep { margin: 0 8px; }
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    Built with <em>Pretext</em>
+  </div>
+
+  <div class="page">
+    <h1>Optimal Line Breaking</h1>
+    <p class="subtitle">
+      A full Knuth-Plass implementation showing dynamic programming for optimal line breaks,
+      badness calculation, fitness classification, and typography river detection.
+    </p>
+
+    <div class="controls">
+      <label for="widthSlider">Column width</label>
+      <input type="range" id="widthSlider" min="200" max="700" value="460">
+      <span class="width-val" id="widthVal">460px</span>
+
+      <label for="paragraphSelect">Paragraph</label>
+      <select id="paragraphSelect">
+        <option value="0">The quick brown fox...</option>
+        <option value="1">In the beginning God...</option>
+        <option value="2">Call me Ishmael...</option>
+        <option value="3">It was the best of times...</option>
+      </select>
+    </div>
+
+    <div class="controls">
+      <label class="toggle">
+        <input type="checkbox" id="showMetrics" checked>
+        <span>Show metrics</span>
+      </label>
+      <label class="toggle">
+        <input type="checkbox" id="showBadness" checked>
+        <span>Show badness</span>
+      </label>
+      <label class="toggle">
+        <input type="checkbox" id="showFitness" checked>
+        <span>Show fitness</span>
+      </label>
+    </div>
+
+    <div class="demo-area">
+      <div class="canvas-wrap">
+        <canvas id="canvas"></canvas>
+      </div>
+    </div>
+
+    <div class="legend">
+      <h3>Legend</h3>
+      <div class="legend-item">
+        <div class="legend-color badness"></div>
+        <span>Badness indicator (red = higher badness)</span>
+      </div>
+      <div class="legend-item">
+        <div class="legend-color tight"></div>
+        <span>Tight line (&lt; 65% natural space)</span>
+      </div>
+      <div class="legend-item">
+        <div class="legend-color decent"></div>
+        <span>Decent line (65% - 100% natural space)</span>
+      </div>
+      <div class="legend-item">
+        <div class="legend-color loose"></div>
+        <span>Loose line (100% - 150% natural space)</span>
+      </div>
+      <div class="legend-item">
+        <div class="legend-color very-loose"></div>
+        <span>Very loose line (&gt; 150% natural space, possible river)</span>
+      </div>
+    </div>
+
+    <div class="info-box">
+      <h3>About Knuth-Plass Line Breaking</h3>
+      <p>
+        The Knuth-Plass algorithm finds the optimal line breaks by treating text layout as a
+        dynamic programming problem. It evaluates all possible break points and chooses the
+        sequence that minimizes total "badness" — a measure of how far each line deviates
+        from the ideal inter-word spacing.
+      </p>
+      <p>
+        <strong>Badness formula:</strong> <code>(slack / lineWidth)³ × 1000</code> — cubic
+        penalty that heavily disfavors very tight or very loose lines.
+      </p>
+      <p>
+        <strong>Penalties:</strong> River gaps (+5000 when spaces align vertically),
+        tight lines (+3000), and hyphenation (+50) all increase badness.
+      </p>
+      <p>
+        <strong>Fitness classification:</strong> Lines are categorized as tight (≤65% stretch),
+        decent, loose (100-150%), or very loose (>150%, indicating potential rivers).
+      </p>
+    </div>
+  </div>
+
+  <footer class="footer">
+    Built with Pretext<span class="sep">&middot;</span><a href="https://github.com/chenglou/pretext">GitHub</a>
+  </footer>
+
+  <script type="module" src="./optimal-line-breaking.ts"></script>
+</body>
+</html>
