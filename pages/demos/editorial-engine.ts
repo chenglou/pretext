@@ -5,12 +5,24 @@ import {
   walkLineRanges,
   type LayoutCursor,
   type PreparedTextWithSegments,
+  setLocale,
 } from '../../src/layout.ts'
+import { BODY_TEXT as BODY_TEXT_FR, PULLQUOTE_TEXTS as PULLQUOTE_TEXTS_FR } from './editorial-engine-text-fr.ts'
+
+const lang = new URLSearchParams(window.location.search).get('lang') === 'fr' ? 'fr' : 'en'
+if (lang === 'fr') setLocale('fr')
+document.documentElement.lang = lang
+if (lang === 'fr') {
+  const hint = document.querySelector('.hint')
+  if (hint) hint.textContent = 'Déplacez les orbes \u00B7 Cliquez pour les figer \u00B7 Zéro lecture DOM'
+}
 
 const BODY_FONT = '18px "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Palatino, serif'
 const BODY_LINE_HEIGHT = 30
 const HEADLINE_FONT_FAMILY = '"Iowan Old Style", "Palatino Linotype", "Book Antiqua", Palatino, serif'
-const HEADLINE_TEXT = 'THE FUTURE OF TEXT LAYOUT IS NOT CSS'
+const HEADLINE_TEXT = lang === 'fr'
+  ? 'L\u2019AVENIR DE LA MISE EN PAGE N\u2019EST PAS LE CSS'
+  : 'THE FUTURE OF TEXT LAYOUT IS NOT CSS'
 const GUTTER = 48
 const COL_GAP = 40
 const BOTTOM_GAP = 20
@@ -183,7 +195,7 @@ function circleIntervalForBand(
   return { left: cx - maxDx - hPad, right: cx + maxDx + hPad }
 }
 
-const BODY_TEXT = `The web renders text through a pipeline that was designed thirty years ago for static documents. A browser loads a font, shapes the text into glyphs, measures their combined width, determines where lines break, and positions each line vertically. Every step depends on the previous one. Every step requires the rendering engine to consult its internal layout tree — a structure so expensive to maintain that browsers guard access to it behind synchronous reflow barriers that can freeze the main thread for tens of milliseconds at a time.
+const BODY_TEXT_EN = `The web renders text through a pipeline that was designed thirty years ago for static documents. A browser loads a font, shapes the text into glyphs, measures their combined width, determines where lines break, and positions each line vertically. Every step depends on the previous one. Every step requires the rendering engine to consult its internal layout tree — a structure so expensive to maintain that browsers guard access to it behind synchronous reflow barriers that can freeze the main thread for tens of milliseconds at a time.
 
 For a paragraph in a blog post, this pipeline is invisible. The browser loads, lays out, and paints before the reader’s eye has traveled from the address bar to the first word. But the web is no longer a collection of static documents. It is a platform for applications, and those applications need to know about text in ways the original pipeline never anticipated.
 
@@ -243,10 +255,13 @@ The web has been waiting thirty years for this. A fifteen kilobyte library with 
 
 Fifteen kilobytes. Zero dependencies. Zero DOM reads. And the text flows.`
 
-const PULLQUOTE_TEXTS = [
-  '“The performance improvement is not incremental — it is categorical. 0.05ms versus 30ms. Zero reflows versus five hundred.”',
-  '“Text becomes a first-class participant in the visual composition — not a static block, but a fluid material that adapts in real time.”',
+const PULLQUOTE_TEXTS_EN = [
+  '”The performance improvement is not incremental — it is categorical. 0.05ms versus 30ms. Zero reflows versus five hundred.”',
+  '”Text becomes a first-class participant in the visual composition — not a static block, but a fluid material that adapts in real time.”',
 ]
+
+const BODY_TEXT = lang === 'fr' ? BODY_TEXT_FR : BODY_TEXT_EN
+const PULLQUOTE_TEXTS = lang === 'fr' ? PULLQUOTE_TEXTS_FR : PULLQUOTE_TEXTS_EN
 
 const stage = getRequiredDiv('stage')
 
