@@ -331,6 +331,20 @@ function stepRichInlineLine(
       continue
     }
 
+    // Guard against overflow: stepPreparedLineGeometry always places at
+    // least one content unit even when it exceeds maxWidth (to prevent
+    // infinite loops in standalone layout). When we already have content on
+    // the current line and the returned fragment would push us past
+    // safeWidth, break the line before this item so the fragment can start
+    // fresh on the next line where it will have the full width available.
+    if (
+      lineWidth > 0 &&
+      atItemStart &&
+      gapBefore + lineWidthForItem + item.extraWidth > remainingWidth
+    ) {
+      break lineLoop
+    }
+
     // If the only thing we can fit after paying the boundary gap is a partial
     // slice of the item's first segment, prefer wrapping before the item so we
     // keep whole-word-style boundaries when they exist. But once the current
@@ -479,6 +493,15 @@ function stepRichInlineLineStats(
       cursor.segmentIndex = 0
       cursor.graphemeIndex = 0
       continue
+    }
+
+    // Guard against overflow (mirrors the check in stepRichInlineLine)
+    if (
+      lineWidth > 0 &&
+      atItemStart &&
+      gapBefore + lineWidthForItem + item.extraWidth > remainingWidth
+    ) {
+      break lineLoop
     }
 
     if (
