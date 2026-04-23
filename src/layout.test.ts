@@ -12,6 +12,7 @@ type LayoutModule = typeof import('./layout.ts')
 type LineBreakModule = typeof import('./line-break.ts')
 type RichInlineModule = typeof import('./rich-inline.ts')
 type AnalysisModule = typeof import('./analysis.ts')
+type MeasurementModule = typeof import('./measurement.ts')
 
 let prepare: LayoutModule['prepare']
 let prepareWithSegments: LayoutModule['prepareWithSegments']
@@ -32,6 +33,8 @@ let materializeRichInlineLineRange: RichInlineModule['materializeRichInlineLineR
 let measureRichInlineStats: RichInlineModule['measureRichInlineStats']
 let walkRichInlineLineRanges: RichInlineModule['walkRichInlineLineRanges']
 let isCJK: AnalysisModule['isCJK']
+let resolveFont: MeasurementModule['resolveFont']
+let parseFontSizeReal: MeasurementModule['parseFontSize']
 
 const emojiPresentationRe = /\p{Emoji_Presentation}/u
 const punctuationRe = /[.,!?;:%)\]}'"”’»›…—-]/u
@@ -262,13 +265,15 @@ class TestOffscreenCanvas {
 
 beforeAll(async () => {
   Reflect.set(globalThis, 'OffscreenCanvas', TestOffscreenCanvas)
-  const [analysisMod, mod, lineBreakMod, richInlineMod] = await Promise.all([
+  const [analysisMod, mod, lineBreakMod, richInlineMod, measurementMod] = await Promise.all([
     import('./analysis.ts'),
     import('./layout.ts'),
     import('./line-break.ts'),
     import('./rich-inline.ts'),
+    import('./measurement.ts'),
   ])
   ;({ isCJK } = analysisMod)
+  ;({ resolveFont, parseFontSize: parseFontSizeReal } = measurementMod)
   ;({
     prepare,
     prepareWithSegments,
@@ -1442,5 +1447,33 @@ describe('layout invariants', () => {
         expect(counted).toBe(walked)
       }
     }
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Relative font unit resolution
+// ---------------------------------------------------------------------------
+
+describe('resolveFont', () => {
+  test('px fonts pass through unchanged', () => {
+    expect(resolveFont('14px "Inter", sans-serif')).toBe('14px "Inter", sans-serif')
+    expect(resolveFont('bold 16px monospace')).toBe('bold 16px monospace')
+  })
+
+  // no document in test environment, so rem falls back to 16px root
+  test('rem resolved to px using root font size', () => {
+    expect(resolveFont('0.875rem "Inter", sans-serif')).toBe('14px "Inter", sans-serif')
+    expect(resolveFont('0.9rem "DM Sans", sans-serif')).toBe('14.4px "DM Sans", sans-serif')
+    expect(resolveFont('bold 1.5rem monospace')).toBe('bold 24px monospace')
+  })
+
+  test('em resolved to px using root font size', () => {
+    expect(resolveFont('1em "Inter"')).toBe('16px "Inter"')
+    expect(resolveFont('italic 0.8em serif')).toBe('italic 12.8px serif')
+  })
+
+  test('parseFontSize handles resolved rem', () => {
+    expect(parseFontSizeReal('0.875rem "Inter"')).toBe(14)
+    expect(parseFontSizeReal('0.9rem "DM Sans"')).toBe(14.4)
   })
 })

@@ -111,8 +111,41 @@ export function getEngineProfile(): EngineProfile {
   return cachedEngineProfile
 }
 
+// Relative font unit resolution for canvas.
+//
+// Canvas ctx.font silently ignores rem/em (spec limitation — canvas can exist
+// without a document root). Callers using CSS-derived font strings like
+// "0.9rem Inter" will get the wrong measurement unless we resolve to px first.
+//
+// rem: resolved against document root font-size (one cached DOM read).
+// em: treated as rem (no parent context available in canvas).
+// Already-absolute fonts pass through unchanged with no allocation.
+
+let cachedRootFontSize: number | null = null
+const resolvedFontCache = new Map<string, string>()
+const relativeFontRe = /(\d+(?:\.\d+)?)\s*(rem|em)/
+
+function getRootFontSize(): number {
+  if (cachedRootFontSize !== null) return cachedRootFontSize
+  if (typeof document !== 'undefined' && document.documentElement) {
+    cachedRootFontSize = parseFloat(getComputedStyle(document.documentElement).fontSize)
+  }
+  return cachedRootFontSize ?? 16
+}
+
+export function resolveFont(font: string): string {
+  let resolved = resolvedFontCache.get(font)
+  if (resolved !== undefined) return resolved
+  resolved = font.replace(relativeFontRe, (_, size) => {
+    return `${parseFloat(size) * getRootFontSize()}px`
+  })
+  resolvedFontCache.set(font, resolved)
+  return resolved
+}
+
 export function parseFontSize(font: string): number {
-  const m = font.match(/(\d+(?:\.\d+)?)\s*px/)
+  const resolved = resolveFont(font)
+  const m = resolved.match(/(\d+(?:\.\d+)?)\s*px/)
   return m ? parseFloat(m[1]!) : 16
 }
 
@@ -275,16 +308,19 @@ export function getFontMeasurementState(font: string, needsEmojiCorrection: bool
   fontSize: number
   emojiCorrection: number
 } {
+  const resolved = resolveFont(font)
   const ctx = getMeasureContext()
-  ctx.font = font
-  const cache = getSegmentMetricCache(font)
-  const fontSize = parseFontSize(font)
-  const emojiCorrection = needsEmojiCorrection ? getEmojiCorrection(font, fontSize) : 0
+  ctx.font = resolved
+  const cache = getSegmentMetricCache(resolved)
+  const fontSize = parseFontSize(resolved)
+  const emojiCorrection = needsEmojiCorrection ? getEmojiCorrection(resolved, fontSize) : 0
   return { cache, fontSize, emojiCorrection }
 }
 
 export function clearMeasurementCaches(): void {
   segmentMetricCaches.clear()
   emojiCorrectionCache.clear()
+  resolvedFontCache.clear()
+  cachedRootFontSize = null
   sharedGraphemeSegmenter = null
 }
