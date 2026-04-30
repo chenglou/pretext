@@ -986,9 +986,13 @@ async function run() {
   }))
 }
 
+function escapeHtml(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+}
+
 run().catch(error => {
   const message = error instanceof Error ? error.message : String(error)
   const root = document.getElementById('root')!
-  root.innerHTML = `<p>${message}</p>`
+  root.innerHTML = `<p>${escapeHtml(message)}</p>`
   setReport(withRequestId({ status: 'error', message }))
 })
