@@ -33,6 +33,10 @@ const maybeEmojiRe = /[\p{Emoji_Presentation}\p{Extended_Pictographic}\p{Regiona
 let sharedGraphemeSegmenter: Intl.Segmenter | null = null
 const emojiCorrectionCache = new Map<string, number>()
 
+export function setMeasureContext(ctx: any): void {
+  measureContext = ctx
+}
+
 export function getMeasureContext(): CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D {
   if (measureContext !== null) return measureContext
 

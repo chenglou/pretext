@@ -213,6 +213,7 @@ Other helpers:
 ```ts
 clearCache(): void // clears Pretext's shared internal caches used by prepare() and prepareWithSegments(). Useful if your app cycles through many different fonts or text variants and you want to release the accumulated cache
 setLocale(locale?: string): void // optional (by default we use the current locale). Sets locale for future prepare() and prepareWithSegments(). Internally, it also calls clearCache(). Setting a new locale doesn't affect existing prepare() and prepareWithSegments() states (no mutations to them)
+setMeasureContext(ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D | any): void // allows setting a custom canvas context for text measurement. Particularly useful in SSR environments (like NextJS or Node.js) where DOM and OffscreenCanvas are not available.
 ```
 
 Notes:
@@ -224,6 +225,24 @@ Notes:
 - If a soft hyphen wins the break, materialized line text includes the visible trailing `-`.
 - `measureNaturalWidth()` returns the widest forced line. Hard breaks still count.
 - `prepare()` and `prepareWithSegments()` do horizontal-only work. `lineHeight` stays a layout-time input.
+
+## Server-Side Rendering (SSR)
+
+To use Pretext in a server-side environment (like Node.js or NextJS), you'll need to provide a canvas implementation, as `document` and `OffscreenCanvas` are not globally available.
+
+You can use the `canvas` package from npm and `setMeasureContext` to initialize the measurement context before calling `prepare()` or `prepareWithSegments()`:
+
+```ts
+import { setMeasureContext } from '@chenglou/pretext'
+import { createCanvas } from 'canvas'
+
+// Initialize the measurement context once, ideally at module scope
+const canvas = createCanvas(1, 1)
+const ctx = canvas.getContext('2d')
+setMeasureContext(ctx)
+
+// Now you can use prepare() and layout() as normal
+```
 
 ## Caveats
 
