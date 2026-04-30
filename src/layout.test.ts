@@ -12,6 +12,8 @@ type LayoutModule = typeof import('./layout.ts')
 type LineBreakModule = typeof import('./line-break.ts')
 type RichInlineModule = typeof import('./rich-inline.ts')
 type AnalysisModule = typeof import('./analysis.ts')
+type MeasurementModule = typeof import('./measurement.ts')
+type SegmentMetrics = ReturnType<MeasurementModule['getSegmentMetrics']>
 
 let prepare: LayoutModule['prepare']
 let prepareWithSegments: LayoutModule['prepareWithSegments']
@@ -32,6 +34,7 @@ let materializeRichInlineLineRange: RichInlineModule['materializeRichInlineLineR
 let measureRichInlineStats: RichInlineModule['measureRichInlineStats']
 let walkRichInlineLineRanges: RichInlineModule['walkRichInlineLineRanges']
 let isCJK: AnalysisModule['isCJK']
+let getSegmentBreakableFitAdvances: MeasurementModule['getSegmentBreakableFitAdvances']
 
 const emojiPresentationRe = /\p{Emoji_Presentation}/u
 const punctuationRe = /[.,!?;:%)\]}'"”’»›…—-]/u
@@ -262,11 +265,12 @@ class TestOffscreenCanvas {
 
 beforeAll(async () => {
   Reflect.set(globalThis, 'OffscreenCanvas', TestOffscreenCanvas)
-  const [analysisMod, mod, lineBreakMod, richInlineMod] = await Promise.all([
+  const [analysisMod, mod, lineBreakMod, richInlineMod, measurementMod] = await Promise.all([
     import('./analysis.ts'),
     import('./layout.ts'),
     import('./line-break.ts'),
     import('./rich-inline.ts'),
+    import('./measurement.ts'),
   ])
   ;({ isCJK } = analysisMod)
   ;({
@@ -283,11 +287,31 @@ beforeAll(async () => {
   } = mod)
   ;({ countPreparedLines, measurePreparedLineGeometry, stepPreparedLineGeometry, walkPreparedLines } = lineBreakMod)
   ;({ prepareRichInline, materializeRichInlineLineRange, measureRichInlineStats, walkRichInlineLineRanges } = richInlineMod)
+  ;({ getSegmentBreakableFitAdvances } = measurementMod)
 })
 
 beforeEach(() => {
   setLocale(undefined)
   clearCache()
+})
+
+describe('measurement invariants', () => {
+  test('breakable fit advance cache is keyed by fit mode', () => {
+    const metrics: SegmentMetrics = { width: 80, containsCJK: false }
+    const cache: Map<string, SegmentMetrics> = new Map([
+      ['a', { width: 10, containsCJK: false }],
+      ['b', { width: 20, containsCJK: false }],
+      ['c', { width: 30, containsCJK: false }],
+      ['ab', { width: 35, containsCJK: false }],
+      ['bc', { width: 60, containsCJK: false }],
+      ['abc', metrics],
+    ])
+
+    expect(getSegmentBreakableFitAdvances('abc', metrics, cache, 0, 'sum-graphemes')).toEqual([10, 20, 30])
+    expect(getSegmentBreakableFitAdvances('abc', metrics, cache, 0, 'pair-context')).toEqual([10, 25, 40])
+    expect(getSegmentBreakableFitAdvances('abc', metrics, cache, 0, 'segment-prefixes')).toEqual([10, 25, 45])
+    expect(getSegmentBreakableFitAdvances('abc', metrics, cache, 0, 'sum-graphemes')).toEqual([10, 20, 30])
+  })
 })
 
 describe('prepare invariants', () => {
