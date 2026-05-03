@@ -4,8 +4,20 @@ import type { PreparedTextWithSegments } from './layout.js'
 let sharedGraphemeSegmenter: Intl.Segmenter | null = null
 let sharedLineTextCaches = new WeakMap<PreparedTextWithSegments, Map<number, string[]>>()
 
+/**
+ * Returns a shared Intl.Segmenter for grapheme segmentation and throws an error if Intl.Segmenter is not supported in the current environment.
+ * Requires Intl.Segmenter support (Chrome 87+, Firefox 125+, Safari 14.1+). 
+ */
 function getSharedGraphemeSegmenter(): Intl.Segmenter {
   if (sharedGraphemeSegmenter === null) {
+    if (typeof Intl?.Segmenter !== 'function') {
+      throw new Error(
+        'Intl.Segmenter is not supported in this environment. ' +
+        'Please polyfill with @formatjs/intl-segmenter or upgrade your browser. ' +
+        'Minimum versions: Chrome 87+, Firefox 125+, Safari 14.1+. ' +
+        'See: https://caniuse.com/mdn-javascript_builtins_intl_segmenter'
+      )
+    }
     sharedGraphemeSegmenter = new Intl.Segmenter(undefined, { granularity: 'grapheme' })
   }
   return sharedGraphemeSegmenter
