@@ -445,6 +445,19 @@ describe('prepare invariants', () => {
     expect(prepared.segments).toEqual(['“Whenever'])
   })
 
+  test('keeps German low opening quotes attached to the following word', () => {
+    for (const quote of ['‚', '„']) {
+      const prepared = prepareWithSegments(`aaaaaaaaaaaaaaaaaaa ${quote}Wort`, FONT)
+      expect(prepared.segments).toEqual(['aaaaaaaaaaaaaaaaaaa', ' ', `${quote}Wort`])
+
+      const strandedQuoteWidth = measureWidth(`aaaaaaaaaaaaaaaaaaa ${quote}`, FONT) + 0.1
+      expect(layoutWithLines(prepared, strandedQuoteWidth, LINE_HEIGHT).lines.map(line => line.text)).toEqual([
+        'aaaaaaaaaaaaaaaaaaa ',
+        `${quote}Wort`,
+      ])
+    }
+  })
+
   test('keeps apostrophe-led elisions attached to the following word', () => {
     const prepared = prepareWithSegments('“Take ’em downstairs', FONT)
     expect(prepared.segments).toEqual(['“Take', ' ', '’em', ' ', 'downstairs'])
