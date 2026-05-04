@@ -41,6 +41,7 @@ bun install
   On a first-break mismatch, probe output now includes a small break trace.
   `sN:gM` means segment/grapheme position, `unit` is that unit's width, `fit` is the cumulative fitted width from the current line start, and `[ours]` / `[browser]` mark the competing break boundaries.
   For Safari URL/query misses or other extractor-sensitive cases, cross-check `--method=span` before changing the engine.
+  On non-macOS hosts, Chrome checks launch headless Chrome through DevTools; set `CHROME_BIN` or `CHROME_PATH` if Chrome is not in a standard location.
 
 ### Corpus Tooling
 
