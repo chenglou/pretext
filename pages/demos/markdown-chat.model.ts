@@ -641,7 +641,8 @@ function collectInlinePieceLines(
         }
 
         case 'link': {
-          walk(token.tokens ?? [], { ...marks, href: token.href })
+          const safeHref = /^https?:\/\//i.test(token.href ?? '') ? token.href : null
+          walk(token.tokens ?? [], { ...marks, href: safeHref })
           continue
         }
 
