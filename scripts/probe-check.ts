@@ -71,8 +71,18 @@ function parseStringFlag(name: string): string | null {
 function parseNumberFlag(name: string, fallback: number): number {
   const raw = parseStringFlag(name)
   if (raw === null) return fallback
+  if (!/^-?\d+$/.test(raw.trim())) throw new Error(`Invalid value for --${name}: ${raw}`)
   const parsed = Number.parseInt(raw, 10)
   if (!Number.isFinite(parsed)) throw new Error(`Invalid value for --${name}: ${raw}`)
+  return parsed
+}
+
+function parseOptionalIntegerEnv(name: string, fallback: number): number {
+  const raw = process.env[name]
+  if (raw === undefined || raw.trim().length === 0) return fallback
+  if (!/^-?\d+$/.test(raw.trim())) throw new Error(`Invalid value for ${name}: ${raw}`)
+  const parsed = Number.parseInt(raw, 10)
+  if (!Number.isFinite(parsed)) throw new Error(`Invalid value for ${name}: ${raw}`)
   return parsed
 }
 
@@ -143,7 +153,7 @@ function printReport(report: ProbeReport): void {
 }
 
 const browser = parseBrowser(parseStringFlag('browser'))
-const requestedPort = parseNumberFlag('port', Number.parseInt(process.env['PROBE_CHECK_PORT'] ?? '0', 10))
+const requestedPort = parseNumberFlag('port', parseOptionalIntegerEnv('PROBE_CHECK_PORT', 0))
 const text = requireFlag('text')
 const width = parseNumberFlag('width', 600)
 const font = parseStringFlag('font') ?? '18px serif'
