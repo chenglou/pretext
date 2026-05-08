@@ -3,22 +3,22 @@
   "results": [
     {
       "label": "Our library: prepare()",
-      "ms": 17.75,
+      "ms": 18.800000071525574,
       "desc": "One cold 500-text measurement batch"
     },
     {
       "label": "Our library: layout()",
-      "ms": 0.14649999976158143,
+      "ms": 0.14825000047683717,
       "desc": "Normalized hot-path throughput per 500-text batch"
     },
     {
       "label": "DOM batch",
-      "ms": 4,
+      "ms": 3.899999976158142,
       "desc": "Single 400→300px batch resize: write all, then read all"
     },
     {
       "label": "DOM interleaved",
-      "ms": 44,
+      "ms": 44.75,
       "desc": "Single 400→300px batch resize: write + read per div"
     }
   ],
@@ -30,17 +30,17 @@
     },
     {
       "label": "Our library: layoutWithLines()",
-      "ms": 0.05249999761581421,
+      "ms": 0.05250000357627869,
       "desc": "60-text shared-corpus batch across widths 180/220/260px; materializes text lines"
     },
     {
       "label": "Our library: walkLineRanges()",
-      "ms": 0.025,
+      "ms": 0.023750001192092897,
       "desc": "60-text shared-corpus batch across widths 180/220/260px; line ranges only, no line text strings"
     },
     {
       "label": "Our library: layoutNextLine()",
-      "ms": 0.04625000059604645,
+      "ms": 0.04500000178813934,
       "desc": "60-text shared-corpus batch across widths 180/220/260px; streaming line-by-line layout"
     }
   ],
@@ -52,29 +52,29 @@
     },
     {
       "label": "Our library: walkRichInlineLineRanges()",
-      "ms": 0.02124999761581421,
+      "ms": 0.01875,
       "desc": "36 rich-text inline flow shared-corpus texts across widths 180/220/260px; per-line ranges with fragment ownership, no text strings"
     },
     {
       "label": "Our library: materializeRichInlineLineRange()",
-      "ms": 0.046249997615814206,
+      "ms": 0.04250000119209289,
       "desc": "36 rich-text inline flow shared-corpus texts across widths 180/220/260px; range walker plus per-line materialization"
     },
     {
       "label": "Our library: layoutNextRichInlineLineRange() + materializeRichInlineLineRange()",
-      "ms": 0.04250000119209289,
+      "ms": 0.04375,
       "desc": "36 rich-text inline flow shared-corpus texts across widths 180/220/260px; streaming range walk plus per-line materialization"
     }
   ],
   "richPreWrapResults": [
     {
       "label": "Our library: measureLineStats()",
-      "ms": 0.3050000011920929,
+      "ms": 0.26999999880790715,
       "desc": "12 generated pre-wrap texts with 320 hard-break chunks across widths 220/260/320px; stats only"
     },
     {
       "label": "Our library: layoutWithLines()",
-      "ms": 0.425,
+      "ms": 0.4299999952316284,
       "desc": "12 generated pre-wrap texts with 320 hard-break chunks across widths 220/260/320px; materializes text lines"
     },
     {
@@ -84,29 +84,29 @@
     },
     {
       "label": "Our library: layoutNextLine()",
-      "ms": 1.1524999976158141,
+      "ms": 1.1225000023841858,
       "desc": "12 generated pre-wrap texts with 320 hard-break chunks across widths 220/260/320px; streaming line-by-line layout"
     }
   ],
   "richLongResults": [
     {
       "label": "Our library: measureLineStats()",
-      "ms": 1.6674999982118606,
+      "ms": 1.6650000005960464,
       "desc": "8 Arabic long-form texts across widths 240/300/360px; stats only"
     },
     {
       "label": "Our library: layoutWithLines()",
-      "ms": 5.647499999403953,
+      "ms": 5.660000002384185,
       "desc": "8 Arabic long-form texts across widths 240/300/360px; materializes text lines"
     },
     {
       "label": "Our library: walkLineRanges()",
-      "ms": 2.2162499994039537,
+      "ms": 2.221249997615814,
       "desc": "8 Arabic long-form texts across widths 240/300/360px; line ranges only, no line text strings"
     },
     {
       "label": "Our library: layoutNextLine()",
-      "ms": 5.6,
+      "ms": 5.613749998807907,
       "desc": "8 Arabic long-form texts across widths 240/300/360px; streaming line-by-line layout"
     }
   ],
@@ -121,8 +121,8 @@
       "breakableSegments": 0,
       "width": 300,
       "lineCount": 193,
-      "analysisMs": 2.4000000953674316,
-      "measureMs": 4.199999809265137,
+      "analysisMs": 2.3999998569488525,
+      "measureMs": 4.299999713897705,
       "prepareMs": 6.599999904632568,
       "layoutMs": 0.02600000023841858
     },
@@ -136,10 +136,10 @@
       "breakableSegments": 1,
       "width": 300,
       "lineCount": 380,
-      "analysisMs": 4.799999952316284,
-      "measureMs": 8.5,
-      "prepareMs": 13.399999856948853,
-      "layoutMs": 0.04899999976158142
+      "analysisMs": 4.8999998569488525,
+      "measureMs": 8.299999952316284,
+      "prepareMs": 13.400000095367432,
+      "layoutMs": 0.049499999284744266
     },
     {
       "id": "ko-unsu-joh-eun-nal",
@@ -152,9 +152,9 @@
       "width": 300,
       "lineCount": 428,
       "analysisMs": 3.4000000953674316,
-      "measureMs": 8.600000381469727,
-      "prepareMs": 12.200000047683716,
-      "layoutMs": 0.0775
+      "measureMs": 9.399999856948853,
+      "prepareMs": 12.700000047683716,
+      "layoutMs": 0.07899999976158142
     },
     {
       "id": "ko-sonagi",
@@ -166,10 +166,10 @@
       "breakableSegments": 2,
       "width": 300,
       "lineCount": 332,
-      "analysisMs": 2.6000001430511475,
-      "measureMs": 6.6000001430511475,
-      "prepareMs": 9.5,
-      "layoutMs": 0.05850000023841858
+      "analysisMs": 2.5,
+      "measureMs": 7.199999809265137,
+      "prepareMs": 9.799999952316284,
+      "layoutMs": 0.05899999976158142
     },
     {
       "id": "zh-zhufu",
@@ -181,10 +181,10 @@
       "breakableSegments": 4,
       "width": 300,
       "lineCount": 626,
-      "analysisMs": 7.599999904632568,
-      "measureMs": 14.800000190734863,
-      "prepareMs": 22.200000047683716,
-      "layoutMs": 0.07950000047683715
+      "analysisMs": 7.700000047683716,
+      "measureMs": 14.699999809265137,
+      "prepareMs": 21.59999990463257,
+      "layoutMs": 0.08
     },
     {
       "id": "zh-guxiang",
@@ -196,10 +196,10 @@
       "breakableSegments": 14,
       "width": 300,
       "lineCount": 375,
-      "analysisMs": 4.800000190734863,
-      "measureMs": 8.90000033378601,
-      "prepareMs": 14,
-      "layoutMs": 0.04700000047683716
+      "analysisMs": 4.700000047683716,
+      "measureMs": 8.399999856948853,
+      "prepareMs": 13.399999856948853,
+      "layoutMs": 0.0475
     },
     {
       "id": "th-nithan-vetal-story-1",
@@ -211,10 +211,10 @@
       "breakableSegments": 8087,
       "width": 300,
       "lineCount": 1024,
-      "analysisMs": 10.5,
-      "measureMs": 8.5,
-      "prepareMs": 19,
-      "layoutMs": 0.08700000047683716
+      "analysisMs": 10.299999952316284,
+      "measureMs": 9.599999904632568,
+      "prepareMs": 19.59999990463257,
+      "layoutMs": 0.08649999976158142
     },
     {
       "id": "my-cunning-heron-teacher",
@@ -227,9 +227,9 @@
       "width": 300,
       "lineCount": 81,
       "analysisMs": 0.7999999523162842,
-      "measureMs": 0.9000000953674316,
-      "prepareMs": 1.7000000476837158,
-      "layoutMs": 0.006999999284744263
+      "measureMs": 0.8000001907348633,
+      "prepareMs": 1.6000001430511475,
+      "layoutMs": 0.0070000004768371584
     },
     {
       "id": "my-bad-deeds-return-to-you-teacher",
@@ -242,9 +242,9 @@
       "width": 300,
       "lineCount": 54,
       "analysisMs": 0.5,
-      "measureMs": 0.6000001430511475,
-      "prepareMs": 1.1000001430511475,
-      "layoutMs": 0.004000000953674317
+      "measureMs": 0.5999999046325684,
+      "prepareMs": 1.0999999046325684,
+      "layoutMs": 0.004499999284744263
     },
     {
       "id": "ur-chughd",
@@ -256,10 +256,10 @@
       "breakableSegments": 2922,
       "width": 300,
       "lineCount": 351,
-      "analysisMs": 3.700000047683716,
+      "analysisMs": 3.6000001430511475,
       "measureMs": 3.8999998569488525,
-      "prepareMs": 8.299999952316284,
-      "layoutMs": 0.04300000071525574
+      "prepareMs": 8,
+      "layoutMs": 0.04299999952316284
     },
     {
       "id": "km-prachum-reuang-preng-khmer-volume-7-stories-1-10",
@@ -271,10 +271,10 @@
       "breakableSegments": 4010,
       "width": 300,
       "lineCount": 591,
-      "analysisMs": 8.099999904632568,
-      "measureMs": 5.000000238418579,
-      "prepareMs": 13.5,
-      "layoutMs": 0.08450000047683716
+      "analysisMs": 8.700000047683716,
+      "measureMs": 5.099999904632568,
+      "prepareMs": 13.799999952316284,
+      "layoutMs": 0.085
     },
     {
       "id": "hi-eidgah",
@@ -286,9 +286,9 @@
       "breakableSegments": 4089,
       "width": 300,
       "lineCount": 653,
-      "analysisMs": 6,
-      "measureMs": 7.799999952316284,
-      "prepareMs": 14.300000190734863,
+      "analysisMs": 6.1000001430511475,
+      "measureMs": 8.399999856948853,
+      "prepareMs": 14.699999809265137,
       "layoutMs": 0.06950000047683716
     },
     {
@@ -301,10 +301,10 @@
       "breakableSegments": 1540,
       "width": 300,
       "lineCount": 2860,
-      "analysisMs": 8.899999856948853,
-      "measureMs": 13.700000047683716,
-      "prepareMs": 22.40000009536743,
-      "layoutMs": 0.3120000004768372
+      "analysisMs": 8.800000190734863,
+      "measureMs": 13,
+      "prepareMs": 21.5,
+      "layoutMs": 0.3125
     },
     {
       "id": "ar-risalat-al-ghufran-part-1",
@@ -316,10 +316,10 @@
       "breakableSegments": 18745,
       "width": 300,
       "lineCount": 2643,
-      "analysisMs": 28.299999952316284,
-      "measureMs": 46.69999980926514,
-      "prepareMs": 75.09999990463257,
-      "layoutMs": 0.2744999992847443
+      "analysisMs": 28.200000047683716,
+      "measureMs": 47.19999980926514,
+      "prepareMs": 75.90000009536743,
+      "layoutMs": 0.2739999997615814
     }
   ]
 }

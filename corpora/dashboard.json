@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-04-08T02:26:58.651Z",
+  "generatedAt": "2026-05-08T10:02:22.063Z",
   "sources": {
     "accuracy": {
       "chrome": "accuracy/chrome.json",
@@ -49,14 +49,14 @@
         "mismatches": []
       },
       "chromeStep10": {
-        "exactCount": 60,
+        "exactCount": 61,
         "widthCount": 61
       },
       "safariStep10": {
         "exactCount": 61,
         "widthCount": 61
       },
-      "notes": "remaining Chrome-only `710px` miss is SHY / extractor-sensitive; Safari is exact there again in height/line count"
+      "notes": "currently exact in the maintained Chrome and Safari step10 sweeps; keep as the product-shaped canary for URLs, emoji ZWJ, hard spaces, and soft hyphens"
     }
   ],
   "longForm": [

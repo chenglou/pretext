@@ -99,7 +99,7 @@ See `DEVELOPMENT.md` for the current command surface and packaging/release check
 - URL-like runs such as `https://...` / `www...` are currently modeled as two breakable preprocessing units when a query exists: the path through the query introducer (`?`), then the query string. This is intentionally narrow and exists to stop obviously bad mid-path URL breaks without forcing the whole query string to fragment character-by-character.
 - Mixed app text also pulled in two more keep-worthy preprocessing rules: contextual escaped quote clusters like `\"word\"`, and numeric/time-range runs like `२४×७` / `7:00-9:00`.
 - For Southeast Asian scripts or mixed text containing Thai/Lao/Khmer/Myanmar, trust the `Range`-based corpus diagnostics over span-probing; span units can perturb line breaking there.
-- The remaining Chrome mixed-app `710px` soft-hyphen miss is extractor-sensitive and not cleanly local. Treat it as paragraph-scale / accumulation-sensitive until a cleaner reproducer appears, and do not patch the engine from only one extractor view.
+- The former Chrome mixed-app `710px` soft-hyphen miss is exact again after keeping chosen soft-hyphen breaks at the SHY boundary. Keep mixed app text as a regression canary, and do not reintroduce post-SHY grapheme packing from only one extractor view.
 - Safari `Range`-based probe extraction can over-advance across URL query text (`...path?q`) even when the real DOM height and the `span` extractor are exact. Cross-check `--method=span` before changing the engine on Safari URL/query probe misses.
 - Keep the current corpus lessons in mind:
   - Thai: contextual ASCII quotes were a real keep

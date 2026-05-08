@@ -2,7 +2,7 @@ Current priorities:
 
 1. Keep the canaries honest
 
-- Mixed app text still has the extractor-sensitive `710px` soft-hyphen miss.
+- Mixed app text is exact again in the maintained Chrome/Safari step10 sweeps; keep it as a product-shaped regression canary rather than an active tuning target.
 - Chinese is still the clearest active CJK canary: Safari's step10 sweep is clean, while Chrome keeps a broader narrow-width positive field with real font sensitivity.
 - Myanmar and Urdu remain useful shaping/context canaries, but they are not the active tuning target right now.
 

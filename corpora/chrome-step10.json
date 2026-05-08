@@ -8,17 +8,8 @@
     "end": 900,
     "step": 10,
     "widthCount": 61,
-    "exactCount": 60,
-    "mismatches": [
-      {
-        "width": 710,
-        "diffPx": -30,
-        "predictedHeight": 500,
-        "actualHeight": 530,
-        "predictedLineCount": 14,
-        "browserLineCount": 15
-      }
-    ]
+    "exactCount": 61,
+    "mismatches": []
   },
   {
     "corpusId": "en-gatsby-opening",

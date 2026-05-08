@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-04-22T05:32:11.275Z",
+  "generatedAt": "2026-05-08T09:56:13.902Z",
   "browsers": [
     "chrome",
     "safari"
@@ -491,23 +491,23 @@
         "line": 1,
         "oursStart": 0,
         "browserStart": 0,
-        "oursEnd": 8,
+        "oursEnd": 6,
         "browserEnd": 7,
-        "oursText": "trans-at",
+        "oursText": "trans-",
         "browserText": "trans­a",
-        "oursRenderedText": "trans-at",
+        "oursRenderedText": "trans-",
         "browserRenderedText": "trans­a",
-        "oursContext": "trans­at|lantic transit",
+        "oursContext": "trans­|atlantic transit",
         "browserContext": "trans­a|tlantic transit",
-        "deltaText": "t",
+        "deltaText": "a",
         "reasonGuess": "our segment sum drifts from full-string width by 0.366px",
-        "oursSumWidth": 58.41593933105469,
-        "oursDomWidth": 58.0546875,
-        "oursFullWidth": 58.0499267578125,
+        "oursSumWidth": 43.52995300292969,
+        "oursDomWidth": 43.1640625,
+        "oursFullWidth": 43.1639404296875,
         "browserDomWidth": 46.609375,
         "browserFullWidth": 46.60194396972656
       },
-      "extractorSensitivity": null,
+      "extractorSensitivity": "range mismatch disappears with span",
       "message": null
     },
     {

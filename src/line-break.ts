@@ -158,30 +158,6 @@ function getBreakableCandidateFitWidth(
     : candidatePaintWidth + prepared.letterSpacing
 }
 
-function fitSoftHyphenBreak(
-  graphemeFitAdvances: number[],
-  initialWidth: number,
-  maxWidth: number,
-  lineFitEpsilon: number,
-  discretionaryHyphenWidth: number,
-  letterSpacing: number,
-): { fitCount: number, fittedWidth: number } {
-  let fitCount = 0
-  let fittedWidth = initialWidth
-
-  while (fitCount < graphemeFitAdvances.length) {
-    const nextWidth = fittedWidth + graphemeFitAdvances[fitCount]! + letterSpacing
-    const nextLineWidth = fitCount + 1 < graphemeFitAdvances.length
-      ? nextWidth + discretionaryHyphenWidth
-      : nextWidth
-    if (nextLineWidth > maxWidth + lineFitEpsilon) break
-    fittedWidth = nextWidth
-    fitCount++
-  }
-
-  return { fitCount, fittedWidth }
-}
-
 function findChunkIndexForStart(prepared: PreparedLineBreakData, segmentIndex: number): number {
   let lo = 0
   let hi = prepared.chunks.length
@@ -570,40 +546,6 @@ export function walkPreparedLinesRaw(
     }
   }
 
-  function continueSoftHyphenBreakableSegment(segmentIndex: number): boolean {
-    if (pendingBreakKind !== 'soft-hyphen') return false
-    const fitWidths = breakableFitAdvances[segmentIndex]
-    if (fitWidths == null) return false
-    const { fitCount, fittedWidth } = fitSoftHyphenBreak(
-      fitWidths,
-      lineW,
-      maxWidth,
-      lineFitEpsilon,
-      discretionaryHyphenWidth,
-      prepared.letterSpacing,
-    )
-    if (fitCount === 0) return false
-
-    lineW = fittedWidth
-    lineEndSegmentIndex = segmentIndex
-    lineEndGraphemeIndex = fitCount
-    clearPendingBreak()
-
-    if (fitCount === fitWidths.length) {
-      lineEndSegmentIndex = segmentIndex + 1
-      lineEndGraphemeIndex = 0
-      return true
-    }
-
-    emitCurrentLine(
-      segmentIndex,
-      fitCount,
-      fittedWidth + discretionaryHyphenWidth,
-    )
-    appendBreakableSegmentFrom(segmentIndex, fitCount)
-    return true
-  }
-
   function emitEmptyChunk(chunk: { startSegmentIndex: number, consumedEndSegmentIndex: number }): void {
     lineCount++
     onLine?.(0, chunk.startSegmentIndex, 0, chunk.consumedEndSegmentIndex, 0)
@@ -678,11 +620,6 @@ export function walkPreparedLinesRaw(
           pendingBreakFitWidth <= fitLimit
         ) {
           emitCurrentLine(pendingBreakSegmentIndex, 0, pendingBreakPaintWidth)
-          continue
-        }
-
-        if (pendingBreakKind === 'soft-hyphen' && continueSoftHyphenBreakableSegment(i)) {
-          i++
           continue
         }
 
@@ -789,13 +726,6 @@ function stepPreparedChunkLineGeometry(
   let pendingBreakPaintWidth = 0
   let pendingBreakKind: SegmentBreakKind | null = null
 
-  function clearPendingBreak(): void {
-    pendingBreakSegmentIndex = -1
-    pendingBreakFitWidth = 0
-    pendingBreakPaintWidth = 0
-    pendingBreakKind = null
-  }
-
   function finishLine(
     endSegmentIndex = lineEndSegmentIndex,
     endGraphemeIndex = lineEndGraphemeIndex,
@@ -876,36 +806,8 @@ function stepPreparedChunkLineGeometry(
     return null
   }
 
-  function maybeFinishAtSoftHyphen(segmentIndex: number): number | null {
+  function maybeFinishAtSoftHyphen(): number | null {
     if (pendingBreakKind !== 'soft-hyphen' || pendingBreakSegmentIndex < 0) return null
-
-    const fitWidths = breakableFitAdvances[segmentIndex] ?? null
-    if (fitWidths !== null) {
-      const { fitCount, fittedWidth } = fitSoftHyphenBreak(
-        fitWidths,
-        lineW,
-        maxWidth,
-        lineFitEpsilon,
-        discretionaryHyphenWidth,
-        prepared.letterSpacing,
-      )
-
-      if (fitCount === fitWidths.length) {
-        lineW = fittedWidth
-        lineEndSegmentIndex = segmentIndex + 1
-        lineEndGraphemeIndex = 0
-        clearPendingBreak()
-        return null
-      }
-
-      if (fitCount > 0) {
-        return finishLine(
-          segmentIndex,
-          fitCount,
-          fittedWidth + discretionaryHyphenWidth,
-        )
-      }
-    }
 
     if (pendingBreakFitWidth <= fitLimit) {
       return finishLine(pendingBreakSegmentIndex, 0, pendingBreakPaintWidth)
@@ -966,7 +868,7 @@ function stepPreparedChunkLineGeometry(
         return finishLine(pendingBreakSegmentIndex, 0, pendingBreakPaintWidth)
       }
 
-      const softBreakLine = maybeFinishAtSoftHyphen(i)
+      const softBreakLine = maybeFinishAtSoftHyphen()
       if (softBreakLine !== null) return softBreakLine
 
       if (breakAfter && currentBreakFitWidth <= fitLimit) {

@@ -51,7 +51,7 @@ type FontMatrixNote = {
 const PRODUCT_SHAPED: CorpusDashboardMeta[] = [
   {
     id: 'mixed-app-text',
-    notes: 'remaining Chrome-only `710px` miss is SHY / extractor-sensitive; Safari is exact there again in height/line count',
+    notes: 'currently exact in the maintained Chrome and Safari step10 sweeps; keep as the product-shaped canary for URLs, emoji ZWJ, hard spaces, and soft hyphens',
   },
 ]
 
