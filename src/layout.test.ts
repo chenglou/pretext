@@ -33,6 +33,7 @@ let stepPreparedLineGeometry: LineBreakModule['stepPreparedLineGeometry']
 let walkPreparedLines: LineBreakModule['walkPreparedLines']
 let getSegmentBreakableFitAdvances: MeasurementModule['getSegmentBreakableFitAdvances']
 let prepareRichInline: RichInlineModule['prepareRichInline']
+let layoutNextRichInlineLineRange: RichInlineModule['layoutNextRichInlineLineRange']
 let materializeRichInlineLineRange: RichInlineModule['materializeRichInlineLineRange']
 let measureRichInlineStats: RichInlineModule['measureRichInlineStats']
 let walkRichInlineLineRanges: RichInlineModule['walkRichInlineLineRanges']
@@ -291,7 +292,7 @@ beforeAll(async () => {
   } = mod)
   ;({ countPreparedLines, measurePreparedLineGeometry, stepPreparedLineGeometry, walkPreparedLines } = lineBreakMod)
   ;({ getSegmentBreakableFitAdvances } = measurementMod)
-  ;({ prepareRichInline, materializeRichInlineLineRange, measureRichInlineStats, walkRichInlineLineRanges } = richInlineMod)
+  ;({ prepareRichInline, layoutNextRichInlineLineRange, materializeRichInlineLineRange, measureRichInlineStats, walkRichInlineLineRanges } = richInlineMod)
 })
 
 beforeEach(() => {
@@ -826,6 +827,24 @@ describe('rich-inline invariants', () => {
         materializedLine.fragments.map(({ text: _text, ...fragment }) => fragment),
       )
     }
+  })
+
+  test('layoutNextRichInlineLineRange leaves the start cursor reusable', () => {
+    const prepared = prepareRichInline([
+      { text: 'Ship ', font: FONT },
+      { text: '@maya', font: '700 12px Test Sans', break: 'never', extraWidth: 18 },
+      { text: "'s rich note wraps cleanly", font: FONT },
+    ])
+    const start = { itemIndex: 0, segmentIndex: 0, graphemeIndex: 0 }
+    const firstLine = layoutNextRichInlineLineRange(prepared, 120, start)
+
+    expect(firstLine).not.toBeNull()
+    expect(start).toEqual({ itemIndex: 0, segmentIndex: 0, graphemeIndex: 0 })
+    expect(layoutNextRichInlineLineRange(prepared, 120, start)).toEqual(firstLine)
+
+    const nextStart = { ...firstLine!.end }
+    expect(layoutNextRichInlineLineRange(prepared, 120, firstLine!.end)).not.toBeNull()
+    expect(firstLine!.end).toEqual(nextStart)
   })
 })
 
