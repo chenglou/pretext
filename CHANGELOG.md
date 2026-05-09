@@ -6,6 +6,10 @@
 
 - Numeric CSS-pixel `letterSpacing` support on `prepare()`, `prepareWithSegments()`, and each existing rich-inline item (#108, #156).
 
+### Changed
+
+- `layoutNextLine()` and `layoutNextLineRange()` now avoid redundant chunk lookup in chunk-heavy manual layout paths (#140).
+
 ### Fixed
 
 - CJK text followed by opening bracket annotations now wraps like browsers instead of leaving the opening bracket on the previous line (#148).

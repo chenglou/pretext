@@ -255,7 +255,8 @@ function normalizeLineStartInChunk(
   return chunkIndex + 1
 }
 
-function normalizeLineStartChunkIndex(
+// Mutates `cursor` to the next renderable line start and returns its chunk index.
+export function normalizePreparedLineStart(
   prepared: PreparedLineBreakData,
   cursor: LineBreakCursor,
 ): number {
@@ -282,18 +283,6 @@ function normalizeLineStartChunkIndexFromHint(
   }
   if (nextChunkIndex >= prepared.chunks.length) return -1
   return normalizeLineStartInChunk(prepared, nextChunkIndex, cursor)
-}
-
-export function normalizeLineStart(
-  prepared: PreparedLineBreakData,
-  start: LineBreakCursor,
-): LineBreakCursor | null {
-  const cursor = {
-    segmentIndex: start.segmentIndex,
-    graphemeIndex: start.graphemeIndex,
-  }
-  const chunkIndex = normalizeLineStartChunkIndex(prepared, cursor)
-  return chunkIndex < 0 ? null : cursor
 }
 
 export function countPreparedLines(prepared: PreparedLineBreakData, maxWidth: number): number {
@@ -1101,32 +1090,17 @@ function stepPreparedSimpleLineGeometry(
   return lineW
 }
 
-export function layoutNextLineRange(
+export function stepPreparedLineGeometryFromChunk(
   prepared: PreparedLineBreakData,
-  start: LineBreakCursor,
+  cursor: LineBreakCursor,
+  chunkIndex: number,
   maxWidth: number,
-): InternalLayoutLine | null {
-  const end: LineBreakCursor = {
-    segmentIndex: start.segmentIndex,
-    graphemeIndex: start.graphemeIndex,
+): number | null {
+  if (prepared.simpleLineWalkFastPath) {
+    return stepPreparedSimpleLineGeometry(prepared, cursor, maxWidth)
   }
-  const chunkIndex = normalizeLineStartChunkIndex(prepared, end)
-  if (chunkIndex < 0) return null
 
-  const lineStartSegmentIndex = end.segmentIndex
-  const lineStartGraphemeIndex = end.graphemeIndex
-  const width = prepared.simpleLineWalkFastPath
-    ? stepPreparedSimpleLineGeometry(prepared, end, maxWidth)
-    : stepPreparedChunkLineGeometry(prepared, end, chunkIndex, maxWidth)
-  if (width === null) return null
-
-  return {
-    startSegmentIndex: lineStartSegmentIndex,
-    startGraphemeIndex: lineStartGraphemeIndex,
-    endSegmentIndex: end.segmentIndex,
-    endGraphemeIndex: end.graphemeIndex,
-    width,
-  }
+  return stepPreparedChunkLineGeometry(prepared, cursor, chunkIndex, maxWidth)
 }
 
 export function stepPreparedLineGeometry(
@@ -1134,14 +1108,9 @@ export function stepPreparedLineGeometry(
   cursor: LineBreakCursor,
   maxWidth: number,
 ): number | null {
-  const chunkIndex = normalizeLineStartChunkIndex(prepared, cursor)
+  const chunkIndex = normalizePreparedLineStart(prepared, cursor)
   if (chunkIndex < 0) return null
-
-  if (prepared.simpleLineWalkFastPath) {
-    return stepPreparedSimpleLineGeometry(prepared, cursor, maxWidth)
-  }
-
-  return stepPreparedChunkLineGeometry(prepared, cursor, chunkIndex, maxWidth)
+  return stepPreparedLineGeometryFromChunk(prepared, cursor, chunkIndex, maxWidth)
 }
 
 export function measurePreparedLineGeometry(
@@ -1166,7 +1135,7 @@ export function measurePreparedLineGeometry(
   let maxLineWidth = 0
 
   if (!prepared.simpleLineWalkFastPath) {
-    let chunkIndex = normalizeLineStartChunkIndex(prepared, cursor)
+    let chunkIndex = normalizePreparedLineStart(prepared, cursor)
     while (chunkIndex >= 0) {
       const lineWidth = stepPreparedChunkLineGeometry(prepared, cursor, chunkIndex, maxWidth)
       if (lineWidth === null) {

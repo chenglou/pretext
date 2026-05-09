@@ -63,8 +63,8 @@ import {
 import {
   countPreparedLines,
   measurePreparedLineGeometry,
-  normalizeLineStart,
-  stepPreparedLineGeometry,
+  normalizePreparedLineStart,
+  stepPreparedLineGeometryFromChunk,
   walkPreparedLinesRaw,
 } from './line-break.js'
 import {
@@ -101,7 +101,7 @@ type PreparedCore = {
   chunks: PreparedLineChunk[] // Precompiled hard-break chunks for line walking
 }
 
-// Keep the main prepared handle opaque so the public API does not accidentally
+// Keep the compact height-prediction handle opaque so the public API does not accidentally
 // calcify around the current parallel-array representation.
 export type PreparedText = {
   readonly [preparedTextBrand]: true
@@ -109,8 +109,8 @@ export type PreparedText = {
 
 type InternalPreparedText = PreparedText & PreparedCore
 
-// Rich/diagnostic variant that still exposes the structural segment data.
-// Treat this as the unstable escape hatch for experiments and custom rendering.
+// Manual-layout handle that exposes the structural segment data used by
+// range/cursor APIs and custom rendering.
 export type PreparedTextWithSegments = InternalPreparedText & {
   segments: string[] // Segment text aligned with the parallel arrays, e.g. ['hello', ' ', 'world']
 }
@@ -783,22 +783,24 @@ export function layoutNextLine(
   maxWidth: number,
 ): LayoutLine | null {
   const internal = getInternalPrepared(prepared)
-  const normalizedStart = normalizeLineStart(internal, start)
-  if (normalizedStart === null) return null
-
   const end = {
-    segmentIndex: normalizedStart.segmentIndex,
-    graphemeIndex: normalizedStart.graphemeIndex,
+    segmentIndex: start.segmentIndex,
+    graphemeIndex: start.graphemeIndex,
   }
-  const width = stepPreparedLineGeometry(internal, end, maxWidth)
+  const chunkIndex = normalizePreparedLineStart(internal, end)
+  if (chunkIndex < 0) return null
+
+  const lineStartSegmentIndex = end.segmentIndex
+  const lineStartGraphemeIndex = end.graphemeIndex
+  const width = stepPreparedLineGeometryFromChunk(internal, end, chunkIndex, maxWidth)
   if (width === null) return null
 
   return createLayoutLine(
     prepared,
     getLineTextCache(prepared),
     width,
-    normalizedStart.segmentIndex,
-    normalizedStart.graphemeIndex,
+    lineStartSegmentIndex,
+    lineStartGraphemeIndex,
     end.segmentIndex,
     end.graphemeIndex,
   )
@@ -810,20 +812,22 @@ export function layoutNextLineRange(
   maxWidth: number,
 ): LayoutLineRange | null {
   const internal = getInternalPrepared(prepared)
-  const normalizedStart = normalizeLineStart(internal, start)
-  if (normalizedStart === null) return null
-
   const end = {
-    segmentIndex: normalizedStart.segmentIndex,
-    graphemeIndex: normalizedStart.graphemeIndex,
+    segmentIndex: start.segmentIndex,
+    graphemeIndex: start.graphemeIndex,
   }
-  const width = stepPreparedLineGeometry(internal, end, maxWidth)
+  const chunkIndex = normalizePreparedLineStart(internal, end)
+  if (chunkIndex < 0) return null
+
+  const lineStartSegmentIndex = end.segmentIndex
+  const lineStartGraphemeIndex = end.graphemeIndex
+  const width = stepPreparedLineGeometryFromChunk(internal, end, chunkIndex, maxWidth)
   if (width === null) return null
 
   return createLayoutLineRange(
     width,
-    normalizedStart.segmentIndex,
-    normalizedStart.graphemeIndex,
+    lineStartSegmentIndex,
+    lineStartGraphemeIndex,
     end.segmentIndex,
     end.graphemeIndex,
   )
