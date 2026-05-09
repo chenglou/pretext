@@ -31,13 +31,11 @@ function getSegmentGraphemes(
 function lineHasDiscretionaryHyphen(
   kinds: SegmentBreakKind[],
   startSegmentIndex: number,
-  startGraphemeIndex: number,
   endSegmentIndex: number,
 ): boolean {
   return (
-    endSegmentIndex > 0 &&
-    kinds[endSegmentIndex - 1] === 'soft-hyphen' &&
-    !(startSegmentIndex === endSegmentIndex && startGraphemeIndex > 0)
+    endSegmentIndex > startSegmentIndex &&
+    kinds[endSegmentIndex - 1] === 'soft-hyphen'
   )
 }
 
@@ -74,7 +72,6 @@ export function buildLineTextFromRange(
   const endsWithDiscretionaryHyphen = lineHasDiscretionaryHyphen(
     prepared.kinds,
     startSegmentIndex,
-    startGraphemeIndex,
     endSegmentIndex,
   )
 

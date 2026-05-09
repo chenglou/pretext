@@ -9,7 +9,7 @@ export type LineBreakCursor = {
 export type PreparedLineBreakData = {
   widths: number[]
   lineEndFitAdvances: number[]
-  lineEndPaintAdvances: number[]
+  lineEndPaintAdvances: number[] // Painted contribution before terminal line-end letter-spacing
   kinds: SegmentBreakKind[]
   simpleLineWalkFastPath: boolean
   breakableFitAdvances: (number[] | null)[]
@@ -156,6 +156,58 @@ function getBreakableCandidateFitWidth(
   return prepared.letterSpacing === 0
     ? candidatePaintWidth
     : candidatePaintWidth + prepared.letterSpacing
+}
+
+function getTerminalLetterSpacing(
+  prepared: PreparedLineBreakData,
+  startSegmentIndex: number,
+  startGraphemeIndex: number,
+  endSegmentIndex: number,
+  endGraphemeIndex: number,
+): number {
+  if (prepared.letterSpacing === 0) return 0
+
+  if (endGraphemeIndex > 0) {
+    return prepared.spacingGraphemeCounts[endSegmentIndex]! > 0
+      ? prepared.letterSpacing
+      : 0
+  }
+
+  for (let i = endSegmentIndex - 1; i >= startSegmentIndex; i--) {
+    const kind = prepared.kinds[i]!
+    if (kind === 'space' || kind === 'zero-width-break' || kind === 'hard-break') continue
+    if (kind === 'soft-hyphen') {
+      if (i === endSegmentIndex - 1) return 0
+      continue
+    }
+
+    if (i === startSegmentIndex && startGraphemeIndex > 0) {
+      return prepared.letterSpacing
+    }
+
+    return prepared.spacingGraphemeCounts[i]! > 0
+      ? prepared.letterSpacing
+      : 0
+  }
+
+  return 0
+}
+
+function finalizeLinePaintWidth(
+  prepared: PreparedLineBreakData,
+  width: number,
+  startSegmentIndex: number,
+  startGraphemeIndex: number,
+  endSegmentIndex: number,
+  endGraphemeIndex: number,
+): number {
+  return width + getTerminalLetterSpacing(
+    prepared,
+    startSegmentIndex,
+    startGraphemeIndex,
+    endSegmentIndex,
+    endGraphemeIndex,
+  )
 }
 
 function findChunkIndexForStart(prepared: PreparedLineBreakData, segmentIndex: number): number {
@@ -455,19 +507,38 @@ export function walkPreparedLinesRaw(
     pendingBreakKind = null
   }
 
+  function getCurrentLinePaintWidth(): number {
+    return (
+      pendingBreakKind === 'soft-hyphen' &&
+      pendingBreakSegmentIndex === lineEndSegmentIndex &&
+      lineEndGraphemeIndex === 0
+    )
+      ? pendingBreakPaintWidth
+      : lineW
+  }
+
   function emitCurrentLine(
     endSegmentIndex = lineEndSegmentIndex,
     endGraphemeIndex = lineEndGraphemeIndex,
-    width = lineW,
+    width?: number,
   ): void {
     lineCount++
-    onLine?.(
-      width,
-      lineStartSegmentIndex,
-      lineStartGraphemeIndex,
-      endSegmentIndex,
-      endGraphemeIndex,
-    )
+    if (onLine !== undefined) {
+      onLine(
+        finalizeLinePaintWidth(
+          prepared,
+          width ?? getCurrentLinePaintWidth(),
+          lineStartSegmentIndex,
+          lineStartGraphemeIndex,
+          endSegmentIndex,
+          endGraphemeIndex,
+        ),
+        lineStartSegmentIndex,
+        lineStartGraphemeIndex,
+        endSegmentIndex,
+        endGraphemeIndex,
+      )
+    }
     lineW = 0
     hasContent = false
     clearPendingBreak()
@@ -717,6 +788,8 @@ function stepPreparedChunkLineGeometry(
   const lineFitEpsilon = engineProfile.lineFitEpsilon
   const fitLimit = maxWidth + lineFitEpsilon
 
+  const lineStartSegmentIndex = cursor.segmentIndex
+  const lineStartGraphemeIndex = cursor.graphemeIndex
   let lineW = 0
   let hasContent = false
   let lineEndSegmentIndex = cursor.segmentIndex
@@ -726,15 +799,32 @@ function stepPreparedChunkLineGeometry(
   let pendingBreakPaintWidth = 0
   let pendingBreakKind: SegmentBreakKind | null = null
 
+  function getCurrentLinePaintWidth(): number {
+    return (
+      pendingBreakKind === 'soft-hyphen' &&
+      pendingBreakSegmentIndex === lineEndSegmentIndex &&
+      lineEndGraphemeIndex === 0
+    )
+      ? pendingBreakPaintWidth
+      : lineW
+  }
+
   function finishLine(
     endSegmentIndex = lineEndSegmentIndex,
     endGraphemeIndex = lineEndGraphemeIndex,
-    width = lineW,
+    width = getCurrentLinePaintWidth(),
   ): number | null {
     if (!hasContent) return null
     cursor.segmentIndex = endSegmentIndex
     cursor.graphemeIndex = endGraphemeIndex
-    return width
+    return finalizeLinePaintWidth(
+      prepared,
+      width,
+      lineStartSegmentIndex,
+      lineStartGraphemeIndex,
+      endSegmentIndex,
+      endGraphemeIndex,
+    )
   }
 
   function startLineAtSegment(segmentIndex: number, width: number): void {

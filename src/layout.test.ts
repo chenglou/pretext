@@ -409,6 +409,10 @@ describe('prepare invariants', () => {
     const narrow = layoutWithLines(prefixed, softBreakWidth, LINE_HEIGHT)
     expect(narrow.lineCount).toBe(2)
     expect(narrow.lines.map(line => line.text)).toEqual(['foo trans-', 'atlantic'])
+    expect(narrow.lines[0]!.width).toBeCloseTo(
+      prefixed.widths[0]! + prefixed.widths[1]! + prefixed.widths[2]! + prefixed.discretionaryHyphenWidth,
+      5,
+    )
     expect(layout(prefixed, softBreakWidth, LINE_HEIGHT).lineCount).toBe(narrow.lineCount)
 
     const hyphenAndOneGraphemeWidth =
@@ -753,7 +757,7 @@ describe('prepare invariants', () => {
 })
 
 describe('rich-inline invariants', () => {
-  test('letterSpacing applies inside rich-inline items', () => {
+  test('letterSpacing preserves the terminal gap inside rich-inline items', () => {
     const spacing = 3
     const prepared = prepareRichInline([
       { text: 'AB', font: FONT, letterSpacing: spacing },
@@ -761,7 +765,31 @@ describe('rich-inline invariants', () => {
 
     expect(measureRichInlineStats(prepared, 200)).toEqual({
       lineCount: 1,
-      maxLineWidth: measureWidth('AB', FONT) + spacing,
+      maxLineWidth: measureWidth('AB', FONT) + spacing * 2,
+    })
+  })
+
+  test('letterSpacing preserves rich-inline gaps across styled item boundaries', () => {
+    const spacing = 3
+    const prepared = prepareRichInline([
+      { text: 'A', font: '700 16px Test Sans', letterSpacing: spacing },
+      { text: 'BC', font: FONT, letterSpacing: spacing },
+    ])
+    const expectedWidth =
+      measureWidth('A', '700 16px Test Sans') +
+      measureWidth('BC', FONT) +
+      spacing * 3
+    const firstItemWidth = measureWidth('A', '700 16px Test Sans') + spacing
+
+    expect(measureRichInlineStats(prepared, 200)).toEqual({
+      lineCount: 1,
+      maxLineWidth: expectedWidth,
+    })
+    expect(layoutNextRichInlineLineRange(prepared, firstItemWidth + 0.1)).toMatchObject({
+      fragments: [
+        { itemIndex: 0 },
+      ],
+      width: firstItemWidth,
     })
   })
 
@@ -911,7 +939,7 @@ describe('rich-inline invariants', () => {
 })
 
 describe('layout invariants', () => {
-  test('letterSpacing adds only inter-grapheme gaps, not trailing gaps', () => {
+  test('letterSpacing preserves terminal line-end gaps like browsers', () => {
     const spacing = 4
 
     const single = layoutWithLines(
@@ -919,21 +947,21 @@ describe('layout invariants', () => {
       200,
       LINE_HEIGHT,
     )
-    expect(single.lines[0]!.width).toBeCloseTo(measureWidth('A', FONT), 5)
+    expect(single.lines[0]!.width).toBeCloseTo(measureWidth('A', FONT) + spacing, 5)
 
     const pair = layoutWithLines(
       prepareWithSegments('AB', FONT, { letterSpacing: spacing }),
       200,
       LINE_HEIGHT,
     )
-    expect(pair.lines[0]!.width).toBeCloseTo(measureWidth('AB', FONT) + spacing, 5)
+    expect(pair.lines[0]!.width).toBeCloseTo(measureWidth('AB', FONT) + spacing * 2, 5)
 
     const segmented = layoutWithLines(
       prepareWithSegments('A B', FONT, { letterSpacing: spacing }),
       200,
       LINE_HEIGHT,
     )
-    expect(segmented.lines[0]!.width).toBeCloseTo(measureWidth('A B', FONT) + spacing * 2, 5)
+    expect(segmented.lines[0]!.width).toBeCloseTo(measureWidth('A B', FONT) + spacing * 3, 5)
   })
 
   test('letterSpacing zero preserves prepared widths', () => {
@@ -953,19 +981,19 @@ describe('layout invariants', () => {
     )
 
     expect(wrapped.lines.map(line => line.text)).toEqual(['A ', 'B'])
-    expect(wrapped.lines[0]!.width).toBeCloseTo(lineAWidth, 5)
+    expect(wrapped.lines[0]!.width).toBeCloseTo(lineAWidth + spacing, 5)
   })
 
   test('letterSpacing restarts at grapheme line breaks inside a word', () => {
     const spacing = 5
     const prepared = prepareWithSegments('abcd', FONT, { letterSpacing: spacing })
-    const twoGraphemesWidth = measureWidth('ab', FONT) + spacing
-    const wrapped = layoutWithLines(prepared, twoGraphemesWidth + spacing + 0.1, LINE_HEIGHT)
+    const twoGraphemesWidth = measureWidth('ab', FONT) + spacing * 2
+    const wrapped = layoutWithLines(prepared, twoGraphemesWidth + 0.1, LINE_HEIGHT)
 
     expect(wrapped.lines.map(line => line.text)).toEqual(['ab', 'cd'])
     expect(wrapped.lines[0]!.width).toBeCloseTo(twoGraphemesWidth, 5)
     expect(wrapped.lines[1]!.width).toBeCloseTo(twoGraphemesWidth, 5)
-    expect(layout(prepared, twoGraphemesWidth + spacing + 0.1, LINE_HEIGHT).lineCount).toBe(wrapped.lineCount)
+    expect(layout(prepared, twoGraphemesWidth + 0.1, LINE_HEIGHT).lineCount).toBe(wrapped.lineCount)
   })
 
   test('letterSpacing uses the trailing fit gap when wrapping inside a word', () => {
@@ -976,7 +1004,18 @@ describe('layout invariants', () => {
     const wrapped = layoutWithLines(prepared, allPaintWidth + spacing / 2, LINE_HEIGHT)
 
     expect(wrapped.lines.map(line => line.text)).toEqual(['abc', 'd'])
-    expect(wrapped.lines[0]!.width).toBeCloseTo(measureWidth('abc', FONT) + spacing * 2, 5)
+    expect(wrapped.lines[0]!.width).toBeCloseTo(measureWidth('abc', FONT) + spacing * 3, 5)
+  })
+
+  test('letterSpacing preserves terminal spacing after a visible soft hyphen', () => {
+    const spacing = 5
+    const prepared = prepareWithSegments('trans\u00ADatlantic', FONT, { letterSpacing: spacing })
+    const softHyphenLineWidth = prepared.widths[0]! + prepared.discretionaryHyphenWidth
+    const wrapped = layoutWithLines(prepared, softHyphenLineWidth - spacing / 2, LINE_HEIGHT)
+
+    expect(wrapped.lines[0]!.text).toBe('trans-')
+    expect(wrapped.lines[0]!.width).toBeCloseTo(softHyphenLineWidth, 5)
+    expect(wrapped.lines[1]!.text.startsWith('-')).toBe(false)
   })
 
   test('letterSpacing trailing fit gap respects combining graphemes', () => {
@@ -1007,7 +1046,7 @@ describe('layout invariants', () => {
       LINE_HEIGHT,
     ).lines[0]!
 
-    expect(line.width).toBeCloseTo(measureWidth('AB', FONT) + spacing, 5)
+    expect(line.width).toBeCloseTo(measureWidth('AB', FONT) + spacing * 2, 5)
   })
 
   test('letterSpacing applies across CJK segment boundaries', () => {
@@ -1018,7 +1057,7 @@ describe('layout invariants', () => {
       LINE_HEIGHT,
     ).lines[0]!
 
-    expect(line.width).toBeCloseTo(measureWidth('春天', FONT) + spacing, 5)
+    expect(line.width).toBeCloseTo(measureWidth('春天', FONT) + spacing * 2, 5)
   })
 
   test('letterSpacing applies through digits and punctuation', () => {
@@ -1029,7 +1068,7 @@ describe('layout invariants', () => {
       300,
       LINE_HEIGHT,
     ).lines[0]!
-    const gapCount = getSegmentGraphemes(text).length - 1
+    const gapCount = getSegmentGraphemes(text).length
 
     expect(line.width).toBeCloseTo(measureWidth(text, FONT) + spacing * gapCount, 5)
   })
@@ -1042,7 +1081,7 @@ describe('layout invariants', () => {
       300,
       LINE_HEIGHT,
     ).lines[0]!
-    const gapCount = getSegmentGraphemes(text).length - 1
+    const gapCount = getSegmentGraphemes(text).length
 
     expect(line.width).toBeCloseTo(measureWidth(text, FONT) + spacing * gapCount, 5)
   })
@@ -1055,7 +1094,7 @@ describe('layout invariants', () => {
       LINE_HEIGHT,
     ).lines[0]!
 
-    expect(line.width).toBeCloseTo(measureWidth('A😀B', FONT) + spacing * 2, 5)
+    expect(line.width).toBeCloseTo(measureWidth('A😀B', FONT) + spacing * 3, 5)
   })
 
   test('letterSpacing stays line-local across hard breaks', () => {
@@ -1067,8 +1106,8 @@ describe('layout invariants', () => {
     ).lines
 
     expect(lines.map(line => line.text)).toEqual(['A', 'B'])
-    expect(lines[0]!.width).toBeCloseTo(measureWidth('A', FONT), 5)
-    expect(lines[1]!.width).toBeCloseTo(measureWidth('B', FONT), 5)
+    expect(lines[0]!.width).toBeCloseTo(measureWidth('A', FONT) + spacing, 5)
+    expect(lines[1]!.width).toBeCloseTo(measureWidth('B', FONT) + spacing, 5)
   })
 
   test('letterSpacing participates in pre-wrap tab positioning', () => {
@@ -1078,7 +1117,7 @@ describe('layout invariants', () => {
     const line = layoutWithLines(prepared, 200, LINE_HEIGHT).lines[0]!
     const aWidth = measureWidth('A', FONT)
     const tabAdvance = nextTabAdvance(aWidth + spacing, measureWidth(' ', FONT))
-    const expected = aWidth + spacing + tabAdvance + spacing + measureWidth('B', FONT)
+    const expected = aWidth + spacing + tabAdvance + spacing + measureWidth('B', FONT) + spacing
 
     expect(line.text).toBe(text)
     expect(line.width).toBeCloseTo(expected, 5)
