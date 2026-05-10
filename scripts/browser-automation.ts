@@ -1,5 +1,5 @@
 import { execFileSync, spawn, type ChildProcess } from 'node:child_process'
-import { closeSync, mkdirSync, mkdtempSync, openSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { closeSync, existsSync, mkdirSync, mkdtempSync, openSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { createConnection, createServer as createNetServer } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -120,7 +120,7 @@ export async function getAvailablePort(requestedPort: number | null = null): Pro
   })
 }
 
-const LOCK_DIR = join(process.env['TMPDIR'] ?? '/tmp', 'pretext-browser-automation-locks')
+const LOCK_DIR = join(process.env['TMPDIR'] ?? tmpdir(), 'pretext-browser-automation-locks')
 
 type LockMetadata = {
   pid: number
@@ -299,6 +299,25 @@ type FirefoxSessionState = {
   profileDir: string
 }
 
+type ChromeCdpResponse = {
+  id: number
+  result?: unknown
+  error?: {
+    message?: string
+  }
+}
+
+type ChromeCdpClient = {
+  send: (method: string, params?: Record<string, unknown>) => Promise<ChromeCdpResponse>
+  close: () => void
+}
+
+type ChromeCdpSessionState = {
+  cdp: ChromeCdpClient
+  chromeProcess: ChildProcess
+  profileDir: string
+}
+
 async function connectFirefoxBidi(port: number): Promise<FirefoxBidiClient> {
   const ws = new WebSocket(`ws://127.0.0.1:${port}/session`)
   const pending = new Map<number, (message: BidiResponse) => void>()
@@ -331,6 +350,96 @@ async function connectFirefoxBidi(port: number): Promise<FirefoxBidiClient> {
   }
 }
 
+async function connectChromeCdp(webSocketDebuggerUrl: string): Promise<ChromeCdpClient> {
+  const ws = new WebSocket(webSocketDebuggerUrl)
+  const pending = new Map<number, (message: ChromeCdpResponse) => void>()
+  let nextId = 1
+
+  ws.onmessage = event => {
+    const message = JSON.parse(String(event.data)) as ChromeCdpResponse
+    if (message.id === undefined) return
+    const resolve = pending.get(message.id)
+    if (resolve !== undefined) {
+      pending.delete(message.id)
+      resolve(message)
+    }
+  }
+
+  await new Promise<void>((resolve, reject) => {
+    ws.onopen = () => resolve()
+    ws.onerror = event => reject(new Error(String((event as ErrorEvent).message ?? 'Chrome WebSocket error')))
+  })
+
+  return {
+    async send(method: string, params: Record<string, unknown> = {}): Promise<ChromeCdpResponse> {
+      const id = nextId++
+      ws.send(JSON.stringify({ id, method, params }))
+      return await new Promise<ChromeCdpResponse>(resolve => pending.set(id, resolve))
+    },
+    close() {
+      ws.close()
+    },
+  }
+}
+
+function getChromeExecutable(): string {
+  const explicit = process.env['CHROME_BIN'] ?? process.env['CHROME_PATH']
+  if (explicit !== undefined && explicit.length > 0) {
+    return explicit
+  }
+
+  const candidates = process.platform === 'win32'
+    ? [
+      'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
+      'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
+      join(process.env['LOCALAPPDATA'] ?? '', 'Google\\Chrome\\Application\\chrome.exe'),
+    ]
+    : [
+      '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+      '/usr/bin/google-chrome',
+      '/usr/bin/google-chrome-stable',
+      '/usr/bin/chromium',
+      '/usr/bin/chromium-browser',
+    ]
+
+  const executable = candidates.find(candidate => candidate.length > 0 && existsSync(candidate))
+  if (executable !== undefined) return executable
+
+  throw new Error('Could not find Chrome. Set CHROME_BIN or CHROME_PATH to the Chrome executable.')
+}
+
+async function getChromePageWebSocketUrl(port: number): Promise<string> {
+  for (let attempt = 0; attempt < 100; attempt++) {
+    try {
+      const response = await fetch(`http://127.0.0.1:${port}/json/list`)
+      const targets = await response.json() as Array<{
+        type?: string
+        webSocketDebuggerUrl?: string
+      }>
+      const page = targets.find(target => target.type === 'page' && target.webSocketDebuggerUrl !== undefined)
+      if (page?.webSocketDebuggerUrl !== undefined) {
+        return page.webSocketDebuggerUrl
+      }
+    } catch {
+      // Chrome may not have finished exposing the target list yet.
+    }
+    await sleep(100)
+  }
+
+  throw new Error('Timed out waiting for Chrome DevTools page target')
+}
+
+function getCdpStringValue(response: ChromeCdpResponse): string {
+  const remoteResult = response.result as {
+    result?: {
+      value?: unknown
+    }
+  } | undefined
+
+  const value = remoteResult?.result?.value
+  return typeof value === 'string' ? value : ''
+}
+
 function getBidiStringValue(response: BidiResponse): string {
   const remoteResult = response.result as {
     type?: string
@@ -342,6 +451,84 @@ function getBidiStringValue(response: BidiResponse): string {
 
   const value = remoteResult?.result?.value
   return typeof value === 'string' ? value : ''
+}
+
+function killProcessTree(childProcess: ChildProcess): void {
+  if (childProcess.pid === undefined) return
+  if (process.platform === 'win32') {
+    try {
+      execFileSync('taskkill', ['/pid', String(childProcess.pid), '/t', '/f'], { stdio: 'ignore' })
+    } catch {
+      // Best effort cleanup.
+    }
+    return
+  }
+
+  try {
+    childProcess.kill('SIGTERM')
+  } catch {
+    // Best effort cleanup.
+  }
+}
+
+async function closeChromeCdpSessionState(state: ChromeCdpSessionState): Promise<void> {
+  state.cdp.close()
+  killProcessTree(state.chromeProcess)
+
+  for (let attempt = 0; attempt < 10; attempt++) {
+    try {
+      rmSync(state.profileDir, { recursive: true, force: true })
+      return
+    } catch {
+      // Windows can keep the profile locked briefly after Chrome exits.
+      await sleep(100)
+    }
+  }
+}
+
+async function initializeChromeCdpSession(): Promise<ChromeCdpSessionState> {
+  const debuggingPort = await getAvailablePort()
+  const profileDir = mkdtempSync(join(tmpdir(), 'pretext-chrome-'))
+  const chromeProcess = spawn(getChromeExecutable(), [
+    '--headless=new',
+    '--disable-gpu',
+    '--no-first-run',
+    '--no-default-browser-check',
+    `--user-data-dir=${profileDir}`,
+    '--remote-debugging-address=127.0.0.1',
+    `--remote-debugging-port=${debuggingPort}`,
+    'about:blank',
+  ], {
+    cwd: process.cwd(),
+    stdio: 'ignore',
+  })
+
+  let cdp: ChromeCdpClient | null = null
+
+  try {
+    await waitForPort(debuggingPort)
+    const webSocketDebuggerUrl = await getChromePageWebSocketUrl(debuggingPort)
+    cdp = await connectChromeCdp(webSocketDebuggerUrl)
+    const page = await cdp.send('Page.enable')
+    if (page.error !== undefined) {
+      throw new Error(page.error.message ?? 'Failed to enable Chrome page domain')
+    }
+
+    return {
+      cdp,
+      chromeProcess,
+      profileDir,
+    }
+  } catch (error) {
+    cdp?.close()
+    try {
+      chromeProcess.kill('SIGTERM')
+    } catch {
+      // Best effort cleanup.
+    }
+    rmSync(profileDir, { recursive: true, force: true })
+    throw error
+  }
 }
 
 function closeFirefoxSessionState(state: FirefoxSessionState): void {
@@ -476,6 +663,50 @@ function createSafariSession(options: BrowserSessionOptions): BrowserSession {
 }
 
 function createChromeSession(options: BrowserSessionOptions): BrowserSession {
+  if (process.platform !== 'darwin') {
+    let statePromise: Promise<ChromeCdpSessionState> | null = null
+    let closed = false
+
+    function ensureState(): Promise<ChromeCdpSessionState> {
+      if (closed) {
+        return Promise.reject(new Error('Chrome automation session already closed'))
+      }
+      statePromise ??= initializeChromeCdpSession()
+      return statePromise
+    }
+
+    return {
+      async navigate(url) {
+        const state = await ensureState()
+        const navigate = await state.cdp.send('Page.navigate', { url })
+        if (navigate.error !== undefined) {
+          throw new Error(navigate.error.message ?? 'Chrome navigation failed')
+        }
+      },
+      async readLocationUrl() {
+        try {
+          const state = await ensureState()
+          const evaluation = await state.cdp.send('Runtime.evaluate', {
+            expression: 'location.href',
+            returnByValue: true,
+          })
+          if (evaluation.error !== undefined) {
+            return ''
+          }
+          return getCdpStringValue(evaluation)
+        } catch {
+          return ''
+        }
+      },
+      close() {
+        if (closed) return
+        closed = true
+        if (statePromise === null) return
+        void statePromise.then(closeChromeCdpSessionState, () => {})
+      },
+    }
+  }
+
   const scriptLines = [
     'tell application "Google Chrome"',
     'if (count of windows) = 0 then make new window',
@@ -610,7 +841,7 @@ export async function ensurePageServer(
     return { baseUrl: existingBaseUrl, process: null }
   }
 
-  const serverProcess = spawn('/bin/zsh', ['-lc', `bun --port=${port} --no-hmr pages/*.html`], {
+  const serverProcess = spawn(process.execPath, [`--port=${port}`, '--no-hmr', 'pages/*.html'], {
     cwd,
     stdio: 'ignore',
   })
