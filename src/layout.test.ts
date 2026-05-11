@@ -27,6 +27,7 @@ let measureNaturalWidth: LayoutModule['measureNaturalWidth']
 let walkLineRanges: LayoutModule['walkLineRanges']
 let clearCache: LayoutModule['clearCache']
 let setLocale: LayoutModule['setLocale']
+let setMeasureFunction: LayoutModule['setMeasureFunction']
 let countPreparedLines: LineBreakModule['countPreparedLines']
 let measurePreparedLineGeometry: LineBreakModule['measurePreparedLineGeometry']
 let stepPreparedLineGeometry: LineBreakModule['stepPreparedLineGeometry']
@@ -289,6 +290,7 @@ beforeAll(async () => {
     walkLineRanges,
     clearCache,
     setLocale,
+    setMeasureFunction,
   } = mod)
   ;({ countPreparedLines, measurePreparedLineGeometry, stepPreparedLineGeometry, walkPreparedLines } = lineBreakMod)
   ;({ getSegmentBreakableFitAdvances } = measurementMod)
@@ -1677,5 +1679,39 @@ describe('layout invariants', () => {
         expect(counted).toBe(walked)
       }
     }
+  })
+})
+
+describe('setMeasureFunction', () => {
+  test('custom measure function is used instead of canvas', () => {
+    setMeasureFunction((text: string) => text.length * 10)
+    
+    const prepared = prepareWithSegments('Hello World', FONT)
+    const result = layout(prepared, 80, LINE_HEIGHT)
+
+    expect(result.lineCount).toBe(2)
+    setMeasureFunction(null)
+  })
+
+  test('setting null restores canvas measurement', () => {
+    setMeasureFunction((text: string) => text.length * 10)
+    setMeasureFunction(null)
+
+    const prepared = prepare('Hello World', FONT)
+    const result = layout(prepared, 200, LINE_HEIGHT)
+    expect(result.lineCount).toBe(1)
+  })
+
+  test('caches are cleared when measure function changes', () => {
+    const p1 = prepare('Test', FONT)
+    const r1 = layout(p1, 200, LINE_HEIGHT)
+
+    setMeasureFunction((text: string) => text.length * 100)
+    const p2 = prepare('Test', FONT)
+    const r2 = layout(p2, 200, LINE_HEIGHT)
+
+    expect(r2.lineCount).toBeGreaterThan(r1.lineCount)
+
+    setMeasureFunction(null)
   })
 })
