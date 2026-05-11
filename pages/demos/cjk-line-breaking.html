@@ -1,0 +1,336 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Interactive CJK kinsoku line-breaking demo — visualize line-start and line-end prohibited punctuation rules powered by Pretext.">
+  <title>CJK Line Breaking — Pretext Demo</title>
+  <style>
+    @layer tokens, base, components;
+
+    /* ============================================================
+       Tokens — design language, no selectors beyond :root
+       ============================================================ */
+    @layer tokens {
+      :root {
+        color-scheme: light;
+
+        /* palette */
+        --color-page: #f5f1ea;
+        --color-panel: #fffdf8;
+        --color-ink: #201b18;
+        --color-muted: #6d645d;
+        --color-rule: #d8cec3;
+        --color-accent: #955f3b;
+        --color-accent-soft: #f0e4da;
+
+        /* typography */
+        --font-sans: "Helvetica Neue", Helvetica, Arial, sans-serif;
+        --font-mono: "SF Mono", ui-monospace, Menlo, monospace;
+        --font-serif: Georgia, "Times New Roman", serif;
+        --font-cjk: "Hiragino Sans", "Noto Sans CJK SC", sans-serif;
+
+        /* surfaces */
+        --shadow-card: 0 18px 40px rgb(54 40 23 / 0.08);
+        --radius-card: 20px;
+        --panel-bg: color-mix(in srgb, var(--color-panel) 92%, white 8%);
+
+        /* motion */
+        --transition-interactive: border-color 160ms ease, background 160ms ease, transform 160ms ease;
+      }
+    }
+
+    /* ============================================================
+       Base — resets, element defaults, inherited styles
+       ============================================================ */
+    @layer base {
+      * { box-sizing: border-box; margin: 0; }
+      html { min-height: 100%; }
+      body {
+        min-height: 100vh;
+        background: linear-gradient(180deg, #fbf7f0 0%, var(--color-page) 100%);
+        color: var(--color-ink);
+        font-family: var(--font-sans);
+      }
+
+      /* serif headings */
+      h1, h2 {
+        font-family: var(--font-serif);
+        font-weight: 700;
+      }
+    }
+
+    /* ============================================================
+       Components — self-contained UI blocks
+       ============================================================ */
+    @layer components {
+
+      /* --- card surface (shared by toolbar / canvas / rule-group) --- */
+      .toolbar,
+      .canvas-wrapper,
+      .rule-group {
+        border: 1px solid var(--color-rule);
+        border-radius: var(--radius-card);
+        background: var(--panel-bg);
+        box-shadow: var(--shadow-card);
+      }
+
+      /* --- mono label (shared by eyebrow / toolbar-label / toggle) --- */
+      .eyebrow,
+      .toolbar-label,
+      .toggle span {
+        font-family: var(--font-mono);
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+      .toolbar-label,
+      .toggle span {
+        font-weight: 600;
+        font-size: 11px;
+        line-height: 1;
+        color: var(--color-muted);
+      }
+
+      /* --- interactive highlight (shared by lang-button / rule-chip) --- */
+      .lang-button,
+      .rule-chip {
+        cursor: pointer;
+        transition: var(--transition-interactive);
+      }
+      .lang-button:hover,
+      .rule-chip:hover,
+      .rule-chip.active {
+        border-color: var(--color-accent);
+        background: var(--color-accent-soft);
+      }
+      .lang-button:hover,
+      .rule-chip:hover {
+        transform: translateY(-1px);
+      }
+      .rule-chip.active {
+        box-shadow: 0 0 0 2px rgba(149, 95, 59, 0.2);
+      }
+
+      /* --- page shell --- */
+      .page {
+        width: min(940px, calc(100vw - 32px));
+        margin: 0 auto;
+        padding: 32px 0 48px;
+      }
+      .page-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+      }
+      .eyebrow {
+        margin: 0 0 8px;
+        font-size: 12px;
+        line-height: 1.2;
+        color: var(--color-accent);
+      }
+      h1 {
+        font-size: 34px;
+        line-height: 1.08;
+      }
+      .intro {
+        margin: 10px 0 0;
+        font-size: 15px;
+        line-height: 1.52;
+        color: var(--color-muted);
+      }
+      .lang-button {
+        flex-shrink: 0;
+        margin-top: 4px;
+        padding: 6px 12px;
+        border: 1px solid var(--color-rule);
+        border-radius: 8px;
+        background: var(--color-panel);
+        font-family: var(--font-mono);
+        font-weight: 600;
+        font-size: 12px;
+        line-height: 1;
+        letter-spacing: 0.06em;
+        color: var(--color-accent);
+        box-shadow: 0 2px 8px rgb(54 40 23 / 0.1);
+      }
+
+      /* --- toolbar --- */
+      .toolbar {
+        margin: 24px 0;
+        padding: 16px 18px;
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        flex-wrap: wrap;
+      }
+      .toolbar input[type="range"] {
+        flex: 1;
+        min-width: 120px;
+        accent-color: var(--color-accent);
+        cursor: grab;
+      }
+      .toolbar input[type="range"]:active {
+        cursor: grabbing;
+      }
+      .toolbar-value {
+        font-family: var(--font-mono);
+        font-weight: 600;
+        font-size: 13px;
+        line-height: 1;
+        color: var(--color-muted);
+        width: 52px;
+        text-align: center;
+        flex-shrink: 0;
+      }
+      .toolbar-separator {
+        width: 1px;
+        height: 20px;
+        background: var(--color-rule);
+      }
+      .toggle {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        cursor: pointer;
+      }
+      .toggle input[type="checkbox"] {
+        margin: 0;
+        accent-color: var(--color-accent);
+        cursor: pointer;
+      }
+      .toggle span {
+        user-select: none;
+      }
+
+      /* --- canvas preview --- */
+      .preview {
+        display: flex;
+        justify-content: center;
+        margin-bottom: 32px;
+      }
+      .canvas-wrapper {
+        overflow: hidden;
+      }
+      .canvas-wrapper canvas {
+        display: block;
+      }
+
+      /* --- rules reference --- */
+      .rules-section h2 {
+        margin: 0 0 6px;
+        font-size: 24px;
+        line-height: 1.15;
+      }
+      .rules-description {
+        margin: 0 0 20px;
+        font-size: 14px;
+        line-height: 1.5;
+        color: var(--color-muted);
+      }
+      .rule-group {
+        margin-bottom: 24px;
+        padding: 18px;
+      }
+      .rule-group-title {
+        font-weight: 700;
+        font-size: 17px;
+        line-height: 1.3;
+        color: var(--color-ink);
+        margin-bottom: 6px;
+      }
+      .rule-group-description {
+        margin: 0 0 14px;
+        font-size: 13px;
+        line-height: 1.5;
+        color: var(--color-muted);
+      }
+      .rule-entries {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+      .rule-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 12px;
+        border: 1px solid var(--color-rule);
+        border-radius: 999px;
+        background: #fff;
+        font-size: 13px;
+        line-height: 1;
+        color: var(--color-ink);
+        user-select: none;
+      }
+      .rule-chip-char {
+        font-family: var(--font-cjk);
+        font-weight: 600;
+        font-size: 15px;
+        line-height: 1;
+        color: var(--color-accent);
+      }
+      .rule-chip-code {
+        font-family: var(--font-mono);
+        font-size: 10px;
+        line-height: 1;
+        color: var(--color-muted);
+      }
+      .rule-chip-name {
+        font-size: 12px;
+        line-height: 1;
+        color: var(--color-muted);
+      }
+
+      /* --- responsive --- */
+      @media (max-width: 640px) {
+        .page {
+          width: min(100vw - 20px, 940px);
+          padding-top: 22px;
+        }
+        h1 { font-size: 28px; }
+        .toolbar { padding: 14px; gap: 12px; }
+        .rule-group { padding: 14px; }
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <div class="page-header">
+      <div>
+        <p class="eyebrow">Demo</p>
+        <h1>CJK Line Breaking</h1>
+      </div>
+      <button type="button" class="lang-button" id="langButton" title="切换到中文">EN / 中文</button>
+    </div>
+    <p class="intro">
+      CJK kinsoku rules prevent punctuation from appearing at invalid line positions. Adjust the width to watch Pretext enforce these rules at every line break.
+    </p>
+
+    <section class="toolbar" aria-label="Layout controls">
+      <label class="toggle" for="autoToggle">
+        <input type="checkbox" id="autoToggle">
+        <span>Auto</span>
+      </label>
+      <div class="toolbar-separator"></div>
+      <span class="toolbar-label">Width</span>
+      <input type="range" id="slider" min="160" max="600" value="360">
+      <span class="toolbar-value" id="widthValue">360px</span>
+    </section>
+
+    <section class="preview">
+      <div class="canvas-wrapper">
+        <canvas id="canvas"></canvas>
+      </div>
+    </section>
+
+    <section class="rules-section">
+      <h2 id="rulesTitle">Kinsoku Rules Reference</h2>
+      <p class="rules-description" id="rulesDescription">Characters listed below are enforced by Pretext during line breaking. Click any entry to highlight it in the preview above.</p>
+      <div id="ruleGroups"></div>
+    </section>
+  </main>
+
+  <script type="module" src="./cjk-line-breaking.ts"></script>
+</body>
+</html>
