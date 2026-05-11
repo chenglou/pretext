@@ -59,6 +59,7 @@ import {
   getFontMeasurementState,
   getSegmentMetrics,
   textMayContainEmoji,
+  setCustomContext,
 } from './measurement.js'
 import {
   countPreparedLines,
@@ -911,4 +912,8 @@ export function clearCache(): void {
 export function setLocale(locale?: string): void {
   setAnalysisLocale(locale)
   clearCache()
+}
+
+export function setContext(ctx: CanvasRenderingContext2D): void {
+  setCustomContext(ctx)
 }
