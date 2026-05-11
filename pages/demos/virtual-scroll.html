@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Virtual Scroll — Pretext</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    background: #f4f1ea;
+    color: #201b18;
+  }
+  .stats {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 10;
+    display: flex;
+    gap: 24px;
+    justify-content: center;
+    padding: 10px 16px;
+    background: rgba(32, 27, 24, 0.92);
+    color: #fffdf8;
+    font: 13px/1.4 'SF Mono', ui-monospace, monospace;
+    backdrop-filter: blur(8px);
+  }
+  .stats span { opacity: 0.55; }
+  .stats b { opacity: 1; font-weight: 600; }
+  .viewport {
+    position: relative;
+    width: min(640px, calc(100vw - 32px));
+    margin: 56px auto 0;
+  }
+  .row {
+    position: absolute;
+    left: 0;
+    right: 0;
+    padding: 12px 16px;
+    background: #fffdf8;
+    border-bottom: 1px solid #e8e0d6;
+    font-size: 15px;
+    line-height: 22px;
+    color: #333;
+  }
+  .row-index {
+    font: 11px/1 'SF Mono', ui-monospace, monospace;
+    color: #955f3b;
+    margin-bottom: 4px;
+  }
+</style>
+</head>
+<body>
+  <div class="stats">
+    <div><span>items </span><b id="stat-total">0</b></div>
+    <div><span>rendered </span><b id="stat-rendered">0</b></div>
+    <div><span>DOM reads </span><b id="stat-dom-reads">0</b></div>
+    <div><span>total height </span><b id="stat-height">0</b></div>
+  </div>
+  <div class="viewport" id="viewport"></div>
+  <script type="module" src="./virtual-scroll.ts"></script>
+</body>
+</html>
