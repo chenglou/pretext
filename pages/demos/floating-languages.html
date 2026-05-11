@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Floating Languages</title>
+<link rel="modulepreload" href="../../src/layout.ts">
+<style>
+  * { box-sizing: border-box; }
+  :root {
+    color-scheme: dark;
+    --page: #0c0a14;
+    --ink: #e8e4f0;
+    --muted: #8a83a0;
+    --accent: #b08aff;
+    --glow: #c9a8ff;
+  }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background: var(--page);
+    color: var(--ink);
+    font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+    overflow: hidden;
+  }
+  #canvas-bg {
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+  }
+  .header {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 10;
+    padding: 24px 32px 16px;
+    pointer-events: none;
+    background: linear-gradient(180deg, rgba(12,10,20,0.92) 0%, rgba(12,10,20,0) 100%);
+  }
+  .header > * { pointer-events: auto; }
+  .eyebrow {
+    margin: 0 0 6px;
+    font: 12px/1.2 "SF Mono", ui-monospace, monospace;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--accent);
+    pointer-events: none;
+  }
+  .header h1 {
+    margin: 0;
+    font: 700 28px/1.12 Georgia, "Times New Roman", serif;
+    color: var(--ink);
+    pointer-events: none;
+  }
+  .header .subtitle {
+    margin: 6px 0 0;
+    max-width: 52ch;
+    font: 14px/1.5 "Helvetica Neue", Helvetica, Arial, sans-serif;
+    color: var(--muted);
+    pointer-events: none;
+  }
+
+  /* --- Controls bar --- */
+  .controls {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 14px;
+    flex-wrap: wrap;
+  }
+  .mode-btn {
+    padding: 5px 12px;
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 999px;
+    background: rgba(255,255,255,0.05);
+    color: var(--muted);
+    font: 11px/1.2 "SF Mono", ui-monospace, monospace;
+    letter-spacing: 0.03em;
+    cursor: pointer;
+    transition: background 200ms, border-color 200ms, color 200ms;
+    outline: none;
+  }
+  .mode-btn:hover {
+    background: rgba(255,255,255,0.1);
+    color: var(--ink);
+  }
+  .mode-btn.selected {
+    background: rgba(176,138,255,0.2);
+    border-color: rgba(176,138,255,0.5);
+    color: var(--glow);
+  }
+
+  /* --- Input bar --- */
+  .input-bar {
+    position: fixed;
+    bottom: 52px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 12;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: min(560px, calc(100vw - 40px));
+  }
+  .input-bar input {
+    flex: 1;
+    padding: 10px 16px;
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 12px;
+    background: rgba(255,255,255,0.06);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    color: var(--ink);
+    font: 14px/1.4 "Helvetica Neue", Helvetica, Arial, sans-serif;
+    outline: none;
+    transition: border-color 200ms, box-shadow 200ms;
+  }
+  .input-bar input::placeholder { color: var(--muted); }
+  .input-bar input:focus {
+    border-color: rgba(176,138,255,0.5);
+    box-shadow: 0 0 20px 4px rgba(176,138,255,0.12);
+  }
+  .input-bar button {
+    padding: 10px 18px;
+    border: 1px solid rgba(176,138,255,0.4);
+    border-radius: 12px;
+    background: rgba(176,138,255,0.15);
+    color: var(--glow);
+    font: 600 13px/1.2 "Helvetica Neue", Helvetica, Arial, sans-serif;
+    cursor: pointer;
+    transition: background 200ms, box-shadow 200ms;
+    white-space: nowrap;
+  }
+  .input-bar button:hover {
+    background: rgba(176,138,255,0.25);
+    box-shadow: 0 0 16px 2px rgba(176,138,255,0.2);
+  }
+
+  /* --- Scene --- */
+  #scene {
+    position: fixed;
+    inset: 0;
+    z-index: 1;
+    cursor: default;
+  }
+
+  /* --- Bubbles --- */
+  .bubble {
+    position: absolute;
+    padding: 10px 16px;
+    border-radius: 14px;
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.08);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    color: var(--ink);
+    white-space: nowrap;
+    user-select: none;
+    cursor: pointer;
+    transition: border-color 320ms ease, box-shadow 320ms ease;
+    will-change: transform;
+  }
+  .bubble:hover { z-index: 5; }
+  .bubble.active { z-index: 6; }
+  .bubble .lang-label {
+    display: block;
+    margin-bottom: 3px;
+    font: 10px/1.2 "SF Mono", ui-monospace, monospace;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    opacity: 0.8;
+  }
+  .bubble .text {
+    display: block;
+    font: 15px/1.4 "Helvetica Neue", Helvetica, Arial, sans-serif;
+    overflow-wrap: break-word;
+    word-break: normal;
+  }
+  .bubble .meta {
+    display: none;
+    margin-top: 6px;
+    font: 11px/1.3 "SF Mono", ui-monospace, monospace;
+    color: var(--muted);
+  }
+  .bubble.active .meta { display: block; }
+
+  /* --- Script-family color themes --- */
+  .bubble[data-family="cjk"] { --fam: 255,195,0; }
+  .bubble[data-family="arabic"] { --fam: 0,210,180; }
+  .bubble[data-family="indic"] { --fam: 255,120,90; }
+  .bubble[data-family="thai-sea"] { --fam: 80,220,120; }
+  .bubble[data-family="european"] { --fam: 176,138,255; }
+  .bubble[data-family="emoji"] { --fam: 255,200,60; }
+  .bubble[data-family="mixed"] { --fam: 220,160,255; }
+
+  .bubble .lang-label { color: rgb(var(--fam, 176,138,255)); }
+  .bubble:hover {
+    background: rgba(var(--fam, 176,138,255), 0.12);
+    border-color: rgba(var(--fam, 176,138,255), 0.35);
+    box-shadow: 0 0 24px 4px rgba(var(--fam, 176,138,255), 0.18), 0 0 60px 8px rgba(var(--fam, 176,138,255), 0.08);
+  }
+  .bubble.active {
+    background: rgba(var(--fam, 176,138,255), 0.18);
+    border-color: rgba(var(--fam, 176,138,255), 0.5);
+    box-shadow: 0 0 32px 8px rgba(var(--fam, 176,138,255), 0.3), 0 0 80px 16px rgba(var(--fam, 176,138,255), 0.12);
+  }
+
+  /* --- Width animation overlay --- */
+  .bubble.animating .text {
+    white-space: normal;
+  }
+
+  /* --- Footer --- */
+  .footer-info {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 10;
+    padding: 16px 32px;
+    pointer-events: none;
+    background: linear-gradient(0deg, rgba(12,10,20,0.85) 0%, rgba(12,10,20,0) 100%);
+    text-align: center;
+  }
+  .footer-info p {
+    margin: 0;
+    font: 12px/1.4 "SF Mono", ui-monospace, monospace;
+    color: var(--muted);
+  }
+  @media (max-width: 640px) {
+    .header { padding: 18px 16px 12px; }
+    .header h1 { font-size: 22px; }
+    .footer-info { padding: 12px 16px; }
+    .input-bar { bottom: 44px; }
+  }
+</style>
+</head>
+<body>
+  <canvas id="canvas-bg"></canvas>
+
+  <header class="header">
+    <p class="eyebrow">Demo</p>
+    <h1>Floating Languages</h1>
+    <p class="subtitle">
+      Everyday phrases from around the world, measured by Pretext and floating
+      freely. Hover to illuminate, click to see live reflow.
+    </p>
+    <nav class="controls" aria-label="Physics mode">
+      <button class="mode-btn selected" data-mode="float">Float</button>
+      <button class="mode-btn" data-mode="orbit">Orbit</button>
+      <button class="mode-btn" data-mode="gravity">Gravity</button>
+    </nav>
+  </header>
+
+  <div id="scene"></div>
+
+  <div class="input-bar">
+    <input id="user-input" type="text" placeholder="Type any text and press Enter to launch a new bubble..." autocomplete="off">
+    <button id="add-btn">Add</button>
+  </div>
+
+  <footer class="footer-info">
+    <p>All heights from Pretext &middot; <span id="bubble-count">0</span> bubbles &middot; <span id="fps-counter">0</span> fps</p>
+  </footer>
+
+  <script type="module" src="./floating-languages.ts"></script>
+</body>
+</html>
