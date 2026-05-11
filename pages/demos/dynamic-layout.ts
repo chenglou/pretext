@@ -21,8 +21,9 @@ This page's made to show off our layout APIs:
 - The first visible render now waits for both fonts and hull preload, so it uses the real geometry from the start.
 - There is no DOM text measurement loop feeding layout.
 */
-import { layoutNextLine, prepareWithSegments, walkLineRanges, type LayoutCursor, type PreparedTextWithSegments } from '../../src/layout.ts'
-import { BODY_COPY } from './dynamic-layout-text.ts'
+import { layoutNextLine, prepareWithSegments, setLocale, walkLineRanges, type LayoutCursor, type PreparedTextWithSegments } from '../../src/layout.ts'
+import { BODY_COPY as BODY_COPY_EN } from './dynamic-layout-text.ts'
+import { BODY_COPY as BODY_COPY_FR } from './dynamic-layout-text-fr.ts'
 import openaiLogoUrl from '../assets/openai-symbol.svg'
 import claudeLogoUrl from '../assets/claude-symbol.svg'
 import {
@@ -37,12 +38,19 @@ import {
   type Rect,
 } from './wrap-geometry.ts'
 
+const lang = new URLSearchParams(window.location.search).get('lang') === 'fr' ? 'fr' : 'en'
+if (lang === 'fr') setLocale('fr')
+document.documentElement.lang = lang
+
 const BODY_FONT = '20px "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Palatino, serif'
 const BODY_LINE_HEIGHT = 32
 const CREDIT_TEXT = 'Leopold Aschenbrenner'
 const CREDIT_FONT = '12px "Helvetica Neue", Helvetica, Arial, sans-serif'
 const CREDIT_LINE_HEIGHT = 16
-const HEADLINE_TEXT = 'SITUATIONAL AWARENESS: THE DECADE AHEAD'
+const BODY_COPY = lang === 'fr' ? BODY_COPY_FR : BODY_COPY_EN
+const HEADLINE_TEXT = lang === 'fr'
+  ? 'CONSCIENCE SITUATIONNELLE\u00A0: LA DÉCENNIE À VENIR'
+  : 'SITUATIONAL AWARENESS: THE DECADE AHEAD'
 const HEADLINE_FONT_FAMILY = '"Iowan Old Style", "Palatino Linotype", "Book Antiqua", Palatino, serif'
 const HINT_PILL_SAFE_TOP = 72
 const NARROW_BREAKPOINT = 760
@@ -133,6 +141,11 @@ type WrapHulls = {
   claudeLayout: Point[]
   openaiHit: Point[]
   claudeHit: Point[]
+}
+
+if (lang === 'fr') {
+  const hintPill = document.querySelector('.hint-pill')
+  if (hintPill) hintPill.textContent = 'Tout est mis en page en JS. Redimensionnez horizontalement et verticalement, puis cliquez sur les logos.'
 }
 
 const stageNode = document.getElementById('stage')
