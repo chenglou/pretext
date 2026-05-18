@@ -693,6 +693,10 @@ function getInternalPrepared(prepared: PreparedText): InternalPreparedText {
   return prepared as InternalPreparedText
 }
 
+function normalizeMaxWidth(maxWidth: number): number {
+  return Number.isNaN(maxWidth) ? 0 : maxWidth
+}
+
 // Layout prepared text at a given max width and caller-provided lineHeight.
 // Pure arithmetic on cached widths — no canvas calls, no DOM reads, no string
 // operations, no allocations.
@@ -706,7 +710,7 @@ export function layout(prepared: PreparedText, maxWidth: number, lineHeight: num
   // Keep the resize hot path specialized. `layoutWithLines()` shares the same
   // break semantics but also tracks line ranges; the extra bookkeeping is too
   // expensive to pay on every hot-path `layout()` call.
-  const lineCount = countPreparedLines(getInternalPrepared(prepared), maxWidth)
+  const lineCount = countPreparedLines(getInternalPrepared(prepared), normalizeMaxWidth(maxWidth))
   return { lineCount, height: lineCount * lineHeight }
 }
 
@@ -786,7 +790,7 @@ export function walkLineRanges(
 
   return walkPreparedLinesRaw(
     getInternalPrepared(prepared),
-    maxWidth,
+    normalizeMaxWidth(maxWidth),
     (width, startSegmentIndex, startGraphemeIndex, endSegmentIndex, endGraphemeIndex) => {
       onLine(createLayoutLineRange(
         width,
@@ -803,7 +807,7 @@ export function measureLineStats(
   prepared: PreparedTextWithSegments,
   maxWidth: number,
 ): LineStats {
-  return measurePreparedLineGeometry(getInternalPrepared(prepared), maxWidth)
+  return measurePreparedLineGeometry(getInternalPrepared(prepared), normalizeMaxWidth(maxWidth))
 }
 
 // Intrinsic-width helper for rich/userland layout work. This asks "how wide is
@@ -832,7 +836,7 @@ export function layoutNextLine(
 
   const lineStartSegmentIndex = end.segmentIndex
   const lineStartGraphemeIndex = end.graphemeIndex
-  const width = stepPreparedLineGeometryFromChunk(internal, end, chunkIndex, maxWidth)
+  const width = stepPreparedLineGeometryFromChunk(internal, end, chunkIndex, normalizeMaxWidth(maxWidth))
   if (width === null) return null
 
   return createLayoutLine(
@@ -861,7 +865,7 @@ export function layoutNextLineRange(
 
   const lineStartSegmentIndex = end.segmentIndex
   const lineStartGraphemeIndex = end.graphemeIndex
-  const width = stepPreparedLineGeometryFromChunk(internal, end, chunkIndex, maxWidth)
+  const width = stepPreparedLineGeometryFromChunk(internal, end, chunkIndex, normalizeMaxWidth(maxWidth))
   if (width === null) return null
 
   return createLayoutLineRange(
@@ -881,10 +885,11 @@ export function layoutWithLines(prepared: PreparedTextWithSegments, maxWidth: nu
   const lines: LayoutLine[] = []
   if (prepared.widths.length === 0) return { lineCount: 0, height: 0, lines }
 
+  const normalizedMaxWidth = normalizeMaxWidth(maxWidth)
   const graphemeCache = getLineTextCache(prepared)
   const lineCount = walkPreparedLinesRaw(
     getInternalPrepared(prepared),
-    maxWidth,
+    normalizedMaxWidth,
     (width, startSegmentIndex, startGraphemeIndex, endSegmentIndex, endGraphemeIndex) => {
       lines.push(createLayoutLine(
         prepared,

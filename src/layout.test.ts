@@ -1214,6 +1214,16 @@ describe('layout invariants', () => {
     expect(rich.lines.at(-1)!.end).toEqual({ segmentIndex: 1, graphemeIndex: 0 })
   })
 
+  test('NaN maxWidth falls back to zero-width layout instead of disabling wrapping', () => {
+    const prepared = prepareWithSegments('hello world', FONT)
+    const zeroWidth = layoutWithLines(prepared, 0, LINE_HEIGHT)
+
+    expect(layout(prepared, Number.NaN, LINE_HEIGHT)).toEqual(layout(prepared, 0, LINE_HEIGHT))
+    expect(layoutWithLines(prepared, Number.NaN, LINE_HEIGHT)).toEqual(zeroWidth)
+    expect(layoutNextLine(prepared, { segmentIndex: 0, graphemeIndex: 0 }, Number.NaN)).toEqual(zeroWidth.lines[0]!)
+    expect(measureLineStats(prepared, Number.NaN)).toEqual(measureLineStats(prepared, 0))
+  })
+
   test('mixed-direction text is a stable smoke test', () => {
     const prepared = prepareWithSegments('According to محمد الأحمد, the results improved.', FONT)
     const result = layoutWithLines(prepared, 120, LINE_HEIGHT)
