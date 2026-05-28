@@ -1,344 +1,344 @@
-# Research Log
+# 研究ログ
 
-Everything we tried, measured, and learned while building this library.
+このライブラリを構築する過程で試したこと、計測したこと、そして得られた知見のすべて。
 
-For the current compact browser-accuracy / benchmark snapshot, see `STATUS.md`.
-For the current compact corpus / sweep snapshot, see `corpora/STATUS.md`.
-For the shared mismatch vocabulary, see `corpora/TAXONOMY.md`.
+最新のコンパクトなブラウザ精度 / ベンチマークスナップショットは `STATUS.md` を参照。
+最新のコンパクトなコーパス / スイープスナップショットは `corpora/STATUS.md` を参照。
+不一致の共通語彙については `corpora/TAXONOMY.md` を参照。
 
-## Current steering summary
+## 現在の指針サマリ
 
-This log is historical. The current practical steering picture is:
+このログは歴史的記録である。現在の実用的な指針は次のとおり。
 
-- Japanese has two real canaries (`羅生門`, `蜘蛛の糸`), both clean at anchor widths and both still exposing a small positive one-line field on broader Chrome sweeps.
-- Chinese has two long-form canaries (`祝福`, `故鄉`) showing the same broad Chrome-positive / Safari-clean split, with real font sensitivity between `Songti SC` and `PingFang SC`.
-- Myanmar still has two real canaries with residual Chrome/Safari disagreement around quote/follower-style classes, so it remains the main unresolved Southeast Asian frontier.
-- Urdu has a real Nastaliq/Naskh canary (`چغد`) with the same narrow-width negative field in Chrome and Safari, so it is clearly a shaping/context class rather than dirty data or a browser-only quirk. It remains parked rather than actively tuned.
-- Arabic coarse corpora are clean; the remaining work there is mostly a fine-width edge-fit class, not the old preprocessing/corpus-hygiene problems.
-- Mixed app text is exact again in the maintained Chrome/Safari step10 sweeps and still matters as the product-shaped regression canary for URLs, emoji ZWJ runs, hard spaces, and soft hyphens.
+- 日本語には実用的なカナリアが 2 つ (`羅生門`, `蜘蛛の糸`) ある。両方ともアンカー幅ではクリーンだが、Chrome の広域スイープでは依然として小さな 1 行ぶんの正方向フィールドが残っている。
+- 中国語には長文カナリアが 2 つ (`祝福`, `故鄉`) あり、同じく Chrome 広域で正方向 / Safari クリーンという分断を示しており、`Songti SC` と `PingFang SC` の間で実際のフォント感受性が見られる。
+- ミャンマー語には依然として実用的なカナリアが 2 つあり、引用符 / 後続記号系のクラスで Chrome/Safari の食い違いが残っているため、東南アジア系で唯一未解決のフロンティアとして残っている。
+- ウルドゥー語には実用的なナスタアリーク / ナスフのカナリア (`چغد`) があり、Chrome と Safari の両方で同じ狭幅の負方向フィールドを示しているため、汚いデータやブラウザ固有の癖というよりは明確に整形 / 文脈クラスの問題である。能動的にチューニングするのではなく保留中という扱い。
+- アラビア語の粗いコーパスはクリーンであり、残作業はおおむね微小幅のエッジフィットクラスであって、旧来の前処理 / コーパス衛生問題ではない。
+- 混合アプリテキストは保守対象の Chrome/Safari step10 スイープで再び完全一致しており、URL や絵文字 ZWJ ラン、ハードスペース、ソフトハイフンに対する製品形状のリグレッションカナリアとして依然重要である。
 
-## The problem: DOM measurement interleaving
+## 問題: DOM 計測のインターリーブ
 
-When UI components independently measure text heights with DOM reads like `getBoundingClientRect()`, each read can force synchronous layout. If those reads interleave with writes, the browser can end up relaying out the whole document repeatedly.
+UI コンポーネントが個別に `getBoundingClientRect()` のような DOM 読み出しでテキストの高さを計測すると、各読み出しが同期レイアウトを強制する可能性がある。これらの読み出しが書き込みとインターリーブすると、ブラウザは文書全体を繰り返し再レイアウトしてしまうことがある。
 
-The goal here was always the same:
-- do the expensive text work once in `prepare()`
-- keep `layout()` arithmetic-only
-- make resize-driven relayout cheap and coordination-free
+ここでの目標は一貫して以下のとおり。
+- 重いテキスト処理は `prepare()` で一度だけ行う
+- `layout()` は算術のみに保つ
+- リサイズ駆動の再レイアウトを安価で調整不要にする
 
-## Approach 1: Canvas measureText + word-width caching
+## アプローチ 1: Canvas measureText + 単語幅キャッシュ
 
-Canvas `measureText()` avoids DOM layout. It goes straight to the browser's font engine.
+Canvas の `measureText()` は DOM レイアウトを回避し、ブラウザのフォントエンジンへ直接向かう。
 
-That led to the basic two-phase model:
-- `prepare(text, font)` — segment text, measure segments, cache widths
-- `layout(prepared, maxWidth, lineHeight)` — walk cached widths with pure arithmetic
+ここから基本となる 2 フェーズモデルが生まれた。
+- `prepare(text, font)` — テキストを分割し、セグメントを計測し、幅をキャッシュする
+- `layout(prepared, maxWidth, lineHeight)` — キャッシュされた幅を純粋な算術で走査する
 
-That architecture held up. The broad browser sweeps are now clean in Chrome, Safari, and Firefox, and the hot `layout()` path is still the core product win.
+このアーキテクチャは耐久性があった。広域のブラウザスイープは Chrome、Safari、Firefox で現在クリーンであり、ホットパスである `layout()` は依然として中核の製品的勝因である。
 
-## Rejected: DOM-based or string-reconstruction measurement in the hot path
+## 却下案: ホットパスでの DOM ベース計測や文字列再構築計測
 
-Several alternatives were tried and rejected:
+いくつかの代替案を試したが却下した。
 
-- measuring full candidate lines as strings during `layout()`
-- moving measurement into hidden DOM elements during `prepare()`
-- using SVG `getComputedTextLength()`
+- `layout()` の最中に候補となる行全体を文字列として計測する
+- `prepare()` の中で計測を隠し DOM 要素に移す
+- SVG の `getComputedTextLength()` を使う
 
-The pattern was consistent:
-- they either reintroduced DOM reads
-- or they were slower than the current two-phase model
-- or they looked cleaner locally but regressed the actual benchmark path
+パターンは一貫していた。
+- DOM 読み出しを再導入してしまう
+- もしくは現行の 2 フェーズモデルより遅い
+- もしくはローカルでは綺麗に見えるが実際のベンチマークパスを退行させる
 
-The important keep was architectural, not algorithmic:
-- `layout()` stayed arithmetic-only on cached widths
+重要な収穫はアルゴリズム的ではなくアーキテクチャ的なものだった。
+- `layout()` はキャッシュされた幅に対する算術のみに留まった
 
-## Discovery: system-ui font resolution mismatch
+## 発見: system-ui フォントの解決の不一致
 
-Canvas and DOM resolve `system-ui` to different font variants on macOS at certain sizes:
+Canvas と DOM は macOS の特定サイズで `system-ui` を異なるフォントバリアントへ解決する。
 
-Machine-readable scan:
+機械可読スキャン:
 - [research-data/system-ui-size-scan.json](research-data/system-ui-size-scan.json)
 
-In the recorded scan, mismatches clustered at `10-12px`, `14px`, and `26px`.
-`13px`, `15-25px`, and `27-28px` were exact.
+記録されたスキャンでは、不一致は `10-12px`, `14px`, `26px` に集中していた。
+`13px`, `15-25px`, `27-28px` は完全一致だった。
 
-macOS uses SF Pro Text at smaller sizes and SF Pro Display at larger sizes. Canvas and DOM switch between them at different thresholds.
+macOS は小さいサイズで SF Pro Text、大きいサイズで SF Pro Display を使う。Canvas と DOM はそれらを異なる閾値で切り替える。
 
-Practical conclusion:
-- use a named font if accuracy matters
-- keep `system-ui` documented as unsafe
-- if we ever support it properly, the believable path is a narrow prepare-time DOM fallback for detected bad tuples
+実用的な結論:
+- 精度が重要なら名前付きフォントを使う
+- `system-ui` は安全でないとドキュメントに残す
+- もし将来ちゃんとサポートするなら、検出された問題のあるタプルに対する prepare 時の狭い DOM フォールバックが現実的な経路
 
-What did **not** look trustworthy enough:
-- lookup tables
-- naive scaling
-- guessed resolved-font substitution
+**信用に値しなかった**もの:
+- ルックアップテーブル
+- 単純なスケーリング
+- 推測による解決済みフォント置換
 
-## Discovery: word-by-word sum accuracy
+## 発見: 単語単位の和算による精度
 
-Canvas is internally consistent enough that summing measured segments works very well, but not perfectly. Over a full paragraph, tiny adjacency differences can accumulate into a line-edge error.
+Canvas は内部的には十分一貫しており、計測したセグメントを合算すればよく機能するが、完璧ではない。段落全体にわたると、隣接の微小な差異が積み重なって行端誤差となり得る。
 
-The keeps were small and semantic:
-- merge punctuation into the preceding word before measuring
-- let trailing collapsible spaces hang instead of forcing a break
+採用した小さな意味的修正:
+- 計測前に句読点を直前の単語へ結合する
+- 行末で折りたたみ可能な空白を強制改行せず垂らす
 
-What did **not** survive:
-- full-string verification in `layout()`
-- uniform rescaling
-- generic pair-level correction models
+**生き残らなかった**もの:
+- `layout()` での全文字列検証
+- 一様なスケーリング
+- 汎用のペア単位補正モデル
 
-The broad lesson was that local semantic preprocessing paid off more than clever runtime correction.
+広い教訓は、ローカルな意味的前処理の方が、巧妙なランタイム補正よりも効果があったということ。
 
-## Discovery: text-shaper is a useful reference, not a runtime replacement
+## 発見: text-shaper は有用な参照だがランタイムの置換ではない
 
-`text-shaper` was useful reference material, especially for Unicode coverage and bidi ideas, but not a replacement for the current browser-facing model.
+`text-shaper` は特に Unicode カバレッジや bidi のアイデアにおいて有用な参照素材だったが、現行のブラウザ向けモデルの置換にはならない。
 
-What was worth taking:
-- broader Unicode coverage, e.g. missing CJK extension blocks
+採り入れる価値があったもの:
+- より広い Unicode カバレッジ (例: 欠けていた CJK 拡張ブロック)
 
-What was not worth taking:
-- its segmentation as a runtime replacement for `Intl.Segmenter`
-- its paragraph breaker as a substitute for browser-parity layout
+採り入れる価値がなかったもの:
+- `Intl.Segmenter` のランタイム置換としてのセグメント化
+- ブラウザ等価レイアウトの代替としての段落ブレーカー
 
-Bottom line:
-- good reference material
-- wrong runtime center of gravity for this repo
+結論:
+- 良い参照素材
+- このリポジトリにとっては誤った重心位置
 
-## Discovery: preserving ordinary spaces, hard breaks, and numeric tab stops is viable
+## 発見: 通常スペース、ハードブレーク、数値タブストップの保持は実現可能
 
-The smallest honest second whitespace mode turned out to be:
-- preserve ordinary spaces
-- preserve `\n` hard breaks
-- preserve tabs with default browser-style tab stops
-- leave the other wrapping defaults alone
+最も誠実で最小の第 2 のホワイトスペースモードは次のとおりとなった。
+- 通常スペースを保持する
+- `\n` ハードブレークを保持する
+- デフォルトのブラウザ式タブストップでタブを保持する
+- 他のラッピングデフォルトには手を付けない
 
-That became:
+これは次となった:
 - `{ whiteSpace: 'pre-wrap' }`
 
-What mattered:
-- preserved spaces still hang at line end
-- consecutive hard breaks keep empty lines
-- a trailing final hard break does **not** invent an extra empty line
-- tabs advance to the next default browser tab stop from the current line start
+重要なポイント:
+- 保持されたスペースは依然として行末で垂れる
+- 連続するハードブレークは空行を保つ
+- 末尾のハードブレークは余分な空行を**生み出さない**
+- タブは現在の行頭から次のデフォルトブラウザ・タブストップへ進む
 
-The mode now covers the textarea-like cases we cared about, and the broad browser sweeps plus the dedicated `pre-wrap` oracle are green.
+このモードは関心のあった textarea 的なケースをカバーしており、広域のブラウザスイープと専用の `pre-wrap` オラクルはいずれもグリーン。
 
-One important tooling lesson also came out of this:
-- keep a small permanent oracle suite
-- justify it once with a broader brute-force validation pass
-- do not keep the brute-force pass forever once it has done its job
+このことから得られた重要なツーリングの教訓もある。
+- 小さな恒久オラクルスイートを保持する
+- 広範な総当たり検証パスで一度だけ正当化する
+- 役割を終えた総当たりパスを永遠に残さない
 
-## Discovery: emoji canvas/DOM width discrepancy
+## 発見: 絵文字の canvas/DOM 幅の食い違い
 
-Chrome and Firefox on macOS can measure emoji wider in canvas than in DOM at small sizes. Safari does not share the same discrepancy.
+macOS の Chrome と Firefox は、小サイズで canvas における絵文字の幅を DOM より広く計測することがある。Safari は同じ食い違いを共有しない。
 
-What held up:
-- detect the discrepancy by comparing canvas emoji width against actual DOM emoji width per font
-- cache that correction
-- keep it outside the hot layout path
+採用したアプローチ:
+- フォントごとに canvas の絵文字幅と実際の DOM 絵文字幅を比較してこの食い違いを検出する
+- その補正をキャッシュする
+- ホットレイアウトパスの外に置く
 
-This is now one of the small browser-profile shims that is actually justified.
+これは正当化される数少ないブラウザプロファイル用 shim の 1 つ。
 
-## Retired HarfBuzz probe path
+## 廃止された HarfBuzz プローブ経路
 
-We briefly kept a headless HarfBuzz backend in the repo for server-side measurement probes.
+サーバーサイド計測プローブのためにヘッドレス HarfBuzz バックエンドを一時的にリポジトリに保持していた。
 
-What it taught us:
-- it was useful for research and algorithm probes
-- it was not close enough to our active browser-grounded path to justify keeping it in the main repo
-- isolated Arabic words in that probe path needed explicit LTR direction to avoid misleading widths
+そこから得られた知見:
+- 研究やアルゴリズムプローブには有用だった
+- メインリポジトリに残すには、現役のブラウザ準拠経路に十分近くなかった
+- そのプローブ経路でアラビア語の単独語は、誤解を招く幅を避けるために明示的に LTR 方向を指定する必要があった
 
-So if HarfBuzz comes up again later, treat it as explored territory:
-- useful as a research reference
-- not the runtime direction for Pretext
-- not a substitute for browser-oracle or browser-canvas validation
+そのため将来再び HarfBuzz が話題になった際は探索済みの領域として扱うこと。
+- 研究の参照としては有用
+- Pretext のランタイム方向ではない
+- ブラウザオラクルや browser-canvas 検証の代替にはならない
 
-## Final browser sweep closure
+## ブラウザスイープ最終決着
 
-The last browser mismatches were not fixed by moving more work into `layout()`. That regressed the hot path and was reverted.
+最後に残ったブラウザの不一致は、`layout()` により多くの作業を移すことでは解消されなかった。それはホットパスを退行させたためロールバックした。
 
-What actually held up:
-- better preprocessing in `prepare()`
-- better browser diagnostics pages and scripts
-- a tiny browser-specific line-fit tolerance
+実際に効いたもの:
+- `prepare()` でのより良い前処理
+- より良いブラウザ診断ページ / スクリプト
+- ごく小さなブラウザ別の行フィット許容度
 
-What did **not** change:
-- `layout()` stayed arithmetic-only
+**変えなかった**もの:
+- `layout()` は算術のみに留まった
 
-That remains the right center of gravity for the project.
+これがプロジェクトにとって正しい重心位置であり続けている。
 
-## Arabic frontier
+## アラビア語フロンティア
 
-Arabic took several passes, but the pattern is clearer now.
+アラビア語は数回のパスを要したが、パターンは今ではより明確になっている。
 
-What survived:
-- merge no-space Arabic punctuation clusters during `prepare()`
-  - e.g. `فيقول:وعليك`, `همزةٌ،ما`
-- treat Arabic punctuation-plus-mark clusters like `،ٍ` as left-sticky too
-- split `" " + combining marks` into plain space plus marks attached to the following word
-- use normalized slices and the exact corpus font during probe work
-- trust the better RTL diagnostics path instead of reconstructing offsets from rendered line text
-- clean obvious corpus/source artifacts instead of inventing new engine rules for them
-- allow a tiny non-Safari line-fit tolerance bump for the remaining positive fine-width field
+採用したもの:
+- `prepare()` 中にスペースなしのアラビア句読点クラスタを結合する
+  - 例: `فيقول:وعليك`, `همزةٌ،ما`
+- `،ٍ` のようなアラビア句読点 + マーククラスタも左粘着として扱う
+- `" " + combining marks` をプレーンスペースと、後続単語に付くマークに分割する
+- プローブ作業では正規化済みスライスと正確なコーパスフォントを使用する
+- レンダリング済み行テキストからオフセットを再構築する代わりに、より良い RTL 診断パスを信頼する
+- 新しいエンジン規則を発明する代わりに、明らかなコーパス / ソースの異物を掃除する
+- 残った正方向の微小幅フィールドのために、Safari 以外で行フィット許容度のごく小さな引き上げを認める
 
-What did **not** survive:
-- pair correction models at segment boundaries
-- larger Arabic run-slice width models
-- broad phrase-level heuristics derived from one good-looking probe
+**生き残らなかった**もの:
+- セグメント境界でのペア補正モデル
+- より大きなアラビア・ランスライス幅モデル
+- 1 つの見栄えの良いプローブから派生した広範なフレーズ単位ヒューリスティック
 
-Those failed for the same reason in different sizes:
-- pair corrections were too local to move the real misses
-- run-slice widths were much heavier and still did not move the hard widths enough
-- both made `prepare()` or `layout()` materially worse without buying a clean Arabic field
+これらは異なるサイズでも同じ理由で失敗した。
+- ペア補正は局所的すぎて実際のミスを動かせなかった
+- ランスライス幅ははるかに重く、それでも難しい幅を十分に動かせなかった
+- どちらもクリーンなアラビア・フィールドを得られないまま `prepare()` あるいは `layout()` を実質的に悪化させた
 
-So the useful guardrail is:
-- if an Arabic idea starts by adding more shaping-aware width caches inside the current segment-sum architecture, be skeptical early
-- the Arabic keeps so far have been preprocessing, corpus cleanup, diagnostics, and tiny tolerance shims, not richer width-cache models
+そのため有用なガードレールは次のとおり。
+- もしアラビア語のアイデアが、現行のセグメント和算アーキテクチャ内でさらに整形対応の幅キャッシュを追加することから始まるなら、早めに懐疑的になること
+- これまでのアラビア語の採用はいずれも前処理、コーパス清掃、診断、ごく小さな許容度 shim であって、よりリッチな幅キャッシュモデルではなかった
 
-Current read:
-- Arabic coarse corpora are healthy
-- the remaining work is much narrower now
-- the unresolved class looks like a mix of fine-width edge-fit and shaping/context, not another obvious preprocessing hole
+現在の見立て:
+- アラビア語の粗いコーパスは健全
+- 残った作業は今やはるかに狭い
+- 未解決のクラスは、別の明白な前処理の穴ではなく、微小幅のエッジフィットと整形 / 文脈の混合に見える
 
-## Long-form corpus canaries
+## 長文コーパスのカナリア
 
-Once the main browser sweep became a regression gate, the long-form corpora became the real steering canaries.
+メインのブラウザスイープがリグレッションゲートになって以降、長文コーパスが実質的な指針カナリアとなった。
 
-### Mixed app text
+### 混合アプリテキスト
 
-This is the most product-shaped canary.
+これは最も製品形状に近いカナリアである。
 
-What it has been good for:
-- URL/query-string handling
-- escaped quote clusters
-- numeric expressions like `२४×७`
-- time ranges like `7:00-9:00`
-- emoji ZWJ runs
-- manual soft hyphens
+役に立ってきた領域:
+- URL / クエリ文字列の扱い
+- エスケープされた引用符クラスタ
+- `२४×७` のような数値表現
+- `7:00-9:00` のような時間範囲
+- 絵文字 ZWJ ラン
+- 手動ソフトハイフン
 
-Important keep:
-- model URL/query strings as narrow structured units, not one giant breakable blob
+重要な採用:
+- URL / クエリ文字列を 1 つの巨大な可分ブロブではなく、狭い構造化単位としてモデル化する
 
-Current status:
-- exact in the maintained Chrome and Safari `step=10` sweeps
-- the former Chrome-only `710px` soft-hyphen miss went away after keeping chosen soft-hyphen breaks at the SHY boundary instead of packing post-SHY graphemes
+現状:
+- 保守対象の Chrome / Safari `step=10` スイープで完全一致
+- かつての Chrome 限定 `710px` ソフトハイフンミスは、選択されたソフトハイフン破断を SHY 境界に保つようにし、SHY 後の書記素を詰め込まなくしたことで解消した
 
-### Thai
+### タイ語
 
-Thai exposed a product-shaped ASCII quote issue more than a dictionary-segmentation failure.
+タイ語は辞書セグメンテーションの失敗というより、製品形状の ASCII 引用符問題を露呈した。
 
-The keep:
-- contextual ASCII quote glue during preprocessing
+採用:
+- 前処理時の文脈的 ASCII 引用符グルー
 
-Result:
-- two Thai prose corpora are healthy at anchor widths
-- maintained step10 sweeps stayed clean enough that Thai now looks broader than one lucky story
+結果:
+- 2 つのタイ語散文コーパスがアンカー幅で健全
+- 保守対象の step10 スイープも十分クリーンに保たれており、タイ語は今や 1 つの幸運なストーリーより広く健全に見える
 
-### Khmer
+### クメール語
 
-Khmer broadened the Southeast Asian class without immediately demanding new engine work.
+クメール語は東南アジア系クラスを広げたが、すぐに新しいエンジン作業を要求はしなかった。
 
-The keep:
-- preserve explicit zero-width separators from the source text
+採用:
+- ソーステキストの明示的なゼロ幅セパレータを保持する
 
-Result:
-- anchor widths and the maintained step10 sweep were clean enough to keep Khmer as a real canary
+結果:
+- アンカー幅と保守対象の step10 スイープが十分にクリーンで、クメール語を実用的なカナリアとして維持できる
 
-### Lao (rejected)
+### ラオ語 (却下)
 
-The Lao corpus attempt was a source problem, not an engine problem.
+ラオ語コーパスの試みはエンジンの問題ではなくソースの問題だった。
 
-The raw text was wrapped print/legal text, which made it a dirty `white-space: normal` canary. We rejected it instead of normalizing nonsense into the repo.
+生テキストは折り返しされた印刷物 / 法律文書テキストであり、`white-space: normal` のカナリアとしては汚かった。リポジトリに無意味な内容を正規化して取り込むのではなく、却下した。
 
-### Myanmar
+### ミャンマー語
 
-Myanmar is still the main unresolved Southeast Asian frontier.
+ミャンマー語は依然として東南アジア系で唯一未解決のフロンティア。
 
-What survived:
-- treat `၊` / `။` / `၍` / `၌` / `၏` as left-sticky during preprocessing
-- treat `၏` as medial glue in clusters like `ကျွန်ုပ်၏လက်မ`
+生き残ったもの:
+- 前処理時に `၊` / `။` / `၍` / `၌` / `၏` を左粘着として扱う
+- `ကျွန်ုပ်၏လက်မ` のようなクラスタで `၏` を中間グルーとして扱う
 
-What did **not** survive:
-- broad Myanmar grapheme breaking in ordinary wrapping
-- quote-follower glue like closing-quote + `ဟု`
+**生き残らなかった**もの:
+- 通常のラッピングにおける広範なミャンマー語書記素破断
+- 閉じ引用符 + `ဟု` のような引用符後続グルー
 
-Current read:
-- there are real recurring classes here
-- but the obvious tempting heuristics improved one browser and hurt another
-- that makes Myanmar a canary, not a license for more instinctive glue rules
+現在の見立て:
+- 実際に繰り返し現れるクラスは存在する
+- だが目につく魅力的なヒューリスティックは片方のブラウザを良くしてもう片方を悪化させた
+- そのためミャンマー語はカナリアであり、直感的なグルー規則を増やす許可ではない
 
-### Japanese
+### 日本語
 
-Japanese gave us one real semantic keep:
-- kana iteration marks like `ゝ` / `ゞ` / `ヽ` / `ヾ` should be treated as CJK line-start-prohibited
+日本語からは 1 つの実用的な意味採用が得られた。
+- `ゝ` / `ゞ` / `ヽ` / `ヾ` のようなかなの繰り返し記号は CJK 行頭禁則として扱うべき
 
-What remains:
-- a small context-width class around punctuation/quote compression
-- good evidence for the exactness ceiling of a width-independent grapheme-sum model in proportional Japanese fonts
+残るもの:
+- 句読点 / 引用符の圧縮まわりに小さな文脈幅クラス
+- プロポーショナルな日本語フォントにおける幅非依存・書記素和算モデルの精度上限についての良い証拠
 
-So Japanese stays as a canary, not as a place to keep stacking narrow punctuation rules.
+そのため日本語はカナリアのままであり、狭い句読点規則を積み重ねる場所ではない。
 
-### Chinese
+### 中国語
 
-Chinese is now the clearest active CJK canary.
+中国語は現時点で最も明確な能動 CJK カナリアである。
 
-What we learned:
-- Safari is clean on the maintained step10 sweep
-- Chrome keeps a broader narrow-width positive field
-- the field changes with font choice (`Songti SC` vs `PingFang SC`)
+学んだこと:
+- Safari は保守対象の step10 スイープでクリーン
+- Chrome は広域の狭幅・正方向フィールドを保持し続けている
+- そのフィールドはフォント選択 (`Songti SC` 対 `PingFang SC`) で変化する
 
-What did **not** survive:
-- carrying closing punctuation forward
-- coalescing repeated punctuation runs like `——` or `……`
+**生き残らなかった**もの:
+- 閉じ句読点の前方繰り越し
+- `——` や `……` のような連続句読点ランの統合
 
-Current read:
-- the remaining Chinese field is real
-- it is not another obvious punctuation bug
-- it is best treated as a canary for the model’s current exactness ceiling
+現在の見立て:
+- 中国語の残余フィールドは実在する
+- 別の明白な句読点バグではない
+- モデル現状の精度上限のカナリアとして扱うのが最適
 
-### Sampled cross-font corpus matrix
+### サンプリングされた多フォント・コーパス・マトリクス
 
-The first cross-font pass was reassuring:
-- Korean, Thai, Khmer, Hindi, Arabic, and Hebrew all stayed exact across the sampled Chrome matrix on this machine
+最初の多フォントパスは安心できるものだった。
+- 韓国語、タイ語、クメール語、ヒンディー語、アラビア語、ヘブライ語のすべてが、このマシン上のサンプリングされた Chrome マトリクスで完全一致を保った
 
-That does **not** mean font fragility is gone. It just means the next likely surprises are:
-- new scripts
-- finer width sweeps
-- or product-shaped mixed text
+これはフォントの脆弱性が消えたという意味ではない。次に来そうな驚きが以下になることを意味するだけ。
+- 新しいスクリプト
+- より細かい幅スイープ
+- もしくは製品形状の混合テキスト
 
-## Segment metrics cache
+## セグメント計測キャッシュ
 
-The cache used to store just widths. It now stores richer per-segment metrics and computes the more expensive derived facts lazily.
+キャッシュは元々幅だけを保存していた。現在はよりリッチなセグメント単位の計測値を保存し、計算が重い派生値は遅延計算する。
 
-Current useful cached facts include:
-- width
+現在キャッシュされている有用な事実:
+- 幅
 - `containsCJK`
-- lazily computed emoji count
-- lazily computed grapheme widths
+- 遅延計算される絵文字数
+- 遅延計算される書記素ごとの幅
 
-That improved repeated `prepare()` work without moving any live measurement back into `layout()`.
+これにより、ライブ計測を `layout()` に戻すことなく、繰り返しの `prepare()` 作業が改善された。
 
-## Soft hyphen support
+## ソフトハイフンのサポート
 
-Soft hyphen became a real internal break kind instead of ordinary text.
+ソフトハイフンは通常テキストではなく、実態のある内部の破断種別となった。
 
-What that bought us:
-- unbroken lines keep it invisible
-- broken lines can expose a visible trailing `-`
-- rich APIs stay aligned with the actual break choice
+これにより得られたもの:
+- 破断されない行では不可視のまま
+- 破断された行では末尾に可視の `-` を出せる
+- リッチ API が実際の破断選択と整合する
 
-This was a genuine model improvement, not just a cosmetic API change.
+これは見た目だけの API 変更ではなく、本物のモデル改善だった。
 
-## What Sebastian already knew
+## Sebastian が既に知っていたこと
 
-Sebastian’s original prototype already had the right overall instinct:
-- words/runs as the unit of caching
-- browser-grounded measurement
-- streamed greedy line breaking
+Sebastian の元のプロトタイプは既に正しい全体的直感を備えていた。
+- 単語 / ラン単位でのキャッシング
+- ブラウザ準拠の計測
+- ストリーミングのグリーディ行破断
 
-What changed here was mostly engineering discipline:
-- caching
-- a clean `prepare()` / `layout()` split
-- preprocessing
-- browser diagnostics
-- and a willingness to keep the hot path simple
+ここで変わったのは主にエンジニアリングの規律だった。
+- キャッシング
+- きれいな `prepare()` / `layout()` 分離
+- 前処理
+- ブラウザ診断
+- ホットパスをシンプルに保つ意志
