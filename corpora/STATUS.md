@@ -1,25 +1,25 @@
 # Corpus Status
 
-This file is the prose pointer map for the checked-in long-form canaries.
+このファイルは、チェックイン済みの長文カナリアに対する散文ポインタマップである。
 
-Historical reasoning and failed experiments live in [RESEARCH.md](../RESEARCH.md).
-Shared mismatch vocabulary lives in [TAXONOMY.md](TAXONOMY.md).
+過去の経緯や失敗した実験は [RESEARCH.md](../RESEARCH.md) に置く。
+不一致用の共通語彙は [TAXONOMY.md](TAXONOMY.md) に置く。
 
-Conventions:
-- "anchors" means `300 / 600 / 800` unless noted otherwise
-- "step=10" means `300..900`
-- values are the last recorded results on this machine, not a promise of universal permanence
+規約:
+- "anchors" は特記がない限り `300 / 600 / 800` を指す
+- "step=10" は `300..900` を指す
+- 値はこのマシン上で最後に記録した結果であり、普遍的恒久性の保証ではない
 
-## Machine-Readable Sources
+## 機械可読ソース
 
-- [dashboard.json](dashboard.json) — browser regression gate counts, product-shaped canaries, anchor/sweep status, fine-sweep notes, and font-matrix notes
-- [chrome-step10.json](chrome-step10.json) — Chrome `step=10` sweep snapshot
-- [safari-step10.json](safari-step10.json) — Safari `step=10` sweep snapshot
-- [../accuracy/chrome.json](../accuracy/chrome.json), [../accuracy/safari.json](../accuracy/safari.json), [../accuracy/firefox.json](../accuracy/firefox.json) — browser regression gate snapshots
+- [dashboard.json](dashboard.json) — ブラウザリグレッションゲートのカウント、製品形カナリア、anchor/sweep ステータス、fine-sweep ノート、font-matrix ノート
+- [chrome-step10.json](chrome-step10.json) — Chrome `step=10` sweep スナップショット
+- [safari-step10.json](safari-step10.json) — Safari `step=10` sweep スナップショット
+- [../accuracy/chrome.json](../accuracy/chrome.json), [../accuracy/safari.json](../accuracy/safari.json), [../accuracy/firefox.json](../accuracy/firefox.json) — ブラウザリグレッションゲートのスナップショット
 
-## Recompute
+## 再計算
 
-Useful commands:
+便利なコマンド:
 
 ```sh
 bun run status-dashboard
