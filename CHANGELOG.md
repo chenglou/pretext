@@ -1,91 +1,91 @@
-# Changelog
+# 変更履歴
 
 ## 0.0.7 - 2026-05-10
 
-### Changed
+### 変更
 
-- The package now declares itself side-effect-free so bundlers can tree-shake unused entrypoints (#160).
-- `layoutNextLine()` and `layoutNextLineRange()` now avoid redundant chunk lookup in chunk-heavy manual layout paths (#140).
+- パッケージが自身を side-effect-free として宣言するようになり、バンドラーが未使用のエントリポイントを tree-shake できるようになりました (#160)。
+- `layoutNextLine()` と `layoutNextLineRange()` が、チャンク数の多い手動レイアウト経路における冗長なチャンク参照を回避するようになりました (#140)。
 
-### Fixed
+### 修正
 
-- `{ wordBreak: 'keep-all' }` now handles no-space mixed Latin, numeric, and CJK text more like browsers.
-- No-space punctuation and symbol chains now stay together for non-ASCII word-like text too, instead of only ASCII words (#169).
-- Opening punctuation such as `¡`, `¿`, German low quotes, and `⸘` now stays with the following word instead of dangling at line end (#165).
-- Numeric prefix/postfix symbols like `$`, `%`, `€`, `+`, `−`, and `°` now stay attached to adjacent text the way browser line breaking does (#105).
-- Soft-hyphen breaks now stay at the soft-hyphen insertion point instead of pulling post-hyphen graphemes onto the broken line (#162).
-- Line geometry now preserves browser-style terminal letter spacing, including rich-inline item boundaries and visible soft-hyphen breaks (#171).
-- Rich-inline item boundaries no longer overflow the requested width after a forced-progress break (#132).
-- The markdown chat demo now drops parsed link URLs unless they resolve to HTTP(S) hrefs (#168).
-- Overlong hyphenated runs now prefer browser-like dash breakpoints before falling back to emergency grapheme breaks (#89).
+- `{ wordBreak: 'keep-all' }` が、空白を含まない Latin・数字・CJK の混在テキストをブラウザにより近い形で処理するようになりました。
+- 空白を含まない約物・記号の連鎖が、ASCII の単語に限らず非 ASCII の単語的テキストでもまとまって保持されるようになりました (#169)。
+- `¡`、`¿`、ドイツ語の下付き引用符、`⸘` のような開き約物が、行末にぶら下がるのではなく後続の単語に付随するようになりました (#165)。
+- `$`、`%`、`€`、`+`、`−`、`°` のような数値の前後に付く記号が、ブラウザの改行処理と同様に隣接テキストへ吸着するようになりました (#105)。
+- ソフトハイフン位置での改行が、ソフトハイフン挿入点を維持するようになり、ハイフン後のグラフェムが折り返された行へ引きずられなくなりました (#162)。
+- 行ジオメトリが、rich-inline 項目境界や可視ソフトハイフン改行を含めて、ブラウザ準拠の終端文字間隔を保持するようになりました (#171)。
+- rich-inline 項目境界が、強制的な改行進行後にも要求幅をオーバーフローしなくなりました (#132)。
+- markdown チャットのデモが、パース済みリンク URL を HTTP(S) の href として解決できない場合に破棄するようになりました (#168)。
+- 過剰に長いハイフン区切りの連続が、緊急のグラフェム単位の改行に頼る前に、ブラウザ準拠のダッシュ位置での改行を優先するようになりました (#89)。
 
 ## 0.0.6 - 2026-04-22
 
-### Added
+### 追加
 
-- Numeric CSS-pixel `letterSpacing` support on `prepare()`, `prepareWithSegments()`, and each existing rich-inline item (#108, #156).
+- `prepare()`、`prepareWithSegments()`、および既存の各 rich-inline 項目で、数値の CSS ピクセル単位 `letterSpacing` をサポートしました (#108, #156)。
 
-### Fixed
+### 修正
 
-- CJK text followed by opening bracket annotations now wraps like browsers instead of leaving the opening bracket on the previous line (#148).
+- 開きブラケットの注釈が後続する CJK テキストが、開きブラケットを前行に残すのではなく、ブラウザと同じように折り返されるようになりました (#148)。
 
 ## 0.0.5 - 2026-04-09
 
-### Added
+### 追加
 
-- Geometry-first rich line helpers for manual layout work: `measureLineStats()`, `measureNaturalWidth()`, `layoutNextLineRange()`, and `materializeLineRange()`.
-- `@chenglou/pretext/rich-inline`, a narrow helper for inline-only rich text, mentions/chips, and browser-like boundary whitespace collapse.
-- `{ wordBreak: 'keep-all' }` support on `prepare()` / `prepareWithSegments()` for CJK and Hangul text.
-- A virtualized markdown chat demo for rich inline text and `pre-wrap` layout.
+- 手動レイアウト作業向けに、ジオメトリ優先の rich line ヘルパー (`measureLineStats()`、`measureNaturalWidth()`、`layoutNextLineRange()`、`materializeLineRange()`) を追加しました。
+- インライン限定のリッチテキスト、メンション・チップス、ブラウザ準拠の境界空白折りたたみのための狭いヘルパー `@chenglou/pretext/rich-inline` を追加しました。
+- CJK およびハングルのテキスト向けに、`prepare()` / `prepareWithSegments()` で `{ wordBreak: 'keep-all' }` をサポートしました。
+- リッチインラインテキストと `pre-wrap` レイアウトのための仮想化された markdown チャットデモを追加しました。
 
-### Changed
+### 変更
 
-- Prepare-time analysis is more resilient on long mixed-script, CJK, Arabic, repeated-punctuation, and other degenerate inputs.
+- 準備時の解析が、長い混合スクリプト、CJK、アラビア語、繰り返し記号、その他の退化的な入力に対してより堅牢になりました。
 
-### Fixed
+### 修正
 
-- Mixed CJK-plus-numeric runs, keep-all mixed-script boundaries, and long breakable runs now stay closer to browser behavior.
-- Rich-path bidi metadata and CJK detection now handle the relevant astral Unicode ranges correctly.
+- CJK と数値の混在する連続、keep-all モードでの混合スクリプト境界、長い改行可能な連続が、ブラウザの挙動により近づきました。
+- リッチ経路の双方向 (bidi) メタデータと CJK 検出が、関連する astral Unicode 範囲を正しく扱うようになりました。
 
 ## 0.0.4 - 2026-04-02
 
-### Added
+### 追加
 
-- A justification comparison demo that shows native CSS justification, greedy hyphenation, and a Knuth-Plass-style paragraph layout side by side.
+- ネイティブ CSS の両端揃え、貪欲なハイフネーション、Knuth-Plass 風の段落レイアウトを並べて比較する両端揃え比較デモを追加しました。
 
-### Changed
+### 変更
 
-- Rich layout is faster on chunk-heavy and long-breakable text.
+- リッチレイアウトが、チャンク数の多いテキストや長い改行可能テキストに対して高速化されました。
 
-### Fixed
+### 修正
 
-- `layout()`, `layoutWithLines()`, and `layoutNextLine()` stay aligned on narrow `ZWSP` / grapheme-breaking edge cases.
-- The justification comparison demo no longer paints justified lines wider than their column.
+- `layout()`、`layoutWithLines()`、`layoutNextLine()` が、狭い `ZWSP` やグラフェム境界での改行といったエッジケースで整合性を保つようになりました。
+- 両端揃え比較デモが、両端揃えされた行を列幅より広く描画しなくなりました。
 
 ## 0.0.3 - 2026-03-29
 
-### Changed
+### 変更
 
-- npm now publishes built ESM JavaScript from `dist/` instead of exposing raw TypeScript source as the package entrypoint.
-- TypeScript consumers now pick up shipped declaration files automatically from the published package, while plain JavaScript consumers can install and import the package without relying on dependency-side TypeScript transpilation.
+- npm が、パッケージのエントリポイントとして生の TypeScript ソースを公開する代わりに、`dist/` からビルド済みの ESM JavaScript を配布するようになりました。
+- TypeScript の利用者は公開パッケージから出力済みの宣言ファイルを自動的に取得できるようになり、素の JavaScript 利用者は依存側の TypeScript トランスパイルに頼らずにパッケージをインストールしてインポートできるようになりました。
 
 ## 0.0.2 - 2026-03-28
 
-### Added
+### 追加
 
-- `{ whiteSpace: 'pre-wrap' }` mode for textarea-like text, preserving ordinary spaces, tabs, and hard breaks.
+- テキストエリア風のテキスト向けに、通常の空白、タブ、ハード改行を保持する `{ whiteSpace: 'pre-wrap' }` モードを追加しました。
 
 ## 0.0.1 - 2026-03-27
 
-### Changed
+### 変更
 
-- Safari line breaking is more accurate for narrow soft-hyphen and breakable-run cases.
+- Safari の改行処理が、狭いソフトハイフンや改行可能な連続のケースにおいてより正確になりました。
 
 ## 0.0.0 - 2026-03-26
 
-Initial public npm release of `@chenglou/pretext`.
+`@chenglou/pretext` の最初の公開 npm リリースです。
 
-### Added
+### 追加
 
-- `prepare()` and `layout()` as the core fast path for DOM-free multiline text height prediction.
-- Rich layout APIs including `prepareWithSegments()`, `layoutWithLines()`, `layoutNextLine()`, and `walkLineRanges()` for custom rendering and manual layout.
+- DOM を使わない複数行テキストの高さ予測のためのコア高速経路として、`prepare()` と `layout()` を追加しました。
+- カスタムレンダリングや手動レイアウトのためのリッチレイアウト API として、`prepareWithSegments()`、`layoutWithLines()`、`layoutNextLine()`、`walkLineRanges()` を追加しました。
