@@ -1,115 +1,115 @@
 ## Pretext
 
-Use `README.md` as the public source of truth for API examples and user-facing limitations. See `DEVELOPMENT.md` for the current command surface and the canonical dashboards/snapshots to consult before making browser-accuracy or benchmark claims. Use `TODO.md` for the current priorities. **Every time before you commit, ensure you've synced the docs**.
-Do not change the existing tone of the documents unless they're wrong.
-Do `bun install` if you're in a fresh worktree.
+API 例とユーザー向けの制約事項については、公開上の信頼できる情報源として `README.md` を使う。現行のコマンド一覧、およびブラウザ精度・ベンチマークに関する主張を行う前に参照すべき正規のダッシュボード/スナップショットは `DEVELOPMENT.md` を参照。現在の優先事項は `TODO.md` を使う。**コミット前は毎回、ドキュメントが同期されていることを確認すること**。
+ドキュメントが間違っている場合を除き、既存のトーンを変更しない。
+新しい worktree にいる場合は `bun install` を実行する。
 
-**Important:** after you're done with a feature, and have enough holistic vision, make sure you do a pass over all the files again and see if you can simplify anything. Don't change things for the sake of, but if there are simplifications, YELL **I DID A HOLISTIC PASS AND FOUND SIMPLIFICATIONS** with a brief summary.
+**Important:** 機能を完成させ、十分な全体像が見えたら、すべてのファイルに対して再度パスを行い、簡素化できる箇所がないか確認すること。変更のための変更は避けるが、簡素化の余地があれば **I DID A HOLISTIC PASS AND FOUND SIMPLIFICATIONS** と叫び、簡単な要約を添える。
 
-**Important:** do NOT monkey-patch. If you found yourself solving the symptom instead of the root cause, reconsider and do a proper fix, then YELL **I SOLVED THE ROOT CAUSE NOT THE SYMPTOM** with a brief summary.
+**Important:** モンキーパッチは行わない。根本原因ではなく症状を解決していると気付いたら、考え直して適切な修正を行い、その上で **I SOLVED THE ROOT CAUSE NOT THE SYMPTOM** と叫び、簡単な要約を添える。
 
-Changelog updates guideline: don't add dev-facing notes, only user-facing ones. Refer to closed PR numbers.
+Changelog 更新のガイドライン: 開発者向けの記述は追加せず、ユーザー向けのもののみを記載する。クローズ済みの PR 番号を参照すること。
 
 ### Commands
 
-See `DEVELOPMENT.md` for the current command surface and packaging/release checks. Keep the higher-level workflow notes below in sync with that command list rather than duplicating it here.
+現行のコマンド一覧と、パッケージング/リリース時のチェックは `DEVELOPMENT.md` を参照。ここでは内容を重複させず、上記のコマンドリストとワークフローの上位ノートが同期した状態に保つこと。
 
 ### Important files
 
-- `package.json` — published entrypoints now target `dist/layout.js` + `dist/layout.d.ts`; keep the package/export surface aligned with the emitted files
-- `tsconfig.build.json` — publish-time emit config for `dist/`
-- `scripts/package-smoke-test.ts` — tarball-level JS/TS consumer verification for the published package shape
-- `src/layout.ts` — core library; keep `layout()` fast and allocation-light
-- `src/analysis.ts` — normalization, segmentation, glue rules, and text-analysis phase for `prepare()`
-- `src/measurement.ts` — canvas measurement runtime, segment metrics cache, emoji correction, and engine-profile shims
-- `src/line-break.ts` — internal line-walking core shared by the rich layout APIs and the hot-path line counter
-- `src/bidi.ts` — simplified bidi metadata helper for the rich `prepareWithSegments()` path
-- `src/rich-inline.ts` — inline-only helper for rich-text inline flow, atomic pills, and boundary whitespace collapse
-- `src/test-data.ts` — shared corpus for browser accuracy pages/checkers and benchmarks
-- `src/layout.test.ts` — small durable invariant tests for the exported prepare/layout APIs
-- `pages/accuracy.ts` — browser sweep plus per-line diagnostics
-- `status/dashboard.json` — machine-readable main status dashboard derived from the checked-in accuracy and benchmark snapshots
-- `accuracy/chrome.json` / `accuracy/safari.json` / `accuracy/firefox.json` — checked-in raw accuracy rows
-- `pages/benchmark.ts` — performance comparisons
-- `benchmarks/chrome.json` / `benchmarks/safari.json` — checked-in current benchmark snapshots
-- `corpora/dashboard.json` — machine-readable long-form corpus dashboard derived from the corpus snapshots and notes
-- `corpora/chrome-step10.json` / `corpora/safari-step10.json` — checked-in browser `step=10` corpus sweep snapshots
-- `pages/diagnostic-utils.ts` — shared grapheme-safe diagnostic helpers used by the browser check pages
-- `scripts/pre-wrap-check.ts` — small permanent browser-oracle sweep for the non-default `{ whiteSpace: 'pre-wrap' }` mode
-- `pages/demos/index.html` — public static demo landing page used as the GitHub Pages site root
-- `pages/demos/bubbles.ts` — bubble shrinkwrap demo using the rich non-materializing line-range walker
-- `pages/demos/dynamic-layout.ts` — fixed-height editorial spread with a continuous two-column flow, obstacle-aware title routing, and live logo-driven reflow
-- `pages/demos/markdown-chat.ts` — rich chat virtualization demo that stress-tests prepared templates and manual block layout
-- `pages/demos/rich-note.ts` — inline-rich-note demo that dogfoods the rich-text inline flow helper at `@chenglou/pretext/rich-inline`
+- `package.json` — 公開エントリポイントは `dist/layout.js` + `dist/layout.d.ts` を指すようになっている。パッケージ/エクスポート面を出力ファイルと整合させること
+- `tsconfig.build.json` — `dist/` 向けの publish 時 emit 設定
+- `scripts/package-smoke-test.ts` — tarball レベルで JS/TS コンシューマーから公開パッケージ形状を検証する
+- `src/layout.ts` — コアライブラリ。`layout()` を高速かつアロケーション軽量に保つ
+- `src/analysis.ts` — 正規化、セグメンテーション、グルーのルール、`prepare()` のテキスト解析フェーズ
+- `src/measurement.ts` — canvas 計測ランタイム、セグメントメトリクスキャッシュ、絵文字補正、エンジンプロファイルの shim
+- `src/line-break.ts` — リッチレイアウト API とホットパスの行カウンタで共有される内部の行ウォーキングコア
+- `src/bidi.ts` — リッチな `prepareWithSegments()` パス向けに簡素化された bidi メタデータヘルパー
+- `src/rich-inline.ts` — リッチテキストのインラインフロー、原子的なピル、境界の空白の縮約を扱うインライン専用ヘルパー
+- `src/test-data.ts` — ブラウザ精度ページ/チェッカーおよびベンチマークで共有するコーパス
+- `src/layout.test.ts` — 公開されている prepare/layout API の小さく安定した不変条件テスト
+- `pages/accuracy.ts` — ブラウザスイープ + 行ごとの診断
+- `status/dashboard.json` — チェックイン済みの精度・ベンチマークスナップショットから派生する、マシン可読なメインステータスダッシュボード
+- `accuracy/chrome.json` / `accuracy/safari.json` / `accuracy/firefox.json` — チェックイン済みの生の精度行
+- `pages/benchmark.ts` — パフォーマンス比較
+- `benchmarks/chrome.json` / `benchmarks/safari.json` — チェックイン済みの現行ベンチマークスナップショット
+- `corpora/dashboard.json` — コーパスのスナップショットとノートから派生する、マシン可読な長文コーパスダッシュボード
+- `corpora/chrome-step10.json` / `corpora/safari-step10.json` — チェックイン済みのブラウザ `step=10` コーパスのスイープスナップショット
+- `pages/diagnostic-utils.ts` — ブラウザのチェックページで共有するグラフェム安全な診断ヘルパー
+- `scripts/pre-wrap-check.ts` — デフォルトではない `{ whiteSpace: 'pre-wrap' }` モード向けの小さな常設ブラウザオラクルスイープ
+- `pages/demos/index.html` — GitHub Pages サイトのルートとして使う公開静的デモのランディングページ
+- `pages/demos/bubbles.ts` — リッチな非マテリアライズの line-range ウォーカーを使ったバブルの shrinkwrap デモ
+- `pages/demos/dynamic-layout.ts` — 固定高さの編集スプレッドで、連続した 2 段組フロー、障害物を考慮したタイトル経路、ロゴ駆動でライブにリフローする例
+- `pages/demos/markdown-chat.ts` — prepared テンプレートと手動のブロックレイアウトをストレステストするリッチチャット仮想化デモ
+- `pages/demos/rich-note.ts` — `@chenglou/pretext/rich-inline` のリッチテキストインラインフローヘルパーをドッグフードするインラインリッチノートのデモ
 
 ### Implementation notes
 
-- The published package ships built ESM from `dist/`; `dist/` is publish-time output, not checked-in source.
-- Keep shipped library source imports runtime-honest with `.js` specifiers inside `.ts` files. That keeps plain `tsc` emit producing correct JS and `.d.ts` files without a declaration rewrite step.
-- `prepare()` / `prepareWithSegments()` do horizontal-only work. `layout()` / `layoutWithLines()` take explicit `lineHeight`.
-- `setLocale(locale?)` retargets the hoisted word segmenter for future `prepare()` calls and clears shared caches. Use it before preparing new text when the app wants a specific `Intl.Segmenter` locale instead of the runtime default.
-- `prepare()` should stay the opaque fast-path handle. If a page/script needs segment arrays, that should usually flow through `prepareWithSegments()` instead of re-exposing internals on the main prepared type.
-- The rich public surface is intentionally split between stats/range helpers (`walkLineRanges()`, `measureLineStats()`, `layoutNextLineRange()`) and text-materializing helpers (`layoutWithLines()`, `layoutNextLine()`, `materializeLineRange()`). Keep their break semantics aligned.
-- `walkLineRanges()` is the rich-path batch range API: no string materialization, but still browser-like line widths/cursors/discretionary-hyphen state. Prefer it over private line walkers for shrinkwrap or aggregate layout work.
-- Keep prepare-time diagnostics internal to benchmark tooling. Do not grow a second public prepare surface just to expose timing splits.
-- `prepare()` is internally split into a text-analysis phase and a measurement phase; keep that seam clear, but keep the public API simple unless requirements force a change.
-- The internal segment model now distinguishes at least eight break kinds: normal text, collapsible spaces, preserved spaces, tabs, non-breaking glue (`NBSP` / `NNBSP` / `WJ`-like runs), zero-width break opportunities, soft hyphens, and hard breaks. Do not collapse those back into one boolean unless the model gets richer in a better way.
-- `layout()` is the resize hot path: no DOM reads, no canvas calls, no string work, and avoid gratuitous allocations.
-- Segment metrics cache is `Map<font, Map<segment, metrics>>`; shared across texts and resettable via `clearCache()`. Width is only one cached fact now; grapheme widths and other segment-derived facts can be populated lazily.
-- Word and grapheme segmenters are hoisted at module scope. Any locale reset should also clear the word cache.
-- Punctuation is merged into preceding word-like segments only, never into spaces.
-- Keep script-specific break-policy fixes in preprocessing, not `layout()`. That includes Arabic no-space punctuation clusters, Arabic punctuation-plus-mark clusters, and `" " + combining marks` before Arabic text.
-- `NBSP`-style glue should survive `prepare()` as visible content and prevent ordinary word-boundary wrapping; `ZWSP` should survive as a zero-width break opportunity.
-- Soft hyphens should stay invisible when unbroken, but if the engine chooses that break, the broken line should expose a visible trailing hyphen in `layoutWithLines()`.
-- If a soft hyphen wins the break, the rich line APIs should still expose the visible trailing `-` in `line.text`, even though the public line types do not currently carry a separate soft-hyphen metadata flag.
-- `layoutNextLine()` is the rich-path escape hatch for variable-width userland layout. It now hides its grapheme-cache bookkeeping again by internally splitting line stepping from text materialization. Keep that internal split semantically aligned with `layoutWithLines()`, but do not pull its extra bookkeeping into the hot `layout()` path.
-- Astral CJK ideographs, compatibility ideographs, and the later extension blocks must still hit the CJK path; do not rely on BMP-only `charCodeAt()` checks there.
-- Non-word, non-space segments are break opportunities, same as words.
-- CJK grapheme splitting plus kinsoku merging keeps prohibited punctuation attached to adjacent graphemes.
-- Emoji correction is auto-detected per font size, constant per emoji grapheme, and effectively font-independent.
-- Bidi levels now stay on the rich `prepareWithSegments()` path as custom-rendering metadata only. The opaque fast `prepare()` handle should not pay for bidi metadata that `layout()` does not consume, and line breaking itself does not read those levels.
-- The rich-path bidi classifier now comes from checked-in generated Unicode range data. Refresh it manually with `bun run generate:bidi-data`; do not turn that into a normal build step.
-- A larger pure-TS Unicode stack like `text-shaper` is useful as reference material, especially for Unicode coverage and richer bidi metadata, but its runtime segmentation and greedy glyph-line breaker are not replacements for our browser-facing `Intl.Segmenter` + preprocessing + canvas-measurement model.
-- Supported CSS target is still the common app-text configuration: `white-space: normal`, `word-break: normal`, `overflow-wrap: break-word`, `line-break: auto`.
-- There is also an explicit opt-in `{ wordBreak: 'keep-all' }` mode for CJK/Hangul text and CJK-leading no-space mixed-script runs; keep its policy work in preprocessing, not `layout()`.
-- There is now a second explicit whitespace mode, `{ whiteSpace: 'pre-wrap' }`, for ordinary spaces, `\t` tabs, and `\n` hard breaks. Tabs follow the default browser-style tab stops. Treat it as editor/input-oriented, not the whole CSS `pre-wrap` surface.
-- Keep the permanent `pre-wrap` coverage small and explicit. A one-time raw-source validation was useful, but the standing repo coverage should stay a compact oracle set rather than a giant sweep over wiki scaffolding.
-- That default target means narrow widths may still break inside words, but only at grapheme boundaries. Keep the core engine honest to that behavior; if an editorial page wants stricter whole-word handling, layer it on top in userland instead of quietly changing the library default.
-- `system-ui` is unsafe for accuracy; canvas and DOM can resolve different fonts on macOS.
-- Accuracy pages and checkers are now expected to be green in all three installed browsers on fresh runs; if a page disagrees, suspect stale tabs/servers before changing the algorithm.
-- The browser automation lock is self-healing for stale dead-owner files now, but it is still single-owner per browser. If a checker times out on the lock, confirm a live checker process still owns it before changing the algorithm.
-- Accuracy and corpus checkers can use background-safe browser automation, but benchmark runs should stay foreground. Do not “optimize away” benchmark focus; throttled/background tabs make the numbers less trustworthy.
-- Accuracy and the maintained `step=10` corpus sweep paths now batch widths in-page after a single navigation. Prefer those sweep entrypoints over userland “navigate once per width” loops, and keep the slow single-width checkers for diagnosis.
-- Keep the transport split deliberate: small automation reports can ride the hash, but large batched reports should use the local POST side channel instead of stuffing every row into `#report=...`.
-- Browser-automation timeouts now report the last page phase they saw (`loading`, `measuring`, or `posting`). Treat `posting` timeouts as transport-side clues first; they usually point at the report side channel rather than the text engine.
-- For deep perf or memory work, prefer an isolated debuggable Chrome over a pure Bun microbenchmark. Bun is fine for quick hypotheses, but Chrome profiling is the better source of truth for CPU hotspots, allocation churn, and retained-heap checks.
-- Refresh `benchmarks/chrome.json` and `benchmarks/safari.json` when a diff changes benchmark methodology or the text engine hot path (`src/analysis.ts`, `src/measurement.ts`, `src/line-break.ts`, `src/layout.ts`, `src/bidi.ts`, or `pages/benchmark.ts`). Regenerate `status/dashboard.json` after those snapshot changes.
-- `bun start` is the stable human-facing dev server. The scripted checkers intentionally keep using `--no-hmr` temporary servers so their runs stay deterministic and easy to tear down.
-- Do not run multiple browser corpus/sweep/font-matrix jobs in parallel against the same browser. The automation session and temporary page server paths interfere with each other and can make a healthy corpus look hung or flaky.
-- An `ERR_CONNECTION_REFUSED` tab on `localhost:3210` or a similar temporary checker port usually means you caught a per-run Bun server after teardown. That is expected after the script exits; it is not, by itself, evidence of a bad measurement.
-- Keep `src/layout.test.ts` small and durable. For browser-specific or narrow hypothesis work, prefer throwaway probes/scripts and promote only the stable invariants into permanent tests.
-- For long-form corpus canary work, use the checked-in `step=10` sweep first and only diagnose the mismatching widths in detail. The slow detailed checker is for narrowing root causes, not for every width by default.
-- For Arabic corpus/probe work, use normalized slices, the exact corpus font, and the RTL `Range`-based diagnostics. Raw offsets or rough fallback fonts will mislead you.
-- For `pre-wrap` probe work, Safari span extraction is currently a better cross-check than Safari `Range` extraction around preserved spaces and hard breaks. Keep using `Range` for the default `white-space: normal` diagnostics unless the mode itself is the thing under test.
-- For Southeast Asian and Arabic/Urdu raw-diagnostic work, keep using the script-appropriate extractor instead of forcing one Safari rule everywhere.
-- The corpus/probe diagnostic pages now compute our line offsets directly from prepared segments and grapheme fallbacks; do not go back to reconstructing them from `layoutWithLines().line.text.length`.
-- `/corpus`, `corpus-check`, and `corpus-sweep` now accept `font` / `lineHeight` overrides. Use those before inventing a second page or checker when the question is “does this same corpus stay healthy under another font?”
-- Prefer Chrome for the first font-matrix pass. Safari font-matrix automation is slower and noisier, so treat it as follow-up smoke coverage.
-- Mixed app text is now a first-class canary. Use it to catch product-shaped classes like URL/query-string wrapping, emoji ZWJ runs, and mixed-script punctuation before tuning another book corpus.
-- URL-like runs such as `https://...` / `www...` are currently modeled as two breakable preprocessing units when a query exists: the path through the query introducer (`?`), then the query string. This is intentionally narrow and exists to stop obviously bad mid-path URL breaks without forcing the whole query string to fragment character-by-character.
-- Mixed app text also pulled in two more keep-worthy preprocessing rules: contextual escaped quote clusters like `\"word\"`, and numeric/time-range runs like `२४×७` / `7:00-9:00`.
-- For Southeast Asian scripts or mixed text containing Thai/Lao/Khmer/Myanmar, trust the `Range`-based corpus diagnostics over span-probing; span units can perturb line breaking there.
-- The former Chrome mixed-app `710px` soft-hyphen miss is exact again after keeping chosen soft-hyphen breaks at the SHY boundary. Keep mixed app text as a regression canary, and do not reintroduce post-SHY grapheme packing from only one extractor view.
-- Safari `Range`-based probe extraction can over-advance across URL query text (`...path?q`) even when the real DOM height and the `span` extractor are exact. Cross-check `--method=span` before changing the engine on Safari URL/query probe misses.
-- Keep the current corpus lessons in mind:
-  - Thai: contextual ASCII quotes were a real keep
-  - Khmer: explicit zero-width separators from clean source text are useful signal
-  - Lao: wrapped raw-law text was a bad canary and was rejected
-  - Myanmar: punctuation/medial-glue keeps survived, broader Chrome-only fixes did not
-  - Japanese: kana iteration marks are CJK line-start-prohibited
-  - Chinese: the remaining broad Chrome-positive field is real and not obviously another punctuation bug
-- The corpus diagnostics should derive our candidate lines from `layoutWithLines()`, not from a second local line-walker. That avoids SHY and future custom-break drift between the hot path and the diagnostic path.
-- Current line-fit tolerance is `0.005` for Chromium/Gecko and `1/64` for Safari/WebKit. That bump was justified by the remaining Arabic fine-width field and did not move the solved browser corpus or the English long-form canary.
-- Refresh `accuracy/chrome.json`, `accuracy/safari.json`, and `accuracy/firefox.json` when a diff changes the browser sweep methodology or the main text engine behavior (`src/analysis.ts`, `src/measurement.ts`, `src/line-break.ts`, `src/layout.ts`, `src/bidi.ts`, or `pages/accuracy.ts`).
-- Refresh `corpora/chrome-step10.json` and then regenerate `corpora/dashboard.json` when the corpus sweep methodology or long-form canary behavior changes in a way that moves the dashboard counts.
-- Refresh `corpora/safari-step10.json` alongside `corpora/chrome-step10.json` when the corpus sweep methodology or long-form canary behavior changes in a way that moves the dashboard counts.
+- 公開パッケージは `dist/` のビルド済み ESM を出荷する。`dist/` は publish 時の出力であり、チェックイン済みのソースではない。
+- ライブラリ出荷用ソースの import は `.ts` ファイル内で `.js` 指定子を使い、ランタイムに対して正直にする。これにより、宣言書き換えステップなしで素の `tsc` emit が正しい JS と `.d.ts` を生成する。
+- `prepare()` / `prepareWithSegments()` は水平方向のみの処理を行う。`layout()` / `layoutWithLines()` は明示的な `lineHeight` を取る。
+- `setLocale(locale?)` は今後の `prepare()` 呼び出しに対して、巻き上げられた単語セグメンタを retarget し、共有キャッシュをクリアする。アプリがランタイムのデフォルトではなく特定の `Intl.Segmenter` ロケールを使いたい場合、新しいテキストを prepare する前に呼ぶ。
+- `prepare()` はオパークな fast-path ハンドルのまま保つ。ページ/スクリプトがセグメント配列を必要とする場合、メインの prepared 型に内部を再露出させるのではなく、通常は `prepareWithSegments()` を経由させること。
+- リッチな公開面は、統計/レンジヘルパー (`walkLineRanges()`, `measureLineStats()`, `layoutNextLineRange()`) とテキストをマテリアライズするヘルパー (`layoutWithLines()`, `layoutNextLine()`, `materializeLineRange()`) に意図的に分けている。両者の改行セマンティクスを揃えて保つこと。
+- `walkLineRanges()` はリッチパスのバッチレンジ API。文字列をマテリアライズしないが、ブラウザのような行幅/カーソル/裁量ハイフン状態は保持する。shrinkwrap や集約レイアウトのワークでは、プライベートな line walker よりこちらを優先する。
+- prepare 時の診断はベンチマークツールの内部にとどめる。タイミング分割の露出のためだけに、もう一つの公開 prepare 面を生やさないこと。
+- `prepare()` は内部でテキスト解析フェーズと計測フェーズに分かれている。この継ぎ目を明確に保ちつつ、要件が強制しない限り公開 API はシンプルに保つこと。
+- 内部のセグメントモデルは少なくとも 8 種類の改行種別を区別する: 通常テキスト、縮約可能なスペース、保持されたスペース、タブ、改行禁止のグルー (`NBSP` / `NNBSP` / `WJ` 様のラン)、ゼロ幅の改行機会、ソフトハイフン、ハードブレイク。モデルがより良い形で豊かになる場合を除き、これらを一つの boolean に潰さないこと。
+- `layout()` はリサイズのホットパスである: DOM 読み込みなし、canvas 呼び出しなし、文字列処理なし、不要なアロケーションも避ける。
+- セグメントメトリクスのキャッシュは `Map<font, Map<segment, metrics>>` で、テキスト間で共有され、`clearCache()` でリセット可能。今や width は単にキャッシュ事実の一つに過ぎず、グラフェム幅などセグメント由来の他の事実は遅延的に投入できる。
+- 単語セグメンタとグラフェムセグメンタはモジュールスコープで巻き上げられている。ロケールをリセットする際は、単語キャッシュもクリアすること。
+- 句読点は前にある単語的セグメントとのみ結合し、スペースとは結合しない。
+- スクリプト固有の改行ポリシー修正は前処理に置き、`layout()` には置かない。これにはアラビア語の無空白句読点クラスター、アラビア語の句読点+マーククラスター、アラビア語テキストの前の `" " + 結合マーク` が含まれる。
+- `NBSP` 様のグルーは `prepare()` を生き残って可視コンテンツとして残り、通常の単語境界での折り返しを防ぐべきである。`ZWSP` はゼロ幅の改行機会として生き残るべきである。
+- ソフトハイフンは未改行なら不可視のままだが、エンジンがその位置で改行を選んだ場合は、`layoutWithLines()` の改行された行で末尾に可視のハイフンを露出すべきである。
+- ソフトハイフンが改行位置として採用された場合、公開された行型が現状ソフトハイフンの個別メタデータフラグを持たないとしても、リッチライン API は `line.text` で末尾の可視 `-` を露出すべきである。
+- `layoutNextLine()` は可変幅のユーザーランドレイアウトのためのリッチパスの抜け道である。今はライン進行とテキストのマテリアライズを内部で分割することで、グラフェムキャッシュの帳簿付けを再び隠している。この内部分割のセマンティクスは `layoutWithLines()` と整合させつつ、その追加の帳簿付けをホットな `layout()` パスに持ち込まないこと。
+- アストラル CJK 表意文字、互換表意文字、後続の拡張ブロックは引き続き CJK パスに乗せる必要がある。BMP のみの `charCodeAt()` チェックに依存しないこと。
+- 非単語・非スペースのセグメントは、単語と同様に改行機会となる。
+- CJK グラフェムの分割と禁則の結合により、禁止された句読点が隣接するグラフェムに付随し続ける。
+- 絵文字補正はフォントサイズごとに自動検出され、絵文字グラフェムごとに定数で、実質的にフォント非依存である。
+- bidi レベルは現在、リッチな `prepareWithSegments()` パスにカスタムレンダリングのメタデータとしてのみ残っている。オパークな fast `prepare()` ハンドルは `layout()` が消費しない bidi メタデータのコストを払うべきではないし、行分割自体もそれらのレベルを読み取らない。
+- リッチパスの bidi 分類器は、チェックイン済みの生成済み Unicode 範囲データから来るようになった。`bun run generate:bidi-data` で手動でリフレッシュすること。通常のビルドステップにはしないこと。
+- `text-shaper` のような、より大きな純 TS の Unicode スタックは、特に Unicode カバレッジとよりリッチな bidi メタデータの参考資料として有用だが、そのランタイムセグメンテーションと貪欲なグリフ行分割器は、ブラウザに対応した我々の `Intl.Segmenter` + 前処理 + canvas 計測モデルの代替にはならない。
+- サポート対象の CSS は依然として一般的なアプリテキストの構成: `white-space: normal`, `word-break: normal`, `overflow-wrap: break-word`, `line-break: auto`。
+- CJK/ハングルテキストおよび CJK 始まりの無空白の混在スクリプトラン向けに、明示的にオプトインする `{ wordBreak: 'keep-all' }` モードもある。そのポリシー処理は前処理にとどめ、`layout()` には置かないこと。
+- 通常のスペース、`\t` タブ、`\n` ハードブレイクを扱う 2 つ目の明示的な空白モード `{ whiteSpace: 'pre-wrap' }` も今はある。タブはデフォルトのブラウザ風タブストップに従う。CSS の `pre-wrap` 全面ではなく、エディタ/入力向けの位置付けとして扱うこと。
+- 常設の `pre-wrap` カバレッジは小さく明示的に保つ。一度きりの生ソース検証は有用だったが、リポジトリの常設カバレッジは、wiki スキャフォールディングを大量にスイープするのではなく、コンパクトなオラクルセットに留めること。
+- そのデフォルトターゲットは、狭い幅では単語内部での改行が起こり得る (ただしグラフェム境界に限る) ことを意味する。コアエンジンはその挙動に忠実に保つこと。編集ページがより厳格な単語単位の扱いを欲する場合は、ライブラリのデフォルトを密かに変更するのではなく、ユーザーランド側に積み重ねること。
+- `system-ui` は精度上安全ではない。macOS では canvas と DOM が異なるフォントに解決し得る。
+- 精度ページとチェッカーは、新規実行で 3 つすべてのインストール済みブラウザでグリーンであることが期待される。ページが不一致を示す場合、アルゴリズムを変更する前に、まず古いタブ/サーバーを疑うこと。
+- ブラウザ自動化のロックは現在、死んだオーナーのスタイルファイルに対して自己修復するが、依然としてブラウザごとに単一オーナーである。チェッカーがロックでタイムアウトする場合は、アルゴリズムを変更する前に、生きたチェッカープロセスがまだ所有していることを確認すること。
+- 精度とコーパスのチェッカーはバックグラウンドセーフなブラウザ自動化を使ってよいが、ベンチマーク実行はフォアグラウンドに保つこと。ベンチマークのフォーカスを「最適化で削除」してはならない。スロットルされた/バックグラウンドのタブは数値の信頼性を下げる。
+- 精度と維持されている `step=10` コーパススイープのパスは、1 回のナビゲーション後にページ内で幅をバッチ処理するようになった。ユーザーランドの「幅ごとに 1 回ナビゲートする」ループより、これらのスイープのエントリポイントを優先すること。遅い単一幅のチェッカーは診断用に残しておくこと。
+- トランスポートの分割は意図的に保つこと: 小さな自動化レポートは hash に乗せられるが、大きなバッチレポートは行ごとに `#report=...` に詰め込むのではなく、ローカルの POST サイドチャネルを使うこと。
+- ブラウザ自動化のタイムアウトは、最後に見たページフェーズ (`loading`, `measuring`, `posting`) を報告するようになった。`posting` のタイムアウトは、まずトランスポート側の手がかりとして扱うこと。これらは通常、テキストエンジンではなくレポートのサイドチャネルを示している。
+- 深いパフォーマンスやメモリの調査では、純 Bun のマイクロベンチマークより、隔離されたデバッグ可能な Chrome を優先すること。クイックな仮説検証には Bun でも十分だが、CPU ホットスポット、アロケーションの churn、retained-heap のチェックの真実の源としては Chrome のプロファイリングのほうが良い。
+- ベンチマーク手法やテキストエンジンのホットパス (`src/analysis.ts`, `src/measurement.ts`, `src/line-break.ts`, `src/layout.ts`, `src/bidi.ts`, `pages/benchmark.ts`) を変更する diff の場合は、`benchmarks/chrome.json` と `benchmarks/safari.json` をリフレッシュする。それらのスナップショット変更後、`status/dashboard.json` を再生成すること。
+- `bun start` は安定した人間向けの開発サーバーである。スクリプトのチェッカーは決定的で破棄しやすい実行を保つために、意図的に `--no-hmr` の一時サーバーを使い続けている。
+- 同じブラウザに対して複数のブラウザコーパス/スイープ/フォントマトリクスジョブを並列に実行しないこと。自動化セッションと一時的なページサーバーのパスが互いに干渉し、健全なコーパスが固まったり不安定に見えたりすることがある。
+- `localhost:3210` あるいは類似の一時チェッカーポート上の `ERR_CONNECTION_REFUSED` タブは、通常、ティアダウン後の per-run の Bun サーバーを捕まえたことを意味する。これはスクリプト終了後に予期される挙動であり、それ自体が悪い計測の証拠ではない。
+- `src/layout.test.ts` は小さく安定したものに保つ。ブラウザ固有や狭い仮説の作業では、使い捨ての probe/スクリプトを優先し、安定した不変条件のみを永続テストに昇格させること。
+- 長文コーパスのカナリア作業では、まずチェックイン済みの `step=10` スイープを使い、不一致の幅のみを詳細に診断すること。遅い詳細チェッカーは、毎幅をデフォルトで回すためのものではなく、根本原因を絞り込むためのものである。
+- アラビア語のコーパス/probe 作業では、正規化されたスライス、正確なコーパスフォント、RTL の `Range` ベース診断を使う。生のオフセットや雑なフォールバックフォントは誤った方向へ導く。
+- `pre-wrap` の probe 作業では、保持されたスペースとハードブレイク周辺について、Safari の `Range` 抽出より Safari の span 抽出のほうが現状クロスチェックとして優れている。モード自体が検証対象でない限り、デフォルトの `white-space: normal` 診断には引き続き `Range` を使うこと。
+- 東南アジアおよびアラビア語/ウルドゥー語の生診断作業では、Safari の一つのルールをすべてに強制するのではなく、スクリプトに適した抽出器を使い続けること。
+- コーパス/probe の診断ページは、我々の行オフセットを prepared セグメントとグラフェムフォールバックから直接計算するようになった。`layoutWithLines().line.text.length` から再構成する方法に戻らないこと。
+- `/corpus`, `corpus-check`, `corpus-sweep` は `font` / `lineHeight` のオーバーライドを受け付けるようになった。問いが「同じコーパスが別のフォントでも健全のままか?」の場合、もう一つのページやチェッカーを発明する前にこれらを使うこと。
+- 最初のフォントマトリクスパスには Chrome を優先する。Safari のフォントマトリクス自動化はより遅くノイズが多いので、フォローアップのスモークカバレッジとして扱うこと。
+- 混在アプリテキストはファーストクラスのカナリアになった。これを使って、別の書籍コーパスをチューニングする前に、URL/クエリ文字列の折り返し、絵文字 ZWJ ラン、混在スクリプトの句読点など、製品的なクラスを捕捉すること。
+- `https://...` / `www...` のような URL 状のランは現在、クエリが存在するときに 2 つの改行可能な前処理単位としてモデル化されている: クエリ導入子 (`?`) までのパスと、クエリ文字列である。これは意図的に狭いもので、クエリ文字列全体を 1 文字ずつ断片化させずに、明らかに悪い URL のパス途中での改行を防ぐために存在する。
+- 混在アプリテキストは、保持すべき前処理ルールをさらに 2 つ持ち込んだ: `\"word\"` のような文脈付きのエスケープされたクォートクラスターと、`२४×७` / `7:00-9:00` のような数値/時刻範囲のラン。
+- タイ語/ラオス語/クメール語/ミャンマー語を含む東南アジアスクリプトや混在テキストでは、span probe より `Range` ベースのコーパス診断を信用すること。span 単位はそこで行分割を擾乱し得る。
+- かつての Chrome の混在アプリ `710px` ソフトハイフンミスは、選択されたソフトハイフン改行を SHY 境界で保つようにしてから再び正確になった。混在アプリテキストはリグレッションのカナリアとして残し、抽出器のひとつの視点だけから SHY 後のグラフェムパッキングを再導入しないこと。
+- Safari の `Range` ベースの probe 抽出は、実際の DOM 高と `span` 抽出器が正確であっても、URL クエリテキスト (`...path?q`) 上で過剰に進むことがある。Safari の URL/クエリ probe ミスでエンジンを変更する前に、`--method=span` でクロスチェックすること。
+- 現行のコーパスの教訓を念頭に置くこと:
+  - タイ語: 文脈付き ASCII クォートは本物の keep だった
+  - クメール語: クリーンなソーステキスト由来の明示的なゼロ幅セパレータは有用な信号
+  - ラオス語: ラップされた生の法律テキストは悪いカナリアだったので却下された
+  - ミャンマー語: 句読点/medial グルーの keep は残ったが、より広い Chrome 限定の修正は残らなかった
+  - 日本語: 仮名の繰り返し記号は CJK の行頭禁則
+  - 中国語: 残っている広範な Chrome ポジティブ領域は本物であり、もう一つの句読点バグとは明らかには言えない
+- コーパス診断は、別のローカル line-walker からではなく、`layoutWithLines()` から候補行を導出すべきである。これにより、ホットパスと診断パスの間で SHY や将来のカスタム改行のドリフトを避けられる。
+- 現行の行フィット許容差は Chromium/Gecko で `0.005`、Safari/WebKit で `1/64` である。この引き上げは残っているアラビア語のファイン幅領域によって正当化されたもので、解決済みのブラウザコーパスや英語長文のカナリアを動かさなかった。
+- ブラウザのスイープ手法やメインのテキストエンジンの挙動 (`src/analysis.ts`, `src/measurement.ts`, `src/line-break.ts`, `src/layout.ts`, `src/bidi.ts`, `pages/accuracy.ts`) を変更する diff の場合は、`accuracy/chrome.json`, `accuracy/safari.json`, `accuracy/firefox.json` をリフレッシュする。
+- コーパススイープ手法や長文カナリアの挙動が、ダッシュボードのカウントを動かす形で変わった場合は、`corpora/chrome-step10.json` をリフレッシュし、その後 `corpora/dashboard.json` を再生成する。
+- コーパススイープ手法や長文カナリアの挙動が、ダッシュボードのカウントを動かす形で変わった場合は、`corpora/chrome-step10.json` とともに `corpora/safari-step10.json` もリフレッシュする。
