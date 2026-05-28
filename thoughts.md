@@ -1,17 +1,17 @@
-## Personal Thoughts, In No Particular Order
+## 個人的な雑感 (順不同)
 
-- My personal desire is to see end-developers being empowered to make all the layouts that makes UI more expressive, without sacrificing maintainability & performance, and without having to wait for permissions from the web committee. The current UI stereotypes across all platforms has been either:
-  - a landing-page with few, floating text chunks, powered by GL
-  - a blog article with mostly just text and no possible interactivity
-  - a SaaS dashboard
-  - a mobile UI with 2-3 rectangles' worth of UI
+- 個人的な願いとして、エンドデベロッパーが UI をもっと表現豊かにするためのあらゆるレイアウトを、保守性とパフォーマンスを犠牲にせず、しかも Web 委員会の許可待ちもなしに自由に作れるようになってほしい。今のところ、あらゆるプラットフォームで見かける UI のステレオタイプはだいたい次のどれか:
+  - GL で動く、わずかな浮遊テキスト塊だけのランディングページ
+  - ほぼテキストだけでインタラクションのないブログ記事
+  - SaaS のダッシュボード
+  - 矩形 2〜3 個分しか UI のないモバイル画面
 
-- If you dig deep enough, 80% of CSS spec could be avoided if userland had better control over text. The paradigm of web layout shoves our text into a single-direction black hole, and to crawl those text metrics back incurs huge maintenance and performance overhead (ask AI about this).
+- 深く掘り下げると、ユーザーランドがテキストをもっと制御できれば、CSS 仕様の 8 割は不要になる。Web レイアウトのパラダイムはテキストを一方向のブラックホールに押し込んでしまっていて、そこからテキストのメトリクスを掘り起こすには、保守とパフォーマンスの両面で巨大なオーバーヘッドがかかる (AI に聞いてみるといい)。
 
-- The convenience angle of CSS is gradually being eroded by the fact that:
-  - the more CSS expressivity we bake in, the worse the CSS perf becomes (against all wishes from everyone on the committee and userland), and "programming" in CSS (as opposed to just "declare things" in CSS) is something very few desire
-  - AI alleviates the need of having more hard-coded CSS configs, which are becoming more dictionary-like rather compositional.
+- CSS の「便利さ」という側面は、次の事実によって徐々に削られている:
+  - CSS に表現力を盛り込めば盛り込むほど、CSS のパフォーマンスは悪化する (委員会もユーザーランドも誰もそれを望んでいないのに)。そして CSS で「プログラミング」する (「宣言する」のではなく) ことを望む人はごくわずか
+  - AI のおかげで、ハードコードされた CSS 設定をたくさん用意する必要も薄れている。そうした設定は構成可能というよりむしろ辞書的になってきている
 
-- It's very hard to have new competing web browser implementations, because the specs are gigantic, and many engines (grassroot efforts, gamers-driven rewrites, languages-driven rewrites, etc.) eagerly chase & premature perf improvements before realizing that the specs, often written decades ago and disregarding modern perf & feature needs,  throw a wrench in those architectures. As a first approximation, UI performance & developer ergonomics _cannot_ possibly have an order of magnitude improvement, because the bottleneck is in the specs themselves. The only way to circumvent this is to bring more capabilities to userland, in a hope to stop the spec from over-growing even more in the future. Stopping spec complexity is something every browser vendor can agree on (and ironically, sometime for completely opposing reasons).
+- 新しく競合する Web ブラウザ実装を立ち上げるのは非常に難しい。仕様が巨大すぎるし、多くのエンジン (草の根、ゲーマー主導の書き直し、言語主導の書き直しなど) は、しばしば数十年前に書かれて現代のパフォーマンスや機能要件を考慮していない仕様自体がそうしたアーキテクチャの足を引っ張ると気づく前に、性急にパフォーマンス改善を追いかけてしまう。第一近似として、UI のパフォーマンスと開発者体験は桁違いの改善は _不可能_ だ。なぜならボトルネックは仕様自体にあるから。これを回避する唯一の道は、ユーザーランドにもっと能力を渡し、将来仕様がこれ以上肥大化しないよう食い止めることだ。仕様の複雑化を止めることは、あらゆるブラウザベンダーが合意できる数少ない事項である (皮肉なことに、まったく正反対の理由から合意することもある)。
 
-- The cost of any verifiable software will trend toward 0
+- 検証可能なソフトウェアのコストは 0 に近づいていく
