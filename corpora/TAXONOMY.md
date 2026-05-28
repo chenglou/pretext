@@ -1,181 +1,179 @@
 # Miss Taxonomy
 
-Compact taxonomy for interpreting canary mismatches.
+カナリア不一致を解釈するためのコンパクトな分類体系である。
 
-Use this when a corpus or probe disagrees with the engine and the question is
-"what class of problem is this?" rather than "what width missed?"
+corpus やプローブがエンジンと食い違ったときに「これはどの幅で外したか?」ではなく
+「これはどのクラスの問題か?」を判断するために使用する。
 
-`RESEARCH.md` stays the detailed exploration log.
-`corpora/STATUS.md` stays the current scorecard.
-This file is the shared vocabulary for deciding what kind of work should happen next.
+`RESEARCH.md` は詳細な調査ログを保持する。
+`corpora/STATUS.md` は現在のスコアカードを保持する。
+このファイルは、次にどの種類の作業を行うべきかを決めるための共有語彙である。
 
-Useful command:
+便利なコマンド:
 
 ```sh
 bun run corpus-taxonomy --id=ja-rashomon 330 450
 ```
 
-That runner is intentionally rough. It now batches widths inside one corpus page load
-and is there to turn repeated browser diagnostics into a steering summary, not to
-replace manual judgment on a new mismatch.
+このランナーは意図的に粗い。1 回の corpus ページ読み込みの中で幅をバッチ処理するようになっており、繰り返しのブラウザ診断を方針サマリにまとめるためのものであって、新しい不一致に対する人間の判断を置き換えるものではない。
 
 ## Categories
 
 ### `corpus-dirty`
 
-The source text itself is not a trustworthy `white-space: normal` canary.
+ソーステキスト自体が信頼できる `white-space: normal` カナリアになっていない。
 
-Typical signs:
-- wrapped print lines
-- header/footer/navigation scaffolding
-- editorial bracket notes
-- obvious `space + punctuation` typos
-- quote-before-punctuation artifacts introduced by scraping
+典型的な兆候:
+- 印刷物の改行が折り返されたまま入っている
+- ヘッダ・フッタ・ナビゲーションの足場が残っている
+- 編集者の角括弧注記が混入している
+- 明らかな `space + punctuation` のタイポ
+- スクレイピングによって混入した「句読点の直前のクオート」アーティファクト
 
-Typical response:
-- clean the corpus
-- or reject it entirely
+典型的な対応:
+- corpus をクリーンアップする
+- もしくは丸ごと却下する
 
-Examples:
-- the rejected Lao raw-law source
-- Arabic quote-before-punctuation Wikisource artifacts
+例:
+- 却下したラオス語の生法令ソース
+- アラビア語の「句読点直前クオート」Wikisource アーティファクト
 
 ### `normalization`
 
-The engine and browser disagree because the text model is wrong before line fitting even begins.
+ライン適合が始まる前の段階で、テキストモデルが誤っているためにエンジンとブラウザが食い違っている。
 
-Typical signs:
-- whitespace collapse differences
-- NBSP / NNBSP / WJ / ZWSP / SHY mishandling
-- wrong hard/soft break preservation
+典型的な兆候:
+- 空白の畳み込みに差異がある
+- NBSP / NNBSP / WJ / ZWSP / SHY の扱いが誤っている
+- ハード/ソフトブレイクの保持が誤っている
 
-Typical response:
-- fix preprocessing / break-kind modeling
-- do not patch `layout()`
+典型的な対応:
+- 前処理 / break-kind モデリングを修正する
+- `layout()` にパッチを当ててはならない
 
-Examples:
-- early Gatsby paragraph-newline drift
-- remaining hard-space edge cases if they surface
+例:
+- 初期 Gatsby の段落改行ドリフト
+- 表面化した場合の残存するハードスペースのエッジケース
 
 ### `boundary-discovery`
 
-The candidate break opportunities are wrong or too coarse.
+ブレイク候補が誤っている、もしくは粒度が粗すぎる。
 
-Typical signs:
-- `Intl.Segmenter` output is plausible, but our merged units are not
-- a script needs additional glue / splitting rules around punctuation or marks
-- a canary is fixed by changing segmentation/merge behavior rather than widths
+典型的な兆候:
+- `Intl.Segmenter` の出力はもっともらしいが、こちらでマージしたユニットが正しくない
+- スクリプトが句読点やマーク周辺に追加の glue / 分割ルールを必要とする
+- カナリアが、幅ではなくセグメンテーション/マージ挙動の変更で修正される
 
-Typical response:
-- adjust preprocessing boundaries
-- keep the rule semantic and narrow
+典型的な対応:
+- 前処理の境界を調整する
+- ルールは意味的かつ狭いものに保つ
 
-Examples:
-- Arabic punctuation-plus-mark clusters like `،ٍ`
-- Japanese iteration marks `ゝ / ゞ / ヽ / ヾ`
-- Thai ASCII quote glue
+例:
+- `،ٍ` のようなアラビア語の「句読点 + マーク」クラスタ
+- 日本語の繰り返し記号 `ゝ / ゞ / ヽ / ヾ`
+- タイ語の ASCII クオート glue
 
 ### `glue-policy`
 
-The right raw boundaries exist, but we attach the wrong units together before layout.
+正しい生の境界は存在するが、レイアウト前に誤ったユニット同士を接着してしまっている。
 
-Typical signs:
-- punctuation should stay with the previous word
-- opening quote clusters should stay with the following text
-- non-breaking glue was modeled as ordinary breakable space
+典型的な兆候:
+- 句読点は前の単語に付くべきところ離れている
+- 開きクオートのクラスタは後続テキストに付くべきところ離れている
+- 改行不可の glue が、通常の改行可能スペースとしてモデル化されてしまっている
 
-Typical response:
-- change glue/attachment rules, not measurement
+典型的な対応:
+- glue/アタッチメントのルールを変える。測定は変えない
 
-Examples:
-- Arabic no-space punctuation clusters like `فيقول:وعليك`
-- Myanmar medial glue with `၏`
-- escaped quote clusters in mixed app text
+例:
+- `فيقول:وعليك` のようなアラビア語のスペース無し句読点クラスタ
+- `၏` を含むミャンマー語の medial glue
+- 混合アプリテキスト中のエスケープされたクオートクラスタ
 
 ### `edge-fit`
 
-The browser keeps or drops one more short phrase at the line edge, usually by less than a pixel.
+ブラウザは行末の短いフレーズを 1 つだけ余分に保持するか、もしくは 1 つだけ落とす。差はたいてい 1 ピクセル未満である。
 
-Typical signs:
-- candidate line width differs from `maxWidth` by only a tiny amount
-- all remaining misses are one-line positive/negative drift
-- line text differs only at the final kept/dropped phrase
+典型的な兆候:
+- 候補ラインの幅が `maxWidth` とごくわずかしか違わない
+- 残った不一致がすべて 1 行ぶんの正負ドリフトである
+- ライン本文は、最後に保持/破棄されたフレーズだけが異なる
 
-Typical response:
-- inspect browser-specific tolerance first
-- avoid broad heuristics unless the class repeats across corpora
+典型的な対応:
+- まずはブラウザ固有の許容値を調べる
+- そのクラスが複数の corpus で繰り返し出るのでなければ、広いヒューリスティックは避ける
 
-Examples:
-- remaining Arabic fine-width field after the coarse corpus was cleaned
-- small Japanese and Thai one-line misses
+例:
+- 粗い corpus をクリーンアップした後に残ったアラビア語の細かい幅領域
+- 日本語およびタイ語の小さな 1 行ミス
 
 ### `shaping-context`
 
-The chosen line break changes shaping or glyph metrics enough that a width-independent segment sum stops being exact.
+選択された改行位置が shaping やグリフメトリクスを十分に変えてしまい、幅に依存しないセグメント和が厳密でなくなる。
 
-Typical signs:
-- isolated-segment sums diverge from browser behavior even after good preprocessing
-- pair/local corrections do not help
-- a miss is stable across clean corpora and fonts for the same script class
+典型的な兆候:
+- 良い前処理を行った後でも、独立セグメント和がブラウザ挙動と乖離する
+- ペア/局所補正が効かない
+- 同じスクリプトクラスについて、クリーンな corpus とフォントを通じてミスが安定して残る
 
-Typical response:
-- do not keep adding glue rules blindly
-- either accept an approximate envelope or move toward a richer shaping-aware model
+典型的な対応:
+- glue ルールを盲目的に追加し続けない
+- 近似的な envelope を受け入れるか、もしくは shaping を意識したよりリッチなモデルへ移行する
 
-Examples:
-- the rejected larger Arabic shaping experiments
-- any future stable cursive-script wall that survives corpus cleanup
+例:
+- 却下されたより大きなアラビア語 shaping 実験
+- corpus クリーンアップ後も生き残る、将来的に安定した cursive スクリプトの壁
 
 ### `font-mismatch`
 
-The engine and browser are effectively measuring different fonts or different font-resolution behavior.
+エンジンとブラウザが、実質的に異なるフォント、もしくは異なるフォント解決挙動で測定している。
 
-Typical signs:
-- only one font stack misses
-- named fonts and `system-ui` disagree
-- cross-font matrix shows one family regressing while others stay exact
+典型的な兆候:
+- 1 つのフォントスタックでのみミスが出る
+- 名前付きフォントと `system-ui` で食い違う
+- クロスフォントマトリクスで 1 つのファミリだけがリグレッションし、他は厳密なまま
 
-Typical response:
-- verify the exact font stack first
-- avoid script heuristics until the font story is clean
+典型的な対応:
+- まず正確なフォントスタックを検証する
+- フォント側の話が片付くまで、スクリプトヒューリスティックは避ける
 
-Examples:
-- historical `system-ui` mismatch
-- sampled Myanmar miss on `Myanmar Sangam MN`
+例:
+- 過去の `system-ui` 不一致
+- `Myanmar Sangam MN` でサンプルされたミャンマー語ミス
 
 ### `diagnostic-sensitivity`
 
-The mismatch may be partly in the probe, extractor, or environment rather than the engine.
+不一致の一部が、エンジンではなくプローブ・抽出器・環境側にある可能性がある。
 
-Typical signs:
-- `span` vs `range` extractors disagree
-- a short isolated probe does not reproduce the corpus mismatch
-- mixed-display or mixed-zoom runs disagree
+典型的な兆候:
+- `span` 抽出器と `range` 抽出器が食い違う
+- 短い孤立プローブが corpus 不一致を再現しない
+- 混合ディスプレイや混合ズームの実行で結果が食い違う
 
-Typical response:
-- re-run with explicit extractor/method/environment
-- do not change the engine until the probe is trustworthy
+典型的な対応:
+- 抽出器/メソッド/環境を明示して再実行する
+- プローブが信頼できるようになるまで、エンジンを変えない
 
-Examples:
-- former mixed-app `710px` soft-hyphen case
-- old Arabic span-probe drift before the RTL `Range` path
+例:
+- かつての混合アプリ `710px` ソフトハイフン事例
+- RTL `Range` パス導入前の、古いアラビア語 span プローブドリフト
 
 ## Steering Rules
 
-When a new mismatch shows up:
+新しい不一致が出てきたとき:
 
-1. Rule out `corpus-dirty` and `diagnostic-sensitivity`.
-2. If widths are obviously tiny-edge cases, classify as `edge-fit`.
-3. If a semantic merge/split fixes multiple widths cleanly, classify as `boundary-discovery` or `glue-policy`.
-4. If repeated clean corpora still miss after good preprocessing, escalate to `shaping-context`.
-5. If only one font family or fallback stack misses, classify as `font-mismatch`.
+1. まず `corpus-dirty` と `diagnostic-sensitivity` を除外する。
+2. 幅が明らかに微小エッジケースなら、`edge-fit` に分類する。
+3. 意味的なマージ/分割が複数の幅をきれいに修正するなら、`boundary-discovery` または `glue-policy` に分類する。
+4. 良い前処理を行った後でもクリーンな corpus が繰り返し外すなら、`shaping-context` に格上げする。
+5. ミスが 1 つのフォントファミリまたはフォールバックスタックのみなら、`font-mismatch` に分類する。
 
 ## Current Frontier
 
-The main current steering classes are:
-- Japanese: mostly `edge-fit` plus some `shaping-context`
-- Myanmar: mostly `boundary-discovery` / `glue-policy`, with some remaining local disagreement that is not yet a safe keep
-- Mixed app text: currently exact again; keep as a product-shaped regression canary
-- Arabic long-form: coarse field is clean; remaining fine field is mostly `edge-fit`
-- Chinese: mostly `glue-policy` around punctuation/quote clusters, plus some Chromium-only edge behavior
-- Urdu: currently behaving more like `boundary-discovery` / shaping-sensitive break policy than dirty data or simple edge-fit
+現在の主要な分類クラスは以下である:
+- 日本語: ほとんどが `edge-fit`、加えて一部 `shaping-context`
+- ミャンマー語: ほとんどが `boundary-discovery` / `glue-policy`、加えて安全に keep にはまだできない局所的な不一致が一部残る
+- 混合アプリテキスト: 現在は再び厳密。プロダクト形状のリグレッションカナリアとして保持する
+- アラビア語ロングフォーム: 粗い領域はクリーン。残った細かい領域はほとんどが `edge-fit`
+- 中国語: ほとんどが句読点/クオートクラスタ周辺の `glue-policy`、加えて一部 Chromium 限定のエッジ挙動
+- ウルドゥー語: 現在のところ、汚いデータや単純な `edge-fit` というよりは `boundary-discovery` / shaping に敏感な break ポリシーに近い挙動を示している
