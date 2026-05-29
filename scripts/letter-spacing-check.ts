@@ -1,4 +1,6 @@
 import { type ChildProcess } from 'node:child_process'
+import { mkdirSync, writeFileSync } from 'node:fs'
+import { dirname } from 'node:path'
 import {
   acquireBrowserAutomationLock,
   createBrowserSession,
@@ -9,13 +11,11 @@ import {
   type BrowserKind,
 } from './browser-automation.ts'
 import { startPostedReportServer } from './report-server.ts'
-import { KEEP_ALL_ORACLE_CASES, type ProbeOracleCase } from '../src/test-data.ts'
+import { LETTER_SPACING_ORACLE_CASES, type LetterSpacingOracleCase } from '../src/test-data.ts'
 
 type ProbeReport = {
   status: 'ready' | 'error'
   requestId?: string
-  browserLineMethod?: 'range' | 'span'
-  width?: number
   predictedHeight?: number
   actualHeight?: number
   diffPx?: number
@@ -30,6 +30,53 @@ type ProbeReport = {
   } | null
   extractorSensitivity?: string | null
   message?: string
+}
+
+type OracleResult = {
+  browser: AutomationBrowserKind
+  label: string
+  text: string
+  width: number
+  font: string
+  lineHeight: number
+  letterSpacing: number
+  whiteSpace: 'normal' | 'pre-wrap'
+  wordBreak: 'normal' | 'keep-all'
+  dir: 'ltr' | 'rtl'
+  lang: string
+  method: 'range' | 'span'
+  status: ProbeReport['status']
+  predictedHeight: number | null
+  actualHeight: number | null
+  diffPx: number | null
+  predictedLineCount: number | null
+  browserLineCount: number | null
+  geometryMatches: boolean
+  firstBreakMismatch: ProbeReport['firstBreakMismatch']
+  extractorSensitivity: string | null
+  message: string | null
+}
+
+type OracleSnapshot = {
+  generatedAt: string
+  browsers: AutomationBrowserKind[]
+  total: number
+  geometryMatchCount: number
+  geometryMismatchCount: number
+  firstBreakMismatchCount: number
+  cases: Array<{
+    label: string
+    width: number
+    font: string
+    lineHeight: number
+    letterSpacing: number
+    whiteSpace: 'normal' | 'pre-wrap'
+    wordBreak: 'normal' | 'keep-all'
+    dir: 'ltr' | 'rtl'
+    lang: string
+    method: 'range' | 'span'
+  }>
+  results: OracleResult[]
 }
 
 type ProbeBatchReport = {
@@ -77,8 +124,26 @@ function parseBrowsers(value: string | null): AutomationBrowserKind[] {
 const requestedPort = parseNumberFlag('port', 0)
 const browsers = parseBrowsers(parseStringFlag('browser'))
 const timeoutMs = parseNumberFlag('timeout', 60_000)
+const output = parseStringFlag('output')
 
-function printCaseResult(browser: AutomationBrowserKind, testCase: ProbeOracleCase, report: ProbeReport): void {
+function materializeCase(testCase: LetterSpacingOracleCase): OracleSnapshot['cases'][number] & { text: string } {
+  const dir = testCase.dir ?? 'ltr'
+  return {
+    label: testCase.label,
+    text: testCase.text,
+    width: testCase.width,
+    font: testCase.font,
+    lineHeight: testCase.lineHeight,
+    letterSpacing: testCase.letterSpacing,
+    whiteSpace: testCase.whiteSpace ?? 'normal',
+    wordBreak: testCase.wordBreak ?? 'normal',
+    dir,
+    lang: testCase.lang ?? (dir === 'rtl' ? 'ar' : 'en'),
+    method: testCase.method ?? 'range',
+  }
+}
+
+function printCaseResult(browser: AutomationBrowserKind, testCase: LetterSpacingOracleCase, report: ProbeReport): void {
   if (report.status === 'error') {
     console.log(`${browser} | ${testCase.label}: error: ${report.message ?? 'unknown error'}`)
     return
@@ -108,25 +173,39 @@ function reportIsExact(report: ProbeReport): boolean {
     report.status === 'ready' &&
     report.diffPx === 0 &&
     report.predictedLineCount === report.browserLineCount &&
-    report.predictedHeight === report.actualHeight &&
-    report.firstBreakMismatch === null
+    report.predictedHeight === report.actualHeight
   )
 }
 
-function caseRunsInBrowser(testCase: ProbeOracleCase, browser: AutomationBrowserKind): boolean {
-  return testCase.browsers === undefined || testCase.browsers.includes(browser)
+function toOracleResult(browser: AutomationBrowserKind, testCase: LetterSpacingOracleCase, report: ProbeReport): OracleResult {
+  const materialized = materializeCase(testCase)
+  const geometryMatches = reportIsExact(report)
+  return {
+    browser,
+    ...materialized,
+    status: report.status,
+    predictedHeight: report.predictedHeight ?? null,
+    actualHeight: report.actualHeight ?? null,
+    diffPx: report.diffPx ?? null,
+    predictedLineCount: report.predictedLineCount ?? null,
+    browserLineCount: report.browserLineCount ?? null,
+    geometryMatches,
+    firstBreakMismatch: report.firstBreakMismatch ?? null,
+    extractorSensitivity: report.extractorSensitivity ?? null,
+    message: report.message ?? null,
+  }
 }
 
-async function runBrowser(browser: AutomationBrowserKind, port: number): Promise<boolean> {
+async function runBrowser(browser: AutomationBrowserKind, port: number): Promise<OracleResult[]> {
   const lock = await acquireBrowserAutomationLock(browser)
   const reportBrowser: BrowserKind | null = browser === 'firefox' ? null : browser
   const session = reportBrowser === null ? null : createBrowserSession(reportBrowser)
   let serverProcess: ChildProcess | null = null
-  let ok = true
+  const results: OracleResult[] = []
 
   try {
     if (session === null || reportBrowser === null) {
-      throw new Error('Firefox is not currently supported for keep-all oracle checks')
+      throw new Error('Firefox is not currently supported for letter-spacing oracle checks')
     }
 
     const pageServer = await ensurePageServer(port, '/probe', process.cwd())
@@ -136,7 +215,7 @@ async function runBrowser(browser: AutomationBrowserKind, port: number): Promise
 
     try {
       const url =
-        `${pageServer.baseUrl}/probe?batch=keep-all` +
+        `${pageServer.baseUrl}/probe?batch=letter-spacing` +
         `&requestId=${encodeURIComponent(requestId)}` +
         `&reportEndpoint=${encodeURIComponent(reportServer.endpoint)}`
       const batchReport = await loadPostedReport(
@@ -148,19 +227,18 @@ async function runBrowser(browser: AutomationBrowserKind, port: number): Promise
         timeoutMs,
       )
       if (batchReport.status === 'error') {
-        throw new Error(batchReport.message ?? 'keep-all batch failed')
+        throw new Error(batchReport.message ?? 'letter-spacing batch failed')
       }
 
       const batchResults = batchReport.results ?? []
       const reportsByLabel = new Map(batchResults.map(result => [result.label, result.report]))
-      for (const testCase of KEEP_ALL_ORACLE_CASES) {
-        if (!caseRunsInBrowser(testCase, browser)) continue
+      for (const testCase of LETTER_SPACING_ORACLE_CASES) {
         const report = reportsByLabel.get(testCase.label)
         if (report === undefined) {
-          throw new Error(`Missing keep-all result for ${testCase.label}`)
+          throw new Error(`Missing letter-spacing result for ${testCase.label}`)
         }
         printCaseResult(browser, testCase, report)
-        if (!reportIsExact(report)) ok = false
+        results.push(toOracleResult(browser, testCase, report))
       }
     } finally {
       reportServer.close()
@@ -171,14 +249,38 @@ async function runBrowser(browser: AutomationBrowserKind, port: number): Promise
     lock.release()
   }
 
-  return ok
+  return results
+}
+
+function buildSnapshot(results: OracleResult[]): OracleSnapshot {
+  const geometryMatchCount = results.filter(result => result.geometryMatches).length
+  const firstBreakMismatchCount = results.filter(result => result.firstBreakMismatch !== null).length
+  return {
+    generatedAt: new Date().toISOString(),
+    browsers,
+    total: results.length,
+    geometryMatchCount,
+    geometryMismatchCount: results.length - geometryMatchCount,
+    firstBreakMismatchCount,
+    cases: LETTER_SPACING_ORACLE_CASES.map(testCase => {
+      const { text: _text, ...rest } = materializeCase(testCase)
+      return rest
+    }),
+    results,
+  }
 }
 
 const port = await getAvailablePort(requestedPort === 0 ? null : requestedPort)
-let overallOk = true
+const results: OracleResult[] = []
 for (const browser of browsers) {
-  const browserOk = await runBrowser(browser, port)
-  if (!browserOk) overallOk = false
+  results.push(...await runBrowser(browser, port))
 }
 
-if (!overallOk) process.exitCode = 1
+const snapshot = buildSnapshot(results)
+if (output !== null) {
+  mkdirSync(dirname(output), { recursive: true })
+  writeFileSync(output, `${JSON.stringify(snapshot, null, 2)}\n`, 'utf8')
+  console.log(`wrote ${output}`)
+}
+
+if (snapshot.geometryMismatchCount > 0) process.exitCode = 1

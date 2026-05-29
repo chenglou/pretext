@@ -57,3 +57,384 @@ export const TEXTS = [
 export const SIZES = [12, 14, 15, 16, 18, 20, 24, 28] as const
 
 export const WIDTHS = [150, 200, 250, 300, 350, 400, 500, 600] as const
+
+export type ProbeOracleCase = {
+  label: string
+  text: string
+  width: number
+  font: string
+  lineHeight: number
+  letterSpacing?: number
+  whiteSpace?: 'normal' | 'pre-wrap'
+  wordBreak?: 'normal' | 'keep-all'
+  dir?: 'ltr' | 'rtl'
+  lang?: string
+  method?: 'range' | 'span'
+  browsers?: readonly ('chrome' | 'safari' | 'firefox')[]
+}
+
+export type LetterSpacingOracleCase = ProbeOracleCase & {
+  letterSpacing: number
+}
+
+export const LETTER_SPACING_ORACLE_CASES: readonly LetterSpacingOracleCase[] = [
+  {
+    label: 'latin segment gaps',
+    text: 'Alpha beta gamma',
+    width: 170,
+    font: '18px serif',
+    lineHeight: 32,
+    letterSpacing: 1.5,
+  },
+  {
+    label: 'negative tracking',
+    text: 'The quick brown fox jumps',
+    width: 150,
+    font: '18px serif',
+    lineHeight: 32,
+    letterSpacing: -0.8,
+  },
+  {
+    label: 'overflow grapheme breaks',
+    text: 'Supercalifragilistic',
+    width: 135,
+    font: '18px serif',
+    lineHeight: 32,
+    letterSpacing: 2,
+  },
+  {
+    label: 'latin trailing fit gap',
+    text: 'abcd',
+    width: 120,
+    font: '18px serif',
+    lineHeight: 32,
+    letterSpacing: 1.5,
+  },
+  {
+    label: 'combining graphemes',
+    text: 'Cafe\u0301 naive',
+    width: 120,
+    font: '18px serif',
+    lineHeight: 32,
+    letterSpacing: 1.5,
+    method: 'span',
+  },
+  {
+    label: 'cjk boundaries',
+    text: '春天到了中文测试',
+    width: 210,
+    font: '20px serif',
+    lineHeight: 34,
+    letterSpacing: 2,
+    lang: 'zh',
+  },
+  {
+    label: 'emoji graphemes',
+    text: 'A😀🎉B wraps',
+    width: 155,
+    font: '20px serif',
+    lineHeight: 34,
+    letterSpacing: 1.5,
+  },
+  {
+    label: 'digits and punctuation',
+    text: '24×7, 7:00-9:00?',
+    width: 175,
+    font: '18px serif',
+    lineHeight: 32,
+    letterSpacing: 1.25,
+  },
+  {
+    label: 'arabic rtl punctuation',
+    text: 'مرحبا، عالم؟',
+    width: 150,
+    font: '20px serif',
+    lineHeight: 34,
+    letterSpacing: 1,
+    dir: 'rtl',
+    lang: 'ar',
+  },
+  {
+    label: 'mixed bidi trailing fit gap',
+    text: 'abc אבג def',
+    width: 110,
+    font: '18px serif',
+    lineHeight: 32,
+    letterSpacing: 1.5,
+    lang: 'he',
+  },
+  {
+    label: 'pre-wrap hard breaks',
+    text: 'foo\nbar baz',
+    width: 170,
+    font: '18px serif',
+    lineHeight: 32,
+    letterSpacing: 2,
+    whiteSpace: 'pre-wrap',
+  },
+  {
+    label: 'pre-wrap preserved spaces',
+    text: 'foo    bar',
+    width: 150,
+    font: '18px serif',
+    lineHeight: 32,
+    letterSpacing: 1.25,
+    whiteSpace: 'pre-wrap',
+    method: 'span',
+  },
+  {
+    label: 'soft hyphen',
+    text: 'trans\u00ADatlantic transit',
+    width: 150,
+    font: '18px serif',
+    lineHeight: 32,
+    letterSpacing: 1.5,
+  },
+  {
+    label: 'keep-all mixed cjk',
+    text: '日本語foo-bar',
+    width: 170,
+    font: '18px serif',
+    lineHeight: 32,
+    letterSpacing: 1,
+    wordBreak: 'keep-all',
+    lang: 'ja',
+  },
+]
+
+export const PRE_WRAP_ORACLE_CASES: readonly ProbeOracleCase[] = [
+  {
+    label: 'hanging spaces',
+    text: 'foo   bar',
+    width: 120,
+    font: '18px serif',
+    lineHeight: 32,
+  },
+  {
+    label: 'hard break',
+    text: 'a\nb',
+    width: 220,
+    font: '18px serif',
+    lineHeight: 32,
+  },
+  {
+    label: 'double hard break',
+    text: '\n\n',
+    width: 220,
+    font: '18px serif',
+    lineHeight: 32,
+  },
+  {
+    label: 'trailing final break',
+    text: 'a\n',
+    width: 220,
+    font: '18px serif',
+    lineHeight: 32,
+  },
+  {
+    label: 'leading spaces after break',
+    text: 'foo\n  bar',
+    width: 220,
+    font: '18px serif',
+    lineHeight: 32,
+  },
+  {
+    label: 'whitespace-only middle line',
+    text: 'foo\n  \nbar',
+    width: 220,
+    font: '18px serif',
+    lineHeight: 32,
+  },
+  {
+    label: 'spaces before hard break',
+    text: 'foo  \nbar',
+    width: 220,
+    font: '18px serif',
+    lineHeight: 32,
+  },
+  {
+    label: 'tab before hard break',
+    text: 'foo\t\nbar',
+    width: 220,
+    font: '18px serif',
+    lineHeight: 32,
+  },
+  {
+    label: 'crlf normalization',
+    text: 'foo\r\n  bar',
+    width: 220,
+    font: '18px serif',
+    lineHeight: 32,
+  },
+  {
+    label: 'preserved space run',
+    text: 'foo    bar',
+    width: 126,
+    font: '18px serif',
+    lineHeight: 32,
+  },
+  {
+    label: 'mixed script indent',
+    text: 'AGI 春天到了\n  بدأت الرحلة 🚀',
+    width: 260,
+    font: '18px "Helvetica Neue", Arial, sans-serif',
+    lineHeight: 30,
+    dir: 'ltr',
+    lang: 'en',
+  },
+  {
+    label: 'rtl indent',
+    text: 'مرحبا\n  بالعالم',
+    width: 220,
+    font: '20px "Geeza Pro", "Arial", serif',
+    lineHeight: 34,
+    dir: 'rtl',
+    lang: 'ar',
+  },
+  {
+    label: 'default tab stops',
+    text: 'a\tb',
+    width: 120,
+    font: '18px serif',
+    lineHeight: 32,
+  },
+  {
+    label: 'double tabs',
+    text: 'a\t\tb',
+    width: 130,
+    font: '18px serif',
+    lineHeight: 32,
+  },
+  {
+    label: 'tab after hard break',
+    text: 'foo\n\tbar',
+    width: 220,
+    font: '18px serif',
+    lineHeight: 32,
+  },
+]
+
+export const SYMBOL_ORACLE_CASES: readonly ProbeOracleCase[] = [
+  {
+    label: 'ascii symbols inside long words',
+    text: 'aaaaaaaaaaaaaaaa!bbbbbbbbbbbbbbbb aaaaaaaaaaaaaaaa/bbbbbbbbbbbbbbbb aaaaaaaaaaaaaaaa|bbbbbbbbbbbbbbbb',
+    width: 150,
+    font: '16px Helvetica',
+    lineHeight: 19,
+    method: 'span',
+    browsers: ['chrome', 'safari'],
+  },
+  {
+    label: 'unicode symbols inside long words',
+    text: 'aaaaaaaaaaaaaaaa♂bbbbbbbbbbbbbbbb aaaaaaaaaaaaaaaa╥bbbbbbbbbbbbbbbb aaaaaaaaaaaaaaaa⁄bbbbbbbbbbbbbbbb',
+    width: 150,
+    font: '16px Helvetica',
+    lineHeight: 19,
+    method: 'span',
+    browsers: ['chrome', 'safari'],
+  },
+  {
+    label: 'browser break symbols stay breakable',
+    text: 'aaaaaaaaaaaaaaaa?bbbbbbbbbbbbbbbb aaaaaaaaaaaaaaaa-bbbbbbbbbbbbbbbb aaaaaaaaaaaaaaaa🙂bbbbbbbbbbbbbbbb',
+    width: 150,
+    font: '16px Helvetica',
+    lineHeight: 19,
+    method: 'span',
+    browsers: ['chrome', 'safari'],
+  },
+]
+
+export const KEEP_ALL_ORACLE_CASES: readonly ProbeOracleCase[] = [
+  {
+    label: 'mixed latin plus cjk',
+    text: 'A 中文测试',
+    width: 140,
+    font: '18px serif',
+    lineHeight: 32,
+    lang: 'zh',
+  },
+  {
+    label: 'cjk punctuation boundary',
+    text: '中文，测试。下一句。',
+    width: 190,
+    font: '18px serif',
+    lineHeight: 32,
+    lang: 'zh',
+  },
+  {
+    label: 'safari ideographic punctuation keep-all boundary',
+    text: 'foo。bar日本語',
+    width: 120,
+    font: '18px serif',
+    lineHeight: 32,
+    lang: 'ja',
+    method: 'span',
+    browsers: ['safari'],
+  },
+  {
+    label: 'korean no-space word',
+    text: '한국어테스트 테스트입니다',
+    width: 220,
+    font: '20px serif',
+    lineHeight: 34,
+    lang: 'ko',
+  },
+  {
+    label: 'mixed no-space cjk plus latin narrow',
+    text: '日本語foo-bar',
+    width: 110,
+    font: '18px serif',
+    lineHeight: 32,
+    lang: 'ja',
+  },
+  {
+    label: 'cjk leading latin hyphen boundary',
+    text: '日本語foo-bar',
+    width: 180,
+    font: '18px serif',
+    lineHeight: 32,
+    lang: 'ja',
+  },
+  {
+    label: 'mixed no-space latin plus cjk run',
+    text: 'abc日本語',
+    width: 140,
+    font: '18px serif',
+    lineHeight: 32,
+    lang: 'ja',
+  },
+  {
+    label: 'mixed no-space dotted latin plus cjk run',
+    text: 'foo.bar日本語',
+    width: 140,
+    font: '18px serif',
+    lineHeight: 32,
+    lang: 'ja',
+    method: 'range',
+    browsers: ['chrome'],
+  },
+  {
+    label: 'mixed no-space numeric plus cjk run',
+    text: '500円テスト',
+    width: 140,
+    font: '18px serif',
+    lineHeight: 32,
+    lang: 'ja',
+  },
+  {
+    label: 'mixed no-space hyphen boundary',
+    text: 'foo-bar日本語',
+    width: 180,
+    font: '18px serif',
+    lineHeight: 32,
+    lang: 'ja',
+  },
+  {
+    label: 'mixed no-space em dash boundary',
+    text: 'foo\u2014bar日本語',
+    width: 160,
+    font: '18px serif',
+    lineHeight: 32,
+    lang: 'ja',
+  },
+]

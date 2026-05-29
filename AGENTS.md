@@ -1,8 +1,14 @@
 ## Pretext
 
-Use `README.md` as the public source of truth for API examples and user-facing limitations. See `DEVELOPMENT.md` for the current command surface and the canonical dashboards/snapshots to consult before making browser-accuracy or benchmark claims. Use `TODO.md` for the current priorities.
+Use `README.md` as the public source of truth for API examples and user-facing limitations. See `DEVELOPMENT.md` for the current command surface and the canonical dashboards/snapshots to consult before making browser-accuracy or benchmark claims. Use `TODO.md` for the current priorities. **Every time before you commit, ensure you've synced the docs**.
 Do not change the existing tone of the documents unless they're wrong.
 Do `bun install` if you're in a fresh worktree.
+
+**Important:** after you're done with a feature, and have enough holistic vision, make sure you do a pass over all the files again and see if you can simplify anything. Don't change things for the sake of, but if there are simplifications, YELL **I DID A HOLISTIC PASS AND FOUND SIMPLIFICATIONS** with a brief summary.
+
+**Important:** do NOT monkey-patch. If you found yourself solving the symptom instead of the root cause, reconsider and do a proper fix, then YELL **I SOLVED THE ROOT CAUSE NOT THE SYMPTOM** with a brief summary.
+
+Changelog updates guideline: don't add dev-facing notes, only user-facing ones. Refer to closed PR numbers.
 
 ### Commands
 
@@ -93,7 +99,7 @@ See `DEVELOPMENT.md` for the current command surface and packaging/release check
 - URL-like runs such as `https://...` / `www...` are currently modeled as two breakable preprocessing units when a query exists: the path through the query introducer (`?`), then the query string. This is intentionally narrow and exists to stop obviously bad mid-path URL breaks without forcing the whole query string to fragment character-by-character.
 - Mixed app text also pulled in two more keep-worthy preprocessing rules: contextual escaped quote clusters like `\"word\"`, and numeric/time-range runs like `२४×७` / `7:00-9:00`.
 - For Southeast Asian scripts or mixed text containing Thai/Lao/Khmer/Myanmar, trust the `Range`-based corpus diagnostics over span-probing; span units can perturb line breaking there.
-- The remaining Chrome mixed-app `710px` soft-hyphen miss is extractor-sensitive and not cleanly local. Treat it as paragraph-scale / accumulation-sensitive until a cleaner reproducer appears, and do not patch the engine from only one extractor view.
+- The former Chrome mixed-app `710px` soft-hyphen miss is exact again after keeping chosen soft-hyphen breaks at the SHY boundary. Keep mixed app text as a regression canary, and do not reintroduce post-SHY grapheme packing from only one extractor view.
 - Safari `Range`-based probe extraction can over-advance across URL query text (`...path?q`) even when the real DOM height and the `span` extractor are exact. Cross-check `--method=span` before changing the engine on Safari URL/query probe misses.
 - Keep the current corpus lessons in mind:
   - Thai: contextual ASCII quotes were a real keep
@@ -107,15 +113,3 @@ See `DEVELOPMENT.md` for the current command surface and packaging/release check
 - Refresh `accuracy/chrome.json`, `accuracy/safari.json`, and `accuracy/firefox.json` when a diff changes the browser sweep methodology or the main text engine behavior (`src/analysis.ts`, `src/measurement.ts`, `src/line-break.ts`, `src/layout.ts`, `src/bidi.ts`, or `pages/accuracy.ts`).
 - Refresh `corpora/chrome-step10.json` and then regenerate `corpora/dashboard.json` when the corpus sweep methodology or long-form canary behavior changes in a way that moves the dashboard counts.
 - Refresh `corpora/safari-step10.json` alongside `corpora/chrome-step10.json` when the corpus sweep methodology or long-form canary behavior changes in a way that moves the dashboard counts.
-
-### Open questions
-
-- Decide whether line-fit tolerance should stay as a browser-specific shim or move to runtime calibration alongside emoji correction.
-- If a future Arabic corpus still exposes misses after preprocessing and corpus cleanup, decide whether that needs a richer break-policy model or a truly shaping-aware architecture beyond segment-sum layout.
-- `layoutWithLines()` now returns line boundary cursors (`start` / `end`) in addition to `{ text, width }`; keep that data model useful for future manual reflow work, especially for the richer editorial demos.
-- The dynamic-layout demo is the current real consumer of the rich line API. If a future custom-layout page wants more metadata, make it prove that need there before expanding the rich API again.
-- The rich-text inline flow helper at `@chenglou/pretext/rich-inline` is intentionally narrow. If a future rich-text inline page can be expressed there, prefer extending that helper over bloating the core paragraph API.
-- The browser demos should increasingly dogfood `layoutNextLine()` rather than depending on `layoutWithLines()` for whole-paragraph materialization. That keeps the streaming userland path honest.
-- ASCII fast path could skip some CJK, bidi, and emoji overhead.
-- Benchmark methodology still needs review.
-- Additional CSS configs are still untested: `break-all`, `strict`, `loose`, `anywhere`.

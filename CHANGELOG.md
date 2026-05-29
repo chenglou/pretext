@@ -1,33 +1,61 @@
 # Changelog
 
-## Unreleased
+## 0.0.7 - 2026-05-10
 
 ### Changed
 
-- Documentation now matches the current public API surface more closely, including the line-stats/range rich line APIs and the `@chenglou/pretext/rich-inline` helper for rich-text inline flow.
-
-### Added
-
-- `{ wordBreak: 'keep-all' }` support on `prepare()` / `prepareWithSegments()` for CJK and Hangul text, plus a small standing `keep-all` browser oracle.
-- A checked-in generated Unicode bidi range table with a manual `bun run generate:bidi-data` refresh path.
+- The package now declares itself side-effect-free so bundlers can tree-shake unused entrypoints (#160).
+- `layoutNextLine()` and `layoutNextLineRange()` now avoid redundant chunk lookup in chunk-heavy manual layout paths (#140).
 
 ### Fixed
 
-- Mixed CJK-plus-numeric runs now use cumulative widths when breaking the numeric suffix, matching the browser more closely.
+- `{ wordBreak: 'keep-all' }` now handles no-space mixed Latin, numeric, and CJK text more like browsers.
+- No-space punctuation and symbol chains now stay together for non-ASCII word-like text too, instead of only ASCII words (#169).
+- Opening punctuation such as `¡`, `¿`, German low quotes, and `⸘` now stays with the following word instead of dangling at line end (#165).
+- Numeric prefix/postfix symbols like `$`, `%`, `€`, `+`, `−`, and `°` now stay attached to adjacent text the way browser line breaking does (#105).
+- Soft-hyphen breaks now stay at the soft-hyphen insertion point instead of pulling post-hyphen graphemes onto the broken line (#162).
+- Line geometry now preserves browser-style terminal letter spacing, including rich-inline item boundaries and visible soft-hyphen breaks (#171).
+- Rich-inline item boundaries no longer overflow the requested width after a forced-progress break (#132).
+- The markdown chat demo now drops parsed link URLs unless they resolve to HTTP(S) hrefs (#168).
+- Overlong hyphenated runs now prefer browser-like dash breakpoints before falling back to emergency grapheme breaks (#89).
+
+## 0.0.6 - 2026-04-22
+
+### Added
+
+- Numeric CSS-pixel `letterSpacing` support on `prepare()`, `prepareWithSegments()`, and each existing rich-inline item (#108, #156).
+
+### Fixed
+
+- CJK text followed by opening bracket annotations now wraps like browsers instead of leaving the opening bracket on the previous line (#148).
+
+## 0.0.5 - 2026-04-09
+
+### Added
+
+- Geometry-first rich line helpers for manual layout work: `measureLineStats()`, `measureNaturalWidth()`, `layoutNextLineRange()`, and `materializeLineRange()`.
+- `@chenglou/pretext/rich-inline`, a narrow helper for inline-only rich text, mentions/chips, and browser-like boundary whitespace collapse.
+- `{ wordBreak: 'keep-all' }` support on `prepare()` / `prepareWithSegments()` for CJK and Hangul text.
+- A virtualized markdown chat demo for rich inline text and `pre-wrap` layout.
+
+### Changed
+
+- Prepare-time analysis is more resilient on long mixed-script, CJK, Arabic, repeated-punctuation, and other degenerate inputs.
+
+### Fixed
+
+- Mixed CJK-plus-numeric runs, keep-all mixed-script boundaries, and long breakable runs now stay closer to browser behavior.
 - Rich-path bidi metadata and CJK detection now handle the relevant astral Unicode ranges correctly.
-- The probe page now reports line content end offsets correctly when a line range steps past a hard break omitted from rendered line text.
 
 ## 0.0.4 - 2026-04-02
 
 ### Added
 
 - A justification comparison demo that shows native CSS justification, greedy hyphenation, and a Knuth-Plass-style paragraph layout side by side.
-- Machine-readable status dashboards under `status/dashboard.json` and `corpora/dashboard.json` for tooling and release-time inspection.
 
 ### Changed
 
-- Browser automation and reporting are more robust: batched sweep transport, phase-aware timeout diagnostics, background-safe correctness runs, and unified Firefox accuracy automation.
-- Rich-line benchmark coverage now includes chunk-heavy and long-breakable stress cases, and chunk lookup in the rich path now uses binary search.
+- Rich layout is faster on chunk-heavy and long-breakable text.
 
 ### Fixed
 
@@ -51,8 +79,7 @@
 
 ### Changed
 
-- Safari line breaking now has a clearer browser-specific policy path for narrow soft-hyphen and breakable-run cases.
-- Browser tooling is more stable: fresh per-run page ports, diagnostics derived from the public rich layout API, and a non-watch `bun start` by default.
+- Safari line breaking is more accurate for narrow soft-hyphen and breakable-run cases.
 
 ## 0.0.0 - 2026-03-26
 
@@ -62,4 +89,3 @@ Initial public npm release of `@chenglou/pretext`.
 
 - `prepare()` and `layout()` as the core fast path for DOM-free multiline text height prediction.
 - Rich layout APIs including `prepareWithSegments()`, `layoutWithLines()`, `layoutNextLine()`, and `walkLineRanges()` for custom rendering and manual layout.
-- Browser accuracy, benchmark, and corpus tooling with checked-in snapshots and representative canaries.

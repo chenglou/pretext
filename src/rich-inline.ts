@@ -1,13 +1,14 @@
 import {
-  materializeLineRange,
   measureNaturalWidth,
   prepareWithSegments,
-  type LayoutCursor,
-  type LayoutLineRange,
   type PreparedTextWithSegments,
+  type LayoutCursor,
 } from './layout.js'
 import {
-  layoutNextLineRange as stepPreparedLineRange,
+  buildLineTextFromRange,
+  getLineTextCache,
+} from './line-text.js'
+import {
   type LineBreakCursor,
   stepPreparedLineGeometry,
 } from './line-break.js'
@@ -24,6 +25,7 @@ declare const preparedRichInlineBrand: unique symbol
 export type RichInlineItem = {
   text: string // Raw author text, including any leading/trailing collapsible spaces
   font: string // Canvas font shorthand used to prepare and measure this item
+  letterSpacing?: number // Extra horizontal spacing between graphemes, in CSS px
   break?: 'normal' | 'never' // `never` keeps the item atomic, like a pill or mention chip
   extraWidth?: number // Caller-owned horizontal chrome, e.g. padding + border width
 }
@@ -113,14 +115,16 @@ function isLineStartCursor(cursor: LayoutCursor): boolean {
   return cursor.segmentIndex === 0 && cursor.graphemeIndex === 0
 }
 
-function getCollapsedSpaceWidth(font: string, cache: Map<string, number>): number {
-  const cached = cache.get(font)
+function getCollapsedSpaceWidth(font: string, letterSpacing: number, cache: Map<string, number>): number {
+  const cacheKey = `${font}\u0000${letterSpacing}`
+  const cached = cache.get(cacheKey)
   if (cached !== undefined) return cached
 
-  const joinedWidth = measureNaturalWidth(prepareWithSegments('A A', font))
-  const compactWidth = measureNaturalWidth(prepareWithSegments('AA', font))
+  const options = letterSpacing === 0 ? undefined : { letterSpacing }
+  const joinedWidth = measureNaturalWidth(prepareWithSegments('A A', font, options))
+  const compactWidth = measureNaturalWidth(prepareWithSegments('AA', font, options))
   const collapsedWidth = Math.max(0, joinedWidth - compactWidth)
-  cache.set(font, collapsedWidth)
+  cache.set(cacheKey, collapsedWidth)
   return collapsedWidth
 }
 
@@ -129,12 +133,13 @@ function prepareWholeItemLine(prepared: PreparedTextWithSegments): {
   endSegmentIndex: number
   width: number
 } | null {
-  const line = stepPreparedLineRange(prepared, EMPTY_LAYOUT_CURSOR, Number.POSITIVE_INFINITY)
-  if (line === null) return null
+  const end: LineBreakCursor = { segmentIndex: 0, graphemeIndex: 0 }
+  const width = stepPreparedLineGeometry(prepared, end, Number.POSITIVE_INFINITY)
+  if (width === null) return null
   return {
-    endGraphemeIndex: line.endGraphemeIndex,
-    endSegmentIndex: line.endSegmentIndex,
-    width: line.width,
+    endGraphemeIndex: end.graphemeIndex,
+    endSegmentIndex: end.segmentIndex,
+    width,
   }
 }
 
@@ -158,6 +163,7 @@ export function prepareRichInline(items: RichInlineItem[]): PreparedRichInline {
 
   for (let index = 0; index < items.length; index++) {
     const item = items[index]!
+    const letterSpacing = item.letterSpacing ?? 0
     const hasLeadingWhitespace = LEADING_COLLAPSIBLE_BOUNDARY_RE.test(item.text)
     const hasTrailingWhitespace = TRAILING_COLLAPSIBLE_BOUNDARY_RE.test(item.text)
     const trimmedText = item.text
@@ -166,7 +172,7 @@ export function prepareRichInline(items: RichInlineItem[]): PreparedRichInline {
 
     if (trimmedText.length === 0) {
       if (COLLAPSIBLE_BOUNDARY_RE.test(item.text) && pendingGapWidth === 0) {
-        pendingGapWidth = getCollapsedSpaceWidth(item.font, collapsedSpaceWidthCache)
+        pendingGapWidth = getCollapsedSpaceWidth(item.font, letterSpacing, collapsedSpaceWidthCache)
       }
       continue
     }
@@ -175,12 +181,18 @@ export function prepareRichInline(items: RichInlineItem[]): PreparedRichInline {
       pendingGapWidth > 0
         ? pendingGapWidth
         : hasLeadingWhitespace
-          ? getCollapsedSpaceWidth(item.font, collapsedSpaceWidthCache)
+          ? getCollapsedSpaceWidth(item.font, letterSpacing, collapsedSpaceWidthCache)
           : 0
-    const prepared = prepareWithSegments(trimmedText, item.font)
+    const prepared = prepareWithSegments(
+      trimmedText,
+      item.font,
+      letterSpacing === 0 ? undefined : { letterSpacing },
+    )
     const wholeLine = prepareWholeItemLine(prepared)
     if (wholeLine === null) {
-      pendingGapWidth = hasTrailingWhitespace ? getCollapsedSpaceWidth(item.font, collapsedSpaceWidthCache) : 0
+      pendingGapWidth = hasTrailingWhitespace
+        ? getCollapsedSpaceWidth(item.font, letterSpacing, collapsedSpaceWidthCache)
+        : 0
       continue
     }
 
@@ -197,7 +209,9 @@ export function prepareRichInline(items: RichInlineItem[]): PreparedRichInline {
     preparedItems.push(preparedItem)
     itemsBySourceItemIndex[index] = preparedItem
 
-    pendingGapWidth = hasTrailingWhitespace ? getCollapsedSpaceWidth(item.font, collapsedSpaceWidthCache) : 0
+    pendingGapWidth = hasTrailingWhitespace
+      ? getCollapsedSpaceWidth(item.font, letterSpacing, collapsedSpaceWidthCache)
+      : 0
   }
 
   return {
@@ -211,178 +225,6 @@ function stepRichInlineLine(
   maxWidth: number,
   cursor: RichInlineCursor,
   collectFragment?: RichInlineFragmentCollector,
-): number | null {
-  if (flow.items.length === 0 || cursor.itemIndex >= flow.items.length) return null
-
-  const safeWidth = Math.max(1, maxWidth)
-  let lineWidth = 0
-  let remainingWidth = safeWidth
-  let itemIndex = cursor.itemIndex
-  const textCursor: LineBreakCursor = {
-    segmentIndex: cursor.segmentIndex,
-    graphemeIndex: cursor.graphemeIndex,
-  }
-
-  lineLoop:
-  while (itemIndex < flow.items.length) {
-    const item = flow.items[itemIndex]!
-    if (
-      !isLineStartCursor(textCursor) &&
-      textCursor.segmentIndex === item.endSegmentIndex &&
-      textCursor.graphemeIndex === item.endGraphemeIndex
-    ) {
-      itemIndex++
-      textCursor.segmentIndex = 0
-      textCursor.graphemeIndex = 0
-      continue
-    }
-
-    const gapBefore = lineWidth === 0 ? 0 : item.gapBefore
-    const atItemStart = isLineStartCursor(textCursor)
-
-    if (item.break === 'never') {
-      if (!atItemStart) {
-        itemIndex++
-        textCursor.segmentIndex = 0
-        textCursor.graphemeIndex = 0
-        continue
-      }
-
-      const occupiedWidth = item.naturalWidth + item.extraWidth
-      const totalWidth = gapBefore + occupiedWidth
-      if (lineWidth > 0 && totalWidth > remainingWidth) break lineLoop
-
-      collectFragment?.(
-        item,
-        gapBefore,
-        occupiedWidth,
-        cloneCursor(EMPTY_LAYOUT_CURSOR),
-        {
-          segmentIndex: item.endSegmentIndex,
-          graphemeIndex: item.endGraphemeIndex,
-        },
-      )
-      lineWidth += totalWidth
-      remainingWidth = Math.max(0, safeWidth - lineWidth)
-      itemIndex++
-      textCursor.segmentIndex = 0
-      textCursor.graphemeIndex = 0
-      continue
-    }
-
-    const reservedWidth = gapBefore + item.extraWidth
-    if (lineWidth > 0 && reservedWidth >= remainingWidth) break lineLoop
-
-    if (atItemStart) {
-      const totalWidth = reservedWidth + item.naturalWidth
-      if (totalWidth <= remainingWidth) {
-        collectFragment?.(
-          item,
-          gapBefore,
-          item.naturalWidth + item.extraWidth,
-          cloneCursor(EMPTY_LAYOUT_CURSOR),
-          {
-            segmentIndex: item.endSegmentIndex,
-            graphemeIndex: item.endGraphemeIndex,
-          },
-        )
-        lineWidth += totalWidth
-        remainingWidth = Math.max(0, safeWidth - lineWidth)
-        itemIndex++
-        textCursor.segmentIndex = 0
-        textCursor.graphemeIndex = 0
-        continue
-      }
-    }
-
-    const availableWidth = Math.max(1, remainingWidth - reservedWidth)
-    const line = stepPreparedLineRange(item.prepared, textCursor, availableWidth)
-    if (line === null) {
-      itemIndex++
-      textCursor.segmentIndex = 0
-      textCursor.graphemeIndex = 0
-      continue
-    }
-    if (
-      textCursor.segmentIndex === line.endSegmentIndex &&
-      textCursor.graphemeIndex === line.endGraphemeIndex
-    ) {
-      itemIndex++
-      textCursor.segmentIndex = 0
-      textCursor.graphemeIndex = 0
-      continue
-    }
-
-    // If the only thing we can fit after paying the boundary gap is a partial
-    // slice of the item's first segment, prefer wrapping before the item so we
-    // keep whole-word-style boundaries when they exist. But once the current
-    // line can consume a real breakable unit from the item, stay greedy and
-    // keep filling the line.
-    if (
-      lineWidth > 0 &&
-      atItemStart &&
-      gapBefore > 0 &&
-      endsInsideFirstSegment(line.endSegmentIndex, line.endGraphemeIndex)
-    ) {
-      const freshLine = stepPreparedLineRange(
-        item.prepared,
-        EMPTY_LAYOUT_CURSOR,
-        Math.max(1, safeWidth - item.extraWidth),
-      )
-      if (
-        freshLine !== null &&
-        (
-          freshLine.endSegmentIndex > line.endSegmentIndex ||
-          (
-            freshLine.endSegmentIndex === line.endSegmentIndex &&
-            freshLine.endGraphemeIndex > line.endGraphemeIndex
-          )
-        )
-      ) {
-        break lineLoop
-      }
-    }
-
-    collectFragment?.(
-      item,
-      gapBefore,
-      line.width + item.extraWidth,
-      cloneCursor(textCursor),
-      {
-        segmentIndex: line.endSegmentIndex,
-        graphemeIndex: line.endGraphemeIndex,
-      },
-    )
-    lineWidth += gapBefore + line.width + item.extraWidth
-    remainingWidth = Math.max(0, safeWidth - lineWidth)
-
-    if (
-      line.endSegmentIndex === item.endSegmentIndex &&
-      line.endGraphemeIndex === item.endGraphemeIndex
-    ) {
-      itemIndex++
-      textCursor.segmentIndex = 0
-      textCursor.graphemeIndex = 0
-      continue
-    }
-
-    textCursor.segmentIndex = line.endSegmentIndex
-    textCursor.graphemeIndex = line.endGraphemeIndex
-    break
-  }
-
-  if (lineWidth === 0) return null
-
-  cursor.itemIndex = itemIndex
-  cursor.segmentIndex = textCursor.segmentIndex
-  cursor.graphemeIndex = textCursor.graphemeIndex
-  return lineWidth
-}
-
-function stepRichInlineLineStats(
-  flow: InternalPreparedRichInline,
-  maxWidth: number,
-  cursor: RichInlineCursor,
 ): number | null {
   if (flow.items.length === 0 || cursor.itemIndex >= flow.items.length) return null
 
@@ -420,6 +262,16 @@ function stepRichInlineLineStats(
       const totalWidth = gapBefore + occupiedWidth
       if (lineWidth > 0 && totalWidth > remainingWidth) break lineLoop
 
+      collectFragment?.(
+        item,
+        gapBefore,
+        occupiedWidth,
+        cloneCursor(EMPTY_LAYOUT_CURSOR),
+        {
+          segmentIndex: item.endSegmentIndex,
+          graphemeIndex: item.endGraphemeIndex,
+        },
+      )
       lineWidth += totalWidth
       remainingWidth = Math.max(0, safeWidth - lineWidth)
       itemIndex++
@@ -434,6 +286,16 @@ function stepRichInlineLineStats(
     if (atItemStart) {
       const totalWidth = reservedWidth + item.naturalWidth
       if (totalWidth <= remainingWidth) {
+        collectFragment?.(
+          item,
+          gapBefore,
+          item.naturalWidth + item.extraWidth,
+          cloneCursor(EMPTY_LAYOUT_CURSOR),
+          {
+            segmentIndex: item.endSegmentIndex,
+            graphemeIndex: item.endGraphemeIndex,
+          },
+        )
         lineWidth += totalWidth
         remainingWidth = Math.max(0, safeWidth - lineWidth)
         itemIndex++
@@ -455,23 +317,35 @@ function stepRichInlineLineStats(
       cursor.graphemeIndex = 0
       continue
     }
-    if (cursor.segmentIndex === lineEnd.segmentIndex && cursor.graphemeIndex === lineEnd.graphemeIndex) {
+    if (
+      cursor.segmentIndex === lineEnd.segmentIndex &&
+      cursor.graphemeIndex === lineEnd.graphemeIndex
+    ) {
       itemIndex++
       cursor.segmentIndex = 0
       cursor.graphemeIndex = 0
       continue
     }
 
+    const itemOccupiedWidth = lineWidthForItem + item.extraWidth
+    const lineWidthContribution = gapBefore + itemOccupiedWidth
+
+    // The lower-level walker may force one unit to make progress. If that unit
+    // only fits on a fresh line, wrap before this rich item instead.
+    if (lineWidth > 0 && atItemStart && lineWidthContribution > remainingWidth) break lineLoop
+
+    // If the only thing we can fit after paying the boundary gap is a partial
+    // slice of the item's first segment, prefer wrapping before the item so we
+    // keep whole-word-style boundaries when they exist. But once the current
+    // line can consume a real breakable unit from the item, stay greedy and
+    // keep filling the line.
     if (
       lineWidth > 0 &&
       atItemStart &&
       gapBefore > 0 &&
       endsInsideFirstSegment(lineEnd.segmentIndex, lineEnd.graphemeIndex)
     ) {
-      const freshLineEnd: LineBreakCursor = {
-        segmentIndex: 0,
-        graphemeIndex: 0,
-      }
+      const freshLineEnd: LineBreakCursor = { segmentIndex: 0, graphemeIndex: 0 }
       const freshLineWidth = stepPreparedLineGeometry(
         item.prepared,
         freshLineEnd,
@@ -491,10 +365,23 @@ function stepRichInlineLineStats(
       }
     }
 
-    lineWidth += gapBefore + lineWidthForItem + item.extraWidth
+    collectFragment?.(
+      item,
+      gapBefore,
+      itemOccupiedWidth,
+      cloneCursor(cursor),
+      {
+        segmentIndex: lineEnd.segmentIndex,
+        graphemeIndex: lineEnd.graphemeIndex,
+      },
+    )
+    lineWidth += lineWidthContribution
     remainingWidth = Math.max(0, safeWidth - lineWidth)
 
-    if (lineEnd.segmentIndex === item.endSegmentIndex && lineEnd.graphemeIndex === item.endGraphemeIndex) {
+    if (
+      lineEnd.segmentIndex === item.endSegmentIndex &&
+      lineEnd.graphemeIndex === item.endGraphemeIndex
+    ) {
       itemIndex++
       cursor.segmentIndex = 0
       cursor.graphemeIndex = 0
@@ -546,12 +433,14 @@ function materializeFragmentText(
   item: PreparedRichInlineItem,
   fragment: RichInlineFragmentRange,
 ): string {
-  const line = materializeLineRange(item.prepared, {
-    width: fragment.occupiedWidth - item.extraWidth,
-    start: fragment.start,
-    end: fragment.end,
-  } satisfies LayoutLineRange)
-  return line.text
+  return buildLineTextFromRange(
+    item.prepared,
+    getLineTextCache(item.prepared),
+    fragment.start.segmentIndex,
+    fragment.start.graphemeIndex,
+    fragment.end.segmentIndex,
+    fragment.end.graphemeIndex,
+  )
 }
 
 // Bridge from cheap range walking to full fragment text. Lets callers do
@@ -562,15 +451,24 @@ export function materializeRichInlineLineRange(
   line: RichInlineLineRange,
 ): RichInlineLine {
   const flow = getInternalPreparedRichInline(prepared)
+  const fragments: RichInlineFragment[] = []
+
+  for (let i = 0; i < line.fragments.length; i++) {
+    const fragment = line.fragments[i]!
+    const item = flow.itemsBySourceItemIndex[fragment.itemIndex]
+    if (item === undefined) throw new Error('Missing rich-text inline item for fragment')
+    fragments.push({
+      itemIndex: fragment.itemIndex,
+      text: materializeFragmentText(item, fragment),
+      gapBefore: fragment.gapBefore,
+      occupiedWidth: fragment.occupiedWidth,
+      start: fragment.start,
+      end: fragment.end,
+    })
+  }
+
   return {
-    fragments: line.fragments.map(fragment => {
-      const item = flow.itemsBySourceItemIndex[fragment.itemIndex]
-      if (item === undefined) throw new Error('Missing rich-text inline item for fragment')
-      return {
-        ...fragment,
-        text: materializeFragmentText(item, fragment),
-      }
-    }),
+    fragments,
     width: line.width,
     end: line.end,
   }
@@ -607,7 +505,7 @@ export function measureRichInlineStats(
   }
 
   while (true) {
-    const lineWidth = stepRichInlineLineStats(flow, maxWidth, cursor)
+    const lineWidth = stepRichInlineLine(flow, maxWidth, cursor)
     if (lineWidth === null) {
       return {
         lineCount,

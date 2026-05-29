@@ -124,6 +124,20 @@ const FONT_MATRIX: Record<string, FontVariant[]> = {
       lineHeight: 30,
     },
   ],
+  'ko-sonagi': [
+    {
+      id: 'default',
+      label: 'Apple SD Gothic Neo',
+      font: '18px "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans CJK KR", sans-serif',
+      lineHeight: 30,
+    },
+    {
+      id: 'myungjo',
+      label: 'AppleMyungjo',
+      font: '18px "AppleMyungjo", "Apple SD Gothic Neo", serif',
+      lineHeight: 30,
+    },
+  ],
   'zh-zhufu': [
     {
       id: 'default',

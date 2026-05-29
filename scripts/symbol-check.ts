@@ -9,7 +9,7 @@ import {
   type BrowserKind,
 } from './browser-automation.ts'
 import { startPostedReportServer } from './report-server.ts'
-import { KEEP_ALL_ORACLE_CASES, type ProbeOracleCase } from '../src/test-data.ts'
+import { SYMBOL_ORACLE_CASES, type ProbeOracleCase } from '../src/test-data.ts'
 
 type ProbeReport = {
   status: 'ready' | 'error'
@@ -126,7 +126,7 @@ async function runBrowser(browser: AutomationBrowserKind, port: number): Promise
 
   try {
     if (session === null || reportBrowser === null) {
-      throw new Error('Firefox is not currently supported for keep-all oracle checks')
+      throw new Error('Firefox is not currently supported for symbol oracle checks')
     }
 
     const pageServer = await ensurePageServer(port, '/probe', process.cwd())
@@ -136,7 +136,7 @@ async function runBrowser(browser: AutomationBrowserKind, port: number): Promise
 
     try {
       const url =
-        `${pageServer.baseUrl}/probe?batch=keep-all` +
+        `${pageServer.baseUrl}/probe?batch=symbol-runs` +
         `&requestId=${encodeURIComponent(requestId)}` +
         `&reportEndpoint=${encodeURIComponent(reportServer.endpoint)}`
       const batchReport = await loadPostedReport(
@@ -148,16 +148,16 @@ async function runBrowser(browser: AutomationBrowserKind, port: number): Promise
         timeoutMs,
       )
       if (batchReport.status === 'error') {
-        throw new Error(batchReport.message ?? 'keep-all batch failed')
+        throw new Error(batchReport.message ?? 'symbol batch failed')
       }
 
       const batchResults = batchReport.results ?? []
       const reportsByLabel = new Map(batchResults.map(result => [result.label, result.report]))
-      for (const testCase of KEEP_ALL_ORACLE_CASES) {
+      for (const testCase of SYMBOL_ORACLE_CASES) {
         if (!caseRunsInBrowser(testCase, browser)) continue
         const report = reportsByLabel.get(testCase.label)
         if (report === undefined) {
-          throw new Error(`Missing keep-all result for ${testCase.label}`)
+          throw new Error(`Missing symbol result for ${testCase.label}`)
         }
         printCaseResult(browser, testCase, report)
         if (!reportIsExact(report)) ok = false

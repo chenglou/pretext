@@ -43,6 +43,33 @@ type BenchmarkReport = {
   message?: string
 }
 
+const BENCHMARK_RESULT_KEYS = [
+  'results',
+  'richResults',
+  'richInlineResults',
+  'richPreWrapResults',
+  'richLongResults',
+] as const
+
+const CORPUS_TIMING_KEYS = [
+  'analysisMs',
+  'measureMs',
+  'prepareMs',
+  'layoutMs',
+] as const
+
+const CORPUS_METADATA_KEYS = [
+  'id',
+  'label',
+  'font',
+  'chars',
+  'analysisSegments',
+  'segments',
+  'breakableSegments',
+  'width',
+  'lineCount',
+] as const
+
 function parseStringFlag(name: string): string | null {
   const prefix = `--${name}=`
   const arg = process.argv.find(value => value.startsWith(prefix))
@@ -65,6 +92,112 @@ function parseBrowser(value: string | null): BrowserKind {
     throw new Error(`Unsupported browser ${browser}; expected chrome or safari`)
   }
   return browser
+}
+
+function median(values: number[]): number {
+  const sorted = [...values].sort((a, b) => a - b)
+  const mid = Math.floor(sorted.length / 2)
+  return sorted.length % 2 === 0 ? (sorted[mid - 1]! + sorted[mid]!) / 2 : sorted[mid]!
+}
+
+function assertSame<T>(actual: T, expected: T, context: string): void {
+  if (actual === expected) return
+  throw new Error(
+    `Benchmark runs disagree for ${context}: expected ${String(expected)}, got ${String(actual)}`,
+  )
+}
+
+function medianBenchmarkResults(
+  reports: BenchmarkReport[],
+  key: typeof BENCHMARK_RESULT_KEYS[number],
+): BenchmarkResult[] | undefined {
+  const firstRows = reports[0]?.[key]
+  if (firstRows === undefined) {
+    for (let reportIndex = 1; reportIndex < reports.length; reportIndex++) {
+      assertSame(reports[reportIndex]![key], undefined, `${key}`)
+    }
+    return undefined
+  }
+  for (let reportIndex = 1; reportIndex < reports.length; reportIndex++) {
+    assertSame(reports[reportIndex]![key]?.length, firstRows.length, `${key}.length`)
+  }
+
+  return firstRows.map((firstRow, rowIndex) => {
+    const values: number[] = []
+    for (let reportIndex = 0; reportIndex < reports.length; reportIndex++) {
+      const row = reports[reportIndex]![key]?.[rowIndex]
+      if (row === undefined) {
+        throw new Error(`Benchmark run ${reportIndex + 1} is missing ${key}[${rowIndex}]`)
+      }
+      assertSame(row.label, firstRow.label, `${key}[${rowIndex}].label`)
+      assertSame(row.desc, firstRow.desc, `${key}[${rowIndex}].desc`)
+      values.push(row.ms)
+    }
+    return {
+      ...firstRow,
+      ms: median(values),
+    }
+  })
+}
+
+function medianCorpusResults(reports: BenchmarkReport[]): CorpusBenchmarkResult[] | undefined {
+  const firstRows = reports[0]?.corpusResults
+  if (firstRows === undefined) {
+    for (let reportIndex = 1; reportIndex < reports.length; reportIndex++) {
+      assertSame(reports[reportIndex]!.corpusResults, undefined, 'corpusResults')
+    }
+    return undefined
+  }
+  for (let reportIndex = 1; reportIndex < reports.length; reportIndex++) {
+    assertSame(reports[reportIndex]!.corpusResults?.length, firstRows.length, 'corpusResults.length')
+  }
+
+  return firstRows.map((firstRow, rowIndex) => {
+    const result: CorpusBenchmarkResult = { ...firstRow }
+    for (let reportIndex = 0; reportIndex < reports.length; reportIndex++) {
+      const row = reports[reportIndex]!.corpusResults?.[rowIndex]
+      if (row === undefined) {
+        throw new Error(`Benchmark run ${reportIndex + 1} is missing corpusResults[${rowIndex}]`)
+      }
+      for (const metadataKey of CORPUS_METADATA_KEYS) {
+        assertSame(
+          row[metadataKey],
+          firstRow[metadataKey],
+          `corpusResults[${rowIndex}].${metadataKey}`,
+        )
+      }
+    }
+
+    for (const timingKey of CORPUS_TIMING_KEYS) {
+      result[timingKey] = median(reports.map(report => report.corpusResults![rowIndex]![timingKey]))
+    }
+
+    return result
+  })
+}
+
+function medianReport(reports: BenchmarkReport[]): BenchmarkReport {
+  if (reports.length === 0) {
+    throw new Error('Cannot summarize zero benchmark runs')
+  }
+
+  for (const [index, report] of reports.entries()) {
+    if (report.status === 'error') {
+      throw new Error(`Benchmark run ${index + 1} failed: ${report.message ?? 'unknown error'}`)
+    }
+  }
+
+  const report: BenchmarkReport = { status: 'ready' }
+
+  for (const key of BENCHMARK_RESULT_KEYS) {
+    const rows = medianBenchmarkResults(reports, key)
+    if (rows !== undefined) report[key] = rows
+  }
+
+  const corpusResults = medianCorpusResults(reports)
+  if (corpusResults !== undefined) report.corpusResults = corpusResults
+
+  return report
 }
 
 function printReport(report: BenchmarkReport): void {
@@ -118,7 +251,12 @@ function printReport(report: BenchmarkReport): void {
 
 const browser = parseBrowser(parseStringFlag('browser'))
 const requestedPort = parseNumberFlag('port', Number.parseInt(process.env['BENCHMARK_CHECK_PORT'] ?? '0', 10))
+const runs = parseNumberFlag('runs', Number.parseInt(process.env['BENCHMARK_CHECK_RUNS'] ?? '3', 10))
 const output = parseStringFlag('output')
+
+if (!Number.isInteger(runs) || runs < 1) {
+  throw new Error(`Invalid value for --runs: ${runs}; expected an integer >= 1`)
+}
 
 let serverProcess: ChildProcess | null = null
 const lock = await acquireBrowserAutomationLock(browser)
@@ -129,12 +267,28 @@ try {
   const pageServer = await ensurePageServer(port, '/benchmark', process.cwd())
   serverProcess = pageServer.process
   const baseUrl = `${pageServer.baseUrl}/benchmark`
-  const requestId = `${Date.now()}-${Math.random().toString(36).slice(2)}`
-  const url =
-    `${baseUrl}?report=1` +
-    `&requestId=${encodeURIComponent(requestId)}`
 
-  const report = await loadHashReport<BenchmarkReport>(session, url, requestId, browser)
+  const reports: BenchmarkReport[] = []
+  for (let runIndex = 0; runIndex < runs; runIndex++) {
+    const requestId = `${Date.now()}-${runIndex}-${Math.random().toString(36).slice(2)}`
+    const url =
+      `${baseUrl}?report=1` +
+      `&requestId=${encodeURIComponent(requestId)}`
+
+    if (runs > 1) {
+      console.log(`Benchmark run ${runIndex + 1}/${runs}:`)
+    }
+    const report = await loadHashReport<BenchmarkReport>(session, url, requestId, browser)
+    reports.push(report)
+    if (runs > 1) {
+      printReport(report)
+    }
+  }
+
+  const report = medianReport(reports)
+  if (runs > 1) {
+    console.log(`Median across ${runs} benchmark runs:`)
+  }
   printReport(report)
 
   if (output !== null) {

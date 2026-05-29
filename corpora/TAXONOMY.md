@@ -157,7 +157,7 @@ Typical response:
 - do not change the engine until the probe is trustworthy
 
 Examples:
-- mixed-app `710px` soft-hyphen case
+- former mixed-app `710px` soft-hyphen case
 - old Arabic span-probe drift before the RTL `Range` path
 
 ## Steering Rules
@@ -175,7 +175,7 @@ When a new mismatch shows up:
 The main current steering classes are:
 - Japanese: mostly `edge-fit` plus some `shaping-context`
 - Myanmar: mostly `boundary-discovery` / `glue-policy`, with some remaining local disagreement that is not yet a safe keep
-- Mixed app text `710px`: `diagnostic-sensitivity`
+- Mixed app text: currently exact again; keep as a product-shaped regression canary
 - Arabic long-form: coarse field is clean; remaining fine field is mostly `edge-fit`
 - Chinese: mostly `glue-policy` around punctuation/quote clusters, plus some Chromium-only edge behavior
 - Urdu: currently behaving more like `boundary-discovery` / shaping-sensitive break policy than dirty data or simple edge-fit

@@ -4,10 +4,12 @@ import {
   createBrowserSession,
   ensurePageServer,
   getAvailablePort,
-  loadHashReport,
+  loadPostedReport,
   type AutomationBrowserKind,
   type BrowserKind,
 } from './browser-automation.ts'
+import { startPostedReportServer } from './report-server.ts'
+import { PRE_WRAP_ORACLE_CASES, type ProbeOracleCase } from '../src/test-data.ts'
 
 type ProbeReport = {
   status: 'ready' | 'error'
@@ -23,14 +25,14 @@ type ProbeReport = {
   message?: string
 }
 
-type OracleCase = {
-  label: string
-  text: string
-  width: number
-  font: string
-  lineHeight: number
-  dir?: 'ltr' | 'rtl'
-  lang?: string
+type ProbeBatchReport = {
+  status: 'ready' | 'error'
+  requestId?: string
+  results?: Array<{
+    label: string
+    report: ProbeReport
+  }>
+  message?: string
 }
 
 function parseStringFlag(name: string): string | null {
@@ -65,143 +67,11 @@ function parseBrowsers(value: string | null): AutomationBrowserKind[] {
   return browsers as AutomationBrowserKind[]
 }
 
-const ORACLE_CASES: OracleCase[] = [
-  {
-    label: 'hanging spaces',
-    text: 'foo   bar',
-    width: 120,
-    font: '18px serif',
-    lineHeight: 32,
-  },
-  {
-    label: 'hard break',
-    text: 'a\nb',
-    width: 220,
-    font: '18px serif',
-    lineHeight: 32,
-  },
-  {
-    label: 'double hard break',
-    text: '\n\n',
-    width: 220,
-    font: '18px serif',
-    lineHeight: 32,
-  },
-  {
-    label: 'trailing final break',
-    text: 'a\n',
-    width: 220,
-    font: '18px serif',
-    lineHeight: 32,
-  },
-  {
-    label: 'leading spaces after break',
-    text: 'foo\n  bar',
-    width: 220,
-    font: '18px serif',
-    lineHeight: 32,
-  },
-  {
-    label: 'whitespace-only middle line',
-    text: 'foo\n  \nbar',
-    width: 220,
-    font: '18px serif',
-    lineHeight: 32,
-  },
-  {
-    label: 'spaces before hard break',
-    text: 'foo  \nbar',
-    width: 220,
-    font: '18px serif',
-    lineHeight: 32,
-  },
-  {
-    label: 'tab before hard break',
-    text: 'foo\t\nbar',
-    width: 220,
-    font: '18px serif',
-    lineHeight: 32,
-  },
-  {
-    label: 'crlf normalization',
-    text: 'foo\r\n  bar',
-    width: 220,
-    font: '18px serif',
-    lineHeight: 32,
-  },
-  {
-    label: 'preserved space run',
-    text: 'foo    bar',
-    width: 126,
-    font: '18px serif',
-    lineHeight: 32,
-  },
-  {
-    label: 'mixed script indent',
-    text: 'AGI 春天到了\n  بدأت الرحلة 🚀',
-    width: 260,
-    font: '18px "Helvetica Neue", Arial, sans-serif',
-    lineHeight: 30,
-    dir: 'ltr',
-    lang: 'en',
-  },
-  {
-    label: 'rtl indent',
-    text: 'مرحبا\n  بالعالم',
-    width: 220,
-    font: '20px "Geeza Pro", "Arial", serif',
-    lineHeight: 34,
-    dir: 'rtl',
-    lang: 'ar',
-  },
-  {
-    label: 'default tab stops',
-    text: 'a\tb',
-    width: 120,
-    font: '18px serif',
-    lineHeight: 32,
-  },
-  {
-    label: 'double tabs',
-    text: 'a\t\tb',
-    width: 130,
-    font: '18px serif',
-    lineHeight: 32,
-  },
-  {
-    label: 'tab after hard break',
-    text: 'foo\n\tbar',
-    width: 220,
-    font: '18px serif',
-    lineHeight: 32,
-  },
-]
-
 const requestedPort = parseNumberFlag('port', 0)
 const browsers = parseBrowsers(parseStringFlag('browser'))
 const timeoutMs = parseNumberFlag('timeout', 60_000)
 
-function buildProbeUrl(
-  baseUrl: string,
-  requestId: string,
-  testCase: OracleCase,
-): string {
-  const dir = testCase.dir ?? 'ltr'
-  const lang = testCase.lang ?? (dir === 'rtl' ? 'ar' : 'en')
-  return (
-    `${baseUrl}/probe?text=${encodeURIComponent(testCase.text)}` +
-    `&width=${testCase.width}` +
-    `&font=${encodeURIComponent(testCase.font)}` +
-    `&lineHeight=${testCase.lineHeight}` +
-    `&dir=${encodeURIComponent(dir)}` +
-    `&lang=${encodeURIComponent(lang)}` +
-    `&whiteSpace=pre-wrap` +
-    `&method=span` +
-    `&requestId=${encodeURIComponent(requestId)}`
-  )
-}
-
-function printCaseResult(browser: AutomationBrowserKind, testCase: OracleCase, report: ProbeReport): void {
+function printCaseResult(browser: AutomationBrowserKind, testCase: ProbeOracleCase, report: ProbeReport): void {
   if (report.status === 'error') {
     console.log(`${browser} | ${testCase.label}: error: ${report.message ?? 'unknown error'}`)
     return
@@ -240,13 +110,38 @@ async function runBrowser(browser: AutomationBrowserKind, port: number): Promise
 
     const pageServer = await ensurePageServer(port, '/probe', process.cwd())
     serverProcess = pageServer.process
+    const requestId = `${browser}-${Date.now()}-${Math.random().toString(36).slice(2)}`
+    const reportServer = await startPostedReportServer<ProbeBatchReport>(requestId)
 
-    for (const testCase of ORACLE_CASES) {
-      const requestId = `${browser}-${Date.now()}-${Math.random().toString(36).slice(2)}`
-      const url = buildProbeUrl(pageServer.baseUrl, requestId, testCase)
-      const report = await loadHashReport<ProbeReport>(session, url, requestId, reportBrowser, timeoutMs)
-      printCaseResult(browser, testCase, report)
-      if (!reportIsExact(report)) ok = false
+    try {
+      const url =
+        `${pageServer.baseUrl}/probe?batch=pre-wrap` +
+        `&requestId=${encodeURIComponent(requestId)}` +
+        `&reportEndpoint=${encodeURIComponent(reportServer.endpoint)}`
+      const batchReport = await loadPostedReport(
+        session,
+        url,
+        () => reportServer.waitForReport(null),
+        requestId,
+        reportBrowser,
+        timeoutMs,
+      )
+      if (batchReport.status === 'error') {
+        throw new Error(batchReport.message ?? 'pre-wrap batch failed')
+      }
+
+      const batchResults = batchReport.results ?? []
+      const reportsByLabel = new Map(batchResults.map(result => [result.label, result.report]))
+      for (const testCase of PRE_WRAP_ORACLE_CASES) {
+        const report = reportsByLabel.get(testCase.label)
+        if (report === undefined) {
+          throw new Error(`Missing pre-wrap result for ${testCase.label}`)
+        }
+        printCaseResult(browser, testCase, report)
+        if (!reportIsExact(report)) ok = false
+      }
+    } finally {
+      reportServer.close()
     }
   } finally {
     session?.close()

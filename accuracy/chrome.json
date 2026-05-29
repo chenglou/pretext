@@ -1,20 +1,20 @@
 {
   "status": "ready",
   "environment": {
-    "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36",
+    "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36",
     "devicePixelRatio": 2,
     "viewport": {
-      "innerWidth": 1510,
-      "innerHeight": 757,
-      "outerWidth": 1510,
-      "outerHeight": 844,
+      "innerWidth": 1512,
+      "innerHeight": 766,
+      "outerWidth": 1512,
+      "outerHeight": 853,
       "visualViewportScale": 1
     },
     "screen": {
       "width": 1512,
       "height": 982,
       "availWidth": 1512,
-      "availHeight": 851,
+      "availHeight": 853,
       "colorDepth": 30,
       "pixelDepth": 30
     }
@@ -76825,5 +76825,5 @@
       "diff": 0
     }
   ],
-  "requestId": "1775293308620-zttbpv"
+  "requestId": "1778458451443-udrw2b"
 }

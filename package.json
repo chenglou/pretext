@@ -1,6 +1,6 @@
 {
   "name": "@chenglou/pretext",
-  "version": "0.0.4",
+  "version": "0.0.7",
   "description": "Fast, accurate & comprehensive text measurement & layout",
   "keywords": [
     "text-layout",
@@ -17,6 +17,7 @@
     "url": "git+https://github.com/chenglou/pretext.git"
   },
   "type": "module",
+  "sideEffects": false,
   "publishConfig": {
     "access": "public"
   },
@@ -33,8 +34,6 @@
       "import": "./dist/rich-inline.js",
       "default": "./dist/rich-inline.js"
     },
-    "./demos/*": "./pages/demos/*",
-    "./assets/*": "./pages/assets/*",
     "./package.json": "./package.json"
   },
   "files": [
@@ -56,7 +55,7 @@
     "benchmark-check": "bun run scripts/benchmark-check.ts",
     "benchmark-check:safari": "BENCHMARK_CHECK_BROWSER=safari bun run scripts/benchmark-check.ts",
     "build:package": "rm -rf dist && tsc -p tsconfig.build.json",
-    "check": "tsc && oxlint --type-aware src",
+    "check": "tsc && oxlint --type-aware src && knip",
     "corpus-check": "bun run scripts/corpus-check.ts",
     "corpus-check:safari": "CORPUS_CHECK_BROWSER=safari bun run scripts/corpus-check.ts",
     "corpus-font-matrix": "bun run scripts/corpus-font-matrix.ts",
@@ -68,6 +67,8 @@
     "corpus-taxonomy": "bun run scripts/corpus-taxonomy.ts",
     "generate:bidi-data": "bun run scripts/generate-bidi-data.ts",
     "keep-all-check": "bun run scripts/keep-all-check.ts",
+    "letter-spacing-check": "bun run scripts/letter-spacing-check.ts",
+    "letter-spacing-snapshot": "bun run scripts/letter-spacing-check.ts --output=accuracy/letter-spacing.json",
     "package-smoke-test": "bun run scripts/package-smoke-test.ts",
     "prepack": "rm -rf dist && tsc -p tsconfig.build.json",
     "pre-wrap-check": "bun run scripts/pre-wrap-check.ts",
@@ -75,11 +76,13 @@
     "probe-check:safari": "PROBE_CHECK_BROWSER=safari bun run scripts/probe-check.ts",
     "status-dashboard": "bun run scripts/status-dashboard.ts",
     "site:build": "rm -rf site && bun run scripts/build-demo-site.ts",
-    "start": "HOST=${HOST:-0.0.0.0}; PORT=3002; pids=$(lsof -tiTCP:$PORT -sTCP:LISTEN 2>/dev/null); if [ -n \"$pids\" ]; then echo \"Freeing port $PORT: terminating $pids\"; kill $pids 2>/dev/null || true; sleep 1; pids=$(lsof -tiTCP:$PORT -sTCP:LISTEN 2>/dev/null); if [ -n \"$pids\" ]; then echo \"Port $PORT still busy: killing $pids\"; kill -9 $pids 2>/dev/null || true; fi; fi; bun pages/*.html pages/demos/*.html pages/demos/*/index.html --host=$HOST:$PORT",
-    "start:windows": "bun pages/*.html pages/demos/*.html pages/demos/*/index.html --host=0.0.0.0 --port=3002"
+    "start": "HOST=${HOST:-0.0.0.0}; PORT=3000; pids=$(lsof -tiTCP:$PORT -sTCP:LISTEN 2>/dev/null); if [ -n \"$pids\" ]; then echo \"Freeing port $PORT: terminating $pids\"; kill $pids 2>/dev/null || true; sleep 1; pids=$(lsof -tiTCP:$PORT -sTCP:LISTEN 2>/dev/null); if [ -n \"$pids\" ]; then echo \"Port $PORT still busy: killing $pids\"; kill -9 $pids 2>/dev/null || true; fi; fi; bun pages/*.html pages/demos/*.html pages/demos/*/index.html --host=$HOST:$PORT",
+    "start:windows": "bun pages/*.html pages/demos/*.html pages/demos/*/index.html --host=0.0.0.0:3000",
+    "symbol-check": "bun run scripts/symbol-check.ts"
   },
   "devDependencies": {
     "@types/bun": "latest",
+    "knip": "^6.14.2",
     "marked": "^17.0.5",
     "oxlint": "^1.51.0",
     "oxlint-tsgolint": "^0.15.0",

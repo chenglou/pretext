@@ -15,7 +15,7 @@ This log is historical. The current practical steering picture is:
 - Myanmar still has two real canaries with residual Chrome/Safari disagreement around quote/follower-style classes, so it remains the main unresolved Southeast Asian frontier.
 - Urdu has a real Nastaliq/Naskh canary (`چغد`) with the same narrow-width negative field in Chrome and Safari, so it is clearly a shaping/context class rather than dirty data or a browser-only quirk. It remains parked rather than actively tuned.
 - Arabic coarse corpora are clean; the remaining work there is mostly a fine-width edge-fit class, not the old preprocessing/corpus-hygiene problems.
-- Mixed app text still matters because it catches product-shaped classes that books miss, especially soft-hyphen and extractor-sensitive cases.
+- Mixed app text is exact again in the maintained Chrome/Safari step10 sweeps and still matters as the product-shaped regression canary for URLs, emoji ZWJ runs, hard spaces, and soft hyphens.
 
 ## The problem: DOM measurement interleaving
 
@@ -220,8 +220,8 @@ Important keep:
 - model URL/query strings as narrow structured units, not one giant breakable blob
 
 Current status:
-- almost entirely clean
-- one remaining extractor-sensitive soft-hyphen miss around `710px` still looks paragraph-scale or accumulation-sensitive rather than like a neat local bug
+- exact in the maintained Chrome and Safari `step=10` sweeps
+- the former Chrome-only `710px` soft-hyphen miss went away after keeping chosen soft-hyphen breaks at the SHY boundary instead of packing post-SHY graphemes
 
 ### Thai
 
@@ -232,7 +232,7 @@ The keep:
 
 Result:
 - two Thai prose corpora are healthy at anchor widths
-- sampled sweeps stayed clean enough that Thai now looks broader than one lucky story
+- maintained step10 sweeps stayed clean enough that Thai now looks broader than one lucky story
 
 ### Khmer
 
@@ -242,7 +242,7 @@ The keep:
 - preserve explicit zero-width separators from the source text
 
 Result:
-- anchors and sampled sweeps were clean enough to keep Khmer as a real canary
+- anchor widths and the maintained step10 sweep were clean enough to keep Khmer as a real canary
 
 ### Lao (rejected)
 
@@ -283,7 +283,7 @@ So Japanese stays as a canary, not as a place to keep stacking narrow punctuatio
 Chinese is now the clearest active CJK canary.
 
 What we learned:
-- Safari is clean at the anchor widths
+- Safari is clean on the maintained step10 sweep
 - Chrome keeps a broader narrow-width positive field
 - the field changes with font choice (`Songti SC` vs `PingFang SC`)
 

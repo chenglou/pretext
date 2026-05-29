@@ -7,6 +7,13 @@ type AccuracyReport = {
   mismatchCount?: number
 }
 
+type LetterSpacingSnapshot = {
+  total?: number
+  geometryMatchCount?: number
+  geometryMismatchCount?: number
+  firstBreakMismatchCount?: number
+}
+
 type BenchmarkResult = {
   label: string
   ms: number
@@ -56,6 +63,15 @@ function summarizeAccuracy(report: AccuracyReport) {
   }
 }
 
+function summarizeLetterSpacing(snapshot: LetterSpacingSnapshot) {
+  return {
+    total: snapshot.total ?? 0,
+    geometryMatchCount: snapshot.geometryMatchCount ?? 0,
+    geometryMismatchCount: snapshot.geometryMismatchCount ?? 0,
+    firstBreakMismatchCount: snapshot.firstBreakMismatchCount ?? 0,
+  }
+}
+
 function indexResults(results: BenchmarkResult[] | undefined): Record<string, { ms: number, desc: string }> {
   const indexed: Record<string, { ms: number, desc: string }> = {}
   for (const result of results ?? []) {
@@ -71,6 +87,7 @@ const output = parseStringFlag('output') ?? 'status/dashboard.json'
 const chromeAccuracy = await loadJson<AccuracyReport>('accuracy/chrome.json')
 const safariAccuracy = await loadJson<AccuracyReport>('accuracy/safari.json')
 const firefoxAccuracy = await loadJson<AccuracyReport>('accuracy/firefox.json')
+const letterSpacing = await loadJson<LetterSpacingSnapshot>('accuracy/letter-spacing.json')
 const chromeBenchmarks = await loadJson<BenchmarkReport>('benchmarks/chrome.json')
 const safariBenchmarks = await loadJson<BenchmarkReport>('benchmarks/safari.json')
 
@@ -81,6 +98,7 @@ const dashboard = {
       chrome: 'accuracy/chrome.json',
       safari: 'accuracy/safari.json',
       firefox: 'accuracy/firefox.json',
+      letterSpacing: 'accuracy/letter-spacing.json',
     },
     benchmarks: {
       chrome: 'benchmarks/chrome.json',
@@ -93,6 +111,7 @@ const dashboard = {
     safari: summarizeAccuracy(safariAccuracy),
     firefox: summarizeAccuracy(firefoxAccuracy),
   },
+  letterSpacingOracle: summarizeLetterSpacing(letterSpacing),
   benchmarks: {
     chrome: {
       topLevel: indexResults(chromeBenchmarks.results),

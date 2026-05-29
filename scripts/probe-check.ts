@@ -147,6 +147,7 @@ const requestedPort = parseNumberFlag('port', Number.parseInt(process.env['PROBE
 const text = requireFlag('text')
 const width = parseNumberFlag('width', 600)
 const font = parseStringFlag('font') ?? '18px serif'
+const letterSpacing = parseStringFlag('letterSpacing')
 const lineHeight = parseNumberFlag('lineHeight', 32)
 const dir = parseStringFlag('dir') ?? 'ltr'
 const lang = parseStringFlag('lang') ?? (dir === 'rtl' ? 'ar' : 'en')
@@ -167,6 +168,7 @@ try {
     `${pageServer.baseUrl}/probe?text=${encodeURIComponent(text)}` +
     `&width=${width}` +
     `&font=${encodeURIComponent(font)}` +
+    (letterSpacing === null ? '' : `&letterSpacing=${encodeURIComponent(letterSpacing)}`) +
     `&lineHeight=${lineHeight}` +
     `&dir=${encodeURIComponent(dir)}` +
     `&lang=${encodeURIComponent(lang)}` +

@@ -14,10 +14,12 @@ Use [corpora/STATUS.md](corpora/STATUS.md) for the long-form corpus canaries.
 - [accuracy/chrome.json](accuracy/chrome.json)
 - [accuracy/safari.json](accuracy/safari.json)
 - [accuracy/firefox.json](accuracy/firefox.json)
+- [accuracy/letter-spacing.json](accuracy/letter-spacing.json)
 
 Notes:
 - This is the checked-in `4 fonts x 8 sizes x 8 widths x 30 texts` browser sweep.
 - The public accuracy page is basically a regression gate now, not the main steering metric.
+- The letter-spacing snapshot is a compact Chrome + Safari oracle, not part of the full sweep matrix.
 
 ## Benchmark Snapshots
 
@@ -27,7 +29,7 @@ Notes:
 Notes:
 - Chrome is still the main maintained performance baseline.
 - Safari numbers are useful, but noisier and warm up less predictably.
-- The checked-in JSON snapshots are cold checker runs. Ad hoc page numbers can differ after warmup.
+- The checked-in JSON snapshots are medians across 3 cold checker runs. Ad hoc page numbers can differ after warmup.
 - Refresh these when benchmark methodology or the hot path changes: `src/analysis.ts`, `src/measurement.ts`, `src/line-break.ts`, `src/layout.ts`, `src/bidi.ts`, or `pages/benchmark.ts`.
 
 ## Long-Form Corpus Status

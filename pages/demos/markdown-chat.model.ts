@@ -228,6 +228,16 @@ const EMPTY_MARK_STATE: MarkState = {
   href: null,
 }
 
+function parseMarkdownHref(href: string | null | undefined): string | null {
+  if (href === undefined || href === null) return null
+  try {
+    const url = new URL(href)
+    return url.protocol === 'http:' || url.protocol === 'https:' ? url.href : null
+  } catch {
+    return null
+  }
+}
+
 const markerWidthCache = new Map<string, number>()
 
 export function createPreparedChatTemplates(
@@ -641,7 +651,7 @@ function collectInlinePieceLines(
         }
 
         case 'link': {
-          walk(token.tokens ?? [], { ...marks, href: token.href })
+          walk(token.tokens ?? [], { ...marks, href: parseMarkdownHref(token.href) })
           continue
         }
 

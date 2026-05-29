@@ -5,6 +5,13 @@ import {
   type PreparedTextWithSegments,
 } from '../src/layout.ts'
 import {
+  KEEP_ALL_ORACLE_CASES,
+  LETTER_SPACING_ORACLE_CASES,
+  PRE_WRAP_ORACLE_CASES,
+  SYMBOL_ORACLE_CASES,
+  type ProbeOracleCase,
+} from '../src/test-data.ts'
+import {
   formatBreakContext,
   getDiagnosticUnits,
   getLineContent,
@@ -81,6 +88,7 @@ type ProbeReport = {
   width?: number
   contentWidth?: number
   font?: string
+  letterSpacing?: number
   lineHeight?: number
   direction?: string
   browserLineMethod?: 'range' | 'span'
@@ -101,27 +109,68 @@ type ProbeReport = {
   message?: string
 }
 
+type ProbeBatchReport = {
+  status: 'ready' | 'error'
+  requestId?: string
+  results?: Array<{
+    label: string
+    report: ProbeReport
+  }>
+  message?: string
+}
+
+type ProbeConfig = {
+  text: string
+  width: number
+  font: string
+  letterSpacing: number
+  lineHeight: number
+  direction: 'ltr' | 'rtl'
+  lang: string
+  browserLineMethod: 'range' | 'span'
+  verbose: boolean
+  whiteSpace: 'normal' | 'pre-wrap'
+  wordBreak: 'normal' | 'keep-all'
+}
+
+type ProbeBatchSpec = {
+  title: string
+  cases: readonly ProbeOracleCase[]
+  defaults: {
+    letterSpacing?: number
+    whiteSpace?: 'normal' | 'pre-wrap'
+    wordBreak?: 'normal' | 'keep-all'
+    method?: 'range' | 'span'
+  }
+}
+
+type OracleBrowser = NonNullable<ProbeOracleCase['browsers']>[number]
+
 declare global {
   interface Window {
-    __PROBE_REPORT__?: ProbeReport
+    __PROBE_REPORT__?: ProbeReport | ProbeBatchReport
   }
 }
 
 const PADDING = 40
 const params = new URLSearchParams(location.search)
 const requestId = params.get('requestId') ?? undefined
-const text = params.get('text') ?? ''
-const width = Math.max(100, Number.parseInt(params.get('width') ?? '600', 10))
-const font = params.get('font') ?? '18px serif'
-const lineHeight = Math.max(1, Number.parseInt(params.get('lineHeight') ?? '32', 10))
-const direction = params.get('dir') === 'rtl' ? 'rtl' : 'ltr'
-const lang = params.get('lang') ?? (direction === 'rtl' ? 'ar' : 'en')
-const browserLineMethod = params.get('method') === 'span' ? 'span' : 'range'
-const verbose = params.get('verbose') === '1'
-const whiteSpace = params.get('whiteSpace') === 'pre-wrap' ? 'pre-wrap' : 'normal'
-const wordBreak = params.get('wordBreak') === 'keep-all' ? 'keep-all' : 'normal'
-const cssWhiteSpace = whiteSpace === 'pre-wrap' ? 'pre-wrap' : 'normal'
-const cssWordBreak = wordBreak === 'keep-all' ? 'keep-all' : 'normal'
+const batch = params.get('batch')
+const reportEndpoint = params.get('reportEndpoint')
+
+let text = params.get('text') ?? ''
+let width = Math.max(100, Number.parseInt(params.get('width') ?? '600', 10))
+let font = params.get('font') ?? '18px serif'
+let letterSpacing = Number.parseFloat(params.get('letterSpacing') ?? '0')
+let lineHeight = Math.max(1, Number.parseInt(params.get('lineHeight') ?? '32', 10))
+let direction: 'ltr' | 'rtl' = params.get('dir') === 'rtl' ? 'rtl' : 'ltr'
+let lang = params.get('lang') ?? (direction === 'rtl' ? 'ar' : 'en')
+let browserLineMethod: 'range' | 'span' = params.get('method') === 'span' ? 'span' : 'range'
+let verbose = params.get('verbose') === '1'
+let whiteSpace: 'normal' | 'pre-wrap' = params.get('whiteSpace') === 'pre-wrap' ? 'pre-wrap' : 'normal'
+let wordBreak: 'normal' | 'keep-all' = params.get('wordBreak') === 'keep-all' ? 'keep-all' : 'normal'
+let cssWhiteSpace = whiteSpace === 'pre-wrap' ? 'pre-wrap' : 'normal'
+let cssWordBreak = wordBreak === 'keep-all' ? 'keep-all' : 'normal'
 
 const stats = document.getElementById('stats')!
 const details = document.getElementById('details') as HTMLPreElement | null
@@ -145,12 +194,137 @@ const diagnosticCanvas = document.createElement('canvas')
 const diagnosticCtx = diagnosticCanvas.getContext('2d')!
 const graphemeSegmenter = new Intl.Segmenter(undefined, { granularity: 'grapheme' })
 
+function getProbeBatchSpec(name: string | null): ProbeBatchSpec | null {
+  switch (name) {
+    case null:
+      return null
+    case 'letter-spacing':
+      return {
+        title: 'Letter-spacing',
+        cases: LETTER_SPACING_ORACLE_CASES,
+        defaults: {},
+      }
+    case 'pre-wrap':
+      return {
+        title: 'Pre-wrap',
+        cases: PRE_WRAP_ORACLE_CASES,
+        defaults: { whiteSpace: 'pre-wrap', method: 'span' },
+      }
+    case 'symbol-runs':
+      return {
+        title: 'Symbol runs',
+        cases: SYMBOL_ORACLE_CASES,
+        defaults: {},
+      }
+    case 'keep-all':
+      return {
+        title: 'Keep-all',
+        cases: KEEP_ALL_ORACLE_CASES,
+        defaults: { wordBreak: 'keep-all', method: 'span' },
+      }
+    default:
+      throw new Error(`Unknown probe batch ${name}`)
+  }
+}
+
+function materializeCase(testCase: ProbeOracleCase, defaults: ProbeBatchSpec['defaults']): ProbeConfig {
+  const dir = testCase.dir ?? 'ltr'
+  return {
+    text: testCase.text,
+    width: testCase.width,
+    font: testCase.font,
+    letterSpacing: testCase.letterSpacing ?? defaults.letterSpacing ?? 0,
+    lineHeight: testCase.lineHeight,
+    direction: dir,
+    lang: testCase.lang ?? (dir === 'rtl' ? 'ar' : 'en'),
+    browserLineMethod: testCase.method ?? defaults.method ?? 'range',
+    verbose: false,
+    whiteSpace: testCase.whiteSpace ?? defaults.whiteSpace ?? 'normal',
+    wordBreak: testCase.wordBreak ?? defaults.wordBreak ?? 'normal',
+  }
+}
+
+function getCurrentOracleBrowser(): OracleBrowser | null {
+  const ua = navigator.userAgent
+  const vendor = navigator.vendor
+
+  if (ua.includes('Firefox/') || ua.includes('FxiOS/')) return 'firefox'
+  if (
+    vendor === 'Apple Computer, Inc.' &&
+    ua.includes('Safari/') &&
+    !ua.includes('Chrome/') &&
+    !ua.includes('Chromium/') &&
+    !ua.includes('CriOS/') &&
+    !ua.includes('FxiOS/') &&
+    !ua.includes('EdgiOS/')
+  ) {
+    return 'safari'
+  }
+  if (
+    ua.includes('Chrome/') ||
+    ua.includes('Chromium/') ||
+    ua.includes('CriOS/') ||
+    ua.includes('Edg/')
+  ) {
+    return 'chrome'
+  }
+  return null
+}
+
+function caseRunsInCurrentBrowser(testCase: ProbeOracleCase, browser: OracleBrowser | null): boolean {
+  return testCase.browsers === undefined || browser === null || testCase.browsers.includes(browser)
+}
+
+function applyConfig(config: ProbeConfig): void {
+  text = config.text
+  width = config.width
+  font = config.font
+  letterSpacing = config.letterSpacing
+  lineHeight = config.lineHeight
+  direction = config.direction
+  lang = config.lang
+  browserLineMethod = config.browserLineMethod
+  verbose = config.verbose
+  whiteSpace = config.whiteSpace
+  wordBreak = config.wordBreak
+  cssWhiteSpace = whiteSpace === 'pre-wrap' ? 'pre-wrap' : 'normal'
+  cssWordBreak = wordBreak === 'keep-all' ? 'keep-all' : 'normal'
+}
+
 function withRequestId<T extends ProbeReport>(report: T): ProbeReport {
   return requestId === undefined ? report : { ...report, requestId }
 }
 
-function publishReport(report: ProbeReport): void {
+function withBatchRequestId<T extends ProbeBatchReport>(report: T): ProbeBatchReport {
+  return requestId === undefined ? report : { ...report, requestId }
+}
+
+function publishCompactReport(report: ProbeReport | ProbeBatchReport): void {
+  publishNavigationReport({
+    status: report.status,
+    ...(report.requestId === undefined ? {} : { requestId: report.requestId }),
+    ...('message' in report && report.message !== undefined ? { message: report.message } : {}),
+  })
+}
+
+function publishReport(report: ProbeReport | ProbeBatchReport): void {
   window.__PROBE_REPORT__ = report
+  if (reportEndpoint !== null) {
+    publishNavigationPhase('posting', requestId)
+    void (async () => {
+      try {
+        await fetch(reportEndpoint, {
+          method: 'POST',
+          body: JSON.stringify(report),
+        })
+        publishCompactReport(report)
+      } catch {
+        // The runner is waiting on the side channel; leaving the phase at
+        // posting makes the transport failure obvious.
+      }
+    })()
+    return
+  }
   publishNavigationReport(report)
 }
 
@@ -579,102 +753,168 @@ function formatReportDetails(report: ProbeReport): string {
   return lines.join('\n')
 }
 
+function buildProbeReport(): ProbeReport {
+  document.title = 'Pretext — Text Probe'
+  document.documentElement.lang = lang
+  document.documentElement.dir = direction
+
+  book.textContent = text
+  book.lang = lang
+  book.dir = direction
+  book.style.font = font
+  book.style.letterSpacing = `${letterSpacing}px`
+  book.style.lineHeight = `${lineHeight}px`
+  book.style.padding = `${PADDING}px`
+  book.style.width = `${width}px`
+  book.style.whiteSpace = cssWhiteSpace
+  book.style.wordBreak = cssWordBreak
+
+  diagnosticDiv.textContent = text
+  diagnosticDiv.lang = lang
+  diagnosticDiv.dir = direction
+  diagnosticDiv.style.font = font
+  diagnosticDiv.style.letterSpacing = `${letterSpacing}px`
+  diagnosticDiv.style.lineHeight = `${lineHeight}px`
+  diagnosticDiv.style.padding = `${PADDING}px`
+  diagnosticDiv.style.width = `${width}px`
+  diagnosticDiv.style.whiteSpace = cssWhiteSpace
+  diagnosticDiv.style.wordBreak = cssWordBreak
+
+  const prepared = prepareWithSegments(text, font, { whiteSpace, wordBreak, letterSpacing })
+  const normalizedText = prepared.segments.join('')
+  const contentWidth = width - PADDING * 2
+  const predicted = layout(prepared, contentWidth, lineHeight)
+  const actualHeight = book.getBoundingClientRect().height
+  const ourLines = getPublicLines(prepared, normalizedText, contentWidth, lineHeight, font)
+  const alternateBrowserLineMethod = browserLineMethod === 'span' ? 'range' : 'span'
+  const browserLines = getBrowserLines(prepared, font, direction, browserLineMethod)
+  const alternateBrowserLines = getBrowserLines(prepared, font, direction, alternateBrowserLineMethod)
+  const firstBreakMismatch = getFirstBreakMismatch(normalizedText, contentWidth, ourLines, browserLines)
+  const alternateFirstBreakMismatch = getFirstBreakMismatch(normalizedText, contentWidth, ourLines, alternateBrowserLines)
+  const breakTrace = firstBreakMismatch === null
+    ? null
+    : getBreakTrace(
+        prepared,
+        font,
+        contentWidth,
+        ourLines[firstBreakMismatch.line - 1],
+        browserLines[firstBreakMismatch.line - 1],
+        firstBreakMismatch,
+      )
+  const extractorSensitivity =
+    firstBreakMismatch !== null && alternateFirstBreakMismatch === null
+      ? `${browserLineMethod} mismatch disappears with ${alternateBrowserLineMethod}`
+      : null
+
+  return withRequestId({
+    status: 'ready',
+    text,
+    whiteSpace,
+    wordBreak,
+    width,
+    contentWidth,
+    font,
+    letterSpacing,
+    lineHeight,
+    direction,
+    browserLineMethod,
+    predictedHeight: predicted.height + PADDING * 2,
+    actualHeight,
+    diffPx: predicted.height + PADDING * 2 - actualHeight,
+    predictedLineCount: ourLines.length,
+    browserLineCount: browserLines.length,
+    firstBreakMismatch,
+    alternateBrowserLineMethod,
+    alternateBrowserLineCount: alternateBrowserLines.length,
+    alternateFirstBreakMismatch,
+    extractorSensitivity,
+    breakTrace,
+    ...(verbose ? {
+      ourLines: summarizeLines(ourLines),
+      browserLines: summarizeLines(browserLines),
+      alternateBrowserLines: summarizeLines(alternateBrowserLines),
+    } : {}),
+  })
+}
+
+function renderProbeReport(report: ProbeReport): void {
+  stats.textContent =
+    `Width ${width}px | Pretext ${report.predictedLineCount} lines | DOM ${report.browserLineCount} lines | Diff ${report.diffPx}px`
+  if (details !== null) details.textContent = formatReportDetails(report)
+}
+
 function init(): void {
   try {
     publishNavigationPhase('measuring', requestId)
-    document.title = 'Pretext — Text Probe'
-    document.documentElement.lang = lang
-    document.documentElement.dir = direction
-
-    book.textContent = text
-    book.lang = lang
-    book.dir = direction
-    book.style.font = font
-    book.style.lineHeight = `${lineHeight}px`
-    book.style.padding = `${PADDING}px`
-    book.style.width = `${width}px`
-    book.style.whiteSpace = cssWhiteSpace
-    book.style.wordBreak = cssWordBreak
-
-    diagnosticDiv.textContent = text
-    diagnosticDiv.lang = lang
-    diagnosticDiv.dir = direction
-    diagnosticDiv.style.font = font
-    diagnosticDiv.style.lineHeight = `${lineHeight}px`
-    diagnosticDiv.style.padding = `${PADDING}px`
-    diagnosticDiv.style.width = `${width}px`
-    diagnosticDiv.style.whiteSpace = cssWhiteSpace
-    diagnosticDiv.style.wordBreak = cssWordBreak
-
-    const prepared = prepareWithSegments(text, font, { whiteSpace, wordBreak })
-    const normalizedText = prepared.segments.join('')
-    const contentWidth = width - PADDING * 2
-    const predicted = layout(prepared, contentWidth, lineHeight)
-    const actualHeight = book.getBoundingClientRect().height
-    const ourLines = getPublicLines(prepared, normalizedText, contentWidth, lineHeight, font)
-    const alternateBrowserLineMethod = browserLineMethod === 'span' ? 'range' : 'span'
-    const browserLines = getBrowserLines(prepared, font, direction, browserLineMethod)
-    const alternateBrowserLines = getBrowserLines(prepared, font, direction, alternateBrowserLineMethod)
-    const firstBreakMismatch = getFirstBreakMismatch(normalizedText, contentWidth, ourLines, browserLines)
-    const alternateFirstBreakMismatch = getFirstBreakMismatch(normalizedText, contentWidth, ourLines, alternateBrowserLines)
-    const breakTrace = firstBreakMismatch === null
-      ? null
-      : getBreakTrace(
-          prepared,
-          font,
-          contentWidth,
-          ourLines[firstBreakMismatch.line - 1],
-          browserLines[firstBreakMismatch.line - 1],
-          firstBreakMismatch,
-        )
-    const extractorSensitivity =
-      firstBreakMismatch !== null && alternateFirstBreakMismatch === null
-        ? `${browserLineMethod} mismatch disappears with ${alternateBrowserLineMethod}`
-        : null
-
-    const report = withRequestId({
-      status: 'ready',
-      text,
-      whiteSpace,
-      wordBreak,
-      width,
-      contentWidth,
-      font,
-      lineHeight,
-      direction,
-      browserLineMethod,
-      predictedHeight: predicted.height + PADDING * 2,
-      actualHeight,
-      diffPx: predicted.height + PADDING * 2 - actualHeight,
-      predictedLineCount: ourLines.length,
-      browserLineCount: browserLines.length,
-      firstBreakMismatch,
-      alternateBrowserLineMethod,
-      alternateBrowserLineCount: alternateBrowserLines.length,
-      alternateFirstBreakMismatch,
-      extractorSensitivity,
-      breakTrace,
-      ...(verbose ? {
-        ourLines: summarizeLines(ourLines),
-        browserLines: summarizeLines(browserLines),
-        alternateBrowserLines: summarizeLines(alternateBrowserLines),
-      } : {}),
-    })
-
-    stats.textContent =
-      `Width ${width}px | Pretext ${report.predictedLineCount} lines | DOM ${report.browserLineCount} lines | Diff ${report.diffPx}px`
-    if (details !== null) details.textContent = formatReportDetails(report)
+    const report = buildProbeReport()
+    renderProbeReport(report)
     publishReport(report)
   } catch (error) {
     setError(error instanceof Error ? error.message : String(error))
   }
 }
 
+function runProbeBatch(batchSpec: ProbeBatchSpec): void {
+  try {
+    publishNavigationPhase('measuring', requestId)
+    const results: NonNullable<ProbeBatchReport['results']> = []
+    const currentBrowser = getCurrentOracleBrowser()
+
+    for (const testCase of batchSpec.cases) {
+      if (!caseRunsInCurrentBrowser(testCase, currentBrowser)) continue
+      applyConfig(materializeCase(testCase, batchSpec.defaults))
+      try {
+        results.push({ label: testCase.label, report: buildProbeReport() })
+      } catch (error) {
+        results.push({
+          label: testCase.label,
+          report: withRequestId({
+            status: 'error',
+            message: error instanceof Error ? error.message : String(error),
+          }),
+        })
+      }
+    }
+
+    stats.textContent = `${batchSpec.title} batch: ${results.length} cases`
+    if (details !== null) {
+      details.textContent = results
+        .map(result => `${result.label}: ${result.report.status}`)
+        .join('\n')
+    }
+    publishReport(withBatchRequestId({ status: 'ready', results }))
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    stats.textContent = `Error: ${message}`
+    if (details !== null) details.textContent = `Error: ${message}`
+    publishReport(withBatchRequestId({ status: 'error', message }))
+  }
+}
+
 window.__PROBE_REPORT__ = withRequestId({ status: 'error', message: 'Pending initial layout' })
 clearNavigationReport()
 publishNavigationPhase('loading', requestId)
+let batchSpec: ProbeBatchSpec | null = null
+let batchError: string | null = null
+try {
+  batchSpec = getProbeBatchSpec(batch)
+} catch (error) {
+  batchError = error instanceof Error ? error.message : String(error)
+}
+
+function runReadyProbe(): void {
+  if (batchError !== null) {
+    setError(batchError)
+    return
+  }
+  if (batchSpec === null) {
+    init()
+  } else {
+    runProbeBatch(batchSpec)
+  }
+}
 if ('fonts' in document) {
-  void document.fonts.ready.then(init)
+  void document.fonts.ready.then(runReadyProbe)
 } else {
-  init()
+  runReadyProbe()
 }

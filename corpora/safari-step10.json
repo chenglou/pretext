@@ -85,6 +85,18 @@
     "mismatches": []
   },
   {
+    "corpusId": "ko-sonagi",
+    "language": "ko",
+    "title": "소나기",
+    "browser": "safari",
+    "start": 300,
+    "end": 900,
+    "step": 10,
+    "widthCount": 61,
+    "exactCount": 61,
+    "mismatches": []
+  },
+  {
     "corpusId": "zh-zhufu",
     "language": "zh",
     "title": "祝福",

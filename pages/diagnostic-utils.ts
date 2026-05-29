@@ -14,7 +14,7 @@ export function getDiagnosticUnits(prepared: PreparedTextWithSegments): Diagnost
 
   for (let i = 0; i < prepared.segments.length; i++) {
     const segment = prepared.segments[i]!
-    if (prepared.breakableWidths[i] !== null) {
+    if (prepared.breakableFitAdvances[i] !== null) {
       let localOffset = 0
       for (const grapheme of diagnosticGraphemeSegmenter.segment(segment)) {
         const start = offset + localOffset

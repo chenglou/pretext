@@ -51,7 +51,7 @@ type FontMatrixNote = {
 const PRODUCT_SHAPED: CorpusDashboardMeta[] = [
   {
     id: 'mixed-app-text',
-    notes: 'remaining Chrome-only `710px` miss is SHY / extractor-sensitive; Safari is exact there again in height/line count',
+    notes: 'currently exact in the maintained Chrome and Safari step10 sweeps; keep as the product-shaped canary for URLs, emoji ZWJ, hard spaces, and soft hyphens',
   },
 ]
 
@@ -71,6 +71,10 @@ const LONG_FORM: CorpusDashboardMeta[] = [
   {
     id: 'ko-unsu-joh-eun-nal',
     notes: 'Korean step10 sweep is clean',
+  },
+  {
+    id: 'ko-sonagi',
+    notes: 'second Korean canary; step10 sweep is clean',
   },
   {
     id: 'zh-guxiang',
@@ -153,6 +157,11 @@ const FONT_MATRIX_NOTES: FontMatrixNote[] = [
   },
   {
     corpusId: 'ko-unsu-joh-eun-nal',
+    status: 'clean on sampled matrix',
+    notes: '`Apple SD Gothic Neo`, `AppleMyungjo`',
+  },
+  {
+    corpusId: 'ko-sonagi',
     status: 'clean on sampled matrix',
     notes: '`Apple SD Gothic Neo`, `AppleMyungjo`',
   },

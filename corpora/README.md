@@ -38,6 +38,12 @@ Current bundle:
   - URL: <https://ko.wikisource.org/wiki/%EC%9A%B4%EC%88%98_%EC%A2%8B%EC%9D%80_%EB%82%A0>
   - Acquisition: Wikisource `extracts` API, lightly cleaned
 
+- `ko-sonagi.txt`
+  - Language: Korean
+  - Source: Hwang Sun-won, `소나기`
+  - URL: <https://ko.wikisource.org/wiki/%EC%86%8C%EB%82%98%EA%B8%B0>
+  - Acquisition: Wikisource `extracts` API, reformatted to remove fixed-width source wrapping
+
 - `zh-zhufu.txt`
   - Language: Chinese
   - Source: 魯迅, `祝福`
@@ -120,6 +126,7 @@ Mismatch taxonomy and steering vocabulary live in `TAXONOMY.md`.
 Useful commands:
 
 - `bun run corpus-check --id=ko-unsu-joh-eun-nal 300 600 800`
+- `bun run corpus-check --id=ko-sonagi 300 600 800`
 - `bun run corpus-check --id=ar-risalat-al-ghufran-part-1 --diagnose 300`
 - `bun run corpus-sweep --id=hi-eidgah --start=300 --end=900 --step=10`
 - `bun run corpus-sweep --id=ar-al-bukhala --start=300 --end=900 --step=10`
