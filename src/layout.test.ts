@@ -984,6 +984,67 @@ describe('rich-inline invariants', () => {
       maxLineWidth: Math.max(...widths),
     })
   })
+
+  test('prepareRichInline with pre-wrap preserves trailing spaces on the current line', () => {
+    const prepared = prepareRichInline(
+      [
+        { text: 'Hello   ', font: FONT },
+        { text: 'World', font: FONT },
+      ],
+      { whiteSpace: 'pre-wrap' },
+    )
+    // The width of 'Hello   ' is sufficient for the first item, 
+    // and the spaces should stay on that line.
+    const widthOfHelloAndSpaces = measureWidth('Hello   ', FONT) + 0.1
+
+    const lines: string[] = []
+    walkRichInlineLineRanges(prepared, widthOfHelloAndSpaces, range => {
+      const line = materializeRichInlineLineRange(prepared, range)
+      lines.push(line.fragments.map(f => f.text).join(''))
+    })
+
+    expect(lines).toEqual(['Hello   ', 'World'])
+  })
+
+  test('prepareRichInline default normal mode still collapses boundary whitespace', () => {
+    const prepared = prepareRichInline([
+      { text: '  Hello  ', font: FONT },
+      { text: '  World  ', font: FONT },
+    ])
+    // Default normal mode: boundary spaces are collapsed into gapBefore.
+    // The fragments should contain trimmed text with inter-item gap.
+    const lines: Array<{ text: string, gapBefore: number }[]> = []
+    walkRichInlineLineRanges(prepared, 500, range => {
+      const line = materializeRichInlineLineRange(prepared, range)
+      lines.push(line.fragments.map(f => ({ text: f.text, gapBefore: f.gapBefore })))
+    })
+
+    expect(lines).toHaveLength(1)
+    expect(lines[0]![0]!.text).toBe('Hello')
+    expect(lines[0]![0]!.gapBefore).toBe(0)
+    expect(lines[0]![1]!.text).toBe('World')
+    expect(lines[0]![1]!.gapBefore).toBeGreaterThan(0)
+  })
+
+  test('prepareRichInline pre-wrap keeps whitespace-only items visible', () => {
+    const prepared = prepareRichInline(
+      [
+        { text: 'Hello', font: FONT },
+        { text: '   ', font: FONT },
+        { text: 'World', font: FONT },
+      ],
+      { whiteSpace: 'pre-wrap' },
+    )
+    // whitespace-only item should not be skipped in pre-wrap mode.
+    // All three items should contribute fragments.
+    const fragments: string[] = []
+    walkRichInlineLineRanges(prepared, 500, range => {
+      const line = materializeRichInlineLineRange(prepared, range)
+      for (const f of line.fragments) fragments.push(f.text)
+    })
+
+    expect(fragments).toEqual(['Hello', '   ', 'World'])
+  })
 })
 
 describe('layout invariants', () => {

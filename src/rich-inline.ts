@@ -155,7 +155,11 @@ function endsInsideFirstSegment(segmentIndex: number, graphemeIndex: number): bo
   return segmentIndex === 0 && graphemeIndex > 0
 }
 
-export function prepareRichInline(items: RichInlineItem[]): PreparedRichInline {
+export function prepareRichInline(
+  items: RichInlineItem[],
+  options?: { whiteSpace?: 'normal' | 'pre-wrap' },
+): PreparedRichInline {
+  const whiteSpace = options?.whiteSpace ?? 'normal'
   const preparedItems: PreparedRichInlineItem[] = []
   const itemsBySourceItemIndex = Array.from<PreparedRichInlineItem | undefined>({ length: items.length })
   const collapsedSpaceWidthCache = new Map<string, number>()
@@ -164,14 +168,17 @@ export function prepareRichInline(items: RichInlineItem[]): PreparedRichInline {
   for (let index = 0; index < items.length; index++) {
     const item = items[index]!
     const letterSpacing = item.letterSpacing ?? 0
-    const hasLeadingWhitespace = LEADING_COLLAPSIBLE_BOUNDARY_RE.test(item.text)
-    const hasTrailingWhitespace = TRAILING_COLLAPSIBLE_BOUNDARY_RE.test(item.text)
-    const trimmedText = item.text
-      .replace(LEADING_COLLAPSIBLE_BOUNDARY_RE, '')
-      .replace(TRAILING_COLLAPSIBLE_BOUNDARY_RE, '')
+    const isPreWrap = whiteSpace === 'pre-wrap'
+    const hasLeadingWhitespace = isPreWrap ? false : LEADING_COLLAPSIBLE_BOUNDARY_RE.test(item.text)
+    const hasTrailingWhitespace = isPreWrap ? false : TRAILING_COLLAPSIBLE_BOUNDARY_RE.test(item.text)
+    const trimmedText = isPreWrap
+      ? item.text
+      : item.text
+          .replace(LEADING_COLLAPSIBLE_BOUNDARY_RE, '')
+          .replace(TRAILING_COLLAPSIBLE_BOUNDARY_RE, '')
 
     if (trimmedText.length === 0) {
-      if (COLLAPSIBLE_BOUNDARY_RE.test(item.text) && pendingGapWidth === 0) {
+      if (!isPreWrap && COLLAPSIBLE_BOUNDARY_RE.test(item.text) && pendingGapWidth === 0) {
         pendingGapWidth = getCollapsedSpaceWidth(item.font, letterSpacing, collapsedSpaceWidthCache)
       }
       continue
@@ -183,10 +190,13 @@ export function prepareRichInline(items: RichInlineItem[]): PreparedRichInline {
         : hasLeadingWhitespace
           ? getCollapsedSpaceWidth(item.font, letterSpacing, collapsedSpaceWidthCache)
           : 0
+    const prepareOptions = isPreWrap
+      ? (letterSpacing === 0 ? { whiteSpace } : { whiteSpace, letterSpacing })
+      : (letterSpacing === 0 ? undefined : { letterSpacing })
     const prepared = prepareWithSegments(
       trimmedText,
       item.font,
-      letterSpacing === 0 ? undefined : { letterSpacing },
+      prepareOptions,
     )
     const wholeLine = prepareWholeItemLine(prepared)
     if (wholeLine === null) {
