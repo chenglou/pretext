@@ -1,4 +1,8 @@
 import {
+  kinsokuStart,
+  leftStickyPunctuation,
+} from './analysis.js'
+import {
   measureNaturalWidth,
   prepareWithSegments,
   type PreparedTextWithSegments,
@@ -153,6 +157,31 @@ type RichInlineFragmentCollector = (
 
 function endsInsideFirstSegment(segmentIndex: number, graphemeIndex: number): boolean {
   return segmentIndex === 0 && graphemeIndex > 0
+}
+
+function startsWithLineStartProhibitedText(item: PreparedRichInlineItem): boolean {
+  const firstSegment = item.prepared.segments[0]
+  if (firstSegment === undefined) return false
+
+  const firstChar = Array.from(firstSegment)[0]
+  return firstChar !== undefined && (
+    leftStickyPunctuation.has(firstChar) ||
+    kinsokuStart.has(firstChar)
+  )
+}
+
+function shouldKeepItemAttachedToCurrentLine(
+  item: PreparedRichInlineItem,
+  gapBefore: number,
+  lineWidth: number,
+  atItemStart: boolean,
+): boolean {
+  return (
+    lineWidth > 0 &&
+    atItemStart &&
+    gapBefore === 0 &&
+    startsWithLineStartProhibitedText(item)
+  )
 }
 
 export function prepareRichInline(items: RichInlineItem[]): PreparedRichInline {
@@ -332,7 +361,14 @@ function stepRichInlineLine(
 
     // The lower-level walker may force one unit to make progress. If that unit
     // only fits on a fresh line, wrap before this rich item instead.
-    if (lineWidth > 0 && atItemStart && lineWidthContribution > remainingWidth) break lineLoop
+    if (
+      lineWidth > 0 &&
+      atItemStart &&
+      lineWidthContribution > remainingWidth &&
+      !shouldKeepItemAttachedToCurrentLine(item, gapBefore, lineWidth, atItemStart)
+    ) {
+      break lineLoop
+    }
 
     // If the only thing we can fit after paying the boundary gap is a partial
     // slice of the item's first segment, prefer wrapping before the item so we

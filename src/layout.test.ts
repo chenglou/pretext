@@ -960,6 +960,30 @@ describe('rich-inline invariants', () => {
     })
   })
 
+  test('rich inline keeps line-start punctuation attached across item boundaries', () => {
+    const prepared = prepareRichInline([
+      { text: 'Hello', font: FONT },
+      { text: '.', font: FONT },
+      { text: ' world', font: FONT },
+    ])
+    const maxWidth = measureWidth('Hello', FONT) + 0.1
+    const lines: string[] = []
+    const widths: number[] = []
+
+    walkRichInlineLineRanges(prepared, maxWidth, range => {
+      const line = materializeRichInlineLineRange(prepared, range)
+      lines.push(line.fragments.map(fragment => fragment.text).join(''))
+      widths.push(line.width)
+    })
+
+    expect(lines).toEqual(['Hello.', 'world'])
+    expect(widths[0]!).toBeCloseTo(measureWidth('Hello.', FONT), 5)
+    expect(measureRichInlineStats(prepared, maxWidth)).toEqual({
+      lineCount: lines.length,
+      maxLineWidth: Math.max(...widths),
+    })
+  })
+
   test('split CJK rich inline items stay inside the line width', () => {
     const maxWidth = measureWidth('中', FONT) + 1
     const prepared = prepareRichInline([
