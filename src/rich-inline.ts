@@ -111,6 +111,51 @@ function cloneCursor(cursor: LayoutCursor): LayoutCursor {
   }
 }
 
+function findInternalItemIndex(
+  flow: InternalPreparedRichInline,
+  sourceItemIndex: number,
+): number {
+  for (let i = 0; i < flow.items.length; i++) {
+    if (flow.items[i]!.sourceItemIndex >= sourceItemIndex) return i
+  }
+  return flow.items.length
+}
+
+function toInternalCursor(
+  flow: InternalPreparedRichInline,
+  cursor: RichInlineCursor,
+): RichInlineCursor {
+  const itemIndex = findInternalItemIndex(flow, cursor.itemIndex)
+  const item = flow.items[itemIndex]
+  if (item === undefined) {
+    return { itemIndex, segmentIndex: 0, graphemeIndex: 0 }
+  }
+  return {
+    itemIndex,
+    segmentIndex: item.sourceItemIndex === cursor.itemIndex ? cursor.segmentIndex : 0,
+    graphemeIndex: item.sourceItemIndex === cursor.itemIndex ? cursor.graphemeIndex : 0,
+  }
+}
+
+function toSourceCursor(
+  flow: InternalPreparedRichInline,
+  cursor: RichInlineCursor,
+): RichInlineCursor {
+  const item = flow.items[cursor.itemIndex]
+  if (item === undefined) {
+    return {
+      itemIndex: flow.itemsBySourceItemIndex.length,
+      segmentIndex: 0,
+      graphemeIndex: 0,
+    }
+  }
+  return {
+    itemIndex: item.sourceItemIndex,
+    segmentIndex: cursor.segmentIndex,
+    graphemeIndex: cursor.graphemeIndex,
+  }
+}
+
 function isLineStartCursor(cursor: LayoutCursor): boolean {
   return cursor.segmentIndex === 0 && cursor.graphemeIndex === 0
 }
@@ -405,11 +450,7 @@ export function layoutNextRichInlineLineRange(
   start: RichInlineCursor = RICH_INLINE_START_CURSOR,
 ): RichInlineLineRange | null {
   const flow = getInternalPreparedRichInline(prepared)
-  const end: RichInlineCursor = {
-    itemIndex: start.itemIndex,
-    segmentIndex: start.segmentIndex,
-    graphemeIndex: start.graphemeIndex,
-  }
+  const end = toInternalCursor(flow, start)
   const fragments: RichInlineFragmentRange[] = []
   const width = stepRichInlineLine(flow, maxWidth, end, (item, gapBefore, occupiedWidth, fragmentStart, fragmentEnd) => {
     fragments.push({
@@ -425,7 +466,7 @@ export function layoutNextRichInlineLineRange(
   return {
     fragments,
     width,
-    end,
+    end: toSourceCursor(flow, end),
   }
 }
 
