@@ -1,46 +1,46 @@
-Current priorities:
+現在の優先事項:
 
-1. Keep the canaries honest
+1. カナリアを正直に保つ
 
-- Mixed app text is exact again in the maintained Chrome/Safari step10 sweeps; keep it as a product-shaped regression canary rather than an active tuning target.
-- Chinese is still the clearest active CJK canary: Safari's step10 sweep is clean, while Chrome keeps a broader narrow-width positive field with real font sensitivity.
-- Myanmar and Urdu remain useful shaping/context canaries, but they are not the active tuning target right now.
+- 混在アプリテキストはメンテ対象の Chrome/Safari step10 スイープで再び完全一致である。能動的なチューニング対象ではなく、プロダクト形状のリグレッションカナリアとして維持する。
+- 中国語は依然として最も明確な能動 CJK カナリア。Safari の step10 スイープはクリーンだが、Chrome では実フォント感受性を伴うより広い狭幅ポジティブ領域が残っている。
+- ミャンマー語とウルドゥー語はシェーピング/文脈カナリアとして引き続き有用だが、現時点では能動的なチューニング対象ではない。
 
-2. Next engine work
+2. 次のエンジン作業
 
-- Use the split `analyze()` / `measure()` benchmark rows to steer any remaining `prepare()` work, and use the chunk-heavy rich benchmark rows to steer `layoutNextLine()` work, instead of reopening generic profiling.
-- Use the synthetic long-breakable-run canary to steer any Safari prefix-width work; naive cache-space cleanups there can trade retained heap for meaningfully slower `prepare()`.
-- Expand mixed app text only when it adds a real product-shaped class, e.g. URL/query runs, mixed bidi with numbers, emoji ZWJ runs, or `NBSP` / `ZWSP` / `WJ` behavior.
-- Broaden canaries only when the source text is clean.
-- If we add another Southeast Asian canary, prefer a clean source text that broadens the class instead of another wrapped/legal/raw-source artifact.
-- Expand the sampled font matrix only where a canary still looks genuinely imperfect.
-- Treat strongly font-sensitive or shaping-sensitive misses as boundary-finding for the current architecture, not automatic invitations for another local glue rule.
-- Keep the height-only `layout()` path simple and allocation-light, and use the rich/manual benchmarks to steer range/cursor layout work.
-- The duplicate public streaming chunk lookup was removed in 3757fa0; only revisit a stateful streaming variant or cursor-carried chunk hint if the remaining single lookup per emitted line shows up in the chunk-heavy benchmark.
-- If arbitrary interior rich cursors become common, consider a compact `segmentIndex -> chunkIndex` side table, ideally only on rich prepared handles or only when `chunks.length > 1`.
+- 一般的なプロファイリングを再開する代わりに、分割された `analyze()` / `measure()` ベンチマーク行を使って残りの `prepare()` 作業を導き、チャンク重視のリッチベンチマーク行を使って `layoutNextLine()` 作業を導く。
+- 合成された長い分割可能ラン (long-breakable-run) カナリアを使って Safari の prefix-width 作業を導く。そこでの素朴なキャッシュ空間の整理は、保持ヒープと引き換えに `prepare()` を体感的に遅くする可能性がある。
+- 混在アプリテキストの拡大は、URL/クエリラン、数字を含む混在 bidi、絵文字 ZWJ ラン、`NBSP` / `ZWSP` / `WJ` の挙動など、実際のプロダクト形状クラスを追加する場合のみ行う。
+- カナリアの拡大はソーステキストがクリーンな場合のみ行う。
+- 別の東南アジア系カナリアを追加するなら、別の折り返された/法律文書的な/生のソースアーティファクトではなく、クラスを広げるクリーンなソーステキストを優先する。
+- サンプルされたフォントマトリクスの拡張は、カナリアがまだ真にしっくり来ない箇所のみ行う。
+- フォント感受性やシェーピング感受性が強いミスは、現アーキテクチャの境界を見つける材料として扱い、自動的に新たな局所グルールールの招待状とはしない。
+- 高さのみの `layout()` パスはシンプルかつアロケーション軽量に保ち、レンジ/カーソルレイアウト作業はリッチ/手動のベンチマークで導く。
+- 重複していた公開ストリーミングチャンクルックアップは 3757fa0 で削除済み。ステートフルなストリーミング版やカーソル運搬型のチャンクヒントは、行を発行するごとの残る単一ルックアップがチャンク重視のベンチマークに現れた場合にのみ再検討する。
+- 任意の内部リッチカーソルが一般化したら、コンパクトな `segmentIndex -> chunkIndex` サイドテーブルを検討する。理想的にはリッチな prepared ハンドル限定、もしくは `chunks.length > 1` のときだけ。
 
-3. Demo work
+3. デモ作業
 
-- Keep the editorial demos as the dogfood path for the rich line APIs.
-- Prefer `layoutNextLine()` / `walkLineRanges()` when a demo is really about streaming or obstacle-aware layout.
-- Add a new demo only if it exposes something the current editorial demos do not already cover.
+- エディトリアル系のデモはリッチライン API のドッグフードパスとして維持する。
+- デモが本当にストリーミングや障害物考慮レイアウトについてなら、`layoutNextLine()` / `walkLineRanges()` を優先する。
+- 新しいデモは、現行のエディトリアル系デモが既にカバーしていない何かを露出する場合にのみ追加する。
 
-Not worth doing right now:
+今やる価値のないこと:
 
-- Do not chase universal exactness as the product claim.
-- Do not put measurement back in `layout()`.
-- Do not resurrect dirty corpora just to cover another language.
-- Do not overfit one-line misses in one browser/corpus without broader evidence.
-- Do not let browser-profile shims turn into a grab bag of ad hoc engine knobs.
-- Do not explode the public API with cache or engine knobs.
+- プロダクトの主張として普遍的な完全一致を追わない。
+- `layout()` に計測を戻さない。
+- 別の言語をカバーするためだけに汚れたコーパスを蘇らせない。
+- 単一ブラウザ/コーパスの 1 行ミスを、より広い証拠なしに過剰適合しない。
+- ブラウザプロファイルの shim を場当たり的なエンジンノブの寄せ集めにさせない。
+- キャッシュやエンジンノブで公開 API を膨らませない。
 
-Still-open design questions:
+未解決の設計課題:
 
-- Whether line-fit tolerance should stay as a browser shim or move toward runtime calibration.
-- Whether `{ whiteSpace: 'pre-wrap' }` should grow beyond spaces / tabs / `\n`.
-- Whether strong real-world demand for `system-ui` would justify a narrow prepare-time DOM fallback.
-- Whether server canvas support should become an explicit supported backend.
-- Whether automatic hyphenation beyond manual soft hyphen is in scope.
-- Whether intrinsic sizing / logical width APIs are needed beyond fixed-width height prediction.
-- Whether bidi rendering concerns like selection and copy/paste belong here or stay out of scope.
-- Whether a separate optional slow verify path is worth having as a diagnostic mode, without contaminating `layout()`.
+- 行フィットの許容値をブラウザ shim のままにすべきか、それともランタイムキャリブレーションへ寄せるべきか。
+- `{ whiteSpace: 'pre-wrap' }` をスペース / タブ / `\n` を超えて拡張すべきか。
+- `system-ui` への強い実需が、prepare 時の狭い DOM フォールバックを正当化するか。
+- サーバー canvas サポートを明示的にサポートされるバックエンドにすべきか。
+- 手動ソフトハイフンを超える自動ハイフネーションがスコープに入るか。
+- 固定幅の高さ予測を超えて、固有サイズ / 論理幅 API が必要か。
+- 選択やコピー&ペーストといった bidi 描画上の関心事はここに属するか、それともスコープ外のままか。
+- `layout()` を汚染せずに、診断モードとしての別個のオプショナルな低速 verify パスを持つ価値があるか。
