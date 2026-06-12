@@ -1,44 +1,44 @@
-# Current Status
+# 現在のステータス
 
-This file is the compact "where do I look right now?" map.
+このファイルは「今どこを見ればいいか」を簡潔に示すマップである。
 
-Use [RESEARCH.md](RESEARCH.md) for why the numbers moved and what was tried.
-Use [corpora/STATUS.md](corpora/STATUS.md) for the long-form corpus canaries.
+数値が動いた理由や試したことについては [RESEARCH.md](RESEARCH.md) を参照。
+長文コーパスのカナリアについては [corpora/STATUS.md](corpora/STATUS.md) を参照。
 
-## Main Dashboard
+## メインダッシュボード
 
-- [status/dashboard.json](status/dashboard.json) — machine-readable summary of the current browser accuracy, benchmark, and corpus inputs
+- [status/dashboard.json](status/dashboard.json) — 現在のブラウザ精度・ベンチマーク・コーパス入力をまとめた機械可読サマリ
 
-## Browser Accuracy
+## ブラウザ精度
 
 - [accuracy/chrome.json](accuracy/chrome.json)
 - [accuracy/safari.json](accuracy/safari.json)
 - [accuracy/firefox.json](accuracy/firefox.json)
 - [accuracy/letter-spacing.json](accuracy/letter-spacing.json)
 
-Notes:
-- This is the checked-in `4 fonts x 8 sizes x 8 widths x 30 texts` browser sweep.
-- The public accuracy page is basically a regression gate now, not the main steering metric.
-- The letter-spacing snapshot is a compact Chrome + Safari oracle, not part of the full sweep matrix.
+メモ:
+- これはチェックイン済みの `4 fonts x 8 sizes x 8 widths x 30 texts` ブラウザスイープである。
+- 公開精度ページは現状ほぼリグレッションゲートであり、メインの指針メトリクスではない。
+- letter-spacing スナップショットは Chrome + Safari の簡易オラクルで、フルスイープ行列の一部ではない。
 
-## Benchmark Snapshots
+## ベンチマークスナップショット
 
 - [benchmarks/chrome.json](benchmarks/chrome.json)
 - [benchmarks/safari.json](benchmarks/safari.json)
 
-Notes:
-- Chrome is still the main maintained performance baseline.
-- Safari numbers are useful, but noisier and warm up less predictably.
-- The checked-in JSON snapshots are medians across 3 cold checker runs. Ad hoc page numbers can differ after warmup.
-- Refresh these when benchmark methodology or the hot path changes: `src/analysis.ts`, `src/measurement.ts`, `src/line-break.ts`, `src/layout.ts`, `src/bidi.ts`, or `pages/benchmark.ts`.
+メモ:
+- Chrome は引き続きメインで維持しているパフォーマンスベースラインである。
+- Safari の数値も有用だが、ノイズが大きくウォームアップも予測しづらい。
+- チェックイン済み JSON スナップショットはコールド状態でのチェッカー 3 回のメディアンである。アドホックなページ計測値はウォームアップ後で異なることがある。
+- ベンチマーク手法やホットパス (`src/analysis.ts`, `src/measurement.ts`, `src/line-break.ts`, `src/layout.ts`, `src/bidi.ts`, `pages/benchmark.ts`) が変わった際にはこれらを再生成すること。
 
-## Long-Form Corpus Status
+## 長文コーパスのステータス
 
 - [corpora/STATUS.md](corpora/STATUS.md)
 - [corpora/dashboard.json](corpora/dashboard.json)
 - [corpora/chrome-step10.json](corpora/chrome-step10.json)
 - [corpora/safari-step10.json](corpora/safari-step10.json)
 
-## Historical Log
+## 履歴ログ
 
 - [RESEARCH.md](RESEARCH.md)
