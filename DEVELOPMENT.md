@@ -1,67 +1,67 @@
-## Development Setup
+## 開発環境のセットアップ
 
-Install once:
+初回のみ実行する。
 
 ```sh
 bun install
 ```
 
-### Day-To-Day
+### 日常的に使うコマンド
 
-- `bun start` — stable local page server at <http://localhost:3000>
-- `bun run start:windows` — Windows-friendly fallback without automatic port cleanup
-- `bun run check` — typecheck, lint, and dead-code scan (`knip`)
-- `bun test` — small durable invariant suite
+- `bun start` — <http://localhost:3000> で動作する安定したローカルページサーバー
+- `bun run start:windows` — 自動ポートクリーンアップを行わない Windows 向けフォールバック
+- `bun run check` — 型チェック、lint、デッドコードスキャン (`knip`)
+- `bun test` — 小さく耐久性のある不変条件スイート
 
-### Packaging And Release Confidence
+### パッケージングとリリース時の確認
 
-- `bun run build:package` — emit `dist/` for the published ESM package
-- `bun run package-smoke-test` — pack the tarball and verify temporary JS + TS consumers
-- `bun run site:build` — build the static demo site into `site/`
-- `bun run generate:bidi-data` — refresh the checked-in simplified Unicode bidi ranges
+- `bun run build:package` — 公開 ESM パッケージ用に `dist/` を出力する
+- `bun run package-smoke-test` — tarball をパックし、一時的な JS および TS コンシューマで検証する
+- `bun run site:build` — 静的デモサイトを `site/` にビルドする
+- `bun run generate:bidi-data` — チェックイン済みの簡略化された Unicode bidi 範囲データを更新する
 
-`prepack` also rebuilds `dist/` through plain `tsc`, so keep runtime `.js` specifiers honest in source imports.
+`prepack` はプレーンな `tsc` を通じて `dist/` を再ビルドするため、ソースインポートでは実行時の `.js` 指定子を正確に保つこと。
 
-### Browser Accuracy And Benchmarking
+### ブラウザ精度とベンチマーク
 
-- `bun run accuracy-check` — Chrome browser sweep
+- `bun run accuracy-check` — Chrome ブラウザスイープ
 - `bun run accuracy-check:safari`
 - `bun run accuracy-check:firefox`
-- `bun run accuracy-snapshot` — refresh `accuracy/chrome.json`
+- `bun run accuracy-snapshot` — `accuracy/chrome.json` を更新する
 - `bun run accuracy-snapshot:safari`
 - `bun run accuracy-snapshot:firefox`
-- `bun run benchmark-check` — Chrome benchmark snapshot; default is the median of 3 full page runs, use `--runs=1` for a quick local check
+- `bun run benchmark-check` — Chrome ベンチマークスナップショット。デフォルトはフルページ実行 3 回の中央値で、ローカルでの素早い確認には `--runs=1` を使用する
 - `bun run benchmark-check:safari`
-- `bun run pre-wrap-check` — compact batched browser oracle for `{ whiteSpace: 'pre-wrap' }`
-- `bun run keep-all-check` — compact batched browser oracle for `{ wordBreak: 'keep-all' }`, including mixed-script no-space canaries
-- `bun run symbol-check` — compact batched Chrome + Safari oracle for no-space symbol runs inside long words
-- `bun run letter-spacing-check` — compact batched browser oracle for `{ letterSpacing }`, using one posted-report probe per browser and covering narrow wraps, combining marks, bidi, CJK, emoji, digits, RTL punctuation, `pre-wrap`, and soft hyphens
-- `bun run letter-spacing-snapshot` — refresh `accuracy/letter-spacing.json` from the Chrome + Safari compact `{ letterSpacing }` oracle
-- `bun run probe-check` — smaller browser probe/diagnostic entrypoint
+- `bun run pre-wrap-check` — `{ whiteSpace: 'pre-wrap' }` 用のコンパクトなバッチ済みブラウザオラクル
+- `bun run keep-all-check` — `{ wordBreak: 'keep-all' }` 用のコンパクトなバッチ済みブラウザオラクル。スペースなしの混在スクリプトカナリアを含む
+- `bun run symbol-check` — 長い単語内のスペースなしシンボル列に対する Chrome + Safari のコンパクトなバッチ済みオラクル
+- `bun run letter-spacing-check` — `{ letterSpacing }` 用のコンパクトなバッチ済みブラウザオラクル。ブラウザごとに 1 つのポスト済みレポートプローブを使い、狭い折り返し、結合マーク、bidi、CJK、絵文字、数字、RTL 句読点、`pre-wrap`、ソフトハイフンをカバーする
+- `bun run letter-spacing-snapshot` — Chrome + Safari のコンパクトな `{ letterSpacing }` オラクルから `accuracy/letter-spacing.json` を更新する
+- `bun run probe-check` — より小さなブラウザプローブ / 診断用エントリポイント
 - `bun run probe-check:safari`
-  On a first-break mismatch, probe output now includes a small break trace.
-  `sN:gM` means segment/grapheme position, `unit` is that unit's width, `fit` is the cumulative fitted width from the current line start, and `[ours]` / `[browser]` mark the competing break boundaries.
-  For Safari URL/query misses or other extractor-sensitive cases, cross-check `--method=span` before changing the engine.
+  初回のブレーク不一致時に、プローブ出力には小さなブレークトレースが含まれるようになった。
+  `sN:gM` はセグメント / 書記素位置を、`unit` はそのユニットの幅を、`fit` は現在の行頭からの累積フィット幅を表し、`[ours]` / `[browser]` は競合するブレーク境界を示す。
+  Safari の URL/クエリ不一致や他のエクストラクタに敏感なケースでは、エンジンを変更する前に `--method=span` で相互チェックすること。
 
-### Corpus Tooling
+### コーパスツール
 
-- `bun run corpus-check` — diagnose one corpus at one or a few widths
+- `bun run corpus-check` — 1 つまたは少数の幅で 1 つのコーパスを診断する
 - `bun run corpus-check:safari`
-- `bun run corpus-sweep` — maintained Chrome `step=10` corpus width sweep
-- `bun run corpus-sweep:safari` — maintained Safari `step=10` corpus width sweep
-- `bun run corpus-font-matrix` — same corpus under alternate fonts
+- `bun run corpus-sweep` — メンテナンス対象の Chrome `step=10` コーパス幅スイープ
+- `bun run corpus-sweep:safari` — メンテナンス対象の Safari `step=10` コーパス幅スイープ
+- `bun run corpus-font-matrix` — 同じコーパスを別フォントで実行する
 - `bun run corpus-font-matrix:safari`
-- `bun run corpus-taxonomy` — classify a mismatch field into steering buckets
-- `bun run corpus-status` — rebuild `corpora/dashboard.json`
-- `bun run corpus-status:refresh` — refresh Chrome and Safari `step=10` sweeps, then the corpus dashboard
+- `bun run corpus-taxonomy` — 不一致フィールドをステアリングバケットに分類する
+- `bun run corpus-status` — `corpora/dashboard.json` を再構築する
+- `bun run corpus-status:refresh` — Chrome と Safari の `step=10` スイープを更新し、その後コーパスダッシュボードを更新する
 
-### Status Dashboards
+### ステータスダッシュボード
 
-- `bun run status-dashboard` — rebuild `status/dashboard.json`
+- `bun run status-dashboard` — `status/dashboard.json` を再構築する
 
-## Useful Pages
+## 便利なページ
 
-The ones worth keeping in your muscle memory:
+筋肉記憶に入れておく価値のあるもの。
 
 - `/demos/index`
 - `/demos/bubbles`
@@ -74,49 +74,49 @@ The ones worth keeping in your muscle memory:
 - `/benchmark`
 - `/corpus`
 
-## Current Sources Of Truth
+## 現在のソースオブトゥルース
 
-Use these for the current checked-in picture:
+現在チェックイン済みの状況把握には以下を使う。
 
-- [STATUS.md](STATUS.md) — short pointer doc for the main browser accuracy + benchmark snapshots
-- [status/dashboard.json](status/dashboard.json) — machine-readable main dashboard
-- [accuracy/chrome.json](accuracy/chrome.json), [accuracy/safari.json](accuracy/safari.json), [accuracy/firefox.json](accuracy/firefox.json) — raw browser accuracy rows
-- [accuracy/letter-spacing.json](accuracy/letter-spacing.json) — compact Chrome + Safari `{ letterSpacing }` oracle snapshot
-- [benchmarks/chrome.json](benchmarks/chrome.json), [benchmarks/safari.json](benchmarks/safari.json) — raw benchmark snapshots
-- [corpora/STATUS.md](corpora/STATUS.md) — short pointer doc for long-form corpora
-- [corpora/dashboard.json](corpora/dashboard.json) — machine-readable corpus dashboard
-- [corpora/chrome-step10.json](corpora/chrome-step10.json), [corpora/safari-step10.json](corpora/safari-step10.json) — checked-in browser `step=10` corpus sweep snapshots
-- [RESEARCH.md](RESEARCH.md) — the exploration log and the durable conclusions behind the current model
+- [STATUS.md](STATUS.md) — メインのブラウザ精度 + ベンチマークスナップショットへの短いポインタドキュメント
+- [status/dashboard.json](status/dashboard.json) — 機械可読なメインダッシュボード
+- [accuracy/chrome.json](accuracy/chrome.json), [accuracy/safari.json](accuracy/safari.json), [accuracy/firefox.json](accuracy/firefox.json) — 生のブラウザ精度行
+- [accuracy/letter-spacing.json](accuracy/letter-spacing.json) — Chrome + Safari のコンパクトな `{ letterSpacing }` オラクルスナップショット
+- [benchmarks/chrome.json](benchmarks/chrome.json), [benchmarks/safari.json](benchmarks/safari.json) — 生のベンチマークスナップショット
+- [corpora/STATUS.md](corpora/STATUS.md) — 長文コーパスへの短いポインタドキュメント
+- [corpora/dashboard.json](corpora/dashboard.json) — 機械可読なコーパスダッシュボード
+- [corpora/chrome-step10.json](corpora/chrome-step10.json), [corpora/safari-step10.json](corpora/safari-step10.json) — チェックイン済みのブラウザ `step=10` コーパススイープスナップショット
+- [RESEARCH.md](RESEARCH.md) — 探索ログと、現行モデルの背後にある耐久性のある結論
 
-## Deep Profiling
+## ディーププロファイリング
 
-For one-off performance and memory work, start in a real browser.
+単発のパフォーマンスおよびメモリ調査では、まず実ブラウザから始める。
 
-Preferred loop:
+推奨ループ。
 
-1. Start the normal page server with `bun start`.
-2. Launch an isolated Chrome with:
+1. `bun start` で通常のページサーバーを起動する。
+2. 以下のオプションで隔離された Chrome を起動する。
    - `--remote-debugging-port=9222`
-   - a throwaway `--user-data-dir`
-   - background throttling disabled if the run is interactive
-3. Connect over Chrome DevTools or CDP.
-4. Use a tiny dedicated repro page before profiling the full benchmark page.
-5. Ask the questions in this order:
-   - Is this a benchmark regression?
-   - Where is the CPU time going?
-   - Is this allocation churn?
-   - Is anything still retained after GC?
+   - 使い捨ての `--user-data-dir`
+   - 実行がインタラクティブなら、バックグラウンドスロットリングを無効化する
+3. Chrome DevTools または CDP 経由で接続する。
+4. ベンチマークページ全体をプロファイリングする前に、小さな専用の再現ページを使う。
+5. 以下の順番で質問する。
+   - これはベンチマークのリグレッションか?
+   - CPU 時間はどこで消費されているか?
+   - これはアロケーションのチャーンか?
+   - GC 後に保持され続けているものはあるか?
 
-Use the right tool for each question:
+各質問には適切なツールを使う。
 
-- Throughput / regression:
+- スループット / リグレッション:
   - [pages/benchmark.ts](pages/benchmark.ts)
-  - or a tiny dedicated stress page when the issue is narrower than the whole benchmark harness
-- CPU hotspots:
-  - Chrome CPU profiler or performance trace
-- Allocation churn:
-  - Chrome heap sampling during the workload
-- Retained memory:
-  - force GC, take a before heapsnapshot, run the workload, force GC again, take an after heapsnapshot, and diff what survives
+  - もしくは、問題がベンチマークハーネス全体より狭い場合は、小さな専用ストレステストページ
+- CPU ホットスポット:
+  - Chrome CPU プロファイラまたはパフォーマンストレース
+- アロケーションのチャーン:
+  - ワークロード中の Chrome ヒープサンプリング
+- 保持メモリ:
+  - GC を強制し、ワークロード前のヒープスナップショットを取得、ワークロードを実行し、再度 GC を強制してワークロード後のヒープスナップショットを取得、残存するものを diff する
 
-A pure Bun/Node microbenchmark is still useful for cheap hypothesis checks, but it is not the final answer when the question is browser behavior.
+純粋な Bun/Node のマイクロベンチマークは、安価な仮説検証には依然として有用だが、ブラウザの挙動が問われている場面では最終的な答えにはならない。
