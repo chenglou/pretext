@@ -1,25 +1,25 @@
 # Pretext
 
-Pure JavaScript/TypeScript library for multiline text measurement & layout. Fast, accurate & supports all the languages you didn't even know about. Allows rendering to DOM, Canvas, SVG and soon, server-side.
+Pretext は複数行テキストの計測とレイアウトのための純粋な JavaScript/TypeScript ライブラリです。高速かつ正確で、存在すら知らなかったような言語も含めてあらゆる言語をサポートします。DOM、Canvas、SVG への描画に対応しており、近日中にサーバーサイドにも対応予定です。
 
-Pretext side-steps the need for DOM measurements (e.g. `getBoundingClientRect`, `offsetHeight`), which trigger layout reflow, one of the most expensive operations in the browser. It implements its own text measurement logic, using the browsers' own font engine as ground truth (very AI-friendly iteration method).
+Pretext は、ブラウザで最も高コストな処理のひとつであるレイアウトリフローを引き起こす DOM 計測 (例: `getBoundingClientRect`、`offsetHeight`) を回避します。ブラウザ自身のフォントエンジンを正解 (ground truth) とした独自のテキスト計測ロジックを実装しています (AI フレンドリーな反復手法でもあります)。
 
-## Installation
+## インストール
 
 ```sh
 npm install @chenglou/pretext
 ```
 
-## Demos
+## デモ
 
-Clone the repo, run `bun install`, then `bun start`, and open `/demos/index` in your browser. On Windows, use `bun run start:windows`.
-Alternatively, see them live at [chenglou.me/pretext](https://chenglou.me/pretext/). Some more at [somnai-dreams.github.io/pretext-demos](https://somnai-dreams.github.io/pretext-demos/)
+リポジトリをクローンして `bun install` を実行し、続いて `bun start` を実行したうえで、ブラウザで `/demos/index` を開いてください。Windows では `bun run start:windows` を使用してください。
+あるいは [chenglou.me/pretext](https://chenglou.me/pretext/) でライブ版を見ることもできます。さらに [somnai-dreams.github.io/pretext-demos](https://somnai-dreams.github.io/pretext-demos/) にも追加のデモがあります。
 
 ## API
 
-Pretext serves 2 use cases:
+Pretext は 2 つのユースケースに対応します:
 
-### 1. Measure a paragraph's height _without ever touching DOM_
+### 1. _DOM に一切触れずに_ 段落の高さを計測する
 
 ```ts
 import { prepare, layout } from '@chenglou/pretext'
@@ -28,28 +28,28 @@ const prepared = prepare('AGI 春天到了. بدأت الرحلة 🚀‎', '16p
 const { height, lineCount } = layout(prepared, 320, 20) // pure arithmetic. No DOM layout & reflow!
 ```
 
-`prepare()` does the one-time work: normalize whitespace, segment the text, apply glue rules, measure the segments with canvas, and return an opaque handle. `layout()` is the cheap hot path after that: pure arithmetic over cached widths. Do not rerun `prepare()` for the same text and configs; that'd defeat its precomputation. For example, on resize, only rerun `layout()`.
+`prepare()` は一度だけ行う作業を担当します。具体的には、空白の正規化、テキストのセグメント化、グルーのルール適用、Canvas によるセグメント計測を行い、不透明なハンドルを返します。`layout()` はその後の安価なホットパスで、キャッシュされた幅に対する純粋な算術処理だけを行います。同じテキストと設定に対して `prepare()` を再実行してはいけません。それでは事前計算の意味がなくなってしまいます。例えばリサイズ時には `layout()` のみを再実行してください。
 
-If you want textarea-like text where ordinary spaces, `\t` tabs, and `\n` hard breaks stay visible, pass `{ whiteSpace: 'pre-wrap' }` to `prepare()`:
+通常のスペース、`\t` タブ、`\n` のハードブレークがそのまま表示される、textarea のようなテキストを扱いたい場合は、`prepare()` に `{ whiteSpace: 'pre-wrap' }` を渡してください:
 
 ```ts
 const prepared = prepare(textareaValue, '16px Inter', { whiteSpace: 'pre-wrap' })
 const { height } = layout(prepared, textareaWidth, 20)
 ```
 
-Other `prepare()` options are `{ wordBreak: 'keep-all' }` for CSS-like `word-break: keep-all`, and `{ letterSpacing: n }` to match CSS `letter-spacing` (`n` is treated as a px value).
+`prepare()` のその他のオプションには、CSS の `word-break: keep-all` 相当である `{ wordBreak: 'keep-all' }` と、CSS の `letter-spacing` に対応する `{ letterSpacing: n }` (`n` は px 値として扱われます) があります。
 
-The returned height is the crucial last piece for unlocking web UIs:
-- proper virtualization/occlusion without guesstimates & caching
-- fancy userland layouts: masonry, JS-driven flexbox-like implementations, nudging a few layout values without CSS hacks (imagine that), etc.
-- _development time_ verification (especially now with AI) that labels on e.g. buttons don't overflow to the next line, browser-free
-- prevent layout shift when new text loads and you wanna re-anchor the scroll position
+返される高さは、Web UI を解き放つための極めて重要な最後のピースです:
+- 推測やキャッシュに頼らない、適切な仮想化/オクルージョン
+- 凝ったユーザーランドレイアウト: マソンリー (masonry)、JS 駆動の flexbox 風実装、CSS ハックなしで一部のレイアウト値を微調整する (想像してみてください) など
+- _開発時_ における、例えばボタンのラベルが次の行にあふれていないかどうかの、ブラウザ不要での検証 (特に AI と組み合わせると有用)
+- 新しいテキストが読み込まれてスクロール位置を再アンカーしたいときに、レイアウトシフトを防ぐ
 
-### 2. Lay out the paragraph lines manually yourself
+### 2. 段落の各行を手動で自分でレイアウトする
 
-Switch out `prepare` with `prepareWithSegments`, then:
+`prepare` を `prepareWithSegments` に差し替えたうえで、以下を利用してください:
 
-- `layoutWithLines()` gives you all the lines at a fixed width:
+- `layoutWithLines()` は固定幅で全行を返します:
 
 ```ts
 import { prepareWithSegments, layoutWithLines } from '@chenglou/pretext'
@@ -59,7 +59,7 @@ const { lines } = layoutWithLines(prepared, 320, 26) // 320px max width, 26px li
 for (let i = 0; i < lines.length; i++) ctx.fillText(lines[i].text, 0, i * 26)
 ```
 
-- `measureLineStats()` and `walkLineRanges()` give you line counts, widths and cursors without building the text strings:
+- `measureLineStats()` および `walkLineRanges()` は、テキスト文字列を構築せずに行数、行の幅、カーソルを返します:
 
 ```ts
 import { measureLineStats, walkLineRanges } from '@chenglou/pretext'
@@ -70,7 +70,7 @@ walkLineRanges(prepared, 320, line => { if (line.width > maxW) maxW = line.width
 // maxW is now the widest line — the tightest container width that still fits the text! This multiline "shrink wrap" has been missing from web
 ```
 
-- `layoutNextLineRange()` lets you route text one row at a time when width changes as you go. If you want the actual string too, `materializeLineRange()` turns that one range back into a full line:
+- `layoutNextLineRange()` は、進むにつれて幅が変わる場合に、テキストを 1 行ずつ流し込むことを可能にします。実際の文字列も必要なら、`materializeLineRange()` でその 1 つのレンジを完全な行に戻せます:
 
 ```ts
 import { layoutNextLineRange, materializeLineRange, prepareWithSegments, type LayoutCursor } from '@chenglou/pretext'
@@ -92,11 +92,11 @@ while (true) {
 }
 ```
 
-This usage allows rendering to canvas, SVG, WebGL and (eventually) server-side. See the `/demos/dynamic-layout` demo for a richer example.
+この使い方では Canvas、SVG、WebGL、そして (将来的には) サーバーサイドへの描画が可能です。より詳しい例は `/demos/dynamic-layout` デモを参照してください。
 
-For hyphenation in manual layout, insert soft hyphens before `prepare()` / `prepareWithSegments()`. Pretext treats them as optional break points: unchosen soft hyphens stay invisible, while chosen breaks materialize as a trailing `-`. For mixed-language or user-generated app text, prefer conservative, locale-aware insertion over aggressive pattern hyphenation. Automatic hyphenation is not built in today.
+手動レイアウトでハイフネーションを行いたい場合は、`prepare()` / `prepareWithSegments()` を呼ぶ前にソフトハイフンを挿入してください。Pretext はそれらを任意の改行ポイントとして扱います。選択されなかったソフトハイフンは見えないままで、選択された改行は末尾の `-` として可視化されます。複数言語が混在するテキストやユーザー生成のアプリテキストでは、積極的なパターンベースのハイフネーションよりも、保守的かつロケールに応じた挿入を優先してください。自動ハイフネーションは現時点では組み込まれていません。
 
-If your manual layout needs a small helper for rich-text inline flow, code spans, mentions, chips, and browser-like boundary whitespace collapse, there is a helper at `@chenglou/pretext/rich-inline`. It stays inline-only and `white-space: normal`-only on purpose:
+リッチテキストのインラインフロー、コードスパン、メンション、チップ、そしてブラウザライクな境界空白の畳み込みのために、手動レイアウトで小さなヘルパーが必要であれば、`@chenglou/pretext/rich-inline` にヘルパーがあります。これは意図的にインライン専用かつ `white-space: normal` 専用にとどめています:
 
 ```ts
 import { materializeRichInlineLineRange, prepareRichInline, walkRichInlineLineRanges } from '@chenglou/pretext/rich-inline'
@@ -113,22 +113,22 @@ walkRichInlineLineRanges(prepared, 320, range => {
 })
 ```
 
-It is intentionally narrow:
-- raw inline text in, including boundary spaces
-- caller-owned `extraWidth` for pill chrome
-- `break: 'never'` for atomic items like chips and mentions
-- `white-space: normal` only
-- not a nested markup tree and not a general CSS inline formatting engine
+これは意図的に狭いスコープに絞っています:
+- 境界の空白も含む生のインラインテキストを入力として受け取る
+- pill (チップ風 UI) の装飾のために呼び出し側が所有する `extraWidth`
+- チップやメンションのようにアトミックに保ちたい項目向けの `break: 'never'`
+- `white-space: normal` のみ
+- ネストしたマークアップツリーではなく、汎用の CSS インライン整形エンジンでもない
 
-### API Glossary
+### API 用語集
 
-Use-case 1 APIs:
+ユースケース 1 の API:
 ```ts
 prepare(text: string, font: string, options?: { whiteSpace?: 'normal' | 'pre-wrap', wordBreak?: 'normal' | 'keep-all', letterSpacing?: number }): PreparedText // one-time text analysis + measurement pass, returns an opaque value to pass to `layout()`. Make sure `font` and `letterSpacing` are synced with your CSS for the text you're measuring. `font` is the same format as what you'd use for `myCanvasContext.font = ...`, e.g. `16px Inter`; `letterSpacing` is a CSS pixel value.
 layout(prepared: PreparedText, maxWidth: number, lineHeight: number): { height: number, lineCount: number } // calculates text height given a max width and lineHeight. Make sure `lineHeight` is synced with your css `line-height` declaration for the text you're measuring.
 ```
 
-Use-case 2 APIs:
+ユースケース 2 の API:
 ```ts
 prepareWithSegments(text: string, font: string, options?: { whiteSpace?: 'normal' | 'pre-wrap', wordBreak?: 'normal' | 'keep-all', letterSpacing?: number }): PreparedTextWithSegments // same as `prepare()`, but returns a richer structure for manual line layout needs
 layoutWithLines(prepared: PreparedTextWithSegments, maxWidth: number, lineHeight: number): { height: number, lineCount: number, lines: LayoutLine[] } // high-level api for manual layout needs. Accepts a fixed max width for all lines. Similar to `layout()`'s return, but additionally returns the lines info
@@ -159,7 +159,7 @@ type LayoutCursor = {
 }
 ```
 
-Helper for rich-text inline flow:
+リッチテキストインラインフロー向けのヘルパー:
 ```ts
 prepareRichInline(items: RichInlineItem[]): PreparedRichInline // compile raw inline items with their original text. The compiler owns cross-item collapsed whitespace and caches each item's natural width
 layoutNextRichInlineLineRange(prepared: PreparedRichInline, maxWidth: number, start?: RichInlineCursor): RichInlineLineRange | null // stream one line of rich-text inline flow at a time without building fragment text strings
@@ -209,40 +209,40 @@ type RichInlineStats = {
 }
 ```
 
-Other helpers:
+その他のヘルパー:
 ```ts
 clearCache(): void // clears Pretext's shared internal caches used by prepare() and prepareWithSegments(). Useful if your app cycles through many different fonts or text variants and you want to release the accumulated cache
 setLocale(locale?: string): void // optional (by default we use the current locale). Sets locale for future prepare() and prepareWithSegments(). Internally, it also calls clearCache(). Setting a new locale doesn't affect existing prepare() and prepareWithSegments() states (no mutations to them)
 ```
 
-Notes:
-- `PreparedText` is the opaque fast-path handle. `PreparedTextWithSegments` is the richer manual-layout handle.
-- `LayoutCursor` is a segment/grapheme cursor, not a raw string offset.
-- `layout()` with an empty string returns `{ lineCount: 0, height: 0 }`. Browsers still size an empty block to one `line-height`, so clamp with `Math.max(1, lineCount) * lineHeight` if you need that behavior.
-- The richer handle also includes `segLevels` for custom bidi-aware rendering. The line-breaking APIs do not read it.
-- Segment widths are browser-canvas widths for line breaking, not exact glyph-position data for custom Arabic or mixed-direction x-coordinate reconstruction.
-- If a soft hyphen wins the break, materialized line text includes the visible trailing `-`.
-- `measureNaturalWidth()` returns the widest forced line. Hard breaks still count.
-- `prepare()` and `prepareWithSegments()` do horizontal-only work. `lineHeight` stays a layout-time input.
+備考:
+- `PreparedText` は不透明な高速パス用のハンドルです。`PreparedTextWithSegments` はより豊富な手動レイアウト用ハンドルです。
+- `LayoutCursor` はセグメント/グラフェム単位のカーソルであり、生の文字列オフセットではありません。
+- 空文字列に対する `layout()` は `{ lineCount: 0, height: 0 }` を返します。ブラウザは空のブロックでも 1 つの `line-height` 分のサイズを取るため、その挙動が必要な場合は `Math.max(1, lineCount) * lineHeight` でクランプしてください。
+- リッチなハンドルにはカスタム bidi 対応レンダリング用の `segLevels` も含まれます。改行系の API はこれを読みません。
+- セグメント幅は改行用のブラウザキャンバス幅であり、アラビア語や混在方向の x 座標を再構築するための厳密なグリフ位置データではありません。
+- ソフトハイフンが選ばれて改行が決定した場合、materialize された行のテキストには末尾の `-` が可視化された形で含まれます。
+- `measureNaturalWidth()` は最も幅広い強制改行行を返します。ハードブレークもカウントされます。
+- `prepare()` と `prepareWithSegments()` は水平方向のみの処理を行います。`lineHeight` はレイアウト時の入力のままです。
 
-## Caveats
+## 制約事項
 
-Pretext doesn't try to be a full font rendering engine (yet?). It currently targets the common text setup:
-- `white-space: normal` and `pre-wrap`
-- `word-break: normal` and `keep-all`
-- `overflow-wrap: break-word`. Very narrow widths can still break inside words, but only at grapheme boundaries.
+Pretext は (今のところ?) 完全なフォントレンダリングエンジンを目指していません。現時点では一般的なテキスト設定をターゲットにしています:
+- `white-space: normal` および `pre-wrap`
+- `word-break: normal` および `keep-all`
+- `overflow-wrap: break-word`。非常に狭い幅では依然として単語内で改行することがありますが、グラフェム境界でのみ行われます。
 - `line-break: auto`
-- `letter-spacing` as a numeric pixel value passed to `prepare()` / `prepareWithSegments()`
-- Tabs follow the default browser-style `tab-size: 8`
-- `{ wordBreak: 'keep-all' }` is supported too. It behaves like you'd expect for CJK/Hangul and no-space mixed Latin/numeric/CJK text, while keeping the same `overflow-wrap: break-word` fallback for overlong runs.
-- `system-ui` is unsafe for `layout()` accuracy on macOS. Use a named font.
-- Runtime requires `Intl.Segmenter` and Canvas 2D text measurement. Browsers or runtimes without `Intl.Segmenter` are currently unsupported.
-- CSS text features outside the canvas `font` shorthand, such as `font-optical-sizing`, `font-feature-settings`, and standalone `font-variation-settings`, are not modeled separately. Variable-font axes only help when the active axis is reflected in the canvas font string, for example via weight.
+- `prepare()` / `prepareWithSegments()` に数値のピクセル値として渡される `letter-spacing`
+- タブはブラウザ既定の `tab-size: 8` に従います
+- `{ wordBreak: 'keep-all' }` もサポートしています。CJK/ハングルや、空白を含まない混在 (ラテン/数字/CJK) テキストに対しては期待通りの挙動を示し、長すぎる連続文字に対しては `overflow-wrap: break-word` のフォールバックを維持します。
+- `system-ui` は macOS における `layout()` の正確性の観点では安全ではありません。名前付きのフォントを使用してください。
+- ランタイムは `Intl.Segmenter` と Canvas 2D テキスト計測を必要とします。`Intl.Segmenter` をサポートしないブラウザやランタイムは現在サポート外です。
+- `font-optical-sizing`、`font-feature-settings`、独立した `font-variation-settings` といった、Canvas の `font` ショートハンドの外にある CSS テキスト機能は個別にはモデル化されていません。バリアブルフォントの軸は、アクティブな軸が Canvas のフォント文字列に (例えば weight を通じて) 反映されている場合に限り効きます。
 
-## Develop
+## 開発
 
-See [DEVELOPMENT.md](https://github.com/chenglou/pretext/blob/main/DEVELOPMENT.md) for the dev setup and commands.
+開発環境のセットアップとコマンドについては [DEVELOPMENT.md](https://github.com/chenglou/pretext/blob/main/DEVELOPMENT.md) を参照してください。
 
-## Credits
+## クレジット
 
-Sebastian Markbage first planted the seed with [text-layout](https://github.com/chenglou/text-layout) last decade. His design — canvas `measureText` for shaping, bidi from pdf.js, streaming line breaking — informed the architecture we kept pushing forward here.
+Sebastian Markbage は前の 10 年に [text-layout](https://github.com/chenglou/text-layout) で最初の種を蒔きました。彼の設計 — シェーピング用の Canvas `measureText`、pdf.js 由来の bidi、ストリーミング型の改行処理 — が、ここで我々が押し進めてきたアーキテクチャの礎となっています。
