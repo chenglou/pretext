@@ -10,6 +10,97 @@ Pretext side-steps the need for DOM measurements (e.g. `getBoundingClientRect`, 
 npm install @chenglou/pretext
 ```
 
+## Quick Start
+
+If you're coming from React, Vue, Angular, or plain DOM code, the core mental model is:
+
+1. `prepare()` once when the text or font changes
+2. `layout()` whenever the available width changes
+3. use the returned `height` / `lineCount` to drive your UI
+
+In other words: **prepare once, layout many times**.
+
+Start with the simplest question:
+
+- "I just need the paragraph height" -> use `prepare()` + `layout()`
+- "I need the actual wrapped lines for custom rendering" -> use `prepareWithSegments()` + one of the rich line APIs
+
+### Common app pattern
+
+This is the most common integration shape for app UIs:
+
+```ts
+import { prepare, layout } from '@chenglou/pretext'
+
+const prepared = prepare(text, font)
+const { height, lineCount } = layout(prepared, width, lineHeight)
+```
+
+In a framework, the same rule applies:
+
+- recompute `prepare()` only when `text`, `font`, or whitespace mode changes
+- recompute `layout()` when width or line height changes
+- do **not** rerun `prepare()` on every resize
+
+React example:
+
+```ts
+import { useMemo } from 'react'
+import { prepare, layout } from '@chenglou/pretext'
+
+const prepared = useMemo(
+  () => prepare(text, font, whiteSpace ? { whiteSpace } : undefined),
+  [text, font, whiteSpace]
+)
+
+const { height, lineCount } = useMemo(
+  () => layout(prepared, width, lineHeight),
+  [prepared, width, lineHeight]
+)
+```
+
+Vue (Composition API) example:
+
+```ts
+import { computed } from 'vue'
+import { prepare, layout } from '@chenglou/pretext'
+
+const prepared = computed(() =>
+  prepare(text.value, font.value, whiteSpace.value ? { whiteSpace: whiteSpace.value } : undefined)
+)
+
+const measured = computed(() =>
+  layout(prepared.value, width.value, lineHeight.value)
+)
+
+const height = computed(() => measured.value.height)
+const lineCount = computed(() => measured.value.lineCount)
+```
+
+Angular (signals) example:
+
+```ts
+import { computed, signal } from '@angular/core'
+import { prepare, layout } from '@chenglou/pretext'
+
+const text = signal('Hello world')
+const font = signal('16px Inter')
+const whiteSpace = signal<'normal' | 'pre-wrap'>('normal')
+const width = signal(320)
+const lineHeight = signal(20)
+
+const prepared = computed(() =>
+  prepare(text(), font(), whiteSpace() === 'normal' ? undefined : { whiteSpace: whiteSpace() })
+)
+
+const measured = computed(() =>
+  layout(prepared(), width(), lineHeight())
+)
+
+const height = computed(() => measured().height)
+const lineCount = computed(() => measured().lineCount)
+```
+
 ## Demos
 
 Clone the repo, run `bun install`, then `bun start`, and open `/demos/index` in your browser. On Windows, use `bun run start:windows`.
