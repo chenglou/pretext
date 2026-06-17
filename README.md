@@ -236,7 +236,7 @@ Pretext doesn't try to be a full font rendering engine (yet?). It currently targ
 - Tabs follow the default browser-style `tab-size: 8`
 - `{ wordBreak: 'keep-all' }` is supported too. It behaves like you'd expect for CJK/Hangul and no-space mixed Latin/numeric/CJK text, while keeping the same `overflow-wrap: break-word` fallback for overlong runs.
 - `system-ui` is unsafe for `layout()` accuracy on macOS. Use a named font.
-- Runtime requires `Intl.Segmenter` and Canvas 2D text measurement. Browsers or runtimes without `Intl.Segmenter` are currently unsupported.
+- Runtime requires `Intl.Segmenter`, Canvas 2D text measurement, and ES2018 Unicode property escapes (`\p{...}`). Browsers or runtimes without `Intl.Segmenter` are currently unsupported; older runtimes without `\p{...}` support fail earlier at module-load time with a `SyntaxError`.
 - CSS text features outside the canvas `font` shorthand, such as `font-optical-sizing`, `font-feature-settings`, and standalone `font-variation-settings`, are not modeled separately. Variable-font axes only help when the active axis is reflected in the canvas font string, for example via weight.
 
 ## Develop
