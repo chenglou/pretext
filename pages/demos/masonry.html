@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Masonry — Pretext</title>
+<style>
+  * {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
+
+  :root {
+    --bg: #121212;
+    --surface: #1e1e1e;
+    --text: #e8e6e3;
+    --muted: #7a7875;
+    --accent: #d4a373;
+    --border: #333;
+    --color-1: #264653;
+    --color-2: #2a9d8f;
+    --color-3: #e9c46a;
+    --color-4: #f4a261;
+    --color-5: #e76f51;
+    --color-6: #6d597a;
+    --color-7: #b56576;
+    --color-8: #c9ada7;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  .controls {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 20px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 40px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+    z-index: 100;
+  }
+
+  .controls label {
+    font-size: 13px;
+    color: var(--muted);
+    letter-spacing: 0.02em;
+  }
+
+  .controls input[type="range"] {
+    width: 100px;
+    height: 4px;
+    -webkit-appearance: none;
+    appearance: none;
+    background: var(--border);
+    border-radius: 2px;
+    cursor: pointer;
+  }
+
+  .controls input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 14px;
+    height: 14px;
+    background: var(--accent);
+    border-radius: 50%;
+    cursor: grab;
+  }
+
+  .controls input[type="range"]::-moz-range-thumb {
+    width: 14px;
+    height: 14px;
+    background: var(--accent);
+    border: none;
+    border-radius: 50%;
+    cursor: grab;
+  }
+
+  .controls span {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text);
+    min-width: 20px;
+    text-align: center;
+  }
+
+  .page {
+    padding: 48px 24px 120px;
+    max-width: 100vw;
+  }
+
+  .eyebrow {
+    font: 11px/1.3 "SF Mono", ui-monospace, monospace;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 8px;
+  }
+
+  h1 {
+    font: 300 28px/1.15 Georgia, "Times New Roman", serif;
+    margin-bottom: 12px;
+  }
+
+  .intro {
+    font-size: 15px;
+    line-height: 1.6;
+    color: var(--muted);
+    max-width: 520px;
+    margin-bottom: 48px;
+  }
+
+  .grid {
+    position: relative;
+    min-height: 600px;
+  }
+
+  .masonry-card {
+    position: absolute;
+    width: var(--card-width);
+    left: var(--card-left);
+    top: var(--card-top);
+    background: var(--surface);
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+    transition: transform 200ms ease, box-shadow 200ms ease;
+  }
+
+  .masonry-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+  }
+
+  .card-image {
+    width: 100%;
+    padding-bottom: 45%;
+  }
+
+  .card-label {
+    display: block;
+    padding: 16px 20px 8px;
+    font: 11px/1.2 "SF Mono", ui-monospace, monospace;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--accent);
+  }
+
+  .card-text {
+    padding: 0 20px 20px;
+    font-size: 14px;
+    line-height: 1.55;
+    color: var(--text);
+  }
+
+  @media (max-width: 640px) {
+    .page {
+      padding: 32px 16px 120px;
+    }
+
+    .controls {
+      bottom: 16px;
+      padding: 12px 16px;
+    }
+  }
+</style>
+</head>
+<body>
+  <main class="page">
+    <p class="eyebrow">Pretext Demo</p>
+    <h1>Masonry</h1>
+    <p class="intro">
+      A Pinterest-style layout with cards positioned in columns based on
+      predicted heights — computed without any DOM reads in the layout path.
+      Adjust the column count to see how Pretext handles the reflow.
+    </p>
+
+    <div class="grid" id="grid"></div>
+  </main>
+
+  <div class="controls">
+    <label for="column-slider">Columns</label>
+    <input type="range" id="column-slider" min="2" max="4" value="2" step="1">
+    <span id="column-value">2</span>
+  </div>
+
+  <script type="module" src="/pages/demos/masonry.ts"></script>
+</body>
+</html>
