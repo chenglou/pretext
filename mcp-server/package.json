@@ -1,0 +1,27 @@
+{
+  "name": "@chenglou/pretext-mcp",
+  "version": "0.1.0",
+  "description": "MCP server exposing Pretext text measurement and layout tools for AI coding assistants",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "bin": {
+    "pretext-mcp": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "tsx src/index.ts"
+  },
+  "dependencies": {
+    "@chenglou/pretext": "file:..",
+    "@modelcontextprotocol/sdk": "^1.12.1",
+    "@napi-rs/canvas": "^0.1.68",
+    "zod": "^3.24.0"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0"
+  },
+  "license": "MIT"
+}
