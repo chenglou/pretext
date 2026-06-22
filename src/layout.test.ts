@@ -665,6 +665,7 @@ describe('prepare invariants', () => {
   test('keeps repeated punctuation runs attachable to trailing closing punctuation', () => {
     const prepared = prepareWithSegments('((()', FONT)
     expect(prepared.segments).toEqual(['((()'])
+    expect(prepareWithSegments('((() ===', FONT).segments).toEqual(['((()', ' ', '==='])
   })
 
   test('applies CJK and Hangul punctuation attachment rules', () => {
