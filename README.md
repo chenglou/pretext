@@ -96,7 +96,7 @@ This usage allows rendering to canvas, SVG, WebGL and (eventually) server-side. 
 
 For hyphenation in manual layout, insert soft hyphens before `prepare()` / `prepareWithSegments()`. Pretext treats them as optional break points: unchosen soft hyphens stay invisible, while chosen breaks materialize as a trailing `-`. For mixed-language or user-generated app text, prefer conservative, locale-aware insertion over aggressive pattern hyphenation. Automatic hyphenation is not built in today.
 
-If your manual layout needs a small helper for rich-text inline flow, code spans, mentions, chips, and browser-like boundary whitespace collapse, there is a helper at `@chenglou/pretext/rich-inline`. It stays inline-only and `white-space: normal`-only on purpose:
+If your manual layout needs a small helper for rich-text inline flow, code spans, mentions, chips, and browser-like boundary whitespace collapse, there is a helper at `@chenglou/pretext/rich-inline`. By default it uses `white-space: normal` boundary collapsing; pass `{ whiteSpace: 'pre-wrap' }` to preserve leading/trailing spaces on each item instead:
 
 ```ts
 import { materializeRichInlineLineRange, prepareRichInline, walkRichInlineLineRanges } from '@chenglou/pretext/rich-inline'
@@ -117,7 +117,7 @@ It is intentionally narrow:
 - raw inline text in, including boundary spaces
 - caller-owned `extraWidth` for pill chrome
 - `break: 'never'` for atomic items like chips and mentions
-- `white-space: normal` only
+- `white-space: normal` (default) or `pre-wrap`
 - not a nested markup tree and not a general CSS inline formatting engine
 
 ### API Glossary
@@ -161,7 +161,7 @@ type LayoutCursor = {
 
 Helper for rich-text inline flow:
 ```ts
-prepareRichInline(items: RichInlineItem[]): PreparedRichInline // compile raw inline items with their original text. The compiler owns cross-item collapsed whitespace and caches each item's natural width
+prepareRichInline(items: RichInlineItem[], options?: { whiteSpace?: 'normal' | 'pre-wrap' }): PreparedRichInline // compile raw inline items with their original text. The compiler owns cross-item collapsed whitespace and caches each item's natural width. Pass `{ whiteSpace: 'pre-wrap' }` to preserve leading/trailing spaces instead of collapsing them into inter-item gaps
 layoutNextRichInlineLineRange(prepared: PreparedRichInline, maxWidth: number, start?: RichInlineCursor): RichInlineLineRange | null // stream one line of rich-text inline flow at a time without building fragment text strings
 walkRichInlineLineRanges(prepared: PreparedRichInline, maxWidth: number, onLine: (line: RichInlineLineRange) => void): number // non-materializing line walker for rich-text inline flow shrinkwrap/stats work
 materializeRichInlineLineRange(prepared: PreparedRichInline, line: RichInlineLineRange): RichInlineLine // turns one previously computed rich-inline line range back into full fragment text
