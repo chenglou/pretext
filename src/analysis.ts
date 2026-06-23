@@ -569,68 +569,39 @@ function isUrlQueryBoundarySegment(text: string): boolean {
   return text.includes('?') && (text.includes('://') || text.startsWith('www.'))
 }
 
-function mergeUrlLikeRuns(segmentation: MergedSegmentation): MergedSegmentation {
-  const texts = segmentation.texts.slice()
-  const isWordLike = segmentation.isWordLike.slice()
-  const kinds = segmentation.kinds.slice()
-  const starts = segmentation.starts.slice()
-
-  for (let i = 0; i < segmentation.len; i++) {
-    if (kinds[i] !== 'text' || !isUrlLikeRunStart(segmentation, i)) continue
-
-    const mergedParts = [texts[i]!]
-    let j = i + 1
-    while (j < segmentation.len && !isTextRunBoundary(kinds[j]!)) {
-      mergedParts.push(texts[j]!)
-      isWordLike[i] = true
-      const endsQueryPrefix = texts[j]!.includes('?')
-      kinds[j] = 'text'
-      texts[j] = ''
-      j++
-      if (endsQueryPrefix) break
-    }
-    texts[i] = joinTextParts(mergedParts)
-  }
-
-  let compactLen = 0
-  for (let read = 0; read < texts.length; read++) {
-    const text = texts[read]!
-    if (text.length === 0) continue
-    if (compactLen !== read) {
-      texts[compactLen] = text
-      isWordLike[compactLen] = isWordLike[read]!
-      kinds[compactLen] = kinds[read]!
-      starts[compactLen] = starts[read]!
-    }
-    compactLen++
-  }
-
-  texts.length = compactLen
-  isWordLike.length = compactLen
-  kinds.length = compactLen
-  starts.length = compactLen
-
-  return {
-    len: compactLen,
-    texts,
-    isWordLike,
-    kinds,
-    starts,
-  }
-}
-
-function mergeUrlQueryRuns(segmentation: MergedSegmentation): MergedSegmentation {
+function mergeUrlRuns(segmentation: MergedSegmentation): MergedSegmentation {
   const texts: string[] = []
   const isWordLike: boolean[] = []
   const kinds: SegmentBreakKind[] = []
   const starts: number[] = []
 
   for (let i = 0; i < segmentation.len; i++) {
-    const text = segmentation.texts[i]!
+    const start = segmentation.starts[i]!
+    let text = segmentation.texts[i]!
+    let wordLike = segmentation.isWordLike[i]!
+    const kind = segmentation.kinds[i]!
+    let queryStartOverride = -1
+
+    if (kind === 'text' && isUrlLikeRunStart(segmentation, i)) {
+      const urlParts = [text]
+      let j = i + 1
+      while (j < segmentation.len && !isTextRunBoundary(segmentation.kinds[j]!)) {
+        if (queryStartOverride < 0 && isUrlLikeRunStart(segmentation, j)) {
+          queryStartOverride = segmentation.starts[j]!
+        }
+        const nextText = segmentation.texts[j]!
+        urlParts.push(nextText)
+        wordLike = true
+        j++
+        if (nextText.includes('?')) break
+      }
+      text = joinTextParts(urlParts)
+      i = j - 1
+    }
     texts.push(text)
-    isWordLike.push(segmentation.isWordLike[i]!)
-    kinds.push(segmentation.kinds[i]!)
-    starts.push(segmentation.starts[i]!)
+    isWordLike.push(wordLike)
+    kinds.push(kind)
+    starts.push(start)
 
     if (!isUrlQueryBoundarySegment(text)) continue
 
@@ -643,7 +614,9 @@ function mergeUrlQueryRuns(segmentation: MergedSegmentation): MergedSegmentation
     }
 
     const queryParts: string[] = []
-    const queryStart = segmentation.starts[nextIndex]!
+    const queryStart = queryStartOverride < 0
+      ? segmentation.starts[nextIndex]!
+      : queryStartOverride
     let j = nextIndex
     while (j < segmentation.len && !isTextRunBoundary(segmentation.kinds[j]!)) {
       queryParts.push(segmentation.texts[j]!)
@@ -773,6 +746,43 @@ function mergeNumericRuns(segmentation: MergedSegmentation): MergedSegmentation 
   const kinds: SegmentBreakKind[] = []
   const starts: number[] = []
 
+  function pushNumericRun(text: string, start: number): void {
+    if (text.includes('-')) {
+      const parts = text.split('-')
+      let shouldSplit = parts.length > 1
+      for (let i = 0; i < parts.length; i++) {
+        const part = parts[i]!
+        if (!shouldSplit) break
+        if (
+          part.length === 0 ||
+          !segmentContainsDecimalDigit(part) ||
+          !isNumericRunSegment(part)
+        ) {
+          shouldSplit = false
+        }
+      }
+
+      if (shouldSplit) {
+        let offset = 0
+        for (let i = 0; i < parts.length; i++) {
+          const part = parts[i]!
+          const splitText = i < parts.length - 1 ? `${part}-` : part
+          texts.push(splitText)
+          isWordLike.push(true)
+          kinds.push('text')
+          starts.push(start + offset)
+          offset += splitText.length
+        }
+        return
+      }
+    }
+
+    texts.push(text)
+    isWordLike.push(true)
+    kinds.push('text')
+    starts.push(start)
+  }
+
   for (let i = 0; i < segmentation.len; i++) {
     const text = segmentation.texts[i]!
     const kind = segmentation.kinds[i]!
@@ -789,10 +799,7 @@ function mergeNumericRuns(segmentation: MergedSegmentation): MergedSegmentation 
         j++
       }
 
-      texts.push(joinTextParts(mergedParts))
-      isWordLike.push(true)
-      kinds.push('text')
-      starts.push(segmentation.starts[i]!)
+      pushNumericRun(joinTextParts(mergedParts), segmentation.starts[i]!)
       i = j - 1
       continue
     }
@@ -860,59 +867,6 @@ function mergeNoSpaceWordChains(segmentation: MergedSegmentation): MergedSegment
     kinds.push(kind)
     starts.push(segmentation.starts[i]!)
     i++
-  }
-
-  return {
-    len: texts.length,
-    texts,
-    isWordLike,
-    kinds,
-    starts,
-  }
-}
-
-function splitHyphenatedNumericRuns(segmentation: MergedSegmentation): MergedSegmentation {
-  const texts: string[] = []
-  const isWordLike: boolean[] = []
-  const kinds: SegmentBreakKind[] = []
-  const starts: number[] = []
-
-  for (let i = 0; i < segmentation.len; i++) {
-    const text = segmentation.texts[i]!
-    if (segmentation.kinds[i] === 'text' && text.includes('-')) {
-      const parts = text.split('-')
-      let shouldSplit = parts.length > 1
-      for (let j = 0; j < parts.length; j++) {
-        const part = parts[j]!
-        if (!shouldSplit) break
-        if (
-          part.length === 0 ||
-          !segmentContainsDecimalDigit(part) ||
-          !isNumericRunSegment(part)
-        ) {
-          shouldSplit = false
-        }
-      }
-
-      if (shouldSplit) {
-        let offset = 0
-        for (let j = 0; j < parts.length; j++) {
-          const part = parts[j]!
-          const splitText = j < parts.length - 1 ? `${part}-` : part
-          texts.push(splitText)
-          isWordLike.push(true)
-          kinds.push('text')
-          starts.push(segmentation.starts[i]! + offset)
-          offset += splitText.length
-        }
-        continue
-      }
-    }
-
-    texts.push(text)
-    isWordLike.push(segmentation.isWordLike[i]!)
-    kinds.push(segmentation.kinds[i]!)
-    starts.push(segmentation.starts[i]!)
   }
 
   return {
@@ -1000,11 +954,8 @@ function mergeGlueConnectedTextRuns(segmentation: MergedSegmentation): MergedSeg
   }
 }
 
-function carryTrailingForwardStickyAcrossCJKBoundary(segmentation: MergedSegmentation): MergedSegmentation {
-  const texts = segmentation.texts.slice()
-  const isWordLike = segmentation.isWordLike.slice()
-  const kinds = segmentation.kinds.slice()
-  const starts = segmentation.starts.slice()
+function carryTrailingForwardStickyAcrossCJKBoundary(segmentation: MergedSegmentation): void {
+  const { texts, kinds, starts } = segmentation
 
   for (let i = 0; i < texts.length - 1; i++) {
     if (kinds[i] !== 'text' || kinds[i + 1] !== 'text') continue
@@ -1016,14 +967,6 @@ function carryTrailingForwardStickyAcrossCJKBoundary(segmentation: MergedSegment
     texts[i] = split.head
     texts[i + 1] = split.tail + texts[i + 1]!
     starts[i + 1] = starts[i]! + split.head.length
-  }
-
-  return {
-    len: texts.length,
-    texts,
-    isWordLike,
-    kinds,
-    starts,
   }
 }
 
@@ -1253,31 +1196,28 @@ function buildMergedSegmentation(
     kinds: mergedKinds,
     starts: mergedStarts,
   })
-  const withMergedUrls = carryTrailingForwardStickyAcrossCJKBoundary(
-    mergeNoSpaceWordChains(
-      splitHyphenatedNumericRuns(mergeNumericRuns(mergeUrlQueryRuns(mergeUrlLikeRuns(compacted)))),
-    ),
-  )
+  const mergedRuns = mergeNoSpaceWordChains(mergeNumericRuns(mergeUrlRuns(compacted)))
+  carryTrailingForwardStickyAcrossCJKBoundary(mergedRuns)
 
-  for (let i = 0; i < withMergedUrls.len - 1; i++) {
-    const split = splitLeadingSpaceAndMarks(withMergedUrls.texts[i]!)
+  for (let i = 0; i < mergedRuns.len - 1; i++) {
+    const split = splitLeadingSpaceAndMarks(mergedRuns.texts[i]!)
     if (split === null) continue
     if (
-      (withMergedUrls.kinds[i] !== 'space' && withMergedUrls.kinds[i] !== 'preserved-space') ||
-      withMergedUrls.kinds[i + 1] !== 'text' ||
-      !containsArabicScript(withMergedUrls.texts[i + 1]!)
+      (mergedRuns.kinds[i] !== 'space' && mergedRuns.kinds[i] !== 'preserved-space') ||
+      mergedRuns.kinds[i + 1] !== 'text' ||
+      !containsArabicScript(mergedRuns.texts[i + 1]!)
     ) {
       continue
     }
 
-    withMergedUrls.texts[i] = split.space
-    withMergedUrls.isWordLike[i] = false
-    withMergedUrls.kinds[i] = withMergedUrls.kinds[i] === 'preserved-space' ? 'preserved-space' : 'space'
-    withMergedUrls.texts[i + 1] = split.marks + withMergedUrls.texts[i + 1]!
-    withMergedUrls.starts[i + 1] = withMergedUrls.starts[i]! + split.space.length
+    mergedRuns.texts[i] = split.space
+    mergedRuns.isWordLike[i] = false
+    mergedRuns.kinds[i] = mergedRuns.kinds[i] === 'preserved-space' ? 'preserved-space' : 'space'
+    mergedRuns.texts[i + 1] = split.marks + mergedRuns.texts[i + 1]!
+    mergedRuns.starts[i + 1] = mergedRuns.starts[i]! + split.space.length
   }
 
-  return withMergedUrls
+  return mergedRuns
 }
 
 function mergeKeepAllTextSegments(
