@@ -78,12 +78,10 @@ The ones worth keeping in your muscle memory:
 
 Use these for the current checked-in picture:
 
-- [STATUS.md](STATUS.md) — short pointer doc for the main browser accuracy + benchmark snapshots
 - [status/dashboard.json](status/dashboard.json) — machine-readable main dashboard
 - [accuracy/chrome.json](accuracy/chrome.json), [accuracy/safari.json](accuracy/safari.json), [accuracy/firefox.json](accuracy/firefox.json) — raw browser accuracy rows
 - [accuracy/letter-spacing.json](accuracy/letter-spacing.json) — compact Chrome + Safari `{ letterSpacing }` oracle snapshot
 - [benchmarks/chrome.json](benchmarks/chrome.json), [benchmarks/safari.json](benchmarks/safari.json) — raw benchmark snapshots
-- [corpora/STATUS.md](corpora/STATUS.md) — short pointer doc for long-form corpora
 - [corpora/dashboard.json](corpora/dashboard.json) — machine-readable corpus dashboard
 - [corpora/chrome-step10.json](corpora/chrome-step10.json), [corpora/safari-step10.json](corpora/safari-step10.json) — checked-in browser `step=10` corpus sweep snapshots
 - [PLATFORM_BUGS.md](PLATFORM_BUGS.md) — current browser/OS issue and workaround ledger

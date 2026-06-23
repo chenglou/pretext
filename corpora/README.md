@@ -118,9 +118,11 @@ Current bundle:
 
 Machine-readable metadata lives in `sources.json`.
 
-Current sweep status lives in `STATUS.md`.
 Machine-readable corpus status lives in `dashboard.json`, and its main snapshot
-inputs are `chrome-step10.json` and `safari-step10.json`.
+inputs are `chrome-step10.json` and `safari-step10.json`. In the dashboard,
+"anchors" means `300 / 600 / 800` unless noted otherwise, and "step=10" means
+the `300..900` sweep. Results describe the machine that produced the snapshots;
+they are not a promise of universal permanence.
 Mismatch taxonomy and steering vocabulary live in `TAXONOMY.md`.
 
 Useful commands:

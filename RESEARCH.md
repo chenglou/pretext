@@ -2,8 +2,8 @@
 
 Everything we tried, measured, and learned while building this library.
 
-For the current compact browser-accuracy / benchmark snapshot, see `STATUS.md`.
-For the current compact corpus / sweep snapshot, see `corpora/STATUS.md`.
+For the current browser-accuracy / benchmark snapshot, see `status/dashboard.json`.
+For the current corpus / sweep snapshot, see `corpora/dashboard.json`.
 For the shared mismatch vocabulary, see `corpora/TAXONOMY.md`.
 For current browser and OS bug reports, related tracker issues, and compatibility behavior, see `PLATFORM_BUGS.md`.
 
