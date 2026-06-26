@@ -937,6 +937,39 @@ describe('rich-inline invariants', () => {
     expect(firstLine!.end).toEqual(nextStart)
   })
 
+  test('rich inline cursors use source item indexes across skipped whitespace items', () => {
+    const prepared = prepareRichInline([
+      { text: 'A', font: FONT },
+      { text: '   ', font: FONT },
+      { text: 'B', font: FONT },
+    ])
+    const maxWidth = measureWidth('A', FONT) + 0.1
+    const firstLine = layoutNextRichInlineLineRange(prepared, maxWidth)
+
+    expect(firstLine).toMatchObject({
+      end: { itemIndex: 2, segmentIndex: 0, graphemeIndex: 0 },
+      fragments: [
+        { itemIndex: 0 },
+      ],
+    })
+
+    const secondLine = layoutNextRichInlineLineRange(prepared, maxWidth, firstLine!.end)
+    expect(secondLine).toMatchObject({
+      end: { itemIndex: 3, segmentIndex: 0, graphemeIndex: 0 },
+      fragments: [
+        { itemIndex: 2 },
+      ],
+    })
+    expect(materializeRichInlineLineRange(prepared, secondLine!).fragments.map(fragment => fragment.text)).toEqual(['B'])
+
+    const directLine = layoutNextRichInlineLineRange(prepared, 200, {
+      itemIndex: 2,
+      segmentIndex: 0,
+      graphemeIndex: 0,
+    })
+    expect(materializeRichInlineLineRange(prepared, directLine!).fragments.map(fragment => fragment.text)).toEqual(['B'])
+  })
+
   test('rich inline item boundaries do not accept forced-progress overflow', () => {
     const maxWidth = measureWidth('A', FONT) + 1
     const prepared = prepareRichInline([
