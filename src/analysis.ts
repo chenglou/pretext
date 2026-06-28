@@ -84,7 +84,8 @@ export function clearAnalysisCaches(): void {
 }
 
 export function setAnalysisLocale(locale?: string): void {
-  const nextLocale = locale && locale.length > 0 ? locale : undefined
+  const trimmedLocale = locale?.trim()
+  const nextLocale = trimmedLocale && trimmedLocale.length > 0 ? trimmedLocale : undefined
   if (segmenterLocale === nextLocale) return
   segmenterLocale = nextLocale
   sharedWordSegmenter = null
