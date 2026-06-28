@@ -772,6 +772,14 @@ describe('prepare invariants', () => {
     expect(layout(latin, 200, LINE_HEIGHT)).toEqual({ lineCount: 1, height: LINE_HEIGHT })
   })
 
+  test('blank locale strings reset the segmenter locale', () => {
+    setLocale('th')
+    setLocale('   ')
+
+    const latin = prepare('hello world', FONT)
+    expect(layout(latin, 200, LINE_HEIGHT)).toEqual({ lineCount: 1, height: LINE_HEIGHT })
+  })
+
   test('pure LTR text skips rich bidi metadata', () => {
     expect(prepareWithSegments('hello world', FONT).segLevels).toBeNull()
   })
