@@ -313,7 +313,7 @@ function render() {
 
       // Group within font by size
       for (const [font, ms] of byFont) {
-        html += `<h2>${font}</h2>`
+        html += `<h2>${escapeHtml(font)}</h2>`
 
         const bySize = new Map<number, Mismatch[]>()
         for (const m of ms) {
