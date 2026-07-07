@@ -662,6 +662,15 @@ describe('prepare invariants', () => {
     expect(prepared.segments).toEqual([text])
   })
 
+  test('breaks overlong repeated symbol runs at grapheme boundaries', () => {
+    const prepared = prepareWithSegments('||||', FONT)
+    const maxWidth = measureWidth('|', FONT) + 0.1
+    const lines = layoutWithLines(prepared, maxWidth, LINE_HEIGHT).lines
+
+    expect(lines.map(line => line.text)).toEqual(['|', '|', '|', '|'])
+    expect(lines.every(line => line.width <= maxWidth)).toBe(true)
+  })
+
   test('keeps repeated punctuation runs attachable to trailing closing punctuation', () => {
     const prepared = prepareWithSegments('((()', FONT)
     expect(prepared.segments).toEqual(['((()'])
