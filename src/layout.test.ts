@@ -937,6 +937,23 @@ describe('rich-inline invariants', () => {
     expect(firstLine!.end).toEqual(nextStart)
   })
 
+  test('rich inline cursors use source item indexes across skipped whitespace items', () => {
+    const prepared = prepareRichInline([
+      { text: 'A', font: FONT },
+      { text: '   ', font: FONT },
+      { text: 'B', font: FONT },
+    ])
+    const firstLine = layoutNextRichInlineLineRange(prepared, measureWidth('A', FONT) + 0.1)
+
+    expect(firstLine).not.toBeNull()
+    expect(firstLine!.end).toEqual({ itemIndex: 2, segmentIndex: 0, graphemeIndex: 0 })
+    expect(layoutNextRichInlineLineRange(prepared, 200, {
+      itemIndex: 2,
+      segmentIndex: 0,
+      graphemeIndex: 0,
+    })?.fragments.map(fragment => fragment.itemIndex)).toEqual([2])
+  })
+
   test('rich inline item boundaries do not accept forced-progress overflow', () => {
     const maxWidth = measureWidth('A', FONT) + 1
     const prepared = prepareRichInline([

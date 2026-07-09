@@ -77,6 +77,8 @@ export type RichInlineStats = {
 type InternalPreparedRichInline = PreparedRichInline & {
   items: PreparedRichInlineItem[]
   itemsBySourceItemIndex: Array<PreparedRichInlineItem | undefined>
+  nextInternalItemIndexBySourceItemIndex: number[]
+  sourceItemCount: number
 }
 
 type PreparedRichInlineItem = {
@@ -102,6 +104,33 @@ const RICH_INLINE_START_CURSOR: RichInlineCursor = {
 
 function getInternalPreparedRichInline(prepared: PreparedRichInline): InternalPreparedRichInline {
   return prepared as InternalPreparedRichInline
+}
+
+function sourceCursorToInternal(
+  flow: InternalPreparedRichInline,
+  cursor: RichInlineCursor,
+): RichInlineCursor {
+  const sourceItemIndex = Math.max(0, Math.min(cursor.itemIndex, flow.sourceItemCount))
+  const internalItemIndex =
+    flow.nextInternalItemIndexBySourceItemIndex[sourceItemIndex] ??
+    flow.items.length
+
+  return {
+    itemIndex: internalItemIndex,
+    segmentIndex: cursor.segmentIndex,
+    graphemeIndex: cursor.graphemeIndex,
+  }
+}
+
+function internalCursorToSource(
+  flow: InternalPreparedRichInline,
+  cursor: RichInlineCursor,
+): RichInlineCursor {
+  return {
+    itemIndex: flow.items[cursor.itemIndex]?.sourceItemIndex ?? flow.sourceItemCount,
+    segmentIndex: cursor.segmentIndex,
+    graphemeIndex: cursor.graphemeIndex,
+  }
 }
 
 function cloneCursor(cursor: LayoutCursor): LayoutCursor {
@@ -158,6 +187,7 @@ function endsInsideFirstSegment(segmentIndex: number, graphemeIndex: number): bo
 export function prepareRichInline(items: RichInlineItem[]): PreparedRichInline {
   const preparedItems: PreparedRichInlineItem[] = []
   const itemsBySourceItemIndex = Array.from<PreparedRichInlineItem | undefined>({ length: items.length })
+  const internalItemIndexBySourceItemIndex = Array.from<number | undefined>({ length: items.length })
   const collapsedSpaceWidthCache = new Map<string, number>()
   let pendingGapWidth = 0
 
@@ -206,6 +236,7 @@ export function prepareRichInline(items: RichInlineItem[]): PreparedRichInline {
       prepared,
       sourceItemIndex: index,
     } satisfies PreparedRichInlineItem
+    internalItemIndexBySourceItemIndex[index] = preparedItems.length
     preparedItems.push(preparedItem)
     itemsBySourceItemIndex[index] = preparedItem
 
@@ -214,9 +245,21 @@ export function prepareRichInline(items: RichInlineItem[]): PreparedRichInline {
       : 0
   }
 
+  const nextInternalItemIndexBySourceItemIndex = Array.from<number>({ length: items.length + 1 })
+  let nextInternalItemIndex = preparedItems.length
+  for (let sourceItemIndex = items.length; sourceItemIndex >= 0; sourceItemIndex--) {
+    nextInternalItemIndexBySourceItemIndex[sourceItemIndex] = nextInternalItemIndex
+    const previousInternalItemIndex = internalItemIndexBySourceItemIndex[sourceItemIndex - 1]
+    if (previousInternalItemIndex !== undefined) {
+      nextInternalItemIndex = previousInternalItemIndex
+    }
+  }
+
   return {
     items: preparedItems,
     itemsBySourceItemIndex,
+    nextInternalItemIndexBySourceItemIndex,
+    sourceItemCount: items.length,
   } as InternalPreparedRichInline
 }
 
@@ -405,11 +448,7 @@ export function layoutNextRichInlineLineRange(
   start: RichInlineCursor = RICH_INLINE_START_CURSOR,
 ): RichInlineLineRange | null {
   const flow = getInternalPreparedRichInline(prepared)
-  const end: RichInlineCursor = {
-    itemIndex: start.itemIndex,
-    segmentIndex: start.segmentIndex,
-    graphemeIndex: start.graphemeIndex,
-  }
+  const end = sourceCursorToInternal(flow, start)
   const fragments: RichInlineFragmentRange[] = []
   const width = stepRichInlineLine(flow, maxWidth, end, (item, gapBefore, occupiedWidth, fragmentStart, fragmentEnd) => {
     fragments.push({
@@ -425,7 +464,7 @@ export function layoutNextRichInlineLineRange(
   return {
     fragments,
     width,
-    end,
+    end: internalCursorToSource(flow, end),
   }
 }
 
