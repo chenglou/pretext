@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Added
+
+- `prepare()` / `prepareWithSegments()` accept `{ fontKerning: 'auto' | 'normal' | 'none' }` so measurement can match the caller's rendered canvas/CSS kerning mode (#199).
+
 ### Changed
 
 - Safari soft-hyphen wrapping now follows the same strict insertion-point behavior across `layout()`, rich-line, and streaming APIs. The Safari compatibility profile was revalidated on Safari 26.4, after previously being validated through Safari 26.3.1.
