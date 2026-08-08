@@ -51,6 +51,7 @@ import {
 } from './analysis.js'
 import {
   type BreakableFitMode,
+  type FontKerningMode,
   clearMeasurementCaches,
   getCorrectedSegmentWidth,
   getSegmentBreakableFitAdvances,
@@ -60,6 +61,8 @@ import {
   textMayContainEmoji,
   type SegmentMetrics,
 } from './measurement.js'
+
+export type { FontKerningMode }
 import {
   countPreparedLines,
   measurePreparedLineGeometry,
@@ -154,6 +157,8 @@ export type PrepareOptions = {
   whiteSpace?: WhiteSpaceMode
   wordBreak?: WordBreakMode
   letterSpacing?: number
+  /** Canvas `fontKerning` used while measuring. Default `'auto'`. */
+  fontKerning?: FontKerningMode
 }
 
 // Internal hard-break chunk hint for the line walker. Not public because
@@ -392,11 +397,13 @@ function measureAnalysis(
   includeSegments: boolean,
   wordBreak: WordBreakMode,
   letterSpacing: number,
+  fontKerning: FontKerningMode,
 ): InternalPreparedText | PreparedTextWithSegments {
   const engineProfile = getEngineProfile()
   const { cache, emojiCorrection } = getFontMeasurementState(
     font,
     textMayContainEmoji(analysis.normalized),
+    fontKerning,
   )
   const discretionaryHyphenWidth =
     getCorrectedSegmentWidth('-', getSegmentMetrics('-', cache), emojiCorrection) +
@@ -646,8 +653,9 @@ function prepareInternal(
 ): InternalPreparedText | PreparedTextWithSegments {
   const wordBreak = options?.wordBreak ?? 'normal'
   const letterSpacing = options?.letterSpacing ?? 0
+  const fontKerning = options?.fontKerning ?? 'auto'
   const analysis = analyzeText(text, getEngineProfile(), options?.whiteSpace, wordBreak)
-  return measureAnalysis(analysis, font, includeSegments, wordBreak, letterSpacing)
+  return measureAnalysis(analysis, font, includeSegments, wordBreak, letterSpacing, fontKerning)
 }
 
 // Prepare text for layout. Segments the text, measures each segment via canvas,
