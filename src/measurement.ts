@@ -17,9 +17,16 @@ export type EngineProfile = {
 
 export type BreakableFitMode = 'sum-graphemes' | 'segment-prefixes' | 'pair-context'
 
+export type FontKerningMode = 'auto' | 'normal' | 'none'
+
 let measureContext: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D | null = null
 const segmentMetricCaches = new Map<string, Map<string, SegmentMetrics>>()
 let cachedEngineProfile: EngineProfile | null = null
+
+function measurementCacheKey(font: string, fontKerning: FontKerningMode): string {
+  // Keep the common default on the plain font key so existing caches stay hit.
+  return fontKerning === 'auto' ? font : `${font}\0fontKerning=${fontKerning}`
+}
 
 // Safari's prefix-fit policy is useful for ordinary word-sized runs, but letting
 // it measure every growing prefix of a giant segment recreates a pathological
@@ -48,11 +55,15 @@ export function getMeasureContext(): CanvasRenderingContext2D | OffscreenCanvasR
   throw new Error('Text measurement requires OffscreenCanvas or a DOM canvas context.')
 }
 
-export function getSegmentMetricCache(font: string): Map<string, SegmentMetrics> {
-  let cache = segmentMetricCaches.get(font)
+export function getSegmentMetricCache(
+  font: string,
+  fontKerning: FontKerningMode = 'auto',
+): Map<string, SegmentMetrics> {
+  const key = measurementCacheKey(font, fontKerning)
+  let cache = segmentMetricCaches.get(key)
   if (!cache) {
     cache = new Map()
-    segmentMetricCaches.set(font, cache)
+    segmentMetricCaches.set(key, cache)
   }
   return cache
 }
@@ -252,14 +263,23 @@ export function getSegmentBreakableFitAdvances(
   return metrics.breakableFitAdvances
 }
 
-export function getFontMeasurementState(font: string, needsEmojiCorrection: boolean): {
+export function getFontMeasurementState(
+  font: string,
+  needsEmojiCorrection: boolean,
+  fontKerning: FontKerningMode = 'auto',
+): {
   cache: Map<string, SegmentMetrics>
   fontSize: number
   emojiCorrection: number
 } {
   const ctx = getMeasureContext()
   ctx.font = font
-  const cache = getSegmentMetricCache(font)
+  // Align canvas measurement with the caller's rendered kerning mode. The
+  // shared context is reused across prepares, so this must be set every call.
+  if ('fontKerning' in ctx) {
+    ctx.fontKerning = fontKerning
+  }
+  const cache = getSegmentMetricCache(font, fontKerning)
   const fontSize = parseFontSize(font)
   const emojiCorrection = needsEmojiCorrection ? getEmojiCorrection(font, fontSize) : 0
   return { cache, fontSize, emojiCorrection }

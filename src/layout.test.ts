@@ -91,7 +91,11 @@ function isWideCharacter(ch: string): boolean {
   )
 }
 
-function measureWidth(text: string, font: string): number {
+function measureWidth(
+  text: string,
+  font: string,
+  fontKerning: 'auto' | 'normal' | 'none' = 'auto',
+): number {
   const fontSize = parseFontSize(font)
   let width = 0
   let previousWasDecimalDigit = false
@@ -119,6 +123,11 @@ function measureWidth(text: string, font: string): number {
       width += fontSize * 0.6
       previousWasDecimalDigit = false
     }
+  }
+
+  // Fake kerning pair: browsers typically tighten "AV" under auto/normal.
+  if (fontKerning !== 'none' && text.includes('AV')) {
+    width -= fontSize * 0.15 * (text.split('AV').length - 1)
   }
 
   return width
@@ -252,9 +261,10 @@ function getNonSpaceSegmentLevels(
 
 class TestCanvasRenderingContext2D {
   font = ''
+  fontKerning: 'auto' | 'normal' | 'none' = 'auto'
 
   measureText(text: string): { width: number } {
-    return { width: measureWidth(text, this.font) }
+    return { width: measureWidth(text, this.font, this.fontKerning) }
   }
 }
 
@@ -298,6 +308,22 @@ beforeAll(async () => {
 beforeEach(() => {
   setLocale(undefined)
   clearCache()
+})
+
+describe('fontKerning prepare option', () => {
+  test('fontKerning none widens kerning pairs relative to auto', () => {
+    const auto = prepareWithSegments('AV', FONT)
+    const none = prepareWithSegments('AV', FONT, { fontKerning: 'none' })
+    expect(none.widths[0]!).toBeGreaterThan(auto.widths[0]!)
+  })
+
+  test('fontKerning caches stay isolated across modes', () => {
+    const autoFirst = prepareWithSegments('AV', FONT, { fontKerning: 'auto' })
+    const none = prepareWithSegments('AV', FONT, { fontKerning: 'none' })
+    const autoAgain = prepareWithSegments('AV', FONT, { fontKerning: 'auto' })
+    expect(autoAgain.widths[0]).toBe(autoFirst.widths[0])
+    expect(none.widths[0]!).toBeGreaterThan(autoFirst.widths[0]!)
+  })
 })
 
 describe('measurement invariants', () => {
