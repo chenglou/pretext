@@ -116,7 +116,7 @@ walkRichInlineLineRanges(prepared, 320, range => {
 It is intentionally narrow:
 - raw inline text in, including boundary spaces
 - caller-owned `extraWidth` for pill chrome
-- `break: 'never'` for atomic items like chips and mentions
+- `break: 'never'` for atomic items like chips and mentions — the item always stays on a single line as one fragment. If it does not fit after existing content, it wraps to the next line whole. If it is wider than the container, it overflows but never splits. Items without `break: 'never'` (including those with `extraWidth`) can still split across lines; `extraWidth` reserves space for visual chrome but does not prevent wrapping.
 - `white-space: normal` only
 - not a nested markup tree and not a general CSS inline formatting engine
 
@@ -170,8 +170,8 @@ type RichInlineItem = {
   text: string // raw author text, including leading/trailing collapsible spaces
   font: string // canvas font shorthand for this item
   letterSpacing?: number // extra horizontal spacing between graphemes, in CSS px
-  break?: 'normal' | 'never' // `never` keeps the item atomic, like a chip
-  extraWidth?: number // caller-owned horizontal chrome, e.g. padding + border width
+  break?: 'normal' | 'never' // `never` keeps the item atomic — it always stays on one line as one fragment, never splits. Default is `normal`.
+  extraWidth?: number // caller-owned horizontal chrome, e.g. padding + border width. Does not affect break behavior; use `break: 'never'` if the item should stay whole.
 }
 type RichInlineCursor = {
   itemIndex: number // Which source RichInlineItem this cursor is currently in

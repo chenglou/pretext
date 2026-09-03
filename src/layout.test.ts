@@ -985,6 +985,101 @@ describe('rich-inline invariants', () => {
       maxLineWidth: Math.max(...widths),
     })
   })
+
+  test('break never chip stays atomic across all widths', () => {
+    const chipFont = '700 12px Test Sans'
+    const chipExtraWidth = 22
+    const chipText = '@maya'
+    const chipItemIndex = 1
+
+    const prepared = prepareRichInline([
+      { text: 'Ship ', font: FONT },
+      { text: chipText, font: chipFont, break: 'never', extraWidth: chipExtraWidth },
+      { text: "'s rich note wraps cleanly here", font: FONT },
+    ])
+
+    const chipNaturalWidth = measureWidth(chipText, chipFont) + chipExtraWidth
+
+    for (const maxWidth of [300, 200, 120, 80, 60, 40, chipNaturalWidth + 1, chipNaturalWidth - 1, 1]) {
+      const chipLineIndices: number[] = []
+
+      walkRichInlineLineRanges(prepared, maxWidth, (line, lineIndex = chipLineIndices.length) => {
+        for (const frag of line.fragments) {
+          if (frag.itemIndex === chipItemIndex) {
+            chipLineIndices.push(lineIndex)
+          }
+        }
+      })
+
+      expect(chipLineIndices.length).toBeLessThanOrEqual(1)
+
+      if (chipLineIndices.length === 1) {
+        const lines: Array<{ fragments: Array<{ itemIndex: number, text: string }> }> = []
+        walkRichInlineLineRanges(prepared, maxWidth, range => {
+          const line = materializeRichInlineLineRange(prepared, range)
+          lines.push({
+            fragments: line.fragments.map(f => ({ itemIndex: f.itemIndex, text: f.text })),
+          })
+        })
+
+        const chipFragments = lines
+          .flatMap(l => l.fragments)
+          .filter(f => f.itemIndex === chipItemIndex)
+        expect(chipFragments).toHaveLength(1)
+        expect(chipFragments[0]!.text).toBe(chipText)
+      }
+    }
+  })
+
+  test('break never chip wider than container stays whole on one line', () => {
+    const chipFont = '700 12px Test Sans'
+    const wideChipText = 'very-long-chip-label-that-overflows'
+    const chipExtraWidth = 22
+    const chipWidth = measureWidth(wideChipText, chipFont) + chipExtraWidth
+    const maxWidth = chipWidth / 2
+
+    const prepared = prepareRichInline([
+      { text: wideChipText, font: chipFont, break: 'never', extraWidth: chipExtraWidth },
+    ])
+
+    const lines: Array<{ fragments: Array<{ itemIndex: number, text: string }> }> = []
+    walkRichInlineLineRanges(prepared, maxWidth, range => {
+      const line = materializeRichInlineLineRange(prepared, range)
+      lines.push({
+        fragments: line.fragments.map(f => ({ itemIndex: f.itemIndex, text: f.text })),
+      })
+    })
+
+    expect(lines).toHaveLength(1)
+    expect(lines[0]!.fragments).toHaveLength(1)
+    expect(lines[0]!.fragments[0]!.text).toBe(wideChipText)
+  })
+
+  test('break never chip wraps to fresh line when it cannot fit after existing content', () => {
+    const chipFont = '700 12px Test Sans'
+    const chipText = '@maya'
+    const chipExtraWidth = 22
+    const chipWidth = measureWidth(chipText, chipFont) + chipExtraWidth
+    const prefixWidth = measureWidth('Ship', FONT)
+    const maxWidth = prefixWidth + chipWidth - 1
+
+    const prepared = prepareRichInline([
+      { text: 'Ship ', font: FONT },
+      { text: chipText, font: chipFont, break: 'never', extraWidth: chipExtraWidth },
+    ])
+
+    const lines: Array<{ fragments: Array<{ itemIndex: number, text: string }> }> = []
+    walkRichInlineLineRanges(prepared, maxWidth, range => {
+      const line = materializeRichInlineLineRange(prepared, range)
+      lines.push({
+        fragments: line.fragments.map(f => ({ itemIndex: f.itemIndex, text: f.text })),
+      })
+    })
+
+    expect(lines).toHaveLength(2)
+    expect(lines[0]!.fragments.every(f => f.itemIndex !== 1)).toBe(true)
+    expect(lines[1]!.fragments.some(f => f.itemIndex === 1 && f.text === chipText)).toBe(true)
+  })
 })
 
 describe('layout invariants', () => {
