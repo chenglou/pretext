@@ -450,7 +450,6 @@ function measureAnalysis(
     textMetrics: SegmentMetrics,
     kind: SegmentBreakKind,
     start: number,
-    wordLike: boolean,
     allowOverflowBreaks: boolean,
   ): void {
     const spacingGraphemeCount = hasLetterSpacing
@@ -474,7 +473,7 @@ function measureAnalysis(
         ? 0
         : width
 
-    if (allowOverflowBreaks && wordLike && text.length > 1) {
+    if (allowOverflowBreaks && kind === 'text' && text.length > 1) {
       let fitMode: BreakableFitMode = 'sum-graphemes'
       if (letterSpacing !== 0) {
         fitMode = 'segment-prefixes'
@@ -523,7 +522,6 @@ function measureAnalysis(
 
   for (let mi = 0; mi < analysis.len; mi++) {
     const segText = analysis.texts[mi]!
-    const segWordLike = analysis.isWordLike[mi]!
     const segKind = analysis.kinds[mi]!
     const segStart = analysis.starts[mi]!
 
@@ -585,14 +583,13 @@ function measureAnalysis(
           unitMetrics,
           'text',
           segStart + unit.start,
-          segWordLike,
           wordBreak === 'keep-all' || !unitMetrics.containsCJK,
         )
       }
       continue
     }
 
-    pushMeasuredTextSegment(segText, segMetrics, segKind, segStart, segWordLike, true)
+    pushMeasuredTextSegment(segText, segMetrics, segKind, segStart, true)
   }
 
   if (chunkStartSegmentIndex < widths.length) {

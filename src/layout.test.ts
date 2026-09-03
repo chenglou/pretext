@@ -662,6 +662,22 @@ describe('prepare invariants', () => {
     expect(prepared.segments).toEqual([text])
   })
 
+  test('breaks overlong symbol runs at grapheme boundaries', () => {
+    const pipeWidth = measureWidth('|', FONT)
+    const maxWidth = pipeWidth + 0.1
+
+    const simplePrepared = prepareWithSegments('||||', FONT)
+    const simpleLines = layoutWithLines(simplePrepared, maxWidth, LINE_HEIGHT).lines
+    expect(simpleLines.map(l => l.text)).toEqual(['|', '|', '|', '|'])
+    expect(simpleLines.every(l => l.width <= maxWidth)).toBe(true)
+
+    const mixedSymbols = '{{{]]]\\\|||'
+    const mixedPrepared = prepareWithSegments(mixedSymbols, FONT)
+    const mixedLines = layoutWithLines(mixedPrepared, maxWidth, LINE_HEIGHT).lines
+    expect(mixedLines.every(l => l.width <= maxWidth)).toBe(true)
+    expect(mixedLines.map(l => l.text)).toEqual(getSegmentGraphemes(mixedSymbols))
+  })
+
   test('keeps repeated punctuation runs attachable to trailing closing punctuation', () => {
     const prepared = prepareWithSegments('((()', FONT)
     expect(prepared.segments).toEqual(['((()'])
