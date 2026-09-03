@@ -1,0 +1,324 @@
+{
+  "status": "ready",
+  "requestId": "1788435913276",
+  "font": "16px Arial",
+  "uniqueCount": 100000,
+  "uniqueCacheEntries": 200040,
+  "uniqueCachedTextUnits": 941054,
+  "streamSteps": 1000,
+  "streamChars": 18200,
+  "results": [
+    {
+      "label": "100k unique-text prepare; cold shared cache at start",
+      "count": 100000,
+      "ms": 1396.4000000059605,
+      "checksum": 40
+    },
+    {
+      "label": "Repeated layout of one prepared paragraph",
+      "count": 100000,
+      "ms": 18.799999997019768,
+      "checksum": 4000000
+    },
+    {
+      "label": "Newline stream; full prepare each update",
+      "count": 1000,
+      "ms": 831.7999999970198,
+      "checksum": 6014000,
+      "p50Ms": 0.7999999970197678,
+      "p95Ms": 1.5999999940395355,
+      "maxMs": 2.2000000029802322
+    },
+    {
+      "label": "Newline stream; incremental analysis owner",
+      "count": 1000,
+      "ms": 231.20000000298023,
+      "checksum": 6014000,
+      "p50Ms": 0.20000000298023224,
+      "p95Ms": 0.4000000059604645,
+      "maxMs": 0.7999999970197678
+    },
+    {
+      "label": "Live paragraph; full prepare each update",
+      "count": 1000,
+      "ms": 851.7000000029802,
+      "checksum": 5014020,
+      "p50Ms": 0.800000011920929,
+      "p95Ms": 1.699999988079071,
+      "maxMs": 2
+    },
+    {
+      "label": "Live paragraph; incremental analysis owner",
+      "count": 1000,
+      "ms": 238.90000000596046,
+      "checksum": 5014020,
+      "p50Ms": 0.20000000298023224,
+      "p95Ms": 0.5,
+      "maxMs": 0.800000011920929
+    },
+    {
+      "label": "Unbroken-run fallback; full prepare each update",
+      "count": 300,
+      "ms": 27.599999994039536,
+      "checksum": 192960,
+      "p50Ms": 0.09999999403953552,
+      "p95Ms": 0.20000000298023224,
+      "maxMs": 0.4000000059604645
+    },
+    {
+      "label": "Unbroken-run fallback; incremental analysis owner",
+      "count": 300,
+      "ms": 22.099999994039536,
+      "checksum": 192960,
+      "p50Ms": 0.09999999403953552,
+      "p95Ms": 0.20000000298023224,
+      "maxMs": 0.9000000059604645
+    }
+  ],
+  "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36",
+  "devicePixelRatio": 2,
+  "runs": 3,
+  "methodology": "Median of independent full page runs. Shared caches clear before each prepare workload. Growing-prefix controls both return rich prepared handles. Latency fields are medians of the per-run summaries.",
+  "samples": [
+    {
+      "status": "ready",
+      "requestId": "1788435913276",
+      "font": "16px Arial",
+      "uniqueCount": 100000,
+      "uniqueCacheEntries": 200040,
+      "uniqueCachedTextUnits": 941054,
+      "streamSteps": 1000,
+      "streamChars": 18200,
+      "results": [
+        {
+          "label": "100k unique-text prepare; cold shared cache at start",
+          "count": 100000,
+          "ms": 1562.2999999970198,
+          "checksum": 40
+        },
+        {
+          "label": "Repeated layout of one prepared paragraph",
+          "count": 100000,
+          "ms": 21.799999997019768,
+          "checksum": 4000000
+        },
+        {
+          "label": "Newline stream; full prepare each update",
+          "count": 1000,
+          "ms": 957.6000000089407,
+          "checksum": 6014000,
+          "p50Ms": 0.9000000059604645,
+          "p95Ms": 1.7999999970197678,
+          "maxMs": 2.2999999970197678
+        },
+        {
+          "label": "Newline stream; incremental analysis owner",
+          "count": 1000,
+          "ms": 268.30000001192093,
+          "checksum": 6014000,
+          "p50Ms": 0.29999999701976776,
+          "p95Ms": 0.5,
+          "maxMs": 0.9000000059604645
+        },
+        {
+          "label": "Live paragraph; full prepare each update",
+          "count": 1000,
+          "ms": 952,
+          "checksum": 5014020,
+          "p50Ms": 0.9000000059604645,
+          "p95Ms": 1.800000011920929,
+          "maxMs": 2.199999988079071
+        },
+        {
+          "label": "Live paragraph; incremental analysis owner",
+          "count": 1000,
+          "ms": 266.20000000298023,
+          "checksum": 5014020,
+          "p50Ms": 0.29999999701976776,
+          "p95Ms": 0.5,
+          "maxMs": 0.9000000059604645
+        },
+        {
+          "label": "Unbroken-run fallback; full prepare each update",
+          "count": 300,
+          "ms": 30.799999997019768,
+          "checksum": 192960,
+          "p50Ms": 0.09999999403953552,
+          "p95Ms": 0.20000000298023224,
+          "maxMs": 0.5999999940395355
+        },
+        {
+          "label": "Unbroken-run fallback; incremental analysis owner",
+          "count": 300,
+          "ms": 24.700000002980232,
+          "checksum": 192960,
+          "p50Ms": 0.09999999403953552,
+          "p95Ms": 0.20000000298023224,
+          "maxMs": 1.0999999940395355
+        }
+      ],
+      "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36",
+      "devicePixelRatio": 2
+    },
+    {
+      "status": "ready",
+      "requestId": "1788435935677",
+      "font": "16px Arial",
+      "uniqueCount": 100000,
+      "uniqueCacheEntries": 200040,
+      "uniqueCachedTextUnits": 941054,
+      "streamSteps": 1000,
+      "streamChars": 18200,
+      "results": [
+        {
+          "label": "100k unique-text prepare; cold shared cache at start",
+          "count": 100000,
+          "ms": 1396.4000000059605,
+          "checksum": 40
+        },
+        {
+          "label": "Repeated layout of one prepared paragraph",
+          "count": 100000,
+          "ms": 18.19999998807907,
+          "checksum": 4000000
+        },
+        {
+          "label": "Newline stream; full prepare each update",
+          "count": 1000,
+          "ms": 821.5,
+          "checksum": 6014000,
+          "p50Ms": 0.7999999970197678,
+          "p95Ms": 1.5,
+          "maxMs": 1.8999999910593033
+        },
+        {
+          "label": "Newline stream; incremental analysis owner",
+          "count": 1000,
+          "ms": 225.90000000596046,
+          "checksum": 6014000,
+          "p50Ms": 0.20000000298023224,
+          "p95Ms": 0.4000000059604645,
+          "maxMs": 0.7999999970197678
+        },
+        {
+          "label": "Live paragraph; full prepare each update",
+          "count": 1000,
+          "ms": 837.6000000089407,
+          "checksum": 5014020,
+          "p50Ms": 0.7999999970197678,
+          "p95Ms": 1.5999999940395355,
+          "maxMs": 1.9000000059604645
+        },
+        {
+          "label": "Live paragraph; incremental analysis owner",
+          "count": 1000,
+          "ms": 238.90000000596046,
+          "checksum": 5014020,
+          "p50Ms": 0.20000000298023224,
+          "p95Ms": 0.5,
+          "maxMs": 0.800000011920929
+        },
+        {
+          "label": "Unbroken-run fallback; full prepare each update",
+          "count": 300,
+          "ms": 27,
+          "checksum": 192960,
+          "p50Ms": 0.09999999403953552,
+          "p95Ms": 0.20000000298023224,
+          "maxMs": 0.3999999910593033
+        },
+        {
+          "label": "Unbroken-run fallback; incremental analysis owner",
+          "count": 300,
+          "ms": 21.900000005960464,
+          "checksum": 192960,
+          "p50Ms": 0.09999999403953552,
+          "p95Ms": 0.20000000298023224,
+          "maxMs": 0.9000000059604645
+        }
+      ],
+      "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36",
+      "devicePixelRatio": 2
+    },
+    {
+      "status": "ready",
+      "requestId": "1788435961385",
+      "font": "16px Arial",
+      "uniqueCount": 100000,
+      "uniqueCacheEntries": 200040,
+      "uniqueCachedTextUnits": 941054,
+      "streamSteps": 1000,
+      "streamChars": 18200,
+      "results": [
+        {
+          "label": "100k unique-text prepare; cold shared cache at start",
+          "count": 100000,
+          "ms": 1395.5,
+          "checksum": 40
+        },
+        {
+          "label": "Repeated layout of one prepared paragraph",
+          "count": 100000,
+          "ms": 18.799999997019768,
+          "checksum": 4000000
+        },
+        {
+          "label": "Newline stream; full prepare each update",
+          "count": 1000,
+          "ms": 831.7999999970198,
+          "checksum": 6014000,
+          "p50Ms": 0.7999999970197678,
+          "p95Ms": 1.5999999940395355,
+          "maxMs": 2.2000000029802322
+        },
+        {
+          "label": "Newline stream; incremental analysis owner",
+          "count": 1000,
+          "ms": 231.20000000298023,
+          "checksum": 6014000,
+          "p50Ms": 0.20000000298023224,
+          "p95Ms": 0.4000000059604645,
+          "maxMs": 0.7999999970197678
+        },
+        {
+          "label": "Live paragraph; full prepare each update",
+          "count": 1000,
+          "ms": 851.7000000029802,
+          "checksum": 5014020,
+          "p50Ms": 0.800000011920929,
+          "p95Ms": 1.699999988079071,
+          "maxMs": 2
+        },
+        {
+          "label": "Live paragraph; incremental analysis owner",
+          "count": 1000,
+          "ms": 237.19999998807907,
+          "checksum": 5014020,
+          "p50Ms": 0.20000000298023224,
+          "p95Ms": 0.5,
+          "maxMs": 0.7999999970197678
+        },
+        {
+          "label": "Unbroken-run fallback; full prepare each update",
+          "count": 300,
+          "ms": 27.599999994039536,
+          "checksum": 192960,
+          "p50Ms": 0.09999999403953552,
+          "p95Ms": 0.20000000298023224,
+          "maxMs": 0.4000000059604645
+        },
+        {
+          "label": "Unbroken-run fallback; incremental analysis owner",
+          "count": 300,
+          "ms": 22.099999994039536,
+          "checksum": 192960,
+          "p50Ms": 0.09999999403953552,
+          "p95Ms": 0.20000000298023224,
+          "maxMs": 0.8999999910593033
+        }
+      ],
+      "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36",
+      "devicePixelRatio": 2
+    }
+  ]
+}

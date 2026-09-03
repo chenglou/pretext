@@ -1,20 +1,20 @@
 {
   "status": "ready",
   "environment": {
-    "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36",
+    "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36",
     "devicePixelRatio": 2,
     "viewport": {
-      "innerWidth": 2560,
-      "innerHeight": 1229,
+      "innerWidth": 2504,
+      "innerHeight": 1268,
       "outerWidth": 2560,
-      "outerHeight": 1316,
+      "outerHeight": 1315,
       "visualViewportScale": 1
     },
     "screen": {
       "width": 2560,
       "height": 1440,
       "availWidth": 2560,
-      "availHeight": 1317,
+      "availHeight": 1315,
       "colorDepth": 30,
       "pixelDepth": 30
     }
@@ -76825,5 +76825,5 @@
       "diff": 0
     }
   ],
-  "requestId": "1782176142868-gajfbw"
+  "requestId": "1788436115822-l8jvxz"
 }

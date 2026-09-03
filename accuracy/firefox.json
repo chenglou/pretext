@@ -1,7 +1,7 @@
 {
   "status": "ready",
   "environment": {
-    "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:148.0) Gecko/20100101 Firefox/148.0",
+    "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:152.0) Gecko/20100101 Firefox/152.0",
     "devicePixelRatio": 1,
     "viewport": {
       "innerWidth": 1366,
@@ -14,7 +14,7 @@
       "width": 1366,
       "height": 768,
       "availWidth": 1366,
-      "availHeight": 768,
+      "availHeight": 692,
       "colorDepth": 24,
       "pixelDepth": 24
     }
@@ -76825,5 +76825,5 @@
       "diff": 0
     }
   ],
-  "requestId": "1782176146630-aj1nmx"
+  "requestId": "1788436177200-vgbx11"
 }

@@ -120,6 +120,25 @@ It is intentionally narrow:
 - `white-space: normal` only
 - not a nested markup tree and not a general CSS inline formatting engine
 
+### Incremental preparation
+
+`createIncrementalPreparer(font, options?)` gives changing text an owner. `append(chunk)` and `replace(text)` return ordinary `PreparedTextWithSegments`, usable with the same layout APIs:
+
+```ts
+import { createIncrementalPreparer, layout } from '@chenglou/pretext'
+const owner = createIncrementalPreparer('16px Arial')
+owner.append('A message with ')
+const prepared = owner.append('a changing tail')
+const { height } = layout(prepared, 320, 20)
+owner.clear()
+```
+
+Unchanged analysis before a safe whitespace boundary is reused. The full suffix from that boundary is analyzed again: incomplete URLs, queries, quotes, numeric runs, combining marks and emoji sequences keep their context. When no safe boundary exists, the owner analyzes the whole text. One unbroken growing word is deliberately a fallback case. Both `normal` and `pre-wrap` modes work, including CRLF split across chunks.
+
+The owner keeps only its current source, analysis, prepared value and segment-metric working set. Metrics still needed by the next value are promoted; unused older metrics are released instead of entering the global text cache. This bounds history, not document size. Normalization, prepared-array rebuilding and rich bidi metadata still scale with the full current text, so this is not constant-time editing. Existing prepared snapshots remain usable; retaining them is the caller's choice.
+
+Font and options are fixed for an owner. `setLocale()` invalidates its analysis on the next update. Browser canvas and emoji calibration remain shared. After changing loaded font data, call both `clearCache()` and `owner.clear()`, then replace the full source; the global helper does not own the private segment metrics. Discard the owner when its input is no longer live.
+
 ### API Glossary
 
 Use-case 1 APIs:

@@ -79,6 +79,10 @@ function getSharedWordSegmenter(): Intl.Segmenter {
   return sharedWordSegmenter
 }
 
+export function getAnalysisLocale(): string | undefined {
+  return segmenterLocale
+}
+
 export function clearAnalysisCaches(): void {
   sharedWordSegmenter = null
 }
@@ -1308,6 +1312,10 @@ function mergeKeepAllTextSegments(
   }
 }
 
+export function normalizeText(text: string, whiteSpace: WhiteSpaceMode): string {
+  return whiteSpace === 'pre-wrap' ? normalizeWhitespacePreWrap(text) : normalizeWhitespaceNormal(text)
+}
+
 export function analyzeText(
   text: string,
   profile: AnalysisProfile,
@@ -1315,9 +1323,7 @@ export function analyzeText(
   wordBreak: WordBreakMode = 'normal',
 ): TextAnalysis {
   const whiteSpaceProfile = getWhiteSpaceProfile(whiteSpace)
-  const normalized = whiteSpaceProfile.mode === 'pre-wrap'
-    ? normalizeWhitespacePreWrap(text)
-    : normalizeWhitespaceNormal(text)
+  const normalized = normalizeText(text, whiteSpaceProfile.mode)
   if (normalized.length === 0) {
     return {
       normalized,

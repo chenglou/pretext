@@ -1685,3 +1685,48 @@ describe('layout invariants', () => {
     }
   })
 })
+
+
+describe('incremental preparation', () => {
+  test('owner cache avoids global text history and snapshots survive updates', async () => {
+    const { createIncrementalPreparer } = await import('./layout.js')
+    const { getSegmentMetricCache } = await import('./measurement.js')
+    const owner = createIncrementalPreparer(FONT)
+    const first = owner.replace('alpha beta gamma')
+    expect(owner.replace('alpha beta gamma')).toBe(first)
+    const original = layoutWithLines(first, 60, LINE_HEIGHT)
+    const current = owner.append(' delta')
+    expect(getSegmentMetricCache(FONT).size).toBe(0)
+    expect(layoutWithLines(first, 60, LINE_HEIGHT)).toEqual(original)
+    setLocale('ja')
+    const localized = owner.replace('alpha beta gamma delta')
+    expect(localized).not.toBe(current)
+    expect(layoutWithLines(localized, 60, LINE_HEIGHT)).toEqual(layoutWithLines(prepareWithSegments('alpha beta gamma delta', FONT), 60, LINE_HEIGHT))
+    owner.clear()
+    expect(owner.replace('alpha beta gamma delta')).not.toBe(localized)
+  })
+
+  test('adversarial append and replacement sequences match fresh preparation', async () => {
+    const { createIncrementalPreparer } = await import('./layout.js')
+    for (const whiteSpace of ['normal', 'pre-wrap'] as const) {
+      for (const wordBreak of ['normal', 'keep-all'] as const) {
+        const options = { whiteSpace, wordBreak, letterSpacing: 0.5 }
+        const owner = createIncrementalPreparer(FONT, options)
+        let source = ''
+        const chunks = ['hello ', 'world', ' \\"', 'quoted', '\\" ', 'https://example.com/path?', 'q=', '👩', '\u200d', '💻', '\n', ' \u0301', 'العربية', '\r', '\n', '7:00', '-9:00', '\n', '\n', '中文(abc', ')', ' \u0301', 'hello', ' ', '\u2060', 'joined']
+        for (const chunk of chunks) {
+          source += chunk
+          const prepared = owner.append(chunk)
+          const fresh = prepareWithSegments(source, FONT, options)
+          expect(prepared.segments).toEqual(fresh.segments)
+          for (const width of [15, 60, 180]) expect(layoutWithLines(prepared, width, LINE_HEIGHT)).toEqual(layoutWithLines(fresh, width, LINE_HEIGHT))
+        }
+        for (const edited of [source.slice(0, 8), 'prefix\n' + source, source.replace('world', 'goodbye'), '', '\r\n\n']) {
+          const prepared = owner.replace(edited)
+          const fresh = prepareWithSegments(edited, FONT, options)
+          expect(layoutWithLines(prepared, 60, LINE_HEIGHT)).toEqual(layoutWithLines(fresh, 60, LINE_HEIGHT))
+        }
+      }
+    }
+  })
+})

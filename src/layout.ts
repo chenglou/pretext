@@ -32,9 +32,12 @@
 //
 // Based on Sebastian Markbage's text-layout research (github.com/chenglou/text-layout).
 
+import { analyzeIncrementally } from './incremental-analysis.js'
 import { computeSegmentLevels } from './bidi.js'
 import {
   analyzeText,
+  getAnalysisLocale,
+  normalizeText,
   canContinueKeepAllTextRun,
   clearAnalysisCaches,
   endsWithClosingQuote,
@@ -392,16 +395,18 @@ function measureAnalysis(
   includeSegments: boolean,
   wordBreak: WordBreakMode,
   letterSpacing: number,
+  workingSet?: { current: Map<string, SegmentMetrics>, previous: Map<string, SegmentMetrics> | undefined },
 ): InternalPreparedText | PreparedTextWithSegments {
   const engineProfile = getEngineProfile()
   const { cache, emojiCorrection } = getFontMeasurementState(
     font,
     textMayContainEmoji(analysis.normalized),
+    workingSet?.current,
   )
   const discretionaryHyphenWidth =
-    getCorrectedSegmentWidth('-', getSegmentMetrics('-', cache), emojiCorrection) +
+    getCorrectedSegmentWidth('-', getSegmentMetrics('-', cache, workingSet?.previous), emojiCorrection) +
     (letterSpacing === 0 ? 0 : letterSpacing * 2)
-  const spaceWidth = getCorrectedSegmentWidth(' ', getSegmentMetrics(' ', cache), emojiCorrection)
+  const spaceWidth = getCorrectedSegmentWidth(' ', getSegmentMetrics(' ', cache, workingSet?.previous), emojiCorrection)
   const tabStopAdvance = spaceWidth * 8
   const hasLetterSpacing = letterSpacing !== 0
 
@@ -489,6 +494,7 @@ function measureAnalysis(
         cache,
         emojiCorrection,
         fitMode,
+        workingSet?.previous,
       )
       const preferredBreaks =
         fitAdvances === null || wordBreak === 'keep-all'
@@ -569,7 +575,7 @@ function measureAnalysis(
       continue
     }
 
-    const segMetrics = getSegmentMetrics(segText, cache)
+    const segMetrics = getSegmentMetrics(segText, cache, workingSet?.previous)
 
     if (segKind === 'text' && segMetrics.containsCJK) {
       const baseUnits = buildBaseCjkUnits(segText, engineProfile)
@@ -579,7 +585,7 @@ function measureAnalysis(
 
       for (let i = 0; i < measuredUnits.length; i++) {
         const unit = measuredUnits[i]!
-        const unitMetrics = getSegmentMetrics(unit.text, cache)
+        const unitMetrics = getSegmentMetrics(unit.text, cache, workingSet?.previous)
         pushMeasuredTextSegment(
           unit.text,
           unitMetrics,
@@ -672,6 +678,49 @@ export function prepare(text: string, font: string, options?: PrepareOptions): P
 // laid-out lines themselves.
 export function prepareWithSegments(text: string, font: string, options?: PrepareOptions): PreparedTextWithSegments {
   return prepareInternal(text, font, true, options) as PreparedTextWithSegments
+}
+
+export type IncrementalPreparer = {
+  replace: (text: string) => PreparedTextWithSegments
+  append: (text: string) => PreparedTextWithSegments
+  clear: () => void
+}
+
+// The owner retains only its latest source/analysis/prepared value and metrics
+// working set. Updates do not mutate earlier prepared snapshots.
+export function createIncrementalPreparer(font: string, options?: PrepareOptions): IncrementalPreparer {
+  const whiteSpace = options?.whiteSpace ?? 'normal'
+  const wordBreak = options?.wordBreak ?? 'normal'
+  const letterSpacing = options?.letterSpacing ?? 0
+  let current: {
+    source: string
+    analysis: TextAnalysis
+    prepared: PreparedTextWithSegments
+    metrics: Map<string, SegmentMetrics>
+    locale: string | undefined
+  } | null = null
+
+  function replace(text: string): PreparedTextWithSegments {
+    const locale = getAnalysisLocale()
+    const previous = current?.locale === locale ? current : null
+    if (previous !== null && previous.source === text) return previous.prepared
+    const normalized = normalizeText(text, whiteSpace)
+    if (previous !== null && normalized === previous.analysis.normalized) {
+      previous.source = text
+      return previous.prepared
+    }
+    const analysis = analyzeIncrementally(previous?.analysis ?? null, normalized, getEngineProfile(), whiteSpace, wordBreak)
+    const metrics = new Map<string, SegmentMetrics>()
+    const prepared = measureAnalysis(analysis, font, true, wordBreak, letterSpacing, {
+      current: metrics,
+      previous: previous?.metrics,
+    }) as PreparedTextWithSegments
+    current = { source: text, analysis, metrics, prepared, locale }
+    return prepared
+  }
+
+  return { replace, append: text => replace((current?.source ?? '') + text), clear: () => { current = null } }
+
 }
 
 function getInternalPrepared(prepared: PreparedText): InternalPreparedText {

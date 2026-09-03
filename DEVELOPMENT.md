@@ -12,6 +12,7 @@ bun install
 - `bun run start:windows` — Windows-friendly fallback without automatic port cleanup
 - `bun run check` — typecheck, lint, and dead-code scan (`knip`)
 - `bun test` — small durable invariant suite
+- `bun run prepare-workload-benchmark` — foreground 100k unique-text preparation, repeated layout, and incremental/full growing-prefix comparison; median of 3 full page runs (`--runs=1` for a quick check)
 
 ### Packaging And Release
 
@@ -73,6 +74,7 @@ Use these for the current checked-in results:
 - [accuracy/chrome.json](accuracy/chrome.json), [accuracy/safari.json](accuracy/safari.json), [accuracy/firefox.json](accuracy/firefox.json) — raw browser accuracy rows
 - [accuracy/letter-spacing.json](accuracy/letter-spacing.json) — results from the small Chrome + Safari `{ letterSpacing }` check
 - [benchmarks/chrome.json](benchmarks/chrome.json), [benchmarks/safari.json](benchmarks/safari.json) — raw benchmark snapshots
+- [benchmarks/prepare-workloads-chrome.json](benchmarks/prepare-workloads-chrome.json) — separate unique-text throughput/cache-retention and incremental-update workload samples; correctness comes from the parity checks, not the unique-text checksum
 - [corpora/dashboard.json](corpora/dashboard.json) — machine-readable corpus dashboard
 - [corpora/chrome-step10.json](corpora/chrome-step10.json), [corpora/safari-step10.json](corpora/safari-step10.json) — checked-in browser `step=10` corpus sweep snapshots
 
