@@ -377,6 +377,29 @@ describe('shared public contracts', () => {
     }
   })
 
+  test('a ZWSP-only paragraph retains one line and its complete source range', () => {
+    for (const [text, whiteSpace, letterSpacing] of [
+      ['\u200B', 'normal', 0],
+      ['\u200B\u200B', 'pre-wrap', -1],
+      ['\u200B\u200B', 'normal', 1],
+    ] as const) for (const width of [0, 100]) {
+      const result = variant.predict({
+        id: 'unit-standalone-zwsp', family: 'api', origins: ['maintained'], scope: 'supported',
+        text, whiteSpace, font: FONT, width, lineHeight: LINE_HEIGHT,
+        wordBreak: 'normal', letterSpacing, direction: 'ltr',
+      })
+      if (result.detail !== 'full') throw new Error('Expected full public contract checks')
+      expect(result.lineCount).toBe(1)
+      expect(result.height).toBe(LINE_HEIGHT)
+      expect(result.lines[0]!.text).toBe(text)
+      expect(result.lines[0]!.width).toBe(0)
+      expect(result.lines[0]!.sourceStart).toBe(0)
+      expect(result.lines[0]!.sourceEnd).toBe(text.length)
+      expect(result.contracts).toEqual([])
+      expect(result.diagnostics).toEqual([])
+    }
+  })
+
   test('a selected soft-hyphen threshold preserves every public line API', () => {
     // The threshold leaves room for a hyphen plus one suffix grapheme, but
     // selecting SHY must still end this line at the discretionary boundary.

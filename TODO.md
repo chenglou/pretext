@@ -2,7 +2,7 @@
 
 ## 1. Engine Work
 
-- Flat #210/#211 remains open. Bounded entry measurements improve related Chrome and Firefox cases; Safari keeps the existing path. Preserving a leading ZWSP still loses the retained Arabic/soft-hyphen and continuation cases. Keep source presence separate from spacing and break selection before broadening that policy.
+- The leading-ZWSP visible-text reproduction in #210/#211 remains open. Original paragraphs made only of ZWSP now retain one line; this does not cover ZWSP beside whitespace or hard breaks. Bounded entry measurements improve related Chrome and Firefox cases; Safari keeps the existing path. Preserving a leading ZWSP still loses the retained Arabic/soft-hyphen and continuation cases. Keep source presence separate from spacing and break selection before broadening that policy.
 - Use the separate `analyze()` and `measure()` benchmark rows when changing `prepare()`. Use the chunk-heavy rich-text rows when changing streaming APIs.
 - Before changing Safari prefix-width behavior, run the synthetic long breakable text case. Lower retained memory does not justify a meaningful `prepare()` regression.
 - Chinese is the most useful current CJK regression case. Until broader measurements show a rule that applies beyond those cases, treat strongly font- or shaping-sensitive differences in Chinese, Myanmar, and Urdu as limits of the current design.

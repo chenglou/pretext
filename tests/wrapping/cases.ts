@@ -127,6 +127,10 @@ export function generateCases(measure: Measure, selection: CaseSelection): Wrapp
       origins: ['maintained/entry-geometry'], required: ['height', 'lineCount', 'api'] })
   }
 
+  add({ ...defaults, text: '\u200B', width: 1, letterSpacing: 1,
+    family: 'standalone-zwsp', origins: ['maintained/standalone-zwsp'],
+    heightSource: 'layout', heightMode: 'exact', required: ['height', 'lineCount', 'api'] })
+
   const recipeMeasure = (text: string, font: string): number => measure(text, font, 0)
   for (const recipe of [policyCases, generateLanguageCases, generateSeamCases, generateAcceptanceCases]) {
     for (const input of recipe(recipeMeasure)) {

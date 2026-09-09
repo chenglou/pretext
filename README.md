@@ -241,7 +241,7 @@ Pretext doesn't try to be a full font rendering engine (yet?). It currently targ
 - `{ wordBreak: 'keep-all' }` is supported too. It behaves like you'd expect for CJK/Hangul and no-space mixed Latin/numeric/CJK text, while keeping the same `overflow-wrap: break-word` fallback for overlong runs.
 - `system-ui` and `-apple-system` are unsafe for `layout()` accuracy on macOS. Use a named font. See the [platform bug ledger](PLATFORM_BUGS.md) for the Chrome and Firefox issues.
 - Emoji next to punctuation can still wrap differently from the browser.
-- Text containing zero-width spaces can still wrap differently from the browser. The rich-inline helper preserves standalone ZWSP items, but still inherits the flat text engine's wrapping limits inside each item.
+- A paragraph containing only zero-width spaces (ZWSP) occupies one line. ZWSP beside other text, whitespace or hard breaks can still wrap differently from the browser. The rich-inline helper preserves standalone ZWSP items, but still inherits the flat text engine's wrapping limits inside each item.
 - Some fonts, such as Shantell Sans, can produce different line breaks inside long words in Pretext and the browser.
 - If your page sets `lang`, a generic font like `sans-serif` may select a different font from the one Pretext measures. Use a named font and check the result in your browser.
 - Runtime requires `Intl.Segmenter` and Canvas 2D text measurement. Browsers or runtimes without `Intl.Segmenter` are currently unsupported.

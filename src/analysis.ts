@@ -26,7 +26,7 @@ export type MergedSegmentation = {
   starts: number[]
 }
 
-export type TextAnalysis = { normalized: string } & MergedSegmentation
+export type TextAnalysis = { source: string; normalized: string } & MergedSegmentation
 
 export type AnalysisProfile = {
   geckoAsciiLineBreaks: boolean
@@ -1564,6 +1564,7 @@ export function analyzeText(
     : normalizeWhitespaceNormal(text)
   if (normalized.length === 0) {
     return {
+      source: text,
       normalized,
       len: 0,
       texts: [],
@@ -1577,6 +1578,7 @@ export function analyzeText(
     ? mergeKeepAllTextSegments(normalized, mergedSegmentation, profile)
     : mergedSegmentation
   return {
+    source: text,
     normalized,
     ...segmentation,
   }

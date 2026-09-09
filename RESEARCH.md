@@ -70,7 +70,19 @@ cost.
 These are findings from the September 2026 wrapping experiments around
 [#210](https://github.com/chenglou/pretext/issues/210) and
 [#211](https://github.com/chenglou/pretext/pull/211). The bounded entry measurements
-below improve some cases; they do not resolve the filed source-accounting examples.
+below improve some cases; they do not resolve the leading-ZWSP visible-text
+reproduction.
+
+A complete original paragraph containing only ZWSP now uses the
+existing empty-line chunk representation, retaining its consumed source range.
+This does not change break selection before visible text, SHY-only paragraphs,
+or ZWSP-only chunks beside hard breaks. Keep the original source through analysis:
+normalization can erase distinctions needed here. Chrome's normal-mode FORM FEED
+followed by ZWSP occupies two lines at width 1 but one at width 100, even though
+normalization reduces both inputs to ZWSP. Pre-wrap currently normalizes raw CR
+and LF to the same hard boundary, although their native line existence can differ.
+The standalone fix does not broaden normalization or resolve the visible-text
+reproduction in #210.
 
 Three quantities that look like “remaining width” need different treatment:
 
