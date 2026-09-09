@@ -8,6 +8,14 @@ opposites discovered during review.
 [README.md](README.md) explains the runner; [INVENTORY.md](INVENTORY.md) records
 coverage, provenance and research protocols outside its scope.
 
+The September 9 SHY observer correction passed the ordinary three-browser run:
+33,632 inputs, nine numeric profiles, no lost successes, required failures or
+execution errors. The default-language Safari quote control passes its explicit
+marker/width contract; keep-all's unwanted marker and width remain known failures.
+All accuracy, letter-spacing and corpus result payloads are unchanged; refreshed
+snapshots change only provenance and environment records. Runtime sources and
+the baseline pin are unchanged, so no runtime benchmark was needed.
+
 ## Browser environment and ownership
 
 The September 6 harness cleanup leaves library sources, cases, assertions,

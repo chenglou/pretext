@@ -101,6 +101,26 @@ test('Safari selected SHY uses corroborating whole-line geometry despite overlap
   expect(assess(input, { ...oracle, lineRects: [] }, prediction(input.text, [['a-', 0, 2], ['b', 2, 3]]), 'safari').hyphen.status).toBe('unobserved')
 })
 
+test('keep-all SHY source rectangles do not prove marker paint; the explicit contract still rejects it', () => {
+  // Captured Safari Arial 16, pre-wrap, keep-all, width 10. The engine trace
+  // and screenshot establish a / b; Range divides the a advance with SHY.
+  const input: WrappingCase = { ...base, text: 'a\u00adb', whiteSpace: 'pre-wrap', wordBreak: 'keep-all', width: 10 }
+  const oracle: NativeObservation = {
+    height: 96, lineCount: 2,
+    points: [
+      { text: 'a', start: 0, end: 1, rects: [{ x: 0, y: 15, width: 5, height: 17 }] },
+      { text: '\u00ad', start: 1, end: 2, rects: [{ x: 4, y: 15, width: 4.890625, height: 17 }] },
+      { text: 'b', start: 2, end: 3, rects: [{ x: 0, y: 63, width: 8.8984375, height: 17 }] },
+    ],
+    lineRects: [{ x: 0, y: 15, width: 8.8984375, height: 17 }, { x: 0, y: 63, width: 8.8984375, height: 17 }],
+  }
+  const wrong = prediction(input.text, [['a-', 0, 2], ['b', 2, 3]])
+  expect(assess(input, oracle, wrong, 'safari').hyphen.status).toBe('unobserved')
+  const verified: WrappingCase = { ...input, discretionary: { expectedText: ['a', 'b'] } }
+  expect(assess(verified, oracle, wrong, 'safari').hyphen.status).toBe('fail')
+  expect(assess(verified, oracle, prediction(input.text, [['a', 0, 2], ['b', 2, 3]]), 'safari').hyphen.status).toBe('pass')
+})
+
 test('same-line SHY is hidden; repeated SHY requires a different native selection oracle', () => {
   const input = { ...base, text: 'a\u00adb' }
   const oracle = native([point('a', 0, 0), point('\u00ad', 1, 0), point('b', 2, 0)], 1)

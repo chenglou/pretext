@@ -204,6 +204,16 @@ export function generateCases(measure: Measure, selection: CaseSelection): Wrapp
     ['a\u00adb', 8, 'normal'], ['a\u00adb', 10, 'normal'], ['a\u00adb', 14, 'normal'], ['a\u00adb', 100, 'normal'],
     ['a\u00ad\u00adb', 10, 'normal'], ['\u200babcd', 10, 'normal'], ['  ab\t cd  ', 20, 'pre-wrap'],
   ] as const) add({ ...defaults, family: 'observer-controls', origins: ['observer-controls'], text, width, whiteSpace })
+  // Exact Safari paint contracts corroborated by engine traces and screenshots.
+  add({ ...defaults, text: 'a\u00ad\u201cb', width: 14.25, whiteSpace: 'pre-wrap',
+    lineHeight: 48, heightMode: 'exact', heightSource: 'layout', browsers: ['safari'],
+    family: 'observer-controls', origins: ['observer-controls/quote-marker'],
+    discretionary: { expectedText: ['a-', '\u201cb'] }, required: ['height', 'hyphen', 'widths', 'api'] })
+  add({ ...defaults, text: 'a\u00adb', width: 10, whiteSpace: 'pre-wrap', wordBreak: 'keep-all',
+    lineHeight: 48, heightMode: 'exact', heightSource: 'layout', browsers: ['safari'],
+    family: 'observer-controls', origins: ['observer-controls/keep-all-hidden-marker'],
+    discretionary: { expectedText: ['a', 'b'] }, required: ['height', 'api'],
+    note: 'Known main marker/width failure: native paints a / b. A positive SHY Range is source allocation, not a hyphen.' })
   for (const cluster of ['e\u0301', '👩‍💻', '👍🏽', 'क्ष']) for (const text of [cluster, `a${cluster}b`]) {
     add({ ...defaults, family: 'emergency-graphemes', origins: ['emergency-graphemes'], text, width: 1, emergencyGraphemes: true })
   }

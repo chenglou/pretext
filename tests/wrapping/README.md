@@ -114,8 +114,12 @@ rich source boundaries. Other rich inputs retain their existing API contracts.
 Ambiguous or invisible rectangles cannot establish source ownership. Generic
 Range extents do not establish advances with negative spacing, preserved
 whitespace or shaping controls. Generic selected-hyphen observation is restricted
-to the verified `a\u00adb` protocol; eight maintained discretionary cases also
-check exact expected text and line widths with their tighter tolerance.
+to the verified normal-word-break `a\u00adb` protocol; eight maintained discretionary
+cases also check exact expected text and line widths with their tighter tolerance.
+Two exact Safari paint witnesses additionally retain the opening-quote marker
+and keep-all's hidden SHY. The quote contract is required. Keep-all's marker and
+width remain observed known failures: a positive SHY Range can describe source
+allocation without a painted hyphen, so it cannot supply a generic keep-all oracle.
 
 Public contracts require forward, nonoverlapping ranges and preservation of
 visible/preserved source. Rendering ranges may leave collapsed SPACE, inactive

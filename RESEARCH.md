@@ -93,6 +93,22 @@ overflow; it also considers the previous SHY when wrapping the following text.
 Neither a width adjustment alone nor “add the marker after wrapping” describes
 this path.
 
+In the investigated WebKit path, SHY becomes discretionary only at the end of
+the actual text item.
+An internal SHY still occupies source but does not own a marker. The ordinary
+endpoint depends on WebKit's boundary shortcuts, Unicode properties and locale;
+keep-all uses a different boundary policy. Source occupancy and painted width
+must remain separate. The derived policy passed independent ICU checks, but
+integrating it still lost existing browser successes around resumed geometry.
+
+Range geometry cannot establish SHY paint in keep-all: Arial 16 `a\u00adb` at
+width 10 paints `a / b`, although the hidden SHY has a positive rectangle.
+The maintained observer retains an explicit known-failure contract for this
+case and a required default-language opening-quote marker control. Temporary measurement
+views preserved source addressing in later experiments, but did not establish
+correct resumed widths. Do not promote those experiments or their large tables
+merely because the source-boundary rule is understood.
+
 Chromium retains the complete RTL-shaped item across ZWSP and SHY. The same text
 fits intact at 25px. At 14.75px it selects a cut after SHY, reshapes the selected
 text range with the surrounding original source still available, then adds a

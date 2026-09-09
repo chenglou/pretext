@@ -341,7 +341,7 @@ function compareWidths(input: WrappingCase, native: NativeObservation, lines: Pr
   if (input.discretionary === undefined && (input.letterSpacing < 0 || input.whiteSpace === 'pre-wrap' || /\u00ad|\u200b|\u200c|\u200d|\u2060|\ufeff/u.test(input.text))) {
     return { status: 'unobserved', reason: 'Range extents do not independently determine advances with overlap, preserved whitespace, or shaping controls.' }
   }
-  // The eight maintained discretionary cases have separately verified whole-
+  // The explicit discretionary cases have separately verified whole-
   // line Range geometry, including terminal SHY and signed spacing. Their
   // original tighter tolerance is part of that explicit observation protocol.
   const tolerance = input.discretionary === undefined ? WIDTH_TOLERANCE : 0.025
@@ -378,9 +378,10 @@ function compareHyphens(input: WrappingCase, native: NativeObservation, lines: P
   if (!input.text.includes('\u00ad')) return { status: 'not-applicable', reason: 'No soft hyphen.' }
   // This is the deliberately restricted oracle from the retained paint audit.
   // Safari can expose a positive SHY Range even when no hyphen was selected.
+  // Keep-all also allocates visible-letter extents to a hidden SHY Range.
   // Arbitrary joining/control contexts need a separate observation method.
-  if (input.text !== 'a\u00adb' || input.letterSpacing < 0) {
-    return { status: 'unobserved', reason: 'SHY selection oracle is verified only for a SHY b with nonnegative spacing; raw rectangles remain available.' }
+  if (input.text !== 'a\u00adb' || input.letterSpacing < 0 || input.wordBreak !== 'normal') {
+    return { status: 'unobserved', reason: 'SHY selection oracle is verified only for normal word breaking in a SHY b with nonnegative spacing; raw rectangles remain available.' }
   }
   const a = native.points.find(point => point.text === 'a')!
   const b = native.points.find(point => point.text === 'b')!
