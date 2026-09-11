@@ -1,5 +1,54 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- Narrow wrapping around invisible controls and combining marks now more closely matches desktop Chrome and Firefox.
+- Paragraphs made only of zero-width spaces now occupy one line instead of disappearing (#223).
+
+## 0.0.9 - 2026-09-07
+
+### Fixed
+
+- Streaming line layouts and line statistics now agree with batch layout when a later break follows a soft hyphen. Streaming also retains later text after consecutive lines containing only invisible break controls (#222).
+- Terminal soft hyphens now stay invisible and preserve terminal letter spacing across the rich line APIs.
+- Rich bidi metadata now resets independently at each paragraph boundary.
+- Rich-inline preparation with long internal whitespace, streaming layout of long hyphenated runs, and long font-size strings now avoid excessive repeated work (#221).
+- Rich-inline cursors now retain original item indices across empty items, zero-width items can occupy a line, and boundary spaces preserve their font and signed letter spacing. Mutating a visited line no longer changes the walker's continuation (#220).
+- Overlong independent symbol runs can now wrap at grapheme boundaries, with browser-specific punctuation attachment (#208).
+- Numeric minus signs no longer introduce a preferred break before their number, and ASCII hyphens after CJK text stay attached to the preceding character (#213, #215).
+- The Markdown chat demo now keeps ordinary text inside its bubbles in Firefox on macOS ([#202](https://github.com/chenglou/pretext/issues/202)).
+
+## 0.0.8 - 2026-06-11
+
+### Added
+
+- The published package now ships declaration maps, so editor go-to-definition and programmatic TypeScript source tracing land in the shipped `.ts` source instead of the `.d.ts` files.
+
+### Fixed
+
+- Word-internal keyboard and Unicode symbol runs in long words now stay with surrounding text the way browsers break them, while browser-break symbols stay breakable (#169).
+- Overlong hyphenated runs now prefer browser-like dash breakpoints before falling back to emergency grapheme breaks (#89).
+
+## 0.0.7 - 2026-05-10
+
+### Changed
+
+- The package now declares itself side-effect-free so bundlers can tree-shake unused entrypoints (#160).
+- `layoutNextLine()` and `layoutNextLineRange()` now avoid redundant chunk lookup in chunk-heavy manual layout paths (#140).
+
+### Fixed
+
+- `{ wordBreak: 'keep-all' }` now handles no-space mixed Latin, numeric, and CJK text more like browsers.
+- No-space punctuation chains now stay together for non-ASCII word-like text too, instead of only ASCII words.
+- Opening punctuation such as `¡`, `¿`, German low quotes, and `⸘` now stays with the following word instead of dangling at line end (#165).
+- Numeric prefix/postfix symbols like `$`, `%`, `€`, `+`, `−`, and `°` now stay attached to adjacent text the way browser line breaking does (#105).
+- Soft-hyphen breaks now stay at the soft-hyphen insertion point instead of pulling post-hyphen graphemes onto the broken line (#162).
+- Line geometry now preserves browser-style terminal letter spacing, including rich-inline item boundaries and visible soft-hyphen breaks (#171).
+- Rich-inline item boundaries no longer overflow the requested width after a forced-progress break (#132).
+- The markdown chat demo now drops parsed link URLs unless they resolve to HTTP(S) hrefs (#168).
+
 ## 0.0.6 - 2026-04-22
 
 ### Added
@@ -9,7 +58,6 @@
 ### Fixed
 
 - CJK text followed by opening bracket annotations now wraps like browsers instead of leaving the opening bracket on the previous line (#148).
-- `{ wordBreak: 'keep-all' }` now handles no-space mixed Latin, numeric, and CJK text more like browsers.
 
 ## 0.0.5 - 2026-04-09
 

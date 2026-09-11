@@ -21,6 +21,8 @@ import {
   type PreparedRichInline,
 } from '../src/rich-inline.ts'
 import { TEXTS } from '../src/test-data.ts'
+import { createBrowserEnvironmentGuard } from '../shared/browser-environment.ts'
+import type { BenchmarkReport, BenchmarkResult, CorpusBenchmarkResult } from '../shared/benchmark-report.ts'
 import {
   clearNavigationReport,
   publishNavigationPhase,
@@ -75,35 +77,6 @@ const RICH_INLINE_CHIP_FONT = `700 11px ${FONT_FAMILY}`
 const RICH_INLINE_EMPHASIS_FONT = `italic ${FONT_SIZE}px ${FONT_FAMILY}`
 const RICH_INLINE_CODE_EXTRA_WIDTH = 12
 const RICH_INLINE_CHIP_EXTRA_WIDTH = 14
-
-type BenchmarkResult = { label: string, ms: number, desc: string }
-type CorpusBenchmarkResult = {
-  id: string
-  label: string
-  font: string
-  chars: number
-  analysisSegments: number
-  segments: number
-  breakableSegments: number
-  width: number
-  lineCount: number
-  analysisMs: number
-  measureMs: number
-  prepareMs: number
-  layoutMs: number
-}
-
-type BenchmarkReport = {
-  status: 'ready' | 'error'
-  requestId?: string
-  results?: BenchmarkResult[]
-  richResults?: BenchmarkResult[]
-  richInlineResults?: BenchmarkResult[]
-  richPreWrapResults?: BenchmarkResult[]
-  richLongResults?: BenchmarkResult[]
-  corpusResults?: CorpusBenchmarkResult[]
-  message?: string
-}
 
 type PrepareProfile = {
   analysisMs: number
@@ -366,6 +339,7 @@ function bench(
   warmup = WARMUP,
   runs = RUNS,
 ): number {
+  environmentGuard.assertStable()
   function runRepeated(): void {
     for (let r = 0; r < sampleRepeats; r++) {
       fn(r)
@@ -379,12 +353,32 @@ function bench(
     runRepeated()
     times.push((performance.now() - t0) / sampleRepeats)
   }
+  environmentGuard.assertStable()
   return median(times)
 }
 
 // Yield to let the browser paint status updates
 function nextFrame(): Promise<void> {
-  return new Promise(resolve => { requestAnimationFrame(() => { resolve() }) })
+  environmentGuard.assertStable()
+  return new Promise((resolve, reject) => {
+    const cleanup = (): void => {
+      window.removeEventListener('blur', interrupted)
+      document.removeEventListener('visibilitychange', interrupted)
+    }
+    const interrupted = (): void => {
+      try { environmentGuard.assertStable() } catch (error) {
+        cancelAnimationFrame(frame)
+        cleanup()
+        reject(error)
+      }
+    }
+    const frame = requestAnimationFrame(() => {
+      cleanup()
+      try { environmentGuard.assertStable(); resolve() } catch (error) { reject(error) }
+    })
+    window.addEventListener('blur', interrupted)
+    document.addEventListener('visibilitychange', interrupted)
+  })
 }
 
 function withRequestId<T extends BenchmarkReport>(report: T): BenchmarkReport {
@@ -679,6 +673,7 @@ async function run() {
   window.__BENCHMARK_REPORT__ = withRequestId({ status: 'error', message: 'Pending benchmark run' })
   clearNavigationReport()
   publishNavigationPhase('loading', requestId)
+  environmentGuard.assertStable()
 
   let topLayoutSink = 0
   let scalingLayoutSink = 0
@@ -975,8 +970,12 @@ async function run() {
   root.dataset['domInterleavedSink'] = String(domInterleavedSink)
   console.log('benchmark sinks', { topLayoutSink, scalingLayoutSink, domBatchSink, domInterleavedSink })
 
+  // Flush queued display/focus events from the final synchronous measurements.
+  await nextFrame()
+  environmentGuard.assertStable()
   setReport(withRequestId({
     status: 'ready',
+    environment: environmentGuard.report(),
     results,
     richResults,
     richInlineResults,
@@ -986,9 +985,11 @@ async function run() {
   }))
 }
 
+await document.fonts.ready
+const environmentGuard = createBrowserEnvironmentGuard('benchmark')
 run().catch(error => {
   const message = error instanceof Error ? error.message : String(error)
   const root = document.getElementById('root')!
   root.innerHTML = `<p>${message}</p>`
-  setReport(withRequestId({ status: 'error', message }))
-})
+  setReport(withRequestId({ status: 'error', message, environment: environmentGuard.report() }))
+}).finally(() => { environmentGuard.dispose() })

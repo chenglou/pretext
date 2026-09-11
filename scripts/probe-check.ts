@@ -6,6 +6,7 @@ import {
   getAvailablePort,
   loadHashReport,
   type BrowserKind,
+  type BrowserSession,
 } from './browser-automation.ts'
 
 type ProbeReport = {
@@ -157,9 +158,10 @@ const wordBreak = parseStringFlag('wordBreak') === 'keep-all' ? 'keep-all' : 'no
 
 let serverProcess: ChildProcess | null = null
 const lock = await acquireBrowserAutomationLock(browser)
-const session = createBrowserSession(browser)
+let session: BrowserSession | null = null
 
 try {
+  session = createBrowserSession(browser, { foreground: false, headless: false })
   const port = await getAvailablePort(requestedPort === 0 ? null : requestedPort)
   const pageServer = await ensurePageServer(port, '/probe', process.cwd())
   serverProcess = pageServer.process
@@ -178,8 +180,12 @@ try {
     `&requestId=${encodeURIComponent(requestId)}`
   const report = await loadHashReport<ProbeReport>(session, url, requestId, browser)
   printReport(report)
+  if (report.status === 'error') process.exitCode = 1
 } finally {
-  session.close()
-  serverProcess?.kill()
-  lock.release()
+  try {
+    await session?.close()
+  } finally {
+    serverProcess?.kill()
+    lock.release()
+  }
 }

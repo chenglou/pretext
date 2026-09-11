@@ -198,8 +198,6 @@ export type GeneratedBidiType =
   | 'WS'
   | 'NSM'
 
-export const unicodeBidiDataVersion = '${payload.unicodeVersion}'
-
 export const latin1BidiTypes: readonly GeneratedBidiType[] = [
 ${latin1Rows},
 ]

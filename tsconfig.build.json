@@ -6,7 +6,8 @@
     "types": [],
     "rootDir": "./src",
     "outDir": "./dist",
-    "declaration": true
+    "declaration": true,
+    "declarationMap": true
   },
   "include": ["src/**/*.ts"],
   "exclude": ["src/layout.test.ts", "src/test-data.ts"]

@@ -1,0 +1,2613 @@
+[
+  {
+    "generatedAt": "2026-09-09T09:46:22.685Z",
+    "suiteHash": "16bfd7e5f094c5d2d0245099b719f0f3e846cbd7132280e36c7a8811b5940caf",
+    "source": {
+      "revision": "785297b87973ef285abb884b1af6110ed2aacfd8",
+      "files": {
+        "analysis.ts": "68a34413572826fcbae8727143af5291ab194ce6bd7ffc327b956a5ccd6dcb39",
+        "bidi.ts": "70f7f01dcd866076b68dbf2a3c398364aceaba2ccf98037e77e0b3b8bcfbeaa5",
+        "entry-geometry.ts": "43ffacd71c3562283135590a06947eef4b2617cb3b6ba680c909dd5e2d2ba9a7",
+        "generated/bidi-data.ts": "745211b804d907af78afb6c1ed87eff6d7454a5e85152a6129eb7b3bf0f6f262",
+        "layout.ts": "66c36dea8d0191bd005c4c7c1fd9d52e26d0df0c0e3c5df954f379c4560811cf",
+        "line-break.ts": "ae5c22f2f7786eb63e355a7c8886086ea237e82e78ce5c7b6f202936fd4996d3",
+        "line-text.ts": "5e21684d995df8c30324c03a14b8a0bc3a579ce169a0e10b6d579b6aeee577dc",
+        "measurement.ts": "b024684745f51317ef8beb79c73fe8c53b0ddcf5e02654798f4571d28a9923d4",
+        "rich-inline.ts": "5a7e5d339e1f703d52928913e3b7d6a5f5df04bdfdd365f47c1890dde3b61964",
+        "text-modules.d.ts": "1547f88f0eb75293bc20054194a2bba29a4bc911c2a4fa99cef98141b6f99927"
+      }
+    },
+    "environments": [
+      {
+        "direction": "ltr",
+        "measurement": {
+          "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:155.0) Gecko/20100101 Firefox/155.0",
+          "start": {
+            "dpr": 2,
+            "visualViewportScale": 1,
+            "innerWidth": 1280,
+            "innerHeight": 956,
+            "outerWidth": 1280,
+            "outerHeight": 1040,
+            "screenX": 4,
+            "screenY": 30,
+            "screenWidth": 2560,
+            "screenHeight": 1440,
+            "screenAvailWidth": 2560,
+            "screenAvailHeight": 1364,
+            "visibility": "visible",
+            "focused": false,
+            "language": "mul",
+            "direction": "ltr"
+          },
+          "end": {
+            "dpr": 2,
+            "visualViewportScale": 1,
+            "innerWidth": 1280,
+            "innerHeight": 956,
+            "outerWidth": 1280,
+            "outerHeight": 1040,
+            "screenX": 4,
+            "screenY": 30,
+            "screenWidth": 2560,
+            "screenHeight": 1440,
+            "screenAvailWidth": 2560,
+            "screenAvailHeight": 1364,
+            "visibility": "visible",
+            "focused": false,
+            "language": "mul",
+            "direction": "ltr"
+          },
+          "changes": []
+        },
+        "context": {
+          "kind": "installed",
+          "lang": "mul"
+        },
+        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:155.0) Gecko/20100101 Firefox/155.0",
+        "dpr": 2,
+        "locale": "en-US",
+        "visibility": "visible",
+        "focused": false,
+        "fonts": []
+      }
+    ],
+    "corpusId": "mixed-app-text",
+    "language": "mul",
+    "title": "Mixed app text",
+    "browser": "firefox",
+    "start": 300,
+    "end": 900,
+    "step": 10,
+    "widthCount": 61,
+    "exactCount": 51,
+    "mismatches": [
+      {
+        "id": "wrap-fe30a68a86c1eea6",
+        "width": 310,
+        "contentWidth": 230,
+        "diffPx": -30,
+        "predictedHeight": 1310,
+        "actualHeight": 1340
+      },
+      {
+        "id": "wrap-126613f85c70ca2c",
+        "width": 370,
+        "contentWidth": 290,
+        "diffPx": 30,
+        "predictedHeight": 1070,
+        "actualHeight": 1040
+      },
+      {
+        "id": "wrap-cea1ab1a76bed3c4",
+        "width": 380,
+        "contentWidth": 300,
+        "diffPx": 30,
+        "predictedHeight": 1040,
+        "actualHeight": 1010
+      },
+      {
+        "id": "wrap-d4ddeed03e88f146",
+        "width": 400,
+        "contentWidth": 320,
+        "diffPx": 30,
+        "predictedHeight": 980,
+        "actualHeight": 950
+      },
+      {
+        "id": "wrap-c258773ac0f89a62",
+        "width": 490,
+        "contentWidth": 410,
+        "diffPx": 30,
+        "predictedHeight": 770,
+        "actualHeight": 740
+      },
+      {
+        "id": "wrap-a6ca40f0d2403ce0",
+        "width": 510,
+        "contentWidth": 430,
+        "diffPx": 30,
+        "predictedHeight": 740,
+        "actualHeight": 710
+      },
+      {
+        "id": "wrap-836b6f590a1c4ca7",
+        "width": 520,
+        "contentWidth": 440,
+        "diffPx": 30,
+        "predictedHeight": 710,
+        "actualHeight": 680
+      },
+      {
+        "id": "wrap-72dba23e913e9266",
+        "width": 530,
+        "contentWidth": 450,
+        "diffPx": 30,
+        "predictedHeight": 710,
+        "actualHeight": 680
+      },
+      {
+        "id": "wrap-7d83f994a28634e4",
+        "width": 550,
+        "contentWidth": 470,
+        "diffPx": 30,
+        "predictedHeight": 680,
+        "actualHeight": 650
+      },
+      {
+        "id": "wrap-3d42c2123e64b26a",
+        "width": 570,
+        "contentWidth": 490,
+        "diffPx": 30,
+        "predictedHeight": 650,
+        "actualHeight": 620
+      }
+    ]
+  },
+  {
+    "generatedAt": "2026-09-09T09:46:22.685Z",
+    "suiteHash": "16bfd7e5f094c5d2d0245099b719f0f3e846cbd7132280e36c7a8811b5940caf",
+    "source": {
+      "revision": "785297b87973ef285abb884b1af6110ed2aacfd8",
+      "files": {
+        "analysis.ts": "68a34413572826fcbae8727143af5291ab194ce6bd7ffc327b956a5ccd6dcb39",
+        "bidi.ts": "70f7f01dcd866076b68dbf2a3c398364aceaba2ccf98037e77e0b3b8bcfbeaa5",
+        "entry-geometry.ts": "43ffacd71c3562283135590a06947eef4b2617cb3b6ba680c909dd5e2d2ba9a7",
+        "generated/bidi-data.ts": "745211b804d907af78afb6c1ed87eff6d7454a5e85152a6129eb7b3bf0f6f262",
+        "layout.ts": "66c36dea8d0191bd005c4c7c1fd9d52e26d0df0c0e3c5df954f379c4560811cf",
+        "line-break.ts": "ae5c22f2f7786eb63e355a7c8886086ea237e82e78ce5c7b6f202936fd4996d3",
+        "line-text.ts": "5e21684d995df8c30324c03a14b8a0bc3a579ce169a0e10b6d579b6aeee577dc",
+        "measurement.ts": "b024684745f51317ef8beb79c73fe8c53b0ddcf5e02654798f4571d28a9923d4",
+        "rich-inline.ts": "5a7e5d339e1f703d52928913e3b7d6a5f5df04bdfdd365f47c1890dde3b61964",
+        "text-modules.d.ts": "1547f88f0eb75293bc20054194a2bba29a4bc911c2a4fa99cef98141b6f99927"
+      }
+    },
+    "environments": [
+      {
+        "direction": "ltr",
+        "measurement": {
+          "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:155.0) Gecko/20100101 Firefox/155.0",
+          "start": {
+            "dpr": 2,
+            "visualViewportScale": 1,
+            "innerWidth": 1280,
+            "innerHeight": 956,
+            "outerWidth": 1280,
+            "outerHeight": 1040,
+            "screenX": 4,
+            "screenY": 30,
+            "screenWidth": 2560,
+            "screenHeight": 1440,
+            "screenAvailWidth": 2560,
+            "screenAvailHeight": 1364,
+            "visibility": "visible",
+            "focused": false,
+            "language": "en",
+            "direction": "ltr"
+          },
+          "end": {
+            "dpr": 2,
+            "visualViewportScale": 1,
+            "innerWidth": 1280,
+            "innerHeight": 956,
+            "outerWidth": 1280,
+            "outerHeight": 1040,
+            "screenX": 4,
+            "screenY": 30,
+            "screenWidth": 2560,
+            "screenHeight": 1440,
+            "screenAvailWidth": 2560,
+            "screenAvailHeight": 1364,
+            "visibility": "visible",
+            "focused": false,
+            "language": "en",
+            "direction": "ltr"
+          },
+          "changes": []
+        },
+        "context": {
+          "kind": "installed",
+          "lang": "en"
+        },
+        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:155.0) Gecko/20100101 Firefox/155.0",
+        "dpr": 2,
+        "locale": "en-US",
+        "visibility": "visible",
+        "focused": false,
+        "fonts": []
+      }
+    ],
+    "corpusId": "en-gatsby-opening",
+    "language": "en",
+    "title": "The Great Gatsby opening",
+    "browser": "firefox",
+    "start": 300,
+    "end": 900,
+    "step": 10,
+    "widthCount": 61,
+    "exactCount": 0,
+    "mismatches": [
+      {
+        "id": "wrap-f59be48ed6f4d300",
+        "width": 300,
+        "contentWidth": 220,
+        "diffPx": -260,
+        "predictedHeight": 243934,
+        "actualHeight": 244194
+      },
+      {
+        "id": "wrap-3316c65544533281",
+        "width": 310,
+        "contentWidth": 230,
+        "diffPx": -286,
+        "predictedHeight": 232598,
+        "actualHeight": 232884
+      },
+      {
+        "id": "wrap-b438d88062e24886",
+        "width": 320,
+        "contentWidth": 240,
+        "diffPx": -312,
+        "predictedHeight": 221860,
+        "actualHeight": 222172
+      },
+      {
+        "id": "wrap-1acbde87f2aea807",
+        "width": 330,
+        "contentWidth": 250,
+        "diffPx": -260,
+        "predictedHeight": 212188,
+        "actualHeight": 212448
+      },
+      {
+        "id": "wrap-53c4f622c9ba8b04",
+        "width": 340,
+        "contentWidth": 260,
+        "diffPx": -364,
+        "predictedHeight": 203270,
+        "actualHeight": 203634
+      },
+      {
+        "id": "wrap-21428b993718ea85",
+        "width": 350,
+        "contentWidth": 270,
+        "diffPx": -260,
+        "predictedHeight": 195288,
+        "actualHeight": 195548
+      },
+      {
+        "id": "wrap-791868a44d22da8a",
+        "width": 360,
+        "contentWidth": 280,
+        "diffPx": -286,
+        "predictedHeight": 187878,
+        "actualHeight": 188164
+      },
+      {
+        "id": "wrap-5dd037abdcef3a0b",
+        "width": 370,
+        "contentWidth": 290,
+        "diffPx": -390,
+        "predictedHeight": 180884,
+        "actualHeight": 181274
+      },
+      {
+        "id": "wrap-003dba410cf79723",
+        "width": 380,
+        "contentWidth": 300,
+        "diffPx": -286,
+        "predictedHeight": 174462,
+        "actualHeight": 174748
+      },
+      {
+        "id": "wrap-2754e10af728d2a2",
+        "width": 390,
+        "contentWidth": 310,
+        "diffPx": -338,
+        "predictedHeight": 168352,
+        "actualHeight": 168690
+      },
+      {
+        "id": "wrap-d4c6120f474cfaa1",
+        "width": 400,
+        "contentWidth": 320,
+        "diffPx": -286,
+        "predictedHeight": 162736,
+        "actualHeight": 163022
+      },
+      {
+        "id": "wrap-dcb71d08e5fb5720",
+        "width": 410,
+        "contentWidth": 330,
+        "diffPx": -338,
+        "predictedHeight": 157510,
+        "actualHeight": 157848
+      },
+      {
+        "id": "wrap-8245d4bdffbd4f27",
+        "width": 420,
+        "contentWidth": 340,
+        "diffPx": -286,
+        "predictedHeight": 152726,
+        "actualHeight": 153012
+      },
+      {
+        "id": "wrap-d843c6b6e9ee8aa6",
+        "width": 430,
+        "contentWidth": 350,
+        "diffPx": -234,
+        "predictedHeight": 148150,
+        "actualHeight": 148384
+      },
+      {
+        "id": "wrap-a3c6610b3a12b2a5",
+        "width": 440,
+        "contentWidth": 360,
+        "diffPx": -182,
+        "predictedHeight": 143808,
+        "actualHeight": 143990
+      },
+      {
+        "id": "wrap-70595304d8c10f24",
+        "width": 450,
+        "contentWidth": 370,
+        "diffPx": -416,
+        "predictedHeight": 139570,
+        "actualHeight": 139986
+      },
+      {
+        "id": "wrap-d052d2f9e9fde12b",
+        "width": 460,
+        "contentWidth": 380,
+        "diffPx": -338,
+        "predictedHeight": 135670,
+        "actualHeight": 136008
+      },
+      {
+        "id": "wrap-0d95bf82d42f1caa",
+        "width": 470,
+        "contentWidth": 390,
+        "diffPx": -390,
+        "predictedHeight": 132056,
+        "actualHeight": 132446
+      },
+      {
+        "id": "wrap-b2723406d7c7bbc4",
+        "width": 480,
+        "contentWidth": 400,
+        "diffPx": -156,
+        "predictedHeight": 128546,
+        "actualHeight": 128702
+      },
+      {
+        "id": "wrap-d6999fcd89689d45",
+        "width": 490,
+        "contentWidth": 410,
+        "diffPx": -364,
+        "predictedHeight": 125244,
+        "actualHeight": 125608
+      },
+      {
+        "id": "wrap-d16efa14d9afd846",
+        "width": 500,
+        "contentWidth": 420,
+        "diffPx": -416,
+        "predictedHeight": 122098,
+        "actualHeight": 122514
+      },
+      {
+        "id": "wrap-b667e35b68e2b9c7",
+        "width": 510,
+        "contentWidth": 430,
+        "diffPx": -234,
+        "predictedHeight": 119238,
+        "actualHeight": 119472
+      },
+      {
+        "id": "wrap-31208cdae50203c0",
+        "width": 520,
+        "contentWidth": 440,
+        "diffPx": -286,
+        "predictedHeight": 116404,
+        "actualHeight": 116690
+      },
+      {
+        "id": "wrap-a844e4d196a2e541",
+        "width": 530,
+        "contentWidth": 450,
+        "diffPx": -208,
+        "predictedHeight": 113726,
+        "actualHeight": 113934
+      },
+      {
+        "id": "wrap-50f85698e6ea2042",
+        "width": 540,
+        "contentWidth": 460,
+        "diffPx": -338,
+        "predictedHeight": 111126,
+        "actualHeight": 111464
+      },
+      {
+        "id": "wrap-8a2b02df761d01c3",
+        "width": 550,
+        "contentWidth": 470,
+        "diffPx": -286,
+        "predictedHeight": 108656,
+        "actualHeight": 108942
+      },
+      {
+        "id": "wrap-9a86fabeb4ce05cc",
+        "width": 560,
+        "contentWidth": 480,
+        "diffPx": -338,
+        "predictedHeight": 106238,
+        "actualHeight": 106576
+      },
+      {
+        "id": "wrap-9ae56dc5666ee74d",
+        "width": 570,
+        "contentWidth": 490,
+        "diffPx": -312,
+        "predictedHeight": 104106,
+        "actualHeight": 104418
+      },
+      {
+        "id": "wrap-a7c91f6bd45f0365",
+        "width": 580,
+        "contentWidth": 500,
+        "diffPx": -286,
+        "predictedHeight": 101844,
+        "actualHeight": 102130
+      },
+      {
+        "id": "wrap-b5e5e4649cbbbce4",
+        "width": 590,
+        "contentWidth": 510,
+        "diffPx": -182,
+        "predictedHeight": 99686,
+        "actualHeight": 99868
+      },
+      {
+        "id": "wrap-b5c7fb1da9c440e7",
+        "width": 600,
+        "contentWidth": 520,
+        "diffPx": -260,
+        "predictedHeight": 97710,
+        "actualHeight": 97970
+      },
+      {
+        "id": "wrap-984b4b96269e1b66",
+        "width": 610,
+        "contentWidth": 530,
+        "diffPx": -234,
+        "predictedHeight": 95838,
+        "actualHeight": 96072
+      },
+      {
+        "id": "wrap-f9a4d3efe1994b61",
+        "width": 620,
+        "contentWidth": 540,
+        "diffPx": -260,
+        "predictedHeight": 94018,
+        "actualHeight": 94278
+      },
+      {
+        "id": "wrap-a4329d68a9f604e0",
+        "width": 630,
+        "contentWidth": 550,
+        "diffPx": -234,
+        "predictedHeight": 92302,
+        "actualHeight": 92536
+      },
+      {
+        "id": "wrap-ffca5c21b6fe88e3",
+        "width": 640,
+        "contentWidth": 560,
+        "diffPx": -260,
+        "predictedHeight": 90586,
+        "actualHeight": 90846
+      },
+      {
+        "id": "wrap-b8caecea33d86362",
+        "width": 650,
+        "contentWidth": 570,
+        "diffPx": -130,
+        "predictedHeight": 88948,
+        "actualHeight": 89078
+      },
+      {
+        "id": "wrap-f1aa1963b1654d6d",
+        "width": 660,
+        "contentWidth": 580,
+        "diffPx": -234,
+        "predictedHeight": 87284,
+        "actualHeight": 87518
+      },
+      {
+        "id": "wrap-bfba2a9c79c206ec",
+        "width": 670,
+        "contentWidth": 590,
+        "diffPx": -156,
+        "predictedHeight": 85776,
+        "actualHeight": 85932
+      },
+      {
+        "id": "wrap-bb0a21d047794906",
+        "width": 680,
+        "contentWidth": 600,
+        "diffPx": -182,
+        "predictedHeight": 84320,
+        "actualHeight": 84502
+      },
+      {
+        "id": "wrap-b523a8d7d745a887",
+        "width": 690,
+        "contentWidth": 610,
+        "diffPx": -182,
+        "predictedHeight": 82942,
+        "actualHeight": 83124
+      },
+      {
+        "id": "wrap-0c22df32ae518b84",
+        "width": 700,
+        "contentWidth": 620,
+        "diffPx": -208,
+        "predictedHeight": 81538,
+        "actualHeight": 81746
+      },
+      {
+        "id": "wrap-27b13ea91bafeb05",
+        "width": 710,
+        "contentWidth": 630,
+        "diffPx": -156,
+        "predictedHeight": 80290,
+        "actualHeight": 80446
+      },
+      {
+        "id": "wrap-1018ebec54b39102",
+        "width": 720,
+        "contentWidth": 640,
+        "diffPx": -156,
+        "predictedHeight": 78886,
+        "actualHeight": 79042
+      },
+      {
+        "id": "wrap-90223a73e47ff083",
+        "width": 730,
+        "contentWidth": 650,
+        "diffPx": -156,
+        "predictedHeight": 77716,
+        "actualHeight": 77872
+      },
+      {
+        "id": "wrap-09ce739ebb8bd380",
+        "width": 740,
+        "contentWidth": 660,
+        "diffPx": -182,
+        "predictedHeight": 76442,
+        "actualHeight": 76624
+      },
+      {
+        "id": "wrap-aa34bba528ea3301",
+        "width": 750,
+        "contentWidth": 670,
+        "diffPx": -182,
+        "predictedHeight": 75246,
+        "actualHeight": 75428
+      },
+      {
+        "id": "wrap-f16c9ef8247f930e",
+        "width": 760,
+        "contentWidth": 680,
+        "diffPx": -130,
+        "predictedHeight": 74128,
+        "actualHeight": 74258
+      },
+      {
+        "id": "wrap-07ff48bfb44bf28f",
+        "width": 770,
+        "contentWidth": 690,
+        "diffPx": -182,
+        "predictedHeight": 73036,
+        "actualHeight": 73218
+      },
+      {
+        "id": "wrap-1ed08df5e4544fa7",
+        "width": 780,
+        "contentWidth": 700,
+        "diffPx": -130,
+        "predictedHeight": 71970,
+        "actualHeight": 72100
+      },
+      {
+        "id": "wrap-46cd952ece858b26",
+        "width": 790,
+        "contentWidth": 710,
+        "diffPx": -182,
+        "predictedHeight": 70930,
+        "actualHeight": 71112
+      },
+      {
+        "id": "wrap-c7b93ec31ea9b325",
+        "width": 800,
+        "contentWidth": 720,
+        "diffPx": -78,
+        "predictedHeight": 69890,
+        "actualHeight": 69968
+      },
+      {
+        "id": "wrap-cb1520fcbd580fa4",
+        "width": 810,
+        "contentWidth": 730,
+        "diffPx": -130,
+        "predictedHeight": 68876,
+        "actualHeight": 69006
+      },
+      {
+        "id": "wrap-dcd6af39f18e97a3",
+        "width": 820,
+        "contentWidth": 740,
+        "diffPx": -130,
+        "predictedHeight": 67992,
+        "actualHeight": 68122
+      },
+      {
+        "id": "wrap-e38a5dc2dbbfd322",
+        "width": 830,
+        "contentWidth": 750,
+        "diffPx": -130,
+        "predictedHeight": 67004,
+        "actualHeight": 67134
+      },
+      {
+        "id": "wrap-d6a25c272be3fb21",
+        "width": 840,
+        "contentWidth": 760,
+        "diffPx": -130,
+        "predictedHeight": 66068,
+        "actualHeight": 66198
+      },
+      {
+        "id": "wrap-87e9a320ca9257a0",
+        "width": 850,
+        "contentWidth": 770,
+        "diffPx": -182,
+        "predictedHeight": 65262,
+        "actualHeight": 65444
+      },
+      {
+        "id": "wrap-ec9472fdc15a99af",
+        "width": 860,
+        "contentWidth": 780,
+        "diffPx": -156,
+        "predictedHeight": 64430,
+        "actualHeight": 64586
+      },
+      {
+        "id": "wrap-d614b6f6ab8bd52e",
+        "width": 870,
+        "contentWidth": 790,
+        "diffPx": -52,
+        "predictedHeight": 63624,
+        "actualHeight": 63676
+      },
+      {
+        "id": "wrap-12de763aa69f4e48",
+        "width": 880,
+        "contentWidth": 800,
+        "diffPx": -78,
+        "predictedHeight": 62740,
+        "actualHeight": 62818
+      },
+      {
+        "id": "wrap-535b2a3158402fc9",
+        "width": 890,
+        "contentWidth": 810,
+        "diffPx": -78,
+        "predictedHeight": 61986,
+        "actualHeight": 62064
+      },
+      {
+        "id": "wrap-b6327cf8a8876aca",
+        "width": 900,
+        "contentWidth": 820,
+        "diffPx": -26,
+        "predictedHeight": 61206,
+        "actualHeight": 61232
+      }
+    ]
+  },
+  {
+    "generatedAt": "2026-09-09T09:46:22.685Z",
+    "suiteHash": "16bfd7e5f094c5d2d0245099b719f0f3e846cbd7132280e36c7a8811b5940caf",
+    "source": {
+      "revision": "785297b87973ef285abb884b1af6110ed2aacfd8",
+      "files": {
+        "analysis.ts": "68a34413572826fcbae8727143af5291ab194ce6bd7ffc327b956a5ccd6dcb39",
+        "bidi.ts": "70f7f01dcd866076b68dbf2a3c398364aceaba2ccf98037e77e0b3b8bcfbeaa5",
+        "entry-geometry.ts": "43ffacd71c3562283135590a06947eef4b2617cb3b6ba680c909dd5e2d2ba9a7",
+        "generated/bidi-data.ts": "745211b804d907af78afb6c1ed87eff6d7454a5e85152a6129eb7b3bf0f6f262",
+        "layout.ts": "66c36dea8d0191bd005c4c7c1fd9d52e26d0df0c0e3c5df954f379c4560811cf",
+        "line-break.ts": "ae5c22f2f7786eb63e355a7c8886086ea237e82e78ce5c7b6f202936fd4996d3",
+        "line-text.ts": "5e21684d995df8c30324c03a14b8a0bc3a579ce169a0e10b6d579b6aeee577dc",
+        "measurement.ts": "b024684745f51317ef8beb79c73fe8c53b0ddcf5e02654798f4571d28a9923d4",
+        "rich-inline.ts": "5a7e5d339e1f703d52928913e3b7d6a5f5df04bdfdd365f47c1890dde3b61964",
+        "text-modules.d.ts": "1547f88f0eb75293bc20054194a2bba29a4bc911c2a4fa99cef98141b6f99927"
+      }
+    },
+    "environments": [
+      {
+        "direction": "ltr",
+        "measurement": {
+          "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:155.0) Gecko/20100101 Firefox/155.0",
+          "start": {
+            "dpr": 2,
+            "visualViewportScale": 1,
+            "innerWidth": 1280,
+            "innerHeight": 956,
+            "outerWidth": 1280,
+            "outerHeight": 1040,
+            "screenX": 4,
+            "screenY": 30,
+            "screenWidth": 2560,
+            "screenHeight": 1440,
+            "screenAvailWidth": 2560,
+            "screenAvailHeight": 1364,
+            "visibility": "visible",
+            "focused": false,
+            "language": "ja",
+            "direction": "ltr"
+          },
+          "end": {
+            "dpr": 2,
+            "visualViewportScale": 1,
+            "innerWidth": 1280,
+            "innerHeight": 956,
+            "outerWidth": 1280,
+            "outerHeight": 1040,
+            "screenX": 4,
+            "screenY": 30,
+            "screenWidth": 2560,
+            "screenHeight": 1440,
+            "screenAvailWidth": 2560,
+            "screenAvailHeight": 1364,
+            "visibility": "visible",
+            "focused": false,
+            "language": "ja",
+            "direction": "ltr"
+          },
+          "changes": []
+        },
+        "context": {
+          "kind": "installed",
+          "lang": "ja"
+        },
+        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:155.0) Gecko/20100101 Firefox/155.0",
+        "dpr": 2,
+        "locale": "en-US",
+        "visibility": "visible",
+        "focused": false,
+        "fonts": []
+      }
+    ],
+    "corpusId": "ja-rashomon",
+    "language": "ja",
+    "title": "羅生門",
+    "browser": "firefox",
+    "start": 300,
+    "end": 900,
+    "step": 10,
+    "widthCount": 61,
+    "exactCount": 61,
+    "mismatches": []
+  },
+  {
+    "generatedAt": "2026-09-09T09:46:22.685Z",
+    "suiteHash": "16bfd7e5f094c5d2d0245099b719f0f3e846cbd7132280e36c7a8811b5940caf",
+    "source": {
+      "revision": "785297b87973ef285abb884b1af6110ed2aacfd8",
+      "files": {
+        "analysis.ts": "68a34413572826fcbae8727143af5291ab194ce6bd7ffc327b956a5ccd6dcb39",
+        "bidi.ts": "70f7f01dcd866076b68dbf2a3c398364aceaba2ccf98037e77e0b3b8bcfbeaa5",
+        "entry-geometry.ts": "43ffacd71c3562283135590a06947eef4b2617cb3b6ba680c909dd5e2d2ba9a7",
+        "generated/bidi-data.ts": "745211b804d907af78afb6c1ed87eff6d7454a5e85152a6129eb7b3bf0f6f262",
+        "layout.ts": "66c36dea8d0191bd005c4c7c1fd9d52e26d0df0c0e3c5df954f379c4560811cf",
+        "line-break.ts": "ae5c22f2f7786eb63e355a7c8886086ea237e82e78ce5c7b6f202936fd4996d3",
+        "line-text.ts": "5e21684d995df8c30324c03a14b8a0bc3a579ce169a0e10b6d579b6aeee577dc",
+        "measurement.ts": "b024684745f51317ef8beb79c73fe8c53b0ddcf5e02654798f4571d28a9923d4",
+        "rich-inline.ts": "5a7e5d339e1f703d52928913e3b7d6a5f5df04bdfdd365f47c1890dde3b61964",
+        "text-modules.d.ts": "1547f88f0eb75293bc20054194a2bba29a4bc911c2a4fa99cef98141b6f99927"
+      }
+    },
+    "environments": [
+      {
+        "direction": "ltr",
+        "measurement": {
+          "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:155.0) Gecko/20100101 Firefox/155.0",
+          "start": {
+            "dpr": 2,
+            "visualViewportScale": 1,
+            "innerWidth": 1280,
+            "innerHeight": 956,
+            "outerWidth": 1280,
+            "outerHeight": 1040,
+            "screenX": 4,
+            "screenY": 30,
+            "screenWidth": 2560,
+            "screenHeight": 1440,
+            "screenAvailWidth": 2560,
+            "screenAvailHeight": 1364,
+            "visibility": "visible",
+            "focused": false,
+            "language": "ja",
+            "direction": "ltr"
+          },
+          "end": {
+            "dpr": 2,
+            "visualViewportScale": 1,
+            "innerWidth": 1280,
+            "innerHeight": 956,
+            "outerWidth": 1280,
+            "outerHeight": 1040,
+            "screenX": 4,
+            "screenY": 30,
+            "screenWidth": 2560,
+            "screenHeight": 1440,
+            "screenAvailWidth": 2560,
+            "screenAvailHeight": 1364,
+            "visibility": "visible",
+            "focused": false,
+            "language": "ja",
+            "direction": "ltr"
+          },
+          "changes": []
+        },
+        "context": {
+          "kind": "installed",
+          "lang": "ja"
+        },
+        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:155.0) Gecko/20100101 Firefox/155.0",
+        "dpr": 2,
+        "locale": "en-US",
+        "visibility": "visible",
+        "focused": false,
+        "fonts": []
+      }
+    ],
+    "corpusId": "ja-kumo-no-ito",
+    "language": "ja",
+    "title": "蜘蛛の糸",
+    "browser": "firefox",
+    "start": 300,
+    "end": 900,
+    "step": 10,
+    "widthCount": 61,
+    "exactCount": 52,
+    "mismatches": [
+      {
+        "id": "wrap-017ca9af47718641",
+        "width": 330,
+        "contentWidth": 250,
+        "diffPx": -32,
+        "predictedHeight": 7760,
+        "actualHeight": 7792
+      },
+      {
+        "id": "wrap-af3f899da598e2c3",
+        "width": 350,
+        "contentWidth": 270,
+        "diffPx": -32,
+        "predictedHeight": 7152,
+        "actualHeight": 7184
+      },
+      {
+        "id": "wrap-e823774bf299464d",
+        "width": 370,
+        "contentWidth": 290,
+        "diffPx": -32,
+        "predictedHeight": 6640,
+        "actualHeight": 6672
+      },
+      {
+        "id": "wrap-14296cba606eb164",
+        "width": 390,
+        "contentWidth": 310,
+        "diffPx": -32,
+        "predictedHeight": 6224,
+        "actualHeight": 6256
+      },
+      {
+        "id": "wrap-02f2a5df19120e27",
+        "width": 400,
+        "contentWidth": 320,
+        "diffPx": -32,
+        "predictedHeight": 5840,
+        "actualHeight": 5872
+      },
+      {
+        "id": "wrap-cbaedf2c715c6ee6",
+        "width": 410,
+        "contentWidth": 330,
+        "diffPx": -32,
+        "predictedHeight": 5840,
+        "actualHeight": 5872
+      },
+      {
+        "id": "wrap-006425e2c32f7b6c",
+        "width": 470,
+        "contentWidth": 390,
+        "diffPx": -32,
+        "predictedHeight": 4912,
+        "actualHeight": 4944
+      },
+      {
+        "id": "wrap-0902671a9f41cec2",
+        "width": 480,
+        "contentWidth": 400,
+        "diffPx": -32,
+        "predictedHeight": 4688,
+        "actualHeight": 4720
+      },
+      {
+        "id": "wrap-d44cc842020298ca",
+        "width": 560,
+        "contentWidth": 480,
+        "diffPx": -32,
+        "predictedHeight": 3920,
+        "actualHeight": 3952
+      }
+    ]
+  },
+  {
+    "generatedAt": "2026-09-09T09:46:22.685Z",
+    "suiteHash": "16bfd7e5f094c5d2d0245099b719f0f3e846cbd7132280e36c7a8811b5940caf",
+    "source": {
+      "revision": "785297b87973ef285abb884b1af6110ed2aacfd8",
+      "files": {
+        "analysis.ts": "68a34413572826fcbae8727143af5291ab194ce6bd7ffc327b956a5ccd6dcb39",
+        "bidi.ts": "70f7f01dcd866076b68dbf2a3c398364aceaba2ccf98037e77e0b3b8bcfbeaa5",
+        "entry-geometry.ts": "43ffacd71c3562283135590a06947eef4b2617cb3b6ba680c909dd5e2d2ba9a7",
+        "generated/bidi-data.ts": "745211b804d907af78afb6c1ed87eff6d7454a5e85152a6129eb7b3bf0f6f262",
+        "layout.ts": "66c36dea8d0191bd005c4c7c1fd9d52e26d0df0c0e3c5df954f379c4560811cf",
+        "line-break.ts": "ae5c22f2f7786eb63e355a7c8886086ea237e82e78ce5c7b6f202936fd4996d3",
+        "line-text.ts": "5e21684d995df8c30324c03a14b8a0bc3a579ce169a0e10b6d579b6aeee577dc",
+        "measurement.ts": "b024684745f51317ef8beb79c73fe8c53b0ddcf5e02654798f4571d28a9923d4",
+        "rich-inline.ts": "5a7e5d339e1f703d52928913e3b7d6a5f5df04bdfdd365f47c1890dde3b61964",
+        "text-modules.d.ts": "1547f88f0eb75293bc20054194a2bba29a4bc911c2a4fa99cef98141b6f99927"
+      }
+    },
+    "environments": [
+      {
+        "direction": "ltr",
+        "measurement": {
+          "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:155.0) Gecko/20100101 Firefox/155.0",
+          "start": {
+            "dpr": 2,
+            "visualViewportScale": 1,
+            "innerWidth": 1280,
+            "innerHeight": 956,
+            "outerWidth": 1280,
+            "outerHeight": 1040,
+            "screenX": 4,
+            "screenY": 30,
+            "screenWidth": 2560,
+            "screenHeight": 1440,
+            "screenAvailWidth": 2560,
+            "screenAvailHeight": 1364,
+            "visibility": "visible",
+            "focused": false,
+            "language": "ko",
+            "direction": "ltr"
+          },
+          "end": {
+            "dpr": 2,
+            "visualViewportScale": 1,
+            "innerWidth": 1280,
+            "innerHeight": 956,
+            "outerWidth": 1280,
+            "outerHeight": 1040,
+            "screenX": 4,
+            "screenY": 30,
+            "screenWidth": 2560,
+            "screenHeight": 1440,
+            "screenAvailWidth": 2560,
+            "screenAvailHeight": 1364,
+            "visibility": "visible",
+            "focused": false,
+            "language": "ko",
+            "direction": "ltr"
+          },
+          "changes": []
+        },
+        "context": {
+          "kind": "installed",
+          "lang": "ko"
+        },
+        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:155.0) Gecko/20100101 Firefox/155.0",
+        "dpr": 2,
+        "locale": "en-US",
+        "visibility": "visible",
+        "focused": false,
+        "fonts": []
+      }
+    ],
+    "corpusId": "ko-unsu-joh-eun-nal",
+    "language": "ko",
+    "title": "운수 좋은 날",
+    "browser": "firefox",
+    "start": 300,
+    "end": 900,
+    "step": 10,
+    "widthCount": 61,
+    "exactCount": 57,
+    "mismatches": [
+      {
+        "id": "wrap-411d0adb5ce44695",
+        "width": 340,
+        "contentWidth": 260,
+        "diffPx": -30,
+        "predictedHeight": 14990,
+        "actualHeight": 15020
+      },
+      {
+        "id": "wrap-2101db086f8298f6",
+        "width": 420,
+        "contentWidth": 340,
+        "diffPx": -30,
+        "predictedHeight": 11360,
+        "actualHeight": 11390
+      },
+      {
+        "id": "wrap-ce945652469aa416",
+        "width": 510,
+        "contentWidth": 430,
+        "diffPx": -30,
+        "predictedHeight": 8990,
+        "actualHeight": 9020
+      },
+      {
+        "id": "wrap-608d5f0edb127c12",
+        "width": 550,
+        "contentWidth": 470,
+        "diffPx": -30,
+        "predictedHeight": 8210,
+        "actualHeight": 8240
+      }
+    ]
+  },
+  {
+    "generatedAt": "2026-09-09T09:46:22.685Z",
+    "suiteHash": "16bfd7e5f094c5d2d0245099b719f0f3e846cbd7132280e36c7a8811b5940caf",
+    "source": {
+      "revision": "785297b87973ef285abb884b1af6110ed2aacfd8",
+      "files": {
+        "analysis.ts": "68a34413572826fcbae8727143af5291ab194ce6bd7ffc327b956a5ccd6dcb39",
+        "bidi.ts": "70f7f01dcd866076b68dbf2a3c398364aceaba2ccf98037e77e0b3b8bcfbeaa5",
+        "entry-geometry.ts": "43ffacd71c3562283135590a06947eef4b2617cb3b6ba680c909dd5e2d2ba9a7",
+        "generated/bidi-data.ts": "745211b804d907af78afb6c1ed87eff6d7454a5e85152a6129eb7b3bf0f6f262",
+        "layout.ts": "66c36dea8d0191bd005c4c7c1fd9d52e26d0df0c0e3c5df954f379c4560811cf",
+        "line-break.ts": "ae5c22f2f7786eb63e355a7c8886086ea237e82e78ce5c7b6f202936fd4996d3",
+        "line-text.ts": "5e21684d995df8c30324c03a14b8a0bc3a579ce169a0e10b6d579b6aeee577dc",
+        "measurement.ts": "b024684745f51317ef8beb79c73fe8c53b0ddcf5e02654798f4571d28a9923d4",
+        "rich-inline.ts": "5a7e5d339e1f703d52928913e3b7d6a5f5df04bdfdd365f47c1890dde3b61964",
+        "text-modules.d.ts": "1547f88f0eb75293bc20054194a2bba29a4bc911c2a4fa99cef98141b6f99927"
+      }
+    },
+    "environments": [
+      {
+        "direction": "ltr",
+        "measurement": {
+          "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:155.0) Gecko/20100101 Firefox/155.0",
+          "start": {
+            "dpr": 2,
+            "visualViewportScale": 1,
+            "innerWidth": 1280,
+            "innerHeight": 956,
+            "outerWidth": 1280,
+            "outerHeight": 1040,
+            "screenX": 4,
+            "screenY": 30,
+            "screenWidth": 2560,
+            "screenHeight": 1440,
+            "screenAvailWidth": 2560,
+            "screenAvailHeight": 1364,
+            "visibility": "visible",
+            "focused": false,
+            "language": "ko",
+            "direction": "ltr"
+          },
+          "end": {
+            "dpr": 2,
+            "visualViewportScale": 1,
+            "innerWidth": 1280,
+            "innerHeight": 956,
+            "outerWidth": 1280,
+            "outerHeight": 1040,
+            "screenX": 4,
+            "screenY": 30,
+            "screenWidth": 2560,
+            "screenHeight": 1440,
+            "screenAvailWidth": 2560,
+            "screenAvailHeight": 1364,
+            "visibility": "visible",
+            "focused": false,
+            "language": "ko",
+            "direction": "ltr"
+          },
+          "changes": []
+        },
+        "context": {
+          "kind": "installed",
+          "lang": "ko"
+        },
+        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:155.0) Gecko/20100101 Firefox/155.0",
+        "dpr": 2,
+        "locale": "en-US",
+        "visibility": "visible",
+        "focused": false,
+        "fonts": []
+      }
+    ],
+    "corpusId": "ko-sonagi",
+    "language": "ko",
+    "title": "소나기",
+    "browser": "firefox",
+    "start": 300,
+    "end": 900,
+    "step": 10,
+    "widthCount": 61,
+    "exactCount": 61,
+    "mismatches": []
+  },
+  {
+    "generatedAt": "2026-09-09T09:46:22.685Z",
+    "suiteHash": "16bfd7e5f094c5d2d0245099b719f0f3e846cbd7132280e36c7a8811b5940caf",
+    "source": {
+      "revision": "785297b87973ef285abb884b1af6110ed2aacfd8",
+      "files": {
+        "analysis.ts": "68a34413572826fcbae8727143af5291ab194ce6bd7ffc327b956a5ccd6dcb39",
+        "bidi.ts": "70f7f01dcd866076b68dbf2a3c398364aceaba2ccf98037e77e0b3b8bcfbeaa5",
+        "entry-geometry.ts": "43ffacd71c3562283135590a06947eef4b2617cb3b6ba680c909dd5e2d2ba9a7",
+        "generated/bidi-data.ts": "745211b804d907af78afb6c1ed87eff6d7454a5e85152a6129eb7b3bf0f6f262",
+        "layout.ts": "66c36dea8d0191bd005c4c7c1fd9d52e26d0df0c0e3c5df954f379c4560811cf",
+        "line-break.ts": "ae5c22f2f7786eb63e355a7c8886086ea237e82e78ce5c7b6f202936fd4996d3",
+        "line-text.ts": "5e21684d995df8c30324c03a14b8a0bc3a579ce169a0e10b6d579b6aeee577dc",
+        "measurement.ts": "b024684745f51317ef8beb79c73fe8c53b0ddcf5e02654798f4571d28a9923d4",
+        "rich-inline.ts": "5a7e5d339e1f703d52928913e3b7d6a5f5df04bdfdd365f47c1890dde3b61964",
+        "text-modules.d.ts": "1547f88f0eb75293bc20054194a2bba29a4bc911c2a4fa99cef98141b6f99927"
+      }
+    },
+    "environments": [
+      {
+        "direction": "ltr",
+        "measurement": {
+          "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:155.0) Gecko/20100101 Firefox/155.0",
+          "start": {
+            "dpr": 2,
+            "visualViewportScale": 1,
+            "innerWidth": 1280,
+            "innerHeight": 956,
+            "outerWidth": 1280,
+            "outerHeight": 1040,
+            "screenX": 4,
+            "screenY": 30,
+            "screenWidth": 2560,
+            "screenHeight": 1440,
+            "screenAvailWidth": 2560,
+            "screenAvailHeight": 1364,
+            "visibility": "visible",
+            "focused": false,
+            "language": "zh",
+            "direction": "ltr"
+          },
+          "end": {
+            "dpr": 2,
+            "visualViewportScale": 1,
+            "innerWidth": 1280,
+            "innerHeight": 956,
+            "outerWidth": 1280,
+            "outerHeight": 1040,
+            "screenX": 4,
+            "screenY": 30,
+            "screenWidth": 2560,
+            "screenHeight": 1440,
+            "screenAvailWidth": 2560,
+            "screenAvailHeight": 1364,
+            "visibility": "visible",
+            "focused": false,
+            "language": "zh",
+            "direction": "ltr"
+          },
+          "changes": []
+        },
+        "context": {
+          "kind": "installed",
+          "lang": "zh"
+        },
+        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:155.0) Gecko/20100101 Firefox/155.0",
+        "dpr": 2,
+        "locale": "en-US",
+        "visibility": "visible",
+        "focused": false,
+        "fonts": []
+      }
+    ],
+    "corpusId": "zh-zhufu",
+    "language": "zh",
+    "title": "祝福",
+    "browser": "firefox",
+    "start": 300,
+    "end": 900,
+    "step": 10,
+    "widthCount": 61,
+    "exactCount": 61,
+    "mismatches": []
+  },
+  {
+    "generatedAt": "2026-09-09T09:46:22.685Z",
+    "suiteHash": "16bfd7e5f094c5d2d0245099b719f0f3e846cbd7132280e36c7a8811b5940caf",
+    "source": {
+      "revision": "785297b87973ef285abb884b1af6110ed2aacfd8",
+      "files": {
+        "analysis.ts": "68a34413572826fcbae8727143af5291ab194ce6bd7ffc327b956a5ccd6dcb39",
+        "bidi.ts": "70f7f01dcd866076b68dbf2a3c398364aceaba2ccf98037e77e0b3b8bcfbeaa5",
+        "entry-geometry.ts": "43ffacd71c3562283135590a06947eef4b2617cb3b6ba680c909dd5e2d2ba9a7",
+        "generated/bidi-data.ts": "745211b804d907af78afb6c1ed87eff6d7454a5e85152a6129eb7b3bf0f6f262",
+        "layout.ts": "66c36dea8d0191bd005c4c7c1fd9d52e26d0df0c0e3c5df954f379c4560811cf",
+        "line-break.ts": "ae5c22f2f7786eb63e355a7c8886086ea237e82e78ce5c7b6f202936fd4996d3",
+        "line-text.ts": "5e21684d995df8c30324c03a14b8a0bc3a579ce169a0e10b6d579b6aeee577dc",
+        "measurement.ts": "b024684745f51317ef8beb79c73fe8c53b0ddcf5e02654798f4571d28a9923d4",
+        "rich-inline.ts": "5a7e5d339e1f703d52928913e3b7d6a5f5df04bdfdd365f47c1890dde3b61964",
+        "text-modules.d.ts": "1547f88f0eb75293bc20054194a2bba29a4bc911c2a4fa99cef98141b6f99927"
+      }
+    },
+    "environments": [
+      {
+        "direction": "ltr",
+        "measurement": {
+          "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:155.0) Gecko/20100101 Firefox/155.0",
+          "start": {
+            "dpr": 2,
+            "visualViewportScale": 1,
+            "innerWidth": 1280,
+            "innerHeight": 956,
+            "outerWidth": 1280,
+            "outerHeight": 1040,
+            "screenX": 4,
+            "screenY": 30,
+            "screenWidth": 2560,
+            "screenHeight": 1440,
+            "screenAvailWidth": 2560,
+            "screenAvailHeight": 1364,
+            "visibility": "visible",
+            "focused": false,
+            "language": "zh",
+            "direction": "ltr"
+          },
+          "end": {
+            "dpr": 2,
+            "visualViewportScale": 1,
+            "innerWidth": 1280,
+            "innerHeight": 956,
+            "outerWidth": 1280,
+            "outerHeight": 1040,
+            "screenX": 4,
+            "screenY": 30,
+            "screenWidth": 2560,
+            "screenHeight": 1440,
+            "screenAvailWidth": 2560,
+            "screenAvailHeight": 1364,
+            "visibility": "visible",
+            "focused": false,
+            "language": "zh",
+            "direction": "ltr"
+          },
+          "changes": []
+        },
+        "context": {
+          "kind": "installed",
+          "lang": "zh"
+        },
+        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:155.0) Gecko/20100101 Firefox/155.0",
+        "dpr": 2,
+        "locale": "en-US",
+        "visibility": "visible",
+        "focused": false,
+        "fonts": []
+      }
+    ],
+    "corpusId": "zh-guxiang",
+    "language": "zh",
+    "title": "故鄉",
+    "browser": "firefox",
+    "start": 300,
+    "end": 900,
+    "step": 10,
+    "widthCount": 61,
+    "exactCount": 61,
+    "mismatches": []
+  },
+  {
+    "generatedAt": "2026-09-09T09:46:22.685Z",
+    "suiteHash": "16bfd7e5f094c5d2d0245099b719f0f3e846cbd7132280e36c7a8811b5940caf",
+    "source": {
+      "revision": "785297b87973ef285abb884b1af6110ed2aacfd8",
+      "files": {
+        "analysis.ts": "68a34413572826fcbae8727143af5291ab194ce6bd7ffc327b956a5ccd6dcb39",
+        "bidi.ts": "70f7f01dcd866076b68dbf2a3c398364aceaba2ccf98037e77e0b3b8bcfbeaa5",
+        "entry-geometry.ts": "43ffacd71c3562283135590a06947eef4b2617cb3b6ba680c909dd5e2d2ba9a7",
+        "generated/bidi-data.ts": "745211b804d907af78afb6c1ed87eff6d7454a5e85152a6129eb7b3bf0f6f262",
+        "layout.ts": "66c36dea8d0191bd005c4c7c1fd9d52e26d0df0c0e3c5df954f379c4560811cf",
+        "line-break.ts": "ae5c22f2f7786eb63e355a7c8886086ea237e82e78ce5c7b6f202936fd4996d3",
+        "line-text.ts": "5e21684d995df8c30324c03a14b8a0bc3a579ce169a0e10b6d579b6aeee577dc",
+        "measurement.ts": "b024684745f51317ef8beb79c73fe8c53b0ddcf5e02654798f4571d28a9923d4",
+        "rich-inline.ts": "5a7e5d339e1f703d52928913e3b7d6a5f5df04bdfdd365f47c1890dde3b61964",
+        "text-modules.d.ts": "1547f88f0eb75293bc20054194a2bba29a4bc911c2a4fa99cef98141b6f99927"
+      }
+    },
+    "environments": [
+      {
+        "direction": "ltr",
+        "measurement": {
+          "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:155.0) Gecko/20100101 Firefox/155.0",
+          "start": {
+            "dpr": 2,
+            "visualViewportScale": 1,
+            "innerWidth": 1280,
+            "innerHeight": 956,
+            "outerWidth": 1280,
+            "outerHeight": 1040,
+            "screenX": 4,
+            "screenY": 30,
+            "screenWidth": 2560,
+            "screenHeight": 1440,
+            "screenAvailWidth": 2560,
+            "screenAvailHeight": 1364,
+            "visibility": "visible",
+            "focused": false,
+            "language": "th",
+            "direction": "ltr"
+          },
+          "end": {
+            "dpr": 2,
+            "visualViewportScale": 1,
+            "innerWidth": 1280,
+            "innerHeight": 956,
+            "outerWidth": 1280,
+            "outerHeight": 1040,
+            "screenX": 4,
+            "screenY": 30,
+            "screenWidth": 2560,
+            "screenHeight": 1440,
+            "screenAvailWidth": 2560,
+            "screenAvailHeight": 1364,
+            "visibility": "visible",
+            "focused": false,
+            "language": "th",
+            "direction": "ltr"
+          },
+          "changes": []
+        },
+        "context": {
+          "kind": "installed",
+          "lang": "th"
+        },
+        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:155.0) Gecko/20100101 Firefox/155.0",
+        "dpr": 2,
+        "locale": "en-US",
+        "visibility": "visible",
+        "focused": false,
+        "fonts": []
+      }
+    ],
+    "corpusId": "th-nithan-vetal-story-1",
+    "language": "th",
+    "title": "นิทานเวตาล/เรื่องที่ 1",
+    "browser": "firefox",
+    "start": 300,
+    "end": 900,
+    "step": 10,
+    "widthCount": 61,
+    "exactCount": 50,
+    "mismatches": [
+      {
+        "id": "wrap-ca7ef8e8c4f304ca",
+        "width": 300,
+        "contentWidth": 220,
+        "diffPx": 32,
+        "predictedHeight": 46576,
+        "actualHeight": 46544
+      },
+      {
+        "id": "wrap-48cacb5de097fd0d",
+        "width": 330,
+        "contentWidth": 250,
+        "diffPx": 32,
+        "predictedHeight": 40368,
+        "actualHeight": 40336
+      },
+      {
+        "id": "wrap-2bb163c473586cce",
+        "width": 340,
+        "contentWidth": 260,
+        "diffPx": 32,
+        "predictedHeight": 38800,
+        "actualHeight": 38768
+      },
+      {
+        "id": "wrap-d8e96066386f6640",
+        "width": 360,
+        "contentWidth": 280,
+        "diffPx": 96,
+        "predictedHeight": 35856,
+        "actualHeight": 35760
+      },
+      {
+        "id": "wrap-ed9f3203c829a561",
+        "width": 460,
+        "contentWidth": 380,
+        "diffPx": 32,
+        "predictedHeight": 25808,
+        "actualHeight": 25776
+      },
+      {
+        "id": "wrap-01b304e00c2c5aa0",
+        "width": 470,
+        "contentWidth": 390,
+        "diffPx": 32,
+        "predictedHeight": 25200,
+        "actualHeight": 25168
+      },
+      {
+        "id": "wrap-7b1c6e7ed23e5f88",
+        "width": 540,
+        "contentWidth": 460,
+        "diffPx": 32,
+        "predictedHeight": 21136,
+        "actualHeight": 21104
+      },
+      {
+        "id": "wrap-27623e2375f826ad",
+        "width": 600,
+        "contentWidth": 520,
+        "diffPx": 32,
+        "predictedHeight": 18640,
+        "actualHeight": 18608
+      },
+      {
+        "id": "wrap-1ce2d0b5b34d932b",
+        "width": 620,
+        "contentWidth": 540,
+        "diffPx": 32,
+        "predictedHeight": 17936,
+        "actualHeight": 17904
+      },
+      {
+        "id": "wrap-37675132af03c3ae",
+        "width": 810,
+        "contentWidth": 730,
+        "diffPx": 32,
+        "predictedHeight": 13136,
+        "actualHeight": 13104
+      },
+      {
+        "id": "wrap-6f2dd6c3c098eee9",
+        "width": 820,
+        "contentWidth": 740,
+        "diffPx": 32,
+        "predictedHeight": 12944,
+        "actualHeight": 12912
+      }
+    ]
+  },
+  {
+    "generatedAt": "2026-09-09T09:46:22.685Z",
+    "suiteHash": "16bfd7e5f094c5d2d0245099b719f0f3e846cbd7132280e36c7a8811b5940caf",
+    "source": {
+      "revision": "785297b87973ef285abb884b1af6110ed2aacfd8",
+      "files": {
+        "analysis.ts": "68a34413572826fcbae8727143af5291ab194ce6bd7ffc327b956a5ccd6dcb39",
+        "bidi.ts": "70f7f01dcd866076b68dbf2a3c398364aceaba2ccf98037e77e0b3b8bcfbeaa5",
+        "entry-geometry.ts": "43ffacd71c3562283135590a06947eef4b2617cb3b6ba680c909dd5e2d2ba9a7",
+        "generated/bidi-data.ts": "745211b804d907af78afb6c1ed87eff6d7454a5e85152a6129eb7b3bf0f6f262",
+        "layout.ts": "66c36dea8d0191bd005c4c7c1fd9d52e26d0df0c0e3c5df954f379c4560811cf",
+        "line-break.ts": "ae5c22f2f7786eb63e355a7c8886086ea237e82e78ce5c7b6f202936fd4996d3",
+        "line-text.ts": "5e21684d995df8c30324c03a14b8a0bc3a579ce169a0e10b6d579b6aeee577dc",
+        "measurement.ts": "b024684745f51317ef8beb79c73fe8c53b0ddcf5e02654798f4571d28a9923d4",
+        "rich-inline.ts": "5a7e5d339e1f703d52928913e3b7d6a5f5df04bdfdd365f47c1890dde3b61964",
+        "text-modules.d.ts": "1547f88f0eb75293bc20054194a2bba29a4bc911c2a4fa99cef98141b6f99927"
+      }
+    },
+    "environments": [
+      {
+        "direction": "ltr",
+        "measurement": {
+          "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:155.0) Gecko/20100101 Firefox/155.0",
+          "start": {
+            "dpr": 2,
+            "visualViewportScale": 1,
+            "innerWidth": 1280,
+            "innerHeight": 956,
+            "outerWidth": 1280,
+            "outerHeight": 1040,
+            "screenX": 4,
+            "screenY": 30,
+            "screenWidth": 2560,
+            "screenHeight": 1440,
+            "screenAvailWidth": 2560,
+            "screenAvailHeight": 1364,
+            "visibility": "visible",
+            "focused": false,
+            "language": "th",
+            "direction": "ltr"
+          },
+          "end": {
+            "dpr": 2,
+            "visualViewportScale": 1,
+            "innerWidth": 1280,
+            "innerHeight": 956,
+            "outerWidth": 1280,
+            "outerHeight": 1040,
+            "screenX": 4,
+            "screenY": 30,
+            "screenWidth": 2560,
+            "screenHeight": 1440,
+            "screenAvailWidth": 2560,
+            "screenAvailHeight": 1364,
+            "visibility": "visible",
+            "focused": false,
+            "language": "th",
+            "direction": "ltr"
+          },
+          "changes": []
+        },
+        "context": {
+          "kind": "installed",
+          "lang": "th"
+        },
+        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:155.0) Gecko/20100101 Firefox/155.0",
+        "dpr": 2,
+        "locale": "en-US",
+        "visibility": "visible",
+        "focused": false,
+        "fonts": []
+      }
+    ],
+    "corpusId": "th-nithan-vetal-story-7",
+    "language": "th",
+    "title": "นิทานเวตาล เรื่องที่ ๗",
+    "browser": "firefox",
+    "start": 300,
+    "end": 900,
+    "step": 10,
+    "widthCount": 61,
+    "exactCount": 52,
+    "mismatches": [
+      {
+        "id": "wrap-c36f37186eacbb1e",
+        "width": 300,
+        "contentWidth": 220,
+        "diffPx": 32,
+        "predictedHeight": 42096,
+        "actualHeight": 42064
+      },
+      {
+        "id": "wrap-de95465b8ef45fdf",
+        "width": 310,
+        "contentWidth": 230,
+        "diffPx": 32,
+        "predictedHeight": 40080,
+        "actualHeight": 40048
+      },
+      {
+        "id": "wrap-a35cc96aaa751b98",
+        "width": 320,
+        "contentWidth": 240,
+        "diffPx": 32,
+        "predictedHeight": 38256,
+        "actualHeight": 38224
+      },
+      {
+        "id": "wrap-65a009cd6cd9e159",
+        "width": 330,
+        "contentWidth": 250,
+        "diffPx": 64,
+        "predictedHeight": 36464,
+        "actualHeight": 36400
+      },
+      {
+        "id": "wrap-53393fbd8b844f3b",
+        "width": 440,
+        "contentWidth": 360,
+        "diffPx": 32,
+        "predictedHeight": 24752,
+        "actualHeight": 24720
+      },
+      {
+        "id": "wrap-f3ebcf73712898b5",
+        "width": 460,
+        "contentWidth": 380,
+        "diffPx": 32,
+        "predictedHeight": 23344,
+        "actualHeight": 23312
+      },
+      {
+        "id": "wrap-13814eb7409ac71b",
+        "width": 490,
+        "contentWidth": 410,
+        "diffPx": 32,
+        "predictedHeight": 21584,
+        "actualHeight": 21552
+      },
+      {
+        "id": "wrap-fee9ed419d65b99d",
+        "width": 550,
+        "contentWidth": 470,
+        "diffPx": 64,
+        "predictedHeight": 18736,
+        "actualHeight": 18672
+      },
+      {
+        "id": "wrap-4910a9bf63947d13",
+        "width": 570,
+        "contentWidth": 490,
+        "diffPx": 32,
+        "predictedHeight": 17872,
+        "actualHeight": 17840
+      }
+    ]
+  },
+  {
+    "generatedAt": "2026-09-09T09:46:22.685Z",
+    "suiteHash": "16bfd7e5f094c5d2d0245099b719f0f3e846cbd7132280e36c7a8811b5940caf",
+    "source": {
+      "revision": "785297b87973ef285abb884b1af6110ed2aacfd8",
+      "files": {
+        "analysis.ts": "68a34413572826fcbae8727143af5291ab194ce6bd7ffc327b956a5ccd6dcb39",
+        "bidi.ts": "70f7f01dcd866076b68dbf2a3c398364aceaba2ccf98037e77e0b3b8bcfbeaa5",
+        "entry-geometry.ts": "43ffacd71c3562283135590a06947eef4b2617cb3b6ba680c909dd5e2d2ba9a7",
+        "generated/bidi-data.ts": "745211b804d907af78afb6c1ed87eff6d7454a5e85152a6129eb7b3bf0f6f262",
+        "layout.ts": "66c36dea8d0191bd005c4c7c1fd9d52e26d0df0c0e3c5df954f379c4560811cf",
+        "line-break.ts": "ae5c22f2f7786eb63e355a7c8886086ea237e82e78ce5c7b6f202936fd4996d3",
+        "line-text.ts": "5e21684d995df8c30324c03a14b8a0bc3a579ce169a0e10b6d579b6aeee577dc",
+        "measurement.ts": "b024684745f51317ef8beb79c73fe8c53b0ddcf5e02654798f4571d28a9923d4",
+        "rich-inline.ts": "5a7e5d339e1f703d52928913e3b7d6a5f5df04bdfdd365f47c1890dde3b61964",
+        "text-modules.d.ts": "1547f88f0eb75293bc20054194a2bba29a4bc911c2a4fa99cef98141b6f99927"
+      }
+    },
+    "environments": [
+      {
+        "direction": "ltr",
+        "measurement": {
+          "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:155.0) Gecko/20100101 Firefox/155.0",
+          "start": {
+            "dpr": 2,
+            "visualViewportScale": 1,
+            "innerWidth": 1280,
+            "innerHeight": 956,
+            "outerWidth": 1280,
+            "outerHeight": 1040,
+            "screenX": 4,
+            "screenY": 30,
+            "screenWidth": 2560,
+            "screenHeight": 1440,
+            "screenAvailWidth": 2560,
+            "screenAvailHeight": 1364,
+            "visibility": "visible",
+            "focused": false,
+            "language": "my",
+            "direction": "ltr"
+          },
+          "end": {
+            "dpr": 2,
+            "visualViewportScale": 1,
+            "innerWidth": 1280,
+            "innerHeight": 956,
+            "outerWidth": 1280,
+            "outerHeight": 1040,
+            "screenX": 4,
+            "screenY": 30,
+            "screenWidth": 2560,
+            "screenHeight": 1440,
+            "screenAvailWidth": 2560,
+            "screenAvailHeight": 1364,
+            "visibility": "visible",
+            "focused": false,
+            "language": "my",
+            "direction": "ltr"
+          },
+          "changes": []
+        },
+        "context": {
+          "kind": "installed",
+          "lang": "my"
+        },
+        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:155.0) Gecko/20100101 Firefox/155.0",
+        "dpr": 2,
+        "locale": "en-US",
+        "visibility": "visible",
+        "focused": false,
+        "fonts": []
+      }
+    ],
+    "corpusId": "my-cunning-heron-teacher",
+    "language": "my",
+    "title": "စဉ်းလဲသော ဗျိုင်း (ဆရာ)",
+    "browser": "firefox",
+    "start": 300,
+    "end": 900,
+    "step": 10,
+    "widthCount": 61,
+    "exactCount": 48,
+    "mismatches": [
+      {
+        "id": "wrap-42cc154bae12b65b",
+        "width": 300,
+        "contentWidth": 220,
+        "diffPx": 64,
+        "predictedHeight": 3696,
+        "actualHeight": 3632
+      },
+      {
+        "id": "wrap-2812a6785a946b1a",
+        "width": 310,
+        "contentWidth": 230,
+        "diffPx": 32,
+        "predictedHeight": 3568,
+        "actualHeight": 3536
+      },
+      {
+        "id": "wrap-75cd86e5b6dfa6dd",
+        "width": 320,
+        "contentWidth": 240,
+        "diffPx": 32,
+        "predictedHeight": 3376,
+        "actualHeight": 3344
+      },
+      {
+        "id": "wrap-bdcc5a220bb0be9c",
+        "width": 330,
+        "contentWidth": 250,
+        "diffPx": 32,
+        "predictedHeight": 3184,
+        "actualHeight": 3152
+      },
+      {
+        "id": "wrap-3b5e1499987fc8d1",
+        "width": 360,
+        "contentWidth": 280,
+        "diffPx": 32,
+        "predictedHeight": 2896,
+        "actualHeight": 2864
+      },
+      {
+        "id": "wrap-bb06fddfb026e1f9",
+        "width": 390,
+        "contentWidth": 310,
+        "diffPx": 32,
+        "predictedHeight": 2576,
+        "actualHeight": 2544
+      },
+      {
+        "id": "wrap-f2b6be48011943bc",
+        "width": 420,
+        "contentWidth": 340,
+        "diffPx": 64,
+        "predictedHeight": 2384,
+        "actualHeight": 2320
+      },
+      {
+        "id": "wrap-8da4117104d9bf7f",
+        "width": 450,
+        "contentWidth": 370,
+        "diffPx": 32,
+        "predictedHeight": 2160,
+        "actualHeight": 2128
+      },
+      {
+        "id": "wrap-2d570bf4e2b965b0",
+        "width": 460,
+        "contentWidth": 380,
+        "diffPx": 32,
+        "predictedHeight": 2096,
+        "actualHeight": 2064
+      },
+      {
+        "id": "wrap-d519ad48fef9e65e",
+        "width": 490,
+        "contentWidth": 410,
+        "diffPx": 32,
+        "predictedHeight": 1968,
+        "actualHeight": 1936
+      },
+      {
+        "id": "wrap-70070071c859781d",
+        "width": 500,
+        "contentWidth": 420,
+        "diffPx": 32,
+        "predictedHeight": 1904,
+        "actualHeight": 1872
+      },
+      {
+        "id": "wrap-7a3d579378161697",
+        "width": 560,
+        "contentWidth": 480,
+        "diffPx": 32,
+        "predictedHeight": 1680,
+        "actualHeight": 1648
+      },
+      {
+        "id": "wrap-1b32d37fe519ae13",
+        "width": 880,
+        "contentWidth": 800,
+        "diffPx": 32,
+        "predictedHeight": 1040,
+        "actualHeight": 1008
+      }
+    ]
+  },
+  {
+    "generatedAt": "2026-09-09T09:46:22.685Z",
+    "suiteHash": "16bfd7e5f094c5d2d0245099b719f0f3e846cbd7132280e36c7a8811b5940caf",
+    "source": {
+      "revision": "785297b87973ef285abb884b1af6110ed2aacfd8",
+      "files": {
+        "analysis.ts": "68a34413572826fcbae8727143af5291ab194ce6bd7ffc327b956a5ccd6dcb39",
+        "bidi.ts": "70f7f01dcd866076b68dbf2a3c398364aceaba2ccf98037e77e0b3b8bcfbeaa5",
+        "entry-geometry.ts": "43ffacd71c3562283135590a06947eef4b2617cb3b6ba680c909dd5e2d2ba9a7",
+        "generated/bidi-data.ts": "745211b804d907af78afb6c1ed87eff6d7454a5e85152a6129eb7b3bf0f6f262",
+        "layout.ts": "66c36dea8d0191bd005c4c7c1fd9d52e26d0df0c0e3c5df954f379c4560811cf",
+        "line-break.ts": "ae5c22f2f7786eb63e355a7c8886086ea237e82e78ce5c7b6f202936fd4996d3",
+        "line-text.ts": "5e21684d995df8c30324c03a14b8a0bc3a579ce169a0e10b6d579b6aeee577dc",
+        "measurement.ts": "b024684745f51317ef8beb79c73fe8c53b0ddcf5e02654798f4571d28a9923d4",
+        "rich-inline.ts": "5a7e5d339e1f703d52928913e3b7d6a5f5df04bdfdd365f47c1890dde3b61964",
+        "text-modules.d.ts": "1547f88f0eb75293bc20054194a2bba29a4bc911c2a4fa99cef98141b6f99927"
+      }
+    },
+    "environments": [
+      {
+        "direction": "ltr",
+        "measurement": {
+          "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:155.0) Gecko/20100101 Firefox/155.0",
+          "start": {
+            "dpr": 2,
+            "visualViewportScale": 1,
+            "innerWidth": 1280,
+            "innerHeight": 956,
+            "outerWidth": 1280,
+            "outerHeight": 1040,
+            "screenX": 4,
+            "screenY": 30,
+            "screenWidth": 2560,
+            "screenHeight": 1440,
+            "screenAvailWidth": 2560,
+            "screenAvailHeight": 1364,
+            "visibility": "visible",
+            "focused": false,
+            "language": "my",
+            "direction": "ltr"
+          },
+          "end": {
+            "dpr": 2,
+            "visualViewportScale": 1,
+            "innerWidth": 1280,
+            "innerHeight": 956,
+            "outerWidth": 1280,
+            "outerHeight": 1040,
+            "screenX": 4,
+            "screenY": 30,
+            "screenWidth": 2560,
+            "screenHeight": 1440,
+            "screenAvailWidth": 2560,
+            "screenAvailHeight": 1364,
+            "visibility": "visible",
+            "focused": false,
+            "language": "my",
+            "direction": "ltr"
+          },
+          "changes": []
+        },
+        "context": {
+          "kind": "installed",
+          "lang": "my"
+        },
+        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:155.0) Gecko/20100101 Firefox/155.0",
+        "dpr": 2,
+        "locale": "en-US",
+        "visibility": "visible",
+        "focused": false,
+        "fonts": []
+      }
+    ],
+    "corpusId": "my-bad-deeds-return-to-you-teacher",
+    "language": "my",
+    "title": "မကောင်းမှုဒဏ် ကိုယ့်ထံပြန် (ဆရာ)",
+    "browser": "firefox",
+    "start": 300,
+    "end": 900,
+    "step": 10,
+    "widthCount": 61,
+    "exactCount": 56,
+    "mismatches": [
+      {
+        "id": "wrap-59c43287b67e4e09",
+        "width": 310,
+        "contentWidth": 230,
+        "diffPx": 32,
+        "predictedHeight": 2384,
+        "actualHeight": 2352
+      },
+      {
+        "id": "wrap-209bf1d69b84244e",
+        "width": 320,
+        "contentWidth": 240,
+        "diffPx": 32,
+        "predictedHeight": 2256,
+        "actualHeight": 2224
+      },
+      {
+        "id": "wrap-cd0cb08d681a1f69",
+        "width": 400,
+        "contentWidth": 320,
+        "diffPx": 32,
+        "predictedHeight": 1712,
+        "actualHeight": 1680
+      },
+      {
+        "id": "wrap-24e892d157ca2f29",
+        "width": 620,
+        "contentWidth": 540,
+        "diffPx": -32,
+        "predictedHeight": 1008,
+        "actualHeight": 1040
+      },
+      {
+        "id": "wrap-44400ed8eee6ac4c",
+        "width": 700,
+        "contentWidth": 620,
+        "diffPx": 32,
+        "predictedHeight": 912,
+        "actualHeight": 880
+      }
+    ]
+  },
+  {
+    "generatedAt": "2026-09-09T09:46:22.685Z",
+    "suiteHash": "16bfd7e5f094c5d2d0245099b719f0f3e846cbd7132280e36c7a8811b5940caf",
+    "source": {
+      "revision": "785297b87973ef285abb884b1af6110ed2aacfd8",
+      "files": {
+        "analysis.ts": "68a34413572826fcbae8727143af5291ab194ce6bd7ffc327b956a5ccd6dcb39",
+        "bidi.ts": "70f7f01dcd866076b68dbf2a3c398364aceaba2ccf98037e77e0b3b8bcfbeaa5",
+        "entry-geometry.ts": "43ffacd71c3562283135590a06947eef4b2617cb3b6ba680c909dd5e2d2ba9a7",
+        "generated/bidi-data.ts": "745211b804d907af78afb6c1ed87eff6d7454a5e85152a6129eb7b3bf0f6f262",
+        "layout.ts": "66c36dea8d0191bd005c4c7c1fd9d52e26d0df0c0e3c5df954f379c4560811cf",
+        "line-break.ts": "ae5c22f2f7786eb63e355a7c8886086ea237e82e78ce5c7b6f202936fd4996d3",
+        "line-text.ts": "5e21684d995df8c30324c03a14b8a0bc3a579ce169a0e10b6d579b6aeee577dc",
+        "measurement.ts": "b024684745f51317ef8beb79c73fe8c53b0ddcf5e02654798f4571d28a9923d4",
+        "rich-inline.ts": "5a7e5d339e1f703d52928913e3b7d6a5f5df04bdfdd365f47c1890dde3b61964",
+        "text-modules.d.ts": "1547f88f0eb75293bc20054194a2bba29a4bc911c2a4fa99cef98141b6f99927"
+      }
+    },
+    "environments": [
+      {
+        "direction": "ltr",
+        "measurement": {
+          "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:155.0) Gecko/20100101 Firefox/155.0",
+          "start": {
+            "dpr": 2,
+            "visualViewportScale": 1,
+            "innerWidth": 1280,
+            "innerHeight": 956,
+            "outerWidth": 1280,
+            "outerHeight": 1040,
+            "screenX": 4,
+            "screenY": 30,
+            "screenWidth": 2560,
+            "screenHeight": 1440,
+            "screenAvailWidth": 2560,
+            "screenAvailHeight": 1364,
+            "visibility": "visible",
+            "focused": false,
+            "language": "km",
+            "direction": "ltr"
+          },
+          "end": {
+            "dpr": 2,
+            "visualViewportScale": 1,
+            "innerWidth": 1280,
+            "innerHeight": 956,
+            "outerWidth": 1280,
+            "outerHeight": 1040,
+            "screenX": 4,
+            "screenY": 30,
+            "screenWidth": 2560,
+            "screenHeight": 1440,
+            "screenAvailWidth": 2560,
+            "screenAvailHeight": 1364,
+            "visibility": "visible",
+            "focused": false,
+            "language": "km",
+            "direction": "ltr"
+          },
+          "changes": []
+        },
+        "context": {
+          "kind": "installed",
+          "lang": "km"
+        },
+        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:155.0) Gecko/20100101 Firefox/155.0",
+        "dpr": 2,
+        "locale": "en-US",
+        "visibility": "visible",
+        "focused": false,
+        "fonts": []
+      }
+    ],
+    "corpusId": "km-prachum-reuang-preng-khmer-volume-7-stories-1-10",
+    "language": "km",
+    "title": "ប្រជុំរឿងព្រេងខ្មែរ/ភាគទី៧ (រឿង ១-១០)",
+    "browser": "firefox",
+    "start": 300,
+    "end": 900,
+    "step": 10,
+    "widthCount": 61,
+    "exactCount": 58,
+    "mismatches": [
+      {
+        "id": "wrap-c311c8bc67f47958",
+        "width": 300,
+        "contentWidth": 220,
+        "diffPx": 32,
+        "predictedHeight": 26320,
+        "actualHeight": 26288
+      },
+      {
+        "id": "wrap-ec50a690d37ca15c",
+        "width": 340,
+        "contentWidth": 260,
+        "diffPx": 32,
+        "predictedHeight": 22064,
+        "actualHeight": 22032
+      },
+      {
+        "id": "wrap-21350cac5d604c18",
+        "width": 520,
+        "contentWidth": 440,
+        "diffPx": 32,
+        "predictedHeight": 12752,
+        "actualHeight": 12720
+      }
+    ]
+  },
+  {
+    "generatedAt": "2026-09-09T09:46:22.685Z",
+    "suiteHash": "16bfd7e5f094c5d2d0245099b719f0f3e846cbd7132280e36c7a8811b5940caf",
+    "source": {
+      "revision": "785297b87973ef285abb884b1af6110ed2aacfd8",
+      "files": {
+        "analysis.ts": "68a34413572826fcbae8727143af5291ab194ce6bd7ffc327b956a5ccd6dcb39",
+        "bidi.ts": "70f7f01dcd866076b68dbf2a3c398364aceaba2ccf98037e77e0b3b8bcfbeaa5",
+        "entry-geometry.ts": "43ffacd71c3562283135590a06947eef4b2617cb3b6ba680c909dd5e2d2ba9a7",
+        "generated/bidi-data.ts": "745211b804d907af78afb6c1ed87eff6d7454a5e85152a6129eb7b3bf0f6f262",
+        "layout.ts": "66c36dea8d0191bd005c4c7c1fd9d52e26d0df0c0e3c5df954f379c4560811cf",
+        "line-break.ts": "ae5c22f2f7786eb63e355a7c8886086ea237e82e78ce5c7b6f202936fd4996d3",
+        "line-text.ts": "5e21684d995df8c30324c03a14b8a0bc3a579ce169a0e10b6d579b6aeee577dc",
+        "measurement.ts": "b024684745f51317ef8beb79c73fe8c53b0ddcf5e02654798f4571d28a9923d4",
+        "rich-inline.ts": "5a7e5d339e1f703d52928913e3b7d6a5f5df04bdfdd365f47c1890dde3b61964",
+        "text-modules.d.ts": "1547f88f0eb75293bc20054194a2bba29a4bc911c2a4fa99cef98141b6f99927"
+      }
+    },
+    "environments": [
+      {
+        "direction": "rtl",
+        "measurement": {
+          "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:155.0) Gecko/20100101 Firefox/155.0",
+          "start": {
+            "dpr": 2,
+            "visualViewportScale": 1,
+            "innerWidth": 1280,
+            "innerHeight": 956,
+            "outerWidth": 1280,
+            "outerHeight": 1040,
+            "screenX": 4,
+            "screenY": 30,
+            "screenWidth": 2560,
+            "screenHeight": 1440,
+            "screenAvailWidth": 2560,
+            "screenAvailHeight": 1364,
+            "visibility": "visible",
+            "focused": false,
+            "language": "ar",
+            "direction": "rtl"
+          },
+          "end": {
+            "dpr": 2,
+            "visualViewportScale": 1,
+            "innerWidth": 1280,
+            "innerHeight": 956,
+            "outerWidth": 1280,
+            "outerHeight": 1040,
+            "screenX": 4,
+            "screenY": 30,
+            "screenWidth": 2560,
+            "screenHeight": 1440,
+            "screenAvailWidth": 2560,
+            "screenAvailHeight": 1364,
+            "visibility": "visible",
+            "focused": false,
+            "language": "ar",
+            "direction": "rtl"
+          },
+          "changes": []
+        },
+        "context": {
+          "kind": "installed",
+          "lang": "ar"
+        },
+        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:155.0) Gecko/20100101 Firefox/155.0",
+        "dpr": 2,
+        "locale": "en-US",
+        "visibility": "visible",
+        "focused": false,
+        "fonts": []
+      }
+    ],
+    "corpusId": "ar-risalat-al-ghufran-part-1",
+    "language": "ar",
+    "title": "رسالة الغفران/الجزء الأول",
+    "browser": "firefox",
+    "start": 300,
+    "end": 900,
+    "step": 10,
+    "widthCount": 61,
+    "exactCount": 61,
+    "mismatches": []
+  },
+  {
+    "generatedAt": "2026-09-09T09:46:22.685Z",
+    "suiteHash": "16bfd7e5f094c5d2d0245099b719f0f3e846cbd7132280e36c7a8811b5940caf",
+    "source": {
+      "revision": "785297b87973ef285abb884b1af6110ed2aacfd8",
+      "files": {
+        "analysis.ts": "68a34413572826fcbae8727143af5291ab194ce6bd7ffc327b956a5ccd6dcb39",
+        "bidi.ts": "70f7f01dcd866076b68dbf2a3c398364aceaba2ccf98037e77e0b3b8bcfbeaa5",
+        "entry-geometry.ts": "43ffacd71c3562283135590a06947eef4b2617cb3b6ba680c909dd5e2d2ba9a7",
+        "generated/bidi-data.ts": "745211b804d907af78afb6c1ed87eff6d7454a5e85152a6129eb7b3bf0f6f262",
+        "layout.ts": "66c36dea8d0191bd005c4c7c1fd9d52e26d0df0c0e3c5df954f379c4560811cf",
+        "line-break.ts": "ae5c22f2f7786eb63e355a7c8886086ea237e82e78ce5c7b6f202936fd4996d3",
+        "line-text.ts": "5e21684d995df8c30324c03a14b8a0bc3a579ce169a0e10b6d579b6aeee577dc",
+        "measurement.ts": "b024684745f51317ef8beb79c73fe8c53b0ddcf5e02654798f4571d28a9923d4",
+        "rich-inline.ts": "5a7e5d339e1f703d52928913e3b7d6a5f5df04bdfdd365f47c1890dde3b61964",
+        "text-modules.d.ts": "1547f88f0eb75293bc20054194a2bba29a4bc911c2a4fa99cef98141b6f99927"
+      }
+    },
+    "environments": [
+      {
+        "direction": "rtl",
+        "measurement": {
+          "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:155.0) Gecko/20100101 Firefox/155.0",
+          "start": {
+            "dpr": 2,
+            "visualViewportScale": 1,
+            "innerWidth": 1280,
+            "innerHeight": 956,
+            "outerWidth": 1280,
+            "outerHeight": 1040,
+            "screenX": 4,
+            "screenY": 30,
+            "screenWidth": 2560,
+            "screenHeight": 1440,
+            "screenAvailWidth": 2560,
+            "screenAvailHeight": 1364,
+            "visibility": "visible",
+            "focused": false,
+            "language": "ar",
+            "direction": "rtl"
+          },
+          "end": {
+            "dpr": 2,
+            "visualViewportScale": 1,
+            "innerWidth": 1280,
+            "innerHeight": 956,
+            "outerWidth": 1280,
+            "outerHeight": 1040,
+            "screenX": 4,
+            "screenY": 30,
+            "screenWidth": 2560,
+            "screenHeight": 1440,
+            "screenAvailWidth": 2560,
+            "screenAvailHeight": 1364,
+            "visibility": "visible",
+            "focused": false,
+            "language": "ar",
+            "direction": "rtl"
+          },
+          "changes": []
+        },
+        "context": {
+          "kind": "installed",
+          "lang": "ar"
+        },
+        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:155.0) Gecko/20100101 Firefox/155.0",
+        "dpr": 2,
+        "locale": "en-US",
+        "visibility": "visible",
+        "focused": false,
+        "fonts": []
+      }
+    ],
+    "corpusId": "ar-al-bukhala",
+    "language": "ar",
+    "title": "البخلاء",
+    "browser": "firefox",
+    "start": 300,
+    "end": 900,
+    "step": 10,
+    "widthCount": 61,
+    "exactCount": 61,
+    "mismatches": []
+  },
+  {
+    "generatedAt": "2026-09-09T09:46:22.685Z",
+    "suiteHash": "16bfd7e5f094c5d2d0245099b719f0f3e846cbd7132280e36c7a8811b5940caf",
+    "source": {
+      "revision": "785297b87973ef285abb884b1af6110ed2aacfd8",
+      "files": {
+        "analysis.ts": "68a34413572826fcbae8727143af5291ab194ce6bd7ffc327b956a5ccd6dcb39",
+        "bidi.ts": "70f7f01dcd866076b68dbf2a3c398364aceaba2ccf98037e77e0b3b8bcfbeaa5",
+        "entry-geometry.ts": "43ffacd71c3562283135590a06947eef4b2617cb3b6ba680c909dd5e2d2ba9a7",
+        "generated/bidi-data.ts": "745211b804d907af78afb6c1ed87eff6d7454a5e85152a6129eb7b3bf0f6f262",
+        "layout.ts": "66c36dea8d0191bd005c4c7c1fd9d52e26d0df0c0e3c5df954f379c4560811cf",
+        "line-break.ts": "ae5c22f2f7786eb63e355a7c8886086ea237e82e78ce5c7b6f202936fd4996d3",
+        "line-text.ts": "5e21684d995df8c30324c03a14b8a0bc3a579ce169a0e10b6d579b6aeee577dc",
+        "measurement.ts": "b024684745f51317ef8beb79c73fe8c53b0ddcf5e02654798f4571d28a9923d4",
+        "rich-inline.ts": "5a7e5d339e1f703d52928913e3b7d6a5f5df04bdfdd365f47c1890dde3b61964",
+        "text-modules.d.ts": "1547f88f0eb75293bc20054194a2bba29a4bc911c2a4fa99cef98141b6f99927"
+      }
+    },
+    "environments": [
+      {
+        "direction": "ltr",
+        "measurement": {
+          "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:155.0) Gecko/20100101 Firefox/155.0",
+          "start": {
+            "dpr": 2,
+            "visualViewportScale": 1,
+            "innerWidth": 1280,
+            "innerHeight": 956,
+            "outerWidth": 1280,
+            "outerHeight": 1040,
+            "screenX": 4,
+            "screenY": 30,
+            "screenWidth": 2560,
+            "screenHeight": 1440,
+            "screenAvailWidth": 2560,
+            "screenAvailHeight": 1364,
+            "visibility": "visible",
+            "focused": false,
+            "language": "hi",
+            "direction": "ltr"
+          },
+          "end": {
+            "dpr": 2,
+            "visualViewportScale": 1,
+            "innerWidth": 1280,
+            "innerHeight": 956,
+            "outerWidth": 1280,
+            "outerHeight": 1040,
+            "screenX": 4,
+            "screenY": 30,
+            "screenWidth": 2560,
+            "screenHeight": 1440,
+            "screenAvailWidth": 2560,
+            "screenAvailHeight": 1364,
+            "visibility": "visible",
+            "focused": false,
+            "language": "hi",
+            "direction": "ltr"
+          },
+          "changes": []
+        },
+        "context": {
+          "kind": "installed",
+          "lang": "hi"
+        },
+        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:155.0) Gecko/20100101 Firefox/155.0",
+        "dpr": 2,
+        "locale": "en-US",
+        "visibility": "visible",
+        "focused": false,
+        "fonts": []
+      }
+    ],
+    "corpusId": "hi-eidgah",
+    "language": "hi",
+    "title": "प्रेमचंद की सर्वश्रेष्ठ कहानियां/ईदगाह",
+    "browser": "firefox",
+    "start": 300,
+    "end": 900,
+    "step": 10,
+    "widthCount": 61,
+    "exactCount": 54,
+    "mismatches": [
+      {
+        "id": "wrap-b9d3d74c69a69ff8",
+        "width": 300,
+        "contentWidth": 220,
+        "diffPx": -32,
+        "predictedHeight": 29136,
+        "actualHeight": 29168
+      },
+      {
+        "id": "wrap-27e935ddadc182b3",
+        "width": 370,
+        "contentWidth": 290,
+        "diffPx": -64,
+        "predictedHeight": 21776,
+        "actualHeight": 21840
+      },
+      {
+        "id": "wrap-d3e289852bc01b19",
+        "width": 400,
+        "contentWidth": 320,
+        "diffPx": -64,
+        "predictedHeight": 19632,
+        "actualHeight": 19696
+      },
+      {
+        "id": "wrap-8ebf9f0ba9abc6fd",
+        "width": 490,
+        "contentWidth": 410,
+        "diffPx": -32,
+        "predictedHeight": 15152,
+        "actualHeight": 15184
+      },
+      {
+        "id": "wrap-0e0a4132b050c43a",
+        "width": 540,
+        "contentWidth": 460,
+        "diffPx": -32,
+        "predictedHeight": 13456,
+        "actualHeight": 13488
+      },
+      {
+        "id": "wrap-c0f5849d3924f83b",
+        "width": 730,
+        "contentWidth": 650,
+        "diffPx": -32,
+        "predictedHeight": 9456,
+        "actualHeight": 9488
+      },
+      {
+        "id": "wrap-efbe7d6a5387d758",
+        "width": 850,
+        "contentWidth": 770,
+        "diffPx": -32,
+        "predictedHeight": 7984,
+        "actualHeight": 8016
+      }
+    ]
+  },
+  {
+    "generatedAt": "2026-09-09T09:46:22.685Z",
+    "suiteHash": "16bfd7e5f094c5d2d0245099b719f0f3e846cbd7132280e36c7a8811b5940caf",
+    "source": {
+      "revision": "785297b87973ef285abb884b1af6110ed2aacfd8",
+      "files": {
+        "analysis.ts": "68a34413572826fcbae8727143af5291ab194ce6bd7ffc327b956a5ccd6dcb39",
+        "bidi.ts": "70f7f01dcd866076b68dbf2a3c398364aceaba2ccf98037e77e0b3b8bcfbeaa5",
+        "entry-geometry.ts": "43ffacd71c3562283135590a06947eef4b2617cb3b6ba680c909dd5e2d2ba9a7",
+        "generated/bidi-data.ts": "745211b804d907af78afb6c1ed87eff6d7454a5e85152a6129eb7b3bf0f6f262",
+        "layout.ts": "66c36dea8d0191bd005c4c7c1fd9d52e26d0df0c0e3c5df954f379c4560811cf",
+        "line-break.ts": "ae5c22f2f7786eb63e355a7c8886086ea237e82e78ce5c7b6f202936fd4996d3",
+        "line-text.ts": "5e21684d995df8c30324c03a14b8a0bc3a579ce169a0e10b6d579b6aeee577dc",
+        "measurement.ts": "b024684745f51317ef8beb79c73fe8c53b0ddcf5e02654798f4571d28a9923d4",
+        "rich-inline.ts": "5a7e5d339e1f703d52928913e3b7d6a5f5df04bdfdd365f47c1890dde3b61964",
+        "text-modules.d.ts": "1547f88f0eb75293bc20054194a2bba29a4bc911c2a4fa99cef98141b6f99927"
+      }
+    },
+    "environments": [
+      {
+        "direction": "rtl",
+        "measurement": {
+          "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:155.0) Gecko/20100101 Firefox/155.0",
+          "start": {
+            "dpr": 2,
+            "visualViewportScale": 1,
+            "innerWidth": 1280,
+            "innerHeight": 956,
+            "outerWidth": 1280,
+            "outerHeight": 1040,
+            "screenX": 4,
+            "screenY": 30,
+            "screenWidth": 2560,
+            "screenHeight": 1440,
+            "screenAvailWidth": 2560,
+            "screenAvailHeight": 1364,
+            "visibility": "visible",
+            "focused": false,
+            "language": "he",
+            "direction": "rtl"
+          },
+          "end": {
+            "dpr": 2,
+            "visualViewportScale": 1,
+            "innerWidth": 1280,
+            "innerHeight": 956,
+            "outerWidth": 1280,
+            "outerHeight": 1040,
+            "screenX": 4,
+            "screenY": 30,
+            "screenWidth": 2560,
+            "screenHeight": 1440,
+            "screenAvailWidth": 2560,
+            "screenAvailHeight": 1364,
+            "visibility": "visible",
+            "focused": false,
+            "language": "he",
+            "direction": "rtl"
+          },
+          "changes": []
+        },
+        "context": {
+          "kind": "installed",
+          "lang": "he"
+        },
+        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:155.0) Gecko/20100101 Firefox/155.0",
+        "dpr": 2,
+        "locale": "en-US",
+        "visibility": "visible",
+        "focused": false,
+        "fonts": []
+      }
+    ],
+    "corpusId": "he-masaot-binyamin-metudela",
+    "language": "he",
+    "title": "מסעות בנימין מטודלה",
+    "browser": "firefox",
+    "start": 300,
+    "end": 900,
+    "step": 10,
+    "widthCount": 61,
+    "exactCount": 61,
+    "mismatches": []
+  },
+  {
+    "generatedAt": "2026-09-09T09:46:22.685Z",
+    "suiteHash": "16bfd7e5f094c5d2d0245099b719f0f3e846cbd7132280e36c7a8811b5940caf",
+    "source": {
+      "revision": "785297b87973ef285abb884b1af6110ed2aacfd8",
+      "files": {
+        "analysis.ts": "68a34413572826fcbae8727143af5291ab194ce6bd7ffc327b956a5ccd6dcb39",
+        "bidi.ts": "70f7f01dcd866076b68dbf2a3c398364aceaba2ccf98037e77e0b3b8bcfbeaa5",
+        "entry-geometry.ts": "43ffacd71c3562283135590a06947eef4b2617cb3b6ba680c909dd5e2d2ba9a7",
+        "generated/bidi-data.ts": "745211b804d907af78afb6c1ed87eff6d7454a5e85152a6129eb7b3bf0f6f262",
+        "layout.ts": "66c36dea8d0191bd005c4c7c1fd9d52e26d0df0c0e3c5df954f379c4560811cf",
+        "line-break.ts": "ae5c22f2f7786eb63e355a7c8886086ea237e82e78ce5c7b6f202936fd4996d3",
+        "line-text.ts": "5e21684d995df8c30324c03a14b8a0bc3a579ce169a0e10b6d579b6aeee577dc",
+        "measurement.ts": "b024684745f51317ef8beb79c73fe8c53b0ddcf5e02654798f4571d28a9923d4",
+        "rich-inline.ts": "5a7e5d339e1f703d52928913e3b7d6a5f5df04bdfdd365f47c1890dde3b61964",
+        "text-modules.d.ts": "1547f88f0eb75293bc20054194a2bba29a4bc911c2a4fa99cef98141b6f99927"
+      }
+    },
+    "environments": [
+      {
+        "direction": "rtl",
+        "measurement": {
+          "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:155.0) Gecko/20100101 Firefox/155.0",
+          "start": {
+            "dpr": 2,
+            "visualViewportScale": 1,
+            "innerWidth": 1280,
+            "innerHeight": 956,
+            "outerWidth": 1280,
+            "outerHeight": 1040,
+            "screenX": 4,
+            "screenY": 30,
+            "screenWidth": 2560,
+            "screenHeight": 1440,
+            "screenAvailWidth": 2560,
+            "screenAvailHeight": 1364,
+            "visibility": "visible",
+            "focused": false,
+            "language": "ur",
+            "direction": "rtl"
+          },
+          "end": {
+            "dpr": 2,
+            "visualViewportScale": 1,
+            "innerWidth": 1280,
+            "innerHeight": 956,
+            "outerWidth": 1280,
+            "outerHeight": 1040,
+            "screenX": 4,
+            "screenY": 30,
+            "screenWidth": 2560,
+            "screenHeight": 1440,
+            "screenAvailWidth": 2560,
+            "screenAvailHeight": 1364,
+            "visibility": "visible",
+            "focused": false,
+            "language": "ur",
+            "direction": "rtl"
+          },
+          "changes": []
+        },
+        "context": {
+          "kind": "installed",
+          "lang": "ur"
+        },
+        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:155.0) Gecko/20100101 Firefox/155.0",
+        "dpr": 2,
+        "locale": "en-US",
+        "visibility": "visible",
+        "focused": false,
+        "fonts": []
+      }
+    ],
+    "corpusId": "ur-chughd",
+    "language": "ur",
+    "title": "چغد",
+    "browser": "firefox",
+    "start": 300,
+    "end": 900,
+    "step": 10,
+    "widthCount": 61,
+    "exactCount": 57,
+    "mismatches": [
+      {
+        "id": "wrap-e378e32fe0360619",
+        "width": 330,
+        "contentWidth": 250,
+        "diffPx": 38,
+        "predictedHeight": 16268,
+        "actualHeight": 16230
+      },
+      {
+        "id": "wrap-b794ece894db2ebe",
+        "width": 410,
+        "contentWidth": 330,
+        "diffPx": 38,
+        "predictedHeight": 12164,
+        "actualHeight": 12126
+      },
+      {
+        "id": "wrap-2a213c1c6f9ca858",
+        "width": 680,
+        "contentWidth": 600,
+        "diffPx": 38,
+        "predictedHeight": 6616,
+        "actualHeight": 6578
+      },
+      {
+        "id": "wrap-3bd23f813602dc1f",
+        "width": 750,
+        "contentWidth": 670,
+        "diffPx": 38,
+        "predictedHeight": 5932,
+        "actualHeight": 5894
+      }
+    ]
+  }
+]

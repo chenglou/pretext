@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-04-08T02:26:58.651Z",
+  "generatedAt": "2026-09-09T09:46:22.726Z",
   "sources": {
     "accuracy": {
       "chrome": "accuracy/chrome.json",
@@ -8,6 +8,7 @@
     },
     "chromeStep10": "corpora/chrome-step10.json",
     "safariStep10": "corpora/safari-step10.json",
+    "firefoxStep10": "corpora/firefox-step10.json",
     "taxonomy": "corpora/TAXONOMY.md"
   },
   "browserRegressionGate": {
@@ -27,6 +28,7 @@
       "mismatchCount": 0
     }
   },
+  "notesScope": "Corpus, fine-sweep and font-matrix notes describe Chrome/Safari and historical investigations. Firefox results are the recorded step10 counts and anchors only.",
   "productShaped": [
     {
       "id": "mixed-app-text",
@@ -48,15 +50,27 @@
         ],
         "mismatches": []
       },
+      "firefoxAnchors": {
+        "exactWidths": [
+          300,
+          600,
+          800
+        ],
+        "mismatches": []
+      },
       "chromeStep10": {
-        "exactCount": 60,
+        "exactCount": 61,
         "widthCount": 61
       },
       "safariStep10": {
         "exactCount": 61,
         "widthCount": 61
       },
-      "notes": "remaining Chrome-only `710px` miss is SHY / extractor-sensitive; Safari is exact there again in height/line count"
+      "firefoxStep10": {
+        "exactCount": 51,
+        "widthCount": 61
+      },
+      "notes": "currently exact in the maintained Chrome and Safari step10 sweeps; keep as the product-shaped canary for URLs, emoji ZWJ, hard spaces, and soft hyphens"
     }
   ],
   "longForm": [
@@ -88,12 +102,33 @@
           }
         ]
       },
+      "firefoxAnchors": {
+        "exactWidths": [],
+        "mismatches": [
+          {
+            "width": 300,
+            "diffPx": -260
+          },
+          {
+            "width": 600,
+            "diffPx": -260
+          },
+          {
+            "width": 800,
+            "diffPx": -78
+          }
+        ]
+      },
       "chromeStep10": {
         "exactCount": 50,
         "widthCount": 61
       },
       "safariStep10": {
         "exactCount": 58,
+        "widthCount": 61
+      },
+      "firefoxStep10": {
+        "exactCount": 0,
         "widthCount": 61
       },
       "notes": "English long-form canary; broad narrow-width negative field with one local positive flip"
@@ -118,12 +153,24 @@
         ],
         "mismatches": []
       },
+      "firefoxAnchors": {
+        "exactWidths": [
+          300,
+          600,
+          800
+        ],
+        "mismatches": []
+      },
       "chromeStep10": {
         "exactCount": 56,
         "widthCount": 61
       },
       "safariStep10": {
         "exactCount": 61,
+        "widthCount": 61
+      },
+      "firefoxStep10": {
+        "exactCount": 52,
         "widthCount": 61
       },
       "notes": "second Japanese canary; same broad one-line positive edge-fit field as `羅生門`, but smaller"
@@ -148,11 +195,23 @@
         ],
         "mismatches": []
       },
+      "firefoxAnchors": {
+        "exactWidths": [
+          300,
+          600,
+          800
+        ],
+        "mismatches": []
+      },
       "chromeStep10": {
         "exactCount": 55,
         "widthCount": 61
       },
       "safariStep10": {
+        "exactCount": 61,
+        "widthCount": 61
+      },
+      "firefoxStep10": {
         "exactCount": 61,
         "widthCount": 61
       },
@@ -178,12 +237,24 @@
         ],
         "mismatches": []
       },
+      "firefoxAnchors": {
+        "exactWidths": [
+          300,
+          600,
+          800
+        ],
+        "mismatches": []
+      },
       "chromeStep10": {
         "exactCount": 61,
         "widthCount": 61
       },
       "safariStep10": {
         "exactCount": 61,
+        "widthCount": 61
+      },
+      "firefoxStep10": {
+        "exactCount": 57,
         "widthCount": 61
       },
       "notes": "Korean step10 sweep is clean"
@@ -208,11 +279,23 @@
         ],
         "mismatches": []
       },
+      "firefoxAnchors": {
+        "exactWidths": [
+          300,
+          600,
+          800
+        ],
+        "mismatches": []
+      },
       "chromeStep10": {
         "exactCount": 61,
         "widthCount": 61
       },
       "safariStep10": {
+        "exactCount": 61,
+        "widthCount": 61
+      },
+      "firefoxStep10": {
         "exactCount": 61,
         "widthCount": 61
       },
@@ -242,11 +325,23 @@
         ],
         "mismatches": []
       },
+      "firefoxAnchors": {
+        "exactWidths": [
+          300,
+          600,
+          800
+        ],
+        "mismatches": []
+      },
       "chromeStep10": {
         "exactCount": 54,
         "widthCount": 61
       },
       "safariStep10": {
+        "exactCount": 61,
+        "widthCount": 61
+      },
+      "firefoxStep10": {
         "exactCount": 61,
         "widthCount": 61
       },
@@ -276,12 +371,24 @@
         ],
         "mismatches": []
       },
+      "firefoxAnchors": {
+        "exactWidths": [
+          300,
+          600,
+          800
+        ],
+        "mismatches": []
+      },
       "chromeStep10": {
-        "exactCount": 42,
+        "exactCount": 43,
         "widthCount": 61
       },
       "safariStep10": {
-        "exactCount": 60,
+        "exactCount": 61,
+        "widthCount": 61
+      },
+      "firefoxStep10": {
+        "exactCount": 61,
         "widthCount": 61
       },
       "notes": "real Chinese canary; broad positive one-line field in Chrome, exact Safari anchors"
@@ -306,12 +413,31 @@
         ],
         "mismatches": []
       },
+      "firefoxAnchors": {
+        "exactWidths": [
+          800
+        ],
+        "mismatches": [
+          {
+            "width": 300,
+            "diffPx": 32
+          },
+          {
+            "width": 600,
+            "diffPx": 32
+          }
+        ]
+      },
       "chromeStep10": {
         "exactCount": 59,
         "widthCount": 61
       },
       "safariStep10": {
         "exactCount": 61,
+        "widthCount": 61
+      },
+      "firefoxStep10": {
+        "exactCount": 50,
         "widthCount": 61
       },
       "notes": "two remaining step10 one-line misses"
@@ -336,12 +462,28 @@
         ],
         "mismatches": []
       },
+      "firefoxAnchors": {
+        "exactWidths": [
+          600,
+          800
+        ],
+        "mismatches": [
+          {
+            "width": 300,
+            "diffPx": 32
+          }
+        ]
+      },
       "chromeStep10": {
         "exactCount": 60,
         "widthCount": 61
       },
       "safariStep10": {
         "exactCount": 61,
+        "widthCount": 61
+      },
+      "firefoxStep10": {
+        "exactCount": 52,
         "widthCount": 61
       },
       "notes": "second Thai canary stays healthy"
@@ -366,12 +508,28 @@
         ],
         "mismatches": []
       },
+      "firefoxAnchors": {
+        "exactWidths": [
+          600,
+          800
+        ],
+        "mismatches": [
+          {
+            "width": 300,
+            "diffPx": 32
+          }
+        ]
+      },
       "chromeStep10": {
         "exactCount": 61,
         "widthCount": 61
       },
       "safariStep10": {
         "exactCount": 61,
+        "widthCount": 61
+      },
+      "firefoxStep10": {
+        "exactCount": 58,
         "widthCount": 61
       },
       "notes": "step10 sweep is fully exact on this machine"
@@ -396,15 +554,31 @@
         ],
         "mismatches": []
       },
+      "firefoxAnchors": {
+        "exactWidths": [
+          600,
+          800
+        ],
+        "mismatches": [
+          {
+            "width": 300,
+            "diffPx": 64
+          }
+        ]
+      },
       "chromeStep10": {
-        "exactCount": 56,
+        "exactCount": 61,
         "widthCount": 61
       },
       "safariStep10": {
-        "exactCount": 59,
+        "exactCount": 58,
         "widthCount": 61
       },
-      "notes": "real residual Myanmar canary; quote/follower and phrase-break classes remain"
+      "firefoxStep10": {
+        "exactCount": 48,
+        "widthCount": 61
+      },
+      "notes": "real Myanmar canary; exact in Chrome with three positive one-line Safari misses on this machine"
     },
     {
       "id": "my-bad-deeds-return-to-you-teacher",
@@ -426,15 +600,27 @@
         ],
         "mismatches": []
       },
+      "firefoxAnchors": {
+        "exactWidths": [
+          300,
+          600,
+          800
+        ],
+        "mismatches": []
+      },
       "chromeStep10": {
-        "exactCount": 57,
+        "exactCount": 61,
         "widthCount": 61
       },
       "safariStep10": {
         "exactCount": 59,
         "widthCount": 61
       },
-      "notes": "healthier than the first Myanmar text, but still shows the same broad quote+follower class in Chrome"
+      "firefoxStep10": {
+        "exactCount": 56,
+        "widthCount": 61
+      },
+      "notes": "second Myanmar canary; exact in Chrome with two positive one-line Safari misses on this machine"
     },
     {
       "id": "ur-chughd",
@@ -442,37 +628,41 @@
       "language": "ur",
       "chromeAnchors": {
         "exactWidths": [
+          300,
           600,
           800
         ],
-        "mismatches": [
-          {
-            "width": 300,
-            "diffPx": -76
-          }
-        ]
+        "mismatches": []
       },
       "safariAnchors": {
         "exactWidths": [
+          300,
           600,
           800
         ],
-        "mismatches": [
-          {
-            "width": 300,
-            "diffPx": -76
-          }
-        ]
+        "mismatches": []
+      },
+      "firefoxAnchors": {
+        "exactWidths": [
+          300,
+          600,
+          800
+        ],
+        "mismatches": []
       },
       "chromeStep10": {
-        "exactCount": 31,
+        "exactCount": 57,
         "widthCount": 61
       },
       "safariStep10": {
-        "exactCount": 31,
+        "exactCount": 57,
         "widthCount": 61
       },
-      "notes": "real Nastaliq/Naskh canary; broad negative field at narrow widths and local shaping/context drift"
+      "firefoxStep10": {
+        "exactCount": 57,
+        "widthCount": 61
+      },
+      "notes": "font-sensitive Nastaliq/Naskh canary; anchors are exact with four shared positive one-line misses"
     },
     {
       "id": "hi-eidgah",
@@ -494,12 +684,28 @@
         ],
         "mismatches": []
       },
+      "firefoxAnchors": {
+        "exactWidths": [
+          600,
+          800
+        ],
+        "mismatches": [
+          {
+            "width": 300,
+            "diffPx": -32
+          }
+        ]
+      },
       "chromeStep10": {
         "exactCount": 61,
         "widthCount": 61
       },
       "safariStep10": {
         "exactCount": 61,
+        "widthCount": 61
+      },
+      "firefoxStep10": {
+        "exactCount": 54,
         "widthCount": 61
       },
       "notes": "Hindi step10 sweep is clean"
@@ -524,15 +730,27 @@
         ],
         "mismatches": []
       },
+      "firefoxAnchors": {
+        "exactWidths": [
+          300,
+          600,
+          800
+        ],
+        "mismatches": []
+      },
       "chromeStep10": {
-        "exactCount": 61,
+        "exactCount": 60,
         "widthCount": 61
       },
       "safariStep10": {
+        "exactCount": 60,
+        "widthCount": 61
+      },
+      "firefoxStep10": {
         "exactCount": 61,
         "widthCount": 61
       },
-      "notes": "Arabic step10 sweep is clean; fine sweep still has a small positive one-line field"
+      "notes": "Arabic step10 sweep has one shared positive one-line miss; fine sweep still has a small positive field"
     },
     {
       "id": "ar-al-bukhala",
@@ -554,11 +772,23 @@
         ],
         "mismatches": []
       },
+      "firefoxAnchors": {
+        "exactWidths": [
+          300,
+          600,
+          800
+        ],
+        "mismatches": []
+      },
       "chromeStep10": {
         "exactCount": 61,
         "widthCount": 61
       },
       "safariStep10": {
+        "exactCount": 61,
+        "widthCount": 61
+      },
+      "firefoxStep10": {
         "exactCount": 61,
         "widthCount": 61
       },
@@ -584,11 +814,23 @@
         ],
         "mismatches": []
       },
+      "firefoxAnchors": {
+        "exactWidths": [
+          300,
+          600,
+          800
+        ],
+        "mismatches": []
+      },
       "chromeStep10": {
         "exactCount": 61,
         "widthCount": 61
       },
       "safariStep10": {
+        "exactCount": 61,
+        "widthCount": 61
+      },
+      "firefoxStep10": {
         "exactCount": 61,
         "widthCount": 61
       },

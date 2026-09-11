@@ -15,7 +15,6 @@ import {
   SUFFIXES,
 } from './justification-comparison.data.ts'
 
-const HUGE_BADNESS = 1e8
 const SOFT_HYPHEN = '\u00AD'
 const SHORT_LINE_RATIO = 0.6
 const RIVER_THRESHOLD = 1.5
@@ -29,8 +28,7 @@ export type DemoControls = {
 }
 
 export type DemoResources = {
-  basePreparedParagraphs: PreparedTextWithSegments[]
-  hyphenatedPreparedParagraphs: PreparedTextWithSegments[]
+  paragraphs: PreparedParagraph[]
   normalSpaceWidth: number
   hyphenWidth: number
 }
@@ -96,6 +94,14 @@ export type RiverIndicator = {
 type BreakCandidate = {
   segIndex: number
   kind: BreakCandidateKind
+  wordWidthBefore: number
+  spacesBefore: number
+}
+
+type PreparedParagraph = {
+  plain: PreparedTextWithSegments
+  hyphenated: PreparedTextWithSegments
+  candidates: BreakCandidate[]
 }
 
 type LineStats = {
@@ -112,8 +118,14 @@ export function createDemoResources(): DemoResources {
   measureCtx.font = FONT
 
   return {
-    basePreparedParagraphs: PARAGRAPHS.map(paragraph => prepareWithSegments(paragraph, FONT)),
-    hyphenatedPreparedParagraphs: PARAGRAPHS.map(paragraph => prepareWithSegments(hyphenateParagraphText(paragraph), FONT)),
+    paragraphs: PARAGRAPHS.map(text => {
+      const hyphenated = prepareWithSegments(hyphenateParagraphText(text), FONT)
+      return {
+        plain: prepareWithSegments(text, FONT),
+        hyphenated,
+        candidates: buildBreakCandidates(hyphenated),
+      }
+    }),
     normalSpaceWidth: measureCtx.measureText(' ').width,
     hyphenWidth: measureCtx.measureText('-').width,
   }
@@ -122,9 +134,14 @@ export function createDemoResources(): DemoResources {
 export function buildDemoFrame(resources: DemoResources, controls: DemoControls): DemoFrame {
   const innerWidth = controls.colWidth - PAD * 2
 
-  const cssParagraphs = layoutParagraphsGreedy(resources.basePreparedParagraphs, innerWidth, resources.hyphenWidth)
-  const hyphenParagraphs = layoutParagraphsGreedy(resources.hyphenatedPreparedParagraphs, innerWidth, resources.hyphenWidth)
-  const optimalParagraphs = layoutParagraphsOptimal(resources.hyphenatedPreparedParagraphs, innerWidth, resources)
+  const cssParagraphs: MeasuredLine[][] = []
+  const hyphenParagraphs: MeasuredLine[][] = []
+  const optimalParagraphs: MeasuredLine[][] = []
+  for (const paragraph of resources.paragraphs) {
+    cssParagraphs.push(layoutParagraphGreedy(paragraph.plain, innerWidth, resources.hyphenWidth))
+    hyphenParagraphs.push(layoutParagraphGreedy(paragraph.hyphenated, innerWidth, resources.hyphenWidth))
+    optimalParagraphs.push(layoutParagraphOptimal(paragraph, innerWidth, resources))
+  }
 
   return {
     controls,
@@ -200,18 +217,6 @@ function hyphenateWord(word: string): string[] {
   return [word]
 }
 
-function layoutParagraphsGreedy(
-  preparedParagraphs: PreparedTextWithSegments[],
-  maxWidth: number,
-  hyphenWidth: number,
-): MeasuredLine[][] {
-  const paragraphs: MeasuredLine[][] = []
-  for (let index = 0; index < preparedParagraphs.length; index++) {
-    paragraphs.push(layoutParagraphGreedy(preparedParagraphs[index]!, maxWidth, hyphenWidth))
-  }
-  return paragraphs
-}
-
 function layoutParagraphGreedy(
   prepared: PreparedTextWithSegments,
   maxWidth: number,
@@ -262,41 +267,37 @@ function buildMeasuredLineFromLayoutResult(
   return finalizeMeasuredLine(segments, maxWidth, ending, trailingMarker)
 }
 
-function layoutParagraphsOptimal(
-  preparedParagraphs: PreparedTextWithSegments[],
-  maxWidth: number,
-  resources: DemoResources,
-): MeasuredLine[][] {
-  const paragraphs: MeasuredLine[][] = []
-  for (let index = 0; index < preparedParagraphs.length; index++) {
-    paragraphs.push(layoutParagraphOptimal(preparedParagraphs[index]!, maxWidth, resources))
+function buildBreakCandidates(prepared: PreparedTextWithSegments): BreakCandidate[] {
+  const candidates: BreakCandidate[] = []
+  let wordWidthBefore = 0
+  let spacesBefore = 0
+  function push(segIndex: number, kind: BreakCandidateKind): void {
+    candidates.push({ segIndex, kind, wordWidthBefore, spacesBefore })
   }
-  return paragraphs
+  push(0, 'start')
+  for (let i = 0; i < prepared.segments.length; i++) {
+    const text = prepared.segments[i]!
+    if (text === SOFT_HYPHEN) {
+      if (i + 1 < prepared.segments.length) push(i + 1, 'soft-hyphen')
+    } else if (isSpaceText(text)) {
+      spacesBefore++
+      if (i + 1 < prepared.segments.length) push(i + 1, 'space')
+    } else {
+      wordWidthBefore += prepared.widths[i]!
+    }
+  }
+  push(prepared.segments.length, 'end')
+  return candidates
 }
 
 function layoutParagraphOptimal(
-  prepared: PreparedTextWithSegments,
+  paragraph: PreparedParagraph,
   maxWidth: number,
   resources: DemoResources,
 ): MeasuredLine[] {
-  const segments = prepared.segments
-  const widths = prepared.widths
-  const segmentCount = segments.length
-
-  if (segmentCount === 0) return []
-
-  const breakCandidates: BreakCandidate[] = [{ segIndex: 0, kind: 'start' }]
-  for (let segIndex = 0; segIndex < segmentCount; segIndex++) {
-    const text = segments[segIndex]!
-    if (text === SOFT_HYPHEN) {
-      if (segIndex + 1 < segmentCount) breakCandidates.push({ segIndex: segIndex + 1, kind: 'soft-hyphen' })
-      continue
-    }
-    if (isSpaceText(text) && segIndex + 1 < segmentCount) {
-      breakCandidates.push({ segIndex: segIndex + 1, kind: 'space' })
-    }
-  }
-  breakCandidates.push({ segIndex: segmentCount, kind: 'end' })
+  const prepared = paragraph.hyphenated
+  const breakCandidates = paragraph.candidates
+  if (prepared.segments.length === 0) return []
 
   const candidateCount = breakCandidates.length
   const dp: number[] = new Array(candidateCount).fill(Infinity)
@@ -307,10 +308,7 @@ function layoutParagraphOptimal(
     const isLastLine = breakCandidates[toCandidate]!.kind === 'end'
 
     for (let fromCandidate = toCandidate - 1; fromCandidate >= 0; fromCandidate--) {
-      if (dp[fromCandidate] === Infinity) continue
       const lineStats = getLineStatsFromBreakCandidates(
-        segments,
-        widths,
         breakCandidates,
         fromCandidate,
         toCandidate,
@@ -318,7 +316,11 @@ function layoutParagraphOptimal(
         resources.normalSpaceWidth,
       )
 
-      if (lineStats.naturalWidth > maxWidth * 2) break
+      // Wider candidate ranges only add content. Prune once even the allowed
+      // space compression cannot fit; the final line uses natural spaces.
+      const minimumSpace = resources.normalSpaceWidth * (isLastLine ? 1 : INFEASIBLE_SPACE_RATIO)
+      if (lineStats.wordWidth + lineStats.spaceCount * minimumSpace > maxWidth) break
+      if (dp[fromCandidate] === Infinity) continue
 
       const totalBadness = dp[fromCandidate]! + lineBadness(lineStats, maxWidth, resources.normalSpaceWidth, isLastLine)
       if (totalBadness < dp[toCandidate]!) {
@@ -331,10 +333,7 @@ function layoutParagraphOptimal(
   const breakIndices: number[] = []
   let current = candidateCount - 1
   while (current > 0) {
-    if (previous[current] === -1) {
-      current--
-      continue
-    }
+    if (previous[current] === -1) throw new Error('The demo paragraph has no feasible line-break path')
     breakIndices.push(current)
     current = previous[current]!
   }
@@ -352,46 +351,18 @@ function layoutParagraphOptimal(
 }
 
 function getLineStatsFromBreakCandidates(
-  segments: readonly string[],
-  widths: readonly number[],
   breakCandidates: readonly BreakCandidate[],
   fromCandidate: number,
   toCandidate: number,
   hyphenWidth: number,
   normalSpaceWidth: number,
 ): LineStats {
-  const from = breakCandidates[fromCandidate]!.segIndex
-  const to = breakCandidates[toCandidate]!.segIndex
-  const trailingMarker: TrailingMarker = breakCandidates[toCandidate]!.kind === 'soft-hyphen'
-    ? 'soft-hyphen'
-    : 'none'
-
-  let wordWidth = 0
-  let spaceCount = 0
-  for (let segIndex = from; segIndex < to; segIndex++) {
-    const text = segments[segIndex]!
-    if (text === SOFT_HYPHEN) continue
-    if (isSpaceText(text)) {
-      spaceCount++
-      continue
-    }
-    wordWidth += widths[segIndex]!
-  }
-
-  if (to > from && isSpaceText(segments[to - 1]!)) {
-    spaceCount--
-  }
-
-  if (trailingMarker === 'soft-hyphen') {
-    wordWidth += hyphenWidth
-  }
-
-  return {
-    wordWidth,
-    spaceCount,
-    naturalWidth: wordWidth + spaceCount * normalSpaceWidth,
-    trailingMarker,
-  }
+  const from = breakCandidates[fromCandidate]!
+  const to = breakCandidates[toCandidate]!
+  const trailingMarker: TrailingMarker = to.kind === 'soft-hyphen' ? 'soft-hyphen' : 'none'
+  const wordWidth = to.wordWidthBefore - from.wordWidthBefore + (trailingMarker === 'soft-hyphen' ? hyphenWidth : 0)
+  const spaceCount = to.spacesBefore - from.spacesBefore - (to.kind === 'space' ? 1 : 0)
+  return { wordWidth, spaceCount, naturalWidth: wordWidth + spaceCount * normalSpaceWidth, trailingMarker }
 }
 
 function lineBadness(
@@ -400,20 +371,18 @@ function lineBadness(
   normalSpaceWidth: number,
   isLastLine: boolean,
 ): number {
-  if (isLastLine) {
-    if (lineStats.wordWidth > maxWidth) return HUGE_BADNESS
-    return 0
-  }
-
-  if (lineStats.spaceCount <= 0) {
-    const slack = maxWidth - lineStats.wordWidth
-    if (slack < 0) return HUGE_BADNESS
+  // Feasibility and painting use the same spacing decision. In particular a
+  // ragged final line pays for its actual spaces, not just the word widths.
+  const spacing = getDisplaySpacing(lineStats, maxWidth, isLastLine ? 'paragraph-end' : 'wrap', normalSpaceWidth)
+  if (spacing.kind === 'overflow') return Infinity
+  if (spacing.kind === 'ragged') {
+    if (isLastLine) return 0
+    const slack = maxWidth - lineStats.naturalWidth
     return slack * slack * 10
   }
 
-  const justifiedSpace = (maxWidth - lineStats.wordWidth) / lineStats.spaceCount
-  if (justifiedSpace < 0) return HUGE_BADNESS
-  if (justifiedSpace < normalSpaceWidth * INFEASIBLE_SPACE_RATIO) return HUGE_BADNESS
+  const justifiedSpace = spacing.width
+  if (justifiedSpace < normalSpaceWidth * INFEASIBLE_SPACE_RATIO) return Infinity
 
   const ratio = (justifiedSpace - normalSpaceWidth) / normalSpaceWidth
   const absRatio = Math.abs(ratio)
@@ -563,7 +532,7 @@ function buildCanvasColumnFrame(
       positionedLines.push({
         ...line,
         y,
-        spacing: getDisplaySpacing(line, normalSpaceWidth),
+        spacing: getDisplaySpacing(line, line.maxWidth, line.ending, normalSpaceWidth),
       })
       y += LINE_HEIGHT
     }
@@ -580,12 +549,17 @@ function buildCanvasColumnFrame(
   }
 }
 
-function getDisplaySpacing(line: MeasuredLine, normalSpaceWidth: number): LineSpacing {
-  if (line.ending === 'paragraph-end') return { kind: 'ragged' }
-  if (line.naturalWidth < line.maxWidth * SHORT_LINE_RATIO) return { kind: 'ragged' }
-  if (line.spaceCount <= 0) return { kind: 'ragged' }
+function getDisplaySpacing(
+  line: LineStats,
+  maxWidth: number,
+  ending: LineEnding,
+  normalSpaceWidth: number,
+): LineSpacing {
+  if (ending === 'paragraph-end' || line.spaceCount <= 0 || line.naturalWidth < maxWidth * SHORT_LINE_RATIO) {
+    return line.naturalWidth <= maxWidth ? { kind: 'ragged' } : { kind: 'overflow' }
+  }
 
-  const rawJustifiedSpace = (line.maxWidth - line.wordWidth) / line.spaceCount
+  const rawJustifiedSpace = (maxWidth - line.wordWidth) / line.spaceCount
   if (rawJustifiedSpace < normalSpaceWidth * OVERFLOW_SPACE_RATIO) return { kind: 'overflow' }
 
   return {

@@ -1,18 +1,19 @@
 import { createServer as createHttpServer } from 'node:http'
-import { getAvailablePort } from './browser-automation.ts'
 
 export async function startPostedReportServer<T extends { requestId?: string }>(expectedRequestId: string): Promise<{
   endpoint: string
   waitForReport: (timeoutMs?: number | null) => Promise<T>
-  close: () => void
+  close: () => Promise<void>
 }> {
-  const port = await getAvailablePort()
   let resolveReport: ((report: T) => void) | null = null
   let rejectReport: ((error: Error) => void) | null = null
   const reportPromise = new Promise<T>((resolve, reject) => {
     resolveReport = resolve
     rejectReport = reject
   })
+  // A startup error may close this server before waitForReport is called.
+  // Callers still receive the rejection when they do await the report.
+  void reportPromise.catch(() => {})
 
   const server = createHttpServer((req, res) => {
     res.setHeader('access-control-allow-origin', '*')
@@ -23,7 +24,7 @@ export async function startPostedReportServer<T extends { requestId?: string }>(
       return
     }
 
-    if (req.method !== 'POST') {
+    if (req.method !== 'POST' || req.url !== '/report') {
       res.statusCode = 404
       res.end()
       return
@@ -37,10 +38,13 @@ export async function startPostedReportServer<T extends { requestId?: string }>(
     req.on('end', () => {
       try {
         const report = JSON.parse(body) as T
-        if (report.requestId === expectedRequestId) {
-          resolveReport?.(report)
+        if (report.requestId !== expectedRequestId) {
+          res.statusCode = 409
+          res.end('Unexpected report request')
+          return
         }
         res.statusCode = 204
+        res.once('finish', () => resolveReport?.(report))
         res.end()
       } catch (error) {
         res.statusCode = 400
@@ -51,11 +55,14 @@ export async function startPostedReportServer<T extends { requestId?: string }>(
 
   await new Promise<void>((resolve, reject) => {
     server.once('error', reject)
-    server.listen(port, '127.0.0.1', () => resolve())
+    server.listen(0, '127.0.0.1', () => resolve())
   })
+  const address = server.address()
+  if (address === null || typeof address === 'string') throw new Error('Report server has no TCP address')
+  let closePromise: Promise<void> | null = null
 
   return {
-    endpoint: `http://127.0.0.1:${port}/report`,
+    endpoint: `http://127.0.0.1:${address.port}/report`,
     async waitForReport(timeoutMs: number | null = 120_000): Promise<T> {
       if (timeoutMs === null) {
         return await reportPromise
@@ -78,8 +85,12 @@ export async function startPostedReportServer<T extends { requestId?: string }>(
       })
     },
     close() {
-      server.close()
-      rejectReport?.(new Error('Report server closed before report arrived'))
+      closePromise ??= new Promise<void>((resolve, reject) => {
+        rejectReport?.(new Error('Report server closed before report arrived'))
+        server.close(error => { if (error) reject(error); else resolve() })
+        server.closeAllConnections()
+      })
+      return closePromise
     },
   }
 }

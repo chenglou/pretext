@@ -1,46 +1,33 @@
-Current priorities:
+# Current Priorities
 
-1. Keep the canaries honest
+## 1. Engine Work
 
-- Mixed app text still has the extractor-sensitive `710px` soft-hyphen miss.
-- Chinese is still the clearest active CJK canary: Safari's step10 sweep is clean, while Chrome keeps a broader narrow-width positive field with real font sensitivity.
-- Myanmar and Urdu remain useful shaping/context canaries, but they are not the active tuning target right now.
+- The leading-ZWSP visible-text reproduction in #210/#211 remains open. Original paragraphs made only of ZWSP now retain one line; this does not cover ZWSP beside whitespace or hard breaks. Bounded entry measurements improve related Chrome and Firefox cases; Safari keeps the existing path. Preserving a leading ZWSP still loses the retained Arabic/soft-hyphen and continuation cases. Use the executed traces in [RESEARCH.md](RESEARCH.md) before broadening this policy: Chromium retains context when reshaping text; WebKit ends an overflowing letter's line before consuming the soft hyphen.
+- Use the separate `analyze()` and `measure()` benchmark rows when changing `prepare()`. Use the chunk-heavy rich-text rows when changing streaming APIs.
+- Before changing Safari prefix-width behavior, run the synthetic long breakable text case. Lower retained memory does not justify a meaningful `prepare()` regression.
+- Chinese is the most useful current CJK regression case. Until broader measurements show a rule that applies beyond those cases, treat strongly font- or shaping-sensitive differences in Chinese, Myanmar, and Urdu as limits of the current design.
+- Keep `layout()` simple and allocation-light. Performance work for rich text and manual line layout belongs in the range and cursor APIs.
 
-2. Next engine work
+## 2. Regression Coverage
 
-- Use the split `analyze()` / `measure()` benchmark rows to steer any remaining `prepare()` work, and use the chunk-heavy rich benchmark rows to steer `layoutNextLine()` work, instead of reopening generic profiling.
-- Use the synthetic long-breakable-run canary to steer any Safari prefix-width work; naive cache-space cleanups there can trade retained heap for meaningfully slower `prepare()`.
-- Expand mixed app text only when it adds a real product-shaped class, e.g. URL/query runs, mixed bidi with numbers, emoji ZWJ runs, or `NBSP` / `ZWSP` / `WJ` behavior.
-- Broaden canaries only when the source text is clean.
-- If we add another Southeast Asian canary, prefer a clean source text that broadens the class instead of another wrapped/legal/raw-source artifact.
-- Expand the sampled font matrix only where a canary still looks genuinely imperfect.
-- Treat strongly font-sensitive or shaping-sensitive misses as boundary-finding for the current architecture, not automatic invitations for another local glue rule.
-- Keep the hot `layout()` path simple and allocation-light while the rich path absorbs more userland layout needs.
-- If chunk-heavy manual layout keeps growing, consider a stateful streaming variant or a cursor-carried chunk hint so sequential `layoutNextLine()` flows can stay overall linear instead of paying a lookup per emitted line.
-- If arbitrary interior rich cursors become common, consider a compact `segmentIndex -> chunkIndex` side table, ideally only on rich prepared handles or only when `chunks.length > 1`.
+- Compare wrapping candidates with the shared [test inventory](tests/wrapping/README.md). Keep each lost success visible; aggregate improvements do not establish a replacement for main or an older worktree.
+- Keep mixed app text as the main app-like regression case. Add only real text patterns that the current corpus misses.
+- Add corpora only from clean source text. Expand the font matrix only around a case with a reproducible mismatch.
+- Prefer a new Southeast Asian source that broadens coverage over another wrapped legal or raw-source artifact.
 
-3. Demo work
+## 3. Demo Work
 
-- Keep the editorial demos as the dogfood path for the rich line APIs.
+- Keep the editorial demos as the first real consumers of the rich line APIs, so they continue to test the APIs in complete layouts.
 - Prefer `layoutNextLine()` / `walkLineRanges()` when a demo is really about streaming or obstacle-aware layout.
 - Add a new demo only if it exposes something the current editorial demos do not already cover.
 
-Not worth doing right now:
+## Open Design Questions
 
-- Do not chase universal exactness as the product claim.
-- Do not put measurement back in `layout()`.
-- Do not resurrect dirty corpora just to cover another language.
-- Do not overfit one-line misses in one browser/corpus without broader evidence.
-- Do not let browser-profile shims turn into a grab bag of ad hoc engine knobs.
-- Do not explode the public API with cache or engine knobs.
-
-Still-open design questions:
-
-- Whether line-fit tolerance should stay as a browser shim or move toward runtime calibration.
-- Whether `{ whiteSpace: 'pre-wrap' }` should grow beyond spaces / tabs / `\n`.
-- Whether strong real-world demand for `system-ui` would justify a narrow prepare-time DOM fallback.
-- Whether server canvas support should become an explicit supported backend.
-- Whether automatic hyphenation beyond manual soft hyphen is in scope.
-- Whether intrinsic sizing / logical width APIs are needed beyond fixed-width height prediction.
-- Whether bidi rendering concerns like selection and copy/paste belong here or stay out of scope.
-- Whether a separate optional slow verify path is worth having as a diagnostic mode, without contaminating `layout()`.
+- Should line-fit tolerance remain a browser-specific constant, or can it be calibrated at runtime without adding unstable behavior?
+- Should `{ whiteSpace: 'pre-wrap' }` support more than ordinary spaces, tabs, and `\n`?
+- Would real demand for `system-ui` justify a small DOM measurement during `prepare()` for the affected browser and font-size combinations?
+- Should server canvas become a supported measurement backend?
+- Is automatic hyphenation in scope beyond caller-provided soft hyphens?
+- Are more intrinsic or logical-width APIs needed beyond `measureNaturalWidth()` and fixed-width layout?
+- Should bidi selection and copy/paste behavior remain outside this package?
+- Is a slower diagnostic verification mode useful enough to support without changing `layout()`?

@@ -1,4 +1,5 @@
 import { type ChildProcess } from 'node:child_process'
+import type { BrowserEnvironmentReport } from '../shared/browser-environment.ts'
 import {
   acquireBrowserAutomationLock,
   createBrowserSession,
@@ -6,6 +7,7 @@ import {
   getAvailablePort,
   loadHashReport,
   type BrowserKind,
+  type BrowserSession,
 } from './browser-automation.ts'
 
 type CorpusMeta = {
@@ -28,25 +30,7 @@ type CorpusOverrideOptions = {
 type CorpusReport = {
   status: 'ready' | 'error'
   requestId?: string
-  environment?: {
-    userAgent: string
-    devicePixelRatio: number
-    viewport: {
-      innerWidth: number
-      innerHeight: number
-      outerWidth: number
-      outerHeight: number
-      visualViewportScale: number | null
-    }
-    screen: {
-      width: number
-      height: number
-      availWidth: number
-      availHeight: number
-      colorDepth: number
-      pixelDepth: number
-    }
-  }
+  environment?: BrowserEnvironmentReport
   corpusId?: string
   sliceStart?: number | null
   sliceEnd?: number | null
@@ -215,9 +199,9 @@ function printReport(report: CorpusReport): void {
     console.log(`  max line width drift: ${report.maxLineWidthDrift.toFixed(3)}px`)
   }
   if (report.environment !== undefined) {
-    const env = report.environment
+    const env = report.environment.end
     console.log(
-      `  env: dpr ${env.devicePixelRatio} | viewport ${env.viewport.innerWidth}x${env.viewport.innerHeight} | outer ${env.viewport.outerWidth}x${env.viewport.outerHeight} | scale ${env.viewport.visualViewportScale ?? '-'} | screen ${env.screen.width}x${env.screen.height}`,
+      `  env: dpr ${env.dpr} | viewport ${env.innerWidth}x${env.innerHeight} | outer ${env.outerWidth}x${env.outerHeight} | scale ${env.visualViewportScale ?? '-'} | screen ${env.screenWidth}x${env.screenHeight}`,
     )
   }
   if (report.probeHeight !== undefined || report.normalizedHeight !== undefined) {
@@ -304,10 +288,11 @@ if (meta === undefined) {
 }
 
 const lock = await acquireBrowserAutomationLock(browser)
-const session = createBrowserSession(browser)
+let session: BrowserSession | null = null
 const diagnose = hasFlag('diagnose')
 
 try {
+  session = createBrowserSession(browser, { foreground: false, headless: false })
   const port = await getAvailablePort(requestedPort === 0 ? null : requestedPort)
   const pageServer = await ensurePageServer(port, '/corpus', process.cwd())
   serverProcess = pageServer.process
@@ -332,7 +317,10 @@ try {
     }
   }
 } finally {
-  session.close()
-  serverProcess?.kill()
-  lock.release()
+  try {
+    await session?.close()
+  } finally {
+    serverProcess?.kill()
+    lock.release()
+  }
 }

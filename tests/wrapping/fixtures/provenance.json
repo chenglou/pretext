@@ -1,0 +1,2579 @@
+{
+  "sources": [
+    {
+      "path": "bounded-canvas-20260904/api/runs/api-control-restart-end-v1-seams-amiri-ltr/inputs.json",
+      "sha256": "19ad69698b1a7f92079fe568a17e8ac82c8b177bda915d5f7068c6b410fff784",
+      "disposition": "imported",
+      "inputRows": 2352,
+      "rows": 2352,
+      "defaults": {},
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/api/runs/api-control-restart-end-v1-seams-amiri-rtl/inputs.json",
+      "sha256": "19ad69698b1a7f92079fe568a17e8ac82c8b177bda915d5f7068c6b410fff784",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/api/runs/api-control-restart-end-v1-seams-amiri-ltr/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/api/runs/api-history-collision-v1/inputs.json",
+      "sha256": "6dc3f75cf307bd8f427ee836ada34950538deda7ff6cbc7f5cbae8508bed3a2a",
+      "disposition": "imported",
+      "inputRows": 96,
+      "rows": 96,
+      "defaults": {},
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/api/runs/api-negative-space-diagnostics-v1/inputs.json",
+      "sha256": "9a3a655723855a12cad11c1182921abfcd587362a3c2b5c2c62550aa96542ef4",
+      "disposition": "imported",
+      "inputRows": 162,
+      "rows": 162,
+      "defaults": {},
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/api/runs/api-negative-space-diagnostics-v2/inputs.json",
+      "sha256": "9a3a655723855a12cad11c1182921abfcd587362a3c2b5c2c62550aa96542ef4",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/api/runs/api-negative-space-diagnostics-v1/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/api/runs/api-physical-text-diagnostics-v1/inputs.json",
+      "sha256": "b72ccc495a21db1476fed66cc5204f058b53f06e46fb4de19db8fb6831d87e9f",
+      "disposition": "imported",
+      "inputRows": 54,
+      "rows": 54,
+      "defaults": {},
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/api/runs/api-physical-text-diagnostics-v2/inputs.json",
+      "sha256": "b72ccc495a21db1476fed66cc5204f058b53f06e46fb4de19db8fb6831d87e9f",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/api/runs/api-physical-text-diagnostics-v1/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/api/runs/api-source15-combined-ltr/inputs.json",
+      "sha256": "19ad69698b1a7f92079fe568a17e8ac82c8b177bda915d5f7068c6b410fff784",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/api/runs/api-control-restart-end-v1-seams-amiri-ltr/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/api/runs/api-source15-combined-rtl/inputs.json",
+      "sha256": "19ad69698b1a7f92079fe568a17e8ac82c8b177bda915d5f7068c6b410fff784",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/api/runs/api-control-restart-end-v1-seams-amiri-ltr/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/api/runs/api-space-context-v2/inputs.json",
+      "sha256": "9a3a655723855a12cad11c1182921abfcd587362a3c2b5c2c62550aa96542ef4",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/api/runs/api-negative-space-diagnostics-v1/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/api/runs/api-space-context-v3-falsifier-ltr/inputs.json",
+      "sha256": "93ae3bff3e9ca5a22157941a6dfa9cf9c3e92134867090b8b115dea21e5939c6",
+      "disposition": "imported",
+      "inputRows": 7140,
+      "rows": 7140,
+      "defaults": {},
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/api/runs/mark-measurement-v1/inputs.json",
+      "sha256": "824b47abe92f7bbd8e0e78d383ec7b17b26ac306bc61cb47b6de6fab4cd44ba2",
+      "disposition": "imported",
+      "inputRows": 36,
+      "rows": 36,
+      "defaults": {},
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/api/runs/restart-spacing-measurement-v1/inputs.json",
+      "sha256": "0c29c3afc11ad47757fad0a9c596df600b0d90f460c8415d2c4e340bb089a9a5",
+      "disposition": "imported",
+      "inputRows": 36,
+      "rows": 36,
+      "defaults": {},
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/api/runs/shy-candidate-v1-heldout44/inputs.json",
+      "sha256": "66c525b7225188ffb2f1c3478528b09b171af16dea0b8c6afee375beb9d589af",
+      "disposition": "imported",
+      "inputRows": 44,
+      "rows": 44,
+      "defaults": {},
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/api/runs/shy-candidate-v1-static-ltr/inputs.json",
+      "sha256": "db77b85b19f6f5cd9531af6079eafea7bcf8f7a19fff336691406043287b66e2",
+      "disposition": "imported",
+      "inputRows": 456,
+      "rows": 456,
+      "defaults": {},
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/api/runs/shy-candidate-v1-static-rtl/inputs.json",
+      "sha256": "db77b85b19f6f5cd9531af6079eafea7bcf8f7a19fff336691406043287b66e2",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/api/runs/shy-candidate-v1-static-ltr/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/api/runs/shy-candidate-v1-threshold-ltr/inputs.json",
+      "sha256": "051340d188c262b052be3f71b1ac12c6e8f5e663b55c2f329c5f5e6438dbe342",
+      "disposition": "imported",
+      "inputRows": 960,
+      "rows": 960,
+      "defaults": {},
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/api/runs/shy-candidate-v1-threshold-rtl/inputs.json",
+      "sha256": "051340d188c262b052be3f71b1ac12c6e8f5e663b55c2f329c5f5e6438dbe342",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/api/runs/shy-candidate-v1-threshold-ltr/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/api/runs/shy-candidate-v3-narrow-ltr/inputs.json",
+      "sha256": "557c6ae0bd7d701da963a22e0396a4d5711bd9dd49ebe15fd44070ef3cf987f9",
+      "disposition": "imported",
+      "inputRows": 84,
+      "rows": 84,
+      "defaults": {},
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/api/runs/shy-candidate-v3-narrow-rtl/inputs.json",
+      "sha256": "557c6ae0bd7d701da963a22e0396a4d5711bd9dd49ebe15fd44070ef3cf987f9",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/api/runs/shy-candidate-v3-narrow-ltr/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/api/runs/source4-language-absent-v1/inputs.json",
+      "sha256": "2aa8c81e70cad909eba14c166bd08b86366c827ea733944851976a302cfd9598",
+      "disposition": "imported",
+      "inputRows": 5,
+      "rows": 5,
+      "defaults": {},
+      "localePolicy": "prepareLocale"
+    },
+    {
+      "path": "bounded-canvas-20260904/api/runs/source4-language-en-v1/inputs.json",
+      "sha256": "7a36e836ddc626a25b29acccf1e6b3f5fb11a922207bf29f64100f719cf03f06",
+      "disposition": "imported",
+      "inputRows": 10,
+      "rows": 10,
+      "defaults": {},
+      "localePolicy": "prepareLocale"
+    },
+    {
+      "path": "bounded-canvas-20260904/api/runs/source4-language-my-v1/inputs.json",
+      "sha256": "8038176dc116b2b3e48a397eee41b59e56256fb53e24f197017c09acd11793a8",
+      "disposition": "imported",
+      "inputRows": 10,
+      "rows": 10,
+      "defaults": {},
+      "localePolicy": "prepareLocale"
+    },
+    {
+      "path": "bounded-canvas-20260904/api/runs/source4-language-zh-cn-v1/inputs.json",
+      "sha256": "50dc89dd8b1ade1b0696e647051d326bc0431bacd39b176a8ee7be163940fdb0",
+      "disposition": "imported",
+      "inputRows": 10,
+      "rows": 10,
+      "defaults": {},
+      "localePolicy": "prepareLocale"
+    },
+    {
+      "path": "bounded-canvas-20260904/api/runs/source7-language-absent-v1/inputs.json",
+      "sha256": "2aa8c81e70cad909eba14c166bd08b86366c827ea733944851976a302cfd9598",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/api/runs/source4-language-absent-v1/inputs.json",
+      "localePolicy": "prepareLocale"
+    },
+    {
+      "path": "bounded-canvas-20260904/api/runs/source7-language-en-v1/inputs.json",
+      "sha256": "7a36e836ddc626a25b29acccf1e6b3f5fb11a922207bf29f64100f719cf03f06",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/api/runs/source4-language-en-v1/inputs.json",
+      "localePolicy": "prepareLocale"
+    },
+    {
+      "path": "bounded-canvas-20260904/api/runs/source7-language-my-v1/inputs.json",
+      "sha256": "8038176dc116b2b3e48a397eee41b59e56256fb53e24f197017c09acd11793a8",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/api/runs/source4-language-my-v1/inputs.json",
+      "localePolicy": "prepareLocale"
+    },
+    {
+      "path": "bounded-canvas-20260904/api/runs/source7-language-zh-cn-v1/inputs.json",
+      "sha256": "50dc89dd8b1ade1b0696e647051d326bc0431bacd39b176a8ee7be163940fdb0",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/api/runs/source4-language-zh-cn-v1/inputs.json",
+      "localePolicy": "prepareLocale"
+    },
+    {
+      "path": "bounded-canvas-20260904/corpus-analysis/runs/myanmar-data-v3-native/inputs.json",
+      "sha256": "3122302b65ca1a28a8140e2b9b56b68e923c4eb5b9e16bf681e1bd16eb8f1f96",
+      "disposition": "imported",
+      "inputRows": 5,
+      "rows": 5,
+      "defaults": {},
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/corpus-analysis/runs/myanmar-language-v3/inputs.json",
+      "sha256": "dd7e0e1d5dd473c6fe3bf45915baf04b7635113a31bfc2cb03d9a432dc934658",
+      "disposition": "imported",
+      "inputRows": 30,
+      "rows": 30,
+      "defaults": {},
+      "localePolicy": "prepareLocale"
+    },
+    {
+      "path": "bounded-canvas-20260904/corpus-analysis/runs/myanmar-language-v5/inputs.json",
+      "sha256": "dd7e0e1d5dd473c6fe3bf45915baf04b7635113a31bfc2cb03d9a432dc934658",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/corpus-analysis/runs/myanmar-language-v3/inputs.json",
+      "localePolicy": "prepareLocale"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/api-admission-v1-historical/inputs.json",
+      "sha256": "87764293f4cb8333a3663471498c819bd2eea5b6cb64727e2cc76423e0da0277",
+      "disposition": "imported",
+      "inputRows": 7776,
+      "rows": 7776,
+      "defaults": {},
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/api-admission-v1-retained/inputs.json",
+      "sha256": "25f493d9790d71a16c4156dfc7079e17f12ba879cbd2c7ff82e06b8f8fafd382",
+      "disposition": "imported",
+      "inputRows": 46,
+      "rows": 46,
+      "defaults": {},
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/api-admission-v1-spaces-ltr/inputs.json",
+      "sha256": "93ae3bff3e9ca5a22157941a6dfa9cf9c3e92134867090b8b115dea21e5939c6",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/api/runs/api-space-context-v3-falsifier-ltr/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/api-admission-v1-spaces-rtl/inputs.json",
+      "sha256": "93ae3bff3e9ca5a22157941a6dfa9cf9c3e92134867090b8b115dea21e5939c6",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/api/runs/api-space-context-v3-falsifier-ltr/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/api-cjk-space-overflow-v2/inputs.json",
+      "sha256": "112430137a23e389049d7d46677fe2bdd423c3d425b5a5acad7943b19a902747",
+      "disposition": "imported",
+      "inputRows": 1152,
+      "rows": 1152,
+      "defaults": {},
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/api-context-controls-ltr-v1/inputs.json",
+      "sha256": "e8a70a27c9e32b7a076e43ee587d3769ea68d301a2bc472e02ac1defe44ab9d2",
+      "disposition": "imported",
+      "inputRows": 4374,
+      "rows": 4374,
+      "defaults": {},
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/api-context-controls-rtl-v1/inputs.json",
+      "sha256": "3c8eb1d8384e7c4361087afd8e9033a9b0536eba9a09c80504fe1c61f9e90976",
+      "disposition": "imported",
+      "inputRows": 4374,
+      "rows": 4374,
+      "defaults": {},
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/api-context-scope-ltr-v2/inputs.json",
+      "sha256": "a0f546c158b5c1ec2e7cc26e0b19687be9f34fdd8a6be33d041b975165b82a4a",
+      "disposition": "imported",
+      "inputRows": 11664,
+      "rows": 11664,
+      "defaults": {},
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/api-context-scope-ltr-v3/inputs.json",
+      "sha256": "a0f546c158b5c1ec2e7cc26e0b19687be9f34fdd8a6be33d041b975165b82a4a",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/runs/api-context-scope-ltr-v2/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/api-context-scope-rtl-v3/inputs.json",
+      "sha256": "2538f92644a64b444bf2af3d1f3b69134f4e1ed1c402424544e41d6e53f59c4c",
+      "disposition": "imported",
+      "inputRows": 11664,
+      "rows": 11664,
+      "defaults": {},
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/api-control-restart-end-v1-full/inputs.json",
+      "sha256": "87764293f4cb8333a3663471498c819bd2eea5b6cb64727e2cc76423e0da0277",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/runs/api-admission-v1-historical/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/api-control-restart-end-v1-seams-ltr/inputs.json",
+      "sha256": "19ad69698b1a7f92079fe568a17e8ac82c8b177bda915d5f7068c6b410fff784",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/api/runs/api-control-restart-end-v1-seams-amiri-ltr/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/api-control-restart-end-v1-seams-rtl/inputs.json",
+      "sha256": "19ad69698b1a7f92079fe568a17e8ac82c8b177bda915d5f7068c6b410fff784",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/api/runs/api-control-restart-end-v1-seams-amiri-ltr/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/api-control-restart-end-v1-small/inputs.json",
+      "sha256": "e28ab8214f50d2c291d212ab32d4461c04606c92f1ddfefc0d990b5566efe92f",
+      "disposition": "imported",
+      "inputRows": 1280,
+      "rows": 1280,
+      "defaults": {},
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/api-control-restart-end-v2-full/inputs.json",
+      "sha256": "87764293f4cb8333a3663471498c819bd2eea5b6cb64727e2cc76423e0da0277",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/runs/api-admission-v1-historical/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/api-control-restart-end-v2-small/inputs.json",
+      "sha256": "e28ab8214f50d2c291d212ab32d4461c04606c92f1ddfefc0d990b5566efe92f",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/runs/api-control-restart-end-v1-small/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/api-control-restart-only-v2-small-r2/inputs.json",
+      "sha256": "e28ab8214f50d2c291d212ab32d4461c04606c92f1ddfefc0d990b5566efe92f",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/runs/api-control-restart-end-v1-small/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/api-control-restart-prefix-v1/inputs.json",
+      "sha256": "cc41cbd3cad771e67e131a10fbdc93eb20011d48d17fa408dce5570952f3e428",
+      "disposition": "imported",
+      "inputRows": 2592,
+      "rows": 2592,
+      "defaults": {},
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/api-control-restart-spacing-v1-small/inputs.json",
+      "sha256": "5cd8e8e386ee9ee1edeea6d04c8d93fafb9d3850684e39be8641672dcbcfe65d",
+      "disposition": "imported",
+      "inputRows": 3840,
+      "rows": 3840,
+      "defaults": {},
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/api-control-restart-v1-full/inputs.json",
+      "sha256": "87764293f4cb8333a3663471498c819bd2eea5b6cb64727e2cc76423e0da0277",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/runs/api-admission-v1-historical/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/api-control-restart-v2-full/inputs.json",
+      "sha256": "87764293f4cb8333a3663471498c819bd2eea5b6cb64727e2cc76423e0da0277",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/runs/api-admission-v1-historical/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/api-control-source-views-v1/inputs.json",
+      "sha256": "cc41cbd3cad771e67e131a10fbdc93eb20011d48d17fa408dce5570952f3e428",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/runs/api-control-restart-prefix-v1/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/api-control-source-views-v2/inputs.json",
+      "sha256": "cc41cbd3cad771e67e131a10fbdc93eb20011d48d17fa408dce5570952f3e428",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/runs/api-control-restart-prefix-v1/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/api-end-v2-on-v11-retained-ltr/inputs.json",
+      "sha256": "25f493d9790d71a16c4156dfc7079e17f12ba879cbd2c7ff82e06b8f8fafd382",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/runs/api-admission-v1-retained/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/api-end-v2-on-v11-retained-rtl/inputs.json",
+      "sha256": "008bfd3105682fa4d4f0d4256ec83aa3032b241b8f9587e4f132e6356c633772",
+      "disposition": "imported",
+      "inputRows": 46,
+      "rows": 46,
+      "defaults": {},
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/api-hanging-tail-safari-v1/inputs.json",
+      "sha256": "1eb0530acf9f28e190234e5a530dda88ba8bd4328256a74d9a45d212f1f16c45",
+      "disposition": "imported",
+      "inputRows": 390,
+      "rows": 390,
+      "defaults": {},
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/api-integration-source3-retained-v1/inputs.json",
+      "sha256": "25f493d9790d71a16c4156dfc7079e17f12ba879cbd2c7ff82e06b8f8fafd382",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/runs/api-admission-v1-retained/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/api-integration-source4-retained-v1/inputs.json",
+      "sha256": "25f493d9790d71a16c4156dfc7079e17f12ba879cbd2c7ff82e06b8f8fafd382",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/runs/api-admission-v1-retained/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/api-integration-source6-retained-v1/inputs.json",
+      "sha256": "25f493d9790d71a16c4156dfc7079e17f12ba879cbd2c7ff82e06b8f8fafd382",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/runs/api-admission-v1-retained/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/api-integration-source7-retained-v1/inputs.json",
+      "sha256": "25f493d9790d71a16c4156dfc7079e17f12ba879cbd2c7ff82e06b8f8fafd382",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/runs/api-admission-v1-retained/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/api-physical-text-v1-historical/inputs.json",
+      "sha256": "87764293f4cb8333a3663471498c819bd2eea5b6cb64727e2cc76423e0da0277",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/runs/api-admission-v1-historical/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/api-physical-text-v2-historical/inputs.json",
+      "sha256": "87764293f4cb8333a3663471498c819bd2eea5b6cb64727e2cc76423e0da0277",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/runs/api-admission-v1-historical/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/api-physical-text-v3-historical/inputs.json",
+      "sha256": "87764293f4cb8333a3663471498c819bd2eea5b6cb64727e2cc76423e0da0277",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/runs/api-admission-v1-historical/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/api-retained-v1/inputs.json",
+      "sha256": "25f493d9790d71a16c4156dfc7079e17f12ba879cbd2c7ff82e06b8f8fafd382",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/runs/api-admission-v1-retained/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/api-shy-source-safari-ltr-v1/inputs.json",
+      "sha256": "db77b85b19f6f5cd9531af6079eafea7bcf8f7a19fff336691406043287b66e2",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/api/runs/shy-candidate-v1-static-ltr/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/api-shy-source-safari-rtl-v1/inputs.json",
+      "sha256": "db77b85b19f6f5cd9531af6079eafea7bcf8f7a19fff336691406043287b66e2",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/api/runs/shy-candidate-v1-static-ltr/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/api-shy-threshold-safari-ltr-v1/inputs.json",
+      "sha256": "051340d188c262b052be3f71b1ac12c6e8f5e663b55c2f329c5f5e6438dbe342",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/api/runs/shy-candidate-v1-threshold-ltr/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/api-shy-threshold-safari-rtl-v1/inputs.json",
+      "sha256": "051340d188c262b052be3f71b1ac12c6e8f5e663b55c2f329c5f5e6438dbe342",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/api/runs/shy-candidate-v1-threshold-ltr/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/api-source14-historical/inputs.json",
+      "sha256": "87764293f4cb8333a3663471498c819bd2eea5b6cb64727e2cc76423e0da0277",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/runs/api-admission-v1-historical/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/api-source15-historical/inputs.json",
+      "sha256": "87764293f4cb8333a3663471498c819bd2eea5b6cb64727e2cc76423e0da0277",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/runs/api-admission-v1-historical/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/api-source15-retained/inputs.json",
+      "sha256": "25f493d9790d71a16c4156dfc7079e17f12ba879cbd2c7ff82e06b8f8fafd382",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/runs/api-admission-v1-retained/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/api-source7-historical162-v1/inputs.json",
+      "sha256": "d7e8d57413edf5f5ce0cdf939dc9b612a0afb97d99923f3f1754580881360852",
+      "disposition": "imported",
+      "inputRows": 162,
+      "rows": 162,
+      "defaults": {},
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/api-source7-historical7776-v1/inputs.json",
+      "sha256": "87764293f4cb8333a3663471498c819bd2eea5b6cb64727e2cc76423e0da0277",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/runs/api-admission-v1-historical/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/api-source9-unicode-spaces-v1/inputs.json",
+      "sha256": "112430137a23e389049d7d46677fe2bdd423c3d425b5a5acad7943b19a902747",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/runs/api-cjk-space-overflow-v2/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/api-space-context-v2-falsifier-ltr/inputs.json",
+      "sha256": "d1b037617434336c95f0aeca9b24894075371bf82dfbe64fe56e98762de41c55",
+      "disposition": "imported",
+      "inputRows": 5880,
+      "rows": 5880,
+      "defaults": {},
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/api-space-context-v3-falsifier-rtl/inputs.json",
+      "sha256": "93ae3bff3e9ca5a22157941a6dfa9cf9c3e92134867090b8b115dea21e5939c6",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/api/runs/api-space-context-v3-falsifier-ltr/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/api-space-item-clamp-v1/inputs.json",
+      "sha256": "a529b26e85ff6b6b780eb7be39584a5be37c36d73e0c0cbc6a20a22a94b035a2",
+      "disposition": "imported",
+      "inputRows": 432,
+      "rows": 432,
+      "defaults": {},
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/api-spaced-prefix-rights-v1-small/inputs.json",
+      "sha256": "5cd8e8e386ee9ee1edeea6d04c8d93fafb9d3850684e39be8641672dcbcfe65d",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/runs/api-control-restart-spacing-v1-small/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/api-spaced-prefix-rights-v2-original162/inputs.json",
+      "sha256": "d7e8d57413edf5f5ce0cdf939dc9b612a0afb97d99923f3f1754580881360852",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/runs/api-source7-historical162-v1/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/api-spaced-prefix-rights-v2-small/inputs.json",
+      "sha256": "5cd8e8e386ee9ee1edeea6d04c8d93fafb9d3850684e39be8641672dcbcfe65d",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/runs/api-control-restart-spacing-v1-small/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/api-spaced-prefix-v1-small/inputs.json",
+      "sha256": "5cd8e8e386ee9ee1edeea6d04c8d93fafb9d3850684e39be8641672dcbcfe65d",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/runs/api-control-restart-spacing-v1-small/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/api-spacing-tail-prepared-v1/inputs.json",
+      "sha256": "a529b26e85ff6b6b780eb7be39584a5be37c36d73e0c0cbc6a20a22a94b035a2",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/runs/api-space-item-clamp-v1/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/api-tabs-producer-v3-ltr/inputs.json",
+      "sha256": "cd97ccf9a4f91d65f4929198f4e1cfb275d1ab10af94c0fa5843ccb6aef1a596",
+      "disposition": "imported",
+      "inputRows": 1056,
+      "rows": 1056,
+      "defaults": {},
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/api-tabs-producer-v3-rtl/inputs.json",
+      "sha256": "cd97ccf9a4f91d65f4929198f4e1cfb275d1ab10af94c0fa5843ccb6aef1a596",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/runs/api-tabs-producer-v3-ltr/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/api-terminal-fit-spacing-v1/inputs.json",
+      "sha256": "2ffaf3161e1e1e3ea5a56ad5b82918e82e87443d19b6fd35d3bf9077d1c21c03",
+      "disposition": "imported",
+      "inputRows": 1764,
+      "rows": 1764,
+      "defaults": {},
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/api-zero-rights-v1-full/inputs.json",
+      "sha256": "87764293f4cb8333a3663471498c819bd2eea5b6cb64727e2cc76423e0da0277",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/runs/api-admission-v1-historical/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/api-zero-rights-v1-targeted/inputs.json",
+      "sha256": "afd853f4c961dc94663faab79fc7a7b995548c7c7a525f338b7575f2c23fe3ef",
+      "disposition": "imported",
+      "inputRows": 171,
+      "rows": 171,
+      "defaults": {},
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/api-zero-rights-v2-full/inputs.json",
+      "sha256": "87764293f4cb8333a3663471498c819bd2eea5b6cb64727e2cc76423e0da0277",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/runs/api-admission-v1-historical/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/api-zero-source-fill-v1/inputs.json",
+      "sha256": "afd853f4c961dc94663faab79fc7a7b995548c7c7a525f338b7575f2c23fe3ef",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/runs/api-zero-rights-v1-targeted/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/api-zero-source-fill-v2/inputs.json",
+      "sha256": "afd853f4c961dc94663faab79fc7a7b995548c7c7a525f338b7575f2c23fe3ef",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/runs/api-zero-rights-v1-targeted/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/api-zero-source-fill-v2-full/inputs.json",
+      "sha256": "87764293f4cb8333a3663471498c819bd2eea5b6cb64727e2cc76423e0da0277",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/runs/api-admission-v1-historical/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/api-zero-tail-v1-full/inputs.json",
+      "sha256": "2f53b967ab92d49c4e296808bc0ea720f6ed0444c1f417eb8ce282fc7dcfb22f",
+      "disposition": "imported",
+      "inputRows": 8736,
+      "rows": 8736,
+      "defaults": {},
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/integration-hanging-tabs-chrome-v8/inputs.json",
+      "sha256": "d81af9c9f1a5a8e7bc53b4eb65a2ef145bed4ad23c0ddc47dcc831815a74dc37",
+      "disposition": "imported",
+      "inputRows": 390,
+      "rows": 390,
+      "defaults": {},
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/integration-retained-chrome-v3/inputs.json",
+      "sha256": "a3ec54aeb1e54a511cdcc67ff287bb9e98e1999d32dfdd651512b92bb682ef6e",
+      "disposition": "imported",
+      "inputRows": 46,
+      "rows": 46,
+      "defaults": {},
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/integration-retained-chrome-v8/inputs.json",
+      "sha256": "a3ec54aeb1e54a511cdcc67ff287bb9e98e1999d32dfdd651512b92bb682ef6e",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/runs/integration-retained-chrome-v3/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/integration-retained-firefox-v1/inputs.json",
+      "sha256": "b71c60345dabbf9f457bc4638cac90be1e41691390c5ee9361048c7784b9b120",
+      "disposition": "imported",
+      "inputRows": 45,
+      "rows": 45,
+      "defaults": {},
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/integration-retained-firefox-v2/inputs.json",
+      "sha256": "b71c60345dabbf9f457bc4638cac90be1e41691390c5ee9361048c7784b9b120",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/runs/integration-retained-firefox-v1/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/integration-unicode-spaces-chrome-v8/inputs.json",
+      "sha256": "112430137a23e389049d7d46677fe2bdd423c3d425b5a5acad7943b19a902747",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/runs/api-cjk-space-overflow-v2/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/measurement-anchor-retained-firefox-v4/inputs.json",
+      "sha256": "b71c60345dabbf9f457bc4638cac90be1e41691390c5ee9361048c7784b9b120",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/runs/integration-retained-firefox-v1/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/measurement-dictionary-retained-maintained-ltr-firefox-v1/inputs.json",
+      "sha256": "604453aa7b57cc9b74f61a5a4860b4d10bdb8cc19da69ee2308d5c9b02941f27",
+      "disposition": "imported",
+      "inputRows": 104,
+      "rows": 104,
+      "defaults": {},
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/measurement-dictionary-retained-maintained-rtl-firefox-v1/inputs.json",
+      "sha256": "604453aa7b57cc9b74f61a5a4860b4d10bdb8cc19da69ee2308d5c9b02941f27",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/runs/measurement-dictionary-retained-maintained-ltr-firefox-v1/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/measurement-dictionary-thai-firefox-v1/inputs.json",
+      "sha256": "89cedb0079c033471a6949bb8c08b47a413ac99803e439601a69831c1b3abd2e",
+      "disposition": "imported",
+      "inputRows": 3,
+      "rows": 3,
+      "defaults": {},
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/measurement-preserved-separator-probe-ltr-v1/inputs.json",
+      "sha256": "05be9a317f93791d016ea2eacbf6f342196f6585114cfd7837bab05783ae0583",
+      "disposition": "imported",
+      "inputRows": 4752,
+      "rows": 4752,
+      "defaults": {},
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/measurement-preserved-separator-probe-rtl-v1/inputs.json",
+      "sha256": "05be9a317f93791d016ea2eacbf6f342196f6585114cfd7837bab05783ae0583",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/runs/measurement-preserved-separator-probe-ltr-v1/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/measurement-reserve-historical16-firefox-v2/inputs.json",
+      "sha256": "6762e8b47ae87144af18b9ff3de3b35d39e7a28703c52f9a6d7c97cfd9263a99",
+      "disposition": "imported",
+      "inputRows": 16,
+      "rows": 16,
+      "defaults": {},
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/measurement-shy-gecko-candidate-ltr-v1/inputs.json",
+      "sha256": "4474bc221a9e6dd54fc737aaa539180c010204f686de2a0a6e30766baf3ccd3e",
+      "disposition": "imported",
+      "inputRows": 1416,
+      "rows": 1416,
+      "defaults": {},
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/measurement-shy-gecko-candidate-rtl-v1/inputs.json",
+      "sha256": "4474bc221a9e6dd54fc737aaa539180c010204f686de2a0a6e30766baf3ccd3e",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/runs/measurement-shy-gecko-candidate-ltr-v1/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/measurement-shy-source-baseline-ltr-v1/inputs.json",
+      "sha256": "db77b85b19f6f5cd9531af6079eafea7bcf8f7a19fff336691406043287b66e2",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/api/runs/shy-candidate-v1-static-ltr/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/measurement-shy-source-baseline-rtl-v1/inputs.json",
+      "sha256": "db77b85b19f6f5cd9531af6079eafea7bcf8f7a19fff336691406043287b66e2",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/api/runs/shy-candidate-v1-static-ltr/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/measurement-shy-threshold-baseline-ltr-v1/inputs.json",
+      "sha256": "051340d188c262b052be3f71b1ac12c6e8f5e663b55c2f329c5f5e6438dbe342",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/api/runs/shy-candidate-v1-threshold-ltr/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/measurement-shy-threshold-baseline-rtl-v1/inputs.json",
+      "sha256": "051340d188c262b052be3f71b1ac12c6e8f5e663b55c2f329c5f5e6438dbe342",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/api/runs/shy-candidate-v1-threshold-ltr/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/measurement-tabs-ltr-firefox-v2/inputs.json",
+      "sha256": "cd97ccf9a4f91d65f4929198f4e1cfb275d1ab10af94c0fa5843ccb6aef1a596",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/runs/api-tabs-producer-v3-ltr/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/measurement-tabs-rtl-firefox-v2/inputs.json",
+      "sha256": "cd97ccf9a4f91d65f4929198f4e1cfb275d1ab10af94c0fa5843ccb6aef1a596",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/runs/api-tabs-producer-v3-ltr/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/measurement-v14-retained-historical-firefox-v1/inputs.json",
+      "sha256": "bad589478723a071606723a1d24127528cf91a40feee5239693da59177b7aef9",
+      "disposition": "imported",
+      "inputRows": 61,
+      "rows": 61,
+      "defaults": {},
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/measurement-v15-retained-historical-firefox-v1/inputs.json",
+      "sha256": "bad589478723a071606723a1d24127528cf91a40feee5239693da59177b7aef9",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/runs/measurement-v14-retained-historical-firefox-v1/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/measurement-v15-thai-canonical-firefox-v1/inputs.json",
+      "sha256": "89cedb0079c033471a6949bb8c08b47a413ac99803e439601a69831c1b3abd2e",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/runs/measurement-dictionary-thai-firefox-v1/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/measurement-windows-historical16-firefox-v5/inputs.json",
+      "sha256": "6762e8b47ae87144af18b9ff3de3b35d39e7a28703c52f9a6d7c97cfd9263a99",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/runs/measurement-reserve-historical16-firefox-v2/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/measurement-windows-retained-firefox-v1/inputs.json",
+      "sha256": "b71c60345dabbf9f457bc4638cac90be1e41691390c5ee9361048c7784b9b120",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/runs/integration-retained-firefox-v1/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/measurement-windows-retained-firefox-v2/inputs.json",
+      "sha256": "b71c60345dabbf9f457bc4638cac90be1e41691390c5ee9361048c7784b9b120",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/runs/integration-retained-firefox-v1/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/measurement-windows-retained-firefox-v3/inputs.json",
+      "sha256": "b71c60345dabbf9f457bc4638cac90be1e41691390c5ee9361048c7784b9b120",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/runs/integration-retained-firefox-v1/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/measurement-windows-retained-firefox-v5/inputs.json",
+      "sha256": "b71c60345dabbf9f457bc4638cac90be1e41691390c5ee9361048c7784b9b120",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/runs/integration-retained-firefox-v1/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/policy-chrome-amiri-partial-ltr-v1/inputs.json",
+      "sha256": "4e955ec9b77036e4dcdf50efbeb7d11c4dfd3c8933b73dded727824c828049bd",
+      "disposition": "imported",
+      "inputRows": 72,
+      "rows": 72,
+      "defaults": {},
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/policy-chrome-amiri-script-ltr-v1/inputs.json",
+      "sha256": "e12fdaaa35342e5e9ed2e6323fd5a57c8ac1ed035d62399bcc536ce239ca5c1a",
+      "disposition": "imported",
+      "inputRows": 20,
+      "rows": 20,
+      "defaults": {},
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/policy-chrome-amiri-script-ltr-v2/inputs.json",
+      "sha256": "9a2bc18257f5b5d38d7bfb43b0cc9ab81067209254b9fe95dd724d9d4541f292",
+      "disposition": "imported",
+      "inputRows": 20,
+      "rows": 20,
+      "defaults": {},
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/policy-chrome-amiri-script-rtl-v1/inputs.json",
+      "sha256": "e12fdaaa35342e5e9ed2e6323fd5a57c8ac1ed035d62399bcc536ce239ca5c1a",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/runs/policy-chrome-amiri-script-ltr-v1/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/policy-chrome-amiri-script-rtl-v2/inputs.json",
+      "sha256": "9a2bc18257f5b5d38d7bfb43b0cc9ab81067209254b9fe95dd724d9d4541f292",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/runs/policy-chrome-amiri-script-ltr-v2/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/policy-chrome-amiri-stage-v1/inputs.json",
+      "sha256": "4251b6690494a36ba62f61f6d5c2b25f1ba081d9e3a8874d33ab8e1f8b32666d",
+      "disposition": "imported",
+      "inputRows": 12,
+      "rows": 12,
+      "defaults": {},
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/policy-chrome-context-order-ltr-v1/inputs.json",
+      "sha256": "9a2bc18257f5b5d38d7bfb43b0cc9ab81067209254b9fe95dd724d9d4541f292",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/runs/policy-chrome-amiri-script-ltr-v2/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/policy-cjk-space-overflow-chrome-v1/inputs.json",
+      "sha256": "112430137a23e389049d7d46677fe2bdd423c3d425b5a5acad7943b19a902747",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/runs/api-cjk-space-overflow-v2/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/policy-endpoint-reserve-combined-ltr-chrome-v1/inputs.json",
+      "sha256": "19ad69698b1a7f92079fe568a17e8ac82c8b177bda915d5f7068c6b410fff784",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/api/runs/api-control-restart-end-v1-seams-amiri-ltr/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/policy-endpoint-reserve-combined-rtl-chrome-v1/inputs.json",
+      "sha256": "19ad69698b1a7f92079fe568a17e8ac82c8b177bda915d5f7068c6b410fff784",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/api/runs/api-control-restart-end-v1-seams-amiri-ltr/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/policy-hanging-tail-chrome-v1/inputs.json",
+      "sha256": "d81af9c9f1a5a8e7bc53b4eb65a2ef145bed4ad23c0ddc47dcc831815a74dc37",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/runs/integration-hanging-tabs-chrome-v8/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/policy-hanging-zs-ltr-v1/inputs.json",
+      "sha256": "05be9a317f93791d016ea2eacbf6f342196f6585114cfd7837bab05783ae0583",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/runs/measurement-preserved-separator-probe-ltr-v1/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/policy-hanging-zs-rtl-v1/inputs.json",
+      "sha256": "05be9a317f93791d016ea2eacbf6f342196f6585114cfd7837bab05783ae0583",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/runs/measurement-preserved-separator-probe-ltr-v1/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/policy-ideographic-space-edges-ltr-v3/inputs.json",
+      "sha256": "89c9834888b108692a03138e67fa4f498839777cb808c746c370b1af7a0f4615",
+      "disposition": "imported",
+      "inputRows": 528,
+      "rows": 528,
+      "defaults": {},
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/policy-ideographic-space-edges-rtl-v3/inputs.json",
+      "sha256": "89c9834888b108692a03138e67fa4f498839777cb808c746c370b1af7a0f4615",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/runs/policy-ideographic-space-edges-ltr-v3/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/policy-ideographic-space-heldout-ltr-v1/inputs.json",
+      "sha256": "d418b8bbbcdcbbf9e2a3641dbb1039656491452a8b9d6947fee46a7a621ae289",
+      "disposition": "imported",
+      "inputRows": 7200,
+      "rows": 7200,
+      "defaults": {},
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/policy-ideographic-space-heldout-ltr-v3/inputs.json",
+      "sha256": "d418b8bbbcdcbbf9e2a3641dbb1039656491452a8b9d6947fee46a7a621ae289",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/runs/policy-ideographic-space-heldout-ltr-v1/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/policy-ideographic-space-heldout-rtl-v1/inputs.json",
+      "sha256": "d418b8bbbcdcbbf9e2a3641dbb1039656491452a8b9d6947fee46a7a621ae289",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/runs/policy-ideographic-space-heldout-ltr-v1/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/policy-ideographic-space-heldout-rtl-v3/inputs.json",
+      "sha256": "d418b8bbbcdcbbf9e2a3641dbb1039656491452a8b9d6947fee46a7a621ae289",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/runs/policy-ideographic-space-heldout-ltr-v1/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/policy-ideographic-space-initial-ltr-v1/inputs.json",
+      "sha256": "05be9a317f93791d016ea2eacbf6f342196f6585114cfd7837bab05783ae0583",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/runs/measurement-preserved-separator-probe-ltr-v1/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/policy-ideographic-space-initial-ltr-v3/inputs.json",
+      "sha256": "05be9a317f93791d016ea2eacbf6f342196f6585114cfd7837bab05783ae0583",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/runs/measurement-preserved-separator-probe-ltr-v1/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/policy-ideographic-space-initial-rtl-v1/inputs.json",
+      "sha256": "05be9a317f93791d016ea2eacbf6f342196f6585114cfd7837bab05783ae0583",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/runs/measurement-preserved-separator-probe-ltr-v1/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/policy-ideographic-space-initial-rtl-v3/inputs.json",
+      "sha256": "05be9a317f93791d016ea2eacbf6f342196f6585114cfd7837bab05783ae0583",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/runs/measurement-preserved-separator-probe-ltr-v1/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/policy-integration-v15-spacing-ltr-v1/inputs.json",
+      "sha256": "c07d840434e86bb4ca7a255784d75782f213688dcb20232652063591e641b2f9",
+      "disposition": "imported",
+      "inputRows": 11172,
+      "rows": 11172,
+      "defaults": {},
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/policy-integration-v15-spacing-rtl-v1/inputs.json",
+      "sha256": "c07d840434e86bb4ca7a255784d75782f213688dcb20232652063591e641b2f9",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/runs/policy-integration-v15-spacing-ltr-v1/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/policy-integration-v15-union-ltr-v1/inputs.json",
+      "sha256": "e5b381cf63dde093b30817d2d8d04aebdbb1638c35a4df22adb113a841763b92",
+      "disposition": "imported",
+      "inputRows": 5384,
+      "rows": 5384,
+      "defaults": {},
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/policy-integration-v15-union-rtl-v1/inputs.json",
+      "sha256": "83032b1c49b674400e233c400155ff04b11ec4990fdd4b9f1652d7ad95e4c4dd",
+      "disposition": "imported",
+      "inputRows": 2472,
+      "rows": 2472,
+      "defaults": {},
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/policy-partial-arabic-ltr-v1/inputs.json",
+      "sha256": "2e9a01588821b45be7ed4939410584b9123628b188407f3cdce25ee8ae7faf74",
+      "disposition": "imported",
+      "inputRows": 360,
+      "rows": 360,
+      "defaults": {},
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/policy-partial-arabic-proxy-ltr-v2/inputs.json",
+      "sha256": "0a1cd04b6bb3947ca844c98568355d00f16a400462cba15520c56293378e120a",
+      "disposition": "imported",
+      "inputRows": 90,
+      "rows": 90,
+      "defaults": {},
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/policy-partial-arabic-threshold-ltr-v3/inputs.json",
+      "sha256": "779f88577d72404a95aed3d1598c3eaf45a8d7f9a4270299ec995dbd354c3f6d",
+      "disposition": "imported",
+      "inputRows": 48,
+      "rows": 48,
+      "defaults": {},
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/policy-preserved-separator-probe-ltr-v1/inputs.json",
+      "sha256": "05be9a317f93791d016ea2eacbf6f342196f6585114cfd7837bab05783ae0583",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/runs/measurement-preserved-separator-probe-ltr-v1/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/policy-preserved-separator-probe-rtl-v1/inputs.json",
+      "sha256": "05be9a317f93791d016ea2eacbf6f342196f6585114cfd7837bab05783ae0583",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/runs/measurement-preserved-separator-probe-ltr-v1/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/policy-reserve-projection-combined-ltr-chrome-v1/inputs.json",
+      "sha256": "19ad69698b1a7f92079fe568a17e8ac82c8b177bda915d5f7068c6b410fff784",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/api/runs/api-control-restart-end-v1-seams-amiri-ltr/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/policy-reserve-projection-combined-rtl-chrome-v1/inputs.json",
+      "sha256": "19ad69698b1a7f92079fe568a17e8ac82c8b177bda915d5f7068c6b410fff784",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/api/runs/api-control-restart-end-v1-seams-amiri-ltr/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/policy-retained-v2/inputs.json",
+      "sha256": "a3ec54aeb1e54a511cdcc67ff287bb9e98e1999d32dfdd651512b92bb682ef6e",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/runs/integration-retained-chrome-v3/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/policy-retained-v4/inputs.json",
+      "sha256": "a3ec54aeb1e54a511cdcc67ff287bb9e98e1999d32dfdd651512b92bb682ef6e",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/runs/integration-retained-chrome-v3/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/policy-retained-v5/inputs.json",
+      "sha256": "a3ec54aeb1e54a511cdcc67ff287bb9e98e1999d32dfdd651512b92bb682ef6e",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/runs/integration-retained-chrome-v3/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/policy-retained-v6/inputs.json",
+      "sha256": "a3ec54aeb1e54a511cdcc67ff287bb9e98e1999d32dfdd651512b92bb682ef6e",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/runs/integration-retained-chrome-v3/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/policy-script-context-combined-ltr-v1/inputs.json",
+      "sha256": "19ad69698b1a7f92079fe568a17e8ac82c8b177bda915d5f7068c6b410fff784",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/api/runs/api-control-restart-end-v1-seams-amiri-ltr/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/policy-script-context-combined-rtl-v1/inputs.json",
+      "sha256": "19ad69698b1a7f92079fe568a17e8ac82c8b177bda915d5f7068c6b410fff784",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/api/runs/api-control-restart-end-v1-seams-amiri-ltr/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/policy-script-context-cost-v2/inputs.json",
+      "sha256": "2dfe97a1e7d78aba840e1ab2fce703a1772bcda4f8e1c75d6e745bd92c4b80d0",
+      "disposition": "imported",
+      "inputRows": 8,
+      "rows": 8,
+      "defaults": {},
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/policy-script-context-emergency-ltr-v2/inputs.json",
+      "sha256": "c751eaa71717deb586b6a4ed7c923a697d9fd36da933a4540532e1a1399c7e3b",
+      "disposition": "imported",
+      "inputRows": 2304,
+      "rows": 2304,
+      "defaults": {},
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/policy-script-context-emergency-ltr-v3/inputs.json",
+      "sha256": "c751eaa71717deb586b6a4ed7c923a697d9fd36da933a4540532e1a1399c7e3b",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/runs/policy-script-context-emergency-ltr-v2/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/policy-script-context-emergency-rtl-v2/inputs.json",
+      "sha256": "c751eaa71717deb586b6a4ed7c923a697d9fd36da933a4540532e1a1399c7e3b",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/runs/policy-script-context-emergency-ltr-v2/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/policy-script-context-final-ltr-v4/inputs.json",
+      "sha256": "e5b381cf63dde093b30817d2d8d04aebdbb1638c35a4df22adb113a841763b92",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/runs/policy-integration-v15-union-ltr-v1/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/policy-script-context-final-rtl-v4/inputs.json",
+      "sha256": "83032b1c49b674400e233c400155ff04b11ec4990fdd4b9f1652d7ad95e4c4dd",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/runs/policy-integration-v15-union-rtl-v1/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/policy-script-context-retained-v4/inputs.json",
+      "sha256": "a3ec54aeb1e54a511cdcc67ff287bb9e98e1999d32dfdd651512b92bb682ef6e",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/runs/integration-retained-chrome-v3/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/policy-script-context-stage-v1/inputs.json",
+      "sha256": "4251b6690494a36ba62f61f6d5c2b25f1ba081d9e3a8874d33ab8e1f8b32666d",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/runs/policy-chrome-amiri-stage-v1/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/policy-script-prefix-heldout-ltr-v1/inputs.json",
+      "sha256": "aca22d88a55dff0a833c9c778b0d135007a77006ce494a2f59046bc9acc31d05",
+      "disposition": "imported",
+      "inputRows": 576,
+      "rows": 576,
+      "defaults": {},
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/policy-script-prefix-heldout-rtl-v1/inputs.json",
+      "sha256": "aca22d88a55dff0a833c9c778b0d135007a77006ce494a2f59046bc9acc31d05",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/runs/policy-script-prefix-heldout-ltr-v1/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/policy-shy-focused-candidate-v3-ltr/inputs.json",
+      "sha256": "5accb9ff0ecfefc3c7ea456ba018586369724dd545d03029eae1ee3792b8ccd6",
+      "disposition": "imported",
+      "inputRows": 4224,
+      "rows": 4224,
+      "defaults": {},
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/policy-shy-heldout-candidate-v2-ltr/inputs.json",
+      "sha256": "edee91a9d9c7cd051e9e960af60587d3d011eb07ba4bc3c1a9dcd47b6a0dcda6",
+      "disposition": "imported",
+      "inputRows": 2808,
+      "rows": 2808,
+      "defaults": {},
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/policy-shy-source-baseline-ltr-v1/inputs.json",
+      "sha256": "db77b85b19f6f5cd9531af6079eafea7bcf8f7a19fff336691406043287b66e2",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/api/runs/shy-candidate-v1-static-ltr/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/policy-shy-source-candidate-v1-ltr/inputs.json",
+      "sha256": "db77b85b19f6f5cd9531af6079eafea7bcf8f7a19fff336691406043287b66e2",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/api/runs/shy-candidate-v1-static-ltr/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/policy-shy-threshold-baseline-ltr-v1/inputs.json",
+      "sha256": "051340d188c262b052be3f71b1ac12c6e8f5e663b55c2f329c5f5e6438dbe342",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/api/runs/shy-candidate-v1-threshold-ltr/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/policy-shy-threshold-candidate-v1-ltr/inputs.json",
+      "sha256": "051340d188c262b052be3f71b1ac12c6e8f5e663b55c2f329c5f5e6438dbe342",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/api/runs/shy-candidate-v1-threshold-ltr/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/policy-source10-combined-ltr-chrome-amiri-v1/inputs.json",
+      "sha256": "19ad69698b1a7f92079fe568a17e8ac82c8b177bda915d5f7068c6b410fff784",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/api/runs/api-control-restart-end-v1-seams-amiri-ltr/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/policy-source10-combined-ltr-chrome-v1/inputs.json",
+      "sha256": "19ad69698b1a7f92079fe568a17e8ac82c8b177bda915d5f7068c6b410fff784",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/api/runs/api-control-restart-end-v1-seams-amiri-ltr/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/policy-source10-combined-rtl-chrome-amiri-v1/inputs.json",
+      "sha256": "19ad69698b1a7f92079fe568a17e8ac82c8b177bda915d5f7068c6b410fff784",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/api/runs/api-control-restart-end-v1-seams-amiri-ltr/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/policy-source10-combined-rtl-chrome-v1/inputs.json",
+      "sha256": "19ad69698b1a7f92079fe568a17e8ac82c8b177bda915d5f7068c6b410fff784",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/api/runs/api-control-restart-end-v1-seams-amiri-ltr/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/policy-source10-retained-chrome-v1/inputs.json",
+      "sha256": "a3ec54aeb1e54a511cdcc67ff287bb9e98e1999d32dfdd651512b92bb682ef6e",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/runs/integration-retained-chrome-v3/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/policy-tab-producer-controls-chrome-v4/inputs.json",
+      "sha256": "d81af9c9f1a5a8e7bc53b4eb65a2ef145bed4ad23c0ddc47dcc831815a74dc37",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/runs/integration-hanging-tabs-chrome-v8/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/policy-tab-producer-ltr-chrome-amiri-v4/inputs.json",
+      "sha256": "2c55a7f4a1b8d1221f51f97d73e90035790bd3dfd2ae95626c2a0d3650143f1f",
+      "disposition": "imported",
+      "inputRows": 192,
+      "rows": 192,
+      "defaults": {},
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/policy-tab-producer-ltr-chrome-v3/inputs.json",
+      "sha256": "cd97ccf9a4f91d65f4929198f4e1cfb275d1ab10af94c0fa5843ccb6aef1a596",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/runs/api-tabs-producer-v3-ltr/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/policy-tab-producer-ltr-chrome-v4/inputs.json",
+      "sha256": "cd97ccf9a4f91d65f4929198f4e1cfb275d1ab10af94c0fa5843ccb6aef1a596",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/runs/api-tabs-producer-v3-ltr/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/policy-tab-producer-rtl-chrome-amiri-v4/inputs.json",
+      "sha256": "2c55a7f4a1b8d1221f51f97d73e90035790bd3dfd2ae95626c2a0d3650143f1f",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/runs/policy-tab-producer-ltr-chrome-amiri-v4/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/policy-tab-producer-rtl-chrome-v3/inputs.json",
+      "sha256": "cd97ccf9a4f91d65f4929198f4e1cfb275d1ab10af94c0fa5843ccb6aef1a596",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/runs/api-tabs-producer-v3-ltr/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/policy-tab-producer-rtl-chrome-v4/inputs.json",
+      "sha256": "cd97ccf9a4f91d65f4929198f4e1cfb275d1ab10af94c0fa5843ccb6aef1a596",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/runs/api-tabs-producer-v3-ltr/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/policy-unicode-spaces-chrome-v1/inputs.json",
+      "sha256": "112430137a23e389049d7d46677fe2bdd423c3d425b5a5acad7943b19a902747",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/runs/api-cjk-space-overflow-v2/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/policy-unicode-spaces-chrome-v2/inputs.json",
+      "sha256": "112430137a23e389049d7d46677fe2bdd423c3d425b5a5acad7943b19a902747",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/runs/api-cjk-space-overflow-v2/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/policy-unicode-spaces-chrome-v3/inputs.json",
+      "sha256": "112430137a23e389049d7d46677fe2bdd423c3d425b5a5acad7943b19a902747",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/runs/api-cjk-space-overflow-v2/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/policy-zero-tail-chrome-v1-fresh/inputs.json",
+      "sha256": "1e623130e0284dbfc12b2b999f3d196cec6b4cf4fe0fb83bd861c2a1ecc857df",
+      "disposition": "imported",
+      "inputRows": 960,
+      "rows": 960,
+      "defaults": {},
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/api/control-restart-end-v1/amiri-ltr-main-loss-inputs.json",
+      "sha256": "9ea129e41793be5ec8e28f467b0becff65aac758609f4eb4512ac954b9aea882",
+      "disposition": "imported",
+      "inputRows": 3,
+      "rows": 3,
+      "defaults": {},
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/api/control-restart-end-v2-v11/retained-rtl-inputs.json",
+      "sha256": "008bfd3105682fa4d4f0d4256ec83aa3032b241b8f9587e4f132e6356c633772",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/runs/api-end-v2-on-v11-retained-rtl/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/api/control-restart-only-v2/falsifier-inputs.json",
+      "sha256": "e28ab8214f50d2c291d212ab32d4461c04606c92f1ddfefc0d990b5566efe92f",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/runs/api-control-restart-end-v1-small/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/api/control-restart-only-v2/small-loss-inputs.json",
+      "sha256": "5ffc6caa87cdb742a4606f8adedb30f97188e81eb50f4b2b2746941984b7a5d9",
+      "disposition": "imported",
+      "inputRows": 89,
+      "rows": 89,
+      "defaults": {},
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/api/control-restart-spacing-v1/falsifier-inputs.json",
+      "sha256": "5cd8e8e386ee9ee1edeea6d04c8d93fafb9d3850684e39be8641672dcbcfe65d",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/runs/api-control-restart-spacing-v1-small/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/api/control-source-views-v1/loss-inputs.json",
+      "sha256": "b90f60b9ca68fabb86ee2362cc97c861fda3f17bd7c55025e87f41d8d2a4ca14",
+      "disposition": "imported",
+      "inputRows": 2,
+      "rows": 2,
+      "defaults": {},
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/api/control-source-views-v1/zero-spacing-inputs.json",
+      "sha256": "cc41cbd3cad771e67e131a10fbdc93eb20011d48d17fa408dce5570952f3e428",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/runs/api-control-restart-prefix-v1/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/api/hanging-tail-v1/inputs.json",
+      "sha256": "1eb0530acf9f28e190234e5a530dda88ba8bd4328256a74d9a45d212f1f16c45",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/runs/api-hanging-tail-safari-v1/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/api/hanging-tail-v2/inputs.json",
+      "sha256": "1eb0530acf9f28e190234e5a530dda88ba8bd4328256a74d9a45d212f1f16c45",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/runs/api-hanging-tail-safari-v1/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/api/history-collision-inputs.json",
+      "sha256": "6dc3f75cf307bd8f427ee836ada34950538deda7ff6cbc7f5cbae8508bed3a2a",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/api/runs/api-history-collision-v1/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/api/language-absent-inputs.json",
+      "sha256": "2aa8c81e70cad909eba14c166bd08b86366c827ea733944851976a302cfd9598",
+      "disposition": "imported",
+      "inputRows": 5,
+      "rows": 5,
+      "defaults": {},
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/api/language-en-inputs.json",
+      "sha256": "7a36e836ddc626a25b29acccf1e6b3f5fb11a922207bf29f64100f719cf03f06",
+      "disposition": "imported",
+      "inputRows": 10,
+      "rows": 10,
+      "defaults": {},
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/api/language-my-inputs.json",
+      "sha256": "8038176dc116b2b3e48a397eee41b59e56256fb53e24f197017c09acd11793a8",
+      "disposition": "imported",
+      "inputRows": 10,
+      "rows": 10,
+      "defaults": {},
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/api/language-zh-CN-inputs.json",
+      "sha256": "50dc89dd8b1ade1b0696e647051d326bc0431bacd39b176a8ee7be163940fdb0",
+      "disposition": "imported",
+      "inputRows": 10,
+      "rows": 10,
+      "defaults": {},
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/api/mark-measurement-harness/inputs.json",
+      "sha256": "824b47abe92f7bbd8e0e78d383ec7b17b26ac306bc61cb47b6de6fab4cd44ba2",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/api/runs/mark-measurement-v1/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/api/negative-space-inputs.json",
+      "sha256": "9a3a655723855a12cad11c1182921abfcd587362a3c2b5c2c62550aa96542ef4",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/api/runs/api-negative-space-diagnostics-v1/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/api/physical-text-diagnostics-inputs.json",
+      "sha256": "b72ccc495a21db1476fed66cc5204f058b53f06e46fb4de19db8fb6831d87e9f",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/api/runs/api-physical-text-diagnostics-v1/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/api/restart-spacing-harness/inputs.json",
+      "sha256": "824b47abe92f7bbd8e0e78d383ec7b17b26ac306bc61cb47b6de6fab4cd44ba2",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/api/runs/mark-measurement-v1/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/api/restart-spacing-inputs.json",
+      "sha256": "0c29c3afc11ad47757fad0a9c596df600b0d90f460c8415d2c4e340bb089a9a5",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/api/runs/restart-spacing-measurement-v1/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/api/rich-contract-safari/inputs.json",
+      "sha256": "5a9e420e6340fddef64a8aae707e5f2d88e543bf24c24b222c8a5efc39276ab5",
+      "disposition": "research-private",
+      "inputRows": 0,
+      "rows": 54,
+      "defaults": {},
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/api/rich-contract-safari/runs/rich-main-contract-v2/inputs.json",
+      "sha256": "5a9e420e6340fddef64a8aae707e5f2d88e543bf24c24b222c8a5efc39276ab5",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/api/rich-contract-safari/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/api/rich-contract-safari/runs/rich-main-contract-v2-fonts/inputs.json",
+      "sha256": "5a9e420e6340fddef64a8aae707e5f2d88e543bf24c24b222c8a5efc39276ab5",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/api/rich-contract-safari/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/api/rich-contract-safari/runs/rich-main-contract-v2-scalar/inputs.json",
+      "sha256": "5a9e420e6340fddef64a8aae707e5f2d88e543bf24c24b222c8a5efc39276ab5",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/api/rich-contract-safari/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/api/shy-source-safari-v1/candidate-v3-inputs.json",
+      "sha256": "557c6ae0bd7d701da963a22e0396a4d5711bd9dd49ebe15fd44070ef3cf987f9",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/api/runs/shy-candidate-v3-narrow-ltr/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/api/space-context-v2/falsifier-inputs.json",
+      "sha256": "d1b037617434336c95f0aeca9b24894075371bf82dfbe64fe56e98762de41c55",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/runs/api-space-context-v2-falsifier-ltr/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/api/space-context-v3/falsifier-inputs.json",
+      "sha256": "93ae3bff3e9ca5a22157941a6dfa9cf9c3e92134867090b8b115dea21e5939c6",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/api/runs/api-space-context-v3-falsifier-ltr/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/api/spaced-prefix-rights-v2/small-loss-inputs.json",
+      "sha256": "ea3e082b229017a7965db85c0351d58006f2d4a0e8ddfae0d502bfb81015979a",
+      "disposition": "imported",
+      "inputRows": 92,
+      "rows": 92,
+      "defaults": {},
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/api/spaced-prefix-v1/cap-inputs.json",
+      "sha256": "7c684e3315609a4b77ee1a2482675f7d7e9c8e7a4085b59d461264ec7cc6b85e",
+      "disposition": "imported",
+      "inputRows": 1080,
+      "rows": 1080,
+      "defaults": {},
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/api/spaced-prefix-v1/small-loss-inputs.json",
+      "sha256": "55e8f4da351c1c80f3c20ee53d3f6dfcb732370c04d546e5ebd8583d5d8830f2",
+      "disposition": "imported",
+      "inputRows": 96,
+      "rows": 96,
+      "defaults": {},
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/api/spacing-semantics/inputs.json",
+      "sha256": "2b06828e6546a6977090fff96412d673a44de55c4b12e85f379ed22fd787d42b",
+      "disposition": "imported",
+      "inputRows": 31,
+      "rows": 31,
+      "defaults": {},
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/api/spacing-semantics/provenance-inputs.json",
+      "sha256": "66c525b7225188ffb2f1c3478528b09b171af16dea0b8c6afee375beb9d589af",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/api/runs/shy-candidate-v1-heldout44/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/api/spacing-semantics/runs/provenance-v1/inputs.json",
+      "sha256": "66c525b7225188ffb2f1c3478528b09b171af16dea0b8c6afee375beb9d589af",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/api/runs/shy-candidate-v1-heldout44/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/api/spacing-semantics/runs/trace-v14-v15/inputs.json",
+      "sha256": "2b06828e6546a6977090fff96412d673a44de55c4b12e85f379ed22fd787d42b",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/api/spacing-semantics/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/api/spacing-tail-inputs.json",
+      "sha256": "a529b26e85ff6b6b780eb7be39584a5be37c36d73e0c0cbc6a20a22a94b035a2",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/runs/api-space-item-clamp-v1/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/api/terminal-fit-spacing-v1/inputs.json",
+      "sha256": "2ffaf3161e1e1e3ea5a56ad5b82918e82e87443d19b6fd35d3bf9077d1c21c03",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/runs/api-terminal-fit-spacing-v1/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/api/zero-rights-v1/loss-inputs.json",
+      "sha256": "affee87e04a0fa0b4f575d1f44ada0278d87bd69b5621a134977e0130419bc3d",
+      "disposition": "imported",
+      "inputRows": 13,
+      "rows": 13,
+      "defaults": {},
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/api/zero-source-fill-v1/inputs.json",
+      "sha256": "afd853f4c961dc94663faab79fc7a7b995548c7c7a525f338b7575f2c23fe3ef",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/runs/api-zero-rights-v1-targeted/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/api/zero-source-fill-v2/inputs.json",
+      "sha256": "afd853f4c961dc94663faab79fc7a7b995548c7c7a525f338b7575f2c23fe3ef",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/runs/api-zero-rights-v1-targeted/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/api/zero-tail-v1/inputs.json",
+      "sha256": "2f53b967ab92d49c4e296808bc0ea720f6ed0444c1f417eb8ce282fc7dcfb22f",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/runs/api-zero-tail-v1-full/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/combined-seams/inputs-v1.json",
+      "sha256": "19ad69698b1a7f92079fe568a17e8ac82c8b177bda915d5f7068c6b410fff784",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/api/runs/api-control-restart-end-v1-seams-amiri-ltr/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/comparison-audit-20260904/chrome/input-provenance-v1.json",
+      "sha256": "9ae87367f8027a1897b9ead8a28034b3299b4c4dddce118935155a5a2fecf7b7",
+      "disposition": "research-private",
+      "inputRows": 0,
+      "rows": 169,
+      "defaults": {},
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/comparison-audit-20260904/chrome/inputs-v1.json",
+      "sha256": "e8fe5b60d592bad618e1937b83833c5f3104c5eb5fb6819f24a66b3f6d58bd8f",
+      "disposition": "imported",
+      "inputRows": 169,
+      "rows": 169,
+      "defaults": {},
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/comparison-audit-20260904/chrome/runs/all-variants-ltr-v1/inputs.json",
+      "sha256": "e8fe5b60d592bad618e1937b83833c5f3104c5eb5fb6819f24a66b3f6d58bd8f",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/comparison-audit-20260904/chrome/inputs-v1.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/comparison-audit-20260904/firefox/inputs.json",
+      "sha256": "e6500e6e52bfed5304754ce9d57234d63b84f33a702284f67ed3a754a4857315",
+      "disposition": "imported",
+      "inputRows": 4718,
+      "rows": 4718,
+      "defaults": {},
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/comparison-audit-20260904/firefox/runs/firefox-comparison-ltr-v2/inputs.json",
+      "sha256": "e6500e6e52bfed5304754ce9d57234d63b84f33a702284f67ed3a754a4857315",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/comparison-audit-20260904/firefox/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/comparison-audit-20260904/firefox/runs/firefox-comparison-rtl-v2/inputs.json",
+      "sha256": "e6500e6e52bfed5304754ce9d57234d63b84f33a702284f67ed3a754a4857315",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/comparison-audit-20260904/firefox/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/comparison-audit-20260904/safari/inputs-v1.json",
+      "sha256": "2b845e58f3502dfd199d792e988a0983b60c7a9e9cd290a20a29106a53312fe2",
+      "disposition": "imported",
+      "inputRows": 1654,
+      "rows": 1654,
+      "defaults": {},
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/comparison-audit-20260904/safari/old-loss-base-inputs.json",
+      "sha256": "1f7eaf37e2cc01f2ac61dce62c9bc22dfa596448286a6efadfc9e10d3ee35b3b",
+      "disposition": "imported",
+      "inputRows": 10,
+      "rows": 10,
+      "defaults": {},
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/comparison-audit-20260904/safari/runs/comparison-six-ltr-system-v2/inputs.json",
+      "sha256": "2b845e58f3502dfd199d792e988a0983b60c7a9e9cd290a20a29106a53312fe2",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/comparison-audit-20260904/safari/inputs-v1.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/comparison-audit-20260904/safari/runs/comparison-six-ltr-v1/inputs.json",
+      "sha256": "2b845e58f3502dfd199d792e988a0983b60c7a9e9cd290a20a29106a53312fe2",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/comparison-audit-20260904/safari/inputs-v1.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/comparison-audit-20260904/safari/runs/comparison-six-rtl-system-v2/inputs.json",
+      "sha256": "2b845e58f3502dfd199d792e988a0983b60c7a9e9cd290a20a29106a53312fe2",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/comparison-audit-20260904/safari/inputs-v1.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/comparison-audit-20260904/safari/runs/old-loss-ancestors-v1/inputs.json",
+      "sha256": "1f7eaf37e2cc01f2ac61dce62c9bc22dfa596448286a6efadfc9e10d3ee35b3b",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/comparison-audit-20260904/safari/old-loss-base-inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/corpus-analysis/myanmar-inputs.json",
+      "sha256": "3122302b65ca1a28a8140e2b9b56b68e923c4eb5b9e16bf681e1bd16eb8f1f96",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/corpus-analysis/runs/myanmar-data-v3-native/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/corpus-analysis/myanmar-language-inputs.json",
+      "sha256": "dd7e0e1d5dd473c6fe3bf45915baf04b7635113a31bfc2cb03d9a432dc934658",
+      "disposition": "imported",
+      "inputRows": 30,
+      "rows": 30,
+      "defaults": {},
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/corpus-analysis/runs/myanmar-data-v3/inputs.json",
+      "sha256": "9e576308dfcf95ac09566c91683a8ea279da0c3e05a8aa68260f8b824d4944e3",
+      "disposition": "imported",
+      "inputRows": 5,
+      "rows": 5,
+      "defaults": {},
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/measurement/canonical-v15/thai-inputs.json",
+      "sha256": "89cedb0079c033471a6949bb8c08b47a413ac99803e439601a69831c1b3abd2e",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/runs/measurement-dictionary-thai-firefox-v1/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/measurement/combined-seams-inputs-v1.json",
+      "sha256": "19ad69698b1a7f92079fe568a17e8ac82c8b177bda915d5f7068c6b410fff784",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/api/runs/api-control-restart-end-v1-seams-amiri-ltr/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/measurement/control-ligature-inputs-v1.json",
+      "sha256": "82acd55924bf9330627b529016e485d02803ca881055079901a14b606aba8352",
+      "disposition": "imported",
+      "inputRows": 960,
+      "rows": 960,
+      "defaults": {},
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/measurement/control-spacing-inputs-v1.json",
+      "sha256": "ea9f38364c7626409a52c250c0eb32a769e88b2942138a796aa1e375a0c06fa3",
+      "disposition": "imported",
+      "inputRows": 4608,
+      "rows": 4608,
+      "defaults": {},
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/measurement/dictionary-retained-maintained-inputs-v1.json",
+      "sha256": "604453aa7b57cc9b74f61a5a4860b4d10bdb8cc19da69ee2308d5c9b02941f27",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/runs/measurement-dictionary-retained-maintained-ltr-firefox-v1/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/measurement/input-endpoint-cc-v7-replay.json",
+      "sha256": "ef84bdd22a0ebe4a11258f351eedcddcb2f894577accd54c819b3140559b97f1",
+      "disposition": "imported",
+      "inputRows": 16640,
+      "rows": 16640,
+      "defaults": {},
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/measurement/input-endpoint-dual-direction-v7-replay.json",
+      "sha256": "4bc933455d19e995c4b43e4728b561330a5387a8c614677ca6579601e31d3ee0",
+      "disposition": "imported",
+      "inputRows": 10688,
+      "rows": 10688,
+      "defaults": {},
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/measurement/input-endpoint-emoji-v7.json",
+      "sha256": "cbb3dc737c82139254101d11f6fb12062abe077ea90ac7ddf84a029dcbe13e9c",
+      "disposition": "imported",
+      "inputRows": 2568,
+      "rows": 2568,
+      "defaults": {},
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/measurement/input-endpoint-normalization-v7-replay.json",
+      "sha256": "929690e11be7e33b622c45ba6e1d79059874aba91ad8fa6a24617178f9e4335e",
+      "disposition": "imported",
+      "inputRows": 14976,
+      "rows": 14976,
+      "defaults": {},
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/measurement/input-endpoint-sufficient-domain-v7-replay.json",
+      "sha256": "8239c1270e09c278ceb531855c0c6784a5e47240a06a770b7665e564f2b74330",
+      "disposition": "imported",
+      "inputRows": 10378,
+      "rows": 10378,
+      "defaults": {},
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/measurement/input-nsm-endpoint-dual-direction-v7-replay.json",
+      "sha256": "c83f327bad706a45efb7bedbf00f55b11f1bc7c63cd9919d96008aa232f7ec61",
+      "disposition": "imported",
+      "inputRows": 200,
+      "rows": 200,
+      "defaults": {},
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/measurement/input-nsm-endpoint-sufficient-domain-v7-replay.json",
+      "sha256": "88e832bbb097376ced92207b3ca977e5e77ad2d31586c7caa5e8cbd4b6742a50",
+      "disposition": "imported",
+      "inputRows": 384,
+      "rows": 384,
+      "defaults": {},
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/measurement/input-scalar-v4-source-replay.json",
+      "sha256": "d1937e2404e0a57931abc86a0b60bc23839c33ba05a9178104aef540f1c3a295",
+      "disposition": "imported",
+      "inputRows": 7296,
+      "rows": 7296,
+      "defaults": {},
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/measurement/inputs.json",
+      "sha256": "f6be327600dc622f834541fccb7ec5f193719d99ff3103525985ee1fa4b64d7f",
+      "disposition": "research-private",
+      "inputRows": 0,
+      "rows": 6,
+      "defaults": {},
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/measurement/nsm-inputs.json",
+      "sha256": "d00d369f41ae1a6b28ff32d493f9ef68141015b65d02bb1a96cfdbdcf0dbe228",
+      "disposition": "research-private",
+      "inputRows": 0,
+      "rows": 2,
+      "defaults": {},
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/measurement/raw-cr-scope-inputs-v1.json",
+      "sha256": "4c694bf9ca33f97c1aa9f8dc3e91086433c14ba7b28a30c6dee17ec987a6b0d1",
+      "disposition": "imported",
+      "inputRows": 1500,
+      "rows": 1500,
+      "defaults": {},
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/measurement/shy-gecko-candidate-v1/inputs.json",
+      "sha256": "4474bc221a9e6dd54fc737aaa539180c010204f686de2a0a6e30766baf3ccd3e",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/runs/measurement-shy-gecko-candidate-ltr-v1/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/measurement/spaced-controls-inputs-v1.json",
+      "sha256": "d495fc59794a02f40c0b14125b3fd9843587571484ac84ddce869a50c4dbf8d8",
+      "disposition": "imported",
+      "inputRows": 7164,
+      "rows": 7164,
+      "defaults": {},
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/measurement/tab-progress-inputs.json",
+      "sha256": "94fc2b68c679c685a5f4c2cb67f2901250120841584dac2a2d5669c6787a2f5e",
+      "disposition": "imported",
+      "inputRows": 384,
+      "rows": 384,
+      "defaults": {},
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/measurement/tabs-font-inputs-v1.json",
+      "sha256": "cd97ccf9a4f91d65f4929198f4e1cfb275d1ab10af94c0fa5843ccb6aef1a596",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/runs/api-tabs-producer-v3-ltr/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/measurement/v13-raw-combined-inputs.json",
+      "sha256": "6b0f80d5973968eb979dbadbb2e8ef0f6944388b05517610863c47284dfe8ae7",
+      "disposition": "imported",
+      "inputRows": 11104,
+      "rows": 11104,
+      "defaults": {},
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/measurement/v14-retained-historical-inputs.json",
+      "sha256": "bad589478723a071606723a1d24127528cf91a40feee5239693da59177b7aef9",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/runs/measurement-v14-retained-historical-firefox-v1/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/measurement/window-raw-geometry-inputs.json",
+      "sha256": "bfbd5514aa684c67526f8d48e33a10432929c6ed6f31679fc8988ddef98122b1",
+      "disposition": "imported",
+      "inputRows": 8752,
+      "rows": 8752,
+      "defaults": {},
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/policy/amiri-tab-inputs-v1.json",
+      "sha256": "2c55a7f4a1b8d1221f51f97d73e90035790bd3dfd2ae95626c2a0d3650143f1f",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/runs/policy-tab-producer-ltr-chrome-amiri-v4/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/policy/chrome-amiri-stage-v1/inputs.json",
+      "sha256": "4251b6690494a36ba62f61f6d5c2b25f1ba081d9e3a8874d33ab8e1f8b32666d",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/runs/policy-chrome-amiri-stage-v1/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/policy/chrome-amiri-stage-v1/order-inputs-v1.json",
+      "sha256": "9a2bc18257f5b5d38d7bfb43b0cc9ab81067209254b9fe95dd724d9d4541f292",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/runs/policy-chrome-amiri-script-ltr-v2/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/policy/chrome-amiri-stage-v1/partial-context-inputs.json",
+      "sha256": "4e955ec9b77036e4dcdf50efbeb7d11c4dfd3c8933b73dded727824c828049bd",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/runs/policy-chrome-amiri-partial-ltr-v1/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/policy/chrome-amiri-stage-v1/script-inputs-v2.json",
+      "sha256": "9a2bc18257f5b5d38d7bfb43b0cc9ab81067209254b9fe95dd724d9d4541f292",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/runs/policy-chrome-amiri-script-ltr-v2/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/policy/chrome-amiri-stage-v1/script-inputs.json",
+      "sha256": "e12fdaaa35342e5e9ed2e6323fd5a57c8ac1ed035d62399bcc536ce239ca5c1a",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/runs/policy-chrome-amiri-script-ltr-v1/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/policy/hanging-zs-heldout-v1/inputs.json",
+      "sha256": "d418b8bbbcdcbbf9e2a3641dbb1039656491452a8b9d6947fee46a7a621ae289",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/runs/policy-ideographic-space-heldout-ltr-v1/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/policy/hanging-zs-v1/inputs.json",
+      "sha256": "05be9a317f93791d016ea2eacbf6f342196f6585114cfd7837bab05783ae0583",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/runs/measurement-preserved-separator-probe-ltr-v1/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/policy/partial-arabic-v1/inputs.json",
+      "sha256": "2e9a01588821b45be7ed4939410584b9123628b188407f3cdce25ee8ae7faf74",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/runs/policy-partial-arabic-ltr-v1/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/policy/partial-arabic-v1/proxy-inputs-v2.json",
+      "sha256": "0a1cd04b6bb3947ca844c98568355d00f16a400462cba15520c56293378e120a",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/runs/policy-partial-arabic-proxy-ltr-v2/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/policy/partial-arabic-v1/threshold-inputs-v3.json",
+      "sha256": "779f88577d72404a95aed3d1598c3eaf45a8d7f9a4270299ec995dbd354c3f6d",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/runs/policy-partial-arabic-threshold-ltr-v3/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/policy/script-context-v1/cost-inputs.json",
+      "sha256": "2dfe97a1e7d78aba840e1ab2fce703a1772bcda4f8e1c75d6e745bd92c4b80d0",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/runs/policy-script-context-cost-v2/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/policy/script-context-v2/cost-inputs.json",
+      "sha256": "2dfe97a1e7d78aba840e1ab2fce703a1772bcda4f8e1c75d6e745bd92c4b80d0",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/runs/policy-script-context-cost-v2/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/policy/script-context-v3/cost-inputs.json",
+      "sha256": "2dfe97a1e7d78aba840e1ab2fce703a1772bcda4f8e1c75d6e745bd92c4b80d0",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/runs/policy-script-context-cost-v2/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/policy/script-context-v4/cost-inputs.json",
+      "sha256": "2dfe97a1e7d78aba840e1ab2fce703a1772bcda4f8e1c75d6e745bd92c4b80d0",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/runs/policy-script-context-cost-v2/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/policy/script-context-v4/final-ltr-inputs.json",
+      "sha256": "e5b381cf63dde093b30817d2d8d04aebdbb1638c35a4df22adb113a841763b92",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/runs/policy-integration-v15-union-ltr-v1/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/policy/script-context-v4/final-rtl-inputs.json",
+      "sha256": "83032b1c49b674400e233c400155ff04b11ec4990fdd4b9f1652d7ad95e4c4dd",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/runs/policy-integration-v15-union-rtl-v1/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/policy/source-v15-qa/signed-spacing-inputs-v1.json",
+      "sha256": "c07d840434e86bb4ca7a255784d75782f213688dcb20232652063591e641b2f9",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/runs/policy-integration-v15-spacing-ltr-v1/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/policy/tab-hanging-inputs-v1.json",
+      "sha256": "d81af9c9f1a5a8e7bc53b4eb65a2ef145bed4ad23c0ddc47dcc831815a74dc37",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/runs/integration-hanging-tabs-chrome-v8/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/policy/unicode-space-inputs.json",
+      "sha256": "112430137a23e389049d7d46677fe2bdd423c3d425b5a5acad7943b19a902747",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/runs/api-cjk-space-overflow-v2/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/policy/zero-tail-chrome-v1/inputs.json",
+      "sha256": "1e623130e0284dbfc12b2b999f3d196cec6b4cf4fe0fb83bd861c2a1ecc857df",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/runs/policy-zero-tail-chrome-v1-fresh/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/api-control-restart-only-v2-small/inputs.json",
+      "sha256": "93bcc81f35ce15f40b0dcece730fbd3b8eb1215dc7d0d4e8255e88ddb241ebcf",
+      "disposition": "imported",
+      "inputRows": 1280,
+      "rows": 1280,
+      "defaults": {},
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/font-preflight-missing-amiri-v1/inputs.json",
+      "sha256": "19ad69698b1a7f92079fe568a17e8ac82c8b177bda915d5f7068c6b410fff784",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/api/runs/api-control-restart-end-v1-seams-amiri-ltr/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/runs/policy-zero-tail-chrome-v1/inputs.json",
+      "sha256": "1e623130e0284dbfc12b2b999f3d196cec6b4cf4fe0fb83bd861c2a1ecc857df",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/runs/policy-zero-tail-chrome-v1-fresh/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/spaces/ideographic-space-v3/source-edge-inputs.json",
+      "sha256": "89c9834888b108692a03138e67fa4f498839777cb808c746c370b1af7a0f4615",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/runs/policy-ideographic-space-edges-ltr-v3/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/spaces/shy-forced-source-v1/focused-union-inputs-v1.json",
+      "sha256": "5accb9ff0ecfefc3c7ea456ba018586369724dd545d03029eae1ee3792b8ccd6",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/runs/policy-shy-focused-candidate-v3-ltr/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/spaces/shy-forced-source-v1/heldout-inputs-v1.json",
+      "sha256": "edee91a9d9c7cd051e9e960af60587d3d011eb07ba4bc3c1a9dcd47b6a0dcda6",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/runs/policy-shy-heldout-candidate-v2-ltr/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/spaces/shy-forced-source-v1/inputs-v1.json",
+      "sha256": "db77b85b19f6f5cd9531af6079eafea7bcf8f7a19fff336691406043287b66e2",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/api/runs/shy-candidate-v1-static-ltr/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/spaces/shy-forced-source-v1/threshold-inputs-v1.json",
+      "sha256": "051340d188c262b052be3f71b1ac12c6e8f5e663b55c2f329c5f5e6438dbe342",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/api/runs/shy-candidate-v1-threshold-ltr/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/tabs/inputs-v1.json",
+      "sha256": "cd97ccf9a4f91d65f4929198f4e1cfb275d1ab10af94c0fa5843ccb6aef1a596",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/runs/api-tabs-producer-v3-ltr/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/historical-inputs/firefox-all.json",
+      "sha256": "c65932b4a36752c1efd66efc6026163d207016a41ec59f8484c938ea669043a9",
+      "disposition": "imported",
+      "inputRows": 3154,
+      "rows": 3154,
+      "defaults": {},
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/historical-inputs/firefox-original-regressions.json",
+      "sha256": "6762e8b47ae87144af18b9ff3de3b35d39e7a28703c52f9a6d7c97cfd9263a99",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/runs/measurement-reserve-historical16-firefox-v2/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/historical-inputs/manifest.json",
+      "sha256": "34f37750f21847c0c27107d864f2ad729af758dc76d7c9251ba73b0716f86ee0",
+      "disposition": "research-private",
+      "inputRows": 0,
+      "rows": 2,
+      "defaults": {},
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/historical-inputs/safari-all.json",
+      "sha256": "87764293f4cb8333a3663471498c819bd2eea5b6cb64727e2cc76423e0da0277",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/runs/api-admission-v1-historical/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "bounded-canvas-20260904/historical-inputs/safari-original-regressions.json",
+      "sha256": "d7e8d57413edf5f5ce0cdf939dc9b612a0afb97d99923f3f1754580881360852",
+      "disposition": "duplicate",
+      "of": "bounded-canvas-20260904/runs/api-source7-historical162-v1/inputs.json",
+      "localePolicy": "lang"
+    },
+    {
+      "path": "policy/retained-regressions.json",
+      "sha256": "3b78256f998a9990d219cf705e3a198b6abd54f5ec9c146135a7488931d8f844",
+      "disposition": "covered-by-bounded-retained-and-broad",
+      "inputRows": 122
+    },
+    {
+      "path": "policy-correctness/discretionary/chrome-tab-threshold-v1/report.json",
+      "sha256": "64ebbe840f5eaf2a1d57d2aac81a7941775f5c1774c5bba8ac7b565a7ba0f44e",
+      "disposition": "imported",
+      "inputRows": 4624,
+      "rows": 4624,
+      "defaults": {
+        "whiteSpace": "pre-wrap"
+      },
+      "localePolicy": "default"
+    },
+    {
+      "path": "policy-correctness/discretionary/chrome-shy-threshold-v2/report.json",
+      "sha256": "41db094f772ab86043831c074b60157d1efee5237964aa0b86914c799fd80a26",
+      "disposition": "imported",
+      "inputRows": 1224,
+      "rows": 1224,
+      "defaults": {},
+      "localePolicy": "default"
+    },
+    {
+      "path": "policy-correctness/measurement/tab-shy-v2/report.json",
+      "sha256": "a3538a4516140e12c9b0422dca51de7718ae0032e5f669a564599830ad37dd15",
+      "disposition": "imported",
+      "inputRows": 420,
+      "rows": 420,
+      "defaults": {},
+      "localePolicy": "default"
+    },
+    {
+      "path": "policy-correctness/measurement/emoji-context-matrix-firefox-v1/report.json",
+      "sha256": "51b16dd7b11b0641aac80b1c91106915a0212ebd1017e91f481916afaec61acf",
+      "disposition": "imported",
+      "inputRows": 3840,
+      "rows": 3840,
+      "defaults": {},
+      "localePolicy": "default"
+    },
+    {
+      "path": "policy-correctness/measurement/emoji-native-state-firefox-v1/report.json",
+      "sha256": "07b334dbbfd792436d2b2d55eb5365807f29bb59276bc818693b934f610e423c",
+      "disposition": "research-private",
+      "inputRows": 0,
+      "rows": 12,
+      "defaults": {},
+      "localePolicy": "default"
+    },
+    {
+      "path": "policy-correctness/chromium-script-spacing/item-graphemes-v1/report.json",
+      "sha256": "64b237e47688fbcc2fcf993a1c0e1dbbfb57462605f0113af72f1f40dd04d115",
+      "disposition": "imported",
+      "inputRows": 7209,
+      "rows": 7209,
+      "defaults": {},
+      "localePolicy": "default"
+    },
+    {
+      "path": "policy-correctness/chromium-script-spacing/fresh-context-v1/report.json",
+      "sha256": "71b90cc28916c4f56592e4ee44568c72b298dd8feec5fa959484442e9e37d261",
+      "disposition": "imported",
+      "inputRows": 1140,
+      "rows": 1140,
+      "defaults": {},
+      "localePolicy": "default"
+    },
+    {
+      "path": "policy-correctness/tabs/chrome-v4/report.json",
+      "sha256": "a5b8b4fa584a1a1a23979d1094399d6f162d67c47bace3df9b09b98633b04d63",
+      "disposition": "imported",
+      "inputRows": 936,
+      "rows": 936,
+      "defaults": {
+        "whiteSpace": "pre-wrap"
+      },
+      "localePolicy": "default"
+    },
+    {
+      "path": "policy-correctness/tabs/safari-v4/report.json",
+      "sha256": "68aadf10592e541dc3c7e1c756100f345d4a10f173feb5ac7e2d56d10b4ae5b8",
+      "disposition": "imported",
+      "inputRows": 936,
+      "rows": 936,
+      "defaults": {
+        "whiteSpace": "pre-wrap"
+      },
+      "localePolicy": "default"
+    },
+    {
+      "path": "policy-correctness/tabs/firefox-v4/report.json",
+      "sha256": "2c8e4d5b5efd59979dd10ecbcb26d123a949152a9fa6f32bbc9e25eba48e7f51",
+      "disposition": "imported",
+      "inputRows": 936,
+      "rows": 936,
+      "defaults": {
+        "whiteSpace": "pre-wrap"
+      },
+      "localePolicy": "default"
+    },
+    {
+      "path": "policy-correctness/measurement/paint-width-chrome-v2/report.json",
+      "sha256": "32e3253b7452a278f94fa48d83f8018be6fc4ee3ea957d4e07615f5e6ff82cf0",
+      "disposition": "research-private",
+      "inputRows": 0,
+      "rows": 360,
+      "defaults": {},
+      "localePolicy": "default"
+    },
+    {
+      "path": "policy-correctness/measurement/paint-width-safari-v2/report.json",
+      "sha256": "4e88ae6f98cea10dc74f2aa3a0beafc236d7eeef934d8e895e5cbd839300eb01",
+      "disposition": "research-private",
+      "inputRows": 0,
+      "rows": 360,
+      "defaults": {},
+      "localePolicy": "default"
+    },
+    {
+      "path": "source-context-next-20260904/webkit/item-cross-inputs-v1.json",
+      "sha256": "e531d2303bad577d1acfc181bdcf314f8c542b4797eb2c8f7e0d04c9f103b613",
+      "disposition": "imported",
+      "inputRows": 1242,
+      "rows": 1242,
+      "defaults": {},
+      "localePolicy": "default"
+    },
+    {
+      "path": "source-context-next-20260904/webkit/item-11238-inputs-v1.json",
+      "sha256": "ff1feac9b0d46688f6c7ec8c7f76c8e884889153360826722b755e3713e3b1e4",
+      "disposition": "imported",
+      "inputRows": 11238,
+      "rows": 11238,
+      "defaults": {},
+      "localePolicy": "default"
+    },
+    {
+      "path": "policy-iteration/final-oracle/safari-threshold-input-v2.json",
+      "sha256": "91679ea2304d8cdf201fc5a12b8c5bcbeff1bd3008aa8093f81a00b1b5cde503",
+      "disposition": "imported",
+      "inputRows": 5611,
+      "rows": 5611,
+      "defaults": {},
+      "localePolicy": "default"
+    },
+    {
+      "path": "source-context-next-20260904/firefox/domain-v4-challenge-inputs.json",
+      "sha256": "4c6fbcc2db4c372bb9686ac5c87e0f8fbf9cfdfed8296e9c2498acb7aac5a0fa",
+      "disposition": "research-private",
+      "inputRows": 0,
+      "rows": 0,
+      "defaults": {},
+      "localePolicy": "default"
+    },
+    {
+      "path": "exploration-20260904/original-family-native-v1/inputs.json",
+      "sha256": "8dad290728b4a5d68ddf2b425e35b25673e0ade7c69d6b42bac2f9660f57c05b",
+      "disposition": "imported",
+      "inputRows": 40,
+      "rows": 40,
+      "defaults": {},
+      "localePolicy": "lang"
+    }
+  ],
+  "unimported": [
+    {
+      "path": "bounded-canvas-20260904/api/rich-contract-safari/inputs.json",
+      "reason": "Rows lacking complete public browser inputs",
+      "imported": 0,
+      "rows": 54
+    },
+    {
+      "path": "bounded-canvas-20260904/comparison-audit-20260904/chrome/input-provenance-v1.json",
+      "reason": "Rows lacking complete public browser inputs",
+      "imported": 0,
+      "rows": 169
+    },
+    {
+      "path": "bounded-canvas-20260904/measurement/inputs.json",
+      "reason": "Rows lacking complete public browser inputs",
+      "imported": 0,
+      "rows": 6
+    },
+    {
+      "path": "bounded-canvas-20260904/measurement/nsm-inputs.json",
+      "reason": "Rows lacking complete public browser inputs",
+      "imported": 0,
+      "rows": 2
+    },
+    {
+      "path": "bounded-canvas-20260904/historical-inputs/manifest.json",
+      "reason": "Rows lacking complete public browser inputs",
+      "imported": 0,
+      "rows": 2
+    },
+    {
+      "path": "policy-correctness/measurement/emoji-native-state-firefox-v1/report.json",
+      "reason": "Rows lacking complete public browser inputs",
+      "imported": 0,
+      "rows": 12
+    },
+    {
+      "path": "policy-correctness/measurement/paint-width-chrome-v2/report.json",
+      "reason": "Rows lacking complete public browser inputs",
+      "imported": 0,
+      "rows": 360
+    },
+    {
+      "path": "policy-correctness/measurement/paint-width-safari-v2/report.json",
+      "reason": "Rows lacking complete public browser inputs",
+      "imported": 0,
+      "rows": 360
+    }
+  ],
+  "localePolicy": "Explicit prepareLocale is retained independently from native lang. Otherwise bounded ordinary harnesses align prepare locale to lang; archived item-cross suites keep their documented runtime default. Empty reset values map to the default locale."
+}

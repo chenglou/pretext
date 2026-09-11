@@ -15,7 +15,7 @@ import {
   walkRichInlineLineRanges,
   type PreparedRichInline,
 } from '../../src/rich-inline.ts'
-import { BASE_MESSAGE_SPECS, type MarkdownChatSeed } from './markdown-chat.data.ts'
+import { BASE_MESSAGE_SPECS } from './markdown-chat.data.ts'
 
 export const MIN_CHAT_WIDTH = 360
 export const DEFAULT_CHAT_WIDTH = 640
@@ -49,7 +49,7 @@ export const CODE_BLOCK_PADDING_X = 12
 export const CODE_BLOCK_PADDING_Y = 8
 const RULE_HEIGHT = 18
 const RAIL_OFFSET = 5
-const SANS_FAMILY = '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif'
+const SANS_FAMILY = 'Helvetica, Arial, sans-serif'
 const SERIF_FAMILY = '"Iowan Old Style", Georgia, "Times New Roman", serif'
 const MONO_FAMILY = '"SF Mono", ui-monospace, Menlo, Monaco, monospace'
 const INLINE_CODE_FONT = `600 12px ${MONO_FAMILY}`
@@ -111,7 +111,7 @@ type PreparedRuleBlock = PreparedBlockBase & {
 
 type PreparedBlock = PreparedInlineBlock | PreparedCodeBlock | PreparedRuleBlock
 
-export type PreparedChatTemplate = {
+export type PreparedChatMessage = {
   blocks: PreparedBlock[]
   role: 'assistant' | 'user'
 }
@@ -197,7 +197,7 @@ type RuleBlockLayout = {
 
 export type BlockLayout = InlineBlockLayout | CodeBlockLayout | RuleBlockLayout
 
-export type TemplateFrame = {
+export type MessageFrame = {
   blocks: BlockFrame[]
   bubbleHeight: number
   contentInsetX: number
@@ -209,8 +209,8 @@ export type TemplateFrame = {
 
 export type ChatMessageInstance = {
   bottom: number
-  prepared: PreparedChatTemplate
-  frame: TemplateFrame
+  prepared: PreparedChatMessage
+  frame: MessageFrame
   top: number
 }
 
@@ -228,15 +228,28 @@ const EMPTY_MARK_STATE: MarkState = {
   href: null,
 }
 
+function parseMarkdownHref(href: string | null | undefined): string | null {
+  if (href === undefined || href === null) return null
+  try {
+    const url = new URL(href)
+    return url.protocol === 'http:' || url.protocol === 'https:' ? url.href : null
+  } catch {
+    return null
+  }
+}
+
 const markerWidthCache = new Map<string, number>()
 
-export function createPreparedChatTemplates(
-  specs: readonly MarkdownChatSeed[] = BASE_MESSAGE_SPECS,
-): PreparedChatTemplate[] {
-  return specs.map(spec => ({
-    blocks: parseMarkdownBlocks(spec.markdown),
-    role: spec.role,
-  }))
+export function createPreparedChatMessages(): PreparedChatMessage[] {
+  const messages = new Array<PreparedChatMessage>(TOTAL_MESSAGE_COUNT)
+  for (let index = 0; index < messages.length; index++) {
+    const seed = BASE_MESSAGE_SPECS[index % BASE_MESSAGE_SPECS.length]!
+    messages[index] = {
+      blocks: parseMarkdownBlocks(seed.markdown),
+      role: seed.role,
+    }
+  }
+  return messages
 }
 
 export function getMaxChatWidth(viewportWidth: number): number {
@@ -244,33 +257,31 @@ export function getMaxChatWidth(viewportWidth: number): number {
 }
 
 export function buildConversationFrame(
-  templates: readonly PreparedChatTemplate[],
+  preparedMessages: readonly PreparedChatMessage[],
   chatWidth: number,
   occlusionBannerHeight: number = OCCLUSION_BANNER_HEIGHT,
 ): ConversationFrame {
-  const messageCount = TOTAL_MESSAGE_COUNT
   const laneWidth = Math.max(120, chatWidth - MESSAGE_SIDE_PADDING * 2)
   const userFrameWidth = Math.min(laneWidth, Math.max(240, Math.floor(chatWidth * BUBBLE_MAX_RATIO)))
   const assistantFrameWidth = laneWidth
-  const messages: ChatMessageInstance[] = new Array(messageCount)
+  const messages: ChatMessageInstance[] = new Array(preparedMessages.length)
   const chatTopPadding = occlusionBannerHeight + CHAT_TOP_PADDING_OFFSET
   const chatBottomPadding = occlusionBannerHeight + CHAT_BOTTOM_PADDING_OFFSET
 
   let y = chatTopPadding
-  for (let ordinal = 0; ordinal < messageCount; ordinal++) {
-    const templateIndex = ordinal % templates.length
-    const template = templates[templateIndex]!
-    const contentInsetX = template.role === 'assistant' ? 0 : BUBBLE_PADDING_X
-    const frameWidth = template.role === 'assistant' ? assistantFrameWidth : userFrameWidth
+  for (let ordinal = 0; ordinal < preparedMessages.length; ordinal++) {
+    const preparedMessage = preparedMessages[ordinal]!
+    const contentInsetX = preparedMessage.role === 'assistant' ? 0 : BUBBLE_PADDING_X
+    const frameWidth = preparedMessage.role === 'assistant' ? assistantFrameWidth : userFrameWidth
     const contentWidth = Math.max(120, frameWidth - contentInsetX * 2)
-    const messageFrame = layoutTemplateFrame(template, frameWidth, contentWidth, contentInsetX)
+    const messageFrame = layoutMessageFrame(preparedMessage, frameWidth, contentWidth, contentInsetX)
     const top = y
     const bottom = top + messageFrame.totalHeight
 
     messages[ordinal] = {
       bottom,
       frame: messageFrame,
-      prepared: template,
+      prepared: preparedMessage,
       top,
     }
     y = bottom
@@ -641,7 +652,7 @@ function collectInlinePieceLines(
         }
 
         case 'link': {
-          walk(token.tokens ?? [], { ...marks, href: token.href })
+          walk(token.tokens ?? [], { ...marks, href: parseMarkdownHref(token.href) })
           continue
         }
 
@@ -896,18 +907,18 @@ function stripSingleTrailingNewline(text: string): string {
   return text.endsWith('\n') ? text.slice(0, -1) : text
 }
 
-function layoutTemplateFrame(
-  template: PreparedChatTemplate,
+function layoutMessageFrame(
+  preparedMessage: PreparedChatMessage,
   maxFrameWidth: number,
   maxContentWidth: number,
   contentInsetX: number,
-): TemplateFrame {
+): MessageFrame {
   let y = BUBBLE_PADDING_Y
   const blocks: BlockFrame[] = []
   let usedContentWidth = 0
 
-  for (let index = 0; index < template.blocks.length; index++) {
-    const block = template.blocks[index]!
+  for (let index = 0; index < preparedMessage.blocks.length; index++) {
+    const block = preparedMessage.blocks[index]!
     y += block.marginTop
     const blockFrame = layoutBlockFrame(block, maxContentWidth, y)
     blocks.push(blockFrame)
@@ -916,7 +927,7 @@ function layoutTemplateFrame(
   }
 
   const bubbleHeight = y + BUBBLE_PADDING_Y
-  const frameWidth = template.role === 'assistant'
+  const frameWidth = preparedMessage.role === 'assistant'
     ? maxFrameWidth
     : Math.min(maxFrameWidth, contentInsetX * 2 + Math.max(1, usedContentWidth))
   return {
@@ -925,7 +936,7 @@ function layoutTemplateFrame(
     contentInsetX,
     frameWidth,
     layoutContentWidth: maxContentWidth,
-    role: template.role,
+    role: preparedMessage.role,
     totalHeight: bubbleHeight,
   }
 }
@@ -998,7 +1009,7 @@ function getUsedBlockWidth(block: BlockFrame): number {
   }
 }
 
-export function materializeTemplateBlocks(message: ChatMessageInstance): BlockLayout[] {
+export function materializeMessageBlocks(message: ChatMessageInstance): BlockLayout[] {
   return message.prepared.blocks.map((block, index) =>
     materializeBlockLayout(block, message.frame.blocks[index]!, message.frame.layoutContentWidth),
   )

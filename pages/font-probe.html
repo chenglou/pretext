@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Pretext — Font context probe</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Shantell+Sans:wght@400;700&display=swap">
+<style>
+body { margin: 32px auto; padding: 0 24px; max-width: 1100px; font: 16px/1.5 Arial; background: #f5f2ea; color: #25251f; }
+h1 { font: 36px Georgia; } table { border-collapse: collapse; width: 100%; font: 13px/1.5 monospace; }
+th, td { text-align: left; padding: 8px; border-bottom: 1px solid #ccc; } pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+#samples { display: flex; flex-wrap: wrap; gap: 24px; margin: 24px 0; } .sample { border: 1px solid #aaa; }
+</style>
+</head>
+<body>
+<h1>Font context probe</h1>
+<p>Compare the same text in native DOM, whole-run Canvas, isolated graphemes and Pretext. A matching line count alone cannot establish matching break positions.</p>
+<p id="status">Loading the exact web font…</p><div id="samples"></div><table><thead><tr><th>Case</th><th>DOM / Pretext breaks</th><th>DOM / Canvas full width</th><th>Isolated sum</th></tr></thead><tbody id="rows"></tbody></table>
+<details><summary>Raw evidence</summary><pre id="report"></pre></details>
+<script type="module" src="./font-probe.ts"></script>
+</body>
+</html>

@@ -12,44 +12,15 @@ import {
   measureDomTextWidth,
 } from './diagnostic-utils.ts'
 import { clearNavigationReport, publishNavigationPhase, publishNavigationReport } from './report-utils.ts'
-import sourcesData from '../corpora/sources.json' with { type: 'json' }
-import arAlBukhala from '../corpora/ar-al-bukhala.txt' with { type: 'text' }
-import arRisalatAlGhufranPart1 from '../corpora/ar-risalat-al-ghufran-part-1.txt' with { type: 'text' }
-import enGatsbyOpening from '../corpora/en-gatsby-opening.txt' with { type: 'text' }
-import heMasaotBinyaminMetudela from '../corpora/he-masaot-binyamin-metudela.txt' with { type: 'text' }
-import hiEidgah from '../corpora/hi-eidgah.txt' with { type: 'text' }
-import jaKumoNoIto from '../corpora/ja-kumo-no-ito.txt' with { type: 'text' }
-import jaRashomon from '../corpora/ja-rashomon.txt' with { type: 'text' }
-import kmPrachumReuangPrengKhmerVolume7Stories1To10 from '../corpora/km-prachum-reuang-preng-khmer-volume-7-stories-1-10.txt' with { type: 'text' }
-import myBadDeedsReturnToYouTeacher from '../corpora/my-bad-deeds-return-to-you-teacher.txt' with { type: 'text' }
-import myCunningHeronTeacher from '../corpora/my-cunning-heron-teacher.txt' with { type: 'text' }
-import koSonagi from '../corpora/ko-sonagi.txt' with { type: 'text' }
-import koUnsuJohEunNal from '../corpora/ko-unsu-joh-eun-nal.txt' with { type: 'text' }
-import mixedAppText from '../corpora/mixed-app-text.txt' with { type: 'text' }
-import thNithanVetalStory1 from '../corpora/th-nithan-vetal-story-1.txt' with { type: 'text' }
-import thNithanVetalStory7 from '../corpora/th-nithan-vetal-story-7.txt' with { type: 'text' }
-import urChughd from '../corpora/ur-chughd.txt' with { type: 'text' }
-import zhGuxiang from '../corpora/zh-guxiang.txt' with { type: 'text' }
-import zhZhufu from '../corpora/zh-zhufu.txt' with { type: 'text' }
+import { corpusSources, corpusTexts } from '../tests/wrapping/fixtures/corpora.ts'
+import { createBrowserEnvironmentGuard, type BrowserEnvironmentReport } from '../shared/browser-environment.ts'
 
-type CorpusMeta = {
-  id: string
-  language: string
-  direction?: 'ltr' | 'rtl'
-  title: string
-  output: string
-  font_family?: string
-  font_size_px?: number
-  line_height_px?: number
-  default_width?: number
-  min_width?: number
-  max_width?: number
-}
+type CorpusMeta = (typeof corpusSources)[number]
 
 type CorpusReport = {
   status: 'ready' | 'error'
   requestId?: string
-  environment?: EnvironmentFingerprint
+  environment?: BrowserEnvironmentReport
   corpusId?: string
   sliceStart?: number | null
   sliceEnd?: number | null
@@ -166,25 +137,7 @@ type DiagnosticLine = {
 
 const rangeProbeScriptRe = /[\u0E00-\u0E7F\u0E80-\u0EFF\u1000-\u109F\u1780-\u17FF]/u
 
-type EnvironmentFingerprint = {
-  userAgent: string
-  devicePixelRatio: number
-  viewport: {
-    innerWidth: number
-    innerHeight: number
-    outerWidth: number
-    outerHeight: number
-    visualViewportScale: number | null
-  }
-  screen: {
-    width: number
-    height: number
-    availWidth: number
-    availHeight: number
-    colorDepth: number
-    pixelDepth: number
-  }
-}
+let environmentGuard: ReturnType<typeof createBrowserEnvironmentGuard> | undefined
 
 declare global {
   interface Window {
@@ -254,7 +207,7 @@ document.body.appendChild(lineProbeDiv)
 
 const diagnosticGraphemeSegmenter = new Intl.Segmenter(undefined, { granularity: 'grapheme' })
 
-let corpusList: CorpusMeta[] = []
+const corpusList = corpusSources
 let currentMeta: CorpusMeta | null = null
 let currentText = ''
 let currentPrepared: PreparedTextWithSegments | null = null
@@ -286,26 +239,10 @@ function toNavigationReport(report: CorpusReport): CorpusReport {
   return navigationReport
 }
 
-function getEnvironmentFingerprint(): EnvironmentFingerprint {
-  return {
-    userAgent: navigator.userAgent,
-    devicePixelRatio: window.devicePixelRatio,
-    viewport: {
-      innerWidth: window.innerWidth,
-      innerHeight: window.innerHeight,
-      outerWidth: window.outerWidth,
-      outerHeight: window.outerHeight,
-      visualViewportScale: window.visualViewport?.scale ?? null,
-    },
-    screen: {
-      width: window.screen.width,
-      height: window.screen.height,
-      availWidth: window.screen.availWidth,
-      availHeight: window.screen.availHeight,
-      colorDepth: window.screen.colorDepth,
-      pixelDepth: window.screen.pixelDepth,
-    },
-  }
+function getEnvironmentFingerprint(): BrowserEnvironmentReport {
+  if (environmentGuard === undefined) throw new Error('Corpus measurements require an environment guard.')
+  environmentGuard.assertStable()
+  return environmentGuard.report()
 }
 
 function buildFont(meta: CorpusMeta): string {
@@ -631,7 +568,7 @@ function setReport(report: CorpusReport): void {
 
 function setError(message: string): void {
   stats.textContent = `Error: ${message}`
-  setReport(withRequestId({ status: 'error', message }))
+  setReport(withRequestId({ status: 'error', message, ...(environmentGuard === undefined ? {} : { environment: environmentGuard.report() }) }))
 }
 
 function updateTitle(meta: CorpusMeta): void {
@@ -848,6 +785,8 @@ function measureWidth(
   if (currentMeta === null || currentPrepared === null) {
     return null
   }
+  if (environmentGuard === undefined) throw new Error('Prepared corpus has no environment guard.')
+  environmentGuard.assertStable()
 
   const font = buildFont(currentMeta)
   const lineHeight = getLineHeight(currentMeta)
@@ -982,7 +921,9 @@ function runSweep(widths: number[]): void {
 }
 
 function setWidth(width: number): void {
-  measureWidth(width)
+  try { measureWidth(width) } catch (error) {
+    setError(error instanceof Error ? error.message : String(error))
+  }
 }
 
 function populateSelect(selectedId: string): void {
@@ -996,56 +937,10 @@ function populateSelect(selectedId: string): void {
   }
 }
 
-async function loadSources(): Promise<CorpusMeta[]> {
-  return sourcesData as CorpusMeta[]
-}
-
-async function loadText(meta: CorpusMeta): Promise<string> {
-  switch (meta.id) {
-    case 'ar-al-bukhala':
-      return arAlBukhala
-    case 'ar-risalat-al-ghufran-part-1':
-      return arRisalatAlGhufranPart1
-    case 'en-gatsby-opening':
-      return enGatsbyOpening
-    case 'he-masaot-binyamin-metudela':
-      return heMasaotBinyaminMetudela
-    case 'hi-eidgah':
-      return hiEidgah
-    case 'ja-kumo-no-ito':
-      return jaKumoNoIto
-    case 'ja-rashomon':
-      return jaRashomon
-    case 'km-prachum-reuang-preng-khmer-volume-7-stories-1-10':
-      return kmPrachumReuangPrengKhmerVolume7Stories1To10
-    case 'my-cunning-heron-teacher':
-      return myCunningHeronTeacher
-    case 'my-bad-deeds-return-to-you-teacher':
-      return myBadDeedsReturnToYouTeacher
-    case 'ko-unsu-joh-eun-nal':
-      return koUnsuJohEunNal
-    case 'ko-sonagi':
-      return koSonagi
-    case 'mixed-app-text':
-      return mixedAppText
-    case 'th-nithan-vetal-story-1':
-      return thNithanVetalStory1
-    case 'th-nithan-vetal-story-7':
-      return thNithanVetalStory7
-    case 'ur-chughd':
-      return urChughd
-    case 'zh-zhufu':
-      return zhZhufu
-    case 'zh-guxiang':
-      return zhGuxiang
-    default:
-      throw new Error(`No bundled text import for corpus ${meta.id}`)
-  }
-}
-
 async function loadCorpus(meta: CorpusMeta): Promise<void> {
   currentMeta = meta
-  const rawText = await loadText(meta)
+  const rawText = corpusTexts[meta.id]
+  if (rawText === undefined) throw new Error(`No bundled text import for corpus ${meta.id}`)
 
   updateTitle(meta)
   configureControls(meta)
@@ -1058,6 +953,9 @@ async function loadCorpus(meta: CorpusMeta): Promise<void> {
   if ('fonts' in document) {
     await document.fonts.ready
   }
+  environmentGuard?.dispose()
+  environmentGuard = createBrowserEnvironmentGuard('correctness')
+  environmentGuard.assertStable()
 
   publishNavigationPhase('measuring', requestId)
   const fullPrepared = prepareWithSegments(rawText, font)
@@ -1124,7 +1022,6 @@ publishNavigationPhase('loading', requestId)
 
 async function init(): Promise<void> {
   try {
-    corpusList = await loadSources()
     if (corpusList.length === 0) {
       throw new Error('No corpora found')
     }

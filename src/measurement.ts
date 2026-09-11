@@ -1,19 +1,34 @@
-import { isCJK } from './analysis.js'
+import { getSharedGraphemeSegmenter } from './analysis.js'
+import type { SegmentEntryGeometry } from './entry-geometry.js'
+
+type EntryMeasurement = {
+  profile: readonly (string | null)[]
+  measure: (text: string) => number | null
+}
+
+const entryContextProperties = ['font', 'direction', 'fontKerning', 'fontStretch', 'fontVariantCaps', 'textRendering', 'wordSpacing', 'lang'] as const
 
 export type SegmentMetrics = {
   width: number
-  containsCJK: boolean
   emojiCount?: number
   breakableFitMode?: BreakableFitMode
   breakableFitAdvances?: number[] | null
+  entryGeometry?: {
+    letterSpacing: number
+    advances: readonly number[]
+    emojiCorrection: number
+    profile: EntryMeasurement['profile']
+    geometry: SegmentEntryGeometry
+  }
 }
 
 export type EngineProfile = {
+  entryFitBasis: 'fresh' | 'original' | 'disabled' // original whole minus consumed prefixes
+  geckoAsciiLineBreaks: boolean
   lineFitEpsilon: number
   carryCJKAfterClosingQuote: boolean
   breakKeepAllAfterPunctuation: boolean
   preferPrefixWidthsForBreakableRuns: boolean
-  preferEarlySoftHyphenBreak: boolean
 }
 
 export type BreakableFitMode = 'sum-graphemes' | 'segment-prefixes' | 'pair-context'
@@ -30,7 +45,6 @@ const MAX_PREFIX_FIT_GRAPHEMES = 96
 
 const emojiPresentationRe = /\p{Emoji_Presentation}/u
 const maybeEmojiRe = /[\p{Emoji_Presentation}\p{Extended_Pictographic}\p{Regional_Indicator}\uFE0F\u20E3]/u
-let sharedGraphemeSegmenter: Intl.Segmenter | null = null
 const emojiCorrectionCache = new Map<string, number>()
 
 export function getMeasureContext(): CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D {
@@ -49,6 +63,53 @@ export function getMeasureContext(): CanvasRenderingContext2D | OffscreenCanvasR
   throw new Error('Text measurement requires OffscreenCanvas or a DOM canvas context.')
 }
 
+export function getEntryMeasurementProfile(): EntryMeasurement['profile'] | null {
+  const original = getMeasureContext()
+  if (!('letterSpacing' in original)) return null
+  const source = original as unknown as Record<string, unknown>
+  const profile: (string | null)[] = []
+  for (const property of entryContextProperties) {
+    if (!(property in original)) { profile.push(null); continue }
+    const value = source[property]
+    if (typeof value !== 'string') return null
+    profile.push(value)
+  }
+  return profile
+}
+
+// Borrow the primary context only for each synchronous direct measurement.
+// These observations never enter the unspaced segment cache, and letterSpacing
+// is restored even when assignment or measurement fails.
+export function createEntryMeasurement(
+  letterSpacing: number,
+  emojiCorrection: number,
+  profile: EntryMeasurement['profile'] | null = getEntryMeasurementProfile(),
+): EntryMeasurement | null {
+  if (profile === null || !Number.isFinite(letterSpacing)) return null
+  const primary = getMeasureContext()
+  if (!('letterSpacing' in primary)) return null
+  return {
+    profile,
+    measure: text => {
+      const previous = primary.letterSpacing
+      if (typeof previous !== 'string') return null
+      try {
+        primary.letterSpacing = `${letterSpacing}px`
+        if (Number.parseFloat(primary.letterSpacing) !== letterSpacing) return null
+        const width = getCorrectedSegmentWidth(text, { width: primary.measureText(text).width }, emojiCorrection)
+        return Number.isFinite(width) ? width : null
+      } finally {
+        primary.letterSpacing = previous
+      }
+    },
+  }
+}
+
+export function entryMeasurementProfilesMatch(a: EntryMeasurement['profile'], b: EntryMeasurement['profile']): boolean {
+  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false
+  return true
+}
+
 export function getSegmentMetricCache(font: string): Map<string, SegmentMetrics> {
   let cache = segmentMetricCaches.get(font)
   if (!cache) {
@@ -64,7 +125,6 @@ export function getSegmentMetrics(seg: string, cache: Map<string, SegmentMetrics
     const ctx = getMeasureContext()
     metrics = {
       width: ctx.measureText(seg).width,
-      containsCJK: isCJK(seg),
     }
     cache.set(seg, metrics)
   }
@@ -76,11 +136,12 @@ export function getEngineProfile(): EngineProfile {
 
   if (typeof navigator === 'undefined') {
     cachedEngineProfile = {
+      entryFitBasis: 'disabled',
+      geckoAsciiLineBreaks: false,
       lineFitEpsilon: 0.005,
       carryCJKAfterClosingQuote: false,
       breakKeepAllAfterPunctuation: true,
       preferPrefixWidthsForBreakableRuns: false,
-      preferEarlySoftHyphenBreak: false,
     }
     return cachedEngineProfile
   }
@@ -100,27 +161,28 @@ export function getEngineProfile(): EngineProfile {
     ua.includes('Chromium/') ||
     ua.includes('CriOS/') ||
     ua.includes('Edg/')
+  const isGecko = ua.includes('Firefox/') && !ua.includes('FxiOS/')
+
+  // Fresh-entry observations are verified only for desktop engines. Keep
+  // mobile brands (including desktop-requesting iOS browsers) on the old path.
+  const isDesktop = /Windows NT|Macintosh|X11/.test(ua) &&
+    !/Android|Mobile|iPhone|iPad|iPod|CriOS\/|FxiOS\/|EdgiOS\//.test(ua)
 
   cachedEngineProfile = {
+    entryFitBasis: isDesktop && isChromium ? 'fresh' : isDesktop && isGecko ? 'original' : 'disabled',
+    geckoAsciiLineBreaks: isGecko,
     lineFitEpsilon: isSafari ? 1 / 64 : 0.005,
     carryCJKAfterClosingQuote: isChromium,
     breakKeepAllAfterPunctuation: !isSafari,
     preferPrefixWidthsForBreakableRuns: isSafari,
-    preferEarlySoftHyphenBreak: isSafari,
   }
   return cachedEngineProfile
 }
 
 export function parseFontSize(font: string): number {
-  const m = font.match(/(\d+(?:\.\d+)?)\s*px/)
+  // A failed size can restart at the next digit run, not at every digit in it.
+  const m = font.match(/(?:^|\D)(\d+(?:\.\d+)?)\s*px/)
   return m ? parseFloat(m[1]!) : 16
-}
-
-function getSharedGraphemeSegmenter(): Intl.Segmenter {
-  if (sharedGraphemeSegmenter === null) {
-    sharedGraphemeSegmenter = new Intl.Segmenter(undefined, { granularity: 'grapheme' })
-  }
-  return sharedGraphemeSegmenter
 }
 
 function isEmojiGrapheme(g: string): boolean {
@@ -131,10 +193,11 @@ export function textMayContainEmoji(text: string): boolean {
   return maybeEmojiRe.test(text)
 }
 
-function getEmojiCorrection(font: string, fontSize: number): number {
+function getEmojiCorrection(font: string): number {
   let correction = emojiCorrectionCache.get(font)
   if (correction !== undefined) return correction
 
+  const fontSize = parseFontSize(font)
   const ctx = getMeasureContext()
   ctx.font = font
   const canvasW = ctx.measureText('\u{1F600}').width
@@ -180,21 +243,6 @@ function getEmojiCount(seg: string, metrics: SegmentMetrics): number {
 export function getCorrectedSegmentWidth(seg: string, metrics: SegmentMetrics, emojiCorrection: number): number {
   if (emojiCorrection === 0) return metrics.width
   return metrics.width - getEmojiCount(seg, metrics) * emojiCorrection
-}
-
-export function getSegmentGraphemeWidths(
-  seg: string,
-  cache: Map<string, SegmentMetrics>,
-  emojiCorrection: number,
-): number[] | null {
-  const widths: number[] = []
-  const graphemeSegmenter = getSharedGraphemeSegmenter()
-  for (const gs of graphemeSegmenter.segment(seg)) {
-    const graphemeMetrics = getSegmentMetrics(gs.segment, cache)
-    widths.push(getCorrectedSegmentWidth(gs.segment, graphemeMetrics, emojiCorrection))
-  }
-
-  return widths.length > 1 ? widths : null
 }
 
 export function getSegmentBreakableFitAdvances(
@@ -272,19 +320,16 @@ export function getSegmentBreakableFitAdvances(
 
 export function getFontMeasurementState(font: string, needsEmojiCorrection: boolean): {
   cache: Map<string, SegmentMetrics>
-  fontSize: number
   emojiCorrection: number
 } {
   const ctx = getMeasureContext()
   ctx.font = font
   const cache = getSegmentMetricCache(font)
-  const fontSize = parseFontSize(font)
-  const emojiCorrection = needsEmojiCorrection ? getEmojiCorrection(font, fontSize) : 0
-  return { cache, fontSize, emojiCorrection }
+  const emojiCorrection = needsEmojiCorrection ? getEmojiCorrection(font) : 0
+  return { cache, emojiCorrection }
 }
 
 export function clearMeasurementCaches(): void {
   segmentMetricCaches.clear()
   emojiCorrectionCache.clear()
-  sharedGraphemeSegmenter = null
 }

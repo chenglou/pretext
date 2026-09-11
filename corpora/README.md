@@ -118,18 +118,22 @@ Current bundle:
 
 Machine-readable metadata lives in `sources.json`.
 
-Current sweep status lives in `STATUS.md`.
-Machine-readable corpus status lives in `dashboard.json`, and its main snapshot
-inputs are `chrome-step10.json` and `safari-step10.json`.
+Machine-readable corpus status lives in [dashboard.json](dashboard.json), and its main snapshot
+inputs are [chrome-step10.json](chrome-step10.json), [safari-step10.json](safari-step10.json)
+and [firefox-step10.json](firefox-step10.json). In the dashboard,
+"anchors" means `300 / 600 / 800` unless noted otherwise, and "step=10" means
+the `300..900` sweep. Results describe the machine that produced the snapshots;
+they are not a promise of universal permanence.
 Mismatch taxonomy and steering vocabulary live in `TAXONOMY.md`.
 
 Useful commands:
 
+- `bun run test:wrapping:snapshot` — refresh all three browser snapshots and the dashboards from the shared suite
 - `bun run corpus-check --id=ko-unsu-joh-eun-nal 300 600 800`
 - `bun run corpus-check --id=ko-sonagi 300 600 800`
 - `bun run corpus-check --id=ar-risalat-al-ghufran-part-1 --diagnose 300`
-- `bun run corpus-sweep --id=hi-eidgah --start=300 --end=900 --step=10`
-- `bun run corpus-sweep --id=ar-al-bukhala --start=300 --end=900 --step=10`
-- `bun run corpus-sweep --all --start=300 --end=900 --step=10`
+- `bun run test:wrapping --family=corpora/hi-eidgah`
+- `bun run test:wrapping --family=corpora/ar-al-bukhala`
+- `bun run test:wrapping --family=maintained/corpus`
 
 The corpus page is also available locally at `/corpus?id=<corpus-id>`.

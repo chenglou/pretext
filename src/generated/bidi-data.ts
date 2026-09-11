@@ -19,8 +19,6 @@ export type GeneratedBidiType =
   | 'WS'
   | 'NSM'
 
-export const unicodeBidiDataVersion = '17.0.0'
-
 export const latin1BidiTypes: readonly GeneratedBidiType[] = [
   'BN',
   'BN',

@@ -23,5 +23,6 @@
     "allowUnreachableCode": true,
     "noFallthroughCasesInSwitch": true,
     "noPropertyAccessFromIndexSignature": true
-  }
+  },
+  "include": ["*.ts", "pages/**/*.ts", "scripts/**/*.ts", "shared/**/*.ts", "src/**/*.ts", "tests/**/*.ts"]
 }

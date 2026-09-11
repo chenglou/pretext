@@ -58,6 +58,13 @@ export const SIZES = [12, 14, 15, 16, 18, 20, 24, 28] as const
 
 export const WIDTHS = [150, 200, 250, 300, 350, 400, 500, 600] as const
 
+export const ACCURACY_FONTS = [
+  '"Helvetica Neue", Helvetica, Arial, sans-serif',
+  'Georgia, "Times New Roman", serif',
+  'Verdana, Geneva, sans-serif',
+  '"Courier New", Courier, monospace',
+] as const
+
 export type ProbeOracleCase = {
   label: string
   text: string
@@ -76,6 +83,20 @@ export type ProbeOracleCase = {
 export type LetterSpacingOracleCase = ProbeOracleCase & {
   letterSpacing: number
 }
+
+export const DISCRETIONARY_ORACLE_CASES: readonly (ProbeOracleCase & { expectedText?: readonly string[] })[] = [
+  { label: 'trailing', text: 'abc\u00AD', width: 100, expectedText: ['abc'] },
+  { label: 'trailing positive spacing', text: 'abc\u00AD', width: 100, letterSpacing: 2, expectedText: ['abc'] },
+  { label: 'trailing negative spacing', text: 'abc\u00AD', width: 100, letterSpacing: -1, expectedText: ['abc'] },
+  { label: 'trailing pre-wrap', text: 'abc\u00AD', width: 100, whiteSpace: 'pre-wrap' as const, expectedText: ['abc'] },
+  { label: 'trailing repeated', text: 'abc\u00AD\u00AD', width: 100, expectedText: ['abc'] },
+  { label: 'unchosen internal', text: 'abc\u00ADdef', width: 100, expectedText: ['abcdef'] },
+  { label: 'forced hard break', text: 'abc\u00AD\nx', width: 100, whiteSpace: 'pre-wrap' as const, expectedText: ['abc', 'x'] },
+  { label: 'chosen fitting break', text: 'ab\u00ADcdef', width: 24, expectedText: ['ab-', 'cd', 'ef'] },
+  { label: 'pending below hyphen fit', text: 'ab\u00ADcdef', width: 20 },
+  { label: 'pending narrow prefix', text: 'ab\u00ADcdef', width: 12 },
+  { label: 'trailing emergency', text: 'abc\u00AD', width: 12 },
+].map(input => ({ font: '16px Arial', lineHeight: 24, ...input }))
 
 export const LETTER_SPACING_ORACLE_CASES: readonly LetterSpacingOracleCase[] = [
   {
@@ -311,6 +332,36 @@ export const PRE_WRAP_ORACLE_CASES: readonly ProbeOracleCase[] = [
     width: 220,
     font: '18px serif',
     lineHeight: 32,
+  },
+]
+
+export const SYMBOL_ORACLE_CASES: readonly ProbeOracleCase[] = [
+  {
+    label: 'ascii symbols inside long words',
+    text: 'aaaaaaaaaaaaaaaa!bbbbbbbbbbbbbbbb aaaaaaaaaaaaaaaa/bbbbbbbbbbbbbbbb aaaaaaaaaaaaaaaa|bbbbbbbbbbbbbbbb',
+    width: 150,
+    font: '16px Helvetica',
+    lineHeight: 19,
+    method: 'span',
+    browsers: ['chrome', 'safari'],
+  },
+  {
+    label: 'unicode symbols inside long words',
+    text: 'aaaaaaaaaaaaaaaa♂bbbbbbbbbbbbbbbb aaaaaaaaaaaaaaaa╥bbbbbbbbbbbbbbbb aaaaaaaaaaaaaaaa⁄bbbbbbbbbbbbbbbb',
+    width: 150,
+    font: '16px Helvetica',
+    lineHeight: 19,
+    method: 'span',
+    browsers: ['chrome', 'safari'],
+  },
+  {
+    label: 'browser break symbols stay breakable',
+    text: 'aaaaaaaaaaaaaaaa?bbbbbbbbbbbbbbbb aaaaaaaaaaaaaaaa-bbbbbbbbbbbbbbbb aaaaaaaaaaaaaaaa🙂bbbbbbbbbbbbbbbb',
+    width: 150,
+    font: '16px Helvetica',
+    lineHeight: 19,
+    method: 'span',
+    browsers: ['chrome', 'safari'],
   },
 ]
 

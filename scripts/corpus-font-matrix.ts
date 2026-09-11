@@ -7,6 +7,7 @@ import {
   getAvailablePort,
   loadPostedReport,
   type BrowserKind,
+  type BrowserSession,
 } from './browser-automation.ts'
 import { startPostedReportServer } from './report-server.ts'
 
@@ -445,10 +446,11 @@ if (variants === undefined) {
 
 const widths = getSweepWidths(meta, options)
 const lock = await acquireBrowserAutomationLock(options.browser)
-const session = createBrowserSession(options.browser)
+let session: BrowserSession | null = null
 let serverProcess: ChildProcess | null = null
 
 try {
+  session = createBrowserSession(options.browser, { foreground: false, headless: false })
   const pageServer = await ensurePageServer(options.port, '/corpus', process.cwd())
   serverProcess = pageServer.process
   const baseUrl = `${pageServer.baseUrl}/corpus`
@@ -477,7 +479,7 @@ try {
           options.timeoutMs,
         )
       } finally {
-        reportServer.close()
+        await reportServer.close()
       }
     })()
     if (report.status === 'error') {
@@ -523,7 +525,10 @@ try {
     console.log(`wrote ${options.output}`)
   }
 } finally {
-  session.close()
-  serverProcess?.kill()
-  lock.release()
+  try {
+    await session?.close()
+  } finally {
+    serverProcess?.kill()
+    lock.release()
+  }
 }

@@ -38,7 +38,9 @@ function computeBidiLevels(str: string): Int8Array | null {
 
   // eslint-disable-next-line unicorn/no-new-array
   const types: BidiType[] = new Array(len)
-  let sawBidi = false
+  let paragraphHasBidi = false
+  let paragraphStart = 0
+  let levels: Int8Array | null = null
 
   // Keep the resolved bidi classes aligned to UTF-16 code-unit offsets,
   // because the rich prepared segments index back into the normalized string
@@ -57,20 +59,39 @@ function computeBidiLevels(str: string): Int8Array | null {
     }
 
     const t = classifyCodePoint(codePoint)
-    if (t === 'R' || t === 'AL' || t === 'AN') sawBidi = true
+    if (t === 'R' || t === 'AL' || t === 'AN') paragraphHasBidi = true
     for (let j = 0; j < codeUnitLength; j++) {
       types[i + j] = t
+    }
+    // Classification has all of this paragraph's types when B arrives.
+    // Resolve that range now; S (tabs) and U+2028 do not end a paragraph.
+    if (t === 'B') {
+      if (paragraphHasBidi) {
+        levels ??= new Int8Array(len)
+        // B belongs to the preceding paragraph and inherits its base level.
+        levels[i] = resolveParagraphLevels(types, levels, paragraphStart, i)
+      }
+      paragraphStart = i + codeUnitLength
+      paragraphHasBidi = false
     }
     i += codeUnitLength
   }
 
-  if (!sawBidi) return null
+  if (paragraphHasBidi) {
+    levels ??= new Int8Array(len)
+    resolveParagraphLevels(types, levels, paragraphStart, len)
+  }
+  // Paragraphs without bidi classes have level zero. Leave their cells at
+  // the typed array's initial value, or keep the all-LTR result null.
+  return levels
+}
 
+function resolveParagraphLevels(types: BidiType[], levels: Int8Array, start: number, end: number): number {
   // Use the first strong character to pick the paragraph base direction.
   // Rich-path bidi metadata is only an approximation, but this keeps mixed
   // LTR/RTL text aligned with the common UBA paragraph rule.
   let startLevel = 0
-  for (let i = 0; i < len; i++) {
+  for (let i = start; i < end; i++) {
     const t = types[i]!
     if (t === 'L') {
       startLevel = 0
@@ -81,28 +102,25 @@ function computeBidiLevels(str: string): Int8Array | null {
       break
     }
   }
-  const levels = new Int8Array(len)
-  for (let i = 0; i < len; i++) levels[i] = startLevel
-
   const e: BidiType = (startLevel & 1) ? 'R' : 'L'
   const sor = e
 
   // W1-W7
   let lastType: BidiType = sor
-  for (let i = 0; i < len; i++) {
+  for (let i = start; i < end; i++) {
     if (types[i] === 'NSM') types[i] = lastType
     else lastType = types[i]!
   }
   lastType = sor
-  for (let i = 0; i < len; i++) {
+  for (let i = start; i < end; i++) {
     const t = types[i]!
     if (t === 'EN') types[i] = lastType === 'AL' ? 'AN' : 'EN'
     else if (t === 'R' || t === 'L' || t === 'AL') lastType = t
   }
-  for (let i = 0; i < len; i++) {
+  for (let i = start; i < end; i++) {
     if (types[i] === 'AL') types[i] = 'R'
   }
-  for (let i = 1; i < len - 1; i++) {
+  for (let i = start + 1; i < end - 1; i++) {
     if (types[i] === 'ES' && types[i - 1] === 'EN' && types[i + 1] === 'EN') {
       types[i] = 'EN'
     }
@@ -114,53 +132,55 @@ function computeBidiLevels(str: string): Int8Array | null {
       types[i] = types[i - 1]!
     }
   }
-  for (let i = 0; i < len; i++) {
+  for (let i = start; i < end; i++) {
     if (types[i] !== 'EN') continue
     let j
-    for (j = i - 1; j >= 0 && types[j] === 'ET'; j--) types[j] = 'EN'
-    for (j = i + 1; j < len && types[j] === 'ET'; j++) types[j] = 'EN'
+    for (j = i - 1; j >= start && types[j] === 'ET'; j--) types[j] = 'EN'
+    for (j = i + 1; j < end && types[j] === 'ET'; j++) types[j] = 'EN'
   }
-  for (let i = 0; i < len; i++) {
+  for (let i = start; i < end; i++) {
     const t = types[i]!
     if (t === 'WS' || t === 'ES' || t === 'ET' || t === 'CS') types[i] = 'ON'
   }
   lastType = sor
-  for (let i = 0; i < len; i++) {
+  for (let i = start; i < end; i++) {
     const t = types[i]!
     if (t === 'EN') types[i] = lastType === 'L' ? 'L' : 'EN'
     else if (t === 'R' || t === 'L') lastType = t
   }
 
   // N1-N2
-  for (let i = 0; i < len; i++) {
+  for (let i = start; i < end; i++) {
     if (types[i] !== 'ON') continue
-    let end = i + 1
-    while (end < len && types[end] === 'ON') end++
-    const before: BidiType = i > 0 ? types[i - 1]! : sor
-    const after: BidiType = end < len ? types[end]! : sor
+    let runEnd = i + 1
+    while (runEnd < end && types[runEnd] === 'ON') runEnd++
+    const before: BidiType = i > start ? types[i - 1]! : sor
+    const after: BidiType = runEnd < end ? types[runEnd]! : sor
     const bDir: BidiType = before !== 'L' ? 'R' : 'L'
     const aDir: BidiType = after !== 'L' ? 'R' : 'L'
     if (bDir === aDir) {
-      for (let j = i; j < end; j++) types[j] = bDir
+      for (let j = i; j < runEnd; j++) types[j] = bDir
     }
-    i = end - 1
+    i = runEnd - 1
   }
-  for (let i = 0; i < len; i++) {
+  for (let i = start; i < end; i++) {
     if (types[i] === 'ON') types[i] = e
   }
 
   // I1-I2
-  for (let i = 0; i < len; i++) {
+  for (let i = start; i < end; i++) {
     const t = types[i]!
-    if ((levels[i]! & 1) === 0) {
-      if (t === 'R') levels[i]!++
-      else if (t === 'AN' || t === 'EN') levels[i]! += 2
+    let level = startLevel
+    if ((startLevel & 1) === 0) {
+      if (t === 'R') level++
+      else if (t === 'AN' || t === 'EN') level += 2
     } else if (t === 'L' || t === 'AN' || t === 'EN') {
-      levels[i]!++
+      level++
     }
+    levels[i] = level
   }
 
-  return levels
+  return startLevel
 }
 
 export function computeSegmentLevels(normalized: string, segStarts: number[]): Int8Array | null {

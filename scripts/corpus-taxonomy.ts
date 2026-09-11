@@ -6,6 +6,7 @@ import {
   getAvailablePort,
   loadPostedReport,
   type BrowserKind,
+  type BrowserSession,
 } from './browser-automation.ts'
 import { startPostedReportServer } from './report-server.ts'
 
@@ -194,10 +195,11 @@ if (meta === undefined) {
 
 const widths = getTargetWidths(meta, start, end, step, samples)
 const lock = await acquireBrowserAutomationLock(browser)
-const session = createBrowserSession(browser)
+let session: BrowserSession | null = null
 let serverProcess: ChildProcess | null = null
 
 try {
+  session = createBrowserSession(browser, { foreground: false, headless: false })
   const port = await getAvailablePort(requestedPort === 0 ? null : requestedPort)
   const pageServer = await ensurePageServer(port, '/corpus', process.cwd())
   serverProcess = pageServer.process
@@ -227,7 +229,7 @@ try {
         timeoutMs,
       )
     } finally {
-      reportServer.close()
+      await reportServer.close()
     }
   })()
   if (report.status === 'error') {
@@ -252,7 +254,10 @@ try {
 
   printEntries(entries)
 } finally {
-  session.close()
-  serverProcess?.kill()
-  lock.release()
+  try {
+    await session?.close()
+  } finally {
+    serverProcess?.kill()
+    lock.release()
+  }
 }

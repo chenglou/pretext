@@ -3,18 +3,18 @@ import {
   CODE_BLOCK_PADDING_X,
   CODE_BLOCK_PADDING_Y,
   CODE_LINE_HEIGHT,
-  createPreparedChatTemplates,
+  createPreparedChatMessages,
   findVisibleRange,
   getMaxChatWidth,
   getOcclusionBannerHeight,
-  materializeTemplateBlocks,
+  materializeMessageBlocks,
   MESSAGE_SIDE_PADDING,
   OCCLUSION_BANNER_HEIGHT,
   type BlockLayout,
   type ChatMessageInstance,
   type ConversationFrame,
   type InlineFragmentLayout,
-  type TemplateFrame,
+  type MessageFrame,
 } from './markdown-chat.model.ts'
 
 type State = {
@@ -41,7 +41,7 @@ const domCache = {
   mountedEnd: 0, // cache lifetime: on visibility changes
 }
 
-const templates = createPreparedChatTemplates()
+const preparedMessages = createPreparedChatMessages()
 const st: State = {
   events: {
     toggleVisualization: false,
@@ -109,7 +109,7 @@ function render(): void {
     && previousFrame.occlusionBannerHeight === occlusionBannerHeight
   const frame = canReuseFrame
     ? previousFrame
-    : buildConversationFrame(templates, chatWidth, occlusionBannerHeight)
+    : buildConversationFrame(preparedMessages, chatWidth, occlusionBannerHeight)
   const needsRelayout = !canReuseFrame
 
   const { start, end } = findVisibleRange(
@@ -231,7 +231,7 @@ function renderMessageContents(
   bubble: HTMLDivElement,
   message: ChatMessageInstance,
 ): void {
-  const blocks = materializeTemplateBlocks(message)
+  const blocks = materializeMessageBlocks(message)
   const fragment = document.createDocumentFragment()
   for (let index = 0; index < blocks.length; index++) {
     fragment.append(renderBlock(blocks[index]!, message.frame.contentInsetX))
@@ -241,7 +241,7 @@ function renderMessageContents(
 
 function projectMessageNode(
   cachedRow: CachedRow,
-  frame: TemplateFrame,
+  frame: MessageFrame,
   top: number,
 ): void {
   cachedRow.row.style.top = `${top}px`

@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>Pretext — Accuracy Sweep</title>
+<title>Pretext — Accuracy Snapshots</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body {
@@ -12,7 +12,6 @@
   h1 { font-size: 22px; margin-bottom: 8px; }
   .sub { font-size: 13px; color: #888; margin-bottom: 24px; }
   h2 { font-size: 16px; color: #4fc3f7; margin: 24px 0 8px; font-family: monospace; }
-  h3 { font-size: 14px; color: #aaa; margin: 16px 0 8px; }
   .summary {
     font-family: "SF Mono", "Fira Code", monospace;
     font-size: 15px; background: #111; border: 1px solid #222;
@@ -25,20 +24,15 @@
     font-family: "SF Mono", monospace; margin-bottom: 16px;
     width: 100%; table-layout: fixed;
   }
-  col.num { width: 80px; }
-  col.text { }
   th { text-align: left; padding: 4px 12px; color: #666; border-bottom: 1px solid #333; white-space: nowrap; }
   td { padding: 4px 12px; border-bottom: 1px solid #1a1a1a; white-space: nowrap; }
-  .over td { color: #ef9a9a; }
-  .under td { color: #ffcc80; }
   .text { color: #888; white-space: normal; word-break: break-all; }
-  .perfect { color: #81c784; font-size: 18px; margin-top: 24px; }
 </style>
 </head>
 <body>
-<h1>Pretext — Accuracy Sweep</h1>
-<p class="sub">Compares library height predictions against DOM ground truth across fonts, sizes, and widths.</p>
-<div id="root"><p>Loading...</p></div>
+<h1>Pretext — Accuracy Snapshots</h1>
+<p class="sub">Maintained height checks from the shared wrapping suite. Refresh with <code>bun run test:wrapping --browser=all --snapshot</code>. Reproduce a mismatch with <code>--case=wrap-ID</code>.</p>
+<div id="root"></div>
 <script type="module" src="./accuracy.ts"></script>
 </body>
 </html>

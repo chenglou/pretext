@@ -1,5 +1,77 @@
 [
   {
+    "generatedAt": "2026-09-09T09:46:22.685Z",
+    "suiteHash": "16bfd7e5f094c5d2d0245099b719f0f3e846cbd7132280e36c7a8811b5940caf",
+    "source": {
+      "revision": "785297b87973ef285abb884b1af6110ed2aacfd8",
+      "files": {
+        "analysis.ts": "68a34413572826fcbae8727143af5291ab194ce6bd7ffc327b956a5ccd6dcb39",
+        "bidi.ts": "70f7f01dcd866076b68dbf2a3c398364aceaba2ccf98037e77e0b3b8bcfbeaa5",
+        "entry-geometry.ts": "43ffacd71c3562283135590a06947eef4b2617cb3b6ba680c909dd5e2d2ba9a7",
+        "generated/bidi-data.ts": "745211b804d907af78afb6c1ed87eff6d7454a5e85152a6129eb7b3bf0f6f262",
+        "layout.ts": "66c36dea8d0191bd005c4c7c1fd9d52e26d0df0c0e3c5df954f379c4560811cf",
+        "line-break.ts": "ae5c22f2f7786eb63e355a7c8886086ea237e82e78ce5c7b6f202936fd4996d3",
+        "line-text.ts": "5e21684d995df8c30324c03a14b8a0bc3a579ce169a0e10b6d579b6aeee577dc",
+        "measurement.ts": "b024684745f51317ef8beb79c73fe8c53b0ddcf5e02654798f4571d28a9923d4",
+        "rich-inline.ts": "5a7e5d339e1f703d52928913e3b7d6a5f5df04bdfdd365f47c1890dde3b61964",
+        "text-modules.d.ts": "1547f88f0eb75293bc20054194a2bba29a4bc911c2a4fa99cef98141b6f99927"
+      }
+    },
+    "environments": [
+      {
+        "direction": "ltr",
+        "measurement": {
+          "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36",
+          "start": {
+            "dpr": 2,
+            "visualViewportScale": 1,
+            "innerWidth": 2287,
+            "innerHeight": 1268,
+            "outerWidth": 2560,
+            "outerHeight": 1315,
+            "screenX": 0,
+            "screenY": 30,
+            "screenWidth": 2560,
+            "screenHeight": 1440,
+            "screenAvailWidth": 2560,
+            "screenAvailHeight": 1315,
+            "visibility": "visible",
+            "focused": false,
+            "language": "mul",
+            "direction": "ltr"
+          },
+          "end": {
+            "dpr": 2,
+            "visualViewportScale": 1,
+            "innerWidth": 2287,
+            "innerHeight": 1268,
+            "outerWidth": 2560,
+            "outerHeight": 1315,
+            "screenX": 0,
+            "screenY": 30,
+            "screenWidth": 2560,
+            "screenHeight": 1440,
+            "screenAvailWidth": 2560,
+            "screenAvailHeight": 1315,
+            "visibility": "visible",
+            "focused": false,
+            "language": "mul",
+            "direction": "ltr"
+          },
+          "changes": []
+        },
+        "context": {
+          "kind": "installed",
+          "lang": "mul"
+        },
+        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36",
+        "dpr": 2,
+        "locale": "zh-CN",
+        "visibility": "visible",
+        "focused": false,
+        "fonts": []
+      }
+    ],
     "corpusId": "mixed-app-text",
     "language": "mul",
     "title": "Mixed app text",
@@ -8,19 +80,82 @@
     "end": 900,
     "step": 10,
     "widthCount": 61,
-    "exactCount": 60,
-    "mismatches": [
-      {
-        "width": 710,
-        "diffPx": -30,
-        "predictedHeight": 500,
-        "actualHeight": 530,
-        "predictedLineCount": 14,
-        "browserLineCount": 15
-      }
-    ]
+    "exactCount": 61,
+    "mismatches": []
   },
   {
+    "generatedAt": "2026-09-09T09:46:22.685Z",
+    "suiteHash": "16bfd7e5f094c5d2d0245099b719f0f3e846cbd7132280e36c7a8811b5940caf",
+    "source": {
+      "revision": "785297b87973ef285abb884b1af6110ed2aacfd8",
+      "files": {
+        "analysis.ts": "68a34413572826fcbae8727143af5291ab194ce6bd7ffc327b956a5ccd6dcb39",
+        "bidi.ts": "70f7f01dcd866076b68dbf2a3c398364aceaba2ccf98037e77e0b3b8bcfbeaa5",
+        "entry-geometry.ts": "43ffacd71c3562283135590a06947eef4b2617cb3b6ba680c909dd5e2d2ba9a7",
+        "generated/bidi-data.ts": "745211b804d907af78afb6c1ed87eff6d7454a5e85152a6129eb7b3bf0f6f262",
+        "layout.ts": "66c36dea8d0191bd005c4c7c1fd9d52e26d0df0c0e3c5df954f379c4560811cf",
+        "line-break.ts": "ae5c22f2f7786eb63e355a7c8886086ea237e82e78ce5c7b6f202936fd4996d3",
+        "line-text.ts": "5e21684d995df8c30324c03a14b8a0bc3a579ce169a0e10b6d579b6aeee577dc",
+        "measurement.ts": "b024684745f51317ef8beb79c73fe8c53b0ddcf5e02654798f4571d28a9923d4",
+        "rich-inline.ts": "5a7e5d339e1f703d52928913e3b7d6a5f5df04bdfdd365f47c1890dde3b61964",
+        "text-modules.d.ts": "1547f88f0eb75293bc20054194a2bba29a4bc911c2a4fa99cef98141b6f99927"
+      }
+    },
+    "environments": [
+      {
+        "direction": "ltr",
+        "measurement": {
+          "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36",
+          "start": {
+            "dpr": 2,
+            "visualViewportScale": 1,
+            "innerWidth": 2287,
+            "innerHeight": 1268,
+            "outerWidth": 2560,
+            "outerHeight": 1315,
+            "screenX": 0,
+            "screenY": 30,
+            "screenWidth": 2560,
+            "screenHeight": 1440,
+            "screenAvailWidth": 2560,
+            "screenAvailHeight": 1315,
+            "visibility": "visible",
+            "focused": false,
+            "language": "en",
+            "direction": "ltr"
+          },
+          "end": {
+            "dpr": 2,
+            "visualViewportScale": 1,
+            "innerWidth": 2287,
+            "innerHeight": 1268,
+            "outerWidth": 2560,
+            "outerHeight": 1315,
+            "screenX": 0,
+            "screenY": 30,
+            "screenWidth": 2560,
+            "screenHeight": 1440,
+            "screenAvailWidth": 2560,
+            "screenAvailHeight": 1315,
+            "visibility": "visible",
+            "focused": false,
+            "language": "en",
+            "direction": "ltr"
+          },
+          "changes": []
+        },
+        "context": {
+          "kind": "installed",
+          "lang": "en"
+        },
+        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36",
+        "dpr": 2,
+        "locale": "zh-CN",
+        "visibility": "visible",
+        "focused": false,
+        "fonts": []
+      }
+    ],
     "corpusId": "en-gatsby-opening",
     "language": "en",
     "title": "The Great Gatsby opening",
@@ -32,96 +167,168 @@
     "exactCount": 50,
     "mismatches": [
       {
+        "id": "wrap-f59be48ed6f4d300",
         "width": 300,
+        "contentWidth": 220,
         "diffPx": -26,
         "predictedHeight": 243882,
-        "actualHeight": 243908,
-        "predictedLineCount": 9377,
-        "browserLineCount": 9378
+        "actualHeight": 243908
       },
       {
+        "id": "wrap-b438d88062e24886",
         "width": 320,
+        "contentWidth": 240,
         "diffPx": -26,
         "predictedHeight": 221834,
-        "actualHeight": 221860,
-        "predictedLineCount": 8529,
-        "browserLineCount": 8530
+        "actualHeight": 221860
       },
       {
+        "id": "wrap-53c4f622c9ba8b04",
         "width": 340,
+        "contentWidth": 260,
         "diffPx": -26,
         "predictedHeight": 203244,
-        "actualHeight": 203270,
-        "predictedLineCount": 7814,
-        "browserLineCount": 7815
+        "actualHeight": 203270
       },
       {
+        "id": "wrap-791868a44d22da8a",
         "width": 360,
+        "contentWidth": 280,
         "diffPx": -26,
         "predictedHeight": 187800,
-        "actualHeight": 187826,
-        "predictedLineCount": 7220,
-        "browserLineCount": 7221
+        "actualHeight": 187826
       },
       {
+        "id": "wrap-5dd037abdcef3a0b",
         "width": 370,
+        "contentWidth": 290,
         "diffPx": -78,
         "predictedHeight": 180832,
-        "actualHeight": 180910,
-        "predictedLineCount": 6952,
-        "browserLineCount": 6955
+        "actualHeight": 180910
       },
       {
+        "id": "wrap-2754e10af728d2a2",
         "width": 390,
+        "contentWidth": 310,
         "diffPx": -52,
         "predictedHeight": 168326,
-        "actualHeight": 168378,
-        "predictedLineCount": 6471,
-        "browserLineCount": 6473
+        "actualHeight": 168378
       },
       {
+        "id": "wrap-d843c6b6e9ee8aa6",
         "width": 430,
+        "contentWidth": 350,
         "diffPx": 26,
         "predictedHeight": 148150,
-        "actualHeight": 148124,
-        "predictedLineCount": 5695,
-        "browserLineCount": 5694
+        "actualHeight": 148124
       },
       {
+        "id": "wrap-d052d2f9e9fde12b",
         "width": 460,
+        "contentWidth": 380,
         "diffPx": -26,
         "predictedHeight": 135670,
-        "actualHeight": 135696,
-        "predictedLineCount": 5215,
-        "browserLineCount": 5216
+        "actualHeight": 135696
       },
       {
+        "id": "wrap-0d95bf82d42f1caa",
         "width": 470,
+        "contentWidth": 390,
         "diffPx": -26,
         "predictedHeight": 131952,
-        "actualHeight": 131978,
-        "predictedLineCount": 5072,
-        "browserLineCount": 5073
+        "actualHeight": 131978
       },
       {
+        "id": "wrap-d16efa14d9afd846",
         "width": 500,
+        "contentWidth": 420,
         "diffPx": -26,
         "predictedHeight": 122072,
-        "actualHeight": 122098,
-        "predictedLineCount": 4692,
-        "browserLineCount": 4693
+        "actualHeight": 122098
       },
       {
+        "id": "wrap-a7c91f6bd45f0365",
         "width": 580,
+        "contentWidth": 500,
         "diffPx": -26,
         "predictedHeight": 101818,
-        "actualHeight": 101844,
-        "predictedLineCount": 3913,
-        "browserLineCount": 3914
+        "actualHeight": 101844
       }
     ]
   },
   {
+    "generatedAt": "2026-09-09T09:46:22.685Z",
+    "suiteHash": "16bfd7e5f094c5d2d0245099b719f0f3e846cbd7132280e36c7a8811b5940caf",
+    "source": {
+      "revision": "785297b87973ef285abb884b1af6110ed2aacfd8",
+      "files": {
+        "analysis.ts": "68a34413572826fcbae8727143af5291ab194ce6bd7ffc327b956a5ccd6dcb39",
+        "bidi.ts": "70f7f01dcd866076b68dbf2a3c398364aceaba2ccf98037e77e0b3b8bcfbeaa5",
+        "entry-geometry.ts": "43ffacd71c3562283135590a06947eef4b2617cb3b6ba680c909dd5e2d2ba9a7",
+        "generated/bidi-data.ts": "745211b804d907af78afb6c1ed87eff6d7454a5e85152a6129eb7b3bf0f6f262",
+        "layout.ts": "66c36dea8d0191bd005c4c7c1fd9d52e26d0df0c0e3c5df954f379c4560811cf",
+        "line-break.ts": "ae5c22f2f7786eb63e355a7c8886086ea237e82e78ce5c7b6f202936fd4996d3",
+        "line-text.ts": "5e21684d995df8c30324c03a14b8a0bc3a579ce169a0e10b6d579b6aeee577dc",
+        "measurement.ts": "b024684745f51317ef8beb79c73fe8c53b0ddcf5e02654798f4571d28a9923d4",
+        "rich-inline.ts": "5a7e5d339e1f703d52928913e3b7d6a5f5df04bdfdd365f47c1890dde3b61964",
+        "text-modules.d.ts": "1547f88f0eb75293bc20054194a2bba29a4bc911c2a4fa99cef98141b6f99927"
+      }
+    },
+    "environments": [
+      {
+        "direction": "ltr",
+        "measurement": {
+          "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36",
+          "start": {
+            "dpr": 2,
+            "visualViewportScale": 1,
+            "innerWidth": 2287,
+            "innerHeight": 1268,
+            "outerWidth": 2560,
+            "outerHeight": 1315,
+            "screenX": 0,
+            "screenY": 30,
+            "screenWidth": 2560,
+            "screenHeight": 1440,
+            "screenAvailWidth": 2560,
+            "screenAvailHeight": 1315,
+            "visibility": "visible",
+            "focused": false,
+            "language": "ja",
+            "direction": "ltr"
+          },
+          "end": {
+            "dpr": 2,
+            "visualViewportScale": 1,
+            "innerWidth": 2287,
+            "innerHeight": 1268,
+            "outerWidth": 2560,
+            "outerHeight": 1315,
+            "screenX": 0,
+            "screenY": 30,
+            "screenWidth": 2560,
+            "screenHeight": 1440,
+            "screenAvailWidth": 2560,
+            "screenAvailHeight": 1315,
+            "visibility": "visible",
+            "focused": false,
+            "language": "ja",
+            "direction": "ltr"
+          },
+          "changes": []
+        },
+        "context": {
+          "kind": "installed",
+          "lang": "ja"
+        },
+        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36",
+        "dpr": 2,
+        "locale": "zh-CN",
+        "visibility": "visible",
+        "focused": false,
+        "fonts": []
+      }
+    ],
     "corpusId": "ja-rashomon",
     "language": "ja",
     "title": "羅生門",
@@ -133,56 +340,128 @@
     "exactCount": 55,
     "mismatches": [
       {
+        "id": "wrap-771563eaae004a98",
         "width": 320,
+        "contentWidth": 240,
         "diffPx": 32,
         "predictedHeight": 15344,
-        "actualHeight": 15312,
-        "predictedLineCount": 477,
-        "browserLineCount": 476
+        "actualHeight": 15312
       },
       {
+        "id": "wrap-1829233d6023acd9",
         "width": 330,
+        "contentWidth": 250,
         "diffPx": 32,
         "predictedHeight": 15216,
-        "actualHeight": 15184,
-        "predictedLineCount": 473,
-        "browserLineCount": 472
+        "actualHeight": 15184
       },
       {
+        "id": "wrap-3f8bb49945c9d8d5",
         "width": 370,
+        "contentWidth": 290,
         "diffPx": 32,
         "predictedHeight": 13072,
-        "actualHeight": 13040,
-        "predictedLineCount": 406,
-        "browserLineCount": 405
+        "actualHeight": 13040
       },
       {
+        "id": "wrap-a759399b9ba7ad35",
         "width": 460,
+        "contentWidth": 380,
         "diffPx": 32,
         "predictedHeight": 9680,
-        "actualHeight": 9648,
-        "predictedLineCount": 300,
-        "browserLineCount": 299
+        "actualHeight": 9648
       },
       {
+        "id": "wrap-0259422beb48ffdf",
         "width": 750,
+        "contentWidth": 670,
         "diffPx": 32,
         "predictedHeight": 5584,
-        "actualHeight": 5552,
-        "predictedLineCount": 172,
-        "browserLineCount": 171
+        "actualHeight": 5552
       },
       {
+        "id": "wrap-9e068523c9bcc417",
         "width": 890,
+        "contentWidth": 810,
         "diffPx": 32,
         "predictedHeight": 4624,
-        "actualHeight": 4592,
-        "predictedLineCount": 142,
-        "browserLineCount": 141
+        "actualHeight": 4592
       }
     ]
   },
   {
+    "generatedAt": "2026-09-09T09:46:22.685Z",
+    "suiteHash": "16bfd7e5f094c5d2d0245099b719f0f3e846cbd7132280e36c7a8811b5940caf",
+    "source": {
+      "revision": "785297b87973ef285abb884b1af6110ed2aacfd8",
+      "files": {
+        "analysis.ts": "68a34413572826fcbae8727143af5291ab194ce6bd7ffc327b956a5ccd6dcb39",
+        "bidi.ts": "70f7f01dcd866076b68dbf2a3c398364aceaba2ccf98037e77e0b3b8bcfbeaa5",
+        "entry-geometry.ts": "43ffacd71c3562283135590a06947eef4b2617cb3b6ba680c909dd5e2d2ba9a7",
+        "generated/bidi-data.ts": "745211b804d907af78afb6c1ed87eff6d7454a5e85152a6129eb7b3bf0f6f262",
+        "layout.ts": "66c36dea8d0191bd005c4c7c1fd9d52e26d0df0c0e3c5df954f379c4560811cf",
+        "line-break.ts": "ae5c22f2f7786eb63e355a7c8886086ea237e82e78ce5c7b6f202936fd4996d3",
+        "line-text.ts": "5e21684d995df8c30324c03a14b8a0bc3a579ce169a0e10b6d579b6aeee577dc",
+        "measurement.ts": "b024684745f51317ef8beb79c73fe8c53b0ddcf5e02654798f4571d28a9923d4",
+        "rich-inline.ts": "5a7e5d339e1f703d52928913e3b7d6a5f5df04bdfdd365f47c1890dde3b61964",
+        "text-modules.d.ts": "1547f88f0eb75293bc20054194a2bba29a4bc911c2a4fa99cef98141b6f99927"
+      }
+    },
+    "environments": [
+      {
+        "direction": "ltr",
+        "measurement": {
+          "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36",
+          "start": {
+            "dpr": 2,
+            "visualViewportScale": 1,
+            "innerWidth": 2287,
+            "innerHeight": 1268,
+            "outerWidth": 2560,
+            "outerHeight": 1315,
+            "screenX": 0,
+            "screenY": 30,
+            "screenWidth": 2560,
+            "screenHeight": 1440,
+            "screenAvailWidth": 2560,
+            "screenAvailHeight": 1315,
+            "visibility": "visible",
+            "focused": false,
+            "language": "ja",
+            "direction": "ltr"
+          },
+          "end": {
+            "dpr": 2,
+            "visualViewportScale": 1,
+            "innerWidth": 2287,
+            "innerHeight": 1268,
+            "outerWidth": 2560,
+            "outerHeight": 1315,
+            "screenX": 0,
+            "screenY": 30,
+            "screenWidth": 2560,
+            "screenHeight": 1440,
+            "screenAvailWidth": 2560,
+            "screenAvailHeight": 1315,
+            "visibility": "visible",
+            "focused": false,
+            "language": "ja",
+            "direction": "ltr"
+          },
+          "changes": []
+        },
+        "context": {
+          "kind": "installed",
+          "lang": "ja"
+        },
+        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36",
+        "dpr": 2,
+        "locale": "zh-CN",
+        "visibility": "visible",
+        "focused": false,
+        "fonts": []
+      }
+    ],
     "corpusId": "ja-kumo-no-ito",
     "language": "ja",
     "title": "蜘蛛の糸",
@@ -194,48 +473,120 @@
     "exactCount": 56,
     "mismatches": [
       {
+        "id": "wrap-002f7c11edffd8c7",
         "width": 310,
+        "contentWidth": 230,
         "diffPx": 32,
         "predictedHeight": 8496,
-        "actualHeight": 8464,
-        "predictedLineCount": 263,
-        "browserLineCount": 262
+        "actualHeight": 8464
       },
       {
+        "id": "wrap-017ca9af47718641",
         "width": 330,
+        "contentWidth": 250,
         "diffPx": 32,
         "predictedHeight": 7760,
-        "actualHeight": 7728,
-        "predictedLineCount": 240,
-        "browserLineCount": 239
+        "actualHeight": 7728
       },
       {
+        "id": "wrap-cbaedf2c715c6ee6",
         "width": 410,
+        "contentWidth": 330,
         "diffPx": 32,
         "predictedHeight": 5840,
-        "actualHeight": 5808,
-        "predictedLineCount": 180,
-        "browserLineCount": 179
+        "actualHeight": 5808
       },
       {
+        "id": "wrap-09221da028f578e2",
         "width": 450,
+        "contentWidth": 370,
         "diffPx": 32,
         "predictedHeight": 5200,
-        "actualHeight": 5168,
-        "predictedLineCount": 160,
-        "browserLineCount": 159
+        "actualHeight": 5168
       },
       {
+        "id": "wrap-8c6d5cb0107d5d26",
         "width": 630,
+        "contentWidth": 550,
         "diffPx": 32,
         "predictedHeight": 3504,
-        "actualHeight": 3472,
-        "predictedLineCount": 107,
-        "browserLineCount": 106
+        "actualHeight": 3472
       }
     ]
   },
   {
+    "generatedAt": "2026-09-09T09:46:22.685Z",
+    "suiteHash": "16bfd7e5f094c5d2d0245099b719f0f3e846cbd7132280e36c7a8811b5940caf",
+    "source": {
+      "revision": "785297b87973ef285abb884b1af6110ed2aacfd8",
+      "files": {
+        "analysis.ts": "68a34413572826fcbae8727143af5291ab194ce6bd7ffc327b956a5ccd6dcb39",
+        "bidi.ts": "70f7f01dcd866076b68dbf2a3c398364aceaba2ccf98037e77e0b3b8bcfbeaa5",
+        "entry-geometry.ts": "43ffacd71c3562283135590a06947eef4b2617cb3b6ba680c909dd5e2d2ba9a7",
+        "generated/bidi-data.ts": "745211b804d907af78afb6c1ed87eff6d7454a5e85152a6129eb7b3bf0f6f262",
+        "layout.ts": "66c36dea8d0191bd005c4c7c1fd9d52e26d0df0c0e3c5df954f379c4560811cf",
+        "line-break.ts": "ae5c22f2f7786eb63e355a7c8886086ea237e82e78ce5c7b6f202936fd4996d3",
+        "line-text.ts": "5e21684d995df8c30324c03a14b8a0bc3a579ce169a0e10b6d579b6aeee577dc",
+        "measurement.ts": "b024684745f51317ef8beb79c73fe8c53b0ddcf5e02654798f4571d28a9923d4",
+        "rich-inline.ts": "5a7e5d339e1f703d52928913e3b7d6a5f5df04bdfdd365f47c1890dde3b61964",
+        "text-modules.d.ts": "1547f88f0eb75293bc20054194a2bba29a4bc911c2a4fa99cef98141b6f99927"
+      }
+    },
+    "environments": [
+      {
+        "direction": "ltr",
+        "measurement": {
+          "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36",
+          "start": {
+            "dpr": 2,
+            "visualViewportScale": 1,
+            "innerWidth": 2287,
+            "innerHeight": 1268,
+            "outerWidth": 2560,
+            "outerHeight": 1315,
+            "screenX": 0,
+            "screenY": 30,
+            "screenWidth": 2560,
+            "screenHeight": 1440,
+            "screenAvailWidth": 2560,
+            "screenAvailHeight": 1315,
+            "visibility": "visible",
+            "focused": false,
+            "language": "ko",
+            "direction": "ltr"
+          },
+          "end": {
+            "dpr": 2,
+            "visualViewportScale": 1,
+            "innerWidth": 2287,
+            "innerHeight": 1268,
+            "outerWidth": 2560,
+            "outerHeight": 1315,
+            "screenX": 0,
+            "screenY": 30,
+            "screenWidth": 2560,
+            "screenHeight": 1440,
+            "screenAvailWidth": 2560,
+            "screenAvailHeight": 1315,
+            "visibility": "visible",
+            "focused": false,
+            "language": "ko",
+            "direction": "ltr"
+          },
+          "changes": []
+        },
+        "context": {
+          "kind": "installed",
+          "lang": "ko"
+        },
+        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36",
+        "dpr": 2,
+        "locale": "zh-CN",
+        "visibility": "visible",
+        "focused": false,
+        "fonts": []
+      }
+    ],
     "corpusId": "ko-unsu-joh-eun-nal",
     "language": "ko",
     "title": "운수 좋은 날",
@@ -248,6 +599,78 @@
     "mismatches": []
   },
   {
+    "generatedAt": "2026-09-09T09:46:22.685Z",
+    "suiteHash": "16bfd7e5f094c5d2d0245099b719f0f3e846cbd7132280e36c7a8811b5940caf",
+    "source": {
+      "revision": "785297b87973ef285abb884b1af6110ed2aacfd8",
+      "files": {
+        "analysis.ts": "68a34413572826fcbae8727143af5291ab194ce6bd7ffc327b956a5ccd6dcb39",
+        "bidi.ts": "70f7f01dcd866076b68dbf2a3c398364aceaba2ccf98037e77e0b3b8bcfbeaa5",
+        "entry-geometry.ts": "43ffacd71c3562283135590a06947eef4b2617cb3b6ba680c909dd5e2d2ba9a7",
+        "generated/bidi-data.ts": "745211b804d907af78afb6c1ed87eff6d7454a5e85152a6129eb7b3bf0f6f262",
+        "layout.ts": "66c36dea8d0191bd005c4c7c1fd9d52e26d0df0c0e3c5df954f379c4560811cf",
+        "line-break.ts": "ae5c22f2f7786eb63e355a7c8886086ea237e82e78ce5c7b6f202936fd4996d3",
+        "line-text.ts": "5e21684d995df8c30324c03a14b8a0bc3a579ce169a0e10b6d579b6aeee577dc",
+        "measurement.ts": "b024684745f51317ef8beb79c73fe8c53b0ddcf5e02654798f4571d28a9923d4",
+        "rich-inline.ts": "5a7e5d339e1f703d52928913e3b7d6a5f5df04bdfdd365f47c1890dde3b61964",
+        "text-modules.d.ts": "1547f88f0eb75293bc20054194a2bba29a4bc911c2a4fa99cef98141b6f99927"
+      }
+    },
+    "environments": [
+      {
+        "direction": "ltr",
+        "measurement": {
+          "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36",
+          "start": {
+            "dpr": 2,
+            "visualViewportScale": 1,
+            "innerWidth": 2287,
+            "innerHeight": 1268,
+            "outerWidth": 2560,
+            "outerHeight": 1315,
+            "screenX": 0,
+            "screenY": 30,
+            "screenWidth": 2560,
+            "screenHeight": 1440,
+            "screenAvailWidth": 2560,
+            "screenAvailHeight": 1315,
+            "visibility": "visible",
+            "focused": false,
+            "language": "ko",
+            "direction": "ltr"
+          },
+          "end": {
+            "dpr": 2,
+            "visualViewportScale": 1,
+            "innerWidth": 2287,
+            "innerHeight": 1268,
+            "outerWidth": 2560,
+            "outerHeight": 1315,
+            "screenX": 0,
+            "screenY": 30,
+            "screenWidth": 2560,
+            "screenHeight": 1440,
+            "screenAvailWidth": 2560,
+            "screenAvailHeight": 1315,
+            "visibility": "visible",
+            "focused": false,
+            "language": "ko",
+            "direction": "ltr"
+          },
+          "changes": []
+        },
+        "context": {
+          "kind": "installed",
+          "lang": "ko"
+        },
+        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36",
+        "dpr": 2,
+        "locale": "zh-CN",
+        "visibility": "visible",
+        "focused": false,
+        "fonts": []
+      }
+    ],
     "corpusId": "ko-sonagi",
     "language": "ko",
     "title": "소나기",
@@ -260,6 +683,78 @@
     "mismatches": []
   },
   {
+    "generatedAt": "2026-09-09T09:46:22.685Z",
+    "suiteHash": "16bfd7e5f094c5d2d0245099b719f0f3e846cbd7132280e36c7a8811b5940caf",
+    "source": {
+      "revision": "785297b87973ef285abb884b1af6110ed2aacfd8",
+      "files": {
+        "analysis.ts": "68a34413572826fcbae8727143af5291ab194ce6bd7ffc327b956a5ccd6dcb39",
+        "bidi.ts": "70f7f01dcd866076b68dbf2a3c398364aceaba2ccf98037e77e0b3b8bcfbeaa5",
+        "entry-geometry.ts": "43ffacd71c3562283135590a06947eef4b2617cb3b6ba680c909dd5e2d2ba9a7",
+        "generated/bidi-data.ts": "745211b804d907af78afb6c1ed87eff6d7454a5e85152a6129eb7b3bf0f6f262",
+        "layout.ts": "66c36dea8d0191bd005c4c7c1fd9d52e26d0df0c0e3c5df954f379c4560811cf",
+        "line-break.ts": "ae5c22f2f7786eb63e355a7c8886086ea237e82e78ce5c7b6f202936fd4996d3",
+        "line-text.ts": "5e21684d995df8c30324c03a14b8a0bc3a579ce169a0e10b6d579b6aeee577dc",
+        "measurement.ts": "b024684745f51317ef8beb79c73fe8c53b0ddcf5e02654798f4571d28a9923d4",
+        "rich-inline.ts": "5a7e5d339e1f703d52928913e3b7d6a5f5df04bdfdd365f47c1890dde3b61964",
+        "text-modules.d.ts": "1547f88f0eb75293bc20054194a2bba29a4bc911c2a4fa99cef98141b6f99927"
+      }
+    },
+    "environments": [
+      {
+        "direction": "ltr",
+        "measurement": {
+          "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36",
+          "start": {
+            "dpr": 2,
+            "visualViewportScale": 1,
+            "innerWidth": 2287,
+            "innerHeight": 1268,
+            "outerWidth": 2560,
+            "outerHeight": 1315,
+            "screenX": 0,
+            "screenY": 30,
+            "screenWidth": 2560,
+            "screenHeight": 1440,
+            "screenAvailWidth": 2560,
+            "screenAvailHeight": 1315,
+            "visibility": "visible",
+            "focused": false,
+            "language": "zh",
+            "direction": "ltr"
+          },
+          "end": {
+            "dpr": 2,
+            "visualViewportScale": 1,
+            "innerWidth": 2287,
+            "innerHeight": 1268,
+            "outerWidth": 2560,
+            "outerHeight": 1315,
+            "screenX": 0,
+            "screenY": 30,
+            "screenWidth": 2560,
+            "screenHeight": 1440,
+            "screenAvailWidth": 2560,
+            "screenAvailHeight": 1315,
+            "visibility": "visible",
+            "focused": false,
+            "language": "zh",
+            "direction": "ltr"
+          },
+          "changes": []
+        },
+        "context": {
+          "kind": "installed",
+          "lang": "zh"
+        },
+        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36",
+        "dpr": 2,
+        "locale": "zh-CN",
+        "visibility": "visible",
+        "focused": false,
+        "fonts": []
+      }
+    ],
     "corpusId": "zh-zhufu",
     "language": "zh",
     "title": "祝福",
@@ -268,163 +763,227 @@
     "end": 900,
     "step": 10,
     "widthCount": 61,
-    "exactCount": 42,
+    "exactCount": 43,
     "mismatches": [
       {
+        "id": "wrap-3f65ff0751ebf877",
         "width": 300,
+        "contentWidth": 220,
         "diffPx": 32,
         "predictedHeight": 27440,
-        "actualHeight": 27408,
-        "predictedLineCount": 855,
-        "browserLineCount": 854
+        "actualHeight": 27408
       },
       {
+        "id": "wrap-5765f0b48591abb6",
         "width": 310,
+        "contentWidth": 230,
         "diffPx": 32,
         "predictedHeight": 27248,
-        "actualHeight": 27216,
-        "predictedLineCount": 849,
-        "browserLineCount": 848
+        "actualHeight": 27216
       },
       {
+        "id": "wrap-b1255911f89744f1",
         "width": 320,
+        "contentWidth": 240,
         "diffPx": 32,
         "predictedHeight": 25232,
-        "actualHeight": 25200,
-        "predictedLineCount": 786,
-        "browserLineCount": 785
+        "actualHeight": 25200
       },
       {
+        "id": "wrap-e5d3b0ce09cef830",
         "width": 330,
+        "contentWidth": 250,
         "diffPx": 64,
         "predictedHeight": 24976,
-        "actualHeight": 24912,
-        "predictedLineCount": 778,
-        "browserLineCount": 776
+        "actualHeight": 24912
       },
       {
+        "id": "wrap-541fdfab09850273",
         "width": 340,
+        "contentWidth": 260,
         "diffPx": 32,
         "predictedHeight": 23280,
-        "actualHeight": 23248,
-        "predictedLineCount": 725,
-        "browserLineCount": 724
+        "actualHeight": 23248
       },
       {
+        "id": "wrap-e43de2783d2ab5b2",
         "width": 350,
+        "contentWidth": 270,
         "diffPx": 64,
         "predictedHeight": 23056,
-        "actualHeight": 22992,
-        "predictedLineCount": 718,
-        "browserLineCount": 716
+        "actualHeight": 22992
       },
       {
+        "id": "wrap-91ce3c35b0f8b0fd",
         "width": 360,
+        "contentWidth": 280,
         "diffPx": 32,
         "predictedHeight": 21584,
-        "actualHeight": 21552,
-        "predictedLineCount": 672,
-        "browserLineCount": 671
+        "actualHeight": 21552
       },
       {
+        "id": "wrap-19019384ed2385d0",
         "width": 420,
+        "contentWidth": 340,
         "diffPx": 32,
         "predictedHeight": 17776,
-        "actualHeight": 17744,
-        "predictedLineCount": 553,
-        "browserLineCount": 552
+        "actualHeight": 17744
       },
       {
+        "id": "wrap-b76eb5adc59ee813",
         "width": 450,
+        "contentWidth": 370,
         "diffPx": 32,
         "predictedHeight": 16624,
-        "actualHeight": 16592,
-        "predictedLineCount": 517,
-        "browserLineCount": 516
+        "actualHeight": 16592
       },
       {
+        "id": "wrap-57bfe2c0a584f1dc",
         "width": 460,
+        "contentWidth": 380,
         "diffPx": 32,
         "predictedHeight": 15888,
-        "actualHeight": 15856,
-        "predictedLineCount": 494,
-        "browserLineCount": 493
+        "actualHeight": 15856
       },
       {
+        "id": "wrap-f0cd9513f50cd89d",
         "width": 470,
+        "contentWidth": 390,
         "diffPx": 32,
         "predictedHeight": 15728,
-        "actualHeight": 15696,
-        "predictedLineCount": 489,
-        "browserLineCount": 488
+        "actualHeight": 15696
       },
       {
-        "width": 490,
-        "diffPx": -32,
-        "predictedHeight": 14928,
-        "actualHeight": 14960,
-        "predictedLineCount": 464,
-        "browserLineCount": 465
-      },
-      {
+        "id": "wrap-dbb0d8dafe1f8e70",
         "width": 510,
+        "contentWidth": 430,
         "diffPx": 32,
         "predictedHeight": 14224,
-        "actualHeight": 14192,
-        "predictedLineCount": 442,
-        "browserLineCount": 441
+        "actualHeight": 14192
       },
       {
+        "id": "wrap-eee9361e46868474",
         "width": 550,
+        "contentWidth": 470,
         "diffPx": 32,
         "predictedHeight": 13008,
-        "actualHeight": 12976,
-        "predictedLineCount": 404,
-        "browserLineCount": 403
+        "actualHeight": 12976
       },
       {
+        "id": "wrap-da31e002abf9699a",
         "width": 660,
+        "contentWidth": 580,
         "diffPx": 32,
         "predictedHeight": 10416,
-        "actualHeight": 10384,
-        "predictedLineCount": 323,
-        "browserLineCount": 322
+        "actualHeight": 10384
       },
       {
+        "id": "wrap-79cc9e994d28bb79",
         "width": 760,
+        "contentWidth": 680,
         "diffPx": 32,
         "predictedHeight": 8880,
-        "actualHeight": 8848,
-        "predictedLineCount": 275,
-        "browserLineCount": 274
+        "actualHeight": 8848
       },
       {
+        "id": "wrap-80550e965e606eb8",
         "width": 770,
+        "contentWidth": 690,
         "diffPx": 32,
         "predictedHeight": 8816,
-        "actualHeight": 8784,
-        "predictedLineCount": 273,
-        "browserLineCount": 272
+        "actualHeight": 8784
       },
       {
+        "id": "wrap-20171de9f29cde97",
         "width": 850,
+        "contentWidth": 770,
         "diffPx": 32,
         "predictedHeight": 7888,
-        "actualHeight": 7856,
-        "predictedLineCount": 244,
-        "browserLineCount": 243
+        "actualHeight": 7856
       },
       {
+        "id": "wrap-21b5b347913ce319",
         "width": 870,
+        "contentWidth": 790,
         "diffPx": 32,
         "predictedHeight": 7696,
-        "actualHeight": 7664,
-        "predictedLineCount": 238,
-        "browserLineCount": 237
+        "actualHeight": 7664
       }
     ]
   },
   {
+    "generatedAt": "2026-09-09T09:46:22.685Z",
+    "suiteHash": "16bfd7e5f094c5d2d0245099b719f0f3e846cbd7132280e36c7a8811b5940caf",
+    "source": {
+      "revision": "785297b87973ef285abb884b1af6110ed2aacfd8",
+      "files": {
+        "analysis.ts": "68a34413572826fcbae8727143af5291ab194ce6bd7ffc327b956a5ccd6dcb39",
+        "bidi.ts": "70f7f01dcd866076b68dbf2a3c398364aceaba2ccf98037e77e0b3b8bcfbeaa5",
+        "entry-geometry.ts": "43ffacd71c3562283135590a06947eef4b2617cb3b6ba680c909dd5e2d2ba9a7",
+        "generated/bidi-data.ts": "745211b804d907af78afb6c1ed87eff6d7454a5e85152a6129eb7b3bf0f6f262",
+        "layout.ts": "66c36dea8d0191bd005c4c7c1fd9d52e26d0df0c0e3c5df954f379c4560811cf",
+        "line-break.ts": "ae5c22f2f7786eb63e355a7c8886086ea237e82e78ce5c7b6f202936fd4996d3",
+        "line-text.ts": "5e21684d995df8c30324c03a14b8a0bc3a579ce169a0e10b6d579b6aeee577dc",
+        "measurement.ts": "b024684745f51317ef8beb79c73fe8c53b0ddcf5e02654798f4571d28a9923d4",
+        "rich-inline.ts": "5a7e5d339e1f703d52928913e3b7d6a5f5df04bdfdd365f47c1890dde3b61964",
+        "text-modules.d.ts": "1547f88f0eb75293bc20054194a2bba29a4bc911c2a4fa99cef98141b6f99927"
+      }
+    },
+    "environments": [
+      {
+        "direction": "ltr",
+        "measurement": {
+          "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36",
+          "start": {
+            "dpr": 2,
+            "visualViewportScale": 1,
+            "innerWidth": 2287,
+            "innerHeight": 1268,
+            "outerWidth": 2560,
+            "outerHeight": 1315,
+            "screenX": 0,
+            "screenY": 30,
+            "screenWidth": 2560,
+            "screenHeight": 1440,
+            "screenAvailWidth": 2560,
+            "screenAvailHeight": 1315,
+            "visibility": "visible",
+            "focused": false,
+            "language": "zh",
+            "direction": "ltr"
+          },
+          "end": {
+            "dpr": 2,
+            "visualViewportScale": 1,
+            "innerWidth": 2287,
+            "innerHeight": 1268,
+            "outerWidth": 2560,
+            "outerHeight": 1315,
+            "screenX": 0,
+            "screenY": 30,
+            "screenWidth": 2560,
+            "screenHeight": 1440,
+            "screenAvailWidth": 2560,
+            "screenAvailHeight": 1315,
+            "visibility": "visible",
+            "focused": false,
+            "language": "zh",
+            "direction": "ltr"
+          },
+          "changes": []
+        },
+        "context": {
+          "kind": "installed",
+          "lang": "zh"
+        },
+        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36",
+        "dpr": 2,
+        "locale": "zh-CN",
+        "visibility": "visible",
+        "focused": false,
+        "fonts": []
+      }
+    ],
     "corpusId": "zh-guxiang",
     "language": "zh",
     "title": "故鄉",
@@ -436,64 +995,136 @@
     "exactCount": 54,
     "mismatches": [
       {
+        "id": "wrap-2d9cb0455b7aba7f",
         "width": 300,
+        "contentWidth": 220,
         "diffPx": 64,
         "predictedHeight": 16592,
-        "actualHeight": 16528,
-        "predictedLineCount": 516,
-        "browserLineCount": 514
+        "actualHeight": 16528
       },
       {
+        "id": "wrap-61de0840135dba38",
         "width": 330,
+        "contentWidth": 250,
         "diffPx": 96,
         "predictedHeight": 14960,
-        "actualHeight": 14864,
-        "predictedLineCount": 465,
-        "browserLineCount": 462
+        "actualHeight": 14864
       },
       {
+        "id": "wrap-4caad397da9286f5",
         "width": 360,
+        "contentWidth": 280,
         "diffPx": 32,
         "predictedHeight": 13008,
-        "actualHeight": 12976,
-        "predictedLineCount": 404,
-        "browserLineCount": 403
+        "actualHeight": 12976
       },
       {
+        "id": "wrap-da772da3cf2daa1b",
         "width": 450,
+        "contentWidth": 370,
         "diffPx": 32,
         "predictedHeight": 9936,
-        "actualHeight": 9904,
-        "predictedLineCount": 308,
-        "browserLineCount": 307
+        "actualHeight": 9904
       },
       {
+        "id": "wrap-b4ce2ecc07ae5078",
         "width": 510,
+        "contentWidth": 430,
         "diffPx": 32,
         "predictedHeight": 8528,
-        "actualHeight": 8496,
-        "predictedLineCount": 264,
-        "browserLineCount": 263
+        "actualHeight": 8496
       },
       {
+        "id": "wrap-a75d753bc30fe253",
         "width": 670,
+        "contentWidth": 590,
         "diffPx": 32,
         "predictedHeight": 6192,
-        "actualHeight": 6160,
-        "predictedLineCount": 191,
-        "browserLineCount": 190
+        "actualHeight": 6160
       },
       {
+        "id": "wrap-dc63d4b1f7aac4fb",
         "width": 700,
+        "contentWidth": 620,
         "diffPx": 32,
         "predictedHeight": 5872,
-        "actualHeight": 5840,
-        "predictedLineCount": 181,
-        "browserLineCount": 180
+        "actualHeight": 5840
       }
     ]
   },
   {
+    "generatedAt": "2026-09-09T09:46:22.685Z",
+    "suiteHash": "16bfd7e5f094c5d2d0245099b719f0f3e846cbd7132280e36c7a8811b5940caf",
+    "source": {
+      "revision": "785297b87973ef285abb884b1af6110ed2aacfd8",
+      "files": {
+        "analysis.ts": "68a34413572826fcbae8727143af5291ab194ce6bd7ffc327b956a5ccd6dcb39",
+        "bidi.ts": "70f7f01dcd866076b68dbf2a3c398364aceaba2ccf98037e77e0b3b8bcfbeaa5",
+        "entry-geometry.ts": "43ffacd71c3562283135590a06947eef4b2617cb3b6ba680c909dd5e2d2ba9a7",
+        "generated/bidi-data.ts": "745211b804d907af78afb6c1ed87eff6d7454a5e85152a6129eb7b3bf0f6f262",
+        "layout.ts": "66c36dea8d0191bd005c4c7c1fd9d52e26d0df0c0e3c5df954f379c4560811cf",
+        "line-break.ts": "ae5c22f2f7786eb63e355a7c8886086ea237e82e78ce5c7b6f202936fd4996d3",
+        "line-text.ts": "5e21684d995df8c30324c03a14b8a0bc3a579ce169a0e10b6d579b6aeee577dc",
+        "measurement.ts": "b024684745f51317ef8beb79c73fe8c53b0ddcf5e02654798f4571d28a9923d4",
+        "rich-inline.ts": "5a7e5d339e1f703d52928913e3b7d6a5f5df04bdfdd365f47c1890dde3b61964",
+        "text-modules.d.ts": "1547f88f0eb75293bc20054194a2bba29a4bc911c2a4fa99cef98141b6f99927"
+      }
+    },
+    "environments": [
+      {
+        "direction": "ltr",
+        "measurement": {
+          "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36",
+          "start": {
+            "dpr": 2,
+            "visualViewportScale": 1,
+            "innerWidth": 2287,
+            "innerHeight": 1268,
+            "outerWidth": 2560,
+            "outerHeight": 1315,
+            "screenX": 0,
+            "screenY": 30,
+            "screenWidth": 2560,
+            "screenHeight": 1440,
+            "screenAvailWidth": 2560,
+            "screenAvailHeight": 1315,
+            "visibility": "visible",
+            "focused": false,
+            "language": "th",
+            "direction": "ltr"
+          },
+          "end": {
+            "dpr": 2,
+            "visualViewportScale": 1,
+            "innerWidth": 2287,
+            "innerHeight": 1268,
+            "outerWidth": 2560,
+            "outerHeight": 1315,
+            "screenX": 0,
+            "screenY": 30,
+            "screenWidth": 2560,
+            "screenHeight": 1440,
+            "screenAvailWidth": 2560,
+            "screenAvailHeight": 1315,
+            "visibility": "visible",
+            "focused": false,
+            "language": "th",
+            "direction": "ltr"
+          },
+          "changes": []
+        },
+        "context": {
+          "kind": "installed",
+          "lang": "th"
+        },
+        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36",
+        "dpr": 2,
+        "locale": "zh-CN",
+        "visibility": "visible",
+        "focused": false,
+        "fonts": []
+      }
+    ],
     "corpusId": "th-nithan-vetal-story-1",
     "language": "th",
     "title": "นิทานเวตาล/เรื่องที่ 1",
@@ -505,24 +1136,96 @@
     "exactCount": 59,
     "mismatches": [
       {
+        "id": "wrap-8b42eaf9552c4b01",
         "width": 370,
+        "contentWidth": 290,
         "diffPx": 32,
         "predictedHeight": 34064,
-        "actualHeight": 34032,
-        "predictedLineCount": 1062,
-        "browserLineCount": 1061
+        "actualHeight": 34032
       },
       {
+        "id": "wrap-12bf6dc7b6bda3cf",
         "width": 490,
+        "contentWidth": 410,
         "diffPx": 32,
         "predictedHeight": 23664,
-        "actualHeight": 23632,
-        "predictedLineCount": 737,
-        "browserLineCount": 736
+        "actualHeight": 23632
       }
     ]
   },
   {
+    "generatedAt": "2026-09-09T09:46:22.685Z",
+    "suiteHash": "16bfd7e5f094c5d2d0245099b719f0f3e846cbd7132280e36c7a8811b5940caf",
+    "source": {
+      "revision": "785297b87973ef285abb884b1af6110ed2aacfd8",
+      "files": {
+        "analysis.ts": "68a34413572826fcbae8727143af5291ab194ce6bd7ffc327b956a5ccd6dcb39",
+        "bidi.ts": "70f7f01dcd866076b68dbf2a3c398364aceaba2ccf98037e77e0b3b8bcfbeaa5",
+        "entry-geometry.ts": "43ffacd71c3562283135590a06947eef4b2617cb3b6ba680c909dd5e2d2ba9a7",
+        "generated/bidi-data.ts": "745211b804d907af78afb6c1ed87eff6d7454a5e85152a6129eb7b3bf0f6f262",
+        "layout.ts": "66c36dea8d0191bd005c4c7c1fd9d52e26d0df0c0e3c5df954f379c4560811cf",
+        "line-break.ts": "ae5c22f2f7786eb63e355a7c8886086ea237e82e78ce5c7b6f202936fd4996d3",
+        "line-text.ts": "5e21684d995df8c30324c03a14b8a0bc3a579ce169a0e10b6d579b6aeee577dc",
+        "measurement.ts": "b024684745f51317ef8beb79c73fe8c53b0ddcf5e02654798f4571d28a9923d4",
+        "rich-inline.ts": "5a7e5d339e1f703d52928913e3b7d6a5f5df04bdfdd365f47c1890dde3b61964",
+        "text-modules.d.ts": "1547f88f0eb75293bc20054194a2bba29a4bc911c2a4fa99cef98141b6f99927"
+      }
+    },
+    "environments": [
+      {
+        "direction": "ltr",
+        "measurement": {
+          "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36",
+          "start": {
+            "dpr": 2,
+            "visualViewportScale": 1,
+            "innerWidth": 2287,
+            "innerHeight": 1268,
+            "outerWidth": 2560,
+            "outerHeight": 1315,
+            "screenX": 0,
+            "screenY": 30,
+            "screenWidth": 2560,
+            "screenHeight": 1440,
+            "screenAvailWidth": 2560,
+            "screenAvailHeight": 1315,
+            "visibility": "visible",
+            "focused": false,
+            "language": "th",
+            "direction": "ltr"
+          },
+          "end": {
+            "dpr": 2,
+            "visualViewportScale": 1,
+            "innerWidth": 2287,
+            "innerHeight": 1268,
+            "outerWidth": 2560,
+            "outerHeight": 1315,
+            "screenX": 0,
+            "screenY": 30,
+            "screenWidth": 2560,
+            "screenHeight": 1440,
+            "screenAvailWidth": 2560,
+            "screenAvailHeight": 1315,
+            "visibility": "visible",
+            "focused": false,
+            "language": "th",
+            "direction": "ltr"
+          },
+          "changes": []
+        },
+        "context": {
+          "kind": "installed",
+          "lang": "th"
+        },
+        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36",
+        "dpr": 2,
+        "locale": "zh-CN",
+        "visibility": "visible",
+        "focused": false,
+        "fonts": []
+      }
+    ],
     "corpusId": "th-nithan-vetal-story-7",
     "language": "th",
     "title": "นิทานเวตาล เรื่องที่ ๗",
@@ -534,16 +1237,88 @@
     "exactCount": 60,
     "mismatches": [
       {
+        "id": "wrap-a35cc96aaa751b98",
         "width": 320,
+        "contentWidth": 240,
         "diffPx": 32,
         "predictedHeight": 37712,
-        "actualHeight": 37680,
-        "predictedLineCount": 1176,
-        "browserLineCount": 1175
+        "actualHeight": 37680
       }
     ]
   },
   {
+    "generatedAt": "2026-09-09T09:46:22.685Z",
+    "suiteHash": "16bfd7e5f094c5d2d0245099b719f0f3e846cbd7132280e36c7a8811b5940caf",
+    "source": {
+      "revision": "785297b87973ef285abb884b1af6110ed2aacfd8",
+      "files": {
+        "analysis.ts": "68a34413572826fcbae8727143af5291ab194ce6bd7ffc327b956a5ccd6dcb39",
+        "bidi.ts": "70f7f01dcd866076b68dbf2a3c398364aceaba2ccf98037e77e0b3b8bcfbeaa5",
+        "entry-geometry.ts": "43ffacd71c3562283135590a06947eef4b2617cb3b6ba680c909dd5e2d2ba9a7",
+        "generated/bidi-data.ts": "745211b804d907af78afb6c1ed87eff6d7454a5e85152a6129eb7b3bf0f6f262",
+        "layout.ts": "66c36dea8d0191bd005c4c7c1fd9d52e26d0df0c0e3c5df954f379c4560811cf",
+        "line-break.ts": "ae5c22f2f7786eb63e355a7c8886086ea237e82e78ce5c7b6f202936fd4996d3",
+        "line-text.ts": "5e21684d995df8c30324c03a14b8a0bc3a579ce169a0e10b6d579b6aeee577dc",
+        "measurement.ts": "b024684745f51317ef8beb79c73fe8c53b0ddcf5e02654798f4571d28a9923d4",
+        "rich-inline.ts": "5a7e5d339e1f703d52928913e3b7d6a5f5df04bdfdd365f47c1890dde3b61964",
+        "text-modules.d.ts": "1547f88f0eb75293bc20054194a2bba29a4bc911c2a4fa99cef98141b6f99927"
+      }
+    },
+    "environments": [
+      {
+        "direction": "ltr",
+        "measurement": {
+          "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36",
+          "start": {
+            "dpr": 2,
+            "visualViewportScale": 1,
+            "innerWidth": 2287,
+            "innerHeight": 1268,
+            "outerWidth": 2560,
+            "outerHeight": 1315,
+            "screenX": 0,
+            "screenY": 30,
+            "screenWidth": 2560,
+            "screenHeight": 1440,
+            "screenAvailWidth": 2560,
+            "screenAvailHeight": 1315,
+            "visibility": "visible",
+            "focused": false,
+            "language": "my",
+            "direction": "ltr"
+          },
+          "end": {
+            "dpr": 2,
+            "visualViewportScale": 1,
+            "innerWidth": 2287,
+            "innerHeight": 1268,
+            "outerWidth": 2560,
+            "outerHeight": 1315,
+            "screenX": 0,
+            "screenY": 30,
+            "screenWidth": 2560,
+            "screenHeight": 1440,
+            "screenAvailWidth": 2560,
+            "screenAvailHeight": 1315,
+            "visibility": "visible",
+            "focused": false,
+            "language": "my",
+            "direction": "ltr"
+          },
+          "changes": []
+        },
+        "context": {
+          "kind": "installed",
+          "lang": "my"
+        },
+        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36",
+        "dpr": 2,
+        "locale": "zh-CN",
+        "visibility": "visible",
+        "focused": false,
+        "fonts": []
+      }
+    ],
     "corpusId": "my-cunning-heron-teacher",
     "language": "my",
     "title": "စဉ်းလဲသော ဗျိုင်း (ဆရာ)",
@@ -552,51 +1327,82 @@
     "end": 900,
     "step": 10,
     "widthCount": 61,
-    "exactCount": 56,
-    "mismatches": [
-      {
-        "width": 340,
-        "diffPx": -32,
-        "predictedHeight": 3120,
-        "actualHeight": 3152,
-        "predictedLineCount": 95,
-        "browserLineCount": 96
-      },
-      {
-        "width": 350,
-        "diffPx": -32,
-        "predictedHeight": 2960,
-        "actualHeight": 2992,
-        "predictedLineCount": 90,
-        "browserLineCount": 91
-      },
-      {
-        "width": 480,
-        "diffPx": -32,
-        "predictedHeight": 2000,
-        "actualHeight": 2032,
-        "predictedLineCount": 60,
-        "browserLineCount": 61
-      },
-      {
-        "width": 690,
-        "diffPx": -32,
-        "predictedHeight": 1296,
-        "actualHeight": 1328,
-        "predictedLineCount": 38,
-        "browserLineCount": 39
-      },
-      {
-        "width": 710,
-        "diffPx": -32,
-        "predictedHeight": 1264,
-        "actualHeight": 1296,
-        "predictedLineCount": 37,
-        "browserLineCount": 38
-      }
-    ]
+    "exactCount": 61,
+    "mismatches": []
   },
   {
+    "generatedAt": "2026-09-09T09:46:22.685Z",
+    "suiteHash": "16bfd7e5f094c5d2d0245099b719f0f3e846cbd7132280e36c7a8811b5940caf",
+    "source": {
+      "revision": "785297b87973ef285abb884b1af6110ed2aacfd8",
+      "files": {
+        "analysis.ts": "68a34413572826fcbae8727143af5291ab194ce6bd7ffc327b956a5ccd6dcb39",
+        "bidi.ts": "70f7f01dcd866076b68dbf2a3c398364aceaba2ccf98037e77e0b3b8bcfbeaa5",
+        "entry-geometry.ts": "43ffacd71c3562283135590a06947eef4b2617cb3b6ba680c909dd5e2d2ba9a7",
+        "generated/bidi-data.ts": "745211b804d907af78afb6c1ed87eff6d7454a5e85152a6129eb7b3bf0f6f262",
+        "layout.ts": "66c36dea8d0191bd005c4c7c1fd9d52e26d0df0c0e3c5df954f379c4560811cf",
+        "line-break.ts": "ae5c22f2f7786eb63e355a7c8886086ea237e82e78ce5c7b6f202936fd4996d3",
+        "line-text.ts": "5e21684d995df8c30324c03a14b8a0bc3a579ce169a0e10b6d579b6aeee577dc",
+        "measurement.ts": "b024684745f51317ef8beb79c73fe8c53b0ddcf5e02654798f4571d28a9923d4",
+        "rich-inline.ts": "5a7e5d339e1f703d52928913e3b7d6a5f5df04bdfdd365f47c1890dde3b61964",
+        "text-modules.d.ts": "1547f88f0eb75293bc20054194a2bba29a4bc911c2a4fa99cef98141b6f99927"
+      }
+    },
+    "environments": [
+      {
+        "direction": "ltr",
+        "measurement": {
+          "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36",
+          "start": {
+            "dpr": 2,
+            "visualViewportScale": 1,
+            "innerWidth": 2287,
+            "innerHeight": 1268,
+            "outerWidth": 2560,
+            "outerHeight": 1315,
+            "screenX": 0,
+            "screenY": 30,
+            "screenWidth": 2560,
+            "screenHeight": 1440,
+            "screenAvailWidth": 2560,
+            "screenAvailHeight": 1315,
+            "visibility": "visible",
+            "focused": false,
+            "language": "my",
+            "direction": "ltr"
+          },
+          "end": {
+            "dpr": 2,
+            "visualViewportScale": 1,
+            "innerWidth": 2287,
+            "innerHeight": 1268,
+            "outerWidth": 2560,
+            "outerHeight": 1315,
+            "screenX": 0,
+            "screenY": 30,
+            "screenWidth": 2560,
+            "screenHeight": 1440,
+            "screenAvailWidth": 2560,
+            "screenAvailHeight": 1315,
+            "visibility": "visible",
+            "focused": false,
+            "language": "my",
+            "direction": "ltr"
+          },
+          "changes": []
+        },
+        "context": {
+          "kind": "installed",
+          "lang": "my"
+        },
+        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36",
+        "dpr": 2,
+        "locale": "zh-CN",
+        "visibility": "visible",
+        "focused": false,
+        "fonts": []
+      }
+    ],
     "corpusId": "my-bad-deeds-return-to-you-teacher",
     "language": "my",
     "title": "မကောင်းမှုဒဏ် ကိုယ့်ထံပြန် (ဆရာ)",
@@ -605,43 +1411,82 @@
     "end": 900,
     "step": 10,
     "widthCount": 61,
-    "exactCount": 57,
-    "mismatches": [
-      {
-        "width": 340,
-        "diffPx": -32,
-        "predictedHeight": 2064,
-        "actualHeight": 2096,
-        "predictedLineCount": 62,
-        "browserLineCount": 63
-      },
-      {
-        "width": 400,
-        "diffPx": -32,
-        "predictedHeight": 1648,
-        "actualHeight": 1680,
-        "predictedLineCount": 49,
-        "browserLineCount": 50
-      },
-      {
-        "width": 470,
-        "diffPx": -32,
-        "predictedHeight": 1360,
-        "actualHeight": 1392,
-        "predictedLineCount": 40,
-        "browserLineCount": 41
-      },
-      {
-        "width": 580,
-        "diffPx": -32,
-        "predictedHeight": 1072,
-        "actualHeight": 1104,
-        "predictedLineCount": 31,
-        "browserLineCount": 32
-      }
-    ]
+    "exactCount": 61,
+    "mismatches": []
   },
   {
+    "generatedAt": "2026-09-09T09:46:22.685Z",
+    "suiteHash": "16bfd7e5f094c5d2d0245099b719f0f3e846cbd7132280e36c7a8811b5940caf",
+    "source": {
+      "revision": "785297b87973ef285abb884b1af6110ed2aacfd8",
+      "files": {
+        "analysis.ts": "68a34413572826fcbae8727143af5291ab194ce6bd7ffc327b956a5ccd6dcb39",
+        "bidi.ts": "70f7f01dcd866076b68dbf2a3c398364aceaba2ccf98037e77e0b3b8bcfbeaa5",
+        "entry-geometry.ts": "43ffacd71c3562283135590a06947eef4b2617cb3b6ba680c909dd5e2d2ba9a7",
+        "generated/bidi-data.ts": "745211b804d907af78afb6c1ed87eff6d7454a5e85152a6129eb7b3bf0f6f262",
+        "layout.ts": "66c36dea8d0191bd005c4c7c1fd9d52e26d0df0c0e3c5df954f379c4560811cf",
+        "line-break.ts": "ae5c22f2f7786eb63e355a7c8886086ea237e82e78ce5c7b6f202936fd4996d3",
+        "line-text.ts": "5e21684d995df8c30324c03a14b8a0bc3a579ce169a0e10b6d579b6aeee577dc",
+        "measurement.ts": "b024684745f51317ef8beb79c73fe8c53b0ddcf5e02654798f4571d28a9923d4",
+        "rich-inline.ts": "5a7e5d339e1f703d52928913e3b7d6a5f5df04bdfdd365f47c1890dde3b61964",
+        "text-modules.d.ts": "1547f88f0eb75293bc20054194a2bba29a4bc911c2a4fa99cef98141b6f99927"
+      }
+    },
+    "environments": [
+      {
+        "direction": "ltr",
+        "measurement": {
+          "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36",
+          "start": {
+            "dpr": 2,
+            "visualViewportScale": 1,
+            "innerWidth": 2287,
+            "innerHeight": 1268,
+            "outerWidth": 2560,
+            "outerHeight": 1315,
+            "screenX": 0,
+            "screenY": 30,
+            "screenWidth": 2560,
+            "screenHeight": 1440,
+            "screenAvailWidth": 2560,
+            "screenAvailHeight": 1315,
+            "visibility": "visible",
+            "focused": false,
+            "language": "km",
+            "direction": "ltr"
+          },
+          "end": {
+            "dpr": 2,
+            "visualViewportScale": 1,
+            "innerWidth": 2287,
+            "innerHeight": 1268,
+            "outerWidth": 2560,
+            "outerHeight": 1315,
+            "screenX": 0,
+            "screenY": 30,
+            "screenWidth": 2560,
+            "screenHeight": 1440,
+            "screenAvailWidth": 2560,
+            "screenAvailHeight": 1315,
+            "visibility": "visible",
+            "focused": false,
+            "language": "km",
+            "direction": "ltr"
+          },
+          "changes": []
+        },
+        "context": {
+          "kind": "installed",
+          "lang": "km"
+        },
+        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36",
+        "dpr": 2,
+        "locale": "zh-CN",
+        "visibility": "visible",
+        "focused": false,
+        "fonts": []
+      }
+    ],
     "corpusId": "km-prachum-reuang-preng-khmer-volume-7-stories-1-10",
     "language": "km",
     "title": "ប្រជុំរឿងព្រេងខ្មែរ/ភាគទី៧ (រឿង ១-១០)",
@@ -654,6 +1499,78 @@
     "mismatches": []
   },
   {
+    "generatedAt": "2026-09-09T09:46:22.685Z",
+    "suiteHash": "16bfd7e5f094c5d2d0245099b719f0f3e846cbd7132280e36c7a8811b5940caf",
+    "source": {
+      "revision": "785297b87973ef285abb884b1af6110ed2aacfd8",
+      "files": {
+        "analysis.ts": "68a34413572826fcbae8727143af5291ab194ce6bd7ffc327b956a5ccd6dcb39",
+        "bidi.ts": "70f7f01dcd866076b68dbf2a3c398364aceaba2ccf98037e77e0b3b8bcfbeaa5",
+        "entry-geometry.ts": "43ffacd71c3562283135590a06947eef4b2617cb3b6ba680c909dd5e2d2ba9a7",
+        "generated/bidi-data.ts": "745211b804d907af78afb6c1ed87eff6d7454a5e85152a6129eb7b3bf0f6f262",
+        "layout.ts": "66c36dea8d0191bd005c4c7c1fd9d52e26d0df0c0e3c5df954f379c4560811cf",
+        "line-break.ts": "ae5c22f2f7786eb63e355a7c8886086ea237e82e78ce5c7b6f202936fd4996d3",
+        "line-text.ts": "5e21684d995df8c30324c03a14b8a0bc3a579ce169a0e10b6d579b6aeee577dc",
+        "measurement.ts": "b024684745f51317ef8beb79c73fe8c53b0ddcf5e02654798f4571d28a9923d4",
+        "rich-inline.ts": "5a7e5d339e1f703d52928913e3b7d6a5f5df04bdfdd365f47c1890dde3b61964",
+        "text-modules.d.ts": "1547f88f0eb75293bc20054194a2bba29a4bc911c2a4fa99cef98141b6f99927"
+      }
+    },
+    "environments": [
+      {
+        "direction": "rtl",
+        "measurement": {
+          "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36",
+          "start": {
+            "dpr": 2,
+            "visualViewportScale": 1,
+            "innerWidth": 2287,
+            "innerHeight": 1268,
+            "outerWidth": 2560,
+            "outerHeight": 1315,
+            "screenX": 0,
+            "screenY": 30,
+            "screenWidth": 2560,
+            "screenHeight": 1440,
+            "screenAvailWidth": 2560,
+            "screenAvailHeight": 1315,
+            "visibility": "visible",
+            "focused": false,
+            "language": "ar",
+            "direction": "rtl"
+          },
+          "end": {
+            "dpr": 2,
+            "visualViewportScale": 1,
+            "innerWidth": 2287,
+            "innerHeight": 1268,
+            "outerWidth": 2560,
+            "outerHeight": 1315,
+            "screenX": 0,
+            "screenY": 30,
+            "screenWidth": 2560,
+            "screenHeight": 1440,
+            "screenAvailWidth": 2560,
+            "screenAvailHeight": 1315,
+            "visibility": "visible",
+            "focused": false,
+            "language": "ar",
+            "direction": "rtl"
+          },
+          "changes": []
+        },
+        "context": {
+          "kind": "installed",
+          "lang": "ar"
+        },
+        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36",
+        "dpr": 2,
+        "locale": "zh-CN",
+        "visibility": "visible",
+        "focused": false,
+        "fonts": []
+      }
+    ],
     "corpusId": "ar-risalat-al-ghufran-part-1",
     "language": "ar",
     "title": "رسالة الغفران/الجزء الأول",
@@ -662,10 +1579,91 @@
     "end": 900,
     "step": 10,
     "widthCount": 61,
-    "exactCount": 61,
-    "mismatches": []
+    "exactCount": 60,
+    "mismatches": [
+      {
+        "id": "wrap-71efdcf2fbeadfe4",
+        "width": 490,
+        "contentWidth": 410,
+        "diffPx": 34,
+        "predictedHeight": 64884,
+        "actualHeight": 64850
+      }
+    ]
   },
   {
+    "generatedAt": "2026-09-09T09:46:22.685Z",
+    "suiteHash": "16bfd7e5f094c5d2d0245099b719f0f3e846cbd7132280e36c7a8811b5940caf",
+    "source": {
+      "revision": "785297b87973ef285abb884b1af6110ed2aacfd8",
+      "files": {
+        "analysis.ts": "68a34413572826fcbae8727143af5291ab194ce6bd7ffc327b956a5ccd6dcb39",
+        "bidi.ts": "70f7f01dcd866076b68dbf2a3c398364aceaba2ccf98037e77e0b3b8bcfbeaa5",
+        "entry-geometry.ts": "43ffacd71c3562283135590a06947eef4b2617cb3b6ba680c909dd5e2d2ba9a7",
+        "generated/bidi-data.ts": "745211b804d907af78afb6c1ed87eff6d7454a5e85152a6129eb7b3bf0f6f262",
+        "layout.ts": "66c36dea8d0191bd005c4c7c1fd9d52e26d0df0c0e3c5df954f379c4560811cf",
+        "line-break.ts": "ae5c22f2f7786eb63e355a7c8886086ea237e82e78ce5c7b6f202936fd4996d3",
+        "line-text.ts": "5e21684d995df8c30324c03a14b8a0bc3a579ce169a0e10b6d579b6aeee577dc",
+        "measurement.ts": "b024684745f51317ef8beb79c73fe8c53b0ddcf5e02654798f4571d28a9923d4",
+        "rich-inline.ts": "5a7e5d339e1f703d52928913e3b7d6a5f5df04bdfdd365f47c1890dde3b61964",
+        "text-modules.d.ts": "1547f88f0eb75293bc20054194a2bba29a4bc911c2a4fa99cef98141b6f99927"
+      }
+    },
+    "environments": [
+      {
+        "direction": "rtl",
+        "measurement": {
+          "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36",
+          "start": {
+            "dpr": 2,
+            "visualViewportScale": 1,
+            "innerWidth": 2287,
+            "innerHeight": 1268,
+            "outerWidth": 2560,
+            "outerHeight": 1315,
+            "screenX": 0,
+            "screenY": 30,
+            "screenWidth": 2560,
+            "screenHeight": 1440,
+            "screenAvailWidth": 2560,
+            "screenAvailHeight": 1315,
+            "visibility": "visible",
+            "focused": false,
+            "language": "ar",
+            "direction": "rtl"
+          },
+          "end": {
+            "dpr": 2,
+            "visualViewportScale": 1,
+            "innerWidth": 2287,
+            "innerHeight": 1268,
+            "outerWidth": 2560,
+            "outerHeight": 1315,
+            "screenX": 0,
+            "screenY": 30,
+            "screenWidth": 2560,
+            "screenHeight": 1440,
+            "screenAvailWidth": 2560,
+            "screenAvailHeight": 1315,
+            "visibility": "visible",
+            "focused": false,
+            "language": "ar",
+            "direction": "rtl"
+          },
+          "changes": []
+        },
+        "context": {
+          "kind": "installed",
+          "lang": "ar"
+        },
+        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36",
+        "dpr": 2,
+        "locale": "zh-CN",
+        "visibility": "visible",
+        "focused": false,
+        "fonts": []
+      }
+    ],
     "corpusId": "ar-al-bukhala",
     "language": "ar",
     "title": "البخلاء",
@@ -678,6 +1676,78 @@
     "mismatches": []
   },
   {
+    "generatedAt": "2026-09-09T09:46:22.685Z",
+    "suiteHash": "16bfd7e5f094c5d2d0245099b719f0f3e846cbd7132280e36c7a8811b5940caf",
+    "source": {
+      "revision": "785297b87973ef285abb884b1af6110ed2aacfd8",
+      "files": {
+        "analysis.ts": "68a34413572826fcbae8727143af5291ab194ce6bd7ffc327b956a5ccd6dcb39",
+        "bidi.ts": "70f7f01dcd866076b68dbf2a3c398364aceaba2ccf98037e77e0b3b8bcfbeaa5",
+        "entry-geometry.ts": "43ffacd71c3562283135590a06947eef4b2617cb3b6ba680c909dd5e2d2ba9a7",
+        "generated/bidi-data.ts": "745211b804d907af78afb6c1ed87eff6d7454a5e85152a6129eb7b3bf0f6f262",
+        "layout.ts": "66c36dea8d0191bd005c4c7c1fd9d52e26d0df0c0e3c5df954f379c4560811cf",
+        "line-break.ts": "ae5c22f2f7786eb63e355a7c8886086ea237e82e78ce5c7b6f202936fd4996d3",
+        "line-text.ts": "5e21684d995df8c30324c03a14b8a0bc3a579ce169a0e10b6d579b6aeee577dc",
+        "measurement.ts": "b024684745f51317ef8beb79c73fe8c53b0ddcf5e02654798f4571d28a9923d4",
+        "rich-inline.ts": "5a7e5d339e1f703d52928913e3b7d6a5f5df04bdfdd365f47c1890dde3b61964",
+        "text-modules.d.ts": "1547f88f0eb75293bc20054194a2bba29a4bc911c2a4fa99cef98141b6f99927"
+      }
+    },
+    "environments": [
+      {
+        "direction": "ltr",
+        "measurement": {
+          "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36",
+          "start": {
+            "dpr": 2,
+            "visualViewportScale": 1,
+            "innerWidth": 2287,
+            "innerHeight": 1268,
+            "outerWidth": 2560,
+            "outerHeight": 1315,
+            "screenX": 0,
+            "screenY": 30,
+            "screenWidth": 2560,
+            "screenHeight": 1440,
+            "screenAvailWidth": 2560,
+            "screenAvailHeight": 1315,
+            "visibility": "visible",
+            "focused": false,
+            "language": "hi",
+            "direction": "ltr"
+          },
+          "end": {
+            "dpr": 2,
+            "visualViewportScale": 1,
+            "innerWidth": 2287,
+            "innerHeight": 1268,
+            "outerWidth": 2560,
+            "outerHeight": 1315,
+            "screenX": 0,
+            "screenY": 30,
+            "screenWidth": 2560,
+            "screenHeight": 1440,
+            "screenAvailWidth": 2560,
+            "screenAvailHeight": 1315,
+            "visibility": "visible",
+            "focused": false,
+            "language": "hi",
+            "direction": "ltr"
+          },
+          "changes": []
+        },
+        "context": {
+          "kind": "installed",
+          "lang": "hi"
+        },
+        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36",
+        "dpr": 2,
+        "locale": "zh-CN",
+        "visibility": "visible",
+        "focused": false,
+        "fonts": []
+      }
+    ],
     "corpusId": "hi-eidgah",
     "language": "hi",
     "title": "प्रेमचंद की सर्वश्रेष्ठ कहानियां/ईदगाह",
@@ -690,6 +1760,78 @@
     "mismatches": []
   },
   {
+    "generatedAt": "2026-09-09T09:46:22.685Z",
+    "suiteHash": "16bfd7e5f094c5d2d0245099b719f0f3e846cbd7132280e36c7a8811b5940caf",
+    "source": {
+      "revision": "785297b87973ef285abb884b1af6110ed2aacfd8",
+      "files": {
+        "analysis.ts": "68a34413572826fcbae8727143af5291ab194ce6bd7ffc327b956a5ccd6dcb39",
+        "bidi.ts": "70f7f01dcd866076b68dbf2a3c398364aceaba2ccf98037e77e0b3b8bcfbeaa5",
+        "entry-geometry.ts": "43ffacd71c3562283135590a06947eef4b2617cb3b6ba680c909dd5e2d2ba9a7",
+        "generated/bidi-data.ts": "745211b804d907af78afb6c1ed87eff6d7454a5e85152a6129eb7b3bf0f6f262",
+        "layout.ts": "66c36dea8d0191bd005c4c7c1fd9d52e26d0df0c0e3c5df954f379c4560811cf",
+        "line-break.ts": "ae5c22f2f7786eb63e355a7c8886086ea237e82e78ce5c7b6f202936fd4996d3",
+        "line-text.ts": "5e21684d995df8c30324c03a14b8a0bc3a579ce169a0e10b6d579b6aeee577dc",
+        "measurement.ts": "b024684745f51317ef8beb79c73fe8c53b0ddcf5e02654798f4571d28a9923d4",
+        "rich-inline.ts": "5a7e5d339e1f703d52928913e3b7d6a5f5df04bdfdd365f47c1890dde3b61964",
+        "text-modules.d.ts": "1547f88f0eb75293bc20054194a2bba29a4bc911c2a4fa99cef98141b6f99927"
+      }
+    },
+    "environments": [
+      {
+        "direction": "rtl",
+        "measurement": {
+          "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36",
+          "start": {
+            "dpr": 2,
+            "visualViewportScale": 1,
+            "innerWidth": 2287,
+            "innerHeight": 1268,
+            "outerWidth": 2560,
+            "outerHeight": 1315,
+            "screenX": 0,
+            "screenY": 30,
+            "screenWidth": 2560,
+            "screenHeight": 1440,
+            "screenAvailWidth": 2560,
+            "screenAvailHeight": 1315,
+            "visibility": "visible",
+            "focused": false,
+            "language": "he",
+            "direction": "rtl"
+          },
+          "end": {
+            "dpr": 2,
+            "visualViewportScale": 1,
+            "innerWidth": 2287,
+            "innerHeight": 1268,
+            "outerWidth": 2560,
+            "outerHeight": 1315,
+            "screenX": 0,
+            "screenY": 30,
+            "screenWidth": 2560,
+            "screenHeight": 1440,
+            "screenAvailWidth": 2560,
+            "screenAvailHeight": 1315,
+            "visibility": "visible",
+            "focused": false,
+            "language": "he",
+            "direction": "rtl"
+          },
+          "changes": []
+        },
+        "context": {
+          "kind": "installed",
+          "lang": "he"
+        },
+        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36",
+        "dpr": 2,
+        "locale": "zh-CN",
+        "visibility": "visible",
+        "focused": false,
+        "fonts": []
+      }
+    ],
     "corpusId": "he-masaot-binyamin-metudela",
     "language": "he",
     "title": "מסעות בנימין מטודלה",
@@ -702,6 +1844,78 @@
     "mismatches": []
   },
   {
+    "generatedAt": "2026-09-09T09:46:22.685Z",
+    "suiteHash": "16bfd7e5f094c5d2d0245099b719f0f3e846cbd7132280e36c7a8811b5940caf",
+    "source": {
+      "revision": "785297b87973ef285abb884b1af6110ed2aacfd8",
+      "files": {
+        "analysis.ts": "68a34413572826fcbae8727143af5291ab194ce6bd7ffc327b956a5ccd6dcb39",
+        "bidi.ts": "70f7f01dcd866076b68dbf2a3c398364aceaba2ccf98037e77e0b3b8bcfbeaa5",
+        "entry-geometry.ts": "43ffacd71c3562283135590a06947eef4b2617cb3b6ba680c909dd5e2d2ba9a7",
+        "generated/bidi-data.ts": "745211b804d907af78afb6c1ed87eff6d7454a5e85152a6129eb7b3bf0f6f262",
+        "layout.ts": "66c36dea8d0191bd005c4c7c1fd9d52e26d0df0c0e3c5df954f379c4560811cf",
+        "line-break.ts": "ae5c22f2f7786eb63e355a7c8886086ea237e82e78ce5c7b6f202936fd4996d3",
+        "line-text.ts": "5e21684d995df8c30324c03a14b8a0bc3a579ce169a0e10b6d579b6aeee577dc",
+        "measurement.ts": "b024684745f51317ef8beb79c73fe8c53b0ddcf5e02654798f4571d28a9923d4",
+        "rich-inline.ts": "5a7e5d339e1f703d52928913e3b7d6a5f5df04bdfdd365f47c1890dde3b61964",
+        "text-modules.d.ts": "1547f88f0eb75293bc20054194a2bba29a4bc911c2a4fa99cef98141b6f99927"
+      }
+    },
+    "environments": [
+      {
+        "direction": "rtl",
+        "measurement": {
+          "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36",
+          "start": {
+            "dpr": 2,
+            "visualViewportScale": 1,
+            "innerWidth": 2287,
+            "innerHeight": 1268,
+            "outerWidth": 2560,
+            "outerHeight": 1315,
+            "screenX": 0,
+            "screenY": 30,
+            "screenWidth": 2560,
+            "screenHeight": 1440,
+            "screenAvailWidth": 2560,
+            "screenAvailHeight": 1315,
+            "visibility": "visible",
+            "focused": false,
+            "language": "ur",
+            "direction": "rtl"
+          },
+          "end": {
+            "dpr": 2,
+            "visualViewportScale": 1,
+            "innerWidth": 2287,
+            "innerHeight": 1268,
+            "outerWidth": 2560,
+            "outerHeight": 1315,
+            "screenX": 0,
+            "screenY": 30,
+            "screenWidth": 2560,
+            "screenHeight": 1440,
+            "screenAvailWidth": 2560,
+            "screenAvailHeight": 1315,
+            "visibility": "visible",
+            "focused": false,
+            "language": "ur",
+            "direction": "rtl"
+          },
+          "changes": []
+        },
+        "context": {
+          "kind": "installed",
+          "lang": "ur"
+        },
+        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36",
+        "dpr": 2,
+        "locale": "zh-CN",
+        "visibility": "visible",
+        "focused": false,
+        "fonts": []
+      }
+    ],
     "corpusId": "ur-chughd",
     "language": "ur",
     "title": "چغد",
@@ -710,247 +1924,39 @@
     "end": 900,
     "step": 10,
     "widthCount": 61,
-    "exactCount": 31,
+    "exactCount": 57,
     "mismatches": [
       {
-        "width": 300,
-        "diffPx": -76,
-        "predictedHeight": 18586,
-        "actualHeight": 18662,
-        "predictedLineCount": 487,
-        "browserLineCount": 489
-      },
-      {
-        "width": 310,
-        "diffPx": -152,
-        "predictedHeight": 17750,
-        "actualHeight": 17902,
-        "predictedLineCount": 465,
-        "browserLineCount": 469
-      },
-      {
-        "width": 320,
-        "diffPx": -190,
-        "predictedHeight": 16952,
-        "actualHeight": 17142,
-        "predictedLineCount": 444,
-        "browserLineCount": 449
-      },
-      {
+        "id": "wrap-e378e32fe0360619",
         "width": 330,
-        "diffPx": -38,
-        "predictedHeight": 16192,
-        "actualHeight": 16230,
-        "predictedLineCount": 424,
-        "browserLineCount": 425
+        "contentWidth": 250,
+        "diffPx": 38,
+        "predictedHeight": 16268,
+        "actualHeight": 16230
       },
       {
-        "width": 340,
-        "diffPx": -38,
-        "predictedHeight": 15622,
-        "actualHeight": 15660,
-        "predictedLineCount": 409,
-        "browserLineCount": 410
+        "id": "wrap-b794ece894db2ebe",
+        "width": 410,
+        "contentWidth": 330,
+        "diffPx": 38,
+        "predictedHeight": 12164,
+        "actualHeight": 12126
       },
       {
-        "width": 360,
-        "diffPx": -114,
-        "predictedHeight": 14368,
-        "actualHeight": 14482,
-        "predictedLineCount": 376,
-        "browserLineCount": 379
+        "id": "wrap-2a213c1c6f9ca858",
+        "width": 680,
+        "contentWidth": 600,
+        "diffPx": 38,
+        "predictedHeight": 6616,
+        "actualHeight": 6578
       },
       {
-        "width": 370,
-        "diffPx": -114,
-        "predictedHeight": 13912,
-        "actualHeight": 14026,
-        "predictedLineCount": 364,
-        "browserLineCount": 367
-      },
-      {
-        "width": 380,
-        "diffPx": -38,
-        "predictedHeight": 13418,
-        "actualHeight": 13456,
-        "predictedLineCount": 351,
-        "browserLineCount": 352
-      },
-      {
-        "width": 390,
-        "diffPx": -38,
-        "predictedHeight": 12962,
-        "actualHeight": 13000,
-        "predictedLineCount": 339,
-        "browserLineCount": 340
-      },
-      {
-        "width": 400,
-        "diffPx": -38,
-        "predictedHeight": 12544,
-        "actualHeight": 12582,
-        "predictedLineCount": 328,
-        "browserLineCount": 329
-      },
-      {
-        "width": 420,
-        "diffPx": -38,
-        "predictedHeight": 11784,
-        "actualHeight": 11822,
-        "predictedLineCount": 308,
-        "browserLineCount": 309
-      },
-      {
-        "width": 430,
-        "diffPx": -76,
-        "predictedHeight": 11328,
-        "actualHeight": 11404,
-        "predictedLineCount": 296,
-        "browserLineCount": 298
-      },
-      {
-        "width": 440,
-        "diffPx": -76,
-        "predictedHeight": 11100,
-        "actualHeight": 11176,
-        "predictedLineCount": 290,
-        "browserLineCount": 292
-      },
-      {
-        "width": 450,
-        "diffPx": -38,
-        "predictedHeight": 10796,
-        "actualHeight": 10834,
-        "predictedLineCount": 282,
-        "browserLineCount": 283
-      },
-      {
-        "width": 470,
-        "diffPx": -38,
-        "predictedHeight": 10188,
-        "actualHeight": 10226,
-        "predictedLineCount": 266,
-        "browserLineCount": 267
-      },
-      {
-        "width": 480,
-        "diffPx": -38,
-        "predictedHeight": 9960,
-        "actualHeight": 9998,
-        "predictedLineCount": 260,
-        "browserLineCount": 261
-      },
-      {
-        "width": 490,
-        "diffPx": -38,
-        "predictedHeight": 9656,
-        "actualHeight": 9694,
-        "predictedLineCount": 252,
-        "browserLineCount": 253
-      },
-      {
-        "width": 510,
-        "diffPx": -38,
-        "predictedHeight": 9238,
-        "actualHeight": 9276,
-        "predictedLineCount": 241,
-        "browserLineCount": 242
-      },
-      {
-        "width": 520,
-        "diffPx": -76,
-        "predictedHeight": 9010,
-        "actualHeight": 9086,
-        "predictedLineCount": 235,
-        "browserLineCount": 237
-      },
-      {
-        "width": 530,
-        "diffPx": -38,
-        "predictedHeight": 8782,
-        "actualHeight": 8820,
-        "predictedLineCount": 229,
-        "browserLineCount": 230
-      },
-      {
-        "width": 550,
-        "diffPx": -38,
-        "predictedHeight": 8402,
-        "actualHeight": 8440,
-        "predictedLineCount": 219,
-        "browserLineCount": 220
-      },
-      {
-        "width": 570,
-        "diffPx": -38,
-        "predictedHeight": 8060,
-        "actualHeight": 8098,
-        "predictedLineCount": 210,
-        "browserLineCount": 211
-      },
-      {
-        "width": 580,
-        "diffPx": -38,
-        "predictedHeight": 7870,
-        "actualHeight": 7908,
-        "predictedLineCount": 205,
-        "browserLineCount": 206
-      },
-      {
-        "width": 590,
-        "diffPx": -38,
-        "predictedHeight": 7718,
-        "actualHeight": 7756,
-        "predictedLineCount": 201,
-        "browserLineCount": 202
-      },
-      {
-        "width": 620,
-        "diffPx": -38,
-        "predictedHeight": 7300,
-        "actualHeight": 7338,
-        "predictedLineCount": 190,
-        "browserLineCount": 191
-      },
-      {
-        "width": 650,
-        "diffPx": -38,
-        "predictedHeight": 6920,
-        "actualHeight": 6958,
-        "predictedLineCount": 180,
-        "browserLineCount": 181
-      },
-      {
-        "width": 730,
-        "diffPx": -38,
-        "predictedHeight": 6046,
-        "actualHeight": 6084,
-        "predictedLineCount": 157,
-        "browserLineCount": 158
-      },
-      {
-        "width": 770,
-        "diffPx": -38,
-        "predictedHeight": 5704,
-        "actualHeight": 5742,
-        "predictedLineCount": 148,
-        "browserLineCount": 149
-      },
-      {
-        "width": 840,
-        "diffPx": -38,
-        "predictedHeight": 5172,
-        "actualHeight": 5210,
-        "predictedLineCount": 134,
-        "browserLineCount": 135
-      },
-      {
-        "width": 900,
-        "diffPx": -38,
-        "predictedHeight": 4792,
-        "actualHeight": 4830,
-        "predictedLineCount": 124,
-        "browserLineCount": 125
+        "id": "wrap-3bd23f813602dc1f",
+        "width": 750,
+        "contentWidth": 670,
+        "diffPx": 38,
+        "predictedHeight": 5932,
+        "actualHeight": 5894
       }
     ]
   }

@@ -94,7 +94,9 @@ while (true) {
 
 This usage allows rendering to canvas, SVG, WebGL and (eventually) server-side. See the `/demos/dynamic-layout` demo for a richer example.
 
-For hyphenation in manual layout, insert soft hyphens before `prepare()` / `prepareWithSegments()`. Pretext treats them as optional break points: unchosen soft hyphens stay invisible, while chosen breaks materialize as a trailing `-`. For mixed-language or user-generated app text, prefer conservative, locale-aware insertion over aggressive pattern hyphenation. Automatic hyphenation is not built in today.
+For hyphenation in manual layout, insert soft hyphens before `prepare()` / `prepareWithSegments()`. Pretext treats them as optional break points: unchosen soft hyphens stay invisible, while chosen breaks materialize as a trailing `-`. A soft hyphen at the end of the paragraph is consumed without painting a hyphen. For mixed-language or user-generated app text, prefer conservative, locale-aware insertion over aggressive pattern hyphenation. Automatic hyphenation is not built in today.
+
+Very narrow SHY fallback remains approximate: Safari can overflow a prefix plus hyphen, while Chromium and Gecko may move part of the prefix to another line.
 
 If your manual layout needs a small helper for rich-text inline flow, code spans, mentions, chips, and browser-like boundary whitespace collapse, there is a helper at `@chenglou/pretext/rich-inline`. It stays inline-only and `white-space: normal`-only on purpose:
 
@@ -119,6 +121,8 @@ It is intentionally narrow:
 - `break: 'never'` for atomic items like chips and mentions
 - `white-space: normal` only
 - not a nested markup tree and not a general CSS inline formatting engine
+
+Fragment and cursor `itemIndex` values refer to that original list, including when it contains empty items. A collapsed boundary space uses the first space's font and letter spacing; `gapBefore` can be zero or negative. Zero-width content can still occupy a line and carry a break opportunity.
 
 ### API Glossary
 
@@ -219,7 +223,7 @@ Notes:
 - `PreparedText` is the opaque fast-path handle. `PreparedTextWithSegments` is the richer manual-layout handle.
 - `LayoutCursor` is a segment/grapheme cursor, not a raw string offset.
 - `layout()` with an empty string returns `{ lineCount: 0, height: 0 }`. Browsers still size an empty block to one `line-height`, so clamp with `Math.max(1, lineCount) * lineHeight` if you need that behavior.
-- The richer handle also includes `segLevels` for custom bidi-aware rendering. The line-breaking APIs do not read it.
+- The richer handle also includes approximate `segLevels` for custom bidi-aware rendering. Base direction and weak/neutral state restart at Unicode bidi paragraph separators in the normalized text. In `pre-wrap`, normalized newlines start fresh paragraphs; in `normal`, ASCII newlines collapse to spaces first. Tabs and U+2028 LINE SEPARATOR do not restart paragraph direction. This is not a full Unicode Bidirectional Algorithm implementation, and the line-breaking APIs do not read these levels.
 - Segment widths are browser-canvas widths for line breaking, not exact glyph-position data for custom Arabic or mixed-direction x-coordinate reconstruction.
 - If a soft hyphen wins the break, materialized line text includes the visible trailing `-`.
 - `measureNaturalWidth()` returns the widest forced line. Hard breaks still count.
@@ -230,13 +234,17 @@ Notes:
 Pretext doesn't try to be a full font rendering engine (yet?). It currently targets the common text setup:
 - `white-space: normal` and `pre-wrap`
 - `word-break: normal` and `keep-all`
-- `overflow-wrap: break-word`. Very narrow widths can still break inside words, but only at grapheme boundaries.
+- `overflow-wrap: break-word`. Very narrow widths can still break inside words and independent symbol runs, but only at grapheme boundaries.
 - `line-break: auto`
 - `letter-spacing` as a numeric pixel value passed to `prepare()` / `prepareWithSegments()`
 - Tabs follow the default browser-style `tab-size: 8`
 - `{ wordBreak: 'keep-all' }` is supported too. It behaves like you'd expect for CJK/Hangul and no-space mixed Latin/numeric/CJK text, while keeping the same `overflow-wrap: break-word` fallback for overlong runs.
-- `system-ui` is unsafe for `layout()` accuracy on macOS. Use a named font.
-- Runtime requires `Intl.Segmenter`, Canvas 2D text measurement, and ES2018 Unicode property escapes (`\p{...}`). Browsers or runtimes without `Intl.Segmenter` are currently unsupported; older runtimes without `\p{...}` support fail earlier at module-load time with a `SyntaxError`.
+- `system-ui` and `-apple-system` are unsafe for `layout()` accuracy on macOS. Use a named font. See the [platform bug ledger](PLATFORM_BUGS.md) for the Chrome and Firefox issues.
+- Emoji next to punctuation can still wrap differently from the browser.
+- A paragraph containing only zero-width spaces (ZWSP) occupies one line. ZWSP beside other text, whitespace or hard breaks can still wrap differently from the browser. The rich-inline helper preserves standalone ZWSP items, but still inherits the flat text engine's wrapping limits inside each item.
+- Some fonts, such as Shantell Sans, can produce different line breaks inside long words in Pretext and the browser.
+- If your page sets `lang`, a generic font like `sans-serif` may select a different font from the one Pretext measures. Use a named font and check the result in your browser.
+- Runtime requires `Intl.Segmenter`, Canvas 2D text measurement, and Unicode property escapes (`\p{...}`). Browsers without these features aren't supported. Without Unicode property escapes, Pretext can't load and throws a `SyntaxError`.
 - CSS text features outside the canvas `font` shorthand, such as `font-optical-sizing`, `font-feature-settings`, and standalone `font-variation-settings`, are not modeled separately. Variable-font axes only help when the active axis is reflected in the canvas font string, for example via weight.
 
 ## Develop
