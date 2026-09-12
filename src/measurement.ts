@@ -28,6 +28,9 @@ export type EngineProfile = {
   lineFitEpsilon: number
   carryCJKAfterClosingQuote: boolean
   breakKeepAllAfterPunctuation: boolean
+  // Under keep-all, Gecko's ICU4X keeps letter pairs by line-break class and
+  // breaks after NS letters such as U+3005. Blink keeps any pair of letters.
+  breakKeepAllAfterNonstarterLetters: boolean
   // WebKit keeps a basic combining mark after a ZWSP that starts a text node or
   // follows a mandatory break. Gecko keeps ZWSP with any following cluster
   // extender in every position; that granularity is not modeled.
@@ -170,6 +173,7 @@ export function getEngineProfile(): EngineProfile {
       lineFitEpsilon: 0.005,
       carryCJKAfterClosingQuote: false,
       breakKeepAllAfterPunctuation: true,
+      breakKeepAllAfterNonstarterLetters: false,
       keepZeroWidthSpaceMarkAtScanStart: false,
       breakBeforeConditionalJapaneseStarter: false,
       wordInitialHyphenLetters: 'alphabetic-and-hebrew',
@@ -210,6 +214,7 @@ export function getEngineProfile(): EngineProfile {
     lineFitEpsilon: isSafari ? 1 / 64 : 0.005,
     carryCJKAfterClosingQuote: isChromium,
     breakKeepAllAfterPunctuation: !isSafari,
+    breakKeepAllAfterNonstarterLetters: isGecko,
     keepZeroWidthSpaceMarkAtScanStart: isSafari,
     breakBeforeConditionalJapaneseStarter: isChromium && !isIOSBrand,
     wordInitialHyphenLetters: isGecko ? 'none' : 'alphabetic-and-hebrew',

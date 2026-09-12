@@ -17,6 +17,55 @@ All accuracy, letter-spacing and corpus result payloads are unchanged; refreshed
 snapshots change only provenance and environment records. Runtime sources and
 the baseline pin are unchanged, so no runtime benchmark was needed.
 
+## CJK closing brackets and nonstarters
+
+This runtime change starts from the pair-table branch head `f030304`. Fullwidth
+closing brackets such as U+300D and U+FF09 are UAX #14 CL, and Chrome breaks
+between them and a following ideograph, kana or Hangul syllable. The Chromium
+profile carried CJK text after those brackets as it does after closing quotes; it
+now carries only after quotes (QU). That carry had also hidden CJK line-start
+prohibitions missing from `kinsokuStart`. The set now holds every code point in
+Pretext's CJK ranges whose class forbids a break before it (CL, EX, NS and the
+non-extending CM U+3035), 17 more than before, and a piece whose first code point
+is in the set attaches to the preceding CJK text even when `Intl.Segmenter` joins
+it with the kana after it. Under `keep-all`, a listed letter such as U+3005 or
+U+30FC no longer ends a run in the Chromium profile, as in Blink, while the
+Firefox profile still breaks after NS letters, as ICU4X does.
+
+The same full native comparison ran this change alone and stacked on the two
+previous changes, in installed Chrome 153.0.8010.36, Safari 26.5.2 and Firefox
+155.0.1, both directions, at DPR 2: 656,407 browser/input observations, with
+pinned `14d92ca` as the reference. There are zero lost metrics, failed required
+checks, execution errors and new API/rich failures, and nine numeric profiles
+have no new failures. Over the pair-table stack it gains 56 Chrome LTR metrics:
+line count and height of 28 `maintained/corpus` cases, whose line counts now
+match Chrome's. They are `zh-zhufu` at widths 220, 230, 240, 250, 260, 270, 280,
+340, 370, 380, 390, 430, 470, 580, 680, 690, 770 and 790, `zh-guxiang` at 220,
+250, 280, 370, 430, 590 and 620, `ja-rashomon` at 240 and 290, and
+`ja-kumo-no-ito` at 230. No other leg changes, and the three-change stack's fixed
+metrics are exactly the union of each change's own.
+
+Headless Chromium 147 and WebKit 26.4 sweeps outside the suite show what remains.
+Chromium hangs U+3000 at a line end; the old carry matched that after a bracket
+only by measuring `\u300D\u3000` as one unit, so those widths need a hanging model
+for U+3000. Below a kinsoku cluster's width, browsers break inside the cluster,
+while Pretext keeps it whole, as main already does for `\u6F22\u3002\u5B57`.
+Chromium's rules for Chinese pages allow a break before U+301C and U+30A0, and
+Pretext does not read the page language for line breaking. Under `keep-all`, Blink
+breaks between a listed letter and a following opening bracket
+(`\u4E2D\u6587|\u3005|\u300C\u4E2D|\u6587`), while Pretext decides a keep-all boundary
+only from the text before it and keeps them together. U+30FC keeps the
+whole-piece rule, because Chromium breaks before it and WebKit does not.
+
+The baseline advances to runtime commit `8db5483`, and the ordinary snapshots
+were regenerated against it: all six legs pass with zero new regressions,
+required failures or execution errors, and nine numeric profiles have no new
+failures. Accuracy results are unchanged. Chrome's step-10 corpus sweep now
+matches 28 more widths: `zh-zhufu` 43 to 61, `zh-guxiang` 54 to 61,
+`ja-rashomon` 55 to 57 and `ja-kumo-no-ito` 56 to 57. Suite hash
+`48fb18fba603a2ae669a5a18af334503009a3c0555c4a07201f05ee84cfae9d1`; rows are in
+`/private/tmp/pretext-eng-20260912/stage1b-full`.
+
 ## Exclamation followers, joiners and word-initial hyphens
 
 This runtime change starts from the figure-space branch head `b55311e`. Chrome

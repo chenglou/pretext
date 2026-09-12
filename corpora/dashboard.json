@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-12T10:02:57.848Z",
+  "generatedAt": "2026-09-12T10:17:47.390Z",
   "sources": {
     "accuracy": {
       "chrome": "accuracy/chrome.json",
@@ -162,7 +162,7 @@
         "mismatches": []
       },
       "chromeStep10": {
-        "exactCount": 56,
+        "exactCount": 57,
         "widthCount": 61
       },
       "safariStep10": {
@@ -204,7 +204,7 @@
         "mismatches": []
       },
       "chromeStep10": {
-        "exactCount": 55,
+        "exactCount": 57,
         "widthCount": 61
       },
       "safariStep10": {
@@ -307,15 +307,11 @@
       "language": "zh",
       "chromeAnchors": {
         "exactWidths": [
+          300,
           600,
           800
         ],
-        "mismatches": [
-          {
-            "width": 300,
-            "diffPx": 64
-          }
-        ]
+        "mismatches": []
       },
       "safariAnchors": {
         "exactWidths": [
@@ -334,7 +330,7 @@
         "mismatches": []
       },
       "chromeStep10": {
-        "exactCount": 54,
+        "exactCount": 61,
         "widthCount": 61
       },
       "safariStep10": {
@@ -353,15 +349,11 @@
       "language": "zh",
       "chromeAnchors": {
         "exactWidths": [
+          300,
           600,
           800
         ],
-        "mismatches": [
-          {
-            "width": 300,
-            "diffPx": 32
-          }
-        ]
+        "mismatches": []
       },
       "safariAnchors": {
         "exactWidths": [
@@ -380,7 +372,7 @@
         "mismatches": []
       },
       "chromeStep10": {
-        "exactCount": 43,
+        "exactCount": 61,
         "widthCount": 61
       },
       "safariStep10": {

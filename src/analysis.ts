@@ -32,6 +32,7 @@ export type AnalysisProfile = {
   geckoAsciiLineBreaks: boolean
   carryCJKAfterClosingQuote: boolean
   breakKeepAllAfterPunctuation: boolean
+  breakKeepAllAfterNonstarterLetters: boolean
   keepZeroWidthSpaceMarkAtScanStart: boolean
   breakBeforeConditionalJapaneseStarter: boolean
   wordInitialHyphenLetters: 'none' | 'alphabetic' | 'alphabetic-and-hebrew'
@@ -136,42 +137,55 @@ function endsWithKeepAllDashBreakText(text: string): boolean {
   return last !== null && keepAllDashBreakChars.has(last)
 }
 
-export function canContinueKeepAllTextRun(previousText: string, breakAfterPunctuation: boolean): boolean {
+const letterOrNumberRe = /[\p{L}\p{N}]/u
+
+// Keep-all suppresses breaks between letters. Blink keeps any pair of letters
+// or numbers by general category, so a letter that cannot start a line, such as
+// U+3005 or U+30FC, does not end a run. ICU4X in Gecko keeps pairs by UAX #14
+// class instead (AI, AL, ID, NU, HY, H2, H3, JL, JV, JT and CJ, with a CM taking
+// its base's class): after an ideograph it keeps U+30FC (CJ) and U+3035 (CM),
+// but it still breaks after an NS letter such as U+3005.
+function endsWithKeepAllLetter(text: string, profile: AnalysisProfile): boolean {
+  const last = getLastCodePoint(text)
+  if (last === null || !letterOrNumberRe.test(last)) return false
+  return !profile.breakKeepAllAfterNonstarterLetters || !cjkNonstarters.has(last)
+}
+
+export function canContinueKeepAllTextRun(previousText: string, profile: AnalysisProfile): boolean {
   if (endsWithKeepAllGlueText(previousText)) return false
-  if (!breakAfterPunctuation) return true
-  if (endsWithLineStartProhibitedText(previousText)) return false
+  if (!profile.breakKeepAllAfterPunctuation) return true
+  if (endsWithLineStartProhibitedText(previousText)) return endsWithKeepAllLetter(previousText, profile)
   if (endsWithKeepAllDashBreakText(previousText)) return false
   return true
 }
 
-export const kinsokuStart = new Set([
-  '\uFF0C',
-  '\uFF0E',
-  '\uFF01',
-  '\uFF1A',
-  '\uFF1B',
-  '\uFF1F',
-  '\u3001',
-  '\u3002',
-  '\u30FB',
-  '\uFF09',
-  '\u3015',
-  '\u3009',
-  '\u300B',
-  '\u300D',
-  '\u300F',
-  '\u3011',
-  '\u3017',
-  '\u3019',
-  '\u301B',
-  '\u30FC',
-  '\u3005',
-  '\u303B',
-  '\u309D',
-  '\u309E',
-  '\u30FD',
-  '\u30FE',
+// UAX #14 NS code points in the CJK ranges above.
+const cjkNonstarters = new Set([
+  '\u3005', '\u301C', '\u303B', '\u303C', '\u309B', '\u309C', '\u309D', '\u309E',
+  '\u30A0', '\u30FB', '\u30FD', '\u30FE', '\uFF1A', '\uFF1B', '\uFF65', '\uFF9E',
+  '\uFF9F',
 ])
+
+// Code points in the CJK ranges above that cannot start a line after other
+// text, by UAX #14 class (LineBreak.txt, Unicode 17). These ranges hold no CP,
+// IS, SY or IN code points. U+3000 is BA but a space that engines hang or trim
+// at a line end, so it is not listed.
+const cjkLineStartProhibited = new Set([
+  // CL (LB13)
+  '\u3001', '\u3002', '\u3009', '\u300B', '\u300D', '\u300F', '\u3011', '\u3015',
+  '\u3017', '\u3019', '\u301B', '\u301E', '\u301F', '\uFF09', '\uFF0C', '\uFF0E',
+  '\uFF3D', '\uFF5D', '\uFF60', '\uFF61', '\uFF63', '\uFF64',
+  // EX (LB13)
+  '\uFF01', '\uFF1F',
+  // NS (LB21)
+  ...cjkNonstarters,
+  // CM that does not extend a grapheme (LB9)
+  '\u3035',
+])
+
+// U+30FC is CJ, which engines disagree on: Chromium breaks before it and
+// WebKit does not. It stays a line-start prohibition, as before.
+export const kinsokuStart = new Set([...cjkLineStartProhibited, '\u30FC'])
 
 export const kinsokuEnd = new Set([
   '"',
@@ -225,15 +239,11 @@ const myanmarMedialGlue = new Set([
   '\u104F',
 ])
 
+// Closing quotes (UAX #14 QU) after which the Chromium profile carries CJK text.
+// A fullwidth closing bracket such as U+300D or U+FF09 is CL instead, and Chromium
+// breaks between it and a following ideograph.
 const closingQuoteChars = new Set([
   '”', '’', '»', '›',
-  '\u300D',
-  '\u300F',
-  '\u3011',
-  '\u300B',
-  '\u3009',
-  '\u3015',
-  '\uFF09',
 ])
 
 function isLeftStickyPunctuationSegment(segment: string): boolean {
@@ -1328,8 +1338,10 @@ function buildMergedSegmentation(
         isText &&
         hasTail &&
         tailKind === 'text' &&
-        isCJKLineStartProhibitedSegment(piece.text) &&
-        tailContainsCJK
+        tailContainsCJK &&
+        // Intl.Segmenter can join a nonstarter such as U+309B or U+30FD with the
+        // kana after it, so the first code point decides.
+        (isCJKLineStartProhibitedSegment(piece.text) || cjkLineStartProhibited.has(piece.text[0]!))
       ) {
         appendToTail = true
       } else if (
@@ -1622,7 +1634,7 @@ function mergeKeepAllTextSegments(
     if (kind === 'text') {
       if (
         groupStart >= 0 &&
-        (!canContinueKeepAllTextRun(segmentation.texts[i - 1]!, profile.breakKeepAllAfterPunctuation) ||
+        (!canContinueKeepAllTextRun(segmentation.texts[i - 1]!, profile) ||
           numericAffixBoundary(normalized, segmentation.starts[i]!, profile) === false)
       ) {
         flushGroup(i)
@@ -1807,7 +1819,7 @@ function mergeKeepAllTextUnits(
     const unit = units[i]!
     if (
       groupStart >= 0 &&
-      (!canContinueKeepAllTextRun(units[i - 1]!.text, profile.breakKeepAllAfterPunctuation) ||
+      (!canContinueKeepAllTextRun(units[i - 1]!.text, profile) ||
         numericAffixBoundary(segText, unit.start, profile) === false)
     ) {
       flushGroup(i)

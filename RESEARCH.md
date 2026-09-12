@@ -127,6 +127,40 @@ CJK character next to glue differ from browsers, and a glued run that
 symbols, or digits where the segmenter marks them non-word, as Safari 26.5.2 and
 Playwright WebKit 2272 do.
 
+Chromium breaks between a fullwidth closing bracket such as `」` or `）` (UAX #14
+CL) and a following ideograph. The Chromium profile used to carry CJK text after
+those brackets as it does after closing quotes, which hid Chrome's breaks in the
+Chinese and Japanese corpora; the carry now follows quotes (QU) only. It is still
+broader than UAX #14 LB19a, which allows a break after a quote between East Asian
+characters (`文”|文`), though not after `.”` before Hangul. Chromium's ICU rules for
+Chinese pages treat `”` as CL and break there too (`다.”|라|고`).
+
+The bracket carry also kept CJK line-start prohibitions that `kinsokuStart` did
+not list, such as `〟`, `］`, `｡`, `〜` or `゛`, with the bracket. The set now holds
+every code point in Pretext's CJK ranges whose UAX #14 class forbids a break
+before it: CL, EX, NS and the non-extending CM U+3035. `Intl.Segmenter` joins
+some nonstarters, such as `゛` or `ヽ`, with the kana after them, so a piece's
+first code point decides whether it attaches to the preceding text. U+3000 is BA,
+but Chromium and Firefox hang or trim it at a line end, so it needs its own
+line-end model rather than a kinsoku entry. Chromium's rules for Chinese pages
+also allow a break before `〜` and `゠`; Pretext does not read the page language
+for line breaking. U+30FC is CJ: Chromium breaks before it and WebKit does not.
+It stays listed but keeps the whole-piece rule, so this change leaves it as it
+was.
+
+Under `word-break: keep-all`, Blink keeps any pair of letters or numbers by
+general category, so a listed letter such as `々`, `ゝ`, `〼`, `〵` or `ー` does not
+end a run in the Chromium profile, while punctuation such as `」`, `・` or `゛`
+still does. Gecko's ICU4X keeps pairs by line-break class instead. It keeps `ー`
+(CJ) and, after an ideograph, `〵` (CM), but breaks after NS letters such as `々`
+or `〼`; `breakKeepAllAfterNonstarterLetters` records that split. Pretext also
+keeps `〵` after a closing bracket, where ICU4X gives it the bracket's class and
+breaks. Neither rule reaches the Safari profile, whose keep-all breaks only at
+spaces; newer WebKit source also breaks after opening, closing and other
+punctuation there, but not after letters. Pretext decides a keep-all boundary from
+the text before it only, so it keeps a letter with a following opening bracket
+where Blink breaks (`文|「文`).
+
 WebKit's pair scan never breaks before a basic combining mark. It reports the
 break between ZWSP and that mark (LB8) only from an ICU lookup that started
 before the ZWSP. Every text node starts its own scan without prior context, so a

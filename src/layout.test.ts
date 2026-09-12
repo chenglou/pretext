@@ -555,7 +555,8 @@ describe('boundary-policy regressions', () => {
     const { analyzeText } = await import('./analysis.ts')
     const profile = {
       geckoAsciiLineBreaks: true, carryCJKAfterClosingQuote: false, breakKeepAllAfterPunctuation: true,
-      keepZeroWidthSpaceMarkAtScanStart: false, breakBeforeConditionalJapaneseStarter: false,
+      breakKeepAllAfterNonstarterLetters: true, keepZeroWidthSpaceMarkAtScanStart: false,
+      breakBeforeConditionalJapaneseStarter: false,
       wordInitialHyphenLetters: 'none' as const, breakHyphenAfterCollapsedTab: false,
     }
     for (const text of ['####((aabb', '""""[[aabb', '−+x«value»!']) {
@@ -572,7 +573,8 @@ describe('boundary-policy regressions', () => {
     const { analyzeText } = await import('./analysis.ts')
     const profile = {
       geckoAsciiLineBreaks: false, carryCJKAfterClosingQuote: false, breakKeepAllAfterPunctuation: true,
-      keepZeroWidthSpaceMarkAtScanStart: false, breakBeforeConditionalJapaneseStarter: false,
+      breakKeepAllAfterNonstarterLetters: false, keepZeroWidthSpaceMarkAtScanStart: false,
+      breakBeforeConditionalJapaneseStarter: false,
       wordInitialHyphenLetters: 'alphabetic' as const, breakHyphenAfterCollapsedTab: false,
     }
     // The ASCII pair tables keep '!' with a following ASCII letter, and break
@@ -608,7 +610,8 @@ describe('boundary-policy regressions', () => {
     const { analyzeText, getBreakablePreferredBreaks } = await import('./analysis.ts')
     const profile = {
       geckoAsciiLineBreaks: false, carryCJKAfterClosingQuote: false, breakKeepAllAfterPunctuation: true,
-      keepZeroWidthSpaceMarkAtScanStart: false, breakBeforeConditionalJapaneseStarter: false,
+      breakKeepAllAfterNonstarterLetters: false, keepZeroWidthSpaceMarkAtScanStart: false,
+      breakBeforeConditionalJapaneseStarter: false,
       wordInitialHyphenLetters: 'alphabetic' as const, breakHyphenAfterCollapsedTab: false,
     }
     // UAX #14 LB8a and LB20a. A ZWJ after a space belongs to that space's
@@ -683,7 +686,8 @@ describe('boundary-policy regressions', () => {
     const { analyzeText, clearAnalysisCaches } = await import('./analysis.ts')
     const profile = {
       geckoAsciiLineBreaks: false, carryCJKAfterClosingQuote: false, breakKeepAllAfterPunctuation: true,
-      keepZeroWidthSpaceMarkAtScanStart: false, breakBeforeConditionalJapaneseStarter: false,
+      breakKeepAllAfterNonstarterLetters: false, keepZeroWidthSpaceMarkAtScanStart: false,
+      breakBeforeConditionalJapaneseStarter: false,
       wordInitialHyphenLetters: 'alphabetic' as const, breakHyphenAfterCollapsedTab: false,
     }
     const Segmenter = Intl.Segmenter
@@ -717,7 +721,8 @@ describe('boundary-policy regressions', () => {
     const { analyzeText } = await import('./analysis.ts')
     const profile = {
       geckoAsciiLineBreaks: false, carryCJKAfterClosingQuote: false, breakKeepAllAfterPunctuation: false,
-      keepZeroWidthSpaceMarkAtScanStart: true, breakBeforeConditionalJapaneseStarter: false,
+      breakKeepAllAfterNonstarterLetters: false, keepZeroWidthSpaceMarkAtScanStart: true,
+      breakBeforeConditionalJapaneseStarter: false,
       wordInitialHyphenLetters: 'alphabetic-and-hebrew' as const, breakHyphenAfterCollapsedTab: true,
     }
     expect(analyzeText('\u200B\u0301ab', profile).texts).toEqual(['\u200B\u0301ab'])
@@ -1191,6 +1196,69 @@ describe('prepare invariants', () => {
   test('applies CJK and Hangul punctuation attachment rules', () => {
     expect(prepareWithSegments('中文，测试。', FONT).segments).toEqual(['中', '文，', '测', '试。'])
     expect(prepareWithSegments('테스트입니다.', FONT).segments.at(-1)).toBe('다.')
+  })
+
+  test('the Chromium profile carries CJK text after closing quotes, not closing brackets', async () => {
+    const { getEngineProfile } = await import('./measurement.ts')
+    const profile = getEngineProfile()
+    const previous = profile.carryCJKAfterClosingQuote
+    profile.carryCJKAfterClosingQuote = true
+    try {
+      // Fullwidth closing brackets are UAX #14 CL, and Chromium breaks between CL and ID.
+      for (const close of ['\u300D', '\u300F', '\u3011', '\u300B', '\u3009', '\u3015', '\uFF09']) {
+        expect(prepareWithSegments(`\u6587${close}\u6587`, FONT).segments).toEqual([`\u6587${close}`, '\u6587'])
+      }
+      expect(prepareWithSegments('\uB2E4.\u300D\uB77C\uACE0', FONT).segments).toEqual(['\uB2E4.\u300D', '\uB77C', '\uACE0'])
+      // No break after a period and closing quote before Hangul (UAX #14 LB19a).
+      expect(prepareWithSegments('\uC5B4.\u201D\uB77C\uACE0', FONT).segments).toEqual(['\uC5B4.\u201D\uB77C', '\uACE0'])
+    } finally {
+      profile.carryCJKAfterClosingQuote = previous
+    }
+  })
+
+  test('CJK closing punctuation and nonstarters cannot start a line', () => {
+    // UAX #14 CL, NS and the non-extending CM U+3035, in context and after a bracket.
+    for (const follower of ['\u301E', '\u301F', '\uFF3D', '\uFF5D', '\uFF60', '\uFF61', '\uFF63', '\uFF64', '\u301C', '\u303C', '\u309B', '\u309C', '\u30A0', '\uFF65', '\u3035']) {
+      expect(prepareWithSegments(`\u6587${follower}\u6587`, FONT).segments).toEqual([`\u6587${follower}`, '\u6587'])
+      expect(prepareWithSegments(`\u6587\u300D${follower}\u30A2`, FONT).segments).toEqual([`\u6587\u300D${follower}`, '\u30A2'])
+    }
+    // The word segmenter can join a nonstarter with the kana after it.
+    expect(prepareWithSegments('\u6587\u30FD\u30A2', FONT).segments).toEqual(['\u6587\u30FD', '\u30A2'])
+  })
+
+  test('keep-all runs continue after letters that cannot start a line', async () => {
+    const keepAll = { wordBreak: 'keep-all' } as const
+    // Blink keeps any pair of letters, including U+3005, U+303C, U+3035, U+309D,
+    // U+30FD and U+30FC.
+    for (const letter of ['\u3005', '\u303C', '\u3035', '\u309D', '\u30FD', '\u30FC']) {
+      const text = `\u4E2D\u6587${letter}\u4E2D\u6587`
+      expect(prepareWithSegments(text, FONT, keepAll).segments).toEqual([text])
+    }
+    expect(prepareWithSegments('\u30E9\u30FC\u30E1\u30F3', FONT, keepAll).segments).toEqual(['\u30E9\u30FC\u30E1\u30F3'])
+    // Punctuation still ends a run.
+    for (const punctuation of ['\u300D', '\u3001', '\u30FB']) {
+      const text = `\u4E2D\u6587${punctuation}\u4E2D\u6587`
+      expect(prepareWithSegments(text, FONT, keepAll).segments).toEqual([`\u4E2D\u6587${punctuation}`, '\u4E2D\u6587'])
+    }
+
+    // ICU4X keeps pairs by line-break class: it breaks after NS letters, but not
+    // after U+3035 (CM) or U+30FC (CJ).
+    const { getEngineProfile } = await import('./measurement.ts')
+    const profile = getEngineProfile()
+    const previous = profile.breakKeepAllAfterNonstarterLetters
+    profile.breakKeepAllAfterNonstarterLetters = true
+    try {
+      for (const letter of ['\u3005', '\u303C', '\u309D', '\u30FD']) {
+        const text = `\u4E2D\u6587${letter}\u4E2D\u6587`
+        expect(prepareWithSegments(text, FONT, keepAll).segments).toEqual([`\u4E2D\u6587${letter}`, '\u4E2D\u6587'])
+      }
+      for (const letter of ['\u3035', '\u30FC']) {
+        const text = `\u4E2D\u6587${letter}\u4E2D\u6587`
+        expect(prepareWithSegments(text, FONT, keepAll).segments).toEqual([text])
+      }
+    } finally {
+      profile.breakKeepAllAfterNonstarterLetters = previous
+    }
   })
 
   test('treats Hangul compatibility jamo as CJK break units', () => {

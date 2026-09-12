@@ -1,4 +1,4 @@
 {
-  "revision": "09c7f20d52943d4b11488f04d0f408e2bd6de602",
-  "description": "Reviewed boundary, rich-inline, shared complex-walker, leading-ZWSP, exclamation-break, figure-space glue and pair-table gap fixes. The runner measures this source and every candidate against the same fresh browser observations; existing mismatches remain observations, never expected answers."
+  "revision": "8db54832e4d09faf4170846ae7c88f0183064a06",
+  "description": "Reviewed boundary, rich-inline, shared complex-walker, leading-ZWSP, exclamation-break, figure-space glue, pair-table gap and CJK closing-bracket fixes. The runner measures this source and every candidate against the same fresh browser observations; existing mismatches remain observations, never expected answers."
 }
