@@ -583,6 +583,77 @@ in A–A kerning, so it is not a clean space measurement. Measure the space itse
 After forced overflow, preserve the negative remaining width; clamping it to zero
 gives a following negative gap room it did not have.
 
+An item boundary is not a break opportunity by itself. Chrome runs one line-break
+iterator over the text of the whole inline formatting context, and Gecko keeps
+collecting a word across text frames until whitespace. `prepareRichInline()`
+analyzes the text that items join between collapsible spaces, as `prepare()`
+would, and an ordinary break falls only where a joined break unit starts. In the
+Chromium profile every break fact near a boundary comes from that joined
+analysis, not only the boundary itself. Splitting a word changes each item's own
+segmentation: Thai `ความสวยง` splits into `ความ/สวย/ง` alone but `ความ/สวยงาม`
+joined. Joined break positions therefore map into item cursors, down to a grapheme
+inside an item segment when needed. Where an item's segments hide a joined break,
+or offer one inside a joined word, the walker ends at the joined break or fills
+graphemes back to a preferred break, as the flat walker splits a word.
+
+WebKit breaks differently, and `inlineItemBreaks` records that. Its inline items
+builder runs a break iterator over each inline box's own text, and a boundary
+between boxes is breakable when the next box's text can break at its start with
+the previous box's last two characters as prior context. Installed Safari 26.5.2
+and headless WebKit spans wrapped Thai, Lao, Khmer and Myanmar words split across
+items differently from one text node, and joined run extents lost the Thai and
+Lao rows where they differ while Chrome gained on the same rows. In the WebKit
+profile an item's last run comes from its own segments, and the boundary from
+analyzing the previous item's last two characters followed by the next item's
+text. The next item's first run and any break inside its first segment come from
+that same analysis, which is only a proxy for WebKit's iterator over the next box
+alone. It matters where Pretext's analysis of the item alone differs from that
+iterator. `Intl.Segmenter` keeps the Myanmar vowel sign at the start of `ာသည်`
+apart, but the forward-sticky pass joins it to the word after it, and the
+resulting carry moved `သ` to the next line where Safari's spans do not. Taking the
+first run from the item's own segments instead changed only such Myanmar rows and
+failed all 70 of them. Keeping a leading mark apart in the analysis itself would
+change `prepare()` for any text that starts with a mark, in every engine. Taking
+the previous item's last run from the same context analysis lost more fuzz rows
+than it fixed. The analysis still differs from WebKit's scan inside some boxes:
+WebKit breaks `-"rt` after the hyphen and `-1o(r)` before the parenthesis, and
+neither the item's segments nor the joined text do.
+
+Gecko segments words with ICU4X, and its segmentation of the joined Myanmar text
+(`မြန်|မာ|ဘာသာ|သည်|လှပသောဘာ|သာ|ဖြစ်သည်`) differs from Chromium's. With the joined
+rule, installed Firefox spans in Myanmar Sangam MN wrapped like one text node and
+like the flat prediction, where the rich prediction added a line. Headless Chromium
+with a Firefox user agent reproduces neither Gecko's segmentation nor its widths
+for this font, so that difference is not modeled. The Gecko profile, like engines
+Pretext doesn't recognize, therefore keeps breaking at every item boundary. Firefox
+gives up the joined rule's gains: a `)` or `,` that starts an item, a word split
+across items, kinsoku across items and Thai words split across items.
+
+When following items continue an item's last run, the run moves to the next line
+if the line already has an earlier break. The continuation's width is measured to
+its cheapest break, so a soft hyphen directly before a ZWSP or SPACE adds no
+hyphen, and it fits within the line walker's fit epsilon. Native Chrome and Safari
+spans reserved a hyphen width for a soft hyphen before a space at some widths;
+the flat walker does not, and neither does rich-inline.
+
+A run that began the line still takes overflow breaks at item boundaries, as before.
+Restricting those to units that `prepare()` would split lost the `a`/ZWSP/`hello`
+witness at width 1: Chrome and Firefox break before that ZWSP even in a single text
+node, while the flat walker keeps it with `a`; Safari agreed on the line count only.
+Item admission compares raw widths, so an item that fits only within the fit
+epsilon still wraps before it. Atomic `break: 'never'` items allow a break on both
+sides. css-text requires this for atomic inlines, and headless Chromium and WebKit
+inline-blocks agreed.
+
+Items are measured separately. Chromium shapes neighboring same-font spans
+together, so Arial `community` + `,` natively fits about a pixel earlier than the
+sum of the two measurements; Gecko frames kern there too, while WebKit spans do
+not. That is a measurement topic, not a break fact. Where the flat walker and one
+native text node disagree, rich-inline in the Chromium and WebKit profiles now
+follows the flat walker: Japanese dialogue in Hiragino Sans after `」`, numeric
+signs that WebKit keeps with the digit, and fit thresholds. Breaking at every item
+boundary matched some of those rows only by accident.
+
 ## Fonts And Other Measurement Engines
 
 Whole-run Canvas/DOM agreement, isolated-letter agreement and matching line

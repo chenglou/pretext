@@ -54,7 +54,7 @@ function consumesAtLineStart(kind: SegmentBreakKind, atChunkStart: boolean): boo
   return kind === 'space' || kind === 'soft-hyphen' || (kind === 'zero-width-break' && !atChunkStart)
 }
 
-function breaksAfter(kind: SegmentBreakKind): boolean {
+export function breaksAfter(kind: SegmentBreakKind): boolean {
   return (
     kind === 'space' ||
     kind === 'preserved-space' ||
@@ -517,8 +517,10 @@ function stepPreparedChunkLineGeometry(
   cursor: LineBreakCursor,
   chunkIndex: number,
   maxWidth: number,
+  endSegmentIndex: number,
+  endGraphemeIndex: number,
 ): number | null {
-  return walkPreparedComplexLines(prepared, cursor, chunkIndex, maxWidth, undefined, 1).lastLineWidth
+  return walkPreparedComplexLines(prepared, cursor, chunkIndex, maxWidth, undefined, 1, endSegmentIndex, endGraphemeIndex).lastLineWidth
 }
 
 function walkPreparedComplexLines(
@@ -528,6 +530,10 @@ function walkPreparedComplexLines(
   maxWidth: number,
   onLine?: InternalLineVisitor,
   lineLimit = Number.POSITIVE_INFINITY,
+  // A single-line caller can end stepping at an ordinary break before this
+  // cursor, as if the text continued past it.
+  endSegmentLimit = Number.POSITIVE_INFINITY,
+  endGraphemeLimit = 0,
 ): { lineCount: number; lastLineWidth: number | null } {
   const {
     widths,
@@ -625,7 +631,11 @@ function walkPreparedComplexLines(
     pendingBreakKind = kind
   }
 
-  function appendBreakableSegmentFrom(segmentIndex: number, startGraphemeIndex: number): number | null {
+  function appendBreakableSegmentFrom(
+    segmentIndex: number,
+    startGraphemeIndex: number,
+    endGraphemeIndex = breakableFitAdvances[segmentIndex]!.length,
+  ): number | null {
     const fitAdvances = breakableFitAdvances[segmentIndex]!
     const preferredBreaks = breakablePreferredBreaks[segmentIndex] ?? null
     let preferredBreakIndex = preferredBreaks === null
@@ -635,7 +645,10 @@ function walkPreparedComplexLines(
     let lastPreferredBreakWidth = 0
 
     const entry = prepared.entryGeometry?.[segmentIndex]
-    const freshWhole = getSegmentEntryWidth(entry, startGraphemeIndex, fitAdvances.length)
+    // Entry geometry describes whole segment tails, not a caller's grapheme limit.
+    const freshWhole = endGraphemeIndex === fitAdvances.length
+      ? getSegmentEntryWidth(entry, startGraphemeIndex, fitAdvances.length)
+      : null
     if (freshWhole !== null) {
       const terminal = prepared.letterSpacing
       if (entry!.entries[startGraphemeIndex]!.admissionFit <= fitLimit) {
@@ -663,7 +676,7 @@ function walkPreparedComplexLines(
       return finishLine(segmentIndex + 1, 0)
     }
 
-    for (let g = startGraphemeIndex; g < fitAdvances.length; g++) {
+    for (let g = startGraphemeIndex; g < endGraphemeIndex; g++) {
       const baseGw = fitAdvances[g]!
 
       if (!hasContent) {
@@ -717,13 +730,17 @@ function walkPreparedComplexLines(
     let afterUnspacedControl = false
 
     const chunk = prepared.chunks[chunkIndex]!
+    const endSegmentIndex = Math.min(chunk.endSegmentIndex, endSegmentLimit)
+    const consumedEndSegmentIndex = endSegmentIndex < chunk.endSegmentIndex
+      ? endSegmentIndex
+      : chunk.consumedEndSegmentIndex
     let lineWidth: number | null = null
     if (chunk.startSegmentIndex === chunk.endSegmentIndex) {
       cursor.segmentIndex = chunk.consumedEndSegmentIndex
       cursor.graphemeIndex = 0
       lineWidth = 0
     } else {
-      lineLoop: for (let i = cursor.segmentIndex; i < chunk.endSegmentIndex; i++) {
+      lineLoop: for (let i = cursor.segmentIndex; i < endSegmentIndex; i++) {
         const kind = kinds[i]!
         const breakAfter = breaksAfter(kind)
         const startGraphemeIndex = i === cursor.segmentIndex ? cursor.graphemeIndex : 0
@@ -820,10 +837,40 @@ function walkPreparedComplexLines(
         appendedSegmentAdvance = advance
       }
 
+      // A limit inside a breakable text segment walks its leading graphemes as
+      // the last unit of the line.
+      if (lineWidth === null && endGraphemeLimit > 0 && endSegmentLimit < chunk.endSegmentIndex) {
+        if (!hasContent) {
+          const startGraphemeIndex = endSegmentLimit === cursor.segmentIndex ? cursor.graphemeIndex : 0
+          lineWidth = appendBreakableSegmentFrom(endSegmentLimit, startGraphemeIndex, endGraphemeLimit) ??
+            finishLine(endSegmentLimit, endGraphemeLimit, lineW)
+        } else {
+          const fitAdvances = breakableFitAdvances[endSegmentLimit]!
+          let advance = letterSpacing !== 0 && spacingGraphemeCounts[endSegmentLimit]! > 0 && !zeroWidthPrefix && !afterUnspacedControl
+            ? letterSpacing
+            : 0
+          for (let g = 0; g < endGraphemeLimit; g++) {
+            advance += getBreakableGraphemeAdvance(prepared, g > 0, fitAdvances[g]!)
+          }
+          if (getBreakableCandidateFitWidth(prepared, lineW + advance) <= fitLimit) {
+            lineW += advance
+            lineWidth = finishLine(endSegmentLimit, endGraphemeLimit, lineW)
+          } else if (
+            pendingBreakSegmentIndex >= 0 &&
+            pendingBreakFitWidth <= fitLimit &&
+            lineEndSegmentIndex === pendingBreakSegmentIndex &&
+            lineEndGraphemeIndex === 0
+          ) {
+            lineWidth = finishLine(pendingBreakSegmentIndex, 0, pendingBreakPaintWidth)
+          } else {
+            lineWidth = finishLine()
+          }
+        }
+      }
       if (lineWidth === null) {
-        lineWidth = pendingBreakSegmentIndex === chunk.consumedEndSegmentIndex && lineEndGraphemeIndex === 0
-          ? finishLine(chunk.consumedEndSegmentIndex, 0, pendingBreakPaintWidth)
-          : finishLine(chunk.consumedEndSegmentIndex, 0, lineW)
+        lineWidth = pendingBreakSegmentIndex === consumedEndSegmentIndex && lineEndGraphemeIndex === 0
+          ? finishLine(consumedEndSegmentIndex, 0, pendingBreakPaintWidth)
+          : finishLine(consumedEndSegmentIndex, 0, lineW)
       }
     }
     if (lineWidth === null) break
@@ -961,27 +1008,34 @@ function stepPreparedSimpleLineGeometry(
   return lineW
 }
 
+// An end cursor stops stepping at an ordinary break there, as if the text were
+// cut at it, and returns the paint width of a line that ends there. A cursor
+// inside a segment needs that segment's breakable fit advances.
 export function stepPreparedLineGeometryFromChunk(
   prepared: PreparedLineBreakData,
   cursor: LineBreakCursor,
   chunkIndex: number,
   maxWidth: number,
+  endSegmentIndex = prepared.widths.length,
+  endGraphemeIndex = 0,
 ): number | null {
-  if (prepared.simpleLineWalkFastPath) {
+  if (prepared.simpleLineWalkFastPath && endSegmentIndex === prepared.widths.length) {
     return stepPreparedSimpleLineGeometry(prepared, cursor, maxWidth)
   }
 
-  return stepPreparedChunkLineGeometry(prepared, cursor, chunkIndex, maxWidth)
+  return stepPreparedChunkLineGeometry(prepared, cursor, chunkIndex, maxWidth, endSegmentIndex, endGraphemeIndex)
 }
 
 export function stepPreparedLineGeometry(
   prepared: PreparedLineBreakData,
   cursor: LineBreakCursor,
   maxWidth: number,
+  endSegmentIndex = prepared.widths.length,
+  endGraphemeIndex = 0,
 ): number | null {
   const chunkIndex = normalizePreparedLineStart(prepared, cursor)
   if (chunkIndex < 0) return null
-  return stepPreparedLineGeometryFromChunk(prepared, cursor, chunkIndex, maxWidth)
+  return stepPreparedLineGeometryFromChunk(prepared, cursor, chunkIndex, maxWidth, endSegmentIndex, endGraphemeIndex)
 }
 
 export function measurePreparedLineGeometry(

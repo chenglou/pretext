@@ -73,6 +73,15 @@ export type EngineProfile = {
   // WebKit moves a tab to the following stop when less than half a space would
   // remain before the next one (FontCascade::tabWidth).
   skipNarrowTabStops: boolean
+  // Where rich-inline items break near a boundary. Blink runs one line-break
+  // iterator over the text of the whole inline formatting context, so every
+  // break fact near a boundary comes from the joined text. WebKit finds breaks
+  // inside each inline box from that box's own text, and decides a boundary
+  // between boxes from the previous box's last two characters. Gecko collects a
+  // word across text frames until a space, but it segments joined Myanmar text
+  // differently from Blink and that is not modeled, so Gecko and unknown engines
+  // keep breaking at every item boundary.
+  inlineItemBreaks: 'joined-text' | 'item-text' | 'item-boundary'
 }
 
 export type BreakableFitMode = 'sum-graphemes' | 'segment-prefixes' | 'pair-context'
@@ -254,6 +263,7 @@ export function getEngineProfile(): EngineProfile {
     breakOnlyAfterNextLine: engine === 'webkit',
     letterSpaceNextLine: engine !== 'webkit',
     skipNarrowTabStops: engine === 'webkit',
+    inlineItemBreaks: engine === 'blink' ? 'joined-text' : engine === 'webkit' ? 'item-text' : 'item-boundary',
   }
   return cachedEngineProfile
 }

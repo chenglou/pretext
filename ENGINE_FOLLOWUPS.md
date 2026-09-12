@@ -62,7 +62,7 @@ Open engine work deferred from the #210 series: decisions for the maintainer, kn
 - Under keep-all, Safari offers no break on either side of NEL and fills an overflowing space-delimited word by graphemes. Outside CJK runs Pretext still breaks after NEL, as it still breaks after `-` in Latin keep-all text.
 - Model lone CR, FF and VT in pre-wrap per engine instead of as hard breaks. This needs the harness contract and `line.text` decisions.
 - Firefox removes a newline next to East Asian punctuation on ja and zh pages, and between wide characters. This needs the content-language decision and a re-observed Firefox corpus.
-- Rich-inline items should break only where the joined text breaks (#177). WebKit breaks inside each item on its own, Chromium and Gecko follow the joined text, and Firefox shows a Myanmar alignment defect at item boundaries.
+- Rich-inline items should break only where the joined text breaks (#177). Chrome and Safari now do. Firefox still breaks at every item boundary: the joined rule lost 40 installed Myanmar split-word rows to Gecko's segmentation, so enabling it waits on a model of that segmentation and an installed re-gate.
 - In Chrome, line-break context crosses rich-inline items after a word-initial hyphen, as in items `foo` and U+2010 `bar baz`.
 
 ## Widths, shaping and emergency breaks

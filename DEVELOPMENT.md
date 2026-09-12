@@ -54,7 +54,9 @@ well as mismatches. A matching pinned-main failure does not waive them.
 The rich-inline checks cover original item coordinates, callback ownership and
 signed boundary spaces. Fourteen native ZWSP/WJ item witnesses require matching rich
 height; the two flat #210 reproductions separately require matching native height
-and line count.
+and line count. Ten rich boundary witnesses observe punctuation, a split word, a
+hyphen, kinsoku, a closing bracket, and Thai and Myanmar words across items; the
+parenthesis and split-word rows require matching rich height in Chrome and Safari.
 The benchmark runner requires every measurement section before writing a
 snapshot; a successful report from an unrelated page is not a benchmark result.
 Failed benchmark reports retain their evidence in `<output>.failed.json`, or under

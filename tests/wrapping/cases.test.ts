@@ -69,10 +69,22 @@ test('boundary, rich and flat #210 reproductions are required', () => {
     for (const metric of ['height', 'lineCount', 'api'] as const) expect(input.required).toContain(metric)
     if (input.text !== '\u200B') expect(input.required).toContain('source')
   }
-  const rich = ordinary.filter(input => input.nativeItems === true)
+  const rich = ordinary.filter(input => input.nativeItems === true && input.origins.includes('issue/#210-#211'))
   expect(rich).toHaveLength(14)
   expect(rich.every(input => input.parts?.join('') === input.text)).toBe(true)
   for (const input of rich) expect(input.required).toEqual(['richHeight'])
+  const boundaries = ordinary.filter(input => input.family === 'maintained/rich-boundaries')
+  expect(boundaries).toHaveLength(10)
+  expect(boundaries.every(input => input.nativeItems === true && input.parts?.join('') === input.text && input.context !== undefined)).toBe(true)
+  expect(boundaries.filter(input => input.required !== undefined).map(input => [input.parts, input.required])).toEqual([
+    [['see (', 'docs', ') now please'], ['richHeight']],
+    [['Hello wor', 'ld again and again'], ['richHeight']],
+  ])
+  // Pretext still breaks at every item boundary in Firefox, so no row is required there.
+  const firefoxBoundaries = generateCases(measure, { schedule: 'ordinary', browser: 'firefox', family: 'maintained/rich-boundaries' })
+  expect(firefoxBoundaries.map(input => input.id)).toEqual(boundaries.map(input => input.id))
+  expect(firefoxBoundaries.filter(input => input.required !== undefined)).toEqual([])
+  expect(ordinary.filter(input => input.nativeItems === true)).toHaveLength(24)
   expect(ordinary.filter(input => input.origins.includes('issue/#208')).every(input => input.required?.includes('source'))).toBe(true)
   expect(ordinary.some(input => input.text === '\u200B≤100nA\u200B' && input.font === '12px Arial' && input.width === 105)).toBe(true)
 })

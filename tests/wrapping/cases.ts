@@ -131,6 +131,44 @@ export function generateCases(measure: Measure, selection: CaseSelection): Wrapp
     family: 'standalone-zwsp', origins: ['maintained/standalone-zwsp'],
     heightSource: 'layout', heightMode: 'exact', required: ['height', 'lineCount', 'api'] })
 
+  // Same-font inline items break where their joined text breaks in Chromium;
+  // WebKit breaks inside each item from its own text. Pretext still breaks at
+  // every item boundary in Firefox, so the two rows required in Chrome and Safari
+  // only observe Firefox. They sit inside wide native bands where all three
+  // browsers agree. The others observe engine-sensitive shapes, including the
+  // fitting control after the comma row.
+  const richBoundary = (label: string, parts: string[], width: number, options: Partial<Omit<WrappingCase, 'id' | 'text' | 'parts' | 'width'>> = {}): void => {
+    add({ ...defaults, family: 'maintained/rich-boundaries', origins: [`maintained/rich-boundaries/${label}`],
+      context: { kind: 'installed', lang: 'en' }, lang: 'en', ...options, text: parts.join(''), parts, width, nativeItems: true })
+  }
+  const community = ['prioritized by our ', 'community', ', projects are led by engineers']
+  const zh = { context: { kind: 'installed', lang: 'zh' }, lang: 'zh' } as const
+  const th = { context: { kind: 'installed', lang: 'th' }, lang: 'th' } as const
+  const perItem = 'WebKit finds breaks inside each inline box from its own text, so spans and one text node wrap differently at this width.'
+  const everyBoundary = 'Pretext breaks at every item boundary in Firefox, where Gecko keeps a word together across text frames.'
+  for (const [label, parts, width] of [
+    ['parenthesized-item', ['see (', 'docs', ') now please'], 64],
+    ['split-word', ['Hello wor', 'ld again and again'], 75],
+  ] as const) {
+    richBoundary(label, [...parts], width, { required: ['richHeight'], browsers: ['chrome', 'safari'] })
+    richBoundary(label, [...parts], width, { browsers: ['firefox'], note: everyBoundary })
+  }
+  richBoundary('leading-comma', community, 106)
+  richBoundary('leading-comma-fits', community, 112)
+  richBoundary('after-hyphen', ['A long line with state-', 'of-the-art tools and more words'], 55)
+  richBoundary('kinsoku', ['\u4E2D\u6587\u4E2D\u6587\u4E2D\u6587', '\u3002\u65E5\u672C\u8A9E\u3067\u3059'], 130, { ...zh, font: '20px Arial', lineHeight: 24 })
+  richBoundary('closing-bracket', ['\u4E2D\u6587\u4E2D\u6587\u4E2D\u6587', '\uFF09\u4E2D\u6587\u4E2D\u6587\u4E2D\u6587'], 50, { ...zh, font: '20px "Songti SC", "PingFang SC", serif', lineHeight: 24 })
+  richBoundary('thai-split-word', ['\u0E04\u0E27\u0E32\u0E21\u0E2A\u0E27\u0E22\u0E07', '\u0E32\u0E21\u0E02\u0E2D\u0E07\u0E18\u0E23\u0E23\u0E21\u0E0A\u0E32\u0E15\u0E34\u0E17\u0E33\u0E43\u0E2B\u0E49\u0E1C\u0E39\u0E49\u0E04\u0E19\u0E21\u0E35\u0E04\u0E27\u0E32\u0E21\u0E2A\u0E38\u0E02\u0E21\u0E32\u0E01\u0E02\u0E36\u0E49\u0E19\u0E17\u0E38\u0E01\u0E27\u0E31\u0E19'], 70, {
+    ...th, font: '16px Thonburi', lineHeight: 24, note: perItem,
+  })
+  richBoundary('thai-split-word-20px', ['\u0E04\u0E27\u0E32\u0E21\u0E2A\u0E27\u0E22\u0E07', '\u0E32\u0E21\u0E02\u0E2D\u0E07\u0E18\u0E23\u0E23\u0E21\u0E0A\u0E32\u0E15\u0E34\u0E17\u0E33\u0E43\u0E2B\u0E49\u0E1C\u0E39\u0E49\u0E04\u0E19\u0E21\u0E35\u0E04\u0E27\u0E32\u0E21\u0E2A\u0E38\u0E02'], 90, {
+    ...th, font: '20px "Thonburi", "Noto Sans Thai", sans-serif', lineHeight: 32, note: perItem,
+  })
+  richBoundary('myanmar-split-word', ['\u1019\u103C\u1014\u103A\u1019\u102C\u1018\u102C\u101E', '\u102C\u101E\u100A\u103A\u101C\u103E\u1015\u101E\u1031\u102C\u1018\u102C\u101E\u102C\u1016\u103C\u1005\u103A\u101E\u100A\u103A'], 88, {
+    context: { kind: 'installed', lang: 'my' }, lang: 'my', font: '16px "Myanmar Sangam MN"', lineHeight: 24,
+    note: `${perItem} Gecko segments this joined text differently from Chromium, so Pretext breaks at every item boundary in Firefox.`,
+  })
+
   const recipeMeasure = (text: string, font: string): number => measure(text, font, 0)
   for (const recipe of [policyCases, generateLanguageCases, generateSeamCases, generateAcceptanceCases]) {
     for (const input of recipe(recipeMeasure)) {

@@ -23,6 +23,7 @@
 - In Chrome and Firefox, a newline next to a zero-width space no longer adds a space in `white-space: normal`, matching the browser (#238).
 - In Safari, a next-line character (U+0085) now stays on the same line as the text before it, and lines can still break after it. `letterSpacing` no longer adds space after U+0085, except next to text that Safari shapes as complex text, such as Arabic, Devanagari or a combining mark (#240).
 - In Safari, a tab in `white-space: pre-wrap` now moves to the following tab stop when less than half a space would remain before the next one, as Safari does (#240).
+- In Chrome and Safari, rich-inline layout now breaks between items only where their joined text has a break opportunity. Punctuation such as `,` or `)` at the start of an item stays with the word before it, and a word split across items wraps as one word. Items without a space between them can also break where the joined text allows it, such as between CJK characters, at Thai word boundaries or after `-`. In Safari, breaks inside each item still come from that item's own text, as Safari wraps each span, so a Thai, Lao, Khmer or Myanmar word split across items wraps like Safari's spans. Firefox still breaks at every item boundary (#241).
 
 ## 0.0.9 - 2026-09-07
 

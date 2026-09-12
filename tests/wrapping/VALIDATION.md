@@ -17,6 +17,43 @@ All accuracy, letter-spacing and corpus result payloads are unchanged; refreshed
 snapshots change only provenance and environment records. Runtime sources and
 the baseline pin are unchanged, so no runtime benchmark was needed.
 
+## Rich-inline boundaries in Chrome and Safari
+
+This runtime change starts from the Safari next-line branch pin `1771ab8`.
+`prepareRichInline()` treated every item boundary as a break opportunity, while
+browsers find breaks in the text their items join. Blink runs one line-break
+iterator over the whole inline formatting context. WebKit decides a boundary
+from the previous box's last two characters followed by the next box's text, and
+finds breaks inside a box from that box's own text. The engine profile's
+`inlineItemBreaks` is `'joined-text'` for Blink, `'item-text'` for WebKit and
+`'item-boundary'` for Gecko or when no engine is named, which keeps main's
+behavior. The line walker can stop at an end cursor as if the text were cut
+there, so a carried run measures up to its first joined break. The joined
+analysis never puts a break before a NEL control segment (LB6). Ten
+`maintained/rich-boundaries` witnesses join the suite. The two exact-fit
+witnesses are required in Chrome and Safari and observed in Firefox, where main
+fails them.
+
+The installed gate ran this change on `daf13ac` against pinned `e5e66be`, and
+again from this branch against pinned `5ba3247`: Chrome 153 through the
+Playwright transport, Safari 26.5.2 and Firefox 155 natively, both directions.
+Both runs agree. Chrome fixes 7 LTR metrics and Safari 6, all witness rich
+heights. RTL and Firefox change nothing. No leg loses a metric or has a new
+required, API or rich failure, and nine numeric profiles have no new failures.
+
+Headless replays of installed rich-inline research observations (13,038 LTR rows
+per browser) gain 757 Chrome rows and 905 Safari rows. They lose 74 and 31, all
+accidents. Chrome shapes a word and its comma across spans (38 rows). On
+Hiragino kinsoku rows (32) and at thresholds (4), the flat prediction already
+differs from native. In Safari, main's boundary break and emergency split
+coincided with WebKit's on numeric signs (27) and quote splits (4). Installed
+Firefox measured the joined rule at +768 and -93 rows, including 40 Myanmar
+split-word rows lost to Gecko's segmentation, so Firefox keeps main's behavior.
+
+`bun test` and `bun run check` pass. The baseline advances to runtime commit
+`06c850f`, and the ordinary snapshots were regenerated against it with unchanged
+results; only provenance and environment records change.
+
 ## Safari next-line and tab stops
 
 This runtime change starts from the segment-break removal branch head `daf13ac`.

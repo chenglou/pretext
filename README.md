@@ -121,6 +121,8 @@ Pass a flat list of text items. Keep leading and trailing spaces; the helper col
 
 Fragment and cursor `itemIndex` values refer to that original list, including when it contains empty items. A collapsed boundary space uses the first space's font and letter spacing; `gapBefore` can be zero or negative. Zero-width content can still occupy a line and carry a break opportunity.
 
+In Chrome and Safari, items break where the text they join has a break opportunity, not at every item boundary. Safari finds breaks inside each span from that span's own text, and Pretext follows it there, so a Thai, Lao, Khmer or Myanmar word split across items wraps like Safari's spans rather than like one text node. In Firefox, and in engines Pretext doesn't recognize, every item boundary is still a break opportunity, so punctuation that starts an item or the rest of a split word can wrap there where Firefox keeps it with the text before. Each item is measured on its own, so kerning across a boundary isn't included: Chrome and Firefox shape neighboring same-font spans together and Safari doesn't, which can move a wrap by about a pixel.
+
 ### API Glossary
 
 Use-case 1 APIs:

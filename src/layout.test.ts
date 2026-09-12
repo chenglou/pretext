@@ -844,6 +844,23 @@ describe('boundary-policy regressions', () => {
       // A rich item that ends in NEL breaks before the next item.
       const rich = prepareRichInline([{ text: 'ab\u0085', font: FONT }, { text: 'cd', font: FONT }])
       expect(measureRichInlineStats(rich, measureWidth('ab\u0085', FONT) + 0.5).lineCount).toBe(2)
+      // A rich item that starts with NEL keeps the word before it, as the joined text does.
+      const previousItemBreaks = profile.inlineItemBreaks
+      profile.inlineItemBreaks = 'item-text'
+      try {
+        const parts = ['ab foo', '\u0085b'] as const
+        const width = measureWidth('ab foo', FONT) + 0.5
+        const leading = prepareRichInline(parts.map(part => ({ text: part, font: FONT })))
+        const richLines: string[] = []
+        walkRichInlineLineRanges(leading, width, range => {
+          richLines.push(materializeRichInlineLineRange(leading, range).fragments.map(fragment => fragment.text).join('').trimEnd())
+        })
+        const flatLines = lines(parts.join(''), width).map(line => line.text.trimEnd())
+        expect(flatLines).toEqual(['ab', 'foo\u0085b'])
+        expect(richLines).toEqual(flatLines)
+      } finally {
+        profile.inlineItemBreaks = previousItemBreaks
+      }
 
       // NEL takes no letter spacing at either sign, but the gap after the
       // grapheme before it stays.
@@ -1795,6 +1812,42 @@ describe('rich-inline invariants', () => {
     })
   })
 
+  test('the Chromium profile breaks rich items only where their joined text breaks', async () => {
+    // Same-font runs from a product page: native text keeps "community," whole,
+    // so the comma that starts the third run moves with the word before it.
+    // Run extents also come from the joined text: split words, dictionary
+    // words, a kinsoku unit and a soft hyphen before a space. At width 30 the
+    // item's own segmentation breaks inside a joined Lao word.
+    const { getEngineProfile } = await import('./measurement.ts')
+    const profile = getEngineProfile()
+    const previous = profile.inlineItemBreaks
+    profile.inlineItemBreaks = 'joined-text'
+    try {
+      for (const [parts, width] of [
+        [['Midjourney operates non-traditionally. Our features are suggested and prioritized by our ', 'community', ', projects are led by engineers and the founder, and the team is strikingly small compared to the size of our community and ambitions.'], 258],
+        [['Hello wor', 'ld again'], 85],
+        [['\u0E04\u0E27\u0E32\u0E21\u0E2A\u0E27\u0E22\u0E07', '\u0E32\u0E21\u0E02\u0E2D\u0E07\u0E18\u0E23\u0E23\u0E21\u0E0A\u0E32\u0E15\u0E34'], 50],
+        [['\u0E9E\u0EB2\u0EAA\u0EB2\u0EA5', '\u0EB2\u0EA7\u0EC0\u0E9B\u0EB1\u0E99\u0E9E\u0EB2\u0EAA\u0EB2'], 60],
+        [['\u0E9E\u0EB2\u0EAA\u0EB2\u0EA5', '\u0EB2\u0EA7\u0EC0\u0E9B\u0EB1\u0E99\u0E9E\u0EB2\u0EAA\u0EB2'], 30],
+        [['\u1019\u103C\u1014\u103A\u1019\u102C\u1018\u102C\u101E', '\u102C\u101E\u100A\u103A\u101C\u103E\u1015\u101E\u1031\u102C'], 100],
+        [['\u4E2D\u6587\u4E2D\u6587', '\u3002\u65E5\u672C\u8A9E'], 40],
+        [['foo ba', 'r\u00AD baz'], 64],
+      ] as const) {
+        const prepared = prepareRichInline(parts.map(text => ({ text, font: FONT })))
+        const richLines: string[] = []
+        walkRichInlineLineRanges(prepared, width, range => {
+          const line = materializeRichInlineLineRange(prepared, range)
+          richLines.push(line.fragments.map(fragment => (fragment.gapBefore === 0 ? '' : ' ') + fragment.text).join('').trimEnd())
+        })
+        const flat = layoutWithLines(prepareWithSegments(parts.join(''), FONT), width, LINE_HEIGHT)
+        expect(richLines).toEqual(flat.lines.map(line => line.text.trimEnd()))
+        expect(measureRichInlineStats(prepared, width).lineCount).toBe(flat.lineCount)
+      }
+    } finally {
+      profile.inlineItemBreaks = previous
+    }
+  })
+
   test('split CJK rich inline items stay inside the line width', () => {
     const maxWidth = measureWidth('中', FONT) + 1
     const prepared = prepareRichInline([
@@ -2516,6 +2569,91 @@ test('unchosen terminal soft hyphens consume source without painting a hyphen', 
   }
 })
 
+
+test('the Safari profile breaks inside rich items from each item alone', () => {
+  // The engine profile is computed once per process, so Safari runs in a child
+  // process. Letters are 8px and marks and spaces 4px. WebKit breaks inside an
+  // inline box from that box's text, and reads only the previous box's last
+  // two characters at a boundary. The Thai item's own last run moves with the
+  // continuation, where the joined text would split the word differently. The
+  // Myanmar continuation is only the vowel sign: analysis of the second item
+  // alone would join that sign to the word after it.
+  const richInlineUrl = new URL('./rich-inline.ts', import.meta.url).href
+  const script = `
+    Object.defineProperty(globalThis, 'navigator', { configurable: true, value: {
+      userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15',
+      vendor: 'Apple Computer, Inc.',
+    } })
+    class Context {
+      font = ''
+      measureText(text) {
+        let width = 0
+        for (const ch of text) width += ch === ' ' || /\\p{M}/u.test(ch) ? 4 : 8
+        return { width }
+      }
+    }
+    globalThis.OffscreenCanvas = class { getContext() { return new Context() } }
+    const { prepareRichInline, walkRichInlineLineRanges, materializeRichInlineLineRange } = await import(${JSON.stringify(richInlineUrl)})
+    const rows = []
+    for (const [parts, width] of [
+      [['\\u0E04\\u0E27\\u0E32\\u0E21\\u0E2A\\u0E27\\u0E22\\u0E07', '\\u0E32\\u0E21\\u0E02\\u0E2D\\u0E07'], 40],
+      [['\\u1019\\u102C\\u1018\\u102C\\u101E', '\\u102C\\u101E\\u100A\\u103A\\u101C\\u103E\\u1015'], 28],
+    ]) {
+      const prepared = prepareRichInline(parts.map(text => ({ text, font: '16px Test' })))
+      const lines = []
+      walkRichInlineLineRanges(prepared, width, range => {
+        lines.push(materializeRichInlineLineRange(prepared, range).fragments.map(fragment => fragment.text))
+      })
+      rows.push(lines)
+    }
+    console.log(JSON.stringify(rows))
+  `
+  const child = Bun.spawnSync([process.execPath, '-e', script])
+  if (child.exitCode !== 0) throw new Error(child.stderr.toString())
+  expect(JSON.parse(child.stdout.toString())).toEqual([
+    [['\u0E04\u0E27\u0E32\u0E21'], ['\u0E2A\u0E27\u0E22'], ['\u0E07', '\u0E32\u0E21'], ['\u0E02\u0E2D\u0E07']],
+    [['\u1019\u102C\u1018\u102C'], ['\u101E', '\u102C'], ['\u101E\u100A\u103A'], ['\u101C\u103E\u1015']],
+  ])
+})
+
+test('the Firefox profile keeps breaking rich items at every item boundary', () => {
+  // The engine profile is computed once per process, so Firefox runs in a child
+  // process. Letters and parentheses are 8px and spaces 4px. Gecko keeps a word
+  // together across text frames too, but its segmentation of joined text is not
+  // modeled, so the parenthesis that starts the third item can still start a
+  // line. The joined text would keep "(docs)" whole.
+  const measurementUrl = new URL('./measurement.ts', import.meta.url).href
+  const richInlineUrl = new URL('./rich-inline.ts', import.meta.url).href
+  const script = `
+    Object.defineProperty(globalThis, 'navigator', { configurable: true, value: {
+      userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:155.0) Gecko/20100101 Firefox/155.0',
+      vendor: '',
+    } })
+    class Context {
+      font = ''
+      measureText(text) {
+        let width = 0
+        for (const ch of text) width += ch === ' ' ? 4 : 8
+        return { width }
+      }
+    }
+    globalThis.OffscreenCanvas = class { getContext() { return new Context() } }
+    const { getEngineProfile } = await import(${JSON.stringify(measurementUrl)})
+    const { prepareRichInline, walkRichInlineLineRanges, materializeRichInlineLineRange } = await import(${JSON.stringify(richInlineUrl)})
+    const prepared = prepareRichInline(['see (', 'docs', ') now please'].map(text => ({ text, font: '16px Test' })))
+    const lines = []
+    walkRichInlineLineRanges(prepared, 70, range => {
+      lines.push(materializeRichInlineLineRange(prepared, range).fragments.map(fragment => fragment.text))
+    })
+    console.log(JSON.stringify({ inlineItemBreaks: getEngineProfile().inlineItemBreaks, lines }))
+  `
+  const child = Bun.spawnSync([process.execPath, '-e', script])
+  if (child.exitCode !== 0) throw new Error(child.stderr.toString())
+  expect(JSON.parse(child.stdout.toString())).toEqual({
+    inlineItemBreaks: 'item-boundary',
+    lines: [['see (', 'docs'], [') now '], ['please']],
+  })
+})
 
 test('the Safari profile keeps the kerning between a word and a following space', () => {
   // The engine profile is computed once per process, so Safari runs in a child
