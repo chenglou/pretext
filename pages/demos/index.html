@@ -75,6 +75,17 @@
     line-height: 1.5;
     color: var(--muted);
   }
+  .lang-link {
+    display: block;
+    margin: -8px 0 0 18px;
+    padding: 4px 0;
+    font: 12px/1.2 "Helvetica Neue", Helvetica, Arial, sans-serif;
+    color: var(--accent);
+    text-decoration: none;
+  }
+  .lang-link:hover {
+    text-decoration: underline;
+  }
   @media (max-width: 760px) {
     .page {
       width: min(100vw - 20px, 940px);
@@ -111,6 +122,7 @@
         <h2>Dynamic Layout</h2>
         <p>A fixed-height editorial spread with obstacle-aware title routing and continuous flow.</p>
       </a>
+      <a class="lang-link" href="/demos/dynamic-layout?lang=fr">Dynamic Layout (FR)</a>
 
       <a class="card" href="/demos/variable-typographic-ascii">
         <h2>Variable Typographic ASCII</h2>
@@ -121,6 +133,7 @@
         <h2>Editorial Engine</h2>
         <p>Animated orbs, live text reflow, pull quotes, and multi-column flow with zero DOM measurements.</p>
       </a>
+      <a class="lang-link" href="/demos/editorial-engine?lang=fr">Editorial Engine (FR)</a>
 
       <a class="card" href="/demos/justification-comparison">
         <h2>Justification Comparison</h2>
