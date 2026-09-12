@@ -404,9 +404,11 @@ export function layoutNextRichInlineLineRange(
   })
   if (width === null) return null
 
+  // As in the text line APIs, only the reported width is clamped at zero;
+  // fitting keeps each item's signed advance.
   return {
     fragments,
-    width,
+    width: Math.max(0, width),
     end,
   }
 }

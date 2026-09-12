@@ -50,6 +50,12 @@ export type EngineProfile = {
   // breaks the collapsed text, where it is a space.
   breakHyphenAfterCollapsedTab: boolean
   preferPrefixWidthsForBreakableRuns: boolean
+  // WebKit measures a text item together with a directly following U+0020 and
+  // subtracts one unshaped space, so the item keeps its kerning with that space
+  // wherever the line ends. Blink also kerns there, but in its default state its
+  // Canvas splits words at spaces and shows none of it; Gecko shapes words
+  // without their spaces.
+  measureTextWithFollowingSpace: boolean
 }
 
 export type BreakableFitMode = 'sum-graphemes' | 'segment-prefixes' | 'pair-context'
@@ -60,6 +66,9 @@ let measureContext: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D
 // measured through it, belong to the language it was created under.
 let measureContextLanguage: string | null = null
 const segmentMetricCaches = new Map<string, Map<string, SegmentMetrics>>()
+// Per font, metrics of a text item measured together with one following
+// U+0020, keyed by the item alone. The width includes that space.
+const followingSpaceMetricCaches = new Map<string, Map<string, SegmentMetrics>>()
 let cachedEngineProfile: EngineProfile | null = null
 
 // Safari's prefix-fit policy is useful for ordinary word-sized runs, but letting
@@ -151,6 +160,28 @@ export function getSegmentMetricCache(font: string): Map<string, SegmentMetrics>
   return cache
 }
 
+export function getFollowingSpaceMetricCache(font: string): Map<string, SegmentMetrics> {
+  let cache = followingSpaceMetricCaches.get(font)
+  if (!cache) {
+    cache = new Map()
+    followingSpaceMetricCaches.set(font, cache)
+  }
+  return cache
+}
+
+// Metrics of seg measured together with one following U+0020.
+export function getFollowingSpaceMetrics(seg: string, cache: Map<string, SegmentMetrics>): SegmentMetrics {
+  let metrics = cache.get(seg)
+  if (metrics === undefined) {
+    const ctx = getMeasureContext()
+    metrics = {
+      width: ctx.measureText(seg + ' ').width,
+    }
+    cache.set(seg, metrics)
+  }
+  return metrics
+}
+
 export function getSegmentMetrics(seg: string, cache: Map<string, SegmentMetrics>): SegmentMetrics {
   let metrics = cache.get(seg)
   if (metrics === undefined) {
@@ -179,6 +210,7 @@ export function getEngineProfile(): EngineProfile {
       wordInitialHyphenLetters: 'alphabetic-and-hebrew',
       breakHyphenAfterCollapsedTab: false,
       preferPrefixWidthsForBreakableRuns: false,
+      measureTextWithFollowingSpace: false,
     }
     return cachedEngineProfile
   }
@@ -220,6 +252,7 @@ export function getEngineProfile(): EngineProfile {
     wordInitialHyphenLetters: isGecko ? 'none' : 'alphabetic-and-hebrew',
     breakHyphenAfterCollapsedTab: isWebKitLayout,
     preferPrefixWidthsForBreakableRuns: isSafari,
+    measureTextWithFollowingSpace: isSafari,
   }
   return cachedEngineProfile
 }
@@ -296,6 +329,9 @@ export function getSegmentBreakableFitAdvances(
   cache: Map<string, SegmentMetrics>,
   emojiCorrection: number,
   mode: BreakableFitMode,
+  // When metrics measured seg together with one following U+0020, the width of
+  // that space alone. The last grapheme then keeps its kerning with the space.
+  followingSpaceWidth: number | null = null,
 ): number[] | null {
   if (metrics.breakableFitAdvances !== undefined && metrics.breakableFitMode === mode) {
     return metrics.breakableFitAdvances
@@ -318,6 +354,7 @@ export function getSegmentBreakableFitAdvances(
       const graphemeMetrics = getSegmentMetrics(grapheme, cache)
       advances.push(getCorrectedSegmentWidth(grapheme, graphemeMetrics, emojiCorrection))
     }
+    if (followingSpaceWidth !== null) addFollowingSpaceKerning(advances, seg, metrics, cache, followingSpaceWidth)
     metrics.breakableFitAdvances = advances
     return metrics.breakableFitAdvances
   }
@@ -343,6 +380,7 @@ export function getSegmentBreakableFitAdvances(
       previousWidth = currentWidth
     }
 
+    if (followingSpaceWidth !== null) addFollowingSpaceKerning(advances, seg, metrics, cache, followingSpaceWidth)
     metrics.breakableFitAdvances = advances
     return metrics.breakableFitAdvances
   }
@@ -351,16 +389,32 @@ export function getSegmentBreakableFitAdvances(
   let prefix = ''
   let prefixWidth = 0
 
-  for (const grapheme of graphemes) {
-    prefix += grapheme
-    const prefixMetrics = getSegmentMetrics(prefix, cache)
-    const nextPrefixWidth = getCorrectedSegmentWidth(prefix, prefixMetrics, emojiCorrection)
+  for (let i = 0; i < graphemes.length; i++) {
+    prefix += graphemes[i]!
+    // The whole segment is the last prefix; with a following space it was
+    // measured together with that space.
+    const nextPrefixWidth = followingSpaceWidth !== null && i === graphemes.length - 1
+      ? getCorrectedSegmentWidth(seg, metrics, emojiCorrection) - followingSpaceWidth
+      : getCorrectedSegmentWidth(prefix, getSegmentMetrics(prefix, cache), emojiCorrection)
     advances.push(nextPrefixWidth - prefixWidth)
     prefixWidth = nextPrefixWidth
   }
 
   metrics.breakableFitAdvances = advances
   return metrics.breakableFitAdvances
+}
+
+// Advances that do not end in the whole segment's width take the kerning as a
+// difference, which needs the segment measured alone too.
+function addFollowingSpaceKerning(
+  advances: number[],
+  seg: string,
+  followingSpaceMetrics: SegmentMetrics,
+  cache: Map<string, SegmentMetrics>,
+  followingSpaceWidth: number,
+): void {
+  const last = advances.length - 1
+  advances[last] = advances[last]! + followingSpaceMetrics.width - getSegmentMetrics(seg, cache).width - followingSpaceWidth
 }
 
 export function getFontMeasurementState(font: string, needsEmojiCorrection: boolean): {
@@ -383,5 +437,6 @@ export function getFontMeasurementState(font: string, needsEmojiCorrection: bool
 
 export function clearMeasurementCaches(): void {
   segmentMetricCaches.clear()
+  followingSpaceMetricCaches.clear()
   emojiCorrectionCache.clear()
 }

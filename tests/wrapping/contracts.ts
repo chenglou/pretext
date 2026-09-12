@@ -355,7 +355,9 @@ export function createVariant<Prepared, WithSegments extends Prepared & { segmen
       const prepared = richApi.prepareRichInline([{ text: 'x ', font, letterSpacing }, { text: 'y', font, letterSpacing }])
       const range = richApi.layoutNextRichInlineLineRange(prepared, Number.POSITIVE_INFINITY)
       const space = api.layoutNextLineRange(api.prepareWithSegments(' ', font, { whiteSpace: 'pre-wrap', wordBreak: 'normal', letterSpacing }), { segmentIndex: 0, graphemeIndex: 0 }, Number.POSITIVE_INFINITY)
-      check(range !== null && range.fragments.length === 2 && space !== null && sameWidth(range.fragments[1]!.gapBefore, space.width), 'rich-boundary-space', 'Collapsed boundary gap differs from the independently measured SPACE advance')
+      // The gap keeps a signed advance, while a line holding only the SPACE may
+      // report its width clamped at zero, so compare both as line widths.
+      check(range !== null && range.fragments.length === 2 && space !== null && sameWidth(Math.max(0, range.fragments[1]!.gapBefore), Math.max(0, space.width)), 'rich-boundary-space', 'Collapsed boundary gap differs from the independently measured SPACE advance')
     })
     if (!includeStructure) return result()
     run('rich-source-item-coordinates', check => {

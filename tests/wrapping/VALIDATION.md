@@ -17,6 +17,159 @@ All accuracy, letter-spacing and corpus result payloads are unchanged; refreshed
 snapshots change only provenance and environment records. Runtime sources and
 the baseline pin are unchanged, so no runtime benchmark was needed.
 
+## Kerning measured with the following space
+
+This runtime change starts from the line-edge kerning head `9535bc6`, where
+each distinct word before a space was measured again together with that space.
+The Safari profile now measures such a word together with the space in place of
+the word alone, and takes the word's width as that measurement minus a space
+alone; the breakable fit advances use it as the last prefix. A word is still
+measured alone where Safari's prefix fit widths need it inside a longer word,
+where it also occurs before other text, in numeric runs and runs above 96
+graphemes, whose fit advances come from pairs, or with a zero-width break before
+the space. The widths are unchanged, and the Chrome and Firefox profiles are
+untouched. None of the checks below ran in installed browsers, and the baseline
+pin and snapshots were not rerun for this change.
+
+In headless WebKit 26.4 with a Safari user agent, one cold `prepare()` makes
+1,347 more Canvas calls than `bf93e2e` on `ar-risalat-al-ghufran-part-1`, where
+`9535bc6` makes 8,825 more, 2,669 on `en-gatsby-opening` (8,439), 278 on
+`hi-eidgah` (1,593), 207 on `ur-chughd` (1,008), 251 on
+`he-masaot-binyamin-metudela` (1,694) and 209 on `ko-unsu-joh-eun-nal` (342).
+That removes 84.7% of `9535bc6`'s extra calls on the Arabic corpus, 68.4% on
+`en-gatsby-opening` and 82.5% on `hi-eidgah`. The numeric API checks make 858
+Safari-profile Canvas calls instead of 861 at `9535bc6` and 850 at `8db5483`,
+with no failures; the Chrome profile makes 777 in all three.
+
+Segment widths and breakable fit advances equal `9535bc6`'s exactly on 2,646,919
+segments of 89 corpus and font rows in headless WebKit, including fonts that
+kern with a space. In 17 further font strings, with bold, italic, other weights
+and odd sizes, in normal and pre-wrap text, the widths, line-end advances and
+fit advances of 6,175,437 segments are bit-identical, 78,476 of them kerned, and
+a Bun fuzz with a context-dependent fake canvas finds no difference in 3,000
+random texts. A headless replay against the installed natives of the #236
+gate, through that gate's harness, with the Safari legs in WebKit 26.4 and the
+Chrome and Firefox legs in Chromium 147 with their user agents, predicts exactly
+as `9535bc6` on every row of all six legs: 148,019 and 70,974 Safari rows,
+147,714 and 71,008 Chrome rows, and 147,680 and 71,012 Firefox rows. Against
+`8db5483` the change fixes the same 433 LTR and 402 RTL Safari rows as the
+installed gate and loses none.
+
+Native line counts in headless WebKit with a Safari user agent, on LTR and RTL
+pages at every width step, cover the corpus rows in their fonts, the benchmark
+font, 14 rows in fonts that kern with a space, the Arabic corpus in Waseem, the
+Urdu corpus in Noto Nastaliq Urdu and short kerned texts: 62,298 points. The
+change gives the same line count as `9535bc6` at every point. Against `bf93e2e`
+both match native at 4,816 more points and 35 fewer: the Arabic corpus in 20px
+system-ui matches at 601 of 601 widths instead of 507, `hi-eidgah` at 601
+instead of 526, and `en-gatsby-opening` in 16px PT Sans at 580 instead of none.
+The 35 are short texts in 16px Fira Code and a few widths in Arial, Times New
+Roman, Avenir Next, PT Sans and system-ui. Sweeps from 300 to 900px in steps of
+3, in fonts outside those rows, again match `9535bc6` at every point and show
+the same kind of loss: `en-gatsby-opening` in italic 18px Times New Roman matches
+native at 195 of 201 widths instead of 166 but loses 369 and 474px, in 17px
+Hoefler Text at 192 instead of 177 but loses 300 and 318px, and `mixed-app-text`
+in italic 16px Gill Sans at 200 instead of 188 but loses 462px. At 0.25px steps,
+`A B` loses 3 widths and `L B` 2 in both Fira Code and Monaspace Neon.
+
+Timings in headless WebKit with a Safari user agent run `bf93e2e`, `9535bc6`
+and this change in five rounds, each in a fresh context with the order rotated,
+at load averages 4.5 to 7.6. The first cold `prepare()` of the benchmark's
+Arabic corpus takes 158ms, where `bf93e2e` takes 138ms and `9535bc6` 196ms;
+`en-gatsby-opening` takes 96ms (95 and 98), `hi-eidgah` 29ms (26 and 38) and
+`he-masaot-binyamin-metudela` 17ms (17 and 20). Preparing every paragraph of a
+corpus once in a fresh page, as virtualization does, takes 163ms for the Arabic
+corpus (148 and 207), 88ms for `en-gatsby-opening` (86 and 99) and 29ms for
+`hi-eidgah` (26 and 37): 15, 2 and 3ms more than `bf93e2e`, where `9535bc6` adds
+59, 13 and 11ms. Repeated `clearCache()` and `prepare()` of the same text in one
+page take more prepares to become cheap, but it is not a lasting cost. At load
+averages 1.1 to 3.1, `hi-eidgah` takes 23ms at prepares 16 to 20 and 7ms at 36
+to 40, where `bf93e2e` takes about 6ms, and `he-masaot-binyamin-metudela` takes
+14ms, then 6ms. WebKit's per-font width cache samples its input after a run of
+misses, so it admits this change's strings later. After five prepares,
+measuring each distinct string 25 times on preparation's own context, with no
+Pretext JavaScript running, brings the next prepares to 6 to 7ms and 5 to 6ms,
+and in converged prepares the time inside `measureText` is 0 to 3ms for
+`bf93e2e`, `9535bc6` and this change alike. Headless Chromium 147 does not
+change.
+
+## Kerning with a following space
+
+This runtime change starts from the CJK closing-bracket branch head `bf93e2e`.
+WebKit measures a text item together with a directly following U+0020 and
+subtracts one unshaped space, so the item keeps its kerning with that space
+whether the space continues the line or hangs. The Safari profile now measures
+each word before a space the same way at letter spacing 0 and caches the
+kerning with the word's metrics; zero-width breaks before the space belong to
+the word. Format characters between the word and the space resolve with the
+space, so the kerning crosses them only when the text has no explicit bidi
+controls and the neutral characters after the space lead to a character of the
+word's direction, with no paired bracket among them. The generated bidi data
+now lists the paired brackets from `BidiBrackets-17.0.0.txt`. A soft hyphen
+before the space takes no kerning. The Chrome and Firefox profiles are
+unchanged.
+
+The full native comparison ran this change with the #234 harness in installed
+Chrome 153.0.8010.36, Safari 26.5.2 and Firefox 155.0.1, both directions, at
+DPR 2: 656,407 browser/input observations, with pinned `8db5483` as the
+reference. Every leg has zero lost successes, failed required checks, execution
+errors and new API/rich failures, and 45 numeric source/profile runs have no
+new failures. The Safari numeric profile makes 861 Canvas calls instead of 850;
+the other profiles are unchanged. The change fixes 493 Safari LTR metrics on
+433 inputs and 454 RTL metrics on 402 inputs, and none in Chrome or Firefox:
+line count, height and source on 28 LTR and 24 RTL inputs, and widths on 409
+and 382. LTR gains 336 metrics in `following-space-scope`, 71 in
+`following-space-context`, 41 in `space-context`, 27 widths in `spacing-tail`
+and 18 in `negative-space`; RTL gains 336, 71 and 47 in the first three. Every
+gain is in 16px Arial or 16px or 18px Times New Roman at letter spacing 0. For
+example, `A\u2060 B` in 18px Times New Roman at width 12 now takes Safari's
+two lines instead of three, `\u05D0\u05D1 A \u0628` in 16px Arial at width 48
+one line instead of two, and pre-wrap ` A B` in 16px Arial at width 10 three
+lines instead of four. Twelve LTR and 13 RTL width failures change only in
+detail: two keep-all `A \u4E2D\u6587\u6D4B\u8BD5` inputs in 18px serif go from
+0.777px wider than native to 0.207px narrower, and the rest move by less than
+0.00001px.
+
+Reported line widths are clamped at 0, while line breaking keeps the signed
+advance. For example, `A\u2060 B` in 18px Times New Roman at width 11.5 puts `A`
+alone on the first line, and the second line, the word joiner and the space,
+has an advance of -0.993: the kerned word minus the isolated `A`. WebKit leaves
+that remainder unclamped; in the suite's Safari rows at widths 1 and 8 the
+prediction has the same line, and native Safari draws it 0.993px outside the
+line's start edge. Strongly negative letter spacing clamps the same way.
+
+The `rich-boundary-space` contract compared a collapsed gap with the width of a
+line holding one space; it now compares both clamped at 0, and a unit test
+checks the signed gap against the measured space. A headless replay in WebKit
+26.4 and Chromium 147 against the gate's natives, with the unclamped change as
+the base, covers every row whose text has a word followed by a space and every
+row with a negative predicted width: 37,801 Safari LTR, 21,232 Safari RTL,
+37,899 Chrome LTR and 21,210 Chrome RTL rows. Only the negative widths change,
+on 2,983, 373, 3,008 and 285 rows; no line count, height, widths or other
+metric changes. Under the gate's harness the only rich contract that changes is
+`rich-boundary-space` at letter spacing -6 and -10, which the updated contract
+accepts, and the nine numeric profiles give identical results.
+
+Headless Chromium 147 and WebKit 26.4 probes outside the suite show what
+remains. Without the paragraph direction, the Safari profile drops the kerning
+across a soft hyphen, and across format characters before right-to-left text or
+a bracket pair, where Safari on an LTR page keeps it. With letter spacing,
+WebKit's measurement also moves the space's gap onto the word and clamps the
+word at zero, which the per-grapheme gap model does not represent, so
+letter-spaced text keeps the unkerned widths. A trailing collapsible space, a
+rich-inline item that ends in a space, and CR or CRLF after a word miss the
+kerning. Chromium kerns across spaces, ZWSP, SHY and same-font spans, which its
+default Canvas does not report, and after an emergency break Gecko keeps a share
+of a pair adjustment that Canvas sums cannot attribute.
+
+The baseline advances to runtime commit `8b1f538`, and the ordinary snapshots
+were regenerated against it: all six legs pass with zero new regressions,
+required failures or execution errors, and nine numeric profiles have no new
+failures. Snapshot results are unchanged; only provenance and environment
+records change. Suite hash
+`7681f371b59384fb346e2b15c5d469da2a30ce9673f5c05ef2cf9a64a3894d3d`; rows are in
+`/private/tmp/pretext-eng-20260912/gate-g1b`.
+
 ## CJK closing brackets and nonstarters
 
 This runtime change starts from the pair-table branch head `f030304`. Fullwidth

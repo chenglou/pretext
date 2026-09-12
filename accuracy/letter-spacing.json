@@ -1,18 +1,18 @@
 {
-  "generatedAt": "2026-09-12T10:17:47.365Z",
-  "suiteHash": "c2980d815e68b948b00f736c8461bd0cdd8c71f2e64bad28faed9a60a8ef02ec",
+  "generatedAt": "2026-09-12T10:51:51.320Z",
+  "suiteHash": "760807216581fa222bcacfd57b674bbb5bd79319c65848c3365b2eb4adf453e0",
   "source": {
-    "revision": "8db54832e4d09faf4170846ae7c88f0183064a06",
+    "revision": "8b1f5383c38f58d5ad3dedf72cd74a160963a866",
     "files": {
       "analysis.ts": "13cf405f3b9510dc72b999eb86e9f6d5df2d4410e4ee55281ff64952c832a929",
-      "bidi.ts": "70f7f01dcd866076b68dbf2a3c398364aceaba2ccf98037e77e0b3b8bcfbeaa5",
+      "bidi.ts": "7ce31d57033cf173559ae393efec23e4a93c8bae8c798ef46c68599079faf454",
       "entry-geometry.ts": "43ffacd71c3562283135590a06947eef4b2617cb3b6ba680c909dd5e2d2ba9a7",
-      "generated/bidi-data.ts": "745211b804d907af78afb6c1ed87eff6d7454a5e85152a6129eb7b3bf0f6f262",
-      "layout.ts": "350f12993c98781da800e44394e9370b7d87767add227fc981129cf825e53119",
+      "generated/bidi-data.ts": "c4480cc4b1d4269f658779574d3b9c25121537f672e4e60be6a919a86fa230f8",
+      "layout.ts": "84150076247b87e0e0ce7df3e530d440cf620efe6f991792f224ee1e7f354523",
       "line-break.ts": "9fa473da96d6c192056cfd914bebb18e83714c869882313345dcf45ec19157d4",
       "line-text.ts": "5e21684d995df8c30324c03a14b8a0bc3a579ce169a0e10b6d579b6aeee577dc",
-      "measurement.ts": "1c6f54993b5dd2ad63ca4407aaeda28b8f0ba867068a3fc6633842c63959d2bf",
-      "rich-inline.ts": "8f5dd0aa01c86c53812adab5ca25946d456213fd0d15d56c0ec6a234fd9af08e",
+      "measurement.ts": "d130590551009aa80778d9bd06a6d1997a513845b5023a531eb846b484b53031",
+      "rich-inline.ts": "6185a7c75f5e749ba4999955c57d7339f89307acf53fe8dabec5d366ac227588",
       "text-modules.d.ts": "1547f88f0eb75293bc20054194a2bba29a4bc911c2a4fa99cef98141b6f99927"
     }
   },
@@ -306,7 +306,7 @@
           "screenAvailWidth": 1440,
           "screenAvailHeight": 2530,
           "visibility": "visible",
-          "focused": true,
+          "focused": false,
           "language": "en",
           "direction": "ltr"
         },
@@ -324,7 +324,7 @@
           "screenAvailWidth": 1440,
           "screenAvailHeight": 2530,
           "visibility": "visible",
-          "focused": true,
+          "focused": false,
           "language": "en",
           "direction": "ltr"
         },
@@ -338,7 +338,7 @@
       "dpr": 2,
       "locale": "zh-CN",
       "visibility": "visible",
-      "focused": true,
+      "focused": false,
       "fonts": []
     },
     {
@@ -360,7 +360,7 @@
           "screenAvailWidth": 1440,
           "screenAvailHeight": 2530,
           "visibility": "visible",
-          "focused": true,
+          "focused": false,
           "language": "he",
           "direction": "ltr"
         },
@@ -378,7 +378,7 @@
           "screenAvailWidth": 1440,
           "screenAvailHeight": 2530,
           "visibility": "visible",
-          "focused": true,
+          "focused": false,
           "language": "he",
           "direction": "ltr"
         },
@@ -392,7 +392,7 @@
       "dpr": 2,
       "locale": "zh-CN",
       "visibility": "visible",
-      "focused": true,
+      "focused": false,
       "fonts": []
     },
     {
@@ -414,7 +414,7 @@
           "screenAvailWidth": 1440,
           "screenAvailHeight": 2530,
           "visibility": "visible",
-          "focused": true,
+          "focused": false,
           "language": "ja",
           "direction": "ltr"
         },
@@ -432,7 +432,7 @@
           "screenAvailWidth": 1440,
           "screenAvailHeight": 2530,
           "visibility": "visible",
-          "focused": true,
+          "focused": false,
           "language": "ja",
           "direction": "ltr"
         },
@@ -446,7 +446,7 @@
       "dpr": 2,
       "locale": "zh-CN",
       "visibility": "visible",
-      "focused": true,
+      "focused": false,
       "fonts": []
     },
     {
@@ -468,7 +468,7 @@
           "screenAvailWidth": 1440,
           "screenAvailHeight": 2530,
           "visibility": "visible",
-          "focused": true,
+          "focused": false,
           "language": "zh",
           "direction": "ltr"
         },
@@ -486,7 +486,7 @@
           "screenAvailWidth": 1440,
           "screenAvailHeight": 2530,
           "visibility": "visible",
-          "focused": true,
+          "focused": false,
           "language": "zh",
           "direction": "ltr"
         },
@@ -500,7 +500,7 @@
       "dpr": 2,
       "locale": "zh-CN",
       "visibility": "visible",
-      "focused": true,
+      "focused": false,
       "fonts": []
     },
     {
@@ -522,7 +522,7 @@
           "screenAvailWidth": 1440,
           "screenAvailHeight": 2530,
           "visibility": "visible",
-          "focused": true,
+          "focused": false,
           "language": "ar",
           "direction": "rtl"
         },
@@ -544,13 +544,7 @@
           "language": "ar",
           "direction": "rtl"
         },
-        "changes": [
-          {
-            "field": "focused",
-            "value": false,
-            "evidence": "snapshot"
-          }
-        ]
+        "changes": []
       },
       "context": {
         "kind": "installed",

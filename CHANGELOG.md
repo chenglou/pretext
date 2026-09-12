@@ -17,6 +17,8 @@
 - In Chrome, lines can now break between a fullwidth closing bracket such as `」` or `）` and a following ideograph, kana or Hangul syllable, as Chrome does (#234).
 - Lines no longer start with CJK closing punctuation or nonstarters such as `〟`, `］`, `｡`, `､`, `｣` or `゛` (#234).
 - With `word-break: keep-all`, lines no longer break after `ー` in words such as `ラーメン`. In Chrome, they also no longer break after iteration marks such as `々`, `ゝ` or `ヽ` (#234).
+- In Safari, a word followed by a space now keeps its kerning with that space, so letters such as `A` in Arial or Times New Roman fit narrow lines as they do natively (#236).
+- Reported line widths are now clamped at 0 instead of going negative, for example with strongly negative `letterSpacing` (#236).
 
 ## 0.0.9 - 2026-09-07
 

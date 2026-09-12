@@ -1484,6 +1484,10 @@ describe('rich-inline invariants', () => {
     for (const letterSpacing of [-5, -measureWidth(' ', spaceFont), 1]) {
       const source = prepareWithSegments(' ', spaceFont, { whiteSpace: 'pre-wrap', letterSpacing })
       const space = layoutNextLineRange(source, { segmentIndex: 0, graphemeIndex: 0 }, Infinity)!
+      // The gap keeps the signed advance; a line holding only this SPACE
+      // reports it clamped at zero.
+      const spaceAdvance = measureWidth(' ', spaceFont) + letterSpacing
+      expect(space.width).toBeCloseTo(Math.max(0, spaceAdvance), 8)
       const prepared = prepareRichInline([
         { text: 'A', font: FONT },
         { text: ' ', font: spaceFont, letterSpacing },
@@ -1492,8 +1496,8 @@ describe('rich-inline invariants', () => {
       ])
       const line = layoutNextRichInlineLineRange(prepared, Infinity)!
       expect(line.fragments.map(fragment => fragment.itemIndex)).toEqual([0, 3])
-      expect(line.fragments[1]!.gapBefore).toBeCloseTo(space.width, 8)
-      expect(line.width).toBeCloseTo(measureWidth('A', FONT) + space.width + measureWidth('B', FONT), 8)
+      expect(line.fragments[1]!.gapBefore).toBeCloseTo(spaceAdvance, 8)
+      expect(line.width).toBeCloseTo(measureWidth('A', FONT) + spaceAdvance + measureWidth('B', FONT), 8)
     }
   })
 
@@ -2339,6 +2343,95 @@ test('unchosen terminal soft hyphens consume source without painting a hyphen', 
       }
     }
   }
+})
+
+
+test('the Safari profile keeps the kerning between a word and a following space', () => {
+  // The engine profile is computed once per process, so Safari runs in a child
+  // process. A is 10px, other letters 8px, a space 4px, format characters 0px,
+  // and A kerns -1px with a following space, also across format characters.
+  const layoutUrl = new URL('./layout.ts', import.meta.url).href
+  const lineBreakUrl = new URL('./line-break.ts', import.meta.url).href
+  const richInlineUrl = new URL('./rich-inline.ts', import.meta.url).href
+  const script = `
+    Object.defineProperty(globalThis, 'navigator', { configurable: true, value: {
+      userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15',
+      vendor: 'Apple Computer, Inc.',
+    } })
+    const measured = []
+    class Context {
+      font = ''
+      measureText(text) {
+        measured.push(text)
+        let width = 0
+        for (const ch of text) width += ch === ' ' ? 4 : /[\\u00AD\\u200B\\u2060]/.test(ch) ? 0 : ch === 'A' ? 10 : 8
+        return { width: width - (text.match(/A[\\u00AD\\u200B\\u2060]* /g) ?? []).length }
+      }
+    }
+    globalThis.OffscreenCanvas = class { getContext() { return new Context() } }
+    const { prepare, prepareWithSegments, layout, layoutWithLines, layoutNextLineRange } = await import(${JSON.stringify(layoutUrl)})
+    const { walkPreparedLinesRaw } = await import(${JSON.stringify(lineBreakUrl)})
+    const { prepareRichInline, walkRichInlineLineRanges } = await import(${JSON.stringify(richInlineUrl)})
+    const kerning = []
+    for (const [text, letterSpacing] of [
+      ['AA B', 0], ['AA\\u200B B', 0], ['AA\\u200B \\u05D0', 0], ['AA\\u2060 (x\\u05D0)', 0], ['AA\\u00AD B', 0], ['AA B', 1],
+    ]) {
+      const lines = layoutWithLines(prepareWithSegments(text, '16px Test', { letterSpacing }), 19.5, 20).lines
+      kerning.push({ lines: lines.map(line => [line.text, line.width]), lineCount: layout(prepare(text, '16px Test', { letterSpacing }), 19.5, 20).lineCount })
+    }
+    measured.length = 0
+    const spaced = layoutWithLines(prepareWithSegments('QA XA q', '16px Spaced'), 25.5, 20).lines.map(line => [line.text, line.width])
+    const wordMeasurements = measured.filter(text => text.length > 1 && text !== ' ' && text !== '-')
+    const remainder = prepareWithSegments('A\\u2060 B', '16px Test')
+    const signed = []
+    walkPreparedLinesRaw(remainder, 8.5, (width, ...cursors) => signed.push([width, ...cursors]))
+    const streamed = []
+    let range = layoutNextLineRange(remainder, { segmentIndex: 0, graphemeIndex: 0 }, 8.5)
+    while (range !== null) {
+      streamed.push(range.width)
+      range = layoutNextLineRange(remainder, range.end, 8.5)
+    }
+    const rich = []
+    walkRichInlineLineRanges(prepareRichInline([{ text: 'A\\u2060 B', font: '16px Test' }]), 8.5, line => rich.push(line.width))
+    console.log(JSON.stringify({ kerning, spaced, wordMeasurements, remainder: {
+      lines: layoutWithLines(remainder, 8.5, 20).lines.map(line => [line.text, line.width, line.start.segmentIndex, line.start.graphemeIndex, line.end.segmentIndex, line.end.graphemeIndex]),
+      signed,
+      streamed,
+      rich,
+      lineCount: layout(prepare('A\\u2060 B', '16px Test'), 8.5, 20).lineCount,
+    } }))
+  `
+  const child = Bun.spawnSync([process.execPath, '-e', script])
+  if (child.exitCode !== 0) throw new Error(child.stderr.toString())
+  const { kerning, spaced, wordMeasurements, remainder } = JSON.parse(child.stdout.toString())
+  expect(kerning).toEqual([
+    // The kerned word fits and the space hangs.
+    { lines: [['AA ', 19], ['B', 8]], lineCount: 2 },
+    { lines: [['AA\u200B ', 19], ['B', 8]], lineCount: 2 },
+    // Before right-to-left text the zero-width space may leave the word's bidi
+    // run, which is unknown without the paragraph direction.
+    { lines: [['A', 10], ['A\u200B ', 10], ['\u05D0', 8]], lineCount: 3 },
+    // A closed bracket pair after the space can take the paragraph direction.
+    { lines: [['A', 10], ['A\u2060 ', 10], ['(x', 16], ['\u05D0)', 16]], lineCount: 4 },
+    // On an RTL page a soft hyphen before the space also costs a hyphen.
+    { lines: [['A', 10], ['A ', 10], ['B', 8]], lineCount: 3 },
+    // With letter spacing the measurement also moves gaps; not modeled.
+    { lines: [['A', 11], ['A ', 11], ['B', 9]], lineCount: 3 },
+  ])
+  // A word before a space is measured together with that space instead of
+  // alone, and keeps the -1px kerning.
+  expect(spaced).toEqual([['QA ', 17], ['XA ', 17], ['q', 8]])
+  expect(wordMeasurements).toEqual(['QA ', 'XA '])
+  // An emergency break inside A and the word joiner leaves the joiner alone
+  // with the -1px kerning. Breaking keeps that signed advance, so the cursors
+  // match the internal walker's, but every reported width is clamped at zero.
+  expect(remainder).toEqual({
+    lines: [['A', 10, 0, 0, 0, 1], ['\u2060 ', 0, 0, 1, 2, 0], ['B', 8, 2, 0, 3, 0]],
+    signed: [[10, 0, 0, 0, 1], [-1, 0, 1, 2, 0], [8, 2, 0, 3, 0]],
+    streamed: [10, 0, 8],
+    rich: [10, 0, 8],
+    lineCount: 3,
+  })
 })
 
 

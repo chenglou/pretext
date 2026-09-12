@@ -1,4 +1,4 @@
 {
-  "revision": "8db54832e4d09faf4170846ae7c88f0183064a06",
-  "description": "Reviewed boundary, rich-inline, shared complex-walker, leading-ZWSP, exclamation-break, figure-space glue, pair-table gap and CJK closing-bracket fixes. The runner measures this source and every candidate against the same fresh browser observations; existing mismatches remain observations, never expected answers."
+  "revision": "8b1f5383c38f58d5ad3dedf72cd74a160963a866",
+  "description": "Reviewed boundary, rich-inline, shared complex-walker, leading-ZWSP, exclamation-break, figure-space glue, pair-table gap, CJK closing-bracket and Safari line-edge kerning fixes. The runner measures this source and every candidate against the same fresh browser observations; existing mismatches remain observations, never expected answers."
 }
