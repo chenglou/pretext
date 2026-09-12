@@ -17,7 +17,7 @@ Open engine work deferred from the #210 series: decisions for the maintainer, kn
 
 - Take a content language for line breaking (approved). Chrome's Chinese quote rules, Safari's Japanese small-kana and quote rules and Firefox's East Asian newline removal depend on it. Build it on the generated line-break class table once keep-all settles, keep `setLocale()` segmenter-only, and add no expensive browser work to `prepare()` or `layout()`.
 - Land keep-all boundaries that follow each engine's pair rule: Blink keeps a pair only when both sides are letters or numbers (with a one-mark lookback), Firefox uses ICU4X's class keep set, and Safari breaks only at spaces. A first version lost rows on VS16 emoji, Thai-type digits, quote-like symbols and iOS browsers.
-- In Chrome and Safari, keep a word-initial hyphen with Hebrew letters and with the Unicode 17 hyphen dashes (U+2012, U+2013, U+058A, U+05BE, U+1400, U+2E17 and others). Installed Chrome 153 keeps them all where #233 breaks, and Firefox breaks after several of these dashes, which Pretext doesn't model.
+- At the start of a word, Firefox breaks after each observed hyphen dash, but Pretext still keeps U+05BE, U+1400, U+2E17 and U+058A with the next letter there. No installed browser was observed on U+2E40, U+2E5D, U+10D6E or U+10EAD.
 - Safari keeps `-` after U+2007 with the following letter but breaks after `-` following NBSP. Chrome and Safari keep U+2010 after either glue. Model both with the glue context rules.
 - A dash before no-break glue should break after the dash (LB12a). Pretext breaks before it, for NBSP and U+2007 alike.
 - Soft hyphens, CJK and joined Arabic next to no-break glue still lose line text outside the suite. Record installed observations before modeling them.
@@ -33,7 +33,6 @@ Open engine work deferred from the #210 series: decisions for the maintainer, kn
 - Treat U+2000-U+200A and U+205F as break-after spaces that count their width: break after the last one in a run, never before (LB21). Narrow widths need the emergency permission below first.
 - An opening bracket after emoji or digits should attach to the text that follows it. Chrome and Safari never end an emergency line with `(`; Firefox does.
 - On a line that starts mid-word, Blink offers no dictionary break before the first ordinary opportunity, so soft-hyphen retreat must not target one there.
-- #233's changelog understates the joiner rule. A zero-width joiner stays with the next character everywhere except right after a space.
 - If benchmarks show a cost, add a fast path for a joiner right after a space, which the grapheme rules make unconditional.
 - Hang U+3000 at a line end as Blink and Gecko do, only where a break follows the run, and keep it on the fast path. Removing Chrome's closing-bracket carry exposes this after closing brackets.
 - Allow emergency breaks inside kinsoku clusters that don't fit, such as `漢。字` in narrow boxes, together with a forward carry that keeps combining marks with their base.
@@ -133,7 +132,6 @@ Open engine work deferred from the #210 series: decisions for the maintainer, kn
 
 ## External actions
 
-- File the JavaScriptCore `Intl.Segmenter` `containing()` bug (Safari 26.5.2 fails 17 of 29 cases), then name it in #233's PLATFORM_BUGS row.
 - Rerun the Retina emoji and `system-ui` repros headed at DPR 2. The trackers were rechecked on September 12.
 - Compare the gallery's local Pretext 0.0.8 patch, which changes overflow fit, overflow-word kerning, continuation widths, tabs and caret ranges, with upstream.
 - Review and merge #226, which fixes broken preload links in the published bubbles demo.

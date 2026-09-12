@@ -348,7 +348,7 @@ function measureAnalysis(
       const preferredBreaks =
         fitAdvances === null || wordBreak === 'keep-all'
           ? null
-          : getBreakablePreferredBreaks(text)
+          : getBreakablePreferredBreaks(text, engineProfile)
       pushMeasuredSegment(
         text,
         width,

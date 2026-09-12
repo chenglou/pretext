@@ -40,16 +40,75 @@ Extending Firefox's ASCII opener/numeric rules to wider Unicode cases exposed
 trailing-space fit failures, so the accepted rules remain narrow.
 
 Question and exclamation marks are UAX #14 class EX. ICU and ICU4X break after EX
-before a following letter or number (LB31), and Firefox sends every word
-containing EX to ICU4X: its ASCII shortcut covers only AL, IS, NU and QU words.
-Chrome and Safari first consult a pair table for characters up to U+00FF. It
-follows ICU except for printable ASCII, where `?` breaks before a letter, digit or
-symbol but `!` does not. Punctuation with no text before it, such as `?` after a
-space or ZWSP, is otherwise carried onto the next word, so the forward carry and
-the no-space join apply the same rule. Safari's keep-all still breaks only at
-spaces. Earlier passes keep two table quirks unmodeled: `?` before `$`, `-` or
-`|`, and `!` before a non-letter symbol such as `©` or `¿`. The first-pass Arabic
-no-space rule also keeps U+061B with a following word.
+unless the next character's class forbids a break before it (LB31), and Firefox
+sends every word containing EX to ICU4X: its ASCII shortcut covers only AL, IS, NU
+and QU words. Chrome and Safari first consult a pair table for characters up to
+U+00FF. It follows ICU except for printable ASCII, where `?` breaks before
+everything except `! " ' ) , . / : ; ? ] }`, and `!` breaks only before `(`, `<`,
+`[` and `{`. Every merge that could join across that boundary asks the same rule:
+the punctuation, hyphen and numeric-affix appends, the forward carry and symbol
+chains. So `x?|$b`, `x?|-|b` and `x!|©b` break as in Chrome and Safari, while
+Firefox keeps `x?-|b`. A URL query unit still joins everything after `?`, so in
+`https://x.com/p?-a` it keeps `-a`, while browsers also break after that hyphen.
+Above U+00FF Pretext reads the LineBreak.txt class of a following letter, number
+or symbol, so an iteration mark such as `々` (NS) stays after `！`, while numeric
+affixes and opening punctuation break; other punctuation keeps its existing
+attachment. Small kana and `ー` (CJ) break after EX only under ICU's normal
+rules, which Chrome uses for `line-break: auto`. Safari's default rules and
+Firefox's are strict and keep them; Safari with a Japanese content language
+breaks too, which Pretext does not model. Elsewhere Pretext still keeps CJ from
+starting a line in every browser, so Chrome's break between the marks in
+`日？ーー` is not modeled. Safari's keep-all still breaks only at spaces. U+061B
+ARABIC SEMICOLON is EX too, while `:`, `.` and U+060C are IS and keep a
+following Arabic word (LB29). Firefox also breaks after BA such as `|` before a
+letter, which symbol chains do not model.
+
+No break follows ZWJ (LB8a), so a ZWJ at the start of the text or after a ZWSP,
+tab or hard break stays with the next word. A ZWJ right after a space belongs to
+that space's grapheme cluster. Browsers break between them, but a line that
+starts there splits the cluster, so Pretext keeps its earlier boundaries. CJK
+units still break after a ZWJ: a unit that joins graphemes is atomic in the
+walker, while browsers can still split it in an emergency, as they also split
+`日！々` at narrow widths. After U+3000 the break following the ZWJ also stands in
+for the break after the ideographic space, and Pretext keeps an ordinary break
+before U+3000 that UAX #14 forbids (LB21), so both need a U+3000 model first.
+
+A hyphen after a space, ZWSP, hard break or the text start keeps a following
+alphabetic (AL) or Hebrew (HL) letter (LB20a) in Chrome and Safari: always for
+U+2010 and the other Unicode 17 HH dashes such as U+2013 and U+05BE, and for `-`
+before a letter above U+00FF. Letters of other classes, such as Bopomofo, Hangul
+jamo, Yi or Balinese, still break. ICU 77 counts only U+2010 as HH and keeps
+only AL letters, so a headless Chromium build on ICU 77 breaks after the dash
+before a Hebrew letter. ICU 78 adds HL and the other HH dashes. Installed Chrome
+153 keeps each one observed, before Hebrew letters too, as Safari 26.5.2 does:
+U+2010, U+2012, U+2013, U+058A, U+05BE, U+1400 and U+2E17. No installed browser
+was observed on U+2E40, U+2E5D, U+10D6E or U+10EAD, which Pretext treats as ICU
+78 data says. Firefox breaks after each observed dash, but Pretext still keeps
+U+05BE, U+1400, U+2E17 and U+058A with the next letter there, as it did before
+it modeled LB20a. Such a word no longer prefers
+the break after its hyphen when it overflows; browsers fill graphemes there.
+Their pair tables break `-` before an ASCII letter, and Safari's also before most
+Latin-1 letters, such as `é` but not `ª`. Chrome sends a non-ASCII follower of
+`-` to ICU instead, which keeps those letters; Pretext does not model that.
+Combining marks between `-` and a Latin-1 letter, as in `a -\u0301\u00E9b`,
+hide the letter from the pair tables, so ICU keeps it, while Pretext still
+breaks there. ICU 78's LB20a letters ($ALPlus) also include AL and AI symbols
+such as `#`, U+00A9 and U+221E, so Chrome and Safari keep `a \u2010\u00A9b`
+and `a -\u221Eb` together, while Pretext keeps only `\p{L}` letters. A TAB
+before the hyphen is UAX #14 BA, not a space. Safari's scan reads it even when
+normal white space collapses it and breaks after the hyphen, while Chrome breaks
+the collapsed text and keeps the letter; Pretext follows each for `-`, U+2010,
+U+2012 and U+2013. Headless WebKit also breaks after a TAB before the other
+eight HH dashes, but Pretext joins each of them to the next text in every
+browser, as it did before it modeled LB20a. Chrome also restarts its ICU context
+at each line start, so after a pre-wrap TAB the result
+can depend on where the line began. Non-breaking glue such as NBSP before the
+hyphen is an LB20a context as well; both engines keep U+2010 with a letter after
+`a` and NBSP, and Pretext still breaks there. A rich-inline item is analyzed as
+its own text, so an item that starts with a hyphen keeps its letter as at a text
+start. That matches Safari's per-node scan, but Chrome's context crosses items,
+so `foo` followed by an item of U+2010 and `bar` breaks after the hyphen there.
+Firefox's ICU4X 2.1 rules follow Unicode 15.0, before LB20a.
 
 U+2007 FIGURE SPACE is UAX #14 class GL, like NBSP and NNBSP, even though it is
 a space separator. Chrome and Safari treat only SPACE, TAB and LF (Safari also
@@ -397,3 +456,18 @@ Cold-cache scaling probes distinguish those costs from reuse. Lower retained
 memory alone does not establish faster preparation, and numeric Canvas doubles
 measure algorithmic work rather than browser throughput. Shared font/segment
 caches accumulating until `clearCache()` are a separate lifetime concern.
+
+Repeating `clearCache()` and `prepare()` on one text is not a stable timing in
+Playwright's WebKit build. Its per-font width cache samples one Canvas call in 21
+after a run of misses, counts only strings of up to 64 UTF-16 units, and returns
+to dense sampling only after a hit. A prepare submits each string once, so hits
+need the sampled positions to line up again: after 21 / gcd(n, 21) prepares for
+n counted strings. The Arabic corpus submitted 21,336, a multiple of 21, and its
+prepare fell from about 120ms to 35ms within five repeats. Breaking after U+061B
+removed four prefix measurements, and the same prepare stayed at 120ms until the
+21st repeat. The first prepares cost the same, replaying the submitted strings
+without library code showed the same split, and four extra Canvas calls per
+prepare restored the drop. Fresh text never reaches those hits. Compare submitted
+Canvas text and first cold prepares, and treat a warm-only change there as a
+cache phase until installed Safari shows it; its benchmark snapshot read the
+Arabic row at the cold level before the change.

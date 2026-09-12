@@ -555,7 +555,8 @@ describe('boundary-policy regressions', () => {
     const { analyzeText } = await import('./analysis.ts')
     const profile = {
       geckoAsciiLineBreaks: true, carryCJKAfterClosingQuote: false, breakKeepAllAfterPunctuation: true,
-      keepZeroWidthSpaceMarkAtScanStart: false,
+      keepZeroWidthSpaceMarkAtScanStart: false, breakBeforeConditionalJapaneseStarter: false,
+      wordInitialHyphenLetters: 'none' as const, breakHyphenAfterCollapsedTab: false,
     }
     for (const text of ['####((aabb', '""""[[aabb', '−+x«value»!']) {
       expect(analyzeText(text, profile).texts).toEqual([text])
@@ -571,10 +572,12 @@ describe('boundary-policy regressions', () => {
     const { analyzeText } = await import('./analysis.ts')
     const profile = {
       geckoAsciiLineBreaks: false, carryCJKAfterClosingQuote: false, breakKeepAllAfterPunctuation: true,
-      keepZeroWidthSpaceMarkAtScanStart: false,
+      keepZeroWidthSpaceMarkAtScanStart: false, breakBeforeConditionalJapaneseStarter: false,
+      wordInitialHyphenLetters: 'alphabetic' as const, breakHyphenAfterCollapsedTab: false,
     }
-    // The ASCII pair tables keep '!' with a following ASCII letter. UAX #14
-    // otherwise separates EX from a following letter or number (LB31).
+    // The ASCII pair tables keep '!' with a following ASCII letter, and break
+    // '?' before '-' and '|'. UAX #14 otherwise separates EX from any
+    // following class that allows a break before it (LB31).
     for (const [text, expected] of [
       ['\u200B?ab', ['\u200B', '?', 'ab']],
       ['\u200B!ab', ['\u200B', '!ab']],
@@ -583,8 +586,130 @@ describe('boundary-policy regressions', () => {
       ['\u200B?#ab', ['\u200B', '?', '#ab']],
       ['?_ab', ['?', '_ab']],
       ['\u200B\u061F\u0628\u0628', ['\u200B', '\u061F', '\u0628\u0628']],
+      ['x?$b', ['x?', '$b']],
+      ['x?-b', ['x?', '-', 'b']],
+      ['x?|b', ['x?', '|b']],
+      ['x!\u00A9b', ['x!', '\u00A9b']],
+      ['x!\u00ABb', ['x!\u00ABb']],
+      ['\u0628\u061B\u0628\u0628', ['\u0628\u061B', '\u0628\u0628']],
     ] as const) {
       expect(analyzeText(text, profile).texts).toEqual([...expected])
+    }
+    expect(analyzeText('x?-b', { ...profile, geckoAsciiLineBreaks: true }).texts).toEqual(['x?-', 'b'])
+    // Iteration marks are NS and stay after EX. CJ such as U+30FC breaks only
+    // under ICU's normal rules.
+    expect(analyzeText('\u65E5\uFF01\u3005', profile).texts).toEqual(['\u65E5\uFF01\u3005'])
+    expect(analyzeText('\u65E5\uFF1F\u30FC', profile).texts).toEqual(['\u65E5\uFF1F\u30FC'])
+    expect(analyzeText('\u65E5\uFF1F\u30FC', { ...profile, breakBeforeConditionalJapaneseStarter: true }).texts)
+      .toEqual(['\u65E5\uFF1F', '\u30FC'])
+  })
+
+  test('ZWJ and a word-initial hyphen keep the following character', async () => {
+    const { analyzeText, getBreakablePreferredBreaks } = await import('./analysis.ts')
+    const profile = {
+      geckoAsciiLineBreaks: false, carryCJKAfterClosingQuote: false, breakKeepAllAfterPunctuation: true,
+      keepZeroWidthSpaceMarkAtScanStart: false, breakBeforeConditionalJapaneseStarter: false,
+      wordInitialHyphenLetters: 'alphabetic' as const, breakHyphenAfterCollapsedTab: false,
+    }
+    // UAX #14 LB8a and LB20a. A ZWJ after a space belongs to that space's
+    // grapheme cluster and keeps its existing boundaries. The pair tables still
+    // break '-' before an ASCII letter, and Firefox's ICU4X rules predate LB20a.
+    expect(analyzeText('\u200Dab', profile).texts).toEqual(['\u200Dab'])
+    expect(analyzeText('a\n\u200Db', profile, 'pre-wrap').texts).toEqual(['a', '\n', '\u200Db'])
+    expect(analyzeText('a \u200Db', profile).texts).toEqual(['a', ' ', '\u200D', 'b'])
+    // Only an extender joins the space, astral code points included.
+    expect(analyzeText('x \u{1F600}\u200Db', profile).texts).toEqual(['x', ' ', '\u{1F600}\u200Db'])
+    expect(analyzeText('a \u{1F3FB}\u200Db', profile).texts).toEqual(['a', ' ', '\u{1F3FB}\u200D', 'b'])
+    expect(analyzeText('a \u2010b', profile).texts).toEqual(['a', ' ', '\u2010b'])
+    expect(analyzeText('a -b', profile).texts).toEqual(['a', ' ', '-', 'b'])
+    // WebKit's scan still reads a collapsed TAB (BA) before the hyphen.
+    expect(analyzeText('a\t\u2010b', profile).texts).toEqual(['a', ' ', '\u2010b'])
+    expect(analyzeText('a\t\u2010b', { ...profile, breakHyphenAfterCollapsedTab: true }).texts)
+      .toEqual(['a', ' ', '\u2010', 'b'])
+    expect(analyzeText('a \u2010b', { ...profile, wordInitialHyphenLetters: 'none' }).texts).toEqual(['a', ' ', '\u2010', 'b'])
+    // Only AL letters keep it, plus HL letters where the profile says so.
+    expect(analyzeText('a \u2010\u3105b', profile).texts).toEqual(['a', ' ', '\u2010', '\u3105b'])
+    expect(analyzeText('a \u2010\u05D1b', profile).texts).toEqual(['a', ' ', '\u2010', '\u05D1b'])
+    expect(analyzeText('a \u2010\u05D1b', { ...profile, wordInitialHyphenLetters: 'alphabetic-and-hebrew' }).texts)
+      .toEqual(['a', ' ', '\u2010\u05D1b'])
+    // The other Unicode 17 HH dashes keep their letter like U+2010, astral ones included.
+    const hebrewProfile = { ...profile, wordInitialHyphenLetters: 'alphabetic-and-hebrew' as const }
+    const noneProfile = { ...profile, wordInitialHyphenLetters: 'none' as const }
+    expect(analyzeText('a \u2012b', hebrewProfile).texts).toEqual(['a', ' ', '\u2012b'])
+    expect(analyzeText('a \u2013\u05D1b', hebrewProfile).texts).toEqual(['a', ' ', '\u2013\u05D1b'])
+    for (const text of ['a \u05BE\u05D1b', 'a \u1400b', 'a \u{10EAD}\u0430b']) {
+      expect(analyzeText(text, hebrewProfile).texts).toEqual(['a', ' ', text.slice(2)])
+    }
+    expect(analyzeText('a \u2013b', noneProfile).texts).toEqual(['a', ' ', '\u2013', 'b'])
+    // WebKit's scan reads a collapsed TAB before U+002D, U+2010, U+2012 and
+    // U+2013, pairing source and normalized hyphens by count. The other HH
+    // dashes already join the next text after a TAB in every profile, while
+    // WebKit breaks there.
+    const tabProfile = { ...hebrewProfile, breakHyphenAfterCollapsedTab: true }
+    expect(analyzeText('x-y  \t\u2012b  \u2013b', tabProfile).texts)
+      .toEqual(['x-', 'y', ' ', '\u2012', 'b', ' ', '\u2013b'])
+    for (const text of ['a\t\u05BEb', 'a\t\u{10EAD}b']) {
+      for (const tabCaseProfile of [tabProfile, hebrewProfile, noneProfile]) {
+        expect(analyzeText(text, tabCaseProfile).texts).toEqual(['a', ' ', text.slice(2)])
+      }
+    }
+    // An overflowing word does not prefer the break LB20a removed.
+    expect(getBreakablePreferredBreaks('\u2010ab', profile)).toBeNull()
+    expect(getBreakablePreferredBreaks('a\u2010b', profile)).toEqual([2])
+    expect(getBreakablePreferredBreaks('\u2010 bar', profile)).toEqual([1])
+    expect(getBreakablePreferredBreaks('\u058A\u0561b', hebrewProfile)).toBeNull()
+    expect(getBreakablePreferredBreaks('\u058A\u0561b', noneProfile)).toEqual([1])
+  })
+
+  test('the profile without a navigator keeps Hebrew letters after a word-initial hyphen', async () => {
+    // Unknown user agents, such as Bun's, get the ICU 78 letters, and so does
+    // a runtime with no navigator.
+    const { getEngineProfile } = await import('./measurement.ts')
+    expect(getEngineProfile().wordInitialHyphenLetters).toBe('alphabetic-and-hebrew')
+    const descriptor = Object.getOwnPropertyDescriptor(globalThis, 'navigator')
+    Object.defineProperty(globalThis, 'navigator', { value: undefined, configurable: true, writable: true })
+    try {
+      const specifier = './measurement.ts?no-navigator'
+      const fresh = await import(specifier) as MeasurementModule
+      expect(typeof navigator).toBe('undefined')
+      expect(fresh.getEngineProfile().wordInitialHyphenLetters).toBe('alphabetic-and-hebrew')
+    } finally {
+      if (descriptor === undefined) Reflect.deleteProperty(globalThis, 'navigator')
+      else Object.defineProperty(globalThis, 'navigator', descriptor)
+    }
+  })
+
+  test('segmenting a ZWJ after a space grows linearly with the text', async () => {
+    const { analyzeText, clearAnalysisCaches } = await import('./analysis.ts')
+    const profile = {
+      geckoAsciiLineBreaks: false, carryCJKAfterClosingQuote: false, breakKeepAllAfterPunctuation: true,
+      keepZeroWidthSpaceMarkAtScanStart: false, breakBeforeConditionalJapaneseStarter: false,
+      wordInitialHyphenLetters: 'alphabetic' as const, breakHyphenAfterCollapsedTab: false,
+    }
+    const Segmenter = Intl.Segmenter
+    let segmentedUnits = 0
+    Reflect.set(Intl, 'Segmenter', class extends Segmenter {
+      override segment(input: string): Intl.Segments {
+        segmentedUnits += input.length
+        return super.segment(input)
+      }
+    })
+    clearAnalysisCaches()
+    try {
+      for (const whiteSpace of ['normal', 'pre-wrap'] as const) {
+        const counts: number[] = []
+        for (const repeats of [64, 256]) {
+          segmentedUnits = 0
+          analyzeText('ab \u200Dcd '.repeat(repeats), profile, whiteSpace)
+          counts.push(segmentedUnits)
+        }
+        // Four times the text is about four times the segmenter input. A pass
+        // over the whole text per joiner would make it sixteen times.
+        expect(counts[1]!).toBeLessThan(counts[0]! * 5)
+      }
+    } finally {
+      Reflect.set(Intl, 'Segmenter', Segmenter)
+      clearAnalysisCaches()
     }
   })
 
@@ -592,7 +717,8 @@ describe('boundary-policy regressions', () => {
     const { analyzeText } = await import('./analysis.ts')
     const profile = {
       geckoAsciiLineBreaks: false, carryCJKAfterClosingQuote: false, breakKeepAllAfterPunctuation: false,
-      keepZeroWidthSpaceMarkAtScanStart: true,
+      keepZeroWidthSpaceMarkAtScanStart: true, breakBeforeConditionalJapaneseStarter: false,
+      wordInitialHyphenLetters: 'alphabetic-and-hebrew' as const, breakHyphenAfterCollapsedTab: true,
     }
     expect(analyzeText('\u200B\u0301ab', profile).texts).toEqual(['\u200B\u0301ab'])
     expect(analyzeText('x\n\u200B\u0301ab', profile, 'pre-wrap').texts).toEqual(['x', '\n', '\u200B\u0301ab'])

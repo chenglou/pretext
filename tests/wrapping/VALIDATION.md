@@ -17,6 +17,82 @@ All accuracy, letter-spacing and corpus result payloads are unchanged; refreshed
 snapshots change only provenance and environment records. Runtime sources and
 the baseline pin are unchanged, so no runtime benchmark was needed.
 
+## Exclamation followers, joiners and word-initial hyphens
+
+This runtime change starts from the figure-space branch head `b55311e`. Chrome
+and Safari look up characters up to U+00FF in a pair table that follows ICU except
+for printable ASCII, where `?` breaks before everything except
+`! " ' ) , . / : ; ? ] }`, and `!` breaks only before `(`, `<`, `[` and `{`. Every
+merge that could join across that boundary now asks the same rule, so `x?|$b`,
+`x?|-|b` and `x!|\u00A9b` break as in Chrome and Safari, while Firefox keeps
+`x?-|b`. Above U+00FF the follower's line-break class decides, CJ such as U+30FC
+breaks after EX only in Chrome, and U+061B ARABIC SEMICOLON now breaks before a
+word as EX. No break follows a ZWJ at the text start or after a ZWSP, TAB or hard
+break (LB8a). In Chrome and Safari, a hyphen after a space, ZWSP, hard break or
+the text start keeps a following alphabetic or Hebrew letter (LB20a), and the
+other Unicode 17 HH dashes such as U+2012 and U+2013 do the same as U+2010.
+Without a navigator, the default profile keeps the same letters. Analysis no
+longer calls `Intl.Segmenter` `containing()`, which JavaScriptCore gets wrong at
+an index just before a surrogate pair.
+
+The same full native comparison ran this change alone and stacked on figure space
+glue, in installed Chrome 153.0.8010.36, Safari 26.5.2 and Firefox 155.0.1, both
+directions, at DPR 2: 656,407 browser/input observations, with pinned `14d92ca` as
+the reference. There are zero lost metrics, failed required checks, execution
+errors and new API/rich failures, and nine numeric profiles have no new failures.
+Over figure space glue, the stack gains 21 metrics in Chrome LTR and 9 in RTL, 24
+and 12 in Safari, and none in Firefox. Its fixed metrics are exactly the union of
+each change's own, so the two do not interact. The gains are `!!!!<<aabb`, where
+`!` now breaks before `<`, in four LTR `ascii-matrix` cases and three
+`signed-spacing/ascii-matrix` cases per direction, and pre-wrap
+`\u200D\u0628\u00AD\u0628` in `U+200D/start`: 16px Amiri at width 14.75 in both
+directions, plus 16px Noto Naskh Arabic at width 12.42 in Safari. The installed
+full gate was rerun on the revision that keeps Hebrew letters in Chrome and the
+other HH dashes in both engines, against pinned `fd54445`: the same 21/9, 24/12
+and 0 metrics are fixed, with zero lost metrics and no numeric failures. On the
+installed research rows for these shapes, the revision fixes 964 LTR and 430 RTL
+rows in Chrome and 432 and 160 in Safari over the previous revision, and loses
+only the two Chrome pre-wrap rows described below, which the previous revision
+matched by breaking in the wrong place.
+
+Headless Chromium 147 and WebKit 26.4 sweeps outside the suite lose shapes that
+main matched only through a second error. In `https://x.com/p?-a`, browsers break
+after both `?` and `-`; the new break after `?` starts the URL query unit there,
+and the unit keeps `-a` (45 of 159 widths per mode). In pre-wrap `a\t -\u0430b` at
+widths 10 to 14, browsers hang the preserved space after the TAB, while Pretext
+now gives it its own line. Chromium also breaks after the hyphen of a rich item
+`\u2010bar baz` after `foo`, because its ICU context crosses items. Headless
+Chromium 147 runs ICU 77 and breaks after a word-initial hyphen before a Hebrew
+letter, but installed Chrome 153 keeps Hebrew letters and each HH dash observed,
+as Safari 26.5.2 does: U+2010, U+2012, U+2013, U+058A, U+05BE, U+1400 and
+U+2E17. No installed browser was observed on U+2E40, U+2E5D, U+10D6E or
+U+10EAD; for those Pretext rests on ICU 78 data and headless WebKit. In the
+installed research rows of `a \u2012b`, `a \u2013b`,
+`a \u058A\u0561b`, `a -\u05D1b`, `a \u2010\u05D1b` and `a \u2013\u05D1b`, both
+browsers keep the dash with the letter wherever the two fit, while the previous
+revision broke after it in 1,165 Chrome rows and 538 Safari rows. Firefox breaks
+after each of those dashes.
+
+A headless replay of this revision against the recorded installed natives, with
+the previous revision as the base, covers every suite row with U+002D or an HH
+dash: 1,034 Chrome, 1,034 Safari and 1,028 Firefox rows, in Chromium 147, WebKit
+26.4 and Chromium with a Firefox user agent. No prediction changes there. On the
+research rows it fixes all 1,165 Chrome and 538 Safari band rows and changes
+nothing on U+2E17, U+1400 or U+05BE. It loses two Chrome rows, pre-wrap
+`a \u2010\u05D1b` at letter spacing -1 and widths 8 and 8.5: browsers hang the
+preserved space after `a`, and Pretext now gives it its own line, as it already
+does in Safari.
+
+The baseline advances to runtime commit `09c7f20`, and the ordinary snapshots
+were regenerated against it: all six legs pass with zero new regressions,
+required failures or execution errors, and nine numeric profiles have no new
+failures. Snapshot results are unchanged; only provenance and environment records
+change. The stacked gate's suite hash is
+`48fb18fba603a2ae669a5a18af334503009a3c0555c4a07201f05ee84cfae9d1`, with rows in
+`/private/tmp/pretext-eng-20260912/stage1b-full`; the revision gate's is
+`31db9695b8a03843670809f12a13c9af6cb5b632147f05191e3441dacaece5a3`, with rows in
+`/private/tmp/pretext-eng-20260912/gate-233rev`.
+
 ## Figure space glue
 
 This runtime change starts from the attached-generator-canvas branch head

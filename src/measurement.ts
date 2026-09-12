@@ -32,6 +32,20 @@ export type EngineProfile = {
   // follows a mandatory break. Gecko keeps ZWSP with any following cluster
   // extender in every position; that granularity is not modeled.
   keepZeroWidthSpaceMarkAtScanStart: boolean
+  // Chromium's ICU root line rules are the normal rules, where small kana and
+  // U+30FC (CJ) resolve to ID. WebKit's root rules and Gecko's auto are strict.
+  breakBeforeConditionalJapaneseStarter: boolean
+  // Letters that keep a word-initial hyphen (LB20a). 'alphabetic-and-hebrew'
+  // models ICU 78, which Chromium and WebKit use: AL and HL letters after
+  // U+002D or any Unicode 17 HH dash. It is also the default without a
+  // navigator. 'none' models Gecko, whose ICU4X rules have no LB20a.
+  // 'alphabetic' keeps only AL letters, as ICU 77 did, but ICU 77 also counted
+  // only U+2010 as HH, so no engine profile selects it.
+  wordInitialHyphenLetters: 'none' | 'alphabetic' | 'alphabetic-and-hebrew'
+  // WebKit's line-break scan reads the source text, where a TAB that normal
+  // white space collapses is still UAX #14 BA, not a LB20a context. Chromium
+  // breaks the collapsed text, where it is a space.
+  breakHyphenAfterCollapsedTab: boolean
   preferPrefixWidthsForBreakableRuns: boolean
 }
 
@@ -157,6 +171,9 @@ export function getEngineProfile(): EngineProfile {
       carryCJKAfterClosingQuote: false,
       breakKeepAllAfterPunctuation: true,
       keepZeroWidthSpaceMarkAtScanStart: false,
+      breakBeforeConditionalJapaneseStarter: false,
+      wordInitialHyphenLetters: 'alphabetic-and-hebrew',
+      breakHyphenAfterCollapsedTab: false,
       preferPrefixWidthsForBreakableRuns: false,
     }
     return cachedEngineProfile
@@ -178,6 +195,9 @@ export function getEngineProfile(): EngineProfile {
     ua.includes('CriOS/') ||
     ua.includes('Edg/')
   const isGecko = ua.includes('Firefox/') && !ua.includes('FxiOS/')
+  // iOS browsers lay out with WebKit and the system ICU, whatever their brand.
+  const isIOSBrand = /CriOS\/|FxiOS\/|EdgiOS\//.test(ua)
+  const isWebKitLayout = isSafari || isIOSBrand
 
   // Fresh-entry observations are verified only for desktop engines. Keep
   // mobile brands (including desktop-requesting iOS browsers) on the old path.
@@ -191,6 +211,9 @@ export function getEngineProfile(): EngineProfile {
     carryCJKAfterClosingQuote: isChromium,
     breakKeepAllAfterPunctuation: !isSafari,
     keepZeroWidthSpaceMarkAtScanStart: isSafari,
+    breakBeforeConditionalJapaneseStarter: isChromium && !isIOSBrand,
+    wordInitialHyphenLetters: isGecko ? 'none' : 'alphabetic-and-hebrew',
+    breakHyphenAfterCollapsedTab: isWebKitLayout,
     preferPrefixWidthsForBreakableRuns: isSafari,
   }
   return cachedEngineProfile
