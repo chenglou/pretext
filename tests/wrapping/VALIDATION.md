@@ -17,6 +17,48 @@ All accuracy, letter-spacing and corpus result payloads are unchanged; refreshed
 snapshots change only provenance and environment records. Runtime sources and
 the baseline pin are unchanged, so no runtime benchmark was needed.
 
+## Soft-hyphen retreat in Blink
+
+This runtime change starts from the segment-break removal branch head `daf13ac`.
+When a selected discretionary hyphen does not fit, Blink retries the text item
+against the available width minus the hyphen, so the line ends at the latest
+earlier opportunity that leaves room for it. The engine profile's
+`unfitHyphenRetreat` is `'reduced-width'` for Blink and `'none'` for WebKit,
+Gecko or when no engine is named. `letterSpaceDiscretionaryHyphen` is false only
+for Blink, which paints the visible hyphen without letter spacing. For Blink,
+`prepare()` records per soft hyphen whether Canvas measures its neighbors
+narrower joined than apart, and the walker keeps the overflowing hyphen on a line
+with such a soft hyphen. The walker records the latest opportunity that leaves
+room for the hyphen when that opportunity is created, and never returns past
+text joined to text or a dash inside a segment.
+
+The installed gate ran from this branch against pinned `e5e66be`: Chrome 153
+through the Playwright transport, Safari 26.5.2 and Firefox 155 natively, both
+directions. Chrome fixes 35 metrics per direction, in 16 rows (10 lineCount, 10
+height and 15 source), and loses none: `​a­b` in pre-wrap in four
+fonts, `  a­b` and `  ­a­b` in Courier New and Noto Nastaliq
+Urdu, and Arabic soft-hyphen rows in Courier New. Safari and Firefox change
+nothing. No leg has required failures, execution errors or new API or rich
+failures, and nine numeric profiles have no new failures. Predictions also
+change on 38 Chrome LTR rows and 3 RTL rows that fail either way. 36 LTR rows
+and 1 RTL row move further from native, all with soft hyphens followed by marks
+or word joiners: Chrome gives word joiners no letter spacing, and breaks after a
+mark that follows a soft hyphen without painting a hyphen.
+
+Headless replays in Chromium 147 and WebKit 26.4 of installed soft-hyphen
+research observations gain 802 Chrome LTR rows and 136 RTL rows and lose 79 LTR
+rows. 24 are true losses owned by other gaps: letter spacing on U+2060, which
+Chrome does not apply (20), and Blink kerning across a space (4). 55 are
+accidents, where the base matched the line count by charging a hyphen that Chrome
+does not paint: a combining mark after a soft hyphen (43) and a soft hyphen
+between word joiners (12). Enabled in WebKit and Gecko, the same rule lost 340
+Safari and 80 Firefox research rows, so those engines keep the overflowing
+hyphen.
+
+`bun test` and `bun run check` pass. The baseline advances to runtime commit
+`81c0c6a`, and the ordinary snapshots were regenerated against it with unchanged
+results; only provenance and environment records change.
+
 ## Newlines next to zero-width spaces
 
 This runtime and harness change starts from the WebKit engine routing branch

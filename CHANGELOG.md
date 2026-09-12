@@ -21,6 +21,7 @@
 - Reported line widths are now clamped at 0 instead of going negative, for example with strongly negative `letterSpacing` (#236).
 - Chrome, Firefox, Edge and other browsers on iPhone and iPad, and in-app web views on iPhone, iPad and Mac, now wrap text as Safari does, since they use WebKit. Previously, some of them got rules meant for other browsers, such as breaks after punctuation with `word-break: keep-all`. In Safari, text prepared in a web worker now gets the same rules as on the page (#237).
 - In Chrome and Firefox, a newline next to a zero-width space no longer adds a space in `white-space: normal`, matching the browser (#238).
+- In Chrome, when the hyphen of a chosen soft hyphen does not fit, the line now ends at an earlier space, zero-width space or soft hyphen that leaves room for it, as Chrome does, instead of overflowing. With `letterSpacing`, Chrome's visible hyphen no longer gets its own letter spacing (#239).
 
 ## 0.0.9 - 2026-09-07
 

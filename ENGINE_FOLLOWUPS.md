@@ -46,7 +46,7 @@ Open engine work deferred from the #210 series: decisions for the maintainer, kn
 - Chrome 153 changed native results for four RTL full-width bracket rows, which main now fails. Find the mechanism, or record it as browser drift.
 - Model Chrome's `text-spacing-trim` on full-width punctuation, which fits on one line text that Pretext puts on two. This waits on kinsoku emergency breaks and the U+3000 hang.
 - Before rerunning the CJK line-start and trim candidate, read three review findings nobody swept: untrusted Firefox rows counted as passes, trimmed paint ignoring terminal letter spacing, and one allocation per stepper call.
-- When a soft hyphen's hyphen doesn't fit, retreat to an earlier fitting break, as browsers do. Installed Chrome still loses research rows to letter spacing on word joiners, soft hyphens followed by marks, and kerning across spaces, so enable it per engine only after those land.
+- When a soft hyphen's hyphen doesn't fit, retreat to an earlier fitting break, as browsers do. This is on in Blink. WebKit and Gecko keep the overflowing hyphen until letter spacing on invisible characters and marks after a soft hyphen land; enabled there, the rule lost 340 Safari and 80 Firefox research rows.
 - A combining mark after a soft hyphen moves the break and suppresses the hyphen, and a word joiner removes the break. Land this with generated attachment tables and without splitting CJK units.
 - Chrome breaks before a soft hyphen that follows an overflowing letter, and never consumes a soft hyphen at a line start. Build one line-start rule shared by soft hyphens and ZWSP.
 - For a chosen soft hyphen, Chromium paints U+2010 where Pretext measures `-`, and Firefox's hyphen line is one letter-spacing gap narrower. Measure across the fixture fonts before changing widths.
@@ -116,7 +116,7 @@ Open engine work deferred from the #210 series: decisions for the maintainer, kn
 - Observe hyphen placement beyond the tiny discretionary protocol, so a wrong hyphen with the right line count fails.
 - Correct INVENTORY: three rows it lists as API failures now pass, although their native misses remain.
 - Before refreshing benchmark snapshots, add benchmark cases for U+3000 indentation, VS16 emoji paragraphs, long invisible tails and letter-spaced CJK, and numeric recipes for soft-hyphen, mark and control shapes.
-- Settle shared representations once before combining engine rules: the unspaced Chromium hyphen, one per-grapheme letter-spacing unit, and lazily allocated per-segment arrays.
+- Settle shared representations once before combining engine rules: one per-grapheme letter-spacing unit and lazily allocated per-segment arrays.
 - The Blink and WebKit rules that hide each other's errors (soft hyphens, U+3000, Arabic widths, controls, kinsoku, letter spacing, line fit) can only gate together. Build them in layers, with a replay after each layer.
 - Name the origin set behind VALIDATION's 3,635 LTR recipe rows, which include 51 issue #212 and #214 rows.
 - Add `(#230)` to its CHANGELOG line.

@@ -58,6 +58,7 @@ Changelog updates guideline: don't add dev-facing notes, only user-facing ones. 
 - Keep script-specific break-policy fixes in preprocessing, not `layout()`. See `RESEARCH.md` for the rules and rejected approaches.
 - `NBSP`-style glue should survive `prepare()` as visible content and prevent ordinary word-boundary wrapping; `ZWSP` should survive as a zero-width break opportunity.
 - Soft hyphens should stay invisible when unbroken. When one is selected, stop at that boundary and expose a visible trailing `-` in the rich line APIs' `line.text`.
+- In Blink, a selected soft hyphen that does not fit returns to the latest earlier opportunity that leaves room for the hyphen. Never return past text joined to text or a dash inside a segment, and keep WebKit and Gecko on the overflowing hyphen until letter-spaced invisibles and marks after a soft hyphen are modeled.
 - Keep `layoutNextLine()`'s line stepping separate from text materialization and aligned with `layoutWithLines()`. Keep its grapheme-cache bookkeeping out of the hot `layout()` path.
 - Astral CJK ideographs, compatibility ideographs, and the later extension blocks must still hit the CJK path; do not rely on BMP-only `charCodeAt()` checks there.
 - CJK grapheme splitting plus kinsoku merging keeps prohibited punctuation attached to adjacent graphemes.

@@ -237,6 +237,57 @@ a discretionary hyphen is actually selected, later source cannot be packed onto
 that line. Skipping invisible controls at line start must also continue past
 every consecutive consumed-only chunk; a real empty hard-break line is different.
 
+A selected discretionary hyphen must fit. Chromium retries a text item whose
+hyphen does not fit against the available width minus the hyphen, WebKit reverts
+to the last wrap opportunity where the hyphen fits, and Gecko records a
+soft-hyphen break only when its text plus the hyphen fits. Installed Chrome 153,
+Safari 26.5.2 and Firefox 155 all end `ab cd\u00adefgh` (Arial 16) at the space
+from 39.25px to 44.25px. In Blink the walker returns to the latest earlier
+opportunity whose line leaves room for the hyphen. The target is updated whenever
+a later opportunity replaces the pending one, so an earlier soft hyphen can win:
+installed Chrome ends `a b\u00adc\u200bi\u00adjki` (Arial 16) at the first soft
+hyphen from 34px to 35.5px, where the zero-width space leaves no room for the
+hyphen. Blink's retry stays inside one text item and rewinds earlier items at the
+full width. The prepared handle has no Blink item boundaries, so the reduced width
+applies to every earlier opportunity, which can miss a return to an earlier item.
+Chromium also paints the hyphen without letter spacing; WebKit and Gecko space it.
+
+Returning needs an overflow that isolated widths can show, and a target that is
+really the latest opportunity. Blink shapes the text on both sides of a soft
+hyphen together, so Arabic letters joined across it, a mark after it and a kerning
+pair around it measure narrower in context. When Canvas measures the neighbors of
+any soft hyphen on the line narrower joined than apart, the overflowing hyphen
+stays; contextual widths during preparation would replace that check. Segment
+kinds do not mark every opportunity: text joined to text, such as after `-` in
+`ab-cd` or between ideographs, and a dash inside one segment, such as `10–20`, can
+hold one. The walker never returns past either. Returning past them lost 142
+installed Chrome rows on compounds such as `x ab-cd\u00adefgh` and
+`a well-known\u00adness`.
+
+The return is enabled in Blink only. On the same installed research rows it lost
+340 Safari rows and 80 Firefox rows that isolated widths cannot show: letter
+spacing on U+2060, which those engines do not apply, and combining marks after a
+soft hyphen, where Safari breaks between the soft hyphen and the mark and Firefox
+paints the hyphen. WebKit and Gecko keep the overflowing hyphen until those are
+modeled. Chrome's remaining losses have the same partners. Chrome gives U+2060 no
+letter spacing, so `a\u2060b cd\u00adefgh` at letter spacing 1 and 2 still fits
+its hyphen line (20 rows), and it kerns across the space in
+`LTA To AV\u00adWAVA` (4 rows). Chromium breaks after a combining mark that
+follows a soft hyphen and paints no hyphen, and a soft hyphen between word joiners
+is no opportunity (55 rows). In those 55 rows the walker without the return
+matched the line count only by charging and overflowing a hyphen that Chrome does
+not paint.
+
+Without a fitting opportunity Safari overflows with the hyphen, while Chrome and
+Firefox break inside the word. Chromium re-breaks the line at grapheme boundaries
+and again retries an unfit hyphen against the reduced width. Gecko keeps cluster
+breaks that fit, never between a letter and its soft hyphen (installed Firefox
+ends `abc\u00addef\u00adghi` at 26px as `ab` / `c-` / `de` / `f-ghi`), and
+otherwise its first candidate. Prototypes of both rules lost hundreds of existing
+successes in a headless replay: marks and joiners next to soft hyphens,
+letter-spaced invisibles, Arabic contextual widths, and hyphen fits within
+Chromium's 1/64px rounding. The overflowing line remains.
+
 A source-coordinate prototype showed that internal storage can change without
 changing public output, but only if measurement-local grapheme boundaries survive.
 Segmenting the complete source into graphemes is not automatically an equivalent

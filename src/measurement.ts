@@ -11,6 +11,9 @@ const entryContextProperties = ['font', 'direction', 'fontKerning', 'fontStretch
 export type SegmentMetrics = {
   width: number
   emojiCount?: number
+  // Per following piece across a soft hyphen: true when the joined text measures
+  // narrower than the two pieces apart.
+  shapesAcrossSoftHyphen?: Map<string, boolean>
   breakableFitMode?: BreakableFitMode
   breakableFitAdvances?: number[] | null
   entryGeometry?: {
@@ -59,6 +62,18 @@ export type EngineProfile = {
   // Blink and Gecko remove a collapsible newline run next to a ZWSP, each
   // through its own run. WebKit turns it into a space.
   segmentBreakRemovalRun: SegmentBreakRemovalRun
+  // WebKit and Gecko letter-space the visible discretionary hyphen itself.
+  // Blink shapes it separately, without spacing.
+  letterSpaceDiscretionaryHyphen: boolean
+  // When a selected discretionary hyphen does not fit, Blink retries the text
+  // item against the width minus the hyphen, so the line ends at the latest
+  // earlier opportunity that leaves room for it. Pretext has no Blink item
+  // boundaries and applies the reduced width to every earlier opportunity.
+  // WebKit and Gecko also return to an earlier opportunity, at the full width,
+  // but that is not modeled: their installed losses come from letter spacing
+  // on invisibles and from marks after a soft hyphen, which isolated widths do
+  // not show. They keep the overflowing hyphen.
+  unfitHyphenRetreat: 'reduced-width' | 'none'
 }
 
 export type BreakableFitMode = 'sum-graphemes' | 'segment-prefixes' | 'pair-context'
@@ -237,6 +252,8 @@ export function getEngineProfile(): EngineProfile {
     preferPrefixWidthsForBreakableRuns: engine === 'webkit',
     measureTextWithFollowingSpace: engine === 'webkit',
     segmentBreakRemovalRun: engine === 'blink' ? 'blink' : engine === 'gecko' ? 'gecko' : 'none',
+    letterSpaceDiscretionaryHyphen: engine !== 'blink',
+    unfitHyphenRetreat: engine === 'blink' ? 'reduced-width' : 'none',
   }
   return cachedEngineProfile
 }
