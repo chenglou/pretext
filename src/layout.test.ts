@@ -744,6 +744,18 @@ describe('prepare invariants', () => {
     expect(prepared.kinds).toEqual(['text'])
   })
 
+  test('keeps figure spaces as glue content', () => {
+    const doubled = prepareWithSegments('a\u2007\u2007b', FONT)
+    expect(doubled.segments).toEqual(['a\u2007\u2007b'])
+    expect(doubled.kinds).toEqual(['text'])
+
+    const prepared = prepareWithSegments('tail\u2007word', FONT)
+    expect(prepared.segments).toEqual(['tail\u2007word'])
+    expect(prepared.kinds).toEqual(['text'])
+    const width = measureWidth('tail\u2007w', FONT) + 0.1
+    expect(layoutWithLines(prepared, width, LINE_HEIGHT).lines.map(line => line.text)).toEqual(['tail\u2007w', 'ord'])
+  })
+
   test('keeps word joiners as glue content', () => {
     const prepared = prepareWithSegments('foo\u2060bar', FONT)
     expect(prepared.segments).toEqual(['foo\u2060bar'])

@@ -1,11 +1,11 @@
 [
   {
-    "generatedAt": "2026-09-12T07:23:02.404Z",
-    "suiteHash": "48fb18fba603a2ae669a5a18af334503009a3c0555c4a07201f05ee84cfae9d1",
+    "generatedAt": "2026-09-12T07:27:36.354Z",
+    "suiteHash": "31db9695b8a03843670809f12a13c9af6cb5b632147f05191e3441dacaece5a3",
     "source": {
-      "revision": "460398ac2787a912082fc2e86aaa9c78e70139fb",
+      "revision": "fd54445fec549f702a5c0dcee11c80ee1724bdbc",
       "files": {
-        "analysis.ts": "a57b2a0cff6e0710d2c3d3444b9c0f8c1a4b78dae51b66b2535c3c16204a3747",
+        "analysis.ts": "71a90b0cdf3ecd3f2142bb6c0206fbb960c7dc7b9f48b059b5d912592f7d4b53",
         "bidi.ts": "70f7f01dcd866076b68dbf2a3c398364aceaba2ccf98037e77e0b3b8bcfbeaa5",
         "entry-geometry.ts": "43ffacd71c3562283135590a06947eef4b2617cb3b6ba680c909dd5e2d2ba9a7",
         "generated/bidi-data.ts": "745211b804d907af78afb6c1ed87eff6d7454a5e85152a6129eb7b3bf0f6f262",
@@ -84,12 +84,12 @@
     "mismatches": []
   },
   {
-    "generatedAt": "2026-09-12T07:23:02.404Z",
-    "suiteHash": "48fb18fba603a2ae669a5a18af334503009a3c0555c4a07201f05ee84cfae9d1",
+    "generatedAt": "2026-09-12T07:27:36.354Z",
+    "suiteHash": "31db9695b8a03843670809f12a13c9af6cb5b632147f05191e3441dacaece5a3",
     "source": {
-      "revision": "460398ac2787a912082fc2e86aaa9c78e70139fb",
+      "revision": "fd54445fec549f702a5c0dcee11c80ee1724bdbc",
       "files": {
-        "analysis.ts": "a57b2a0cff6e0710d2c3d3444b9c0f8c1a4b78dae51b66b2535c3c16204a3747",
+        "analysis.ts": "71a90b0cdf3ecd3f2142bb6c0206fbb960c7dc7b9f48b059b5d912592f7d4b53",
         "bidi.ts": "70f7f01dcd866076b68dbf2a3c398364aceaba2ccf98037e77e0b3b8bcfbeaa5",
         "entry-geometry.ts": "43ffacd71c3562283135590a06947eef4b2617cb3b6ba680c909dd5e2d2ba9a7",
         "generated/bidi-data.ts": "745211b804d907af78afb6c1ed87eff6d7454a5e85152a6129eb7b3bf0f6f262",
@@ -263,12 +263,12 @@
     ]
   },
   {
-    "generatedAt": "2026-09-12T07:23:02.404Z",
-    "suiteHash": "48fb18fba603a2ae669a5a18af334503009a3c0555c4a07201f05ee84cfae9d1",
+    "generatedAt": "2026-09-12T07:27:36.354Z",
+    "suiteHash": "31db9695b8a03843670809f12a13c9af6cb5b632147f05191e3441dacaece5a3",
     "source": {
-      "revision": "460398ac2787a912082fc2e86aaa9c78e70139fb",
+      "revision": "fd54445fec549f702a5c0dcee11c80ee1724bdbc",
       "files": {
-        "analysis.ts": "a57b2a0cff6e0710d2c3d3444b9c0f8c1a4b78dae51b66b2535c3c16204a3747",
+        "analysis.ts": "71a90b0cdf3ecd3f2142bb6c0206fbb960c7dc7b9f48b059b5d912592f7d4b53",
         "bidi.ts": "70f7f01dcd866076b68dbf2a3c398364aceaba2ccf98037e77e0b3b8bcfbeaa5",
         "entry-geometry.ts": "43ffacd71c3562283135590a06947eef4b2617cb3b6ba680c909dd5e2d2ba9a7",
         "generated/bidi-data.ts": "745211b804d907af78afb6c1ed87eff6d7454a5e85152a6129eb7b3bf0f6f262",
@@ -299,7 +299,7 @@
             "screenAvailWidth": 2560,
             "screenAvailHeight": 1315,
             "visibility": "visible",
-            "focused": false,
+            "focused": true,
             "language": "ja",
             "direction": "ltr"
           },
@@ -317,7 +317,7 @@
             "screenAvailWidth": 2560,
             "screenAvailHeight": 1315,
             "visibility": "visible",
-            "focused": false,
+            "focused": true,
             "language": "ja",
             "direction": "ltr"
           },
@@ -331,7 +331,7 @@
         "dpr": 2,
         "locale": "zh-CN",
         "visibility": "visible",
-        "focused": false,
+        "focused": true,
         "fonts": []
       }
     ],
@@ -396,12 +396,12 @@
     ]
   },
   {
-    "generatedAt": "2026-09-12T07:23:02.404Z",
-    "suiteHash": "48fb18fba603a2ae669a5a18af334503009a3c0555c4a07201f05ee84cfae9d1",
+    "generatedAt": "2026-09-12T07:27:36.354Z",
+    "suiteHash": "31db9695b8a03843670809f12a13c9af6cb5b632147f05191e3441dacaece5a3",
     "source": {
-      "revision": "460398ac2787a912082fc2e86aaa9c78e70139fb",
+      "revision": "fd54445fec549f702a5c0dcee11c80ee1724bdbc",
       "files": {
-        "analysis.ts": "a57b2a0cff6e0710d2c3d3444b9c0f8c1a4b78dae51b66b2535c3c16204a3747",
+        "analysis.ts": "71a90b0cdf3ecd3f2142bb6c0206fbb960c7dc7b9f48b059b5d912592f7d4b53",
         "bidi.ts": "70f7f01dcd866076b68dbf2a3c398364aceaba2ccf98037e77e0b3b8bcfbeaa5",
         "entry-geometry.ts": "43ffacd71c3562283135590a06947eef4b2617cb3b6ba680c909dd5e2d2ba9a7",
         "generated/bidi-data.ts": "745211b804d907af78afb6c1ed87eff6d7454a5e85152a6129eb7b3bf0f6f262",
@@ -432,7 +432,7 @@
             "screenAvailWidth": 2560,
             "screenAvailHeight": 1315,
             "visibility": "visible",
-            "focused": false,
+            "focused": true,
             "language": "ja",
             "direction": "ltr"
           },
@@ -450,7 +450,7 @@
             "screenAvailWidth": 2560,
             "screenAvailHeight": 1315,
             "visibility": "visible",
-            "focused": false,
+            "focused": true,
             "language": "ja",
             "direction": "ltr"
           },
@@ -464,7 +464,7 @@
         "dpr": 2,
         "locale": "zh-CN",
         "visibility": "visible",
-        "focused": false,
+        "focused": true,
         "fonts": []
       }
     ],
@@ -521,12 +521,12 @@
     ]
   },
   {
-    "generatedAt": "2026-09-12T07:23:02.404Z",
-    "suiteHash": "48fb18fba603a2ae669a5a18af334503009a3c0555c4a07201f05ee84cfae9d1",
+    "generatedAt": "2026-09-12T07:27:36.354Z",
+    "suiteHash": "31db9695b8a03843670809f12a13c9af6cb5b632147f05191e3441dacaece5a3",
     "source": {
-      "revision": "460398ac2787a912082fc2e86aaa9c78e70139fb",
+      "revision": "fd54445fec549f702a5c0dcee11c80ee1724bdbc",
       "files": {
-        "analysis.ts": "a57b2a0cff6e0710d2c3d3444b9c0f8c1a4b78dae51b66b2535c3c16204a3747",
+        "analysis.ts": "71a90b0cdf3ecd3f2142bb6c0206fbb960c7dc7b9f48b059b5d912592f7d4b53",
         "bidi.ts": "70f7f01dcd866076b68dbf2a3c398364aceaba2ccf98037e77e0b3b8bcfbeaa5",
         "entry-geometry.ts": "43ffacd71c3562283135590a06947eef4b2617cb3b6ba680c909dd5e2d2ba9a7",
         "generated/bidi-data.ts": "745211b804d907af78afb6c1ed87eff6d7454a5e85152a6129eb7b3bf0f6f262",
@@ -605,12 +605,12 @@
     "mismatches": []
   },
   {
-    "generatedAt": "2026-09-12T07:23:02.404Z",
-    "suiteHash": "48fb18fba603a2ae669a5a18af334503009a3c0555c4a07201f05ee84cfae9d1",
+    "generatedAt": "2026-09-12T07:27:36.354Z",
+    "suiteHash": "31db9695b8a03843670809f12a13c9af6cb5b632147f05191e3441dacaece5a3",
     "source": {
-      "revision": "460398ac2787a912082fc2e86aaa9c78e70139fb",
+      "revision": "fd54445fec549f702a5c0dcee11c80ee1724bdbc",
       "files": {
-        "analysis.ts": "a57b2a0cff6e0710d2c3d3444b9c0f8c1a4b78dae51b66b2535c3c16204a3747",
+        "analysis.ts": "71a90b0cdf3ecd3f2142bb6c0206fbb960c7dc7b9f48b059b5d912592f7d4b53",
         "bidi.ts": "70f7f01dcd866076b68dbf2a3c398364aceaba2ccf98037e77e0b3b8bcfbeaa5",
         "entry-geometry.ts": "43ffacd71c3562283135590a06947eef4b2617cb3b6ba680c909dd5e2d2ba9a7",
         "generated/bidi-data.ts": "745211b804d907af78afb6c1ed87eff6d7454a5e85152a6129eb7b3bf0f6f262",
@@ -689,12 +689,12 @@
     "mismatches": []
   },
   {
-    "generatedAt": "2026-09-12T07:23:02.404Z",
-    "suiteHash": "48fb18fba603a2ae669a5a18af334503009a3c0555c4a07201f05ee84cfae9d1",
+    "generatedAt": "2026-09-12T07:27:36.354Z",
+    "suiteHash": "31db9695b8a03843670809f12a13c9af6cb5b632147f05191e3441dacaece5a3",
     "source": {
-      "revision": "460398ac2787a912082fc2e86aaa9c78e70139fb",
+      "revision": "fd54445fec549f702a5c0dcee11c80ee1724bdbc",
       "files": {
-        "analysis.ts": "a57b2a0cff6e0710d2c3d3444b9c0f8c1a4b78dae51b66b2535c3c16204a3747",
+        "analysis.ts": "71a90b0cdf3ecd3f2142bb6c0206fbb960c7dc7b9f48b059b5d912592f7d4b53",
         "bidi.ts": "70f7f01dcd866076b68dbf2a3c398364aceaba2ccf98037e77e0b3b8bcfbeaa5",
         "entry-geometry.ts": "43ffacd71c3562283135590a06947eef4b2617cb3b6ba680c909dd5e2d2ba9a7",
         "generated/bidi-data.ts": "745211b804d907af78afb6c1ed87eff6d7454a5e85152a6129eb7b3bf0f6f262",
@@ -743,17 +743,11 @@
             "screenAvailWidth": 2560,
             "screenAvailHeight": 1315,
             "visibility": "visible",
-            "focused": false,
+            "focused": true,
             "language": "zh",
             "direction": "ltr"
           },
-          "changes": [
-            {
-              "field": "focused",
-              "value": false,
-              "evidence": "snapshot"
-            }
-          ]
+          "changes": []
         },
         "context": {
           "kind": "installed",
@@ -763,7 +757,7 @@
         "dpr": 2,
         "locale": "zh-CN",
         "visibility": "visible",
-        "focused": false,
+        "focused": true,
         "fonts": []
       }
     ],
@@ -924,12 +918,12 @@
     ]
   },
   {
-    "generatedAt": "2026-09-12T07:23:02.404Z",
-    "suiteHash": "48fb18fba603a2ae669a5a18af334503009a3c0555c4a07201f05ee84cfae9d1",
+    "generatedAt": "2026-09-12T07:27:36.354Z",
+    "suiteHash": "31db9695b8a03843670809f12a13c9af6cb5b632147f05191e3441dacaece5a3",
     "source": {
-      "revision": "460398ac2787a912082fc2e86aaa9c78e70139fb",
+      "revision": "fd54445fec549f702a5c0dcee11c80ee1724bdbc",
       "files": {
-        "analysis.ts": "a57b2a0cff6e0710d2c3d3444b9c0f8c1a4b78dae51b66b2535c3c16204a3747",
+        "analysis.ts": "71a90b0cdf3ecd3f2142bb6c0206fbb960c7dc7b9f48b059b5d912592f7d4b53",
         "bidi.ts": "70f7f01dcd866076b68dbf2a3c398364aceaba2ccf98037e77e0b3b8bcfbeaa5",
         "entry-geometry.ts": "43ffacd71c3562283135590a06947eef4b2617cb3b6ba680c909dd5e2d2ba9a7",
         "generated/bidi-data.ts": "745211b804d907af78afb6c1ed87eff6d7454a5e85152a6129eb7b3bf0f6f262",
@@ -978,17 +972,11 @@
             "screenAvailWidth": 2560,
             "screenAvailHeight": 1315,
             "visibility": "visible",
-            "focused": false,
+            "focused": true,
             "language": "zh",
             "direction": "ltr"
           },
-          "changes": [
-            {
-              "field": "focused",
-              "value": false,
-              "evidence": "snapshot"
-            }
-          ]
+          "changes": []
         },
         "context": {
           "kind": "installed",
@@ -998,7 +986,7 @@
         "dpr": 2,
         "locale": "zh-CN",
         "visibility": "visible",
-        "focused": false,
+        "focused": true,
         "fonts": []
       }
     ],
@@ -1071,12 +1059,12 @@
     ]
   },
   {
-    "generatedAt": "2026-09-12T07:23:02.404Z",
-    "suiteHash": "48fb18fba603a2ae669a5a18af334503009a3c0555c4a07201f05ee84cfae9d1",
+    "generatedAt": "2026-09-12T07:27:36.354Z",
+    "suiteHash": "31db9695b8a03843670809f12a13c9af6cb5b632147f05191e3441dacaece5a3",
     "source": {
-      "revision": "460398ac2787a912082fc2e86aaa9c78e70139fb",
+      "revision": "fd54445fec549f702a5c0dcee11c80ee1724bdbc",
       "files": {
-        "analysis.ts": "a57b2a0cff6e0710d2c3d3444b9c0f8c1a4b78dae51b66b2535c3c16204a3747",
+        "analysis.ts": "71a90b0cdf3ecd3f2142bb6c0206fbb960c7dc7b9f48b059b5d912592f7d4b53",
         "bidi.ts": "70f7f01dcd866076b68dbf2a3c398364aceaba2ccf98037e77e0b3b8bcfbeaa5",
         "entry-geometry.ts": "43ffacd71c3562283135590a06947eef4b2617cb3b6ba680c909dd5e2d2ba9a7",
         "generated/bidi-data.ts": "745211b804d907af78afb6c1ed87eff6d7454a5e85152a6129eb7b3bf0f6f262",
@@ -1125,17 +1113,11 @@
             "screenAvailWidth": 2560,
             "screenAvailHeight": 1315,
             "visibility": "visible",
-            "focused": false,
+            "focused": true,
             "language": "th",
             "direction": "ltr"
           },
-          "changes": [
-            {
-              "field": "focused",
-              "value": false,
-              "evidence": "snapshot"
-            }
-          ]
+          "changes": []
         },
         "context": {
           "kind": "installed",
@@ -1145,7 +1127,7 @@
         "dpr": 2,
         "locale": "zh-CN",
         "visibility": "visible",
-        "focused": false,
+        "focused": true,
         "fonts": []
       }
     ],
@@ -1178,12 +1160,12 @@
     ]
   },
   {
-    "generatedAt": "2026-09-12T07:23:02.404Z",
-    "suiteHash": "48fb18fba603a2ae669a5a18af334503009a3c0555c4a07201f05ee84cfae9d1",
+    "generatedAt": "2026-09-12T07:27:36.354Z",
+    "suiteHash": "31db9695b8a03843670809f12a13c9af6cb5b632147f05191e3441dacaece5a3",
     "source": {
-      "revision": "460398ac2787a912082fc2e86aaa9c78e70139fb",
+      "revision": "fd54445fec549f702a5c0dcee11c80ee1724bdbc",
       "files": {
-        "analysis.ts": "a57b2a0cff6e0710d2c3d3444b9c0f8c1a4b78dae51b66b2535c3c16204a3747",
+        "analysis.ts": "71a90b0cdf3ecd3f2142bb6c0206fbb960c7dc7b9f48b059b5d912592f7d4b53",
         "bidi.ts": "70f7f01dcd866076b68dbf2a3c398364aceaba2ccf98037e77e0b3b8bcfbeaa5",
         "entry-geometry.ts": "43ffacd71c3562283135590a06947eef4b2617cb3b6ba680c909dd5e2d2ba9a7",
         "generated/bidi-data.ts": "745211b804d907af78afb6c1ed87eff6d7454a5e85152a6129eb7b3bf0f6f262",
@@ -1232,17 +1214,11 @@
             "screenAvailWidth": 2560,
             "screenAvailHeight": 1315,
             "visibility": "visible",
-            "focused": false,
+            "focused": true,
             "language": "th",
             "direction": "ltr"
           },
-          "changes": [
-            {
-              "field": "focused",
-              "value": false,
-              "evidence": "snapshot"
-            }
-          ]
+          "changes": []
         },
         "context": {
           "kind": "installed",
@@ -1252,7 +1228,7 @@
         "dpr": 2,
         "locale": "zh-CN",
         "visibility": "visible",
-        "focused": false,
+        "focused": true,
         "fonts": []
       }
     ],
@@ -1277,12 +1253,12 @@
     ]
   },
   {
-    "generatedAt": "2026-09-12T07:23:02.404Z",
-    "suiteHash": "48fb18fba603a2ae669a5a18af334503009a3c0555c4a07201f05ee84cfae9d1",
+    "generatedAt": "2026-09-12T07:27:36.354Z",
+    "suiteHash": "31db9695b8a03843670809f12a13c9af6cb5b632147f05191e3441dacaece5a3",
     "source": {
-      "revision": "460398ac2787a912082fc2e86aaa9c78e70139fb",
+      "revision": "fd54445fec549f702a5c0dcee11c80ee1724bdbc",
       "files": {
-        "analysis.ts": "a57b2a0cff6e0710d2c3d3444b9c0f8c1a4b78dae51b66b2535c3c16204a3747",
+        "analysis.ts": "71a90b0cdf3ecd3f2142bb6c0206fbb960c7dc7b9f48b059b5d912592f7d4b53",
         "bidi.ts": "70f7f01dcd866076b68dbf2a3c398364aceaba2ccf98037e77e0b3b8bcfbeaa5",
         "entry-geometry.ts": "43ffacd71c3562283135590a06947eef4b2617cb3b6ba680c909dd5e2d2ba9a7",
         "generated/bidi-data.ts": "745211b804d907af78afb6c1ed87eff6d7454a5e85152a6129eb7b3bf0f6f262",
@@ -1331,11 +1307,17 @@
             "screenAvailWidth": 2560,
             "screenAvailHeight": 1315,
             "visibility": "visible",
-            "focused": true,
+            "focused": false,
             "language": "my",
             "direction": "ltr"
           },
-          "changes": []
+          "changes": [
+            {
+              "field": "focused",
+              "value": false,
+              "evidence": "snapshot"
+            }
+          ]
         },
         "context": {
           "kind": "installed",
@@ -1345,7 +1327,7 @@
         "dpr": 2,
         "locale": "zh-CN",
         "visibility": "visible",
-        "focused": true,
+        "focused": false,
         "fonts": []
       }
     ],
@@ -1361,12 +1343,12 @@
     "mismatches": []
   },
   {
-    "generatedAt": "2026-09-12T07:23:02.404Z",
-    "suiteHash": "48fb18fba603a2ae669a5a18af334503009a3c0555c4a07201f05ee84cfae9d1",
+    "generatedAt": "2026-09-12T07:27:36.354Z",
+    "suiteHash": "31db9695b8a03843670809f12a13c9af6cb5b632147f05191e3441dacaece5a3",
     "source": {
-      "revision": "460398ac2787a912082fc2e86aaa9c78e70139fb",
+      "revision": "fd54445fec549f702a5c0dcee11c80ee1724bdbc",
       "files": {
-        "analysis.ts": "a57b2a0cff6e0710d2c3d3444b9c0f8c1a4b78dae51b66b2535c3c16204a3747",
+        "analysis.ts": "71a90b0cdf3ecd3f2142bb6c0206fbb960c7dc7b9f48b059b5d912592f7d4b53",
         "bidi.ts": "70f7f01dcd866076b68dbf2a3c398364aceaba2ccf98037e77e0b3b8bcfbeaa5",
         "entry-geometry.ts": "43ffacd71c3562283135590a06947eef4b2617cb3b6ba680c909dd5e2d2ba9a7",
         "generated/bidi-data.ts": "745211b804d907af78afb6c1ed87eff6d7454a5e85152a6129eb7b3bf0f6f262",
@@ -1415,11 +1397,17 @@
             "screenAvailWidth": 2560,
             "screenAvailHeight": 1315,
             "visibility": "visible",
-            "focused": true,
+            "focused": false,
             "language": "my",
             "direction": "ltr"
           },
-          "changes": []
+          "changes": [
+            {
+              "field": "focused",
+              "value": false,
+              "evidence": "snapshot"
+            }
+          ]
         },
         "context": {
           "kind": "installed",
@@ -1429,7 +1417,7 @@
         "dpr": 2,
         "locale": "zh-CN",
         "visibility": "visible",
-        "focused": true,
+        "focused": false,
         "fonts": []
       }
     ],
@@ -1445,12 +1433,12 @@
     "mismatches": []
   },
   {
-    "generatedAt": "2026-09-12T07:23:02.404Z",
-    "suiteHash": "48fb18fba603a2ae669a5a18af334503009a3c0555c4a07201f05ee84cfae9d1",
+    "generatedAt": "2026-09-12T07:27:36.354Z",
+    "suiteHash": "31db9695b8a03843670809f12a13c9af6cb5b632147f05191e3441dacaece5a3",
     "source": {
-      "revision": "460398ac2787a912082fc2e86aaa9c78e70139fb",
+      "revision": "fd54445fec549f702a5c0dcee11c80ee1724bdbc",
       "files": {
-        "analysis.ts": "a57b2a0cff6e0710d2c3d3444b9c0f8c1a4b78dae51b66b2535c3c16204a3747",
+        "analysis.ts": "71a90b0cdf3ecd3f2142bb6c0206fbb960c7dc7b9f48b059b5d912592f7d4b53",
         "bidi.ts": "70f7f01dcd866076b68dbf2a3c398364aceaba2ccf98037e77e0b3b8bcfbeaa5",
         "entry-geometry.ts": "43ffacd71c3562283135590a06947eef4b2617cb3b6ba680c909dd5e2d2ba9a7",
         "generated/bidi-data.ts": "745211b804d907af78afb6c1ed87eff6d7454a5e85152a6129eb7b3bf0f6f262",
@@ -1499,11 +1487,17 @@
             "screenAvailWidth": 2560,
             "screenAvailHeight": 1315,
             "visibility": "visible",
-            "focused": true,
+            "focused": false,
             "language": "km",
             "direction": "ltr"
           },
-          "changes": []
+          "changes": [
+            {
+              "field": "focused",
+              "value": false,
+              "evidence": "snapshot"
+            }
+          ]
         },
         "context": {
           "kind": "installed",
@@ -1513,7 +1507,7 @@
         "dpr": 2,
         "locale": "zh-CN",
         "visibility": "visible",
-        "focused": true,
+        "focused": false,
         "fonts": []
       }
     ],
@@ -1529,12 +1523,12 @@
     "mismatches": []
   },
   {
-    "generatedAt": "2026-09-12T07:23:02.404Z",
-    "suiteHash": "48fb18fba603a2ae669a5a18af334503009a3c0555c4a07201f05ee84cfae9d1",
+    "generatedAt": "2026-09-12T07:27:36.354Z",
+    "suiteHash": "31db9695b8a03843670809f12a13c9af6cb5b632147f05191e3441dacaece5a3",
     "source": {
-      "revision": "460398ac2787a912082fc2e86aaa9c78e70139fb",
+      "revision": "fd54445fec549f702a5c0dcee11c80ee1724bdbc",
       "files": {
-        "analysis.ts": "a57b2a0cff6e0710d2c3d3444b9c0f8c1a4b78dae51b66b2535c3c16204a3747",
+        "analysis.ts": "71a90b0cdf3ecd3f2142bb6c0206fbb960c7dc7b9f48b059b5d912592f7d4b53",
         "bidi.ts": "70f7f01dcd866076b68dbf2a3c398364aceaba2ccf98037e77e0b3b8bcfbeaa5",
         "entry-geometry.ts": "43ffacd71c3562283135590a06947eef4b2617cb3b6ba680c909dd5e2d2ba9a7",
         "generated/bidi-data.ts": "745211b804d907af78afb6c1ed87eff6d7454a5e85152a6129eb7b3bf0f6f262",
@@ -1565,7 +1559,7 @@
             "screenAvailWidth": 2560,
             "screenAvailHeight": 1315,
             "visibility": "visible",
-            "focused": false,
+            "focused": true,
             "language": "ar",
             "direction": "rtl"
           },
@@ -1587,7 +1581,13 @@
             "language": "ar",
             "direction": "rtl"
           },
-          "changes": []
+          "changes": [
+            {
+              "field": "focused",
+              "value": false,
+              "evidence": "snapshot"
+            }
+          ]
         },
         "context": {
           "kind": "installed",
@@ -1613,12 +1613,12 @@
     "mismatches": []
   },
   {
-    "generatedAt": "2026-09-12T07:23:02.404Z",
-    "suiteHash": "48fb18fba603a2ae669a5a18af334503009a3c0555c4a07201f05ee84cfae9d1",
+    "generatedAt": "2026-09-12T07:27:36.354Z",
+    "suiteHash": "31db9695b8a03843670809f12a13c9af6cb5b632147f05191e3441dacaece5a3",
     "source": {
-      "revision": "460398ac2787a912082fc2e86aaa9c78e70139fb",
+      "revision": "fd54445fec549f702a5c0dcee11c80ee1724bdbc",
       "files": {
-        "analysis.ts": "a57b2a0cff6e0710d2c3d3444b9c0f8c1a4b78dae51b66b2535c3c16204a3747",
+        "analysis.ts": "71a90b0cdf3ecd3f2142bb6c0206fbb960c7dc7b9f48b059b5d912592f7d4b53",
         "bidi.ts": "70f7f01dcd866076b68dbf2a3c398364aceaba2ccf98037e77e0b3b8bcfbeaa5",
         "entry-geometry.ts": "43ffacd71c3562283135590a06947eef4b2617cb3b6ba680c909dd5e2d2ba9a7",
         "generated/bidi-data.ts": "745211b804d907af78afb6c1ed87eff6d7454a5e85152a6129eb7b3bf0f6f262",
@@ -1649,7 +1649,7 @@
             "screenAvailWidth": 2560,
             "screenAvailHeight": 1315,
             "visibility": "visible",
-            "focused": false,
+            "focused": true,
             "language": "ar",
             "direction": "rtl"
           },
@@ -1671,7 +1671,13 @@
             "language": "ar",
             "direction": "rtl"
           },
-          "changes": []
+          "changes": [
+            {
+              "field": "focused",
+              "value": false,
+              "evidence": "snapshot"
+            }
+          ]
         },
         "context": {
           "kind": "installed",
@@ -1697,12 +1703,12 @@
     "mismatches": []
   },
   {
-    "generatedAt": "2026-09-12T07:23:02.404Z",
-    "suiteHash": "48fb18fba603a2ae669a5a18af334503009a3c0555c4a07201f05ee84cfae9d1",
+    "generatedAt": "2026-09-12T07:27:36.354Z",
+    "suiteHash": "31db9695b8a03843670809f12a13c9af6cb5b632147f05191e3441dacaece5a3",
     "source": {
-      "revision": "460398ac2787a912082fc2e86aaa9c78e70139fb",
+      "revision": "fd54445fec549f702a5c0dcee11c80ee1724bdbc",
       "files": {
-        "analysis.ts": "a57b2a0cff6e0710d2c3d3444b9c0f8c1a4b78dae51b66b2535c3c16204a3747",
+        "analysis.ts": "71a90b0cdf3ecd3f2142bb6c0206fbb960c7dc7b9f48b059b5d912592f7d4b53",
         "bidi.ts": "70f7f01dcd866076b68dbf2a3c398364aceaba2ccf98037e77e0b3b8bcfbeaa5",
         "entry-geometry.ts": "43ffacd71c3562283135590a06947eef4b2617cb3b6ba680c909dd5e2d2ba9a7",
         "generated/bidi-data.ts": "745211b804d907af78afb6c1ed87eff6d7454a5e85152a6129eb7b3bf0f6f262",
@@ -1751,11 +1757,17 @@
             "screenAvailWidth": 2560,
             "screenAvailHeight": 1315,
             "visibility": "visible",
-            "focused": true,
+            "focused": false,
             "language": "hi",
             "direction": "ltr"
           },
-          "changes": []
+          "changes": [
+            {
+              "field": "focused",
+              "value": false,
+              "evidence": "snapshot"
+            }
+          ]
         },
         "context": {
           "kind": "installed",
@@ -1765,7 +1777,7 @@
         "dpr": 2,
         "locale": "zh-CN",
         "visibility": "visible",
-        "focused": true,
+        "focused": false,
         "fonts": []
       }
     ],
@@ -1781,12 +1793,12 @@
     "mismatches": []
   },
   {
-    "generatedAt": "2026-09-12T07:23:02.404Z",
-    "suiteHash": "48fb18fba603a2ae669a5a18af334503009a3c0555c4a07201f05ee84cfae9d1",
+    "generatedAt": "2026-09-12T07:27:36.354Z",
+    "suiteHash": "31db9695b8a03843670809f12a13c9af6cb5b632147f05191e3441dacaece5a3",
     "source": {
-      "revision": "460398ac2787a912082fc2e86aaa9c78e70139fb",
+      "revision": "fd54445fec549f702a5c0dcee11c80ee1724bdbc",
       "files": {
-        "analysis.ts": "a57b2a0cff6e0710d2c3d3444b9c0f8c1a4b78dae51b66b2535c3c16204a3747",
+        "analysis.ts": "71a90b0cdf3ecd3f2142bb6c0206fbb960c7dc7b9f48b059b5d912592f7d4b53",
         "bidi.ts": "70f7f01dcd866076b68dbf2a3c398364aceaba2ccf98037e77e0b3b8bcfbeaa5",
         "entry-geometry.ts": "43ffacd71c3562283135590a06947eef4b2617cb3b6ba680c909dd5e2d2ba9a7",
         "generated/bidi-data.ts": "745211b804d907af78afb6c1ed87eff6d7454a5e85152a6129eb7b3bf0f6f262",
@@ -1817,7 +1829,7 @@
             "screenAvailWidth": 2560,
             "screenAvailHeight": 1315,
             "visibility": "visible",
-            "focused": false,
+            "focused": true,
             "language": "he",
             "direction": "rtl"
           },
@@ -1835,7 +1847,7 @@
             "screenAvailWidth": 2560,
             "screenAvailHeight": 1315,
             "visibility": "visible",
-            "focused": false,
+            "focused": true,
             "language": "he",
             "direction": "rtl"
           },
@@ -1849,7 +1861,7 @@
         "dpr": 2,
         "locale": "zh-CN",
         "visibility": "visible",
-        "focused": false,
+        "focused": true,
         "fonts": []
       }
     ],
@@ -1865,12 +1877,12 @@
     "mismatches": []
   },
   {
-    "generatedAt": "2026-09-12T07:23:02.404Z",
-    "suiteHash": "48fb18fba603a2ae669a5a18af334503009a3c0555c4a07201f05ee84cfae9d1",
+    "generatedAt": "2026-09-12T07:27:36.354Z",
+    "suiteHash": "31db9695b8a03843670809f12a13c9af6cb5b632147f05191e3441dacaece5a3",
     "source": {
-      "revision": "460398ac2787a912082fc2e86aaa9c78e70139fb",
+      "revision": "fd54445fec549f702a5c0dcee11c80ee1724bdbc",
       "files": {
-        "analysis.ts": "a57b2a0cff6e0710d2c3d3444b9c0f8c1a4b78dae51b66b2535c3c16204a3747",
+        "analysis.ts": "71a90b0cdf3ecd3f2142bb6c0206fbb960c7dc7b9f48b059b5d912592f7d4b53",
         "bidi.ts": "70f7f01dcd866076b68dbf2a3c398364aceaba2ccf98037e77e0b3b8bcfbeaa5",
         "entry-geometry.ts": "43ffacd71c3562283135590a06947eef4b2617cb3b6ba680c909dd5e2d2ba9a7",
         "generated/bidi-data.ts": "745211b804d907af78afb6c1ed87eff6d7454a5e85152a6129eb7b3bf0f6f262",
@@ -1901,7 +1913,7 @@
             "screenAvailWidth": 2560,
             "screenAvailHeight": 1315,
             "visibility": "visible",
-            "focused": false,
+            "focused": true,
             "language": "ur",
             "direction": "rtl"
           },
@@ -1923,7 +1935,13 @@
             "language": "ur",
             "direction": "rtl"
           },
-          "changes": []
+          "changes": [
+            {
+              "field": "focused",
+              "value": false,
+              "evidence": "snapshot"
+            }
+          ]
         },
         "context": {
           "kind": "installed",

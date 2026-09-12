@@ -10,6 +10,7 @@
 - Lines can now break after `?`, and after `!` or other exclamation punctuation such as `؟` and `۔`, before a following word, as browsers do, including after a space or zero-width space. Chrome and Safari still keep `!` with a following ASCII letter or digit; Firefox breaks there too (#228).
 - In Safari, a combining mark after a zero-width space at the start of the text, at the start of a rich-inline item, or after a line break now stays with that zero-width space (#228).
 - In Chrome, text prepared after changing `<html lang>` now uses the fonts for the new language, even when the font string is unchanged.
+- Figure spaces (U+2007) now keep adjacent text on the same line, like no-break spaces, as browsers do (#232).
 
 ## 0.0.9 - 2026-09-07
 

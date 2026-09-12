@@ -51,6 +51,23 @@ spaces. Earlier passes keep two table quirks unmodeled: `?` before `$`, `-` or
 `|`, and `!` before a non-letter symbol such as `©` or `¿`. The first-pass Arabic
 no-space rule also keeps U+061B with a following word.
 
+U+2007 FIGURE SPACE is UAX #14 class GL, like NBSP and NNBSP, even though it is
+a space separator. Chrome and Safari treat only SPACE, TAB and LF (Safari also
+LS/PS) as breakable spaces, and their pair tables stop at U+00FF, so U+2007 goes
+to ICU's GL rules. Firefox's line breaker splits words only at SPACE, TAB and
+CR, so U+2007, like the rest of U+2000..U+200B, stays inside the word it sends
+to ICU4X, which applies the same GL rules. Treating it as plain text let
+`Intl.Segmenter`'s word boundaries around it become break opportunities. As glue
+it inherits the NBSP glue model's remaining gaps, and Safari adds one that is
+specific to U+2007: Safari 26.5.2 keeps `-` with the following letter after a
+figure space (`foo\u2007-bar`, `x ab\u2007-cd`) but breaks after it following
+NBSP, while Pretext breaks after the hyphen in both, as Chromium does; main
+misses the same widths. Other gaps: some breaks around a dash, soft hyphen or
+CJK character next to glue differ from browsers, and a glued run that
+`Intl.Segmenter` does not mark word-like gets no emergency breaks: emoji and
+symbols, or digits where the segmenter marks them non-word, as Safari 26.5.2 and
+Playwright WebKit 2272 do.
+
 WebKit's pair scan never breaks before a basic combining mark. It reports the
 break between ZWSP and that mark (LB8) only from an ICU lookup that started
 before the ZWSP. Every text node starts its own scan without prior context, so a

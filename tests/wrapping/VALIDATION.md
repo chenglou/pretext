@@ -17,6 +17,42 @@ All accuracy, letter-spacing and corpus result payloads are unchanged; refreshed
 snapshots change only provenance and environment records. Runtime sources and
 the baseline pin are unchanged, so no runtime benchmark was needed.
 
+## Figure space glue
+
+This runtime change starts from the attached-generator-canvas branch head
+`6b8929d`. U+2007 FIGURE SPACE is UAX #14 class GL, like NBSP and NNBSP, and
+every engine keeps the text on both sides of it together. Pretext classified it
+as plain text, so `Intl.Segmenter`'s word boundaries around it became break
+opportunities. It now joins adjacent text as glue.
+
+The full shared inventory ran with that harness in installed Chrome
+153.0.8010.36, Safari 26.5.2 and Firefox 155.0.1, both directions, at DPR 2:
+656,407 browser/input observations, with pinned `14d92ca` as the reference.
+There are zero lost metrics, failed required checks, execution errors and new
+API/rich failures, and nine numeric profiles have no new failures. The candidate
+gains 190 metrics in Chrome LTR and 150 in RTL, 210 and 170 in Safari, and 210
+and 164 in Firefox. Every gain is a `hanging-FIGURE` case (40 per direction in
+Chrome, 44 in Safari and Firefox) or one of 12 LTR `unicode-space` cases, on
+`a\u2007\u2007b`, `a\u2007?b`, `foo\u2007bar`, `a\u2007\u2018b` and
+`\u05D0\u05D1((tail\u2007word`. For that last text at 24px Amiri and width 40,
+Chrome in both directions and Firefox RTL gain line count and height in four
+modes while the line text still differs. The bidi-opener carry owns that
+difference, so a later fix there could read as a loss against a pin that
+includes this change.
+
+Out of suite, headless Chromium 147 and WebKit 26.4 probes show the NBSP glue
+model's existing gaps next to U+2007: a dash or soft hyphen before glue, CJK
+beside glue, and glued emoji, symbol or non-word digit runs that get no emergency
+breaks. RESEARCH.md records them.
+
+The baseline advances to runtime commit `fd54445`, and the ordinary snapshots
+were regenerated against it: all six legs pass with zero new regressions,
+required failures or execution errors, and nine numeric profiles have no new
+failures. Snapshot results are unchanged; only provenance and environment
+records change. Suite hash
+`48fb18fba603a2ae669a5a18af334503009a3c0555c4a07201f05ee84cfae9d1`; rows are in
+`/private/tmp/pretext-eng-20260912/stage1b-full`.
+
 ## Attached generator canvas
 
 This test-only change starts from published main `20ad703`. The case generator

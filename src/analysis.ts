@@ -422,7 +422,7 @@ function classifySegmentBreakChar(ch: string, whiteSpace: WhiteSpaceMode): Segme
     if (ch === '\n') return 'hard-break'
   }
   if (ch === ' ') return 'space'
-  if (ch === '\u00A0' || ch === '\u202F' || ch === '\u2060' || ch === '\uFEFF') {
+  if (ch === '\u00A0' || ch === '\u2007' || ch === '\u202F' || ch === '\u2060' || ch === '\uFEFF') {
     return 'glue'
   }
   if (ch === '\u200B') return 'zero-width-break'
@@ -431,7 +431,7 @@ function classifySegmentBreakChar(ch: string, whiteSpace: WhiteSpaceMode): Segme
 }
 
 // All characters that classifySegmentBreakChar maps to a non-'text' kind.
-const breakCharRe = /[\x20\t\n\xA0\xAD\u200B\u202F\u2060\uFEFF]/
+const breakCharRe = /[\x20\t\n\xA0\xAD\u2007\u200B\u202F\u2060\uFEFF]/
 
 // The combining marks WebKit's pair scan classifies without ICU. That scan
 // never breaks before them (BreakablePositions.h, `after.type == kCM`).
