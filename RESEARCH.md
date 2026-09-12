@@ -199,6 +199,27 @@ word-initial extender is not a cluster start. Pretext does not model that
 granularity. Gluing them everywhere lost native successes, because Firefox also
 applies letter spacing and emergency breaks per cluster.
 
+The CSS segment break transformation differs per engine. In normal white space,
+Blink and Gecko remove a collapsible run containing a newline when a ZWSP
+immediately precedes or follows the run; WebKit turns the run into a space like
+any other. A word joiner between the newline and the ZWSP keeps the space.
+Each engine checks adjacency on its own collapsible run. Blink's run is SPACE,
+TAB, LF and CR, so a form feed between the newline and the ZWSP keeps the space.
+Gecko's run is SPACE, TAB and LF: a carriage return breaks adjacency, the run
+continues through soft hyphens and bidi controls without ending on one, and a
+last space before a combining mark stays outside the run and survives. Deciding
+adjacency on Pretext's own collapse set instead lost headless Chromium widths on
+form-feed shapes and predicted Firefox losses on CR, SHY and combining-mark
+shapes. Blink
+checks the previous character across element boundaries, while Gecko sees one
+text node at a time, so the rich-inline helper applies the rule only inside an
+item. Blink compiles out its East Asian width rule. Gecko also removes a newline
+between two full-, half- or wide-width non-Hangul characters, skipping default
+ignorables, and, for `ja` or `zh` content, next to such punctuation. Pretext does
+not model those Gecko rules: the ja/zh corpora contain such newlines, and their
+native paragraphs are observed from space-normalized text, so modeling them
+needs a Firefox-faithful corpus observation first.
+
 The shared complex walker fixed batch/streaming disagreement after a soft hyphen
 ([#222](https://github.com/chenglou/pretext/pull/222)). A later usable break could
 win in one path while another rewound to the hyphen. This needed one decision

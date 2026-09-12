@@ -2,11 +2,11 @@ import { generateCases } from './cases.ts'
 import { samePreparation, type ContractFailure, type Prediction } from './contracts.ts'
 import { assess, observeNative } from './observe.ts'
 import { createBrowserEnvironmentGuard } from '../../shared/browser-environment.ts'
-import type { BrowserCompletion, BrowserConfig, BrowserContext, BrowserFailure, BrowserProgress, BrowserReport, BrowserRows, CaseResult, FontFixture, WrappingCase } from './types.ts'
+import type { BrowserCompletion, BrowserConfig, BrowserContext, BrowserFailure, BrowserKind, BrowserProgress, BrowserReport, BrowserRows, CaseResult, FontFixture, WrappingCase } from './types.ts'
 
 type Variant = {
   name: string
-  prepare(input: WrappingCase): (input: WrappingCase) => Prediction
+  prepare(input: WrappingCase, browser: BrowserKind): (input: WrappingCase) => Prediction
   checkRichContracts(input: { font: string; letterSpacing: number }, includeStructure?: boolean): { failures: ContractFailure[]; passedContracts: string[] }
 }
 
@@ -142,14 +142,14 @@ export async function runBrowser(variants: Variant[]): Promise<void> {
       // every affected input, while other candidates still observe the group.
       const preparedVariants = variants.map<{ name: string; predict: (input: WrappingCase) => Prediction } | { name: string; error: string }>(variant => {
         try {
-          return { name: variant.name, predict: variant.prepare(first) }
+          return { name: variant.name, predict: variant.prepare(first, config.browser) }
         } catch (error) {
           return { name: variant.name, error: error instanceof Error ? error.stack ?? error.message : String(error) }
         }
       })
       for (; index < end; index++) {
         const input = inputs[index]!
-        const native = observeNative(input)
+        const native = observeNative(input, config.browser)
         const predictions: CaseResult['predictions'] = []
         for (const variant of preparedVariants) {
           if ('error' in variant) {

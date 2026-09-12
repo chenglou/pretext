@@ -1,4 +1,4 @@
-import type { WrappingCase } from './types.ts'
+import type { BrowserKind, WrappingCase } from './types.ts'
 
 type Cursor = { segmentIndex: number; graphemeIndex: number }
 type Range = { width: number; start: Cursor; end: Cursor }
@@ -43,10 +43,56 @@ export type Prediction =
   | ({ detail: 'height' } & LayoutResult)
   | ({ detail: 'full'; countedHeight: number; normalized: string; lines: PredictionLine[]; contracts: ContractFailure[]; passedContracts: string[]; diagnostics: ContractFailure[]; richLineCount?: number } & LayoutResult)
 
-export function normalizeSource(text: string, whiteSpace: WrappingCase['whiteSpace']): string {
-  return whiteSpace === 'pre-wrap'
-    ? text.replace(/\r\n/g, '\n').replace(/[\r\f]/g, '\n')
-    : text.replace(/[ \t\n\r\f]+/g, ' ').replace(/^ | $/g, '')
+// The source the observed engine lays out. In normal white space, Blink and
+// Gecko delete a collapsible run containing LF when a ZWSP immediately precedes
+// or follows the run (CSS segment break transformation); what the deletion
+// leaves still collapses to SPACE. WebKit, and a runtime with no observed
+// engine, delete nothing. Gecko's East Asian segment break rules are not part of
+// this form.
+export function normalizeSource(text: string, whiteSpace: WrappingCase['whiteSpace'], browser: BrowserKind | null): string {
+  if (whiteSpace === 'pre-wrap') return text.replace(/\r\n/g, '\n').replace(/[\r\f]/g, '\n')
+  const removed = segmentBreakRemovals(text, browser)
+  let kept = text
+  if (removed !== null) {
+    kept = ''
+    for (let index = 0; index < text.length; index++) if (!removed[index]) kept += text[index]
+  }
+  return kept.replace(/[ \t\n\r\f]+/g, ' ').replace(/^ | $/g, '')
+}
+
+// Raw offsets deleted by the segment break transformation, or null. Adjacency
+// is decided on each engine's own run. Blink: SPACE, TAB, LF and CR
+// (Character::IsCollapsibleSpace). Gecko: SPACE, TAB and LF, continuing through
+// SHY and bidi controls without ending on one, less a last SPACE before bidi
+// controls and a UTF-16 cluster extender other than ZWJ/ZWNJ
+// (nsTextFrameUtils.cpp TransformText).
+export function segmentBreakRemovals(text: string, browser: BrowserKind | null): boolean[] | null {
+  if ((browser !== 'chrome' && browser !== 'firefox') || !text.includes('\u200B')) return null
+  const space = browser === 'chrome' ? /[ \t\n\r]/ : /[ \t\n]/
+  const bidiControl = /[\u061C\u200E\u200F\u202A-\u202E\u2066-\u2069]/
+  let removed: boolean[] | null = null
+  for (let index = 0; index < text.length;) {
+    if (!space.test(text[index]!)) {
+      index++
+      continue
+    }
+    const start = index
+    let end = index + 1
+    for (; index < text.length; index++) {
+      const char = text[index]!
+      if (space.test(char)) end = index + 1
+      else if (browser === 'chrome' || (char !== '\u00AD' && !bidiControl.test(char))) break
+    }
+    if (browser === 'firefox' && text[end - 1] === ' ') {
+      let tail = end
+      while (tail < text.length && bidiControl.test(text[tail]!)) tail++
+      if (tail < text.length && /^[\p{M}\uFF9E\uFF9F]$/u.test(text[tail]!)) end--
+    }
+    if (!text.slice(start, end).includes('\n') || (text[start - 1] !== '\u200B' && text[end] !== '\u200B')) continue
+    removed ??= Array.from({ length: text.length }, () => false)
+    for (let member = start; member < end; member++) if (space.test(text[member]!)) removed[member] = true
+  }
+  return removed
 }
 
 function copy<T>(value: T): T {
@@ -155,11 +201,11 @@ export function createVariant<Prepared, WithSegments extends Prepared & { segmen
   richApi?: PublicRichApi<RichPrepared>,
 ): {
   name: string
-  predict: (input: WrappingCase) => Prediction
-  prepare: (input: WrappingCase) => (input: WrappingCase) => Prediction
+  predict: (input: WrappingCase, browser?: BrowserKind | null) => Prediction
+  prepare: (input: WrappingCase, browser?: BrowserKind | null) => (input: WrappingCase) => Prediction
   checkRichContracts: (input: { font: string; letterSpacing: number }, includeStructure?: boolean) => { failures: ContractFailure[]; passedContracts: string[] }
 } {
-  function prepare(input: WrappingCase): (input: WrappingCase) => Prediction {
+  function prepare(input: WrappingCase, browser: BrowserKind | null = null): (input: WrappingCase) => Prediction {
     const locale = input.locale === '' ? undefined : input.locale
     api.setLocale(locale)
     const options = { whiteSpace: input.whiteSpace, wordBreak: input.wordBreak, letterSpacing: input.letterSpacing }
@@ -232,7 +278,7 @@ export function createVariant<Prepared, WithSegments extends Prepared & { segmen
         throw new Error('Streaming did not terminate')
       }
 
-      check(normalized === normalizeSource(input.text, input.whiteSpace), 'source-normalization', 'Prepared segments lose or change normalized source text')
+      check(normalized === normalizeSource(input.text, input.whiteSpace, browser), 'source-normalization', 'Prepared segments lose or change normalized source text')
       check(batch.lineCount === batch.lines.length && batch.height === batch.lineCount * input.lineHeight, 'batch-result', 'Batch line count or height disagrees with its lines')
       check(counted.lineCount === batch.lineCount && counted.height === batch.height, 'opaque-rich-agreement', 'prepare/layout and prepareWithSegments/layoutWithLines disagree')
       run('source-coverage', check => checkSource(batch.lines, 'source-coverage', 'source-conservation', check))
@@ -414,5 +460,5 @@ export function createVariant<Prepared, WithSegments extends Prepared & { segmen
     return result()
   }
 
-  return { name, prepare, predict: input => prepare(input)(input), checkRichContracts }
+  return { name, prepare, predict: (input, browser = null) => prepare(input, browser)(input), checkRichContracts }
 }

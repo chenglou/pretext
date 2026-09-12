@@ -11,7 +11,8 @@ import {
   type LineBreakCursor,
   stepPreparedLineGeometry,
 } from './line-break.js'
-import { getFontMeasurementState, getSegmentMetrics } from './measurement.js'
+import { removeSegmentBreaksNextToZeroWidthSpace } from './analysis.js'
+import { getEngineProfile, getFontMeasurementState, getSegmentMetrics } from './measurement.js'
 
 // Helper for rich-text inline flow under `white-space: normal`.
 // It keeps the core layout API low-level while taking over the boring shared
@@ -142,14 +143,18 @@ export function prepareRichInline(items: RichInlineItem[]): PreparedRichInline {
   // ordinary break opportunity must survive independently of that number.
   let pendingGapWidth: number | null = null
   let breakAfterPreviousItem = false
+  const profile = getEngineProfile()
 
   for (let index = 0; index < items.length; index++) {
     const item = items[index]!
     const letterSpacing = item.letterSpacing ?? 0
+    // The item's own segment break transformation can remove a boundary run.
+    // Context from a neighboring item is not modeled.
+    const text = removeSegmentBreaksNextToZeroWidthSpace(item.text, profile)
     let start = 0
-    while (start < item.text.length && isCollapsibleBoundaryWhitespace(item.text.charCodeAt(start))) start++
+    while (start < text.length && isCollapsibleBoundaryWhitespace(text.charCodeAt(start))) start++
 
-    if (start === item.text.length) {
+    if (start === text.length) {
       if (start > 0 && pendingGapWidth === null) {
         pendingGapWidth = getCollapsedSpaceWidth(item.font, letterSpacing)
       }
@@ -158,10 +163,10 @@ export function prepareRichInline(items: RichInlineItem[]): PreparedRichInline {
 
     // Scan from the ends once. A trailing-whitespace regex retries every
     // position in a long internal space run when later content prevents a match.
-    let end = item.text.length
-    while (end > start && isCollapsibleBoundaryWhitespace(item.text.charCodeAt(end - 1))) end--
+    let end = text.length
+    while (end > start && isCollapsibleBoundaryWhitespace(text.charCodeAt(end - 1))) end--
     const hasLeadingWhitespace = start > 0
-    const hasTrailingWhitespace = end < item.text.length
+    const hasTrailingWhitespace = end < text.length
 
     const gapBefore = pendingGapWidth ?? (
       hasLeadingWhitespace ? getCollapsedSpaceWidth(item.font, letterSpacing) : 0

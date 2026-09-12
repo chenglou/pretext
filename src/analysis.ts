@@ -37,15 +37,85 @@ export type AnalysisProfile = {
   breakBeforeConditionalJapaneseStarter: boolean
   wordInitialHyphenLetters: 'none' | 'alphabetic' | 'alphabetic-and-hebrew'
   breakHyphenAfterCollapsedTab: boolean
+  segmentBreakRemovalRun: SegmentBreakRemovalRun
 }
+
+// The collapsible run that a ZWSP removes under the CSS segment break
+// transformation, per engine. WebKit never removes one.
+export type SegmentBreakRemovalRun = 'none' | 'blink' | 'gecko'
 
 const collapsibleWhitespaceRunRe = /[ \t\n\r\f]+/g
 const needsWhitespaceNormalizationRe = /[\t\n\r\f]| {2,}|^ | $/
 
-export function normalizeWhitespaceNormal(text: string): string {
+function isSegmentBreakRunSpace(code: number, run: SegmentBreakRemovalRun): boolean {
+  return code === 0x20 || code === 0x09 || code === 0x0A || (code === 0x0D && run === 'blink')
+}
+
+function isGeckoBidiControl(code: number): boolean {
+  return code === 0x061C || code === 0x200E || code === 0x200F ||
+    (code >= 0x202A && code <= 0x202E) || (code >= 0x2066 && code <= 0x2069)
+}
+
+// A character a run continues through but never starts or ends on.
+function isSegmentBreakRunDiscardable(code: number, run: SegmentBreakRemovalRun): boolean {
+  return run === 'gecko' && (code === 0x00AD || isGeckoBidiControl(code))
+}
+
+// Gecko's combining sequence tail: bidi controls, then a cluster extender
+// other than ZWJ/ZWNJ, read as UTF-16 units.
+function startsGeckoSpaceCombiningSequenceTail(text: string, index: number): boolean {
+  for (; index < text.length; index++) {
+    const code = text.charCodeAt(index)
+    if (isGeckoBidiControl(code)) continue
+    return code === 0xFF9E || code === 0xFF9F || (code >= 0x0300 && combiningMarkRe.test(text[index]!))
+  }
+  return false
+}
+
+// CSS segment break transformation in normal white space. Blink and Gecko
+// delete a collapsible run containing LF when a ZWSP immediately precedes or
+// follows the run. Each engine collects its own run:
+// - Blink: SPACE, TAB, LF and CR.
+// - Gecko: SPACE, TAB and LF, continuing through SHY and bidi controls without
+//   ending on one, and leaving out a last SPACE before a combining sequence tail.
+// Characters outside the run, such as FF, keep the ordinary collapse.
+export function removeSegmentBreaksNextToZeroWidthSpace(text: string, profile: AnalysisProfile): string {
+  const run = profile.segmentBreakRemovalRun
+  if (run === 'none' || !text.includes('\u200B')) return text
+  let result = ''
+  let copied = 0
+  // Only a run containing LF can be removed. Expand each LF to its run once;
+  // the next search starts where this run's scan stopped.
+  for (let newline = text.indexOf('\n'); newline !== -1;) {
+    let start = newline
+    for (let index = newline - 1; index >= 0; index--) {
+      const code = text.charCodeAt(index)
+      if (isSegmentBreakRunSpace(code, run)) start = index
+      else if (!isSegmentBreakRunDiscardable(code, run)) break
+    }
+    let end = newline + 1
+    let index = end
+    for (; index < text.length; index++) {
+      const code = text.charCodeAt(index)
+      if (isSegmentBreakRunSpace(code, run)) end = index + 1
+      else if (!isSegmentBreakRunDiscardable(code, run)) break
+    }
+    newline = text.indexOf('\n', index)
+    if (run === 'gecko' && text.charCodeAt(end - 1) === 0x20 && startsGeckoSpaceCombiningSequenceTail(text, end)) end--
+    if (text.charCodeAt(start - 1) !== 0x200B && text.charCodeAt(end) !== 0x200B) continue
+    result += text.slice(copied, start)
+    for (let member = start; member < end; member++) {
+      if (!isSegmentBreakRunSpace(text.charCodeAt(member), run)) result += text[member]
+    }
+    copied = end
+  }
+  return copied === 0 ? text : result + text.slice(copied)
+}
+
+export function normalizeWhitespaceNormal(text: string, profile: AnalysisProfile): string {
   if (!needsWhitespaceNormalizationRe.test(text)) return text
 
-  let normalized = text.replace(collapsibleWhitespaceRunRe, ' ')
+  let normalized = removeSegmentBreaksNextToZeroWidthSpace(text, profile).replace(collapsibleWhitespaceRunRe, ' ')
   if (normalized.charCodeAt(0) === 0x20) {
     normalized = normalized.slice(1)
   }
@@ -1890,7 +1960,7 @@ export function analyzeText(
 ): TextAnalysis {
   const normalized = whiteSpace === 'pre-wrap'
     ? normalizeWhitespacePreWrap(text)
-    : normalizeWhitespaceNormal(text)
+    : normalizeWhitespaceNormal(text, profile)
   if (normalized.length === 0) {
     return {
       source: text,

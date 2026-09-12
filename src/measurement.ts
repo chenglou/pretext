@@ -1,4 +1,4 @@
-import { getSharedGraphemeSegmenter } from './analysis.js'
+import { getSharedGraphemeSegmenter, type SegmentBreakRemovalRun } from './analysis.js'
 import type { SegmentEntryGeometry } from './entry-geometry.js'
 
 type EntryMeasurement = {
@@ -56,6 +56,9 @@ export type EngineProfile = {
   // Canvas splits words at spaces and shows none of it; Gecko shapes words
   // without their spaces.
   measureTextWithFollowingSpace: boolean
+  // Blink and Gecko remove a collapsible newline run next to a ZWSP, each
+  // through its own run. WebKit turns it into a space.
+  segmentBreakRemovalRun: SegmentBreakRemovalRun
 }
 
 export type BreakableFitMode = 'sum-graphemes' | 'segment-prefixes' | 'pair-context'
@@ -233,6 +236,7 @@ export function getEngineProfile(): EngineProfile {
     breakHyphenAfterCollapsedTab: engine === 'webkit',
     preferPrefixWidthsForBreakableRuns: engine === 'webkit',
     measureTextWithFollowingSpace: engine === 'webkit',
+    segmentBreakRemovalRun: engine === 'blink' ? 'blink' : engine === 'gecko' ? 'gecko' : 'none',
   }
   return cachedEngineProfile
 }

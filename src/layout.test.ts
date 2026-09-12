@@ -558,6 +558,7 @@ describe('boundary-policy regressions', () => {
       breakKeepAllAfterNonstarterLetters: true, keepZeroWidthSpaceMarkAtScanStart: false,
       breakBeforeConditionalJapaneseStarter: false,
       wordInitialHyphenLetters: 'none' as const, breakHyphenAfterCollapsedTab: false,
+      segmentBreakRemovalRun: 'none' as const,
     }
     for (const text of ['####((aabb', '""""[[aabb', '−+x«value»!']) {
       expect(analyzeText(text, profile).texts).toEqual([text])
@@ -576,6 +577,7 @@ describe('boundary-policy regressions', () => {
       breakKeepAllAfterNonstarterLetters: false, keepZeroWidthSpaceMarkAtScanStart: false,
       breakBeforeConditionalJapaneseStarter: false,
       wordInitialHyphenLetters: 'alphabetic' as const, breakHyphenAfterCollapsedTab: false,
+      segmentBreakRemovalRun: 'none' as const,
     }
     // The ASCII pair tables keep '!' with a following ASCII letter, and break
     // '?' before '-' and '|'. UAX #14 otherwise separates EX from any
@@ -613,6 +615,7 @@ describe('boundary-policy regressions', () => {
       breakKeepAllAfterNonstarterLetters: false, keepZeroWidthSpaceMarkAtScanStart: false,
       breakBeforeConditionalJapaneseStarter: false,
       wordInitialHyphenLetters: 'alphabetic' as const, breakHyphenAfterCollapsedTab: false,
+      segmentBreakRemovalRun: 'none' as const,
     }
     // UAX #14 LB8a and LB20a. A ZWJ after a space belongs to that space's
     // grapheme cluster and keeps its existing boundaries. The pair tables still
@@ -689,6 +692,7 @@ describe('boundary-policy regressions', () => {
       breakKeepAllAfterNonstarterLetters: false, keepZeroWidthSpaceMarkAtScanStart: false,
       breakBeforeConditionalJapaneseStarter: false,
       wordInitialHyphenLetters: 'alphabetic' as const, breakHyphenAfterCollapsedTab: false,
+      segmentBreakRemovalRun: 'none' as const,
     }
     const Segmenter = Intl.Segmenter
     let segmentedUnits = 0
@@ -724,6 +728,7 @@ describe('boundary-policy regressions', () => {
       breakKeepAllAfterNonstarterLetters: false, keepZeroWidthSpaceMarkAtScanStart: true,
       breakBeforeConditionalJapaneseStarter: false,
       wordInitialHyphenLetters: 'alphabetic-and-hebrew' as const, breakHyphenAfterCollapsedTab: true,
+      segmentBreakRemovalRun: 'none' as const,
     }
     expect(analyzeText('\u200B\u0301ab', profile).texts).toEqual(['\u200B\u0301ab'])
     expect(analyzeText('x\n\u200B\u0301ab', profile, 'pre-wrap').texts).toEqual(['x', '\n', '\u200B\u0301ab'])
@@ -751,6 +756,57 @@ describe('boundary-policy regressions', () => {
       }
     } finally {
       profile.keepZeroWidthSpaceMarkAtScanStart = previous
+    }
+  })
+
+  test('Chrome and Firefox remove a newline run next to a zero-width space through their own runs', async () => {
+    const { getEngineProfile } = await import('./measurement.ts')
+    const profile = getEngineProfile()
+    const previous = profile.segmentBreakRemovalRun
+    try {
+      for (const [browser, run, column] of [['safari', 'none', 1], ['chrome', 'blink', 2], ['firefox', 'gecko', 3]] as const) {
+        profile.segmentBreakRemovalRun = run
+        // Source, then the normalized text in Safari, Chrome and Firefox.
+        for (const shape of [
+          ['ab\n\u200Bcd', 'ab \u200Bcd', 'ab\u200Bcd', 'ab\u200Bcd'],
+          ['ab\u200B \n\tcd', 'ab\u200B cd', 'ab\u200Bcd', 'ab\u200Bcd'],
+          ['\u200B\nab', '\u200B ab', '\u200Bab', '\u200Bab'],
+          // The ZWSP must touch the run, and the run must contain a newline.
+          ['ab\n\u2060\u200Bcd', 'ab \u2060\u200Bcd', 'ab \u2060\u200Bcd', 'ab \u2060\u200Bcd'],
+          ['ab \u200Bcd', 'ab \u200Bcd', 'ab \u200Bcd', 'ab \u200Bcd'],
+          // CR joins Blink's run only. FF joins neither run and still collapses.
+          ['ab\u200B\r\ncd', 'ab\u200B cd', 'ab\u200Bcd', 'ab\u200B cd'],
+          ['ab\u200B\f\ncd', 'ab\u200B cd', 'ab\u200B cd', 'ab\u200B cd'],
+          ['ab\u200B\n\fcd', 'ab\u200B cd', 'ab\u200B cd', 'ab\u200B cd'],
+          // Gecko's run continues through SHY without ending on one, and leaves
+          // out a last SPACE before a combining mark.
+          ['ab\u200B\n\u00AD\ncd', 'ab\u200B \u00AD cd', 'ab\u200B\u00AD cd', 'ab\u200B\u00ADcd'],
+          ['ab\n\u00AD\u200Bcd', 'ab \u00AD\u200Bcd', 'ab \u00AD\u200Bcd', 'ab \u00AD\u200Bcd'],
+          ['ab\u200B\n \u0301cd', 'ab\u200B \u0301cd', 'ab\u200B\u0301cd', 'ab\u200B \u0301cd'],
+        ] as const) {
+          expect(prepareWithSegments(shape[0], FONT).segments.join('')).toBe(shape[column])
+          // The documented source contract of the observed browser agrees.
+          const result = variant.predict({
+            id: 'unit-segment-break-removal', family: 'api', origins: ['maintained'], scope: 'supported',
+            text: shape[0], whiteSpace: 'normal', font: FONT, width: 20,
+            lineHeight: LINE_HEIGHT, wordBreak: 'normal', letterSpacing: 0, direction: 'ltr',
+          }, browser)
+          if (result.detail !== 'full') throw new Error('Expected full public contract checks')
+          expect(result.contracts).toEqual([])
+        }
+        expect(prepareWithSegments('ab\n\u200Bcd', FONT, { whiteSpace: 'pre-wrap' }).segments.join('')).toBe('ab\n\u200Bcd')
+        // A rich item's own boundary newline next to its ZWSP leaves no gap.
+        for (const [text, gaps] of [
+          ['ab\u200B\n', [false, true, false, false]],
+          ['ab\u200B\n\u00AD\n', [false, true, true, false]],
+        ] as const) {
+          const rich = prepareRichInline([{ text, font: FONT }, { text: 'cd', font: FONT }])
+          const line = layoutNextRichInlineLineRange(rich, Number.POSITIVE_INFINITY)
+          expect(line?.fragments.map(fragment => fragment.gapBefore > 0)).toEqual([false, gaps[column]])
+        }
+      }
+    } finally {
+      profile.segmentBreakRemovalRun = previous
     }
   })
 

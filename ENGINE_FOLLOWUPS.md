@@ -53,7 +53,7 @@ Open engine work deferred from the #210 series: decisions for the maintainer, kn
 - Add a README caveat that Pretext assumes `hyphens: manual`.
 - Give zero-advance characters (word joiners, glued ZWSP, lone marks) no letter-spacing gap, per engine: Blink per shaping cluster, WebKit only on glyphs with an advance. Several planned rules lose rows until this exists.
 - A leading ZWNJ, joiner, bidi mark or bare combining mark before a long word over-counts lines. A paragraph of only soft hyphens has 1 line in Chrome and Safari but none in Pretext.
-- A ZWSP right after a forced break inside a word gets its own line in all three browsers. Copying that loses hundreds of rows until joined Arabic widths, the U+3000 hang, letter spacing on invisibles and newline removal next to ZWSP land.
+- A ZWSP right after a forced break inside a word gets its own line in all three browsers. Copying that loses hundreds of rows until joined Arabic widths, the U+3000 hang and letter spacing on invisibles land.
 - If demand for Persian appears, observe how browsers render soft hyphens typed in place of ZWNJ before weighing any Arabic-script soft-hyphen policy.
 - Firefox and Safari add a line for CRLF, or for a lone CR, at very narrow widths. Trace their line builders before modeling it.
 - Enable the NEL rule (no break before, break after) for Safari only, and model that WebKit gives NEL no letter spacing.

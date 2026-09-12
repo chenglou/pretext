@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import type { Prediction } from './contracts.ts'
+import { normalizeSource, type Prediction } from './contracts.ts'
 import { assess } from './observe.ts'
 import type { NativeExtraction, NativeObservation, NativePoint, WrappingCase } from './types.ts'
 
@@ -44,6 +44,45 @@ test('rich inline height is independently observed and cannot inherit a flat or 
   expect(assess(input, oracle, flat, 'safari').richHeight.status).toBe('unobserved')
   expect(assess(input, native([], 2), { ...flat, richLineCount: 3 }, 'safari').richHeight.status).toBe('unobserved')
   expect(assess(base, oracle, flat, 'safari').richHeight.status).toBe('not-applicable')
+})
+
+test('segment breaks next to ZWSP follow the observed engine', () => {
+  const input: WrappingCase = { ...base, text: 'a\u200B\nword' }
+  const oracle = native([point('a', 0, 0), point('w', 3, 1), point('o', 4, 1), point('r', 5, 1), point('d', 6, 1)], 2)
+  const removed = prediction('a\u200Bword', [['a\u200B', 0, 2], ['word', 2, 6]])
+  const collapsed = prediction('a\u200B word', [['a\u200B ', 0, 3], ['word', 3, 7]])
+  for (const browser of ['chrome', 'firefox'] as const) {
+    expect(assess(input, oracle, removed, browser).source.status).toBe('pass')
+    expect(assess(input, oracle, collapsed, browser).source.status).toBe('fail')
+  }
+  expect(assess(input, oracle, collapsed, 'safari').source.status).toBe('pass')
+  expect(assess(input, oracle, removed, 'safari').source.status).toBe('fail')
+  expect(normalizeSource('ab \n \u200Bcd', 'normal', 'chrome')).toBe('ab\u200Bcd')
+  expect(normalizeSource('\u200B\nab', 'normal', 'firefox')).toBe('\u200Bab')
+  expect(normalizeSource('ab\n\u2060\u200Bcd', 'normal', 'chrome')).toBe('ab \u2060\u200Bcd')
+  expect(normalizeSource('ab \u200Bcd', 'normal', 'chrome')).toBe('ab \u200Bcd')
+  expect(normalizeSource('ab\n\u200Bcd', 'normal', 'safari')).toBe('ab \u200Bcd')
+  expect(normalizeSource('ab\n\u200Bcd', 'pre-wrap', 'chrome')).toBe('ab\n\u200Bcd')
+  // Each engine decides adjacency on its own run: CR joins Chrome's, SHY joins
+  // Firefox's inside the run, FF joins neither, and Firefox leaves out a last
+  // SPACE before a combining mark.
+  for (const [text, chrome, firefox] of [
+    ['ab\u200B\r\ncd', 'ab\u200Bcd', 'ab\u200B cd'],
+    ['ab\r\n\u200Bcd', 'ab\u200Bcd', 'ab \u200Bcd'],
+    ['ab\u200B\f\ncd', 'ab\u200B cd', 'ab\u200B cd'],
+    ['ab\u200B\n\fcd', 'ab\u200B cd', 'ab\u200B cd'],
+    ['ab\u200B\n\u00AD\ncd', 'ab\u200B\u00AD cd', 'ab\u200B\u00ADcd'],
+    ['ab\n\u00AD\u200Bcd', 'ab \u00AD\u200Bcd', 'ab \u00AD\u200Bcd'],
+    ['ab\u200B\n \u0301cd', 'ab\u200B\u0301cd', 'ab\u200B \u0301cd'],
+  ] as const) {
+    expect(normalizeSource(text, 'normal', 'chrome')).toBe(chrome)
+    expect(normalizeSource(text, 'normal', 'firefox')).toBe(firefox)
+  }
+  // White space the engine's run leaves still owns one normalized SPACE.
+  const formFeed: WrappingCase = { ...base, text: 'a\u200B\n\fword' }
+  const formFeedOracle = native([point('a', 0, 0), point('w', 4, 1), point('o', 5, 1), point('r', 6, 1), point('d', 7, 1)], 2)
+  expect(assess(formFeed, formFeedOracle, collapsed, 'chrome').source.status).toBe('pass')
+  expect(assess(formFeed, formFeedOracle, removed, 'chrome').source.status).toBe('fail')
 })
 
 test('fractional CSS line boxes use an independently observed native advance', () => {

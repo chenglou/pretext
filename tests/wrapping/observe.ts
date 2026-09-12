@@ -1,4 +1,4 @@
-import { normalizeSource, type Prediction, type PredictionLine } from './contracts.ts'
+import { normalizeSource, segmentBreakRemovals, type Prediction, type PredictionLine } from './contracts.ts'
 import type {
   Assessment, BrowserKind, MetricResult, NativeExtraction, NativeObservation, NativePoint, NativeRect, WrappingCase,
 } from './types.ts'
@@ -15,8 +15,8 @@ const graphemeSegmenter = new Intl.Segmenter(undefined, { granularity: 'grapheme
 // boundaries are an intervention, so keep this observation separate from the
 // unmodified paragraph's height and scalar rectangles. Units come from source
 // graphemes, never a candidate's private prepared representation.
-function observeLineExtraction(element: HTMLElement, input: WrappingCase): Omit<NativeExtraction, 'usedLineHeight'> {
-  const text = normalizeSource(input.text, input.whiteSpace)
+function observeLineExtraction(element: HTMLElement, input: WrappingCase, browser: BrowserKind): Omit<NativeExtraction, 'usedLineHeight'> {
+  const text = normalizeSource(input.text, input.whiteSpace, browser)
   const sourceUnits = Array.from(graphemeSegmenter.segment(text))
   element.textContent = text
   const method = input.lineMethod
@@ -73,8 +73,8 @@ function observeLineExtraction(element: HTMLElement, input: WrappingCase): Omit<
 
 // One unmodified text node is the oracle. Wrapping every letter in a span
 // changes contextual shaping and dictionary breaks in the text under test.
-export function observeNative(input: WrappingCase): NativeObservation {
-  const text = input.nativeSource === 'normalized' ? normalizeSource(input.text, input.whiteSpace) : input.text
+export function observeNative(input: WrappingCase, browser: BrowserKind): NativeObservation {
+  const text = input.nativeSource === 'normalized' ? normalizeSource(input.text, input.whiteSpace, browser) : input.text
   const element = document.createElement('div')
   Object.assign(element.style, {
     position: 'absolute', left: '0', top: '0', margin: '0', padding: '0', border: '0',
@@ -120,7 +120,7 @@ export function observeNative(input: WrappingCase): NativeObservation {
       }))
       richHeight = element.getBoundingClientRect().height
     }
-    const extraction = input.lineMethod === undefined ? undefined : observeLineExtraction(element, input)
+    const extraction = input.lineMethod === undefined ? undefined : observeLineExtraction(element, input, browser)
     let usedLineHeight = input.lineHeight
     if (!Number.isInteger(input.lineHeight)) {
       // Safari can use integral line boxes despite retaining a fractional
@@ -146,15 +146,18 @@ type SourceSpan = { rawStart: number; rawEnd: number; start: number; end: number
 
 // Map the documented whitespace transformation, not a candidate's private
 // segmentation. Every observed raw scalar retains its normalized source view.
-function sourceSpans(input: WrappingCase): SourceSpan[] {
+function sourceSpans(input: WrappingCase, browser: BrowserKind): SourceSpan[] {
   const spans: SourceSpan[] = []
+  const removed = input.whiteSpace === 'normal' ? segmentBreakRemovals(input.text, browser) : null
   let normalizedOffset = 0
   for (let rawStart = 0; rawStart < input.text.length;) {
     const char = input.text[rawStart]!
     let rawEnd = rawStart + 1
     if (input.whiteSpace === 'normal' && ASCII_SPACE.test(char)) {
-      for (; rawEnd < input.text.length && ASCII_SPACE.test(input.text[rawEnd]!); rawEnd++) { /* whitespace run */ }
-      if (rawStart !== 0 && rawEnd !== input.text.length) {
+      let survives = removed?.[rawStart] !== true
+      for (; rawEnd < input.text.length && ASCII_SPACE.test(input.text[rawEnd]!); rawEnd++) survives ||= removed?.[rawEnd] !== true
+      // A run whose white space the engine deletes has no normalized offset.
+      if (rawStart !== 0 && rawEnd !== input.text.length && survives) {
         spans.push({ rawStart, rawEnd, start: normalizedOffset, end: normalizedOffset + 1 })
         normalizedOffset++
       }
@@ -466,7 +469,7 @@ export function assess(
     const extraction = native.extraction
     if (extraction === undefined) {
       lineCount = breaks = { status: 'unobserved', reason: `The selected ${input.lineMethod} extraction has no stage geometry. Legacy source groups cannot establish its height or source ownership.` }
-    } else if (extraction.method !== input.lineMethod || extraction.source !== normalizeSource(input.text, input.whiteSpace)) {
+    } else if (extraction.method !== input.lineMethod || extraction.source !== normalizeSource(input.text, input.whiteSpace, browser)) {
       lineCount = breaks = { status: 'unobserved', reason: 'The recorded extraction method or source differs from the selected observation protocol.' }
     } else {
       const count = extractionLineCount(extraction)
@@ -492,9 +495,9 @@ export function assess(
     const unobserved: MetricResult = { status: 'unobserved', reason: 'This maintained case is scheduled for height observation only.' }
     return { height, lineCount, breaks, source: unobserved, whitespace: unobserved, widths: unobserved, hyphen: input.text.includes('\u00ad') ? unobserved : { status: 'not-applicable', reason: 'No soft hyphen.' }, api: unobserved, richHeight }
   }
-  const observedInput = input.nativeSource === 'normalized' ? { ...input, text: normalizeSource(input.text, input.whiteSpace) } : input
-  const spans = sourceSpans(observedInput)
-  const normalizationCorrect = normalizeSource(input.text, input.whiteSpace) === prediction.normalized
+  const observedInput = input.nativeSource === 'normalized' ? { ...input, text: normalizeSource(input.text, input.whiteSpace, browser) } : input
+  const spans = sourceSpans(observedInput, browser)
+  const normalizationCorrect = normalizeSource(input.text, input.whiteSpace, browser) === prediction.normalized
   const source = normalizationCorrect
     ? compareSource(observedInput, native, prediction.lines, spans, false)
     : { status: 'fail' as const, detail: 'Prepared segments do not preserve the documented normalized source.' }

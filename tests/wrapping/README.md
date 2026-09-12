@@ -129,6 +129,20 @@ Canonical accuracy and corpus cases retain their height-only scope. Corpus
 native paragraphs use documented whitespace normalization while the candidate
 still receives the original source.
 
+Documented normal-mode normalization follows the observed browser's segment
+break transformation. In Chrome and Firefox, a collapsible run containing LF is
+removed when a ZWSP immediately precedes or follows it; in Safari it becomes
+SPACE. Adjacency uses the engine's own run: Chrome's holds SPACE, TAB, LF and CR;
+Firefox's holds SPACE, TAB and LF, continues through SHY and bidi controls, and
+leaves out a last SPACE before a combining mark. Characters outside that run,
+such as FF, still collapse like SPACE. The source contract, source placement and
+normalized native paragraphs all use that form. Normalized native text renders
+like its raw source when the run holds only SPACE, TAB and LF; the documented
+form still approximates CR and FF as SPACE, and does not model Firefox
+collapsing across SHY or bidi controls when no ZWSP removes the run. Firefox's
+East Asian segment break rules are not part of the documented form, so Firefox
+ja/zh corpus paragraphs are observed without them.
+
 Twelve explicit ZWSP item cases also measure a native paragraph made from the
 original same-font inline spans. `richHeight` compares that height with the rich
 public walk, independently of the flat paragraph and API consistency. This small
