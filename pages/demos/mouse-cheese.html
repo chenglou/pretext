@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mouse &amp; Cheese — Pretext Demo</title>
+<style>
+  * { box-sizing: border-box; }
+  :root {
+    color-scheme: light;
+    --page: #f5f1ea;
+    --panel: #fffdf8;
+    --ink: #201b18;
+    --muted: #6d645d;
+    --rule: #d8cec3;
+    --accent: #955f3b;
+    --accent-soft: #f0e4da;
+    --cheese-size: 140px;
+  }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background: radial-gradient(circle at top, #fff8f1 0, var(--page) 42%, #efe8de 100%);
+    background-color: #efe8de;
+    background-repeat: no-repeat;
+    color: var(--ink);
+    font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  }
+  .page {
+    width: min(780px, calc(100vw - 32px));
+    margin: 0 auto;
+    padding: 32px 0 48px;
+  }
+  .eyebrow {
+    margin: 0 0 8px;
+    font: 12px/1.2 "SF Mono", ui-monospace, monospace;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--accent);
+  }
+  h1 {
+    margin: 0;
+    font: 700 32px/1.08 Georgia, "Times New Roman", serif;
+  }
+  .intro {
+    margin: 10px 0 0;
+    max-width: 60ch;
+    line-height: 1.5;
+    color: var(--muted);
+  }
+  .controls {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin: 24px 0 16px;
+    padding: 14px 18px;
+    border: 1px solid var(--rule);
+    border-radius: 18px;
+    background: color-mix(in srgb, var(--panel) 92%, white 8%);
+    box-shadow: 0 18px 40px rgb(54 40 23 / 0.08);
+    font: 12px/1.2 "SF Mono", ui-monospace, monospace;
+    color: var(--muted);
+  }
+  .controls input[type=range] {
+    flex: 1;
+    accent-color: var(--accent);
+  }
+  .controls .val {
+    min-width: 52px;
+    text-align: right;
+    color: var(--ink);
+  }
+  .panel {
+    position: relative;
+    padding: 28px 28px 28px;
+    border: 1px solid var(--rule);
+    border-radius: 20px;
+    background: color-mix(in srgb, var(--panel) 92%, white 8%);
+    box-shadow: 0 18px 40px rgb(54 40 23 / 0.08);
+    min-height: 380px;
+    overflow: hidden;
+  }
+  /* The text layer: all story lines rendered here by JS */
+  .text-layer {
+    position: relative;
+    font: 16px/26px "Helvetica Neue", Helvetica, Arial, sans-serif;
+    color: var(--ink);
+  }
+  /* Cheese block: absolute, top-right of the panel */
+  .cheese-wrap {
+    position: absolute;
+    top: 28px;
+    right: 28px;
+    width: var(--cheese-size);
+    height: var(--cheese-size);
+    transition: width 80ms ease, height 80ms ease;
+    pointer-events: none;
+  }
+  .cheese-wrap svg {
+    width: 100%;
+    height: 100%;
+  }
+  /* Mouse: fixed bottom-right of the panel */
+  .mouse-wrap {
+    position: absolute;
+    bottom: 12px;
+    right: 20px;
+    width: 96px;
+    height: 84px;
+    pointer-events: none;
+    overflow: visible;
+  }
+  .mouse-wrap svg {
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+  }
+  @media (max-width: 640px) {
+    .page {
+      width: min(100vw - 20px, 780px);
+      padding-top: 22px;
+    }
+    .controls {
+      flex-wrap: wrap;
+    }
+  }
+</style>
+</head>
+<body>
+  <main class="page">
+    <p class="eyebrow">Demo</p>
+    <h1>Mouse &amp; Cheese</h1>
+    <p class="intro">
+      The story text wraps around the cheese in real time — no DOM measurements
+      in the layout path. Drag the slider to resize the cheese and watch the
+      lines reflow.
+    </p>
+
+    <section class="controls" aria-label="Cheese size control">
+      <span>Cheese size:</span>
+      <input type="range" id="cheese-slider" min="60" max="240" value="140">
+      <span class="val" id="cheese-size-label">140px</span>
+    </section>
+
+    <section class="panel" id="scene" aria-label="Mouse and cheese scene">
+      <!-- Text lines injected here by mouse-cheese.ts -->
+      <div class="text-layer" id="text-layer"></div>
+
+      <!-- Cheese illustration (scalable) -->
+      <div class="cheese-wrap" id="cheese-wrap">
+        <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <!-- Shadow -->
+          <ellipse cx="52" cy="95" rx="36" ry="5" fill="#D4A017" opacity="0.25"/>
+          <!-- Main cheese body -->
+          <rect x="6" y="8" width="88" height="82" rx="14" fill="#F4C43A"/>
+          <!-- Top highlight band -->
+          <rect x="6" y="8" width="88" height="22" rx="14" fill="#FAE168" opacity="0.55"/>
+          <rect x="6" y="22" width="88" height="8" fill="#FAE168" opacity="0.55"/>
+          <!-- Cheese holes -->
+          <ellipse cx="28" cy="36" rx="12" ry="10" fill="#FAD95C" stroke="#D4A017" stroke-width="1.5"/>
+          <ellipse cx="66" cy="50" rx="9" ry="8" fill="#FAD95C" stroke="#D4A017" stroke-width="1.5"/>
+          <ellipse cx="40" cy="68" rx="10" ry="9" fill="#FAD95C" stroke="#D4A017" stroke-width="1.5"/>
+          <!-- Hole inner shadows (depth effect) -->
+          <ellipse cx="28" cy="37" rx="10" ry="8" fill="none" stroke="#D4A017" stroke-width="1" opacity="0.4"/>
+          <ellipse cx="66" cy="51" rx="7" ry="6" fill="none" stroke="#D4A017" stroke-width="1" opacity="0.4"/>
+          <ellipse cx="40" cy="69" rx="8" ry="7" fill="none" stroke="#D4A017" stroke-width="1" opacity="0.4"/>
+          <!-- Outer border -->
+          <rect x="6" y="8" width="88" height="82" rx="14" fill="none" stroke="#D4A017" stroke-width="2.5"/>
+        </svg>
+      </div>
+
+      <!-- Mouse illustration (fixed position, bottom-right) -->
+      <div class="mouse-wrap" id="mouse-wrap" aria-hidden="true">
+        <svg viewBox="-8 0 108 84" xmlns="http://www.w3.org/2000/svg">
+          <!-- Tail -->
+          <path d="M 88 54 Q 96 70 82 73 Q 68 76 64 64" fill="none" stroke="#BDBDBD" stroke-width="3.5" stroke-linecap="round"/>
+          <!-- Body -->
+          <ellipse cx="62" cy="52" rx="28" ry="21" fill="#ABABAB"/>
+          <!-- Body highlight -->
+          <ellipse cx="54" cy="43" rx="14" ry="8" fill="#C4C4C4" opacity="0.6"/>
+          <!-- Head -->
+          <circle cx="30" cy="44" r="20" fill="#ABABAB"/>
+          <!-- Head highlight -->
+          <circle cx="26" cy="37" r="9" fill="#C4C4C4" opacity="0.5"/>
+          <!-- Left ear (back) -->
+          <circle cx="20" cy="23" r="11" fill="#ABABAB"/>
+          <!-- Right ear -->
+          <circle cx="40" cy="21" r="11" fill="#ABABAB"/>
+          <!-- Inner left ear -->
+          <circle cx="20" cy="23" r="7" fill="#F8BBD0"/>
+          <!-- Inner right ear -->
+          <circle cx="40" cy="21" r="7" fill="#F8BBD0"/>
+          <!-- Eye -->
+          <circle cx="20" cy="40" r="4" fill="#1a1a1a"/>
+          <circle cx="21" cy="39" r="1.5" fill="white"/>
+          <!-- Nose -->
+          <circle cx="11" cy="46" r="3.5" fill="#F48FB1"/>
+          <!-- Whiskers left-upper -->
+          <line x1="11" y1="44" x2="-6" y2="38" stroke="#777" stroke-width="1.2" stroke-linecap="round"/>
+          <line x1="11" y1="46" x2="-8" y2="46" stroke="#777" stroke-width="1.2" stroke-linecap="round"/>
+          <line x1="11" y1="48" x2="-6" y2="54" stroke="#777" stroke-width="1.2" stroke-linecap="round"/>
+          <!-- Whiskers right-upper -->
+          <line x1="11" y1="44" x2="24" y2="38" stroke="#777" stroke-width="1.2" stroke-linecap="round"/>
+          <line x1="11" y1="46" x2="26" y2="46" stroke="#777" stroke-width="1.2" stroke-linecap="round"/>
+          <line x1="11" y1="48" x2="24" y2="54" stroke="#777" stroke-width="1.2" stroke-linecap="round"/>
+          <!-- Mouth -->
+          <path d="M 11 49 Q 14 52 17 49" fill="none" stroke="#888" stroke-width="1.2" stroke-linecap="round"/>
+        </svg>
+      </div>
+    </section>
+  </main>
+
+  <script type="module" src="./mouse-cheese.ts"></script>
+</body>
+</html>
