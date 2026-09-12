@@ -17,6 +17,45 @@ All accuracy, letter-spacing and corpus result payloads are unchanged; refreshed
 snapshots change only provenance and environment records. Runtime sources and
 the baseline pin are unchanged, so no runtime benchmark was needed.
 
+## Safari next-line and tab stops
+
+This runtime change starts from the segment-break removal branch head `daf13ac`.
+NEL (U+0085) is UAX #14 class NL: a break follows it and no ordinary break
+precedes it. In the WebKit profile, analysis gives each NEL its own control
+segment, the walker offers a break after it, and a NEL that overflows right after
+text or glue ends the line before that content. WebKit's simple text path gives
+NEL no letter spacing, so NEL takes spacing only next to complex text or before a
+combining mark. Safari also moves a `pre-wrap` tab to the following stop when
+less than half a space would remain before the next one. The profile fields
+`breakOnlyAfterNextLine`, `letterSpaceNextLine` and `skipNarrowTabStops` key on
+the layout engine; Chrome and Firefox keep NEL as ordinary text and the previous
+tab rule.
+
+The installed gate ran this change on `daf13ac` against pinned `e5e66be`: Chrome
+153 through the Playwright transport, Safari 26.5.2 and Firefox 155 natively,
+both directions. Safari fixes 627 metrics in 235 LTR rows and 442 in 170 RTL
+rows, in the hidden-control spacing, NEL, discretionary and tab families. Chrome
+and Firefox change nothing. Each Safari direction loses one row, 3 metrics:
+`a\u05D0\u05D1aabb((\u0628\u0628\u0628\u0628\t\tword` in 16px Arial, pre-wrap,
+at width 64. Safari moves the first tab to the next stop and hangs both tabs.
+Pretext now reaches the same stop but hangs only the first overflowing tab, and
+main matched only because its tab stayed at the nearer stop. Three rows per
+direction that fail either way change widths only. No leg has required failures,
+execution errors or new API or rich failures, and nine numeric profiles have no
+new failures. Every leg still exits with an error, because the numeric companion
+fails when an unverified profile's tab sizing changes: the iOS Chrome, Edge and
+Firefox profiles and iPad desktop mode follow the same WebKit threshold, which
+installed Safari verifies.
+
+Headless replays in WebKit 26.4 with the Safari 26.5.2 user agent reproduce the
+suite result. On installed research NEL observations they gain 310 LTR and 116
+RTL rows and lose 8 LTR rows of `aa\u0085\u2060bb` at 1px, where Safari gives the
+word joiner no letter spacing.
+
+`bun test` and `bun run check` pass. The baseline advances to runtime commit
+`5ba3247`, and the ordinary snapshots were regenerated against it with unchanged
+results; only provenance and environment records change.
+
 ## Newlines next to zero-width spaces
 
 This runtime and harness change starts from the WebKit engine routing branch

@@ -10,6 +10,7 @@ export type SegmentBreakKind =
   | 'zero-width-break'
   | 'soft-hyphen'
   | 'hard-break'
+  | 'control'
 
 type SegmentationPiece = {
   text: string
@@ -38,6 +39,7 @@ export type AnalysisProfile = {
   wordInitialHyphenLetters: 'none' | 'alphabetic' | 'alphabetic-and-hebrew'
   breakHyphenAfterCollapsedTab: boolean
   segmentBreakRemovalRun: SegmentBreakRemovalRun
+  breakOnlyAfterNextLine: boolean
 }
 
 // The collapsible run that a ZWSP removes under the CSS segment break
@@ -498,7 +500,7 @@ export function endsWithClosingQuote(text: string): boolean {
   return false
 }
 
-function classifySegmentBreakChar(ch: string, whiteSpace: WhiteSpaceMode): SegmentBreakKind {
+function classifySegmentBreakChar(ch: string, whiteSpace: WhiteSpaceMode, breakOnlyAfterNextLine: boolean): SegmentBreakKind {
   if (whiteSpace === 'pre-wrap') {
     if (ch === ' ') return 'preserved-space'
     if (ch === '\t') return 'tab'
@@ -510,11 +512,13 @@ function classifySegmentBreakChar(ch: string, whiteSpace: WhiteSpaceMode): Segme
   }
   if (ch === '\u200B') return 'zero-width-break'
   if (ch === '\u00AD') return 'soft-hyphen'
+  // UAX #14 NL: visible content with a break after it and none before it.
+  if (ch === '\u0085' && breakOnlyAfterNextLine) return 'control'
   return 'text'
 }
 
 // All characters that classifySegmentBreakChar maps to a non-'text' kind.
-const breakCharRe = /[\x20\t\n\xA0\xAD\u2007\u200B\u202F\u2060\uFEFF]/
+const breakCharRe = /[\x20\t\n\x85\xA0\xAD\u2007\u200B\u202F\u2060\uFEFF]/
 
 // The combining marks WebKit's pair scan classifies without ICU. That scan
 // never breaks before them (BreakablePositions.h, `after.type == kCM`).
@@ -604,6 +608,7 @@ function splitSegmentByBreakKind(
   isWordLike: boolean,
   start: number,
   whiteSpace: WhiteSpaceMode,
+  breakOnlyAfterNextLine: boolean,
 ): SegmentationPiece[] {
   if (!breakCharRe.test(segment)) {
     return [{ text: segment, isWordLike, kind: 'text', start }]
@@ -616,10 +621,11 @@ function splitSegmentByBreakKind(
   let offset = 0
 
   for (const ch of segment) {
-    const kind = classifySegmentBreakChar(ch, whiteSpace)
+    const kind = classifySegmentBreakChar(ch, whiteSpace, breakOnlyAfterNextLine)
     const wordLike = kind === 'text' && isWordLike
 
-    if (currentKind !== null && kind === currentKind && wordLike === currentWordLike) {
+    // Each NEL offers its own break after it.
+    if (currentKind !== null && kind === currentKind && wordLike === currentWordLike && kind !== 'control') {
       offset += ch.length
       continue
     }
@@ -656,7 +662,8 @@ function isTextRunBoundary(kind: SegmentBreakKind): boolean {
     kind === 'space' ||
     kind === 'preserved-space' ||
     kind === 'zero-width-break' ||
-    kind === 'hard-break'
+    kind === 'hard-break' ||
+    kind === 'control'
   )
 }
 
@@ -1357,7 +1364,7 @@ function buildMergedSegmentation(
   let tailIsWordInitialHyphen = false
 
   for (const s of wordSegmenter.segment(normalized)) {
-    for (const piece of splitSegmentByBreakKind(s.segment, s.isWordLike ?? false, s.index, whiteSpace)) {
+    for (const piece of splitSegmentByBreakKind(s.segment, s.isWordLike ?? false, s.index, whiteSpace, profile.breakOnlyAfterNextLine)) {
       if (
         piece.kind === 'zero-width-break' &&
         piece.text.length === 1 &&
@@ -1661,7 +1668,7 @@ function mergeKeepAllTextSegments(
   function pushOriginalText(index: number): void {
     texts.push(segmentation.texts[index]!)
     isWordLike.push(segmentation.isWordLike[index]!)
-    kinds.push('text')
+    kinds.push(segmentation.kinds[index]!)
     starts.push(segmentation.starts[index]!)
   }
 
@@ -1701,9 +1708,13 @@ function mergeKeepAllTextSegments(
     const text = segmentation.texts[i]!
     const kind = segmentation.kinds[i]!
 
-    if (kind === 'text') {
+    // No ordinary break precedes NEL, so it continues the run before it, glue
+    // included. A CJK run merges across NEL as it did across NEL text; other
+    // runs keep their pieces, and NEL stays a control segment there.
+    if (kind === 'text' || kind === 'control' || (kind === 'glue' && segmentation.kinds[i + 1] === 'control')) {
       if (
         groupStart >= 0 &&
+        kind !== 'control' &&
         (!canContinueKeepAllTextRun(segmentation.texts[i - 1]!, profile) ||
           numericAffixBoundary(normalized, segmentation.starts[i]!, profile) === false)
       ) {

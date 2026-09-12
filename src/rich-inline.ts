@@ -195,7 +195,10 @@ export function prepareRichInline(items: RichInlineItem[]): PreparedRichInline {
       prepared,
     } satisfies PreparedRichInlineItem
     preparedItems[index] = preparedItem
-    if (establishesLine) breakAfterPreviousItem = prepared.kinds.at(-1) === 'zero-width-break'
+    if (establishesLine) {
+      const lastKind = prepared.kinds.at(-1)
+      breakAfterPreviousItem = lastKind === 'zero-width-break' || lastKind === 'control'
+    }
 
     pendingGapWidth = hasTrailingWhitespace
       ? getCollapsedSpaceWidth(item.font, letterSpacing)

@@ -558,7 +558,7 @@ describe('boundary-policy regressions', () => {
       breakKeepAllAfterNonstarterLetters: true, keepZeroWidthSpaceMarkAtScanStart: false,
       breakBeforeConditionalJapaneseStarter: false,
       wordInitialHyphenLetters: 'none' as const, breakHyphenAfterCollapsedTab: false,
-      segmentBreakRemovalRun: 'none' as const,
+      segmentBreakRemovalRun: 'none' as const, breakOnlyAfterNextLine: false,
     }
     for (const text of ['####((aabb', '""""[[aabb', '−+x«value»!']) {
       expect(analyzeText(text, profile).texts).toEqual([text])
@@ -577,7 +577,7 @@ describe('boundary-policy regressions', () => {
       breakKeepAllAfterNonstarterLetters: false, keepZeroWidthSpaceMarkAtScanStart: false,
       breakBeforeConditionalJapaneseStarter: false,
       wordInitialHyphenLetters: 'alphabetic' as const, breakHyphenAfterCollapsedTab: false,
-      segmentBreakRemovalRun: 'none' as const,
+      segmentBreakRemovalRun: 'none' as const, breakOnlyAfterNextLine: false,
     }
     // The ASCII pair tables keep '!' with a following ASCII letter, and break
     // '?' before '-' and '|'. UAX #14 otherwise separates EX from any
@@ -615,7 +615,7 @@ describe('boundary-policy regressions', () => {
       breakKeepAllAfterNonstarterLetters: false, keepZeroWidthSpaceMarkAtScanStart: false,
       breakBeforeConditionalJapaneseStarter: false,
       wordInitialHyphenLetters: 'alphabetic' as const, breakHyphenAfterCollapsedTab: false,
-      segmentBreakRemovalRun: 'none' as const,
+      segmentBreakRemovalRun: 'none' as const, breakOnlyAfterNextLine: false,
     }
     // UAX #14 LB8a and LB20a. A ZWJ after a space belongs to that space's
     // grapheme cluster and keeps its existing boundaries. The pair tables still
@@ -692,7 +692,7 @@ describe('boundary-policy regressions', () => {
       breakKeepAllAfterNonstarterLetters: false, keepZeroWidthSpaceMarkAtScanStart: false,
       breakBeforeConditionalJapaneseStarter: false,
       wordInitialHyphenLetters: 'alphabetic' as const, breakHyphenAfterCollapsedTab: false,
-      segmentBreakRemovalRun: 'none' as const,
+      segmentBreakRemovalRun: 'none' as const, breakOnlyAfterNextLine: false,
     }
     const Segmenter = Intl.Segmenter
     let segmentedUnits = 0
@@ -728,7 +728,7 @@ describe('boundary-policy regressions', () => {
       breakKeepAllAfterNonstarterLetters: false, keepZeroWidthSpaceMarkAtScanStart: true,
       breakBeforeConditionalJapaneseStarter: false,
       wordInitialHyphenLetters: 'alphabetic-and-hebrew' as const, breakHyphenAfterCollapsedTab: true,
-      segmentBreakRemovalRun: 'none' as const,
+      segmentBreakRemovalRun: 'none' as const, breakOnlyAfterNextLine: true,
     }
     expect(analyzeText('\u200B\u0301ab', profile).texts).toEqual(['\u200B\u0301ab'])
     expect(analyzeText('x\n\u200B\u0301ab', profile, 'pre-wrap').texts).toEqual(['x', '\n', '\u200B\u0301ab'])
@@ -807,6 +807,87 @@ describe('boundary-policy regressions', () => {
       }
     } finally {
       profile.segmentBreakRemovalRun = previous
+    }
+  })
+
+  test('the WebKit profile keeps NEL with the content before it, breaks after it and gives it no letter spacing', async () => {
+    const { getEngineProfile } = await import('./measurement.ts')
+    const profile = getEngineProfile()
+    const previous = [profile.breakOnlyAfterNextLine, profile.letterSpaceNextLine, profile.breakKeepAllAfterPunctuation] as const
+    // Blink and Gecko keep NEL as ordinary text.
+    expect(prepareWithSegments('zz ab\u0085cd', FONT).kinds).not.toContain('control')
+    profile.breakOnlyAfterNextLine = true
+    profile.letterSpaceNextLine = false
+    profile.breakKeepAllAfterPunctuation = false
+    try {
+      const lines = (text: string, width: number, options?: { whiteSpace?: 'pre-wrap', letterSpacing?: number }) => {
+        const prepared = prepareWithSegments(text, FONT, options)
+        const result = layoutWithLines(prepared, width, LINE_HEIGHT)
+        expect(collectStreamedLines(prepared, width)).toEqual(result.lines)
+        expect(layout(prepare(text, FONT, options), width, LINE_HEIGHT).lineCount).toBe(result.lineCount)
+        return result.lines
+      }
+      const text = 'zz ab\u00A0\u0085\u0085cd \u0085ef'
+      const prepared = prepareWithSegments(text, FONT)
+      expect(prepared.segments).toEqual(['zz', ' ', 'ab\u00A0', '\u0085', '\u0085', 'cd', ' ', '\u0085', 'ef'])
+      expect(prepared.kinds).toEqual(['text', 'space', 'text', 'control', 'control', 'text', 'space', 'control', 'text'])
+      // Glued content moves to the next line with its NEL, while a space still breaks before one.
+      expect(lines(text, measureWidth('zz ab\u00A0', FONT) + 0.5).map(line => line.text)).toEqual(['zz ', 'ab\u00A0\u0085\u0085', 'cd \u0085ef'])
+      // Content that starts a line can still overflow right before the NEL.
+      expect(lines(text, measureWidth('ab\u00A0', FONT) + 0.5).map(line => line.text)).toEqual(['zz ', 'ab\u00A0', '\u0085\u0085', 'cd ', '\u0085ef'])
+      // Keep-all runs continue across NEL, glue included: a CJK run merges across
+      // it, while other runs keep NEL as a control segment.
+      const { analyzeText } = await import('./analysis.ts')
+      const keepAll = analyzeText('zz ab\u00A0\u0085cd \u6F22\u00A0\u0085\u5B57', profile, 'normal', 'keep-all')
+      expect(keepAll.texts).toEqual(['zz', ' ', 'ab\u00A0', '\u0085', 'cd', ' ', '\u6F22\u00A0\u0085\u5B57'])
+      expect(keepAll.kinds).toEqual(['text', 'space', 'text', 'control', 'text', 'space', 'text'])
+      // A rich item that ends in NEL breaks before the next item.
+      const rich = prepareRichInline([{ text: 'ab\u0085', font: FONT }, { text: 'cd', font: FONT }])
+      expect(measureRichInlineStats(rich, measureWidth('ab\u0085', FONT) + 0.5).lineCount).toBe(2)
+
+      // NEL takes no letter spacing at either sign, but the gap after the
+      // grapheme before it stays.
+      const a = measureWidth('a', FONT)
+      const nel = measureWidth('\u0085', FONT)
+      for (const letterSpacing of [-1, 2]) {
+        const natural = lines('a\u0085\u0085b', 1000, { letterSpacing })
+        expect(natural.map(line => line.text)).toEqual(['a\u0085\u0085b'])
+        expect(natural[0]!.width).toBeCloseTo(2 * a + 2 * nel + 2 * letterSpacing)
+        const split = lines('a\u0085\u0085b', a + nel + letterSpacing + 0.5, { letterSpacing })
+        expect(split.map(line => line.text)).toEqual(['a\u0085', '\u0085b'])
+        for (const line of split) expect(line.width).toBeCloseTo(a + nel + letterSpacing)
+        // Text on WebKit's simple path, such as CJK, leaves the NEL after it
+        // unspaced, while text on its complex path, such as Arabic, spaces it.
+        expect(lines('\u6F22\u0085', 1000, { letterSpacing })[0]!.width).toBeCloseTo(measureWidth('\u6F22', FONT) + nel + letterSpacing)
+        expect(lines('\u0628\u0085', 1000, { letterSpacing })[0]!.width).toBeCloseTo(measureWidth('\u0628', FONT) + nel + 2 * letterSpacing)
+      }
+      // A preserved space does not hang after a NEL that already overflows.
+      expect(lines('a\u0085 b', nel - 0.5, { whiteSpace: 'pre-wrap', letterSpacing: 1 }).map(line => line.text)).toEqual(['a', '\u0085', ' ', 'b'])
+    } finally {
+      [profile.breakOnlyAfterNextLine, profile.letterSpaceNextLine, profile.breakKeepAllAfterPunctuation] = previous
+    }
+  })
+
+  test('the WebKit profile moves a tab to the following stop when less than half a space remains', async () => {
+    const { getEngineProfile } = await import('./measurement.ts')
+    const profile = getEngineProfile()
+    const previous = profile.skipNarrowTabStops
+    const space = measureWidth(' ', FONT)
+    const a = measureWidth('a', FONT)
+    const tabLineWidth = (letterSpacing: number) =>
+      layoutWithLines(prepareWithSegments('a\tb', FONT, { whiteSpace: 'pre-wrap', letterSpacing }), 1000, LINE_HEIGHT).lines[0]!.width
+    try {
+      // Letter spacing places the tab a quarter or three quarters of a space
+      // before the first stop, eight spaces from the line start.
+      for (const [remaining, skipped] of [[space / 4, true], [space * 3 / 4, false]] as const) {
+        const letterSpacing = 8 * space - remaining - a
+        profile.skipNarrowTabStops = false
+        const nearest = tabLineWidth(letterSpacing)
+        profile.skipNarrowTabStops = true
+        expect(tabLineWidth(letterSpacing) - nearest).toBeCloseTo(skipped ? 8 * space : 0)
+      }
+    } finally {
+      profile.skipNarrowTabStops = previous
     }
   })
 

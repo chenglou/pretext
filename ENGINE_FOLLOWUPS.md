@@ -56,9 +56,10 @@ Open engine work deferred from the #210 series: decisions for the maintainer, kn
 - A ZWSP right after a forced break inside a word gets its own line in all three browsers. Copying that loses hundreds of rows until joined Arabic widths, the U+3000 hang and letter spacing on invisibles land.
 - If demand for Persian appears, observe how browsers render soft hyphens typed in place of ZWNJ before weighing any Arabic-script soft-hyphen policy.
 - Firefox and Safari add a line for CRLF, or for a lone CR, at very narrow widths. Trace their line builders before modeling it.
-- Enable the NEL rule (no break before, break after) for Safari only, and model that WebKit gives NEL no letter spacing.
 - In pre-wrap, Chrome hangs preserved spaces and tabs after an overflowing letter, including a space after a tab. WebKit also hangs whole white-space runs.
 - For tab stops with letter spacing, WebKit hangs whole tab runs, and Firefox grows a tab by nine times the letter spacing.
+- In pre-wrap, Safari hangs a whole trailing tab run at a line end, while Pretext ends the line after the first tab that overflows. #240 loses one suite row per direction to this.
+- Under keep-all, Safari offers no break on either side of NEL and fills an overflowing space-delimited word by graphemes. Outside CJK runs Pretext still breaks after NEL, as it still breaks after `-` in Latin keep-all text.
 - Model lone CR, FF and VT in pre-wrap per engine instead of as hard breaks. This needs the harness contract and `line.text` decisions.
 - Firefox removes a newline next to East Asian punctuation on ja and zh pages, and between wide characters. This needs the content-language decision and a re-observed Firefox corpus.
 - Rich-inline items should break only where the joined text breaks (#177). WebKit breaks inside each item on its own, Chromium and Gecko follow the joined text, and Firefox shows a Myanmar alignment defect at item boundaries.

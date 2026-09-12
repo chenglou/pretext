@@ -59,6 +59,20 @@ export type EngineProfile = {
   // Blink and Gecko remove a collapsible newline run next to a ZWSP, each
   // through its own run. WebKit turns it into a space.
   segmentBreakRemovalRun: SegmentBreakRemovalRun
+  // NEL (U+0085, UAX #14 NL) offers a break after itself and no ordinary break
+  // before it (LB5, LB6). Blink and Gecko break there too, but keep NEL as
+  // ordinary text for now: Blink joins Arabic across a soft hyphen that Pretext
+  // measures as separate segments, which the break before NEL was hiding, and
+  // release Gecko draws NEL with no advance while its Canvas measures a space.
+  breakOnlyAfterNextLine: boolean
+  // WebKit's simple text path replaces a control character's advance after
+  // applying letter spacing, so NEL takes none there, at either sign. Its
+  // complex path spaces NEL like other characters. Blink spaces NEL outside
+  // cursive runs.
+  letterSpaceNextLine: boolean
+  // WebKit moves a tab to the following stop when less than half a space would
+  // remain before the next one (FontCascade::tabWidth).
+  skipNarrowTabStops: boolean
 }
 
 export type BreakableFitMode = 'sum-graphemes' | 'segment-prefixes' | 'pair-context'
@@ -237,6 +251,9 @@ export function getEngineProfile(): EngineProfile {
     preferPrefixWidthsForBreakableRuns: engine === 'webkit',
     measureTextWithFollowingSpace: engine === 'webkit',
     segmentBreakRemovalRun: engine === 'blink' ? 'blink' : engine === 'gecko' ? 'gecko' : 'none',
+    breakOnlyAfterNextLine: engine === 'webkit',
+    letterSpaceNextLine: engine !== 'webkit',
+    skipNarrowTabStops: engine === 'webkit',
   }
   return cachedEngineProfile
 }

@@ -220,6 +220,71 @@ not model those Gecko rules: the ja/zh corpora contain such newlines, and their
 native paragraphs are observed from space-normalized text, so modeling them
 needs a Firefox-faithful corpus observation first.
 
+NEL (U+0085) is UAX #14 class NL: a break follows it, and no ordinary break
+precedes it (LB5, LB6). Chrome and Safari break that way, and so do Firefox's
+ICU4X rules, but only the Safari profile models it. Each NEL is its own segment. When one overflows
+right after text or glue, the line ends before that content instead, so the
+content moves to the next line with the NEL; when the content started the line,
+overflow still breaks right before the NEL, as browsers do. Joining NEL to the
+content before it instead split overlong words at Canvas grapheme widths where
+browsers break before the NEL. A ZWSP or soft hyphen right before NEL still
+offers its break in Pretext, and so does any spurious boundary before the NEL,
+such as the ordinary break before U+3000 that LB21 forbids: main hid those by
+breaking before the NEL itself. Safari's keep-all offers no break on either side
+of NEL: it keeps a space-delimited word whole and fills it by graphemes only when
+it overflows. Pretext keeps NEL inside CJK keep-all runs, as it kept NEL text,
+and elsewhere keeps NEL as its own segment with its break after it, the way it
+still breaks after a hyphen in Latin keep-all text. Merging NEL with the text on
+both sides lost emergency breaks in emoji runs, which the overflow rule above
+withholds from control-bearing fragments, and Canvas prefix widths across NEL
+gave a following combining mark a 12px advance in 16px Arial, so the mark took
+its own line. Starting a new keep-all run at NEL after glue also put a break
+before the NEL. In normal white space, `漢<NBSP><NEL>字 漢字` at -1px loses a few
+headless widths where Safari fills the overlong unit by graphemes: Pretext breaks
+between the ideograph and the NBSP, which LB12a forbids, and main matched only
+because its spaced NEL fit.
+
+Safari's simple text path replaces a control character's advance after applying
+letter spacing, so NEL takes none, at either sign. In Safari 26.5.2 `a<NEL><NEL>b`
+grows by 2px per pixel of spacing from -1px to 1px, a line holding only NEL
+keeps its width, and `<NEL><NEL>` fits 24px at 1px and 2px. Per-character Range
+rects split those 24px as 13 and 11 at 1px and as 14 and 10 at 2px, so only the
+total is an advance.
+Pretext still places the gap of the grapheme before a NEL and adds none after
+it. Safari's complex path spaces NEL like other characters. A combining mark
+directly after NEL puts NEL on that path on either page direction. Text before
+NEL shares its item only when its direction matches the page's: Arabic on a
+right-to-left page, Devanagari, Thai or a marked letter on a left-to-right one.
+Preparation cannot see the page direction, so a NEL next to text in WebKit's
+complex ranges keeps its spacing. Safari's unspaced NEL after Arabic on a
+left-to-right page, or after Devanagari on a right-to-left page, is not modeled.
+Inside a CJK keep-all run, NEL keeps per-grapheme spacing, as NEL text did.
+
+Safari moves a `pre-wrap` tab to the following stop when less than half a space
+would remain before the next one. Stops are eight spaces apart, and Pretext used
+to move to the next stop unless the pen stood exactly on one. The spaced NEL hid
+that: in `ab<NEL>\tcd ef` at 2px in 16px Arial, the pen stands 1.77px before the
+first stop with NEL unspaced, and Safari's tab reaches the second stop. Headless
+WebKit 26.4 jumps 1.77px before a stop but not 2.28px before one. Replaying
+Safari 26.5.2's suite rows with this threshold fixes 70 left-to-right and 8
+right-to-left tab rows. WebKit trunk's threshold, half the advance of `0`, loses
+10 and 6 more rows. The one remaining lost row in each direction ends a line with
+two tabs: Safari hangs both, while Pretext ends the line after the first tab that
+overflows. Headless probes lose a few widths the same way to one overflowing tab
+at negative spacing, such as `ab cd\tef gh\tij` at -1px in 16px Arial: Safari
+moves the tab to the second stop and hangs it, and Pretext breaks before it. Main
+matched there only because its tab stayed at the nearer stop. Only the Safari
+profile models the threshold.
+
+Chrome and Firefox keep NEL as ordinary text. In Chrome the same rule lost rows
+that main matched only because two errors cancelled: Chrome joins Arabic across
+a soft hyphen that Pretext measures as separate segments, hangs preserved spaces
+at emergency widths, and gives a word joiner no letter spacing, while Pretext
+spaces it. That last gap also costs Safari `aa<NEL>\u2060bb` at 1px, where main
+kept the joiner on the NEL's line. Release Firefox also breaks after NEL, but
+draws control characters with no advance while its Canvas measures NEL as a
+space.
+
 The shared complex walker fixed batch/streaming disagreement after a soft hyphen
 ([#222](https://github.com/chenglou/pretext/pull/222)). A later usable break could
 win in one path while another rewound to the hyphen. This needed one decision

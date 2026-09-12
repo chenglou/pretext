@@ -197,6 +197,36 @@ function addInternalLetterSpacing(width: number, graphemeCount: number, letterSp
   return graphemeCount > 1 ? width + (graphemeCount - 1) * letterSpacing : width
 }
 
+// Code points that WebKit's FontCascade::characterRangeCodePath sends to the
+// complex text path, stored as start/end pairs. So does a ZWJ after an emoji.
+const complexTextPathRanges = [
+  0x02E5, 0x02E9, 0x0300, 0x036F, 0x0591, 0x05BD, 0x05BF, 0x05CF, 0x0600, 0x109F,
+  0x1100, 0x11FF, 0x135D, 0x135F, 0x1700, 0x18AF, 0x1900, 0x194F, 0x1980, 0x19DF,
+  0x1A00, 0x1CFF, 0x1DC0, 0x1DFF, 0x20D0, 0x20FF, 0x26F9, 0x26F9, 0x2CEF, 0x2CF1,
+  0x302A, 0x302F, 0x3099, 0x309C, 0xA67C, 0xA67D, 0xA6F0, 0xA6F1, 0xA800, 0xABFF,
+  0xD7B0, 0xD7FF, 0xFE00, 0xFE0F, 0xFE20, 0xFE2F, 0x10A00, 0x10A5F, 0x11000, 0x110CF,
+  0x11100, 0x111DF, 0x11200, 0x1124F, 0x112B0, 0x1137F, 0x11400, 0x114DF, 0x11580, 0x1165F,
+  0x11680, 0x116CF, 0x11700, 0x11CBF, 0x16B00, 0x16B8F, 0x1E900, 0x1E95F, 0x1F1E6, 0x1F1FF,
+  0x1F3FB, 0x1F3FF, 0xE0000, 0xE007F, 0xE0100, 0xE01EF,
+] as const
+
+const extendedPictographicRe = /\p{Extended_Pictographic}/u
+const leadingCombiningMarkRe = /^\p{M}/u
+
+function needsComplexTextPath(text: string): boolean {
+  let previousIsEmoji = false
+  for (let i = 0; i < text.length;) {
+    const codePoint = text.codePointAt(i)!
+    i += codePoint > 0xFFFF ? 2 : 1
+    if (codePoint === 0x200D && previousIsEmoji) return true
+    previousIsEmoji = codePoint > 0xFFFF && extendedPictographicRe.test(String.fromCodePoint(codePoint))
+    for (let range = 0; range < complexTextPathRanges.length && codePoint >= complexTextPathRanges[range]!; range += 2) {
+      if (codePoint <= complexTextPathRanges[range + 1]!) return true
+    }
+  }
+  return false
+}
+
 function isCollapsibleWhitespaceCode(code: number): boolean {
   return code === 0x20 || code === 0x09 || code === 0x0a || code === 0x0d || code === 0x0c
 }
@@ -600,6 +630,24 @@ function measureAnalysis(
         null,
         hasLetterSpacing ? countRenderedSpacingGraphemes(segText, segKind) : 0,
       )
+      continue
+    }
+
+    if (segKind === 'control') {
+      const width = getCorrectedSegmentWidth(segText, getSegmentMetrics(segText, cache), emojiCorrection)
+      // NEL shares a WebKit text item with the text or glue before it and with
+      // combining marks after it, and the complex text path spaces it. Complex
+      // text shares the item only when its direction matches the page's, which
+      // preparation cannot see, so NEL next to complex text keeps its spacing.
+      const previousKind = mi > 0 ? analysis.kinds[mi - 1] : undefined
+      const nextText = mi + 1 < analysis.len ? analysis.texts[mi + 1]! : ''
+      const takesLetterSpacing = hasLetterSpacing && (
+        engineProfile.letterSpaceNextLine ||
+        ((previousKind === 'text' || previousKind === 'glue') && needsComplexTextPath(analysis.texts[mi - 1]!)) ||
+        (leadingCombiningMarkRe.test(nextText) && needsComplexTextPath(nextText))
+      )
+      const spacing = takesLetterSpacing ? letterSpacing : 0
+      pushMeasuredSegment(segText, width, width + spacing, width, segKind, segStart, null, null, takesLetterSpacing ? 1 : 0)
       continue
     }
 

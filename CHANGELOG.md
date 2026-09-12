@@ -21,6 +21,8 @@
 - Reported line widths are now clamped at 0 instead of going negative, for example with strongly negative `letterSpacing` (#236).
 - Chrome, Firefox, Edge and other browsers on iPhone and iPad, and in-app web views on iPhone, iPad and Mac, now wrap text as Safari does, since they use WebKit. Previously, some of them got rules meant for other browsers, such as breaks after punctuation with `word-break: keep-all`. In Safari, text prepared in a web worker now gets the same rules as on the page (#237).
 - In Chrome and Firefox, a newline next to a zero-width space no longer adds a space in `white-space: normal`, matching the browser (#238).
+- In Safari, a next-line character (U+0085) now stays on the same line as the text before it, and lines can still break after it. `letterSpacing` no longer adds space after U+0085, except next to text that Safari shapes as complex text, such as Arabic, Devanagari or a combining mark (#240).
+- In Safari, a tab in `white-space: pre-wrap` now moves to the following tab stop when less than half a space would remain before the next one, as Safari does (#240).
 
 ## 0.0.9 - 2026-09-07
 
