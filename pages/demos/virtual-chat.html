@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Virtual Chat — DOM vs Pretext</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0f0f0f; color: #e0e0e0; height: 100vh; overflow: hidden; display: flex; flex-direction: column; }
+
+/* --- Controls --- */
+
+.controls {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px 20px;
+  background: #1a1a1a; border-bottom: 1px solid #282828; padding: 10px 16px; flex-shrink: 0;
+}
+
+.toggle { display: flex; align-items: center; gap: 8px; }
+.toggle-label {
+  font-size: 11px; color: #666; text-transform: uppercase; letter-spacing: 0.6px;
+  transition: color 0.2s;
+}
+.toggle-label.active { font-weight: 600; }
+.toggle-label.dom.active { color: #cc8888; }
+.toggle-label.pretext.active { color: #88cc88; }
+
+.switch { position: relative; width: 40px; height: 22px; cursor: pointer; flex-shrink: 0; }
+.switch input { display: none; }
+.switch .track {
+  position: absolute; inset: 0; border-radius: 11px;
+  background: #cc8888; transition: background 0.25s;
+}
+.switch input:checked + .track { background: #88cc88; }
+.switch .thumb {
+  position: absolute; top: 2px; left: 2px; width: 18px; height: 18px;
+  border-radius: 50%; background: #fff; transition: transform 0.25s;
+  pointer-events: none;
+}
+.switch input:checked ~ .thumb { transform: translateX(18px); }
+
+.sep { width: 1px; height: 20px; background: #282828; flex-shrink: 0; }
+
+.slider-group { display: flex; align-items: center; gap: 6px; }
+.slider-group label { font-size: 11px; color: #555; text-transform: uppercase; letter-spacing: 0.4px; }
+.slider-group input[type=range] {
+  -webkit-appearance: none; appearance: none;
+  width: 100px; height: 4px; background: #333; border-radius: 2px; outline: none;
+}
+.slider-group input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none; appearance: none;
+  width: 14px; height: 14px; border-radius: 50%; background: #aaa; cursor: pointer;
+  border: none;
+}
+.slider-group input[type=range]::-moz-range-thumb {
+  width: 14px; height: 14px; border-radius: 50%; background: #aaa; cursor: pointer;
+  border: none;
+}
+.slider-group .val {
+  font-size: 11px; color: #888; min-width: 34px; font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.timing {
+  font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums;
+  text-align: center; transition: color 0.2s;
+}
+.timing.dom { color: #cc8888; }
+.timing.pretext { color: #88cc88; }
+
+/* --- Chat --- */
+
+.chat { flex: 1; overflow-y: auto; position: relative; margin: 0 auto; max-width: 100%; scrollbar-width: none; }
+.chat::-webkit-scrollbar { display: none; }
+.chat-content { position: relative; }
+
+.msg { position: absolute; left: 0; right: 0; padding: 3px 16px; display: flex; overflow: hidden; }
+.msg.sent { justify-content: flex-end; }
+.msg.received { justify-content: flex-start; }
+
+.bubble {
+  padding: 8px 12px; border-radius: 16px; overflow: hidden;
+  word-break: normal; overflow-wrap: break-word; white-space: normal;
+}
+.msg.sent .bubble { border-bottom-right-radius: 4px; }
+.msg.received .bubble { border-bottom-left-radius: 4px; }
+</style>
+</head>
+<body>
+<div class="controls">
+  <div class="toggle">
+    <span class="toggle-label dom active">DOM</span>
+    <label class="switch">
+      <input type="checkbox" id="mode-toggle" />
+      <div class="track"></div>
+      <div class="thumb"></div>
+    </label>
+    <span class="toggle-label pretext">Pretext</span>
+  </div>
+  <div class="sep"></div>
+  <div class="slider-group">
+    <label>Width</label>
+    <input type="range" id="width-slider" min="250" max="900" value="600" step="1" />
+    <span class="val" id="width-val">600px</span>
+  </div>
+  <div class="slider-group">
+    <label>Font</label>
+    <input type="range" id="font-slider" min="11" max="28" value="15" step="1" />
+    <span class="val" id="font-val">15px</span>
+  </div>
+  <div class="sep"></div>
+  <span class="timing dom" id="timing">—</span>
+</div>
+<div class="chat" id="chat">
+  <div class="chat-content" id="chat-content"></div>
+</div>
+<script type="module" src="./virtual-chat.ts"></script>
+</body>
+</html>
