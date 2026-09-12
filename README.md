@@ -13,7 +13,9 @@ npm install @chenglou/pretext
 ## Demos
 
 Clone the repo, run `bun install`, then `bun start`, and open `/demos/index` in your browser. On Windows, use `bun run start:windows`.
-Alternatively, see them live at [chenglou.me/pretext](https://chenglou.me/pretext/). Some more at [somnai-dreams.github.io/pretext-demos](https://somnai-dreams.github.io/pretext-demos/)
+Alternatively, see them live at [chenglou.me/pretext](https://chenglou.me/pretext/). Some more at [somnai-dreams.github.io/pretext-demos](https://somnai-dreams.github.io/pretext-demos/).
+
+A community-built [interactive benchmark tool](/pages/demos/benchmark/) compares Pretext performance against traditional DOM measurement across text types, lengths, and widths. [Source repo →](https://github.com/nankai-mz/pretext-benchmark)
 
 ## API
 
