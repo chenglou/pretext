@@ -19,6 +19,7 @@
 - With `word-break: keep-all`, lines no longer break after `ー` in words such as `ラーメン`. In Chrome, they also no longer break after iteration marks such as `々`, `ゝ` or `ヽ` (#234).
 - In Safari, a word followed by a space now keeps its kerning with that space, so letters such as `A` in Arial or Times New Roman fit narrow lines as they do natively (#236).
 - Reported line widths are now clamped at 0 instead of going negative, for example with strongly negative `letterSpacing` (#236).
+- Chrome, Firefox, Edge and other browsers on iPhone and iPad, and in-app web views on iPhone, iPad and Mac, now wrap text as Safari does, since they use WebKit. Previously, some of them got rules meant for other browsers, such as breaks after punctuation with `word-break: keep-all`. In Safari, text prepared in a web worker now gets the same rules as on the page (#237).
 
 ## 0.0.9 - 2026-09-07
 

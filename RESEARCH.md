@@ -21,6 +21,29 @@ trailing collapsible spaces to hang improved results. Uniform scaling and generi
 pair corrections did not recover the missing context reliably. Agreement on a
 whole word also does not establish the widths of its possible line prefixes.
 
+Engine profiles describe the layout engine, not the browser brand. Chrome,
+Firefox and Edge on iOS lay out and measure text with WebKit, whatever their
+brand token (`CriOS/`, `FxiOS/`, `EdgiOS/`), and so does an app's web view, whose
+user agent names no browser. A Safari brand check gave them the default profile,
+apart from WebKit's hyphen rule after a collapsed tab for those three brands and
+Blink's CJK carry for Chrome. The user agent alone names the engine, so a page
+and its workers agree. `navigator.vendor` is not read: workers have none in
+WebKit or Blink, which is why the brand check gave Safari's own workers the
+default profile, and jsdom reports WebKit's vendor beside Chromium's
+`AppleWebKit/537.36`. Chromium froze that token and WebKit froze `605.1.15`. So
+`Firefox/` names Gecko, `AppleWebKit/537.36` names Blink only beside `Chrome/` or
+`Chromium/`, and any other `AppleWebKit/` version names WebKit. Samsung's TV web
+views send Chromium's token with neither and keep the default profile. Their
+Tizen 3.0 web view runs Chromium 47 but sends `AppleWebKit/538.1`; it predates
+`Intl.Segmenter`. Before the following-space kerning change, in headless
+Playwright WebKit 2272 with an iPhone Chrome user agent, switching from the old
+profile to Safari's changed predictions on 28,564 of the 218,993 suite rows
+recorded in Safari 26.5.2. Against those natives, 8,055 rows gained a check; the
+1,427 that lost one are rows the Safari profile already fails there. Desktop
+Safari's natives only stand in for iOS: fonts and ICU on a device can differ. A
+Blink page emulating an iOS user agent gets WebKit's profile, as that user agent
+claims.
+
 ## Breaks And Source Positions
 
 Storage segments, measurement spans, ordinary break opportunities and emergency

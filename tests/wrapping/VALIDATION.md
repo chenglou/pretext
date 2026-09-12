@@ -17,6 +17,68 @@ All accuracy, letter-spacing and corpus result payloads are unchanged; refreshed
 snapshots change only provenance and environment records. Runtime sources and
 the baseline pin are unchanged, so no runtime benchmark was needed.
 
+## WebKit engine routing
+
+This runtime change starts from the line-edge kerning branch head `9535bc6`.
+Engine profiles now follow the layout engine the user agent names instead of a
+browser brand: `Firefox/` names Gecko, `AppleWebKit/537.36` names Blink only
+beside `Chrome/` or `Chromium/`, and any other `AppleWebKit/` version names
+WebKit. `navigator.vendor` is no longer read, since workers don't have it. Every
+profile field keys on that engine, including the following-space kerning, so
+Chrome, Firefox and Edge on iPhone and iPad and in-app web views take the Safari
+profile, and a page and its workers take the same profile. Before, Safari's
+workers and app web views took the default profile, and the three iOS brands
+took it with WebKit's hyphen rule after a collapsed tab and, for Chrome, Blink's
+CJK carry.
+
+Headless replays in WebKit 26.4 and Chromium 147 with the recorded user agents
+and locales compare `8b1f538` with this change on every row of the line-edge
+kerning gate: 147,714 Chrome LTR, 71,008 Chrome RTL, 148,019 Safari LTR, 70,974
+Safari RTL, 147,680 Firefox LTR and 71,012 Firefox RTL rows, 656,407 in all,
+with the Firefox legs through a Gecko user agent in Chromium. No prediction
+changes and no row errors, both sources give the same in-page profile in every
+context, and in the Safari legs headless `8db5483` reproduces all 218,993
+recorded installed predictions. The same replay over the CJK closing-bracket
+stack, before the kerning change, changed no prediction either.
+
+In headless WebKit 26.4 over the CJK closing-bracket stack, user agents for
+Chrome, Firefox and Edge on iPhone, Chrome on iPad in desktop mode, and app web
+views on iPhone and Mac give the desktop Safari profile on every field; on this
+branch, iOS Safari and Chrome and Firefox on iPhone equal desktop Safari on all
+12 fields. Over that stack and judged against the Safari 26.5.2 natives, an
+iPhone Chrome user agent changed 28,564 of the 218,993 Safari rows: 8,055 rows
+gain a check and 1,427 lose one. An iPhone Firefox user agent changed 28,783,
+with 8,114 gains and the same 1,427 losses. Every candidate prediction under
+both user agents equals the desktop Safari user agent's, so each loss is a row
+the Safari profile already fails in Safari. The crios, crios-desktop, fxios and
+edgios numeric profiles now equal safari's, and `tabSizing` is unchanged in all
+nine.
+
+A probe outside the suite ran each user agent in a window and in classic blob,
+classic URL and module dedicated workers: 51 user agents over the CJK
+closing-bracket stack, and on this branch desktop Safari, iOS Safari, Chrome and
+Firefox on iPhone, desktop Chrome and the Firefox user agent. In every row the
+workers give the window's engine, profile and lines, and no worker exposes
+`navigator.vendor`. With `8b1f538`, Safari's and iOS Safari's workers differed
+from their windows on 6 fields, and `A\u2060 B` in 18px Times New Roman at width
+12 took three lines in a Safari worker and two on the page.
+
+Desktop Safari's natives stand in for iOS, and nothing ran on a device, so iOS
+fonts, older iOS ICU and iOS WebKit builds are unverified. Blink emulating an
+iOS user agent, as in developer tools, now takes WebKit's profile on the page
+and in its workers while Chromium lays out the text. Samsung's Tizen 3.0 TV web
+view runs Chromium 47 but sends `AppleWebKit/538.1`, so it takes WebKit's
+profile; it predates `Intl.Segmenter`. Shared and service workers were not
+probed.
+
+`bun test` and `bun run check` pass. The installed gate ran from this branch against pinned `8b1f538`: Chrome through
+the Playwright transport, Safari and Firefox natively, both directions. Every leg
+has zero fixed or lost metrics, required failures, execution errors or new
+API/rich failures, and nine numeric profiles have no new failures. The baseline
+advances to runtime commit `2f15d72`, and the ordinary snapshots were
+regenerated against it with unchanged results; only provenance and environment
+records change.
+
 ## Kerning measured with the following space
 
 This runtime change starts from the line-edge kerning head `9535bc6`, where

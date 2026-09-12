@@ -194,65 +194,45 @@ export function getSegmentMetrics(seg: string, cache: Map<string, SegmentMetrics
   return metrics
 }
 
+export type LayoutEngine = 'blink' | 'webkit' | 'gecko'
+
+// Engine profiles describe the layout engine, not the browser brand. Chrome,
+// Firefox and Edge on iOS lay out with WebKit whatever their brand token (CriOS/,
+// FxiOS/, EdgiOS/) or desktop-mode user agent, and an app's web view may name no
+// browser at all. The user agent decides alone, so a page and its workers agree.
+// navigator.vendor is not read: workers don't have it, and jsdom reports WebKit's
+// beside Chromium's frozen AppleWebKit/537.36 token. WebKit froze 605.1.15, so
+// 537.36 names Blink only beside Chrome/ or Chromium/, which Samsung's TV web
+// views omit, and any other AppleWebKit/ version names WebKit.
+export function getLayoutEngine(userAgent: string): LayoutEngine | null {
+  if (userAgent.includes('Firefox/')) return 'gecko'
+  if (userAgent.includes('AppleWebKit/537.36')) {
+    return userAgent.includes('Chrome/') || userAgent.includes('Chromium/') ? 'blink' : null
+  }
+  return userAgent.includes('AppleWebKit/') ? 'webkit' : null
+}
+
 export function getEngineProfile(): EngineProfile {
   if (cachedEngineProfile !== null) return cachedEngineProfile
 
-  if (typeof navigator === 'undefined') {
-    cachedEngineProfile = {
-      entryFitBasis: 'disabled',
-      geckoAsciiLineBreaks: false,
-      lineFitEpsilon: 0.005,
-      carryCJKAfterClosingQuote: false,
-      breakKeepAllAfterPunctuation: true,
-      breakKeepAllAfterNonstarterLetters: false,
-      keepZeroWidthSpaceMarkAtScanStart: false,
-      breakBeforeConditionalJapaneseStarter: false,
-      wordInitialHyphenLetters: 'alphabetic-and-hebrew',
-      breakHyphenAfterCollapsedTab: false,
-      preferPrefixWidthsForBreakableRuns: false,
-      measureTextWithFollowingSpace: false,
-    }
-    return cachedEngineProfile
-  }
-
-  const ua = navigator.userAgent
-  const vendor = navigator.vendor
-  const isSafari =
-    vendor === 'Apple Computer, Inc.' &&
-    ua.includes('Safari/') &&
-    !ua.includes('Chrome/') &&
-    !ua.includes('Chromium/') &&
-    !ua.includes('CriOS/') &&
-    !ua.includes('FxiOS/') &&
-    !ua.includes('EdgiOS/')
-  const isChromium =
-    ua.includes('Chrome/') ||
-    ua.includes('Chromium/') ||
-    ua.includes('CriOS/') ||
-    ua.includes('Edg/')
-  const isGecko = ua.includes('Firefox/') && !ua.includes('FxiOS/')
-  // iOS browsers lay out with WebKit and the system ICU, whatever their brand.
-  const isIOSBrand = /CriOS\/|FxiOS\/|EdgiOS\//.test(ua)
-  const isWebKitLayout = isSafari || isIOSBrand
-
-  // Fresh-entry observations are verified only for desktop engines. Keep
-  // mobile brands (including desktop-requesting iOS browsers) on the old path.
-  const isDesktop = /Windows NT|Macintosh|X11/.test(ua) &&
-    !/Android|Mobile|iPhone|iPad|iPod|CriOS\/|FxiOS\/|EdgiOS\//.test(ua)
+  const ua = typeof navigator === 'undefined' ? '' : navigator.userAgent
+  const engine = getLayoutEngine(ua)
+  // Fresh-entry observations are verified only for desktop Blink and Gecko.
+  const isDesktop = /Windows NT|Macintosh|X11/.test(ua) && !/Android|Mobile|iPhone|iPad|iPod/.test(ua)
 
   cachedEngineProfile = {
-    entryFitBasis: isDesktop && isChromium ? 'fresh' : isDesktop && isGecko ? 'original' : 'disabled',
-    geckoAsciiLineBreaks: isGecko,
-    lineFitEpsilon: isSafari ? 1 / 64 : 0.005,
-    carryCJKAfterClosingQuote: isChromium,
-    breakKeepAllAfterPunctuation: !isSafari,
-    breakKeepAllAfterNonstarterLetters: isGecko,
-    keepZeroWidthSpaceMarkAtScanStart: isSafari,
-    breakBeforeConditionalJapaneseStarter: isChromium && !isIOSBrand,
-    wordInitialHyphenLetters: isGecko ? 'none' : 'alphabetic-and-hebrew',
-    breakHyphenAfterCollapsedTab: isWebKitLayout,
-    preferPrefixWidthsForBreakableRuns: isSafari,
-    measureTextWithFollowingSpace: isSafari,
+    entryFitBasis: isDesktop && engine === 'blink' ? 'fresh' : isDesktop && engine === 'gecko' ? 'original' : 'disabled',
+    geckoAsciiLineBreaks: engine === 'gecko',
+    lineFitEpsilon: engine === 'webkit' ? 1 / 64 : 0.005,
+    carryCJKAfterClosingQuote: engine === 'blink',
+    breakKeepAllAfterPunctuation: engine !== 'webkit',
+    breakKeepAllAfterNonstarterLetters: engine === 'gecko',
+    keepZeroWidthSpaceMarkAtScanStart: engine === 'webkit',
+    breakBeforeConditionalJapaneseStarter: engine === 'blink',
+    wordInitialHyphenLetters: engine === 'gecko' ? 'none' : 'alphabetic-and-hebrew',
+    breakHyphenAfterCollapsedTab: engine === 'webkit',
+    preferPrefixWidthsForBreakableRuns: engine === 'webkit',
+    measureTextWithFollowingSpace: engine === 'webkit',
   }
   return cachedEngineProfile
 }

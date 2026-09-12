@@ -1198,6 +1198,40 @@ describe('prepare invariants', () => {
     expect(prepareWithSegments('테스트입니다.', FONT).segments.at(-1)).toBe('다.')
   })
 
+  test('engine profiles follow the layout engine the user agent names', async () => {
+    const { getLayoutEngine } = await import('./measurement.ts')
+    const mac = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko)'
+    const iPhone = 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko)'
+    const chrome = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36'
+    // A page and its workers see the same user agent, so each row names one
+    // engine in every scope.
+    for (const [userAgent, engine] of [
+      [`${mac} Version/26.5.2 Safari/605.1.15`, 'webkit'],
+      [`${iPhone} Version/18.5 Mobile/15E148 Safari/604.1`, 'webkit'],
+      // iOS browsers run WebKit, whatever their brand token.
+      [`${iPhone} CriOS/140.0.7339.101 Mobile/15E148 Safari/604.1`, 'webkit'],
+      [`${iPhone} FxiOS/142.0 Mobile/15E148 Safari/604.1`, 'webkit'],
+      [`${iPhone} EdgiOS/140.0.3485.94 Mobile/15E148 Safari/605.1.15`, 'webkit'],
+      // iPadOS desktop-mode requests name a Mac, and an app's web view names no browser.
+      [`${mac} CriOS/140 Version/11.1.1 Safari/605.1.15`, 'webkit'],
+      [`${iPhone} Mobile/15E148`, 'webkit'],
+      [mac, 'webkit'],
+      // Blink's user agent also names Safari/537.36.
+      [chrome, 'blink'],
+      [`${chrome} Edg/140.0.3485.94`, 'blink'],
+      ['Mozilla/5.0 (Linux; Android 14; Pixel 8; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/140.0.7339.101 Mobile Safari/537.36', 'blink'],
+      ['Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:155.0) Gecko/20100101 Firefox/155.0', 'gecko'],
+      ['Mozilla/5.0 (Android 14; Mobile; rv:142.0) Gecko/142.0 Firefox/142.0', 'gecko'],
+      // AppleWebKit/537.36 without a Blink token names no engine: a Samsung TV
+      // web view, and jsdom, whose navigator.vendor is Apple's.
+      ['Mozilla/5.0 (SMART-TV; LINUX; Tizen 9.0) AppleWebKit/537.36 (KHTML, like Gecko) 120.0.6099.5/9.0 TV Safari/537.36', null],
+      ['Mozilla/5.0 (darwin) AppleWebKit/537.36 (KHTML, like Gecko) jsdom/26.1.0', null],
+      ['Bun/1.4.0', null],
+    ] as const) {
+      expect({ userAgent, engine: getLayoutEngine(userAgent) }).toEqual({ userAgent, engine })
+    }
+  })
+
   test('the Chromium profile carries CJK text after closing quotes, not closing brackets', async () => {
     const { getEngineProfile } = await import('./measurement.ts')
     const profile = getEngineProfile()

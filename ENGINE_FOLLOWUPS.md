@@ -5,7 +5,6 @@ Open engine work deferred from the #210 series: decisions for the maintainer, kn
 ## Decisions
 
 - Decide the public output changes the combined engine rules need: segment kinds for controls and for U+3000, raw CR, FF and VT kept in `line.text`, and U+00AD stripped from `line.text` when an unhyphenated soft hyphen stays inside text.
-- Decide what the iOS profile patch does outside real devices: jsdom reports Apple's vendor string and would get the WebKit profile, and Blink emulating an iOS user agent would get the default profile. Also decide whether headless user-agent replays are enough without an iOS device.
 - Decide whether Safari cursors may land inside a grapheme. WebKit's emergency breaks step by code point on its simple font path and by ICU cluster on its complex path, while the API promises grapheme boundaries.
 - Decide between a dedicated no-DOM study of Firefox's joined Arabic advances and documenting them as a limitation. Several Firefox halves of planned rules wait on it.
 - Decide on a feature-detected `fontKerning` prepare option (#199, #216), which would be a no-op on Safari's OffscreenCanvas, and on other Canvas font settings (#107).
@@ -87,7 +86,6 @@ Open engine work deferred from the #210 series: decisions for the maintainer, kn
 
 ## Per-browser gaps
 
-- iOS Chrome, Firefox and Edge run WebKit, but brand checks give them Blink or Gecko profile fields.
 - Installed Firefox confirms its cluster rules around invisible characters: ZWSP plus extenders form one unit, emergency units are clusters, and bidi levels separate marks. Implement them with resolved bidi levels, and fix the cap that misfires on kerned pairs.
 - Firefox keeps a Myanmar spacing mark such as U+102C with the previous cluster where Unicode graphemes split it. Record Firefox's `Intl.Segmenter` output, then model Gecko cluster starts, which rich-inline boundaries need too.
 - Firefox charges no hyphen for a soft hyphen at an ordinary break opportunity.
