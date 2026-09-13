@@ -862,8 +862,11 @@ function walkPreparedComplexLines(
             lineEndSegmentIndex = i - 1
             lineEndGraphemeIndex = 0
           }
-          // A break segment hangs with the gap before it.
-          if (breakAfter && lineW <= fitLimit) {
+          // A break segment hangs with the gap before it. A collapsible space or
+          // ZWSP hangs even after overflowing content that started the line, as
+          // the simple walker does; a preserved space there starts the next line.
+          if (breakAfter && (lineW <= fitLimit ||
+            (pendingBreakSegmentIndex < 0 && (kind === 'space' || kind === 'zero-width-break')))) {
             const currentBreakPaintWidth = lineW + getLineEndPaintContribution(kind, leadingSpacing, w)
             appendWholeSegment(i, advance)
             lineWidth = finishLine(i + 1, 0, currentBreakPaintWidth)
