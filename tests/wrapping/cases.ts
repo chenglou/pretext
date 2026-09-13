@@ -131,6 +131,22 @@ export function generateCases(measure: Measure, selection: CaseSelection): Wrapp
     family: 'standalone-zwsp', origins: ['maintained/standalone-zwsp'],
     heightSource: 'layout', heightMode: 'exact', required: ['height', 'lineCount', 'api'] })
 
+  // Pre-wrap pieces: preparation facts must not read across a newline. The
+  // width sits between the word measured with and without its kerning with the
+  // following space, so the line count shows whether Safari keeps the kerning
+  // when an explicit bidi control appears only in the next paragraph.
+  const kerned = measure('AA\u2060 ', '16px Arial', 0) - measure(' ', '16px Arial', 0)
+  add({ ...defaults, family: 'maintained/pieces', origins: ['maintained/pieces/control-in-another-paragraph'],
+    text: 'AA\u2060 B\n\u202Ax', width: (kerned + measure('AA\u2060', '16px Arial', 0)) / 2, whiteSpace: 'pre-wrap',
+    context: { kind: 'installed', lang: 'en' }, lang: 'en', browsers: ['safari'], required: ['height', 'lineCount', 'api'] })
+  // A collapsible space after an overflowing first glyph ends that line on both
+  // line walkers; the soft hyphen moves the text off the simple walker. Source
+  // observations show which line owns the space.
+  for (const text of ['字 字', '字 字 ab\u00ADcd']) {
+    add({ ...defaults, family: 'maintained/pieces', origins: ['maintained/pieces/space-after-overflow'],
+      text, width: 5, required: ['height', 'lineCount', 'api'] })
+  }
+
   // Same-font inline items break where their joined text breaks in Chromium;
   // WebKit breaks inside each item from its own text. Pretext still breaks at
   // every item boundary in Firefox, so the two rows required in Chrome and Safari

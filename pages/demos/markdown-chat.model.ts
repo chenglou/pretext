@@ -70,6 +70,9 @@ type MarkState = {
 type ParseContext = {
   listDepth: number
   quoteDepth: number
+  // Blocks of an earlier parse by preparation key, such as the same message
+  // before the latest streamed token.
+  previous: ReadonlyMap<string, PreparedBlock>
 }
 
 type InlinePiece = {
@@ -95,11 +98,13 @@ type PreparedInlineBlock = PreparedBlockBase & {
   classNames: string[]
   flow: PreparedRichInline
   hrefs: Array<string | null>
+  key: string
   lineHeight: number
 }
 
 type PreparedCodeBlock = PreparedBlockBase & {
   kind: 'code'
+  key: string
   lineHeight: number
   prepared: PreparedTextWithSegments
 }
@@ -352,9 +357,14 @@ export function formatPixelCount(value: number): string {
   return `${Math.round(value).toLocaleString()}px`
 }
 
-function parseMarkdownBlocks(markdown: string): PreparedBlock[] {
+// Blocks whose preparation inputs equal a block of `previous` reuse its prepared
+// text. The key is the input to preparation, not the block's markdown source: a
+// reference definition that arrives later changes an earlier paragraph's links.
+export function parseMarkdownBlocks(markdown: string, previous: readonly PreparedBlock[] = []): PreparedBlock[] {
   const tokens = marked.lexer(markdown, { gfm: true })
-  return parseBlockTokens(tokens, { listDepth: 0, quoteDepth: 0 })
+  const reuse = new Map<string, PreparedBlock>()
+  for (const block of previous) if (block.kind !== 'rule') reuse.set(block.key, block)
+  return parseBlockTokens(tokens, { listDepth: 0, quoteDepth: 0, previous: reuse })
 }
 
 function parseBlockTokens(tokens: readonly Token[], ctx: ParseContext): PreparedBlock[] {
@@ -399,6 +409,7 @@ function parseBlockTokens(tokens: readonly Token[], ctx: ParseContext): Prepared
           parseBlockTokens(token.tokens ?? [], {
             listDepth: ctx.listDepth,
             quoteDepth: ctx.quoteDepth + 1,
+            previous: ctx.previous,
           }),
           RICH_BLOCK_GAP,
         )
@@ -452,6 +463,7 @@ function buildListBlocks(token: Tokens.List, ctx: ParseContext): PreparedBlock[]
   const itemCtx: ParseContext = {
     listDepth: ctx.listDepth + 1,
     quoteDepth: ctx.quoteDepth,
+    previous: ctx.previous,
   }
 
   for (let index = 0; index < token.items.length; index++) {
@@ -534,27 +546,35 @@ function buildPreparedInlineBlock(
 ): PreparedInlineBlock | null {
   if (pieces.length === 0) return null
 
+  const items = pieces.map(piece => ({
+    text: piece.text,
+    font: piece.font,
+    break: piece.breakMode,
+    extraWidth: piece.extraWidth,
+  }))
+  const key = JSON.stringify(items)
+  const previous = ctx.previous.get(key)
   return {
     ...createBlockBase(ctx),
     classNames: pieces.map(piece => piece.className),
-    flow: prepareRichInline(pieces.map(piece => ({
-      text: piece.text,
-      font: piece.font,
-      break: piece.breakMode,
-      extraWidth: piece.extraWidth,
-    }))),
+    flow: previous?.kind === 'inline' ? previous.flow : prepareRichInline(items),
     hrefs: pieces.map(piece => piece.href),
+    key,
     kind: 'inline',
     lineHeight: lineHeightForVariant(variant),
   }
 }
 
 function buildCodeBlock(text: string, ctx: ParseContext): PreparedCodeBlock {
+  const source = stripSingleTrailingNewline(text)
+  const key = JSON.stringify(['code', source])
+  const previous = ctx.previous.get(key)
   return {
     ...createBlockBase(ctx),
+    key,
     kind: 'code',
     lineHeight: CODE_LINE_HEIGHT,
-    prepared: prepareWithSegments(stripSingleTrailingNewline(text), `500 12px ${MONO_FAMILY}`, {
+    prepared: previous?.kind === 'code' ? previous.prepared : prepareWithSegments(source, `500 12px ${MONO_FAMILY}`, {
       whiteSpace: 'pre-wrap',
     }),
   }
