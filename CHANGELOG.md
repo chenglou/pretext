@@ -32,6 +32,7 @@
 - In Firefox, and in engines Pretext doesn't recognize, small kana no longer start a line after CJK text, as Firefox does (#250).
 - In Safari, a word that ends in an invisible format character such as a word joiner now keeps its kerning with a following space when an explicit bidi control such as U+202A appears only in another paragraph, such as another line of `white-space: pre-wrap` text.
 - When a line's first word is wider than the line, a following space or zero-width space now ends that line in `layoutWithLines()`, `walkLineRanges()`, `layoutNextLine()` and `layoutNextLineRange()` whatever else the text contains. Previously other content such as a soft hyphen, or `letterSpacing`, moved it to the start of the next line. Line counts and widths don't change.
+- In Firefox, a combining mark at the start of a line after a line break or a space now stays with a following `$` or `%`, as it does at the start of the text.
 
 ## 0.0.9 - 2026-09-07
 
