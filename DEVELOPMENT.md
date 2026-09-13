@@ -12,6 +12,7 @@ bun install
 - `bun run start:windows` — Windows-friendly fallback without automatic port cleanup
 - `bun run check` — typecheck, lint, and dead-code scan (`knip`)
 - `bun test` — durable invariant suite
+- `bun run rich-inline-memo-check` — random item-edit chains comparing `prepareRichInline(items, previous)` with fresh flows and pinned main, one child process per engine profile with a fake canvas; `--canary=all` confirms it catches broken reuse checks
 - `bun run test:wrapping --browser=all` — complete maintained checks and selected regressions against a fresh pinned-main comparison
 - `bun run test:wrapping --suite=full --browser=all` — also run the broad exploratory wrapping matrices
 
