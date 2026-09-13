@@ -3075,7 +3075,9 @@ test('the Safari profile keeps the kerning between a word and a following space'
     }
     const rich = []
     walkRichInlineLineRanges(prepareRichInline([{ text: 'A\\u2060 B', font: '16px Test' }]), 8.5, line => rich.push(line.width))
-    console.log(JSON.stringify({ kerning, spaced, wordMeasurements, remainder: {
+    const paragraphs = [['AA\\u2060 B\\n\\u202Ax', 'pre-wrap'], ['AA\\u2060 B\\u2029\\u202Ax', 'normal'], ['AA\\u2060 B\\u202Ax', 'normal']]
+      .map(([text, whiteSpace]) => prepareWithSegments(text, '16px Test', { whiteSpace }).widths[0])
+    console.log(JSON.stringify({ kerning, spaced, wordMeasurements, paragraphs, remainder: {
       lines: layoutWithLines(remainder, 8.5, 20).lines.map(line => [line.text, line.width, line.start.segmentIndex, line.start.graphemeIndex, line.end.segmentIndex, line.end.graphemeIndex]),
       signed,
       streamed,
@@ -3085,7 +3087,7 @@ test('the Safari profile keeps the kerning between a word and a following space'
   `
   const child = Bun.spawnSync([process.execPath, '-e', script])
   if (child.exitCode !== 0) throw new Error(child.stderr.toString())
-  const { kerning, spaced, wordMeasurements, remainder } = JSON.parse(child.stdout.toString())
+  const { kerning, spaced, wordMeasurements, paragraphs, remainder } = JSON.parse(child.stdout.toString())
   expect(kerning).toEqual([
     // The kerned word fits and the space hangs.
     { lines: [['AA ', 19], ['B', 8]], lineCount: 2 },
@@ -3104,6 +3106,10 @@ test('the Safari profile keeps the kerning between a word and a following space'
   // alone, and keeps the -1px kerning.
   expect(spaced).toEqual([['QA ', 17], ['XA ', 17], ['q', 8]])
   expect(wordMeasurements).toEqual(['QA ', 'XA '])
+  // An explicit bidi control ends with its paragraph, at a newline in pre-wrap
+  // or at U+2029, so one in a later paragraph keeps the kerning. One in the same
+  // paragraph leaves the space's direction unknown.
+  expect(paragraphs).toEqual([19, 19, 20])
   // An emergency break inside A and the word joiner leaves the joiner alone
   // with the -1px kerning. Breaking keeps that signed advance, so the cursors
   // match the internal walker's, but every reported width is clamped at zero.

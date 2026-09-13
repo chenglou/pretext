@@ -345,7 +345,25 @@ function measureAnalysis(
   // sides (N1, with W7 turning European digits after Latin text into L). A
   // paired bracket in that run can take the paragraph direction instead (N0),
   // so it leaves the direction unknown.
+  // Explicit embeddings, overrides and isolates end with their paragraph (UAX #9
+  // X8), so only controls in the space's own paragraph leave its direction
+  // unknown. Spaces arrive in order, so each paragraph is scanned once.
   let hasExplicitBidiControls: boolean | null = null
+  let controlParagraphEnd = -1
+  let paragraphHasExplicitBidiControls = false
+  function spaceParagraphHasExplicitBidiControls(spaceStart: number): boolean {
+    hasExplicitBidiControls ??= explicitBidiControlRe.test(analysis.normalized)
+    if (!hasExplicitBidiControls) return false
+    if (spaceStart < controlParagraphEnd) return paragraphHasExplicitBidiControls
+    const text = analysis.normalized
+    let start = spaceStart
+    while (start > 0 && classifyCodePoint(text.charCodeAt(start - 1)) !== 'B') start--
+    let end = spaceStart
+    while (end < text.length && classifyCodePoint(text.charCodeAt(end)) !== 'B') end++
+    controlParagraphEnd = end
+    paragraphHasExplicitBidiControls = explicitBidiControlRe.test(text.slice(start, end))
+    return paragraphHasExplicitBidiControls
+  }
   function formatTailStaysWithWord(item: string, spaceStart: number): boolean {
     let end = item.length
     while (end > 0) {
@@ -356,8 +374,7 @@ function measureAnalysis(
       end = start
     }
     if (end === item.length) return true
-    hasExplicitBidiControls ??= explicitBidiControlRe.test(analysis.normalized)
-    if (hasExplicitBidiControls) return false
+    if (spaceParagraphHasExplicitBidiControls(spaceStart)) return false
     let wordType: ReturnType<typeof classifyCodePoint> | null = null
     while (end > 0) {
       const start = previousCodePointStart(item, end)

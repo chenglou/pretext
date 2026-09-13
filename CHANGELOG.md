@@ -30,6 +30,7 @@
 - In Safari, small kana and `ー` after CJK text can now start a line only on pages whose `<html lang>` is Japanese or Korean, as Safari does (#249).
 - In Chrome, `ー` can now start a line after CJK text, as Chrome does (#250).
 - In Firefox, and in engines Pretext doesn't recognize, small kana no longer start a line after CJK text, as Firefox does (#250).
+- In Safari, a word that ends in an invisible format character such as a word joiner now keeps its kerning with a following space when an explicit bidi control such as U+202A appears only in another paragraph, such as another line of `white-space: pre-wrap` text.
 
 ## 0.0.9 - 2026-09-07
 
