@@ -2221,6 +2221,60 @@ describe('rich-inline invariants', () => {
     }
   })
 
+  test('a previous rich flow lets preparation reuse only unchanged items', () => {
+    type TestFlow = { items: Array<{ prepared: object } | undefined> }
+    const bold = '700 16px Test Sans'
+    const chip = { text: '@maya', font: '700 12px Test Sans', break: 'never', extraWidth: 18 } as const
+    const steps: Array<[Parameters<typeof prepareRichInline>[0], Array<boolean | null>]> = [
+      // Typing inside an item prepares only that item again.
+      [[{ text: 'Ship the ', font: FONT }, { text: 'rich notes', font: bold }, { text: ' today', font: FONT }], [true, false, true]],
+      // Restyling a sub-range splits an item. The restyled word and the
+      // unchanged tail match by content; the whitespace-only item has no handle.
+      [[{ text: 'Ship ', font: FONT }, { text: 'the', font: bold }, { text: ' ', font: FONT }, { text: 'rich notes', font: bold }, { text: ' today', font: FONT }], [false, false, null, true, true]],
+      // Merging the neighbors back is new text.
+      [[{ text: 'Ship the ', font: FONT }, { text: 'rich notes', font: bold }, { text: ' today', font: FONT }], [false, true, true]],
+      // A font change is a new item.
+      [[{ text: 'Ship the ', font: FONT }, { text: 'rich notes', font: FONT }, { text: ' today', font: FONT }], [true, false, true]],
+      // A re-parse builds new objects and strings with the same content.
+      [[{ text: ` ${'Ship the '}`.slice(1), font: FONT }, { text: ` ${'rich notes'}`.slice(1), font: FONT }, { text: ` ${' today'}`.slice(1), font: FONT }], [true, true, true]],
+      // Inserting an atomic item shifts every other item.
+      [[chip, { text: 'Ship the ', font: FONT }, { text: 'rich notes', font: FONT }, { text: ' today', font: FONT }], [false, true, true, true]],
+    ]
+    let previous = prepareRichInline([{ text: 'Ship the ', font: FONT }, { text: 'rich note', font: bold }, { text: ' today', font: FONT }])
+    for (const [items, reused] of steps) {
+      const next = prepareRichInline(items, previous)
+      expect(next).toEqual(prepareRichInline(items))
+      const previousHandles = new Set((previous as unknown as TestFlow).items.map(item => item?.prepared))
+      expect((next as unknown as TestFlow).items.map(item => item === undefined ? null : previousHandles.has(item.prepared))).toEqual(reused)
+      previous = next
+    }
+  })
+
+  test('a previous rich flow is not reused after clearCache, setLocale or a page language change', () => {
+    type TestFlow = { items: Array<{ prepared: object } | undefined> }
+    const items = [{ text: 'Ship ', font: FONT }, { text: 'ラーメン', font: FONT }]
+    const sharesHandles = (next: ReturnType<typeof prepareRichInline>, previous: ReturnType<typeof prepareRichInline>) =>
+      (next as unknown as TestFlow).items.map((item, i) => item?.prepared === (previous as unknown as TestFlow).items[i]?.prepared)
+    const root = { lang: 'en' }
+    Reflect.set(globalThis, 'document', { documentElement: root })
+    try {
+      // The first preparation under a new page language replaces the
+      // measurement context, which clears the caches; reuse starts after it.
+      prepareRichInline(items)
+      const unchanged = prepareRichInline(items)
+      expect(sharesHandles(prepareRichInline(items, unchanged), unchanged)).toEqual([true, true])
+      for (const invalidate of [() => clearCache(), () => setLocale('ja'), () => { root.lang = 'ja' }]) {
+        const previous = prepareRichInline(items)
+        invalidate()
+        const next = prepareRichInline(items, previous)
+        expect(sharesHandles(next, previous)).toEqual([false, false])
+        expect((next as unknown as TestFlow).items).toEqual((prepareRichInline(items) as unknown as TestFlow).items)
+      }
+    } finally {
+      Reflect.deleteProperty(globalThis, 'document')
+    }
+  })
+
   test('split CJK rich inline items stay inside the line width', () => {
     const maxWidth = measureWidth('中', FONT) + 1
     const prepared = prepareRichInline([

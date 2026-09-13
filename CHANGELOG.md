@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Added
+
+- `prepareRichInline()` accepts the previous flow as an optional second argument. After an edit, such as a keystroke or a restyled range, it reuses the preparation of items whose text, font and `letterSpacing` are unchanged, and returns the same result as without it.
+
 ### Fixed
 
 - Narrow wrapping around invisible controls and combining marks now more closely matches desktop Chrome and Firefox.

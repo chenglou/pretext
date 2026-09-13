@@ -488,7 +488,16 @@ export function getFontMeasurementState(font: string, needsEmojiCorrection: bool
   return { cache, emojiCorrection }
 }
 
+// Counts clears of the measurement caches. Work derived from measured facts,
+// such as a rich-inline item's preparation, is reused only within one generation.
+let measurementGeneration = 0
+
+export function getMeasurementGeneration(): number {
+  return measurementGeneration
+}
+
 export function clearMeasurementCaches(): void {
+  measurementGeneration++
   segmentMetricCaches.clear()
   followingSpaceMetricCaches.clear()
   emojiCorrectionCache.clear()

@@ -156,7 +156,7 @@ type LayoutCursor = {
 
 Helper for rich-text inline flow:
 ```ts
-prepareRichInline(items: RichInlineItem[]): PreparedRichInline // prepares the items for layout and collapses spaces between them
+prepareRichInline(items: RichInlineItem[], previous?: PreparedRichInline): PreparedRichInline // prepares the items for layout and collapses spaces between them. After an edit, pass the previous result to reuse the preparation of items whose text, font and letterSpacing didn't change; the result is the same either way
 layoutNextRichInlineLineRange(prepared: PreparedRichInline, maxWidth: number, start?: RichInlineCursor): RichInlineLineRange | null // stream one line of rich-text inline flow at a time without building fragment text strings
 walkRichInlineLineRanges(prepared: PreparedRichInline, maxWidth: number, onLine: (line: RichInlineLineRange) => void): number // non-materializing line walker for rich-text inline flow shrinkwrap/stats work
 materializeRichInlineLineRange(prepared: PreparedRichInline, line: RichInlineLineRange): RichInlineLine // turns one previously computed rich-inline line range back into full fragment text

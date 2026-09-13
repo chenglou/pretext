@@ -24,7 +24,14 @@ import {
   type PreparedLineBreakData,
   stepPreparedLineGeometry,
 } from './line-break.js'
-import { getDocumentLanguage, getEngineProfile, getFontMeasurementState, getSegmentMetrics } from './measurement.js'
+import {
+  getDocumentLanguage,
+  getEngineProfile,
+  getFontMeasurementState,
+  getMeasurementGeneration,
+  getSegmentMetrics,
+  type EngineProfile,
+} from './measurement.js'
 
 // Helper for rich-text inline flow under `white-space: normal`.
 // It keeps the core layout API low-level while taking over the boring shared
@@ -89,6 +96,11 @@ export type RichInlineStats = {
 
 type InternalPreparedRichInline = PreparedRichInline & {
   items: Array<PreparedRichInlineItem | undefined>
+  // What a later prepareRichInline() can reuse, under the page language and
+  // measurement generation this flow was prepared with.
+  cores: ItemCore[]
+  documentLanguage: string | null
+  generation: number
 }
 
 type PreparedRichInlineItem = {
@@ -443,13 +455,139 @@ function endsInsideFirstSegment(segmentIndex: number, graphemeIndex: number): bo
   return segmentIndex === 0 && graphemeIndex > 0
 }
 
-export function prepareRichInline(items: RichInlineItem[]): PreparedRichInline {
+// Everything preparation computes from one item alone. It is a pure function
+// of the item's text, font and letterSpacing under one page language and one
+// measurement generation, and never changes once created, so flows share it.
+type ItemCore = {
+  text: string
+  font: string
+  letterSpacing: number
+  // Whether the item text, after its own segment break transformation, starts
+  // or ends with collapsible whitespace.
+  hasLeadingWhitespace: boolean
+  hasTrailingWhitespace: boolean
+  // The last two characters before trailing whitespace, for engines where
+  // breaks come from each item's own text.
+  boundaryContext: string
+  prepared: PreparedTextWithSegments | null // Null for an empty or whitespace-only item
+  wholeWidth: number | null
+  establishesLine: boolean
+  // The first and last collapsible-space segments, or -1.
+  firstSpace: number
+  lastSpace: number
+}
+
+const EMPTY_ITEM_CORES: readonly ItemCore[] = []
+
+function createItemCore(item: RichInlineItem, profile: EngineProfile): ItemCore {
+  const letterSpacing = item.letterSpacing ?? 0
+  // The item's own segment break transformation can remove a boundary run.
+  // Context from a neighboring item is not modeled.
+  const text = removeSegmentBreaksNextToZeroWidthSpace(item.text, profile)
+  // Scan from the ends once. A trailing-whitespace regex retries every
+  // position in a long internal space run when later content prevents a match.
+  let start = 0
+  while (start < text.length && isCollapsibleBoundaryWhitespace(text.charCodeAt(start))) start++
+  let end = text.length
+  while (end > start && isCollapsibleBoundaryWhitespace(text.charCodeAt(end - 1))) end--
+  const core: ItemCore = {
+    text: item.text,
+    font: item.font,
+    letterSpacing,
+    hasLeadingWhitespace: start > 0,
+    hasTrailingWhitespace: end < text.length,
+    boundaryContext: profile.inlineItemBreaks === 'item-text' ? text.slice(Math.max(0, end - 2), end) : '',
+    prepared: null,
+    wholeWidth: null,
+    establishesLine: false,
+    firstSpace: -1,
+    lastSpace: -1,
+  }
+  if (start === end) return core
+
+  // Normalization already drops boundary whitespace, so the item's own text
+  // yields the same segments while analysis keeps the source before them:
+  // a leading SPACE or TAB is break context inside the item's text node.
+  // Fragment cursors then index the same handle as prepareWithSegments(item.text).
+  const prepared = prepareWithSegments(
+    item.text,
+    item.font,
+    letterSpacing === 0 ? undefined : { letterSpacing },
+  )
+  const { kinds } = prepared
+  core.prepared = prepared
+  // The flat walker can omit source controls at line start. Its result is
+  // a measurement observation, not the rich item's identity or source end.
+  core.wholeWidth = measureWholeItem(prepared)
+  core.establishesLine = core.wholeWidth !== null || kinds.includes('zero-width-break')
+  core.firstSpace = kinds.indexOf('space')
+  core.lastSpace = kinds.lastIndexOf('space')
+  return core
+}
+
+function coreMatches(core: ItemCore, item: RichInlineItem): boolean {
+  return core.text === item.text && core.font === item.font && core.letterSpacing === (item.letterSpacing ?? 0)
+}
+
+// Keeps the cores of unchanged leading and trailing items by position and finds
+// the others by content, so edits, splits, merges, insertions and re-parsed
+// item arrays prepare only new content. Equal items can share a core.
+function matchItemCores(items: RichInlineItem[], previous: readonly ItemCore[], profile: EngineProfile): ItemCore[] {
+  let head = 0
+  while (head < items.length && head < previous.length && coreMatches(previous[head]!, items[head]!)) head++
+  let tail = 0
+  while (
+    tail < items.length - head &&
+    tail < previous.length - head &&
+    coreMatches(previous[previous.length - 1 - tail]!, items[items.length - 1 - tail]!)
+  ) {
+    tail++
+  }
+  let pool: Map<string, ItemCore> | null = null
+  for (let i = head; i < previous.length - tail; i++) {
+    const core = previous[i]!
+    pool ??= new Map()
+    pool.set(`${core.font}\u0000${core.letterSpacing}\u0000${core.text}`, core)
+  }
+  const cores: ItemCore[] = []
+  for (let i = 0; i < items.length; i++) {
+    if (i < head) {
+      cores.push(previous[i]!)
+    } else if (i >= items.length - tail) {
+      cores.push(previous[previous.length - items.length + i]!)
+    } else {
+      const item = items[i]!
+      const core = pool?.get(`${item.font}\u0000${item.letterSpacing ?? 0}\u0000${item.text}`)
+      // A font containing the separator can collide; matching decides.
+      cores.push(core !== undefined && coreMatches(core, item) ? core : createItemCore(item, profile))
+    }
+  }
+  return cores
+}
+
+// `previous` only enables reuse. The result equals prepareRichInline(items)
+// whatever flow it is: an unrelated one, or one from before clearCache(),
+// setLocale() or a page-language change.
+export function prepareRichInline(items: RichInlineItem[], previous?: PreparedRichInline): PreparedRichInline {
   const preparedItems = Array.from<PreparedRichInlineItem | undefined>({ length: items.length })
   // Each item reads the page language as it prepares; the joined analysis and
   // boundary spaces share one more read.
   const documentLanguage = getDocumentLanguage()
   const profile = getEngineProfile(getBreakLanguage(documentLanguage))
   const { inlineItemBreaks } = profile
+  // Cores hold the break rules of their page language and widths from the
+  // caches of their generation. The generation is read before anything is
+  // measured, so when measuring replaces the context for a new page language,
+  // this flow keeps the older generation and later calls prepare its items again.
+  const generation = getMeasurementGeneration()
+  const prior = previous === undefined ? null : getInternalPreparedRichInline(previous)
+  const cores = matchItemCores(
+    items,
+    prior !== null && prior.generation === generation && prior.documentLanguage === documentLanguage
+      ? prior.cores
+      : EMPTY_ITEM_CORES,
+    profile,
+  )
   // A collapsed SPACE can have zero or negative advance. Its existence and
   // ordinary break opportunity must survive independently of that number.
   let pendingGapWidth: number | null = null
@@ -526,45 +664,22 @@ export function prepareRichInline(items: RichInlineItem[]): PreparedRichInline {
 
   for (let index = 0; index < items.length; index++) {
     const item = items[index]!
-    const letterSpacing = item.letterSpacing ?? 0
-    // The item's own segment break transformation can remove a boundary run.
-    // Context from a neighboring item is not modeled.
-    const text = removeSegmentBreaksNextToZeroWidthSpace(item.text, profile)
-    let start = 0
-    while (start < text.length && isCollapsibleBoundaryWhitespace(text.charCodeAt(start))) start++
+    const core = cores[index]!
+    const { letterSpacing, hasLeadingWhitespace, hasTrailingWhitespace, prepared, wholeWidth, establishesLine } = core
 
-    if (start === text.length) {
-      if (start > 0 && pendingGapWidth === null) {
+    if (prepared === null) {
+      if (hasLeadingWhitespace && pendingGapWidth === null) {
         pendingGapWidth = getCollapsedSpaceWidth(item.font, letterSpacing, documentLanguage)
       }
       continue
     }
 
-    // Scan from the ends once. A trailing-whitespace regex retries every
-    // position in a long internal space run when later content prevents a match.
-    let end = text.length
-    while (end > start && isCollapsibleBoundaryWhitespace(text.charCodeAt(end - 1))) end--
-    const hasLeadingWhitespace = start > 0
-    const hasTrailingWhitespace = end < text.length
     const whitespaceBefore = pendingGapWidth !== null || hasLeadingWhitespace
-    if (inlineItemBreaks === 'item-text') boundaryContexts[index] = text.slice(Math.max(0, end - 2), end)
+    if (inlineItemBreaks === 'item-text') boundaryContexts[index] = core.boundaryContext
 
     const gapBefore = pendingGapWidth ?? (
       hasLeadingWhitespace ? getCollapsedSpaceWidth(item.font, letterSpacing, documentLanguage) : 0
     )
-    // Normalization already drops boundary whitespace, so the item's own text
-    // yields the same segments while analysis keeps the source before them:
-    // a leading SPACE or TAB is break context inside the item's text node.
-    // Fragment cursors then index the same handle as prepareWithSegments(item.text).
-    const prepared = prepareWithSegments(
-      item.text,
-      item.font,
-      letterSpacing === 0 ? undefined : { letterSpacing },
-    )
-    // The flat walker can omit source controls at line start. Its result is
-    // a measurement observation, not the rich item's identity or source end.
-    const wholeWidth = measureWholeItem(prepared)
-    const establishesLine = wholeWidth !== null || prepared.kinds.includes('zero-width-break')
 
     const preparedItem = {
       break: item.break ?? 'normal',
@@ -596,8 +711,7 @@ export function prepareRichInline(items: RichInlineItem[]): PreparedRichInline {
       } else {
         // Normal-mode segments hold single collapsed spaces. Text beyond the
         // first and last of them cannot reach a neighboring item's boundary.
-        const { kinds } = prepared
-        const firstSpace = kinds.indexOf('space')
+        const { firstSpace } = core
         joinedPortions.push({
           item: preparedItem,
           itemIndex: index,
@@ -611,7 +725,7 @@ export function prepareRichInline(items: RichInlineItem[]): PreparedRichInline {
             item: preparedItem,
             itemIndex: index,
             start: 0,
-            startSegmentIndex: kinds.lastIndexOf('space') + 1,
+            startSegmentIndex: core.lastSpace + 1,
             spaceEndSegmentIndex: -1,
           })
         }
@@ -649,6 +763,9 @@ export function prepareRichInline(items: RichInlineItem[]): PreparedRichInline {
 
   return {
     items: preparedItems,
+    cores,
+    documentLanguage,
+    generation,
   } as InternalPreparedRichInline
 }
 
