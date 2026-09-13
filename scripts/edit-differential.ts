@@ -556,6 +556,10 @@ async function child(): Promise<void> {
     { label: 'space + ZWJ', texts: ['x \u200Dword', 'x \u200Dwordy'], embed: 'middle' },
     { label: 'LF + mark + $', texts: ['a\n\u0301$5', 'a\n\u0301$55'], embed: 'middle' },
     { label: 'TAB + hyphen', texts: ['a\t-\u05D0b', 'a\t-\u05D0bc'], embed: 'middle' },
+    // The same hazards one word further from the edit, where criteria off put them on the window's outer separator.
+    { label: 'space + ZWJ, edit one word away', texts: ['x \u200Dword two', 'x \u200Dword twos'], embed: 'middle' },
+    { label: 'LF + mark + $, edit one word away', texts: ['a\n\u0301$5 cd', 'a\n\u0301$5 cde'], embed: 'middle' },
+    { label: 'TAB + hyphen, edit one word away', texts: ['a\t-\u05D0b cd', 'a\t-\u05D0b cde'], embed: 'middle' },
     { label: 'direction scan', texts: ['fo\u200D , , , , bar', 'fo\u200D , , , , \u05E2\u05D1'], embed: 'middle' },
     { label: 'direction scan memo', texts: ['fo\u200D bar fo\u200D \u05E2\u05D1 end', 'fo\u200D baz fo\u200D \u05E2\u05D1 end'], embed: 'middle' },
     { label: 'explicit control typed and deleted', texts: ['ab cd', 'ab \u202Acd', 'ab cd'], embed: 'middle' },
@@ -571,18 +575,23 @@ async function child(): Promise<void> {
     { label: 'soft-hyphen-only paragraph', texts: ['a\n\u00AD\nb', 'a\n\u00AD\nbc'], embed: 'middle' },
     { label: 'URL query', texts: ['see www.a.com/www.b?q=1 now', 'see www.a.com/www.b?q=12 now'], embed: 'middle' },
   ]
-  for (let t = 0; t < TARGETED.length; t++) {
-    const targeted = TARGETED[t]!
-    for (let c = 0; c < CONFIGS.length; c++) {
-      const config = configFor(c)
-      const prefix = targeted.embed === 'none' ? '' : randomWords(int(600, 1500), false)
-      const suffix = targeted.embed === 'middle' ? ' ' + randomWords(int(600, 1500), false).trimEnd() : ''
-      let text = prefix + targeted.texts[0]! + suffix
-      let handle = prepareFor(config, text, true)
-      for (let i = 1; i < targeted.texts.length; i++) {
-        const nextText = prefix + targeted.texts[i]! + suffix
-        handle = checkEdit('D', targeted.label, config, handle, text, nextText, true, false)
-        text = nextText
+  // Both width tables: only the fixed one kerns a space after `o`.
+  for (const table of ['fixed', 'proportional'] as const) {
+    canvas.table = table
+    L.clearCache()
+    for (let t = 0; t < TARGETED.length; t++) {
+      const targeted = TARGETED[t]!
+      for (let c = 0; c < CONFIGS.length; c++) {
+        const config = configFor(c)
+        const prefix = targeted.embed === 'none' ? '' : randomWords(int(600, 1500), false)
+        const suffix = targeted.embed === 'middle' ? ' ' + randomWords(int(600, 1500), false).trimEnd() : ''
+        let text = prefix + targeted.texts[0]! + suffix
+        let handle = prepareFor(config, text, true)
+        for (let i = 1; i < targeted.texts.length; i++) {
+          const nextText = prefix + targeted.texts[i]! + suffix
+          handle = checkEdit('D', targeted.label, config, handle, text, nextText, true, false)
+          text = nextText
+        }
       }
     }
   }
@@ -663,7 +672,9 @@ async function parent(): Promise<void> {
 
   if (process.argv.includes('--canaries')) {
     const canaries = [
-      { name: 'separator criteria and guards off', profile: 'blink', mutations: ['criteria', 'guards'], label: null },
+      { name: 'separator criteria and guards off', profile: 'blink', mutations: ['criteria', 'guards'], label: 'space + ZWJ, edit one word away' },
+      { name: 'separator criteria and guards off', profile: 'gecko', mutations: ['criteria', 'guards'], label: 'LF + mark + $, edit one word away' },
+      { name: 'separator criteria and guards off', profile: 'webkit', mutations: ['criteria', 'guards'], label: 'TAB + hyphen, edit one word away' },
       { name: 'measurement context off', profile: 'webkit', mutations: ['nocontext'], label: null },
       { name: 'right-neighbor rule off', profile: 'webkit', mutations: ['rightneighbor'], label: 'direction scan' },
       { name: 'direction scan memo in whole-text coordinates', profile: 'webkit', mutations: ['scanmemo'], label: 'direction scan memo' },
