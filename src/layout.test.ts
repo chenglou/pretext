@@ -3221,3 +3221,32 @@ describe('bidi paragraph boundaries', () => {
     for (const separator of ['\t', '\u2028']) expect(levels(`אבג${separator}abc`).at(-1)).toBe(2)
   })
 })
+
+describe('pre-wrap pieces', () => {
+  test('text split after each newline prepares into pieces whose lines match the whole text', () => {
+    // Each piece keeps its newline: the whole text shows no line for the
+    // soft-hyphen-only paragraph. The last piece of 'ab\u00ADcd\n字\u200B字'
+    // can take the simple walker while the whole text cannot.
+    const options = { whiteSpace: 'pre-wrap' } as const
+    for (const text of ['a\n\u00AD\nb', 'a\n\u200B', 'x\r\ny\n', 'ab\u00ADcd\n字\u200B字', 'www.a.com\n/b ab\u00ADcd']) {
+      const whole = prepareWithSegments(text, FONT, options)
+      const pieces = text.split(/(?<=\n)/).map(piece => prepareWithSegments(piece, FONT, options))
+      expect(pieces.flatMap(piece => piece.segments)).toEqual(whole.segments)
+      expect(pieces.flatMap(piece => piece.widths)).toEqual(whole.widths)
+      for (const width of [5, 25, 90, Number.POSITIVE_INFINITY]) {
+        let shift = 0
+        const pieceLines = pieces.flatMap(piece => {
+          const lines = layoutWithLines(piece, width, LINE_HEIGHT).lines.map(line => ({
+            ...line,
+            start: { ...line.start, segmentIndex: line.start.segmentIndex + shift },
+            end: { ...line.end, segmentIndex: line.end.segmentIndex + shift },
+          }))
+          shift += piece.segments.length
+          return lines
+        })
+        expect(pieceLines).toEqual(layoutWithLines(whole, width, LINE_HEIGHT).lines)
+        expect(pieces.reduce((sum, piece) => sum + layout(piece, width, LINE_HEIGHT).lineCount, 0)).toBe(layout(whole, width, LINE_HEIGHT).lineCount)
+      }
+    }
+  })
+})

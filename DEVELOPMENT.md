@@ -14,6 +14,7 @@ bun install
 - `bun test` — durable invariant suite
 - `bun run test:wrapping --browser=all` — complete maintained checks and selected regressions against a fresh pinned-main comparison
 - `bun run test:wrapping --suite=full --browser=all` — also run the broad exploratory wrapping matrices
+- `bun run scripts/pieces-differential.ts` — offline differential with a fake Canvas, one process per engine profile: pre-wrap text split after each `\n` must lay out like the whole text, simple and complex line walkers must agree, and a streamed markdown chat must lay out like one parsed from scratch. `--variant=<name>` runs canaries that must report differences; `--src=<dir>` runs another tree, such as main's
 
 The report-server tests use temporary loopback ports; sandboxed runs need local
 listener access. They do not launch browsers.

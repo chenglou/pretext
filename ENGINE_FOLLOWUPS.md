@@ -8,6 +8,9 @@ Open engine work: decisions for the maintainer, known gaps and harness debt.
 - Decide whether `prepareRichInline()` supports `whiteSpace: 'pre-wrap'` (#173, #193). Accepting it needs a native styled-inline pre-wrap oracle.
 - Revisit what rich-text editing needs from Pretext: source offsets through whitespace normalization (#90) and caret positions (#198), and whether bidi selection and copy/paste behavior stay outside this package. Do a pass over the open demo and showcase issues (#94, #99, #150, #167).
 
+- Decide whether to keep the simple line walker, now aligned with the complex walker where overflowing content starts a line, or delete it and walk every handle with the complex walker. This waits for `pages/benchmark.ts` in Chrome and Safari.
+- Check in Safari that an explicit bidi control in another paragraph leaves a word's kerning with a following space (`maintained/pieces`). If Safari reads controls across paragraphs, revert the paragraph scope, and the pre-wrap pieces guarantee excludes Safari texts with explicit controls.
+
 ## Line breaking
 
 - Follow the page language in the remaining line-break rules (approved). Preparation reads `<html lang>` once and resolves it to `ja`, `ko`, `zh` or root, with no `prepare()` option; only Safari's small-kana and `ー` rule uses it so far. Remaining layers: Safari's quote rules on `ja` pages, and Chrome's quote, `〜` and `゠` rules on `zh` pages (RESEARCH.md). Build them on the generated line-break class table, keep `setLocale()` segmenter-only, and rerun the family in each installed browser before each layer.
