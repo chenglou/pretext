@@ -37,6 +37,26 @@ const prepared = prepare(textareaValue, '16px Inter', { whiteSpace: 'pre-wrap' }
 const { height } = layout(prepared, textareaWidth, 20)
 ```
 
+For `pre-wrap` text that changes as you type or stream, prepare each line separately, keeping its `\n`, and add up the line counts. The lines match preparing the whole text, so only changed lines need `prepare()` again:
+
+```ts
+let handles = new Map<string, PreparedText>()
+
+function textareaHeight(value: string, width: number): number {
+  const next = new Map<string, PreparedText>()
+  let lineCount = 0
+  for (const line of value.split(/(?<=\n)/)) { // each line keeps its '\n'
+    const prepared = next.get(line) ?? handles.get(line) ?? prepare(line, '16px Inter', { whiteSpace: 'pre-wrap' })
+    next.set(line, prepared)
+    lineCount += layout(prepared, width, 20).lineCount
+  }
+  handles = next
+  return Math.max(1, lineCount) * 20
+}
+```
+
+Drop the handles after changing the font or options, `<html lang>` or `setLocale()`, and after calling `clearCache()` when a web font loads. With `prepareWithSegments()`, a position is the line's index plus a `LayoutCursor` inside that line. Markdown blocks, paragraphs and chat messages are separate blocks anyway: prepare each on its own and prepare again only the ones whose text or style changed.
+
 Other `prepare()` options are `{ wordBreak: 'keep-all' }` for CSS-like `word-break: keep-all`, and `{ letterSpacing: n }` to match CSS `letter-spacing` (`n` is treated as a px value).
 
 The returned height is the crucial last piece for unlocking web UIs:
