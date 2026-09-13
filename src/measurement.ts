@@ -488,8 +488,17 @@ export function getFontMeasurementState(font: string, needsEmojiCorrection: bool
   return { cache, emojiCorrection }
 }
 
+// Bumped by every cache clear. prepareEdit() splices only handles measured
+// within one generation.
+let measurementGeneration = 0
+
+export function getMeasurementGeneration(): number {
+  return measurementGeneration
+}
+
 export function clearMeasurementCaches(): void {
   segmentMetricCaches.clear()
   followingSpaceMetricCaches.clear()
   emojiCorrectionCache.clear()
+  measurementGeneration++
 }

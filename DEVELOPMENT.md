@@ -12,6 +12,7 @@ bun install
 - `bun run start:windows` — Windows-friendly fallback without automatic port cleanup
 - `bun run check` — typecheck, lint, and dead-code scan (`knip`)
 - `bun test` — durable invariant suite
+- `bun run edit-differential` — random `prepareEdit()` edits against fresh prepares in four engine profiles with fake canvases; `--canaries` confirms that its mutation canaries fail
 - `bun run test:wrapping --browser=all` — complete maintained checks and selected regressions against a fresh pinned-main comparison
 - `bun run test:wrapping --suite=full --browser=all` — also run the broad exploratory wrapping matrices
 

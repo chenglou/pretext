@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Added
+
+- `prepareEdit()` prepares a new version of a text, like a textarea's value or a streamed reply, from the previous state prepared with `{ editable: true }`, and re-measures only around the change.
+
 ### Fixed
 
 - Narrow wrapping around invisible controls and combining marks now more closely matches desktop Chrome and Firefox.

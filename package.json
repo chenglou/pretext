@@ -41,12 +41,14 @@
     "dist",
     "src",
     "!src/layout.test.ts",
+    "!src/prepare-edit.test.ts",
     "!src/test-data.ts",
     "pages/demos",
     "pages/assets"
   ],
   "scripts": {
     "benchmark-check": "bun run scripts/benchmark-check.ts",
+    "edit-differential": "bun run scripts/edit-differential.ts",
     "build:package": "rm -rf dist && tsc -p tsconfig.build.json",
     "check": "tsc && oxlint --type-aware src tests/wrapping scripts/wrapping-check.ts && knip",
     "test:wrapping": "bun run scripts/wrapping-check.ts",

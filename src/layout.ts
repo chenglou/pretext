@@ -52,6 +52,11 @@ import {
   buildLineTextFromRange,
   getLineTextCache,
 } from './line-text.js'
+import {
+  editPrepared,
+  prepareEditable,
+  type MeasureWindowContext,
+} from './prepare-edit.js'
 
 // --- Public types ---
 
@@ -127,6 +132,9 @@ export type PrepareOptions = {
   whiteSpace?: WhiteSpaceMode
   wordBreak?: WordBreakMode
   letterSpacing?: number
+  // Keep the source text, normalized text and segment offsets so prepareEdit()
+  // can reuse this state. Other states keep none of it.
+  editable?: boolean
 }
 
 // Internal hard-break chunk hint for the line walker. Not public because
@@ -252,10 +260,14 @@ function measureAnalysis(
   letterSpacing: number,
   engineProfile: EngineProfile,
   documentLanguage: string | null,
+  // An edit window reads the rest of the text through `context`. Editable
+  // preparation collects each segment's normalized start in `startsOut`.
+  context: MeasureWindowContext | null = null,
+  startsOut: number[] | null = null,
 ): InternalPreparedText | PreparedTextWithSegments {
   const { cache, emojiCorrection } = getFontMeasurementState(
     font,
-    textMayContainEmoji(analysis.normalized),
+    textMayContainEmoji(context === null ? analysis.normalized : context.text),
     documentLanguage,
   )
   // The gap before the hyphen, plus the hyphen's own spacing where the engine
@@ -313,7 +325,12 @@ function measureAnalysis(
       tail += analysis.texts[next]!
       next++
     }
-    if (next >= analysis.len) return null
+    if (next >= analysis.len) {
+      // At the end of an edit window, the separator after the window decides.
+      if (context === null || (context.followingKind !== 'space' && context.followingKind !== 'preserved-space') ||
+        context.followingSourceCode !== 0x20) return null
+      return formatTailStaysWithWord(tail === '' ? text : text + tail, analysis.normalized.length) ? tail : null
+    }
     const nextKind = analysis.kinds[next]!
     if ((nextKind !== 'space' && nextKind !== 'preserved-space') || getSpaceSourceCode(next) !== 0x20) return null
     return formatTailStaysWithWord(tail === '' ? text : text + tail, analysis.starts[next]!) ? tail : null
@@ -356,7 +373,7 @@ function measureAnalysis(
       end = start
     }
     if (end === item.length) return true
-    hasExplicitBidiControls ??= explicitBidiControlRe.test(analysis.normalized)
+    hasExplicitBidiControls ??= context === null ? explicitBidiControlRe.test(analysis.normalized) : context.hasExplicitBidiControls
     if (hasExplicitBidiControls) return false
     let wordType: ReturnType<typeof classifyCodePoint> | null = null
     while (end > 0) {
@@ -384,14 +401,16 @@ function measureAnalysis(
   // L, R (with AL), EN or AN, or null for a paired bracket, a separator, or the
   // end of the text. Every character before the stop is skipped, so a later
   // start inside the scanned range reaches the same stop. Segments arrive in
-  // order, which keeps the scans linear in the text.
+  // order, which keeps the scans linear in the text. An edit window scans the
+  // whole new text.
   let decisiveScanStart = -1
   let decisiveScanStop = -1
   let decisiveType: 'L' | 'R' | 'EN' | 'AN' | null = null
   function getDecisiveTypeAfterSpace(spaceStart: number): 'L' | 'R' | 'EN' | 'AN' | null {
     if (decisiveScanStart <= spaceStart && spaceStart <= decisiveScanStop) return decisiveType
-    const text = analysis.normalized
-    let i = spaceStart
+    const text = context === null ? analysis.normalized : context.text
+    const offset = context === null ? 0 : context.offset
+    let i = spaceStart + offset
     let type: 'L' | 'R' | 'EN' | 'AN' | null = null
     while (i < text.length) {
       const codePoint = text.codePointAt(i)!
@@ -419,7 +438,7 @@ function measureAnalysis(
   const widths: number[] = []
   const kinds: SegmentBreakKind[] = []
   let simpleLineWalkFastPath = !hasLetterSpacing
-  const segStarts = includeSegments ? [] as number[] : null
+  const segStarts = startsOut ?? (includeSegments ? [] as number[] : null)
   const breakableFitAdvances: (number[] | null)[] = []
   const breakablePreferredBreaks: (number[] | null)[] = []
   let entryGeometry: (SegmentEntryGeometry | null)[] | null = null
@@ -704,7 +723,8 @@ function measureAnalysis(
       consumedEndSegmentIndex: widths.length,
     })
   }
-  const segLevels = segStarts === null ? null : computeSegmentLevels(analysis.normalized, segStarts)
+  // An edit recomputes levels over the whole new text.
+  const segLevels = includeSegments && context === null ? computeSegmentLevels(analysis.normalized, segStarts!) : null
   if (segments !== null) {
     return {
       widths,
@@ -746,6 +766,9 @@ function prepareInternal(
   includeSegments: boolean,
   options?: PrepareOptions,
 ): InternalPreparedText | PreparedTextWithSegments {
+  if (options?.editable === true) {
+    return prepareEditable(text, font, includeSegments, options, measureAnalysis) as InternalPreparedText
+  }
   const wordBreak = options?.wordBreak ?? 'normal'
   const letterSpacing = options?.letterSpacing ?? 0
   // One page-language read: break rules and measurement both follow it.
@@ -753,6 +776,17 @@ function prepareInternal(
   const engineProfile = getEngineProfile(getBreakLanguage(documentLanguage))
   const analysis = analyzeText(text, engineProfile, options?.whiteSpace, wordBreak)
   return measureAnalysis(analysis, font, includeSegments, wordBreak, letterSpacing, engineProfile, documentLanguage)
+}
+
+// Prepares `text` with the font and options of `previous`, a state prepared
+// with { editable: true }. Only a window around the changed range is analyzed
+// and measured again, and the rest is spliced from `previous`, which stays
+// unchanged. The result equals prepare()/prepareWithSegments() of `text`
+// against the same caches, and is editable too.
+export function prepareEdit(previous: PreparedTextWithSegments, text: string): PreparedTextWithSegments
+export function prepareEdit(previous: PreparedText, text: string): PreparedText
+export function prepareEdit(previous: PreparedText, text: string): PreparedText {
+  return editPrepared(previous, text, measureAnalysis) as PreparedText
 }
 
 // Prepare text for layout. Segments the text, measures each segment via canvas,
