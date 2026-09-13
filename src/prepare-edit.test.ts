@@ -132,11 +132,14 @@ test('the Safari profile splices around words whose kerning reads past a separat
     // direction after its space, so Hebrew typed four separators later takes
     // away its kerning with the space.
     [`${filler} fo\u200D , , , , bar ${filler}`, `${filler} fo\u200D , , , , עב ${filler}`, {}],
+    // A second such word in the same window scans for its own direction.
+    [`${filler} fo\u200D bar fo\u200D \u05E2\u05D1 end ${filler}`, `${filler} fo\u200D baz fo\u200D \u05E2\u05D1 end ${filler}`, {}],
     // A hyphen after a collapsed TAB is read from the source.
     [`${filler} a\t-אb ${filler}`, `${filler} a\t-אbc ${filler}`, {}],
   ])
   expect(rows).toEqual([
     { equal: true, reason: 'splice', changed: true },
+    { equal: true, reason: 'splice', changed: false },
     { equal: true, reason: 'splice', changed: false },
   ])
 })

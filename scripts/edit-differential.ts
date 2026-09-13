@@ -52,6 +52,7 @@ const MUTATIONS: Record<string, [file: string, search: string, replace: string][
   nocontext: [['prepare-edit.ts', 'state.documentLanguage, context, windowStarts)', 'state.documentLanguage, null, windowStarts)']],
   rightneighbor: [['prepare-edit.ts', 'if (profile.measureTextWithFollowingSpace && !isStrongOrNumber(after)) return false', '']],
   counts: [['prepare-edit.ts', 'letterSpacing === 0 && nonSimpleKinds === 0 && entries === 0', 'old.simpleLineWalkFastPath && measured.simpleLineWalkFastPath']],
+  scanmemo: [['layout.ts', 'decisiveScanStop = i - offset', 'decisiveScanStop = i']],
 }
 
 const repoRoot = path.resolve(import.meta.dir, '..')
@@ -556,6 +557,7 @@ async function child(): Promise<void> {
     { label: 'LF + mark + $', texts: ['a\n\u0301$5', 'a\n\u0301$55'], embed: 'middle' },
     { label: 'TAB + hyphen', texts: ['a\t-\u05D0b', 'a\t-\u05D0bc'], embed: 'middle' },
     { label: 'direction scan', texts: ['fo\u200D , , , , bar', 'fo\u200D , , , , \u05E2\u05D1'], embed: 'middle' },
+    { label: 'direction scan memo', texts: ['fo\u200D bar fo\u200D \u05E2\u05D1 end', 'fo\u200D baz fo\u200D \u05E2\u05D1 end'], embed: 'middle' },
     { label: 'explicit control typed and deleted', texts: ['ab cd', 'ab \u202Acd', 'ab cd'], embed: 'middle' },
     { label: 'first soft hyphen typed and deleted', texts: ['alpha beta', 'al\u00ADpha beta', 'alpha beta'], embed: 'middle' },
     { label: 'entry geometry typed and deleted', texts: ['word play', 'wo\u200Drd play', 'word play'], embed: 'middle' },
@@ -664,6 +666,7 @@ async function parent(): Promise<void> {
       { name: 'separator criteria and guards off', profile: 'blink', mutations: ['criteria', 'guards'], label: null },
       { name: 'measurement context off', profile: 'webkit', mutations: ['nocontext'], label: null },
       { name: 'right-neighbor rule off', profile: 'webkit', mutations: ['rightneighbor'], label: 'direction scan' },
+      { name: 'direction scan memo in whole-text coordinates', profile: 'webkit', mutations: ['scanmemo'], label: 'direction scan memo' },
       { name: 'counts off', profile: 'blink', mutations: ['counts'], label: null },
       { name: 'URL query start fix reverted', profile: 'blink', mutations: ['url-revert'], label: null },
     ]

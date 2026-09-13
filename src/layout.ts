@@ -430,7 +430,7 @@ function measureAnalysis(
       i += codePoint > 0xffff ? 2 : 1
     }
     decisiveScanStart = spaceStart
-    decisiveScanStop = i
+    decisiveScanStop = i - offset
     decisiveType = type
     return type
   }
