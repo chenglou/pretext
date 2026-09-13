@@ -10,7 +10,6 @@ export type LineBreakCursor = {
 export type PreparedLineBreakData = {
   widths: number[]
   kinds: SegmentBreakKind[]
-  simpleLineWalkFastPath: boolean
   breakableFitAdvances: (number[] | null)[]
   breakablePreferredBreaks: (number[] | null)[]
   entryGeometry?: (SegmentEntryGeometry | null)[] | null
@@ -154,8 +153,8 @@ function getNextPreferredBreakIndex(
   let lo = preferredBreakIndex
   if (lo >= preferredBreaks.length || preferredBreaks[lo]! >= graphemeEnd) return lo
 
-  // Simple batch walking carries the next boundary. The shared complex loop
-  // and public continuations seek instead of rescanning every prior cut.
+  // Line walking and public continuations seek instead of rescanning every
+  // prior cut.
   let hi = preferredBreaks.length
   lo++
   while (lo < hi) {
@@ -302,201 +301,11 @@ export function countPreparedLines(prepared: PreparedLineBreakData, maxWidth: nu
   return walkPreparedLinesRaw(prepared, maxWidth)
 }
 
-function walkPreparedLinesSimple(
-  prepared: PreparedLineBreakData,
-  maxWidth: number,
-  onLine?: InternalLineVisitor,
-): number {
-  const { widths, kinds, breakableFitAdvances, breakablePreferredBreaks } = prepared
-  if (widths.length === 0) return 0
-
-  const engineProfile = getEngineProfile()
-  const lineFitEpsilon = engineProfile.lineFitEpsilon
-  const fitLimit = maxWidth + lineFitEpsilon
-
-  let lineCount = 0
-  let lineW = 0
-  let hasContent = false
-  let lineStartSegmentIndex = 0
-  let lineStartGraphemeIndex = 0
-  let lineEndSegmentIndex = 0
-  let lineEndGraphemeIndex = 0
-  let pendingBreakSegmentIndex = -1
-  let pendingBreakPaintWidth = 0
-
-  function clearPendingBreak(): void {
-    pendingBreakSegmentIndex = -1
-    pendingBreakPaintWidth = 0
-  }
-
-  function emitCurrentLine(
-    endSegmentIndex = lineEndSegmentIndex,
-    endGraphemeIndex = lineEndGraphemeIndex,
-    width = lineW,
-  ): void {
-    lineCount++
-    onLine?.(
-      width,
-      lineStartSegmentIndex,
-      lineStartGraphemeIndex,
-      endSegmentIndex,
-      endGraphemeIndex,
-    )
-    lineW = 0
-    hasContent = false
-    clearPendingBreak()
-  }
-
-  function startLineAtSegment(segmentIndex: number, width: number): void {
-    hasContent = true
-    lineStartSegmentIndex = segmentIndex
-    lineStartGraphemeIndex = 0
-    lineEndSegmentIndex = segmentIndex + 1
-    lineEndGraphemeIndex = 0
-    lineW = width
-  }
-
-  function startLineAtGrapheme(segmentIndex: number, graphemeIndex: number, width: number): void {
-    hasContent = true
-    lineStartSegmentIndex = segmentIndex
-    lineStartGraphemeIndex = graphemeIndex
-    lineEndSegmentIndex = segmentIndex
-    lineEndGraphemeIndex = graphemeIndex + 1
-    lineW = width
-  }
-
-  function appendWholeSegment(segmentIndex: number, width: number): void {
-    if (!hasContent) {
-      startLineAtSegment(segmentIndex, width)
-      return
-    }
-    lineW += width
-    lineEndSegmentIndex = segmentIndex + 1
-    lineEndGraphemeIndex = 0
-  }
-
-  function appendBreakableSegmentFrom(segmentIndex: number, startGraphemeIndex: number): void {
-    const fitAdvances = breakableFitAdvances[segmentIndex]!
-    const preferredBreaks = breakablePreferredBreaks[segmentIndex] ?? null
-    let preferredBreakIndex = preferredBreaks === null
-      ? -1
-      : getNextPreferredBreakIndex(preferredBreaks, 0, startGraphemeIndex + 1)
-    let lastPreferredBreakEnd = -1
-    let lastPreferredBreakWidth = 0
-
-    let g = startGraphemeIndex
-    while (g < fitAdvances.length) {
-      const gw = fitAdvances[g]!
-
-      if (!hasContent) {
-        startLineAtGrapheme(segmentIndex, g, gw)
-      } else if (lineW + gw > fitLimit) {
-        if (preferredBreaks !== null && lastPreferredBreakEnd > startGraphemeIndex) {
-          emitCurrentLine(segmentIndex, lastPreferredBreakEnd, lastPreferredBreakWidth)
-          g = lastPreferredBreakEnd
-          preferredBreakIndex = getNextPreferredBreakIndex(preferredBreaks, preferredBreakIndex, g + 1)
-          lastPreferredBreakEnd = -1
-          lastPreferredBreakWidth = 0
-          continue
-        }
-        emitCurrentLine()
-        startLineAtGrapheme(segmentIndex, g, gw)
-      } else {
-        lineW += gw
-        lineEndSegmentIndex = segmentIndex
-        lineEndGraphemeIndex = g + 1
-      }
-
-      const graphemeEnd = g + 1
-      if (preferredBreaks !== null && preferredBreaks[preferredBreakIndex] === graphemeEnd) {
-        lastPreferredBreakEnd = graphemeEnd
-        lastPreferredBreakWidth = lineW
-        preferredBreakIndex++
-      }
-      g++
-    }
-
-    if (hasContent && lineEndSegmentIndex === segmentIndex && lineEndGraphemeIndex === fitAdvances.length) {
-      lineEndSegmentIndex = segmentIndex + 1
-      lineEndGraphemeIndex = 0
-    }
-  }
-
-  let i = 0
-  while (i < widths.length) {
-    if (!hasContent) {
-      i = normalizeLineStartSegmentIndex(prepared, i, widths.length, i === 0)
-      if (i >= widths.length) break
-    }
-
-    const w = widths[i]!
-    const kind = kinds[i]!
-    const breakAfter = breaksAfter(kind)
-
-    if (!hasContent) {
-      if (w > fitLimit && breakableFitAdvances[i] !== null) {
-        appendBreakableSegmentFrom(i, 0)
-      } else {
-        startLineAtSegment(i, w)
-      }
-      if (breakAfter) {
-        pendingBreakSegmentIndex = i + 1
-        pendingBreakPaintWidth = lineW - w
-      }
-      i++
-      continue
-    }
-
-    const newW = lineW + w
-    if (newW > fitLimit) {
-      if (breakAfter) {
-        appendWholeSegment(i, w)
-        emitCurrentLine(i + 1, 0, lineW - w)
-        i++
-        continue
-      }
-
-      if (pendingBreakSegmentIndex >= 0) {
-        if (
-          lineEndSegmentIndex > pendingBreakSegmentIndex ||
-          (lineEndSegmentIndex === pendingBreakSegmentIndex && lineEndGraphemeIndex > 0)
-        ) {
-          emitCurrentLine()
-          continue
-        }
-        emitCurrentLine(pendingBreakSegmentIndex, 0, pendingBreakPaintWidth)
-        continue
-      }
-
-      if (w > fitLimit && breakableFitAdvances[i] !== null) {
-        emitCurrentLine()
-        appendBreakableSegmentFrom(i, 0)
-        i++
-        continue
-      }
-
-      emitCurrentLine()
-      continue
-    }
-
-    appendWholeSegment(i, w)
-    if (breakAfter) {
-      pendingBreakSegmentIndex = i + 1
-      pendingBreakPaintWidth = lineW - w
-    }
-    i++
-  }
-
-  if (hasContent) emitCurrentLine()
-  return lineCount
-}
-
 export function walkPreparedLinesRaw(
   prepared: PreparedLineBreakData,
   maxWidth: number,
   onLine?: InternalLineVisitor,
 ): number {
-  if (prepared.simpleLineWalkFastPath) return walkPreparedLinesSimple(prepared, maxWidth, onLine)
   const cursor: LineBreakCursor = { segmentIndex: 0, graphemeIndex: 0 }
   const chunkIndex = normalizePreparedLineStart(prepared, cursor)
   return walkPreparedComplexLines(prepared, cursor, chunkIndex, maxWidth, onLine).lineCount
@@ -944,131 +753,6 @@ function walkPreparedComplexLines(
   return { lineCount, lastLineWidth }
 }
 
-function stepPreparedSimpleLineGeometry(
-  prepared: PreparedLineBreakData,
-  cursor: LineBreakCursor,
-  maxWidth: number,
-): number | null {
-  const { widths, kinds, breakableFitAdvances, breakablePreferredBreaks } = prepared
-  const engineProfile = getEngineProfile()
-  const lineFitEpsilon = engineProfile.lineFitEpsilon
-  const fitLimit = maxWidth + lineFitEpsilon
-
-  let lineW = 0
-  let hasContent = false
-  let lineEndSegmentIndex = cursor.segmentIndex
-  let lineEndGraphemeIndex = cursor.graphemeIndex
-  let pendingBreakSegmentIndex = -1
-  let pendingBreakPaintWidth = 0
-
-  for (let i = cursor.segmentIndex; i < widths.length; i++) {
-    const kind = kinds[i]!
-    const breakAfter = breaksAfter(kind)
-    const startGraphemeIndex = i === cursor.segmentIndex ? cursor.graphemeIndex : 0
-    const breakableFitAdvance = breakableFitAdvances[i]
-    const w = widths[i]!
-
-    if (!hasContent) {
-      if (startGraphemeIndex > 0 || (w > fitLimit && breakableFitAdvance !== null)) {
-        const fitAdvances = breakableFitAdvance!
-        const preferredBreaks = breakablePreferredBreaks[i] ?? null
-        let preferredBreakIndex = preferredBreaks === null
-          ? -1
-          : getNextPreferredBreakIndex(preferredBreaks, 0, startGraphemeIndex + 1)
-        let lastPreferredBreakEnd = -1
-        let lastPreferredBreakWidth = 0
-        const firstGraphemeWidth = fitAdvances[startGraphemeIndex]!
-
-        hasContent = true
-        lineW = firstGraphemeWidth
-        lineEndSegmentIndex = i
-        lineEndGraphemeIndex = startGraphemeIndex + 1
-        if (preferredBreaks !== null && preferredBreaks[preferredBreakIndex] === lineEndGraphemeIndex) {
-          lastPreferredBreakEnd = lineEndGraphemeIndex
-          lastPreferredBreakWidth = lineW
-          preferredBreakIndex++
-        }
-
-        for (let g = startGraphemeIndex + 1; g < fitAdvances.length; g++) {
-          const gw = fitAdvances[g]!
-          if (lineW + gw > fitLimit) {
-            if (preferredBreaks !== null && lastPreferredBreakEnd > startGraphemeIndex) {
-              cursor.segmentIndex = i
-              cursor.graphemeIndex = lastPreferredBreakEnd
-              return lastPreferredBreakWidth
-            }
-            cursor.segmentIndex = lineEndSegmentIndex
-            cursor.graphemeIndex = lineEndGraphemeIndex
-            return lineW
-          }
-          lineW += gw
-          lineEndSegmentIndex = i
-          lineEndGraphemeIndex = g + 1
-          if (preferredBreaks !== null && preferredBreaks[preferredBreakIndex] === lineEndGraphemeIndex) {
-            lastPreferredBreakEnd = lineEndGraphemeIndex
-            lastPreferredBreakWidth = lineW
-            preferredBreakIndex++
-          }
-        }
-
-        if (lineEndSegmentIndex === i && lineEndGraphemeIndex === fitAdvances.length) {
-          lineEndSegmentIndex = i + 1
-          lineEndGraphemeIndex = 0
-        }
-      } else {
-        hasContent = true
-        lineW = w
-        lineEndSegmentIndex = i + 1
-        lineEndGraphemeIndex = 0
-      }
-      if (breakAfter) {
-        pendingBreakSegmentIndex = i + 1
-        pendingBreakPaintWidth = lineW - w
-      }
-      continue
-    }
-
-    if (lineW + w > fitLimit) {
-      if (breakAfter) {
-        cursor.segmentIndex = i + 1
-        cursor.graphemeIndex = 0
-        return lineW
-      }
-
-      if (pendingBreakSegmentIndex >= 0) {
-        if (
-          lineEndSegmentIndex > pendingBreakSegmentIndex ||
-          (lineEndSegmentIndex === pendingBreakSegmentIndex && lineEndGraphemeIndex > 0)
-        ) {
-          cursor.segmentIndex = lineEndSegmentIndex
-          cursor.graphemeIndex = lineEndGraphemeIndex
-          return lineW
-        }
-        cursor.segmentIndex = pendingBreakSegmentIndex
-        cursor.graphemeIndex = 0
-        return pendingBreakPaintWidth
-      }
-
-      cursor.segmentIndex = lineEndSegmentIndex
-      cursor.graphemeIndex = lineEndGraphemeIndex
-      return lineW
-    }
-
-    lineW += w
-    lineEndSegmentIndex = i + 1
-    lineEndGraphemeIndex = 0
-    if (breakAfter) {
-      pendingBreakSegmentIndex = i + 1
-      pendingBreakPaintWidth = lineW - w
-    }
-  }
-
-  if (!hasContent) return null
-  cursor.segmentIndex = lineEndSegmentIndex
-  cursor.graphemeIndex = lineEndGraphemeIndex
-  return lineW
-}
-
 // An end cursor stops stepping at an ordinary break there, as if the text were
 // cut at it, and returns the paint width of a line that ends there. A cursor
 // inside a segment needs that segment's breakable fit advances.
@@ -1080,10 +764,6 @@ export function stepPreparedLineGeometryFromChunk(
   endSegmentIndex = prepared.widths.length,
   endGraphemeIndex = 0,
 ): number | null {
-  if (prepared.simpleLineWalkFastPath && endSegmentIndex === prepared.widths.length) {
-    return stepPreparedSimpleLineGeometry(prepared, cursor, maxWidth)
-  }
-
   return stepPreparedChunkLineGeometry(prepared, cursor, chunkIndex, maxWidth, endSegmentIndex, endGraphemeIndex)
 }
 
@@ -1117,26 +797,10 @@ export function measurePreparedLineGeometry(
     segmentIndex: 0,
     graphemeIndex: 0,
   }
-  let lineCount = 0
   let maxLineWidth = 0
-
-  if (!prepared.simpleLineWalkFastPath) {
-    const chunkIndex = normalizePreparedLineStart(prepared, cursor)
-    lineCount = walkPreparedComplexLines(prepared, cursor, chunkIndex, maxWidth, width => {
-      if (width > maxLineWidth) maxLineWidth = width
-    }).lineCount
-    return { lineCount, maxLineWidth }
-  }
-
-  while (true) {
-    const lineWidth = stepPreparedLineGeometry(prepared, cursor, maxWidth)
-    if (lineWidth === null) {
-      return {
-        lineCount,
-        maxLineWidth,
-      }
-    }
-    lineCount++
-    if (lineWidth > maxLineWidth) maxLineWidth = lineWidth
-  }
+  const chunkIndex = normalizePreparedLineStart(prepared, cursor)
+  const lineCount = walkPreparedComplexLines(prepared, cursor, chunkIndex, maxWidth, width => {
+    if (width > maxLineWidth) maxLineWidth = width
+  }).lineCount
+  return { lineCount, maxLineWidth }
 }

@@ -60,7 +60,6 @@ declare const preparedTextBrand: unique symbol
 type PreparedCore = {
   widths: number[] // Segment widths, e.g. [42.5, 4.4, 37.2]
   kinds: SegmentBreakKind[] // Break behavior per segment, e.g. ['text', 'space', 'text']
-  simpleLineWalkFastPath: boolean // Normal text can use the simpler old line walker across all layout APIs
   segLevels: Int8Array | null // Rich-path bidi metadata for custom rendering; layout() never reads it
   breakableFitAdvances: (number[] | null)[] // Per-grapheme fit advances for breakable segments, else null
   breakablePreferredBreaks: (number[] | null)[] // Preferred grapheme break ends inside breakable segments, else null
@@ -144,7 +143,6 @@ function createEmptyPrepared(includeSegments: boolean): InternalPreparedText | P
     return {
       widths: [],
       kinds: [],
-      simpleLineWalkFastPath: true,
       segLevels: null,
       breakableFitAdvances: [],
       breakablePreferredBreaks: [],
@@ -161,7 +159,6 @@ function createEmptyPrepared(includeSegments: boolean): InternalPreparedText | P
   return {
     widths: [],
     kinds: [],
-    simpleLineWalkFastPath: true,
     segLevels: null,
     breakableFitAdvances: [],
     breakablePreferredBreaks: [],
@@ -435,7 +432,6 @@ function measureAnalysis(
 
   const widths: number[] = []
   const kinds: SegmentBreakKind[] = []
-  let simpleLineWalkFastPath = !hasLetterSpacing
   const segStarts = includeSegments ? [] as number[] : null
   const breakableFitAdvances: (number[] | null)[] = []
   const breakablePreferredBreaks: (number[] | null)[] = []
@@ -520,9 +516,6 @@ function measureAnalysis(
     spacingGraphemeCount: number,
     entry: SegmentEntryGeometry | null = null,
   ): void {
-    if (kind !== 'text' && kind !== 'space' && kind !== 'zero-width-break') {
-      simpleLineWalkFastPath = false
-    }
     widths.push(width)
     kinds.push(kind)
     segStarts?.push(start)
@@ -530,7 +523,6 @@ function measureAnalysis(
     breakablePreferredBreaks.push(breakablePreferredBreak)
     if (entry !== null && entryGeometry === null) {
       entryGeometry = Array.from({ length: widths.length - 1 }, () => null)
-      simpleLineWalkFastPath = false
     }
     entryGeometry?.push(entry)
     if (hasLetterSpacing) spacingGraphemeCounts.push(spacingGraphemeCount)
@@ -714,7 +706,6 @@ function measureAnalysis(
     const onlyZeroWidthBreaks = chunkStartSegmentIndex === 0 &&
       analysis.kinds.every(kind => kind === 'zero-width-break') &&
       analysis.source === analysis.normalized
-    if (onlyZeroWidthBreaks) simpleLineWalkFastPath = false
     chunks.push({
       startSegmentIndex: chunkStartSegmentIndex,
       endSegmentIndex: onlyZeroWidthBreaks ? 0 : widths.length,
@@ -726,7 +717,6 @@ function measureAnalysis(
     return {
       widths,
       kinds,
-      simpleLineWalkFastPath,
       segLevels,
       breakableFitAdvances,
       breakablePreferredBreaks,
@@ -743,7 +733,6 @@ function measureAnalysis(
   return {
     widths,
     kinds,
-    simpleLineWalkFastPath,
     segLevels,
     breakableFitAdvances,
     breakablePreferredBreaks,

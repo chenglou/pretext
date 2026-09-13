@@ -39,7 +39,7 @@ test('fresh entry geometry survives copied public range cursors without layout m
   // Canvas backend. It is not a claim about native control or mark advances.
   const prepared = {
     widths: [19], kinds: ['text'],
-    simpleLineWalkFastPath: false, segLevels: null, breakableFitAdvances: [advances],
+    segLevels: null, breakableFitAdvances: [advances],
     breakablePreferredBreaks: [null], entryGeometry: [entry], letterSpacing: 0,
     spacingGraphemeCounts: [], discretionaryHyphenWidth: 4, tabStopAdvance: 32,
     chunks: [{ startSegmentIndex: 0, endSegmentIndex: 1, consumedEndSegmentIndex: 1 }],
