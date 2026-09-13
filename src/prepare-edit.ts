@@ -248,10 +248,11 @@ function isCleanSeparator(state: EditState, kinds: readonly SegmentBreakKind[], 
     excludedSpaceNeighborRe.test(String.fromCodePoint(after)) || classifyCodePoint(before) === 'BN') {
     return false
   }
-  // WebKit scans past a space for the first character that decides its
+  // Measuring a word with its following space, which WebKit does without letter
+  // spacing, scans past the space for the first character that decides its
   // direction. A strong or numeric character right after the separator stops
   // every such scan from earlier words there.
-  if (profile.measureTextWithFollowingSpace && !isStrongOrNumber(after)) return false
+  if (profile.measureTextWithFollowingSpace && state.letterSpacing === 0 && !isStrongOrNumber(after)) return false
   if (!isGraphemeBoundary(normalized, start) || !isGraphemeBoundary(normalized, end)) return false
   // WebKit reads a collapsed TAB before a hyphen from the source.
   return !(kind === 'space' && profile.breakHyphenAfterCollapsedTab && state.source.charCodeAt(state.sourceStarts[k + 1]! - 1) === 0x09)
@@ -374,12 +375,14 @@ export function editPrepared(previous: object, text: string, measure: MeasureAna
     editHooks.reason = reason
     return prepareEditable(text, font, includeSegments, state, measure)
   }
+  // Nothing from `previous`, not even the whole handle, is reused under another
+  // page language or cache generation.
+  if (getDocumentLanguage() !== state.documentLanguage) return full('language')
+  if (getMeasurementGeneration() !== state.generation) return full('generation')
   if (text === source) {
     editHooks.reason = 'same'
     return previous
   }
-  if (getDocumentLanguage() !== state.documentLanguage) return full('language')
-  if (getMeasurementGeneration() !== state.generation) return full('generation')
   const old = previous as Handle
   const n = old.widths.length
   if (n === 0) return full('empty')

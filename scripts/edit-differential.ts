@@ -50,7 +50,10 @@ const MUTATIONS: Record<string, [file: string, search: string, replace: string][
   guards: [['prepare-edit.ts', 'if (!leftConverged || !rightConverged) {', 'if (false) {']],
   noguardblocks: [['prepare-edit.ts', 'let leftGuards = 1', 'let leftGuards = 0']],
   nocontext: [['prepare-edit.ts', 'state.documentLanguage, context, windowStarts)', 'state.documentLanguage, null, windowStarts)']],
-  rightneighbor: [['prepare-edit.ts', 'if (profile.measureTextWithFollowingSpace && !isStrongOrNumber(after)) return false', '']],
+  rightneighbor: [['prepare-edit.ts', 'if (profile.measureTextWithFollowingSpace && state.letterSpacing === 0 && !isStrongOrNumber(after)) return false', '']],
+  notab: [['prepare-edit.ts', "  return !(kind === 'space' && profile.breakHyphenAfterCollapsedTab && state.source.charCodeAt(state.sourceStarts[k + 1]! - 1) === 0x09)", '  return true']],
+  nobidi: [['prepare-edit.ts', "    if (followsSpaceKerning && (explicitBidiControls > 0) !== (state.explicitBidiControls > 0)) return full('bidi')\n", '']],
+  samefirst: [['prepare-edit.ts', "  if (getDocumentLanguage() !== state.documentLanguage) return full('language')\n", "  if (text === source) {\n    editHooks.reason = 'same'\n    return previous\n  }\n  if (getDocumentLanguage() !== state.documentLanguage) return full('language')\n"]],
   counts: [['prepare-edit.ts', 'letterSpacing === 0 && nonSimpleKinds === 0 && entries === 0', 'old.simpleLineWalkFastPath && measured.simpleLineWalkFastPath']],
   scanmemo: [['layout.ts', 'decisiveScanStop = i - offset', 'decisiveScanStop = i']],
 }
@@ -498,6 +501,8 @@ async function child(): Promise<void> {
     } else {
       L.setLocale(next() < 0.5 ? 'th' : undefined)
     }
+    // An app re-prepares its unchanged value after a font load, as well as the next edit.
+    checkEdit('E', `${invalidation}, same text`, config, handle, text, text, true, false)
     const nextText = randomEdit(text)
     checkEdit('E', invalidation, config, handle, text, nextText, true, false)
   }
@@ -562,7 +567,9 @@ async function child(): Promise<void> {
     { label: 'TAB + hyphen, edit one word away', texts: ['a\t-\u05D0b cd', 'a\t-\u05D0b cde'], embed: 'middle' },
     { label: 'direction scan', texts: ['fo\u200D , , , , bar', 'fo\u200D , , , , \u05E2\u05D1'], embed: 'middle' },
     { label: 'direction scan memo', texts: ['fo\u200D bar fo\u200D \u05E2\u05D1 end', 'fo\u200D baz fo\u200D \u05E2\u05D1 end'], embed: 'middle' },
-    { label: 'explicit control typed and deleted', texts: ['ab cd', 'ab \u202Acd', 'ab cd'], embed: 'middle' },
+    // On WebKit, a word ending in a format character before a space takes its kerning with the space only while
+    // the text holds no explicit control; this one sits outside the window.
+    { label: 'explicit control typed and deleted', texts: ['fo\u200D bar one two three ab cd', 'fo\u200D bar one two three ab \u202Acd', 'fo\u200D bar one two three ab cd'], embed: 'middle' },
     { label: 'first soft hyphen typed and deleted', texts: ['alpha beta', 'al\u00ADpha beta', 'alpha beta'], embed: 'middle' },
     { label: 'entry geometry typed and deleted', texts: ['word play', 'wo\u200Drd play', 'word play'], embed: 'middle' },
     { label: 'Hebrew letter typed and deleted', texts: ['abc def', 'abc d\u05D0ef', 'abc def'], embed: 'middle' },
@@ -679,6 +686,9 @@ async function parent(): Promise<void> {
       { name: 'right-neighbor rule off', profile: 'webkit', mutations: ['rightneighbor'], label: 'direction scan' },
       { name: 'direction scan memo in whole-text coordinates', profile: 'webkit', mutations: ['scanmemo'], label: 'direction scan memo' },
       { name: 'counts off', profile: 'blink', mutations: ['counts'], label: null },
+      { name: 'same text returned before the language and generation checks', profile: 'blink', mutations: ['samefirst'], label: 'font load, same text' },
+      { name: 'explicit-control full prepare off', profile: 'webkit', mutations: ['nobidi'], label: 'explicit control typed and deleted' },
+      { name: 'collapsed-TAB criterion and guards off', profile: 'webkit', mutations: ['notab', 'guards'], label: 'TAB + hyphen, edit one word away' },
       { name: 'URL query start fix reverted', profile: 'blink', mutations: ['url-revert'], label: null },
     ]
     const results = await runLimited(canaries.map(canary => () => runChild(canary.profile, [...shared, `--src=${mutatedSource(canary.mutations)}`])))

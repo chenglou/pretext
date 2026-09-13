@@ -76,20 +76,26 @@ describe('prepareEdit', () => {
     expect(() => L.prepareEdit(L.prepare(base, FONT), base + '!')).toThrow(TypeError)
   })
 
-  test('prepares fully after clearCache()', () => {
+  test('prepares fully after clearCache(), also for the same text', () => {
     const previous = L.prepare(base, FONT, { editable: true })
     L.clearCache()
-    const edited = L.prepareEdit(previous, base.replace('words', 'letters'))
-    expect(E.editHooks.reason).toBe('generation')
-    expect(edited).toStrictEqual(L.prepare(base.replace('words', 'letters'), FONT))
+    for (const text of [base, base.replace('words', 'letters')]) {
+      const edited = L.prepareEdit(previous, text)
+      expect(E.editHooks.reason).toBe('generation')
+      expect(edited).not.toBe(previous)
+      expect(edited).toStrictEqual(L.prepare(text, FONT))
+    }
   })
 })
 
-function runEngineCases(userAgent: string, cases: [string, string, PrepareOptions][]): { equal: boolean, reason: string, changed: boolean }[] {
+function runEngineCases(userAgent: string, cases: [before: string, after: string, options: PrepareOptions, language?: string][]): { equal: boolean, reason: string, changed: boolean }[] {
   // The engine profile is computed once per process, so each engine runs in a
-  // child process. Letters are 10px and spaces 4px, or 3px after `o`.
+  // child process. Letters are 10px and spaces 4px, or 3px after `o`. A case
+  // can change <html lang> between the prepare and the edit.
   const script = `
     Object.defineProperty(globalThis, 'navigator', { configurable: true, value: { userAgent: ${JSON.stringify(userAgent)} } })
+    const root = { lang: '' }
+    globalThis.document = { documentElement: root }
     class Context {
       font = ''
       measureText(text) {
@@ -107,8 +113,10 @@ function runEngineCases(userAgent: string, cases: [string, string, PrepareOption
     const L = await import(${JSON.stringify(new URL('./layout.ts', import.meta.url).href)})
     const E = await import(${JSON.stringify(new URL('./prepare-edit.ts', import.meta.url).href)})
     const rows = []
-    for (const [before, after, options] of ${JSON.stringify(cases)}) {
+    for (const [before, after, options, language] of ${JSON.stringify(cases)}) {
+      root.lang = ''
       const previous = L.prepareWithSegments(before, '16px Test', { ...options, editable: true })
+      root.lang = language ?? ''
       const edited = L.prepareEdit(previous, after)
       const expected = L.prepareWithSegments(after, '16px Test', options)
       rows.push({
@@ -125,9 +133,30 @@ function runEngineCases(userAgent: string, cases: [string, string, PrepareOption
 }
 
 const filler = Array.from({ length: 40 }, (_, i) => `word${i}`).join(' ')
+const SAFARI = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15'
+
+test('the Safari profile prepares fully only where earlier facts stop holding', () => {
+  const quoted = Array.from({ length: 40 }, (_, i) => `"w${i}"`).join(' ')
+  const rows = runEngineCases(SAFARI, [
+    // An explicit control anywhere takes away the kerning of a word that ends
+    // in a format character before its space.
+    [`${filler} fo\u200D bar ${filler} ab cd ${filler}`, `${filler} fo\u200D bar ${filler} ab \u202Acd ${filler}`, {}],
+    // Under a Japanese page, small kana after CJK text can start a line, even
+    // when the text is unchanged.
+    ['あぁあ', 'あぁあ', {}, 'ja'],
+    // With letter spacing no word is measured with its following space, so a
+    // space before a quote still separates.
+    [`${quoted} "mid" ${quoted}`, `${quoted} "midx" ${quoted}`, { letterSpacing: 1.5 }],
+  ])
+  expect(rows).toEqual([
+    { equal: true, reason: 'bidi', changed: true },
+    { equal: true, reason: 'language', changed: false },
+    { equal: true, reason: 'splice', changed: false },
+  ])
+})
 
 test('the Safari profile splices around words whose kerning reads past a separator', () => {
-  const rows = runEngineCases('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15', [
+  const rows = runEngineCases(SAFARI, [
     // A word ending in a format character scans commas and spaces for the
     // direction after its space, so Hebrew typed four separators later takes
     // away its kerning with the space.
