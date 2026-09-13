@@ -1326,6 +1326,13 @@ describe('prepare invariants', () => {
     ])
   })
 
+  test('keeps the query text of a URL run with a later www. segment', () => {
+    // The query segment starts after the whole URL run, not at the inner
+    // www. segment. keep-all slices normalized text by segment starts.
+    expect(prepareWithSegments('アwww.¿www.?־', FONT, { wordBreak: 'keep-all' }).segments).toEqual(['アwww.¿www.?', '־'])
+    expect(prepareWithSegments('x中www.a/www.b?q', FONT, { wordBreak: 'keep-all' }).segments).toEqual(['x中www.a/www.b?', 'q'])
+  })
+
   test('prefers hyphen-like boundaries inside overlong breakable runs', () => {
     const text = 'https://alpha-beta-gamma-delta.example.test/path'
     const prepared = prepareWithSegments(text, FONT)

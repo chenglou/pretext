@@ -1004,7 +1004,6 @@ function mergeUrlRuns(segmentation: MergedSegmentation, normalized: string, prof
     let text = segmentation.texts[i]!
     let wordLike = segmentation.isWordLike[i]!
     const kind = segmentation.kinds[i]!
-    let queryStartOverride = -1
 
     if (kind === 'text' && isUrlLikeRunStart(segmentation, i)) {
       const urlParts = [text]
@@ -1014,9 +1013,6 @@ function mergeUrlRuns(segmentation: MergedSegmentation, normalized: string, prof
         !isTextRunBoundary(segmentation.kinds[j]!) &&
         numericAffixBoundary(normalized, segmentation.starts[j]!, profile) !== false
       ) {
-        if (queryStartOverride < 0 && isUrlLikeRunStart(segmentation, j)) {
-          queryStartOverride = segmentation.starts[j]!
-        }
         const nextText = segmentation.texts[j]!
         urlParts.push(nextText)
         wordLike = true
@@ -1042,9 +1038,7 @@ function mergeUrlRuns(segmentation: MergedSegmentation, normalized: string, prof
     }
 
     const queryParts: string[] = []
-    const queryStart = queryStartOverride < 0
-      ? segmentation.starts[nextIndex]!
-      : queryStartOverride
+    const queryStart = segmentation.starts[nextIndex]!
     let j = nextIndex
     while (
       j < segmentation.len &&
