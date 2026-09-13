@@ -2996,6 +2996,7 @@ test('the Firefox profile keeps breaking rich items at every item boundary', () 
   // modeled, so the parenthesis that starts the third item can still start a
   // line. The joined text would keep "(docs)" whole.
   const measurementUrl = new URL('./measurement.ts', import.meta.url).href
+  const layoutUrl = new URL('./layout.ts', import.meta.url).href
   const richInlineUrl = new URL('./rich-inline.ts', import.meta.url).href
   const script = `
     Object.defineProperty(globalThis, 'navigator', { configurable: true, value: {
@@ -3018,13 +3019,18 @@ test('the Firefox profile keeps breaking rich items at every item boundary', () 
     walkRichInlineLineRanges(prepared, 70, range => {
       lines.push(materializeRichInlineLineRange(prepared, range).fragments.map(fragment => fragment.text))
     })
-    console.log(JSON.stringify({ inlineItemBreaks: getEngineProfile().inlineItemBreaks, lines }))
+    const { prepareWithSegments } = await import(${JSON.stringify(layoutUrl)})
+    const marks = ['\\u064B$', 'x\\n\\u064B$', 'x \\u064B$'].map(text => prepareWithSegments(text, '16px Test', { whiteSpace: 'pre-wrap' }).segments)
+    console.log(JSON.stringify({ inlineItemBreaks: getEngineProfile().inlineItemBreaks, lines, marks }))
   `
   const child = Bun.spawnSync([process.execPath, '-e', script])
   if (child.exitCode !== 0) throw new Error(child.stderr.toString())
   expect(JSON.parse(child.stdout.toString())).toEqual({
     inlineItemBreaks: 'item-boundary',
     lines: [['see (', 'docs'], [') now '], ['please']],
+    // A mark after a line break or a space has no base and counts as a letter,
+    // as at the start of the text, so it stays with a following numeric prefix.
+    marks: [['\u064B$'], ['x', '\n', '\u064B$'], ['x', ' ', '\u064B$']],
   })
 })
 
