@@ -32,12 +32,14 @@ let countPreparedLines: LineBreakModule['countPreparedLines']
 let measurePreparedLineGeometry: LineBreakModule['measurePreparedLineGeometry']
 let stepPreparedLineGeometry: LineBreakModule['stepPreparedLineGeometry']
 let walkPreparedLinesRaw: LineBreakModule['walkPreparedLinesRaw']
+let countPreparedLinesInWidthRange: LineBreakModule['countPreparedLinesInWidthRange']
 let getSegmentBreakableFitAdvances: MeasurementModule['getSegmentBreakableFitAdvances']
 let prepareRichInline: RichInlineModule['prepareRichInline']
 let layoutNextRichInlineLineRange: RichInlineModule['layoutNextRichInlineLineRange']
 let materializeRichInlineLineRange: RichInlineModule['materializeRichInlineLineRange']
 let measureRichInlineStats: RichInlineModule['measureRichInlineStats']
 let walkRichInlineLineRanges: RichInlineModule['walkRichInlineLineRanges']
+let measureRichInlineStatsInWidthRange: RichInlineModule['measureRichInlineStatsInWidthRange']
 let isCJK: AnalysisModule['isCJK']
 let variant: ReturnType<typeof createVariant>
 let canvasMeasurementCount = 0
@@ -280,15 +282,90 @@ beforeAll(async () => {
     setLocale,
     clearCache,
   } = mod)
-  ;({ countPreparedLines, measurePreparedLineGeometry, stepPreparedLineGeometry, walkPreparedLinesRaw } = lineBreakMod)
+  ;({ countPreparedLines, countPreparedLinesInWidthRange, measurePreparedLineGeometry, stepPreparedLineGeometry, walkPreparedLinesRaw } = lineBreakMod)
   ;({ getSegmentBreakableFitAdvances } = measurementMod)
-  ;({ prepareRichInline, layoutNextRichInlineLineRange, materializeRichInlineLineRange, measureRichInlineStats, walkRichInlineLineRanges } = richInlineMod)
+  ;({ prepareRichInline, layoutNextRichInlineLineRange, materializeRichInlineLineRange, measureRichInlineStats, measureRichInlineStatsInWidthRange, walkRichInlineLineRanges } = richInlineMod)
   variant = createVariant('unit', mod, richInlineMod)
 })
 
 beforeEach(() => {
   // Retargeting the locale also clears the shared caches.
   setLocale(undefined)
+})
+
+describe('width ranges', () => {
+  function lineEndKey(prepared: Parameters<typeof walkLineRanges>[0], width: number): string {
+    const ends: string[] = []
+    walkLineRanges(prepared, width, line => {
+      ends.push(`${line.end.segmentIndex}.${line.end.graphemeIndex}:${line.width}`)
+    })
+    return ends.join(' ')
+  }
+
+  test('every width in a range ends each line at the same cursor with the same width', () => {
+    const range = { lo: 0, hi: 0 }
+    for (const [text, options] of [
+      ['aaa bbb ccc ddd eee', undefined],
+      ['foo trans­atlantic said "hello" to 世界 and waved.', undefined],
+      ['https://example.com/some-long/path-with-hyphens', undefined],
+      ['foo\n\tbar  baz qux\n', { whiteSpace: 'pre-wrap' }],
+      ['Alpha beta gamma', { letterSpacing: 1.5 }],
+    ] as const) {
+      const prepared = prepareWithSegments(text, FONT, options)
+      for (const width of [0, 12, 30, 57.3, 64, 100, 200]) {
+        expect(countPreparedLinesInWidthRange(prepared, width, range)).toBe(layout(prepared, width, LINE_HEIGHT).lineCount)
+        expect(range.lo <= width && width < range.hi).toBe(true)
+        const key = lineEndKey(prepared, width)
+        const lo = Math.max(range.lo, -10)
+        const hi = Math.min(range.hi, 1000)
+        for (const inside of [lo, (lo + hi) / 2, hi - 1e-9 * Math.max(1, hi)]) {
+          expect({ text, width, inside, key: lineEndKey(prepared, inside) }).toEqual({ text, width, inside, key })
+        }
+      }
+    }
+  })
+
+  test('a line that ends at a space keeps its end until the next word fits', () => {
+    // Letters are 9.6px and spaces 5.28px: 'aaa bbb' is 62.88px, 'aaa bbb ccc' 96.96px.
+    const prepared = prepareWithSegments('aaa bbb ccc', FONT)
+    const range = { lo: 0, hi: 0 }
+    for (const width of [64, 70]) {
+      expect(countPreparedLinesInWidthRange(prepared, width, range)).toBe(2)
+      expect(range.lo).toBeCloseTo(62.88 - 0.005, 9)
+      expect(range.hi).toBeCloseTo(96.96 - 0.005, 9)
+    }
+  })
+
+  test('rich inline ranges keep every line end', () => {
+    const flow = prepareRichInline([
+      { text: 'Hello ', font: FONT },
+      { text: 'bold', font: '700 16px Test Sans' },
+      { text: ' world, then more words and a link https://example.com/a-b ', font: FONT },
+      { text: '@pill', font: FONT, break: 'never', extraWidth: 12 },
+    ])
+    const range = { lo: 0, hi: 0 }
+    // A line that ends at a hanging space can report its width an ulp apart.
+    function lines(width: number): { ends: string; widths: number[] } {
+      const ends: string[] = []
+      const widths: number[] = []
+      walkRichInlineLineRanges(flow, width, line => {
+        ends.push(`${line.end.itemIndex}.${line.end.segmentIndex}.${line.end.graphemeIndex}`)
+        widths.push(line.width)
+      })
+      return { ends: ends.join(' '), widths }
+    }
+    for (const width of [0, 20, 50, 90, 150, 400]) {
+      expect(measureRichInlineStatsInWidthRange(flow, width, range)).toEqual(measureRichInlineStats(flow, width))
+      const expected = lines(width)
+      const lo = Math.max(range.lo, -10)
+      const hi = Math.min(range.hi, 1000)
+      for (const inside of [lo, (lo + hi) / 2, hi - 1e-9 * Math.max(1, hi)]) {
+        const actual = lines(inside)
+        expect({ width, inside, ends: actual.ends }).toEqual({ width, inside, ends: expected.ends })
+        for (let i = 0; i < actual.widths.length; i++) expect(actual.widths[i]!).toBeCloseTo(expected.widths[i]!, 9)
+      }
+    }
+  })
 })
 
 describe('shared public contracts', () => {
