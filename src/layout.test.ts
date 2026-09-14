@@ -315,6 +315,14 @@ describe('width ranges', () => {
       for (const width of [0, 12, 30, 57.3, 64, 100, 200]) {
         expect(countPreparedLinesInWidthRange(prepared, width, range)).toBe(layout(prepared, width, LINE_HEIGHT).lineCount)
         expect(range.lo <= width && width < range.hi).toBe(true)
+        // The inset below the exclusive end still repeats the breaks, and the
+        // range computed there holds that width too.
+        if (range.hi !== Number.POSITIVE_INFINITY) {
+          const edge = range.hi
+          const edgeRange = { lo: 0, hi: 0 }
+          countPreparedLinesInWidthRange(prepared, edge, edgeRange)
+          expect({ text, edge, inside: edgeRange.lo <= edge && edge < edgeRange.hi }).toEqual({ text, edge, inside: true })
+        }
         const key = lineEndKey(prepared, width)
         const lo = Math.max(range.lo, -10)
         const hi = Math.min(range.hi, 1000)
@@ -356,6 +364,12 @@ describe('width ranges', () => {
     }
     for (const width of [0, 20, 50, 90, 150, 400]) {
       expect(measureRichInlineStatsInWidthRange(flow, width, range)).toEqual(measureRichInlineStats(flow, width))
+      if (range.hi !== Number.POSITIVE_INFINITY) {
+        const edge = range.hi
+        const edgeRange = { lo: 0, hi: 0 }
+        measureRichInlineStatsInWidthRange(flow, edge, edgeRange)
+        expect({ edge, inside: edgeRange.lo <= edge && edge < edgeRange.hi }).toEqual({ edge, inside: true })
+      }
       const expected = lines(width)
       const lo = Math.max(range.lo, -10)
       const hi = Math.min(range.hi, 1000)

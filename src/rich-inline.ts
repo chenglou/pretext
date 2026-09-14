@@ -20,6 +20,7 @@ import {
 } from './line-text.js'
 import {
   breaksAfter,
+  includeWidthInRange,
   type LineBreakCursor,
   type PreparedLineBreakData,
   stepPreparedLineGeometry,
@@ -678,23 +679,23 @@ const itemWalkFitRange: WidthRange = { lo: Number.NEGATIVE_INFINITY, hi: Number.
 // narrows to that. Each end moves inward by 16 ulps of the widths involved, so
 // rounding cannot bring in a width whose decision differs; `scale` adds widths
 // the limit subtracted that neither side shows.
+// The line calls this only with a range. Without one it compares in place, so
+// stats and walks make no extra calls.
 function overflowsLineLimit(
-  range: WidthRange | undefined,
+  range: WidthRange,
   maxWidth: number,
   fitWidth: number,
   limit: number,
   scale = 0,
 ): boolean {
   const overflows = fitWidth > limit
-  if (range !== undefined) {
-    const margin = 16 * Number.EPSILON * (1 + scale + Math.abs(maxWidth) + Math.abs(fitWidth) + Math.abs(limit))
-    if (overflows) {
-      const hi = maxWidth + (fitWidth - limit) - margin
-      if (hi < range.hi) range.hi = hi
-    } else {
-      const lo = maxWidth + (fitWidth - limit) + margin
-      if (lo > range.lo) range.lo = lo
-    }
+  const margin = 16 * Number.EPSILON * (1 + scale + Math.abs(maxWidth) + Math.abs(fitWidth) + Math.abs(limit))
+  if (overflows) {
+    const hi = maxWidth + (fitWidth - limit) - margin
+    if (hi < range.hi) range.hi = hi
+  } else {
+    const lo = maxWidth + (fitWidth - limit) + margin
+    if (lo > range.lo) range.lo = lo
   }
   return overflows
 }
@@ -760,7 +761,7 @@ function stepRichInlineLine(
 
       const occupiedWidth = item.naturalWidth + item.extraWidth
       const totalWidth = gapBefore + occupiedWidth
-      if (hasContent && overflowsLineLimit(range, maxWidth, totalWidth, remainingWidth)) break lineLoop
+      if (hasContent && (range === undefined ? totalWidth > remainingWidth : overflowsLineLimit(range, maxWidth, totalWidth, remainingWidth))) break lineLoop
 
       collectWholeItem(collectFragment, itemIndex, item, gapBefore, occupiedWidth)
       hasContent = true
@@ -770,7 +771,7 @@ function stepRichInlineLine(
     }
 
     const reservedWidth = gapBefore + item.extraWidth
-    if (hasContent && overflowsLineLimit(range, maxWidth, reservedWidth, remainingWidth)) break lineLoop
+    if (hasContent && (range === undefined ? reservedWidth > remainingWidth : overflowsLineLimit(range, maxWidth, reservedWidth, remainingWidth))) break lineLoop
 
     // When following items continue this item's last run without a break,
     // the run moves to a later line with them if the line already has an
@@ -782,11 +783,13 @@ function stepRichInlineLine(
     if (atItemStart) {
       const totalWidth = reservedWidth + item.naturalWidth
       if (
-        !overflowsLineLimit(range, maxWidth, totalWidth, remainingWidth) &&
+        (range === undefined ? totalWidth <= remainingWidth : !overflowsLineLimit(range, maxWidth, totalWidth, remainingWidth)) &&
         (
           carryWidth === 0 ||
           (isLineStartCursor(item.lastRunStart) && !(hasContent && item.breakBefore)) ||
-          !overflowsLineLimit(range, maxWidth, totalWidth + carryWidth, remainingWidth + lineFitEpsilon)
+          (range === undefined
+            ? totalWidth + carryWidth <= remainingWidth + lineFitEpsilon
+            : !overflowsLineLimit(range, maxWidth, totalWidth + carryWidth, remainingWidth + lineFitEpsilon))
         )
       ) {
         collectWholeItem(collectFragment, itemIndex, item, gapBefore, item.naturalWidth + item.extraWidth)
@@ -798,8 +801,10 @@ function stepRichInlineLine(
     }
 
     const availableWidth = Math.max(1, remainingWidth - reservedWidth)
-    itemAvailableWidth = availableWidth
-    itemScale = Math.abs(remainingWidth) + Math.abs(reservedWidth)
+    if (range !== undefined) {
+      itemAvailableWidth = availableWidth
+      itemScale = Math.abs(remainingWidth) + Math.abs(reservedWidth)
+    }
     const lineEnd: LineBreakCursor = {
       segmentIndex: cursor.segmentIndex,
       graphemeIndex: cursor.graphemeIndex,
@@ -818,7 +823,13 @@ function stepRichInlineLine(
 
     // The lower-level walker may force one unit to make progress. If that unit
     // only fits on a fresh line, wrap before this rich item instead.
-    if (hasContent && atItemStart && overflowsLineLimit(range, maxWidth, lineWidthContribution, remainingWidth)) break lineLoop
+    if (
+      hasContent &&
+      atItemStart &&
+      (range === undefined ? lineWidthContribution > remainingWidth : overflowsLineLimit(range, maxWidth, lineWidthContribution, remainingWidth))
+    ) {
+      break lineLoop
+    }
 
     // Preserve ordinary breaks before emergency splitting the next word: the
     // last one the joined text offers inside its first segment, else the item
@@ -861,7 +872,9 @@ function stepRichInlineLine(
       carryWidth !== 0 &&
       lineEnd.segmentIndex === item.prepared.segments.length &&
       lineEnd.graphemeIndex === 0 &&
-      overflowsLineLimit(range, maxWidth, lineWidthContribution + carryWidth, remainingWidth + lineFitEpsilon)
+      (range === undefined
+        ? lineWidthContribution + carryWidth > remainingWidth + lineFitEpsilon
+        : overflowsLineLimit(range, maxWidth, lineWidthContribution + carryWidth, remainingWidth + lineFitEpsilon))
     ) {
       const runStart = item.lastRunStart
       if (isBeforeCursor(cursor, runStart)) {
@@ -1056,5 +1069,6 @@ export function measureRichInlineStatsInWidthRange(
   }
   // A distance to an infinite limit carries no width.
   if (maxWidth === Number.POSITIVE_INFINITY) range.lo = maxWidth
+  includeWidthInRange(range, maxWidth)
   return { lineCount, maxLineWidth }
 }
