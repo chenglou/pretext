@@ -17,10 +17,18 @@ import {
   walkRichInlineLineRanges,
   type PreparedRichInline,
 } from '../../src/rich-inline.ts'
-import { createMarkdownChatSpecs } from './markdown-chat.data.ts'
+import { createMarkdownChatSpecs, type MarkdownChatSeed } from './markdown-chat.data.ts'
 
 export const MAX_CHAT_WIDTH = 860
 export const TOTAL_MESSAGE_COUNT = 10_000
+// History loads and unloads in chunks of this many messages. Preparing a chunk
+// is the most work a frame does: in Chrome on an M5 Max, 50 messages load within
+// a 120 Hz frame, and twice as many take twice as long.
+const HISTORY_CHUNK_SIZE = 50
+// The most chunks loaded at once: the chunks on screen, and one on either side.
+// While every chunk is taller than the room between the banners, the screen
+// shows at most two chunks, so a smaller window would unload one it needs.
+const HISTORY_WINDOW_CHUNKS = 4
 export const OCCLUSION_BANNER_HEIGHT = 61
 export const PAGE_MARGIN = 28
 export const MESSAGE_SIDE_PADDING = 22
@@ -242,6 +250,14 @@ export type MessageFrame = {
   layoutContentWidth: number
 }
 
+// The loaded part of the history: whole chunks in order, starting with the
+// chunk whose first message is at firstOrdinal. Only these messages are
+// prepared and laid out, and the scroll area holds only them.
+export type HistoryWindow = {
+  firstOrdinal: number
+  messages: PreparedChatMessage[]
+}
+
 // Every message's bubble height at one chat width, and its top, in typed
 // arrays. Tops and totalHeight leave out the banners: the canvas puts the top
 // banner's height above the messages and both banners' heights in its own, so
@@ -253,15 +269,16 @@ export type ConversationLayout = {
   totalHeight: number
 }
 
-// A message, and how far its top sits below the top banner's edge, negative
-// when the banner hides its top. Scrolling keeps it there across relayouts.
+// A message, by its ordinal in the history, and how far its top sits below the
+// top banner's edge, negative when the banner hides its top. Scrolling keeps it
+// there across relayouts, loads and unloads.
 export type ScrollAnchor = {
-  index: number
   offset: number
+  ordinal: number
 }
 
 // The chat scrolled to its top.
-export const TOP_SCROLL_ANCHOR: ScrollAnchor = { index: 0, offset: CHAT_TOP_PADDING_OFFSET }
+export const TOP_SCROLL_ANCHOR: ScrollAnchor = { offset: CHAT_TOP_PADDING_OFFSET, ordinal: 0 }
 
 const EMPTY_MARK_STATE: MarkState = {
   bold: false,
@@ -282,12 +299,61 @@ function parseMarkdownHref(href: string | null | undefined): string | null {
 
 const markerWidthCache = new Map<string, number>()
 
-export function createPreparedChatMessages(): PreparedChatMessage[] {
-  const specs = createMarkdownChatSpecs(TOTAL_MESSAGE_COUNT)
-  const messages = new Array<PreparedChatMessage>(specs.length)
-  for (let index = 0; index < specs.length; index++) {
-    const spec = specs[index]!
-    messages[index] = {
+export function createChatHistory(): MarkdownChatSeed[] {
+  return createMarkdownChatSpecs(TOTAL_MESSAGE_COUNT)
+}
+
+// Nothing loaded yet, at the chunk holding the message at ordinal.
+export function createHistoryWindow(ordinal: number): HistoryWindow {
+  return { firstOrdinal: ordinal - (ordinal % HISTORY_CHUNK_SIZE), messages: [] }
+}
+
+// The chunks holding the first and last messages shown stay loaded, with one
+// more chunk on either side. The window grows toward those, then, while it holds
+// more than HISTORY_WINDOW_CHUNKS, drops its first or last chunk, whichever is
+// farther from the shown ones. Shown messages are loaded ones, so once anything
+// has been shown, a move loads at most one chunk on either side. A window that
+// changes is a new object.
+export function moveHistoryWindow(
+  history: readonly MarkdownChatSeed[],
+  historyWindow: HistoryWindow,
+  firstShownOrdinal: number,
+  lastShownOrdinal: number,
+): HistoryWindow {
+  const firstShownChunk = Math.floor(firstShownOrdinal / HISTORY_CHUNK_SIZE)
+  const lastShownChunk = Math.floor(lastShownOrdinal / HISTORY_CHUNK_SIZE)
+  const firstWantedChunk = Math.max(0, firstShownChunk - 1)
+  const lastWantedChunk = Math.min(Math.ceil(history.length / HISTORY_CHUNK_SIZE) - 1, lastShownChunk + 1)
+  let firstChunk = historyWindow.firstOrdinal / HISTORY_CHUNK_SIZE
+  let lastChunk = Math.ceil((historyWindow.firstOrdinal + historyWindow.messages.length) / HISTORY_CHUNK_SIZE) - 1
+  if (firstChunk <= firstWantedChunk && lastChunk >= lastWantedChunk) return historyWindow
+
+  let messages = historyWindow.messages
+  for (; firstChunk > firstWantedChunk; firstChunk--) {
+    messages = prepareHistoryChunk(history, firstChunk - 1).concat(messages)
+  }
+  for (; lastChunk < lastWantedChunk; lastChunk++) {
+    messages = messages.concat(prepareHistoryChunk(history, lastChunk + 1))
+  }
+  while (lastChunk - firstChunk + 1 > HISTORY_WINDOW_CHUNKS) {
+    if (firstShownChunk - firstChunk > lastChunk - lastShownChunk) {
+      messages = messages.slice(HISTORY_CHUNK_SIZE)
+      firstChunk++
+    } else {
+      messages = messages.slice(0, (lastChunk - firstChunk) * HISTORY_CHUNK_SIZE)
+      lastChunk--
+    }
+  }
+  return { firstOrdinal: firstChunk * HISTORY_CHUNK_SIZE, messages }
+}
+
+function prepareHistoryChunk(history: readonly MarkdownChatSeed[], chunk: number): PreparedChatMessage[] {
+  const start = chunk * HISTORY_CHUNK_SIZE
+  const end = Math.min(history.length, start + HISTORY_CHUNK_SIZE)
+  const messages = new Array<PreparedChatMessage>(end - start)
+  for (let ordinal = start; ordinal < end; ordinal++) {
+    const spec = history[ordinal]!
+    messages[ordinal - start] = {
       blocks: parseMarkdownBlocks(spec.markdown),
       role: spec.role,
     }
@@ -368,12 +434,26 @@ export function findVisibleRange(
   return { start, end: low }
 }
 
-// The first message showing below the top banner at scrollTop. Past the last
-// message, which a viewport shorter than both banners can scroll to, it's the
-// last message.
-export function findScrollAnchor(conversation: ConversationLayout, scrollTop: number): ScrollAnchor {
-  const index = Math.min(findFirstMessageBelow(conversation, scrollTop), conversation.tops.length - 1)
-  return { index, offset: conversation.tops[index]! - scrollTop }
+// What a layout of the window shows at scrollTop: the anchor, which is the
+// first message showing below the top banner, and the last message showing
+// above the bottom one. Past the last message, which a viewport shorter than
+// both banners can scroll to, both are the last message.
+export function findShownMessages(
+  historyWindow: HistoryWindow,
+  conversation: ConversationLayout,
+  scrollTop: number,
+  viewportHeight: number,
+  occlusionBannerHeight: number,
+): {
+  anchor: ScrollAnchor
+  lastOrdinal: number
+} {
+  const { start, end } = findVisibleRange(conversation, scrollTop, viewportHeight, occlusionBannerHeight)
+  const index = Math.min(start, conversation.tops.length - 1)
+  return {
+    anchor: { offset: conversation.tops[index]! - scrollTop, ordinal: historyWindow.firstOrdinal + index },
+    lastOrdinal: historyWindow.firstOrdinal + Math.max(index, end - 1),
+  }
 }
 
 // The first message whose bottom is below y.
