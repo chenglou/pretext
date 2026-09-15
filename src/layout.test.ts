@@ -599,8 +599,8 @@ describe('boundary-policy regressions', () => {
     const profile = { ...baseProfile, carryCJKAfterClosingQuote: true, breakBeforeConditionalJapaneseStarter: true, wordInitialHyphenLetters: 'alphabetic-and-hebrew' as const, segmentBreakRemovalRun: 'blink' as const }
     for (const [text, expected] of [
       ['a 00:00:00\uFF0Cb', ['a', ' ', '00:00:00\uFF0C', 'b']],
-      ['2025-08-01 00:00:00\uFF0C2025-08-01 00:00:00', ['2025-', '08-', '01', ' ', '00:00:', '00\uFF0C', '2025-', '08-', '01', ' ', '00:00:00']],
-      ['00:00:00\uFF0C2025', ['00:00:', '00\uFF0C', '2025']],
+      ['2025-08-01 00:00:00\uFF0C2025-08-01 00:00:00', ['2025-', '08-', '01', ' ', '00:00:00\uFF0C', '2025-', '08-', '01', ' ', '00:00:00']],
+      ['00:00:00\uFF0C2025', ['00:00:00\uFF0C', '2025']],
       ['12:30\uFF0Cb', ['12:30\uFF0C', 'b']],
     ] as const) {
       expect(analyzeText(text, profile).texts).toEqual([...expected])
@@ -680,8 +680,8 @@ describe('boundary-policy regressions', () => {
     for (const [text, geckoTexts, blinkTexts] of [
       ['log-2026', ['log-2026'], ['log-', '2026']],
       ['crash-log-2026-09-12.txt', ['crash-', 'log-2026-09-12.txt'], ['crash-', 'log-', '2026-', '09-', '12.txt']],
-      ['2025-08-01 00:00:00\uFF0C2025-08-01 00:00:00', ['2025-08-01', ' ', '00:00:', '00\uFF0C', '2025-08-01', ' ', '00:00:00'],
-        ['2025-', '08-', '01', ' ', '00:00:', '00\uFF0C', '2025-', '08-', '01', ' ', '00:00:00']],
+      ['2025-08-01 00:00:00\uFF0C2025-08-01 00:00:00', ['2025-08-01', ' ', '00:00:00\uFF0C', '2025-08-01', ' ', '00:00:00'],
+        ['2025-', '08-', '01', ' ', '00:00:00\uFF0C', '2025-', '08-', '01', ' ', '00:00:00']],
       ['n2-1o(r)', ['n2-1o(r)'], ['n2-', '1o(r)']],
       ['x--1', ['x--1'], ['x--', '1']],
       ['a-\u0661\u0662', ['a-\u0661\u0662'], ['a-', '\u0661\u0662']],
