@@ -1409,8 +1409,6 @@ function getNumericClosingSuffixStart(text: string): number {
   return isNumericRunSegment(body) && segmentContainsDecimalDigit(body) ? start : -1
 }
 
-const keepNumericClosingSuffix: boolean = false
-
 function mergeNumericRuns(segmentation: MergedSegmentation, normalized: string, profile: AnalysisProfile): MergedSegmentation {
   const texts: string[] = []
   const isWordLike: boolean[] = []
@@ -1478,7 +1476,6 @@ function mergeNumericRuns(segmentation: MergedSegmentation, normalized: string, 
 
       let suffixLength = 0
       if (
-        keepNumericClosingSuffix &&
         j < segmentation.len &&
         segmentation.kinds[j] === 'text' &&
         geckoPairBoundary(normalized, segmentation.starts[j]!, profile) !== false
