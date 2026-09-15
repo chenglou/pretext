@@ -3,32 +3,10 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!-- Reserves a classic scrollbar's room from the start without painting a track, so the page's width doesn't change when it grows past the window. Overlay scrollbars ignore it. -->
+<style>html { scrollbar-gutter: stable; }</style>
 <title>Shrinkwrap Showdown</title>
 <script type="module" src="./bubbles.ts"></script>
-<script>
-  (function syncInitialBubbleGeometry() {
-    const root = document.documentElement
-    const minWidth = 220
-    const requestedWidth = 340
-    const pageMaxWidth = 1080
-    const desktopPageMargin = 32
-    const mobilePageMargin = 20
-    const gridGap = 16
-    const panelPaddingX = 36
-    const viewportWidth = root.clientWidth
-    const pageWidth = Math.min(pageMaxWidth, viewportWidth - (viewportWidth <= 760 ? mobilePageMargin : desktopPageMargin))
-    const columnWidth = viewportWidth <= 760 ? pageWidth : (pageWidth - gridGap) / 2
-    const panelContentWidth = Math.max(1, Math.floor(columnWidth - panelPaddingX))
-    const maxWidth = Math.max(minWidth, panelContentWidth)
-    const chatWidth = Math.min(requestedWidth, maxWidth)
-    const bubbleMaxWidth = Math.floor(chatWidth * 0.8)
-
-    root.dataset['bubblesChatWidth'] = String(chatWidth)
-    root.dataset['bubblesMaxWidth'] = String(maxWidth)
-    root.style.setProperty('--chat-width', `${chatWidth}px`)
-    root.style.setProperty('--bubble-max-width', `${bubbleMaxWidth}px`)
-  })()
-</script>
 <style>
   * { box-sizing: border-box; }
   :root {
@@ -40,8 +18,6 @@
     --rule: #d8cec3;
     --accent: #955f3b;
     --accent-soft: #f0e4da;
-    --chat-width: 340px;
-    --bubble-max-width: 272px;
   }
   body {
     margin: 0;
@@ -53,9 +29,12 @@
     font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
   }
   .page {
-    width: min(1080px, calc(100vw - 32px));
+    width: var(--page-width);
     margin: 0 auto;
     padding: 28px 0 40px;
+  }
+  :root[data-layout="narrow"] .page {
+    padding-top: 20px;
   }
   .eyebrow {
     margin: 0 0 8px;
@@ -87,6 +66,9 @@
     font: 12px/1.2 "SF Mono", ui-monospace, monospace;
     color: var(--muted);
   }
+  :root[data-layout="narrow"] .controls {
+    flex-wrap: wrap;
+  }
   .controls input[type=range] {
     flex: 1;
   }
@@ -98,14 +80,18 @@
   .grid {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 16px;
+    gap: var(--grid-gap);
+  }
+  :root[data-layout="narrow"] .grid {
+    grid-template-columns: 1fr;
   }
   .panel {
-    padding: 18px;
-    border: 1px solid var(--rule);
+    padding-block: 18px;
+    padding-inline: var(--panel-padding-x);
     border-radius: 20px;
     background: color-mix(in srgb, var(--panel) 92%, white 8%);
-    box-shadow: 0 18px 40px rgb(54 40 23 / 0.08);
+    /* The ring is a shadow, so it adds no width to the panel. */
+    box-shadow: inset 0 0 0 1px var(--rule), 0 18px 40px rgb(54 40 23 / 0.08);
   }
   .panel h2 {
     margin: 0;
@@ -138,10 +124,11 @@
     background: #1c1c1e;
   }
   .msg {
-    padding: 8px 12px;
+    padding: var(--bubble-padding);
     border-radius: 16px;
     width: fit-content;
-    font: 15px/20px "Helvetica Neue", Helvetica, Arial, sans-serif;
+    font: var(--bubble-font);
+    line-height: var(--bubble-line-height);
     max-width: var(--bubble-max-width);
     overflow-wrap: break-word;
     word-break: normal;
@@ -178,18 +165,6 @@
   code {
     font: 12px/1.3 "SF Mono", ui-monospace, monospace;
   }
-  @media (max-width: 760px) {
-    .page {
-      width: min(100vw - 20px, 1080px);
-      padding-top: 20px;
-    }
-    .controls {
-      flex-wrap: wrap;
-    }
-    .grid {
-      grid-template-columns: 1fr;
-    }
-  }
 </style>
 </head>
 <body>
@@ -204,25 +179,66 @@
 
     <section class="controls" aria-label="Container width control">
       <span>Container width:</span>
-      <input type="range" id="slider" min="220" max="760" value="340">
-      <span class="val" id="val">340px</span>
+      <input type="range" id="slider">
+      <span class="val" id="val"></span>
     </section>
-  <script>
-      (function applyInitialBubbleControls() {
-        const slider = document.getElementById('slider')
-        const label = document.getElementById('val')
-        if (!(slider instanceof HTMLInputElement)) return
-        if (!(label instanceof HTMLSpanElement)) return
-
-        const root = document.documentElement
-        const chatWidth = root.dataset['bubblesChatWidth']
-        const maxWidth = root.dataset['bubblesMaxWidth']
-        if (chatWidth === undefined || maxWidth === undefined) return
-
-        slider.max = maxWidth
-        slider.value = chatWidth
-        label.textContent = `${chatWidth}px`
-      })()
+    <script>
+      // The page's geometry, and the bubbles' font and padding. It's a classic script so the first
+      // paint has them before bubbles.ts loads, and bubbles.ts calls the same getGeometry() and
+      // paint() on every render.
+      const bubblesPage = {
+        defaultChatWidth: 340,
+        // Pretext measures the bubbles in this font, and a bubble's width includes this padding.
+        bubbleFont: '15px "Helvetica Neue", Helvetica, Arial, sans-serif',
+        bubbleLineHeight: 20,
+        bubblePaddingX: 12,
+        bubblePaddingY: 8,
+        dom: {
+          root: document.documentElement,
+          slider: document.getElementById('slider'),
+          label: document.getElementById('val'),
+        },
+        getGeometry(viewportWidth, requestedChatWidth) {
+          const isNarrow = viewportWidth <= 760
+          const pageWidth = Math.min(1080, viewportWidth - (isNarrow ? 20 : 32))
+          const gridGap = 16
+          const columnWidth = isNarrow ? pageWidth : (pageWidth - gridGap) / 2
+          // The panel's ring is a shadow, so only this padding sits between its edge and the chat.
+          const panelPaddingX = 18
+          const minChatWidth = 220
+          const maxChatWidth = Math.max(minChatWidth, Math.floor(columnWidth - panelPaddingX * 2))
+          const chatWidth = Math.min(requestedChatWidth, maxChatWidth)
+          return {
+            isNarrow,
+            pageWidth,
+            gridGap,
+            panelPaddingX,
+            minChatWidth,
+            maxChatWidth,
+            chatWidth,
+            bubbleMaxWidth: Math.floor(chatWidth * 0.8),
+          }
+        },
+        paint(geometry) {
+          const { root, slider, label } = bubblesPage.dom
+          root.dataset.layout = geometry.isNarrow ? 'narrow' : 'wide'
+          root.style.setProperty('--page-width', `${geometry.pageWidth}px`)
+          root.style.setProperty('--grid-gap', `${geometry.gridGap}px`)
+          root.style.setProperty('--panel-padding-x', `${geometry.panelPaddingX}px`)
+          root.style.setProperty('--chat-width', `${geometry.chatWidth}px`)
+          root.style.setProperty('--bubble-max-width', `${geometry.bubbleMaxWidth}px`)
+          root.style.setProperty('--bubble-font', bubblesPage.bubbleFont)
+          root.style.setProperty('--bubble-line-height', `${bubblesPage.bubbleLineHeight}px`)
+          root.style.setProperty('--bubble-padding', `${bubblesPage.bubblePaddingY}px ${bubblesPage.bubblePaddingX}px`)
+          slider.min = String(geometry.minChatWidth)
+          slider.max = String(geometry.maxChatWidth)
+          slider.value = String(geometry.chatWidth)
+          label.textContent = `${geometry.chatWidth}px`
+        },
+      }
+      // The body has no margin, border or padding, so its width is the room the page lays out in.
+      // Chrome's root clientWidth ignores an empty scrollbar gutter and reports the full window.
+      bubblesPage.paint(bubblesPage.getGeometry(document.body.clientWidth, bubblesPage.defaultChatWidth))
     </script>
 
     <section class="grid">
@@ -280,77 +296,5 @@
       </p>
     </section>
   </main>
-  <script>
-    (function applyInitialShrinkwrapRender() {
-      const root = document.documentElement
-      const slider = document.getElementById('slider')
-      const shrinkWaste = document.getElementById('shrink-waste')
-      const cssChat = document.getElementById('chat-css')
-      const shrinkChat = document.getElementById('chat-shrink')
-      if (
-        !(slider instanceof HTMLInputElement) ||
-        !(shrinkWaste instanceof HTMLSpanElement) ||
-        !(cssChat instanceof HTMLDivElement) ||
-        !(shrinkChat instanceof HTMLDivElement)
-      ) {
-        return
-      }
-
-      const datasetWidth = root.dataset['bubblesChatWidth']
-      const chatWidth = datasetWidth === undefined ? Number.parseInt(slider.value, 10) : Number.parseInt(datasetWidth, 10)
-      const bubbleMaxWidth = Math.floor(chatWidth * 0.8)
-      const shrinkNodes = Array.from(shrinkChat.querySelectorAll('.msg'))
-      const cssNodes = Array.from(cssChat.querySelectorAll('.msg'))
-      const firstCssNode = cssNodes[0]
-      const firstCssStyle = firstCssNode instanceof HTMLDivElement ? getComputedStyle(firstCssNode) : null
-      const lineHeight = firstCssStyle === null ? 20 : Number.parseFloat(firstCssStyle.lineHeight)
-      const verticalPadding = firstCssStyle === null
-        ? 16
-        : Number.parseFloat(firstCssStyle.paddingTop) + Number.parseFloat(firstCssStyle.paddingBottom)
-
-      function getLineCount(node, height) {
-        return Math.max(1, Math.round((height - verticalPadding) / lineHeight))
-      }
-
-      function findTightStartupWidth(shrinkNode, cssWidth, initialLineCount) {
-        let lo = 1
-        let hi = Math.max(1, cssWidth)
-
-        while (lo < hi) {
-          const mid = Math.floor((lo + hi) / 2)
-          shrinkNode.style.width = `${mid}px`
-          const midLineCount = getLineCount(shrinkNode, shrinkNode.getBoundingClientRect().height)
-          if (midLineCount <= initialLineCount) {
-            hi = mid
-          } else {
-            lo = mid + 1
-          }
-        }
-
-        shrinkNode.style.width = `${lo}px`
-      }
-
-      root.style.setProperty('--chat-width', `${chatWidth}px`)
-      root.style.setProperty('--bubble-max-width', `${bubbleMaxWidth}px`)
-
-      for (let index = 0; index < shrinkNodes.length; index++) {
-        const shrinkNode = shrinkNodes[index]
-        const cssNode = cssNodes[index]
-        if (!(shrinkNode instanceof HTMLDivElement) || !(cssNode instanceof HTMLDivElement)) continue
-
-        cssNode.style.maxWidth = `${bubbleMaxWidth}px`
-        cssNode.style.width = 'fit-content'
-
-        const cssBox = cssNode.getBoundingClientRect()
-        const cssWidth = Math.ceil(cssBox.width)
-        const initialLineCount = getLineCount(cssNode, cssBox.height)
-
-        shrinkNode.style.maxWidth = `${bubbleMaxWidth}px`
-        findTightStartupWidth(shrinkNode, cssWidth, initialLineCount)
-      }
-
-      shrinkWaste.textContent = '0'
-    })()
-  </script>
 </body>
 </html>

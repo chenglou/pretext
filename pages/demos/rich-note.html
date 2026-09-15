@@ -6,6 +6,10 @@
   <meta name="description" content="Rich text rendered as text runs, links, code spans, and atomic chips, with live width changes powered by Pretext.">
   <title>Rich Text</title>
   <style>
+    /* A classic scrollbar keeps its room from the first frame, without an empty
+       track on short pages, so the width the page reads doesn't change when the
+       note grows past the window. */
+    html { scrollbar-gutter: stable; }
     * { box-sizing: border-box; margin: 0; }
     :root {
       color-scheme: light;
@@ -28,7 +32,7 @@
       min-height: 100vh;
     }
     .page {
-      width: min(940px, calc(100vw - 32px));
+      width: min(940px, calc(100% - 32px));
       margin: 0 auto;
       padding: 32px 0 48px;
     }
@@ -103,19 +107,19 @@
     .line-row {
       position: absolute;
       left: 0;
-      display: flex;
-      align-items: baseline;
-      flex-wrap: nowrap;
-      gap: 0;
-      width: max-content;
+      right: 0;
+      /* Spaces collapse as in the text Pretext laid out, so a line that wraps
+         inside an item doesn't paint the space it ends on. */
+      white-space: nowrap;
+      font: var(--font);
+      /* As on each fragment, so a line with a chip is 24px, the chip's
+         height, which the body counts for the last line. */
+      line-height: 1;
     }
     .frag {
-      display: inline-block;
-      white-space: pre;
       font: var(--font);
       line-height: 1;
       color: var(--ink);
-      vertical-align: baseline;
     }
     .frag--link {
       color: var(--accent);
@@ -127,7 +131,6 @@
       padding: 2px 7px 3px;
       border-radius: 3px;
       background: rgba(17, 31, 43, 0.08);
-      letter-spacing: 0;
     }
     .chip {
       display: inline-flex;
@@ -150,9 +153,10 @@
         justify-content: center;
       }
     }
+    /* rich-note.model.ts picks the card's narrow padding with the same query. */
     @media (max-width: 640px) {
       .page {
-        width: min(100vw - 20px, 940px);
+        width: min(100% - 20px, 940px);
         padding-top: 22px;
       }
       h1 { font-size: 30px; }

@@ -527,6 +527,7 @@ describe('boundary-policy regressions', () => {
     breakHyphenAfterCollapsedTab: false,
     segmentBreakRemovalRun: 'none' as const,
     breakOnlyAfterNextLine: false,
+    icuDecidesLetterAfterCJKMark: false,
   }
 
   test('independent symbols use grapheme overflow without splitting attached marks', () => {
@@ -720,8 +721,8 @@ describe('boundary-policy regressions', () => {
       ['a/\u0639\u0631\u0628\u064a', ['a/', '\u0639\u0631\u0628\u064a'], ['a/\u0639\u0631\u0628\u064a']],
       ['a/\u0e44\u0e17\u0e22', ['a/', '\u0e44\u0e17\u0e22'], ['a/\u0e44\u0e17\u0e22']],
       ['https://example.com/2026/09/docs', ['https://', 'example.com/2026/09/', 'docs'], ['https://example.com/2026/09/docs']],
-      // Pretext still breaks before `/` after CJK text, which UAX #14 forbids (ENGINE_FOLLOWUPS.md:29).
-      ['\u6f22/abc', ['\u6f22', '/', 'abc'], ['\u6f22', '/abc']],
+      // No break before `/` after CJK text either (LB13).
+      ['\u6f22/abc', ['\u6f22/', 'abc'], ['\u6f22/abc']],
     ] as const) {
       expect(analyzeText(text, gecko).texts).toEqual([...geckoTexts])
       expect(analyzeText(text, baseProfile).texts).toEqual([...blinkTexts])
@@ -732,6 +733,49 @@ describe('boundary-policy regressions', () => {
     // No break before a quote, IS, BA, a Hebrew letter (LB21b) or a number (LB25).
     for (const text of ['a/"b"', 'a/.b', 'a/|b', 'a/\u05e2\u05d1\u05e8', '1/2', 'a/1', 'docs/']) {
       expect(analyzeText(text, gecko).texts).toEqual(analyzeText(text, baseProfile).texts)
+    }
+  })
+
+  test('a mark after CJK text stays with it, and each engine keeps the text after the mark as its pair rules do (#293)', async () => {
+    const { analyzeText } = await import('./analysis.ts')
+    const webkit = { ...baseProfile, keepAllPairModel: 'webkit-spaces' as const, icuDecidesLetterAfterCJKMark: true }
+    const gecko = { ...baseProfile, geckoAsciiLineBreaks: true, keepAllPairModel: 'icu4x-classes' as const, breakAroundEastAsianQuotes: false, wordInitialHyphenLetters: 'none' as const }
+    // No engine breaks before these marks after CJK text (LB13, LB19, LB21). Blink's
+    // pair table keeps an ASCII mark with an ASCII letter or digit, except `?`.
+    // WebKit's table decides before a digit, and ICU before a letter where the mark
+    // follows a character that reached ICU; CL and CP after an ideograph or Hangul
+    // syllable skip ICU. Gecko follows UAX #14.
+    for (const [text, blinkTexts, webkitTexts, geckoTexts] of [
+      ["\u4e19'first", ["\u4e19'first"], ["\u4e19'first"], ["\u4e19'first"]],
+      ['\u4e19/first', ['\u4e19/first'], ['\u4e19/', 'first'], ['\u4e19/', 'first']],
+      ['\u4e19|first', ['\u4e19|first'], ['\u4e19|', 'first'], ['\u4e19|', 'first']],
+      ['\u4e19!first', ['\u4e19!first'], ['\u4e19!', 'first'], ['\u4e19!', 'first']],
+      ['\u4e19}first', ['\u4e19}first'], ['\u4e19}first'], ['\u4e19}', 'first']],
+      ['\ub2e4}first', ['\ub2e4}first'], ['\ub2e4}first'], ['\ub2e4}', 'first']],
+      ['\u3046}first', ['\u3046}first'], ['\u3046}', 'first'], ['\u3046}', 'first']],
+      ['\u4e19|1234', ['\u4e19|1234'], ['\u4e19|1234'], ['\u4e19|', '1234']],
+      ['\u4e19!1234', ['\u4e19!1234'], ['\u4e19!1234'], ['\u4e19!', '1234']],
+      ['\u4e19/1234', ['\u4e19/1234'], ['\u4e19/1234'], ['\u4e19/1234']],
+      // The table decides the pair after a mark that follows another mark.
+      ['\u4e19.!first', ['\u4e19.!first'], ['\u4e19.!first'], ['\u4e19.!', 'first']],
+      ['\u4e19?first', ['\u4e19?', 'first'], ['\u4e19?', 'first'], ['\u4e19?', 'first']],
+      ['\u4e19}\u03b1\u03b2', ['\u4e19}', '\u03b1\u03b2'], ['\u4e19}', '\u03b1\u03b2'], ['\u4e19}', '\u03b1\u03b2']],
+      ["\u4e19'\u03b1\u03b2", ["\u4e19'\u03b1\u03b2"], ["\u4e19'\u03b1\u03b2"], ["\u4e19'\u03b1\u03b2"]],
+    ] as const) {
+      expect(analyzeText(text, baseProfile).texts).toEqual([...blinkTexts])
+      expect(analyzeText(text, webkit).texts).toEqual([...webkitTexts])
+      expect(analyzeText(text, gecko).texts).toEqual([...geckoTexts])
+    }
+    // Punctuation attaches by its class, such as NS and PO, but an opening curly quote
+    // and U+3000 still start a line, and a hyphen keeps its own rules.
+    for (const [text, expected] of [
+      ['\u4e19\u203cfirst', ['\u4e19\u203c', 'first']],
+      ['\u6587\uff05\u6587', ['\u6587\uff05', '\u6587']],
+      ['\u4e19\u201cfirst\u201d', ['\u4e19', '\u201cfirst\u201d']],
+      ['\u4e19\u3000first', ['\u4e19', '\u3000', 'first']],
+      ['\u4e19-first', ['\u4e19-', 'first']],
+    ] as const) {
+      expect(analyzeText(text, baseProfile).texts).toEqual([...expected])
     }
   })
 
@@ -911,7 +955,7 @@ describe('boundary-policy regressions', () => {
         ] as const) {
           const rich = prepareRichInline([{ text, font: FONT }, { text: 'cd', font: FONT }])
           const line = layoutNextRichInlineLineRange(rich, Number.POSITIVE_INFINITY)
-          expect(line?.fragments.map(fragment => fragment.gapBefore > 0)).toEqual([false, gaps[column]])
+          expect(line?.fragments.map(fragment => fragment.gapItemIndex >= 0)).toEqual([false, gaps[column]])
         }
       }
     } finally {
@@ -1646,14 +1690,18 @@ describe('prepare invariants', () => {
     expect(prepareWithSegments('테스트입니다.', FONT).segments.at(-1)).toBe('다.')
   })
 
-  test('keeps text after a mark that ends CJK text where UAX #14 keeps the pair', () => {
-    // #274. IS, CP, PO and QU keep a following letter or number; EX and
-    // full-width marks don't, and a hyphen keeps its own rules.
+  test('keeps text after a mark that ends CJK text where the engine keeps the pair', () => {
+    // #274 and #293. IS, CP, PO and QU keep a following letter or number, and
+    // Blink's pair table, which this profile follows, also keeps `/`, `|`, `!` and
+    // `}`. `?` and full-width marks don't, and a hyphen keeps its own rules.
     for (const [text, expected] of [
       ['甲乙丙.first_week_voltage}户', ['甲', '乙', '丙.first_week_voltage}', '户']],
       ['甲乙丙,1234户', ['甲', '乙', '丙,1234', '户']],
       ['甲乙丙)first户', ['甲', '乙', '丙)first', '户']],
       ['甲乙丙%first户', ['甲', '乙', '丙%first', '户']],
+      ["甲乙丙'first_week户", ['甲', '乙', "丙'first_week", '户']],
+      ['甲乙丙|first_week户', ['甲', '乙', '丙|first_week', '户']],
+      ['甲乙丙/first_week户', ['甲', '乙', '丙/first_week', '户']],
       ['가나다.first', ['가', '나', '다.first']],
       ['甲乙丙.foo-bar', ['甲', '乙', '丙.foo-', 'bar']],
       ['甲乙丙?first户', ['甲', '乙', '丙?', 'first', '户']],
@@ -2307,6 +2355,52 @@ describe('rich-inline invariants', () => {
     }
   })
 
+  test('a rich fragment names the item whose collapsed whitespace made its gap', () => {
+    const gapItems = (items: Array<{ text: string, font?: string, break?: 'never', letterSpacing?: number }>, maxWidth = Infinity) => {
+      const prepared = prepareRichInline(items.map(item => ({ font: FONT, ...item })))
+      const lines: Array<Array<[number, number]>> = []
+      walkRichInlineLineRanges(prepared, maxWidth, range => {
+        lines.push(range.fragments.map(fragment => [fragment.itemIndex, fragment.gapItemIndex]))
+      })
+      return lines
+    }
+    // The previous item's trailing whitespace, else the first whitespace-only
+    // item after it, else the item's own leading whitespace.
+    for (const [texts, fragments] of [
+      [['a', 'b'], [[0, -1], [1, -1]]],
+      [['a ', ' b'], [[0, -1], [1, 0]]],
+      [['a', ' b'], [[0, -1], [1, 1]]],
+      [['a', ' ', '  ', 'b'], [[0, -1], [3, 1]]],
+      [['a ', '\t', 'b'], [[0, -1], [2, 0]]],
+      [['a', '', '\n b'], [[0, -1], [2, 2]]],
+      [['a ', '\u200B', 'b'], [[0, -1], [1, 0], [2, -1]]],
+      // An item holding only a soft hyphen isn't line content: its fragment
+      // has no gap, and it ends the pending space.
+      [['a ', '\u00AD', ' b'], [[0, -1], [1, -1], [2, 2]]],
+    ] as const) {
+      expect(gapItems(texts.map(text => ({ text })))).toEqual([fragments.map(fragment => [...fragment])])
+    }
+    expect(gapItems([{ text: 'Tag' }, { text: ' @maya', break: 'never' }])).toEqual([[[0, -1], [1, 1]]])
+    // A gap of zero or negative advance still names its item.
+    for (const letterSpacing of [-measureWidth(' ', FONT), -measureWidth(' ', FONT) - 2]) {
+      expect(gapItems([{ text: 'A' }, { text: ' B', letterSpacing }])).toEqual([[[0, -1], [1, 1]]])
+    }
+    // A line's first fragment has no gap.
+    expect(gapItems([{ text: 'A ' }, { text: 'B' }], measureWidth('A', FONT))).toEqual([[[0, -1]], [[1, -1]]])
+    // Materialized fragments keep the item, and the gap takes that item's font.
+    const codeFont = '12px Test Sans'
+    const prepared = prepareRichInline([
+      { text: 'Call', font: FONT },
+      { text: ' make build', font: codeFont },
+      { text: ' now', font: FONT },
+    ])
+    const range = layoutNextRichInlineLineRange(prepared, Infinity)!
+    expect(materializeRichInlineLineRange(prepared, range).fragments.map(fragment => [fragment.text, fragment.gapItemIndex])).toEqual([
+      ['Call', -1], ['make build', 1], ['now', 2],
+    ])
+    expect(range.fragments[1]!.gapBefore).toBeCloseTo(measureWidth(' ', codeFont), 8)
+  })
+
   test('rich ordinary break rights survive zero and negative SPACE advances', () => {
     for (const gap of [-2, 0, 2]) {
       const prepared = prepareRichInline([
@@ -2451,7 +2545,7 @@ describe('rich-inline invariants', () => {
         maxLineWidth: Math.max(...streamed.map(line => line.width)),
       })
       return streamed.map(line => materializeRichInlineLineRange(prepared, line).fragments
-        .map(fragment => (fragment.gapBefore === 0 ? '' : ' ') + fragment.text).join('').trimEnd())
+        .map(fragment => (fragment.gapItemIndex < 0 ? '' : ' ') + fragment.text).join('').trimEnd())
     }
     const words = prepareRichInline([
       { text: 'Is that ', font: FONT },
@@ -2494,7 +2588,7 @@ describe('rich-inline invariants', () => {
         const richLines: string[] = []
         walkRichInlineLineRanges(prepared, width, range => {
           const line = materializeRichInlineLineRange(prepared, range)
-          richLines.push(line.fragments.map(fragment => (fragment.gapBefore === 0 ? '' : ' ') + fragment.text).join('').trimEnd())
+          richLines.push(line.fragments.map(fragment => (fragment.gapItemIndex < 0 ? '' : ' ') + fragment.text).join('').trimEnd())
         })
         const flat = layoutWithLines(prepareWithSegments(parts.join(''), FONT), width, LINE_HEIGHT)
         expect(richLines).toEqual(flat.lines.map(line => line.text.trimEnd()))
@@ -2519,12 +2613,9 @@ describe('rich-inline invariants', () => {
       return lines
     }
     try {
-      for (const mode of ['item-boundary', 'joined-text'] as const) {
-        profile.inlineItemBreaks = mode
-        expect(richLines(['漢', '。字'], measureWidth('漢。', FONT) + 0.1)).toEqual(['漢。', '字'])
-        expect(richLines(['漢', '。字'], measureWidth('漢。', FONT) - 0.1)).toEqual(['漢', '。', '字'])
-      }
       profile.inlineItemBreaks = 'joined-text'
+      expect(richLines(['漢', '。字'], measureWidth('漢。', FONT) + 0.1)).toEqual(['漢。', '字'])
+      expect(richLines(['漢', '。字'], measureWidth('漢。', FONT) - 0.1)).toEqual(['漢', '。', '字'])
       expect(richLines(['漢', '字。字'], measureWidth('字。', FONT) + 0.1)).toEqual(['漢', '字。', '字'])
       expect(richLines(['漢', '字。字'], measureWidth('字', FONT) + 0.1)).toEqual(['漢', '字', '。', '字'])
     } finally {
@@ -2960,6 +3051,77 @@ describe('layout invariants', () => {
     expect(layout(prepared, width, LINE_HEIGHT).lineCount).toBe(2)
   })
 
+  test('pre-wrap line widths leave out the spaces and tabs a wrapped line ends on', () => {
+    const foo = measureWidth('foo', FONT)
+    const bar = measureWidth('bar', FONT)
+    const cases: Array<[string, number]> = [
+      ['foo   bar', foo + 0.1],
+      ['foo\tbar', foo + 0.1],
+      ['foo\tbar', 50],
+      // Main put the tab and the space after it on lines of their own here.
+      ['foo \t bar', foo],
+      ['foo \t bar', 60],
+    ]
+    for (const [text, width] of cases) {
+      const prepared = prepareWithSegments(text, FONT, { whiteSpace: 'pre-wrap' })
+      const { lines } = layoutWithLines(prepared, width, LINE_HEIGHT)
+      expect(lines.map(line => line.text)).toEqual([text.slice(0, -3), 'bar'])
+      expect(lines.map(line => line.width)).toEqual([foo, bar])
+      const walked: number[] = []
+      walkLineRanges(prepared, width, line => walked.push(line.width))
+      expect(walked).toEqual([foo, bar])
+      expect(collectStreamedLines(prepared, width)).toEqual(lines)
+      expect(measureLineStats(prepared, width)).toEqual({ lineCount: 2, maxLineWidth: Math.max(foo, bar) })
+      // Laid out at its widest line, the text wraps the same way.
+      expect(layoutWithLines(prepared, Math.max(foo, bar), LINE_HEIGHT).lines.map(line => line.text)).toEqual([text.slice(0, -3), 'bar'])
+    }
+
+    // With letter spacing the width keeps the gap after the last letter, as in normal mode.
+    for (const letterSpacing of [2, -1]) {
+      const preWrap = layoutWithLines(prepareWithSegments('foo bar', FONT, { whiteSpace: 'pre-wrap', letterSpacing }), 50, LINE_HEIGHT).lines
+      const normal = layoutWithLines(prepareWithSegments('foo bar', FONT, { letterSpacing }), 50, LINE_HEIGHT).lines
+      expect(preWrap.map(line => line.text)).toEqual(['foo ', 'bar'])
+      expect(preWrap.map(line => line.width)).toEqual(normal.map(line => line.width))
+    }
+  })
+
+  test('the Gecko profile counts a pre-wrap tab in the fit and the width, as Firefox does not hang tabs', async () => {
+    const { getEngineProfile } = await import('./measurement.ts')
+    const profile = getEngineProfile()
+    const previous = profile.hangTabs
+    const foo = measureWidth('foo', FONT)
+    const tab = prepareWithSegments('foo\tbar', FONT, { whiteSpace: 'pre-wrap' })
+    const mixed = prepareWithSegments('foo \t bar', FONT, { whiteSpace: 'pre-wrap' })
+    try {
+      profile.hangTabs = false
+      const gecko = layoutWithLines(tab, 50, LINE_HEIGHT).lines
+      expect(gecko.map(line => line.text)).toEqual(['foo\t', 'bar'])
+      expect(gecko[0]!.width).toBeCloseTo(measureWidth(' ', FONT) * 8, 9)
+      // A tab that doesn't fit after a space starts the next line, and the space hangs.
+      expect(layoutWithLines(mixed, foo + 1, LINE_HEIGHT).lines.map(line => [line.text, line.width])).toEqual([['foo ', foo], ['\t', measureWidth(' ', FONT) * 8], [' ', 0], ['bar', measureWidth('bar', FONT)]])
+      profile.hangTabs = true
+      expect(layoutWithLines(tab, 50, LINE_HEIGHT).lines.map(line => [line.text, line.width])).toEqual([['foo\t', foo], ['bar', measureWidth('bar', FONT)]])
+      expect(layoutWithLines(mixed, foo + 1, LINE_HEIGHT).lines.map(line => line.text)).toEqual(['foo \t ', 'bar'])
+    } finally {
+      profile.hangTabs = previous
+    }
+  })
+
+  test('pre-wrap spaces and tabs before a hard break or the end of the text count as far as they fit', () => {
+    const foo = measureWidth('foo', FONT)
+    const withSpaces = measureWidth('foo   ', FONT)
+    const prepared = prepareWithSegments('foo   \nbar', FONT, { whiteSpace: 'pre-wrap' })
+    expect(layoutWithLines(prepared, 200, LINE_HEIGHT).lines.map(line => line.width)).toEqual([withSpaces, measureWidth('bar', FONT)])
+    expect(layoutWithLines(prepared, foo + 5, LINE_HEIGHT).lines.map(line => [line.text, line.width])).toEqual([['foo   ', foo + 5], ['bar', measureWidth('bar', FONT)]])
+    expect(measureNaturalWidth(prepared)).toBe(withSpaces)
+
+    // Two tabs at the end stay on one line, which the width clamps to.
+    const tabs = prepareWithSegments('foo\t\t', FONT, { whiteSpace: 'pre-wrap' })
+    expect(layoutWithLines(tabs, 60, LINE_HEIGHT).lines.map(line => [line.text, line.width])).toEqual([['foo\t\t', 60]])
+    expect(layout(tabs, 60, LINE_HEIGHT).lineCount).toBe(1)
+    expect(measureNaturalWidth(tabs)).toBeCloseTo(measureWidth(' ', FONT) * 16, 9)
+  })
+
   test('pre-wrap mode treats hard breaks as forced line boundaries', () => {
     const prepared = prepareWithSegments('a\nb', FONT, { whiteSpace: 'pre-wrap' })
     const lines = layoutWithLines(prepared, 200, LINE_HEIGHT)
@@ -3343,7 +3505,7 @@ test('the Firefox profile breaks rich items only where their joined text breaks'
       const rich = []
       walkRichInlineLineRanges(prepared, width, range => {
         rich.push(materializeRichInlineLineRange(prepared, range).fragments
-          .map(fragment => (fragment.gapBefore === 0 ? '' : ' ') + fragment.text).join('').trimEnd())
+          .map(fragment => (fragment.gapItemIndex < 0 ? '' : ' ') + fragment.text).join('').trimEnd())
       })
       const flat = layoutWithLines(prepareWithSegments(parts.join(''), '16px Test'), width, 20)
       rows.push({
@@ -3387,8 +3549,8 @@ test('the Safari profile keeps the kerning between a word and a following space'
       measureText(text) {
         measured.push(text)
         let width = 0
-        for (const ch of text) width += ch === ' ' ? 4 : /[\\u00AD\\u200B\\u2060]/.test(ch) ? 0 : ch === 'A' ? 10 : 8
-        return { width: width - (text.match(/A[\\u00AD\\u200B\\u2060]* /g) ?? []).length }
+        for (const ch of text) width += ch === ' ' ? 4 : /[\\u00AD\\u200B\\u200E\\u2060]/.test(ch) ? 0 : ch === 'A' ? 10 : 8
+        return { width: width - (text.match(/A[\\u00AD\\u200B\\u200E\\u2060]* /g) ?? []).length }
       }
     }
     globalThis.OffscreenCanvas = class { getContext() { return new Context() } }
@@ -3397,7 +3559,8 @@ test('the Safari profile keeps the kerning between a word and a following space'
     const { prepareRichInline, walkRichInlineLineRanges } = await import(${JSON.stringify(richInlineUrl)})
     const kerning = []
     for (const [text, letterSpacing] of [
-      ['AA B', 0], ['AA\\u200B B', 0], ['AA\\u200B \\u05D0', 0], ['AA\\u2060 (x\\u05D0)', 0], ['AA\\u00AD B', 0], ['AA B', 1],
+      ['AA B', 0], ['AA\\u200B B', 0], ['AA\\u200E \\u05D0', 0], ['AA\\u2060 \\u2060B', 0], ['AA\\u2060 1', 0],
+      ['AA\\u200B \\u05D0', 0], ['AA\\u2060 (x\\u05D0)', 0], ['AA\\u00AD B', 0], ['AA B', 1],
     ]) {
       const lines = layoutWithLines(prepareWithSegments(text, '16px Test', { letterSpacing }), 19.5, 20).lines
       kerning.push({ lines: lines.map(line => [line.text, line.width]), lineCount: layout(prepare(text, '16px Test', { letterSpacing }), 19.5, 20).lineCount })
@@ -3433,6 +3596,12 @@ test('the Safari profile keeps the kerning between a word and a following space'
     // The kerned word fits and the space hangs.
     { lines: [['AA ', 19], ['B', 8]], lineCount: 2 },
     { lines: [['AA\u200B ', 19], ['B', 8]], lineCount: 2 },
+    // A direction mark is a strong character that ends the word like a letter,
+    // and format characters after the space are skipped to the next letter.
+    { lines: [['AA\u200E ', 19], ['\u05D0', 8]], lineCount: 2 },
+    { lines: [['AA\u2060 ', 19], ['\u2060B', 8]], lineCount: 2 },
+    // An ASCII digit after the space takes the word's direction either way.
+    { lines: [['AA\u2060 ', 19], ['1', 8]], lineCount: 2 },
     // Before right-to-left text the zero-width space may leave the word's bidi
     // run, which is unknown without the paragraph direction.
     { lines: [['A', 10], ['A\u200B ', 10], ['\u05D0', 8]], lineCount: 3 },

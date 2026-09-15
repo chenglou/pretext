@@ -3,11 +3,10 @@ import { marked, type Token, type Tokens } from 'marked'
 import {
   layout,
   layoutWithLines,
+  measureLineStats,
   measureNaturalWidth,
   prepareWithSegments,
-  walkLineRanges,
   type LayoutLine,
-  type LineStats,
   type PreparedTextWithSegments,
 } from '../../src/layout.ts'
 import {
@@ -136,7 +135,7 @@ type PreparedInlineBlock = PreparedBlockBase & {
   flow: PreparedRichInline
   hrefs: Array<string | null>
   lineHeight: number
-  paragraphStyle: TextStyle // unmarked text, which paints the spaces between items
+  paragraphStyle: TextStyle // unmarked text, which sets each line's baseline
   styles: TextStyle[]
 }
 
@@ -159,8 +158,9 @@ export type PreparedChatMessage = {
 }
 
 export type InlineFragmentLayout = {
+  gapItemIndex: number // the item whose collapsed space precedes it on its line, or -1
   href: string | null
-  spaceBefore: boolean // a collapsed space precedes it on its line
+  itemIndex: number
   style: TextStyle
   text: string
 }
@@ -196,6 +196,7 @@ type InlineBlockLayout = {
   contentLeft: number
   direction: 'ltr' | 'rtl'
   height: number
+  hrefs: Array<string | null>
   kind: 'inline'
   lineHeight: number
   lines: Array<{
@@ -205,6 +206,9 @@ type InlineBlockLayout = {
   markerLeft: number | null
   markerText: string | null
   paragraphStyle: TextStyle
+  // Per item, as hrefs, so a space made by an item holding only whitespace
+  // paints in that item's style.
+  styles: TextStyle[]
   top: number
   width: number
 }
@@ -251,10 +255,11 @@ export type MessageFrame = {
 }
 
 // The loaded part of the history: whole chunks in order, starting with the
-// chunk whose first message is at firstOrdinal. Only these messages are
-// prepared and laid out, and the scroll area holds only them.
+// chunk whose first message is at firstOrdinal, and their layout. Only these
+// messages are prepared and laid out, and the scroll area holds only them.
 export type HistoryWindow = {
   firstOrdinal: number
+  layout: ConversationLayout
   messages: PreparedChatMessage[]
 }
 
@@ -303,32 +308,36 @@ export function createChatHistory(): MarkdownChatSeed[] {
   return createMarkdownChatSpecs(TOTAL_MESSAGE_COUNT)
 }
 
-// Nothing loaded yet, at the chunk holding the message at ordinal.
-export function createHistoryWindow(ordinal: number): HistoryWindow {
-  return { firstOrdinal: ordinal - (ordinal % HISTORY_CHUNK_SIZE), messages: [] }
-}
-
-// The chunks holding the first and last messages shown stay loaded, with one
+// The chunks holding the first and last messages kept stay loaded, with one
 // more chunk on either side. The window grows toward those, then, while it holds
 // more than HISTORY_WINDOW_CHUNKS, drops its first or last chunk, whichever is
-// farther from the shown ones. Shown messages are loaded ones, so once anything
-// has been shown, a move loads at most one chunk on either side. A window that
-// changes is a new object.
+// farther from the kept ones. Kept messages are loaded ones, so once anything
+// has been shown, a move loads at most one chunk on either side. A window whose
+// chunks or chat width change is a new object, laid out again. Before the first
+// frame there's no window, and it loads around the kept messages.
 export function moveHistoryWindow(
   history: readonly MarkdownChatSeed[],
-  historyWindow: HistoryWindow,
-  firstShownOrdinal: number,
-  lastShownOrdinal: number,
+  historyWindow: HistoryWindow | null,
+  firstKeptOrdinal: number,
+  lastKeptOrdinal: number,
+  chatWidth: number,
 ): HistoryWindow {
-  const firstShownChunk = Math.floor(firstShownOrdinal / HISTORY_CHUNK_SIZE)
-  const lastShownChunk = Math.floor(lastShownOrdinal / HISTORY_CHUNK_SIZE)
-  const firstWantedChunk = Math.max(0, firstShownChunk - 1)
-  const lastWantedChunk = Math.min(Math.ceil(history.length / HISTORY_CHUNK_SIZE) - 1, lastShownChunk + 1)
-  let firstChunk = historyWindow.firstOrdinal / HISTORY_CHUNK_SIZE
-  let lastChunk = Math.ceil((historyWindow.firstOrdinal + historyWindow.messages.length) / HISTORY_CHUNK_SIZE) - 1
-  if (firstChunk <= firstWantedChunk && lastChunk >= lastWantedChunk) return historyWindow
+  const firstKeptChunk = Math.floor(firstKeptOrdinal / HISTORY_CHUNK_SIZE)
+  const lastKeptChunk = Math.floor(lastKeptOrdinal / HISTORY_CHUNK_SIZE)
+  const firstWantedChunk = Math.max(0, firstKeptChunk - 1)
+  const lastWantedChunk = Math.min(Math.ceil(history.length / HISTORY_CHUNK_SIZE) - 1, lastKeptChunk + 1)
+  let messages: PreparedChatMessage[] = historyWindow === null ? [] : historyWindow.messages
+  let firstChunk = historyWindow === null ? firstKeptChunk : historyWindow.firstOrdinal / HISTORY_CHUNK_SIZE
+  let lastChunk = Math.ceil((firstChunk * HISTORY_CHUNK_SIZE + messages.length) / HISTORY_CHUNK_SIZE) - 1
+  if (
+    historyWindow !== null &&
+    historyWindow.layout.chatWidth === chatWidth &&
+    firstChunk <= firstWantedChunk &&
+    lastChunk >= lastWantedChunk
+  ) {
+    return historyWindow
+  }
 
-  let messages = historyWindow.messages
   for (; firstChunk > firstWantedChunk; firstChunk--) {
     messages = prepareHistoryChunk(history, firstChunk - 1).concat(messages)
   }
@@ -336,7 +345,7 @@ export function moveHistoryWindow(
     messages = messages.concat(prepareHistoryChunk(history, lastChunk + 1))
   }
   while (lastChunk - firstChunk + 1 > HISTORY_WINDOW_CHUNKS) {
-    if (firstShownChunk - firstChunk > lastChunk - lastShownChunk) {
+    if (firstKeptChunk - firstChunk > lastChunk - lastKeptChunk) {
       messages = messages.slice(HISTORY_CHUNK_SIZE)
       firstChunk++
     } else {
@@ -344,7 +353,7 @@ export function moveHistoryWindow(
       lastChunk--
     }
   }
-  return { firstOrdinal: firstChunk * HISTORY_CHUNK_SIZE, messages }
+  return { firstOrdinal: firstChunk * HISTORY_CHUNK_SIZE, layout: layoutConversation(messages, chatWidth), messages }
 }
 
 function prepareHistoryChunk(history: readonly MarkdownChatSeed[], chunk: number): PreparedChatMessage[] {
@@ -416,12 +425,23 @@ export function findVisibleRange(
   end: number
   start: number
 } {
-  const { tops } = conversation
-  const start = findFirstMessageBelow(conversation, scrollTop)
+  const { heights, tops } = conversation
   const maxY = Math.max(scrollTop, scrollTop + viewportHeight - occlusionBannerHeight * 2)
-
-  let low = start
+  let low = 0
   let high = tops.length
+
+  while (low < high) {
+    const mid = (low + high) >> 1
+    if (tops[mid]! + heights[mid]! > scrollTop) {
+      high = mid
+    } else {
+      low = mid + 1
+    }
+  }
+  const start = low
+
+  low = start
+  high = tops.length
   while (low < high) {
     const mid = (low + high) >> 1
     if (tops[mid]! >= maxY) {
@@ -434,42 +454,30 @@ export function findVisibleRange(
   return { start, end: low }
 }
 
-// What a layout of the window shows at scrollTop: the anchor, which is the
-// first message showing below the top banner, and the last message showing
-// above the bottom one. Past the last message, which a viewport shorter than
-// both banners can scroll to, both are the last message.
-export function findShownMessages(
+// The first message whose top shows between the banners when the window is
+// scrolled to scrollTop. If no top shows, as when one tall message fills the
+// room, the last message whose top is above the room, or the window's first
+// message when there's none.
+export function findScrollAnchor(
   historyWindow: HistoryWindow,
-  conversation: ConversationLayout,
   scrollTop: number,
   viewportHeight: number,
   occlusionBannerHeight: number,
-): {
-  anchor: ScrollAnchor
-  lastOrdinal: number
-} {
-  const { start, end } = findVisibleRange(conversation, scrollTop, viewportHeight, occlusionBannerHeight)
-  const index = Math.min(start, conversation.tops.length - 1)
-  return {
-    anchor: { offset: conversation.tops[index]! - scrollTop, ordinal: historyWindow.firstOrdinal + index },
-    lastOrdinal: historyWindow.firstOrdinal + Math.max(index, end - 1),
-  }
-}
-
-// The first message whose bottom is below y.
-function findFirstMessageBelow(conversation: ConversationLayout, y: number): number {
-  const { heights, tops } = conversation
+): ScrollAnchor {
+  const { tops } = historyWindow.layout
   let low = 0
   let high = tops.length
   while (low < high) {
     const mid = (low + high) >> 1
-    if (tops[mid]! + heights[mid]! > y) {
+    if (tops[mid]! >= scrollTop) {
       high = mid
     } else {
       low = mid + 1
     }
   }
-  return low
+  const maxY = scrollTop + viewportHeight - occlusionBannerHeight * 2
+  const index = low < tops.length && tops[low]! < maxY ? low : Math.max(0, low - 1)
+  return { offset: tops[index]! - scrollTop, ordinal: historyWindow.firstOrdinal + index }
 }
 
 function parseMarkdownBlocks(markdown: string): PreparedBlock[] {
@@ -1147,7 +1155,7 @@ function layoutBlockFrame(
     }
 
     case 'code': {
-      const { lineCount, maxLineWidth } = measureCodeLineStats(block.prepared, getBlockLineWidth(block, contentWidth))
+      const { lineCount, maxLineWidth } = measureLineStats(block.prepared, getBlockLineWidth(block, contentWidth))
       return {
         contentLeft: block.contentLeft,
         height: getBlockHeight(block, lineCount),
@@ -1173,25 +1181,6 @@ function layoutBlockFrame(
       }
     }
   }
-}
-
-// A pre-wrap line that soft-wraps after a space keeps the space, and Pretext
-// counts it in the line's width. Browsers hang that space past the end of the
-// line (CSS Text 3 §4.1.2, §8.2), so it paints nothing and never sizes a box.
-// Spaces before a newline or the end of the code still count, as in a browser's
-// max-content width.
-function measureCodeLineStats(prepared: PreparedTextWithSegments, maxWidth: number): LineStats {
-  let maxLineWidth = 0
-  const lineCount = walkLineRanges(prepared, maxWidth, line => {
-    const last = line.end.segmentIndex - 1
-    const isSoftWrapAfterSpace =
-      line.end.graphemeIndex === 0 &&
-      line.end.segmentIndex < prepared.segments.length &&
-      prepared.kinds[last] === 'preserved-space'
-    const width = isSoftWrapAfterSpace ? line.width - prepared.widths[last]! : line.width
-    if (width > maxLineWidth) maxLineWidth = width
-  })
-  return { lineCount, maxLineWidth }
 }
 
 function getUsedBlockWidth(block: BlockFrame): number {
@@ -1257,8 +1246,9 @@ function materializeBlockLayout(
         const line = materializeRichInlineLineRange(block.flow, range)
         lines.push({
           fragments: line.fragments.map(fragment => ({
+            gapItemIndex: fragment.gapItemIndex,
             href: block.hrefs[fragment.itemIndex] ?? null,
-            spaceBefore: fragment.gapBefore > 0,
+            itemIndex: fragment.itemIndex,
             style: block.styles[fragment.itemIndex]!,
             text: fragment.text,
           })),
@@ -1269,6 +1259,7 @@ function materializeBlockLayout(
         contentLeft: frame.contentLeft,
         direction: block.direction,
         height: frame.height,
+        hrefs: block.hrefs,
         kind: 'inline',
         lineHeight: frame.lineHeight,
         lines,
@@ -1276,6 +1267,7 @@ function materializeBlockLayout(
         markerLeft: frame.markerLeft,
         markerText: frame.markerText,
         paragraphStyle: block.paragraphStyle,
+        styles: block.styles,
         top: frame.top,
         // Rows span the final bubble, so they stay inside a shrinkwrapped one.
         width: Math.max(1, bubbleContentWidth - frame.contentLeft),

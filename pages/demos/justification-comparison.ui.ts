@@ -46,6 +46,11 @@ export function createDomCache(): DomCache {
   const widthValue = getHtmlElement('widthVal')
   const cssCol = getHtmlElement('cssCol')
   const cssText = getHtmlElement('cssText')
+  // The model lays out this column's lines in FONT at colWidth - PAD * 2, so
+  // the font and padding come from the same constants.
+  cssText.style.font = FONT
+  cssText.style.lineHeight = `${LINE_HEIGHT}px`
+  cssText.style.padding = `${PAD}px`
   const cssRiverOverlay = getHtmlElement('cssRiverOverlay')
 
   const columns = Array.from(document.querySelectorAll<HTMLElement>('.column'))
@@ -263,12 +268,11 @@ function paintCanvasColumn(
   showIndicators: boolean,
   normalSpaceWidth: number,
 ): void {
+  // Resizing clears the canvas. It stays transparent, so the wrap's white
+  // background and ring show through.
   setupCanvas(surface, frame.colWidth, frame.totalHeight)
 
   const ctx = surface.ctx
-  ctx.fillStyle = '#fff'
-  ctx.fillRect(0, 0, frame.colWidth, frame.totalHeight)
-
   ctx.save()
   ctx.beginPath()
   ctx.rect(0, 0, frame.colWidth, frame.totalHeight)

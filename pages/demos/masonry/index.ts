@@ -104,6 +104,9 @@ function getOrCreateCardNode(cardIndex: number): HTMLDivElement {
 
   const node = document.createElement('div')
   node.className = 'card'
+  node.style.font = font
+  node.style.lineHeight = `${lineHeight}px`
+  node.style.padding = `${cardPadding}px`
   node.textContent = st.cards[cardIndex]!.text
   domCache.container.appendChild(node)
   domCache.cards[cardIndex] = node
@@ -125,7 +128,9 @@ function scheduleRender() {
 
 function render() {
   // --- DOM reads ---
-  const windowWidth = document.documentElement.clientWidth
+  // body.clientWidth leaves out the scrollbar gutter. Chrome's documentElement.clientWidth includes
+  // the gutter while the page doesn't overflow, as before the first render.
+  const windowWidth = document.body.clientWidth
   const windowHeight = document.documentElement.clientHeight
   const scrollTop = window.scrollY
 

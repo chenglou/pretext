@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### Added
+
+- Rich-inline fragments now have `gapItemIndex`, the index of the item whose collapsed space `gapBefore` measures, or -1 when no space precedes the fragment on its line. A painter can draw that space inside the element of the item whose font measured it, and can tell a zero-width space apart from no space (#310).
+
+### Changed
+
+- Bundles that import Pretext are about 5 KB smaller gzipped and 16 KB smaller minified, since Safari's check for keeping a word's kerning with a following space no longer uses a generated bidi class table (#311).
+
 ### Removed
 
 - `prepareWithSegments()` no longer returns `segLevels`. Those approximate bidi levels per segment couldn't produce visual order, and computing them slowed every `prepareWithSegments()` and rich-inline preparation, most for Arabic and Hebrew text. To draw mixed bidi text, render each paragraph as one DOM element with its direction set, and the browser orders every line. Lines drawn separately, such as with Canvas `fillText()`, are each ordered as their own paragraph, so numbers or punctuation next to a line break can come out in a different order (#258).
@@ -42,10 +50,13 @@
 - After CJK text, `.`, `,`, `:`, `;`, `)`, `]`, `%` or `"` now stays on the same line as a following word or number, as browsers do. In `甲乙丙.first_week_voltage}户`, lines no longer break after the period (#276).
 - Rich-inline layout now keeps text, or a `break: 'never'` item, on a line when it overflows by no more than 0.005px, or 1/64px in Safari, as it already did inside one item. Previously, at some widths, layout took one more line than at a slightly narrower width (#281).
 - In Firefox, rich-inline layout now breaks between items only where their joined text has a break opportunity, as in Chrome. Punctuation such as `,` or `)` at the start of an item stays with the word before it, and a word split across items wraps as one word. Items without a space between them can also break where the joined text allows it, such as between CJK characters, at Thai word boundaries or after `-` (#287).
+- In engines Pretext doesn't recognize, and in runtimes such as Node, Bun or jsdom, rich-inline layout now breaks between items only where their joined text has a break opportunity, as in Chrome and Firefox, instead of at every item boundary (#301).
 - CJK text that stays together on a line, such as `漢。`, `「漢` or a `word-break: keep-all` group, now breaks between characters when it doesn't fit a line, as browsers do, instead of overflowing. Lines also no longer break between a run of opening brackets and the word after it, as in `「「tail`, or inside that word, as in `「tail`, or before a combining mark that ends a word before CJK text or an opening bracket, such as U+3099 after `ト` (#288).
 - In Firefox, a hyphen now stays on the same line as a number after it, as in `2025-08-01`, `log-2026` or `8:30-4:30`, as Firefox does. A word that doesn't fit a line breaks between characters there instead (#289).
 - In Firefox, lines can now break after `/` before a letter or a symbol such as `#` or `@`, as in `https://example.com`, `example.com/docs` or `and/or`, as Firefox does. A number after `/` still stays on the same line, as in `1/2` (#290).
 - Closing punctuation and marks that can't start a line, such as `，`, `」`, `：`, `。` or `！`, now stay on the same line as the text before them when that text isn't CJK, as in `xxxx，`, `x“value”，` or `😀。`, as browsers do. A word that doesn't fit a line with its mark breaks before the mark instead. In Firefox, and in Safari on pages that aren't Japanese or Korean, small kana and `ー` also stay with a letter or digit before them, as in `約3ヶ月` (#291).
+- In `pre-wrap`, a line that wraps no longer counts the spaces it ends on in its width, and spaces before a newline or at the end of the text count only as far as they fit, so boxes sized from `measureLineStats()` or `walkLineRanges()` no longer run past the text. In Chrome and Safari the same holds for tabs, and a run of spaces and tabs at the end of a line now stays on that line whole, instead of starting the next line with a tab or a space after a tab. Firefox doesn't hang tabs, so there a tab still counts in the width (#308).
+- After CJK text, lines no longer start with punctuation such as `'`, `/`, `|`, `‼` or `％`. A word or number after `!`, `}`, `/` or `|` there now stays with the mark as each browser keeps it: Chrome keeps ASCII letters and digits; Safari keeps digits, and letters only after a `}` that follows an ideograph or Hangul syllable; Firefox keeps only digits after `/` (#309).
 
 ## 0.0.9 - 2026-09-07
 

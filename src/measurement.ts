@@ -99,17 +99,27 @@ export type EngineProfile = {
   // text whose direction differs from the page's it keeps spacing Safari omits.
   // Blink spaces NEL outside cursive runs.
   breakOnlyAfterNextLine: boolean
+  // After CJK text, WebKit's pair scan reaches ICU at the CJK character and skips
+  // ahead over ASCII letters to ICU's next break without reading its pair table, so
+  // ICU's rules decide the break after a mark before a letter (`丙!|first`), while the
+  // table still keeps `丙!1234` and `丙.!first`. Blink reads its table for any two code
+  // units up to U+00FF, and Gecko sends the word to ICU4X.
+  icuDecidesLetterAfterCJKMark: boolean
   // WebKit moves a tab to the following stop when less than half a space would
   // remain before the next one (FontCascade::tabWidth).
   skipNarrowTabStops: boolean
+  // A run of preserved spaces and tabs at the end of a pre-wrap line hangs in Blink
+  // and WebKit (CSS Text 3 §4.1.2). Gecko doesn't hang a tab that doesn't fit, so a
+  // tab counts in the line's fit and width there, as spaces do not.
+  hangTabs: boolean
   // Where rich-inline items break near a boundary. Blink runs one line-break
   // iterator over the text of the whole inline formatting context, and Gecko
   // collects a word across text frames until a space and breaks it in one pass,
   // so every break fact near a boundary comes from the joined text. WebKit finds
   // breaks inside each inline box from that box's own text, and decides a
   // boundary between boxes from the previous box's last two characters. Engines
-  // Pretext doesn't recognize keep breaking at every item boundary.
-  inlineItemBreaks: 'joined-text' | 'item-text' | 'item-boundary'
+  // Pretext doesn't recognize use the joined text, as Blink and Gecko do.
+  inlineItemBreaks: 'joined-text' | 'item-text'
 }
 
 export type BreakableFitMode = 'sum-graphemes' | 'segment-prefixes' | 'pair-context'
@@ -300,8 +310,10 @@ export function getEngineProfile(language: BreakLanguage = 'root'): EngineProfil
     letterSpaceDiscretionaryHyphen: engine !== 'blink',
     unfitHyphenRetreat: engine === 'blink' ? 'reduced-width' : 'none',
     breakOnlyAfterNextLine: engine === 'webkit',
+    icuDecidesLetterAfterCJKMark: engine === 'webkit',
     skipNarrowTabStops: engine === 'webkit',
-    inlineItemBreaks: engine === 'blink' || engine === 'gecko' ? 'joined-text' : engine === 'webkit' ? 'item-text' : 'item-boundary',
+    hangTabs: engine !== 'gecko',
+    inlineItemBreaks: engine === 'webkit' ? 'item-text' : 'joined-text',
   }
   // Apple ICU opens its normal line rules for Japanese and Korean content.
   const normalRules = engine === 'webkit' ? { ...profile, breakBeforeConditionalJapaneseStarter: true } : profile

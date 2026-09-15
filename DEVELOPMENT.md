@@ -26,7 +26,6 @@ known-failure reporting, native observation limits and reproducible case IDs.
 - `bun run build:package` — emit `dist/` for the published ESM package
 - `bun run package-smoke-test` — pack the tarball and verify temporary JS + TS consumers
 - `bun run site:build` — build the static demo site into `site/`
-- `bun run generate:bidi-data` — refresh the checked-in simplified Unicode bidi ranges
 - `bun run generate:line-break-data` — refresh the checked-in projected Unicode line-break class table; `--check` compares it with `scripts/unicode/LineBreak-17.0.0.txt`
 
 ### Browser Accuracy And Benchmarking

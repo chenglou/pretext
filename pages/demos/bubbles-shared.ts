@@ -16,34 +16,45 @@ export type BubbleRenderWidths = {
 }
 
 export type BubbleRenderState = {
-  chatWidth: number
-  bubbleMaxWidth: number
   totalWastedPixels: number
   widths: BubbleRenderWidths[]
 }
 
-export const FONT = '15px "Helvetica Neue", Helvetica, Arial, sans-serif'
-export const LINE_HEIGHT = 20
-export const PADDING_H = 12
-export const PADDING_V = 8
-export const BUBBLE_MAX_RATIO = 0.8
-export const PAGE_MAX_WIDTH = 1080
-export const DESKTOP_PAGE_MARGIN = 32
-export const MOBILE_PAGE_MARGIN = 20
-export const GRID_GAP = 16
-export const PANEL_PADDING_X = 36
+export type BubblesPageGeometry = {
+  isNarrow: boolean
+  pageWidth: number
+  gridGap: number
+  panelPaddingX: number
+  minChatWidth: number
+  maxChatWidth: number
+  chatWidth: number
+  bubbleMaxWidth: number
+}
+
+declare global {
+  // Defined by the classic script after the controls in bubbles.html, so the first paint has the
+  // page's geometry and the bubbles' font and padding before this module loads.
+  const bubblesPage: {
+    defaultChatWidth: number
+    bubbleFont: string
+    bubbleLineHeight: number
+    bubblePaddingX: number
+    bubblePaddingY: number
+    getGeometry(viewportWidth: number, requestedChatWidth: number): BubblesPageGeometry
+    paint(geometry: BubblesPageGeometry): void
+  }
+}
+
+// The same font and padding the page's classic script paints on the bubbles.
+export const FONT = bubblesPage.bubbleFont
+export const LINE_HEIGHT = bubblesPage.bubbleLineHeight
+export const PADDING_H = bubblesPage.bubblePaddingX
+export const PADDING_V = bubblesPage.bubblePaddingY
 
 export function prepareBubbleTexts(texts: string[]): PreparedBubble[] {
   return texts.map(text => ({
     prepared: prepareWithSegments(text, FONT),
   }))
-}
-
-export function getMaxChatWidth(minWidth: number, viewportWidth: number): number {
-  const pageWidth = Math.min(PAGE_MAX_WIDTH, viewportWidth - (viewportWidth <= 760 ? MOBILE_PAGE_MARGIN : DESKTOP_PAGE_MARGIN))
-  const columnWidth = viewportWidth <= 760 ? pageWidth : (pageWidth - GRID_GAP) / 2
-  const panelContentWidth = Math.max(1, Math.floor(columnWidth - PANEL_PADDING_X))
-  return Math.max(minWidth, panelContentWidth)
 }
 
 export function collectWrapMetrics(prepared: PreparedTextWithSegments, maxWidth: number): WrapMetrics {
@@ -76,8 +87,7 @@ export function findTightWrapMetrics(prepared: PreparedTextWithSegments, maxWidt
   return collectWrapMetrics(prepared, lo)
 }
 
-export function computeBubbleRender(preparedBubbles: PreparedBubble[], chatWidth: number): BubbleRenderState {
-  const bubbleMaxWidth = Math.floor(chatWidth * BUBBLE_MAX_RATIO)
+export function computeBubbleRender(preparedBubbles: PreparedBubble[], bubbleMaxWidth: number): BubbleRenderState {
   const contentMaxWidth = bubbleMaxWidth - PADDING_H * 2
   let totalWastedPixels = 0
   const widths: BubbleRenderWidths[] = []
@@ -95,8 +105,6 @@ export function computeBubbleRender(preparedBubbles: PreparedBubble[], chatWidth
   }
 
   return {
-    chatWidth,
-    bubbleMaxWidth,
     totalWastedPixels,
     widths,
   }

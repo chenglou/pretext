@@ -17,6 +17,441 @@ All accuracy, letter-spacing and corpus result payloads are unchanged; refreshed
 snapshots change only provenance and environment records. Runtime sources and
 the baseline pin are unchanged, so no runtime benchmark was needed.
 
+## Safari kerning without the bidi class table
+
+This runtime change starts from main `1262b4f` (#310). The Safari profile keeps a
+word's kerning with a following space across format characters such as a word joiner
+only when the space resolves to the word's direction. That check read bidi classes
+from the generated table in `src/generated/bidi-data.ts`, and nothing else did. It
+now reads Unicode letter properties and the right-to-left blocks: format characters
+stand for class BN, except LRM, RLM and ALM, which count as letters of their
+direction. Across format characters, a word keeps its kerning when its last letter
+or direction mark, with no soft hyphen after it, has the direction of the first
+letter or direction mark after the space, past spaces and format characters, or when
+an ASCII digit follows, which resolves the space to the word's direction either way
+(UAX #9 W7 and N1). An explicit bidi control in the space's paragraph still leaves
+the direction unknown. The table, `src/bidi.ts`, the generator, both Unicode source
+files and `generate:bidi-data` are removed, and the minified `layout` bundle goes
+from 95,701 to 79,647 bytes, 26,261 to 20,973 gzipped.
+
+Before the browsers, a fake canvas that kerns every glyph with a following space,
+also across zero-width characters, ran all 239,063 full-schedule Safari suite inputs
+through main and this branch, and no prepared handle, line or rich-inline line
+changes. The table also kept the kerning before other digits, after symbols such as
+`!` or modifier letters, and across punctuation, other spaces or combining marks
+after the space. No suite row shows those shapes, and ENGINE_FOLLOWUPS records them.
+The fake-canvas screen's 1,380 keys over the corpora, the accuracy grid, hyphen and
+slash shapes, analysis, preferred breaks and rich-inline cases are identical in all
+four profiles.
+
+An installed probe in Safari 26.5.2 at DPR 2, on a `lang="en"` page with main and
+this branch bundled into it, laid out three shapes and six controls in 18px Times
+New Roman and 16px Arial, with `A` and with `a`, which doesn't kern with a space, in
+LTR and RTL paragraphs, normal and pre-wrap, at every 0.1px width up to the natural
+width plus 4px. Main and this branch give the same lines at every width. Safari
+paints `A`, LRM, space / `א` on 2 lines at 12-12.9px in Times New Roman, between the
+letter's kerned and unkerned widths, as both predict, and so it paints `A`, WJ,
+space / WJ, `b` and `A`, WJ, space / `1`. An earlier table-free rule, which took
+only a letter before the format characters and only spaces and a letter after them,
+passed every suite row but predicted 3 lines there: on the same page the LRM and
+double word joiner shapes failed at 20 Times New Roman and 17-18 Arial widths per
+sweep, and without the digit rule this branch failed `A`, WJ, space, `1` at 80 of
+1,200 Times New Roman widths and 68 of 1,120 Arial widths. The controls `A` + space
++ `B`, `A` + WJ + space + `B`, `A` + LRM + space + `b`, `A` + space + Hebrew and `A`
++ RLM + WJ + space + `B` match native at every width on both builds, and `A` + WJ +
+space + Hebrew in an LTR paragraph fails on both at the same 20 Times New Roman and
+18 Arial widths per sweep, where Safari keeps a kerning whose direction preparation
+can't know. Results are in
+`scratchpad/library-fixes/bidi-table-narrowed-probe/results/`.
+
+The installed gate ran this change on `c2dfd08` against pinned `4672c58`, whose
+runtime source equals main: Chrome 153 through the Playwright transport, Safari
+26.5.2 and Firefox 155 natively, both directions, at DPR 2. No leg fixes or loses a
+metric or has required failures, execution errors, or new API or rich failures, and
+five numeric profiles have no new failures. Only the WebKit profiles run this check,
+so no Chrome or Firefox prediction changes. In Safari 12 rows in each direction
+change predicted widths by at most 0.0000005px, all where a lone NUL or DEL comes
+before a space, which is now measured together with the space, and no metric's
+status changes. The 17 LTR and 16 RTL Safari rows that dropping the kerning across
+format characters lost, `maintained/space-kerning` among them, pass height, line
+count and source on main and on this branch. Suite hash
+`03b5cdfc772b52c1519882e3bbd963434087f3e3f6f65af1e0a3edd932885fa5`; rows are in
+`/private/tmp/pretext-eng-20260912/gate-bidi-table-narrowed-{chrome,safari,firefox}`.
+
+No row is lost, so there is nothing to attribute.
+
+`bun test` and `bun run check` pass. A unit test pins `AA`, LRM, space, Hebrew,
+`AA`, WJ, space, WJ, `B` and `AA`, WJ, space, `1`, which keep the kerning here and
+on main but not under the earlier rule. Under a counting fake canvas, Canvas calls
+per cold `prepare()` don't change in any profile: the 18 corpora take 53,093 calls
+in the Chrome profile, 116,306 in the Safari profile and 53,108 in the Firefox
+profile, 57,041, 135,791 and 57,071 under `keep-all`, and 53,101, 116,314 and 53,116
+under `pre-wrap`, and the accuracy grid takes 9,136, 13,984 and 9,160. The 25,675
+distinct Safari suite preparations take 382,948 calls on main and on this branch; in
+18 of them a lone NUL or DEL before a space, a control character but not a format
+character, is measured together with the space instead of alone. In Bun, cold
+`prepare()` under a fake canvas in the Safari profile stays within 2% of main over
+the corpora in normal and pre-wrap white space, over two alternating runs of 15
+rounds. One text of 20,000 words that each end in a word joiner before a space is
+9-10% slower, and 4-5% when each word also ends in LRM and the next starts with a
+word joiner, since the check matches regular expressions where main walked the
+table. A word joiner run of 20,000 before one space, 20,000 spaces after one, and
+5,000 paragraphs with an explicit bidi control stay within 8% of main, faster on
+some and slower on others. The baseline advances to `fcd9b4e`, and the ordinary
+snapshots were regenerated against it.
+
+Chrome and Safari benchmark snapshots were refreshed from this branch: three
+foreground runs each at DPR 2, visible and focused, with Chrome on the 2560x1440
+screen and Safari on the 2560x1440 screen (the parent branch's runs used the
+1440x2560 screen). Chrome reads `prepare()` at 8.95 ms (9.15 on the parent branch)
+and hot `layout()` at 0.0885 ms (0.0868); Safari reads 11.0 ms (11.0) and 0.105 ms
+(0.100). Long-form corpus totals read 115.0 ms in Chrome (124.1) and 351 ms in
+Safari (347).
+
+## Rich-inline gaps name the item whose space they measure
+
+This runtime change starts from main `aaea18c` (#309). Rich-inline fragments and
+fragment ranges now carry `gapItemIndex`, the index of the item whose collapsed
+whitespace made `gapBefore`, or -1 when no space precedes the fragment on its line.
+`prepareRichInline()` takes it from the order that already picks the gap's width:
+the previous item's trailing whitespace, else the first whitespace-only item after
+that item, else the item's own leading whitespace. A zero or negative gap keeps its
+item, where `gapBefore` alone reads 0 both for such a gap and for no gap. The
+Markdown chat and rich-note now paint each collapsed space inside the element of
+that item, at the start of the fragment's own element, at the end of the previous
+fragment's, or in a span in the style of an item holding only whitespace, instead of
+as a text node in the row's paragraph style (#295). Their rows also take
+`white-space: nowrap` instead of `pre`, so a line that wraps inside an item no
+longer paints the space it ends on under a link's underline, a strike-through or a
+code pill's fill.
+
+An installed probe in Chrome 153, Safari 26.5.2 and Firefox 155 at DPR 2 loaded the
+Markdown chat, built from main and from this branch, with #295's four messages, a
+heading and an Arabic paragraph whose code spans hold their own space, `**bold**
+**more**`, links with a boundary space, and an English and an Arabic message whose
+link, strike-through and code span wrap, at chat widths 640 and 360. Next to each
+message it laid out the same pieces natively, in a `white-space: normal` paragraph
+with the demo's classes and fonts. Measured with every word in its own span, main's
+user lines end 3.30-3.33px short of the bubble's content edge in Chrome and Firefox
+and 3.51-3.52px in Safari, 2.28-2.54px for the heading, and its words sit up to
+3.34px off native, 3.53px in Safari. On this branch every user line ends within
+0.05px of the edge, and every word sits where native puts it, within 0.01px. With
+the rows' old `white-space: pre`, a line that wraps inside an item ends with its
+element one space past the last word, 3.88-5.47px for body text and 7.22-8.31px for
+a code span. With `nowrap` that element ends at its last word within 0.02px, as
+native line boxes do, and no word or other element edge moves in any browser, in the
+chat or in rich-note's default note at body widths 516 and 260, whose words paint
+where main paints them. Safari's Range rectangles snap some word edges to whole
+pixels, so there Ranges alone showed moves of up to 1.52px that spans don't. Results
+are in
+`scratchpad/browser-probes/results/{chrome,safari,firefox}-i295-2026-09-15T20-3*`;
+the `T20-37` runs load this branch's committed rows, and the earlier ones inject
+`nowrap` into its first commit.
+
+Before the browsers, the fake-canvas screen compared this branch with main over the
+corpora, the accuracy grid, hyphen and slash shapes, analysis, preferred breaks and
+rich-inline cases in all four profiles, and all 1,380 keys are identical in each.
+Over the chat's 10,000 messages at chat widths 640 and 360, main and this branch
+paint the same fragments with a space before the same ones in all four profiles. At
+640 in the Chrome profile 4,470 fragments have a gap: the fragment's own item holds
+the space for 1,304, the previous fragment's item for 3,155, and an item holding
+only whitespace for 11. None of those items has a style other than the paragraph's,
+so the #295 shape needs typed Markdown. At that width 23 link lines and 14
+strike-through lines wrap inside the item, where `pre` painted the space.
+
+The installed gate ran this change on `7b8ade9` against pinned `1691168`, whose
+runtime source equals main: Chrome 153 through the Playwright transport, Safari
+26.5.2 and Firefox 155 natively, both directions, at DPR 2 on the 2560x1440 screen.
+No leg fixes or loses a metric or has required failures, execution errors, or new
+API or rich failures, and the numeric companion finds no new failures in five
+profiles. The suite doesn't read `gapItemIndex` or paint the demos, so its rich
+rows, the `rich`, `rich-more`, `maintained/rich-boundaries` and signed-spacing rich
+families, 210 left to right and 90 right to left in each browser, pass and fail as
+on main. Suite hash
+`a72c647e17140b0585d31016c8e4fa71f0d8f33561e922d5f75a389312c399b3`; rows are in
+`/private/tmp/pretext-eng-20260912/gate-rich-gap-owner-{chrome,safari,firefox}`.
+
+No row is lost, so there is nothing to attribute.
+
+`bun test` and `bun run check` pass. Under a counting fake canvas, Canvas calls per
+cold `prepare()` don't change in any profile, since no corpus or accuracy-grid
+segment changes: the 18 corpora take 53,093 calls in the Chrome profile, 116,306 in
+the Safari profile and 53,108 in the Firefox profile, 57,041, 135,791 and 57,071
+under `keep-all`, and 53,101, 116,314 and 53,116 under `pre-wrap`, and the accuracy
+grid takes 9,136, 13,984 and 9,160. Preparing the chat's 10,000 messages takes
+25,370, 98,530 and 25,386 calls on main and on this branch, since naming the gap's
+item measures nothing. In Bun under a fake canvas, over seven alternating runs,
+preparing those messages and streaming, measuring and materializing their lines at
+chat widths 640 and 360 stay within 4% of main in the Chrome and Safari profiles,
+faster on some rows and slower on others. The baseline advances to `4672c58`, and
+the ordinary snapshots were regenerated against it.
+
+Chrome and Safari benchmark snapshots were refreshed from this branch: three
+foreground runs each at DPR 2, visible and focused, with Chrome on the 2560x1440
+screen and Safari on the 1440x2560 screen (the parent branch's runs used the
+2560x1440 screen). Chrome reads `prepare()` at 9.15 ms (8.80 on the parent branch)
+and hot `layout()` at 0.0868 ms (0.0887); Safari reads 11.0 ms (11.0) and 0.100 ms
+(0.105). Long-form corpus totals read 124.1 ms in Chrome (125.0) and 347 ms in
+Safari (352).
+
+## Marks after CJK text follow each engine
+
+This runtime change starts from main `8a26c56` (#308). After CJK text, punctuation
+whose UAX #14 class forbids a break before it now attaches to the CJK text, in the
+first merge pass and in the CJK unit builder, where main attached only a
+hand-written list plus CL, EX and NS inside CJK blocks: `'`, `/`, `|`, `‼`, `％` and
+`°` no longer start a line after `丙` (LB13, LB19, LB21, LB23a). Opening curly quotes
+and U+3000 and the other space separators still don't attach, and `-` keeps its own
+rules. The text after such a mark follows each engine (#293). One boundary rule,
+`pairBoundary()`, now answers the exclamation-mark rows, the Gecko rows and these
+rows, and every merge and the unit builder ask it. After an ASCII mark before an
+ASCII letter or digit, the Chromium profile keeps the pair from Blink's pair table,
+except after `?`. The WebKit profile keeps it before a digit, and before a letter
+follows UAX #14, since WebKit's scan reaches ICU at the CJK character and skips
+ahead over ASCII letters, unless the mark follows a code unit up to U+00FF or is CL
+or CP after an ideograph or Hangul syllable, where WebKit reads its table. The Gecko
+profile follows UAX #14. A new profile field, `icuDecidesLetterAfterCJKMark`, is
+true for WebKit. The URL query unit no longer asks about the boundary right after
+`?`, which it never joins.
+
+An installed probe on an `en` page in 16px Arial, Chrome 153, Safari 26.5.2 and
+Firefox 155 at DPR 2, reran #274's rows with longer followers: `甲乙丙`, `あいう` or `가나다`
+before 32 ASCII marks and `first_week`, `FirstWeek`, `1234` or `αβγδεζη`, at the
+width where the CJK text and the mark fit and the follower doesn't. Chrome keeps
+`!`, `}`, `/`, `|` and `'` with the letters and digits and breaks after all but `'`
+before the Greek. Safari breaks after `!`, `/` and `|` before a letter, after `}`
+before a letter only after kana, and keeps digits. Firefox breaks after `!`, `}` and
+`|` and after `/` before a letter. No browser breaks before any of those marks. A
+second probe checked the context rule: Safari, like Chrome, keeps `丙a}first`,
+`丙a!first`, `丙!!first`, `丙.!first` and `丙.}first` whole, so its table decides a pair
+unless the mark directly follows the character that reached ICU, and Firefox breaks
+after the mark in all of them. A third put `}`, `|`, `!`, `/` and `'` after `xy abc`
+before `1234` or `first`, with ` 丙`, `丙` or nothing after the word: Firefox breaks
+after `}`, `|` and `!` before either and after `/` before `first`, whatever follows
+the word, since ICU4X decides each word alone, and Chrome and Safari keep every word
+whole. Over the 1,296 probe rows at the width that splits the mark from what
+follows, this branch's analysis matches Chrome and Safari on every row, where main
+is wrong on 48 and 52, and misses 12 Firefox rows, where main misses 24. The 12 are
+`丙a}`, `丙a|` and their kana and Hangul copies before `first_week` or `1234`, where a
+letter comes between the CJK text and the mark: every Gecko profile, before and
+after this change, keeps `a}first` and `a|1234` whole, as it does after Latin text
+(ENGINE_FOLLOWUPS.md). Results are in
+`scratchpad/browser-probes/results/{chrome,safari,firefox}-i293-2026-09-15T19-01-*`,
+and the rerun with both bundles in `…-i293-2026-09-15T19-3*`.
+
+Before the browsers, the fake-canvas screen compared this branch with main over the
+corpora, the accuracy grid, hyphen and slash shapes, analysis, preferred breaks and
+rich-inline cases in all four profiles. Only `/` after CJK text changes: `see 漢/abc
+now`, `see 漢字/abc now`, `see かな/abc now`, `see 漢/1 now` and `see 中文/中文 now` in
+normal, pre-wrap and letter-spaced modes and in analysis, and the rich-inline split
+`see 漢` + `/abc now`, 21 keys in each profile. Main broke before `/` in every
+profile. Now the Chromium and unrecognized profiles keep `漢/abc`, the WebKit and
+Gecko profiles give `漢/ | abc`, and every profile keeps `漢/1` and breaks `文/ | 中`.
+
+The installed gate ran this change on `e7fb206` against pinned `11c440b`, whose
+runtime source equals main: Chrome 153 through the Playwright transport, Safari
+26.5.2 and Firefox 155 natively, both directions, at DPR 2 on the 2560x1440 screen.
+No leg loses a metric or has required failures, execution errors, or new API or rich
+failures, and five numeric profiles have no new failures. Chrome fixes 82 LTR and 46
+RTL metrics, Safari 85 and 46, and Firefox 82 and 46, all in supported scope and all
+on straight single quotes after CJK text: `中文中文''tail`, `あいあい''tail` and
+`가나가나''tail`, with letter spacing 0, −1 or 1.5, in normal white space and pre-wrap,
+where main started a line with `''` and each browser keeps the quotes and `tail`
+with the character before them. Chrome paints `中文中 / 文''tail` at 67.15px, as this
+branch gives, where main gave `中文中文 / ''tail`, and Safari also fixes both
+`policy/straight-single` rows, `가나가 / 나''tail` at 58.51px. Over the full suite's
+`maintained/closing-punctuation` rows, 4,528 left to right and 1,600 right to left
+in each browser, and `reported/#274`'s 6 rows, main and this branch predict the same
+lines. Suite hash
+`b1d38173d4d4a84d70164b0537c3d578296b1a26a39dd9906d32c35d6310c766`; rows are in
+`/private/tmp/pretext-eng-20260912/gate-cjk-mark-pairs-by-engine-{chrome,safari,firefox}`.
+
+No row is lost, so there is nothing to attribute. Rerun with main's and this
+branch's bundles side by side, the installed probe gives this branch's lines on all
+1,038 Safari rows, where main matches 862. Chrome matches this branch on 1,036 rows
+and main on 845, and Firefox on 973 and 907, and no row that main matches differs on
+this branch. Chrome's other 2 rows are fits main misses too: at 45.08px Chrome
+paints `가나 / 다'Firs / tWeek / 户` and this branch `가나 / 다'Firs / tWee / k户`, and at
+47.70px Chrome fits `δεζη户` on one line where both give `δεζη / 户`. Of Firefox's
+other 65, 64 put `}` or `|` after a letter, as in `xy abc}1234` or
+`甲乙丙a|first_week户`, where Firefox breaks after the mark and the Gecko profile keeps
+the word whole on main and this branch. In the last, `가나다|FirstWeek户` at 46.15px,
+this branch now breaks after `|` as Firefox does, but Firefox fills `FirstW / eek户`
+where this branch gives `First / Week / 户`.
+
+`bun test` and `bun run check` pass. Under a counting fake canvas, Canvas calls per
+cold `prepare()` don't change in any profile, since no corpus or accuracy-grid
+segment changes: the 18 corpora take 53,093 calls in the Chrome profile, 116,306 in
+the Safari profile and 53,108 in the Firefox profile, 57,041, 135,791 and 57,071
+under `keep-all`, and 53,101, 116,314 and 53,116 under `pre-wrap`, and the accuracy
+grid takes 9,136, 13,984 and 9,160. In Bun, cold `prepare()` under a fake canvas
+stays within 3% of main over the corpora in each profile, is 16-18% faster on 500
+CJK lines with marks, whose marks join fewer segments, and is 4-12% slower on one
+text of 20,000 marks after CJK text, which stays linear. The baseline advances to
+`1691168`, and the ordinary snapshots were regenerated against it.
+
+Chrome and Safari benchmark snapshots were refreshed from this branch: three
+foreground runs each at DPR 2, visible and focused, with Chrome on the 2560x1440
+screen and Safari on the 2560x1440 screen. Chrome reads `prepare()` at 8.80 ms
+(9.10 on the parent branch) and hot `layout()` at 0.0887 ms (0.0883); Safari reads
+11.0 ms (12.0) and 0.105 ms (0.105). Long-form corpus totals read 125.0 ms in
+Chrome (115.2) and 352 ms in Safari (358).
+
+## Pre-wrap spaces and tabs that hang
+
+This runtime change starts from main `0c12ece` (#307). In `pre-wrap`, a run of
+preserved spaces and tabs at the end of a line hangs past it, as CSS Text 3 asks
+(§4.1.2, §8.2). A line that wraps after such a run now reports the width before the
+run, with the letter-spacing gap after the glyph before it, and the run fits
+wherever the text before it fits, so the whole run stays on that line. Before a
+newline or at the end of the text the run counts only as far as it fits, between the
+width before it and the width with it, so `measureNaturalWidth()` still counts it.
+Main counted every preserved space and each tab's full advance, fit a tab by its own
+advance and later white space by the width after the earlier part of the run, so
+`foo \t bar` laid out again at its 28.8px widest line gave `foo ` / `\t` / ` ` /
+`bar` where 60px gave `foo \t ` / `bar`. The Markdown chat drops
+`measureCodeLineStats()`, which subtracted the last space's width (#267) and
+couldn't see tabs (#294), and sizes code boxes with `measureLineStats()`. Firefox
+doesn't hang tabs, so the Gecko profile keeps main's tab rule through a new profile
+field, `hangTabs`, and only preserved spaces hang there.
+
+Before the browsers, the test fake canvas compared this branch with main over 20,000
+random pre-wrap texts in each engine profile. Batch, streaming, walker, stats and
+`layout()` agree in every profile. Widths change only on lines that end in preserved
+spaces or, outside the Gecko profile, tabs. Where such a line wraps its width equals
+the natural width of its text without them, and before a newline or at the end of
+the text it lies between that and the width with them. Laid out again at its widest
+line, a text that fits keeps its lines except with a zero-width space or a soft
+hyphen under negative letter spacing, or at the Chromium profile's return from an
+unfit hyphen: 165 texts in the Chrome profile and 70 in the Safari profile fail,
+where main fails on 379 and 70, and normal mode on main fails in the same ways. The
+Gecko profile fails on 427 texts, where main fails on 332, all with negative letter
+spacing, since its tabs keep main's fit. The screen's 1,380 keys over the corpora,
+the accuracy grid, hyphen and slash shapes, analysis, preferred breaks and
+rich-inline cases are byte-identical in all four profiles; the screen records line
+text but not widths.
+
+The installed gate ran this change on `bc72c6d` against pinned `ebc3414`, whose
+runtime source equals main: Chrome 153 through the Playwright transport, Safari
+26.5.2 and Firefox 155 natively, both directions, at DPR 2. In supported scope
+Chrome fixes 2,611 LTR and 883 RTL metrics and loses 97 and 25, Safari fixes 1,988
+and 670 and loses 125 and 51, and Firefox fixes 438 and 248 and loses 69 and 31. No
+leg has required failures, execution errors or new API or rich failures, and five
+numeric profiles have no new failures. Most fixes are in the discretionary, tab,
+terminal-spacing and negative-spacing families, where the browsers hang a whole run
+of spaces and tabs, or a space by the negative gap after the letter before it:
+Chrome paints `abc\tdef` at 20px in 16px Arial with letter spacing −2 as `abc\t` /
+`def`, where main gave `abc` / `\t` / `def`. The two pre-wrap rows ENGINE_FOLLOWUPS
+kept as losses from earlier changes now pass: `})x「value」! end` at 34.77px with
+letter spacing −1 in Chrome and Firefox, where the space after `ue」!` hangs, and
+`a\u05D0\u05D1aabb((\u0628\u0628\u0628\u0628\t\tword` at 64px in Safari, where both
+tabs hang (#240). Suite hash
+`cdaf225961c92a952d86c4c4f244e359241e11dd97d8699893e361e881413317`; rows are in
+`/private/tmp/pretext-eng-20260912/gate-prewrap-hanging-width-{chrome,safari,firefox}`.
+
+A first gate on `e162b31`, before the Gecko profile kept main's tab rule, gave the
+same Chrome and Safari rows, but Firefox lost 1,119 LTR and 367 RTL metrics in 332
+and 100 rows. Of those rows 307 and 90 contain a tab, and on 219 and 80 of them
+main's lines equal Firefox's: Firefox gives a tab that doesn't fit a line of its
+own, and paints `abc\tdef` above as `abc` / `\t` / `def`. Every Firefox row lost on
+`bc72c6d` was lost there too.
+
+Chrome loses 50 rows, Safari 67 and Firefox 35, all with negative letter spacing or
+Arabic and Amiri emergency breaks. In 40 of Chrome's, 64 of Safari's and 30 of
+Firefox's, main passed only while a line it gave to a space or tab cancelled another
+error. That error was an emergency break Pretext places differently in Amiri (10
+Chrome and 6 Safari rows, such as `بِبِ((tail \tword` at 24px, where Chrome paints
+`((` / `tai` / `l \t` and this branch `((t` / `ail \t`), a lam-alef or bracket split
+in Arabic with letter spacing −1 (15 Chrome, 9 Safari and 7 Firefox rows), or a line
+the browser gives a raw CR or form feed (2 Firefox and 2 Safari rows). With letter
+spacing −6 the browsers don't fit the next word after a hanging space (6 Chrome, 38
+Safari and 12 Firefox rows): Chrome paints ` A B` at 6.5px as `A` / `B` and Safari
+as ` A ` / `B`, where this branch keeps one line and main started the second line
+with the space. With letter spacing −4 they give a space after a word joiner and
+combining mark, or after U+FEFF, a line of its own, where this branch charges the
+invisible character a negative gap and hangs the space, where main matched only
+while it fit the space without that gap (9 rows in each browser). Chrome ends `a`,
+U+00AD, space, `b` before the space at 7-10px with letter spacing −1 to −6 (10
+rows), where main chose the hyphen. The remaining 13 rows are true losses, where
+main's lines equal the native ones apart from a painted hyphen: 5 of those Chrome
+soft hyphen rows; in Safari `a`, U+007F, space, `b` in 24px Amiri in both directions
+and `a لا ب` at 1px in 32px Arial; and in Firefox that Arabic row and `To To` and
+`AV AV` with letter spacing −1 in both directions, where Firefox gives the space a
+line of its own. ENGINE_FOLLOWUPS records these shapes.
+
+`bun test` and `bun run check` pass. Under a counting fake canvas, Canvas calls per
+cold `prepare()` don't change in any profile, since only the line walker changes:
+the 18 corpora take 53,093 calls in the Chrome profile, 116,306 in the Safari
+profile and 53,108 in the Firefox profile, 57,041, 135,791 and 57,071 under
+`keep-all`, and 53,101, 116,314 and 53,116 under `pre-wrap`. The baseline advances
+to `11c440b`, and the ordinary snapshots were regenerated against it.
+
+Chrome and Safari benchmark snapshots were refreshed from this branch: three
+foreground runs each at DPR 2, visible and focused, with Chrome on the 2560x1440
+screen and Safari on the 2560x1440 screen. Chrome reads `prepare()` at 9.10 ms
+(9.05 on the parent branch) and hot `layout()` at 0.0883 ms (0.0887); Safari reads
+12.0 ms (11.5) and 0.105 ms (0.105). Long-form corpus totals read 115.2 ms in
+Chrome (115.0) and 358 ms in Safari (368).
+
+## Rich-inline item-boundary mode removed
+
+This change starts from main after #300 and removes rich-inline's `'item-boundary'`
+mode. No installed browser has used it since #287: the Blink and Gecko profiles use
+`'joined-text'`, and the WebKit profile `'item-text'`. It still ran in engines
+Pretext doesn't recognize, including Bun, Node and jsdom, and where there is no
+`navigator`. There every item boundary allowed a break, the joined text around a
+boundary was never analyzed, and a trailing ZWSP or NEL marked a break before the
+next item. Those engines now use `'joined-text'`, as Blink and Gecko do, and
+`prepareRichInline()` loses the mode's branches and its `breakAfterPreviousItem`
+state, 15 runtime lines. This fixes the wrong result ENGINE_FOLLOWUPS recorded,
+where items `漢` and `丙.first` gave `漢丙.fir` / `st` though `丙.first` fits the next
+line. The rich-inline unit tests that set no profile run under Bun's user agent, so
+they now test the mode Chrome and Firefox use; they pass unchanged, and the test
+that pinned both modes keeps its `'joined-text'` half.
+
+The installed gate ran this change on `a36ce1b` against pinned `b69f72e`, whose
+runtime source equals main: Chrome 153 through the Playwright transport, Safari
+26.5.2 and Firefox 155 natively, both directions, at DPR 2 on the 2560x1440 screen.
+No leg fixes or loses a metric or changes a failure, and every leg's metric totals
+equal main's, as expected, since no installed profile used the mode. None has
+required failures, execution errors, or new API or rich failures, and five numeric
+profiles have no new failures. Suite hash
+`8dff524da9a6cd7c95c956aa4c617781e062358a846fc3858547c07e716887b4`; rows are in
+`/private/tmp/pretext-eng-20260912/gate-ablate-rich-item-boundary-{chrome,safari,firefox}`.
+
+Before the browsers, a counting fake canvas compared this branch with main. Under
+the Chrome, Safari and Firefox user agents, 1,380 keys covering the corpora, the
+accuracy grid, hyphen and slash shapes, analysis, preferred breaks and 26
+rich-inline cases are byte-identical, and so are 46 more rich-inline shapes and 18
+corpus prefixes split into 5-character items. Under an unrecognized user agent 23 of
+the 1,380 keys change, all of them rich-inline cases, at 450 of 2,262 widths, and
+every flat output stays the same; the extra rich shapes change 28 shapes and all 18
+prefixes, at 748 of 5,648 widths, with the same results when there is no
+`navigator`. No native browser observes that profile, so its lines were compared
+with the three major profiles at the same widths. Of the 748 widths, the branch
+matches at least one of them where main matched none at 697, and all three at 510;
+at no width does main match one of them while the branch matches none. At the other
+51, main matched one engine by accident and the branch matches the other two: main
+broke Thai, Lao and Myanmar split words at the item boundary as Safari does (15
+widths), before small kana and `ー` as Chrome does (25), and after `/` in a URL or
+path as Firefox does (11).
+
+`bun test` and `bun run check` pass. Under a counting fake canvas, Canvas calls per
+cold `prepare()` don't change in any profile: the 18 corpora take 53,093 calls in
+the Chrome profile, 116,306 in the Safari profile and 53,108 in the Firefox profile,
+and 57,041, 135,791 and 57,071 under `keep-all`. Canvas calls per cold
+`prepareRichInline()` over the 64 rich screen inputs don't change either: 4,136 in
+the Chrome profile, 4,944 in the Safari profile, 4,147 in the Firefox profile and
+4,144 under an unrecognized user agent or with no `navigator`. The baseline advances
+to `ebc3414`, and the ordinary snapshots were regenerated against it.
+
+Chrome and Safari benchmark snapshots were refreshed from this branch: three
+foreground runs each at DPR 2, visible and focused, with Chrome on the 2560x1440
+screen and Safari on the 2560x1440 screen. Chrome reads `prepare()` at 9.05 ms
+(8.95 on the parent branch) and hot `layout()` at 0.0887 ms (0.0882); Safari reads
+11.5 ms (12.0) and 0.105 ms (0.105). Long-form corpus totals read 115.0 ms in
+Chrome (114.9) and 368 ms in Safari (350).
+
 ## Closing punctuation joins the text before it
 
 This runtime change starts from published main `52cc87c` (#290). A text segment that

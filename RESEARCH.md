@@ -50,40 +50,60 @@ must not depend on those incidental storage differences.
 Extending Firefox's ASCII opener/numeric rules to wider Unicode cases exposed
 trailing-space fit failures, so the accepted rules remain narrow.
 
-Question and exclamation marks are UAX #14 class EX. ICU and ICU4X break after EX
-unless the next character's class forbids a break before it (LB31), and Firefox
-sends every word containing EX to ICU4X: its ASCII shortcut covers only AL, IS, NU
-and QU words. Chrome and Safari first consult a pair table for characters up to
-U+00FF. It follows ICU except for printable ASCII, where `?` breaks before
-everything except `! " ' ) , . / : ; ? ] }`, and `!` breaks only before `(`, `<`,
-`[` and `{`. Every merge that could join across that boundary asks the same rule:
-the punctuation, hyphen and numeric-affix appends, the forward carry and symbol
-chains. So `x?|$b`, `x?|-|b` and `x!|©b` break as in Chrome and Safari, while
-Firefox keeps `x?-|b`. A URL query unit still joins everything after `?`, so in
-`https://x.com/p?-a` it keeps `-a`, while browsers also break after that hyphen.
-Above U+00FF Pretext reads the LineBreak.txt class of a following letter, number
-or symbol, so an iteration mark such as `々` (NS) stays after `！`, while numeric
-affixes and opening punctuation break; other punctuation keeps its existing
-attachment. Small kana and `ー` (CJ) after EX follow the engine and page
-language; see Content Language. Safari's keep-all still breaks only at spaces. U+061B
-ARABIC SEMICOLON is EX too, while `:`, `.` and U+060C are IS and keep a
-following Arabic word (LB29). Firefox also breaks after BA such as `|` before a
-letter, which symbol chains do not model.
+Question and exclamation marks are UAX #14 class EX. ICU and ICU4X break after
+EX unless the next character's class forbids a break before it (LB31), and
+Firefox sends every word containing EX to ICU4X: its ASCII shortcut covers only
+AL, IS, NU and QU words. Chrome and Safari first consult a pair table for
+characters up to U+00FF. It follows ICU except for printable ASCII, where `?`
+breaks before everything except `! " ' ) , . / : ; ? ] }`, and `!` breaks only
+before `(`, `<`, `[` and `{`. Every merge that could join across that boundary
+asks the same rule: the punctuation, hyphen and numeric-affix appends, the
+forward carry, symbol chains, URL and numeric runs and keep-all run ends. So
+`x?|$b`, `x?|-|b` and `x!|©b` break as in Chrome and Safari, while Firefox keeps
+`x?-|b`. A URL query unit joins the text after `?` up to the next break this
+rule allows, such as a second `?` before a letter, so in `https://x.com/p?-a` it
+keeps `-a`, while browsers also break after that hyphen. Above U+00FF Pretext
+reads the LineBreak.txt class of a following letter, number or symbol, so an
+iteration mark such as `々` (NS) stays after `！`, while numeric affixes and
+opening punctuation break; other punctuation keeps its existing attachment.
+Small kana and `ー` (CJ) after EX follow the engine and page language; see
+Content Language. Safari's keep-all still breaks only at spaces. U+061B ARABIC
+SEMICOLON is EX too, while `:`, `.` and U+060C are IS and keep a following
+Arabic word (LB29). Firefox also breaks after BA such as `|` and CL such as `}`
+before a letter or digit, which symbol chains do not model: installed Firefox
+155 paints `xy abc} / 1234`, and ` 丙` after the word doesn't change it, since
+ICU4X decides each word alone.
 
-After CJK text, engines don't decide those pairs alike (#274). Blink reads its
-pair table for any two characters up to U+00FF, whatever comes before them, so
-`丙!a` keeps `!` with `a`, as `x!a` does. WebKit reaches ICU at the CJK character,
-takes ICU's next break, and skips ahead over ASCII letters without reading its
-table (`BreakablePositions.h`). So ICU's rules decide before a letter and the
-table before a number: `丙!|a` breaks and `丙!1` doesn't. WebKit skips ICU
-entirely when CL or CP follows an ideograph, so `}` keeps a letter after Han and
-Hangul, but not after kana. Firefox sends those words to ICU4X. Where UAX #14 keeps
-the pair, as IS, CP, PO and straight quotes do before a letter or number, all three
-engines keep it, and Pretext joins that text to the CJK text's last unit, which
-still takes grapheme breaks when it doesn't fit. Only punctuation joins, never a
-letter inside a CJK unit such as the Arabic in `中（ابب）`, and a closing curly
-quote doesn't: LB19 no longer keeps the text after it, and Chrome breaks before
-`tail` in `中文中文””tail`.
+After CJK text, no engine breaks before punctuation that UAX #14 keeps with the
+text before it, such as `'`, `/` or `|` (LB13, LB19, LB21), so Pretext attaches
+punctuation to CJK text by its class. Opening curly quotes don't attach, since
+they can start a line next to East Asian text (LB19a), and neither do U+3000 and
+the other space separators, which hang or trim at a line end. The text after
+such a mark is decided differently by each engine (#274, #293). Blink reads its
+pair table for any two code units up to U+00FF, whatever comes before them, so
+`丙!a` keeps `!` with `a`, as `x!a` does. WebKit reaches ICU at the CJK
+character, takes ICU's next break, and skips ahead over ASCII letters without
+reading its table (`BreakablePositions.h`). So ICU's rules decide before a
+letter and the table before a number: `丙!|a` breaks and `丙!1` doesn't. The skip
+reaches only the pair right after the character that reached ICU, so the table
+keeps `丙!!first` and `丙.!first`, and a letter between the CJK text and the mark,
+as in `丙a}first`, puts the pair back on the table. WebKit skips ICU entirely
+when CL or CP follows an ideograph or Hangul syllable, so `}` keeps a letter
+after Han and Hangul, but not after kana. Firefox sends those words to ICU4X.
+The September 15 installed probe (Chrome 153, Safari 26.5.2, Firefox 155; `甲乙丙`,
+`あいう` or `가나다` before 32 ASCII marks and `first_week`, `FirstWeek`, `1234` or
+`αβγδεζη`) matched each rule: Chrome keeps `!`, `}`, `/`, `|` and `'` with an
+ASCII letter or digit and breaks after all but `'` before Greek, Safari breaks
+after `!`, `/` and `|` before a letter and after `}` only after kana, and
+Firefox follows UAX #14. The boundary rule that answers the exclamation and
+Gecko pairs answers these too, for Chrome and Safari only before an ASCII letter
+or digit: Pretext doesn't model their tables before ASCII symbols. Where UAX #14
+keeps the pair, as IS, CP, PO and straight quotes do before a letter or number,
+all three engines keep it, and Pretext joins that text to the CJK text's last
+unit, which still takes grapheme breaks when it doesn't fit. Only punctuation
+joins, never a letter inside a CJK unit such as the Arabic in `中（ابب）`, and a
+closing curly quote doesn't: LB19 no longer keeps the text after it, and Chrome
+breaks before `tail` in `中文中文””tail`.
 
 No break precedes closing punctuation or a nonstarter, whatever comes before it
 (LB13, LB21). For these marks above U+00FF all three engines reach ICU or ICU4X, and
@@ -350,6 +370,21 @@ at negative spacing, such as `ab cd\tef gh\tij` at -1px in 16px Arial: Safari
 moves the tab to the second stop and hangs it, and Pretext breaks before it. Only
 the Safari profile models the threshold.
 
+In pre-wrap, a run of preserved spaces and tabs at the end of a line hangs (CSS
+Text 3 §4.1.2, §8.2): it takes no room when fitting and doesn't count in the
+line's width. Before a hard break or the end of the text, only the part past the
+available width hangs. Fitting and the reported width have to use the same width,
+the one before the run with the gap after the glyph before it, or a text laid out
+again at its widest line wraps differently. While the walker counted the space
+before fitting the tab after it, `foo \t bar` laid out again at its 28.8px widest
+line gave `foo ` / `\t` / ` ` / `bar`. Subtracting the last space's width in the
+Markdown chat (#267) couldn't cover tabs, whose advance depends on the pen
+position, runs of several segments or letter spacing (#294). Firefox doesn't hang
+tabs: hanging them in every profile lost 332 left-to-right and 100 right-to-left
+installed Firefox rows where main matched, such as `abc\tdef` at 20px in 16px Arial
+with letter spacing −2, which Firefox paints as `abc` / `\t` / `def`. The Gecko
+profile keeps main's tab rule, so a tab counts in the fit and the width there.
+
 Chrome and Firefox keep NEL as ordinary text. In Chrome the same rule lost rows
 that main matched only because two errors cancelled: Chrome joins Arabic across
 a soft hyphen that Pretext measures as separate segments, hangs preserved spaces
@@ -567,9 +602,25 @@ they are measured, and format characters between a word and the space resolve
 with that space. On an RTL page, emoji, space, `A`, WJ, space, Hebrew therefore
 paints the unkerned letter, while an LTR page kerns it.
 Without the paragraph direction, preparation keeps the kerning across format
-characters only when the neutral characters around the space lie between the
-word and a strong character of the word's direction, with no paired bracket
-among them. A closed bracket pair takes the paragraph direction when it
+characters only when the word's last letter and the first letter after the
+space have the same direction, with only spaces and format characters between,
+so the characters between the two letters resolve to that direction (UAX #9
+N1). LRM, RLM and ALM are strong characters, so they count as letters of their
+direction, and a word that ends in one keeps its kerning. An ASCII digit after
+the space keeps it too, since it resolves the space to the word's direction
+either way (UAX #9 W7 and N1). Letters in the right-to-left blocks have bidi
+class R or AL, and every other letter except modifier letters has class L, so no
+bidi class table is needed. A generated table also kept the kerning before other
+digits, after symbols and across neutral punctuation after the space. Under a
+fake Canvas that kerns every glyph with a following space, the letter rule gives
+the same segments, widths and lines as the table on all 239,063 Safari suite
+inputs. In the installed gate, dropping the kerning across format characters
+altogether lost 33 Safari rows (17 LTR, 16 RTL), each a Latin letter, WJ, one or
+two spaces and a Latin letter, which both rules keep. A rule that took only
+letters before the format characters and only spaces and a letter after them
+passed those rows but lost the kerning that installed Safari keeps for `A`, LRM,
+space, Hebrew, for `A`, WJ, space, WJ, `b` and for `A`, WJ, space, `1`. A
+closed bracket pair takes the paragraph direction when it
 contains text of that direction, so on an RTL page `A`, WJ, space, then a
 parenthesized Latin letter and Hebrew letter paints the unkerned letter too. On
 an RTL page headless WebKit also needs about a hyphen's width more to fit a word
@@ -659,10 +710,17 @@ shaping across styled items or solve flat ZWSP wrapping inside an item.
 
 A collapsed space's presence and advance are separate. Its style comes from the
 first whitespace at the boundary, and a zero or negative advance still provides
-a break opportunity. `measureText('A A') - measureText('AA')` includes the change
-in A–A kerning, so it is not a clean space measurement. Measure the space itself.
-After forced overflow, preserve the negative remaining width; clamping it to zero
-gives a following negative gap room it did not have.
+a break opportunity. Fragments name that whitespace's item as `gapItemIndex`,
+which is -1 only where no space precedes the fragment on its line. A painter
+draws the space inside that item's element, as native layout does. Painting
+every space in the paragraph's style moved the text after a code span's own
+space by the difference between the two space widths (#295). Margins or spacer
+boxes keep the width, but leave the space out of copied text, and margins put
+mixed-direction lines out of order (#273). `measureText('A A') -
+measureText('AA')` includes the change in A–A kerning, so it is not a clean
+space measurement. Measure the space itself. After forced overflow, preserve the
+negative remaining width; clamping it to zero gives a following negative gap
+room it did not have.
 
 A whole zero-width item fits at the end of an exactly filled line. Checking
 whole-item fit before reserving the item's gap and extra width admitted it, but
@@ -717,8 +775,9 @@ In every same-font case of a September 14, 2026 probe, installed Firefox 155 spa
 wrapped like one text node. The Gecko profile therefore uses the joined analysis
 too, with its own break rules across boundaries: small kana don't start a line, so
 items `ちょっと待` and `ってください` keep `待って` together where the Chromium
-profile breaks before `っ`. Engines Pretext doesn't recognize keep breaking at
-every item boundary.
+profile breaks before `っ`. Engines Pretext doesn't recognize use the joined
+analysis too, with their own break rules. They used to break at every item
+boundary, which no major engine does.
 
 An earlier prototype of the joined rule lost 40 installed Firefox Myanmar
 split-word rows, which were attributed to Gecko's segmentation. But Gecko breaks
@@ -853,8 +912,9 @@ Every rich preparation still paid for the pass, including each rich-inline item.
 Skipping it made `prepareWithSegments()` about 3% faster on the Latin corpora,
 8.5% on the Arabic, Hebrew and Urdu corpora and 16% on short Arabic texts, and
 `prepareRichInline()` 15% faster with Arabic items (Node V8 with a fake Canvas,
-medians of 31 interleaved rounds). The generated bidi class table stayed,
-because the WebKit following-space kerning guard reads it.
+medians of 31 interleaved rounds). The generated bidi class table stayed for the
+WebKit following-space kerning guard, until that guard came to need only letters,
+direction marks and the right-to-left blocks (see Kerning At Line Edges).
 
 A DOM element that renders the whole paragraph needs only a paragraph direction,
 since the browser resolves the paragraph and reorders each line itself. A string

@@ -11,6 +11,7 @@ const BODY_FONT = '18px "Iowan Old Style", "Palatino Linotype", "Book Antiqua", 
 const BODY_LINE_HEIGHT = 30
 const HEADLINE_FONT_FAMILY = '"Iowan Old Style", "Palatino Linotype", "Book Antiqua", Palatino, serif'
 const HEADLINE_TEXT = 'THE FUTURE OF TEXT LAYOUT IS NOT CSS'
+const HEADLINE_LETTER_SPACING = -0.5
 const GUTTER = 48
 const COL_GAP = 40
 const BOTTOM_GAP = 20
@@ -295,6 +296,7 @@ const dropCapEl = document.createElement('div')
 dropCapEl.className = 'drop-cap'
 dropCapEl.textContent = DROP_CAP_TEXT
 dropCapEl.style.font = DROP_CAP_FONT
+dropCapEl.style.letterSpacing = '0px'
 dropCapEl.style.lineHeight = `${DROP_CAP_SIZE}px`
 stage.appendChild(dropCapEl)
 
@@ -369,7 +371,7 @@ function fitHeadline(maxWidth: number, maxHeight: number, maxSize: number = 92):
     const size = Math.floor((lo + hi) / 2)
     const font = `700 ${size}px ${HEADLINE_FONT_FAMILY}`
     const lineHeight = Math.round(size * 0.93)
-    const prepared = prepareWithSegments(HEADLINE_TEXT, font)
+    const prepared = prepareWithSegments(HEADLINE_TEXT, font, { letterSpacing: HEADLINE_LETTER_SPACING })
     let breaksWord = false
     let lineCount = 0
 
@@ -555,6 +557,7 @@ function projectTextProjection(projection: TextProjection): void {
     element.style.left = `${projection.headlineLeft + line.x}px`
     element.style.top = `${projection.headlineTop + line.y}px`
     element.style.font = projection.headlineFont
+    element.style.letterSpacing = `${HEADLINE_LETTER_SPACING}px`
     element.style.lineHeight = `${projection.headlineLineHeight}px`
   }
 
@@ -570,6 +573,7 @@ function projectTextProjection(projection: TextProjection): void {
     element.style.left = `${line.x}px`
     element.style.top = `${line.y}px`
     element.style.font = projection.bodyFont
+    element.style.letterSpacing = '0px'
     element.style.lineHeight = `${projection.bodyLineHeight}px`
   }
 
@@ -585,6 +589,7 @@ function projectTextProjection(projection: TextProjection): void {
     element.style.left = `${line.x}px`
     element.style.top = `${line.y}px`
     element.style.font = projection.pullquoteFont
+    element.style.letterSpacing = '0px'
     element.style.lineHeight = `${projection.pullquoteLineHeight}px`
   }
 }

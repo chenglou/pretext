@@ -66,21 +66,23 @@
       color: #a09888; margin-bottom: 12px;
     }
 
+    /* The rings are shadows, so they take no room from the column width the
+       model lays lines out in. */
     .col-canvas-wrap {
-      position: relative; border: 1px solid #e8e0d4; border-radius: 3px;
+      position: relative; border-radius: 3px;
       background: #fff; overflow: hidden;
+      box-shadow: inset 0 0 0 1px #e8e0d4;
     }
     .col-canvas-wrap canvas { display: block; }
 
     .css-col {
       position: relative;
-      border: 1px solid #e8e0d4; border-radius: 3px;
+      border-radius: 3px;
       background: #fff; overflow: hidden;
+      box-shadow: inset 0 0 0 1px #e8e0d4;
     }
     .css-text {
-      font: 15px/24px Georgia, "Times New Roman", serif;
       text-align: justify;
-      padding: 12px;
       hyphens: none; -webkit-hyphens: none;
       word-break: normal; overflow-wrap: break-word;
       text-align-last: left;

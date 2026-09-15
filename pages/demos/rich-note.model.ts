@@ -26,6 +26,7 @@ type TextStyleModel = {
 
 export type PreparedRichInlineNote = {
   classNames: string[]
+  direction: 'ltr' | 'rtl'
   flow: PreparedRichInline
   fonts: string[]
   hrefs: Array<string | null>
@@ -34,8 +35,9 @@ export type PreparedRichInlineNote = {
 export type RichLineFragment = {
   className: string
   font: string
+  gapItemIndex: number // the item whose collapsed space precedes it on its line, or -1
   href: string | null
-  leadingGap: number
+  itemIndex: number
   text: string
 }
 
@@ -45,6 +47,7 @@ export type RichLine = {
 
 export type RichNoteLayout = {
   bodyWidth: number
+  direction: 'ltr' | 'rtl'
   lineCount: number
   lines: RichLine[]
   noteBodyHeight: number
@@ -63,12 +66,21 @@ export const LAST_LINE_BLOCK_HEIGHT = 24
 // an inset shadow, so the padding is all the width the card adds to the body.
 export const NOTE_PADDING_X = 20
 export const NARROW_NOTE_PADDING_X = 14
-export const NARROW_VIEWPORT_WIDTH = 640 // the page's other narrow styles start here too
+// The page's other narrow styles use the same media query. The page asks it
+// instead of comparing clientWidth with 640: a media query counts a classic
+// scrollbar and clientWidth doesn't, so the two would disagree by its width.
+export const NARROW_VIEWPORT_QUERY = '(max-width: 640px)'
 export const BODY_MIN_WIDTH = 260
 export const BODY_DEFAULT_WIDTH = 516
 export const BODY_MAX_WIDTH = 760
 export const PAGE_MARGIN = 28
 export const CHIP_CHROME_WIDTH = 22
+// A note takes the direction of its first strong character, the way HTML
+// dir=auto reads text. Scripts stand in for bidi classes: letters of these
+// right-to-left scripts, RLM and ALM count as right-to-left, and any other
+// letter, spacing mark or LRM as left-to-right.
+const STRONG_CHARACTER = /[\p{L}\p{Mc}\u200E\u200F\u061C]/u
+const RIGHT_TO_LEFT_CHARACTER = /[\p{Script=Hebrew}\p{Script=Arabic}\p{Script=Syriac}\p{Script=Thaana}\p{Script=Nko}\p{Script=Samaritan}\p{Script=Mandaic}\p{Script=Adlam}\p{Script=Hanifi_Rohingya}\u200F\u061C]/u
 
 export const TEXT_STYLES = {
   body: {
@@ -156,7 +168,21 @@ export function prepareRichInlineNote(
   })
 
   // The painter reads each item's font from the items Pretext measured.
-  return { classNames, flow: prepareRichInline(items), fonts: items.map(item => item.font), hrefs }
+  return {
+    classNames,
+    direction: resolveDirection(items),
+    flow: prepareRichInline(items),
+    fonts: items.map(item => item.font),
+    hrefs,
+  }
+}
+
+function resolveDirection(items: readonly RichInlineItem[]): 'ltr' | 'rtl' {
+  for (let index = 0; index < items.length; index++) {
+    const strong = STRONG_CHARACTER.exec(items[index]!.text)
+    if (strong !== null) return RIGHT_TO_LEFT_CHARACTER.test(strong[0]) ? 'rtl' : 'ltr'
+  }
+  return 'ltr'
 }
 
 export function layoutRichInlineItems(
@@ -170,8 +196,9 @@ export function layoutRichInlineItems(
       fragments: line.fragments.map(fragment => ({
         className: prepared.classNames[fragment.itemIndex]!,
         font: prepared.fonts[fragment.itemIndex]!,
+        gapItemIndex: fragment.gapItemIndex,
         href: prepared.hrefs[fragment.itemIndex] ?? null,
-        leadingGap: fragment.gapBefore,
+        itemIndex: fragment.itemIndex,
         text: fragment.text,
       })),
     })
@@ -181,13 +208,14 @@ export function layoutRichInlineItems(
 
 export function resolveRichNoteBodyWidth(
   viewportWidth: number,
+  narrowViewport: boolean,
   requestedWidth: number,
 ): {
   bodyWidth: number
   maxBodyWidth: number
   notePaddingX: number
 } {
-  const notePaddingX = viewportWidth <= NARROW_VIEWPORT_WIDTH ? NARROW_NOTE_PADDING_X : NOTE_PADDING_X
+  const notePaddingX = narrowViewport ? NARROW_NOTE_PADDING_X : NOTE_PADDING_X
   const maxBodyWidth = Math.max(
     BODY_MIN_WIDTH,
     Math.min(BODY_MAX_WIDTH, viewportWidth - PAGE_MARGIN * 2 - notePaddingX * 2),
@@ -209,6 +237,7 @@ export function layoutRichNote(
 
   return {
     bodyWidth,
+    direction: prepared.direction,
     lineCount,
     lines,
     noteBodyHeight:

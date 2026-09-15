@@ -1,12 +1,15 @@
 import {
   BODY_DEFAULT_WIDTH,
+  BODY_FONT,
   BODY_MIN_WIDTH,
   DEFAULT_RICH_NOTE_SPECS,
   prepareRichInlineNote,
   layoutRichNote,
   LINE_HEIGHT,
+  NARROW_VIEWPORT_QUERY,
   resolveRichNoteBodyWidth,
-  type RichLine,
+  type PreparedRichInlineNote,
+  type RichNoteLayout,
 } from './rich-note.model.ts'
 
 type State = {
@@ -18,6 +21,7 @@ type State = {
 
 const domCache = {
   root: document.documentElement, // cache lifetime: page
+  narrowViewport: window.matchMedia(NARROW_VIEWPORT_QUERY), // cache lifetime: page
   noteBody: getRequiredDiv('note-body'), // cache lifetime: page
   widthSlider: getRequiredInput('width-slider'), // cache lifetime: page
   widthValue: getRequiredSpan('width-value'), // cache lifetime: page
@@ -69,30 +73,33 @@ function scheduleRender(): void {
   })
 }
 
-function renderBody(lines: RichLine[]): void {
+function renderBody(note: PreparedRichInlineNote, layout: RichNoteLayout): void {
   domCache.noteBody.textContent = ''
   const fragment = document.createDocumentFragment()
 
-  for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
-    const line = lines[lineIndex]!
+  for (let lineIndex = 0; lineIndex < layout.lines.length; lineIndex++) {
+    const line = layout.lines[lineIndex]!
+    // Each Pretext line is one line box, so the browser orders its bidi runs.
+    // The body font sets the baseline.
     const row = document.createElement('div')
     row.className = 'line-row'
+    row.dir = layout.direction
+    row.style.setProperty('--font', BODY_FONT)
     row.style.top = `${lineIndex * LINE_HEIGHT}px`
 
     for (let fragmentIndex = 0; fragmentIndex < line.fragments.length; fragmentIndex++) {
       const part = line.fragments[fragmentIndex]!
-      const element = part.href === null
-        ? document.createElement('span')
-        : document.createElement('a')
-      element.className = part.className
-      // Paint with the font the item was measured with.
-      element.style.setProperty('--font', part.font)
-      element.textContent = part.text
-      if (part.leadingGap > 0) element.style.marginLeft = `${part.leadingGap}px`
-      if (element instanceof HTMLAnchorElement && part.href !== null) {
-        element.href = part.href
-        element.target = '_blank'
-        element.rel = 'noreferrer'
+      const element = renderPart(part.className, part.font, part.href, part.text)
+      // A collapsed space paints inside the element of the item whose font
+      // measured it: this fragment's, the previous fragment's, or, for an item
+      // holding only whitespace, an element of its own.
+      const gapItemIndex = part.gapItemIndex
+      if (gapItemIndex === part.itemIndex) {
+        element.prepend(' ')
+      } else if (gapItemIndex >= 0 && gapItemIndex === line.fragments[fragmentIndex - 1]?.itemIndex) {
+        row.lastElementChild!.append(' ')
+      } else if (gapItemIndex >= 0) {
+        row.appendChild(renderPart(note.classNames[gapItemIndex]!, note.fonts[gapItemIndex]!, note.hrefs[gapItemIndex] ?? null, ' '))
       }
       row.appendChild(element)
     }
@@ -103,16 +110,35 @@ function renderBody(lines: RichLine[]): void {
   domCache.noteBody.appendChild(fragment)
 }
 
+function renderPart(className: string, font: string, href: string | null, text: string): HTMLElement {
+  const element = href === null
+    ? document.createElement('span')
+    : document.createElement('a')
+  element.className = className
+  // Paint with the font the item was measured with.
+  element.style.setProperty('--font', font)
+  element.textContent = text
+  if (element instanceof HTMLAnchorElement && href !== null) {
+    element.href = href
+    element.target = '_blank'
+    element.rel = 'noreferrer'
+  }
+  return element
+}
+
 function render(): void {
   // DOM reads
-  const viewportWidth = document.documentElement.clientWidth
+  // Chrome's root clientWidth ignores an empty gutter. body has no margin,
+  // border or padding, so its clientWidth is the room the page lays out in.
+  const viewportWidth = document.body.clientWidth
+  const narrowViewport = domCache.narrowViewport.matches
 
   // Handle inputs
   let requestedWidth = st.requestedWidth
   if (st.events.sliderValue !== null) requestedWidth = st.events.sliderValue
 
   // Layout
-  const { bodyWidth, maxBodyWidth, notePaddingX } = resolveRichNoteBodyWidth(viewportWidth, requestedWidth)
+  const { bodyWidth, maxBodyWidth, notePaddingX } = resolveRichNoteBodyWidth(viewportWidth, narrowViewport, requestedWidth)
   const layout = layoutRichNote(richInline, bodyWidth, notePaddingX)
 
   // Commit state
@@ -129,5 +155,5 @@ function render(): void {
   domCache.root.style.setProperty('--note-content-width', `${bodyWidth}px`)
   domCache.noteBody.style.height = `${layout.noteBodyHeight}px`
 
-  renderBody(layout.lines)
+  renderBody(richInline, layout)
 }

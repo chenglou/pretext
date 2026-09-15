@@ -1,7 +1,6 @@
 import {
   computeBubbleRender,
   formatPixelCount,
-  getMaxChatWidth,
   prepareBubbleTexts,
 } from './bubbles-shared.ts'
 
@@ -13,10 +12,8 @@ type State = {
 }
 
 const domCache = {
-  root: document.documentElement,
   chatShrink: getRequiredDiv('chat-shrink'),
   slider: getRequiredInput('slider'),
-  valLabel: getRequiredSpan('val'),
   cssWaste: getRequiredSpan('css-waste'),
   shrinkWaste: getRequiredSpan('shrink-waste'),
 }
@@ -24,7 +21,7 @@ const domCache = {
 const shrinkNodes = getChatMessageNodes(domCache.chatShrink)
 const preparedBubbles = prepareBubbleTexts(shrinkNodes.map(readNodeText))
 const st: State = {
-  requestedChatWidth: getInitialChatWidth(),
+  requestedChatWidth: bubblesPage.defaultChatWidth,
   events: {
     sliderValue: null,
   },
@@ -64,13 +61,6 @@ function getRequiredSpan(id: string): HTMLSpanElement {
   return element
 }
 
-function getInitialChatWidth(): number {
-  const datasetValue = domCache.root.dataset['bubblesChatWidth']
-  const parsed = datasetValue === undefined ? Number.NaN : Number.parseInt(datasetValue, 10)
-  if (Number.isFinite(parsed)) return parsed
-  return Number.parseInt(domCache.slider.value, 10)
-}
-
 function getChatMessageNodes(chat: HTMLDivElement): HTMLDivElement[] {
   return Array.from(chat.querySelectorAll<HTMLDivElement>('.msg'))
 }
@@ -88,31 +78,22 @@ function scheduleRender(): void {
 }
 
 function render(): void {
-  const minWidth = Number.parseInt(domCache.slider.min, 10)
+  // The body's width, not the root's: see the geometry script in bubbles.html.
+  const viewportWidth = document.body.clientWidth
   let requestedChatWidth = st.requestedChatWidth
   if (st.events.sliderValue !== null) requestedChatWidth = st.events.sliderValue
-  const maxWidth = getMaxChatWidth(minWidth, document.documentElement.clientWidth)
-  const chatWidth = Math.min(requestedChatWidth, maxWidth)
+  const geometry = bubblesPage.getGeometry(viewportWidth, requestedChatWidth)
+  const renderState = computeBubbleRender(preparedBubbles, geometry.bubbleMaxWidth)
 
   st.requestedChatWidth = requestedChatWidth
   st.events.sliderValue = null
 
-  domCache.slider.max = String(maxWidth)
-  domCache.slider.value = String(chatWidth)
-  domCache.valLabel.textContent = `${chatWidth}px`
-  updateBubbles(chatWidth)
-}
-
-function updateBubbles(chatWidth: number): void {
-  const renderState = computeBubbleRender(preparedBubbles, chatWidth)
-  domCache.root.style.setProperty('--chat-width', `${renderState.chatWidth}px`)
-  domCache.root.style.setProperty('--bubble-max-width', `${renderState.bubbleMaxWidth}px`)
-
+  bubblesPage.paint(geometry)
   for (let index = 0; index < shrinkNodes.length; index++) {
     const shrinkNode = shrinkNodes[index]!
     const widths = renderState.widths[index]!
 
-    shrinkNode.style.maxWidth = `${renderState.bubbleMaxWidth}px`
+    shrinkNode.style.maxWidth = `${geometry.bubbleMaxWidth}px`
     shrinkNode.style.width = `${widths.tightWidth}px`
   }
 

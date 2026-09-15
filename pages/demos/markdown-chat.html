@@ -60,13 +60,15 @@
       min-height: 100%;
       margin: 0 auto;
     }
+    /* The chat is centered in the viewport's client width, which leaves out a
+       classic scrollbar's gutter. So the layer is as wide as the client width
+       the frame read, and the banners are centered in it like the chat. */
     .occlusion-layer {
       position: absolute;
       top: 0;
       bottom: 0;
-      left: 50%;
-      width: min(100%, var(--chat-width));
-      transform: translateX(-50%);
+      left: 0;
+      width: var(--chat-viewport-width, 100%);
       z-index: 4;
       pointer-events: none;
     }
@@ -74,6 +76,9 @@
       position: absolute;
       left: 0;
       right: 0;
+      /* Until the first frame, --chat-width is the 860px default above. */
+      width: min(100%, var(--chat-width));
+      margin-inline: auto;
       height: var(--occlusion-banner-height);
       background: var(--page);
       transition:
@@ -193,7 +198,9 @@
     }
     .inline-line {
       position: absolute;
-      white-space: pre;
+      /* Spaces collapse as in the text Pretext laid out, so a line that wraps
+         inside an item doesn't paint the space it ends on. */
+      white-space: nowrap;
       font: var(--font);
     }
     .frag {

@@ -1,4 +1,4 @@
-import { layout, prepare, type PreparedText } from '../../src/layout.ts'
+import { layout, prepare } from '../../src/layout.ts'
 
 type AccordionItem = {
   id: string
@@ -25,9 +25,21 @@ type State = {
 }
 
 type DomCache = {
+  page: HTMLElement
   list: HTMLElement
   items: AccordionItemDom[]
 }
+
+// Every value a panel's height depends on. The painter writes them inline, and CSS doesn't restate them.
+const COPY_FONT = '16px "Helvetica Neue", Helvetica, Arial, sans-serif'
+const COPY_LINE_HEIGHT = 26
+const COPY_PADDING_X = 20
+const COPY_PADDING_BOTTOM = 18
+const PAGE_MAX_WIDTH = 780
+const PAGE_MARGIN_X = 16
+const NARROW_PAGE_MARGIN_X = 10
+// At this width and below, the page takes the narrow margins and sets data-narrow for its other narrow styles.
+const NARROW_MAX_VIEWPORT_WIDTH = 640
 
 const items: AccordionItem[] = [
   {
@@ -56,6 +68,8 @@ const items: AccordionItem[] = [
   },
 ]
 
+const preparedItems = items.map(item => prepare(item.text, COPY_FONT))
+
 const st: State = {
   openItemId: 'shipping',
   events: {
@@ -64,11 +78,6 @@ const st: State = {
 }
 
 let domCache: DomCache | null = null
-
-const preparedCache = {
-  font: '',
-  items: [] as PreparedText[],
-}
 
 let scheduledRaf: number | null = null
 
@@ -118,25 +127,11 @@ function initializeStaticContent(): void {
     itemDom.root.dataset['id'] = item.id
     itemDom.toggle.dataset['id'] = item.id
     itemDom.title.textContent = item.title
+    itemDom.inner.style.padding = `0 ${COPY_PADDING_X}px ${COPY_PADDING_BOTTOM}px`
+    itemDom.copy.style.font = COPY_FONT
+    itemDom.copy.style.lineHeight = `${COPY_LINE_HEIGHT}px`
     itemDom.copy.textContent = item.text
   }
-}
-
-function parsePx(value: string): number {
-  const parsed = Number.parseFloat(value)
-  return Number.isFinite(parsed) ? parsed : 0
-}
-
-function getFontFromStyles(styles: CSSStyleDeclaration): string {
-  return styles.font.length > 0
-    ? styles.font
-    : `${styles.fontStyle} ${styles.fontVariant} ${styles.fontWeight} ${styles.fontSize} / ${styles.lineHeight} ${styles.fontFamily}`
-}
-
-function refreshPrepared(font: string): void {
-  if (preparedCache.font === font) return
-  preparedCache.font = font
-  preparedCache.items = items.map(item => prepare(item.text, font))
 }
 
 function scheduleRender(): void {
@@ -151,6 +146,7 @@ function scheduleRender(): void {
 function boot(): void {
   const list = getRequiredElement('list')
   domCache = {
+    page: getRequiredChild(document.body, '.page', HTMLElement),
     list,
     items: getAccordionItemNodes(list),
   }
@@ -183,35 +179,37 @@ function boot(): void {
 
 function render(_now: number): boolean {
   if (domCache === null) return false
-  const firstCopy = domCache.items[0]?.copy
-  const firstInner = domCache.items[0]?.inner
-  if (firstCopy === undefined || firstInner === undefined) return false
 
-  const copyStyles = getComputedStyle(firstCopy)
-  const innerStyles = getComputedStyle(firstInner)
-  const font = getFontFromStyles(copyStyles)
-  const lineHeight = parsePx(copyStyles.lineHeight)
-  const contentWidth = firstCopy.getBoundingClientRect().width
-  const paddingY = parsePx(innerStyles.paddingTop) + parsePx(innerStyles.paddingBottom)
+  // DOM reads
+  // body.clientWidth leaves out the scrollbar gutter. Chrome's documentElement.clientWidth includes
+  // the gutter while the page doesn't overflow.
+  const viewportWidth = document.body.clientWidth
 
   let openItemId = st.openItemId
   if (st.events.clickedItemId !== null) {
     openItemId = openItemId === st.events.clickedItemId ? null : st.events.clickedItemId
   }
 
-  refreshPrepared(font)
+  // Layout
+  const narrow = viewportWidth <= NARROW_MAX_VIEWPORT_WIDTH
+  const pageWidth = Math.min(PAGE_MAX_WIDTH, viewportWidth - (narrow ? NARROW_PAGE_MARGIN_X : PAGE_MARGIN_X) * 2)
+  const copyWidth = pageWidth - COPY_PADDING_X * 2
 
   const panelHeights: number[] = []
   const panelMeta: string[] = []
   for (let index = 0; index < items.length; index++) {
-    const metrics = layout(preparedCache.items[index]!, contentWidth, lineHeight)
-    panelHeights.push(Math.ceil(metrics.height + paddingY))
+    const metrics = layout(preparedItems[index]!, copyWidth, COPY_LINE_HEIGHT)
+    panelHeights.push(metrics.height + COPY_PADDING_BOTTOM)
     panelMeta.push(`Measurement: ${metrics.lineCount} lines · ${Math.round(metrics.height)}px`)
   }
 
   st.openItemId = openItemId
   st.events.clickedItemId = null
 
+  // DOM writes
+  domCache.page.style.width = `${pageWidth}px`
+  domCache.page.toggleAttribute('data-narrow', narrow)
+  domCache.page.toggleAttribute('data-ready', true)
   for (let index = 0; index < items.length; index++) {
     const item = items[index]!
     const itemDom = domCache.items[index]!

@@ -5,7 +5,6 @@
 // Browser measurement limitations are documented in README.md and PLATFORM_BUGS.md.
 // Based on Sebastian Markbage's text-layout research (github.com/chenglou/text-layout).
 
-import { classifyCodePoint, isBidiPairedBracket } from './bidi.js'
 import { observeSegmentEntries, type SegmentEntryGeometry } from './entry-geometry.js'
 import {
   analyzeText,
@@ -105,13 +104,13 @@ export type LineStats = {
 
 export type LayoutLine = {
   text: string // Full text content of this line, e.g. 'hello world'
-  width: number // Measured width of this line, e.g. 87.5
+  width: number // Measured width of this line, e.g. 87.5, leaving out spaces and tabs that hang past its end
   start: LayoutCursor // Inclusive start cursor in prepared segments/graphemes
   end: LayoutCursor // Exclusive end cursor in prepared segments/graphemes
 }
 
 export type LayoutLineRange = {
-  width: number // Measured width of this line, e.g. 87.5
+  width: number // Measured width of this line, e.g. 87.5, leaving out spaces and tabs that hang past its end
   start: LayoutCursor // Inclusive start cursor in prepared segments/graphemes
   end: LayoutCursor // Exclusive end cursor in prepared segments/graphemes
 }
@@ -231,14 +230,21 @@ function isCollapsibleWhitespaceCode(code: number): boolean {
 }
 
 const explicitBidiControlRe = /[\u202A-\u202E\u2066-\u2069]/
+// Format characters stand for bidi class BN, except the direction marks LRM,
+// RLM and ALM, which are strong characters like letters.
+const trailingFormatCharacterRe = /(?![\u200E\u200F\u061C])\p{Cf}$/u
+// Letters in the right-to-left blocks have bidi class R or AL, as do RLM and
+// ALM. Every other letter except modifier letters has class L, as does LRM.
+const rightToLeftLetterRe = /[\u0590-\u08FF\uFB1D-\uFDFF\uFE70-\uFEFF\u200F\u{10800}-\u{10FFF}\u{1E800}-\u{1EFFF}]/u
+// The last letter or direction mark before format characters other than a soft
+// hyphen, and the first letter, direction mark or ASCII digit after the space,
+// past spaces and format characters.
+const letterBeforeFormatTailRe = /([\p{Lu}\p{Ll}\p{Lt}\p{Lo}\u200E\u200F\u061C])\p{M}*(?:(?![\u00AD\u200E\u200F\u061C])\p{Cf})+$/u
+const letterAfterSpacesRe = / (?: |(?![\u200E\u200F\u061C])\p{Cf})*([0-9\p{Lu}\p{Ll}\p{Lt}\p{Lo}\u200E\u200F\u061C])/uy
 
-function previousCodePointStart(text: string, end: number): number {
-  const low = text.charCodeAt(end - 1)
-  if (end >= 2 && low >= 0xdc00 && low <= 0xdfff) {
-    const high = text.charCodeAt(end - 2)
-    if (high >= 0xd800 && high <= 0xdbff) return end - 2
-  }
-  return end - 1
+// Bidi class B: the characters that end a bidi paragraph.
+function isParagraphSeparatorCode(code: number): boolean {
+  return code === 0x0a || code === 0x0d || (code >= 0x1c && code <= 0x1e) || code === 0x85 || code === 0x2029
 }
 
 function measureAnalysis(
@@ -334,14 +340,12 @@ function measureAnalysis(
   }
 
   // WebKit splits text items where resolved bidi levels change before it
-  // measures them. Format characters (class BN) between a word and the space
-  // resolve with that space, so they stay in the word's item, and the word's
-  // last glyph keeps its kerning with the space, only when the space resolves
-  // to the word's direction. Without the paragraph direction that is known
-  // when the neutral run holding the space has the word's direction on both
-  // sides (N1, with W7 turning European digits after Latin text into L). A
-  // paired bracket in that run can take the paragraph direction instead (N0),
-  // so it leaves the direction unknown.
+  // measures them. Format characters between a word and the space resolve with
+  // that space, so they stay in the word's item, and the word's last glyph keeps
+  // its kerning with the space, only when the space resolves to the word's
+  // direction. Without the paragraph direction that is known when the word's last
+  // letter or direction mark and the first one after the space have the same
+  // direction, with only spaces and format characters between (UAX #9 N1).
   // Explicit embeddings, overrides and isolates end with their paragraph (UAX #9
   // X8), so only controls in the space's own paragraph leave its direction
   // unknown. Spaces arrive in order, so each paragraph is scanned once.
@@ -354,80 +358,24 @@ function measureAnalysis(
     if (spaceStart < controlParagraphEnd) return paragraphHasExplicitBidiControls
     const text = analysis.normalized
     let start = spaceStart
-    while (start > 0 && classifyCodePoint(text.charCodeAt(start - 1)) !== 'B') start--
+    while (start > 0 && !isParagraphSeparatorCode(text.charCodeAt(start - 1))) start--
     let end = spaceStart
-    while (end < text.length && classifyCodePoint(text.charCodeAt(end)) !== 'B') end++
+    while (end < text.length && !isParagraphSeparatorCode(text.charCodeAt(end))) end++
     controlParagraphEnd = end
     paragraphHasExplicitBidiControls = explicitBidiControlRe.test(text.slice(start, end))
     return paragraphHasExplicitBidiControls
   }
   function formatTailStaysWithWord(item: string, spaceStart: number): boolean {
-    let end = item.length
-    while (end > 0) {
-      const start = previousCodePointStart(item, end)
-      const codePoint = item.codePointAt(start)!
-      if (classifyCodePoint(codePoint) !== 'BN') break
-      if (codePoint === 0xad) return false
-      end = start
-    }
-    if (end === item.length) return true
-    if (spaceParagraphHasExplicitBidiControls(spaceStart)) return false
-    let wordType: ReturnType<typeof classifyCodePoint> | null = null
-    while (end > 0) {
-      const start = previousCodePointStart(item, end)
-      const codePoint = item.codePointAt(start)!
-      const type = classifyCodePoint(codePoint)
-      if (type !== 'NSM') {
-        if (type === 'ON' && isBidiPairedBracket(codePoint)) return false
-        wordType = type
-        break
-      }
-      end = start
-    }
-    if (wordType !== 'L' && wordType !== 'R' && wordType !== 'AL' && wordType !== 'ON') return false
-    const nextType = getDecisiveTypeAfterSpace(spaceStart)
-    if (nextType === null) return false
-    switch (wordType) {
-      case 'ON': return true
-      case 'L': return nextType === 'L' || nextType === 'EN'
-      default: return nextType !== 'L'
-    }
-  }
-
-  // The first character after a space that decides the space's direction:
-  // L, R (with AL), EN or AN, or null for a paired bracket, a separator, or the
-  // end of the text. Every character before the stop is skipped, so a later
-  // start inside the scanned range reaches the same stop. Segments arrive in
-  // order, which keeps the scans linear in the text.
-  let decisiveScanStart = -1
-  let decisiveScanStop = -1
-  let decisiveType: 'L' | 'R' | 'EN' | 'AN' | null = null
-  function getDecisiveTypeAfterSpace(spaceStart: number): 'L' | 'R' | 'EN' | 'AN' | null {
-    if (decisiveScanStart <= spaceStart && spaceStart <= decisiveScanStop) return decisiveType
-    const text = analysis.normalized
-    let i = spaceStart
-    let type: 'L' | 'R' | 'EN' | 'AN' | null = null
-    while (i < text.length) {
-      const codePoint = text.codePointAt(i)!
-      const bidiType = classifyCodePoint(codePoint)
-      if (bidiType === 'L' || bidiType === 'EN' || bidiType === 'AN') {
-        type = bidiType
-        break
-      }
-      if (bidiType === 'R' || bidiType === 'AL') {
-        type = 'R'
-        break
-      }
-      const skipped = bidiType === 'ON'
-        ? !isBidiPairedBracket(codePoint)
-        : bidiType === 'WS' || bidiType === 'BN' || bidiType === 'NSM' || bidiType === 'ET' || bidiType === 'ES' || bidiType === 'CS'
-      if (!skipped) break
-      i += codePoint > 0xffff ? 2 : 1
-    }
-    decisiveScanStart = spaceStart
-    decisiveScanStop = i
-    decisiveType = type
-    return type
+    if (!trailingFormatCharacterRe.test(item)) return true
+    const before = letterBeforeFormatTailRe.exec(item)
+    if (before === null) return false
+    letterAfterSpacesRe.lastIndex = spaceStart
+    const after = letterAfterSpacesRe.exec(analysis.normalized)
+    if (after === null) return false
+    // An ASCII digit takes the direction of the text before it (UAX #9 W7 and N1).
+    const next = after[1]!
+    return (next.charCodeAt(0) <= 0x39 || rightToLeftLetterRe.test(before[1]!) === rightToLeftLetterRe.test(next)) &&
+      !spaceParagraphHasExplicitBidiControls(spaceStart)
   }
 
   const widths: number[] = []

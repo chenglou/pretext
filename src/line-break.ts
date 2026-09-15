@@ -63,6 +63,13 @@ export function breaksAfter(kind: SegmentBreakKind): boolean {
   )
 }
 
+// Preserved spaces and tabs at the end of a line hang past it (CSS Text 3
+// §4.1.2), so they take no room when fitting and don't size the line (§8.2).
+// Gecko doesn't hang tabs.
+function isHangingWhiteSpace(kind: SegmentBreakKind, hangTabs: boolean): boolean {
+  return kind === 'preserved-space' || (hangTabs && kind === 'tab')
+}
+
 function normalizeLineStartSegmentIndex(
   prepared: PreparedLineBreakData,
   segmentIndex: number,
@@ -115,16 +122,6 @@ function getWholeSegmentFitContribution(
 ): number {
   if (breakAfter ? kind !== 'tab' : segmentWidth === 0 && kind !== 'control') return 0
   return getLineEndContribution(leadingSpacing, segmentWidth + getTrailingLetterSpacing(prepared, segmentIndex))
-}
-
-// A line that ends after a collapsible space or a zero-width break paints none
-// of it. The walker handles soft hyphens before this.
-function getLineEndPaintContribution(
-  kind: SegmentBreakKind,
-  leadingSpacing: number,
-  segmentWidth: number,
-): number {
-  return kind === 'space' || kind === 'zero-width-break' ? 0 : getLineEndContribution(leadingSpacing, segmentWidth)
 }
 
 function getBreakableGraphemeAdvance(
@@ -182,6 +179,15 @@ function getTerminalLetterSpacing(
   }
 
   if (isDiscretionaryLineEnd(prepared.kinds, endSegmentIndex, endGraphemeIndex)) return 0
+  // A run of preserved spaces and tabs that hangs where the line wraps already
+  // charged the gap after the glyph before it.
+  if (
+    endSegmentIndex < prepared.kinds.length &&
+    prepared.kinds[endSegmentIndex] !== 'hard-break' &&
+    isHangingWhiteSpace(prepared.kinds[endSegmentIndex - 1]!, getEngineProfile().hangTabs)
+  ) {
+    return 0
+  }
 
   for (let i = endSegmentIndex - 1; i >= startSegmentIndex; i--) {
     const kind = prepared.kinds[i]!
@@ -562,8 +568,10 @@ function walkPreparedComplexLines(
   } = prepared
   const engineProfile = getEngineProfile()
   const lineFitEpsilon = engineProfile.lineFitEpsilon
+  const hangTabs = engineProfile.hangTabs
   // A negative width lays out as 0, as in the simple walker.
-  const fitLimit = Math.max(0, maxWidth) + lineFitEpsilon
+  const availableWidth = Math.max(0, maxWidth)
+  const fitLimit = availableWidth + lineFitEpsilon
   // Preparation records soft-hyphen contexts only where the engine retreats
   // and the text has a soft hyphen; hand-built handles may omit them.
   const discretionaryHyphenContexts = prepared.discretionaryHyphenContexts ?? null
@@ -577,8 +585,8 @@ function walkPreparedComplexLines(
   let lineEndSegmentIndex: number
   let lineEndGraphemeIndex: number
   let pendingBreakSegmentIndex: number
-  let pendingBreakFitWidth: number
-  let pendingBreakPaintWidth: number
+  // A line that ends at the pending break both fits and paints this width.
+  let pendingBreakWidth: number
   let pendingBreakKind: SegmentBreakKind | null
   // The latest opportunity whose line leaves room for the hyphen, which Blink's
   // retry against the width minus the hyphen returns to when a selected
@@ -588,6 +596,10 @@ function walkPreparedComplexLines(
   // The last whole segment appended after other line content, and its advance.
   let appendedSegmentIndex: number
   let appendedSegmentAdvance = 0
+  // The latest run of preserved spaces and tabs: the segment after it, and the
+  // line's width before it, with the gap after the glyph before it.
+  let hangEndSegmentIndex: number
+  let hangStartWidth = 0
 
   function getCurrentLinePaintWidth(): number {
     return (
@@ -595,7 +607,7 @@ function walkPreparedComplexLines(
       pendingBreakSegmentIndex === lineEndSegmentIndex &&
       lineEndGraphemeIndex === 0
     )
-      ? pendingBreakPaintWidth
+      ? pendingBreakWidth
       : lineW
   }
 
@@ -607,14 +619,22 @@ function walkPreparedComplexLines(
     if (!hasContent) return null
     cursor.segmentIndex = endSegmentIndex
     cursor.graphemeIndex = endGraphemeIndex
-    return finalizeLinePaintWidth(
+    // Preserved spaces and tabs before a hard break or the end of the text
+    // hang only where they don't fit (CSS Text 3 §8.2).
+    const hangsWhereUnfit =
+      endGraphemeIndex === 0 &&
+      hangEndSegmentIndex >= 0 &&
+      (endSegmentIndex === hangEndSegmentIndex || endSegmentIndex === hangEndSegmentIndex + 1) &&
+      (hangEndSegmentIndex === kinds.length || kinds[hangEndSegmentIndex] === 'hard-break')
+    const paintWidth = finalizeLinePaintWidth(
       prepared,
-      width,
+      hangsWhereUnfit ? lineW : width,
       lineStartSegmentIndex,
       lineStartGraphemeIndex,
       endSegmentIndex,
       endGraphemeIndex,
     )
+    return hangsWhereUnfit ? Math.max(hangStartWidth, Math.min(paintWidth, availableWidth)) : paintWidth
   }
 
   // A line that would end at a selected discretionary hyphen that does not fit
@@ -626,7 +646,7 @@ function walkPreparedComplexLines(
       pendingBreakKind !== 'soft-hyphen' ||
       pendingBreakSegmentIndex !== lineEndSegmentIndex ||
       lineEndGraphemeIndex !== 0 ||
-      pendingBreakFitWidth <= fitLimit ||
+      pendingBreakWidth <= fitLimit ||
       !canReturnFromUnfitHyphen(
         prepared,
         discretionaryHyphenContexts!,
@@ -668,16 +688,13 @@ function walkPreparedComplexLines(
     kind: SegmentBreakKind,
     breakAfter: boolean,
     segmentIndex: number,
-    segmentWidth: number,
-    leadingSpacing: number,
     advance: number,
   ): void {
     if (!breakAfter) return
-    const paintAdvance = getLineEndPaintContribution(kind, leadingSpacing, segmentWidth)
     pendingBreakSegmentIndex = segmentIndex + 1
-    // The break segment hangs with the gap before it.
-    pendingBreakFitWidth = lineW - advance
-    pendingBreakPaintWidth = lineW - advance + paintAdvance
+    // The break segment hangs with the gap before it, a run of preserved spaces
+    // and tabs hangs whole, and a tab that doesn't hang counts whole.
+    pendingBreakWidth = isHangingWhiteSpace(kind, hangTabs) ? hangStartWidth : kind === 'tab' ? lineW : lineW - advance
     pendingBreakKind = kind
   }
 
@@ -771,12 +788,12 @@ function walkPreparedComplexLines(
     lineEndSegmentIndex = cursor.segmentIndex
     lineEndGraphemeIndex = cursor.graphemeIndex
     pendingBreakSegmentIndex = -1
-    pendingBreakFitWidth = 0
-    pendingBreakPaintWidth = 0
+    pendingBreakWidth = 0
     pendingBreakKind = null
     fitBreakSegmentIndex = -1
     fitBreakPaintWidth = 0
     appendedSegmentIndex = -1
+    hangEndSegmentIndex = -1
     // Retained line-start ZWSP establishes the line without owning a spacing gap.
     let zeroWidthPrefix = true
     let afterUnspacedControl = false
@@ -817,13 +834,12 @@ function walkPreparedComplexLines(
             lineEndGraphemeIndex = 0
             if (i + 1 < chunk.endSegmentIndex) {
               pendingBreakSegmentIndex = i + 1
-              pendingBreakFitWidth = lineW + discretionaryHyphenWidth
-              pendingBreakPaintWidth = lineW + discretionaryHyphenWidth
+              pendingBreakWidth = lineW + discretionaryHyphenWidth
               pendingBreakKind = kind
               // A soft hyphen's fit already includes its own hyphen.
-              if (retreatsFromUnfitHyphen && pendingBreakFitWidth <= fitLimit) {
+              if (retreatsFromUnfitHyphen && pendingBreakWidth <= fitLimit) {
                 fitBreakSegmentIndex = pendingBreakSegmentIndex
-                fitBreakPaintWidth = pendingBreakPaintWidth
+                fitBreakPaintWidth = pendingBreakWidth
               }
             }
           }
@@ -831,6 +847,11 @@ function walkPreparedComplexLines(
         }
 
         const fitAdvance = getWholeSegmentFitContribution(prepared, kind, breakAfter, i, leadingSpacing, w)
+        const hangs = breakAfter && isHangingWhiteSpace(kind, hangTabs)
+        if (hangs) {
+          if (hangEndSegmentIndex !== i) hangStartWidth = lineW + leadingSpacing
+          hangEndSegmentIndex = i + 1
+        }
         if (!hasContent) {
           if (startGraphemeIndex > 0) {
             const line = appendBreakableSegmentFrom(i, startGraphemeIndex)
@@ -847,15 +868,16 @@ function walkPreparedComplexLines(
           } else {
             startLineAtSegment(i, w)
           }
-          updatePendingBreakForWholeSegment(kind, breakAfter, i, w, leadingSpacing, advance)
-          if (retreatsFromUnfitHyphen && breakAfter && pendingBreakFitWidth + discretionaryHyphenWidth <= fitLimit) {
+          updatePendingBreakForWholeSegment(kind, breakAfter, i, advance)
+          if (retreatsFromUnfitHyphen && breakAfter && pendingBreakWidth + discretionaryHyphenWidth <= fitLimit) {
             fitBreakSegmentIndex = pendingBreakSegmentIndex
-            fitBreakPaintWidth = pendingBreakPaintWidth
+            fitBreakPaintWidth = pendingBreakWidth
           }
           continue
         }
 
-        const newFitW = lineW + fitAdvance
+        // A run of preserved spaces and tabs fits where the text before it fits.
+        const newFitW = hangs ? hangStartWidth : lineW + fitAdvance
         if (newFitW > fitLimit) {
           // UAX #14 LB6: no ordinary break before NEL. The line ends before the
           // text or glue that NEL follows instead. When that content started
@@ -870,13 +892,13 @@ function walkPreparedComplexLines(
           // the simple walker does; a preserved space there starts the next line.
           if (breakAfter && (lineW <= fitLimit ||
             (pendingBreakSegmentIndex < 0 && (kind === 'space' || kind === 'zero-width-break')))) {
-            const currentBreakPaintWidth = lineW + getLineEndPaintContribution(kind, leadingSpacing, w)
+            const currentBreakWidth = hangs ? hangStartWidth : kind === 'tab' ? lineW + advance : lineW
             appendWholeSegment(i, advance)
-            lineWidth = finishLine(i + 1, 0, currentBreakPaintWidth)
+            lineWidth = finishLine(i + 1, 0, currentBreakWidth)
             break lineLoop
           }
 
-          if (pendingBreakSegmentIndex >= 0 && pendingBreakFitWidth <= fitLimit) {
+          if (pendingBreakSegmentIndex >= 0 && pendingBreakWidth <= fitLimit) {
             if (
               lineEndSegmentIndex > pendingBreakSegmentIndex ||
               (lineEndSegmentIndex === pendingBreakSegmentIndex && lineEndGraphemeIndex > 0)
@@ -884,7 +906,7 @@ function walkPreparedComplexLines(
               lineWidth = finishLine()
               break lineLoop
             }
-            lineWidth = finishLine(pendingBreakSegmentIndex, 0, pendingBreakPaintWidth)
+            lineWidth = finishLine(pendingBreakSegmentIndex, 0, pendingBreakWidth)
             break lineLoop
           }
 
@@ -893,10 +915,10 @@ function walkPreparedComplexLines(
         }
 
         appendWholeSegment(i, advance)
-        updatePendingBreakForWholeSegment(kind, breakAfter, i, w, leadingSpacing, advance)
-        if (retreatsFromUnfitHyphen && breakAfter && pendingBreakFitWidth + discretionaryHyphenWidth <= fitLimit) {
+        updatePendingBreakForWholeSegment(kind, breakAfter, i, advance)
+        if (retreatsFromUnfitHyphen && breakAfter && pendingBreakWidth + discretionaryHyphenWidth <= fitLimit) {
           fitBreakSegmentIndex = pendingBreakSegmentIndex
-          fitBreakPaintWidth = pendingBreakPaintWidth
+          fitBreakPaintWidth = pendingBreakWidth
         }
         appendedSegmentIndex = i
         appendedSegmentAdvance = advance
@@ -922,11 +944,11 @@ function walkPreparedComplexLines(
             lineWidth = finishLine(endSegmentLimit, endGraphemeLimit, lineW)
           } else if (
             pendingBreakSegmentIndex >= 0 &&
-            pendingBreakFitWidth <= fitLimit &&
+            pendingBreakWidth <= fitLimit &&
             lineEndSegmentIndex === pendingBreakSegmentIndex &&
             lineEndGraphemeIndex === 0
           ) {
-            lineWidth = finishLine(pendingBreakSegmentIndex, 0, pendingBreakPaintWidth)
+            lineWidth = finishLine(pendingBreakSegmentIndex, 0, pendingBreakWidth)
           } else {
             lineWidth = finishLineBeforeUnfitHyphen() ?? finishLine()
           }
@@ -936,7 +958,7 @@ function walkPreparedComplexLines(
       // a line that ends there at an unfit selected hyphen returns as well.
       if (lineWidth === null) {
         lineWidth = pendingBreakSegmentIndex === consumedEndSegmentIndex && lineEndGraphemeIndex === 0
-          ? finishLineBeforeUnfitHyphen() ?? finishLine(consumedEndSegmentIndex, 0, pendingBreakPaintWidth)
+          ? finishLineBeforeUnfitHyphen() ?? finishLine(consumedEndSegmentIndex, 0, pendingBreakWidth)
           : finishLine(consumedEndSegmentIndex, 0, lineW)
       }
     }

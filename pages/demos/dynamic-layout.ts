@@ -38,12 +38,16 @@ import {
 } from './wrap-geometry.ts'
 
 const BODY_FONT = '20px "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Palatino, serif'
+const BODY_LETTER_SPACING = 0.04 // 0.002em at 20px
 const BODY_LINE_HEIGHT = 32
-const CREDIT_TEXT = 'Leopold Aschenbrenner'
+const CREDIT_TEXT = 'LEOPOLD ASCHENBRENNER'
 const CREDIT_FONT = '12px "Helvetica Neue", Helvetica, Arial, sans-serif'
+const CREDIT_LETTER_SPACING = 1.68 // 0.14em at 12px
+const NARROW_CREDIT_LETTER_SPACING = 1.44 // 0.12em at 12px
 const CREDIT_LINE_HEIGHT = 16
 const HEADLINE_TEXT = 'SITUATIONAL AWARENESS: THE DECADE AHEAD'
 const HEADLINE_FONT_FAMILY = '"Iowan Old Style", "Palatino Linotype", "Book Antiqua", Palatino, serif'
+const HEADLINE_LETTER_SPACING = 0
 const HINT_PILL_SAFE_TOP = 72
 const NARROW_BREAKPOINT = 760
 const NARROW_COLUMN_MAX_WIDTH = 430
@@ -90,9 +94,11 @@ type TextProjection = {
   headlineFont: string
   headlineLineHeight: number
   headlineLines: PositionedLine[]
-  creditLeft: number
+  creditLeft: number | null
   creditTop: number
+  creditLetterSpacing: number
   bodyFont: string
+  bodyLetterSpacing: number
   bodyLineHeight: number
   bodyLines: ProjectedBodyLine[]
 }
@@ -122,6 +128,7 @@ type PageLayout = {
   headlineFont: string
   headlineLineHeight: number
   creditGap: number
+  creditLetterSpacing: number
   copyGap: number
   openaiRect: Rect
   claudeRect: Rect
@@ -216,19 +223,17 @@ const [, openaiLayout, claudeLayout, openaiHit, claudeHit] = await Promise.all([
   getWrapHull(CLAUDE_LOGO_SRC, { smoothRadius: 5, mode: 'mean' }),
 ])
 const wrapHulls: WrapHulls = { openaiLayout, claudeLayout, openaiHit, claudeHit }
-const preparedBody = getPrepared(BODY_COPY, BODY_FONT)
-const preparedCredit = getPrepared(CREDIT_TEXT, CREDIT_FONT)
-const creditWidth = Math.ceil(getPreparedSingleLineWidth(preparedCredit))
+const preparedBody = getPrepared(BODY_COPY, BODY_FONT, BODY_LETTER_SPACING)
 
-function getTypography(): { font: string, lineHeight: number } {
-  return { font: BODY_FONT, lineHeight: BODY_LINE_HEIGHT }
+function getTypography(): { font: string, letterSpacing: number, lineHeight: number } {
+  return { font: BODY_FONT, letterSpacing: BODY_LETTER_SPACING, lineHeight: BODY_LINE_HEIGHT }
 }
 
-function getPrepared(text: string, font: string): PreparedTextWithSegments {
-  const key = `${font}::${text}`
+function getPrepared(text: string, font: string, letterSpacing: number): PreparedTextWithSegments {
+  const key = `${font}::${letterSpacing}::${text}`
   const cached = preparedByKey.get(key)
   if (cached !== undefined) return cached
-  const prepared = prepareWithSegments(text, font)
+  const prepared = prepareWithSegments(text, font, { letterSpacing })
   preparedByKey.set(key, prepared)
   return prepared
 }
@@ -366,6 +371,7 @@ function projectHeadlineLines(lines: PositionedLine[], font: string, lineHeight:
     element.style.left = `${line.x}px`
     element.style.top = `${line.y}px`
     element.style.font = font
+    element.style.letterSpacing = `${HEADLINE_LETTER_SPACING}px`
     element.style.lineHeight = `${lineHeight}px`
   }
 }
@@ -430,7 +436,9 @@ function textProjectionEqual(a: TextProjection | null, b: TextProjection): boole
     a.headlineLineHeight === b.headlineLineHeight &&
     a.creditLeft === b.creditLeft &&
     a.creditTop === b.creditTop &&
+    a.creditLetterSpacing === b.creditLetterSpacing &&
     a.bodyFont === b.bodyFont &&
+    a.bodyLetterSpacing === b.bodyLetterSpacing &&
     a.bodyLineHeight === b.bodyLineHeight &&
     positionedLinesEqual(a.headlineLines, b.headlineLines) &&
     projectedBodyLinesEqual(a.bodyLines, b.bodyLines)
@@ -443,14 +451,15 @@ function projectTextProjection(projection: TextProjection): void {
   domCache.headline.style.height = `${projection.pageHeight}px`
   domCache.headline.style.font = projection.headlineFont
   domCache.headline.style.lineHeight = `${projection.headlineLineHeight}px`
-  domCache.headline.style.letterSpacing = '0px'
 
   projectHeadlineLines(projection.headlineLines, projection.headlineFont, projection.headlineLineHeight)
 
-  domCache.credit.style.left = `${projection.creditLeft}px`
+  domCache.credit.style.display = projection.creditLeft === null ? 'none' : 'block'
+  domCache.credit.style.left = `${projection.creditLeft ?? 0}px`
   domCache.credit.style.top = `${projection.creditTop}px`
   domCache.credit.style.width = 'auto'
   domCache.credit.style.font = CREDIT_FONT
+  domCache.credit.style.letterSpacing = `${projection.creditLetterSpacing}px`
   domCache.credit.style.lineHeight = `${CREDIT_LINE_HEIGHT}px`
 
   syncPool(domCache.bodyLines, projection.bodyLines.length, () => {
@@ -466,6 +475,7 @@ function projectTextProjection(projection: TextProjection): void {
     element.style.left = `${line.x}px`
     element.style.top = `${line.y}px`
     element.style.font = projection.bodyFont
+    element.style.letterSpacing = `${projection.bodyLetterSpacing}px`
     element.style.lineHeight = `${projection.bodyLineHeight}px`
   }
 }
@@ -478,7 +488,7 @@ function fitHeadlineFontSize(headlineWidth: number, pageWidth: number): number {
   while (low <= high) {
     const size = Math.floor((low + high) / 2)
     const font = `700 ${size}px ${HEADLINE_FONT_FAMILY}`
-    const headlinePrepared = getPrepared(HEADLINE_TEXT, font)
+    const headlinePrepared = getPrepared(HEADLINE_TEXT, font, HEADLINE_LETTER_SPACING)
     if (!headlineBreaksInsideWord(headlinePrepared, headlineWidth)) {
       best = size
       low = size + 1
@@ -606,6 +616,7 @@ function buildLayout(pageWidth: number, pageHeight: number, lineHeight: number):
       headlineFont,
       headlineLineHeight,
       creditGap,
+      creditLetterSpacing: NARROW_CREDIT_LETTER_SPACING,
       copyGap,
       openaiRect,
       claudeRect,
@@ -659,6 +670,7 @@ function buildLayout(pageWidth: number, pageHeight: number, lineHeight: number):
     headlineFont,
     headlineLineHeight,
     creditGap,
+    creditLetterSpacing: CREDIT_LETTER_SPACING,
     copyGap,
     openaiRect,
     claudeRect,
@@ -671,7 +683,7 @@ function evaluateLayout(
   preparedBody: PreparedTextWithSegments,
 ): {
   headlineLines: PositionedLine[]
-  creditLeft: number
+  creditLeft: number | null
   creditTop: number
   leftLines: PositionedLine[]
   rightLines: PositionedLine[]
@@ -680,7 +692,7 @@ function evaluateLayout(
 } {
   const { openaiObstacle, claudeObstacle, hits } = getLogoProjection(layout, lineHeight)
 
-  const headlinePrepared = getPrepared(HEADLINE_TEXT, layout.headlineFont)
+  const headlinePrepared = getPrepared(HEADLINE_TEXT, layout.headlineFont, HEADLINE_LETTER_SPACING)
   const headlineResult = layoutColumn(
     headlinePrepared,
     { segmentIndex: 0, graphemeIndex: 0 },
@@ -743,7 +755,9 @@ function evaluateLayout(
     },
     layout.isNarrow ? creditBlocked.concat(claudeCreditBlocked) : creditBlocked,
   )
-  let creditLeft = creditRegion.x
+  const creditWidth = Math.ceil(getPreparedSingleLineWidth(getPrepared(CREDIT_TEXT, CREDIT_FONT, layout.creditLetterSpacing)))
+  // When no slot fits, the credit isn't painted, rather than painted over a logo or past the page.
+  let creditLeft: number | null = null
   for (let index = 0; index < creditSlots.length; index++) {
     const slot = creditSlots[index]!
     if (slot.right - slot.left >= creditWidth) {
@@ -810,7 +824,7 @@ function evaluateLayout(
 }
 
 function commitFrame(now: number): boolean {
-  const { font, lineHeight } = getTypography()
+  const { font, letterSpacing, lineHeight } = getTypography()
   const root = document.documentElement
   const pageWidth = root.clientWidth
   const pageHeight = root.clientHeight
@@ -834,7 +848,9 @@ function commitFrame(now: number): boolean {
     headlineLines,
     creditLeft,
     creditTop,
+    creditLetterSpacing: layout.creditLetterSpacing,
     bodyFont: font,
+    bodyLetterSpacing: letterSpacing,
     bodyLineHeight: lineHeight,
     bodyLines,
   }

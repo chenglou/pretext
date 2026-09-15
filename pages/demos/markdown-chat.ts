@@ -4,12 +4,10 @@ import {
   CODE_FONT,
   CODE_LINE_HEIGHT,
   createChatHistory,
-  createHistoryWindow,
-  findShownMessages,
+  findScrollAnchor,
   findVisibleRange,
   getMaxChatWidth,
   getOcclusionBannerHeight,
-  layoutConversation,
   layoutMessageFrame,
   MARKER_FONT,
   materializeMessageBlocks,
@@ -19,9 +17,7 @@ import {
   OCCLUSION_BANNER_HEIGHT,
   TOP_SCROLL_ANCHOR,
   type BlockLayout,
-  type ConversationLayout,
   type HistoryWindow,
-  type InlineFragmentLayout,
   type MessageFrame,
   type PreparedChatMessage,
   type QuoteRailLayout,
@@ -30,11 +26,10 @@ import {
 } from './markdown-chat.model.ts'
 
 type State = {
-  conversation: ConversationLayout | null // historyWindow's layout, as the screen shows it
   events: {
     toggleVisualization: boolean
   }
-  historyWindow: HistoryWindow
+  historyWindow: HistoryWindow | null // laid out as the screen shows it; null before the first frame
   isVisualizationOn: boolean
   scrollAnchor: ScrollAnchor
   scrollTop: number // where the last frame left the scroll position, as read back
@@ -58,11 +53,10 @@ const domCache = {
 
 const history = createChatHistory()
 const st: State = {
-  conversation: null,
   events: {
     toggleVisualization: false,
   },
-  historyWindow: createHistoryWindow(TOP_SCROLL_ANCHOR.ordinal),
+  historyWindow: null,
   isVisualizationOn: false,
   scrollAnchor: TOP_SCROLL_ANCHOR,
   scrollTop: 0,
@@ -123,29 +117,29 @@ function render(): void {
 
   const chatWidth = getMaxChatWidth(viewportWidth)
   const previousWindow = st.historyWindow
-  const previousConversation = st.conversation
 
-  // The screen shows the last frame's layout, scrolled to scrollTop. Before the
-  // first layout it shows nothing, and the window loads around the anchor.
-  const shown = previousConversation === null
-    ? { anchor: st.scrollAnchor, lastOrdinal: st.scrollAnchor.ordinal }
-    : findShownMessages(previousWindow, previousConversation, scrollTop, viewportHeight, occlusionBannerHeight)
   // st.scrollTop is where the last frame left the scroll position, so any other
-  // value is the user's scroll: anchor the first message showing below the top
-  // banner, in the layout they scrolled. Otherwise keep the anchor. Either way,
-  // scroll so its top keeps its distance below the banner, within the range, so
-  // loading or unloading a chunk above doesn't move what's shown.
-  const scrollAnchor = scrollTop === st.scrollTop ? st.scrollAnchor : shown.anchor
-  const historyWindow = moveHistoryWindow(history, previousWindow, shown.anchor.ordinal, shown.lastOrdinal)
-  const canReuseConversation =
-    previousConversation !== null &&
-    previousConversation.chatWidth === chatWidth &&
-    historyWindow === previousWindow
-  const conversation = canReuseConversation
-    ? previousConversation
-    : layoutConversation(historyWindow.messages, chatWidth)
+  // value is the user's scroll: anchor the first message whose top shows below
+  // the top banner, in the layout they scrolled. Otherwise, or before the first
+  // layout, keep the anchor. Either way, scroll so its top keeps its distance
+  // below the banner, within the range, so loading or unloading a chunk above
+  // doesn't move what's shown.
+  const scrollAnchor = scrollTop === st.scrollTop || previousWindow === null
+    ? st.scrollAnchor
+    : findScrollAnchor(previousWindow, scrollTop, viewportHeight, occlusionBannerHeight)
+  // The window keeps the anchor, which the scroll below needs, and what the
+  // screen shows: the last frame's layout, scrolled to scrollTop.
+  let firstKeptOrdinal = scrollAnchor.ordinal
+  let lastKeptOrdinal = scrollAnchor.ordinal
+  if (previousWindow !== null) {
+    const shown = findVisibleRange(previousWindow.layout, scrollTop, viewportHeight, occlusionBannerHeight)
+    firstKeptOrdinal = Math.min(firstKeptOrdinal, previousWindow.firstOrdinal + shown.start)
+    lastKeptOrdinal = Math.max(lastKeptOrdinal, previousWindow.firstOrdinal + shown.end - 1)
+  }
+  const historyWindow = moveHistoryWindow(history, previousWindow, firstKeptOrdinal, lastKeptOrdinal, chatWidth)
+  const conversation = historyWindow.layout
   // A mounted row keeps its contents when only the window changes.
-  const needsRelayout = previousConversation === null || previousConversation.chatWidth !== chatWidth
+  const needsRelayout = previousWindow === null || previousWindow.layout.chatWidth !== chatWidth
 
   const canvasHeight = conversation.totalHeight + occlusionBannerHeight * 2
   const adjustedScrollTop = Math.min(
@@ -159,13 +153,13 @@ function render(): void {
     visibleFrames[index - start] = layoutMessageFrame(historyWindow.messages[index]!, chatWidth)
   }
 
-  st.conversation = conversation
   st.historyWindow = historyWindow
   st.isVisualizationOn = isVisualizationOn
   st.scrollAnchor = scrollAnchor
   st.events.toggleVisualization = false
 
   domCache.root.style.setProperty('--chat-width', `${chatWidth}px`)
+  domCache.root.style.setProperty('--chat-viewport-width', `${viewportWidth}px`)
   domCache.root.style.setProperty('--occlusion-banner-height', `${occlusionBannerHeight}px`)
   domCache.root.style.setProperty('--occlusion-banner-padding-block', isCompactOcclusionChrome ? '6px' : '12px')
   domCache.root.style.setProperty('--virtualization-toggle-padding-block', isCompactOcclusionChrome ? '8px' : '10px')
@@ -180,7 +174,7 @@ function render(): void {
     : 'Show virtualization mask'
   domCache.toggleButton.setAttribute('aria-pressed', String(isVisualizationOn))
 
-  projectVisibleRows(historyWindow, conversation, occlusionBannerHeight, visibleFrames, start, end, needsRelayout)
+  projectVisibleRows(historyWindow, occlusionBannerHeight, visibleFrames, start, end, needsRelayout)
 
   // The last effect. Browsers round scrollTop, so store the position read back,
   // not the one asked for, or the next frame would take it for a user scroll.
@@ -197,7 +191,6 @@ function render(): void {
 // row stays mounted while chunks load and unload around it.
 function projectVisibleRows(
   historyWindow: HistoryWindow,
-  conversation: ConversationLayout,
   occlusionBannerHeight: number,
   visibleFrames: readonly MessageFrame[],
   start: number,
@@ -228,14 +221,14 @@ function projectVisibleRows(
   if (overlapStart >= overlapEnd) {
     for (let ordinal = startOrdinal; ordinal < endOrdinal; ordinal++) {
       const frame = visibleFrames[ordinal - startOrdinal]!
-      const cachedRow = projectRow(historyWindow, conversation, occlusionBannerHeight, frame, ordinal, needsRelayout)
+      const cachedRow = projectRow(historyWindow, occlusionBannerHeight, frame, ordinal, needsRelayout)
       if (cachedRow.row.parentNode === null) domCache.canvas.append(cachedRow.row)
     }
   } else {
     let anchorRow = domCache.rows[overlapStart]?.row ?? null
     for (let ordinal = overlapStart - 1; ordinal >= startOrdinal; ordinal--) {
       const frame = visibleFrames[ordinal - startOrdinal]!
-      const cachedRow = projectRow(historyWindow, conversation, occlusionBannerHeight, frame, ordinal, needsRelayout)
+      const cachedRow = projectRow(historyWindow, occlusionBannerHeight, frame, ordinal, needsRelayout)
       if (anchorRow === null) {
         if (cachedRow.row.parentNode === null) domCache.canvas.append(cachedRow.row)
       } else if (cachedRow.row.parentNode !== domCache.canvas || cachedRow.row.nextSibling !== anchorRow) {
@@ -246,12 +239,12 @@ function projectVisibleRows(
 
     for (let ordinal = overlapStart; ordinal < overlapEnd; ordinal++) {
       const frame = visibleFrames[ordinal - startOrdinal]!
-      projectRow(historyWindow, conversation, occlusionBannerHeight, frame, ordinal, needsRelayout)
+      projectRow(historyWindow, occlusionBannerHeight, frame, ordinal, needsRelayout)
     }
 
     for (let ordinal = overlapEnd; ordinal < endOrdinal; ordinal++) {
       const frame = visibleFrames[ordinal - startOrdinal]!
-      const cachedRow = projectRow(historyWindow, conversation, occlusionBannerHeight, frame, ordinal, needsRelayout)
+      const cachedRow = projectRow(historyWindow, occlusionBannerHeight, frame, ordinal, needsRelayout)
       if (cachedRow.row.parentNode === null) domCache.canvas.append(cachedRow.row)
     }
   }
@@ -264,12 +257,12 @@ function projectVisibleRows(
 // width changed, then places it.
 function projectRow(
   historyWindow: HistoryWindow,
-  conversation: ConversationLayout,
   occlusionBannerHeight: number,
   frame: MessageFrame,
   ordinal: number,
   needsRelayout: boolean,
 ): CachedRow {
+  const { heights, tops } = historyWindow.layout
   const index = ordinal - historyWindow.firstOrdinal
   const preparedMessage = historyWindow.messages[index]!
   let cachedRow = domCache.rows[ordinal]
@@ -280,7 +273,7 @@ function projectRow(
   } else if (needsRelayout) {
     renderMessageContents(cachedRow.bubble, preparedMessage, frame)
   }
-  projectMessageNode(cachedRow, frame, occlusionBannerHeight + conversation.tops[index]!, conversation.heights[index]!)
+  projectMessageNode(cachedRow, frame, occlusionBannerHeight + tops[index]!, heights[index]!)
   return cachedRow
 }
 
@@ -347,7 +340,7 @@ function renderInlineBlock(
   for (let lineIndex = 0; lineIndex < block.lines.length; lineIndex++) {
     const line = block.lines[lineIndex]!
     // Each Pretext line is one line box, so the browser orders its bidi runs.
-    // The paragraph style sets the baseline and paints the collapsed spaces.
+    // The paragraph style sets the baseline.
     const row = document.createElement('div')
     row.className = 'inline-line'
     row.dir = block.direction
@@ -359,8 +352,19 @@ function renderInlineBlock(
 
     for (let fragmentIndex = 0; fragmentIndex < line.fragments.length; fragmentIndex++) {
       const fragment = line.fragments[fragmentIndex]!
-      if (fragment.spaceBefore) row.append(' ')
-      row.append(renderInlineFragment(fragment))
+      const node = renderInlineFragment(fragment.style, fragment.href, fragment.text)
+      // A collapsed space paints inside the element of the item whose font
+      // measured it: this fragment's, the previous fragment's, or, for an item
+      // holding only whitespace, an element of its own.
+      const gapItemIndex = fragment.gapItemIndex
+      if (gapItemIndex === fragment.itemIndex) {
+        node.prepend(' ')
+      } else if (gapItemIndex >= 0 && gapItemIndex === line.fragments[fragmentIndex - 1]?.itemIndex) {
+        row.lastElementChild!.append(' ')
+      } else if (gapItemIndex >= 0) {
+        row.append(renderInlineFragment(block.styles[gapItemIndex]!, block.hrefs[gapItemIndex] ?? null, ' '))
+      }
+      row.append(node)
     }
     wrapper.append(row)
   }
@@ -464,17 +468,17 @@ function markerTop(block: BlockLayout): number {
   }
 }
 
-function renderInlineFragment(fragment: InlineFragmentLayout): HTMLElement {
-  const node = fragment.href === null
+function renderInlineFragment(style: TextStyle, href: string | null, text: string): HTMLElement {
+  const node = href === null
     ? document.createElement('span')
     : document.createElement('a')
 
-  node.className = fragment.style.className
-  applyTextStyle(node, fragment.style)
-  node.textContent = fragment.text
+  node.className = style.className
+  applyTextStyle(node, style)
+  node.textContent = text
 
-  if (node instanceof HTMLAnchorElement && fragment.href !== null) {
-    node.href = fragment.href
+  if (node instanceof HTMLAnchorElement && href !== null) {
+    node.href = href
     node.target = '_blank'
     node.rel = 'noreferrer'
   }

@@ -5,6 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Pretext Demo — Accordion</title>
     <style>
+      /* Keeps a classic scrollbar's room from the start, so the width accordion.ts reads doesn't
+         change when the page starts or stops overflowing. */
+      html {
+        scrollbar-gutter: stable;
+      }
+
       * {
         box-sizing: border-box;
       }
@@ -26,10 +32,16 @@
         font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
       }
 
+      /* accordion.ts writes the page width, and sets data-narrow for the narrow styles below. */
       .page {
-        width: min(780px, calc(100vw - 32px));
         margin: 0 auto;
         padding: 32px 0 48px;
+      }
+
+      /* Hidden until accordion.ts's first render writes the width and sets data-ready, so no frame
+         paints the page at the window's width. */
+      .page:not([data-ready]) {
+        visibility: hidden;
       }
 
       .intro {
@@ -56,10 +68,11 @@
         color: var(--muted);
       }
 
+      /* The ring is a box-shadow, so it takes no width from the copy. */
       .stack {
-        border: 1px solid var(--rule);
         border-radius: 18px;
         background: var(--panel);
+        box-shadow: inset 0 0 0 1px var(--rule);
         overflow: hidden;
       }
 
@@ -125,14 +138,11 @@
         transition: height 180ms ease;
       }
 
-      .accordion-inner {
-        padding: 0 20px 18px;
-      }
-
+      /* accordion.ts writes the padding, font and line height. overflow-wrap is Pretext's wrapping mode. */
       .accordion-copy {
         margin: 0;
-        font: 16px/26px "Helvetica Neue", Helvetica, Arial, sans-serif;
         color: var(--ink);
+        overflow-wrap: break-word;
       }
 
       @media (prefers-reduced-motion: reduce) {
@@ -142,19 +152,16 @@
         }
       }
 
-      @media (max-width: 640px) {
-        .page {
-          width: min(100vw - 20px, 780px);
-          padding-top: 22px;
-        }
+      .page[data-narrow] {
+        padding-top: 22px;
+      }
 
-        .accordion-toggle {
-          gap: 10px;
-        }
+      .page[data-narrow] .accordion-toggle {
+        gap: 10px;
+      }
 
-        .accordion-meta {
-          font-size: 11px;
-        }
+      .page[data-narrow] .accordion-meta {
+        font-size: 11px;
       }
     </style>
   </head>

@@ -5,6 +5,7 @@ const ROWS = 28
 const FONT_SIZE = 14
 const LINE_HEIGHT = 16
 const TARGET_ROW_W = 440
+const ART_PADDING = 14
 const PROP_FAMILY = 'Georgia, Palatino, "Times New Roman", serif'
 const FIELD_OVERSAMPLE = 2
 const FIELD_COLS = COLS * FIELD_OVERSAMPLE
@@ -245,6 +246,13 @@ function splatFieldStamp(centerX: number, centerY: number, stamp: FieldStamp): v
 const particleFieldStamp = createFieldStamp(SPRITE_R)
 const largeAttractorFieldStamp = createFieldStamp(LARGE_ATTRACTOR_R)
 const smallAttractorFieldStamp = createFieldStamp(ATTRACTOR_R)
+
+// The art boxes hold rows aimed at TARGET_ROW_W and ROWS * LINE_HEIGHT tall,
+// inside ART_PADDING, so the model hands the page those sizes.
+const rootStyle = document.documentElement.style
+rootStyle.setProperty('--art-width', `${TARGET_ROW_W}px`)
+rootStyle.setProperty('--art-height', `${ROWS * LINE_HEIGHT}px`)
+rootStyle.setProperty('--art-padding', `${ART_PADDING}px`)
 
 const sourceBox = getRequiredDiv('source-box')
 sourceBox.appendChild(simulationCanvas)
