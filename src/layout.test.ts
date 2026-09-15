@@ -602,6 +602,11 @@ describe('boundary-policy regressions', () => {
       ['2025-08-01 00:00:00\uFF0C2025-08-01 00:00:00', ['2025-', '08-', '01', ' ', '00:00:00\uFF0C', '2025-', '08-', '01', ' ', '00:00:00']],
       ['00:00:00\uFF0C2025', ['00:00:00\uFF0C', '2025']],
       ['12:30\uFF0Cb', ['12:30\uFF0C', 'b']],
+      // The whole run gets the mark, and a run that stops before glued
+      // punctuation still splits after each hyphen.
+      ['a x12:30\uFF0Cb', ['a', ' ', 'x12:30\uFF0C', 'b']],
+      ['a 00:00:00\uFF1B2025', ['a', ' ', '00:00:00\uFF1B', '2025']],
+      ['a 2025-08-01)b', ['a', ' ', '2025-', '08-', '01)b']],
     ] as const) {
       expect(analyzeText(text, profile).texts).toEqual([...expected])
     }

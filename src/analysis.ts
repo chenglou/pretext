@@ -915,17 +915,19 @@ function joinReversedPrefixParts(prefixParts: string[], tail: string): string {
 // one numeric word (UAX #29 MidNum and MidNumLet). UAX #14 classes them CL or
 // NS, which allow a break after them before a digit, as in `00，2025`. Safari
 // marks digit strings non-word, so the split doesn't depend on word-likeness.
-// Text without any of them skips the per-segment scan.
-const numericWordPunctuationCharRe = /[\uFE50\uFE52\uFE54\uFF0C\uFF0E\uFF1B]/
+// The punctuation becomes its own piece, so the numeric merge sees the digits
+// before it and the line-start join attaches it to the whole run, as in
+// `00:00:00，`. Text without any of them skips the per-segment scan.
+const numericWordPunctuationCharRe = /[\uFF0C\uFF0E\uFF1B]/
 
 function getNumericWordPunctuationSplits(segment: string): number[] | null {
   let splits: number[] | null = null
   for (let i = 1; i < segment.length - 1; i++) {
     const code = segment.charCodeAt(i)
-    if (code !== 0xFE50 && code !== 0xFE52 && code !== 0xFE54 && code !== 0xFF0C && code !== 0xFF0E && code !== 0xFF1B) continue
+    if (code !== 0xFF0C && code !== 0xFF0E && code !== 0xFF1B) continue
     if (decimalDigitRe.test(segment[i - 1]!) && decimalDigitRe.test(segment[i + 1]!)) {
       if (splits === null) splits = []
-      splits.push(i + 1)
+      splits.push(i, i + 1)
     }
   }
   return splits
@@ -1392,33 +1394,18 @@ export function isNumericRunSegment(text: string): boolean {
   return true
 }
 
-// A numeric run can end in closing punctuation, as in `00:00:00，` (LB25's CL
-// or CP suffix, and LB13 for EX). Returns where that suffix starts in the
-// segment after the run: 0 when the segment is only closing punctuation, after
-// its numeric continuation otherwise, or -1 when it is neither.
-function getNumericClosingSuffixStart(text: string): number {
-  let start = text.length
-  while (start > 0) {
-    const lineBreakClass = getLineBreakClass(text.charCodeAt(start - 1))
-    if (lineBreakClass !== LineBreakClass.CL && lineBreakClass !== LineBreakClass.CP && lineBreakClass !== LineBreakClass.EX) break
-    start--
-  }
-  if (start === text.length) return -1
-  if (start === 0) return 0
-  const body = text.slice(0, start)
-  return isNumericRunSegment(body) && segmentContainsDecimalDigit(body) ? start : -1
-}
-
 function mergeNumericRuns(segmentation: MergedSegmentation, normalized: string, profile: AnalysisProfile): MergedSegmentation {
   const texts: string[] = []
   const isWordLike: boolean[] = []
   const kinds: SegmentBreakKind[] = []
   const starts: number[] = []
 
-  function pushNumericRun(text: string, start: number, suffixLength: number): void {
+  function pushNumericRun(text: string, start: number): void {
     if (text.includes('-')) {
-      const suffix = text.slice(text.length - suffixLength)
-      const parts = text.slice(0, text.length - suffixLength).split('-')
+      // The run ends in `-` when punctuation glued to the digits after it stops
+      // the merge, as `01)` does after `2025-08-`.
+      const endsWithHyphen = text.endsWith('-')
+      const parts = (endsWithHyphen ? text.slice(0, -1) : text).split('-')
       let shouldSplit = parts.length > 1
       for (let i = 0; i < parts.length; i++) {
         const part = parts[i]!
@@ -1436,7 +1423,7 @@ function mergeNumericRuns(segmentation: MergedSegmentation, normalized: string, 
         let offset = 0
         for (let i = 0; i < parts.length; i++) {
           const part = parts[i]!
-          const splitText = i < parts.length - 1 ? `${part}-` : part + suffix
+          const splitText = i < parts.length - 1 || endsWithHyphen ? `${part}-` : part
           if (i > 0 && geckoPairBoundary(normalized, start + offset, profile) === true) {
             texts[texts.length - 1] += splitText
           } else {
@@ -1474,22 +1461,7 @@ function mergeNumericRuns(segmentation: MergedSegmentation, normalized: string, 
         j++
       }
 
-      let suffixLength = 0
-      if (
-        j < segmentation.len &&
-        segmentation.kinds[j] === 'text' &&
-        geckoPairBoundary(normalized, segmentation.starts[j]!, profile) !== false
-      ) {
-        const finalText = segmentation.texts[j]!
-        const suffixStart = getNumericClosingSuffixStart(finalText)
-        if (suffixStart >= 0) {
-          mergedParts.push(finalText)
-          suffixLength = finalText.length - suffixStart
-          j++
-        }
-      }
-
-      pushNumericRun(joinTextParts(mergedParts), segmentation.starts[i]!, suffixLength)
+      pushNumericRun(joinTextParts(mergedParts), segmentation.starts[i]!)
       i = j - 1
       continue
     }

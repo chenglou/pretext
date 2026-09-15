@@ -105,6 +105,20 @@ SA code points to its dictionary or LSTM segmenter, which reports the end of the
 run as a break whatever follows, even for an SA script with no model, so Firefox
 paints `a ខ្មែរ / ，b`, and the Gecko profile keeps that break.
 
+Numeric runs don't carry their own closing suffix. #245 pulled one following
+segment of CL, CP or EX, with any digits before it, into the run, so `00:00:00，`
+stayed whole. Once the join above covered any text, that suffix only mattered for
+pieces that hold both digits and a mark: `00，` from splitting `00，2025`, and `01)`
+after the first pass glues `)` to its digits. Now the numeric-word split cuts before
+and after a full-width comma, stop or semicolon between digits, so the numeric
+merge ends at `00:00:00` and the join adds the comma. A run that stops before glued
+punctuation, such as `2025-08-` before `01)`, still splits after each hyphen. The
+split skips the small form variants `﹐`, `﹒` and `﹔`: the no-space merge joins `3﹐`
+back to `4` anyway, and a piece that starts with one would allow a break before it,
+since the kinsoku test reads only U+3000-U+30FF and U+FF00-U+FFEF. Turning the
+suffix off without these changes broke #225's first reproduction in both white-space
+modes in all three browsers, as `2025-08-01 00:00: / 00，2025-08-01 / 00:00:00`.
+
 No break follows ZWJ (LB8a), so a ZWJ at the start of the text or after a ZWSP,
 tab or hard break stays with the next word. A ZWJ right after a space belongs to
 that space's grapheme cluster. Browsers break between them, but a line that
