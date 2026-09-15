@@ -298,7 +298,7 @@ export function getEngineProfile(language: BreakLanguage = 'root'): EngineProfil
     measureTextWithFollowingSpace: engine === 'webkit',
     segmentBreakRemovalRun: engine === 'blink' ? 'blink' : engine === 'gecko' ? 'gecko' : 'none',
     letterSpaceDiscretionaryHyphen: engine !== 'blink',
-    unfitHyphenRetreat: engine === 'blink' ? 'reduced-width' : 'none',
+    unfitHyphenRetreat: 'none',
     breakOnlyAfterNextLine: engine === 'webkit',
     skipNarrowTabStops: engine === 'webkit',
     inlineItemBreaks: engine === 'blink' || engine === 'gecko' ? 'joined-text' : engine === 'webkit' ? 'item-text' : 'item-boundary',
