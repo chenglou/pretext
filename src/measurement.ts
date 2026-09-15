@@ -301,7 +301,7 @@ export function getEngineProfile(language: BreakLanguage = 'root'): EngineProfil
     unfitHyphenRetreat: engine === 'blink' ? 'reduced-width' : 'none',
     breakOnlyAfterNextLine: engine === 'webkit',
     skipNarrowTabStops: engine === 'webkit',
-    inlineItemBreaks: engine === 'blink' || engine === 'gecko' ? 'joined-text' : engine === 'webkit' ? 'item-text' : 'item-boundary',
+    inlineItemBreaks: engine === 'blink' || engine === 'gecko' || engine === 'webkit' ? 'joined-text' : 'item-boundary',
   }
   // Apple ICU opens its normal line rules for Japanese and Korean content.
   const normalRules = engine === 'webkit' ? { ...profile, breakBeforeConditionalJapaneseStarter: true } : profile
