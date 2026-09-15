@@ -17,7 +17,6 @@ export type PreparedLineBreakData = {
   letterSpacing: number
   spacingGraphemeCounts: number[]
   discretionaryHyphenWidth: number
-  discretionaryHyphenContexts?: boolean[] | null
   tabStopAdvance: number
   chunks: {
     startSegmentIndex: number
@@ -515,30 +514,6 @@ function stepPreparedChunkLineGeometry(
   return walkPreparedComplexLines(prepared, cursor, chunkIndex, maxWidth, undefined, 1, endSegmentIndex, endGraphemeIndex).lastLineWidth
 }
 
-// A return from an unfit discretionary hyphen needs an overflow that isolated
-// widths can show and a target that really is the latest opportunity. No soft
-// hyphen on the line may measure narrower joined than apart, and nothing after
-// the target may be text after text or a dash inside a segment, which can hold an
-// opportunity that segment kinds don't mark, such as after `-` or between
-// ideographs. Checked only on a line that would end at an unfit hyphen.
-function canReturnFromUnfitHyphen(
-  prepared: PreparedLineBreakData,
-  discretionaryHyphenContexts: boolean[],
-  lineStartSegmentIndex: number,
-  targetSegmentIndex: number,
-  softHyphenIndex: number,
-): boolean {
-  for (let i = lineStartSegmentIndex; i <= softHyphenIndex; i++) {
-    if (discretionaryHyphenContexts[i]) return false
-  }
-  const { kinds, breakablePreferredBreaks } = prepared
-  for (let i = targetSegmentIndex; i < softHyphenIndex; i++) {
-    if (breaksAfter(kinds[i]!)) continue
-    if (!breaksAfter(kinds[i - 1]!) || breakablePreferredBreaks[i] !== null) return false
-  }
-  return true
-}
-
 function walkPreparedComplexLines(
   prepared: PreparedLineBreakData,
   cursor: LineBreakCursor,
@@ -564,11 +539,6 @@ function walkPreparedComplexLines(
   const lineFitEpsilon = engineProfile.lineFitEpsilon
   // A negative width lays out as 0, as in the simple walker.
   const fitLimit = Math.max(0, maxWidth) + lineFitEpsilon
-  // Preparation records soft-hyphen contexts only where the engine retreats
-  // and the text has a soft hyphen; hand-built handles may omit them.
-  const discretionaryHyphenContexts = prepared.discretionaryHyphenContexts ?? null
-  const retreatsFromUnfitHyphen =
-    discretionaryHyphenContexts !== null && engineProfile.unfitHyphenRetreat === 'reduced-width'
 
   let lineStartSegmentIndex: number
   let lineStartGraphemeIndex: number
@@ -580,11 +550,6 @@ function walkPreparedComplexLines(
   let pendingBreakFitWidth: number
   let pendingBreakPaintWidth: number
   let pendingBreakKind: SegmentBreakKind | null
-  // The latest opportunity whose line leaves room for the hyphen, which Blink's
-  // retry against the width minus the hyphen returns to when a selected
-  // discretionary hyphen does not fit, with that line's painted width.
-  let fitBreakSegmentIndex: number
-  let fitBreakPaintWidth: number
   // The last whole segment appended after other line content, and its advance.
   let appendedSegmentIndex: number
   let appendedSegmentAdvance = 0
@@ -615,29 +580,6 @@ function walkPreparedComplexLines(
       endSegmentIndex,
       endGraphemeIndex,
     )
-  }
-
-  // A line that would end at a selected discretionary hyphen that does not fit
-  // returns to the recorded earlier opportunity. Null without one, where the
-  // hyphen overflows.
-  function finishLineBeforeUnfitHyphen(): number | null {
-    if (
-      fitBreakSegmentIndex < 0 ||
-      pendingBreakKind !== 'soft-hyphen' ||
-      pendingBreakSegmentIndex !== lineEndSegmentIndex ||
-      lineEndGraphemeIndex !== 0 ||
-      pendingBreakFitWidth <= fitLimit ||
-      !canReturnFromUnfitHyphen(
-        prepared,
-        discretionaryHyphenContexts!,
-        lineStartSegmentIndex,
-        fitBreakSegmentIndex,
-        lineEndSegmentIndex - 1,
-      )
-    ) {
-      return null
-    }
-    return finishLine(fitBreakSegmentIndex, 0, fitBreakPaintWidth)
   }
 
   function startLineAtSegment(segmentIndex: number, width: number): void {
@@ -774,8 +716,6 @@ function walkPreparedComplexLines(
     pendingBreakFitWidth = 0
     pendingBreakPaintWidth = 0
     pendingBreakKind = null
-    fitBreakSegmentIndex = -1
-    fitBreakPaintWidth = 0
     appendedSegmentIndex = -1
     // Retained line-start ZWSP establishes the line without owning a spacing gap.
     let zeroWidthPrefix = true
@@ -820,11 +760,6 @@ function walkPreparedComplexLines(
               pendingBreakFitWidth = lineW + discretionaryHyphenWidth
               pendingBreakPaintWidth = lineW + discretionaryHyphenWidth
               pendingBreakKind = kind
-              // A soft hyphen's fit already includes its own hyphen.
-              if (retreatsFromUnfitHyphen && pendingBreakFitWidth <= fitLimit) {
-                fitBreakSegmentIndex = pendingBreakSegmentIndex
-                fitBreakPaintWidth = pendingBreakPaintWidth
-              }
             }
           }
           continue
@@ -848,10 +783,6 @@ function walkPreparedComplexLines(
             startLineAtSegment(i, w)
           }
           updatePendingBreakForWholeSegment(kind, breakAfter, i, w, leadingSpacing, advance)
-          if (retreatsFromUnfitHyphen && breakAfter && pendingBreakFitWidth + discretionaryHyphenWidth <= fitLimit) {
-            fitBreakSegmentIndex = pendingBreakSegmentIndex
-            fitBreakPaintWidth = pendingBreakPaintWidth
-          }
           continue
         }
 
@@ -888,16 +819,12 @@ function walkPreparedComplexLines(
             break lineLoop
           }
 
-          lineWidth = finishLineBeforeUnfitHyphen() ?? finishLine()
+          lineWidth = finishLine()
           break lineLoop
         }
 
         appendWholeSegment(i, advance)
         updatePendingBreakForWholeSegment(kind, breakAfter, i, w, leadingSpacing, advance)
-        if (retreatsFromUnfitHyphen && breakAfter && pendingBreakFitWidth + discretionaryHyphenWidth <= fitLimit) {
-          fitBreakSegmentIndex = pendingBreakSegmentIndex
-          fitBreakPaintWidth = pendingBreakPaintWidth
-        }
         appendedSegmentIndex = i
         appendedSegmentAdvance = advance
       }
@@ -928,15 +855,13 @@ function walkPreparedComplexLines(
           ) {
             lineWidth = finishLine(pendingBreakSegmentIndex, 0, pendingBreakPaintWidth)
           } else {
-            lineWidth = finishLineBeforeUnfitHyphen() ?? finishLine()
+            lineWidth = finishLine()
           }
         }
       }
-      // A limit before the chunk end is an ordinary break before later text, so
-      // a line that ends there at an unfit selected hyphen returns as well.
       if (lineWidth === null) {
         lineWidth = pendingBreakSegmentIndex === consumedEndSegmentIndex && lineEndGraphemeIndex === 0
-          ? finishLineBeforeUnfitHyphen() ?? finishLine(consumedEndSegmentIndex, 0, pendingBreakPaintWidth)
+          ? finishLine(consumedEndSegmentIndex, 0, pendingBreakPaintWidth)
           : finishLine(consumedEndSegmentIndex, 0, lineW)
       }
     }

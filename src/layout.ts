@@ -66,10 +66,6 @@ type PreparedCore = {
   letterSpacing: number // Extra advance between rendered graphemes on the same line
   spacingGraphemeCounts: number[] // Rendered grapheme counts for letter-spacing gaps; empty when letterSpacing is 0
   discretionaryHyphenWidth: number // Visible width added when a soft hyphen is chosen as the break
-  // Per segment, true for a soft hyphen whose neighboring text measures narrower
-  // joined than apart. Null when the text has no soft hyphen or the engine keeps
-  // an unfit hyphen.
-  discretionaryHyphenContexts: boolean[] | null
   tabStopAdvance: number // Absolute advance between tab stops for pre-wrap tab segments
   chunks: PreparedLineChunk[] // Precompiled hard-break chunks for line walking
 }
@@ -150,7 +146,6 @@ function createEmptyPrepared(includeSegments: boolean): InternalPreparedText | P
       letterSpacing: 0,
       spacingGraphemeCounts: [],
       discretionaryHyphenWidth: 0,
-      discretionaryHyphenContexts: null,
       tabStopAdvance: 0,
       chunks: [],
       segments: [],
@@ -166,7 +161,6 @@ function createEmptyPrepared(includeSegments: boolean): InternalPreparedText | P
     letterSpacing: 0,
     spacingGraphemeCounts: [],
     discretionaryHyphenWidth: 0,
-    discretionaryHyphenContexts: null,
     tabStopAdvance: 0,
     chunks: [],
   } as unknown as InternalPreparedText
@@ -450,32 +444,6 @@ function measureAnalysis(
   const segments = includeSegments ? [] as string[] : null
   const chunks: PreparedLineChunk[] = []
   let chunkStartSegmentIndex = 0
-  const retreatsFromUnfitHyphen = engineProfile.unfitHyphenRetreat !== 'none'
-  let discretionaryHyphenContexts: boolean[] | null = null
-  let previousJoinablePiece: string | null = null
-  let previousJoinableMetrics: SegmentMetrics | null = null
-
-  // Pieces split by a soft hyphen are measured apart, but Blink shapes the
-  // unbroken text together: cursive joins, marks and kerning across the soft
-  // hyphen. Canvas shows whether the neighbors measure narrower joined than
-  // apart, where isolated widths cannot prove that the hyphen overflows.
-  function shapesAcrossSoftHyphen(analysisIndex: number): boolean {
-    const before = previousJoinablePiece
-    if (before === null) return false
-    let next = analysisIndex + 1
-    while (next < analysis.len && analysis.kinds[next] === 'soft-hyphen') next++
-    if (next >= analysis.len) return false
-    const nextKind = analysis.kinds[next]!
-    if (nextKind !== 'text' && nextKind !== 'glue') return false
-    const after = analysis.texts[next]!
-    const joined = before + after
-    const apart =
-      getCorrectedSegmentWidth(before, previousJoinableMetrics!, emojiCorrection) +
-      getCorrectedSegmentWidth(after, getSegmentMetrics(after, cache), emojiCorrection)
-    const together = getCorrectedSegmentWidth(joined, getSegmentMetrics(joined, cache), emojiCorrection)
-    return apart - together > engineProfile.lineFitEpsilon
-  }
-
   function getEntryGeometry(
     text: string,
     metrics: SegmentMetrics,
@@ -529,8 +497,6 @@ function measureAnalysis(
     entryGeometry?.push(entry)
     if (hasLetterSpacing) spacingGraphemeCounts.push(spacingGraphemeCount)
     if (segments !== null) segments.push(text)
-    discretionaryHyphenContexts?.push(false)
-    if (kind !== 'text' && kind !== 'glue' && kind !== 'soft-hyphen') previousJoinablePiece = null
   }
 
   // With an empty following-space tail, textMetrics measured the text together
@@ -542,10 +508,6 @@ function measureAnalysis(
     allowOverflowBreaks: boolean,
     followingSpaceTail: string | null,
   ): void {
-    if (kind === 'text' || kind === 'glue') {
-      previousJoinablePiece = text
-      previousJoinableMetrics = textMetrics
-    }
     const spacingGraphemeCount = hasLetterSpacing
       ? countRenderedSpacingGraphemes(text, kind)
       : 0
@@ -614,7 +576,6 @@ function measureAnalysis(
     const segKind = analysis.kinds[mi]!
 
     if (segKind === 'soft-hyphen') {
-      const shapesAcross = retreatsFromUnfitHyphen && shapesAcrossSoftHyphen(mi)
       pushMeasuredSegment(
         segText,
         0,
@@ -623,10 +584,6 @@ function measureAnalysis(
         null,
         0,
       )
-      if (retreatsFromUnfitHyphen) {
-        discretionaryHyphenContexts ??= Array.from({ length: widths.length }, () => false)
-        if (shapesAcross) discretionaryHyphenContexts[widths.length - 1] = true
-      }
       continue
     }
 
@@ -719,7 +676,6 @@ function measureAnalysis(
       letterSpacing,
       spacingGraphemeCounts,
       discretionaryHyphenWidth,
-      discretionaryHyphenContexts,
       tabStopAdvance,
       chunks,
       segments,
@@ -735,7 +691,6 @@ function measureAnalysis(
     letterSpacing,
     spacingGraphemeCounts,
     discretionaryHyphenWidth,
-    discretionaryHyphenContexts,
     tabStopAdvance,
     chunks,
   } as unknown as InternalPreparedText

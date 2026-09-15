@@ -1220,18 +1220,18 @@ describe('prepare invariants', () => {
     expect(layout(prepared, alphaWidth + 0.1, LINE_HEIGHT).lineCount).toBe(2)
   })
 
-  test('only the Blink profile returns from an unfit hyphen and paints the hyphen unspaced', async () => {
+  test('only the Blink profile paints the hyphen unspaced', async () => {
     const descriptor = Object.getOwnPropertyDescriptor(globalThis, 'navigator')
     try {
-      for (const [index, userAgent, unfitHyphenRetreat, letterSpaceDiscretionaryHyphen] of [
-        [0, 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36', 'none', false],
-        [1, 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.5.2 Safari/605.1.15', 'none', true],
-        [2, 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:155.0) Gecko/20100101 Firefox/155.0', 'none', true],
+      for (const [index, userAgent, letterSpaceDiscretionaryHyphen] of [
+        [0, 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36', false],
+        [1, 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.5.2 Safari/605.1.15', true],
+        [2, 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:155.0) Gecko/20100101 Firefox/155.0', true],
       ] as const) {
         Object.defineProperty(globalThis, 'navigator', { value: { userAgent }, configurable: true, writable: true })
-        const specifier = `./measurement.ts?unfit-hyphen-${index}`
+        const specifier = `./measurement.ts?hyphen-spacing-${index}`
         const fresh = await import(specifier) as MeasurementModule
-        expect(fresh.getEngineProfile()).toMatchObject({ unfitHyphenRetreat, letterSpaceDiscretionaryHyphen })
+        expect(fresh.getEngineProfile()).toMatchObject({ letterSpaceDiscretionaryHyphen })
       }
     } finally {
       if (descriptor === undefined) Reflect.deleteProperty(globalThis, 'navigator')
@@ -1250,96 +1250,6 @@ describe('prepare invariants', () => {
       expect(spaced - unspaced).toBe(2)
     } finally {
       profile.letterSpaceDiscretionaryHyphen = previous
-    }
-  })
-
-  test('Blink returns an unfit soft hyphen to the latest earlier break that leaves room for the hyphen', async () => {
-    const { getEngineProfile } = await import('./measurement.ts')
-    const profile = getEngineProfile()
-    const previous = profile.unfitHyphenRetreat
-    try {
-      // "foo trans" fits and "foo trans-" does not.
-      const text = 'foo trans\u00ADatlantic'
-      const width = measureWidth('foo trans', FONT) + 0.1
-      for (const [unfitHyphenRetreat, expected] of [
-        ['none', ['foo trans-', 'atlantic']],
-        ['reduced-width', ['foo ', 'trans-', 'atlantic']],
-      ] as const) {
-        profile.unfitHyphenRetreat = unfitHyphenRetreat
-        const prepared = prepareWithSegments(text, FONT)
-        expect(layoutWithLines(prepared, width, LINE_HEIGHT).lines.map(line => line.text)).toEqual([...expected])
-        expect(collectStreamedLines(prepared, width).map(line => line.text)).toEqual([...expected])
-        expect(measureLineStats(prepared, width).lineCount).toBe(expected.length)
-        expect(layout(prepare(text, FONT), width, LINE_HEIGHT).lineCount).toBe(expected.length)
-      }
-
-      // The zero-width space leaves no room for the hyphen, so the line returns
-      // to the soft hyphen that the zero-width space replaced as pending.
-      const replaced = prepareWithSegments('a b\u00ADc\u200B\u00ADjki', FONT)
-      expect(layoutWithLines(replaced, 36, LINE_HEIGHT).lines.map(line => line.text)).toEqual(['a b-', 'c\u200B-', 'jki'])
-
-      // Text after text, or a dash inside a segment, can hold a later real
-      // opportunity, so the line never returns past it to the space.
-      expect(layoutWithLines(prepareWithSegments('x ab-cd\u00ADefgh', FONT), 62, LINE_HEIGHT).lines.map(line => line.text))
-        .toEqual(['x ab-cd-', 'efgh'])
-      expect(layoutWithLines(prepareWithSegments('x 10\u201320\u00ADabcd', FONT), 58, LINE_HEIGHT).lines.map(line => line.text))
-        .toEqual(['x 10\u201320-', 'abcd'])
-
-      // A hand-built handle without soft-hyphen contexts keeps the overflowing hyphen.
-      const handBuilt = { ...prepareWithSegments(text, FONT) } as Record<string, unknown>
-      Reflect.deleteProperty(handBuilt, 'discretionaryHyphenContexts')
-      expect(walkPreparedLinesRaw(handBuilt as unknown as Parameters<typeof walkPreparedLinesRaw>[0], width)).toBe(2)
-    } finally {
-      profile.unfitHyphenRetreat = previous
-    }
-  })
-
-  test('Blink keeps an unfit hyphen where the text around the soft hyphen measures narrower joined', async () => {
-    const { getEngineProfile } = await import('./measurement.ts')
-    const profile = getEngineProfile()
-    const previous = profile.unfitHyphenRetreat
-    const measureText = Object.getOwnPropertyDescriptor(TestCanvasRenderingContext2D.prototype, 'measureText')!
-    // A and V kern by -2px, so A and VAV measure 2px wider apart than AVAV.
-    Object.defineProperty(TestCanvasRenderingContext2D.prototype, 'measureText', {
-      ...measureText,
-      value(this: TestCanvasRenderingContext2D, text: string) {
-        return { width: measureWidth(text, this.font) - 2 * (text.match(/AV/g) ?? []).length }
-      },
-    })
-    profile.unfitHyphenRetreat = 'reduced-width'
-    try {
-      const font = '16px Kerning Test Sans'
-      expect(layoutWithLines(prepareWithSegments('ab B\u00ADVAV', font), 36, LINE_HEIGHT).lines.map(line => line.text))
-        .toEqual(['ab ', 'B-', 'VAV'])
-      expect(layoutWithLines(prepareWithSegments('ab A\u00ADVAV', font), 36, LINE_HEIGHT).lines.map(line => line.text))
-        .toEqual(['ab A-', 'VAV'])
-    } finally {
-      Object.defineProperty(TestCanvasRenderingContext2D.prototype, 'measureText', measureText)
-      profile.unfitHyphenRetreat = previous
-    }
-  })
-
-  test('an end-limited step returns from an unfit soft hyphen as the continuing text does', async () => {
-    const { getEngineProfile } = await import('./measurement.ts')
-    const profile = getEngineProfile()
-    const previous = profile.unfitHyphenRetreat
-    profile.unfitHyphenRetreat = 'reduced-width'
-    try {
-      // "foo trans" fits and "foo trans-" does not.
-      const prepared = prepareWithSegments('foo trans\u00ADatlantic', FONT)
-      const width = measureWidth('foo trans', FONT) + 0.1
-      const continuing = { segmentIndex: 0, graphemeIndex: 0 }
-      const continuingWidth = stepPreparedLineGeometry(prepared, continuing, width)
-      expect(continuing).toEqual({ segmentIndex: 2, graphemeIndex: 0 })
-      // A limit right after the soft hyphen, or inside the word after it, is an
-      // ordinary break before later text, so the line returns to the space too.
-      for (const [segmentIndex, graphemeIndex] of [[4, 0], [4, 2]] as const) {
-        const cursor = { segmentIndex: 0, graphemeIndex: 0 }
-        expect(stepPreparedLineGeometry(prepared, cursor, width, segmentIndex, graphemeIndex)).toBe(continuingWidth)
-        expect(cursor).toEqual(continuing)
-      }
-    } finally {
-      profile.unfitHyphenRetreat = previous
     }
   })
 

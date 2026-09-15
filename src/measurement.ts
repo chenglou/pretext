@@ -78,15 +78,6 @@ export type EngineProfile = {
   // WebKit and Gecko letter-space the visible discretionary hyphen itself.
   // Blink shapes it separately, without spacing.
   letterSpaceDiscretionaryHyphen: boolean
-  // When a selected discretionary hyphen does not fit, Blink retries the text
-  // item against the width minus the hyphen, so the line ends at the latest
-  // earlier opportunity that leaves room for it. Pretext has no Blink item
-  // boundaries and applies the reduced width to every earlier opportunity.
-  // WebKit and Gecko also return to an earlier opportunity, at the full width,
-  // but that is not modeled: their installed losses come from letter spacing
-  // on invisibles and from marks after a soft hyphen, which isolated widths do
-  // not show. They keep the overflowing hyphen.
-  unfitHyphenRetreat: 'reduced-width' | 'none'
   // NEL (U+0085, UAX #14 NL) offers a break after itself and no ordinary break
   // before it (LB5, LB6). Blink and Gecko break there too, but keep NEL as
   // ordinary text for now: Blink joins Arabic across a soft hyphen that Pretext
@@ -298,7 +289,6 @@ export function getEngineProfile(language: BreakLanguage = 'root'): EngineProfil
     measureTextWithFollowingSpace: engine === 'webkit',
     segmentBreakRemovalRun: engine === 'blink' ? 'blink' : engine === 'gecko' ? 'gecko' : 'none',
     letterSpaceDiscretionaryHyphen: engine !== 'blink',
-    unfitHyphenRetreat: 'none',
     breakOnlyAfterNextLine: engine === 'webkit',
     skipNarrowTabStops: engine === 'webkit',
     inlineItemBreaks: engine === 'blink' || engine === 'gecko' ? 'joined-text' : engine === 'webkit' ? 'item-text' : 'item-boundary',

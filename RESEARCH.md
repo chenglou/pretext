@@ -378,34 +378,40 @@ hyphen does not fit against the available width minus the hyphen, WebKit reverts
 to the last wrap opportunity where the hyphen fits, and Gecko records a
 soft-hyphen break only when its text plus the hyphen fits. Installed Chrome 153,
 Safari 26.5.2 and Firefox 155 all end `ab cd\u00adefgh` (Arial 16) at the space
-from 39.25px to 44.25px. In Blink the walker returns to the latest earlier
-opportunity whose line leaves room for the hyphen. The target is updated whenever
-a later opportunity replaces the pending one, so an earlier soft hyphen can win:
-installed Chrome ends `a b\u00adc\u200bi\u00adjki` (Arial 16) at the first soft
-hyphen from 34px to 35.5px, where the zero-width space leaves no room for the
-hyphen. Blink's retry stays inside one text item and rewinds earlier items at the
-full width. The prepared handle has no Blink item boundaries, so the reduced width
-applies to every earlier opportunity, which can miss a return to an earlier item.
-Chromium also paints the hyphen without letter spacing; WebKit and Gecko space it.
+from 39.25px to 44.25px. Pretext keeps the overflowing hyphen in every engine. An
+earlier soft hyphen can be the target: installed Chrome ends
+`a b\u00adc\u200bi\u00adjki` (Arial 16) at the first soft hyphen from 34px to
+35.5px, where the zero-width space leaves no room for the hyphen. Blink's retry
+stays inside one text item and rewinds earlier items at the full width, and the
+prepared handle has no Blink item boundaries. Chromium also paints the hyphen
+without letter spacing; WebKit and Gecko space it.
 
 Returning needs an overflow that isolated widths can show, and a target that is
 really the latest opportunity. Blink shapes the text on both sides of a soft
 hyphen together, so Arabic letters joined across it, a mark after it and a kerning
-pair around it measure narrower in context. When Canvas measures the neighbors of
-any soft hyphen on the line narrower joined than apart, the overflowing hyphen
-stays; contextual widths during preparation would replace that check. Segment
+pair around it measure narrower in context. #239 kept the overflowing hyphen when
+Canvas measured the neighbors of any soft hyphen on the line narrower joined than
+apart; contextual widths during preparation would replace that check. Segment
 kinds do not mark every opportunity: text joined to text, such as after `-` in
 `ab-cd` or between ideographs, and a dash inside one segment, such as `10–20`, can
-hold one. The walker never returns past either. Returning past them lost 142
+hold one. A return must never go past either. Returning past them lost 142
 installed Chrome rows on compounds such as `x ab-cd\u00adefgh` and
 `a well-known\u00adness`.
 
-The return is enabled in Blink only. Isolated widths cannot show what WebKit and
+#239 returned in Blink only and was removed after an ablation on main `5dbc9bd`:
+about 130 runtime lines, a Canvas call per soft hyphen between text, and a
+per-segment array on the prepared handle. Turning it off lost 16 installed Chrome
+rows per direction (10 lineCount, 10 height and 15 source metrics) and fixed none:
+`\u200ba\u00adb` in pre-wrap at 8px to 11.64px in four fonts, and Courier New and
+Noto Nastaliq Urdu shapes with preserved spaces, a zero-width space or a space
+before a soft hyphen, six of them within 0.1px of the hyphen line's width. All
+came from retained research inputs frozen before #239. On rows that fail either
+way, the return moved 36 LTR rows and 1 RTL row further from native, all with marks
+or word joiners after a soft hyphen. Isolated widths cannot show what WebKit and
 Gecko need: letter
 spacing on U+2060, which those engines do not apply, and combining marks after a
 soft hyphen, where Safari breaks between the soft hyphen and the mark and Firefox
-paints the hyphen. WebKit and Gecko keep the overflowing hyphen until those are
-modeled. Chrome's remaining losses have the same partners. Chrome gives U+2060 no
+paints the hyphen. Chrome's losses with the return had the same partners. Chrome gives U+2060 no
 letter spacing, so `a\u2060b cd\u00adefgh` at letter spacing 1 and 2 still fits
 its hyphen line, and it kerns across the space in
 `LTA To AV\u00adWAVA`. Chromium breaks after a combining mark that
