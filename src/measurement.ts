@@ -2,7 +2,6 @@ import {
   getSharedGraphemeSegmenter,
   type BreakLanguage,
   type KeepAllPairModel,
-  type SegmentBreakRemovalRun,
 } from './analysis.js'
 import type { SegmentEntryGeometry } from './entry-geometry.js'
 
@@ -72,9 +71,6 @@ export type EngineProfile = {
   // Canvas splits words at spaces and shows none of it; Gecko shapes words
   // without their spaces.
   measureTextWithFollowingSpace: boolean
-  // Blink and Gecko remove a collapsible newline run next to a ZWSP, each
-  // through its own run. WebKit turns it into a space.
-  segmentBreakRemovalRun: SegmentBreakRemovalRun
   // WebKit and Gecko letter-space the visible discretionary hyphen itself.
   // Blink shapes it separately, without spacing.
   letterSpaceDiscretionaryHyphen: boolean
@@ -296,7 +292,6 @@ export function getEngineProfile(language: BreakLanguage = 'root'): EngineProfil
     breakHyphenAfterCollapsedTab: engine === 'webkit',
     preferPrefixWidthsForBreakableRuns: engine === 'webkit',
     measureTextWithFollowingSpace: engine === 'webkit',
-    segmentBreakRemovalRun: 'none',
     letterSpaceDiscretionaryHyphen: engine !== 'blink',
     unfitHyphenRetreat: engine === 'blink' ? 'reduced-width' : 'none',
     breakOnlyAfterNextLine: engine === 'webkit',

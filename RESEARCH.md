@@ -292,10 +292,16 @@ continues through soft hyphens and bidi controls without ending on one, and a
 last space before a combining mark stays outside the run and survives. Deciding
 adjacency on Pretext's own collapse set instead lost headless Chromium widths on
 form-feed shapes and predicted Firefox losses on CR, SHY and combining-mark
-shapes. Blink
-checks the previous character across element boundaries, while Gecko sees one
-text node at a time, so the rich-inline helper applies the rule only inside an
-item. Blink compiles out its East Asian width rule. Gecko also removes a newline
+shapes. Blink checks the previous character across element boundaries, while
+Gecko sees one text node at a time.
+[#238](https://github.com/chenglou/pretext/pull/238) modeled both runs, within
+each rich-inline item, and was later removed: turning it off changed only `a`,
+ZWSP, newline, `word` at widths 8, 24 and 40 in the installed Chrome and Firefox
+gate, which lost source-normalization and source placement metrics but no
+height or line count. Pretext now turns every such run into a space, as WebKit
+does. The two forms differ by one space's width, so line counts differ only
+where that space moves a break; a future attempt needs suite rows in that band.
+Blink compiles out its East Asian width rule. Gecko also removes a newline
 between two full-, half- or wide-width non-Hangul characters, skipping default
 ignorables, and, for `ja` or `zh` content, next to such punctuation. Pretext does
 not model those Gecko rules: the ja/zh corpora contain such newlines, and their
