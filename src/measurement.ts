@@ -296,7 +296,7 @@ export function getEngineProfile(language: BreakLanguage = 'root'): EngineProfil
     breakHyphenAfterCollapsedTab: engine === 'webkit',
     preferPrefixWidthsForBreakableRuns: engine === 'webkit',
     measureTextWithFollowingSpace: engine === 'webkit',
-    segmentBreakRemovalRun: engine === 'blink' ? 'blink' : engine === 'gecko' ? 'gecko' : 'none',
+    segmentBreakRemovalRun: 'none',
     letterSpaceDiscretionaryHyphen: engine !== 'blink',
     unfitHyphenRetreat: engine === 'blink' ? 'reduced-width' : 'none',
     breakOnlyAfterNextLine: engine === 'webkit',
