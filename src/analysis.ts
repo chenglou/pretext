@@ -598,11 +598,11 @@ export const leftStickyPunctuation = new Set([
   '…',
 ])
 
-// UAX #14 IS punctuation, which keeps a following letter (LB29). U+061B is EX.
 const arabicNoSpaceTrailingPunctuation = new Set([
   ':',
   '.',
   '\u060C',
+  '\u061B',
 ])
 
 const myanmarMedialGlue = new Set([
@@ -1173,39 +1173,15 @@ function endsWithNoSpaceWordJoiner(text: string): boolean {
   return false
 }
 
-// Letters, numbers and symbols above U+00FF whose UAX #14 class forbids a break
-// before them: BA, CL, CM, EX, IN, IS, NS or QU, such as the iteration marks
-// U+3005 and U+309D.
-const noBreakBeforeLetterClasses =
-  (1 << LineBreakClass.BA) | (1 << LineBreakClass.CL) | (1 << LineBreakClass.CM) | (1 << LineBreakClass.EX) |
-  (1 << LineBreakClass.IN) | (1 << LineBreakClass.IS) | (1 << LineBreakClass.NS) | (1 << LineBreakClass.QU)
-
-// Up to U+00FF, the UAX #14 classes that forbid a break before them are CM
-// (controls), BA, CL, CP, EX, GL, HY, IS, QU and SY, besides spaces and line
-// breaks.
-const latin1NoBreakBeforeClasses =
-  (1 << LineBreakClass.CM) | (1 << LineBreakClass.BA) | (1 << LineBreakClass.CL) | (1 << LineBreakClass.CP) |
-  (1 << LineBreakClass.EX) | (1 << LineBreakClass.GL) | (1 << LineBreakClass.HY) | (1 << LineBreakClass.IS) |
-  (1 << LineBreakClass.QU) | (1 << LineBreakClass.SY) | (1 << LineBreakClass.SP) | (1 << LineBreakClass.BK)
-
-function isLatin1NoBreakBeforeCode(code: number): boolean {
-  return ((1 << getLineBreakClass(code)) & latin1NoBreakBeforeClasses) !== 0
-}
-
-const exclamationFollowerAtRe = /[\p{L}\p{N}\p{S}\p{Ps}]/uy
+// Letters and numbers, with the ASCII symbols of the AL line-break class.
+const lineBreakWordStartRe = /[\p{L}\p{N}#&*<=>@^_`~]/uy
 const combiningMarkAtRe = /\p{M}/uy
 
-// UAX #14 breaks after EX unless the following class forbids a break before it
-// (LB31). Gecko's nsLineBreaker ASCII shortcut skips only words of AL/IS/NU/QU
-// characters, so any word containing EX reaches ICU4X. Chromium and WebKit
-// first look up code-unit pairs up to U+00FF in a table that follows ICU,
-// except for printable ASCII: there '?' also breaks before '-' and '|', while
-// '!' breaks only before '(', '<', '[' and '{'. Above U+00FF, letters, numbers,
-// symbols and opening punctuation break unless their line-break class forbids
-// it, numeric affixes break, and other punctuation is not classified. CJ breaks
-// only under ICU's normal rules, which Chromium uses for line-break: auto, and
-// WebKit on Japanese and Korean pages.
-// Every merge that would join across the boundary asks here.
+// UAX #14 breaks after EX before a following letter or number (LB31). Gecko's
+// nsLineBreaker ASCII shortcut skips only words of AL/IS/NU/QU characters, so
+// any word containing EX reaches ICU4X. Chromium and WebKit first look up
+// pairs up to U+00FF in a table that follows ICU, except for printable ASCII:
+// there '?' still breaks, but '!' keeps a following letter, digit or symbol.
 // The last-code-unit screen keeps ordinary word boundaries allocation-free.
 function breaksAfterExclamation(
   source: string,
@@ -1222,22 +1198,10 @@ function breaksAfterExclamation(
     const start = previousCodePointStart(source, end)
     const codePoint = source.codePointAt(start)!
     if (getLineBreakClass(codePoint) === LineBreakClass.EX) {
-      const next = source.codePointAt(boundary)!
-      if (next > 0xFF) {
-        exclamationFollowerAtRe.lastIndex = boundary
-        if (!exclamationFollowerAtRe.test(source)) return isLineBreakNumericAffixCode(next)
-        const nextClass = getLineBreakClass(next)
-        // Strict rules treat CJ as NS; ICU's normal rules treat it as ID.
-        if (nextClass === LineBreakClass.CJ) return profile.breakBeforeConditionalJapaneseStarter
-        return ((1 << nextClass) & noBreakBeforeLetterClasses) === 0
-      }
+      lineBreakWordStartRe.lastIndex = boundary
+      if (!lineBreakWordStartRe.test(source)) return false
       // The pair table sees the code unit before the boundary, not a mark's base.
-      if (!profile.geckoAsciiLineBreaks && end === boundary && codePoint <= 0xFF && next < 0x80) {
-        return codePoint === 0x3F
-          ? next === 0x2D || next === 0x7C || !isLatin1NoBreakBeforeCode(next)
-          : next === 0x28 || next === 0x3C || next === 0x5B || next === 0x7B
-      }
-      return !isLatin1NoBreakBeforeCode(next)
+      return profile.geckoAsciiLineBreaks || codePoint !== 0x21 || end !== boundary || source.charCodeAt(boundary) >= 0x80
     }
     combiningMarkAtRe.lastIndex = start
     if (codePoint < 0x0300 || !combiningMarkAtRe.test(source)) return false
@@ -1868,7 +1832,6 @@ function buildMergedSegmentation(
       }
 
       if (isText && hasTail && tailKind === 'text' && boundaryJoin !== null) appendToTail = boundaryJoin
-      if (appendToTail && breaksAfterExclamation(normalized, piece.start, profile, wordBreak)) appendToTail = false
 
       if (appendToTail) {
         tailEnd = pieceEnd
@@ -1948,8 +1911,7 @@ function buildMergedSegmentation(
       mergedKinds[i - 1] === 'text' &&
       !isCJK(mergedTexts[i - 1]!) &&
       (geckoPairBoundary(normalized, mergedStarts[i]!, profile) ??
-        openingPunctuationJoinsPrevious(normalized, mergedTexts[i]!, profile, mergedStarts[i]!)) !== false &&
-      !breaksAfterExclamation(normalized, mergedStarts[i]!, profile, wordBreak)
+        openingPunctuationJoinsPrevious(normalized, mergedTexts[i]!, profile, mergedStarts[i]!)) !== false
     ) {
       mergedTexts[i - 1] += mergedTexts[i]!
       mergedWordLike[i - 1] = mergedWordLike[i - 1]! || mergedWordLike[i]!
