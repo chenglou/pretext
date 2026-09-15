@@ -1727,8 +1727,6 @@ function extendsPrecedingSpace(text: string, start: number): boolean {
   return getSharedGraphemeSegmenter().segment(pair)[Symbol.iterator]().next().value!.segment.length === pair.length
 }
 
-const splitNumericWordPunctuation: boolean = false
-
 function buildMergedSegmentation(
   source: string,
   normalized: string,
@@ -1739,7 +1737,7 @@ function buildMergedSegmentation(
   const markKeepingZeroWidthSpaces = getMarkKeepingZeroWidthSpaces(source, normalized, profile)
   const hyphensAfterSourceTab = getHyphensAfterSourceTab(source, normalized, profile, whiteSpace)
   const wordSegmenter = getSharedWordSegmenter()
-  const mayContainNumericWordPunctuation = splitNumericWordPunctuation && numericWordPunctuationCharRe.test(normalized)
+  const mayContainNumericWordPunctuation = numericWordPunctuationCharRe.test(normalized)
   let mergedLen = 0
   const mergedTexts: string[] = []
   const mergedWordLike: boolean[] = []
