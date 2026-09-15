@@ -1680,17 +1680,6 @@ function carryTrailingForwardStickyAcrossCJKBoundary(segmentation: MergedSegment
   }
 }
 
-// Whether the code point at `start` joins the SPACE before it into one grapheme
-// cluster. No grapheme rule looks back past a SPACE, so these two code points
-// decide it (GB9, GB9a) without segmenting the rest of the text. Read the first
-// segment instead of calling `containing()`: JavaScriptCore returns the wrong
-// segment for an index just before a surrogate pair.
-function extendsPrecedingSpace(text: string, start: number): boolean {
-  const end = start + (text.codePointAt(start)! > 0xFFFF ? 2 : 1)
-  const pair = text.slice(start - 1, end)
-  return getSharedGraphemeSegmenter().segment(pair)[Symbol.iterator]().next().value!.segment.length === pair.length
-}
-
 function buildMergedSegmentation(
   source: string,
   normalized: string,
@@ -1721,7 +1710,6 @@ function buildMergedSegmentation(
   let tailEndsWithClosingQuote = false
   let tailEndsWithMyanmarMedialGlue = false
   let tailHasArabicNoSpacePunctuation = false
-  let tailEndsWithZeroWidthJoiner = false
   let tailIsWordInitialHyphen = false
 
   for (const s of wordSegmenter.segment(normalized)) {
@@ -1743,7 +1731,6 @@ function buildMergedSegmentation(
       const pieceEndsWithClosingQuote = endsWithClosingQuote(piece.text)
       const pieceEndsWithMyanmarMedialGlue = endsWithMyanmarMedialGlue(piece.text)
       const pieceEnd = piece.start + piece.text.length
-      const pieceEndsWithZeroWidthJoiner = piece.text.charCodeAt(piece.text.length - 1) === 0x200D
       const boundaryJoin = geckoPairBoundary(normalized, piece.start, profile) ??
         (tailContainsCJK || pieceContainsCJK ? null :
           openingPunctuationJoinsPrevious(normalized, piece.text, profile, piece.start))
@@ -1752,10 +1739,7 @@ function buildMergedSegmentation(
 
       // First-pass keeps: no-space script-specific joins and punctuation glue
       // that depend on the immediately preceding text run.
-      if (isText && hasTail && tailKind === 'text' && tailEndsWithZeroWidthJoiner) {
-        // UAX #14 LB8a: no break after ZWJ.
-        appendToTail = true
-      } else if (
+      if (
         isText &&
         hasTail &&
         tailKind === 'text' &&
@@ -1847,7 +1831,6 @@ function buildMergedSegmentation(
           tailContainsArabicScript,
           pieceLastCodePoint,
         )
-        tailEndsWithZeroWidthJoiner = pieceEndsWithZeroWidthJoiner
         tailIsWordInitialHyphen = false
       } else {
         // LB20a looks back past the hyphen to a break boundary or the text start.
@@ -1856,15 +1839,6 @@ function buildMergedSegmentation(
           isHyphenPiece(piece.text) &&
           (!hasTail || isTextRunBoundary(tailKind)) &&
           (hyphensAfterSourceTab === null || !hyphensAfterSourceTab.has(piece.start))
-        // A ZWJ run after a space belongs to that space's grapheme cluster.
-        // Browsers break before it (LB9 skips SP) and keep the next character
-        // (LB8a), but that line start splits the cluster, so these boundaries
-        // stay as they were.
-        const joinerExtendsSpace =
-          pieceEndsWithZeroWidthJoiner &&
-          hasTail &&
-          (tailKind === 'space' || tailKind === 'preserved-space') &&
-          extendsPrecedingSpace(normalized, piece.start)
         if (hasTail) {
           mergedTexts[mergedLen] = normalized.slice(tailStart, tailEnd)
           mergedWordLike[mergedLen] = tailWordLike
@@ -1887,7 +1861,6 @@ function buildMergedSegmentation(
           pieceContainsArabicScript,
           pieceLastCodePoint,
         )
-        tailEndsWithZeroWidthJoiner = pieceEndsWithZeroWidthJoiner && !joinerExtendsSpace
       }
     }
   }
