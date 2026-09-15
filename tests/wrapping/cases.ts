@@ -15,6 +15,7 @@ import { ordinaryReasons } from './fixtures/ordinary.ts'
 import { sourceViewCases } from './fixtures/source-views.ts'
 import directionData from './fixtures/direction-conflicts.json' with { type: 'json' }
 import { corpusSources, corpusTexts } from './fixtures/corpora.ts'
+import { researchRecipes233 } from './fixtures/research-233.ts'
 import {
   generateCases as policyCases,
   generateLanguageCases,
@@ -434,6 +435,22 @@ export function generateCases(measure: Measure, selection: CaseSelection): Wrapp
     note: 'Known main marker/width failure: native paints a / b. A positive SHY Range is source allocation, not a hyphen.' })
   for (const cluster of ['e\u0301', '👩‍💻', '👍🏽', 'क्ष']) for (const text of [cluster, `a${cluster}b`]) {
     add({ ...defaults, family: 'emergency-graphemes', origins: ['emergency-graphemes'], text, width: 1, emergencyGraphemes: true })
+  }
+  // Opt-in #233 research rows for the rule-233 ablation, as the throwaway r0912
+  // research harness generated them: research scope and lineHeight 47.
+  if (family !== undefined && family.startsWith('r0912/')) {
+    researchRecipes233((origin, text, font, whiteSpace, widths, options = {}) => {
+      const researchFamily = `r0912/${origin.slice(0, origin.indexOf('/'))}`
+      for (const direction of options.directions ?? ['ltr', 'rtl'] as const) for (const width of widths) {
+        add({
+          ...defaults, text, ...(options.parts === undefined ? {} : { parts: [...options.parts], nativeItems: true as const }),
+          font, width, lineHeight: 47, whiteSpace, wordBreak: options.wordBreak ?? 'normal', letterSpacing: options.letterSpacing ?? 0,
+          direction, ...(options.lang === undefined ? {} : { lang: options.lang }),
+          ...(options.pageLang === undefined ? {} : { context: { kind: 'installed' as const, lang: options.pageLang } }),
+          family: researchFamily, origins: [`r0912/${origin}`], scope: 'research',
+        }, false)
+      }
+    })
   }
   // A family selects inputs, not a different assertion contract. Merge every
   // alias first so filtered replays retain the same scope and observation detail.
