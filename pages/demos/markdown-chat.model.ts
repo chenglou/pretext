@@ -26,7 +26,8 @@ export const TOTAL_MESSAGE_COUNT = 10_000
 const HISTORY_CHUNK_SIZE = 50
 // The most chunks loaded at once: the chunks on screen, and one on either side.
 // While every chunk is taller than the room between the banners, the screen
-// shows at most two chunks, so a smaller window would unload one it needs.
+// shows at most two chunks, so the window wants at most four. With fewer, a
+// screen straddling two chunks would load and drop a chunk on every frame.
 const HISTORY_WINDOW_CHUNKS = 4
 export const OCCLUSION_BANNER_HEIGHT = 61
 export const PAGE_MARGIN = 28
