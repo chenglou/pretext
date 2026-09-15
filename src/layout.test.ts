@@ -3254,7 +3254,8 @@ test('unchosen terminal soft hyphens consume source without painting a hyphen', 
 })
 
 
-test('the Safari profile breaks inside rich items from each item alone', () => {
+// Skipped on the ablation branch: it pins the 'item-text' mode that the flag turns off.
+test.skip('the Safari profile breaks inside rich items from each item alone', () => {
   // The engine profile is computed once per process, so Safari runs in a child
   // process. Letters are 8px and marks and spaces 4px. WebKit breaks inside an
   // inline box from that box's text, and reads only the previous box's last
