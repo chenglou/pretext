@@ -830,11 +830,12 @@ export function prepareGecko(paragraph: Paragraph, env: Environment, measurer: M
           : context.before ? au(context.text + ' ' + word) - au(context.text + ' ') : au(word + ' ' + context.text) - au(' ' + context.text)
         let total = w
         if (!b.is8bit && !fallbackGapReported && !/Apple Color Emoji/i.test(font.family) && hasEmojiPresentation(word)) {
-          // Firefox resolves system font fallback asynchronously (gfx.font_rendering.fallback.async, specs/gecko-canvas.md
-          // §1.11): a Canvas measurement can run before Apple Color Emoji is chosen for the cluster (suite-r1 measured 😀 at
-          // 17px instead of 32px in one document and 32px in another).
+          // Apple Color Emoji comes from font fallback, which Canvas and the DOM resolve separately (DESIGN.md §5
+          // font-fallback). Once any OffscreenCanvas in the document has measured U+1F600 U+FE0E, later measurements of
+          // U+1F600 at every size and family return the text glyph (17px at 32px Arial where a fresh document gives 32px;
+          // probes gecko-port F1 and F2, specs/gecko-RESULTS.md).
           fallbackGapReported = true
-          gaps.push({ gap: 'font-fallback', run: firstRun, detail: 'emoji through system font fallback, which Firefox can resolve after Canvas measures' })
+          gaps.push({ gap: 'font-fallback', run: firstRun, detail: 'emoji drawn by a fallback font; an earlier Canvas measurement of a text-presentation sequence pins the character to a text font' })
         }
         if (apd !== 60 && !b.is8bit) {
           // Apple Color Emoji advances come from Core Text at the device size (specs/gecko-canvas.md §1.9, §2 A12).
@@ -850,7 +851,14 @@ export function prepareGecko(paragraph: Paragraph, env: Environment, measurer: M
             const emojiContext = measureContext(measurer, { ...settings, font: canvasFont(font, devSize) })
             // The DOM stores floor(apd × device advance + 0.5) (gfxHarfBuzzShaper.cpp:1559); a lone regional indicator's
             // advance isn't a whole pixel (28.683px at 28px), so round once from the Canvas au at the device size.
-            const dom = Math.floor(Math.round(measureText(measurer, emojiContext, cluster) * 60) * apd / 60 + 0.5)
+            const deviceAu60 = Math.round(measureText(measurer, emojiContext, cluster) * 60)
+            const dom = Math.floor(deviceAu60 * apd / 60 + 0.5)
+            if ((deviceAu60 * apd) % 60 !== 0 && !emojiGapReported) {
+              // Canvas's au at the device size rounds once at apd 60; the DOM rounds at the page's apd, and adds synthetic
+              // bold after rounding (gfxFont.cpp:3551-3562), so the DOM value isn't determined (+1 au per bold flag, runs-r4).
+              emojiGapReported = true
+              gaps.push({ gap: 'bitmap-emoji-size', run: firstRun, detail: `device-size advance ${deviceAu60} au at apd 60 doesn't give an exact au at apd ${apd}` })
+            }
             const delta = dom - au(cluster)
             correction[t + boundaries[c]!] = delta
             total += delta

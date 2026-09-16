@@ -19,12 +19,35 @@ function glyphBefore(p: GeckoPrepared, m: Measurer, run: GeckoTextRun, t: number
   if (t >= run.tEnd) return run.totalAdvance
   const unit = p.units[p.unitOf[t]!]!
   if (t === unit.tStart) return unit.startAdvance
-  let suffix = ''
-  for (let k = t; k < unit.tEnd; k++) suffix += String.fromCharCode(p.tUnits[k]!)
   const w = (s: string) => Math.round(measureText(m, run.context, s) * 60)
+  let suffix = ''
+  // The letters on both sides of t join: measured alone, the suffix would take its isolated or initial forms, while the
+  // DOM's glyph records keep the joined forms. U+200D is join-causing (Joining_Type C) and has no advance, so Canvas
+  // shapes the suffix's first letter joined, as the paragraph did; the prefix keeps what depends on the following letter.
+  if (joinsAcross(p, unit, t)) suffix = '‍'
+  for (let k = t; k < unit.tEnd; k++) suffix += String.fromCharCode(p.tUnits[k]!)
   const suffixAu = unit.scriptContext === '' ? w(suffix)
     : unit.contextBefore ? w(unit.scriptContext + ' ' + suffix) - w(unit.scriptContext + ' ') : w(suffix + ' ' + unit.scriptContext) - w(' ' + unit.scriptContext)
   return unit.startAdvance + unit.canvasAu - suffixAu + (p.correctionPrefix[t]! - p.correctionPrefix[unit.tStart]!)
+}
+
+function codePointAtT(p: GeckoPrepared, i: number): number {
+  const u = p.tUnits[i]!
+  if ((u & 0xfc00) === 0xdc00 && i > 0 && (p.tUnits[i - 1]! & 0xfc00) === 0xd800) return 0x10000 + ((p.tUnits[i - 1]! - 0xd800) << 10) + (u - 0xdc00)
+  if ((u & 0xfc00) === 0xd800 && i + 1 < p.tUnits.length && (p.tUnits[i + 1]! & 0xfc00) === 0xdc00) return 0x10000 + ((u - 0xd800) << 10) + (p.tUnits[i + 1]! - 0xdc00)
+  return u
+}
+
+// A cursive connection across offset t inside a unit: the last non-transparent letter before t joins to its following
+// side and the first non-transparent letter from t joins to its preceding side (Joining_Type, ArabicShaping.txt).
+function joinsAcross(p: GeckoPrepared, unit: { tStart: number; tEnd: number }, t: number): boolean {
+  let a = t - 1
+  while (a > unit.tStart && joiningType(codePointAtT(p, a)) === 'T') a--
+  let b = t
+  while (b + 1 < unit.tEnd && joiningType(codePointAtT(p, b)) === 'T') b++
+  const left = joiningType(codePointAtT(p, a))
+  const right = joiningType(codePointAtT(p, b))
+  return (left === 'D' || left === 'L' || left === 'C') && (right === 'D' || right === 'R' || right === 'C')
 }
 
 // A frame's measuring context: nsTextFrame::PropertyProvider (nsTextFrame.cpp:3472-3500) with its tab widths.
@@ -569,8 +592,10 @@ function buildLine(p: GeckoPrepared, m: Measurer, lineStart: number, lineEnd: nu
     for (let s = r.offset; s < end; s++) {
       const t = p.sourceT[s]!
       if (t === -1 || isLowSurrogateOfPair(p.text, s)) continue
-      // A zero-width invalid character has no positive rect, so it neither counts nor stops the trailing run.
-      if (p.units[p.unitOf[t]!]!.kind === 'invalid' && p.kind[t] !== KIND_TAB && p.spacingPrefix[t + 1] === p.spacingPrefix[t]) continue
+      // A space, NBSP or invalid character whose advance isn't positive (a control, a space under negative word spacing)
+      // has no positive rect, so it neither counts nor stops the trailing run.
+      const unit = p.units[p.unitOf[t]!]!
+      if (unit.kind !== 'word' && unit.au + p.spacingPrefix[t + 1]! - p.spacingPrefix[t]! + (r.prov?.tabs.get(t) ?? 0) <= 0) continue
       kept.push(s)
     }
   }
@@ -647,7 +672,9 @@ function buildLine(p: GeckoPrepared, m: Measurer, lineStart: number, lineEnd: nu
   // visible code points' own extent (lab/score.ts lineExtent); a line without a visible code point observes 0.
   let hangingInk = false
   for (let k = 0; k < kept.length; k++) if (!visible.has(kept[k]!) && isWhiteSpaceProperty(p.text.codePointAt(kept[k]!)!)) hangingInk = true
-  const visibleAu = visible.size === 0 ? 0 : !hangingInk ? lineBoxAu : right > left ? right - left : 0
+  let hyphenated = false
+  for (let k = 0; k < placed.length; k++) if (placed[k]!.usedHyphenation) hyphenated = true
+  const visibleAu = visible.size === 0 && !hyphenated ? 0 : !hangingInk ? lineBoxAu : right > left ? right - left : 0
   return {
     start: lineStart, end: lineEnd, width: visibleAu / 60, engineWidth: { unit: 'gecko-app-unit', au: lineBoxAu }, fragments,
     joinsNextLine, next,

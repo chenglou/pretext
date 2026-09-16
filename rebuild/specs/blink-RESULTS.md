@@ -150,3 +150,14 @@ Counts are failing cases in the named runs; ids are examples in `.artifacts/lab/
   pre-wrap and pre-line, bidi D5) and `lines.test.ts` (DESIGN.md §2.2 examples 1 and 2, the +1 raw fit bound, forced
   breaks, an empty paragraph) with a stand-in Canvas.
 - A shaping-group edge inside a grapheme cluster now reports `font-fallback` (class 10 above).
+
+## Follow-up probes (not run yet)
+
+`rebuild/probes/blink-followups.ts` defines plain-observation probes for claims the rows contradict or can't settle:
+
+- F1 (Amiri, Geeza Pro): Arabic joining at breaks. specs/blink-gaps.md §3.2 says joining is unsafe_to_break,
+  specs/painter.md §3.1 a says unsafe_to_concat; the rows say OpenType fonts keep joined forms and AAT fonts don't
+  (class 2).
+- F2: HanKerning's line-end trim of a lone 》 (class 1).
+- F3: whether Blink draws a hyphen at an RTL soft-hyphen break whose SHY rect is zero width (class 6).
+- F4: tab stops from the untruncated space advance (class 5).

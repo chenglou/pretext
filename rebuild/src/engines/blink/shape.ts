@@ -15,7 +15,7 @@
 import { measureContext, measureText, type Measurer } from '../../measure/canvas.js'
 import { canvasFont } from '../../measure/font.js'
 import { hanKerningFontData, hanKerningMayApply, resolvedCharType, shouldKern, shouldKernLast, trim16 } from './hankerning.js'
-import { joiningType } from './props.js'
+import { joiningType, scriptKind } from './props.js'
 import type { BlinkPrepared, BlinkStyle } from './types.js'
 
 const f32 = Math.fround
@@ -133,7 +133,23 @@ export function measure16(sh: Shaper, g: number, from: number, to: number): numb
   const zwjAfter = to < group.end && joinsAcross(p, to) ? '\u200d' : ''
   const w = s.length === 0 ? 0 : Math.round(measureText(m, group.rtl ? contexts.rtl : contexts.ltr, zwjBefore + s + zwjAfter) * 65536)
   const st = p.styles[group.style]!
-  return w - formFeeds * raw16Trunc(f32(st.letterSpacing * p.layoutZoom)) + wordSpacing16(p, group.style, from, to)
+  const ls16 = st.letterSpacing === 0 ? 0 : raw16Trunc(f32(st.letterSpacing * p.layoutZoom))
+  return w - formFeeds * ls16 + spacesInCursiveRuns(p, from, to) * ls16 + wordSpacing16(p, group.style, from, to)
+}
+
+// Letter spacing skips clusters of cursive scripts except spaces (shape_result_spacing.cc:118-130). A U+2028 standing for
+// a space in such a run isn't a space to Canvas, so the space's spacing is added back: the space takes the script of the
+// nearest character before it that has one, else after it (ScriptRunIterator merging Common characters).
+function spacesInCursiveRuns(p: BlinkPrepared, from: number, to: number): number {
+  let n = 0
+  for (let i = from; i < to; i++) {
+    if (p.text.charCodeAt(i) !== 0x20) continue
+    let kind = 1
+    for (let j = i - 1; j >= from && kind === 1; j--) kind = scriptKind(p.text.charCodeAt(j))
+    for (let j = i + 1; j < to && kind === 1; j++) kind = scriptKind(p.text.charCodeAt(j))
+    if (kind === 2) n++
+  }
+  return n
 }
 
 // Word spacing on U+0020, TAB, LF and NBSP, except at text_content index 0 unless NBSP or the block preserves spaces

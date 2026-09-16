@@ -72,6 +72,24 @@ await forEachPpucdRange(ppucdPath, range => {
   const type = gc === 'Ps' ? (wide ? HAN_OPEN : HAN_OPEN_NARROW) : (wide ? HAN_CLOSE : HAN_CLOSE_NARROW)
   for (let cp = range.first; cp <= range.last; cp++) hanKerning.set(cp, type)
 })
+// Script kinds for letter spacing in cursive scripts (shape_result.cc:977-990 IsCursiveScript; ScriptRunIterator gives
+// Common and Inherited characters the script around them): 1 Common or Inherited, 2 cursive.
+const CURSIVE = new Set(['Arab', 'Rohg', 'Mand', 'Mong', 'Nkoo', 'Phag', 'Syrc'])
+const scriptKinds = new Uint8Array(0x110000)
+await forEachPpucdRange(ppucdPath, range => {
+  const sc = range.props.get('sc') ?? ''
+  const kind = sc === 'Zyyy' || sc === 'Zinh' ? 1 : CURSIVE.has(sc) ? 2 : 0
+  scriptKinds.fill(kind, range.first, range.last + 1)
+})
+const scriptFlat: number[] = []
+for (let cp = 0; cp < scriptKinds.length;) {
+  const kind = scriptKinds[cp]!
+  let end = cp
+  while (end + 1 < scriptKinds.length && scriptKinds[end + 1] === kind) end++
+  if (kind !== 0) scriptFlat.push(cp, end, kind)
+  cp = end + 1
+}
+
 const hanKerningFlat: number[] = []
 for (const [cp, type] of [...hanKerning.entries()].sort((a, b) => a[0] - b[0])) if (type !== HAN_OTHER) hanKerningFlat.push(cp, type)
 
@@ -103,4 +121,8 @@ export const blinkCharPropsBase64 = '${base64(packed)}'
 // HanKerningCharType as [code point, type] pairs for every code point not kOther: 1 open, 2 close, 3 middle, 4 open
 // narrow, 5 close narrow, 6 dot, 7 colon, 8 semicolon, 9 open quote, 10 close quote.
 export const blinkHanKerningTypes: readonly number[] = [${hanKerningFlat.join(',')}]
+
+// Script kind runs as [first, last, kind]: 1 Common or Inherited (sc=Zyyy, Zinh), 2 a cursive script (Arab, Rohg, Mand,
+// Mong, Nkoo, Phag, Syrc); code points in no run have another script.
+export const blinkScriptKinds: readonly number[] = [${scriptFlat.join(',')}]
 `)

@@ -1,7 +1,7 @@
 // Unicode properties Chrome 153 reads through ICU 78.2: Line_Break (break-all), General_Category L, N and M (keep-all),
 // and Joining_Type (HarfBuzz's Arabic joining), per code point, from tools/gen-blink-data.ts.
 import { decodeBase64 } from '../../breaks/icu4x.js'
-import { blinkCharPropsBase64, blinkHanKerningTypes } from '../../breaks/generated/blink-break-tables.js'
+import { blinkCharPropsBase64, blinkHanKerningTypes, blinkScriptKinds } from '../../breaks/generated/blink-break-tables.js'
 
 // ULineBreak values used by name (unicode/uchar.h:2487-2565).
 export const LB_AL = 2
@@ -58,4 +58,17 @@ export function hanKerningCharType(cp: number): number {
     for (let i = 0; i < blinkHanKerningTypes.length; i += 2) hanKerningTypes.set(blinkHanKerningTypes[i]!, blinkHanKerningTypes[i + 1]!)
   }
   return hanKerningTypes.get(cp) ?? HAN_OTHER
+}
+
+// Script kind: 0 another script, 1 Common or Inherited, 2 a cursive script.
+export function scriptKind(cp: number): number {
+  let lo = 0
+  let hi = blinkScriptKinds.length / 3 - 1
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1
+    if (cp < blinkScriptKinds[mid * 3]!) hi = mid - 1
+    else if (cp > blinkScriptKinds[mid * 3 + 1]!) lo = mid + 1
+    else return blinkScriptKinds[mid * 3 + 2]!
+  }
+  return 0
 }

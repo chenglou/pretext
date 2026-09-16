@@ -118,6 +118,11 @@ function prepareGaps(p: BlinkPrepared): void {
     const group = p.groups[g]!
     // HarfBuzz's context joins OpenType Arabic fonts across shaping calls; AAT fonts join only inside one call
     // (probes-chrome.md blink-text H3). Canvas can't tell the two apart, and pieces here join only inside a group.
+    // An element edge inside an extended grapheme cluster splits a sequence the DOM shapes in two calls (e.g. a keycap or
+    // emoji ZWJ sequence across spans); Canvas measures each part alone and may pick other glyphs.
+    if (group.start > 0 && p.graphemeStarts[group.start] !== 1) {
+      addGap(p, 'font-fallback', p.styles[group.style]!.run, 'a shaping-group edge inside a grapheme cluster')
+    }
     if (g > 0 && p.groups[g - 1]!.end === group.start && joinsAcross(p, group.start)) {
       addGap(p, 'unsafe-to-break', p.styles[group.style]!.run, 'joining letters on both sides of a shaping-group edge')
     }

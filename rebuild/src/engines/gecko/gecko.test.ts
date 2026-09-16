@@ -102,6 +102,12 @@ describe('gecko line filling (probes-firefox verdicts)', () => {
     expect(widths(paragraph([run('aaaaaaa\tb')], 500, { whiteSpace: 'pre' }))).toEqual([4608 + 576])
     expect(widths(paragraph([run('aaaaaaaa\tb')], 500, { whiteSpace: 'pre' }))).toEqual([9216 + 576])
   })
+  test('tab widths: tab-size 0 and a negative tab width leave tabs at 0 (nsTextFrame.cpp:4306-4309)', () => {
+    expect(widths(paragraph([run('a\tb')], 500, { whiteSpace: 'pre', tabSize: 0 }))).toEqual([1152])
+    // letter-spacing -10px: 8 × (576 − 600) au is negative, so no tab stops; `a` and `b` each get −600 au, and the frame
+    // width is ceil(max(0, −48)) = 0 (nsTextFrame.cpp:11272-11273).
+    expect(widths(paragraph([run('a\tb', 'text', { letterSpacing: -10 })], 500, { whiteSpace: 'pre', letterSpacing: -10 }))).toEqual([0])
+  })
   test('H16 the hyphen letter spacing counts for fit, not width', () => {
     const p = paragraph([run('aaaa­bbbb', 'span', { letterSpacing: 1 })], 53)
     expect(starts(p)).toEqual([0, 5])

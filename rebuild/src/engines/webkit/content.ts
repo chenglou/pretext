@@ -142,7 +142,13 @@ function isComplexCodePath(text: string): boolean {
       if (s < 0xe0080) return true
       if (s < 0xe0100) continue
       if (s <= 0xe01ef) return true
+      continue
     }
+    // :961-969, variation selectors and combining half marks.
+    if (c < 0xfe00) continue
+    if (c <= 0xfe0f) return true
+    if (c < 0xfe20) continue
+    if (c <= 0xfe2f) return true
   }
   return false
 }

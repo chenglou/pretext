@@ -108,12 +108,14 @@ describe('BreakablePositions data', () => {
 
   test('linebreak-table-pairs.tsv', () => {
     const rows = readFileSync(resolve(DATA, 'webkit/breakable-positions/linebreak-table-pairs.tsv'), 'utf8').split('\n')
+    // `before \t count \t afters`, the afters where a break is allowed, as hex code units.
     const expected = new Set<string>()
     for (let i = 0; i < rows.length; i++) {
       const row = rows[i]!
       if (row.length === 0 || row.startsWith('#')) continue
-      const [before, after] = row.split('\t')
-      expected.add(`${parseInt(before!, 16)} ${parseInt(after!, 16)}`)
+      const [before, , afters] = row.split('\t')
+      const list = afters === undefined || afters.length === 0 ? [] : afters.split(' ')
+      for (let k = 0; k < list.length; k++) expected.add(`${parseInt(before!, 16)} ${parseInt(list[k]!, 16)}`)
     }
     let breakable = 0
     for (let before = 0x21; before <= 0xff; before++) {
