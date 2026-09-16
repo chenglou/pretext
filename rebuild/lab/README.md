@@ -12,6 +12,7 @@ doesn't depend on the old library in `src/`.
 - `tsconfig.json`: the repo's strict settings over the lab and its case generators
   (`bunx tsc -p rebuild/lab/tsconfig.json --noEmit`).
 - `VALIDATION.md`: what the end-to-end validation ran, found and fixed.
+- `WEBKIT-HOST.md`: how the WKWebView host's rows compare with installed Safari's, and when they may stand in for it.
 - `smoke-cases.ndjson`: 25 hand-written cases covering spans, bare white-space text nodes, pre-wrap with trailing
   spaces and empty lines, `pre`, `pre-line`, `break-spaces`, `nowrap`, RTL Hebrew and Arabic, CJK, keep-all, emoji,
   soft hyphens, combining marks, ZWSP, mixed font sizes, tabs, a span with its own `lang`, a fixture web font and a
@@ -28,7 +29,7 @@ bun rebuild/lab/score.ts --rows=.artifacts/lab/smoke/chrome-rows.ndjson --cases=
   --out=.artifacts/lab/smoke/chrome-summary.json --examples=10 --per-case=.artifacts/lab/smoke/chrome-per-case.ndjson
 ```
 
-`run.ts` options: `--browser=chrome|safari|firefox`, `--cases`, `--out`, `--limit=N`, `--family=substring`,
+`run.ts` options: `--browser=chrome|safari|firefox|webkit-host`, `--cases`, `--out`, `--limit=N`, `--family=substring`,
 `--chunk=N` (cases per round trip, default 25), `--stall-ms=N` (fail after this long without page activity, default
 120000) and `--predictor=<file>`, which bundles another module in place of `predictor.ts` for experiments.
 
@@ -55,10 +56,21 @@ Sessions stay in the background and never activate a window.
   takes keyboard focus there, so the driver first waits, for at most 10 minutes, until Safari isn't the frontmost
   app, then exits with an error. If Safari takes focus anyway, the driver gives it back to the previously frontmost
   app. Closing removes only that uniquely identified tab.
+- webkit-host: the system WebKit.framework, which installed Safari runs, in a small WKWebView app
+  (`rebuild/tools/webkit-host/main.swift`, built by `build.sh` into `.artifacts/webkit-host/webkit-host`). The driver
+  spawns it with the page URL; it doesn't touch the user's Safari. The host never activates (accessory app, no Dock
+  icon or menu bar, a window that can't become key) and shows one borderless, transparent, click-through window at
+  desktop level, below every normal window, on the menu-bar screen, so the page gets that screen's DPR. WebKit hides
+  a page whose window is covered, so the window reports itself visible. The host uses a non-persistent data store,
+  records Safari's linked SDK version so WebKit enables the same SDK-gated behaviours, and hides user-installed fonts
+  as Safari does, with the one private API it calls (`-[WKPreferences _setShouldAllowUserInstalledFonts:]`). Its user
+  agent ends with `Version/<installed Safari's version> Safari/605.1.15 webkit-host/<WebKit build>`. It exits when the
+  page's title is `lab done` or when the driver exits, and it logs to the driver's stderr. It takes Safari's cases, but
+  rows and files say `webkit-host`, so they never mix with Safari's, and the scorer treats it as Safari.
 
 The page navigates itself. Apart from opening Chrome's window, no remote debugging protocol is used. The driver
-closes the browser it opened (Chrome and Firefox get SIGTERM, then SIGKILL) and moves their profiles to the Trash. It
-launches once and never retries.
+closes the browser it opened (Chrome and Firefox get SIGTERM, then SIGKILL; webkit-host gets 2 s to exit by itself
+first) and moves their profiles to the Trash. It launches once and never retries.
 
 ## Page protocol
 
@@ -171,3 +183,7 @@ These findings from the smoke runs shape the rules above:
   whole-node rects wherever possible. When hanging white space forces code point rects and an extent edge is a whole
   pixel, the width is unobserved.
 - Firefox 156: rect values are app units (1/60px) read through float32.
+- webkit-host on WebKit 22625.1.29.11.27, Safari 27.0's build: the same Range geometry as installed Safari 27 wherever
+  both observed a case after the same earlier cases in the document. In WebKit a few cases (web-font Arabic with
+  brackets, soft hyphens next to controls, 12px URL seams) depend on the cases before them, in the host and in
+  Safari alike. `WEBKIT-HOST.md` has the comparison and the rule for when host rows may stand in for Safari.

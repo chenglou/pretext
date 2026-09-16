@@ -1,30 +1,47 @@
 // The prediction hook. page.ts imports this file and nothing else from the library side, so the rebuilt
 // library plugs in by editing this file only (run.ts --predictor=<file> swaps it for experiments).
 //
-// Until rebuild/src exists this is a stand-in: one line holding all the text, whose width is the sum of
-// each run's Canvas measureText width. paint returns null, so painter observations are skipped.
+// predict() lays the paragraph out with rebuild/src for the running browser's engine. paint() lays it out again (with a
+// fresh measurer, so the same Canvas results) and paints the lines, because the hook passes only the lab's Prediction.
+import { detectEnvironment, type EngineName, type Environment } from '../src/env.ts'
+import { layoutParagraph } from '../src/index.ts'
+import { paintLines } from '../src/paint.ts'
 import type { BrowserKind, Case, Prediction } from './types.ts'
 
-export function predict(c: Case, _env: { browser: BrowserKind; dpr: number }): Prediction | { error: string } {
-  const ctx = new OffscreenCanvas(1, 1).getContext('2d')
-  if (ctx === null) return { error: 'No OffscreenCanvas 2d context' }
-  let width = 0
-  let length = 0
-  let measureLog = 0
-  const runs = c.paragraph.runs
-  for (let i = 0; i < runs.length; i++) {
-    const run = runs[i]!
-    ctx.font = `${run.font.style} ${run.font.weight} ${run.font.size}px ${run.font.family}`
-    ctx.letterSpacing = `${run.letterSpacing}px`
-    ctx.wordSpacing = `${run.wordSpacing}px`
-    width += ctx.measureText(run.text).width
-    measureLog++
-    length += run.text.length
+function engineOf(browser: BrowserKind): EngineName {
+  switch (browser) {
+    case 'chrome': return 'blink'
+    case 'safari': return 'webkit'
+    case 'webkit-host': return 'webkit'
+    case 'firefox': return 'gecko'
   }
-  return { lines: [{ start: 0, end: length, width }], measureLog }
+}
+
+function environment(browser: BrowserKind | null): Environment | { error: string } {
+  const detected = detectEnvironment()
+  if (detected.kind === 'unsupported') return { error: `Unsupported browser: ${detected.reason} (${detected.userAgent})` }
+  if (browser !== null && detected.env.engine.name !== engineOf(browser)) {
+    return { error: `The driver says ${browser}, the page runs ${detected.env.engine.browser}` }
+  }
+  return detected.env
+}
+
+export function predict(c: Case, env: { browser: BrowserKind; dpr: number }): Prediction | { error: string } {
+  const e = environment(env.browser)
+  if ('error' in e) return e
+  if (c.pageLang !== e.pageLang) return { error: `Case ${c.id} needs <html lang="${c.pageLang}">; page has "${e.pageLang}"` }
+  const layout = layoutParagraph(c.paragraph, e)
+  const lines: Prediction['lines'] = []
+  for (let i = 0; i < layout.lines.length; i++) {
+    const line = layout.lines[i]!
+    lines.push({ start: line.start, end: line.end, width: line.width })
+  }
+  return { lines, measureLog: layout.measure.calls.length }
 }
 
 // One element per predicted line, or null when the predictor doesn't paint.
-export function paint(_c: Case, _prediction: Prediction, _host: HTMLElement): HTMLElement[] | null {
-  return null
+export function paint(c: Case, _prediction: Prediction, host: HTMLElement): HTMLElement[] | null {
+  const e = environment(null)
+  if ('error' in e) return null
+  return paintLines(c.paragraph, layoutParagraph(c.paragraph, e), host.ownerDocument)
 }

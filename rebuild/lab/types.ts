@@ -1,49 +1,13 @@
 // Shared data shapes for the rebuild's observation lab. The lab owns this file; generators use the case
 // shapes, the page and scorer use all of it.
 
-export type BrowserKind = 'chrome' | 'safari' | 'firefox'
+// 'webkit-host': the system WebKit.framework, the engine installed Safari runs, in rebuild/tools/webkit-host. Its rows stay
+// apart from Safari's; it takes Safari's cases and is scored like Safari.
+export type BrowserKind = 'chrome' | 'safari' | 'firefox' | 'webkit-host'
 
-export type FontDecl = {
-  // CSS font-family list, e.g. '"Helvetica Neue", Arial'.
-  family: string
-  // CSS px.
-  size: number
-  weight: number
-  style: 'normal' | 'italic'
-}
-
-export type TextRun = {
-  text: string
-  // 'span': the text in its own <span> carrying this run's styles.
-  // 'text': a bare text node inheriting the paragraph's styles (for example white space between spans);
-  // its font, letterSpacing, wordSpacing and lang must equal the paragraph's.
-  node: 'span' | 'text'
-  font: FontDecl
-  letterSpacing: number
-  wordSpacing: number
-  // The span's lang attribute; null inherits the paragraph's.
-  lang: string | null
-}
-
-export type Paragraph = {
-  runs: TextRun[]
-  // The block's own styles, inherited by bare text nodes.
-  font: FontDecl
-  letterSpacing: number
-  wordSpacing: number
-  // Content-box width in CSS px.
-  width: number
-  // Fixed line height in CSS px.
-  lineHeight: number
-  whiteSpace: 'normal' | 'pre' | 'pre-wrap' | 'pre-line' | 'nowrap' | 'break-spaces'
-  wordBreak: 'normal' | 'break-all' | 'keep-all' | 'break-word'
-  overflowWrap: 'normal' | 'break-word' | 'anywhere'
-  lineBreak: 'auto' | 'loose' | 'normal' | 'strict' | 'anywhere'
-  tabSize: number
-  direction: 'ltr' | 'rtl'
-  // The paragraph element's lang attribute.
-  lang: string
-}
+// The styled paragraph is the library's input, defined once in rebuild/src/model.ts.
+import type { Paragraph } from '../src/model.ts'
+export type { FontDecl, Paragraph, TextRun } from '../src/model.ts'
 
 export type Case = {
   id: string

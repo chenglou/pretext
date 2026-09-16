@@ -10,7 +10,7 @@ type MetricName = 'lineCount' | 'breaks' | 'widths' | 'painter'
 const METRICS: MetricName[] = ['lineCount', 'breaks', 'widths', 'painter']
 
 // Layout coordinates: Blink and WebKit LayoutUnit is 1/64px, Gecko app units are 1/60px.
-const GRID: Record<BrowserKind, number> = { chrome: 64, safari: 64, firefox: 60 }
+const GRID: Record<BrowserKind, number> = { chrome: 64, safari: 64, firefox: 60, 'webkit-host': 64 }
 
 const INVISIBLE = /^[\p{Cc}\p{Cf}\p{Zl}\p{Zp}\p{Default_Ignorable_Code_Point}]$/u
 const WHITE_SPACE = /^\p{White_Space}$/u
@@ -338,7 +338,7 @@ function deriveNative(c: Case, native: NativeObservation, text: string, browser:
     } else {
       widthSource = 'code points'
       const startEdge = p.direction === 'ltr' ? left === 0 : right === p.width
-      if (browser === 'safari' && (Number.isInteger(p.direction === 'ltr' ? right : left) || (!startEdge && Number.isInteger(p.direction === 'ltr' ? left : right)))) {
+      if ((browser === 'safari' || browser === 'webkit-host') && (Number.isInteger(p.direction === 'ltr' ? right : left) || (!startEdge && Number.isInteger(p.direction === 'ltr' ? left : right)))) {
         widthIssue ??= 'Safari snaps partial Range rects to whole CSS px; hanging white space rules out whole-node geometry'
       }
     }

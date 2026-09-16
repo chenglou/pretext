@@ -28,12 +28,14 @@ const KNOWN = ['browser', 'cases', 'out', 'limit', 'family', 'chunk', 'predictor
 const args = new Map<string, string>()
 for (const raw of process.argv.slice(2)) {
   const match = /^--([a-z-]+)=(.*)$/s.exec(raw)
-  if (match === null || !KNOWN.includes(match[1]!)) fail(`Unknown argument ${raw}. Usage: bun rebuild/lab/run.ts --browser=chrome|safari|firefox --cases=<cases.ndjson> --out=<dir> [--limit=N] [--family=substr] [--chunk=N] [--predictor=<file>] [--stall-ms=N]`)
+  if (match === null || !KNOWN.includes(match[1]!)) fail(`Unknown argument ${raw}. Usage: bun rebuild/lab/run.ts --browser=chrome|safari|firefox|webkit-host --cases=<cases.ndjson> --out=<dir> [--limit=N] [--family=substr] [--chunk=N] [--predictor=<file>] [--stall-ms=N]`)
   args.set(match[1]!, match[2]!)
 }
 const browserArg = args.get('browser')
-if (browserArg !== 'chrome' && browserArg !== 'safari' && browserArg !== 'firefox') fail('--browser must be chrome, safari or firefox')
+if (browserArg !== 'chrome' && browserArg !== 'safari' && browserArg !== 'firefox' && browserArg !== 'webkit-host') fail('--browser must be chrome, safari, firefox or webkit-host')
 const browser: BrowserKind = browserArg
+// webkit-host runs installed Safari's engine, so it takes Safari's cases.
+const caseBrowser: BrowserKind = browser === 'webkit-host' ? 'safari' : browser
 const casesPath = args.get('cases') ?? fail('--cases is required')
 const outDir = resolve(args.get('out') ?? fail('--out is required'))
 function positiveInteger(name: string, fallback: number): number {
@@ -113,7 +115,7 @@ const casesByContext = new Map<string, Case[]>()
     if (problem !== null) fail(`${casesPath}:${i + 1}: ${problem}`)
     if (ids.has(c.id)) fail(`${casesPath}:${i + 1}: duplicate id ${c.id}`)
     ids.add(c.id)
-    if (c.browsers !== undefined && !c.browsers.includes(browser)) continue
+    if (c.browsers !== undefined && !c.browsers.includes(caseBrowser)) continue
     if (familyFilter !== undefined && !c.family.includes(familyFilter)) continue
     if (selected >= limit) continue
     selected++
@@ -302,21 +304,13 @@ function backgroundAppleScript(lines: string[]): string {
   }
 }
 
-// Seconds since the last keyboard or mouse input (IOHIDSystem HIDIdleTime, in nanoseconds).
-function userIdleSeconds(): number {
-  const out = execFileSync('ioreg', ['-c', 'IOHIDSystem'], { encoding: 'utf8', timeout: 15_000 })
-  const match = /"HIDIdleTime" = (\d+)/.exec(out)
-  return match === null ? 0 : Number(match[1]) / 1e9
-}
-
 // A new document in a frontmost Safari opens over the user's windows and takes keyboard focus there, and handing focus
-// back afterwards doesn't undo that. So the lab window is only created while Safari is in the background, or while
-// the user has been away from the keyboard and mouse for 10 minutes (then nobody's typing can land in it).
+// back afterwards doesn't undo that. So the lab window is only created while Safari is in the background.
 async function launchSafari(url: string, runId: string, baseUrl: string): Promise<Session> {
   const waitStart = Date.now()
-  for (let announced = false; frontmostApp() === 'Safari' && userIdleSeconds() < 600;) {
+  for (let announced = false; frontmostApp() === 'Safari';) {
     if (Date.now() - waitStart > 10 * 60_000) throw new Error('Safari stayed the frontmost app for 10 minutes; not opening the lab window over the user\'s windows')
-    if (!announced) console.log('[lab] safari: waiting until Safari is no longer the frontmost app or the user is idle')
+    if (!announced) console.log('[lab] safari: waiting until Safari is no longer the frontmost app')
     announced = true
     await Bun.sleep(2_000)
   }
@@ -363,6 +357,30 @@ async function launchSafari(url: string, runId: string, baseUrl: string): Promis
       } catch {
         // The owned window may already be gone.
       }
+    },
+  }
+}
+
+// The system WebKit.framework, the engine installed Safari runs, in a background WKWebView app built by
+// rebuild/tools/webkit-host/build.sh. The driver spawns it directly. It never activates, keeps its window behind every
+// normal window, and exits when the page's title is 'lab done' or when the driver exits. One attempt only.
+async function launchWebKitHost(url: string): Promise<Session> {
+  const executable = resolve(LAB_DIR, '../../.artifacts/webkit-host/webkit-host')
+  if (!await Bun.file(executable).exists()) throw new Error(`${executable} is missing; build it with rebuild/tools/webkit-host/build.sh`)
+  const host = Bun.spawn([executable, `--url=${url}`, '--width=1440', '--height=900', '--exit-title=lab done'], { stdin: 'ignore', stdout: 'inherit', stderr: 'inherit' })
+  let closing = false
+  void host.exited.then(code => {
+    if (!closing) stopRun(new Error(`webkit-host exited with code ${code} before the run finished`))
+  })
+  const exited = (ms: number): Promise<boolean> => Promise.race([host.exited.then(() => true), Bun.sleep(ms).then(() => false)])
+  return {
+    async close() {
+      closing = true
+      if (await exited(2_000)) return
+      host.kill('SIGTERM')
+      if (await exited(4_000)) return
+      host.kill('SIGKILL')
+      if (!await exited(4_000)) throw new Error(`webkit-host ${host.pid} did not exit`)
     },
   }
 }
@@ -556,6 +574,7 @@ try {
     case 'chrome': session = await launchChrome(url, runId); break
     case 'firefox': session = await launchFirefox(url, runId); break
     case 'safari': session = await launchSafari(url, runId, baseUrl); break
+    case 'webkit-host': session = await launchWebKitHost(url); break
   }
   lastActivity = Date.now()
   const watchdog = setInterval(() => {
