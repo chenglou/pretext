@@ -1,0 +1,190 @@
+{
+ "file": "modules/libpref/init/StaticPrefList.yaml @ FIREFOX_156_0_RELEASE",
+ "release": "156.0 is a release build: @IS_NOT_RELEASE_OR_BETA@ = false, NIGHTLY_BUILD undefined",
+ "consumersChecked": "StaticPrefs:: uses in intl/lwbrk/*.cpp and dom/base/nsLineBreaker.cpp: none. Line breaking opportunities have no pref at 156.",
+ "prefs": [
+  {
+   "name": "bidi.numeral",
+   "line": 1021,
+   "valueLines": [
+    "value: 0"
+   ],
+   "effect": "FormatUnicodeText numeral shaping (nsBidiPresUtils.cpp:2019-2074). 0 = nominal: no digit substitution."
+  },
+  {
+   "name": "bidi.direction",
+   "line": 1038,
+   "valueLines": [
+    "value: 1"
+   ],
+   "effect": "Document bidi option direction used by a connected canvas with direction 'inherit' and no style (CanvasRenderingContext2D.cpp:5142-5144)."
+  },
+  {
+   "name": "browser.display.auto_quality_min_font_size",
+   "line": 1535,
+   "valueLines": [
+    "value: 20"
+   ],
+   "effect": "text-rendering:auto sets TEXT_OPTIMIZE_SPEED below this many device px (nsLayoutUtils.cpp:6913-6919; canvas compares CSS px at CanvasRenderingContext2D.cpp:5198-5204). The flag only skips bounding boxes (nsTextFrame.cpp:2604); no width effect."
+  },
+  {
+   "name": "font.size.inflation.emPerLine",
+   "line": 6820,
+   "valueLines": [
+    "value: 0"
+   ],
+   "effect": "Font inflation (mobile); 0 on desktop disables it."
+  },
+  {
+   "name": "font.size.inflation.minTwips",
+   "line": 6831,
+   "valueLines": [
+    "value: 0"
+   ],
+   "effect": "Font inflation (mobile); 0 on desktop disables it."
+  },
+  {
+   "name": "gfx.font_rendering.coretext.enabled",
+   "line": 7849,
+   "valueLines": [
+    "value: false",
+    "#endif"
+   ],
+   "effect": "macOS: false -> all shaping through HarfBuzz (gfxMacFont.cpp:157)."
+  },
+  {
+   "name": "gfx.font_rendering.fallback.async",
+   "line": 7861,
+   "valueLines": [
+    "value: true"
+   ],
+   "effect": "System font fallback may run asynchronously (gfxTextRun.cpp:3111, gfxPlatformFontList.cpp:1481): a first layout can use a temporary font and reflow later."
+  },
+  {
+   "name": "gfx.font_rendering.fallback.unassigned_chars",
+   "line": 7873,
+   "valueLines": [
+    "value: false",
+    "#if defined(MOZ_WIDGET_GTK) || defined(MOZ_WIDGET_ANDROID)"
+   ],
+   "effect": "No system fallback for unassigned code points (gfxTextRun.cpp:3525)."
+  },
+  {
+   "name": "gfx.font_rendering.graphite.enabled",
+   "line": 7925,
+   "valueLines": [
+    "value: true"
+   ],
+   "effect": "Graphite shaping for fonts with Graphite tables (gfxFont.cpp:3495-3510)."
+  },
+  {
+   "name": "gfx.font_rendering.wordcache.charlimit",
+   "line": 7931,
+   "valueLines": [
+    "value: 32"
+   ],
+   "effect": "Words longer than 32 UTF-16 units are shaped straight into the run instead of the word cache (gfxFont.cpp:3736-3739, :3804-3811); same shaper, no width change."
+  },
+  {
+   "name": "layout.css.dpi",
+   "line": 10735,
+   "valueLines": [
+    "value: -1"
+   ],
+   "effect": "Physical units only (nsDeviceContext.cpp:81-92)."
+  },
+  {
+   "name": "layout.css.moz-control-character-visibility.enabled",
+   "line": 10777,
+   "valueLines": [
+    "value: false"
+   ],
+   "effect": "Exposes the property to content; off."
+  },
+  {
+   "name": "layout.css.devPixelsPerPx",
+   "line": 10871,
+   "valueLines": [
+    "value: -1.0f"
+   ],
+   "effect": "-1 = use the widget scale; sets app units per device pixel (nsDeviceContext.cpp:52-55, :94-98)."
+  },
+  {
+   "name": "layout.css.control-characters.visible",
+   "line": 10927,
+   "valueLines": [
+    "value: @IS_NOT_RELEASE_OR_BETA@"
+   ],
+   "effect": "Initial value of -moz-control-character-visibility (servo values/specified/text.rs:932-939). Release: false -> Hidden -> TEXT_HIDE_CONTROL_CHARACTERS for DOM text (nsLayoutUtils.cpp:6905-6908): stray C0/C1 controls get no hexbox and no advance. An OffscreenCanvas has no style, so its runs keep hexboxes."
+  },
+  {
+   "name": "layout.css.intrinsic-size-first-letter.enabled",
+   "line": 11032,
+   "valueLines": [
+    "value: true"
+   ],
+   "effect": "::first-letter intrinsic sizing (nsTextFrame.cpp:10112); not in plain paragraphs."
+  },
+  {
+   "name": "layout.css.letter-spacing.model",
+   "line": 11041,
+   "valueLines": [
+    "#ifdef NIGHTLY_BUILD",
+    "value: 2",
+    "#else",
+    "value: 0",
+    "#endif"
+   ],
+   "effect": "DOM letter-spacing placement (nsTextFrame.cpp:4114-4133). Release value 0 = whole amount after each cluster (trailing side); only the position changes, the sum per frame is the same as model 1."
+  },
+  {
+   "name": "layout.css.text-transform.uppercase-eszett.enabled",
+   "line": 11323,
+   "valueLines": [
+    "value: false"
+   ],
+   "effect": "text-transform:uppercase maps U+00DF to 'SS' (false) instead of U+1E9E (nsTextFrame.cpp:2628, :11711)."
+  },
+  {
+   "name": "layout.css.text-autospace.enabled",
+   "line": 11330,
+   "valueLines": [
+    "value: true"
+   ],
+   "effect": "Property enabled, but its initial value is no-autospace (servo properties/longhands.toml:2610-2612), so no inter-script spacing unless authored."
+  },
+  {
+   "name": "layout.css.text-wrap-balance.limit",
+   "line": 11343,
+   "valueLines": [
+    "value: 10"
+   ],
+   "effect": "text-wrap: balance only (nsBlockFrame.cpp:1769, :1813)."
+  },
+  {
+   "name": "layout.css.text-wrap-balance-after-clamp.enabled",
+   "line": 11348,
+   "valueLines": [
+    "value: true"
+   ],
+   "effect": "text-wrap: balance with line-clamp only (nsBlockFrame.cpp:1784)."
+  },
+  {
+   "name": "layout.css.text-align.justify-only-after-last-tab",
+   "line": 11353,
+   "valueLines": [
+    "value: true"
+   ],
+   "effect": "text-align: justify with tabs only (nsTextFrame.cpp:3740)."
+  },
+  {
+   "name": "layout.css.zoom.enabled",
+   "line": 11379,
+   "valueLines": [
+    "value: true"
+   ],
+   "effect": "CSS zoom property enabled."
+  }
+ ],
+ "notFound": []
+}

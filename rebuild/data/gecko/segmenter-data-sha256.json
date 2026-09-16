@@ -1,0 +1,131 @@
+{
+ "firefoxTag": "FIREFOX_156_0_RELEASE",
+ "firefoxCommit": "3bf8f468258c2181f455e23d4ffcd6acb8f4cdb1",
+ "icu4xGitInfo": "commit 3579f233b2bdffbd99183d797231f9d7a0448548",
+ "datagenDefaults": {
+  "cldr": "48.0.0",
+  "icuexport": "release-78.1",
+  "source": "intl/update-icu4x.sh:17-20"
+ },
+ "sadictionariesEmptied": "intl/update-icu4x.sh:58-67 (Burmese/Khmer/Lao/Thai dictionaries replaced by empty.toml)",
+ "groundworkPaths": {
+  "vendor": "oracle/gecko/vendor/icu_segmenter_data/data",
+  "firefoxData": "oracle/gecko/crates/firefox-data",
+  "cratesio": "oracle/gecko/crates/icu_segmenter_data-2.1.1/data"
+ },
+ "files": [
+  {
+   "file": "ICU4X-GIT-INFO",
+   "bytes": 163,
+   "sha256_firefox156": "77ef7947c54c22e4d71acd4c08ef9d842066af95ccd81c124d7facacfc8b07a6",
+   "sha256_groundwork_vendor_ff155": null,
+   "sha256_groundwork_firefox_data": null,
+   "sha256_cratesio_icu_segmenter_data_2_1_1": null,
+   "firefox156_equals_groundwork": true,
+   "firefox156_equals_cratesio": false,
+   "sha256_groundwork_gecko_src_copy": "77ef7947c54c22e4d71acd4c08ef9d842066af95ccd81c124d7facacfc8b07a6",
+   "note": "the groundwork vendor dir has no ICU4X-GIT-INFO; compared with its gecko-src copy instead"
+  },
+  {
+   "file": "mod.rs",
+   "bytes": 2035,
+   "sha256_firefox156": "3420e67690582f265fb33adc7455d1a196e2367392e4a6ca2333a4978ff728f4",
+   "sha256_groundwork_vendor_ff155": "3420e67690582f265fb33adc7455d1a196e2367392e4a6ca2333a4978ff728f4",
+   "sha256_groundwork_firefox_data": "3420e67690582f265fb33adc7455d1a196e2367392e4a6ca2333a4978ff728f4",
+   "sha256_cratesio_icu_segmenter_data_2_1_1": "fa162f8d9f348e29deec98c4c4603ff0fb645d99e0a7d8cd6c49ef3b052825c0",
+   "firefox156_equals_groundwork": true,
+   "firefox156_equals_cratesio": false
+  },
+  {
+   "file": "segmenter_break_grapheme_cluster_v1.rs.data",
+   "bytes": 33699,
+   "sha256_firefox156": "60bdd83d9f9c5835988f55ba8d943d2c7ce759026519315b6909680534df219f",
+   "sha256_groundwork_vendor_ff155": "60bdd83d9f9c5835988f55ba8d943d2c7ce759026519315b6909680534df219f",
+   "sha256_groundwork_firefox_data": "60bdd83d9f9c5835988f55ba8d943d2c7ce759026519315b6909680534df219f",
+   "sha256_cratesio_icu_segmenter_data_2_1_1": "9d69d6c5393e1e2561b0ddaf451816dc6672ad91cf44b91e2ac35c4f7e4e3f2d",
+   "firefox156_equals_groundwork": true,
+   "firefox156_equals_cratesio": false
+  },
+  {
+   "file": "segmenter_break_line_v1.rs.data",
+   "bytes": 70546,
+   "sha256_firefox156": "bbb77f4e38bf955186b1db391b4b09f770bfeebf446074b67ca6dd2a37cf96b7",
+   "sha256_groundwork_vendor_ff155": "bbb77f4e38bf955186b1db391b4b09f770bfeebf446074b67ca6dd2a37cf96b7",
+   "sha256_groundwork_firefox_data": "bbb77f4e38bf955186b1db391b4b09f770bfeebf446074b67ca6dd2a37cf96b7",
+   "sha256_cratesio_icu_segmenter_data_2_1_1": "9b2c17ec78de579355f88b9e8df30a1ddbe5c3a3623e03a9198b21893a001cf2",
+   "firefox156_equals_groundwork": true,
+   "firefox156_equals_cratesio": false
+  },
+  {
+   "file": "segmenter_break_sentence_override_v1.rs.data",
+   "bytes": 5040,
+   "sha256_firefox156": "8a154340cce0f82fcde463dbb273af0fdfbc4edf5b63f5d7706f546e27cf02b7",
+   "sha256_groundwork_vendor_ff155": "8a154340cce0f82fcde463dbb273af0fdfbc4edf5b63f5d7706f546e27cf02b7",
+   "sha256_groundwork_firefox_data": "8a154340cce0f82fcde463dbb273af0fdfbc4edf5b63f5d7706f546e27cf02b7",
+   "sha256_cratesio_icu_segmenter_data_2_1_1": "8471fca5320823d6d287f4313cf187e6655657e5b0bba5a1a92fa1cb727d97ad",
+   "firefox156_equals_groundwork": true,
+   "firefox156_equals_cratesio": false
+  },
+  {
+   "file": "segmenter_break_sentence_v1.rs.data",
+   "bytes": 49888,
+   "sha256_firefox156": "551267cdd4bf0005590c8fca786ce8755f9e694148da882726ad3712e720f4e1",
+   "sha256_groundwork_vendor_ff155": "551267cdd4bf0005590c8fca786ce8755f9e694148da882726ad3712e720f4e1",
+   "sha256_groundwork_firefox_data": "551267cdd4bf0005590c8fca786ce8755f9e694148da882726ad3712e720f4e1",
+   "sha256_cratesio_icu_segmenter_data_2_1_1": "de45adf14d627328cac553f39eacb980a31b317585bc50f96fdba7a40f4afa19",
+   "firefox156_equals_groundwork": true,
+   "firefox156_equals_cratesio": false
+  },
+  {
+   "file": "segmenter_break_word_override_v1.rs.data",
+   "bytes": 5439,
+   "sha256_firefox156": "54f3904e2027380ec3415b7b2aad3368db315760cb18c5435b9fe6f1a72b7595",
+   "sha256_groundwork_vendor_ff155": "54f3904e2027380ec3415b7b2aad3368db315760cb18c5435b9fe6f1a72b7595",
+   "sha256_groundwork_firefox_data": "54f3904e2027380ec3415b7b2aad3368db315760cb18c5435b9fe6f1a72b7595",
+   "sha256_cratesio_icu_segmenter_data_2_1_1": "ce7f65d14bd31912ce1edddcd1c2a09c9ec09690574ad331212ba23a5ceb6de5",
+   "firefox156_equals_groundwork": true,
+   "firefox156_equals_cratesio": false
+  },
+  {
+   "file": "segmenter_break_word_v1.rs.data",
+   "bytes": 54463,
+   "sha256_firefox156": "ea6274edb7e02e74b4622c950d27b036288c39a956db2df59b8e718176fa3300",
+   "sha256_groundwork_vendor_ff155": "ea6274edb7e02e74b4622c950d27b036288c39a956db2df59b8e718176fa3300",
+   "sha256_groundwork_firefox_data": "ea6274edb7e02e74b4622c950d27b036288c39a956db2df59b8e718176fa3300",
+   "sha256_cratesio_icu_segmenter_data_2_1_1": "5e54d2fa24eaf73755c872cec9662a89f1b93d9fa0ed13e28227dac80108f561",
+   "firefox156_equals_groundwork": true,
+   "firefox156_equals_cratesio": false
+  },
+  {
+   "file": "segmenter_dictionary_auto_v1.rs.data",
+   "bytes": 5247820,
+   "sha256_firefox156": "2cb4147b39139cacb4311c304f03a8348f12c4ddd9e1db505fd12cb220999c92",
+   "sha256_groundwork_vendor_ff155": "2cb4147b39139cacb4311c304f03a8348f12c4ddd9e1db505fd12cb220999c92",
+   "sha256_groundwork_firefox_data": "2cb4147b39139cacb4311c304f03a8348f12c4ddd9e1db505fd12cb220999c92",
+   "sha256_cratesio_icu_segmenter_data_2_1_1": "bd1159f1439cf71e1fadbec103b121f22e51bf0ba4c42e91a867dd6e5d22d0ac",
+   "firefox156_equals_groundwork": true,
+   "firefox156_equals_cratesio": false
+  },
+  {
+   "file": "segmenter_dictionary_extended_v1.rs.data",
+   "bytes": 3341,
+   "sha256_firefox156": "691e158ba2840062372e781b7021bd9a12e15b5a72b92e03573e057cf55a8360",
+   "sha256_groundwork_vendor_ff155": "691e158ba2840062372e781b7021bd9a12e15b5a72b92e03573e057cf55a8360",
+   "sha256_groundwork_firefox_data": "691e158ba2840062372e781b7021bd9a12e15b5a72b92e03573e057cf55a8360",
+   "sha256_cratesio_icu_segmenter_data_2_1_1": "278532592cdfa7fa14e2ae9ad4fa6a06d1a90a9d26dd1f53af0fcd16da381288",
+   "firefox156_equals_groundwork": true,
+   "firefox156_equals_cratesio": false
+  },
+  {
+   "file": "segmenter_lstm_auto_v1.rs.data",
+   "bytes": 874165,
+   "sha256_firefox156": "404c07e25783eceb489e9e41293b296cef6a037b0deb1f03044e62a3c0abb495",
+   "sha256_groundwork_vendor_ff155": "404c07e25783eceb489e9e41293b296cef6a037b0deb1f03044e62a3c0abb495",
+   "sha256_groundwork_firefox_data": "404c07e25783eceb489e9e41293b296cef6a037b0deb1f03044e62a3c0abb495",
+   "sha256_cratesio_icu_segmenter_data_2_1_1": "1953b57dae730a0c7e7f7c134744df7c5505277a80d3959e966bbdf9c9b98483",
+   "firefox156_equals_groundwork": true,
+   "firefox156_equals_cratesio": false
+  }
+ ],
+ "summary": "All 9 baked data files and mod.rs at Firefox 156 are byte-identical to the groundwork's Firefox 155.0.1 copies; none equals crates.io icu_segmenter_data 2.1.1."
+}

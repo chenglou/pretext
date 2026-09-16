@@ -1,0 +1,36 @@
+{
+ "description": "Groundwork Rust break oracle (oracle/gecko, icu_segmenter =2.1.2) rebuilt with [patch.crates-io] icu_segmenter_data pointed at firefox-156.0/intl/icu_segmenter_data; cargo build --release --offline, no source change",
+ "buildLogTail": [
+  "   Compiling gecko-breaks v0.1.0 (/private/tmp/claude-501/-Users-chenglou-github-pretext/7e07dee5-fc27-4046-b679-3f61a43f7436/scratchpad/oracle156)",
+  "    Finished `release` profile [optimized] target(s) in 5.47s",
+  "exit=0"
+ ],
+ "tablesDumpSha256_156": "0935cdebb84b67a3879b1564b99a5bbd9e539a5fedea249698f20fd0c9627fa2",
+ "tablesDumpSha256_groundwork": "0935cdebb84b67a3879b1564b99a5bbd9e539a5fedea249698f20fd0c9627fa2",
+ "tablesIdentical": true,
+ "smoke": [
+  {
+   "input": "hello world foo-bar",
+   "breaks": [
+    6,
+    12,
+    16
+   ]
+  },
+  {
+   "input": "\u65e5\u672c\u8a9e\u306e\u30c6\u30ad\u30b9\u30c8\u3001\u3067\u3059\u3002 lang=ja",
+   "breaks": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    9,
+    10
+   ]
+  }
+ ],
+ "caveat": "The oracle ports C++ (nsLineBreaker, SetupClusterBoundaries, text transform) from 155; those C++ files are byte-identical at 156 (see source-diff-155-156.json) except gfxFont.cpp/gfxTextRun.cpp/nsContentUtils.cpp, whose changes do not touch the ported functions."
+}

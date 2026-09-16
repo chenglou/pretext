@@ -1,0 +1,282 @@
+ICU library version 78.2
+icuver DataVersion 78.2.0.0
+icuver ICUVersion 78.2.0.0
+root Version 48 (U_ZERO_ERROR)
+tables:
+  root/boundaries/grapheme = char.brk
+  root/boundaries/line = line_normal.brk
+  root/boundaries/line_loose = line_loose.brk
+  root/boundaries/line_normal = line_normal.brk
+  root/boundaries/line_strict = line.brk
+  root/boundaries/sentence = sent.brk
+  root/boundaries/title = title.brk
+  root/boundaries/word = word.brk
+  root/dictionaries/Hani = cjdict.dict
+  root/dictionaries/Hira = cjdict.dict
+  root/dictionaries/Kana = cjdict.dict
+  root/dictionaries/Khmr = khmerdict.dict
+  root/dictionaries/Laoo = laodict.dict
+  root/dictionaries/Mymr = burmesedict.dict
+  root/dictionaries/Thai = thaidict.dict
+  root/exceptions: none
+  ja/boundaries/line = line_normal.brk
+  ja/boundaries/line_loose = line_loose_cj.brk
+  ja/boundaries/line_loose_phrase = line_loose_phrase_cj.brk
+  ja/boundaries/line_normal = line_normal_cj.brk
+  ja/boundaries/line_normal_phrase = line_normal_phrase_cj.brk
+  ja/boundaries/line_phrase = line_phrase_cj.brk
+  ja/boundaries/line_strict = line.brk
+  ja/boundaries/line_strict_phrase = line_phrase_cj.brk
+  ja/dictionaries: none
+  ja/exceptions: none
+  ko/boundaries/line = line_normal.brk
+  ko/boundaries/line_loose = line_loose_cj.brk
+  ko/boundaries/line_loose_phrase = line_loose_phrase_cj.brk
+  ko/boundaries/line_normal = line_normal_cj.brk
+  ko/boundaries/line_normal_phrase = line_normal_phrase_cj.brk
+  ko/boundaries/line_phrase = line_phrase_cj.brk
+  ko/boundaries/line_strict = line_cj.brk
+  ko/boundaries/line_strict_phrase = line_phrase_cj.brk
+  ko/dictionaries: none
+  ko/exceptions: none
+  zh/boundaries/line = line_normal_cj.brk
+  zh/boundaries/line_loose = line_loose_cj.brk
+  zh/boundaries/line_normal = line_normal_cj.brk
+  zh/boundaries/line_strict = line.brk
+  zh/dictionaries: none
+  zh/exceptions: none
+  zh_Hant/boundaries/line = line_normal_cj.brk
+  zh_Hant/boundaries/line_loose = line_loose_cj.brk
+  zh_Hant/boundaries/line_normal = line_normal_cj.brk
+  zh_Hant/boundaries/line_strict = line.brk
+  zh_Hant/dictionaries: none
+  zh_Hant/exceptions: none
+  en/boundaries: none
+  en/dictionaries: none
+  en/exceptions/SentenceBreak = U_RESOURCE_TYPE_MISMATCH
+  en_US/boundaries: none
+  en_US/dictionaries: none
+  en_US/exceptions: none
+  de/boundaries: none
+  de/dictionaries: none
+  de/exceptions/SentenceBreak = U_RESOURCE_TYPE_MISMATCH
+  el/boundaries/sentence = sent_el.brk
+  el/dictionaries: none
+  el/exceptions: none
+  es/boundaries: none
+  es/dictionaries: none
+  es/exceptions/SentenceBreak = U_RESOURCE_TYPE_MISMATCH
+  fr/boundaries: none
+  fr/dictionaries: none
+  fr/exceptions/SentenceBreak = U_RESOURCE_TYPE_MISMATCH
+  it/boundaries: none
+  it/dictionaries: none
+  it/exceptions/SentenceBreak = U_RESOURCE_TYPE_MISMATCH
+  pt/boundaries: none
+  pt/dictionaries: none
+  pt/exceptions/SentenceBreak = U_RESOURCE_TYPE_MISMATCH
+  ru/boundaries: none
+  ru/dictionaries: none
+  ru/exceptions/SentenceBreak = U_RESOURCE_TYPE_MISMATCH
+line instances:
+                           -> line_normal.brk actual= valid=
+  @lb=normal               -> line_normal.brk actual= valid=
+  @lb=strict               -> line.brk actual= valid=
+  @lb=loose                -> line_loose.brk actual= valid=
+  @lw=phrase               -> line_normal.brk actual= valid=
+  @lb=normal;lw=phrase     -> line_normal.brk actual= valid=
+  @lb=strict;lw=phrase     -> line.brk actual= valid=
+  @lb=loose;lw=phrase      -> line_loose.brk actual= valid=
+  en                       -> line_normal.brk actual= valid=en
+  en@lb=normal             -> line_normal.brk actual= valid=en
+  en@lb=strict             -> line.brk actual= valid=en
+  en@lb=loose              -> line_loose.brk actual= valid=en
+  en@lw=phrase             -> line_normal.brk actual= valid=en
+  en@lb=normal;lw=phrase   -> line_normal.brk actual= valid=en
+  en@lb=strict;lw=phrase   -> line.brk actual= valid=en
+  en@lb=loose;lw=phrase    -> line_loose.brk actual= valid=en
+  en-US                    -> line_normal.brk actual= valid=en_US
+  en-US@lb=normal          -> line_normal.brk actual= valid=en_US
+  en-US@lb=strict          -> line.brk actual= valid=en_US
+  en-US@lb=loose           -> line_loose.brk actual= valid=en_US
+  en-US@lw=phrase          -> line_normal.brk actual= valid=en_US
+  en-US@lb=normal;lw=phrase -> line_normal.brk actual= valid=en_US
+  en-US@lb=strict;lw=phrase -> line.brk actual= valid=en_US
+  en-US@lb=loose;lw=phrase -> line_loose.brk actual= valid=en_US
+  de                       -> line_normal.brk actual= valid=de
+  de@lb=normal             -> line_normal.brk actual= valid=de
+  de@lb=strict             -> line.brk actual= valid=de
+  de@lb=loose              -> line_loose.brk actual= valid=de
+  de@lw=phrase             -> line_normal.brk actual= valid=de
+  de@lb=normal;lw=phrase   -> line_normal.brk actual= valid=de
+  de@lb=strict;lw=phrase   -> line.brk actual= valid=de
+  de@lb=loose;lw=phrase    -> line_loose.brk actual= valid=de
+  fr                       -> line_normal.brk actual= valid=fr
+  fr@lb=normal             -> line_normal.brk actual= valid=fr
+  fr@lb=strict             -> line.brk actual= valid=fr
+  fr@lb=loose              -> line_loose.brk actual= valid=fr
+  fr@lw=phrase             -> line_normal.brk actual= valid=fr
+  fr@lb=normal;lw=phrase   -> line_normal.brk actual= valid=fr
+  fr@lb=strict;lw=phrase   -> line.brk actual= valid=fr
+  fr@lb=loose;lw=phrase    -> line_loose.brk actual= valid=fr
+  ru                       -> line_normal.brk actual= valid=ru
+  ru@lb=normal             -> line_normal.brk actual= valid=ru
+  ru@lb=strict             -> line.brk actual= valid=ru
+  ru@lb=loose              -> line_loose.brk actual= valid=ru
+  ru@lw=phrase             -> line_normal.brk actual= valid=ru
+  ru@lb=normal;lw=phrase   -> line_normal.brk actual= valid=ru
+  ru@lb=strict;lw=phrase   -> line.brk actual= valid=ru
+  ru@lb=loose;lw=phrase    -> line_loose.brk actual= valid=ru
+  ar                       -> line_normal.brk actual= valid=
+  ar@lb=normal             -> line_normal.brk actual= valid=
+  ar@lb=strict             -> line.brk actual= valid=
+  ar@lb=loose              -> line_loose.brk actual= valid=
+  ar@lw=phrase             -> line_normal.brk actual= valid=
+  ar@lb=normal;lw=phrase   -> line_normal.brk actual= valid=
+  ar@lb=strict;lw=phrase   -> line.brk actual= valid=
+  ar@lb=loose;lw=phrase    -> line_loose.brk actual= valid=
+  he                       -> line_normal.brk actual= valid=
+  he@lb=normal             -> line_normal.brk actual= valid=
+  he@lb=strict             -> line.brk actual= valid=
+  he@lb=loose              -> line_loose.brk actual= valid=
+  he@lw=phrase             -> line_normal.brk actual= valid=
+  he@lb=normal;lw=phrase   -> line_normal.brk actual= valid=
+  he@lb=strict;lw=phrase   -> line.brk actual= valid=
+  he@lb=loose;lw=phrase    -> line_loose.brk actual= valid=
+  th                       -> line_normal.brk actual= valid=
+  th@lb=normal             -> line_normal.brk actual= valid=
+  th@lb=strict             -> line.brk actual= valid=
+  th@lb=loose              -> line_loose.brk actual= valid=
+  th@lw=phrase             -> line_normal.brk actual= valid=
+  th@lb=normal;lw=phrase   -> line_normal.brk actual= valid=
+  th@lb=strict;lw=phrase   -> line.brk actual= valid=
+  th@lb=loose;lw=phrase    -> line_loose.brk actual= valid=
+  hi                       -> line_normal.brk actual= valid=
+  hi@lb=normal             -> line_normal.brk actual= valid=
+  hi@lb=strict             -> line.brk actual= valid=
+  hi@lb=loose              -> line_loose.brk actual= valid=
+  hi@lw=phrase             -> line_normal.brk actual= valid=
+  hi@lb=normal;lw=phrase   -> line_normal.brk actual= valid=
+  hi@lb=strict;lw=phrase   -> line.brk actual= valid=
+  hi@lb=loose;lw=phrase    -> line_loose.brk actual= valid=
+  ja                       -> line_normal.brk actual=ja valid=ja
+  ja@lb=normal             -> line_normal_cj.brk actual=ja valid=ja
+  ja@lb=strict             -> line.brk actual=ja valid=ja
+  ja@lb=loose              -> line_loose_cj.brk actual=ja valid=ja
+  ja@lw=phrase             -> line_phrase_cj.brk actual=ja valid=ja
+  ja@lb=normal;lw=phrase   -> line_normal_phrase_cj.brk actual=ja valid=ja
+  ja@lb=strict;lw=phrase   -> line_phrase_cj.brk actual=ja valid=ja
+  ja@lb=loose;lw=phrase    -> line_loose_phrase_cj.brk actual=ja valid=ja
+  ja-JP                    -> line_normal.brk actual=ja valid=ja
+  ja-JP@lb=normal          -> line_normal_cj.brk actual=ja valid=ja
+  ja-JP@lb=strict          -> line.brk actual=ja valid=ja
+  ja-JP@lb=loose           -> line_loose_cj.brk actual=ja valid=ja
+  ja-JP@lw=phrase          -> line_phrase_cj.brk actual=ja valid=ja
+  ja-JP@lb=normal;lw=phrase -> line_normal_phrase_cj.brk actual=ja valid=ja
+  ja-JP@lb=strict;lw=phrase -> line_phrase_cj.brk actual=ja valid=ja
+  ja-JP@lb=loose;lw=phrase -> line_loose_phrase_cj.brk actual=ja valid=ja
+  ko                       -> line_normal.brk actual=ko valid=ko
+  ko@lb=normal             -> line_normal_cj.brk actual=ko valid=ko
+  ko@lb=strict             -> FAIL U_FILE_ACCESS_ERROR (canonical ko@lb=strict)
+  ko@lb=loose              -> line_loose_cj.brk actual=ko valid=ko
+  ko@lw=phrase             -> line_phrase_cj.brk actual=ko valid=ko
+  ko@lb=normal;lw=phrase   -> line_normal_phrase_cj.brk actual=ko valid=ko
+  ko@lb=strict;lw=phrase   -> line_phrase_cj.brk actual=ko valid=ko
+  ko@lb=loose;lw=phrase    -> line_loose_phrase_cj.brk actual=ko valid=ko
+  ko-KR                    -> line_normal.brk actual=ko valid=ko
+  ko-KR@lb=normal          -> line_normal_cj.brk actual=ko valid=ko
+  ko-KR@lb=strict          -> FAIL U_FILE_ACCESS_ERROR (canonical ko_KR@lb=strict)
+  ko-KR@lb=loose           -> line_loose_cj.brk actual=ko valid=ko
+  ko-KR@lw=phrase          -> line_phrase_cj.brk actual=ko valid=ko
+  ko-KR@lb=normal;lw=phrase -> line_normal_phrase_cj.brk actual=ko valid=ko
+  ko-KR@lb=strict;lw=phrase -> line_phrase_cj.brk actual=ko valid=ko
+  ko-KR@lb=loose;lw=phrase -> line_loose_phrase_cj.brk actual=ko valid=ko
+  zh                       -> line_normal_cj.brk actual=zh valid=zh
+  zh@lb=normal             -> line_normal_cj.brk actual=zh valid=zh
+  zh@lb=strict             -> line.brk actual=zh valid=zh
+  zh@lb=loose              -> line_loose_cj.brk actual=zh valid=zh
+  zh@lw=phrase             -> line_normal_cj.brk actual=zh valid=zh
+  zh@lb=normal;lw=phrase   -> line_normal_cj.brk actual=zh valid=zh
+  zh@lb=strict;lw=phrase   -> line.brk actual=zh valid=zh
+  zh@lb=loose;lw=phrase    -> line_loose_cj.brk actual=zh valid=zh
+  zh-CN                    -> line_normal_cj.brk actual=zh valid=zh
+  zh-CN@lb=normal          -> line_normal_cj.brk actual=zh valid=zh
+  zh-CN@lb=strict          -> line.brk actual=zh valid=zh
+  zh-CN@lb=loose           -> line_loose_cj.brk actual=zh valid=zh
+  zh-CN@lw=phrase          -> line_normal_cj.brk actual=zh valid=zh
+  zh-CN@lb=normal;lw=phrase -> line_normal_cj.brk actual=zh valid=zh
+  zh-CN@lb=strict;lw=phrase -> line.brk actual=zh valid=zh
+  zh-CN@lb=loose;lw=phrase -> line_loose_cj.brk actual=zh valid=zh
+  zh-TW                    -> line_normal_cj.brk actual=zh_Hant valid=zh_Hant
+  zh-TW@lb=normal          -> line_normal_cj.brk actual=zh_Hant valid=zh_Hant
+  zh-TW@lb=strict          -> line.brk actual=zh_Hant valid=zh_Hant
+  zh-TW@lb=loose           -> line_loose_cj.brk actual=zh_Hant valid=zh_Hant
+  zh-TW@lw=phrase          -> line_normal_cj.brk actual=zh_Hant valid=zh_Hant
+  zh-TW@lb=normal;lw=phrase -> line_normal_cj.brk actual=zh_Hant valid=zh_Hant
+  zh-TW@lb=strict;lw=phrase -> line.brk actual=zh_Hant valid=zh_Hant
+  zh-TW@lb=loose;lw=phrase -> line_loose_cj.brk actual=zh_Hant valid=zh_Hant
+  zh-HK                    -> line_normal_cj.brk actual=zh_Hant valid=zh_Hant
+  zh-HK@lb=normal          -> line_normal_cj.brk actual=zh_Hant valid=zh_Hant
+  zh-HK@lb=strict          -> line.brk actual=zh_Hant valid=zh_Hant
+  zh-HK@lb=loose           -> line_loose_cj.brk actual=zh_Hant valid=zh_Hant
+  zh-HK@lw=phrase          -> line_normal_cj.brk actual=zh_Hant valid=zh_Hant
+  zh-HK@lb=normal;lw=phrase -> line_normal_cj.brk actual=zh_Hant valid=zh_Hant
+  zh-HK@lb=strict;lw=phrase -> line.brk actual=zh_Hant valid=zh_Hant
+  zh-HK@lb=loose;lw=phrase -> line_loose_cj.brk actual=zh_Hant valid=zh_Hant
+  zh-Hans                  -> line_normal_cj.brk actual=zh valid=zh
+  zh-Hans@lb=normal        -> line_normal_cj.brk actual=zh valid=zh
+  zh-Hans@lb=strict        -> line.brk actual=zh valid=zh
+  zh-Hans@lb=loose         -> line_loose_cj.brk actual=zh valid=zh
+  zh-Hans@lw=phrase        -> line_normal_cj.brk actual=zh valid=zh
+  zh-Hans@lb=normal;lw=phrase -> line_normal_cj.brk actual=zh valid=zh
+  zh-Hans@lb=strict;lw=phrase -> line.brk actual=zh valid=zh
+  zh-Hans@lb=loose;lw=phrase -> line_loose_cj.brk actual=zh valid=zh
+  zh-Hant                  -> line_normal_cj.brk actual=zh_Hant valid=zh_Hant
+  zh-Hant@lb=normal        -> line_normal_cj.brk actual=zh_Hant valid=zh_Hant
+  zh-Hant@lb=strict        -> line.brk actual=zh_Hant valid=zh_Hant
+  zh-Hant@lb=loose         -> line_loose_cj.brk actual=zh_Hant valid=zh_Hant
+  zh-Hant@lw=phrase        -> line_normal_cj.brk actual=zh_Hant valid=zh_Hant
+  zh-Hant@lb=normal;lw=phrase -> line_normal_cj.brk actual=zh_Hant valid=zh_Hant
+  zh-Hant@lb=strict;lw=phrase -> line.brk actual=zh_Hant valid=zh_Hant
+  zh-Hant@lb=loose;lw=phrase -> line_loose_cj.brk actual=zh_Hant valid=zh_Hant
+  zh_Hant_TW               -> line_normal_cj.brk actual=zh_Hant valid=zh_Hant
+  zh_Hant_TW@lb=normal     -> line_normal_cj.brk actual=zh_Hant valid=zh_Hant
+  zh_Hant_TW@lb=strict     -> line.brk actual=zh_Hant valid=zh_Hant
+  zh_Hant_TW@lb=loose      -> line_loose_cj.brk actual=zh_Hant valid=zh_Hant
+  zh_Hant_TW@lw=phrase     -> line_normal_cj.brk actual=zh_Hant valid=zh_Hant
+  zh_Hant_TW@lb=normal;lw=phrase -> line_normal_cj.brk actual=zh_Hant valid=zh_Hant
+  zh_Hant_TW@lb=strict;lw=phrase -> line.brk actual=zh_Hant valid=zh_Hant
+  zh_Hant_TW@lb=loose;lw=phrase -> line_loose_cj.brk actual=zh_Hant valid=zh_Hant
+  yue                      -> line_normal.brk actual= valid=
+  yue@lb=normal            -> line_normal.brk actual= valid=
+  yue@lb=strict            -> line.brk actual= valid=
+  yue@lb=loose             -> line_loose.brk actual= valid=
+  yue@lw=phrase            -> line_normal.brk actual= valid=
+  yue@lb=normal;lw=phrase  -> line_normal.brk actual= valid=
+  yue@lb=strict;lw=phrase  -> line.brk actual= valid=
+  yue@lb=loose;lw=phrase   -> line_loose.brk actual= valid=
+  und                      -> line_normal.brk actual= valid=
+  und@lb=normal            -> line_normal.brk actual= valid=
+  und@lb=strict            -> line.brk actual= valid=
+  und@lb=loose             -> line_loose.brk actual= valid=
+  und@lw=phrase            -> line_normal.brk actual= valid=
+  und@lb=normal;lw=phrase  -> line_normal.brk actual= valid=
+  und@lb=strict;lw=phrase  -> line.brk actual= valid=
+  und@lb=loose;lw=phrase   -> line_loose.brk actual= valid=
+  x-bogus                  -> line_normal.brk actual= valid=
+  x-bogus@lb=normal        -> line_normal.brk actual= valid=
+  x-bogus@lb=strict        -> line.brk actual= valid=
+  x-bogus@lb=loose         -> line_loose.brk actual= valid=
+  x-bogus@lw=phrase        -> line_normal.brk actual= valid=
+  x-bogus@lb=normal;lw=phrase -> line_normal.brk actual= valid=
+  x-bogus@lb=strict;lw=phrase -> line.brk actual= valid=
+  x-bogus@lb=loose;lw=phrase -> line_loose.brk actual= valid=
+  tlh                      -> line_normal.brk actual= valid=
+  tlh@lb=normal            -> line_normal.brk actual= valid=
+  tlh@lb=strict            -> line.brk actual= valid=
+  tlh@lb=loose             -> line_loose.brk actual= valid=
+  tlh@lw=phrase            -> line_normal.brk actual= valid=
+  tlh@lb=normal;lw=phrase  -> line_normal.brk actual= valid=
+  tlh@lb=strict;lw=phrase  -> line.brk actual= valid=
+  tlh@lb=loose;lw=phrase   -> line_loose.brk actual= valid=
+char en -> char.brk U_USING_DEFAULT_WARNING

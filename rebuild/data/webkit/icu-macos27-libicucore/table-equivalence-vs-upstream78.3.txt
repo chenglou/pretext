@@ -1,0 +1,9 @@
+line|(empty)|default: pool 573 code points, iterations 300000, differences 0
+line|en|loose: pool 573 code points, iterations 300000, differences 0
+line|en|normal: pool 573 code points, iterations 300000, differences 0
+line|ja|loose: pool 573 code points, iterations 300000, differences 0
+line|ja|normal: pool 573 code points, iterations 300000, differences 0
+line|ja|strict: pool 573 code points, iterations 300000, differences 0
+character|zh-Hans-US|default: pool 573 code points, iterations 300000, differences 0
+word|zh-Hans-US|default: pool 573 code points, iterations 300000, differences 314
+sentence|zh-Hans-US|default: pool 573 code points, iterations 300000, differences 0

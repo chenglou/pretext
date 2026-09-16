@@ -1,0 +1,35 @@
+1c1
+< # icu 78.1
+---
+> # icu 78.3
+4095,4122c4095
+< E000..F7EF lb=XX ea=1 gc=17 ep=0
+< F7F0..F84F lb=AL ea=0 gc=27 ep=0
+< F850..F86F lb=AL ea=1 gc=27 ep=0
+< F870..F87F lb=CM ea=1 gc=6 ep=0
+< F880..F881 lb=AL ea=5 gc=27 ep=0
+< F882..F882 lb=AL ea=0 gc=5 ep=0
+< F883..F883 lb=AL ea=0 gc=25 ep=0
+< F884..F899 lb=CM ea=0 gc=6 ep=0
+< F89A..F89E lb=AL ea=0 gc=5 ep=0
+< F89F..F89F lb=CM ea=0 gc=6 ep=0
+< F8A0..F8A0 lb=PR ea=0 gc=25 ep=0
+< F8A1..F8A1 lb=AL ea=5 gc=11 ep=0
+< F8A2..F8A7 lb=AL ea=5 gc=10 ep=0
+< F8A8..F8B3 lb=AL ea=5 gc=27 ep=0
+< F8B4..F8B4 lb=CL ea=5 gc=21 ep=0
+< F8B5..F8B6 lb=CL ea=5 gc=23 ep=0
+< F8B7..F8B7 lb=ID ea=3 gc=23 ep=0
+< F8B8..F8B8 lb=NS ea=5 gc=4 ep=0
+< F8B9..F8B9 lb=BA ea=5 gc=19 ep=0
+< F8BA..F8BA lb=NS ea=5 gc=19 ep=0
+< F8BB..F8BB lb=AI ea=5 gc=23 ep=0
+< F8BC..F8BC lb=ID ea=3 gc=24 ep=0
+< F8BD..F8BD lb=IN ea=5 gc=24 ep=0
+< F8BE..F8BE lb=OP ea=3 gc=20 ep=0
+< F8BF..F8BF lb=CL ea=3 gc=21 ep=0
+< F8C0..F8C0 lb=ID ea=3 gc=24 ep=0
+< F8C1..F8D6 lb=NS ea=5 gc=5 ep=0
+< F8D7..F8FF lb=AL ea=0 gc=27 ep=0
+---
+> E000..F8FF lb=XX ea=1 gc=17 ep=0

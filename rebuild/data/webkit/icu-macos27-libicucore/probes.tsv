@@ -1,0 +1,3180 @@
+line||default	0	0 4 10
+line||default	1	0 1 2 7 8 9
+line||default	2	0 1 3 4
+line||default	3	0 4 8 11
+line||default	4	0 1 4 5 6
+line||default	5	0 1 2 3 5 6 7
+line||default	6	0 4 10 13 21
+line||default	7	0 4 5 6 8 16 20 22 29
+line||default	8	0 2 3 6 7 8 12
+line||default	9	0 2 5 7 10 11
+line||default	10	0 4 8 11
+line||default	11	0 9
+line||default	12	0 10
+line||default	13	0 5 9 12 15 18 22 25
+line||default	14	0 9 13 17
+line||loose	0	0 4 10
+line||loose	1	0 1 2 7 8 9
+line||loose	2	0 1 3 4
+line||loose	3	0 4 8 11
+line||loose	4	0 1 4 5 6
+line||loose	5	0 1 2 3 5 6 7
+line||loose	6	0 4 10 13 21
+line||loose	7	0 4 5 6 8 16 20 22 29
+line||loose	8	0 2 3 6 7 8 12
+line||loose	9	0 2 5 7 10 11
+line||loose	10	0 4 8 11
+line||loose	11	0 9
+line||loose	12	0 10
+line||loose	13	0 5 9 12 15 18 22 25
+line||loose	14	0 9 13 17
+line||normal	0	0 4 10
+line||normal	1	0 1 2 7 8 9
+line||normal	2	0 1 3 4
+line||normal	3	0 4 8 11
+line||normal	4	0 1 4 5 6
+line||normal	5	0 1 2 3 5 6 7
+line||normal	6	0 4 10 13 21
+line||normal	7	0 4 5 6 8 16 20 22 29
+line||normal	8	0 2 3 6 7 8 12
+line||normal	9	0 2 5 7 10 11
+line||normal	10	0 4 8 11
+line||normal	11	0 9
+line||normal	12	0 10
+line||normal	13	0 5 9 12 15 18 22 25
+line||normal	14	0 9 13 17
+line||strict	0	0 4 10
+line||strict	1	0 1 2 7 8 9
+line||strict	2	0 1 3 4
+line||strict	3	0 4 8 11
+line||strict	4	0 1 4 5 6
+line||strict	5	0 1 2 3 5 6 7
+line||strict	6	0 4 10 13 21
+line||strict	7	0 4 5 6 8 16 20 22 29
+line||strict	8	0 2 3 6 7 8 12
+line||strict	9	0 2 5 7 10 11
+line||strict	10	0 4 8 11
+line||strict	11	0 9
+line||strict	12	0 10
+line||strict	13	0 5 9 12 15 18 22 25
+line||strict	14	0 9 13 17
+line|en|default	0	0 4 10
+line|en|default	1	0 1 2 7 8 9
+line|en|default	2	0 1 3 4
+line|en|default	3	0 4 8 11
+line|en|default	4	0 1 4 5 6
+line|en|default	5	0 1 2 3 5 6 7
+line|en|default	6	0 4 10 13 21
+line|en|default	7	0 4 5 6 8 16 20 22 29
+line|en|default	8	0 2 3 6 7 8 12
+line|en|default	9	0 2 5 7 10 11
+line|en|default	10	0 4 8 11
+line|en|default	11	0 9
+line|en|default	12	0 10
+line|en|default	13	0 5 9 12 15 18 22 25
+line|en|default	14	0 9 13 17
+line|en|loose	0	0 4 10
+line|en|loose	1	0 1 2 7 8 9
+line|en|loose	2	0 1 2 3 4
+line|en|loose	3	0 4 8 11
+line|en|loose	4	0 1 4 5 6
+line|en|loose	5	0 1 2 3 5 6 7
+line|en|loose	6	0 4 10 13 21
+line|en|loose	7	0 4 5 6 8 16 20 22 29
+line|en|loose	8	0 2 3 6 7 8 10 11 12
+line|en|loose	9	0 1 2 3 4 5 6 7 9 10 11
+line|en|loose	10	0 4 8 11
+line|en|loose	11	0 9
+line|en|loose	12	0 10
+line|en|loose	13	0 5 9 12 15 18 22 25
+line|en|loose	14	0 9 13 17
+line|en|normal	0	0 4 10
+line|en|normal	1	0 1 2 7 8 9
+line|en|normal	2	0 1 2 3 4
+line|en|normal	3	0 4 8 11
+line|en|normal	4	0 1 4 5 6
+line|en|normal	5	0 1 2 3 5 6 7
+line|en|normal	6	0 4 10 13 21
+line|en|normal	7	0 4 5 6 8 16 20 22 29
+line|en|normal	8	0 2 3 6 7 8 10 11 12
+line|en|normal	9	0 1 2 5 6 7 10 11
+line|en|normal	10	0 4 8 11
+line|en|normal	11	0 9
+line|en|normal	12	0 10
+line|en|normal	13	0 5 9 12 15 18 22 25
+line|en|normal	14	0 9 13 17
+line|en|strict	0	0 4 10
+line|en|strict	1	0 1 2 7 8 9
+line|en|strict	2	0 1 3 4
+line|en|strict	3	0 4 8 11
+line|en|strict	4	0 1 4 5 6
+line|en|strict	5	0 1 2 3 5 6 7
+line|en|strict	6	0 4 10 13 21
+line|en|strict	7	0 4 5 6 8 16 20 22 29
+line|en|strict	8	0 2 3 6 7 8 12
+line|en|strict	9	0 2 5 7 10 11
+line|en|strict	10	0 4 8 11
+line|en|strict	11	0 9
+line|en|strict	12	0 10
+line|en|strict	13	0 5 9 12 15 18 22 25
+line|en|strict	14	0 9 13 17
+line|en-US|default	0	0 4 10
+line|en-US|default	1	0 1 2 7 8 9
+line|en-US|default	2	0 1 3 4
+line|en-US|default	3	0 4 8 11
+line|en-US|default	4	0 1 4 5 6
+line|en-US|default	5	0 1 2 3 5 6 7
+line|en-US|default	6	0 4 10 13 21
+line|en-US|default	7	0 4 5 6 8 16 20 22 29
+line|en-US|default	8	0 2 3 6 7 8 12
+line|en-US|default	9	0 2 5 7 10 11
+line|en-US|default	10	0 4 8 11
+line|en-US|default	11	0 9
+line|en-US|default	12	0 10
+line|en-US|default	13	0 5 9 12 15 18 22 25
+line|en-US|default	14	0 9 13 17
+line|en-US|loose	0	0 4 10
+line|en-US|loose	1	0 1 2 7 8 9
+line|en-US|loose	2	0 1 2 3 4
+line|en-US|loose	3	0 4 8 11
+line|en-US|loose	4	0 1 4 5 6
+line|en-US|loose	5	0 1 2 3 5 6 7
+line|en-US|loose	6	0 4 10 13 21
+line|en-US|loose	7	0 4 5 6 8 16 20 22 29
+line|en-US|loose	8	0 2 3 6 7 8 10 11 12
+line|en-US|loose	9	0 1 2 3 4 5 6 7 9 10 11
+line|en-US|loose	10	0 4 8 11
+line|en-US|loose	11	0 9
+line|en-US|loose	12	0 10
+line|en-US|loose	13	0 5 9 12 15 18 22 25
+line|en-US|loose	14	0 9 13 17
+line|en-US|normal	0	0 4 10
+line|en-US|normal	1	0 1 2 7 8 9
+line|en-US|normal	2	0 1 2 3 4
+line|en-US|normal	3	0 4 8 11
+line|en-US|normal	4	0 1 4 5 6
+line|en-US|normal	5	0 1 2 3 5 6 7
+line|en-US|normal	6	0 4 10 13 21
+line|en-US|normal	7	0 4 5 6 8 16 20 22 29
+line|en-US|normal	8	0 2 3 6 7 8 10 11 12
+line|en-US|normal	9	0 1 2 5 6 7 10 11
+line|en-US|normal	10	0 4 8 11
+line|en-US|normal	11	0 9
+line|en-US|normal	12	0 10
+line|en-US|normal	13	0 5 9 12 15 18 22 25
+line|en-US|normal	14	0 9 13 17
+line|en-US|strict	0	0 4 10
+line|en-US|strict	1	0 1 2 7 8 9
+line|en-US|strict	2	0 1 3 4
+line|en-US|strict	3	0 4 8 11
+line|en-US|strict	4	0 1 4 5 6
+line|en-US|strict	5	0 1 2 3 5 6 7
+line|en-US|strict	6	0 4 10 13 21
+line|en-US|strict	7	0 4 5 6 8 16 20 22 29
+line|en-US|strict	8	0 2 3 6 7 8 12
+line|en-US|strict	9	0 2 5 7 10 11
+line|en-US|strict	10	0 4 8 11
+line|en-US|strict	11	0 9
+line|en-US|strict	12	0 10
+line|en-US|strict	13	0 5 9 12 15 18 22 25
+line|en-US|strict	14	0 9 13 17
+line|en_US_POSIX|default	0	0 4 10
+line|en_US_POSIX|default	1	0 1 2 7 8 9
+line|en_US_POSIX|default	2	0 1 3 4
+line|en_US_POSIX|default	3	0 4 8 11
+line|en_US_POSIX|default	4	0 1 4 5 6
+line|en_US_POSIX|default	5	0 1 2 3 5 6 7
+line|en_US_POSIX|default	6	0 4 10 13 21
+line|en_US_POSIX|default	7	0 4 5 6 8 16 20 22 29
+line|en_US_POSIX|default	8	0 2 3 6 7 8 12
+line|en_US_POSIX|default	9	0 2 5 7 10 11
+line|en_US_POSIX|default	10	0 4 8 11
+line|en_US_POSIX|default	11	0 9
+line|en_US_POSIX|default	12	0 10
+line|en_US_POSIX|default	13	0 5 9 12 15 18 22 25
+line|en_US_POSIX|default	14	0 9 13 17
+line|en_US_POSIX|loose	0	0 4 10
+line|en_US_POSIX|loose	1	0 1 2 7 8 9
+line|en_US_POSIX|loose	2	0 1 2 3 4
+line|en_US_POSIX|loose	3	0 4 8 11
+line|en_US_POSIX|loose	4	0 1 4 5 6
+line|en_US_POSIX|loose	5	0 1 2 3 5 6 7
+line|en_US_POSIX|loose	6	0 4 10 13 21
+line|en_US_POSIX|loose	7	0 4 5 6 8 16 20 22 29
+line|en_US_POSIX|loose	8	0 2 3 6 7 8 10 11 12
+line|en_US_POSIX|loose	9	0 1 2 3 4 5 6 7 9 10 11
+line|en_US_POSIX|loose	10	0 4 8 11
+line|en_US_POSIX|loose	11	0 9
+line|en_US_POSIX|loose	12	0 10
+line|en_US_POSIX|loose	13	0 5 9 12 15 18 22 25
+line|en_US_POSIX|loose	14	0 9 13 17
+line|en_US_POSIX|normal	0	0 4 10
+line|en_US_POSIX|normal	1	0 1 2 7 8 9
+line|en_US_POSIX|normal	2	0 1 2 3 4
+line|en_US_POSIX|normal	3	0 4 8 11
+line|en_US_POSIX|normal	4	0 1 4 5 6
+line|en_US_POSIX|normal	5	0 1 2 3 5 6 7
+line|en_US_POSIX|normal	6	0 4 10 13 21
+line|en_US_POSIX|normal	7	0 4 5 6 8 16 20 22 29
+line|en_US_POSIX|normal	8	0 2 3 6 7 8 10 11 12
+line|en_US_POSIX|normal	9	0 1 2 5 6 7 10 11
+line|en_US_POSIX|normal	10	0 4 8 11
+line|en_US_POSIX|normal	11	0 9
+line|en_US_POSIX|normal	12	0 10
+line|en_US_POSIX|normal	13	0 5 9 12 15 18 22 25
+line|en_US_POSIX|normal	14	0 9 13 17
+line|en_US_POSIX|strict	0	0 4 10
+line|en_US_POSIX|strict	1	0 1 2 7 8 9
+line|en_US_POSIX|strict	2	0 1 3 4
+line|en_US_POSIX|strict	3	0 4 8 11
+line|en_US_POSIX|strict	4	0 1 4 5 6
+line|en_US_POSIX|strict	5	0 1 2 3 5 6 7
+line|en_US_POSIX|strict	6	0 4 10 13 21
+line|en_US_POSIX|strict	7	0 4 5 6 8 16 20 22 29
+line|en_US_POSIX|strict	8	0 2 3 6 7 8 12
+line|en_US_POSIX|strict	9	0 2 5 7 10 11
+line|en_US_POSIX|strict	10	0 4 8 11
+line|en_US_POSIX|strict	11	0 9
+line|en_US_POSIX|strict	12	0 10
+line|en_US_POSIX|strict	13	0 5 9 12 15 18 22 25
+line|en_US_POSIX|strict	14	0 9 13 17
+line|fr|default	0	0 10
+line|fr|default	1	0 1 8 9
+line|fr|default	2	0 1 3 4
+line|fr|default	3	0 4 11
+line|fr|default	4	0 1 5 6
+line|fr|default	5	0 1 2 3 5 6 7
+line|fr|default	6	0 4 10 13 21
+line|fr|default	7	0 4 5 6 8 16 20 22 29
+line|fr|default	8	0 2 3 6 7 8 12
+line|fr|default	9	0 2 5 7 10 11
+line|fr|default	10	0 4 8 11
+line|fr|default	11	0 9
+line|fr|default	12	0 10
+line|fr|default	13	0 5 9 12 15 18 22 25
+line|fr|default	14	0 9 13 17
+line|fr|loose	0	0 10
+line|fr|loose	1	0 1 8 9
+line|fr|loose	2	0 1 2 3 4
+line|fr|loose	3	0 4 11
+line|fr|loose	4	0 1 5 6
+line|fr|loose	5	0 1 2 3 5 6 7
+line|fr|loose	6	0 4 10 13 21
+line|fr|loose	7	0 4 5 6 8 16 20 22 29
+line|fr|loose	8	0 2 3 6 7 8 10 11 12
+line|fr|loose	9	0 1 2 3 4 5 6 7 9 10 11
+line|fr|loose	10	0 4 8 11
+line|fr|loose	11	0 9
+line|fr|loose	12	0 10
+line|fr|loose	13	0 5 9 12 15 18 22 25
+line|fr|loose	14	0 9 13 17
+line|fr|normal	0	0 10
+line|fr|normal	1	0 1 8 9
+line|fr|normal	2	0 1 2 3 4
+line|fr|normal	3	0 4 11
+line|fr|normal	4	0 1 5 6
+line|fr|normal	5	0 1 2 3 5 6 7
+line|fr|normal	6	0 4 10 13 21
+line|fr|normal	7	0 4 5 6 8 16 20 22 29
+line|fr|normal	8	0 2 3 6 7 8 10 11 12
+line|fr|normal	9	0 1 2 5 6 7 10 11
+line|fr|normal	10	0 4 8 11
+line|fr|normal	11	0 9
+line|fr|normal	12	0 10
+line|fr|normal	13	0 5 9 12 15 18 22 25
+line|fr|normal	14	0 9 13 17
+line|fr|strict	0	0 10
+line|fr|strict	1	0 1 8 9
+line|fr|strict	2	0 1 3 4
+line|fr|strict	3	0 4 11
+line|fr|strict	4	0 1 5 6
+line|fr|strict	5	0 1 2 3 5 6 7
+line|fr|strict	6	0 4 10 13 21
+line|fr|strict	7	0 4 5 6 8 16 20 22 29
+line|fr|strict	8	0 2 3 6 7 8 12
+line|fr|strict	9	0 2 5 7 10 11
+line|fr|strict	10	0 4 8 11
+line|fr|strict	11	0 9
+line|fr|strict	12	0 10
+line|fr|strict	13	0 5 9 12 15 18 22 25
+line|fr|strict	14	0 9 13 17
+line|de|default	0	0 10
+line|de|default	1	0 1 7 8 9
+line|de|default	2	0 1 3 4
+line|de|default	3	0 4 8 11
+line|de|default	4	0 1 4 5 6
+line|de|default	5	0 1 2 3 5 6 7
+line|de|default	6	0 4 10 13 21
+line|de|default	7	0 4 5 6 8 16 20 22 29
+line|de|default	8	0 2 3 6 7 8 12
+line|de|default	9	0 2 5 7 10 11
+line|de|default	10	0 4 8 11
+line|de|default	11	0 9
+line|de|default	12	0 10
+line|de|default	13	0 5 9 12 15 18 22 25
+line|de|default	14	0 9 13 17
+line|de|loose	0	0 10
+line|de|loose	1	0 1 7 8 9
+line|de|loose	2	0 1 2 3 4
+line|de|loose	3	0 4 8 11
+line|de|loose	4	0 1 4 5 6
+line|de|loose	5	0 1 2 3 5 6 7
+line|de|loose	6	0 4 10 13 21
+line|de|loose	7	0 4 5 6 8 16 20 22 29
+line|de|loose	8	0 2 3 6 7 8 10 11 12
+line|de|loose	9	0 1 2 3 4 5 6 7 9 10 11
+line|de|loose	10	0 4 8 11
+line|de|loose	11	0 9
+line|de|loose	12	0 10
+line|de|loose	13	0 5 9 12 15 18 22 25
+line|de|loose	14	0 9 13 17
+line|de|normal	0	0 10
+line|de|normal	1	0 1 7 8 9
+line|de|normal	2	0 1 2 3 4
+line|de|normal	3	0 4 8 11
+line|de|normal	4	0 1 4 5 6
+line|de|normal	5	0 1 2 3 5 6 7
+line|de|normal	6	0 4 10 13 21
+line|de|normal	7	0 4 5 6 8 16 20 22 29
+line|de|normal	8	0 2 3 6 7 8 10 11 12
+line|de|normal	9	0 1 2 5 6 7 10 11
+line|de|normal	10	0 4 8 11
+line|de|normal	11	0 9
+line|de|normal	12	0 10
+line|de|normal	13	0 5 9 12 15 18 22 25
+line|de|normal	14	0 9 13 17
+line|de|strict	0	0 10
+line|de|strict	1	0 1 7 8 9
+line|de|strict	2	0 1 3 4
+line|de|strict	3	0 4 8 11
+line|de|strict	4	0 1 4 5 6
+line|de|strict	5	0 1 2 3 5 6 7
+line|de|strict	6	0 4 10 13 21
+line|de|strict	7	0 4 5 6 8 16 20 22 29
+line|de|strict	8	0 2 3 6 7 8 12
+line|de|strict	9	0 2 5 7 10 11
+line|de|strict	10	0 4 8 11
+line|de|strict	11	0 9
+line|de|strict	12	0 10
+line|de|strict	13	0 5 9 12 15 18 22 25
+line|de|strict	14	0 9 13 17
+line|es|default	0	0 4 10
+line|es|default	1	0 1 2 7 8 9
+line|es|default	2	0 1 3 4
+line|es|default	3	0 4 8 11
+line|es|default	4	0 1 4 5 6
+line|es|default	5	0 1 2 3 5 6 7
+line|es|default	6	0 4 10 13 21
+line|es|default	7	0 4 5 6 8 16 20 22 29
+line|es|default	8	0 2 3 6 7 8 12
+line|es|default	9	0 2 5 7 10 11
+line|es|default	10	0 4 8 11
+line|es|default	11	0 9
+line|es|default	12	0 10
+line|es|default	13	0 5 9 12 15 18 22 25
+line|es|default	14	0 9 13 17
+line|es|loose	0	0 4 10
+line|es|loose	1	0 1 2 7 8 9
+line|es|loose	2	0 1 2 3 4
+line|es|loose	3	0 4 8 11
+line|es|loose	4	0 1 4 5 6
+line|es|loose	5	0 1 2 3 5 6 7
+line|es|loose	6	0 4 10 13 21
+line|es|loose	7	0 4 5 6 8 16 20 22 29
+line|es|loose	8	0 2 3 6 7 8 10 11 12
+line|es|loose	9	0 1 2 3 4 5 6 7 9 10 11
+line|es|loose	10	0 4 8 11
+line|es|loose	11	0 9
+line|es|loose	12	0 10
+line|es|loose	13	0 5 9 12 15 18 22 25
+line|es|loose	14	0 9 13 17
+line|es|normal	0	0 4 10
+line|es|normal	1	0 1 2 7 8 9
+line|es|normal	2	0 1 2 3 4
+line|es|normal	3	0 4 8 11
+line|es|normal	4	0 1 4 5 6
+line|es|normal	5	0 1 2 3 5 6 7
+line|es|normal	6	0 4 10 13 21
+line|es|normal	7	0 4 5 6 8 16 20 22 29
+line|es|normal	8	0 2 3 6 7 8 10 11 12
+line|es|normal	9	0 1 2 5 6 7 10 11
+line|es|normal	10	0 4 8 11
+line|es|normal	11	0 9
+line|es|normal	12	0 10
+line|es|normal	13	0 5 9 12 15 18 22 25
+line|es|normal	14	0 9 13 17
+line|es|strict	0	0 4 10
+line|es|strict	1	0 1 2 7 8 9
+line|es|strict	2	0 1 3 4
+line|es|strict	3	0 4 8 11
+line|es|strict	4	0 1 4 5 6
+line|es|strict	5	0 1 2 3 5 6 7
+line|es|strict	6	0 4 10 13 21
+line|es|strict	7	0 4 5 6 8 16 20 22 29
+line|es|strict	8	0 2 3 6 7 8 12
+line|es|strict	9	0 2 5 7 10 11
+line|es|strict	10	0 4 8 11
+line|es|strict	11	0 9
+line|es|strict	12	0 10
+line|es|strict	13	0 5 9 12 15 18 22 25
+line|es|strict	14	0 9 13 17
+line|it|default	0	0 4 10
+line|it|default	1	0 1 2 7 8 9
+line|it|default	2	0 1 3 4
+line|it|default	3	0 4 8 11
+line|it|default	4	0 1 4 5 6
+line|it|default	5	0 1 2 3 5 6 7
+line|it|default	6	0 4 10 13 21
+line|it|default	7	0 4 5 6 8 16 20 22 29
+line|it|default	8	0 2 3 6 7 8 12
+line|it|default	9	0 2 5 7 10 11
+line|it|default	10	0 4 8 11
+line|it|default	11	0 9
+line|it|default	12	0 10
+line|it|default	13	0 5 9 12 15 18 22 25
+line|it|default	14	0 9 13 17
+line|it|loose	0	0 4 10
+line|it|loose	1	0 1 2 7 8 9
+line|it|loose	2	0 1 2 3 4
+line|it|loose	3	0 4 8 11
+line|it|loose	4	0 1 4 5 6
+line|it|loose	5	0 1 2 3 5 6 7
+line|it|loose	6	0 4 10 13 21
+line|it|loose	7	0 4 5 6 8 16 20 22 29
+line|it|loose	8	0 2 3 6 7 8 10 11 12
+line|it|loose	9	0 1 2 3 4 5 6 7 9 10 11
+line|it|loose	10	0 4 8 11
+line|it|loose	11	0 9
+line|it|loose	12	0 10
+line|it|loose	13	0 5 9 12 15 18 22 25
+line|it|loose	14	0 9 13 17
+line|it|normal	0	0 4 10
+line|it|normal	1	0 1 2 7 8 9
+line|it|normal	2	0 1 2 3 4
+line|it|normal	3	0 4 8 11
+line|it|normal	4	0 1 4 5 6
+line|it|normal	5	0 1 2 3 5 6 7
+line|it|normal	6	0 4 10 13 21
+line|it|normal	7	0 4 5 6 8 16 20 22 29
+line|it|normal	8	0 2 3 6 7 8 10 11 12
+line|it|normal	9	0 1 2 5 6 7 10 11
+line|it|normal	10	0 4 8 11
+line|it|normal	11	0 9
+line|it|normal	12	0 10
+line|it|normal	13	0 5 9 12 15 18 22 25
+line|it|normal	14	0 9 13 17
+line|it|strict	0	0 4 10
+line|it|strict	1	0 1 2 7 8 9
+line|it|strict	2	0 1 3 4
+line|it|strict	3	0 4 8 11
+line|it|strict	4	0 1 4 5 6
+line|it|strict	5	0 1 2 3 5 6 7
+line|it|strict	6	0 4 10 13 21
+line|it|strict	7	0 4 5 6 8 16 20 22 29
+line|it|strict	8	0 2 3 6 7 8 12
+line|it|strict	9	0 2 5 7 10 11
+line|it|strict	10	0 4 8 11
+line|it|strict	11	0 9
+line|it|strict	12	0 10
+line|it|strict	13	0 5 9 12 15 18 22 25
+line|it|strict	14	0 9 13 17
+line|pt|default	0	0 4 10
+line|pt|default	1	0 1 2 7 8 9
+line|pt|default	2	0 1 3 4
+line|pt|default	3	0 4 8 11
+line|pt|default	4	0 1 4 5 6
+line|pt|default	5	0 1 2 3 5 6 7
+line|pt|default	6	0 4 10 13 21
+line|pt|default	7	0 4 5 6 8 16 20 22 29
+line|pt|default	8	0 2 3 6 7 8 12
+line|pt|default	9	0 2 5 7 10 11
+line|pt|default	10	0 4 8 11
+line|pt|default	11	0 9
+line|pt|default	12	0 10
+line|pt|default	13	0 5 9 12 15 18 22 25
+line|pt|default	14	0 9 13 17
+line|pt|loose	0	0 4 10
+line|pt|loose	1	0 1 2 7 8 9
+line|pt|loose	2	0 1 2 3 4
+line|pt|loose	3	0 4 8 11
+line|pt|loose	4	0 1 4 5 6
+line|pt|loose	5	0 1 2 3 5 6 7
+line|pt|loose	6	0 4 10 13 21
+line|pt|loose	7	0 4 5 6 8 16 20 22 29
+line|pt|loose	8	0 2 3 6 7 8 10 11 12
+line|pt|loose	9	0 1 2 3 4 5 6 7 9 10 11
+line|pt|loose	10	0 4 8 11
+line|pt|loose	11	0 9
+line|pt|loose	12	0 10
+line|pt|loose	13	0 5 9 12 15 18 22 25
+line|pt|loose	14	0 9 13 17
+line|pt|normal	0	0 4 10
+line|pt|normal	1	0 1 2 7 8 9
+line|pt|normal	2	0 1 2 3 4
+line|pt|normal	3	0 4 8 11
+line|pt|normal	4	0 1 4 5 6
+line|pt|normal	5	0 1 2 3 5 6 7
+line|pt|normal	6	0 4 10 13 21
+line|pt|normal	7	0 4 5 6 8 16 20 22 29
+line|pt|normal	8	0 2 3 6 7 8 10 11 12
+line|pt|normal	9	0 1 2 5 6 7 10 11
+line|pt|normal	10	0 4 8 11
+line|pt|normal	11	0 9
+line|pt|normal	12	0 10
+line|pt|normal	13	0 5 9 12 15 18 22 25
+line|pt|normal	14	0 9 13 17
+line|pt|strict	0	0 4 10
+line|pt|strict	1	0 1 2 7 8 9
+line|pt|strict	2	0 1 3 4
+line|pt|strict	3	0 4 8 11
+line|pt|strict	4	0 1 4 5 6
+line|pt|strict	5	0 1 2 3 5 6 7
+line|pt|strict	6	0 4 10 13 21
+line|pt|strict	7	0 4 5 6 8 16 20 22 29
+line|pt|strict	8	0 2 3 6 7 8 12
+line|pt|strict	9	0 2 5 7 10 11
+line|pt|strict	10	0 4 8 11
+line|pt|strict	11	0 9
+line|pt|strict	12	0 10
+line|pt|strict	13	0 5 9 12 15 18 22 25
+line|pt|strict	14	0 9 13 17
+line|ru|default	0	0 10
+line|ru|default	1	0 1 7 8 9
+line|ru|default	2	0 1 3 4
+line|ru|default	3	0 4 8 11
+line|ru|default	4	0 1 4 5 6
+line|ru|default	5	0 1 2 3 5 6 7
+line|ru|default	6	0 4 10 13 21
+line|ru|default	7	0 4 5 6 8 16 20 22 29
+line|ru|default	8	0 2 3 6 7 8 12
+line|ru|default	9	0 2 5 7 10 11
+line|ru|default	10	0 4 8 11
+line|ru|default	11	0 9
+line|ru|default	12	0 10
+line|ru|default	13	0 5 9 12 15 18 22 25
+line|ru|default	14	0 9 13 17
+line|ru|loose	0	0 10
+line|ru|loose	1	0 1 7 8 9
+line|ru|loose	2	0 1 2 3 4
+line|ru|loose	3	0 4 8 11
+line|ru|loose	4	0 1 4 5 6
+line|ru|loose	5	0 1 2 3 5 6 7
+line|ru|loose	6	0 4 10 13 21
+line|ru|loose	7	0 4 5 6 8 16 20 22 29
+line|ru|loose	8	0 2 3 6 7 8 10 11 12
+line|ru|loose	9	0 1 2 3 4 5 6 7 9 10 11
+line|ru|loose	10	0 4 8 11
+line|ru|loose	11	0 9
+line|ru|loose	12	0 10
+line|ru|loose	13	0 5 9 12 15 18 22 25
+line|ru|loose	14	0 9 13 17
+line|ru|normal	0	0 10
+line|ru|normal	1	0 1 7 8 9
+line|ru|normal	2	0 1 2 3 4
+line|ru|normal	3	0 4 8 11
+line|ru|normal	4	0 1 4 5 6
+line|ru|normal	5	0 1 2 3 5 6 7
+line|ru|normal	6	0 4 10 13 21
+line|ru|normal	7	0 4 5 6 8 16 20 22 29
+line|ru|normal	8	0 2 3 6 7 8 10 11 12
+line|ru|normal	9	0 1 2 5 6 7 10 11
+line|ru|normal	10	0 4 8 11
+line|ru|normal	11	0 9
+line|ru|normal	12	0 10
+line|ru|normal	13	0 5 9 12 15 18 22 25
+line|ru|normal	14	0 9 13 17
+line|ru|strict	0	0 10
+line|ru|strict	1	0 1 7 8 9
+line|ru|strict	2	0 1 3 4
+line|ru|strict	3	0 4 8 11
+line|ru|strict	4	0 1 4 5 6
+line|ru|strict	5	0 1 2 3 5 6 7
+line|ru|strict	6	0 4 10 13 21
+line|ru|strict	7	0 4 5 6 8 16 20 22 29
+line|ru|strict	8	0 2 3 6 7 8 12
+line|ru|strict	9	0 2 5 7 10 11
+line|ru|strict	10	0 4 8 11
+line|ru|strict	11	0 9
+line|ru|strict	12	0 10
+line|ru|strict	13	0 5 9 12 15 18 22 25
+line|ru|strict	14	0 9 13 17
+line|sv|default	0	0 10
+line|sv|default	1	0 1 8 9
+line|sv|default	2	0 1 3 4
+line|sv|default	3	0 4 11
+line|sv|default	4	0 1 5 6
+line|sv|default	5	0 1 2 3 5 6 7
+line|sv|default	6	0 4 10 13 21
+line|sv|default	7	0 4 5 6 8 16 20 22 29
+line|sv|default	8	0 2 3 6 7 8 12
+line|sv|default	9	0 2 5 7 10 11
+line|sv|default	10	0 4 8 11
+line|sv|default	11	0 9
+line|sv|default	12	0 10
+line|sv|default	13	0 5 9 12 15 18 22 25
+line|sv|default	14	0 9 13 17
+line|sv|loose	0	0 10
+line|sv|loose	1	0 1 8 9
+line|sv|loose	2	0 1 2 3 4
+line|sv|loose	3	0 4 11
+line|sv|loose	4	0 1 5 6
+line|sv|loose	5	0 1 2 3 5 6 7
+line|sv|loose	6	0 4 10 13 21
+line|sv|loose	7	0 4 5 6 8 16 20 22 29
+line|sv|loose	8	0 2 3 6 7 8 10 11 12
+line|sv|loose	9	0 1 2 3 4 5 6 7 9 10 11
+line|sv|loose	10	0 4 8 11
+line|sv|loose	11	0 9
+line|sv|loose	12	0 10
+line|sv|loose	13	0 5 9 12 15 18 22 25
+line|sv|loose	14	0 9 13 17
+line|sv|normal	0	0 10
+line|sv|normal	1	0 1 8 9
+line|sv|normal	2	0 1 2 3 4
+line|sv|normal	3	0 4 11
+line|sv|normal	4	0 1 5 6
+line|sv|normal	5	0 1 2 3 5 6 7
+line|sv|normal	6	0 4 10 13 21
+line|sv|normal	7	0 4 5 6 8 16 20 22 29
+line|sv|normal	8	0 2 3 6 7 8 10 11 12
+line|sv|normal	9	0 1 2 5 6 7 10 11
+line|sv|normal	10	0 4 8 11
+line|sv|normal	11	0 9
+line|sv|normal	12	0 10
+line|sv|normal	13	0 5 9 12 15 18 22 25
+line|sv|normal	14	0 9 13 17
+line|sv|strict	0	0 10
+line|sv|strict	1	0 1 8 9
+line|sv|strict	2	0 1 3 4
+line|sv|strict	3	0 4 11
+line|sv|strict	4	0 1 5 6
+line|sv|strict	5	0 1 2 3 5 6 7
+line|sv|strict	6	0 4 10 13 21
+line|sv|strict	7	0 4 5 6 8 16 20 22 29
+line|sv|strict	8	0 2 3 6 7 8 12
+line|sv|strict	9	0 2 5 7 10 11
+line|sv|strict	10	0 4 8 11
+line|sv|strict	11	0 9
+line|sv|strict	12	0 10
+line|sv|strict	13	0 5 9 12 15 18 22 25
+line|sv|strict	14	0 9 13 17
+line|fi|default	0	0 10
+line|fi|default	1	0 1 8 9
+line|fi|default	2	0 1 3 4
+line|fi|default	3	0 4 11
+line|fi|default	4	0 1 5 6
+line|fi|default	5	0 1 2 3 5 6 7
+line|fi|default	6	0 4 10 13 21
+line|fi|default	7	0 4 5 6 8 16 20 22 29
+line|fi|default	8	0 2 3 6 7 8 12
+line|fi|default	9	0 2 5 7 10 11
+line|fi|default	10	0 4 8 11
+line|fi|default	11	0 9
+line|fi|default	12	0 10
+line|fi|default	13	0 5 9 12 15 18 22 25
+line|fi|default	14	0 9 13 17
+line|fi|loose	0	0 10
+line|fi|loose	1	0 1 8 9
+line|fi|loose	2	0 1 2 3 4
+line|fi|loose	3	0 4 11
+line|fi|loose	4	0 1 5 6
+line|fi|loose	5	0 1 2 3 5 6 7
+line|fi|loose	6	0 4 10 13 21
+line|fi|loose	7	0 4 5 6 8 16 20 22 29
+line|fi|loose	8	0 2 3 6 7 8 10 11 12
+line|fi|loose	9	0 1 2 3 4 5 6 7 9 10 11
+line|fi|loose	10	0 4 8 11
+line|fi|loose	11	0 9
+line|fi|loose	12	0 10
+line|fi|loose	13	0 5 9 12 15 18 22 25
+line|fi|loose	14	0 9 13 17
+line|fi|normal	0	0 10
+line|fi|normal	1	0 1 8 9
+line|fi|normal	2	0 1 2 3 4
+line|fi|normal	3	0 4 11
+line|fi|normal	4	0 1 5 6
+line|fi|normal	5	0 1 2 3 5 6 7
+line|fi|normal	6	0 4 10 13 21
+line|fi|normal	7	0 4 5 6 8 16 20 22 29
+line|fi|normal	8	0 2 3 6 7 8 10 11 12
+line|fi|normal	9	0 1 2 5 6 7 10 11
+line|fi|normal	10	0 4 8 11
+line|fi|normal	11	0 9
+line|fi|normal	12	0 10
+line|fi|normal	13	0 5 9 12 15 18 22 25
+line|fi|normal	14	0 9 13 17
+line|fi|strict	0	0 10
+line|fi|strict	1	0 1 8 9
+line|fi|strict	2	0 1 3 4
+line|fi|strict	3	0 4 11
+line|fi|strict	4	0 1 5 6
+line|fi|strict	5	0 1 2 3 5 6 7
+line|fi|strict	6	0 4 10 13 21
+line|fi|strict	7	0 4 5 6 8 16 20 22 29
+line|fi|strict	8	0 2 3 6 7 8 12
+line|fi|strict	9	0 2 5 7 10 11
+line|fi|strict	10	0 4 8 11
+line|fi|strict	11	0 9
+line|fi|strict	12	0 10
+line|fi|strict	13	0 5 9 12 15 18 22 25
+line|fi|strict	14	0 9 13 17
+line|el|default	0	0 4 10
+line|el|default	1	0 1 2 7 8 9
+line|el|default	2	0 1 3 4
+line|el|default	3	0 4 8 11
+line|el|default	4	0 1 4 5 6
+line|el|default	5	0 1 2 3 5 6 7
+line|el|default	6	0 4 10 13 21
+line|el|default	7	0 4 5 6 8 16 20 22 29
+line|el|default	8	0 2 3 6 7 8 12
+line|el|default	9	0 2 5 7 10 11
+line|el|default	10	0 4 8 11
+line|el|default	11	0 9
+line|el|default	12	0 10
+line|el|default	13	0 5 9 12 15 18 22 25
+line|el|default	14	0 9 13 17
+line|el|loose	0	0 4 10
+line|el|loose	1	0 1 2 7 8 9
+line|el|loose	2	0 1 2 3 4
+line|el|loose	3	0 4 8 11
+line|el|loose	4	0 1 4 5 6
+line|el|loose	5	0 1 2 3 5 6 7
+line|el|loose	6	0 4 10 13 21
+line|el|loose	7	0 4 5 6 8 16 20 22 29
+line|el|loose	8	0 2 3 6 7 8 10 11 12
+line|el|loose	9	0 1 2 3 4 5 6 7 9 10 11
+line|el|loose	10	0 4 8 11
+line|el|loose	11	0 9
+line|el|loose	12	0 10
+line|el|loose	13	0 5 9 12 15 18 22 25
+line|el|loose	14	0 9 13 17
+line|el|normal	0	0 4 10
+line|el|normal	1	0 1 2 7 8 9
+line|el|normal	2	0 1 2 3 4
+line|el|normal	3	0 4 8 11
+line|el|normal	4	0 1 4 5 6
+line|el|normal	5	0 1 2 3 5 6 7
+line|el|normal	6	0 4 10 13 21
+line|el|normal	7	0 4 5 6 8 16 20 22 29
+line|el|normal	8	0 2 3 6 7 8 10 11 12
+line|el|normal	9	0 1 2 5 6 7 10 11
+line|el|normal	10	0 4 8 11
+line|el|normal	11	0 9
+line|el|normal	12	0 10
+line|el|normal	13	0 5 9 12 15 18 22 25
+line|el|normal	14	0 9 13 17
+line|el|strict	0	0 4 10
+line|el|strict	1	0 1 2 7 8 9
+line|el|strict	2	0 1 3 4
+line|el|strict	3	0 4 8 11
+line|el|strict	4	0 1 4 5 6
+line|el|strict	5	0 1 2 3 5 6 7
+line|el|strict	6	0 4 10 13 21
+line|el|strict	7	0 4 5 6 8 16 20 22 29
+line|el|strict	8	0 2 3 6 7 8 12
+line|el|strict	9	0 2 5 7 10 11
+line|el|strict	10	0 4 8 11
+line|el|strict	11	0 9
+line|el|strict	12	0 10
+line|el|strict	13	0 5 9 12 15 18 22 25
+line|el|strict	14	0 9 13 17
+line|tr|default	0	0 4 10
+line|tr|default	1	0 1 2 7 8 9
+line|tr|default	2	0 1 3 4
+line|tr|default	3	0 4 8 11
+line|tr|default	4	0 1 4 5 6
+line|tr|default	5	0 1 2 3 5 6 7
+line|tr|default	6	0 4 10 13 21
+line|tr|default	7	0 4 5 6 8 16 20 22 29
+line|tr|default	8	0 2 3 6 7 8 12
+line|tr|default	9	0 2 5 7 10 11
+line|tr|default	10	0 4 8 11
+line|tr|default	11	0 9
+line|tr|default	12	0 10
+line|tr|default	13	0 5 9 12 15 18 22 25
+line|tr|default	14	0 9 13 17
+line|tr|loose	0	0 4 10
+line|tr|loose	1	0 1 2 7 8 9
+line|tr|loose	2	0 1 2 3 4
+line|tr|loose	3	0 4 8 11
+line|tr|loose	4	0 1 4 5 6
+line|tr|loose	5	0 1 2 3 5 6 7
+line|tr|loose	6	0 4 10 13 21
+line|tr|loose	7	0 4 5 6 8 16 20 22 29
+line|tr|loose	8	0 2 3 6 7 8 10 11 12
+line|tr|loose	9	0 1 2 3 4 5 6 7 9 10 11
+line|tr|loose	10	0 4 8 11
+line|tr|loose	11	0 9
+line|tr|loose	12	0 10
+line|tr|loose	13	0 5 9 12 15 18 22 25
+line|tr|loose	14	0 9 13 17
+line|tr|normal	0	0 4 10
+line|tr|normal	1	0 1 2 7 8 9
+line|tr|normal	2	0 1 2 3 4
+line|tr|normal	3	0 4 8 11
+line|tr|normal	4	0 1 4 5 6
+line|tr|normal	5	0 1 2 3 5 6 7
+line|tr|normal	6	0 4 10 13 21
+line|tr|normal	7	0 4 5 6 8 16 20 22 29
+line|tr|normal	8	0 2 3 6 7 8 10 11 12
+line|tr|normal	9	0 1 2 5 6 7 10 11
+line|tr|normal	10	0 4 8 11
+line|tr|normal	11	0 9
+line|tr|normal	12	0 10
+line|tr|normal	13	0 5 9 12 15 18 22 25
+line|tr|normal	14	0 9 13 17
+line|tr|strict	0	0 4 10
+line|tr|strict	1	0 1 2 7 8 9
+line|tr|strict	2	0 1 3 4
+line|tr|strict	3	0 4 8 11
+line|tr|strict	4	0 1 4 5 6
+line|tr|strict	5	0 1 2 3 5 6 7
+line|tr|strict	6	0 4 10 13 21
+line|tr|strict	7	0 4 5 6 8 16 20 22 29
+line|tr|strict	8	0 2 3 6 7 8 12
+line|tr|strict	9	0 2 5 7 10 11
+line|tr|strict	10	0 4 8 11
+line|tr|strict	11	0 9
+line|tr|strict	12	0 10
+line|tr|strict	13	0 5 9 12 15 18 22 25
+line|tr|strict	14	0 9 13 17
+line|pl|default	0	0 10
+line|pl|default	1	0 1 7 8 9
+line|pl|default	2	0 1 3 4
+line|pl|default	3	0 4 8 11
+line|pl|default	4	0 1 4 5 6
+line|pl|default	5	0 1 2 3 5 6 7
+line|pl|default	6	0 4 10 13 21
+line|pl|default	7	0 4 5 6 8 16 20 22 29
+line|pl|default	8	0 2 3 6 7 8 12
+line|pl|default	9	0 2 5 7 10 11
+line|pl|default	10	0 4 8 11
+line|pl|default	11	0 9
+line|pl|default	12	0 10
+line|pl|default	13	0 5 9 12 15 18 22 25
+line|pl|default	14	0 9 13 17
+line|pl|loose	0	0 10
+line|pl|loose	1	0 1 7 8 9
+line|pl|loose	2	0 1 2 3 4
+line|pl|loose	3	0 4 8 11
+line|pl|loose	4	0 1 4 5 6
+line|pl|loose	5	0 1 2 3 5 6 7
+line|pl|loose	6	0 4 10 13 21
+line|pl|loose	7	0 4 5 6 8 16 20 22 29
+line|pl|loose	8	0 2 3 6 7 8 10 11 12
+line|pl|loose	9	0 1 2 3 4 5 6 7 9 10 11
+line|pl|loose	10	0 4 8 11
+line|pl|loose	11	0 9
+line|pl|loose	12	0 10
+line|pl|loose	13	0 5 9 12 15 18 22 25
+line|pl|loose	14	0 9 13 17
+line|pl|normal	0	0 10
+line|pl|normal	1	0 1 7 8 9
+line|pl|normal	2	0 1 2 3 4
+line|pl|normal	3	0 4 8 11
+line|pl|normal	4	0 1 4 5 6
+line|pl|normal	5	0 1 2 3 5 6 7
+line|pl|normal	6	0 4 10 13 21
+line|pl|normal	7	0 4 5 6 8 16 20 22 29
+line|pl|normal	8	0 2 3 6 7 8 10 11 12
+line|pl|normal	9	0 1 2 5 6 7 10 11
+line|pl|normal	10	0 4 8 11
+line|pl|normal	11	0 9
+line|pl|normal	12	0 10
+line|pl|normal	13	0 5 9 12 15 18 22 25
+line|pl|normal	14	0 9 13 17
+line|pl|strict	0	0 10
+line|pl|strict	1	0 1 7 8 9
+line|pl|strict	2	0 1 3 4
+line|pl|strict	3	0 4 8 11
+line|pl|strict	4	0 1 4 5 6
+line|pl|strict	5	0 1 2 3 5 6 7
+line|pl|strict	6	0 4 10 13 21
+line|pl|strict	7	0 4 5 6 8 16 20 22 29
+line|pl|strict	8	0 2 3 6 7 8 12
+line|pl|strict	9	0 2 5 7 10 11
+line|pl|strict	10	0 4 8 11
+line|pl|strict	11	0 9
+line|pl|strict	12	0 10
+line|pl|strict	13	0 5 9 12 15 18 22 25
+line|pl|strict	14	0 9 13 17
+line|nl|default	0	0 10
+line|nl|default	1	0 1 8 9
+line|nl|default	2	0 1 3 4
+line|nl|default	3	0 4 11
+line|nl|default	4	0 1 5 6
+line|nl|default	5	0 1 2 3 5 6 7
+line|nl|default	6	0 4 10 13 21
+line|nl|default	7	0 4 5 6 8 16 20 22 29
+line|nl|default	8	0 2 3 6 7 8 12
+line|nl|default	9	0 2 5 7 10 11
+line|nl|default	10	0 4 8 11
+line|nl|default	11	0 9
+line|nl|default	12	0 10
+line|nl|default	13	0 5 9 12 15 18 22 25
+line|nl|default	14	0 9 13 17
+line|nl|loose	0	0 10
+line|nl|loose	1	0 1 8 9
+line|nl|loose	2	0 1 2 3 4
+line|nl|loose	3	0 4 11
+line|nl|loose	4	0 1 5 6
+line|nl|loose	5	0 1 2 3 5 6 7
+line|nl|loose	6	0 4 10 13 21
+line|nl|loose	7	0 4 5 6 8 16 20 22 29
+line|nl|loose	8	0 2 3 6 7 8 10 11 12
+line|nl|loose	9	0 1 2 3 4 5 6 7 9 10 11
+line|nl|loose	10	0 4 8 11
+line|nl|loose	11	0 9
+line|nl|loose	12	0 10
+line|nl|loose	13	0 5 9 12 15 18 22 25
+line|nl|loose	14	0 9 13 17
+line|nl|normal	0	0 10
+line|nl|normal	1	0 1 8 9
+line|nl|normal	2	0 1 2 3 4
+line|nl|normal	3	0 4 11
+line|nl|normal	4	0 1 5 6
+line|nl|normal	5	0 1 2 3 5 6 7
+line|nl|normal	6	0 4 10 13 21
+line|nl|normal	7	0 4 5 6 8 16 20 22 29
+line|nl|normal	8	0 2 3 6 7 8 10 11 12
+line|nl|normal	9	0 1 2 5 6 7 10 11
+line|nl|normal	10	0 4 8 11
+line|nl|normal	11	0 9
+line|nl|normal	12	0 10
+line|nl|normal	13	0 5 9 12 15 18 22 25
+line|nl|normal	14	0 9 13 17
+line|nl|strict	0	0 10
+line|nl|strict	1	0 1 8 9
+line|nl|strict	2	0 1 3 4
+line|nl|strict	3	0 4 11
+line|nl|strict	4	0 1 5 6
+line|nl|strict	5	0 1 2 3 5 6 7
+line|nl|strict	6	0 4 10 13 21
+line|nl|strict	7	0 4 5 6 8 16 20 22 29
+line|nl|strict	8	0 2 3 6 7 8 12
+line|nl|strict	9	0 2 5 7 10 11
+line|nl|strict	10	0 4 8 11
+line|nl|strict	11	0 9
+line|nl|strict	12	0 10
+line|nl|strict	13	0 5 9 12 15 18 22 25
+line|nl|strict	14	0 9 13 17
+line|ja|default	0	0 10
+line|ja|default	1	0 1 8 9
+line|ja|default	2	0 1 2 3 4
+line|ja|default	3	0 4 11
+line|ja|default	4	0 1 5 6
+line|ja|default	5	0 1 2 3 5 6 7
+line|ja|default	6	0 4 10 13 21
+line|ja|default	7	0 4 5 6 8 16 20 22 29
+line|ja|default	8	0 2 3 6 7 8 10 11 12
+line|ja|default	9	0 1 2 5 6 7 10 11
+line|ja|default	10	0 4 8 11
+line|ja|default	11	0 9
+line|ja|default	12	0 10
+line|ja|default	13	0 5 9 12 15 18 22 25
+line|ja|default	14	0 9 13 17
+line|ja|loose	0	0 4 10
+line|ja|loose	1	0 1 2 7 8 9
+line|ja|loose	2	0 1 2 3 4
+line|ja|loose	3	0 4 8 11
+line|ja|loose	4	0 1 4 5 6
+line|ja|loose	5	0 1 2 3 4 5 6 7
+line|ja|loose	6	0 4 10 13 21
+line|ja|loose	7	0 4 5 6 8 16 20 22 29
+line|ja|loose	8	0 2 3 6 7 8 10 11 12
+line|ja|loose	9	0 1 2 3 4 5 6 7 9 10 11
+line|ja|loose	10	0 4 8 11
+line|ja|loose	11	0 9
+line|ja|loose	12	0 10
+line|ja|loose	13	0 5 9 12 15 18 22 25
+line|ja|loose	14	0 9 13 17
+line|ja|normal	0	0 4 10
+line|ja|normal	1	0 1 2 7 8 9
+line|ja|normal	2	0 1 2 3 4
+line|ja|normal	3	0 4 8 11
+line|ja|normal	4	0 1 4 5 6
+line|ja|normal	5	0 1 2 3 4 5 6 7
+line|ja|normal	6	0 4 10 13 21
+line|ja|normal	7	0 4 5 6 8 16 20 22 29
+line|ja|normal	8	0 2 3 6 7 8 10 11 12
+line|ja|normal	9	0 1 2 5 6 7 10 11
+line|ja|normal	10	0 4 8 11
+line|ja|normal	11	0 9
+line|ja|normal	12	0 10
+line|ja|normal	13	0 5 9 12 15 18 22 25
+line|ja|normal	14	0 9 13 17
+line|ja|strict	0	0 4 10
+line|ja|strict	1	0 1 2 7 8 9
+line|ja|strict	2	0 1 3 4
+line|ja|strict	3	0 4 8 11
+line|ja|strict	4	0 1 4 5 6
+line|ja|strict	5	0 1 2 3 5 6 7
+line|ja|strict	6	0 4 10 13 21
+line|ja|strict	7	0 4 5 6 8 16 20 22 29
+line|ja|strict	8	0 2 3 6 7 8 12
+line|ja|strict	9	0 2 5 7 10 11
+line|ja|strict	10	0 4 8 11
+line|ja|strict	11	0 9
+line|ja|strict	12	0 10
+line|ja|strict	13	0 5 9 12 15 18 22 25
+line|ja|strict	14	0 9 13 17
+line|ja-JP|default	0	0 10
+line|ja-JP|default	1	0 1 8 9
+line|ja-JP|default	2	0 1 2 3 4
+line|ja-JP|default	3	0 4 11
+line|ja-JP|default	4	0 1 5 6
+line|ja-JP|default	5	0 1 2 3 5 6 7
+line|ja-JP|default	6	0 4 10 13 21
+line|ja-JP|default	7	0 4 5 6 8 16 20 22 29
+line|ja-JP|default	8	0 2 3 6 7 8 10 11 12
+line|ja-JP|default	9	0 1 2 5 6 7 10 11
+line|ja-JP|default	10	0 4 8 11
+line|ja-JP|default	11	0 9
+line|ja-JP|default	12	0 10
+line|ja-JP|default	13	0 5 9 12 15 18 22 25
+line|ja-JP|default	14	0 9 13 17
+line|ja-JP|loose	0	0 4 10
+line|ja-JP|loose	1	0 1 2 7 8 9
+line|ja-JP|loose	2	0 1 2 3 4
+line|ja-JP|loose	3	0 4 8 11
+line|ja-JP|loose	4	0 1 4 5 6
+line|ja-JP|loose	5	0 1 2 3 4 5 6 7
+line|ja-JP|loose	6	0 4 10 13 21
+line|ja-JP|loose	7	0 4 5 6 8 16 20 22 29
+line|ja-JP|loose	8	0 2 3 6 7 8 10 11 12
+line|ja-JP|loose	9	0 1 2 3 4 5 6 7 9 10 11
+line|ja-JP|loose	10	0 4 8 11
+line|ja-JP|loose	11	0 9
+line|ja-JP|loose	12	0 10
+line|ja-JP|loose	13	0 5 9 12 15 18 22 25
+line|ja-JP|loose	14	0 9 13 17
+line|ja-JP|normal	0	0 4 10
+line|ja-JP|normal	1	0 1 2 7 8 9
+line|ja-JP|normal	2	0 1 2 3 4
+line|ja-JP|normal	3	0 4 8 11
+line|ja-JP|normal	4	0 1 4 5 6
+line|ja-JP|normal	5	0 1 2 3 4 5 6 7
+line|ja-JP|normal	6	0 4 10 13 21
+line|ja-JP|normal	7	0 4 5 6 8 16 20 22 29
+line|ja-JP|normal	8	0 2 3 6 7 8 10 11 12
+line|ja-JP|normal	9	0 1 2 5 6 7 10 11
+line|ja-JP|normal	10	0 4 8 11
+line|ja-JP|normal	11	0 9
+line|ja-JP|normal	12	0 10
+line|ja-JP|normal	13	0 5 9 12 15 18 22 25
+line|ja-JP|normal	14	0 9 13 17
+line|ja-JP|strict	0	0 4 10
+line|ja-JP|strict	1	0 1 2 7 8 9
+line|ja-JP|strict	2	0 1 3 4
+line|ja-JP|strict	3	0 4 8 11
+line|ja-JP|strict	4	0 1 4 5 6
+line|ja-JP|strict	5	0 1 2 3 5 6 7
+line|ja-JP|strict	6	0 4 10 13 21
+line|ja-JP|strict	7	0 4 5 6 8 16 20 22 29
+line|ja-JP|strict	8	0 2 3 6 7 8 12
+line|ja-JP|strict	9	0 2 5 7 10 11
+line|ja-JP|strict	10	0 4 8 11
+line|ja-JP|strict	11	0 9
+line|ja-JP|strict	12	0 10
+line|ja-JP|strict	13	0 5 9 12 15 18 22 25
+line|ja-JP|strict	14	0 9 13 17
+line|ko|default	0	0 4 10
+line|ko|default	1	0 1 2 7 8 9
+line|ko|default	2	0 1 2 3 4
+line|ko|default	3	0 4 8 11
+line|ko|default	4	0 1 4 5 6
+line|ko|default	5	0 1 2 3 5 6 7
+line|ko|default	6	0 4 10 13 21
+line|ko|default	7	0 4 5 6 8 16 20 22 29
+line|ko|default	8	0 2 3 6 7 8 10 11 12
+line|ko|default	9	0 1 2 5 6 7 10 11
+line|ko|default	10	0 4 8 11
+line|ko|default	11	0 9
+line|ko|default	12	0 10
+line|ko|default	13	0 5 9 12 15 18 22 25
+line|ko|default	14	0 9 13 17
+line|ko|loose	0	0 4 10
+line|ko|loose	1	0 1 2 7 8 9
+line|ko|loose	2	0 1 2 3 4
+line|ko|loose	3	0 4 8 11
+line|ko|loose	4	0 1 4 5 6
+line|ko|loose	5	0 1 2 3 4 5 6 7
+line|ko|loose	6	0 4 10 13 21
+line|ko|loose	7	0 4 5 6 8 16 20 22 29
+line|ko|loose	8	0 2 3 6 7 8 10 11 12
+line|ko|loose	9	0 1 2 3 4 5 6 7 9 10 11
+line|ko|loose	10	0 4 8 11
+line|ko|loose	11	0 9
+line|ko|loose	12	0 10
+line|ko|loose	13	0 5 9 12 15 18 22 25
+line|ko|loose	14	0 9 13 17
+line|ko|normal	0	0 4 10
+line|ko|normal	1	0 1 2 7 8 9
+line|ko|normal	2	0 1 2 3 4
+line|ko|normal	3	0 4 8 11
+line|ko|normal	4	0 1 4 5 6
+line|ko|normal	5	0 1 2 3 4 5 6 7
+line|ko|normal	6	0 4 10 13 21
+line|ko|normal	7	0 4 5 6 8 16 20 22 29
+line|ko|normal	8	0 2 3 6 7 8 10 11 12
+line|ko|normal	9	0 1 2 5 6 7 10 11
+line|ko|normal	10	0 4 8 11
+line|ko|normal	11	0 9
+line|ko|normal	12	0 10
+line|ko|normal	13	0 5 9 12 15 18 22 25
+line|ko|normal	14	0 9 13 17
+line|ko|strict	0	0 4 10
+line|ko|strict	1	0 1 2 7 8 9
+line|ko|strict	2	0 1 3 4
+line|ko|strict	3	0 4 8 11
+line|ko|strict	4	0 1 4 5 6
+line|ko|strict	5	0 1 2 3 5 6 7
+line|ko|strict	6	0 4 10 13 21
+line|ko|strict	7	0 4 5 6 8 16 20 22 29
+line|ko|strict	8	0 2 3 6 7 8 12
+line|ko|strict	9	0 2 5 7 10 11
+line|ko|strict	10	0 4 8 11
+line|ko|strict	11	0 9
+line|ko|strict	12	0 10
+line|ko|strict	13	0 5 9 12 15 18 22 25
+line|ko|strict	14	0 9 13 17
+line|ko-KR|default	0	0 4 10
+line|ko-KR|default	1	0 1 2 7 8 9
+line|ko-KR|default	2	0 1 2 3 4
+line|ko-KR|default	3	0 4 8 11
+line|ko-KR|default	4	0 1 4 5 6
+line|ko-KR|default	5	0 1 2 3 5 6 7
+line|ko-KR|default	6	0 4 10 13 21
+line|ko-KR|default	7	0 4 5 6 8 16 20 22 29
+line|ko-KR|default	8	0 2 3 6 7 8 10 11 12
+line|ko-KR|default	9	0 1 2 5 6 7 10 11
+line|ko-KR|default	10	0 4 8 11
+line|ko-KR|default	11	0 9
+line|ko-KR|default	12	0 10
+line|ko-KR|default	13	0 5 9 12 15 18 22 25
+line|ko-KR|default	14	0 9 13 17
+line|ko-KR|loose	0	0 4 10
+line|ko-KR|loose	1	0 1 2 7 8 9
+line|ko-KR|loose	2	0 1 2 3 4
+line|ko-KR|loose	3	0 4 8 11
+line|ko-KR|loose	4	0 1 4 5 6
+line|ko-KR|loose	5	0 1 2 3 4 5 6 7
+line|ko-KR|loose	6	0 4 10 13 21
+line|ko-KR|loose	7	0 4 5 6 8 16 20 22 29
+line|ko-KR|loose	8	0 2 3 6 7 8 10 11 12
+line|ko-KR|loose	9	0 1 2 3 4 5 6 7 9 10 11
+line|ko-KR|loose	10	0 4 8 11
+line|ko-KR|loose	11	0 9
+line|ko-KR|loose	12	0 10
+line|ko-KR|loose	13	0 5 9 12 15 18 22 25
+line|ko-KR|loose	14	0 9 13 17
+line|ko-KR|normal	0	0 4 10
+line|ko-KR|normal	1	0 1 2 7 8 9
+line|ko-KR|normal	2	0 1 2 3 4
+line|ko-KR|normal	3	0 4 8 11
+line|ko-KR|normal	4	0 1 4 5 6
+line|ko-KR|normal	5	0 1 2 3 4 5 6 7
+line|ko-KR|normal	6	0 4 10 13 21
+line|ko-KR|normal	7	0 4 5 6 8 16 20 22 29
+line|ko-KR|normal	8	0 2 3 6 7 8 10 11 12
+line|ko-KR|normal	9	0 1 2 5 6 7 10 11
+line|ko-KR|normal	10	0 4 8 11
+line|ko-KR|normal	11	0 9
+line|ko-KR|normal	12	0 10
+line|ko-KR|normal	13	0 5 9 12 15 18 22 25
+line|ko-KR|normal	14	0 9 13 17
+line|ko-KR|strict	0	0 4 10
+line|ko-KR|strict	1	0 1 2 7 8 9
+line|ko-KR|strict	2	0 1 3 4
+line|ko-KR|strict	3	0 4 8 11
+line|ko-KR|strict	4	0 1 4 5 6
+line|ko-KR|strict	5	0 1 2 3 5 6 7
+line|ko-KR|strict	6	0 4 10 13 21
+line|ko-KR|strict	7	0 4 5 6 8 16 20 22 29
+line|ko-KR|strict	8	0 2 3 6 7 8 12
+line|ko-KR|strict	9	0 2 5 7 10 11
+line|ko-KR|strict	10	0 4 8 11
+line|ko-KR|strict	11	0 9
+line|ko-KR|strict	12	0 10
+line|ko-KR|strict	13	0 5 9 12 15 18 22 25
+line|ko-KR|strict	14	0 9 13 17
+line|zh|default	0	0 4 10
+line|zh|default	1	0 1 2 7 8 9
+line|zh|default	2	0 1 3 4
+line|zh|default	3	0 4 8 11
+line|zh|default	4	0 1 4 5 6
+line|zh|default	5	0 1 2 3 5 6 7
+line|zh|default	6	0 4 10 13 21
+line|zh|default	7	0 4 5 6 8 16 20 22 29
+line|zh|default	8	0 2 3 6 7 8 12
+line|zh|default	9	0 2 5 7 10 11
+line|zh|default	10	0 4 8 11
+line|zh|default	11	0 9
+line|zh|default	12	0 10
+line|zh|default	13	0 5 9 12 15 18 22 25
+line|zh|default	14	0 9 13 17
+line|zh|loose	0	0 4 10
+line|zh|loose	1	0 1 2 7 8 9
+line|zh|loose	2	0 1 2 3 4
+line|zh|loose	3	0 4 8 11
+line|zh|loose	4	0 1 4 5 6
+line|zh|loose	5	0 1 2 3 4 5 6 7
+line|zh|loose	6	0 4 10 13 21
+line|zh|loose	7	0 4 5 6 8 16 20 22 29
+line|zh|loose	8	0 2 3 6 7 8 10 11 12
+line|zh|loose	9	0 1 2 3 4 5 6 7 9 10 11
+line|zh|loose	10	0 4 8 11
+line|zh|loose	11	0 9
+line|zh|loose	12	0 10
+line|zh|loose	13	0 5 9 12 15 18 22 25
+line|zh|loose	14	0 9 13 17
+line|zh|normal	0	0 4 10
+line|zh|normal	1	0 1 2 7 8 9
+line|zh|normal	2	0 1 2 3 4
+line|zh|normal	3	0 4 8 11
+line|zh|normal	4	0 1 4 5 6
+line|zh|normal	5	0 1 2 3 4 5 6 7
+line|zh|normal	6	0 4 10 13 21
+line|zh|normal	7	0 4 5 6 8 16 20 22 29
+line|zh|normal	8	0 2 3 6 7 8 10 11 12
+line|zh|normal	9	0 1 2 5 6 7 10 11
+line|zh|normal	10	0 4 8 11
+line|zh|normal	11	0 9
+line|zh|normal	12	0 10
+line|zh|normal	13	0 5 9 12 15 18 22 25
+line|zh|normal	14	0 9 13 17
+line|zh|strict	0	0 4 10
+line|zh|strict	1	0 1 2 7 8 9
+line|zh|strict	2	0 1 3 4
+line|zh|strict	3	0 4 8 11
+line|zh|strict	4	0 1 4 5 6
+line|zh|strict	5	0 1 2 3 5 6 7
+line|zh|strict	6	0 4 10 13 21
+line|zh|strict	7	0 4 5 6 8 16 20 22 29
+line|zh|strict	8	0 2 3 6 7 8 12
+line|zh|strict	9	0 2 5 7 10 11
+line|zh|strict	10	0 4 8 11
+line|zh|strict	11	0 9
+line|zh|strict	12	0 10
+line|zh|strict	13	0 5 9 12 15 18 22 25
+line|zh|strict	14	0 9 13 17
+line|zh-hans|default	0	0 4 10
+line|zh-hans|default	1	0 1 2 7 8 9
+line|zh-hans|default	2	0 1 3 4
+line|zh-hans|default	3	0 4 8 11
+line|zh-hans|default	4	0 1 4 5 6
+line|zh-hans|default	5	0 1 2 3 5 6 7
+line|zh-hans|default	6	0 4 10 13 21
+line|zh-hans|default	7	0 4 5 6 8 16 20 22 29
+line|zh-hans|default	8	0 2 3 6 7 8 12
+line|zh-hans|default	9	0 2 5 7 10 11
+line|zh-hans|default	10	0 4 8 11
+line|zh-hans|default	11	0 9
+line|zh-hans|default	12	0 10
+line|zh-hans|default	13	0 5 9 12 15 18 22 25
+line|zh-hans|default	14	0 9 13 17
+line|zh-hans|loose	0	0 4 10
+line|zh-hans|loose	1	0 1 2 7 8 9
+line|zh-hans|loose	2	0 1 2 3 4
+line|zh-hans|loose	3	0 4 8 11
+line|zh-hans|loose	4	0 1 4 5 6
+line|zh-hans|loose	5	0 1 2 3 4 5 6 7
+line|zh-hans|loose	6	0 4 10 13 21
+line|zh-hans|loose	7	0 4 5 6 8 16 20 22 29
+line|zh-hans|loose	8	0 2 3 6 7 8 10 11 12
+line|zh-hans|loose	9	0 1 2 3 4 5 6 7 9 10 11
+line|zh-hans|loose	10	0 4 8 11
+line|zh-hans|loose	11	0 9
+line|zh-hans|loose	12	0 10
+line|zh-hans|loose	13	0 5 9 12 15 18 22 25
+line|zh-hans|loose	14	0 9 13 17
+line|zh-hans|normal	0	0 4 10
+line|zh-hans|normal	1	0 1 2 7 8 9
+line|zh-hans|normal	2	0 1 2 3 4
+line|zh-hans|normal	3	0 4 8 11
+line|zh-hans|normal	4	0 1 4 5 6
+line|zh-hans|normal	5	0 1 2 3 4 5 6 7
+line|zh-hans|normal	6	0 4 10 13 21
+line|zh-hans|normal	7	0 4 5 6 8 16 20 22 29
+line|zh-hans|normal	8	0 2 3 6 7 8 10 11 12
+line|zh-hans|normal	9	0 1 2 5 6 7 10 11
+line|zh-hans|normal	10	0 4 8 11
+line|zh-hans|normal	11	0 9
+line|zh-hans|normal	12	0 10
+line|zh-hans|normal	13	0 5 9 12 15 18 22 25
+line|zh-hans|normal	14	0 9 13 17
+line|zh-hans|strict	0	0 4 10
+line|zh-hans|strict	1	0 1 2 7 8 9
+line|zh-hans|strict	2	0 1 3 4
+line|zh-hans|strict	3	0 4 8 11
+line|zh-hans|strict	4	0 1 4 5 6
+line|zh-hans|strict	5	0 1 2 3 5 6 7
+line|zh-hans|strict	6	0 4 10 13 21
+line|zh-hans|strict	7	0 4 5 6 8 16 20 22 29
+line|zh-hans|strict	8	0 2 3 6 7 8 12
+line|zh-hans|strict	9	0 2 5 7 10 11
+line|zh-hans|strict	10	0 4 8 11
+line|zh-hans|strict	11	0 9
+line|zh-hans|strict	12	0 10
+line|zh-hans|strict	13	0 5 9 12 15 18 22 25
+line|zh-hans|strict	14	0 9 13 17
+line|zh-Hans|default	0	0 4 10
+line|zh-Hans|default	1	0 1 2 7 8 9
+line|zh-Hans|default	2	0 1 3 4
+line|zh-Hans|default	3	0 4 8 11
+line|zh-Hans|default	4	0 1 4 5 6
+line|zh-Hans|default	5	0 1 2 3 5 6 7
+line|zh-Hans|default	6	0 4 10 13 21
+line|zh-Hans|default	7	0 4 5 6 8 16 20 22 29
+line|zh-Hans|default	8	0 2 3 6 7 8 12
+line|zh-Hans|default	9	0 2 5 7 10 11
+line|zh-Hans|default	10	0 4 8 11
+line|zh-Hans|default	11	0 9
+line|zh-Hans|default	12	0 10
+line|zh-Hans|default	13	0 5 9 12 15 18 22 25
+line|zh-Hans|default	14	0 9 13 17
+line|zh-Hans|loose	0	0 4 10
+line|zh-Hans|loose	1	0 1 2 7 8 9
+line|zh-Hans|loose	2	0 1 2 3 4
+line|zh-Hans|loose	3	0 4 8 11
+line|zh-Hans|loose	4	0 1 4 5 6
+line|zh-Hans|loose	5	0 1 2 3 4 5 6 7
+line|zh-Hans|loose	6	0 4 10 13 21
+line|zh-Hans|loose	7	0 4 5 6 8 16 20 22 29
+line|zh-Hans|loose	8	0 2 3 6 7 8 10 11 12
+line|zh-Hans|loose	9	0 1 2 3 4 5 6 7 9 10 11
+line|zh-Hans|loose	10	0 4 8 11
+line|zh-Hans|loose	11	0 9
+line|zh-Hans|loose	12	0 10
+line|zh-Hans|loose	13	0 5 9 12 15 18 22 25
+line|zh-Hans|loose	14	0 9 13 17
+line|zh-Hans|normal	0	0 4 10
+line|zh-Hans|normal	1	0 1 2 7 8 9
+line|zh-Hans|normal	2	0 1 2 3 4
+line|zh-Hans|normal	3	0 4 8 11
+line|zh-Hans|normal	4	0 1 4 5 6
+line|zh-Hans|normal	5	0 1 2 3 4 5 6 7
+line|zh-Hans|normal	6	0 4 10 13 21
+line|zh-Hans|normal	7	0 4 5 6 8 16 20 22 29
+line|zh-Hans|normal	8	0 2 3 6 7 8 10 11 12
+line|zh-Hans|normal	9	0 1 2 5 6 7 10 11
+line|zh-Hans|normal	10	0 4 8 11
+line|zh-Hans|normal	11	0 9
+line|zh-Hans|normal	12	0 10
+line|zh-Hans|normal	13	0 5 9 12 15 18 22 25
+line|zh-Hans|normal	14	0 9 13 17
+line|zh-Hans|strict	0	0 4 10
+line|zh-Hans|strict	1	0 1 2 7 8 9
+line|zh-Hans|strict	2	0 1 3 4
+line|zh-Hans|strict	3	0 4 8 11
+line|zh-Hans|strict	4	0 1 4 5 6
+line|zh-Hans|strict	5	0 1 2 3 5 6 7
+line|zh-Hans|strict	6	0 4 10 13 21
+line|zh-Hans|strict	7	0 4 5 6 8 16 20 22 29
+line|zh-Hans|strict	8	0 2 3 6 7 8 12
+line|zh-Hans|strict	9	0 2 5 7 10 11
+line|zh-Hans|strict	10	0 4 8 11
+line|zh-Hans|strict	11	0 9
+line|zh-Hans|strict	12	0 10
+line|zh-Hans|strict	13	0 5 9 12 15 18 22 25
+line|zh-Hans|strict	14	0 9 13 17
+line|zh-Hans-US|default	0	0 4 10
+line|zh-Hans-US|default	1	0 1 2 7 8 9
+line|zh-Hans-US|default	2	0 1 3 4
+line|zh-Hans-US|default	3	0 4 8 11
+line|zh-Hans-US|default	4	0 1 4 5 6
+line|zh-Hans-US|default	5	0 1 2 3 5 6 7
+line|zh-Hans-US|default	6	0 4 10 13 21
+line|zh-Hans-US|default	7	0 4 5 6 8 16 20 22 29
+line|zh-Hans-US|default	8	0 2 3 6 7 8 12
+line|zh-Hans-US|default	9	0 2 5 7 10 11
+line|zh-Hans-US|default	10	0 4 8 11
+line|zh-Hans-US|default	11	0 9
+line|zh-Hans-US|default	12	0 10
+line|zh-Hans-US|default	13	0 5 9 12 15 18 22 25
+line|zh-Hans-US|default	14	0 9 13 17
+line|zh-Hans-US|loose	0	0 4 10
+line|zh-Hans-US|loose	1	0 1 2 7 8 9
+line|zh-Hans-US|loose	2	0 1 2 3 4
+line|zh-Hans-US|loose	3	0 4 8 11
+line|zh-Hans-US|loose	4	0 1 4 5 6
+line|zh-Hans-US|loose	5	0 1 2 3 4 5 6 7
+line|zh-Hans-US|loose	6	0 4 10 13 21
+line|zh-Hans-US|loose	7	0 4 5 6 8 16 20 22 29
+line|zh-Hans-US|loose	8	0 2 3 6 7 8 10 11 12
+line|zh-Hans-US|loose	9	0 1 2 3 4 5 6 7 9 10 11
+line|zh-Hans-US|loose	10	0 4 8 11
+line|zh-Hans-US|loose	11	0 9
+line|zh-Hans-US|loose	12	0 10
+line|zh-Hans-US|loose	13	0 5 9 12 15 18 22 25
+line|zh-Hans-US|loose	14	0 9 13 17
+line|zh-Hans-US|normal	0	0 4 10
+line|zh-Hans-US|normal	1	0 1 2 7 8 9
+line|zh-Hans-US|normal	2	0 1 2 3 4
+line|zh-Hans-US|normal	3	0 4 8 11
+line|zh-Hans-US|normal	4	0 1 4 5 6
+line|zh-Hans-US|normal	5	0 1 2 3 4 5 6 7
+line|zh-Hans-US|normal	6	0 4 10 13 21
+line|zh-Hans-US|normal	7	0 4 5 6 8 16 20 22 29
+line|zh-Hans-US|normal	8	0 2 3 6 7 8 10 11 12
+line|zh-Hans-US|normal	9	0 1 2 5 6 7 10 11
+line|zh-Hans-US|normal	10	0 4 8 11
+line|zh-Hans-US|normal	11	0 9
+line|zh-Hans-US|normal	12	0 10
+line|zh-Hans-US|normal	13	0 5 9 12 15 18 22 25
+line|zh-Hans-US|normal	14	0 9 13 17
+line|zh-Hans-US|strict	0	0 4 10
+line|zh-Hans-US|strict	1	0 1 2 7 8 9
+line|zh-Hans-US|strict	2	0 1 3 4
+line|zh-Hans-US|strict	3	0 4 8 11
+line|zh-Hans-US|strict	4	0 1 4 5 6
+line|zh-Hans-US|strict	5	0 1 2 3 5 6 7
+line|zh-Hans-US|strict	6	0 4 10 13 21
+line|zh-Hans-US|strict	7	0 4 5 6 8 16 20 22 29
+line|zh-Hans-US|strict	8	0 2 3 6 7 8 12
+line|zh-Hans-US|strict	9	0 2 5 7 10 11
+line|zh-Hans-US|strict	10	0 4 8 11
+line|zh-Hans-US|strict	11	0 9
+line|zh-Hans-US|strict	12	0 10
+line|zh-Hans-US|strict	13	0 5 9 12 15 18 22 25
+line|zh-Hans-US|strict	14	0 9 13 17
+line|zh-CN|default	0	0 4 10
+line|zh-CN|default	1	0 1 2 7 8 9
+line|zh-CN|default	2	0 1 3 4
+line|zh-CN|default	3	0 4 8 11
+line|zh-CN|default	4	0 1 4 5 6
+line|zh-CN|default	5	0 1 2 3 5 6 7
+line|zh-CN|default	6	0 4 10 13 21
+line|zh-CN|default	7	0 4 5 6 8 16 20 22 29
+line|zh-CN|default	8	0 2 3 6 7 8 12
+line|zh-CN|default	9	0 2 5 7 10 11
+line|zh-CN|default	10	0 4 8 11
+line|zh-CN|default	11	0 9
+line|zh-CN|default	12	0 10
+line|zh-CN|default	13	0 5 9 12 15 18 22 25
+line|zh-CN|default	14	0 9 13 17
+line|zh-CN|loose	0	0 4 10
+line|zh-CN|loose	1	0 1 2 7 8 9
+line|zh-CN|loose	2	0 1 2 3 4
+line|zh-CN|loose	3	0 4 8 11
+line|zh-CN|loose	4	0 1 4 5 6
+line|zh-CN|loose	5	0 1 2 3 4 5 6 7
+line|zh-CN|loose	6	0 4 10 13 21
+line|zh-CN|loose	7	0 4 5 6 8 16 20 22 29
+line|zh-CN|loose	8	0 2 3 6 7 8 10 11 12
+line|zh-CN|loose	9	0 1 2 3 4 5 6 7 9 10 11
+line|zh-CN|loose	10	0 4 8 11
+line|zh-CN|loose	11	0 9
+line|zh-CN|loose	12	0 10
+line|zh-CN|loose	13	0 5 9 12 15 18 22 25
+line|zh-CN|loose	14	0 9 13 17
+line|zh-CN|normal	0	0 4 10
+line|zh-CN|normal	1	0 1 2 7 8 9
+line|zh-CN|normal	2	0 1 2 3 4
+line|zh-CN|normal	3	0 4 8 11
+line|zh-CN|normal	4	0 1 4 5 6
+line|zh-CN|normal	5	0 1 2 3 4 5 6 7
+line|zh-CN|normal	6	0 4 10 13 21
+line|zh-CN|normal	7	0 4 5 6 8 16 20 22 29
+line|zh-CN|normal	8	0 2 3 6 7 8 10 11 12
+line|zh-CN|normal	9	0 1 2 5 6 7 10 11
+line|zh-CN|normal	10	0 4 8 11
+line|zh-CN|normal	11	0 9
+line|zh-CN|normal	12	0 10
+line|zh-CN|normal	13	0 5 9 12 15 18 22 25
+line|zh-CN|normal	14	0 9 13 17
+line|zh-CN|strict	0	0 4 10
+line|zh-CN|strict	1	0 1 2 7 8 9
+line|zh-CN|strict	2	0 1 3 4
+line|zh-CN|strict	3	0 4 8 11
+line|zh-CN|strict	4	0 1 4 5 6
+line|zh-CN|strict	5	0 1 2 3 5 6 7
+line|zh-CN|strict	6	0 4 10 13 21
+line|zh-CN|strict	7	0 4 5 6 8 16 20 22 29
+line|zh-CN|strict	8	0 2 3 6 7 8 12
+line|zh-CN|strict	9	0 2 5 7 10 11
+line|zh-CN|strict	10	0 4 8 11
+line|zh-CN|strict	11	0 9
+line|zh-CN|strict	12	0 10
+line|zh-CN|strict	13	0 5 9 12 15 18 22 25
+line|zh-CN|strict	14	0 9 13 17
+line|zh-SG|default	0	0 4 10
+line|zh-SG|default	1	0 1 2 7 8 9
+line|zh-SG|default	2	0 1 3 4
+line|zh-SG|default	3	0 4 8 11
+line|zh-SG|default	4	0 1 4 5 6
+line|zh-SG|default	5	0 1 2 3 5 6 7
+line|zh-SG|default	6	0 4 10 13 21
+line|zh-SG|default	7	0 4 5 6 8 16 20 22 29
+line|zh-SG|default	8	0 2 3 6 7 8 12
+line|zh-SG|default	9	0 2 5 7 10 11
+line|zh-SG|default	10	0 4 8 11
+line|zh-SG|default	11	0 9
+line|zh-SG|default	12	0 10
+line|zh-SG|default	13	0 5 9 12 15 18 22 25
+line|zh-SG|default	14	0 9 13 17
+line|zh-SG|loose	0	0 4 10
+line|zh-SG|loose	1	0 1 2 7 8 9
+line|zh-SG|loose	2	0 1 2 3 4
+line|zh-SG|loose	3	0 4 8 11
+line|zh-SG|loose	4	0 1 4 5 6
+line|zh-SG|loose	5	0 1 2 3 4 5 6 7
+line|zh-SG|loose	6	0 4 10 13 21
+line|zh-SG|loose	7	0 4 5 6 8 16 20 22 29
+line|zh-SG|loose	8	0 2 3 6 7 8 10 11 12
+line|zh-SG|loose	9	0 1 2 3 4 5 6 7 9 10 11
+line|zh-SG|loose	10	0 4 8 11
+line|zh-SG|loose	11	0 9
+line|zh-SG|loose	12	0 10
+line|zh-SG|loose	13	0 5 9 12 15 18 22 25
+line|zh-SG|loose	14	0 9 13 17
+line|zh-SG|normal	0	0 4 10
+line|zh-SG|normal	1	0 1 2 7 8 9
+line|zh-SG|normal	2	0 1 2 3 4
+line|zh-SG|normal	3	0 4 8 11
+line|zh-SG|normal	4	0 1 4 5 6
+line|zh-SG|normal	5	0 1 2 3 4 5 6 7
+line|zh-SG|normal	6	0 4 10 13 21
+line|zh-SG|normal	7	0 4 5 6 8 16 20 22 29
+line|zh-SG|normal	8	0 2 3 6 7 8 10 11 12
+line|zh-SG|normal	9	0 1 2 5 6 7 10 11
+line|zh-SG|normal	10	0 4 8 11
+line|zh-SG|normal	11	0 9
+line|zh-SG|normal	12	0 10
+line|zh-SG|normal	13	0 5 9 12 15 18 22 25
+line|zh-SG|normal	14	0 9 13 17
+line|zh-SG|strict	0	0 4 10
+line|zh-SG|strict	1	0 1 2 7 8 9
+line|zh-SG|strict	2	0 1 3 4
+line|zh-SG|strict	3	0 4 8 11
+line|zh-SG|strict	4	0 1 4 5 6
+line|zh-SG|strict	5	0 1 2 3 5 6 7
+line|zh-SG|strict	6	0 4 10 13 21
+line|zh-SG|strict	7	0 4 5 6 8 16 20 22 29
+line|zh-SG|strict	8	0 2 3 6 7 8 12
+line|zh-SG|strict	9	0 2 5 7 10 11
+line|zh-SG|strict	10	0 4 8 11
+line|zh-SG|strict	11	0 9
+line|zh-SG|strict	12	0 10
+line|zh-SG|strict	13	0 5 9 12 15 18 22 25
+line|zh-SG|strict	14	0 9 13 17
+line|zh-Hant|default	0	0 4 10
+line|zh-Hant|default	1	0 1 2 7 8 9
+line|zh-Hant|default	2	0 1 3 4
+line|zh-Hant|default	3	0 4 8 11
+line|zh-Hant|default	4	0 1 4 5 6
+line|zh-Hant|default	5	0 1 2 3 5 6 7
+line|zh-Hant|default	6	0 4 10 13 21
+line|zh-Hant|default	7	0 4 5 6 8 16 20 22 29
+line|zh-Hant|default	8	0 2 3 6 7 8 12
+line|zh-Hant|default	9	0 2 5 7 10 11
+line|zh-Hant|default	10	0 4 8 11
+line|zh-Hant|default	11	0 9
+line|zh-Hant|default	12	0 10
+line|zh-Hant|default	13	0 5 9 12 15 18 22 25
+line|zh-Hant|default	14	0 9 13 17
+line|zh-Hant|loose	0	0 4 10
+line|zh-Hant|loose	1	0 1 2 7 8 9
+line|zh-Hant|loose	2	0 1 2 3 4
+line|zh-Hant|loose	3	0 4 8 11
+line|zh-Hant|loose	4	0 1 4 5 6
+line|zh-Hant|loose	5	0 1 2 3 4 5 6 7
+line|zh-Hant|loose	6	0 4 10 13 21
+line|zh-Hant|loose	7	0 4 5 6 8 16 20 22 29
+line|zh-Hant|loose	8	0 2 3 6 7 8 10 11 12
+line|zh-Hant|loose	9	0 1 2 3 4 5 6 7 9 10 11
+line|zh-Hant|loose	10	0 4 8 11
+line|zh-Hant|loose	11	0 9
+line|zh-Hant|loose	12	0 10
+line|zh-Hant|loose	13	0 5 9 12 15 18 22 25
+line|zh-Hant|loose	14	0 9 13 17
+line|zh-Hant|normal	0	0 4 10
+line|zh-Hant|normal	1	0 1 2 7 8 9
+line|zh-Hant|normal	2	0 1 2 3 4
+line|zh-Hant|normal	3	0 4 8 11
+line|zh-Hant|normal	4	0 1 4 5 6
+line|zh-Hant|normal	5	0 1 2 3 4 5 6 7
+line|zh-Hant|normal	6	0 4 10 13 21
+line|zh-Hant|normal	7	0 4 5 6 8 16 20 22 29
+line|zh-Hant|normal	8	0 2 3 6 7 8 10 11 12
+line|zh-Hant|normal	9	0 1 2 5 6 7 10 11
+line|zh-Hant|normal	10	0 4 8 11
+line|zh-Hant|normal	11	0 9
+line|zh-Hant|normal	12	0 10
+line|zh-Hant|normal	13	0 5 9 12 15 18 22 25
+line|zh-Hant|normal	14	0 9 13 17
+line|zh-Hant|strict	0	0 4 10
+line|zh-Hant|strict	1	0 1 2 7 8 9
+line|zh-Hant|strict	2	0 1 3 4
+line|zh-Hant|strict	3	0 4 8 11
+line|zh-Hant|strict	4	0 1 4 5 6
+line|zh-Hant|strict	5	0 1 2 3 5 6 7
+line|zh-Hant|strict	6	0 4 10 13 21
+line|zh-Hant|strict	7	0 4 5 6 8 16 20 22 29
+line|zh-Hant|strict	8	0 2 3 6 7 8 12
+line|zh-Hant|strict	9	0 2 5 7 10 11
+line|zh-Hant|strict	10	0 4 8 11
+line|zh-Hant|strict	11	0 9
+line|zh-Hant|strict	12	0 10
+line|zh-Hant|strict	13	0 5 9 12 15 18 22 25
+line|zh-Hant|strict	14	0 9 13 17
+line|zh-hant|default	0	0 4 10
+line|zh-hant|default	1	0 1 2 7 8 9
+line|zh-hant|default	2	0 1 3 4
+line|zh-hant|default	3	0 4 8 11
+line|zh-hant|default	4	0 1 4 5 6
+line|zh-hant|default	5	0 1 2 3 5 6 7
+line|zh-hant|default	6	0 4 10 13 21
+line|zh-hant|default	7	0 4 5 6 8 16 20 22 29
+line|zh-hant|default	8	0 2 3 6 7 8 12
+line|zh-hant|default	9	0 2 5 7 10 11
+line|zh-hant|default	10	0 4 8 11
+line|zh-hant|default	11	0 9
+line|zh-hant|default	12	0 10
+line|zh-hant|default	13	0 5 9 12 15 18 22 25
+line|zh-hant|default	14	0 9 13 17
+line|zh-hant|loose	0	0 4 10
+line|zh-hant|loose	1	0 1 2 7 8 9
+line|zh-hant|loose	2	0 1 2 3 4
+line|zh-hant|loose	3	0 4 8 11
+line|zh-hant|loose	4	0 1 4 5 6
+line|zh-hant|loose	5	0 1 2 3 4 5 6 7
+line|zh-hant|loose	6	0 4 10 13 21
+line|zh-hant|loose	7	0 4 5 6 8 16 20 22 29
+line|zh-hant|loose	8	0 2 3 6 7 8 10 11 12
+line|zh-hant|loose	9	0 1 2 3 4 5 6 7 9 10 11
+line|zh-hant|loose	10	0 4 8 11
+line|zh-hant|loose	11	0 9
+line|zh-hant|loose	12	0 10
+line|zh-hant|loose	13	0 5 9 12 15 18 22 25
+line|zh-hant|loose	14	0 9 13 17
+line|zh-hant|normal	0	0 4 10
+line|zh-hant|normal	1	0 1 2 7 8 9
+line|zh-hant|normal	2	0 1 2 3 4
+line|zh-hant|normal	3	0 4 8 11
+line|zh-hant|normal	4	0 1 4 5 6
+line|zh-hant|normal	5	0 1 2 3 4 5 6 7
+line|zh-hant|normal	6	0 4 10 13 21
+line|zh-hant|normal	7	0 4 5 6 8 16 20 22 29
+line|zh-hant|normal	8	0 2 3 6 7 8 10 11 12
+line|zh-hant|normal	9	0 1 2 5 6 7 10 11
+line|zh-hant|normal	10	0 4 8 11
+line|zh-hant|normal	11	0 9
+line|zh-hant|normal	12	0 10
+line|zh-hant|normal	13	0 5 9 12 15 18 22 25
+line|zh-hant|normal	14	0 9 13 17
+line|zh-hant|strict	0	0 4 10
+line|zh-hant|strict	1	0 1 2 7 8 9
+line|zh-hant|strict	2	0 1 3 4
+line|zh-hant|strict	3	0 4 8 11
+line|zh-hant|strict	4	0 1 4 5 6
+line|zh-hant|strict	5	0 1 2 3 5 6 7
+line|zh-hant|strict	6	0 4 10 13 21
+line|zh-hant|strict	7	0 4 5 6 8 16 20 22 29
+line|zh-hant|strict	8	0 2 3 6 7 8 12
+line|zh-hant|strict	9	0 2 5 7 10 11
+line|zh-hant|strict	10	0 4 8 11
+line|zh-hant|strict	11	0 9
+line|zh-hant|strict	12	0 10
+line|zh-hant|strict	13	0 5 9 12 15 18 22 25
+line|zh-hant|strict	14	0 9 13 17
+line|zh-TW|default	0	0 4 10
+line|zh-TW|default	1	0 1 2 7 8 9
+line|zh-TW|default	2	0 1 3 4
+line|zh-TW|default	3	0 4 8 11
+line|zh-TW|default	4	0 1 4 5 6
+line|zh-TW|default	5	0 1 2 3 5 6 7
+line|zh-TW|default	6	0 4 10 13 21
+line|zh-TW|default	7	0 4 5 6 8 16 20 22 29
+line|zh-TW|default	8	0 2 3 6 7 8 12
+line|zh-TW|default	9	0 2 5 7 10 11
+line|zh-TW|default	10	0 4 8 11
+line|zh-TW|default	11	0 9
+line|zh-TW|default	12	0 10
+line|zh-TW|default	13	0 5 9 12 15 18 22 25
+line|zh-TW|default	14	0 9 13 17
+line|zh-TW|loose	0	0 4 10
+line|zh-TW|loose	1	0 1 2 7 8 9
+line|zh-TW|loose	2	0 1 2 3 4
+line|zh-TW|loose	3	0 4 8 11
+line|zh-TW|loose	4	0 1 4 5 6
+line|zh-TW|loose	5	0 1 2 3 4 5 6 7
+line|zh-TW|loose	6	0 4 10 13 21
+line|zh-TW|loose	7	0 4 5 6 8 16 20 22 29
+line|zh-TW|loose	8	0 2 3 6 7 8 10 11 12
+line|zh-TW|loose	9	0 1 2 3 4 5 6 7 9 10 11
+line|zh-TW|loose	10	0 4 8 11
+line|zh-TW|loose	11	0 9
+line|zh-TW|loose	12	0 10
+line|zh-TW|loose	13	0 5 9 12 15 18 22 25
+line|zh-TW|loose	14	0 9 13 17
+line|zh-TW|normal	0	0 4 10
+line|zh-TW|normal	1	0 1 2 7 8 9
+line|zh-TW|normal	2	0 1 2 3 4
+line|zh-TW|normal	3	0 4 8 11
+line|zh-TW|normal	4	0 1 4 5 6
+line|zh-TW|normal	5	0 1 2 3 4 5 6 7
+line|zh-TW|normal	6	0 4 10 13 21
+line|zh-TW|normal	7	0 4 5 6 8 16 20 22 29
+line|zh-TW|normal	8	0 2 3 6 7 8 10 11 12
+line|zh-TW|normal	9	0 1 2 5 6 7 10 11
+line|zh-TW|normal	10	0 4 8 11
+line|zh-TW|normal	11	0 9
+line|zh-TW|normal	12	0 10
+line|zh-TW|normal	13	0 5 9 12 15 18 22 25
+line|zh-TW|normal	14	0 9 13 17
+line|zh-TW|strict	0	0 4 10
+line|zh-TW|strict	1	0 1 2 7 8 9
+line|zh-TW|strict	2	0 1 3 4
+line|zh-TW|strict	3	0 4 8 11
+line|zh-TW|strict	4	0 1 4 5 6
+line|zh-TW|strict	5	0 1 2 3 5 6 7
+line|zh-TW|strict	6	0 4 10 13 21
+line|zh-TW|strict	7	0 4 5 6 8 16 20 22 29
+line|zh-TW|strict	8	0 2 3 6 7 8 12
+line|zh-TW|strict	9	0 2 5 7 10 11
+line|zh-TW|strict	10	0 4 8 11
+line|zh-TW|strict	11	0 9
+line|zh-TW|strict	12	0 10
+line|zh-TW|strict	13	0 5 9 12 15 18 22 25
+line|zh-TW|strict	14	0 9 13 17
+line|zh-HK|default	0	0 4 10
+line|zh-HK|default	1	0 1 2 7 8 9
+line|zh-HK|default	2	0 1 3 4
+line|zh-HK|default	3	0 4 8 11
+line|zh-HK|default	4	0 1 4 5 6
+line|zh-HK|default	5	0 1 2 3 5 6 7
+line|zh-HK|default	6	0 4 10 13 21
+line|zh-HK|default	7	0 4 5 6 8 16 20 22 29
+line|zh-HK|default	8	0 2 3 6 7 8 12
+line|zh-HK|default	9	0 2 5 7 10 11
+line|zh-HK|default	10	0 4 8 11
+line|zh-HK|default	11	0 9
+line|zh-HK|default	12	0 10
+line|zh-HK|default	13	0 5 9 12 15 18 22 25
+line|zh-HK|default	14	0 9 13 17
+line|zh-HK|loose	0	0 4 10
+line|zh-HK|loose	1	0 1 2 7 8 9
+line|zh-HK|loose	2	0 1 2 3 4
+line|zh-HK|loose	3	0 4 8 11
+line|zh-HK|loose	4	0 1 4 5 6
+line|zh-HK|loose	5	0 1 2 3 4 5 6 7
+line|zh-HK|loose	6	0 4 10 13 21
+line|zh-HK|loose	7	0 4 5 6 8 16 20 22 29
+line|zh-HK|loose	8	0 2 3 6 7 8 10 11 12
+line|zh-HK|loose	9	0 1 2 3 4 5 6 7 9 10 11
+line|zh-HK|loose	10	0 4 8 11
+line|zh-HK|loose	11	0 9
+line|zh-HK|loose	12	0 10
+line|zh-HK|loose	13	0 5 9 12 15 18 22 25
+line|zh-HK|loose	14	0 9 13 17
+line|zh-HK|normal	0	0 4 10
+line|zh-HK|normal	1	0 1 2 7 8 9
+line|zh-HK|normal	2	0 1 2 3 4
+line|zh-HK|normal	3	0 4 8 11
+line|zh-HK|normal	4	0 1 4 5 6
+line|zh-HK|normal	5	0 1 2 3 4 5 6 7
+line|zh-HK|normal	6	0 4 10 13 21
+line|zh-HK|normal	7	0 4 5 6 8 16 20 22 29
+line|zh-HK|normal	8	0 2 3 6 7 8 10 11 12
+line|zh-HK|normal	9	0 1 2 5 6 7 10 11
+line|zh-HK|normal	10	0 4 8 11
+line|zh-HK|normal	11	0 9
+line|zh-HK|normal	12	0 10
+line|zh-HK|normal	13	0 5 9 12 15 18 22 25
+line|zh-HK|normal	14	0 9 13 17
+line|zh-HK|strict	0	0 4 10
+line|zh-HK|strict	1	0 1 2 7 8 9
+line|zh-HK|strict	2	0 1 3 4
+line|zh-HK|strict	3	0 4 8 11
+line|zh-HK|strict	4	0 1 4 5 6
+line|zh-HK|strict	5	0 1 2 3 5 6 7
+line|zh-HK|strict	6	0 4 10 13 21
+line|zh-HK|strict	7	0 4 5 6 8 16 20 22 29
+line|zh-HK|strict	8	0 2 3 6 7 8 12
+line|zh-HK|strict	9	0 2 5 7 10 11
+line|zh-HK|strict	10	0 4 8 11
+line|zh-HK|strict	11	0 9
+line|zh-HK|strict	12	0 10
+line|zh-HK|strict	13	0 5 9 12 15 18 22 25
+line|zh-HK|strict	14	0 9 13 17
+line|zh-MO|default	0	0 4 10
+line|zh-MO|default	1	0 1 2 7 8 9
+line|zh-MO|default	2	0 1 3 4
+line|zh-MO|default	3	0 4 8 11
+line|zh-MO|default	4	0 1 4 5 6
+line|zh-MO|default	5	0 1 2 3 5 6 7
+line|zh-MO|default	6	0 4 10 13 21
+line|zh-MO|default	7	0 4 5 6 8 16 20 22 29
+line|zh-MO|default	8	0 2 3 6 7 8 12
+line|zh-MO|default	9	0 2 5 7 10 11
+line|zh-MO|default	10	0 4 8 11
+line|zh-MO|default	11	0 9
+line|zh-MO|default	12	0 10
+line|zh-MO|default	13	0 5 9 12 15 18 22 25
+line|zh-MO|default	14	0 9 13 17
+line|zh-MO|loose	0	0 4 10
+line|zh-MO|loose	1	0 1 2 7 8 9
+line|zh-MO|loose	2	0 1 2 3 4
+line|zh-MO|loose	3	0 4 8 11
+line|zh-MO|loose	4	0 1 4 5 6
+line|zh-MO|loose	5	0 1 2 3 4 5 6 7
+line|zh-MO|loose	6	0 4 10 13 21
+line|zh-MO|loose	7	0 4 5 6 8 16 20 22 29
+line|zh-MO|loose	8	0 2 3 6 7 8 10 11 12
+line|zh-MO|loose	9	0 1 2 3 4 5 6 7 9 10 11
+line|zh-MO|loose	10	0 4 8 11
+line|zh-MO|loose	11	0 9
+line|zh-MO|loose	12	0 10
+line|zh-MO|loose	13	0 5 9 12 15 18 22 25
+line|zh-MO|loose	14	0 9 13 17
+line|zh-MO|normal	0	0 4 10
+line|zh-MO|normal	1	0 1 2 7 8 9
+line|zh-MO|normal	2	0 1 2 3 4
+line|zh-MO|normal	3	0 4 8 11
+line|zh-MO|normal	4	0 1 4 5 6
+line|zh-MO|normal	5	0 1 2 3 4 5 6 7
+line|zh-MO|normal	6	0 4 10 13 21
+line|zh-MO|normal	7	0 4 5 6 8 16 20 22 29
+line|zh-MO|normal	8	0 2 3 6 7 8 10 11 12
+line|zh-MO|normal	9	0 1 2 5 6 7 10 11
+line|zh-MO|normal	10	0 4 8 11
+line|zh-MO|normal	11	0 9
+line|zh-MO|normal	12	0 10
+line|zh-MO|normal	13	0 5 9 12 15 18 22 25
+line|zh-MO|normal	14	0 9 13 17
+line|zh-MO|strict	0	0 4 10
+line|zh-MO|strict	1	0 1 2 7 8 9
+line|zh-MO|strict	2	0 1 3 4
+line|zh-MO|strict	3	0 4 8 11
+line|zh-MO|strict	4	0 1 4 5 6
+line|zh-MO|strict	5	0 1 2 3 5 6 7
+line|zh-MO|strict	6	0 4 10 13 21
+line|zh-MO|strict	7	0 4 5 6 8 16 20 22 29
+line|zh-MO|strict	8	0 2 3 6 7 8 12
+line|zh-MO|strict	9	0 2 5 7 10 11
+line|zh-MO|strict	10	0 4 8 11
+line|zh-MO|strict	11	0 9
+line|zh-MO|strict	12	0 10
+line|zh-MO|strict	13	0 5 9 12 15 18 22 25
+line|zh-MO|strict	14	0 9 13 17
+line|yue|default	0	0 10
+line|yue|default	1	0 1 8 9
+line|yue|default	2	0 1 3 4
+line|yue|default	3	0 4 11
+line|yue|default	4	0 1 5 6
+line|yue|default	5	0 1 2 3 5 6 7
+line|yue|default	6	0 4 10 13 21
+line|yue|default	7	0 4 5 6 8 16 20 22 29
+line|yue|default	8	0 2 3 6 7 8 12
+line|yue|default	9	0 2 5 7 10 11
+line|yue|default	10	0 4 8 11
+line|yue|default	11	0 9
+line|yue|default	12	0 10
+line|yue|default	13	0 5 9 12 15 18 22 25
+line|yue|default	14	0 9 13 17
+line|yue|loose	0	0 10
+line|yue|loose	1	0 1 8 9
+line|yue|loose	2	0 1 2 3 4
+line|yue|loose	3	0 4 11
+line|yue|loose	4	0 1 5 6
+line|yue|loose	5	0 1 2 3 5 6 7
+line|yue|loose	6	0 4 10 13 21
+line|yue|loose	7	0 4 5 6 8 16 20 22 29
+line|yue|loose	8	0 2 3 6 7 8 10 11 12
+line|yue|loose	9	0 1 2 3 4 5 6 7 9 10 11
+line|yue|loose	10	0 4 8 11
+line|yue|loose	11	0 9
+line|yue|loose	12	0 10
+line|yue|loose	13	0 5 9 12 15 18 22 25
+line|yue|loose	14	0 9 13 17
+line|yue|normal	0	0 10
+line|yue|normal	1	0 1 8 9
+line|yue|normal	2	0 1 2 3 4
+line|yue|normal	3	0 4 11
+line|yue|normal	4	0 1 5 6
+line|yue|normal	5	0 1 2 3 5 6 7
+line|yue|normal	6	0 4 10 13 21
+line|yue|normal	7	0 4 5 6 8 16 20 22 29
+line|yue|normal	8	0 2 3 6 7 8 10 11 12
+line|yue|normal	9	0 1 2 5 6 7 10 11
+line|yue|normal	10	0 4 8 11
+line|yue|normal	11	0 9
+line|yue|normal	12	0 10
+line|yue|normal	13	0 5 9 12 15 18 22 25
+line|yue|normal	14	0 9 13 17
+line|yue|strict	0	0 10
+line|yue|strict	1	0 1 8 9
+line|yue|strict	2	0 1 3 4
+line|yue|strict	3	0 4 11
+line|yue|strict	4	0 1 5 6
+line|yue|strict	5	0 1 2 3 5 6 7
+line|yue|strict	6	0 4 10 13 21
+line|yue|strict	7	0 4 5 6 8 16 20 22 29
+line|yue|strict	8	0 2 3 6 7 8 12
+line|yue|strict	9	0 2 5 7 10 11
+line|yue|strict	10	0 4 8 11
+line|yue|strict	11	0 9
+line|yue|strict	12	0 10
+line|yue|strict	13	0 5 9 12 15 18 22 25
+line|yue|strict	14	0 9 13 17
+line|yue-Hant|default	0	0 10
+line|yue-Hant|default	1	0 1 8 9
+line|yue-Hant|default	2	0 1 3 4
+line|yue-Hant|default	3	0 4 11
+line|yue-Hant|default	4	0 1 5 6
+line|yue-Hant|default	5	0 1 2 3 5 6 7
+line|yue-Hant|default	6	0 4 10 13 21
+line|yue-Hant|default	7	0 4 5 6 8 16 20 22 29
+line|yue-Hant|default	8	0 2 3 6 7 8 12
+line|yue-Hant|default	9	0 2 5 7 10 11
+line|yue-Hant|default	10	0 4 8 11
+line|yue-Hant|default	11	0 9
+line|yue-Hant|default	12	0 10
+line|yue-Hant|default	13	0 5 9 12 15 18 22 25
+line|yue-Hant|default	14	0 9 13 17
+line|yue-Hant|loose	0	0 10
+line|yue-Hant|loose	1	0 1 8 9
+line|yue-Hant|loose	2	0 1 2 3 4
+line|yue-Hant|loose	3	0 4 11
+line|yue-Hant|loose	4	0 1 5 6
+line|yue-Hant|loose	5	0 1 2 3 5 6 7
+line|yue-Hant|loose	6	0 4 10 13 21
+line|yue-Hant|loose	7	0 4 5 6 8 16 20 22 29
+line|yue-Hant|loose	8	0 2 3 6 7 8 10 11 12
+line|yue-Hant|loose	9	0 1 2 3 4 5 6 7 9 10 11
+line|yue-Hant|loose	10	0 4 8 11
+line|yue-Hant|loose	11	0 9
+line|yue-Hant|loose	12	0 10
+line|yue-Hant|loose	13	0 5 9 12 15 18 22 25
+line|yue-Hant|loose	14	0 9 13 17
+line|yue-Hant|normal	0	0 10
+line|yue-Hant|normal	1	0 1 8 9
+line|yue-Hant|normal	2	0 1 2 3 4
+line|yue-Hant|normal	3	0 4 11
+line|yue-Hant|normal	4	0 1 5 6
+line|yue-Hant|normal	5	0 1 2 3 5 6 7
+line|yue-Hant|normal	6	0 4 10 13 21
+line|yue-Hant|normal	7	0 4 5 6 8 16 20 22 29
+line|yue-Hant|normal	8	0 2 3 6 7 8 10 11 12
+line|yue-Hant|normal	9	0 1 2 5 6 7 10 11
+line|yue-Hant|normal	10	0 4 8 11
+line|yue-Hant|normal	11	0 9
+line|yue-Hant|normal	12	0 10
+line|yue-Hant|normal	13	0 5 9 12 15 18 22 25
+line|yue-Hant|normal	14	0 9 13 17
+line|yue-Hant|strict	0	0 10
+line|yue-Hant|strict	1	0 1 8 9
+line|yue-Hant|strict	2	0 1 3 4
+line|yue-Hant|strict	3	0 4 11
+line|yue-Hant|strict	4	0 1 5 6
+line|yue-Hant|strict	5	0 1 2 3 5 6 7
+line|yue-Hant|strict	6	0 4 10 13 21
+line|yue-Hant|strict	7	0 4 5 6 8 16 20 22 29
+line|yue-Hant|strict	8	0 2 3 6 7 8 12
+line|yue-Hant|strict	9	0 2 5 7 10 11
+line|yue-Hant|strict	10	0 4 8 11
+line|yue-Hant|strict	11	0 9
+line|yue-Hant|strict	12	0 10
+line|yue-Hant|strict	13	0 5 9 12 15 18 22 25
+line|yue-Hant|strict	14	0 9 13 17
+line|th|default	0	0 4 10
+line|th|default	1	0 1 2 7 8 9
+line|th|default	2	0 1 3 4
+line|th|default	3	0 4 8 11
+line|th|default	4	0 1 4 5 6
+line|th|default	5	0 1 2 3 5 6 7
+line|th|default	6	0 4 10 13 21
+line|th|default	7	0 4 5 6 8 16 20 22 29
+line|th|default	8	0 2 3 6 7 8 12
+line|th|default	9	0 2 5 7 10 11
+line|th|default	10	0 4 8 11
+line|th|default	11	0 9
+line|th|default	12	0 10
+line|th|default	13	0 5 9 12 15 18 22 25
+line|th|default	14	0 9 13 17
+line|th|loose	0	0 4 10
+line|th|loose	1	0 1 2 7 8 9
+line|th|loose	2	0 1 2 3 4
+line|th|loose	3	0 4 8 11
+line|th|loose	4	0 1 4 5 6
+line|th|loose	5	0 1 2 3 5 6 7
+line|th|loose	6	0 4 10 13 21
+line|th|loose	7	0 4 5 6 8 16 20 22 29
+line|th|loose	8	0 2 3 6 7 8 10 11 12
+line|th|loose	9	0 1 2 3 4 5 6 7 9 10 11
+line|th|loose	10	0 4 8 11
+line|th|loose	11	0 9
+line|th|loose	12	0 10
+line|th|loose	13	0 5 9 12 15 18 22 25
+line|th|loose	14	0 9 13 17
+line|th|normal	0	0 4 10
+line|th|normal	1	0 1 2 7 8 9
+line|th|normal	2	0 1 2 3 4
+line|th|normal	3	0 4 8 11
+line|th|normal	4	0 1 4 5 6
+line|th|normal	5	0 1 2 3 5 6 7
+line|th|normal	6	0 4 10 13 21
+line|th|normal	7	0 4 5 6 8 16 20 22 29
+line|th|normal	8	0 2 3 6 7 8 10 11 12
+line|th|normal	9	0 1 2 5 6 7 10 11
+line|th|normal	10	0 4 8 11
+line|th|normal	11	0 9
+line|th|normal	12	0 10
+line|th|normal	13	0 5 9 12 15 18 22 25
+line|th|normal	14	0 9 13 17
+line|th|strict	0	0 4 10
+line|th|strict	1	0 1 2 7 8 9
+line|th|strict	2	0 1 3 4
+line|th|strict	3	0 4 8 11
+line|th|strict	4	0 1 4 5 6
+line|th|strict	5	0 1 2 3 5 6 7
+line|th|strict	6	0 4 10 13 21
+line|th|strict	7	0 4 5 6 8 16 20 22 29
+line|th|strict	8	0 2 3 6 7 8 12
+line|th|strict	9	0 2 5 7 10 11
+line|th|strict	10	0 4 8 11
+line|th|strict	11	0 9
+line|th|strict	12	0 10
+line|th|strict	13	0 5 9 12 15 18 22 25
+line|th|strict	14	0 9 13 17
+line|lo|default	0	0 4 10
+line|lo|default	1	0 1 2 7 8 9
+line|lo|default	2	0 1 3 4
+line|lo|default	3	0 4 8 11
+line|lo|default	4	0 1 4 5 6
+line|lo|default	5	0 1 2 3 5 6 7
+line|lo|default	6	0 4 10 13 21
+line|lo|default	7	0 4 5 6 8 16 20 22 29
+line|lo|default	8	0 2 3 6 7 8 12
+line|lo|default	9	0 2 5 7 10 11
+line|lo|default	10	0 4 8 11
+line|lo|default	11	0 9
+line|lo|default	12	0 10
+line|lo|default	13	0 5 9 12 15 18 22 25
+line|lo|default	14	0 9 13 17
+line|lo|loose	0	0 4 10
+line|lo|loose	1	0 1 2 7 8 9
+line|lo|loose	2	0 1 2 3 4
+line|lo|loose	3	0 4 8 11
+line|lo|loose	4	0 1 4 5 6
+line|lo|loose	5	0 1 2 3 5 6 7
+line|lo|loose	6	0 4 10 13 21
+line|lo|loose	7	0 4 5 6 8 16 20 22 29
+line|lo|loose	8	0 2 3 6 7 8 10 11 12
+line|lo|loose	9	0 1 2 3 4 5 6 7 9 10 11
+line|lo|loose	10	0 4 8 11
+line|lo|loose	11	0 9
+line|lo|loose	12	0 10
+line|lo|loose	13	0 5 9 12 15 18 22 25
+line|lo|loose	14	0 9 13 17
+line|lo|normal	0	0 4 10
+line|lo|normal	1	0 1 2 7 8 9
+line|lo|normal	2	0 1 2 3 4
+line|lo|normal	3	0 4 8 11
+line|lo|normal	4	0 1 4 5 6
+line|lo|normal	5	0 1 2 3 5 6 7
+line|lo|normal	6	0 4 10 13 21
+line|lo|normal	7	0 4 5 6 8 16 20 22 29
+line|lo|normal	8	0 2 3 6 7 8 10 11 12
+line|lo|normal	9	0 1 2 5 6 7 10 11
+line|lo|normal	10	0 4 8 11
+line|lo|normal	11	0 9
+line|lo|normal	12	0 10
+line|lo|normal	13	0 5 9 12 15 18 22 25
+line|lo|normal	14	0 9 13 17
+line|lo|strict	0	0 4 10
+line|lo|strict	1	0 1 2 7 8 9
+line|lo|strict	2	0 1 3 4
+line|lo|strict	3	0 4 8 11
+line|lo|strict	4	0 1 4 5 6
+line|lo|strict	5	0 1 2 3 5 6 7
+line|lo|strict	6	0 4 10 13 21
+line|lo|strict	7	0 4 5 6 8 16 20 22 29
+line|lo|strict	8	0 2 3 6 7 8 12
+line|lo|strict	9	0 2 5 7 10 11
+line|lo|strict	10	0 4 8 11
+line|lo|strict	11	0 9
+line|lo|strict	12	0 10
+line|lo|strict	13	0 5 9 12 15 18 22 25
+line|lo|strict	14	0 9 13 17
+line|km|default	0	0 4 10
+line|km|default	1	0 1 2 7 8 9
+line|km|default	2	0 1 3 4
+line|km|default	3	0 4 8 11
+line|km|default	4	0 1 4 5 6
+line|km|default	5	0 1 2 3 5 6 7
+line|km|default	6	0 4 10 13 21
+line|km|default	7	0 4 5 6 8 16 20 22 29
+line|km|default	8	0 2 3 6 7 8 12
+line|km|default	9	0 2 5 7 10 11
+line|km|default	10	0 4 8 11
+line|km|default	11	0 9
+line|km|default	12	0 10
+line|km|default	13	0 5 9 12 15 18 22 25
+line|km|default	14	0 9 13 17
+line|km|loose	0	0 4 10
+line|km|loose	1	0 1 2 7 8 9
+line|km|loose	2	0 1 2 3 4
+line|km|loose	3	0 4 8 11
+line|km|loose	4	0 1 4 5 6
+line|km|loose	5	0 1 2 3 5 6 7
+line|km|loose	6	0 4 10 13 21
+line|km|loose	7	0 4 5 6 8 16 20 22 29
+line|km|loose	8	0 2 3 6 7 8 10 11 12
+line|km|loose	9	0 1 2 3 4 5 6 7 9 10 11
+line|km|loose	10	0 4 8 11
+line|km|loose	11	0 9
+line|km|loose	12	0 10
+line|km|loose	13	0 5 9 12 15 18 22 25
+line|km|loose	14	0 9 13 17
+line|km|normal	0	0 4 10
+line|km|normal	1	0 1 2 7 8 9
+line|km|normal	2	0 1 2 3 4
+line|km|normal	3	0 4 8 11
+line|km|normal	4	0 1 4 5 6
+line|km|normal	5	0 1 2 3 5 6 7
+line|km|normal	6	0 4 10 13 21
+line|km|normal	7	0 4 5 6 8 16 20 22 29
+line|km|normal	8	0 2 3 6 7 8 10 11 12
+line|km|normal	9	0 1 2 5 6 7 10 11
+line|km|normal	10	0 4 8 11
+line|km|normal	11	0 9
+line|km|normal	12	0 10
+line|km|normal	13	0 5 9 12 15 18 22 25
+line|km|normal	14	0 9 13 17
+line|km|strict	0	0 4 10
+line|km|strict	1	0 1 2 7 8 9
+line|km|strict	2	0 1 3 4
+line|km|strict	3	0 4 8 11
+line|km|strict	4	0 1 4 5 6
+line|km|strict	5	0 1 2 3 5 6 7
+line|km|strict	6	0 4 10 13 21
+line|km|strict	7	0 4 5 6 8 16 20 22 29
+line|km|strict	8	0 2 3 6 7 8 12
+line|km|strict	9	0 2 5 7 10 11
+line|km|strict	10	0 4 8 11
+line|km|strict	11	0 9
+line|km|strict	12	0 10
+line|km|strict	13	0 5 9 12 15 18 22 25
+line|km|strict	14	0 9 13 17
+line|my|default	0	0 4 10
+line|my|default	1	0 1 2 7 8 9
+line|my|default	2	0 1 3 4
+line|my|default	3	0 4 8 11
+line|my|default	4	0 1 4 5 6
+line|my|default	5	0 1 2 3 5 6 7
+line|my|default	6	0 4 10 13 21
+line|my|default	7	0 4 5 6 8 16 20 22 29
+line|my|default	8	0 2 3 6 7 8 12
+line|my|default	9	0 2 5 7 10 11
+line|my|default	10	0 4 8 11
+line|my|default	11	0 9
+line|my|default	12	0 10
+line|my|default	13	0 5 9 12 15 18 22 25
+line|my|default	14	0 9 13 17
+line|my|loose	0	0 4 10
+line|my|loose	1	0 1 2 7 8 9
+line|my|loose	2	0 1 2 3 4
+line|my|loose	3	0 4 8 11
+line|my|loose	4	0 1 4 5 6
+line|my|loose	5	0 1 2 3 5 6 7
+line|my|loose	6	0 4 10 13 21
+line|my|loose	7	0 4 5 6 8 16 20 22 29
+line|my|loose	8	0 2 3 6 7 8 10 11 12
+line|my|loose	9	0 1 2 3 4 5 6 7 9 10 11
+line|my|loose	10	0 4 8 11
+line|my|loose	11	0 9
+line|my|loose	12	0 10
+line|my|loose	13	0 5 9 12 15 18 22 25
+line|my|loose	14	0 9 13 17
+line|my|normal	0	0 4 10
+line|my|normal	1	0 1 2 7 8 9
+line|my|normal	2	0 1 2 3 4
+line|my|normal	3	0 4 8 11
+line|my|normal	4	0 1 4 5 6
+line|my|normal	5	0 1 2 3 5 6 7
+line|my|normal	6	0 4 10 13 21
+line|my|normal	7	0 4 5 6 8 16 20 22 29
+line|my|normal	8	0 2 3 6 7 8 10 11 12
+line|my|normal	9	0 1 2 5 6 7 10 11
+line|my|normal	10	0 4 8 11
+line|my|normal	11	0 9
+line|my|normal	12	0 10
+line|my|normal	13	0 5 9 12 15 18 22 25
+line|my|normal	14	0 9 13 17
+line|my|strict	0	0 4 10
+line|my|strict	1	0 1 2 7 8 9
+line|my|strict	2	0 1 3 4
+line|my|strict	3	0 4 8 11
+line|my|strict	4	0 1 4 5 6
+line|my|strict	5	0 1 2 3 5 6 7
+line|my|strict	6	0 4 10 13 21
+line|my|strict	7	0 4 5 6 8 16 20 22 29
+line|my|strict	8	0 2 3 6 7 8 12
+line|my|strict	9	0 2 5 7 10 11
+line|my|strict	10	0 4 8 11
+line|my|strict	11	0 9
+line|my|strict	12	0 10
+line|my|strict	13	0 5 9 12 15 18 22 25
+line|my|strict	14	0 9 13 17
+line|bo|default	0	0 4 10
+line|bo|default	1	0 1 2 7 8 9
+line|bo|default	2	0 1 3 4
+line|bo|default	3	0 4 8 11
+line|bo|default	4	0 1 4 5 6
+line|bo|default	5	0 1 2 3 5 6 7
+line|bo|default	6	0 4 10 13 21
+line|bo|default	7	0 4 5 6 8 16 20 22 29
+line|bo|default	8	0 2 3 6 7 8 12
+line|bo|default	9	0 2 5 7 10 11
+line|bo|default	10	0 4 8 11
+line|bo|default	11	0 9
+line|bo|default	12	0 10
+line|bo|default	13	0 5 9 12 15 18 22 25
+line|bo|default	14	0 9 13 17
+line|bo|loose	0	0 4 10
+line|bo|loose	1	0 1 2 7 8 9
+line|bo|loose	2	0 1 2 3 4
+line|bo|loose	3	0 4 8 11
+line|bo|loose	4	0 1 4 5 6
+line|bo|loose	5	0 1 2 3 5 6 7
+line|bo|loose	6	0 4 10 13 21
+line|bo|loose	7	0 4 5 6 8 16 20 22 29
+line|bo|loose	8	0 2 3 6 7 8 10 11 12
+line|bo|loose	9	0 1 2 3 4 5 6 7 9 10 11
+line|bo|loose	10	0 4 8 11
+line|bo|loose	11	0 9
+line|bo|loose	12	0 10
+line|bo|loose	13	0 5 9 12 15 18 22 25
+line|bo|loose	14	0 9 13 17
+line|bo|normal	0	0 4 10
+line|bo|normal	1	0 1 2 7 8 9
+line|bo|normal	2	0 1 2 3 4
+line|bo|normal	3	0 4 8 11
+line|bo|normal	4	0 1 4 5 6
+line|bo|normal	5	0 1 2 3 5 6 7
+line|bo|normal	6	0 4 10 13 21
+line|bo|normal	7	0 4 5 6 8 16 20 22 29
+line|bo|normal	8	0 2 3 6 7 8 10 11 12
+line|bo|normal	9	0 1 2 5 6 7 10 11
+line|bo|normal	10	0 4 8 11
+line|bo|normal	11	0 9
+line|bo|normal	12	0 10
+line|bo|normal	13	0 5 9 12 15 18 22 25
+line|bo|normal	14	0 9 13 17
+line|bo|strict	0	0 4 10
+line|bo|strict	1	0 1 2 7 8 9
+line|bo|strict	2	0 1 3 4
+line|bo|strict	3	0 4 8 11
+line|bo|strict	4	0 1 4 5 6
+line|bo|strict	5	0 1 2 3 5 6 7
+line|bo|strict	6	0 4 10 13 21
+line|bo|strict	7	0 4 5 6 8 16 20 22 29
+line|bo|strict	8	0 2 3 6 7 8 12
+line|bo|strict	9	0 2 5 7 10 11
+line|bo|strict	10	0 4 8 11
+line|bo|strict	11	0 9
+line|bo|strict	12	0 10
+line|bo|strict	13	0 5 9 12 15 18 22 25
+line|bo|strict	14	0 9 13 17
+line|he|default	0	0 10
+line|he|default	1	0 1 8 9
+line|he|default	2	0 1 3 4
+line|he|default	3	0 4 11
+line|he|default	4	0 1 5 6
+line|he|default	5	0 1 2 3 5 6 7
+line|he|default	6	0 4 10 13 21
+line|he|default	7	0 4 5 6 8 16 20 22 29
+line|he|default	8	0 2 3 6 7 8 12
+line|he|default	9	0 2 5 7 10 11
+line|he|default	10	0 4 8 11
+line|he|default	11	0 9
+line|he|default	12	0 10
+line|he|default	13	0 5 9 12 15 18 22 25
+line|he|default	14	0 9 13 17
+line|he|loose	0	0 10
+line|he|loose	1	0 1 8 9
+line|he|loose	2	0 1 2 3 4
+line|he|loose	3	0 4 11
+line|he|loose	4	0 1 5 6
+line|he|loose	5	0 1 2 3 5 6 7
+line|he|loose	6	0 4 10 13 21
+line|he|loose	7	0 4 5 6 8 16 20 22 29
+line|he|loose	8	0 2 3 6 7 8 10 11 12
+line|he|loose	9	0 1 2 3 4 5 6 7 9 10 11
+line|he|loose	10	0 4 8 11
+line|he|loose	11	0 9
+line|he|loose	12	0 10
+line|he|loose	13	0 5 9 12 15 18 22 25
+line|he|loose	14	0 9 13 17
+line|he|normal	0	0 10
+line|he|normal	1	0 1 8 9
+line|he|normal	2	0 1 2 3 4
+line|he|normal	3	0 4 11
+line|he|normal	4	0 1 5 6
+line|he|normal	5	0 1 2 3 5 6 7
+line|he|normal	6	0 4 10 13 21
+line|he|normal	7	0 4 5 6 8 16 20 22 29
+line|he|normal	8	0 2 3 6 7 8 10 11 12
+line|he|normal	9	0 1 2 5 6 7 10 11
+line|he|normal	10	0 4 8 11
+line|he|normal	11	0 9
+line|he|normal	12	0 10
+line|he|normal	13	0 5 9 12 15 18 22 25
+line|he|normal	14	0 9 13 17
+line|he|strict	0	0 10
+line|he|strict	1	0 1 8 9
+line|he|strict	2	0 1 3 4
+line|he|strict	3	0 4 11
+line|he|strict	4	0 1 5 6
+line|he|strict	5	0 1 2 3 5 6 7
+line|he|strict	6	0 4 10 13 21
+line|he|strict	7	0 4 5 6 8 16 20 22 29
+line|he|strict	8	0 2 3 6 7 8 12
+line|he|strict	9	0 2 5 7 10 11
+line|he|strict	10	0 4 8 11
+line|he|strict	11	0 9
+line|he|strict	12	0 10
+line|he|strict	13	0 5 9 12 15 18 22 25
+line|he|strict	14	0 9 13 17
+line|ar|default	0	0 10
+line|ar|default	1	0 1 8 9
+line|ar|default	2	0 1 3 4
+line|ar|default	3	0 4 11
+line|ar|default	4	0 1 5 6
+line|ar|default	5	0 1 2 3 5 6 7
+line|ar|default	6	0 4 10 13 21
+line|ar|default	7	0 4 5 6 8 16 20 22 29
+line|ar|default	8	0 2 3 6 7 8 12
+line|ar|default	9	0 2 5 7 10 11
+line|ar|default	10	0 4 8 11
+line|ar|default	11	0 9
+line|ar|default	12	0 10
+line|ar|default	13	0 5 9 12 15 18 22 25
+line|ar|default	14	0 9 13 17
+line|ar|loose	0	0 10
+line|ar|loose	1	0 1 8 9
+line|ar|loose	2	0 1 2 3 4
+line|ar|loose	3	0 4 11
+line|ar|loose	4	0 1 5 6
+line|ar|loose	5	0 1 2 3 5 6 7
+line|ar|loose	6	0 4 10 13 21
+line|ar|loose	7	0 4 5 6 8 16 20 22 29
+line|ar|loose	8	0 2 3 6 7 8 10 11 12
+line|ar|loose	9	0 1 2 3 4 5 6 7 9 10 11
+line|ar|loose	10	0 4 8 11
+line|ar|loose	11	0 9
+line|ar|loose	12	0 10
+line|ar|loose	13	0 5 9 12 15 18 22 25
+line|ar|loose	14	0 9 13 17
+line|ar|normal	0	0 10
+line|ar|normal	1	0 1 8 9
+line|ar|normal	2	0 1 2 3 4
+line|ar|normal	3	0 4 11
+line|ar|normal	4	0 1 5 6
+line|ar|normal	5	0 1 2 3 5 6 7
+line|ar|normal	6	0 4 10 13 21
+line|ar|normal	7	0 4 5 6 8 16 20 22 29
+line|ar|normal	8	0 2 3 6 7 8 10 11 12
+line|ar|normal	9	0 1 2 5 6 7 10 11
+line|ar|normal	10	0 4 8 11
+line|ar|normal	11	0 9
+line|ar|normal	12	0 10
+line|ar|normal	13	0 5 9 12 15 18 22 25
+line|ar|normal	14	0 9 13 17
+line|ar|strict	0	0 10
+line|ar|strict	1	0 1 8 9
+line|ar|strict	2	0 1 3 4
+line|ar|strict	3	0 4 11
+line|ar|strict	4	0 1 5 6
+line|ar|strict	5	0 1 2 3 5 6 7
+line|ar|strict	6	0 4 10 13 21
+line|ar|strict	7	0 4 5 6 8 16 20 22 29
+line|ar|strict	8	0 2 3 6 7 8 12
+line|ar|strict	9	0 2 5 7 10 11
+line|ar|strict	10	0 4 8 11
+line|ar|strict	11	0 9
+line|ar|strict	12	0 10
+line|ar|strict	13	0 5 9 12 15 18 22 25
+line|ar|strict	14	0 9 13 17
+line|fa|default	0	0 10
+line|fa|default	1	0 1 8 9
+line|fa|default	2	0 1 3 4
+line|fa|default	3	0 4 11
+line|fa|default	4	0 1 5 6
+line|fa|default	5	0 1 2 3 5 6 7
+line|fa|default	6	0 4 10 13 21
+line|fa|default	7	0 4 5 6 8 16 20 22 29
+line|fa|default	8	0 2 3 6 7 8 12
+line|fa|default	9	0 2 5 7 10 11
+line|fa|default	10	0 4 8 11
+line|fa|default	11	0 9
+line|fa|default	12	0 10
+line|fa|default	13	0 5 9 12 15 18 22 25
+line|fa|default	14	0 9 13 17
+line|fa|loose	0	0 10
+line|fa|loose	1	0 1 8 9
+line|fa|loose	2	0 1 2 3 4
+line|fa|loose	3	0 4 11
+line|fa|loose	4	0 1 5 6
+line|fa|loose	5	0 1 2 3 5 6 7
+line|fa|loose	6	0 4 10 13 21
+line|fa|loose	7	0 4 5 6 8 16 20 22 29
+line|fa|loose	8	0 2 3 6 7 8 10 11 12
+line|fa|loose	9	0 1 2 3 4 5 6 7 9 10 11
+line|fa|loose	10	0 4 8 11
+line|fa|loose	11	0 9
+line|fa|loose	12	0 10
+line|fa|loose	13	0 5 9 12 15 18 22 25
+line|fa|loose	14	0 9 13 17
+line|fa|normal	0	0 10
+line|fa|normal	1	0 1 8 9
+line|fa|normal	2	0 1 2 3 4
+line|fa|normal	3	0 4 11
+line|fa|normal	4	0 1 5 6
+line|fa|normal	5	0 1 2 3 5 6 7
+line|fa|normal	6	0 4 10 13 21
+line|fa|normal	7	0 4 5 6 8 16 20 22 29
+line|fa|normal	8	0 2 3 6 7 8 10 11 12
+line|fa|normal	9	0 1 2 5 6 7 10 11
+line|fa|normal	10	0 4 8 11
+line|fa|normal	11	0 9
+line|fa|normal	12	0 10
+line|fa|normal	13	0 5 9 12 15 18 22 25
+line|fa|normal	14	0 9 13 17
+line|fa|strict	0	0 10
+line|fa|strict	1	0 1 8 9
+line|fa|strict	2	0 1 3 4
+line|fa|strict	3	0 4 11
+line|fa|strict	4	0 1 5 6
+line|fa|strict	5	0 1 2 3 5 6 7
+line|fa|strict	6	0 4 10 13 21
+line|fa|strict	7	0 4 5 6 8 16 20 22 29
+line|fa|strict	8	0 2 3 6 7 8 12
+line|fa|strict	9	0 2 5 7 10 11
+line|fa|strict	10	0 4 8 11
+line|fa|strict	11	0 9
+line|fa|strict	12	0 10
+line|fa|strict	13	0 5 9 12 15 18 22 25
+line|fa|strict	14	0 9 13 17
+line|ur|default	0	0 10
+line|ur|default	1	0 1 8 9
+line|ur|default	2	0 1 3 4
+line|ur|default	3	0 4 11
+line|ur|default	4	0 1 5 6
+line|ur|default	5	0 1 2 3 5 6 7
+line|ur|default	6	0 4 10 13 21
+line|ur|default	7	0 4 5 6 8 16 20 22 29
+line|ur|default	8	0 2 3 6 7 8 12
+line|ur|default	9	0 2 5 7 10 11
+line|ur|default	10	0 4 8 11
+line|ur|default	11	0 9
+line|ur|default	12	0 10
+line|ur|default	13	0 5 9 12 15 18 22 25
+line|ur|default	14	0 9 13 17
+line|ur|loose	0	0 10
+line|ur|loose	1	0 1 8 9
+line|ur|loose	2	0 1 2 3 4
+line|ur|loose	3	0 4 11
+line|ur|loose	4	0 1 5 6
+line|ur|loose	5	0 1 2 3 5 6 7
+line|ur|loose	6	0 4 10 13 21
+line|ur|loose	7	0 4 5 6 8 16 20 22 29
+line|ur|loose	8	0 2 3 6 7 8 10 11 12
+line|ur|loose	9	0 1 2 3 4 5 6 7 9 10 11
+line|ur|loose	10	0 4 8 11
+line|ur|loose	11	0 9
+line|ur|loose	12	0 10
+line|ur|loose	13	0 5 9 12 15 18 22 25
+line|ur|loose	14	0 9 13 17
+line|ur|normal	0	0 10
+line|ur|normal	1	0 1 8 9
+line|ur|normal	2	0 1 2 3 4
+line|ur|normal	3	0 4 11
+line|ur|normal	4	0 1 5 6
+line|ur|normal	5	0 1 2 3 5 6 7
+line|ur|normal	6	0 4 10 13 21
+line|ur|normal	7	0 4 5 6 8 16 20 22 29
+line|ur|normal	8	0 2 3 6 7 8 10 11 12
+line|ur|normal	9	0 1 2 5 6 7 10 11
+line|ur|normal	10	0 4 8 11
+line|ur|normal	11	0 9
+line|ur|normal	12	0 10
+line|ur|normal	13	0 5 9 12 15 18 22 25
+line|ur|normal	14	0 9 13 17
+line|ur|strict	0	0 10
+line|ur|strict	1	0 1 8 9
+line|ur|strict	2	0 1 3 4
+line|ur|strict	3	0 4 11
+line|ur|strict	4	0 1 5 6
+line|ur|strict	5	0 1 2 3 5 6 7
+line|ur|strict	6	0 4 10 13 21
+line|ur|strict	7	0 4 5 6 8 16 20 22 29
+line|ur|strict	8	0 2 3 6 7 8 12
+line|ur|strict	9	0 2 5 7 10 11
+line|ur|strict	10	0 4 8 11
+line|ur|strict	11	0 9
+line|ur|strict	12	0 10
+line|ur|strict	13	0 5 9 12 15 18 22 25
+line|ur|strict	14	0 9 13 17
+line|hi|default	0	0 4 10
+line|hi|default	1	0 1 2 7 8 9
+line|hi|default	2	0 1 3 4
+line|hi|default	3	0 4 8 11
+line|hi|default	4	0 1 4 5 6
+line|hi|default	5	0 1 2 3 5 6 7
+line|hi|default	6	0 4 10 13 21
+line|hi|default	7	0 4 5 6 8 16 20 22 29
+line|hi|default	8	0 2 3 6 7 8 12
+line|hi|default	9	0 2 5 7 10 11
+line|hi|default	10	0 4 8 11
+line|hi|default	11	0 9
+line|hi|default	12	0 10
+line|hi|default	13	0 5 9 12 15 18 22 25
+line|hi|default	14	0 9 13 17
+line|hi|loose	0	0 4 10
+line|hi|loose	1	0 1 2 7 8 9
+line|hi|loose	2	0 1 2 3 4
+line|hi|loose	3	0 4 8 11
+line|hi|loose	4	0 1 4 5 6
+line|hi|loose	5	0 1 2 3 5 6 7
+line|hi|loose	6	0 4 10 13 21
+line|hi|loose	7	0 4 5 6 8 16 20 22 29
+line|hi|loose	8	0 2 3 6 7 8 10 11 12
+line|hi|loose	9	0 1 2 3 4 5 6 7 9 10 11
+line|hi|loose	10	0 4 8 11
+line|hi|loose	11	0 9
+line|hi|loose	12	0 10
+line|hi|loose	13	0 5 9 12 15 18 22 25
+line|hi|loose	14	0 9 13 17
+line|hi|normal	0	0 4 10
+line|hi|normal	1	0 1 2 7 8 9
+line|hi|normal	2	0 1 2 3 4
+line|hi|normal	3	0 4 8 11
+line|hi|normal	4	0 1 4 5 6
+line|hi|normal	5	0 1 2 3 5 6 7
+line|hi|normal	6	0 4 10 13 21
+line|hi|normal	7	0 4 5 6 8 16 20 22 29
+line|hi|normal	8	0 2 3 6 7 8 10 11 12
+line|hi|normal	9	0 1 2 5 6 7 10 11
+line|hi|normal	10	0 4 8 11
+line|hi|normal	11	0 9
+line|hi|normal	12	0 10
+line|hi|normal	13	0 5 9 12 15 18 22 25
+line|hi|normal	14	0 9 13 17
+line|hi|strict	0	0 4 10
+line|hi|strict	1	0 1 2 7 8 9
+line|hi|strict	2	0 1 3 4
+line|hi|strict	3	0 4 8 11
+line|hi|strict	4	0 1 4 5 6
+line|hi|strict	5	0 1 2 3 5 6 7
+line|hi|strict	6	0 4 10 13 21
+line|hi|strict	7	0 4 5 6 8 16 20 22 29
+line|hi|strict	8	0 2 3 6 7 8 12
+line|hi|strict	9	0 2 5 7 10 11
+line|hi|strict	10	0 4 8 11
+line|hi|strict	11	0 9
+line|hi|strict	12	0 10
+line|hi|strict	13	0 5 9 12 15 18 22 25
+line|hi|strict	14	0 9 13 17
+line|bn|default	0	0 4 10
+line|bn|default	1	0 1 2 7 8 9
+line|bn|default	2	0 1 3 4
+line|bn|default	3	0 4 8 11
+line|bn|default	4	0 1 4 5 6
+line|bn|default	5	0 1 2 3 5 6 7
+line|bn|default	6	0 4 10 13 21
+line|bn|default	7	0 4 5 6 8 16 20 22 29
+line|bn|default	8	0 2 3 6 7 8 12
+line|bn|default	9	0 2 5 7 10 11
+line|bn|default	10	0 4 8 11
+line|bn|default	11	0 9
+line|bn|default	12	0 10
+line|bn|default	13	0 5 9 12 15 18 22 25
+line|bn|default	14	0 9 13 17
+line|bn|loose	0	0 4 10
+line|bn|loose	1	0 1 2 7 8 9
+line|bn|loose	2	0 1 2 3 4
+line|bn|loose	3	0 4 8 11
+line|bn|loose	4	0 1 4 5 6
+line|bn|loose	5	0 1 2 3 5 6 7
+line|bn|loose	6	0 4 10 13 21
+line|bn|loose	7	0 4 5 6 8 16 20 22 29
+line|bn|loose	8	0 2 3 6 7 8 10 11 12
+line|bn|loose	9	0 1 2 3 4 5 6 7 9 10 11
+line|bn|loose	10	0 4 8 11
+line|bn|loose	11	0 9
+line|bn|loose	12	0 10
+line|bn|loose	13	0 5 9 12 15 18 22 25
+line|bn|loose	14	0 9 13 17
+line|bn|normal	0	0 4 10
+line|bn|normal	1	0 1 2 7 8 9
+line|bn|normal	2	0 1 2 3 4
+line|bn|normal	3	0 4 8 11
+line|bn|normal	4	0 1 4 5 6
+line|bn|normal	5	0 1 2 3 5 6 7
+line|bn|normal	6	0 4 10 13 21
+line|bn|normal	7	0 4 5 6 8 16 20 22 29
+line|bn|normal	8	0 2 3 6 7 8 10 11 12
+line|bn|normal	9	0 1 2 5 6 7 10 11
+line|bn|normal	10	0 4 8 11
+line|bn|normal	11	0 9
+line|bn|normal	12	0 10
+line|bn|normal	13	0 5 9 12 15 18 22 25
+line|bn|normal	14	0 9 13 17
+line|bn|strict	0	0 4 10
+line|bn|strict	1	0 1 2 7 8 9
+line|bn|strict	2	0 1 3 4
+line|bn|strict	3	0 4 8 11
+line|bn|strict	4	0 1 4 5 6
+line|bn|strict	5	0 1 2 3 5 6 7
+line|bn|strict	6	0 4 10 13 21
+line|bn|strict	7	0 4 5 6 8 16 20 22 29
+line|bn|strict	8	0 2 3 6 7 8 12
+line|bn|strict	9	0 2 5 7 10 11
+line|bn|strict	10	0 4 8 11
+line|bn|strict	11	0 9
+line|bn|strict	12	0 10
+line|bn|strict	13	0 5 9 12 15 18 22 25
+line|bn|strict	14	0 9 13 17
+line|ta|default	0	0 4 10
+line|ta|default	1	0 1 2 7 8 9
+line|ta|default	2	0 1 3 4
+line|ta|default	3	0 4 8 11
+line|ta|default	4	0 1 4 5 6
+line|ta|default	5	0 1 2 3 5 6 7
+line|ta|default	6	0 4 10 13 21
+line|ta|default	7	0 4 5 6 8 16 20 22 29
+line|ta|default	8	0 2 3 6 7 8 12
+line|ta|default	9	0 2 5 7 10 11
+line|ta|default	10	0 4 8 11
+line|ta|default	11	0 9
+line|ta|default	12	0 10
+line|ta|default	13	0 5 9 12 15 18 22 25
+line|ta|default	14	0 9 13 17
+line|ta|loose	0	0 4 10
+line|ta|loose	1	0 1 2 7 8 9
+line|ta|loose	2	0 1 2 3 4
+line|ta|loose	3	0 4 8 11
+line|ta|loose	4	0 1 4 5 6
+line|ta|loose	5	0 1 2 3 5 6 7
+line|ta|loose	6	0 4 10 13 21
+line|ta|loose	7	0 4 5 6 8 16 20 22 29
+line|ta|loose	8	0 2 3 6 7 8 10 11 12
+line|ta|loose	9	0 1 2 3 4 5 6 7 9 10 11
+line|ta|loose	10	0 4 8 11
+line|ta|loose	11	0 9
+line|ta|loose	12	0 10
+line|ta|loose	13	0 5 9 12 15 18 22 25
+line|ta|loose	14	0 9 13 17
+line|ta|normal	0	0 4 10
+line|ta|normal	1	0 1 2 7 8 9
+line|ta|normal	2	0 1 2 3 4
+line|ta|normal	3	0 4 8 11
+line|ta|normal	4	0 1 4 5 6
+line|ta|normal	5	0 1 2 3 5 6 7
+line|ta|normal	6	0 4 10 13 21
+line|ta|normal	7	0 4 5 6 8 16 20 22 29
+line|ta|normal	8	0 2 3 6 7 8 10 11 12
+line|ta|normal	9	0 1 2 5 6 7 10 11
+line|ta|normal	10	0 4 8 11
+line|ta|normal	11	0 9
+line|ta|normal	12	0 10
+line|ta|normal	13	0 5 9 12 15 18 22 25
+line|ta|normal	14	0 9 13 17
+line|ta|strict	0	0 4 10
+line|ta|strict	1	0 1 2 7 8 9
+line|ta|strict	2	0 1 3 4
+line|ta|strict	3	0 4 8 11
+line|ta|strict	4	0 1 4 5 6
+line|ta|strict	5	0 1 2 3 5 6 7
+line|ta|strict	6	0 4 10 13 21
+line|ta|strict	7	0 4 5 6 8 16 20 22 29
+line|ta|strict	8	0 2 3 6 7 8 12
+line|ta|strict	9	0 2 5 7 10 11
+line|ta|strict	10	0 4 8 11
+line|ta|strict	11	0 9
+line|ta|strict	12	0 10
+line|ta|strict	13	0 5 9 12 15 18 22 25
+line|ta|strict	14	0 9 13 17
+line|vi|default	0	0 4 10
+line|vi|default	1	0 1 2 7 8 9
+line|vi|default	2	0 1 3 4
+line|vi|default	3	0 4 8 11
+line|vi|default	4	0 1 4 5 6
+line|vi|default	5	0 1 2 3 5 6 7
+line|vi|default	6	0 4 10 13 21
+line|vi|default	7	0 4 5 6 8 16 20 22 29
+line|vi|default	8	0 2 3 6 7 8 12
+line|vi|default	9	0 2 5 7 10 11
+line|vi|default	10	0 4 8 11
+line|vi|default	11	0 9
+line|vi|default	12	0 10
+line|vi|default	13	0 5 9 12 15 18 22 25
+line|vi|default	14	0 9 13 17
+line|vi|loose	0	0 4 10
+line|vi|loose	1	0 1 2 7 8 9
+line|vi|loose	2	0 1 2 3 4
+line|vi|loose	3	0 4 8 11
+line|vi|loose	4	0 1 4 5 6
+line|vi|loose	5	0 1 2 3 5 6 7
+line|vi|loose	6	0 4 10 13 21
+line|vi|loose	7	0 4 5 6 8 16 20 22 29
+line|vi|loose	8	0 2 3 6 7 8 10 11 12
+line|vi|loose	9	0 1 2 3 4 5 6 7 9 10 11
+line|vi|loose	10	0 4 8 11
+line|vi|loose	11	0 9
+line|vi|loose	12	0 10
+line|vi|loose	13	0 5 9 12 15 18 22 25
+line|vi|loose	14	0 9 13 17
+line|vi|normal	0	0 4 10
+line|vi|normal	1	0 1 2 7 8 9
+line|vi|normal	2	0 1 2 3 4
+line|vi|normal	3	0 4 8 11
+line|vi|normal	4	0 1 4 5 6
+line|vi|normal	5	0 1 2 3 5 6 7
+line|vi|normal	6	0 4 10 13 21
+line|vi|normal	7	0 4 5 6 8 16 20 22 29
+line|vi|normal	8	0 2 3 6 7 8 10 11 12
+line|vi|normal	9	0 1 2 5 6 7 10 11
+line|vi|normal	10	0 4 8 11
+line|vi|normal	11	0 9
+line|vi|normal	12	0 10
+line|vi|normal	13	0 5 9 12 15 18 22 25
+line|vi|normal	14	0 9 13 17
+line|vi|strict	0	0 4 10
+line|vi|strict	1	0 1 2 7 8 9
+line|vi|strict	2	0 1 3 4
+line|vi|strict	3	0 4 8 11
+line|vi|strict	4	0 1 4 5 6
+line|vi|strict	5	0 1 2 3 5 6 7
+line|vi|strict	6	0 4 10 13 21
+line|vi|strict	7	0 4 5 6 8 16 20 22 29
+line|vi|strict	8	0 2 3 6 7 8 12
+line|vi|strict	9	0 2 5 7 10 11
+line|vi|strict	10	0 4 8 11
+line|vi|strict	11	0 9
+line|vi|strict	12	0 10
+line|vi|strict	13	0 5 9 12 15 18 22 25
+line|vi|strict	14	0 9 13 17
+line|id|default	0	0 4 10
+line|id|default	1	0 1 2 7 8 9
+line|id|default	2	0 1 3 4
+line|id|default	3	0 4 8 11
+line|id|default	4	0 1 4 5 6
+line|id|default	5	0 1 2 3 5 6 7
+line|id|default	6	0 4 10 13 21
+line|id|default	7	0 4 5 6 8 16 20 22 29
+line|id|default	8	0 2 3 6 7 8 12
+line|id|default	9	0 2 5 7 10 11
+line|id|default	10	0 4 8 11
+line|id|default	11	0 9
+line|id|default	12	0 10
+line|id|default	13	0 5 9 12 15 18 22 25
+line|id|default	14	0 9 13 17
+line|id|loose	0	0 4 10
+line|id|loose	1	0 1 2 7 8 9
+line|id|loose	2	0 1 2 3 4
+line|id|loose	3	0 4 8 11
+line|id|loose	4	0 1 4 5 6
+line|id|loose	5	0 1 2 3 5 6 7
+line|id|loose	6	0 4 10 13 21
+line|id|loose	7	0 4 5 6 8 16 20 22 29
+line|id|loose	8	0 2 3 6 7 8 10 11 12
+line|id|loose	9	0 1 2 3 4 5 6 7 9 10 11
+line|id|loose	10	0 4 8 11
+line|id|loose	11	0 9
+line|id|loose	12	0 10
+line|id|loose	13	0 5 9 12 15 18 22 25
+line|id|loose	14	0 9 13 17
+line|id|normal	0	0 4 10
+line|id|normal	1	0 1 2 7 8 9
+line|id|normal	2	0 1 2 3 4
+line|id|normal	3	0 4 8 11
+line|id|normal	4	0 1 4 5 6
+line|id|normal	5	0 1 2 3 5 6 7
+line|id|normal	6	0 4 10 13 21
+line|id|normal	7	0 4 5 6 8 16 20 22 29
+line|id|normal	8	0 2 3 6 7 8 10 11 12
+line|id|normal	9	0 1 2 5 6 7 10 11
+line|id|normal	10	0 4 8 11
+line|id|normal	11	0 9
+line|id|normal	12	0 10
+line|id|normal	13	0 5 9 12 15 18 22 25
+line|id|normal	14	0 9 13 17
+line|id|strict	0	0 4 10
+line|id|strict	1	0 1 2 7 8 9
+line|id|strict	2	0 1 3 4
+line|id|strict	3	0 4 8 11
+line|id|strict	4	0 1 4 5 6
+line|id|strict	5	0 1 2 3 5 6 7
+line|id|strict	6	0 4 10 13 21
+line|id|strict	7	0 4 5 6 8 16 20 22 29
+line|id|strict	8	0 2 3 6 7 8 12
+line|id|strict	9	0 2 5 7 10 11
+line|id|strict	10	0 4 8 11
+line|id|strict	11	0 9
+line|id|strict	12	0 10
+line|id|strict	13	0 5 9 12 15 18 22 25
+line|id|strict	14	0 9 13 17
+line|und|default	0	0 4 10
+line|und|default	1	0 1 2 7 8 9
+line|und|default	2	0 1 3 4
+line|und|default	3	0 4 8 11
+line|und|default	4	0 1 4 5 6
+line|und|default	5	0 1 2 3 5 6 7
+line|und|default	6	0 4 10 13 21
+line|und|default	7	0 4 5 6 8 16 20 22 29
+line|und|default	8	0 2 3 6 7 8 12
+line|und|default	9	0 2 5 7 10 11
+line|und|default	10	0 4 8 11
+line|und|default	11	0 9
+line|und|default	12	0 10
+line|und|default	13	0 5 9 12 15 18 22 25
+line|und|default	14	0 9 13 17
+line|und|loose	0	0 4 10
+line|und|loose	1	0 1 2 7 8 9
+line|und|loose	2	0 1 2 3 4
+line|und|loose	3	0 4 8 11
+line|und|loose	4	0 1 4 5 6
+line|und|loose	5	0 1 2 3 5 6 7
+line|und|loose	6	0 4 10 13 21
+line|und|loose	7	0 4 5 6 8 16 20 22 29
+line|und|loose	8	0 2 3 6 7 8 10 11 12
+line|und|loose	9	0 1 2 3 4 5 6 7 9 10 11
+line|und|loose	10	0 4 8 11
+line|und|loose	11	0 9
+line|und|loose	12	0 10
+line|und|loose	13	0 5 9 12 15 18 22 25
+line|und|loose	14	0 9 13 17
+line|und|normal	0	0 4 10
+line|und|normal	1	0 1 2 7 8 9
+line|und|normal	2	0 1 2 3 4
+line|und|normal	3	0 4 8 11
+line|und|normal	4	0 1 4 5 6
+line|und|normal	5	0 1 2 3 5 6 7
+line|und|normal	6	0 4 10 13 21
+line|und|normal	7	0 4 5 6 8 16 20 22 29
+line|und|normal	8	0 2 3 6 7 8 10 11 12
+line|und|normal	9	0 1 2 5 6 7 10 11
+line|und|normal	10	0 4 8 11
+line|und|normal	11	0 9
+line|und|normal	12	0 10
+line|und|normal	13	0 5 9 12 15 18 22 25
+line|und|normal	14	0 9 13 17
+line|und|strict	0	0 4 10
+line|und|strict	1	0 1 2 7 8 9
+line|und|strict	2	0 1 3 4
+line|und|strict	3	0 4 8 11
+line|und|strict	4	0 1 4 5 6
+line|und|strict	5	0 1 2 3 5 6 7
+line|und|strict	6	0 4 10 13 21
+line|und|strict	7	0 4 5 6 8 16 20 22 29
+line|und|strict	8	0 2 3 6 7 8 12
+line|und|strict	9	0 2 5 7 10 11
+line|und|strict	10	0 4 8 11
+line|und|strict	11	0 9
+line|und|strict	12	0 10
+line|und|strict	13	0 5 9 12 15 18 22 25
+line|und|strict	14	0 9 13 17
+line|mul|default	0	0 4 10
+line|mul|default	1	0 1 2 7 8 9
+line|mul|default	2	0 1 3 4
+line|mul|default	3	0 4 8 11
+line|mul|default	4	0 1 4 5 6
+line|mul|default	5	0 1 2 3 5 6 7
+line|mul|default	6	0 4 10 13 21
+line|mul|default	7	0 4 5 6 8 16 20 22 29
+line|mul|default	8	0 2 3 6 7 8 12
+line|mul|default	9	0 2 5 7 10 11
+line|mul|default	10	0 4 8 11
+line|mul|default	11	0 9
+line|mul|default	12	0 10
+line|mul|default	13	0 5 9 12 15 18 22 25
+line|mul|default	14	0 9 13 17
+line|mul|loose	0	0 4 10
+line|mul|loose	1	0 1 2 7 8 9
+line|mul|loose	2	0 1 2 3 4
+line|mul|loose	3	0 4 8 11
+line|mul|loose	4	0 1 4 5 6
+line|mul|loose	5	0 1 2 3 5 6 7
+line|mul|loose	6	0 4 10 13 21
+line|mul|loose	7	0 4 5 6 8 16 20 22 29
+line|mul|loose	8	0 2 3 6 7 8 10 11 12
+line|mul|loose	9	0 1 2 3 4 5 6 7 9 10 11
+line|mul|loose	10	0 4 8 11
+line|mul|loose	11	0 9
+line|mul|loose	12	0 10
+line|mul|loose	13	0 5 9 12 15 18 22 25
+line|mul|loose	14	0 9 13 17
+line|mul|normal	0	0 4 10
+line|mul|normal	1	0 1 2 7 8 9
+line|mul|normal	2	0 1 2 3 4
+line|mul|normal	3	0 4 8 11
+line|mul|normal	4	0 1 4 5 6
+line|mul|normal	5	0 1 2 3 5 6 7
+line|mul|normal	6	0 4 10 13 21
+line|mul|normal	7	0 4 5 6 8 16 20 22 29
+line|mul|normal	8	0 2 3 6 7 8 10 11 12
+line|mul|normal	9	0 1 2 5 6 7 10 11
+line|mul|normal	10	0 4 8 11
+line|mul|normal	11	0 9
+line|mul|normal	12	0 10
+line|mul|normal	13	0 5 9 12 15 18 22 25
+line|mul|normal	14	0 9 13 17
+line|mul|strict	0	0 4 10
+line|mul|strict	1	0 1 2 7 8 9
+line|mul|strict	2	0 1 3 4
+line|mul|strict	3	0 4 8 11
+line|mul|strict	4	0 1 4 5 6
+line|mul|strict	5	0 1 2 3 5 6 7
+line|mul|strict	6	0 4 10 13 21
+line|mul|strict	7	0 4 5 6 8 16 20 22 29
+line|mul|strict	8	0 2 3 6 7 8 12
+line|mul|strict	9	0 2 5 7 10 11
+line|mul|strict	10	0 4 8 11
+line|mul|strict	11	0 9
+line|mul|strict	12	0 10
+line|mul|strict	13	0 5 9 12 15 18 22 25
+line|mul|strict	14	0 9 13 17
+line|root|default	0	0 4 10
+line|root|default	1	0 1 2 7 8 9
+line|root|default	2	0 1 3 4
+line|root|default	3	0 4 8 11
+line|root|default	4	0 1 4 5 6
+line|root|default	5	0 1 2 3 5 6 7
+line|root|default	6	0 4 10 13 21
+line|root|default	7	0 4 5 6 8 16 20 22 29
+line|root|default	8	0 2 3 6 7 8 12
+line|root|default	9	0 2 5 7 10 11
+line|root|default	10	0 4 8 11
+line|root|default	11	0 9
+line|root|default	12	0 10
+line|root|default	13	0 5 9 12 15 18 22 25
+line|root|default	14	0 9 13 17
+line|root|loose	0	0 4 10
+line|root|loose	1	0 1 2 7 8 9
+line|root|loose	2	0 1 2 3 4
+line|root|loose	3	0 4 8 11
+line|root|loose	4	0 1 4 5 6
+line|root|loose	5	0 1 2 3 5 6 7
+line|root|loose	6	0 4 10 13 21
+line|root|loose	7	0 4 5 6 8 16 20 22 29
+line|root|loose	8	0 2 3 6 7 8 10 11 12
+line|root|loose	9	0 1 2 3 4 5 6 7 9 10 11
+line|root|loose	10	0 4 8 11
+line|root|loose	11	0 9
+line|root|loose	12	0 10
+line|root|loose	13	0 5 9 12 15 18 22 25
+line|root|loose	14	0 9 13 17
+line|root|normal	0	0 4 10
+line|root|normal	1	0 1 2 7 8 9
+line|root|normal	2	0 1 2 3 4
+line|root|normal	3	0 4 8 11
+line|root|normal	4	0 1 4 5 6
+line|root|normal	5	0 1 2 3 5 6 7
+line|root|normal	6	0 4 10 13 21
+line|root|normal	7	0 4 5 6 8 16 20 22 29
+line|root|normal	8	0 2 3 6 7 8 10 11 12
+line|root|normal	9	0 1 2 5 6 7 10 11
+line|root|normal	10	0 4 8 11
+line|root|normal	11	0 9
+line|root|normal	12	0 10
+line|root|normal	13	0 5 9 12 15 18 22 25
+line|root|normal	14	0 9 13 17
+line|root|strict	0	0 4 10
+line|root|strict	1	0 1 2 7 8 9
+line|root|strict	2	0 1 3 4
+line|root|strict	3	0 4 8 11
+line|root|strict	4	0 1 4 5 6
+line|root|strict	5	0 1 2 3 5 6 7
+line|root|strict	6	0 4 10 13 21
+line|root|strict	7	0 4 5 6 8 16 20 22 29
+line|root|strict	8	0 2 3 6 7 8 12
+line|root|strict	9	0 2 5 7 10 11
+line|root|strict	10	0 4 8 11
+line|root|strict	11	0 9
+line|root|strict	12	0 10
+line|root|strict	13	0 5 9 12 15 18 22 25
+line|root|strict	14	0 9 13 17
+line|xx|default	0	0 4 10
+line|xx|default	1	0 1 2 7 8 9
+line|xx|default	2	0 1 3 4
+line|xx|default	3	0 4 8 11
+line|xx|default	4	0 1 4 5 6
+line|xx|default	5	0 1 2 3 5 6 7
+line|xx|default	6	0 4 10 13 21
+line|xx|default	7	0 4 5 6 8 16 20 22 29
+line|xx|default	8	0 2 3 6 7 8 12
+line|xx|default	9	0 2 5 7 10 11
+line|xx|default	10	0 4 8 11
+line|xx|default	11	0 9
+line|xx|default	12	0 10
+line|xx|default	13	0 5 9 12 15 18 22 25
+line|xx|default	14	0 9 13 17
+line|xx|loose	0	0 4 10
+line|xx|loose	1	0 1 2 7 8 9
+line|xx|loose	2	0 1 2 3 4
+line|xx|loose	3	0 4 8 11
+line|xx|loose	4	0 1 4 5 6
+line|xx|loose	5	0 1 2 3 5 6 7
+line|xx|loose	6	0 4 10 13 21
+line|xx|loose	7	0 4 5 6 8 16 20 22 29
+line|xx|loose	8	0 2 3 6 7 8 10 11 12
+line|xx|loose	9	0 1 2 3 4 5 6 7 9 10 11
+line|xx|loose	10	0 4 8 11
+line|xx|loose	11	0 9
+line|xx|loose	12	0 10
+line|xx|loose	13	0 5 9 12 15 18 22 25
+line|xx|loose	14	0 9 13 17
+line|xx|normal	0	0 4 10
+line|xx|normal	1	0 1 2 7 8 9
+line|xx|normal	2	0 1 2 3 4
+line|xx|normal	3	0 4 8 11
+line|xx|normal	4	0 1 4 5 6
+line|xx|normal	5	0 1 2 3 5 6 7
+line|xx|normal	6	0 4 10 13 21
+line|xx|normal	7	0 4 5 6 8 16 20 22 29
+line|xx|normal	8	0 2 3 6 7 8 10 11 12
+line|xx|normal	9	0 1 2 5 6 7 10 11
+line|xx|normal	10	0 4 8 11
+line|xx|normal	11	0 9
+line|xx|normal	12	0 10
+line|xx|normal	13	0 5 9 12 15 18 22 25
+line|xx|normal	14	0 9 13 17
+line|xx|strict	0	0 4 10
+line|xx|strict	1	0 1 2 7 8 9
+line|xx|strict	2	0 1 3 4
+line|xx|strict	3	0 4 8 11
+line|xx|strict	4	0 1 4 5 6
+line|xx|strict	5	0 1 2 3 5 6 7
+line|xx|strict	6	0 4 10 13 21
+line|xx|strict	7	0 4 5 6 8 16 20 22 29
+line|xx|strict	8	0 2 3 6 7 8 12
+line|xx|strict	9	0 2 5 7 10 11
+line|xx|strict	10	0 4 8 11
+line|xx|strict	11	0 9
+line|xx|strict	12	0 10
+line|xx|strict	13	0 5 9 12 15 18 22 25
+line|xx|strict	14	0 9 13 17
+line|i-klingon|default	0	0 4 10
+line|i-klingon|default	1	0 1 2 7 8 9
+line|i-klingon|default	2	0 1 3 4
+line|i-klingon|default	3	0 4 8 11
+line|i-klingon|default	4	0 1 4 5 6
+line|i-klingon|default	5	0 1 2 3 5 6 7
+line|i-klingon|default	6	0 4 10 13 21
+line|i-klingon|default	7	0 4 5 6 8 16 20 22 29
+line|i-klingon|default	8	0 2 3 6 7 8 12
+line|i-klingon|default	9	0 2 5 7 10 11
+line|i-klingon|default	10	0 4 8 11
+line|i-klingon|default	11	0 9
+line|i-klingon|default	12	0 10
+line|i-klingon|default	13	0 5 9 12 15 18 22 25
+line|i-klingon|default	14	0 9 13 17
+line|i-klingon|loose	0	0 4 10
+line|i-klingon|loose	1	0 1 2 7 8 9
+line|i-klingon|loose	2	0 1 2 3 4
+line|i-klingon|loose	3	0 4 8 11
+line|i-klingon|loose	4	0 1 4 5 6
+line|i-klingon|loose	5	0 1 2 3 5 6 7
+line|i-klingon|loose	6	0 4 10 13 21
+line|i-klingon|loose	7	0 4 5 6 8 16 20 22 29
+line|i-klingon|loose	8	0 2 3 6 7 8 10 11 12
+line|i-klingon|loose	9	0 1 2 3 4 5 6 7 9 10 11
+line|i-klingon|loose	10	0 4 8 11
+line|i-klingon|loose	11	0 9
+line|i-klingon|loose	12	0 10
+line|i-klingon|loose	13	0 5 9 12 15 18 22 25
+line|i-klingon|loose	14	0 9 13 17
+line|i-klingon|normal	0	0 4 10
+line|i-klingon|normal	1	0 1 2 7 8 9
+line|i-klingon|normal	2	0 1 2 3 4
+line|i-klingon|normal	3	0 4 8 11
+line|i-klingon|normal	4	0 1 4 5 6
+line|i-klingon|normal	5	0 1 2 3 5 6 7
+line|i-klingon|normal	6	0 4 10 13 21
+line|i-klingon|normal	7	0 4 5 6 8 16 20 22 29
+line|i-klingon|normal	8	0 2 3 6 7 8 10 11 12
+line|i-klingon|normal	9	0 1 2 5 6 7 10 11
+line|i-klingon|normal	10	0 4 8 11
+line|i-klingon|normal	11	0 9
+line|i-klingon|normal	12	0 10
+line|i-klingon|normal	13	0 5 9 12 15 18 22 25
+line|i-klingon|normal	14	0 9 13 17
+line|i-klingon|strict	0	0 4 10
+line|i-klingon|strict	1	0 1 2 7 8 9
+line|i-klingon|strict	2	0 1 3 4
+line|i-klingon|strict	3	0 4 8 11
+line|i-klingon|strict	4	0 1 4 5 6
+line|i-klingon|strict	5	0 1 2 3 5 6 7
+line|i-klingon|strict	6	0 4 10 13 21
+line|i-klingon|strict	7	0 4 5 6 8 16 20 22 29
+line|i-klingon|strict	8	0 2 3 6 7 8 12
+line|i-klingon|strict	9	0 2 5 7 10 11
+line|i-klingon|strict	10	0 4 8 11
+line|i-klingon|strict	11	0 9
+line|i-klingon|strict	12	0 10
+line|i-klingon|strict	13	0 5 9 12 15 18 22 25
+line|i-klingon|strict	14	0 9 13 17
+character|zh-Hans-US|default	0	0 1 2 3 4 5 6 7 8 9 10
+character|zh-Hans-US|default	1	0 1 2 3 4 5 6 7 8 9
+character|zh-Hans-US|default	2	0 1 2 3 4
+character|zh-Hans-US|default	3	0 1 2 3 4 5 6 7 8 9 10 11
+character|zh-Hans-US|default	4	0 1 2 3 4 5 6
+character|zh-Hans-US|default	5	0 1 2 3 4 5 6 7
+character|zh-Hans-US|default	6	0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 21
+character|zh-Hans-US|default	7	0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29
+character|zh-Hans-US|default	8	0 1 2 3 4 5 6 7 8 9 10 11 12
+character|zh-Hans-US|default	9	0 1 2 3 4 5 6 7 8 9 10 11
+character|zh-Hans-US|default	10	0 1 2 3 4 5 6 7 8 9 10 11
+character|zh-Hans-US|default	11	0 2 4 8 9
+character|zh-Hans-US|default	12	0 2 4 5 6 7 8 9 10
+character|zh-Hans-US|default	13	0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25
+character|zh-Hans-US|default	14	0 8 9 13 17
+word|zh-Hans-US|default	0	0 1 2 3 4 5 6 10
+word|zh-Hans-US|default	1	0 2 3 6 7 9
+word|zh-Hans-US|default	2	0 2 4
+word|zh-Hans-US|default	3	0 3 4 7 8 11
+word|zh-Hans-US|default	4	0 2 3 4 6
+word|zh-Hans-US|default	5	0 2 4 5 7
+word|zh-Hans-US|default	6	0 4 10 13 21
+word|zh-Hans-US|default	7	0 1 2 3 4 5 6 7 8 13 14 15 16 19 20 21 22 23 24 25 26 27 28 29
+word|zh-Hans-US|default	8	0 1 4 5 6 9 10 12
+word|zh-Hans-US|default	9	0 2 3 4 5 8 9 10 11
+word|zh-Hans-US|default	10	0 3 4 8 11
+word|zh-Hans-US|default	11	0 9
+word|zh-Hans-US|default	12	0 10
+word|zh-Hans-US|default	13	0 3 4 5 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25
+word|zh-Hans-US|default	14	0 8 9 13 17
+sentence|zh-Hans-US|default	0	0 10
+sentence|zh-Hans-US|default	1	0 9
+sentence|zh-Hans-US|default	2	0 4
+sentence|zh-Hans-US|default	3	0 11
+sentence|zh-Hans-US|default	4	0 4 6
+sentence|zh-Hans-US|default	5	0 7
+sentence|zh-Hans-US|default	6	0 21
+sentence|zh-Hans-US|default	7	0 22 29
+sentence|zh-Hans-US|default	8	0 10 12
+sentence|zh-Hans-US|default	9	0 11
+sentence|zh-Hans-US|default	10	0 11
+sentence|zh-Hans-US|default	11	0 9
+sentence|zh-Hans-US|default	12	0 10
+sentence|zh-Hans-US|default	13	0 25
+sentence|zh-Hans-US|default	14	0 17
+character||default	0	0 1 2 3 4 5 6 7 8 9 10
+character||default	1	0 1 2 3 4 5 6 7 8 9
+character||default	2	0 1 2 3 4
+character||default	3	0 1 2 3 4 5 6 7 8 9 10 11
+character||default	4	0 1 2 3 4 5 6
+character||default	5	0 1 2 3 4 5 6 7
+character||default	6	0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 21
+character||default	7	0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29
+character||default	8	0 1 2 3 4 5 6 7 8 9 10 11 12
+character||default	9	0 1 2 3 4 5 6 7 8 9 10 11
+character||default	10	0 1 2 3 4 5 6 7 8 9 10 11
+character||default	11	0 2 4 8 9
+character||default	12	0 2 4 5 6 7 8 9 10
+character||default	13	0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25
+character||default	14	0 8 9 13 17

@@ -1,0 +1,303 @@
+{
+ "description": "File-level comparison of Gecko sources the groundwork read at Firefox 155.0.1 against FIREFOX_156_0_RELEASE (3bf8f468)",
+ "files": [
+  {
+   "path": "dom/base/CharacterDataBuffer.cpp",
+   "sha256_156": "7f2375a3bf8c5ff8b1e3e2c25369fbe4480e863cd23cda3092245fa35d27c96f",
+   "sha256_groundwork_155": "7f2375a3bf8c5ff8b1e3e2c25369fbe4480e863cd23cda3092245fa35d27c96f",
+   "same": true
+  },
+  {
+   "path": "dom/base/nsContentUtils.cpp",
+   "sha256_156": "5b96feafbbee28999ba1a8a09c08bb399e3b5d5f612eed29b60987dbb7298e6c",
+   "sha256_groundwork_155": "4b7b198e9a2c4b85818bdf1088b6e43722583857a30209699e8c7459f4db2cd2",
+   "same": false,
+   "note": "cookie/partition-key and event dispatch changes; IsAlphanumeric/IsHyphen unchanged"
+  },
+  {
+   "path": "gfx/thebes/gfxFont.cpp",
+   "sha256_156": "4d49abbc260106271e06ae2f3baf39b3ff1ea7c7342e8f53c55e89f83d42dc57",
+   "sha256_groundwork_155": "1fef2b1eb77bf505d607e06149e3c8b76a8ef6dfc9523403751e525cc1ba9248",
+   "same": false,
+   "note": "only adds InitMetricsFromSkrifa under #if MOZ_FONTATIONS, which is off by default (toolkit/moz.configure:888-901; no mozconfig enables it)"
+  },
+  {
+   "path": "gfx/thebes/gfxFont.h",
+   "sha256_156": "03af8711466eb94fd854e7f8a369391350460ddfff99e4a34d817a86278fbacc",
+   "sha256_groundwork_155": "0dd4a557b639251c930332fc78219d2e4a7d804d238b6d954962b8e5d03f9ed7",
+   "same": false,
+   "note": "removes FontCanSupportHarfBuzz(); adds InitMetricsFromSkrifa decl under MOZ_FONTATIONS"
+  },
+  {
+   "path": "gfx/thebes/gfxScriptItemizer.cpp",
+   "sha256_156": "9bb002cb7f6d68f53d1410dfa9b3efc1c7449f92065548ab96cfe149346e4d0d",
+   "sha256_groundwork_155": "9bb002cb7f6d68f53d1410dfa9b3efc1c7449f92065548ab96cfe149346e4d0d",
+   "same": true
+  },
+  {
+   "path": "gfx/thebes/gfxSkipChars.cpp",
+   "sha256_156": "4ad2604474f91eeb88086f4867c45b8cdbc2dabc32c8f1e2ed077e041af36863",
+   "sha256_groundwork_155": "4ad2604474f91eeb88086f4867c45b8cdbc2dabc32c8f1e2ed077e041af36863",
+   "same": true
+  },
+  {
+   "path": "gfx/thebes/gfxTextRun.cpp",
+   "sha256_156": "396a2bfe475e33bbfb4aa9079dbf872bd1c1164afe089241d67f25647d98c5ec",
+   "sha256_groundwork_155": "b7846f253571043b41ac084a48e6fdfde34fb4855ec4d801843b1a909bd291b1",
+   "same": false,
+   "note": "adds MruCache IsEmpty for the lang->script cache; no width or break change"
+  },
+  {
+   "path": "gfx/thebes/gfxTextRun.h",
+   "sha256_156": "555344070940ddd563d8e9319b6224206efee3dd0233a2f9df1cd37573a468b3",
+   "sha256_groundwork_155": "555344070940ddd563d8e9319b6224206efee3dd0233a2f9df1cd37573a468b3",
+   "same": true
+  },
+  {
+   "path": "intl/components/src/UnicodeProperties.h",
+   "sha256_156": "d284da79d3638207b8bbc5eb413e3a7caf682c28c04fa12a0cabb2306d92349a",
+   "sha256_groundwork_155": "d284da79d3638207b8bbc5eb413e3a7caf682c28c04fa12a0cabb2306d92349a",
+   "same": true
+  },
+  {
+   "path": "intl/lwbrk/LineBreaker.h",
+   "sha256_156": "b038663d1984a38b0d8568df72d79e4507a1b40ea59be2149cacc025a667fc38",
+   "sha256_groundwork_155": "b038663d1984a38b0d8568df72d79e4507a1b40ea59be2149cacc025a667fc38",
+   "same": true
+  },
+  {
+   "path": "intl/lwbrk/LineBreaker.cpp",
+   "sha256_156": "01c461b1e9a89a5ebd316de77fa76b17655ea72d86442727b57518d1a06da8c8",
+   "sha256_groundwork_155": "01c461b1e9a89a5ebd316de77fa76b17655ea72d86442727b57518d1a06da8c8",
+   "same": true
+  },
+  {
+   "path": "dom/base/nsLineBreaker.cpp",
+   "sha256_156": "3e5e35c9e5e2a1526c08c7cb3b16aedd1af50f849cfb89b23067d9063917094a",
+   "sha256_groundwork_155": "3e5e35c9e5e2a1526c08c7cb3b16aedd1af50f849cfb89b23067d9063917094a",
+   "same": true
+  },
+  {
+   "path": "dom/base/nsLineBreaker.h",
+   "sha256_156": "71e18cff538db6fe528553012b8440a4d92ff9d24d5d4beb9b69ea8cf5e90bd4",
+   "sha256_groundwork_155": "71e18cff538db6fe528553012b8440a4d92ff9d24d5d4beb9b69ea8cf5e90bd4",
+   "same": true
+  },
+  {
+   "path": "intl/lwbrk/Segmenter.cpp",
+   "sha256_156": "b7c3f8c987abbd0110deeccb9449954ab878b31bb39701aa8318d38eda9c2f39",
+   "sha256_groundwork_155": "b7c3f8c987abbd0110deeccb9449954ab878b31bb39701aa8318d38eda9c2f39",
+   "same": true
+  },
+  {
+   "path": "intl/unicharutil/util/nsBidiUtils.h",
+   "sha256_156": "3c4290817db637ed889cdbceb7c371bb7ee11fa2b2ad2ffcc19bb524f731a2c8",
+   "sha256_groundwork_155": "3c4290817db637ed889cdbceb7c371bb7ee11fa2b2ad2ffcc19bb524f731a2c8",
+   "same": true
+  },
+  {
+   "path": "intl/unicharutil/util/nsUnicodeProperties.cpp",
+   "sha256_156": "b4d30d04430e017e0be57f3d6fefd60bdae0515203bf79ffda32fae95938adea",
+   "sha256_groundwork_155": "b4d30d04430e017e0be57f3d6fefd60bdae0515203bf79ffda32fae95938adea",
+   "same": true
+  },
+  {
+   "path": "intl/update-icu4x.sh",
+   "sha256_156": "0897ab1632fe985b55117d5973cbede0a24954181ae7547033c6ed0a5d1ae251",
+   "sha256_groundwork_155": "0897ab1632fe985b55117d5973cbede0a24954181ae7547033c6ed0a5d1ae251",
+   "same": true
+  },
+  {
+   "path": "layout/base/nsBidiPresUtils.cpp",
+   "sha256_156": "1ba3dfc29f8b7488b1f35c93f2ecc9013b077e307b9c18f18f1fd969b60d3d8d",
+   "sha256_groundwork_155": "1ba3dfc29f8b7488b1f35c93f2ecc9013b077e307b9c18f18f1fd969b60d3d8d",
+   "same": true
+  },
+  {
+   "path": "layout/generic/nsTextFrame.cpp",
+   "sha256_156": "d541e4b0216cd5eff776a34c2de02790a49919fe3ce52b430b97836bda4ea708",
+   "sha256_groundwork_155": "d541e4b0216cd5eff776a34c2de02790a49919fe3ce52b430b97836bda4ea708",
+   "same": true
+  },
+  {
+   "path": "layout/generic/nsTextFrameUtils.cpp",
+   "sha256_156": "8781416c547d6b7e9e6fe53a83996fbc57d0703f4343def695666163154d0e49",
+   "sha256_groundwork_155": "8781416c547d6b7e9e6fe53a83996fbc57d0703f4343def695666163154d0e49",
+   "same": true
+  },
+  {
+   "path": "third_party/rust/icu_segmenter/src/line.rs",
+   "sha256_156": "08351143911687809801ab86c1c806bca963450c39e6eb6c89872e5ed928d28e",
+   "sha256_groundwork_155": "08351143911687809801ab86c1c806bca963450c39e6eb6c89872e5ed928d28e",
+   "same": true
+  },
+  {
+   "path": "third_party/rust/icu_segmenter/.cargo-checksum.json",
+   "sha256_156": "e2b270a1fed9cbea89ec4d9b748b1f4f32afd9f30e799d598a07737a9fcbfe75",
+   "sha256_groundwork_155": "e2b270a1fed9cbea89ec4d9b748b1f4f32afd9f30e799d598a07737a9fcbfe75",
+   "same": true
+  },
+  {
+   "path": "third_party/rust/icu_properties/.cargo-checksum.json",
+   "sha256_156": "a97ecec4528c2b20fa1e0328194eae5f355c7ce96730f3cbce4f5b2d38d1ab61",
+   "sha256_groundwork_155": "a97ecec4528c2b20fa1e0328194eae5f355c7ce96730f3cbce4f5b2d38d1ab61",
+   "same": true
+  },
+  {
+   "path": "third_party/rust/icu_properties_data/.cargo-checksum.json",
+   "sha256_156": "321f7804b3a0e6b66b9ec67ca01d4956abfab9d555fd54744cdde6e0d302e6e7",
+   "sha256_groundwork_155": "321f7804b3a0e6b66b9ec67ca01d4956abfab9d555fd54744cdde6e0d302e6e7",
+   "same": true
+  },
+  {
+   "path": "third_party/rust/icu_collections/.cargo-checksum.json",
+   "sha256_156": "e893fc82245a9a71927fceece8cbc0c979b81edb66075a7e944696fe784cd0be",
+   "sha256_groundwork_155": "e893fc82245a9a71927fceece8cbc0c979b81edb66075a7e944696fe784cd0be",
+   "same": true
+  },
+  {
+   "path": "intl/icu_capi/Cargo.toml",
+   "sha256_156": "d8684c5ef1eeb072629c47a0fbba01051077440408fec4a932e7c97a85a15004",
+   "sha256_groundwork_155": "d8684c5ef1eeb072629c47a0fbba01051077440408fec4a932e7c97a85a15004",
+   "same": true
+  },
+  {
+   "path": "intl/icu_capi/src/segmenter_line.rs",
+   "sha256_156": "e3ffb4920f2885c1e9f59ebf763bab1acd8e23f3d0a3f349b5b67f340d2b1290",
+   "sha256_groundwork_155": "e3ffb4920f2885c1e9f59ebf763bab1acd8e23f3d0a3f349b5b67f340d2b1290",
+   "same": true
+  },
+  {
+   "path": "intl/icu4x-patches/002-bug2011393.patch",
+   "sha256_156": "8801f5ef23fdc8e14269b1fe78f485afd6666bd64152615d08ae825f9d0d2a3a",
+   "sha256_groundwork_155": "8801f5ef23fdc8e14269b1fe78f485afd6666bd64152615d08ae825f9d0d2a3a",
+   "same": true
+  },
+  {
+   "path": "layout/generic/nsLineLayout.cpp",
+   "sha256_156": "831674d87fbdbabe89e6f50ca060a2ea4a9dc33f9e892c6257c1b5335bac34a6",
+   "sha256_groundwork_155": "482955c22cfa9d584699ef0f1bea166155a78e46b9a6f92422eb1575a16bd295",
+   "same": false,
+   "note": "text-box-trim metrics from ::first-line; block-axis only"
+  },
+  {
+   "path": "js/src/builtin/intl/Segmenter.cpp",
+   "sha256_156": "d8f9389d83abfa99703df771dc9cc0fb5dc56d38d820ce0d33f93b1824ccba92",
+   "sha256_groundwork_155": "d8f9389d83abfa99703df771dc9cc0fb5dc56d38d820ce0d33f93b1824ccba92",
+   "same": true
+  },
+  {
+   "path": "intl/components/src/Bidi.cpp",
+   "sha256_156": "7a73759d5f7862d1572a0f09895cbbaf0bb31c3c7599016714e81e10a7353ad4",
+   "sha256_groundwork_155": "7a73759d5f7862d1572a0f09895cbbaf0bb31c3c7599016714e81e10a7353ad4",
+   "same": true
+  },
+  {
+   "path": "dom/canvas/CanvasRenderingContext2D.cpp",
+   "sha256_156": "f1a1359023ac7b3cbd025c27af0d8e478006f72d8d4539c38920f06fad954755",
+   "sha256_155_0_1": "60ffa07037bcf6976a1033da3756eb40a3d22ee794f23ca1c18fb76595f35dee",
+   "same": false,
+   "source155": "raw.githubusercontent.com/mozilla-firefox/firefox/fb95137a04eb8fe1196cb12f26b100c1e060295c/dom/canvas/CanvasRenderingContext2D.cpp",
+   "note": "font-group caching (FontIsUnchanged, FontGroupCache MRU), state.font split into specifiedFont/resolvedFont; measure path, QuantizeFontSize, whitespace replacement, spacing and bidi processor unchanged"
+  },
+  {
+   "path": "dom/canvas/CanvasRenderingContext2D.h",
+   "sha256_156": "32c6ee53c7070e754c9f8a91ac0acfad82caa81b093a3c2ad7114b229e568538",
+   "sha256_155_0_1": "21d9db4ed65cd0f98dec83700b18f19f8b3a68d98b569f9a19064e90c4130dc3",
+   "same": false,
+   "source155": "raw.githubusercontent.com/mozilla-firefox/firefox/fb95137a04eb8fe1196cb12f26b100c1e060295c/dom/canvas/CanvasRenderingContext2D.h",
+   "note": "cache types; no measure change"
+  },
+  {
+   "path": "dom/canvas/OffscreenCanvas.cpp",
+   "sha256_156": "8009036836aad3ffcbb7c14af7ffed5a98addd4ceaa084dae505191066b845fe",
+   "sha256_155_0_1": "8009036836aad3ffcbb7c14af7ffed5a98addd4ceaa084dae505191066b845fe",
+   "same": true,
+   "source155": "raw.githubusercontent.com/mozilla-firefox/firefox/fb95137a04eb8fe1196cb12f26b100c1e060295c/dom/canvas/OffscreenCanvas.cpp"
+  },
+  {
+   "path": "gfx/thebes/gfxMacFont.cpp",
+   "sha256_156": "12f8e7f664b63b93efce41a55347bf37dd7c4a867c3800b4af8091919620eeb1",
+   "sha256_155_0_1": "f7128bd0f2590dc377b210a896476ce4cdbe48e7d6630252f092d4c96e0f9f49",
+   "same": false,
+   "source155": "raw.githubusercontent.com/mozilla-firefox/firefox/fb95137a04eb8fe1196cb12f26b100c1e060295c/gfx/thebes/gfxMacFont.cpp",
+   "note": "InitMetricsFromSkrifa call under MOZ_FONTATIONS (off)"
+  },
+  {
+   "path": "gfx/thebes/gfxMacFont.h",
+   "sha256_156": "4c8bbf95942c1c58455f3e70720ca97b1cd877358bd7fe4bab7dc26413621aad",
+   "sha256_155_0_1": "4c8bbf95942c1c58455f3e70720ca97b1cd877358bd7fe4bab7dc26413621aad",
+   "same": true,
+   "source155": "raw.githubusercontent.com/mozilla-firefox/firefox/fb95137a04eb8fe1196cb12f26b100c1e060295c/gfx/thebes/gfxMacFont.h"
+  },
+  {
+   "path": "gfx/thebes/gfxHarfBuzzShaper.cpp",
+   "sha256_156": "1a0839d99c520e856af9f68c01cde13f1fa9dec4cf8e565874bf5d631399a4a6",
+   "sha256_155_0_1": "15d268b7bdfda61c8c7d127e8d09cd97d360f6f4e95ebd7f28054e5503e1e6e9",
+   "same": false,
+   "source155": "raw.githubusercontent.com/mozilla-firefox/firefox/fb95137a04eb8fe1196cb12f26b100c1e060295c/gfx/thebes/gfxHarfBuzzShaper.cpp",
+   "note": "mutex moved later in ShapeText; vertical init locking; no feature or rounding change"
+  },
+  {
+   "path": "gfx/src/nsFontMetrics.cpp",
+   "sha256_156": "d580b41e57b958fbaf7f49b20e0d779c34cec390f24e2e812d354ce87bfb8e82",
+   "sha256_155_0_1": "d580b41e57b958fbaf7f49b20e0d779c34cec390f24e2e812d354ce87bfb8e82",
+   "same": true,
+   "source155": "raw.githubusercontent.com/mozilla-firefox/firefox/fb95137a04eb8fe1196cb12f26b100c1e060295c/gfx/src/nsFontMetrics.cpp"
+  },
+  {
+   "path": "gfx/src/nsDeviceContext.cpp",
+   "sha256_156": "cd516fefcd8d0802d8174b5f2ef4b469197fe2d9a8af9218bf778cca3e815199",
+   "sha256_155_0_1": "cd516fefcd8d0802d8174b5f2ef4b469197fe2d9a8af9218bf778cca3e815199",
+   "same": true,
+   "source155": "raw.githubusercontent.com/mozilla-firefox/firefox/fb95137a04eb8fe1196cb12f26b100c1e060295c/gfx/src/nsDeviceContext.cpp"
+  },
+  {
+   "path": "gfx/thebes/gfxPlatformMac.cpp",
+   "sha256_156": "c92cb5e994d6c18f93a00f474aae7f18d10f55d0686413b9927e12d5344c8cc2",
+   "sha256_155_0_1": "c92cb5e994d6c18f93a00f474aae7f18d10f55d0686413b9927e12d5344c8cc2",
+   "same": true,
+   "source155": "raw.githubusercontent.com/mozilla-firefox/firefox/fb95137a04eb8fe1196cb12f26b100c1e060295c/gfx/thebes/gfxPlatformMac.cpp"
+  },
+  {
+   "path": "gfx/thebes/gfxFontEntry.cpp",
+   "sha256_156": "c260bd447ab7a9d6146431ae28de97ee4458c7e0d6e10edbc8949c278ff00b9c",
+   "sha256_155_0_1": "e19f7947041f034860a4f834662a114acda582e316e85d937f54d73df218aab4",
+   "same": false,
+   "source155": "raw.githubusercontent.com/mozilla-firefox/firefox/fb95137a04eb8fe1196cb12f26b100c1e060295c/gfx/thebes/gfxFontEntry.cpp",
+   "note": "Skrifa hooks under MOZ_FONTATIONS, cmap locking; TrackingForCSSPx/HasTrackingTable logic not in the changed hunks' +/- lines checked for track/size"
+  },
+  {
+   "path": "gfx/thebes/CoreTextFontList.cpp",
+   "sha256_156": "9f41b4cb84751b7f8386f3af3e0868111ddde9cde4e2af0ab0d6799da16a1551",
+   "sha256_155_0_1": "bd4f537aba22ddeea0d6a9628df53d6613ed90c03ef064bfd381ef43e582a06c",
+   "same": false,
+   "source155": "raw.githubusercontent.com/mozilla-firefox/firefox/fb95137a04eb8fe1196cb12f26b100c1e060295c/gfx/thebes/CoreTextFontList.cpp",
+   "note": "cmap locking, *Internal renames, InitSkrifaFontFace under MOZ_FONTATIONS"
+  },
+  {
+   "path": "intl/lwbrk/LineBreakCache.h",
+   "sha256_156": "07c7f63c7385fcb886f2fc6ecf2f54a7f131d4d56e544beebe9b4b525302f959",
+   "sha256_155_0_1": "8f1ea79d2ccf8cb63d4ec0a59466acd020878e042e0149b72bb7bfc3320275a9",
+   "same": false,
+   "source155": "raw.githubusercontent.com/mozilla-firefox/firefox/fb95137a04eb8fe1196cb12f26b100c1e060295c/intl/lwbrk/LineBreakCache.h",
+   "note": "namespace style and MruCache IsEmpty; no result change"
+  },
+  {
+   "path": "layout/style/ServoStyleConstsInlines.h",
+   "sha256_156": "f290c13802e65110e347fbe60b5bdc9aadec01ad6fb05c24e02c7b1259d38ce2",
+   "sha256_155_0_1": "1e0a1424283ae328014bd8a6888870edc56dcc46e499a3db4f3b5a8015f86bd0",
+   "same": false,
+   "source155": "raw.githubusercontent.com/mozilla-firefox/firefox/fb95137a04eb8fe1196cb12f26b100c1e060295c/layout/style/ServoStyleConstsInlines.h",
+   "note": "operator!= removals; ToAppUnits unchanged"
+  },
+  {
+   "path": "layout/base/nsLayoutUtils.cpp",
+   "sha256_156": "49f9a2ce358f9517eb006132f6373cbec94f8c3156159b2c7a565a3649d92aea",
+   "sha256_155_0_1": "20117657a682421421ce599cabaf25c8f582fc30fdb6018e41474a1d9252b754",
+   "same": false,
+   "source155": "raw.githubusercontent.com/mozilla-firefox/firefox/fb95137a04eb8fe1196cb12f26b100c1e060295c/layout/base/nsLayoutUtils.cpp",
+   "note": "GetTextRunFlagsForStyle region (6896-6925) unchanged"
+  }
+ ]
+}
