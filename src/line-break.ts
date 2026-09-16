@@ -16,6 +16,9 @@ export type PreparedLineBreakData = {
   // Per segment, false where an engine's scan gives no break before text, glue,
   // zero-width glue or a control, so no line ends there. Null without one.
   breaksBefore?: boolean[] | null
+  // Per segment with breakable fit advances, the graphemes that can't start a line, which
+  // a line holding only an overflowing first grapheme keeps. Null without any.
+  lineStartProhibitions?: (number[] | null)[] | null
   letterSpacing: number
   spacingGraphemeCounts: number[]
   discretionaryHyphenWidth: number
@@ -143,6 +146,20 @@ function getBreakableCandidateFitWidth(
   return prepared.letterSpacing === 0
     ? candidatePaintWidth
     : candidatePaintWidth + prepared.letterSpacing
+}
+
+// Where a line that holds only an overflowing grapheme ends: after that grapheme and
+// the graphemes after it that can't start a line, up to `endGraphemeIndex`.
+function getOverflowingFirstGraphemeEnd(
+  prepared: PreparedLineBreakData,
+  segmentIndex: number,
+  graphemeIndex: number,
+  endGraphemeIndex: number,
+): number {
+  const prohibitions = prepared.lineStartProhibitions?.[segmentIndex] ?? null
+  let end = graphemeIndex + 1
+  while (prohibitions !== null && end < endGraphemeIndex && prohibitions.includes(end)) end++
+  return end
 }
 
 function getTerminalLetterSpacing(
@@ -381,6 +398,18 @@ function walkPreparedLinesSimple(
         lineW += gw
         lineEndSegmentIndex = segmentIndex
         lineEndGraphemeIndex = g + 1
+      }
+
+      // A line that holds only this grapheme, overflowing, keeps the graphemes after it
+      // that can't start a line, and ends.
+      if (gw > fitLimit && lineStartSegmentIndex === segmentIndex && lineStartGraphemeIndex === g && lineEndGraphemeIndex === g + 1) {
+        const end = getOverflowingFirstGraphemeEnd(prepared, segmentIndex, g, fitAdvances.length)
+        if (end > g + 1) {
+          for (let k = g + 1; k < end; k++) lineW += fitAdvances[k]!
+          if (end === fitAdvances.length) emitCurrentLine(segmentIndex + 1, 0)
+          else emitCurrentLine(segmentIndex, end)
+          g = end - 1
+        }
       }
     }
 
@@ -693,6 +722,15 @@ function walkPreparedComplexLines(
 
       if (!hasContent) {
         startLineAtGrapheme(segmentIndex, g, baseGw)
+        // A line that holds only this grapheme, overflowing, keeps the graphemes after
+        // it that can't start a line, and ends.
+        const end = getBreakableCandidateFitWidth(prepared, baseGw) > fitLimit
+          ? getOverflowingFirstGraphemeEnd(prepared, segmentIndex, g, endGraphemeIndex)
+          : g + 1
+        if (end > g + 1) {
+          for (let k = g + 1; k < end; k++) lineW += fitAdvances[k]! + letterSpacing
+          return end === fitAdvances.length ? finishLine(segmentIndex + 1, 0) : finishLine(segmentIndex, end)
+        }
       } else {
         const gw = baseGw + (g > startGraphemeIndex ? letterSpacing : leadingSpacing)
         const candidatePaintWidth = lineW + gw
@@ -958,6 +996,16 @@ function stepPreparedSimpleLineGeometry(
         lineW = fitAdvances[startGraphemeIndex]!
         lineEndSegmentIndex = i
         lineEndGraphemeIndex = startGraphemeIndex + 1
+
+        const overflowEnd = lineW > fitLimit
+          ? getOverflowingFirstGraphemeEnd(prepared, i, startGraphemeIndex, fitAdvances.length)
+          : startGraphemeIndex + 1
+        if (overflowEnd > startGraphemeIndex + 1) {
+          for (let g = startGraphemeIndex + 1; g < overflowEnd; g++) lineW += fitAdvances[g]!
+          cursor.segmentIndex = overflowEnd === fitAdvances.length ? i + 1 : i
+          cursor.graphemeIndex = overflowEnd === fitAdvances.length ? 0 : overflowEnd
+          return lineW
+        }
 
         for (let g = startGraphemeIndex + 1; g < fitAdvances.length; g++) {
           const gw = fitAdvances[g]!

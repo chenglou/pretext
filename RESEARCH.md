@@ -30,7 +30,13 @@ recognize take Blink's. Blink's
 scan answers from its space rule, its generated pair table for U+0021-U+00FF, its
 rule for `-` before a digit and keep-all by general category, and asks ICU
 otherwise. WebKit's answers from its own pair table and character classes, and asks
-ICU, skipping ahead over ASCII letters. Both run a port of ICU's rule-based iterator
+ICU, skipping ahead over ASCII letters. The WebKit port follows Safari 27
+(`safari-7625.1.29.11`), whose classes make curly quotes and guillemets opening or
+closing quotation marks, so a quote next to a letter never breaks and one next to East
+Asian text breaks before it opens or after it closes, without asking ICU. Its keep-all
+also breaks after punctuation in text holding a code unit above U+00FF, and a U+2028 or
+U+2029 that starts an item forces a break, in every white-space mode. Safari 26.5.2 on
+macOS 26 and iOS 26 breaks these shapes as Safari 26's source does. Both run a port of ICU's rule-based iterator
 over Chrome 153's compiled `line_normal.brk`. libicucore's `line.brk`,
 `line_normal.brk` and `line_cj.brk` ship as category overrides on that table, which
 the generator checks behave the same for every input, with Apple's per-locale
@@ -44,8 +50,12 @@ brackets). TypeScript copies of the scans matched those ports outside Thai, Lao,
 and Myanmar runs, with 0 differences over 13,108 Blink and 19,393 WebKit requests,
 WebKit with the ports' bidi levels. Against the C++ ports themselves, this port differs
 outside those runs only where Chrome opens `line_normal_cj.brk` (44 of 13,108 Blink
-requests) and, since Pretext resolves no bidi levels, at 15 positions in 15 of 19,393
-WebKit requests. Its ICU iterator gives ICU C's boundaries on all 19,338 cases of
+requests) and, since Pretext resolves no bidi levels, at 71 positions in 71 of 19,393
+WebKit requests, all right-to-left at a bidi level change, against the C++ port with
+Safari 27's changes. It matches that port on all of 20,000 random requests over quotes,
+punctuation, CJK text, separators and keep-all. With those changes the C++ port leaves
+no native line start of the September 16 Safari 27 rows unexplained, where Safari 26's
+port left 323 left-to-right and 247 right-to-left. Its ICU iterator gives ICU C's boundaries on all 19,338 cases of
 LineBreakTest.txt and on the corpora, over Chrome's `line_normal.brk` and through
 libicucore's `ubrk_open` for nine page languages.
 
@@ -75,8 +85,10 @@ in `a/|b`.
 
 Segments are the text between opportunities, split where the break kind changes, so
 a URL splits where the engine may break it and CJK text arrives in its final units,
-and a control character stays its own segment, measured alone. A ZWSP or soft hyphen
-with no break before the text after it,
+and a control character stays its own segment, measured alone. A U+2028 or U+2029
+the WebKit scan makes a forced break is a hard break. One that ICU's fast-forward
+passes stays inside a text item in WebKit's source, and stays a control segment. A
+ZWSP or soft hyphen with no break before the text after it,
 as at the start of a WebKit scan, before a combining mark or a closing bracket, or
 under keep-all, is zero-width glue: its own zero-width segment, which takes no letter
 spacing and doesn't end a line. Folding it into that text instead measured the text
@@ -174,11 +186,13 @@ could not recover; the scans read the whole text. Keeping an ordinary unit toget
 does not forbid emergency grapheme progress when it is overlong. Kinsoku clusters
 such as `漢。` or `「漢`, and keep-all groups, are no exception: under
 `overflow-wrap: break-word`, Chromium retries an overflowing line with grapheme
-breaks, WebKit in Safari 26.5.2 breaks at an arbitrary position once the line has
+breaks, WebKit breaks at an arbitrary position once the line has
 no earlier wrap opportunity, and Firefox admits a word-wrap break at every cluster
-start, all ignoring line-break classes. WebKit trunk keeps `漢。` together when not
-even `漢` fits (`firstCharacterBreakRespectingLineStartProhibitions`), which Safari
-26.5.2 doesn't have. Several narrow rows passed only while this
+start, all ignoring line-break classes. Safari 27 keeps `漢。` together when not
+even `漢` fits (`firstCharacterBreakRespectingLineStartProhibitions`), in text holding
+a code unit above U+00FF, and so does the WebKit profile; Safari 26.5.2 doesn't. It
+keeps punctuation other than dashes, connectors and `\`, NBSP, U+2010 and U+2013 after
+the first character, measured by grapheme where WebKit steps by code point. Several narrow rows passed only while this
 missing break cancelled another error, such as a combining mark detached from its
 base, U+3000 not hanging, joined Arabic widths, raw controls or Chrome's
 text-spacing-trim.
@@ -193,7 +207,8 @@ before `(`, `<`, `[` and `{`. So Chrome and Safari break `x?|$b`, `x?|-|b` and
 `x!|©b`, while Firefox keeps `x?-|b`. Above U+00FF the engines'
 line-break classes decide, so an iteration mark such as `々` (NS) stays after `！`.
 Small kana and `ー` (CJ) after EX follow the engine and page language; see
-Content Language. Safari's keep-all still breaks only at spaces. U+061B ARABIC
+Content Language. Safari's keep-all breaks at spaces, and in text holding a code unit
+above U+00FF after punctuation. U+061B ARABIC
 SEMICOLON is EX too, while `:`, `.` and U+060C are IS and keep a following
 Arabic word (LB29). Firefox also breaks after BA such as `|` and CL such as `}`
 before a letter or digit, as Gecko's scan does: installed Firefox
@@ -324,9 +339,11 @@ Gecko's ICU4X keeps pairs by line-break class instead (AI, AL, ID, NU, HY, the
 Hangul classes and CJ), where a mark takes its base's class. It keeps `ー`, symbols
 such as `★`, supplementary ideographs and, after an ideograph, `〵` or an
 ideographic variation selector, but breaks after NS letters such as `々` or `〼`,
-and after `〵` following a closing bracket. WebKit's keep-all breaks only at spaces;
-newer WebKit source also breaks after opening, closing and other punctuation there,
-but not after letters. Chrome, Safari and Firefox take these rules from their scans.
+and after `〵` following a closing bracket. Safari 27's keep-all breaks at spaces
+and, in text holding a code unit above U+00FF, after opening, closing and other
+punctuation that isn't the text's last character, but not after letters or dashes;
+Safari 26.5.2's broke only at spaces. Chrome, Safari and Firefox take these rules
+from their scans.
 
 Where the engine doesn't keep a pair under keep-all, its ordinary rules decide, and
 older rules keep more. ICU4X's Unicode 15.0 rules keep any character after a Hebrew
@@ -920,7 +937,10 @@ and `zh-Hant` pages, plus 5 `en` controls, with named CJK fonts. On September 12
 
 These agree with the engine sources: Chromium's `line_normal_cj.txt` tailoring
 for `zh`, Apple ICU's `ja.txt` and `ko.txt` plus its curly-quote patch, and
-Gecko's newline transformation in `nsTextFrameUtils.cpp`.
+Gecko's newline transformation in `nsTextFrameUtils.cpp`. Safari 27 decides a curly
+quote next to East Asian text from its own quotation classes before ICU, so it breaks
+around the quotes in `中文“abc”中文` on every page, while `했다.”라고` still follows the
+page language.
 
 Under `ja`, `zh-Hans` and `ko`, Safari and Firefox also shape some of the named
 font's own punctuation differently. An element's `lang=""` marks its language as

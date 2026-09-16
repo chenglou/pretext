@@ -1,5 +1,5 @@
 import { getGeckoLineBreaks } from './gecko-line-breaks.js'
-import { getBlinkLineBreaks, getWebKitLineBreaks } from './line-breaks.js'
+import { canWebKitLineStartWith, getBlinkLineBreaks, getWebKitLineBreaks } from './line-breaks.js'
 
 export type WhiteSpaceMode = 'normal' | 'pre-wrap'
 export type WordBreakMode = 'normal' | 'keep-all'
@@ -197,6 +197,22 @@ export function isNumericRunSegment(text: string): boolean {
   return true
 }
 
+// The graphemes after the first that WebKit doesn't start a line with when a line
+// holds only an overflowing first character, by their first code unit, as ascending
+// grapheme indices. Null without any.
+export function getLineStartProhibitions(text: string): number[] | null {
+  let any = false
+  for (let i = 1; i < text.length && !any; i++) any = !canWebKitLineStartWith(text.charCodeAt(i))
+  if (!any) return null
+  const prohibitions: number[] = []
+  let graphemeIndex = 0
+  for (const gs of getSharedGraphemeSegmenter().segment(text)) {
+    if (graphemeIndex > 0 && !canWebKitLineStartWith(gs.segment.charCodeAt(0))) prohibitions.push(graphemeIndex)
+    graphemeIndex++
+  }
+  return prohibitions.length === 0 ? null : prohibitions
+}
+
 function isCollapsibleSpaceCode(code: number): boolean {
   return code === 0x20 || code === 0x09 || code === 0x0A || code === 0x0D || code === 0x0C
 }
@@ -205,8 +221,9 @@ function isCollapsibleSpaceCode(code: number): boolean {
 // normal white space each run of SPACE, TAB, LF, CR and FF became one space, or nothing
 // at either end, and in pre-wrap CRLF became LF. A break before a run's first unit is a
 // break before what the run became. A break before a later unit, as before a CR after a
-// space, follows white space, so it is a break after what the run became. A cluster start
-// without a break (2) goes with its unit, and only a unit that stays text has one.
+// space, follows white space, so it is a break after what the run became. A 2 goes with
+// its unit: Gecko's cluster start without a break, which only a unit that stays text
+// reads, and WebKit's forced break after a separator, which keeps its 2 at the end too.
 function mapSourceLineBreaks(source: string, normalizedLength: number, sourceBreaks: Uint8Array, whiteSpace: WhiteSpaceMode): Uint8Array {
   const breaks = new Uint8Array(normalizedLength + 1)
   let normalizedIndex = 0
@@ -218,6 +235,7 @@ function mapSourceLineBreaks(source: string, normalizedLength: number, sourceBre
         if (sourceBreaks[i] === 1) breaks[normalizedIndex] = 1
       }
     }
+    breaks[normalizedLength] = sourceBreaks[source.length]!
     return breaks
   }
   let i = 0
@@ -227,15 +245,15 @@ function mapSourceLineBreaks(source: string, normalizedLength: number, sourceBre
     if (isCollapsibleSpaceCode(source.charCodeAt(i))) {
       while (end < source.length && isCollapsibleSpaceCode(source.charCodeAt(end))) end++
       if (end === source.length) break
-    } else if (sourceBreaks[i] === 2 && breaks[normalizedIndex] === 0) {
-      breaks[normalizedIndex] = 2
     }
+    if (sourceBreaks[i] === 2 && breaks[normalizedIndex] === 0) breaks[normalizedIndex] = 2
     const start = i
     for (; i < end; i++) {
       if (sourceBreaks[i] === 1) breaks[i === start ? normalizedIndex : normalizedIndex + 1] = 1
     }
     normalizedIndex++
   }
+  if (sourceBreaks[i] === 2) breaks[normalizedLength] = 2
   return breaks
 }
 
@@ -251,7 +269,7 @@ function gathersKind(kind: SegmentBreakKind): boolean {
 
 // A control character that stays its own text segment, measured alone: the C0 and C1
 // controls that white-space normalization leaves as text, and the line and paragraph
-// separators.
+// separators where they don't end a line.
 function isControlSegmentCode(code: number): boolean {
   return code < 0x20 || (code >= 0x7F && code <= 0x9F) || code === 0x2028 || code === 0x2029
 }
@@ -262,17 +280,21 @@ function isControlSegmentCode(code: number): boolean {
 // before a combining mark or a closing bracket, or under keep-all, is zero-width glue:
 // it stays its own zero-width segment, takes no letter spacing and doesn't end a line.
 // Combining marks right after it, or after a control, stay apart from the text after
-// them, since they shape on the grapheme before it (measureAnalysis). Where the scan
-// marks cluster starts (2), a segment records whether one falls inside it.
-function segmentAtLineBreaks(normalized: string, breaks: Uint8Array, whiteSpace: WhiteSpaceMode, breakOnlyAfterNextLine: boolean, withClusters: boolean): Segmentation {
+// them, since they shape on the grapheme before it (measureAnalysis). Where the Gecko
+// scan marks cluster starts (2), a segment records whether one falls inside it.
+function segmentAtLineBreaks(normalized: string, breaks: Uint8Array, whiteSpace: WhiteSpaceMode, breakOnlyAfterNextLine: boolean, scan: AnalysisProfile['lineBreakScan']): Segmentation {
+  // The WebKit scan's 2 after U+2028 or U+2029 makes the separator a hard break in every white-space mode.
+  const classify = (code: number, i: number): SegmentBreakKind => scan === 'webkit' && breaks[i + 1] === 2 && (code === 0x2028 || code === 0x2029)
+    ? 'hard-break'
+    : classifySegmentBreakCode(code, whiteSpace, breakOnlyAfterNextLine)
   const starts = [0]
-  const kinds = [classifySegmentBreakCode(normalized.charCodeAt(0), whiteSpace, breakOnlyAfterNextLine)]
-  const clusterSplits = withClusters ? [false] : null
+  const kinds = [classify(normalized.charCodeAt(0), 0)]
+  const clusterSplits = scan === 'gecko' ? [false] : null
   let lastAlone = kinds[0] === 'text' && isControlSegmentCode(normalized.charCodeAt(0))
   let markRun = false
   for (let i = 1; i < normalized.length; i++) {
     const code = normalized.charCodeAt(i)
-    const kind = classifySegmentBreakCode(code, whiteSpace, breakOnlyAfterNextLine)
+    const kind = classify(code, i)
     const alone = kind === 'text' && isControlSegmentCode(code)
     const last = kinds.length - 1
     if (
@@ -280,7 +302,7 @@ function segmentAtLineBreaks(normalized: string, breaks: Uint8Array, whiteSpace:
       (kind === kinds[last] ? gathersKind(kind) : isTextLikeKind(kind) && isTextLikeKind(kinds[last]!))
     ) {
       if (kind === 'text') kinds[last] = 'text'
-      if (breaks[i] === 2) clusterSplits![last] = true
+      if (clusterSplits !== null && breaks[i] === 2) clusterSplits[last] = true
       continue
     }
     markRun = breaks[i] !== 1 && kind === 'text' && combiningMarkRe.test(normalized[i]!) &&
@@ -351,6 +373,6 @@ export function analyzeText(
   return {
     source: text,
     normalized,
-    ...segmentAtLineBreaks(normalized, breaks, whiteSpace, profile.breakOnlyAfterNextLine, profile.lineBreakScan === 'gecko'),
+    ...segmentAtLineBreaks(normalized, breaks, whiteSpace, profile.breakOnlyAfterNextLine, profile.lineBreakScan),
   }
 }

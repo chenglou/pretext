@@ -9,6 +9,7 @@ import { observeSegmentEntries, type SegmentEntryGeometry } from './entry-geomet
 import {
   analyzeText,
   clearAnalysisCaches,
+  getLineStartProhibitions,
   getSharedGraphemeSegmenter,
   isNumericRunSegment,
   setAnalysisLocale,
@@ -163,6 +164,7 @@ function createEmptyPrepared(includeSegments: boolean): InternalPreparedText | P
     discretionaryHyphenWidth: 0,
     discretionaryHyphenContexts: null,
     breaksBefore: null,
+    lineStartProhibitions: null,
     tabStopAdvance: 0,
     chunks: [],
   } as unknown as InternalPreparedText
@@ -401,6 +403,8 @@ function measureAnalysis(
   let simpleLineWalkFastPath = !hasLetterSpacing
   const breakableFitAdvances: (number[] | null)[] = []
   let entryGeometry: (SegmentEntryGeometry | null)[] | null = null
+  let lineStartProhibitions: (number[] | null)[] | null = null
+  const keepsLineStartPunctuation = engineProfile.keepsLineStartPunctuationAfterFirstCharacter && /[\u0100-\uFFFF]/.test(analysis.source)
   let entryProfile: ReturnType<typeof getEntryMeasurementProfile> | undefined
   let measureEntry: ReturnType<typeof createEntryMeasurement> | undefined
   const getEntryProfile = () => {
@@ -478,6 +482,7 @@ function measureAnalysis(
     breakableFitAdvance: number[] | null,
     spacingGraphemeCount: number,
     entry: SegmentEntryGeometry | null = null,
+    prohibitions: number[] | null = null,
   ): void {
     if (kind !== 'text' && kind !== 'space' && kind !== 'zero-width-break') {
       simpleLineWalkFastPath = false
@@ -490,6 +495,10 @@ function measureAnalysis(
       simpleLineWalkFastPath = false
     }
     entryGeometry?.push(entry)
+    if (prohibitions !== null && lineStartProhibitions === null) {
+      lineStartProhibitions = Array.from({ length: widths.length - 1 }, () => null)
+    }
+    lineStartProhibitions?.push(prohibitions)
     if (hasLetterSpacing) spacingGraphemeCounts.push(spacingGraphemeCount)
     if (segments !== null) segments.push(text)
     discretionaryHyphenContexts?.push(false)
@@ -553,6 +562,7 @@ function measureAnalysis(
         spacingGraphemeCount,
         engineProfile.entryFitBasis !== 'disabled' && kind === 'text' && fitAdvances !== null
           ? getEntryGeometry(text, textMetrics, fitAdvances, width, engineProfile.entryFitBasis) : null,
+        keepsLineStartPunctuation && fitAdvances !== null ? getLineStartProhibitions(text) : null,
       )
       return
     }
@@ -688,6 +698,7 @@ function measureAnalysis(
       discretionaryHyphenWidth,
       discretionaryHyphenContexts,
       breaksBefore,
+      lineStartProhibitions,
       tabStopAdvance,
       chunks,
       segments,
@@ -704,6 +715,7 @@ function measureAnalysis(
     discretionaryHyphenWidth,
     discretionaryHyphenContexts,
     breaksBefore,
+    lineStartProhibitions,
     tabStopAdvance,
     chunks,
   } as unknown as InternalPreparedText

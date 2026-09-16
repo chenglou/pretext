@@ -927,10 +927,15 @@ describe('boundary-policy regressions', () => {
       for (const control of ['\u0000', '\u000B', '\u007F', '\u009F', '\u2028', '\u2029']) {
         const analysis = analyzeText(`ab${control}cd`, profile)
         expect(analysis.texts).toEqual(['ab', control, 'cd'])
-        expect(analysis.kinds).toEqual(['text', 'text', 'text'])
+        // WebKit's items builder makes a separator that starts an item a forced break.
+        const separator = profile === webkit && control >= '\u2028'
+        expect(analysis.kinds).toEqual(['text', separator ? 'hard-break' : 'text', 'text'])
         expect(analyzeText(`a${control}${control} b`, profile).texts).toEqual(['a', control, control, ' ', 'b'])
       }
     }
+    // A separator that ICU's fast-forward passes stays inside a text item and ends no line.
+    const passed = analyzeText('か中？\u2028b', webkit)
+    expect({ texts: passed.texts, kinds: passed.kinds }).toEqual({ texts: ['か', '中？', '\u2028', 'b'], kinds: ['text', 'text', 'text', 'text'] })
     // NEL is text in the Blink profile and a control in the WebKit profile.
     expect(analyzeText('ab\u0085cd', blink).kinds).toEqual(['text', 'text', 'text'])
     expect(analyzeText('ab\u0085cd', webkit).kinds).toEqual(['text', 'control', 'text'])
@@ -1209,7 +1214,7 @@ describe('boundary-policy regressions', () => {
       expect(lines(text, measureWidth('zz ab\u00A0', FONT) + 0.5).map(line => line.text)).toEqual(['zz ', 'ab\u00A0\u0085\u0085', 'cd \u0085ef'])
       // Content that starts a line can still overflow right before the NEL.
       expect(lines(text, measureWidth('ab\u00A0', FONT) + 0.5).map(line => line.text)).toEqual(['zz ', 'ab\u00A0', '\u0085\u0085', 'cd ', '\u0085ef'])
-      // WebKit's keep-all breaks only at spaces. A NEL with no break after it still
+      // WebKit's keep-all breaks only at spaces in this text. A NEL with no break after it still
       // stays its own control segment, measured alone.
       const { analyzeText } = await import('./analysis.ts')
       const keepAll = analyzeText('zz ab\u00A0\u0085cd \u6F22\u00A0\u0085\u5B57', profile, 'normal', 'keep-all')
@@ -1454,7 +1459,7 @@ describe('engine break scans', () => {
       ['日本ァア', 'ja', false, false, [1, 2, 3]],
       ['日本ァア', 'zh', false, false, [1, 3]],
       ['中文“abc”中文', 'en', false, false, [1, 2, 7, 8]],
-      ['中文“abc”中文', 'ja', false, false, [1, 8]],
+      ['中文“abc”中文', 'ja', false, false, [1, 2, 7, 8]],
       ['A 中文测试', 'zh', true, false, [1, 2]],
       ['ab　cd', 'en', true, false, [3]],
       ['a​b', 'en', true, false, [1]],
@@ -1471,10 +1476,17 @@ describe('engine break scans', () => {
       ['a\u2007b', 'en', false, false, []],
       ['日本ァア', 'ko', false, false, [1, 2, 3]],
       ['日本ーー', 'en', false, false, [1]],
-      ['xyz abc\u201Ddef', 'en', false, false, [3, 4, 8]],
+      ['xyz abc\u201Ddef', 'en', false, false, [3, 4]],
       ['xyz abc\u201Ddef', 'ja', false, false, [3, 4]],
-      ['日本\uFF01ァア', 'ja', true, false, []],
+      ['日本\uFF01ァア', 'ja', true, false, [3]],
       ['a\nb', 'en', false, false, [1, 2]],
+      // Safari 27's opening and closing quotation classes, and keep-all breaks after
+      // punctuation in text above U+00FF.
+      ['中文«abc»中文', 'en', false, false, [1, 2, 7, 8]],
+      ['go 한글x\u201Dvalue\u201C!', 'en', false, false, [2, 3, 4, 5]],
+      ['(试验前-试验后)/试验前', 'zh', true, false, [1, 9, 10]],
+      ['foo。bar日本語', 'ja', true, false, [4]],
+      ['a,b', 'ja', true, false, []],
     ] as const) {
       expect({ text, language, keepAll, breaks: positions(getWebKitLineBreaks(text, preserve, keepAll, language, wordSegmenter), text.length) })
         .toEqual({ text, language, keepAll, breaks: [...expected] })
@@ -1483,6 +1495,10 @@ describe('engine break scans', () => {
     expect(getWebKitBreakBetweenItems('丙!', 'a', 'en', wordSegmenter)).toBe(false)
     expect(getWebKitBreakBetweenItems('ex-', 'ample', 'en', wordSegmenter)).toBe(true)
     expect(getWebKitBreakBetweenItems('a', '-1', 'en', wordSegmenter)).toBe(false)
+    // A separator that starts an item forces a break after it, marked 2; one inside a
+    // text item doesn't.
+    expect(Array.from(getWebKitLineBreaks('ab\u2028cd', false, false, 'en', wordSegmenter))).toEqual([0, 0, 0, 2, 0, 0])
+    expect(Array.from(getWebKitLineBreaks('か中？\u2028b', false, false, 'en', wordSegmenter))).toEqual([0, 1, 0, 0, 1, 0])
   })
 
   test("Gecko's scan follows its white-space transform, text runs, nsLineBreaker and ICU4X's rules", async () => {
@@ -2358,7 +2374,8 @@ describe('prepare invariants', () => {
       // class, but still breaks before an opening bracket, after a closing one and
       // next to an SA letter, and Firefox breaks at the end of a run of SA letters
       // whatever follows, small kana (CJ) included. A mark takes its base's class,
-      // so U+3035 after a closing bracket breaks. WebKit breaks only at spaces.
+      // so U+3035 after a closing bracket breaks. WebKit breaks at spaces, and after
+      // punctuation in text above U+00FF.
       for (const symbol of ['\u2605', '\u2665\uFE0F', '\u{20000}', '\u845B\u{E0100}', '\u{1F389}\u{1F389}']) {
         const text = `\u4E2D\u6587${symbol}\u4E2D\u6587`
         expect(segments(text)).toEqual([text])
@@ -2370,9 +2387,10 @@ describe('prepare invariants', () => {
       expect(segments('\u4E2D\u6587\u0E44\u0E17\u0E22\u3041\u4E2D\u6587')).toEqual(['\u4E2D\u6587', '\u0E44\u0E17\u0E22', '\u3041\u4E2D\u6587'])
       expect(segments('\u4E2D\u6587\u300D\u3035\u4E2D\u6587')).toEqual(['\u4E2D\u6587\u300D\u3035', '\u4E2D\u6587'])
       profile.lineBreakScan = 'webkit'
-      for (const text of ['\u4E2D\u6587\u2605\u4E2D\u6587', '\u4E2D\u6587\u00A1\u6F22\u5B57', '\u4E2D\u6587\u0E44\u0E17\u0E22\u4E2D\u6587']) {
+      for (const text of ['\u4E2D\u6587\u2605\u4E2D\u6587', '\u4E2D\u6587\u0E44\u0E17\u0E22\u4E2D\u6587']) {
         expect(segments(text)).toEqual([text])
       }
+      expect(segments('\u4E2D\u6587\u00A1\u6F22\u5B57')).toEqual(['\u4E2D\u6587\u00A1', '\u6F22\u5B57'])
     } finally {
       Object.assign(profile, previous)
     }
@@ -2417,9 +2435,11 @@ describe('prepare invariants', () => {
       expect({ language, webkit: segments('日本ァア', 'webkit', language), blink: segments('日本ァア', 'blink', language) })
         .toEqual({ language, webkit, blink: '日|本|ァ|ア' })
     }
-    // Apple ICU's quotation remap makes curly quotes brackets, except on ja pages.
-    expect(segments('中文“abc”中文', 'webkit', 'en')).toBe('中|文|“abc”|中|文')
-    expect(segments('中文“abc”中文', 'webkit', 'ja')).toBe('中|文“abc”中|文')
+    // Apple ICU's quotation remap makes curly quotes brackets, except on ja pages. Next to
+    // East Asian text, Safari 27's quotation classes decide before ICU on every page.
+    expect(segments('£€£€““tail', 'webkit', 'en')).toBe('£|€|£|€|““tail')
+    expect(segments('£€£€““tail', 'webkit', 'ja')).toBe('£|€|£|€““tail')
+    expect(segments('中文“abc”中文', 'webkit', 'ja')).toBe('中|文|“abc”|中|文')
   })
 
   test('treats Hangul compatibility jamo as CJK break units', () => {
@@ -2522,6 +2542,50 @@ describe('prepare invariants', () => {
       // unit that still breaks in an emergency.
       profile.lineBreakScan = 'webkit'
       expect(lines('日本ーー', graphemeWidth * 2.5)).toEqual(['日', '本ー', 'ー'])
+    } finally {
+      profile.lineBreakScan = previous
+    }
+  })
+
+  test('the WebKit profile keeps punctuation after an overflowing first character in text above U+00FF', async () => {
+    const { getEngineProfile } = await import('./measurement.ts')
+    const profile = getEngineProfile()
+    const previous = { ...profile }
+    const lines = (source: string, options?: { letterSpacing: number }) => {
+      const prepared = prepareWithSegments(source, FONT, options)
+      const result = layoutWithLines(prepared, 1, LINE_HEIGHT)
+      expect(collectStreamedLines(prepared, 1)).toEqual(result.lines)
+      expect(layout(prepare(source, FONT, options), 1, LINE_HEIGHT).lineCount).toBe(result.lineCount)
+      return result.lines.map(line => line.text)
+    }
+    try {
+      profile.lineBreakScan = 'webkit'
+      profile.keepsLineStartPunctuationAfterFirstCharacter = true
+      // Safari 27 paints these at a width below one character; 8-bit `xb((c` takes one
+      // character per line.
+      expect(lines('xb((cā')).toEqual(['x', 'b((', 'c', 'ā'])
+      expect(lines('xb((cā', { letterSpacing: 1 })).toEqual(['x', 'b((', 'c', 'ā'])
+      expect(lines('xb((c')).toEqual(['x', 'b', '(', '(', 'c'])
+      profile.keepsLineStartPunctuationAfterFirstCharacter = false
+      expect(lines('xb((cā')).toEqual(['x', 'b', '(', '(', 'c', 'ā'])
+    } finally {
+      Object.assign(profile, previous)
+    }
+  })
+
+  test('the WebKit profile ends a line at U+2028 and U+2029', async () => {
+    const { getEngineProfile } = await import('./measurement.ts')
+    const profile = getEngineProfile()
+    const previous = profile.lineBreakScan
+    try {
+      profile.lineBreakScan = 'webkit'
+      for (const text of ['aaa\u2028bbb ccc', 'aaa\u2029bbb ccc']) {
+        const prepared = prepareWithSegments(text, FONT)
+        const result = layoutWithLines(prepared, 1000, LINE_HEIGHT)
+        expect(result.lines.map(line => line.text)).toEqual(['aaa', 'bbb ccc'])
+        expect(collectStreamedLines(prepared, 1000)).toEqual(result.lines)
+        expect(layout(prepare(text, FONT), 1000, LINE_HEIGHT).lineCount).toBe(2)
+      }
     } finally {
       profile.lineBreakScan = previous
     }

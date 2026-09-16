@@ -75,6 +75,12 @@ export type EngineProfile = {
   // Gecko draws NEL with no advance while its Canvas measures a space, so both keep
   // NEL as ordinary text.
   breakOnlyAfterNextLine: boolean
+  // When not even the first character of an overflowing word fits an empty line,
+  // WebKit keeps the punctuation, NBSP, U+2010 and U+2013 after that character on the
+  // line, in text holding a code unit above U+00FF
+  // (InlineContentBreaker.cpp:124-158, 222-233). Blink and Gecko end the line after
+  // the first grapheme.
+  keepsLineStartPunctuationAfterFirstCharacter: boolean
   // WebKit moves a tab to the following stop when less than half a space would
   // remain before the next one (FontCascade::tabWidth).
   skipNarrowTabStops: boolean
@@ -285,6 +291,7 @@ export function getEngineProfile(): EngineProfile {
     shapesMarksAcrossSoftHyphen: engine !== 'webkit' && engine !== 'gecko',
     unfitHyphenRetreat: engine === 'blink' ? 'reduced-width' : 'none',
     breakOnlyAfterNextLine: engine === 'webkit',
+    keepsLineStartPunctuationAfterFirstCharacter: engine === 'webkit',
     skipNarrowTabStops: engine === 'webkit',
     hangTabs: engine !== 'gecko',
     zeroWidthGlueTakesLine: engine !== 'gecko',

@@ -454,7 +454,7 @@ export function prepareRichInline(items: RichInlineItem[]): PreparedRichInline {
       } else {
         // Breaks inside each item come from WebKit's scan over the item's own
         // text, which made its segments. As in WebKit, the boundary reads the
-        // previous item's last two characters as prior context (TextUtil.cpp:379-401).
+        // previous item's last two characters as prior context (TextUtil.cpp:374-396).
         for (let i = 1; i < joinedPortions.length; i++) {
           const portion = joinedPortions[i]!
           const portionEnd = i + 1 < joinedPortions.length ? joinedPortions[i + 1]!.start : joinedText.length

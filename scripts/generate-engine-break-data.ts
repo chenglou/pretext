@@ -8,12 +8,15 @@
 // - line_normal.brk: the brkitr/line_normal.brk entry of Chrome's icudtl.dat (ICU 78.2).
 // - break_iterator_data_inline_header.h: the header Chromium's build generates for
 //   kFastLineBreakTable (character_property_data_generator.cc:422-551).
-// safari-26.5.2/, from Safari 26.5.2 on macOS 26.5.2:
+// safari-27.0/, from Safari 27.0 on macOS 27:
 // - line.brk, line_normal.brk, line_cj.brk: brkitr entries of /usr/share/icu/icudt78l.dat,
-//   the data libicucore 78.1 reads.
-// - BreakablePositions.cpp: WebKit's checked-in pair table (safari-7624.2.5.11-branch).
+//   the data libicucore 78.1 reads, the same bytes as on macOS 26.5.2.
+// - BreakablePositions.cpp: WebKit's checked-in pair table (safari-7625.1.29.11-branch,
+//   unchanged since Safari 26.5.2's safari-7624.2.5.11-branch).
 // - locales.json: for every locale libicucore lists, the line table ubrk_open(UBRK_LINE)
-//   opens and the four quotation delimiters ulocdata_getDelimiter reports.
+//   opens and the four quotation delimiters ulocdata_getDelimiter reports. Dumped on
+//   macOS 26.5.2; macOS 27 lists a few locales more or fewer, all with root's table and
+//   delimiters, which generate the same module.
 // - quotation.json: the code points libicucore gives Line_Break=QU.
 // firefox-156/, from Firefox 155.0.1's source tree. Firefox 156.0's XUL holds the same line
 // data and icu_properties Bidi_Class data byte for byte:
@@ -209,7 +212,7 @@ function findDifferences(a: BreakRules, b: BreakRules): string[] {
 
 // Pair tables.
 const blinkPairs = parsePairTable(readText('chrome-153/break_iterator_data_inline_header.h'), 'kFastLineBreakTable[')
-const webkitPairs = parsePairTable(readText('safari-26.5.2/BreakablePositions.cpp'), 'LineBreakTable::breakTable')
+const webkitPairs = parsePairTable(readText('safari-27.0/BreakablePositions.cpp'), 'LineBreakTable::breakTable')
 let differingPairs = 0
 for (let i = 0; i < blinkPairs.length; i++) for (let k = 0; k < 8; k++) if (((blinkPairs[i]! ^ webkitPairs[i]!) >> k) & 1) differingPairs++
 
@@ -222,7 +225,7 @@ if (!sameRules(chromiumRules, parseBreakRules(chromiumCompact))) throw new Error
 // libicucore's line tables as overrides on Chromium's.
 const appleLineOverrides: Record<string, number[]> = {}
 for (const table of ['line', 'line_normal', 'line_cj']) {
-  const appleRules = parseBreakRules(withoutDataHeader(readData(`safari-26.5.2/${table}.brk`)))
+  const appleRules = parseBreakRules(withoutDataHeader(readData(`safari-27.0/${table}.brk`)))
   const overrides = deriveOverrides(chromiumRules, appleRules)
   const codePoints = Array.from(overrides.keys()).sort((x, y) => x - y)
   const ranges: number[] = []
@@ -243,8 +246,8 @@ for (const table of ['line', 'line_normal', 'line_cj']) {
 }
 
 // Quotation remaps per locale, setCategoryOverrides in apple-rbbi.cpp:406-487.
-const quotation = new Set(JSON.parse(readText('safari-26.5.2/quotation.json')) as number[])
-const locales = JSON.parse(readText('safari-26.5.2/locales.json')) as Record<string, [string, number, number, number, number]>
+const quotation = new Set(JSON.parse(readText('safari-27.0/quotation.json')) as number[])
+const locales = JSON.parse(readText('safari-27.0/locales.json')) as Record<string, [string, number, number, number, number]>
 function getQuoteRemap(language: string, delimiters: readonly number[]): number[] {
   const remap: number[] = []
   if (language === 'da') return remap

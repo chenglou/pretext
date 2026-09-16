@@ -5,11 +5,11 @@
 // Sources, cited as file:line:
 // - ICU 78.2 as vendored in Chromium 152, under third_party/icu/source/common. Chrome
 //   153 runs the same code. apple-rbbi.cpp and apple-brkiter.cpp are Apple's
-//   ICU-76142.5.1.200 sources, behind libicucore 78.1 on macOS 26.5.2.
+//   ICU-76142.5.1.200 sources, behind libicucore 78.1 on macOS 26.5.2 and macOS 27.
 // - Blink in Chromium 152, under third_party/blink/renderer/platform/text/:
 //   tbi.cc = text_break_iterator.cc, tbi.h = text_break_iterator.h,
 //   tbi_icu.cc = text_break_iterator_icu.cc, gen.cc = character_property_data_generator.cc.
-// - WebKit safari-7624.2.5.11-branch (Safari 26.5.2), under Source/:
+// - WebKit safari-7625.1.29.11-branch (Safari 27.0), under Source/:
 //   BP.h = WebCore/rendering/BreakablePositions.h,
 //   IIB = WebCore/layout/formattingContexts/inline/InlineItemsBuilder.cpp,
 //   IFU = WebCore/layout/formattingContexts/inline/InlineFormattingUtils.cpp,
@@ -24,8 +24,8 @@
 //   (tbi.h:159-163, tbi_icu.cc:771-810). These scans read each text once.
 // - Chrome opens line_normal_cj.brk on zh pages, and on pages without a language under
 //   a Chinese UI (tbi_icu.cc:58-83). Only line_normal.brk ships.
-// - WebKit splits items where bidi levels change (IIB:588-679), and swaps a Han-script
-//   locale for the user's first Chinese language (FontDescription.cpp:75-84, 108-114).
+// - WebKit splits items where bidi levels change (IIB:637-775), and swaps a Han-script
+//   locale for the user's first Chinese language (FontDescription.cpp:74-83, 107-113).
 //   Pretext resolves no bidi levels and takes the page language as it is.
 
 import {
@@ -428,6 +428,8 @@ const SPACE = 0x20
 const TAB = 0x09
 const LF = 0x0a
 const ZWSP = 0x200b
+const LINE_SEPARATOR = 0x2028
+const PARAGRAPH_SEPARATOR = 0x2029
 const IDEOGRAPHIC_SPACE = 0x3000
 
 // --- Blink ---
@@ -435,10 +437,11 @@ const IDEOGRAPHIC_SPACE = 0x3000
 let blinkPairs: Uint8Array | null = null
 let blinkIterator: RuleBreakIterator | null = null
 // General category bits per UTF-16 code unit, filled on first use: 1 known, 2 letter
-// or number, 4 mark.
+// or number, 4 mark, 8 punctuation other than dashes and connectors.
 let categoryBits: Uint8Array | null = null
 const letterOrNumberRe = /^[\p{L}\p{N}]$/u
 const markRe = /^\p{M}$/u
+const punctuationRe = /^[\p{Ps}\p{Pe}\p{Pi}\p{Pf}\p{Po}]$/u
 
 const NO_BREAK = 0
 const CAN_BREAK = 1
@@ -476,7 +479,7 @@ function getCategoryBits(unit: number): number {
   let value = bits[unit]!
   if (value === 0) {
     const s = String.fromCharCode(unit)
-    value = 1 | (letterOrNumberRe.test(s) ? 2 : 0) | (markRe.test(s) ? 4 : 0)
+    value = 1 | (letterOrNumberRe.test(s) ? 2 : 0) | (markRe.test(s) ? 4 : 0) | (punctuationRe.test(s) ? 8 : 0)
     bits[unit] = value
   }
   return value
@@ -524,7 +527,8 @@ export function getBlinkLineBreaks(text: string, keepAll: boolean, wordSegmenter
 
 // --- WebKit ---
 
-// BreakClass, BP.h:78-96.
+// BreakClass, BP.h:80-102. PI and PF mark opening and closing quotation marks, always
+// together with QU.
 const AL = 1
 const ID = 2
 const CM = 4
@@ -534,14 +538,16 @@ const CL = 32
 const GL = 64
 const QU = 128
 const SP = 256
+const PI = 512
+const PF = 1024
 const WEIRD = 32768
 
 let webkitPairs: Uint8Array | null = null
 const webkitIterators = new Map<string, RuleBreakIterator>()
 
-// BP.h:121-133 with NoBreakSpaceBehavior::Normal.
+// BP.h:125-139 with NoBreakSpaceBehavior::Normal.
 function isWebKitBreakableSpace(c: number): boolean {
-  return c === SPACE || c === LF || c === TAB
+  return c === SPACE || c === LF || c === TAB || c === LINE_SEPARATOR || c === PARAGRAPH_SEPARATOR
 }
 
 function isASCIIDigit(c: number): boolean {
@@ -553,7 +559,7 @@ function isASCIIAlpha(c: number): boolean {
   return lower >= 0x61 && lower <= 0x7a
 }
 
-// BP.h:313-518. The 0x3000..0x303F switch reads only the low five bits, so it answers for
+// BP.h:330-539. The 0x3000..0x303F switch reads only the low five bits, so it answers for
 // 0x3020..0x303F too.
 function classify(c: number): number {
   switch (c >> 7) {
@@ -572,7 +578,8 @@ function classify(c: number): number {
       if (c === 0xa0) return GL
       if (c > 0xc0) return AL
       if (c === 0xa1 || c === 0xbf) return OP
-      if (c === 0xab || c === 0xbb) return QU
+      if (c === 0xab) return QU | PI
+      if (c === 0xbb) return QU | PF
       return WEIRD
     case 2: case 3: case 4: return AL
     case 5: return c === 0x2c8 || c === 0x2cc || c === 0x2df ? WEIRD : AL
@@ -587,7 +594,10 @@ function classify(c: number): number {
       if (c <= 0x588 || c >= 0x5c8) return AL
       if (c >= 0x591 && c <= 0x5bd) return CM
       return c === 0x5bf || c === 0x5c1 || c === 0x5c2 || c === 0x5c4 || c === 0x5c5 || c === 0x5c7 ? CM : WEIRD
-    case 64: return c === 0x2018 || c === 0x2019 ? QU : WEIRD
+    case 64:
+      if (c === 0x2018 || c === 0x201c) return QU | PI
+      if (c === 0x2019 || c === 0x201d) return QU | PF
+      return WEIRD
   }
   if (c >= 0x2e80 && c <= 0xa4cf) {
     if ((c & 0xff00) === 0x3000) {
@@ -666,9 +676,9 @@ class Factory {
   }
 }
 
-// BP.h:136-241 for LineBreakRules::Normal, WordBreakBehavior::Normal and
+// BP.h:142-255 for LineBreakRules::Normal, WordBreakBehavior::Normal and
 // NoBreakSpaceBehavior::Normal. During the fast-forward over units where ICU agrees
-// (BP.h:227-235) the characters before are not read again.
+// (BP.h:241-249) the characters before are not read again.
 function nextBreakablePosition(pairs: Uint8Array, f: Factory, startPosition: number): number {
   const s = f.text
   const length = s.length
@@ -702,9 +712,14 @@ function nextBreakablePosition(pairs: Uint8Array, f: Factory, startPosition: num
     if (beforeType === 0) beforeType = classify(before)
     afterType = classify(after)
     const pair = beforeType | afterType
-    if ((pair & ~(SP | AL | QU)) === 0) continue
+    if ((pair & ~(SP | AL | QU | PI | PF)) === 0) continue
     if ((pair | AL) === (ID | AL)) return i
-    if ((pair & (GL | QU)) !== 0 && (pair & WEIRD) === 0) continue
+    if ((pair & (GL | QU)) !== 0 && (pair & WEIRD) === 0) {
+      // A quotation mark next to East Asian text breaks before it when it opens and
+      // after it when it closes (LB19a).
+      if ((pair & ID) !== 0 && (pair & QU) !== 0 && ((afterType & PI) !== 0 || (beforeType & PF) !== 0)) return i
+      continue
+    }
     if (afterType === CM) {
       afterType = beforeType
       continue
@@ -726,19 +741,23 @@ function nextBreakablePosition(pairs: Uint8Array, f: Factory, startPosition: num
   return length
 }
 
-// BP.h:244-257: keep-all breaks only at spaces, before ZWSP and after U+3000.
-function nextBreakableSpace(s: string, startPosition: number): number {
+// BP.h:258-274: keep-all breaks at spaces, before ZWSP and after U+3000, and with
+// punctuation breaks after any punctuation but the text's last character.
+function nextBreakableSpace(s: string, startPosition: number, punctuationBreaks: boolean): number {
   for (let i = startPosition; i < s.length; i++) {
     const c = s.charCodeAt(i)
     if (isWebKitBreakableSpace(c) || c === ZWSP) return i
     if (c === IDEOGRAPHIC_SPACE) return i + 1
+    if (punctuationBreaks && (getCategoryBits(c) & 8) !== 0 && i + 1 < s.length) return i + 1
   }
   return s.length
 }
 
-// TU:403-427 with line-break auto (LineMode Default, TU:455-471) and BP.h:271-283.
-function findNextBreakablePosition(pairs: Uint8Array, f: Factory, startPosition: number, keepAll: boolean): number {
-  return keepAll ? nextBreakableSpace(f.text, startPosition) : nextBreakablePosition(pairs, f, startPosition)
+// TU:398-422 with line-break auto (LineMode Default, TU:450-466) and BP.h:287-300. WebKit
+// stores a text holding a code unit above U+00FF in 16 bits, where keep-all also breaks
+// after punctuation.
+function findNextBreakablePosition(pairs: Uint8Array, f: Factory, startPosition: number, keepAll: boolean, sixteenBit: boolean): number {
+  return keepAll ? nextBreakableSpace(f.text, startPosition, sixteenBit) : nextBreakablePosition(pairs, f, startPosition)
 }
 
 // ubrk_open(UBRK_LINE, locale) in libicucore (TBIICU.h:63-67): line_normal.brk for ja and
@@ -774,8 +793,10 @@ const SOFT_LINE_BREAK = 2
 
 // Where a line may start in a text node's source: flags[i] = 1 for 0 < i < source.length.
 // These are the soft wrap opportunities between the items InlineItemsBuilder::build
-// makes (IIB:90-101), as the soft wrap index loop finds them (IFU:471-525): every item
-// boundary that isn't next to a preserved newline, which is a forced break instead.
+// makes (IIB:122-130), as the soft wrap index loop finds them (IFU:456-510): every item
+// boundary that isn't next to a forced break. flags[i] = 2 after a U+2028 or U+2029 that
+// starts an item, which forces a break. One that ICU's fast-forward passed stays inside
+// a text item and doesn't.
 export function getWebKitLineBreaks(
   source: string,
   preserveNewlines: boolean,
@@ -787,32 +808,36 @@ export function getWebKitLineBreaks(
   const f = new Factory(source, getWebKitLineIterator(language), wordSegmenter)
   const length = source.length
   const breaks = new Uint8Array(length + 1)
+  let sixteenBit = false
+  for (let i = 0; keepAll && i < length && !sixteenBit; i++) sixteenBit = source.charCodeAt(i) > 0xff
   let previousKind = -1
-  // handleTextContent, IIB:871-978, for hyphens manual and nbsp-mode normal.
+  // handleTextContent, IIB:924-1051, for hyphens manual and nbsp-mode normal.
   for (let position = 0; position < length;) {
     let kind = WHITESPACE
     let end = position
-    if (preserveNewlines && source.charCodeAt(position) === LF) {
-      // handleSegmentBreak, IIB:897-904.
+    const c = source.charCodeAt(position)
+    if (c === LINE_SEPARATOR || c === PARAGRAPH_SEPARATOR || (preserveNewlines && c === LF)) {
+      // handleSegmentBreak, IIB:954-962.
       kind = SOFT_LINE_BREAK
       end++
+      if (c !== LF) breaks[end] = 2
     } else {
-      // handleWhitespace, IIB:905-926, with moveToNextNonWhitespacePosition (IIB:52-70).
+      // handleWhitespace, IIB:963-992, with moveToNextNonWhitespacePosition (IIB:55-73).
       for (; end < length; end++) {
         const c = source.charCodeAt(end)
         if (c !== SPACE && c !== TAB && (preserveNewlines || c !== LF)) break
       }
       if (end === position) {
-        // handleNonWhitespace, IIB:946-965, with moveToNextBreakablePosition (IIB:72-84).
+        // handleNonWhitespace, IIB:1012-1038, with moveToNextBreakablePosition (IIB:75-87).
         kind = TEXT
         end = length
         for (let p = position; p < length; p++) {
-          const next = findNextBreakablePosition(pairs, f, p, keepAll)
+          const next = findNextBreakablePosition(pairs, f, p, keepAll, sixteenBit)
           if (next !== position) { end = next; break }
         }
       }
     }
-    // IFU:351-370, 421-433: the scan split same-level items, and wrapping is allowed next
+    // IFU:336-355, 406-418: the scan split same-level items, and wrapping is allowed next
     // to white space.
     if (previousKind >= 0 && previousKind !== SOFT_LINE_BREAK && kind !== SOFT_LINE_BREAK) breaks[position] = 1
     previousKind = kind
@@ -821,7 +846,7 @@ export function getWebKitLineBreaks(
   return breaks
 }
 
-// TU:379-401: whether a line may start where the next inline box starts, from a fresh
+// TU:374-396: whether a line may start where the next inline box starts, from a fresh
 // factory on that box with the previous box's last two characters as prior context.
 // hyphens: manual, so a trailing soft hyphen doesn't block the break.
 export function getWebKitBreakBetweenItems(previous: string, next: string, language: string | null, wordSegmenter: Intl.Segmenter): boolean {
@@ -830,4 +855,10 @@ export function getWebKitBreakBetweenItems(previous: string, next: string, langu
   const n = previous.length
   f.setPriorContext(n > 1 ? previous.charCodeAt(n - 2) : 0, n > 0 ? previous.charCodeAt(n - 1) : 0)
   return nextBreakablePosition(pairs, f, 0) === 0
+}
+
+// canBreakBefore, InlineContentBreaker.cpp:124-137, for line-break auto: whether a line
+// that holds only an overflowing first character ends before this code unit.
+export function canWebKitLineStartWith(unit: number): boolean {
+  return unit === 0x5c || (unit !== 0xa0 && unit !== 0x2010 && unit !== 0x2013 && (getCategoryBits(unit) & 8) === 0)
 }
