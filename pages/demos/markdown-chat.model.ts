@@ -24,10 +24,11 @@ export const TOTAL_MESSAGE_COUNT = 10_000
 // is the most work a frame does: in Chrome on an M5 Max, 50 messages load within
 // a 120 Hz frame, and twice as many take twice as long.
 const HISTORY_CHUNK_SIZE = 50
-// The most chunks loaded at once: the chunks on screen, and one on either side.
-// While every chunk is taller than the room between the banners, the screen
-// shows at most two chunks, so the window wants at most four. With fewer, a
-// screen straddling two chunks would load and drop a chunk on every frame.
+// The most chunks loaded at once, unless the chunks on screen and one on either
+// side need more. While every chunk is taller than the room between the banners,
+// the screen shows at most two chunks, so the window wants at most four. With
+// fewer, the screen's edge crossing a chunk boundary back and forth would load
+// and drop the same chunk each time.
 const HISTORY_WINDOW_CHUNKS = 4
 export const OCCLUSION_BANNER_HEIGHT = 61
 export const PAGE_MARGIN = 28
@@ -312,8 +313,9 @@ export function createChatHistory(): MarkdownChatSeed[] {
 // The chunks holding the first and last messages kept stay loaded, with one
 // more chunk on either side. The window grows toward those, then, while it holds
 // more than HISTORY_WINDOW_CHUNKS, drops its first or last chunk, whichever is
-// farther from the kept ones. Kept messages are loaded ones, so once anything
-// has been shown, a move loads at most one chunk on either side. A window whose
+// farther from the kept ones, unless that chunk is one of those. Kept messages
+// are loaded ones, so once anything has been shown, a move loads at most one
+// chunk on either side. A window whose
 // chunks or chat width change is a new object, laid out again. Before the first
 // frame there's no window, and it loads around the kept messages.
 export function moveHistoryWindow(
@@ -345,7 +347,10 @@ export function moveHistoryWindow(
   for (; lastChunk < lastWantedChunk; lastChunk++) {
     messages = messages.concat(prepareHistoryChunk(history, lastChunk + 1))
   }
-  while (lastChunk - firstChunk + 1 > HISTORY_WINDOW_CHUNKS) {
+  while (
+    lastChunk - firstChunk + 1 > HISTORY_WINDOW_CHUNKS &&
+    (firstChunk < firstWantedChunk || lastChunk > lastWantedChunk)
+  ) {
     if (firstKeptChunk - firstChunk > lastChunk - lastKeptChunk) {
       messages = messages.slice(HISTORY_CHUNK_SIZE)
       firstChunk++
