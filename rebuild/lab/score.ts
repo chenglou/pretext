@@ -4,7 +4,7 @@
 // Imported as a module it runs nothing. It exports the derivation, the per-row score and the comparison of two runs, so
 // tools use the scorer's own rules instead of copying them.
 import { closeSync, openSync, readFileSync, writeFileSync, writeSync } from 'node:fs'
-import type { BrowserKind, Case, LabRow, NativeObservation, PainterLine, PainterObservation, Paragraph, Prediction, PredictionLine, Rect } from './types.ts'
+import type { BrowserKind, Case, CodePointObservation, LabRow, NativeObservation, PainterLine, PainterObservation, Paragraph, Prediction, PredictionLine, Rect } from './types.ts'
 
 export type Status = 'pass' | 'fail' | 'unobserved' | 'not-applicable'
 // `reason` is a fixed category (counted in the summary); `detail` names offsets and values for this case.
@@ -75,6 +75,31 @@ function positive(rect: Rect): boolean {
 
 function inked(ch: string): boolean {
   return !WHITE_SPACE.test(ch) && !INVISIBLE.test(ch)
+}
+
+// The grapheme start of each UTF-16 offset, and text.length at text.length.
+function graphemeStarts(text: string): Int32Array {
+  const starts = new Int32Array(text.length + 1)
+  for (const { segment, index } of graphemes.segment(text)) for (let k = 0; k < segment.length; k++) starts[index + k] = index
+  starts[text.length] = text.length
+  return starts
+}
+
+// Whether each code point carries its grapheme's ink: an inked code point does, and so does any other code point that
+// isn't white space in a grapheme with an inked code point. The engines put a cluster's advance on whichever code point
+// they like: Firefox gives an emoji + VS16 cluster's advance to the VS16 and a letter + ZWNJ's to the ZWNJ, with a
+// zero-width base. Controls, line and paragraph separators, ZWSP and soft hyphens always form graphemes of their own.
+function carriesInk(points: CodePointObservation[], chars: string[], graphemeStart: Int32Array): boolean[] {
+  const ink: boolean[] = new Array(points.length).fill(false)
+  for (let first = 0; first < points.length;) {
+    const start = graphemeStart[points[first]!.offset]!
+    let end = first
+    let hasInk = false
+    for (; end < points.length && graphemeStart[points[end]!.offset] === start; end++) hasInk ||= inked(chars[end]!)
+    for (let k = first; k < end; k++) ink[k] = hasInk && !WHITE_SPACE.test(chars[k]!)
+    first = end
+  }
+  return ink
 }
 
 export function rowText(c: Case): string {
@@ -151,16 +176,16 @@ function describe(text: string, offset: number | null): string {
   return offset === null ? 'no visible code point' : `${offset} ${JSON.stringify(text.slice(offset, offset + 12))}`
 }
 
-// Marks the visible code points of one line; `list` holds the line's code points with positive rects, in source order.
-// A visible code point isn't a default-ignorable, control or line/paragraph separator (TAB counts as white space), and
-// isn't hanging white space: SPACE or TAB in the line's trailing run under a mode where it hangs. The trailing run is the
-// white space and invisible code points at the line's end, back to an inked code point, a no-break space or a control
+// Marks the visible code points of one line; `list` holds the line's code points with positive rects, in source order,
+// and `ink` says which code points carry their grapheme's ink. A visible code point carries ink, or is white space other
+// than hanging white space: SPACE or TAB in the line's trailing run under a mode where it hangs. The trailing run is the
+// white space and invisible code points at the line's end, back to a code point with ink, a no-break space or a control
 // other than TAB, LF and CR. Returns why the line's width isn't established, if it isn't.
-function markVisible(list: number[], chars: string[], hangs: boolean, visible: boolean[]): string | null {
+function markVisible(list: number[], chars: string[], ink: boolean[], hangs: boolean, visible: boolean[]): string | null {
   let trailingStart = list.length
   while (trailingStart > 0) {
-    const ch = chars[list[trailingStart - 1]!]!
-    if (inked(ch) || NO_BREAK_SPACE.test(ch) || OTHER_CONTROL.test(ch)) break
+    const i = list[trailingStart - 1]!
+    if (ink[i] || NO_BREAK_SPACE.test(chars[i]!) || OTHER_CONTROL.test(chars[i]!)) break
     trailingStart--
   }
   let issue: string | null = null
@@ -169,7 +194,7 @@ function markVisible(list: number[], chars: string[], hangs: boolean, visible: b
     const ch = chars[i]!
     const trailing = k >= trailingStart
     if (ch === '­' && trailing) issue ??= 'positive soft hyphen rect at line end; hyphen selection is not established'
-    if (INVISIBLE.test(ch) && ch !== '\t') continue
+    if (INVISIBLE.test(ch) && ch !== '\t' && !ink[i]) continue
     if (hangs && trailing && SPACE_OR_TAB.test(ch)) continue
     if (hangs && trailing && OTHER_SPACE.test(ch)) {
       issue ??= 'other space separator at line end; hanging is not established'
@@ -182,13 +207,50 @@ function markVisible(list: number[], chars: string[], hangs: boolean, visible: b
 
 type Extent = { left: number; right: number; source: NativeLine['widthSource']; issue: string | null }
 
-// A line's horizontal extent over its visible code points; `list` holds the code points with positive rects on the line.
-// When no white space outside the visible set has a positive rect, everything on the line that isn't visible has zero
-// width, so the whole-node boxes (`nodes`, their union on the line) end exactly at the visible edges. Safari snaps
-// partial Range rects to whole CSS px and splits a cluster's advance between a letter and a following invisible control,
-// but reports box edges exactly. Otherwise the extent comes from the visible code points' own rects.
+// A whole-node rect's right edge. WebKit keeps a box's x and width as float32 and adds them in float32
+// (FloatRect::maxX); their float64 sum can fall between float32 values, where no float32 prediction equals it.
+function boxRight(rect: Rect, browser: BrowserKind): number {
+  return usesFloat32Positions(browser) ? Math.fround(rect.x + rect.width) : rect.x + rect.width
+}
+
+// The union of a line's whole-node rects (positive ones), or source 'none' without any.
+function boxesExtent(boxes: Rect[], browser: BrowserKind): Extent {
+  if (boxes.length === 0) return { left: 0, right: 0, source: 'none', issue: null }
+  let left = Infinity
+  let right = -Infinity
+  for (let b = 0; b < boxes.length; b++) {
+    left = Math.min(left, boxes[b]!.x)
+    right = Math.max(right, boxRight(boxes[b]!, browser))
+  }
+  return { left, right, source: 'nodes', issue: null }
+}
+
+// Safari reports a code point Range edge unsnapped only where it is a text box's edge: an edge inside a box snaps outward
+// to whole CSS px, and a box's right end is floored to 1/64px (190.296875 where the box ends at 190.3046875). So an
+// extent edge from code point rects is taken from the whole-node rect of the box that ends at the edge code point: the
+// one box on the line whose edge equals the reported edge or, for a right edge that isn't a whole px, whose right end
+// floors to it. A whole-px edge that no box edge equals may be a snapped edge inside a box, with white space after it.
+function boxEdge(boxes: Rect[], edge: number, side: 'left' | 'right'): number | null {
+  let found: number | null = null
+  for (let b = 0; b < boxes.length; b++) {
+    const box = boxes[b]!
+    const value = side === 'left' ? box.x : Math.fround(box.x + box.width)
+    if (value !== edge && (side === 'left' || Number.isInteger(edge) || Math.floor(value * 64) / 64 !== edge)) continue
+    if (found !== null) return null
+    found = value
+  }
+  return found
+}
+
+// A line's horizontal extent over its visible code points; `list` holds the code points with positive rects on the line,
+// `boxes` the positive whole-node rects on it. When no white space outside the visible set has a positive rect,
+// everything on the line that isn't visible has zero width, so the whole-node boxes (`nodes`, their union) end exactly
+// at the visible edges. Safari snaps partial Range rects and splits a cluster's advance between a letter and a following
+// invisible control, but reports box edges exactly. Otherwise the extent comes from the visible code points' own rects,
+// and in Safari each edge other than the line's start at the content edge comes from a box (boxEdge) or the width is
+// unobserved.
 function lineExtent(list: number[], chars: string[], rectsOf: (i: number) => Rect[], visible: boolean[],
-  nodes: { left: number; right: number } | null, p: Paragraph, browser: BrowserKind): Extent {
+  boxes: Rect[], p: Paragraph, browser: BrowserKind): Extent {
   let any = false
   let left = Infinity
   let right = -Infinity
@@ -209,11 +271,15 @@ function lineExtent(list: number[], chars: string[], rectsOf: (i: number) => Rec
     }
   }
   if (!any) return { left: 0, right: 0, source: 'none', issue: null }
-  if (!hangingInk && nodes !== null) return { left: nodes.left, right: nodes.right, source: 'nodes', issue: null }
-  const startEdge = p.direction === 'ltr' ? left === 0 : right === p.width
-  const snapped = (browser === 'safari' || browser === 'webkit-host')
-    && (Number.isInteger(p.direction === 'ltr' ? right : left) || (!startEdge && Number.isInteger(p.direction === 'ltr' ? left : right)))
-  return { left, right, source: 'code points', issue: snapped ? 'Safari snaps partial Range rects to whole CSS px; hanging white space rules out whole-node geometry' : null }
+  if (!hangingInk && boxes.length > 0) return boxesExtent(boxes, browser)
+  if (!usesFloat32Positions(browser)) return { left, right, source: 'code points', issue: null }
+  const boxLeft = p.direction === 'ltr' && left === 0 ? left : boxEdge(boxes, left, 'left')
+  const boxRightEdge = p.direction === 'rtl' && right === p.width ? right : boxEdge(boxes, right, 'right')
+  if (boxLeft !== null && boxRightEdge !== null) return { left: boxLeft, right: boxRightEdge, source: 'code points', issue: null }
+  const issue = Number.isInteger(boxLeft === null ? left : right)
+    ? 'Safari snaps partial Range rects to whole CSS px; hanging white space rules out whole-node geometry'
+    : 'Safari floors a text box end in Range rects to 1/64px; no whole-node rect ends at the edge code point'
+  return { left, right, source: 'code points', issue }
 }
 
 export function deriveNative(c: Case, native: NativeObservation, text: string, browser: BrowserKind, dpr: number): Derived | { error: string } {
@@ -228,10 +294,9 @@ export function deriveNative(c: Case, native: NativeObservation, text: string, b
     expected += length
   }
   if (expected !== text.length) return { error: `Observations cover ${expected} of ${text.length} UTF-16 units` }
-  const graphemeStart = new Int32Array(text.length + 1)
-  for (const { segment, index } of graphemes.segment(text)) for (let k = 0; k < segment.length; k++) graphemeStart[index + k] = index
-  graphemeStart[text.length] = text.length
+  const graphemeStart = graphemeStarts(text)
   const chars = points.map(point => text.slice(point.offset, point.offset + point.length))
+  const ink = carriesInk(points, chars, graphemeStart)
 
   // Cluster the code points' positive rects and the whole-node rects together; owner -1 marks a node rect.
   const centers: number[] = []
@@ -315,7 +380,7 @@ export function deriveNative(c: Case, native: NativeObservation, text: string, b
   const clusterOf = positiveLines.clusterOf.map(c => lineOf[c]!)
   // pointLine: line index, -1 without positive rects, -2 with positive rects on several lines.
   const pointLine: number[] = new Array(points.length).fill(-1)
-  const nodeExtent: Array<{ left: number; right: number } | null> = new Array(count).fill(null)
+  const nodeBoxes: Rect[][] = Array.from({ length: count }, () => [])
   // touching: per line, the code points with a positive rect on it, including those with rects on several lines. Lines
   // take their source range from these, so a line still counts when its only code point also has a rect elsewhere
   // (Chrome gives the letter after a chosen soft hyphen positive rects on both lines).
@@ -324,11 +389,7 @@ export function deriveNative(c: Case, native: NativeObservation, text: string, b
     const i = owners[r]!
     const line = clusterOf[r]!
     if (i === -1) {
-      const rect = rects[r]!
-      const extent = nodeExtent[line]!
-      nodeExtent[line] = extent === null
-        ? { left: rect.x, right: rect.x + rect.width }
-        : { left: Math.min(extent.left, rect.x), right: Math.max(extent.right, rect.x + rect.width) }
+      nodeBoxes[line]!.push(rects[r]!)
       continue
     }
     pointLine[i] = pointLine[i] === -1 || pointLine[i] === line ? line : -2
@@ -344,7 +405,7 @@ export function deriveNative(c: Case, native: NativeObservation, text: string, b
   let highest = -1
   let splitWhiteSpace = 0
   for (let i = 0; i < points.length; i++) {
-    if (!inked(chars[i]!)) {
+    if (!ink[i]) {
       if (pointLine[i] === -2 && WHITE_SPACE.test(chars[i]!)) splitWhiteSpace++
       continue
     }
@@ -384,7 +445,7 @@ export function deriveNative(c: Case, native: NativeObservation, text: string, b
   const visibleFlags: boolean[] = new Array(points.length).fill(false)
   const widthIssues: Array<string | null> = new Array(count).fill(null)
   const hangs = HANGING_MODES.has(p.whiteSpace)
-  for (let line = 0; line < count; line++) widthIssues[line] = markVisible(members[line]!, chars, hangs, visibleFlags)
+  for (let line = 0; line < count; line++) widthIssues[line] = markVisible(members[line]!, chars, ink, hangs, visibleFlags)
 
   // Lines in visual order, with empty lines from consecutive preserved newlines (CSS: a trailing newline adds no line).
   const lines: NativeLine[] = []
@@ -415,7 +476,7 @@ export function deriveNative(c: Case, native: NativeObservation, text: string, b
       firstVisible ??= graphemeStart[points[i]!.offset]!
       lastVisible = points[i]!.offset
     }
-    const extent = lineExtent(list, chars, i => points[i]!.rects, visibleFlags, nodeExtent[line]!, p, browser)
+    const extent = lineExtent(list, chars, i => points[i]!.rects, visibleFlags, nodeBoxes[line]!, p, browser)
     if (extent.source !== 'none' && !onGrid(extent.right - extent.left, grid, Math.max(Math.abs(extent.left), Math.abs(extent.right)), 4)) offGridWidths.push(lines.length)
     lines.push({ start, end: last.offset + last.length, firstVisible, lastVisible, left: extent.left, right: extent.right, widthSource: extent.source, widthIssue: widthIssues[line] ?? extent.issue })
     previousEnd = last.offset + last.length
@@ -443,11 +504,12 @@ export function deriveNative(c: Case, native: NativeObservation, text: string, b
 // white space, from its whole-node rects wherever no excluded white space has width. Rows from before the page recorded
 // painted code points carry only whole-node rects; those give the extent unless the predicted line ends in white space.
 function paintedExtent(line: PainterLine, p: Paragraph, browser: BrowserKind, text: string, predicted: PredictionLine): Extent {
+  const boxes = line.rects.filter(positive)
   if (line.points === undefined || line.text === undefined) {
     if (TRAILING_WHITE_SPACE.test(text.slice(predicted.start, predicted.end))) {
       return { left: 0, right: 0, source: 'none', issue: 'painter row has no code point rects; the line ends in white space' }
     }
-    return line.extent === null ? { left: 0, right: 0, source: 'none', issue: null } : { ...line.extent, source: 'nodes', issue: null }
+    return boxesExtent(boxes, browser)
   }
   const painted = line.text
   const points = line.points
@@ -456,8 +518,8 @@ function paintedExtent(line: PainterLine, p: Paragraph, browser: BrowserKind, te
   const list: number[] = []
   for (let i = 0; i < points.length; i++) if (chars[i] !== '\n' && points[i]!.rects.some(positive)) list.push(i)
   const visible: boolean[] = new Array(points.length).fill(false)
-  const issue = markVisible(list, chars, HANGING_MODES.has(p.whiteSpace), visible)
-  const extent = lineExtent(list, chars, i => points[i]!.rects, visible, line.extent, p, browser)
+  const issue = markVisible(list, chars, carriesInk(points, chars, graphemeStarts(painted)), HANGING_MODES.has(p.whiteSpace), visible)
+  const extent = lineExtent(list, chars, i => points[i]!.rects, visible, boxes, p, browser)
   return { ...extent, issue: issue ?? extent.issue }
 }
 

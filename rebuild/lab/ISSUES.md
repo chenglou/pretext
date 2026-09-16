@@ -13,6 +13,15 @@ One entry per problem: the case id, what the owner expected, and what the lab re
   110.0667px; the hearts natively reach 151.0667px (7984 + 1080 au), which is what the Gecko port predicts.
 - Expected: a grapheme cluster with ink counts as visible through whichever of its code points has the positive rect,
   as the scorer already does for a precomposed base letter whose advance sits on its combining mark.
+- Resolved (lab, 2026-09-16): the scorer marks per code point whether it carries its grapheme's ink: an inked code
+  point, or any other code point except white space in a grapheme with an inked one (`carriesInk` in score.ts). Such a
+  code point with a positive rect is visible, ends a line's trailing white space and counts for line membership and
+  extents, in native and painted lines, in every browser. All six cases pass `widths` and `painter` in `smoke-r1` and
+  `smoke-r4`; native line 2 of `c-9b13e18e12ef188a` observes 151.0667px from the whole-node rects. On the latest owner
+  rows only Firefox counts change: widths 580 fail → pass and 333 fail → unobserved (another line ending at a soft
+  hyphen), painter 739 fail → pass. Chrome and Safari give every code point of a cluster a copy of its rect, so there
+  only the last visible code point moves. This also covers the U+200C and U+200D addendum at the end of this file.
+  Counts in VALIDATION.md, third pass.
 
 ## Safari/webkit-host: widths taken from code point rects end at a floored line-end edge, then fail the float32 edge test (WebKit owner, 2026-09-16)
 
@@ -27,6 +36,21 @@ One entry per problem: the case id, what the owner expected, and what the lab re
 - Expected: when the extent's end edge comes from a code point rect at a line end, either take that edge from the
   whole-node rect of the box that holds it (the node rect ends at the float32 glyph position) or mark the width
   unobserved, as the scorer already does for whole-pixel edges.
+- Resolved (lab, 2026-09-16): two sources. `c-0608392e9e6aad81`, `c-036aa1473159b950` and `c-0512d206ac683547` took
+  widths from whole-node rects, not code points, and the scorer computed a box's right edge as the float64 sum
+  x + width (102.40376663208008); WebKit's is the float32 sum (102.40376281738281), which Safari and webkit-host now use.
+  `c-019fad2e6d75064e` and `c-1527768a97b41c3b` took the end edge from a code point rect floored at a box end
+  (448.59375). When hanging white space forces code point rects, each Safari extent edge other than a line start at
+  the content edge now comes from the one whole-node rect on the line whose edge equals it or, for a right edge off the
+  whole px, floors to it at 1/64px (448.5999755859375). Otherwise the width is unobserved: 'Safari snaps partial Range
+  rects to whole CSS px' for a whole-px edge as before, 'Safari floors a text box end in Range rects to 1/64px' for the
+  rest. The equality rule is unchanged. Five of the six cases pass. `c-b178d5d519151ab5` still fails: its line ends at
+  the box of an Arabic span placed before its neighbour in visual order, and that box's x + width (147.4470977783203)
+  is one float32 step from the predicted end (147.44711303710938). On the latest owner rows, webkit-host widths go from
+  566 to 291 failures and painter from 856 to 591; no Chrome or Firefox row derives differently. Of the 0-unit failures
+  left, 78 are LTR lines ending one or two float32 steps from the prediction, and 82 are RTL lines, 53 of them where the
+  first box's x + width sits one or two steps from the content edge the line starts at. Counts in VALIDATION.md, third
+  pass.
 
 ## Safari/webkit-host: controls with a .notdef advance are left out of the observed extent (WebKit owner, 2026-09-16)
 
@@ -78,6 +102,10 @@ One entry per problem: the case id, what the owner expected, and what the lab re
   consonant and its Range rects have zero width, so the scorer's native line starts at `ट` (offset 25) and breaks fail.
 - Expected: compare line starts at the first code point of the line's first grapheme with ink through any of its code
   points, as in the Gecko owner's VS16 issue above.
+- Lab note (2026-09-16): native line 8 already starts at offset 23 in the scorer, before and after the VS16 fix. The
+  scorer's segmenter keeps `र्ट` in one grapheme, and `firstVisible` is its start; the line's source range (`start`)
+  begins at 25 because `र्` has no positive rect. This case's `breaks` fails on 'predicted line splits a grapheme' at
+  offset 31 (`क` and `्षत्रिय` in two spans), the text node edge issue above.
 
 ## Chrome: break-all breaks inside Thai grapheme clusters natively, and the scorer calls the prediction wrong (Blink owner, 2026-09-16)
 
@@ -106,3 +134,8 @@ One entry per problem: the case id, what the owner expected, and what the lab re
   joiner the cluster's advance. `c-027754d73c591d1d` (`a­b‌b`, suite-sample): line 2's `b` (offset 2) is 0 au and U+200C (offset 3)
   534 au, so the line observes 0px where the Gecko port predicts 8.9px. About 600 suite-sample width and painter failures in
   `suite/U+200C/*`, `suite/U+200D/*` and `suite/woman-after-zwj/zwsp` are this, in `.artifacts/lab/gecko/suite-r1/`.
+- Lab note (2026-09-16): the U+200C and U+200D part is resolved with the VS16 issue: a joiner that carries its
+  cluster's advance is visible. `c-027754d73c591d1d` line 2 observes 8.9px; its `widths` are now unobserved because
+  line 0 ends at a soft hyphen. In `gecko/suite-r1`, width failures go from 299 to 126 in `suite/U+200C/*`, 277 to 118
+  in `suite/U+200D/*` and 96 to 0 in `suite/woman-after-zwj/*`. The rest are Arabic joining widths (`ب­ب‌`: native
+  12.35px, predicted 14.8167px). The grapheme split part of this entry stays open.

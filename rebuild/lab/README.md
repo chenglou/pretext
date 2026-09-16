@@ -9,6 +9,7 @@ doesn't depend on the old library in `src/`.
 - `predictor.ts`: the prediction hook, the only library-facing import in the page.
 - `run.ts`: the driver. It serves the page, opens one background browser session and streams rows to NDJSON.
 - `score.ts`: the offline scorer.
+- `score.test.ts`: the scorer's derivation rules on small hand-made rows (`bun test rebuild/lab/score.test.ts`).
 - `tsconfig.json`: the repo's strict settings over the lab and its case generators
   (`bunx tsc -p rebuild/lab/tsconfig.json --noEmit`).
 - `VALIDATION.md`: what the end-to-end validation ran, found and fixed.
@@ -143,10 +144,13 @@ language, the paragraph height must equal the line count times the line height. 
 resolve a generic family to another primary font, and baseline alignment then makes the line box taller.
 
 Visible code points. A visible code point has a positive rect on exactly one line. It isn't a default-ignorable,
-control or line/paragraph separator (TAB counts as white space). It isn't hanging white space either: SPACE or TAB in
+control or line/paragraph separator (TAB counts as white space), unless it carries its grapheme's ink: a grapheme with
+an inked code point is visible through whichever of its code points has the rect, other than white space. Firefox puts
+an emoji + VS16 cluster's advance on the VS16 and a letter + ZWNJ's on the ZWNJ, with a zero-width base, and Chrome and
+Safari give each code point of such a cluster a copy of its rect. It isn't hanging white space either: SPACE or TAB in
 a line's trailing run under `normal`, `nowrap`, `pre-line` or `pre-wrap`. Trailing spaces count under `pre` and
-`break-spaces`. The trailing run is the white space and invisible code points at the line's end, back to an inked code
-point, a no-break space or a control other than TAB, LF and CR. The engines keep such a control as a character, so the
+`break-spaces`. The trailing run is the white space and invisible code points at the line's end, back to a code point
+with ink, a no-break space or a control other than TAB, LF and CR. The engines keep such a control as a character, so the
 space before it isn't at the line's end: Firefox keeps the space of `aaaa ` + VT in the line's width. The other space separators at a line end (U+3000, U+2000–U+200A and so on) are excluded, and that
 line's width is unobserved, because no engine's hanging rule for them is verified here. A line's first visible code
 point is compared at its grapheme start. Firefox can give a precomposed base letter a zero-width rect and put the
@@ -159,8 +163,12 @@ Metrics per case. `unobserved` and `not-applicable` are never passes.
   inside a grapheme or misses a visible code point.
 - `widths`: scored only when breaks pass. The observed width is the line's horizontal extent. When nothing on the
   line except visible code points has width, the extent comes from the whole-node rects. Otherwise it comes from
-  the visible code points' own rects. The observed and predicted values are both snapped to the row's layout
-  grid, rounding half up, and the metric passes only on equality. The grid follows each engine's layout unit and the
+  the visible code points' own rects; in Safari and webkit-host, each of those edges other than a line start at the
+  content edge is taken from the whole-node rect of the box that ends at it, or the width is unobserved (see "Range
+  geometry"). In Chrome and Firefox the observed and predicted values are both snapped to the row's layout grid,
+  rounding half up, and the metric passes only on equality. Safari and webkit-host keep inline positions as float32 px,
+  so there it passes only where the line's end edge equals the float32 sum of its start edge and the predicted width,
+  and a box's right edge is the float32 sum of its rect's x and width. The grid follows each engine's layout unit and the
   row's `devicePixelRatio`. Chrome lays out in LayoutUnits of zoomed px, so its grid is 1/(64 × DPR) CSS px (1/128 at
   DPR 2). Safari and webkit-host use 1/64 CSS px at any DPR. Firefox uses app units, 1/60 CSS px without device-pixel
   snapping. The summary keeps a histogram of predicted minus observed, in grid units.
@@ -230,11 +238,15 @@ These findings from the smoke runs shape the rules above:
   the letter before it) has positive rects on both lines, and the one on the hyphen's line is an exact copy of the
   hyphen's own rect. A lone ZWSP, joiner or soft hyphen can make a line with only zero-width rects.
 - Safari 27: whole-node rects are float glyph positions like Chrome's (the same 190.3046875). A code point Range
-  edge inside a text box is snapped outward to whole CSS px ('T' is [0, 10] for a 9.77px glyph), and an edge at a
-  line's end is floored to 1/64px (190.296875). Safari also splits a cluster's advance between a letter and a
+  edge inside a text box is snapped outward to whole CSS px ('T' is [0, 10] for a 9.77px glyph), and the right edge
+  of a code point that ends a box is floored, mostly to 1/64px (190.296875 for a box ending at 190.3046875), in some
+  lines to whole px (80 for 80.22). Safari also splits a cluster's advance between a letter and a
   following ZWSP ('c' [17, 22) and ZWSP [21, 25.797) where the line ends at 25.796875). So widths come from the
-  whole-node rects wherever possible. When hanging white space forces code point rects and an extent edge is a whole
-  pixel, the width is unobserved. Inline layout positions are float32 CSS px, not LayoutUnits, so observed widths
+  whole-node rects wherever possible, and a box's right edge is the float32 sum of its x and width (30.469196319580078 +
+  71.9345703125 is 102.40376281738281, where the float64 sum falls between float32 values). When hanging white space
+  forces code point rects, an extent edge off the whole px ends a box, and the extent takes it from the one whole-node
+  rect on the line whose right edge floors to it (448.59375 gives 448.5999755859375). A whole-px edge counts only where
+  a box edge equals it. Otherwise the width is unobserved. Inline layout positions are float32 CSS px, not LayoutUnits, so observed widths
   mostly sit off the 1/64px grid (892 of 1,314 smoke lines; 10,838 of 14,703 in the host's 5,000-case run), and
   scoring snaps them. After an inline box end (`</span> foo`), the collapsed space's rect has zero width on the next
   line. With a `text-transform` that changes length, Range offsets address the transformed text. The lab sets
@@ -242,7 +254,7 @@ These findings from the smoke runs shape the rules above:
 - Firefox 156: rect values are app units (1/60px) read through float32. Some are float32 sums one step off the
   nearest float32 of the app unit value (285.83331298828125 for 17150 au), so the grid checks allow two steps. Every
   observed smoke line width sits on the grid. A precomposed base letter can have a zero-width rect and its combining
-  mark the advance. VT and FF keep zero-width rects on the line they end, and the space before them keeps its width.
+  mark the advance, and so can an emoji before VS16 and a letter before ZWNJ or ZWJ. VT and FF keep zero-width rects on the line they end, and the space before them keeps its width.
 - webkit-host on WebKit 22625.1.29.11.27, Safari 27.0's build: the same Range geometry as installed Safari 27 wherever
   both observed a case after the same earlier cases in the document. In WebKit a few cases (web-font Arabic with
   brackets, soft hyphens next to controls, 12px URL seams) depend on the cases before them, in the host and in

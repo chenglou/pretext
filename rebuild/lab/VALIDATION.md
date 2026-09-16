@@ -185,6 +185,71 @@ the host's suite sample.
   cases and the same 5 geometry-only ones against the forward run. Against the earlier reversed-file run it has the
   same row order and identical native observations for every case, so in one order the host replays exactly.
 
+## Third pass: owner issues
+
+The engine owners filed problems in `ISSUES.md` while iterating against the lab. Two came from the derivation and are
+fixed in `score.ts`. Each fix was scored on the owners' latest rows as of 09:27 and on the validation rows, 62,587 rows
+in all: under `.artifacts/lab/`, `blink/{smoke-r4,policy-r4,runs-r3,ws-r5,suite-r1/00-07}`,
+`gecko/{smoke-r4,policy-r4,runs-r4,ws-r4,suite-sample-r4}` and `webkit/{smoke-r3,policy-r1,runs-r1,ws-r3}`, and the Chrome
+smoke and suite-sample, Firefox, Safari and webkit-host smoke rows above. The scorer versions, per-row metrics and
+comparisons are in `.artifacts/lab/validate-20260916/third-pass/`. `score.test.ts` covers both rules with hand-made rows.
+
+17. **A grapheme's ink on another code point.** Firefox puts an emoji + VS16 cluster's advance on the VS16, and a letter
+    + ZWNJ's or ZWJ's on the joiner, with a zero-width base. VS16 and the joiners are default-ignorable, so such a
+    cluster had no visible code point: a line ending `❤️❤️` observed its extent only up to the space before the hearts
+    (110.0667px of 151.0667px), and a line holding only a joiner's advance observed 0px. A code point other than white
+    space now carries ink when its grapheme has an inked code point. With a positive rect it is visible, ends the line's
+    trailing white space and counts for line membership and extents, in native and painted lines.
+18. **Safari box edges.** Two derivations gave edges that no float32 prediction can equal. A whole-node rect's right edge
+    was the float64 sum of its x and width (102.40376663208008, where WebKit's float32 sum is 102.40376281738281). And
+    when hanging white space forced code point rects, a right edge came from a code point rect that Safari floors at a
+    box end (448.59375 for a box ending at 448.5999755859375). In Safari and webkit-host a box's right edge is now the
+    float32 sum, and each code point extent edge other than a line start at the content edge comes from the one
+    whole-node rect on the line whose edge equals it or, for a right edge off the whole px, floors to it at 1/64px. A
+    whole-px edge that no box edge equals stays unobserved with the old reason. An edge off the whole px that no box
+    gives is unobserved as 'Safari floors a text box end in Range rects to 1/64px'; no current row has one. Over the
+    owners' four WebKit files, the Safari smoke rows and the host's 5,000-case rows, code point extent end edges were
+    142 box ends floored to 1/64px, 48 box ends off the whole px, 27 whole-px box ends and 541 whole px with no box edge.
+
+Before and after, same rows (pass/fail/unobserved/not applicable). Counts not listed didn't change:
+
+| Fix | Rows | Metric | Before | After |
+|---|---|---|---|---|
+| 17 | Firefox, owners' latest (25,390) | widths | 19,794/1,941/2,684/971 | 20,374/1,028/3,017/971 |
+| 17 | Firefox, owners' latest | painter | 22,663/2,461/266/0 | 23,402/1,722/266/0 |
+| 18 | webkit-host, owners' latest (5,505) | widths | 4,431/566/392/116 | 4,684/291/414/116 |
+| 18 | webkit-host, owners' latest | painter | 4,287/856/362/0 | 4,530/591/384/0 |
+
+The owners' Chrome rows (25,498) and every validation count stayed the same under both fixes. The stand-in predictor
+fails breaks on nearly every validation row, so derivation changes there don't reach the metrics.
+
+- **17, Firefox.** 580 width and 739 painter failures pass, including all six listed cases in `gecko/smoke-r1` and
+  `smoke-r4`. 333 width failures became unobserved: once the failing line passed, another line ending at a positive soft
+  hyphen decided the metric (`a­b‌`). One painter failure moved to a later line that wraps. In `gecko/suite-r1`, width
+  failures went 299 → 126 in `suite/U+200C/*`, 277 → 118 in `suite/U+200D/*` and 96 → 0 in `suite/woman-after-zwj/*`.
+  The rest are Arabic joining widths (`ب­ب‌`: native 12.35px, predicted 14.8167px).
+- **17, derivation.** 1,433 of the 25,390 owner Firefox rows derive differently. 1,090 lines that held only a joiner or
+  VS16 advance gain a visible code point. The others gain one at a cluster, which moves the last visible code point and,
+  where the space before the cluster had counted as trailing, the width source from code points to whole-node rects.
+  Chrome and Safari give every code point of a cluster a copy of its rect, so there only the last visible code point
+  moves: 839 owner Chrome rows, 83 webkit-host rows, and 196 Chrome, 7 Safari and 7 webkit-host validation rows, with no
+  other difference. In webkit-host `c-45a96fe1087eb491` and `c-d93198729f8adfce` (`a❤️­b`), breaks still fail, now as
+  'predicted line splits a grapheme': the port starts a line at the VS16.
+- **18, webkit-host.** 242 width and 233 painter failures pass, five of the six listed cases among them. 11 width and 10
+  painter results that were unobserved on a whole-px edge equal to a box edge now pass. 32 width failures became
+  unobserved as another line's whole-px edge decided the metric, and 2 on a soft hyphen or other space separator. One
+  unobserved width now fails: `c-26935623971a96b9` (`\ftoday.\f“We’ll\f`) starts at the box after an FF, which Safari draws
+  with a .notdef advance the scorer doesn't count (the controls issue in `ISSUES.md`). No Chrome or Firefox row derives
+  differently. 89 webkit-host owner rows do: 68 lines by their width in grid units, where a floored code point edge gave
+  way to the box edge (49.609375px → 49.625px in `c-5baefdc0f8b3f441`), and 21 newly observed lines. The float32 sums
+  change no width as snapped to the grid, only the float32 edge test.
+- **18, what still fails at 0 grid units.** `c-b178d5d519151ab5` ends at the box of an Arabic span that comes logically
+  before its neighbour, and that box's x + width (147.4470977783203) is one float32 step from the predicted end
+  (147.44711303710938). 78 LTR lines end one or two float32 steps from the prediction like that. 82 are RTL lines. In
+  53 of them the first box's x + width sits one or two steps from the content edge where the line starts
+  (336.0000305175781 for 336), and the prediction matches from the content edge. Equality on observed edges stays the
+  rule.
+
 ## Remaining caveats
 
 All browsers:
@@ -221,7 +286,10 @@ Safari 27 (the smoke run waited for Safari to leave the front, as in problem 3, 
   1,314 observed line widths sit off the 1/64px grid, 890 of them from whole-node rects. Scoring snaps both sides
   half up, so a prediction within float32 noise of the observed width can still land in the neighbouring unit.
 - Code point Range edges inside a text box snap to whole px. On 1 smoke case, hanging white space forced code point
-  rects with a whole-px edge, and the width is unobserved.
+  rects with a whole-px edge, and the width is unobserved. The right edge of a code point that ends a box is floored,
+  mostly to 1/64px; since the third pass the scorer takes such edges from the box's whole-node rect.
+- A line's end edge from a box can sit one or two float32 steps from a prediction, and in RTL the first box's x + width
+  can sit one or two steps from the content edge where the line starts (third pass). Widths still pass only on equality.
 
 ## Commands
 
@@ -288,3 +356,20 @@ bun rebuild/lab/score.ts --rows=.artifacts/lab/order-20260916/webkit-host-revers
 
 The frontmost-app and memory sampler was a scratch script, not part of the lab. To repeat that check, poll
 `lsappinfo info "$(lsappinfo front)"` and `ps -axo pid=,ppid=,rss=,command=` while a run is going.
+
+Third pass, no browser (the scorer module paths must be absolute):
+
+```sh
+T=$PWD/.artifacts/lab/validate-20260916/third-pass
+bun $T/score-all.ts $T/score-before.ts $T/before.ndjson
+bun $T/score-all.ts $T/score-fix1.ts $T/fix1.ndjson
+bun $T/score-all.ts $T/score-fix2.ts $T/fix2.ndjson
+bun $T/compare.ts $T/before.ndjson $T/fix1.ndjson
+bun $T/compare.ts $T/fix1.ndjson $T/fix2.ndjson
+bun $T/derive-diff.ts $T/score-before.ts $T/score-fix1.ts
+bun $T/derive-diff-masked.ts $T/score-before.ts $T/score-fix1.ts
+bun $T/derive-diff.ts $T/score-fix1.ts $T/score-fix2.ts
+bun $T/steps.ts .artifacts/lab/webkit/{smoke-r3,policy-r1,runs-r1,ws-r3}/webkit-host-rows.ndjson
+bun test rebuild/lab/score.test.ts
+bunx tsc -p rebuild/lab/tsconfig.json --noEmit
+```
