@@ -65,6 +65,11 @@ export type EngineProfile = {
   // WebKit and Gecko letter-space the visible discretionary hyphen itself.
   // Blink shapes it separately, without spacing.
   letterSpaceDiscretionaryHyphen: boolean
+  // Blink's page shapes a soft hyphen inside its text, so nonspacing marks after
+  // one shape with the text before it and take no advance. Its Canvas turns the soft
+  // hyphen into a ZWSP and shapes each word alone, where such a mark can take a
+  // dotted circle. WebKit's page gives the marks the advance its Canvas measures.
+  shapesMarksAcrossSoftHyphen: boolean
   // When a selected discretionary hyphen does not fit, Blink retries the text
   // item against the width minus the hyphen, so the line ends at the latest
   // earlier opportunity that leaves room for it. Pretext has no Blink item
@@ -286,6 +291,7 @@ export function getEngineProfile(): EngineProfile {
     measureTextWithFollowingSpace: engine === 'webkit',
     segmentBreakRemovalRun: engine === 'blink' ? 'blink' : engine === 'gecko' ? 'gecko' : 'none',
     letterSpaceDiscretionaryHyphen: engine !== 'blink',
+    shapesMarksAcrossSoftHyphen: engine !== 'webkit' && engine !== 'gecko',
     unfitHyphenRetreat: engine === 'blink' ? 'reduced-width' : 'none',
     breakOnlyAfterNextLine: engine === 'webkit',
     skipNarrowTabStops: engine === 'webkit',

@@ -44,6 +44,9 @@ let canvasMeasurementCount = 0
 // Real fonts give WJ and U+FEFF no advance, and a mark on its base almost none. A
 // font without U+0323 draws a letter right before it in a wider font, as Amiri does.
 let shapesMarksAndJoiners = false
+// A font with a dotted circle draws one for a nonspacing mark that starts a Canvas
+// word, as Blink's Canvas does after a soft hyphen or ZWSP in Georgia.
+let drawsDottedCircles = false
 
 const emojiPresentationRe = /\p{Emoji_Presentation}/u
 const punctuationRe = /[.,!?;:%)\]}'"”’»›…—-]/u
@@ -105,6 +108,10 @@ function measureWidth(text: string, font: string): number {
   for (const ch of text) {
     const before = previous
     previous = ch
+    if (drawsDottedCircles && /\p{Mn}/u.test(ch) && (before === '' || before === '\u00AD' || before === '\u200B')) {
+      width += fontSize * 0.5
+      continue
+    }
     if (ch === '\u200B') continue
     if (shapesMarksAndJoiners && ch === '\u0323' && /\p{L}/u.test(before)) {
       width += fontSize * 0.14
@@ -1017,6 +1024,7 @@ describe('boundary-policy regressions', () => {
     const { getEngineProfile } = await import('./measurement.ts')
     const profile = getEngineProfile()
     const previous = profile.lineBreakScan
+    const previousShapesMarks = profile.shapesMarksAcrossSoftHyphen
     shapesMarksAndJoiners = true
     clearCache()
     try {
@@ -1036,6 +1044,7 @@ describe('boundary-policy regressions', () => {
       }
       for (const scan of ['blink', 'webkit'] as const) {
         profile.lineBreakScan = scan
+        profile.shapesMarksAcrossSoftHyphen = scan === 'blink'
         // No break on either side of the soft hyphen before WJ, so the glue goes
         // with WJ, which fits, as both browsers paint it.
         expect(lines('a\u00AD\u2060b', 0)).toEqual(['a', '\u00AD\u2060', 'b'])
@@ -1065,13 +1074,23 @@ describe('boundary-policy regressions', () => {
         // Measured with the soft hyphens, U+0323 doesn't take `a` into another font,
         // so the text fits where `ab` fits, as Chrome paints it in Amiri.
         expect(lines(marks, measureWidth('ab', FONT) + 0.1)).toEqual([marks])
+        // Where Canvas draws a dotted circle for the mark after a soft hyphen, Chrome
+        // shapes the mark with `a` and gives it no advance; Safari draws the circle.
+        drawsDottedCircles = true
+        clearCache()
+        const circled = 'a­́b'
+        expect(lines(circled, measureWidth('ab', FONT) + 0.1)).toEqual(scan === 'blink' ? [circled] : ['a­́', 'b'])
+        drawsDottedCircles = false
+        clearCache()
       }
       // The merged segmentation marks no boundary.
       profile.lineBreakScan = null
       expect(prepareWithSegments('a\u00AD\u2060b \u0301cd', FONT).breaksBefore).toBeNull()
     } finally {
       profile.lineBreakScan = previous
+      profile.shapesMarksAcrossSoftHyphen = previousShapesMarks
       shapesMarksAndJoiners = false
+      drawsDottedCircles = false
       clearCache()
     }
   })

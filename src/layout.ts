@@ -216,6 +216,7 @@ const complexTextPathRanges = [
 const extendedPictographicRe = /\p{Extended_Pictographic}/u
 const leadingCombiningMarkRe = /^\p{M}/u
 const markRunRe = /^\p{M}+$/u
+const nonspacingMarkRunRe = /^\p{Mn}+$/u
 const controlOrMarkRunRe = /^(?:[\p{Cc}\u2028\u2029]|\p{M}+)$/u
 
 function needsComplexTextPath(text: string): boolean {
@@ -671,8 +672,10 @@ function measureAnalysis(
     const markContext = getMarkContext(mi)
     if (markContext !== null) {
       const joined = markContext + segText
-      const width = getCorrectedSegmentWidth(joined, getSegmentMetrics(joined, cache), emojiCorrection) -
-        getCorrectedSegmentWidth(markContext, getSegmentMetrics(markContext, cache), emojiCorrection)
+      const width = engineProfile.shapesMarksAcrossSoftHyphen && analysis.texts[mi - 1] === '­' && nonspacingMarkRunRe.test(segText)
+        ? 0
+        : getCorrectedSegmentWidth(joined, getSegmentMetrics(joined, cache), emojiCorrection) -
+          getCorrectedSegmentWidth(markContext, getSegmentMetrics(markContext, cache), emojiCorrection)
       pushMeasuredSegment(segText, width, segKind, null, null, 0)
       continue
     }

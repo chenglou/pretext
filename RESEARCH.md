@@ -71,7 +71,15 @@ them and what separates them, so they're measured as that source with the marks,
 the source, and take no letter spacing of their own. Measured alone, U+0301 took 2.97px
 in 16px Arial. Measured on the grapheme without the glue, Canvas composed the pair or drew
 it in another font: `a` with U+0323 in 16px Amiri took 2.22px more than `a`, where
-Chrome paints `a`, U+00AD, U+0301, U+00AD, U+0323, `b` as wide as `ab`. WebKit scans a
+Chrome paints `a`, U+00AD, U+0301, U+00AD, U+0323, `b` as wide as `ab`. WebKit's
+Canvas measures text through the page's `FontCascade::width`, so in both installed
+Safari and its page such marks take their fallback font's advance (8px for U+0301 in
+Georgia). Blink's page shapes a soft hyphen inside its text item, and in about 20,000
+suite observations over 13 fonts a nonspacing mark after one never took width. Its
+Canvas turns the soft hyphen into a ZWSP and shapes each word alone
+(`PlainTextNode::SegmentWord`), so after a soft hyphen the mark can measure as a
+dotted circle (8px in Georgia); the Chrome profile gives such runs no advance. After
+a ZWSP, Chrome's page splits too and draws the circle, as its Canvas does. WebKit scans a
 text node's source, where a collapsed TAB is still UAX #14 BA, so the WebKit profile
 maps the source's opportunities onto the normalized text; Blink scans the collapsed
 text, as Pretext normalizes it. A break before a run's later unit follows white space,
