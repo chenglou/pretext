@@ -1,22 +1,31 @@
-// Computes verdicts for webkit-probes.ts from the raw Safari output. Usage:
-//   bun rebuild/probes/webkit-verdicts.ts [.artifacts/probes/webkit] > verdicts.md
-// Reads every <dir>/*/safari-probes.json, evaluates each hypothesis against the spec's expected outcome and prints a
-// Markdown table (id | verdict | measured | expected), then the same rows as JSON after a `<!-- json -->` marker.
-import { readdirSync, readFileSync, existsSync } from 'node:fs'
+// Computes verdicts for webkit-probes-crosscheck.ts from its raw output. Usage:
+//   bun rebuild/probes/webkit-crosscheck-verdicts.ts <dir or output file> > verdicts.md
+// Reads <file>, or every <dir>/*-probes.json and <dir>/*/*-probes.json (installed Safari or webkit-host), evaluates each
+// hypothesis against the spec's expected outcome and prints a Markdown table (id | verdict | measured | expected), then
+// the same rows as JSON after a `<!-- json -->` marker.
+import { readdirSync, readFileSync, existsSync, statSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import type { CanvasResult, ProbeOutput } from './types.ts'
 
-const dir = resolve(process.argv[2] ?? '.artifacts/probes/webkit')
+const target = resolve(process.argv[2] ?? '.artifacts/probes/webkit-crosscheck')
 type Verdict = 'confirmed' | 'refuted' | 'inconclusive' | 'not-run'
 type Row = { id: string; spec: string; verdict: Verdict; measured: string; expected: string }
 
+const files: string[] = []
+if (existsSync(target) && statSync(target).isFile()) files.push(target)
+else if (existsSync(target)) {
+  for (const name of readdirSync(target)) {
+    const path = join(target, name)
+    if (name.endsWith('-probes.json')) files.push(path)
+    else if (statSync(path).isDirectory()) for (const inner of readdirSync(path)) if (inner.endsWith('-probes.json')) files.push(join(path, inner))
+  }
+}
 const results = new Map<string, { spec: string; observations: Array<Record<string, unknown>>; errors: string[] }>()
 const allCanvas: CanvasResult[] = []
 const envs: ProbeOutput['envs'] = []
-for (const sub of existsSync(dir) ? readdirSync(dir) : []) {
-  const file = join(dir, sub, 'safari-probes.json')
-  if (!existsSync(file)) continue
+for (const file of files) {
   const out = JSON.parse(readFileSync(file, 'utf8')) as ProbeOutput
+  if (!out.probesFile.endsWith('webkit-probes-crosscheck.ts')) continue
   envs.push(...out.envs)
   for (const r of out.results) {
     if (r.result === null) continue
@@ -145,7 +154,7 @@ function linesRow(id: string, spec: string, expectedStarts: number[] | { count: 
     const x = value(s(11))
     const pwrLeft = x.PWR.node[0]?.x
     const ok = same(x.PW.starts, [0, 9]) && x.BS.starts[1] === 4 && x.NW.count === 1 && x.PRE.count === 1 && close(pwrLeft, x.PWR.expectedLeftHangExcluded)
-    return { verdict: v(ok), measured: `W=${n(x.W)}; pre-wrap ${J(x.PW.texts)}; break-spaces ${J(x.BS.texts)}; nowrap ${x.NW.count}; pre ${x.PRE.count}; pre-wrap right: left ${n(pwrLeft)} vs W − w(abc) ${n(x.PWR.expectedLeftHangExcluded)}` }
+    return { verdict: v(ok), measured: `W=${n(x.W)}; pre-wrap ${J(x.PW.texts)}; break-spaces ${J(x.BS.texts)} (box widths ${J(x.BSnode.map((q: Any) => n(q.w, 4)))}); break-spaces with 20 spaces ${J(x.BSlong.starts)} (box widths ${J(x.BSlongNode.map((q: Any) => n(q.w, 4)))}); nowrap ${x.NW.count}; pre ${x.PRE.count}; pre-wrap right: left ${n(pwrLeft)} vs W − w(abc) ${n(x.PWR.expectedLeftHangExcluded)}` }
   })
   row(s(12), s(12), '2 lines; right-aligned line 1 left = W − f(M("abc ") − M(" "))', () => {
     const x = value(s(12))
