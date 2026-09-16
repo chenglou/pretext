@@ -17,6 +17,66 @@ All accuracy, letter-spacing and corpus result payloads are unchanged; refreshed
 snapshots change only provenance and environment records. Runtime sources and
 the baseline pin are unchanged, so no runtime benchmark was needed.
 
+## Emoji correction counts U+FE0F only after an emoji character
+
+This runtime change starts from main `5810820` (#311). Chrome and Firefox on macOS
+measure Apple Color Emoji wider on Canvas than they draw it at small sizes, so
+`prepare()` subtracts a per-font correction for each emoji grapheme. It counted
+every grapheme holding U+FE0F, so `a` + U+FE0F, a lone U+FE0F, a space + U+FE0F and
+U+3000 + U+FE0F each lost the correction although Canvas never added it: 4px in
+Chrome and 5px in Firefox at 16px. A grapheme now counts when it holds an
+emoji-presentation character or an emoji character followed by U+FE0F, which is
+Unicode's emoji presentation sequence. A digit, `#` or `*` followed by U+FE0F still
+counts without U+20E3.
+
+Headed at DPR 2 on the Retina display, on a `lang="en"` page, Chrome 153, Firefox
+155 and Safari 26.5.2 laid out 31 sequences in 16px and 24px Helvetica Neue and
+Arial. Chrome and Firefox draw `1`, `#`, `*`, `©` and `✔` followed by U+FE0F from
+the emoji font, with the full Canvas and DOM gap even where no pixel is colored, and
+draw U+FE0F after a letter, a space or U+3000 from the text font with no gap.
+Predicted widths now match the DOM within 0.008px in Chrome and exactly in Firefox,
+where the old rule missed 8 rows by up to 4px in Chrome and 16 rows by up to 5px in
+Firefox. Safari's correction is 0. Its OffscreenCanvas gives a space followed by
+U+FE0F the emoji width while the DOM draws a space, a separate gap ENGINE_FOLLOWUPS
+records.
+
+The installed gate ran this change on `2bdf62f` against pinned `fcd9b4e`: Chrome 153
+through the Playwright transport, Safari 26.5.2 and Firefox 155 natively, both
+directions, at DPR 2. Chrome fixes 282 LTR metrics on 144 rows and 4 RTL, and
+Firefox 379 LTR metrics on 211 rows and 24 RTL, in the measurement,
+chromium-script-spacing, cluster-v2-new and ideographic-source-edge families. Safari
+doesn't change. No leg has required failures, execution errors, or new API or rich
+failures, and every changed row holds one of the graphemes the two rules count
+differently.
+
+Chrome loses 22 metrics on 8 LTR rows and Firefox 10 on 4, each a pass main got by
+accident, where subtracting a width Canvas never added cancelled another gap. `a`,
+U+FE0F, U+00AD, U+0301, `b` and `a`, U+00AD, U+FE0F, `b` in 16px Arial with letter
+spacing 1 at width 20 paint one 19.8px line in both browsers; this branch measures
+20.8px and breaks at the soft hyphen, because Canvas adds letter spacing that the
+browsers don't draw around the soft hyphen and on a lone U+FE0F. In Chrome, `a`,
+U+00AD, U+FE0F, `b` in 16px Times New Roman with letter spacing 1 at width 9 paints
+no hyphen, where main and this branch take the soft-hyphen break whose hyphen
+overflows. In Chrome, `a`, space, U+FE0F, `b` in pre-wrap with letter spacing −2 at
+width 1 in 16px Arial and Georgia now splits U+FE0F and `b` as Chrome does, which
+exposes the line holding only the space after the overflowing `a`. ENGINE_FOLLOWUPS
+records these gaps.
+
+`bun test` and `bun run check` pass. A unit test stubs a 4px correction and checks
+that `a` + U+FE0F + `b`, a space + U+FE0F, U+3000 + U+FE0F and `1` + U+20E3 lose no
+width, while U+2764 + U+FE0F, U+1F44B, `1` and `#` with U+FE0F and U+20E3, and `1`
+and `#` with U+FE0F lose one correction each. Canvas calls per cold `prepare()`
+don't change in any profile, since the rule only decides how many corrections a
+measured segment subtracts. The baseline advances to `acba4c5`, and the ordinary
+snapshots were regenerated against it.
+
+Chrome and Safari benchmark snapshots were refreshed from this branch: three
+foreground runs each at DPR 2, visible and focused, with Chrome on the 2560x1440
+screen and Safari on the 2560x1440 screen. Chrome reads `prepare()` at 8.95 ms
+(8.95 on the parent branch) and hot `layout()` at 0.0895 ms (0.0885); Safari reads
+11.0 ms (11.0) and 0.102 ms (0.105). Long-form corpus totals read 122.5 ms in
+Chrome (115.0) and 348 ms in Safari (351).
+
 ## Safari kerning without the bidi class table
 
 This runtime change starts from main `1262b4f` (#310). The Safari profile keeps a

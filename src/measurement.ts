@@ -121,7 +121,10 @@ let cachedEngineProfile: EngineProfile | null = null
 // pair-context model and keep the public behavior linear.
 const MAX_PREFIX_FIT_GRAPHEMES = 96
 
-const emojiPresentationRe = /\p{Emoji_Presentation}/u
+// Graphemes drawn from the emoji font: those holding an emoji-presentation
+// character, or an emoji character followed by U+FE0F, such as U+2764 or a
+// keycap base like `1`. U+FE0F after a letter or a space changes nothing.
+const emojiGraphemeRe = /\p{Emoji_Presentation}|\p{Emoji}\uFE0F/u
 const maybeEmojiRe = /[\p{Emoji_Presentation}\p{Extended_Pictographic}\p{Regional_Indicator}\uFE0F\u20E3]/u
 const emojiCorrectionCache = new Map<string, number>()
 
@@ -300,7 +303,7 @@ export function parseFontSize(font: string): number {
 }
 
 function isEmojiGrapheme(g: string): boolean {
-  return emojiPresentationRe.test(g) || g.includes('\uFE0F')
+  return emojiGraphemeRe.test(g)
 }
 
 export function textMayContainEmoji(text: string): boolean {

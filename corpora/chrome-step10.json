@@ -1,9 +1,9 @@
 [
   {
-    "generatedAt": "2026-09-15T21:54:47.193Z",
-    "suiteHash": "c70e0e78ce8bdef01906d7b1b8bbe8bb8443330634e4c45321e332fbf3dee4ba",
+    "generatedAt": "2026-09-16T02:14:27.637Z",
+    "suiteHash": "5b8c137f9e96ca15345aa8545442a6992eee4b63e7e01cf6e00a505a2537e8b7",
     "source": {
-      "revision": "fcd9b4e6b3e6102f748e3e4009793b6383f35254",
+      "revision": "acba4c505fce89e49db23a1ba2543777d243dab5",
       "files": {
         "analysis.ts": "8e5ab9fb0ce5dbdf7b71a325381607bf04c650d473e3272101ae9d1c7002a0e3",
         "entry-geometry.ts": "43ffacd71c3562283135590a06947eef4b2617cb3b6ba680c909dd5e2d2ba9a7",
@@ -11,7 +11,7 @@
         "layout.ts": "5afb8662a52d8089fcbabb933f158b2e2ede31cec26a273fedf9feb95c0a24e1",
         "line-break.ts": "f23e34dbf46dc8284b45cdb9538002678ec74617b97af16374bd4117e1e844c1",
         "line-text.ts": "31abd7a69c9e4a4dbba57d2791038349e803e65813a819e4e3128e0544d25ae1",
-        "measurement.ts": "5f171de04c5c4553e7dade0dc24304a18a8a22312ba7a98d3b32c106ff741068",
+        "measurement.ts": "db1d78c8cd804d2e2cd67be2dc894a56d34ce8519aa31fc6bbaac5e8336c8a19",
         "rich-inline.ts": "63363d943f07dda50ffada67a63115814e2b6dd1a28ed06a6c0fbd0df3661f65",
         "text-modules.d.ts": "1547f88f0eb75293bc20054194a2bba29a4bc911c2a4fa99cef98141b6f99927"
       }
@@ -35,7 +35,7 @@
             "screenAvailWidth": 2560,
             "screenAvailHeight": 1315,
             "visibility": "visible",
-            "focused": true,
+            "focused": false,
             "language": "mul",
             "direction": "ltr"
           },
@@ -53,7 +53,7 @@
             "screenAvailWidth": 2560,
             "screenAvailHeight": 1315,
             "visibility": "visible",
-            "focused": true,
+            "focused": false,
             "language": "mul",
             "direction": "ltr"
           },
@@ -67,7 +67,7 @@
         "dpr": 2,
         "locale": "zh-CN",
         "visibility": "visible",
-        "focused": true,
+        "focused": false,
         "fonts": []
       }
     ],
@@ -83,10 +83,10 @@
     "mismatches": []
   },
   {
-    "generatedAt": "2026-09-15T21:54:47.193Z",
-    "suiteHash": "c70e0e78ce8bdef01906d7b1b8bbe8bb8443330634e4c45321e332fbf3dee4ba",
+    "generatedAt": "2026-09-16T02:14:27.637Z",
+    "suiteHash": "5b8c137f9e96ca15345aa8545442a6992eee4b63e7e01cf6e00a505a2537e8b7",
     "source": {
-      "revision": "fcd9b4e6b3e6102f748e3e4009793b6383f35254",
+      "revision": "acba4c505fce89e49db23a1ba2543777d243dab5",
       "files": {
         "analysis.ts": "8e5ab9fb0ce5dbdf7b71a325381607bf04c650d473e3272101ae9d1c7002a0e3",
         "entry-geometry.ts": "43ffacd71c3562283135590a06947eef4b2617cb3b6ba680c909dd5e2d2ba9a7",
@@ -94,7 +94,7 @@
         "layout.ts": "5afb8662a52d8089fcbabb933f158b2e2ede31cec26a273fedf9feb95c0a24e1",
         "line-break.ts": "f23e34dbf46dc8284b45cdb9538002678ec74617b97af16374bd4117e1e844c1",
         "line-text.ts": "31abd7a69c9e4a4dbba57d2791038349e803e65813a819e4e3128e0544d25ae1",
-        "measurement.ts": "5f171de04c5c4553e7dade0dc24304a18a8a22312ba7a98d3b32c106ff741068",
+        "measurement.ts": "db1d78c8cd804d2e2cd67be2dc894a56d34ce8519aa31fc6bbaac5e8336c8a19",
         "rich-inline.ts": "63363d943f07dda50ffada67a63115814e2b6dd1a28ed06a6c0fbd0df3661f65",
         "text-modules.d.ts": "1547f88f0eb75293bc20054194a2bba29a4bc911c2a4fa99cef98141b6f99927"
       }
@@ -118,7 +118,7 @@
             "screenAvailWidth": 2560,
             "screenAvailHeight": 1315,
             "visibility": "visible",
-            "focused": true,
+            "focused": false,
             "language": "en",
             "direction": "ltr"
           },
@@ -136,7 +136,7 @@
             "screenAvailWidth": 2560,
             "screenAvailHeight": 1315,
             "visibility": "visible",
-            "focused": true,
+            "focused": false,
             "language": "en",
             "direction": "ltr"
           },
@@ -150,7 +150,7 @@
         "dpr": 2,
         "locale": "zh-CN",
         "visibility": "visible",
-        "focused": true,
+        "focused": false,
         "fonts": []
       }
     ],
@@ -255,10 +255,10 @@
     ]
   },
   {
-    "generatedAt": "2026-09-15T21:54:47.193Z",
-    "suiteHash": "c70e0e78ce8bdef01906d7b1b8bbe8bb8443330634e4c45321e332fbf3dee4ba",
+    "generatedAt": "2026-09-16T02:14:27.637Z",
+    "suiteHash": "5b8c137f9e96ca15345aa8545442a6992eee4b63e7e01cf6e00a505a2537e8b7",
     "source": {
-      "revision": "fcd9b4e6b3e6102f748e3e4009793b6383f35254",
+      "revision": "acba4c505fce89e49db23a1ba2543777d243dab5",
       "files": {
         "analysis.ts": "8e5ab9fb0ce5dbdf7b71a325381607bf04c650d473e3272101ae9d1c7002a0e3",
         "entry-geometry.ts": "43ffacd71c3562283135590a06947eef4b2617cb3b6ba680c909dd5e2d2ba9a7",
@@ -266,7 +266,7 @@
         "layout.ts": "5afb8662a52d8089fcbabb933f158b2e2ede31cec26a273fedf9feb95c0a24e1",
         "line-break.ts": "f23e34dbf46dc8284b45cdb9538002678ec74617b97af16374bd4117e1e844c1",
         "line-text.ts": "31abd7a69c9e4a4dbba57d2791038349e803e65813a819e4e3128e0544d25ae1",
-        "measurement.ts": "5f171de04c5c4553e7dade0dc24304a18a8a22312ba7a98d3b32c106ff741068",
+        "measurement.ts": "db1d78c8cd804d2e2cd67be2dc894a56d34ce8519aa31fc6bbaac5e8336c8a19",
         "rich-inline.ts": "63363d943f07dda50ffada67a63115814e2b6dd1a28ed06a6c0fbd0df3661f65",
         "text-modules.d.ts": "1547f88f0eb75293bc20054194a2bba29a4bc911c2a4fa99cef98141b6f99927"
       }
@@ -290,7 +290,7 @@
             "screenAvailWidth": 2560,
             "screenAvailHeight": 1315,
             "visibility": "visible",
-            "focused": true,
+            "focused": false,
             "language": "ja",
             "direction": "ltr"
           },
@@ -308,7 +308,7 @@
             "screenAvailWidth": 2560,
             "screenAvailHeight": 1315,
             "visibility": "visible",
-            "focused": true,
+            "focused": false,
             "language": "ja",
             "direction": "ltr"
           },
@@ -322,7 +322,7 @@
         "dpr": 2,
         "locale": "zh-CN",
         "visibility": "visible",
-        "focused": true,
+        "focused": false,
         "fonts": []
       }
     ],
@@ -371,10 +371,10 @@
     ]
   },
   {
-    "generatedAt": "2026-09-15T21:54:47.193Z",
-    "suiteHash": "c70e0e78ce8bdef01906d7b1b8bbe8bb8443330634e4c45321e332fbf3dee4ba",
+    "generatedAt": "2026-09-16T02:14:27.637Z",
+    "suiteHash": "5b8c137f9e96ca15345aa8545442a6992eee4b63e7e01cf6e00a505a2537e8b7",
     "source": {
-      "revision": "fcd9b4e6b3e6102f748e3e4009793b6383f35254",
+      "revision": "acba4c505fce89e49db23a1ba2543777d243dab5",
       "files": {
         "analysis.ts": "8e5ab9fb0ce5dbdf7b71a325381607bf04c650d473e3272101ae9d1c7002a0e3",
         "entry-geometry.ts": "43ffacd71c3562283135590a06947eef4b2617cb3b6ba680c909dd5e2d2ba9a7",
@@ -382,7 +382,7 @@
         "layout.ts": "5afb8662a52d8089fcbabb933f158b2e2ede31cec26a273fedf9feb95c0a24e1",
         "line-break.ts": "f23e34dbf46dc8284b45cdb9538002678ec74617b97af16374bd4117e1e844c1",
         "line-text.ts": "31abd7a69c9e4a4dbba57d2791038349e803e65813a819e4e3128e0544d25ae1",
-        "measurement.ts": "5f171de04c5c4553e7dade0dc24304a18a8a22312ba7a98d3b32c106ff741068",
+        "measurement.ts": "db1d78c8cd804d2e2cd67be2dc894a56d34ce8519aa31fc6bbaac5e8336c8a19",
         "rich-inline.ts": "63363d943f07dda50ffada67a63115814e2b6dd1a28ed06a6c0fbd0df3661f65",
         "text-modules.d.ts": "1547f88f0eb75293bc20054194a2bba29a4bc911c2a4fa99cef98141b6f99927"
       }
@@ -406,7 +406,7 @@
             "screenAvailWidth": 2560,
             "screenAvailHeight": 1315,
             "visibility": "visible",
-            "focused": true,
+            "focused": false,
             "language": "ja",
             "direction": "ltr"
           },
@@ -424,7 +424,7 @@
             "screenAvailWidth": 2560,
             "screenAvailHeight": 1315,
             "visibility": "visible",
-            "focused": true,
+            "focused": false,
             "language": "ja",
             "direction": "ltr"
           },
@@ -438,7 +438,7 @@
         "dpr": 2,
         "locale": "zh-CN",
         "visibility": "visible",
-        "focused": true,
+        "focused": false,
         "fonts": []
       }
     ],
@@ -487,10 +487,10 @@
     ]
   },
   {
-    "generatedAt": "2026-09-15T21:54:47.193Z",
-    "suiteHash": "c70e0e78ce8bdef01906d7b1b8bbe8bb8443330634e4c45321e332fbf3dee4ba",
+    "generatedAt": "2026-09-16T02:14:27.637Z",
+    "suiteHash": "5b8c137f9e96ca15345aa8545442a6992eee4b63e7e01cf6e00a505a2537e8b7",
     "source": {
-      "revision": "fcd9b4e6b3e6102f748e3e4009793b6383f35254",
+      "revision": "acba4c505fce89e49db23a1ba2543777d243dab5",
       "files": {
         "analysis.ts": "8e5ab9fb0ce5dbdf7b71a325381607bf04c650d473e3272101ae9d1c7002a0e3",
         "entry-geometry.ts": "43ffacd71c3562283135590a06947eef4b2617cb3b6ba680c909dd5e2d2ba9a7",
@@ -498,7 +498,7 @@
         "layout.ts": "5afb8662a52d8089fcbabb933f158b2e2ede31cec26a273fedf9feb95c0a24e1",
         "line-break.ts": "f23e34dbf46dc8284b45cdb9538002678ec74617b97af16374bd4117e1e844c1",
         "line-text.ts": "31abd7a69c9e4a4dbba57d2791038349e803e65813a819e4e3128e0544d25ae1",
-        "measurement.ts": "5f171de04c5c4553e7dade0dc24304a18a8a22312ba7a98d3b32c106ff741068",
+        "measurement.ts": "db1d78c8cd804d2e2cd67be2dc894a56d34ce8519aa31fc6bbaac5e8336c8a19",
         "rich-inline.ts": "63363d943f07dda50ffada67a63115814e2b6dd1a28ed06a6c0fbd0df3661f65",
         "text-modules.d.ts": "1547f88f0eb75293bc20054194a2bba29a4bc911c2a4fa99cef98141b6f99927"
       }
@@ -522,7 +522,7 @@
             "screenAvailWidth": 2560,
             "screenAvailHeight": 1315,
             "visibility": "visible",
-            "focused": true,
+            "focused": false,
             "language": "ko",
             "direction": "ltr"
           },
@@ -540,7 +540,7 @@
             "screenAvailWidth": 2560,
             "screenAvailHeight": 1315,
             "visibility": "visible",
-            "focused": true,
+            "focused": false,
             "language": "ko",
             "direction": "ltr"
           },
@@ -554,7 +554,7 @@
         "dpr": 2,
         "locale": "zh-CN",
         "visibility": "visible",
-        "focused": true,
+        "focused": false,
         "fonts": []
       }
     ],
@@ -570,10 +570,10 @@
     "mismatches": []
   },
   {
-    "generatedAt": "2026-09-15T21:54:47.193Z",
-    "suiteHash": "c70e0e78ce8bdef01906d7b1b8bbe8bb8443330634e4c45321e332fbf3dee4ba",
+    "generatedAt": "2026-09-16T02:14:27.637Z",
+    "suiteHash": "5b8c137f9e96ca15345aa8545442a6992eee4b63e7e01cf6e00a505a2537e8b7",
     "source": {
-      "revision": "fcd9b4e6b3e6102f748e3e4009793b6383f35254",
+      "revision": "acba4c505fce89e49db23a1ba2543777d243dab5",
       "files": {
         "analysis.ts": "8e5ab9fb0ce5dbdf7b71a325381607bf04c650d473e3272101ae9d1c7002a0e3",
         "entry-geometry.ts": "43ffacd71c3562283135590a06947eef4b2617cb3b6ba680c909dd5e2d2ba9a7",
@@ -581,7 +581,7 @@
         "layout.ts": "5afb8662a52d8089fcbabb933f158b2e2ede31cec26a273fedf9feb95c0a24e1",
         "line-break.ts": "f23e34dbf46dc8284b45cdb9538002678ec74617b97af16374bd4117e1e844c1",
         "line-text.ts": "31abd7a69c9e4a4dbba57d2791038349e803e65813a819e4e3128e0544d25ae1",
-        "measurement.ts": "5f171de04c5c4553e7dade0dc24304a18a8a22312ba7a98d3b32c106ff741068",
+        "measurement.ts": "db1d78c8cd804d2e2cd67be2dc894a56d34ce8519aa31fc6bbaac5e8336c8a19",
         "rich-inline.ts": "63363d943f07dda50ffada67a63115814e2b6dd1a28ed06a6c0fbd0df3661f65",
         "text-modules.d.ts": "1547f88f0eb75293bc20054194a2bba29a4bc911c2a4fa99cef98141b6f99927"
       }
@@ -605,7 +605,7 @@
             "screenAvailWidth": 2560,
             "screenAvailHeight": 1315,
             "visibility": "visible",
-            "focused": true,
+            "focused": false,
             "language": "ko",
             "direction": "ltr"
           },
@@ -623,7 +623,7 @@
             "screenAvailWidth": 2560,
             "screenAvailHeight": 1315,
             "visibility": "visible",
-            "focused": true,
+            "focused": false,
             "language": "ko",
             "direction": "ltr"
           },
@@ -637,7 +637,7 @@
         "dpr": 2,
         "locale": "zh-CN",
         "visibility": "visible",
-        "focused": true,
+        "focused": false,
         "fonts": []
       }
     ],
@@ -653,10 +653,10 @@
     "mismatches": []
   },
   {
-    "generatedAt": "2026-09-15T21:54:47.193Z",
-    "suiteHash": "c70e0e78ce8bdef01906d7b1b8bbe8bb8443330634e4c45321e332fbf3dee4ba",
+    "generatedAt": "2026-09-16T02:14:27.637Z",
+    "suiteHash": "5b8c137f9e96ca15345aa8545442a6992eee4b63e7e01cf6e00a505a2537e8b7",
     "source": {
-      "revision": "fcd9b4e6b3e6102f748e3e4009793b6383f35254",
+      "revision": "acba4c505fce89e49db23a1ba2543777d243dab5",
       "files": {
         "analysis.ts": "8e5ab9fb0ce5dbdf7b71a325381607bf04c650d473e3272101ae9d1c7002a0e3",
         "entry-geometry.ts": "43ffacd71c3562283135590a06947eef4b2617cb3b6ba680c909dd5e2d2ba9a7",
@@ -664,7 +664,7 @@
         "layout.ts": "5afb8662a52d8089fcbabb933f158b2e2ede31cec26a273fedf9feb95c0a24e1",
         "line-break.ts": "f23e34dbf46dc8284b45cdb9538002678ec74617b97af16374bd4117e1e844c1",
         "line-text.ts": "31abd7a69c9e4a4dbba57d2791038349e803e65813a819e4e3128e0544d25ae1",
-        "measurement.ts": "5f171de04c5c4553e7dade0dc24304a18a8a22312ba7a98d3b32c106ff741068",
+        "measurement.ts": "db1d78c8cd804d2e2cd67be2dc894a56d34ce8519aa31fc6bbaac5e8336c8a19",
         "rich-inline.ts": "63363d943f07dda50ffada67a63115814e2b6dd1a28ed06a6c0fbd0df3661f65",
         "text-modules.d.ts": "1547f88f0eb75293bc20054194a2bba29a4bc911c2a4fa99cef98141b6f99927"
       }
@@ -679,15 +679,15 @@
             "visualViewportScale": 1,
             "innerWidth": 2320,
             "innerHeight": 1268,
-            "outerWidth": 0,
-            "outerHeight": 0,
+            "outerWidth": 2560,
+            "outerHeight": 1315,
             "screenX": 0,
-            "screenY": 0,
+            "screenY": 30,
             "screenWidth": 2560,
             "screenHeight": 1440,
             "screenAvailWidth": 2560,
             "screenAvailHeight": 1315,
-            "visibility": "hidden",
+            "visibility": "visible",
             "focused": false,
             "language": "zh",
             "direction": "ltr"
@@ -697,15 +697,15 @@
             "visualViewportScale": 1,
             "innerWidth": 2320,
             "innerHeight": 1268,
-            "outerWidth": 0,
-            "outerHeight": 0,
+            "outerWidth": 2560,
+            "outerHeight": 1315,
             "screenX": 0,
-            "screenY": 0,
+            "screenY": 30,
             "screenWidth": 2560,
             "screenHeight": 1440,
             "screenAvailWidth": 2560,
             "screenAvailHeight": 1315,
-            "visibility": "hidden",
+            "visibility": "visible",
             "focused": false,
             "language": "zh",
             "direction": "ltr"
@@ -719,7 +719,7 @@
         "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36",
         "dpr": 2,
         "locale": "zh-CN",
-        "visibility": "hidden",
+        "visibility": "visible",
         "focused": false,
         "fonts": []
       }
@@ -736,10 +736,10 @@
     "mismatches": []
   },
   {
-    "generatedAt": "2026-09-15T21:54:47.193Z",
-    "suiteHash": "c70e0e78ce8bdef01906d7b1b8bbe8bb8443330634e4c45321e332fbf3dee4ba",
+    "generatedAt": "2026-09-16T02:14:27.637Z",
+    "suiteHash": "5b8c137f9e96ca15345aa8545442a6992eee4b63e7e01cf6e00a505a2537e8b7",
     "source": {
-      "revision": "fcd9b4e6b3e6102f748e3e4009793b6383f35254",
+      "revision": "acba4c505fce89e49db23a1ba2543777d243dab5",
       "files": {
         "analysis.ts": "8e5ab9fb0ce5dbdf7b71a325381607bf04c650d473e3272101ae9d1c7002a0e3",
         "entry-geometry.ts": "43ffacd71c3562283135590a06947eef4b2617cb3b6ba680c909dd5e2d2ba9a7",
@@ -747,90 +747,7 @@
         "layout.ts": "5afb8662a52d8089fcbabb933f158b2e2ede31cec26a273fedf9feb95c0a24e1",
         "line-break.ts": "f23e34dbf46dc8284b45cdb9538002678ec74617b97af16374bd4117e1e844c1",
         "line-text.ts": "31abd7a69c9e4a4dbba57d2791038349e803e65813a819e4e3128e0544d25ae1",
-        "measurement.ts": "5f171de04c5c4553e7dade0dc24304a18a8a22312ba7a98d3b32c106ff741068",
-        "rich-inline.ts": "63363d943f07dda50ffada67a63115814e2b6dd1a28ed06a6c0fbd0df3661f65",
-        "text-modules.d.ts": "1547f88f0eb75293bc20054194a2bba29a4bc911c2a4fa99cef98141b6f99927"
-      }
-    },
-    "environments": [
-      {
-        "direction": "ltr",
-        "measurement": {
-          "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36",
-          "start": {
-            "dpr": 2,
-            "visualViewportScale": 1,
-            "innerWidth": 2320,
-            "innerHeight": 1268,
-            "outerWidth": 0,
-            "outerHeight": 0,
-            "screenX": 0,
-            "screenY": 0,
-            "screenWidth": 2560,
-            "screenHeight": 1440,
-            "screenAvailWidth": 2560,
-            "screenAvailHeight": 1315,
-            "visibility": "hidden",
-            "focused": false,
-            "language": "zh",
-            "direction": "ltr"
-          },
-          "end": {
-            "dpr": 2,
-            "visualViewportScale": 1,
-            "innerWidth": 2320,
-            "innerHeight": 1268,
-            "outerWidth": 0,
-            "outerHeight": 0,
-            "screenX": 0,
-            "screenY": 0,
-            "screenWidth": 2560,
-            "screenHeight": 1440,
-            "screenAvailWidth": 2560,
-            "screenAvailHeight": 1315,
-            "visibility": "hidden",
-            "focused": false,
-            "language": "zh",
-            "direction": "ltr"
-          },
-          "changes": []
-        },
-        "context": {
-          "kind": "installed",
-          "lang": "zh"
-        },
-        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36",
-        "dpr": 2,
-        "locale": "zh-CN",
-        "visibility": "hidden",
-        "focused": false,
-        "fonts": []
-      }
-    ],
-    "corpusId": "zh-guxiang",
-    "language": "zh",
-    "title": "故鄉",
-    "browser": "chrome",
-    "start": 300,
-    "end": 900,
-    "step": 10,
-    "widthCount": 61,
-    "exactCount": 61,
-    "mismatches": []
-  },
-  {
-    "generatedAt": "2026-09-15T21:54:47.193Z",
-    "suiteHash": "c70e0e78ce8bdef01906d7b1b8bbe8bb8443330634e4c45321e332fbf3dee4ba",
-    "source": {
-      "revision": "fcd9b4e6b3e6102f748e3e4009793b6383f35254",
-      "files": {
-        "analysis.ts": "8e5ab9fb0ce5dbdf7b71a325381607bf04c650d473e3272101ae9d1c7002a0e3",
-        "entry-geometry.ts": "43ffacd71c3562283135590a06947eef4b2617cb3b6ba680c909dd5e2d2ba9a7",
-        "generated/line-break-data.ts": "3a42caa6039e2d59df4830d3d713d8e5692aae79e40d34c0b7f7f49e294fdd8a",
-        "layout.ts": "5afb8662a52d8089fcbabb933f158b2e2ede31cec26a273fedf9feb95c0a24e1",
-        "line-break.ts": "f23e34dbf46dc8284b45cdb9538002678ec74617b97af16374bd4117e1e844c1",
-        "line-text.ts": "31abd7a69c9e4a4dbba57d2791038349e803e65813a819e4e3128e0544d25ae1",
-        "measurement.ts": "5f171de04c5c4553e7dade0dc24304a18a8a22312ba7a98d3b32c106ff741068",
+        "measurement.ts": "db1d78c8cd804d2e2cd67be2dc894a56d34ce8519aa31fc6bbaac5e8336c8a19",
         "rich-inline.ts": "63363d943f07dda50ffada67a63115814e2b6dd1a28ed06a6c0fbd0df3661f65",
         "text-modules.d.ts": "1547f88f0eb75293bc20054194a2bba29a4bc911c2a4fa99cef98141b6f99927"
       }
@@ -854,7 +771,90 @@
             "screenAvailWidth": 2560,
             "screenAvailHeight": 1315,
             "visibility": "visible",
-            "focused": true,
+            "focused": false,
+            "language": "zh",
+            "direction": "ltr"
+          },
+          "end": {
+            "dpr": 2,
+            "visualViewportScale": 1,
+            "innerWidth": 2320,
+            "innerHeight": 1268,
+            "outerWidth": 2560,
+            "outerHeight": 1315,
+            "screenX": 0,
+            "screenY": 30,
+            "screenWidth": 2560,
+            "screenHeight": 1440,
+            "screenAvailWidth": 2560,
+            "screenAvailHeight": 1315,
+            "visibility": "visible",
+            "focused": false,
+            "language": "zh",
+            "direction": "ltr"
+          },
+          "changes": []
+        },
+        "context": {
+          "kind": "installed",
+          "lang": "zh"
+        },
+        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36",
+        "dpr": 2,
+        "locale": "zh-CN",
+        "visibility": "visible",
+        "focused": false,
+        "fonts": []
+      }
+    ],
+    "corpusId": "zh-guxiang",
+    "language": "zh",
+    "title": "故鄉",
+    "browser": "chrome",
+    "start": 300,
+    "end": 900,
+    "step": 10,
+    "widthCount": 61,
+    "exactCount": 61,
+    "mismatches": []
+  },
+  {
+    "generatedAt": "2026-09-16T02:14:27.637Z",
+    "suiteHash": "5b8c137f9e96ca15345aa8545442a6992eee4b63e7e01cf6e00a505a2537e8b7",
+    "source": {
+      "revision": "acba4c505fce89e49db23a1ba2543777d243dab5",
+      "files": {
+        "analysis.ts": "8e5ab9fb0ce5dbdf7b71a325381607bf04c650d473e3272101ae9d1c7002a0e3",
+        "entry-geometry.ts": "43ffacd71c3562283135590a06947eef4b2617cb3b6ba680c909dd5e2d2ba9a7",
+        "generated/line-break-data.ts": "3a42caa6039e2d59df4830d3d713d8e5692aae79e40d34c0b7f7f49e294fdd8a",
+        "layout.ts": "5afb8662a52d8089fcbabb933f158b2e2ede31cec26a273fedf9feb95c0a24e1",
+        "line-break.ts": "f23e34dbf46dc8284b45cdb9538002678ec74617b97af16374bd4117e1e844c1",
+        "line-text.ts": "31abd7a69c9e4a4dbba57d2791038349e803e65813a819e4e3128e0544d25ae1",
+        "measurement.ts": "db1d78c8cd804d2e2cd67be2dc894a56d34ce8519aa31fc6bbaac5e8336c8a19",
+        "rich-inline.ts": "63363d943f07dda50ffada67a63115814e2b6dd1a28ed06a6c0fbd0df3661f65",
+        "text-modules.d.ts": "1547f88f0eb75293bc20054194a2bba29a4bc911c2a4fa99cef98141b6f99927"
+      }
+    },
+    "environments": [
+      {
+        "direction": "ltr",
+        "measurement": {
+          "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36",
+          "start": {
+            "dpr": 2,
+            "visualViewportScale": 1,
+            "innerWidth": 2320,
+            "innerHeight": 1268,
+            "outerWidth": 2560,
+            "outerHeight": 1315,
+            "screenX": 0,
+            "screenY": 30,
+            "screenWidth": 2560,
+            "screenHeight": 1440,
+            "screenAvailWidth": 2560,
+            "screenAvailHeight": 1315,
+            "visibility": "visible",
+            "focused": false,
             "language": "th",
             "direction": "ltr"
           },
@@ -871,23 +871,12 @@
             "screenHeight": 1440,
             "screenAvailWidth": 2560,
             "screenAvailHeight": 1315,
-            "visibility": "hidden",
+            "visibility": "visible",
             "focused": false,
             "language": "th",
             "direction": "ltr"
           },
-          "changes": [
-            {
-              "field": "focused",
-              "value": false,
-              "evidence": "snapshot"
-            },
-            {
-              "field": "visibility",
-              "value": "hidden",
-              "evidence": "snapshot"
-            }
-          ]
+          "changes": []
         },
         "context": {
           "kind": "installed",
@@ -896,7 +885,7 @@
         "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36",
         "dpr": 2,
         "locale": "zh-CN",
-        "visibility": "hidden",
+        "visibility": "visible",
         "focused": false,
         "fonts": []
       }
@@ -930,10 +919,10 @@
     ]
   },
   {
-    "generatedAt": "2026-09-15T21:54:47.193Z",
-    "suiteHash": "c70e0e78ce8bdef01906d7b1b8bbe8bb8443330634e4c45321e332fbf3dee4ba",
+    "generatedAt": "2026-09-16T02:14:27.637Z",
+    "suiteHash": "5b8c137f9e96ca15345aa8545442a6992eee4b63e7e01cf6e00a505a2537e8b7",
     "source": {
-      "revision": "fcd9b4e6b3e6102f748e3e4009793b6383f35254",
+      "revision": "acba4c505fce89e49db23a1ba2543777d243dab5",
       "files": {
         "analysis.ts": "8e5ab9fb0ce5dbdf7b71a325381607bf04c650d473e3272101ae9d1c7002a0e3",
         "entry-geometry.ts": "43ffacd71c3562283135590a06947eef4b2617cb3b6ba680c909dd5e2d2ba9a7",
@@ -941,7 +930,7 @@
         "layout.ts": "5afb8662a52d8089fcbabb933f158b2e2ede31cec26a273fedf9feb95c0a24e1",
         "line-break.ts": "f23e34dbf46dc8284b45cdb9538002678ec74617b97af16374bd4117e1e844c1",
         "line-text.ts": "31abd7a69c9e4a4dbba57d2791038349e803e65813a819e4e3128e0544d25ae1",
-        "measurement.ts": "5f171de04c5c4553e7dade0dc24304a18a8a22312ba7a98d3b32c106ff741068",
+        "measurement.ts": "db1d78c8cd804d2e2cd67be2dc894a56d34ce8519aa31fc6bbaac5e8336c8a19",
         "rich-inline.ts": "63363d943f07dda50ffada67a63115814e2b6dd1a28ed06a6c0fbd0df3661f65",
         "text-modules.d.ts": "1547f88f0eb75293bc20054194a2bba29a4bc911c2a4fa99cef98141b6f99927"
       }
@@ -965,7 +954,7 @@
             "screenAvailWidth": 2560,
             "screenAvailHeight": 1315,
             "visibility": "visible",
-            "focused": true,
+            "focused": false,
             "language": "th",
             "direction": "ltr"
           },
@@ -982,23 +971,12 @@
             "screenHeight": 1440,
             "screenAvailWidth": 2560,
             "screenAvailHeight": 1315,
-            "visibility": "hidden",
+            "visibility": "visible",
             "focused": false,
             "language": "th",
             "direction": "ltr"
           },
-          "changes": [
-            {
-              "field": "focused",
-              "value": false,
-              "evidence": "snapshot"
-            },
-            {
-              "field": "visibility",
-              "value": "hidden",
-              "evidence": "snapshot"
-            }
-          ]
+          "changes": []
         },
         "context": {
           "kind": "installed",
@@ -1007,7 +985,7 @@
         "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36",
         "dpr": 2,
         "locale": "zh-CN",
-        "visibility": "hidden",
+        "visibility": "visible",
         "focused": false,
         "fonts": []
       }
@@ -1033,10 +1011,10 @@
     ]
   },
   {
-    "generatedAt": "2026-09-15T21:54:47.193Z",
-    "suiteHash": "c70e0e78ce8bdef01906d7b1b8bbe8bb8443330634e4c45321e332fbf3dee4ba",
+    "generatedAt": "2026-09-16T02:14:27.637Z",
+    "suiteHash": "5b8c137f9e96ca15345aa8545442a6992eee4b63e7e01cf6e00a505a2537e8b7",
     "source": {
-      "revision": "fcd9b4e6b3e6102f748e3e4009793b6383f35254",
+      "revision": "acba4c505fce89e49db23a1ba2543777d243dab5",
       "files": {
         "analysis.ts": "8e5ab9fb0ce5dbdf7b71a325381607bf04c650d473e3272101ae9d1c7002a0e3",
         "entry-geometry.ts": "43ffacd71c3562283135590a06947eef4b2617cb3b6ba680c909dd5e2d2ba9a7",
@@ -1044,7 +1022,7 @@
         "layout.ts": "5afb8662a52d8089fcbabb933f158b2e2ede31cec26a273fedf9feb95c0a24e1",
         "line-break.ts": "f23e34dbf46dc8284b45cdb9538002678ec74617b97af16374bd4117e1e844c1",
         "line-text.ts": "31abd7a69c9e4a4dbba57d2791038349e803e65813a819e4e3128e0544d25ae1",
-        "measurement.ts": "5f171de04c5c4553e7dade0dc24304a18a8a22312ba7a98d3b32c106ff741068",
+        "measurement.ts": "db1d78c8cd804d2e2cd67be2dc894a56d34ce8519aa31fc6bbaac5e8336c8a19",
         "rich-inline.ts": "63363d943f07dda50ffada67a63115814e2b6dd1a28ed06a6c0fbd0df3661f65",
         "text-modules.d.ts": "1547f88f0eb75293bc20054194a2bba29a4bc911c2a4fa99cef98141b6f99927"
       }
@@ -1068,7 +1046,7 @@
             "screenAvailWidth": 2560,
             "screenAvailHeight": 1315,
             "visibility": "visible",
-            "focused": true,
+            "focused": false,
             "language": "my",
             "direction": "ltr"
           },
@@ -1086,7 +1064,7 @@
             "screenAvailWidth": 2560,
             "screenAvailHeight": 1315,
             "visibility": "visible",
-            "focused": true,
+            "focused": false,
             "language": "my",
             "direction": "ltr"
           },
@@ -1100,7 +1078,7 @@
         "dpr": 2,
         "locale": "zh-CN",
         "visibility": "visible",
-        "focused": true,
+        "focused": false,
         "fonts": []
       }
     ],
@@ -1116,10 +1094,10 @@
     "mismatches": []
   },
   {
-    "generatedAt": "2026-09-15T21:54:47.193Z",
-    "suiteHash": "c70e0e78ce8bdef01906d7b1b8bbe8bb8443330634e4c45321e332fbf3dee4ba",
+    "generatedAt": "2026-09-16T02:14:27.637Z",
+    "suiteHash": "5b8c137f9e96ca15345aa8545442a6992eee4b63e7e01cf6e00a505a2537e8b7",
     "source": {
-      "revision": "fcd9b4e6b3e6102f748e3e4009793b6383f35254",
+      "revision": "acba4c505fce89e49db23a1ba2543777d243dab5",
       "files": {
         "analysis.ts": "8e5ab9fb0ce5dbdf7b71a325381607bf04c650d473e3272101ae9d1c7002a0e3",
         "entry-geometry.ts": "43ffacd71c3562283135590a06947eef4b2617cb3b6ba680c909dd5e2d2ba9a7",
@@ -1127,7 +1105,7 @@
         "layout.ts": "5afb8662a52d8089fcbabb933f158b2e2ede31cec26a273fedf9feb95c0a24e1",
         "line-break.ts": "f23e34dbf46dc8284b45cdb9538002678ec74617b97af16374bd4117e1e844c1",
         "line-text.ts": "31abd7a69c9e4a4dbba57d2791038349e803e65813a819e4e3128e0544d25ae1",
-        "measurement.ts": "5f171de04c5c4553e7dade0dc24304a18a8a22312ba7a98d3b32c106ff741068",
+        "measurement.ts": "db1d78c8cd804d2e2cd67be2dc894a56d34ce8519aa31fc6bbaac5e8336c8a19",
         "rich-inline.ts": "63363d943f07dda50ffada67a63115814e2b6dd1a28ed06a6c0fbd0df3661f65",
         "text-modules.d.ts": "1547f88f0eb75293bc20054194a2bba29a4bc911c2a4fa99cef98141b6f99927"
       }
@@ -1151,7 +1129,7 @@
             "screenAvailWidth": 2560,
             "screenAvailHeight": 1315,
             "visibility": "visible",
-            "focused": true,
+            "focused": false,
             "language": "my",
             "direction": "ltr"
           },
@@ -1169,7 +1147,7 @@
             "screenAvailWidth": 2560,
             "screenAvailHeight": 1315,
             "visibility": "visible",
-            "focused": true,
+            "focused": false,
             "language": "my",
             "direction": "ltr"
           },
@@ -1183,7 +1161,7 @@
         "dpr": 2,
         "locale": "zh-CN",
         "visibility": "visible",
-        "focused": true,
+        "focused": false,
         "fonts": []
       }
     ],
@@ -1199,10 +1177,10 @@
     "mismatches": []
   },
   {
-    "generatedAt": "2026-09-15T21:54:47.193Z",
-    "suiteHash": "c70e0e78ce8bdef01906d7b1b8bbe8bb8443330634e4c45321e332fbf3dee4ba",
+    "generatedAt": "2026-09-16T02:14:27.637Z",
+    "suiteHash": "5b8c137f9e96ca15345aa8545442a6992eee4b63e7e01cf6e00a505a2537e8b7",
     "source": {
-      "revision": "fcd9b4e6b3e6102f748e3e4009793b6383f35254",
+      "revision": "acba4c505fce89e49db23a1ba2543777d243dab5",
       "files": {
         "analysis.ts": "8e5ab9fb0ce5dbdf7b71a325381607bf04c650d473e3272101ae9d1c7002a0e3",
         "entry-geometry.ts": "43ffacd71c3562283135590a06947eef4b2617cb3b6ba680c909dd5e2d2ba9a7",
@@ -1210,7 +1188,7 @@
         "layout.ts": "5afb8662a52d8089fcbabb933f158b2e2ede31cec26a273fedf9feb95c0a24e1",
         "line-break.ts": "f23e34dbf46dc8284b45cdb9538002678ec74617b97af16374bd4117e1e844c1",
         "line-text.ts": "31abd7a69c9e4a4dbba57d2791038349e803e65813a819e4e3128e0544d25ae1",
-        "measurement.ts": "5f171de04c5c4553e7dade0dc24304a18a8a22312ba7a98d3b32c106ff741068",
+        "measurement.ts": "db1d78c8cd804d2e2cd67be2dc894a56d34ce8519aa31fc6bbaac5e8336c8a19",
         "rich-inline.ts": "63363d943f07dda50ffada67a63115814e2b6dd1a28ed06a6c0fbd0df3661f65",
         "text-modules.d.ts": "1547f88f0eb75293bc20054194a2bba29a4bc911c2a4fa99cef98141b6f99927"
       }
@@ -1234,7 +1212,7 @@
             "screenAvailWidth": 2560,
             "screenAvailHeight": 1315,
             "visibility": "visible",
-            "focused": true,
+            "focused": false,
             "language": "km",
             "direction": "ltr"
           },
@@ -1252,7 +1230,7 @@
             "screenAvailWidth": 2560,
             "screenAvailHeight": 1315,
             "visibility": "visible",
-            "focused": true,
+            "focused": false,
             "language": "km",
             "direction": "ltr"
           },
@@ -1266,7 +1244,7 @@
         "dpr": 2,
         "locale": "zh-CN",
         "visibility": "visible",
-        "focused": true,
+        "focused": false,
         "fonts": []
       }
     ],
@@ -1282,10 +1260,10 @@
     "mismatches": []
   },
   {
-    "generatedAt": "2026-09-15T21:54:47.193Z",
-    "suiteHash": "c70e0e78ce8bdef01906d7b1b8bbe8bb8443330634e4c45321e332fbf3dee4ba",
+    "generatedAt": "2026-09-16T02:14:27.637Z",
+    "suiteHash": "5b8c137f9e96ca15345aa8545442a6992eee4b63e7e01cf6e00a505a2537e8b7",
     "source": {
-      "revision": "fcd9b4e6b3e6102f748e3e4009793b6383f35254",
+      "revision": "acba4c505fce89e49db23a1ba2543777d243dab5",
       "files": {
         "analysis.ts": "8e5ab9fb0ce5dbdf7b71a325381607bf04c650d473e3272101ae9d1c7002a0e3",
         "entry-geometry.ts": "43ffacd71c3562283135590a06947eef4b2617cb3b6ba680c909dd5e2d2ba9a7",
@@ -1293,7 +1271,7 @@
         "layout.ts": "5afb8662a52d8089fcbabb933f158b2e2ede31cec26a273fedf9feb95c0a24e1",
         "line-break.ts": "f23e34dbf46dc8284b45cdb9538002678ec74617b97af16374bd4117e1e844c1",
         "line-text.ts": "31abd7a69c9e4a4dbba57d2791038349e803e65813a819e4e3128e0544d25ae1",
-        "measurement.ts": "5f171de04c5c4553e7dade0dc24304a18a8a22312ba7a98d3b32c106ff741068",
+        "measurement.ts": "db1d78c8cd804d2e2cd67be2dc894a56d34ce8519aa31fc6bbaac5e8336c8a19",
         "rich-inline.ts": "63363d943f07dda50ffada67a63115814e2b6dd1a28ed06a6c0fbd0df3661f65",
         "text-modules.d.ts": "1547f88f0eb75293bc20054194a2bba29a4bc911c2a4fa99cef98141b6f99927"
       }
@@ -1317,7 +1295,7 @@
             "screenAvailWidth": 2560,
             "screenAvailHeight": 1315,
             "visibility": "visible",
-            "focused": true,
+            "focused": false,
             "language": "ar",
             "direction": "rtl"
           },
@@ -1335,7 +1313,7 @@
             "screenAvailWidth": 2560,
             "screenAvailHeight": 1315,
             "visibility": "visible",
-            "focused": true,
+            "focused": false,
             "language": "ar",
             "direction": "rtl"
           },
@@ -1349,7 +1327,7 @@
         "dpr": 2,
         "locale": "zh-CN",
         "visibility": "visible",
-        "focused": true,
+        "focused": false,
         "fonts": []
       }
     ],
@@ -1365,10 +1343,10 @@
     "mismatches": []
   },
   {
-    "generatedAt": "2026-09-15T21:54:47.193Z",
-    "suiteHash": "c70e0e78ce8bdef01906d7b1b8bbe8bb8443330634e4c45321e332fbf3dee4ba",
+    "generatedAt": "2026-09-16T02:14:27.637Z",
+    "suiteHash": "5b8c137f9e96ca15345aa8545442a6992eee4b63e7e01cf6e00a505a2537e8b7",
     "source": {
-      "revision": "fcd9b4e6b3e6102f748e3e4009793b6383f35254",
+      "revision": "acba4c505fce89e49db23a1ba2543777d243dab5",
       "files": {
         "analysis.ts": "8e5ab9fb0ce5dbdf7b71a325381607bf04c650d473e3272101ae9d1c7002a0e3",
         "entry-geometry.ts": "43ffacd71c3562283135590a06947eef4b2617cb3b6ba680c909dd5e2d2ba9a7",
@@ -1376,7 +1354,7 @@
         "layout.ts": "5afb8662a52d8089fcbabb933f158b2e2ede31cec26a273fedf9feb95c0a24e1",
         "line-break.ts": "f23e34dbf46dc8284b45cdb9538002678ec74617b97af16374bd4117e1e844c1",
         "line-text.ts": "31abd7a69c9e4a4dbba57d2791038349e803e65813a819e4e3128e0544d25ae1",
-        "measurement.ts": "5f171de04c5c4553e7dade0dc24304a18a8a22312ba7a98d3b32c106ff741068",
+        "measurement.ts": "db1d78c8cd804d2e2cd67be2dc894a56d34ce8519aa31fc6bbaac5e8336c8a19",
         "rich-inline.ts": "63363d943f07dda50ffada67a63115814e2b6dd1a28ed06a6c0fbd0df3661f65",
         "text-modules.d.ts": "1547f88f0eb75293bc20054194a2bba29a4bc911c2a4fa99cef98141b6f99927"
       }
@@ -1400,7 +1378,7 @@
             "screenAvailWidth": 2560,
             "screenAvailHeight": 1315,
             "visibility": "visible",
-            "focused": true,
+            "focused": false,
             "language": "ar",
             "direction": "rtl"
           },
@@ -1418,7 +1396,7 @@
             "screenAvailWidth": 2560,
             "screenAvailHeight": 1315,
             "visibility": "visible",
-            "focused": true,
+            "focused": false,
             "language": "ar",
             "direction": "rtl"
           },
@@ -1432,7 +1410,7 @@
         "dpr": 2,
         "locale": "zh-CN",
         "visibility": "visible",
-        "focused": true,
+        "focused": false,
         "fonts": []
       }
     ],
@@ -1448,10 +1426,10 @@
     "mismatches": []
   },
   {
-    "generatedAt": "2026-09-15T21:54:47.193Z",
-    "suiteHash": "c70e0e78ce8bdef01906d7b1b8bbe8bb8443330634e4c45321e332fbf3dee4ba",
+    "generatedAt": "2026-09-16T02:14:27.637Z",
+    "suiteHash": "5b8c137f9e96ca15345aa8545442a6992eee4b63e7e01cf6e00a505a2537e8b7",
     "source": {
-      "revision": "fcd9b4e6b3e6102f748e3e4009793b6383f35254",
+      "revision": "acba4c505fce89e49db23a1ba2543777d243dab5",
       "files": {
         "analysis.ts": "8e5ab9fb0ce5dbdf7b71a325381607bf04c650d473e3272101ae9d1c7002a0e3",
         "entry-geometry.ts": "43ffacd71c3562283135590a06947eef4b2617cb3b6ba680c909dd5e2d2ba9a7",
@@ -1459,7 +1437,7 @@
         "layout.ts": "5afb8662a52d8089fcbabb933f158b2e2ede31cec26a273fedf9feb95c0a24e1",
         "line-break.ts": "f23e34dbf46dc8284b45cdb9538002678ec74617b97af16374bd4117e1e844c1",
         "line-text.ts": "31abd7a69c9e4a4dbba57d2791038349e803e65813a819e4e3128e0544d25ae1",
-        "measurement.ts": "5f171de04c5c4553e7dade0dc24304a18a8a22312ba7a98d3b32c106ff741068",
+        "measurement.ts": "db1d78c8cd804d2e2cd67be2dc894a56d34ce8519aa31fc6bbaac5e8336c8a19",
         "rich-inline.ts": "63363d943f07dda50ffada67a63115814e2b6dd1a28ed06a6c0fbd0df3661f65",
         "text-modules.d.ts": "1547f88f0eb75293bc20054194a2bba29a4bc911c2a4fa99cef98141b6f99927"
       }
@@ -1483,7 +1461,7 @@
             "screenAvailWidth": 2560,
             "screenAvailHeight": 1315,
             "visibility": "visible",
-            "focused": true,
+            "focused": false,
             "language": "hi",
             "direction": "ltr"
           },
@@ -1501,7 +1479,7 @@
             "screenAvailWidth": 2560,
             "screenAvailHeight": 1315,
             "visibility": "visible",
-            "focused": true,
+            "focused": false,
             "language": "hi",
             "direction": "ltr"
           },
@@ -1515,7 +1493,7 @@
         "dpr": 2,
         "locale": "zh-CN",
         "visibility": "visible",
-        "focused": true,
+        "focused": false,
         "fonts": []
       }
     ],
@@ -1531,10 +1509,10 @@
     "mismatches": []
   },
   {
-    "generatedAt": "2026-09-15T21:54:47.193Z",
-    "suiteHash": "c70e0e78ce8bdef01906d7b1b8bbe8bb8443330634e4c45321e332fbf3dee4ba",
+    "generatedAt": "2026-09-16T02:14:27.637Z",
+    "suiteHash": "5b8c137f9e96ca15345aa8545442a6992eee4b63e7e01cf6e00a505a2537e8b7",
     "source": {
-      "revision": "fcd9b4e6b3e6102f748e3e4009793b6383f35254",
+      "revision": "acba4c505fce89e49db23a1ba2543777d243dab5",
       "files": {
         "analysis.ts": "8e5ab9fb0ce5dbdf7b71a325381607bf04c650d473e3272101ae9d1c7002a0e3",
         "entry-geometry.ts": "43ffacd71c3562283135590a06947eef4b2617cb3b6ba680c909dd5e2d2ba9a7",
@@ -1542,7 +1520,7 @@
         "layout.ts": "5afb8662a52d8089fcbabb933f158b2e2ede31cec26a273fedf9feb95c0a24e1",
         "line-break.ts": "f23e34dbf46dc8284b45cdb9538002678ec74617b97af16374bd4117e1e844c1",
         "line-text.ts": "31abd7a69c9e4a4dbba57d2791038349e803e65813a819e4e3128e0544d25ae1",
-        "measurement.ts": "5f171de04c5c4553e7dade0dc24304a18a8a22312ba7a98d3b32c106ff741068",
+        "measurement.ts": "db1d78c8cd804d2e2cd67be2dc894a56d34ce8519aa31fc6bbaac5e8336c8a19",
         "rich-inline.ts": "63363d943f07dda50ffada67a63115814e2b6dd1a28ed06a6c0fbd0df3661f65",
         "text-modules.d.ts": "1547f88f0eb75293bc20054194a2bba29a4bc911c2a4fa99cef98141b6f99927"
       }
@@ -1566,7 +1544,7 @@
             "screenAvailWidth": 2560,
             "screenAvailHeight": 1315,
             "visibility": "visible",
-            "focused": true,
+            "focused": false,
             "language": "he",
             "direction": "rtl"
           },
@@ -1584,7 +1562,7 @@
             "screenAvailWidth": 2560,
             "screenAvailHeight": 1315,
             "visibility": "visible",
-            "focused": true,
+            "focused": false,
             "language": "he",
             "direction": "rtl"
           },
@@ -1598,7 +1576,7 @@
         "dpr": 2,
         "locale": "zh-CN",
         "visibility": "visible",
-        "focused": true,
+        "focused": false,
         "fonts": []
       }
     ],
@@ -1614,10 +1592,10 @@
     "mismatches": []
   },
   {
-    "generatedAt": "2026-09-15T21:54:47.193Z",
-    "suiteHash": "c70e0e78ce8bdef01906d7b1b8bbe8bb8443330634e4c45321e332fbf3dee4ba",
+    "generatedAt": "2026-09-16T02:14:27.637Z",
+    "suiteHash": "5b8c137f9e96ca15345aa8545442a6992eee4b63e7e01cf6e00a505a2537e8b7",
     "source": {
-      "revision": "fcd9b4e6b3e6102f748e3e4009793b6383f35254",
+      "revision": "acba4c505fce89e49db23a1ba2543777d243dab5",
       "files": {
         "analysis.ts": "8e5ab9fb0ce5dbdf7b71a325381607bf04c650d473e3272101ae9d1c7002a0e3",
         "entry-geometry.ts": "43ffacd71c3562283135590a06947eef4b2617cb3b6ba680c909dd5e2d2ba9a7",
@@ -1625,7 +1603,7 @@
         "layout.ts": "5afb8662a52d8089fcbabb933f158b2e2ede31cec26a273fedf9feb95c0a24e1",
         "line-break.ts": "f23e34dbf46dc8284b45cdb9538002678ec74617b97af16374bd4117e1e844c1",
         "line-text.ts": "31abd7a69c9e4a4dbba57d2791038349e803e65813a819e4e3128e0544d25ae1",
-        "measurement.ts": "5f171de04c5c4553e7dade0dc24304a18a8a22312ba7a98d3b32c106ff741068",
+        "measurement.ts": "db1d78c8cd804d2e2cd67be2dc894a56d34ce8519aa31fc6bbaac5e8336c8a19",
         "rich-inline.ts": "63363d943f07dda50ffada67a63115814e2b6dd1a28ed06a6c0fbd0df3661f65",
         "text-modules.d.ts": "1547f88f0eb75293bc20054194a2bba29a4bc911c2a4fa99cef98141b6f99927"
       }
@@ -1649,7 +1627,7 @@
             "screenAvailWidth": 2560,
             "screenAvailHeight": 1315,
             "visibility": "visible",
-            "focused": true,
+            "focused": false,
             "language": "ur",
             "direction": "rtl"
           },
@@ -1667,7 +1645,7 @@
             "screenAvailWidth": 2560,
             "screenAvailHeight": 1315,
             "visibility": "visible",
-            "focused": true,
+            "focused": false,
             "language": "ur",
             "direction": "rtl"
           },
@@ -1681,7 +1659,7 @@
         "dpr": 2,
         "locale": "zh-CN",
         "visibility": "visible",
-        "focused": true,
+        "focused": false,
         "fonts": []
       }
     ],

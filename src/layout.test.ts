@@ -1311,6 +1311,45 @@ describe('measurement invariants', () => {
     expect(getSegmentBreakableFitAdvances('abc', metrics, cache, 0, 'segment-prefixes')).toEqual([10, 25, 45])
     expect(getSegmentBreakableFitAdvances('abc', metrics, cache, 0, 'sum-graphemes')).toEqual([10, 20, 30])
   })
+
+  test('the emoji correction counts U+FE0F only after an emoji character', () => {
+    // Like Chrome and Firefox on macOS at small sizes, Canvas measures the emoji
+    // 4px wider than DOM text.
+    const font = '16px Emoji Correction Test'
+    const measureText = Object.getOwnPropertyDescriptor(TestCanvasRenderingContext2D.prototype, 'measureText')!
+    Object.defineProperty(TestCanvasRenderingContext2D.prototype, 'measureText', {
+      ...measureText,
+      value(this: TestCanvasRenderingContext2D, text: string) {
+        return { width: text === '\u{1F600}' ? 20 : measureWidth(text, this.font) }
+      },
+    })
+    const cases: [string, number][] = [
+      ['a\uFE0Fb', 0],
+      [' \uFE0F', 0],
+      ['\u3000\uFE0F', 0],
+      ['1\u20E3', 0],
+      ['\u2764\uFE0F', 1],
+      ['\u{1F44B}', 1],
+      ['1\uFE0F\u20E3', 1],
+      ['#\uFE0F\u20E3', 1],
+      // Chrome and Firefox draw these from the emoji font too, with the same gap.
+      ['1\uFE0F', 1],
+      ['#\uFE0F', 1],
+    ]
+    try {
+      const uncorrected = cases.map(([text]) => measureNaturalWidth(prepareWithSegments(text, font)))
+      Reflect.set(globalThis, 'document', {
+        body: { appendChild: () => undefined, removeChild: () => undefined },
+        createElement: () => ({ style: {}, getBoundingClientRect: () => ({ width: 16 }) }),
+      })
+      clearCache()
+      const removed = cases.map(([text], i) => Math.round(uncorrected[i]! - measureNaturalWidth(prepareWithSegments(text, font))))
+      expect(removed).toEqual(cases.map(([, count]) => count * 4))
+    } finally {
+      Object.defineProperty(TestCanvasRenderingContext2D.prototype, 'measureText', measureText)
+      Reflect.deleteProperty(globalThis, 'document')
+    }
+  })
 })
 
 describe('prepare invariants', () => {
