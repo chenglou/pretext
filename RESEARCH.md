@@ -49,9 +49,18 @@ LineBreakTest.txt and on the corpora, over Chrome's `line_normal.brk` and throug
 libicucore's `ubrk_open` for nine page languages.
 
 Segments are the text between opportunities, split where the break kind changes, so
-a URL splits where the engine may break it and CJK text arrives in its final units. A
-ZWSP, soft hyphen or NEL with no break before the text after it joins that text, as at
-the start of a WebKit scan or under keep-all. WebKit scans a text node's source, where
+a URL splits where the engine may break it and CJK text arrives in its final units,
+and a control character stays its own segment, measured alone, as the merged
+segmentation keeps it. A ZWSP or soft hyphen with no break before the text after it,
+as at the start of a WebKit scan, before a combining mark or a closing bracket, or
+under keep-all, is zero-width glue: its own zero-width segment, which takes no letter
+spacing and doesn't end a line. Folding it into that text instead measured the text
+with it inside, charged it letter spacing native layout doesn't give it, and let an
+emergency break give it a line of its own; the September 15 installed gate lost 1,887
+Chrome and Safari rows that way, such as `a`, U+00AD, U+0301, U+00AD, U+0323, `b` at
+7px in 16px Arial with letter spacing −4, which both browsers paint as `a` / `b`.
+Where a line can still end after the ZWSP or soft hyphen, before a space, tab, hard
+break or NEL, it keeps its kind. WebKit scans a text node's source, where
 a collapsed TAB is still UAX #14 BA, so the WebKit profile maps the source's
 opportunities onto the normalized text; Blink scans the collapsed text, as Pretext
 normalizes it. `Intl.Segmenter` still says which text segments are words for emergency

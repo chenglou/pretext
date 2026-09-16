@@ -176,6 +176,7 @@ function countRenderedSpacingGraphemes(
 ): number {
   if (
     kind === 'zero-width-break' ||
+    kind === 'zero-width-glue' ||
     kind === 'soft-hyphen' ||
     kind === 'hard-break'
   ) {
@@ -577,6 +578,11 @@ function measureAnalysis(
       continue
     }
 
+    if (segKind === 'zero-width-glue') {
+      pushMeasuredSegment(segText, 0, segKind, null, null, 0)
+      continue
+    }
+
     if (segKind === 'hard-break') {
       const endSegmentIndex = widths.length
       pushMeasuredSegment(segText, 0, segKind, null, null, 0)
@@ -649,7 +655,7 @@ function measureAnalysis(
     // its source in the consumed range, like an existing empty hard line.
     // Normalization can erase other line-producing source, such as form feed.
     const onlyZeroWidthBreaks = chunkStartSegmentIndex === 0 &&
-      analysis.kinds.every(kind => kind === 'zero-width-break') &&
+      analysis.kinds.every(kind => kind === 'zero-width-break' || kind === 'zero-width-glue') &&
       analysis.source === analysis.normalized
     if (onlyZeroWidthBreaks) simpleLineWalkFastPath = false
     chunks.push({

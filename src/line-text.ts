@@ -40,7 +40,9 @@ export function buildLineTextFromRange(
 ): string {
   let text = ''
   for (let i = startSegmentIndex; i < endSegmentIndex; i++) {
-    if (prepared.kinds[i] === 'soft-hyphen' || prepared.kinds[i] === 'hard-break') continue
+    // A soft hyphen shows only as the hyphen of a line that ends at it.
+    const kind = prepared.kinds[i]
+    if (kind === 'soft-hyphen' || kind === 'hard-break' || (kind === 'zero-width-glue' && prepared.segments[i]!.charCodeAt(0) === 0x00AD)) continue
     if (i === startSegmentIndex && startGraphemeIndex > 0) {
       const offsets = getSegmentGraphemeOffsets(i, prepared.segments, cache)
       text += prepared.segments[i]!.slice(offsets[startGraphemeIndex]!)

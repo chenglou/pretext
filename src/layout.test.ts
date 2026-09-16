@@ -882,11 +882,90 @@ describe('boundary-policy regressions', () => {
   test('a ZWSP that starts a WebKit scan keeps a basic combining mark', async () => {
     const { analyzeText } = await import('./analysis.ts')
     const profile = { ...baseProfile, lineBreakScan: 'webkit' as const, wordInitialHyphenLetters: 'alphabetic-and-hebrew' as const, breakOnlyAfterNextLine: true }
-    expect(analyzeText('\u200B\u0301ab', profile).texts).toEqual(['\u200B\u0301ab'])
-    expect(analyzeText('x\n\u200B\u0301ab', profile, 'pre-wrap').texts).toEqual(['x', '\n', '\u200B\u0301ab'])
+    const segments = (text: string, whiteSpace?: 'pre-wrap') => {
+      const analysis = analyzeText(text, profile, whiteSpace)
+      return analysis.texts.map((segment, i) => `${segment}:${analysis.kinds[i]}`)
+    }
+    // The ZWSP stays its own zero-width segment, with no break after it.
+    expect(segments('\u200B\u0301ab')).toEqual(['\u200B:zero-width-glue', '\u0301ab:text'])
+    expect(segments('x\n\u200B\u0301ab', 'pre-wrap')).toEqual(['x:text', '\n:hard-break', '\u200B:zero-width-glue', '\u0301ab:text'])
     // Source before the ZWSP, even a collapsed leading space, is prior context.
-    expect(analyzeText(' \u200B\u0301ab', profile).texts).toEqual(['\u200B', '\u0301ab'])
-    expect(analyzeText('x\u200B\u0301ab', profile).texts).toEqual(['x', '\u200B', '\u0301ab'])
+    expect(segments(' \u200B\u0301ab')).toEqual(['\u200B:zero-width-break', '\u0301ab:text'])
+    expect(segments('x\u200B\u0301ab')).toEqual(['x:text', '\u200B:zero-width-break', '\u0301ab:text'])
+  })
+
+  test('a soft hyphen or ZWSP the scan does not break after stays its own zero-width segment', async () => {
+    const { analyzeText } = await import('./analysis.ts')
+    const { getEngineProfile } = await import('./measurement.ts')
+    const blink = { ...baseProfile, lineBreakScan: 'blink' as const }
+    const webkit = { ...baseProfile, lineBreakScan: 'webkit' as const, breakOnlyAfterNextLine: true }
+    const segments = (text: string, profile: Parameters<typeof analyzeText>[1], whiteSpace?: 'pre-wrap', wordBreak?: 'keep-all') => {
+      const analysis = analyzeText(text, profile, whiteSpace, wordBreak)
+      return analysis.texts.map((segment, i) => `${segment}:${analysis.kinds[i]}`)
+    }
+    // No break between a soft hyphen and a combining mark or a closing bracket, or
+    // between a ZWSP and a mark, so neither breaks like its kind; each stays apart
+    // instead of joining the text after it.
+    for (const profile of [blink, webkit]) {
+      expect(segments('a\u00AD\u0301\u00AD\u0323b', profile, 'pre-wrap')).toEqual(['a:text', '\u00AD:zero-width-glue', '\u0301:text', '\u00AD:zero-width-glue', '\u0323:text', 'b:text'])
+      expect(segments('ab\u00AD)cd', profile)).toEqual(['ab:text', '\u00AD:zero-width-glue', ')cd:text'])
+      expect(segments('a\u00AD\u3000b', profile)).toEqual(['a:text', '\u00AD:zero-width-glue', '\u3000:text', 'b:text'])
+      // A break follows a ZWSP even before a mark (LB8), and none precedes it (LB7).
+      expect(segments('a\u00AD\u200B\u0301b', profile)).toEqual(['a:text', '\u00AD:soft-hyphen', '\u200B:zero-width-break', '\u0301b:text'])
+      expect(segments('a\u200B\u00AD\u0301b', profile)).toEqual(['a:text', '\u200B:zero-width-break', '\u00AD:zero-width-glue', '\u0301:text', 'b:text'])
+      // A break after the soft hyphen or ZWSP keeps its kind, as does one before a
+      // space or a hard break, where the line can still end.
+      expect(segments('ab\u00ADcd', profile)).toEqual(['ab:text', '\u00AD:soft-hyphen', 'cd:text'])
+      expect(segments('a\u200B\u200Bb', profile)).toEqual(['a:text', '\u200B:zero-width-break', '\u200B:zero-width-break', 'b:text'])
+      expect(segments('a\u00AD b\u00AD\nc\u00AD', profile, 'pre-wrap')).toEqual(['a:text', '\u00AD:soft-hyphen', ' :preserved-space', 'b:text', '\u00AD:soft-hyphen', '\n:hard-break', 'c:text', '\u00AD:soft-hyphen'])
+    }
+    // Blink keeps letters across a ZWSP under keep-all; WebKit breaks before it.
+    expect(segments('abc\u200Bd', blink, undefined, 'keep-all')).toEqual(['abc:text', '\u200B:zero-width-break', 'd:text'])
+    expect(segments('a\u200B\u0301b', webkit, 'pre-wrap', 'keep-all')).toEqual(['a:text', '\u200B:zero-width-glue', '\u0301b:text'])
+
+    // Zero-width glue is zero-width and unmeasured, takes no letter spacing, and a
+    // line neither ends at it nor draws a hyphen for it.
+    const profile = getEngineProfile()
+    const previous = profile.lineBreakScan
+    profile.lineBreakScan = 'blink'
+    try {
+      const lines = (text: string, width: number, letterSpacing = 0) => {
+        const prepared = prepareWithSegments(text, FONT, { letterSpacing })
+        const result = layoutWithLines(prepared, width, LINE_HEIGHT)
+        expect(collectStreamedLines(prepared, width)).toEqual(result.lines)
+        expect(layout(prepare(text, FONT, { letterSpacing }), width, LINE_HEIGHT).lineCount).toBe(result.lineCount)
+        return result.lines
+      }
+      const prepared = prepareWithSegments('ab\u00AD)cd', FONT, { letterSpacing: 2 })
+      expect(prepared.kinds).toEqual(['text', 'zero-width-glue', 'text'])
+      expect(prepared.widths[1]).toBe(0)
+      expect(prepared.spacingGraphemeCounts[1]).toBe(0)
+      const whole = lines('ab\u00AD)cd', 1000, 2)
+      expect(whole.map(line => line.text)).toEqual(['ab)cd'])
+      expect(whole[0]!.width).toBeCloseTo(measureWidth('ab)cd', FONT) + 5 * 2)
+      const split = lines('ab\u00AD)cd', measureWidth('ab)c', FONT), 2)
+      expect(split.map(line => line.text)).toEqual(['ab', ')cd'])
+      expect(split[0]!.width).toBeCloseTo(measureWidth('ab', FONT) + 2 * 2)
+    } finally {
+      profile.lineBreakScan = previous
+    }
+  })
+
+  test('a control character stays its own segment on the scan path, measured alone', async () => {
+    const { analyzeText } = await import('./analysis.ts')
+    const blink = { ...baseProfile, lineBreakScan: 'blink' as const }
+    const webkit = { ...baseProfile, lineBreakScan: 'webkit' as const, breakOnlyAfterNextLine: true }
+    for (const profile of [blink, webkit]) {
+      for (const control of ['\u0000', '\u000B', '\u007F', '\u009F', '\u2028', '\u2029']) {
+        const analysis = analyzeText(`ab${control}cd`, profile)
+        expect(analysis.texts).toEqual(['ab', control, 'cd'])
+        expect(analysis.kinds).toEqual(['text', 'text', 'text'])
+        expect(analyzeText(`a${control}${control} b`, profile).texts).toEqual(['a', control, control, ' ', 'b'])
+      }
+    }
+    // NEL is text in the Blink profile and a control in the WebKit profile.
+    expect(analyzeText('ab\u0085cd', blink).kinds).toEqual(['text', 'text', 'text'])
+    expect(analyzeText('ab\u0085cd', webkit).kinds).toEqual(['text', 'control', 'text'])
   })
 
   test('a rich item keeps its collapsed leading whitespace as WebKit break context', async () => {
@@ -986,12 +1065,12 @@ describe('boundary-policy regressions', () => {
       expect(lines(text, measureWidth('zz ab\u00A0', FONT) + 0.5).map(line => line.text)).toEqual(['zz ', 'ab\u00A0\u0085\u0085', 'cd \u0085ef'])
       // Content that starts a line can still overflow right before the NEL.
       expect(lines(text, measureWidth('ab\u00A0', FONT) + 0.5).map(line => line.text)).toEqual(['zz ', 'ab\u00A0', '\u0085\u0085', 'cd ', '\u0085ef'])
-      // WebKit's keep-all breaks only at spaces, so a NEL with no break after it joins
-      // the text around it.
+      // WebKit's keep-all breaks only at spaces. A NEL with no break after it still
+      // stays its own control segment, measured alone.
       const { analyzeText } = await import('./analysis.ts')
       const keepAll = analyzeText('zz ab\u00A0\u0085cd \u6F22\u00A0\u0085\u5B57', profile, 'normal', 'keep-all')
-      expect(keepAll.texts).toEqual(['zz', ' ', 'ab\u00A0\u0085cd', ' ', '\u6F22\u00A0\u0085\u5B57'])
-      expect(keepAll.kinds).toEqual(['text', 'space', 'text', 'space', 'text'])
+      expect(keepAll.texts).toEqual(['zz', ' ', 'ab\u00A0', '\u0085', 'cd', ' ', '\u6F22\u00A0', '\u0085', '\u5B57'])
+      expect(keepAll.kinds).toEqual(['text', 'space', 'text', 'control', 'text', 'space', 'text', 'control', 'text'])
       // A rich item that ends in NEL breaks before the next item.
       const rich = prepareRichInline([{ text: 'ab\u0085', font: FONT }, { text: 'cd', font: FONT }])
       expect(measureRichInlineStats(rich, measureWidth('ab\u0085', FONT) + 0.5).lineCount).toBe(2)

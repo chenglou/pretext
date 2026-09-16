@@ -191,7 +191,7 @@ function getTerminalLetterSpacing(
 
   for (let i = endSegmentIndex - 1; i >= startSegmentIndex; i--) {
     const kind = prepared.kinds[i]!
-    if (kind === 'space' || kind === 'zero-width-break' || kind === 'hard-break' || kind === 'soft-hyphen') continue
+    if (kind === 'space' || kind === 'zero-width-break' || kind === 'zero-width-glue' || kind === 'hard-break' || kind === 'soft-hyphen') continue
 
     if (i === startSegmentIndex && startGraphemeIndex > 0) {
       return prepared.letterSpacing
@@ -815,13 +815,14 @@ function walkPreparedComplexLines(
         const startGraphemeIndex = i === cursor.segmentIndex ? cursor.graphemeIndex : 0
         // The gap before a segment belongs to the grapheme before it. A control
         // that takes no letter spacing still follows that gap but adds none
-        // after itself; zero-width breaks and soft hyphens leave it as it was.
+        // after itself; zero-width breaks, zero-width glue and soft hyphens leave
+        // it as it was.
         let leadingSpacing = 0
         if (letterSpacing !== 0 && (spacingGraphemeCounts[i]! > 0 || kind === 'control')) {
           if (hasContent && !zeroWidthPrefix && !afterUnspacedControl) leadingSpacing = letterSpacing
           afterUnspacedControl = spacingGraphemeCounts[i] === 0
         }
-        if (kind !== 'zero-width-break') zeroWidthPrefix = false
+        if (kind !== 'zero-width-break' && kind !== 'zero-width-glue') zeroWidthPrefix = false
         // Tab stops are eight spaces apart, so half a space is a sixteenth of one.
         const w = kind === 'tab'
           ? getTabAdvance(lineW + leadingSpacing, prepared.tabStopAdvance, engineProfile.skipNarrowTabStops ? prepared.tabStopAdvance / 16 : 0)

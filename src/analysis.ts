@@ -12,6 +12,9 @@ export type SegmentBreakKind =
   | 'glue'
   | 'zero-width-break'
   | 'soft-hyphen'
+  // A ZWSP or soft hyphen the engine's scan doesn't break after: zero width, no
+  // letter spacing, no break on either side, unlike glue measured with its text.
+  | 'zero-width-glue'
   | 'hard-break'
   | 'control'
 
@@ -2271,41 +2274,50 @@ function gathersKind(kind: SegmentBreakKind): boolean {
   return kind === 'text' || kind === 'glue' || kind === 'space' || kind === 'preserved-space' || kind === 'soft-hyphen'
 }
 
+// A control character that stays its own text segment, measured alone: the C0 and C1
+// controls that white-space normalization leaves as text, and the line and paragraph
+// separators. The merged segmentation keeps them apart too, as `Intl.Segmenter` does.
+function isControlSegmentCode(code: number): boolean {
+  return code < 0x20 || (code >= 0x7F && code <= 0x9F) || code === 0x2028 || code === 0x2029
+}
+
 // Segments are the text between an engine's break opportunities, split where the
-// break kind changes; text and glue share a segment. A ZWSP, soft hyphen or NEL with
-// no break before the text after it, as at the start of a WebKit scan, before a
-// combining mark or under keep-all, doesn't break like its kind, so it joins that text.
+// break kind changes; text and glue share a segment, and a control stays alone. A ZWSP
+// or soft hyphen that the scan doesn't break after, as at the start of a WebKit scan,
+// before a combining mark or a closing bracket, or under keep-all, is zero-width glue:
+// it stays its own zero-width segment, takes no letter spacing and doesn't end a line.
 function segmentAtLineBreaks(normalized: string, breaks: Uint8Array, whiteSpace: WhiteSpaceMode, breakOnlyAfterNextLine: boolean): MergedSegmentation {
   const starts = [0]
   const kinds = [classifySegmentBreakCode(normalized.charCodeAt(0), whiteSpace, breakOnlyAfterNextLine)]
+  let lastAlone = kinds[0] === 'text' && isControlSegmentCode(normalized.charCodeAt(0))
   for (let i = 1; i < normalized.length; i++) {
-    const kind = classifySegmentBreakCode(normalized.charCodeAt(i), whiteSpace, breakOnlyAfterNextLine)
+    const code = normalized.charCodeAt(i)
+    const kind = classifySegmentBreakCode(code, whiteSpace, breakOnlyAfterNextLine)
+    const alone = kind === 'text' && isControlSegmentCode(code)
     const last = kinds.length - 1
-    if (breaks[i] === 0 && (kind === kinds[last] ? gathersKind(kind) : isTextLikeKind(kind) && isTextLikeKind(kinds[last]!))) {
+    if (
+      breaks[i] === 0 && !alone && !lastAlone &&
+      (kind === kinds[last] ? gathersKind(kind) : isTextLikeKind(kind) && isTextLikeKind(kinds[last]!))
+    ) {
       if (kind === 'text') kinds[last] = 'text'
       continue
     }
     starts.push(i)
     kinds.push(kind)
+    lastAlone = alone
   }
-  for (let j = kinds.length - 2; j >= 0; j--) {
+  // Before a space, tab, hard break or NEL the scan has no break either, but the
+  // line can still end there, so the ZWSP or soft hyphen keeps its kind.
+  const len = kinds.length
+  for (let j = len - 2; j >= 0; j--) {
     const kind = kinds[j]!
+    const next = kinds[j + 1]!
     if (
-      (kind === 'zero-width-break' || kind === 'soft-hyphen' || kind === 'control') &&
-      breaks[starts[j + 1]!] === 0 && isTextLikeKind(kinds[j + 1]!)
+      (kind === 'zero-width-break' || kind === 'soft-hyphen') &&
+      breaks[starts[j + 1]!] === 0 && (isTextLikeKind(next) || next === 'zero-width-glue')
     ) {
-      kinds[j] = 'text'
+      kinds[j] = 'zero-width-glue'
     }
-  }
-  let len = 0
-  for (let j = 0; j < kinds.length; j++) {
-    if (len > 0 && breaks[starts[j]!] === 0 && isTextLikeKind(kinds[j]!) && isTextLikeKind(kinds[len - 1]!)) {
-      if (kinds[j] === 'text') kinds[len - 1] = 'text'
-      continue
-    }
-    starts[len] = starts[j]!
-    kinds[len] = kinds[j]!
-    len++
   }
   const texts: string[] = []
   const isWordLike: boolean[] = []
@@ -2313,8 +2325,6 @@ function segmentAtLineBreaks(normalized: string, breaks: Uint8Array, whiteSpace:
     texts.push(normalized.slice(starts[j]!, j + 1 < len ? starts[j + 1]! : normalized.length))
     isWordLike.push(false)
   }
-  starts.length = len
-  kinds.length = len
   // Intl.Segmenter's word-likeness still decides emergency breaks: a text segment is a
   // word where a word-like segment of the whole text overlaps it.
   let first = 0
