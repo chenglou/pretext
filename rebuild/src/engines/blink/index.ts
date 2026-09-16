@@ -95,15 +95,6 @@ function prepareGaps(p: BlinkPrepared): void {
       if ((c === 0x0c && collapses) || c === 0x0b || (c >= 0x01 && c <= 0x08) || (c >= 0x0e && c <= 0x1f) || (c >= 0x7f && c <= 0x9f)) {
         addGap(p, 'control-character-width', item.run, `U+${c.toString(16).toUpperCase().padStart(4, '0')}: FF and VT measured as U+0001, other controls literally; the fallback font Core Text picks for a control isn't probed (specs/blink-gaps.md §2.8)`)
       }
-      // shape.ts leaves out the default-ignorable characters Canvas would turn into U+200B. In the DOM their hidden glyphs
-      // are removed only after substitution (hb-ot-shape.cc hb_ot_hide_default_ignorables), so they can still block a
-      // ligature or an emoji sequence that the Canvas word forms.
-      switch (c) {
-        case 0xad: case 0x200b: case 0x200e: case 0x200f: case 0x202a: case 0x202b: case 0x202c: case 0x202d: case 0x202e: case 0xfeff:
-          if (k > item.start && k + 1 < item.end) {
-            addGap(p, 'soft-hyphen-shaping', item.run, `Canvas measures the word without U+${c.toString(16).toUpperCase().padStart(4, '0')}, whose hidden glyph can still block a ligature or emoji sequence in the DOM`)
-          }
-      }
       // Canvas turns U+FFFC into U+200B (character.h:167-175); the DOM shapes it with a fallback glyph.
       if (c === 0xfffc) addGap(p, 'font-fallback', item.run, 'U+FFFC in text: Canvas measures it as U+200B')
     }

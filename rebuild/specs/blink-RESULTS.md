@@ -23,6 +23,22 @@ rows with the current score.ts (`.artifacts/lab/blink/rescore/`).
 | policy (1,606) | policy-r5 | 1605/1/0/0 | 1602/4/0/0 | 1599/3/0/4 | 1599/7/0/0 |
 | suite-sample (19,994) | suite-r1, rescored | 19333/660/1/0 | 19068/702/224/0 | 14570/1938/2560/926 | 15150/4677/167/0 |
 | suite-sample (19,994) | suite-r3 | 19318/675/1/0 | 19047/723/224/0 | 14666/1273/3108/947 | 17622/2205/167/0 |
+| smoke (299) | smoke-r7 | 296/3/0/0 | 290/3/6/0 | 262/9/19/9 | 283/12/4/0 |
+| smoke (299) | smoke-r8 | 295/4/0/0 | 287/6/6/0 | 258/10/19/12 | 280/15/4/0 |
+| ws (1,019) | ws-r7, ws-r8 | 1019/0/0/0 | 1017/0/2/0 | 975/1/41/2 | 968/18/33/0 |
+| runs (2,580) | runs-r7, runs-r8 | 2566/5/9/0 | 2551/19/10/0 | 2342/125/84/29 | 2342/158/80/0 |
+| policy (1,606) | policy-r6 | 1605/1/0/0 | 1602/4/0/0 | 1599/3/0/4 | 1599/7/0/0 |
+| policy (1,606) | policy-r7 | 1603/3/0/0 | 1593/13/0/0 | 1585/8/0/13 | 1586/20/0/0 |
+| suite-sample (19,994) | suite-r4 | 19320/673/1/0 | 19063/707/224/0 | 14671/1284/3108/931 | 17628/2199/167/0 |
+| suite-sample (19,994) | suite-r5 | 18996/997/1/0 | 18655/1115/224/0 | 14167/1380/3108/1339 | 17383/2444/167/0 |
+| smoke (299) | smoke-r9 | 298/1/0/0 | 292/1/6/0 | 262/10/20/7 | 288/7/4/0 |
+| ws (1,019) | ws-r9 | 1019/0/0/0 | 1017/0/2/0 | 975/1/41/2 | 973/13/33/0 |
+| runs (2,580) | runs-r9 | 2566/5/9/0 | 2551/19/10/0 | 2342/125/84/29 | 2348/152/80/0 |
+| policy (1,606) | policy-r8 | 1605/1/0/0 | 1602/4/0/0 | 1599/3/0/4 | 1600/6/0/0 |
+| suite-sample (19,994) | suite-r6 | 19888/105/1/0 | 19654/116/224/0 | 15105/1181/3368/340 | 19349/473/172/0 |
+
+The r9 runs and suite-r6 bundled the painter owner's paint.ts 3221c114, and every earlier run used 6bfbbc89 (hashes in
+`.artifacts/lab/blink/<run>.build.txt`), so painter changes in those runs aren't the engine's alone.
 
 suite-r3 ran in eight chunks of 2,500 cases (`.artifacts/lab/blink/cases/suite-0N.ndjson`, `suite-r3-0N/`), each under
 its own lock. smoke-r5 and runs-r5 were an intermediate build, before the default-ignorable pair window.
@@ -78,6 +94,20 @@ From `prediction.measureLog` (calls that reached Canvas; the per-layout memo ans
 | policy-r5 | 45.6 | 40 | 97 | 207 | 9.4 |
 | suite-r1 | 32.7 | 12 | 94 | 8,698 | 10.2 |
 | suite-r3 | 38.5 | 23 | 99 | 9,111 | 12.0 |
+| smoke-r7 | 47.6 | 38 | 119 | 213 | 10.6 |
+| smoke-r8 | 47.4 | 38 | 119 | 213 | 10.6 |
+| ws-r7 | 38.8 | 37 | 86 | 167 | 10.7 |
+| ws-r8 | 38.7 | 36 | 86 | 167 | 10.7 |
+| runs-r7, runs-r8 | 68.6 | 59 | 150 | 342 | 15.6 |
+| policy-r6 | 47.4 | 41 | 100 | 207 | 9.7 |
+| policy-r7 | 47.3 | 41 | 100 | 207 | 9.7 |
+| suite-r4 | 40.3 | 23 | 106 | 10,241 | 12.6 |
+| suite-r5 | 40.0 | 23 | 106 | 10,241 | 12.6 |
+| smoke-r9 | 47.6 | 38 | 119 | 213 | 10.6 |
+| ws-r9 | 38.8 | 36 | 86 | 167 | 10.7 |
+| runs-r9 | 68.6 | 59 | 150 | 342 | 15.6 |
+| policy-r8 | 47.3 | 41 | 100 | 207 | 9.7 |
+| suite-r6 | 40.7 | 24 | 106 | 10,241 | 12.6 |
 
 A group narrower than 256 zoomed px is now one call instead of pieces cut every 32 code units and at space edges. The
 nextLine lookahead for line boxes lays out the next line again, which the memo answers.
@@ -99,7 +129,8 @@ nextLine lookahead for line boxes lays out the next line again, which the memo a
   safe-to-break never inside a cluster, between joining letters, at a HanKerning-halted group start, or where the pair
   total shows an adjustment; U+200D where text joins across a range edge (inside a group always, at call edges per
   `JOINING_CONTEXT`); HanKerning start and end trims on every later position; letter spacing on spaces in cursive runs
-  and on FF, by the Canvas string's own script runs; 8-bit or 16-bit Canvas strings as the paragraph segments;
+  and on FF, by the Canvas string's own script runs; 8-bit or 16-bit Canvas strings as the paragraph segments; U+2060 in
+  place of the default-ignorable characters Canvas turns into U+200B, left out where the string would otherwise be 8-bit;
   system-ui measured at the CSS size and scaled; views, reshapes, the hyphen, tab runs.
 - `hankerning.ts`: HanKerning character types (ICU 78.2 blk, ea, gc), font data from Canvas (`halt` through the 「「
   pair trim, glyph ink bounds for dots, colons and quotes), ShouldKern and ShouldKernLast, trims per character.
@@ -125,9 +156,11 @@ ws-r6 (1), policy-r5 (7) or runs-r6 (144), and 9 of 2,005 in suite-r3, class 7 b
 2. **A chosen soft hyphen in an RTL run is drawn but not observed (lab observation, rebuild/lab/ISSUES.md).** About 575
    suite-r3 lines differ by exactly the hyphen (+756 units Amiri, +660 Noto Naskh Arabic, +682 Arial); smoke
    `c-1cb8b9aea80ececb`, `c-f73e825e2a1758dd`. Probe blink-followups F3 shows the hyphen drawn left of the letter.
-3. **Soft hyphens between emoji sequence parts (named gap `soft-hyphen-shaping`).** suite-r3 woman-before-zwj 164,
-   skin-modifier 148, woman-after-zwj 148 line counts. The port drops the SHY from measured text, which joins `👍` + `🏽`
-   into one glyph in Canvas; in the DOM the hidden SHY glyph blocks the sequence. Example `c-018aabf9e8c15984`.
+3. **Soft hyphens between emoji sequence parts (resolved after suite-r5).** suite-r3 woman-before-zwj 164, skin-modifier
+   148, woman-after-zwj 148 line counts: the port left the SHY out, so Canvas joined `👍🏽`, which natively stays two
+   segments. Canvas strings now carry U+2060 there (Follow-up). In suite-r6 these three families fail no line count and
+   no break; skin-modifier/shy still fails 12 widths, not attributed yet (`c-07a3246bc666d379` line 2: native
+   15.6796875px, predicted 18.6796875px). `c-018aabf9e8c15984` passes.
 4. **Common punctuation that inherits another script (named gap `script-context`).** suite-r3 36 lines at −623 units:
    Amiri `(` after Arabic shapes with the Arabic script natively and as Latin in Canvas. Example `c-26a7a7b28da24b44`.
    No Canvas string gives an LTR `(` the Arabic script: an Arabic letter beside it starts another bidi run.
@@ -170,6 +203,79 @@ ws-r6 (1), policy-r5 (7) or runs-r6 (144), and 9 of 2,005 in suite-r3, class 7 b
 - arabic-ot-0/1, arabic-aat-0/1: the joining model comparison above.
 - smoke-r6, ws-r6, runs-r6, policy-r5, suite-r3: pair windows reach past default-ignorable characters, which HarfBuzz's
   lookups skip (`c-544518dd1f5540d5` now passes); the painted extent is at least 0 (`c-b097eff3c56ef9a0`).
+- smoke-r7, ws-r7, runs-r7, policy-r6, suite-r4: the build before the default-ignorable change. Every metric equals the
+  r6 runs in smoke, ws, runs and policy; suite-r4 differs from suite-r3 in 23 cases (my-cunning-heron-teacher,
+  spacing/curly-single-close, my-bad-deeds-return-to-you-teacher, maintained/corpus), not attributed here.
+- smoke-r8, ws-r8, runs-r8, policy-r7, suite-r5: default-ignorable characters left out of Canvas strings (see Follow-up).
+- smoke-r9, ws-r9, runs-r9, policy-r8, suite-r6: U+2060 in place of those characters, left out where the string would
+  otherwise be 8-bit (see Follow-up); paint.ts 3221c114 from its owner.
+
+## Follow-up
+
+**Left out of Canvas strings (smoke-r8, ws-r8, runs-r8, policy-r7, suite-r5).** The previous build left SHY, ZWSP, LRM,
+RLM, U+202A..U+202E and U+FEFF out of every Canvas string, because Blink's Canvas turns them into U+200B and ends a word
+there. Against smoke-r7, ws-r7, runs-r7, policy-r6 and suite-r4 (fixed / broke):
+
+- ws, runs: no case changed.
+- smoke: lineCount 0 / 1, breaks 0 / 3, widths 0 / 4, painter 0 / 3, all policy/thai.
+- policy: lineCount 0 / 2, breaks 0 / 9, widths 0 / 14, painter 0 / 13, all policy/thai: Thonburi cases with U+200B
+  before a mark or vowel (`ค​์`), which the left-out ZWSP put on the consonant before it.
+- suite: lineCount 1 / 325, breaks 1 / 409, widths 1 / 505, painter 8 / 253.
+  - skin-modifier/zwsp, woman-after-zwj/zwsp and woman-before-zwj/zwsp: widths 168 / 168 / 168 broke. Canvas joined `👍🏽`
+    and `👩‍🚀` across the left-out ZWSP; natively the sequence stays split.
+  - U+FEFF/middle 10, U+200B/middle 1, control 1: `ب­ب﻿ب` in Shantell Sans (Geeza Pro fallback). Canvas joined the letters
+    across the ZWSP or U+FEFF; natively Geeza Pro gives isolated forms there.
+  - cluster-v1: broke `a​́b` (Arial, letter spacing −4px, `c-7f37991f6889a284`), where the mark moved onto `a`; fixed
+    `a﻿﻿́b` (Courier New, −4px, `c-bf63924e328743c3`).
+  - mark-context and source-views: painter fixed 7 (`a⁠́​̈b`, Courier New).
+  - partial-source-context: `c-9f72ec9d12c60092` passes (`‏((tail` in Amiri); see the RLM strings below.
+
+**Probe blink-ignorables.** 29 DOM strings in installed Chrome, against Canvas strings at the zoomed size (DOM units
+against ceil64 of the Canvas width):
+
+- Left out: wrong for every emoji sequence with SHY or ZWSP between its parts (`a👍­🏽b` natively 8793 units, left out
+  6489), Geeza Pro joining across ZWSP or U+FEFF (3931 against 2527), and Thai marks after ZWSP (14160 against 12991).
+- The character itself, U+2060 and U+034F: equal to the DOM in 27 of 29 strings, including those, kerning across ZWSP
+  (Arial `A​V`, ProbeShantell bold `abc​d` with 1px spacing), Amiri joining, and marks after ZWSP or U+FEFF with letter
+  spacing −4px and 1px.
+- U+180E: wrong wherever script matters (Mongolian script splits the run): kerning, Amiri.
+- Parts measured alone: wrong for kerning, joining, letter spacing on marks and `a👍­🏽b`.
+- The other 2 strings hold RLM before `((` in Amiri. The RTL item `‏((` is 1567 units natively and left out, and 2814 with
+  the character or any substitute. It isn't the storage class: in `ignorables-3`, `(((` is 36.719970703125px as an 8-bit
+  and as a 16-bit string, while `⁠((` is 43.967987060546875px against `((` at 24.47998046875px. The cause isn't known.
+
+**The recipe (smoke-r9, ws-r9, runs-r9, policy-r8, suite-r6).** From source: the DOM keeps the character in the shaping
+call. RunSegmenter's emoji scanner sees a non-emoji character there, so `👍` SHY `🏽` stays two segments
+(emoji_segmentation_category_inline_header.h:15-77); `morx` state machines see its glyph (hb-aat-layout-common.hh:1226-1241);
+HarfBuzz hides it only after substitution (hb-ot-shape.cc:951-959). The character itself can't go into a Canvas string:
+Canvas turns it into U+200B (plain_text_node.cc:47-62), which ends a word in fonts shaped word by word (:85-91). U+2060
+WORD JOINER has the same HarfBuzz properties (gc Cf, neither joiner nor hidden, hb-ot-layout.hh:212-244), script Common,
+emoji category kMaxCategory and bidi class BN, and Canvas doesn't normalize it. So `canvasString` measures U+2060 in
+place of these characters. Where the string without them would be 8-bit (an 8-bit paragraph, or 1 or 2 code units),
+they're left out and the string keeps that storage, as every probed Latin-1 string (and the RLM item above) needs, and
+`soft-hyphen-shaping` is reported, since a `morx` substitution across a left-out character can still differ.
+
+Prediction metrics against the build before any change (smoke-r7, ws-r7, runs-r7, policy-r6, suite-r4), fixed / broke:
+
+- suite: lineCount 568 / 0, breaks 591 / 0, widths 434 / 0. skin-modifier/shy 148, woman-before-zwj/shy 164 and
+  woman-after-zwj/shy 148 line counts (class 3); the U+200B..U+200D, U+2060, U+FEFF and U+2028 families, 6 each at
+  start, 4 in the middle and 4 at end (U+2028/start 10, U+2028/end 12, U+200D/end 6); marks 3, unprovided-direction 2
+  and single cases in control-character families. Against suite-r5: lineCount 893 / 1, breaks 999 / 0, widths 938 / 0.
+  The one is `c-bf63924e328743c3` (`a﻿﻿́b`, Courier New, −4px), which suite-r5 fixed and which fails again as in suite-r4
+  (native 3 lines, predicted 5), though the probe's `a﻿﻿́b` at −4px equals the DOM. Not attributed.
+- smoke: lineCount 2 / 0, breaks 2 / 0 (woman-after-zwj/shy, U+2060/start); the policy/thai cases smoke-r8 broke pass
+  again.
+- policy: no prediction metric differs from policy-r6; the 14 Thai cases policy-r7 broke pass again.
+- ws, runs: no prediction metric differs.
+- Painter (confounded with paint.ts 3221c114): suite 1721 / 0, smoke 5 / 0, ws 5 / 0, runs 6 / 0, policy 1 / 0. Some
+  suite fixes are `a­b` beside a C0 or C1 control in 8-bit paragraphs, whose Canvas strings didn't change, so they come
+  from the painter: its change keeps lines that end at a chosen soft hyphen or start with U+200D from wrapping, and
+  paints an empty span between two slices.
+- Still failing in the families this touched: U+FEFF/middle 2 line counts and 46 widths (from 6 and 48), U+200B/middle 1,
+  control 2 widths and partial-source-context 7 line counts, all as in suite-r4.
+- measureText calls: suite-r6 mean 40.7, against 40.3 in suite-r4.
+
+`bun test rebuild/src/engines/blink`: 60 pass, 0 fail. `bunx tsc --noEmit -p rebuild/tsconfig.json` is clean.
 
 ## Probes run
 
@@ -179,6 +285,11 @@ ws-r6 (1), policy-r5 (7) or runs-r6 (144), and 9 of 2,005 in suite-r3, class 7 b
 - F2: PingFang SC `《书名》：标` at 1px: lines `《书`, `名》：` (》 10px wide), `标`.
 - F3: a chosen soft hyphen in Noto Naskh Arabic is drawn left of the letter while its SHY rect is zero width (class 2).
 - F4: tab stops follow the untracked space advance (class 8).
+
+`rebuild/probes/blink-ignorables.ts` in installed Chrome 153 (`.artifacts/probes/blink/ignorables-2/chrome-probes.json`,
+and `ignorables-3` with the storage probe): 29 strings holding SHY, ZWSP, RLM or U+FEFF, each DOM width against Canvas
+strings with the character left out, the character itself, U+2060, U+034F and U+180E, and Amiri brackets as 8-bit and
+16-bit strings (Follow-up).
 
 ## Notes for the architect
 
@@ -193,6 +304,9 @@ ws-r6 (1), policy-r5 (7) or runs-r6 (144), and 9 of 2,005 in suite-r3, class 7 b
 - DESIGN.md §5 `unsafe-to-break`: the pair-total test is only necessary. It misses joining letters and adjustments across
   default-ignorable characters (hb-ot-layout-gsubgpos.hh:558-571), which the port now checks.
 - Shared-file change: GapName `tab-stops` (SHARED-CHANGES.md, 10:50).
+- DESIGN.md §5 `soft-hyphen-shaping`, Blink column: the handling is U+2060 in place of SHY, ZWSP, LRM, RLM, U+202A..U+202E
+  and U+FEFF (Canvas turns all of them into U+200B, not only SHY), and the character left out where the Canvas string
+  would otherwise be 8-bit. Predictions can be wrong where a `morx` substitution crosses a left-out character (Follow-up).
 - blink-gaps §8's hypotheses beyond F1-F4 still have no probe verdict: U+2028 for spaces (H5-H8), U+0001 for FF and VT
   (H1-H3, which probes-chrome X2 supports for Arial and Helvetica Neue), and the pair-total safe test (H12).
 - `bun test rebuild/src`: 128 pass, 0 fail. `bunx tsc --noEmit -p rebuild/tsconfig.json` is clean.

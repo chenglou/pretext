@@ -186,21 +186,33 @@ export function joinsAcross(p: BlinkPrepared, k: number, lo: number, hi: number)
 // and Blink keys storage on V8's representation (to_blink_string.cc:216-227). A paragraph that RunSegmenter segments gets
 // 16-bit strings where V8 keeps them 16-bit: slices of a 16-bit string, except those of 1 and 2 code units, which V8 makes
 // 8-bit when their code units allow.
-type CanvasString = { s: string; units: Int32Array; twoByte: boolean }
+//
+// The default-ignorable characters Canvas turns into U+200B end a Canvas word (TreatAsZeroWidthSpaceInComplexScriptLegacy,
+// character.h:167-175; plain_text_node.cc:47-62, 85-91): SHY, ZWSP, LRM, RLM, U+202A..U+202E and U+FEFF. The DOM keeps
+// such a character in the shaping call. RunSegmenter's emoji scanner sees a non-emoji character there, so `👍` SHY `🏽`
+// stays two segments (emoji_segmentation_category_inline_header.h:15-77); a combining mark after it starts another cluster;
+// `morx` state machines see its glyph (hb-aat-layout-common.hh:1226-1241); HarfBuzz hides it only after substitution
+// (hb-ot-shape.cc:951-959). U+2060 WORD JOINER has the same HarfBuzz properties (gc Cf, neither joiner nor hidden:
+// hb-ot-layout.hh:212-244), script Common, emoji category kMaxCategory and bidi class BN, and Canvas doesn't normalize it,
+// so the string carries U+2060 instead (probe blink-ignorables: emoji sequences, Geeza Pro and Amiri joining, Thai marks,
+// kerning and letter spacing all equal the DOM). Where the string without the character would be 8-bit (an 8-bit
+// paragraph, or 1 or 2 code units, as above), the character is left out and the string keeps that storage; every probed
+// Latin-1 string equals the DOM that way. The RTL item `‏((` in Amiri is one: 1567 units natively and left out, 2814 with
+// U+2060 or the character itself. That difference isn't storage (`(((` measures the same as an 8-bit and a 16-bit string)
+// and its cause isn't known. A `morx` substitution across a character left out can still differ (gap soft-hyphen-shaping).
+type CanvasString = { s: string; units: Int32Array; twoByte: boolean; leftOut: boolean }
 
 function canvasString(p: BlinkPrepared, from: number, to: number, zwjBefore: boolean, zwjAfter: boolean): CanvasString {
-  const codes: number[] = []
-  const units: number[] = []
+  let codes: number[] = []
+  let units: number[] = []
   if (zwjBefore) { codes.push(0x200d); units.push(-1) }
   let wide = zwjBefore || zwjAfter
+  const substituted: number[] = []
   for (let i = from; i < to; i++) {
     const c = p.text.charCodeAt(i)
     switch (c) {
-      // The default-ignorable characters Canvas turns into U+200B, which ends a Canvas word (character.h:167-175,
-      // plain_text_node.cc:84-113). HarfBuzz hides them inside one call (hb-ot-shape.cc hb_ot_hide_default_ignorables),
-      // and joining and lookups skip them (hb-ot-layout-gsubgpos.hh:558-571), so a word measures as if they weren't there.
       case 0xad: case 0x200b: case 0x200e: case 0x200f: case 0x202a: case 0x202b: case 0x202c: case 0x202d: case 0x202e: case 0xfeff:
-        continue
+        substituted.push(codes.length); codes.push(0x2060); break
       case 0x20: codes.push(0x2028); wide = true; break
       case 0x0b: case 0x0c: codes.push(0x0001); break
       default: codes.push(c); if (c > 0xff) wide = true
@@ -208,10 +220,23 @@ function canvasString(p: BlinkPrepared, from: number, to: number, zwjBefore: boo
     units.push(i)
   }
   if (zwjAfter) { codes.push(0x200d); units.push(-1) }
+  const twoByte = wide || (p.segmented && codes.length - substituted.length > 2)
+  const leftOut = !twoByte && substituted.length > 0
+  if (leftOut) {
+    const keptCodes: number[] = []
+    const keptUnits: number[] = []
+    for (let i = 0, next = 0; i < codes.length; i++) {
+      if (next < substituted.length && substituted[next] === i) { next++; continue }
+      keptCodes.push(codes[i]!)
+      keptUnits.push(units[i]!)
+    }
+    codes = keptCodes
+    units = keptUnits
+  }
   let s = ''
   for (let i = 0; i < codes.length; i += 4096) s += String.fromCharCode(...codes.slice(i, i + 4096))
-  const twoByte = wide || (p.segmented && codes.length > 2)
-  return { s: twoByte && !wide ? ('Ā' + s).slice(1) : s, units: Int32Array.from(units), twoByte }
+  const forced = twoByte && !wide && substituted.length === 0
+  return { s: forced ? ('Ā' + s).slice(1) : s, units: Int32Array.from(units), twoByte, leftOut }
 }
 
 // Math.round(W × 65536) of text_content[from, to) inside group g, in its context, with JS word spacing and the letter
@@ -225,6 +250,9 @@ export function measure16(sh: Shaper, g: number, from: number, to: number, resha
   const w = cs.s.length === 0 ? 0 : raw16Of(sh, contexts, group.rtl ? contexts.rtl : contexts.ltr, cs.s)
   const scripts = cs.twoByte ? scriptsPerUnit(cs.s) : null
   const st = p.styles[group.style]!
+  if (cs.leftOut && cs.s.length > 1) {
+    addGap(p, 'soft-hyphen-shaping', st.run, `text_content [${from}, ${to}) is measured as an 8-bit string without its default-ignorable characters, whose glyphs a \`morx\` substitution across them still sees in the DOM (hb-aat-layout-common.hh:1226-1241)`)
+  }
   const ls16 = st.letterSpacing === 0 ? 0 : raw16Trunc(f32(st.letterSpacing * p.layoutZoom))
   let adjust = wordSpacing16(p, group.style, from, to)
   for (let u = 0; u < cs.units.length; u++) {
