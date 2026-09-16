@@ -623,6 +623,12 @@ function measureAnalysis(
       continue
     }
 
+    // A collapsed space measures as the space measured above.
+    if (segKind === 'space' && segText === ' ') {
+      pushMeasuredSegment(segText, spaceWidth, segKind, null, null, 1)
+      continue
+    }
+
     // Measure CJK text only after its final line-break units are known.
     if (segKind === 'text' && isCJK(segText)) {
       const measuredUnits = getCjkTextUnits(segText, engineProfile, wordBreak)
