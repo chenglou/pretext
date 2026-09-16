@@ -277,3 +277,69 @@ failures, including B1 and B2.
 - **N3. RTL soft hyphen observation (class 6).** File the lab/ISSUES.md entry once a probe shows whether the hyphen is
   drawn.
 - **N4. The suite numbers need suite-r2 at the current build** before any claim about the 20k sample.
+
+## 8. Resolution (Blink owner, 2026-09-16)
+
+Runs: smoke-r6, ws-r6, runs-r6, policy-r5 and suite-r3, scored with the current score.ts against the rescored earlier rows
+(specs/blink-RESULTS.md). Probes: `rebuild/probes/blink-followups.ts` F1-F4 in installed Chrome 153.
+
+- **B1. Fixed.** Each group keeps its HanKerning edge trims (`startTrim16`, `endTrim16`), and `groupPrefix16` subtracts
+  the start trim from every position after the group's first character, whatever the cuts (han_kerning.cc:235-262).
+  `c-07f2657d11bf821f` and `c-111dee8e6a53b668` pass all four metrics in runs-r6; runs lang-spans widths gain 18 cases.
+- **B2. Fixed.** `safeToBreak` at a group start is false when HanKerning halted the first character, the offset it adds to
+  the unsafe ones (harfbuzz_shaper.cc:1044-1048). `c-5325d5f65e230b90` passes all four metrics.
+- **B3. Agreed on the source; one model now, chosen by measurement.** HarfBuzz marks every join unsafe to break
+  (`hb-shape --show-flags` flags the joins in Amiri, Noto Naskh Arabic, Arial and Geeza Pro), so `safeToBreak` rejects
+  joining offsets and ShapeLine reshapes those line edges. What the reshape gives depends on the font, and probe F1
+  settles it: Amiri keeps initial, medial and final forms on one-letter lines, Geeza Pro takes isolated forms, because
+  `morx` fonts never read HarfBuzz's context (hb-ot-shape.cc:60-66, 100-101). Canvas can't tell the two apart. The
+  inconsistency is gone: `JOINING_CONTEXT` decides group edges and reshape edges alike, and inside a group letters are
+  always joined. Over 5,272 Arabic cases OpenType keeps 562 more line counts and 583 more breaks, AAT 111 more widths, all
+  in Geeza Pro, so the port measures OpenType forms and reports `unsafe-to-break` with that mechanism at every such edge.
+  `c-a6803706e450767e` and `c-0dd1d404ea812dbc` still fail, now for the declared reason, and the two wrong-reason passes
+  (`c-063f813aa30b2357`, `c-7e2d34d616d88252`) fail widths under it. painter.md §3.1 a is routed to the architect.
+- **B4. Reported, not handled.** `script.ts` ports ScriptRunIterator (47 of Blink's ICU-data unit tests pass). The
+  paragraph's script per unit comes from it where RunSegmenter runs (inline_node.cc:1256-1290), and each Canvas string is
+  resolved the same way: one Latin segment when 8-bit, ScriptRunIterator when 16-bit, with V8 storage chosen by
+  construction (to_blink_string.cc:216-227). A word Canvas shapes under another script reports `script-context`;
+  `c-26a7a7b28da24b44` does (debug-3). No Canvas string gets an LTR `(` the Arabic script, because an Arabic letter
+  beside it starts another bidi run. RESULTS' old class 11 was wrong: EqualsRunSegment compares segment data that items
+  only get in single-segment paragraphs (inline_item.cc:187-196), so groups span segments and each segment is its own
+  HarfBuzz call inside the group, which Canvas repeats per string.
+- **B5. Fixed in the engine.** `paintedExtent` follows score.ts's markVisible and lineExtent, which the lab updated at 10:30
+  (controls other than TAB, LF and CR with a positive rect are visible), over generated ICU 78.2 classes (White_Space;
+  gc Cc, Cf, Zl, Zp; Default_Ignorable_Code_Point) instead of a hand-written list. `c-7dcfed3b3b987d59` passes painter in
+  smoke-r6 and its widths are unobserved (line 0 ends at a positive soft hyphen rect). The lab README already matches
+  score.ts, so no lab entry was needed.
+- **B6. Fixed where a rule exists, reported otherwise.**
+  - `unsafe-to-break` is reported at line edges: between joining letters; where a wrapped line start or a line end
+    before a space takes a paragraph position with a nonzero pair adjustment (L1); where a group of 256 zoomed px or more
+    is cut at an adjusted offset.
+  - `in-word-prefix` is reported where a line edge inside a word rests on the pair test alone (L2).
+  - `tab-stops` is a new shared gap name. Probe F4 shows 16px Helvetica Neue's stops at 35.5859375px, 8 × the untracked
+    space advance, not 8 × Canvas's 4.453125px; `c-87e013cf240ecbdc` reports it.
+  - `optical-size`: system-ui and BlinkMacSystemFont are measured at the CSS size and scaled, as probes-chrome
+    correction 7 says, and report the gap at zoom ≠ 1. No lab case uses them.
+  - `c-544518dd1f5540d5` was a port bug. HarfBuzz's lookups skip default-ignorable glyphs (hb-ot-layout-gsubgpos.hh:558-571),
+    so `c` and `d` kern across the U+200B: Canvas gives `abc​d` 88.70395px against `abc` 64.81596px + `d` 24.07999px. The pair
+    window stopped at the U+200B and called the line start safe. Windows now reach past default-ignorable clusters; the
+    case passes all four metrics in smoke-r6.
+  - `han-kerning` fires only where the port adds a trim arithmetically (group edges, reshape edges, the line-end trim).
+  - Census with a stand-in Canvas against the final metrics: failing cases without a gap are 0 of 12 (smoke), 0 of 1 (ws),
+    0 of 7 (policy), 0 of 144 (runs) and 9 of 2,005 (suite). The 9 are Times New Roman `A` before a space on a
+    paragraph's last line, where line-edge gaps weren't checked; fixed after suite-r3, predicted lines unchanged.
+  - The Geeza Pro letter spacing fix (`c-2eb90aa2648b07b7`) passes; the Thai break-all cases were resolved by the lab.
+- **B7. Fixed.** A group below 256 zoomed px is one Canvas call (blink-canvas §1.5). A wider group is halved at the offset
+  nearest its middle that passes the safe test, else at the nearest cluster boundary with the pair adjustment added and
+  `unsafe-to-break` reported (blink-gaps §3.6 L4). `MAX_PIECE` and the space-edge cuts are gone.
+- **§3 heuristics.** `restCreatesLineBox` is gone: firstLine and nextLine lay the following line out and fold lines whose
+  results create no line box (line_breaker.cc:945-975, inline_layout_algorithm.cc:1493-1498). `availableWidth` uses
+  f32(f32(width) × f32(zoom)). The stale comment is fixed. `hasHalt` still comes from the 「「 trim: Blink's ten-glyph test
+  (han_kerning.cc:465-470) needs glyph ids Canvas doesn't expose, and `han-kerning` covers it where a trim is added.
+- **Also found.** A painted extent could go negative (`c-b097eff3c56ef9a0`, a lone combining mark at letter spacing
+  −1px); it is at least 0 now, as the lab derives for content without a positive rect.
+- **N1.** F1-F4 are run and recorded in RESULTS. blink-gaps §8 H5-H8 (U+2028) and H12 (pair totals) still have no verdict.
+- **N2.** Routed in RESULTS' notes for the architect.
+- **N3.** Filed in rebuild/lab/ISSUES.md with probe F3: the hyphen is drawn, its SHY rect is zero width in an RTL run,
+  and about 575 suite-r3 lines differ by exactly the hyphen.
+- **N4.** suite-r3 is at the current build.

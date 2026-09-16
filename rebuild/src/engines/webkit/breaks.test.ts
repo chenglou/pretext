@@ -14,7 +14,7 @@ import { WEBKIT, type Environment } from '../../env.js'
 import { createMeasurer } from '../../measure/canvas.js'
 import type { Paragraph, TextRun } from '../../model.js'
 import { getCategory } from '../../breaks/rbbi.js'
-import { canBreakBefore, classify, findNextBreakablePosition, makeFactory, mayBreakInBetween } from './breaks.js'
+import { canBreakBefore, classify, computeFollowing, dictionaryRangeStartsWithMark, findNextBreakablePosition, makeFactory, mayBreakInBetween } from './breaks.js'
 import { lineRules, pairTableBreaks } from './data.js'
 import { prepareWebKit } from './content.js'
 import type { WebKitPrepared, WebKitTextItem } from './types.js'
@@ -204,6 +204,47 @@ describe('installed-browser verdicts (specs/probes-safari.md)', () => {
     expect(breaksOf([['----““aabb', 'text']])).toEqual([1, 2, 3, 4])
     expect(breaksOf([['----““aabb', 'text']], { lang: 'ja' })).toEqual([1, 2, 3])
   })
+})
+
+// runtime-parity/sa: libicucore 78.1's own line iterator (bin/sa-icu-apple over inputs/texts.jsonl, results/raw/
+// icu-apple.jsonl) at the root locale, the boundaries whose neighbours both have Line_Break=SA. The port's dictionary path
+// runs bun's Intl.Segmenter, JavaScriptCore over the same system libicucore (specs/webkit-gaps.md §4.2), so this runs on
+// macOS only. The rule tables give SA characters, marks included, the dictionary categories.
+const SA = resolve(process.env['HOME'] ?? '', 'github/browser-engines/pretext-emulation-20260915/runtime-parity/sa')
+
+describe.skipIf(process.platform !== 'darwin' || !existsSync(resolve(SA, 'results/raw/icu-apple.jsonl')))('libicucore dictionary boundaries', () => {
+  test('interior SA boundaries equal libicucore except where a dictionary range starts with a mark', async () => {
+    const texts: string[] = []
+    await forEachLine(resolve(SA, 'inputs/texts.jsonl'), line => { if (line.length > 0) texts.push((JSON.parse(line) as { text: string }).text) })
+    const { rules } = lineRules('', 'Default')
+    const dictionary = (cp: number) => getCategory(rules, cp) >= rules.dictCategoriesStart
+    let positions = 0
+    let markStart = 0
+    const failures: string[] = []
+    await forEachLine(resolve(SA, 'results/raw/icu-apple.jsonl'), line => {
+      if (line.length === 0) return
+      const row = JSON.parse(line) as { i: number; line: Record<string, number[]> }
+      const text = texts[row.i]!
+      const expected = new Set(row.line['root']!)
+      const following = computeFollowing(makeFactory(text, false, '', 'Default', { kind: 'intl-segmenter-word' }))
+      for (let q = 1; q < text.length; q++) {
+        if (!dictionary(text.codePointAt(q - 1)!) || !dictionary(text.codePointAt(q)!)) continue
+        positions++
+        if ((following[q] === q) === expected.has(q)) continue
+        // The line engine resynchronizes from a leading mark with its dictionary; the paragraph reports it.
+        let start = q
+        while (start > 0 && dictionary(text.codePointAt(start - 1)!)) start--
+        let end = q
+        while (end < text.length && dictionary(text.codePointAt(end)!)) end++
+        if (dictionaryRangeStartsWithMark(rules, text.slice(start, end))) markStart++
+        else failures.push(`${row.i}@${q}: ${JSON.stringify(text.slice(Math.max(0, q - 8), q))}|${JSON.stringify(text.slice(q, q + 8))}`)
+      }
+    })
+    console.log(JSON.stringify({ texts: texts.length, positions, markStart, differing: failures.length }))
+    expect(failures).toEqual([])
+    expect(markStart).toBe(27)
+    expect(positions).toBe(282337)
+  }, 600_000)
 })
 
 // runtime-parity/blink-webkit/work: requests { id, text, parts?, whiteSpace, wordBreak, lang, direction } and the C++

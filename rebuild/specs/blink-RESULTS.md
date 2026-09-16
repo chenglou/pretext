@@ -2,31 +2,65 @@
 
 Lab runs of `rebuild/src/engines/blink` in installed Chrome 153 on this Mac (Retina, `devicePixelRatio` 2, UI language
 zh-CN), 2026-09-16. Rows and summaries are under `.artifacts/lab/blink/<run>/`. The scorer snaps Chrome widths to
-1/128 px at DPR 2 (`grid 128`), so a 1-unit error is 1 raw LayoutUnit.
+1/128 px at DPR 2 (`grid 128`), so a 1-unit error is 1 raw LayoutUnit. specs/blink-AUDIT.md §8 says how each audit
+finding was resolved.
 
 ## Scores
 
-pass / fail / unobserved (not-applicable left out).
+pass / fail / unobserved / not-applicable. The lab changed score.ts at 10:30 (controls other than TAB, LF and CR with a
+positive rect are visible; line starts compare at native cluster starts), so the earlier runs are scored again from their
+rows with the current score.ts (`.artifacts/lab/blink/rescore/`).
 
 | Case set | Run | lineCount | breaks | widths | painter |
 |---|---|---|---|---|---|
-| smoke (299) | smoke-r1 | 295/4/0 | 287/6/6 | 239/36/12 | 252/43/4 |
-| smoke (299) | smoke-r3 | 296/3/0 | 290/3/6 | 260/13/17 | 277/18/4 |
-| smoke (299) | smoke-r4 | 296/3/0 | 290/3/6 | 263/10/17 | 280/15/4 |
-| ws (1,019) | ws-r1 | 1019/0/0 | 1014/3/2 | 913/60/41 | 907/79/33 |
-| ws (1,019) | ws-r3 | 1019/0/0 | 1017/0/2 | 946/30/41 | 941/45/33 |
-| ws (1,019) | ws-r4 | 1019/0/0 | 1017/0/2 | 963/13/41 | 958/28/33 |
-| ws (1,019) | ws-r5 | 1019/0/0 | 1017/0/2 | 975/1/41 | 970/16/33 |
-| runs (2,580) | runs-r1 | 2517/54/9 | 2426/144/10 | 2273/71/82 | 2342/160/78 |
-| runs (2,580) | runs-r2 | 2559/12/9 | 2524/46/10 | 2353/87/84 | 2358/144/78 |
-| runs (2,580) | runs-r3 | 2563/8/9 | 2541/29/10 | 2401/56/84 | 2401/99/80 |
-| policy (1,606) | policy-r1 | 1600/6/0 | 1589/17/0 | 1581/8/0 | 1598/8/0 |
-| policy (1,606) | policy-r3 | 1600/6/0 | 1589/17/0 | 1581/8/0 | 1603/3/0 |
-| policy (1,606) | policy-r4 | 1605/1/0 | 1599/7/0 | 1596/3/0 | 1598/8/0 |
-| suite-sample (19,994) | suite-r1 | 19333/660/1 | 19064/706/224 | 14593/1665/2806 | 15182/4645/167 |
+| smoke (299) | smoke-r4, rescored | 296/3/0/0 | 290/3/6/0 | 262/18/10/9 | 272/23/4/0 |
+| smoke (299) | smoke-r6 | 296/3/0/0 | 290/3/6/0 | 262/9/19/9 | 283/12/4/0 |
+| ws (1,019) | ws-r5, rescored | 1019/0/0/0 | 1017/0/2/0 | 946/30/41/2 | 943/43/33/0 |
+| ws (1,019) | ws-r6 | 1019/0/0/0 | 1017/0/2/0 | 975/1/41/2 | 968/18/33/0 |
+| runs (2,580) | runs-r3, rescored | 2563/8/9/0 | 2541/29/10/0 | 2401/56/84/39 | 2401/99/80/0 |
+| runs (2,580) | runs-r6 | 2566/5/9/0 | 2551/19/10/0 | 2342/125/84/29 | 2342/158/80/0 |
+| policy (1,606) | policy-r4, rescored | 1605/1/0/0 | 1602/4/0/0 | 1599/3/0/4 | 1598/8/0/0 |
+| policy (1,606) | policy-r5 | 1605/1/0/0 | 1602/4/0/0 | 1599/3/0/4 | 1599/7/0/0 |
+| suite-sample (19,994) | suite-r1, rescored | 19333/660/1/0 | 19068/702/224/0 | 14570/1938/2560/926 | 15150/4677/167/0 |
+| suite-sample (19,994) | suite-r3 | 19318/675/1/0 | 19047/723/224/0 | 14666/1273/3108/947 | 17622/2205/167/0 |
 
-The suite sample ran in eight chunks of 2,500 cases (`.artifacts/lab/blink/cases/suite-0N.ndjson`, `suite-r1/0N/`),
-each under its own lock. suite-r1 predates the painted-extent and `joinsNextLine` changes below.
+suite-r3 ran in eight chunks of 2,500 cases (`.artifacts/lab/blink/cases/suite-0N.ndjson`, `suite-r3-0N/`), each under
+its own lock. smoke-r5 and runs-r5 were an intermediate build, before the default-ignorable pair window.
+
+Cases that changed against the rescored baseline (fixed / broke):
+
+- smoke: widths 3 / 3, painter 14 / 3. The painter fixes are controls that Chrome draws with an advance; the breaks
+  are Geeza Pro bidi-runs and split-word cases (class 1).
+- ws: widths 29 / 0 (ws/controls 24), painter 27 / 2.
+- runs: lineCount 5 / 2, breaks 18 / 8, widths 28 / 97, painter 45 / 104. Fixed: lang-spans (widths 18, the HanKerning
+  audit findings B1 and B2) and letter-spacing-spans. Broke: Geeza Pro bidi-runs (widths 79) and split-word (16), where
+  the port now joins letters at shaping-group edges that Geeza Pro doesn't join (class 1).
+- policy: painter 1 / 0.
+- suite: lineCount 29 / 44, breaks 37 / 58, widths 75 / 4, painter 2,536 / 64. Line counts and breaks move inside the
+  invisible-character families (U+200D 21 / 9; U+200C, U+2060, U+FEFF, U+200B, U+2028), where soft-hyphen breaks inside
+  joined Arabic are now reshaped. The painter fixes come from the extent rule (audit finding B5) and the hyphen span.
+
+## Joining model
+
+HarfBuzz marks every offset between joining letters unsafe to break, in OpenType and AAT fonts alike
+(`hb-shape --show-flags` on Amiri, Noto Naskh Arabic, Arial and Geeza Pro), so Blink reshapes line edges there. Whether
+the reshaped letters keep their joined forms depends on the font, and Canvas can't see it: probe blink-followups F1 puts
+Amiri's `بببب` one letter per line in initial, medial, medial and final forms (4.5625, 5.859375, 5.859375, 21.1953125px)
+and Geeza Pro's `لللل` in isolated forms (11.40625px each). One switch in shape.ts, `JOINING_CONTEXT`, decides both kinds
+of call edge: shaping-group edges and line-edge reshapes. Both values were run over the 5,272 lab cases that hold
+Arabic (`.artifacts/lab/blink/cases/arabic-{0,1}.ndjson`, runs `arabic-ot-{0,1}` and `arabic-aat-{0,1}`), passes:
+
+| Primary font of the Arabic text | lineCount OpenType / AAT | breaks | widths | painter |
+|---|---|---|---|---|
+| "Geeza Pro" (AAT) | 578 / 582 | 560 / 580 | 437 / 570 | 444 / 563 |
+| Arial (OpenType) | 783 / 607 | 775 / 592 | 256 / 227 | 737 / 486 |
+| Amiri (OpenType) | 621 / 453 | 614 / 420 | 137 / 110 | 578 / 344 |
+| "Noto Naskh Arabic" (OpenType) | 608 / 455 | 601 / 441 | 109 / 90 | 579 / 342 |
+| "Shantell Sans" (falls back) | 595 / 531 | 591 / 530 | 21 / 73 | 201 / 327 |
+| all 5,272 | 5079 / 4517 | 5029 / 4446 | 2820 / 2931 | 4427 / 3947 |
+
+The port measures the OpenType forms: 562 more line counts, 583 more breaks and 480 more painter passes, against 111
+more widths for AAT. Every line or group edge between joining letters reports `unsafe-to-break` with the mechanism.
 
 ## measureText calls per paragraph
 
@@ -34,18 +68,19 @@ From `prediction.measureLog` (calls that reached Canvas; the per-layout memo ans
 
 | Run | mean | median | p95 | max | per line |
 |---|---|---|---|---|---|
-| smoke-r3 | 36.9 | 29 | 88 | 145 | 8.2 |
-| ws-r3 | 32.1 | 30 | 65 | 138 | 8.9 |
-| runs-r2 | 52.1 | 47 | 104 | 253 | 11.8 |
-| policy-r3 | 40.6 | 34 | 88 | 191 | 8.3 |
-| suite-r1 | 32.7 | 12 | 94 | 8,698 | 10.2 |
 | smoke-r4 | 49.2 | 42 | 114 | 217 | 11.0 |
+| smoke-r6 | 46.3 | 37 | 113 | 205 | 10.3 |
 | ws-r5 | 40.7 | 38 | 82 | 162 | 11.2 |
+| ws-r6 | 37.3 | 35 | 84 | 167 | 10.3 |
 | runs-r3 | 73.7 | 65 | 151 | 337 | 16.7 |
+| runs-r6 | 67.0 | 57 | 147 | 342 | 15.2 |
 | policy-r4 | 47.8 | 42 | 99 | 203 | 9.8 |
+| policy-r5 | 45.6 | 40 | 97 | 207 | 9.4 |
+| suite-r1 | 32.7 | 12 | 94 | 8,698 | 10.2 |
+| suite-r3 | 38.5 | 23 | 99 | 9,111 | 12.0 |
 
-The r4/r3/r5 runs measure more because HanKerning probes each CJK style's font (the 「「 trim and ten glyph bounds) and
-the extent measures prefixes at line edges.
+A group narrower than 256 zoomed px is now one call instead of pieces cut every 32 code units and at space edges. The
+nextLine lookahead for line boxes lays out the next line again, which the memo answers.
 
 ## What the port does
 
@@ -55,66 +90,63 @@ the extent measures prefixes at line edges.
 - `breaks.ts`: LazyLineBreakIterator: the space rule, `kFastLineBreakTable`, break-all (Unicode 17 classes, HH row
   empty), keep-all per code unit, soft hyphens, ICU restarted at every line start with the rule file per locale and
   strictness, `Intl.v8BreakIterator` inside dictionary segments, grapheme boundaries for kBreakCharacter.
-  `breaks.test.ts` equals the groundwork's C++ oracle on all 13,108 requests outside SA runs.
-- `shape.ts`: shaping groups measured in pieces below 256 zoomed px with U+2028 for U+0020 and `optimizeLegibility`
-  contexts, the pair total at each cut on the glyph before it (after it for a halted open mark), safe-to-break from the
-  pair total, ZWJ on sides where Arabic joining crosses a measured range, HanKerning context at group and reshape edges,
-  letter spacing on spaces in cursive runs, positions and offsets per ShapeResult (LTR and RTL), views, reshapes, the
-  hyphen with the two-fallback U+2010 test, tab runs from the block's space advance.
-- `hankerning.ts`: HanKerning character types (generated from ICU 78.2 blk, ea and gc), font data from Canvas (`halt`
-  through the 「「 pair trim, glyph ink bounds for dots, colons and quotes), ShouldKern and ShouldKernLast, trims per
-  character.
+- `script.ts`: ScriptRunIterator with ICU 78.2's Script and Script_Extensions, brackets and the East Asian width fix
+  (47 of Blink's ICU-data unit tests in `script.test.ts`). It gives the script of every text_content unit where
+  RunSegmenter runs, and of every 16-bit string Canvas measures.
+- `shape.ts`: a shaping group measured in one Canvas call below 256 zoomed px, halved at an offset the safe test passes
+  above that; U+2028 for U+0020; `optimizeLegibility` contexts; the paragraph position of an offset from the piece prefix
+  plus the pair adjustment on the glyph before it, with pair windows that reach past default-ignorable characters;
+  safe-to-break never inside a cluster, between joining letters, at a HanKerning-halted group start, or where the pair
+  total shows an adjustment; U+200D where text joins across a range edge (inside a group always, at call edges per
+  `JOINING_CONTEXT`); HanKerning start and end trims on every later position; letter spacing on spaces in cursive runs
+  and on FF, by the Canvas string's own script runs; 8-bit or 16-bit Canvas strings as the paragraph segments;
+  system-ui measured at the CSS size and scaled; views, reshapes, the hyphen, tab runs.
+- `hankerning.ts`: HanKerning character types (ICU 78.2 blk, ea, gc), font data from Canvas (`halt` through the 「「
+  pair trim, glyph ink bounds for dots, colons and quotes), ShouldKern and ShouldKernLast, trims per character.
 - `line-breaker.ts`: NextLine, BreakLine, HandleText, BreakText with the hyphen retry, ShapeLine (with the HanKerning
-  line-end trim; no auto-space, which is off by default), HandleTrailingSpaces, HandleEmptyText, HandleControlItem, HandleForcedLineBreak, open and close tags,
+  line-end trim), HandleTrailingSpaces, HandleEmptyText, HandleControlItem, HandleForcedLineBreak, open and close tags,
   HandleOverflow with the 1px re-break and the break-anywhere retry, RewindOverflow, Rewind, ComputeCurrentStyle,
   RemoveTrailingCollapsibleSpace with RewindTrailingOpenTags, SplitTrailingBidiPreservedSpace.
-- `index.ts`: settings, groups, fragments tiling the source, the painted extent (hanging white space and ink-less code
-  points left out), `joinsNextLine`, gaps.
+- `index.ts`: settings, groups, fragments tiling the source, lines without a line box folded into their neighbours
+  (the breaker's own should_create_line_box), the painted extent by lab/score.ts's visibility rule over generated ICU
+  classes, `joinsNextLine`, gaps at prepare time and at line edges.
 
 ## Failure classes
 
-Counts are failing cases in the named runs; ids are examples in `.artifacts/lab/cases/`.
+Counts are failing cases or lines in the named runs; ids are in `.artifacts/lab/cases/`. A stand-in Canvas census
+(the engine in bun, gaps set against the real per-case metrics) finds no failing case without a gap in smoke-r6 (12),
+ws-r6 (1), policy-r5 (7) or runs-r6 (144), and 9 of 2,005 in suite-r3, class 7 below.
 
-1. **HanKerning (named gap `han-kerning`), CJK.** runs-r3 lang-spans 18 widths (runs-r2: 39), policy-r4 line-break
-   breaks down to 7 (from 17). The port now applies Blink's context trims and the line-end trim, with font facts from
-   Canvas. What remains is off by half an em in both directions: which glyph a chws adjustment sits on inside a group
-   (the pair total can't say), segments narrower than groups (AppendFontFeatures runs per script segment), and fonts
-   where the 「「 probe and `halt` disagree. Examples `c-07f2657d11bf821f`, `c-111dee8e6a53b668`, `c-5325d5f65e230b90`.
-2. **Arabic joining at line edges and group edges (named gap `unsafe-to-break`).** Geeza Pro, an AAT font, reshapes a
-   line edge without joining; the port measures OpenType behaviour (joining is unsafe_to_concat, not unsafe_to_break,
-   painter.md §3.1 a), which Amiri and Noto Naskh Arabic follow. policy-r3 overflow-wrap 4 breaks (`c-0dd1d404ea812dbc`,
-   `c-4862558a05c81dd3`), runs-r2 split-word/letter-spacing-spans widths (`c-a6803706e450767e`). Canvas can't tell AAT
-   from OpenType.
-3. **Soft hyphens between emoji sequence parts (named gap `soft-hyphen-shaping`).** suite-r1 woman-before-zwj,
-   woman-after-zwj, skin-modifier: about 460 lineCount failures. The port drops SHY from measured text, which joins
-   `👍` + `🏽` into one glyph in Canvas; in the DOM the hidden SHY glyph blocks the emoji sequence. Example
-   `c-018aabf9e8c15984`.
-4. **VT, FF and C0/C1 controls (named gap `control-character-width`).** ws-r5 has 1 width failure left; suite U+00xx
-   families. VT and FF measured as U+0001 (specs/blink-gaps.md §2.8) take the fallback advance the DOM uses: before the
-   substitution Canvas gave VT the space advance (`c-0c1f51b39facaa62`), after it the ws controls widths pass. C1 controls
-   still measure differently (`c-5bb28a79f6310f0d`: Canvas 16px for U+009D).
-5. **Tab stops from the float space advance (spec observation).** `c-87e013cf240ecbdc`, 1 unit. Font::TabWidth uses
-   SimpleFontData::SpaceWidth, the untruncated float advance; Canvas returns it truncated to 16.16, so a tab stop can land
-   1 LayoutUnit early. No gap name fits; recorded here.
-6. **Invisible characters next to Arabic soft hyphens in RTL (observation).** suite-r1 chunk 07 U+200B, U+200C, U+2060,
-   U+FEFF families: native line `ب` 4.40625 vs predicted 9.5625 (the hyphen). Chrome reports the SHY rect with zero
-   width in RTL, so the scorer doesn't mark the width unobserved while the prediction includes the hyphen. Example
-   `c-0167f0e244838f3b`. To be written to rebuild/lab/ISSUES.md once the native hyphen is confirmed.
-7. **Thai break-all inside grapheme clusters (observation, rebuild/lab/ISSUES.md).** `c-213e2818602b7033`,
-   `c-8234a339ec2266c1`, `c-8299efa6cdb80808`: native and predicted lines start at the same offsets; the scorer's
-   grapheme check fails the prediction.
-8. **U+FFFC in text (named gap `font-fallback`).** `c-ff4745cb7e9bb2a1`: Canvas measures U+FFFC as U+200B, the DOM
-   draws a fallback glyph.
-9. **Painter form.** runs-r3 has 48 painter-only failures: bidi lines painted under override spans come out 1 LayoutUnit
-   wider, since the inserted bidi controls divide items differently (painter.md L9; `c-05bbcacc0fe2f0e5`), CJK line-end
-   trims don't happen again on a painted line (`c-3e4c81707a37c51f`), and emoji sequences split across spans
-   (`c-24cbaf244be355e6`). Lines holding only a soft hyphen and its hyphen span wrap at narrow widths
-   (`c-45a96fe1087eb491`), and an empty span run isn't painted, so a following bare FF text node loses its LayoutText in
-   the painted DOM (`c-0ca55250962649aa`). All of these live in the shared painter.
-10. **Emoji sequences split across spans (named gap `font-fallback`, not reported per paragraph yet).** `1️` in one span and
-    `⃣❤️` in the next: native 16px wider (`c-8862f0d3be757916`, `c-23e3483b3b25122f`).
-11. **Unported: shaping segments.** Groups don't break at script-run segments (`EqualsRunSegment`), and HanKerning context
-    uses group edges where Blink uses segment edges.
+1. **Arabic joining at call edges in AAT fonts (named gap `unsafe-to-break`; model decision).** runs-r6 bidi-runs 85
+   and split-word 27 widths, 9 split-word breaks; policy-r5 overflow-wrap and word-break 4 breaks, 3 widths; about 509
+   suite-r3 lines differing by −703 or −701 units in fonts that fall back to Geeza Pro (Shantell Sans, ProbeShantell).
+   The port joins where Geeza Pro reshapes isolated forms. Example `c-0f06b802391f39b9`: line 5 ends at an unsafe join;
+   native `وأعان` is 45.7265625px with an isolated `ن`, predicted 40.0390625px.
+2. **A chosen soft hyphen in an RTL run is drawn but not observed (lab observation, rebuild/lab/ISSUES.md).** About 575
+   suite-r3 lines differ by exactly the hyphen (+756 units Amiri, +660 Noto Naskh Arabic, +682 Arial); smoke
+   `c-1cb8b9aea80ececb`, `c-f73e825e2a1758dd`. Probe blink-followups F3 shows the hyphen drawn left of the letter.
+3. **Soft hyphens between emoji sequence parts (named gap `soft-hyphen-shaping`).** suite-r3 woman-before-zwj 164,
+   skin-modifier 148, woman-after-zwj 148 line counts. The port drops the SHY from measured text, which joins `👍` + `🏽`
+   into one glyph in Canvas; in the DOM the hidden SHY glyph blocks the sequence. Example `c-018aabf9e8c15984`.
+4. **Common punctuation that inherits another script (named gap `script-context`).** suite-r3 36 lines at −623 units:
+   Amiri `(` after Arabic shapes with the Arabic script natively and as Latin in Canvas. Example `c-26a7a7b28da24b44`.
+   No Canvas string gives an LTR `(` the Arabic script: an Arabic letter beside it starts another bidi run.
+5. **U+FFFC in text (named gap `font-fallback`).** suite-r3 22 widths. Canvas measures U+FFFC as U+200B; the DOM draws a
+   fallback glyph. Example `c-ff4745cb7e9bb2a1`.
+6. **Emoji sequences split across spans (named gap `font-fallback`).** `c-8862f0d3be757916` (keycap, −2048 units),
+   `c-24cbaf244be355e6` (🏳️ in one span, ‍🌈 with letter spacing 5px in the next: +640 units).
+7. **Legacy `kern` attribution at a line end before a space (named gap `unsafe-to-break`).** suite/negative-space,
+   spacing-tail and space-context (9 lines, −57 units), runs `c-73ac54b28cdfe776` (−76). Times New Roman kerns `A` with the
+   space through the legacy `kern` table, which puts d >> 1 on `A`; the port puts all of d there (specs/blink-gaps.md
+   §3.6 L1). These 9 reported no gap because line-edge gaps skipped a paragraph's last line; that is fixed after
+   suite-r3 and doesn't change predicted lines.
+8. **Tab stops from the untracked platform space advance (named gap `tab-stops`).** `c-87e013cf240ecbdc`, −1 unit.
+   Probe blink-followups F4: 16px Helvetica Neue stops at multiples of 35.5859375px, not 8 × Canvas's 4.453125px.
+9. **Painter form (shared painter).** CJK line-end trims don't happen again on a painted line (policy-r5 zh-lang 3 and
+   line-break 2, runs `c-3e4c81707a37c51f`: painted 20px, predicted 10px); bidi lines under override spans 1 unit wider
+   (runs-r6 20 lines, painter.md L9, `c-05bbcacc0fe2f0e5`); a bare FF text node loses its advance (`c-0ca55250962649aa`,
+   +682 units); trailing-space edges (`c-0fe656a162eb2508`, −37 units). The painter also puts U+200D after the last
+   letter of an RTL run in an LTR block, where the U+200D takes the paragraph level and doesn't join.
 
 ## Changes by run
 
@@ -122,42 +154,45 @@ Counts are failing cases in the named runs; ids are examples in `.artifacts/lab/
 - smoke-r2: lang="" is a null locale; `optimizeLegibility` contexts (whole-run Canvas shaping for fonts whose GPOS or
   GSUB cover the space glyph, which fixed Hiragino kana and CJK kerning); `width` leaves out hanging spaces.
 - ws-r1: white-space set first run.
-- runs-r1, runs-r2: VT measured as U+0001; pieces halved until below 256 px; ZWJ joining context (runs-r1 had a broken
-  ZWJ literal that measured `"""+bs+"""u200d` text, fixed in runs-r2).
+- runs-r1, runs-r2: VT measured as U+0001; pieces halved until below 256 px; ZWJ joining context.
 - policy-r1, suite-r1: first runs.
 - smoke-r3, ws-r3, policy-r3: the painted extent includes the hyphen and leaves out trailing ink-less code points;
-  `joinsNextLine` at joined edges; gap names `han-kerning` (shared, logged in SHARED-CHANGES.md) and the joining gaps.
-- ws-r4: TAB counts as white space in the painted extent (ws-r3 had dropped trailing tabs under `pre` and
-  `break-spaces`).
-- smoke-r4, runs-r3, policy-r4, ws-r5: HanKerning (`hankerning.ts`): character types from ICU 78.2 (blk, ea, gc), font
-  data from Canvas (the 「「 pair trim for `halt`, ink bounds for dots, colons and quotes), context trims at shaping-group
-  and reshape edges, the open-mark attribution after the pair, and ShapeLine's line-end trim; Range-rect edges rounded
-  to LayoutUnits; leading ink-less controls left out of the extent, and a control with width ends the hanging run.
-- runs-r4, suite-r2: letter spacing added back for spaces in cursive-script runs, which U+2028 had hidden from Canvas
-  (`c-a797931f634f8091`). suite-r2's chunks were bundled while this change landed, so early chunks may predate it.
+  `joinsNextLine` at joined edges; gap names `han-kerning` and the joining gaps.
+- ws-r4: TAB counts as white space in the painted extent.
+- smoke-r4, runs-r3, policy-r4, ws-r5: HanKerning (`hankerning.ts`); Range-rect edges rounded to LayoutUnits.
+- runs-r4, suite-r2: never ran (lock wait).
+- smoke-r5, runs-r5: the audit's fixes (specs/blink-AUDIT.md §8): HanKerning trims on every position after a group's
+  first character and at unsafe group starts; joining offsets unsafe to break, U+200D at every call edge under one
+  model; ScriptRunIterator and `script-context`; the extent rule from score.ts with generated ICU classes; one Canvas call
+  per group below 256 zoomed px; line boxes from should_create_line_box; line-edge gaps; `tab-stops`; system-ui at the CSS
+  size; letter spacing on spaces in cursive runs.
+- debug-3, debug-4: `--predictor` traces returning the measure log (resumed-zero-tail, source-shaped-arabic).
+- arabic-ot-0/1, arabic-aat-0/1: the joining model comparison above.
+- smoke-r6, ws-r6, runs-r6, policy-r5, suite-r3: pair windows reach past default-ignorable characters, which HarfBuzz's
+  lookups skip (`c-544518dd1f5540d5` now passes); the painted extent is at least 0 (`c-b097eff3c56ef9a0`).
+
+## Probes run
+
+`rebuild/probes/blink-followups.ts` in installed Chrome 153 (`.artifacts/probes/blink/followups/chrome-probes.json`):
+
+- F1: Amiri keeps joined forms on one-letter lines; Geeza Pro takes isolated forms (the joining model above).
+- F2: PingFang SC `《书名》：标` at 1px: lines `《书`, `名》：` (》 10px wide), `标`.
+- F3: a chosen soft hyphen in Noto Naskh Arabic is drawn left of the letter while its SHY rect is zero width (class 2).
+- F4: tab stops follow the untracked space advance (class 8).
 
 ## Notes for the architect
 
-- `BlinkLineStart` holds `style`, an index into the prepared styles (the block's style is 0, a span's style follows its
-  run), where DESIGN.md §2.3 names `styleRun`. The break token needs the current ComputedStyle, and every bare text node
-  shares the block's, so an index is the one source of truth; DESIGN.md should follow.
-- Shared-file changes, logged in SHARED-CHANGES.md: GapName `han-kerning` (model.ts) and `measureTextBounds`
-  (measure/canvas.ts), both additive.
-- `bun test rebuild/src`: 79 pass, 1 fail, and the failure is the WebKit owner's
-  `engines/webkit/breaks.test.ts` (`linebreak-table-pairs.tsv`). `bunx tsc --noEmit -p rebuild/tsconfig.json` is clean.
-- Blink tests: `breaks.test.ts` (13,108 oracle requests, 0 differences outside SA runs, plus the §2.F.5 worked examples
-  and the rule-file table), `content.test.ts` (the §2.C.4 examples, DESIGN.md example 1's text_content and items,
-  pre-wrap and pre-line, bidi D5) and `lines.test.ts` (DESIGN.md §2.2 examples 1 and 2, the +1 raw fit bound, forced
-  breaks, an empty paragraph) with a stand-in Canvas.
-- A shaping-group edge inside a grapheme cluster now reports `font-fallback` (class 10 above).
-
-## Follow-up probes (not run yet)
-
-`rebuild/probes/blink-followups.ts` defines plain-observation probes for claims the rows contradict or can't settle:
-
-- F1 (Amiri, Geeza Pro): Arabic joining at breaks. specs/blink-gaps.md §3.2 says joining is unsafe_to_break,
-  specs/painter.md §3.1 a says unsafe_to_concat; the rows say OpenType fonts keep joined forms and AAT fonts don't
-  (class 2).
-- F2: HanKerning's line-end trim of a lone 》 (class 1).
-- F3: whether Blink draws a hyphen at an RTL soft-hyphen break whose SHY rect is zero width (class 6).
-- F4: tab stops from the untruncated space advance (class 5).
+- DESIGN.md §2.3 names `styleRun`; `BlinkLineStart` holds `style`, an index into the prepared styles (the block's style
+  is 0, a span's style follows its run). The break token needs the current ComputedStyle, and every bare text node shares
+  the block's.
+- painter.md §3.1 a says joining marks glyphs `unsafe_to_concat`, not `unsafe_to_break`. HarfBuzz's safe_to_insert_tatweel
+  falls back to unsafe_to_break without the tatweel buffer flag (hb-buffer.hh:517-527; hb-ot-shaper-arabic.cc:332, 366),
+  and AAT transitions are marked too (hb-aat-layout-common.hh:1341-1370): Blink reshapes every line edge between joining
+  letters. OpenType fonts keep the joined forms there through the context, AAT fonts don't (probe F1).
+- blink-text §2.F.3 says `lang=""` inherits; element.cc:12595-12599 sets a null locale, and the rows agree.
+- DESIGN.md §5 `unsafe-to-break`: the pair-total test is only necessary. It misses joining letters and adjustments across
+  default-ignorable characters (hb-ot-layout-gsubgpos.hh:558-571), which the port now checks.
+- Shared-file change: GapName `tab-stops` (SHARED-CHANGES.md, 10:50).
+- blink-gaps §8's hypotheses beyond F1-F4 still have no probe verdict: U+2028 for spaces (H5-H8), U+0001 for FF and VT
+  (H1-H3, which probes-chrome X2 supports for Arial and Helvetica Neue), and the pair-total safe test (H12).
+- `bun test rebuild/src`: 128 pass, 0 fail. `bunx tsc --noEmit -p rebuild/tsconfig.json` is clean.

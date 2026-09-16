@@ -8,6 +8,7 @@ import type { Fragment, LineOf } from '../../model.js'
 import { canBreakBefore, findNextBreakablePosition, makeFactory, mayBreakInBetween } from './breaks.js'
 import { DEFAULT_BIDI_LEVEL } from './content.js'
 import { boxWidth, breakWord, firstUserPerceivedCharacterLength, forwardOneCodePoint, hyphenWidth, itemWidth } from './measure.js'
+import { isDefaultIgnorable } from './data.js'
 import { preservesSpacesAndTabs, trailingWhitespaceHangs } from './style.js'
 import type { WebKitItem, WebKitLineStart, WebKitPrepared, WebKitTextItem } from './types.js'
 
@@ -305,6 +306,41 @@ function handleTrailingTrimmableContent(L: Layout, line: Line): void {
   if (piece !== undefined && piece.kind === 'text') piece.trimmed = true
   resetTrimmable(line)
   line.contentLogicalWidth = f32(line.contentLogicalWidth - trimmed)
+}
+
+// Line::resetBidiLevelForTrailingWhitespace (IL:243-287), after trimming and hanging: trailing white-space-only runs take
+// the root level where their parity differs, and the trailing white space of the last content run with the other parity
+// is detached into its own run at the root level (Line::Run::detachTrailingWhitespace, IL:919-941).
+function resetBidiLevelForTrailingWhitespace(L: Layout, line: Line): void {
+  if (!line.hasNonDefaultBidiLevelRun) return
+  const rootLevel = L.p.style.rtl ? 1 : 0
+  const runs = line.runs
+  let detach: number | null = null
+  for (let i = runs.length - 1; i >= 0; i--) {
+    const run = runs[i]!
+    if (run.kind === 'soft-line-break' || (run.kind === 'text' && run.trailing === 'not-applicable')) break
+    if (run.trailing === 'not-applicable') continue
+    const sameInlineDirection = run.level % 2 === rootLevel % 2
+    if (run.trailingLength !== run.textLength) {
+      detach = sameInlineDirection ? null : i
+      break
+    }
+    if (!sameInlineDirection) run.level = rootLevel
+  }
+  if (detach === null) return
+  const run = runs[detach]!
+  const leadingLength = run.textLength - run.trailingLength
+  const detached: LineRun = {
+    ...run, textStart: run.textStart + leadingLength, textLength: run.trailingLength, width: run.trailingWidth,
+    left: f32(f32(run.left + run.width) - run.trailingWidth), level: rootLevel, trailing: 'not-applicable', trailingLength: 0,
+    trailingWidth: 0, lastNonWhitespaceContentStart: null,
+  }
+  run.width = f32(run.width - run.trailingWidth)
+  run.textLength = leadingLength
+  run.trailing = 'not-applicable'
+  run.trailingLength = 0
+  run.trailingWidth = 0
+  runs.splice(detach + 1, 0, detached)
 }
 
 // Line::handleTrailingHangingContent (IL:198-233), outside intrinsic sizing: a conditional hang that fits stops hanging.
@@ -1302,6 +1338,7 @@ function placeInlineAndFloatContent(b: Builder, start: Position): { end: Positio
   }
   handleTrailingTrimmableContent(L, b.line)
   handleTrailingHangingContent(b.line, L.lineWidth, isLastInlineContent)
+  resetBidiLevelForTrailingWhitespace(L, b.line)
   return { end, overflowLogicalWidth }
 }
 
@@ -1398,23 +1435,126 @@ function buildFragments(p: WebKitPrepared, line: Line, start: number, end: numbe
   return fragments
 }
 
-// The painted extent: the line's content right edge without the pre-wrap white space that hangs at its end or before
-// its forced break (specs/webkit-lines.md §9.1-§9.2). A line holding only such white space paints nothing.
-// Negative word spacing can start the first text run left of the line start (Line::appendText, IL:406-415).
-function paintedWidth(p: WebKitPrepared, line: Line): number {
-  let left = 0
-  for (let i = 0; i < line.runs.length; i++) {
-    const run = line.runs[i]!
-    if (run.kind === 'text' && run.textLength > 0) left = Math.min(left, run.left)
+// ubidi_reorderVisual (ICU 78.2 ubidiln.cpp:709-744, 812-867): L2 over one level per run; indexMap[visual] = logical.
+function reorderVisual(levels: number[]): number[] {
+  const indexMap: number[] = []
+  let minLevel = 126
+  let maxLevel = 0
+  for (let i = 0; i < levels.length; i++) {
+    indexMap.push(i)
+    minLevel = Math.min(minLevel, levels[i]!)
+    maxLevel = Math.max(maxLevel, levels[i]!)
   }
-  if (!trailingWhitespaceHangs(p.style)) return f32(line.contentLogicalWidth - left)
-  for (let i = line.runs.length - 1; i >= 0; i--) {
-    const run = line.runs[i]!
+  if (minLevel === maxLevel && (minLevel & 1) === 0) return indexMap
+  minLevel |= 1
+  for (; maxLevel >= minLevel; maxLevel--) {
+    let start = 0
+    for (;;) {
+      while (start < levels.length && levels[start]! < maxLevel) start++
+      if (start >= levels.length) break
+      let limit = start + 1
+      while (limit < levels.length && levels[limit]! >= maxLevel) limit++
+      for (let a = start, z = limit - 1; a < z; a++, z--) {
+        const t = indexMap[a]!
+        indexMap[a] = indexMap[z]!
+        indexMap[z] = t
+      }
+      if (limit === levels.length) break
+      start = limit + 1
+    }
+  }
+  return indexMap
+}
+
+// computedVisualOrder (ILB:93-138): opaque runs are left out and the others reordered by level.
+function visualOrder(runs: LineRun[]): number[] {
+  const levels: number[] = []
+  const offsets: number[] = []
+  let accumulated = 0
+  for (let i = 0; i < runs.length; i++) {
+    const level = runs[i]!.level
+    if (level === 255) {
+      accumulated++
+      continue
+    }
+    if (level > 126) continue
+    levels.push(level)
+    offsets.push(accumulated)
+  }
+  const order = reorderVisual(levels)
+  for (let i = 0; i < order.length; i++) order[i] = order[i]! + offsets[order[i]!]!
+  return order
+}
+
+// The painted extent of a line: the display boxes InlineDisplayContentBuilder gives its text runs, over the content the
+// lab observes (DESIGN.md §2.1).
+// - Without bidi reordering a box sits at the run's logical left (LineBox::logicalRectForTextRun, InlineLineBox.cpp:58-72;
+//   buildTextOnlyContent, InlineDisplayContentBuilder.cpp:119-144), with content logical left 0 for text-align start.
+// - With reordering boxes follow in visual order from the content's left edge, each at the edge plus its word spacing
+//   margin, the edge advancing by f32(width + margin) (processBidiContent :851-1088, adjustVisualGeometryForDisplayBox
+//   :728-826). An RTL line's content starts at f32(line width − content logical right) (InlineDisplayLineBuilder.cpp:133-137).
+// - A box keeps its run's width after trimming, not the content width: f32(f32(w + space) − space) can differ from
+//   f32(w) by a float32 step. A negative width draws the box to the left of its x.
+// - Hanging and trailing SPACE or TAB under normal, nowrap, pre-line and pre-wrap, and default-ignorable code points at
+//   the line end, aren't in the extent (lab/README.md "Visible code points").
+function paintedExtent(L: Layout, line: Line): number {
+  const p = L.p
+  const runs = line.runs
+  const lefts: number[] = new Array(runs.length).fill(0)
+  if (!line.hasNonDefaultBidiLevelRun) {
+    for (let i = 0; i < runs.length; i++) lefts[i] = runs[i]!.left
+  } else {
+    let edge = p.style.rtl ? f32(L.lineWidth - lastRunLogicalRight(line)) : 0
+    const order = visualOrder(runs)
+    for (let k = 0; k < order.length; k++) {
+      const run = runs[order[k]!]!
+      if (run.kind !== 'text') continue
+      const margin = run.isWordSeparator ? p.boxes[run.box]!.wordSpacing : 0
+      lefts[order[k]!] = f32(edge + margin)
+      edge = f32(edge + f32(run.width + margin))
+    }
+  }
+  // The line's trailing run: SPACE and TAB under normal, nowrap, pre-line and pre-wrap, and default-ignorable code points,
+  // back to the last code point that isn't one. Runs made only of it paint nothing; a run ending in it loses its tracked
+  // trailing white space width.
+  const excludeTrailingSpaces = p.style.collapse !== 'break-spaces' && !(p.style.collapse === 'preserve' && !p.style.wrap)
+  let visibleEnd = runs.length
+  let trailingCut = 0
+  for (let i = runs.length - 1; i >= 0; i--) {
+    const run = runs[i]!
     if (run.kind !== 'text') continue
-    if (run.trailing === 'not-applicable') return f32(f32(run.left + run.width) - left)
-    if (run.trailingLength < run.textLength) return f32(f32(f32(run.left + run.width) - run.trailingWidth) - left)
+    const text = p.boxes[run.box]!.text
+    let k = run.textStart + run.textLength
+    while (k > run.textStart) {
+      const c = text.charCodeAt(k - 1)
+      const cp = (c & 0xfc00) === 0xdc00 && k - 2 >= run.textStart ? text.codePointAt(k - 2)! : c
+      if (!((excludeTrailingSpaces && (c === 0x20 || c === 0x09)) || isDefaultIgnorable(cp))) break
+      k -= cp > 0xffff ? 2 : 1
+    }
+    if (k === run.textStart) {
+      visibleEnd = i
+      continue
+    }
+    if (excludeTrailingSpaces && run.trailing !== 'not-applicable') trailingCut = run.trailingWidth
+    visibleEnd = i + 1
+    break
   }
-  return 0
+  let left = Infinity
+  let right = -Infinity
+  for (let i = 0; i < visibleEnd; i++) {
+    const run = runs[i]!
+    if (run.kind !== 'text') continue
+    let x = lefts[i]!
+    let w = run.width
+    if (i === visibleEnd - 1 && trailingCut !== 0) {
+      if (run.level !== DEFAULT_BIDI_LEVEL && (run.level & 1) === 1) x = f32(x + trailingCut)
+      w = f32(w - trailingCut)
+    }
+    const end = f32(x + w)
+    left = Math.min(left, x, end)
+    right = Math.max(right, x, end)
+  }
+  return left === Infinity ? 0 : f32(right - left)
 }
 
 // One line of InlineFormattingContext::lineLayout (InlineFormattingContext.cpp:293-360) with the builder the paragraph
@@ -1493,7 +1633,7 @@ export function webkitNextLine(p: WebKitPrepared, start: WebKitLineStart, width:
   return {
     start: start.itemIndex === 0 && start.offset === 0 ? 0 : lineStart,
     end: lineEnd,
-    width: f32(paintedWidth(p, line) / zoom),
+    width: f32(paintedExtent(L, line) / zoom),
     engineWidth: { unit: 'webkit-float32-px', value: line.contentLogicalWidth },
     fragments,
     joinsNextLine: false,

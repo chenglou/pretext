@@ -4,12 +4,12 @@
 // measured string alone, so those context trims, and the line-end trim ShapingLineBreaker asks for with
 // `han_kerning_end`, are added here. The trim of one character is 2 × W(c) − W(cc): in `cc` HanKerning halts exactly
 // one of the two (ShouldKern for opens, ShouldKernLast for closes).
-import { measureText, measureTextBounds } from '../../measure/canvas.js'
+import { measureTextBounds } from '../../measure/canvas.js'
 import {
   HAN_CLOSE, HAN_CLOSE_NARROW, HAN_CLOSE_QUOTE, HAN_COLON, HAN_DOT, HAN_MIDDLE, HAN_OPEN, HAN_OPEN_NARROW, HAN_OPEN_QUOTE, HAN_OTHER,
   HAN_SEMICOLON, hanKerningCharType,
 } from './props.js'
-import type { Shaper } from './shape.js'
+import { raw16Of, type Shaper } from './shape.js'
 
 export type HanKerningFontData = {
   hasHalt: boolean
@@ -99,9 +99,8 @@ export function shouldKernLast(type: number, lastType: number): boolean {
 
 // The 16.16 amount `halt` removes from character c in this style's font.
 export function trim16(sh: Shaper, style: number, c: number): number {
-  const { p, m } = sh
-  const context = p.contexts[style]!.hyphen
+  const contexts = sh.p.contexts[style]!
   const one = String.fromCharCode(c)
-  return 2 * Math.round(measureText(m, context, one) * 65536) - Math.round(measureText(m, context, one + one) * 65536)
+  return 2 * raw16Of(sh, contexts, contexts.hyphen, one) - raw16Of(sh, contexts, contexts.hyphen, one + one)
 }
 

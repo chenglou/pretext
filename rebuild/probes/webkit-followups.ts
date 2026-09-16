@@ -51,5 +51,54 @@ export default async function followupProbes(): Promise<Probe[]> {
       html: '<div id="t" dir="rtl" style="font:24px Amiri; width:15.5px; white-space:pre-wrap; overflow-wrap:break-word; line-height:48px">aبِبِ((بب</div>',
       observe: ['lines', 'rangeWidth'],
     },
+    {
+      // webkit-AUDIT B5: simplified measuring needs every glyph from the primary font (FontCascade.cpp:498-502). Canvas
+      // shows coverage when a family after P draws a glyph no fallback font would: LastResort's box. If P maps the code
+      // point, "P, LastResort" and "P" draw the same glyph (same advance and ink); if not, the first draws LastResort's
+      // box and the second the system fallback's glyph.
+      id: 'webkit-followups B5 coverage (Canvas)',
+      spec: 'specs/webkit-gaps.md §2.3-§2.5, §3.3',
+      pageLang: 'en',
+      canvas: [
+        { kind: 'offscreen', context: 'lr', font: '16px LastResort', text: 'a' },
+        { kind: 'offscreen', context: 'lr', text: '　' },
+        { kind: 'offscreen', context: 'times', font: '16px Times', text: 'a' },
+        ...['a', 'Ω', '─', '　', '中', '→', 'ж', '€'].flatMap(text => [
+          { kind: 'offscreen' as const, context: 'menlo', font: '16px Menlo', text },
+          { kind: 'offscreen' as const, context: 'menlo-lr', font: '16px Menlo, LastResort', text },
+          { kind: 'offscreen' as const, context: 'courier', font: '16px Courier', text },
+          { kind: 'offscreen' as const, context: 'courier-lr', font: '16px Courier, LastResort', text },
+        ]),
+        { kind: 'offscreen', context: 'courier', text: 'ΩΩΩΩ' },
+        { kind: 'offscreen', context: 'menlo', text: 'a　a' },
+        { kind: 'offscreen', context: 'menlo', text: 'a─a' },
+        { kind: 'offscreen', context: 'menlo', text: ' ' },
+      ],
+      observe: ['canvasWidths'],
+    },
+    {
+      // webkit-gaps probe 8: the fixed-pitch width shortcut gives 4 × 9.6015625 = 38.40625, Canvas 49.15625.
+      id: 'webkit-followups B5 Courier omega (DOM)',
+      spec: 'specs/webkit-gaps.md §2.5 probe 8',
+      pageLang: 'en',
+      html: '<span style="font:16px Courier">ΩΩΩΩ</span>',
+      observe: ['rangeWidth'],
+    },
+    {
+      // Menlo lacks U+3000, so the box leaves simplified measuring and measures on the full path, as Canvas does.
+      id: 'webkit-followups B5 Menlo ideographic space (DOM)',
+      spec: 'specs/webkit-gaps.md §2.3',
+      pageLang: 'en',
+      html: '<span style="font:16px Menlo">a　a</span>',
+      observe: ['rangeWidth'],
+    },
+    {
+      // Menlo maps U+2500, so the box keeps the shortcut: 3 × the space width.
+      id: 'webkit-followups B5 Menlo box drawing (DOM)',
+      spec: 'specs/webkit-gaps.md §2.3',
+      pageLang: 'en',
+      html: '<span style="font:16px Menlo">a─a</span>',
+      observe: ['rangeWidth'],
+    },
   ]
 }

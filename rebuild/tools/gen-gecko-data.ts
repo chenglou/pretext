@@ -12,7 +12,7 @@
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { BROWSER_ENGINES, DATA, REBUILD, base64, readVerified, writeModule } from './gen-shared.ts'
-import { PPUCD_PATH, PPUCD_SHA256, forEachPpucdRange } from './ppucd.ts'
+import { PPUCD_PATH, PPUCD_SHA256, forEachPpucdBlock, forEachPpucdRange, type PpucdRange } from './ppucd.ts'
 
 type HashEntry = { file: string; bytes: number; sha256_firefox156: string }
 const hashes = JSON.parse(readFileSync(resolve(DATA, 'gecko/segmenter-data-sha256.json'), 'utf8')) as { files: HashEntry[] }
@@ -105,7 +105,7 @@ const enumIndex = (list: string[], value: string | undefined, name: string): num
   if (i < 0) throw new Error(`unknown ${name} value ${value}`)
   return i
 }
-await forEachPpucdRange(ppucdPath, range => {
+const fill = (range: PpucdRange): void => {
   const p = range.props
   const sc = indexOf(scripts, p.get('sc') ?? 'Zzzz')
   if (sc > 255) throw new Error('more than 256 scripts')
@@ -118,6 +118,13 @@ await forEachPpucdRange(ppucdPath, range => {
     packed[cp] = value
     scxOf[cp] = scxIndex
   }
+}
+// Block values first: code points no cp or unassigned line names keep them (tools/ppucd.ts forEachPpucdBlock). Outside
+// every block the defaults apply, which are index 0 of each table above (gc=Cn, ea=N, jt=U, sc=Zzzz).
+await forEachPpucdBlock(ppucdPath, fill)
+await forEachPpucdRange(ppucdPath, range => {
+  fill(range)
+  const p = range.props
   const bmg = p.get('bmg')
   if (p.get('gc') === 'Ps' && p.has('Bidi_M') && bmg !== undefined && bmg !== '<code point>') {
     for (let cp = range.first; cp <= range.last; cp++) mirrors.push(cp, parseInt(bmg, 16))

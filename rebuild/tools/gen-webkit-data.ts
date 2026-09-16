@@ -9,9 +9,12 @@
 // - the CLDR delimiters behind Apple ICU's quote overrides (specs/webkit-canvas.md §2.6);
 // - which line table ubrk_open loads per requested locale and behaviour (specs/webkit-canvas.md §2.5);
 // - localeToScriptCode's tables, for the Han locale swap (specs/webkit-text.md §4.1).
+// - the Line_Break=SA combining marks the dictionary engines never stop before (ICU dictbe.cpp fMarkSet), from ICU 78.2's
+//   ppucd.txt: [[:LineBreak=SA:]&[:M:]] (specs/webkit-gaps.md §4), and Default_Ignorable_Code_Point for painted extents.
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { BROWSER_ENGINES, DATA, REBUILD, base64, parsePairBitmap, readVerified, writeModule } from './gen-shared.ts'
+import { PPUCD_PATH, PPUCD_SHA256, forEachPpucdRange } from './ppucd.ts'
 
 const shaByPath = new Map<string, string>()
 const files = readFileSync(resolve(DATA, 'webkit/FILES.tsv'), 'utf8').trim().split('\n')
@@ -74,6 +77,27 @@ const punctuation: number[] = []
     count += b - a + 1
   }
   if (count !== 600) throw new Error(`expected 600 punctuation code units, got ${count}`)
+}
+
+// [[:LineBreak=SA:]&[:M:]] from ICU 78.2's ppucd.txt, which libicucore 78.1 shares for these properties
+// (data/webkit/icu-macos27-libicucore/unicode-properties-vs-upstream78.3.diff differs only in private use).
+const dictionaryMarks: number[] = []
+// Default_Ignorable_Code_Point from the same file: what the lab leaves out of a line's painted extent (DESIGN.md §2.1).
+const defaultIgnorables: number[] = []
+{
+  const ppucdPath = resolve(BROWSER_ENGINES, PPUCD_PATH)
+  readVerified(ppucdPath, PPUCD_SHA256)
+  await forEachPpucdRange(ppucdPath, range => {
+    if (range.props.has('DI')) {
+      const last = defaultIgnorables.length - 1
+      if (last > 0 && defaultIgnorables[last] === range.first - 1) defaultIgnorables[last] = range.last
+      else defaultIgnorables.push(range.first, range.last)
+    }
+    if (range.props.get('lb') !== 'SA' || range.props.get('gc')?.[0] !== 'M') return
+    const last = dictionaryMarks.length - 1
+    if (last > 0 && dictionaryMarks[last] === range.first - 1) dictionaryMarks[last] = range.last
+    else dictionaryMarks.push(range.first, range.last)
+  })
 }
 
 // delimiters.tsv: locale, quotationStart, quotationEnd, alternateQuotationStart, alternateQuotationEnd as
@@ -160,6 +184,13 @@ export const webkitLinePairsBase64 = '${base64(pairs)}'
 // BMP code units c with U_GET_GC_MASK(c) & (Ps|Pe|Pi|Pf|Po) in libicucore 78.1, as [first, last] pairs
 // (data/webkit/breakable-positions/keepall-punctuation-bmp.tsv).
 export const webkitPunctuationRanges: readonly number[] = [${punctuation.join(', ')}]
+
+// Code points with Line_Break=SA and General_Category M (ICU 78.2 ppucd.txt), as [first, last] pairs: the dictionary
+// engines' fMarkSet per script (dictbe.cpp:210, 453, 648, 843).
+export const webkitDictionaryMarkRanges: readonly number[] = [${dictionaryMarks.join(', ')}]
+
+// Code points with Default_Ignorable_Code_Point (ICU 78.2 ppucd.txt), as [first, last] pairs.
+export const webkitDefaultIgnorableRanges: readonly number[] = [${defaultIgnorables.join(', ')}]
 
 // CLDR delimiters per locale key (lowercase, '-'): [quotationStart, is QU, quotationEnd, is QU,
 // alternateQuotationStart, is QU, alternateQuotationEnd, is QU] (data/webkit/icu-macos27-libicucore/delimiters.tsv).

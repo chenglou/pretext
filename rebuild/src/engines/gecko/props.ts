@@ -105,11 +105,15 @@ export function isCursiveScript(cp: number): boolean {
   return s === 'Arab' || s === 'Syrc' || s === 'Nkoo' || s === 'Mand' || s === 'Mong' || s === 'Phag' || s === 'Rohg'
 }
 
+// Script_Extensions as space-separated short names; a code point without an explicit list has its Script.
+export function scriptExtensions(cp: number): string {
+  const list = lookup(extensionRuns, cp)
+  return list < 0 ? scriptOf(cp) : scriptExtensionLists[list]!
+}
+
 // intl::UnicodeProperties::HasScript: the code point's Script_Extensions contain the script.
 export function hasScript(cp: number, script: string): boolean {
-  const list = lookup(extensionRuns, cp)
-  if (list < 0) return scriptOf(cp) === script
-  return scriptExtensionLists[list]!.split(' ').includes(script)
+  return scriptExtensions(cp).split(' ').includes(script)
 }
 
 export function openingMirror(cp: number): number {

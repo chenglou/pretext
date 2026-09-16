@@ -1,7 +1,10 @@
 // Unicode properties Chrome 153 reads through ICU 78.2: Line_Break (break-all), General_Category L, N and M (keep-all),
-// and Joining_Type (HarfBuzz's Arabic joining), per code point, from tools/gen-blink-data.ts.
+// Joining_Type (HarfBuzz's Arabic joining), scripts and paired brackets (ScriptRunIterator), and the classes the painted
+// extent reads, per code point, from tools/gen-blink-data.ts.
 import { decodeBase64 } from '../../breaks/icu4x.js'
-import { blinkCharPropsBase64, blinkHanKerningTypes, blinkScriptKinds } from '../../breaks/generated/blink-break-tables.js'
+import {
+  blinkCharPropsBase64, blinkCursiveScripts, blinkHanKerningTypes, blinkScriptExtensions, blinkScriptPropsBase64,
+} from '../../breaks/generated/blink-break-tables.js'
 
 // ULineBreak values used by name (unicode/uchar.h:2487-2565).
 export const LB_AL = 2
@@ -60,15 +63,57 @@ export function hanKerningCharType(cp: number): number {
   return hanKerningTypes.get(cp) ?? HAN_OTHER
 }
 
-// Script kind: 0 another script, 1 Common or Inherited, 2 a cursive script.
-export function scriptKind(cp: number): number {
+// UScriptCode numbers used by name (unicode/uscript.h:63-539).
+export const USCRIPT_INVALID_CODE = -1, USCRIPT_COMMON = 0, USCRIPT_INHERITED = 1, USCRIPT_BOPOMOFO = 5, USCRIPT_HAN = 17,
+  USCRIPT_HIRAGANA = 20, USCRIPT_KATAKANA = 22, USCRIPT_LATIN = 25, USCRIPT_KATAKANA_OR_HIRAGANA = 54
+
+let scriptRuns: Uint32Array | null = null
+
+function scriptPropsOf(cp: number): number {
+  scriptRuns ??= new Uint32Array(decodeBase64(blinkScriptPropsBase64).slice().buffer)
   let lo = 0
-  let hi = blinkScriptKinds.length / 3 - 1
-  while (lo <= hi) {
-    const mid = (lo + hi) >> 1
-    if (cp < blinkScriptKinds[mid * 3]!) hi = mid - 1
-    else if (cp > blinkScriptKinds[mid * 3 + 1]!) lo = mid + 1
-    else return blinkScriptKinds[mid * 3 + 2]!
+  let hi = scriptRuns.length / 2 - 1
+  while (lo < hi) {
+    const mid = (lo + hi + 1) >> 1
+    if (scriptRuns[2 * mid]! <= cp) lo = mid
+    else hi = mid - 1
   }
-  return 0
+  return scriptRuns[2 * lo + 1]!
+}
+
+// uscript_getScript.
+export function scriptOf(cp: number): number {
+  return scriptPropsOf(cp) & 0xff
+}
+
+// uscript_getScriptExtensions: the extension list, or the script alone.
+export function scriptExtensionsOf(cp: number): readonly number[] {
+  const value = scriptPropsOf(cp)
+  const list = (value >> 8) & 0x3ff
+  return list === 0 ? [value & 0xff] : blinkScriptExtensions[list]!
+}
+
+// u_getIntPropertyValue(cp, UCHAR_BIDI_PAIRED_BRACKET_TYPE): 0 none, 1 open, 2 close.
+export function pairedBracketType(cp: number): number {
+  return (scriptPropsOf(cp) >> 18) & 3
+}
+
+// East_Asian_Width W, F or H (script_run_iterator.cc:94-97).
+export function isEastAsianWide(cp: number): boolean {
+  return (scriptPropsOf(cp) & 0x100000) !== 0
+}
+
+// White_Space.
+export function isWhiteSpace(cp: number): boolean {
+  return (scriptPropsOf(cp) & 0x200000) !== 0
+}
+
+// General_Category Cc, Cf, Zl or Zp, or Default_Ignorable_Code_Point.
+export function hasNoInkClass(cp: number): boolean {
+  return (scriptPropsOf(cp) & 0x400000) !== 0
+}
+
+// IsCursiveScript (shape_result.cc:977-990) over UScriptCode numbers.
+export function isCursiveScript(script: number): boolean {
+  return blinkCursiveScripts.includes(script)
 }

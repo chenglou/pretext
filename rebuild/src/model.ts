@@ -136,6 +136,8 @@ export type GapName =
   | 'string-storage'
   | 'ui-language'
   | 'han-kerning'
+  | 'dictionary-breaks-stand-in'
+  | 'tab-stops'
 
 export type Gap = { gap: GapName; run: number | null; detail: string }
 

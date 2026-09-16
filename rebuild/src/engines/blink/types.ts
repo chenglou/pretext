@@ -1,5 +1,6 @@
 // Blink's prepared paragraph and line state (Chrome 153.0.8010.48). The Blink port owns this file.
 import type { Environment } from '../../env.js'
+import type { Measurer } from '../../measure/canvas.js'
 import type { FontDecl, Gap, Paragraph } from '../../model.js'
 import type { HanKerningFontData } from './hankerning.js'
 
@@ -27,6 +28,10 @@ export type BlinkStyle = {
   fontKey: string
 }
 
+// Canvas contexts per style: shaping (LTR, RTL) and the hyphen (no spacing), and the factor from Canvas px to zoomed px
+// (the layout zoom for fonts measured at the CSS size, else 1).
+export type StyleContexts = { ltr: number; rtl: number; hyphen: number; scale: number }
+
 export type BlinkItem = {
   type: BlinkItemType
   control: BlinkControl
@@ -46,18 +51,20 @@ export type BlinkItem = {
   group: number
 }
 
-// One HarfBuzzShaper::Shape call over consecutive text items (inline_node.cc:1551-1796). Measured in pieces cut at
-// space edges and at most MAX_PIECE code units, with the pair adjustment at every cut put on the glyph before it
-// (shape.ts explains the model).
+// The text of one HarfBuzzShaper::Shape call over consecutive text items (inline_node.cc:1551-1796). Measured whole while
+// below 256 zoomed px, else in pieces (shape.ts explains the model).
 export type BlinkGroup = {
   start: number
   end: number
   style: number
   rtl: boolean
-  context: number
+  // [start, piece ends..., end].
   cuts: number[]
-  // 16.16 advance sum before each cut, including the adjustment at that cut.
+  // 16.16 advance sum before each cut, including the pair adjustment at that cut, without HanKerning edge trims.
   prefixAtCut: number[]
+  // What HanKerning's start and end contexts halt at the group's edges.
+  startTrim16: number
+  endTrim16: number
 }
 
 export type IteratorSettings = {
@@ -73,11 +80,18 @@ export type IteratorSettings = {
 export type BlinkPrepared = {
   paragraph: Paragraph
   env: Environment
+  // The layout's one measurer, which firstLine also lays a line out with.
+  measurer: Measurer
   // Device scale factor times browser zoom: every LayoutUnit counts 1/64 of a zoomed px (specs/blink-lines.md §2.1).
   layoutZoom: number
   // text_content: the paragraph string after white-space processing (specs/blink-text.md §2.C).
   text: string
   is8Bit: boolean
+  // RunSegmenter segments text_content: it is 16-bit with a character other than U+FFFC, or bidi is on
+  // (inline_node.cc:1256-1290). Otherwise the paragraph is one Latin segment.
+  segmented: boolean
+  // The script each text_content unit is shaped with (ScriptRunIterator over text_content, or Latin).
+  scripts: Uint8Array
   // Per text_content unit, its source offset, or -1 for a unit Blink generated (U+200B after leading spaces).
   sourceOffsets: Int32Array
   // Per source unit, its text_content unit, or -1 when white-space processing removed it.
@@ -88,8 +102,7 @@ export type BlinkPrepared = {
   items: BlinkItem[]
   styles: BlinkStyle[]
   groups: BlinkGroup[]
-  // Contexts per style: shaping (LTR, RTL) and the hyphen (no spacing).
-  contexts: { ltr: number; rtl: number; hyphen: number }[]
+  contexts: StyleContexts[]
   bidiEnabled: boolean
   baseLevel: number
   settings: IteratorSettings

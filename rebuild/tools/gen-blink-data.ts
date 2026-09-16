@@ -72,23 +72,50 @@ await forEachPpucdRange(ppucdPath, range => {
   const type = gc === 'Ps' ? (wide ? HAN_OPEN : HAN_OPEN_NARROW) : (wide ? HAN_CLOSE : HAN_CLOSE_NARROW)
   for (let cp = range.first; cp <= range.last; cp++) hanKerning.set(cp, type)
 })
-// Script kinds for letter spacing in cursive scripts (shape_result.cc:977-990 IsCursiveScript; ScriptRunIterator gives
-// Common and Inherited characters the script around them): 1 Common or Inherited, 2 cursive.
-const CURSIVE = new Set(['Arab', 'Rohg', 'Mand', 'Mong', 'Nkoo', 'Phag', 'Syrc'])
-const scriptKinds = new Uint8Array(0x110000)
-await forEachPpucdRange(ppucdPath, range => {
-  const sc = range.props.get('sc') ?? ''
-  const kind = sc === 'Zyyy' || sc === 'Zinh' ? 1 : CURSIVE.has(sc) ? 2 : 0
-  scriptKinds.fill(kind, range.first, range.last + 1)
-})
-const scriptFlat: number[] = []
-for (let cp = 0; cp < scriptKinds.length;) {
-  const kind = scriptKinds[cp]!
-  let end = cp
-  while (end + 1 < scriptKinds.length && scriptKinds[end + 1] === kind) end++
-  if (kind !== 0) scriptFlat.push(cp, end, kind)
-  cp = end + 1
+// ScriptRunIterator's data (script_run_iterator.cc:133-236, :80-113): uscript_getScript and uscript_getScriptExtensions as
+// UScriptCode numbers from ICU 78.2's uscript.h, extension lists in ICU's order (ascending codes, as icu4c 78.3's
+// uscript_getScriptExtensions returns them), Bidi_Paired_Bracket_Type, and East_Asian_Width W, F or H for
+// FixScriptsByEastAsianWidth. The painted extent reads White_Space and the classes without ink of their own (gc Cc, Cf,
+// Zl, Zp, Default_Ignorable_Code_Point), which is how lab/score.ts classifies code points.
+const USCRIPT_PATH = 'chromium-icu-8cc91d9b/source/common/unicode/uscript.h'
+const USCRIPT_SHA256 = '293adf40390583c1c5394d3dc1794ed1669e8356cdf292ca5eaac145a2a5d1e0'
+const uscriptSource = new TextDecoder().decode(readVerified(resolve(BROWSER_ENGINES, USCRIPT_PATH), USCRIPT_SHA256))
+const scriptCodes = new Map<string, number>()
+for (const m of uscriptSource.matchAll(/USCRIPT_\w+\s*=\s*(\d+),\s*\/\*\s*([A-Z][a-z]{3})\s*\*\//g)) {
+  if (!scriptCodes.has(m[2]!)) scriptCodes.set(m[2]!, Number(m[1]))
 }
+function scriptCode(name: string): number {
+  const code = scriptCodes.get(name)
+  if (code === undefined) throw new Error(`uscript.h has no UScriptCode for ${name}`)
+  return code
+}
+// Index 0 stands for "the code point's own script".
+const extensionLists: string[] = ['']
+const scriptProps = new Uint32Array(0x110000)
+await forEachPpucdRange(ppucdPath, range => {
+  const sc = scriptCode(range.props.get('sc') ?? '')
+  const scx = range.props.get('scx') ?? '<script>'
+  let list = 0
+  if (scx !== '<script>') {
+    const key = scx.split(' ').map(scriptCode).sort((a, b) => a - b).join(',')
+    list = extensionLists.indexOf(key)
+    if (list < 0) {
+      list = extensionLists.length
+      extensionLists.push(key)
+    }
+  }
+  const bpt = range.props.get('bpt') ?? 'n'
+  const ea = range.props.get('ea') ?? 'N'
+  const gc = range.props.get('gc') ?? ''
+  const flags = (bpt === 'o' ? 1 : 0) | (bpt === 'c' ? 2 : 0) | (ea === 'W' || ea === 'F' || ea === 'H' ? 4 : 0) |
+    (range.props.has('WSpace') ? 8 : 0) | (gc === 'Cc' || gc === 'Cf' || gc === 'Zl' || gc === 'Zp' || range.props.has('DI') ? 16 : 0)
+  scriptProps.fill(sc | (list << 8) | (flags << 18), range.first, range.last + 1)
+})
+if (extensionLists.length > 1024) throw new Error('more than 1024 Script_Extensions lists')
+const scriptRuns: number[] = []
+for (let cp = 0; cp < scriptProps.length; cp++) if (cp === 0 || scriptProps[cp] !== scriptProps[cp - 1]) scriptRuns.push(cp, scriptProps[cp]!)
+const scriptPacked = new Uint8Array(new Uint32Array(scriptRuns).buffer)
+const cursiveScripts = ['Arab', 'Rohg', 'Mand', 'Mong', 'Nkoo', 'Phag', 'Syrc'].map(scriptCode)
 
 const hanKerningFlat: number[] = []
 for (const [cp, type] of [...hanKerning.entries()].sort((a, b) => a[0] - b[0])) if (type !== HAN_OTHER) hanKerningFlat.push(cp, type)
@@ -122,7 +149,15 @@ export const blinkCharPropsBase64 = '${base64(packed)}'
 // narrow, 5 close narrow, 6 dot, 7 colon, 8 semicolon, 9 open quote, 10 close quote.
 export const blinkHanKerningTypes: readonly number[] = [${hanKerningFlat.join(',')}]
 
-// Script kind runs as [first, last, kind]: 1 Common or Inherited (sc=Zyyy, Zinh), 2 a cursive script (Arab, Rohg, Mand,
-// Mong, Nkoo, Phag, Syrc); code points in no run have another script.
-export const blinkScriptKinds: readonly number[] = [${scriptFlat.join(',')}]
+// Runs over U+0000..U+10FFFF as little-endian uint32 pairs (first code point, value), value = UScriptCode (bits 0-7) |
+// Script_Extensions list index << 8 (0: the script alone) | Bidi_Paired_Bracket_Type open 0x40000, close 0x80000 |
+// East_Asian_Width W, F or H 0x100000 | White_Space 0x200000 | gc Cc, Cf, Zl, Zp or Default_Ignorable_Code_Point 0x400000,
+// from ICU 78.2 ppucd.txt and uscript.h (sha256 ${USCRIPT_SHA256}).
+export const blinkScriptPropsBase64 = '${base64(scriptPacked)}'
+
+// Script_Extensions lists by index, UScriptCode numbers in ICU's order.
+export const blinkScriptExtensions: readonly (readonly number[])[] = [${extensionLists.map(key => `[${key}]`).join(',')}]
+
+// IsCursiveScript (shape_result.cc:977-990): Arab, Rohg, Mand, Mong, Nkoo, Phag, Syrc as UScriptCode numbers.
+export const blinkCursiveScripts: readonly number[] = [${cursiveScripts.join(',')}]
 `)

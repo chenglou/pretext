@@ -9,8 +9,8 @@ import type { Paragraph, TextRun } from '../../model.js'
 import { getCategory } from '../../breaks/rbbi.js'
 import { AL, LRE, LRO, PDF, R, RLE, RLO, bidiClassOf, bidiDataFor, type BidiData } from '../../unicode/bidi.js'
 import { resolveIcuBidi } from '../../unicode/ubidi.js'
-import { makeFactory, moveToNextBreakablePosition } from './breaks.js'
-import { computedLocale, isPunctuation, lineRules } from './data.js'
+import { canBreakBefore, dictionaryRangeStartsWithMark, makeFactory, moveToNextBreakablePosition } from './breaks.js'
+import { computedLocale, isPunctuation, lineRules, localeScript } from './data.js'
 import { boxWidth, itemWidth, singleSpaceWidth } from './measure.js'
 import { preservesNewline, preservesSpacesAndTabs, webkitStyle } from './style.js'
 import type { WebKitBox, WebKitPrepared, WebKitStyle, WebKitTextItem } from './types.js'
@@ -174,7 +174,8 @@ function characterCanUseSimplifiedTextMeasuring(c: number, whitespaceIsCollapsed
 // Families whose fonts carry kCTFontMonoSpaceTrait on macOS 27 (specs/webkit-gaps.md §2.4), which Font::determinePitch
 // treats as fixed pitch (FontCoreText.cpp:753-785). Courier New takes no width shortcut by name (:776-782).
 const FIXED_PITCH_FAMILIES = ['menlo', 'monaco', 'andale mono', 'courier new', 'pt mono', 'courier', 'biz udgothic', 'biz udmincho', 'pcmyungjo', 'osaka-mono']
-const GENERIC_FAMILIES = ['serif', 'sans-serif', 'monospace', 'cursive', 'fantasy', 'system-ui', '-apple-system', 'ui-serif', 'ui-sans-serif', 'ui-monospace', 'ui-rounded']
+// Families CoreText resolves with the locale (FontCacheCoreText.cpp:585-598, SystemFontDatabaseCoreText.cpp:236).
+const SYSTEM_DESIGN_FAMILIES = ['system-ui', '-apple-system', 'ui-serif', 'ui-sans-serif', 'ui-monospace', 'ui-rounded']
 
 function familyNames(family: string): string[] {
   const out: string[] = []
@@ -219,16 +220,21 @@ function makeBox(p: WebKitPrepared, m: Measurer, run: number, sourceStart: numbe
   const settings = { font, lang: '', letterSpacing: `${letterSpacing}px`, wordSpacing: `${wordSpacing}px`, fontKerning: 'auto' as const, textRendering: 'auto' as const, direction: 'ltr' as const, partition: '' }
   const context = measureContext(m, settings)
   const plainContext = measureContext(m, { ...settings, letterSpacing: '0px', wordSpacing: '0px' })
-  // Simplified measuring also needs every glyph from the primary font (FontCascade.cpp:498-502). The shortcuts that read
-  // it need a fixed-pitch font, whose glyphs all advance by the space width, so a code point whose Canvas advance differs
-  // came from a fallback font (specs/webkit-gaps.md §2.5 T1). Only fixed-pitch boxes are tested.
+  // Simplified measuring also needs a glyph from the primary font for every character
+  // (FontCascade::canUseSimplifiedTextMeasuring, FontCascade.cpp:486-510). Fallback follows the family list before
+  // system fallback (FontCascadeFonts.cpp:426-439, specs/webkit-gaps.md §3.3), so a family after the primary one that
+  // draws a glyph no other font would shows coverage: if the primary family maps the code point, "P, LastResort" draws
+  // the paragraph's glyph; otherwise LastResort's box, 17.6015625px at 16px in webkit-host (rebuild/probes/webkit-followups.ts
+  // B5: Courier maps Ω, Menlo doesn't map U+3000). Only fixed-pitch boxes read the result, in the width and breakWord
+  // shortcuts; the 17.6015625px advance matching a fallback glyph's is the recipe's loss.
   if (simplifiedMeasuring && fixedPitch) {
-    const spaceWidth = measureText(m, plainContext, ' ')
+    const coverageContext = measureContext(m, { ...settings, font: canvasFont({ ...r.font, family: `${r.font.family.split(',')[0]!.trim()}, LastResort` }, size), letterSpacing: '0px', wordSpacing: '0px' })
     for (let i = 0; simplifiedMeasuring && i < text.length; i++) {
       const cp = text.codePointAt(i)!
       if (cp > 0xffff) i++
       if (cp < 0x20) continue
-      simplifiedMeasuring = measureText(m, plainContext, String.fromCodePoint(cp)) === spaceWidth
+      const s = String.fromCodePoint(cp)
+      simplifiedMeasuring = measureText(m, coverageContext, s) === measureText(m, plainContext, s)
     }
   }
   return {
@@ -426,6 +432,14 @@ function computeItemWidths(p: WebKitPrepared, m: Measurer): void {
   }
 }
 
+// Code points whose system fallback CoreText picks by language: Hangul, CJK symbols and punctuation, kana, Bopomofo, Han
+// and fullwidth forms, by block (specs/webkit-canvas.md §1.3, probes-safari cross-cutting 4).
+function hasLanguageDependentFallback(cp: number): boolean {
+  return (cp >= 0x1100 && cp <= 0x11ff) || (cp >= 0x2e80 && cp <= 0x4dbf) || (cp >= 0x4e00 && cp <= 0x9fff) || (cp >= 0xa960 && cp <= 0xa97f)
+    || (cp >= 0xac00 && cp <= 0xd7ff) || (cp >= 0xf900 && cp <= 0xfaff) || (cp >= 0xfe30 && cp <= 0xfe4f) || (cp >= 0xff00 && cp <= 0xffef)
+    || (cp >= 0x1aff0 && cp <= 0x1b16f) || (cp >= 0x1f200 && cp <= 0x1f2ff) || (cp >= 0x20000 && cp <= 0x3ffff)
+}
+
 function collectGaps(p: WebKitPrepared): void {
   const gaps = p.gaps
   if (p.env.pageZoom !== 1) {
@@ -438,7 +452,7 @@ function collectGaps(p: WebKitPrepared): void {
     const text = box.text
     let control = false
     let softHyphen = false
-    let cjk = false
+    let languageFallback = false
     let quote = false
     let punctuation = false
     let dictionary = false
@@ -448,25 +462,56 @@ function collectGaps(p: WebKitPrepared): void {
       if (cp > 0xffff) i++
       if ((cp <= 0x1f && cp !== 0x09 && cp !== 0x0a) || (cp >= 0x7f && cp <= 0x9f)) control = true
       if (cp === 0xad) softHyphen = true
-      if (cp >= 0x2e80) cjk = true
+      if (hasLanguageDependentFallback(cp)) languageFallback = true
       if (cp === 0x22 || cp === 0x27 || cp === 0xab || cp === 0xbb || (cp >= 0x2018 && cp <= 0x201f) || cp === 0x2039 || cp === 0x203a) quote = true
       if (cp <= 0xffff && isPunctuation(cp)) punctuation = true
       if (getCategory(rules, cp) >= rules.dictCategoriesStart) dictionary = true
+    }
+    // Widths measured for the box's items, and whether an item leads with a code unit followed by one that can't start
+    // a line.
+    let offGridWidth = false
+    let lineStartProhibition = false
+    for (let i = 0; i < p.items.length; i++) {
+      const item = p.items[i]!
+      if (item.kind !== 'text' || item.box !== b) continue
+      if (item.width !== null && !(Number.isInteger(item.width * 2048) && item.width < 4096)) offGridWidth = true
+      for (let k = item.start + 1; !item.isWhitespace && k < item.end; k++) if (!canBreakBefore(text.charCodeAt(k), p.style.lineBreak)) lineStartProhibition = true
     }
     if (control) gaps.push({ gap: 'control-character-width', run: box.run, detail: 'CR keeps its glyph advance (measured as 0, as in Arial); VT, FF and other Cc take .notdef, measured as U+0001' })
     if (softHyphen) gaps.push({ gap: 'hyphen-glyph', run: box.run, detail: 'the hyphen is U+2010 when the primary font maps it, else "-"; measured as U+2010' })
     if (box.letterSpacing !== 0) gaps.push({ gap: 'letter-spacing-ligatures', run: box.run, detail: 'the DOM turns off liga, clig, dlig and hlig under letter-spacing; OffscreenCanvas keeps them' })
     const families = familyNames(run.font.family)
-    let generic = false
-    for (let i = 0; i < families.length; i++) if (GENERIC_FAMILIES.includes(families[i]!)) generic = true
-    if (box.locale !== '' && (cjk || generic)) gaps.push({ gap: 'canvas-language', run: box.run, detail: `locale ${box.locale} can choose fonts and glyphs; OffscreenCanvas has no locale` })
+    // OffscreenCanvas has a null locale (specs/webkit-canvas.md §1.3). The DOM passes the box's locale where fonts are
+    // chosen: -webkit-standard per script (FontGenericFamilies.cpp:50-66, SettingsBaseCocoa.mm:44-50; the other generic
+    // families have only a Common entry on macOS), system-ui and the ui-* designs (FontCacheCoreText.cpp:585-598,
+    // SystemFontDatabaseCoreText.cpp:236), and system fallback (FontCacheCoreText.cpp:822), whose cascades differ by
+    // language for Han, kana and Hangul. It also shapes with the locale (FontCascade.cpp:403, WidthIterator.cpp:96), which
+    // Canvas can't show; fonts with locl lookups for other languages aren't reported (webkit-RESULTS.md).
+    const standardPerScript = families.includes('-webkit-standard') && ['HAN', 'SIMPLIFIED_HAN', 'TRADITIONAL_HAN', 'KATAKANA_OR_HIRAGANA', 'HANGUL'].includes(localeScript(box.locale))
+    let systemDesign = false
+    for (let i = 0; i < families.length; i++) if (SYSTEM_DESIGN_FAMILIES.includes(families[i]!)) systemDesign = true
+    if (box.locale !== '' && (standardPerScript || systemDesign || languageFallback)) {
+      gaps.push({ gap: 'canvas-language', run: box.run, detail: `locale ${box.locale} chooses ${languageFallback ? 'the fallback font for Han, kana or Hangul' : 'the system or standard font'}; OffscreenCanvas has no locale` })
+    }
     if (box.fixedPitch) gaps.push({ gap: 'fixed-pitch-path', run: box.run, detail: `${families[0]} is treated as fixed pitch by family name; Canvas can't show the monospace trait` })
-    if (box.simplifiedMeasuring && (!Number.isInteger(run.font.size * p.env.pageZoom) || families.includes('system-ui') || families.includes('-apple-system'))) {
+    // The text box's shortcut path sums shaped advances in one float32 loop (FontCascade::widthForSimpleTextSlow,
+    // FontCascade.cpp:381-412); Canvas runs WidthIterator (probes-safari correction 5). Advances on a 1/2048px grid sum
+    // exactly in float32 in any order below 4096px, so the order shows only where a measured width is off that grid [I:
+    // the advances of on-grid totals are on the grid]. The fixed-pitch width shortcut sums no advances.
+    if (box.simplifiedMeasuring && !box.fixedPitchFastMeasuring && offGridWidth) {
       gaps.push({ gap: 'simplified-measuring', run: box.run, detail: 'the DOM sums glyph advances in another float32 order on the simplified path' })
     }
     if (dictionary && p.env.dictionaryBreaks.kind !== 'intl-segmenter-word') gaps.push({ gap: 'dictionary-breaks-unavailable', run: box.run, detail: 'Thai, Lao, Khmer or Myanmar text gets no dictionary boundaries' })
+    if (dictionary && p.env.dictionaryBreaks.kind === 'intl-segmenter-word' && dictionaryRangeStartsWithMark(rules, box.text)) {
+      gaps.push({ gap: 'dictionary-breaks-stand-in', run: box.run, detail: 'a dictionary range starts with a combining mark, where the line engine resynchronizes from its dictionary and the word segmenter breaks after the mark' })
+    }
     if (box.locale === '' && quote) gaps.push({ gap: 'ui-language', run: box.run, detail: "quote overrides for a null locale follow the WebContent process's ICU default locale (assumed en_US_POSIX)" })
-    if (box.is8Bit && p.style.wordBreak === 'keep-all' && punctuation) gaps.push({ gap: 'string-storage', run: box.run, detail: 'keep-all breaks after punctuation only in 16-bit text; assumed 8-bit' })
+    // Storage decides keep-all punctuation breaks (BreakablePositions.h:292-299) and what an emergency break keeps at a
+    // line start: one code unit in 8-bit text, the first character and every following one that can't start a line in
+    // 16-bit text (InlineContentBreaker.cpp:139-158). The port treats Latin-1 text as 8-bit (specs/webkit-gaps.md §7.5).
+    if (box.is8Bit && ((p.style.wordBreak === 'keep-all' && punctuation) || (p.style.wrap && lineStartProhibition))) {
+      gaps.push({ gap: 'string-storage', run: box.run, detail: 'keep-all punctuation breaks and emergency line-start breaks differ for 16-bit storage; Latin-1 text assumed 8-bit' })
+    }
     if (!box.simpleFontCodePath && box.hasStrongDirectionality) complexRtlBoxes++
   }
   if (p.builder === 'line-builder' && complexRtlBoxes > 1) {

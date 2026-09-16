@@ -32,6 +32,10 @@ export type GeckoFrame = {
   is8bit: boolean
 }
 
+// A script run gfxFontGroup::InitTextRun shapes (gfxScriptItemizer.cpp:60-243): it ends before `limit`, a transformed
+// index. 'Zyyy' stands for Common resolved from the language.
+export type ScriptRun = { limit: number; script: string }
+
 // A gfxTextRun: the transformed characters of consecutive frames that ContinueTextRunAcrossFrames joins
 // (nsTextFrame.cpp:2015-2174). [tStart, tEnd) index the paragraph's transformed arrays.
 export type GeckoTextRun = {
@@ -41,6 +45,8 @@ export type GeckoTextRun = {
   level: number
   // Measure context: the first flow's font and language, ligatures off when its letter spacing isn't 0 au.
   context: number
+  // The run's script runs, which decide the script context a measured piece of a unit needs (rangeAu in prepare.ts).
+  scriptRuns: ScriptRun[]
   // TEXT_ENABLE_HYPHEN_BREAKS from a removed soft hyphen (nsTextFrame.cpp:2584-2586).
   hasShy: boolean
   // Flags::HasTrailingBreak (nsTextFrame.cpp:1835-1848): the paragraph's last text run ended on breakable space.
@@ -60,18 +66,12 @@ export type GeckoUnit = {
   kind: 'word' | 'space' | 'nbsp' | 'invalid'
   tStart: number
   tEnd: number
-  // measureText of the unit in its text run's context, in au at apd 60.
+  // measureText of the unit in its text run's context and its DOM script (rangeAu), in au at apd 60.
   canvasAu: number
   // The DOM advance: canvasAu plus Apple Color Emoji corrections at the page's apd (specs/gecko-canvas.md §2 A12).
   au: number
   // Glyph advance of the text run before this unit.
   startAdvance: number
-  // A character of the script the DOM itemizer gives the unit's leading Common characters, when the unit measured alone
-  // itemizes differently (gfxScriptItemizer merges Common characters into the surrounding run; CJK runs shape without
-  // kern, gfxHarfBuzzShaper.cpp:1405-1438). Canvas measures `context + ' ' + unit` (or `unit + ' ' + context`) less the
-  // context's part. '' when no context is needed.
-  scriptContext: string
-  contextBefore: boolean
 }
 
 // Character kinds a text run records (gfxFont.cpp:3872-3897).
@@ -113,7 +113,10 @@ export type GeckoPrepared = {
   nextT: Int32Array
   // ComputeTabWidthAppUnits (nsTextFrame.cpp:3875-3906), 0 when nothing measured it.
   tabWidth: number
+  // Gaps from preparation, plus in-word-prefix, which the line loop adds at the first in-word offset whose recipe Canvas
+  // can't confirm (lines.ts glyphBefore); the prepared paragraph lives for one layout at one width.
   gaps: Gap[]
+  inWordGapReported: boolean
 }
 
 // Where the continuation frame starts (nsTextFrame.cpp:11253, :11523). No measured remainder carries over; a line's

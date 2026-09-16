@@ -4,7 +4,7 @@
 import { NO_OVERRIDES, getCategory, type BreakRules, type CategoryOverrides } from '../../breaks/rbbi.js'
 import { pairCanBreak, webkitBreakRules, webkitLinePairs } from '../../breaks/tables.js'
 import {
-  webkitDelimiters, webkitLineTables, webkitLocaleScripts, webkitPunctuationRanges, webkitScriptNames,
+  webkitDefaultIgnorableRanges, webkitDelimiters, webkitDictionaryMarkRanges, webkitLineTables, webkitLocaleScripts, webkitPunctuationRanges, webkitScriptNames,
 } from '../../breaks/generated/webkit-break-tables.js'
 import type { LineBreakMode } from './types.js'
 
@@ -13,10 +13,7 @@ export function pairTableBreaks(before: number, after: number): boolean {
   return pairCanBreak(webkitLinePairs(), before, after)
 }
 
-// U_GET_GC_MASK(c) & (Ps|Pe|Pi|Pf|Po) for a UTF-16 code unit in libicucore 78.1. Surrogates are Cs, so supplementary
-// punctuation never matches.
-export function isPunctuation(c: number): boolean {
-  const r = webkitPunctuationRanges
+function inRanges(r: readonly number[], c: number): boolean {
   let lo = 0
   let hi = r.length / 2 - 1
   while (lo <= hi) {
@@ -26,6 +23,22 @@ export function isPunctuation(c: number): boolean {
     else return true
   }
   return false
+}
+
+// U_GET_GC_MASK(c) & (Ps|Pe|Pi|Pf|Po) for a UTF-16 code unit in libicucore 78.1. Surrogates are Cs, so supplementary
+// punctuation never matches.
+export function isPunctuation(c: number): boolean {
+  return inRanges(webkitPunctuationRanges, c)
+}
+
+// Default_Ignorable_Code_Point (ICU 78.2 ppucd.txt).
+export function isDefaultIgnorable(cp: number): boolean {
+  return inRanges(webkitDefaultIgnorableRanges, cp)
+}
+
+// [[:LineBreak=SA:]&[:M:]]: the dictionary engines' fMarkSet for the script of c (ICU dictbe.cpp:210, 453, 648, 843).
+export function isDictionaryMark(cp: number): boolean {
+  return inRanges(webkitDictionaryMarkRanges, cp)
 }
 
 // ICU resource lookup: the locale as dumped, else its parents by truncation, else root. Break tables open with
@@ -99,25 +112,29 @@ function packedLower(s: string, max: number): string | null {
   return s.toLowerCase()
 }
 
-// localeToScriptCode (LocaleToScriptMapping.cpp:360-377), reduced to "is the script USCRIPT_HAN".
-export function isHanLocale(locale: string): boolean {
+// localeToScriptCode (LocaleToScriptMapping.cpp:360-377): the USCRIPT_ name without its prefix, or 'COMMON'.
+export function localeScript(locale: string): string {
   let canonical = locale.replaceAll('-', '_')
   while (canonical.length > 0) {
     const name = packedLower(canonical, 8)
     if (name !== null) {
       const script = webkitLocaleScripts[name]
-      if (script !== undefined) return script === 'HAN'
+      if (script !== undefined) return script
     }
     const cut = canonical.lastIndexOf('_')
     if (cut < 0) break
     const scriptName = packedLower(canonical.slice(cut + 1), 4)
     if (scriptName !== null) {
       const script = webkitScriptNames[scriptName]
-      if (script !== undefined && script !== 'UNKNOWN') return script === 'HAN'
+      if (script !== undefined && script !== 'UNKNOWN') return script
     }
     canonical = canonical.slice(0, cut)
   }
-  return false
+  return 'COMMON'
+}
+
+export function isHanLocale(locale: string): boolean {
+  return localeScript(locale) === 'HAN'
 }
 
 // FontDescription::setSpecifiedLocale (FontDescription.cpp:107-113): `lang=""` gives a null locale, and a Han locale

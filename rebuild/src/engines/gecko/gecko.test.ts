@@ -10,13 +10,54 @@ import type { Paragraph, TextRun } from '../../model.js'
 import { BREAK_EMERGENCY_WRAP, BREAK_NORMAL } from './linebreak.js'
 import { prepareGecko } from './prepare.js'
 
+// The stand-in's widths in au at apd 60. Any code point is 576 au at 16px, scaled with the size, with these exceptions,
+// each modelled on an installed-Firefox measurement:
+// - "AV" kerns by −60 au (a GPOS pair across an in-word offset).
+// - "(" is 367 au, or 660 au in a string with an Arabic letter, where the itemizer gives it the Arabic script (Amiri,
+//   gecko-AUDIT probe A1).
+// - U+1F600, U+1F469, U+1F680 and the ligature U+1F469 U+200D U+1F680 take Apple Color Emoji's whole-pixel advances
+//   (960, 1260, 1500 and 1920 au at 12, 16, 24 and 32px, specs/gecko-canvas.md §1.9) in every family, except a
+//   text-presentation U+1F600 U+FE0E, and U+1F600 alone once `stub.pinned` (probe gecko-port F3), which draw with a text
+//   font at 1020 au outside "Apple Color Emoji". U+200D, U+FE0E and U+FE0F have no advance.
+const stub = { pinned: false }
+function stubAu(font: string, text: string): number {
+  const size = Number(/([\d.]+)px/.exec(font)![1])
+  const emojiFont = font.includes('Apple Color Emoji')
+  const emoji = size === 12 ? 960 : size === 16 ? 1260 : size === 24 ? 1500 : size === 32 ? 1920 : Math.round(size * 60)
+  const arabic = /[ء-ي]/.test(text)
+  const cps = [...text]
+  let au = 0
+  for (let i = 0; i < cps.length; i++) {
+    const c = cps[i]!
+    if (c === '‍' || c === '︎' || c === '️') continue
+    if (c === '👩' && cps[i + 1] === '‍' && cps[i + 2] === '🚀') {
+      au += emoji
+      i += 2
+      continue
+    }
+    if (c === '😀' || c === '👩' || c === '🚀') {
+      au += !emojiFont && (cps[i + 1] === '︎' || (stub.pinned && c === '😀')) ? 1020 : emoji
+      continue
+    }
+    if (c === '(') {
+      au += arabic ? 660 : 367
+      continue
+    }
+    if (c === ' ' && font.includes('Arial')) {
+      au += 60 * Math.floor(size / 5 + 0.5) // Arial has no U+2009: Gecko synthesizes it (gfxTextRun.cpp:3032-3043)
+      continue
+    }
+    au += Math.round(576 * size / 16)
+    if (c === 'A' && cps[i + 1] === 'V') au -= 60
+  }
+  return au
+}
+
 beforeAll(() => {
   class StubContext {
     font = ''; lang = ''; letterSpacing = '0px'; wordSpacing = '0px'; fontKerning = 'auto'; textRendering = 'auto'; direction = 'ltr'
     measureText(s: string) {
-      let n = 0
-      for (const _ of s) n++
-      return { width: Math.fround((n * 576) / 60) }
+      return { width: Math.fround(stubAu(this.font, s) / 60) }
     }
   }
   ;(globalThis as { OffscreenCanvas?: unknown }).OffscreenCanvas = class {
@@ -159,6 +200,68 @@ describe('gecko line filling (probes-firefox verdicts)', () => {
       at = layout.lines[l]!.end
     }
     expect(at).toBe(p.runs.reduce((n, r) => n + r.text.length, 0))
+  })
+})
+
+describe('gecko Canvas recipes (specs/gecko-AUDIT.md B1-B4)', () => {
+  const arial = (size: number) => ({ family: 'Arial', size, weight: 400, style: 'normal' as const })
+  const gapNames = (p: Paragraph) => layoutParagraph(p, env).gaps.map(g => g.gap)
+
+  test('B2: in-word-prefix only where a prefix and suffix shaped alone differ from the unit', () => {
+    expect(gapNames(paragraph([run('aaaa')], 20, { overflowWrap: 'anywhere' }))).not.toContain('in-word-prefix')
+    expect(gapNames(paragraph([run('AVAV')], 20, { overflowWrap: 'anywhere' }))).toContain('in-word-prefix')
+  })
+
+  test('B3: a suffix is measured in the script the paragraph gives it', () => {
+    // W("ا ((") − W("ا ") = 1320 au for "((" after Arabic, where "((" alone is 734 au: line 1 is لا( at exactly 1812 au.
+    const p = paragraph([run('لا((')], 30.2, { direction: 'rtl', overflowWrap: 'anywhere' })
+    expect(starts(p)).toEqual([0, 3])
+    expect(widths(p)).toEqual([1812, 660])
+  })
+
+  test('B1a: the device-size emoji advance applies only where Canvas shows Apple Color Emoji draws the cluster', () => {
+    const p = (text: string) => paragraph([run(text, 'span', { font: arial(16) })], 500, { font: arial(16) })
+    try {
+      expect(widths(p('😀'))).toEqual([960])
+      expect(gapNames(p('😀'))).not.toContain('font-fallback')
+      expect(widths(p('😀︎'))).toEqual([1020])
+      expect(gapNames(p('😀︎'))).not.toContain('font-fallback')
+      stub.pinned = true
+      expect(widths(p('😀'))).toEqual([1020])
+      expect(gapNames(p('😀'))).toContain('font-fallback')
+    } finally {
+      stub.pinned = false
+    }
+  })
+
+  test('B1b: a soft hyphen inside a grapheme cluster puts the whole cluster before the break', () => {
+    // c-27e5b02212b7324f: natively line 2 holds the ligated cluster (750 au) and the hyphen; U+1F680 starts line 3 at 0 au.
+    const p = paragraph([run('a👩‍­🚀b', 'text', { font: arial(12) })], 8, { font: arial(12), whiteSpace: 'pre-wrap', overflowWrap: 'break-word' })
+    expect(starts(p)).toEqual([0, 1, 5])
+    expect(widths(p)).toEqual([432, 750 + 432, 432])
+  })
+
+  test('B4: trailing white space trimmed with a negative advance widens the line box, not the painted extent', () => {
+    // c-79e5272a2644d9b8: the space is 576 − 60 − 600 = −84 au; TrimTrailingWhiteSpace subtracts floor(−84) unclamped.
+    const p = paragraph([run('aaaa', 'span'), run(' bbbb', 'span', { letterSpacing: -1, wordSpacing: -10 })], 57.6)
+    const layout = layoutParagraph(p, env)
+    expect(starts(p)).toEqual([0, 5])
+    expect(layout.lines[0]!.engineWidth).toEqual({ unit: 'gecko-app-unit', au: 2304 + 84 })
+    expect(layout.lines[0]!.width).toBe(38.4)
+  })
+
+  test('a synthesized Unicode space rounds to whole device pixels', () => {
+    // 18px U+2009: Canvas 60 × floor(3.6 + 0.5) = 240 au; the DOM at apd 30 30 × floor(7.2 + 0.5) = 210 au.
+    const arial18 = paragraph([run('a b', 'span', { font: arial(18) })], 500, { font: arial(18) })
+    expect(widths(arial18)).toEqual([648 + 210 + 648])
+    const courier18 = { ...courier, size: 18 }
+    expect(widths(paragraph([run('a b', 'span', { font: courier18 })], 500, { font: courier18 }))).toEqual([648 * 3])
+  })
+
+  test('B4: a hidden control with letter spacing has a rect', () => {
+    // c-92b6963ae4344985: a lone VT with 1px letter spacing is 60 au natively.
+    const layout = layoutParagraph(paragraph([run('\v', 'span', { letterSpacing: 1 })], 500), env)
+    expect(layout.lines.map(l => [l.engineWidth.unit === 'gecko-app-unit' ? l.engineWidth.au : -1, l.width])).toEqual([[60, 1]])
   })
 })
 

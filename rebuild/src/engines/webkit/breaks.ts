@@ -6,8 +6,7 @@
 import type { DictionaryBreaks } from '../../env.js'
 import { RuleBreakIterator, getCategory, ruleBoundaries, type BreakRules } from '../../breaks/rbbi.js'
 import type { LineBreak } from '../../model.js'
-import { graphemeBoundaries, graphemeRulesFor } from '../../unicode/grapheme.js'
-import { isPunctuation, lineRules, pairTableBreaks } from './data.js'
+import { isDictionaryMark, isPunctuation, lineRules, pairTableBreaks } from './data.js'
 import type { LineBreakMode, WebKitStyle } from './types.js'
 
 // BreakClass, BP.h:80-102.
@@ -52,32 +51,75 @@ function isDictionaryCharacter(rules: BreakRules, cp: number): boolean {
   return getCategory(rules, cp) >= rules.dictCategoriesStart
 }
 
-function codePointBefore(s: string, p: number): number {
-  const c = s.charCodeAt(p - 1)
-  if ((c & 0xfc00) === 0xdc00 && p >= 2 && (s.charCodeAt(p - 2) & 0xfc00) === 0xd800) {
-    return ((s.charCodeAt(p - 2) - 0xd800) << 10) + c - 0xdc00 + 0x10000
-  }
-  return c
+// The dictionary engine a character reaches (ICULanguageBreakFactory::loadEngineFor, AppleICU76 brkeng.cpp:163-199, by
+// uscript_getScript) and the characters it takes, [[:Thai:]&[:LineBreak=SA:]] and so on (ICU 78.2 dictbe.cpp:208, 451,
+// 651, 841). Every Line_Break=SA character in these blocks has the block's script. Other SA scripts (Tai Tham, Tai Viet)
+// reach UnhandledEngine, which finds no breaks.
+type DictionaryEngine = 'thai' | 'lao' | 'burmese' | 'khmer' | 'unhandled'
+
+function dictionaryEngine(cp: number): DictionaryEngine {
+  if (cp >= 0x0e00 && cp <= 0x0e7f) return 'thai'
+  if (cp >= 0x0e80 && cp <= 0x0eff) return 'lao'
+  if ((cp >= 0x1000 && cp <= 0x109f) || (cp >= 0xa9e0 && cp <= 0xa9ff) || (cp >= 0xaa60 && cp <= 0xaa7f) || (cp >= 0x116d0 && cp <= 0x116ff)) return 'burmese'
+  if (cp >= 0x1780 && cp <= 0x17ff) return 'khmer'
+  return 'unhandled'
 }
 
-// Thai, Lao, Khmer and Myanmar segments that ICU hands to its dictionary engines: boundaries from JSC's Intl.Segmenter
-// word granularity, which runs the same libicucore dictionaries (DESIGN.md §6.3, specs/webkit-gaps.md §4.2), kept where
-// both neighbours are dictionary characters. The dictionary engines attach combining marks to the word before them
-// (ICU dictbe.cpp:210, 362 `fMarkSet`), where the word segmenter can start a segment at a mark after a mark; a boundary
-// that isn't a grapheme boundary in libicucore's char.brk is dropped, which keeps those marks attached.
+// Whether an engine's range holds too few characters for two words, when divideUpDictionaryRange returns no breaks: Thai
+// moves four code points from the range start (dictbe.cpp:240-244), Lao, Burmese and Khmer compare code units (:480,
+// :673, :879).
+function tooShortForTwoWords(engine: DictionaryEngine, text: string, start: number, end: number): boolean {
+  switch (engine) {
+    case 'thai': {
+      let index = start
+      for (let k = 0; k < 4 && index < text.length; k++) index += text.codePointAt(index)! > 0xffff ? 2 : 1
+      return index >= end
+    }
+    case 'lao':
+    case 'burmese':
+    case 'khmer':
+      return end - start < 4
+    case 'unhandled':
+      return true
+  }
+}
+
+// The engine ranges of a rule segment [start, end) with dictionary characters (DictionaryCache::populateDictionary, ICU
+// 78.2 rbbi_cache.cpp:120-200): characters outside the dictionary categories are skipped, then the engine takes the run
+// of characters it handles (DictionaryBreakEngine::findBreaks, dictbe.cpp:48-78).
+function forEachDictionaryRange(rules: BreakRules, text: string, start: number, end: number, visit: (engine: DictionaryEngine, rangeStart: number, rangeEnd: number) => void): void {
+  let current = start
+  while (current < end) {
+    while (current < end && !isDictionaryCharacter(rules, text.codePointAt(current)!)) current += text.codePointAt(current)! > 0xffff ? 2 : 1
+    if (current >= end) return
+    const engine = dictionaryEngine(text.codePointAt(current)!)
+    let rangeEnd = current
+    while (rangeEnd < end && isDictionaryCharacter(rules, text.codePointAt(rangeEnd)!) && dictionaryEngine(text.codePointAt(rangeEnd)!) === engine) {
+      rangeEnd += text.codePointAt(rangeEnd)! > 0xffff ? 2 : 1
+    }
+    visit(engine, current, rangeEnd)
+    current = rangeEnd
+  }
+}
+
+// The engines' boundaries inside an engine range, from JSC's Intl.Segmenter word granularity over that range, which runs
+// the same libicucore dictionaries (DESIGN.md §6.3, specs/webkit-gaps.md §4.2). The engines never stop before a
+// combining mark of their script (dictbe.cpp "Never stop before a combining mark", fMarkSet), and the range end is never a
+// boundary ("Don't return a break for the end of the dictionary range"). Against libicucore's line iterator over the
+// groundwork's 1,556 SA texts this differs only where a range starts with a mark (breaks.test.ts), which the paragraph
+// reports as dictionary-breaks-stand-in.
 function addDictionaryBoundaries(source: DictionaryBreaks, rules: BreakRules, text: string, start: number, end: number, isBoundary: Uint8Array): void {
   switch (source.kind) {
-    case 'intl-segmenter-word': {
-      const segment = text.slice(start, end)
-      const segments = Array.from(new Intl.Segmenter(undefined, { granularity: 'word' }).segment(segment))
-      const graphemes = graphemeBoundaries(segment, graphemeRulesFor('webkit'))
-      for (let k = 1; k < segments.length; k++) {
-        const p = start + segments[k]!.index
-        if (!graphemes.includes(p - start)) continue
-        if (isDictionaryCharacter(rules, codePointBefore(text, p)) && isDictionaryCharacter(rules, text.codePointAt(p)!)) isBoundary[p] = 1
-      }
+    case 'intl-segmenter-word':
+      forEachDictionaryRange(rules, text, start, end, (engine, rangeStart, rangeEnd) => {
+        if (tooShortForTwoWords(engine, text, rangeStart, rangeEnd)) return
+        const range = text.slice(rangeStart, rangeEnd)
+        const segments = Array.from(new Intl.Segmenter(undefined, { granularity: 'word' }).segment(range))
+        for (let k = 1; k < segments.length; k++) {
+          if (!isDictionaryMark(range.codePointAt(segments[k]!.index)!)) isBoundary[rangeStart + segments[k]!.index] = 1
+        }
+      })
       return
-    }
     // Chrome's V8 break iterator runs Chrome's ICU data, not libicucore's; the paragraph reports the gap.
     case 'v8-break-iterator':
     case 'unavailable':
@@ -85,9 +127,20 @@ function addDictionaryBoundaries(source: DictionaryBreaks, rules: BreakRules, te
   }
 }
 
+// Whether an engine range long enough for breaks starts with a combining mark, where the line engine resynchronizes from
+// its dictionary (ThaiBreakEngine::divideUpDictionaryRange's "Look for a plausible word boundary") and the word segmenter
+// starts its range after the mark. The text is taken as one rule segment.
+export function dictionaryRangeStartsWithMark(rules: BreakRules, text: string): boolean {
+  let found = false
+  forEachDictionaryRange(rules, text, 0, text.length, (engine, rangeStart, rangeEnd) => {
+    if (!tooShortForTwoWords(engine, text, rangeStart, rangeEnd) && isDictionaryMark(text.codePointAt(rangeStart)!)) found = true
+  })
+  return found
+}
+
 // ubrk_following over prior context + text (TBI:99-147). Boundaries come from one forward pass, which equals
 // ubrk_following on libicucore with the overrides (specs/webkit-canvas.md §2.6).
-function computeFollowing(f: BreakFactory): Int32Array {
+export function computeFollowing(f: BreakFactory): Int32Array {
   const priorLength = priorContextLength(f)
   const prior = priorLength === 2 ? String.fromCharCode(f.secondToLast, f.last) : priorLength === 1 ? String.fromCharCode(f.last) : ''
   const icuText = prior + f.text

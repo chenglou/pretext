@@ -88,8 +88,8 @@ export class LineBreaker {
     this.text = p.text
     this.items = p.items
     this.token = token
-    // CSS length × zoom as float, truncated to LayoutUnits (specs/blink-lines.md §2.2).
-    this.availableWidth = Math.trunc(Math.fround(Math.fround(availableWidthPx * p.layoutZoom) * 64))
+    // CSS length × zoom as float, truncated to LayoutUnits (specs/blink-lines.md §2.2, DESIGN.md §4.4).
+    this.availableWidth = Math.trunc(Math.fround(Math.fround(Math.fround(availableWidthPx) * Math.fround(p.layoutZoom)) * 64))
     this.iterator = new LineBreakIterator(p.text, p.is8Bit, p.settings, p.env.uiLanguage, p.env.dictionaryBreaks)
     this.current = { itemIndex: token.itemIndex, textOffset: token.textOffset }
     this.previousLineHadForcedBreak = token.afterForcedBreak
@@ -433,8 +433,8 @@ export class LineBreaker {
   }
 
   // ShapingLineBreaker::ShapeLine (shaping_line_breaker.cc:256-612), without hyphenation dictionaries (hyphens: manual),
-  // auto-spacing (text-autospace: no-autospace) and HanKerning at wrapped line starts (not trimmed by default). The
-  // HanKerning line-end reshape (:344-363) needs `halt` widths Canvas can't give and isn't taken.
+  // auto-spacing (text-autospace: no-autospace) and HanKerning at wrapped line starts, which text-spacing-trim: normal
+  // doesn't trim (text_spacing_trim.h:31-34). The HanKerning line-end reshape (:344-363) is taken.
   shapeLine(item: BlinkItem, sr: ShapeResult, start: number, availableSpace: number, noResultIfOverflow: boolean, out: ShapeLineResult): View | null {
     const sh = this.sh
     const rangeStart = sr.start
@@ -631,7 +631,7 @@ export class LineBreaker {
         return
       case 'tab': {
         // The block's font; the position includes no float offset or tab stop offset in this model.
-        const sr = tabShapeResult(this.sh, item.start, item.end, (item.bidiLevel & 1) === 1, this.position)
+        const sr = tabShapeResult(this.sh, item.start, item.end, (item.bidiLevel & 1) === 1, this.position, item.run)
         this.handleText(item, sr)
         return
       }

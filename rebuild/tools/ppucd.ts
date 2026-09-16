@@ -38,6 +38,30 @@ function overlay(base: PpucdProps, fields: string[]): PpucdProps {
   return props
 }
 
+// Calls `visit` for every block range with the block's resolved props. A code point that a block covers and no cp or
+// unassigned line names has the block's values: ppucd writes no cp line for CJK Unified Ideographs Extension A
+// (block;3400..4DBF;...;gc=Lo;sc=Hani, then algnamesrange and a cp line for U+3405 only), Hangul syllables, Tangut and
+// other algorithmically named ranges.
+export async function forEachPpucdBlock(path: string, visit: (range: PpucdRange) => void): Promise<void> {
+  let defaults: PpucdProps = new Map()
+  await forEachLine(path, line => {
+    if (line.length === 0 || line.startsWith('#')) return
+    const fields = line.split(';')
+    switch (fields[0]) {
+      case 'defaults':
+        defaults = overlay(new Map(), fields)
+        return
+      case 'block': {
+        const [first, last] = parseRange(fields[1]!)
+        visit({ first, last, props: overlay(defaults, fields) })
+        return
+      }
+      default:
+        return
+    }
+  })
+}
+
 // Calls `visit` for every cp and unassigned range, in file order, with resolved props.
 export async function forEachPpucdRange(path: string, visit: (range: PpucdRange) => void): Promise<void> {
   let defaults: PpucdProps = new Map()
