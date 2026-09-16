@@ -1,10 +1,10 @@
 import {
   getSharedGraphemeSegmenter,
-  type BreakLanguage,
   type KeepAllPairModel,
   type SegmentBreakRemovalRun,
 } from './analysis.js'
 import type { SegmentEntryGeometry } from './entry-geometry.js'
+import type { BreakLanguage } from './line-breaks.js'
 
 type EntryMeasurement = {
   profile: readonly (string | null)[]
@@ -29,6 +29,11 @@ export type SegmentMetrics = {
 
 export type EngineProfile = {
   entryFitBasis: 'fresh' | 'original' | 'disabled' // original whole minus consumed prefixes
+  // Where preparation finds break opportunities. Blink and WebKit scan the text with
+  // their own pair tables and ICU line rules (src/line-breaks.ts), and engines Pretext
+  // doesn't recognize take Blink's scan. The Gecko profile still merges Intl.Segmenter
+  // words with hand-written rules.
+  lineBreakScan: 'blink' | 'webkit' | null
   geckoAsciiLineBreaks: boolean
   lineFitEpsilon: number
   carryCJKAfterClosingQuote: boolean
@@ -295,6 +300,7 @@ export function getEngineProfile(language: BreakLanguage = 'root'): EngineProfil
 
   const profile: EngineProfile = {
     entryFitBasis: isDesktop && engine === 'blink' ? 'fresh' : isDesktop && engine === 'gecko' ? 'original' : 'disabled',
+    lineBreakScan: engine === 'gecko' ? null : engine === 'webkit' ? 'webkit' : 'blink',
     geckoAsciiLineBreaks: engine === 'gecko',
     lineFitEpsilon: engine === 'webkit' ? 1 / 64 : 0.005,
     carryCJKAfterClosingQuote: engine === 'blink',

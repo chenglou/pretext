@@ -6,14 +6,15 @@ import {
 import {
   analyzeText,
   getBreakablePreferredBreaks,
-  getBreakLanguage,
   getCjkTextUnits,
   getSharedGraphemeSegmenter,
+  getSharedWordSegmenter,
   isCJK,
   removeSegmentBreaksNextToZeroWidthSpace,
   type AnalysisProfile,
   type SegmentBreakKind,
 } from './analysis.js'
+import { getBreakLanguage, getWebKitBreakBetweenItems } from './line-breaks.js'
 import {
   buildLineTextFromRange,
   getLineTextCache,
@@ -201,19 +202,19 @@ function getItemCursor(prepared: PreparedTextWithSegments, startSegmentIndex: nu
 
 // Browsers find ordinary break opportunities in the text their inline items
 // join; the item boundary itself is not one. This analyzes the joined text like
-// prepare(): analysis segments, with CJK text split into its measured units.
-// It returns the offsets of the units the line walker could end a line before.
-// A leading SPACE keeps the scan-start rules from treating text after a
+// prepare(): analysis segments, with merged CJK text split into its measured
+// units. It returns the offsets of the units the line walker could end a line
+// before. A leading SPACE keeps the scan-start rules from treating text after a
 // collapsed space as the start of its node.
-function getJoinedBreakOffsets(text: string, afterWhitespace: boolean, profile: AnalysisProfile): number[] {
-  const analysis = analyzeText(afterWhitespace ? ` ${text}` : text, profile)
+function getJoinedBreakOffsets(text: string, afterWhitespace: boolean, profile: AnalysisProfile, language: string | null): number[] {
+  const analysis = analyzeText(afterWhitespace ? ` ${text}` : text, profile, 'normal', 'normal', language)
   const offsets: number[] = []
   let previousKind: SegmentBreakKind | null = null
   for (let i = 0; i < analysis.len; i++) {
     const segText = analysis.texts[i]!
     const kind = analysis.kinds[i]!
     const start = analysis.starts[i]!
-    const units = kind === 'text' && isCJK(segText) ? getCjkTextUnits(segText, profile, 'normal') : null
+    const units = kind === 'text' && profile.lineBreakScan === null && isCJK(segText) ? getCjkTextUnits(segText, profile, 'normal') : null
     const unitCount = units === null ? 1 : units.length
     for (let unitIndex = 0; unitIndex < unitCount; unitIndex++) {
       // No ordinary break precedes NEL (UAX #14 LB6).
@@ -256,19 +257,15 @@ function getLastItemRunStart(portion: JoinedPortion): LayoutCursor {
     : { segmentIndex: portion.startSegmentIndex, graphemeIndex: 0 }
 }
 
-// Records breaks that fall inside the first segment of a portion that starts
-// the item, as grapheme cursors, so an emergency split of that segment ends at
-// one. Offsets are in window coordinates.
-function recordFirstSegmentBreaks(portion: JoinedPortion, breakOffsets: readonly number[]): void {
-  const { item } = portion
-  const segmentEnd = portion.start + item.prepared.segments[0]!.length
-  for (let k = 0; k < breakOffsets.length && breakOffsets[k]! < segmentEnd; k++) {
-    if (breakOffsets[k]! <= portion.start) continue
-    const cursor = getItemCursor(item.prepared, 0, breakOffsets[k]! - portion.start)
-    if (cursor === null) continue
-    if (item.joinedBreaks === null) item.joinedBreaks = []
-    item.joinedBreaks.push(cursor)
+// The item's own first ordinary break inside a portion that starts the item,
+// before the collapsible space that ends the portion; null when there is none.
+function getFirstItemRunEnd(portion: JoinedPortion): LayoutCursor | null {
+  const { kinds } = portion.item.prepared
+  const end = portion.spaceEndSegmentIndex < 0 ? kinds.length : portion.spaceEndSegmentIndex - 1
+  for (let i = 1; i < end; i++) {
+    if (breaksBeforeItemSegment(kinds, i)) return { segmentIndex: i, graphemeIndex: 0 }
   }
+  return null
 }
 
 // Records where the joined text breaks inside a portion, as item cursors, and
@@ -482,7 +479,7 @@ export function prepareRichInline(items: RichInlineItem[]): PreparedRichInline {
         for (let s = portion.startSegmentIndex; s < endSegmentIndex; s++) joinedText += segments[s]!
       }
       if (inlineItemBreaks === 'joined-text') {
-        const breakOffsets = getJoinedBreakOffsets(joinedText, joinedAfterWhitespace, profile)
+        const breakOffsets = getJoinedBreakOffsets(joinedText, joinedAfterWhitespace, profile, documentLanguage)
         let breakIndex = 0
         for (let i = 0; i < joinedPortions.length; i++) {
           const portion = joinedPortions[i]!
@@ -496,29 +493,17 @@ export function prepareRichInline(items: RichInlineItem[]): PreparedRichInline {
           leadingRunWidths[portion.itemIndex] = getLeadingRunWidth(portion, getFirstJoinedRunEnd(portion, breakOffsets, breakIndex, portionEnd))
         }
       } else {
-        // Breaks inside each item come from its own text. As in WebKit, the
-        // boundary reads the previous item's last two characters as prior
-        // context. The next item's first run, and breaks inside its first
-        // segment, come from that same analysis. That is a proxy: WebKit takes
-        // them from an iterator over the next box alone, while analysis of the
-        // item alone joins a leading mark, such as a Myanmar vowel sign, to the
-        // word after it, where Safari's spans break after the mark.
+        // Breaks inside each item come from WebKit's scan over the item's own
+        // text, which made its segments. As in WebKit, the boundary reads the
+        // previous item's last two characters as prior context (TextUtil.cpp:379-401).
         for (let i = 1; i < joinedPortions.length; i++) {
           const portion = joinedPortions[i]!
           const portionEnd = i + 1 < joinedPortions.length ? joinedPortions[i + 1]!.start : joinedText.length
           const context = boundaryContexts[joinedPortions[i - 1]!.itemIndex]!
-          const leadingSpace = isCollapsibleBoundaryWhitespace(context.charCodeAt(0))
-          const priorText = leadingSpace ? context.slice(1) : context
-          const contextOffsets = getJoinedBreakOffsets(priorText + joinedText.slice(portion.start, portionEnd), leadingSpace, profile)
-          const breakOffsets: number[] = []
-          for (let k = 0; k < contextOffsets.length; k++) {
-            if (contextOffsets[k]! >= priorText.length) breakOffsets.push(portion.start + contextOffsets[k]! - priorText.length)
-          }
-          portion.item.breakBefore = breakOffsets[0] === portion.start
-          recordFirstSegmentBreaks(portion, breakOffsets)
+          portion.item.breakBefore = getWebKitBreakBetweenItems(context, joinedText.slice(portion.start, portionEnd), documentLanguage, getSharedWordSegmenter())
           if (portion.item.breakBefore) continue
           joinedPortions[i - 1]!.item.lastRunStart = getLastItemRunStart(joinedPortions[i - 1]!)
-          leadingRunWidths[portion.itemIndex] = getLeadingRunWidth(portion, getFirstJoinedRunEnd(portion, breakOffsets, 0, portionEnd))
+          leadingRunWidths[portion.itemIndex] = getLeadingRunWidth(portion, getFirstItemRunEnd(portion))
         }
       }
     }

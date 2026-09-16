@@ -10,7 +10,6 @@ import {
   analyzeText,
   clearAnalysisCaches,
   getBreakablePreferredBreaks,
-  getBreakLanguage,
   getCjkTextUnits,
   getSharedGraphemeSegmenter,
   isCJK,
@@ -51,6 +50,7 @@ import {
   buildLineTextFromRange,
   getLineTextCache,
 } from './line-text.js'
+import { getBreakLanguage } from './line-breaks.js'
 
 // --- Public types ---
 
@@ -618,8 +618,9 @@ function measureAnalysis(
       continue
     }
 
-    // Measure CJK text only after its final line-break units are known.
-    if (segKind === 'text' && isCJK(segText)) {
+    // A merged segment holds CJK text whose line-break units are known only now, so it
+    // is measured unit by unit. An engine's scan already ends a segment at each opportunity.
+    if (segKind === 'text' && engineProfile.lineBreakScan === null && isCJK(segText)) {
       const measuredUnits = getCjkTextUnits(segText, engineProfile, wordBreak)
 
       for (let i = 0; i < measuredUnits.length; i++) {
@@ -637,8 +638,10 @@ function measureAnalysis(
     }
 
     const followingSpaceTail = segKind === 'text' || segKind === 'glue' ? getFollowingSpaceTail(mi, segText) : null
+    // Text with CJK in it breaks between graphemes when it overflows, whether or not
+    // Intl marks it as a word, as the units above do.
     pushMeasuredTextSegment(segText, getTextMetrics(segText, followingSpaceTail), segKind,
-      segKind === 'text' && (analysis.isWordLike[mi]! || isIndependentSymbolRun(segText)),
+      segKind === 'text' && (analysis.isWordLike[mi]! || isCJK(segText) || isIndependentSymbolRun(segText)),
       followingSpaceTail)
   }
 
@@ -700,7 +703,7 @@ function prepareInternal(
   // One page-language read: break rules and measurement both follow it.
   const documentLanguage = getDocumentLanguage()
   const engineProfile = getEngineProfile(getBreakLanguage(documentLanguage))
-  const analysis = analyzeText(text, engineProfile, options?.whiteSpace, wordBreak)
+  const analysis = analyzeText(text, engineProfile, options?.whiteSpace, wordBreak, documentLanguage)
   return measureAnalysis(analysis, font, includeSegments, wordBreak, letterSpacing, engineProfile, documentLanguage)
 }
 

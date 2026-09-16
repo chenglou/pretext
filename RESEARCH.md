@@ -22,6 +22,43 @@ whole word also does not establish the widths of its possible line prefixes.
 Engine profiles describe the layout engine, not the browser brand;
 `getLayoutEngine()` in `src/measurement.ts` explains how the user agent names it.
 
+## Break Opportunities From Engine Data
+
+Chrome and Safari take break opportunities from ports of their engines' own scans
+(`src/line-breaks.ts`), and engines Pretext doesn't recognize take Blink's. Blink's
+scan answers from its space rule, its generated pair table for U+0021-U+00FF, its
+rule for `-` before a digit and keep-all by general category, and asks ICU
+otherwise. WebKit's answers from its own pair table and character classes, and asks
+ICU, skipping ahead over ASCII letters. Both run a port of ICU's rule-based iterator
+over Chrome 153's compiled `line_normal.brk`. libicucore's `line.brk`,
+`line_normal.brk` and `line_cj.brk` ship as category overrides on that table, which
+the generator checks behave the same for every input, with Apple's per-locale
+quotation remap. Inside Thai, Lao, Khmer and Myanmar runs, `Intl.Segmenter` words
+stand in for the engines' dictionaries.
+
+Offline C++ ports of each engine's break code over its own ICU data found no native
+line start in the September 14 suite rows that skipped a usable opportunity (210 of
+391,755 Chrome starts stayed unexplained, probably widths of joined Arabic and trimmed
+brackets). TypeScript copies of the scans matched those ports outside Thai, Lao, Khmer
+and Myanmar runs, with 0 differences over 13,108 Blink and 19,393 WebKit requests,
+WebKit with the ports' bidi levels. This port gives the copies' answers on 12,318
+Blink requests (leaving out 790 that open `line_normal_cj.brk`), 13,108 one-node
+WebKit requests and 998 multi-node WebKit requests.
+
+Segments are the text between opportunities, split where the break kind changes, so
+a URL splits where the engine may break it and CJK text arrives in its final units. A
+ZWSP, soft hyphen or NEL with no break before the text after it joins that text, as at
+the start of a WebKit scan or under keep-all. WebKit scans a text node's source, where
+a collapsed TAB is still UAX #14 BA, so the WebKit profile maps the source's
+opportunities onto the normalized text; Blink scans the collapsed text, as Pretext
+normalizes it. `Intl.Segmenter` still says which text segments are words for emergency
+breaks, and text with CJK in it takes grapheme breaks, as CJK units did. Between
+rich-inline items, the WebKit profile reads the previous item's last two characters
+as prior context, as `TextUtil::mayBreakInBetween` does.
+
+Chrome's `line_normal_cj.brk` doesn't ship, so curly quotes wrap on `zh` pages as on
+`en` pages. ENGINE_FOLLOWUPS.md lists that and the other deliberate differences.
+
 ## Breaks And Source Positions
 
 Storage segments, measurement spans, ordinary break opportunities and emergency

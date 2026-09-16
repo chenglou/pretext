@@ -1,4 +1,5 @@
 import { getLineBreakClass, LineBreakClass } from './generated/line-break-data.js'
+import { getBlinkLineBreaks, getWebKitLineBreaks } from './line-breaks.js'
 
 export type WhiteSpaceMode = 'normal' | 'pre-wrap'
 export type WordBreakMode = 'normal' | 'keep-all'
@@ -32,6 +33,7 @@ export type MergedSegmentation = {
 export type TextAnalysis = { source: string; normalized: string } & MergedSegmentation
 
 export type AnalysisProfile = {
+  lineBreakScan: 'blink' | 'webkit' | null
   geckoAsciiLineBreaks: boolean
   carryCJKAfterClosingQuote: boolean
   keepAllPairModel: KeepAllPairModel
@@ -53,23 +55,6 @@ export type KeepAllPairModel = 'blink-general-category' | 'icu4x-classes' | 'web
 // The collapsible run that a ZWSP removes under the CSS segment break
 // transformation, per engine. WebKit never removes one.
 export type SegmentBreakRemovalRun = 'none' | 'blink' | 'gecko'
-
-// Page languages whose line-break rules differ in some engine. Every other
-// language, an empty or missing one, and no document read as root.
-export type BreakLanguage = 'root' | 'ja' | 'ko' | 'zh'
-
-// The primary language subtag, ASCII case-insensitively, up to `-`, `_` or the
-// end. No allocation: preparation calls this once per text.
-export function getBreakLanguage(tag: string | null): BreakLanguage {
-  if (tag === null || tag.length < 2) return 'root'
-  if (tag.length > 2 && tag.charCodeAt(2) !== 0x2D && tag.charCodeAt(2) !== 0x5F) return 'root'
-  const first = tag.charCodeAt(0) | 0x20
-  const second = tag.charCodeAt(1) | 0x20
-  if (first === 0x6A && second === 0x61) return 'ja'
-  if (first === 0x6B && second === 0x6F) return 'ko'
-  if (first === 0x7A && second === 0x68) return 'zh'
-  return 'root'
-}
 
 const collapsibleWhitespaceRunRe = /[ \t\n\r\f]+/g
 const needsWhitespaceNormalizationRe = /[\t\n\r\f]| {2,}|^ | $/
@@ -171,7 +156,7 @@ export function getSharedGraphemeSegmenter(): Intl.Segmenter {
 let sharedWordSegmenter: Intl.Segmenter | null = null
 let segmenterLocale: string | undefined
 
-function getSharedWordSegmenter(): Intl.Segmenter {
+export function getSharedWordSegmenter(): Intl.Segmenter {
   if (sharedWordSegmenter === null) {
     sharedWordSegmenter = new Intl.Segmenter(segmenterLocale, { granularity: 'word' })
   }
@@ -795,24 +780,24 @@ export function endsWithClosingQuote(text: string): boolean {
   return false
 }
 
-function classifySegmentBreakChar(ch: string, whiteSpace: WhiteSpaceMode, breakOnlyAfterNextLine: boolean): SegmentBreakKind {
+function classifySegmentBreakCode(code: number, whiteSpace: WhiteSpaceMode, breakOnlyAfterNextLine: boolean): SegmentBreakKind {
   if (whiteSpace === 'pre-wrap') {
-    if (ch === ' ') return 'preserved-space'
-    if (ch === '\t') return 'tab'
-    if (ch === '\n') return 'hard-break'
+    if (code === 0x20) return 'preserved-space'
+    if (code === 0x09) return 'tab'
+    if (code === 0x0A) return 'hard-break'
   }
-  if (ch === ' ') return 'space'
-  if (ch === '\u00A0' || ch === '\u2007' || ch === '\u202F' || ch === '\u2060' || ch === '\uFEFF') {
+  if (code === 0x20) return 'space'
+  if (code === 0x00A0 || code === 0x2007 || code === 0x202F || code === 0x2060 || code === 0xFEFF) {
     return 'glue'
   }
-  if (ch === '\u200B') return 'zero-width-break'
-  if (ch === '\u00AD') return 'soft-hyphen'
+  if (code === 0x200B) return 'zero-width-break'
+  if (code === 0x00AD) return 'soft-hyphen'
   // UAX #14 NL: visible content with a break after it and none before it.
-  if (ch === '\u0085' && breakOnlyAfterNextLine) return 'control'
+  if (code === 0x0085 && breakOnlyAfterNextLine) return 'control'
   return 'text'
 }
 
-// All characters that classifySegmentBreakChar maps to a non-'text' kind.
+// All characters that classifySegmentBreakCode maps to a non-'text' kind.
 const breakCharRe = /[\x20\t\n\x85\xA0\xAD\u2007\u200B\u202F\u2060\uFEFF]/
 
 // The combining marks WebKit's pair scan classifies without ICU. That scan
@@ -958,7 +943,7 @@ function splitTextByBreakKind(
   let offset = 0
 
   for (const ch of segment) {
-    const kind = classifySegmentBreakChar(ch, whiteSpace, breakOnlyAfterNextLine)
+    const kind = classifySegmentBreakCode(ch.charCodeAt(0), whiteSpace, breakOnlyAfterNextLine)
     const wordLike = kind === 'text' && isWordLike
 
     // Each NEL offers its own break after it.
@@ -2462,11 +2447,118 @@ export function getBreakablePreferredBreaks(text: string, profile: AnalysisProfi
   return breaks.length === 0 ? null : breaks
 }
 
+function isCollapsibleSpaceCode(code: number): boolean {
+  return code === 0x20 || code === 0x09 || code === 0x0A || code === 0x0D || code === 0x0C
+}
+
+// WebKit scans a text node's source, where normalization collapsed white space: in
+// normal white space each run of SPACE, TAB, LF, CR and FF became one space, or nothing
+// at either end, and in pre-wrap CRLF became LF. A break before any unit of a run is a
+// break before what the run became.
+function mapSourceLineBreaks(source: string, normalizedLength: number, sourceBreaks: Uint8Array, whiteSpace: WhiteSpaceMode): Uint8Array {
+  const breaks = new Uint8Array(normalizedLength + 1)
+  let normalizedIndex = 0
+  if (whiteSpace === 'pre-wrap') {
+    for (let i = 0; i < source.length; i++, normalizedIndex++) {
+      if (sourceBreaks[i] === 1) breaks[normalizedIndex] = 1
+      if (source.charCodeAt(i) === 0x0D && source.charCodeAt(i + 1) === 0x0A) {
+        i++
+        if (sourceBreaks[i] === 1) breaks[normalizedIndex] = 1
+      }
+    }
+    return breaks
+  }
+  let i = 0
+  while (i < source.length && isCollapsibleSpaceCode(source.charCodeAt(i))) i++
+  while (i < source.length) {
+    let end = i + 1
+    if (isCollapsibleSpaceCode(source.charCodeAt(i))) {
+      while (end < source.length && isCollapsibleSpaceCode(source.charCodeAt(end))) end++
+      if (end === source.length) break
+    }
+    for (; i < end; i++) {
+      if (sourceBreaks[i] === 1) breaks[normalizedIndex] = 1
+    }
+    normalizedIndex++
+  }
+  return breaks
+}
+
+function isTextLikeKind(kind: SegmentBreakKind): boolean {
+  return kind === 'text' || kind === 'glue'
+}
+
+// Characters of these kinds share a segment when no break falls between them. Each
+// tab, hard break, ZWSP and NEL control stays its own segment.
+function gathersKind(kind: SegmentBreakKind): boolean {
+  return kind === 'text' || kind === 'glue' || kind === 'space' || kind === 'preserved-space' || kind === 'soft-hyphen'
+}
+
+// Segments are the text between an engine's break opportunities, split where the
+// break kind changes; text and glue share a segment. A ZWSP, soft hyphen or NEL with
+// no break before the text after it, as at the start of a WebKit scan, before a
+// combining mark or under keep-all, doesn't break like its kind, so it joins that text.
+function segmentAtLineBreaks(normalized: string, breaks: Uint8Array, whiteSpace: WhiteSpaceMode, breakOnlyAfterNextLine: boolean): MergedSegmentation {
+  const starts = [0]
+  const kinds = [classifySegmentBreakCode(normalized.charCodeAt(0), whiteSpace, breakOnlyAfterNextLine)]
+  for (let i = 1; i < normalized.length; i++) {
+    const kind = classifySegmentBreakCode(normalized.charCodeAt(i), whiteSpace, breakOnlyAfterNextLine)
+    const last = kinds.length - 1
+    if (breaks[i] === 0 && (kind === kinds[last] ? gathersKind(kind) : isTextLikeKind(kind) && isTextLikeKind(kinds[last]!))) {
+      if (kind === 'text') kinds[last] = 'text'
+      continue
+    }
+    starts.push(i)
+    kinds.push(kind)
+  }
+  for (let j = kinds.length - 2; j >= 0; j--) {
+    const kind = kinds[j]!
+    if (
+      (kind === 'zero-width-break' || kind === 'soft-hyphen' || kind === 'control') &&
+      breaks[starts[j + 1]!] === 0 && isTextLikeKind(kinds[j + 1]!)
+    ) {
+      kinds[j] = 'text'
+    }
+  }
+  let len = 0
+  for (let j = 0; j < kinds.length; j++) {
+    if (len > 0 && breaks[starts[j]!] === 0 && isTextLikeKind(kinds[j]!) && isTextLikeKind(kinds[len - 1]!)) {
+      if (kinds[j] === 'text') kinds[len - 1] = 'text'
+      continue
+    }
+    starts[len] = starts[j]!
+    kinds[len] = kinds[j]!
+    len++
+  }
+  const texts: string[] = []
+  const isWordLike: boolean[] = []
+  for (let j = 0; j < len; j++) {
+    texts.push(normalized.slice(starts[j]!, j + 1 < len ? starts[j + 1]! : normalized.length))
+    isWordLike.push(false)
+  }
+  starts.length = len
+  kinds.length = len
+  // Intl.Segmenter's word-likeness still decides emergency breaks: a text segment is a
+  // word where a word-like segment of the whole text overlaps it.
+  let first = 0
+  for (const word of getSharedWordSegmenter().segment(normalized)) {
+    if (word.isWordLike !== true) continue
+    const wordEnd = word.index + word.segment.length
+    while (first + 1 < len && starts[first + 1]! <= word.index) first++
+    for (let j = first; j < len && starts[j]! < wordEnd; j++) {
+      if (kinds[j] === 'text') isWordLike[j] = true
+    }
+  }
+  return { len, texts, isWordLike, kinds, starts }
+}
+
 export function analyzeText(
   text: string,
   profile: AnalysisProfile,
   whiteSpace: WhiteSpaceMode = 'normal',
   wordBreak: WordBreakMode = 'normal',
+  // The page language, which picks WebKit's line table and quotation remap.
+  language: string | null = null,
 ): TextAnalysis {
   const normalized = whiteSpace === 'pre-wrap'
     ? normalizeWhitespacePreWrap(text)
@@ -2482,10 +2574,20 @@ export function analyzeText(
       starts: [],
     }
   }
-  const mergedSegmentation = buildMergedSegmentation(text, normalized, profile, whiteSpace, wordBreak)
-  const segmentation = wordBreak === 'keep-all'
-    ? mergeKeepAllTextSegments(normalized, mergedSegmentation, profile)
-    : mergedSegmentation
+  let segmentation: MergedSegmentation
+  if (profile.lineBreakScan === 'blink') {
+    const breaks = getBlinkLineBreaks(normalized, wordBreak === 'keep-all', getSharedWordSegmenter())
+    segmentation = segmentAtLineBreaks(normalized, breaks, whiteSpace, profile.breakOnlyAfterNextLine)
+  } else if (profile.lineBreakScan === 'webkit') {
+    const sourceBreaks = getWebKitLineBreaks(text, whiteSpace === 'pre-wrap', wordBreak === 'keep-all', language, getSharedWordSegmenter())
+    const breaks = text === normalized ? sourceBreaks : mapSourceLineBreaks(text, normalized.length, sourceBreaks, whiteSpace)
+    segmentation = segmentAtLineBreaks(normalized, breaks, whiteSpace, profile.breakOnlyAfterNextLine)
+  } else {
+    const mergedSegmentation = buildMergedSegmentation(text, normalized, profile, whiteSpace, wordBreak)
+    segmentation = wordBreak === 'keep-all'
+      ? mergeKeepAllTextSegments(normalized, mergedSegmentation, profile)
+      : mergedSegmentation
+  }
   return {
     source: text,
     normalized,
