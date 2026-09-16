@@ -155,6 +155,16 @@ if (cases.length === 0) fail('No cases selected')
   }
 }
 
+// A text node's storage width (8-bit or 16-bit) follows its string's provenance, and WebKit and Blink have rules that
+// apply only to 16-bit text (specs/webkit-gaps.md, blink-gaps.md). JSON parsed from a body holding any raw non-Latin-1
+// character yields 16-bit strings even for ASCII values (specs/probes-safari.md, cross-check), so one CJK case in a chunk
+// would change how every ASCII case in it lays out. Escaping everything above U+007E keeps the body ASCII: each string
+// then parses 8-bit unless its own characters need 16 bits, what a typical page's Latin-1 text gets.
+function asciiJsonResponse(value: unknown): Response {
+  const body = JSON.stringify(value).replace(/[-￿]/g, char => `\\u${char.charCodeAt(0).toString(16).padStart(4, '0')}`)
+  return new Response(body, { headers: { 'content-type': 'application/json; charset=utf-8' } })
+}
+
 // ---- Browser sessions ----
 
 type Session = { close: () => Promise<void> }
@@ -519,7 +529,7 @@ async function step(request: Request): Promise<Response> {
     pending = { seq: seqCounter++, start, end, sends: 0 }
   }
   pending.sends++
-  return Response.json({ kind: 'chunk', seq: pending.seq, browser, cases: cases.slice(pending.start, pending.end) })
+  return asciiJsonResponse({ kind: 'chunk', seq: pending.seq, browser, cases: cases.slice(pending.start, pending.end) })
 }
 
 function pageHtml(lang: string, families: string[]): string {
