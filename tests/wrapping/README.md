@@ -36,8 +36,10 @@ harness and also runs once from main's harness, so contract-masked losses stay
 visible.
 
 For fractional CSS line heights, a separate two-line strut observes the browser’s
-used line-box advance. This keeps Safari’s integer rounding out of the wrapping
-comparison; the API contract still requires the explicit requested line height.
+used line-box advance. Safari 26 rounds line boxes to whole pixels, and Safari 27
+truncates the block height to 1/64px, so a block within 1/64px per line of k line
+boxes counts as k lines. The API contract still requires the explicit requested
+line height.
 
 Height, extracted line count/boundaries, source placement, whitespace, widths,
 selected hyphens, public API contracts and selected native rich-item heights

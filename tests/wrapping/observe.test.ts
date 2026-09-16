@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test'
 import { normalizeSource, type Prediction } from './contracts.ts'
-import { assess } from './observe.ts'
+import { assess, wholeLineCount } from './observe.ts'
 import type { NativeExtraction, NativeObservation, NativePoint, WrappingCase } from './types.ts'
 
 const base: WrappingCase = {
@@ -95,6 +95,25 @@ test('fractional CSS line boxes use an independently observed native advance', (
   expect(assess(input, oracle, predicted, 'safari').lineCount.status).toBe('pass')
   expect(assess(input, oracle, predicted, 'safari').source.status).toBe('pass')
   expect(assess(input, oracle, { ...predicted, height: 41.92 }, 'safari').height.status).toBe('fail')
+})
+
+test('fractional CSS line heights read whole line counts within 1/64px per line', () => {
+  // Safari 27's strut advance and block heights for one to six lines.
+  const safari27: Array<[number, number, number[]]> = [
+    [20.96, 20.953125, [20.953125, 41.90625, 62.875, 83.828125, 104.796875, 125.75]],
+    [17.3, 17.296875, [17.296875, 34.59375, 51.890625, 69.1875, 86.5, 103.796875]],
+    [20.5, 20.5, [20.5, 41, 61.5, 82, 102.5, 123]],
+    [32, 32, [32, 64, 96, 128, 160, 192]],
+  ]
+  for (const [lineHeight, strut, heights] of safari27) {
+    for (let index = 0; index < heights.length; index++) expect(wholeLineCount(heights[index]!, lineHeight, strut)).toBe(index + 1)
+  }
+  // Safari 26 rounds each 20.96px line box to 20px.
+  expect(wholeLineCount(60, 20.96, 20)).toBe(3)
+  // A line box taller than the strut still reads fractional, and whole-pixel
+  // line heights keep the exact count.
+  expect(wholeLineCount(63.875, 20.96, 20.953125)).toBeNull()
+  expect(wholeLineCount(96.015625, 32, 32)).toBeNull()
 })
 
 test('raw collapsed whitespace and astral scalars retain normalized source coordinates', () => {

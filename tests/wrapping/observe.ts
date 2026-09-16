@@ -123,16 +123,15 @@ export function observeNative(input: WrappingCase, browser: BrowserKind): Native
     const extraction = input.lineMethod === undefined ? undefined : observeLineExtraction(element, input, browser)
     let usedLineHeight = input.lineHeight
     if (!Number.isInteger(input.lineHeight)) {
-      // Safari can use integral line boxes despite retaining a fractional
-      // computed CSS line-height. Observe the strut independently of wrapping.
+      // Safari 26 rounds line boxes to whole pixels despite a fractional computed
+      // CSS line-height. Observe the strut independently of wrapping.
       element.style.whiteSpace = 'pre'
       element.style.width = 'max-content'
       element.textContent = 'x\nx'
       usedLineHeight = element.getBoundingClientRect().height / 2
     }
-    const count = origin.height / usedLineHeight
     return {
-      height: origin.height, lineCount: Math.abs(count - Math.round(count)) < 0.000001 ? Math.round(count) : count, points, lineRects,
+      height: origin.height, lineCount: wholeLineCount(origin.height, input.lineHeight, usedLineHeight) ?? origin.height / usedLineHeight, points, lineRects,
       ...(usedLineHeight === input.lineHeight ? {} : { usedLineHeight }),
       ...(extraction === undefined ? {} : { extraction: { ...extraction, usedLineHeight } }),
       ...(richHeight === undefined ? {} : { richHeight }),
@@ -191,11 +190,18 @@ export function pointLine(point: NativePoint, lineHeight: number, lineCount: num
   return line
 }
 
-function extractionLineCount(extraction: NativeExtraction): number | null {
+// Safari 27 truncates the block and the strut to 1/64px, so with a fractional
+// CSS line height k line boxes can be up to k/64px from k strut advances.
+export function wholeLineCount(height: number, lineHeight: number, usedLineHeight: number): number | null {
+  const count = Math.round(height / usedLineHeight)
+  if (Math.abs(height / usedLineHeight - count) < 0.000001) return count
+  return !Number.isInteger(lineHeight) && Math.abs(height - count * usedLineHeight) <= count / 64 ? count : null
+}
+
+function extractionLineCount(extraction: NativeExtraction, lineHeight: number): number | null {
   const { height, usedLineHeight } = extraction
   if (!Number.isFinite(height) || height < 0 || !Number.isFinite(usedLineHeight) || usedLineHeight <= 0) return null
-  const count = height / usedLineHeight
-  return Math.abs(count - Math.round(count)) < 0.000001 ? Math.round(count) : null
+  return wholeLineCount(height, lineHeight, usedLineHeight)
 }
 
 function forcedLineBounds(source: string, count: number): Array<{ start: number; end: number }> | null {
@@ -472,7 +478,7 @@ export function assess(
     } else if (extraction.method !== input.lineMethod || extraction.source !== normalizeSource(input.text, input.whiteSpace, browser)) {
       lineCount = breaks = { status: 'unobserved', reason: 'The recorded extraction method or source differs from the selected observation protocol.' }
     } else {
-      const count = extractionLineCount(extraction)
+      const count = extractionLineCount(extraction, input.lineHeight)
       if (count === null) {
         lineCount = breaks = { status: 'unobserved', reason: 'Extraction-stage height and resolved line-height do not establish an integral line-box count.' }
       } else {

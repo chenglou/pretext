@@ -17,6 +17,38 @@ All accuracy, letter-spacing and corpus result payloads are unchanged; refreshed
 snapshots change only provenance and environment records. Runtime sources and
 the baseline pin are unchanged, so no runtime benchmark was needed.
 
+## Safari 27
+
+This test-only change starts from main `2e5e2bd`. macOS 27 brought Safari 27.0,
+and its first installed full gate moved native layout on 6,230 LTR and 3,599 RTL
+suite rows against the Safari 26.5.2 rows of September 14, 5,662 and 2,883 of them
+in line count or height. WebKit 27 changed four break rules: punctuation after an
+overflowing first character, curly quotes and guillemets, keep-all after
+punctuation, and U+2028/U+2029 ending lines. It also keeps fractional line boxes.
+ICU didn't change. Main failed two required Safari rows.
+
+`reported/#210-#211` at 20.96px keeps Safari 26's lines, but Safari 27 truncates
+the block and the strut to 1/64px, so the observer read 3.000746 lines. For
+fractional CSS line heights, a block within 1/64px per line of k strut advances
+now counts as k lines. Safari 27's heights for one to six lines at 17.3, 20.5,
+20.96 and 32px all read whole, and Safari 26's 60px over a 20px strut still reads 3.
+
+The Safari keep-all case `foo。bar日本語` read per-character spans. Safari 27 breaks
+after `。` (WebKit #312099) only inside one text node, so spans kept Safari 26's four
+lines where the paragraph has five. The case now reads the text node with Range
+rects, so `wrap-06c1e0111950efed` becomes `wrap-8bb19504eadc995e` with the same
+origin, and requires nothing until the WebKit profile models the fix.
+
+The Safari leg of the full gate ran in the background against the pin `7c2ec51`,
+once from this branch's harness and once from main's: 162,489 LTR and 73,680 RTL
+rows. From this branch neither direction fixes or loses a metric, and none has
+required failures or execution errors. From main's harness the LTR leg fails the
+two required rows above. Between the two harnesses, main's assessments differ only
+in `wrap-4faaad4b08f18c01`'s line count, which now passes, and in the keep-all case:
+with spans main passed line count and breaks and failed height; from the text node
+it fails height, line count, breaks, source and widths. `bun test` and
+`bun run check` pass, and the pin stays.
+
 ## Rich inline keeps a line at an unfit soft hyphen as plain text does
 
 This runtime change starts from main `491c7f1` (#324). In `prepareRichInline()`,
