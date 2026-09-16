@@ -819,7 +819,7 @@ function walkPreparedComplexLines(
 
         // Text that takes no letter spacing, such as zero-width glue, fits like
         // the line that still ends with the gap before it.
-        const fitAdvance = spacingGraphemeCounts[i] === 0 && !breakAfter && kind !== 'control'
+        const fitAdvance = letterSpacing !== 0 && spacingGraphemeCounts[i] === 0 && !breakAfter && kind !== 'control'
           ? gap + w
           : getWholeSegmentFitContribution(prepared, kind, breakAfter, i, leadingSpacing, w)
         const hangs = breakAfter && isHangingWhiteSpace(kind, hangTabs)
