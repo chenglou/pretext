@@ -19,6 +19,10 @@ type StepReply =
 
 const runId = new URLSearchParams(location.search).get('run') ?? ''
 let fontFixtures: string[] = []
+// This document's history: how many cases it observed and the last one's id. WebKit reuses content-keyed caches across
+// cases, so a case can lay out differently after another one (lab README "Page-history dependence").
+let casesObserved = 0
+let previousCaseId: string | null = null
 
 // A named family resolves when a probe string measures differently from at least one of two generic fallbacks. This
 // catches fonts that aren't installed, that Safari hides from web content, and fixtures that didn't load; it can't tell
@@ -97,6 +101,8 @@ function readEnv(): PageEnv {
     outerHeight: window.outerHeight,
     visibilityState: document.visibilityState,
     hasFocus: document.hasFocus(),
+    documentCaseIndex: casesObserved,
+    previousCaseId,
   }
 }
 
@@ -299,6 +305,8 @@ async function observeCase(c: Case, browser: BrowserKind, range: Range): Promise
       painter = { error: message(error) }
     }
   }
+  casesObserved++
+  previousCaseId = c.id
   return { id: c.id, env, native, prediction, painter, timings }
 }
 

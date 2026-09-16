@@ -143,7 +143,7 @@ export type NativeLine = {
   // Source range of the code points with positive rects on this line; start === end for an empty line.
   start: number
   end: number
-  // Grapheme start of the first visible code point, and the last visible code point.
+  // Cluster start (Derived.clusterStart) of the first visible code point, and the last visible code point.
   firstVisible: number | null
   lastVisible: number | null
   left: number
@@ -159,7 +159,10 @@ export type Derived = {
   lines: NativeLine[]
   // Offsets of visible code points, ascending.
   visible: number[]
+  // The grapheme start of each UTF-16 offset under the lab's segmenter (Intl.Segmenter over the whole paragraph), and
+  // the cluster start: the grapheme start, or a later start where native layout put the grapheme on several lines.
   graphemeStart: Int32Array
+  clusterStart: Int32Array
   lineCountIssue: Metric | null
   breaksIssue: Metric | null
   // The row's layout grid (units per CSS px).
@@ -177,10 +180,13 @@ function describe(text: string, offset: number | null): string {
 }
 
 // Marks the visible code points of one line; `list` holds the line's code points with positive rects, in source order,
-// and `ink` says which code points carry their grapheme's ink. A visible code point carries ink, or is white space other
-// than hanging white space: SPACE or TAB in the line's trailing run under a mode where it hangs. The trailing run is the
-// white space and invisible code points at the line's end, back to a code point with ink, a no-break space or a control
-// other than TAB, LF and CR. Returns why the line's width isn't established, if it isn't.
+// and `ink` says which code points carry their grapheme's ink. A visible code point carries ink, is a control other than
+// TAB, LF and CR, or is white space other than hanging white space: SPACE or TAB in the line's trailing run under a mode
+// where it hangs. CSS Text 3 renders such a control as a visible glyph, and a positive rect is its advance: Safari draws
+// U+001C with Arial's 12px .notdef, Chrome U+009D 16px wide, Firefox U+0000 1px wide, each inside the text node's box.
+// Where an engine gives a control no advance its rects have zero width, so it isn't in `list`. The trailing run is the
+// white space and invisible code points at the line's end, back to a code point with ink, a no-break space or such a
+// control. Returns why the line's width isn't established, if it isn't.
 function markVisible(list: number[], chars: string[], ink: boolean[], hangs: boolean, visible: boolean[]): string | null {
   let trailingStart = list.length
   while (trailingStart > 0) {
@@ -194,7 +200,7 @@ function markVisible(list: number[], chars: string[], ink: boolean[], hangs: boo
     const ch = chars[i]!
     const trailing = k >= trailingStart
     if (ch === '­' && trailing) issue ??= 'positive soft hyphen rect at line end; hyphen selection is not established'
-    if (INVISIBLE.test(ch) && ch !== '\t' && !ink[i]) continue
+    if (INVISIBLE.test(ch) && ch !== '\t' && !ink[i] && !OTHER_CONTROL.test(ch)) continue
     if (hangs && trailing && SPACE_OR_TAB.test(ch)) continue
     if (hangs && trailing && OTHER_SPACE.test(ch)) {
       issue ??= 'other space separator at line end; hanging is not established'
@@ -400,6 +406,26 @@ export function deriveNative(c: Case, native: NativeObservation, text: string, b
     if (touching[line]![touching[line]!.length - 1] !== zeroOwners[r]) touching[line]!.push(zeroOwners[r]!)
   }
 
+  // Clusters as native layout drew them. The lab's segmenter sees the whole paragraph, and the engines segment less:
+  // WebKit and Firefox never form a cluster across a text node edge (`nai` + span `̈ve` breaks between `i` and U+0308),
+  // and Blink's break-all table breaks between two Thai characters inside a grapheme (`ท` | `ู`). So a code point with
+  // positive rects on one line starts a cluster when an earlier code point of its grapheme has them on another line.
+  // Code points without positive rects (a zero-width base or virama) follow the cluster before them.
+  const clusterStart = graphemeStart.slice()
+  for (let i = 0, grapheme = -1, start = 0, line = -1; i < points.length; i++) {
+    const point = points[i]!
+    if (graphemeStart[point.offset] !== grapheme) {
+      grapheme = graphemeStart[point.offset]!
+      start = grapheme
+      line = -1
+    }
+    if (pointLine[i]! >= 0) {
+      if (line >= 0 && pointLine[i] !== line) start = point.offset
+      line = pointLine[i]!
+    }
+    for (let k = 0; k < point.length; k++) clusterStart[point.offset + k] = start
+  }
+
   let breaksIssue: Metric | null = null
   let lineCountIssue: Metric | null = null
   let highest = -1
@@ -473,7 +499,7 @@ export function deriveNative(c: Case, native: NativeObservation, text: string, b
     for (let k = 0; k < list.length; k++) {
       const i = list[k]!
       if (!visibleFlags[i]) continue
-      firstVisible ??= graphemeStart[points[i]!.offset]!
+      firstVisible ??= clusterStart[points[i]!.offset]!
       lastVisible = points[i]!.offset
     }
     const extent = lineExtent(list, chars, i => points[i]!.rects, visibleFlags, nodeBoxes[line]!, p, browser)
@@ -497,7 +523,7 @@ export function deriveNative(c: Case, native: NativeObservation, text: string, b
   }
   const visible: number[] = []
   for (let i = 0; i < points.length; i++) if (visibleFlags[i]) visible.push(points[i]!.offset)
-  return { lines, visible, graphemeStart, lineCountIssue, breaksIssue, grid, rectValues, offGridValues, offGridWidths, splitWhiteSpace }
+  return { lines, visible, graphemeStart, clusterStart, lineCountIssue, breaksIssue, grid, rectValues, offGridValues, offGridWidths, splitWhiteSpace }
 }
 
 // A painted line's extent under the widths metric's rule: over its visible code points, without trimmed or hanging
@@ -579,7 +605,7 @@ export function scoreRow(row: LabRow, text: string = rowText(row.case)): CaseSco
       continue
     }
     if (predictedFirst[j] === null) {
-      const start = derived.graphemeStart[offset]!
+      const start = derived.clusterStart[offset]!
       predictedFirst[j] = start
       if (predicted[j]!.start > start) splits ??= start
     }

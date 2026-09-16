@@ -250,9 +250,89 @@ fails breaks on nearly every validation row, so derivation changes there don't r
   (336.0000305175781 for 336), and the prediction matches from the content edge. Equality on observed edges stays the
   rule.
 
+## Fourth pass: owner issues, second round
+
+The owners filed seven more problems in `ISSUES.md`. Two came from the derivation and are fixed in `score.ts`, and one
+needed the page to record more. Each fix was scored on the owners' latest rows as of 09:57 and on the validation rows,
+82,520 rows in all: under `.artifacts/lab/`, `blink/{smoke-r4,policy-r4,runs-r3,ws-r5,suite-r1/00-07}` (25,498),
+`gecko/{smoke-r6,policy-r6,runs-r6,ws-r6,suite-sample-r6}` (25,390) and
+`webkit/{smoke-r3,policy-r1,runs-r1,ws-r3,suite-r1-part0-3}` (25,438), and the five validation rows files above. The
+scorer versions, per-row metrics, comparisons and census scripts are in `.artifacts/lab/validate-20260916/fourth-pass/`.
+`score.test.ts` covers both rules with hand-made rows.
+
+19. **Controls with an advance.** The scorer treated every control as invisible. CSS renders a control other than TAB,
+    LF and CR as a visible glyph, and the engines give most such controls an advance inside the text node's box:
+    Safari the font's `.notdef` (U+001C 12px in 16px Arial), Chrome 1,185 of 1,429 controls in its rows (U+009D 16px,
+    VT 5.328125px), Firefox 4 of 1,186 (U+0000 1px). A line holding only such a control observed 0px, and a trailing FF
+    with an advance counted as hanging white space. A control other than TAB, LF and CR with a positive rect is now
+    visible, in native and painted lines. One with zero-width rects stays out of every line, as before.
+20. **Graphemes that native layout splits.** Breaks compared line starts at grapheme starts from `Intl.Segmenter` over
+    the whole paragraph, and failed any predicted line that started inside a grapheme. The engines segment less. WebKit
+    and Firefox never form a cluster across a text node edge, and Blink's break-all table breaks between two Thai
+    characters in one grapheme. So native lines started inside the lab's graphemes, and a prediction that started at
+    the same offset failed. Breaks now compare cluster starts: a grapheme is split where native layout put its code
+    points with positive rects on different lines (`Derived.clusterStart`; `graphemeStart` is unchanged).
+21. **In-document history per row.** Rows now record `env.documentCaseIndex`, how many cases the document observed
+    before the case, and `env.previousCaseId`, the last of them.
+
+Before and after, same rows (pass/fail/unobserved/not applicable). Counts not listed didn't change:
+
+| Fix | Rows | Metric | Before | After |
+|---|---|---|---|---|
+| 19 | webkit-host, owners' latest | widths | 18,780/837/5,102/719 | 18,852/357/5,510/719 |
+| 19 | webkit-host, owners' latest | painter | 21,449/3,199/790/0 | 21,705/2,990/743/0 |
+| 19 | Chrome, owners' latest | widths | 19,828/1,735/2,948/987 | 19,775/2,045/2,691/987 |
+| 19 | Chrome, owners' latest | painter | 20,431/4,783/284/0 | 20,364/4,850/284/0 |
+| 19 | Firefox, owners' latest | widths | 20,382/1,020/3,017/971 | 20,380/1,022/3,017/971 |
+| 19 | Firefox, owners' latest | painter | 23,407/1,717/266/0 | 23,405/1,719/266/0 |
+| 19 | Chrome, validation (5,297) | widths | 294/396/3/4,604 | 295/395/3/4,604 |
+| 20 | Chrome, owners' latest | breaks | 24,511/745/242/0 | 24,518/738/242/0 |
+| 20 | Chrome, owners' latest | widths | 19,775/2,045/2,691/987 | 19,778/2,045/2,695/980 |
+| 20 | Firefox, owners' latest | breaks | 24,419/194/777/0 | 24,424/189/777/0 |
+| 20 | Firefox, owners' latest | widths | 20,380/1,022/3,017/971 | 20,385/1,022/3,017/966 |
+| 20 | webkit-host, owners' latest | breaks | 24,719/508/211/0 | 24,730/497/211/0 |
+| 20 | webkit-host, owners' latest | widths | 18,852/357/5,510/719 | 18,859/358/5,513/708 |
+
+- **19, webkit-host.** 32 width and 208 painter failures pass, and 40 widths and 48 painter results that were
+  unobserved on a whole-px edge pass, among them `c-de31834f9896a7cc` (FF text nodes between spans) and `ws/controls`.
+  447 width failures became unobserved: once the control line passed, another line ending at a positive soft hyphen
+  decided the metric (eight of the nine listed cases). 16 painter failures moved to a later painted line that wraps.
+- **19, Chrome and Firefox.** Every result that became a failure fails on a line holding a control with an advance the
+  port doesn't predict (`newfails.ts`): Chrome 310 widths (257 were unobserved, 53 passed) and 70 painter results,
+  Firefox 2 widths and 2 painter results (`c-fc59a73aa616baff`, `a  b`: 9.1px observed, 8.1px predicted). 3 Chrome
+  painter failures pass.
+- **19, derivation.** 620 owner Chrome rows, 4 Firefox and 763 webkit-host derive differently, and 142 Chrome, 15
+  Safari and 15 webkit-host validation rows. 403, 2 and 470 owner lines that held only a control gain a visible code
+  point, and 50, 1 and 61 lines take their width from whole-node rects instead of code point rects, where a control
+  with an advance had counted as hanging white space. The rest move a first or last visible code point.
+- **20.** 7 Chrome breaks failures pass (the three Thai break-all cases in `policy-r4` and 4 suite rows), 5 Firefox and
+  11 webkit-host, the listed cases among them. Their widths pass or are unobserved, except webkit-host
+  `c-4f0c9d3cd9d60735`, whose line 3 box ends one float32 step from the prediction (30.719999313354492 against
+  30.720001220703125). Only these rows derive differently (7 Chrome, 5 Firefox, 13 webkit-host owner rows and 1 Chrome
+  validation row), each by a first visible code point that moves to the native line's start. No 'predicted line splits
+  a grapheme' failure is left in Chrome or Firefox. In webkit-host 398 are left, where native layout keeps the cluster
+  on one line: 386 in `suite/heart-vs16/*` and `suite/before-heart` (in `c-45a96fe1087eb491` the port starts a line at
+  the VS16), 6 Thai `runs/split-word` and 6 `suite/measurement` (emoji + VS15).
+- **Latin-1 storage, no scorer change.** Commit 8df70c6 (09:10) made `run.ts` serve chunk replies as ASCII-only JSON.
+  Scored with `--native-compare`, `webkit/smoke-r3` against `smoke-r1` (from before that commit) derives differently on
+  exactly the three listed cases of 300: `c-42086912543bce9f` 48 → 53 lines, `c-c551e7ed97f564ff` 4 → 1 and
+  `c-c62182c46f2a130d` 3 → 2. All three pass lineCount, breaks and widths in `smoke-r2` and `smoke-r3`.
+- **Soft hyphen lines, no change.** In the owners' WebKit rows, a line holding only a soft hyphen without a positive
+  rect holds a hyphen that wasn't chosen: a trailing SHY at the paragraph end or a SHY before a collapsible space, which
+  0px describes. A chosen hyphen gets a positive rect, and that line's width is unobserved. The reported 0px failures
+  were control lines (19).
+- **21, page history.** `c-17af0e41879fc51f` (`aبِبِ((tail`, 24px Amiri, RTL) alone in a webkit-host run gives 6 lines,
+  as a standalone document does. After `c-15392ecfc5a69b77`, the same text LTR at the same width, it gives the 7 lines
+  of the suite rows (`.artifacts/lab/history-20260916/`). A rerun of the pair with the new fields reports
+  `documentCaseIndex` 1 and `previousCaseId` `c-15392ecfc5a69b77` on the 7-line row. This is WebKit's page history
+  (WEBKIT-HOST.md "Order within a page").
+
 ## Remaining caveats
 
 All browsers:
+
+- Line starts are compared at cluster starts, which split a grapheme only where its code points with positive rects
+  sit on different lines. Which line a zero-width code point of a split grapheme sits on isn't observed.
 
 - The stand-in predictor predicts one line, so widths were compared only on one-line paragraphs, and `paint`
   returned null, so the painter path wasn't exercised in this validation.
@@ -372,4 +452,29 @@ bun $T/derive-diff.ts $T/score-fix1.ts $T/score-fix2.ts
 bun $T/steps.ts .artifacts/lab/webkit/{smoke-r3,policy-r1,runs-r1,ws-r3}/webkit-host-rows.ndjson
 bun test rebuild/lab/score.test.ts
 bunx tsc -p rebuild/lab/tsconfig.json --noEmit
+```
+
+Fourth pass (the three host runs under the lock, with the payload-check stand-in predictor):
+
+```sh
+F=$PWD/.artifacts/lab/validate-20260916/fourth-pass
+bun $F/score-all.ts $F/score-before.ts $F/before.ndjson
+bun $F/score-all.ts $F/score-controls.ts $F/controls.ndjson
+bun $F/score-all.ts $F/score-clusters.ts $F/clusters.ndjson
+bun $F/compare.ts $F/before.ndjson $F/controls.ndjson
+bun $F/compare.ts $F/controls.ndjson $F/clusters.ndjson
+bun $F/derive-diff.ts $F/score-before.ts $F/score-controls.ts
+bun $F/derive-diff.ts $F/score-controls.ts $F/score-clusters.ts
+bun $F/census.ts
+bun $F/newfails.ts
+bun rebuild/lab/score.ts --rows=.artifacts/lab/webkit/smoke-r3/webkit-host-rows.ndjson --cases=.artifacts/lab/cases/smoke.ndjson \
+  --out=$F/latin1-smoke-r3-vs-r1.json --native-compare=.artifacts/lab/webkit/smoke-r1/webkit-host-rows.ndjson
+H=.artifacts/lab/history-20260916
+P=.artifacts/lab/verify-8bit/predictor.ts
+python3 .artifacts/session/with-browser-lock.py lab-history-amiri-alone -- \
+  bun rebuild/lab/run.ts --browser=webkit-host --cases=$H/alone.ndjson --out=$H/alone --predictor=$P
+python3 .artifacts/session/with-browser-lock.py lab-history-amiri-after-ltr -- \
+  bun rebuild/lab/run.ts --browser=webkit-host --cases=$H/after-ltr.ndjson --out=$H/after-ltr --predictor=$P
+python3 .artifacts/session/with-browser-lock.py lab-history-amiri-provenance -- \
+  bun rebuild/lab/run.ts --browser=webkit-host --cases=$H/after-ltr.ndjson --out=$H/after-ltr-provenance --predictor=$P
 ```

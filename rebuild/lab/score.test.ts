@@ -151,3 +151,70 @@ describe('Safari widths take box edges from whole-node rects', () => {
     expect(derive(row).lines[0]!.right).toBe(20.59375)
   })
 })
+
+describe('a control other than TAB, LF and CR with a positive rect is visible', () => {
+  test('Safari: a line holding only U+001C observes its .notdef advance', () => {
+    const row = makeRow('webkit-host', paragraph([['ab', 'text']], { width: 20 }),
+      [[at(0, 9)], [at(9, 9)], [at(0, 12, 1)]], [[at(0, 18), at(0, 12, 1)]], [[0, 2, 18], [2, 3, 12]])
+    const lines = derive(row).lines
+    expect(lines.map(line => [line.firstVisible, line.lastVisible, line.widthSource, line.right - line.left])).toEqual([[0, 1, 'nodes', 18], [2, 2, 'nodes', 12]])
+    expect(scoreRow(row).metrics.widths).toEqual({ status: 'pass' })
+  })
+
+  test('Safari: a trailing FF with an advance ends the extent instead of hanging', () => {
+    const row = makeRow('webkit-host', paragraph([['ab', 'span'], ['\f', 'text']], { whiteSpace: 'nowrap' }),
+      [[at(0, 9)], [at(9, 9)], [at(18, 16)]], [[at(0, 18)], [at(18, 16)]], [[0, 3, 34]])
+    const line = derive(row).lines[0]!
+    expect([line.lastVisible, line.widthSource, line.right]).toEqual([2, 'nodes', 34])
+    expect(scoreRow(row).metrics.widths).toEqual({ status: 'pass' })
+  })
+
+  test('Firefox: U+0000 with a 1px rect counts, and a zero-width VT does not', () => {
+    const nul = makeRow('firefox', paragraph([['a  b', 'text']], { whiteSpace: 'pre-wrap', width: 20 }),
+      [[at(0, 8.1)], [at(8.1, 1)], [at(9.1, 5)], [at(0, 9, 1)]], [[at(0, 14.1), at(0, 9, 1)]], [[0, 3, 9.1], [3, 4, 9]])
+    const first = derive(nul).lines[0]!
+    expect([first.lastVisible, first.widthSource]).toEqual([1, 'code points'])
+    expect(first.right - first.left).toBeCloseTo(9.1, 9)
+    expect(scoreRow(nul).metrics.widths).toEqual({ status: 'pass' })
+    const vt = makeRow('firefox', paragraph([['ab', 'text']], { whiteSpace: 'pre-wrap' }),
+      [[at(0, 9)], [at(9, 9)], [at(18, 0)]], [[at(0, 18)]], [[0, 3, 18]])
+    expect([derive(vt).lines[0]!.lastVisible, derive(vt).lines[0]!.right]).toEqual([1, 18])
+  })
+})
+
+describe('breaks compare clusters as native layout drew them', () => {
+  // `nai` in one span, U+0308 U+0301 `v` in the next: WebKit and Firefox break between `i` and U+0308, which the lab's
+  // segmenter keeps in one grapheme. Native lines: `n`, `a`, `i`, then the marks, then `v`.
+  const p = paragraph([['nai', 'span'], ['̈́v', 'span']], { width: 1 })
+  const rects = [[at(0, 9, 0)], [at(0, 8, 1)], [at(0, 5, 2)], [at(0, 7, 3)], [at(0, 7, 3)], [at(0, 7, 4)]]
+  const runRects = [[at(0, 9, 0), at(0, 8, 1), at(0, 5, 2)], [at(0, 7, 3), at(0, 7, 4)]]
+
+  test('a line start where native layout splits the grapheme is a cluster start', () => {
+    const row = makeRow('webkit-host', p, rects, runRects, [[0, 1, 9], [1, 2, 8], [2, 3, 5], [3, 5, 7], [5, 6, 7]])
+    const derived = derive(row)
+    expect([derived.graphemeStart[3], derived.clusterStart[3], derived.clusterStart[4]]).toEqual([2, 3, 3])
+    expect(derived.lines[3]!.firstVisible).toBe(3)
+    expect(scoreRow(row).metrics.breaks).toEqual({ status: 'pass' })
+  })
+
+  test('a prediction that starts elsewhere inside the native cluster still splits it', () => {
+    const row = makeRow('webkit-host', p, rects, runRects, [[0, 1, 9], [1, 2, 8], [2, 4, 5], [4, 5, 7], [5, 6, 7]])
+    expect(scoreRow(row).metrics.breaks).toEqual({ status: 'fail', reason: 'predicted line splits a grapheme', detail: '3 "̈́v"' })
+  })
+
+  test('a grapheme native layout keeps on one line still counts as one', () => {
+    // One text node: Chrome keeps `i` + U+0308 on one line and gives the mark a copy of the letter's rect.
+    const q = paragraph([['naïv', 'text']], { width: 1 })
+    const row = makeRow('chrome', q, [[at(0, 9, 0)], [at(0, 8, 1)], [at(0, 5, 2)], [at(0, 5, 2)], [at(0, 7, 3)]],
+      [[at(0, 9, 0), at(0, 8, 1), at(0, 5, 2), at(0, 7, 3)]], [[0, 1, 9], [1, 2, 8], [2, 3, 5], [3, 5, 7]])
+    expect(derive(row).clusterStart[3]).toBe(2)
+    expect(scoreRow(row).metrics.breaks).toEqual({ status: 'fail', reason: 'predicted line splits a grapheme', detail: `2 ${JSON.stringify('ïv')}` })
+  })
+
+  test('Chrome break-all: a Thai vowel alone on its line in one text node', () => {
+    const row = makeRow('chrome', paragraph([['ทู', 'text']], { width: 2, wordBreak: 'break-all' }),
+      [[at(0, 12)], [at(0, 10, 1)]], [[at(0, 12), at(0, 10, 1)]], [[0, 1, 12], [1, 2, 10]])
+    expect(derive(row).lines.map(line => line.firstVisible)).toEqual([0, 1])
+    expect(scoreRow(row).metrics.breaks).toEqual({ status: 'pass' })
+  })
+})

@@ -101,7 +101,8 @@ For each case the page:
    rect over the owning run's text node, relative to the paragraph's content box. It also records `runRects`: the
    rects of a Range over each run's whole text node.
 4. Records the paragraph height and the environment: user agent, DPR, visual-viewport scale, page language,
-   fixture fonts, window sizes, visibility and focus.
+   fixture fonts, window sizes, visibility and focus, plus the document's history: `documentCaseIndex`, how many
+   cases the document observed before this one, and `previousCaseId`, the last of them (null for the first).
 5. Calls `predict(c, { browser, dpr })`. When it returns lines, it calls `paint(c, prediction, host)`. If that returns
    elements, one per predicted line, the page appends them to a host of the paragraph's width. For each element it
    records the height, the Range rects of every text node inside it and their horizontal extent, the text of those
@@ -143,8 +144,11 @@ consecutive LFs add empty lines (a trailing LF adds none). When all runs share t
 language, the paragraph height must equal the line count times the line height. A span with its own `lang` can
 resolve a generic family to another primary font, and baseline alignment then makes the line box taller.
 
-Visible code points. A visible code point has a positive rect on exactly one line. It isn't a default-ignorable,
-control or line/paragraph separator (TAB counts as white space), unless it carries its grapheme's ink: a grapheme with
+Visible code points. A visible code point has a positive rect on exactly one line. A control other than TAB, LF and
+CR with a positive rect is visible: CSS renders such a control as a visible glyph, and the engines that give it an
+advance draw one (see "Range geometry"). Where an engine gives a control no advance, its rects have zero width. Otherwise
+a visible code point isn't a default-ignorable, control or line/paragraph separator (TAB counts as white space), unless
+it carries its grapheme's ink: a grapheme with
 an inked code point is visible through whichever of its code points has the rect, other than white space. Firefox puts
 an emoji + VS16 cluster's advance on the VS16 and a letter + ZWNJ's on the ZWNJ, with a zero-width base, and Chrome and
 Safari give each code point of such a cluster a copy of its rect. It isn't hanging white space either: SPACE or TAB in
@@ -153,14 +157,18 @@ a line's trailing run under `normal`, `nowrap`, `pre-line` or `pre-wrap`. Traili
 with ink, a no-break space or a control other than TAB, LF and CR. The engines keep such a control as a character, so the
 space before it isn't at the line's end: Firefox keeps the space of `aaaa ` + VT in the line's width. The other space separators at a line end (U+3000, U+2000–U+200A and so on) are excluded, and that
 line's width is unobserved, because no engine's hanging rule for them is verified here. A line's first visible code
-point is compared at its grapheme start. Firefox can give a precomposed base letter a zero-width rect and put the
-advance on its combining mark.
+point is compared at its cluster start. Firefox can give a precomposed base letter a zero-width rect and put the
+advance on its combining mark. A cluster is a grapheme of the lab's segmenter (`Intl.Segmenter` over the whole
+paragraph), split where native layout put the grapheme's code points with positive rects on different lines. The
+engines segment less than the lab does. WebKit and Firefox never form a cluster across a text node edge (`nai` + a
+span holding U+0308 `ve` breaks between `i` and U+0308), and Blink's break-all table breaks between two Thai
+characters inside a grapheme (`ท` | `ู`).
 
 Metrics per case. `unobserved` and `not-applicable` are never passes.
 
 - `lineCount`: native line count equals predicted.
-- `breaks`: every native line's first visible grapheme equals the predicted line's, and no predicted line starts
-  inside a grapheme or misses a visible code point.
+- `breaks`: every native line's first visible cluster equals the predicted line's, and no predicted line starts
+  inside a cluster or misses a visible code point. The fail reason still says 'predicted line splits a grapheme'.
 - `widths`: scored only when breaks pass. The observed width is the line's horizontal extent. When nothing on the
   line except visible code points has width, the extent comes from the whole-node rects. Otherwise it comes from
   the visible code points' own rects; in Safari and webkit-host, each of those edges other than a line start at the
@@ -227,6 +235,9 @@ bun rebuild/lab/score.ts --rows=<dir>/reverse/webkit-host-rows.ndjson --cases=<c
   could be compared.
 - A comparison only finds the dependence the two orders expose. Compare runs of the same case file on the same browser
   build and environment; a shuffled run widens the net.
+- Each row's `env.documentCaseIndex` and `env.previousCaseId` say which cases the document observed before it. To test
+  one suspect, run a case file holding the case alone and one holding the suspect then the case: a single-case run
+  gets a fresh document in a fresh browser process.
 
 ## Range geometry, per browser
 
@@ -236,11 +247,14 @@ These findings from the smoke runs shape the rules above:
   16px is 8.8984375px). Every positive code point rect value and every observed line width in the smoke and 5,000-case
   runs sits on the 1/128px grid. A letter after a selected soft hyphen (in RTL
   the letter before it) has positive rects on both lines, and the one on the hyphen's line is an exact copy of the
-  hyphen's own rect. A lone ZWSP, joiner or soft hyphen can make a line with only zero-width rects.
+  hyphen's own rect. A lone ZWSP, joiner or soft hyphen can make a line with only zero-width rects. Controls other than
+  TAB, LF and CR mostly get an advance inside the text node's box: 1,185 of 1,429 in the owners' and validation Chrome
+  rows, such as U+009D 16px and VT 5.328125px wide in 16px Arial.
 - Safari 27: whole-node rects are float glyph positions like Chrome's (the same 190.3046875). A code point Range
   edge inside a text box is snapped outward to whole CSS px ('T' is [0, 10] for a 9.77px glyph), and the right edge
   of a code point that ends a box is floored, mostly to 1/64px (190.296875 for a box ending at 190.3046875), in some
-  lines to whole px (80 for 80.22). Safari also splits a cluster's advance between a letter and a
+  lines to whole px (80 for 80.22). Controls other than TAB, LF and CR get the font's `.notdef` advance (U+001C 12px in
+  16px Arial), so a line can hold only a control. Safari also splits a cluster's advance between a letter and a
   following ZWSP ('c' [17, 22) and ZWSP [21, 25.797) where the line ends at 25.796875). So widths come from the
   whole-node rects wherever possible, and a box's right edge is the float32 sum of its x and width (30.469196319580078 +
   71.9345703125 is 102.40376281738281, where the float64 sum falls between float32 values). When hanging white space
@@ -255,6 +269,8 @@ These findings from the smoke runs shape the rules above:
   nearest float32 of the app unit value (285.83331298828125 for 17150 au), so the grid checks allow two steps. Every
   observed smoke line width sits on the grid. A precomposed base letter can have a zero-width rect and its combining
   mark the advance, and so can an emoji before VS16 and a letter before ZWNJ or ZWJ. VT and FF keep zero-width rects on the line they end, and the space before them keeps its width.
+  Of 1,186 controls other than TAB, LF and CR in the owners' and validation Firefox rows, 1,164 have zero-width rects and 4 have 1px
+  advances (U+0000 in 16px Times New Roman, VT, FF and U+0000 in 24px Amiri).
 - webkit-host on WebKit 22625.1.29.11.27, Safari 27.0's build: the same Range geometry as installed Safari 27 wherever
   both observed a case after the same earlier cases in the document. In WebKit a few cases (web-font Arabic with
   brackets, soft hyphens next to controls, 12px URL seams) depend on the cases before them, in the host and in

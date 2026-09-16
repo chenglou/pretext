@@ -45,6 +45,10 @@ export type PageEnv = {
   outerHeight: number
   visibilityState: string
   hasFocus: boolean
+  // How many cases this document observed before this one, and the id of the last of them (null for the first). The page
+  // reloads on every page-context change, so this is the case's in-page history. Absent in rows from before these fields.
+  documentCaseIndex?: number
+  previousCaseId?: string | null
 }
 
 // One code point of the concatenated run text.
