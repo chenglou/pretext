@@ -963,6 +963,35 @@ describe('boundary-policy regressions', () => {
     }
   })
 
+  test('Gecko returns an unfit soft hyphen to the latest earlier break that fits', async () => {
+    const { getEngineProfile } = await import('./measurement.ts')
+    const profile = getEngineProfile()
+    const previous = [profile.lineBreakScan, profile.hidesControlCharacters, profile.unfitHyphenRetreat] as const
+    try {
+      profile.lineBreakScan = 'gecko'
+      profile.hidesControlCharacters = true
+      // Gecko records a soft-hyphen break only where its hyphen fits, and any other
+      // break where its line fits, such as the break after a hidden control.
+      const text = 'trans­ic'
+      const width = measureWidth('trans', FONT) + 0.1
+      for (const [unfitHyphenRetreat, expected] of [
+        ['none', ['trans-', 'ic']],
+        ['reduced-width', ['trans-', 'ic']],
+        ['full-width', ['', 'trans-', 'ic']],
+      ] as const) {
+        profile.unfitHyphenRetreat = unfitHyphenRetreat
+        clearCache()
+        const prepared = prepareWithSegments(text, FONT, { whiteSpace: 'pre-wrap' })
+        expect(layoutWithLines(prepared, width, LINE_HEIGHT).lines.map(line => line.text)).toEqual([...expected])
+        expect(collectStreamedLines(prepared, width).map(line => line.text)).toEqual([...expected])
+        expect(layout(prepare(text, FONT, { whiteSpace: 'pre-wrap' }), width, LINE_HEIGHT).lineCount).toBe(expected.length)
+      }
+    } finally {
+      [profile.lineBreakScan, profile.hidesControlCharacters, profile.unfitHyphenRetreat] = previous
+      clearCache()
+    }
+  })
+
   test('every text segment of an engine scan takes emergency grapheme breaks', async () => {
     const { getEngineProfile } = await import('./measurement.ts')
     const profile = getEngineProfile()
@@ -1704,13 +1733,13 @@ describe('prepare invariants', () => {
     expect(layout(prepared, alphaWidth + 0.1, LINE_HEIGHT).lineCount).toBe(2)
   })
 
-  test('only the Blink profile returns from an unfit hyphen and paints the hyphen unspaced', async () => {
+  test('Blink and Gecko return from an unfit hyphen, and only Blink paints the hyphen unspaced', async () => {
     const descriptor = Object.getOwnPropertyDescriptor(globalThis, 'navigator')
     try {
       for (const [index, userAgent, unfitHyphenRetreat, letterSpaceDiscretionaryHyphen] of [
         [0, 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36', 'reduced-width', false],
         [1, 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.5.2 Safari/605.1.15', 'none', true],
-        [2, 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:155.0) Gecko/20100101 Firefox/155.0', 'none', true],
+        [2, 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:155.0) Gecko/20100101 Firefox/155.0', 'full-width', true],
       ] as const) {
         Object.defineProperty(globalThis, 'navigator', { value: { userAgent }, configurable: true, writable: true })
         const specifier = `./measurement.ts?unfit-hyphen-${index}`

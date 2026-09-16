@@ -710,7 +710,8 @@ function stepRichInlineLine(
     // only fits on a fresh line, wrap before this rich item instead. A line that
     // ends at a soft hyphen can overflow by the hyphen alone, which the walker
     // keeps when the item has no earlier break to return to. Plain text keeps it
-    // too, unless the Chromium profile returns to the break before the item.
+    // too, unless the Chromium or Gecko profile returns to the break before the
+    // item: Chromium where that line leaves room for the hyphen, Gecko where it fits.
     if (hasContent && atItemStart && lineWidthContribution > remainingWidth + lineFitEpsilon) {
       const { prepared } = item
       if (!isDiscretionaryLineEnd(prepared.kinds, lineEnd.segmentIndex, lineEnd.graphemeIndex)) break lineLoop
@@ -722,7 +723,7 @@ function stepRichInlineLine(
         gapBefore + textWidth + item.extraWidth > remainingWidth + lineFitEpsilon ||
         (
           item.breakBefore &&
-          lineWidth + prepared.discretionaryHyphenWidth <= safeWidth + lineFitEpsilon &&
+          lineWidth + (getEngineProfile().unfitHyphenRetreat === 'reduced-width' ? prepared.discretionaryHyphenWidth : 0) <= safeWidth + lineFitEpsilon &&
           canReturnFromUnfitHyphen(prepared, 0, 0, softHyphenIndex)
         )
       ) {

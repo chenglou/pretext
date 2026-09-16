@@ -518,12 +518,17 @@ Returning past such breaks lost 142
 installed Chrome rows on compounds such as `x ab-cd\u00adefgh` and
 `a well-known\u00adness`.
 
-The return is enabled in Blink only. Isolated widths cannot show what WebKit and
-Gecko need: letter
-spacing on U+2060, which those engines do not apply, and combining marks after a
+The return is enabled in Blink and Gecko. Gecko returns at the full width, to any
+earlier break whose line fits, including one between two text segments: Firefox
+paints VT, `a`, U+00AD, `b` in pre-wrap 16px Arial at 13.28px as VT / `a-` / `b`.
+Isolated widths cannot show what WebKit needs: letter
+spacing on U+2060, which WebKit and Gecko do not apply, and combining marks after a
 soft hyphen, where Safari breaks between the soft hyphen and the mark and Firefox
-paints the hyphen. WebKit and Gecko keep the overflowing hyphen until those are
-modeled. Chrome's remaining losses have the same partners. Chrome gives U+2060 no
+paints the hyphen. WebKit keeps the overflowing hyphen until those are
+modeled. Firefox's losses have those partners: in an offline replay of the Firefox
+gate's rows the return fixed 60 line counts per direction and lost 5 left-to-right
+rows, `a` then sixteen U+00AD U+2060 pairs and a mark, and marks after soft hyphens,
+at letter spacing 1. Chrome's remaining losses have the same partners. Chrome gives U+2060 no
 letter spacing, so `a\u2060b cd\u00adefgh` at letter spacing 1 and 2 still fits
 its hyphen line, and it kerns across the space in
 `LTA To AV\u00adWAVA`. Chromium breaks after a combining mark that
@@ -893,8 +898,8 @@ unit the walker forced onto the line. Wrapping before the item anyway broke
 where the joined text has no break: items `T` and `po\u00add` gave `T` / `pod`
 where `Tpo\u00add` gives `Tpo-` / `d`, and line counts went up as the width grew
 (#323). Such a line now keeps its hyphen, as the flat walker does, unless the
-Chromium profile returns to the break before the item with the flat walker's
-checks: that break leaves room for the hyphen, no soft hyphen up to the hyphen
+Chromium or Gecko profile returns to the break before the item with the flat walker's
+checks: that break leaves room for the hyphen in Chromium and fits in Gecko, no soft hyphen up to the hyphen
 measures narrower joined than apart, and nothing after the break can hold a
 later opportunity. Blink retries the text item against the width minus the
 hyphen, then rewinds earlier items at the full width, so any break before the

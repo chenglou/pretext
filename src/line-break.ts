@@ -524,7 +524,7 @@ export function canReturnFromUnfitHyphen(
   softHyphenIndex: number,
 ): boolean {
   const discretionaryHyphenContexts = prepared.discretionaryHyphenContexts ?? null
-  if (discretionaryHyphenContexts === null || getEngineProfile().unfitHyphenRetreat !== 'reduced-width') return false
+  if (discretionaryHyphenContexts === null || getEngineProfile().unfitHyphenRetreat === 'none') return false
   for (let i = lineStartSegmentIndex; i <= softHyphenIndex; i++) {
     if (discretionaryHyphenContexts[i]) return false
   }
@@ -566,7 +566,11 @@ function walkPreparedComplexLines(
   // and the text has a soft hyphen; hand-built handles may omit them.
   const discretionaryHyphenContexts = prepared.discretionaryHyphenContexts ?? null
   const retreatsFromUnfitHyphen =
-    discretionaryHyphenContexts !== null && engineProfile.unfitHyphenRetreat === 'reduced-width'
+    discretionaryHyphenContexts !== null && engineProfile.unfitHyphenRetreat !== 'none'
+  // Blink's retry leaves room for the hyphen at every earlier opportunity. Gecko
+  // returns to any opportunity whose line fits, such as a break between text segments.
+  const retreatsAtFullWidth = retreatsFromUnfitHyphen && engineProfile.unfitHyphenRetreat === 'full-width'
+  const reservedHyphenWidth = retreatsAtFullWidth ? 0 : discretionaryHyphenWidth
   const breaksBefore = prepared.breaksBefore ?? null
 
   let lineStartSegmentIndex: number
@@ -851,7 +855,7 @@ function walkPreparedComplexLines(
             startLineAtSegment(i, w)
           }
           updatePendingBreakForWholeSegment(kind, breakAfter, i, advance)
-          if (retreatsFromUnfitHyphen && breakAfter && pendingBreakWidth + discretionaryHyphenWidth <= fitLimit) {
+          if (retreatsFromUnfitHyphen && breakAfter && pendingBreakWidth + reservedHyphenWidth <= fitLimit) {
             fitBreakSegmentIndex = pendingBreakSegmentIndex
             fitBreakPaintWidth = pendingBreakWidth
           }
@@ -908,9 +912,13 @@ function walkPreparedComplexLines(
           pendingBreakWidth = lineW
           pendingBreakKind = null
         }
+        if (retreatsAtFullWidth && !breakAfter && breaksBefore?.[i] !== false && !breaksAfter(kinds[i - 1]!)) {
+          fitBreakSegmentIndex = i
+          fitBreakPaintWidth = lineW
+        }
         appendWholeSegment(i, advance)
         updatePendingBreakForWholeSegment(kind, breakAfter, i, advance)
-        if (retreatsFromUnfitHyphen && breakAfter && pendingBreakWidth + discretionaryHyphenWidth <= fitLimit) {
+        if (retreatsFromUnfitHyphen && breakAfter && pendingBreakWidth + reservedHyphenWidth <= fitLimit) {
           fitBreakSegmentIndex = pendingBreakSegmentIndex
           fitBreakPaintWidth = pendingBreakWidth
         }

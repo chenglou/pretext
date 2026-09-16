@@ -59,11 +59,13 @@ export type EngineProfile = {
   // item against the width minus the hyphen, so the line ends at the latest
   // earlier opportunity that leaves room for it. Pretext has no Blink item
   // boundaries and applies the reduced width to every earlier opportunity.
-  // WebKit and Gecko also return to an earlier opportunity, at the full width,
-  // but that is not modeled: their installed losses come from letter spacing
-  // on invisibles and from marks after a soft hyphen, which isolated widths do
-  // not show. They keep the overflowing hyphen.
-  unfitHyphenRetreat: 'reduced-width' | 'none'
+  // Gecko records a soft-hyphen break only where its hyphen fits, and any other
+  // break where its line fits (gfxTextRun.cpp:1086-1101), so the line returns to
+  // the latest opportunity that fits at the full width. WebKit also returns, but
+  // that is not modeled: its installed losses come from letter spacing on
+  // invisibles and from marks after a soft hyphen, which isolated widths do not
+  // show. It keeps the overflowing hyphen.
+  unfitHyphenRetreat: 'reduced-width' | 'full-width' | 'none'
   // NEL (U+0085, UAX #14 NL) offers a break after itself and no ordinary break
   // before it (LB5, LB6), as the scans find. The WebKit profile gives NEL its own
   // control segment for letter spacing: WebKit's simple text path gives NEL no
@@ -289,7 +291,7 @@ export function getEngineProfile(): EngineProfile {
     segmentBreakRemovalRun: engine === 'blink' ? 'blink' : engine === 'gecko' ? 'gecko' : 'none',
     letterSpaceDiscretionaryHyphen: engine !== 'blink',
     shapesMarksAcrossSoftHyphen: engine !== 'webkit' && engine !== 'gecko',
-    unfitHyphenRetreat: engine === 'blink' ? 'reduced-width' : 'none',
+    unfitHyphenRetreat: engine === 'blink' ? 'reduced-width' : engine === 'gecko' ? 'full-width' : 'none',
     breakOnlyAfterNextLine: engine === 'webkit',
     keepsLineStartPunctuationAfterFirstCharacter: engine === 'webkit',
     skipNarrowTabStops: engine === 'webkit',
