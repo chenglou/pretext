@@ -186,3 +186,94 @@ Two measurement caveats found while probing:
   - default generic font preferences: webkit-canvas H7, cross-cutting 4.
 - **Installed Safari 27.0 itself:** not driven, because Safari stayed the frontmost app. The runner's rule waits for it
   to go to the background.
+
+## Independent cross-check, and WebKit's break-position cache
+
+A second agent was given the same task while installed Safari stayed frontmost (07:04 to at least 09:06). It encoded
+every hypothesis again, without reading the probes above, and ran them in the same webkit-host build (DPR 2, scale 1).
+Where the two encodings disagree, follow-up probes settled the cause. Installed Safari is still not run.
+
+- Probes: `rebuild/probes/webkit-probes-crosscheck.ts` (118 hypothesis probes plus the follow-ups below). Verdicts:
+  `bun rebuild/probes/webkit-verdicts-crosscheck.ts <output file>`.
+- Raw results: `.artifacts/probes/webkit-crosscheck/webkit-host-probes.json` (status ok, 0 errors; table in
+  `verdicts.md` beside it). Follow-ups: `.artifacts/probes/webkit-crosscheck-{storage,history,payload,cache}/`.
+- Command: `python3 .artifacts/session/with-browser-lock.py <job> -- bun rebuild/probes/runner.ts --browser=webkit-host
+  --probes=rebuild/probes/webkit-probes-crosscheck.ts --out=.artifacts/probes/webkit-crosscheck`. Follow-ups use
+  `--only=storage`, `history`, `payload`, `cache A`, then `cache B` in a second invocation. Installed Safari:
+  `--browser=safari`, once Safari isn't the frontmost app.
+
+The cross-check's own table gives 73 confirmed, 6 refuted, 2 inconclusive and 4 not-run. After attribution, H13 (the
+empty div, correction 3 above) is the only spec error among its refuted rows. H9, webkit-text H15 and webkit-canvas
+H14 are storage effects (item 2 below). H19's second box is the `text-transform` observer caveat above. cross-cutting 5
+is the float32 step in correction 5.
+
+### Agreements that add evidence
+
+| id | cross-check measurement |
+|---|---|
+| webkit-lines H6 | Across every 1/64px width from 16.78 to 70.39px, A and B give identical starts at every width. The four constraints can't all hold in 16px Arial (`aabbccFits` false: w(cc­) = 16 > H = 5.328). This supports correction 1. |
+| webkit-lines H1, cross-cutting 6 | The first one-line width equals ceil(64w) − 1 for 8 strings. In a 1/128px scan, every 2→1 transition is at an even step. |
+| webkit-lines H7 | Right-aligned "abc abc" with `letter-spacing: 4px` at 100px: left 15.960938 = 100 − content with the trailing 4px (trimmed would be 19.960938). |
+| webkit-lines H15 | tab-size 1 after "abc" (remainder above half a space): b at 31.117188 = with the jump (26.671875 without). |
+| webkit-canvas H7 | An element canvas *without* a `lang` attribute also equals the DOM (53.328) under `<html lang="ja">`: the canvas inherits the page locale through its computed style. |
+| CRITIC C10, CSS zoom proxy | `zoom: 1.25`, `width: 93.425049px`, 16px Arial `nnnnn nnnnn` (f32 width at 20px 116.787109): 1 line. That is the zoom-then-truncate bound (116.78125 + 1/64). Truncate-then-zoom would give 2 lines. CSS zoom only; page zoom is still not run. |
+
+### Disagreements, settled
+
+1. **webkit-lines H11, break-spaces: the process-wide `TextBreakingPositionCache`, not a missing source branch.** The
+   cross-check gave "abc " | "     " | "def", which is the source walk. The run above gave all six spaces on line 1.
+   - Probes, in one webkit-host process: break-spaces `abc      xyz` right after a document that laid out the same text
+     in pre-wrap keeps all six spaces on line 1. Alone in a fresh process, or with content never laid out in pre-wrap,
+     it wraps per space.
+   - Source:
+     - The cache key is `tuple<String, TextBreakingPositionContext, SecurityOriginData>`, with the string compared by
+       value (`L/text/TextBreakingPositionCache.h:48`).
+     - The context maps `Preserve` and `BreakSpaces` to the same value (`L/text/TextBreakingPositionContext.h:43-56`).
+     - `handleTextContent` reads the cache before building items (`L/InlineItemsBuilder.cpp:936`). Only its fresh path
+       splits a break-spaces run into one item per character (`:972-978`), so positions cached from pre-wrap give one
+       six-space item, with no opportunity inside it.
+     - The cache is filled when a block's line layout is destroyed while the document lives
+       (`W/layout/integration/inline/LayoutIntegrationLineLayout.cpp:210-221`). The probe host is cleared after every
+       probe, so that happens then. Only text boxes with at least 3 items and 5 code units are stored
+       (`L/text/TextBreakingPositionCache.h:41-42`; `L/InlineItemsBuilder.cpp:1082-1148`).
+   - Correction: withdraw correction 2 above. webkit-lines §9.1's break-spaces paragraph holds in a fresh process. Add
+     the cache to both WebKit specs as a page-history input: identical text and style can break differently depending
+     on what the same WebContent process laid out and tore down before, for any white-space or storage difference the
+     key doesn't record. It is a candidate explanation for the history-dependent WebKit rows in the lab (PLAN 07:50
+     suspected the width caches).
+2. **webkit-lines H9, webkit-text H15, webkit-canvas H14 (the 8-bit rows): the text node's storage width comes from the
+   string's provenance.** The cross-check gave 16-bit behaviour for Latin-1-only text ("W)))", 3 lines, 2 lines). The
+   run above gave 8-bit behaviour.
+   - Probes: the same markup in fresh documents. When the document's probe JSON contains a raw non-Latin-1 character
+     anywhere, canvas H14 `abcd,efghé` gives 2 lines instead of 1, and H9 `W)))iiii` puts "W)))" on line 1 instead of
+     "W". The cross-check's payloads carried CJK text for other probes. The probes above build markup from JS
+     literals.
+   - The keep-all `abc,def(ghi` pair gave 3 lines in both payload widths, because its 16-bit document ran first and
+     filled the cache (item 1). With unique content `pqr,stu(vwx`, a Latin-1 payload gives 3 lines right after a
+     16-bit document, and 1 line alone in a fresh process.
+   - Source:
+     - JSON string tokens parsed from a UTF-16 source are stored 16-bit (`JavaScriptCore/runtime/LiteralParser.cpp:896-899`).
+     - The fast `innerHTML` parser keeps the source width (`W/html/parser/HTMLDocumentParserFastPath.cpp:1154-1156`).
+     - The keep-all punctuation rule (`W/rendering/BreakablePositions.h:292-299`) and the first-unit shortcut
+       (`L/InlineContentBreaker.cpp:143`) both test `is8Bit()`.
+   - Not reproduced from plain JS: `(s + '一').slice(0, -1)`, `JSON.parse(JSON.stringify([s, '一']))[0]`,
+     `createTextNode` and `innerHTML` of those all behaved 8-bit. Which JS string operations keep 16-bit storage wasn't
+     traced in JSC.
+   - Correction: webkit-text §13 "Whether a string is 8-bit: approximate with every unit ≤ U+00FF [I]" is wrong in
+     practice. Storage follows provenance and the cache, and JS can't observe it. The keep-all punctuation breaks and
+     the 16-bit first-unit rule are unpredictable for Latin-1-only text that comes from such strings, for example a
+     `fetch` JSON response that contains any non-Latin-1 character. The painter must control storage (not yet shown
+     possible), or this is a named gap.
+3. **webkit-lines H22.** Inconclusive in both. `::first-line { letter-spacing: 1px }` gave [0, 11, 22, 33] at 112.75 and
+   113.5px and [0, 11, 22] at 114.75px. The cross-check's fresh-measurement and carry models both predict
+   [0, 11, 22, 33] at 114.75px, so settling `IL/AbstractLineBuilder.cpp:84-91` needs a `breakWord` port with the
+   first-line style, not Canvas prefix sums.
+
+### Harness notes
+
+- Keep each document's probe payload Latin-1-only, or build probe text from JS literals, and record which. A lab or
+  probe payload with CJK text elsewhere changes WebKit's breaks for ASCII cases.
+- The break-position cache outlives documents: compare runs only in the same order, give each comparison a fresh
+  webkit-host process, or use content unique to one case.
+- Installed Safari: one waiter took the lock at 08:40 and found Safari frontmost again. It was stopped before opening
+  a window. SIGTERM also stopped the lock helper before its cleanup ran; the dead-owner takeover recovered the lock.

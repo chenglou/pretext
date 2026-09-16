@@ -60,8 +60,11 @@ function hyphenSpan(doc: Document, engine: EngineName, fragment: Extract<Fragmen
       break
     case 'gecko':
       // Gecko draws the hyphen from its own text run (nsTextFrame.cpp:7963-7984); an isolate ends the text run
-      // (nsTextFrame.cpp:2091-2096).
+      // (nsTextFrame.cpp:2091-2096). In the paragraph the hyphen is part of the frame, never a break candidate; as its
+      // own frame on an overflowing line, overflow-wrap would offer a word-wrap break before it (gfxTextRun.cpp:
+      // 1068-1074), which nowrap removes (WordCanWrap needs WhiteSpaceCanWrap, nsStyleStruct.h:1360-1367).
       span.style.unicodeBidi = 'isolate'
+      span.style.whiteSpace = 'nowrap'
       break
   }
   span.append(doc.createTextNode(fragment.painted))

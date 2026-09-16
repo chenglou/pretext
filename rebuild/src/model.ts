@@ -135,6 +135,7 @@ export type GapName =
   | 'float32-precision'
   | 'string-storage'
   | 'ui-language'
+  | 'han-kerning'
 
 export type Gap = { gap: GapName; run: number | null; detail: string }
 

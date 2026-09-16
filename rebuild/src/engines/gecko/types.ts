@@ -1,37 +1,119 @@
 // Gecko's prepared paragraph and line state (Firefox 156.0). The Gecko port owns this file.
 import type { Environment } from '../../env.js'
-import type { Paragraph } from '../../model.js'
+import type { Gap, Paragraph } from '../../model.js'
 
-// One mapped flow: the transformed text of one text node inside one text run (specs/gecko-text.md §0.3, §6).
-export type GeckoMappedFlow = {
+// white-space as its two longhands and the predicates Gecko derives from them (nsStyleStruct.h:1303-1367,
+// specs/gecko-text.md §2.1).
+export type GeckoStyle = {
+  collapse: 'collapse' | 'preserve' | 'preserve-breaks' | 'break-spaces'
+  wrap: boolean
+  whiteSpaceIsSignificant: boolean
+  newlineIsSignificant: boolean
+  whitespaceCanHang: boolean
+  wordCanWrap: boolean
+  isBreakSpaces: boolean
+  // EffectiveWordBreak: break-word is normal plus overflow-wrap anywhere.
+  wordBreak: 'normal' | 'break-all' | 'keep-all'
+}
+
+// A text frame: one text node, or the piece of it bidi resolution split off as a non-fluid continuation
+// (nsBidiPresUtils.cpp:1039-1057). Line breaking later makes fluid continuations, which are line state, not frames.
+export type GeckoFrame = {
   run: number
-  // The flow's DOM range [start, end) into the concatenated run text.
+  // Source offsets [start, end).
   start: number
   end: number
-  // Offset of the flow's first unit in its text run.
-  textRunOffset: number
+  level: number
+  textRun: number
+  // The frame's transformed range [tStart, tEnd).
+  tStart: number
+  tEnd: number
+  // The node is stored 8-bit: every code unit is below U+0100 (CharacterDataBuffer.cpp:285-288, gap string-storage).
+  is8bit: boolean
 }
 
+// A gfxTextRun: the transformed characters of consecutive frames that ContinueTextRunAcrossFrames joins
+// (nsTextFrame.cpp:2015-2174). [tStart, tEnd) index the paragraph's transformed arrays.
 export type GeckoTextRun = {
-  // Transformed characters of every flow in the run.
-  text: string
-  // Per transformed unit: its source offset, break flag (0 none, 1 normal, 3 emergency), cluster start, CharIsSpace.
-  sourceOffsets: Int32Array
-  breakFlags: Uint8Array
-  clusterStarts: Uint8Array
-  isSpace: Uint8Array
-  // Integer app-unit advance per unit (ligature continuations 0), from Canvas unit totals (specs/gecko-canvas.md §2 A4).
-  advances: Int32Array
-  bidiLevel: number
+  tStart: number
+  tEnd: number
+  is8bit: boolean
+  level: number
+  // Measure context: the first flow's font and language, ligatures off when its letter spacing isn't 0 au.
+  context: number
+  // TEXT_ENABLE_HYPHEN_BREAKS from a removed soft hyphen (nsTextFrame.cpp:2584-2586).
+  hasShy: boolean
+  // Flags::HasTrailingBreak (nsTextFrame.cpp:1835-1848): the paragraph's last text run ended on breakable space.
+  trailingBreak: boolean
+  // 0.5 × NS_round(ZeroOrAveCharWidth × apd) (nsTextFrame.cpp:1931-1937); measured only for runs with tabs.
+  minTabAdvance: number
+  // The hyphen text run's advance, U+2010 or '-' in the first font (gfxTextRun.cpp:2458-2488); 0 without soft hyphens.
+  hyphenAu: number
+  hasTab: boolean
+  // Glyph advance of the whole run.
+  totalAdvance: number
 }
+
+// A shaping unit (gfxFont::SplitAndInitTextRun, gfxFont.cpp:3708-3900): a word between boundary spaces and invalid
+// characters, a boundary U+0020 or U+00A0, or an invalid character (zero width).
+export type GeckoUnit = {
+  kind: 'word' | 'space' | 'nbsp' | 'invalid'
+  tStart: number
+  tEnd: number
+  // measureText of the unit in its text run's context, in au at apd 60.
+  canvasAu: number
+  // The DOM advance: canvasAu plus Apple Color Emoji corrections at the page's apd (specs/gecko-canvas.md §2 A12).
+  au: number
+  // Glyph advance of the text run before this unit.
+  startAdvance: number
+  // A character of the script the DOM itemizer gives the unit's leading Common characters, when the unit measured alone
+  // itemizes differently (gfxScriptItemizer merges Common characters into the surrounding run; CJK runs shape without
+  // kern, gfxHarfBuzzShaper.cpp:1405-1438). Canvas measures `context + ' ' + unit` (or `unit + ' ' + context`) less the
+  // context's part. '' when no context is needed.
+  scriptContext: string
+  contextBefore: boolean
+}
+
+// Character kinds a text run records (gfxFont.cpp:3872-3897).
+export const KIND_GLYPH = 0
+export const KIND_TAB = 1
+export const KIND_NEWLINE = 2
+export const KIND_FORMAT = 3
+export const KIND_INVISIBLE = 4
 
 export type GeckoPrepared = {
   paragraph: Paragraph
   env: Environment
   // max(1, round(60 / devicePixelRatio)) (specs/gecko-lines.md §2.1).
   appUnitsPerDevPixel: number
-  flows: GeckoMappedFlow[]
+  style: GeckoStyle
+  text: string
+  runStarts: number[]
+  // Resolved per run in au (nsTextFrame.cpp:1949-1980).
+  letterSpacingAu: number[]
+  // Frames in logical order; runs without a frame (white space at a line boundary) have none.
+  frames: GeckoFrame[]
   textRuns: GeckoTextRun[]
+  // Per transformed code unit.
+  tUnits: Uint16Array
+  tSource: Int32Array
+  breakFlags: Uint8Array
+  clusterStart: Uint8Array
+  isSpace: Uint8Array
+  kind: Uint8Array
+  // spacingPrefix[t]: letter and word spacing after the characters before t, in au (nsTextFrame.cpp:4089-4295).
+  spacingPrefix: Int32Array
+  // correctionPrefix[t]: Apple Color Emoji corrections of the clusters before t, in au.
+  correctionPrefix: Int32Array
+  unitOf: Int32Array
+  units: GeckoUnit[]
+  // Per source offset: the transformed index of that character, or -1 when TransformText skipped it.
+  sourceT: Int32Array
+  // Per source offset (length + 1): the first transformed index at or after it (gfxSkipCharsIterator).
+  nextT: Int32Array
+  // ComputeTabWidthAppUnits (nsTextFrame.cpp:3875-3906), 0 when nothing measured it.
+  tabWidth: number
+  gaps: Gap[]
 }
 
 // Where the continuation frame starts (nsTextFrame.cpp:11253, :11523). No measured remainder carries over; a line's
@@ -40,6 +122,3 @@ export type GeckoLineStart = {
   engine: 'gecko'
   contentOffset: number
 }
-
-// The break the second pass of a line forces (nsBlockFrame.cpp:5170-5194). A line is laid out at most twice.
-export type GeckoForcedBreak = { flow: number; offset: number }
