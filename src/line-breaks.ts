@@ -53,7 +53,7 @@ export function getBreakLanguage(tag: string | null): BreakLanguage {
   return 'root'
 }
 
-function decodeBase64(s: string): Uint8Array {
+export function decodeBase64(s: string): Uint8Array {
   const binary = atob(s)
   const bytes = new Uint8Array(binary.length)
   for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)

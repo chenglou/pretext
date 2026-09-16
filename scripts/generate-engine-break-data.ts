@@ -1,7 +1,8 @@
 // Generates src/generated/engine-break-data.ts, the tables behind Chrome's and Safari's
-// break scans in src/line-breaks.ts, from the engine files in scripts/engine-data/, and
-// checks each table against its source. Refresh those files by hand when a browser's
-// tables change, then run this. `--check` compares instead of writing.
+// break scans in src/line-breaks.ts and Firefox's in src/gecko-line-breaks.ts, from the
+// engine files in scripts/engine-data/, and checks each table against its source. Refresh
+// those files by hand when a browser's tables change, then run this. `--check` compares
+// instead of writing.
 //
 // chrome-153/, from Chrome 153.0.8010.37:
 // - line_normal.brk: the brkitr/line_normal.brk entry of Chrome's icudtl.dat (ICU 78.2).
@@ -14,6 +15,17 @@
 // - locales.json: for every locale libicucore lists, the line table ubrk_open(UBRK_LINE)
 //   opens and the four quotation delimiters ulocdata_getDelimiter reports.
 // - quotation.json: the code points libicucore gives Line_Break=QU.
+// firefox-156/, from Firefox 155.0.1's source tree. Firefox 156.0's XUL holds the same line
+// data and icu_properties Bidi_Class data byte for byte:
+// - segmenter_break_line_v1.rs.data: intl/icu_segmenter_data/data/, Firefox's baked ICU4X
+//   line data (icuexport release-78.1, CLDR 48), databake output for RuleBreakData
+//   (icu_segmenter 2.1.2 src/provider/mod.rs:151-180).
+// - properties.json: icu_properties 2.1.2's compiled data (Unicode 17), the crate Firefox
+//   vendors, as [first, last, value] ranges over every code point: Bidi_Class and
+//   East_Asian_Width in ICU4C numbering, General_Category Ps, every Bidi_Mirroring_Glyph
+//   pair, and the short names of every Script and Script_Extensions value.
+// - bidi_pairs_table.rs: servo/unicode-bidi ca612daf's bracket table,
+//   src/char_data/tables.rs:519-535.
 import { readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -271,9 +283,86 @@ for (const [name, remap] of ownRemaps) {
   if (JSON.stringify(lookUpRemap(name)) !== JSON.stringify(remap)) throw new Error(`Remap lookup misses ${name}`)
 }
 
+// Firefox's line data: three Rust byte string literals, the trie index as u16
+// little-endian, the trie data and the break states as u8, and header fields.
+const geckoLineSource = readText('firefox-156/segmenter_break_line_v1.rs.data')
+const rustEscapes: Record<string, number> = { '0': 0, n: 10, r: 13, t: 9, '\\': 92, '"': 34, "'": 39 }
+const parseRustByteString = (literal: string): Uint8Array => {
+  const bytes: number[] = []
+  for (let i = 0; i < literal.length; i++) {
+    if (literal[i] !== '\\') { bytes.push(literal.charCodeAt(i)); continue }
+    const escape = literal[++i]!
+    if (escape === 'x') { bytes.push(parseInt(literal.slice(i + 1, i + 3), 16)); i += 2 }
+    else if (escape in rustEscapes) bytes.push(rustEscapes[escape]!)
+    else throw new Error(`Unknown Rust escape \\${escape}`)
+  }
+  return new Uint8Array(bytes)
+}
+const geckoLineLiterals = Array.from(geckoLineSource.matchAll(/b"((?:[^"\\]|\\.)*)"/g), match => parseRustByteString(match[1]!))
+const geckoLineField = (name: string): number => {
+  const match = geckoLineSource.match(new RegExp(`${name} : (\\d+)u`))
+  if (match === null) throw new Error(`Missing ${name} in segmenter_break_line_v1.rs.data`)
+  return Number(match[1])
+}
+if (geckoLineLiterals.length !== 3) throw new Error(`Expected 3 byte strings in segmenter_break_line_v1.rs.data, got ${geckoLineLiterals.length}`)
+const [geckoLineIndex, geckoLineData, geckoLineStates] = geckoLineLiterals as [Uint8Array, Uint8Array, Uint8Array]
+const geckoLinePropertyCount = geckoLineField('property_count')
+if (!/trie_type : icu :: collections :: codepointtrie :: TrieType :: Small/.test(geckoLineSource)) throw new Error('Expected a small trie')
+if (!/\) \} , 0u8\) \} , break_state_table/.test(geckoLineSource)) throw new Error('Expected trie error value 0')
+if (geckoLineIndex.length % 2 !== 0 || geckoLineStates.length !== geckoLinePropertyCount ** 2) throw new Error('Unexpected line data sizes')
+// src/gecko-line-breaks.ts reads Line_Break values by number (icu_segmenter line.rs:18-128).
+if (geckoLineField('complex_property') !== 46) throw new Error('Expected SA to be Line_Break value 46')
+
+// Firefox's Unicode properties.
+type Ranges = [number, number, number][]
+const properties = JSON.parse(readText('firefox-156/properties.json')) as {
+  bidiClass: Ranges, eastAsianWidth: Ranges, openPunctuation: [number, number][], mirroringGlyph: [number, number][], scriptNames: string[]
+}
+// Flat [start - previous end - 1, end - start, value] triples of the kept values, from ranges
+// that cover every code point in order.
+const deltaRanges = (ranges: Ranges, keep: (value: number) => boolean): number[] => {
+  const flat: number[] = []
+  let previousEnd = -1
+  for (let i = 0; i < ranges.length; i++) {
+    const [start, end, value] = ranges[i]!
+    if (start !== (i === 0 ? 0 : ranges[i - 1]![1] + 1) || end < start) throw new Error(`Ranges out of order at U+${start.toString(16)}`)
+    if (!keep(value)) continue
+    flat.push(start - previousEnd - 1, end - start, value)
+    previousEnd = end
+  }
+  if (ranges[ranges.length - 1]![1] !== 0x10ffff) throw new Error('Ranges stop before U+10FFFF')
+  return flat
+}
+const geckoBidiClassRanges = deltaRanges(properties.bidiClass, value => value !== 0)
+const geckoEastAsianWidthRanges = deltaRanges(properties.eastAsianWidth, value => value === 2 || value === 3 || value === 5)
+for (const name of ['Zyyy', 'Zinh', 'Zzzz', 'Latn', 'Hira', 'Kana']) {
+  if (!properties.scriptNames.includes(name)) throw new Error(`Missing script ${name}`)
+}
+
+// unicode-bidi's bracket pairs: [opening, closing, normalized opening or 0].
+const geckoBidiPairs: number[] = []
+const pairsSource = readText('firefox-156/bidi_pairs_table.rs')
+for (const match of pairsSource.matchAll(/\(\s*'\\u\{([0-9a-f]+)\}',\s*'\\u\{([0-9a-f]+)\}',\s*(?:None|Some\(\s*'\\u\{([0-9a-f]+)\}'\s*\))\s*\)/g)) {
+  geckoBidiPairs.push(parseInt(match[1]!, 16), parseInt(match[2]!, 16), match[3] === undefined ? 0 : parseInt(match[3], 16))
+}
+if (geckoBidiPairs.length / 3 !== (pairsSource.match(/None|Some\(/g) ?? []).length) throw new Error('Unparsed bidi pairs')
+// Gecko's script itemizer pairs an Open_Punctuation code point at or above U+0F3A with its
+// mirror (gfxScriptItemizer.cpp:167-185). The scan takes that mirror from the bracket table.
+const mirrors = new Map(properties.mirroringGlyph)
+const openMirrors = new Map<number, number>()
+for (const [start, end] of properties.openPunctuation) {
+  for (let c = Math.max(start, 0x0f3a); c <= end; c++) if (mirrors.has(c)) openMirrors.set(c, mirrors.get(c)!)
+}
+const bracketMirrors = new Map<number, number>()
+for (let k = 0; k < geckoBidiPairs.length; k += 3) if (geckoBidiPairs[k]! >= 0x0f3a) bracketMirrors.set(geckoBidiPairs[k]!, geckoBidiPairs[k + 1]!)
+if (openMirrors.size !== bracketMirrors.size || Array.from(openMirrors).some(([open, close]) => bracketMirrors.get(open) !== close)) {
+  throw new Error('Open_Punctuation mirrors differ from the bidi bracket table')
+}
+
 const chromiumBase64 = base64(chromiumCompact)
 const overridesJson = JSON.stringify(appleLineOverrides)
 const remapsJson = JSON.stringify(appleQuoteRemaps)
+const geckoPropertiesJson = JSON.stringify([geckoBidiClassRanges, geckoEastAsianWidthRanges, geckoBidiPairs])
 const nextSource = `// Generated by scripts/generate-engine-break-data.ts from scripts/engine-data/.
 // Do not edit by hand. Regenerate with \`bun run generate:engine-break-data\`.
 
@@ -294,6 +383,28 @@ export const webkitLinePairsBase64 = '${base64(webkitPairs)}'
 // libicucore's quotation remaps by locale name (apple-rbbi.cpp:406-487): a code point, then
 // 0 for the category of U+007B or 1 for U+007D. A locale without an entry takes its parent's.
 export const appleQuoteRemaps: Record<string, readonly number[]> = ${remapsJson}
+
+// Firefox's baked ICU4X line data: a small CodePointTrie of Line_Break values (icu_collections
+// 2.1.1 codepointtrie), with the index as u16 little-endian, and the BreakState byte of each pair
+// of properties (icu_segmenter 2.1.2 src/provider/mod.rs:288-310).
+export const geckoLineTrieHighStart = ${geckoLineField('high_start')}
+export const geckoLinePropertyCount = ${geckoLinePropertyCount}
+export const geckoLineLastCodepointProperty = ${geckoLineField('last_codepoint_property')}
+export const geckoLineEotProperty = ${geckoLineField('eot_property')}
+export const geckoLineTrieIndexBase64 = '${base64(geckoLineIndex)}'
+export const geckoLineTrieDataBase64 = '${base64(geckoLineData)}'
+export const geckoLineBreakStatesBase64 = '${base64(geckoLineStates)}'
+
+// icu_properties 2.1.2's Bidi_Class other than L, and its East_Asian_Width H (2), F (3) and W (5),
+// in ICU4C numbering, as flat [start - previous end - 1, end - start, value] triples.
+export const geckoBidiClassRanges: readonly number[] = ${JSON.stringify(geckoBidiClassRanges)}
+export const geckoEastAsianWidthRanges: readonly number[] = ${JSON.stringify(geckoEastAsianWidthRanges)}
+
+// unicode-bidi's bracket pairs (Unicode 15): [opening, closing, normalized opening or 0].
+export const geckoBidiPairs: readonly number[] = ${JSON.stringify(geckoBidiPairs)}
+
+// Script short names, for RegExp \\p{sc=...} and \\p{scx=...}.
+export const geckoScriptNames = '${properties.scriptNames.join(' ')}'
 `
 
 const summary = [
@@ -301,6 +412,8 @@ const summary = [
   `overrides ${Object.entries(appleLineOverrides).map(([table, ranges]) => `${table} ${ranges.length / 3} ranges`).join(', ')} (${gzipSize(overridesJson)} B gzipped)`,
   `pair tables differ in ${differingPairs} pairs`,
   `quotation remaps ${Object.keys(appleQuoteRemaps).length} of ${ownRemaps.size} locales (${gzipSize(remapsJson)} B gzipped)`,
+  `Firefox line data ${geckoLineIndex.length + geckoLineData.length + geckoLineStates.length} B, ${gzipSize(base64(geckoLineIndex) + base64(geckoLineData) + base64(geckoLineStates))} B gzipped as base64`,
+  `Firefox properties ${gzipSize(geckoPropertiesJson)} B gzipped`,
   `module ${nextSource.length} B, ${gzipSize(nextSource)} B gzipped`,
 ].join('; ')
 

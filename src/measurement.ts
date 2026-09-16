@@ -27,24 +27,18 @@ export type SegmentMetrics = {
 
 export type EngineProfile = {
   entryFitBasis: 'fresh' | 'original' | 'disabled' // original whole minus consumed prefixes
-  // Where preparation finds break opportunities. Blink and WebKit scan the text with
-  // their own pair tables and ICU line rules (src/line-breaks.ts), and engines Pretext
-  // doesn't recognize take Blink's scan. The Gecko profile still merges Intl.Segmenter
-  // words with hand-written rules.
-  lineBreakScan: 'blink' | 'webkit' | null
+  // Where preparation finds break opportunities: each engine's own scan. Blink and WebKit
+  // scan the text with their pair tables and ICU line rules (src/line-breaks.ts), Gecko
+  // with nsLineBreaker over ICU4X's rules (src/gecko-line-breaks.ts), and engines Pretext
+  // doesn't recognize take Blink's scan.
+  lineBreakScan: 'blink' | 'webkit' | 'gecko'
   geckoAsciiLineBreaks: boolean
   lineFitEpsilon: number
   // Small kana and U+30FC are UAX #14 CJ. ICU's normal rules resolve CJ to ID, so
   // both may start a line, and its strict rules to NS, so neither may. Gecko's auto
-  // is strict. The scans take CJ from their engines' tables, so only the merged
-  // segmentation reads this.
+  // is strict. The scans take CJ from their engines' tables, so only preferred hyphen
+  // breaks read this.
   breakBeforeConditionalJapaneseStarter: boolean
-  // ICU's line rules break before an opening quotation mark such as U+201C and
-  // after a closing one such as U+201D between East Asian characters (UAX #14
-  // LB19a), identically in ICU 77 and 78. Gecko's ICU4X rules follow Unicode
-  // 15.0, with no break next to a quotation mark. Only the merged segmentation's
-  // keep-all runs read it.
-  breakAroundEastAsianQuotes: boolean
   // Letters that keep a word-initial hyphen (LB20a). 'alphabetic-and-hebrew'
   // models ICU 78, which Chromium and WebKit use: AL and HL letters after
   // U+002D or any Unicode 17 HH dash. It is also the default without a
@@ -281,11 +275,10 @@ export function getEngineProfile(): EngineProfile {
 
   const profile: EngineProfile = {
     entryFitBasis: isDesktop && engine === 'blink' ? 'fresh' : isDesktop && engine === 'gecko' ? 'original' : 'disabled',
-    lineBreakScan: engine === 'gecko' ? null : engine === 'webkit' ? 'webkit' : 'blink',
+    lineBreakScan: engine === 'gecko' || engine === 'webkit' ? engine : 'blink',
     geckoAsciiLineBreaks: engine === 'gecko',
     lineFitEpsilon: engine === 'webkit' ? 1 / 64 : 0.005,
     breakBeforeConditionalJapaneseStarter: engine === 'blink',
-    breakAroundEastAsianQuotes: engine !== 'gecko',
     wordInitialHyphenLetters: engine === 'gecko' ? 'none' : 'alphabetic-and-hebrew',
     preferPrefixWidthsForBreakableRuns: engine === 'webkit',
     measureTextWithFollowingSpace: engine === 'webkit',

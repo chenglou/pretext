@@ -26,8 +26,8 @@ known-failure reporting, native observation limits and reproducible case IDs.
 - `bun run build:package` — emit `dist/` for the published ESM package
 - `bun run package-smoke-test` — pack the tarball and verify temporary JS + TS consumers
 - `bun run site:build` — build the static demo site into `site/`
-- `bun run generate:engine-break-data` — refresh Chrome's and Safari's checked-in break tables from the engine files in `scripts/engine-data/`, checking each table against its source; `--check` compares the generated file instead of writing it
-- `bun run generate:line-break-data` — refresh the checked-in projected Unicode line-break class table that the Gecko profile reads; `--check` compares it with `scripts/unicode/LineBreak-17.0.0.txt`
+- `bun run generate:engine-break-data` — refresh Chrome's, Safari's and Firefox's checked-in break tables from the engine files in `scripts/engine-data/`, checking each table against its source; `--check` compares the generated file instead of writing it
+- `bun run generate:line-break-data` — refresh the checked-in projected Unicode line-break class table that preferred hyphen breaks read; `--check` compares it with `scripts/unicode/LineBreak-17.0.0.txt`
 
 ### Browser Accuracy And Benchmarking
 

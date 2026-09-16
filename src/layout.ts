@@ -10,11 +10,8 @@ import {
   analyzeText,
   clearAnalysisCaches,
   getBreakablePreferredBreaks,
-  getCjkTextUnits,
   getSharedGraphemeSegmenter,
-  isCJK,
   isNumericRunSegment,
-  isIndependentSymbolRun,
   setAnalysisLocale,
   type SegmentBreakKind,
   type TextAnalysis,
@@ -648,25 +645,6 @@ function measureAnalysis(
       continue
     }
 
-    // A merged segment holds CJK text whose line-break units are known only now, so it
-    // is measured unit by unit. An engine's scan already ends a segment at each opportunity.
-    if (segKind === 'text' && engineProfile.lineBreakScan === null && isCJK(segText)) {
-      const measuredUnits = getCjkTextUnits(segText, engineProfile, wordBreak)
-
-      for (let i = 0; i < measuredUnits.length; i++) {
-        const unit = measuredUnits[i]!
-        const followingSpaceTail = i === measuredUnits.length - 1 ? getFollowingSpaceTail(mi, unit.text) : null
-        pushMeasuredTextSegment(
-          unit.text,
-          getTextMetrics(unit.text, followingSpaceTail),
-          'text',
-          unit.overflow === 'grapheme' || analysis.isWordLike[mi]!,
-          followingSpaceTail,
-        )
-      }
-      continue
-    }
-
     // Such a run of marks adds its context with the marks, minus the context, and
     // takes no letter spacing of its own.
     const markContext = getMarkContext(mi)
@@ -682,13 +660,10 @@ function measureAnalysis(
 
     const followingSpaceTail = segKind === 'text' || segKind === 'glue' ? getFollowingSpaceTail(mi, segText) : null
     // Under break-word, Blink retries an overflowing line with a break allowed between
-    // any two graphemes (line_breaker.cc) and WebKit searches the word's grapheme
-    // prefixes (TextUtil::breakWord), so every text segment of an engine's scan takes
-    // emergency grapheme breaks. In the merged segmentation, words, text with CJK in
-    // it and independent symbol runs do.
-    pushMeasuredTextSegment(segText, getTextMetrics(segText, followingSpaceTail), segKind,
-      segKind === 'text' && (engineProfile.lineBreakScan !== null || analysis.isWordLike[mi]! || isCJK(segText) || isIndependentSymbolRun(segText)),
-      followingSpaceTail)
+    // any two graphemes (line_breaker.cc), WebKit searches the word's grapheme prefixes
+    // (TextUtil::breakWord) and Gecko may wrap before any cluster (gfxTextRun.cpp:1069-1072),
+    // so every text segment takes emergency grapheme breaks.
+    pushMeasuredTextSegment(segText, getTextMetrics(segText, followingSpaceTail), segKind, segKind === 'text', followingSpaceTail)
   }
 
   // An engine's scan makes one prepared segment per analysis segment. Only the

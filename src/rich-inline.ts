@@ -6,13 +6,10 @@ import {
 import {
   analyzeText,
   getBreakablePreferredBreaks,
-  getCjkTextUnits,
   getSharedGraphemeSegmenter,
   getSharedWordSegmenter,
-  isCJK,
   removeSegmentBreaksNextToZeroWidthSpace,
   type AnalysisProfile,
-  type SegmentBreakKind,
 } from './analysis.js'
 import { getWebKitBreakBetweenItems } from './line-breaks.js'
 import {
@@ -204,25 +201,16 @@ function getItemCursor(prepared: PreparedTextWithSegments, startSegmentIndex: nu
 
 // Browsers find ordinary break opportunities in the text their inline items
 // join; the item boundary itself is not one. This analyzes the joined text like
-// prepare(): analysis segments, with merged CJK text split into its measured
-// units. It returns the offsets of the units the line walker could end a line
-// before.
+// prepare() and returns the offsets of the segments the line walker could end a
+// line before.
 function getJoinedBreakOffsets(text: string, profile: AnalysisProfile, language: string | null): number[] {
   const analysis = analyzeText(text, profile, 'normal', 'normal', language)
   const offsets: number[] = []
-  let previousKind: SegmentBreakKind | null = null
-  for (let i = 0; i < analysis.len; i++) {
-    const segText = analysis.texts[i]!
+  for (let i = 1; i < analysis.len; i++) {
     const kind = analysis.kinds[i]!
-    const start = analysis.starts[i]!
-    const units = kind === 'text' && profile.lineBreakScan === null && isCJK(segText) ? getCjkTextUnits(segText, profile, 'normal') : null
-    const unitCount = units === null ? 1 : units.length
-    for (let unitIndex = 0; unitIndex < unitCount; unitIndex++) {
-      // An engine's scan can give no break there, as before NEL (UAX #14 LB6).
-      if (previousKind !== null && (breaksAfter(previousKind) || !breaksAfter(kind)) && analysis.breaksBefore?.[i] !== false) {
-        offsets.push(units === null ? start : start + units[unitIndex]!.start)
-      }
-      previousKind = kind
+    // An engine's scan can give no break there, as before NEL (UAX #14 LB6).
+    if ((breaksAfter(analysis.kinds[i - 1]!) || !breaksAfter(kind)) && analysis.breaksBefore?.[i] !== false) {
+      offsets.push(analysis.starts[i]!)
     }
   }
   return offsets

@@ -226,7 +226,7 @@ Notes:
 Pretext doesn't try to be a full font rendering engine (yet?). It currently targets the common text setup:
 - `white-space: normal` and `pre-wrap`
 - `word-break: normal` and `keep-all`
-- `overflow-wrap: break-word`. Very narrow widths can still break inside words, independent symbol runs, `keep-all` groups and kinsoku clusters such as `漢。`, but only at grapheme boundaries.
+- `overflow-wrap: break-word`. Very narrow widths can still break inside words, symbol runs, `keep-all` groups and kinsoku clusters such as `漢。`, but only at grapheme boundaries.
 - `line-break: auto`
 - `letter-spacing` as a numeric pixel value passed to `prepare()` / `prepareWithSegments()`
 - Tabs follow the default browser-style `tab-size: 8`
