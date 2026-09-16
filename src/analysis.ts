@@ -20,12 +20,15 @@ export type SegmentBreakKind =
 
 // `breaksBefore` is false where the engine's scan gives no break before text, glue,
 // zero-width glue or a control, other than at a line start. Null where it always does.
+// `clusterSplits` is false for a segment the engine's clusters don't split, which no
+// emergency break splits either. Null where the scan has no clusters of its own.
 export type Segmentation = {
   len: number
   texts: string[]
   kinds: SegmentBreakKind[]
   starts: number[]
   breaksBefore: boolean[] | null
+  clusterSplits: boolean[] | null
 }
 
 export type TextAnalysis = { source: string; normalized: string } & Segmentation
@@ -202,13 +205,14 @@ function isCollapsibleSpaceCode(code: number): boolean {
 // normal white space each run of SPACE, TAB, LF, CR and FF became one space, or nothing
 // at either end, and in pre-wrap CRLF became LF. A break before a run's first unit is a
 // break before what the run became. A break before a later unit, as before a CR after a
-// space, follows white space, so it is a break after what the run became.
+// space, follows white space, so it is a break after what the run became. A cluster start
+// without a break (2) goes with its unit, and only a unit that stays text has one.
 function mapSourceLineBreaks(source: string, normalizedLength: number, sourceBreaks: Uint8Array, whiteSpace: WhiteSpaceMode): Uint8Array {
   const breaks = new Uint8Array(normalizedLength + 1)
   let normalizedIndex = 0
   if (whiteSpace === 'pre-wrap') {
     for (let i = 0; i < source.length; i++, normalizedIndex++) {
-      if (sourceBreaks[i] === 1) breaks[normalizedIndex] = 1
+      breaks[normalizedIndex] = sourceBreaks[i]!
       if (source.charCodeAt(i) === 0x0D && source.charCodeAt(i + 1) === 0x0A) {
         i++
         if (sourceBreaks[i] === 1) breaks[normalizedIndex] = 1
@@ -223,6 +227,8 @@ function mapSourceLineBreaks(source: string, normalizedLength: number, sourceBre
     if (isCollapsibleSpaceCode(source.charCodeAt(i))) {
       while (end < source.length && isCollapsibleSpaceCode(source.charCodeAt(end))) end++
       if (end === source.length) break
+    } else if (sourceBreaks[i] === 2 && breaks[normalizedIndex] === 0) {
+      breaks[normalizedIndex] = 2
     }
     const start = i
     for (; i < end; i++) {
@@ -256,10 +262,12 @@ function isControlSegmentCode(code: number): boolean {
 // before a combining mark or a closing bracket, or under keep-all, is zero-width glue:
 // it stays its own zero-width segment, takes no letter spacing and doesn't end a line.
 // Combining marks right after it, or after a control, stay apart from the text after
-// them, since they shape on the grapheme before it (measureAnalysis).
-function segmentAtLineBreaks(normalized: string, breaks: Uint8Array, whiteSpace: WhiteSpaceMode, breakOnlyAfterNextLine: boolean): Segmentation {
+// them, since they shape on the grapheme before it (measureAnalysis). Where the scan
+// marks cluster starts (2), a segment records whether one falls inside it.
+function segmentAtLineBreaks(normalized: string, breaks: Uint8Array, whiteSpace: WhiteSpaceMode, breakOnlyAfterNextLine: boolean, withClusters: boolean): Segmentation {
   const starts = [0]
   const kinds = [classifySegmentBreakCode(normalized.charCodeAt(0), whiteSpace, breakOnlyAfterNextLine)]
+  const clusterSplits = withClusters ? [false] : null
   let lastAlone = kinds[0] === 'text' && isControlSegmentCode(normalized.charCodeAt(0))
   let markRun = false
   for (let i = 1; i < normalized.length; i++) {
@@ -268,16 +276,18 @@ function segmentAtLineBreaks(normalized: string, breaks: Uint8Array, whiteSpace:
     const alone = kind === 'text' && isControlSegmentCode(code)
     const last = kinds.length - 1
     if (
-      breaks[i] === 0 && !alone && !lastAlone && !(markRun && !combiningMarkRe.test(normalized[i]!)) &&
+      breaks[i] !== 1 && !alone && !lastAlone && !(markRun && !combiningMarkRe.test(normalized[i]!)) &&
       (kind === kinds[last] ? gathersKind(kind) : isTextLikeKind(kind) && isTextLikeKind(kinds[last]!))
     ) {
       if (kind === 'text') kinds[last] = 'text'
+      if (breaks[i] === 2) clusterSplits![last] = true
       continue
     }
-    markRun = breaks[i] === 0 && kind === 'text' && combiningMarkRe.test(normalized[i]!) &&
+    markRun = breaks[i] !== 1 && kind === 'text' && combiningMarkRe.test(normalized[i]!) &&
       (lastAlone || kinds[last] === 'zero-width-break' || kinds[last] === 'soft-hyphen' || kinds[last] === 'control')
     starts.push(i)
     kinds.push(kind)
+    clusterSplits?.push(false)
     lastAlone = alone
   }
   // A line ends only where the scan breaks, so the walkers learn where it doesn't:
@@ -296,7 +306,7 @@ function segmentAtLineBreaks(normalized: string, breaks: Uint8Array, whiteSpace:
   }
   const texts: string[] = []
   for (let j = 0; j < len; j++) texts.push(normalized.slice(starts[j]!, j + 1 < len ? starts[j + 1]! : normalized.length))
-  return { len, texts, kinds, starts, breaksBefore }
+  return { len, texts, kinds, starts, breaksBefore, clusterSplits }
 }
 
 export function analyzeText(
@@ -320,6 +330,7 @@ export function analyzeText(
       kinds: [],
       starts: [],
       breaksBefore: null,
+      clusterSplits: null,
     }
   }
   const keepAll = wordBreak === 'keep-all'
@@ -340,6 +351,6 @@ export function analyzeText(
   return {
     source: text,
     normalized,
-    ...segmentAtLineBreaks(normalized, breaks, whiteSpace, profile.breakOnlyAfterNextLine),
+    ...segmentAtLineBreaks(normalized, breaks, whiteSpace, profile.breakOnlyAfterNextLine, profile.lineBreakScan === 'gecko'),
   }
 }

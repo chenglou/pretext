@@ -952,7 +952,8 @@ function getBreakStates(text: string, units: Uint16Array, is8bit: boolean, after
 
 // Where a line may start in a text node's source: flags[i] = 1 for 0 < i < source.length, at a
 // normal break (FLAG_BREAK_TYPE_NORMAL) or after a soft hyphen. gfxTextRun::SetPotentialLineBreaks
-// (gfxTextRun.cpp:210-236) keeps a break only at a cluster start or after a space.
+// (gfxTextRun.cpp:210-236) keeps a break only at a cluster start or after a space. flags[i] = 2 where
+// a cluster starts without a break, where only break-word can wrap (gfxTextRun.cpp:1068-1074).
 export function getGeckoLineBreaks(
   source: string,
   preserveWhiteSpace: boolean,
@@ -1000,6 +1001,8 @@ export function getGeckoLineBreaks(
     const rawPos = tr.orig[t]!
     if ((state[t] === 1 && (g.clusterStart[t] === 1 || g.isSpace[t - 1] === 1)) || (tr.skipped[rawPos - 1] === 1 && raw[rawPos - 1] === CH_SHY)) {
       flags[rawPos] = 1
+    } else if (g.clusterStart[t] === 1) {
+      flags[rawPos] = 2
     }
   }
   return flags

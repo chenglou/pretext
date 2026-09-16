@@ -646,8 +646,9 @@ function measureAnalysis(
     // Under break-word, Blink retries an overflowing line with a break allowed between
     // any two graphemes (line_breaker.cc), WebKit searches the word's grapheme prefixes
     // (TextUtil::breakWord) and Gecko may wrap before any cluster (gfxTextRun.cpp:1069-1072),
-    // so every text segment takes emergency grapheme breaks.
-    pushMeasuredTextSegment(segText, getTextMetrics(segText, followingSpaceTail), segKind, segKind === 'text', followingSpaceTail)
+    // so every text segment takes emergency grapheme breaks, unless it is one Gecko cluster.
+    const allowOverflowBreaks = segKind === 'text' && analysis.clusterSplits?.[mi] !== false
+    pushMeasuredTextSegment(segText, getTextMetrics(segText, followingSpaceTail), segKind, allowOverflowBreaks, followingSpaceTail)
   }
 
   // An engine's scan makes one prepared segment per analysis segment. Only the

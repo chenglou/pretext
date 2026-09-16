@@ -128,7 +128,12 @@ prefixes (`TextUtil::breakWord`) and Gecko wraps before any cluster start
 numbers (`11111111` at 1px laid out as one line, 230 September 15 gate rows) and every
 engine from emoji and symbol runs (`🇺🇸/👩‍💻` at 8px, where both browsers break
 before the `/` that no scan allows, 526 rows). No scan asks `Intl.Segmenter` for words
-outside Thai, Lao, Khmer and Myanmar runs. Between rich-inline items, the WebKit profile reads the
+outside Thai, Lao, Khmer and Myanmar runs. Gecko clusters its text run after dropping soft
+hyphens and bidi controls, per shaped word, so the Gecko scan's cluster starts decide
+which segments split: one that holds no cluster start after its first unit takes no
+emergency breaks. In `a`, `👩`, U+00AD, ZWJ, `🚀`, `b` at 0px the ZWJ continues the
+woman's cluster and joins the rocket to it, so Firefox paints `a` / `👩-` / ZWJ `🚀` /
+`b`, where Unicode graphemes split ZWJ from the rocket (68 installed rows). Between rich-inline items, the WebKit profile reads the
 previous item's last two characters as prior context, as `TextUtil::mayBreakInBetween`
 does.
 

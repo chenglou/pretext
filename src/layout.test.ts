@@ -964,6 +964,29 @@ describe('boundary-policy regressions', () => {
     }
   })
 
+  test('a Gecko text segment that is one cluster takes no emergency breaks', async () => {
+    const { getEngineProfile } = await import('./measurement.ts')
+    const profile = getEngineProfile()
+    const previous = profile.lineBreakScan
+    try {
+      // Gecko drops the soft hyphen before it clusters, so ZWJ continues the woman's
+      // cluster and joins the rocket to it, where Unicode graphemes split ZWJ off.
+      profile.lineBreakScan = 'gecko'
+      const text = 'a\u{1F469}­‍\u{1F680}b'
+      const prepared = prepareWithSegments(text, FONT)
+      const zwj = prepared.segments.indexOf('‍\u{1F680}')
+      expect(getSegmentGraphemes(prepared.segments[zwj]!).length).toBe(2)
+      expect(prepared.breakableFitAdvances[zwj]).toBeNull()
+      expect(layoutWithLines(prepared, 0, LINE_HEIGHT).lines.map(line => line.text)).toEqual(['a', '\u{1F469}-', '‍\u{1F680}', 'b'])
+      profile.lineBreakScan = 'blink'
+      clearCache()
+      const blink = prepareWithSegments('ab‍\u{1F680}', FONT)
+      expect(blink.breakableFitAdvances[0]).not.toBeNull()
+    } finally {
+      profile.lineBreakScan = previous
+    }
+  })
+
   test('zero-width glue at a line start holds the line only where the engine lets it', async () => {
     const { getEngineProfile } = await import('./measurement.ts')
     const profile = getEngineProfile()
