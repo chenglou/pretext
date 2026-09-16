@@ -41,9 +41,12 @@ line start in the September 14 suite rows that skipped a usable opportunity (210
 391,755 Chrome starts stayed unexplained, probably widths of joined Arabic and trimmed
 brackets). TypeScript copies of the scans matched those ports outside Thai, Lao, Khmer
 and Myanmar runs, with 0 differences over 13,108 Blink and 19,393 WebKit requests,
-WebKit with the ports' bidi levels. This port gives the copies' answers on 12,318
-Blink requests (leaving out 790 that open `line_normal_cj.brk`), 13,108 one-node
-WebKit requests and 998 multi-node WebKit requests.
+WebKit with the ports' bidi levels. Against the C++ ports themselves, this port differs
+outside those runs only where Chrome opens `line_normal_cj.brk` (44 of 13,108 Blink
+requests) and, since Pretext resolves no bidi levels, at 15 positions in 15 of 19,393
+WebKit requests. Its ICU iterator gives ICU C's boundaries on all 19,338 cases of
+LineBreakTest.txt and on the corpora, over Chrome's `line_normal.brk` and through
+libicucore's `ubrk_open` for nine page languages.
 
 Segments are the text between opportunities, split where the break kind changes, so
 a URL splits where the engine may break it and CJK text arrives in its final units. A

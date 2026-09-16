@@ -1172,6 +1172,19 @@ describe('engine break scans', () => {
       ['₩１００％ᄀᄀ가각', [2, 3, 5, 8]],
       ['〈〔漢字〕〉ー々', [3, 6]],
       ['ⅣⅤ→★☆※‼⁉', []],
+      // Cases from LineBreakTest.txt. In the last two, ICU's normal rules resolve small
+      // kana (CJ) to ID and break before them, where the file expects no break.
+      ['\u3066\u300C\uBD24\uC5B4?\u300D\u3068', [1, 3, 6]],
+      ['\u25CC\uA9B3\uA9C0\uA9A0', []],
+      ['\u0085\u0308\u2757', [1]],
+      ['\u200B\u0308\u3000', [1]],
+      ['\u200D\u0308\uFFFC', [2]],
+      ['\u2014-', []],
+      ['\u00B4\u05D0', []],
+      ['}\uFE19', []],
+      ['\uFE56\u00AB', []],
+      ['p\uFF08\u30AF\u30A4\u30C3\u30AF\u30FB\u30D6', [1, 3, 4, 5, 7]],
+      ['\u2757\u3041', [1]],
     ] as const) {
       expect({ text, breaks: positions(getBlinkLineBreaks(text, false, wordSegmenter), text.length) }).toEqual({ text, breaks: [...expected] })
     }
@@ -1203,6 +1216,15 @@ describe('engine break scans', () => {
       ['a　b', false, [2]],
       ['a\tb', false, [2]],
       ['a\rb', false, []],
+      ['1234-5678', false, [5]],
+      ['AB-12', false, [3]],
+      ['a -אב', false, [2]],
+      ['a -\u0301\u00E9b', false, [2]],
+      ['abcァア', false, [3, 4]],
+      ['中文\u201Cabc\u201D中文', false, [1, 8]],
+      ['中文中文\u201D漢字kana', true, [5]],
+      ['한국어테스트 테스트입니다', true, [7]],
+      ['\u{1F600}\u{1F600}', false, [2]],
     ] as const) {
       expect({ text, keepAll, breaks: positions(getBlinkLineBreaks(text, keepAll, wordSegmenter), text.length) })
         .toEqual({ text, keepAll, breaks: [...expected] })
@@ -1211,35 +1233,49 @@ describe('engine break scans', () => {
 
   test("WebKit's scan follows its pair table, classes, ICU skip, keep-all rule and page language", async () => {
     const { getWebKitBreakBetweenItems, getWebKitLineBreaks } = await import('./line-breaks.ts')
-    // Cases the WebKit break oracle was checked on, from WebKit source and installed Safari:
-    // offsets that must be breaks, then offsets that must not.
-    for (const [text, language, keepAll, preserve, breaks, noBreaks] of [
-      ['丙!a', 'en', false, false, [2], [1]],
-      ['丙!1', 'en', false, false, [], [1, 2]],
-      ['か}a', 'en', false, false, [2], [1]],
-      ['丙}a', 'en', false, false, [], [1, 2]],
-      ['x?$b', 'en', false, false, [2], [1, 3]],
-      ['x?-b', 'en', false, false, [2, 3], [1]],
-      ['$-1', 'en', false, false, [], [2]],
-      ['a -ª', 'en', false, false, [], [3]],
-      ['a ‐b', 'en', false, false, [], [3]],
-      ['a\t-b', 'en', false, false, [1, 2, 3], []],
-      ['a/é', 'en', false, false, [2], []],
-      ['foo\u00A0世界', 'en', false, false, [5], [3, 4]],
-      ['日本ァア', 'en', false, false, [1, 3], [2]],
-      ['日本ァア', 'ja', false, false, [1, 2, 3], []],
-      ['日本ァア', 'zh', false, false, [], [2]],
-      ['中文“abc”中文', 'en', false, false, [2, 7], []],
-      ['中文“abc”中文', 'ja', false, false, [], [2, 7]],
-      ['A 中文测试', 'zh', true, false, [1, 2], [3, 4, 5]],
-      ['ab　cd', 'en', true, false, [3], [1, 2, 4]],
-      ['a​b', 'en', true, false, [1], [2]],
-      ['a​b', 'en', false, false, [2], [1]],
-      ['a\nb', 'en', false, true, [], [1]],
+    // Cases the WebKit break oracle was checked on, from WebKit source and installed Safari,
+    // with the oracle's breaks.
+    for (const [text, language, keepAll, preserve, expected] of [
+      ['丙!a', 'en', false, false, [2]],
+      ['丙!1', 'en', false, false, []],
+      ['か}a', 'en', false, false, [2]],
+      ['丙}a', 'en', false, false, []],
+      ['x?$b', 'en', false, false, [2]],
+      ['x?-b', 'en', false, false, [2, 3]],
+      ['$-1', 'en', false, false, []],
+      ['a -ª', 'en', false, false, [1, 2]],
+      ['a ‐b', 'en', false, false, [1, 2]],
+      ['a\t-b', 'en', false, false, [1, 2, 3]],
+      ['a/é', 'en', false, false, [2]],
+      ['foo\u00A0世界', 'en', false, false, [5]],
+      ['日本ァア', 'en', false, false, [1, 3]],
+      ['日本ァア', 'ja', false, false, [1, 2, 3]],
+      ['日本ァア', 'zh', false, false, [1, 3]],
+      ['中文“abc”中文', 'en', false, false, [1, 2, 7, 8]],
+      ['中文“abc”中文', 'ja', false, false, [1, 8]],
+      ['A 中文测试', 'zh', true, false, [1, 2]],
+      ['ab　cd', 'en', true, false, [3]],
+      ['a​b', 'en', true, false, [1]],
+      ['a​b', 'en', false, false, [2]],
+      ['a\nb', 'en', false, true, []],
+      ['한}a', 'en', false, false, []],
+      ['x!b', 'en', false, false, []],
+      ['x!(b', 'en', false, false, [2]],
+      ['a-1', 'en', false, false, [2]],
+      ['x -1', 'en', false, false, [1, 2]],
+      ['a -\u0301\u00E9b', 'en', false, false, [1, 2]],
+      ['and/or', 'en', false, false, []],
+      ['a/б', 'en', false, false, [2]],
+      ['a\u2007b', 'en', false, false, []],
+      ['日本ァア', 'ko', false, false, [1, 2, 3]],
+      ['日本ーー', 'en', false, false, [1]],
+      ['xyz abc\u201Ddef', 'en', false, false, [3, 4, 8]],
+      ['xyz abc\u201Ddef', 'ja', false, false, [3, 4]],
+      ['日本\uFF01ァア', 'ja', true, false, []],
+      ['a\nb', 'en', false, false, [1, 2]],
     ] as const) {
-      const found = positions(getWebKitLineBreaks(text, preserve, keepAll, language, wordSegmenter), text.length)
-      expect({ text, language, keepAll, missing: breaks.filter(p => !found.includes(p)), extra: noBreaks.filter(p => found.includes(p)) })
-        .toEqual({ text, language, keepAll, missing: [], extra: [] })
+      expect({ text, language, keepAll, breaks: positions(getWebKitLineBreaks(text, preserve, keepAll, language, wordSegmenter), text.length) })
+        .toEqual({ text, language, keepAll, breaks: [...expected] })
     }
     // Between inline boxes, the previous box's last two characters are prior context.
     expect(getWebKitBreakBetweenItems('丙!', 'a', 'en', wordSegmenter)).toBe(false)
