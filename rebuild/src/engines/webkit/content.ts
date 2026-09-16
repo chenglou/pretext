@@ -467,15 +467,15 @@ function collectGaps(p: WebKitPrepared): void {
       if (cp <= 0xffff && isPunctuation(cp)) punctuation = true
       if (getCategory(rules, cp) >= rules.dictCategoriesStart) dictionary = true
     }
-    // Widths measured for the box's items, and whether an item leads with a code unit followed by one that can't start
-    // a line.
+    // Widths measured for the box's items, and whether an item's second code unit can't start a line, where the 16-bit
+    // emergency break extends past the first unit (InlineContentBreaker.cpp:143-157).
     let offGridWidth = false
     let lineStartProhibition = false
     for (let i = 0; i < p.items.length; i++) {
       const item = p.items[i]!
       if (item.kind !== 'text' || item.box !== b) continue
       if (item.width !== null && !(Number.isInteger(item.width * 2048) && item.width < 4096)) offGridWidth = true
-      for (let k = item.start + 1; !item.isWhitespace && k < item.end; k++) if (!canBreakBefore(text.charCodeAt(k), p.style.lineBreak)) lineStartProhibition = true
+      if (!item.isWhitespace && item.end - item.start > 1 && !canBreakBefore(text.charCodeAt(item.start + 1), p.style.lineBreak)) lineStartProhibition = true
     }
     if (control) gaps.push({ gap: 'control-character-width', run: box.run, detail: 'CR keeps its glyph advance (measured as 0, as in Arial); VT, FF and other Cc take .notdef, measured as U+0001' })
     if (softHyphen) gaps.push({ gap: 'hyphen-glyph', run: box.run, detail: 'the hyphen is U+2010 when the primary font maps it, else "-"; measured as U+2010' })

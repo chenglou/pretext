@@ -1518,11 +1518,18 @@ function paintedExtent(L: Layout, line: Line): number {
   // back to the last code point that isn't one. Runs made only of it paint nothing; a run ending in it loses its tracked
   // trailing white space width.
   const excludeTrailingSpaces = p.style.collapse !== 'break-spaces' && !(p.style.collapse === 'preserve' && !p.style.wrap)
+  // A hyphen ends the line at its soft hyphen and is painted with the last text run (Line::addTrailingHyphen).
+  let hyphen = false
+  for (let i = 0; i < line.pieces.length; i++) hyphen ||= line.pieces[i]!.kind === 'hyphen'
   let visibleEnd = runs.length
   let trailingCut = 0
   for (let i = runs.length - 1; i >= 0; i--) {
     const run = runs[i]!
     if (run.kind !== 'text') continue
+    if (hyphen) {
+      visibleEnd = i + 1
+      break
+    }
     const text = p.boxes[run.box]!.text
     let k = run.textStart + run.textLength
     while (k > run.textStart) {

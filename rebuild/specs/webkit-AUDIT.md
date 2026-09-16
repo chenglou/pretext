@@ -291,3 +291,79 @@ traced cases.
   `letter-spacing-ligatures`, but the mechanism isn't shown.
 - **N6. ISSUES.md.** "Controls left out of the extent" and "grapheme across a text node edge" read as open, though the
   current scorer resolves both (B1).
+
+## 8. Resolution (WebKit owner, 2026-09-16)
+
+Fixed from the pinned source, then rerun in webkit-host with the current scorer: smoke-r7, ws-r7, policy-r5, runs-r5
+and suite-r4, plus reverse-order suite runs for page history. Installed Safari stayed frontmost, so it wasn't run.
+webkit-RESULTS.md has the numbers. `bunx tsc` is clean and `bun test rebuild/src` passes 137 tests.
+
+- **B1, stale scoring.** Agreed. RESULTS is rewritten from runs scored with score.ts as of 10:10, with the audit's
+  rescoring as "before". The controls, floored-edge and node-edge classes are gone from it. ISSUES.md already carries
+  "Resolved (lab)" notes on those entries, so N6 needed no change.
+- **B2, one- and two-step widths.** Agreed on attribution, and the mechanism is found; it isn't Range geometry.
+  - A text box's width is its Line::Run width. When trailing white space is trimmed, the run shrinks by the white space
+    width (Line::Run::removeTrailingWhitespace, InlineLine.cpp:963-987), while the content width subtracts the trimmable
+    offset plus that width (TrimmableTrailingContent::remove, :745-778). The port reported the content width.
+  - Boxes of bidi lines sit in visual order, each edge advancing by f32(width + margin) (InlineDisplayContentBuilder.cpp
+    :851-1088). An RTL line starts at f32(line width − content logical right) (InlineDisplayLineBuilder.cpp:133-137).
+  - lines.ts `paintedExtent` now computes that geometry. `c-4f0c9d3cd9d60735` line 3 is f32(f32(30.720001220703125 +
+    6.912) − 6.912) = 30.719999313354492, the native box. `c-4be96ac008e01ec7` and `c-4997dcd80482f3d4` pass widths.
+  - Node-rect failures within two steps went from about 205 to 17: suite 13, runs 2, ws 2, policy 0, smoke 0.
+    - 6 are two-step Amiri widths that pass in another document (page history).
+    - 4 are controls in Amiri or Noto Naskh Arabic (`control-character-width`).
+    - 2 are Arabic spans shaped across inline boxes (`c-d03f94e8fb53e7e2`, where WebKit splits runs at shaping
+      boundaries the port doesn't port).
+    - 2 are shortcut-path sums (`simplified-measuring`).
+    - 1 is `c-f561607b4cfc7606`, Arabic with letter spacing, whose content logical right is one step above the port's
+      run edge (`letter-spacing-ligatures` reported; mechanism unresolved).
+    - 2 are painter or history noise.
+- **B3, unattributed failures.**
+  - Page history: the suite ran in reverse order and was scored with `--native-compare`, which flags 55 cases. All five
+    named here are flagged. The Amiri original-vs-reshaped family and `c-6e866f68bcc7bb7e` aren't exposed by the reverse
+    order, but pass or match the port in another document or a fresh one (probe F1, ISSUES.md), and are listed as page
+    history.
+  - Negative widths: the extent normalizes boxes with negative width, as the DOM rect does. `c-ffb529e6cf621a00` and
+    `c-67db90040d06ae76` pass widths. `c-ac3a23494bc89c36`'s ZWSP line is default-ignorable content and observes 0.
+    RESULTS' old claim that `c-67db90040d06ae76`'s engine width is −2.19px was wrong; engineWidth is 0 there.
+  - Space before a ZWSP: DESIGN.md §2.1 defines `width` as the extent the lab observes. The port now leaves the line's
+    trailing run out of the extent the same way, while engineWidth keeps WebKit's content width with the space. All five
+    cases pass widths, so no ISSUES entry.
+  - Every failing case outside the page-history class now reports a gap (gaps-r1, the in-page gap predictor over all
+    254 failing cases).
+- **B4, gap conditions.**
+  - `canvas-language` now follows where WebKit hands the locale to font selection:
+    - -webkit-standard per script (FontGenericFamilies.cpp:50-66, SettingsBaseCocoa.mm:44-50; serif, sans-serif and the
+      other generic families have only a Common entry on macOS);
+    - system-ui and the ui-* designs (FontCacheCoreText.cpp:585-598, SystemFontDatabaseCoreText.cpp:236);
+    - system fallback for Han, kana, Hangul and fullwidth code points under any locale (FontCacheCoreText.cpp:822).
+
+    It fires on 3,623 of 17,851 all-pass suite cases and covers every canvas-language failure. Unreported and stated in
+    RESULTS: locl lookups in other fonts, which shaping reads from the locale (FontCascade.cpp:403) and Canvas can't show.
+  - `simplified-measuring`: the integer-size exemption is gone. The gap fires on shortcut-path boxes with a measured
+    width off the 1/2048px grid, where float32 order can change a sum [I]. It covers both one-step shortcut-path failures.
+  - `string-storage` adds Latin-1 items whose second unit can't start a line: the 16-bit emergency break extends over
+    it (InlineContentBreaker.cpp:143-157). The breakWord alignment differs only for supplementary code points, which
+    Latin-1 text has none of, so it adds no condition.
+  - Intl.Segmenter losses: fixed at the root for the traced cases. ICU starts an engine range at the first dictionary
+    character and returns no breaks for a range of at most four code points in Thai or under four code units in Lao,
+    Burmese and Khmer (rbbi_cache.cpp:120-200, dictbe.cpp:48-78, 240-244, 480, 673, 879), and never stops before a mark of
+    the engine's script (`fMarkSet`).
+    - `c-26eedff255c8f6b5` passes.
+    - Against libicucore's line iterator over the groundwork's 1,556 SA texts, 27 of 282,337 positions differ, all in
+      ranges that start with a mark, where the Thai engine resynchronizes with its dictionary. `breaks.test.ts` pins that
+      count.
+    - That residue is the new gap `dictionary-breaks-stand-in` (model.ts, additive, SHARED-CHANGES.md). It covers
+      `c-8e0ef1214d002403` and `c-2a1fef66065962b0`.
+- **B5, fixed-pitch coverage.** Agreed.
+  - The W(cp) = W(space) test is gone. `makeBox` compares "P, LastResort" with the paragraph's family list per code
+    point. Fallback follows the list before system fallback (FontCascadeFonts.cpp:426-439), and LastResort draws a box
+    no other font does.
+  - Probe `webkit-followups B5` in webkit-host: Courier maps Ω, so the DOM keeps the 38.40625px shortcut (Canvas
+    49.15625). Menlo lacks U+3000 and measures on the full path (35.265625 = Canvas).
+  - The recipe's loss is a fallback glyph whose advance equals LastResort's 17.6015625px at 16px.
+- **N1, Canvas word spacing.** Kept, with a disagreement with DESIGN §4.2. TextUtil::width measures an item through
+  FontCascade with the font's word spacing and subtracts `singleSpaceWidth + wordSpacing` (TextUtil.cpp:62-104), which
+  `ctx.wordSpacing` reproduces. The JS offsets of webkit-lines §6.2 are LineBuilder run offsets and stay in lines.ts.
+  DESIGN §4.2's WebKit row should say so (architect).
+- **N2-N5.** N2 and N4 stand as noted. N3 is unchanged. N5 (`c-61ddb22b8b3d47cc`) passes every metric in runs-r5.

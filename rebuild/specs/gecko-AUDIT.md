@@ -274,3 +274,90 @@ Two caveats:
   - U+3000 + VS16 derived as 0px (`c-7c1bb30f6445a88a`);
   - emoji rows whose native layout depends on earlier text-presentation cases in the same document
     (`c-0e9eee22e9d69e02` and about 80 more).
+
+## 8. Resolution (Gecko owner, 2026-09-16)
+
+Rounds 9-11 are under `.artifacts/lab/gecko/<set>-r<n>/`, with `gaps-predictor.ts` (the lab predictor plus gaps and
+engine widths) and score.ts `e0a7b4be…`. Comparisons are with `audit/<set>-r8-now/`. Numbers and classes are in
+specs/gecko-RESULTS.md.
+
+### B1a: resolved by identifying the font from Canvas
+
+- `isEmojiCluster` and `hasEmojiPresentation` are gone. For a cluster whose first character has an emoji presentation
+  other than TextOnly (`GetEmojiPresentation`, nsUnicodeProperties.h:127-165), the port compares the run's context with
+  a `"Apple Color Emoji"` context at the CSS size and at the device size. Only a cluster equal at both gets the sbix
+  device-size advance.
+- Probe gecko-port F3 (`rebuild/probes/gecko-emoji-font.ts`) supports the rule in both states. Fresh 16px Arial U+1F600
+  is 1260 and 1920 au in both fonts, DOM 960 au. After `😀😀︎`, Arial gives 1020 au at both sizes, Apple Color Emoji
+  still 1260 and 1920 au, DOM 1020 au. `😀︎`, `❤` and `#⃣` without VS16 differ from Apple Color Emoji, and the DOM
+  equals Canvas at the CSS size.
+- `font-fallback` fires only where `FindFontForChar` asks for a color glyph and Canvas shows another font drew the
+  cluster: 122 suite cases, all in the pinned state.
+- Round 11: `suite/non-ascii-control`, `numeric-ideograph-direction`, `pair` and `policy/pair` pass every metric. Of the
+  130 suite rows whose native layout depends on the order (forward and reverse runs, `--native-compare`), 127 have no
+  failure in either order; round 8 failed 118 of them.
+
+### B1b: resolved
+
+- `glyphBefore` at an offset inside a grapheme cluster returns the advance before the cluster's end. HarfBuzz attaches
+  a clump's glyphs to its first character (gfxHarfBuzzShaper.cpp:1705-1786), and `ComputeLigatureData` gives a partial
+  ligature its width per started cluster (gfxTextRun.cpp:238-322).
+- The 36 lineCount failures of `skin-modifier/shy`, `woman-before-zwj/shy` and `woman-after-zwj/shy` pass, and smoke
+  `c-40ecb4f7950b571e` passes lineCount. Their painter failures (84 each) are a painter loss: painted alone, the rest
+  of a ligated sequence draws as its own emoji.
+- There `in-word-prefix` fires only where the rest of the cluster has an advance of its own in Canvas.
+
+### B2: resolved
+
+- The prepare-time count is gone. `nextLine` reports `in-word-prefix` at the first in-word offset the layout consults
+  where Canvas can't confirm the recipe: W(prefix) + W(suffix) ≠ W(unit) in the unit's script context, letters joining
+  across the offset, or the cluster case above. The prepared paragraph lives for one layout, so the gap describes the
+  chosen lines.
+- Suite: 5,260 cases report it (was 18,610), 2,715 of the 15,124 all-pass cases (was 13,768 of 15,000). Runs 604, ws 91,
+  policy 106, smoke 46.
+- Where it can't see: a ligature whose width equals its parts (`c-daf9c7047097f77b`, Helvetica Neue `fi`, natively 217
+  and 218 au by cluster share) fails widths with no gap. The other suite failures with no gap are painter losses and
+  per-glyph rounding (N7).
+
+### B3: resolved
+
+- One recipe, `rangeAu` (prepare.ts), measures units, suffixes and the check's prefixes in the script the paragraph
+  gives the piece. `c-09a7775ba6eea10d`: suffix `((` 1320 au, `(` 660 au. lineCount and breaks pass; widths still fail
+  at the lam|alef offset, which reports the gap.
+- Suite `original-vs-reshaped-admission` went from 23 lineCount and 27 breaks failures to 11 and 11, and
+  `partial-source-context` breaks pass.
+- The recipe now cites `gfxScriptItemizer` and `gfxHarfBuzzShaper.cpp:1405-1438`. I didn't add a gap for it. The U+0020
+  between the context and the piece is a shaping boundary, and `space-in-shaping` reports fonts whose space glyph takes
+  part in shaping.
+
+### B4: resolved, with one correction to the finding
+
+- `width` comes from cluster geometry. Range rects cover clusters; a piece whose advance isn't positive has no rect;
+  white space a frame removed at the line end spans to the frame's edge; hidden controls with letter spacing count.
+  `c-79e5272a2644d9b8`, `c-92b6963ae4344985` and `c-fc59a73aa616baff` pass widths and painter.
+- Correction: "a space whose advance isn't positive has no rect" does hold inside a line and at a pre-wrap line end.
+  `c-4aafc349e1c161fd` and `c-3b2e9519e5b651d4` have −270 and −218 au spaces that observe 0 wide. Round 9 gave them rects
+  and lost 6 runs widths. The 90 au rect of `c-79e5272a2644d9b8` comes from `TrimTrailingWhiteSpace` growing the frame,
+  which the port models now.
+- The visibility categories still follow lab/README.md, as DESIGN §2.1 asks; the geometry is Gecko's.
+
+### Other items
+
+- §7 props test: `props.test.ts` checks the generated props against icu_properties 2.1.2 for every code point. It found
+  210,383 code points ppucd covers only with block lines (CJK Ext A-J, private use, surrogates) that the generator had
+  left at Cn, N and Zzzz. `gen-gecko-data.ts` now fills block values first through the additive `forEachPpucdBlock`
+  (SHARED-CHANGES.md). Emoji_Presentation, Emoji_Modifier and Joining_Type aren't in the dump.
+- §7 Rust oracle replay of break scans: still not done.
+- §7 `joinsNextLine` uses the unit-bounded joining scan.
+- §6 no-gap failures `hidden-control-spacing` and `space-context` pass. The runs no-gap width failures were synthesized
+  Unicode spaces: U+2009 at 18px is 240 au in Canvas and 210 au in the DOM (gfxTextRun.cpp:3032-3043). The port
+  corrects them where Canvas measures the synthesized value at both sizes. U+2007 and U+2008, which take font metrics,
+  aren't corrected.
+- §3 table:
+  - `/Apple Color Emoji/i` is removed.
+  - `OPTICAL_SIZE_FAMILIES` and the `AddLikelySubtags` approximation stay; no lab case exercises them.
+  - The empty-line join cites `nsLineLayout::VerticalAlignLine`.
+  - The U+200D suffix recipe stays, and `in-word-prefix` names every offset that uses it.
+- §6 `font-fallback` stays narrower than DESIGN §5: the port reports only the emoji state Canvas can show. The document
+  differences for Mongolian in Arial aren't reported.
+- §2 the stale scorer note and test count in RESULTS are updated.
