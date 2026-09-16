@@ -12,7 +12,7 @@ export type PreparedLineBreakData = {
   kinds: SegmentBreakKind[]
   simpleLineWalkFastPath: boolean
   breakableFitAdvances: (number[] | null)[]
-  breakablePreferredBreaks: (number[] | null)[]
+  breakablePreferredBreaks: (number[] | null)[] | null
   entryGeometry?: (SegmentEntryGeometry | null)[] | null
   letterSpacing: number
   spacingGraphemeCounts: number[]
@@ -385,7 +385,7 @@ function walkPreparedLinesSimple(
 
   function appendBreakableSegmentFrom(segmentIndex: number, startGraphemeIndex: number): void {
     const fitAdvances = breakableFitAdvances[segmentIndex]!
-    const preferredBreaks = breakablePreferredBreaks[segmentIndex] ?? null
+    const preferredBreaks = breakablePreferredBreaks?.[segmentIndex] ?? null
     let preferredBreakIndex = preferredBreaks === null
       ? -1
       : getNextPreferredBreakIndex(preferredBreaks, 0, startGraphemeIndex + 1)
@@ -543,7 +543,7 @@ export function canReturnFromUnfitHyphen(
   const { kinds, breakablePreferredBreaks } = prepared
   for (let i = targetSegmentIndex; i < softHyphenIndex; i++) {
     if (breaksAfter(kinds[i]!)) continue
-    if ((i > targetSegmentIndex && !breaksAfter(kinds[i - 1]!)) || breakablePreferredBreaks[i] !== null) return false
+    if ((i > targetSegmentIndex && !breaksAfter(kinds[i - 1]!)) || (breakablePreferredBreaks?.[i] ?? null) !== null) return false
   }
   return true
 }
@@ -706,7 +706,7 @@ function walkPreparedComplexLines(
     endGraphemeIndex = breakableFitAdvances[segmentIndex]!.length,
   ): number | null {
     const fitAdvances = breakableFitAdvances[segmentIndex]!
-    const preferredBreaks = breakablePreferredBreaks[segmentIndex] ?? null
+    const preferredBreaks = breakablePreferredBreaks?.[segmentIndex] ?? null
     let preferredBreakIndex = preferredBreaks === null
       ? -1
       : getNextPreferredBreakIndex(preferredBreaks, 0, startGraphemeIndex + 1)
@@ -1002,7 +1002,7 @@ function stepPreparedSimpleLineGeometry(
     if (!hasContent) {
       if (startGraphemeIndex > 0 || (w > fitLimit && breakableFitAdvance !== null)) {
         const fitAdvances = breakableFitAdvance!
-        const preferredBreaks = breakablePreferredBreaks[i] ?? null
+        const preferredBreaks = breakablePreferredBreaks?.[i] ?? null
         let preferredBreakIndex = preferredBreaks === null
           ? -1
           : getNextPreferredBreakIndex(preferredBreaks, 0, startGraphemeIndex + 1)

@@ -1624,7 +1624,7 @@ describe('prepare invariants', () => {
     const prepared = prepareWithSegments(text, FONT, { wordBreak: 'keep-all' })
 
     expect(prepared.segments).toEqual(['foo-', 'bar日本語'])
-    expect(prepared.breakablePreferredBreaks).toEqual([null, null])
+    expect(prepared.breakablePreferredBreaks).toBeNull()
   })
 
   test('keeps no-space punctuation chains together as one breakable segment', () => {

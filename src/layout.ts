@@ -61,7 +61,9 @@ type PreparedCore = {
   kinds: SegmentBreakKind[] // Break behavior per segment, e.g. ['text', 'space', 'text']
   simpleLineWalkFastPath: boolean // Normal text can use the simpler old line walker across all layout APIs
   breakableFitAdvances: (number[] | null)[] // Per-grapheme fit advances for breakable segments, else null
-  breakablePreferredBreaks: (number[] | null)[] // Preferred grapheme break ends inside breakable segments, else null
+  // Per segment, preferred grapheme break ends inside a breakable segment, else
+  // null. Null when no segment has one.
+  breakablePreferredBreaks: (number[] | null)[] | null
   letterSpacing: number // Extra advance between rendered graphemes on the same line
   spacingGraphemeCounts: number[] // Rendered grapheme counts for letter-spacing gaps; empty when letterSpacing is 0
   discretionaryHyphenWidth: number // Visible width added when a soft hyphen is chosen as the break
@@ -144,7 +146,7 @@ function createEmptyPrepared(includeSegments: boolean): InternalPreparedText | P
       kinds: [],
       simpleLineWalkFastPath: true,
       breakableFitAdvances: [],
-      breakablePreferredBreaks: [],
+      breakablePreferredBreaks: null,
       entryGeometry: null,
       letterSpacing: 0,
       spacingGraphemeCounts: [],
@@ -160,7 +162,7 @@ function createEmptyPrepared(includeSegments: boolean): InternalPreparedText | P
     kinds: [],
     simpleLineWalkFastPath: true,
     breakableFitAdvances: [],
-    breakablePreferredBreaks: [],
+    breakablePreferredBreaks: null,
     entryGeometry: null,
     letterSpacing: 0,
     spacingGraphemeCounts: [],
@@ -382,7 +384,7 @@ function measureAnalysis(
   const kinds: SegmentBreakKind[] = []
   let simpleLineWalkFastPath = !hasLetterSpacing
   const breakableFitAdvances: (number[] | null)[] = []
-  const breakablePreferredBreaks: (number[] | null)[] = []
+  let breakablePreferredBreaks: (number[] | null)[] | null = null
   let entryGeometry: (SegmentEntryGeometry | null)[] | null = null
   let entryProfile: ReturnType<typeof getEntryMeasurementProfile> | undefined
   let measureEntry: ReturnType<typeof createEntryMeasurement> | undefined
@@ -469,7 +471,10 @@ function measureAnalysis(
     widths.push(width)
     kinds.push(kind)
     breakableFitAdvances.push(breakableFitAdvance)
-    breakablePreferredBreaks.push(breakablePreferredBreak)
+    if (breakablePreferredBreak !== null && breakablePreferredBreaks === null) {
+      breakablePreferredBreaks = Array.from({ length: widths.length - 1 }, () => null)
+    }
+    breakablePreferredBreaks?.push(breakablePreferredBreak)
     if (entry !== null && entryGeometry === null) {
       entryGeometry = Array.from({ length: widths.length - 1 }, () => null)
       simpleLineWalkFastPath = false
