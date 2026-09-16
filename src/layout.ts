@@ -65,7 +65,7 @@ type PreparedCore = {
   // null. Null when no segment has one.
   breakablePreferredBreaks: (number[] | null)[] | null
   letterSpacing: number // Extra advance between rendered graphemes on the same line
-  spacingGraphemeCounts: number[] // Rendered grapheme counts for letter-spacing gaps; empty when letterSpacing is 0
+  spacingGraphemeCounts: number[] | null // Rendered grapheme counts for letter-spacing gaps; null when letterSpacing is 0
   discretionaryHyphenWidth: number // Visible width added when a soft hyphen is chosen as the break
   // Per segment, true for a soft hyphen whose neighboring text measures narrower
   // joined than apart. Null when the text has no soft hyphen or the engine keeps
@@ -149,7 +149,7 @@ function createEmptyPrepared(includeSegments: boolean): InternalPreparedText | P
       breakablePreferredBreaks: null,
       entryGeometry: null,
       letterSpacing: 0,
-      spacingGraphemeCounts: [],
+      spacingGraphemeCounts: null,
       discretionaryHyphenWidth: 0,
       discretionaryHyphenContexts: null,
       tabStopAdvance: 0,
@@ -165,7 +165,7 @@ function createEmptyPrepared(includeSegments: boolean): InternalPreparedText | P
     breakablePreferredBreaks: null,
     entryGeometry: null,
     letterSpacing: 0,
-    spacingGraphemeCounts: [],
+    spacingGraphemeCounts: null,
     discretionaryHyphenWidth: 0,
     discretionaryHyphenContexts: null,
     tabStopAdvance: 0,
@@ -396,7 +396,7 @@ function measureAnalysis(
     if (measureEntry === undefined) measureEntry = createEntryMeasurement(letterSpacing, emojiCorrection, getEntryProfile())
     return measureEntry
   }
-  const spacingGraphemeCounts: number[] = []
+  const spacingGraphemeCounts: number[] | null = hasLetterSpacing ? [] : null
   const segments = includeSegments ? [] as string[] : null
   const chunks: PreparedLineChunk[] = []
   let chunkStartSegmentIndex = 0
@@ -480,7 +480,7 @@ function measureAnalysis(
       simpleLineWalkFastPath = false
     }
     entryGeometry?.push(entry)
-    if (hasLetterSpacing) spacingGraphemeCounts.push(spacingGraphemeCount)
+    spacingGraphemeCounts?.push(spacingGraphemeCount)
     if (segments !== null) segments.push(text)
     discretionaryHyphenContexts?.push(false)
     if (kind !== 'text' && kind !== 'glue' && kind !== 'soft-hyphen') previousJoinablePiece = null

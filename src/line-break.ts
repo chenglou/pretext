@@ -15,7 +15,7 @@ export type PreparedLineBreakData = {
   breakablePreferredBreaks: (number[] | null)[] | null
   entryGeometry?: (SegmentEntryGeometry | null)[] | null
   letterSpacing: number
-  spacingGraphemeCounts: number[]
+  spacingGraphemeCounts: number[] | null // null when letterSpacing is 0
   discretionaryHyphenWidth: number
   discretionaryHyphenContexts?: boolean[] | null
   tabStopAdvance: number
@@ -103,7 +103,7 @@ function getTrailingLetterSpacing(
 ): number {
   return (
     prepared.letterSpacing !== 0 &&
-    prepared.spacingGraphemeCounts[segmentIndex]! > 0
+    prepared.spacingGraphemeCounts![segmentIndex]! > 0
   )
     ? prepared.letterSpacing
     : 0
@@ -173,7 +173,7 @@ function getTerminalLetterSpacing(
   if (prepared.letterSpacing === 0) return 0
 
   if (endGraphemeIndex > 0) {
-    return prepared.spacingGraphemeCounts[endSegmentIndex]! > 0
+    return prepared.spacingGraphemeCounts![endSegmentIndex]! > 0
       ? prepared.letterSpacing
       : 0
   }
@@ -197,7 +197,7 @@ function getTerminalLetterSpacing(
       return prepared.letterSpacing
     }
 
-    return prepared.spacingGraphemeCounts[i]! > 0
+    return prepared.spacingGraphemeCounts![i]! > 0
       ? prepared.letterSpacing
       : 0
   }
@@ -819,9 +819,9 @@ function walkPreparedComplexLines(
         // that takes no letter spacing still follows that gap but adds none
         // after itself; zero-width breaks and soft hyphens leave it as it was.
         let leadingSpacing = 0
-        if (letterSpacing !== 0 && (spacingGraphemeCounts[i]! > 0 || kind === 'control')) {
+        if (letterSpacing !== 0 && (spacingGraphemeCounts![i]! > 0 || kind === 'control')) {
           if (hasContent && !zeroWidthPrefix && !afterUnspacedControl) leadingSpacing = letterSpacing
-          afterUnspacedControl = spacingGraphemeCounts[i] === 0
+          afterUnspacedControl = spacingGraphemeCounts![i] === 0
         }
         if (kind !== 'zero-width-break') zeroWidthPrefix = false
         // Tab stops are eight spaces apart, so half a space is a sixteenth of one.
@@ -935,7 +935,7 @@ function walkPreparedComplexLines(
             finishLine(endSegmentLimit, endGraphemeLimit, lineW)
         } else {
           const fitAdvances = breakableFitAdvances[endSegmentLimit]!
-          let advance = letterSpacing !== 0 && spacingGraphemeCounts[endSegmentLimit]! > 0 && !zeroWidthPrefix && !afterUnspacedControl
+          let advance = letterSpacing !== 0 && spacingGraphemeCounts![endSegmentLimit]! > 0 && !zeroWidthPrefix && !afterUnspacedControl
             ? letterSpacing
             : 0
           for (let g = 0; g < endGraphemeLimit; g++) {

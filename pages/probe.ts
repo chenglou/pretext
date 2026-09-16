@@ -489,7 +489,7 @@ function getLineEndFitAdvance(prepared: PreparedTextWithSegments, segmentIndex: 
   if (kind === 'soft-hyphen') return prepared.discretionaryHyphenWidth
   if (kind === 'space' || kind === 'preserved-space' || kind === 'zero-width-break') return 0
   if (width === 0 && kind !== 'control') return 0
-  return prepared.letterSpacing !== 0 && prepared.spacingGraphemeCounts[segmentIndex]! > 0
+  return prepared.letterSpacing !== 0 && prepared.spacingGraphemeCounts![segmentIndex]! > 0
     ? width + prepared.letterSpacing
     : width
 }
