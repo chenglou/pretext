@@ -2359,19 +2359,20 @@ describe('prepare invariants', () => {
   test('break scans follow the layout engine the user agent names', async () => {
     const descriptor = Object.getOwnPropertyDescriptor(globalThis, 'navigator')
     try {
-      for (const [userAgent, scan] of [
-        ['Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36', 'blink'],
-        ['Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:155.0) Gecko/20100101 Firefox/155.0', 'gecko'],
-        ['Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.5.2 Safari/605.1.15', 'webkit'],
+      // WebKit and Gecko fit emergency breaks from grapheme prefixes, Blink from standalone graphemes.
+      for (const [userAgent, scan, prefixes] of [
+        ['Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36', 'blink', false],
+        ['Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:155.0) Gecko/20100101 Firefox/155.0', 'gecko', true],
+        ['Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.5.2 Safari/605.1.15', 'webkit', true],
         // An app web view names no browser.
-        ['Mozilla/5.0 (iPhone; CPU iPhone OS 18_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148', 'webkit'],
+        ['Mozilla/5.0 (iPhone; CPU iPhone OS 18_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148', 'webkit', true],
         // Engines Pretext doesn't recognize take Blink's scan.
-        ['Bun/1.4.0', 'blink'],
+        ['Bun/1.4.0', 'blink', false],
       ] as const) {
         Object.defineProperty(globalThis, 'navigator', { value: { userAgent, vendor: '' }, configurable: true })
         const measurement = await import(`./measurement.ts?user-agent=${encodeURIComponent(userAgent)}`) as MeasurementModule
         const profile = measurement.getEngineProfile()
-        expect({ userAgent, scan: profile.lineBreakScan }).toEqual({ userAgent, scan })
+        expect({ userAgent, scan: profile.lineBreakScan, prefixes: profile.preferPrefixWidthsForBreakableRuns }).toEqual({ userAgent, scan, prefixes })
       }
     } finally {
       if (descriptor === undefined) {

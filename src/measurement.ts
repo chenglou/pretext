@@ -33,6 +33,10 @@ export type EngineProfile = {
   // doesn't recognize take Blink's scan.
   lineBreakScan: 'blink' | 'webkit' | 'gecko'
   lineFitEpsilon: number
+  // Where an emergency break falls inside a segment. WebKit measures the word's grapheme
+  // prefixes (TextUtil::breakWord), and Gecko adds the advances of the word shaped whole
+  // (gfxTextRun::BreakAndMeasureText), which prefixes follow in joined scripts where
+  // standalone graphemes don't. Blink sums standalone graphemes.
   preferPrefixWidthsForBreakableRuns: boolean
   // WebKit measures a text item together with a directly following U+0020 and
   // subtracts one unshaped space, so the item keeps its kerning with that space
@@ -269,7 +273,7 @@ export function getEngineProfile(): EngineProfile {
     entryFitBasis: isDesktop && engine === 'blink' ? 'fresh' : isDesktop && engine === 'gecko' ? 'original' : 'disabled',
     lineBreakScan: engine === 'gecko' || engine === 'webkit' ? engine : 'blink',
     lineFitEpsilon: engine === 'webkit' ? 1 / 64 : 0.005,
-    preferPrefixWidthsForBreakableRuns: engine === 'webkit',
+    preferPrefixWidthsForBreakableRuns: engine === 'webkit' || engine === 'gecko',
     measureTextWithFollowingSpace: engine === 'webkit',
     segmentBreakRemovalRun: engine === 'blink' ? 'blink' : engine === 'gecko' ? 'gecko' : 'none',
     letterSpaceDiscretionaryHyphen: engine !== 'blink',

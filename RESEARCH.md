@@ -133,9 +133,26 @@ hyphens and bidi controls, per shaped word, so the Gecko scan's cluster starts d
 which segments split: one that holds no cluster start after its first unit takes no
 emergency breaks. In `a`, `👩`, U+00AD, ZWJ, `🚀`, `b` at 0px the ZWJ continues the
 woman's cluster and joins the rocket to it, so Firefox paints `a` / `👩-` / ZWJ `🚀` /
-`b`, where Unicode graphemes split ZWJ from the rocket (68 installed rows). Between rich-inline items, the WebKit profile reads the
-previous item's last two characters as prior context, as `TextUtil::mayBreakInBetween`
-does.
+`b`, where Unicode graphemes split ZWJ from the rocket (68 installed rows). Between
+rich-inline items, the WebKit profile reads the previous item's last two characters as
+prior context, as `TextUtil::mayBreakInBetween` does.
+
+Where an emergency break falls inside a segment depends on the advances an engine adds
+up. Gecko adds the advances of the word shaped whole (`BreakAndMeasureText`), so a
+joined letter counts at its joined width: in 16px Arial `بِبِ((tail` at 27.86px Firefox
+fits `بِبِ((` (25.98px, the first ب at 3.9px) and starts the next line at `tail`. Summing
+standalone graphemes charged both ب their isolated 11.42px, so the Gecko profile ended
+the first line after `بِبِ` and gave `((tai` a line (460 installed rows, most of the
+Firefox emergency losses). The Gecko profile now fits from grapheme prefixes, as the
+WebKit profile does, which give each letter its left context. A prefix still ends in a
+final form and misses kerning with the grapheme after it, so after a split a word's last
+Arabic letter gets its medial advance and `V` in `AV AV` its kerned one. In an offline
+replay of the Firefox rows the Canvas stand-in can measure, prefixes gain 2,110
+left-to-right and 703 right-to-left line counts over sums and lose 643 and 349, and double
+the Canvas calls of a cold preparation of the corpora (53,017 to 106,768). Pairs, each
+grapheme measured after the one before it, gain 2,062 and 702, lose 753 and 352, and
+cost 21% more calls on the corpora but 91% more on the accuracy grid, where every
+preparation starts cold.
 
 An overflowing segment used to end its emergency split after its last hyphen that
 fit. Those preferred breaks recovered ordinary breaks the merged segmentation hid
