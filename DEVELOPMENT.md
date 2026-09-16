@@ -60,7 +60,12 @@ Benchmarks require a visible, focused page throughout and reject observed window
 viewport or screen changes. The three runs must have matching environments before
 we take their median; snapshots retain each run's request and environment.
 Foreground Firefox sessions request activation of the owned tab and process by
-PID; a headed window alone does not establish focus.
+PID; a headed window alone does not establish focus. Automation launches Firefox
+through LaunchServices (`open -n -a`, with `-g` unless the session asks for
+foreground) and stops the process that names its disposable profile, because
+macOS 27 denies a shell's processes access to apps' folders under
+`~/Library/Application Support` and a directly spawned Firefox exits with
+"Could not find profile folder." for any `--profile`.
 
 For portable Chrome correctness checks, use `bun run test:wrapping --transport=playwright --browser=chrome`. This launches installed Chrome in an isolated headed browser with its native viewport. Install Chrome normally first; the adapter uses `playwright-core` without downloading another browser. Safari continues to use the native macOS path; Playwright WebKit is not treated as Safari. This transport is for correctness checks only; Playwright can emulate focus, so its visible/focused fields do not prove native tab attention. Benchmark scripts retain foreground native automation.
 

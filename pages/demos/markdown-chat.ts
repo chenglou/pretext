@@ -25,6 +25,7 @@ import {
 
 type State = {
   conversation: ConversationLayout
+  endScrollTop: number // the scroll position that showed the canvas's end in the last frame, computed from its height, not read
   events: {
     toggleVisualization: boolean
   }
@@ -47,6 +48,8 @@ const domCache = {
 const preparedMessages = createPreparedChatMessages()
 const st: State = {
   conversation: layoutConversation(preparedMessages, getMaxChatWidth(domCache.viewport.clientWidth)),
+  // The empty canvas shows its end at 0, so the first frame's end has moved.
+  endScrollTop: 0,
   events: {
     toggleVisualization: false,
   },
@@ -118,20 +121,35 @@ function render(): void {
   // st.scrollTop is where the last frame left the scroll position, so any other
   // value is the user's scroll: anchor the first message whose top shows below
   // the top banner, in the layout they scrolled. Otherwise keep the anchor.
-  // Either way, scroll so its top keeps its distance below the banner, within
-  // the range. The end anchor scrolls to the range's end.
   const scrollAnchor = scrollTop === st.scrollTop
     ? st.scrollAnchor
     : findScrollAnchor(previousConversation, scrollTop, viewportHeight, occlusionBannerHeight)
   const canvasHeight = conversation.totalHeight + occlusionBannerHeight * 2
-  const maxScrollTop = Math.max(0, canvasHeight - viewportHeight)
-  const adjustedScrollTop = scrollAnchor === 'end'
-    ? maxScrollTop
-    : Math.min(maxScrollTop, Math.max(0, conversation.tops[scrollAnchor.index]! - scrollAnchor.offset))
+  const endScrollTop = canvasHeight - viewportHeight
+  // The scroll position stays whatever it reads, even past an end while it
+  // bounces, unless this layout moved the anchor from where the last frame put
+  // it. Then the anchored message's top goes back to its distance below the
+  // banner, or the end anchor to the canvas's end. The browser keeps the scroll
+  // inside the canvas.
+  let adjustedScrollTop = scrollTop
+  if (scrollAnchor === 'end') {
+    if (endScrollTop !== st.endScrollTop) adjustedScrollTop = endScrollTop
+  } else if (conversation.tops[scrollAnchor.index] !== previousConversation.tops[scrollAnchor.index]) {
+    adjustedScrollTop = conversation.tops[scrollAnchor.index]! - scrollAnchor.offset
+  }
 
-  const { start, end } = findVisibleRange(conversation, adjustedScrollTop, viewportHeight, occlusionBannerHeight)
+  // Rows mount for the position clamped between 0 and the canvas's end. The
+  // browser clamps the scroll below the same way, and a bounce past an end shows
+  // no message the end doesn't.
+  const { start, end } = findVisibleRange(
+    conversation,
+    Math.max(0, Math.min(endScrollTop, adjustedScrollTop)),
+    viewportHeight,
+    occlusionBannerHeight,
+  )
 
   st.conversation = conversation
+  st.endScrollTop = endScrollTop
   st.isVisualizationOn = isVisualizationOn
   st.scrollAnchor = scrollAnchor
   st.events.toggleVisualization = false

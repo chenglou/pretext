@@ -73,35 +73,27 @@ export function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms))
 }
 
-async function waitForPort(port: number, child: ChildProcess): Promise<void> {
-  let launchError: Error | null = null
-  const onError = (error: Error): void => { launchError = error }
-  child.on('error', onError)
-  try {
-    for (let i = 0; i < 200; i++) {
-      if (launchError !== null) throw launchError
-      if (child.exitCode !== null || child.signalCode !== null) throw new Error('Browser process exited during startup')
-      const open = await new Promise<boolean>(resolve => {
-        const socket = createConnection({ host: '127.0.0.1', port })
-        let settled = false
+async function waitForPort(port: number, pid: number): Promise<void> {
+  for (let i = 0; i < 200; i++) {
+    if (!isProcessAlive(pid)) throw new Error('Browser process exited during startup')
+    const open = await new Promise<boolean>(resolve => {
+      const socket = createConnection({ host: '127.0.0.1', port })
+      let settled = false
 
-        const finish = (value: boolean): void => {
-          if (settled) return
-          settled = true
-          socket.destroy()
-          resolve(value)
-        }
+      const finish = (value: boolean): void => {
+        if (settled) return
+        settled = true
+        socket.destroy()
+        resolve(value)
+      }
 
-        socket.once('connect', () => finish(true))
-        socket.once('error', () => finish(false))
-      })
-      if (open) return
-      await sleep(100)
-    }
-    throw new Error(`Timed out waiting for local port ${port}`)
-  } finally {
-    child.off('error', onError)
+      socket.once('connect', () => finish(true))
+      socket.once('error', () => finish(false))
+    })
+    if (open) return
+    await sleep(100)
   }
+  throw new Error(`Timed out waiting for local port ${port}`)
 }
 
 export async function getAvailablePort(requestedPort: number | null = null): Promise<number> {
@@ -126,6 +118,8 @@ export async function getAvailablePort(requestedPort: number | null = null): Pro
     })
   })
 }
+
+const FIREFOX_APP = '/Applications/Firefox.app'
 
 const LOCK_DIR = join(process.env['TMPDIR'] ?? tmpdir(), 'pretext-browser-automation-locks')
 
@@ -314,7 +308,7 @@ type FirefoxBidiClient = {
 type FirefoxSessionState = {
   bidi: FirefoxBidiClient
   context: string
-  firefoxProcess: ChildProcess
+  firefoxPid: number
   profileDir: string
 }
 
@@ -400,29 +394,49 @@ function getBidiStringValue(response: BidiResponse): string {
   return typeof value === 'string' ? value : ''
 }
 
-async function stopFirefoxProcess(child: ChildProcess): Promise<void> {
-  if (child.exitCode !== null || child.signalCode !== null || child.pid === undefined) return
-  await new Promise<void>((resolve, reject) => {
-    const finish = (error?: Error): void => {
-      clearTimeout(killTimer)
-      clearTimeout(deadline)
-      child.off('exit', onExit)
-      child.off('error', finish)
-      if (error === undefined) resolve()
-      else reject(error)
+// LaunchServices starts Firefox outside our process tree. Its main process is
+// the Firefox executable naming our disposable profile; content processes run
+// plugin-container, and the user's own Firefox names no such profile.
+function findFirefoxPid(profileDir: string): number | null {
+  const lines = execFileSync('ps', ['-axo', 'pid=,command='], { encoding: 'utf8' }).split('\n')
+  for (let i = 0; i < lines.length; i++) {
+    const match = /^\s*(\d+) (.*)$/.exec(lines[i]!)
+    if (match === null) continue
+    const command = match[2]!
+    if (command.startsWith(`${FIREFOX_APP}/Contents/MacOS/firefox `) && command.includes(` --profile ${profileDir} `)) {
+      return Number.parseInt(match[1]!, 10)
     }
-    const onExit = (): void => finish()
-    const killTimer = setTimeout(() => child.kill('SIGKILL'), 2_000)
-    const deadline = setTimeout(() => finish(new Error('Firefox process did not exit during teardown')), 5_000)
-    child.once('exit', onExit)
-    child.once('error', finish)
-    child.kill('SIGTERM')
-  })
+  }
+  return null
+}
+
+function signalProcess(pid: number, signal: NodeJS.Signals): void {
+  try {
+    process.kill(pid, signal)
+  } catch {
+    // The process already exited.
+  }
+}
+
+async function stopFirefoxProcess(pid: number): Promise<void> {
+  if (!isProcessAlive(pid)) return
+  signalProcess(pid, 'SIGTERM')
+  const start = Date.now()
+  let killed = false
+  while (isProcessAlive(pid)) {
+    const elapsed = Date.now() - start
+    if (elapsed >= 5_000) throw new Error('Firefox process did not exit during teardown')
+    if (!killed && elapsed >= 2_000) {
+      killed = true
+      signalProcess(pid, 'SIGKILL')
+    }
+    await sleep(50)
+  }
 }
 
 async function closeFirefoxSessionState(state: FirefoxSessionState): Promise<void> {
   state.bidi.close()
-  await stopFirefoxProcess(state.firefoxProcess)
+  await stopFirefoxProcess(state.firefoxPid)
   rmSync(state.profileDir, { recursive: true, force: true })
 }
 
@@ -432,23 +446,33 @@ async function initializeFirefoxSession(options: BrowserSessionOptions): Promise
   // The startup default-browser dialog takes focus from the owned page.
   // Disable that prompt only in this disposable automation profile.
   writeFileSync(join(profileDir, 'user.js'), 'user_pref("browser.shell.checkDefaultBrowser", false);\n')
-  const firefoxProcess = spawn('/Applications/Firefox.app/Contents/MacOS/firefox', [
-    ...(options.headless === false || options.foreground === true ? [] : ['--headless']),
-    '--new-instance',
-    '--profile',
-    profileDir,
-    '--remote-debugging-port',
-    String(bidiPort),
-    'about:blank',
-  ], {
-    cwd: process.cwd(),
-    stdio: 'ignore',
-  })
-
+  let firefoxPid: number | null = null
   let bidi: FirefoxBidiClient | null = null
 
   try {
-    await waitForPort(bidiPort, firefoxProcess)
+    // macOS 27 denies a shell's processes access to apps' folders under
+    // ~/Library/Application Support, so a directly spawned Firefox finds no
+    // profile. LaunchServices starts it under its own permissions.
+    execFileSync('open', [
+      '-n',
+      ...(options.foreground === true ? [] : ['-g']),
+      '-a',
+      FIREFOX_APP,
+      '--args',
+      ...(options.headless === false || options.foreground === true ? [] : ['--headless']),
+      '--new-instance',
+      '--profile',
+      profileDir,
+      '--remote-debugging-port',
+      String(bidiPort),
+      'about:blank',
+    ], { stdio: ['ignore', 'ignore', 'pipe'], encoding: 'utf8', timeout: 15_000 })
+    for (let i = 0; i < 50 && firefoxPid === null; i++) {
+      firefoxPid = findFirefoxPid(profileDir)
+      if (firefoxPid === null) await sleep(100)
+    }
+    if (firefoxPid === null) throw new Error('Could not find the launched Firefox process')
+    await waitForPort(bidiPort, firefoxPid)
     bidi = await connectFirefoxBidi(bidiPort)
 
     const session = await bidi.send('session.new', { capabilities: { alwaysMatch: {} } })
@@ -470,12 +494,12 @@ async function initializeFirefoxSession(options: BrowserSessionOptions): Promise
     return {
       bidi,
       context,
-      firefoxProcess,
+      firefoxPid,
       profileDir,
     }
   } catch (error) {
     bidi?.close()
-    await stopFirefoxProcess(firefoxProcess)
+    if (firefoxPid !== null) await stopFirefoxProcess(firefoxPid)
     rmSync(profileDir, { recursive: true, force: true })
     throw error
   }
@@ -661,11 +685,9 @@ function createFirefoxSession(options: BrowserSessionOptions): BrowserSession {
       if (options.foreground === true) {
         const activated = await state.bidi.send('browsingContext.activate', { context: state.context })
         if (activated.error !== undefined) throw new Error(activated.message ?? activated.error)
-        const pid = state.firefoxProcess.pid
-        if (pid === undefined) throw new Error('The owned Firefox process has no PID')
         runAppleScript([
           'tell application "System Events"',
-          `set frontmost of (first application process whose unix id is ${pid}) to true`,
+          `set frontmost of (first application process whose unix id is ${state.firefoxPid}) to true`,
           'end tell',
         ])
       }
