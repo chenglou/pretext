@@ -7,9 +7,11 @@
 //   bun rebuild/lab/cases/generate.ts smoke --smoke-count=300
 //
 // Options: --seed=S (default lab-20260916), --out=FILE (single kind only), --out-dir=DIR
-// (default .artifacts/lab/cases), --rows=DIR (default .artifacts/rows-20260916).
+// (default .artifacts/lab/cases), --rows=DIR (default .artifacts/rows-20260916),
+// --exclude-ids=FILE[,FILE...] (drop every case whose id appears in these case files before sampling or writing;
+// for held-out sets).
 
-import { closeSync, mkdirSync, openSync, writeFileSync, writeSync } from 'node:fs'
+import { closeSync, mkdirSync, openSync, readFileSync, writeFileSync, writeSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import type { Case } from '../types.ts'
 import type { Generator } from './build.ts'
@@ -31,7 +33,7 @@ type Flags = Map<string, string>
 function parseArgs(argv: readonly string[]): { kinds: Kind[]; flags: Flags } {
   const kinds: Kind[] = []
   const flags: Flags = new Map()
-  const known = new Set(['seed', 'out', 'out-dir', 'rows', 'families', 'suite-sample', 'suite-families', 'smoke-count'])
+  const known = new Set(['seed', 'out', 'out-dir', 'rows', 'families', 'suite-sample', 'suite-families', 'smoke-count', 'exclude-ids'])
   for (const arg of argv) {
     if (arg.startsWith('--')) {
       const eq = arg.indexOf('=')
@@ -46,7 +48,7 @@ function parseArgs(argv: readonly string[]): { kinds: Kind[]; flags: Flags } {
     }
   }
   if (kinds.length === 0) {
-    throw new Error(`Usage: bun rebuild/lab/cases/generate.ts <${KINDS.join('|')}>... [--seed=S] [--out=FILE] [--out-dir=DIR] [--rows=DIR] [--families=substr] [--suite-sample=N] [--suite-families=substr] [--smoke-count=N]`)
+    throw new Error(`Usage: bun rebuild/lab/cases/generate.ts <${KINDS.join('|')}>... [--seed=S] [--out=FILE] [--out-dir=DIR] [--rows=DIR] [--families=substr] [--suite-sample=N] [--suite-families=substr] [--smoke-count=N] [--exclude-ids=FILE[,FILE...]]`)
   }
   if (flags.has('out') && (kinds.length !== 1 || kinds[0] === 'all')) throw new Error('--out needs exactly one kind other than all')
   return { kinds, flags }
@@ -97,9 +99,22 @@ function writeCases(path: string, cases: Iterable<Case>, summary: Record<string,
   return families
 }
 
-type SuiteData = { suite: SuiteImport; entries: SuiteEntry[]; files: string[]; skipped: string[] }
+type SuiteData = { suite: SuiteImport; entries: SuiteEntry[]; files: string[]; skipped: string[]; excludedCases: number }
 
-async function importSuite(rowsDir: string, familyFilter: string | undefined): Promise<SuiteData> {
+// Case ids listed in NDJSON case files (--exclude-ids). Lines are split on LF only: JSON strings can hold U+2028.
+function readCaseIds(paths: string): Set<string> {
+  const ids = new Set<string>()
+  for (const path of paths.split(',')) {
+    const lines = readFileSync(resolve(path), 'utf8').split('\n')
+    for (let i = 0; i < lines.length; i++) {
+      if (lines[i]!.trim() === '') continue
+      ids.add((JSON.parse(lines[i]!) as { id: string }).id)
+    }
+  }
+  return ids
+}
+
+async function importSuite(rowsDir: string, familyFilter: string | undefined, excluded: ReadonlySet<string> | null): Promise<SuiteData> {
   const { files, skipped } = suiteRowFiles(rowsDir)
   if (files.length === 0) throw new Error(`No finished row files under ${rowsDir} (${skipped.join('; ')})`)
   for (const note of skipped) console.error(`skipped rows ${note}`)
@@ -111,11 +126,17 @@ async function importSuite(rowsDir: string, familyFilter: string | undefined): P
     console.error(`read ${rows} rows from ${file.rows} in ${Date.now() - started}ms (${suite.size} cases so far)`)
   }
   let entries = suite.entries()
+  let excludedCases = 0
+  if (excluded !== null) {
+    const before = entries.length
+    entries = entries.filter(entry => !excluded.has(entry.id))
+    excludedCases = before - entries.length
+  }
   if (familyFilter !== undefined) {
     entries = entries.filter(entry => entry.family.includes(familyFilter) || entry.oldFamilies.some(family => family.includes(familyFilter)))
     if (entries.length === 0) throw new Error(`--suite-families=${familyFilter} matches no suite case`)
   }
-  return { suite, entries, files: files.map(file => file.rows), skipped }
+  return { suite, entries, files: files.map(file => file.rows), skipped, excludedCases }
 }
 
 function* materialize(suite: SuiteImport, entries: readonly SuiteEntry[]): IterableIterator<Case> {
@@ -146,28 +167,37 @@ async function main(): Promise<void> {
   const outDir = resolve(flags.get('out-dir') ?? resolve(REPO, '.artifacts/lab/cases'))
   const rowsDir = resolve(flags.get('rows') ?? resolve(REPO, '.artifacts/rows-20260916'))
   const familyFilter = flags.get('families')
+  const excludeIds = flags.get('exclude-ids')
+  const excluded = excludeIds === undefined ? null : readCaseIds(excludeIds)
+  // Summary fields for --exclude-ids, absent without it so existing summaries don't change.
+  const exclusion = (removed: number): Record<string, unknown> => (excluded === null ? {} : { excludeIds, excludedIds: excluded.size, excludedCases: removed })
   const all = kinds.includes('all')
   const expanded = new Set<Kind>(all ? ['runs', 'ws', 'policy', 'smoke', 'suite'] : kinds)
   const outFor = (name: string): string => resolve(flags.get('out') ?? resolve(outDir, `${name}.ndjson`))
 
-  const generated = new Map<string, Case[]>()
-  const familyCases = (name: 'runs' | 'ws' | 'policy'): Case[] => {
-    let cases = generated.get(name)
-    if (cases === undefined) {
+  const generated = new Map<string, { cases: Case[]; removed: number }>()
+  const familyCases = (name: 'runs' | 'ws' | 'policy'): { cases: Case[]; removed: number } => {
+    let value = generated.get(name)
+    if (value === undefined) {
       const generators = name === 'runs' ? RUN_GENERATORS : name === 'ws' ? WS_GENERATORS : POLICY_GENERATORS
-      cases = generateFamilies(generators, seed, familyFilter)
-      generated.set(name, cases)
+      const cases = generateFamilies(generators, seed, familyFilter)
+      const kept = excluded === null ? cases : cases.filter(c => !excluded.has(c.id))
+      value = { cases: kept, removed: cases.length - kept.length }
+      generated.set(name, value)
     }
-    return cases
+    return value
   }
   if (familyFilter !== undefined && [...RUN_GENERATORS, ...WS_GENERATORS, ...POLICY_GENERATORS].every(generator => !generator.family.includes(familyFilter))) {
     throw new Error(`--families=${familyFilter} matches no generator family`)
   }
   for (const name of ['runs', 'ws', 'policy'] as const) {
-    if (expanded.has(name)) writeCases(outFor(name), sortCases(familyCases(name).slice()), { seed, familyFilter: familyFilter ?? null })
+    if (expanded.has(name)) {
+      const { cases, removed } = familyCases(name)
+      writeCases(outFor(name), sortCases(cases.slice()), { seed, familyFilter: familyFilter ?? null, ...exclusion(removed) })
+    }
   }
 
-  const suiteData = expanded.has('suite') || expanded.has('smoke') ? await importSuite(rowsDir, flags.get('suite-families')) : null
+  const suiteData = expanded.has('suite') || expanded.has('smoke') ? await importSuite(rowsDir, flags.get('suite-families'), excluded) : null
 
   if (expanded.has('suite') && suiteData !== null) {
     const { suite, entries } = suiteData
@@ -186,21 +216,21 @@ async function main(): Promise<void> {
     const families = new Set(entries.map(entry => entry.family)).size
     writeCases(outFor(sampleSize === null ? 'suite' : 'suite-sample'), materialize(suite, sortByCaseOrder(selected.slice())), {
       seed, rows: suiteData.files, skippedRows: suiteData.skipped, inputs: suite.inputs, suiteCases: entries.length, requiredCases: required,
-      suiteFamilies: flags.get('suite-families') ?? null, ...sampleInfo, suiteFamilyTable: suiteFamilyTable(entries, selected),
+      suiteFamilies: flags.get('suite-families') ?? null, ...exclusion(suiteData.excludedCases), ...sampleInfo, suiteFamilyTable: suiteFamilyTable(entries, selected),
     })
     console.log(`suite: ${suite.inputs} row inputs -> ${entries.length} cases (${required} with required metrics) in ${families} families; wrote ${selected.length}`)
   }
 
   if (expanded.has('smoke')) {
     const count = positiveInt(flags, 'smoke-count', 300)!
-    const pool = [...familyCases('runs'), ...familyCases('ws'), ...familyCases('policy')]
+    const pool = [...familyCases('runs').cases, ...familyCases('ws').cases, ...familyCases('policy').cases]
     const fromSuite = suiteData === null ? [] : stratifiedSample(suiteData.entries, Math.round(count / 4), `${seed}/smoke-suite`, {
       family: entry => entry.family, id: entry => entry.id, keepFamiliesUpTo: 0, priority: entry => (entry.required ? 1 : 0),
     }).selected.map(entry => suiteData.suite.materialize(entry.id))
     const fromGenerated = stratifiedSample(pool, count - fromSuite.length, `${seed}/smoke`, {
       family: value => value.family, id: value => value.id, keepFamiliesUpTo: 0,
     }).selected
-    writeCases(outFor('smoke'), sortCases(mergeCases([...fromGenerated, ...fromSuite])), { seed, suiteShare: fromSuite.length })
+    writeCases(outFor('smoke'), sortCases(mergeCases([...fromGenerated, ...fromSuite])), { seed, suiteShare: fromSuite.length, ...exclusion(0) })
   }
 }
 
