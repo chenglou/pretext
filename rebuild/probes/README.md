@@ -10,6 +10,12 @@ may read the DOM freely; this is research, not the library.
 - `runner.ts`: the driver. It validates the probes, serves the page, opens one background browser session and writes
   `<out>/<browser>-probes.json`.
 - `smoke.ts`: 16 trivial probes that exercise every runner path. They validate the runner, not a hypothesis.
+- `blink-probes.ts`: the Chrome probes for the hypotheses in `blink-lines`, `blink-text`, `blink-canvas` and the Blink
+  items of `CRITIC.md`, plus cross-cutting checks. Each probe is one script observation that returns raw values and
+  `checks` (expected next to measured). `blink-probes-zoom.ts` and `blink-probes-sysui.ts` select the subsets that the
+  forced-DPR, emulated-DPR and fresh-browser system-ui runs repeat. `blink-verdicts.ts` summarizes the output files
+  under `.artifacts/probes/blink/` for `rebuild/specs/probes-chrome.md`; the commands are in the header of
+  `blink-probes.ts`.
 
 ## Running
 
