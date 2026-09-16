@@ -204,10 +204,9 @@ function getItemCursor(prepared: PreparedTextWithSegments, startSegmentIndex: nu
 // join; the item boundary itself is not one. This analyzes the joined text like
 // prepare(): analysis segments, with merged CJK text split into its measured
 // units. It returns the offsets of the units the line walker could end a line
-// before. A leading SPACE keeps the scan-start rules from treating text after a
-// collapsed space as the start of its node.
-function getJoinedBreakOffsets(text: string, afterWhitespace: boolean, profile: AnalysisProfile, language: string | null): number[] {
-  const analysis = analyzeText(afterWhitespace ? ` ${text}` : text, profile, 'normal', 'normal', language)
+// before.
+function getJoinedBreakOffsets(text: string, profile: AnalysisProfile, language: string | null): number[] {
+  const analysis = analyzeText(text, profile, 'normal', 'normal', language)
   const offsets: number[] = []
   let previousKind: SegmentBreakKind | null = null
   for (let i = 0; i < analysis.len; i++) {
@@ -458,7 +457,6 @@ export function prepareRichInline(items: RichInlineItem[]): PreparedRichInline {
   let previousItem: PreparedRichInlineItem | null = null
   // Collapsible spaces always break and atomic items always allow a break on
   // both sides. Only the text between them joins across item boundaries.
-  let joinedAfterWhitespace = false
   const joinedPortions: JoinedPortion[] = []
   // Width of an item's leading run when no break precedes the item; null when
   // that run continues past the item.
@@ -467,7 +465,7 @@ export function prepareRichInline(items: RichInlineItem[]): PreparedRichInline {
   // boundary where breaks come from each item's own text.
   const boundaryContexts: string[] = []
 
-  function finishJoinedText(afterWhitespace: boolean): void {
+  function finishJoinedText(): void {
     if (joinedPortions.length > 1) {
       // Only a window with an item boundary needs its text.
       let joinedText = ''
@@ -479,7 +477,7 @@ export function prepareRichInline(items: RichInlineItem[]): PreparedRichInline {
         for (let s = portion.startSegmentIndex; s < endSegmentIndex; s++) joinedText += segments[s]!
       }
       if (inlineItemBreaks === 'joined-text') {
-        const breakOffsets = getJoinedBreakOffsets(joinedText, joinedAfterWhitespace, profile, documentLanguage)
+        const breakOffsets = getJoinedBreakOffsets(joinedText, profile, documentLanguage)
         let breakIndex = 0
         for (let i = 0; i < joinedPortions.length; i++) {
           const portion = joinedPortions[i]!
@@ -508,7 +506,6 @@ export function prepareRichInline(items: RichInlineItem[]): PreparedRichInline {
       }
     }
     joinedPortions.length = 0
-    joinedAfterWhitespace = afterWhitespace
   }
 
   for (let index = 0; index < items.length; index++) {
@@ -572,11 +569,11 @@ export function prepareRichInline(items: RichInlineItem[]): PreparedRichInline {
     preparedItems[index] = preparedItem
 
     if (previousItem === null || whitespaceBefore || preparedItem.break === 'never' || previousItem.break === 'never') {
-      finishJoinedText(whitespaceBefore)
+      finishJoinedText()
       preparedItem.breakBefore = whitespaceBefore || previousItem !== null
     }
     if (preparedItem.break === 'never') {
-      finishJoinedText(false)
+      finishJoinedText()
     } else {
       // Normal-mode segments hold single collapsed spaces. Text beyond the
       // first and last of them cannot reach a neighboring item's boundary.
@@ -590,7 +587,7 @@ export function prepareRichInline(items: RichInlineItem[]): PreparedRichInline {
         spaceEndSegmentIndex: firstSpace < 0 ? -1 : firstSpace + 1,
       })
       if (firstSpace >= 0) {
-        finishJoinedText(true)
+        finishJoinedText()
         joinedPortions.push({
           item: preparedItem,
           itemIndex: index,
@@ -608,7 +605,7 @@ export function prepareRichInline(items: RichInlineItem[]): PreparedRichInline {
     pendingGapItemIndex = hasTrailingWhitespace ? index : -1
   }
 
-  finishJoinedText(false)
+  finishJoinedText()
 
   // Without a break at the next boundary, the next item's leading run stays
   // with this item's last run. A run that spans a whole item continues further.

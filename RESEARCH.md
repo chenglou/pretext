@@ -135,15 +135,15 @@ The September 15 installed probe (Chrome 153, Safari 26.5.2, Firefox 155; `甲�
 `αβγδεζη`) matched each rule: Chrome keeps `!`, `}`, `/`, `|` and `'` with an
 ASCII letter or digit and breaks after all but `'` before Greek, Safari breaks
 after `!`, `/` and `|` before a letter and after `}` only after kana, and
-Firefox follows UAX #14. The boundary rule that answers the exclamation and
-Gecko pairs answers these too, for Chrome and Safari only before an ASCII letter
-or digit: Pretext doesn't model their tables before ASCII symbols. Where UAX #14
+Firefox follows UAX #14. Chrome's and Safari's scans answer these from their
+tables, and in the Gecko profile the boundary rule that answers the exclamation
+and Gecko pairs answers these too. Where UAX #14
 keeps the pair, as IS, CP, PO and straight quotes do before a letter or number,
 all three engines keep it, and Pretext joins that text to the CJK text's last
 unit, which still takes grapheme breaks when it doesn't fit. Only punctuation
-joins, never a letter inside a CJK unit such as the Arabic in `中（ابب）`, and a
-closing curly quote doesn't: LB19 no longer keeps the text after it, and Chrome
-breaks before `tail` in `中文中文””tail`.
+joins, never a letter inside a CJK unit such as the Arabic in `中（ابب）`. A closing curly quote keeps the text after it under
+`line_normal.brk` (LB19a), but Chrome's `line_normal_cj.brk` reads `”` as CL, so
+where Chrome opens that table it breaks before `tail` in `中文中文””tail`.
 
 No break precedes closing punctuation or a nonstarter, whatever comes before it
 (LB13, LB21). For these marks above U+00FF all three engines reach ICU or ICU4X, and
@@ -252,9 +252,8 @@ to ICU4X, which applies the same GL rules. Treating it as plain text let
 `Intl.Segmenter`'s word boundaries around it become break opportunities.
 
 Chromium breaks between a fullwidth closing bracket such as `」` or `）` (UAX #14
-CL) and a following ideograph. The Chromium profile carries CJK text after
-closing quotes (QU) only. Outside
-keep-all it is still broader than UAX #14 LB19a, which allows a break after a quote between East Asian
+CL) and a following ideograph. Blink's scan takes the quote rules from ICU:
+UAX #14 LB19a allows a break after a quote between East Asian
 characters (`文”|文`), though not after `.”` before Hangul. Chromium's ICU rules for
 Chinese pages treat `”` as CL and break there too (`다.”|라|고`).
 
