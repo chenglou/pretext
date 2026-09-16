@@ -240,9 +240,15 @@ Each line gives the probe and the outcome per the source.
 1. **C7, Blink zoom recipe.** Retina (DPR 2), zoom 100%. The DOM span width of `Hello world`:
    - at `16px Arial`: equals `OffscreenCanvas measureText` at `32px Arial` / 2, within 1/128 px;
    - at `13px system-ui`: differs from both `W(13px)` and `W(26px)/2`.
+   - Measured in installed Chrome 153 on 2026-09-16: Arial holds (79.140625 = W(32px)/2). system-ui is refuted in a
+     clean renderer: DOM 67.875 = ceil64(2 × W(13px))/128. It differs from both (60.5703125) only after a Canvas has
+     created the 26px platform font first (blink-canvas §1.8 note).
 2. **C8, Gecko DOM X rounding.** DPR 2, `font: 16px Georgia`, span `bbb`.
    - Without snapping: width = 1614/60 = 26.9px (538 au per `b`, gecko-lines §2.5).
    - With device-pixel snapping: a multiple of 1/30 px, for example 26.8667 or 26.9333.
+   - Measured in installed Firefox 156 on 2026-09-16: `bbb` is 26.9px (1614 au), but this can't discriminate, because
+     26.9 = 807/30 is itself a multiple of 1/30. Other strings do: 10 × `b` 5380 au (snapped would be 5400), 10 × `a`
+     4840 au (snapped 4800). DOM glyph advances aren't snapped at DPR 2; gecko-lines §2.5 holds.
 3. **C9, Gecko segment-break context.** `<p lang="en" style="font:16px 'PingFang SC'">`.
    - `<span>日本` newline `<span>語</span></span>`: width equals `日本 語` (a space).
    - `<span>日本` newline `語</span>`: width equals `日本語`.
@@ -263,11 +269,18 @@ Each line gives the probe and the outcome per the source.
    - Chrome: 2 lines (breaks the transformed `ａｂ`, class ID).
    - Safari: 2 lines (ICU on `ａｂ`).
    - Firefox: 1 line (breaks `ab` before the transform).
+   - Measured in installed Chrome 153 on 2026-09-16 (refuted): 1 line. `text-transform: full-width` is gated by the
+     experimental flag `CSSTextTransformFullWidth` and isn't parsed (computed `none`). Installed Firefox 156 gave 1 line
+     as stated. webkit-host (system WebKit 22625.1.29.11.27; installed Safari 27.0 not run) gave 2 lines [0, 1].
 9. **W1, Blink break-spaces.** `white-space:break-spaces;width:1px`, text `a b` (NARROW NO-BREAK SPACE, Zs, class
    GL): 1 line. An "other Zs" reading would give 2 lines.
 10. **W3, Gecko VT.** `white-space:normal;font:16px "Courier New";width:57.6px`, textContent `aaaa \vbbbbb`: `Range`
     rects show the VT kept at the start of line 2 with zero width, not trimmed away. Low value, because VT has zero
     width either way.
+    - Measured in installed Firefox 156 on 2026-09-16 (refuted): line starts [0, 6]. The VT's rect is on line 1 at
+      x 48 with width 0, and nothing of it is on line 2: VT is line-break class BK, so the only opportunity is after
+      it. The space before it isn't trimmed: right-aligned, line 1 starts at x 9.6 (48px = `aaaa` plus the space). The
+      expected outcome should be "VT zero-width at the end of line 1, the preceding space kept in the line width".
 11. **W7, WebKit empty nodes.** `<div id=a></div>` height 0. `a.textContent = "\r"` also gives height 0 (no renderer).
     `a.textContent = "\v"` gives one line.
 12. **W8, Blink fit bound at DPR 2.** `16px Arial`, `nnnnn nnnnn`, with `C128 = ceil(W(32px) × 64)`:
@@ -275,6 +288,11 @@ Each line gives the probe and the outcome per the source.
     - width `(C128 − 2)/128` px: 2 lines.
 
     A +1/64 CSS px bound would keep 1 line at `(C128 − 2)/128`.
+
+    Measured in installed Chrome 153 on 2026-09-16: 1 line and 2 lines as stated, but the last sentence is wrong for
+    this string. 64 × W(16px) = 5979.5, so C128 = 2 × C64 − 1, and a +1/64 CSS px bound also gives 2 lines at
+    `(C128 − 2)/128`. The difference shows with `Hello world` (C128 = 2 × C64 = 10130): width 10128/128 gives 2 lines at
+    DPR 2 where the CSS-grid bound gives 1.
 
 ---
 
@@ -295,3 +313,12 @@ Each line gives the probe and the outcome per the source.
 - Font-size precision in Canvas: Blink floors to 1/100 px in both Canvas and DOM; Gecko quantizes Canvas sizes to 7
   significant bits while the DOM uses a 1/60 px grid; WebKit applies neither. Fractional CSS sizes need a per-engine
   gate before Canvas totals count as exact.
+  - Measured in installed Firefox 156 on 2026-09-16: the Gecko DOM size isn't only on a 1/60 px grid. Servo first keeps
+    10 significant bits of every computed font size (`servo/components/style/values/specified/font.rs:993-1022`), so
+    `16.8px` lays out at 16.8125px (1009 au), and a connected canvas reads `13.33px` back as `13.3281px`.
+  - Measured in installed Chrome 153 on 2026-09-16: at DPR 2 the DOM floors the zoomed size, so 17.3px (288.140625 for
+    20 × `m`) and 17.29px (288.0546875) differ in the DOM while Canvas keeps them equal. Installed Chrome does lay out at
+    zoom 2 on this display: thresholds sit on the 1/128 px grid.
+  - Measured in webkit-host (system WebKit 22625.1.29.11.27; installed Safari 27.0 not run) on 2026-09-16: no size
+    quantization, but plain Latin text on the DOM shortcut path can differ from Canvas by one float32 step (11.1111px,
+    17.49px).

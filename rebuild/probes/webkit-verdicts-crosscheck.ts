@@ -1,5 +1,5 @@
 // Computes verdicts for webkit-probes-crosscheck.ts from its raw output. Usage:
-//   bun rebuild/probes/webkit-crosscheck-verdicts.ts <dir or output file> > verdicts.md
+//   bun rebuild/probes/webkit-verdicts-crosscheck.ts <dir or output file> > verdicts.md
 // Reads <file>, or every <dir>/*-probes.json and <dir>/*/*-probes.json (installed Safari or webkit-host), evaluates each
 // hypothesis against the spec's expected outcome and prints a Markdown table (id | verdict | measured | expected), then
 // the same rows as JSON after a `<!-- json -->` marker.

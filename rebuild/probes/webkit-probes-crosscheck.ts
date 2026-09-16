@@ -2,7 +2,7 @@
 // webkit-canvas.md (f), the WebKit rows of CRITIC.md §6, and six cross-cutting checks). The canonical set is
 // webkit-probes.ts; this one was written separately, so agreement between the two isolates probe-encoding mistakes.
 // Ids keep the spec's numbering. Where a hypothesis needs a threshold width, the page computes it from OffscreenCanvas
-// measurements (M) with the spec's float32 recipe. Verdicts come from webkit-crosscheck-verdicts.ts over the raw output.
+// measurements (M) with the spec's float32 recipe. Verdicts come from webkit-verdicts-crosscheck.ts over the raw output.
 import type { ObservationSpec, Probe } from './types.ts'
 
 // Helpers shared by every script observation. Plain JS; no backticks and no template interpolation inside.
@@ -806,6 +806,113 @@ for (const [x, y] of pairs) {
 return { dpr: DPR, visualViewportScale: window.visualViewport ? window.visualViewport.scale : null, rows };
 `)],
   })
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// String storage: the same Latin-1 text built from 8-bit and from 16-bit JS strings. WebKit applies the keep-all
+// punctuation rule and the first-unit line-start rule only to 16-bit text boxes (webkit-text §16 open question).
+// ---------------------------------------------------------------------------------------------------------------
+probes.push({
+  id: 'storage 8-bit vs 16-bit', spec: 'webkit-text §16 (8-bit storage); webkit-lines H9, H11; webkit-text H15; webkit-canvas H14', pageLang: 'en',
+  note: 'The probe markup itself arrives through the runner JSON (as every probe html does); the script builds the rest.',
+  html: `<p style="margin:0;${ARIAL};width:1px;word-break:keep-all">abc,def(ghi</p>`,
+  observe: [script(String.raw`
+const F = '16px Arial';
+const forced16 = s => (s + '一').slice(0, -1);
+const W11 = T64(M(F, 'abc') + M(F, ' '));
+const cases = [
+  ['webkit-lines H9', 'font:16px Arial;line-height:20px;width:1px;overflow-wrap:anywhere', 'W)))iiii'],
+  ['webkit-text H15', 'font:16px Arial;line-height:20px;width:1px;word-break:keep-all', 'abc,def(ghi'],
+  ['webkit-canvas H14', 'font:16px Menlo;line-height:20px;width:50px;word-break:keep-all', 'abcd,efghé'],
+  ['webkit-lines H11 break-spaces', 'font:16px Arial;line-height:20px;white-space:break-spaces;width:' + W11 + 'px', 'abc      def'],
+];
+const makers = {
+  textContent8: (d, t) => { d.textContent = t; },
+  textContent16: (d, t) => { d.textContent = forced16(t); },
+  innerHTML8: (d, t) => { d.innerHTML = t; },
+  innerHTML16: (d, t) => { d.innerHTML = forced16(t); },
+  createTextNode16: (d, t) => { d.append(document.createTextNode(forced16(t))); },
+  jsonParseWithCjkPayload: (d, t) => { d.textContent = JSON.parse(JSON.stringify([t, '一']))[0]; },
+  jsonParseLatin1Payload: (d, t) => { d.textContent = JSON.parse(JSON.stringify([t]))[0]; },
+};
+const rows = [];
+for (const [id, style, t] of cases) {
+  const row = { id, text: t };
+  for (const k in makers) { const d = add('<div></div>'); d.style.cssText = style; makers[k](d, t); const L = lines(d); row[k] = L.texts; }
+  rows.push(row);
+}
+return { W11, runnerJsonMarkup: lines(element).texts, rows };
+`)],
+})
+
+// ---------------------------------------------------------------------------------------------------------------
+// Page history: does laying out a 16-bit text first change the breaks of a later Latin-1 text? Each order gets a fresh
+// document; within one, every text is laid out (and removed) before the next is inserted.
+// ---------------------------------------------------------------------------------------------------------------
+{
+  const sequences: Array<[string, Array<[string, string]>]> = [
+    ['keep-all 16-bit then 8-bit', [['font:16px Arial;line-height:20px;width:1px;word-break:keep-all', 'abc,def(ghi中'], ['font:16px Arial;line-height:20px;width:1px;word-break:keep-all', 'abc,def(ghi']]],
+    ['keep-all 8-bit then 16-bit', [['font:16px Arial;line-height:20px;width:1px;word-break:keep-all', 'abc,def(ghi'], ['font:16px Arial;line-height:20px;width:1px;word-break:keep-all', 'abc,def(ghi中']]],
+    ['keep-all other prefix 16-bit then 8-bit', [['font:16px Arial;line-height:20px;width:1px;word-break:keep-all', 'xyz,uvw(rst中'], ['font:16px Arial;line-height:20px;width:1px;word-break:keep-all', 'abc,def(ghi']]],
+    ['keep-all 16-bit then 8-bit, then 8-bit again in a new element', [['font:16px Arial;line-height:20px;width:1px;word-break:keep-all', 'abc,def(ghi中'], ['font:16px Arial;line-height:20px;width:1px;word-break:keep-all', 'abc,def(ghi'], ['font:16px Arial;line-height:20px;width:1px;word-break:keep-all', 'abc,def(ghi']]],
+    ['Menlo keep-all 16-bit then 8-bit', [['font:16px Menlo;line-height:20px;width:50px;word-break:keep-all', 'abcd,efgh中'], ['font:16px Menlo;line-height:20px;width:50px;word-break:keep-all', 'abcd,efghé']]],
+    ['anywhere 16-bit then 8-bit', [['font:16px Arial;line-height:20px;width:1px;overflow-wrap:anywhere', 'W)))iiii一'], ['font:16px Arial;line-height:20px;width:1px;overflow-wrap:anywhere', 'W)))iiii']]],
+    ['anywhere 8-bit then 16-bit', [['font:16px Arial;line-height:20px;width:1px;overflow-wrap:anywhere', 'W)))iiii'], ['font:16px Arial;line-height:20px;width:1px;overflow-wrap:anywhere', 'W)))iiii一']]],
+    ['anywhere both in one fragment', [['font:16px Arial;line-height:20px;width:1px;overflow-wrap:anywhere', 'W)))iiii|W)))iiii一']]],
+  ]
+  for (const [name, steps] of sequences) {
+    probes.push({
+      id: `history ${name}`, spec: 'page history (webkit-lines H9; webkit-text H15; webkit-canvas H14)', pageLang: 'en',
+      note: 'Fresh document. Texts are inserted one at a time; "a|b" inserts two sibling divs at once.',
+      observe: [script(String.raw`
+const steps = ${JSON.stringify(steps)};
+const out = [];
+for (const [style, text] of steps) {
+  const parts = text.split('|');
+  const divs = parts.map(t => { const d = add('<div></div>'); d.style.cssText = style; d.textContent = t; return d; });
+  divs.forEach((d, i) => out.push({ text: parts[i], texts: lines(d).texts }));
+  divs.forEach(d => d.remove());
+}
+return out;
+`)],
+    })
+  }
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// Payload width: the runner sends each document's probes as JSON, and the page applies `html` with innerHTML. A raw
+// non-Latin-1 character anywhere in that payload may make every parsed string, and so the markup and its text node,
+// 16-bit. Same markup twice, each in a fresh document: once with a raw 中 in the note, once with an ASCII note.
+// ---------------------------------------------------------------------------------------------------------------
+{
+  const cases: Array<[string, string]> = [
+    ['keep-all abc,def(ghi', `<p style="margin:0;${ARIAL};width:1px;word-break:keep-all">abc,def(ghi</p>`],
+    ['Menlo keep-all abcd,efghé', `<p style="margin:0;${MENLO};width:50px;word-break:keep-all">abcd,efghé</p>`],
+    ['anywhere W)))iiii', `<p style="margin:0;${ARIAL};width:1px;overflow-wrap:anywhere">W)))iiii</p>`],
+  ]
+  for (const [name, html] of cases) {
+    probes.push(linesProbe(`payload 16-bit ${name}`, 'string storage via the runner JSON (webkit-lines H9; webkit-text H15; webkit-canvas H14)', 'en', html, { note: 'Payload carries a raw CJK character: 中' }))
+    probes.push(linesProbe(`payload 8-bit ${name}`, 'string storage via the runner JSON (webkit-lines H9; webkit-text H15; webkit-canvas H14)', 'en', html, { note: 'Payload is Latin-1 only.' }))
+  }
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// TextBreakingPositionCache: a process-wide cache keyed by content (by value), style context and origin. Run "cache A"
+// in one runner invocation (one webkit-host process, documents in this order) and "cache B" in another. Contents are
+// unique to these probes so no other probe can have filled the cache for them.
+// ---------------------------------------------------------------------------------------------------------------
+{
+  const spec = 'TextBreakingPositionCache (webkit-text §5.2; webkit-lines H11; webkit-text H15)'
+  const setW11 = String.raw`const c = new OffscreenCanvas(1, 1).getContext('2d'); c.font = '16px Arial'; element.style.width = (Math.trunc((c.measureText('abc').width + c.measureText(' ').width) * 64) / 64) + 'px';`
+  const keepAll = `<p style="margin:0;${ARIAL};width:1px;word-break:keep-all">pqr,stu(vwx</p>`
+  const ws = (mode: string, text: string) => `<p style="margin:0;${ARIAL};white-space:${mode}">${text}</p>`
+  probes.push(linesProbe('cache A1 keep-all 16-bit payload', spec, 'en', keepAll, { note: 'Payload carries a raw CJK character: 中. Fills the cache with 16-bit breaks for pqr,stu(vwx.' }))
+  probes.push(linesProbe('cache A2 keep-all 8-bit payload after A1', spec, 'en', keepAll, { note: 'Latin-1 payload, same content and style as A1.' }))
+  probes.push(linesProbe('cache A3 pre-wrap abc      xyz', spec, 'en', ws('pre-wrap', 'abc      xyz'), { setup: setW11, note: 'Fills the cache with pre-wrap items (one whitespace item for the six spaces).' }))
+  probes.push(linesProbe('cache A4 break-spaces abc      xyz after A3', spec, 'en', ws('break-spaces', 'abc      xyz'), { setup: setW11 }))
+  probes.push(linesProbe('cache A5 break-spaces mno      qrs control', spec, 'en', ws('break-spaces', 'mno      qrs'), { setup: setW11 }))
+  probes.push(linesProbe('cache B1 keep-all 8-bit payload alone', spec, 'en', keepAll, { note: 'Separate runner invocation: a fresh webkit-host process.' }))
+  probes.push(linesProbe('cache B2 break-spaces abc      xyz alone', spec, 'en', ws('break-spaces', 'abc      xyz'), { setup: setW11, note: 'Separate runner invocation: a fresh webkit-host process.' }))
 }
 
 export default probes

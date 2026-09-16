@@ -282,6 +282,7 @@ Things to keep:
 - **Break position cache** (`TextBreakingPositionCache`): after layout, the item ends of text boxes with ≥ 5 code units and ≥ 3 items are stored. The key is (content, white-space collapse group, overflow-wrap, line-break, word-break, nbsp-mode, locale, security origin) (`L/text/TextBreakingPositionContext.h:43-86`; `L/text/TextBreakingPositionCache.h:41-48`; `L/InlineItemsBuilder.cpp:1082-1148`).
   - On later builds items are rebuilt from those ends (`:858-922`). The positions are the same.
   - One difference: `isWordSeparator` of a white-space item comes from its **first** character only (`:899`). A pre-wrap run `"\t "` is a word separator on a fresh build but not from the cache. It matters only with word-spacing.
+  - Measured in webkit-host (system WebKit 22625.1.29.11.27; installed Safari 27.0 not run) on 2026-09-16: the positions aren't always the same. The white-space group puts `preserve` and `break-spaces` together (`L/text/TextBreakingPositionContext.h:43-56`), and only a fresh build splits break-spaces text into one item per space (`:972-978`), so break-spaces text laid out after the same text in pre-wrap keeps its spaces as one item: `abc      xyz` keeps all six spaces on line 1, while alone it wraps per space. Storage width isn't in the key either: keep-all `pqr,stu(vwx` stored 8-bit gives 3 lines right after a 16-bit document with the same text, and 1 line alone in a fresh process.
 
 ### 5.3 Per-character handling
 
@@ -737,6 +738,8 @@ These are the text-level effects. Widths are the width spec.
 | Hyphen string choice (U+2010 or `-`) | Not directly | Needs "does the primary font have a U+2010 glyph". |
 | Whether a string is 8-bit | No | Approximate with "every unit ≤ U+00FF" [I]. |
 
+Measured in webkit-host (system WebKit 22625.1.29.11.27; installed Safari 27.0 not run) on 2026-09-16: the last row's approximation fails in practice. Storage follows where the string came from, and JS can't observe it. When a document's fetched JSON contains any non-Latin-1 character, its ASCII strings come back 16-bit (`JavaScriptCore/runtime/LiteralParser.cpp:896-899`), and the fast `innerHTML` parser keeps that width (`W/html/parser/HTMLDocumentParserFastPath.cpp:1154-1156`). The same markup then gives 16-bit results: keep-all `abcd,efghé` 2 lines instead of 1 (webkit-canvas H14), and `W)))iiii` puts `W)))` on line 1 instead of `W` (webkit-lines H9). `(s + '一').slice(0, -1)`, `JSON.parse(JSON.stringify([s, '一']))[0]`, `createTextNode` and `innerHTML` of those stayed 8-bit. The break-position cache also carries 16-bit breaks to 8-bit text (§5.2 note). The painter must control storage, not yet shown possible, or this is a named loss.
+
 ## 14. Hypotheses to probe in installed Safari 27.0
 
 Unless noted, each probe is a `<p>` with `margin:0` and the stated font, width and `white-space: normal`. The text is set with `textContent`, or given as markup for span cases. "Pieces" means the lines expected at that width: every soft wrap opportunity starts a new line, and pieces that don't fit stay whole. The expected outcome is what the source gives.
@@ -778,6 +781,7 @@ Unless noted, each probe is a `<p>` with `margin:0` and the stated font, width a
 15. **H15 keep-all punctuation rule only in 16-bit text boxes (new at 7625).** `word-break: keep-all`, 16px Arial, width 1px.
     - `abc,def(ghi中` → 3 lines `abc,` | `def(` | `ghi中`.
     - `abc,def(ghi` → 1 line.
+    - Measured in webkit-host (system WebKit 22625.1.29.11.27; installed Safari 27.0 not run) on 2026-09-16: confirmed for text set from JS literals ([0, 4, 8]; `abc,def(ghi` 1 line alone in a fresh process). The Latin-1 text gives 3 lines when it is stored 16-bit or when the break-position cache holds 16-bit breaks for it (§5.2 and §13 notes).
 16. **H16 keep-all never breaks at a span edge.** `word-break:keep-all`, 20px Hiragino Mincho ProN, width 1px.
     - `<span>中文，</span><span>中文</span>` → 1 line.
     - Single node `中文，中文` → 2 lines `中文，` | `中文`.

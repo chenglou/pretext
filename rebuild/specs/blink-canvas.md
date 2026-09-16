@@ -369,6 +369,7 @@ JS width       = float64(measure_width)
   - Canvas at 12px asks CoreText for the 12px advance. The DOM at DPR 2 asks for the 24px advance and divides by the zoom.
   - If CoreText's bitmap-emoji advance isn't linear in size, the two differ. That matches Chromium #489494015's "size-dependent, disappears at larger sizes" [I].
 - **system-ui.** `CTFontCreateUIFontForLanguage(..., size)` receives CSS px from Canvas but device px from the DOM at DPR 2, while opsz is forced to the CSS size in both. Canvas at `size × DPR` also gets opsz = `size × DPR`. **No Canvas size reproduces the DOM's (CoreText size, opsz) pair** for system-ui on a Retina display [I]. This fits Chromium #489579956.
+  - Measured in installed Chrome 153 on 2026-09-16 (refuted): in a clean renderer at DPR 2, DOM(S) = ceil64(2 × W(S))/128 at every size 10–28px, so Canvas at the CSS size reproduces the DOM (13px `Hello world`: DOM 67.875, W(13px) 67.8691406, W(26px)/2 62.5902023). A different DOM width appears only after a Canvas measured `2S` px system-ui first (13px: 60.5703125). `FontCacheKey` holds `EffectiveFontSize()` but not the specified size (`font_description.cc:308-331`; `font_cache_key.h:53-68`), and opsz is fixed when the platform font is created, so a Canvas at 2S and DOM text at S share one platform font whose opsz came from whichever text created it. At DPR 1 DOM = W(13px). `-apple-system` resolves like `sans-serif`; `BlinkMacSystemFont` is the system UI font.
 - **Measuring at `size × zoom`** reproduces the DOM's CoreText advances only for fonts with no opsz axis and no `trak`+`STAT` tracking, whose font matching doesn't depend on size [I].
 
 ## 1.9 Runtime settings that matter at 153
@@ -633,6 +634,7 @@ Not obtainable from Canvas:
 2. Which font each cluster used (fallback identity) and its tables (`trak`, `STAT`, `halt`, `chws`, whether U+2010 exists, whether the space is in GPOS or GSUB). Some can be inferred, but never proven absent.
 3. The DOM's script context for characters shaped inside a longer item. A punctuation-only Canvas word from 16-bit text is Common, while the DOM resolves script over the item.
 4. CoreText size plus opsz pairs that the DOM uses at DPR ≠ 1 for opsz or system-ui fonts; bitmap emoji advances at device size other than by measuring at `size × DPR`, which is a hypothesis (H19).
+   - Measured in installed Chrome 153 on 2026-09-16: measuring emoji at `size × DPR` is exact (DOM = ceil64(W(2 × size))/128 at 8–32px; the emoji probe is H17, not H19). `system-ui` in a clean renderer is reproduced by Canvas at the CSS size (§1.8 note). What Canvas can't supply is the renderer's font-cache order: which text created the platform font first.
 5. The UI language, which picks generic families for unlabeled canvases and break tables for unlabeled content.
 6. Any break data. `Intl.v8BreakIterator` supplies only ICU's "no keyword" tables (2.6).
 7. Order-independent widths for words whose cached result depends on earlier strings. The rebuild must control measurement order, or use fresh canvases, for words that can occur in both 8-bit and 16-bit strings or with word spacing.
@@ -666,6 +668,7 @@ Unless stated otherwise:
    - Probe: `40px Arial` and `40px "Times New Roman"`, `s = "AV AV"`.
    - Expected by default: `W(s) === fround(fround(W("AV")+W(" "))+W("AV"))`.
    - Expected under `textRendering='optimizeLegibility'`: either the same value (space not in GPOS/GSUB coverage) or the DOM's whole-run width. For Times, if its cross-space kerning comes only from legacy `kern` (`pretext-emulation-20260915/NOTES.md:81`), the value stays equal to the split sum.
+   - Measured in installed Chrome 153 on 2026-09-16: by default the split sum (Arial 111.89453125, Times New Roman 115.234375). Under `optimizeLegibility` both fonts give the DOM whole-run width (Arial 109.6875, Times New Roman 112.3046875). The guess that Times New Roman stays split is wrong: on macOS 27 its space glyph is in GPOS or GSUB coverage.
 7. **H7, word-spacing order dependence.**
    - Probe: `16px Arial`, `wordSpacing='10px'`.
    - Context A measures `W(" x")`, then `W("x y")`. Context B measures `W("x y")`, then `W(" x")`.
@@ -700,6 +703,7 @@ Unless stated otherwise:
 16. **H16, system-ui on Retina.**
     - Probe: DPR 2, `13px system-ui`, `"Hello world"`; DOM span at 13px (Range width); `W` at `13px` and at `26px`.
     - Expected: some sizes in 10-28px where DOM ≠ `W(13px)` and also DOM ≠ `W(26px)/2`; at DPR 1, DOM === `W(13px)` within 1/64 px.
+    - Measured in installed Chrome 153 on 2026-09-16 (refuted): at DPR 2 in a clean renderer DOM = ceil64(2 × W(S))/128 at every size 10–28px. DOM differs from both W(13px) and W(26px)/2 (60.5703125) only after a Canvas measured 26px system-ui first. At DPR 1 DOM 67.875 = W(13px) within 1/64. See the §1.8 note.
 17. **H17, emoji at small sizes.**
     - Probe: DPR 2, `12px "Helvetica Neue"`, `"😀"`.
     - Expected: DOM Range width equals `W` at `24px` divided by 2 (±1/128 px) and differs from `W` at `12px`; at DPR 1, DOM equals `W(12px)`.

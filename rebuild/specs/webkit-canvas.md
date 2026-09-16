@@ -184,6 +184,7 @@ finalize: runWidth += leftover initial advance                                //
 ```
 
 - For Canvas, TAB, LF, CR, VT and FF were already replaced by spaces, so the LF, CR and TAB branches never run.
+- Measured in webkit-host (system WebKit 22625.1.29.11.27; installed Safari 27.0 not run) on 2026-09-16, with the source re-read: the "TAB/LF/CR/NUL/default-ignorable ...: delete glyph" line is wrong for LF and CR. `case newlineCharacter / carriageReturn` swaps in the space glyph and `continue`s before the delete check at `:812` (`G/WidthIterator.cpp:792-800`), so LF and CR keep their own glyph's advance, as webkit-lines §3.3 says. TAB is made invisible (`:804-806`); only NUL and default-ignorables reach the delete. In Arial the CR advance is 0: DOM `a\rb` = `ab` = 17.796875 in normal and pre.
 - U+0000 is deleted (width 0). U+0001–0008, U+000E–001F and U+007F–009F take the `.notdef` advance of the font chosen for them.
 - U+00AD (soft hyphen) and other default-ignorables contribute 0 once their glyph is deleted, but their glyphs were present during shaping.
 
@@ -525,6 +526,11 @@ Consequences:
 | Widths under page zoom or CSS zoom | Not directly | Canvas sizes are unzoomed (`S/StyleResolveForFont.cpp:278`). Use a zoomed px size (H9). |
 | Break opportunities, pair table, ICU tables, quote overrides, bidi levels, grapheme boundaries | No | Static data in `data/webkit/`. `Intl.Segmenter` grapheme in Safari uses the same libicucore (H18). |
 
+Measured in webkit-host (system WebKit 22625.1.29.11.27; installed Safari 27.0 not run) on 2026-09-16:
+- Simplified measuring row: not bit-exact. Text with NBSP, which takes the full path, equals Canvas at 13.33, 13.337, 11.1111 and 17.49px. Plain Latin text on the shortcut path differs by one float32 step at 11.1111px (`Hello world` 54.958710 vs 54.958717) and 17.49px (86.510597 vs 86.510605), and for 20px `system-ui` `The quick brown fox 0123` (225.220261 vs 225.220245). The shortcut shapes once and sums advances in one loop (`G/FontCascade.cpp:381-412`, sum at `:405-407`), while WidthIterator sums pre-shaping advances and adds `after − before` per range (`G/WidthIterator.cpp:92-123`). A fit test at an exact threshold can flip. Port the shortcut summing order, which needs per-glyph advances, or name the loss. H15's `AV` and `Hello world` at 16px Times New Roman were equal.
+- Emoji row: DOM = O at the CSS size, bit-exact at 8–32px. Measuring at `size × DPR` and dividing is wrong for WebKit below 32px.
+- Letter-spaced row: E with `font-variant-ligatures: no-common-ligatures` equals the DOM (59.344002). Locale: under `<html lang="ko">` O gives 64 for `永骨` where the DOM gives 55.36; an E without its own `lang` inherits the page lang (53.328 = DOM under ja).
+
 ---
 
 # (f) Hypotheses to probe in installed Safari 27.0
@@ -553,6 +559,7 @@ Fonts are macOS 27 system fonts. CoreText offline numbers at 16px, from a local 
 12. **The next node's lang decides at a node boundary.** `<div style="font:16px Menlo;width:50px"><span lang=sv>abcd.</span><span lang=en>“efg”</span></div>` gives 2 lines. Swapping the two `lang` values gives 1 line.
 13. **WebKit's LB19a rule (new at 7625) ignores lang.** `<div lang=sv style="font:16px 'Hiragino Sans';width:16px">中“文”中</div>` has line starts [0, 1, 4]: a break before U+201C and after U+201D, and none between U+201C and 文. The fast path decides all four positions without ICU (`R/BreakablePositions.h:214-220`). In 7624, U+201C and U+201D were Weird and went to ICU; for this string the outcome may be the same, so this probe checks the rule, not a difference.
 14. **keep-all punctuation only on 16-bit text.** `word-break:keep-all;font:16px Menlo;width:50px`: `abcd,efgh中` gives 2 lines (the second starting at 5); `abcd,efghé` gives 1 line. The expectation assumes the second node is stored 8-bit.
+    - Measured in webkit-host (system WebKit 22625.1.29.11.27; installed Safari 27.0 not run) on 2026-09-16: confirmed when the text node is stored 8-bit (markup built from JS literals). The same markup stored 16-bit, because the document's JSON payload contained CJK text, gives 2 lines for `abcd,efghé` (webkit-text §13 note).
 15. **Simplified DOM path equals Canvas in practice.** `<span style="font:16px 'Times New Roman'">AV</span>` `getBoundingClientRect().width === ` O `measureText("AV").width`; and for `"Hello world"` likewise.
 16. **Cache interaction.** In one document, O and a DOM span with the same font measure `"Te st"` in alternating order 100 times. The expected per source is that every O result is identical. A difference would mean the shared glyph geometry cache returned the DOM's simplified-path value.
 17. **line-break without lang disables the table shortcuts.** `font:16px Menlo;width:25px`, text `a-1234`: `line-break:auto` gives 2 lines (`a-` | `1234`); `line-break:strict` (no lang) gives 1 line.

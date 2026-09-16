@@ -80,6 +80,7 @@ function textLayoutObjectIsNeeded(textNode, ctx, style):   // style = parent ele
     - `capitalize` / `uppercase` / `lowercase`, using ICU `CaseMap` with the element's locale (1981-1998). `capitalize` uses `Capitalize(result, previous_character)` unless the `ICUCapitalization` flag is on, and that flag is `experimental`, so off (`runtime_enabled_features.json5:3589-3590`). The previous character is the last code unit of the previous LayoutText in pre-order, or U+0020 if there is none (`layout_text.cc:857-877`).
     - then `full-width` (2000-2003)
     - then `full-size-kana` (2005-2022)
+    - Measured in installed Chrome 153 on 2026-09-16: `full-width` isn't parsed (`CSS.supports('text-transform', 'full-width')` false, computed `none`). The keyword is gated by the experimental runtime flag `CSSTextTransformFullWidth` (`runtime_enabled_features.json5:2066-2070`), and `full-size-kana` by `CSSTextTransformFullSizeKana`, also experimental, so lines 2000-2022 never run in stable 153 (H32; CRITIC C14).
   - Uppercase and lowercase can change the length, for example `ß` → `SS`. Line breaking and shaping see the transformed string.
   - `-webkit-text-security: disc|circle|square` then replaces each grapheme cluster by U+2022, U+25E6 or U+25A0 (`layout_text.cc:899-966`).
 - **`<br>`**: `LayoutBR` text is `"\n"` (`blink/core/layout/layout_br.cc:32-37`).
@@ -336,6 +337,7 @@ while index < items.length:
   - **Kerning, ligatures and GPOS never cross a group, segment or fallback boundary**, because those are separate `hb_shape` calls.
   - **Arabic joining does cross them**: the Arabic shaper reads the pre- and post-context characters when choosing joining forms (`hb:src/hb-ot-shaper-arabic.cc:305-360`).
   - Example: `ب<b>ب</b>` makes two shape calls with different fonts, and both letters still get joined forms.
+  - Measured in installed Chrome 153 on 2026-09-16: true for the OpenType font Noto Naskh Arabic (`ب<b>ب</b>` 43.6875 = initial 11 + bold final 32.6875), false for Geeza Pro (55.90625 = isolated 25.59375 + bold isolated 30.3125). Geeza Pro's faces carry `morx` and `kern` but no `GSUB` or `GPOS`, so [I] HarfBuzz shapes it with the AAT shaper, which doesn't read the buffer context. Geeza Pro joins only inside one group (`ب<span style="color:red">ب</span>` 37.4921875). Cross-item joining needs an OpenType Arabic font (H3).
   - Inside one group, e.g. `<span>A</span><span>V</span>` with the same font, `A` and `V` are in one call and kern.
 - **Script and language.** The segment script goes into `hb_buffer_set_script` (340-341). The language is `font-language-override` if set, else `LocaleOrDefault().HarfbuzzLanguage()` (858-876): the element locale, else the UI language (`layout_locale.cc:294-302`).
 - **Glyph lookups that change measured text.**
@@ -553,6 +555,7 @@ function nextGraphemeBoundary(pos):                        // .cc:419-430
   - row HY: NU
   - row PR: PO
   - every other row (including ID, CJ, H2, H3, EB, EM, ZWJ, RI and the ICU 74/78 classes): none
+  - Measured in installed Chrome 153 on 2026-09-16: U+2010 HYPHEN is class HH at ICU 78 (Unicode 17), not BA. In Chrome's `line_normal.brk` it shares an RBBI category with U+2013, which LineBreakTest 17.0 labels HH. So its break-all row is empty and the `lb == BA` exception doesn't apply. The loose rule in (3) tests the character and still breaks before U+2010 (`text_break_iterator.cc:315-327`). A break after the hyphen can come only from ICU, which restarts at each line start with no prior context (F.1), and `line_normal.txt:301` `^($HY | $HH) $CM* ($ALPlus | $HL);` (LB20a) forbids a break after a line-initial hyphen. `a‐b` with break-all + loose gives `a` / `‐b`, and `‐b` alone 1 line (H20). U+2013 behaves the same.
 - **Worked examples** (text_content from `<div lang=en>`, start 0):
   - `"a )"` → space rule, break at 2 (before `)`).
   - `"x!é"` → table row `!`, column `é`: break at 2. `"x!a"`: no break.
@@ -632,6 +635,7 @@ function nextGraphemeBoundary(pos):                        // .cc:419-430
   2. The same script segmentation. Canvas runs `RunSegmenter` on each word, and 8-bit words are Latin. The DOM runs it on the whole paragraph, where Common punctuation takes the neighbouring script (§2.D; PLATFORM_BUGS.md row "Canvas 2D context … Amiri").
   3. The same bidi. Canvas resolves bidi on the measured string alone (`plain_text_node.cc:285-353`). The DOM resolves it on the paragraph, with isolates from `dir`.
   4. No context-dependent shaping at the group edges. The DOM passes up to 5 code points of context to HarfBuzz (`hb-buffer.hh:109`); Canvas cannot. Arabic joining across a span with a different font cannot be reproduced by measuring the span alone. Candidate workaround (H29): add U+200D ZWJ on the joining side.
+     - Measured in installed Chrome 153 on 2026-09-16: the workaround fails in an LTR context. With Noto Naskh Arabic, W(`ب` + ZWJ) = W(`ب`) = 30.8799896 (isolated), while the DOM's first ب is 11 (initial). With `ctx.direction = 'rtl'` it gives 11, and `ب` + ZWJ + `ب` gives the joined pair (43.6799927). `PlainTextNode` shapes each bidi run alone (`plain_text_node.cc:285-318`); [I] at paragraph level LTR the trailing ZWJ forms its own run under UAX #9 L1. Measure a joining form with `direction = 'rtl'`, or with the ZWJ between two Arabic letters (H29).
   5. The same characters. Canvas turns TAB, LF, VT, FF and CR into U+0020, and SHY, ZWSP, LRM, RLM, LRE-RLO, ZWNBSP and U+FFFC into U+200B (`plain_text_node.cc:47-60`; `character.h:167-175, 226-238`). In the DOM:
      - CR in collapse modes is a space, so Canvas matches
      - FF and VT in collapse modes are real characters (H5, H6), so **Canvas cannot supply them**
@@ -651,6 +655,7 @@ Common harness: `<!doctype html><html lang="en"><body style="margin:0">`. Lines 
 1. **Span edge, no break.** `foo<b>bar</b>` in `#t` → 1 line. `foo <b>bar</b>` → 2 lines. `foo<span lang=zh>bar</span>` → 1 line.
 2. **Kerning inside a group.** 48px Helvetica Neue: width(`<span>A</span><span style="color:red">V</span>`) == width(`<span>AV</span>`). width(`<span>A</span><span style="letter-spacing:0.01px">V</span>`) == width("A") + width("V" with 0.01px spacing), with no kern. width(`A<span style="padding-left:0.001px">V</span>`) ≥ width("A")+width("V").
 3. **Arabic joining across a font change.** 40px Geeza Pro: `ب<b>ب</b>` draws joined forms. Its width equals width(initial ب) + width(bold final ب) and differs from width("ب") + width(bold "ب") measured in separate paragraphs.
+   - Measured in installed Chrome 153 on 2026-09-16 (refuted for Geeza Pro): 55.90625 = isolated + bold isolated, not initial + bold final 55.6875. The OpenType font Noto Naskh Arabic gives 43.6875 = initial + bold final. See the §2.E note.
 4. **CR collapses.** Normal white-space, data `"a\rb"` → 2 lines in `#t`, and span width == width of `"a b"`. `white-space:pre-line` → 2 lines. `white-space:pre-wrap` → 1 line, width == width("ab").
 5. **FF is literal in normal mode.** data `"a\fb"` in `#t` → 1 line (no opportunity next to a char < U+0021). Width ≠ width("a b") and ≥ width("ab"); the exact value is unknown from source. `pre-wrap` → 1 line, width == width("ab").
 6. **VT is literal in every mode.** data `"a\vb"` → 1 line in normal and in pre-wrap. Width in pre-wrap ≠ width("ab") unless the fallback glyph has zero advance.
@@ -668,6 +673,7 @@ Common harness: `<!doctype html><html lang="en"><body style="margin:0">`. Lines 
 18. **Loose.** `lang=en`, `line-break:loose`, `あ々` → 2 lines; with `line-break:auto` → 1 line. `一‥‥` → 2 lines in loose, 1 line in auto.
 19. **keep-all per code unit.** `word-break:keep-all`: `一一` → 1 line; `𠀀𠀀` (U+20000 ×2) → 2 lines; `한국어` → 1 line; `ภาษาไทย` → 2 lines (SA excluded, dictionary break at 4).
 20. **break-all loose hyphen.** `lang=en`: `a‐b` (U+2010) with `word-break:break-all; line-break:loose` → 3 lines; with `break-all` alone → 2 lines (break after ‐ only).
+    - Measured in installed Chrome 153 on 2026-09-16 (refuted): break-all + loose gives 2 lines, `a` / `‐b`; break-all alone `a‐` / `b`; `‐b` alone 1 line with or without loose. See the F.5 note: U+2010 is class HH, and LB20a forbids a break after a hyphen at the start of a line.
 21. **break-all PR→PO.** `$%` in `#t` with `word-break:break-all` → 2 lines; `word-break:normal` → 1 line.
 22. **wbr inside nowrap.** `<div id=t style="white-space:nowrap">foo<wbr>bar</div>` → 2 lines.
 23. **nowrap→wrap generated opportunity.** `<div id=t><span style="white-space:nowrap">foo </span> bar</div>` → 2 lines, and the second line starts with "bar" (b's left == 0).
@@ -677,11 +683,13 @@ Common harness: `<!doctype html><html lang="en"><body style="margin:0">`. Lines 
 27. **Letter spacing turns ligatures off in DOM and Canvas.** 48px Times: DOM width of `fi` with `letter-spacing:0.001px` == width("f")+width("i")+2×0.001 (±1/64). Canvas `ctx.letterSpacing="0.001px"; measureText("fi")` gives the same, not the ligature width.
 28. **Canvas normalizes controls.** `measureText("a\fb") == measureText("a b")`, and likewise for `\v` and `\r`. `measureText("a­b") == measureText("ab")`.
 29. **ZWJ as joining context in Canvas.** 40px Geeza Pro: `measureText("ب‍")` equals the DOM width of the first ب in `<span>ب</span><b>ب</b>`.
+    - Measured in installed Chrome 153 on 2026-09-16 (refuted): Geeza Pro matches (W 25.5876923 vs DOM 25.59375) only because its initial and isolated ب have the same advance. Noto Naskh Arabic: DOM first ب 11, Canvas W(`ب` + ZWJ) 30.8799896 (isolated); with `ctx.direction = 'rtl'` 11. See the §5 item 4 note.
 30. **Word spacing at paragraph offset 0.** `word-spacing:10px` on the span.
     - `<div style="white-space:pre-wrap"><span style="word-spacing:10px"> a</span></div>`: a's left == width(" ") + 10, because the block preserves spaces and `WordSpacingWhiteSpacePre` is stable.
     - `<div style="white-space:normal"><span style="white-space:pre-wrap; word-spacing:10px"> a</span></div>`: a's left == width(" "). The block style does not preserve spaces, and the space is at text_content offset 0.
 31. **Uppercase changes measured text.** `<span style="text-transform:uppercase">ß</span>` width == width("SS"). In `#t`, `ßß` uppercase → 1 line.
 32. **full-width collapses to U+3000.** `<span style="text-transform:full-width">a  b</span>` width == width("ａ　ｂ"). In `#t` → 2 lines (break after U+3000).
+    - Measured in installed Chrome 153 on 2026-09-16 (refuted): `full-width` isn't supported (computed `none`). The span is 22.53125 (plain `a b`), and the 2 lines come only from the space. See the §2.B note.
 33. **break-spaces.** `white-space:break-spaces`, `a  b` in `#t` → 3 lines ("a ", " ", "b"); `a　b` (U+3000) → 2 lines.
 34. **ICU restarts at the line start.** `<div lang=en style="font:16px 'Thonburi'; width:Wpx">การทดสอบ</div>`: at a width that ends the first line after `การ`, the second line is `ทดสอบ` with no further internal break. Pick W between width("การ") and width("การท").
 35. **CR/FF control items in pre-wrap block breaks.** data `"a \rb"` in `#t` with pre-wrap → 2 lines (the break is after the space, before CR), and the CR adds zero width.

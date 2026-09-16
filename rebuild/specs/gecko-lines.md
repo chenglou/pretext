@@ -86,6 +86,12 @@ Terms used throughout:
 
 - The DOM font size in device pixels is `size.ToAppUnits() / apd` (`gfx/src/nsFontMetrics.cpp:124, :134`), so the
   size itself is quantized to 1/60 CSS px first. `devToCssSize = apd / 60` (`:151`).
+- Measured in installed Firefox 156 on 2026-09-16: before that step, Servo computes every font size through
+  `quantize_font_size`, which keeps 10 significant bits (`servo/components/style/values/specified/font.rs:993-1022`).
+  The computed `font-size` equals that value for all 9 sizes tested (13.33 → 13.3281, 16.8 → 16.8125, 14.4 → 14.4063,
+  10.01 → 10.0156). 60 × `m` in Georgia measures 53340 au at 16.8, 16.81 and 16.8166667px and 53220 au at 16.79px, so
+  `16.8px` lays out at 16.8125px = 1009 au, not 1008. The size is `NSToIntRound(fround(q10(s)) * 60)` au, with
+  `q10(x) = d - (d - x)`, `d = fround(x * 16385)`, all float32.
 - On macOS `mAdjustedSize = GetAdjustedSize()` (size-adjust / font-size-adjust applied) and
   `mFUnitsConvFactor = mAdjustedSize / upem`, a float (`gfx/thebes/gfxMacFont.cpp:247-248`).
 
@@ -249,6 +255,9 @@ The transform (`layout/generic/nsTextFrameUtils.cpp:211-401`):
   - `COMPRESS_WHITESPACE_NEWLINE` turns a newline into a space, or removes it when a ZWSP is next to it, when both
     neighbors are East-Asian wide/fullwidth/halfwidth and not Hangul, or for `ja`/`zh` language when either neighbor
     is East-Asian punctuation. Those neighbors must be inside the same run (`:97-141, :183-193`);
+    - Measured in installed Firefox 156 on 2026-09-16 (CRITIC C9): the neighbors must be inside the same mapped flow,
+      one text node. `<span>日本` newline `<span>語</span></span>` keeps the space (53.3333px = `日本 語`);
+      `<span>日本` newline `語</span>` removes it (48px).
   - a space right before a combining mark is kept as a space (`:337-345`).
 - **CR (U+000D)** is not white space here: it's kept as is in every mode and it ends the "in white space" state
   (`:169-179, :369-379`). **FF (U+000C)** and **VT (U+000B)** are ordinary characters for this transform.
@@ -756,6 +765,11 @@ textFrame.trimTrailingWhiteSpace():                                        // :1
 | white-space-only text | no frame at a line boundary; elsewhere a frame whose text may collapse to nothing (placed with zero width, making the line breakable) | `nsCSSFrameConstructor.cpp:5263-5286`; `nsTextFrame.cpp:10953-10957`; `nsLineLayout.cpp:1391-1403` |
 | CR, FF, VT | kept by the transform, zero width in the DOM; CR is a word boundary for the line breaker; all three are trimmable at line start/end when not significant | 3.3, 3.4; `nsLineBreaker.h:260-264`; `nsTextFrame.cpp:904-942` |
 
+Measured in installed Firefox 156 on 2026-09-16: the last row is wrong for VT (CRITIC W3). `aaaa \vbbbbb` in 16px
+Courier New at 57.6px gives line starts [0, 6]: VT is class BK, so the break comes after it, and it stays at the end
+of line 1 with zero width. VT isn't trimmable (`nsTextFrame.cpp:904-919`), so the space before it isn't trimmed either:
+right-aligned, line 1 starts at x 9.6 (48px wide).
+
 ## 6. "Firefox splits inside a word only while the line has no ordinary break"
 
 - **Where**:
@@ -856,6 +870,11 @@ Canvas path: a main-thread `new OffscreenCanvas()` has no pres shell (`dom/canva
    CR/FF/VT at zero width, turns tabs into stops or collapses them, and LF per white-space.
 6. The hyphen glyph: U+2010 if the first font maps it, else `-` (`gfxTextRun.cpp:2464-2473`). A canvas measuring
    U+2010 falls back silently to another font, so the page can't tell which case applies.
+   - Measured in installed Firefox 156 on 2026-09-16, with the source read: there is no silent fallback. Gecko's
+     HarfBuzz nominal-glyph callback substitutes `-` for U+2010 and U+2011 when the font lacks them
+     (`gfxHarfBuzzShaper.cpp:119-124`), and font matching falls back to `-` in the primary font
+     (`gfxTextRun.cpp:3227-3229`). Georgia has no U+2010, and OC `'‐'` = 5.9833px = 359 au = `-` with either generic
+     after it. So `au('‐')` gives the hyphen run's advance whenever the first font has U+2010 or `-`.
 7. Font sizes not representable in 7 bits (for example 14.4px → 14.375px): no exact scaling back.
 8. `sbix` emoji: Core Text at the device size in the DOM vs CSS size in canvas (`gfxMacFont.cpp:448-462`;
    PLATFORM_BUGS.md:12).
@@ -912,6 +931,9 @@ Common setup unless stated:
 12. **Inline end padding shrinks the space on every line of the span.**
     - Probe: width `57.6px`, `<span style="padding-right:9.6px">aaa aaa b</span>`; control without the padding.
     - Expected: `aaa` / `aaa b` with padding; `aaa aaa` / `b` without.
+    - Measured in installed Firefox 156 on 2026-09-16 (refuted control): at 57.6px (3456 au) `aaa aaa` is 4032 au and
+      can't fit, so both elements give `aaa` / `aaa b`. At 67.2px (4032 au) the claim holds: with padding `aaa` /
+      `aaa b`, without `aaa aaa` / `b`. Use 67.2px.
 13. **pre-wrap hangs only the overflowing part.**
     - Probe: `white-space: pre-wrap; text-align: right`, width `57.6px`, `aaaa   bb` (three spaces).
     - Expected: lines `aaaa   ` / `bb`. The first `a` sits at x = 19.2px (1152 au = hangable 1728 − 576).

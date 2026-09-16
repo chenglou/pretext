@@ -140,6 +140,10 @@ function setFontDisconnected(ctx, fontString) {
 - `resizedFont.size = computedSize * (1 / CSSToDevPixelScale)` (`:4263-4264`), then
   `QuantizeFontSize(resizedFont.size.ToCSSPixels())` (`:4268-4269`). `CSSToDevPixelScale = 60 / apd`, so at DPR 2 this
   quantizes `size / 2`.
+- Measured in installed Firefox 156 on 2026-09-16: `computedSize` is already kept to 10 significant bits by Servo
+  (`servo/components/style/values/specified/font.rs:993-1022`), and the getter returns the computed size
+  (`CanvasRenderingContext2D.cpp:2883-2893, :4358-4359`): `13.33px Arial` reads back `13.3281px Arial`, `12.1px` →
+  `12.0938px`, and `1.2em` under a 16px parent → `19.1875px` (H3).
 - `resizedFont.kerning = CanvasToGfx(fontKerning)` (`:4271`, mapping `:1193-1204`), then `nsPresContext::GetMetricsFor`
   (`:4345-4353`). `nsFontMetrics` converts the size with `ToAppUnits(size) / apd` (`gfx/src/nsFontMetrics.cpp:133-134`)
   and uses `devToCssSize = apd / 60` (`:151-154`).
@@ -172,6 +176,12 @@ function quantizeFontSize(size: number): number {     // all float32
 - Canvas size equals DOM size only when `quantize(s) === round(s*60)/60`. Integers, halves and quarters (below 32px)
   qualify. Odd eighths never do: `13.375px` is `802.5 au` → `803 au` → `13.38333px` in the DOM, but stays `13.375px` in
   Canvas [P].
+- Measured in installed Firefox 156 on 2026-09-16: the DOM size reaches the 1/60 px grid only after Servo's 10-bit
+  `quantize_font_size` (H3b). `16.8px` lays out at 16.8125px = 1009 au: 60 × `m` in Georgia measures 53340 au at 16.8,
+  16.81 and 16.8166667px. The equality condition becomes `quantize7(s) === round(q10(s) * 60) / 60`, with
+  `q10(x) = d - (d - x)`, `d = fround(x * 16385)`. Integers, halves, quarters and odd eighths keep their results
+  (13.375px: DOM − OC 0.3334px; 13.5px equal, H4); 16.8px doesn't. A2, §1.10 row 2 and A12's `domDevSize` need
+  `q10(s)` in place of `s`.
 
 **C3. Language** (`ResolveFontLang`, `:5421-5478`) [V], first match wins:
 
@@ -357,6 +367,13 @@ bidi.setParagraph(text, baseLevel); for each visual run:                        
   11.5/12.5/14/15/16/18/20/24/28) and jfkthame's comment 3 (DPR split, bitmap font).
 - All probed advances (8–40px, U+1F600) are whole pixels, so an OffscreenCanvas measured at font size `size·DPR` and
   divided by DPR reproduces the DOM value exactly at DPR 2 [P/I].
+- Measured in installed Firefox 156 on 2026-09-16: exact for U+1F600 and the ZWJ family at 8–32px at apd 30, 60, 40
+  and 23 (DPR 2 DOM: 10.5, 11.5, 12.5, 14, 16, 20, 24, 32). Not exact at apd 27 (110% zoom at DPR 2) for 20px and 24px:
+  DOM 19.8px and 23.85px, recipe 20.25px and 24.3px. The DOM asks Core Text at `round(q10(s) * 60) / apd` device px
+  (44.44px and 53.33px, advances 44 and 53), while OffscreenCanvas quantizes `s·DPR` to 7 bits (44.5px and 53.5px,
+  advances 45 and 54). The recipe is exact when both sizes get the same whole-pixel advance, which holds when `s·DPR`
+  is on the 7-bit grid and equals the DOM device size, as for integer sizes at DPR 1 and 2. At fractional apd it can
+  miss by one device pixel (E6, A12).
 
 ### 1.10 Canvas versus DOM text of the same string
 
@@ -469,6 +486,11 @@ tail, and after TAB/CR/LF when those are not significant (`nsTextFrame.cpp:880-8
 A8. **Hyphens: manual / SHY.** The DOM hyphen glyph width is the width of a text run of U+2010 if the first font of the
 group has U+2010, else `-` (`gfxTextRun.cpp:2458-2488`). `au('‐')` is correct only when the first font covers
 U+2010; otherwise Canvas may use a fallback font's U+2010 instead of the first font's `-` (§3 N5).
+
+Measured in installed Firefox 156 on 2026-09-16: no fallback happens. When the first font lacks U+2010 or U+2011,
+Gecko's HarfBuzz callback substitutes `-` (`gfxHarfBuzzShaper.cpp:119-124`; `gfxTextRun.cpp:3227-3229`). Georgia has
+no U+2010, and OC `'‐'` = `'-'` = 5.9833px. So `au('‐')` equals the hyphen run's advance whenever the first font has
+U+2010 or `-`. N5 and gecko-lines §9 item 6 change the same way; H25 can't discriminate in Georgia.
 
 A9. **Direction and bidi.** Measure each bidi run as its own unit with `ctx.direction` set to the run's direction.
 Canvas splits further where a strong class changes between RTL scripts (C9); DOM frames do their own resolution, so
@@ -640,6 +662,9 @@ DOM `<span>` in a `lang="en"` page with `white-space: pre` measured by `getBound
 2. **Connected canvas grid.** EC `font='16px Georgia'` at DPR 2: `width * 30` is an integer; `width * 60` is never odd
    for any of 50 random words; EC and OC differ by at most `n/60` px for an `n`-glyph word.
 3. **Quantized readback.** OC `ctx.font='13.33px Arial'` reads back `13.375px Arial`; EC reads back `13.33px Arial`.
+   - Measured in installed Firefox 156 on 2026-09-16 (refuted for EC): OC reads back `13.375px Arial` as stated; EC
+     reads back `13.3281px Arial` (13.3 → 13.2969, 16.8 → 16.8125, `1.2em` → 19.1875), Servo's 10-bit quantization of
+     the computed size (§1.2 C1b note).
 4. **Odd eighths.** `font: 13.375px Georgia`, text `'The quick brown fox jumps over the lazy dog. '` repeated 4 times:
    DOM − OC is positive, between 0.3 and 1.2 px (DOM size 803/60 = 13.3833px). At `13.5px` DOM×60 == OC×60 exactly.
 5. **Emoji sizes.** OC `measureText('😀')` at `Npx "Helvetica Neue"`: 10→13, 12→16, 14→19, 16→21, 20→23, 24→25, 28→28.

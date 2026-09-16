@@ -177,6 +177,8 @@ More available-width values (float32 emulated): `width: 100.01px` gives 6400 raw
 
 The HTML canvas resets `ComputedSize` and `AdjustedSize` to `SpecifiedSize`, "to skip zoom and minimum font size" (`B/modules/canvas/canvas2d/canvas_rendering_context_2d.cc:690-706, 722-727`). Canvas `letterSpacing` / `wordSpacing` are converted with the canvas's conversion data (`B/modules/canvas/canvas2d/canvas_rendering_context_2d_state.cc:399-403, 900-903`). **[I]** To get DOM device-px widths at zoom 2 from Canvas, measure at `2 × font-size` (the same float32 `EffectiveFontSize` floor then applies to the same value).
 
+Measured in installed Chrome 153 on 2026-09-16: holds for Arial (DOM `Hello world` 79.140625 = W(32px)/2) and Apple Color Emoji (DOM = ceil64(W(2 × size))/128 at 8–32px), not for `system-ui`. In a clean renderer the system-ui DOM width is `ceil64(W(size) × 2)/128`, from Canvas at the CSS size (13px: DOM 67.875, W(13px) 67.8691406, W(26px)/2 62.5902023), because opsz and HarfBuzz ptem take the specified size. After a Canvas has created the 26px platform font first, the DOM gives 60.5703125: `FontCacheKey` has no specified size, so opsz follows whichever text created the font (blink-canvas §1.8 note; PROBES.md).
+
 ---
 
 ## 3. What the line breaker visits
@@ -962,6 +964,8 @@ Canvas `measureText` in Chrome (`B/core/html/canvas/text_metrics.cc:95-112, 172-
 | Break opportunities | Not Canvas (break-data spec) |
 | Zoomed-size effects (emoji bitmaps, `system-ui` optical variants) | Measure at `zoom × size`; PLATFORM_BUGS.md records the known gaps at small sizes |
 
+Measured in installed Chrome 153 on 2026-09-16: the last row holds for emoji bitmaps (DOM = ceil64(W(size × 2))/128 at 8–32px at DPR 2) but not for `system-ui`, whose clean DOM width comes from Canvas at the CSS size (§2.5 note). `-apple-system` measures like `sans-serif`, not like `system-ui`.
+
 The groundwork's Canvas-only run (results-canvas-only-blink.txt) got 96.3% of Chrome line counts from totals plus probes. The losses came from in-word positions and totals across spaces, not from the rules above.
 
 ---
@@ -972,6 +976,7 @@ All: page zoom 100%, a `<div>` with the given `width`, `padding: 0`, `font` as g
 
 1. **Fit epsilon (DPR 1).** Font `16px Arial`, text `nnnnn nnnnn`. Width `(C64 − 1)/64` px → 1 line. Width `(C64 − 2)/64` px → 2 lines. Width `(C64 − 1)/64 + 1/128` px → 1 line (truncation to 1/64).
 2. **Device grid (DPR 2).** Same text. Let `C128 = ceil(W32 × 64)` with `W32` measured at `32px Arial`. Width `(C128 − 1)/128` → 1 line; `(C128 − 2)/128` → 2 lines. Expect at least one width in `[C64/64 − 1/32, C64/64]` where DPR 1 and DPR 2 give different line counts, exactly as the formulas predict.
+   - Measured in installed Chrome 153 on 2026-09-16 (refuted for this string): `nnnnn nnnnn` has 64 × W16 = 5979.5, so C128 = 2 × C64 − 1 and both formulas give the same threshold; DPR 1 and DPR 2 agree at every width. (C128 − 1)/128 → 1 line and (C128 − 2)/128 → 2 lines hold. The DPRs differ, at the single width (2 × C64 − 2)/128, only when C128 = 2 × C64: `Hello world` at 10128/128, `abc def ghi` at 10018/128 and `The quick brown` at 15024/128 give 1 line at forced DPR 1 and 2 lines at DPR 2.
 3. **Emulated DPR.** In DevTools device emulation or headless with `deviceScaleFactor: 2` on a DPR 1 screen, `devicePixelRatio == 2` but probe 2's thresholds equal probe 1's (layout zoom 1).
 4. **Effective font size floor.** DPR 1, span `mmmmmmmmmmmmmmmmmmmm` (20 × m) with `white-space: nowrap`. `getBoundingClientRect().width` at `17.3px Arial` equals the width at `17.29px Arial` and differs from `17.31px Arial`. Canvas `measureText` at `17.3px Arial` also equals `17.29px`.
 5. **Styled runs.** `width: 1px; font: 16px Arial`. `<b>foo</b>bar` → 1 line. `<b>foo </b>bar` → 2 lines. `<b>foo</b> bar` → 2 lines. `foo<span lang="ja">bar</span>` → 1 line.
@@ -985,6 +990,7 @@ All: page zoom 100%, a `<div>` with the given `width`, `padding: 0`, `font` as g
 13. **Emergency break redoes the line.** `width: 60px; font: 16px Arial`, `<div>aaaaaaaaaaaaaaaa<span style="overflow-wrap:anywhere">bbbbbbbb</span></div>` → line 1 is `aaaaaaaaaaaaaaaab` (the unbreakable prefix plus exactly one `b`), then the rest of the b's by grapheme fill.
 14. **Soft hyphen at an item end is dropped when text follows.** `16px Arial`, wide div, `aaaa&shy;<span>bbbb</span>` → 1 line, no hyphen drawn; the line width equals `ceil64(W("aaaa­"))` + `ceil64(W("bbbb"))` in 1/64 steps.
 15. **Han kerning trim at line end (default text-spacing-trim).** `16px "Hiragino Sans"`, text `あああ」いいい`. Let `F = C64("あああ」")/64` (Canvas shapes each CJK character alone, so this is the untrimmed width). Width `F − 4` px (the bracket is a full-width em of 16px, and `halt` should remove about half of it) → line 1 is `あああ」`, because ShapeLine reshapes the bracket with `halt` at the line end and it fits. Width `F − 9` px → line 1 no longer ends with `」` (exact content depends on break data for U+300D, which cannot start a line). The same probe in a font without `halt` (for example `16px "Courier New"` with a fallback font) keeps `」` off line 1 at `F − 4` px.
+    - Measured in installed Chrome 153 on 2026-09-16 (refuted control): Hiragino Sans behaves as stated (F − 4 → `あああ」`, F − 9 → `ああ`; smallest width keeping `あああ」` 55.9921875). Courier New gives the same: its 」 comes from a CJK fallback font that has `halt`, and `TextSpacingTrimFallback`/`TextSpacingTrimFallbackChws` are stable (§18), so the bracket is trimmed with the same 55.9921875 threshold. The trim follows the font that renders the bracket, including a fallback. A control needs a bracket from a font without `halt`/`chws`; none was identified.
 16. **Re-break after a 1-raw position/width mismatch.** DPR 1, `font: 16px "Times New Roman"`, text `nnn nnnn nnnn nnnn` in a width where line 2 starts at `nnnn` inside the same item. Compute with the §6 pseudo-code over Canvas prefix widths (`measureText` of each prefix). Expected: wherever `ceil64(P(b)) − ceil64(P(start))` fits but `ceil64(P(b) − P(start))` is 1 raw too wide, Chrome ends line 2 one opportunity earlier than a position-only model. A width scan in 1/64 px steps over the line-2 threshold should show such a width if the prefix sums have fractional 1/64 parts.
 
 ---
