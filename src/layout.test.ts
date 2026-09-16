@@ -968,6 +968,38 @@ describe('boundary-policy regressions', () => {
     expect(analyzeText('ab\u0085cd', webkit).kinds).toEqual(['text', 'control', 'text'])
   })
 
+  test('every text segment of an engine scan takes emergency grapheme breaks', async () => {
+    const { getEngineProfile } = await import('./measurement.ts')
+    const profile = getEngineProfile()
+    const previous = profile.lineBreakScan
+    try {
+      for (const scan of ['blink', 'webkit'] as const) {
+        profile.lineBreakScan = scan
+        // Digits, which Safari's JavaScriptCore doesn't mark word-like, symbols and emoji.
+        for (const text of ['11111111', '-0.475', '\u{1F1FA}\u{1F1F8}/\u{1F469}\u200D\u{1F4BB}', '\u{1F600}--tail']) {
+          const prepared = prepareWithSegments(text, FONT)
+          for (let i = 0; i < prepared.segments.length; i++) {
+            if (prepared.kinds[i] === 'text' && getSegmentGraphemes(prepared.segments[i]!).length > 1) {
+              expect({ text, segment: prepared.segments[i], breakable: prepared.breakableFitAdvances[i] !== null }).toEqual({ text, segment: prepared.segments[i], breakable: true })
+            }
+          }
+          const graphemes = getSegmentGraphemes(text).filter(grapheme => grapheme !== ' ')
+          const width = Math.min(...graphemes.map(grapheme => measureWidth(grapheme, FONT))) + 0.1
+          const result = layoutWithLines(prepared, width, LINE_HEIGHT)
+          expect(result.lines.map(line => line.text)).toEqual(graphemes)
+          expect(collectStreamedLines(prepared, width)).toEqual(result.lines)
+          expect(layout(prepare(text, FONT), width, LINE_HEIGHT).lineCount).toBe(graphemes.length)
+        }
+      }
+      // The merged segmentation still asks Intl.Segmenter, CJK and symbol runs.
+      profile.lineBreakScan = null
+      const flag = prepareWithSegments('\u{1F1FA}\u{1F1F8}/\u{1F469}\u200D\u{1F4BB}', FONT)
+      expect(flag.breakableFitAdvances.every(advances => advances === null)).toBe(true)
+    } finally {
+      profile.lineBreakScan = previous
+    }
+  })
+
   test('a rich item keeps its collapsed leading whitespace as WebKit break context', async () => {
     const { getEngineProfile } = await import('./measurement.ts')
     const profile = getEngineProfile()

@@ -2320,21 +2320,13 @@ function segmentAtLineBreaks(normalized: string, breaks: Uint8Array, whiteSpace:
     }
   }
   const texts: string[] = []
+  // Every text segment takes emergency grapheme breaks in the layout that reads this
+  // segmentation, as Blink and WebKit retry an overflowing line between any two
+  // graphemes under break-word, so no segment needs Intl.Segmenter's word-likeness.
   const isWordLike: boolean[] = []
   for (let j = 0; j < len; j++) {
     texts.push(normalized.slice(starts[j]!, j + 1 < len ? starts[j + 1]! : normalized.length))
     isWordLike.push(false)
-  }
-  // Intl.Segmenter's word-likeness still decides emergency breaks: a text segment is a
-  // word where a word-like segment of the whole text overlaps it.
-  let first = 0
-  for (const word of getSharedWordSegmenter().segment(normalized)) {
-    if (word.isWordLike !== true) continue
-    const wordEnd = word.index + word.segment.length
-    while (first + 1 < len && starts[first + 1]! <= word.index) first++
-    for (let j = first; j < len && starts[j]! < wordEnd; j++) {
-      if (kinds[j] === 'text') isWordLike[j] = true
-    }
   }
   return { len, texts, isWordLike, kinds, starts }
 }

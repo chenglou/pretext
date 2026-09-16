@@ -643,10 +643,13 @@ function measureAnalysis(
     }
 
     const followingSpaceTail = segKind === 'text' || segKind === 'glue' ? getFollowingSpaceTail(mi, segText) : null
-    // Text with CJK in it breaks between graphemes when it overflows, whether or not
-    // Intl marks it as a word, as the units above do.
+    // Under break-word, Blink retries an overflowing line with a break allowed between
+    // any two graphemes (line_breaker.cc) and WebKit searches the word's grapheme
+    // prefixes (TextUtil::breakWord), so every text segment of an engine's scan takes
+    // emergency grapheme breaks. In the merged segmentation, words, text with CJK in
+    // it and independent symbol runs do.
     pushMeasuredTextSegment(segText, getTextMetrics(segText, followingSpaceTail), segKind,
-      segKind === 'text' && (analysis.isWordLike[mi]! || isCJK(segText) || isIndependentSymbolRun(segText)),
+      segKind === 'text' && (engineProfile.lineBreakScan !== null || analysis.isWordLike[mi]! || isCJK(segText) || isIndependentSymbolRun(segText)),
       followingSpaceTail)
   }
 

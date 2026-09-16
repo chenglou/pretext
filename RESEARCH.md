@@ -63,10 +63,18 @@ Where a line can still end after the ZWSP or soft hyphen, before a space, tab, h
 break or NEL, it keeps its kind. WebKit scans a text node's source, where
 a collapsed TAB is still UAX #14 BA, so the WebKit profile maps the source's
 opportunities onto the normalized text; Blink scans the collapsed text, as Pretext
-normalizes it. `Intl.Segmenter` still says which text segments are words for emergency
-breaks, and text with CJK in it takes grapheme breaks, as CJK units did. Between
-rich-inline items, the WebKit profile reads the previous item's last two characters
-as prior context, as `TextUtil::mayBreakInBetween` does.
+normalizes it. Every text segment of a scan takes emergency grapheme breaks: under
+`overflow-wrap: break-word` Blink retries an overflowing line with a break allowed
+between any two graphemes (line_breaker.cc) and WebKit searches the word's grapheme
+prefixes (`TextUtil::breakWord`), so the permission doesn't come from
+`Intl.Segmenter`'s word-likeness, which Safari's JavaScriptCore withholds from
+numbers (`11111111` at 1px laid out as one line, 230 September 15 gate rows) and every
+engine from emoji and symbol runs (`🇺🇸/👩‍💻` at 8px, where both browsers break
+before the `/` that no scan allows, 526 rows). The scan path skips the word
+segmentation pass; the merged segmentation still asks `Intl.Segmenter`, CJK and
+independent symbol runs. Between rich-inline items, the WebKit profile reads the
+previous item's last two characters as prior context, as `TextUtil::mayBreakInBetween`
+does.
 
 Chrome's `line_normal_cj.brk` doesn't ship, so curly quotes wrap on `zh` pages as on
 `en` pages. ENGINE_FOLLOWUPS.md lists that and the other deliberate differences.
