@@ -131,6 +131,7 @@ Open engine work: decisions for the maintainer, known gaps and harness debt.
 - Cite the HTML spec for the OffscreenCanvas language snapshot in PLATFORM_BUGS.
 - Accepted losses live only in VALIDATION prose and go silent once the pin advances. If they become frequent, consider a gated `changedFailures` report.
 - Checker logs print harmless osascript -1728 errors when restoring the frontmost app; resolve the app by bundle id. Record screen and viewport per leg in the run manifest, since some Safari legs ran on the portrait screen.
+- The Safari ideographic punctuation keep-all case requires nothing until the WebKit profile models Safari 27's keep-all breaks after punctuation. Require height, line count and breaks again in that change.
 - Automation Firefox starts through LaunchServices, outside the checker's process group, so an interrupted or killed checker leaves it running with its temporary profile. Quit that instance by hand; if interrupts become common, stop the owned PID from a signal handler.
 
 ## External actions
