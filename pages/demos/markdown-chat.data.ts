@@ -66,8 +66,8 @@ const BASE_MESSAGE_SPECS: MarkdownChatSeed[] = [
     'const conversation = layoutConversation(preparedMessages, width)',
     'const visible = findVisibleRange(conversation, scrollTop, viewportHeight, bannerHeight)',
     'for (let index = visible.start; index < visible.end; index++) {',
-    '  const frame = layoutMessageFrame(preparedMessages[index], width)',
-    '  renderMessage(frame, bannerHeight + conversation.tops[index], conversation.heights[index])',
+    '  const message = layoutMessage(preparedMessages[index], width)',
+    '  renderMessage(message, bannerHeight + conversation.tops[index], conversation.heights[index])',
     '}',
     '```',
   ),
@@ -258,7 +258,7 @@ const BASE_MESSAGE_SPECS: MarkdownChatSeed[] = [
   ),
   message(
     'assistant',
-    'That is one of the better parts of the demo right now: width changes rebuild the frame and remount only the visible window.',
+    'That is one of the better parts of the demo right now: width changes recompute every height and re-render only the visible window.',
   ),
   message(
     'user',
@@ -270,10 +270,24 @@ const BASE_MESSAGE_SPECS: MarkdownChatSeed[] = [
   ),
 ]
 
-// The thread opens with the hand-written seeds above. Every later message is
-// generated: it takes the shape and markdown features of one of the seeds, with
-// the seeds' frequencies, and fills it with corpus text. Real chats don't reuse
-// the same 44 messages, so preparation meets new words as they do.
+// An Arabic answer, with an English name and a number inside its paragraph, a
+// list and a quote. The chat paints each from the right.
+const RIGHT_TO_LEFT_MESSAGE = message(
+  'assistant',
+  'ملخص سريع للفريق: تضم هذه المحادثة 10,000 رسالة، ويحسب Pretext ارتفاع كل رسالة منها قبل أن تظهر على الشاشة، فلا يحتاج التمرير إلى قياس أي شيء من الصفحة.',
+  '',
+  '- تُقاس النصوص مرة واحدة عند تحضير الرسائل.',
+  '- يُعاد حساب الارتفاعات كلما تغيّر العرض.',
+  '- لا تُرسم إلا الرسائل الظاهرة على الشاشة.',
+  '',
+  '> إذا عرفنا الارتفاع الدقيق مسبقًا، لم يعد التمرير الافتراضي تخمينًا، بل صار هندسة.',
+)
+
+// The thread opens with the hand-written seeds above, and the right-to-left
+// message sits near its end. Every other message is generated: it takes the
+// shape and markdown features of one of the seeds, with the seeds' frequencies,
+// and fills it with corpus text. Real chats don't reuse the same 44 messages, so
+// preparation meets new words as they do.
 const GENERATOR_SEED = 20260404
 // There are 22 seeds of each role, and each seed is one weight.
 const SHAPES_PER_ROLE = 22
@@ -315,6 +329,10 @@ export function createMarkdownChatSpecs(count: number): MarkdownChatSeed[] {
     seen.add(markdown)
     specs.push({ role, markdown })
   }
+  // It takes the place of the third message from the end, an assistant message,
+  // so the chat shows it soon after opening on the latest message. The others
+  // stay as generated.
+  specs[count - 3] = RIGHT_TO_LEFT_MESSAGE
 
   return specs
 }

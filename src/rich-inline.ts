@@ -20,6 +20,8 @@ import {
 } from './line-text.js'
 import {
   breaksAfter,
+  canReturnFromUnfitHyphen,
+  isDiscretionaryLineEnd,
   type LineBreakCursor,
   type PreparedLineBreakData,
   stepPreparedLineGeometry,
@@ -764,8 +766,28 @@ function stepRichInlineLine(
     let lineWidthContribution = gapBefore + itemOccupiedWidth
 
     // The lower-level walker may force one unit to make progress. If that unit
-    // only fits on a fresh line, wrap before this rich item instead.
-    if (hasContent && atItemStart && lineWidthContribution > remainingWidth + lineFitEpsilon) break lineLoop
+    // only fits on a fresh line, wrap before this rich item instead. A line that
+    // ends at a soft hyphen can overflow by the hyphen alone, which the walker
+    // keeps when the item has no earlier break to return to. Plain text keeps it
+    // too, unless the Chromium profile returns to the break before the item.
+    if (hasContent && atItemStart && lineWidthContribution > remainingWidth + lineFitEpsilon) {
+      const { prepared } = item
+      if (!isDiscretionaryLineEnd(prepared.kinds, lineEnd.segmentIndex, lineEnd.graphemeIndex)) break lineLoop
+      const softHyphenIndex = lineEnd.segmentIndex - 1
+      const beforeHyphen: LineBreakCursor = { segmentIndex: cursor.segmentIndex, graphemeIndex: cursor.graphemeIndex }
+      const textWidth = stepPreparedLineGeometry(prepared, beforeHyphen, availableWidth, softHyphenIndex, 0)
+      if (
+        textWidth === null ||
+        gapBefore + textWidth + item.extraWidth > remainingWidth + lineFitEpsilon ||
+        (
+          item.breakBefore &&
+          lineWidth + prepared.discretionaryHyphenWidth <= safeWidth + lineFitEpsilon &&
+          canReturnFromUnfitHyphen(prepared, 0, 0, softHyphenIndex)
+        )
+      ) {
+        break lineLoop
+      }
+    }
 
     // Preserve ordinary breaks before emergency splitting the next word: the
     // last one the joined text offers inside its first segment, else the item

@@ -42,11 +42,29 @@ known-failure reporting, native observation limits and reproducible case IDs.
 Failed benchmark reports retain their evidence in `<output>.failed.json`, or under
 `.artifacts/benchmarks/` when no output path was requested.
 
+The shape rows run after every other section. They prepare batches of
+U+3000-indented and letter-spaced Chinese, VS16 and ZWJ emoji, long invisible
+tails, soft hyphens, dashes, CJK brackets with and without keep-all, and
+controls next to spaces. Each row reports ms per text for its first cold batch,
+the median cold batch after `clearCache()`, a warm batch with filled caches and
+a hot `layout()` pass. Apart from the first batch, each sample repeats its work
+for at least 20ms so Safari's 1ms timer resolves it. `canvasCalls` counts
+`measureText()` in one cold batch. The last row is shaped like virtualization:
+1,000 distinct sentences in a font no other row measures, so its first batch is
+the fresh-text prepare. WebKit's width cache can speed up repeated cold batches
+of the same strings, so compare Canvas calls and first batches before trusting a
+difference only the median cold batch shows.
+
 Benchmarks require a visible, focused page throughout and reject observed window,
 viewport or screen changes. The three runs must have matching environments before
 we take their median; snapshots retain each run's request and environment.
 Foreground Firefox sessions request activation of the owned tab and process by
-PID; a headed window alone does not establish focus.
+PID; a headed window alone does not establish focus. Automation launches Firefox
+through LaunchServices (`open -n -a`, with `-g` unless the session asks for
+foreground) and stops the process that names its disposable profile, because
+macOS 27 denies a shell's processes access to apps' folders under
+`~/Library/Application Support` and a directly spawned Firefox exits with
+"Could not find profile folder." for any `--profile`.
 
 For portable Chrome correctness checks, use `bun run test:wrapping --transport=playwright --browser=chrome`. This launches installed Chrome in an isolated headed browser with its native viewport. Install Chrome normally first; the adapter uses `playwright-core` without downloading another browser. Safari continues to use the native macOS path; Playwright WebKit is not treated as Safari. This transport is for correctness checks only; Playwright can emulate focus, so its visible/focused fields do not prove native tab attention. Benchmark scripts retain foreground native automation.
 

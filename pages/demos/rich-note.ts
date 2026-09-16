@@ -2,6 +2,8 @@ import {
   BODY_DEFAULT_WIDTH,
   BODY_FONT,
   BODY_MIN_WIDTH,
+  CHIP_PADDING_X,
+  CODE_PADDING_X,
   DEFAULT_RICH_NOTE_SPECS,
   prepareRichInlineNote,
   layoutRichNote,
@@ -37,6 +39,9 @@ const st: State = {
 }
 
 let scheduledRaf: number | null = null
+
+domCache.root.style.setProperty('--code-padding-x', `${CODE_PADDING_X}px`)
+domCache.root.style.setProperty('--chip-padding-x', `${CHIP_PADDING_X}px`)
 
 domCache.widthSlider.addEventListener('input', () => {
   st.events.sliderValue = Number.parseInt(domCache.widthSlider.value, 10)
@@ -87,6 +92,7 @@ function renderBody(note: PreparedRichInlineNote, layout: RichNoteLayout): void 
     row.style.setProperty('--font', BODY_FONT)
     row.style.top = `${lineIndex * LINE_HEIGHT}px`
 
+    let previousElement: HTMLElement | null = null
     for (let fragmentIndex = 0; fragmentIndex < line.fragments.length; fragmentIndex++) {
       const part = line.fragments[fragmentIndex]!
       const element = renderPart(part.className, part.font, part.href, part.text)
@@ -97,11 +103,12 @@ function renderBody(note: PreparedRichInlineNote, layout: RichNoteLayout): void 
       if (gapItemIndex === part.itemIndex) {
         element.prepend(' ')
       } else if (gapItemIndex >= 0 && gapItemIndex === line.fragments[fragmentIndex - 1]?.itemIndex) {
-        row.lastElementChild!.append(' ')
+        previousElement!.append(' ')
       } else if (gapItemIndex >= 0) {
         row.appendChild(renderPart(note.classNames[gapItemIndex]!, note.fonts[gapItemIndex]!, note.hrefs[gapItemIndex] ?? null, ' '))
       }
       row.appendChild(element)
+      previousElement = element
     }
 
     fragment.appendChild(row)

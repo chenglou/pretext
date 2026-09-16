@@ -815,6 +815,28 @@ instead of keeping the shorter part. No browser witness backed the raw compariso
 Atomic `break: 'never'` items allow a break on both sides. css-text requires this
 for atomic inlines, and headless Chromium and WebKit inline-blocks agreed.
 
+An item's walk can also end at a soft hyphen whose hyphen doesn't fit, where the
+item has no earlier break to return to. Only the hyphen overflows there, not a
+unit the walker forced onto the line. Wrapping before the item anyway broke
+where the joined text has no break: items `T` and `po\u00add` gave `T` / `pod`
+where `Tpo\u00add` gives `Tpo-` / `d`, and line counts went up as the width grew
+(#323). Such a line now keeps its hyphen, as the flat walker does, unless the
+Chromium profile returns to the break before the item with the flat walker's
+checks: that break leaves room for the hyphen, no soft hyphen up to the hyphen
+measures narrower joined than apart, and nothing after the break can hold a
+later opportunity. Blink retries the text item against the width minus the
+hyphen, then rewinds earlier items at the full width, so any break before the
+item counts, including one between ideographs, where the flat walker records no
+target. Whether the text before the hyphen fits comes from walking the item
+again up to the soft hyphen; subtracting the hyphen's width from the line's
+width left ranges under 1e-6px wide where layout still moved backward. In a
+seeded search with a tabulated fake canvas, 400 flows per profile with and
+without kerning and item options, flows whose lines move backward as the width
+grows fell from 43-60 to 7-14 per profile, and no flow without a soft hyphen
+changed. The rest have an item that starts or ends with a soft hyphen, or move
+backward in plain text too, where a Blink return appears only once its target
+leaves room for the hyphen.
+
 Items are measured separately. Chromium shapes neighboring same-font spans
 together, so Arial `community` + `,` natively fits about a pixel earlier than the
 sum of the two measurements; Gecko frames kern there too, while WebKit spans do

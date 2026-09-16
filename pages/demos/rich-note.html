@@ -128,26 +128,26 @@
       text-underline-offset: 0.14em;
     }
     .frag--code {
-      padding: 2px 7px 3px;
+      padding: 2px var(--code-padding-x) 3px;
       border-radius: 3px;
       background: rgba(17, 31, 43, 0.08);
     }
     .chip {
       display: inline-flex;
       align-items: center;
-      padding: 0 10px;
+      padding-inline: var(--chip-padding-x);
       min-height: 24px;
       border-radius: 999px;
       white-space: nowrap;
-      border: 1px solid transparent;
       vertical-align: baseline;
       transform: translateY(-1px);
     }
-    .chip--mention { background: rgba(21, 90, 136, 0.12); color: #155a88; border-color: rgba(21, 90, 136, 0.12); }
-    .chip--status { background: rgba(196, 129, 20, 0.12); color: #916207; border-color: rgba(196, 129, 20, 0.14); }
-    .chip--priority { background: rgba(176, 44, 44, 0.1); color: #8e2323; border-color: rgba(176, 44, 44, 0.14); }
-    .chip--time { background: rgba(70, 118, 77, 0.11); color: #355f38; border-color: rgba(70, 118, 77, 0.14); }
-    .chip--count { background: rgba(67, 57, 122, 0.1); color: #483e83; border-color: rgba(67, 57, 122, 0.13); }
+    /* The ring is a shadow, so it adds no width to the chip. */
+    .chip--mention { background: rgba(21, 90, 136, 0.12); color: #155a88; box-shadow: inset 0 0 0 1px rgba(21, 90, 136, 0.12); }
+    .chip--status { background: rgba(196, 129, 20, 0.12); color: #916207; box-shadow: inset 0 0 0 1px rgba(196, 129, 20, 0.14); }
+    .chip--priority { background: rgba(176, 44, 44, 0.1); color: #8e2323; box-shadow: inset 0 0 0 1px rgba(176, 44, 44, 0.14); }
+    .chip--time { background: rgba(70, 118, 77, 0.11); color: #355f38; box-shadow: inset 0 0 0 1px rgba(70, 118, 77, 0.14); }
+    .chip--count { background: rgba(67, 57, 122, 0.1); color: #483e83; box-shadow: inset 0 0 0 1px rgba(67, 57, 122, 0.13); }
     @media (max-width: 900px) {
       .preview {
         justify-content: center;
