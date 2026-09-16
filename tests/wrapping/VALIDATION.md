@@ -39,6 +39,16 @@ lines where the paragraph has five. The case now reads the text node with Range
 rects, so `wrap-06c1e0111950efed` becomes `wrap-8bb19504eadc995e` with the same
 origin, and requires nothing until the WebKit profile models the fix.
 
+The Safari leg of the full gate ran in the background against the pin `7c2ec51`,
+once from this branch's harness and once from main's: 162,489 LTR and 73,680 RTL
+rows. From this branch neither direction fixes or loses a metric, and none has
+required failures or execution errors. From main's harness the LTR leg fails the
+two required rows above. Between the two harnesses, main's assessments differ only
+in `wrap-4faaad4b08f18c01`'s line count, which now passes, and in the keep-all case:
+with spans main passed line count and breaks and failed height; from the text node
+it fails height, line count, breaks, source and widths. `bun test` and
+`bun run check` pass, and the pin stays.
+
 ## Rich inline keeps a line at an unfit soft hyphen as plain text does
 
 This runtime change starts from main `491c7f1` (#324). In `prepareRichInline()`,
