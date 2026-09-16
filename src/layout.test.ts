@@ -41,6 +41,8 @@ let walkRichInlineLineRanges: RichInlineModule['walkRichInlineLineRanges']
 let isCJK: AnalysisModule['isCJK']
 let variant: ReturnType<typeof createVariant>
 let canvasMeasurementCount = 0
+// Real fonts give WJ and U+FEFF no advance, and a mark on its base almost none.
+let shapesMarksAndJoiners = false
 
 const emojiPresentationRe = /\p{Emoji_Presentation}/u
 const punctuationRe = /[.,!?;:%)\]}'"”’»›…—-]/u
@@ -100,6 +102,7 @@ function measureWidth(text: string, font: string): number {
 
   for (const ch of text) {
     if (ch === '\u200B') continue
+    if (shapesMarksAndJoiners && (ch === '\u2060' || ch === '\uFEFF' || (width > 0 && /\p{M}/u.test(ch)))) continue
     if (ch === ' ') {
       width += fontSize * 0.33
       previousWasDecimalDigit = false
@@ -886,9 +889,10 @@ describe('boundary-policy regressions', () => {
       const analysis = analyzeText(text, profile, whiteSpace)
       return analysis.texts.map((segment, i) => `${segment}:${analysis.kinds[i]}`)
     }
-    // The ZWSP stays its own zero-width segment, with no break after it.
-    expect(segments('\u200B\u0301ab')).toEqual(['\u200B:zero-width-glue', '\u0301ab:text'])
-    expect(segments('x\n\u200B\u0301ab', 'pre-wrap')).toEqual(['x:text', '\n:hard-break', '\u200B:zero-width-glue', '\u0301ab:text'])
+    // The ZWSP stays its own zero-width segment, with no break after it, and the
+    // mark after it stays apart from the letters.
+    expect(segments('\u200B\u0301ab')).toEqual(['\u200B:zero-width-glue', '\u0301:text', 'ab:text'])
+    expect(segments('x\n\u200B\u0301ab', 'pre-wrap')).toEqual(['x:text', '\n:hard-break', '\u200B:zero-width-glue', '\u0301:text', 'ab:text'])
     // Source before the ZWSP, even a collapsed leading space, is prior context.
     expect(segments(' \u200B\u0301ab')).toEqual(['\u200B:zero-width-break', '\u0301ab:text'])
     expect(segments('x\u200B\u0301ab')).toEqual(['x:text', '\u200B:zero-width-break', '\u0301ab:text'])
@@ -921,10 +925,11 @@ describe('boundary-policy regressions', () => {
     }
     // Blink keeps letters across a ZWSP under keep-all; WebKit breaks before it.
     expect(segments('abc\u200Bd', blink, undefined, 'keep-all')).toEqual(['abc:text', '\u200B:zero-width-break', 'd:text'])
-    expect(segments('a\u200B\u0301b', webkit, 'pre-wrap', 'keep-all')).toEqual(['a:text', '\u200B:zero-width-glue', '\u0301b:text'])
+    expect(segments('a\u200B\u0301b', webkit, 'pre-wrap', 'keep-all')).toEqual(['a:text', '\u200B:zero-width-glue', '\u0301:text', 'b:text'])
 
     // Zero-width glue is zero-width and unmeasured, takes no letter spacing, and a
-    // line neither ends at it nor draws a hyphen for it.
+    // line neither ends at it nor draws a hyphen for it: without a break, graphemes
+    // fill the line across it.
     const profile = getEngineProfile()
     const previous = profile.lineBreakScan
     profile.lineBreakScan = 'blink'
@@ -944,8 +949,8 @@ describe('boundary-policy regressions', () => {
       expect(whole.map(line => line.text)).toEqual(['ab)cd'])
       expect(whole[0]!.width).toBeCloseTo(measureWidth('ab)cd', FONT) + 5 * 2)
       const split = lines('ab\u00AD)cd', measureWidth('ab)c', FONT), 2)
-      expect(split.map(line => line.text)).toEqual(['ab', ')cd'])
-      expect(split[0]!.width).toBeCloseTo(measureWidth('ab', FONT) + 2 * 2)
+      expect(split.map(line => line.text)).toEqual(['ab)', 'cd'])
+      expect(split[0]!.width).toBeCloseTo(measureWidth('ab)', FONT) + 3 * 2)
     } finally {
       profile.lineBreakScan = previous
     }
@@ -997,6 +1002,63 @@ describe('boundary-policy regressions', () => {
       expect(flag.breakableFitAdvances.every(advances => advances === null)).toBe(true)
     } finally {
       profile.lineBreakScan = previous
+    }
+  })
+
+  test('a line ends only where the scan breaks, and marks after zero-width glue shape on their base', async () => {
+    const { getEngineProfile } = await import('./measurement.ts')
+    const profile = getEngineProfile()
+    const previous = profile.lineBreakScan
+    shapesMarksAndJoiners = true
+    clearCache()
+    try {
+      const lines = (text: string, width: number, options?: { whiteSpace?: 'pre-wrap', letterSpacing?: number }) => {
+        const prepared = prepareWithSegments(text, FONT, options)
+        const result = layoutWithLines(prepared, width, LINE_HEIGHT)
+        expect(collectStreamedLines(prepared, width)).toEqual(result.lines)
+        expect(layout(prepare(text, FONT, options), width, LINE_HEIGHT).lineCount).toBe(result.lineCount)
+        const contract = variant.predict({
+          id: 'unit-scan-breaks', family: 'api', origins: ['maintained'], scope: 'supported',
+          text, whiteSpace: options?.whiteSpace ?? 'normal', font: FONT, width, lineHeight: LINE_HEIGHT,
+          wordBreak: 'normal', letterSpacing: options?.letterSpacing ?? 0, direction: 'ltr',
+        })
+        if (contract.detail !== 'full') throw new Error('Expected full public contract checks')
+        expect(contract.contracts).toEqual([])
+        return result.lines.map(line => slicePreparedText(prepared, line.start, line.end))
+      }
+      for (const scan of ['blink', 'webkit'] as const) {
+        profile.lineBreakScan = scan
+        // No break on either side of the soft hyphen before WJ, so the glue goes
+        // with WJ, which fits, as both browsers paint it.
+        expect(lines('a\u00AD\u2060b', 0)).toEqual(['a', '\u00AD\u2060', 'b'])
+        // With no break on the line, graphemes fill it across a control.
+        expect(lines('abcd', measureWidth('abc', FONT) + 0.1)).toEqual(['abc', 'd'])
+        // With one, the line returns to it instead of ending before the control.
+        expect(lines('a\u00ADb\u0080b', measureWidth('b\u0080', FONT) + 0.1)).toEqual(['a\u00AD', 'b\u0080', 'b'])
+
+        // A mark after zero-width glue or a control adds the letter with the mark,
+        // minus the letter, and takes no letter spacing of its own.
+        for (const [text, markIndex] of [['aaaa\u00AD\u0301tail', 2], ['ab \u0301cd', 2]] as const) {
+          const prepared = prepareWithSegments(text, FONT, { letterSpacing: 1 })
+          expect(prepared.segments[markIndex]).toBe('\u0301')
+          expect(prepared.widths[markIndex]).toBe(0)
+          expect(prepared.spacingGraphemeCounts[markIndex]).toBe(0)
+        }
+        const tail = 'aaaa\u00AD\u0301tail'
+        expect(lines(tail, measureWidth('aaaatail', FONT) + 0.1)).toEqual([tail])
+        // Glue and marks fit like the line that ends with the letter's gap: at
+        // letter spacing -4 both browsers keep them with `a`, at 0 they wrap them.
+        const marks = 'a\u00AD\u0301\u00AD\u0323b'
+        expect(lines(marks, 7, { whiteSpace: 'pre-wrap', letterSpacing: -4 })).toEqual(['a\u00AD\u0301\u00AD\u0323', 'b'])
+        expect(lines(marks, 7, { whiteSpace: 'pre-wrap' })).toEqual(['a', '\u00AD\u0301\u00AD\u0323', 'b'])
+      }
+      // The merged segmentation marks no boundary.
+      profile.lineBreakScan = null
+      expect(prepareWithSegments('a\u00AD\u2060b \u0301cd', FONT).breaksBefore).toBeNull()
+    } finally {
+      profile.lineBreakScan = previous
+      shapesMarksAndJoiners = false
+      clearCache()
     }
   })
 

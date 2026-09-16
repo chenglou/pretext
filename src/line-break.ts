@@ -14,6 +14,9 @@ export type PreparedLineBreakData = {
   breakableFitAdvances: (number[] | null)[]
   breakablePreferredBreaks: (number[] | null)[]
   entryGeometry?: (SegmentEntryGeometry | null)[] | null
+  // Per segment, false where an engine's scan gives no break before text, glue,
+  // zero-width glue or a control, so no line ends there. Null without one.
+  breaksBefore?: boolean[] | null
   letterSpacing: number
   spacingGraphemeCounts: number[]
   discretionaryHyphenWidth: number
@@ -191,7 +194,9 @@ function getTerminalLetterSpacing(
 
   for (let i = endSegmentIndex - 1; i >= startSegmentIndex; i--) {
     const kind = prepared.kinds[i]!
-    if (kind === 'space' || kind === 'zero-width-break' || kind === 'zero-width-glue' || kind === 'hard-break' || kind === 'soft-hyphen') continue
+    // Segments that take no letter spacing, such as zero-width glue or marks
+    // shaped on the grapheme before them, leave that grapheme's gap last.
+    if (kind === 'space' || (kind !== 'control' && prepared.spacingGraphemeCounts[i] === 0)) continue
 
     if (i === startSegmentIndex && startGraphemeIndex > 0) {
       return prepared.letterSpacing
@@ -580,6 +585,7 @@ function walkPreparedComplexLines(
   const discretionaryHyphenContexts = prepared.discretionaryHyphenContexts ?? null
   const retreatsFromUnfitHyphen =
     discretionaryHyphenContexts !== null && engineProfile.unfitHyphenRetreat === 'reduced-width'
+  const breaksBefore = prepared.breaksBefore ?? null
 
   let lineStartSegmentIndex: number
   let lineStartGraphemeIndex: number
@@ -596,9 +602,6 @@ function walkPreparedComplexLines(
   // discretionary hyphen does not fit, with that line's painted width.
   let fitBreakSegmentIndex: number
   let fitBreakPaintWidth: number
-  // The last whole segment appended after other line content, and its advance.
-  let appendedSegmentIndex: number
-  let appendedSegmentAdvance = 0
   // The latest run of preserved spaces and tabs: the segment after it, and the
   // line's width before it, with the gap after the glyph before it.
   let hangEndSegmentIndex: number
@@ -692,7 +695,7 @@ function walkPreparedComplexLines(
     segmentIndex: number,
     advance: number,
   ): void {
-    if (!breakAfter) return
+    if (!breakAfter || breaksBefore?.[segmentIndex + 1] === false) return
     pendingBreakSegmentIndex = segmentIndex + 1
     // The break segment hangs with the gap before it, a run of preserved spaces
     // and tabs hangs whole, and a tab that doesn't hang counts whole.
@@ -704,6 +707,8 @@ function walkPreparedComplexLines(
     segmentIndex: number,
     startGraphemeIndex: number,
     endGraphemeIndex = breakableFitAdvances[segmentIndex]!.length,
+    // The gap before the first grapheme, on a line that already has content.
+    leadingSpacing = 0,
   ): number | null {
     const fitAdvances = breakableFitAdvances[segmentIndex]!
     const preferredBreaks = breakablePreferredBreaks[segmentIndex] ?? null
@@ -714,8 +719,9 @@ function walkPreparedComplexLines(
     let lastPreferredBreakWidth = 0
 
     const entry = prepared.entryGeometry?.[segmentIndex]
-    // Entry geometry describes whole segment tails, not a caller's grapheme limit.
-    const freshWhole = endGraphemeIndex === fitAdvances.length
+    // Entry geometry describes whole segment tails on a fresh line, not a
+    // caller's grapheme limit.
+    const freshWhole = !hasContent && endGraphemeIndex === fitAdvances.length
       ? getSegmentEntryWidth(entry, startGraphemeIndex, fitAdvances.length)
       : null
     if (freshWhole !== null) {
@@ -751,7 +757,7 @@ function walkPreparedComplexLines(
       if (!hasContent) {
         startLineAtGrapheme(segmentIndex, g, baseGw)
       } else {
-        const gw = getBreakableGraphemeAdvance(prepared, true, baseGw)
+        const gw = baseGw + (g > startGraphemeIndex ? letterSpacing : leadingSpacing)
         const candidatePaintWidth = lineW + gw
         if (getBreakableCandidateFitWidth(prepared, candidatePaintWidth) > fitLimit) {
           if (preferredBreaks !== null && lastPreferredBreakEnd > startGraphemeIndex) {
@@ -794,7 +800,6 @@ function walkPreparedComplexLines(
     pendingBreakKind = null
     fitBreakSegmentIndex = -1
     fitBreakPaintWidth = 0
-    appendedSegmentIndex = -1
     hangEndSegmentIndex = -1
     // Retained line-start ZWSP establishes the line without owning a spacing gap.
     let zeroWidthPrefix = true
@@ -817,11 +822,11 @@ function walkPreparedComplexLines(
         const startGraphemeIndex = i === cursor.segmentIndex ? cursor.graphemeIndex : 0
         // The gap before a segment belongs to the grapheme before it. A control
         // that takes no letter spacing still follows that gap but adds none
-        // after itself; zero-width breaks, zero-width glue and soft hyphens leave
-        // it as it was.
+        // after itself; other segments that take none leave it as it was.
+        const gap = letterSpacing !== 0 && hasContent && !zeroWidthPrefix && !afterUnspacedControl ? letterSpacing : 0
         let leadingSpacing = 0
         if (letterSpacing !== 0 && (spacingGraphemeCounts[i]! > 0 || kind === 'control')) {
-          if (hasContent && !zeroWidthPrefix && !afterUnspacedControl) leadingSpacing = letterSpacing
+          leadingSpacing = gap
           afterUnspacedControl = spacingGraphemeCounts[i] === 0
         }
         if (kind !== 'zero-width-break' && kind !== 'zero-width-glue') zeroWidthPrefix = false
@@ -835,7 +840,7 @@ function walkPreparedComplexLines(
           if (hasContent) {
             lineEndSegmentIndex = i + 1
             lineEndGraphemeIndex = 0
-            if (i + 1 < chunk.endSegmentIndex) {
+            if (i + 1 < chunk.endSegmentIndex && breaksBefore?.[i + 1] !== false) {
               pendingBreakSegmentIndex = i + 1
               pendingBreakWidth = lineW + discretionaryHyphenWidth
               pendingBreakKind = kind
@@ -849,7 +854,11 @@ function walkPreparedComplexLines(
           continue
         }
 
-        const fitAdvance = getWholeSegmentFitContribution(prepared, kind, breakAfter, i, leadingSpacing, w)
+        // Text that takes no letter spacing, such as zero-width glue, fits like
+        // the line that still ends with the gap before it.
+        const fitAdvance = spacingGraphemeCounts[i] === 0 && !breakAfter && kind !== 'control'
+          ? gap + w
+          : getWholeSegmentFitContribution(prepared, kind, breakAfter, i, leadingSpacing, w)
         const hangs = breakAfter && isHangingWhiteSpace(kind, hangTabs)
         if (hangs) {
           if (hangEndSegmentIndex !== i) hangStartWidth = lineW + leadingSpacing
@@ -882,14 +891,6 @@ function walkPreparedComplexLines(
         // A run of preserved spaces and tabs fits where the text before it fits.
         const newFitW = hangs ? hangStartWidth : lineW + fitAdvance
         if (newFitW > fitLimit) {
-          // UAX #14 LB6: no ordinary break before NEL. The line ends before the
-          // text or glue that NEL follows instead. When that content started
-          // the line, overflow still breaks right before the NEL.
-          if (kind === 'control' && appendedSegmentIndex === i - 1 && (kinds[i - 1] === 'text' || kinds[i - 1] === 'glue')) {
-            lineW -= appendedSegmentAdvance
-            lineEndSegmentIndex = i - 1
-            lineEndGraphemeIndex = 0
-          }
           // A break segment hangs with the gap before it. A collapsible space or
           // ZWSP hangs even after overflowing content that started the line, as
           // the simple walker does; a preserved space there starts the next line.
@@ -898,6 +899,20 @@ function walkPreparedComplexLines(
             const currentBreakWidth = hangs ? hangStartWidth : kind === 'tab' ? lineW + advance : lineW
             appendWholeSegment(i, advance)
             lineWidth = finishLine(i + 1, 0, currentBreakWidth)
+            break lineLoop
+          }
+
+          // Where the scan gives no break before the segment, as before NEL (UAX
+          // #14 LB6), the line returns to its last break. Without one, Blink and
+          // WebKit retry between graphemes, so the segment's graphemes fill it.
+          const unbroken = breaksBefore !== null && !breaksBefore[i]
+          if (unbroken && pendingBreakSegmentIndex >= 0) {
+            lineEndSegmentIndex = pendingBreakSegmentIndex
+            lineEndGraphemeIndex = 0
+          } else if (unbroken && breakableFitAdvances[i] !== null) {
+            const line = appendBreakableSegmentFrom(i, 0, undefined, leadingSpacing)
+            if (line === null) continue
+            lineWidth = line
             break lineLoop
           }
 
@@ -917,14 +932,18 @@ function walkPreparedComplexLines(
           break lineLoop
         }
 
+        // A break the scan gives before text is one the line can return to.
+        if (breaksBefore !== null && breaksBefore[i] && !breakAfter && pendingBreakSegmentIndex !== i) {
+          pendingBreakSegmentIndex = i
+          pendingBreakWidth = lineW
+          pendingBreakKind = null
+        }
         appendWholeSegment(i, advance)
         updatePendingBreakForWholeSegment(kind, breakAfter, i, advance)
         if (retreatsFromUnfitHyphen && breakAfter && pendingBreakWidth + discretionaryHyphenWidth <= fitLimit) {
           fitBreakSegmentIndex = pendingBreakSegmentIndex
           fitBreakPaintWidth = pendingBreakWidth
         }
-        appendedSegmentIndex = i
-        appendedSegmentAdvance = advance
       }
 
       // A limit inside a breakable text segment walks its leading graphemes as

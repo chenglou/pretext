@@ -218,8 +218,8 @@ function getJoinedBreakOffsets(text: string, profile: AnalysisProfile, language:
     const units = kind === 'text' && profile.lineBreakScan === null && isCJK(segText) ? getCjkTextUnits(segText, profile, 'normal') : null
     const unitCount = units === null ? 1 : units.length
     for (let unitIndex = 0; unitIndex < unitCount; unitIndex++) {
-      // No ordinary break precedes NEL (UAX #14 LB6).
-      if (previousKind !== null && kind !== 'control' && (breaksAfter(previousKind) || !breaksAfter(kind))) {
+      // An engine's scan can give no break there, as before NEL (UAX #14 LB6).
+      if (previousKind !== null && (breaksAfter(previousKind) || !breaksAfter(kind)) && analysis.breaksBefore?.[i] !== false) {
         offsets.push(units === null ? start : start + units[unitIndex]!.start)
       }
       previousKind = kind
@@ -242,16 +242,17 @@ function getLastRunStart(portion: JoinedPortion, breakOffsets: readonly number[]
 }
 
 // Whether the line walker can end a line before an item's own segment.
-function breaksBeforeItemSegment(kinds: readonly SegmentBreakKind[], segmentIndex: number): boolean {
-  return kinds[segmentIndex] !== 'control' && (breaksAfter(kinds[segmentIndex - 1]!) || !breaksAfter(kinds[segmentIndex]!))
+function breaksBeforeItemSegment(prepared: PreparedTextWithSegments, segmentIndex: number): boolean {
+  const { kinds } = prepared
+  return (breaksAfter(kinds[segmentIndex - 1]!) || !breaksAfter(kinds[segmentIndex]!)) && prepared.breaksBefore?.[segmentIndex] !== false
 }
 
 // The item's own last ordinary break inside a portion that ends the item; the
 // portion start when there is none.
 function getLastItemRunStart(portion: JoinedPortion): LayoutCursor {
-  const { kinds } = portion.item.prepared
-  for (let i = kinds.length - 1; i > portion.startSegmentIndex; i--) {
-    if (breaksBeforeItemSegment(kinds, i)) return { segmentIndex: i, graphemeIndex: 0 }
+  const { prepared } = portion.item
+  for (let i = prepared.kinds.length - 1; i > portion.startSegmentIndex; i--) {
+    if (breaksBeforeItemSegment(prepared, i)) return { segmentIndex: i, graphemeIndex: 0 }
   }
   return portion.startSegmentIndex === 0
     ? EMPTY_LAYOUT_CURSOR
@@ -261,10 +262,10 @@ function getLastItemRunStart(portion: JoinedPortion): LayoutCursor {
 // The item's own first ordinary break inside a portion that starts the item,
 // before the collapsible space that ends the portion; null when there is none.
 function getFirstItemRunEnd(portion: JoinedPortion): LayoutCursor | null {
-  const { kinds } = portion.item.prepared
-  const end = portion.spaceEndSegmentIndex < 0 ? kinds.length : portion.spaceEndSegmentIndex - 1
+  const { prepared } = portion.item
+  const end = portion.spaceEndSegmentIndex < 0 ? prepared.kinds.length : portion.spaceEndSegmentIndex - 1
   for (let i = 1; i < end; i++) {
-    if (breaksBeforeItemSegment(kinds, i)) return { segmentIndex: i, graphemeIndex: 0 }
+    if (breaksBeforeItemSegment(prepared, i)) return { segmentIndex: i, graphemeIndex: 0 }
   }
   return null
 }

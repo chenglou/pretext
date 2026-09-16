@@ -68,6 +68,9 @@ type PreparedCore = {
   // joined than apart. Null when the text has no soft hyphen or the engine keeps
   // an unfit hyphen.
   discretionaryHyphenContexts: boolean[] | null
+  // Per segment, false where an engine's scan gives no break before text, glue,
+  // zero-width glue or a control, so no line ends there. Null without one.
+  breaksBefore: boolean[] | null
   tabStopAdvance: number // Absolute advance between tab stops for pre-wrap tab segments
   chunks: PreparedLineChunk[] // Precompiled hard-break chunks for line walking
 }
@@ -149,6 +152,7 @@ function createEmptyPrepared(includeSegments: boolean): InternalPreparedText | P
       spacingGraphemeCounts: [],
       discretionaryHyphenWidth: 0,
       discretionaryHyphenContexts: null,
+      breaksBefore: null,
       tabStopAdvance: 0,
       chunks: [],
       segments: [],
@@ -165,6 +169,7 @@ function createEmptyPrepared(includeSegments: boolean): InternalPreparedText | P
     spacingGraphemeCounts: [],
     discretionaryHyphenWidth: 0,
     discretionaryHyphenContexts: null,
+    breaksBefore: null,
     tabStopAdvance: 0,
     chunks: [],
   } as unknown as InternalPreparedText
@@ -210,6 +215,8 @@ const complexTextPathRanges = [
 
 const extendedPictographicRe = /\p{Extended_Pictographic}/u
 const leadingCombiningMarkRe = /^\p{M}/u
+const markRunRe = /^\p{M}+$/u
+const controlOrMarkRunRe = /^(?:[\p{Cc}\u2028\u2029]|\p{M}+)$/u
 
 function needsComplexTextPath(text: string): boolean {
   let previousIsEmoji = false
@@ -376,6 +383,19 @@ function measureAnalysis(
     const next = after[1]!
     return (next.charCodeAt(0) <= 0x39 || rightToLeftLetterRe.test(before[1]!) === rightToLeftLetterRe.test(next)) &&
       !spaceParagraphHasExplicitBidiControls(spaceStart)
+  }
+
+  // The grapheme a run of combining marks shapes on when only zero-width glue,
+  // controls or other such runs, with no break, separate the run from it.
+  function getMarkBase(analysisIndex: number): string | null {
+    if (analysis.breaksBefore?.[analysisIndex] !== false || !markRunRe.test(analysis.texts[analysisIndex]!)) return null
+    for (let k = analysisIndex - 1; k >= 0; k--) {
+      const kind = analysis.kinds[k]!
+      const text = analysis.texts[k]!
+      if (kind === 'zero-width-glue' || ((kind === 'text' || kind === 'control') && controlOrMarkRunRe.test(text))) continue
+      return kind === 'text' || kind === 'glue' ? getSharedGraphemeSegmenter().segment(text).containing(text.length - 1)!.segment : null
+    }
+    return null
   }
 
   const widths: number[] = []
@@ -642,6 +662,17 @@ function measureAnalysis(
       continue
     }
 
+    // Such a run of marks adds the grapheme with the marks, minus the grapheme, and
+    // takes no letter spacing of its own.
+    const markBase = getMarkBase(mi)
+    if (markBase !== null) {
+      const joined = markBase + segText
+      const width = getCorrectedSegmentWidth(joined, getSegmentMetrics(joined, cache), emojiCorrection) -
+        getCorrectedSegmentWidth(markBase, getSegmentMetrics(markBase, cache), emojiCorrection)
+      pushMeasuredSegment(segText, width, segKind, null, null, 0)
+      continue
+    }
+
     const followingSpaceTail = segKind === 'text' || segKind === 'glue' ? getFollowingSpaceTail(mi, segText) : null
     // Under break-word, Blink retries an overflowing line with a break allowed between
     // any two graphemes (line_breaker.cc) and WebKit searches the word's grapheme
@@ -653,6 +684,10 @@ function measureAnalysis(
       followingSpaceTail)
   }
 
+  // An engine's scan makes one prepared segment per analysis segment. Only the
+  // complex walker reads where it gives no break.
+  const breaksBefore = analysis.breaksBefore ?? null
+  if (breaksBefore !== null) simpleLineWalkFastPath = false
   if (chunkStartSegmentIndex < widths.length) {
     // A whole ZWSP-only paragraph has a line but no rendered advance. Keep
     // its source in the consumed range, like an existing empty hard line.
@@ -679,6 +714,7 @@ function measureAnalysis(
       spacingGraphemeCounts,
       discretionaryHyphenWidth,
       discretionaryHyphenContexts,
+      breaksBefore,
       tabStopAdvance,
       chunks,
       segments,
@@ -695,6 +731,7 @@ function measureAnalysis(
     spacingGraphemeCounts,
     discretionaryHyphenWidth,
     discretionaryHyphenContexts,
+    breaksBefore,
     tabStopAdvance,
     chunks,
   } as unknown as InternalPreparedText

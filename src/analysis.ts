@@ -33,7 +33,9 @@ export type MergedSegmentation = {
   starts: number[]
 }
 
-export type TextAnalysis = { source: string; normalized: string } & MergedSegmentation
+// On an engine's scan, `breaksBefore` is false where the scan gives no break before
+// text, glue, zero-width glue or a control, other than at a line start. Null without one.
+export type TextAnalysis = { source: string; normalized: string; breaksBefore?: boolean[] | null } & MergedSegmentation
 
 export type AnalysisProfile = {
   lineBreakScan: 'blink' | 'webkit' | null
@@ -2286,38 +2288,44 @@ function isControlSegmentCode(code: number): boolean {
 // or soft hyphen that the scan doesn't break after, as at the start of a WebKit scan,
 // before a combining mark or a closing bracket, or under keep-all, is zero-width glue:
 // it stays its own zero-width segment, takes no letter spacing and doesn't end a line.
-function segmentAtLineBreaks(normalized: string, breaks: Uint8Array, whiteSpace: WhiteSpaceMode, breakOnlyAfterNextLine: boolean): MergedSegmentation {
+// Combining marks right after it, or after a control, stay apart from the text after
+// them, since they shape on the grapheme before it (measureAnalysis).
+function segmentAtLineBreaks(normalized: string, breaks: Uint8Array, whiteSpace: WhiteSpaceMode, breakOnlyAfterNextLine: boolean): MergedSegmentation & { breaksBefore: boolean[] | null } {
   const starts = [0]
   const kinds = [classifySegmentBreakCode(normalized.charCodeAt(0), whiteSpace, breakOnlyAfterNextLine)]
   let lastAlone = kinds[0] === 'text' && isControlSegmentCode(normalized.charCodeAt(0))
+  let markRun = false
   for (let i = 1; i < normalized.length; i++) {
     const code = normalized.charCodeAt(i)
     const kind = classifySegmentBreakCode(code, whiteSpace, breakOnlyAfterNextLine)
     const alone = kind === 'text' && isControlSegmentCode(code)
     const last = kinds.length - 1
     if (
-      breaks[i] === 0 && !alone && !lastAlone &&
+      breaks[i] === 0 && !alone && !lastAlone && !(markRun && !combiningMarkRe.test(normalized[i]!)) &&
       (kind === kinds[last] ? gathersKind(kind) : isTextLikeKind(kind) && isTextLikeKind(kinds[last]!))
     ) {
       if (kind === 'text') kinds[last] = 'text'
       continue
     }
+    markRun = breaks[i] === 0 && kind === 'text' && combiningMarkRe.test(normalized[i]!) &&
+      (lastAlone || kinds[last] === 'zero-width-break' || kinds[last] === 'soft-hyphen' || kinds[last] === 'control')
     starts.push(i)
     kinds.push(kind)
     lastAlone = alone
   }
-  // Before a space, tab, hard break or NEL the scan has no break either, but the
-  // line can still end there, so the ZWSP or soft hyphen keeps its kind.
+  // A line ends only where the scan breaks, so the walkers learn where it doesn't:
+  // before text, glue, zero-width glue or a control, other than at a line start. A
+  // ZWSP or soft hyphen there is zero-width glue. Before a space, tab or hard break
+  // the scan has no break either, but the line can still end there, so it keeps its kind.
   const len = kinds.length
+  let breaksBefore: boolean[] | null = null
   for (let j = len - 2; j >= 0; j--) {
     const kind = kinds[j]!
     const next = kinds[j + 1]!
-    if (
-      (kind === 'zero-width-break' || kind === 'soft-hyphen') &&
-      breaks[starts[j + 1]!] === 0 && (isTextLikeKind(next) || next === 'zero-width-glue')
-    ) {
-      kinds[j] = 'zero-width-glue'
-    }
+    if (breaks[starts[j + 1]!] === 1 || kind === 'hard-break' || !(isTextLikeKind(next) || next === 'zero-width-glue' || next === 'control')) continue
+    if (kind === 'zero-width-break' || kind === 'soft-hyphen') kinds[j] = 'zero-width-glue'
+    breaksBefore ??= Array.from({ length: len }, () => true)
+    breaksBefore[j + 1] = false
   }
   const texts: string[] = []
   // Every text segment takes emergency grapheme breaks in the layout that reads this
@@ -2328,7 +2336,7 @@ function segmentAtLineBreaks(normalized: string, breaks: Uint8Array, whiteSpace:
     texts.push(normalized.slice(starts[j]!, j + 1 < len ? starts[j + 1]! : normalized.length))
     isWordLike.push(false)
   }
-  return { len, texts, isWordLike, kinds, starts }
+  return { len, texts, isWordLike, kinds, starts, breaksBefore }
 }
 
 export function analyzeText(
@@ -2353,7 +2361,7 @@ export function analyzeText(
       starts: [],
     }
   }
-  let segmentation: MergedSegmentation
+  let segmentation: MergedSegmentation & { breaksBefore?: boolean[] | null }
   if (profile.lineBreakScan === 'blink') {
     const breaks = getBlinkLineBreaks(normalized, wordBreak === 'keep-all', getSharedWordSegmenter())
     segmentation = segmentAtLineBreaks(normalized, breaks, whiteSpace, profile.breakOnlyAfterNextLine)

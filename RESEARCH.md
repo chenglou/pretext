@@ -59,8 +59,17 @@ with it inside, charged it letter spacing native layout doesn't give it, and let
 emergency break give it a line of its own; the September 15 installed gate lost 1,887
 Chrome and Safari rows that way, such as `a`, U+00AD, U+0301, U+00AD, U+0323, `b` at
 7px in 16px Arial with letter spacing −4, which both browsers paint as `a` / `b`.
-Where a line can still end after the ZWSP or soft hyphen, before a space, tab, hard
-break or NEL, it keeps its kind. WebKit scans a text node's source, where
+Where a line can still end after the ZWSP or soft hyphen, before a space, tab or hard
+break, it keeps its kind. The walkers end a line only where the scan breaks: prepared
+text records the segments that follow no break, a line that overflows before one
+returns to its last break, and a line without one fills graphemes across the unbroken
+run, as Blink's break-anywhere retry and WebKit's `TextUtil::breakWord` do. Ending at
+any segment boundary instead gave `a`, U+00AD, WJ, `b` at 0px a line holding only the
+soft hyphen, and the second installed gate lost 9,068 line-count passes that way.
+Combining marks after zero-width glue or a control shape on the grapheme before them,
+so they're measured as that grapheme with the marks, minus the grapheme, and take no
+letter spacing of their own; measured alone, U+0301 took 2.97px in 16px Arial.
+WebKit scans a text node's source, where
 a collapsed TAB is still UAX #14 BA, so the WebKit profile maps the source's
 opportunities onto the normalized text; Blink scans the collapsed text, as Pretext
 normalizes it. Every text segment of a scan takes emergency grapheme breaks: under
@@ -378,14 +387,13 @@ native paragraphs are observed from space-normalized text.
 
 NEL (U+0085) is UAX #14 class NL: a break follows it, and no ordinary break
 precedes it (LB5, LB6). Chrome and Safari break that way, and so do Firefox's
-ICU4X rules, but only the Safari profile models it. Each NEL is its own segment. When one overflows
-right after text or glue, the line ends before that content instead, so the
-content moves to the next line with the NEL; when the content started the line,
-overflow still breaks right before the NEL, as browsers do. Joining NEL to the
-content before it instead split overlong words at Canvas grapheme widths where
-browsers break before the NEL. A ZWSP or soft hyphen right before NEL still
-offers its break in Pretext, and so does any spurious boundary before the NEL,
-such as the ordinary break before U+3000 that LB21 forbids. Pretext keeps NEL
+ICU4X rules, but only the Safari profile models it. Each NEL is its own segment. When one overflows,
+the line returns to its last break, as it does before any segment the scan gives
+no break before, so the content NEL follows moves to the next line with the NEL;
+when that content started the line, overflow still breaks right before the NEL,
+as browsers do. Joining NEL to the content before it instead split overlong words
+at Canvas grapheme widths where browsers break before the NEL. A ZWSP or soft
+hyphen right before NEL is zero-width glue, with no break of its own. Pretext keeps NEL
 inside CJK keep-all runs, as it kept NEL text,
 and elsewhere keeps NEL as its own segment with its break after it, the way it
 still breaks after a hyphen in Latin keep-all text. Merging NEL with the text on
