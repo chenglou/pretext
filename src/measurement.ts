@@ -453,6 +453,8 @@ export function getSegmentBreakableFitAdvances(
   }
 
   const advances: number[] = []
+  // Only this segment's advances need its prefixes' widths, and the advances are
+  // cached on its metrics, so prefixes are read from the shared cache but not added to it.
   let prefix = ''
   let prefixWidth = 0
 
@@ -460,9 +462,9 @@ export function getSegmentBreakableFitAdvances(
     prefix += graphemes[i]!
     // The whole segment is the last prefix; with a following space it was
     // measured together with that space.
-    const nextPrefixWidth = followingSpaceWidth !== null && i === graphemes.length - 1
-      ? getCorrectedSegmentWidth(seg, metrics, emojiCorrection) - followingSpaceWidth
-      : getCorrectedSegmentWidth(prefix, getSegmentMetrics(prefix, cache), emojiCorrection)
+    const nextPrefixWidth = i === graphemes.length - 1
+      ? getCorrectedSegmentWidth(seg, metrics, emojiCorrection) - (followingSpaceWidth ?? 0)
+      : getCorrectedSegmentWidth(prefix, cache.get(prefix) ?? { width: getMeasureContext().measureText(prefix).width }, emojiCorrection)
     advances.push(nextPrefixWidth - prefixWidth)
     prefixWidth = nextPrefixWidth
   }
