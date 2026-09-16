@@ -17,6 +17,50 @@ All accuracy, letter-spacing and corpus result payloads are unchanged; refreshed
 snapshots change only provenance and environment records. Runtime sources and
 the baseline pin are unchanged, so no runtime benchmark was needed.
 
+## Rich inline keeps a line at an unfit soft hyphen as plain text does
+
+This runtime change starts from main `491c7f1` (#324). In `prepareRichInline()`,
+when an item follows other content on the line and its text fits only up to a soft
+hyphen whose hyphen doesn't fit, the walker's check for a unit forced onto the line
+broke before the item, although the joined text has no break there (#323). So `T` +
+`po`, U+00AD, `d` in 16px Test Sans gave `T` / `pod` at 28.8px where plain `Tpo`,
+U+00AD, `d` gives `Tpo-` / `d`, and with `T` at 12px it gave `T` / `po-` / `d`, one
+line more than at 0.1px narrower. The check now walks the item again up to the soft
+hyphen at the same width and breaks before the item only when that text doesn't fit
+either, or when the Chromium profile would return to the break before the item as
+the plain walker does. `canReturnFromUnfitHyphen()` is shared with the plain walker
+for that decision.
+
+A seeded search over 400 rich flows per configuration, in the Chrome, Safari,
+Firefox and unrecognized profiles with and without letter spacing, `break: 'never'`
+and `extraWidth`, sampled every 0.05px from 1 to 150px, counts flows whose layout
+moves backward as the width grows: from 43 to 60 per configuration on main to 7 to
+14 on this branch, and no flow without a soft hyphen changes. The leftover cases
+have other causes, which ENGINE_FOLLOWUPS records: an item that starts with a soft
+hyphen after other content, an item that ends with one, and Chromium's return to a
+soft hyphen inside an earlier item.
+
+The installed gate ran this change on `7c2ec51` against pinned `acba4c5`: Chrome 153
+through the Playwright transport, Safari 26.5.2 and Firefox 155 natively, both
+directions, at DPR 2. No leg fixes or loses a metric, and there are no required
+failures, execution errors, or new API or rich failures. The 3,620 Chrome rows with
+a soft hyphen all hold the hyphen as its own item, so no suite row has the shape
+this change fixes; the unit tests pin it.
+
+`bun test` and `bun run check` pass. Two unit tests pin `T` + `po`, U+00AD, `d` in
+one font and in two, under both `unfitHyphenRetreat` modes, with a forced letter
+(`T` + `p`, U+00AD, `d` at 12px) still wrapping before the item. Canvas calls per
+cold `prepare()` don't change in any profile, since the change is in line breaking
+and reads only cached advances. The baseline advances to `7c2ec51`, and the ordinary
+snapshots were regenerated against it.
+
+Chrome and Safari benchmark snapshots were refreshed from this branch: three
+foreground runs each at DPR 2, visible and focused, with Chrome on the 2560x1440
+screen and Safari on the 2560x1440 screen. Chrome reads `prepare()` at 9.15 ms
+(8.95 on the parent branch) and hot `layout()` at 0.0885 ms (0.0895); Safari reads
+11.5 ms (11.0) and 0.105 ms (0.102). Long-form corpus totals read 125.4 ms in
+Chrome (122.5) and 349 ms in Safari (348).
+
 ## Emoji correction counts U+FE0F only after an emoji character
 
 This runtime change starts from main `5810820` (#311). Chrome and Firefox on macOS

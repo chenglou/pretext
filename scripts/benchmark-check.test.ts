@@ -1,6 +1,5 @@
 import { expect, test } from 'bun:test'
-import { medianReport, parseBenchmarkRun } from './benchmark-check.ts'
-import type { BenchmarkRun } from '../shared/benchmark-report.ts'
+import { medianReport, parseBenchmarkRun, type CompleteBenchmarkRun } from './benchmark-check.ts'
 import type { BrowserEnvironmentSnapshot } from '../shared/browser-environment.ts'
 
 const state: BrowserEnvironmentSnapshot = {
@@ -8,16 +7,17 @@ const state: BrowserEnvironmentSnapshot = {
   screenX: 0, screenY: 0, screenWidth: 2560, screenHeight: 1440, screenAvailWidth: 2560, screenAvailHeight: 1400,
   visibility: 'visible', focused: true, language: 'en', direction: 'ltr',
 }
-function report(requestId: string, ms: number, snapshot = state): BenchmarkRun {
+function report(requestId: string, ms: number, snapshot = state): CompleteBenchmarkRun {
   const rows = [{ label: 'prepare', ms, desc: 'cold batch' }]
   return {
     status: 'ready', requestId, environment: { userAgent: 'test', start: snapshot, end: snapshot, changes: [] },
     results: rows, richResults: rows, richInlineResults: rows, richPreWrapResults: rows, richLongResults: rows,
     corpusResults: [{ id: 'corpus', label: 'prose', font: '16px Arial', chars: 12, analysisSegments: 3, segments: 3,
       breakableSegments: 1, width: 100, lineCount: 1, analysisMs: ms, measureMs: ms, prepareMs: ms, layoutMs: ms }],
+    shapeResults: [{ id: 'shape', texts: 2, segments: 6, lineCount: 2, canvasCalls: 5, firstMs: ms, prepareMs: ms, warmMs: ms, layoutMs: ms }],
   }
 }
-function run(requestId: string, ms: number, snapshot = state): BenchmarkRun {
+function run(requestId: string, ms: number, snapshot = state): CompleteBenchmarkRun {
   return parseBenchmarkRun(report(requestId, ms, snapshot), requestId)
 }
 
@@ -25,6 +25,7 @@ test('benchmark medians retain full measurements and identity of every validated
   const result = medianReport([run('a', 1), run('b', 8), run('c', 3)])
   expect(result.results[0]!.ms).toBe(3)
   expect(result.corpusResults[0]!.prepareMs).toBe(3)
+  expect(result.shapeResults[0]!.warmMs).toBe(3)
   expect(result.runs.map(run => [run.requestId, run.results[0]!.ms])).toEqual([['a', 1], ['b', 8], ['c', 3]])
 })
 
@@ -37,11 +38,15 @@ test('unstable measurements and incompatible runs cannot silently become one ben
   const different = run('b', 2)
   different.corpusResults[0]!.lineCount = 2
   expect(() => medianReport([run('a', 1), different])).toThrow('corpusResults[0].lineCount')
+  const recounted = run('b', 2)
+  recounted.shapeResults[0]!.canvasCalls = 6
+  expect(() => medianReport([run('a', 1), recounted])).toThrow('shapeResults[0].canvasCalls')
 })
 
 test('missing, failed or repeated report evidence cannot produce a benchmark snapshot', () => {
   const value = report('a', 1)
   expect(() => parseBenchmarkRun({ ...value, corpusResults: undefined }, 'a')).toThrow('missing corpusResults')
+  expect(() => parseBenchmarkRun({ ...value, shapeResults: [] }, 'a')).toThrow('missing shapeResults')
   expect(() => parseBenchmarkRun({ ...value, environment: undefined }, 'a')).toThrow('browser environment')
   expect(() => parseBenchmarkRun(value, 'other')).toThrow('wrong request identity')
   expect(() => parseBenchmarkRun({ status: 'error', message: 'Pending benchmark run' }, 'a')).toThrow('Pending benchmark run')
@@ -53,6 +58,7 @@ test('null, missing and nonfinite timings are rejected at the browser boundary',
   for (const ms of [null, undefined, NaN, Infinity, -1]) {
     expect(() => parseBenchmarkRun({ ...value, results: [{ ...value.results[0], ms }] }, 'a')).toThrow('results.ms')
     expect(() => parseBenchmarkRun({ ...value, corpusResults: [{ ...value.corpusResults[0], layoutMs: ms }] }, 'a')).toThrow('corpusResults.layoutMs')
+    expect(() => parseBenchmarkRun({ ...value, shapeResults: [{ ...value.shapeResults[0], firstMs: ms }] }, 'a')).toThrow('shapeResults.firstMs')
   }
   expect(run('a', 0).results[0]!.ms).toBe(0)
 })

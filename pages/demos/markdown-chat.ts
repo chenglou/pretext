@@ -15,7 +15,6 @@ import {
   MARKER_FONT,
   MARKER_FONT_SIZE,
   OCCLUSION_BANNER_HEIGHT,
-  TOP_SCROLL_ANCHOR,
   type BlockLayout,
   type ConversationLayout,
   type PreparedChatMessage,
@@ -30,7 +29,7 @@ type State = {
     toggleVisualization: boolean
   }
   isVisualizationOn: boolean
-  scrollAnchor: ScrollAnchor
+  scrollAnchor: ScrollAnchor | 'end' // 'end' until the user scrolls: the chat opens on its last message and keeps it above the bottom banner
   scrollTop: number // where the last frame left the scroll position, as read back
 }
 
@@ -52,7 +51,8 @@ const st: State = {
     toggleVisualization: false,
   },
   isVisualizationOn: false,
-  scrollAnchor: TOP_SCROLL_ANCHOR,
+  // The empty canvas can't scroll, so the first frame reads 0 and keeps the end.
+  scrollAnchor: 'end',
   scrollTop: 0,
 }
 
@@ -119,15 +119,15 @@ function render(): void {
   // value is the user's scroll: anchor the first message whose top shows below
   // the top banner, in the layout they scrolled. Otherwise keep the anchor.
   // Either way, scroll so its top keeps its distance below the banner, within
-  // the range.
+  // the range. The end anchor scrolls to the range's end.
   const scrollAnchor = scrollTop === st.scrollTop
     ? st.scrollAnchor
     : findScrollAnchor(previousConversation, scrollTop, viewportHeight, occlusionBannerHeight)
   const canvasHeight = conversation.totalHeight + occlusionBannerHeight * 2
-  const adjustedScrollTop = Math.min(
-    Math.max(0, canvasHeight - viewportHeight),
-    Math.max(0, conversation.tops[scrollAnchor.index]! - scrollAnchor.offset),
-  )
+  const maxScrollTop = Math.max(0, canvasHeight - viewportHeight)
+  const adjustedScrollTop = scrollAnchor === 'end'
+    ? maxScrollTop
+    : Math.min(maxScrollTop, Math.max(0, conversation.tops[scrollAnchor.index]! - scrollAnchor.offset))
 
   const { start, end } = findVisibleRange(conversation, adjustedScrollTop, viewportHeight, occlusionBannerHeight)
 

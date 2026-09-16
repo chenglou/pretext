@@ -196,9 +196,6 @@ export type ScrollAnchor = {
   offset: number
 }
 
-// The chat scrolled to its top.
-export const TOP_SCROLL_ANCHOR: ScrollAnchor = { index: 0, offset: CHAT_TOP_PADDING_OFFSET }
-
 const EMPTY_MARK_STATE: MarkState = {
   bold: false,
   italic: false,

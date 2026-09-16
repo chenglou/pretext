@@ -43,6 +43,19 @@ known-failure reporting, native observation limits and reproducible case IDs.
 Failed benchmark reports retain their evidence in `<output>.failed.json`, or under
 `.artifacts/benchmarks/` when no output path was requested.
 
+The shape rows run after every other section. They prepare batches of
+U+3000-indented and letter-spaced Chinese, VS16 and ZWJ emoji, long invisible
+tails, soft hyphens, dashes, CJK brackets with and without keep-all, and
+controls next to spaces. Each row reports ms per text for its first cold batch,
+the median cold batch after `clearCache()`, a warm batch with filled caches and
+a hot `layout()` pass. Apart from the first batch, each sample repeats its work
+for at least 20ms so Safari's 1ms timer resolves it. `canvasCalls` counts
+`measureText()` in one cold batch. The last row is shaped like virtualization:
+1,000 distinct sentences in a font no other row measures, so its first batch is
+the fresh-text prepare. WebKit's width cache can speed up repeated cold batches
+of the same strings, so compare Canvas calls and first batches before trusting a
+difference only the median cold batch shows.
+
 Benchmarks require a visible, focused page throughout and reject observed window,
 viewport or screen changes. The three runs must have matching environments before
 we take their median; snapshots retain each run's request and environment.

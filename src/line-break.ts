@@ -526,21 +526,24 @@ function stepPreparedChunkLineGeometry(
 // hyphen on the line may measure narrower joined than apart, and nothing after
 // the target may be text after text or a dash inside a segment, which can hold an
 // opportunity that segment kinds don't mark, such as after `-` or between
-// ideographs. Checked only on a line that would end at an unfit hyphen.
-function canReturnFromUnfitHyphen(
+// ideographs. Checked only on a line that would end at an unfit hyphen. The
+// target can be a segment start that follows a break outside the prepared
+// text, such as a rich-inline item boundary.
+export function canReturnFromUnfitHyphen(
   prepared: PreparedLineBreakData,
-  discretionaryHyphenContexts: boolean[],
   lineStartSegmentIndex: number,
   targetSegmentIndex: number,
   softHyphenIndex: number,
 ): boolean {
+  const discretionaryHyphenContexts = prepared.discretionaryHyphenContexts ?? null
+  if (discretionaryHyphenContexts === null || getEngineProfile().unfitHyphenRetreat !== 'reduced-width') return false
   for (let i = lineStartSegmentIndex; i <= softHyphenIndex; i++) {
     if (discretionaryHyphenContexts[i]) return false
   }
   const { kinds, breakablePreferredBreaks } = prepared
   for (let i = targetSegmentIndex; i < softHyphenIndex; i++) {
     if (breaksAfter(kinds[i]!)) continue
-    if (!breaksAfter(kinds[i - 1]!) || breakablePreferredBreaks[i] !== null) return false
+    if ((i > targetSegmentIndex && !breaksAfter(kinds[i - 1]!)) || breakablePreferredBreaks[i] !== null) return false
   }
   return true
 }
@@ -649,7 +652,6 @@ function walkPreparedComplexLines(
       pendingBreakWidth <= fitLimit ||
       !canReturnFromUnfitHyphen(
         prepared,
-        discretionaryHyphenContexts!,
         lineStartSegmentIndex,
         fitBreakSegmentIndex,
         lineEndSegmentIndex - 1,

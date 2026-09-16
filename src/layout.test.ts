@@ -2871,6 +2871,7 @@ describe('rich-inline invariants', () => {
         [['\u4E2D\u6587\u4E2D\u6587', '\u3002\u65E5\u672C\u8A9E'], 40],
         [['foo ba', 'r\u00AD baz'], 64],
         [['a xxxx', '\uFF0Cb'], 54.5],
+        [['T', 'po\u00ADd'], 28.8],
       ] as const) {
         const prepared = prepareRichInline(parts.map(text => ({ text, font: FONT })))
         const richLines: string[] = []
@@ -2884,6 +2885,53 @@ describe('rich-inline invariants', () => {
       }
     } finally {
       profile.inlineItemBreaks = previous
+    }
+  })
+
+  test('rich line counts do not go up where a soft hyphen line fits only without its hyphen', async () => {
+    const lineTexts = (items: Parameters<typeof prepareRichInline>[0], maxWidth: number): string[] => {
+      const prepared = prepareRichInline(items)
+      const lines: string[] = []
+      walkRichInlineLineRanges(prepared, maxWidth, range => {
+        lines.push(materializeRichInlineLineRange(prepared, range).fragments
+          .map(fragment => (fragment.gapItemIndex < 0 ? '' : ' ') + fragment.text).join('').trimEnd())
+      })
+      expect(measureRichInlineStats(prepared, maxWidth).lineCount).toBe(lines.length)
+      return lines
+    }
+    const { getEngineProfile } = await import('./measurement.ts')
+    const profile = getEngineProfile()
+    const previous = profile.unfitHyphenRetreat
+    try {
+      // After `T`, the walk over `po\u00ADd` ends the item's line at the soft
+      // hyphen once `po` fits, with a width that includes the hyphen, which
+      // doesn't fit. Wrapping before the item then took one more line than 0.1px
+      // narrower, although the joined text `Tpo\u00ADd` has no break before `p`.
+      // A letter that the walk forces onto the line still wraps before the item.
+      const smallFont = '12px Test Sans'
+      const split = [{ text: 'T', font: smallFont }, { text: 'po\u00ADd', font: FONT }]
+      const poFits = measureWidth('T', smallFont) + measureWidth('po', FONT)
+      for (const unfitHyphenRetreat of ['none', 'reduced-width'] as const) {
+        profile.unfitHyphenRetreat = unfitHyphenRetreat
+        expect(lineTexts(split, poFits - 0.1)).toEqual(['Tp', 'od'])
+        expect(lineTexts(split, poFits)).toEqual(['Tpo-', 'd'])
+        expect(lineTexts([{ text: 'T', font: FONT }, { text: 'p\u00ADd', font: FONT }], 12)).toEqual(['T', 'p-', 'd'])
+      }
+
+      // As in plain text, only the Chromium profile returns from the unfit hyphen
+      // to a break before the item, here the space.
+      const width = measureWidth('a po', FONT) + 0.1
+      for (const [unfitHyphenRetreat, expected] of [
+        ['none', ['a po-', 'd']],
+        ['reduced-width', ['a', 'pod']],
+      ] as const) {
+        profile.unfitHyphenRetreat = unfitHyphenRetreat
+        expect(lineTexts([{ text: 'a ', font: FONT }, { text: 'po\u00ADd', font: FONT }], width)).toEqual([...expected])
+        expect(layoutWithLines(prepareWithSegments('a po\u00ADd', FONT), width, LINE_HEIGHT).lines.map(line => line.text.trimEnd()))
+          .toEqual([...expected])
+      }
+    } finally {
+      profile.unfitHyphenRetreat = previous
     }
   })
 

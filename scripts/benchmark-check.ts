@@ -13,6 +13,12 @@ import {
 
 import { environmentFailure, parseBrowserEnvironmentReport } from '../shared/browser-environment.ts'
 import type { BenchmarkResult, CorpusBenchmarkResult, BenchmarkRun, BenchmarkSummary, BenchmarkResults } from '../shared/benchmark-report.ts'
+import type { ShapeBenchmarkResult } from '../pages/benchmark-shapes.ts'
+
+// Shape rows are required like every other section. Their type lives with the
+// page because the wrapping suite hash covers shared/.
+export type CompleteBenchmarkRun = BenchmarkRun & { shapeResults: ShapeBenchmarkResult[] }
+type CompleteBenchmarkSummary = BenchmarkSummary & { shapeResults: ShapeBenchmarkResult[] }
 
 const BENCHMARK_RESULT_KEYS = [
   'results',
@@ -40,6 +46,9 @@ const CORPUS_METADATA_KEYS = [
   'width',
   'lineCount',
 ] as const
+
+const SHAPE_COUNT_KEYS = ['texts', 'segments', 'lineCount', 'canvasCalls'] as const
+const SHAPE_TIMING_KEYS = ['firstMs', 'prepareMs', 'warmMs', 'layoutMs'] as const
 
 function parseStringFlag(name: string): string | null {
   const prefix = `--${name}=`
@@ -105,9 +114,18 @@ function benchmarkRows(value: unknown, context: string): BenchmarkResult[] {
   })
 }
 
+function shapeRows(value: unknown): ShapeBenchmarkResult[] {
+  return rows(value, 'shapeResults').map((value, index) => {
+    const row = record(value, `shapeResults[${index}]`)
+    const result = { id: text(row['id'], 'shapeResults.id') } as ShapeBenchmarkResult
+    for (const key of [...SHAPE_COUNT_KEYS, ...SHAPE_TIMING_KEYS]) result[key] = nonnegative(row[key], `shapeResults.${key}`)
+    return result
+  })
+}
+
 // The browser is the report boundary. Everything after this function receives
 // complete runs, so aggregation never needs a second optional-section protocol.
-export function parseBenchmarkRun(value: unknown, expectedRequestId: string): BenchmarkRun {
+export function parseBenchmarkRun(value: unknown, expectedRequestId: string): CompleteBenchmarkRun {
   const report = record(value, 'benchmark report')
   if (report['status'] === 'error') throw new Error(text(report['message'], 'benchmark error message'))
   if (report['status'] !== 'ready') throw new Error('Benchmark report is not ready')
@@ -130,7 +148,7 @@ export function parseBenchmarkRun(value: unknown, expectedRequestId: string): Be
     status: 'ready', requestId: expectedRequestId, environment, corpusResults,
     results: benchmarkRows(report['results'], 'results'), richResults: benchmarkRows(report['richResults'], 'richResults'),
     richInlineResults: benchmarkRows(report['richInlineResults'], 'richInlineResults'), richPreWrapResults: benchmarkRows(report['richPreWrapResults'], 'richPreWrapResults'),
-    richLongResults: benchmarkRows(report['richLongResults'], 'richLongResults'),
+    richLongResults: benchmarkRows(report['richLongResults'], 'richLongResults'), shapeResults: shapeRows(report['shapeResults']),
   }
 }
 
@@ -163,7 +181,21 @@ function medianCorpusResults(reports: BenchmarkRun[]): CorpusBenchmarkResult[] {
   })
 }
 
-export function medianReport(reports: BenchmarkRun[]): BenchmarkSummary {
+function medianShapeResults(reports: CompleteBenchmarkRun[]): ShapeBenchmarkResult[] {
+  const firstRows = reports[0]!.shapeResults
+  for (const report of reports) assertSame(report.shapeResults.length, firstRows.length, 'shapeResults.length')
+  return firstRows.map((firstRow, rowIndex) => {
+    const result: ShapeBenchmarkResult = { ...firstRow }
+    for (const report of reports) {
+      const row = report.shapeResults[rowIndex]!
+      for (const key of ['id', ...SHAPE_COUNT_KEYS] as const) assertSame(row[key], firstRow[key], `shapeResults[${rowIndex}].${key}`)
+    }
+    for (const key of SHAPE_TIMING_KEYS) result[key] = median(reports.map(report => report.shapeResults[rowIndex]![key]))
+    return result
+  })
+}
+
+export function medianReport(reports: CompleteBenchmarkRun[]): CompleteBenchmarkSummary {
   const first = reports[0]
   if (first === undefined) throw new Error('Cannot summarize zero benchmark runs')
   for (let index = 0; index < reports.length; index++) {
@@ -179,10 +211,11 @@ export function medianReport(reports: BenchmarkRun[]): BenchmarkSummary {
     results: medianBenchmarkResults(reports, 'results'), richResults: medianBenchmarkResults(reports, 'richResults'),
     richInlineResults: medianBenchmarkResults(reports, 'richInlineResults'), richPreWrapResults: medianBenchmarkResults(reports, 'richPreWrapResults'),
     richLongResults: medianBenchmarkResults(reports, 'richLongResults'), corpusResults: medianCorpusResults(reports),
+    shapeResults: medianShapeResults(reports),
   }
 }
 
-function printReport(report: BenchmarkResults): void {
+function printReport(report: BenchmarkResults & { shapeResults: ShapeBenchmarkResult[] }): void {
 
   console.log('Top-level batch benchmark:')
   for (const result of report.results) {
@@ -225,6 +258,13 @@ function printReport(report: BenchmarkResults): void {
       )
     }
   }
+
+  console.log('Shape and fresh-text rows (µs per text):')
+  for (const shape of report.shapeResults) {
+    console.log(
+      `  ${shape.id}: first ${(shape.firstMs * 1000).toFixed(2)} | prepare ${(shape.prepareMs * 1000).toFixed(2)} | warm ${(shape.warmMs * 1000).toFixed(2)} | layout ${(shape.layoutMs * 1000).toFixed(2)} | ${shape.canvasCalls.toLocaleString()} Canvas calls | ${shape.texts} texts | ${shape.segments.toLocaleString()} segs | ${shape.lineCount} lines`,
+    )
+  }
 }
 
 function saveFailure(output: string | null, browser: BrowserKind, requestId: string, error: unknown, report: unknown, runs: BenchmarkRun[]): void {
@@ -258,7 +298,7 @@ async function main(): Promise<void> {
     serverProcess = pageServer.process
     const baseUrl = `${pageServer.baseUrl}/benchmark`
 
-    const reports: BenchmarkRun[] = []
+    const reports: CompleteBenchmarkRun[] = []
     for (let runIndex = 0; runIndex < runs; runIndex++) {
       const requestId = `${Date.now()}-${runIndex}-${Math.random().toString(36).slice(2)}`
       const url =
@@ -269,7 +309,7 @@ async function main(): Promise<void> {
         console.log(`Benchmark run ${runIndex + 1}/${runs}:`)
       }
       let raw: unknown = null
-      let report: BenchmarkRun
+      let report: CompleteBenchmarkRun
       try {
         raw = await loadHashReport<{ requestId?: string }>(session, url, requestId, browser)
         report = parseBenchmarkRun(raw, requestId)
@@ -285,7 +325,7 @@ async function main(): Promise<void> {
       }
     }
 
-    let report: BenchmarkSummary
+    let report: CompleteBenchmarkSummary
     try { report = medianReport(reports) } catch (error) {
       saveFailure(output, browser, `${reports[0]!.requestId}-aggregate`, error, null, reports)
       throw error

@@ -10,7 +10,7 @@ import {
 } from '../src/layout.ts'
 import type { PreparedText, PreparedTextWithSegments } from '../src/layout.ts'
 import { analyzeText } from '../src/analysis.ts'
-import { getEngineProfile } from '../src/measurement.ts'
+import { getEngineProfile, getMeasureContext } from '../src/measurement.ts'
 import {
   layoutNextRichInlineLineRange,
   materializeRichInlineLineRange,
@@ -21,6 +21,7 @@ import {
   type PreparedRichInline,
 } from '../src/rich-inline.ts'
 import { TEXTS } from '../src/test-data.ts'
+import { buildShapeCases, type ShapeBenchmarkResult, type ShapeCase } from './benchmark-shapes.ts'
 import { createBrowserEnvironmentGuard } from '../shared/browser-environment.ts'
 import type { BenchmarkReport, BenchmarkResult, CorpusBenchmarkResult } from '../shared/benchmark-report.ts'
 import {
@@ -77,6 +78,8 @@ const RICH_INLINE_CHIP_FONT = `700 11px ${FONT_FAMILY}`
 const RICH_INLINE_EMPHASIS_FONT = `italic ${FONT_SIZE}px ${FONT_FAMILY}`
 const RICH_INLINE_CODE_EXTRA_WIDTH = 12
 const RICH_INLINE_CHIP_EXTRA_WIDTH = 14
+const SHAPE_SAMPLE_MS = 20
+const SHAPE_WIDTHS = [240, 300, 360] as const
 
 type PrepareProfile = {
   analysisMs: number
@@ -646,6 +649,94 @@ function buildRichInlineBenchmarks(
   ]
 }
 
+// Four significant digits keep the report hash short; run-to-run noise is larger.
+function roundTiming(ms: number): number {
+  return Number(ms.toPrecision(4))
+}
+
+// Shape rows report ms per text. Each sample repeats its batch until it spans
+// SHAPE_SAMPLE_MS, so Safari's 1ms timer resolves batches of a few milliseconds.
+function benchPerText(texts: number, fn: (repeatIndex: number) => void): number {
+  environmentGuard.assertStable()
+  for (let i = 0; i < CORPUS_WARMUP; i++) fn(i)
+  const times: number[] = []
+  for (let run = 0; run < CORPUS_RUNS; run++) {
+    let repeats = 0
+    let elapsed = 0
+    const t0 = performance.now()
+    do {
+      fn(repeats++)
+      elapsed = performance.now() - t0
+    } while (elapsed < SHAPE_SAMPLE_MS)
+    times.push(elapsed / repeats / texts)
+  }
+  environmentGuard.assertStable()
+  return roundTiming(median(times))
+}
+
+// Counts measureText() calls on the shared measurement context while fn runs.
+function countCanvasCalls(fn: () => void): number {
+  const context = getMeasureContext()
+  const measureText = context.measureText
+  let calls = 0
+  context.measureText = text => {
+    calls++
+    return measureText.call(context, text)
+  }
+  try {
+    fn()
+  } finally {
+    Reflect.deleteProperty(context, 'measureText')
+  }
+  return calls
+}
+
+// Each row times its first cold batch once, then cold batches after
+// clearCache(), warm batches with filled caches and hot layout() passes.
+function buildShapeBenchmarks(cases: readonly ShapeCase[]): ShapeBenchmarkResult[] {
+  const shapeResults: ShapeBenchmarkResult[] = []
+  let shapeSink = 0
+
+  for (let caseIndex = 0; caseIndex < cases.length; caseIndex++) {
+    const { id, font, options, texts } = cases[caseIndex]!
+    const prepareBatch = (): void => {
+      for (let i = 0; i < texts.length; i++) prepare(texts[i]!, font, options)
+    }
+
+    environmentGuard.assertStable()
+    clearCache()
+    const t0 = performance.now()
+    prepareBatch()
+    const firstMs = roundTiming((performance.now() - t0) / texts.length)
+    const prepareMs = benchPerText(texts.length, () => {
+      clearCache()
+      prepareBatch()
+    })
+    const warmMs = benchPerText(texts.length, prepareBatch)
+    clearCache()
+    const canvasCalls = countCanvasCalls(prepareBatch)
+
+    const prepared = texts.map(text => prepareWithSegments(text, font, options))
+    let segments = 0
+    let lineCount = 0
+    for (let i = 0; i < prepared.length; i++) {
+      segments += prepared[i]!.widths.length
+      lineCount += layout(prepared[i]!, SHAPE_WIDTHS[1], LINE_HEIGHT).lineCount
+    }
+    const layoutMs = benchPerText(texts.length, repeatIndex => {
+      const width = SHAPE_WIDTHS[repeatIndex % SHAPE_WIDTHS.length]!
+      let sum = 0
+      for (let i = 0; i < prepared.length; i++) sum += layout(prepared[i]!, width, LINE_HEIGHT).lineCount
+      shapeSink += sum + repeatIndex
+    })
+
+    shapeResults.push({ id, texts: texts.length, segments, lineCount, canvasCalls, firstMs, prepareMs, warmMs, layoutMs })
+  }
+
+  document.body.dataset['shapeSink'] = String(shapeSink)
+  return shapeResults
+}
+
 function renderBenchmarkTable(results: BenchmarkResult[], treatFirstAsSetup: boolean): string {
   const comparable = treatFirstAsSetup ? results.filter(r => r.label !== results[0]?.label) : results
   const fastest = Math.min(...comparable.map(r => r.ms))
@@ -964,6 +1055,32 @@ async function run() {
     </table>
     <p class="note">Long-form rows split cold prepare into text analysis and measurement phases for one full corpus text, then report one hot layout pass over the prepared result. They are intended to catch script-specific prepare regressions and long-breakable-run measurement costs that the short shared corpus can hide.</p>
   `
+
+  // --- Shape and fresh-text rows ---
+  // They run after every existing section, which keeps its measurement order.
+  await nextFrame()
+  const shapeCases = buildShapeCases()
+  const shapeResults = buildShapeBenchmarks(shapeCases)
+  root.innerHTML += `
+    <h2 style="color:#4fc3f7;font-family:monospace;font-size:16px;margin:24px 0 8px">Shape and fresh-text rows</h2>
+    <table>
+      <tr><th>Row</th><th>Texts</th><th>Segs</th><th>Canvas calls</th><th>First cold (µs)</th><th>Prepare cold (µs)</th><th>Prepare warm (µs)</th><th>Layout hot (µs)</th><th>Lines @ ${SHAPE_WIDTHS[1]}px</th></tr>
+      ${shapeResults.map((result, index) => `
+        <tr>
+          <td>${shapeCases[index]!.label}</td>
+          <td>${result.texts}</td>
+          <td>${result.segments.toLocaleString()}</td>
+          <td>${result.canvasCalls.toLocaleString()}</td>
+          <td>${(result.firstMs * 1000).toFixed(2)}</td>
+          <td>${(result.prepareMs * 1000).toFixed(2)}</td>
+          <td>${(result.warmMs * 1000).toFixed(2)}</td>
+          <td>${(result.layoutMs * 1000).toFixed(2)}</td>
+          <td>${result.lineCount}</td>
+        </tr>
+      `).join('')}
+    </table>
+    <p class="note">Times are µs per text. First cold times the row's first batch once. Prepare cold is the median batch after <code>clearCache()</code>, prepare warm re-prepares with the caches filled, and each of their samples repeats the batch for at least ${SHAPE_SAMPLE_MS}ms. Canvas calls count <code>measureText()</code> in one cold batch. The last row is shaped like virtualization: its first batch prepares each distinct text once, in a font no earlier row measures.</p>
+  `
   root.dataset['topLayoutSink'] = String(topLayoutSink)
   root.dataset['scalingLayoutSink'] = String(scalingLayoutSink)
   root.dataset['domBatchSink'] = String(domBatchSink)
@@ -982,6 +1099,7 @@ async function run() {
     richPreWrapResults,
     richLongResults,
     corpusResults,
+    shapeResults,
   }))
 }
 

@@ -1,18 +1,18 @@
 [
   {
-    "generatedAt": "2026-09-16T02:14:27.637Z",
-    "suiteHash": "5b8c137f9e96ca15345aa8545442a6992eee4b63e7e01cf6e00a505a2537e8b7",
+    "generatedAt": "2026-09-16T05:03:02.876Z",
+    "suiteHash": "4231e4fbbc904ae405c2b5e95dfa2c95049028465f2b1d9a4fdf0e23d9dce068",
     "source": {
-      "revision": "acba4c505fce89e49db23a1ba2543777d243dab5",
+      "revision": "7c2ec519922e364ecc80dcb88596047fd3b54e3c",
       "files": {
         "analysis.ts": "8e5ab9fb0ce5dbdf7b71a325381607bf04c650d473e3272101ae9d1c7002a0e3",
         "entry-geometry.ts": "43ffacd71c3562283135590a06947eef4b2617cb3b6ba680c909dd5e2d2ba9a7",
         "generated/line-break-data.ts": "3a42caa6039e2d59df4830d3d713d8e5692aae79e40d34c0b7f7f49e294fdd8a",
         "layout.ts": "5afb8662a52d8089fcbabb933f158b2e2ede31cec26a273fedf9feb95c0a24e1",
-        "line-break.ts": "f23e34dbf46dc8284b45cdb9538002678ec74617b97af16374bd4117e1e844c1",
+        "line-break.ts": "8effa5b25734868f9da3626eb156e3bea7d41e82495400b8fdafe7bc30716c07",
         "line-text.ts": "31abd7a69c9e4a4dbba57d2791038349e803e65813a819e4e3128e0544d25ae1",
         "measurement.ts": "db1d78c8cd804d2e2cd67be2dc894a56d34ce8519aa31fc6bbaac5e8336c8a19",
-        "rich-inline.ts": "63363d943f07dda50ffada67a63115814e2b6dd1a28ed06a6c0fbd0df3661f65",
+        "rich-inline.ts": "e72da6ab1caee350f230589b5772846b508a5020f6d4202ae505a25d5522b504",
         "text-modules.d.ts": "1547f88f0eb75293bc20054194a2bba29a4bc911c2a4fa99cef98141b6f99927"
       }
     },
@@ -20,7 +20,7 @@
       {
         "direction": "ltr",
         "measurement": {
-          "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:155.0) Gecko/20100101 Firefox/155.0",
+          "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:156.0) Gecko/20100101 Firefox/156.0",
           "start": {
             "dpr": 2,
             "visualViewportScale": 1,
@@ -63,7 +63,7 @@
           "kind": "installed",
           "lang": "mul"
         },
-        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:155.0) Gecko/20100101 Firefox/155.0",
+        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:156.0) Gecko/20100101 Firefox/156.0",
         "dpr": 2,
         "locale": "en-US",
         "visibility": "visible",
@@ -92,19 +92,19 @@
     ]
   },
   {
-    "generatedAt": "2026-09-16T02:14:27.637Z",
-    "suiteHash": "5b8c137f9e96ca15345aa8545442a6992eee4b63e7e01cf6e00a505a2537e8b7",
+    "generatedAt": "2026-09-16T05:03:02.876Z",
+    "suiteHash": "4231e4fbbc904ae405c2b5e95dfa2c95049028465f2b1d9a4fdf0e23d9dce068",
     "source": {
-      "revision": "acba4c505fce89e49db23a1ba2543777d243dab5",
+      "revision": "7c2ec519922e364ecc80dcb88596047fd3b54e3c",
       "files": {
         "analysis.ts": "8e5ab9fb0ce5dbdf7b71a325381607bf04c650d473e3272101ae9d1c7002a0e3",
         "entry-geometry.ts": "43ffacd71c3562283135590a06947eef4b2617cb3b6ba680c909dd5e2d2ba9a7",
         "generated/line-break-data.ts": "3a42caa6039e2d59df4830d3d713d8e5692aae79e40d34c0b7f7f49e294fdd8a",
         "layout.ts": "5afb8662a52d8089fcbabb933f158b2e2ede31cec26a273fedf9feb95c0a24e1",
-        "line-break.ts": "f23e34dbf46dc8284b45cdb9538002678ec74617b97af16374bd4117e1e844c1",
+        "line-break.ts": "8effa5b25734868f9da3626eb156e3bea7d41e82495400b8fdafe7bc30716c07",
         "line-text.ts": "31abd7a69c9e4a4dbba57d2791038349e803e65813a819e4e3128e0544d25ae1",
         "measurement.ts": "db1d78c8cd804d2e2cd67be2dc894a56d34ce8519aa31fc6bbaac5e8336c8a19",
-        "rich-inline.ts": "63363d943f07dda50ffada67a63115814e2b6dd1a28ed06a6c0fbd0df3661f65",
+        "rich-inline.ts": "e72da6ab1caee350f230589b5772846b508a5020f6d4202ae505a25d5522b504",
         "text-modules.d.ts": "1547f88f0eb75293bc20054194a2bba29a4bc911c2a4fa99cef98141b6f99927"
       }
     },
@@ -112,7 +112,7 @@
       {
         "direction": "ltr",
         "measurement": {
-          "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:155.0) Gecko/20100101 Firefox/155.0",
+          "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:156.0) Gecko/20100101 Firefox/156.0",
           "start": {
             "dpr": 2,
             "visualViewportScale": 1,
@@ -155,7 +155,7 @@
           "kind": "installed",
           "lang": "en"
         },
-        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:155.0) Gecko/20100101 Firefox/155.0",
+        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:156.0) Gecko/20100101 Firefox/156.0",
         "dpr": 2,
         "locale": "en-US",
         "visibility": "visible",
@@ -664,19 +664,19 @@
     ]
   },
   {
-    "generatedAt": "2026-09-16T02:14:27.637Z",
-    "suiteHash": "5b8c137f9e96ca15345aa8545442a6992eee4b63e7e01cf6e00a505a2537e8b7",
+    "generatedAt": "2026-09-16T05:03:02.876Z",
+    "suiteHash": "4231e4fbbc904ae405c2b5e95dfa2c95049028465f2b1d9a4fdf0e23d9dce068",
     "source": {
-      "revision": "acba4c505fce89e49db23a1ba2543777d243dab5",
+      "revision": "7c2ec519922e364ecc80dcb88596047fd3b54e3c",
       "files": {
         "analysis.ts": "8e5ab9fb0ce5dbdf7b71a325381607bf04c650d473e3272101ae9d1c7002a0e3",
         "entry-geometry.ts": "43ffacd71c3562283135590a06947eef4b2617cb3b6ba680c909dd5e2d2ba9a7",
         "generated/line-break-data.ts": "3a42caa6039e2d59df4830d3d713d8e5692aae79e40d34c0b7f7f49e294fdd8a",
         "layout.ts": "5afb8662a52d8089fcbabb933f158b2e2ede31cec26a273fedf9feb95c0a24e1",
-        "line-break.ts": "f23e34dbf46dc8284b45cdb9538002678ec74617b97af16374bd4117e1e844c1",
+        "line-break.ts": "8effa5b25734868f9da3626eb156e3bea7d41e82495400b8fdafe7bc30716c07",
         "line-text.ts": "31abd7a69c9e4a4dbba57d2791038349e803e65813a819e4e3128e0544d25ae1",
         "measurement.ts": "db1d78c8cd804d2e2cd67be2dc894a56d34ce8519aa31fc6bbaac5e8336c8a19",
-        "rich-inline.ts": "63363d943f07dda50ffada67a63115814e2b6dd1a28ed06a6c0fbd0df3661f65",
+        "rich-inline.ts": "e72da6ab1caee350f230589b5772846b508a5020f6d4202ae505a25d5522b504",
         "text-modules.d.ts": "1547f88f0eb75293bc20054194a2bba29a4bc911c2a4fa99cef98141b6f99927"
       }
     },
@@ -684,7 +684,7 @@
       {
         "direction": "ltr",
         "measurement": {
-          "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:155.0) Gecko/20100101 Firefox/155.0",
+          "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:156.0) Gecko/20100101 Firefox/156.0",
           "start": {
             "dpr": 2,
             "visualViewportScale": 1,
@@ -727,7 +727,7 @@
           "kind": "installed",
           "lang": "ja"
         },
-        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:155.0) Gecko/20100101 Firefox/155.0",
+        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:156.0) Gecko/20100101 Firefox/156.0",
         "dpr": 2,
         "locale": "en-US",
         "visibility": "visible",
@@ -747,19 +747,19 @@
     "mismatches": []
   },
   {
-    "generatedAt": "2026-09-16T02:14:27.637Z",
-    "suiteHash": "5b8c137f9e96ca15345aa8545442a6992eee4b63e7e01cf6e00a505a2537e8b7",
+    "generatedAt": "2026-09-16T05:03:02.876Z",
+    "suiteHash": "4231e4fbbc904ae405c2b5e95dfa2c95049028465f2b1d9a4fdf0e23d9dce068",
     "source": {
-      "revision": "acba4c505fce89e49db23a1ba2543777d243dab5",
+      "revision": "7c2ec519922e364ecc80dcb88596047fd3b54e3c",
       "files": {
         "analysis.ts": "8e5ab9fb0ce5dbdf7b71a325381607bf04c650d473e3272101ae9d1c7002a0e3",
         "entry-geometry.ts": "43ffacd71c3562283135590a06947eef4b2617cb3b6ba680c909dd5e2d2ba9a7",
         "generated/line-break-data.ts": "3a42caa6039e2d59df4830d3d713d8e5692aae79e40d34c0b7f7f49e294fdd8a",
         "layout.ts": "5afb8662a52d8089fcbabb933f158b2e2ede31cec26a273fedf9feb95c0a24e1",
-        "line-break.ts": "f23e34dbf46dc8284b45cdb9538002678ec74617b97af16374bd4117e1e844c1",
+        "line-break.ts": "8effa5b25734868f9da3626eb156e3bea7d41e82495400b8fdafe7bc30716c07",
         "line-text.ts": "31abd7a69c9e4a4dbba57d2791038349e803e65813a819e4e3128e0544d25ae1",
         "measurement.ts": "db1d78c8cd804d2e2cd67be2dc894a56d34ce8519aa31fc6bbaac5e8336c8a19",
-        "rich-inline.ts": "63363d943f07dda50ffada67a63115814e2b6dd1a28ed06a6c0fbd0df3661f65",
+        "rich-inline.ts": "e72da6ab1caee350f230589b5772846b508a5020f6d4202ae505a25d5522b504",
         "text-modules.d.ts": "1547f88f0eb75293bc20054194a2bba29a4bc911c2a4fa99cef98141b6f99927"
       }
     },
@@ -767,7 +767,7 @@
       {
         "direction": "ltr",
         "measurement": {
-          "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:155.0) Gecko/20100101 Firefox/155.0",
+          "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:156.0) Gecko/20100101 Firefox/156.0",
           "start": {
             "dpr": 2,
             "visualViewportScale": 1,
@@ -810,7 +810,7 @@
           "kind": "installed",
           "lang": "ja"
         },
-        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:155.0) Gecko/20100101 Firefox/155.0",
+        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:156.0) Gecko/20100101 Firefox/156.0",
         "dpr": 2,
         "locale": "en-US",
         "visibility": "visible",
@@ -830,19 +830,19 @@
     "mismatches": []
   },
   {
-    "generatedAt": "2026-09-16T02:14:27.637Z",
-    "suiteHash": "5b8c137f9e96ca15345aa8545442a6992eee4b63e7e01cf6e00a505a2537e8b7",
+    "generatedAt": "2026-09-16T05:03:02.876Z",
+    "suiteHash": "4231e4fbbc904ae405c2b5e95dfa2c95049028465f2b1d9a4fdf0e23d9dce068",
     "source": {
-      "revision": "acba4c505fce89e49db23a1ba2543777d243dab5",
+      "revision": "7c2ec519922e364ecc80dcb88596047fd3b54e3c",
       "files": {
         "analysis.ts": "8e5ab9fb0ce5dbdf7b71a325381607bf04c650d473e3272101ae9d1c7002a0e3",
         "entry-geometry.ts": "43ffacd71c3562283135590a06947eef4b2617cb3b6ba680c909dd5e2d2ba9a7",
         "generated/line-break-data.ts": "3a42caa6039e2d59df4830d3d713d8e5692aae79e40d34c0b7f7f49e294fdd8a",
         "layout.ts": "5afb8662a52d8089fcbabb933f158b2e2ede31cec26a273fedf9feb95c0a24e1",
-        "line-break.ts": "f23e34dbf46dc8284b45cdb9538002678ec74617b97af16374bd4117e1e844c1",
+        "line-break.ts": "8effa5b25734868f9da3626eb156e3bea7d41e82495400b8fdafe7bc30716c07",
         "line-text.ts": "31abd7a69c9e4a4dbba57d2791038349e803e65813a819e4e3128e0544d25ae1",
         "measurement.ts": "db1d78c8cd804d2e2cd67be2dc894a56d34ce8519aa31fc6bbaac5e8336c8a19",
-        "rich-inline.ts": "63363d943f07dda50ffada67a63115814e2b6dd1a28ed06a6c0fbd0df3661f65",
+        "rich-inline.ts": "e72da6ab1caee350f230589b5772846b508a5020f6d4202ae505a25d5522b504",
         "text-modules.d.ts": "1547f88f0eb75293bc20054194a2bba29a4bc911c2a4fa99cef98141b6f99927"
       }
     },
@@ -850,7 +850,7 @@
       {
         "direction": "ltr",
         "measurement": {
-          "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:155.0) Gecko/20100101 Firefox/155.0",
+          "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:156.0) Gecko/20100101 Firefox/156.0",
           "start": {
             "dpr": 2,
             "visualViewportScale": 1,
@@ -893,7 +893,7 @@
           "kind": "installed",
           "lang": "ko"
         },
-        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:155.0) Gecko/20100101 Firefox/155.0",
+        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:156.0) Gecko/20100101 Firefox/156.0",
         "dpr": 2,
         "locale": "en-US",
         "visibility": "visible",
@@ -946,19 +946,19 @@
     ]
   },
   {
-    "generatedAt": "2026-09-16T02:14:27.637Z",
-    "suiteHash": "5b8c137f9e96ca15345aa8545442a6992eee4b63e7e01cf6e00a505a2537e8b7",
+    "generatedAt": "2026-09-16T05:03:02.876Z",
+    "suiteHash": "4231e4fbbc904ae405c2b5e95dfa2c95049028465f2b1d9a4fdf0e23d9dce068",
     "source": {
-      "revision": "acba4c505fce89e49db23a1ba2543777d243dab5",
+      "revision": "7c2ec519922e364ecc80dcb88596047fd3b54e3c",
       "files": {
         "analysis.ts": "8e5ab9fb0ce5dbdf7b71a325381607bf04c650d473e3272101ae9d1c7002a0e3",
         "entry-geometry.ts": "43ffacd71c3562283135590a06947eef4b2617cb3b6ba680c909dd5e2d2ba9a7",
         "generated/line-break-data.ts": "3a42caa6039e2d59df4830d3d713d8e5692aae79e40d34c0b7f7f49e294fdd8a",
         "layout.ts": "5afb8662a52d8089fcbabb933f158b2e2ede31cec26a273fedf9feb95c0a24e1",
-        "line-break.ts": "f23e34dbf46dc8284b45cdb9538002678ec74617b97af16374bd4117e1e844c1",
+        "line-break.ts": "8effa5b25734868f9da3626eb156e3bea7d41e82495400b8fdafe7bc30716c07",
         "line-text.ts": "31abd7a69c9e4a4dbba57d2791038349e803e65813a819e4e3128e0544d25ae1",
         "measurement.ts": "db1d78c8cd804d2e2cd67be2dc894a56d34ce8519aa31fc6bbaac5e8336c8a19",
-        "rich-inline.ts": "63363d943f07dda50ffada67a63115814e2b6dd1a28ed06a6c0fbd0df3661f65",
+        "rich-inline.ts": "e72da6ab1caee350f230589b5772846b508a5020f6d4202ae505a25d5522b504",
         "text-modules.d.ts": "1547f88f0eb75293bc20054194a2bba29a4bc911c2a4fa99cef98141b6f99927"
       }
     },
@@ -966,7 +966,7 @@
       {
         "direction": "ltr",
         "measurement": {
-          "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:155.0) Gecko/20100101 Firefox/155.0",
+          "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:156.0) Gecko/20100101 Firefox/156.0",
           "start": {
             "dpr": 2,
             "visualViewportScale": 1,
@@ -1009,7 +1009,7 @@
           "kind": "installed",
           "lang": "ko"
         },
-        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:155.0) Gecko/20100101 Firefox/155.0",
+        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:156.0) Gecko/20100101 Firefox/156.0",
         "dpr": 2,
         "locale": "en-US",
         "visibility": "visible",
@@ -1029,19 +1029,19 @@
     "mismatches": []
   },
   {
-    "generatedAt": "2026-09-16T02:14:27.637Z",
-    "suiteHash": "5b8c137f9e96ca15345aa8545442a6992eee4b63e7e01cf6e00a505a2537e8b7",
+    "generatedAt": "2026-09-16T05:03:02.876Z",
+    "suiteHash": "4231e4fbbc904ae405c2b5e95dfa2c95049028465f2b1d9a4fdf0e23d9dce068",
     "source": {
-      "revision": "acba4c505fce89e49db23a1ba2543777d243dab5",
+      "revision": "7c2ec519922e364ecc80dcb88596047fd3b54e3c",
       "files": {
         "analysis.ts": "8e5ab9fb0ce5dbdf7b71a325381607bf04c650d473e3272101ae9d1c7002a0e3",
         "entry-geometry.ts": "43ffacd71c3562283135590a06947eef4b2617cb3b6ba680c909dd5e2d2ba9a7",
         "generated/line-break-data.ts": "3a42caa6039e2d59df4830d3d713d8e5692aae79e40d34c0b7f7f49e294fdd8a",
         "layout.ts": "5afb8662a52d8089fcbabb933f158b2e2ede31cec26a273fedf9feb95c0a24e1",
-        "line-break.ts": "f23e34dbf46dc8284b45cdb9538002678ec74617b97af16374bd4117e1e844c1",
+        "line-break.ts": "8effa5b25734868f9da3626eb156e3bea7d41e82495400b8fdafe7bc30716c07",
         "line-text.ts": "31abd7a69c9e4a4dbba57d2791038349e803e65813a819e4e3128e0544d25ae1",
         "measurement.ts": "db1d78c8cd804d2e2cd67be2dc894a56d34ce8519aa31fc6bbaac5e8336c8a19",
-        "rich-inline.ts": "63363d943f07dda50ffada67a63115814e2b6dd1a28ed06a6c0fbd0df3661f65",
+        "rich-inline.ts": "e72da6ab1caee350f230589b5772846b508a5020f6d4202ae505a25d5522b504",
         "text-modules.d.ts": "1547f88f0eb75293bc20054194a2bba29a4bc911c2a4fa99cef98141b6f99927"
       }
     },
@@ -1049,7 +1049,7 @@
       {
         "direction": "ltr",
         "measurement": {
-          "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:155.0) Gecko/20100101 Firefox/155.0",
+          "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:156.0) Gecko/20100101 Firefox/156.0",
           "start": {
             "dpr": 2,
             "visualViewportScale": 1,
@@ -1092,7 +1092,7 @@
           "kind": "installed",
           "lang": "zh"
         },
-        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:155.0) Gecko/20100101 Firefox/155.0",
+        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:156.0) Gecko/20100101 Firefox/156.0",
         "dpr": 2,
         "locale": "en-US",
         "visibility": "visible",
@@ -1112,19 +1112,19 @@
     "mismatches": []
   },
   {
-    "generatedAt": "2026-09-16T02:14:27.637Z",
-    "suiteHash": "5b8c137f9e96ca15345aa8545442a6992eee4b63e7e01cf6e00a505a2537e8b7",
+    "generatedAt": "2026-09-16T05:03:02.876Z",
+    "suiteHash": "4231e4fbbc904ae405c2b5e95dfa2c95049028465f2b1d9a4fdf0e23d9dce068",
     "source": {
-      "revision": "acba4c505fce89e49db23a1ba2543777d243dab5",
+      "revision": "7c2ec519922e364ecc80dcb88596047fd3b54e3c",
       "files": {
         "analysis.ts": "8e5ab9fb0ce5dbdf7b71a325381607bf04c650d473e3272101ae9d1c7002a0e3",
         "entry-geometry.ts": "43ffacd71c3562283135590a06947eef4b2617cb3b6ba680c909dd5e2d2ba9a7",
         "generated/line-break-data.ts": "3a42caa6039e2d59df4830d3d713d8e5692aae79e40d34c0b7f7f49e294fdd8a",
         "layout.ts": "5afb8662a52d8089fcbabb933f158b2e2ede31cec26a273fedf9feb95c0a24e1",
-        "line-break.ts": "f23e34dbf46dc8284b45cdb9538002678ec74617b97af16374bd4117e1e844c1",
+        "line-break.ts": "8effa5b25734868f9da3626eb156e3bea7d41e82495400b8fdafe7bc30716c07",
         "line-text.ts": "31abd7a69c9e4a4dbba57d2791038349e803e65813a819e4e3128e0544d25ae1",
         "measurement.ts": "db1d78c8cd804d2e2cd67be2dc894a56d34ce8519aa31fc6bbaac5e8336c8a19",
-        "rich-inline.ts": "63363d943f07dda50ffada67a63115814e2b6dd1a28ed06a6c0fbd0df3661f65",
+        "rich-inline.ts": "e72da6ab1caee350f230589b5772846b508a5020f6d4202ae505a25d5522b504",
         "text-modules.d.ts": "1547f88f0eb75293bc20054194a2bba29a4bc911c2a4fa99cef98141b6f99927"
       }
     },
@@ -1132,7 +1132,7 @@
       {
         "direction": "ltr",
         "measurement": {
-          "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:155.0) Gecko/20100101 Firefox/155.0",
+          "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:156.0) Gecko/20100101 Firefox/156.0",
           "start": {
             "dpr": 2,
             "visualViewportScale": 1,
@@ -1175,7 +1175,7 @@
           "kind": "installed",
           "lang": "zh"
         },
-        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:155.0) Gecko/20100101 Firefox/155.0",
+        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:156.0) Gecko/20100101 Firefox/156.0",
         "dpr": 2,
         "locale": "en-US",
         "visibility": "visible",
@@ -1195,19 +1195,19 @@
     "mismatches": []
   },
   {
-    "generatedAt": "2026-09-16T02:14:27.637Z",
-    "suiteHash": "5b8c137f9e96ca15345aa8545442a6992eee4b63e7e01cf6e00a505a2537e8b7",
+    "generatedAt": "2026-09-16T05:03:02.876Z",
+    "suiteHash": "4231e4fbbc904ae405c2b5e95dfa2c95049028465f2b1d9a4fdf0e23d9dce068",
     "source": {
-      "revision": "acba4c505fce89e49db23a1ba2543777d243dab5",
+      "revision": "7c2ec519922e364ecc80dcb88596047fd3b54e3c",
       "files": {
         "analysis.ts": "8e5ab9fb0ce5dbdf7b71a325381607bf04c650d473e3272101ae9d1c7002a0e3",
         "entry-geometry.ts": "43ffacd71c3562283135590a06947eef4b2617cb3b6ba680c909dd5e2d2ba9a7",
         "generated/line-break-data.ts": "3a42caa6039e2d59df4830d3d713d8e5692aae79e40d34c0b7f7f49e294fdd8a",
         "layout.ts": "5afb8662a52d8089fcbabb933f158b2e2ede31cec26a273fedf9feb95c0a24e1",
-        "line-break.ts": "f23e34dbf46dc8284b45cdb9538002678ec74617b97af16374bd4117e1e844c1",
+        "line-break.ts": "8effa5b25734868f9da3626eb156e3bea7d41e82495400b8fdafe7bc30716c07",
         "line-text.ts": "31abd7a69c9e4a4dbba57d2791038349e803e65813a819e4e3128e0544d25ae1",
         "measurement.ts": "db1d78c8cd804d2e2cd67be2dc894a56d34ce8519aa31fc6bbaac5e8336c8a19",
-        "rich-inline.ts": "63363d943f07dda50ffada67a63115814e2b6dd1a28ed06a6c0fbd0df3661f65",
+        "rich-inline.ts": "e72da6ab1caee350f230589b5772846b508a5020f6d4202ae505a25d5522b504",
         "text-modules.d.ts": "1547f88f0eb75293bc20054194a2bba29a4bc911c2a4fa99cef98141b6f99927"
       }
     },
@@ -1215,7 +1215,7 @@
       {
         "direction": "ltr",
         "measurement": {
-          "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:155.0) Gecko/20100101 Firefox/155.0",
+          "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:156.0) Gecko/20100101 Firefox/156.0",
           "start": {
             "dpr": 2,
             "visualViewportScale": 1,
@@ -1258,7 +1258,7 @@
           "kind": "installed",
           "lang": "th"
         },
-        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:155.0) Gecko/20100101 Firefox/155.0",
+        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:156.0) Gecko/20100101 Firefox/156.0",
         "dpr": 2,
         "locale": "en-US",
         "visibility": "visible",
@@ -1367,19 +1367,19 @@
     ]
   },
   {
-    "generatedAt": "2026-09-16T02:14:27.637Z",
-    "suiteHash": "5b8c137f9e96ca15345aa8545442a6992eee4b63e7e01cf6e00a505a2537e8b7",
+    "generatedAt": "2026-09-16T05:03:02.876Z",
+    "suiteHash": "4231e4fbbc904ae405c2b5e95dfa2c95049028465f2b1d9a4fdf0e23d9dce068",
     "source": {
-      "revision": "acba4c505fce89e49db23a1ba2543777d243dab5",
+      "revision": "7c2ec519922e364ecc80dcb88596047fd3b54e3c",
       "files": {
         "analysis.ts": "8e5ab9fb0ce5dbdf7b71a325381607bf04c650d473e3272101ae9d1c7002a0e3",
         "entry-geometry.ts": "43ffacd71c3562283135590a06947eef4b2617cb3b6ba680c909dd5e2d2ba9a7",
         "generated/line-break-data.ts": "3a42caa6039e2d59df4830d3d713d8e5692aae79e40d34c0b7f7f49e294fdd8a",
         "layout.ts": "5afb8662a52d8089fcbabb933f158b2e2ede31cec26a273fedf9feb95c0a24e1",
-        "line-break.ts": "f23e34dbf46dc8284b45cdb9538002678ec74617b97af16374bd4117e1e844c1",
+        "line-break.ts": "8effa5b25734868f9da3626eb156e3bea7d41e82495400b8fdafe7bc30716c07",
         "line-text.ts": "31abd7a69c9e4a4dbba57d2791038349e803e65813a819e4e3128e0544d25ae1",
         "measurement.ts": "db1d78c8cd804d2e2cd67be2dc894a56d34ce8519aa31fc6bbaac5e8336c8a19",
-        "rich-inline.ts": "63363d943f07dda50ffada67a63115814e2b6dd1a28ed06a6c0fbd0df3661f65",
+        "rich-inline.ts": "e72da6ab1caee350f230589b5772846b508a5020f6d4202ae505a25d5522b504",
         "text-modules.d.ts": "1547f88f0eb75293bc20054194a2bba29a4bc911c2a4fa99cef98141b6f99927"
       }
     },
@@ -1387,7 +1387,7 @@
       {
         "direction": "ltr",
         "measurement": {
-          "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:155.0) Gecko/20100101 Firefox/155.0",
+          "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:156.0) Gecko/20100101 Firefox/156.0",
           "start": {
             "dpr": 2,
             "visualViewportScale": 1,
@@ -1430,7 +1430,7 @@
           "kind": "installed",
           "lang": "th"
         },
-        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:155.0) Gecko/20100101 Firefox/155.0",
+        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:156.0) Gecko/20100101 Firefox/156.0",
         "dpr": 2,
         "locale": "en-US",
         "visibility": "visible",
@@ -1523,19 +1523,19 @@
     ]
   },
   {
-    "generatedAt": "2026-09-16T02:14:27.637Z",
-    "suiteHash": "5b8c137f9e96ca15345aa8545442a6992eee4b63e7e01cf6e00a505a2537e8b7",
+    "generatedAt": "2026-09-16T05:03:02.876Z",
+    "suiteHash": "4231e4fbbc904ae405c2b5e95dfa2c95049028465f2b1d9a4fdf0e23d9dce068",
     "source": {
-      "revision": "acba4c505fce89e49db23a1ba2543777d243dab5",
+      "revision": "7c2ec519922e364ecc80dcb88596047fd3b54e3c",
       "files": {
         "analysis.ts": "8e5ab9fb0ce5dbdf7b71a325381607bf04c650d473e3272101ae9d1c7002a0e3",
         "entry-geometry.ts": "43ffacd71c3562283135590a06947eef4b2617cb3b6ba680c909dd5e2d2ba9a7",
         "generated/line-break-data.ts": "3a42caa6039e2d59df4830d3d713d8e5692aae79e40d34c0b7f7f49e294fdd8a",
         "layout.ts": "5afb8662a52d8089fcbabb933f158b2e2ede31cec26a273fedf9feb95c0a24e1",
-        "line-break.ts": "f23e34dbf46dc8284b45cdb9538002678ec74617b97af16374bd4117e1e844c1",
+        "line-break.ts": "8effa5b25734868f9da3626eb156e3bea7d41e82495400b8fdafe7bc30716c07",
         "line-text.ts": "31abd7a69c9e4a4dbba57d2791038349e803e65813a819e4e3128e0544d25ae1",
         "measurement.ts": "db1d78c8cd804d2e2cd67be2dc894a56d34ce8519aa31fc6bbaac5e8336c8a19",
-        "rich-inline.ts": "63363d943f07dda50ffada67a63115814e2b6dd1a28ed06a6c0fbd0df3661f65",
+        "rich-inline.ts": "e72da6ab1caee350f230589b5772846b508a5020f6d4202ae505a25d5522b504",
         "text-modules.d.ts": "1547f88f0eb75293bc20054194a2bba29a4bc911c2a4fa99cef98141b6f99927"
       }
     },
@@ -1543,7 +1543,7 @@
       {
         "direction": "ltr",
         "measurement": {
-          "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:155.0) Gecko/20100101 Firefox/155.0",
+          "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:156.0) Gecko/20100101 Firefox/156.0",
           "start": {
             "dpr": 2,
             "visualViewportScale": 1,
@@ -1586,7 +1586,7 @@
           "kind": "installed",
           "lang": "my"
         },
-        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:155.0) Gecko/20100101 Firefox/155.0",
+        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:156.0) Gecko/20100101 Firefox/156.0",
         "dpr": 2,
         "locale": "en-US",
         "visibility": "visible",
@@ -1711,19 +1711,19 @@
     ]
   },
   {
-    "generatedAt": "2026-09-16T02:14:27.637Z",
-    "suiteHash": "5b8c137f9e96ca15345aa8545442a6992eee4b63e7e01cf6e00a505a2537e8b7",
+    "generatedAt": "2026-09-16T05:03:02.876Z",
+    "suiteHash": "4231e4fbbc904ae405c2b5e95dfa2c95049028465f2b1d9a4fdf0e23d9dce068",
     "source": {
-      "revision": "acba4c505fce89e49db23a1ba2543777d243dab5",
+      "revision": "7c2ec519922e364ecc80dcb88596047fd3b54e3c",
       "files": {
         "analysis.ts": "8e5ab9fb0ce5dbdf7b71a325381607bf04c650d473e3272101ae9d1c7002a0e3",
         "entry-geometry.ts": "43ffacd71c3562283135590a06947eef4b2617cb3b6ba680c909dd5e2d2ba9a7",
         "generated/line-break-data.ts": "3a42caa6039e2d59df4830d3d713d8e5692aae79e40d34c0b7f7f49e294fdd8a",
         "layout.ts": "5afb8662a52d8089fcbabb933f158b2e2ede31cec26a273fedf9feb95c0a24e1",
-        "line-break.ts": "f23e34dbf46dc8284b45cdb9538002678ec74617b97af16374bd4117e1e844c1",
+        "line-break.ts": "8effa5b25734868f9da3626eb156e3bea7d41e82495400b8fdafe7bc30716c07",
         "line-text.ts": "31abd7a69c9e4a4dbba57d2791038349e803e65813a819e4e3128e0544d25ae1",
         "measurement.ts": "db1d78c8cd804d2e2cd67be2dc894a56d34ce8519aa31fc6bbaac5e8336c8a19",
-        "rich-inline.ts": "63363d943f07dda50ffada67a63115814e2b6dd1a28ed06a6c0fbd0df3661f65",
+        "rich-inline.ts": "e72da6ab1caee350f230589b5772846b508a5020f6d4202ae505a25d5522b504",
         "text-modules.d.ts": "1547f88f0eb75293bc20054194a2bba29a4bc911c2a4fa99cef98141b6f99927"
       }
     },
@@ -1731,7 +1731,7 @@
       {
         "direction": "ltr",
         "measurement": {
-          "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:155.0) Gecko/20100101 Firefox/155.0",
+          "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:156.0) Gecko/20100101 Firefox/156.0",
           "start": {
             "dpr": 2,
             "visualViewportScale": 1,
@@ -1774,7 +1774,7 @@
           "kind": "installed",
           "lang": "my"
         },
-        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:155.0) Gecko/20100101 Firefox/155.0",
+        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:156.0) Gecko/20100101 Firefox/156.0",
         "dpr": 2,
         "locale": "en-US",
         "visibility": "visible",
@@ -1835,19 +1835,19 @@
     ]
   },
   {
-    "generatedAt": "2026-09-16T02:14:27.637Z",
-    "suiteHash": "5b8c137f9e96ca15345aa8545442a6992eee4b63e7e01cf6e00a505a2537e8b7",
+    "generatedAt": "2026-09-16T05:03:02.876Z",
+    "suiteHash": "4231e4fbbc904ae405c2b5e95dfa2c95049028465f2b1d9a4fdf0e23d9dce068",
     "source": {
-      "revision": "acba4c505fce89e49db23a1ba2543777d243dab5",
+      "revision": "7c2ec519922e364ecc80dcb88596047fd3b54e3c",
       "files": {
         "analysis.ts": "8e5ab9fb0ce5dbdf7b71a325381607bf04c650d473e3272101ae9d1c7002a0e3",
         "entry-geometry.ts": "43ffacd71c3562283135590a06947eef4b2617cb3b6ba680c909dd5e2d2ba9a7",
         "generated/line-break-data.ts": "3a42caa6039e2d59df4830d3d713d8e5692aae79e40d34c0b7f7f49e294fdd8a",
         "layout.ts": "5afb8662a52d8089fcbabb933f158b2e2ede31cec26a273fedf9feb95c0a24e1",
-        "line-break.ts": "f23e34dbf46dc8284b45cdb9538002678ec74617b97af16374bd4117e1e844c1",
+        "line-break.ts": "8effa5b25734868f9da3626eb156e3bea7d41e82495400b8fdafe7bc30716c07",
         "line-text.ts": "31abd7a69c9e4a4dbba57d2791038349e803e65813a819e4e3128e0544d25ae1",
         "measurement.ts": "db1d78c8cd804d2e2cd67be2dc894a56d34ce8519aa31fc6bbaac5e8336c8a19",
-        "rich-inline.ts": "63363d943f07dda50ffada67a63115814e2b6dd1a28ed06a6c0fbd0df3661f65",
+        "rich-inline.ts": "e72da6ab1caee350f230589b5772846b508a5020f6d4202ae505a25d5522b504",
         "text-modules.d.ts": "1547f88f0eb75293bc20054194a2bba29a4bc911c2a4fa99cef98141b6f99927"
       }
     },
@@ -1855,7 +1855,7 @@
       {
         "direction": "ltr",
         "measurement": {
-          "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:155.0) Gecko/20100101 Firefox/155.0",
+          "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:156.0) Gecko/20100101 Firefox/156.0",
           "start": {
             "dpr": 2,
             "visualViewportScale": 1,
@@ -1898,7 +1898,7 @@
           "kind": "installed",
           "lang": "km"
         },
-        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:155.0) Gecko/20100101 Firefox/155.0",
+        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:156.0) Gecko/20100101 Firefox/156.0",
         "dpr": 2,
         "locale": "en-US",
         "visibility": "visible",
@@ -1943,19 +1943,19 @@
     ]
   },
   {
-    "generatedAt": "2026-09-16T02:14:27.637Z",
-    "suiteHash": "5b8c137f9e96ca15345aa8545442a6992eee4b63e7e01cf6e00a505a2537e8b7",
+    "generatedAt": "2026-09-16T05:03:02.876Z",
+    "suiteHash": "4231e4fbbc904ae405c2b5e95dfa2c95049028465f2b1d9a4fdf0e23d9dce068",
     "source": {
-      "revision": "acba4c505fce89e49db23a1ba2543777d243dab5",
+      "revision": "7c2ec519922e364ecc80dcb88596047fd3b54e3c",
       "files": {
         "analysis.ts": "8e5ab9fb0ce5dbdf7b71a325381607bf04c650d473e3272101ae9d1c7002a0e3",
         "entry-geometry.ts": "43ffacd71c3562283135590a06947eef4b2617cb3b6ba680c909dd5e2d2ba9a7",
         "generated/line-break-data.ts": "3a42caa6039e2d59df4830d3d713d8e5692aae79e40d34c0b7f7f49e294fdd8a",
         "layout.ts": "5afb8662a52d8089fcbabb933f158b2e2ede31cec26a273fedf9feb95c0a24e1",
-        "line-break.ts": "f23e34dbf46dc8284b45cdb9538002678ec74617b97af16374bd4117e1e844c1",
+        "line-break.ts": "8effa5b25734868f9da3626eb156e3bea7d41e82495400b8fdafe7bc30716c07",
         "line-text.ts": "31abd7a69c9e4a4dbba57d2791038349e803e65813a819e4e3128e0544d25ae1",
         "measurement.ts": "db1d78c8cd804d2e2cd67be2dc894a56d34ce8519aa31fc6bbaac5e8336c8a19",
-        "rich-inline.ts": "63363d943f07dda50ffada67a63115814e2b6dd1a28ed06a6c0fbd0df3661f65",
+        "rich-inline.ts": "e72da6ab1caee350f230589b5772846b508a5020f6d4202ae505a25d5522b504",
         "text-modules.d.ts": "1547f88f0eb75293bc20054194a2bba29a4bc911c2a4fa99cef98141b6f99927"
       }
     },
@@ -1963,7 +1963,7 @@
       {
         "direction": "rtl",
         "measurement": {
-          "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:155.0) Gecko/20100101 Firefox/155.0",
+          "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:156.0) Gecko/20100101 Firefox/156.0",
           "start": {
             "dpr": 2,
             "visualViewportScale": 1,
@@ -2006,7 +2006,7 @@
           "kind": "installed",
           "lang": "ar"
         },
-        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:155.0) Gecko/20100101 Firefox/155.0",
+        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:156.0) Gecko/20100101 Firefox/156.0",
         "dpr": 2,
         "locale": "en-US",
         "visibility": "visible",
@@ -2026,19 +2026,19 @@
     "mismatches": []
   },
   {
-    "generatedAt": "2026-09-16T02:14:27.637Z",
-    "suiteHash": "5b8c137f9e96ca15345aa8545442a6992eee4b63e7e01cf6e00a505a2537e8b7",
+    "generatedAt": "2026-09-16T05:03:02.876Z",
+    "suiteHash": "4231e4fbbc904ae405c2b5e95dfa2c95049028465f2b1d9a4fdf0e23d9dce068",
     "source": {
-      "revision": "acba4c505fce89e49db23a1ba2543777d243dab5",
+      "revision": "7c2ec519922e364ecc80dcb88596047fd3b54e3c",
       "files": {
         "analysis.ts": "8e5ab9fb0ce5dbdf7b71a325381607bf04c650d473e3272101ae9d1c7002a0e3",
         "entry-geometry.ts": "43ffacd71c3562283135590a06947eef4b2617cb3b6ba680c909dd5e2d2ba9a7",
         "generated/line-break-data.ts": "3a42caa6039e2d59df4830d3d713d8e5692aae79e40d34c0b7f7f49e294fdd8a",
         "layout.ts": "5afb8662a52d8089fcbabb933f158b2e2ede31cec26a273fedf9feb95c0a24e1",
-        "line-break.ts": "f23e34dbf46dc8284b45cdb9538002678ec74617b97af16374bd4117e1e844c1",
+        "line-break.ts": "8effa5b25734868f9da3626eb156e3bea7d41e82495400b8fdafe7bc30716c07",
         "line-text.ts": "31abd7a69c9e4a4dbba57d2791038349e803e65813a819e4e3128e0544d25ae1",
         "measurement.ts": "db1d78c8cd804d2e2cd67be2dc894a56d34ce8519aa31fc6bbaac5e8336c8a19",
-        "rich-inline.ts": "63363d943f07dda50ffada67a63115814e2b6dd1a28ed06a6c0fbd0df3661f65",
+        "rich-inline.ts": "e72da6ab1caee350f230589b5772846b508a5020f6d4202ae505a25d5522b504",
         "text-modules.d.ts": "1547f88f0eb75293bc20054194a2bba29a4bc911c2a4fa99cef98141b6f99927"
       }
     },
@@ -2046,7 +2046,7 @@
       {
         "direction": "rtl",
         "measurement": {
-          "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:155.0) Gecko/20100101 Firefox/155.0",
+          "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:156.0) Gecko/20100101 Firefox/156.0",
           "start": {
             "dpr": 2,
             "visualViewportScale": 1,
@@ -2089,7 +2089,7 @@
           "kind": "installed",
           "lang": "ar"
         },
-        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:155.0) Gecko/20100101 Firefox/155.0",
+        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:156.0) Gecko/20100101 Firefox/156.0",
         "dpr": 2,
         "locale": "en-US",
         "visibility": "visible",
@@ -2109,19 +2109,19 @@
     "mismatches": []
   },
   {
-    "generatedAt": "2026-09-16T02:14:27.637Z",
-    "suiteHash": "5b8c137f9e96ca15345aa8545442a6992eee4b63e7e01cf6e00a505a2537e8b7",
+    "generatedAt": "2026-09-16T05:03:02.876Z",
+    "suiteHash": "4231e4fbbc904ae405c2b5e95dfa2c95049028465f2b1d9a4fdf0e23d9dce068",
     "source": {
-      "revision": "acba4c505fce89e49db23a1ba2543777d243dab5",
+      "revision": "7c2ec519922e364ecc80dcb88596047fd3b54e3c",
       "files": {
         "analysis.ts": "8e5ab9fb0ce5dbdf7b71a325381607bf04c650d473e3272101ae9d1c7002a0e3",
         "entry-geometry.ts": "43ffacd71c3562283135590a06947eef4b2617cb3b6ba680c909dd5e2d2ba9a7",
         "generated/line-break-data.ts": "3a42caa6039e2d59df4830d3d713d8e5692aae79e40d34c0b7f7f49e294fdd8a",
         "layout.ts": "5afb8662a52d8089fcbabb933f158b2e2ede31cec26a273fedf9feb95c0a24e1",
-        "line-break.ts": "f23e34dbf46dc8284b45cdb9538002678ec74617b97af16374bd4117e1e844c1",
+        "line-break.ts": "8effa5b25734868f9da3626eb156e3bea7d41e82495400b8fdafe7bc30716c07",
         "line-text.ts": "31abd7a69c9e4a4dbba57d2791038349e803e65813a819e4e3128e0544d25ae1",
         "measurement.ts": "db1d78c8cd804d2e2cd67be2dc894a56d34ce8519aa31fc6bbaac5e8336c8a19",
-        "rich-inline.ts": "63363d943f07dda50ffada67a63115814e2b6dd1a28ed06a6c0fbd0df3661f65",
+        "rich-inline.ts": "e72da6ab1caee350f230589b5772846b508a5020f6d4202ae505a25d5522b504",
         "text-modules.d.ts": "1547f88f0eb75293bc20054194a2bba29a4bc911c2a4fa99cef98141b6f99927"
       }
     },
@@ -2129,7 +2129,7 @@
       {
         "direction": "ltr",
         "measurement": {
-          "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:155.0) Gecko/20100101 Firefox/155.0",
+          "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:156.0) Gecko/20100101 Firefox/156.0",
           "start": {
             "dpr": 2,
             "visualViewportScale": 1,
@@ -2172,7 +2172,7 @@
           "kind": "installed",
           "lang": "hi"
         },
-        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:155.0) Gecko/20100101 Firefox/155.0",
+        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:156.0) Gecko/20100101 Firefox/156.0",
         "dpr": 2,
         "locale": "en-US",
         "visibility": "visible",
@@ -2249,19 +2249,19 @@
     ]
   },
   {
-    "generatedAt": "2026-09-16T02:14:27.637Z",
-    "suiteHash": "5b8c137f9e96ca15345aa8545442a6992eee4b63e7e01cf6e00a505a2537e8b7",
+    "generatedAt": "2026-09-16T05:03:02.876Z",
+    "suiteHash": "4231e4fbbc904ae405c2b5e95dfa2c95049028465f2b1d9a4fdf0e23d9dce068",
     "source": {
-      "revision": "acba4c505fce89e49db23a1ba2543777d243dab5",
+      "revision": "7c2ec519922e364ecc80dcb88596047fd3b54e3c",
       "files": {
         "analysis.ts": "8e5ab9fb0ce5dbdf7b71a325381607bf04c650d473e3272101ae9d1c7002a0e3",
         "entry-geometry.ts": "43ffacd71c3562283135590a06947eef4b2617cb3b6ba680c909dd5e2d2ba9a7",
         "generated/line-break-data.ts": "3a42caa6039e2d59df4830d3d713d8e5692aae79e40d34c0b7f7f49e294fdd8a",
         "layout.ts": "5afb8662a52d8089fcbabb933f158b2e2ede31cec26a273fedf9feb95c0a24e1",
-        "line-break.ts": "f23e34dbf46dc8284b45cdb9538002678ec74617b97af16374bd4117e1e844c1",
+        "line-break.ts": "8effa5b25734868f9da3626eb156e3bea7d41e82495400b8fdafe7bc30716c07",
         "line-text.ts": "31abd7a69c9e4a4dbba57d2791038349e803e65813a819e4e3128e0544d25ae1",
         "measurement.ts": "db1d78c8cd804d2e2cd67be2dc894a56d34ce8519aa31fc6bbaac5e8336c8a19",
-        "rich-inline.ts": "63363d943f07dda50ffada67a63115814e2b6dd1a28ed06a6c0fbd0df3661f65",
+        "rich-inline.ts": "e72da6ab1caee350f230589b5772846b508a5020f6d4202ae505a25d5522b504",
         "text-modules.d.ts": "1547f88f0eb75293bc20054194a2bba29a4bc911c2a4fa99cef98141b6f99927"
       }
     },
@@ -2269,7 +2269,7 @@
       {
         "direction": "rtl",
         "measurement": {
-          "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:155.0) Gecko/20100101 Firefox/155.0",
+          "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:156.0) Gecko/20100101 Firefox/156.0",
           "start": {
             "dpr": 2,
             "visualViewportScale": 1,
@@ -2312,7 +2312,7 @@
           "kind": "installed",
           "lang": "he"
         },
-        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:155.0) Gecko/20100101 Firefox/155.0",
+        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:156.0) Gecko/20100101 Firefox/156.0",
         "dpr": 2,
         "locale": "en-US",
         "visibility": "visible",
@@ -2332,19 +2332,19 @@
     "mismatches": []
   },
   {
-    "generatedAt": "2026-09-16T02:14:27.637Z",
-    "suiteHash": "5b8c137f9e96ca15345aa8545442a6992eee4b63e7e01cf6e00a505a2537e8b7",
+    "generatedAt": "2026-09-16T05:03:02.876Z",
+    "suiteHash": "4231e4fbbc904ae405c2b5e95dfa2c95049028465f2b1d9a4fdf0e23d9dce068",
     "source": {
-      "revision": "acba4c505fce89e49db23a1ba2543777d243dab5",
+      "revision": "7c2ec519922e364ecc80dcb88596047fd3b54e3c",
       "files": {
         "analysis.ts": "8e5ab9fb0ce5dbdf7b71a325381607bf04c650d473e3272101ae9d1c7002a0e3",
         "entry-geometry.ts": "43ffacd71c3562283135590a06947eef4b2617cb3b6ba680c909dd5e2d2ba9a7",
         "generated/line-break-data.ts": "3a42caa6039e2d59df4830d3d713d8e5692aae79e40d34c0b7f7f49e294fdd8a",
         "layout.ts": "5afb8662a52d8089fcbabb933f158b2e2ede31cec26a273fedf9feb95c0a24e1",
-        "line-break.ts": "f23e34dbf46dc8284b45cdb9538002678ec74617b97af16374bd4117e1e844c1",
+        "line-break.ts": "8effa5b25734868f9da3626eb156e3bea7d41e82495400b8fdafe7bc30716c07",
         "line-text.ts": "31abd7a69c9e4a4dbba57d2791038349e803e65813a819e4e3128e0544d25ae1",
         "measurement.ts": "db1d78c8cd804d2e2cd67be2dc894a56d34ce8519aa31fc6bbaac5e8336c8a19",
-        "rich-inline.ts": "63363d943f07dda50ffada67a63115814e2b6dd1a28ed06a6c0fbd0df3661f65",
+        "rich-inline.ts": "e72da6ab1caee350f230589b5772846b508a5020f6d4202ae505a25d5522b504",
         "text-modules.d.ts": "1547f88f0eb75293bc20054194a2bba29a4bc911c2a4fa99cef98141b6f99927"
       }
     },
@@ -2352,7 +2352,7 @@
       {
         "direction": "rtl",
         "measurement": {
-          "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:155.0) Gecko/20100101 Firefox/155.0",
+          "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:156.0) Gecko/20100101 Firefox/156.0",
           "start": {
             "dpr": 2,
             "visualViewportScale": 1,
@@ -2395,7 +2395,7 @@
           "kind": "installed",
           "lang": "ur"
         },
-        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:155.0) Gecko/20100101 Firefox/155.0",
+        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:156.0) Gecko/20100101 Firefox/156.0",
         "dpr": 2,
         "locale": "en-US",
         "visibility": "visible",
