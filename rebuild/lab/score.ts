@@ -26,6 +26,26 @@ export function layoutGrid(browser: BrowserKind, dpr: number): number {
   }
 }
 
+// WebKit keeps inline positions as float32 CSS px, not LayoutUnits (specs/webkit-lines.md §1.4; 892 of 1,314 Safari smoke
+// widths are off the 1/64 grid), so snapping both sides to 1/64 can hide or invent a difference. A line's end edge is the
+// float32 sum of its start edge and its width, so compare that exactly: the start edge is the left edge of an LTR line
+// and the right edge of an RTL one.
+function usesFloat32Positions(browser: BrowserKind): boolean {
+  switch (browser) {
+    case 'safari':
+    case 'webkit-host': return true
+    case 'chrome':
+    case 'firefox': return false
+  }
+}
+
+function float32EdgesMatch(left: number, right: number, width: number, direction: 'ltr' | 'rtl'): boolean {
+  switch (direction) {
+    case 'ltr': return Math.fround(left + Math.fround(width)) === right
+    case 'rtl': return Math.fround(right - Math.fround(width)) === left
+  }
+}
+
 // Whether value is a multiple of 1/grid px, allowing `steps` float32 steps at `magnitude`: Safari and Firefox compute
 // rect positions in float32 (Firefox reports x = 17150 au as 285.83331298828125, one step from the nearest float32).
 function onGrid(value: number, grid: number, magnitude: number, steps: number): boolean {
@@ -541,7 +561,10 @@ export function scoreRow(row: LabRow, text: string = rowText(row.case)): CaseSco
       const predictedUnits = Math.round(predicted[i]!.width * grid)
       const diff = predictedUnits - observedUnits
       widthDiffs.push(diff)
-      if (diff !== 0 && widths.status === 'pass') {
+      const matches = usesFloat32Positions(row.browser)
+        ? float32EdgesMatch(line.left, line.right, predicted[i]!.width, row.case.paragraph.direction)
+        : diff === 0
+      if (!matches && widths.status === 'pass') {
         widths = { status: 'fail', reason: 'width differs', detail: `line ${i}: native ${observedUnits / grid}px, predicted ${predicted[i]!.width}px, ${diff} units of 1/${grid}px` }
       }
     }
@@ -576,7 +599,10 @@ export function scoreRow(row: LabRow, text: string = rowText(row.case)): CaseSco
       const extentUnits = Math.round((extent.right - extent.left) * grid)
       const diff = Math.round(predicted[i]!.width * grid) - extentUnits
       painterDiffs.push(diff)
-      if (diff !== 0 && painter.status === 'pass') {
+      const matches = usesFloat32Positions(row.browser)
+        ? float32EdgesMatch(extent.left, extent.right, predicted[i]!.width, row.case.paragraph.direction)
+        : diff === 0
+      if (!matches && painter.status === 'pass') {
         painter = { status: 'fail', reason: 'painted extent differs', detail: `line ${i}: painted ${extentUnits / grid}px, predicted ${predicted[i]!.width}px, ${diff} units of 1/${grid}px` }
       }
     }
