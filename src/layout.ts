@@ -385,15 +385,19 @@ function measureAnalysis(
       !spaceParagraphHasExplicitBidiControls(spaceStart)
   }
 
-  // The grapheme a run of combining marks shapes on when only zero-width glue,
-  // controls or other such runs, with no break, separate the run from it.
-  function getMarkBase(analysisIndex: number): string | null {
+  // The source a run of combining marks shapes after when only zero-width glue,
+  // controls or other such runs, with no break, separate the run from the grapheme
+  // before it: that grapheme and what separates them. Without the separators, Canvas
+  // can compose the marks with the grapheme or draw both in another font.
+  function getMarkContext(analysisIndex: number): string | null {
     if (analysis.breaksBefore?.[analysisIndex] !== false || !markRunRe.test(analysis.texts[analysisIndex]!)) return null
     for (let k = analysisIndex - 1; k >= 0; k--) {
       const kind = analysis.kinds[k]!
       const text = analysis.texts[k]!
       if (kind === 'zero-width-glue' || ((kind === 'text' || kind === 'control') && controlOrMarkRunRe.test(text))) continue
-      return kind === 'text' || kind === 'glue' ? getSharedGraphemeSegmenter().segment(text).containing(text.length - 1)!.segment : null
+      if (kind !== 'text' && kind !== 'glue') return null
+      const base = getSharedGraphemeSegmenter().segment(text).containing(text.length - 1)!
+      return analysis.normalized.slice(analysis.starts[k]! + base.index, analysis.starts[analysisIndex]!)
     }
     return null
   }
@@ -662,13 +666,13 @@ function measureAnalysis(
       continue
     }
 
-    // Such a run of marks adds the grapheme with the marks, minus the grapheme, and
+    // Such a run of marks adds its context with the marks, minus the context, and
     // takes no letter spacing of its own.
-    const markBase = getMarkBase(mi)
-    if (markBase !== null) {
-      const joined = markBase + segText
+    const markContext = getMarkContext(mi)
+    if (markContext !== null) {
+      const joined = markContext + segText
       const width = getCorrectedSegmentWidth(joined, getSegmentMetrics(joined, cache), emojiCorrection) -
-        getCorrectedSegmentWidth(markBase, getSegmentMetrics(markBase, cache), emojiCorrection)
+        getCorrectedSegmentWidth(markContext, getSegmentMetrics(markContext, cache), emojiCorrection)
       pushMeasuredSegment(segText, width, segKind, null, null, 0)
       continue
     }

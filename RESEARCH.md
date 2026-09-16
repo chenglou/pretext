@@ -66,13 +66,18 @@ returns to its last break, and a line without one fills graphemes across the unb
 run, as Blink's break-anywhere retry and WebKit's `TextUtil::breakWord` do. Ending at
 any segment boundary instead gave `a`, U+00AD, WJ, `b` at 0px a line holding only the
 soft hyphen, and the second installed gate lost 9,068 line-count passes that way.
-Combining marks after zero-width glue or a control shape on the grapheme before them,
-so they're measured as that grapheme with the marks, minus the grapheme, and take no
-letter spacing of their own; measured alone, U+0301 took 2.97px in 16px Arial.
-WebKit scans a text node's source, where
-a collapsed TAB is still UAX #14 BA, so the WebKit profile maps the source's
-opportunities onto the normalized text; Blink scans the collapsed text, as Pretext
-normalizes it. Every text segment of a scan takes emergency grapheme breaks: under
+Combining marks after zero-width glue or a control shape after the grapheme before
+them and what separates them, so they're measured as that source with the marks, minus
+the source, and take no letter spacing of their own. Measured alone, U+0301 took 2.97px
+in 16px Arial. Measured on the grapheme without the glue, Canvas composed the pair or drew
+it in another font: `a` with U+0323 in 16px Amiri took 2.22px more than `a`, where
+Chrome paints `a`, U+00AD, U+0301, U+00AD, U+0323, `b` as wide as `ab`. WebKit scans a
+text node's source, where a collapsed TAB is still UAX #14 BA, so the WebKit profile
+maps the source's opportunities onto the normalized text; Blink scans the collapsed
+text, as Pretext normalizes it. A break before a run's later unit follows white space,
+so it's a break after the space the run became: in `ab`, SPACE, CR, `cd` the only
+source opportunities after `b` are before the SPACE and before the CR, and Safari starts
+the next line at the CR. Every text segment of a scan takes emergency grapheme breaks: under
 `overflow-wrap: break-word` Blink retries an overflowing line with a break allowed
 between any two graphemes (line_breaker.cc) and WebKit searches the word's grapheme
 prefixes (`TextUtil::breakWord`), so the permission doesn't come from

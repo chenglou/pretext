@@ -2235,8 +2235,9 @@ function isCollapsibleSpaceCode(code: number): boolean {
 
 // WebKit scans a text node's source, where normalization collapsed white space: in
 // normal white space each run of SPACE, TAB, LF, CR and FF became one space, or nothing
-// at either end, and in pre-wrap CRLF became LF. A break before any unit of a run is a
-// break before what the run became.
+// at either end, and in pre-wrap CRLF became LF. A break before a run's first unit is a
+// break before what the run became. A break before a later unit, as before a CR after a
+// space, follows white space, so it is a break after what the run became.
 function mapSourceLineBreaks(source: string, normalizedLength: number, sourceBreaks: Uint8Array, whiteSpace: WhiteSpaceMode): Uint8Array {
   const breaks = new Uint8Array(normalizedLength + 1)
   let normalizedIndex = 0
@@ -2258,8 +2259,9 @@ function mapSourceLineBreaks(source: string, normalizedLength: number, sourceBre
       while (end < source.length && isCollapsibleSpaceCode(source.charCodeAt(end))) end++
       if (end === source.length) break
     }
+    const start = i
     for (; i < end; i++) {
-      if (sourceBreaks[i] === 1) breaks[normalizedIndex] = 1
+      if (sourceBreaks[i] === 1) breaks[i === start ? normalizedIndex : normalizedIndex + 1] = 1
     }
     normalizedIndex++
   }

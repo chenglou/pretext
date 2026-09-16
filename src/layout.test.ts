@@ -41,7 +41,8 @@ let walkRichInlineLineRanges: RichInlineModule['walkRichInlineLineRanges']
 let isCJK: AnalysisModule['isCJK']
 let variant: ReturnType<typeof createVariant>
 let canvasMeasurementCount = 0
-// Real fonts give WJ and U+FEFF no advance, and a mark on its base almost none.
+// Real fonts give WJ and U+FEFF no advance, and a mark on its base almost none. A
+// font without U+0323 draws a letter right before it in a wider font, as Amiri does.
 let shapesMarksAndJoiners = false
 
 const emojiPresentationRe = /\p{Emoji_Presentation}/u
@@ -100,8 +101,15 @@ function measureWidth(text: string, font: string): number {
   let width = 0
   let previousWasDecimalDigit = false
 
+  let previous = ''
   for (const ch of text) {
+    const before = previous
+    previous = ch
     if (ch === '\u200B') continue
+    if (shapesMarksAndJoiners && ch === '\u0323' && /\p{L}/u.test(before)) {
+      width += fontSize * 0.14
+      continue
+    }
     if (shapesMarksAndJoiners && (ch === '\u2060' || ch === '\uFEFF' || (width > 0 && /\p{M}/u.test(ch)))) continue
     if (ch === ' ') {
       width += fontSize * 0.33
@@ -1005,7 +1013,7 @@ describe('boundary-policy regressions', () => {
     }
   })
 
-  test('a line ends only where the scan breaks, and marks after zero-width glue shape on their base', async () => {
+  test('a line ends only where the scan breaks, and marks after zero-width glue shape after the source before them', async () => {
     const { getEngineProfile } = await import('./measurement.ts')
     const profile = getEngineProfile()
     const previous = profile.lineBreakScan
@@ -1035,9 +1043,12 @@ describe('boundary-policy regressions', () => {
         expect(lines('abcd', measureWidth('abc', FONT) + 0.1)).toEqual(['abc', 'd'])
         // With one, the line returns to it instead of ending before the control.
         expect(lines('a\u00ADb\u0080b', measureWidth('b\u0080', FONT) + 0.1)).toEqual(['a\u00AD', 'b\u0080', 'b'])
+        // WebKit breaks before the CR after the space, which is a break after the
+        // collapsed space, so the line returns there as Safari paints it.
+        expect(lines('ab \rcd', measureWidth('ab c', FONT) - 2, { letterSpacing: -1 })).toEqual(['ab ', 'cd'])
 
-        // A mark after zero-width glue or a control adds the letter with the mark,
-        // minus the letter, and takes no letter spacing of its own.
+        // A mark after zero-width glue or a control adds the source before it with the
+        // mark, minus that source, and takes no letter spacing of its own.
         for (const [text, markIndex] of [['aaaa\u00AD\u0301tail', 2], ['ab \u0301cd', 2]] as const) {
           const prepared = prepareWithSegments(text, FONT, { letterSpacing: 1 })
           expect(prepared.segments[markIndex]).toBe('\u0301')
@@ -1051,6 +1062,9 @@ describe('boundary-policy regressions', () => {
         const marks = 'a\u00AD\u0301\u00AD\u0323b'
         expect(lines(marks, 7, { whiteSpace: 'pre-wrap', letterSpacing: -4 })).toEqual(['a\u00AD\u0301\u00AD\u0323', 'b'])
         expect(lines(marks, 7, { whiteSpace: 'pre-wrap' })).toEqual(['a', '\u00AD\u0301\u00AD\u0323', 'b'])
+        // Measured with the soft hyphens, U+0323 doesn't take `a` into another font,
+        // so the text fits where `ab` fits, as Chrome paints it in Amiri.
+        expect(lines(marks, measureWidth('ab', FONT) + 0.1)).toEqual([marks])
       }
       // The merged segmentation marks no boundary.
       profile.lineBreakScan = null
