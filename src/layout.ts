@@ -9,7 +9,6 @@ import { observeSegmentEntries, type SegmentEntryGeometry } from './entry-geomet
 import {
   analyzeText,
   clearAnalysisCaches,
-  getBreakablePreferredBreaks,
   getSharedGraphemeSegmenter,
   isNumericRunSegment,
   setAnalysisLocale,
@@ -57,7 +56,6 @@ type PreparedCore = {
   kinds: SegmentBreakKind[] // Break behavior per segment, e.g. ['text', 'space', 'text']
   simpleLineWalkFastPath: boolean // Normal text can use the simpler old line walker across all layout APIs
   breakableFitAdvances: (number[] | null)[] // Per-grapheme fit advances for breakable segments, else null
-  breakablePreferredBreaks: (number[] | null)[] // Preferred grapheme break ends inside breakable segments, else null
   letterSpacing: number // Extra advance between rendered graphemes on the same line
   spacingGraphemeCounts: number[] // Rendered grapheme counts for letter-spacing gaps; empty when letterSpacing is 0
   discretionaryHyphenWidth: number // Visible width added when a soft hyphen is chosen as the break
@@ -143,7 +141,6 @@ function createEmptyPrepared(includeSegments: boolean): InternalPreparedText | P
       kinds: [],
       simpleLineWalkFastPath: true,
       breakableFitAdvances: [],
-      breakablePreferredBreaks: [],
       entryGeometry: null,
       letterSpacing: 0,
       spacingGraphemeCounts: [],
@@ -160,7 +157,6 @@ function createEmptyPrepared(includeSegments: boolean): InternalPreparedText | P
     kinds: [],
     simpleLineWalkFastPath: true,
     breakableFitAdvances: [],
-    breakablePreferredBreaks: [],
     entryGeometry: null,
     letterSpacing: 0,
     spacingGraphemeCounts: [],
@@ -256,7 +252,6 @@ function measureAnalysis(
   analysis: TextAnalysis,
   font: string,
   includeSegments: boolean,
-  wordBreak: WordBreakMode,
   letterSpacing: number,
   engineProfile: EngineProfile,
   documentLanguage: string | null,
@@ -404,7 +399,6 @@ function measureAnalysis(
   const kinds: SegmentBreakKind[] = []
   let simpleLineWalkFastPath = !hasLetterSpacing
   const breakableFitAdvances: (number[] | null)[] = []
-  const breakablePreferredBreaks: (number[] | null)[] = []
   let entryGeometry: (SegmentEntryGeometry | null)[] | null = null
   let entryProfile: ReturnType<typeof getEntryMeasurementProfile> | undefined
   let measureEntry: ReturnType<typeof createEntryMeasurement> | undefined
@@ -481,7 +475,6 @@ function measureAnalysis(
     width: number,
     kind: SegmentBreakKind,
     breakableFitAdvance: number[] | null,
-    breakablePreferredBreak: number[] | null,
     spacingGraphemeCount: number,
     entry: SegmentEntryGeometry | null = null,
   ): void {
@@ -491,7 +484,6 @@ function measureAnalysis(
     widths.push(width)
     kinds.push(kind)
     breakableFitAdvances.push(breakableFitAdvance)
-    breakablePreferredBreaks.push(breakablePreferredBreak)
     if (entry !== null && entryGeometry === null) {
       entryGeometry = Array.from({ length: widths.length - 1 }, () => null)
       simpleLineWalkFastPath = false
@@ -552,16 +544,11 @@ function measureAnalysis(
         fitAdvances = fitAdvances.slice()
         fitAdvances[fitAdvances.length - 1] = fitAdvances[fitAdvances.length - 1]! + followingSpaceKerning
       }
-      const preferredBreaks =
-        fitAdvances === null || wordBreak === 'keep-all'
-          ? null
-          : getBreakablePreferredBreaks(text, engineProfile)
       pushMeasuredSegment(
         text,
         width,
         kind,
         fitAdvances,
-        preferredBreaks,
         spacingGraphemeCount,
         engineProfile.entryFitBasis !== 'disabled' && kind === 'text' && fitAdvances !== null
           ? getEntryGeometry(text, textMetrics, fitAdvances, width, engineProfile.entryFitBasis) : null,
@@ -573,7 +560,6 @@ function measureAnalysis(
       text,
       width,
       kind,
-      null,
       null,
       spacingGraphemeCount,
     )
@@ -590,7 +576,6 @@ function measureAnalysis(
         0,
         segKind,
         null,
-        null,
         0,
       )
       if (retreatsFromUnfitHyphen) {
@@ -601,13 +586,13 @@ function measureAnalysis(
     }
 
     if (segKind === 'zero-width-glue') {
-      pushMeasuredSegment(segText, 0, segKind, null, null, 0)
+      pushMeasuredSegment(segText, 0, segKind, null, 0)
       continue
     }
 
     if (segKind === 'hard-break') {
       const endSegmentIndex = widths.length
-      pushMeasuredSegment(segText, 0, segKind, null, null, 0)
+      pushMeasuredSegment(segText, 0, segKind, null, 0)
       chunks.push({
         startSegmentIndex: chunkStartSegmentIndex,
         endSegmentIndex,
@@ -622,7 +607,6 @@ function measureAnalysis(
         segText,
         0,
         segKind,
-        null,
         null,
         hasLetterSpacing ? countRenderedSpacingGraphemes(segText, segKind) : 0,
       )
@@ -641,7 +625,7 @@ function measureAnalysis(
         ((previousKind === 'text' || previousKind === 'glue') && needsComplexTextPath(analysis.texts[mi - 1]!)) ||
         (leadingCombiningMarkRe.test(nextText) && needsComplexTextPath(nextText))
       )
-      pushMeasuredSegment(segText, width, segKind, null, null, takesLetterSpacing ? 1 : 0)
+      pushMeasuredSegment(segText, width, segKind, null, takesLetterSpacing ? 1 : 0)
       continue
     }
 
@@ -654,7 +638,7 @@ function measureAnalysis(
         ? 0
         : getCorrectedSegmentWidth(joined, getSegmentMetrics(joined, cache), emojiCorrection) -
           getCorrectedSegmentWidth(markContext, getSegmentMetrics(markContext, cache), emojiCorrection)
-      pushMeasuredSegment(segText, width, segKind, null, null, 0)
+      pushMeasuredSegment(segText, width, segKind, null, 0)
       continue
     }
 
@@ -690,7 +674,6 @@ function measureAnalysis(
       kinds,
       simpleLineWalkFastPath,
       breakableFitAdvances,
-      breakablePreferredBreaks,
       entryGeometry,
       letterSpacing,
       spacingGraphemeCounts,
@@ -707,7 +690,6 @@ function measureAnalysis(
     kinds,
     simpleLineWalkFastPath,
     breakableFitAdvances,
-    breakablePreferredBreaks,
     entryGeometry,
     letterSpacing,
     spacingGraphemeCounts,
@@ -731,7 +713,7 @@ function prepareInternal(
   const documentLanguage = getDocumentLanguage()
   const engineProfile = getEngineProfile()
   const analysis = analyzeText(text, engineProfile, options?.whiteSpace, wordBreak, documentLanguage)
-  return measureAnalysis(analysis, font, includeSegments, wordBreak, letterSpacing, engineProfile, documentLanguage)
+  return measureAnalysis(analysis, font, includeSegments, letterSpacing, engineProfile, documentLanguage)
 }
 
 // Prepare text for layout. Segments the text, measures each segment via canvas,

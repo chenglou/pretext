@@ -54,7 +54,6 @@
     "corpus-font-matrix": "bun run scripts/corpus-font-matrix.ts",
     "corpus-taxonomy": "bun run scripts/corpus-taxonomy.ts",
     "generate:engine-break-data": "bun run scripts/generate-engine-break-data.ts",
-    "generate:line-break-data": "bun run scripts/generate-line-break-data.ts",
     "package-smoke-test": "bun run scripts/package-smoke-test.ts",
     "prepack": "bun run build:package",
     "probe-check": "bun run scripts/probe-check.ts",

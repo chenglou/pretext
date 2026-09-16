@@ -40,7 +40,7 @@ test('fresh entry geometry survives copied public range cursors without layout m
   const prepared = {
     widths: [19], kinds: ['text'],
     simpleLineWalkFastPath: false, breakableFitAdvances: [advances],
-    breakablePreferredBreaks: [null], entryGeometry: [entry], letterSpacing: 0,
+    entryGeometry: [entry], letterSpacing: 0,
     spacingGraphemeCounts: [], discretionaryHyphenWidth: 4, tabStopAdvance: 32,
     chunks: [{ startSegmentIndex: 0, endSegmentIndex: 1, consumedEndSegmentIndex: 1 }],
     segments: ['a\u2060\u0301b'],

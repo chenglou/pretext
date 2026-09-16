@@ -12,7 +12,6 @@ export type PreparedLineBreakData = {
   kinds: SegmentBreakKind[]
   simpleLineWalkFastPath: boolean
   breakableFitAdvances: (number[] | null)[]
-  breakablePreferredBreaks: (number[] | null)[]
   entryGeometry?: (SegmentEntryGeometry | null)[] | null
   // Per segment, false where an engine's scan gives no break before text, glue,
   // zero-width glue or a control, so no line ends there. Null without one.
@@ -144,26 +143,6 @@ function getBreakableCandidateFitWidth(
   return prepared.letterSpacing === 0
     ? candidatePaintWidth
     : candidatePaintWidth + prepared.letterSpacing
-}
-
-function getNextPreferredBreakIndex(
-  preferredBreaks: number[],
-  preferredBreakIndex: number,
-  graphemeEnd: number,
-): number {
-  let lo = preferredBreakIndex
-  if (lo >= preferredBreaks.length || preferredBreaks[lo]! >= graphemeEnd) return lo
-
-  // Simple batch walking carries the next boundary. The shared complex loop
-  // and public continuations seek instead of rescanning every prior cut.
-  let hi = preferredBreaks.length
-  lo++
-  while (lo < hi) {
-    const mid = Math.floor((lo + hi) / 2)
-    if (preferredBreaks[mid]! < graphemeEnd) lo = mid + 1
-    else hi = mid
-  }
-  return lo
 }
 
 function getTerminalLetterSpacing(
@@ -318,7 +297,7 @@ function walkPreparedLinesSimple(
   maxWidth: number,
   onLine?: InternalLineVisitor,
 ): number {
-  const { widths, kinds, breakableFitAdvances, breakablePreferredBreaks } = prepared
+  const { widths, kinds, breakableFitAdvances } = prepared
   if (widths.length === 0) return 0
 
   const engineProfile = getEngineProfile()
@@ -390,28 +369,12 @@ function walkPreparedLinesSimple(
 
   function appendBreakableSegmentFrom(segmentIndex: number, startGraphemeIndex: number): void {
     const fitAdvances = breakableFitAdvances[segmentIndex]!
-    const preferredBreaks = breakablePreferredBreaks[segmentIndex] ?? null
-    let preferredBreakIndex = preferredBreaks === null
-      ? -1
-      : getNextPreferredBreakIndex(preferredBreaks, 0, startGraphemeIndex + 1)
-    let lastPreferredBreakEnd = -1
-    let lastPreferredBreakWidth = 0
-
-    let g = startGraphemeIndex
-    while (g < fitAdvances.length) {
+    for (let g = startGraphemeIndex; g < fitAdvances.length; g++) {
       const gw = fitAdvances[g]!
 
       if (!hasContent) {
         startLineAtGrapheme(segmentIndex, g, gw)
       } else if (lineW + gw > fitLimit) {
-        if (preferredBreaks !== null && lastPreferredBreakEnd > startGraphemeIndex) {
-          emitCurrentLine(segmentIndex, lastPreferredBreakEnd, lastPreferredBreakWidth)
-          g = lastPreferredBreakEnd
-          preferredBreakIndex = getNextPreferredBreakIndex(preferredBreaks, preferredBreakIndex, g + 1)
-          lastPreferredBreakEnd = -1
-          lastPreferredBreakWidth = 0
-          continue
-        }
         emitCurrentLine()
         startLineAtGrapheme(segmentIndex, g, gw)
       } else {
@@ -419,14 +382,6 @@ function walkPreparedLinesSimple(
         lineEndSegmentIndex = segmentIndex
         lineEndGraphemeIndex = g + 1
       }
-
-      const graphemeEnd = g + 1
-      if (preferredBreaks !== null && preferredBreaks[preferredBreakIndex] === graphemeEnd) {
-        lastPreferredBreakEnd = graphemeEnd
-        lastPreferredBreakWidth = lineW
-        preferredBreakIndex++
-      }
-      g++
     }
 
     if (hasContent && lineEndSegmentIndex === segmentIndex && lineEndGraphemeIndex === fitAdvances.length) {
@@ -529,9 +484,8 @@ function stepPreparedChunkLineGeometry(
 // A return from an unfit discretionary hyphen needs an overflow that isolated
 // widths can show and a target that really is the latest opportunity. No soft
 // hyphen on the line may measure narrower joined than apart, and nothing after
-// the target may be text after text or a dash inside a segment, which can hold an
-// opportunity that segment kinds don't mark, such as after `-` or between
-// ideographs. Checked only on a line that would end at an unfit hyphen. The
+// the target may be text after text, which can hold an opportunity that segment
+// kinds don't mark. Checked only on a line that would end at an unfit hyphen. The
 // target can be a segment start that follows a break outside the prepared
 // text, such as a rich-inline item boundary.
 export function canReturnFromUnfitHyphen(
@@ -545,10 +499,10 @@ export function canReturnFromUnfitHyphen(
   for (let i = lineStartSegmentIndex; i <= softHyphenIndex; i++) {
     if (discretionaryHyphenContexts[i]) return false
   }
-  const { kinds, breakablePreferredBreaks } = prepared
+  const { kinds } = prepared
   for (let i = targetSegmentIndex; i < softHyphenIndex; i++) {
     if (breaksAfter(kinds[i]!)) continue
-    if ((i > targetSegmentIndex && !breaksAfter(kinds[i - 1]!)) || breakablePreferredBreaks[i] !== null) return false
+    if (i > targetSegmentIndex && !breaksAfter(kinds[i - 1]!)) return false
   }
   return true
 }
@@ -569,7 +523,6 @@ function walkPreparedComplexLines(
     widths,
     kinds,
     breakableFitAdvances,
-    breakablePreferredBreaks,
     discretionaryHyphenWidth,
     letterSpacing,
     spacingGraphemeCounts,
@@ -711,13 +664,6 @@ function walkPreparedComplexLines(
     leadingSpacing = 0,
   ): number | null {
     const fitAdvances = breakableFitAdvances[segmentIndex]!
-    const preferredBreaks = breakablePreferredBreaks[segmentIndex] ?? null
-    let preferredBreakIndex = preferredBreaks === null
-      ? -1
-      : getNextPreferredBreakIndex(preferredBreaks, 0, startGraphemeIndex + 1)
-    let lastPreferredBreakEnd = -1
-    let lastPreferredBreakWidth = 0
-
     const entry = prepared.entryGeometry?.[segmentIndex]
     // Entry geometry describes whole segment tails on a fresh line, not a
     // caller's grapheme limit.
@@ -734,17 +680,8 @@ function walkPreparedComplexLines(
       // The first real grapheme is mandatory source progress, even when unfit.
       for (let g = startGraphemeIndex; g < fitAdvances.length; g++) {
         const fresh = getSegmentEntryWidth(entry, startGraphemeIndex, g + 1)!
-        if (g > startGraphemeIndex && fresh > fitLimit) {
-          return lastPreferredBreakEnd > startGraphemeIndex
-            ? finishLine(segmentIndex, lastPreferredBreakEnd, lastPreferredBreakWidth)
-            : finishLine()
-        }
+        if (g > startGraphemeIndex && fresh > fitLimit) return finishLine()
         startLineAtGrapheme(segmentIndex, g, fresh - terminal)
-        if (preferredBreaks !== null && preferredBreaks[preferredBreakIndex] === g + 1) {
-          lastPreferredBreakEnd = g + 1
-          lastPreferredBreakWidth = lineW
-          preferredBreakIndex++
-        }
       }
       // Exhausting an emergency fragment consumes the measured segment and
       // ends this line. Only intact admission above continues into other source.
@@ -759,23 +696,11 @@ function walkPreparedComplexLines(
       } else {
         const gw = baseGw + (g > startGraphemeIndex ? letterSpacing : leadingSpacing)
         const candidatePaintWidth = lineW + gw
-        if (getBreakableCandidateFitWidth(prepared, candidatePaintWidth) > fitLimit) {
-          if (preferredBreaks !== null && lastPreferredBreakEnd > startGraphemeIndex) {
-            return finishLine(segmentIndex, lastPreferredBreakEnd, lastPreferredBreakWidth)
-          }
-          return finishLine()
-        }
+        if (getBreakableCandidateFitWidth(prepared, candidatePaintWidth) > fitLimit) return finishLine()
 
         lineW = candidatePaintWidth
         lineEndSegmentIndex = segmentIndex
         lineEndGraphemeIndex = g + 1
-      }
-
-      const graphemeEnd = g + 1
-      if (preferredBreaks !== null && preferredBreaks[preferredBreakIndex] === graphemeEnd) {
-        lastPreferredBreakEnd = graphemeEnd
-        lastPreferredBreakWidth = lineW
-        preferredBreakIndex++
       }
     }
 
@@ -999,7 +924,7 @@ function stepPreparedSimpleLineGeometry(
   cursor: LineBreakCursor,
   maxWidth: number,
 ): number | null {
-  const { widths, kinds, breakableFitAdvances, breakablePreferredBreaks } = prepared
+  const { widths, kinds, breakableFitAdvances } = prepared
   const engineProfile = getEngineProfile()
   const lineFitEpsilon = engineProfile.lineFitEpsilon
   // A negative width lays out as 0, as in the batch walkers.
@@ -1022,32 +947,14 @@ function stepPreparedSimpleLineGeometry(
     if (!hasContent) {
       if (startGraphemeIndex > 0 || (w > fitLimit && breakableFitAdvance !== null)) {
         const fitAdvances = breakableFitAdvance!
-        const preferredBreaks = breakablePreferredBreaks[i] ?? null
-        let preferredBreakIndex = preferredBreaks === null
-          ? -1
-          : getNextPreferredBreakIndex(preferredBreaks, 0, startGraphemeIndex + 1)
-        let lastPreferredBreakEnd = -1
-        let lastPreferredBreakWidth = 0
-        const firstGraphemeWidth = fitAdvances[startGraphemeIndex]!
-
         hasContent = true
-        lineW = firstGraphemeWidth
+        lineW = fitAdvances[startGraphemeIndex]!
         lineEndSegmentIndex = i
         lineEndGraphemeIndex = startGraphemeIndex + 1
-        if (preferredBreaks !== null && preferredBreaks[preferredBreakIndex] === lineEndGraphemeIndex) {
-          lastPreferredBreakEnd = lineEndGraphemeIndex
-          lastPreferredBreakWidth = lineW
-          preferredBreakIndex++
-        }
 
         for (let g = startGraphemeIndex + 1; g < fitAdvances.length; g++) {
           const gw = fitAdvances[g]!
           if (lineW + gw > fitLimit) {
-            if (preferredBreaks !== null && lastPreferredBreakEnd > startGraphemeIndex) {
-              cursor.segmentIndex = i
-              cursor.graphemeIndex = lastPreferredBreakEnd
-              return lastPreferredBreakWidth
-            }
             cursor.segmentIndex = lineEndSegmentIndex
             cursor.graphemeIndex = lineEndGraphemeIndex
             return lineW
@@ -1055,11 +962,6 @@ function stepPreparedSimpleLineGeometry(
           lineW += gw
           lineEndSegmentIndex = i
           lineEndGraphemeIndex = g + 1
-          if (preferredBreaks !== null && preferredBreaks[preferredBreakIndex] === lineEndGraphemeIndex) {
-            lastPreferredBreakEnd = lineEndGraphemeIndex
-            lastPreferredBreakWidth = lineW
-            preferredBreakIndex++
-          }
         }
 
         if (lineEndSegmentIndex === i && lineEndGraphemeIndex === fitAdvances.length) {

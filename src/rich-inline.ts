@@ -5,7 +5,6 @@ import {
 } from './layout.js'
 import {
   analyzeText,
-  getBreakablePreferredBreaks,
   getSharedGraphemeSegmenter,
   getSharedWordSegmenter,
   removeSegmentBreaksNextToZeroWidthSpace,
@@ -325,38 +324,10 @@ function stepItemToBreak(
   return width
 }
 
-// The latest end of a preferred break grapheme, such as a hyphen, in
-// (start, end]. An emergency split of a word ends there. The walker can end
-// a line inside a segment only where that segment has fit advances.
-function getLastPreferredBreak(prepared: PreparedTextWithSegments, start: LayoutCursor, end: LayoutCursor): LayoutCursor | null {
-  const data: PreparedLineBreakData = prepared
-  const { segments } = prepared
-  let text = ''
-  for (let i = start.segmentIndex; i <= end.segmentIndex; i++) text += segments[i]!
-  const preferredBreaks = getBreakablePreferredBreaks(text, getEngineProfile())
-  let preferredBreak: LayoutCursor | null = null
-  if (preferredBreaks === null) return preferredBreak
-  let graphemeEnd = 0
-  let breakIndex = 0
-  for (let i = start.segmentIndex; i <= end.segmentIndex; i++) {
-    const graphemes = Array.from(getSharedGraphemeSegmenter().segment(segments[i]!))
-    const walkable = data.breakableFitAdvances[i] !== null && data.entryGeometry?.[i] == null
-    for (let g = 1; g <= graphemes.length; g++) {
-      graphemeEnd++
-      if (preferredBreaks[breakIndex] !== graphemeEnd) continue
-      breakIndex++
-      const cursor = g === graphemes.length ? { segmentIndex: i + 1, graphemeIndex: 0 } : { segmentIndex: i, graphemeIndex: g }
-      if (cursor.graphemeIndex > 0 && !walkable) continue
-      if (isBeforeCursor(start, cursor) && !isBeforeCursor(end, cursor)) preferredBreak = cursor
-    }
-  }
-  return preferredBreak
-}
-
 // Fills the graphemes of a segment that does not fit, as the line walker does
-// for a word that began the line: up to the last grapheme that fits, or back
-// to the word's last preferred break. Null when the item's own break before
-// the segment is that end, or the segment has no fit advances.
+// for a word that began the line: up to the last grapheme that fits. Null when
+// the item's own break before the segment is that end, or the segment has no
+// fit advances.
 function fillItemSegment(
   prepared: PreparedTextWithSegments,
   start: LayoutCursor,
@@ -376,9 +347,8 @@ function fillItemSegment(
     if (cursor.segmentIndex !== segmentIndex || cursor.graphemeIndex !== g) break
     overflow.graphemeIndex = g
   }
-  const end = getLastPreferredBreak(prepared, start, overflow) ?? overflow
-  if (end.segmentIndex === segmentIndex && end.graphemeIndex === 0) return null
-  return stepItemToBreak(prepared, start, availableWidth, end, lineEnd)
+  if (overflow.graphemeIndex === 0) return null
+  return stepItemToBreak(prepared, start, availableWidth, overflow, lineEnd)
 }
 
 // The joined text's first ordinary break inside a portion that starts at a

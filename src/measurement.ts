@@ -32,20 +32,7 @@ export type EngineProfile = {
   // with nsLineBreaker over ICU4X's rules (src/gecko-line-breaks.ts), and engines Pretext
   // doesn't recognize take Blink's scan.
   lineBreakScan: 'blink' | 'webkit' | 'gecko'
-  geckoAsciiLineBreaks: boolean
   lineFitEpsilon: number
-  // Small kana and U+30FC are UAX #14 CJ. ICU's normal rules resolve CJ to ID, so
-  // both may start a line, and its strict rules to NS, so neither may. Gecko's auto
-  // is strict. The scans take CJ from their engines' tables, so only preferred hyphen
-  // breaks read this.
-  breakBeforeConditionalJapaneseStarter: boolean
-  // Letters that keep a word-initial hyphen (LB20a). 'alphabetic-and-hebrew'
-  // models ICU 78, which Chromium and WebKit use: AL and HL letters after
-  // U+002D or any Unicode 17 HH dash. It is also the default without a
-  // navigator. 'none' models Gecko, whose ICU4X rules have no LB20a.
-  // 'alphabetic' keeps only AL letters, as ICU 77 did, but ICU 77 also counted
-  // only U+2010 as HH, so no engine profile selects it.
-  wordInitialHyphenLetters: 'none' | 'alphabetic' | 'alphabetic-and-hebrew'
   preferPrefixWidthsForBreakableRuns: boolean
   // WebKit measures a text item together with a directly following U+0020 and
   // subtracts one unshaped space, so the item keeps its kerning with that space
@@ -276,10 +263,7 @@ export function getEngineProfile(): EngineProfile {
   const profile: EngineProfile = {
     entryFitBasis: isDesktop && engine === 'blink' ? 'fresh' : isDesktop && engine === 'gecko' ? 'original' : 'disabled',
     lineBreakScan: engine === 'gecko' || engine === 'webkit' ? engine : 'blink',
-    geckoAsciiLineBreaks: engine === 'gecko',
     lineFitEpsilon: engine === 'webkit' ? 1 / 64 : 0.005,
-    breakBeforeConditionalJapaneseStarter: engine === 'blink',
-    wordInitialHyphenLetters: engine === 'gecko' ? 'none' : 'alphabetic-and-hebrew',
     preferPrefixWidthsForBreakableRuns: engine === 'webkit',
     measureTextWithFollowingSpace: engine === 'webkit',
     segmentBreakRemovalRun: engine === 'blink' ? 'blink' : engine === 'gecko' ? 'gecko' : 'none',

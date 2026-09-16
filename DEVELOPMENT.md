@@ -27,7 +27,6 @@ known-failure reporting, native observation limits and reproducible case IDs.
 - `bun run package-smoke-test` — pack the tarball and verify temporary JS + TS consumers
 - `bun run site:build` — build the static demo site into `site/`
 - `bun run generate:engine-break-data` — refresh Chrome's, Safari's and Firefox's checked-in break tables from the engine files in `scripts/engine-data/`, checking each table against its source; `--check` compares the generated file instead of writing it
-- `bun run generate:line-break-data` — refresh the checked-in projected Unicode line-break class table that preferred hyphen breaks read; `--check` compares it with `scripts/unicode/LineBreak-17.0.0.txt`
 
 ### Browser Accuracy And Benchmarking
 
@@ -117,7 +116,7 @@ For one-off performance and memory work, start with `bun start` and an isolated,
 Bun/Node microbenchmarks are useful for quick experiments, but browser behavior needs browser measurements.
 
 For algorithmic changes, scale both source length and the number of segments,
-preferred breaks, forced lines and rich items. Include repeated punctuation,
+forced lines and rich items. Include repeated punctuation,
 Arabic joins, CJK keep-all, long hyphenated URLs and internal whitespace runs.
 Count visited boundaries and submitted Canvas text, with cold caches, before
 relying on timings; doubling an input should not quadruple repeated work.

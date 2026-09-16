@@ -123,6 +123,14 @@ outside Thai, Lao, Khmer and Myanmar runs. Between rich-inline items, the WebKit
 previous item's last two characters as prior context, as `TextUtil::mayBreakInBetween`
 does.
 
+An overflowing segment used to end its emergency split after its last hyphen that
+fit. Those preferred breaks recovered ordinary breaks the merged segmentation hid
+inside a segment. A scan segment ends at every break, so a hyphen left inside one has
+no break after it, and Chrome, Safari and Firefox fill graphemes there under
+`overflow-wrap: break-word`. Over the corpora and test texts, 188 of 374,178 Blink
+and 178 of 374,218 WebKit scan segments still held a hyphen before other graphemes,
+such as `ה-16`, `-.` and `—”`, where the preferred break could still move a line end.
+
 Chrome's `line_normal_cj.brk` doesn't ship, so curly quotes wrap on `zh` pages as on
 `en` pages. ENGINE_FOLLOWUPS.md lists that and the other deliberate differences.
 
@@ -164,10 +172,8 @@ forward carry, symbol chains, URL and numeric runs and keep-all run ends. So
 `x?|$b`, `x?|-|b` and `x!|©b` break as in Chrome and Safari, while Firefox keeps
 `x?-|b`. A URL query unit joins the text after `?` up to the next break this
 rule allows, such as a second `?` before a letter, so in `https://x.com/p?-a` it
-keeps `-a`, while browsers also break after that hyphen. Above U+00FF Pretext
-reads the LineBreak.txt class of a following letter, number or symbol, so an
-iteration mark such as `々` (NS) stays after `！`, while numeric affixes and
-opening punctuation break; other punctuation keeps its existing attachment.
+keeps `-a`, while browsers also break after that hyphen. Above U+00FF the engines'
+line-break classes decide, so an iteration mark such as `々` (NS) stays after `！`.
 Small kana and `ー` (CJ) after EX follow the engine and page language; see
 Content Language. Safari's keep-all still breaks only at spaces. U+061B ARABIC
 SEMICOLON is EX too, while `:`, `.` and U+060C are IS and keep a following
@@ -352,7 +358,7 @@ stays hidden.
 
 Headless Chromium 147, which most headless keep-all evidence comes from, runs ICU
 77.1 with Unicode 16 data, while installed Chrome 153 runs ICU 78.2 with Unicode 17
-data, which the generated table follows. The headless build cannot check the HH,
+data, as the scans' tables do. The headless build cannot check the HH,
 LB21a and LB20a differences described above. The two versions' LB19a rules are
 identical, so the quotation mark evidence carries over.
 
@@ -811,8 +817,7 @@ item's own segmentation: Thai `ความสวยง` splits into `ควา�
 `ความ/สวยงาม` joined. Joined break positions therefore map into item cursors, down
 to a grapheme inside an item segment when needed. Where an item's segments hide a
 joined break, or offer one inside a joined word, the walker ends at the joined
-break or fills graphemes back to a preferred break, as the flat walker splits a
-word.
+break or fills graphemes, as the flat walker splits a word.
 
 WebKit breaks differently, and `inlineItemBreaks` records that. Its inline items
 builder runs a break iterator over each inline box's own text, and a boundary
@@ -1072,8 +1077,7 @@ The regex failures involved *internal* whitespace followed by content and long
 digit runs without `px`, not just long trailing whitespace or valid font strings.
 The preferred-break failure needed one long hyphenated run producing many lines.
 An arbitrary continuation must seek to its starting boundary; an already
-positioned scan can carry its index. The shared complex walker's preferred-break
-lookup work is O(lines × log(cuts)); the simple batch walker carries the next cut.
+positioned scan can carry its index.
 
 Count total submitted Canvas text, not just calls. Measuring every prefix or
 suffix is quadratic even if each position triggers only one query. Safari's

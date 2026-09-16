@@ -13,7 +13,6 @@ type LayoutModule = typeof import('./layout.ts')
 type LineBreakModule = typeof import('./line-break.ts')
 type MeasurementModule = typeof import('./measurement.ts')
 type RichInlineModule = typeof import('./rich-inline.ts')
-type AnalysisModule = typeof import('./analysis.ts')
 type SegmentMetrics = ReturnType<MeasurementModule['getSegmentMetrics']>
 
 let prepare: LayoutModule['prepare']
@@ -38,7 +37,6 @@ let layoutNextRichInlineLineRange: RichInlineModule['layoutNextRichInlineLineRan
 let materializeRichInlineLineRange: RichInlineModule['materializeRichInlineLineRange']
 let measureRichInlineStats: RichInlineModule['measureRichInlineStats']
 let walkRichInlineLineRanges: RichInlineModule['walkRichInlineLineRanges']
-let isCJK: AnalysisModule['isCJK']
 let variant: ReturnType<typeof createVariant>
 let canvasMeasurementCount = 0
 // Real fonts give WJ and U+FEFF no advance, and a mark on its base almost none. A
@@ -276,14 +274,12 @@ class TestOffscreenCanvas {
 
 beforeAll(async () => {
   Reflect.set(globalThis, 'OffscreenCanvas', TestOffscreenCanvas)
-  const [analysisMod, mod, lineBreakMod, measurementMod, richInlineMod] = await Promise.all([
-    import('./analysis.ts'),
+  const [mod, lineBreakMod, measurementMod, richInlineMod] = await Promise.all([
     import('./layout.ts'),
     import('./line-break.ts'),
     import('./measurement.ts'),
     import('./rich-inline.ts'),
   ])
-  ;({ isCJK } = analysisMod)
   ;({
     prepare,
     prepareWithSegments,
@@ -536,19 +532,10 @@ describe('shared public contracts', () => {
 describe('boundary-policy regressions', () => {
   const baseProfile = {
     lineBreakScan: 'blink' as const,
-    geckoAsciiLineBreaks: false,
-    breakBeforeConditionalJapaneseStarter: false,
-    wordInitialHyphenLetters: 'alphabetic' as const,
     segmentBreakRemovalRun: 'none' as const,
     breakOnlyAfterNextLine: false,
   }
-  const geckoProfile = {
-    ...baseProfile,
-    lineBreakScan: 'gecko' as const,
-    geckoAsciiLineBreaks: true,
-    wordInitialHyphenLetters: 'none' as const,
-    segmentBreakRemovalRun: 'gecko' as const,
-  }
+  const geckoProfile = { ...baseProfile, lineBreakScan: 'gecko' as const, segmentBreakRemovalRun: 'gecko' as const }
 
   test('independent symbols use grapheme overflow without splitting attached marks', () => {
     for (const text of ['||||', '|\u0301|\u0301']) {
@@ -608,7 +595,7 @@ describe('boundary-policy regressions', () => {
 
   test('times and numbers keep a closing full-width comma (#225)', async () => {
     const { analyzeText } = await import('./analysis.ts')
-    const profile = { ...baseProfile, breakBeforeConditionalJapaneseStarter: true, wordInitialHyphenLetters: 'alphabetic-and-hebrew' as const, segmentBreakRemovalRun: 'blink' as const }
+    const profile = { ...baseProfile, segmentBreakRemovalRun: 'blink' as const }
     for (const [text, expected] of [
       ['a 00:00:00\uFF0Cb', ['a', ' ', '00:00:00\uFF0C', 'b']],
       ['2025-08-01 00:00:00\uFF0C2025-08-01 00:00:00', ['2025-', '08-', '01', ' ', '00:00:00\uFF0C', '2025-', '08-', '01', ' ', '00:00:00']],
@@ -685,7 +672,7 @@ describe('boundary-policy regressions', () => {
   })
 
   test('the Gecko profile keeps a hyphen with the number after it', async () => {
-    const { analyzeText, getBreakablePreferredBreaks } = await import('./analysis.ts')
+    const { analyzeText } = await import('./analysis.ts')
     const gecko = geckoProfile
     // ICU4X keeps a hyphen-minus (HY) with a following number (NU), ASCII or not
     // (LB25): Firefox moves `log-2026` to the next line whole and breaks
@@ -709,10 +696,6 @@ describe('boundary-policy regressions', () => {
     for (const text of ['a-\uFF11\uFF12', 'a\u20101', 'a\u20131', 'x-y', '1-+2']) {
       expect(analyzeText(text, gecko).texts).toEqual(analyzeText(text, baseProfile).texts)
     }
-    // An overflowing word fills graphemes there instead of preferring the break.
-    expect(getBreakablePreferredBreaks('crash-log-2026', gecko)).toEqual([6])
-    expect(getBreakablePreferredBreaks('crash-log-2026', baseProfile)).toEqual([6, 10])
-    expect(getBreakablePreferredBreaks('a-\u0661\u0662', gecko)).toBeNull()
   })
 
   test('the Gecko profile breaks after a slash before a letter', async () => {
@@ -795,7 +778,7 @@ describe('boundary-policy regressions', () => {
   })
 
   test('ZWJ and a word-initial hyphen keep the following character', async () => {
-    const { analyzeText, getBreakablePreferredBreaks } = await import('./analysis.ts')
+    const { analyzeText } = await import('./analysis.ts')
     const profile = baseProfile
     // UAX #14 LB8a and LB20a. The pair tables still break '-' before an ASCII letter,
     // and Firefox's ICU4X rules predate LB20a.
@@ -810,7 +793,7 @@ describe('boundary-policy regressions', () => {
       .toEqual(['a', ' ', '\u2010', 'b'])
     expect(analyzeText('a \u2010b', geckoProfile).texts).toEqual(['a', ' ', '\u2010', 'b'])
     // HL letters keep it too, and so do the other Unicode 17 HH dashes, astral ones included.
-    const hebrewProfile = { ...profile, wordInitialHyphenLetters: 'alphabetic-and-hebrew' as const }
+    const hebrewProfile = profile
     const noneProfile = geckoProfile
     expect(analyzeText('a \u2010\u05D1b', hebrewProfile).texts).toEqual(['a', ' ', '\u2010\u05D1b'])
     expect(analyzeText('a \u2012b', hebrewProfile).texts).toEqual(['a', ' ', '\u2012b'])
@@ -829,30 +812,6 @@ describe('boundary-policy regressions', () => {
         expect(analyzeText(text, breakingProfile).texts).toEqual(['a', ' ', text.slice(2, -1), 'b'])
       }
       expect(analyzeText(text, hebrewProfile).texts).toEqual(['a', ' ', text.slice(2)])
-    }
-    // An overflowing word does not prefer the break LB20a removed.
-    expect(getBreakablePreferredBreaks('\u2010ab', profile)).toBeNull()
-    expect(getBreakablePreferredBreaks('a\u2010b', profile)).toEqual([2])
-    expect(getBreakablePreferredBreaks('\u2010 bar', profile)).toEqual([1])
-    expect(getBreakablePreferredBreaks('\u058A\u0561b', hebrewProfile)).toBeNull()
-    expect(getBreakablePreferredBreaks('\u058A\u0561b', noneProfile)).toEqual([1])
-  })
-
-  test('the profile without a navigator keeps Hebrew letters after a word-initial hyphen', async () => {
-    // Unknown user agents, such as Bun's, get the ICU 78 letters, and so does
-    // a runtime with no navigator.
-    const { getEngineProfile } = await import('./measurement.ts')
-    expect(getEngineProfile().wordInitialHyphenLetters).toBe('alphabetic-and-hebrew')
-    const descriptor = Object.getOwnPropertyDescriptor(globalThis, 'navigator')
-    Object.defineProperty(globalThis, 'navigator', { value: undefined, configurable: true, writable: true })
-    try {
-      const specifier = './measurement.ts?no-navigator'
-      const fresh = await import(specifier) as MeasurementModule
-      expect(typeof navigator).toBe('undefined')
-      expect(fresh.getEngineProfile().wordInitialHyphenLetters).toBe('alphabetic-and-hebrew')
-    } finally {
-      if (descriptor === undefined) Reflect.deleteProperty(globalThis, 'navigator')
-      else Object.defineProperty(globalThis, 'navigator', descriptor)
     }
   })
 
@@ -888,7 +847,7 @@ describe('boundary-policy regressions', () => {
 
   test('a ZWSP that starts a WebKit scan keeps a basic combining mark', async () => {
     const { analyzeText } = await import('./analysis.ts')
-    const profile = { ...baseProfile, lineBreakScan: 'webkit' as const, wordInitialHyphenLetters: 'alphabetic-and-hebrew' as const, breakOnlyAfterNextLine: true }
+    const profile = { ...baseProfile, lineBreakScan: 'webkit' as const, breakOnlyAfterNextLine: true }
     const segments = (text: string, whiteSpace?: 'pre-wrap') => {
       const analysis = analyzeText(text, profile, whiteSpace)
       return analysis.texts.map((segment, i) => `${segment}:${analysis.kinds[i]}`)
@@ -1952,14 +1911,6 @@ describe('prepare invariants', () => {
     expect(layoutWithLines(unicodeDash, unicodeWidth, LINE_HEIGHT).lines[0]?.text).toBe('https://alpha\u2010')
   })
 
-  test('does not prefer hyphen-like boundaries in keep-all runs', () => {
-    const text = 'foo-bar日本語'
-    const prepared = prepareWithSegments(text, FONT, { wordBreak: 'keep-all' })
-
-    expect(prepared.segments).toEqual(['foo-', 'bar日本語'])
-    expect(prepared.breakablePreferredBreaks).toEqual([null, null])
-  })
-
   test('keeps no-space punctuation chains together as one breakable segment', () => {
     const prepared = prepareWithSegments(
       'foo;bar foo:bar foo,bar foo.bar as;lkdfjals;k ééé.ééé αβγ.δεζ אבג.דהו',
@@ -2394,22 +2345,6 @@ describe('prepare invariants', () => {
     expect(segments('中文“abc”中文', 'webkit', 'ja')).toBe('中|文“abc”中|文')
   })
 
-  test('the generated line-break classes follow LineBreak.txt', async () => {
-    const { getLineBreakClass, LineBreakClass } = await import('./generated/line-break-data.ts')
-    // One code point per projected class family, from the ASCII block, the BMP,
-    // the supplementary planes and the plane-14 tail checks.
-    for (const [codePoint, lineBreakClass] of [
-      [0x21, LineBreakClass.EX], [0x20, LineBreakClass.SP], [0x0A, LineBreakClass.BK], [0x09FA, LineBreakClass.AL],
-      [0x05D0, LineBreakClass.HL], [0x0E44, LineBreakClass.SA], [0x2605, LineBreakClass.AL], [0x3005, LineBreakClass.NS],
-      [0x30FC, LineBreakClass.CJ], [0xAC00, LineBreakClass.ID], [0x1100, LineBreakClass.ID], [0x200D, LineBreakClass.CM],
-      [0x1F60A, LineBreakClass.ID], [0x1F44D, LineBreakClass.EB], [0x1F4AF, LineBreakClass.AL], [0x1F1EF, LineBreakClass.RI],
-      [0x20000, LineBreakClass.ID], [0xE0001, LineBreakClass.CM], [0xE0100, LineBreakClass.CM], [0xE01F0, LineBreakClass.AL],
-      [0xF0000, LineBreakClass.AL], [0x10FFFF, LineBreakClass.AL],
-    ] as const) {
-      expect({ codePoint, lineBreakClass: getLineBreakClass(codePoint) }).toEqual({ codePoint, lineBreakClass })
-    }
-  })
-
   test('treats Hangul compatibility jamo as CJK break units', () => {
     const prepared = prepareWithSegments('ㅋㅋㅋ 진짜', FONT)
     expect(prepared.segments).toEqual(['ㅋ', 'ㅋ', 'ㅋ', ' ', '진', '짜'])
@@ -2523,7 +2458,7 @@ describe('prepare invariants', () => {
       override segment(input: string): Intl.Segments {
         const segments = super.segment(input)
         if (this.resolvedOptions().granularity !== 'word') return segments
-        const pieces = Array.from(segments, piece => isCJK(piece.segment) ? { ...piece, isWordLike: false } : piece)
+        const pieces = Array.from(segments, piece => /[\p{Script=Han}\p{Script=Hangul}]/u.test(piece.segment) ? { ...piece, isWordLike: false } : piece)
         return Object.assign(pieces, { containing: (index?: number) => segments.containing(index) }) as unknown as Intl.Segments
       }
     })
@@ -2542,14 +2477,6 @@ describe('prepare invariants', () => {
       Reflect.set(Intl, 'Segmenter', Segmenter)
       clearAnalysisCaches()
     }
-  })
-
-  test('isCJK covers Hangul compatibility jamo and the newer CJK extension blocks', () => {
-    expect(isCJK('ㅋ')).toBe(true)
-    expect(isCJK('\u{2EBF0}')).toBe(true)
-    expect(isCJK('\u{31350}')).toBe(true)
-    expect(isCJK('\u{323B0}')).toBe(true)
-    expect(isCJK('hello')).toBe(false)
   })
 
   test('keeps opening brackets after CJK attached to following annotation text', () => {
