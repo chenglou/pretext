@@ -919,7 +919,16 @@ const textH29: Fn = (_host, L) => {
   const naskhDom = L.bw(naskhEl.firstElementChild!)
   L.eq('supplementary: Noto Naskh Arabic: DOM width of the first ب = ceil64(W("ب\u200D") at the zoomed size)', L.ceil64(naskhCanvasZ) / (64 * Z), naskhDom)
   L.check('supplementary: Noto Naskh Arabic: the initial form is not the isolated width (the probe can tell)', naskhCanvasZ !== naskhIsolatedZ, `not ${naskhIsolatedZ}`, naskhCanvasZ)
-  return { canvas, canvasZ, dom, naskhCanvas, naskhCanvasZ, naskhIsolatedZ, naskhDom }
+  // Supplementary: is the trailing ZWJ split off by the Canvas bidi pass (UAX #9 L1 resets trailing BN to the paragraph
+  // level), so that ب is shaped alone? An RTL paragraph level or a following Arabic letter keeps it in the run.
+  const naskhFont = "40px 'Noto Naskh Arabic'"
+  const zwjProbe = {
+    trailingLtr: L.W(naskhFont, '\u0628\u200D'), trailingRtl: L.W(naskhFont, '\u0628\u200D', { direction: 'rtl' }),
+    isolated: L.W(naskhFont, '\u0628'), pair: L.W(naskhFont, '\u0628\u0628'), middleZwj: L.W(naskhFont, '\u0628\u200D\u0628'),
+    zwjThenLatin: L.W(naskhFont, '\u0628\u200Dx'), latin: L.W(naskhFont, 'x'), leadingZwj: L.W(naskhFont, '\u200D\u0628'),
+  }
+  L.check('supplementary: Canvas direction rtl: W("ب\u200D") differs from the isolated width', zwjProbe.trailingRtl !== zwjProbe.isolated, `not ${zwjProbe.isolated}`, zwjProbe.trailingRtl)
+  return { canvas, canvasZ, dom, naskhCanvas, naskhCanvasZ, naskhIsolatedZ, naskhDom, zwjProbe }
 }
 
 const textH30: Fn = (host, L) => {
@@ -1630,6 +1639,27 @@ const crossSystemUiOrder: Fn = (_host, L) => {
   return { before, after, changed, dom, identify }
 }
 
+// The opposite order in a fresh browser: DOM system-ui text first, then Canvas. The DOM widths are clean, and a Canvas at
+// S = DOM size x DPR reuses the DOM's platform font.
+const crossSystemUiOrderDomFirst: Fn = (_host, L) => {
+  const Z = L.Z
+  const text = 'Hello world'
+  const domSizes = [10, 11, 12, 13, 14, 16, 20]
+  const canvasSizes = [10, 11, 12, 13, 14, 16, 20, 22, 24, 26, 28, 32, 40]
+  const dom: Record<string, number> = {}
+  for (let i = 0; i < domSizes.length; i++) {
+    const el = L.put(`<div style="font:${domSizes[i]}px system-ui;white-space:nowrap"><span>${text}</span></div>`)
+    dom[String(domSizes[i])] = L.extent(el.firstElementChild!).width
+  }
+  const canvas: Record<string, number> = {}
+  for (let i = 0; i < canvasSizes.length; i++) canvas[String(canvasSizes[i])] = L.W(`${canvasSizes[i]}px system-ui`, text)
+  for (let i = 0; i < domSizes.length; i++) {
+    const size = domSizes[i]!
+    L.eq(`DOM ${size}px system-ui (laid out first) = ceil64(Canvas W(${size}px) x DPR) / (64 x DPR)`, L.ceil64(canvas[String(size)]! * Z) / (64 * Z), dom[String(size)])
+  }
+  return { dom, canvas }
+}
+
 // ---- LineBreakTest data for blink-canvas H20 ----
 
 type RbbiModule = {
@@ -1667,6 +1697,8 @@ async function lineBreakTestData(): Promise<{ cases: string[]; expected: string[
 
 // Probes the zoom runs (forced DPR 1 and 3.5, emulated DPR 2) re-run; see blink-probes-zoom.ts.
 // Probes the fresh-browser system-ui run repeats, the cache-order probe first; see blink-probes-sysui.ts.
+// The DOM-first order probe runs alone in its own fresh browser; see blink-probes-sysui-domfirst.ts.
+export const SYSUI_DOM_FIRST_PROBE_IDS = ['cross X5 (system-ui cache order, DOM first)']
 export const SYSUI_PROBE_IDS = ['cross X5 (system-ui cache order)', 'blink-canvas H16', 'CRITIC C7', 'cross X5 system-ui and -apple-system']
 export const ZOOM_PROBE_IDS = ['blink-lines H1', 'blink-lines H2', 'blink-lines H3', 'blink-lines H4', 'blink-canvas H10', 'CRITIC C7', 'cross X6 env and line-breaking grid']
 
@@ -1773,6 +1805,7 @@ export default async function probes(): Promise<Probe[]> {
     probe('cross X4 generic sans-serif (lang=ko)', crossLangSans, { pageLang: 'ko' }),
     probe('cross X4 generic sans-serif (lang=en)', crossLangSans, { pageLang: 'en' }),
     probe('cross X5 system-ui and -apple-system', crossSystemUi),
+    probe('cross X5 (system-ui cache order, DOM first)', crossSystemUiOrderDomFirst, { note: 'Meaningful only as the first system-ui probe of a fresh browser (blink-probes-sysui-domfirst.ts).' }),
     probe('cross X6 env and line-breaking grid', crossEnv, { observe: [{ kind: 'env', families: FAMILIES }] }),
   ]
 }

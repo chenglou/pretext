@@ -27,7 +27,7 @@ const args = new Map(process.argv.slice(2).map(arg => {
   return [match[1]!, match[2]!] as const
 }))
 const dir = resolve(args.get('dir') ?? '.artifacts/probes/blink')
-const RUNS = ['dpr2', 'dpr1', 'dsf3.5', 'emulated', 'sysui-dpr2', 'sysui-dpr1']
+const RUNS = ['dpr2', 'dpr1', 'dsf3.5', 'emulated', 'sysui-dpr2', 'sysui-dpr1', 'sysui-domfirst-dpr2', 'supp-dpr2']
 
 const runs = new Map<string, { output: Output; byId: Map<string, Entry> }>()
 for (let i = 0; i < RUNS.length; i++) {
@@ -96,11 +96,20 @@ function crossRunRows(label: string, a: Rows | undefined, b: Rows | undefined, s
   notes.push(`${label}: widths (k/128) where the runs differ ${differing.map(row => row.k128).join(', ') || 'none'}; formulas differ at ${predictedDiffering.join(', ') || 'none'}`)
 }
 
-for (let i = 0; i < main.output.results.length; i++) {
-  const id = main.output.results[i]!.id
+// Probe ids of the main run first, then ids that only later runs have (probes added after the main runs).
+const ids: string[] = main.output.results.map(row => row.id)
+for (const data of runs.values()) {
+  for (let k = 0; k < data.output.results.length; k++) if (!ids.includes(data.output.results[k]!.id)) ids.push(data.output.results[k]!.id)
+}
+
+for (let i = 0; i < ids.length; i++) {
+  const id = ids[i]!
   const notes: string[] = []
   const summaries: Summary[] = []
-  if (id === 'blink-lines H3') {
+  if (id === 'cross X5 (system-ui cache order, DOM first)') {
+    const summary = summarize('sysui-domfirst-dpr2', runs.get('sysui-domfirst-dpr2')?.byId.get(id), applies)
+    if (summary !== null) summaries.push(summary)
+  } else if (id === 'blink-lines H3') {
     const emulated = summarize('emulated', runs.get('emulated')?.byId.get(id), applies)
     if (emulated !== null) summaries.push(emulated)
   } else if (id === 'cross X5 (system-ui cache order)') {
@@ -129,7 +138,7 @@ for (let i = 0; i < main.output.results.length; i++) {
     if (dpr1 !== null && (dpr1.applicable > 0 || dpr1.supplementary.length > 0)) summaries.push(dpr1)
     const dpr1Other = summarize('dpr1 (other checks)', runs.get('dpr1')?.byId.get(id), check => check.dpr === null)
     if (dpr1Other !== null && dpr1Other.failures.length > 0) notes.push(`forced DPR 1 run, DPR-independent checks failing: ${dpr1Other.failures.map(check => `${check.name} expected ${short(check.expected, 160)} measured ${short(check.measured, 160)}`).join(' | ')}`)
-    for (const run of ['dsf3.5', 'emulated', 'sysui-dpr2', 'sysui-dpr1']) {
+    for (const run of ['dsf3.5', 'emulated', 'sysui-dpr2', 'sysui-dpr1', 'supp-dpr2']) {
       const other = summarize(run, runs.get(run)?.byId.get(id), check => check.dpr === null)
       if (other !== null && other.applicable > 0) notes.push(`${run}: ${other.passed}/${other.applicable} DPR-independent checks pass${other.failures.length > 0 ? `; failing: ${other.failures.map(check => `${check.name} expected ${short(check.expected, 160)} measured ${short(check.measured, 160)}`).join(' | ')}` : ''}`)
     }
