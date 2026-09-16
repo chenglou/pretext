@@ -211,6 +211,7 @@ const leadingCombiningMarkRe = /^\p{M}/u
 const markRunRe = /^\p{M}+$/u
 const nonspacingMarkRunRe = /^\p{Mn}+$/u
 const controlOrMarkRunRe = /^(?:[\p{Cc}\u2028\u2029]|\p{M}+)$/u
+const controlCharacterRe = /^[\p{Cc}\u2028\u2029]$/u
 
 function needsComplexTextPath(text: string): boolean {
   let previousIsEmoji = false
@@ -626,6 +627,12 @@ function measureAnalysis(
         (leadingCombiningMarkRe.test(nextText) && needsComplexTextPath(nextText))
       )
       pushMeasuredSegment(segText, width, segKind, null, takesLetterSpacing ? 1 : 0)
+      continue
+    }
+
+    // A control the engine hides takes no advance, only letter spacing.
+    if (engineProfile.hidesControlCharacters && controlCharacterRe.test(segText)) {
+      pushMeasuredSegment(segText, 0, segKind, null, hasLetterSpacing ? 1 : 0)
       continue
     }
 

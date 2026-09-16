@@ -87,6 +87,11 @@ export type EngineProfile = {
   // its own. Gecko drops soft hyphens from its text run and clusters a ZWSP with the marks
   // after it, so glue at a line start can't hold the line: the segment after it starts it.
   zeroWidthGlueTakesLine: boolean
+  // Release Gecko draws C0 and C1 controls, U+2028 and U+2029 with no advance plus letter
+  // spacing (gfxFont.cpp:3877-3892), where its Canvas measures VT, FS-US, NEL and U+2029 as a
+  // space (CanvasRenderingContext2D.cpp:4570-4573) and other controls as a hexbox. Chrome and
+  // Safari give most controls an advance on the page, as their Canvas does.
+  hidesControlCharacters: boolean
   // Where rich-inline items break near a boundary. Blink runs one line-break
   // iterator over the text of the whole inline formatting context, and Gecko
   // collects a word across text frames until a space and breaks it in one pass,
@@ -283,6 +288,7 @@ export function getEngineProfile(): EngineProfile {
     skipNarrowTabStops: engine === 'webkit',
     hangTabs: engine !== 'gecko',
     zeroWidthGlueTakesLine: engine !== 'gecko',
+    hidesControlCharacters: engine === 'gecko',
     inlineItemBreaks: engine === 'webkit' ? 'item-text' : 'joined-text',
   }
   cachedEngineProfile = profile

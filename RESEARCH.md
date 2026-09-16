@@ -450,7 +450,15 @@ at emergency widths, and gives a word joiner no letter spacing, while Pretext
 spaces it. That last gap also costs Safari `aa<NEL>\u2060bb` at 1px, where main
 kept the joiner on the NEL's line. Release Firefox also breaks after NEL, but
 draws control characters with no advance while its Canvas measures NEL as a
-space.
+space. In the September 16 installed rows, every C0 and C1 control, DEL, U+2028 and
+U+2029 that Firefox painted without letter spacing had a zero-width rect (15,428
+code points in the left-to-right rows), and with letter spacing about half took the gap, where its
+Canvas gives VT, FS-US, NEL and U+2029 a space and other controls a hexbox. The Gecko
+profile gives them no advance and one letter-spacing gap. Chrome's page gives most of
+them an advance (NEL 16px and other C1 controls 16px in 16px fonts, VT and FS-US about
+5.3px, U+2028 and U+2029 about 4.4-5.5px, some C0 controls 0), and so does Safari's
+(about 6-13px), except U+2028, U+2029 and some C0 controls, so those profiles keep
+their Canvas widths.
 
 The shared complex walker fixed batch/streaming disagreement after a soft hyphen
 ([#222](https://github.com/chenglou/pretext/pull/222)). A later usable break could

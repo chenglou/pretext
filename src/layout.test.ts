@@ -936,6 +936,28 @@ describe('boundary-policy regressions', () => {
     expect(analyzeText('ab\u0085cd', webkit).kinds).toEqual(['text', 'control', 'text'])
   })
 
+  test('the Gecko profile gives control characters no advance, only letter spacing', async () => {
+    const { getEngineProfile } = await import('./measurement.ts')
+    const profile = getEngineProfile()
+    const previous = profile.hidesControlCharacters
+    try {
+      for (const control of [' ', '', '', '', '\u0085', '\u009f', '\u2028', '\u2029']) {
+        profile.hidesControlCharacters = true
+        clearCache()
+        const hidden = prepareWithSegments(`ab${control}cd`, FONT, { letterSpacing: 2 })
+        const index = hidden.segments.indexOf(control)
+        expect({ control, width: hidden.widths[index], gaps: hidden.spacingGraphemeCounts[index] }).toEqual({ control, width: 0, gaps: 1 })
+        profile.hidesControlCharacters = false
+        clearCache()
+        const shown = prepareWithSegments(`ab${control}cd`, FONT)
+        expect(shown.widths[shown.segments.indexOf(control)]).toBe(measureWidth(control, FONT))
+      }
+    } finally {
+      profile.hidesControlCharacters = previous
+      clearCache()
+    }
+  })
+
   test('every text segment of an engine scan takes emergency grapheme breaks', async () => {
     const { getEngineProfile } = await import('./measurement.ts')
     const profile = getEngineProfile()
