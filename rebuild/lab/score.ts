@@ -1,16 +1,38 @@
 // Offline scorer: derives native lines from lab rows and compares them with the predictions.
 //   bun rebuild/lab/score.ts --rows=<file> [--cases=<file>] --out=<summary.json> [--examples=K] [--per-case=<file>]
+//     [--native-compare=<other rows file>]
+// Imported as a module it runs nothing. It exports the derivation, the per-row score and the comparison of two runs, so
+// tools use the scorer's own rules instead of copying them.
 import { closeSync, openSync, readFileSync, writeFileSync, writeSync } from 'node:fs'
-import type { BrowserKind, Case, LabRow, NativeObservation, PainterObservation, Prediction, Rect } from './types.ts'
+import type { BrowserKind, Case, LabRow, NativeObservation, PainterLine, PainterObservation, Paragraph, Prediction, PredictionLine, Rect } from './types.ts'
 
-type Status = 'pass' | 'fail' | 'unobserved' | 'not-applicable'
+export type Status = 'pass' | 'fail' | 'unobserved' | 'not-applicable'
 // `reason` is a fixed category (counted in the summary); `detail` names offsets and values for this case.
-type Metric = { status: Status; reason?: string; detail?: string }
-type MetricName = 'lineCount' | 'breaks' | 'widths' | 'painter'
-const METRICS: MetricName[] = ['lineCount', 'breaks', 'widths', 'painter']
+export type Metric = { status: Status; reason?: string; detail?: string }
+export type MetricName = 'lineCount' | 'breaks' | 'widths' | 'painter'
+export const METRICS: MetricName[] = ['lineCount', 'breaks', 'widths', 'painter']
 
-// Layout coordinates: Blink and WebKit LayoutUnit is 1/64px, Gecko app units are 1/60px.
-const GRID: Record<BrowserKind, number> = { chrome: 64, safari: 64, firefox: 60, 'webkit-host': 64 }
+// The layout grid, in units per CSS px, for a row's browser and devicePixelRatio:
+// - Blink: a LayoutUnit is 1/64 of a zoomed px and client rects divide by the layout zoom, so 1/(64 × DPR) CSS px
+//   (1/128 at DPR 2; specs/blink-gaps.md §6.4).
+// - WebKit: LayoutUnit is 1/64 CSS px at any DPR (specs/webkit-lines.md §1.6).
+// - Gecko: app units, 60 per CSS px at any DPR, without device-pixel snapping (specs/probes-firefox.md, CRITIC C8).
+export function layoutGrid(browser: BrowserKind, dpr: number): number {
+  switch (browser) {
+    case 'chrome': return 64 * dpr
+    case 'safari':
+    case 'webkit-host': return 64
+    case 'firefox': return 60
+  }
+}
+
+// Whether value is a multiple of 1/grid px, allowing `steps` float32 steps at `magnitude`: Safari and Firefox compute
+// rect positions in float32 (Firefox reports x = 17150 au as 285.83331298828125, one step from the nearest float32).
+function onGrid(value: number, grid: number, magnitude: number, steps: number): boolean {
+  const scaled = value * grid
+  const step = magnitude > 0 ? 2 ** (Math.floor(Math.log2(magnitude)) - 23) : 0
+  return Math.abs(scaled - Math.round(scaled)) <= Math.max(1e-3, steps * step * grid)
+}
 
 const INVISIBLE = /^[\p{Cc}\p{Cf}\p{Zl}\p{Zp}\p{Default_Ignorable_Code_Point}]$/u
 const WHITE_SPACE = /^\p{White_Space}$/u
@@ -19,12 +41,24 @@ const NO_BREAK_SPACE = /^[   ]$/
 const SPACE_OR_TAB = /^[ \t]$/
 // Other space separators: CSS says they hang at line end, but no engine's behaviour is verified here.
 const OTHER_SPACE = /^[  -  -  　]$/u
+// Controls other than TAB, LF and CR. The engines keep them as characters, so white space before one isn't at the line's
+// end: Firefox keeps the space of `aaaa ` + VT in the line's width (specs/probes-firefox.md, CRITIC W3).
+const OTHER_CONTROL = /^[\0-\x08\x0B\x0C\x0E-\x1F\x7F-\x9F]$/
+const TRAILING_WHITE_SPACE = /\p{White_Space}[\p{White_Space}\p{Cf}]*$/u
 const HANGING_MODES = new Set(['normal', 'nowrap', 'pre-line', 'pre-wrap'])
 const NEWLINE_MODES = new Set(['pre', 'pre-wrap', 'pre-line', 'break-spaces'])
 const graphemes = new Intl.Segmenter(undefined, { granularity: 'grapheme' })
 
 function positive(rect: Rect): boolean {
   return rect.width > 0 && rect.height > 0
+}
+
+function inked(ch: string): boolean {
+  return !WHITE_SPACE.test(ch) && !INVISIBLE.test(ch)
+}
+
+export function rowText(c: Case): string {
+  return c.paragraph.runs.map(run => run.text).join('')
 }
 
 // Line boxes from rects: sort positive-area rects by vertical centre and start a new line where consecutive centres
@@ -60,7 +94,7 @@ function nearestDistance(sorted: number[], value: number): number {
   return best
 }
 
-type NativeLine = {
+export type NativeLine = {
   // Source range of the code points with positive rects on this line; start === end for an empty line.
   start: number
   end: number
@@ -76,15 +110,19 @@ type NativeLine = {
   widthIssue: string | null
 }
 
-type Derived = {
+export type Derived = {
   lines: NativeLine[]
   // Offsets of visible code points, ascending.
   visible: number[]
   graphemeStart: Int32Array
   lineCountIssue: Metric | null
   breaksIssue: Metric | null
+  // The row's layout grid (units per CSS px).
+  grid: number
   rectValues: number
   offGridValues: number
+  // Indices of lines with a visible code point whose width (right − left) isn't on the grid.
+  offGridWidths: number[]
   // White-space code points with positive rects on several lines; they belong to no derived line.
   splitWhiteSpace: number
 }
@@ -93,10 +131,75 @@ function describe(text: string, offset: number | null): string {
   return offset === null ? 'no visible code point' : `${offset} ${JSON.stringify(text.slice(offset, offset + 12))}`
 }
 
-function deriveNative(c: Case, native: NativeObservation, text: string, browser: BrowserKind): Derived | { error: string } {
+// Marks the visible code points of one line; `list` holds the line's code points with positive rects, in source order.
+// A visible code point isn't a default-ignorable, control or line/paragraph separator (TAB counts as white space), and
+// isn't hanging white space: SPACE or TAB in the line's trailing run under a mode where it hangs. The trailing run is the
+// white space and invisible code points at the line's end, back to an inked code point, a no-break space or a control
+// other than TAB, LF and CR. Returns why the line's width isn't established, if it isn't.
+function markVisible(list: number[], chars: string[], hangs: boolean, visible: boolean[]): string | null {
+  let trailingStart = list.length
+  while (trailingStart > 0) {
+    const ch = chars[list[trailingStart - 1]!]!
+    if (inked(ch) || NO_BREAK_SPACE.test(ch) || OTHER_CONTROL.test(ch)) break
+    trailingStart--
+  }
+  let issue: string | null = null
+  for (let k = 0; k < list.length; k++) {
+    const i = list[k]!
+    const ch = chars[i]!
+    const trailing = k >= trailingStart
+    if (ch === '­' && trailing) issue ??= 'positive soft hyphen rect at line end; hyphen selection is not established'
+    if (INVISIBLE.test(ch) && ch !== '\t') continue
+    if (hangs && trailing && SPACE_OR_TAB.test(ch)) continue
+    if (hangs && trailing && OTHER_SPACE.test(ch)) {
+      issue ??= 'other space separator at line end; hanging is not established'
+      continue
+    }
+    visible[i] = true
+  }
+  return issue
+}
+
+type Extent = { left: number; right: number; source: NativeLine['widthSource']; issue: string | null }
+
+// A line's horizontal extent over its visible code points; `list` holds the code points with positive rects on the line.
+// When no white space outside the visible set has a positive rect, everything on the line that isn't visible has zero
+// width, so the whole-node boxes (`nodes`, their union on the line) end exactly at the visible edges. Safari snaps
+// partial Range rects to whole CSS px and splits a cluster's advance between a letter and a following invisible control,
+// but reports box edges exactly. Otherwise the extent comes from the visible code points' own rects.
+function lineExtent(list: number[], chars: string[], rectsOf: (i: number) => Rect[], visible: boolean[],
+  nodes: { left: number; right: number } | null, p: Paragraph, browser: BrowserKind): Extent {
+  let any = false
+  let left = Infinity
+  let right = -Infinity
+  let hangingInk = false
+  for (let k = 0; k < list.length; k++) {
+    const i = list[k]!
+    if (!visible[i]) {
+      hangingInk ||= WHITE_SPACE.test(chars[i]!)
+      continue
+    }
+    any = true
+    const own = rectsOf(i)
+    for (let r = 0; r < own.length; r++) {
+      const rect = own[r]!
+      if (!positive(rect)) continue
+      left = Math.min(left, rect.x)
+      right = Math.max(right, rect.x + rect.width)
+    }
+  }
+  if (!any) return { left: 0, right: 0, source: 'none', issue: null }
+  if (!hangingInk && nodes !== null) return { left: nodes.left, right: nodes.right, source: 'nodes', issue: null }
+  const startEdge = p.direction === 'ltr' ? left === 0 : right === p.width
+  const snapped = (browser === 'safari' || browser === 'webkit-host')
+    && (Number.isInteger(p.direction === 'ltr' ? right : left) || (!startEdge && Number.isInteger(p.direction === 'ltr' ? left : right)))
+  return { left, right, source: 'code points', issue: snapped ? 'Safari snaps partial Range rects to whole CSS px; hanging white space rules out whole-node geometry' : null }
+}
+
+export function deriveNative(c: Case, native: NativeObservation, text: string, browser: BrowserKind, dpr: number): Derived | { error: string } {
   const p = c.paragraph
   const points = native.points
-  const grid = GRID[browser]
+  const grid = layoutGrid(browser, dpr)
   let expected = 0
   for (let i = 0; i < points.length; i++) {
     const point = points[i]!
@@ -108,23 +211,25 @@ function deriveNative(c: Case, native: NativeObservation, text: string, browser:
   const graphemeStart = new Int32Array(text.length + 1)
   for (const { segment, index } of graphemes.segment(text)) for (let k = 0; k < segment.length; k++) graphemeStart[index + k] = index
   graphemeStart[text.length] = text.length
+  const chars = points.map(point => text.slice(point.offset, point.offset + point.length))
 
   // Cluster the code points' positive rects and the whole-node rects together; owner -1 marks a node rect.
   const centers: number[] = []
   const owners: number[] = []
   const rects: Rect[] = []
+  const placed: boolean[] = new Array(points.length).fill(false)
   let rectValues = 0
   let offGridValues = 0
   // Chrome reports a chosen soft hyphen's box twice: as the SHY's own rect and as an extra rect of a neighbouring code
   // point (the letter after it; in RTL the letter before it). An exact copy of a positive SHY rect places nothing else.
   const hyphenBoxes = new Set<string>()
   for (let i = 0; i < points.length; i++) {
-    if (text[points[i]!.offset] !== '­') continue
+    if (chars[i] !== '­') continue
     for (const rect of points[i]!.rects) if (positive(rect)) hyphenBoxes.add(`${rect.x} ${rect.y} ${rect.width} ${rect.height}`)
   }
   for (let i = 0; i < points.length; i++) {
     const list = points[i]!.rects
-    const hyphen = text[points[i]!.offset] === '­'
+    const hyphen = chars[i] === '­'
     for (let k = 0; k < list.length; k++) {
       const rect = list[k]!
       if (!positive(rect)) continue
@@ -132,10 +237,11 @@ function deriveNative(c: Case, native: NativeObservation, text: string, browser:
       centers.push(rect.y + rect.height / 2)
       owners.push(i)
       rects.push(rect)
+      placed[i] = true
+      const magnitude = Math.max(Math.abs(rect.x), Math.abs(rect.x + rect.width))
       for (const value of [rect.x, rect.width]) {
         rectValues++
-        // Firefox reports app units through float32, so allow that much noise.
-        if (Math.abs(value * grid - Math.round(value * grid)) > 1e-3) offGridValues++
+        if (!onGrid(value, grid, magnitude, 2)) offGridValues++
       }
     }
   }
@@ -150,14 +256,16 @@ function deriveNative(c: Case, native: NativeObservation, text: string, browser:
     }
   }
   // A line can hold only zero-width content (a ZWSP, joiner or soft hyphen alone on a line at a narrow width), so it
-  // has no positive rect. Zero-area rects of code points other than LF establish such a line where they sit half a
-  // line height or more from every positive rect. Nearer, they sit on a line positive rects already place (Safari's
-  // extra zero-width rect on the previous line, a collapsed space at a line edge).
+  // has no positive rect. A zero-area rect establishes such a line where it sits half a line height or more from every
+  // positive rect, but only for a code point that no positive rect places and that isn't SPACE, TAB or LF. Positive rects
+  // place a code point that has them, and collapsed white space can't make a line: WebKit reports the collapsed space
+  // after an inline box end (`</span> foo`) as a zero-width rect on the next line (specs/probes-safari.md). Nearer
+  // rects place nothing (Safari's extra zero-width rect on the previous line, a collapsed space at a line edge).
   const sortedCenters = centers.slice().sort((a, b) => a - b)
   const zeroCenters: number[] = []
   const zeroOwners: number[] = []
   for (let i = 0; i < points.length; i++) {
-    if (text[points[i]!.offset] === '\n') continue
+    if (placed[i] || chars[i] === '\n' || SPACE_OR_TAB.test(chars[i]!)) continue
     const list = points[i]!.rects
     for (let k = 0; k < list.length; k++) {
       const rect = list[k]!
@@ -213,8 +321,6 @@ function deriveNative(c: Case, native: NativeObservation, text: string, browser:
 
   let breaksIssue: Metric | null = null
   let lineCountIssue: Metric | null = null
-  const chars = points.map(point => text.slice(point.offset, point.offset + point.length))
-  const inked = (ch: string): boolean => !WHITE_SPACE.test(ch) && !INVISIBLE.test(ch)
   let highest = -1
   let splitWhiteSpace = 0
   for (let i = 0; i < points.length; i++) {
@@ -252,37 +358,17 @@ function deriveNative(c: Case, native: NativeObservation, text: string, browser:
     }
   }
 
-  // Per line: its code points in source order, the trailing run of white space and controls, and visible code points.
+  // Per line: its code points in source order (those with positive rects on it alone), and which are visible.
   const members: number[][] = Array.from({ length: count }, () => [])
   for (let i = 0; i < points.length; i++) if (pointLine[i]! >= 0) members[pointLine[i]!]!.push(i)
   const visibleFlags: boolean[] = new Array(points.length).fill(false)
   const widthIssues: Array<string | null> = new Array(count).fill(null)
   const hangs = HANGING_MODES.has(p.whiteSpace)
-  for (let line = 0; line < count; line++) {
-    const list = members[line]!
-    let trailingStart = list.length
-    while (trailingStart > 0) {
-      const ch = chars[list[trailingStart - 1]!]!
-      if (inked(ch) || NO_BREAK_SPACE.test(ch)) break
-      trailingStart--
-    }
-    for (let k = 0; k < list.length; k++) {
-      const i = list[k]!
-      const ch = chars[i]!
-      const trailing = k >= trailingStart
-      if (ch === '­' && trailing) widthIssues[line] ??= 'positive soft hyphen rect at line end; hyphen selection is not established'
-      if (INVISIBLE.test(ch) && ch !== '\t') continue
-      if (hangs && trailing && SPACE_OR_TAB.test(ch)) continue
-      if (hangs && trailing && OTHER_SPACE.test(ch)) {
-        widthIssues[line] ??= 'other space separator at line end; hanging is not established'
-        continue
-      }
-      visibleFlags[i] = true
-    }
-  }
+  for (let line = 0; line < count; line++) widthIssues[line] = markVisible(members[line]!, chars, hangs, visibleFlags)
 
   // Lines in visual order, with empty lines from consecutive preserved newlines (CSS: a trailing newline adds no line).
   const lines: NativeLine[] = []
+  const offGridWidths: number[] = []
   const newlines: number[] = []
   if (NEWLINE_MODES.has(p.whiteSpace)) for (let i = 0; i < text.length; i++) if (text[i] === '\n') newlines.push(i)
   let newlineIndex = 0
@@ -303,46 +389,15 @@ function deriveNative(c: Case, native: NativeObservation, text: string, browser:
     pushEmpty(lines.length === 0 ? between : Math.max(0, between - 1), start)
     let firstVisible: number | null = null
     let lastVisible: number | null = null
-    let left = Infinity
-    let right = -Infinity
-    let hangingInk = false
     for (let k = 0; k < list.length; k++) {
       const i = list[k]!
-      if (!visibleFlags[i]) {
-        hangingInk ||= WHITE_SPACE.test(chars[i]!)
-        continue
-      }
+      if (!visibleFlags[i]) continue
       firstVisible ??= graphemeStart[points[i]!.offset]!
       lastVisible = points[i]!.offset
-      const own = points[i]!.rects
-      for (let r = 0; r < own.length; r++) {
-        const rect = own[r]!
-        if (!positive(rect)) continue
-        left = Math.min(left, rect.x)
-        right = Math.max(right, rect.x + rect.width)
-      }
     }
-    let widthIssue = widthIssues[line]!
-    let widthSource: NativeLine['widthSource'] = 'none'
-    const nodes = nodeExtent[line]!
-    if (firstVisible === null) {
-      left = 0
-      right = 0
-    } else if (!hangingInk && nodes !== null) {
-      // Everything on the line that isn't visible has zero width, so the whole-node boxes end exactly at the visible
-      // edges. Safari snaps partial Range rects to whole px and splits a cluster's advance between a letter and a
-      // following invisible control, but reports box edges exactly.
-      left = nodes.left
-      right = nodes.right
-      widthSource = 'nodes'
-    } else {
-      widthSource = 'code points'
-      const startEdge = p.direction === 'ltr' ? left === 0 : right === p.width
-      if ((browser === 'safari' || browser === 'webkit-host') && (Number.isInteger(p.direction === 'ltr' ? right : left) || (!startEdge && Number.isInteger(p.direction === 'ltr' ? left : right)))) {
-        widthIssue ??= 'Safari snaps partial Range rects to whole CSS px; hanging white space rules out whole-node geometry'
-      }
-    }
-    lines.push({ start, end: last.offset + last.length, firstVisible, lastVisible, left, right, widthSource, widthIssue })
+    const extent = lineExtent(list, chars, i => points[i]!.rects, visibleFlags, nodeExtent[line]!, p, browser)
+    if (extent.source !== 'none' && !onGrid(extent.right - extent.left, grid, Math.max(Math.abs(extent.left), Math.abs(extent.right)), 4)) offGridWidths.push(lines.length)
+    lines.push({ start, end: last.offset + last.length, firstVisible, lastVisible, left: extent.left, right: extent.right, widthSource: extent.source, widthIssue: widthIssues[line] ?? extent.issue })
     previousEnd = last.offset + last.length
   }
   let after = 0
@@ -361,7 +416,29 @@ function deriveNative(c: Case, native: NativeObservation, text: string, browser:
   }
   const visible: number[] = []
   for (let i = 0; i < points.length; i++) if (visibleFlags[i]) visible.push(points[i]!.offset)
-  return { lines, visible, graphemeStart, lineCountIssue, breaksIssue, rectValues, offGridValues, splitWhiteSpace }
+  return { lines, visible, graphemeStart, lineCountIssue, breaksIssue, grid, rectValues, offGridValues, offGridWidths, splitWhiteSpace }
+}
+
+// A painted line's extent under the widths metric's rule: over its visible code points, without trimmed or hanging
+// white space, from its whole-node rects wherever no excluded white space has width. Rows from before the page recorded
+// painted code points carry only whole-node rects; those give the extent unless the predicted line ends in white space.
+function paintedExtent(line: PainterLine, p: Paragraph, browser: BrowserKind, text: string, predicted: PredictionLine): Extent {
+  if (line.points === undefined || line.text === undefined) {
+    if (TRAILING_WHITE_SPACE.test(text.slice(predicted.start, predicted.end))) {
+      return { left: 0, right: 0, source: 'none', issue: 'painter row has no code point rects; the line ends in white space' }
+    }
+    return line.extent === null ? { left: 0, right: 0, source: 'none', issue: null } : { ...line.extent, source: 'nodes', issue: null }
+  }
+  const painted = line.text
+  const points = line.points
+  const chars = points.map(point => painted.slice(point.offset, point.offset + point.length))
+  // As for native lines: the code points with positive rects, without LF.
+  const list: number[] = []
+  for (let i = 0; i < points.length; i++) if (chars[i] !== '\n' && points[i]!.rects.some(positive)) list.push(i)
+  const visible: boolean[] = new Array(points.length).fill(false)
+  const issue = markVisible(list, chars, HANGING_MODES.has(p.whiteSpace), visible)
+  const extent = lineExtent(list, chars, i => points[i]!.rects, visible, line.extent, p, browser)
+  return { ...extent, issue: issue ?? extent.issue }
 }
 
 function predictionProblem(prediction: Prediction, length: number): string | null {
@@ -378,18 +455,18 @@ function predictionProblem(prediction: Prediction, length: number): string | nul
   return null
 }
 
-type CaseScore = {
+export type CaseScore = {
   metrics: Record<MetricName, Metric>
   derived: Derived | null
   widthDiffs: number[]
   painterDiffs: number[]
 }
 
-function scoreRow(row: LabRow, text: string): CaseScore {
-  const grid = GRID[row.browser]
+export function scoreRow(row: LabRow, text: string = rowText(row.case)): CaseScore {
+  const grid = layoutGrid(row.browser, row.env.devicePixelRatio)
   const all = (metric: Metric): Record<MetricName, Metric> => ({ lineCount: metric, breaks: metric, widths: metric, painter: metric })
   if ('error' in row.native) return { metrics: all({ status: 'unobserved', reason: 'native observation error', detail: row.native.error }), derived: null, widthDiffs: [], painterDiffs: [] }
-  const derived = deriveNative(row.case, row.native, text, row.browser)
+  const derived = deriveNative(row.case, row.native, text, row.browser, row.env.devicePixelRatio)
   if ('error' in derived) return { metrics: all({ status: 'unobserved', reason: 'malformed native observation', detail: derived.error }), derived: null, widthDiffs: [], painterDiffs: [] }
   const prediction = row.prediction
   if ('error' in prediction) {
@@ -482,6 +559,7 @@ function scoreRow(row: LabRow, text: string): CaseScore {
     painter = { status: 'fail', reason: 'painted line count differs', detail: `painted ${painted.lines.length} elements for ${predicted.length} lines` }
   } else {
     painter = { status: 'pass' }
+    let issue: Metric | null = null
     for (let i = 0; i < painted.lines.length; i++) {
       const line = painted.lines[i]!
       const own = line.rects.filter(positive)
@@ -490,15 +568,71 @@ function scoreRow(row: LabRow, text: string): CaseScore {
         if (painter.status === 'pass') painter = { status: 'fail', reason: 'painted line wraps', detail: `line ${i} painted on ${count} lines (height ${line.height})` }
         continue
       }
-      const extentUnits = line.extent === null ? 0 : Math.round((line.extent.right - line.extent.left) * grid)
+      const extent = paintedExtent(line, row.case.paragraph, row.browser, text, predicted[i]!)
+      if (extent.issue !== null) {
+        issue ??= { status: 'unobserved', reason: extent.issue.split(';')[0]!, detail: `line ${i}: ${extent.issue}` }
+        continue
+      }
+      const extentUnits = Math.round((extent.right - extent.left) * grid)
       const diff = Math.round(predicted[i]!.width * grid) - extentUnits
       painterDiffs.push(diff)
       if (diff !== 0 && painter.status === 'pass') {
         painter = { status: 'fail', reason: 'painted extent differs', detail: `line ${i}: painted ${extentUnits / grid}px, predicted ${predicted[i]!.width}px, ${diff} units of 1/${grid}px` }
       }
     }
+    if (painter.status === 'pass' && issue !== null) painter = issue
   }
   return { metrics: { lineCount, breaks, widths, painter }, derived, widthDiffs, painterDiffs }
+}
+
+// ---- Comparing two runs ----
+
+// What a comparison of two runs of the same case looks at: the derived lines, the widths as scored (grid units) and the
+// derivation's unobserved reasons.
+export type NativeView = {
+  error: string | null
+  grid: number
+  lineCountIssue: string | null
+  breaksIssue: string | null
+  lines: Array<{ start: number; end: number; firstVisible: number | null; lastVisible: number | null; widthUnits: number; widthSource: NativeLine['widthSource']; widthIssue: string | null }>
+}
+
+function viewOf(derived: Derived | { error: string }, grid: number): NativeView {
+  if ('error' in derived) return { error: derived.error, grid, lineCountIssue: null, breaksIssue: null, lines: [] }
+  return {
+    error: null, grid,
+    lineCountIssue: derived.lineCountIssue?.reason ?? null,
+    breaksIssue: derived.breaksIssue?.reason ?? null,
+    lines: derived.lines.map(line => ({
+      start: line.start, end: line.end, firstVisible: line.firstVisible, lastVisible: line.lastVisible,
+      widthUnits: Math.round((line.right - line.left) * grid), widthSource: line.widthSource, widthIssue: line.widthIssue,
+    })),
+  }
+}
+
+export function nativeView(row: LabRow, text: string = rowText(row.case)): NativeView {
+  const grid = layoutGrid(row.browser, row.env.devicePixelRatio)
+  if ('error' in row.native) return viewOf({ error: row.native.error }, grid)
+  return viewOf(deriveNative(row.case, row.native, text, row.browser, row.env.devicePixelRatio), grid)
+}
+
+// The first difference between two runs' native derivations of one case, or null when they agree. Two observation
+// errors agree (their messages carry stacks).
+export function nativeDifference(a: NativeView, b: NativeView): string | null {
+  if (a.error !== null || b.error !== null) return a.error !== null && b.error !== null ? null : `native observation error in one run: ${a.error ?? b.error}`
+  if (a.lineCountIssue !== b.lineCountIssue) return `line count issue: ${a.lineCountIssue ?? 'none'} vs ${b.lineCountIssue ?? 'none'}`
+  if (a.breaksIssue !== b.breaksIssue) return `breaks issue: ${a.breaksIssue ?? 'none'} vs ${b.breaksIssue ?? 'none'}`
+  if (a.lines.length !== b.lines.length) return `${a.lines.length} derived lines vs ${b.lines.length}`
+  for (let i = 0; i < a.lines.length; i++) {
+    const x = a.lines[i]!
+    const y = b.lines[i]!
+    if (x.start !== y.start || x.end !== y.end || x.firstVisible !== y.firstVisible || x.lastVisible !== y.lastVisible) {
+      return `line ${i}: [${x.start}, ${x.end}) first visible ${x.firstVisible} vs [${y.start}, ${y.end}) first visible ${y.firstVisible}`
+    }
+    if (x.widthSource !== y.widthSource || x.widthIssue !== y.widthIssue) return `line ${i}: width from ${x.widthSource} (${x.widthIssue ?? 'observed'}) vs ${y.widthSource} (${y.widthIssue ?? 'observed'})`
+    if (x.widthIssue === null && (x.widthUnits !== y.widthUnits || a.grid !== b.grid)) return `line ${i}: width ${x.widthUnits / a.grid}px vs ${y.widthUnits / b.grid}px`
+  }
+  return null
 }
 
 // ---- Summary ----
@@ -506,7 +640,9 @@ function scoreRow(row: LabRow, text: string): CaseScore {
 type Counts = Record<Status, number>
 const emptyCounts = (): Counts => ({ pass: 0, fail: 0, unobserved: 0, 'not-applicable': 0 })
 type BrowserSummary = {
+  // The first row's layout grid; `grids` counts rows per grid when the DPR varies.
   grid: number
+  grids: Record<string, number>
   rows: number
   nativeErrors: number
   predictionErrors: number
@@ -517,7 +653,7 @@ type BrowserSummary = {
   // Predicted minus observed width, in grid units, over lines whose breaks pass.
   widthDiffUnits: Record<string, number>
   painterDiffUnits: Record<string, number>
-  // Positive code point rect x/width values off the layout grid (Chrome reports glyph positions finer than 1/64px).
+  // Positive code point rect x/width values off the layout grid, beyond float32 rounding.
   rectGrid: { values: number; offGrid: number }
   timingsMs: { native: number; predict: number; paint: number; painterObserve: number }
   // Rows whose page couldn't resolve a named family, by family.
@@ -533,12 +669,28 @@ type BrowserSummary = {
     breaksIssues: Record<string, number>
     widthIssueLines: Record<string, number>
     splitWhiteSpace: number
+    // Lines with a visible code point, how many of their observed widths are off the layout grid, and examples.
+    widthGrid: { lines: number; offGrid: number; bySource: Record<string, number>; examples: unknown[] }
+  }
+  // With --native-compare: rows of this run compared with the other run's row for the same case, and the cases whose
+  // derived lines, widths or unobserved reasons differ. Those are left out of every count above that scores the
+  // prediction (metrics, reasons, histograms, families, examples) and listed here.
+  historyDependent: {
+    compared: number
+    rows: number
+    // No row for the case in the other run, or a row that observed a different version of the case.
+    missing: number
+    caseDiffers: number
+    // Same derivation, different raw geometry (float noise in positions that don't change lines or scored widths).
+    geometryOnly: number
+    geometryOnlyIds: string[]
+    cases: unknown[]
   }
 }
 
-function newBrowserSummary(browser: BrowserKind): BrowserSummary {
+function newBrowserSummary(grid: number): BrowserSummary {
   return {
-    grid: GRID[browser], rows: 0, nativeErrors: 0, predictionErrors: 0, rejectedStyleRows: 0, environments: {},
+    grid, grids: {}, rows: 0, nativeErrors: 0, predictionErrors: 0, rejectedStyleRows: 0, environments: {},
     metrics: { lineCount: emptyCounts(), breaks: emptyCounts(), widths: emptyCounts(), painter: emptyCounts() },
     reasons: { lineCount: {}, breaks: {}, widths: {}, painter: {} },
     widthDiffUnits: {}, painterDiffUnits: {}, rectGrid: { values: 0, offGrid: 0 },
@@ -547,14 +699,26 @@ function newBrowserSummary(browser: BrowserKind): BrowserSummary {
     native: {
       lineCounts: {}, lines: 0, widthSources: { nodes: 0, 'code points': 0, none: 0 },
       lineCountIssues: {}, breaksIssues: {}, widthIssueLines: {}, splitWhiteSpace: 0,
+      widthGrid: { lines: 0, offGrid: 0, bySource: {}, examples: [] },
     },
+    historyDependent: { compared: 0, rows: 0, missing: 0, caseDiffers: 0, geometryOnly: 0, geometryOnlyIds: [], cases: [] },
   }
+}
+
+function nativeLinesView(row: LabRow, text: string, derived: Derived | null): unknown {
+  const p = row.case.paragraph
+  return derived?.lines.map(line => ({
+    text: text.slice(line.start, line.end), firstVisible: line.firstVisible, lastVisible: line.lastVisible,
+    width: Math.round((line.right - line.left) * derived.grid) / derived.grid, widthSource: line.widthSource,
+    inset: line.firstVisible === null ? null : p.direction === 'rtl' ? p.width - line.right : line.left,
+    ...(line.widthIssue === null ? {} : { widthIssue: line.widthIssue }),
+  })) ?? null
 }
 
 function example(row: LabRow, text: string, score: CaseScore, metric: MetricName): unknown {
   const p = row.case.paragraph
-  const grid = GRID[row.browser]
   const m = score.metrics[metric]
+  const prediction = row.prediction
   return {
     id: row.id, family: row.family, browser: row.browser, metric, reason: m.reason, detail: m.detail,
     text,
@@ -565,20 +729,20 @@ function example(row: LabRow, text: string, score: CaseScore, metric: MetricName
     },
     pageLang: row.case.pageLang,
     nativeHeight: 'error' in row.native ? null : row.native.height,
-    nativeLines: score.derived?.lines.map(line => ({
-      text: text.slice(line.start, line.end), firstVisible: line.firstVisible, lastVisible: line.lastVisible,
-      width: Math.round((line.right - line.left) * grid) / grid, widthSource: line.widthSource,
-      inset: line.firstVisible === null ? null : p.direction === 'rtl' ? p.width - line.right : line.left,
-      ...(line.widthIssue === null ? {} : { widthIssue: line.widthIssue }),
-    })) ?? null,
-    predictedLines: 'error' in row.prediction ? row.prediction : row.prediction.lines.map(line => ({ ...line, text: text.slice(line.start, line.end) })),
-    ...(metric === 'painter' && row.painter !== null && !('error' in row.painter)
-      ? { painterLines: (row.painter as PainterObservation).lines.map(line => ({ height: line.height, extent: line.extent })) }
+    nativeLines: nativeLinesView(row, text, score.derived),
+    predictedLines: 'error' in prediction ? prediction : prediction.lines.map(line => ({ ...line, text: text.slice(line.start, line.end) })),
+    ...(metric === 'painter' && row.painter !== null && !('error' in row.painter) && !('error' in prediction)
+      ? {
+        painterLines: (row.painter as PainterObservation).lines.map((line, i) => {
+          const scored = i < prediction.lines.length ? paintedExtent(line, p, row.browser, text, prediction.lines[i]!) : null
+          return { height: line.height, extent: line.extent, text: line.text, scoredExtent: scored }
+        }),
+      }
       : {}),
   }
 }
 
-async function* readLines(path: string): AsyncGenerator<string> {
+export async function* readLines(path: string): AsyncGenerator<string> {
   const decoder = new TextDecoder()
   let buffer = ''
   for await (const chunk of Bun.file(path).stream()) {
@@ -594,137 +758,200 @@ async function* readLines(path: string): AsyncGenerator<string> {
   if (buffer.trim() !== '') yield buffer
 }
 
-const args = new Map<string, string>()
-for (const raw of process.argv.slice(2)) {
-  const match = /^--([a-z-]+)=(.*)$/s.exec(raw)
-  if (match === null || !['rows', 'cases', 'out', 'examples', 'per-case'].includes(match[1]!)) {
-    console.error(`Unknown argument ${raw}. Usage: bun rebuild/lab/score.ts --rows=<file> [--cases=<file>] --out=<summary.json> [--examples=K] [--per-case=<file>]`)
+// webkit-host runs installed Safari's engine, so its rows compare with Safari's.
+function compareKey(browser: BrowserKind, id: string): string {
+  return `${browser === 'webkit-host' ? 'safari' : browser}\n${id}`
+}
+
+async function main(): Promise<void> {
+  const USAGE = 'Usage: bun rebuild/lab/score.ts --rows=<file> [--cases=<file>] --out=<summary.json> [--examples=K] [--per-case=<file>] [--native-compare=<other rows file>]'
+  const args = new Map<string, string>()
+  for (const raw of process.argv.slice(2)) {
+    const match = /^--([a-z-]+)=(.*)$/s.exec(raw)
+    if (match === null || !['rows', 'cases', 'out', 'examples', 'per-case', 'native-compare'].includes(match[1]!)) {
+      console.error(`Unknown argument ${raw}. ${USAGE}`)
+      process.exit(1)
+    }
+    args.set(match[1]!, match[2]!)
+  }
+  const rowsPath = args.get('rows')
+  const outPath = args.get('out')
+  if (rowsPath === undefined || outPath === undefined) {
+    console.error('--rows and --out are required')
     process.exit(1)
   }
-  args.set(match[1]!, match[2]!)
-}
-const rowsPath = args.get('rows')
-const outPath = args.get('out')
-if (rowsPath === undefined || outPath === undefined) {
-  console.error('--rows and --out are required')
-  process.exit(1)
-}
-const examplesPerMetric = Number(args.get('examples') ?? 5)
-const perCasePath = args.get('per-case')
+  const examplesPerMetric = Number(args.get('examples') ?? 5)
+  const perCasePath = args.get('per-case')
 
-// --cases restricts scoring to those ids and checks each row observed exactly that case.
-let casesById: Map<string, string> | null = null
-const casesPath = args.get('cases')
-if (casesPath !== undefined) {
-  casesById = new Map()
-  for (const line of readFileSync(casesPath, 'utf8').split('\n')) {
-    if (line.trim() === '') continue
-    const c = JSON.parse(line) as Case
-    casesById.set(c.id, JSON.stringify(c))
-  }
-}
-
-const browsers: Partial<Record<BrowserKind, BrowserSummary>> = {}
-const families: Record<string, Partial<Record<BrowserKind, Record<MetricName, Counts>>>> = {}
-const failExamples: Partial<Record<BrowserKind, Record<MetricName, unknown[]>>> = {}
-const unobservedExamples: Partial<Record<BrowserKind, Record<MetricName, unknown[]>>> = {}
-const seen = new Map<BrowserKind, Set<string>>()
-let skippedRows = 0
-let mismatchedCases = 0
-const perCaseFd = perCasePath === undefined ? null : openSync(perCasePath, 'w')
-
-for await (const line of readLines(rowsPath)) {
-  const row = JSON.parse(line) as LabRow
-  if (casesById !== null) {
-    const expected = casesById.get(row.id)
-    if (expected === undefined) {
-      skippedRows++
-      continue
-    }
-    if (expected !== JSON.stringify(row.case)) {
-      mismatchedCases++
-      continue
+  // --cases restricts scoring to those ids and checks each row observed exactly that case.
+  let casesById: Map<string, string> | null = null
+  const casesPath = args.get('cases')
+  if (casesPath !== undefined) {
+    casesById = new Map()
+    for (const line of readFileSync(casesPath, 'utf8').split('\n')) {
+      if (line.trim() === '') continue
+      const c = JSON.parse(line) as Case
+      casesById.set(c.id, JSON.stringify(c))
     }
   }
-  const text = row.case.paragraph.runs.map(run => run.text).join('')
-  const score = scoreRow(row, text)
-  const summary = browsers[row.browser] ??= newBrowserSummary(row.browser)
-  if (!seen.has(row.browser)) seen.set(row.browser, new Set())
-  seen.get(row.browser)!.add(row.id)
-  summary.rows++
-  if ('error' in row.native) summary.nativeErrors++
-  else if (row.native.rejectedStyles.length > 0) summary.rejectedStyleRows++
-  if ('error' in row.prediction) summary.predictionErrors++
-  const envKey = `DPR ${row.env.devicePixelRatio}, scale ${row.env.visualViewportScale}, ${row.env.userAgent}`
-  summary.environments[envKey] = (summary.environments[envKey] ?? 0) + 1
-  summary.timingsMs.native += row.timings.nativeMs
-  summary.timingsMs.predict += row.timings.predictMs
-  summary.timingsMs.paint += row.timings.paintMs
-  summary.timingsMs.painterObserve += row.timings.painterObserveMs
-  if (!('error' in row.native) && (row.native.missingFonts ?? []).length > 0) {
-    summary.missingFontRows++
-    for (const family of row.native.missingFonts!) summary.missingFonts[family] = (summary.missingFonts[family] ?? 0) + 1
-  }
-  if (score.derived !== null) {
-    const derived = score.derived
-    summary.rectGrid.values += derived.rectValues
-    summary.rectGrid.offGrid += derived.offGridValues
-    const native = summary.native
-    const bump = (counts: Record<string, number>, key: string): void => { counts[key] = (counts[key] ?? 0) + 1 }
-    bump(native.lineCounts, String(derived.lines.length))
-    native.lines += derived.lines.length
-    native.splitWhiteSpace += derived.splitWhiteSpace
-    if (derived.lineCountIssue !== null) bump(native.lineCountIssues, derived.lineCountIssue.reason ?? '')
-    if (derived.breaksIssue !== null) bump(native.breaksIssues, derived.breaksIssue.reason ?? '')
-    for (let i = 0; i < derived.lines.length; i++) {
-      const line = derived.lines[i]!
-      native.widthSources[line.widthSource]++
-      if (line.widthIssue !== null) bump(native.widthIssueLines, line.widthIssue.split(';')[0]!)
-    }
-  }
-  for (let i = 0; i < score.widthDiffs.length; i++) summary.widthDiffUnits[score.widthDiffs[i]!] = (summary.widthDiffUnits[score.widthDiffs[i]!] ?? 0) + 1
-  for (let i = 0; i < score.painterDiffs.length; i++) summary.painterDiffUnits[score.painterDiffs[i]!] = (summary.painterDiffUnits[score.painterDiffs[i]!] ?? 0) + 1
-  const familyCounts = (families[row.family] ??= {})[row.browser] ??= { lineCount: emptyCounts(), breaks: emptyCounts(), widths: emptyCounts(), painter: emptyCounts() }
-  const fails = failExamples[row.browser] ??= { lineCount: [], breaks: [], widths: [], painter: [] }
-  const unobserved = unobservedExamples[row.browser] ??= { lineCount: [], breaks: [], widths: [], painter: [] }
-  for (let k = 0; k < METRICS.length; k++) {
-    const name = METRICS[k]!
-    const metric = score.metrics[name]
-    summary.metrics[name][metric.status]++
-    familyCounts[name][metric.status]++
-    if (metric.reason !== undefined) {
-      const key = `${metric.status}: ${metric.reason}`
-      summary.reasons[name][key] = (summary.reasons[name][key] ?? 0) + 1
-    }
-    const bucket = metric.status === 'fail' ? fails[name] : metric.status === 'unobserved' ? unobserved[name] : null
-    if (bucket !== null && bucket.length < examplesPerMetric) bucket.push(example(row, text, score, name))
-  }
-  if (perCaseFd !== null) {
-    writeSync(perCaseFd, JSON.stringify({ id: row.id, family: row.family, browser: row.browser, ...score.metrics }) + '\n')
-  }
-}
-if (perCaseFd !== null) closeSync(perCaseFd)
 
-const missingRows: Partial<Record<BrowserKind, number>> = {}
-if (casesById !== null) for (const [browser, ids] of seen) missingRows[browser] = [...casesById.keys()].filter(id => !ids.has(id)).length
-const summary = {
-  generatedAt: new Date().toISOString(),
-  rowsFile: rowsPath, casesFile: casesPath ?? null,
-  note: 'unobserved and not-applicable are never passes; widths are compared only on cases whose breaks pass',
-  skippedRows, mismatchedCases, missingRows,
-  browsers, families, failExamples, unobservedExamples,
+  // --native-compare: the other run's derivation per case, and a hash of its raw native observation.
+  const comparePath = args.get('native-compare')
+  let other: Map<string, { caseJson: string; view: NativeView; geometry: bigint | number }> | null = null
+  if (comparePath !== undefined) {
+    other = new Map()
+    for await (const line of readLines(comparePath)) {
+      const row = JSON.parse(line) as LabRow
+      other.set(compareKey(row.browser, row.id), { caseJson: JSON.stringify(row.case), view: nativeView(row), geometry: Bun.hash(JSON.stringify(row.native)) })
+    }
+  }
+
+  const browsers: Partial<Record<BrowserKind, BrowserSummary>> = {}
+  const families: Record<string, Partial<Record<BrowserKind, Record<MetricName, Counts>>>> = {}
+  const failExamples: Partial<Record<BrowserKind, Record<MetricName, unknown[]>>> = {}
+  const unobservedExamples: Partial<Record<BrowserKind, Record<MetricName, unknown[]>>> = {}
+  const seen = new Map<BrowserKind, Set<string>>()
+  let skippedRows = 0
+  let mismatchedCases = 0
+  const perCaseFd = perCasePath === undefined ? null : openSync(perCasePath, 'w')
+  const bump = (counts: Record<string, number>, key: string): void => { counts[key] = (counts[key] ?? 0) + 1 }
+
+  for await (const line of readLines(rowsPath)) {
+    const row = JSON.parse(line) as LabRow
+    const caseJson = JSON.stringify(row.case)
+    if (casesById !== null) {
+      const expected = casesById.get(row.id)
+      if (expected === undefined) {
+        skippedRows++
+        continue
+      }
+      if (expected !== caseJson) {
+        mismatchedCases++
+        continue
+      }
+    }
+    const text = rowText(row.case)
+    const score = scoreRow(row, text)
+    const grid = layoutGrid(row.browser, row.env.devicePixelRatio)
+    const summary = browsers[row.browser] ??= newBrowserSummary(grid)
+    if (!seen.has(row.browser)) seen.set(row.browser, new Set())
+    seen.get(row.browser)!.add(row.id)
+    summary.rows++
+    bump(summary.grids, String(grid))
+    if ('error' in row.native) summary.nativeErrors++
+    else if (row.native.rejectedStyles.length > 0) summary.rejectedStyleRows++
+    if ('error' in row.prediction) summary.predictionErrors++
+    bump(summary.environments, `DPR ${row.env.devicePixelRatio}, scale ${row.env.visualViewportScale}, ${row.env.userAgent}`)
+    summary.timingsMs.native += row.timings.nativeMs
+    summary.timingsMs.predict += row.timings.predictMs
+    summary.timingsMs.paint += row.timings.paintMs
+    summary.timingsMs.painterObserve += row.timings.painterObserveMs
+    if (!('error' in row.native) && (row.native.missingFonts ?? []).length > 0) {
+      summary.missingFontRows++
+      for (const family of row.native.missingFonts!) bump(summary.missingFonts, family)
+    }
+    if (score.derived !== null) {
+      const derived = score.derived
+      summary.rectGrid.values += derived.rectValues
+      summary.rectGrid.offGrid += derived.offGridValues
+      const native = summary.native
+      bump(native.lineCounts, String(derived.lines.length))
+      native.lines += derived.lines.length
+      native.splitWhiteSpace += derived.splitWhiteSpace
+      if (derived.lineCountIssue !== null) bump(native.lineCountIssues, derived.lineCountIssue.reason ?? '')
+      if (derived.breaksIssue !== null) bump(native.breaksIssues, derived.breaksIssue.reason ?? '')
+      for (let i = 0; i < derived.lines.length; i++) {
+        const nativeLine = derived.lines[i]!
+        native.widthSources[nativeLine.widthSource]++
+        if (nativeLine.widthIssue !== null) bump(native.widthIssueLines, nativeLine.widthIssue.split(';')[0]!)
+        if (nativeLine.widthSource !== 'none') native.widthGrid.lines++
+      }
+      for (let k = 0; k < derived.offGridWidths.length; k++) {
+        const nativeLine = derived.lines[derived.offGridWidths[k]!]!
+        native.widthGrid.offGrid++
+        bump(native.widthGrid.bySource, nativeLine.widthSource)
+        if (native.widthGrid.examples.length < examplesPerMetric) {
+          const width = nativeLine.right - nativeLine.left
+          native.widthGrid.examples.push({ id: row.id, line: derived.offGridWidths[k], text: text.slice(nativeLine.start, nativeLine.end), widthSource: nativeLine.widthSource, left: nativeLine.left, right: nativeLine.right, width, units: width * grid })
+        }
+      }
+    }
+
+    let history: string | null = null
+    if (other !== null) {
+      const hd = summary.historyDependent
+      const entry = other.get(compareKey(row.browser, row.id))
+      if (entry === undefined) {
+        hd.missing++
+      } else if (entry.caseJson !== caseJson) {
+        hd.caseDiffers++
+      } else {
+        hd.compared++
+        const view = score.derived !== null ? viewOf(score.derived, grid) : nativeView(row, text)
+        history = nativeDifference(view, entry.view)
+        if (history !== null) {
+          hd.rows++
+          hd.cases.push({
+            id: row.id, family: row.family, detail: history, text, metrics: score.metrics,
+            nativeLines: view.lines.map(l => ({ ...l, text: text.slice(l.start, l.end) })),
+            otherNativeLines: entry.view.lines.map(l => ({ ...l, text: text.slice(l.start, l.end) })),
+          })
+        } else if (entry.geometry !== Bun.hash(JSON.stringify(row.native))) {
+          hd.geometryOnly++
+          if (hd.geometryOnlyIds.length < 20) hd.geometryOnlyIds.push(row.id)
+        }
+      }
+    }
+    if (perCaseFd !== null) {
+      writeSync(perCaseFd, JSON.stringify({ id: row.id, family: row.family, browser: row.browser, ...score.metrics, ...(history === null ? {} : { historyDependent: history }) }) + '\n')
+    }
+    if (history !== null) continue
+
+    for (let i = 0; i < score.widthDiffs.length; i++) bump(summary.widthDiffUnits, String(score.widthDiffs[i]!))
+    for (let i = 0; i < score.painterDiffs.length; i++) bump(summary.painterDiffUnits, String(score.painterDiffs[i]!))
+    const familyCounts = (families[row.family] ??= {})[row.browser] ??= { lineCount: emptyCounts(), breaks: emptyCounts(), widths: emptyCounts(), painter: emptyCounts() }
+    const fails = failExamples[row.browser] ??= { lineCount: [], breaks: [], widths: [], painter: [] }
+    const unobserved = unobservedExamples[row.browser] ??= { lineCount: [], breaks: [], widths: [], painter: [] }
+    for (let k = 0; k < METRICS.length; k++) {
+      const name = METRICS[k]!
+      const metric = score.metrics[name]
+      summary.metrics[name][metric.status]++
+      familyCounts[name][metric.status]++
+      if (metric.reason !== undefined) bump(summary.reasons[name], `${metric.status}: ${metric.reason}`)
+      const bucket = metric.status === 'fail' ? fails[name] : metric.status === 'unobserved' ? unobserved[name] : null
+      if (bucket !== null && bucket.length < examplesPerMetric) bucket.push(example(row, text, score, name))
+    }
+  }
+  if (perCaseFd !== null) closeSync(perCaseFd)
+
+  const missingRows: Partial<Record<BrowserKind, number>> = {}
+  if (casesById !== null) for (const [browser, ids] of seen) missingRows[browser] = [...casesById.keys()].filter(id => !ids.has(id)).length
+  const summary = {
+    generatedAt: new Date().toISOString(),
+    rowsFile: rowsPath, casesFile: casesPath ?? null, nativeCompareFile: comparePath ?? null,
+    note: 'unobserved and not-applicable are never passes; widths are compared only on cases whose breaks pass; with --native-compare, history-dependent cases are excluded from the metric counts',
+    skippedRows, mismatchedCases, missingRows,
+    browsers, families, failExamples, unobservedExamples,
+  }
+  writeFileSync(outPath, JSON.stringify(summary, null, 2) + '\n')
+  for (const [browser, s] of Object.entries(browsers)) {
+    const line = METRICS.map(name => `${name} ${s.metrics[name].pass}/${s.metrics[name].fail}/${s.metrics[name].unobserved}/${s.metrics[name]['not-applicable']}`).join(' | ')
+    const history = other === null ? '' : `; ${s.historyDependent.rows} history-dependent of ${s.historyDependent.compared} compared (excluded)`
+    console.log(`${browser}: ${s.rows} rows; pass/fail/unobserved/n-a: ${line}${history}`)
+  }
+  console.log(`summary: ${outPath}`)
+  if (mismatchedCases > 0) {
+    console.error(`${mismatchedCases} rows observed a case that differs from --cases`)
+    process.exit(1)
+  }
+  if (Object.keys(browsers).length === 0) {
+    console.error('No rows scored')
+    process.exit(1)
+  }
+  if (other !== null && Object.values(browsers).every(s => s.historyDependent.compared === 0)) {
+    console.error(`No row of ${rowsPath} has a row for the same case in ${comparePath}`)
+    process.exit(1)
+  }
 }
-writeFileSync(outPath, JSON.stringify(summary, null, 2) + '\n')
-for (const [browser, s] of Object.entries(browsers)) {
-  const line = METRICS.map(name => `${name} ${s.metrics[name].pass}/${s.metrics[name].fail}/${s.metrics[name].unobserved}/${s.metrics[name]['not-applicable']}`).join(' | ')
-  console.log(`${browser}: ${s.rows} rows; pass/fail/unobserved/n-a: ${line}`)
-}
-console.log(`summary: ${outPath}`)
-if (mismatchedCases > 0) {
-  console.error(`${mismatchedCases} rows observed a case that differs from --cases`)
-  process.exit(1)
-}
-if (Object.keys(browsers).length === 0) {
-  console.error('No rows scored')
-  process.exit(1)
-}
+
+if (import.meta.main) await main()

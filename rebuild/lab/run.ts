@@ -5,6 +5,7 @@ import { execFileSync } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import { closeSync, mkdirSync, openSync, readFileSync, writeFileSync, writeSync } from 'node:fs'
 import { join, resolve } from 'node:path'
+import { createRng } from './cases/prng.ts'
 import type { BrowserKind, Case, FontDecl, LabRow } from './types.ts'
 
 const LAB_DIR = import.meta.dir
@@ -24,11 +25,11 @@ function message(error: unknown): string {
 
 // ---- Arguments ----
 
-const KNOWN = ['browser', 'cases', 'out', 'limit', 'family', 'chunk', 'predictor', 'stall-ms']
+const KNOWN = ['browser', 'cases', 'out', 'limit', 'family', 'chunk', 'predictor', 'stall-ms', 'order']
 const args = new Map<string, string>()
 for (const raw of process.argv.slice(2)) {
   const match = /^--([a-z-]+)=(.*)$/s.exec(raw)
-  if (match === null || !KNOWN.includes(match[1]!)) fail(`Unknown argument ${raw}. Usage: bun rebuild/lab/run.ts --browser=chrome|safari|firefox|webkit-host --cases=<cases.ndjson> --out=<dir> [--limit=N] [--family=substr] [--chunk=N] [--predictor=<file>] [--stall-ms=N]`)
+  if (match === null || !KNOWN.includes(match[1]!)) fail(`Unknown argument ${raw}. Usage: bun rebuild/lab/run.ts --browser=chrome|safari|firefox|webkit-host --cases=<cases.ndjson> --out=<dir> [--limit=N] [--family=substr] [--chunk=N] [--predictor=<file>] [--stall-ms=N] [--order=file|reverse|shuffle:<seed>]`)
   args.set(match[1]!, match[2]!)
 }
 const browserArg = args.get('browser')
@@ -50,6 +51,10 @@ const chunkSize = positiveInteger('chunk', 25)
 const stallMs = positiveInteger('stall-ms', 120_000)
 const familyFilter = args.get('family')
 const predictorPath = resolve(args.get('predictor') ?? join(LAB_DIR, 'predictor.ts'))
+// The order the selected cases run in: the file's, reversed, or shuffled by a seeded generator. It applies before cases
+// are grouped by page context, so it changes which cases share a document and which ran before each one.
+const order = args.get('order') ?? 'file'
+if (order !== 'file' && order !== 'reverse' && !/^shuffle:.+$/s.test(order)) fail('--order must be file, reverse or shuffle:<seed>')
 
 // ---- Cases ----
 
@@ -95,14 +100,14 @@ function contextKey(lang: string, families: string[]): string {
   return JSON.stringify([lang, families])
 }
 
-// Cases grouped by page context, stable in order of first appearance, so the page reloads once per context (a fresh
-// document, so Canvas contexts start under the new language) and installed-font cases never share a document with
-// web fonts.
+// Cases grouped by page context, stable in order of first appearance after --order, so the page reloads once per context
+// (a fresh document, so Canvas contexts start under the new language) and installed-font cases never share a document
+// with web fonts.
 const casesByContext = new Map<string, Case[]>()
 {
   const lines = readFileSync(casesPath, 'utf8').split('\n')
   const ids = new Set<string>()
-  let selected = 0
+  const selected: Case[] = []
   for (let i = 0; i < lines.length; i++) {
     if (lines[i]!.trim() === '') continue
     let c: Case
@@ -117,8 +122,21 @@ const casesByContext = new Map<string, Case[]>()
     ids.add(c.id)
     if (c.browsers !== undefined && !c.browsers.includes(caseBrowser)) continue
     if (familyFilter !== undefined && !c.family.includes(familyFilter)) continue
-    if (selected >= limit) continue
-    selected++
+    if (selected.length >= limit) continue
+    selected.push(c)
+  }
+  if (order === 'reverse') selected.reverse()
+  if (order.startsWith('shuffle:')) {
+    const rng = createRng(order.slice('shuffle:'.length))
+    for (let i = selected.length - 1; i > 0; i--) {
+      const j = rng.int(i + 1)
+      const swap = selected[i]!
+      selected[i] = selected[j]!
+      selected[j] = swap
+    }
+  }
+  for (let i = 0; i < selected.length; i++) {
+    const c = selected[i]!
     const key = contextKey(c.pageLang, fixtureFamilies(c))
     if (!casesByContext.has(key)) casesByContext.set(key, [])
     casesByContext.get(key)!.push(c)
@@ -605,7 +623,7 @@ try {
     status: errors.length === 0 ? 'ok' : 'error',
     errors,
     browser, runId, casesFile: resolve(casesPath), rowsFile: rowsPath, predictor: predictorPath,
-    family: familyFilter ?? null, limit: limit === Number.MAX_SAFE_INTEGER ? null : limit, chunkSize, bundleBytes,
+    family: familyFilter ?? null, limit: limit === Number.MAX_SAFE_INTEGER ? null : limit, order, chunkSize, bundleBytes,
     startedAt: startedAt.toISOString(), finishedAt: finishedAt.toISOString(), durationMs: finishedAt.getTime() - startedAt.getTime(),
     // From the start to the page's first request (bundle, launch, page load), then from there to the end.
     launchMs: firstStepAt === null ? null : firstStepAt - startedAt.getTime(),

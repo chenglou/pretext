@@ -237,10 +237,23 @@ function observePainter(c: Case, prediction: Prediction, range: Range, timings: 
       const element = elements[i]!
       const box = relative(element.getBoundingClientRect(), origin)
       const rects: Rect[] = []
+      const points: CodePointObservation[] = []
+      let text = ''
       const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT)
       for (let node = walker.nextNode(); node !== null; node = walker.nextNode()) {
         range.selectNodeContents(node)
         pushRects(range.getClientRects(), origin, rects)
+        const data = (node as Text).data
+        for (let k = 0; k < data.length;) {
+          const length = data.codePointAt(k)! > 0xffff ? 2 : 1
+          range.setStart(node, k)
+          range.setEnd(node, k + length)
+          const own: Rect[] = []
+          pushRects(range.getClientRects(), origin, own)
+          points.push({ offset: text.length + k, length, rects: own })
+          k += length
+        }
+        text += data
       }
       let extent: PainterLine['extent'] = null
       for (let k = 0; k < rects.length; k++) {
@@ -250,7 +263,7 @@ function observePainter(c: Case, prediction: Prediction, range: Range, timings: 
           ? { left: rect.x, right: rect.x + rect.width }
           : { left: Math.min(extent.left, rect.x), right: Math.max(extent.right, rect.x + rect.width) }
       }
-      lines.push({ box, height: box.height, rects, extent })
+      lines.push({ box, height: box.height, rects, extent, text, points })
     }
     timings.painterObserveMs = performance.now() - start
     return { lines }

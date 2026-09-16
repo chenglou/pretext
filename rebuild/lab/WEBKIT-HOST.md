@@ -64,7 +64,10 @@ and DecoType Nastaleeq Urdu UI (1). Chrome also misses SimSun on 5 Chrome-only c
 
 In WebKit a few cases lay out differently depending on which cases ran before them in the same page. This is the
 engine, not the host. The host's own suite-sample run in reverse order changed 16 of 4,983 cases (1 height, 16 sets of
-derived lines), while Chrome showed no such effect in a different order. The cases are the same kinds every time:
+derived lines), while Chrome showed no such effect in a different order. Scored with `score.ts --native-compare` (lab
+README "Page-history dependence"), 11 of the 16 are history-dependent. The other 5 differ only by float32 noise in a
+line edge, which changes no line and no width as scored. A fresh run with `run.ts --order=reverse` repeated the
+reversed run's native observations exactly and found the same 11. The cases are the same kinds every time:
 Amiri or Noto Naskh Arabic web fonts with `((` or a soft hyphen next to a control, 12px-wide URLs, and brackets or
 quotes at a line edge (`(12.5)%`, `!!!!““aabb`, `££££{{aabb`).
 
@@ -148,5 +151,6 @@ python3 .artifacts/session/with-browser-lock.py lab-webkit-host -- \
 bun .artifacts/webkit-host/compare-20260916/compare-rows.ts --a=<dir>/safari-rows.ndjson --b=<dir>/webkit-host-rows.ndjson --out=<report.json>
 ```
 
-`compare-rows.ts` loads `score.ts`'s derivation from its source, up to the summary section. The match is expected to be
-exact.
+`compare-rows.ts` imports `deriveNative` from `score.ts`. The match is expected to be exact. To find cases that depend
+on page history rather than on the host, score a reverse-order run with `--native-compare` (README "Page-history
+dependence").

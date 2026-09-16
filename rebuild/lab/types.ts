@@ -97,6 +97,11 @@ export type PainterLine = {
   rects: Rect[]
   // Horizontal extent of the positive-width rects in `rects`, or null when there are none.
   extent: { left: number; right: number } | null
+  // The element's text nodes concatenated in document order, and every Range client rect of each of its code points,
+  // relative to the host, unfiltered. The scorer takes the painted extent from these the way it takes native widths, so
+  // trimmed and hanging white space don't count. Absent in rows from before these fields.
+  text?: string
+  points?: CodePointObservation[]
 }
 
 export type PainterObservation = { lines: PainterLine[] }
