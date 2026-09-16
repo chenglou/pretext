@@ -622,8 +622,8 @@ describe('boundary-policy regressions', () => {
         expect(narrow.join('')).toBe(`a${word}${mark}b`)
       }
     }
-    // The mark joins a whole merged run, and a space or zero-width space still
-    // separates it from the text before.
+    // The mark stays with the whole unit before it, and a space or zero-width space
+    // still separates it from the text before.
     for (const [text, expected] of [
       ['a 00:00:00：b', ['a', ' ', '00:00:00：', 'b']],
       ['(10:30)，b', ['(10:30)，', 'b']],
@@ -637,7 +637,7 @@ describe('boundary-policy regressions', () => {
     ] as const) {
       expect(prepareWithSegments(text, FONT).segments).toEqual([...expected])
     }
-    // Once `」!` joins `value`, the forward carry moves the opener onto it.
+    // The opener starts a unit with the text after it.
     const bracket = '739x「value」! end'
     expect(prepareWithSegments(bracket, FONT).segments).toEqual(['739x', '「value」!', ' ', 'end'])
     expect(lines(bracket, measureWidth('「value」!', FONT) + 0.1)).toEqual(['739x', '「value」!', 'end'])

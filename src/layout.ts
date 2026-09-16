@@ -723,12 +723,11 @@ function prepareInternal(
 //
 // Steps:
 //   1. Normalize collapsible whitespace (CSS white-space: normal behavior)
-//   2. Segment via Intl.Segmenter (handles CJK, Thai, etc.)
-//   3. Merge punctuation into preceding word ("better." as one unit)
-//   4. Split CJK words into individual graphemes (per-character line breaks)
-//   5. Measure each segment via canvas measureText, cache by (segment, font)
-//   6. Pre-measure graphemes of long words (for overflow-wrap: break-word)
-//   7. Correct emoji canvas inflation (auto-detected per font size)
+//   2. Find break opportunities with the engine's own line-break scan
+//   3. Split the text into segments between them ("better." as one unit)
+//   4. Measure each segment via canvas measureText, cache by (segment, font)
+//   5. Pre-measure graphemes of long words (for overflow-wrap: break-word)
+//   6. Correct emoji canvas inflation (auto-detected per font size)
 export function prepare(text: string, font: string, options?: PrepareOptions): PreparedText {
   return prepareInternal(text, font, false, options) as PreparedText
 }

@@ -255,7 +255,7 @@ export function generateCases(measure: Measure, selection: CaseSelection): Wrapp
     for (const width of widths) {
       add({ ...defaults, family: kinsokuFamily, origins: [`${kinsokuFamily}/${label}`], scope: 'research',
         ...(page === 'installed' ? { context: { kind: 'installed' as const, lang } } : {}), ...options, lang, text, font, width,
-        note: 'Observation only: emergency breaks inside kinsoku units, opener runs and the forward carry.' }, false)
+        note: 'Observation only: emergency breaks inside kinsoku units, opener runs and marks before openers.' }, false)
     }
   }
   const hiragino = '16px "Hiragino Sans"'
