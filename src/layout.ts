@@ -661,12 +661,14 @@ function measureAnalysis(
       consumedEndSegmentIndex: widths.length,
     })
   }
+  // Arrays built with push keep spare capacity. Copies hold exactly the segments,
+  // which matters when an app keeps many prepared texts.
   if (segments !== null) {
     return {
-      widths,
-      kinds,
+      widths: widths.slice(),
+      kinds: kinds.slice(),
       simpleLineWalkFastPath,
-      breakableFitAdvances,
+      breakableFitAdvances: breakableFitAdvances.slice(),
       breakablePreferredBreaks,
       entryGeometry,
       letterSpacing,
@@ -674,15 +676,15 @@ function measureAnalysis(
       discretionaryHyphenWidth,
       discretionaryHyphenContexts,
       tabStopAdvance,
-      chunks,
-      segments,
+      chunks: chunks.slice(),
+      segments: segments.slice(),
     } as unknown as PreparedTextWithSegments
   }
   return {
-    widths,
-    kinds,
+    widths: widths.slice(),
+    kinds: kinds.slice(),
     simpleLineWalkFastPath,
-    breakableFitAdvances,
+    breakableFitAdvances: breakableFitAdvances.slice(),
     breakablePreferredBreaks,
     entryGeometry,
     letterSpacing,
@@ -690,7 +692,7 @@ function measureAnalysis(
     discretionaryHyphenWidth,
     discretionaryHyphenContexts,
     tabStopAdvance,
-    chunks,
+    chunks: chunks.slice(),
   } as unknown as InternalPreparedText
 }
 
