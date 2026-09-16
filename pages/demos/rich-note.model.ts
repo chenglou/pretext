@@ -74,7 +74,10 @@ export const BODY_MIN_WIDTH = 260
 export const BODY_DEFAULT_WIDTH = 516
 export const BODY_MAX_WIDTH = 760
 export const PAGE_MARGIN = 28
-export const CHIP_CHROME_WIDTH = 22
+// A code span's and a chip's side padding, which the page paints from here. A
+// chip's ring is an inset shadow, so the padding is all the width it adds.
+export const CODE_PADDING_X = 7
+export const CHIP_PADDING_X = 11
 // A note takes the direction of its first strong character, the way HTML
 // dir=auto reads text. Scripts stand in for bidi classes: letters of these
 // right-to-left scripts, RLM and ALM count as right-to-left, and any other
@@ -90,7 +93,7 @@ export const TEXT_STYLES = {
   },
   code: {
     className: 'frag frag--code',
-    extraWidth: 14,
+    extraWidth: CODE_PADDING_X * 2,
     font: CODE_FONT,
   },
   // Links keep the body weight; color and underline mark them.
@@ -155,7 +158,7 @@ export function prepareRichInlineNote(
         text: spec.label,
         font: CHIP_FONT,
         break: 'never' as const,
-        extraWidth: CHIP_CHROME_WIDTH,
+        extraWidth: CHIP_PADDING_X * 2,
       }
     }
 

@@ -3,7 +3,6 @@ import { marked, type Token, type Tokens } from 'marked'
 import {
   layout,
   layoutWithLines,
-  measureLineStats,
   measureNaturalWidth,
   prepareWithSegments,
   type LayoutLine,
@@ -15,6 +14,7 @@ import {
   prepareRichInline,
   walkRichInlineLineRanges,
   type PreparedRichInline,
+  type RichInlineLine,
 } from '../../src/rich-inline.ts'
 import { createMarkdownChatSpecs } from './markdown-chat.data.ts'
 
@@ -51,8 +51,6 @@ const SANS_FAMILY = 'Helvetica, Arial, sans-serif'
 const SERIF_FAMILY = '"Iowan Old Style", Georgia, "Times New Roman", serif'
 const MONO_FAMILY = '"SF Mono", ui-monospace, Menlo, Monaco, monospace'
 const HEADING_LETTER_SPACING_EM = -0.01
-const INLINE_CODE_EXTRA_WIDTH = 12
-const IMAGE_EXTRA_WIDTH = 14
 // A paragraph takes the direction of its first strong character, the way HTML
 // dir=auto reads text. Scripts stand in for bidi classes: letters of these
 // right-to-left scripts, RLM and ALM count as right-to-left, and any other
@@ -60,10 +58,14 @@ const IMAGE_EXTRA_WIDTH = 14
 const STRONG_CHARACTER = /[\p{L}\p{Mc}\u200E\u200F\u061C]/u
 const RIGHT_TO_LEFT_CHARACTER = /[\p{Script=Hebrew}\p{Script=Arabic}\p{Script=Syriac}\p{Script=Thaana}\p{Script=Nko}\p{Script=Samaritan}\p{Script=Mandaic}\p{Script=Adlam}\p{Script=Hanifi_Rohingya}\u200F\u061C]/u
 
-// The page paints text with the fonts and letter spacing Pretext measured, so
-// typography lives here and the CSS doesn't restate it.
-export const MARKER_FONT = `600 11px ${MONO_FAMILY}`
+// The page paints text with the fonts and letter spacing Pretext measured, and
+// pills with the side padding their widths count, so typography lives here and
+// the CSS doesn't restate it.
+export const MARKER_FONT_SIZE = 11
+export const MARKER_FONT = `600 ${MARKER_FONT_SIZE}px ${MONO_FAMILY}`
 export const CODE_FONT = `500 12px ${MONO_FAMILY}`
+export const INLINE_CODE_PADDING_X = 6
+export const IMAGE_PADDING_X = 7
 const INLINE_CODE_STYLE: TextStyle = {
   className: 'frag frag--code',
   font: `600 12px ${MONO_FAMILY}`,
@@ -115,9 +117,7 @@ type PreparedBlockBase = {
   contentLeft: number
   direction: 'ltr' | 'rtl' | null // a code block or rule has none until inheritDirection
   marginTop: number
-  markerClassName: string | null
-  markerLeft: number | null
-  markerText: string | null
+  marker: { left: number; text: string } | null // a list item's first block paints its marker
   quotes: Quote[]
 }
 
@@ -128,18 +128,18 @@ type PreparedInlineBlock = PreparedBlockBase & {
   hrefs: Array<string | null>
   lineHeight: number
   paragraphStyle: TextStyle // unmarked text, which sets each line's baseline
+  // Per item, as hrefs, so a space made by an item holding only whitespace
+  // paints in that item's style.
   styles: TextStyle[]
 }
 
 type PreparedCodeBlock = PreparedBlockBase & {
   kind: 'code'
-  lineHeight: number
   prepared: PreparedTextWithSegments
 }
 
 type PreparedRuleBlock = PreparedBlockBase & {
   kind: 'rule'
-  height: number
 }
 
 type PreparedBlock = PreparedInlineBlock | PreparedCodeBlock | PreparedRuleBlock
@@ -149,88 +149,17 @@ export type PreparedChatMessage = {
   role: 'assistant' | 'user'
 }
 
-export type InlineFragmentLayout = {
-  gapItemIndex: number // the item whose collapsed space precedes it on its line, or -1
-  href: string | null
-  itemIndex: number
-  style: TextStyle
-  text: string
-}
-
-type BlockFrameBase = {
-  contentLeft: number
-  height: number
-  markerClassName: string | null
-  markerLeft: number | null
-  markerText: string | null
-  top: number
-}
-
-type InlineBlockFrame = BlockFrameBase & {
-  kind: 'inline'
-  lineHeight: number
-  usedWidth: number
-}
-
-type CodeBlockFrame = BlockFrameBase & {
-  kind: 'code'
-  lineHeight: number
-  width: number
-}
-
-type RuleBlockFrame = BlockFrameBase & {
-  kind: 'rule'
-}
-
-type BlockFrame = InlineBlockFrame | CodeBlockFrame | RuleBlockFrame
-
-type InlineBlockLayout = {
-  contentLeft: number
+// A block placed in its message, its top from the bubble's top edge. A code
+// block's width is its box's.
+export type BlockLayout = {
   direction: 'ltr' | 'rtl'
   height: number
-  hrefs: Array<string | null>
-  kind: 'inline'
-  lineHeight: number
-  lines: Array<{
-    fragments: InlineFragmentLayout[]
-  }>
-  markerClassName: string | null
-  markerLeft: number | null
-  markerText: string | null
-  paragraphStyle: TextStyle
-  // Per item, as hrefs, so a space made by an item holding only whitespace
-  // paints in that item's style.
-  styles: TextStyle[]
   top: number
-  width: number
-}
-
-type CodeBlockLayout = {
-  contentLeft: number
-  direction: 'ltr' | 'rtl'
-  height: number
-  kind: 'code'
-  lines: LayoutLine[]
-  markerClassName: string | null
-  markerLeft: number | null
-  markerText: string | null
-  top: number
-  width: number
-}
-
-type RuleBlockLayout = {
-  contentLeft: number
-  direction: 'ltr' | 'rtl'
-  height: number
-  kind: 'rule'
-  markerClassName: string | null
-  markerLeft: number | null
-  markerText: string | null
-  top: number
-  width: number
-}
-
-export type BlockLayout = InlineBlockLayout | CodeBlockLayout | RuleBlockLayout
+} & (
+  | { kind: 'inline'; block: PreparedInlineBlock; lines: RichInlineLine[] }
+  | { kind: 'code'; block: PreparedCodeBlock; lines: LayoutLine[]; width: number }
+  | { kind: 'rule'; block: PreparedRuleBlock }
+)
 
 export type QuoteRailLayout = {
   direction: 'ltr' | 'rtl'
@@ -239,17 +168,20 @@ export type QuoteRailLayout = {
   top: number
 }
 
-export type MessageFrame = {
-  blocks: BlockFrame[]
+// The blocks, quote rails and bubble placement a visible message paints with.
+// Its bubble height is the message's entry in ConversationLayout.heights.
+export type MessageLayout = {
+  blocks: BlockLayout[]
   contentInsetX: number
-  frameWidth: number
-  layoutContentWidth: number
+  left: number // from the chat's left edge
+  rails: QuoteRailLayout[]
+  width: number
 }
 
 // Every message's bubble height at one chat width, and its top, in typed
 // arrays. Tops and totalHeight leave out the banners: the canvas puts the top
 // banner's height above the messages and both banners' heights in its own, so
-// a banner change needs no new pass. Only visible messages get a MessageFrame.
+// a banner change needs no new pass. Only visible messages get a MessageLayout.
 export type ConversationLayout = {
   chatWidth: number
   heights: Float64Array
@@ -323,10 +255,7 @@ export function layoutConversation(
     y += MESSAGE_GAP
   }
 
-  const totalHeight =
-    preparedMessages.length === 0
-      ? CHAT_TOP_PADDING_OFFSET + CHAT_BOTTOM_PADDING_OFFSET
-      : y - MESSAGE_GAP + CHAT_BOTTOM_PADDING_OFFSET
+  const totalHeight = y - MESSAGE_GAP + CHAT_BOTTOM_PADDING_OFFSET
 
   return {
     chatWidth,
@@ -482,7 +411,7 @@ function parseBlockTokens(tokens: readonly Token[], ctx: ParseContext): Prepared
         if (token.block || isPre) {
           appendBlockGroup(blocks, [buildCodeBlock(htmlText, ctx)], RICH_BLOCK_GAP)
         } else {
-          appendBlockGroup(blocks, buildPlainTextBlocks(htmlText, 'body', ctx), BLOCK_GAP)
+          appendBlockGroup(blocks, buildPlainTextBlocks(htmlText, ctx), BLOCK_GAP)
         }
         continue
       }
@@ -491,7 +420,7 @@ function parseBlockTokens(tokens: readonly Token[], ctx: ParseContext): Prepared
         if (Array.isArray(token.tokens) && token.tokens.length > 0) {
           appendBlockGroup(blocks, buildInlineBlocks(token.tokens, 'body', ctx), BLOCK_GAP)
         } else {
-          appendBlockGroup(blocks, buildPlainTextBlocks(token.text, 'body', ctx), BLOCK_GAP)
+          appendBlockGroup(blocks, buildPlainTextBlocks(token.text, ctx), BLOCK_GAP)
         }
         continue
       }
@@ -499,7 +428,7 @@ function parseBlockTokens(tokens: readonly Token[], ctx: ParseContext): Prepared
       default: {
         const fallbackText = fallbackTextForToken(token)
         if (fallbackText.length > 0) {
-          appendBlockGroup(blocks, buildPlainTextBlocks(fallbackText, 'body', ctx), BLOCK_GAP)
+          appendBlockGroup(blocks, buildPlainTextBlocks(fallbackText, ctx), BLOCK_GAP)
         }
       }
     }
@@ -524,16 +453,11 @@ function buildListBlocks(token: Tokens.List, ctx: ParseContext): PreparedBlock[]
     }
     let itemBlocks = parseBlockTokens(item.tokens, itemCtx)
     if (itemBlocks.length === 0) {
-      itemBlocks = buildPlainTextBlocks(item.text, 'body', itemCtx)
+      itemBlocks = buildPlainTextBlocks(item.text, itemCtx)
     }
     if (itemBlocks.length === 0) continue
 
-    itemBlocks[0] = {
-      ...itemBlocks[0]!,
-      markerClassName: resolveListMarkerClassName(token, item),
-      markerLeft,
-      markerText,
-    } satisfies PreparedBlock
+    itemBlocks[0]!.marker = { left: markerLeft, text: markerText }
     appendBlockGroup(blocks, itemBlocks, LIST_ITEM_GAP)
   }
 
@@ -555,14 +479,10 @@ function inheritDirection(blocks: PreparedBlock[]): void {
   }
 }
 
-function buildPlainTextBlocks(
-  text: string,
-  variant: InlineVariant,
-  ctx: ParseContext,
-): PreparedBlock[] {
-  const piece = createTextPiece(text, EMPTY_MARK_STATE, variant)
+function buildPlainTextBlocks(text: string, ctx: ParseContext): PreparedBlock[] {
+  const piece = createTextPiece(text, EMPTY_MARK_STATE, 'body')
   if (piece === null) return []
-  return buildPreparedInlineBlocks([[piece]], variant, ctx)
+  return buildPreparedInlineBlocks([[piece]], 'body', ctx)
 }
 
 function buildInlineBlocks(
@@ -586,10 +506,8 @@ function buildPreparedInlineBlocks(
   for (let index = 0; index < lines.length; index++) {
     const block = buildPreparedInlineBlock(lines[index]!, variant, direction, ctx)
     if (block === null) continue
-    blocks.push({
-      ...block,
-      marginTop: blocks.length === 0 ? 0 : HARD_BREAK_GAP,
-    } satisfies PreparedBlock)
+    block.marginTop = blocks.length === 0 ? 0 : HARD_BREAK_GAP
+    blocks.push(block)
   }
 
   return blocks
@@ -636,7 +554,6 @@ function buildCodeBlock(text: string, ctx: ParseContext): PreparedCodeBlock {
   return {
     ...createBlockBase(ctx),
     kind: 'code',
-    lineHeight: CODE_LINE_HEIGHT,
     prepared: prepareWithSegments(stripSingleTrailingNewline(text), CODE_FONT, {
       whiteSpace: 'pre-wrap',
     }),
@@ -646,7 +563,6 @@ function buildCodeBlock(text: string, ctx: ParseContext): PreparedCodeBlock {
 function buildRuleBlock(ctx: ParseContext): PreparedRuleBlock {
   return {
     ...createBlockBase(ctx),
-    height: RULE_HEIGHT,
     kind: 'rule',
   }
 }
@@ -656,9 +572,7 @@ function createBlockBase(ctx: ParseContext): PreparedBlockBase {
     contentLeft: ctx.contentLeft,
     direction: null,
     marginTop: 0,
-    markerClassName: null,
-    markerLeft: null,
-    markerText: null,
+    marker: null,
     quotes: ctx.quotes,
   }
 }
@@ -669,17 +583,9 @@ function collectInlinePieceLines(
 ): InlinePiece[][] {
   const lines: InlinePiece[][] = [[]]
 
-  function currentLine(): InlinePiece[] {
-    return lines[lines.length - 1]!
-  }
-
-  function pushLineBreak(): void {
-    lines.push([])
-  }
-
   function pushPiece(piece: InlinePiece | null): void {
     if (piece === null) return
-    const line = currentLine()
+    const line = lines[lines.length - 1]!
     const previous = line[line.length - 1]
     if (previous !== undefined && canMergeInlinePieces(previous, piece)) {
       previous.text += piece.text
@@ -738,7 +644,7 @@ function collectInlinePieceLines(
         }
 
         case 'br': {
-          pushLineBreak()
+          lines.push([])
           continue
         }
 
@@ -791,7 +697,7 @@ function createCodePiece(text: string): InlinePiece | null {
 
   return {
     breakMode: 'normal',
-    extraWidth: INLINE_CODE_EXTRA_WIDTH,
+    extraWidth: INLINE_CODE_PADDING_X * 2,
     href: null,
     style: INLINE_CODE_STYLE,
     text,
@@ -801,7 +707,7 @@ function createCodePiece(text: string): InlinePiece | null {
 function createImagePiece(text: string): InlinePiece {
   return {
     breakMode: 'never',
-    extraWidth: IMAGE_EXTRA_WIDTH,
+    extraWidth: IMAGE_PADDING_X * 2,
     href: null,
     style: IMAGE_STYLE,
     text: text.length > 0 ? text : 'image',
@@ -817,19 +723,23 @@ function canMergeInlinePieces(a: InlinePiece, b: InlinePiece): boolean {
   )
 }
 
-const textStyleCache = new Map<string, TextStyle>()
+// One style object per variant and marks, so pieces in the same style merge.
+const textStyles: Record<InlineVariant, Array<TextStyle | undefined>> = { body: [], 'heading-1': [], 'heading-2': [] }
 
 function resolveTextStyle(variant: InlineVariant, marks: MarkState): TextStyle {
-  const className = resolveTextClassName(variant, marks)
-  let style = textStyleCache.get(className)
+  const styles = textStyles[variant]
+  const index = (marks.bold ? 8 : 0) + (marks.italic ? 4 : 0) + (marks.strike ? 2 : 0) + (marks.href === null ? 0 : 1)
+  let style = styles[index]
   if (style === undefined) {
-    style = createTextStyle(className, variant, marks)
-    textStyleCache.set(className, style)
+    style = createTextStyle(variant, marks)
+    styles[index] = style
   }
   return style
 }
 
-function createTextStyle(className: string, variant: InlineVariant, marks: MarkState): TextStyle {
+function createTextStyle(variant: InlineVariant, marks: MarkState): TextStyle {
+  // Bold and italic are in the font, so only links and deletions add a class.
+  const className = `frag${marks.href === null ? '' : ' is-link'}${marks.strike ? ' is-del' : ''}`
   const italicPrefix = marks.italic ? 'italic ' : ''
   // Links keep the body weight; color and underline mark them.
   if (variant === 'body') {
@@ -842,28 +752,6 @@ function createTextStyle(className: string, variant: InlineVariant, marks: MarkS
     font: `${italicPrefix}700 ${size}px ${SERIF_FAMILY}`,
     letterSpacing: size * HEADING_LETTER_SPACING_EM,
   }
-}
-
-function resolveTextClassName(variant: InlineVariant, marks: MarkState): string {
-  let className = 'frag'
-
-  switch (variant) {
-    case 'heading-1':
-      className += ' frag--heading-1'
-      break
-    case 'heading-2':
-      className += ' frag--heading-2'
-      break
-    case 'body':
-      className += ' frag--body'
-      break
-  }
-
-  if (marks.href !== null) className += ' is-link'
-  if (marks.bold) className += ' is-strong'
-  if (marks.italic) className += ' is-em'
-  if (marks.strike) className += ' is-del'
-  return className
 }
 
 function headingVariant(depth: number): InlineVariant {
@@ -889,14 +777,8 @@ function appendBlockGroup(
   firstMargin: number,
 ): void {
   if (group.length === 0) return
-
-  for (let index = 0; index < group.length; index++) {
-    const block = group[index]!
-    target.push({
-      ...block,
-      marginTop: index === 0 ? (target.length === 0 ? 0 : firstMargin) : block.marginTop,
-    } satisfies PreparedBlock)
-  }
+  group[0]!.marginTop = target.length === 0 ? 0 : firstMargin
+  for (let index = 0; index < group.length; index++) target.push(group[index]!)
 }
 
 function resolveListMarkerText(
@@ -910,16 +792,6 @@ function resolveListMarkerText(
     return `${start + index}.`
   }
   return '•'
-}
-
-function resolveListMarkerClassName(
-  list: Tokens.List,
-  item: Tokens.ListItem,
-): string {
-  if (item.task) return 'block-marker block-marker--task'
-  return list.ordered
-    ? 'block-marker block-marker--ordered'
-    : 'block-marker block-marker--bullet'
 }
 
 function measureMarkerWidth(text: string): number {
@@ -958,13 +830,11 @@ function inlineTokensToPlainText(tokens: readonly Token[]): string {
       case 'escape':
       case 'text':
       case 'html':
+      case 'image':
         text += token.text
         break
       case 'br':
         text += '\n'
-        break
-      case 'image':
-        text += token.text
         break
       default:
         text += fallbackTextForToken(token)
@@ -980,22 +850,22 @@ function stripSingleTrailingNewline(text: string): string {
 type MessageWidths = {
   contentInsetX: number
   contentWidth: number // the width its blocks lay out in
-  maxFrameWidth: number
+  maxBubbleWidth: number
 }
 
 // An assistant message spans the lane. A user bubble is at most
 // BUBBLE_MAX_RATIO of the chat wide, and its padding insets its content.
 function getMessageWidths(role: PreparedChatMessage['role'], chatWidth: number): MessageWidths {
   const laneWidth = Math.max(120, chatWidth - MESSAGE_SIDE_PADDING * 2)
-  const maxFrameWidth = role === 'assistant'
+  const maxBubbleWidth = role === 'assistant'
     ? laneWidth
     : Math.min(laneWidth, Math.max(240, Math.floor(chatWidth * BUBBLE_MAX_RATIO)))
   const contentInsetX = role === 'assistant' ? 0 : BUBBLE_PADDING_X
-  return { contentInsetX, contentWidth: Math.max(120, maxFrameWidth - contentInsetX * 2), maxFrameWidth }
+  return { contentInsetX, contentWidth: Math.max(120, maxBubbleWidth - contentInsetX * 2), maxBubbleWidth }
 }
 
 // A message's bubble height, from line counts alone, so a width change builds
-// no block objects. layoutMessageFrame() places the blocks with the same top
+// no block objects. layoutMessage() places the blocks with the same top
 // padding and block margins.
 function measureMessageHeight(preparedMessage: PreparedChatMessage, contentWidth: number): number {
   let y = BUBBLE_PADDING_Y
@@ -1006,39 +876,11 @@ function measureMessageHeight(preparedMessage: PreparedChatMessage, contentWidth
     if (block.kind === 'inline') {
       lineCount = measureRichInlineStats(block.flow, getBlockLineWidth(block, contentWidth)).lineCount
     } else if (block.kind === 'code') {
-      lineCount = layout(block.prepared, getBlockLineWidth(block, contentWidth), block.lineHeight).lineCount
+      lineCount = layout(block.prepared, getBlockLineWidth(block, contentWidth), CODE_LINE_HEIGHT).lineCount
     }
     y += getBlockHeight(block, lineCount)
   }
   return y + BUBBLE_PADDING_Y
-}
-
-// The blocks and bubble width a visible message paints with. Its bubble height
-// is the message's entry in ConversationLayout.heights.
-export function layoutMessageFrame(preparedMessage: PreparedChatMessage, chatWidth: number): MessageFrame {
-  const { contentInsetX, contentWidth, maxFrameWidth } = getMessageWidths(preparedMessage.role, chatWidth)
-  let y = BUBBLE_PADDING_Y
-  const blocks: BlockFrame[] = []
-  let usedContentWidth = 0
-
-  for (let index = 0; index < preparedMessage.blocks.length; index++) {
-    const block = preparedMessage.blocks[index]!
-    y += block.marginTop
-    const blockFrame = layoutBlockFrame(block, contentWidth, y)
-    blocks.push(blockFrame)
-    y += blockFrame.height
-    usedContentWidth = Math.max(usedContentWidth, getUsedBlockWidth(blockFrame))
-  }
-
-  const frameWidth = preparedMessage.role === 'assistant'
-    ? maxFrameWidth
-    : Math.min(maxFrameWidth, contentInsetX * 2 + Math.max(1, usedContentWidth))
-  return {
-    blocks,
-    contentInsetX,
-    frameWidth,
-    layoutContentWidth: contentWidth,
-  }
 }
 
 // The width a block's lines wrap at: past its indent, and for code, inside its
@@ -1055,184 +897,85 @@ function getBlockHeight(block: PreparedBlock, lineCount: number): number {
     case 'inline':
       return lineCount * block.lineHeight
     case 'code':
-      return lineCount * block.lineHeight + CODE_BLOCK_PADDING_Y * 2
+      return lineCount * CODE_LINE_HEIGHT + CODE_BLOCK_PADDING_Y * 2
     case 'rule':
-      return block.height
+      return RULE_HEIGHT
   }
 }
 
-function layoutBlockFrame(
-  block: PreparedBlock,
-  contentWidth: number,
-  top: number,
-): BlockFrame {
-  switch (block.kind) {
-    case 'inline': {
-      const { lineCount, maxLineWidth } = measureRichInlineStats(block.flow, getBlockLineWidth(block, contentWidth))
-      return {
-        contentLeft: block.contentLeft,
-        height: getBlockHeight(block, lineCount),
-        kind: 'inline',
-        lineHeight: block.lineHeight,
-        markerClassName: block.markerClassName,
-        markerLeft: block.markerLeft,
-        markerText: block.markerText,
-        top,
-        usedWidth: maxLineWidth,
-      }
-    }
-
-    case 'code': {
-      const { lineCount, maxLineWidth } = measureLineStats(block.prepared, getBlockLineWidth(block, contentWidth))
-      return {
-        contentLeft: block.contentLeft,
-        height: getBlockHeight(block, lineCount),
-        kind: 'code',
-        lineHeight: block.lineHeight,
-        markerClassName: block.markerClassName,
-        markerLeft: block.markerLeft,
-        markerText: block.markerText,
-        top,
-        width: maxLineWidth + CODE_BLOCK_PADDING_X * 2,
-      }
-    }
-
-    case 'rule': {
-      return {
-        contentLeft: block.contentLeft,
-        height: getBlockHeight(block, 0),
-        kind: 'rule',
-        markerClassName: block.markerClassName,
-        markerLeft: block.markerLeft,
-        markerText: block.markerText,
-        top,
-      }
-    }
-  }
-}
-
-function getUsedBlockWidth(block: BlockFrame): number {
-  switch (block.kind) {
-    case 'inline':
-      return block.contentLeft + block.usedWidth
-    case 'code':
-      return block.contentLeft + block.width
-    case 'rule':
-      // A rule has no width of its own. It stretches across the final bubble.
-      return block.contentLeft
-  }
-}
-
-export function materializeMessageBlocks(preparedMessage: PreparedChatMessage, frame: MessageFrame): BlockLayout[] {
-  const bubbleContentWidth = frame.frameWidth - frame.contentInsetX * 2
-  return preparedMessage.blocks.map((block, index) =>
-    materializeBlockLayout(block, frame.blocks[index]!, frame.layoutContentWidth, bubbleContentWidth),
-  )
-}
-
+// The blocks, quote rails and bubble placement a visible message paints with,
+// from one walk over each block's lines.
+//
 // A quote's rail runs beside its blocks, from the top of the first to the
 // bottom of the last, across the gaps between them. Each block starts from its
 // own side, indented past every enclosing quote's rail, so a quote with blocks
 // on both sides paints one rail per run of blocks on the same side. A quote's
 // blocks are consecutive, so each block extends its quote's last rail, or opens
 // a new one where the side changes.
-export function materializeQuoteRails(preparedMessage: PreparedChatMessage, frame: MessageFrame): QuoteRailLayout[] {
+export function layoutMessage(preparedMessage: PreparedChatMessage, chatWidth: number): MessageLayout {
+  const { contentInsetX, contentWidth, maxBubbleWidth } = getMessageWidths(preparedMessage.role, chatWidth)
+  const blocks: BlockLayout[] = []
   const rails: QuoteRailLayout[] = []
   const lastRails = new Map<Quote, QuoteRailLayout>()
-  const { blocks } = preparedMessage
-  for (let index = 0; index < blocks.length; index++) {
-    const block = blocks[index]!
-    const blockFrame = frame.blocks[index]!
+  let y = BUBBLE_PADDING_Y
+  let usedContentWidth = 0
+
+  for (let index = 0; index < preparedMessage.blocks.length; index++) {
+    const block = preparedMessage.blocks[index]!
+    y += block.marginTop
     // A message with no paragraph at all is left-to-right.
     const direction = block.direction ?? 'ltr'
+    let blockLayout: BlockLayout
+    switch (block.kind) {
+      case 'inline': {
+        const lines: RichInlineLine[] = []
+        let maxLineWidth = 0
+        walkRichInlineLineRanges(block.flow, getBlockLineWidth(block, contentWidth), range => {
+          lines.push(materializeRichInlineLineRange(block.flow, range))
+          maxLineWidth = Math.max(maxLineWidth, range.width)
+        })
+        usedContentWidth = Math.max(usedContentWidth, block.contentLeft + maxLineWidth)
+        blockLayout = { block, direction, height: getBlockHeight(block, lines.length), kind: 'inline', lines, top: y }
+        break
+      }
+      case 'code': {
+        const { lines } = layoutWithLines(block.prepared, getBlockLineWidth(block, contentWidth), CODE_LINE_HEIGHT)
+        let maxLineWidth = 0
+        for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
+          maxLineWidth = Math.max(maxLineWidth, lines[lineIndex]!.width)
+        }
+        const width = maxLineWidth + CODE_BLOCK_PADDING_X * 2
+        usedContentWidth = Math.max(usedContentWidth, block.contentLeft + width)
+        blockLayout = { block, direction, height: getBlockHeight(block, lines.length), kind: 'code', lines, top: y, width }
+        break
+      }
+      case 'rule':
+        // A rule has no width of its own. It stretches across the final bubble.
+        usedContentWidth = Math.max(usedContentWidth, block.contentLeft)
+        blockLayout = { block, direction, height: getBlockHeight(block, 0), kind: 'rule', top: y }
+        break
+    }
+    blocks.push(blockLayout)
+
     for (let depth = 0; depth < block.quotes.length; depth++) {
       const quote = block.quotes[depth]!
       const rail = lastRails.get(quote)
       if (rail === undefined || rail.direction !== direction) {
-        const opened = { direction, height: blockFrame.height, left: quote.railLeft, top: blockFrame.top }
+        const opened = { direction, height: blockLayout.height, left: quote.railLeft, top: y }
         lastRails.set(quote, opened)
         rails.push(opened)
       } else {
-        rail.height = blockFrame.top + blockFrame.height - rail.top
+        rail.height = y + blockLayout.height - rail.top
       }
     }
+    y += blockLayout.height
   }
-  return rails
-}
 
-function materializeBlockLayout(
-  block: PreparedBlock,
-  frame: BlockFrame,
-  contentWidth: number,
-  bubbleContentWidth: number,
-): BlockLayout {
-  switch (frame.kind) {
-    case 'inline': {
-      if (block.kind !== 'inline') throw new Error('Inline block/frame mismatch')
-      const lines: InlineBlockLayout['lines'] = []
-      walkRichInlineLineRanges(block.flow, getBlockLineWidth(block, contentWidth), range => {
-        const line = materializeRichInlineLineRange(block.flow, range)
-        lines.push({
-          fragments: line.fragments.map(fragment => ({
-            gapItemIndex: fragment.gapItemIndex,
-            href: block.hrefs[fragment.itemIndex] ?? null,
-            itemIndex: fragment.itemIndex,
-            style: block.styles[fragment.itemIndex]!,
-            text: fragment.text,
-          })),
-        })
-      })
-
-      return {
-        contentLeft: frame.contentLeft,
-        direction: block.direction,
-        height: frame.height,
-        hrefs: block.hrefs,
-        kind: 'inline',
-        lineHeight: frame.lineHeight,
-        lines,
-        markerClassName: frame.markerClassName,
-        markerLeft: frame.markerLeft,
-        markerText: frame.markerText,
-        paragraphStyle: block.paragraphStyle,
-        styles: block.styles,
-        top: frame.top,
-        // Rows span the final bubble, so they stay inside a shrinkwrapped one.
-        width: Math.max(1, bubbleContentWidth - frame.contentLeft),
-      }
-    }
-
-    case 'code': {
-      if (block.kind !== 'code') throw new Error('Code block/frame mismatch')
-      const { lines } = layoutWithLines(block.prepared, getBlockLineWidth(block, contentWidth), frame.lineHeight)
-      return {
-        contentLeft: frame.contentLeft,
-        // A message with no paragraph at all is left-to-right.
-        direction: block.direction ?? 'ltr',
-        height: frame.height,
-        kind: 'code',
-        lines,
-        markerClassName: frame.markerClassName,
-        markerLeft: frame.markerLeft,
-        markerText: frame.markerText,
-        top: frame.top,
-        width: frame.width,
-      }
-    }
-
-    case 'rule': {
-      if (block.kind !== 'rule') throw new Error('Rule block/frame mismatch')
-      return {
-        contentLeft: frame.contentLeft,
-        direction: block.direction ?? 'ltr',
-        height: frame.height,
-        kind: 'rule',
-        markerClassName: frame.markerClassName,
-        markerLeft: frame.markerLeft,
-        markerText: frame.markerText,
-        top: frame.top,
-        width: Math.max(1, bubbleContentWidth - frame.contentLeft),
-      }
-    }
-  }
+  const width = preparedMessage.role === 'assistant'
+    ? maxBubbleWidth
+    : Math.min(maxBubbleWidth, contentInsetX * 2 + Math.max(1, usedContentWidth))
+  // An assistant bubble starts at the lane's left edge, a user bubble ends at its
+  // right edge.
+  const left = preparedMessage.role === 'assistant' ? MESSAGE_SIDE_PADDING : chatWidth - MESSAGE_SIDE_PADDING - width
+  return { blocks, contentInsetX, left, rails, width }
 }

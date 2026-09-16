@@ -8,17 +8,16 @@ import {
   findVisibleRange,
   getMaxChatWidth,
   getOcclusionBannerHeight,
+  IMAGE_PADDING_X,
+  INLINE_CODE_PADDING_X,
   layoutConversation,
-  layoutMessageFrame,
+  layoutMessage,
   MARKER_FONT,
-  materializeMessageBlocks,
-  materializeQuoteRails,
-  MESSAGE_SIDE_PADDING,
+  MARKER_FONT_SIZE,
   OCCLUSION_BANNER_HEIGHT,
   TOP_SCROLL_ANCHOR,
   type BlockLayout,
   type ConversationLayout,
-  type MessageFrame,
   type PreparedChatMessage,
   type QuoteRailLayout,
   type ScrollAnchor,
@@ -26,7 +25,7 @@ import {
 } from './markdown-chat.model.ts'
 
 type State = {
-  conversation: ConversationLayout | null
+  conversation: ConversationLayout
   events: {
     toggleVisualization: boolean
   }
@@ -35,25 +34,20 @@ type State = {
   scrollTop: number // where the last frame left the scroll position, as read back
 }
 
-type CachedRow = {
-  bubble: HTMLDivElement
-  row: HTMLElement
-}
-
 const domCache = {
   root: document.documentElement,
   shell: getRequiredElement('chat-shell'),
   viewport: getRequiredDiv('chat-viewport'),
   canvas: getRequiredDiv('chat-canvas'),
   toggleButton: getRequiredButton('virtualization-toggle'),
-  rows: [] as Array<CachedRow | undefined>, // cache lifetime: on visibility changes
+  rows: [] as Array<HTMLElement | undefined>, // cache lifetime: on visibility changes
   mountedStart: 0, // cache lifetime: on visibility changes
   mountedEnd: 0, // cache lifetime: on visibility changes
 }
 
 const preparedMessages = createPreparedChatMessages()
 const st: State = {
-  conversation: null,
+  conversation: layoutConversation(preparedMessages, getMaxChatWidth(domCache.viewport.clientWidth)),
   events: {
     toggleVisualization: false,
   },
@@ -64,9 +58,11 @@ const st: State = {
 
 let scheduledRaf: number | null = null
 
-domCache.root.style.setProperty('--message-side-padding', `${MESSAGE_SIDE_PADDING}px`)
 domCache.root.style.setProperty('--marker-font', MARKER_FONT)
 domCache.root.style.setProperty('--code-font', CODE_FONT)
+domCache.root.style.setProperty('--code-line-height', `${CODE_LINE_HEIGHT}px`)
+domCache.root.style.setProperty('--inline-code-padding-x', `${INLINE_CODE_PADDING_X}px`)
+domCache.root.style.setProperty('--image-padding-x', `${IMAGE_PADDING_X}px`)
 
 domCache.toggleButton.addEventListener('click', () => {
   st.events.toggleVisualization = true
@@ -76,7 +72,6 @@ domCache.toggleButton.addEventListener('click', () => {
 domCache.viewport.addEventListener('scroll', scheduleRender, { passive: true })
 window.addEventListener('resize', scheduleRender)
 
-await document.fonts.ready
 scheduleRender()
 
 function getRequiredDiv(id: string): HTMLDivElement {
@@ -117,11 +112,8 @@ function render(): void {
 
   const chatWidth = getMaxChatWidth(viewportWidth)
   const previousConversation = st.conversation
-  const canReuseConversation = previousConversation !== null && previousConversation.chatWidth === chatWidth
-  const conversation = canReuseConversation
-    ? previousConversation
-    : layoutConversation(preparedMessages, chatWidth)
-  const needsRelayout = !canReuseConversation
+  const needsRelayout = previousConversation.chatWidth !== chatWidth
+  const conversation = needsRelayout ? layoutConversation(preparedMessages, chatWidth) : previousConversation
 
   // st.scrollTop is where the last frame left the scroll position, so any other
   // value is the user's scroll: anchor the first message whose top shows below
@@ -130,7 +122,7 @@ function render(): void {
   // the range.
   const scrollAnchor = scrollTop === st.scrollTop
     ? st.scrollAnchor
-    : findScrollAnchor(previousConversation ?? conversation, scrollTop, viewportHeight, occlusionBannerHeight)
+    : findScrollAnchor(previousConversation, scrollTop, viewportHeight, occlusionBannerHeight)
   const canvasHeight = conversation.totalHeight + occlusionBannerHeight * 2
   const adjustedScrollTop = Math.min(
     Math.max(0, canvasHeight - viewportHeight),
@@ -138,10 +130,6 @@ function render(): void {
   )
 
   const { start, end } = findVisibleRange(conversation, adjustedScrollTop, viewportHeight, occlusionBannerHeight)
-  const visibleFrames = new Array<MessageFrame>(end - start)
-  for (let index = start; index < end; index++) {
-    visibleFrames[index - start] = layoutMessageFrame(preparedMessages[index]!, chatWidth)
-  }
 
   st.conversation = conversation
   st.isVisualizationOn = isVisualizationOn
@@ -151,7 +139,6 @@ function render(): void {
   domCache.root.style.setProperty('--chat-width', `${chatWidth}px`)
   domCache.root.style.setProperty('--chat-viewport-width', `${viewportWidth}px`)
   domCache.root.style.setProperty('--occlusion-banner-height', `${occlusionBannerHeight}px`)
-  domCache.root.style.setProperty('--occlusion-banner-padding-block', isCompactOcclusionChrome ? '6px' : '12px')
   domCache.root.style.setProperty('--virtualization-toggle-padding-block', isCompactOcclusionChrome ? '8px' : '10px')
   domCache.root.style.setProperty('--virtualization-toggle-padding-inline', isCompactOcclusionChrome ? '12px' : '14px')
   domCache.root.style.setProperty('--virtualization-toggle-font-size', isCompactOcclusionChrome ? '11px' : '12px')
@@ -164,7 +151,7 @@ function render(): void {
     : 'Show virtualization mask'
   domCache.toggleButton.setAttribute('aria-pressed', String(isVisualizationOn))
 
-  projectVisibleRows(conversation, occlusionBannerHeight, visibleFrames, start, end, needsRelayout)
+  projectVisibleRows(conversation, occlusionBannerHeight, start, end, needsRelayout)
 
   // The last effect. Browsers round scrollTop, so store the position read back,
   // not the one asked for, or the next frame would take it for a user scroll.
@@ -177,162 +164,116 @@ function render(): void {
   }
 }
 
+// Rows that stop showing leave. A row that starts showing goes before the first
+// row kept when it's above that row, else last, so the canvas holds its rows in
+// message order.
 function projectVisibleRows(
   conversation: ConversationLayout,
   occlusionBannerHeight: number,
-  visibleFrames: readonly MessageFrame[],
   start: number,
   end: number,
   needsRelayout: boolean,
 ): void {
-  const { heights, tops } = conversation
+  const { chatWidth, heights, tops } = conversation
   const previousStart = domCache.mountedStart
   const previousEnd = domCache.mountedEnd
-  const overlapStart = Math.max(start, previousStart)
-  const overlapEnd = Math.min(end, previousEnd)
-
-  for (let index = previousStart; index < Math.min(previousEnd, start); index++) {
-    const node = domCache.rows[index]
-    if (node === undefined) continue
-    node.row.remove()
+  for (let index = previousStart; index < previousEnd; index++) {
+    if (index >= start && index < end) continue
+    domCache.rows[index]!.remove()
     domCache.rows[index] = undefined
   }
 
-  for (let index = Math.max(previousStart, end); index < previousEnd; index++) {
-    const node = domCache.rows[index]
-    if (node === undefined) continue
-    node.row.remove()
-    domCache.rows[index] = undefined
-  }
-
-  if (overlapStart >= overlapEnd) {
-    for (let index = start; index < end; index++) {
-      const cachedRow = prepareRow(index, visibleFrames[index - start]!, needsRelayout)
-      projectMessageNode(cachedRow, visibleFrames[index - start]!, occlusionBannerHeight + tops[index]!, heights[index]!)
-      if (cachedRow.row.parentNode === null) domCache.canvas.append(cachedRow.row)
+  const keptStart = Math.max(start, previousStart)
+  const firstKeptRow = keptStart < Math.min(end, previousEnd) ? domCache.rows[keptStart]! : null
+  for (let index = start; index < end; index++) {
+    const preparedMessage = preparedMessages[index]!
+    let row = domCache.rows[index]
+    if (row === undefined) {
+      row = document.createElement('article')
+      row.className = `msg msg--${preparedMessage.role}`
+      domCache.rows[index] = row
+      renderMessageContents(row, preparedMessage, chatWidth, heights[index]!)
+      domCache.canvas.insertBefore(row, index < keptStart ? firstKeptRow : null)
+    } else if (needsRelayout) {
+      renderMessageContents(row, preparedMessage, chatWidth, heights[index]!)
     }
-  } else {
-    let anchorRow = domCache.rows[overlapStart]?.row ?? null
-    for (let index = overlapStart - 1; index >= start; index--) {
-      const cachedRow = prepareRow(index, visibleFrames[index - start]!, needsRelayout)
-      projectMessageNode(cachedRow, visibleFrames[index - start]!, occlusionBannerHeight + tops[index]!, heights[index]!)
-      if (anchorRow === null) {
-        if (cachedRow.row.parentNode === null) domCache.canvas.append(cachedRow.row)
-      } else if (cachedRow.row.parentNode !== domCache.canvas || cachedRow.row.nextSibling !== anchorRow) {
-        domCache.canvas.insertBefore(cachedRow.row, anchorRow)
-      }
-      anchorRow = cachedRow.row
-    }
-
-    for (let index = overlapStart; index < overlapEnd; index++) {
-      const cachedRow = prepareRow(index, visibleFrames[index - start]!, needsRelayout)
-      projectMessageNode(cachedRow, visibleFrames[index - start]!, occlusionBannerHeight + tops[index]!, heights[index]!)
-    }
-
-    for (let index = overlapEnd; index < end; index++) {
-      const cachedRow = prepareRow(index, visibleFrames[index - start]!, needsRelayout)
-      projectMessageNode(cachedRow, visibleFrames[index - start]!, occlusionBannerHeight + tops[index]!, heights[index]!)
-      if (cachedRow.row.parentNode === null) domCache.canvas.append(cachedRow.row)
-    }
+    row.style.top = `${occlusionBannerHeight + tops[index]!}px`
   }
 
   domCache.mountedStart = start
   domCache.mountedEnd = end
 }
 
-function prepareRow(
-  index: number,
-  frame: MessageFrame,
-  needsRelayout: boolean,
-): CachedRow {
-  const preparedMessage = preparedMessages[index]!
-  let cachedRow = domCache.rows[index]
-  if (cachedRow === undefined) {
-    cachedRow = createMessageShell(preparedMessage.role)
-    domCache.rows[index] = cachedRow
-    renderMessageContents(cachedRow.bubble, preparedMessage, frame)
-    return cachedRow
-  }
-  if (needsRelayout) renderMessageContents(cachedRow.bubble, preparedMessage, frame)
-  return cachedRow
-}
-
-function createMessageShell(role: PreparedChatMessage['role']): CachedRow {
-  const row = document.createElement('article')
-  row.className = `msg msg--${role}`
-
-  const bubble = document.createElement('div')
-  bubble.className = 'msg-bubble'
-
-  row.append(bubble)
-  return { bubble, row }
-}
-
+// A row is its message's bubble. Its contents, side and size follow the chat
+// width, so they're laid out and written when the row is created and when the
+// chat width changes.
 function renderMessageContents(
-  bubble: HTMLDivElement,
+  row: HTMLElement,
   preparedMessage: PreparedChatMessage,
-  frame: MessageFrame,
-): void {
-  const fragment = document.createDocumentFragment()
-  const rails = materializeQuoteRails(preparedMessage, frame)
-  for (let index = 0; index < rails.length; index++) {
-    fragment.append(renderQuoteRail(rails[index]!, frame.contentInsetX))
-  }
-  const blocks = materializeMessageBlocks(preparedMessage, frame)
-  for (let index = 0; index < blocks.length; index++) {
-    fragment.append(renderBlock(blocks[index]!, frame.contentInsetX))
-  }
-  bubble.replaceChildren(fragment)
-}
-
-function projectMessageNode(
-  cachedRow: CachedRow,
-  frame: MessageFrame,
-  top: number,
+  chatWidth: number,
   height: number,
 ): void {
-  cachedRow.row.style.top = `${top}px`
-  cachedRow.row.style.height = `${height}px`
-  cachedRow.bubble.style.width = `${frame.frameWidth}px`
-  cachedRow.bubble.style.height = `${height}px`
+  const { blocks, contentInsetX, left, rails, width } = layoutMessage(preparedMessage, chatWidth)
+  // Lines and rules span the final bubble, so they stay inside a shrinkwrapped one.
+  const contentWidth = width - contentInsetX * 2
+  const fragment = document.createDocumentFragment()
+  for (let index = 0; index < rails.length; index++) {
+    fragment.append(renderQuoteRail(rails[index]!, contentInsetX))
+  }
+  for (let index = 0; index < blocks.length; index++) {
+    renderBlock(fragment, blocks[index]!, contentInsetX, contentWidth)
+  }
+  row.replaceChildren(fragment)
+  row.style.left = `${left}px`
+  row.style.width = `${width}px`
+  row.style.height = `${height}px`
 }
 
-function renderBlock(block: BlockLayout, contentInsetX: number): HTMLElement {
+// A block's nodes go straight into the bubble, offset by the block's top.
+function renderBlock(
+  parent: DocumentFragment,
+  layout: BlockLayout,
+  contentInsetX: number,
+  contentWidth: number,
+): void {
   // A right-to-left block starts its indent and marker from the right.
-  const start = block.direction === 'rtl' ? 'right' : 'left'
-  switch (block.kind) {
+  const start = layout.direction === 'rtl' ? 'right' : 'left'
+  appendMarker(parent, layout, contentInsetX, start)
+  switch (layout.kind) {
     case 'inline':
-      return renderInlineBlock(block, contentInsetX, start)
+      return renderInlineBlock(parent, layout, contentInsetX, contentWidth, start)
     case 'code':
-      return renderCodeBlock(block, contentInsetX, start)
+      return renderCodeBlock(parent, layout, contentInsetX, start)
     case 'rule':
-      return renderRuleBlock(block, contentInsetX, start)
+      return renderRuleBlock(parent, layout, contentInsetX, contentWidth, start)
   }
 }
 
 function renderInlineBlock(
-  block: Extract<BlockLayout, { kind: 'inline' }>,
+  parent: DocumentFragment,
+  layout: Extract<BlockLayout, { kind: 'inline' }>,
   contentInsetX: number,
+  contentWidth: number,
   start: 'left' | 'right',
-): HTMLElement {
-  const wrapper = createBlockShell(block, 'block block--inline', contentInsetX, start)
-
-  for (let lineIndex = 0; lineIndex < block.lines.length; lineIndex++) {
-    const line = block.lines[lineIndex]!
+): void {
+  const { block } = layout
+  for (let lineIndex = 0; lineIndex < layout.lines.length; lineIndex++) {
+    const line = layout.lines[lineIndex]!
     // Each Pretext line is one line box, so the browser orders its bidi runs.
     // The paragraph style sets the baseline.
     const row = document.createElement('div')
     row.className = 'inline-line'
-    row.dir = block.direction
+    row.dir = layout.direction
     applyTextStyle(row, block.paragraphStyle)
     row.style.lineHeight = `${block.lineHeight}px`
     row.style[start] = `${contentInsetX + block.contentLeft}px`
-    row.style.top = `${lineIndex * block.lineHeight}px`
-    row.style.width = `${block.width}px`
+    row.style.top = `${layout.top + lineIndex * block.lineHeight}px`
+    row.style.width = `${Math.max(1, contentWidth - block.contentLeft)}px`
 
+    let previousNode: HTMLElement | null = null
     for (let fragmentIndex = 0; fragmentIndex < line.fragments.length; fragmentIndex++) {
       const fragment = line.fragments[fragmentIndex]!
-      const node = renderInlineFragment(fragment.style, fragment.href, fragment.text)
+      const node = renderInlineFragment(block.styles[fragment.itemIndex]!, block.hrefs[fragment.itemIndex]!, fragment.text)
       // A collapsed space paints inside the element of the item whose font
       // measured it: this fragment's, the previous fragment's, or, for an item
       // holding only whitespace, an element of its own.
@@ -340,33 +281,32 @@ function renderInlineBlock(
       if (gapItemIndex === fragment.itemIndex) {
         node.prepend(' ')
       } else if (gapItemIndex >= 0 && gapItemIndex === line.fragments[fragmentIndex - 1]?.itemIndex) {
-        row.lastElementChild!.append(' ')
+        previousNode!.append(' ')
       } else if (gapItemIndex >= 0) {
-        row.append(renderInlineFragment(block.styles[gapItemIndex]!, block.hrefs[gapItemIndex] ?? null, ' '))
+        row.append(renderInlineFragment(block.styles[gapItemIndex]!, block.hrefs[gapItemIndex]!, ' '))
       }
       row.append(node)
+      previousNode = node
     }
-    wrapper.append(row)
+    parent.append(row)
   }
-
-  return wrapper
 }
 
 function renderCodeBlock(
-  block: Extract<BlockLayout, { kind: 'code' }>,
+  parent: DocumentFragment,
+  layout: Extract<BlockLayout, { kind: 'code' }>,
   contentInsetX: number,
   start: 'left' | 'right',
-): HTMLElement {
-  const wrapper = createBlockShell(block, 'block block--code-shell', contentInsetX, start)
-
+): void {
   const codeBox = document.createElement('div')
   codeBox.className = 'code-box'
-  codeBox.style[start] = `${contentInsetX + block.contentLeft}px`
-  codeBox.style.width = `${block.width}px`
-  codeBox.style.height = `${block.height}px`
+  codeBox.style[start] = `${contentInsetX + layout.block.contentLeft}px`
+  codeBox.style.top = `${layout.top}px`
+  codeBox.style.width = `${layout.width}px`
+  codeBox.style.height = `${layout.height}px`
 
-  for (let lineIndex = 0; lineIndex < block.lines.length; lineIndex++) {
-    const line = block.lines[lineIndex]!
+  for (let lineIndex = 0; lineIndex < layout.lines.length; lineIndex++) {
+    const line = layout.lines[lineIndex]!
     const row = document.createElement('div')
     row.className = 'code-line'
     // Code reads left to right inside its box, whichever side the box starts from.
@@ -376,38 +316,22 @@ function renderCodeBlock(
     codeBox.append(row)
   }
 
-  wrapper.append(codeBox)
-  return wrapper
+  parent.append(codeBox)
 }
 
 function renderRuleBlock(
-  block: Extract<BlockLayout, { kind: 'rule' }>,
+  parent: DocumentFragment,
+  layout: Extract<BlockLayout, { kind: 'rule' }>,
   contentInsetX: number,
+  contentWidth: number,
   start: 'left' | 'right',
-): HTMLElement {
-  const wrapper = createBlockShell(block, 'block block--rule-shell', contentInsetX, start)
+): void {
   const rule = document.createElement('div')
   rule.className = 'rule-line'
-  rule.style[start] = `${contentInsetX + block.contentLeft}px`
-  rule.style.top = `${Math.floor(block.height / 2)}px`
-  rule.style.width = `${block.width}px`
-  wrapper.append(rule)
-  return wrapper
-}
-
-function createBlockShell(
-  block: BlockLayout,
-  className: string,
-  contentInsetX: number,
-  start: 'left' | 'right',
-): HTMLDivElement {
-  const wrapper = document.createElement('div')
-  wrapper.className = className
-  wrapper.style.top = `${block.top}px`
-  wrapper.style.height = `${block.height}px`
-
-  appendMarker(wrapper, block, contentInsetX, start)
-  return wrapper
+  rule.style[start] = `${contentInsetX + layout.block.contentLeft}px`
+  rule.style.top = `${layout.top + Math.floor(layout.height / 2)}px`
+  rule.style.width = `${Math.max(1, contentWidth - layout.block.contentLeft)}px`
+  parent.append(rule)
 }
 
 // A rail starts from the side of the blocks it runs beside.
@@ -421,30 +345,33 @@ function renderQuoteRail(rail: QuoteRailLayout, contentInsetX: number): HTMLElem
 }
 
 function appendMarker(
-  wrapper: HTMLDivElement,
-  block: BlockLayout,
+  parent: DocumentFragment,
+  layout: BlockLayout,
   contentInsetX: number,
   start: 'left' | 'right',
 ): void {
-  if (block.markerText === null || block.markerLeft === null || block.markerClassName === null) return
+  const { marker } = layout.block
+  if (marker === null) return
 
-  const marker = document.createElement('span')
-  marker.className = block.markerClassName
-  marker.dir = block.direction
-  marker.style[start] = `${contentInsetX + block.markerLeft}px`
-  marker.style.top = `${markerTop(block)}px`
-  marker.textContent = block.markerText
-  wrapper.append(marker)
+  const node = document.createElement('span')
+  node.className = 'block-marker'
+  node.dir = layout.direction
+  node.style[start] = `${contentInsetX + marker.left}px`
+  node.style.top = `${layout.top + markerTop(layout)}px`
+  node.textContent = marker.text
+  parent.append(node)
 }
 
-function markerTop(block: BlockLayout): number {
-  switch (block.kind) {
-    case 'code':
-      return CODE_BLOCK_PADDING_Y
+// A marker's box is one em of the marker font tall. Its center sits on the
+// center of the first line it marks, or of a rule's block.
+function markerTop(layout: BlockLayout): number {
+  switch (layout.kind) {
     case 'inline':
-      return Math.max(0, Math.round((block.lineHeight - 12) / 2))
+      return (layout.block.lineHeight - MARKER_FONT_SIZE) / 2
+    case 'code':
+      return CODE_BLOCK_PADDING_Y + (CODE_LINE_HEIGHT - MARKER_FONT_SIZE) / 2
     case 'rule':
-      return 0
+      return (layout.height - MARKER_FONT_SIZE) / 2
   }
 }
 

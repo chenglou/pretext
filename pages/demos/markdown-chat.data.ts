@@ -66,8 +66,8 @@ const BASE_MESSAGE_SPECS: MarkdownChatSeed[] = [
     'const conversation = layoutConversation(preparedMessages, width)',
     'const visible = findVisibleRange(conversation, scrollTop, viewportHeight, bannerHeight)',
     'for (let index = visible.start; index < visible.end; index++) {',
-    '  const frame = layoutMessageFrame(preparedMessages[index], width)',
-    '  renderMessage(frame, bannerHeight + conversation.tops[index], conversation.heights[index])',
+    '  const message = layoutMessage(preparedMessages[index], width)',
+    '  renderMessage(message, bannerHeight + conversation.tops[index], conversation.heights[index])',
     '}',
     '```',
   ),
@@ -258,7 +258,7 @@ const BASE_MESSAGE_SPECS: MarkdownChatSeed[] = [
   ),
   message(
     'assistant',
-    'That is one of the better parts of the demo right now: width changes rebuild the frame and remount only the visible window.',
+    'That is one of the better parts of the demo right now: width changes recompute every height and re-render only the visible window.',
   ),
   message(
     'user',
