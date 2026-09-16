@@ -21,9 +21,13 @@ import { createMarkdownChatSpecs, type MarkdownChatSeed } from './markdown-chat.
 export const MAX_CHAT_WIDTH = 860
 export const TOTAL_MESSAGE_COUNT = 10_000
 // History loads and unloads in chunks of this many messages. Preparing a chunk
-// is the most work a frame does: in Chrome on an M5 Max, 50 messages load within
-// a 120 Hz frame, and twice as many take twice as long.
-const HISTORY_CHUNK_SIZE = 50
+// is the most work a frame does, and it grows with the messages prepared. In
+// Chrome on an M5 Max, a first visit that loads a chunk and mounts every row on
+// screen takes 2.8 ms at the median and 4.7 ms at the 99th percentile with 24
+// messages, against 4.1 and 8.0 ms with 50. At the widest chat, 24 messages are
+// at least about 1,900 px tall, so the first frame's two chunks fill a room of
+// about 3,800 px.
+const HISTORY_CHUNK_SIZE = 24
 // The most chunks loaded at once, unless the chunks on screen and one on either
 // side need more. While every chunk is taller than the room between the banners,
 // the screen shows at most two chunks, so the window wants at most four. With
