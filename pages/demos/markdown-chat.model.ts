@@ -319,9 +319,9 @@ export function createChatHistory(): MarkdownChatSeed[] {
 // more than HISTORY_WINDOW_CHUNKS, drops its first or last chunk, whichever is
 // farther from the kept ones, unless that chunk is one of those. Kept messages
 // are loaded ones, so once anything has been shown, a move loads at most one
-// chunk on either side. A window whose
-// chunks or chat width change is a new object, laid out again. Before the first
-// frame there's no window, and it loads around the kept messages.
+// chunk on either side. A window whose chunks or chat width change is a new
+// object, laid out again. Before the first frame there's no window, and it loads
+// around the kept messages.
 export function moveHistoryWindow(
   history: readonly MarkdownChatSeed[],
   historyWindow: HistoryWindow | null,
@@ -340,7 +340,9 @@ export function moveHistoryWindow(
     historyWindow !== null &&
     historyWindow.layout.chatWidth === chatWidth &&
     firstChunk <= firstWantedChunk &&
-    lastChunk >= lastWantedChunk
+    lastChunk >= lastWantedChunk &&
+    (lastChunk - firstChunk + 1 <= HISTORY_WINDOW_CHUNKS ||
+      (firstChunk === firstWantedChunk && lastChunk === lastWantedChunk))
   ) {
     return historyWindow
   }
