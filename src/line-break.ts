@@ -789,6 +789,13 @@ function walkPreparedComplexLines(
           if (hangEndSegmentIndex !== i) hangStartWidth = lineW + leadingSpacing
           hangEndSegmentIndex = i + 1
         }
+        // Where glue can't hold a line, glue at a line start isn't the line's content:
+        // the segment after it starts the line, however wide.
+        if (!hasContent && kind === 'zero-width-glue' && !engineProfile.zeroWidthGlueTakesLine) {
+          lineEndSegmentIndex = i + 1
+          lineEndGraphemeIndex = 0
+          continue
+        }
         if (!hasContent) {
           if (startGraphemeIndex > 0) {
             const line = appendBreakableSegmentFrom(i, startGraphemeIndex)

@@ -85,7 +85,16 @@ emergency break give it a line of its own; the September 15 installed gate lost 
 Chrome and Safari rows that way, such as `a`, U+00AD, U+0301, U+00AD, U+0323, `b` at
 7px in 16px Arial with letter spacing −4, which both browsers paint as `a` / `b`.
 Where a line can still end after the ZWSP or soft hyphen, before a space, tab or hard
-break, it keeps its kind. The walkers end a line only where the scan breaks: prepared
+break, it keeps its kind. Blink's break-anywhere retry and WebKit's grapheme search
+can still give glue a line of its own when the grapheme after it doesn't fit: Chrome
+paints `abc`, U+00AD, `)def` at 1px as `a` / `b` / `c` / U+00AD / `)` / `d` / `e` / `f`.
+Gecko can't. It drops soft hyphens from its text run, so a soft hyphen at the start
+offers no break and isn't a cluster, and it clusters a ZWSP with the marks after it, so
+in the Gecko profile glue at a line start isn't the line's content and the segment after
+it starts the line however wide it is. Letting the glue start the line gave `SHY a SHY b`
+at 0px an empty first line, which the Gecko scan's installed gate lost on 428 Firefox
+rows; applying the same rule to the Chrome and Safari profiles loses 101 Chrome and 866
+Safari rows in an offline replay. The walkers end a line only where the scan breaks: prepared
 text records the segments that follow no break, a line that overflows before one
 returns to its last break, and a line without one fills graphemes across the unbroken
 run, as Blink's break-anywhere retry and WebKit's `TextUtil::breakWord` do. Ending at

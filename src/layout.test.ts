@@ -964,6 +964,37 @@ describe('boundary-policy regressions', () => {
     }
   })
 
+  test('zero-width glue at a line start holds the line only where the engine lets it', async () => {
+    const { getEngineProfile } = await import('./measurement.ts')
+    const profile = getEngineProfile()
+    const previous = { lineBreakScan: profile.lineBreakScan, zeroWidthGlueTakesLine: profile.zeroWidthGlueTakesLine }
+    try {
+      const lines = (text: string, width: number) => {
+        const prepared = prepareWithSegments(text, FONT)
+        const result = layoutWithLines(prepared, width, LINE_HEIGHT)
+        expect(collectStreamedLines(prepared, width)).toEqual(result.lines)
+        expect(layout(prepare(text, FONT), width, LINE_HEIGHT).lineCount).toBe(result.lineCount)
+        return result.lines.map(line => slicePreparedText(prepared, line.start, line.end))
+      }
+      // Blink has no break between a soft hyphen and a closing bracket, and its
+      // break-anywhere retry gives the soft hyphen a line of its own, as Chrome paints it.
+      profile.lineBreakScan = 'blink'
+      profile.zeroWidthGlueTakesLine = true
+      expect(prepareWithSegments('ab­)c', FONT).kinds[1]).toBe('zero-width-glue')
+      expect(lines('ab­)c', 1)).toEqual(['a', 'b', '­', ')', 'c'])
+      // Gecko drops a soft hyphen from its text run, so one at the start offers no break
+      // and holds no line.
+      profile.lineBreakScan = 'gecko'
+      profile.zeroWidthGlueTakesLine = false
+      expect(prepareWithSegments('­a­b', FONT).kinds[0]).toBe('zero-width-glue')
+      expect(lines('­a­b', 0)).toEqual(['­a­', 'b'])
+      expect(lines('­b', 1)).toEqual(['­b'])
+    } finally {
+      profile.lineBreakScan = previous.lineBreakScan
+      profile.zeroWidthGlueTakesLine = previous.zeroWidthGlueTakesLine
+    }
+  })
+
   test('a line ends only where the scan breaks, and marks after zero-width glue shape after the source before them', async () => {
     const { getEngineProfile } = await import('./measurement.ts')
     const profile = getEngineProfile()
