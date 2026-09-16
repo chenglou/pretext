@@ -4,18 +4,20 @@ import {
   CODE_FONT,
   CODE_LINE_HEIGHT,
   createChatHistory,
+  dropHistoryChunks,
+  findAnchoredScrollTop,
   findScrollAnchor,
   findVisibleRange,
   getMaxChatWidth,
+  getMessageTopAnchor,
   getOcclusionBannerHeight,
   layoutMessageFrame,
+  loadHistoryChunks,
   MARKER_FONT,
   materializeMessageBlocks,
   materializeQuoteRails,
   MESSAGE_SIDE_PADDING,
-  moveHistoryWindow,
   OCCLUSION_BANNER_HEIGHT,
-  TOP_SCROLL_ANCHOR,
   type BlockLayout,
   type HistoryWindow,
   type MessageFrame,
@@ -27,6 +29,8 @@ import {
 
 type State = {
   events: {
+    jumpKey: 'first' | 'last' | null // the last key pressed this frame that jumps to the history's first or last message
+    navigated: boolean // the page opened or its URL's fragment changed
     toggleVisualization: boolean
   }
   historyWindow: HistoryWindow | null // laid out as the screen shows it; null before the first frame
@@ -54,11 +58,13 @@ const domCache = {
 const history = createChatHistory()
 const st: State = {
   events: {
+    jumpKey: null,
+    navigated: true,
     toggleVisualization: false,
   },
   historyWindow: null,
   isVisualizationOn: false,
-  scrollAnchor: TOP_SCROLL_ANCHOR,
+  scrollAnchor: getMessageTopAnchor(0),
   scrollTop: 0,
 }
 
@@ -75,6 +81,25 @@ domCache.toggleButton.addEventListener('click', () => {
 
 domCache.viewport.addEventListener('scroll', scheduleRender, { passive: true })
 window.addEventListener('resize', scheduleRender)
+// The browser's Home and End, and Command-Up and Command-Down on a Mac, scroll to
+// an end of the scroll range, which holds only the loaded chunks. These jump to
+// the history's first and last messages instead.
+window.addEventListener('keydown', event => {
+  if (event.altKey || event.ctrlKey || event.shiftKey) return
+  if (event.metaKey ? event.key === 'ArrowUp' : event.key === 'Home') {
+    st.events.jumpKey = 'first'
+  } else if (event.metaKey ? event.key === 'ArrowDown' : event.key === 'End') {
+    st.events.jumpKey = 'last'
+  } else {
+    return
+  }
+  event.preventDefault()
+  scheduleRender()
+})
+window.addEventListener('hashchange', () => {
+  st.events.navigated = true
+  scheduleRender()
+})
 
 await document.fonts.ready
 scheduleRender()
@@ -109,42 +134,81 @@ function render(): void {
   const viewportWidth = domCache.viewport.clientWidth
   const viewportHeight = domCache.viewport.clientHeight
   const scrollTop = domCache.viewport.scrollTop
+  const hash = location.hash
   const occlusionBannerHeight = getOcclusionBannerHeight(viewportHeight)
   const isCompactOcclusionChrome = occlusionBannerHeight < OCCLUSION_BANNER_HEIGHT
 
   let isVisualizationOn = st.isVisualizationOn
   if (st.events.toggleVisualization) isVisualizationOn = !isVisualizationOn
 
+  // A jump: a key to the first or last message, else the message the URL links
+  // to when the page opens or the link changes.
+  let jumpOrdinal = st.events.navigated ? parseMessageLink(hash, history.length) : null
+  switch (st.events.jumpKey) {
+    case 'first':
+      jumpOrdinal = 0
+      break
+    case 'last':
+      jumpOrdinal = history.length - 1
+      break
+    case null:
+      break
+  }
+
   const chatWidth = getMaxChatWidth(viewportWidth)
   const previousWindow = st.historyWindow
 
-  // st.scrollTop is where the last frame left the scroll position, so any other
-  // value is the user's scroll: anchor the first message whose top shows below
-  // the top banner, in the layout they scrolled. Otherwise, or before the first
-  // layout, keep the anchor. Either way, scroll so its top keeps its distance
-  // below the banner, within the range, so loading or unloading a chunk above
-  // doesn't move what's shown.
-  const scrollAnchor = scrollTop === st.scrollTop || previousWindow === null
-    ? st.scrollAnchor
-    : findScrollAnchor(previousWindow, scrollTop, viewportHeight, occlusionBannerHeight)
-  // The window keeps the anchor, which the scroll below needs, and what the
-  // screen shows: the last frame's layout, scrolled to scrollTop.
+  // A jump anchors its message's top where the first message's top sits at the
+  // top of the chat. Otherwise st.scrollTop is where the last frame left the
+  // scroll position, so any other value is the user's scroll: anchor the first
+  // message whose top shows below the top banner, in the layout they scrolled.
+  // Otherwise, or before the first layout, keep the anchor. Either way, scroll so
+  // its top keeps its distance below the banner, within the range, so loading or
+  // unloading a chunk above doesn't move what's shown.
+  let scrollAnchor = st.scrollAnchor
+  if (jumpOrdinal !== null) {
+    scrollAnchor = getMessageTopAnchor(jumpOrdinal)
+  } else if (previousWindow !== null && scrollTop !== st.scrollTop) {
+    scrollAnchor = findScrollAnchor(previousWindow, scrollTop, viewportHeight, occlusionBannerHeight)
+  }
+  // The window keeps the anchor, which the scroll below needs, and unless the
+  // frame jumps, what the screen shows: the last frame's layout, scrolled to
+  // scrollTop. Then it loads what the screen shows once scrolled, until it holds
+  // all of that, so the frame shows every message after a jump, a new width or a
+  // taller room. It drops chunks only then, so it never drops one it has to
+  // prepare again.
   let firstKeptOrdinal = scrollAnchor.ordinal
   let lastKeptOrdinal = scrollAnchor.ordinal
-  if (previousWindow !== null) {
+  if (jumpOrdinal === null && previousWindow !== null) {
     const shown = findVisibleRange(previousWindow.layout, scrollTop, viewportHeight, occlusionBannerHeight)
     firstKeptOrdinal = Math.min(firstKeptOrdinal, previousWindow.firstOrdinal + shown.start)
     lastKeptOrdinal = Math.max(lastKeptOrdinal, previousWindow.firstOrdinal + shown.end - 1)
   }
-  const historyWindow = moveHistoryWindow(history, previousWindow, firstKeptOrdinal, lastKeptOrdinal, chatWidth)
+  let historyWindow = loadHistoryChunks(history, previousWindow, firstKeptOrdinal, lastKeptOrdinal, chatWidth)
+  for (;;) {
+    const shown = findVisibleRange(
+      historyWindow.layout,
+      findAnchoredScrollTop(historyWindow, history.length, scrollAnchor, viewportHeight, occlusionBannerHeight),
+      viewportHeight,
+      occlusionBannerHeight,
+    )
+    firstKeptOrdinal = Math.min(firstKeptOrdinal, historyWindow.firstOrdinal + shown.start)
+    lastKeptOrdinal = Math.max(lastKeptOrdinal, historyWindow.firstOrdinal + shown.end - 1)
+    const loadedWindow = loadHistoryChunks(history, historyWindow, firstKeptOrdinal, lastKeptOrdinal, chatWidth)
+    if (loadedWindow === historyWindow) break
+    historyWindow = loadedWindow
+  }
+  historyWindow = dropHistoryChunks(historyWindow, firstKeptOrdinal, lastKeptOrdinal)
   const conversation = historyWindow.layout
   // A mounted row keeps its contents when only the window changes.
   const needsRelayout = previousWindow === null || previousWindow.layout.chatWidth !== chatWidth
-
   const canvasHeight = conversation.totalHeight + occlusionBannerHeight * 2
-  const adjustedScrollTop = Math.min(
-    Math.max(0, canvasHeight - viewportHeight),
-    Math.max(0, conversation.tops[scrollAnchor.ordinal - historyWindow.firstOrdinal]! - scrollAnchor.offset),
+  const adjustedScrollTop = findAnchoredScrollTop(
+    historyWindow,
+    history.length,
+    scrollAnchor,
+    viewportHeight,
+    occlusionBannerHeight,
   )
 
   const { start, end } = findVisibleRange(conversation, adjustedScrollTop, viewportHeight, occlusionBannerHeight)
@@ -156,6 +220,8 @@ function render(): void {
   st.historyWindow = historyWindow
   st.isVisualizationOn = isVisualizationOn
   st.scrollAnchor = scrollAnchor
+  st.events.jumpKey = null
+  st.events.navigated = false
   st.events.toggleVisualization = false
 
   domCache.root.style.setProperty('--chat-width', `${chatWidth}px`)
@@ -185,6 +251,15 @@ function render(): void {
     domCache.viewport.scrollTo({ top: adjustedScrollTop, behavior: 'instant' })
     st.scrollTop = domCache.viewport.scrollTop
   }
+}
+
+// A link to a message is #message-<n>, counting from 1. Other fragments, and
+// messages past the history's end, link to none.
+function parseMessageLink(hash: string, messageCount: number): number | null {
+  const match = /^#message-([1-9]\d*)$/.exec(hash)
+  if (match === null) return null
+  const ordinal = Number(match[1]) - 1
+  return ordinal < messageCount ? ordinal : null
 }
 
 // start and end index the window's messages. Rows are cached by ordinal, so a

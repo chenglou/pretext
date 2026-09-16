@@ -20,13 +20,12 @@ import { createMarkdownChatSpecs, type MarkdownChatSeed } from './markdown-chat.
 
 export const MAX_CHAT_WIDTH = 860
 export const TOTAL_MESSAGE_COUNT = 10_000
-// History loads and unloads in chunks of this many messages. Preparing a chunk
-// is the most work a frame does, and it grows with the messages prepared. In
-// Chrome on an M5 Max, a first visit that loads a chunk and mounts every row on
-// screen takes 2.8 ms at the median and 4.7 ms at the 99th percentile with 24
-// messages, against 4.1 and 8.0 ms with 50. At the widest chat, 24 messages are
-// at least about 1,900 px tall, so the first frame's two chunks fill a room of
-// about 3,800 px.
+// History loads and unloads in chunks of this many messages. Preparing chunks is
+// most of a frame's work, and it grows with the messages prepared. In Chrome on
+// an M5 Max, a first visit that loads a chunk and mounts every row on screen
+// takes 2.8 ms at the median and 4.7 ms at the 99th percentile with 24 messages,
+// against 4.1 and 8.0 ms with 50. At the widest chat, 24 messages are at least
+// about 1,900 px tall.
 const HISTORY_CHUNK_SIZE = 24
 // The most chunks loaded at once, unless the chunks on screen and one on either
 // side need more. While every chunk is taller than the room between the banners,
@@ -288,8 +287,12 @@ export type ScrollAnchor = {
   ordinal: number
 }
 
-// The chat scrolled to its top.
-export const TOP_SCROLL_ANCHOR: ScrollAnchor = { offset: CHAT_TOP_PADDING_OFFSET, ordinal: 0 }
+// A message's top where the first message's top sits with the chat scrolled to
+// its top: 14 px below the top banner's edge. The chat opens on the first
+// message there, and a jump puts its message there.
+export function getMessageTopAnchor(ordinal: number): ScrollAnchor {
+  return { offset: CHAT_TOP_PADDING_OFFSET, ordinal }
+}
 
 const EMPTY_MARK_STATE: MarkState = {
   bold: false,
@@ -314,72 +317,116 @@ export function createChatHistory(): MarkdownChatSeed[] {
   return createMarkdownChatSpecs(TOTAL_MESSAGE_COUNT)
 }
 
-// The chunks holding the first and last messages kept stay loaded, with one
-// more chunk on either side. The window grows toward those, then, while it holds
-// more than HISTORY_WINDOW_CHUNKS, drops its first or last chunk, whichever is
-// farther from the kept ones, unless that chunk is one of those. Kept messages
-// are loaded ones, so once anything has been shown, a move loads at most one
-// chunk on either side. A window whose chunks or chat width change is a new
-// object, laid out again. Before the first frame there's no window, and it loads
-// around the kept messages.
-export function moveHistoryWindow(
+// A window holding the chunks with the first and last messages kept, one more
+// chunk on either side, and the loaded chunks touching those. Missing chunks are
+// prepared, so a jump far from the loaded chunks prepares the ones around its
+// message and none between. A window whose chunks or chat width change is a new
+// object, laid out again. Before the first frame there's no window.
+export function loadHistoryChunks(
   history: readonly MarkdownChatSeed[],
   historyWindow: HistoryWindow | null,
   firstKeptOrdinal: number,
   lastKeptOrdinal: number,
   chatWidth: number,
 ): HistoryWindow {
-  const firstKeptChunk = Math.floor(firstKeptOrdinal / HISTORY_CHUNK_SIZE)
-  const lastKeptChunk = Math.floor(lastKeptOrdinal / HISTORY_CHUNK_SIZE)
-  const firstWantedChunk = Math.max(0, firstKeptChunk - 1)
-  const lastWantedChunk = Math.min(Math.ceil(history.length / HISTORY_CHUNK_SIZE) - 1, lastKeptChunk + 1)
-  let messages: PreparedChatMessage[] = historyWindow === null ? [] : historyWindow.messages
-  let firstChunk = historyWindow === null ? firstKeptChunk : historyWindow.firstOrdinal / HISTORY_CHUNK_SIZE
-  let lastChunk = Math.ceil((firstChunk * HISTORY_CHUNK_SIZE + messages.length) / HISTORY_CHUNK_SIZE) - 1
+  const firstWantedChunk = Math.max(0, Math.floor(firstKeptOrdinal / HISTORY_CHUNK_SIZE) - 1)
+  const lastWantedChunk = Math.min(
+    Math.ceil(history.length / HISTORY_CHUNK_SIZE) - 1,
+    Math.floor(lastKeptOrdinal / HISTORY_CHUNK_SIZE) + 1,
+  )
+  const loadedMessages = historyWindow === null ? [] : historyWindow.messages
+  const firstLoadedChunk = historyWindow === null ? 0 : historyWindow.firstOrdinal / HISTORY_CHUNK_SIZE
+  const lastLoadedChunk = firstLoadedChunk + Math.ceil(loadedMessages.length / HISTORY_CHUNK_SIZE) - 1
+  let firstChunk = firstWantedChunk
+  let lastChunk = lastWantedChunk
+  if (firstLoadedChunk <= lastWantedChunk + 1 && lastLoadedChunk >= firstWantedChunk - 1) {
+    firstChunk = Math.min(firstChunk, firstLoadedChunk)
+    lastChunk = Math.max(lastChunk, lastLoadedChunk)
+  }
   if (
     historyWindow !== null &&
     historyWindow.layout.chatWidth === chatWidth &&
-    firstChunk <= firstWantedChunk &&
-    lastChunk >= lastWantedChunk &&
-    (lastChunk - firstChunk + 1 <= HISTORY_WINDOW_CHUNKS ||
-      (firstChunk === firstWantedChunk && lastChunk === lastWantedChunk))
+    firstChunk === firstLoadedChunk &&
+    lastChunk === lastLoadedChunk
   ) {
     return historyWindow
   }
 
-  for (; firstChunk > firstWantedChunk; firstChunk--) {
-    messages = prepareHistoryChunk(history, firstChunk - 1).concat(messages)
-  }
-  for (; lastChunk < lastWantedChunk; lastChunk++) {
-    messages = messages.concat(prepareHistoryChunk(history, lastChunk + 1))
-  }
-  while (
-    lastChunk - firstChunk + 1 > HISTORY_WINDOW_CHUNKS &&
-    (firstChunk < firstWantedChunk || lastChunk > lastWantedChunk)
-  ) {
-    if (firstKeptChunk - firstChunk > lastChunk - lastKeptChunk) {
-      messages = messages.slice(HISTORY_CHUNK_SIZE)
-      firstChunk++
+  const messages: PreparedChatMessage[] = []
+  for (let chunk = firstChunk; chunk <= lastChunk; chunk++) {
+    const start = chunk * HISTORY_CHUNK_SIZE
+    const end = Math.min(history.length, start + HISTORY_CHUNK_SIZE)
+    if (chunk >= firstLoadedChunk && chunk <= lastLoadedChunk) {
+      const loadedStart = start - firstLoadedChunk * HISTORY_CHUNK_SIZE
+      for (let index = loadedStart; index < loadedStart + end - start; index++) {
+        messages.push(loadedMessages[index]!)
+      }
     } else {
-      messages = messages.slice(0, (lastChunk - firstChunk) * HISTORY_CHUNK_SIZE)
-      lastChunk--
+      for (let ordinal = start; ordinal < end; ordinal++) {
+        const spec = history[ordinal]!
+        messages.push({ blocks: parseMarkdownBlocks(spec.markdown), role: spec.role })
+      }
     }
   }
   return { firstOrdinal: firstChunk * HISTORY_CHUNK_SIZE, layout: layoutConversation(messages, chatWidth), messages }
 }
 
-function prepareHistoryChunk(history: readonly MarkdownChatSeed[], chunk: number): PreparedChatMessage[] {
-  const start = chunk * HISTORY_CHUNK_SIZE
-  const end = Math.min(history.length, start + HISTORY_CHUNK_SIZE)
-  const messages = new Array<PreparedChatMessage>(end - start)
-  for (let ordinal = start; ordinal < end; ordinal++) {
-    const spec = history[ordinal]!
-    messages[ordinal - start] = {
-      blocks: parseMarkdownBlocks(spec.markdown),
-      role: spec.role,
+// While the window holds more than HISTORY_WINDOW_CHUNKS, drops its first or last
+// chunk, whichever is farther from the kept messages, unless that chunk holds
+// kept messages or is next to one that does. A window that drops a chunk is a new
+// object, laid out again.
+export function dropHistoryChunks(
+  historyWindow: HistoryWindow,
+  firstKeptOrdinal: number,
+  lastKeptOrdinal: number,
+): HistoryWindow {
+  const firstKeptChunk = Math.floor(firstKeptOrdinal / HISTORY_CHUNK_SIZE)
+  const lastKeptChunk = Math.floor(lastKeptOrdinal / HISTORY_CHUNK_SIZE)
+  const firstLoadedChunk = historyWindow.firstOrdinal / HISTORY_CHUNK_SIZE
+  const lastLoadedChunk = firstLoadedChunk + Math.ceil(historyWindow.messages.length / HISTORY_CHUNK_SIZE) - 1
+  let firstChunk = firstLoadedChunk
+  let lastChunk = lastLoadedChunk
+  while (
+    lastChunk - firstChunk + 1 > HISTORY_WINDOW_CHUNKS &&
+    (firstChunk < firstKeptChunk - 1 || lastChunk > lastKeptChunk + 1)
+  ) {
+    if (firstKeptChunk - firstChunk > lastChunk - lastKeptChunk) {
+      firstChunk++
+    } else {
+      lastChunk--
     }
   }
-  return messages
+  if (firstChunk === firstLoadedChunk && lastChunk === lastLoadedChunk) return historyWindow
+
+  const messages = historyWindow.messages.slice(
+    (firstChunk - firstLoadedChunk) * HISTORY_CHUNK_SIZE,
+    (lastChunk - firstLoadedChunk + 1) * HISTORY_CHUNK_SIZE,
+  )
+  return {
+    firstOrdinal: firstChunk * HISTORY_CHUNK_SIZE,
+    layout: layoutConversation(messages, historyWindow.layout.chatWidth),
+    messages,
+  }
+}
+
+// Where render scrolls the window so the anchor's top sits its offset below the
+// top banner, within the history's range. At an end of the window that isn't an
+// end of the history, the range goes on, so the position can fall past what's
+// loaded, and render loads toward it.
+export function findAnchoredScrollTop(
+  historyWindow: HistoryWindow,
+  historyLength: number,
+  scrollAnchor: ScrollAnchor,
+  viewportHeight: number,
+  occlusionBannerHeight: number,
+): number {
+  const { tops, totalHeight } = historyWindow.layout
+  let scrollTop = tops[scrollAnchor.ordinal - historyWindow.firstOrdinal]! - scrollAnchor.offset
+  if (historyWindow.firstOrdinal + historyWindow.messages.length === historyLength) {
+    scrollTop = Math.min(Math.max(0, totalHeight + occlusionBannerHeight * 2 - viewportHeight), scrollTop)
+  }
+  if (historyWindow.firstOrdinal === 0) scrollTop = Math.max(0, scrollTop)
+  return scrollTop
 }
 
 export function getMaxChatWidth(viewportWidth: number): number {
