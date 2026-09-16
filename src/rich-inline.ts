@@ -14,7 +14,7 @@ import {
   type AnalysisProfile,
   type SegmentBreakKind,
 } from './analysis.js'
-import { getBreakLanguage, getWebKitBreakBetweenItems } from './line-breaks.js'
+import { getWebKitBreakBetweenItems } from './line-breaks.js'
 import {
   buildLineTextFromRange,
   getLineTextCache,
@@ -449,7 +449,7 @@ export function prepareRichInline(items: RichInlineItem[]): PreparedRichInline {
   // Each item reads the page language as it prepares; the joined analysis and
   // boundary spaces share one more read.
   const documentLanguage = getDocumentLanguage()
-  const profile = getEngineProfile(getBreakLanguage(documentLanguage))
+  const profile = getEngineProfile()
   const { inlineItemBreaks } = profile
   // A collapsed SPACE can have zero or negative advance. Its existence and
   // ordinary break opportunity must survive independently of that number.

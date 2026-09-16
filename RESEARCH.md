@@ -269,10 +269,10 @@ Gecko's ICU4X keeps pairs by line-break class instead (AI, AL, ID, NU, HY, the
 Hangul classes and CJ), where a mark takes its base's class. It keeps `ー`, symbols
 such as `★`, supplementary ideographs and, after an ideograph, `〵` or an
 ideographic variation selector, but breaks after NS letters such as `々` or `〼`,
-and after `〵` following a closing bracket. `keepAllPairModel` picks Blink's rule,
-ICU4X's, or WebKit's, whose keep-all breaks only at spaces; newer WebKit source
-also breaks after opening, closing and other punctuation there, but not after
-letters.
+and after `〵` following a closing bracket. WebKit's keep-all breaks only at spaces;
+newer WebKit source also breaks after opening, closing and other punctuation there,
+but not after letters. Chrome and Safari take these rules from their scans, and the
+Gecko profile's merges follow ICU4X's.
 
 Where the engine does not keep a pair, Pretext ends a keep-all run where UAX #14
 allows a break between the two line-break classes. The classes come from a table
@@ -306,8 +306,7 @@ ICU 77 and 78 break before an opening quotation mark and after a closing one bet
 East Asian characters (LB19a). Gecko's ICU4X rules follow Unicode 15.0 and keep both;
 `breakAroundEastAsianQuotes` records the difference. Pretext's CJK ranges and
 emoji-presentation characters stand in for East Asian Width there. Under keep-all,
-the Chromium profile's CJK units no longer carry CJK text after a closing quote
-where LB19a breaks, so `文|“漢字”|文` ends both runs. Chrome restarts its ICU context
+Blink's scan breaks there too, so `文|“漢字”|文` ends both runs. Chrome restarts its ICU context
 at each line start, so when an emergency break lands just before a closing quote,
 Chrome no longer sees the East Asian character before the quote and keeps the quote
 with the next ideograph, while Pretext breaks after it. That loses 16 installed
@@ -893,17 +892,17 @@ measured 16px, as with no language, against 27.53px under `en`. Safari's matched
 `en`. No recorded empty-language row contains a fallback glyph, so no recorded
 result separates from `en` yet.
 
-Every profile resolves small kana and `ー` (CJ in the
-generated class table) with one field: to ID, so they may start a line, or to NS,
-so they stay with CJK text before them. Only the WebKit profile varies so far: ID on `ja` and `ko` pages and NS
-elsewhere. The Blink profile resolves ID on every page. Chromium's ICU data maps
-`line` to `line_normal.brk` for root and `ja` and to `line_normal_cj.brk` for
-`zh` and `zh_Hant`, and both put CJ in ID. So `ー` starts a line after `？` and
-`！` exactly as small kana do, and between the marks in `日？ーー`, as installed
-Chrome shows. The Gecko profile resolves NS, since Gecko's auto is strict, and so
-do engines Pretext doesn't recognize, following ICU's root rules. Reading
-`<html lang>` costs about 3-16ns in headless WebKit and Chromium, with no style or
-layout work.
+Chrome's and Safari's scans take small kana and `ー` (CJ) from their engines'
+tables. libicucore opens its normal line rules, where CJ is ID and may start a line,
+on `ja` and `ko` pages, `line_cj.brk` on `zh` pages and strict rules, where CJ is NS
+and stays with the CJK text before it, elsewhere, and Safari's scan picks the table
+from `<html lang>`. Chromium's ICU data maps `line` to `line_normal.brk` for root and
+`ja` and to `line_normal_cj.brk` for `zh` and `zh_Hant`, and both put CJ in ID. So
+`ー` starts a line after `？` and `！` exactly as small kana do, and between the marks
+in `日？ーー`, as installed Chrome shows. The Gecko profile's merges resolve CJ to NS
+with one field, since Gecko's auto is strict, and engines Pretext doesn't recognize
+take Blink's scan. Reading `<html lang>` costs about 3-16ns in headless WebKit and
+Chromium, with no style or layout work.
 
 ## Fonts And Other Measurement Engines
 

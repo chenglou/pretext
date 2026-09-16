@@ -50,7 +50,6 @@ import {
   buildLineTextFromRange,
   getLineTextCache,
 } from './line-text.js'
-import { getBreakLanguage } from './line-breaks.js'
 
 // --- Public types ---
 
@@ -702,7 +701,7 @@ function prepareInternal(
   const letterSpacing = options?.letterSpacing ?? 0
   // One page-language read: break rules and measurement both follow it.
   const documentLanguage = getDocumentLanguage()
-  const engineProfile = getEngineProfile(getBreakLanguage(documentLanguage))
+  const engineProfile = getEngineProfile()
   const analysis = analyzeText(text, engineProfile, options?.whiteSpace, wordBreak, documentLanguage)
   return measureAnalysis(analysis, font, includeSegments, wordBreak, letterSpacing, engineProfile, documentLanguage)
 }

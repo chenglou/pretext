@@ -35,22 +35,12 @@ export type TextAnalysis = { source: string; normalized: string } & MergedSegmen
 export type AnalysisProfile = {
   lineBreakScan: 'blink' | 'webkit' | null
   geckoAsciiLineBreaks: boolean
-  carryCJKAfterClosingQuote: boolean
-  keepAllPairModel: KeepAllPairModel
-  keepZeroWidthSpaceMarkAtScanStart: boolean
   breakBeforeConditionalJapaneseStarter: boolean
   breakAroundEastAsianQuotes: boolean
   wordInitialHyphenLetters: 'none' | 'alphabetic' | 'alphabetic-and-hebrew'
-  breakHyphenAfterCollapsedTab: boolean
   segmentBreakRemovalRun: SegmentBreakRemovalRun
   breakOnlyAfterNextLine: boolean
-  icuDecidesLetterAfterCJKMark: boolean
 }
-
-// Which pairs `word-break: keep-all` keeps. Blink keeps letters and numbers by
-// general category, Gecko's ICU4X keeps pairs by line-break class, and WebKit
-// breaks only at spaces.
-export type KeepAllPairModel = 'blink-general-category' | 'icu4x-classes' | 'webkit-spaces'
 
 // The collapsible run that a ZWSP removes under the CSS segment break
 // transformation, per engine. WebKit never removes one.
@@ -220,18 +210,15 @@ function endsWithKeepAllDashBreakText(text: string): boolean {
 }
 
 const letterOrNumberRe = /[\p{L}\p{N}]/u
-const letterOrNumberAtRe = /[\p{L}\p{N}]/uy
 
-// Keep-all suppresses breaks between letters. Blink keeps any pair of letters
-// or numbers by general category, so a letter that cannot start a line, such as
-// U+3005 or U+30FC, does not end a run. ICU4X in Gecko keeps pairs by UAX #14
-// class instead (AI, AL, ID, NU, HY, H2, H3, JL, JV, JT and CJ, with a CM taking
-// its base's class): after an ideograph it keeps U+30FC (CJ) and U+3035 (CM),
-// but it still breaks after an NS letter such as U+3005.
-function endsWithKeepAllLetter(text: string, profile: AnalysisProfile): boolean {
+// Keep-all suppresses breaks between letters. ICU4X in Gecko keeps pairs by UAX #14
+// class (AI, AL, ID, NU, HY, H2, H3, JL, JV, JT and CJ, with a CM taking its base's
+// class): after an ideograph it keeps U+30FC (CJ) and U+3035 (CM), but it still
+// breaks after an NS letter such as U+3005.
+function endsWithKeepAllLetter(text: string): boolean {
   const last = getLastCodePoint(text)
   if (last === null || !letterOrNumberRe.test(last)) return false
-  return profile.keepAllPairModel !== 'icu4x-classes' || getCJKLineStartClass(last) !== LineBreakClass.NS
+  return getCJKLineStartClass(last) !== LineBreakClass.NS
 }
 
 // Ideographs, kana and Hangul syllables, which every keep-all pair model keeps.
@@ -241,27 +228,6 @@ function isPlainKeepAllLetterCode(code: number): boolean {
     (code >= 0x3400 && code <= 0x4DBF) || (code >= 0x3041 && code <= 0x3096) ||
     (code >= 0x30A1 && code <= 0x30FA)
   )
-}
-
-// A UTF-16 code unit that Blink's keep-all rule keeps: a letter or number by
-// general category whose line-break class is not SA. A surrogate is neither.
-function isBlinkKeepAllLetterUnit(text: string, index: number): boolean {
-  const code = text.charCodeAt(index)
-  if (!(code < 0xD800 || code > 0xDFFF)) return false
-  letterOrNumberAtRe.lastIndex = index
-  return letterOrNumberAtRe.test(text) && getLineBreakClass(code) !== LineBreakClass.SA
-}
-
-// Blink keeps a pair when the code unit after the boundary keeps, and so does
-// the one before it, or the one before that when it is a mark.
-function blinkKeepsKeepAllPair(text: string, boundary: number): boolean {
-  let before = boundary - 1
-  const code = text.charCodeAt(before)
-  if (code >= 0x0300 && (code < 0xD800 || code > 0xDFFF)) {
-    combiningMarkAtRe.lastIndex = before
-    if (combiningMarkAtRe.test(text)) before--
-  }
-  return isBlinkKeepAllLetterUnit(text, before) && isBlinkKeepAllLetterUnit(text, boundary)
 }
 
 // The projected classes ICU4X keeps under keep-all. The table reads AI, XX and
@@ -417,38 +383,15 @@ function breaksBeforeEastAsianOpeningQuote(text: string, boundary: number, base:
   return next < text.length && isEastAsianCodePointAt(text, next)
 }
 
-// Classes that LB19a still keeps after a closing quotation mark.
-const noBreakAfterEastAsianQuoteClasses =
-  (1 << LineBreakClass.NS) | (1 << LineBreakClass.BA) | (1 << LineBreakClass.EX) | (1 << LineBreakClass.CL) |
-  (1 << LineBreakClass.IN) | (1 << LineBreakClass.IS) | (1 << LineBreakClass.GL) | (1 << LineBreakClass.CM)
-
-// ICU 77 and 78 break after a closing quotation mark (QU and \p{Pf}) between
-// East Asian characters, unless the next character keeps it (LB19a).
-function breaksAfterEastAsianClosingQuote(text: string, boundary: number, profile: AnalysisProfile): boolean {
-  if (!profile.breakAroundEastAsianQuotes || boundary >= text.length) return false
-  const quote = lineBreakBaseBefore(text, boundary)
-  if (quote < 0 || getLineBreakClass(text.codePointAt(quote)!) !== LineBreakClass.QU) return false
-  closingQuoteAtRe.lastIndex = quote
-  if (!closingQuoteAtRe.test(text)) return false
-  const base = lineBreakBaseBefore(text, quote)
-  return (
-    base >= 0 && isEastAsianCodePointAt(text, base) && isEastAsianCodePointAt(text, boundary) &&
-    ((1 << getLineBreakClass(text.codePointAt(boundary)!)) & noBreakAfterEastAsianQuoteClasses) === 0
-  )
-}
-
-// Where the engine does not keep a pair, its ordinary rules decide, so a run
-// ends where those rules allow a break. Chromium and WebKit decide pairs of
-// code units up to U+00FF from their own tables before any keep-all rule, and
-// Gecko decides ASCII pairs from its own model, so those stay with the
-// punctuation rules below. No break follows ZWJ (LB8a). U+3000 is BA, but
-// engines hang or trim it at a line edge, which needs its own model, so a run
-// does not end next to it.
+// Where ICU4X does not keep a pair, its ordinary rules decide, so a run ends
+// where those rules allow a break. Gecko decides ASCII pairs from its own model,
+// so pairs of code units up to U+00FF stay with the punctuation rules below. No
+// break follows ZWJ (LB8a). U+3000 is BA, but engines hang or trim it at a line
+// edge, which needs its own model, so a run does not end next to it.
 function endsKeepAllRunAtPair(text: string, boundary: number, profile: AnalysisProfile): boolean {
   const beforeCode = text.charCodeAt(boundary - 1)
   const afterCode = text.charCodeAt(boundary)
   if ((beforeCode <= 0xFF && afterCode <= 0xFF) || beforeCode === 0x200D || beforeCode === 0x3000 || afterCode === 0x3000) return false
-  if (profile.keepAllPairModel === 'blink-general-category' && blinkKeepsKeepAllPair(text, boundary)) return false
   // Marks at the start of a segment's text have their base in the text before
   // it, which this check cannot see.
   const base = lineBreakBaseBefore(text, boundary)
@@ -456,19 +399,17 @@ function endsKeepAllRunAtPair(text: string, boundary: number, profile: AnalysisP
   const afterCodePoint = text.codePointAt(boundary)!
   let after = getLineBreakClass(afterCodePoint)
   let before = getLineBreakClass(text.codePointAt(base)!)
-  if (profile.keepAllPairModel === 'icu4x-classes') {
-    if (((1 << before) & icu4xKeepAllClasses) !== 0 && ((1 << after) & icu4xKeepAllClasses) !== 0) return false
-    // ICU4X's Unicode 15.0 rules keep any character after a Hebrew letter and HY
-    // or BA, past marks on either side (LB21a). ICU 78 replaced BA there with HH.
-    // The pair rules below never break after HY or HH, and runs never end next to
-    // U+3000, the one East Asian BA, so only BA needs this check. The dash and
-    // line-start punctuation ends in getKeepAllRunEnd still end a run after a
-    // Hebrew letter and `-`, U+2010, U+2013, U+0964, U+0965, U+104A or U+104B,
-    // where both engines keep the next character.
-    if (before === LineBreakClass.BA) {
-      const letter = lineBreakBaseBefore(text, base)
-      if (letter >= 0 && getLineBreakClass(text.codePointAt(letter)!) === LineBreakClass.HL) return false
-    }
+  if (((1 << before) & icu4xKeepAllClasses) !== 0 && ((1 << after) & icu4xKeepAllClasses) !== 0) return false
+  // ICU4X's Unicode 15.0 rules keep any character after a Hebrew letter and HY
+  // or BA, past marks on either side (LB21a). ICU 78 replaced BA there with HH.
+  // The pair rules below never break after HY or HH, and runs never end next to
+  // U+3000, the one East Asian BA, so only BA needs this check. The dash and
+  // line-start punctuation ends in getKeepAllRunEnd still end a run after a
+  // Hebrew letter and `-`, U+2010, U+2013, U+0964, U+0965, U+104A or U+104B,
+  // where Gecko keeps the next character.
+  if (before === LineBreakClass.BA) {
+    const letter = lineBreakBaseBefore(text, base)
+    if (letter >= 0 && getLineBreakClass(text.codePointAt(letter)!) === LineBreakClass.HL) return false
   }
   if (after === LineBreakClass.QU) {
     return profile.breakAroundEastAsianQuotes && breaksBeforeEastAsianOpeningQuote(text, boundary, base, before)
@@ -494,10 +435,9 @@ function endsKeepAllRunAtPair(text: string, boundary: number, profile: AnalysisP
 function getKeepAllRunEnd(text: string, boundary: number, previousText: string, profile: AnalysisProfile): 'end' | 'split' | null {
   if (isPlainKeepAllLetterCode(text.charCodeAt(boundary - 1)) && isPlainKeepAllLetterCode(text.charCodeAt(boundary))) return null
   if (endsWithKeepAllGlueText(previousText)) return 'end'
-  if (profile.keepAllPairModel === 'webkit-spaces') return null
   if (
     endsWithLineStartProhibitedText(previousText, profile)
-      ? !endsWithKeepAllLetter(previousText, profile)
+      ? !endsWithKeepAllLetter(previousText)
       : endsWithKeepAllDashBreakText(previousText)
   ) {
     return 'end'
@@ -581,13 +521,6 @@ const arabicNoSpaceTrailingPunctuation = new Set([
 
 const myanmarMedialGlue = new Set([
   '\u104F',
-])
-
-// Closing quotes (UAX #14 QU) after which the Chromium profile carries CJK text.
-// A fullwidth closing bracket such as U+300D or U+FF09 is CL instead, and Chromium
-// breaks between it and a following ideograph.
-const closingQuoteChars = new Set([
-  '”', '’', '»', '›',
 ])
 
 function isLeftStickyPunctuationSegment(segment: string): boolean {
@@ -768,18 +701,6 @@ function splitLeadingSpaceAndMarks(segment: string): { space: string, marks: str
   return null
 }
 
-export function endsWithClosingQuote(text: string): boolean {
-  let end = text.length
-  while (end > 0) {
-    const start = previousCodePointStart(text, end)
-    const ch = text.slice(start, end)
-    if (closingQuoteChars.has(ch)) return true
-    if (!leftStickyPunctuation.has(ch)) return false
-    end = start
-  }
-  return false
-}
-
 function classifySegmentBreakCode(code: number, whiteSpace: WhiteSpaceMode, breakOnlyAfterNextLine: boolean): SegmentBreakKind {
   if (whiteSpace === 'pre-wrap') {
     if (code === 0x20) return 'preserved-space'
@@ -797,79 +718,8 @@ function classifySegmentBreakCode(code: number, whiteSpace: WhiteSpaceMode, brea
   return 'text'
 }
 
-// All characters that classifySegmentBreakCode maps to a non-'text' kind.
-const breakCharRe = /[\x20\t\n\x85\xA0\xAD\u2007\u200B\u202F\u2060\uFEFF]/
-
-// The combining marks WebKit's pair scan classifies without ICU. That scan
-// never breaks before them (BreakablePositions.h, `after.type == kCM`).
-function isBasicCombiningMark(code: number): boolean {
-  return (
-    (code >= 0x0300 && code <= 0x036F && code !== 0x034F && (code < 0x035C || code > 0x0362)) ||
-    (code >= 0x0483 && code <= 0x0489) ||
-    (code >= 0x0591 && code <= 0x05BD) ||
-    code === 0x05BF || code === 0x05C1 || code === 0x05C2 ||
-    code === 0x05C4 || code === 0x05C5 || code === 0x05C7
-  )
-}
-
-// UAX #14 BK, CR, LF and NL, which the class table reads as BK. LB7 forbids every
-// other break before a ZWSP.
-function isMandatoryBreakCode(code: number): boolean {
-  return getLineBreakClass(code) === LineBreakClass.BK
-}
-
-// WebKit reports ZWSP|mark (LB8) only from an ICU lookup that starts before the
-// ZWSP. A scan that starts at a text node's leading ZWSP makes no such lookup,
-// and after a mandatory break ICU reports the earlier boundary, so the basic
-// mark rule wins. Other source before the ZWSP, including a collapsible SPACE,
-// is prior context. Normalization neither adds nor removes ZWSPs, so the nth
-// normalized ZWSP is the nth source ZWSP. Returns normalized offsets.
-function getMarkKeepingZeroWidthSpaces(source: string, normalized: string, profile: AnalysisProfile): Set<number> | null {
-  if (!profile.keepZeroWidthSpaceMarkAtScanStart) return null
-  let kept: Set<number> | null = null
-  let sourceIndex = -1
-  for (let index = normalized.indexOf('\u200B'); index >= 0; index = normalized.indexOf('\u200B', index + 1)) {
-    sourceIndex = source.indexOf('\u200B', sourceIndex + 1)
-    if (!isBasicCombiningMark(normalized.charCodeAt(index + 1))) continue
-    if (sourceIndex > 0 && !isMandatoryBreakCode(source.charCodeAt(sourceIndex - 1))) continue
-    if (kept === null) kept = new Set()
-    kept.add(index)
-  }
-  return kept
-}
-
-// U+002D and the HH dashes that can still break after a collapsed TAB. The
-// other Unicode 17 HH dashes already join the next text in every profile: the
-// word segmenter keeps U+058A with its letters, and symbol chains join U+05BE,
-// U+1400, U+2E17, U+2E40, U+2E5D, U+10D6E and U+10EAD. WebKit breaks after them
-// there too, a documented gap.
-const tabBeforeHyphenRe = /\t[-\u2010\u2012\u2013]/
-const hyphenCharRe = /[-\u2010\u2012\u2013]/g
-
-// Normal mode collapses a TAB before a hyphen to a space, but WebKit's scan
-// reads the source text, where a TAB is UAX #14 BA and not a LB20a context.
-// Normalization neither adds nor removes hyphens, so the nth normalized hyphen
-// is the nth source hyphen. Text with a TAB always normalizes to a new string.
-// Returns normalized offsets.
-function getHyphensAfterSourceTab(
-  source: string,
-  normalized: string,
-  profile: AnalysisProfile,
-  whiteSpace: WhiteSpaceMode,
-): Set<number> | null {
-  if (
-    !profile.breakHyphenAfterCollapsedTab ||
-    whiteSpace !== 'normal' ||
-    source === normalized ||
-    !tabBeforeHyphenRe.test(source)
-  ) return null
-  const hyphens = new Set<number>()
-  const sourceHyphens = source.matchAll(hyphenCharRe)
-  for (const match of normalized.matchAll(hyphenCharRe)) {
-    if (source.charCodeAt(sourceHyphens.next().value!.index - 1) === 0x09) hyphens.add(match.index)
-  }
-  return hyphens
-}
+// All characters that the merged segmentation gives a kind other than 'text'.
+const breakCharRe = /[\x20\t\n\xA0\xAD\u2007\u200B\u202F\u2060\uFEFF]/
 
 function joinTextParts(parts: string[]): string {
   return parts.length === 1 ? parts[0]! : parts.join('')
@@ -909,16 +759,15 @@ function splitSegmentByBreakKind(
   isWordLike: boolean,
   start: number,
   whiteSpace: WhiteSpaceMode,
-  breakOnlyAfterNextLine: boolean,
   mayContainNumericWordPunctuation: boolean,
 ): SegmentationPiece[] {
   const numericSplits = mayContainNumericWordPunctuation ? getNumericWordPunctuationSplits(segment) : null
-  if (numericSplits === null) return splitTextByBreakKind(segment, isWordLike, start, whiteSpace, breakOnlyAfterNextLine)
+  if (numericSplits === null) return splitTextByBreakKind(segment, isWordLike, start, whiteSpace)
   const pieces: SegmentationPiece[] = []
   let pieceStart = 0
   for (let i = 0; i <= numericSplits.length; i++) {
     const pieceEnd = i < numericSplits.length ? numericSplits[i]! : segment.length
-    const split = splitTextByBreakKind(segment.slice(pieceStart, pieceEnd), isWordLike, start + pieceStart, whiteSpace, breakOnlyAfterNextLine)
+    const split = splitTextByBreakKind(segment.slice(pieceStart, pieceEnd), isWordLike, start + pieceStart, whiteSpace)
     for (let j = 0; j < split.length; j++) pieces.push(split[j]!)
     pieceStart = pieceEnd
   }
@@ -930,7 +779,6 @@ function splitTextByBreakKind(
   isWordLike: boolean,
   start: number,
   whiteSpace: WhiteSpaceMode,
-  breakOnlyAfterNextLine: boolean,
 ): SegmentationPiece[] {
   if (!breakCharRe.test(segment)) {
     return [{ text: segment, isWordLike, kind: 'text', start }]
@@ -943,11 +791,10 @@ function splitTextByBreakKind(
   let offset = 0
 
   for (const ch of segment) {
-    const kind = classifySegmentBreakCode(ch.charCodeAt(0), whiteSpace, breakOnlyAfterNextLine)
+    const kind = classifySegmentBreakCode(ch.charCodeAt(0), whiteSpace, false)
     const wordLike = kind === 'text' && isWordLike
 
-    // Each NEL offers its own break after it.
-    if (currentKind !== null && kind === currentKind && wordLike === currentWordLike && kind !== 'control') {
+    if (currentKind !== null && kind === currentKind && wordLike === currentWordLike) {
       offset += ch.length
       continue
     }
@@ -1006,7 +853,7 @@ function isUrlQueryBoundarySegment(text: string): boolean {
   return text.includes('?') && (text.includes('://') || text.startsWith('www.'))
 }
 
-function mergeUrlRuns(segmentation: MergedSegmentation, normalized: string, profile: AnalysisProfile, wordBreak: WordBreakMode): MergedSegmentation {
+function mergeUrlRuns(segmentation: MergedSegmentation, normalized: string, profile: AnalysisProfile): MergedSegmentation {
   const texts: string[] = []
   const isWordLike: boolean[] = []
   const kinds: SegmentBreakKind[] = []
@@ -1024,7 +871,7 @@ function mergeUrlRuns(segmentation: MergedSegmentation, normalized: string, prof
       while (
         j < segmentation.len &&
         !isTextRunBoundary(segmentation.kinds[j]!) &&
-        pairBoundary(normalized, segmentation.starts[j]!, profile, wordBreak) !== false
+        pairBoundary(normalized, segmentation.starts[j]!, profile) !== false
       ) {
         const nextText = segmentation.texts[j]!
         urlParts.push(nextText)
@@ -1058,7 +905,7 @@ function mergeUrlRuns(segmentation: MergedSegmentation, normalized: string, prof
     while (
       j < segmentation.len &&
       !isTextRunBoundary(segmentation.kinds[j]!) &&
-      (j === nextIndex || pairBoundary(normalized, segmentation.starts[j]!, profile, wordBreak) !== false)
+      (j === nextIndex || pairBoundary(normalized, segmentation.starts[j]!, profile) !== false)
     ) {
       queryParts.push(segmentation.texts[j]!)
       j++
@@ -1214,15 +1061,6 @@ function isAsciiAlphanumericCode(code: number): boolean {
   return (code >= 0x30 && code <= 0x39) || ((code | 0x20) >= 0x61 && (code | 0x20) <= 0x7A)
 }
 
-// The code units WebKit's pair scan classifies as ideographic (`classify` in
-// BreakablePositions.h): U+2E80-U+A4CF except U+3000-U+30FF, U+31F0-U+31FF,
-// U+3248-U+324F, U+4DC0-U+4DFF and U+A015, precomposed Hangul and U+F900-U+FAFF.
-function isWebKitIdeographicCode(code: number): boolean {
-  if (code >= 0xAC00) return code <= 0xD7AF || (code >= 0xF900 && code <= 0xFAFF)
-  return code >= 0x2E80 && code <= 0xA4CF && (code < 0x3000 || code > 0x30FF) && (code < 0x31F0 || code > 0x31FF) &&
-    (code < 0x3248 || code > 0x324F) && (code < 0x4DC0 || code > 0x4DFF) && code !== 0xA015
-}
-
 // Where an engine's pair rules decide the boundary at `boundary`: true keeps the
 // text on both sides together, false breaks there, and null leaves the boundary to
 // the merge passes. Every merge that would join across the boundary asks here, and
@@ -1233,7 +1071,6 @@ function pairBoundary(
   source: string,
   boundary: number,
   profile: AnalysisProfile,
-  wordBreak: WordBreakMode,
   afterCJK = false,
 ): boolean | null {
   if (boundary <= 0 || boundary >= source.length) return null
@@ -1248,14 +1085,10 @@ function pairBoundary(
   // symbols and opening punctuation break unless their line-break class forbids
   // it, numeric affixes break, and other punctuation is not classified. CJ breaks
   // only under ICU's normal rules, which Chromium uses for line-break: auto, and
-  // WebKit on Japanese and Korean pages. WebKit's keep-all breaks only at spaces,
-  // even after punctuation. The last-code-unit screen keeps ordinary word
-  // boundaries allocation-free.
+  // WebKit on Japanese and Korean pages. The last-code-unit screen keeps ordinary
+  // word boundaries allocation-free.
   const lastCode = source.charCodeAt(boundary - 1)
-  if (
-    (lastCode >= 0x0300 || lastCode === 0x21 || lastCode === 0x3F) &&
-    (wordBreak !== 'keep-all' || profile.keepAllPairModel !== 'webkit-spaces')
-  ) {
+  if (lastCode >= 0x0300 || lastCode === 0x21 || lastCode === 0x3F) {
     for (let end = boundary; end > 0;) {
       const start = previousCodePointStart(source, end)
       const codePoint = source.codePointAt(start)!
@@ -1332,13 +1165,8 @@ function pairBoundary(
   // engines differ before an ASCII letter or digit (#293). Blink reads its pair
   // table for two code units up to U+00FF, whatever comes before them, so it keeps
   // an ASCII mark such as `!`, `}`, `/` or `|` with the letter or digit, except `?`.
-  // WebKit reaches ICU at the CJK character, takes ICU's next break and skips ahead
-  // over ASCII letters without reading its table (`BreakablePositions.h`), so ICU's
-  // rules decide before a letter and the table before a digit: `丙!|first` breaks,
-  // `丙!1234` doesn't, and neither does `丙.!first`, where the table decides the pair
-  // after `.`. It skips ICU when CL or CP follows an ideograph or Hangul syllable, so
-  // `丙}first` keeps, but not after kana. Gecko sends the word to ICU4X, whose rules
-  // decide. Where an engine breaks, no merge joins the text after the mark.
+  // Gecko sends the word to ICU4X, whose rules decide. Where an engine breaks, no
+  // merge joins the text after the mark.
   if (!afterCJK) return null
   const base = lineBreakBaseBefore(source, boundary)
   if (base < 0) return null
@@ -1354,11 +1182,7 @@ function pairBoundary(
   }
   const after = getLineBreakClass(next)
   if (after === LineBreakClass.CJ) return null
-  if (!profile.geckoAsciiLineBreaks && base === boundary - 1 && mark < 0x80 && isAsciiAlphanumericCode(next)) {
-    if (!profile.icuDecidesLetterAfterCJKMark || next <= 0x39) return true
-    const previous = source.charCodeAt(base - 1)
-    if (previous <= 0xFF || (isWebKitIdeographicCode(previous) && (before === LineBreakClass.CL || before === LineBreakClass.CP))) return true
-  }
+  if (!profile.geckoAsciiLineBreaks && base === boundary - 1 && mark < 0x80 && isAsciiAlphanumericCode(next)) return true
   return lineBreakClassesBreak(before, after === LineBreakClass.SA ? LineBreakClass.AL : after, next) ? null : true
 }
 
@@ -1440,7 +1264,7 @@ function getNumericClosingSuffixStart(text: string): number {
   return isNumericRunSegment(body) && segmentContainsDecimalDigit(body) ? start : -1
 }
 
-function mergeNumericRuns(segmentation: MergedSegmentation, normalized: string, profile: AnalysisProfile, wordBreak: WordBreakMode): MergedSegmentation {
+function mergeNumericRuns(segmentation: MergedSegmentation, normalized: string, profile: AnalysisProfile): MergedSegmentation {
   const texts: string[] = []
   const isWordLike: boolean[] = []
   const kinds: SegmentBreakKind[] = []
@@ -1468,7 +1292,7 @@ function mergeNumericRuns(segmentation: MergedSegmentation, normalized: string, 
         for (let i = 0; i < parts.length; i++) {
           const part = parts[i]!
           const splitText = i < parts.length - 1 ? `${part}-` : part + suffix
-          if (i > 0 && pairBoundary(normalized, start + offset, profile, wordBreak) === true) {
+          if (i > 0 && pairBoundary(normalized, start + offset, profile) === true) {
             texts[texts.length - 1] += splitText
           } else {
             texts.push(splitText)
@@ -1499,7 +1323,7 @@ function mergeNumericRuns(segmentation: MergedSegmentation, normalized: string, 
         j < segmentation.len &&
         segmentation.kinds[j] === 'text' &&
         isNumericRunSegment(segmentation.texts[j]!) &&
-        pairBoundary(normalized, segmentation.starts[j]!, profile, wordBreak) !== false
+        pairBoundary(normalized, segmentation.starts[j]!, profile) !== false
       ) {
         mergedParts.push(segmentation.texts[j]!)
         j++
@@ -1509,7 +1333,7 @@ function mergeNumericRuns(segmentation: MergedSegmentation, normalized: string, 
       if (
         j < segmentation.len &&
         segmentation.kinds[j] === 'text' &&
-        pairBoundary(normalized, segmentation.starts[j]!, profile, wordBreak) !== false
+        pairBoundary(normalized, segmentation.starts[j]!, profile) !== false
       ) {
         const finalText = segmentation.texts[j]!
         const suffixStart = getNumericClosingSuffixStart(finalText)
@@ -1544,7 +1368,6 @@ function mergeNoSpaceWordChains(
   segmentation: MergedSegmentation,
   normalized: string,
   profile: AnalysisProfile,
-  wordBreak: WordBreakMode,
 ): MergedSegmentation {
   const texts: string[] = []
   const isWordLike: boolean[] = []
@@ -1565,7 +1388,7 @@ function mergeNoSpaceWordChains(
       while (
         j < segmentation.len &&
         segmentation.kinds[j] === 'text' &&
-        (pairBoundary(normalized, segmentation.starts[j]!, profile, wordBreak) ?? canJoinNoSpaceWordBoundary(
+        (pairBoundary(normalized, segmentation.starts[j]!, profile) ?? canJoinNoSpaceWordBoundary(
           segmentation.texts[j - 1]!,
           segmentation.isWordLike[j - 1]!,
           segmentation.texts[j]!,
@@ -1756,14 +1579,10 @@ function extendsPrecedingSpace(text: string, start: number): boolean {
 }
 
 function buildMergedSegmentation(
-  source: string,
   normalized: string,
   profile: AnalysisProfile,
   whiteSpace: WhiteSpaceMode,
-  wordBreak: WordBreakMode,
 ): MergedSegmentation {
-  const markKeepingZeroWidthSpaces = getMarkKeepingZeroWidthSpaces(source, normalized, profile)
-  const hyphensAfterSourceTab = getHyphensAfterSourceTab(source, normalized, profile, whiteSpace)
   const wordSegmenter = getSharedWordSegmenter()
   const mayContainNumericWordPunctuation = numericWordPunctuationCharRe.test(normalized)
   let mergedLen = 0
@@ -1782,34 +1601,23 @@ function buildMergedSegmentation(
   let tailSingleCharRunChar: string | null = null
   let tailContainsCJK = false
   let tailContainsArabicScript = false
-  let tailEndsWithClosingQuote = false
   let tailEndsWithMyanmarMedialGlue = false
   let tailHasArabicNoSpacePunctuation = false
   let tailEndsWithZeroWidthJoiner = false
   let tailIsWordInitialHyphen = false
 
   for (const s of wordSegmenter.segment(normalized)) {
-    for (const piece of splitSegmentByBreakKind(s.segment, s.isWordLike ?? false, s.index, whiteSpace, profile.breakOnlyAfterNextLine, mayContainNumericWordPunctuation)) {
-      if (
-        piece.kind === 'zero-width-break' &&
-        piece.text.length === 1 &&
-        markKeepingZeroWidthSpaces !== null &&
-        markKeepingZeroWidthSpaces.has(piece.start)
-      ) {
-        // No break before it (LB7) or after it: glue joins the marked word.
-        piece.kind = 'glue'
-      }
+    for (const piece of splitSegmentByBreakKind(s.segment, s.isWordLike ?? false, s.index, whiteSpace, mayContainNumericWordPunctuation)) {
       const isText = piece.kind === 'text'
       const repeatableSingleCharRunChar = getRepeatableSingleCharRunChar(piece.text, piece.isWordLike, piece.kind)
       const pieceContainsCJK = isCJK(piece.text)
       const pieceContainsArabicScript = containsArabicScript(piece.text)
       const pieceLastCodePoint = getLastCodePoint(piece.text)
-      const pieceEndsWithClosingQuote = endsWithClosingQuote(piece.text)
       const pieceEndsWithMyanmarMedialGlue = endsWithMyanmarMedialGlue(piece.text)
       const pieceEnd = piece.start + piece.text.length
       const pieceEndsWithZeroWidthJoiner = piece.text.charCodeAt(piece.text.length - 1) === 0x200D
       const afterCJK = tailContainsCJK && !pieceContainsCJK
-      const pair = pairBoundary(normalized, piece.start, profile, wordBreak, afterCJK)
+      const pair = pairBoundary(normalized, piece.start, profile, afterCJK)
       const boundaryJoin = pair ??
         (tailContainsCJK || pieceContainsCJK ? null :
           openingPunctuationJoinsPrevious(normalized, piece.text, profile, piece.start))
@@ -1827,16 +1635,6 @@ function buildMergedSegmentation(
         tailKind === 'text' &&
         tailIsWordInitialHyphen &&
         keepsWordInitialHyphen(normalized, tailStart, piece.start, profile)
-      ) {
-        appendToTail = true
-      } else if (
-        profile.carryCJKAfterClosingQuote &&
-        isText &&
-        hasTail &&
-        tailKind === 'text' &&
-        pieceContainsCJK &&
-        tailContainsCJK &&
-        tailEndsWithClosingQuote
       ) {
         appendToTail = true
       } else if (
@@ -1906,7 +1704,6 @@ function buildMergedSegmentation(
         // ordinary text at its end, as `first-` does after `丙.`.
         tailContainsCJK = !joinsTextAfterCJKMark && (tailContainsCJK || pieceContainsCJK)
         tailContainsArabicScript = tailContainsArabicScript || pieceContainsArabicScript
-        tailEndsWithClosingQuote = pieceEndsWithClosingQuote
         tailEndsWithMyanmarMedialGlue = pieceEndsWithMyanmarMedialGlue
         tailHasArabicNoSpacePunctuation = hasArabicNoSpacePunctuation(
           tailContainsArabicScript,
@@ -1919,8 +1716,7 @@ function buildMergedSegmentation(
         tailIsWordInitialHyphen =
           isText &&
           isHyphenPiece(piece.text) &&
-          (!hasTail || isTextRunBoundary(tailKind)) &&
-          (hyphensAfterSourceTab === null || !hyphensAfterSourceTab.has(piece.start))
+          (!hasTail || isTextRunBoundary(tailKind))
         // A ZWJ run after a space belongs to that space's grapheme cluster.
         // Browsers break before it (LB9 skips SP) and keep the next character
         // (LB8a), but that line start splits the cluster, so these boundaries
@@ -1946,7 +1742,6 @@ function buildMergedSegmentation(
         tailSingleCharRunChar = repeatableSingleCharRunChar
         tailContainsCJK = pieceContainsCJK
         tailContainsArabicScript = pieceContainsArabicScript
-        tailEndsWithClosingQuote = pieceEndsWithClosingQuote
         tailEndsWithMyanmarMedialGlue = pieceEndsWithMyanmarMedialGlue
         tailHasArabicNoSpacePunctuation = hasArabicNoSpacePunctuation(
           pieceContainsArabicScript,
@@ -1975,7 +1770,7 @@ function buildMergedSegmentation(
       isPunctuationGlueCluster(mergedTexts[i]!) &&
       mergedKinds[i - 1] === 'text' &&
       !isCJK(mergedTexts[i - 1]!) &&
-      (pairBoundary(normalized, mergedStarts[i]!, profile, wordBreak) ??
+      (pairBoundary(normalized, mergedStarts[i]!, profile) ??
         openingPunctuationJoinsPrevious(normalized, mergedTexts[i]!, profile, mergedStarts[i]!)) !== false
     ) {
       mergedTexts[i - 1] += mergedTexts[i]!
@@ -2000,7 +1795,7 @@ function buildMergedSegmentation(
       (
         // A cluster with no text before it must not erase the break browsers
         // keep after it, such as '?' before a word.
-        (pairBoundary(normalized, mergedStarts[i]! + text.length, profile, wordBreak) ??
+        (pairBoundary(normalized, mergedStarts[i]! + text.length, profile) ??
           (isForwardStickyClusterSegment(text) && openingPunctuationJoinsPrevious(text, nextText, profile) !== false)) ||
         (text === '-' && startsWithDecimalDigit(nextText))
       )
@@ -2055,10 +1850,9 @@ function buildMergedSegmentation(
     starts: mergedStarts,
   })
   const mergedRuns = attachLineStartProhibitedText(mergeNoSpaceWordChains(
-    mergeNumericRuns(mergeUrlRuns(compacted, normalized, profile, wordBreak), normalized, profile, wordBreak),
+    mergeNumericRuns(mergeUrlRuns(compacted, normalized, profile), normalized, profile),
     normalized,
     profile,
-    wordBreak,
   ), profile)
   carryTrailingForwardStickyAcrossCJKBoundary(mergedRuns)
 
@@ -2147,14 +1941,11 @@ function mergeKeepAllTextSegments(
     const text = segmentation.texts[i]!
     const kind = segmentation.kinds[i]!
 
-    // No ordinary break precedes NEL, so it continues the run before it, glue
-    // included. A CJK run merges across NEL as it did across NEL text; other
-    // runs keep their pieces, and NEL stays a control segment there.
-    if (kind === 'text' || kind === 'control' || (kind === 'glue' && segmentation.kinds[i + 1] === 'control')) {
-      if (groupStart >= 0 && kind !== 'control') {
+    if (kind === 'text') {
+      if (groupStart >= 0) {
         const start = segmentation.starts[i]!
         const runEnd = getKeepAllRunEnd(normalized, start, segmentation.texts[i - 1]!, profile)
-        if (runEnd === 'end' || pairBoundary(normalized, start, profile, 'keep-all') === false) {
+        if (runEnd === 'end' || pairBoundary(normalized, start, profile) === false) {
           flushGroup(i)
         } else if (runEnd === 'split') {
           (splits ??= []).push(i)
@@ -2212,14 +2003,12 @@ type TextBreakUnit = {
 function buildBaseCjkUnits(
   segText: string,
   profile: AnalysisProfile,
-  wordBreak: WordBreakMode,
 ): TextBreakUnit[] {
   const units: TextBreakUnit[] = []
   let unitStart = 0
   let unitEnd = 0
   let unitContainsCJK = false
   let unitEndsWithCJK = false
-  let unitEndsWithClosingQuote = false
   let unitEndsWithKinsokuEnd = false
   let unitHasNumericHyphen = false
 
@@ -2235,7 +2024,6 @@ function buildBaseCjkUnits(
     unitStart = unitEnd
     unitContainsCJK = false
     unitEndsWithCJK = false
-    unitEndsWithClosingQuote = false
     unitEndsWithKinsokuEnd = false
     unitHasNumericHyphen = false
   }
@@ -2245,7 +2033,6 @@ function buildBaseCjkUnits(
     unitEnd = start + grapheme.length
     unitContainsCJK = graphemeContainsCJK
     unitEndsWithCJK = graphemeContainsCJK
-    unitEndsWithClosingQuote = endsWithClosingQuote(grapheme)
     unitEndsWithKinsokuEnd = kinsokuEnd.has(grapheme)
   }
 
@@ -2253,12 +2040,6 @@ function buildBaseCjkUnits(
     unitEnd += grapheme.length
     unitContainsCJK = unitContainsCJK || graphemeContainsCJK
     unitEndsWithCJK = graphemeContainsCJK
-    const graphemeEndsWithClosingQuote = endsWithClosingQuote(grapheme)
-    if (grapheme.length === 1 && leftStickyPunctuation.has(grapheme)) {
-      unitEndsWithClosingQuote = unitEndsWithClosingQuote || graphemeEndsWithClosingQuote
-    } else {
-      unitEndsWithClosingQuote = graphemeEndsWithClosingQuote
-    }
     // No break follows an opener (LB14), so a run of openers stays with the
     // grapheme after the last one.
     unitEndsWithKinsokuEnd = kinsokuEnd.has(grapheme)
@@ -2281,11 +2062,7 @@ function buildBaseCjkUnits(
       prohibitsCJKLineStart(grapheme, profile) ||
       attachesToCJKText(grapheme) ||
       attachHyphen ||
-      (unitHasNumericHyphen && !graphemeContainsCJK) ||
-      (profile.carryCJKAfterClosingQuote &&
-        graphemeContainsCJK &&
-        unitEndsWithClosingQuote &&
-        !(wordBreak === 'keep-all' && breaksAfterEastAsianClosingQuote(segText, gs.index, profile)))
+      (unitHasNumericHyphen && !graphemeContainsCJK)
     ) {
       appendToUnit(grapheme, graphemeContainsCJK)
       continue
@@ -2299,7 +2076,7 @@ function buildBaseCjkUnits(
       continue
     }
 
-    if (!graphemeContainsCJK && pairBoundary(segText, gs.index, profile, wordBreak, true) === true) {
+    if (!graphemeContainsCJK && pairBoundary(segText, gs.index, profile, true) === true) {
       appendToUnit(grapheme, graphemeContainsCJK)
       continue
     }
@@ -2364,7 +2141,7 @@ function mergeKeepAllTextUnits(
     const unit = units[i]!
     if (groupStart >= 0) {
       const runEnd = getKeepAllRunEnd(segText, unit.start, units[i - 1]!.text, profile)
-      if (runEnd === 'end' || pairBoundary(segText, unit.start, profile, 'keep-all') === false) {
+      if (runEnd === 'end' || pairBoundary(segText, unit.start, profile) === false) {
         flushGroup(i)
       } else if (runEnd === 'split') {
         (splits ??= []).push(i)
@@ -2393,7 +2170,7 @@ export function getCjkTextUnits(text: string, profile: AnalysisProfile, wordBrea
   // Like a merged keep-all run, this run breaks between graphemes whether or not
   // Intl marks it as a word, which Firefox doesn't for some CJK text.
   if (wordBreak === 'keep-all' && isPlainKeepAllLetterText(text)) return [{ text, start: 0, overflow: 'grapheme' }]
-  const units = buildBaseCjkUnits(text, profile, wordBreak)
+  const units = buildBaseCjkUnits(text, profile)
   return wordBreak === 'keep-all'
     ? mergeKeepAllTextUnits(text, units, profile)
     : units
@@ -2437,7 +2214,7 @@ export function getBreakablePreferredBreaks(text: string, profile: AnalysisProfi
     // Gecko keeps any hyphen with a following number (LB25), so an overflowing
     // word fills graphemes there.
     const numericSign = gs.segment === '-' &&
-      (isNumericHyphen(text, gs.index) || pairBoundary(text, gs.index + 1, profile, 'normal') === true)
+      (isNumericHyphen(text, gs.index) || pairBoundary(text, gs.index + 1, profile) === true)
     // A segment that starts with a hyphen kept with its letter (LB20a) offers
     // no break after it, so an overflowing word fills graphemes there.
     const wordInitial = gs.index === 0 && isHyphenPiece(gs.segment) && keepsWordInitialHyphen(text, 0, gs.segment.length, profile)
@@ -2583,7 +2360,7 @@ export function analyzeText(
     const breaks = text === normalized ? sourceBreaks : mapSourceLineBreaks(text, normalized.length, sourceBreaks, whiteSpace)
     segmentation = segmentAtLineBreaks(normalized, breaks, whiteSpace, profile.breakOnlyAfterNextLine)
   } else {
-    const mergedSegmentation = buildMergedSegmentation(text, normalized, profile, whiteSpace, wordBreak)
+    const mergedSegmentation = buildMergedSegmentation(normalized, profile, whiteSpace)
     segmentation = wordBreak === 'keep-all'
       ? mergeKeepAllTextSegments(normalized, mergedSegmentation, profile)
       : mergedSegmentation

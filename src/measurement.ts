@@ -1,10 +1,8 @@
 import {
   getSharedGraphemeSegmenter,
-  type KeepAllPairModel,
   type SegmentBreakRemovalRun,
 } from './analysis.js'
 import type { SegmentEntryGeometry } from './entry-geometry.js'
-import type { BreakLanguage } from './line-breaks.js'
 
 type EntryMeasurement = {
   profile: readonly (string | null)[]
@@ -36,28 +34,16 @@ export type EngineProfile = {
   lineBreakScan: 'blink' | 'webkit' | null
   geckoAsciiLineBreaks: boolean
   lineFitEpsilon: number
-  carryCJKAfterClosingQuote: boolean
-  // Which pairs keep-all keeps. Blink keeps letters and numbers by general
-  // category, tested per UTF-16 code unit. Gecko's ICU4X keeps pairs by
-  // line-break class, so it also keeps symbols such as U+2605 but breaks after
-  // NS letters such as U+3005. WebKit breaks only at spaces.
-  keepAllPairModel: KeepAllPairModel
-  // WebKit keeps a basic combining mark after a ZWSP that starts a text node or
-  // follows a mandatory break. Gecko keeps ZWSP with any following cluster
-  // extender in every position; that granularity is not modeled.
-  keepZeroWidthSpaceMarkAtScanStart: boolean
   // Small kana and U+30FC are UAX #14 CJ. ICU's normal rules resolve CJ to ID, so
-  // both may start a line, and its strict rules to NS, so neither may. Chromium's
-  // ICU data opens normal rules for every language, `line_normal_cj` for Chinese.
-  // Apple ICU opens the normal rules for Japanese and Korean pages and strict
-  // rules for others. Gecko's auto is strict, as are ICU's root rules, which
-  // engines Pretext doesn't recognize follow.
+  // both may start a line, and its strict rules to NS, so neither may. Gecko's auto
+  // is strict. The scans take CJ from their engines' tables, so only the merged
+  // segmentation reads this.
   breakBeforeConditionalJapaneseStarter: boolean
   // ICU's line rules break before an opening quotation mark such as U+201C and
   // after a closing one such as U+201D between East Asian characters (UAX #14
   // LB19a), identically in ICU 77 and 78. Gecko's ICU4X rules follow Unicode
-  // 15.0, with no break next to a quotation mark. Only keep-all runs model it,
-  // and WebKit's keep-all breaks only at spaces, so only Blink reads it.
+  // 15.0, with no break next to a quotation mark. Only the merged segmentation's
+  // keep-all runs read it.
   breakAroundEastAsianQuotes: boolean
   // Letters that keep a word-initial hyphen (LB20a). 'alphabetic-and-hebrew'
   // models ICU 78, which Chromium and WebKit use: AL and HL letters after
@@ -66,10 +52,6 @@ export type EngineProfile = {
   // 'alphabetic' keeps only AL letters, as ICU 77 did, but ICU 77 also counted
   // only U+2010 as HH, so no engine profile selects it.
   wordInitialHyphenLetters: 'none' | 'alphabetic' | 'alphabetic-and-hebrew'
-  // WebKit's line-break scan reads the source text, where a TAB that normal
-  // white space collapses is still UAX #14 BA, not a LB20a context. Chromium
-  // breaks the collapsed text, where it is a space.
-  breakHyphenAfterCollapsedTab: boolean
   preferPrefixWidthsForBreakableRuns: boolean
   // WebKit measures a text item together with a directly following U+0020 and
   // subtracts one unshaped space, so the item keeps its kerning with that space
@@ -93,23 +75,16 @@ export type EngineProfile = {
   // not show. They keep the overflowing hyphen.
   unfitHyphenRetreat: 'reduced-width' | 'none'
   // NEL (U+0085, UAX #14 NL) offers a break after itself and no ordinary break
-  // before it (LB5, LB6). Blink and Gecko break there too, but keep NEL as
-  // ordinary text for now: Blink joins Arabic across a soft hyphen that Pretext
-  // measures as separate segments, which the break before NEL was hiding, and
-  // release Gecko draws NEL with no advance while its Canvas measures a space.
-  // WebKit's simple text path gives NEL no letter spacing, at either sign, and
-  // its complex path spaces it. A NEL control segment takes spacing after text
-  // or glue in WebKit's complex ranges, or before such text that starts with a
-  // combining mark. Preparation cannot see the page direction, so after complex
-  // text whose direction differs from the page's it keeps spacing Safari omits.
-  // Blink spaces NEL outside cursive runs.
+  // before it (LB5, LB6), as the scans find. The WebKit profile gives NEL its own
+  // control segment for letter spacing: WebKit's simple text path gives NEL no
+  // letter spacing, at either sign, and its complex path spaces it. A NEL control
+  // segment takes spacing after text or glue in WebKit's complex ranges, or before
+  // such text that starts with a combining mark. Preparation cannot see the page
+  // direction, so after complex text whose direction differs from the page's it
+  // keeps spacing Safari omits. Blink spaces NEL outside cursive runs, and release
+  // Gecko draws NEL with no advance while its Canvas measures a space, so both keep
+  // NEL as ordinary text.
   breakOnlyAfterNextLine: boolean
-  // After CJK text, WebKit's pair scan reaches ICU at the CJK character and skips
-  // ahead over ASCII letters to ICU's next break without reading its pair table, so
-  // ICU's rules decide the break after a mark before a letter (`丙!|first`), while the
-  // table still keeps `丙!1234` and `丙.!first`. Blink reads its table for any two code
-  // units up to U+00FF, and Gecko sends the word to ICU4X.
-  icuDecidesLetterAfterCJKMark: boolean
   // WebKit moves a tab to the following stop when less than half a space would
   // remain before the next one (FontCascade::tabWidth).
   skipNarrowTabStops: boolean
@@ -138,9 +113,7 @@ const segmentMetricCaches = new Map<string, Map<string, SegmentMetrics>>()
 // Per font, metrics of a text item measured together with one following
 // U+0020, keyed by the item alone. The width includes that space.
 const followingSpaceMetricCaches = new Map<string, Map<string, SegmentMetrics>>()
-// One profile per break language, created once. Languages whose rules match root
-// share its object, so preparation allocates none.
-let cachedEngineProfiles: Record<BreakLanguage, EngineProfile> | null = null
+let cachedEngineProfile: EngineProfile | null = null
 
 // Safari's prefix-fit policy is useful for ordinary word-sized runs, but letting
 // it measure every growing prefix of a giant segment recreates a pathological
@@ -290,8 +263,8 @@ export function getLayoutEngine(userAgent: string): LayoutEngine | null {
   return userAgent.includes('AppleWebKit/') ? 'webkit' : null
 }
 
-export function getEngineProfile(language: BreakLanguage = 'root'): EngineProfile {
-  if (cachedEngineProfiles !== null) return cachedEngineProfiles[language]
+export function getEngineProfile(): EngineProfile {
+  if (cachedEngineProfile !== null) return cachedEngineProfile
 
   const ua = typeof navigator === 'undefined' ? '' : navigator.userAgent
   const engine = getLayoutEngine(ua)
@@ -303,28 +276,21 @@ export function getEngineProfile(language: BreakLanguage = 'root'): EngineProfil
     lineBreakScan: engine === 'gecko' ? null : engine === 'webkit' ? 'webkit' : 'blink',
     geckoAsciiLineBreaks: engine === 'gecko',
     lineFitEpsilon: engine === 'webkit' ? 1 / 64 : 0.005,
-    carryCJKAfterClosingQuote: engine === 'blink',
-    keepAllPairModel: engine === 'gecko' ? 'icu4x-classes' : engine === 'webkit' ? 'webkit-spaces' : 'blink-general-category',
-    keepZeroWidthSpaceMarkAtScanStart: engine === 'webkit',
     breakBeforeConditionalJapaneseStarter: engine === 'blink',
     breakAroundEastAsianQuotes: engine !== 'gecko',
     wordInitialHyphenLetters: engine === 'gecko' ? 'none' : 'alphabetic-and-hebrew',
-    breakHyphenAfterCollapsedTab: engine === 'webkit',
     preferPrefixWidthsForBreakableRuns: engine === 'webkit',
     measureTextWithFollowingSpace: engine === 'webkit',
     segmentBreakRemovalRun: engine === 'blink' ? 'blink' : engine === 'gecko' ? 'gecko' : 'none',
     letterSpaceDiscretionaryHyphen: engine !== 'blink',
     unfitHyphenRetreat: engine === 'blink' ? 'reduced-width' : 'none',
     breakOnlyAfterNextLine: engine === 'webkit',
-    icuDecidesLetterAfterCJKMark: engine === 'webkit',
     skipNarrowTabStops: engine === 'webkit',
     hangTabs: engine !== 'gecko',
     inlineItemBreaks: engine === 'webkit' ? 'item-text' : 'joined-text',
   }
-  // Apple ICU opens its normal line rules for Japanese and Korean content.
-  const normalRules = engine === 'webkit' ? { ...profile, breakBeforeConditionalJapaneseStarter: true } : profile
-  cachedEngineProfiles = { root: profile, ja: normalRules, ko: normalRules, zh: profile }
-  return cachedEngineProfiles[language]
+  cachedEngineProfile = profile
+  return profile
 }
 
 export function parseFontSize(font: string): number {
