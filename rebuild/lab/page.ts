@@ -13,7 +13,8 @@ import type {
 
 type PageRow = Omit<LabRow, 'family' | 'browser' | 'case'>
 type StepReply =
-  | { kind: 'chunk'; seq: number; browser: BrowserKind; cases: Case[] }
+  // predictOnly: run.ts --predict-only; the page skips native observation.
+  | { kind: 'chunk'; seq: number; browser: BrowserKind; cases: Case[]; predictOnly?: true }
   | { kind: 'navigate'; lang: string; fonts: string[] }
   | { kind: 'done' }
 
@@ -278,17 +279,21 @@ function observePainter(c: Case, prediction: Prediction, range: Range, timings: 
   }
 }
 
-async function observeCase(c: Case, browser: BrowserKind, range: Range): Promise<PageRow> {
+async function observeCase(c: Case, browser: BrowserKind, range: Range, predictOnly: boolean): Promise<PageRow> {
   const timings = { nativeMs: 0, predictMs: 0, paintMs: 0, painterObserveMs: 0 }
   const env = readEnv()
   let start = performance.now()
   let native: PageRow['native']
-  try {
-    native = await observeNative(c, range)
-  } catch (error) {
-    native = { error: message(error) }
+  if (predictOnly) {
+    native = { skipped: 'predict-only' }
+  } else {
+    try {
+      native = await observeNative(c, range)
+    } catch (error) {
+      native = { error: message(error) }
+    }
+    timings.nativeMs = performance.now() - start
   }
-  timings.nativeMs = performance.now() - start
   start = performance.now()
   let prediction: PageRow['prediction']
   try {
@@ -329,7 +334,7 @@ async function main(): Promise<void> {
         for (let i = 0; i < reply.cases.length; i++) {
           const c = reply.cases[i]!
           if (c.pageLang !== pageLang) throw new Error(`Case ${c.id} needs <html lang="${c.pageLang}">; page has "${pageLang}"`)
-          rows.push(await observeCase(c, reply.browser, range))
+          rows.push(await observeCase(c, reply.browser, range, reply.predictOnly === true))
         }
         reply = await post<StepReply>('/api/step', { runId, pageLang, fonts: fontFixtures, seq: reply.seq, rows })
       }

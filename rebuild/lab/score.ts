@@ -1,9 +1,9 @@
 // Offline scorer: derives native lines from lab rows and compares them with the predictions.
 //   bun rebuild/lab/score.ts --rows=<file> [--cases=<file>] --out=<summary.json> [--examples=K] [--per-case=<file>]
-//     [--native-compare=<other rows file>]
+//     [--native-compare=<other rows file>] [--native-rows=<rows file that observed natively>]
 // Imported as a module it runs nothing. It exports the derivation, the per-row score and the comparison of two runs, so
 // tools use the scorer's own rules instead of copying them.
-import { closeSync, openSync, readFileSync, writeFileSync, writeSync } from 'node:fs'
+import { closeSync, openSync, readFileSync, readSync, writeFileSync, writeSync } from 'node:fs'
 import type { BrowserKind, Case, CodePointObservation, LabRow, NativeObservation, PainterLine, PainterObservation, Paragraph, Prediction, PredictionLine, Rect } from './types.ts'
 
 export type Status = 'pass' | 'fail' | 'unobserved' | 'not-applicable'
@@ -574,6 +574,7 @@ export function scoreRow(row: LabRow, text: string = rowText(row.case)): CaseSco
   const grid = layoutGrid(row.browser, row.env.devicePixelRatio)
   const all = (metric: Metric): Record<MetricName, Metric> => ({ lineCount: metric, breaks: metric, widths: metric, painter: metric })
   if ('error' in row.native) return { metrics: all({ status: 'unobserved', reason: 'native observation error', detail: row.native.error }), derived: null, widthDiffs: [], painterDiffs: [] }
+  if ('skipped' in row.native) return { metrics: all({ status: 'unobserved', reason: 'native observation skipped', detail: row.native.skipped }), derived: null, widthDiffs: [], painterDiffs: [] }
   const derived = deriveNative(row.case, row.native, text, row.browser, row.env.devicePixelRatio)
   if ('error' in derived) return { metrics: all({ status: 'unobserved', reason: 'malformed native observation', detail: derived.error }), derived: null, widthDiffs: [], painterDiffs: [] }
   const prediction = row.prediction
@@ -727,6 +728,7 @@ function viewOf(derived: Derived | { error: string }, grid: number): NativeView 
 export function nativeView(row: LabRow, text: string = rowText(row.case)): NativeView {
   const grid = layoutGrid(row.browser, row.env.devicePixelRatio)
   if ('error' in row.native) return viewOf({ error: row.native.error }, grid)
+  if ('skipped' in row.native) return viewOf({ error: `native observation skipped: ${row.native.skipped}` }, grid)
   return viewOf(deriveNative(row.case, row.native, text, row.browser, row.env.devicePixelRatio), grid)
 }
 
@@ -842,7 +844,7 @@ function example(row: LabRow, text: string, score: CaseScore, metric: MetricName
       runs: p.runs.map(run => ({ node: run.node, text: run.text, font: `${run.font.style} ${run.font.weight} ${run.font.size}px ${run.font.family}`, lang: run.lang })),
     },
     pageLang: row.case.pageLang,
-    nativeHeight: 'error' in row.native ? null : row.native.height,
+    nativeHeight: 'error' in row.native || 'skipped' in row.native ? null : row.native.height,
     nativeLines: nativeLinesView(row, text, score.derived),
     predictedLines: 'error' in prediction ? prediction : prediction.lines.map(line => ({ ...line, text: text.slice(line.start, line.end) })),
     ...(metric === 'painter' && row.painter !== null && !('error' in row.painter) && !('error' in prediction)
@@ -872,17 +874,90 @@ export async function* readLines(path: string): AsyncGenerator<string> {
   if (buffer.trim() !== '') yield buffer
 }
 
+// ---- Native observations from another run ----
+
+// Where each row of a rows file sits: its UTF-8 byte offset and length, by case id.
+export type RowIndex = Map<string, { offset: number; length: number }>
+
+// Indexes a rows file by case id without parsing the rows. run.ts writes every row as JSON that starts with
+// `{"id":"<id>"`; a line that doesn't is parsed whole to find its id. Throws on a row without an id or a duplicate id.
+export async function indexRows(path: string): Promise<RowIndex> {
+  // Start and end byte offsets of each non-empty line, in pairs.
+  const bounds: number[] = []
+  let base = 0
+  let lineStart = 0
+  for await (const chunk of Bun.file(path).stream()) {
+    for (let newline = chunk.indexOf(10); newline !== -1; newline = chunk.indexOf(10, newline + 1)) {
+      if (base + newline > lineStart) bounds.push(lineStart, base + newline)
+      lineStart = base + newline + 1
+    }
+    base += chunk.length
+  }
+  if (base > lineStart) bounds.push(lineStart, base)
+  const index: RowIndex = new Map()
+  const fd = openSync(path, 'r')
+  try {
+    const head = Buffer.alloc(256)
+    for (let k = 0; k < bounds.length; k += 2) {
+      const entry = { offset: bounds[k]!, length: bounds[k + 1]! - bounds[k]! }
+      const read = readSync(fd, head, 0, Math.min(head.length, entry.length), entry.offset)
+      const match = /^\{"id":("(?:[^"\\]|\\.)*")/.exec(head.toString('utf8', 0, read))
+      const id: unknown = match !== null ? JSON.parse(match[1]!) : readRowAt(fd, entry).id
+      if (typeof id !== 'string') throw new Error(`${path}: the row at byte ${entry.offset} has no id`)
+      if (index.has(id)) throw new Error(`${path}: two rows for case ${id}`)
+      index.set(id, entry)
+    }
+  } finally {
+    closeSync(fd)
+  }
+  return index
+}
+
+// The row at an index entry of an open rows file.
+export function readRowAt(fd: number, entry: { offset: number; length: number }): LabRow {
+  const bytes = Buffer.alloc(entry.length)
+  for (let done = 0; done < entry.length;) {
+    const read = readSync(fd, bytes, done, entry.length - done, entry.offset + done)
+    if (read === 0) throw new Error(`Short read at byte ${entry.offset + done}`)
+    done += read
+  }
+  return JSON.parse(bytes.toString('utf8')) as LabRow
+}
+
+// A row from run.ts --predict-only with the native observation of another run's row for the same case: the other row's
+// native observation, environment (so its document history) and native timing, with this row's prediction and painted
+// lines. Returns why not instead when the row has its own native observation, the other row has none, the rows observed
+// different cases, or their environments differ: browser, user agent, devicePixelRatio, visual viewport scale, page
+// language or fixture fonts.
+export function withNativeRow(row: LabRow, other: LabRow): LabRow | { error: string } {
+  if (!('skipped' in row.native)) return { error: `row ${row.id} has its own native observation; --native-rows takes rows from run.ts --predict-only` }
+  if ('skipped' in other.native) return { error: `the native row for ${row.id} has no native observation either` }
+  if (other.id !== row.id || JSON.stringify(other.case) !== JSON.stringify(row.case)) return { error: `the native row for ${row.id} observed a different case` }
+  const differences: string[] = []
+  const compare = (name: string, a: unknown, b: unknown): void => {
+    if (a !== b) differences.push(`${name} ${JSON.stringify(a)} vs ${JSON.stringify(b)}`)
+  }
+  compare('browser', row.browser, other.browser)
+  compare('userAgent', row.env.userAgent, other.env.userAgent)
+  compare('devicePixelRatio', row.env.devicePixelRatio, other.env.devicePixelRatio)
+  compare('visualViewportScale', row.env.visualViewportScale, other.env.visualViewportScale)
+  compare('pageLang', row.env.pageLang, other.env.pageLang)
+  compare('fontFixtures', row.env.fontFixtures.join('|'), other.env.fontFixtures.join('|'))
+  if (differences.length > 0) return { error: `the environments differ for ${row.id}: ${differences.join('; ')}` }
+  return { ...row, env: other.env, native: other.native, timings: { ...row.timings, nativeMs: other.timings.nativeMs } }
+}
+
 // webkit-host runs installed Safari's engine, so its rows compare with Safari's.
 function compareKey(browser: BrowserKind, id: string): string {
   return `${browser === 'webkit-host' ? 'safari' : browser}\n${id}`
 }
 
 async function main(): Promise<void> {
-  const USAGE = 'Usage: bun rebuild/lab/score.ts --rows=<file> [--cases=<file>] --out=<summary.json> [--examples=K] [--per-case=<file>] [--native-compare=<other rows file>]'
+  const USAGE = 'Usage: bun rebuild/lab/score.ts --rows=<file> [--cases=<file>] --out=<summary.json> [--examples=K] [--per-case=<file>] [--native-compare=<other rows file>] [--native-rows=<rows file that observed natively>]'
   const args = new Map<string, string>()
   for (const raw of process.argv.slice(2)) {
     const match = /^--([a-z-]+)=(.*)$/s.exec(raw)
-    if (match === null || !['rows', 'cases', 'out', 'examples', 'per-case', 'native-compare'].includes(match[1]!)) {
+    if (match === null || !['rows', 'cases', 'out', 'examples', 'per-case', 'native-compare', 'native-rows'].includes(match[1]!)) {
       console.error(`Unknown argument ${raw}. ${USAGE}`)
       process.exit(1)
     }
@@ -920,6 +995,13 @@ async function main(): Promise<void> {
     }
   }
 
+  // --native-rows: rows from run.ts --predict-only take their native observation from another run's row for the same case
+  // (withNativeRow). The scorer refuses rows it can't combine; a row with no native row stays unobserved and makes the
+  // scorer exit nonzero.
+  const nativeRowsPath = args.get('native-rows')
+  const nativeRows = nativeRowsPath === undefined ? null : { fd: openSync(nativeRowsPath, 'r'), index: await indexRows(nativeRowsPath) }
+  const nativeRowCounts = { used: 0, missing: 0 }
+
   const browsers: Partial<Record<BrowserKind, BrowserSummary>> = {}
   const families: Record<string, Partial<Record<BrowserKind, Record<MetricName, Counts>>>> = {}
   const failExamples: Partial<Record<BrowserKind, Record<MetricName, unknown[]>>> = {}
@@ -931,7 +1013,7 @@ async function main(): Promise<void> {
   const bump = (counts: Record<string, number>, key: string): void => { counts[key] = (counts[key] ?? 0) + 1 }
 
   for await (const line of readLines(rowsPath)) {
-    const row = JSON.parse(line) as LabRow
+    let row = JSON.parse(line) as LabRow
     const caseJson = JSON.stringify(row.case)
     if (casesById !== null) {
       const expected = casesById.get(row.id)
@@ -944,6 +1026,20 @@ async function main(): Promise<void> {
         continue
       }
     }
+    if (nativeRows !== null) {
+      const entry = nativeRows.index.get(row.id)
+      if (entry === undefined) {
+        nativeRowCounts.missing++
+      } else {
+        const combined = withNativeRow(row, readRowAt(nativeRows.fd, entry))
+        if ('error' in combined) {
+          console.error(`--native-rows=${nativeRowsPath}: ${combined.error}`)
+          process.exit(1)
+        }
+        row = combined
+        nativeRowCounts.used++
+      }
+    }
     const text = rowText(row.case)
     const score = scoreRow(row, text)
     const grid = layoutGrid(row.browser, row.env.devicePixelRatio)
@@ -953,14 +1049,14 @@ async function main(): Promise<void> {
     summary.rows++
     bump(summary.grids, String(grid))
     if ('error' in row.native) summary.nativeErrors++
-    else if (row.native.rejectedStyles.length > 0) summary.rejectedStyleRows++
+    else if (!('skipped' in row.native) && row.native.rejectedStyles.length > 0) summary.rejectedStyleRows++
     if ('error' in row.prediction) summary.predictionErrors++
     bump(summary.environments, `DPR ${row.env.devicePixelRatio}, scale ${row.env.visualViewportScale}, ${row.env.userAgent}`)
     summary.timingsMs.native += row.timings.nativeMs
     summary.timingsMs.predict += row.timings.predictMs
     summary.timingsMs.paint += row.timings.paintMs
     summary.timingsMs.painterObserve += row.timings.painterObserveMs
-    if (!('error' in row.native) && (row.native.missingFonts ?? []).length > 0) {
+    if (!('error' in row.native) && !('skipped' in row.native) && (row.native.missingFonts ?? []).length > 0) {
       summary.missingFontRows++
       for (const family of row.native.missingFonts!) bump(summary.missingFonts, family)
     }
@@ -1037,13 +1133,15 @@ async function main(): Promise<void> {
     }
   }
   if (perCaseFd !== null) closeSync(perCaseFd)
+  if (nativeRows !== null) closeSync(nativeRows.fd)
 
   const missingRows: Partial<Record<BrowserKind, number>> = {}
   if (casesById !== null) for (const [browser, ids] of seen) missingRows[browser] = [...casesById.keys()].filter(id => !ids.has(id)).length
   const summary = {
     generatedAt: new Date().toISOString(),
     rowsFile: rowsPath, casesFile: casesPath ?? null, nativeCompareFile: comparePath ?? null,
-    note: 'unobserved and not-applicable are never passes; widths are compared only on cases whose breaks pass; with --native-compare, history-dependent cases are excluded from the metric counts',
+    ...(nativeRowsPath === undefined ? {} : { nativeRowsFile: nativeRowsPath, nativeRows: nativeRowCounts }),
+    note:'unobserved and not-applicable are never passes; widths are compared only on cases whose breaks pass; with --native-compare, history-dependent cases are excluded from the metric counts',
     skippedRows, mismatchedCases, missingRows,
     browsers, families, failExamples, unobservedExamples,
   }
@@ -1056,6 +1154,10 @@ async function main(): Promise<void> {
   console.log(`summary: ${outPath}`)
   if (mismatchedCases > 0) {
     console.error(`${mismatchedCases} rows observed a case that differs from --cases`)
+    process.exit(1)
+  }
+  if (nativeRowCounts.missing > 0) {
+    console.error(`${nativeRowCounts.missing} rows have no row for their case in --native-rows=${nativeRowsPath}; scored as unobserved`)
     process.exit(1)
   }
   if (Object.keys(browsers).length === 0) {

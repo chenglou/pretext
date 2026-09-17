@@ -117,7 +117,9 @@ export type LabRow = {
   // The case exactly as the driver served it.
   case: Case
   env: PageEnv
-  native: NativeObservation | { error: string }
+  // `skipped`: run.ts --predict-only records predictions without observing native layout; score.ts --native-rows takes
+  // the native observation from another run's row for the same case.
+  native: NativeObservation | { error: string } | { skipped: string }
   prediction: Prediction | { error: string }
   // null when paint returned null or there was no prediction.
   painter: PainterObservation | { error: string } | null

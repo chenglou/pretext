@@ -1,5 +1,8 @@
 import { describe, expect, test } from 'bun:test'
-import { deriveNative, scoreRow, type Derived } from './score.ts'
+import { mkdtempSync, openSync, readFileSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { deriveNative, indexRows, readRowAt, scoreRow, withNativeRow, type Derived } from './score.ts'
 import type { BrowserKind, CodePointObservation, FontDecl, LabRow, Paragraph, PainterLine, Rect, TextRun } from './types.ts'
 
 const arial: FontDecl = { family: 'Arial', size: 16, weight: 400, style: 'normal' }
@@ -43,6 +46,7 @@ function makeRow(browser: BrowserKind, p: Paragraph, rects: Rect[][], runRects: 
 
 function derive(row: LabRow): Derived {
   if ('error' in row.native) throw new Error(row.native.error)
+  if ('skipped' in row.native) throw new Error('native observation skipped')
   const derived = deriveNative(row.case, row.native, row.case.paragraph.runs.map(run => run.text).join(''), row.browser, row.env.devicePixelRatio)
   if ('error' in derived) throw new Error(derived.error)
   return derived
@@ -216,5 +220,87 @@ describe('breaks compare clusters as native layout drew them', () => {
       [[at(0, 12)], [at(0, 10, 1)]], [[at(0, 12), at(0, 10, 1)]], [[0, 1, 12], [1, 2, 10]])
     expect(derive(row).lines.map(line => line.firstVisible)).toEqual([0, 1])
     expect(scoreRow(row).metrics.breaks).toEqual({ status: 'pass' })
+  })
+})
+
+describe('rows from run.ts --predict-only take native observations from another run', () => {
+  const p = paragraph([['ab cd', 'text']], { width: 30 })
+  // `ab ` on line 0 and `cd` on line 1, with a hanging space.
+  const rects = [[at(0, 9)], [at(9, 9)], [at(18, 4)], [at(0, 9, 1)], [at(9, 9, 1)]]
+  const runRects = [[at(0, 22), at(0, 18, 1)]]
+  const native = makeRow('chrome', p, rects, runRects, [[0, 3, 18], [3, 5, 18]])
+  const predictOnly = (lines: Array<[number, number, number]>): LabRow => ({ ...makeRow('chrome', p, rects, runRects, lines), native: { skipped: 'predict-only' } })
+
+  test('without a native row, every metric is unobserved', () => {
+    expect(scoreRow(predictOnly([[0, 5, 36]])).metrics.lineCount).toEqual({ status: 'unobserved', reason: 'native observation skipped', detail: 'predict-only' })
+  })
+
+  test('combined with the native row, the prediction scores against that observation', () => {
+    const combined = withNativeRow(predictOnly([[0, 5, 36]]), native)
+    if ('error' in combined) throw new Error(combined.error)
+    expect(combined.native).toBe(native.native)
+    expect(scoreRow(combined).metrics.lineCount).toEqual({ status: 'fail', reason: 'line count differs', detail: 'native 2, predicted 1' })
+    const good = withNativeRow(predictOnly([[0, 3, 18], [3, 5, 18]]), native)
+    if ('error' in good) throw new Error(good.error)
+    expect([scoreRow(good).metrics.breaks.status, scoreRow(good).metrics.widths.status]).toEqual(['pass', 'pass'])
+  })
+
+  test('refuses rows it cannot combine', () => {
+    const errorOf = (value: LabRow | { error: string }): string => ('error' in value ? value.error : 'combined')
+    expect(errorOf(withNativeRow(native, native))).toBe('row c-test has its own native observation; --native-rows takes rows from run.ts --predict-only')
+    expect(errorOf(withNativeRow(predictOnly([]), predictOnly([])))).toBe('the native row for c-test has no native observation either')
+    const otherCase = { ...native, case: { ...native.case, paragraph: { ...p, width: 31 } } }
+    expect(errorOf(withNativeRow(predictOnly([]), otherCase))).toBe('the native row for c-test observed a different case')
+    const otherBrowser = { ...native, env: { ...native.env, userAgent: 'other', devicePixelRatio: 1 } }
+    expect(errorOf(withNativeRow(predictOnly([]), otherBrowser))).toBe('the environments differ for c-test: userAgent "test" vs "other"; devicePixelRatio 2 vs 1')
+    expect(errorOf(withNativeRow(predictOnly([]), { ...native, browser: 'firefox' }))).toBe('the environments differ for c-test: browser "chrome" vs "firefox"')
+  })
+
+  test('indexRows finds rows by byte offset, past multi-byte text and blank lines', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'lab-score-test-'))
+    const path = join(dir, 'rows.ndjson')
+    const texts = ['日本語 テキスト', 'emoji 👩‍👩‍👧 and U+2028   here', 'plain']
+    const rows = texts.map((text, i) => ({ ...predictOnly([]), id: `c-${i}`, case: { ...native.case, id: `c-${i}`, paragraph: paragraph([[text, 'text']]) } }))
+    // A row whose id isn't first is found by parsing it.
+    const reordered = JSON.stringify({ family: 'test', id: 'c-late' })
+    writeFileSync(path, `${JSON.stringify(rows[0])}\n\n${JSON.stringify(rows[1])}\n${reordered}\n${JSON.stringify(rows[2])}`)
+    return indexRows(path).then(index => {
+      expect([...index.keys()]).toEqual(['c-0', 'c-1', 'c-late', 'c-2'])
+      const fd = openSync(path, 'r')
+      for (let i = 0; i < rows.length; i++) expect(readRowAt(fd, index.get(`c-${i}`)!)).toEqual(rows[i]!)
+      expect(Buffer.byteLength(readFileSync(path, 'utf8').split('\n')[2]!)).toBe(index.get('c-1')!.length)
+      writeFileSync(path, `${JSON.stringify(rows[0])}\n${JSON.stringify(rows[0])}\n`)
+      return expect(indexRows(path)).rejects.toThrow(`${path}: two rows for case c-0`)
+    })
+  })
+
+  test('score.ts --native-rows scores a predict-only run and refuses another environment', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'lab-score-cli-'))
+    const nativePath = join(dir, 'native.ndjson')
+    const predictPath = join(dir, 'predict.ndjson')
+    writeFileSync(nativePath, `${JSON.stringify(native)}\n`)
+    writeFileSync(predictPath, `${JSON.stringify(predictOnly([[0, 3, 18], [3, 5, 18]]))}\n`)
+    const run = (nativeRows: string): { code: number; stderr: string; summary: unknown } => {
+      const out = join(dir, 'summary.json')
+      writeFileSync(out, '')
+      const result = Bun.spawnSync(['bun', join(import.meta.dir, 'score.ts'), `--rows=${predictPath}`, `--native-rows=${nativeRows}`, `--out=${out}`])
+      const text = readFileSync(out, 'utf8')
+      return { code: result.exitCode, stderr: result.stderr.toString(), summary: text === '' ? null : JSON.parse(text) }
+    }
+    const ok = run(nativePath)
+    expect(ok.code).toBe(0)
+    const summary = ok.summary as { nativeRows: unknown; browsers: { chrome: { metrics: { breaks: { pass: number } } } } }
+    expect(summary.nativeRows).toEqual({ used: 1, missing: 0 })
+    expect(summary.browsers.chrome.metrics.breaks.pass).toBe(1)
+    writeFileSync(nativePath, `${JSON.stringify({ ...native, env: { ...native.env, userAgent: 'other' } })}\n`)
+    const refused = run(nativePath)
+    expect(refused.code).toBe(1)
+    expect(refused.stderr).toContain('the environments differ for c-test: userAgent "test" vs "other"')
+    expect(refused.summary).toBeNull()
+    writeFileSync(nativePath, `${JSON.stringify({ ...native, id: 'c-other' })}\n`)
+    const missing = run(nativePath)
+    expect(missing.code).toBe(1)
+    expect(missing.stderr).toContain('1 rows have no row for their case in --native-rows=')
+    expect((missing.summary as { nativeRows: unknown }).nativeRows).toEqual({ used: 0, missing: 1 })
   })
 })

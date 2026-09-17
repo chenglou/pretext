@@ -10,6 +10,11 @@ doesn't depend on the old library in `src/`.
 - `run.ts`: the driver. It serves the page, opens one background browser session and streams rows to NDJSON.
 - `score.ts`: the offline scorer.
 - `score.test.ts`: the scorer's derivation rules on small hand-made rows (`bun test rebuild/lab/score.test.ts`).
+- `gate.ts`: the no-regression gate over scored runs, and `gate.test.ts` its rules. `baselines/gate-chrome.json`,
+  `gate-firefox.json` and `gate-webkit.json` hold the passing (case, metric) pairs of the final runs of 2026-09-16 per
+  engine version (see "No-regression gate").
+- `cases/obligations.ts`: the `obligations` case kind, first-class cases from main's wrapping suite with provenance to
+  main's input and the lab metrics each browser requires (`bun rebuild/lab/cases/generate.ts obligations`).
 - `tsconfig.json`: the repo's strict settings over the lab and its case generators
   (`bunx tsc -p rebuild/lab/tsconfig.json --noEmit`).
 - `VALIDATION.md`: what the end-to-end validation ran, found and fixed.
@@ -35,7 +40,10 @@ bun rebuild/lab/score.ts --rows=.artifacts/lab/smoke/chrome-rows.ndjson --cases=
 120000), `--predictor=<file>`, which bundles another module in place of `predictor.ts` for experiments, and
 `--order=file|reverse|shuffle:<seed>`, the order the selected cases run in (default `file`; see "Page-history
 dependence"). `--allow-safari-frontmost` (Safari only, no value) skips the wait for Safari to leave the front
-(approved by the maintainer on 2026-09-16); the lab window then opens over the user's windows.
+(approved by the maintainer on 2026-09-16); the lab window then opens over the user's windows. `--predict-only` (no
+value) skips native observation: rows keep their format with `native: { skipped: 'predict-only' }`, the predictor and
+painter still run, and `run.json` adds `predictOnly` and `skippedNativeRows`. Score such rows with `score.ts
+--native-rows`.
 
 It writes `<out>/<browser>-rows.ndjson`, one row per case, and `<out>/<browser>-run.json` with totals, the case
 order, page contexts, the environment and errors. It exits nonzero when anything goes wrong: invalid cases, a launch or page
@@ -122,6 +130,13 @@ each run's Canvas width, and `paint` returns null.
 `score.ts` streams rows and derives native lines from the rects alone. The case carried by each row supplies the
 text and styles. `--cases` restricts scoring to those ids and fails when a row observed a different version of a case.
 `--native-compare=<other rows file>` compares the derivation with another run's (see "Page-history dependence").
+`--native-rows=<rows file>` scores rows from `run.ts --predict-only` against another run's native observations: each row
+takes the native observation, environment and native timing of the other file's row for its case id (found by byte
+offset, not held in memory). The scorer refuses (exit 1) a row that has its own native observation, a native row without
+one, a different case, or another environment (browser, user agent, devicePixelRatio, visual-viewport scale, page
+language or fixture fonts). A row with no native row stays unobserved ('native observation skipped'), the summary's
+`nativeRows` counts `used` and `missing`, and any missing row makes the scorer exit 1. Without the option a skipped row is
+unobserved.
 Imported as a module, `score.ts` runs nothing and exports `deriveNative`, `scoreRow`, `layoutGrid`, `nativeView`,
 `nativeDifference`, `rowText` and `readLines` with their types, so tools that compare rows use the scorer's rules.
 
@@ -239,6 +254,34 @@ bun rebuild/lab/score.ts --rows=<dir>/reverse/webkit-host-rows.ndjson --cases=<c
 - Each row's `env.documentCaseIndex` and `env.previousCaseId` say which cases the document observed before it. To test
   one suspect, run a case file holding the case alone and one holding the suspect then the case: a single-case run
   gets a fresh document in a fresh browser process.
+
+## No-regression gate
+
+`gate.ts` compares scored runs with a committed baseline for one engine version. A run is a `--per-case` file and the
+summary the same `score.ts` call wrote next to it; `--runs` takes files or directories and can repeat.
+
+```sh
+bun rebuild/lab/gate.ts --baseline=rebuild/lab/baselines/gate-chrome.json \
+  --runs=.artifacts/lab/<dir>/smoke-forward,.artifacts/lab/<dir>/smoke-reverse [--complete] [--out=<report.json>]
+bun rebuild/lab/gate.ts --seed --engine=blink --engine-version='Chrome 153.0.8010.48' --note='<library and runs>' \
+  --baseline=rebuild/lab/baselines/gate-chrome.json --runs=<the runs to seed from>
+```
+
+- A baseline pair is a pass in every seeding run that observed its case outside history dependence. A pair passing in
+  some seeding runs and not others is unstable, and cases a seeding run marked history-dependent hold no pairs.
+- The gate fails (exit 1) on a lost pass: a baseline pair that isn't a pass in a current run observing the case,
+  whatever else improved. New passes are reported. With `--complete`, a baseline case with passes that no current run
+  observes also fails it.
+- History-dependent cases, current or at seeding, and unstable pairs never fail the gate; the report lists them.
+- Runs from an environment the baseline didn't record (DPR, visual-viewport scale, user agent), from another engine, or
+  scored without `--native-compare` are refused (exit 2). `--allow-uncompared` accepts single-order runs.
+- Seeding over an existing baseline prints the pairs the new seed loses and gains, which is the review of a library
+  change or a browser update. Chrome's user agent says `Chrome/153.0.0.0` for every 153 build, so the environment
+  can't tell 153.0.8010.48 from a later 153 build; installed Safari's says `Version/27.0`, and webkit-host's names the
+  WebKit build.
+
+`gate-webkit.json` was seeded from webkit-host's per-set runs plus installed Safari's and webkit-host's combined runs,
+so either browser's runs check against it.
 
 ## Range geometry, per browser
 
