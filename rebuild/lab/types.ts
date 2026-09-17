@@ -5,9 +5,12 @@
 // apart from Safari's; it takes Safari's cases and is scored like Safari.
 export type BrowserKind = 'chrome' | 'safari' | 'firefox' | 'webkit-host'
 
-// The styled paragraph is the library's input, defined once in rebuild/src/model.ts.
-import type { Paragraph } from '../src/model.ts'
-export type { FontDecl, Paragraph, TextRun } from '../src/model.ts'
+// The styled paragraph is defined once in rebuild/src/model.ts. A case describes the page, so its fonts are CSS fonts
+// without the font facts the library also takes; predictor.ts adds those (DESIGN.md §1.2), and they don't enter case ids.
+import type { CssFont, ParagraphOf, TextRunOf } from '../src/model.ts'
+export type FontDecl = CssFont
+export type TextRun = TextRunOf<CssFont>
+export type Paragraph = ParagraphOf<CssFont>
 
 export type Case = {
   id: string

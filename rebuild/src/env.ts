@@ -1,92 +1,134 @@
-// The environment a prediction is for: the engine and its pinned version, and the page, device and system facts the
-// engines' layout reads. detectEnvironment() reads them from the running browser. Anything else (tests, predicting one
-// engine from another runtime) builds an Environment object directly.
+// The environment a prediction is for: the engine, the build the caller runs, and the page, device and browser-process
+// facts that engine's layout reads (DESIGN.md §1.4). The library reads only page facts itself (rebuild/CHARTER.md,
+// "Boundaries"): the engine from the user agent, devicePixelRatio, <html lang> and which segmenters the running browser
+// has. Everything else is given, and a fact given as null is laid out with its documented default and reported as a gap.
+// Tests, and predictions for another runtime, build an Environment directly.
 
 export type EngineName = 'blink' | 'webkit' | 'gecko'
 
-export type Engine =
-  | { name: 'blink'; browser: 'Chrome'; version: '153.0.8010.48'; icu: '78.2' }
-  | { name: 'webkit'; browser: 'Safari'; version: '27.0'; webkit: '7625.1.29.11.27'; icu: 'libicucore 78.1' }
-  | { name: 'gecko'; browser: 'Firefox'; version: '156.0'; segmenter: 'icu_segmenter 2.1.2' }
+// The builds the ports are pinned to, as the app bundles report them: Chrome's and Firefox's CFBundleShortVersionString,
+// and WebKit.framework's CFBundleVersion, which Safari 27.0 and webkit-host share (source tag WebKit-7625.1.29.11.27).
+// A layout for another build, or for an unknown one, reports the engine-build gap.
+export const PINNED_BUILDS = { blink: '153.0.8010.48', webkit: '22625.1.29.11.27', gecko: '156.0' } as const satisfies Record<EngineName, string>
 
-export const BLINK: Engine = { name: 'blink', browser: 'Chrome', version: '153.0.8010.48', icu: '78.2' }
-export const WEBKIT: Engine = { name: 'webkit', browser: 'Safari', version: '27.0', webkit: '7625.1.29.11.27', icu: 'libicucore 78.1' }
-export const GECKO: Engine = { name: 'gecko', browser: 'Firefox', version: '156.0', segmenter: 'icu_segmenter 2.1.2' }
-
-// Where boundaries inside runs of Thai, Lao, Khmer and Myanmar text come from (DESIGN.md §6). Only the running
-// browser's own segmenter is backed by the engine's dictionary or model data, so an Environment built for another
-// runtime has 'unavailable', and predictions with such text name that gap.
-export type DictionaryBreaks =
-  // Chrome: Intl.v8BreakIterator runs the same ICU 78.2 and icudtl.dat as layout (specs/blink-canvas.md §2.6).
-  | { kind: 'v8-break-iterator' }
-  // Safari: JSC's Intl.Segmenter word granularity over libicucore; Firefox: ICU4X's word segmenter with the LSTM
-  // models layout uses (specs/webkit-text.md §5.5, specs/gecko-text.md §10).
-  | { kind: 'intl-segmenter-word' }
-  | { kind: 'unavailable' }
-
-export type Environment = {
-  engine: Engine
-  // window.devicePixelRatio. Blink: its layout zoom, device scale factor times browser zoom (specs/blink-lines.md §2.1).
-  // Gecko: 60 / app units per device pixel, browser zoom included (specs/gecko-lines.md §2.1). WebKit: the backing scale
-  // factor; no line-breaking code reads it (specs/webkit-lines.md §1.6).
+export type BlinkEnvironment = {
+  engine: 'blink'
+  // The app bundle version the caller runs, or null.
+  build: string | null
+  // window.devicePixelRatio: device scale factor times browser zoom, Blink's layout zoom (specs/blink-lines.md §2.1).
   devicePixelRatio: number
-  // Safari's page zoom, which neither devicePixelRatio nor any page API exposes. 1 for Blink and Gecko, whose browser
-  // zoom is inside devicePixelRatio.
-  pageZoom: number
-  // document.documentElement.lang when the paragraph is laid out, '' when absent. Blink's OffscreenCanvas and Gecko's
-  // disconnected canvas read it (specs/blink-canvas.md §1.2, specs/gecko-canvas.md §1.2 C3).
+  // document.documentElement.lang, '' when absent. OffscreenCanvas resolves it when the font string is set
+  // (specs/blink-canvas.md §1.2).
   pageLang: string
-  // The document's Content-Language (HTTP header or <meta http-equiv>), or null. It is the root locale when no element
-  // has lang (specs/blink-text.md §2.F.3, specs/webkit-text.md §4.1, specs/gecko-text.md §2.4). Pages can't read the
-  // header, so detection reports null.
+  // The document's Content-Language (HTTP header or <meta http-equiv>), or null when it has none: the root locale when
+  // no element has lang (specs/blink-text.md §2.F.3). Pages can't read the header, so it is given.
   contentLanguage: string | null
-  // navigator.language. What each engine reads for unlabeled content, and whether navigator.language equals it, is in
-  // DESIGN.md §1: Chrome's UI language, Safari's preferred languages, Firefox's regional-prefs locale.
-  uiLanguage: string
-  // navigator.languages. WebKit's specialized Chinese locale is the first entry starting with zh- (specs/webkit-canvas.md §1.3).
-  preferredLanguages: readonly string[]
-  dictionaryBreaks: DictionaryBreaks
+  // DefaultLanguage(), Chrome's application locale: the break table for content without a locale, the retry locale of
+  // ko@lb=strict, generic families and the HarfBuzz language (specs/blink-canvas.md §2.3; probes blink-canvas H22, H23).
+  // null: such content reports ui-language.
+  uiLanguage: string | null
+  // Intl.v8BreakIterator runs the same ICU 78.2 and icudtl.dat as layout (specs/blink-canvas.md §2.6).
+  dictionaryBreaks: { kind: 'v8-break-iterator' } | { kind: 'unavailable' }
 }
+
+export type WebKitEnvironment = {
+  engine: 'webkit'
+  build: string | null
+  // The backing scale factor; no line-breaking code reads it (specs/webkit-lines.md §1.6).
+  devicePixelRatio: number
+  // Safari's page zoom, which multiplies lengths and font sizes and no page API shows (specs/webkit-gaps.md §1). null:
+  // laid out at 1, with the page-zoom gap.
+  pageZoom: number | null
+  pageLang: string
+  contentLanguage: string | null
+  // WTF::userPreferredLanguages() of the WebContent process, the system's preferred languages passed at launch
+  // (XPCServiceMain.mm:67-78). A Han lang becomes the first entry starting with zh- (specs/webkit-canvas.md §1.3). null:
+  // such content reports ui-language.
+  preferredLanguages: readonly string[] | null
+  // uloc_getDefault() of the WebContent process: en_US_POSIX unless launchd passes LANG or LC_* (specs/webkit-gaps.md
+  // §8.2). The quote overrides of a locale ICU has no data for fall back through it (§8.3). null: such content reports
+  // ui-language.
+  icuDefaultLocale: string | null
+  // JSC's Intl.Segmenter word granularity over libicucore's dictionaries (specs/webkit-text.md §5.5).
+  dictionaryBreaks: { kind: 'intl-segmenter-word' } | { kind: 'unavailable' }
+}
+
+export type GeckoEnvironment = {
+  engine: 'gecko'
+  build: string | null
+  // 60 / app units per device pixel, browser zoom included (specs/gecko-lines.md §2.1).
+  devicePixelRatio: number
+  pageLang: string
+  contentLanguage: string | null
+  // The OS regional-preferences locale, lowercased (nsLanguageAtomService.cpp:107-127): the style language of content
+  // without lang in a UTF-8 document, which decides the ja/zh segment-break rule and the shaping language
+  // (specs/gecko-text.md §2.4; probe gecko-text H15). Firefox's navigator.language comes from accept-languages instead.
+  // null: such content reports ui-language.
+  regionalPrefsLocale: string | null
+  // Firefox's Intl.Segmenter word granularity runs ICU4X's word segmenter with layout's LSTM models (specs/gecko-text.md §10).
+  dictionaryBreaks: { kind: 'intl-segmenter-word' } | { kind: 'unavailable' }
+}
+
+export type Environment = BlinkEnvironment | WebKitEnvironment | GeckoEnvironment
+
+// What the caller knows about the browser it runs and the document, for that engine.
+export type GivenFacts =
+  | { engine: 'blink'; build: string | null; contentLanguage: string | null; uiLanguage: string | null }
+  | { engine: 'webkit'; build: string | null; contentLanguage: string | null; pageZoom: number | null; preferredLanguages: readonly string[] | null; icuDefaultLocale: string | null }
+  | { engine: 'gecko'; build: string | null; contentLanguage: string | null; regionalPrefsLocale: string | null }
+
+export type DetectedEngine =
+  | { kind: 'supported'; engine: EngineName }
+  | { kind: 'unsupported'; userAgent: string; reason: string }
 
 export type DetectedEnvironment =
   | { kind: 'supported'; env: Environment }
   | { kind: 'unsupported'; userAgent: string; reason: string }
 
-// Chrome's reduced user agent shows only the major version (Chrome/153.0.0.0); the full build needs the asynchronous
-// userAgentData.getHighEntropyValues, so detection pins the major version and the lab records the full user agent.
-function engineFromUserAgent(ua: string): Engine | string {
-  if (/\bFirefox\//.test(ua)) return /\bFirefox\/156\.0\b/.test(ua) ? GECKO : 'Firefox other than 156.0'
-  if (/\bEdg\//.test(ua) || /\bOPR\//.test(ua)) return 'Chromium browsers other than Chrome are not modeled'
-  if (/\bChrome\//.test(ua)) return /\bChrome\/153\./.test(ua) ? BLINK : 'Chrome other than 153'
-  if (/\bVersion\/[\d.]+ .*Safari\//.test(ua)) return /\bVersion\/27\.0\b/.test(ua) ? WEBKIT : 'Safari other than 27.0'
-  return 'unknown browser'
+// The engine from the user agent. The build isn't read here: Chrome's reduced user agent shows only the major version.
+export function detectEngine(): DetectedEngine {
+  const ua = navigator.userAgent
+  if (/\bFirefox\//.test(ua)) return { kind: 'supported', engine: 'gecko' }
+  if (/\bEdg\//.test(ua) || /\bOPR\//.test(ua)) return { kind: 'unsupported', userAgent: ua, reason: 'Chromium browsers other than Chrome are not modeled' }
+  if (/\bChrome\//.test(ua)) return { kind: 'supported', engine: 'blink' }
+  if (/\bVersion\/[\d.]+ .*Safari\//.test(ua)) return { kind: 'supported', engine: 'webkit' }
+  return { kind: 'unsupported', userAgent: ua, reason: 'unknown browser' }
 }
 
-export function detectEnvironment(): DetectedEnvironment {
+export function detectEnvironment(given: GivenFacts): DetectedEnvironment {
+  const detected = detectEngine()
+  if (detected.kind === 'unsupported') return detected
   const ua = navigator.userAgent
-  const engine = engineFromUserAgent(ua)
-  if (typeof engine === 'string') return { kind: 'unsupported', userAgent: ua, reason: engine }
-  let dictionaryBreaks: DictionaryBreaks
-  switch (engine.name) {
+  if (detected.engine !== given.engine) return { kind: 'unsupported', userAgent: ua, reason: `the given facts are for ${given.engine}; the page runs ${detected.engine}` }
+  const devicePixelRatio = window.devicePixelRatio
+  const pageLang = document.documentElement.lang
+  switch (given.engine) {
     case 'blink':
-      dictionaryBreaks = 'v8BreakIterator' in Intl ? { kind: 'v8-break-iterator' } : { kind: 'unavailable' }
-      break
+      return {
+        kind: 'supported',
+        env: {
+          engine: 'blink', build: given.build, devicePixelRatio, pageLang, contentLanguage: given.contentLanguage,
+          uiLanguage: given.uiLanguage,
+          dictionaryBreaks: 'v8BreakIterator' in Intl ? { kind: 'v8-break-iterator' } : { kind: 'unavailable' },
+        },
+      }
     case 'webkit':
+      return {
+        kind: 'supported',
+        env: {
+          engine: 'webkit', build: given.build, devicePixelRatio, pageZoom: given.pageZoom, pageLang,
+          contentLanguage: given.contentLanguage, preferredLanguages: given.preferredLanguages, icuDefaultLocale: given.icuDefaultLocale,
+          dictionaryBreaks: typeof Intl.Segmenter === 'function' ? { kind: 'intl-segmenter-word' } : { kind: 'unavailable' },
+        },
+      }
     case 'gecko':
-      dictionaryBreaks = typeof Intl.Segmenter === 'function' ? { kind: 'intl-segmenter-word' } : { kind: 'unavailable' }
-      break
-  }
-  return {
-    kind: 'supported',
-    env: {
-      engine,
-      devicePixelRatio: window.devicePixelRatio,
-      pageZoom: 1,
-      pageLang: document.documentElement.lang,
-      contentLanguage: null,
-      uiLanguage: navigator.language,
-      preferredLanguages: navigator.languages,
-      dictionaryBreaks,
-    },
+      return {
+        kind: 'supported',
+        env: {
+          engine: 'gecko', build: given.build, devicePixelRatio, pageLang, contentLanguage: given.contentLanguage,
+          regionalPrefsLocale: given.regionalPrefsLocale,
+          dictionaryBreaks: typeof Intl.Segmenter === 'function' ? { kind: 'intl-segmenter-word' } : { kind: 'unavailable' },
+        },
+      }
   }
 }

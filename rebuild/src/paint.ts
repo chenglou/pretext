@@ -21,17 +21,18 @@
 //   block overrides to the base direction and nested override spans add one level each, so the browser reorders the
 //   line with the paragraph's levels instead of resolving the line alone (R8, specs/painter.md §4.4). Text never sits
 //   directly in an override element, and the line's trailing white space takes the level of the text before it.
-// Nothing sets a text width: the lab compares the painted extent with the predicted width (rebuild/lab/README.md
-// "painter").
+// - A line without a line box paints nothing and gets no block.
+// Nothing sets a text width: the lab compares the painted rects with the rects the observation contract expects
+// (DESIGN.md §7, §9).
 import type { EngineName } from './env.js'
-import type { FontDecl, Fragment, Paragraph, ParagraphLayout, TextRun } from './model.js'
+import type { CssFont, Fragment, Paragraph, ParagraphLayout, TextRun } from './model.js'
 
 // U+0020 and U+0009..U+000D, the white space of Blink's IsASCIISpace: a text node holding only these as a block's first
 // child gets no layout object in collapsing modes (Blink text.cc:319-364, the Blink port's layoutTextNeeded).
 const ASCII_SPACE_ONLY = /^[\t-\r ]+$/
 const SPACES_AND_TABS = /^[\t ]+$/
 
-function setFont(style: CSSStyleDeclaration, font: FontDecl): void {
+function setFont(style: CSSStyleDeclaration, font: CssFont): void {
   style.fontFamily = font.family
   style.fontSize = `${font.size}px`
   style.fontWeight = String(font.weight)
@@ -77,8 +78,13 @@ export function paintLines(paragraph: Paragraph, layout: ParagraphLayout, doc: D
   const base = paragraph.direction === 'rtl' ? 1 : 0
   const collapses = paragraph.whiteSpace === 'normal' || paragraph.whiteSpace === 'nowrap'
   const out: HTMLDivElement[] = []
+  // The last line with a line box before this one.
+  let previousJoins = false
   for (let l = 0; l < layout.lines.length; l++) {
     const line = layout.lines[l]!
+    if (!line.hasLineBox) continue
+    const joinsPreviousLine = previousJoins
+    previousJoins = line.joinsNextLine
     const element = doc.createElement('div')
     const s = element.style
     s.display = 'block'
@@ -150,7 +156,6 @@ export function paintLines(paragraph: Paragraph, layout: ParagraphLayout, doc: D
       }
     }
     if (reorders) s.unicodeBidi = 'bidi-override'
-    const joinsPreviousLine = l > 0 && layout.lines[l - 1]!.joinsNextLine
     // In the paragraph the hyphen belongs to the line after the break was taken, and the letters around a joined edge
     // are one cluster run; painted, the hyphen span and the leading U+200D start new items and grapheme clusters, which
     // an overflowing line would break before (Blink HandleOverflow's break-anywhere retry, WebKit's soft wrap opportunity
