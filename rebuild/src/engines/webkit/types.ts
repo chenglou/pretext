@@ -1,5 +1,5 @@
 // WebKit's prepared paragraph and line state (Safari 27.0, WebKit 7625.1.29.11.27). The WebKit port owns this file.
-import type { Environment } from '../../env.js'
+import type { WebKitEnvironment } from '../../env.js'
 import type { Gap, Paragraph } from '../../model.js'
 
 // Which line builder InlineFormattingContext::layout picks (specs/webkit-lines.md §2, InlineFormattingContext.cpp:170-184).
@@ -33,16 +33,27 @@ export type WebKitBox = {
   is8Bit: boolean
   // RenderText::canUseSimpleFontCodePath: FontCascade::characterRangeCodePath isn't Complex.
   simpleFontCodePath: boolean
-  // InlineTextBox::canUseSimplifiedContentMeasuring (RenderText.cpp:480-524), assuming every glyph comes from the primary
-  // font, which Canvas can't show (gap simplified-measuring).
+  // InlineTextBox::canUseSimplifiedContentMeasuring (RenderText.cpp:480-524). The primary-font coverage condition is tested
+  // only for fixed-pitch boxes, the only ones that read the result.
   simplifiedMeasuring: boolean
-  // Font::determinePitch for the primary family (specs/webkit-gaps.md §2.1, §2.4; gap fixed-pitch-path).
+  // Font::determinePitch of the primary font (FontCoreText.cpp:753-785), from FontFacts.monospace: the breakWord shortcut
+  // (TextUtil.cpp:265-280).
   fixedPitch: boolean
+  // canTakeFixedPitchFastContentMeasuring: fixed pitch and a primary family other than Courier New (FontCoreText.cpp:776-784;
+  // Safari hides user-installed fonts, so :784's attribute is never set for web content). The width shortcut.
   fixedPitchFastMeasuring: boolean
+  // FontFacts.monospace was null: laid out as variable pitch, with the fixed-pitch-path gap where test T1 fails.
+  monospaceUnknown: boolean
+  // The primary family as a lowercase name, from FontFacts.primaryFamily or the first family listed.
+  primaryFamily: string
+  // hyphenString() (StyleComputedStyle.cpp:419-435): U+2010 when the primary font maps it, else U+002D. FontFacts.mapsHyphen
+  // null lays out U+2010 and reports hyphen-glyph where the two measure differently.
+  hyphen: string
+  hyphenUnknown: boolean
   // computedLocale after the Han swap; '' for a null locale (specs/webkit-text.md §4.1).
   locale: string
-  // Canvas contexts: the run's font with its letter and word spacing, and the same font with no spacing (the primary
-  // font's space advance for tab stops and the fixed-pitch shortcut).
+  // Canvas contexts: the run's font with its letter spacing and no word spacing (JS adds word spacing as WidthIterator
+  // does), and the same font with no spacing (the primary font's space advance for tab stops and the fixed-pitch shortcut).
   context: number
   plainContext: number
   // float32 px after page zoom.
@@ -76,7 +87,12 @@ export type WebKitItem =
 
 export type WebKitPrepared = {
   paragraph: Paragraph
-  env: Environment
+  env: WebKitEnvironment
+  // env.pageZoom, or 1 when it isn't given (gap page-zoom).
+  zoom: number
+  // env.icuDefaultLocale, or en_US_POSIX, what Apple ICU computes without LANG or LC_* (specs/webkit-gaps.md §8.2), when it
+  // isn't given (gap ui-language where it decides).
+  icuDefaultLocale: string
   style: WebKitStyle
   builder: WebKitLineBuilder
   boxes: WebKitBox[]

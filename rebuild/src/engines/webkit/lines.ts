@@ -1,25 +1,36 @@
-// WebKit line filling (Safari 27.0): Line bookkeeping, InlineContentBreaker with breakWord and the carried remainder, and
-// the line builders, TextOnlySimpleLineBuilder (also run inside RangeBasedLineBuilder) and LineBuilder
-// (specs/webkit-lines.md §1, §4-§9). Cited at WebKit-7625.1.29.11.27 under Source/WebCore/layout/formattingContexts/
-// inline/: IL = InlineLine.cpp, ICB = InlineContentBreaker.cpp, TOS = TextOnlySimpleLineBuilder.cpp,
-// ILB = InlineLineBuilder.cpp, IFU = InlineFormattingUtils.cpp, ALB = AbstractLineBuilder.cpp.
+// WebKit line filling (Safari 27.0): Line bookkeeping, InlineContentBreaker with breakWord and the carried remainder, the
+// line builders, TextOnlySimpleLineBuilder (also run inside RangeBasedLineBuilder) and LineBuilder
+// (specs/webkit-lines.md §1, §4-§9), and the line's output from the closed Line::Run list: display boxes
+// (InlineDisplayContentBuilder) and fragments. Cited at WebKit-7625.1.29.11.27 under
+// Source/WebCore/layout/formattingContexts/inline/: IL = InlineLine.cpp, ICB = InlineContentBreaker.cpp,
+// TOS = TextOnlySimpleLineBuilder.cpp, ILB = InlineLineBuilder.cpp, IFU = InlineFormattingUtils.cpp,
+// ALB = AbstractLineBuilder.cpp, IDCB = display/InlineDisplayContentBuilder.cpp, IDLB = display/InlineDisplayLineBuilder.cpp.
 import type { Measurer } from '../../measure/canvas.js'
-import type { Fragment, LineOf } from '../../model.js'
+import type { Fragment, Gap, LineOf, WebKitDisplayBox, WebKitLineGeometry } from '../../model.js'
 import { canBreakBefore, findNextBreakablePosition, makeFactory, mayBreakInBetween } from './breaks.js'
 import { DEFAULT_BIDI_LEVEL } from './content.js'
-import { boxWidth, breakWord, firstUserPerceivedCharacterLength, forwardOneCodePoint, hyphenWidth, itemWidth } from './measure.js'
-import { isDefaultIgnorable } from './data.js'
-import { preservesSpacesAndTabs, trailingWhitespaceHangs } from './style.js'
-import type { WebKitItem, WebKitLineStart, WebKitPrepared, WebKitTextItem } from './types.js'
+import { boxWidth, breakWord, firstUserPerceivedCharacterLength, forwardOneCodePoint, hyphenGlyphsDiffer, hyphenWidth, itemWidth } from './measure.js'
+import { collapsesWhiteSpace, preservesSpacesAndTabs, trailingWhitespaceHangs } from './style.js'
+import type { WebKitBox, WebKitItem, WebKitLineStart, WebKitPrepared, WebKitTextItem } from './types.js'
 
 const f32 = Math.fround
 const F32_MAX = 3.4028234663852886e38
 
-type Layout = { p: WebKitPrepared; m: Measurer; lineWidth: number }
+// `gaps` collects the gaps this line's filling decides.
+type Layout = { p: WebKitPrepared; m: Measurer; lineWidth: number; gaps: Gap[] }
 type SoftLineBreakItem = Extract<WebKitItem, { kind: 'soft-line-break' }>
 type InlineBoxItem = Extract<WebKitItem, { kind: 'inline-box-start' | 'inline-box-end' }>
 type ContentItem = WebKitTextItem | InlineBoxItem
 type Position = { index: number; offset: number }
+
+// TextUtil::hyphenWidth, read while filling a line. Where FontFacts.mapsHyphen isn't given and U+2010 and U+002D measure
+// differently, the fact decides this line's fit, so the line reports hyphen-glyph.
+function lineHyphenWidth(L: Layout, box: WebKitBox): number {
+  if (box.hyphenUnknown && hyphenGlyphsDiffer(L.m, box) && !L.gaps.some(g => g.gap === 'hyphen-glyph' && g.run === box.run)) {
+    L.gaps.push({ gap: 'hyphen-glyph', run: box.run, detail: `whether ${box.primaryFamily} maps U+2010 isn't given; laid out with U+2010, which measures differently from "-" here` })
+  }
+  return hyphenWidth(L.m, box)
+}
 
 // ---- Line (IL, InlineLine.h) ----
 
@@ -35,18 +46,13 @@ type LineRun = {
   level: number
   textStart: number
   textLength: number
+  // Line::Run::Text::needsHyphen (InlineLine.h:388-393): the hyphen width is inside `width`.
+  needsHyphen: boolean
   trailing: TrailingWhitespace
   trailingLength: number
   trailingWidth: number
   lastNonWhitespaceContentStart: number | null
 }
-
-// What the line holds in logical order, for fragments: every appended text item or piece of one, soft line breaks, and
-// the hyphen.
-type Piece =
-  | { kind: 'text'; item: WebKitTextItem; width: number; collapsed: boolean; trimmed: boolean }
-  | { kind: 'soft-line-break'; item: SoftLineBreakItem }
-  | { kind: 'hyphen'; box: number; at: number; width: number; level: number }
 
 type Line = {
   runs: LineRun[]
@@ -56,18 +62,18 @@ type Line = {
   trimHasFully: boolean
   trimOffset: number
   trimWidth: number
-  trimPiece: number
+  // The unit TrimmableTrailingContent::remove took out of its run (IL:963-987): still in the box's content, in no run.
+  trimmedUnit: { box: number; offset: number; level: number } | null
   // HangingContent's trailing white space (IsConditional::WhenFollowedByForcedLineBreak).
   hanging: { length: number; width: number } | null
   trailingSoftHyphenWidth: number | null
   hasNonDefaultBidiLevelRun: boolean
-  pieces: Piece[]
 }
 
 function newLine(spanningInlineBox: boolean): Line {
   const line: Line = {
-    runs: [], contentLogicalWidth: 0, trimRunIndex: null, trimHasFully: false, trimOffset: 0, trimWidth: 0, trimPiece: -1,
-    hanging: null, trailingSoftHyphenWidth: null, hasNonDefaultBidiLevelRun: false, pieces: [],
+    runs: [], contentLogicalWidth: 0, trimRunIndex: null, trimHasFully: false, trimOffset: 0, trimWidth: 0, trimmedUnit: null,
+    hanging: null, trailingSoftHyphenWidth: null, hasNonDefaultBidiLevelRun: false,
   }
   // Line::initialize (IL:48-78): a line starting inside a span begins with its spanning inline box start.
   if (spanningInlineBox) line.runs.push(boxRun('spanning-inline-box-start', 0, 255))
@@ -75,7 +81,7 @@ function newLine(spanningInlineBox: boolean): Line {
 }
 
 function boxRun(kind: LineRun['kind'], left: number, level: number): LineRun {
-  return { kind, isWordSeparator: false, box: -1, left, width: 0, level, textStart: 0, textLength: 0, trailing: 'not-applicable', trailingLength: 0, trailingWidth: 0, lastNonWhitespaceContentStart: null }
+  return { kind, isWordSeparator: false, box: -1, left, width: 0, level, textStart: 0, textLength: 0, needsHyphen: false, trailing: 'not-applicable', trailingLength: 0, trailingWidth: 0, lastNonWhitespaceContentStart: null }
 }
 
 function lastRunLogicalRight(line: Line): number {
@@ -88,7 +94,6 @@ function resetTrimmable(line: Line): void {
   line.trimHasFully = false
   line.trimOffset = 0
   line.trimWidth = 0
-  line.trimPiece = -1
 }
 
 // Line::Run::isContentful (InlineLine.h:129), and Line::hasContent.
@@ -116,7 +121,7 @@ function textRun(p: WebKitPrepared, item: WebKitTextItem, left: number, width: n
   const length = type === 'collapsed' ? 1 : item.end - item.start
   return {
     kind: 'text', isWordSeparator: item.isWordSeparator, box: item.box, left, width, level: item.level, textStart: item.start,
-    textLength: length, trailing: type, trailingLength: type === 'not-applicable' ? 0 : length,
+    textLength: length, needsHyphen: false, trailing: type, trailingLength: type === 'not-applicable' ? 0 : length,
     trailingWidth: type === 'not-applicable' ? 0 : width, lastNonWhitespaceContentStart: null,
   }
 }
@@ -141,7 +146,7 @@ function expandRun(p: WebKitPrepared, run: LineRun, item: WebKitTextItem, width:
   run.textLength += length
 }
 
-function updateTrailingContent(L: Layout, line: Line, item: WebKitTextItem, width: number, oldContentLogicalWidth: number, pieceIndex: number): void {
+function updateTrailingContent(L: Layout, line: Line, item: WebKitTextItem, width: number, oldContentLogicalWidth: number): void {
   line.trailingSoftHyphenWidth = null
   const isTrimmable = item.isWhitespace && !preservesSpacesAndTabs(L.p.style)
   if (isTrimmable) {
@@ -151,12 +156,11 @@ function updateTrailingContent(L: Layout, line: Line, item: WebKitTextItem, widt
     line.trimOffset = offset
     line.trimHasFully = true
     line.trimRunIndex ??= line.runs.length - 1
-    line.trimPiece = pieceIndex
   } else {
     resetTrimmable(line)
   }
   line.hanging = !isTrimmable && item.isWhitespace && trailingWhitespaceHangs(L.p.style) ? { length: item.end - item.start, width } : null
-  if (item.hasTrailingSoftHyphen) line.trailingSoftHyphenWidth = hyphenWidth(L.m, L.p.boxes[item.box]!)
+  if (item.hasTrailingSoftHyphen) line.trailingSoftHyphenWidth = lineHyphenWidth(L, L.p.boxes[item.box]!)
 }
 
 // Line::appendText (IL:346-481), LineBuilder's variant.
@@ -174,10 +178,7 @@ function appendText(L: Layout, line: Line, item: WebKitTextItem, width: number):
       break
     }
   }
-  if (willCollapseCompletely) {
-    line.pieces.push({ kind: 'text', item, width: 0, collapsed: true, trimmed: false })
-    return
-  }
+  if (willCollapseCompletely) return
   const last = line.runs[line.runs.length - 1]
   const needsNewRun = last === undefined || last.kind !== 'text' || last.box !== item.box || last.level !== item.level
     || last.trailing === 'collapsed'
@@ -207,8 +208,7 @@ function appendText(L: Layout, line: Line, item: WebKitTextItem, width: number):
     contentLogicalRight = Math.max(withoutLastTextRun, f32(lastRight + width))
   }
   line.contentLogicalWidth = Math.max(oldContentLogicalWidth, contentLogicalRight)
-  const pieceIndex = line.pieces.push({ kind: 'text', item, width, collapsed: false, trimmed: false }) - 1
-  updateTrailingContent(L, line, item, width, oldContentLogicalWidth, pieceIndex)
+  updateTrailingContent(L, line, item, width, oldContentLogicalWidth)
 }
 
 // Line::appendTextFast (IL:483-556), the simple builder's variant.
@@ -218,10 +218,7 @@ function appendTextFast(L: Layout, line: Line, item: WebKitTextItem, width: numb
   const last = line.runs[line.runs.length - 1]
   const willCollapseCompletely = item.isWhitespace && !preservesSpacesAndTabs(p.style)
     && (last === undefined || last.trailing === 'collapsible' || last.trailing === 'collapsed')
-  if (willCollapseCompletely) {
-    line.pieces.push({ kind: 'text', item, width: 0, collapsed: true, trimmed: false })
-    return
-  }
+  if (willCollapseCompletely) return
   const needsNewRun = last === undefined || last.trailing === 'collapsed' || last.box !== item.box || isZeroWidthSpaceSeparator(p, item)
   const oldContentLogicalWidth = line.contentLogicalWidth
   if (needsNewRun) {
@@ -237,8 +234,7 @@ function appendTextFast(L: Layout, line: Line, item: WebKitTextItem, width: numb
     expandRun(p, last, item, width)
     line.contentLogicalWidth = Math.max(withoutLastTextRun, f32(lastRight + width))
   }
-  const pieceIndex = line.pieces.push({ kind: 'text', item, width, collapsed: false, trimmed: false }) - 1
-  updateTrailingContent(L, line, item, width, oldContentLogicalWidth, pieceIndex)
+  updateTrailingContent(L, line, item, width, oldContentLogicalWidth)
 }
 
 // Line::appendInlineBoxStart and appendInlineBoxEnd (IL:289-344) for spans with no margin, border or padding.
@@ -248,29 +244,24 @@ function appendInlineBox(line: Line, item: InlineBoxItem): void {
   line.runs.push(boxRun(item.kind, left, item.level))
 }
 
-// Line::appendLineBreak (IL:588-597)
+// Line::appendLineBreak (IL:588-597): a soft line break run holds its one unit, { position, 1 } (IL:856-865).
 function appendLineBreak(line: Line, item: SoftLineBreakItem): void {
   line.trailingSoftHyphenWidth = null
   const run = boxRun('soft-line-break', lastRunLogicalRight(line), item.level)
   run.box = item.box
   run.textStart = item.start
+  run.textLength = 1
   line.runs.push(run)
-  line.pieces.push({ kind: 'soft-line-break', item })
 }
 
-// Line::addTrailingHyphen (IL:609-619)
-function addTrailingHyphen(L: Layout, line: Line, width: number): void {
+// Line::addTrailingHyphen (IL:609-619) with Line::Run::setNeedsHyphen (InlineLine.h:388-393).
+function addTrailingHyphen(line: Line, width: number): void {
   for (let i = line.runs.length - 1; i >= 0; i--) {
     const run = line.runs[i]!
     if (run.kind !== 'text') continue
+    run.needsHyphen = true
     run.width = f32(run.width + width)
     line.contentLogicalWidth = f32(line.contentLogicalWidth + width)
-    for (let k = line.pieces.length - 1; k >= 0; k--) {
-      const piece = line.pieces[k]!
-      if (piece.kind !== 'text' || piece.collapsed || piece.item.box !== run.box) continue
-      line.pieces.push({ kind: 'hyphen', box: run.box, at: L.p.boxes[run.box]!.sourceStart + piece.item.end, width, level: piece.item.level })
-      break
-    }
     return
   }
 }
@@ -293,6 +284,7 @@ function handleTrailingTrimmableContent(L: Layout, line: Line): void {
         whitespaceWidth = f32(boxWidth(L.p, L.m, box, start, end, 0, true) - boxWidth(L.p, L.m, box, start, end - 1, 0, false))
       }
     }
+    line.trimmedUnit = { box: run.box, offset: run.textStart + run.textLength - 1, level: run.level }
     run.textLength -= 1
     run.trailing = 'not-applicable'
     run.trailingLength = 0
@@ -302,8 +294,6 @@ function handleTrailingTrimmableContent(L: Layout, line: Line): void {
   }
   for (let i = index + 1; i < line.runs.length; i++) line.runs[i]!.left = f32(line.runs[i]!.left - trimmed)
   if (run.textLength === 0) line.runs.splice(index, 1)
-  const piece = line.pieces[line.trimPiece]
-  if (piece !== undefined && piece.kind === 'text') piece.trimmed = true
   resetTrimmable(line)
   line.contentLogicalWidth = f32(line.contentLogicalWidth - trimmed)
 }
@@ -332,8 +322,8 @@ function resetBidiLevelForTrailingWhitespace(L: Layout, line: Line): void {
   const leadingLength = run.textLength - run.trailingLength
   const detached: LineRun = {
     ...run, textStart: run.textStart + leadingLength, textLength: run.trailingLength, width: run.trailingWidth,
-    left: f32(f32(run.left + run.width) - run.trailingWidth), level: rootLevel, trailing: 'not-applicable', trailingLength: 0,
-    trailingWidth: 0, lastNonWhitespaceContentStart: null,
+    left: f32(f32(run.left + run.width) - run.trailingWidth), level: rootLevel, needsHyphen: false, trailing: 'not-applicable',
+    trailingLength: 0, trailingWidth: 0, lastNonWhitespaceContentStart: null,
   }
   run.width = f32(run.width - run.trailingWidth)
   run.textLength = leadingLength
@@ -830,7 +820,7 @@ function revertToLastNonOverflowingItem(b: Builder): number {
     const count = revertToTrailingItem(b, b.wrapOpportunityList[i]!)
     const h = b.line.trailingSoftHyphenWidth
     if (i === 0 || h === null || h <= simpleAvailableWidth(b)) {
-      if (h !== null) addTrailingHyphen(b.L, b.line, h)
+      if (h !== null) addTrailingHyphen(b.line, h)
       return count
     }
   }
@@ -851,7 +841,7 @@ function handleOverflowingTextContent(b: Builder, c: Content): SimpleResult {
     case 'wrap':
       return simpleResult(true, 0, 0, overflowWidthAsLeadingForNextLine(c.runs, r))
     case 'wrap-with-hyphen':
-      addTrailingHyphen(L, b.line, b.line.trailingSoftHyphenWidth!)
+      addTrailingHyphen(b.line, b.line.trailingSoftHyphenWidth!)
       return simpleResult(true)
     case 'break': {
       const t = r.partialTrailingContent!
@@ -861,11 +851,11 @@ function handleOverflowingTextContent(b: Builder, c: Content): SimpleResult {
       const item = trailing.item as WebKitTextItem
       if (t.partialRun === null) {
         appendTextFast(L, b.line, item, trailing.contentWidth)
-        if (t.hyphenWidth !== null) addTrailingHyphen(L, b.line, t.hyphenWidth)
+        if (t.hyphenWidth !== null) addTrailingHyphen(b.line, t.hyphenWidth)
         return simpleResult(true, committed)
       }
       appendTextFast(L, b.line, leftPart(item, t.partialRun.length), t.partialRun.logicalWidth)
-      if (t.partialRun.hyphenWidth !== null) addTrailingHyphen(L, b.line, t.partialRun.hyphenWidth)
+      if (t.partialRun.hyphenWidth !== null) addTrailingHyphen(b.line, t.partialRun.hyphenWidth)
       return simpleResult(true, committed, item.end - item.start - t.partialRun.length, overflowWidthAsLeadingForNextLine(c.runs, r))
     }
     case 'revert-to-last-wrap-opportunity':
@@ -945,7 +935,7 @@ function placeInlineTextContent(b: Builder): { end: Position; overflowLogicalWid
     if (item.box === nextText.box) return true
     const prevBox = L.p.boxes[item.box]!
     const nextBox = L.p.boxes[nextText.box]!
-    return mayBreakInBetween(prevBox.text, prevBox.is8Bit, nextBox.text, nextBox.is8Bit, nextBox.locale, style, L.p.env.dictionaryBreaks)
+    return mayBreakInBetween(prevBox.text, prevBox.is8Bit, nextBox.text, nextBox.is8Bit, nextBox.locale, style, L.p.icuDefaultLocale, L.p.env.dictionaryBreaks)
   }
   const process = (): boolean => {
     r = simpleCommitCandidateContent(b, candidateStart, candidateEnd, candidateWidth)
@@ -1034,11 +1024,11 @@ function endsWithSoftWrapOpportunity(L: Layout, previous: WebKitTextItem, next: 
   const prevBox = L.p.boxes[previous.box]!
   if (previous.box === next.box) {
     if (previous.level === next.level) return true
-    const f = makeFactory(prevBox.text, prevBox.is8Bit, prevBox.locale, L.p.style.lineBreakMode, L.p.env.dictionaryBreaks)
+    const f = makeFactory(prevBox.text, prevBox.is8Bit, prevBox.locale, L.p.style.lineBreakMode, L.p.icuDefaultLocale, L.p.env.dictionaryBreaks)
     return findNextBreakablePosition(f, next.start, L.p.style) === next.start
   }
   const nextBox = L.p.boxes[next.box]!
-  return mayBreakInBetween(prevBox.text, prevBox.is8Bit, nextBox.text, nextBox.is8Bit, nextBox.locale, L.p.style, L.p.env.dictionaryBreaks)
+  return mayBreakInBetween(prevBox.text, prevBox.is8Bit, nextBox.text, nextBox.is8Bit, nextBox.locale, L.p.style, L.p.icuDefaultLocale, L.p.env.dictionaryBreaks)
 }
 
 // InlineFormattingUtils::isAtSoftWrapOpportunity (IFU:385-454) for two text items. Every box in the model wraps as the
@@ -1150,7 +1140,7 @@ function candidateContentForLine(b: Builder, startIndex: number, endIndex: numbe
     for (let k = trailingSoftHyphenIndex; k < endIndex; k++) if (items[k]!.kind !== 'text') onlyText = false
     if (onlyText) {
       const shy = items[trailingSoftHyphenIndex] as WebKitTextItem
-      candidate.content.logicalWidth = f32(candidate.content.logicalWidth + hyphenWidth(L.m, L.p.boxes[shy.box]!))
+      candidate.content.logicalWidth = f32(candidate.content.logicalWidth + lineHyphenWidth(L, L.p.boxes[shy.box]!))
       candidate.content.hasTrailingSoftHyphen = true
     }
   }
@@ -1179,10 +1169,10 @@ function commitCandidateContent(b: Builder, candidate: Candidate, partial: Parti
     const item = trailing.item as WebKitTextItem
     appendText(L, b.line, leftPart(item, partial.partialRun.length), partial.partialRun.logicalWidth)
     if (item.level !== DEFAULT_BIDI_LEVEL) b.line.hasNonDefaultBidiLevelRun = true
-    if (partial.partialRun.hyphenWidth !== null) addTrailingHyphen(L, b.line, partial.partialRun.hyphenWidth)
+    if (partial.partialRun.hyphenWidth !== null) addTrailingHyphen(b.line, partial.partialRun.hyphenWidth)
   } else {
     appendRun(trailing)
-    if (partial.hyphenWidth !== null) addTrailingHyphen(L, b.line, partial.hyphenWidth)
+    if (partial.hyphenWidth !== null) addTrailingHyphen(b.line, partial.hyphenWidth)
   }
 }
 
@@ -1215,12 +1205,12 @@ function rebuildLineForTrailingSoftHyphen(b: Builder): number {
     const available = f32(b.L.lineWidth - lastRunLogicalRight(b.line))
     const h = b.line.trailingSoftHyphenWidth
     if (h === null || h <= available) {
-      if (h !== null) addTrailingHyphen(b.L, b.line, h)
+      if (h !== null) addTrailingHyphen(b.line, h)
       return count
     }
   }
   const count = rebuildLineWithInlineContent(b, list[0]!)
-  if (b.line.trailingSoftHyphenWidth !== null) addTrailingHyphen(b.L, b.line, b.line.trailingSoftHyphenWidth)
+  if (b.line.trailingSoftHyphenWidth !== null) addTrailingHyphen(b.line, b.line.trailingSoftHyphenWidth)
   return count
 }
 
@@ -1242,7 +1232,7 @@ function processLineBreakingResult(b: Builder, candidate: Candidate, r: BreakRes
       return lineBuilderResult(true, 0, false, 0, overflowWidthAsLeadingForNextLine(runs, r))
     }
     case 'wrap-with-hyphen':
-      addTrailingHyphen(b.L, b.line, b.line.trailingSoftHyphenWidth!)
+      addTrailingHyphen(b.line, b.line.trailingSoftHyphenWidth!)
       return lineBuilderResult(true)
     case 'revert-to-last-wrap-opportunity':
       return lineBuilderResult(true, rebuildLineWithInlineContent(b, b.wrapOpportunityList[b.wrapOpportunityList.length - 1]!), true)
@@ -1342,7 +1332,7 @@ function placeInlineAndFloatContent(b: Builder, start: Position): { end: Positio
   return { end, overflowLogicalWidth }
 }
 
-// ---- Output ----
+// ---- Output: display boxes and fragments from the closed Line::Run list ----
 
 function sourceOffset(p: WebKitPrepared, position: Position): number {
   const item = p.items[position.index]
@@ -1359,80 +1349,6 @@ function runAt(p: WebKitPrepared, offset: number): number {
   let run = 0
   while (run + 1 < p.paragraph.runs.length && p.runStarts[run + 1]! <= offset) run++
   return run
-}
-
-// Fragments in logical order. Levels are the items' levels, with trailing white space at the root level where its parity
-// differs, as Line::resetBidiLevelForTrailingWhitespace does (IL:243-287, specs/bidi.md §6).
-function buildFragments(p: WebKitPrepared, line: Line, start: number, end: number): Fragment[] {
-  const rootLevel = p.style.rtl ? 1 : 0
-  const levels: number[] = []
-  const hangs: boolean[] = []
-  for (let i = 0; i < line.pieces.length; i++) {
-    const piece = line.pieces[i]!
-    levels.push(piece.kind === 'hyphen' ? piece.level : piece.item.level === DEFAULT_BIDI_LEVEL ? rootLevel : piece.item.level)
-    hangs.push(false)
-  }
-  // resetBidiLevelForTrailingWhitespace stops at a line break.
-  for (let i = line.pieces.length - 1; i >= 0; i--) {
-    const piece = line.pieces[i]!
-    if (piece.kind !== 'text' || !piece.item.isWhitespace) break
-    if (line.hasNonDefaultBidiLevelRun && (levels[i]! & 1) !== (rootLevel & 1)) levels[i] = rootLevel
-  }
-  // pre-wrap white space before the line end or a forced break hangs (specs/webkit-lines.md §9.1).
-  for (let i = line.pieces.length - 1; trailingWhitespaceHangs(p.style) && i >= 0; i--) {
-    const piece = line.pieces[i]!
-    if (piece.kind === 'soft-line-break') continue
-    if (piece.kind !== 'text' || !piece.item.isWhitespace) break
-    hangs[i] = true
-  }
-  const fragments: Fragment[] = []
-  let covered = start
-  const collapse = (to: number) => {
-    while (covered < to) {
-      const run = runAt(p, covered)
-      const runEnd = Math.min(to, p.runStarts[run + 1]!)
-      fragments.push({ kind: 'collapsed', run, start: covered, end: runEnd })
-      covered = runEnd
-    }
-  }
-  for (let i = 0; i < line.pieces.length; i++) {
-    const piece = line.pieces[i]!
-    const level = levels[i]!
-    switch (piece.kind) {
-      case 'hyphen':
-        fragments.push({ kind: 'hyphen', run: p.boxes[piece.box]!.run, at: piece.at, painted: '‐', letterSpacing: p.boxes[piece.box]!.letterSpacing, width: piece.width, level })
-        break
-      case 'soft-line-break': {
-        const box = p.boxes[piece.item.box]!
-        const s = box.sourceStart + piece.item.start
-        collapse(s)
-        fragments.push({ kind: 'forced-break', run: box.run, start: s, end: s + 1 })
-        covered = s + 1
-        break
-      }
-      case 'text': {
-        const box = p.boxes[piece.item.box]!
-        const s = box.sourceStart + piece.item.start
-        const e = box.sourceStart + piece.item.end
-        collapse(s)
-        const painted = box.text.slice(piece.item.start, piece.item.end)
-        if (piece.collapsed) {
-          fragments.push({ kind: 'collapsed', run: box.run, start: s, end: e })
-        } else if (!piece.item.isWhitespace || preservesSpacesAndTabs(p.style)) {
-          if (hangs[i]) fragments.push({ kind: 'hanging', run: box.run, start: s, end: e, painted, width: piece.width, level })
-          else fragments.push({ kind: 'text', run: box.run, start: s, end: e, painted, width: piece.width, level })
-        } else {
-          if (piece.trimmed) fragments.push({ kind: 'trimmed', run: box.run, start: s, end: s + 1, painted: ' ', level })
-          else fragments.push({ kind: 'text', run: box.run, start: s, end: s + 1, painted: ' ', width: piece.width, level })
-          if (e > s + 1) fragments.push({ kind: 'collapsed', run: box.run, start: s + 1, end: e })
-        }
-        covered = e
-        break
-      }
-    }
-  }
-  collapse(end)
-  return fragments
 }
 
 // ubidi_reorderVisual (ICU 78.2 ubidiln.cpp:709-744, 812-867): L2 over one level per run; indexMap[visual] = logical.
@@ -1486,90 +1402,164 @@ function visualOrder(runs: LineRun[]): number[] {
   return order
 }
 
-// The painted extent of a line: the display boxes InlineDisplayContentBuilder gives its text runs, over the content the
-// lab observes (DESIGN.md §2.1).
-// - Without bidi reordering a box sits at the run's logical left (LineBox::logicalRectForTextRun, InlineLineBox.cpp:58-72;
-//   buildTextOnlyContent, InlineDisplayContentBuilder.cpp:119-144), with content logical left 0 for text-align start.
-// - With reordering boxes follow in visual order from the content's left edge, each at the edge plus its word spacing
-//   margin, the edge advancing by f32(width + margin) (processBidiContent :851-1088, adjustVisualGeometryForDisplayBox
-//   :728-826). An RTL line's content starts at f32(line width − content logical right) (InlineDisplayLineBuilder.cpp:133-137).
-// - A box keeps its run's width after trimming, not the content width: f32(f32(w + space) − space) can differ from
-//   f32(w) by a float32 step. A negative width draws the box to the left of its x.
-// - Hanging and trailing SPACE or TAB under normal, nowrap, pre-line and pre-wrap, and default-ignorable code points at
-//   the line end, aren't in the extent (lab/README.md "Visible code points").
-function paintedExtent(L: Layout, line: Line): number {
+function displayBox(p: WebKitPrepared, run: LineRun, x: number): WebKitDisplayBox {
+  const box = p.boxes[run.box]!
+  return {
+    kind: run.kind === 'soft-line-break' ? 'soft-line-break' : 'text', run: box.run, start: run.textStart, end: run.textStart + run.textLength,
+    level: run.level, isWordSeparator: run.isWordSeparator, x, width: run.kind === 'soft-line-break' ? 0 : run.width,
+    hyphen: run.needsHyphen ? box.hyphen : null,
+  }
+}
+
+// InlineDisplayContentBuilder::build (IDCB:100-117). Under text-align: start the root inline box starts at 0: the
+// alignment offset is 0 for start in both directions (horizontalAlignmentOffset, IFU:198-270), and the line box has no
+// floats or text-indent.
+// - Without bidi reordering (processNonBidiContent :504-600, buildTextOnlyContent :119-144): a box sits at the root inline
+//   box's left plus the run's logical left (LineBox::logicalRectForTextRun, InlineLineBox.cpp:58-73).
+// - With reordering (processBidiContent :851-940, adjustVisualGeometryForDisplayBox :728-826): boxes follow in visual order
+//   from the content's left edge, each at the edge plus its word spacing margin, the edge advancing by f32(width + margin).
+//   An RTL line's edge is f32(line box width - contentGeometry.logicalRightIncludingNegativeMargin) (IDLB:136-138), which
+//   is the alignment offset (0) plus Line::contentLogicalRight(), the last run's logical right (InlineLine.h:71;
+//   ILB:363-373, TOS:117-126), hanging content included.
+function displayBoxes(L: Layout, line: Line): WebKitDisplayBox[] {
   const p = L.p
   const runs = line.runs
-  const lefts: number[] = new Array(runs.length).fill(0)
+  const out: WebKitDisplayBox[] = []
   if (!line.hasNonDefaultBidiLevelRun) {
-    for (let i = 0; i < runs.length; i++) lefts[i] = runs[i]!.left
-  } else {
-    let edge = p.style.rtl ? f32(L.lineWidth - lastRunLogicalRight(line)) : 0
-    const order = visualOrder(runs)
-    for (let k = 0; k < order.length; k++) {
-      const run = runs[order[k]!]!
-      if (run.kind !== 'text') continue
-      const margin = run.isWordSeparator ? p.boxes[run.box]!.wordSpacing : 0
-      lefts[order[k]!] = f32(edge + margin)
-      edge = f32(edge + f32(run.width + margin))
+    for (let i = 0; i < runs.length; i++) {
+      const run = runs[i]!
+      if (run.kind === 'text' || run.kind === 'soft-line-break') out.push(displayBox(p, run, f32(0 + run.left)))
+    }
+    return out
+  }
+  let edge = p.style.rtl ? f32(L.lineWidth - lastRunLogicalRight(line)) : 0
+  const order = visualOrder(runs)
+  for (let k = 0; k < order.length; k++) {
+    const run = runs[order[k]!]!
+    switch (run.kind) {
+      case 'text': {
+        const margin = run.isWordSeparator ? p.boxes[run.box]!.wordSpacing : 0
+        out.push(displayBox(p, run, f32(edge + margin)))
+        edge = f32(edge + f32(run.width + margin))
+        break
+      }
+      case 'soft-line-break':
+        out.push(displayBox(p, run, edge))
+        break
+      case 'inline-box-start':
+      case 'inline-box-end':
+      case 'spanning-inline-box-start':
+        break
     }
   }
-  // The line's trailing run: SPACE and TAB under normal, nowrap, pre-line and pre-wrap, and default-ignorable code points,
-  // back to the last code point that isn't one. Runs made only of it paint nothing; a run ending in it loses its tracked
-  // trailing white space width.
-  const excludeTrailingSpaces = p.style.collapse !== 'break-spaces' && !(p.style.collapse === 'preserve' && !p.style.wrap)
-  // A hyphen ends the line at its soft hyphen and is painted with the last text run (Line::addTrailingHyphen).
-  let hyphen = false
-  for (let i = 0; i < line.pieces.length; i++) hyphen ||= line.pieces[i]!.kind === 'hyphen'
-  let visibleEnd = runs.length
-  let trailingCut = 0
-  for (let i = runs.length - 1; i >= 0; i--) {
+  return out
+}
+
+// The line's fragments in logical order, from the closed run list. Units inside a text run are laid out: `hanging` for
+// HangingContent's trailing white space, else `text`. A soft line break run is the `forced-break`. The unit trimming took
+// out of its run is `trimmed`. Every other unit of [start, end) is in no run: white space that collapsed completely or
+// into earlier white space, a text node without a renderer (`collapsed`). A run with needsHyphen is followed by the
+// `hyphen`. Levels are the runs' levels after resetBidiLevelForTrailingWhitespace; UBIDI_DEFAULT_LTR is the root level.
+function lineFragments(p: WebKitPrepared, line: Line, start: number, end: number): Fragment[] {
+  const rootLevel = p.style.rtl ? 1 : 0
+  const levelOf = (level: number) => level === DEFAULT_BIDI_LEVEL ? rootLevel : level
+  // Collapsible white space is laid out as a space (a newline or TAB in normal is a space).
+  const painted = (box: WebKitBox, from: number, to: number): string => {
+    const text = box.text.slice(from, to)
+    if (!collapsesWhiteSpace(p.style)) return text
+    let out = ''
+    for (let i = 0; i < text.length; i++) {
+      const c = text.charCodeAt(i)
+      out += c === 0x09 || c === 0x0a ? ' ' : text[i]!
+    }
+    return out
+  }
+  const runs = line.runs
+  let lastTextRun = -1
+  for (let i = 0; i < runs.length; i++) if (runs[i]!.kind === 'text') lastTextRun = i
+  const pieces: Fragment[] = []
+  for (let i = 0; i < runs.length; i++) {
     const run = runs[i]!
-    if (run.kind !== 'text') continue
-    if (hyphen) {
-      visibleEnd = i + 1
-      break
+    switch (run.kind) {
+      case 'text': {
+        const box = p.boxes[run.box]!
+        const from = run.textStart
+        const to = run.textStart + run.textLength
+        const hangFrom = i === lastTextRun && line.hanging !== null ? Math.max(from, to - line.hanging.length) : to
+        const level = levelOf(run.level)
+        if (hangFrom > from) pieces.push({ kind: 'text', run: box.run, start: box.sourceStart + from, end: box.sourceStart + hangFrom, painted: painted(box, from, hangFrom), level })
+        if (to > hangFrom) pieces.push({ kind: 'hanging', run: box.run, start: box.sourceStart + hangFrom, end: box.sourceStart + to, painted: painted(box, hangFrom, to), level })
+        if (run.needsHyphen) pieces.push({ kind: 'hyphen', run: box.run, at: box.sourceStart + to, painted: box.hyphen, letterSpacing: p.paragraph.runs[box.run]!.letterSpacing, level })
+        break
+      }
+      case 'soft-line-break': {
+        const box = p.boxes[run.box]!
+        pieces.push({ kind: 'forced-break', run: box.run, start: box.sourceStart + run.textStart, end: box.sourceStart + run.textStart + 1 })
+        break
+      }
+      case 'inline-box-start':
+      case 'inline-box-end':
+      case 'spanning-inline-box-start':
+        break
     }
-    const text = p.boxes[run.box]!.text
-    let k = run.textStart + run.textLength
-    while (k > run.textStart) {
-      const c = text.charCodeAt(k - 1)
-      const cp = (c & 0xfc00) === 0xdc00 && k - 2 >= run.textStart ? text.codePointAt(k - 2)! : c
-      if (!((excludeTrailingSpaces && (c === 0x20 || c === 0x09)) || isDefaultIgnorable(cp))) break
-      k -= cp > 0xffff ? 2 : 1
-    }
-    if (k === run.textStart) {
-      visibleEnd = i
-      continue
-    }
-    if (excludeTrailingSpaces && run.trailing !== 'not-applicable') trailingCut = run.trailingWidth
-    visibleEnd = i + 1
-    break
   }
-  let left = Infinity
-  let right = -Infinity
-  for (let i = 0; i < visibleEnd; i++) {
-    const run = runs[i]!
-    if (run.kind !== 'text') continue
-    let x = lefts[i]!
-    let w = run.width
-    if (i === visibleEnd - 1 && trailingCut !== 0) {
-      if (run.level !== DEFAULT_BIDI_LEVEL && (run.level & 1) === 1) x = f32(x + trailingCut)
-      w = f32(w - trailingCut)
-    }
-    const end = f32(x + w)
-    left = Math.min(left, x, end)
-    right = Math.max(right, x, end)
+  if (line.trimmedUnit !== null) {
+    const box = p.boxes[line.trimmedUnit.box]!
+    const s = box.sourceStart + line.trimmedUnit.offset
+    let index = pieces.length
+    while (index > 0 && pieceStart(pieces[index - 1]!) > s) index--
+    pieces.splice(index, 0, { kind: 'trimmed', run: box.run, start: s, end: s + 1, painted: ' ', level: levelOf(line.trimmedUnit.level) })
   }
-  return left === Infinity ? 0 : f32(right - left)
+  const fragments: Fragment[] = []
+  let covered = start
+  const collapse = (to: number) => {
+    while (covered < to) {
+      const run = runAt(p, covered)
+      const runEnd = Math.min(to, p.runStarts[run + 1]!)
+      fragments.push({ kind: 'collapsed', run, start: covered, end: runEnd })
+      covered = runEnd
+    }
+  }
+  for (let i = 0; i < pieces.length; i++) {
+    const piece = pieces[i]!
+    switch (piece.kind) {
+      case 'text':
+      case 'hanging':
+      case 'trimmed':
+      case 'forced-break':
+        collapse(piece.start)
+        fragments.push(piece)
+        covered = piece.end
+        break
+      case 'hyphen':
+        fragments.push(piece)
+        break
+      case 'collapsed':
+        break
+    }
+  }
+  collapse(end)
+  return fragments
+}
+
+function pieceStart(fragment: Fragment): number {
+  switch (fragment.kind) {
+    case 'hyphen': return fragment.at
+    case 'text':
+    case 'trimmed':
+    case 'collapsed':
+    case 'hanging':
+    case 'forced-break':
+      return fragment.start
+  }
 }
 
 // One line of InlineFormattingContext::lineLayout (InlineFormattingContext.cpp:293-360) with the builder the paragraph
 // chose, then leadingInlineItemPositionForNextLine (IFU:278-298).
-export function webkitNextLine(p: WebKitPrepared, start: WebKitLineStart, width: number, m: Measurer): LineOf<WebKitLineStart> {
+export function webkitNextLine(p: WebKitPrepared, start: WebKitLineStart, width: number, m: Measurer): LineOf<WebKitLineStart, WebKitLineGeometry> {
   // The content box width truncates to a LayoutUnit (StylePrimitiveData.h:341-360); a line is that many 64ths.
-  const layoutUnits = Math.trunc(f32(f32(width) * f32(p.env.pageZoom)) * 64)
-  const L: Layout = { p, m, lineWidth: f32(layoutUnits / 64) }
+  const layoutUnits = Math.trunc(f32(f32(width) * f32(p.zoom)) * 64)
+  const L: Layout = { p, m, lineWidth: f32(layoutUnits / 64), gaps: [] }
   const items = p.items
   const itemsEnd: Position = { index: items.length, offset: 0 }
   const partialLeading = (index: number): WebKitTextItem | null => {
@@ -1622,28 +1612,26 @@ export function webkitNextLine(p: WebKitPrepared, start: WebKitLineStart, width:
       next = { index: Math.min(lineContentEnd.index + 1, itemsEnd.index), offset: 0 }
     }
   }
-  // A line whose runs would all be empty (collapsible white space that collapses at the line start, span edges) has no
-  // contentful inline content, so it gets no line box height (LineLayoutResult.h:94-105, InlineDisplayLineBuilder.cpp:62).
-  // When only such items remain, this line is the last one with a line box.
-  let onlyEmptyRunsRemain = next.offset === 0
-  for (let i = next.index; onlyEmptyRunsRemain && i < items.length; i++) {
-    const item = items[i]!
-    onlyEmptyRunsRemain = item.kind === 'inline-box-start' || item.kind === 'inline-box-end' || (item.kind === 'text' && item.isWhitespace && !preservesSpacesAndTabs(p.style))
-  }
-  if (onlyEmptyRunsRemain) next = itemsEnd
   const isEnd = next.index === itemsEnd.index && next.offset === 0
-  const lineStart = sourceOffset(p, { index: start.itemIndex, offset: start.offset })
+  const lineStart = start.itemIndex === 0 && start.offset === 0 ? 0 : sourceOffset(p, { index: start.itemIndex, offset: start.offset })
   const lineEnd = isEnd ? p.runStarts[p.runStarts.length - 1]! : sourceOffset(p, next)
-  const fragments = buildFragments(p, line, start.itemIndex === 0 && start.offset === 0 ? 0 : lineStart, lineEnd)
-  const zoom = f32(p.env.pageZoom)
   const lastRun = line.runs[line.runs.length - 1]
   return {
-    start: start.itemIndex === 0 && start.offset === 0 ? 0 : lineStart,
+    start: lineStart,
     end: lineEnd,
-    width: f32(paintedExtent(L, line) / zoom),
-    engineWidth: { unit: 'webkit-float32-px', value: line.contentLogicalWidth },
-    fragments,
+    fragments: lineFragments(p, line, lineStart, lineEnd),
+    // Line::close's isContentful (IL:87-110, 621-629): a run with text content or a line break; undecorated spans aren't
+    // contentful, so a line of collapsed white space and span edges has no line box (LineLayoutResult.h:94-105).
+    hasLineBox: hasContent(line),
     joinsNextLine: false,
+    geometry: {
+      lineBoxWidth: L.lineWidth,
+      contentWidth: line.contentLogicalWidth,
+      hangingWidth: line.hanging === null ? 0 : line.hanging.width,
+      contentLogicalRight: lastRunLogicalRight(line),
+      boxes: displayBoxes(L, line),
+    },
+    gaps: L.gaps,
     next: isEnd ? null : {
       engine: 'webkit', itemIndex: next.index, offset: next.offset,
       previousLine: { carriedWidth: overflowLogicalWidth, endsWithLineBreak: lastRun !== undefined && lastRun.kind === 'soft-line-break' },

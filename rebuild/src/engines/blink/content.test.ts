@@ -1,9 +1,9 @@
 // text_content and items on the specs' worked examples (specs/blink-text.md §2.C, DESIGN.md §2.2 example 1).
 import { describe, expect, test } from 'bun:test'
-import type { Paragraph, TextRun } from '../../model.js'
+import { UNKNOWN_FONT_FACTS, type Paragraph, type TextRun } from '../../model.js'
 import { buildContent, segmentBidiRuns, styles } from './content.js'
 
-const font = { family: 'Arial', size: 16, weight: 400, style: 'normal' as const }
+const font = { family: 'Arial', size: 16, weight: 400, style: 'normal' as const, facts: UNKNOWN_FONT_FACTS }
 
 function paragraph(runs: [string, TextRun['node']][], whiteSpace: Paragraph['whiteSpace'] = 'normal', direction: Paragraph['direction'] = 'ltr'): Paragraph {
   return {

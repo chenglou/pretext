@@ -4,7 +4,10 @@
 // gfxTextRun::SetPotentialLineBreaks (gfxTextRun.cpp:210-236). specs/gecko-text.md §8-§10.
 import { geckoLineRules } from '../../breaks/tables.js'
 import { BREAK, INTERMEDIATE, KEEP, NO_MATCH, icu4xProperty, type Icu4xRuleData } from '../../breaks/icu4x.js'
-import type { DictionaryBreaks } from '../../env.js'
+import type { GeckoEnvironment } from '../../env.js'
+import { scriptIsChineseOrJapanese } from './likely.js'
+
+type DictionaryBreaks = GeckoEnvironment['dictionaryBreaks']
 
 // Line_Break property values of the data (line.rs:20-128).
 const AI = 1, AL = 3, BA = 8, BK = 10, CJ = 12, CM = 14, CR = 16, EX = 19, H2 = 21, H3 = 22, HY = 24, ID = 25, IN = 27,
@@ -21,7 +24,7 @@ export const BREAK_NORMAL = 1
 export const BREAK_EMERGENCY_WRAP = 3
 
 // complex/language.rs:17-45, read on single code units (LanguageIteratorUtf16).
-function complexLanguage(u: number): string {
+export function complexLanguage(u: number): string {
   if (u >= 0xe01 && u <= 0xe7f) return 'th'
   if (u >= 0xe80 && u <= 0xeff) return 'lo'
   if ((u >= 0x1000 && u <= 0x109f) || (u >= 0xa9e0 && u <= 0xa9ff) || (u >= 0xaa60 && u <= 0xaa7f)) return 'my'
@@ -48,7 +51,6 @@ function segmentComplex(units: number[], dictionary: DictionaryBreaks): number[]
           for (const part of segments) if (part.index > 0) result.push(i + part.index)
           break
         }
-        case 'v8-break-iterator':
         case 'unavailable':
           break
       }
@@ -340,22 +342,6 @@ const NON_BREAKABLE_ASCII = [
 ]
 const isNonBreakableChar = (ch: number) => ch >= 0x20 && ch <= 0x7f && NON_BREAKABLE_ASCII[ch - 0x20] === 1
 const isSegmentSpace = (u: number) => u === 0x20 || u === 0x09 || u === 0x0d // nsLineBreaker.h:260-264
-
-// ICU's likely-subtags result for the script of a language tag, as far as nsLineBreaker asks (nsLineBreaker.cpp:659-690):
-// only Hans, Hant, Jpan and Hrkt matter. An explicit script subtag wins; otherwise zh and ja add those scripts.
-function scriptIsChineseOrJapanese(lang: string): boolean | null {
-  const parts = lang.split(/[-_]/)
-  const language = parts[0]!.toLowerCase()
-  if (!/^[a-z]{2,8}$/.test(language)) return null
-  for (let i = 1; i < parts.length; i++) {
-    const p = parts[i]!
-    if (p.length === 4 && /^[A-Za-z]{4}$/.test(p)) {
-      const s = p[0]!.toUpperCase() + p.slice(1).toLowerCase()
-      return s === 'Hans' || s === 'Hant' || s === 'Jpan' || s === 'Hrkt'
-    }
-  }
-  return language === 'zh' || language === 'ja'
-}
 
 export class LineBreakerState {
   word: number[] = []

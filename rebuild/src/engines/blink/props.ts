@@ -108,8 +108,8 @@ export function isWhiteSpace(cp: number): boolean {
   return (scriptPropsOf(cp) & 0x200000) !== 0
 }
 
-// General_Category Cc, Cf, Zl or Zp, or Default_Ignorable_Code_Point.
-export function hasNoInkClass(cp: number): boolean {
+// Extended_Pictographic (HarfBuzz's _hb_unicode_is_emoji_Extended_Pictographic).
+export function isExtendedPictographic(cp: number): boolean {
   return (scriptPropsOf(cp) & 0x400000) !== 0
 }
 

@@ -1,0 +1,217 @@
+// What Firefox 156.0 reports through Range.getClientRects() for a Gecko layout: for each code point of the concatenated run
+// text, the rects of a Range over it in its run's text node, and for each run the rects of a Range over the whole node
+// (research/observe-gecko.md, DESIGN.md §9). The rules port GetPartialTextRect and ExtractRectFromOffset
+// (dom/base/AbstractRange.cpp:715-831), nsTextFrame::GetPointFromOffset (layout/generic/nsTextFrame.cpp:8667-8752) and
+// DOMRect::SetLayoutRect (dom/base/DOMRect.cpp:152-164) over the frames the engine placed. Types only from
+// rebuild/src/model.ts: no expected value comes from the library's logic.
+import type {
+  Expected, ExpectedObservation, ExpectedRect, GeckoFrameGeometry, GeckoLayout, ObservationPort, UnobservableFact,
+} from '../../src/model.ts'
+
+// DOMRect::SetLayoutRect rounds each app-unit edge to 1/65536 px, and SetRect narrows each field to float32 on its own
+// (DOMRect.cpp:152-164, DOMRect.h:122-127). TransformFrameRectToAncestor's float32 round trip returns integer au below
+// 2^23 au (nsLayoutUtils.cpp:2517-2537), so the edges are the frames' own.
+const R = (au: number): number => Math.floor(au * (65536 / 60) + 0.5) / 65536
+
+export function encodeEdges(a0: number, a1: number): { x: number; width: number } {
+  return { x: Math.fround(R(a0)), width: Math.fround(R(a1) - R(a0)) }
+}
+
+// An inline position in au and whether it rests on a Canvas stand-in for glyph records.
+type Edge = { au: number; limited: boolean }
+
+type PlacedFrame = {
+  line: number
+  index: number
+  frame: GeckoFrameGeometry
+  // The text run's direction: the frame's level is odd (nsTextFrame.cpp:8712-8716).
+  rtl: boolean
+  // prefix[k]: the advance of characters [measuredStart, measuredStart + k).
+  prefix: number[]
+  widthLimited: boolean
+  xLimited: boolean
+}
+
+// gfxFont::SplitAndInitTextRun ends a shaping unit at a boundary space and at an invalid character
+// (gfxFont.cpp:3708-3900, IsBoundarySpace gfxTextRun.cpp:1612-1619, IsInvalidChar gfxTextRun.h:971-992). Kept white space
+// in collapsing modes is U+0020 in the transformed text, and C0 controls are invalid, so a kept source unit below U+0020
+// ends a unit too. A space followed by a combining mark continues the unit (\p{M}, the zero-width joiners, halfwidth
+// voiced marks, emoji modifiers and tags stand in for IsClusterExtender here; this only decides the state of a value).
+const CLUSTER_EXTENDER = /^[\p{M}‌‍ﾞﾟ\u{1f3fb}-\u{1f3ff}\u{e0020}-\u{e007f}]/u
+function endsShapingUnit(text: string, s: number): boolean {
+  const c = text.charCodeAt(s)
+  if (c === 0x20 || c === 0xa0) return !CLUSTER_EXTENDER.test(text.slice(s + 1, s + 3))
+  return c < 0x20 || (c >= 0x7f && c <= 0x9f) || c === 0x200b || c === 0x2028 || c === 0x2029 || c === 0x2060 || c === 0xfeff
+}
+
+export const observeGecko: ObservationPort<GeckoLayout> = (paragraph, layout) => {
+  let text = ''
+  const runStarts: number[] = []
+  for (let r = 0; r < paragraph.runs.length; r++) {
+    runStarts.push(text.length)
+    text += paragraph.runs[r]!.text
+  }
+  runStarts.push(text.length)
+
+  // Which source units a frame kept: the in-word test looks at the kept neighbours on both sides of an offset.
+  const kept = new Uint8Array(text.length)
+  const framesOfRun: PlacedFrame[][] = paragraph.runs.map(() => [])
+  const unobservable: UnobservableFact[] = []
+  for (let l = 0; l < layout.lines.length; l++) {
+    const line = layout.lines[l]!
+    for (let k = 0; k < line.geometry.frames.length; k++) {
+      const frame = line.geometry.frames[k]!
+      const prefix = [0]
+      for (let c = 0; c < frame.characters.length; c++) {
+        const ch = frame.characters[c]!
+        if (!ch.skipped) kept[frame.measuredStart + c] = 1
+        prefix.push(prefix[c]! + ch.advance)
+      }
+      framesOfRun[frame.run]!.push({ line: l, index: k, frame, rtl: (frame.level & 1) === 1, prefix, widthLimited: false, xLimited: false })
+    }
+  }
+  const previousKept = new Int32Array(text.length + 1)
+  let lastKept = -1
+  for (let s = 0; s <= text.length; s++) {
+    previousKept[s] = lastKept
+    if (s < text.length && kept[s] === 1) lastKept = s
+  }
+  const nextKept = new Int32Array(text.length + 1)
+  let firstKept = -1
+  for (let s = text.length; s >= 0; s--) {
+    if (s < text.length && kept[s] === 1) firstKept = s
+    nextKept[s] = firstKept
+  }
+  // An offset strictly inside a shaping unit: glyph records there come from W(unit) − W(suffix) (DESIGN.md §5).
+  const inWord = (o: number): boolean => {
+    const a = previousKept[o]!
+    const b = nextKept[o]!
+    return a >= 0 && b >= 0 && !endsShapingUnit(text, a) && !endsShapingUnit(text, b)
+  }
+
+  for (let r = 0; r < framesOfRun.length; r++) {
+    const frames = framesOfRun[r]!
+    frames.sort((a, b) => a.frame.contentStart - b.frame.contentStart)
+    for (let k = 0; k < frames.length; k++) {
+      const f = frames[k]!.frame
+      frames[k]!.widthLimited = f.characters.length > 0 && (inWord(f.measuredStart) || inWord(f.contentEnd))
+    }
+  }
+  // A frame's position sums the boxes before it on its line, and in an RTL line starts from the right edge less its own box
+  // (RepositionInlineFrames and RepositionFrame, nsBidiPresUtils.cpp:1860-1866, :1882-1905).
+  const rtlLine = paragraph.direction === 'rtl'
+  const lineHasLimitedWidth: number[] = layout.lines.map(() => 0)
+  for (let r = 0; r < framesOfRun.length; r++) for (const pf of framesOfRun[r]!) if (pf.widthLimited) lineHasLimitedWidth[pf.line]!++
+  for (let r = 0; r < framesOfRun.length; r++) {
+    for (const pf of framesOfRun[r]!) pf.xLimited = lineHasLimitedWidth[pf.line]! - (pf.widthLimited && !rtlLine ? 1 : 0) > 0
+  }
+
+  // nsTextFrame::GetPointFromOffset in frame-local au (nsTextFrame.cpp:8667-8752): clamp to the content and the trimmed
+  // start (GetTrimmedOffsets without trimming the end, :3287-3330), snap back to the cluster start (FindClusterStart,
+  // :3549-3558), sum the advances from the trimmed start, and count from the box's right edge in an RTL text run.
+  const point = (pf: PlacedFrame, offset: number): Edge => {
+    const f = pf.frame
+    let o = Math.max(f.contentStart, Math.min(f.contentEnd, offset))
+    o = Math.max(f.measuredStart, Math.min(f.contentEnd, o))
+    const at = (s: number) => f.characters[s - f.measuredStart]!
+    if (o < f.contentEnd && !at(o).skipped && !at(o).clusterStart) {
+      while (o > f.measuredStart && !at(o).skipped && !at(o).clusterStart) o--
+    }
+    const iSize = pf.prefix[o - f.measuredStart]!
+    const limited = o > f.measuredStart && (inWord(f.measuredStart) || inWord(o))
+    return pf.rtl ? { au: f.width - iSize, limited: limited || pf.widthLimited } : { au: iSize, limited }
+  }
+  // nsRect::ClampPoint into the rect as already cut (gfx/2d/BaseRect.h:701-705).
+  const clamp = (p: Edge, lo: Edge, hi: Edge): Edge => {
+    if (p.au <= lo.au) return { au: lo.au, limited: p.limited || lo.limited }
+    if (p.au >= hi.au) return { au: hi.au, limited: p.limited || hi.limited }
+    return p
+  }
+  const expected = (value: number, limited: boolean): Expected =>
+    limited ? { state: 'limited', gap: 'in-word-prefix', value } : { state: 'predicted', value }
+  const rect = (pf: PlacedFrame, x0: Edge, x1: Edge): ExpectedRect => {
+    const encoded = encodeEdges(pf.frame.x + x0.au, pf.frame.x + x1.au)
+    return {
+      line: pf.line,
+      x: expected(encoded.x, pf.xLimited || x0.limited),
+      width: expected(encoded.width, pf.xLimited || x0.limited || x1.limited),
+    }
+  }
+
+  // GetPartialTextRect over one code point [i, i + length) of run r: every continuation overlapping the range, its box cut
+  // at the offsets inside it, flush to the origin edge in RTL (AbstractRange.cpp:771-831, :715-765). A node without a
+  // frame reports nothing (:775-778).
+  const codePoints: ExpectedObservation['codePoints'] = []
+  for (let r = 0; r < paragraph.runs.length; r++) {
+    const frames = framesOfRun[r]!
+    let k = 0
+    for (let i = runStarts[r]!; i < runStarts[r + 1]!;) {
+      const length = text.codePointAt(i)! > 0xffff ? 2 : 1
+      const rects: ExpectedRect[] = []
+      while (k < frames.length && frames[k]!.frame.contentEnd <= i) k++
+      for (let j = k; j < frames.length; j++) {
+        const pf = frames[j]!
+        const f = pf.frame
+        if (f.contentStart >= i + length) break
+        let x0: Edge = { au: 0, limited: false }
+        let x1: Edge = { au: f.width, limited: pf.widthLimited }
+        if (f.contentStart < i) {
+          const p = clamp(point(pf, i), x0, x1)
+          if (pf.rtl) x1 = p
+          else x0 = p
+        }
+        if (f.contentEnd > i + length) {
+          const p = clamp(point(pf, i + length), x0, x1)
+          if (pf.rtl) x0 = p
+          else x1 = p
+        }
+        rects.push(rect(pf, x0, x1))
+      }
+      codePoints.push({ offset: i, length, rects })
+      i += length
+    }
+  }
+
+  // selectNodeContents takes the same path over [0, length): each continuation's whole box.
+  const nodes: ExpectedRect[][] = []
+  for (let r = 0; r < paragraph.runs.length; r++) {
+    nodes.push(framesOfRun[r]!.map(pf => rect(pf, { au: 0, limited: false }, { au: pf.frame.width, limited: pf.widthLimited })))
+  }
+
+  // Engine facts no rect reflects, whatever their value (observe-gecko.md §8).
+  for (let r = 0; r < framesOfRun.length; r++) {
+    for (const pf of framesOfRun[r]!) {
+      const f = pf.frame
+      const path = `lines[${pf.line}].geometry.frames[${pf.index}]`
+      let beyond = -1
+      const within: number[] = []
+      const skipped: number[] = []
+      for (let c = 0; c < f.characters.length; c++) {
+        const ch = f.characters[c]!
+        if (ch.skipped) skipped.push(c)
+        else if (!ch.clusterStart) within.push(c)
+        if (beyond < 0 && pf.prefix[c]! >= f.width && ch.advance !== 0) beyond = c
+      }
+      if (beyond >= 0) {
+        unobservable.push({ line: pf.line, fact: `${path}.characters[${beyond}..${f.characters.length - 1}].advance`, rule: 'points past the box clamp to its edge: white space trimmed at a break or by TrimTrailingWhiteSpace, and hanging white space past the available width (AbstractRange.cpp:741-743; nsTextFrame.cpp:11203-11240, :11540-11628)' })
+      }
+      if (within.length > 0) {
+        unobservable.push({ line: pf.line, fact: `${path}.characters[${within.join(',')}].advance`, rule: 'an offset inside a cluster snaps to the cluster start, so only a cluster\'s total shows (nsTextFrame.cpp:3549-3558, :8685-8689)' })
+      }
+      if (skipped.length > 0) {
+        unobservable.push({ line: pf.line, fact: `${path}.characters[${skipped.join(',')}]`, rule: 'skipped characters have no advance; their ranges report width 0 at a point (nsTextFrame.cpp:8667-8690)' })
+      }
+      if (f.usedHyphen) {
+        const fragments = layout.lines[pf.line]!.fragments
+        for (let n = 0; n < fragments.length; n++) {
+          const fragment = fragments[n]!
+          if (fragment.kind === 'hyphen' && fragment.at === f.contentEnd) {
+            unobservable.push({ line: pf.line, fact: `lines[${pf.line}].fragments[${n}].painted`, rule: 'only the hyphen run\'s advance shows inside the box, not which glyph drew it (nsTextFrame.cpp:6829-6845)' })
+          }
+        }
+      }
+    }
+  }
+
+  return { codePoints, nodes, unobservable }
+}

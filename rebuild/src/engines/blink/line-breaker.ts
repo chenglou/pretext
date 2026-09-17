@@ -9,7 +9,7 @@ import {
   previousSafeToBreak, reshape, reshapeHanKerningEnd, shapeHyphen, snappedWidth, tabShapeResult, truncateView, viewOf, widthOf16,
   type Part, type ReshapePart, type ShapeResult, type Shaper, type View,
 } from './shape.js'
-import type { BlinkItem, BlinkLineStart } from './types.js'
+import type { BlinkLineStart, InlineItem } from './types.js'
 
 const ONE_PX = 64 // LayoutUnit ± int adds whole px (layout_unit.h:653-655, 684-686)
 
@@ -36,10 +36,16 @@ export type ItemResult = {
 
 export type LineInfo = {
   results: ItemResult[]
+  // LineInfo::AvailableWidth.
+  availableWidth: number
   // LineInfo::Width(): position after trailing spaces were removed, hanging spaces included, clamped at 0.
   width: number
   token: BlinkLineStart | null
   hasForcedBreak: boolean
+  // SetIsLastLine: the line ended at the paragraph's end or in a forced break (line_breaker.cc:1038, 2938, 4428).
+  isLastLine: boolean
+  // SetHasTrailingSpaces: the line ends in preserved white space (line_breaker.cc:976-981).
+  hasTrailingSpaces: boolean
   shouldCreateLineBox: boolean
 }
 
@@ -63,7 +69,7 @@ type ShapeLineResult = { breakOffset: number; isOverflow: boolean; isHyphenated:
 export class LineBreaker {
   readonly sh: Shaper
   readonly text: string
-  readonly items: BlinkItem[]
+  readonly items: InlineItem[]
   readonly iterator: LineBreakIterator
   readonly availableWidth: number
   readonly token: BlinkLineStart
@@ -79,6 +85,7 @@ export class LineBreaker {
   hyphenIndex: number | null = null
   hasAnyHyphens = false
   isForcedBreak = false
+  isLastLine = false
   readonly previousLineHadForcedBreak: boolean
   readonly shapeResults = new Map<number, ShapeResult>()
 
@@ -245,9 +252,12 @@ export class LineBreaker {
     for (let i = 0; i < this.results.length; i++) if (this.results[i]!.shouldCreateLineBox) shouldCreateLineBox = true
     return {
       results: this.results,
+      availableWidth: this.availableWidth,
       width: Math.max(0, this.position),
       token: this.atEnd() ? null : { engine: 'blink', itemIndex: this.current.itemIndex, textOffset: this.current.textOffset, style: this.currentStyle, afterForcedBreak: this.isForcedBreak },
       hasForcedBreak: this.isForcedBreak,
+      isLastLine: this.isLastLine,
+      hasTrailingSpaces: this.trailingWhitespace === 'preserved',
       shouldCreateLineBox,
     }
   }
@@ -260,6 +270,7 @@ export class LineBreaker {
       if (this.atEnd()) {
         if (this.handleOverflowIfNeeded() && !this.atEnd()) continue
         if (this.hasHyphen()) this.position -= this.removeHyphen()
+        this.isLastLine = true
         return
       }
       const last = this.lastResult()
@@ -278,7 +289,7 @@ export class LineBreaker {
   }
 
   // HandleText (line_breaker.cc:1322-1504).
-  handleText(item: BlinkItem, sr: ShapeResult): void {
+  handleText(item: InlineItem, sr: ShapeResult): void {
     if (this.state === 'trailing') {
       this.handleTrailingSpaces(item, sr)
       return
@@ -365,7 +376,7 @@ export class LineBreaker {
   }
 
   // BreakText (line_breaker.cc:1603-1759).
-  breakText(r: ItemResult, item: BlinkItem, sr: ShapeResult, availableWidth: number, availableWidthWithHyphens: number): 'success' | 'overflow' {
+  breakText(r: ItemResult, item: InlineItem, sr: ShapeResult, availableWidth: number, availableWidthWithHyphens: number): 'success' | 'overflow' {
     const noResultIfOverflow = this.breakAnywhereIfOverflow && !this.overrideBreakAnywhere
     let inlineSize: number
     let out: ShapeLineResult
@@ -435,7 +446,7 @@ export class LineBreaker {
   // ShapingLineBreaker::ShapeLine (shaping_line_breaker.cc:256-612), without hyphenation dictionaries (hyphens: manual),
   // auto-spacing (text-autospace: no-autospace) and HanKerning at wrapped line starts, which text-spacing-trim: normal
   // doesn't trim (text_spacing_trim.h:31-34). The HanKerning line-end reshape (:344-363) is taken.
-  shapeLine(item: BlinkItem, sr: ShapeResult, start: number, availableSpace: number, noResultIfOverflow: boolean, out: ShapeLineResult): View | null {
+  shapeLine(item: InlineItem, sr: ShapeResult, start: number, availableSpace: number, noResultIfOverflow: boolean, out: ShapeLineResult): View | null {
     const sh = this.sh
     const rangeStart = sr.start
     const rangeEnd = sr.end
@@ -454,7 +465,7 @@ export class LineBreaker {
       const firstSafePosition = positionForOffset(sh, sr, firstSafe)
       lineStartResult = reshape(sh, item.group, start, firstSafe, true)
       const oldWidth = flip(firstSafePosition - startPosition)
-      const diff = oldWidth - luCeil(widthOf16(lineStartResult.width16))
+      const diff = oldWidth - luCeil(widthOf16(lineStartResult.call.width16))
       if (diff !== 0) availableSpace = Math.max(availableSpace + diff, 0)
     }
     const endPosition = startPosition + flip(availableSpace)
@@ -478,7 +489,7 @@ export class LineBreaker {
       lastSafe = previousSafeToBreak(sh, sr, candidate)
       lineEndResult = reshapeHanKerningEnd(sh, item.group, lastSafe, candidate + 1)
       const widthToLastSafe = flip(positionForOffset(sh, sr, lastSafe) - startPosition)
-      if (Math.fround(Math.fround(widthToLastSafe / 64) + widthOf16(lineEndResult.width16)) <= Math.fround(availableSpace / 64)) candidate++
+      if (Math.fround(Math.fround(widthToLastSafe / 64) + widthOf16(lineEndResult.call.width16)) <= Math.fround(availableSpace / 64)) candidate++
       else lineEndResult = null
     }
     if (candidate >= rangeEnd) {
@@ -546,7 +557,7 @@ export class LineBreaker {
         }
         const safePosition = positionForOffset(sh, sr, lastSafe)
         lineEndResult = reshape(sh, item.group, lastSafe, bo.offset)
-        if (widthOf16(lineEndResult.width16) <= Math.fround(flip(endPosition - safePosition) / 64)) break
+        if (widthOf16(lineEndResult.call.width16) <= Math.fround(flip(endPosition - safePosition) / 64)) break
         lineEndResult = null
         bo = this.previousBO(bo.offset - 1, start)
         if (bo.offset > start) continue
@@ -567,7 +578,7 @@ export class LineBreaker {
   }
 
   // HandleTrailingSpaces (line_breaker.cc:2418-2534).
-  handleTrailingSpaces(item: BlinkItem, sr: ShapeResult | null): void {
+  handleTrailingSpaces(item: InlineItem, sr: ShapeResult | null): void {
     if (!this.autoWrap) {
       this.state = 'done'
       return
@@ -624,7 +635,7 @@ export class LineBreaker {
   }
 
   // HandleControlItem (line_breaker.cc:2944-2999).
-  handleControlItem(item: BlinkItem): void {
+  handleControlItem(item: InlineItem): void {
     switch (item.control) {
       case 'forced-break':
         this.handleForcedLineBreak()
@@ -666,12 +677,13 @@ export class LineBreaker {
     }
     if (this.hasHyphen()) this.position -= this.removeHyphen()
     this.isForcedBreak = true
+    this.isLastLine = true
     this.state = 'done'
   }
 
   // HandleOpenTag (line_breaker.cc:3957-4008): no margins, borders or padding in this model, and every span wraps as the
   // block does, so the nowrap-to-wrap recomputation (:4003-4007) never runs.
-  handleOpenTag(item: BlinkItem): void {
+  handleOpenTag(item: InlineItem): void {
     this.addItem(item.end)
     this.setCurrentStyle(item.style)
     this.moveToNextOfItem()
@@ -839,6 +851,7 @@ export class LineBreaker {
     this.trailingWhitespace = 'unknown'
     this.position = this.computeWidth()
     this.state = 'done'
+    if (this.atEnd()) this.isLastLine = true
   }
 
   // Rewind (line_breaker.cc:4422-4497).
@@ -900,7 +913,7 @@ export class LineBreaker {
           if (r.end - 1 > r.start) {
             r.end--
             // TruncateLineEndResult without NeedsAccurateEndPosition: a view, no reshape (line_breaker.cc:2371-2405).
-            r.shape = truncateView(this.sh, r.shape, item.group, r.start, r.end)
+            r.shape = truncateView(this.sh, r.shape, r.start, r.end)
             r.inlineSize = luCeil(r.shape.width)
           } else {
             r.end = r.start
@@ -957,10 +970,10 @@ export class LineBreaker {
         const view = r.shape!
         const end = r.end
         r.end = i
-        r.shape = truncateView(this.sh, view, item.group, r.start, i)
+        r.shape = truncateView(this.sh, view, r.start, i)
         r.inlineSize = luCeil(r.shape.width)
         const spaces: ItemResult = {
-          ...r, start: i, end, shape: truncateView(this.sh, view, item.group, i, end),
+          ...r, start: i, end, shape: truncateView(this.sh, view, i, end),
           inlineSize: previousSize - r.inlineSize, hasOnlyBidiTrailingSpaces: true, canBreakAfter: false, hyphen: null, isHyphenated: false, trimmedEnd: -1,
         }
         this.results.splice(index + 1, 0, spaces)

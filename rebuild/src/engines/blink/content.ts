@@ -1,9 +1,9 @@
 // text_content and items: which text nodes get a LayoutText (specs/blink-text.md §2.A), InlineItemsBuilder's
 // white-space processing (§2.C), bidi item splitting (§2.D) and shaping groups (§2.E).
-import type { Paragraph } from '../../model.js'
+import type { FontDecl, Paragraph } from '../../model.js'
 import { bidiDataFor } from '../../unicode/bidi.js'
 import { resolveIcuBidi } from '../../unicode/ubidi.js'
-import type { BlinkEndCollapseType, BlinkItem, BlinkStyle } from './types.js'
+import type { BlinkStyle, EndCollapseType, InlineItem } from './types.js'
 
 const SPACE = 0x20
 const TAB = 0x09
@@ -31,7 +31,7 @@ function isControlItemCharacter(c: number): boolean {
 export type Content = {
   text: string
   sourceOffsets: Int32Array
-  items: BlinkItem[]
+  items: InlineItem[]
   hasNonOrc16Bit: boolean
 }
 
@@ -41,11 +41,7 @@ export type Content = {
 // the source says otherwise. The root starts from Content-Language (style_resolver.cc:2405-2406).
 export function styles(paragraph: Paragraph): { styles: BlinkStyle[]; styleOfRun: number[] } {
   const blockLocale = paragraph.lang !== '' ? paragraph.lang : null
-  const out: BlinkStyle[] = []
-  const key = (s: Omit<BlinkStyle, 'fontKey'>): string =>
-    [s.font.family, s.font.size, s.font.weight, s.font.style, s.locale, s.letterSpacing, s.wordSpacing].join('\u0001')
-  const block = { run: null, font: paragraph.font, letterSpacing: paragraph.letterSpacing, wordSpacing: paragraph.wordSpacing, locale: blockLocale }
-  out.push({ ...block, fontKey: key(block) })
+  const out: BlinkStyle[] = [styleOf(null, paragraph.font, paragraph.letterSpacing, paragraph.wordSpacing, blockLocale)]
   const styleOfRun: number[] = []
   for (let r = 0; r < paragraph.runs.length; r++) {
     const run = paragraph.runs[r]!
@@ -53,21 +49,47 @@ export function styles(paragraph: Paragraph): { styles: BlinkStyle[]; styleOfRun
       case 'text':
         styleOfRun.push(0)
         break
-      case 'span': {
-        const s = { run: r, font: run.font, letterSpacing: run.letterSpacing, wordSpacing: run.wordSpacing, locale: run.lang === null ? blockLocale : run.lang !== '' ? run.lang : null }
+      case 'span':
         styleOfRun.push(out.length)
-        out.push({ ...s, fontKey: key(s) })
+        out.push(styleOf(r, run.font, run.letterSpacing, run.wordSpacing, run.lang === null ? blockLocale : run.lang !== '' ? run.lang : null))
         break
-      }
     }
   }
   return { styles: out, styleOfRun }
 }
 
+function styleOf(run: number | null, font: FontDecl, letterSpacing: number, wordSpacing: number, locale: string | null): BlinkStyle {
+  const first = firstFamily(font.family)
+  const primaryFamily = font.facts.primaryFamily ?? first.name
+  const keyword = font.facts.primaryFamily !== null ? isSystemFontKeyword(primaryFamily, false) : isSystemFontKeyword(first.name, first.quoted)
+  return {
+    run, font, letterSpacing, wordSpacing, locale,
+    fontKey: [font.family, font.size, font.weight, font.style, locale, letterSpacing, wordSpacing].join('\u0001'),
+    primaryFamily,
+    measuresAtCssSize: font.facts.opticalSizeAxis ?? keyword,
+    joining: font.facts.joining,
+  }
+}
+
+// The first family of a CSS font-family list, without its quotes.
+function firstFamily(list: string): { name: string; quoted: boolean } {
+  const comma = list.indexOf(',')
+  const first = (comma < 0 ? list : list.slice(0, comma)).trim()
+  const quoted = first.length >= 2 && (first[0] === '"' || first[0] === "'") && first[first.length - 1] === first[0]
+  return { name: quoted ? first.slice(1, -1) : first, quoted }
+}
+
+// The families Blink resolves to the macOS system UI font: the generic system-ui (FontCache::GetFontPlatformData,
+// font_cache_mac.mm:408) and the family name BlinkMacSystemFont (LegacySystemFontFamily, :289-292). The system UI font
+// has an opsz axis (probes-chrome correction 7), which is the documented default of FontFacts.opticalSizeAxis.
+function isSystemFontKeyword(name: string, quoted: boolean): boolean {
+  return (name === 'system-ui' && !quoted) || name === 'BlinkMacSystemFont'
+}
+
 class Builder {
   units: number[] = []
   src: number[] = []
-  items: BlinkItem[] = []
+  items: InlineItem[] = []
   hasNonOrc16Bit = false
   readonly paragraph: Paragraph
   readonly collapses: boolean
@@ -92,8 +114,8 @@ class Builder {
     if (c >= 0x100 && c !== 0xfffc) this.hasNonOrc16Bit = true
   }
 
-  item(type: BlinkItem['type'], control: BlinkItem['control'], start: number, run: number, style: number, endCollapseType: BlinkEndCollapseType): BlinkItem {
-    const item: BlinkItem = {
+  item(type: InlineItem['type'], control: InlineItem['control'], start: number, run: number, style: number, endCollapseType: EndCollapseType): InlineItem {
+    const item: InlineItem = {
       type, control, start, end: this.units.length, run, style, bidiLevel: 0, endCollapseType, isEndCollapsibleNewline: false,
       removedSpaceSource: -1, group: -1,
     }
@@ -102,7 +124,7 @@ class Builder {
   }
 
   // LastItemToCollapseWith (inline_items_builder.cc:207-214).
-  lastItemToCollapseWith(): BlinkItem | null {
+  lastItemToCollapseWith(): InlineItem | null {
     for (let i = this.items.length - 1; i >= 0; i--) {
       if (this.items[i]!.endCollapseType !== 'opaque-to-collapsing') return this.items[i]!
     }
@@ -114,7 +136,7 @@ class Builder {
     return (spaceIndex > 0 && this.units[spaceIndex - 1] === ZWSP) || (after.length > 0 && after.charCodeAt(0) === ZWSP)
   }
 
-  shift(from: BlinkItem, delta: number): void {
+  shift(from: InlineItem, delta: number): void {
     const index = this.items.indexOf(from)
     for (let i = index + 1; i < this.items.length; i++) {
       this.items[i]!.start += delta
@@ -123,7 +145,7 @@ class Builder {
   }
 
   // RemoveTrailingCollapsibleSpace (inline_items_builder.cc:1376-1410).
-  removeTrailingCollapsibleSpace(item: BlinkItem): void {
+  removeTrailingCollapsibleSpace(item: InlineItem): void {
     if (item.type !== 'text') return
     const offset = item.end - 1
     item.removedSpaceSource = this.src[offset]!
@@ -155,7 +177,7 @@ class Builder {
   appendCollapseWhitespace(s: string, base: number, run: number, style: number): void {
     const n = s.length
     let i = 0
-    let endCollapse: BlinkEndCollapseType = 'not-collapsible'
+    let endCollapse: EndCollapseType = 'not-collapsible'
     let runHasNewline = false
     let start: number
     const endOfSpaceRun = (from: number): void => {
@@ -378,13 +400,13 @@ function maybeBidiRtl(text: string): boolean {
 
 // is_bidi_enabled_ (inline_items_builder.cc:1744-1746) and SegmentBidiRuns (inline_node.cc:1333-1461): items split
 // where ICU's logical runs end (InlineItem::SetBidiLevel, inline_item.cc:207-254).
-export function segmentBidiRuns(paragraph: Paragraph, content: Content): { items: BlinkItem[]; enabled: boolean } {
+export function segmentBidiRuns(paragraph: Paragraph, content: Content): { items: InlineItem[]; enabled: boolean } {
   const rtlBlock = paragraph.direction === 'rtl' // EnterBlock sets has_bidi_controls_ for an RTL block
   if (!rtlBlock && !(content.hasNonOrc16Bit && maybeBidiRtl(content.text))) return { items: content.items, enabled: false }
   const bidi = resolveIcuBidi(content.text, paragraph.direction, bidiDataFor('blink'))
   if (bidi.direction === 'ltr' && !rtlBlock) return { items: content.items, enabled: false }
   const levels = bidi.levels
-  const out: BlinkItem[] = []
+  const out: InlineItem[] = []
   for (let i = 0; i < content.items.length; i++) {
     const item = content.items[i]!
     if (item.start === item.end) {

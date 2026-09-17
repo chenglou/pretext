@@ -10,6 +10,7 @@ import {
   HAN_SEMICOLON, hanKerningCharType,
 } from './props.js'
 import { raw16Of, type Shaper } from './shape.js'
+import type { BlinkPrepared } from './types.js'
 
 export type HanKerningFontData = {
   hasHalt: boolean
@@ -46,11 +47,10 @@ function typeFromBounds(halfEm: number, left: number, right: number): number {
 }
 
 // HanKerning::FontData (han_kerning.cc:417-535) from Canvas: `halt` through the pair trim of 「「, glyph bounds from
-// measureText's ink box.
-export function hanKerningFontData(sh: Shaper, style: number): HanKerningFontData {
+// measureText's ink box. Measured in prepare for every style with a shaping group HanKerning may apply to.
+export function measureHanKerningFontData(sh: Shaper, style: number): void {
   const { p, m } = sh
-  const known = p.hanKerning[style]
-  if (known !== null && known !== undefined) return known
+  if (p.hanKerning[style] !== null) return
   const context = p.contexts[style]!.hyphen
   const data: HanKerningFontData = { hasHalt: trim16(sh, style, 0x300c) > 0, typeForDot: HAN_OTHER, typeForColon: HAN_OTHER, typeForSemicolon: HAN_OTHER, quoteFullwidth: false }
   if (data.hasHalt) {
@@ -72,7 +72,11 @@ export function hanKerningFontData(sh: Shaper, style: number): HanKerningFontDat
     data.quoteFullwidth = group(6, 8) === HAN_OPEN && group(8, 10) === HAN_CLOSE
   }
   p.hanKerning[style] = data
-  return data
+}
+
+// The measured font data of a style whose text HanKerning may apply to.
+export function hanKerningFontData(p: BlinkPrepared, style: number): HanKerningFontData {
+  return p.hanKerning[style]!
 }
 
 // HanKerning::GetCharType (han_kerning.cc:116-140).
@@ -103,4 +107,3 @@ export function trim16(sh: Shaper, style: number, c: number): number {
   const one = String.fromCharCode(c)
   return 2 * raw16Of(sh, contexts, contexts.hyphen, one) - raw16Of(sh, contexts, contexts.hyphen, one + one)
 }
-

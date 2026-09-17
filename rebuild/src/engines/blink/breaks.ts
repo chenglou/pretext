@@ -3,7 +3,7 @@
 // break-all and keep-all, soft hyphens, and grapheme boundaries for kBreakCharacter.
 import { DONE, NO_OVERRIDES, RuleBreakIterator, getCategory, type BreakRules } from '../../breaks/rbbi.js'
 import { blinkBreakRules, blinkLinePairs, pairCanBreak, type BlinkBreakTable } from '../../breaks/tables.js'
-import type { DictionaryBreaks } from '../../env.js'
+import type { BlinkEnvironment } from '../../env.js'
 import { graphemeBoundaries, graphemeRulesFor } from '../../unicode/grapheme.js'
 import { LB_AL, LB_BA, LB_CM, LB_ID, LB_NU, LB_SA, isLetterOrNumber, isMark, lineBreakClass } from './props.js'
 import type { IteratorSettings } from './types.js'
@@ -25,18 +25,31 @@ function languageOf(tag: string): string {
 
 // ICU's line rule file for Blink's locale string (layout_locale.cc:368-429, text_break_iterator_icu.cc:59-94,
 // brkiter.cpp:433-457; verified table in specs/blink-canvas.md §2.3). A null locale opens the UI language with the
-// keywords dropped; ko@lb=strict fails to open and retries the UI language.
-export function lineTable(locale: string | null, strictness: IteratorSettings['strictness'], uiLanguage: string): BlinkBreakTable {
+// keywords dropped; ko@lb=strict fails to open and retries the UI language. When the UI language isn't given, those
+// cases open the table every UI language but Chinese opens, line_normal, and the paragraph reports ui-language.
+export function lineTable(locale: string | null, strictness: IteratorSettings['strictness'], uiLanguage: string | null): BlinkBreakTable {
   const auto = (language: string): BlinkBreakTable => language === 'zh' ? 'line_normal_cj' : 'line_normal'
-  if (locale === null) return auto(languageOf(uiLanguage))
+  if (locale === null) return auto(uiLanguage === null ? '' : languageOf(uiLanguage))
   const language = languageOf(locale)
   const cj = language === 'zh' || language === 'ja' || language === 'ko'
   switch (strictness) {
     case 'default': return auto(language)
     case 'normal': return cj ? 'line_normal_cj' : 'line_normal'
-    case 'strict': return language === 'ko' ? auto(languageOf(uiLanguage)) : 'line'
+    case 'strict': return language === 'ko' ? auto(uiLanguage === null ? '' : languageOf(uiLanguage)) : 'line'
     case 'loose': return cj ? 'line_loose_cj' : 'line_loose'
   }
+}
+
+// Whether text_content[from, to) holds a character the line table hands to a dictionary engine (ICU's dictionary
+// categories, rbbi.ts), where interior boundaries come from the running browser (DESIGN.md §6.3).
+export function hasDictionaryCharacters(text: string, from: number, to: number, table: BlinkBreakTable): boolean {
+  const rules = blinkBreakRules(table)
+  for (let i = from; i < to;) {
+    const cp = text.codePointAt(i)!
+    if (getCategory(rules, cp) >= rules.dictCategoriesStart) return true
+    i += cp > 0xffff ? 2 : 1
+  }
+  return false
 }
 
 // kBreakAllLineBreakClassTable (text_break_iterator.cc:48-110), MSB-first bits per row; rows not listed are all 0.
@@ -86,18 +99,16 @@ export class LineBreakIterator {
   readonly text: string
   readonly is8Bit: boolean
   readonly settings: IteratorSettings
-  readonly uiLanguage: string
-  readonly dictionaryBreaks: DictionaryBreaks
+  readonly uiLanguage: string | null
+  readonly dictionaryBreaks: BlinkEnvironment['dictionaryBreaks']
   startOffset = 0
   locale: string | null = null
   // LineBreakType in effect, after an override to kBreakCharacter.
   breakType: IteratorSettings['breakType']
   private icu: { start: number; table: BlinkBreakTable; flags: Uint8Array } | null = null
   private graphemes: { start: number; flags: Uint8Array } | null = null
-  // Whether a Thai, Lao, Khmer or Myanmar run needed interior boundaries this iterator couldn't give.
-  dictionaryUnavailable = false
 
-  constructor(text: string, is8Bit: boolean, settings: IteratorSettings, uiLanguage: string, dictionaryBreaks: DictionaryBreaks) {
+  constructor(text: string, is8Bit: boolean, settings: IteratorSettings, uiLanguage: string | null, dictionaryBreaks: BlinkEnvironment['dictionaryBreaks']) {
     this.text = text
     this.is8Bit = is8Bit
     this.settings = settings
@@ -144,9 +155,7 @@ export class LineBreakIterator {
             this.markDictionaryRuns(rules, sub, previous, b, v8, flags, start)
             break
           }
-          case 'intl-segmenter-word':
           case 'unavailable':
-            this.dictionaryUnavailable = true
             break
         }
       }

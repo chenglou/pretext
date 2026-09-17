@@ -1,19 +1,18 @@
 // Blink's prepared paragraph and line state (Chrome 153.0.8010.48). The Blink port owns this file.
-import type { Environment } from '../../env.js'
-import type { Measurer } from '../../measure/canvas.js'
-import type { FontDecl, Gap, Paragraph } from '../../model.js'
+import type { BlinkEnvironment } from '../../env.js'
+import type { FontDecl, FontFacts, Gap, Paragraph } from '../../model.js'
 import type { HanKerningFontData } from './hankerning.js'
 
 // InlineItem types this model produces (specs/blink-text.md §1). The model has no <br>, <wbr>, atomic inlines, floats
 // or unicode-bidi, so there are no bidi control, atomic or float items.
-export type BlinkItemType = 'text' | 'control' | 'open-tag' | 'close-tag'
+export type InlineItemType = 'text' | 'control' | 'open-tag' | 'close-tag'
 
 // TextItemType of a control item: kForcedLineBreak (LF in preserve-breaks modes), or kFlowControl: a tab run, a
 // generated U+200B after leading preserved spaces, CR or FF in preserve modes (inline_items_builder.cc:1040-1136).
-export type BlinkControl = 'none' | 'forced-break' | 'tab' | 'generated-zwsp' | 'cr-ff'
+export type ControlKind = 'none' | 'forced-break' | 'tab' | 'generated-zwsp' | 'cr-ff'
 
 // End collapse types (inline_item.h:307).
-export type BlinkEndCollapseType = 'not-collapsible' | 'collapsible' | 'collapsed' | 'opaque-to-collapsing'
+export type EndCollapseType = 'not-collapsible' | 'collapsible' | 'collapsed' | 'opaque-to-collapsing'
 
 // A ComputedStyle as far as this model varies it: the block's (index 0, also every bare text node's) or a span's.
 export type BlinkStyle = {
@@ -21,20 +20,28 @@ export type BlinkStyle = {
   font: FontDecl
   letterSpacing: number
   wordSpacing: number
-  // FontDescription::Locale(): the nearest non-empty lang, then <html lang>, then Content-Language; null without any
-  // (element.cc:12653-12660, style_resolver.cc:2405-2406, specs/blink-text.md §2.F.3).
+  // FontDescription::Locale(): the nearest non-empty lang; null for lang="" (element.cc:12568-12600,
+  // specs/blink-text.md §2.F.3).
   locale: string | null
   // Equal keys mean equal Font (font_description.cc:136-157): family, size, weight, style, locale and spacing.
   fontKey: string
+  // The primary family: FontFacts.primaryFamily, or the first family of the list (DESIGN.md §1.2).
+  primaryFamily: string
+  // Whether the DOM's advances at the zoomed size are the CSS-size advances scaled: FontFacts.opticalSizeAxis, by default
+  // true for Blink's system-font keywords (DESIGN.md §1.2, probes-chrome correction 7).
+  measuresAtCssSize: boolean
+  // FontFacts.joining as given; null lays joining letters at shaping-call edges out as an AAT font does and reports
+  // joining-technology there.
+  joining: FontFacts['joining']
 }
 
 // Canvas contexts per style: shaping (LTR, RTL) and the hyphen (no spacing), and the factor from Canvas px to zoomed px
 // (the layout zoom for fonts measured at the CSS size, else 1).
 export type StyleContexts = { ltr: number; rtl: number; hyphen: number; scale: number }
 
-export type BlinkItem = {
-  type: BlinkItemType
-  control: BlinkControl
+export type InlineItem = {
+  type: InlineItemType
+  control: ControlKind
   // [start, end) into text_content.
   start: number
   end: number
@@ -43,7 +50,7 @@ export type BlinkItem = {
   // Index into BlinkPrepared.styles: the style the item is handled under (a span's text and tags: the span's).
   style: number
   bidiLevel: number
-  endCollapseType: BlinkEndCollapseType
+  endCollapseType: EndCollapseType
   isEndCollapsibleNewline: boolean
   // Source offset of the collapsible space RemoveTrailingCollapsibleSpace erased, for a later restore; -1 otherwise.
   removedSpaceSource: number
@@ -77,11 +84,10 @@ export type IteratorSettings = {
   breakSpace: 'after-space-run' | 'after-every-space'
 }
 
+// Everything prepare computes. nextLine only reads it.
 export type BlinkPrepared = {
   paragraph: Paragraph
-  env: Environment
-  // The layout's one measurer, which firstLine also lays a line out with.
-  measurer: Measurer
+  env: BlinkEnvironment
   // Device scale factor times browser zoom: every LayoutUnit counts 1/64 of a zoomed px (specs/blink-lines.md §2.1).
   layoutZoom: number
   // text_content: the paragraph string after white-space processing (specs/blink-text.md §2.C).
@@ -96,10 +102,13 @@ export type BlinkPrepared = {
   sourceOffsets: Int32Array
   // Per source unit, its text_content unit, or -1 when white-space processing removed it.
   contentOffsets: Int32Array
+  // Per source unit removed by white-space processing, the text_content offset its collapsed OffsetMapping unit maps to:
+  // the length of text_content when it was collapsed (offset_mapping_builder.cc:95-117).
+  collapsedAt: Int32Array
   // Per source unit, its run.
   sourceRuns: Int32Array
   sourceLength: number
-  items: BlinkItem[]
+  items: InlineItem[]
   styles: BlinkStyle[]
   groups: BlinkGroup[]
   contexts: StyleContexts[]
@@ -108,11 +117,15 @@ export type BlinkPrepared = {
   settings: IteratorSettings
   // Extended grapheme cluster boundaries over text_content (flags per offset, the end included).
   graphemeStarts: Uint8Array
+  // Per text_content unit, 1 when HarfBuzz marks it a continuation of the glyph cluster before it: a mark, a ZWJ and the
+  // pictograph after it, an emoji modifier, the second of a regional indicator pair, a halfwidth voiced sound mark or a
+  // tag character (hb-ot-shape.cc:466-522, hb-ot-layout.hh:246-251), or the trail unit of a surrogate pair.
+  continuations: Uint8Array
   // Word spacing at text_content index 0 (WordSpacingWhiteSpacePre, inline_node.cc:1561-1565).
   wordSpacingAnywhere: boolean
-  // HanKerning::FontData per style, measured when a style's text first needs it.
+  // HanKerning::FontData per style whose shaping groups HanKerning may apply to, measured in prepare.
   hanKerning: (HanKerningFontData | null)[]
-  // Named gaps found so far; nextLine adds the ones that depend on chosen breaks.
+  // The paragraph's gaps: its content, fonts and environment.
   gaps: Gap[]
 }
 

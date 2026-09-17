@@ -1,5 +1,5 @@
 // Gecko's prepared paragraph and line state (Firefox 156.0). The Gecko port owns this file.
-import type { Environment } from '../../env.js'
+import type { GeckoEnvironment } from '../../env.js'
 import type { Gap, Paragraph } from '../../model.js'
 
 // white-space as its two longhands and the predicates Gecko derives from them (nsStyleStruct.h:1303-1367,
@@ -68,7 +68,8 @@ export type GeckoUnit = {
   tEnd: number
   // measureText of the unit in its text run's context and its DOM script (rangeAu), in au at apd 60.
   canvasAu: number
-  // The DOM advance: canvasAu plus Apple Color Emoji corrections at the page's apd (specs/gecko-canvas.md §2 A12).
+  // The DOM advance: canvasAu plus the color emoji and synthesized space corrections at the page's apd
+  // (specs/gecko-canvas.md §2 A12).
   au: number
   // Glyph advance of the text run before this unit.
   startAdvance: number
@@ -83,7 +84,7 @@ export const KIND_INVISIBLE = 4
 
 export type GeckoPrepared = {
   paragraph: Paragraph
-  env: Environment
+  env: GeckoEnvironment
   // max(1, round(60 / devicePixelRatio)) (specs/gecko-lines.md §2.1).
   appUnitsPerDevPixel: number
   style: GeckoStyle
@@ -103,7 +104,7 @@ export type GeckoPrepared = {
   kind: Uint8Array
   // spacingPrefix[t]: letter and word spacing after the characters before t, in au (nsTextFrame.cpp:4089-4295).
   spacingPrefix: Int32Array
-  // correctionPrefix[t]: Apple Color Emoji corrections of the clusters before t, in au.
+  // correctionPrefix[t]: color emoji and synthesized space corrections of the clusters before t, in au.
   correctionPrefix: Int32Array
   unitOf: Int32Array
   units: GeckoUnit[]
@@ -113,10 +114,9 @@ export type GeckoPrepared = {
   nextT: Int32Array
   // ComputeTabWidthAppUnits (nsTextFrame.cpp:3875-3906), 0 when nothing measured it.
   tabWidth: number
-  // Gaps from preparation, plus in-word-prefix, which the line loop adds at the first in-word offset whose recipe Canvas
-  // can't confirm (lines.ts glyphBefore); the prepared paragraph lives for one layout at one width.
+  // The gaps of the paragraph's content, fonts and environment. Line filling never writes here; gaps its breaks decide go
+  // on the line (DESIGN.md §2.8).
   gaps: Gap[]
-  inWordGapReported: boolean
 }
 
 // Where the continuation frame starts (nsTextFrame.cpp:11253, :11523). No measured remainder carries over; a line's
