@@ -27,7 +27,6 @@ let measureNaturalWidth: LayoutModule['measureNaturalWidth']
 let walkLineRanges: LayoutModule['walkLineRanges']
 let setLocale: LayoutModule['setLocale']
 let clearCache: LayoutModule['clearCache']
-let countPreparedLines: LineBreakModule['countPreparedLines']
 let measurePreparedLineGeometry: LineBreakModule['measurePreparedLineGeometry']
 let stepPreparedLineGeometry: LineBreakModule['stepPreparedLineGeometry']
 let walkPreparedLinesRaw: LineBreakModule['walkPreparedLinesRaw']
@@ -294,7 +293,7 @@ beforeAll(async () => {
     setLocale,
     clearCache,
   } = mod)
-  ;({ countPreparedLines, measurePreparedLineGeometry, stepPreparedLineGeometry, walkPreparedLinesRaw } = lineBreakMod)
+  ;({ measurePreparedLineGeometry, stepPreparedLineGeometry, walkPreparedLinesRaw } = lineBreakMod)
   ;({ getSegmentBreakableFitAdvances } = measurementMod)
   ;({ prepareRichInline, layoutNextRichInlineLineRange, materializeRichInlineLineRange, measureRichInlineStats, walkRichInlineLineRanges } = richInlineMod)
   variant = createVariant('unit', mod, richInlineMod)
@@ -3854,7 +3853,7 @@ describe('layout invariants', () => {
     }
   })
 
-  test('countPreparedLines stays aligned with the walked line counter', () => {
+  test('layout() stays aligned with the walked line counter', () => {
     const texts = [
       'The quick brown fox jumps over the lazy dog.',
       'said "hello" to 世界 and waved.',
@@ -3868,9 +3867,10 @@ describe('layout invariants', () => {
       const prepared = prepareWithSegments(texts[textIndex]!, FONT)
       for (let widthIndex = 0; widthIndex < widths.length; widthIndex++) {
         const width = widths[widthIndex]!
-        const counted = countPreparedLines(prepared, width)
-        const walked = walkPreparedLinesRaw(prepared, width)
-        expect(counted).toBe(walked)
+        let visited = 0
+        const walked = walkPreparedLinesRaw(prepared, width, () => { visited++ })
+        expect(layout(prepared, width, LINE_HEIGHT).lineCount).toBe(walked)
+        expect(visited).toBe(walked)
       }
     }
   })

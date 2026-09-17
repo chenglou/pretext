@@ -37,7 +37,6 @@ import {
   type SegmentMetrics,
 } from './measurement.js'
 import {
-  countPreparedLines,
   measurePreparedLineGeometry,
   normalizePreparedLineStart,
   stepPreparedLineGeometryFromChunk,
@@ -750,7 +749,7 @@ export function layout(prepared: PreparedText, maxWidth: number, lineHeight: num
   // Keep the resize hot path specialized. `layoutWithLines()` shares the same
   // break semantics but also tracks line ranges; the extra bookkeeping is too
   // expensive to pay on every hot-path `layout()` call.
-  const lineCount = countPreparedLines(getInternalPrepared(prepared), maxWidth)
+  const lineCount = walkPreparedLinesRaw(getInternalPrepared(prepared), maxWidth)
   return { lineCount, height: lineCount * lineHeight }
 }
 

@@ -103,10 +103,6 @@ function getTabAdvance(lineWidth: number, tabStopAdvance: number, minimumAdvance
   return advance < minimumAdvance ? advance + tabStopAdvance : advance
 }
 
-function getLineEndContribution(leadingSpacing: number, segmentContribution: number): number {
-  return segmentContribution === 0 ? 0 : leadingSpacing + segmentContribution
-}
-
 function getTrailingLetterSpacing(
   prepared: PreparedLineBreakData,
   segmentIndex: number,
@@ -131,17 +127,8 @@ function getWholeSegmentFitContribution(
   segmentWidth: number,
 ): number {
   if (breakAfter ? kind !== 'tab' : segmentWidth === 0 && kind !== 'control') return 0
-  return getLineEndContribution(leadingSpacing, segmentWidth + getTrailingLetterSpacing(prepared, segmentIndex))
-}
-
-function getBreakableGraphemeAdvance(
-  prepared: PreparedLineBreakData,
-  hasContent: boolean,
-  baseAdvance: number,
-): number {
-  return prepared.letterSpacing !== 0 && hasContent
-    ? baseAdvance + prepared.letterSpacing
-    : baseAdvance
+  const contribution = segmentWidth + getTrailingLetterSpacing(prepared, segmentIndex)
+  return contribution === 0 ? 0 : leadingSpacing + contribution
 }
 
 function getBreakableCandidateFitWidth(
@@ -209,23 +196,6 @@ function getTerminalLetterSpacing(
   }
 
   return 0
-}
-
-function finalizeLinePaintWidth(
-  prepared: PreparedLineBreakData,
-  width: number,
-  startSegmentIndex: number,
-  startGraphemeIndex: number,
-  endSegmentIndex: number,
-  endGraphemeIndex: number,
-): number {
-  return width + getTerminalLetterSpacing(
-    prepared,
-    startSegmentIndex,
-    startGraphemeIndex,
-    endSegmentIndex,
-    endGraphemeIndex,
-  )
 }
 
 function findChunkIndexForStart(prepared: PreparedLineBreakData, segmentIndex: number): number {
@@ -308,10 +278,6 @@ function normalizeLineStartChunkIndexFromHint(
   }
   if (nextChunkIndex >= prepared.chunks.length) return -1
   return normalizeLineStartInChunk(prepared, nextChunkIndex, cursor)
-}
-
-export function countPreparedLines(prepared: PreparedLineBreakData, maxWidth: number): number {
-  return walkPreparedLinesRaw(prepared, maxWidth)
 }
 
 function walkPreparedLinesSimple(
@@ -504,17 +470,6 @@ export function walkPreparedLinesRaw(
   return walkPreparedComplexLines(prepared, cursor, chunkIndex, maxWidth, onLine).lineCount
 }
 
-function stepPreparedChunkLineGeometry(
-  prepared: PreparedLineBreakData,
-  cursor: LineBreakCursor,
-  chunkIndex: number,
-  maxWidth: number,
-  endSegmentIndex: number,
-  endGraphemeIndex: number,
-): number | null {
-  return walkPreparedComplexLines(prepared, cursor, chunkIndex, maxWidth, undefined, 1, endSegmentIndex, endGraphemeIndex).lastLineWidth
-}
-
 // A return from an unfit discretionary hyphen needs an overflow that isolated
 // widths can show and a target that really is the latest opportunity. No soft
 // hyphen on the line may measure narrower joined than apart, and nothing after
@@ -620,14 +575,8 @@ function walkPreparedComplexLines(
       hangEndSegmentIndex >= 0 &&
       (endSegmentIndex === hangEndSegmentIndex || endSegmentIndex === hangEndSegmentIndex + 1) &&
       (hangEndSegmentIndex === kinds.length || kinds[hangEndSegmentIndex] === 'hard-break')
-    const paintWidth = finalizeLinePaintWidth(
-      prepared,
-      hangsWhereUnfit ? lineW : width,
-      lineStartSegmentIndex,
-      lineStartGraphemeIndex,
-      endSegmentIndex,
-      endGraphemeIndex,
-    )
+    const paintWidth = (hangsWhereUnfit ? lineW : width) +
+      getTerminalLetterSpacing(prepared, lineStartSegmentIndex, lineStartGraphemeIndex, endSegmentIndex, endGraphemeIndex)
     return hangsWhereUnfit ? Math.max(hangStartWidth, Math.min(paintWidth, availableWidth)) : paintWidth
   }
 
@@ -939,7 +888,7 @@ function walkPreparedComplexLines(
             ? letterSpacing
             : 0
           for (let g = 0; g < endGraphemeLimit; g++) {
-            advance += getBreakableGraphemeAdvance(prepared, g > 0, fitAdvances[g]!)
+            advance += fitAdvances[g]! + (g > 0 ? letterSpacing : 0)
           }
           if (getBreakableCandidateFitWidth(prepared, lineW + advance) <= fitLimit) {
             lineW += advance
@@ -1102,7 +1051,7 @@ export function stepPreparedLineGeometryFromChunk(
     return stepPreparedSimpleLineGeometry(prepared, cursor, maxWidth)
   }
 
-  return stepPreparedChunkLineGeometry(prepared, cursor, chunkIndex, maxWidth, endSegmentIndex, endGraphemeIndex)
+  return walkPreparedComplexLines(prepared, cursor, chunkIndex, maxWidth, undefined, 1, endSegmentIndex, endGraphemeIndex).lastLineWidth
 }
 
 export function stepPreparedLineGeometry(
