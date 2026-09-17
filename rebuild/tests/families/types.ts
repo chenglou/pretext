@@ -8,7 +8,7 @@
 import { createHash } from 'node:crypto'
 import { canonicalJson } from '../../lab/cases/case.ts'
 import { createRng, type Rng } from '../../lab/cases/prng.ts'
-import type { Paragraph } from '../../lab/types.ts'
+import type { InlineStructure, Paragraph } from '../../lab/types.ts'
 import { pairwiseRows } from './covering.ts'
 
 export type Engine = 'blink' | 'webkit' | 'gecko'
@@ -20,6 +20,8 @@ export type Draft = {
   pageLang: string
   // width is ignored; derive.ts sets it.
   paragraph: Paragraph
+  // Inline structure (lab/types.ts InlineStructure), from lab/cases/build.ts treeParagraph; absent for a flat paragraph.
+  inline?: InlineStructure
   fontFixtures?: readonly string[]
   // Source offsets where the rule acts at a line edge: a line should end, or the next line start, exactly there.
   focus: readonly number[]
@@ -91,7 +93,7 @@ export function expandFamily(family: RuleFamily, engine: Engine, seed: string): 
       const rng: Rng = createRng(`${seed}/${family.name}/${r}/${n}`)
       const draft = family.build(values, rng)
       if (draft === null) continue
-      const content = canonicalJson({ family: family.name, pageLang: draft.pageLang, paragraph: { ...draft.paragraph, width: 0 }, fontFixtures: draft.fontFixtures ?? [] })
+      const content = canonicalJson({ family: family.name, pageLang: draft.pageLang, paragraph: { ...draft.paragraph, width: 0 }, inline: draft.inline, fontFixtures: draft.fontFixtures ?? [] })
       const key = `p-${createHash('sha256').update(content).digest('hex').slice(0, 16)}`
       // Axis values that only move the focus (a mark at the line end or start) give the same paragraph: one paragraph
       // with the union of their focus offsets.

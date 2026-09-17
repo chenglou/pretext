@@ -12,11 +12,12 @@ import { DATA } from '../../../tools/gen-shared.ts'
 import { forEachLine } from '../../../tools/lines.ts'
 import { PINNED_BUILDS, type WebKitEnvironment } from '../../env.js'
 import { createMeasurer } from '../../measure/canvas.js'
-import { UNKNOWN_FONT_FACTS, type Paragraph, type TextRun } from '../../model.js'
+import { UNKNOWN_FONT_FACTS, type Paragraph } from '../../model.js'
 import { getCategory } from '../../breaks/rbbi.js'
 import { canBreakBefore, classify, computeFollowing, dictionaryRangeStartsWithMark, findNextBreakablePosition, makeFactory, mayBreakInBetween } from './breaks.js'
 import { lineRules, pairTableBreaks } from './data.js'
 import { prepareWebKit } from './content.js'
+import { flatParagraph, type FlatNode } from './test-paragraph.js'
 import type { WebKitPrepared, WebKitTextItem } from './types.js'
 
 // A fixed-advance OffscreenCanvas: the scan doesn't read widths, but preparing a paragraph measures items.
@@ -45,12 +46,8 @@ const env: WebKitEnvironment = {
 }
 const font = { family: 'Arial', size: 16, weight: 400, style: 'normal' as const, facts: UNKNOWN_FONT_FACTS }
 
-function paragraph(runs: Array<[string, TextRun['node']]>, overrides: Partial<Paragraph> = {}): Paragraph {
-  return {
-    runs: runs.map(([text, node]) => ({ text, node, font, letterSpacing: 0, wordSpacing: 0, lang: null })),
-    font, letterSpacing: 0, wordSpacing: 0, width: 1, lineHeight: 20, whiteSpace: 'normal', wordBreak: 'normal',
-    overflowWrap: 'normal', lineBreak: 'auto', tabSize: 8, direction: 'ltr', lang: 'en', ...overrides,
-  }
+function paragraph(runs: Array<[string, FlatNode]>, overrides: Partial<Paragraph> = {}): Paragraph {
+  return flatParagraph(runs, font, { width: 1, ...overrides })
 }
 
 // Soft wrap opportunities between items, as TextOnlySimpleLineBuilder and LineBuilder decide them for text in one
@@ -73,11 +70,11 @@ function opportunities(p: WebKitPrepared): { breaks: number[]; forced: number[] 
         opportunity = true
       } else if (previous.box === item.box) {
         const box = p.boxes[item.box]!
-        opportunity = previous.level === item.level || findNextBreakablePosition(makeFactory(box.text, box.is8Bit, box.locale, p.style.lineBreakMode, p.icuDefaultLocale, p.env.dictionaryBreaks), item.start, p.style) === item.start
+        opportunity = previous.level === item.level || findNextBreakablePosition(makeFactory(box.text, box.is8Bit, box.locale, box.style.lineBreakMode, p.icuDefaultLocale, p.env.dictionaryBreaks), item.start, box.style) === item.start
       } else {
         const a = p.boxes[previous.box]!
         const b = p.boxes[item.box]!
-        opportunity = mayBreakInBetween(a.text, a.is8Bit, b.text, b.is8Bit, b.locale, p.style, p.icuDefaultLocale, p.env.dictionaryBreaks)
+        opportunity = mayBreakInBetween(a.text, a.is8Bit, b.text, b.is8Bit, b.locale, b.style, p.icuDefaultLocale, p.env.dictionaryBreaks)
       }
       if (opportunity) breaks.push(p.boxes[item.box]!.sourceStart + item.start)
     }
@@ -86,7 +83,7 @@ function opportunities(p: WebKitPrepared): { breaks: number[]; forced: number[] 
   return { breaks, forced }
 }
 
-function breaksOf(runs: Array<[string, TextRun['node']]>, overrides: Partial<Paragraph> = {}): number[] {
+function breaksOf(runs: Array<[string, FlatNode]>, overrides: Partial<Paragraph> = {}): number[] {
   return opportunities(prepareWebKit(paragraph(runs, overrides), env, createMeasurer())).breaks
 }
 
@@ -280,7 +277,7 @@ describe.skipIf(!existsSync(resolve(WORK, 'webkit-answers.jsonl')))('groundwork 
         excluded++
         return
       }
-      const p = prepareWebKit(paragraph(parts.map(part => [part, 'text'] as [string, TextRun['node']]), {
+      const p = prepareWebKit(paragraph(parts.map(part => [part, 'text'] as [string, FlatNode]), {
         whiteSpace: request.whiteSpace, wordBreak: request.wordBreak, direction: request.direction, lang: request.lang ?? 'en',
       }), env, createMeasurer())
       const actual = opportunities(p)

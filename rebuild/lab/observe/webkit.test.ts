@@ -3,33 +3,39 @@
 // complex text controller had (the Canvas stand-in the port uses), so these check the ported geometry rules, not Canvas.
 import { describe, expect, test } from 'bun:test'
 import { PINNED_BUILDS } from '../../src/env.ts'
-import { UNKNOWN_FONT_FACTS, type CanvasMeasure, type ExpectedRect, type Paragraph, type WebKitDisplayBox, type WebKitLayout, type WebKitLine } from '../../src/model.ts'
+import {
+  NO_BOX_EDGE, UNKNOWN_FONT_FACTS, type CanvasMeasure, type ExpectedRect, type InlineNode, type Paragraph, type WebKitDisplayBox, type WebKitLayout,
+  type WebKitLine, type WebKitTextBox,
+} from '../../src/model.ts'
 import { observeWebKit } from './webkit.ts'
 
 const font = { family: 'Arial', size: 16, weight: 400, style: 'normal' as const, facts: UNKNOWN_FONT_FACTS }
 
 function paragraph(texts: string[], overrides: Partial<Paragraph> = {}): Paragraph {
+  return treeParagraph(texts.map(text => ({ kind: 'text' as const, text })), overrides)
+}
+
+function treeParagraph(content: InlineNode[], overrides: Partial<Paragraph> = {}): Paragraph {
   return {
-    runs: texts.map(text => ({ text, node: 'text' as const, font, letterSpacing: 0, wordSpacing: 0, lang: null })),
-    font, letterSpacing: 0, wordSpacing: 0, width: 100, lineHeight: 20, whiteSpace: 'normal', wordBreak: 'normal',
-    overflowWrap: 'normal', lineBreak: 'auto', tabSize: 8, direction: 'ltr', lang: 'en', ...overrides,
+    content, font, letterSpacing: 0, wordSpacing: 0, width: 100, lineHeight: 20, whiteSpace: 'normal', wordBreak: 'normal',
+    overflowWrap: 'normal', lineBreak: 'auto', tabSize: 8, direction: 'ltr', lang: 'en', textIndent: 0, textAlign: 'start', ...overrides,
   }
 }
 
 function line(boxes: WebKitDisplayBox[], lineBoxWidth = 100): WebKitLine {
   return {
-    start: 0, end: 0, fragments: [], hasLineBox: true, joinsNextLine: false,
-    geometry: { lineBoxWidth, contentWidth: 0, hangingWidth: 0, contentLogicalRight: 0, boxes }, gaps: [], next: null,
+    start: 0, end: 0, fragments: [], hasLineBox: true, joinsNextLine: false, slot: { left: 0, right: 0 }, indented: false, align: 'start',
+    geometry: { lineLeft: 0, contentEdgeOffset: 0, lineBoxWidth, contentWidth: 0, hangingWidth: 0, contentLogicalRight: 0, alignmentOffset: 0, boxes }, gaps: [], next: null,
   }
 }
 
-function box(run: number, start: number, end: number, x: number, width: number, overrides: Partial<WebKitDisplayBox> = {}): WebKitDisplayBox {
-  return { kind: 'text', run, start, end, level: 0, isWordSeparator: false, x, width, hyphen: null, ...overrides }
+function box(run: number, start: number, end: number, x: number, width: number, overrides: Partial<WebKitTextBox> = {}): WebKitDisplayBox {
+  return { kind: 'text', run, start, end, level: 0, isWordSeparator: false, x, width, hyphen: null, expansion: 0, expansionBehavior: { left: 'allow', right: 'allow' }, shapedAcrossBoxes: false, ...overrides }
 }
 
 function layoutOf(lines: WebKitLine[]): WebKitLayout {
   return {
-    engine: 'webkit', lines, gaps: [], measure: { contexts: [], calls: [], memoHits: 0 },
+    engine: 'webkit', lines, belowFloats: [], gaps: [], measure: { contexts: [], calls: [], memoHits: 0 },
     env: { engine: 'webkit', build: PINNED_BUILDS.webkit, devicePixelRatio: 2, pageZoom: 1, pageLang: 'en', contentLanguage: null, preferredLanguages: null, icuDefaultLocale: null, dictionaryBreaks: { kind: 'unavailable' } },
   }
 }
@@ -131,10 +137,38 @@ describe('whole-node rects', () => {
     expect(observed.nodes[0]).toEqual([{ line: 0, x: { state: 'predicted', value: -11.808002471923828 }, width: { state: 'predicted', value: 11.808002471923828 } }])
   })
 
+  test('a TAB inside a box counts its stop from the content box edge, past slot insets and text-indent', () => {
+    const p = paragraph(['a\tb'], { whiteSpace: 'pre-wrap', tabSize: 4 })
+    const l = line([box(0, 0, 3, 20, 20)])
+    l.geometry.lineLeft = 20
+    l.geometry.contentEdgeOffset = 20
+    // Every unit 8, so W(' ') is 8 and stops fall every 32px: xPos 20 + 8 reaches the stop at 32 with a 4px tab.
+    const observed = observeWebKit(p, layoutOf([l]), advances([8, 8, 8]))
+    expect(plain(observed.codePoints[2]!.rects)).toEqual([[0, 32, 8]])
+  })
+
   test('page zoom that is not 1 limits every value', () => {
     const p = paragraph(['a'])
     const layout = layoutOf([line([box(0, 0, 1, 0, 8)])])
     layout.env.pageZoom = null
     expect(observeWebKit(p, layout, advances([8])).nodes[0]![0]!.x).toEqual({ state: 'limited', gap: 'page-zoom', value: 0 })
+  })
+})
+
+describe('element rects (DESIGN.md §9, stage 5)', () => {
+  test('a span reports its inline box per line; an atomic inline its border box; a <br> its line break box; a <wbr> nothing', () => {
+    const spanNode: InlineNode = {
+      kind: 'span', font, letterSpacing: 0, wordSpacing: 0, whiteSpace: 'normal', wordBreak: 'normal', overflowWrap: 'normal', lineBreak: 'auto', tabSize: 8,
+      lang: null, inlineStart: { margin: 0, border: 0, padding: 7 }, inlineEnd: NO_BOX_EDGE, verticalAlign: 'baseline', children: [{ kind: 'text', text: 'ab' }],
+    }
+    const p = treeParagraph([spanNode, { kind: 'atomic', width: 20, height: 10, marginInlineStart: 0, marginInlineEnd: 0 }, { kind: 'br' }, { kind: 'wbr' }, { kind: 'text', text: 'c' }])
+    const layout = layoutOf([
+      line([{ kind: 'inline-box', element: 0, x: 0, width: 23, hasStartEdge: true, hasEndEdge: true }, box(0, 0, 2, 7, 16), { kind: 'atomic', element: 1, level: 0, x: 23, width: 20 }, { kind: 'line-break', element: 2, x: 43, width: 0 }]),
+      line([box(1, 0, 1, 0, 8)]),
+    ])
+    const observed = observeWebKit(p, layout, advances([8, 8]))
+    expect(observed.elements.map(plain)).toEqual([[[0, 0, 23]], [[0, 23, 20]], [[0, 43, 0]], []])
+    expect(plain(observed.nodes[0]!)).toEqual([[0, 7, 16]])
+    expect(plain(observed.nodes[1]!)).toEqual([[1, 0, 8]])
   })
 })

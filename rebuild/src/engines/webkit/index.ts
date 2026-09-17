@@ -17,7 +17,7 @@ export const webkitEngine: EngineImplementation<WebKitEnvironment, WebKitPrepare
   // nodes all lack renderers has none (RenderTreeUpdater.cpp:536-595).
   firstLine(prepared: WebKitPrepared): WebKitLineStart | null {
     if (prepared.items.length === 0) return null
-    return { engine: 'webkit', itemIndex: 0, offset: 0, previousLine: null, isFirstFormattedLine: true }
+    return { engine: 'webkit', itemIndex: 0, offset: 0, previousLine: null, isFirstFormattedLine: true, hasFloats: false }
   },
 
   nextLine: webkitNextLine,

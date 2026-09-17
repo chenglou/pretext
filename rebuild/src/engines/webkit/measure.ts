@@ -43,8 +43,8 @@ export function hyphenGlyphsDiffer(m: Measurer, box: WebKitBox): boolean {
 // FontCascade::tabWidth (FontCascadeInlines.h:76-94) with a tab-size of spaces (TabSize.h:52-55): the stop counts from
 // the TextRun's xpos, the pen position on the line. The primary font's spaceWidth() is taken from Canvas W(' ') without
 // spacing (gap tab-stops).
-function tabWidth(p: WebKitPrepared, box: WebKitBox, spaceWidth: number, position: number): number {
-  const base = f32(p.style.tabSize * spaceWidth)
+function tabWidth(box: WebKitBox, spaceWidth: number, position: number): number {
+  const base = f32(box.style.tabSize * spaceWidth)
   if (base === 0) return box.letterSpacing
   let remainder = f32(position % base)
   if (remainder < 0) remainder = f32(remainder + base)
@@ -56,9 +56,9 @@ function tabWidth(p: WebKitPrepared, box: WebKitBox, spaceWidth: number, positio
 // WidthIterator::calculateAdditionalWidth (WidthIterator.cpp:500-519): word spacing after SPACE, LF, NBSP, and TAB when
 // tabs aren't allowed (FontCascade::treatAsSpace, FontCascadeInlines.h:140-143), except at the TextRun's index 0 unless
 // the character is NBSP. The Canvas context has no word spacing, so it is added here.
-function addWordSpacing(p: WebKitPrepared, box: WebKitBox, from: number, to: number, width: number): number {
+function addWordSpacing(box: WebKitBox, from: number, to: number, width: number): number {
   if (box.wordSpacing === 0) return width
-  const allowTabs = tabsAllowed(p.style)
+  const allowTabs = tabsAllowed(box.style)
   let w = width
   for (let i = from; i < to; i++) {
     const c = box.text.charCodeAt(i)
@@ -70,7 +70,7 @@ function addWordSpacing(p: WebKitPrepared, box: WebKitBox, from: number, to: num
 
 // WidthIterator with tabs allowed (WidthIterator.cpp:500-519): a TAB's advance is its tab stop, and letter spacing is
 // added after it as after every glyph with an advance; the text between TABs is a Canvas total.
-function tabbedWidth(p: WebKitPrepared, m: Measurer, box: WebKitBox, from: number, to: number, left: number): number {
+function tabbedWidth(_p: WebKitPrepared, m: Measurer, box: WebKitBox, from: number, to: number, left: number): number {
   const text = box.text
   const spaceWidth = measureText(m, box.plainContext, ' ')
   let width = 0
@@ -79,7 +79,7 @@ function tabbedWidth(p: WebKitPrepared, m: Measurer, box: WebKitBox, from: numbe
     if (i < to && text.charCodeAt(i) !== 0x09) continue
     if (i > segmentStart) width = f32(width + measureText(m, box.context, canvasString(text.slice(segmentStart, i))))
     if (i < to) {
-      width = f32(width + tabWidth(p, box, spaceWidth, f32(left + width)))
+      width = f32(width + tabWidth(box, spaceWidth, f32(left + width)))
       if (box.letterSpacing !== 0) width = f32(width + box.letterSpacing)
     }
     segmentStart = i + 1
@@ -88,9 +88,9 @@ function tabbedWidth(p: WebKitPrepared, m: Measurer, box: WebKitBox, from: numbe
 }
 
 // FontCascade::widthForSimpleTextWithFixedPitch (FontCascade.cpp:414-442).
-export function fixedPitchWidth(p: WebKitPrepared, m: Measurer, box: WebKitBox, from: number, to: number): number {
+export function fixedPitchWidth(_p: WebKitPrepared, m: Measurer, box: WebKitBox, from: number, to: number): number {
   const spaceWidth = measureText(m, box.plainContext, ' ')
-  if (collapsesWhiteSpace(p.style)) return f32((to - from) * spaceWidth)
+  if (collapsesWhiteSpace(box.style)) return f32((to - from) * spaceWidth)
   let width = 0
   for (let i = from; i < to; i++) {
     const c = box.text.charCodeAt(i)
@@ -121,10 +121,10 @@ export function boxWidth(p: WebKitPrepared, m: Measurer, box: WebKitBox, from: n
   if (box.simplifiedMeasuring && box.fixedPitchFastMeasuring) {
     width = fixedPitchWidth(p, m, box, from, end)
   } else {
-    const measured = tabsAllowed(p.style) && containsTab(box.text, from, end)
+    const measured = tabsAllowed(box.style) && containsTab(box.text, from, end)
       ? tabbedWidth(p, m, box, from, end, left)
       : measureText(m, box.context, canvasString(box.text.slice(from, end)))
-    width = addWordSpacing(p, box, from, end, measured)
+    width = addWordSpacing(box, from, end, measured)
   }
   if (end > to) width = f32(width - f32(singleSpaceWidth(m, box) + box.wordSpacing))
   return Number.isNaN(width) ? 0 : Math.max(0, width)
@@ -144,7 +144,7 @@ export function fixedPitchShortcutWidth(p: WebKitPrepared, m: Measurer, box: Web
 // space are one space wide.
 export function itemWidth(p: WebKitPrepared, m: Measurer, item: WebKitTextItem, from: number, to: number, left: number): number {
   const box = p.boxes[item.box]!
-  if (item.isWhitespace && (!preservesSpacesAndTabs(p.style) || (to - from === 1 && box.text.charCodeAt(from) === 0x20))) {
+  if (item.isWhitespace && (!preservesSpacesAndTabs(box.style) || (to - from === 1 && box.text.charCodeAt(from) === 0x20))) {
     return Math.max(0, singleSpaceWidth(m, box))
   }
   return boxWidth(p, m, box, from, to, left, true)

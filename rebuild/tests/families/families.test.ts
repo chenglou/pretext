@@ -35,7 +35,7 @@ describe('rule families', () => {
         const paragraphs = expandFamily(family, engine, SEED)
         expect(paragraphs.length).toBeGreaterThan(0)
         for (const p of paragraphs) {
-          const value = makeCase({ family: `rule/${family.name}`, origin: 'test', pageLang: p.draft.pageLang, paragraph: { ...p.draft.paragraph, width: 100 }, fontFixtures: p.draft.fontFixtures })
+          const value = makeCase({ family: `rule/${family.name}`, origin: 'test', pageLang: p.draft.pageLang, paragraph: { ...p.draft.paragraph, width: 100 }, inline: p.draft.inline, fontFixtures: p.draft.fontFixtures })
           const length = value.paragraph.runs.reduce((sum, run) => sum + run.text.length, 0)
           expect(p.draft.focus.length).toBeGreaterThan(0)
           for (const offset of p.draft.focus) {

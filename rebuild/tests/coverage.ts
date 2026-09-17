@@ -44,6 +44,9 @@ export type RuleCoverage = {
   facts: { specs: string[]; holds: number; fails: number; other: number; specsWithoutFacts: string[] }
   declaredFamilies: string[]
   observedFamilies: FamilyEvidence[]
+  // Families naming the rule with resolved brackets in the engine's browser whose cases no scored prediction run has
+  // reached yet, such as stage 5 families derived with FINAL_RUNS=native. They show where brackets exist; they don't cover.
+  derivedFamilies: FamilyEvidence[]
   coveredBy: Array<'test' | 'fact' | 'family'>
   annotated: boolean
 }
@@ -52,7 +55,8 @@ export type Coverage = {
   format: 'pretext-coverage/1'
   generatedAt: string
   inputs: { facts: string[]; derived: string[] }
-  counts: Record<string, { current: number; covered: number; byTest: number; byFact: number; byFamily: number; uncovered: number; withProbeButNoHoldingFact: number; deviations: number }>
+  // derivedOnly: uncovered rules with a derived family (RuleCoverage.derivedFamilies).
+  counts: Record<string, { current: number; covered: number; byTest: number; byFact: number; byFamily: number; uncovered: number; derivedOnly: number; withProbeButNoHoldingFact: number; deviations: number }>
   rulesWithObservedFamily: string[]
   uncovered: string[]
   // Rules with probe labels and no holding fact in the current facts files (TENTPOLES-CRITIC §2.D item 3).
@@ -162,17 +166,19 @@ export function buildCoverage(registry: readonly RuleRecord[], facts: readonly F
     }
     const declaredFamilies = declared.get(rule.id) ?? []
     const observedFamilies = evidence.filter(value => declaredFamilies.includes(value.family) && engineOfBrowser(value.browser) === rule.engine && value.resolvedTargets > 0 && value.scored > 0)
+    const derivedFamilies = evidence.filter(value => declaredFamilies.includes(value.family) && engineOfBrowser(value.browser) === rule.engine && value.resolvedTargets > 0 && value.scored === 0)
     const coveredBy: RuleCoverage['coveredBy'] = []
     if (present.length > 0) coveredBy.push('test')
     if (holds > 0) coveredBy.push('fact')
     if (observedFamilies.length > 0) coveredBy.push('family')
     if (specs.length > 0 && holds === 0) withProbeButNoHoldingFact.push(rule.id)
     if (rule.kind === 'heuristic' || rule.kind === 'choice by score') deviations.push(rule.id)
-    rules.push({ id: rule.id, engine: rule.engine, kind: rule.kind, declaredBy: rule.declaredBy, tests: { present, stale }, facts: { specs, holds, fails, other, specsWithoutFacts }, declaredFamilies, observedFamilies, coveredBy, annotated: annotatedIds.has(rule.id) })
-    const c = counts[rule.engine] ??= { current: 0, covered: 0, byTest: 0, byFact: 0, byFamily: 0, uncovered: 0, withProbeButNoHoldingFact: 0, deviations: 0 }
+    rules.push({ id: rule.id, engine: rule.engine, kind: rule.kind, declaredBy: rule.declaredBy, tests: { present, stale }, facts: { specs, holds, fails, other, specsWithoutFacts }, declaredFamilies, observedFamilies, derivedFamilies, coveredBy, annotated: annotatedIds.has(rule.id) })
+    const c = counts[rule.engine] ??= { current: 0, covered: 0, byTest: 0, byFact: 0, byFamily: 0, uncovered: 0, derivedOnly: 0, withProbeButNoHoldingFact: 0, deviations: 0 }
     c.current++
     if (coveredBy.length > 0) c.covered++
     else c.uncovered++
+    if (coveredBy.length === 0 && derivedFamilies.length > 0) c.derivedOnly++
     if (coveredBy.includes('test')) c.byTest++
     if (coveredBy.includes('fact')) c.byFact++
     if (coveredBy.includes('family')) c.byFamily++
@@ -213,7 +219,7 @@ if (import.meta.main) {
   const out = resolve(args.get('out') ?? join(import.meta.dir, 'coverage.json'))
   writeFileSync(out, `${JSON.stringify(coverage, null, 1)}\n`)
   for (const [engine, c] of Object.entries(coverage.counts)) {
-    console.log(`${engine}: ${c.current} current rules, covered ${c.covered} (tests ${c.byTest}, facts ${c.byFact}, families ${c.byFamily}), uncovered ${c.uncovered}; ${c.withProbeButNoHoldingFact} with probes but no holding fact; ${c.deviations} heuristics or choices by score`)
+    console.log(`${engine}: ${c.current} current rules, covered ${c.covered} (tests ${c.byTest}, facts ${c.byFact}, families ${c.byFamily}), uncovered ${c.uncovered} (${c.derivedOnly} with derived families awaiting scored runs); ${c.withProbeButNoHoldingFact} with probes but no holding fact; ${c.deviations} heuristics or choices by score`)
   }
   console.log(`annotations: ${coverage.annotations.annotated} rules annotated in source, ${coverage.annotations.missing} not; ${out}`)
   if (coverage.lostFamilies.length > 0) {

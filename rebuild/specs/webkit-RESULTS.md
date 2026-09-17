@@ -1,156 +1,282 @@
 # WebKit port results (Safari 27.0, WebKit 7625.1.29.11.27)
 
 Lab runs of `rebuild/src/engines/webkit` in `webkit-host`, the system WebKit.framework that installed Safari 27.0 runs
-(CFBundleVersion 22625.1.29.11.27, macOS 27, libicucore 78.1), on this Mac (Retina, `devicePixelRatio` 2), 2026-09-16,
-after the audit fixes (specs/webkit-AUDIT.md §8). Rows, summaries and per-case files are under
-`.artifacts/lab/webkit/<run>/`. Every run is scored with `rebuild/lab/score.ts` as of 10:10, which compares WebKit
-widths as float32 edges; a "0 units" failure is a difference below 1/64px.
+(CFBundleVersion 22625.1.29.11.27, macOS 27, libicucore 78.1), on this Mac (Retina, `devicePixelRatio` 2). Rows,
+summaries and per-case files are under `.artifacts/lab/webkit-stage5/<run>/`, scored with `rebuild/lab/score.ts`
+(scorer 3). Installed Safari wasn't run in this round.
 
-Installed Safari wasn't run: Safari was the frontmost app at every check (11:13 to 11:40), and the machine rules allow
-Safari windows only while it isn't. WEBKIT-HOST.md reserves reported numbers for installed Safari, so these are
-host numbers.
+## 2026-09-17: stage 5 (inline structure, line slots, alignment)
 
-## Scores
+### What changed
 
-pass / fail / unobserved (not-applicable left out). "Before" is the audit's rescoring of the previous rows with the same
-scorer (webkit-AUDIT.md §2).
+- **Input.** `prepare` walks `indexContent(paragraph)`. Each text box takes its parent's computed style, and every site
+  that read the block's style now reads the box the source reads (webkit audit F1): the item's own style
+  (`trailingWhitespaceType`, `appendText`, `wordBreakBehavior`, `isBreakableRun`, `lastValidBreakingPosition`), the layout
+  box parent's (`isAtSoftWrapOpportunity`, `shouldWrapUnbreakableContentToNextLine`, the wrap opportunity list), the
+  nearest common ancestor's (`InlineFormattingUtils.cpp:357-383, :436`), the next box's (`mayBreakInBetween`) and the root's
+  (the simple builder, `handleLineEnding`).
+- **Text renderers.** `textRendererIsNeeded` over the tree: previous child renderer, a `<br>` before white space, a span
+  parent (`RenderTreeUpdater.cpp:536-595`).
+- **Items.** Inline box start and end, atomic inline, hard line break and word break opportunity items
+  (`InlineItemsBuilder.cpp:1053-1078`), with their bidi paragraph entries (U+FFFC, LF, opaque; `:568, :596-618, :730-774`).
+- **Box edges.** Inline box start and end widths as LayoutUnit sums of margin, border and padding
+  (`InlineFormattingUtils.cpp:320-324`; `LayoutIntegrationBoxGeometryUpdater.cpp:231-306`; borders snapped as border widths
+  to device pixels, `StyleLineWidth.cpp:46-61`). `appendInlineBoxStart` and `appendInlineBoxEnd` with the hanging reset,
+  negative margins and the letter-spacing stack (`InlineLine.cpp:289-344`). Decorated boxes are contentful
+  (`InlineLine.cpp:989-1008`, `InlineLineBuilder.cpp:64-78`).
+- **Atomic inlines, `<br>`, `<wbr>`.** `appendAtomicInlineBox`, `appendLineBreak`, `appendWordBreakOpportunity`
+  (`InlineLine.cpp:558-602`), candidate content and trailing opportunities (`InlineLineBuilder.cpp:141-192, :1030-1170`),
+  `nextWrapOpportunity` (`InlineFormattingUtils.cpp:456-544`), the atomic branch of `processOverflowingContent`
+  (`InlineContentBreaker.cpp:263-299`). The simple builder takes `<br>` (`TextOnlySimpleLineBuilder.cpp:80-94, :488-497`).
+- **Builders.** Simple and range-based eligibility over the style records (`TextOnlySimpleLineBuilder.cpp:488-528`,
+  `RangeBasedLineBuilder.cpp:36-39, :131-184`), and the range-based builder's leading and trailing inline box runs
+  (`:48-126`).
+- **Line slots.** The line rect from the slot's insets through `floatAvoidingRect` (`InlineLineBuilder.cpp:432-478,
+  :1185-1216`); a float-constrained line counts as having content (`:1454-1455`), so content that doesn't fit beside the
+  floats places nothing and the line moves below them (`below-floats`, `InlineFormattingUtils.cpp:54-103, :286-289`). Floats
+  make the content ineligible for the simple builders, so every line from the first slotted one uses LineBuilder
+  (`WebKitLineStart.hasFloats`). The lab protocol puts the slot floats before the content, so the paragraph's first build
+  places them itself (`tryPlacingFloatBox`, `:1329-1400`): they narrow the line afterwards, and `m_lineContentEdgeOffset`,
+  which tab stops read, stays the indent alone (`:478`, `:1394-1396`). A later build finds them in the formatting context.
+  A refused first build returns `below-floats` with `next`, its start with `hasFloats` set (additive `LineResultOf` field
+  and `fillLines` change, SHARED-CHANGES.md).
+- **text-indent.** A start margin on the first formatted line, which tab stops read through `m_lineContentEdgeOffset`
+  (`InlineFormattingUtils.cpp:143-179`, `InlineLineBuilder.cpp:453-478`).
+- **text-align.** `horizontalAlignmentOffset` with text-align-last auto (`InlineFormattingUtils.cpp:198-276`) in both
+  builders, and `align` on the line. `justify` through `InlineContentAligner` (below).
+- **Geometry.** `lineLeft`, `contentEdgeOffset`, `alignmentOffset`; `inline-box`, `atomic` and `line-break` display boxes
+  from `processNonBidiContent` and the line box builder (`InlineDisplayContentBuilder.cpp:504-645`,
+  `InlineLineBoxBuilder.cpp:440-540`), and on bidi lines from `processBidiContent`'s display box tree (below).
+- **Fragments.** `box-start` and `box-end` for every span (spanning starts carry none), `atomic`, `br`, `wbr`.
+- **Observation port** (`lab/observe/webkit.ts`). Walks the tree; per-leaf Canvas settings from the leaf's parent style;
+  element rects: a span's inline box per line (`RenderInline::absoluteQuads`), an atomic inline's frame at its truncated
+  LayoutUnit location (`RenderBox::absoluteQuads`, `InlineDisplayContentBuilder.cpp:632-640`), a `<br>`'s line break box
+  (`RenderLineBreak.cpp:97-105`), nothing for `<wbr>` (no display box). A `wbr` fragment's line and an atomic inline's
+  margins are listed as unobservable. A box's `xPos`, which only tab stops read, is its position from the content box less
+  the display line's `contentLogicalLeft`, the root inline box's left inside the line box: the alignment offset alone
+  (`InlineIteratorBoxModernPathInlines.h:38-60`, `InlineDisplayLineBuilder.cpp:134-160`, `InlineLineBoxBuilder.cpp:63`).
+  The port had subtracted the slot insets and text-indent too.
+- **Gaps.**
+  - `font-fallback` where the fixed-pitch coverage test meets a code point exactly as wide as LastResort's box, where the
+    recipe can't tell (research/CHARTER-CRITIC.md item 1).
+  - A quoted family name no longer counts as a generic keyword for `canvas-language` (CHARTER-CRITIC item 9).
+  - `page-history` now follows the break position cache's key from source (below).
+  - `rtl-shaping-across-inline-boxes` is reported per line where LineBuilder shaped a range, no longer for the paragraph
+    (below, *Text shaping across inline boxes*).
+- **Process languages.** `preferredLanguages` and `icuDefaultLocale` are read where the source reads them (Han locales,
+  quote overrides). `contentLanguage` is never the root locale here: the model's block always carries a `lang` attribute,
+  and `Element::effectiveLang` reads Content-Language only without one (CHARTER-CRITIC item 10).
 
-| Case set | Run | lineCount | breaks | widths | painter |
-|---|---|---|---|---|---|
-| smoke (300) | before: smoke-r4 | 299/1/0 | 292/4/4 | 241/10/41 | 244/39/17 |
-| smoke (300) | smoke-r7 | 299/1/0 | 293/3/4 | 247/5/41 | 248/35/17 |
-| ws (1,019) | before: ws-r4 | 1019/0/0 | 1019/0/0 | 843/9/167 | 823/36/160 |
-| ws (1,019) | ws-r7 | 1019/0/0 | 1019/0/0 | 847/5/167 | 827/32/160 |
-| policy (1,606) | before: policy-r2 | 1603/1/2 | 1574/8/24 | 1524/42/8 | 1441/158/7 |
-| policy (1,606) | policy-r5 | 1603/1/2 | 1575/7/24 | 1546/21/8 | 1460/139/7 |
-| runs (2,580) | before: runs-r2 | 2566/10/4 | 2520/50/10 | 2142/199/179 | 2078/332/170 |
-| runs (2,580) | runs-r5 | 2566/10/4 | 2521/49/10 | 2257/83/181 | 2156/252/172 |
-| suite sample (19,933 rows) | before: suite-r1 + targeted-r2 | 19903/27/3 | 19718/42/173 | 14344/91/5283 | 17478/2066/389 |
-| suite sample (19,933 rows) | suite-r4 | 19910/20/3 | 19724/36/173 | 14401/38/5285 | 17507/2036/390 |
-| suite sample, page-history cases left out | suite-r4 | 19860/15/3 | 19697/16/165 | 14376/37/5284 | 17464/2024/390 |
+### Flat parity
 
-- The suite sample runs in four parts of 5,000 (`suite-sample-part{0..3}.ndjson`, `suite-r4-part{0..3}/`); run.ts
-  selects 4,998 cases in part 2 and 4,935 in part 3. `per-case-all.ndjson` and `summary-all.json` score every row;
-  `per-case.ndjson` and `summary.json` leave out page-history cases (below).
-- Page history: `suite-r2-reverse-part{0..3}/` ran each part with `--order=reverse`, and the suite-r4 parts are scored
-  with `--native-compare` against those rows. 55 cases lay out differently in the two orders (11, 0, 25, 19 per part):
-  original-vs-reshaped-admission 13, ascii-angle-policy, explicit-locale-quotes, numeric-postfix-grammar,
-  numeric-prefix-grammar, opening-quote-ownership and repeated-pr-opener 4 each, policy/fullwidth-paren 3, and others.
-  The comparison only finds what the two orders expose (lab README "Page-history dependence").
-- Prediction errors: 0 in every run.
+Forward runs with the stage-5 library, scored, against the previous forward runs (smoke: the lab foundations run with
+process languages; the others: the charter evaluation). Cells are pass / fail / unobserved, and widths add not-applicable.
 
-## measureText calls per paragraph
+| Set | Rows | lineCount | breaks | widths | painter | Transitions |
+|---|---:|---|---|---|---|---|
+| smoke | 300 | 299/1/0 | 297/3/0 | 287/5/5/3 | 263/32/5 | 0 lost, 0 gained |
+| ws | 1,019 | 1019/0/0 | 1019/0/0 | 1017/2/0/0 | 993/26/0 | 0 lost, 0 gained |
+| policy | 1,606 | 1605/1/0 | 1599/7/0 | 1558/21/20/7 | 1451/139/16 | 0 lost, 0 gained; `ui-language` 103 → 0 |
+| runs | 2,580 | 2571/9/0 | 2530/50/0 | 2317/83/130/50 | 2240/221/119 | 0 lost, 0 gained |
+| suite sample | 19,933 | 19912/21/0 | 19887/46/0 | 19750/48/89/46 | 18810/1045/78 | lineCount 1, breaks 7, widths 10 lost; 0 gained |
 
-From `prediction.measureLog` (calls that reached Canvas; the per-layout memo answers repeats).
+- Prediction errors 0 and observation errors 0 in every set.
+- **Rerun with the final library** (`<set>-forward-r2/`, after justify, bidi geometry, `font-fallback` and the
+  `page-history` condition): the same counts on every set and 0 transitions against the first stage-5 runs. No failing
+  case reports no gap. `page-history` now fires on smoke 40, ws 38, policy 44, runs 756 and suite sample 4,526 rows (the
+  source condition, not narrowed by counts); `font-fallback` on none.
+- **Rerun after the shaping port and the slot fixes** (`<set>-forward-r5/`, smoke, ws, policy and the suite sample, against
+  r2 and the suite sample's r3): 0 transitions on every metric, and no failing case without a gap. Flat cases have no
+  slots or indent, so the tab-stop fixes can't move them; the shaping port moved `runs` only (below).
+- **The suite sample's losses are page history.** On all 7 cases the prediction is the charter's to the bit, and the
+  native geometry differs between the two runs: `c-10045fce207d89e7` and `c-b87d5d950d1bc9e2` (`straight-double`, observed
+  after other cases), `c-2a0af46d56e09079`, `c-80023476b04ec0a6`, `c-b52e18f58d0c2974`, `c-d2e3af1d49858fb5`
+  (`U+001C`/`U+001E` middle) and `c-5c68643afc1d77d8` (`spacing-hanging-NBSP`). No reverse run was made this round, so
+  the forward rows don't mark them.
+
+### Feature probes
+
+`.artifacts/lab/webkit-stage5/probe-features/`: 92 tree cases in 16px Arial and Menlo (box edges at wrap points, border
+and margin, negative margin, nested spans, nowrap in wrap and wrap in nowrap, atomic inlines next to text, NBSP, CJK and
+spaces, `<br>` after white space and inside a decorated span, `<br>` under pre-wrap, `<wbr>` under keep-all and nowrap,
+positive and negative text-indent with tabs, end, center and right in RTL, pre-wrap with end, slots on either side, slots
+too narrow for a word, RTL slots).
+
+- lineCount 85/0/7, breaks 85/0/7, widths 57/0/28/7, painter 57/0/35: **no failures**. Unobserved lines hold only an
+  atomic inline, or box edges or an atomic inline at a line end, which the scorer's node-rect widths can't span.
+- **Element rects**, compared offline exactly: 64 equal and 7 differ in the first run, from two port bugs since fixed:
+  - a negative margin start stays inside the inline box's rect (`InlineLineBoxBuilder.cpp:482-487`): native x −5, width
+    19.27;
+  - an atomic inline reports its renderer's frame, whose location is the display box's truncated to a LayoutUnit:
+    22.234375 for 22.2421875.
+- The rerun with both fixes (`run-r2/`) gives the same metrics, and all 67 element rects equal native to the bit: spans 40,
+  atomic inlines 15, `<wbr>` 8 (none reported, none expected), `<br>` 4.
+
+### text-align: justify
+
+Ported after the first probe round: `applyRunBasedAlignmentIfApplicable` with text-align-last auto (InlineLineBuilder.cpp:
+679-704), hanging trailing white space detached into its own run (InlineLine.cpp:235-241, :918-941),
+`InlineContentAligner::computedExpansions` and `applyExpansionOnRange` (InlineContentAligner.cpp:150-267),
+`FontCascade::expansionOpportunityCount` with ideographs on Cocoa (FontCascade.cpp:974-1303,
+cocoa/FontCascadeCocoaInlines.h:34-37). Display boxes carry `expansion` and `expansionBehavior` (additive model field,
+SHARED-CHANGES.md), and the observation port places the expansion among a box's glyphs as the complex text controller
+does (ComplexTextController.cpp:107-118, :673-696, :800-845).
+
+Probe round r3 (`run-r3/`, 109 cases with 17 justify cases: plain, pre-wrap with runs of spaces, RTL, CJK under `zh`, a
+decorated span, an atomic inline, `<br>`): lineCount 102/0/7, breaks 102/0/7, widths 72/0/30/7, no failures. In the
+justify cases every predicted and limited value equals native, code point edges inside expanded boxes included. All 73
+element rects are equal. Painter 3 failures, all `align-justify-pre-wrap`: the painted line's extent differs (painter
+owner).
+
+### Bidi lines with inline structure
+
+Ported after the justify round, replacing the `UnportedFeature` throws: `processBidiContent` with
+`processBidiLinesWithNoContent`, the display box tree of `ensureDisplayBoxForContainer`, `adjustVisualGeometryForDisplayBox`
+and `closeInlineBoxes` (InlineDisplayContentBuilder.cpp:713-1088).
+
+Probe round r4 (`run-r4/`, 129 cases with 20 bidi cases: RTL spans with padding, margins and borders, RTL atomic inlines,
+`<br>` under RTL, Latin spans in RTL blocks, Hebrew spans and atomic inlines in LTR blocks, an empty decorated span, nested
+spans): lineCount 120/0/9, breaks 120/0/9, widths 83/0/37/9, no failures. In the bidi cases every predicted and limited
+value equals native, and all 95 element rects of the round are equal.
+
+### Observation port: negative Canvas stand-ins
+
+The rows' `facts.predicted` count values the ported rules claim to give exactly. In the r2 runs 515 suite sample cases
+(732 values) and 172 runs cases (906 values) had a predicted value that differed from native, 121 suite cases without any
+gap: `U+200D/middle` 70, `U+200D/end` 50, `maintained/accuracy` and others. The partial rect of a code point at a box
+edge kept its x on the edge only while its in-context advance was non-negative, and the Canvas stand-in, a prefix
+difference, went negative where a joining form or a fallback font measured alone is narrower (`ب` ZWJ, `ريال` in Courier
+New). In-context advances are glyph advances plus non-negative spacing and expansion (ComplexTextController.cpp:740-845),
+so a negative stand-in is the stand-in's error: it now clamps at 0 unless spacing is negative.
+
+r3 (`runs-forward-r3/`, `suite-sample-forward-r3/`): 0 metric transitions; predicted-value differences down to 93 suite
+cases (226 values) and 136 runs cases (868 values), every one reporting a gap: `original-vs-reshaped-admission` and `glue`
+page history 25, `canvas-language` 16, `control-character-width` 18, `simplified-measuring` 14, `letter-spacing-ligatures`
+10 and a few with several.
+
+### Text shaping across inline boxes
+
+`TextShapingAcrossInlineBoxes` is on by default (UnifiedWebPreferences.yaml:8489-8501, InlineFormattingContext.cpp:569-570),
+so LineBuilder shapes complex RTL text of one font joined over undecorated inline box edges as one run
+(`applyShapingIfNeeded`, `collectShapeRanges`, `applyShapingOnRunRange`, `shapePartialLineCandidate`,
+InlineLineBuilder.cpp:780-1028; the run splits of `Line::appendText`, InlineLine.cpp:399). The port had only a paragraph
+gap for it, and the charter's rule families failed 194 `rule/joining` cases under it (`c-0c565437ddc97aaa`: Geeza Pro
+`بب ببب ببب بب` over two spans, native line 110.918px, predicted 119.175px from separately measured items).
+
+Ported: the ranges and their eligibility from source; a run's share is the Canvas prefix difference of the joined text in
+the plain context (glyphAdvancesForTextRun sums CoreText base advances without letter spacing,
+ComplexTextController.cpp:186-205). Canvas positions glyphs otherwise than those base advances, so even the range total can
+differ: in `c-d03f94e8fb53e7e2` (Geeza Pro 16px, `الرَّحِيمِ|السلام` over two spans) WebKit's shares equal the separately
+measured words and the joined Canvas total is 0.51px wider. The line reports
+`rtl-shaping-across-inline-boxes` where a range was shaped (the paragraph-level condition is gone), and the display boxes
+carry `shapedAcrossBoxes` (additive, SHARED-CHANGES.md), whose rect values the observation port marks limited.
+
+Rule families (`families-forward-r4/`, the charter's 9,584 derived family cases), against the charter evaluation's families
+run: lineCount 9458/126 (+33, −22), breaks 9376/208 (+33, −22), widths 8822/291/263/208 (+58, −0), painter 8388/995/201
+(+58, −6). All changes are `rule/joining`.
+
+- **The 22 lost line counts were accidental passes.** In every one the charter's widths failed: it measured the items
+  separately, where WebKit shapes the range as one run, and its line count came out right anyway. With `line-break:
+  anywhere` the lines depend on the share each character has inside the joined shaping, which Canvas can't give:
+  `c-16a062eb9e8d14cb` (`بب ببب|ببب بب` over two spans in 16px Arial, 7.8px) has a native box of 0.305px for the last
+  letter of the first span. Those lines report `rtl-shaping-across-inline-boxes`.
+- Failures without a gap: 0 (charter 0). `rule/joining` failures under the gap: 186 (charter 194).
+- runs (`runs-forward-r4/`, against r3): breaks +1, widths +2 −1, painter +2 −1, all `runs/bidi-runs`. The lost width is
+  `c-d03f94e8fb53e7e2` above, under the line's `rtl-shaping-across-inline-boxes`.
+
+### Feature families
+
+The families owner's webkit-host derivation (`.artifacts/tests/features-20260917/webkit-host/final/`, 12,150 cases in 9
+families, native rows observed in file order and in reverse). Predict-only runs under the lock, scored with
+`--native-rows` from the file-order rows and `--native-compare` against the reverse rows (0 history-dependent cases):
+`features-families/predict/` (the stage-5 library with the shaping port) and `predict-r2/` (after the two fixes below).
+
+| Run | lineCount | breaks | widths | painter |
+|---|---|---|---|---|
+| predict | 11407/38/705 | 11310/135/705 | 8241/200/2869/840 | 8270/494/3386 |
+| predict-r2 | 11426/19/705 | 11416/29/705 | 8547/0/2869/734 | 8449/315/3386 |
+
+r2 against the first run: 0 lost on every metric; gained lineCount 19, breaks 106, widths 306, painter 179, all
+`rule/line-slots`.
+
+- **Tab stops beside slot floats** (309 failing cases, all `rule/line-slots` with tabs under pre-wrap, reported under
+  `tab-stops`, whose condition doesn't explain them). Only first lines with a left inset differed, by the float's share of
+  a tab: `c-0289df69e0498d74` (Arial, a 40px left float, `aaaa⇥bbbb cccc⇥dddd eeee`) native box 217.88px, predicted
+  213.45px from stops counted past the float. Two root causes, both from source:
+  - the engine counted the first build's tab stops past the floats that build places itself (above, *Line slots*);
+  - the observation port's `xPos` subtracted the slot insets and text-indent (above, *Observation port*); on later lines too
+    native tab rects extend to the box end (`c-0150d8ad3497ba83` line 1: 42.66px, the port 39px), and these values are
+    limited by `in-word-prefix`, so no metric showed them.
+- **Left after r2** (lineCount 19, breaks 29, widths 0):
+  - `rule/br-elements` 16 line counts, 24 breaks, under `page-history`: `xx aaaa␠␠⇥<br>…` under break-spaces keeps the
+    overflowing white space before `<br>` natively and the port breaks it. All 24 pass alone in a fresh document
+    (`isolate-br/`: lineCount 24/0, breaks 24/0, widths 12/0/12), so they are page history, although the reverse rows
+    showed no difference.
+  - `rule/line-slots` 5 cases (2 without a gap: `c-303d850e42b725dd`, `c-32a0d43aea9861a7`): the native floats aren't
+    the declared slots. Row 0's left inset, right inset and text-indent exceed the width, so the right float doesn't fit
+    beside the indented line and goes below it (`haveEnoughSpaceForFloatWithClear`, InlineLineBuilder.cpp:1317-1380), and
+    every later row moves. 7 of 1,906 line-slots cases have native floats that differ from their slots, the 5 failing
+    ones among them. A lab item: the scorer's slot-rows assumption doesn't compare `floats` with `lineSlots`.
+- Painter failures (315): `rule/line-slots` 179 painted extents and line wraps, `rule/text-align` 80, `rule/wbr-elements`
+  38, `rule/atomic-inlines` 24; painter owner.
+- Unobserved (705 lines, 2,869 widths): lines holding only an atomic inline, or box edges at a line end, which the scorer's
+  node-rect spans can't measure.
+
+### Failures without a named gap
+
+From the charter evaluation's forward per-case files (dev, held-out and families), outside page history: 15 suite cases
+reported no gap (`suite/original-vs-reshaped-admission` 7, `suite/glue` 8), and MAIN-TRIAGE's 9 webkit-host facts to
+learn without gaps (`suite/raw-context` 7, `suite/physical-window-terminal-seam` 2), which include SUPERSET-webkit's
+unexplained case D (`c-49feb03a06bd4b90`).
+
+- **Each alone in a fresh webkit-host process, all 17 pass lineCount, breaks and widths** (`isolate/`): the 8 glue and
+  reshaped-admission cases observed in the suite rows, and the 9 triage cases. So they are page history, not port bugs.
+- **The mechanism, from source.** `InlineItemsBuilder::populateBreakingPositionCache` stores a box's item ends after the
+  bidi splits (`InlineItemsBuilder.cpp:1082-1148`), and a later box with the same text, wrapping styles, nbsp mode and
+  locale builds its items from them (`:858-900, :936-939`). `TextBreakingPositionContext` has no direction or bidi level
+  (`TextBreakingPositionContext.h:48-80`). All 17 are the same text in several directions and widths.
+- **Probe** (`probe-glue/`, one document): `ب` SHY `ب` NBSP `x` in 16px Arial, `break-word`, RTL at 0, 27.78 and 40px,
+  equals the prediction. The LTR variant at 27.78px, observed after the RTL ones, gives `[0, 4)` `[4, 5)` where the port
+  gives `[0, 2)` `[2, 5)`: the RTL box's cached ends include 4, which splits `NBSP x` into two items at one level, and
+  `endsWithSoftWrapOpportunity` returns true there (`InlineFormattingUtils.cpp:342-346`).
+- **The rest of MAIN-TRIAGE's webkit-host facts** (`isolate-triage/`, 6 cases in one fresh document): `c-7fcab2c1e2e0c85a`,
+  `c-da5b8181a781b719` and `c-ea243dabb9a70fe7` pass alone (page history, all reporting `page-history`). `c-0774ff114d939edf`
+  (`A` CR TAB `B`), `c-af325ec8545eb5af` and `c-d1da84746a9b926a` (`😀A` FF TAB `B`) fail alone: SUPERSET-webkit §3.4's CR
+  and FF kerning, reported as `control-character-width`. With the 9 above, all 15 facts to learn outside
+  `letter-spacing-ligatures` are accounted for.
+- **Gap condition changed.** `page-history` is reported for a box of at least 3 items and 5 units whose item ends depend
+  on what the key leaves out: strong RTL content or an RTL block (bidi splits), or preserved white space split at word
+  separators or per space. It replaces the narrower white-space-only condition.
+
+### Costs
+
+measureText calls per paragraph (`prediction.measure.calls`), forward runs with the current library, and in parentheses the
+first stage-5 runs, which equal the charter's:
 
 | Run | mean | median | p90 | p95 | max |
 |---|---|---|---|---|---|
-| smoke-r7 | 16.5 | 11 | 37 | 53 | 86 |
-| ws-r7 | 15.4 | 11 | 31 | 37 | 72 |
-| policy-r5 | 16.0 | 12 | 35 | 47 | 99 |
-| runs-r5 | 23.1 | 17 | 47 | 61 | 103 |
-| suite-r4 | 12.5 | 6 | 30 | 38 | 2,059 |
+| smoke r5 | 18.6 (16.4) | 11 (11) | 49 (37) | 69 (53) | 122 (86) |
+| ws r5 | 18.0 (15.4) | 11 (11) | 39 (31) | 48 (37) | 100 (72) |
+| policy r5 | 17.5 (16.0) | 12 (12) | 36 (35) | 63 (47) | 123 (99) |
+| runs r4 | 25.1 (22.8) | 17 (17) | 55 (47) | 76 (61) | 140 (103) |
+| suite sample r5 | 13.4 (12.5) | 6 (6) | 30 (30) | 38 (38) | 2,059 (2,059) |
+| rule families r4 | 7.3 | 6 | 10 | 14 | 66 |
+| feature families r2 | 9.1 | 6 | 18 | 23 | 29 |
 
-The previous means were 14.3, 12.9, 14.5, 20.7 and 11.5. The increase is the primary-font coverage test, two calls per
-distinct code point of a fixed-pitch box (content.ts `makeBox`). The suite maximum is still `c-c8b0ddb41a784eda` (then
-`c-a580f4ad18b9ea2c` at 1,580 and `c-d5ffa42e1eca7ac8` at 1,400): long words split by `breakWord`, whose probe sequence
-measures prefixes from the item start (specs/webkit-lines.md §8.1).
+The r2 runs already cost what r5 costs, so the shaping port added nothing on flat cases. The rise arrived between the
+first runs and r2 (justify, bidi geometry, `font-fallback`, the `page-history` condition). Justify and bidi geometry make no
+Canvas calls on flat cases, so it most likely comes from `font-fallback`'s LastResort context, one call per distinct code
+point of fixed-pitch boxes; not isolated. The tree walk adds no Canvas call.
 
-## What the port does
+### Open
 
-- `content.ts`: textRendererIsNeeded, InlineTextBox content per text node, `characterRangeCodePath`, simplified measuring
-  with the primary-font coverage test for fixed-pitch families, the fixed-pitch allowlist, items at BreakablePositions,
-  the bidi paragraph with item splits and opaque levels, stored widths, builder choice, gaps.
-- `breaks.ts`, `data.ts`: BreakablePositions verbatim (classify, the pair table, the stale fast-forward state, keep-all
-  with 16-bit punctuation), libicucore line tables per locale and mode with Apple's quote overrides, `mayBreakInBetween`
-  with the next box's style, and dictionary boundaries per engine range with the engines' minimum span and mark rules.
-- `measure.ts`: TextUtil::width from Canvas totals with the following-space rule, tab stops, the fixed-pitch width,
-  `breakWord`'s probe sequence and `firstUserPerceivedCharacterLength`.
-- `lines.ts`: Line, ContinuousContent, InlineContentBreaker, TextOnlySimpleLineBuilder, RangeBasedLineBuilder and
-  LineBuilder, the carried remainder, trailing soft hyphens, trimming, hanging, the trailing white space level reset, and
-  the painted extent from InlineDisplayContentBuilder's box geometry.
-- `WebKitLineStart` is `{ engine, itemIndex, offset, previousLine: { carriedWidth, endsWithLineBreak } | null,
-  isFirstFormattedLine }`. DESIGN.md §2.3 lists `carriedWidth` and `endsWithLineBreak` as top-level fields. The port
-  nests them because both come from the previous line, and the first line has none (LineBuilder's `previousLine`
-  optional).
+- Slot rows whose insets and text-indent can't all fit: native floats differ from the declared slots (lab and families
+  owners).
+- The known gaps stand: `letter-spacing-ligatures` (721 census cases; SUPERSET-webkit §3.3 needs the maintainer's decision
+  on a connected `<canvas>`), `control-character-width` for CR and FF kerning (§3.4), and SUPERSET §3.6's leftover width,
+  which no longer applies: lines carry display boxes, and the scorer derives extents.
 
-## Failure classes
+## 2026-09-16: before stage 5
 
-Counts from the latest run of each set, lineCount, breaks and widths results, page-history cases left out. Each
-failing case's gaps come from `gaps-r1/`, the in-page gap predictor over all 254 failing cases. Attribution: named gap,
-page history, or unresolved. Every failing case except the page-history class reports a gap.
-
-| Class | Attribution | Counts | Example |
-|---|---|---|---|
-| Locale-chosen fonts: lang spans, zh/ja/ko paragraphs, serif or sans-serif with Han, kana or Hangul under a language | named gap `canvas-language` | runs: widths 73, breaks 47, lineCount 8; policy: widths 21, breaks 5, lineCount 1; suite: widths 15, breaks 2, lineCount 2; smoke: widths 5, breaks 3, lineCount 1; ws: widths 1 | `c-024909ef9234f390`, `c-64bf20f7c2d249a1`, `c-142318ab2676108c` |
-| Letter-spaced text with ligatures or joined Arabic: the DOM turns ligatures off, Canvas keeps them | named gap `letter-spacing-ligatures` | suite: widths 8, lineCount 5, breaks 4; runs: widths 5, lineCount 1, breaks 1 | `c-046c8e49140717e2`, `c-f561607b4cfc7606` |
-| Controls with a `.notdef` or CR advance Canvas can't give | named gap `control-character-width` | suite: widths 6, breaks 1; ws: widths 3 | `c-790a15d5d04b7c3a`, `c-076e6fc979e1fea8` |
-| Arabic spans shaped across inline boxes, which also splits runs where the port doesn't | named gap `rtl-shaping-across-inline-boxes` | runs: widths 5, lineCount 1, breaks 1 | `c-0ad060cd384930bf`, `c-d03f94e8fb53e7e2` |
-| A dictionary range that starts with a combining mark, where libicucore's engine resynchronizes from its dictionary | named gap `dictionary-breaks-stand-in` | policy: breaks 2 | `c-8e0ef1214d002403`, `c-2a1fef66065962b0` |
-| Shortcut-path summing order, one float32 step | named gap `simplified-measuring` | suite: widths 1; ws: widths 1 | `c-08d207e44b9fbbb4`, `c-fbd2f77752afe430` |
-| Hyphen glyph at soft hyphens in fixture fonts | named gap `hyphen-glyph` | suite: widths 1, lineCount 1, breaks 1 | `c-311b65d1c9ab10e4` |
-| Amiri `a…((tail` cases and one Times New Roman case: native lines after other cases of the family differ from a fresh document, which equals the port (probe F1, ISSUES.md) | page history, not exposed by the reverse run | suite: breaks 8, lineCount 7, widths 6 | `c-17af0e41879fc51f`, `c-718c3e84352a57fc`, `c-6e866f68bcc7bb7e` |
-| 55 suite cases whose native lines differ between forward and reverse order | page history, flagged by `--native-compare` | left out of the counts | `c-9577ee04c2807ef2`, `c-cd9aa832387ef76f` |
-
-Painter results, which paint.ts and the painted document decide, not the prediction:
-
-| Reason | Counts | Example |
-|---|---|---|
-| Painted line wraps: mostly a soft hyphen plus the painter's hyphen span wrapping inside the painted line box | suite 1,133, runs 40, policy 14, smoke 10, ws 4 | `c-3a9a7b6cde7063c9` |
-| Painted extent differs: the prediction equals the native boxes and the painted text measures differently (isolated shaping context, joined forms, controls, negative carried widths painted fresh) | suite 891, runs 212, policy 125, ws 28, smoke 25 | `c-0145610398f11164`, `c-ffb529e6cf621a00` |
-
-## Gaps reported
-
-`census.ts` (scratchpad `wk-r5/`) prepares every case in bun with a stand-in Canvas, so `simplified-measuring` never fires
-there; the in-page run `gaps-r1` gives it on failing cases. Rows reporting each gap among the cases that pass every
-metric:
-
-| Set (all-pass cases) | canvas-language | string-storage | fixed-pitch-path | letter-spacing-ligatures | control-character-width | hyphen-glyph | rtl-shaping | dictionary-breaks-stand-in |
-|---|---|---|---|---|---|---|---|---|
-| smoke (265) | 88 | 16 | 49 | 27 | 16 | 23 | 12 | 3 |
-| ws (987) | 193 | 11 | 363 | | 227 | 38 | | |
-| policy (1,465) | 727 | 91 | 118 | | | | | 9 |
-| runs (2,327) | 858 | 110 | 497 | 488 | | 12 | 351 | |
-| suite (17,851) | 3,623 | 486 | 1,919 | 2,129 | 646 | 4,694 | | 1 |
-
-Before the fixes `canvas-language` fired on 12,329 of 17,832 all-pass suite cases (webkit-AUDIT.md B4). Not reported:
-`locl` lookups for a language in fonts outside the reported conditions. WebKit shapes with the locale
-(FontCascade.cpp:403, WidthIterator.cpp:96), OffscreenCanvas has none, and Canvas shows no sign of which fonts carry
-such lookups.
-
-## Changes since the audit
-
-- Painted width: each line's width is the extent of the display boxes InlineDisplayContentBuilder gives its text runs:
-  - a box keeps its run's width after trimming, f32(f32(w + space) − space), not the content width;
-  - bidi lines place boxes in visual order (ubidi_reorderVisual over run levels), advancing by f32(width + margin);
-  - an RTL line's content starts at f32(line width − content logical right);
-  - negative box widths draw left of their x;
-  - the lab's trailing run is left out (SPACE and TAB under normal, nowrap, pre-line and pre-wrap, and default-ignorable
-    code points), except a run that carries the line's hyphen.
-
-  `resetBidiLevelForTrailingWhitespace` detaches trailing white space as the source does.
-- Dictionary boundaries: engine ranges start at the first dictionary character of a rule segment and hold one engine's
-  characters, with no breaks inside ranges too short for two words: four code points for Thai, under four code units for
-  the others. A boundary before a Line_Break=SA combining mark is dropped (`fMarkSet`), where the grapheme filter was.
-  `breaks.test.ts` compares the dictionary path with libicucore's own line iterator over the groundwork's 1,556 SA texts
-  (`runtime-parity/sa`): 27 of 282,337 positions differ, all in ranges that start with a mark.
-- Fixed-pitch coverage: a code point comes from the primary family when "P, LastResort" measures what the paragraph's
-  family list measures (probe `webkit-followups B5`: Courier maps Ω and keeps the 38.40625px shortcut, Menlo doesn't map
-  U+3000). This replaces the W(cp) = W(space) test.
-- Gap conditions:
-  - `canvas-language`: -webkit-standard under Han, kana or Hangul locales; system-ui and ui-* families; Han, kana,
-    Hangul and fullwidth code points under any locale.
-  - `simplified-measuring`: a measured width off the 1/2048px grid on the shortcut path.
-  - `string-storage`: adds Latin-1 items whose second unit can't start a line.
-  - `dictionary-breaks-stand-in`: new shared gap name.
-- Generated data: `webkitDictionaryMarkRanges` and `webkitDefaultIgnorableRanges` from ICU 78.2's ppucd.txt.
-
-## Follow-up probes
-
-`rebuild/probes/webkit-followups.ts`, run in webkit-host:
-
-- F1 (`.artifacts/probes/webkit/followups/`): Amiri `aبِبِ((tail` at 15.5px, RTL, pre-wrap gives 6 lines as the port
-  predicts; the lab rows of the family give 7 after other cases in the document (ISSUES.md).
-- B5 (`.artifacts/probes/webkit/followups-b5/`): LastResort is reachable by name, 17.6015625px for every code point at
-  16px. Menlo maps a, Ω, ─, →, ж and €, not U+3000 or 中; Courier maps a, Ω and €. DOM: Courier `ΩΩΩΩ` 38.40625px,
-  Menlo `a　a` 35.265625px (= Canvas, full path), Menlo `a─a` 28.8984375px.
+The charter tables for smoke, ws, policy, runs and the suite sample, the failure classes and the gap firing rates are in
+this file's git history (committed with the charter merge, 7c3fcf9) and in REPORT.md §2-§4.

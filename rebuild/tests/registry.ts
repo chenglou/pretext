@@ -5,7 +5,9 @@
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
-export type RuleKind = 'ported rule' | 'recipe' | 'named gap' | 'fact' | 'choice by score' | 'heuristic' | 'observation rule'
+// 'observer assumption': a named assumption of the lab's observer, not a library rule (DESIGN.md §9), such as grouping rects
+// of different text nodes into lines by vertical centre.
+export type RuleKind = 'ported rule' | 'recipe' | 'named gap' | 'fact' | 'choice by score' | 'heuristic' | 'observation rule' | 'observer assumption'
 export type RuleEngine = 'blink' | 'webkit' | 'gecko' | 'shared'
 
 export type RuleRecord = {

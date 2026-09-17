@@ -321,10 +321,22 @@ export function chooseByFocus(candidates: readonly number[], focus: readonly num
 type ParagraphData = { p: FamilyParagraph; text: string; normal: Observation | null; own: Observation | null; b: Observation | null; sized: Observed[] }
 type Requested = { c: boolean; dRounds: number }
 
-function familyCase(p: FamilyParagraph, browser: BrowserKind, width: number, normalOverflowWrap: boolean, note: string): Case {
+// The widest row's insets in grid units: below it a row's left and right floats don't fit side by side, and the next float
+// drops into another row, so the slot protocol doesn't hold (DESIGN.md §2.9).
+export function minimumUnits(inline: InlineStructure | undefined, grid: number): number {
+  let widest = 0
+  for (const slot of inline?.lineSlots ?? []) widest = Math.max(widest, slot.left + slot.right)
+  return Math.ceil(widest * grid)
+}
+
+// A family case at a width. Pass A observes the content's break opportunities, which floats and text-indent don't make:
+// its cases leave out the line slots and the indent, since floats wider than width 1 stack past their rows and a negative
+// indent lets the first line hold more than one piece.
+function familyCase(p: FamilyParagraph, browser: BrowserKind, width: number, normalOverflowWrap: boolean, note: string, opportunities = false): Case {
   const draft = p.draft
   const paragraph = normalOverflowWrap ? { ...draft.paragraph, width, overflowWrap: 'normal' as const } : { ...draft.paragraph, width }
-  const inline = draft.inline === undefined || !normalOverflowWrap ? draft.inline : { ...draft.inline, content: overflowWrapNormal(draft.inline.content) }
+  let inline = draft.inline === undefined || !normalOverflowWrap ? draft.inline : { ...draft.inline, content: overflowWrapNormal(draft.inline.content) }
+  if (inline !== undefined && opportunities) inline = { ...inline, textIndent: 0, lineSlots: [] }
   return makeCase({
     family: `rule/${p.family}`, origin: `rule-family=${p.family} paragraph=${p.key} ${note}`, pageLang: draft.pageLang,
     paragraph, inline, browsers: [caseBrowser(browser)], fontFixtures: draft.fontFixtures,
@@ -404,7 +416,7 @@ async function step(dir: string, browser: BrowserKind, seed: string, familyFilte
   const outcomes = new Map<string, Outcome>()
   const requests = new Map<string, Map<number, { pass: Pass; targets: string[] }>>()
   const request = (entry: ParagraphData, own: readonly Observed[], units: number, pass: Pass, target: string): boolean => {
-    if (units < grid || units >= unwrappedUnits || own.some(obs => obs.units === units)) return false
+    if (units < grid || units < minimumUnits(entry.p.draft.inline, grid) || units >= unwrappedUnits || own.some(obs => obs.units === units)) return false
     let widths = requests.get(entry.p.key)
     if (widths === undefined) requests.set(entry.p.key, (widths = new Map()))
     const existing = widths.get(units) ?? { pass, targets: [] }
@@ -424,7 +436,7 @@ async function step(dir: string, browser: BrowserKind, seed: string, familyFilte
       if (any) return
     }
     if (seen.dRounds >= MAX_D_ROUNDS) return
-    for (const u of bisectionWidths(outcome.lo ?? grid - 1, outcome.hi)) request(entry, own, u, 'D', target.id)
+    for (const u of bisectionWidths(Math.max(outcome.lo ?? grid - 1, minimumUnits(entry.p.draft.inline, grid) - 1), outcome.hi)) request(entry, own, u, 'D', target.id)
   }
   for (const entry of data.values()) {
     const { p, text, b, normal } = entry
@@ -531,11 +543,11 @@ function plan(dir: string, browser: BrowserKind, engine: Engine, seed: string, f
   const cases: Case[] = []
   const meta: MetaRecord[] = []
   for (const p of paragraphs) {
-    const normal = familyCase(p, browser, NARROW, true, 'pass=A-normal')
+    const normal = familyCase(p, browser, NARROW, true, 'pass=A-normal', true)
     cases.push(normal)
     meta.push({ caseId: normal.id, paragraph: p.key, pass: 'A-normal', units: null, targets: [] })
     if (hasOwnOverflowWrap(p.draft)) {
-      const own = familyCase(p, browser, NARROW, false, 'pass=A-own')
+      const own = familyCase(p, browser, NARROW, false, 'pass=A-own', true)
       cases.push(own)
       meta.push({ caseId: own.id, paragraph: p.key, pass: 'A-own', units: null, targets: [] })
     }
@@ -581,8 +593,8 @@ function finalize(dir: string, browser: BrowserKind, state: State, data: Readonl
     const s = statsOf(p.family)
     s.paragraphs++
     const derivedFrom = [entry.normal?.caseId, entry.own?.caseId, entry.b?.caseId].filter((id): id is string => id !== undefined)
-    const roles: Array<[Case, FinalRole]> = [[familyCase(p, browser, NARROW, true, 'role=A-normal'), 'A-normal']]
-    if (hasOwnOverflowWrap(p.draft)) roles.push([familyCase(p, browser, NARROW, false, 'role=A-own'), 'A-own'])
+    const roles: Array<[Case, FinalRole]> = [[familyCase(p, browser, NARROW, true, 'role=A-normal', true), 'A-normal']]
+    if (hasOwnOverflowWrap(p.draft)) roles.push([familyCase(p, browser, NARROW, false, 'role=A-own', true), 'A-own'])
     roles.push([familyCase(p, browser, UNWRAPPED, false, 'role=B'), 'B'])
     for (const [value, role] of roles) {
       cases.push(value)

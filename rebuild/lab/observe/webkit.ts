@@ -1,25 +1,29 @@
 // The WebKit observation port (DESIGN.md §9, research/observe-webkit.md): the rects Safari 27.0 reports for a Range over
-// each code point of a run's text node and over each whole node, derived from the engine's display boxes by porting
-// WebKit 7625.1.29.11.27's geometry code:
+// each code point of a text leaf's node, over each whole node, and for Element.getClientRects() of each element, derived from
+// the engine's display boxes by porting WebKit 7625.1.29.11.27's geometry code:
 // - RenderText::absoluteQuadsForRange (rendering/RenderText.cpp:761-832): clamp to caretMin/caretMax, whole-box rects,
 //   partial rects;
 // - selectionRectForTextBox (:352-396) with TextBoxSelectableRange::clamp (rendering/TextBoxSelectableRange.h:40-54),
 //   FontCascade::adjustSelectionRectForComplexText (platform/graphics/FontCascade.cpp:1668-1681) and snappedSelectionRect
 //   (rendering/LegacyInlineTextBox.cpp:146-160, platform/graphics/LayoutRect.cpp:206-213);
-// - FloatQuad::boundingBox for whole-box widths (platform/graphics/FloatQuad.cpp:90-99).
+// - FloatQuad::boundingBox for whole-box widths (platform/graphics/FloatQuad.cpp:90-99);
+// - RenderInline::absoluteQuads (rendering/RenderInline.cpp:237-241) over the span's inline boxes, one per line, and
+//   RenderLineBreak::absoluteQuads (rendering/RenderLineBreak.cpp:97-105) over the <br>'s line break box; an atomic inline's
+//   border box. A <wbr> has no display box (InlineDisplayContentBuilder.cpp:527-528), so boxFor finds none and it reports
+//   nothing.
 // It imports types from rebuild/src/model.ts only, so no expected value comes from the library (TEST-ARCHITECTURE.md §0
-// rule 1, DESIGN.md §8.1). y and height are outside the contract (DESIGN.md §9).
+// rule 1, DESIGN.md §8.1), and walks the inline tree itself. y and height are outside the contract (DESIGN.md §9).
 import type {
-  CanvasMeasure, Expected, ExpectedObservation, ExpectedRect, GapName, ObservationPort, Paragraph, UnobservableFact, WebKitDisplayBox,
-  WebKitLayout,
+  CanvasMeasure, Expected, ExpectedObservation, ExpectedRect, GapName, InlineNode, ObservationPort, Paragraph, TextStyle, UnobservableFact,
+  WebKitDisplayBox, WebKitLayout, WebKitTextBox,
 } from '../../src/model.ts'
 
 const f32 = Math.fround
 
 type Settings = Parameters<CanvasMeasure>[0]
 
-// A display box with its engine line.
-type OwnBox = { box: WebKitDisplayBox; line: number }
+// A text display box with its engine line.
+type OwnBox = { box: WebKitTextBox; line: number }
 
 // LayoutUnit(float) (platform/LayoutUnit.h:83-88): the value times 64 in float, truncated toward zero. In 64ths.
 function toLayoutUnit(v: number): number {
@@ -31,30 +35,59 @@ function toLayoutUnitCeil(v: number): number {
   return Math.ceil(f32(v * 64))
 }
 
-// What the port knows about a paragraph: the Canvas settings of each run's box and the white-space facts the complex text
-// controller reads.
-type RunCanvas = { context: Settings; plain: Settings; letterSpacing: number; wordSpacing: number }
+// What the port knows about a leaf: the Canvas settings of its box and the white-space facts the complex text controller
+// reads, from the style the leaf takes from its parent.
+type LeafCanvas = { text: string; context: Settings; plain: Settings; letterSpacing: number; wordSpacing: number; allowTabs: boolean; tabSize: number }
 type Port = {
   paragraph: Paragraph
   measure: CanvasMeasure
-  runs: RunCanvas[]
-  allowTabs: boolean
-  tabSize: number
+  leaves: LeafCanvas[]
   // Page zoom other than 1, or not given: inverseFrameScale isn't ported (research/observe-webkit.md U8).
   zoomGap: boolean
 }
 
+// The inline tree in document order: each text leaf with its parent's style, and each element's kind.
+function walkTree(paragraph: Paragraph): { leaves: { text: string; style: TextStyle }[]; elements: InlineNode['kind'][] } {
+  const leaves: { text: string; style: TextStyle }[] = []
+  const elements: InlineNode['kind'][] = []
+  const visit = (nodes: readonly InlineNode[], style: TextStyle) => {
+    for (let i = 0; i < nodes.length; i++) {
+      const node = nodes[i]!
+      switch (node.kind) {
+        case 'text':
+          leaves.push({ text: node.text, style })
+          break
+        case 'span':
+          elements.push('span')
+          visit(node.children, node)
+          break
+        case 'atomic':
+        case 'br':
+        case 'wbr':
+          elements.push(node.kind)
+          break
+      }
+    }
+  }
+  visit(paragraph.content, paragraph)
+  return { leaves, elements }
+}
+
 // The Canvas stand-in for a box's in-context shaping: the same OffscreenCanvas settings layout measures with (font at the
 // CSS size times page zoom, letter spacing, no locale, no word spacing).
-function runCanvas(paragraph: Paragraph, run: number, zoom: number): RunCanvas {
-  const r = paragraph.runs[run]!
-  const size = f32(f32(r.font.size) * f32(zoom))
-  const letterSpacing = f32(f32(r.letterSpacing) * f32(zoom))
+function leafCanvas(text: string, style: TextStyle, zoom: number): LeafCanvas {
+  const size = f32(f32(style.font.size) * f32(zoom))
+  const letterSpacing = f32(f32(style.letterSpacing) * f32(zoom))
   const context: Settings = {
-    font: `${r.font.style} ${r.font.weight} ${String(size)}px ${r.font.family}`, lang: '', letterSpacing: `${letterSpacing}px`,
+    font: `${style.font.style} ${style.font.weight} ${String(size)}px ${style.font.family}`, lang: '', letterSpacing: `${letterSpacing}px`,
     wordSpacing: '0px', fontKerning: 'auto', textRendering: 'auto', direction: 'ltr', partition: '',
   }
-  return { context, plain: { ...context, letterSpacing: '0px' }, letterSpacing, wordSpacing: f32(f32(r.wordSpacing) * f32(zoom)) }
+  return {
+    text, context, plain: { ...context, letterSpacing: '0px' }, letterSpacing, wordSpacing: f32(f32(style.wordSpacing) * f32(zoom)),
+    // TextRun::setTabSize(!collapseWhiteSpace && tabSize != 0) (TextUtil.cpp:91-92).
+    allowTabs: style.whiteSpace !== 'normal' && style.whiteSpace !== 'nowrap' && style.whiteSpace !== 'pre-line' && style.tabSize !== 0,
+    tabSize: style.tabSize,
+  }
 }
 
 // Canvas turns U+0009-U+000D into spaces; the complex text controller gives VT, FF and other Cc the .notdef advance, which
@@ -69,19 +102,117 @@ function canvasText(text: string): string {
   return out
 }
 
+// FontCascade::treatAsSpace (platform/graphics/FontCascadeInlines.h:140-143).
+function treatAsSpace(c: number): boolean {
+  return c === 0x20 || c === 0x09 || c === 0x0a || c === 0xa0
+}
+
+// FontCascade::isCJKIdeographOrSymbol (platform/graphics/FontCascade.cpp:974-1196), canExpandAroundIdeographsInComplexText being
+// true on Cocoa (cocoa/FontCascadeCocoaInlines.h:34-37).
+const CJK_SYMBOLS = new Set([
+  0x2c7, 0x2ca, 0x2cb, 0x2d9, 0x2ea, 0x2eb, 0x2020, 0x2021, 0x2030, 0x203b, 0x203c, 0x2042, 0x2047, 0x2048, 0x2049, 0x2051, 0x20dd,
+  0x20de, 0x2100, 0x2103, 0x2105, 0x2109, 0x210a, 0x2113, 0x2116, 0x2121, 0x212b, 0x213b, 0x2150, 0x2151, 0x2152, 0x217f, 0x2189,
+  0x2307, 0x2312, 0x23be, 0x23bf, 0x23ce, 0x2423, 0x25a0, 0x25a1, 0x25a2, 0x25aa, 0x25ab, 0x25b1, 0x25b2, 0x25b3, 0x25b6, 0x25b7,
+  0x25bc, 0x25bd, 0x25c0, 0x25c1, 0x25c6, 0x25c7, 0x25c9, 0x25cb, 0x25cc, 0x25ef, 0x2605, 0x2606, 0x260e, 0x2616, 0x2617, 0x2640,
+  0x2642, 0x26a0, 0x26bd, 0x26be, 0x2713, 0x271a, 0x273f, 0x2740, 0x2756, 0x2b1a, 0xfe10, 0xfe11, 0xfe12, 0xfe19, 0x1f100,
+])
+function isCJKIdeographOrSymbol(c: number): boolean {
+  if (CJK_SYMBOLS.has(c)) return true
+  if ((c >= 0x2156 && c <= 0x215a) || (c >= 0x2160 && c <= 0x216b) || (c >= 0x2170 && c <= 0x217b) || (c >= 0x23c0 && c <= 0x23cc)) return true
+  if ((c >= 0x2460 && c <= 0x2492) || (c >= 0x249c && c <= 0x24ff) || (c >= 0x25ce && c <= 0x25d3) || (c >= 0x25e2 && c <= 0x25e6)) return true
+  if ((c >= 0x2600 && c <= 0x2603) || (c >= 0x2660 && c <= 0x266f) || (c >= 0x2672 && c <= 0x267d) || (c >= 0x2776 && c <= 0x277f)) return true
+  if ((c >= 0x2ff0 && c <= 0x2fff) || (c >= 0x3000 && c < 0x3030) || (c > 0x3030 && c <= 0x303f)) return true
+  if ((c >= 0x3040 && c <= 0x309f) || (c >= 0x30a0 && c <= 0x30ff) || (c >= 0x3100 && c <= 0x312f) || (c >= 0x3190 && c <= 0x319f) || (c >= 0x31a0 && c <= 0x31bf)) return true
+  if ((c >= 0x3200 && c <= 0x32ff) || (c >= 0x3300 && c <= 0x33ff) || (c >= 0xf860 && c <= 0xf862) || (c >= 0xfe30 && c <= 0xfe4f)) return true
+  if (c === 0xff0d || c === 0xff1b || c === 0xff1c || c === 0xff1e) return false
+  if (c >= 0xff00 && c <= 0xffef) return true
+  if ((c >= 0x1f110 && c <= 0x1f129) || (c >= 0x1f130 && c <= 0x1f149) || (c >= 0x1f150 && c <= 0x1f169) || (c >= 0x1f170 && c <= 0x1f189) || (c >= 0x1f200 && c <= 0x1f6c5)) return true
+  return (c >= 0x4e00 && c <= 0x9fff) || (c >= 0x3400 && c <= 0x4dbf) || (c >= 0x2e80 && c <= 0x2eff) || (c >= 0x2f00 && c <= 0x2fdf)
+    || (c >= 0x31c0 && c <= 0x31ef) || (c >= 0xf900 && c <= 0xfaff) || (c >= 0x20000 && c <= 0x2a6df) || (c >= 0x2a700 && c <= 0x2b73f)
+    || (c >= 0x2b740 && c <= 0x2b81f) || (c >= 0x2b820 && c <= 0x2ceaf) || (c >= 0x2ceb0 && c <= 0x2ebef) || (c >= 0x2ebf0 && c <= 0x2ee5f)
+    || (c >= 0x2f800 && c <= 0x2fa1f) || (c >= 0x30000 && c <= 0x3134f) || (c >= 0x31350 && c <= 0x323af)
+}
+
+// The expansion each code point's advance holds in a justified box: ComplexTextController::computeExpansionOpportunity
+// recounts opportunities over the box's rendered text with its expansion behavior (ComplexTextController.cpp:107-118,
+// FontCascade.cpp:1198-1292), and adjustGlyphsAndAdvances hands one share to each side expansionLocation chooses, visiting
+// glyphs in visual order, the left side growing the glyph visited before (:673-696, :800-845). One glyph per code point is
+// assumed; where a font's glyphs cover several code points the position rests on Canvas anyway (gap in-word-prefix).
+function expansionShares(rendered: string, rtl: boolean, box: WebKitTextBox): number[] {
+  const shares: number[] = new Array<number>(rendered.length).fill(0)
+  if (box.expansion === 0) return shares
+  const starts: number[] = []
+  for (let i = 0; i < rendered.length; i++) {
+    starts.push(i)
+    if (rendered.codePointAt(i)! > 0xffff) i++
+  }
+  // expansionOpportunityCountInternal
+  let count = 0
+  let isAfterExpansion = box.expansionBehavior.left === 'forbid'
+  const logical = rtl ? [...starts].reverse() : starts
+  for (let k = 0; k < logical.length; k++) {
+    const c = rendered.codePointAt(logical[k]!)!
+    if (treatAsSpace(c)) {
+      count++
+      isAfterExpansion = true
+    } else if (isCJKIdeographOrSymbol(c)) {
+      if (!isAfterExpansion) count++
+      count++
+      isAfterExpansion = true
+    } else {
+      isAfterExpansion = false
+    }
+  }
+  if (isAfterExpansion && box.expansionBehavior.right === 'forbid' && count > 0) count--
+  if (count === 0) return shares
+  const per = f32(box.expansion / count)
+  let afterExpansion = box.expansionBehavior.left === 'forbid'
+  let previous: number | null = null
+  for (let k = 0; k < logical.length; k++) {
+    const i = logical[k]!
+    const c = rendered.codePointAt(i)!
+    const isFirstCharacter = i === 0
+    const isLastCharacter = i + (c > 0xffff ? 2 : 1) === rendered.length
+    const forbidLeft = box.expansionBehavior.left === 'forbid' && (rtl ? isLastCharacter : isFirstCharacter)
+    const forbidRight = box.expansionBehavior.right === 'forbid' && (rtl ? isFirstCharacter : isLastCharacter)
+    const space = treatAsSpace(c)
+    const ideograph = isCJKIdeographOrSymbol(c)
+    if (space || ideograph) {
+      let expandLeft = ideograph
+      let expandRight = ideograph
+      if (space) {
+        if (rtl) expandLeft = true
+        else expandRight = true
+      }
+      if (afterExpansion) expandLeft = false
+      if (forbidLeft) expandLeft = false
+      if (forbidRight) expandRight = false
+      if (expandLeft) shares[previous ?? i] = f32(shares[previous ?? i]! + per)
+      if (expandRight) {
+        shares[i] = f32(shares[i]! + per)
+        afterExpansion = true
+      }
+    } else {
+      afterExpansion = false
+    }
+    previous = i
+  }
+  return shares
+}
+
 // ComplexTextController::advance(offset)'s runWidthSoFar over the box's rendered text (ComplexTextController.cpp:577-668,
 // 740-800), from Canvas: prefix totals, a TAB's tab stop from the TextRun's xPos plus the advance so far
 // (FontCascade::tabWidth, FontCascadeInlines.h:76-94) with letter spacing after it, and word spacing after SPACE, LF and
 // NBSP past index 0. Canvas measures the prefix alone, where the controller shapes the box once (gap in-word-prefix).
-function advanceTo(port: Port, canvas: RunCanvas, rendered: string, offset: number, xPos: number): number {
+function advanceTo(port: Port, canvas: LeafCanvas, rendered: string, offset: number, xPos: number, shares: number[]): number {
   let width = 0
   let segmentStart = 0
   for (let i = 0; i <= offset; i++) {
-    if (i < offset && !(port.allowTabs && rendered.charCodeAt(i) === 0x09)) continue
+    if (i < offset && !(canvas.allowTabs && rendered.charCodeAt(i) === 0x09)) continue
     if (i > segmentStart) width = f32(width + port.measure(canvas.context, canvasText(rendered.slice(segmentStart, i))))
     if (i < offset) {
       const space = port.measure(canvas.plain, ' ')
-      const base = f32(port.tabSize * space)
+      const base = f32(canvas.tabSize * space)
       let tab: number
       if (base === 0) {
         tab = canvas.letterSpacing
@@ -99,10 +230,11 @@ function advanceTo(port: Port, canvas: RunCanvas, rendered: string, offset: numb
   if (canvas.wordSpacing !== 0) {
     for (let i = 0; i < offset; i++) {
       const c = rendered.charCodeAt(i)
-      const treatAsSpace = c === 0x20 || c === 0x0a || c === 0xa0 || (c === 0x09 && !port.allowTabs)
-      if (treatAsSpace && (i > 0 || c === 0xa0)) width = f32(width + canvas.wordSpacing)
+      const asSpace = c === 0x20 || c === 0x0a || c === 0xa0 || (c === 0x09 && !canvas.allowTabs)
+      if (asSpace && (i > 0 || c === 0xa0)) width = f32(width + canvas.wordSpacing)
     }
   }
+  for (let i = 0; i < offset && i < shares.length; i++) if (shares[i] !== 0) width = f32(width + shares[i]!)
   return width
 }
 
@@ -123,10 +255,18 @@ function boundingBox(x: number, width: number): { x: number; width: number } {
   return { x: left, width: f32(Math.max(x, right) - left) }
 }
 
-// The whole-box branch (RenderText.cpp:815-831): the display box's float rect.
-function wholeBoxRect(port: Port, own: OwnBox): ExpectedRect {
-  const rect = boundingBox(own.box.x, own.box.width)
-  return { line: own.line, x: predicted(port, rect.x), width: predicted(port, rect.width) }
+// The whole-box branch (RenderText.cpp:815-831), and any element's display box: its float rect.
+function boxRect(port: Port, line: number, box: { x: number; width: number }): ExpectedRect {
+  const rect = boundingBox(box.x, box.width)
+  return { line, x: predicted(port, rect.x), width: predicted(port, rect.width) }
+}
+
+// A text box's whole rect. A box shaped across inline boxes takes its characters' share of one shaping of the joined text
+// (InlineLineBuilder.cpp:920-967), which the engine estimates from Canvas prefixes, so its edges are limited.
+function textBoxRect(port: Port, own: OwnBox): ExpectedRect {
+  const rect = boxRect(port, own.line, own.box)
+  if (!own.box.shapedAcrossBoxes) return rect
+  return { line: own.line, x: limited(port, 'in-word-prefix', rect.x.value), width: limited(port, 'in-word-prefix', rect.width.value) }
 }
 
 // selectionRectForTextBox (RenderText.cpp:352-396) followed by snappedSelectionRect (LegacyInlineTextBox.cpp:146-160) and
@@ -162,23 +302,34 @@ function partialRect(port: Port, layout: WebKitLayout, own: OwnBox, next: OwnBox
   if (clampedStart !== 0 || clampedEnd !== renderedLength) {
     // Partial ranges take the complex path under the lab's font-kerning: auto and text-rendering: auto
     // (FontCascade.cpp:673-731, research/observe-webkit.md §7).
-    const text = layout.lines[own.line]!.geometry
-    const canvas = port.runs[b.run]!
-    const rendered = port.paragraph.runs[b.run]!.text.slice(b.start, b.end) + (b.hyphen ?? '')
+    const geometry = layout.lines[own.line]!.geometry
+    const canvas = port.leaves[b.run]!
+    const rendered = canvas.text.slice(b.start, b.end) + (b.hyphen ?? '')
     const rtl = b.level % 2 === 1
-    // InlineIteratorBoxModernPathInlines.h:38-66: xPos from the content box edge, with the alignment offset (0) removed.
-    const xPos = rtl ? f32(text.lineBoxWidth - f32(b.x + b.width)) : b.x
-    const before = advanceTo(port, canvas, rendered, clampedStart, xPos)
-    const after = advanceTo(port, canvas, rendered, clampedEnd, xPos)
+    // BoxModernPath::textRun (layout/integration/inline/InlineIteratorBoxModernPathInlines.h:38-60): xPos is the box's position
+    // from the content box (from its right edge in RTL, against RenderBox::contentBoxWidth, a LayoutUnit) less the display
+    // line's contentLogicalLeft, the root inline box's left inside the line box (InlineDisplayLineBuilder.cpp:134-160,
+    // InlineLineBoxBuilder.cpp:63, :100): the alignment offset. Tab stops count from the content box edge, past slot insets and
+    // text-indent.
+    const contentBoxWidth = toLayoutUnit(f32(f32(port.paragraph.width) * f32(layout.env.pageZoom ?? 1))) / 64
+    const xPos = rtl ? f32(f32(contentBoxWidth - f32(b.x + b.width)) - geometry.alignmentOffset) : f32(b.x - geometry.alignmentOffset)
+    const shares = expansionShares(rendered, rtl, b)
+    const before = advanceTo(port, canvas, rendered, clampedStart, xPos, shares)
+    const after = advanceTo(port, canvas, rendered, clampedEnd, xPos, shares)
     if (rtl) {
-      const total = advanceTo(port, canvas, rendered, renderedLength, xPos)
+      const total = advanceTo(port, canvas, rendered, renderedLength, xPos, shares)
       x64 += toLayoutUnit(f32(total - after))
       xKnown = clampedEnd === renderedLength
     } else {
       x64 += toLayoutUnit(before)
       xKnown = clampedStart === 0
     }
-    width64 = toLayoutUnitCeil(f32(after - before))
+    // In-context advances are glyph advances with letter and word spacing and justification expansion added
+    // (ComplexTextController.cpp:740-845), so a range's advance is at least 0 unless spacing is negative. A Canvas stand-in
+    // below 0 (a joining form or fallback font measured on its own) is the stand-in's error, never a rect moved left.
+    const leafSpacing = port.leaves[b.run]!
+    const standIn = f32(after - before)
+    width64 = toLayoutUnitCeil(standIn < 0 && leafSpacing.letterSpacing >= 0 && leafSpacing.wordSpacing >= 0 ? 0 : standIn)
     widthKnown = clampedStart === clampedEnd
     // A range whose Canvas advance is 0: whether the code point has a glyph of its own decides its rect (U3).
     if (clampedEnd > clampedStart && after === before) gap = 'glyph-clusters'
@@ -196,7 +347,7 @@ function partialRect(port: Port, layout: WebKitLayout, own: OwnBox, next: OwnBox
   const rect = boundingBox(snappedX, snappedWidth)
   // The bounding box moves x only for a negative width. In-context advances are glyph advances plus letter and word spacing
   // (ComplexTextController.cpp:740-800), so an unknown width can be negative only under negative spacing.
-  const canvas = port.runs[b.run]!
+  const canvas = port.leaves[b.run]!
   const xOnBoxEdge = xKnown && (widthKnown || (canvas.letterSpacing >= 0 && canvas.wordSpacing >= 0))
   return {
     line: own.line,
@@ -220,7 +371,7 @@ function rangeRects(port: Port, layout: WebKitLayout, own: OwnBox[], start: numb
   for (let k = 0; k < own.length; k++) {
     const b = own[k]!
     if (s <= b.box.start && b.box.end <= e) {
-      rects.push(wholeBoxRect(port, b))
+      rects.push(textBoxRect(port, b))
       continue
     }
     const rect = partialRect(port, layout, b, k + 1 < own.length ? own[k + 1]! : null, k === own.length - 1, s, e)
@@ -229,31 +380,41 @@ function rangeRects(port: Port, layout: WebKitLayout, own: OwnBox[], start: numb
   return rects
 }
 
+function isTextBox(box: WebKitDisplayBox): box is WebKitTextBox {
+  return box.kind === 'text' || box.kind === 'soft-line-break'
+}
+
 export const observeWebKit: ObservationPort<WebKitLayout> = (paragraph, layout, measure) => {
   const zoom = layout.env.pageZoom ?? 1
-  const port: Port = {
-    paragraph, measure, runs: [],
-    allowTabs: paragraph.whiteSpace !== 'normal' && paragraph.whiteSpace !== 'nowrap' && paragraph.whiteSpace !== 'pre-line' && paragraph.tabSize !== 0,
-    tabSize: paragraph.tabSize,
-    zoomGap: layout.env.pageZoom !== 1,
-  }
-  for (let r = 0; r < paragraph.runs.length; r++) port.runs.push(runCanvas(paragraph, r, zoom))
+  const tree = walkTree(paragraph)
+  const port: Port = { paragraph, measure, leaves: [], zoomGap: layout.env.pageZoom !== 1 }
+  for (let r = 0; r < tree.leaves.length; r++) port.leaves.push(leafCanvas(tree.leaves[r]!.text, tree.leaves[r]!.style, zoom))
   // InlineIterator::textBoxesFor: a node's boxes in box index order, line then visual order
-  // (LayoutIntegrationLineLayout.cpp:1048-1059, InlineIteratorTextBox.cpp:71-102).
+  // (LayoutIntegrationLineLayout.cpp:1048-1059, InlineIteratorTextBox.cpp:71-102); inlineBoxesFor likewise for an element.
   const own: OwnBox[][] = []
-  for (let r = 0; r < paragraph.runs.length; r++) own.push([])
+  for (let r = 0; r < tree.leaves.length; r++) own.push([])
+  const elements: ExpectedRect[][] = []
+  for (let e = 0; e < tree.elements.length; e++) elements.push([])
   for (let l = 0; l < layout.lines.length; l++) {
     const boxes = layout.lines[l]!.geometry.boxes
-    for (let k = 0; k < boxes.length; k++) own[boxes[k]!.run]!.push({ box: boxes[k]!, line: l })
+    for (let k = 0; k < boxes.length; k++) {
+      const box = boxes[k]!
+      if (isTextBox(box)) own[box.run]!.push({ box, line: l })
+      // An atomic inline reports its renderer's frame (RenderBox::absoluteQuads, rendering/RenderBox.cpp:694-701), whose
+      // location InlineDisplayContentBuilder set from the display box through toLayoutPoint, truncating to a LayoutUnit
+      // (InlineDisplayContentBuilder.cpp:632-640, platform/LayoutUnit.h:76-78); its border box width is a LayoutUnit already.
+      else if (box.kind === 'atomic') elements[box.element]!.push(boxRect(port, l, { x: toLayoutUnit(box.x) / 64, width: box.width }))
+      else elements[box.element]!.push(boxRect(port, l, box))
+    }
   }
   const nodes: ExpectedRect[][] = []
   const codePoints: ExpectedObservation['codePoints'] = []
   let runStart = 0
-  for (let r = 0; r < paragraph.runs.length; r++) {
-    const text = paragraph.runs[r]!.text
+  for (let r = 0; r < tree.leaves.length; r++) {
+    const text = tree.leaves[r]!.text
     const boxes = own[r]!
     const nodeRects: ExpectedRect[] = []
-    for (let k = 0; k < boxes.length; k++) nodeRects.push(wholeBoxRect(port, boxes[k]!))
+    for (let k = 0; k < boxes.length; k++) nodeRects.push(textBoxRect(port, boxes[k]!))
     nodes.push(nodeRects)
     for (let i = 0; i < text.length;) {
       const length = text.codePointAt(i)! > 0xffff ? 2 : 1
@@ -265,7 +426,7 @@ export const observeWebKit: ObservationPort<WebKitLayout> = (paragraph, layout, 
   const unobservable: UnobservableFact[] = []
   for (let l = 0; l < layout.lines.length; l++) {
     const line = layout.lines[l]!
-    if (line.geometry.hangingWidth !== 0) {
+    if (line.geometry.hangingWidth !== 0 && line.align === 'start') {
       unobservable.push({ line: l, fact: `lines[${l}].geometry.hangingWidth`, rule: 'under text-align: start the alignment offset is 0 whatever hangs (InlineFormattingUtils.cpp:198-270), and hanging white space stays inside its box (InlineLine.cpp:198-233)' })
     }
     if (paragraph.direction === 'ltr') {
@@ -275,7 +436,7 @@ export const observeWebKit: ObservationPort<WebKitLayout> = (paragraph, layout, 
       const fragment = line.fragments[f]!
       switch (fragment.kind) {
         case 'hyphen': {
-          const canvas = port.runs[fragment.run]!
+          const canvas = port.leaves[fragment.run]!
           if (measure(canvas.context, '‐') === measure(canvas.context, '-')) {
             unobservable.push({ line: l, fact: `lines[${l}].fragments[${f}].painted`, rule: 'a box with needsHyphen reports its rendered text through its width and additionalLengthAtEnd (InlineIteratorBoxModernPath.h:76-97); U+2010 and U+002D have equal advances here' })
           }
@@ -293,13 +454,25 @@ export const observeWebKit: ObservationPort<WebKitLayout> = (paragraph, layout, 
           }
           break
         }
+        case 'wbr':
+          unobservable.push({ line: l, fact: `lines[${l}].fragments[${f}]`, rule: 'a word break opportunity run makes no display box (InlineDisplayContentBuilder.cpp:527-528), so RenderLineBreak::absoluteQuads finds no box (RenderLineBreak.cpp:97-105) and only breaks show the line it sits on' })
+          break
         case 'text':
         case 'trimmed':
         case 'hanging':
         case 'forced-break':
+        case 'box-start':
+        case 'box-end':
+        case 'atomic':
+        case 'br':
           break
       }
     }
+    for (let k = 0; k < line.geometry.boxes.length; k++) {
+      const box = line.geometry.boxes[k]!
+      if (box.kind !== 'atomic') continue
+      unobservable.push({ line: l, fact: `lines[${l}].geometry.boxes[${k}] margins`, rule: 'an atomic inline reports its border box (InlineDisplayContentBuilder.cpp:344-371); its margins show only in its neighbours\' positions' })
+    }
   }
-  return { codePoints, nodes, unobservable }
+  return { codePoints, nodes, elements, unobservable }
 }

@@ -1,12 +1,13 @@
 // WebKit line output on worked examples of DESIGN.md §2.2-§2.4 and research/observe-webkit.md §4-§5, with a stand-in
 // Canvas whose advances are chosen per test. These pin the port's output shape (display boxes from the closed run list,
-// fragments, line boxes, font facts and the gaps they report), not browser widths: no expectation here is a browser
-// observation.
+// fragments, line boxes, font facts and the gaps they report) and the stage-5 rules from source (box edges, atomic inlines,
+// <br>, <wbr>, text-indent, text-align, line slots), not browser widths: no expectation here is a browser observation.
 import { describe, expect, test } from 'bun:test'
 import { PINNED_BUILDS, type WebKitEnvironment } from '../../env.js'
 import { createMeasurer } from '../../measure/canvas.js'
-import { UNKNOWN_FONT_FACTS, type FontFacts, type Paragraph, type TextRun, type WebKitLine } from '../../model.js'
+import { FULL_WIDTH, UNKNOWN_FONT_FACTS, type FontFacts, type LineSlot, type Paragraph, type WebKitDisplayBox, type WebKitLine, type WebKitTextBox } from '../../model.js'
 import { webkitEngine } from './index.js'
+import { atomic, flatParagraph, span, treeParagraph, type FlatNode } from './test-paragraph.js'
 
 // Advance per code unit: SPACE 4, everything else 8, unless a test sets `advance`.
 let advance = (c: number): number => c === 0x20 ? 4 : 8
@@ -35,32 +36,43 @@ const env: WebKitEnvironment = {
   preferredLanguages: ['en-US'], icuDefaultLocale: 'en_US_POSIX', dictionaryBreaks: { kind: 'unavailable' },
 }
 
-function paragraph(runs: Array<[string, TextRun['node']]>, overrides: Partial<Paragraph> = {}, facts: FontFacts = UNKNOWN_FONT_FACTS): Paragraph {
-  const font = { family: 'Arial', size: 16, weight: 400, style: 'normal' as const, facts }
-  return {
-    runs: runs.map(([text, node]) => ({ text, node, font, letterSpacing: 0, wordSpacing: 0, lang: null })),
-    font, letterSpacing: 0, wordSpacing: 0, width: 1000, lineHeight: 20, whiteSpace: 'normal', wordBreak: 'normal',
-    overflowWrap: 'normal', lineBreak: 'auto', tabSize: 8, direction: 'ltr', lang: 'en', ...overrides,
-  }
+function fontWith(facts: FontFacts = UNKNOWN_FONT_FACTS) {
+  return { family: 'Arial', size: 16, weight: 400, style: 'normal' as const, facts }
 }
 
-function layout(p: Paragraph): { lines: WebKitLine[]; gaps: string[] } {
+function paragraph(runs: Array<[string, FlatNode]>, overrides: Partial<Paragraph> = {}, facts: FontFacts = UNKNOWN_FONT_FACTS): Paragraph {
+  return flatParagraph(runs, fontWith(facts), overrides)
+}
+
+function layout(p: Paragraph, slots: LineSlot[] = []): { lines: WebKitLine[]; gaps: string[]; belowFloats: number[] } {
   const m = createMeasurer()
   const prepared = webkitEngine.prepare(p, env, m)
   const lines: WebKitLine[] = []
+  const belowFloats: number[] = []
+  let row = 0
   for (let start = webkitEngine.firstLine(prepared); start !== null;) {
-    const line = webkitEngine.nextLine(prepared, start, p.width, m)
-    lines.push(line)
-    start = line.next
+    const result = webkitEngine.nextLine(prepared, start, slots[row] ?? FULL_WIDTH, m)
+    if (result.kind === 'below-floats') {
+      belowFloats.push(row++)
+      if (result.next !== undefined) start = result.next
+      continue
+    }
+    lines.push(result.line)
+    if (result.line.hasLineBox) row++
+    start = result.line.next
   }
-  return { lines, gaps: webkitEngine.gaps(prepared).map(g => g.gap) }
+  return { lines, gaps: webkitEngine.gaps(prepared).map(g => g.gap), belowFloats }
+}
+
+function textBoxes(boxes: WebKitDisplayBox[]): WebKitTextBox[] {
+  return boxes.filter((b): b is WebKitTextBox => b.kind === 'text' || b.kind === 'soft-line-break')
 }
 
 describe('display boxes from the closed run list (DESIGN.md §2.4)', () => {
   test('foo   bar in one node is two boxes; units 4 and 5 are in no box', () => {
     const { lines } = layout(paragraph([['foo   bar', 'text']]))
     expect(lines.length).toBe(1)
-    expect(lines[0]!.geometry.boxes.map(b => [b.start, b.end, b.x, b.width])).toEqual([[0, 4, 0, 28], [6, 9, 28, 24]])
+    expect(textBoxes(lines[0]!.geometry.boxes).map(b => [b.start, b.end, b.x, b.width])).toEqual([[0, 4, 0, 28], [6, 9, 28, 24]])
     expect(lines[0]!.fragments).toEqual([
       { kind: 'text', run: 0, start: 0, end: 4, painted: 'foo ', level: 0 },
       { kind: 'collapsed', run: 0, start: 4, end: 6 },
@@ -71,13 +83,13 @@ describe('display boxes from the closed run list (DESIGN.md §2.4)', () => {
   test('foo bar broken after the space: the trimmed space is in no box', () => {
     const { lines } = layout(paragraph([['foo bar', 'text']], { width: 30 }))
     expect(lines.map(l => [l.start, l.end])).toEqual([[0, 4], [4, 7]])
-    expect(lines[0]!.geometry.boxes.map(b => [b.start, b.end, b.width])).toEqual([[0, 3, 24]])
+    expect(textBoxes(lines[0]!.geometry.boxes).map(b => [b.start, b.end, b.width])).toEqual([[0, 3, 24]])
     expect(lines[0]!.geometry.contentWidth).toBe(24)
     expect(lines[0]!.fragments).toEqual([
       { kind: 'text', run: 0, start: 0, end: 3, painted: 'foo', level: 0 },
       { kind: 'trimmed', run: 0, start: 3, end: 4, painted: ' ', level: 0 },
     ])
-    expect(lines[1]!.geometry.boxes.map(b => [b.start, b.end, b.x])).toEqual([[4, 7, 0]])
+    expect(textBoxes(lines[1]!.geometry.boxes).map(b => [b.start, b.end, b.x])).toEqual([[4, 7, 0]])
   })
 
   test('pre-wrap spaces hang inside their box; the conditional hang of the last line stops', () => {
@@ -89,7 +101,7 @@ describe('display boxes from the closed run list (DESIGN.md §2.4)', () => {
       { kind: 'text', run: 0, start: 0, end: 3, painted: 'abc', level: 0 },
       { kind: 'hanging', run: 0, start: 3, end: 9, painted: '      ', level: 0 },
     ])
-    expect(lines[0]!.geometry.boxes.map(b => [b.start, b.end, b.width])).toEqual([[0, 9, 72]])
+    expect(textBoxes(lines[0]!.geometry.boxes).map(b => [b.start, b.end, b.width])).toEqual([[0, 9, 72]])
     expect(lines[0]!.geometry.contentWidth).toBe(72)
     expect(lines[0]!.geometry.hangingWidth).toBe(48)
   })
@@ -97,7 +109,7 @@ describe('display boxes from the closed run list (DESIGN.md §2.4)', () => {
   test('a preserved newline is its own zero-width box and the forced break', () => {
     const { lines } = layout(paragraph([['a\nb', 'text']], { whiteSpace: 'pre' }))
     expect(lines.map(l => [l.start, l.end])).toEqual([[0, 2], [2, 3]])
-    expect(lines[0]!.geometry.boxes.map(b => [b.kind, b.start, b.end, b.x, b.width])).toEqual([['text', 0, 1, 0, 8], ['soft-line-break', 1, 2, 8, 0]])
+    expect(textBoxes(lines[0]!.geometry.boxes).map(b => [b.kind, b.start, b.end, b.x, b.width])).toEqual([['text', 0, 1, 0, 8], ['soft-line-break', 1, 2, 8, 0]])
     expect(lines[0]!.fragments.map(f => f.kind)).toEqual(['text', 'forced-break'])
   })
 
@@ -107,8 +119,8 @@ describe('display boxes from the closed run list (DESIGN.md §2.4)', () => {
     advance = c => c === 0x20 ? 4 : 8
     const g = lines[0]!.geometry
     expect(g.contentLogicalRight).toBe(Math.fround(15.299999999999999))
-    expect(g.boxes[0]!.x).toBe(Math.fround(336 - Math.fround(15.299999999999999)))
-    expect(g.boxes[0]!.level).toBe(1)
+    expect(textBoxes(g.boxes)[0]!.x).toBe(Math.fround(336 - Math.fround(15.299999999999999)))
+    expect(textBoxes(g.boxes)[0]!.level).toBe(1)
   })
 })
 
@@ -117,7 +129,7 @@ describe('line boxes', () => {
     const { lines } = layout(paragraph([[' ', 'span']]))
     expect(lines.length).toBe(1)
     expect(lines[0]!.hasLineBox).toBe(false)
-    expect(lines[0]!.fragments).toEqual([{ kind: 'collapsed', run: 0, start: 0, end: 1 }])
+    expect(lines[0]!.fragments).toEqual([{ kind: 'box-start', element: 0 }, { kind: 'collapsed', run: 0, start: 0, end: 1 }, { kind: 'box-end', element: 0 }])
   })
 
   test('a block whose only node gets no renderer makes no line', () => {
@@ -131,7 +143,7 @@ describe('font facts (DESIGN.md §1.2)', () => {
     const unknown = layout(paragraph([['super­califragilistic', 'text']], narrow))
     const hyphen = unknown.lines[0]!.fragments.find(f => f.kind === 'hyphen')!
     expect(hyphen).toEqual({ kind: 'hyphen', run: 0, at: 6, painted: '‐', letterSpacing: 0, level: 0 })
-    expect(unknown.lines[0]!.geometry.boxes[0]!.hyphen).toBe('‐')
+    expect(textBoxes(unknown.lines[0]!.geometry.boxes)[0]!.hyphen).toBe('‐')
     const without = layout(paragraph([['super­califragilistic', 'text']], narrow, { ...UNKNOWN_FONT_FACTS, mapsHyphen: false }))
     expect(without.lines[0]!.fragments.find(f => f.kind === 'hyphen')!).toMatchObject({ painted: '-' })
   })
@@ -187,5 +199,172 @@ describe('environment facts (DESIGN.md §1.4)', () => {
   test('page zoom not given reports page-zoom', () => {
     const m = createMeasurer()
     expect(webkitEngine.gaps(webkitEngine.prepare(paragraph([['a', 'text']]), { ...env, pageZoom: null }, m)).map(g => g.gap)).toContain('page-zoom')
+  })
+
+  test('a quoted "system-ui" names a family, not the system design (research/CHARTER-CRITIC.md item 9)', () => {
+    const m = createMeasurer()
+    const facts = UNKNOWN_FONT_FACTS
+    const quoted = { ...paragraph([['a', 'text']]), font: { ...fontWith(facts), family: '"system-ui"' } }
+    const keyword = { ...paragraph([['a', 'text']]), font: { ...fontWith(facts), family: 'system-ui' } }
+    expect(webkitEngine.gaps(webkitEngine.prepare(quoted, env, m)).map(g => g.gap)).not.toContain('canvas-language')
+    expect(webkitEngine.gaps(webkitEngine.prepare(keyword, env, m)).map(g => g.gap)).toContain('canvas-language')
+  })
+})
+
+describe('inline structure (DESIGN.md §1.1, stage 5)', () => {
+  const block = treeParagraph([], fontWith())
+
+  test('an inline box start is margin + border + padding wide and decorates the line (InlineFormattingUtils.cpp:320-324)', () => {
+    // "ab cd" in a span with 10px start padding at width 50: "ab" is 16 after 10 of padding; " cd" doesn't fit.
+    const p = treeParagraph([span(block, [{ kind: 'text', text: 'ab cd' }], {}, { margin: 0, border: 0, padding: 10 }, { margin: 0, border: 0, padding: 0 })], fontWith(), { width: 40 })
+    const { lines } = layout(p)
+    expect(lines.map(l => [l.start, l.end])).toEqual([[0, 3], [3, 5]])
+    const box0 = lines[0]!.geometry.boxes
+    expect(box0[0]).toEqual({ kind: 'inline-box', element: 0, x: 0, width: 26, hasStartEdge: true, hasEndEdge: false })
+    expect(textBoxes(box0)[0]!.x).toBe(10)
+    expect(lines[1]!.geometry.boxes[0]).toMatchObject({ kind: 'inline-box', element: 0, x: 0, hasStartEdge: false, hasEndEdge: true })
+    expect(lines[0]!.fragments[0]).toEqual({ kind: 'box-start', element: 0 })
+    expect(lines[1]!.fragments[lines[1]!.fragments.length - 1]).toEqual({ kind: 'box-end', element: 0 })
+  })
+
+  test('a span of only box edges makes a line box; an undecorated one does not (InlineLine.cpp:989-1008)', () => {
+    const decorated = layout(treeParagraph([span(block, [], {}, { margin: 0, border: 0, padding: 4 })], fontWith()))
+    expect(decorated.lines.map(l => l.hasLineBox)).toEqual([true])
+    const plain = layout(treeParagraph([span(block, [])], fontWith()))
+    expect(plain.lines.map(l => l.hasLineBox)).toEqual([false])
+  })
+
+  test('a nowrap span inside a wrapping block keeps its content together; the space before it is an opportunity', () => {
+    const p = treeParagraph([{ kind: 'text', text: 'aa ' }, span(block, [{ kind: 'text', text: 'b c' }], { whiteSpace: 'nowrap' })], fontWith(), { width: 30 })
+    const { lines } = layout(p)
+    expect(lines.map(l => [l.start, l.end])).toEqual([[0, 3], [3, 6]])
+  })
+
+  test('an atomic inline is a soft wrap opportunity on both sides (InlineFormattingUtils.cpp:446-450)', () => {
+    const p = treeParagraph([{ kind: 'text', text: 'abc' }, atomic(20), { kind: 'text', text: 'def' }], fontWith(), { width: 30 })
+    const { lines } = layout(p)
+    expect(lines.map(l => l.fragments.map(f => f.kind))).toEqual([['text'], ['atomic'], ['text']])
+    expect(lines[1]!.geometry.boxes).toEqual([{ kind: 'atomic', element: 0, level: 0, x: 0, width: 20 }])
+  })
+
+  test('<br> ends the line and is its zero-width line break box; the simple builder takes it', () => {
+    const p = treeParagraph([{ kind: 'text', text: 'ab' }, { kind: 'br' }, { kind: 'text', text: 'cd' }], fontWith())
+    const { lines } = layout(p)
+    expect(lines.map(l => [l.start, l.end])).toEqual([[0, 2], [2, 4]])
+    expect(lines[0]!.fragments.map(f => f.kind)).toEqual(['text', 'br'])
+    expect(lines[0]!.geometry.boxes[1]).toEqual({ kind: 'line-break', element: 0, x: 16, width: 0 })
+    expect(lines[0]!.align).toBe('start')
+  })
+
+  test('<wbr> is a break opportunity without a character and no display box', () => {
+    const p = treeParagraph([{ kind: 'text', text: 'abc' }, { kind: 'wbr' }, { kind: 'text', text: 'def' }], fontWith(), { width: 30 })
+    const { lines } = layout(p)
+    expect(lines.map(l => [l.start, l.end])).toEqual([[0, 3], [3, 6]])
+    expect(lines[0]!.fragments.map(f => f.kind)).toEqual(['text', 'wbr'])
+    expect(lines[0]!.geometry.boxes.every(b => b.kind === 'text')).toBe(true)
+  })
+})
+
+describe('bidi lines with inline structure (InlineDisplayContentBuilder.cpp:728-1088)', () => {
+  test('an RTL span with start padding: the box ends at the content edge and its text sits past the padding', () => {
+    const block = treeParagraph([], fontWith(), { direction: 'rtl', width: 100 })
+    const p = treeParagraph([span(block, [{ kind: 'text', text: 'אב' }], {}, { margin: 0, border: 0, padding: 6 })], fontWith(), { direction: 'rtl', width: 100 })
+    const { lines } = layout(p)
+    const boxes = lines[0]!.geometry.boxes
+    // Content 16 + 6 of padding right-aligned in 100: the box spans [78, 100], the text [78, 94].
+    expect(boxes.find(b => b.kind === 'inline-box')).toEqual({ kind: 'inline-box', element: 0, x: 78, width: 22, hasStartEdge: true, hasEndEdge: true })
+    expect(textBoxes(boxes)[0]!.x).toBe(78)
+  })
+
+  test('an RTL atomic inline follows visual order with its line-left margin', () => {
+    const p = treeParagraph([{ kind: 'text', text: 'אב ' }, atomic(20, 3, 5), { kind: 'text', text: ' גד' }], fontWith(), { direction: 'rtl', width: 200 })
+    const { lines } = layout(p)
+    const atom = lines[0]!.geometry.boxes.find(b => b.kind === 'atomic')!
+    // Visually: "גד" (16), " " (4), margin end 5, the box, margin start 3, " " (4), "אב" (16); content 68 from 132.
+    expect(atom).toMatchObject({ kind: 'atomic', element: 0, x: 157, width: 20 })
+  })
+})
+
+describe('text shaping across inline boxes (InlineLineBuilder.cpp:780-1028)', () => {
+  test('RTL complex text joined over an undecorated span edge is one shaping range: one run per box, the line gap', () => {
+    // The stand-in Canvas is additive, so the widths equal separate measurement; the ranges, run splits and gap are the rule.
+    const block = treeParagraph([], fontWith(), { direction: 'rtl', width: 500 })
+    const p = treeParagraph([{ kind: 'text', text: 'بب' }, span(block, [{ kind: 'text', text: 'بب' }]), { kind: 'text', text: 'بب' }], fontWith(), { direction: 'rtl', width: 500 })
+    const { lines } = layout(p)
+    expect(lines[0]!.gaps.map(g => g.gap)).toEqual(['rtl-shaping-across-inline-boxes'])
+    const boxes = textBoxes(lines[0]!.geometry.boxes)
+    expect(boxes.map(b => [b.run, b.width, b.shapedAcrossBoxes])).toEqual([[2, 16, true], [1, 16, true], [0, 16, true]])
+  })
+
+  test('a decorated span edge breaks the range', () => {
+    const block = treeParagraph([], fontWith(), { direction: 'rtl', width: 500 })
+    const p = treeParagraph([{ kind: 'text', text: 'بب' }, span(block, [{ kind: 'text', text: 'بب' }], {}, { margin: 0, border: 0, padding: 2 }, { margin: 0, border: 0, padding: 2 })], fontWith(), { direction: 'rtl', width: 500 })
+    const { lines } = layout(p)
+    expect(lines[0]!.gaps.map(g => g.gap)).toEqual([])
+    expect(textBoxes(lines[0]!.geometry.boxes).every(b => !b.shapedAcrossBoxes)).toBe(true)
+  })
+})
+
+describe('text-indent, text-align and line slots (DESIGN.md §2.9)', () => {
+  test('text-indent narrows the first formatted line only and moves its content (InlineLineBuilder.cpp:453-478)', () => {
+    const { lines } = layout(paragraph([['aa bb cc', 'text']], { width: 50, textIndent: 20 }))
+    expect(lines.map(l => [l.start, l.end, l.indented])).toEqual([[0, 3, true], [3, 8, false]])
+    expect(lines[0]!.geometry.lineBoxWidth).toBe(30)
+    expect(textBoxes(lines[0]!.geometry.boxes)[0]!.x).toBe(20)
+    expect(textBoxes(lines[1]!.geometry.boxes)[0]!.x).toBe(0)
+  })
+
+  test('text-align end moves boxes by the available space; center by half (InlineFormattingUtils.cpp:198-276)', () => {
+    const end = layout(paragraph([['ab', 'text']], { width: 100, textAlign: 'end' }))
+    expect(end.lines[0]!.geometry.alignmentOffset).toBe(84)
+    expect(textBoxes(end.lines[0]!.geometry.boxes)[0]!.x).toBe(84)
+    expect(end.lines[0]!.align).toBe('end')
+    const center = layout(paragraph([['ab', 'text']], { width: 100, textAlign: 'center' }))
+    expect(center.lines[0]!.geometry.alignmentOffset).toBe(42)
+  })
+
+  test('text-align justify spreads the space over the opportunities of all but the last line (InlineContentAligner.cpp:150-267)', () => {
+    const { lines } = layout(paragraph([['ab cd ef', 'text']], { width: 45, textAlign: 'justify' }))
+    expect(lines.map(l => [l.start, l.end, l.align])).toEqual([[0, 6, 'justify'], [6, 8, 'start']])
+    const box = textBoxes(lines[0]!.geometry.boxes)[0]!
+    expect([box.start, box.end, box.width, box.expansion]).toEqual([0, 5, 45, 9])
+    expect(box.expansionBehavior).toEqual({ left: 'forbid', right: 'forbid' })
+    expect(lines[0]!.geometry.contentWidth).toBe(45)
+    expect(lines[0]!.geometry.alignmentOffset).toBe(0)
+    expect(textBoxes(lines[1]!.geometry.boxes)[0]!.expansion).toBe(0)
+  })
+
+  test('a slot inset narrows the line through floatAvoidingRect (InlineLineBuilder.cpp:1185-1216)', () => {
+    const { lines } = layout(paragraph([['aa bb', 'text']], { width: 50 }), [{ left: 20, right: 0 }])
+    expect(lines.map(l => [l.start, l.end])).toEqual([[0, 3], [3, 5]])
+    expect(lines[0]!.geometry.lineBoxWidth).toBe(30)
+    expect(textBoxes(lines[0]!.geometry.boxes)[0]!.x).toBe(20)
+    expect(lines[0]!.slot).toEqual({ left: 20, right: 0 })
+  })
+
+  test('content that does not fit beside floats moves below them (InlineFormattingUtils.cpp:54-103)', () => {
+    const { lines, belowFloats } = layout(paragraph([['aaaaa', 'text']], { width: 50 }), [{ left: 30, right: 0 }])
+    expect(belowFloats).toEqual([0])
+    expect(lines.map(l => [l.start, l.end])).toEqual([[0, 5]])
+  })
+
+  test('the first build places the slot floats: its tab stops count from the indented line start, later builds from the content box (InlineLineBuilder.cpp:478, :1394-1396)', () => {
+    // SPACE 4, tab-size 4: stops every 16px. 'a' is 8 wide.
+    const p = paragraph([['a\tb\na\tb', 'text']], { width: 100, whiteSpace: 'pre-wrap', tabSize: 4 })
+    const { lines } = layout(p, [{ left: 20, right: 0 }, { left: 20, right: 0 }])
+    expect(lines.map(l => [l.start, l.end])).toEqual([[0, 4], [4, 7]])
+    expect(lines.map(l => l.geometry.contentEdgeOffset)).toEqual([0, 20])
+    // First build: position 0 + 8, the tab is 8 wide. Second: position 20 + 8, the tab is 4 wide.
+    expect(textBoxes(lines[0]!.geometry.boxes)[0]!.width).toBe(24)
+    expect(textBoxes(lines[1]!.geometry.boxes)[0]!.width).toBe(20)
+  })
+
+  test('a refused first build hands on the placed floats: the retried line counts tab stops from the content box', () => {
+    const p = paragraph([['aaaa\tb', 'text']], { width: 100, whiteSpace: 'pre-wrap', tabSize: 4 })
+    const { lines, belowFloats } = layout(p, [{ left: 95, right: 0 }, { left: 20, right: 0 }])
+    expect(belowFloats).toEqual([0])
+    expect(lines[0]!.geometry.contentEdgeOffset).toBe(20)
+    // Position 20 + 32 = 52: the tab is 12 wide.
+    expect(textBoxes(lines[0]!.geometry.boxes)[0]!.width).toBe(52)
   })
 })

@@ -1,6 +1,7 @@
 // The derivation's bracketing on hand-made observations.
 import { describe, expect, test } from 'bun:test'
-import { bisectionWidths, chooseByFocus, evaluate, lineEnd, MAX_D_ROUNDS, unresolvedReason, type Observed } from './derive.ts'
+import { el, font, leaf, treeParagraph } from '../lab/cases/build.ts'
+import { bisectionWidths, chooseByFocus, declaredOffset, evaluate, hasOwnOverflowWrap, lineEnd, MAX_D_ROUNDS, minimumUnits, unresolvedReason, type Observed } from './derive.ts'
 
 function observed(units: number, keys: number[], textLength = 20): Observed {
   return { units, keys, textLength, caseId: `c-${units}` }
@@ -52,5 +53,27 @@ describe('derivation brackets', () => {
     expect(chooseByFocus([3, 6, 9, 12], [8], 0, 20, 4)).toEqual([6, 9])
     expect(chooseByFocus([3, 6, 9, 12], [8, 13], 7, 20, 4)).toEqual([9, 12])
     expect(chooseByFocus([3, 6, 9, 12], [2, 5, 11], 0, 20, 2)).toEqual([3, 6])
+  })
+})
+
+describe('structured paragraphs', () => {
+  const arial = font('Arial', 16)
+
+  test('an overflow-wrap on a span alone makes pass A observe twice', () => {
+    expect(hasOwnOverflowWrap(treeParagraph({ font: arial, lang: 'en', textIndent: 4 }, [leaf('a b')]))).toBe(false)
+    expect(hasOwnOverflowWrap(treeParagraph({ font: arial, lang: 'en' }, [leaf('a '), el({}, el({ overflowWrap: 'anywhere' }, leaf('bbbb')))]))).toBe(true)
+  })
+
+  test('declared lengths: the first row\'s insets, and the indent on the first line only', () => {
+    const tree = treeParagraph({ font: arial, lang: 'en', textIndent: -12, lineSlots: [{ left: 40, right: 37.3 }, { left: 10, right: 10 }] }, [leaf('a b')])
+    expect(declaredOffset(tree.inline, 0)).toBeCloseTo(65.3, 9)
+    expect(declaredOffset(tree.inline, 5)).toBeCloseTo(77.3, 9)
+    expect(declaredOffset(undefined, 0)).toBe(0)
+  })
+
+  test('sized passes stay at or above the widest row of insets, in grid units', () => {
+    const tree = treeParagraph({ font: arial, lang: 'en', lineSlots: [{ left: 40, right: 0 }, { left: 111.9, right: 0 }] }, [leaf('a b')])
+    expect(minimumUnits(tree.inline, 128)).toBe(Math.ceil(111.9 * 128))
+    expect(minimumUnits(treeParagraph({ font: arial, lang: 'en', textIndent: 3 }, [leaf('a b')]).inline, 128)).toBe(0)
   })
 })

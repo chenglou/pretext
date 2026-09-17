@@ -5,14 +5,15 @@
 import type { WebKitEnvironment } from '../../env.js'
 import { measureContext, measureText, type Measurer } from '../../measure/canvas.js'
 import { canvasFont } from '../../measure/font.js'
-import type { Paragraph, TextRun } from '../../model.js'
+import { indexContent, langUnder, styleUnder } from '../../content.js'
+import type { Paragraph, TextStyle } from '../../model.js'
 import { getCategory } from '../../breaks/rbbi.js'
 import { AL, LRE, LRO, PDF, R, RLE, RLO, bidiClassOf, bidiDataFor, type BidiData } from '../../unicode/bidi.js'
 import { resolveIcuBidi } from '../../unicode/ubidi.js'
 import { canBreakBefore, dictionaryRangeStartsWithMark, makeFactory, moveToNextBreakablePosition } from './breaks.js'
 import { computedLocale, hasDelimiterData, isDelimiterQuote, isHanLocale, isPunctuation, lineRules, localeScript } from './data.js'
 import { boxWidth, fixedPitchShortcutWidth, itemWidth, singleSpaceWidth } from './measure.js'
-import { preservesNewline, preservesSpacesAndTabs, tabsAllowed, webkitStyle } from './style.js'
+import { boxEdges, layoutUnit, preservesNewline, preservesSpacesAndTabs, tabsAllowed, webkitStyle } from './style.js'
 import type { WebKitBox, WebKitPrepared, WebKitStyle, WebKitTextItem } from './types.js'
 
 const f32 = Math.fround
@@ -34,21 +35,23 @@ function containsOnlyASCIIWhitespace(text: string): boolean {
   return true
 }
 
-// RenderTreeUpdater::textRendererIsNeeded (RenderTreeUpdater.cpp:536-595) for the model's tree: a bare text node in the
-// block, or a span's only child. `previous` is the block's previous child renderer.
-function textRendererIsNeeded(run: TextRun, previous: 'none' | 'text' | 'inline', style: WebKitStyle): boolean {
-  if (run.text.length === 0) return false
-  if (!containsOnlyASCIIWhitespace(run.text)) return true
-  switch (run.node) {
-    // The parent is the span's RenderInline, and the node has no previous sibling inside it (:562-568).
-    case 'span':
-      return true
-    case 'text':
-      if (previous === 'text') return true
-      if (preservesNewline(style)) return true
-      // The first inline content inside the block gets none; otherwise hasPrecedingInFlowChild (:570-594).
-      return previous !== 'none'
-  }
+// RenderTreeUpdater::textRendererIsNeeded (RenderTreeUpdater.cpp:536-595) over the model's tree, which has only blocks, inline
+// spans, atomic inline-blocks, <br> and <wbr>. `previous` is the rendering parent's previous child renderer, and whether it
+// exists is hasPrecedingInFlowChild. A block's first child renderer finds childrenInline() true, so the "first inline content"
+// test (:575-591) never answers yes, and the node gets a renderer exactly when an earlier in-flow child renderer exists.
+type PreviousRenderer = 'none' | 'text' | 'inline' | 'br'
+
+function textRendererIsNeeded(text: string, previous: PreviousRenderer, parentStyle: WebKitStyle, parentIsInline: boolean): boolean {
+  if (text.length === 0) return false
+  if (!containsOnlyASCIIWhitespace(text)) return true
+  if (previous === 'text') return true
+  // pre, pre-wrap and pre-line always make renderers (:557-558).
+  if (preservesNewline(parentStyle)) return true
+  // <span><br/> <br/></span> (:560-562).
+  if (previous === 'br') return false
+  // A RenderInline parent keeps the node unless the previous renderer is a block (:564-570).
+  if (parentIsInline) return true
+  return previous !== 'none'
 }
 
 // Supplementary blocks isEmojiGroupCandidate accepts (WTF/wtf/text/CharacterProperties.h:34-55): Miscellaneous Symbols and
@@ -180,10 +183,18 @@ const SYSTEM_DESIGN_FAMILIES = ['system-ui', '-apple-system', 'ui-serif', 'ui-sa
 // font-family list, since a quoted keyword names a family of that name.
 const GENERIC_FAMILY_KEYWORDS = ['serif', 'sans-serif', 'cursive', 'fantasy', 'monospace', 'system-ui', 'emoji', 'math', 'fangsong', 'ui-serif', 'ui-sans-serif', 'ui-monospace', 'ui-rounded', '-apple-system', '-webkit-standard', '-webkit-body', '-webkit-pictograph']
 
-function familyNames(family: string): string[] {
-  const out: string[] = []
+// A font-family list as names, each marked quoted or not: a quoted keyword names a family of that name, not the generic family
+// (CSS Fonts 4 §4.2, research/CHARTER-CRITIC.md item 9).
+type FamilyName = { name: string; quoted: boolean }
+
+function familyNames(family: string): FamilyName[] {
+  const out: FamilyName[] = []
   const parts = family.split(',')
-  for (let i = 0; i < parts.length; i++) out.push(parts[i]!.trim().replace(/^["']|["']$/g, '').toLowerCase())
+  for (let i = 0; i < parts.length; i++) {
+    const part = parts[i]!.trim()
+    const quoted = /^["'].*["']$/.test(part)
+    out.push({ name: part.replace(/^["']|["']$/g, '').toLowerCase(), quoted })
+  }
   return out
 }
 
@@ -204,30 +215,32 @@ function hasStrongDirectionality(text: string, is8Bit: boolean, bidi: BidiData):
   return false
 }
 
-function makeBox(p: WebKitPrepared, m: Measurer, run: number, sourceStart: number, bidi: BidiData): WebKitBox {
-  const r = p.paragraph.runs[run]!
-  const facts = r.font.facts
+// The facts of one text leaf's box: its computed style, font, spacing and language as the tree gives them.
+type LeafInput = { run: number; parent: number; text: string; textStyle: TextStyle; style: WebKitStyle; lang: string }
+
+function makeBox(p: WebKitPrepared, m: Measurer, leaf: LeafInput, sourceStart: number, bidi: BidiData): WebKitBox {
+  const font = leaf.textStyle.font
+  const facts = font.facts
   const zoom = f32(p.zoom)
-  const size = f32(f32(r.font.size) * zoom)
-  const letterSpacing = f32(f32(r.letterSpacing) * zoom)
-  const wordSpacing = f32(f32(r.wordSpacing) * zoom)
-  const text = r.text
+  const size = f32(f32(font.size) * zoom)
+  const letterSpacing = f32(f32(leaf.textStyle.letterSpacing) * zoom)
+  const wordSpacing = f32(f32(leaf.textStyle.wordSpacing) * zoom)
+  const text = leaf.text
   let is8Bit = true
   for (let i = 0; i < text.length; i++) if (text.charCodeAt(i) > 0xff) { is8Bit = false; break }
   const simpleFontCodePath = !isComplexCodePath(text)
   let simplifiedMeasuring = simpleFontCodePath && letterSpacing === 0 && wordSpacing === 0
-  const collapsed = p.style.collapse === 'collapse' || p.style.collapse === 'preserve-breaks'
+  const collapsed = leaf.style.collapse === 'collapse' || leaf.style.collapse === 'preserve-breaks'
   for (let i = 0; simplifiedMeasuring && i < text.length; i++) {
     const cp = text.codePointAt(i)!
     if (cp > 0xffff) i++
     simplifiedMeasuring = characterCanUseSimplifiedTextMeasuring(cp, collapsed)
   }
   // The index-0 family (FontCascadeFonts.cpp:200-218): the given fact, else the first family listed.
-  const primaryFamily = facts.primaryFamily === null ? familyNames(r.font.family)[0]! : facts.primaryFamily.toLowerCase()
-  const primaryFamilyCss = facts.primaryFamily === null ? r.font.family.split(',')[0]!.trim() : cssFamilyName(facts.primaryFamily)
+  const primaryFamily = facts.primaryFamily === null ? familyNames(font.family)[0]!.name : facts.primaryFamily.toLowerCase()
+  const primaryFamilyCss = facts.primaryFamily === null ? font.family.split(',')[0]!.trim() : cssFamilyName(facts.primaryFamily)
   const fixedPitch = facts.monospace === true
-  const font = canvasFont(r.font, size)
-  const settings = { font, lang: '', letterSpacing: `${letterSpacing}px`, wordSpacing: '0px', fontKerning: 'auto' as const, textRendering: 'auto' as const, direction: 'ltr' as const, partition: '' }
+  const settings = { font: canvasFont(font, size), lang: '', letterSpacing: `${letterSpacing}px`, wordSpacing: '0px', fontKerning: 'auto' as const, textRendering: 'auto' as const, direction: 'ltr' as const, partition: '' }
   const context = measureContext(m, settings)
   const plainContext = measureContext(m, { ...settings, letterSpacing: '0px' })
   // Simplified measuring also needs a glyph from the primary font for every character
@@ -237,25 +250,32 @@ function makeBox(p: WebKitPrepared, m: Measurer, run: number, sourceStart: numbe
   // the paragraph's glyph; otherwise LastResort's box, 17.6015625px at 16px in webkit-host (rebuild/probes/webkit-followups.ts
   // B5: Courier maps Ω, Menlo doesn't map U+3000). Only fixed-pitch boxes read the result, in the width and breakWord
   // shortcuts; the 17.6015625px advance matching a fallback glyph's is the recipe's loss.
+  // The recipe can't vouch for a code point that measures as wide as LastResort's own box: a fallback glyph of that advance
+  // looks covered (research/CHARTER-CRITIC.md item 1). Such a box reports font-fallback.
+  let coverageUnverified = false
   if (simplifiedMeasuring && fixedPitch) {
-    const coverageContext = measureContext(m, { ...settings, font: canvasFont({ ...r.font, family: `${primaryFamilyCss}, LastResort` }, size), letterSpacing: '0px' })
+    const coverageContext = measureContext(m, { ...settings, font: canvasFont({ ...font, family: `${primaryFamilyCss}, LastResort` }, size), letterSpacing: '0px' })
+    const lastResortContext = measureContext(m, { ...settings, font: canvasFont({ ...font, family: 'LastResort' }, size), letterSpacing: '0px' })
     for (let i = 0; simplifiedMeasuring && i < text.length; i++) {
       const cp = text.codePointAt(i)!
       if (cp > 0xffff) i++
       if (cp < 0x20) continue
       const s = String.fromCodePoint(cp)
-      simplifiedMeasuring = measureText(m, coverageContext, s) === measureText(m, plainContext, s)
+      const covered = measureText(m, coverageContext, s)
+      simplifiedMeasuring = covered === measureText(m, plainContext, s)
+      if (simplifiedMeasuring && covered === measureText(m, lastResortContext, s)) coverageUnverified = true
     }
   }
   return {
-    run, sourceStart, text, is8Bit, simpleFontCodePath, simplifiedMeasuring, fixedPitch,
+    run: leaf.run, parent: leaf.parent, style: leaf.style, sourceStart, text, is8Bit, simpleFontCodePath, simplifiedMeasuring, fixedPitch,
     fixedPitchFastMeasuring: fixedPitch && primaryFamily !== 'courier new',
     monospaceUnknown: facts.monospace === null,
     primaryFamily,
     hyphen: facts.mapsHyphen === false ? '-' : '‐',
     hyphenUnknown: facts.mapsHyphen === null,
-    locale: computedLocale(r.lang ?? p.paragraph.lang, p.env.preferredLanguages),
-    context, plainContext, letterSpacing, wordSpacing, hasStrongDirectionality: hasStrongDirectionality(text, is8Bit, bidi),
+    locale: computedLocale(leaf.lang, p.env.preferredLanguages),
+    context, plainContext, letterSpacing, wordSpacing, cssLetterSpacing: leaf.textStyle.letterSpacing,
+    hasStrongDirectionality: hasStrongDirectionality(text, is8Bit, bidi), coverageUnverified,
   }
 }
 
@@ -276,14 +296,16 @@ function whitespaceRun(text: string, start: number, preserveNewline: boolean, pr
   return q === start ? null : { length: q - start, isWordSeparator: hasWordSeparator }
 }
 
-// InlineItemsBuilder::handleTextContent (IIB:924-1051) with hyphens: manual and -webkit-nbsp-mode: normal. `defer` is
-// shouldDeferTextMeasurement's content part: the paragraph needs visual reordering (IIB:1150-1154).
+// InlineItemsBuilder::handleTextContent (IIB:924-1051) with hyphens: manual and -webkit-nbsp-mode: normal, over the text
+// box's own style. `defer` is shouldDeferTextMeasurement's content part: the paragraph needs visual reordering
+// (IIB:1150-1154).
 function handleTextContent(p: WebKitPrepared, m: Measurer, boxIndex: number, defer: boolean): void {
   const box = p.boxes[boxIndex]!
+  const style = box.style
   const text = box.text
-  const preserveSpaces = preservesSpacesAndTabs(p.style)
-  const preserveNewline = preservesNewline(p.style)
-  const factory = makeFactory(text, box.is8Bit, box.locale, p.style.lineBreakMode, p.icuDefaultLocale, p.env.dictionaryBreaks)
+  const preserveSpaces = preservesSpacesAndTabs(style)
+  const preserveNewline = preservesNewline(style)
+  const factory = makeFactory(text, box.is8Bit, box.locale, style.lineBreakMode, p.icuDefaultLocale, p.env.dictionaryBreaks)
   // canCacheWidthOnInlineTextItem (IIB:777-787): preserved white space in a box with a TAB depends on position.
   const deferWhitespace = defer || (preserveSpaces && text.includes('\t'))
   const spaceWidth = deferWhitespace ? null : Math.max(0, singleSpaceWidth(m, box))
@@ -298,7 +320,7 @@ function handleTextContent(p: WebKitPrepared, m: Measurer, boxIndex: number, def
     }
     const ws = whitespaceRun(text, position, preserveNewline, preserveSpaces, preserveSpaces && box.wordSpacing !== 0)
     if (ws !== null) {
-      if (p.style.collapse === 'break-spaces') {
+      if (style.collapse === 'break-spaces') {
         for (let k = 0; k < ws.length; k++) {
           p.items.push({ kind: 'text', box: boxIndex, start: position + k, end: position + k + 1, level: DEFAULT_BIDI_LEVEL, isWhitespace: true, isWordSeparator: ws.isWordSeparator, hasTrailingSoftHyphen: false, width: spaceWidth })
         }
@@ -309,7 +331,7 @@ function handleTextContent(p: WebKitPrepared, m: Measurer, boxIndex: number, def
       position += ws.length
       continue
     }
-    const end = position + moveToNextBreakablePosition(position, factory, p.style)
+    const end = position + moveToNextBreakablePosition(position, factory, style)
     p.items.push({
       kind: 'text', box: boxIndex, start: position, end, level: DEFAULT_BIDI_LEVEL, isWhitespace: false, isWordSeparator: false,
       hasTrailingSoftHyphen: text.charCodeAt(end - 1) === 0xad, width: defer ? null : boxWidth(p, m, box, position, end, 0, true),
@@ -330,10 +352,11 @@ function bidiBoxContent(box: WebKitBox): string {
 }
 
 // InlineItemsBuilder::breakAndComputeBidiLevels (IIB:550-775) for a block with unicode-bidi: normal and spans without
-// unicode-bidi: the paragraph text, ubidi_setPara, the item splits at logical run ends, and the opaque levels.
+// unicode-bidi: the paragraph text, ubidi_setPara, the item splits at logical run ends, and the opaque levels. Inline box
+// starts and ends and word break opportunities have no position in the paragraph (:599-618); an atomic inline is U+FFFC
+// (:596-598); a hard line break starts a paragraph with LF (handleBidiParagraphStart, :535-548, :568).
 function computeBidiLevels(p: WebKitPrepared): void {
   const items = p.items
-  const preserveNewline = preservesNewline(p.style)
   let paragraph = ''
   const offsets: (number | null)[] = []
   let lastBox = -1
@@ -347,7 +370,8 @@ function computeBidiLevels(p: WebKitPrepared): void {
   for (let i = 0; i < items.length; i++) {
     const item = items[i]!
     switch (item.kind) {
-      case 'soft-line-break':
+      case 'soft-line-break': {
+        const preserveNewline = preservesNewline(p.boxes[item.box]!.style)
         if (p.boxes[item.box]!.text.charCodeAt(item.start) !== 0x2028) {
           // handleBidiParagraphStart (:535-548): no controls to unwind, then LF.
           offsets.push(paragraph.length)
@@ -358,11 +382,12 @@ function computeBidiLevels(p: WebKitPrepared): void {
         } else {
           // :593 appends the U+2028 itself.
           offsets.push(paragraph.length)
-          paragraph += '\u2028'
+          paragraph += ' '
         }
         break
+      }
       case 'text':
-        if (!preserveNewline) {
+        if (!preservesNewline(p.boxes[item.box]!.style)) {
           appendBoxContentOnce(item.box)
           offsets.push(boxOffset + item.start)
         } else {
@@ -370,8 +395,19 @@ function computeBidiLevels(p: WebKitPrepared): void {
           paragraph += p.boxes[item.box]!.text.slice(item.start, item.end)
         }
         break
+      case 'hard-line-break':
+        offsets.push(paragraph.length)
+        paragraph += '\n'
+        lastBox = -1
+        break
+      case 'atomic':
+        offsets.push(paragraph.length)
+        paragraph += '￼'
+        lastBox = -1
+        break
       case 'inline-box-start':
       case 'inline-box-end':
+      case 'word-break-opportunity':
         offsets.push(null)
         break
     }
@@ -423,10 +459,15 @@ function computeBidiLevels(p: WebKitPrepared): void {
         hasContent.push(false)
         item.level = OPAQUE_BIDI_LEVEL
         break
+      case 'word-break-opportunity':
+        item.level = OPAQUE_BIDI_LEVEL
+        break
       case 'text':
-        if (!item.isWhitespace || preservesSpacesAndTabs(p.style)) hasContent.fill(true)
+        if (!item.isWhitespace || preservesSpacesAndTabs(p.boxes[item.box]!.style)) hasContent.fill(true)
         break
       case 'soft-line-break':
+      case 'hard-line-break':
+      case 'atomic':
         hasContent.fill(true)
         break
     }
@@ -442,7 +483,7 @@ function computeItemWidths(p: WebKitPrepared, m: Measurer): void {
     const box = p.boxes[item.box]!
     const length = item.end - item.start
     if (length === 0 || (length === 1 && box.text.charCodeAt(item.start) === 0x200b)) continue
-    if (item.isWhitespace && preservesSpacesAndTabs(p.style) && box.text.includes('\t')) continue
+    if (item.isWhitespace && preservesSpacesAndTabs(box.style) && box.text.includes('\t')) continue
     item.width = itemWidth(p, m, item, item.start, item.end, 0)
   }
 }
@@ -463,7 +504,7 @@ function fixedPitchDecidesWidths(p: WebKitPrepared, m: Measurer, boxIndex: numbe
     const item = p.items[i]!
     if (item.kind !== 'text' || item.box !== boxIndex || item.width === null) continue
     // Collapsible white space and a lone preserved space are one space wide whatever the pitch (TextUtil.cpp:111-122).
-    if (item.isWhitespace && (!preservesSpacesAndTabs(p.style) || item.end - item.start === 1)) continue
+    if (item.isWhitespace && (!preservesSpacesAndTabs(box.style) || item.end - item.start === 1)) continue
     const trailingSpace = !item.isWhitespace
     if (boxWidth(p, m, box, item.start, item.end, 0, trailingSpace) !== fixedPitchShortcutWidth(p, m, box, item.start, item.end, trailingSpace)) return true
   }
@@ -472,7 +513,7 @@ function fixedPitchDecidesWidths(p: WebKitPrepared, m: Measurer, boxIndex: numbe
 
 // The paragraph's gaps: conditions of its content, fonts and environment whatever the width (DESIGN.md §2.8, §5). Gaps
 // that depend on where lines break are reported by lines.ts.
-function collectGaps(p: WebKitPrepared, m: Measurer): void {
+function collectGaps(p: WebKitPrepared, m: Measurer, leaves: LeafInput[]): void {
   const gaps = p.gaps
   const env = p.env
   if (env.pageZoom === null) {
@@ -481,8 +522,9 @@ function collectGaps(p: WebKitPrepared, m: Measurer): void {
   let complexRtlBoxes = 0
   for (let b = 0; b < p.boxes.length; b++) {
     const box = p.boxes[b]!
-    const run = p.paragraph.runs[box.run]!
-    const lang = run.lang ?? p.paragraph.lang
+    const style = box.style
+    const leaf = leaves[box.run]!
+    const lang = leaf.lang
     const text = box.text
     let carriageReturn = false
     let otherControl = false
@@ -492,7 +534,7 @@ function collectGaps(p: WebKitPrepared, m: Measurer): void {
     let dictionary = false
     let tab = false
     let longWhitespace = false
-    const { rules } = lineRules(box.locale, p.style.lineBreakMode, p.icuDefaultLocale)
+    const { rules } = lineRules(box.locale, style.lineBreakMode, p.icuDefaultLocale)
     for (let i = 0; i < text.length; i++) {
       const cp = text.codePointAt(i)!
       if (cp > 0xffff) i++
@@ -513,24 +555,33 @@ function collectGaps(p: WebKitPrepared, m: Measurer): void {
       const item = p.items[i]!
       if ((item.kind !== 'text' && item.kind !== 'soft-line-break') || item.box !== b) continue
       boxItems++
-      if (item.kind === 'text' && !item.isWhitespace && item.end - item.start > 1 && !canBreakBefore(text.charCodeAt(item.start + 1), p.style.lineBreak)) lineStartProhibition = true
+      if (item.kind === 'text' && !item.isWhitespace && item.end - item.start > 1 && !canBreakBefore(text.charCodeAt(item.start + 1), style.lineBreak)) lineStartProhibition = true
     }
     // specs/webkit-text.md §5.3: on the simple font code path the DOM keeps CR's glyph advance, measured as U+0000 (0 in
     // Arial); VT, FF and other Cc take .notdef, measured as U+0001, which another font can supply.
     if (carriageReturn && box.simpleFontCodePath) gaps.push({ gap: 'control-character-width', run: box.run, detail: "CR keeps its glyph advance on the simple path; measured as U+0000, 0 in Arial" })
     if (otherControl) gaps.push({ gap: 'control-character-width', run: box.run, detail: 'VT, FF and other Cc take .notdef, measured as U+0001; the .notdef can come from another font' })
     if (box.letterSpacing !== 0) gaps.push({ gap: 'letter-spacing-ligatures', run: box.run, detail: 'the DOM turns off liga, clig, dlig and hlig under letter-spacing; OffscreenCanvas keeps them' })
-    const families = familyNames(run.font.family)
+    const families = familyNames(leaf.textStyle.font.family)
     // OffscreenCanvas has a null locale (specs/webkit-canvas.md §1.3). The DOM passes the box's locale where fonts are
     // chosen: -webkit-standard per script (FontGenericFamilies.cpp:50-66; SettingsBaseCocoa.mm:44-50 sets it for Han, kana
     // and Hangul, the other generic families have only a Common entry on macOS), system-ui and the ui-* designs
     // (FontCacheCoreText.cpp:585-598, SystemFontDatabaseCoreText.cpp:236), and system fallback (FontCacheCoreText.cpp:822),
-    // whose cascades differ by language for Han, kana and Hangul (DESIGN.md §1.3).
-    const standardPerScript = families.includes('-webkit-standard') && ['HAN', 'SIMPLIFIED_HAN', 'TRADITIONAL_HAN', 'KATAKANA_OR_HIRAGANA', 'HANGUL'].includes(localeScript(box.locale))
+    // whose cascades differ by language for Han, kana and Hangul (DESIGN.md §1.3). Only unquoted names are the keywords.
+    let standardFamily = false
     let systemDesign = false
-    for (let i = 0; i < families.length; i++) if (SYSTEM_DESIGN_FAMILIES.includes(families[i]!)) systemDesign = true
+    for (let i = 0; i < families.length; i++) {
+      const family = families[i]!
+      if (family.quoted) continue
+      if (family.name === '-webkit-standard') standardFamily = true
+      if (SYSTEM_DESIGN_FAMILIES.includes(family.name)) systemDesign = true
+    }
+    const standardPerScript = standardFamily && ['HAN', 'SIMPLIFIED_HAN', 'TRADITIONAL_HAN', 'KATAKANA_OR_HIRAGANA', 'HANGUL'].includes(localeScript(box.locale))
     if (box.locale !== '' && (standardPerScript || systemDesign || languageFallback)) {
       gaps.push({ gap: 'canvas-language', run: box.run, detail: `locale ${box.locale} chooses ${languageFallback ? 'the fallback font for Han, kana or Hangul' : 'the system or standard font'}; OffscreenCanvas has no locale` })
+    }
+    if (box.coverageUnverified && box.fixedPitchFastMeasuring) {
+      gaps.push({ gap: 'font-fallback', run: box.run, detail: "a code point measures as wide as LastResort's box, so the Canvas coverage test can't tell whether the primary font maps it, which decides the fixed-pitch width shortcut" })
     }
     if (box.monospaceUnknown && box.simplifiedMeasuring && fixedPitchDecidesWidths(p, m, b)) {
       gaps.push({ gap: 'fixed-pitch-path', run: box.run, detail: `whether ${box.primaryFamily} has the monospace trait isn't given, and the width shortcut of a fixed-pitch font would give other item widths (test T1)` })
@@ -543,7 +594,7 @@ function collectGaps(p: WebKitPrepared, m: Measurer): void {
     }
     // FontCascade::tabWidth counts stops from the primary font's spaceWidth() (FontCascadeInlines.h:76-94), taken here from
     // Canvas W(' '), and letter spacing after a TAB follows WidthIterator; neither is probed (webkit audit E3).
-    if (tab && tabsAllowed(p.style)) gaps.push({ gap: 'tab-stops', run: box.run, detail: "tab stops count from Canvas W(' ') for the primary font's spaceWidth()" })
+    if (tab && tabsAllowed(style)) gaps.push({ gap: 'tab-stops', run: box.run, detail: "tab stops count from Canvas W(' ') for the primary font's spaceWidth()" })
     if (dictionary && env.dictionaryBreaks.kind === 'unavailable') gaps.push({ gap: 'dictionary-breaks-unavailable', run: box.run, detail: 'Thai, Lao, Khmer or Myanmar text gets no dictionary boundaries' })
     if (dictionary && env.dictionaryBreaks.kind === 'intl-segmenter-word' && dictionaryRangeStartsWithMark(rules, box.text)) {
       gaps.push({ gap: 'dictionary-breaks-stand-in', run: box.run, detail: 'a dictionary range starts with a combining mark, where the line engine resynchronizes from its dictionary and the word segmenter breaks after the mark' })
@@ -557,73 +608,182 @@ function collectGaps(p: WebKitPrepared, m: Measurer): void {
     // Storage decides keep-all punctuation breaks (BreakablePositions.h:292-299) and what an emergency break keeps at a
     // line start: one code unit in 8-bit text, the first character and every following one that can't start a line in
     // 16-bit text (InlineContentBreaker.cpp:139-158). The port treats Latin-1 text as 8-bit (specs/webkit-gaps.md §7.5).
-    if (box.is8Bit && ((p.style.wordBreak === 'keep-all' && punctuation) || (p.style.wrap && lineStartProhibition))) {
+    if (box.is8Bit && ((style.wordBreak === 'keep-all' && punctuation) || (style.wrap && lineStartProhibition))) {
       gaps.push({ gap: 'string-storage', run: box.run, detail: 'keep-all punctuation breaks and emergency line-start breaks differ for 16-bit storage; Latin-1 text assumed 8-bit' })
     }
-    // TextBreakingPositionCache (InlineItemsBuilder.cpp:1082-1148, 858-900): a box with at least 3 items and 5 units stores
-    // its item ends under (content, TextBreakingPositionContext, origin), and a later box with the same key builds its
-    // items from them. preserve and break-spaces share a context (TextBreakingPositionContext.h:48-58) and word spacing
-    // isn't in it, while both change where preserved white space splits into items (IIB:54-73, 1001-1016).
-    if (boxItems >= 3 && text.length >= 5 && preservesSpacesAndTabs(p.style) && longWhitespace) {
-      gaps.push({ gap: 'page-history', run: box.run, detail: 'a box of the same text laid out earlier under break-spaces or pre-wrap, or with other word spacing, leaves its white-space items in the break position cache' })
+    // TextBreakingPositionCache (InlineItemsBuilder.cpp:858-900, 936-939, 1082-1148; TextBreakingPositionCache.h:41-42): after
+    // layout a box with at least 3 items and 5 units stores its items' ends, taken from the item list after the bidi splits,
+    // under (content, TextBreakingPositionContext, origin), and a later box with the same key builds its items from them.
+    // The context holds white-space collapse (preserve and break-spaces share a value), overflow-wrap, line-break,
+    // word-break, nbsp mode and locale (TextBreakingPositionContext.h:48-80), not direction, embedding levels or word spacing.
+    // So a box whose item ends depend on those, bidi splits or preserved white space split at word separators or per space,
+    // can take another box's ends: extra ends invent wrap opportunities and split joined text into separately measured items.
+    const splitByBidi = box.hasStrongDirectionality || style.rtl
+    const whitespaceSplitOutsideKey = preservesSpacesAndTabs(style) && longWhitespace
+    if (boxItems >= 3 && text.length >= 5 && (splitByBidi || whitespaceSplitOutsideKey)) {
+      gaps.push({ gap: 'page-history', run: box.run, detail: splitByBidi
+        ? 'the break position cache keys a box by its text and wrapping styles, not its direction or bidi levels, so a box of the same text laid out earlier in another direction leaves other item ends'
+        : 'a box of the same text laid out earlier under break-spaces or pre-wrap, or with other word spacing, leaves its white-space items in the break position cache' })
     }
     if (!box.simpleFontCodePath && box.hasStrongDirectionality) complexRtlBoxes++
   }
-  if (p.builder === 'line-builder' && complexRtlBoxes > 1) {
-    gaps.push({ gap: 'rtl-shaping-across-inline-boxes', run: null, detail: 'LineBuilder shapes complex RTL text joined across inline boxes as one run' })
-  }
+  void complexRtlBoxes
+}
+
+// TextOnlySimpleLineBuilder::isEligibleForSimplifiedInlineLayoutByStyle (TextOnlySimpleLineBuilder.cpp:499-528) over the
+// properties the model has; the others sit at eligible initial values (word-break auto-phrase, box-decoration-break clone,
+// hanging-punctuation, hyphenate-limit-lines, text-wrap-style, line-align, line-snap, ::first-line).
+function isEligibleForSimplifiedInlineLayoutByStyle(s: WebKitStyle): boolean {
+  return s.wordSpacing === 0 && !s.rtl && s.textIndent === 0 && s.textAlign !== 'justify'
 }
 
 export function prepareWebKit(paragraph: Paragraph, env: WebKitEnvironment, m: Measurer): WebKitPrepared {
-  const style = webkitStyle(paragraph)
+  const zoom = env.pageZoom ?? 1
+  const style = webkitStyle(paragraph, paragraph, zoom)
+  const index = indexContent(paragraph)
   const bidi = bidiDataFor('webkit')
   const p: WebKitPrepared = {
-    paragraph, env, zoom: env.pageZoom ?? 1, icuDefaultLocale: env.icuDefaultLocale ?? ICU_DEFAULT_LOCALE_WITHOUT_ENVIRONMENT, style,
-    builder: 'line-builder', boxes: [], runStarts: [], items: [], gaps: [],
+    paragraph, env, zoom, icuDefaultLocale: env.icuDefaultLocale ?? ICU_DEFAULT_LOCALE_WITHOUT_ENVIRONMENT, style, elements: [],
+    builder: 'line-builder', boxes: [], runStarts: [], runTexts: [], items: [], gaps: [],
+  }
+  const styleOf = (parent: number): WebKitStyle => {
+    if (parent < 0) return style
+    const e = p.elements[parent]!
+    if (e.kind !== 'span') throw new Error(`element ${parent} holds content but is ${e.kind}`)
+    return e.style
+  }
+  for (let e = 0; e < index.elements.length; e++) {
+    const indexed = index.elements[e]!
+    const node = indexed.node
+    switch (node.kind) {
+      case 'span':
+        p.elements.push({ kind: 'span', parent: indexed.parent, style: webkitStyle(node, paragraph, zoom), edges: boxEdges(node.inlineStart, node.inlineEnd, zoom, env.devicePixelRatio), letterSpacing: f32(f32(node.letterSpacing) * f32(zoom)) })
+        break
+      case 'atomic': {
+        // BoxGeometry of an inline-block with box-sizing: border-box (LayoutIntegrationBoxGeometryUpdater.cpp:670-706):
+        // LayoutUnit margins and border box; the margin box is their LayoutUnit sum.
+        const marginStart = layoutUnit(f32(f32(node.marginInlineStart) * f32(zoom)))
+        const marginEnd = layoutUnit(f32(f32(node.marginInlineEnd) * f32(zoom)))
+        const borderBoxWidth = layoutUnit(f32(f32(node.width) * f32(zoom)))
+        p.elements.push({ kind: 'atomic', parent: indexed.parent, node, marginStart, marginEnd, borderBoxWidth, marginBoxWidth: f32(marginStart + borderBoxWidth + marginEnd) })
+        break
+      }
+      case 'br':
+        p.elements.push({ kind: 'br', parent: indexed.parent })
+        break
+      case 'wbr':
+        p.elements.push({ kind: 'wbr', parent: indexed.parent })
+        break
+    }
+  }
+  // Leaves in document order, with the renderer decision of each rendering parent's children.
+  const leaves: LeafInput[] = []
+  const rendered: boolean[] = []
+  const frames: { parent: number; previous: PreviousRenderer }[] = [{ parent: -1, previous: 'none' }]
+  for (let ev = 0; ev < index.events.length; ev++) {
+    const event = index.events[ev]!
+    const frame = frames[frames.length - 1]!
+    switch (event.kind) {
+      case 'open':
+        frame.previous = 'inline'
+        frames.push({ parent: event.element, previous: 'none' })
+        break
+      case 'close':
+        frames.pop()
+        break
+      case 'atomic':
+      case 'wbr':
+        frame.previous = 'inline'
+        break
+      case 'br':
+        frame.previous = 'br'
+        break
+      case 'text': {
+        const leaf = index.leaves[event.run]!
+        const parentStyle = styleOf(leaf.parent)
+        const textStyle = styleUnder(paragraph, index, leaf.parent)
+        leaves.push({ run: event.run, parent: leaf.parent, text: leaf.text, textStyle, style: parentStyle, lang: langUnder(paragraph, index, leaf.parent) })
+        const needed = textRendererIsNeeded(leaf.text, frame.previous, parentStyle, leaf.parent >= 0)
+        rendered.push(needed)
+        if (needed) frame.previous = 'text'
+        break
+      }
+    }
   }
   // m_contentRequiresVisualReordering (IIB:231-240): a 16-bit box with strong RTL content, or an RTL inline box.
   let reordering = false
-  for (let r = 0; r < paragraph.runs.length; r++) reordering ||= paragraph.runs[r]!.node === 'span' && style.rtl
-  let previous: 'none' | 'text' | 'inline' = 'none'
-  let offset = 0
   let inlineBoxes = 0
-  const boxRuns: number[] = []
-  for (let r = 0; r < paragraph.runs.length; r++) {
-    const run = paragraph.runs[r]!
-    p.runStarts.push(offset)
-    if (textRendererIsNeeded(run, previous, style)) {
-      const box = makeBox(p, m, r, offset, bidi)
-      reordering ||= box.hasStrongDirectionality
-      p.boxes.push(box)
-      boxRuns.push(r)
-      if (run.node === 'text') previous = 'text'
-    }
-    if (run.node === 'span') previous = 'inline'
-    offset += run.text.length
-  }
-  p.runStarts.push(offset)
-  let boxIndex = 0
-  for (let r = 0; r < paragraph.runs.length; r++) {
-    const run = paragraph.runs[r]!
-    if (run.node === 'span') {
-      p.items.push({ kind: 'inline-box-start', run: r, level: DEFAULT_BIDI_LEVEL })
+  let textAndLineBreakOnly = true
+  for (let e = 0; e < p.elements.length; e++) {
+    const element = p.elements[e]!
+    if (element.kind === 'span') {
       inlineBoxes++
+      reordering ||= element.style.rtl
     }
-    if (boxIndex < boxRuns.length && boxRuns[boxIndex] === r) handleTextContent(p, m, boxIndex++, reordering)
-    if (run.node === 'span') p.items.push({ kind: 'inline-box-end', run: r, level: DEFAULT_BIDI_LEVEL })
+    // isTextOrLineBreak and isInlineBoxWithInlineContent (IIB:89-92, :242-245): atomic inlines and <wbr> aren't.
+    if (element.kind === 'atomic' || element.kind === 'wbr') textAndLineBreakOnly = false
+  }
+  const boxOfRun: number[] = []
+  for (let r = 0; r < leaves.length; r++) {
+    p.runStarts.push(index.leaves[r]!.start)
+    p.runTexts.push(leaves[r]!.text)
+    boxOfRun.push(-1)
+    if (!rendered[r]) continue
+    const box = makeBox(p, m, leaves[r]!, index.leaves[r]!.start, bidi)
+    reordering ||= box.hasStrongDirectionality
+    boxOfRun[r] = p.boxes.length
+    p.boxes.push(box)
+  }
+  p.runStarts.push(index.text.length)
+  // collectInlineItems: the tree walk (IIB:320-370, 1053-1078).
+  for (let ev = 0; ev < index.events.length; ev++) {
+    const event = index.events[ev]!
+    switch (event.kind) {
+      case 'open': p.items.push({ kind: 'inline-box-start', element: event.element, level: DEFAULT_BIDI_LEVEL }); break
+      case 'close': p.items.push({ kind: 'inline-box-end', element: event.element, level: DEFAULT_BIDI_LEVEL }); break
+      case 'atomic': p.items.push({ kind: 'atomic', element: event.element, level: DEFAULT_BIDI_LEVEL }); break
+      case 'br': p.items.push({ kind: 'hard-line-break', element: event.element, level: DEFAULT_BIDI_LEVEL }); break
+      case 'wbr': p.items.push({ kind: 'word-break-opportunity', element: event.element, level: DEFAULT_BIDI_LEVEL }); break
+      case 'text':
+        if (boxOfRun[event.run]! >= 0) handleTextContent(p, m, boxOfRun[event.run]!, reordering)
+        break
+    }
   }
   if (style.rtl || reordering) computeBidiLevels(p)
   if (reordering) computeItemWidths(p, m)
-  // isEligibleForSimplifiedInlineLayoutByStyle (TextOnlySimpleLineBuilder.cpp:499-528): word-spacing 0 and LTR; the
-  // model's other properties sit at eligible initial values.
-  const styleEligible = f32(paragraph.wordSpacing) === 0 && !style.rtl
   const items = p.items
-  if (items.length > 0 && inlineBoxes === 0 && !reordering && styleEligible) {
+  if (items.length > 0 && textAndLineBreakOnly && inlineBoxes === 0 && !reordering && isEligibleForSimplifiedInlineLayoutByStyle(style)) {
     p.builder = 'text-only-simple'
-  } else if (inlineBoxes === 1 && items.length > 2 && items[0]!.kind === 'inline-box-start' && items[items.length - 1]!.kind === 'inline-box-end' && !reordering && styleEligible && f32(paragraph.runs[(items[0] as { run: number }).run]!.wordSpacing) === 0) {
-    // RangeBasedLineBuilder::isEligibleForRangeInlineLayout (RangeBasedLineBuilder.cpp:131-184): one span around every item.
+  } else if (isEligibleForRangeInlineLayout(p, inlineBoxes, textAndLineBreakOnly, reordering)) {
     p.builder = 'range-based'
   }
-  collectGaps(p, m)
+  collectGaps(p, m, leaves)
   return p
+}
+
+// RangeBasedLineBuilder::isEligibleForRangeInlineLayout (RangeBasedLineBuilder.cpp:36-39, :131-184) without floats: every
+// item is an inline box start or end, or one span without box edges around content the simple builder takes.
+function isEligibleForRangeInlineLayout(p: WebKitPrepared, inlineBoxes: number, textAndLineBreakOnly: boolean, reordering: boolean): boolean {
+  const items = p.items
+  if (items.length === 0) return false
+  const isEmptyContent = items.length % 2 === 0 && inlineBoxes === items.length / 2
+  const first = items[0]!
+  const last = items[items.length - 1]!
+  const isFullyNestedContent = inlineBoxes === 1 && first.kind === 'inline-box-start' && last.kind === 'inline-box-end' && items.length > 2
+  if (!isEmptyContent && !isFullyNestedContent) return false
+  // hasDecorationOrBreak (:147-160): the leading inline box starts' margin, border and padding.
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i]!
+    if (item.kind !== 'inline-box-start') break
+    const element = p.elements[item.element]!
+    if (element.kind !== 'span') break
+    const e = element.edges
+    if (e.marginStart + e.borderStart + e.paddingStart + e.marginEnd + e.borderEnd + e.paddingEnd !== 0 || e.marginStart < 0 || e.marginEnd < 0) return false
+  }
+  if (isEmptyContent) return true
+  if (!textAndLineBreakOnly || reordering) return false
+  const span = p.elements[(first as { element: number }).element]!
+  if (span.kind !== 'span') return false
+  if (span.style.textAlign !== p.style.textAlign) return false
+  return isEligibleForSimplifiedInlineLayoutByStyle(p.style) && isEligibleForSimplifiedInlineLayoutByStyle(span.style)
 }

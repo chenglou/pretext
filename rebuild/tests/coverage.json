@@ -1,56 +1,64 @@
 {
  "format": "pretext-coverage/1",
- "generatedAt": "2026-09-17T07:38:15.997Z",
+ "generatedAt": "2026-09-17T14:59:51.344Z",
  "inputs": {
   "facts": [
-   "/Users/chenglou/github/pretext-rebuild-charter/rebuild/facts/blink/153.0.8010.48.ndjson",
-   "/Users/chenglou/github/pretext-rebuild-charter/rebuild/facts/webkit/22625.1.29.11.27.ndjson",
-   "/Users/chenglou/github/pretext-rebuild-charter/rebuild/facts/gecko/156.0.ndjson"
+   "/Users/chenglou/github/pretext-rebuild/rebuild/facts/blink/153.0.8010.48.ndjson",
+   "/Users/chenglou/github/pretext-rebuild/rebuild/facts/webkit/22625.1.29.11.27.ndjson",
+   "/Users/chenglou/github/pretext-rebuild/rebuild/facts/gecko/156.0.ndjson"
   ],
   "derived": [
-   "/Users/chenglou/github/pretext-rebuild-charter/.artifacts/charter-20260916/tests/families-20260916/chrome",
-   "/Users/chenglou/github/pretext-rebuild-charter/.artifacts/charter-20260916/tests/families-20260916/webkit-host",
-   "/Users/chenglou/github/pretext-rebuild-charter/.artifacts/charter-20260916/tests/families-20260916/firefox"
+   "/Users/chenglou/github/pretext-rebuild/.artifacts/charter-20260916/tests/families-20260916/chrome",
+   "/Users/chenglou/github/pretext-rebuild/.artifacts/charter-20260916/tests/families-20260916/webkit-host",
+   "/Users/chenglou/github/pretext-rebuild/.artifacts/charter-20260916/tests/families-20260916/firefox",
+   "/Users/chenglou/github/pretext-rebuild/.artifacts/tests/features-20260917/chrome",
+   "/Users/chenglou/github/pretext-rebuild/.artifacts/tests/features-20260917/firefox",
+   "/Users/chenglou/github/pretext-rebuild/.artifacts/tests/features-20260917/webkit-host",
+   "/Users/chenglou/github/pretext-rebuild/.artifacts/tests/features-20260917/chrome-en-US"
   ]
  },
  "counts": {
   "blink": {
-   "current": 157,
+   "current": 175,
    "covered": 122,
    "byTest": 39,
    "byFact": 57,
    "byFamily": 90,
-   "uncovered": 35,
+   "uncovered": 53,
+   "derivedOnly": 18,
    "withProbeButNoHoldingFact": 8,
    "deviations": 2
   },
   "webkit": {
-   "current": 126,
+   "current": 144,
    "covered": 86,
    "byTest": 23,
    "byFact": 47,
    "byFamily": 74,
-   "uncovered": 40,
+   "uncovered": 58,
+   "derivedOnly": 17,
    "withProbeButNoHoldingFact": 10,
    "deviations": 0
   },
   "gecko": {
-   "current": 105,
+   "current": 122,
    "covered": 85,
    "byTest": 51,
    "byFact": 55,
    "byFamily": 60,
-   "uncovered": 20,
+   "uncovered": 37,
+   "derivedOnly": 16,
    "withProbeButNoHoldingFact": 2,
    "deviations": 0
   },
   "shared": {
-   "current": 27,
+   "current": 29,
    "covered": 12,
    "byTest": 6,
    "byFact": 6,
    "byFamily": 0,
-   "uncovered": 15,
+   "uncovered": 17,
+   "derivedOnly": 0,
    "withProbeButNoHoldingFact": 0,
    "deviations": 4
   }
@@ -391,7 +399,62 @@
   "gecko/output/line-without-line-box",
   "gecko/textrun/parsed-family-compare",
   "gecko/gap/font-fallback-figure-space",
-  "gecko/gap/glyph-clusters-letter-spacing"
+  "gecko/gap/glyph-clusters-letter-spacing",
+  "blink/content/atomic-inline-object-replacement",
+  "blink/content/br-forced-break-item",
+  "blink/content/wbr-flow-control-zwsp",
+  "blink/lines/atomic-inline-item",
+  "blink/lines/open-tag-edge-size",
+  "blink/lines/close-tag-edge-size",
+  "blink/lines/line-layout-opportunity",
+  "blink/lines/overflow-moves-to-next-opportunity",
+  "blink/lines/per-item-wrap-style",
+  "blink/lines/text-indent-first-formatted-line",
+  "blink/lines/wrap-span-inside-nowrap-recomputes-break",
+  "blink/output/apply-text-align",
+  "blink/output/inline-box-item",
+  "blink/shapeline/needs-accurate-end-position",
+  "blink/shaping/box-edge-ends-group",
+  "blink/style/box-edge-layout-units",
+  "blink/tabs/float-offset",
+  "webkit/breaks/atomic-soft-wrap-opportunity",
+  "webkit/breaks/nearest-common-ancestor-white-space",
+  "webkit/builder/eligibility-over-style-record",
+  "webkit/content/hard-line-break-item",
+  "webkit/content/word-break-opportunity-item",
+  "webkit/lines/atomic-margin-box-width",
+  "webkit/lines/candidate-beside-float-wraps",
+  "webkit/lines/decorated-box-is-content",
+  "webkit/lines/float-avoiding-rect",
+  "webkit/lines/inline-box-edge-widths",
+  "webkit/lines/line-spanning-inline-boxes",
+  "webkit/lines/text-indent-start-margin",
+  "webkit/output/horizontal-alignment-offset",
+  "webkit/output/justify-expansion",
+  "webkit/style/box-geometry-units",
+  "webkit/style/per-box-style-record",
+  "webkit/tabs/content-edge-offset",
+  "gecko/lines/begin-span-line-data",
+  "gecko/lines/br-frame-always-placed",
+  "gecko/lines/break-after-non-text-frame",
+  "gecko/lines/continuation-reserves-end-edge",
+  "gecko/lines/end-margin-last-continuation",
+  "gecko/lines/float-available-space",
+  "gecko/lines/impacted-by-floats",
+  "gecko/lines/nowrap-span-fits",
+  "gecko/lines/redo-next-band",
+  "gecko/lines/text-indent-root-span",
+  "gecko/lines/trim-recurses-into-spans",
+  "gecko/lines/wbr-frame-opportunity",
+  "gecko/output/text-align-line",
+  "gecko/style/box-edge-app-units",
+  "gecko/tabs/distance-from-content-edge",
+  "gecko/textrun/box-edges-end-run",
+  "lab/observe/blink/quads-for-self",
+  "lab/observe/webkit/inline-absolute-quads",
+  "lab/observe/gecko/all-in-flow-rects",
+  "shared/lab/vertical-centre-grouping",
+  "shared/lab/slot-rows"
  ],
  "withProbeButNoHoldingFact": [
   "blink/measure/space-as-u2028",
@@ -425,7 +488,7 @@
  ],
  "annotations": {
   "annotated": 0,
-  "missing": 415,
+  "missing": 470,
   "unknown": []
  },
  "removed": [
@@ -617,7 +680,8 @@
     "specsWithoutFacts": []
    },
    "declaredFamilies": [
-    "languages"
+    "languages",
+    "process-languages"
    ],
    "observedFamilies": [
     {
@@ -634,6 +698,28 @@
       "painter": 828
      },
      "scored": 848
+    }
+   ],
+   "derivedFamilies": [
+    {
+     "family": "process-languages",
+     "browser": "chrome",
+     "build": "153.0.8010.48",
+     "resolvedTargets": 198,
+     "targets": 270,
+     "cases": 504,
+     "passes": {},
+     "scored": 0
+    },
+    {
+     "family": "process-languages",
+     "browser": "chrome",
+     "build": "153.0.8010.48",
+     "resolvedTargets": 180,
+     "targets": 270,
+     "cases": 468,
+     "passes": {},
+     "scored": 0
     }
    ],
    "coveredBy": [
@@ -661,6 +747,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [
     "fact"
    ],
@@ -684,6 +771,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [],
    "annotated": false
   },
@@ -725,6 +813,7 @@
      "scored": 344
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "fact",
     "family"
@@ -767,6 +856,7 @@
      "scored": 216
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "family"
    ],
@@ -796,6 +886,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [
     "test",
     "fact"
@@ -826,7 +917,8 @@
    "declaredFamilies": [
     "following-space",
     "forced-breaks",
-    "segment-breaks"
+    "segment-breaks",
+    "br-elements"
    ],
    "observedFamilies": [
     {
@@ -873,6 +965,18 @@
       "painter": 608
      },
      "scored": 608
+    }
+   ],
+   "derivedFamilies": [
+    {
+     "family": "br-elements",
+     "browser": "chrome",
+     "build": "153.0.8010.48",
+     "resolvedTargets": 236,
+     "targets": 268,
+     "cases": 856,
+     "passes": {},
+     "scored": 0
     }
    ],
    "coveredBy": [
@@ -925,6 +1029,7 @@
      "scored": 344
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "test",
     "fact",
@@ -976,6 +1081,7 @@
      "scored": 344
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "test",
     "fact",
@@ -1003,6 +1109,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [
     "test"
    ],
@@ -1048,6 +1155,7 @@
      "scored": 608
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "test",
     "fact",
@@ -1075,6 +1183,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [
     "test"
    ],
@@ -1098,6 +1207,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [],
    "annotated": false
   },
@@ -1121,6 +1231,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [
     "test"
    ],
@@ -1166,6 +1277,7 @@
      "scored": 224
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "test",
     "family"
@@ -1192,6 +1304,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [
     "test"
    ],
@@ -1237,6 +1350,7 @@
      "scored": 796
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "test",
     "fact",
@@ -1280,6 +1394,7 @@
      "scored": 216
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "family"
    ],
@@ -1329,6 +1444,7 @@
      "scored": 344
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "test",
     "fact",
@@ -1356,6 +1472,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [
     "test"
    ],
@@ -1382,6 +1499,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [
     "test"
    ],
@@ -1407,6 +1525,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [
     "test"
    ],
@@ -1430,6 +1549,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [],
    "annotated": false
   },
@@ -1453,6 +1573,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [],
    "annotated": false
   },
@@ -1474,6 +1595,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [],
    "annotated": false
   },
@@ -1500,6 +1622,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [
     "fact"
    ],
@@ -1565,6 +1688,7 @@
      "scored": 660
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "fact",
     "family"
@@ -1596,6 +1720,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [
     "fact"
    ],
@@ -1627,6 +1752,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [
     "fact"
    ],
@@ -1652,6 +1778,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [
     "fact"
    ],
@@ -1679,6 +1806,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [
     "fact"
    ],
@@ -1704,6 +1832,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [
     "fact"
    ],
@@ -1731,6 +1860,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [],
    "annotated": false
   },
@@ -1774,6 +1904,7 @@
      "scored": 344
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "family"
    ],
@@ -1819,6 +1950,7 @@
      "scored": 216
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "family"
    ],
@@ -1846,6 +1978,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [],
    "annotated": false
   },
@@ -1888,6 +2021,7 @@
      "scored": 288
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "fact",
     "family"
@@ -1930,6 +2064,7 @@
      "scored": 718
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "family"
    ],
@@ -1976,6 +2111,7 @@
      "scored": 718
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "fact",
     "family"
@@ -2018,6 +2154,7 @@
      "scored": 718
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "family"
    ],
@@ -2045,6 +2182,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [],
    "annotated": false
   },
@@ -2084,6 +2222,7 @@
      "scored": 216
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "family"
    ],
@@ -2125,6 +2264,7 @@
      "scored": 600
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "family"
    ],
@@ -2148,6 +2288,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [],
    "annotated": false
   },
@@ -2171,6 +2312,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [
     "fact"
    ],
@@ -2218,6 +2360,7 @@
      "scored": 360
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "test",
     "fact",
@@ -2248,7 +2391,8 @@
     "specsWithoutFacts": []
    },
    "declaredFamilies": [
-    "fit-bound"
+    "fit-bound",
+    "line-slots"
    ],
    "observedFamilies": [
     {
@@ -2265,6 +2409,18 @@
       "painter": 348
      },
      "scored": 360
+    }
+   ],
+   "derivedFamilies": [
+    {
+     "family": "line-slots",
+     "browser": "chrome",
+     "build": "153.0.8010.48",
+     "resolvedTargets": 844,
+     "targets": 1294,
+     "cases": 1904,
+     "passes": {},
+     "scored": 0
     }
    ],
    "coveredBy": [
@@ -2319,6 +2475,7 @@
      "scored": 360
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "test",
     "fact",
@@ -2348,7 +2505,8 @@
     ]
    },
    "declaredFamilies": [
-    "tabs"
+    "tabs",
+    "text-indent"
    ],
    "observedFamilies": [
     {
@@ -2365,6 +2523,18 @@
       "painter": 658
      },
      "scored": 796
+    }
+   ],
+   "derivedFamilies": [
+    {
+     "family": "text-indent",
+     "browser": "chrome",
+     "build": "153.0.8010.48",
+     "resolvedTargets": 412,
+     "targets": 640,
+     "cases": 992,
+     "passes": {},
+     "scored": 0
     }
    ],
    "coveredBy": [
@@ -2411,6 +2581,7 @@
      "scored": 796
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "fact",
     "family"
@@ -2453,6 +2624,7 @@
      "scored": 796
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "family"
    ],
@@ -2496,6 +2668,7 @@
      "scored": 560
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "fact",
     "family"
@@ -2542,6 +2715,7 @@
      "scored": 954
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "family"
    ],
@@ -2583,6 +2757,7 @@
      "scored": 954
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "family"
    ],
@@ -2624,6 +2799,7 @@
      "scored": 954
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "family"
    ],
@@ -2665,6 +2841,7 @@
      "scored": 954
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "family"
    ],
@@ -2706,6 +2883,7 @@
      "scored": 954
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "family"
    ],
@@ -2749,6 +2927,7 @@
      "scored": 954
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "fact",
     "family"
@@ -2791,6 +2970,7 @@
      "scored": 954
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "family"
    ],
@@ -2832,6 +3012,7 @@
      "scored": 954
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "family"
    ],
@@ -2873,6 +3054,7 @@
      "scored": 954
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "family"
    ],
@@ -2940,6 +3122,7 @@
      "scored": 516
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "test",
     "fact",
@@ -2970,7 +3153,8 @@
     "specsWithoutFacts": []
    },
    "declaredFamilies": [
-    "languages"
+    "languages",
+    "process-languages"
    ],
    "observedFamilies": [
     {
@@ -2987,6 +3171,28 @@
       "painter": 828
      },
      "scored": 848
+    }
+   ],
+   "derivedFamilies": [
+    {
+     "family": "process-languages",
+     "browser": "chrome",
+     "build": "153.0.8010.48",
+     "resolvedTargets": 198,
+     "targets": 270,
+     "cases": 504,
+     "passes": {},
+     "scored": 0
+    },
+    {
+     "family": "process-languages",
+     "browser": "chrome",
+     "build": "153.0.8010.48",
+     "resolvedTargets": 180,
+     "targets": 270,
+     "cases": 468,
+     "passes": {},
+     "scored": 0
     }
    ],
    "coveredBy": [
@@ -3018,7 +3224,8 @@
     "specsWithoutFacts": []
    },
    "declaredFamilies": [
-    "languages"
+    "languages",
+    "process-languages"
    ],
    "observedFamilies": [
     {
@@ -3035,6 +3242,28 @@
       "painter": 828
      },
      "scored": 848
+    }
+   ],
+   "derivedFamilies": [
+    {
+     "family": "process-languages",
+     "browser": "chrome",
+     "build": "153.0.8010.48",
+     "resolvedTargets": 198,
+     "targets": 270,
+     "cases": 504,
+     "passes": {},
+     "scored": 0
+    },
+    {
+     "family": "process-languages",
+     "browser": "chrome",
+     "build": "153.0.8010.48",
+     "resolvedTargets": 180,
+     "targets": 270,
+     "cases": 468,
+     "passes": {},
+     "scored": 0
     }
    ],
    "coveredBy": [
@@ -3099,6 +3328,7 @@
      "scored": 280
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "fact",
     "family"
@@ -3126,6 +3356,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [
     "fact"
    ],
@@ -3152,6 +3383,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [
     "test"
    ],
@@ -3197,6 +3429,7 @@
      "scored": 248
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "fact",
     "family"
@@ -3242,6 +3475,7 @@
      "scored": 744
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "test",
     "family"
@@ -3321,6 +3555,7 @@
      "scored": 280
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "test",
     "fact",
@@ -3399,6 +3634,7 @@
      "scored": 600
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "fact",
     "family"
@@ -3443,6 +3679,7 @@
      "scored": 744
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "fact",
     "family"
@@ -3471,7 +3708,8 @@
    },
    "declaredFamilies": [
     "hyphen-classes",
-    "keep-all-storage"
+    "keep-all-storage",
+    "wbr-elements"
    ],
    "observedFamilies": [
     {
@@ -3503,6 +3741,18 @@
       "painter": 368
      },
      "scored": 368
+    }
+   ],
+   "derivedFamilies": [
+    {
+     "family": "wbr-elements",
+     "browser": "chrome",
+     "build": "153.0.8010.48",
+     "resolvedTargets": 532,
+     "targets": 692,
+     "cases": 1352,
+     "passes": {},
+     "scored": 0
     }
    ],
    "coveredBy": [
@@ -3567,6 +3817,7 @@
      "scored": 516
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "test",
     "family"
@@ -3593,6 +3844,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [
     "fact"
    ],
@@ -3637,6 +3889,7 @@
      "scored": 392
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "fact",
     "family"
@@ -3661,6 +3914,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [],
    "annotated": false
   },
@@ -3700,6 +3954,7 @@
      "scored": 392
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "family"
    ],
@@ -3741,6 +3996,7 @@
      "scored": 544
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "family"
    ],
@@ -3766,6 +4022,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [
     "test"
    ],
@@ -3789,6 +4046,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [],
    "annotated": false
   },
@@ -3810,8 +4068,22 @@
     "other": 0,
     "specsWithoutFacts": []
    },
-   "declaredFamilies": [],
+   "declaredFamilies": [
+    "nowrap-spans"
+   ],
    "observedFamilies": [],
+   "derivedFamilies": [
+    {
+     "family": "nowrap-spans",
+     "browser": "chrome",
+     "build": "153.0.8010.48",
+     "resolvedTargets": 192,
+     "targets": 264,
+     "cases": 544,
+     "passes": {},
+     "scored": 0
+    }
+   ],
    "coveredBy": [
     "fact"
    ],
@@ -3856,6 +4128,7 @@
      "scored": 560
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "fact",
     "family"
@@ -3880,6 +4153,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [],
    "annotated": false
   },
@@ -3903,6 +4177,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [
     "fact"
    ],
@@ -3926,6 +4201,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [],
    "annotated": false
   },
@@ -3965,6 +4241,7 @@
      "scored": 600
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "family"
    ],
@@ -3988,6 +4265,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [],
    "annotated": false
   },
@@ -4009,6 +4287,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [],
    "annotated": false
   },
@@ -4050,6 +4329,7 @@
      "scored": 360
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "fact",
     "family"
@@ -4074,6 +4354,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [],
    "annotated": false
   },
@@ -4096,7 +4377,8 @@
     "specsWithoutFacts": []
    },
    "declaredFamilies": [
-    "following-space"
+    "following-space",
+    "text-align"
    ],
    "observedFamilies": [
     {
@@ -4113,6 +4395,18 @@
       "painter": 190
      },
      "scored": 288
+    }
+   ],
+   "derivedFamilies": [
+    {
+     "family": "text-align",
+     "browser": "chrome",
+     "build": "153.0.8010.48",
+     "resolvedTargets": 432,
+     "targets": 576,
+     "cases": 1104,
+     "passes": {},
+     "scored": 0
     }
    ],
    "coveredBy": [
@@ -4139,6 +4433,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [],
    "annotated": false
   },
@@ -4159,7 +4454,8 @@
     "specsWithoutFacts": []
    },
    "declaredFamilies": [
-    "in-word-breaks"
+    "in-word-breaks",
+    "text-align"
    ],
    "observedFamilies": [
     {
@@ -4176,6 +4472,18 @@
       "painter": 524
      },
      "scored": 600
+    }
+   ],
+   "derivedFamilies": [
+    {
+     "family": "text-align",
+     "browser": "chrome",
+     "build": "153.0.8010.48",
+     "resolvedTargets": 432,
+     "targets": 576,
+     "cases": 1104,
+     "passes": {},
+     "scored": 0
     }
    ],
    "coveredBy": [
@@ -4219,6 +4527,7 @@
      "scored": 600
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "family"
    ],
@@ -4260,6 +4569,7 @@
      "scored": 248
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "family"
    ],
@@ -4305,6 +4615,7 @@
      "scored": 248
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "test",
     "fact",
@@ -4330,6 +4641,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [],
    "annotated": false
   },
@@ -4371,6 +4683,7 @@
      "scored": 248
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "fact",
     "family"
@@ -4415,6 +4728,7 @@
      "scored": 796
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "fact",
     "family"
@@ -4439,6 +4753,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [],
    "annotated": false
   },
@@ -4481,6 +4796,7 @@
      "scored": 344
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "fact",
     "family"
@@ -4506,7 +4822,8 @@
     "specsWithoutFacts": []
    },
    "declaredFamilies": [
-    "forced-breaks"
+    "forced-breaks",
+    "br-elements"
    ],
    "observedFamilies": [
     {
@@ -4523,6 +4840,18 @@
       "painter": 224
      },
      "scored": 224
+    }
+   ],
+   "derivedFamilies": [
+    {
+     "family": "br-elements",
+     "browser": "chrome",
+     "build": "153.0.8010.48",
+     "resolvedTargets": 236,
+     "targets": 268,
+     "cases": 856,
+     "passes": {},
+     "scored": 0
     }
    ],
    "coveredBy": [
@@ -4566,6 +4895,7 @@
      "scored": 360
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "family"
    ],
@@ -4591,7 +4921,8 @@
     "specsWithoutFacts": []
    },
    "declaredFamilies": [
-    "rewind"
+    "rewind",
+    "box-edges"
    ],
    "observedFamilies": [
     {
@@ -4608,6 +4939,18 @@
       "painter": 360
      },
      "scored": 360
+    }
+   ],
+   "derivedFamilies": [
+    {
+     "family": "box-edges",
+     "browser": "chrome",
+     "build": "153.0.8010.48",
+     "resolvedTargets": 1152,
+     "targets": 1728,
+     "cases": 2880,
+     "passes": {},
+     "scored": 0
     }
    ],
    "coveredBy": [
@@ -4652,6 +4995,7 @@
      "scored": 600
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "family"
    ],
@@ -4693,6 +5037,7 @@
      "scored": 360
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "family"
    ],
@@ -4752,6 +5097,7 @@
      "scored": 544
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "fact",
     "family"
@@ -4794,6 +5140,7 @@
      "scored": 360
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "family"
    ],
@@ -4816,7 +5163,8 @@
     "specsWithoutFacts": []
    },
    "declaredFamilies": [
-    "rewind"
+    "rewind",
+    "box-edges"
    ],
    "observedFamilies": [
     {
@@ -4833,6 +5181,18 @@
       "painter": 360
      },
      "scored": 360
+    }
+   ],
+   "derivedFamilies": [
+    {
+     "family": "box-edges",
+     "browser": "chrome",
+     "build": "153.0.8010.48",
+     "resolvedTargets": 1152,
+     "targets": 1728,
+     "cases": 2880,
+     "passes": {},
+     "scored": 0
     }
    ],
    "coveredBy": [
@@ -4859,7 +5219,8 @@
     "specsWithoutFacts": []
    },
    "declaredFamilies": [
-    "following-space"
+    "following-space",
+    "br-elements"
    ],
    "observedFamilies": [
     {
@@ -4876,6 +5237,18 @@
       "painter": 190
      },
      "scored": 288
+    }
+   ],
+   "derivedFamilies": [
+    {
+     "family": "br-elements",
+     "browser": "chrome",
+     "build": "153.0.8010.48",
+     "resolvedTargets": 236,
+     "targets": 268,
+     "cases": 856,
+     "passes": {},
+     "scored": 0
     }
    ],
    "coveredBy": [
@@ -4920,6 +5293,7 @@
      "scored": 288
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "family"
    ],
@@ -4943,6 +5317,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [],
    "annotated": false
   },
@@ -4962,8 +5337,22 @@
     "other": 0,
     "specsWithoutFacts": []
    },
-   "declaredFamilies": [],
+   "declaredFamilies": [
+    "nested-box-edges"
+   ],
    "observedFamilies": [],
+   "derivedFamilies": [
+    {
+     "family": "nested-box-edges",
+     "browser": "chrome",
+     "build": "153.0.8010.48",
+     "resolvedTargets": 288,
+     "targets": 432,
+     "cases": 720,
+     "passes": {},
+     "scored": 0
+    }
+   ],
    "coveredBy": [],
    "annotated": false
   },
@@ -4987,6 +5376,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [],
    "annotated": false
   },
@@ -5010,6 +5400,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [
     "test"
    ],
@@ -5035,6 +5426,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [
     "test"
    ],
@@ -5078,6 +5470,7 @@
      "scored": 560
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "fact",
     "family"
@@ -5102,6 +5495,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [],
    "annotated": false
   },
@@ -5147,6 +5541,7 @@
      "scored": 344
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "fact",
     "family"
@@ -5187,6 +5582,7 @@
      "scored": 348
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "family"
    ],
@@ -5210,6 +5606,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [],
    "annotated": false
   },
@@ -5232,7 +5629,8 @@
     "specsWithoutFacts": []
    },
    "declaredFamilies": [
-    "languages"
+    "languages",
+    "process-languages"
    ],
    "observedFamilies": [
     {
@@ -5249,6 +5647,28 @@
       "painter": 828
      },
      "scored": 848
+    }
+   ],
+   "derivedFamilies": [
+    {
+     "family": "process-languages",
+     "browser": "chrome",
+     "build": "153.0.8010.48",
+     "resolvedTargets": 198,
+     "targets": 270,
+     "cases": 504,
+     "passes": {},
+     "scored": 0
+    },
+    {
+     "family": "process-languages",
+     "browser": "chrome",
+     "build": "153.0.8010.48",
+     "resolvedTargets": 180,
+     "targets": 270,
+     "cases": 468,
+     "passes": {},
+     "scored": 0
     }
    ],
    "coveredBy": [
@@ -5295,6 +5715,7 @@
      "scored": 660
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "fact",
     "family"
@@ -5337,6 +5758,7 @@
      "scored": 600
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "family"
    ],
@@ -5378,6 +5800,7 @@
      "scored": 600
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "family"
    ],
@@ -5419,6 +5842,7 @@
      "scored": 560
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "family"
    ],
@@ -5442,6 +5866,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [],
    "annotated": false
   },
@@ -5463,6 +5888,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [],
    "annotated": false
   },
@@ -5484,6 +5910,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [],
    "annotated": false
   },
@@ -5527,6 +5954,7 @@
      "scored": 796
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "family"
    ],
@@ -5550,6 +5978,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [],
    "annotated": false
   },
@@ -5574,6 +6003,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [
     "fact"
    ],
@@ -5597,6 +6027,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [],
    "annotated": false
   },
@@ -5639,6 +6070,7 @@
      "scored": 336
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "fact",
     "family"
@@ -5681,6 +6113,7 @@
      "scored": 752
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "family"
    ],
@@ -5726,6 +6159,7 @@
      "scored": 544
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "family"
    ],
@@ -5767,6 +6201,7 @@
      "scored": 544
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "family"
    ],
@@ -5794,6 +6229,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [],
    "annotated": false
   },
@@ -5835,6 +6271,7 @@
      "scored": 800
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "fact",
     "family"
@@ -5879,6 +6316,7 @@
      "scored": 800
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "fact",
     "family"
@@ -5903,6 +6341,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [],
    "annotated": false
   },
@@ -5924,6 +6363,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [],
    "annotated": false
   },
@@ -5945,6 +6385,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [],
    "annotated": false
   },
@@ -5984,6 +6425,7 @@
      "scored": 786
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "family"
    ],
@@ -6029,6 +6471,7 @@
      "scored": 176
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "test",
     "fact",
@@ -6076,6 +6519,7 @@
      "scored": 176
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "test",
     "fact",
@@ -6124,6 +6568,7 @@
      "scored": 238
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "family"
    ],
@@ -6165,6 +6610,7 @@
      "scored": 786
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "family"
    ],
@@ -6211,6 +6657,7 @@
      "scored": 192
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "test",
     "fact",
@@ -6256,6 +6703,7 @@
      "scored": 544
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "fact",
     "family"
@@ -6298,6 +6746,7 @@
      "scored": 640
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "family"
    ],
@@ -6339,6 +6788,7 @@
      "scored": 176
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "family"
    ],
@@ -6362,6 +6812,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [],
    "annotated": false
   },
@@ -6383,6 +6834,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [],
    "annotated": false
   },
@@ -6404,6 +6856,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [],
    "annotated": false
   },
@@ -6425,6 +6878,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [],
    "annotated": false
   },
@@ -6446,6 +6900,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [],
    "annotated": false
   },
@@ -6493,6 +6948,7 @@
      "scored": 336
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "fact",
     "family"
@@ -6518,7 +6974,8 @@
     "specsWithoutFacts": []
    },
    "declaredFamilies": [
-    "tabs"
+    "tabs",
+    "text-indent"
    ],
    "observedFamilies": [
     {
@@ -6535,6 +6992,18 @@
       "painter": 786
      },
      "scored": 786
+    }
+   ],
+   "derivedFamilies": [
+    {
+     "family": "text-indent",
+     "browser": "webkit-host",
+     "build": "22625.1.29.11.27",
+     "resolvedTargets": 412,
+     "targets": 640,
+     "cases": 992,
+     "passes": {},
+     "scored": 0
     }
    ],
    "coveredBy": [
@@ -6581,6 +7050,7 @@
      "scored": 786
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "fact",
     "family"
@@ -6623,6 +7093,7 @@
      "scored": 786
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "family"
    ],
@@ -6664,6 +7135,7 @@
      "scored": 786
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "family"
    ],
@@ -6705,6 +7177,7 @@
      "scored": 544
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "family"
    ],
@@ -6732,7 +7205,8 @@
    },
    "declaredFamilies": [
     "fit-bound",
-    "following-space"
+    "following-space",
+    "text-align"
    ],
    "observedFamilies": [
     {
@@ -6764,6 +7238,18 @@
       "painter": 273
      },
      "scored": 288
+    }
+   ],
+   "derivedFamilies": [
+    {
+     "family": "text-align",
+     "browser": "webkit-host",
+     "build": "22625.1.29.11.27",
+     "resolvedTargets": 432,
+     "targets": 576,
+     "cases": 1104,
+     "passes": {},
+     "scored": 0
     }
    ],
    "coveredBy": [
@@ -6810,6 +7296,7 @@
      "scored": 288
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "fact",
     "family"
@@ -6855,6 +7342,7 @@
      "scored": 594
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "fact",
     "family"
@@ -6897,6 +7385,7 @@
      "scored": 544
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "family"
    ],
@@ -6954,6 +7443,7 @@
      "scored": 752
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "family"
    ],
@@ -6997,6 +7487,7 @@
      "scored": 392
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "fact",
     "family"
@@ -7044,6 +7535,7 @@
      "scored": 280
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "test",
     "fact",
@@ -7091,6 +7583,7 @@
      "scored": 680
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "test",
     "fact",
@@ -7155,6 +7648,7 @@
      "scored": 280
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "test",
     "fact",
@@ -7203,6 +7697,7 @@
      "scored": 560
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "test",
     "fact",
@@ -7251,6 +7746,7 @@
      "scored": 280
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "test",
     "fact",
@@ -7300,6 +7796,7 @@
      "scored": 560
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "test",
     "fact",
@@ -7368,6 +7865,7 @@
      "scored": 560
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "test",
     "fact",
@@ -7419,6 +7917,7 @@
      "scored": 560
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "test",
     "fact",
@@ -7464,6 +7963,7 @@
      "scored": 560
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "test",
     "family"
@@ -7492,6 +7992,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [
     "test",
     "fact"
@@ -7525,7 +8026,8 @@
    },
    "declaredFamilies": [
     "hyphen-classes",
-    "keep-all-storage"
+    "keep-all-storage",
+    "wbr-elements"
    ],
    "observedFamilies": [
     {
@@ -7557,6 +8059,18 @@
       "painter": 273
      },
      "scored": 376
+    }
+   ],
+   "derivedFamilies": [
+    {
+     "family": "wbr-elements",
+     "browser": "webkit-host",
+     "build": "22625.1.29.11.27",
+     "resolvedTargets": 438,
+     "targets": 612,
+     "cases": 1164,
+     "passes": {},
+     "scored": 0
     }
    ],
    "coveredBy": [
@@ -7607,6 +8121,7 @@
      "scored": 376
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "test",
     "fact",
@@ -7654,6 +8169,7 @@
      "scored": 376
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "test",
     "fact",
@@ -7707,6 +8223,7 @@
      "scored": 680
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "test",
     "fact",
@@ -7736,6 +8253,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [
     "test",
     "fact"
@@ -7785,6 +8303,7 @@
      "scored": 360
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "fact",
     "family"
@@ -7829,6 +8348,7 @@
      "scored": 360
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "fact",
     "family"
@@ -7871,6 +8391,7 @@
      "scored": 640
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "family"
    ],
@@ -7894,6 +8415,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [],
    "annotated": false
   },
@@ -7915,6 +8437,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [],
    "annotated": false
   },
@@ -7935,7 +8458,9 @@
     "specsWithoutFacts": []
    },
    "declaredFamilies": [
-    "following-space"
+    "following-space",
+    "nested-box-edges",
+    "br-elements"
    ],
    "observedFamilies": [
     {
@@ -7952,6 +8477,28 @@
       "painter": 273
      },
      "scored": 288
+    }
+   ],
+   "derivedFamilies": [
+    {
+     "family": "br-elements",
+     "browser": "webkit-host",
+     "build": "22625.1.29.11.27",
+     "resolvedTargets": 232,
+     "targets": 264,
+     "cases": 848,
+     "passes": {},
+     "scored": 0
+    },
+    {
+     "family": "nested-box-edges",
+     "browser": "webkit-host",
+     "build": "22625.1.29.11.27",
+     "resolvedTargets": 288,
+     "targets": 432,
+     "cases": 720,
+     "passes": {},
+     "scored": 0
     }
    ],
    "coveredBy": [
@@ -7995,6 +8542,7 @@
      "scored": 238
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "family"
    ],
@@ -8038,6 +8586,7 @@
      "scored": 544
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "fact",
     "family"
@@ -8063,7 +8612,8 @@
     "specsWithoutFacts": []
    },
    "declaredFamilies": [
-    "following-space"
+    "following-space",
+    "br-elements"
    ],
    "observedFamilies": [
     {
@@ -8080,6 +8630,18 @@
       "painter": 273
      },
      "scored": 288
+    }
+   ],
+   "derivedFamilies": [
+    {
+     "family": "br-elements",
+     "browser": "webkit-host",
+     "build": "22625.1.29.11.27",
+     "resolvedTargets": 232,
+     "targets": 264,
+     "cases": 848,
+     "passes": {},
+     "scored": 0
     }
    ],
    "coveredBy": [
@@ -8124,6 +8686,7 @@
      "scored": 238
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "family"
    ],
@@ -8147,6 +8710,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [],
    "annotated": false
   },
@@ -8168,6 +8732,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [],
    "annotated": false
   },
@@ -8209,6 +8774,7 @@
      "scored": 238
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "fact",
     "family"
@@ -8233,6 +8799,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [],
    "annotated": false
   },
@@ -8290,6 +8857,7 @@
      "scored": 594
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "fact",
     "family"
@@ -8350,6 +8918,7 @@
      "scored": 594
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "fact",
     "family"
@@ -8394,6 +8963,7 @@
      "scored": 594
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "fact",
     "family"
@@ -8420,6 +8990,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [
     "fact"
    ],
@@ -8463,6 +9034,7 @@
      "scored": 594
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "fact",
     "family"
@@ -8487,6 +9059,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [],
    "annotated": false
   },
@@ -8526,6 +9099,7 @@
      "scored": 360
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "family"
    ],
@@ -8549,6 +9123,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [],
    "annotated": false
   },
@@ -8570,6 +9145,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [],
    "annotated": false
   },
@@ -8591,6 +9167,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [],
    "annotated": false
   },
@@ -8612,6 +9189,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [],
    "annotated": false
   },
@@ -8651,6 +9229,7 @@
      "scored": 360
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "family"
    ],
@@ -8695,6 +9274,7 @@
      "scored": 544
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "fact",
     "family"
@@ -8740,6 +9320,7 @@
      "scored": 594
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "fact",
     "family"
@@ -8784,6 +9365,7 @@
      "scored": 594
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "fact",
     "family"
@@ -8808,6 +9390,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [],
    "annotated": false
   },
@@ -8831,6 +9414,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [
     "fact"
    ],
@@ -8854,6 +9438,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [],
    "annotated": false
   },
@@ -8875,6 +9460,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [],
    "annotated": false
   },
@@ -8914,6 +9500,7 @@
      "scored": 544
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "family"
    ],
@@ -8937,6 +9524,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [],
    "annotated": false
   },
@@ -8958,6 +9546,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [],
    "annotated": false
   },
@@ -8997,6 +9586,7 @@
      "scored": 360
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "family"
    ],
@@ -9020,6 +9610,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [],
    "annotated": false
   },
@@ -9041,6 +9632,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [],
    "annotated": false
   },
@@ -9062,6 +9654,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [],
    "annotated": false
   },
@@ -9083,6 +9676,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [],
    "annotated": false
   },
@@ -9124,6 +9718,7 @@
      "scored": 544
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "family"
    ],
@@ -9147,6 +9742,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [],
    "annotated": false
   },
@@ -9170,6 +9766,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [],
    "annotated": false
   },
@@ -9209,6 +9806,7 @@
      "scored": 360
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "family"
    ],
@@ -9232,6 +9830,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [],
    "annotated": false
   },
@@ -9253,6 +9852,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [],
    "annotated": false
   },
@@ -9274,6 +9874,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [],
    "annotated": false
   },
@@ -9295,6 +9896,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [],
    "annotated": false
   },
@@ -9319,6 +9921,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [
     "fact"
    ],
@@ -9342,6 +9945,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [],
    "annotated": false
   },
@@ -9371,6 +9975,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [],
    "annotated": false
   },
@@ -9412,6 +10017,7 @@
      "scored": 336
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "family"
    ],
@@ -9453,6 +10059,7 @@
      "scored": 544
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "family"
    ],
@@ -9480,6 +10087,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [
     "fact"
    ],
@@ -9524,6 +10132,7 @@
      "scored": 680
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "fact",
     "family"
@@ -9566,6 +10175,7 @@
      "scored": 544
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "family"
    ],
@@ -9612,6 +10222,7 @@
      "scored": 544
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "family"
    ],
@@ -9635,6 +10246,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [],
    "annotated": false
   },
@@ -9658,6 +10270,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [
     "test"
    ],
@@ -9718,6 +10331,7 @@
      "scored": 560
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "family"
    ],
@@ -9763,6 +10377,7 @@
      "scored": 376
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "family"
    ],
@@ -9804,6 +10419,7 @@
      "scored": 752
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "family"
    ],
@@ -9849,6 +10465,7 @@
      "scored": 602
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "test",
     "fact",
@@ -9877,6 +10494,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [
     "fact"
    ],
@@ -9907,6 +10525,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [
     "test",
     "fact"
@@ -9933,6 +10552,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [
     "test"
    ],
@@ -9958,6 +10578,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [
     "fact"
    ],
@@ -9999,6 +10620,7 @@
      "scored": 224
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "family"
    ],
@@ -10040,6 +10662,7 @@
      "scored": 224
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "family"
    ],
@@ -10065,6 +10688,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [
     "fact"
    ],
@@ -10113,6 +10737,7 @@
      "scored": 360
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "test",
     "fact",
@@ -10141,6 +10766,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [
     "fact"
    ],
@@ -10166,6 +10792,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [
     "test"
    ],
@@ -10212,6 +10839,7 @@
      "scored": 544
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "test",
     "fact",
@@ -10239,6 +10867,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [
     "fact"
    ],
@@ -10300,6 +10929,7 @@
      "scored": 288
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "test",
     "fact",
@@ -10361,6 +10991,7 @@
      "scored": 624
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "test",
     "family"
@@ -10406,6 +11037,7 @@
      "scored": 624
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "test",
     "family"
@@ -10455,6 +11087,7 @@
      "scored": 624
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "test",
     "fact",
@@ -10519,6 +11152,7 @@
      "scored": 624
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "test",
     "fact",
@@ -10550,6 +11184,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [
     "test",
     "fact"
@@ -10574,6 +11209,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [],
    "annotated": false
   },
@@ -10619,6 +11255,7 @@
      "scored": 336
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "test",
     "fact",
@@ -10662,6 +11299,7 @@
      "scored": 312
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "family"
    ],
@@ -10703,6 +11341,7 @@
      "scored": 312
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "family"
    ],
@@ -10767,6 +11406,7 @@
      "scored": 324
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "test",
     "fact",
@@ -10792,6 +11432,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [],
    "annotated": false
   },
@@ -10815,6 +11456,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [
     "fact"
    ],
@@ -10878,6 +11520,7 @@
      "scored": 192
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "test",
     "fact",
@@ -10903,6 +11546,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [],
    "annotated": false
   },
@@ -10924,6 +11568,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [],
    "annotated": false
   },
@@ -10945,6 +11590,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [],
    "annotated": false
   },
@@ -10968,6 +11614,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [
     "test"
    ],
@@ -11033,6 +11680,7 @@
      "scored": 360
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "test",
     "fact",
@@ -11079,6 +11727,7 @@
      "scored": 756
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "test",
     "family"
@@ -11139,6 +11788,7 @@
      "scored": 324
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "test",
     "family"
@@ -11184,6 +11834,7 @@
      "scored": 800
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "fact",
     "family"
@@ -11246,6 +11897,7 @@
      "scored": 324
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "test",
     "family"
@@ -11290,6 +11942,7 @@
      "scored": 312
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "test",
     "family"
@@ -11350,6 +12003,7 @@
      "scored": 602
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "fact",
     "family"
@@ -11379,7 +12033,8 @@
    },
    "declaredFamilies": [
     "hyphen-classes",
-    "keep-all-storage"
+    "keep-all-storage",
+    "wbr-elements"
    ],
    "observedFamilies": [
     {
@@ -11411,6 +12066,18 @@
       "painter": 368
      },
      "scored": 368
+    }
+   ],
+   "derivedFamilies": [
+    {
+     "family": "wbr-elements",
+     "browser": "firefox",
+     "build": "156.0",
+     "resolvedTargets": 450,
+     "targets": 612,
+     "cases": 1188,
+     "passes": {},
+     "scored": 0
     }
    ],
    "coveredBy": [
@@ -11461,6 +12128,7 @@
      "scored": 800
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "test",
     "fact",
@@ -11506,6 +12174,7 @@
      "scored": 800
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "fact",
     "family"
@@ -11550,6 +12219,7 @@
      "scored": 800
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "fact",
     "family"
@@ -11594,6 +12264,7 @@
      "scored": 312
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "fact",
     "family"
@@ -11620,6 +12291,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [
     "fact"
    ],
@@ -11661,6 +12333,7 @@
      "scored": 312
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "family"
    ],
@@ -11687,8 +12360,22 @@
     "other": 0,
     "specsWithoutFacts": []
    },
-   "declaredFamilies": [],
+   "declaredFamilies": [
+    "nowrap-spans"
+   ],
    "observedFamilies": [],
+   "derivedFamilies": [
+    {
+     "family": "nowrap-spans",
+     "browser": "firefox",
+     "build": "156.0",
+     "resolvedTargets": 160,
+     "targets": 232,
+     "cases": 480,
+     "passes": {},
+     "scored": 0
+    }
+   ],
    "coveredBy": [
     "test",
     "fact"
@@ -11713,6 +12400,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [],
    "annotated": false
   },
@@ -11734,6 +12422,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [],
    "annotated": false
   },
@@ -11757,6 +12446,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [
     "fact"
    ],
@@ -11807,6 +12497,7 @@
      "scored": 602
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "test",
     "fact",
@@ -11853,6 +12544,7 @@
      "scored": 736
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "fact",
     "family"
@@ -11900,6 +12592,7 @@
      "scored": 288
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "fact",
     "family"
@@ -11928,6 +12621,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [
     "fact"
    ],
@@ -11957,6 +12651,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [
     "fact"
    ],
@@ -12018,6 +12713,7 @@
      "scored": 680
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "fact",
     "family"
@@ -12062,6 +12758,7 @@
      "scored": 544
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "fact",
     "family"
@@ -12095,6 +12792,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [
     "test",
     "fact"
@@ -12121,6 +12819,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [
     "test"
    ],
@@ -12146,6 +12845,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [
     "test"
    ],
@@ -12191,6 +12891,7 @@
      "scored": 782
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "test",
     "fact",
@@ -12255,6 +12956,7 @@
      "scored": 782
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "test",
     "fact",
@@ -12280,6 +12982,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [],
    "annotated": false
   },
@@ -12327,6 +13030,7 @@
      "scored": 360
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "test",
     "fact",
@@ -12374,6 +13078,7 @@
      "scored": 360
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "test",
     "fact",
@@ -12439,6 +13144,7 @@
      "scored": 544
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "test",
     "fact",
@@ -12486,6 +13192,7 @@
      "scored": 248
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "test",
     "fact",
@@ -12536,6 +13243,7 @@
      "scored": 544
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "test",
     "fact",
@@ -12561,6 +13269,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [],
    "annotated": false
   },
@@ -12618,6 +13327,7 @@
      "scored": 736
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "family"
    ],
@@ -12643,6 +13353,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [
     "test"
    ],
@@ -12669,7 +13380,8 @@
     "specsWithoutFacts": []
    },
    "declaredFamilies": [
-    "tabs"
+    "tabs",
+    "text-indent"
    ],
    "observedFamilies": [
     {
@@ -12686,6 +13398,18 @@
       "painter": 528
      },
      "scored": 782
+    }
+   ],
+   "derivedFamilies": [
+    {
+     "family": "text-indent",
+     "browser": "firefox",
+     "build": "156.0",
+     "resolvedTargets": 412,
+     "targets": 640,
+     "cases": 992,
+     "passes": {},
+     "scored": 0
     }
    ],
    "coveredBy": [
@@ -12733,6 +13457,7 @@
      "scored": 782
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "test",
     "family"
@@ -12759,6 +13484,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [
     "test"
    ],
@@ -12804,6 +13530,7 @@
      "scored": 224
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "test",
     "fact",
@@ -12851,6 +13578,7 @@
      "scored": 360
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "test",
     "fact",
@@ -12880,7 +13608,9 @@
    },
    "declaredFamilies": [
     "fit-bound",
-    "following-space"
+    "following-space",
+    "br-elements",
+    "text-align"
    ],
    "observedFamilies": [
     {
@@ -12912,6 +13642,28 @@
       "painter": 288
      },
      "scored": 288
+    }
+   ],
+   "derivedFamilies": [
+    {
+     "family": "br-elements",
+     "browser": "firefox",
+     "build": "156.0",
+     "resolvedTargets": 236,
+     "targets": 268,
+     "cases": 856,
+     "passes": {},
+     "scored": 0
+    },
+    {
+     "family": "text-align",
+     "browser": "firefox",
+     "build": "156.0",
+     "resolvedTargets": 432,
+     "targets": 576,
+     "cases": 1104,
+     "passes": {},
+     "scored": 0
     }
    ],
    "coveredBy": [
@@ -12961,6 +13713,7 @@
      "scored": 248
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "test",
     "fact",
@@ -13008,6 +13761,7 @@
      "scored": 544
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "test",
     "fact",
@@ -13033,6 +13787,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [],
    "annotated": false
   },
@@ -13076,6 +13831,7 @@
      "scored": 544
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "test",
     "fact",
@@ -13119,6 +13875,7 @@
      "scored": 360
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "family"
    ],
@@ -13164,6 +13921,7 @@
      "scored": 360
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "test",
     "fact",
@@ -13189,6 +13947,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [],
    "annotated": false
   },
@@ -13234,6 +13993,7 @@
      "scored": 360
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "test",
     "fact",
@@ -13259,6 +14019,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [],
    "annotated": false
   },
@@ -13280,6 +14041,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [],
    "annotated": false
   },
@@ -13321,6 +14083,7 @@
      "scored": 248
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "family"
    ],
@@ -13344,6 +14107,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [],
    "annotated": false
   },
@@ -13383,6 +14147,7 @@
      "scored": 736
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "family"
    ],
@@ -13442,6 +14207,7 @@
      "scored": 736
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "family"
    ],
@@ -13487,6 +14253,7 @@
      "scored": 680
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "fact",
     "family"
@@ -13529,6 +14296,7 @@
      "scored": 288
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "family"
    ],
@@ -13560,6 +14328,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [
     "test"
    ],
@@ -13585,6 +14354,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [],
    "annotated": false
   },
@@ -13643,6 +14413,7 @@
      "scored": 624
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "fact",
     "family"
@@ -13667,6 +14438,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [],
    "annotated": false
   },
@@ -13692,6 +14464,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [
     "fact"
    ],
@@ -13717,6 +14490,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [
     "fact"
    ],
@@ -13742,6 +14516,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [
     "fact"
    ],
@@ -13767,6 +14542,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [
     "fact"
    ],
@@ -13793,6 +14569,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [
     "fact"
    ],
@@ -13824,6 +14601,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [
     "test"
    ],
@@ -13852,6 +14630,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [
     "test"
    ],
@@ -13880,6 +14659,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [
     "test"
    ],
@@ -13905,6 +14685,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [],
    "annotated": false
   },
@@ -13929,6 +14710,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [
     "test"
    ],
@@ -13954,6 +14736,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [
     "test"
    ],
@@ -13979,6 +14762,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [],
    "annotated": false
   },
@@ -14002,6 +14786,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [],
    "annotated": false
   },
@@ -14027,6 +14812,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [
     "test"
    ],
@@ -14055,6 +14841,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [
     "fact"
    ],
@@ -14078,6 +14865,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [],
    "annotated": false
   },
@@ -14099,6 +14887,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [],
    "annotated": false
   },
@@ -14120,6 +14909,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [],
    "annotated": false
   },
@@ -14141,6 +14931,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [],
    "annotated": false
   },
@@ -14162,6 +14953,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [],
    "annotated": false
   },
@@ -14183,6 +14975,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [],
    "annotated": false
   },
@@ -14204,6 +14997,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [],
    "annotated": false
   },
@@ -14225,6 +15019,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [],
    "annotated": false
   },
@@ -14246,6 +15041,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [],
    "annotated": false
   },
@@ -14267,6 +15063,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [],
    "annotated": false
   },
@@ -14288,6 +15085,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [],
    "annotated": false
   },
@@ -14309,6 +15107,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [],
    "annotated": false
   },
@@ -14353,6 +15152,7 @@
      "scored": 718
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "family"
    ],
@@ -14394,6 +15194,7 @@
      "scored": 718
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "family"
    ],
@@ -14438,6 +15239,7 @@
      "scored": 660
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "fact",
     "family"
@@ -14482,6 +15284,7 @@
      "scored": 560
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "fact",
     "family"
@@ -14524,6 +15327,7 @@
      "scored": 718
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "family"
    ],
@@ -14565,6 +15369,7 @@
      "scored": 560
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "family"
    ],
@@ -14608,6 +15413,7 @@
      "scored": 660
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "fact",
     "family"
@@ -14650,6 +15456,7 @@
      "scored": 600
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "family"
    ],
@@ -14675,6 +15482,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [
     "test"
    ],
@@ -14698,6 +15506,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [],
    "annotated": false
   },
@@ -14719,6 +15528,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [],
    "annotated": false
   },
@@ -14758,6 +15568,7 @@
      "scored": 248
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "family"
    ],
@@ -14781,6 +15592,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [],
    "annotated": false
   },
@@ -14802,6 +15614,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [],
    "annotated": false
   },
@@ -14823,6 +15636,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [],
    "annotated": false
   },
@@ -14867,6 +15681,7 @@
      "scored": 344
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "fact",
     "family"
@@ -14891,6 +15706,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [],
    "annotated": false
   },
@@ -14912,6 +15728,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [],
    "annotated": false
   },
@@ -14935,6 +15752,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [
     "test"
    ],
@@ -14960,6 +15778,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [
     "test"
    ],
@@ -14985,6 +15804,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [
     "test"
    ],
@@ -15010,6 +15830,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [
     "test"
    ],
@@ -15035,6 +15856,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [
     "test"
    ],
@@ -15060,6 +15882,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [
     "test"
    ],
@@ -15085,6 +15908,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [
     "test"
    ],
@@ -15126,6 +15950,7 @@
      "scored": 544
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "family"
    ],
@@ -15169,6 +15994,7 @@
      "scored": 544
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "fact",
     "family"
@@ -15227,6 +16053,7 @@
      "scored": 786
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "family"
    ],
@@ -15252,6 +16079,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [
     "test"
    ],
@@ -15277,6 +16105,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [
     "test"
    ],
@@ -15302,6 +16131,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [
     "test"
    ],
@@ -15325,6 +16155,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [],
    "annotated": false
   },
@@ -15346,6 +16177,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [],
    "annotated": false
   },
@@ -15385,6 +16217,7 @@
      "scored": 786
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "family"
    ],
@@ -15410,6 +16243,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [
     "test"
    ],
@@ -15435,6 +16269,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [
     "test"
    ],
@@ -15476,6 +16311,7 @@
      "scored": 248
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "family"
    ],
@@ -15499,6 +16335,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [],
    "annotated": false
   },
@@ -15541,6 +16378,7 @@
      "scored": 680
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "fact",
     "family"
@@ -15565,6 +16403,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [],
    "annotated": false
   },
@@ -15588,6 +16427,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [
     "test"
    ],
@@ -15611,6 +16451,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [],
    "annotated": false
   },
@@ -15632,6 +16473,7 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [],
    "annotated": false
   },
@@ -15655,9 +16497,2079 @@
    },
    "declaredFamilies": [],
    "observedFamilies": [],
+   "derivedFamilies": [],
    "coveredBy": [
     "test"
    ],
+   "annotated": false
+  },
+  {
+   "id": "blink/content/atomic-inline-object-replacement",
+   "engine": "blink",
+   "kind": "ported rule",
+   "declaredBy": "provisional (stage 5, feature families 2026-09-17)",
+   "tests": {
+    "present": [],
+    "stale": []
+   },
+   "facts": {
+    "specs": [],
+    "holds": 0,
+    "fails": 0,
+    "other": 0,
+    "specsWithoutFacts": []
+   },
+   "declaredFamilies": [
+    "atomic-inlines"
+   ],
+   "observedFamilies": [],
+   "derivedFamilies": [
+    {
+     "family": "atomic-inlines",
+     "browser": "chrome",
+     "build": "153.0.8010.48",
+     "resolvedTargets": 725,
+     "targets": 1004,
+     "cases": 2026,
+     "passes": {},
+     "scored": 0
+    }
+   ],
+   "coveredBy": [],
+   "annotated": false
+  },
+  {
+   "id": "blink/content/br-forced-break-item",
+   "engine": "blink",
+   "kind": "ported rule",
+   "declaredBy": "provisional (stage 5, feature families 2026-09-17)",
+   "tests": {
+    "present": [],
+    "stale": []
+   },
+   "facts": {
+    "specs": [],
+    "holds": 0,
+    "fails": 0,
+    "other": 0,
+    "specsWithoutFacts": []
+   },
+   "declaredFamilies": [
+    "br-elements"
+   ],
+   "observedFamilies": [],
+   "derivedFamilies": [
+    {
+     "family": "br-elements",
+     "browser": "chrome",
+     "build": "153.0.8010.48",
+     "resolvedTargets": 236,
+     "targets": 268,
+     "cases": 856,
+     "passes": {},
+     "scored": 0
+    }
+   ],
+   "coveredBy": [],
+   "annotated": false
+  },
+  {
+   "id": "blink/content/wbr-flow-control-zwsp",
+   "engine": "blink",
+   "kind": "ported rule",
+   "declaredBy": "provisional (stage 5, feature families 2026-09-17)",
+   "tests": {
+    "present": [],
+    "stale": []
+   },
+   "facts": {
+    "specs": [],
+    "holds": 0,
+    "fails": 0,
+    "other": 0,
+    "specsWithoutFacts": []
+   },
+   "declaredFamilies": [
+    "wbr-elements"
+   ],
+   "observedFamilies": [],
+   "derivedFamilies": [
+    {
+     "family": "wbr-elements",
+     "browser": "chrome",
+     "build": "153.0.8010.48",
+     "resolvedTargets": 532,
+     "targets": 692,
+     "cases": 1352,
+     "passes": {},
+     "scored": 0
+    }
+   ],
+   "coveredBy": [],
+   "annotated": false
+  },
+  {
+   "id": "blink/lines/atomic-inline-item",
+   "engine": "blink",
+   "kind": "ported rule",
+   "declaredBy": "provisional (stage 5, feature families 2026-09-17)",
+   "tests": {
+    "present": [],
+    "stale": []
+   },
+   "facts": {
+    "specs": [],
+    "holds": 0,
+    "fails": 0,
+    "other": 0,
+    "specsWithoutFacts": []
+   },
+   "declaredFamilies": [
+    "atomic-inlines"
+   ],
+   "observedFamilies": [],
+   "derivedFamilies": [
+    {
+     "family": "atomic-inlines",
+     "browser": "chrome",
+     "build": "153.0.8010.48",
+     "resolvedTargets": 725,
+     "targets": 1004,
+     "cases": 2026,
+     "passes": {},
+     "scored": 0
+    }
+   ],
+   "coveredBy": [],
+   "annotated": false
+  },
+  {
+   "id": "blink/lines/open-tag-edge-size",
+   "engine": "blink",
+   "kind": "ported rule",
+   "declaredBy": "provisional (stage 5, feature families 2026-09-17)",
+   "tests": {
+    "present": [],
+    "stale": []
+   },
+   "facts": {
+    "specs": [],
+    "holds": 0,
+    "fails": 0,
+    "other": 0,
+    "specsWithoutFacts": []
+   },
+   "declaredFamilies": [
+    "box-edges",
+    "nested-box-edges"
+   ],
+   "observedFamilies": [],
+   "derivedFamilies": [
+    {
+     "family": "box-edges",
+     "browser": "chrome",
+     "build": "153.0.8010.48",
+     "resolvedTargets": 1152,
+     "targets": 1728,
+     "cases": 2880,
+     "passes": {},
+     "scored": 0
+    },
+    {
+     "family": "nested-box-edges",
+     "browser": "chrome",
+     "build": "153.0.8010.48",
+     "resolvedTargets": 288,
+     "targets": 432,
+     "cases": 720,
+     "passes": {},
+     "scored": 0
+    }
+   ],
+   "coveredBy": [],
+   "annotated": false
+  },
+  {
+   "id": "blink/lines/close-tag-edge-size",
+   "engine": "blink",
+   "kind": "ported rule",
+   "declaredBy": "provisional (stage 5, feature families 2026-09-17)",
+   "tests": {
+    "present": [],
+    "stale": []
+   },
+   "facts": {
+    "specs": [],
+    "holds": 0,
+    "fails": 0,
+    "other": 0,
+    "specsWithoutFacts": []
+   },
+   "declaredFamilies": [
+    "box-edges",
+    "nested-box-edges"
+   ],
+   "observedFamilies": [],
+   "derivedFamilies": [
+    {
+     "family": "box-edges",
+     "browser": "chrome",
+     "build": "153.0.8010.48",
+     "resolvedTargets": 1152,
+     "targets": 1728,
+     "cases": 2880,
+     "passes": {},
+     "scored": 0
+    },
+    {
+     "family": "nested-box-edges",
+     "browser": "chrome",
+     "build": "153.0.8010.48",
+     "resolvedTargets": 288,
+     "targets": 432,
+     "cases": 720,
+     "passes": {},
+     "scored": 0
+    }
+   ],
+   "coveredBy": [],
+   "annotated": false
+  },
+  {
+   "id": "blink/lines/line-layout-opportunity",
+   "engine": "blink",
+   "kind": "ported rule",
+   "declaredBy": "provisional (stage 5, feature families 2026-09-17)",
+   "tests": {
+    "present": [],
+    "stale": []
+   },
+   "facts": {
+    "specs": [],
+    "holds": 0,
+    "fails": 0,
+    "other": 0,
+    "specsWithoutFacts": []
+   },
+   "declaredFamilies": [
+    "line-slots"
+   ],
+   "observedFamilies": [],
+   "derivedFamilies": [
+    {
+     "family": "line-slots",
+     "browser": "chrome",
+     "build": "153.0.8010.48",
+     "resolvedTargets": 844,
+     "targets": 1294,
+     "cases": 1904,
+     "passes": {},
+     "scored": 0
+    }
+   ],
+   "coveredBy": [],
+   "annotated": false
+  },
+  {
+   "id": "blink/lines/overflow-moves-to-next-opportunity",
+   "engine": "blink",
+   "kind": "ported rule",
+   "declaredBy": "provisional (stage 5, feature families 2026-09-17)",
+   "tests": {
+    "present": [],
+    "stale": []
+   },
+   "facts": {
+    "specs": [],
+    "holds": 0,
+    "fails": 0,
+    "other": 0,
+    "specsWithoutFacts": []
+   },
+   "declaredFamilies": [
+    "line-slots"
+   ],
+   "observedFamilies": [],
+   "derivedFamilies": [
+    {
+     "family": "line-slots",
+     "browser": "chrome",
+     "build": "153.0.8010.48",
+     "resolvedTargets": 844,
+     "targets": 1294,
+     "cases": 1904,
+     "passes": {},
+     "scored": 0
+    }
+   ],
+   "coveredBy": [],
+   "annotated": false
+  },
+  {
+   "id": "blink/lines/per-item-wrap-style",
+   "engine": "blink",
+   "kind": "ported rule",
+   "declaredBy": "provisional (stage 5, feature families 2026-09-17)",
+   "tests": {
+    "present": [],
+    "stale": []
+   },
+   "facts": {
+    "specs": [],
+    "holds": 0,
+    "fails": 0,
+    "other": 0,
+    "specsWithoutFacts": []
+   },
+   "declaredFamilies": [
+    "nowrap-spans",
+    "wbr-elements"
+   ],
+   "observedFamilies": [],
+   "derivedFamilies": [
+    {
+     "family": "nowrap-spans",
+     "browser": "chrome",
+     "build": "153.0.8010.48",
+     "resolvedTargets": 192,
+     "targets": 264,
+     "cases": 544,
+     "passes": {},
+     "scored": 0
+    },
+    {
+     "family": "wbr-elements",
+     "browser": "chrome",
+     "build": "153.0.8010.48",
+     "resolvedTargets": 532,
+     "targets": 692,
+     "cases": 1352,
+     "passes": {},
+     "scored": 0
+    }
+   ],
+   "coveredBy": [],
+   "annotated": false
+  },
+  {
+   "id": "blink/lines/text-indent-first-formatted-line",
+   "engine": "blink",
+   "kind": "ported rule",
+   "declaredBy": "provisional (stage 5, feature families 2026-09-17)",
+   "tests": {
+    "present": [],
+    "stale": []
+   },
+   "facts": {
+    "specs": [],
+    "holds": 0,
+    "fails": 0,
+    "other": 0,
+    "specsWithoutFacts": []
+   },
+   "declaredFamilies": [
+    "text-indent"
+   ],
+   "observedFamilies": [],
+   "derivedFamilies": [
+    {
+     "family": "text-indent",
+     "browser": "chrome",
+     "build": "153.0.8010.48",
+     "resolvedTargets": 412,
+     "targets": 640,
+     "cases": 992,
+     "passes": {},
+     "scored": 0
+    }
+   ],
+   "coveredBy": [],
+   "annotated": false
+  },
+  {
+   "id": "blink/lines/wrap-span-inside-nowrap-recomputes-break",
+   "engine": "blink",
+   "kind": "ported rule",
+   "declaredBy": "provisional (stage 5, feature families 2026-09-17)",
+   "tests": {
+    "present": [],
+    "stale": []
+   },
+   "facts": {
+    "specs": [],
+    "holds": 0,
+    "fails": 0,
+    "other": 0,
+    "specsWithoutFacts": []
+   },
+   "declaredFamilies": [
+    "nowrap-spans"
+   ],
+   "observedFamilies": [],
+   "derivedFamilies": [
+    {
+     "family": "nowrap-spans",
+     "browser": "chrome",
+     "build": "153.0.8010.48",
+     "resolvedTargets": 192,
+     "targets": 264,
+     "cases": 544,
+     "passes": {},
+     "scored": 0
+    }
+   ],
+   "coveredBy": [],
+   "annotated": false
+  },
+  {
+   "id": "blink/output/apply-text-align",
+   "engine": "blink",
+   "kind": "ported rule",
+   "declaredBy": "provisional (stage 5, feature families 2026-09-17)",
+   "tests": {
+    "present": [],
+    "stale": []
+   },
+   "facts": {
+    "specs": [],
+    "holds": 0,
+    "fails": 0,
+    "other": 0,
+    "specsWithoutFacts": []
+   },
+   "declaredFamilies": [
+    "text-indent",
+    "text-align"
+   ],
+   "observedFamilies": [],
+   "derivedFamilies": [
+    {
+     "family": "text-align",
+     "browser": "chrome",
+     "build": "153.0.8010.48",
+     "resolvedTargets": 432,
+     "targets": 576,
+     "cases": 1104,
+     "passes": {},
+     "scored": 0
+    },
+    {
+     "family": "text-indent",
+     "browser": "chrome",
+     "build": "153.0.8010.48",
+     "resolvedTargets": 412,
+     "targets": 640,
+     "cases": 992,
+     "passes": {},
+     "scored": 0
+    }
+   ],
+   "coveredBy": [],
+   "annotated": false
+  },
+  {
+   "id": "blink/output/inline-box-item",
+   "engine": "blink",
+   "kind": "ported rule",
+   "declaredBy": "provisional (stage 5, feature families 2026-09-17)",
+   "tests": {
+    "present": [],
+    "stale": []
+   },
+   "facts": {
+    "specs": [],
+    "holds": 0,
+    "fails": 0,
+    "other": 0,
+    "specsWithoutFacts": []
+   },
+   "declaredFamilies": [
+    "box-edges",
+    "nested-box-edges",
+    "atomic-inlines"
+   ],
+   "observedFamilies": [],
+   "derivedFamilies": [
+    {
+     "family": "atomic-inlines",
+     "browser": "chrome",
+     "build": "153.0.8010.48",
+     "resolvedTargets": 725,
+     "targets": 1004,
+     "cases": 2026,
+     "passes": {},
+     "scored": 0
+    },
+    {
+     "family": "box-edges",
+     "browser": "chrome",
+     "build": "153.0.8010.48",
+     "resolvedTargets": 1152,
+     "targets": 1728,
+     "cases": 2880,
+     "passes": {},
+     "scored": 0
+    },
+    {
+     "family": "nested-box-edges",
+     "browser": "chrome",
+     "build": "153.0.8010.48",
+     "resolvedTargets": 288,
+     "targets": 432,
+     "cases": 720,
+     "passes": {},
+     "scored": 0
+    }
+   ],
+   "coveredBy": [],
+   "annotated": false
+  },
+  {
+   "id": "blink/shapeline/needs-accurate-end-position",
+   "engine": "blink",
+   "kind": "ported rule",
+   "declaredBy": "provisional (stage 5, feature families 2026-09-17)",
+   "tests": {
+    "present": [],
+    "stale": []
+   },
+   "facts": {
+    "specs": [],
+    "holds": 0,
+    "fails": 0,
+    "other": 0,
+    "specsWithoutFacts": []
+   },
+   "declaredFamilies": [
+    "text-align"
+   ],
+   "observedFamilies": [],
+   "derivedFamilies": [
+    {
+     "family": "text-align",
+     "browser": "chrome",
+     "build": "153.0.8010.48",
+     "resolvedTargets": 432,
+     "targets": 576,
+     "cases": 1104,
+     "passes": {},
+     "scored": 0
+    }
+   ],
+   "coveredBy": [],
+   "annotated": false
+  },
+  {
+   "id": "blink/shaping/box-edge-ends-group",
+   "engine": "blink",
+   "kind": "ported rule",
+   "declaredBy": "provisional (stage 5, feature families 2026-09-17)",
+   "tests": {
+    "present": [],
+    "stale": []
+   },
+   "facts": {
+    "specs": [],
+    "holds": 0,
+    "fails": 0,
+    "other": 0,
+    "specsWithoutFacts": []
+   },
+   "declaredFamilies": [
+    "box-edges"
+   ],
+   "observedFamilies": [],
+   "derivedFamilies": [
+    {
+     "family": "box-edges",
+     "browser": "chrome",
+     "build": "153.0.8010.48",
+     "resolvedTargets": 1152,
+     "targets": 1728,
+     "cases": 2880,
+     "passes": {},
+     "scored": 0
+    }
+   ],
+   "coveredBy": [],
+   "annotated": false
+  },
+  {
+   "id": "blink/style/box-edge-layout-units",
+   "engine": "blink",
+   "kind": "ported rule",
+   "declaredBy": "provisional (stage 5, feature families 2026-09-17)",
+   "tests": {
+    "present": [],
+    "stale": []
+   },
+   "facts": {
+    "specs": [],
+    "holds": 0,
+    "fails": 0,
+    "other": 0,
+    "specsWithoutFacts": []
+   },
+   "declaredFamilies": [
+    "box-edges"
+   ],
+   "observedFamilies": [],
+   "derivedFamilies": [
+    {
+     "family": "box-edges",
+     "browser": "chrome",
+     "build": "153.0.8010.48",
+     "resolvedTargets": 1152,
+     "targets": 1728,
+     "cases": 2880,
+     "passes": {},
+     "scored": 0
+    }
+   ],
+   "coveredBy": [],
+   "annotated": false
+  },
+  {
+   "id": "blink/tabs/float-offset",
+   "engine": "blink",
+   "kind": "ported rule",
+   "declaredBy": "provisional (stage 5, feature families 2026-09-17)",
+   "tests": {
+    "present": [],
+    "stale": []
+   },
+   "facts": {
+    "specs": [],
+    "holds": 0,
+    "fails": 0,
+    "other": 0,
+    "specsWithoutFacts": []
+   },
+   "declaredFamilies": [
+    "line-slots"
+   ],
+   "observedFamilies": [],
+   "derivedFamilies": [
+    {
+     "family": "line-slots",
+     "browser": "chrome",
+     "build": "153.0.8010.48",
+     "resolvedTargets": 844,
+     "targets": 1294,
+     "cases": 1904,
+     "passes": {},
+     "scored": 0
+    }
+   ],
+   "coveredBy": [],
+   "annotated": false
+  },
+  {
+   "id": "webkit/breaks/atomic-soft-wrap-opportunity",
+   "engine": "webkit",
+   "kind": "ported rule",
+   "declaredBy": "provisional (stage 5, feature families 2026-09-17)",
+   "tests": {
+    "present": [],
+    "stale": []
+   },
+   "facts": {
+    "specs": [],
+    "holds": 0,
+    "fails": 0,
+    "other": 0,
+    "specsWithoutFacts": []
+   },
+   "declaredFamilies": [
+    "atomic-inlines"
+   ],
+   "observedFamilies": [],
+   "derivedFamilies": [
+    {
+     "family": "atomic-inlines",
+     "browser": "webkit-host",
+     "build": "22625.1.29.11.27",
+     "resolvedTargets": 726,
+     "targets": 1003,
+     "cases": 2028,
+     "passes": {},
+     "scored": 0
+    }
+   ],
+   "coveredBy": [],
+   "annotated": false
+  },
+  {
+   "id": "webkit/breaks/nearest-common-ancestor-white-space",
+   "engine": "webkit",
+   "kind": "ported rule",
+   "declaredBy": "provisional (stage 5, feature families 2026-09-17)",
+   "tests": {
+    "present": [],
+    "stale": []
+   },
+   "facts": {
+    "specs": [],
+    "holds": 0,
+    "fails": 0,
+    "other": 0,
+    "specsWithoutFacts": []
+   },
+   "declaredFamilies": [
+    "nowrap-spans"
+   ],
+   "observedFamilies": [],
+   "derivedFamilies": [
+    {
+     "family": "nowrap-spans",
+     "browser": "webkit-host",
+     "build": "22625.1.29.11.27",
+     "resolvedTargets": 168,
+     "targets": 240,
+     "cases": 496,
+     "passes": {},
+     "scored": 0
+    }
+   ],
+   "coveredBy": [],
+   "annotated": false
+  },
+  {
+   "id": "webkit/builder/eligibility-over-style-record",
+   "engine": "webkit",
+   "kind": "ported rule",
+   "declaredBy": "provisional (stage 5, feature families 2026-09-17)",
+   "tests": {
+    "present": [],
+    "stale": []
+   },
+   "facts": {
+    "specs": [],
+    "holds": 0,
+    "fails": 0,
+    "other": 0,
+    "specsWithoutFacts": []
+   },
+   "declaredFamilies": [
+    "nowrap-spans",
+    "text-align"
+   ],
+   "observedFamilies": [],
+   "derivedFamilies": [
+    {
+     "family": "nowrap-spans",
+     "browser": "webkit-host",
+     "build": "22625.1.29.11.27",
+     "resolvedTargets": 168,
+     "targets": 240,
+     "cases": 496,
+     "passes": {},
+     "scored": 0
+    },
+    {
+     "family": "text-align",
+     "browser": "webkit-host",
+     "build": "22625.1.29.11.27",
+     "resolvedTargets": 432,
+     "targets": 576,
+     "cases": 1104,
+     "passes": {},
+     "scored": 0
+    }
+   ],
+   "coveredBy": [],
+   "annotated": false
+  },
+  {
+   "id": "webkit/content/hard-line-break-item",
+   "engine": "webkit",
+   "kind": "ported rule",
+   "declaredBy": "provisional (stage 5, feature families 2026-09-17)",
+   "tests": {
+    "present": [],
+    "stale": []
+   },
+   "facts": {
+    "specs": [],
+    "holds": 0,
+    "fails": 0,
+    "other": 0,
+    "specsWithoutFacts": []
+   },
+   "declaredFamilies": [
+    "br-elements"
+   ],
+   "observedFamilies": [],
+   "derivedFamilies": [
+    {
+     "family": "br-elements",
+     "browser": "webkit-host",
+     "build": "22625.1.29.11.27",
+     "resolvedTargets": 232,
+     "targets": 264,
+     "cases": 848,
+     "passes": {},
+     "scored": 0
+    }
+   ],
+   "coveredBy": [],
+   "annotated": false
+  },
+  {
+   "id": "webkit/content/word-break-opportunity-item",
+   "engine": "webkit",
+   "kind": "ported rule",
+   "declaredBy": "provisional (stage 5, feature families 2026-09-17)",
+   "tests": {
+    "present": [],
+    "stale": []
+   },
+   "facts": {
+    "specs": [],
+    "holds": 0,
+    "fails": 0,
+    "other": 0,
+    "specsWithoutFacts": []
+   },
+   "declaredFamilies": [
+    "wbr-elements"
+   ],
+   "observedFamilies": [],
+   "derivedFamilies": [
+    {
+     "family": "wbr-elements",
+     "browser": "webkit-host",
+     "build": "22625.1.29.11.27",
+     "resolvedTargets": 438,
+     "targets": 612,
+     "cases": 1164,
+     "passes": {},
+     "scored": 0
+    }
+   ],
+   "coveredBy": [],
+   "annotated": false
+  },
+  {
+   "id": "webkit/lines/atomic-margin-box-width",
+   "engine": "webkit",
+   "kind": "ported rule",
+   "declaredBy": "provisional (stage 5, feature families 2026-09-17)",
+   "tests": {
+    "present": [],
+    "stale": []
+   },
+   "facts": {
+    "specs": [],
+    "holds": 0,
+    "fails": 0,
+    "other": 0,
+    "specsWithoutFacts": []
+   },
+   "declaredFamilies": [
+    "atomic-inlines"
+   ],
+   "observedFamilies": [],
+   "derivedFamilies": [
+    {
+     "family": "atomic-inlines",
+     "browser": "webkit-host",
+     "build": "22625.1.29.11.27",
+     "resolvedTargets": 726,
+     "targets": 1003,
+     "cases": 2028,
+     "passes": {},
+     "scored": 0
+    }
+   ],
+   "coveredBy": [],
+   "annotated": false
+  },
+  {
+   "id": "webkit/lines/candidate-beside-float-wraps",
+   "engine": "webkit",
+   "kind": "ported rule",
+   "declaredBy": "provisional (stage 5, feature families 2026-09-17)",
+   "tests": {
+    "present": [],
+    "stale": []
+   },
+   "facts": {
+    "specs": [],
+    "holds": 0,
+    "fails": 0,
+    "other": 0,
+    "specsWithoutFacts": []
+   },
+   "declaredFamilies": [
+    "line-slots"
+   ],
+   "observedFamilies": [],
+   "derivedFamilies": [
+    {
+     "family": "line-slots",
+     "browser": "webkit-host",
+     "build": "22625.1.29.11.27",
+     "resolvedTargets": 851,
+     "targets": 1297,
+     "cases": 1918,
+     "passes": {},
+     "scored": 0
+    }
+   ],
+   "coveredBy": [],
+   "annotated": false
+  },
+  {
+   "id": "webkit/lines/decorated-box-is-content",
+   "engine": "webkit",
+   "kind": "ported rule",
+   "declaredBy": "provisional (stage 5, feature families 2026-09-17)",
+   "tests": {
+    "present": [],
+    "stale": []
+   },
+   "facts": {
+    "specs": [],
+    "holds": 0,
+    "fails": 0,
+    "other": 0,
+    "specsWithoutFacts": []
+   },
+   "declaredFamilies": [
+    "box-edges"
+   ],
+   "observedFamilies": [],
+   "derivedFamilies": [
+    {
+     "family": "box-edges",
+     "browser": "webkit-host",
+     "build": "22625.1.29.11.27",
+     "resolvedTargets": 1152,
+     "targets": 1728,
+     "cases": 2880,
+     "passes": {},
+     "scored": 0
+    }
+   ],
+   "coveredBy": [],
+   "annotated": false
+  },
+  {
+   "id": "webkit/lines/float-avoiding-rect",
+   "engine": "webkit",
+   "kind": "ported rule",
+   "declaredBy": "provisional (stage 5, feature families 2026-09-17)",
+   "tests": {
+    "present": [],
+    "stale": []
+   },
+   "facts": {
+    "specs": [],
+    "holds": 0,
+    "fails": 0,
+    "other": 0,
+    "specsWithoutFacts": []
+   },
+   "declaredFamilies": [
+    "line-slots"
+   ],
+   "observedFamilies": [],
+   "derivedFamilies": [
+    {
+     "family": "line-slots",
+     "browser": "webkit-host",
+     "build": "22625.1.29.11.27",
+     "resolvedTargets": 851,
+     "targets": 1297,
+     "cases": 1918,
+     "passes": {},
+     "scored": 0
+    }
+   ],
+   "coveredBy": [],
+   "annotated": false
+  },
+  {
+   "id": "webkit/lines/inline-box-edge-widths",
+   "engine": "webkit",
+   "kind": "ported rule",
+   "declaredBy": "provisional (stage 5, feature families 2026-09-17)",
+   "tests": {
+    "present": [],
+    "stale": []
+   },
+   "facts": {
+    "specs": [],
+    "holds": 0,
+    "fails": 0,
+    "other": 0,
+    "specsWithoutFacts": []
+   },
+   "declaredFamilies": [
+    "box-edges",
+    "nested-box-edges"
+   ],
+   "observedFamilies": [],
+   "derivedFamilies": [
+    {
+     "family": "box-edges",
+     "browser": "webkit-host",
+     "build": "22625.1.29.11.27",
+     "resolvedTargets": 1152,
+     "targets": 1728,
+     "cases": 2880,
+     "passes": {},
+     "scored": 0
+    },
+    {
+     "family": "nested-box-edges",
+     "browser": "webkit-host",
+     "build": "22625.1.29.11.27",
+     "resolvedTargets": 288,
+     "targets": 432,
+     "cases": 720,
+     "passes": {},
+     "scored": 0
+    }
+   ],
+   "coveredBy": [],
+   "annotated": false
+  },
+  {
+   "id": "webkit/lines/line-spanning-inline-boxes",
+   "engine": "webkit",
+   "kind": "ported rule",
+   "declaredBy": "provisional (stage 5, feature families 2026-09-17)",
+   "tests": {
+    "present": [],
+    "stale": []
+   },
+   "facts": {
+    "specs": [],
+    "holds": 0,
+    "fails": 0,
+    "other": 0,
+    "specsWithoutFacts": []
+   },
+   "declaredFamilies": [
+    "box-edges",
+    "nested-box-edges"
+   ],
+   "observedFamilies": [],
+   "derivedFamilies": [
+    {
+     "family": "box-edges",
+     "browser": "webkit-host",
+     "build": "22625.1.29.11.27",
+     "resolvedTargets": 1152,
+     "targets": 1728,
+     "cases": 2880,
+     "passes": {},
+     "scored": 0
+    },
+    {
+     "family": "nested-box-edges",
+     "browser": "webkit-host",
+     "build": "22625.1.29.11.27",
+     "resolvedTargets": 288,
+     "targets": 432,
+     "cases": 720,
+     "passes": {},
+     "scored": 0
+    }
+   ],
+   "coveredBy": [],
+   "annotated": false
+  },
+  {
+   "id": "webkit/lines/text-indent-start-margin",
+   "engine": "webkit",
+   "kind": "ported rule",
+   "declaredBy": "provisional (stage 5, feature families 2026-09-17)",
+   "tests": {
+    "present": [],
+    "stale": []
+   },
+   "facts": {
+    "specs": [],
+    "holds": 0,
+    "fails": 0,
+    "other": 0,
+    "specsWithoutFacts": []
+   },
+   "declaredFamilies": [
+    "text-indent"
+   ],
+   "observedFamilies": [],
+   "derivedFamilies": [
+    {
+     "family": "text-indent",
+     "browser": "webkit-host",
+     "build": "22625.1.29.11.27",
+     "resolvedTargets": 412,
+     "targets": 640,
+     "cases": 992,
+     "passes": {},
+     "scored": 0
+    }
+   ],
+   "coveredBy": [],
+   "annotated": false
+  },
+  {
+   "id": "webkit/output/horizontal-alignment-offset",
+   "engine": "webkit",
+   "kind": "ported rule",
+   "declaredBy": "provisional (stage 5, feature families 2026-09-17)",
+   "tests": {
+    "present": [],
+    "stale": []
+   },
+   "facts": {
+    "specs": [],
+    "holds": 0,
+    "fails": 0,
+    "other": 0,
+    "specsWithoutFacts": []
+   },
+   "declaredFamilies": [
+    "text-align"
+   ],
+   "observedFamilies": [],
+   "derivedFamilies": [
+    {
+     "family": "text-align",
+     "browser": "webkit-host",
+     "build": "22625.1.29.11.27",
+     "resolvedTargets": 432,
+     "targets": 576,
+     "cases": 1104,
+     "passes": {},
+     "scored": 0
+    }
+   ],
+   "coveredBy": [],
+   "annotated": false
+  },
+  {
+   "id": "webkit/output/justify-expansion",
+   "engine": "webkit",
+   "kind": "ported rule",
+   "declaredBy": "provisional (stage 5, feature families 2026-09-17)",
+   "tests": {
+    "present": [],
+    "stale": []
+   },
+   "facts": {
+    "specs": [],
+    "holds": 0,
+    "fails": 0,
+    "other": 0,
+    "specsWithoutFacts": []
+   },
+   "declaredFamilies": [
+    "text-align"
+   ],
+   "observedFamilies": [],
+   "derivedFamilies": [
+    {
+     "family": "text-align",
+     "browser": "webkit-host",
+     "build": "22625.1.29.11.27",
+     "resolvedTargets": 432,
+     "targets": 576,
+     "cases": 1104,
+     "passes": {},
+     "scored": 0
+    }
+   ],
+   "coveredBy": [],
+   "annotated": false
+  },
+  {
+   "id": "webkit/style/box-geometry-units",
+   "engine": "webkit",
+   "kind": "ported rule",
+   "declaredBy": "provisional (stage 5, feature families 2026-09-17)",
+   "tests": {
+    "present": [],
+    "stale": []
+   },
+   "facts": {
+    "specs": [],
+    "holds": 0,
+    "fails": 0,
+    "other": 0,
+    "specsWithoutFacts": []
+   },
+   "declaredFamilies": [
+    "box-edges"
+   ],
+   "observedFamilies": [],
+   "derivedFamilies": [
+    {
+     "family": "box-edges",
+     "browser": "webkit-host",
+     "build": "22625.1.29.11.27",
+     "resolvedTargets": 1152,
+     "targets": 1728,
+     "cases": 2880,
+     "passes": {},
+     "scored": 0
+    }
+   ],
+   "coveredBy": [],
+   "annotated": false
+  },
+  {
+   "id": "webkit/style/per-box-style-record",
+   "engine": "webkit",
+   "kind": "ported rule",
+   "declaredBy": "provisional (stage 5, feature families 2026-09-17)",
+   "tests": {
+    "present": [],
+    "stale": []
+   },
+   "facts": {
+    "specs": [],
+    "holds": 0,
+    "fails": 0,
+    "other": 0,
+    "specsWithoutFacts": []
+   },
+   "declaredFamilies": [
+    "nowrap-spans",
+    "wbr-elements"
+   ],
+   "observedFamilies": [],
+   "derivedFamilies": [
+    {
+     "family": "nowrap-spans",
+     "browser": "webkit-host",
+     "build": "22625.1.29.11.27",
+     "resolvedTargets": 168,
+     "targets": 240,
+     "cases": 496,
+     "passes": {},
+     "scored": 0
+    },
+    {
+     "family": "wbr-elements",
+     "browser": "webkit-host",
+     "build": "22625.1.29.11.27",
+     "resolvedTargets": 438,
+     "targets": 612,
+     "cases": 1164,
+     "passes": {},
+     "scored": 0
+    }
+   ],
+   "coveredBy": [],
+   "annotated": false
+  },
+  {
+   "id": "webkit/tabs/content-edge-offset",
+   "engine": "webkit",
+   "kind": "ported rule",
+   "declaredBy": "provisional (stage 5, feature families 2026-09-17)",
+   "tests": {
+    "present": [],
+    "stale": []
+   },
+   "facts": {
+    "specs": [],
+    "holds": 0,
+    "fails": 0,
+    "other": 0,
+    "specsWithoutFacts": []
+   },
+   "declaredFamilies": [
+    "text-indent",
+    "line-slots"
+   ],
+   "observedFamilies": [],
+   "derivedFamilies": [
+    {
+     "family": "line-slots",
+     "browser": "webkit-host",
+     "build": "22625.1.29.11.27",
+     "resolvedTargets": 851,
+     "targets": 1297,
+     "cases": 1918,
+     "passes": {},
+     "scored": 0
+    },
+    {
+     "family": "text-indent",
+     "browser": "webkit-host",
+     "build": "22625.1.29.11.27",
+     "resolvedTargets": 412,
+     "targets": 640,
+     "cases": 992,
+     "passes": {},
+     "scored": 0
+    }
+   ],
+   "coveredBy": [],
+   "annotated": false
+  },
+  {
+   "id": "gecko/lines/begin-span-line-data",
+   "engine": "gecko",
+   "kind": "ported rule",
+   "declaredBy": "provisional (stage 5, feature families 2026-09-17)",
+   "tests": {
+    "present": [],
+    "stale": []
+   },
+   "facts": {
+    "specs": [],
+    "holds": 0,
+    "fails": 0,
+    "other": 0,
+    "specsWithoutFacts": []
+   },
+   "declaredFamilies": [
+    "box-edges",
+    "nested-box-edges",
+    "nowrap-spans"
+   ],
+   "observedFamilies": [],
+   "derivedFamilies": [
+    {
+     "family": "box-edges",
+     "browser": "firefox",
+     "build": "156.0",
+     "resolvedTargets": 1152,
+     "targets": 1728,
+     "cases": 2880,
+     "passes": {},
+     "scored": 0
+    },
+    {
+     "family": "nested-box-edges",
+     "browser": "firefox",
+     "build": "156.0",
+     "resolvedTargets": 288,
+     "targets": 432,
+     "cases": 720,
+     "passes": {},
+     "scored": 0
+    },
+    {
+     "family": "nowrap-spans",
+     "browser": "firefox",
+     "build": "156.0",
+     "resolvedTargets": 160,
+     "targets": 232,
+     "cases": 480,
+     "passes": {},
+     "scored": 0
+    }
+   ],
+   "coveredBy": [],
+   "annotated": false
+  },
+  {
+   "id": "gecko/lines/br-frame-always-placed",
+   "engine": "gecko",
+   "kind": "ported rule",
+   "declaredBy": "provisional (stage 5, feature families 2026-09-17)",
+   "tests": {
+    "present": [],
+    "stale": []
+   },
+   "facts": {
+    "specs": [],
+    "holds": 0,
+    "fails": 0,
+    "other": 0,
+    "specsWithoutFacts": []
+   },
+   "declaredFamilies": [
+    "br-elements"
+   ],
+   "observedFamilies": [],
+   "derivedFamilies": [
+    {
+     "family": "br-elements",
+     "browser": "firefox",
+     "build": "156.0",
+     "resolvedTargets": 236,
+     "targets": 268,
+     "cases": 856,
+     "passes": {},
+     "scored": 0
+    }
+   ],
+   "coveredBy": [],
+   "annotated": false
+  },
+  {
+   "id": "gecko/lines/break-after-non-text-frame",
+   "engine": "gecko",
+   "kind": "ported rule",
+   "declaredBy": "provisional (stage 5, feature families 2026-09-17)",
+   "tests": {
+    "present": [],
+    "stale": []
+   },
+   "facts": {
+    "specs": [],
+    "holds": 0,
+    "fails": 0,
+    "other": 0,
+    "specsWithoutFacts": []
+   },
+   "declaredFamilies": [
+    "atomic-inlines"
+   ],
+   "observedFamilies": [],
+   "derivedFamilies": [
+    {
+     "family": "atomic-inlines",
+     "browser": "firefox",
+     "build": "156.0",
+     "resolvedTargets": 668,
+     "targets": 920,
+     "cases": 1912,
+     "passes": {},
+     "scored": 0
+    }
+   ],
+   "coveredBy": [],
+   "annotated": false
+  },
+  {
+   "id": "gecko/lines/continuation-reserves-end-edge",
+   "engine": "gecko",
+   "kind": "ported rule",
+   "declaredBy": "provisional (stage 5, feature families 2026-09-17)",
+   "tests": {
+    "present": [],
+    "stale": []
+   },
+   "facts": {
+    "specs": [],
+    "holds": 0,
+    "fails": 0,
+    "other": 0,
+    "specsWithoutFacts": []
+   },
+   "declaredFamilies": [
+    "box-edges",
+    "nested-box-edges"
+   ],
+   "observedFamilies": [],
+   "derivedFamilies": [
+    {
+     "family": "box-edges",
+     "browser": "firefox",
+     "build": "156.0",
+     "resolvedTargets": 1152,
+     "targets": 1728,
+     "cases": 2880,
+     "passes": {},
+     "scored": 0
+    },
+    {
+     "family": "nested-box-edges",
+     "browser": "firefox",
+     "build": "156.0",
+     "resolvedTargets": 288,
+     "targets": 432,
+     "cases": 720,
+     "passes": {},
+     "scored": 0
+    }
+   ],
+   "coveredBy": [],
+   "annotated": false
+  },
+  {
+   "id": "gecko/lines/end-margin-last-continuation",
+   "engine": "gecko",
+   "kind": "ported rule",
+   "declaredBy": "provisional (stage 5, feature families 2026-09-17)",
+   "tests": {
+    "present": [],
+    "stale": []
+   },
+   "facts": {
+    "specs": [],
+    "holds": 0,
+    "fails": 0,
+    "other": 0,
+    "specsWithoutFacts": []
+   },
+   "declaredFamilies": [
+    "box-edges",
+    "nested-box-edges"
+   ],
+   "observedFamilies": [],
+   "derivedFamilies": [
+    {
+     "family": "box-edges",
+     "browser": "firefox",
+     "build": "156.0",
+     "resolvedTargets": 1152,
+     "targets": 1728,
+     "cases": 2880,
+     "passes": {},
+     "scored": 0
+    },
+    {
+     "family": "nested-box-edges",
+     "browser": "firefox",
+     "build": "156.0",
+     "resolvedTargets": 288,
+     "targets": 432,
+     "cases": 720,
+     "passes": {},
+     "scored": 0
+    }
+   ],
+   "coveredBy": [],
+   "annotated": false
+  },
+  {
+   "id": "gecko/lines/float-available-space",
+   "engine": "gecko",
+   "kind": "ported rule",
+   "declaredBy": "provisional (stage 5, feature families 2026-09-17)",
+   "tests": {
+    "present": [],
+    "stale": []
+   },
+   "facts": {
+    "specs": [],
+    "holds": 0,
+    "fails": 0,
+    "other": 0,
+    "specsWithoutFacts": []
+   },
+   "declaredFamilies": [
+    "line-slots"
+   ],
+   "observedFamilies": [],
+   "derivedFamilies": [
+    {
+     "family": "line-slots",
+     "browser": "firefox",
+     "build": "156.0",
+     "resolvedTargets": 829,
+     "targets": 1319,
+     "cases": 1814,
+     "passes": {},
+     "scored": 0
+    }
+   ],
+   "coveredBy": [],
+   "annotated": false
+  },
+  {
+   "id": "gecko/lines/impacted-by-floats",
+   "engine": "gecko",
+   "kind": "ported rule",
+   "declaredBy": "provisional (stage 5, feature families 2026-09-17)",
+   "tests": {
+    "present": [],
+    "stale": []
+   },
+   "facts": {
+    "specs": [],
+    "holds": 0,
+    "fails": 0,
+    "other": 0,
+    "specsWithoutFacts": []
+   },
+   "declaredFamilies": [
+    "line-slots"
+   ],
+   "observedFamilies": [],
+   "derivedFamilies": [
+    {
+     "family": "line-slots",
+     "browser": "firefox",
+     "build": "156.0",
+     "resolvedTargets": 829,
+     "targets": 1319,
+     "cases": 1814,
+     "passes": {},
+     "scored": 0
+    }
+   ],
+   "coveredBy": [],
+   "annotated": false
+  },
+  {
+   "id": "gecko/lines/nowrap-span-fits",
+   "engine": "gecko",
+   "kind": "ported rule",
+   "declaredBy": "provisional (stage 5, feature families 2026-09-17)",
+   "tests": {
+    "present": [],
+    "stale": []
+   },
+   "facts": {
+    "specs": [],
+    "holds": 0,
+    "fails": 0,
+    "other": 0,
+    "specsWithoutFacts": []
+   },
+   "declaredFamilies": [
+    "nowrap-spans",
+    "atomic-inlines",
+    "wbr-elements"
+   ],
+   "observedFamilies": [],
+   "derivedFamilies": [
+    {
+     "family": "atomic-inlines",
+     "browser": "firefox",
+     "build": "156.0",
+     "resolvedTargets": 668,
+     "targets": 920,
+     "cases": 1912,
+     "passes": {},
+     "scored": 0
+    },
+    {
+     "family": "nowrap-spans",
+     "browser": "firefox",
+     "build": "156.0",
+     "resolvedTargets": 160,
+     "targets": 232,
+     "cases": 480,
+     "passes": {},
+     "scored": 0
+    },
+    {
+     "family": "wbr-elements",
+     "browser": "firefox",
+     "build": "156.0",
+     "resolvedTargets": 450,
+     "targets": 612,
+     "cases": 1188,
+     "passes": {},
+     "scored": 0
+    }
+   ],
+   "coveredBy": [],
+   "annotated": false
+  },
+  {
+   "id": "gecko/lines/redo-next-band",
+   "engine": "gecko",
+   "kind": "ported rule",
+   "declaredBy": "provisional (stage 5, feature families 2026-09-17)",
+   "tests": {
+    "present": [],
+    "stale": []
+   },
+   "facts": {
+    "specs": [],
+    "holds": 0,
+    "fails": 0,
+    "other": 0,
+    "specsWithoutFacts": []
+   },
+   "declaredFamilies": [
+    "line-slots"
+   ],
+   "observedFamilies": [],
+   "derivedFamilies": [
+    {
+     "family": "line-slots",
+     "browser": "firefox",
+     "build": "156.0",
+     "resolvedTargets": 829,
+     "targets": 1319,
+     "cases": 1814,
+     "passes": {},
+     "scored": 0
+    }
+   ],
+   "coveredBy": [],
+   "annotated": false
+  },
+  {
+   "id": "gecko/lines/text-indent-root-span",
+   "engine": "gecko",
+   "kind": "ported rule",
+   "declaredBy": "provisional (stage 5, feature families 2026-09-17)",
+   "tests": {
+    "present": [],
+    "stale": []
+   },
+   "facts": {
+    "specs": [],
+    "holds": 0,
+    "fails": 0,
+    "other": 0,
+    "specsWithoutFacts": []
+   },
+   "declaredFamilies": [
+    "text-indent"
+   ],
+   "observedFamilies": [],
+   "derivedFamilies": [
+    {
+     "family": "text-indent",
+     "browser": "firefox",
+     "build": "156.0",
+     "resolvedTargets": 412,
+     "targets": 640,
+     "cases": 992,
+     "passes": {},
+     "scored": 0
+    }
+   ],
+   "coveredBy": [],
+   "annotated": false
+  },
+  {
+   "id": "gecko/lines/trim-recurses-into-spans",
+   "engine": "gecko",
+   "kind": "ported rule",
+   "declaredBy": "provisional (stage 5, feature families 2026-09-17)",
+   "tests": {
+    "present": [],
+    "stale": []
+   },
+   "facts": {
+    "specs": [],
+    "holds": 0,
+    "fails": 0,
+    "other": 0,
+    "specsWithoutFacts": []
+   },
+   "declaredFamilies": [
+    "nested-box-edges",
+    "br-elements"
+   ],
+   "observedFamilies": [],
+   "derivedFamilies": [
+    {
+     "family": "br-elements",
+     "browser": "firefox",
+     "build": "156.0",
+     "resolvedTargets": 236,
+     "targets": 268,
+     "cases": 856,
+     "passes": {},
+     "scored": 0
+    },
+    {
+     "family": "nested-box-edges",
+     "browser": "firefox",
+     "build": "156.0",
+     "resolvedTargets": 288,
+     "targets": 432,
+     "cases": 720,
+     "passes": {},
+     "scored": 0
+    }
+   ],
+   "coveredBy": [],
+   "annotated": false
+  },
+  {
+   "id": "gecko/lines/wbr-frame-opportunity",
+   "engine": "gecko",
+   "kind": "ported rule",
+   "declaredBy": "provisional (stage 5, feature families 2026-09-17)",
+   "tests": {
+    "present": [],
+    "stale": []
+   },
+   "facts": {
+    "specs": [],
+    "holds": 0,
+    "fails": 0,
+    "other": 0,
+    "specsWithoutFacts": []
+   },
+   "declaredFamilies": [
+    "wbr-elements"
+   ],
+   "observedFamilies": [],
+   "derivedFamilies": [
+    {
+     "family": "wbr-elements",
+     "browser": "firefox",
+     "build": "156.0",
+     "resolvedTargets": 450,
+     "targets": 612,
+     "cases": 1188,
+     "passes": {},
+     "scored": 0
+    }
+   ],
+   "coveredBy": [],
+   "annotated": false
+  },
+  {
+   "id": "gecko/output/text-align-line",
+   "engine": "gecko",
+   "kind": "ported rule",
+   "declaredBy": "provisional (stage 5, feature families 2026-09-17)",
+   "tests": {
+    "present": [],
+    "stale": []
+   },
+   "facts": {
+    "specs": [],
+    "holds": 0,
+    "fails": 0,
+    "other": 0,
+    "specsWithoutFacts": []
+   },
+   "declaredFamilies": [
+    "text-align"
+   ],
+   "observedFamilies": [],
+   "derivedFamilies": [
+    {
+     "family": "text-align",
+     "browser": "firefox",
+     "build": "156.0",
+     "resolvedTargets": 432,
+     "targets": 576,
+     "cases": 1104,
+     "passes": {},
+     "scored": 0
+    }
+   ],
+   "coveredBy": [],
+   "annotated": false
+  },
+  {
+   "id": "gecko/style/box-edge-app-units",
+   "engine": "gecko",
+   "kind": "ported rule",
+   "declaredBy": "provisional (stage 5, feature families 2026-09-17)",
+   "tests": {
+    "present": [],
+    "stale": []
+   },
+   "facts": {
+    "specs": [],
+    "holds": 0,
+    "fails": 0,
+    "other": 0,
+    "specsWithoutFacts": []
+   },
+   "declaredFamilies": [
+    "box-edges"
+   ],
+   "observedFamilies": [],
+   "derivedFamilies": [
+    {
+     "family": "box-edges",
+     "browser": "firefox",
+     "build": "156.0",
+     "resolvedTargets": 1152,
+     "targets": 1728,
+     "cases": 2880,
+     "passes": {},
+     "scored": 0
+    }
+   ],
+   "coveredBy": [],
+   "annotated": false
+  },
+  {
+   "id": "gecko/tabs/distance-from-content-edge",
+   "engine": "gecko",
+   "kind": "ported rule",
+   "declaredBy": "provisional (stage 5, feature families 2026-09-17)",
+   "tests": {
+    "present": [],
+    "stale": []
+   },
+   "facts": {
+    "specs": [],
+    "holds": 0,
+    "fails": 0,
+    "other": 0,
+    "specsWithoutFacts": []
+   },
+   "declaredFamilies": [
+    "text-indent",
+    "line-slots"
+   ],
+   "observedFamilies": [],
+   "derivedFamilies": [
+    {
+     "family": "line-slots",
+     "browser": "firefox",
+     "build": "156.0",
+     "resolvedTargets": 829,
+     "targets": 1319,
+     "cases": 1814,
+     "passes": {},
+     "scored": 0
+    },
+    {
+     "family": "text-indent",
+     "browser": "firefox",
+     "build": "156.0",
+     "resolvedTargets": 412,
+     "targets": 640,
+     "cases": 992,
+     "passes": {},
+     "scored": 0
+    }
+   ],
+   "coveredBy": [],
+   "annotated": false
+  },
+  {
+   "id": "gecko/textrun/box-edges-end-run",
+   "engine": "gecko",
+   "kind": "ported rule",
+   "declaredBy": "provisional (stage 5, feature families 2026-09-17)",
+   "tests": {
+    "present": [],
+    "stale": []
+   },
+   "facts": {
+    "specs": [],
+    "holds": 0,
+    "fails": 0,
+    "other": 0,
+    "specsWithoutFacts": []
+   },
+   "declaredFamilies": [
+    "box-edges"
+   ],
+   "observedFamilies": [],
+   "derivedFamilies": [
+    {
+     "family": "box-edges",
+     "browser": "firefox",
+     "build": "156.0",
+     "resolvedTargets": 1152,
+     "targets": 1728,
+     "cases": 2880,
+     "passes": {},
+     "scored": 0
+    }
+   ],
+   "coveredBy": [],
+   "annotated": false
+  },
+  {
+   "id": "lab/observe/blink/quads-for-self",
+   "engine": "blink",
+   "kind": "observation rule",
+   "declaredBy": "provisional (stage 5, feature families 2026-09-17)",
+   "tests": {
+    "present": [],
+    "stale": []
+   },
+   "facts": {
+    "specs": [],
+    "holds": 0,
+    "fails": 0,
+    "other": 0,
+    "specsWithoutFacts": []
+   },
+   "declaredFamilies": [],
+   "observedFamilies": [],
+   "derivedFamilies": [],
+   "coveredBy": [],
+   "annotated": false
+  },
+  {
+   "id": "lab/observe/webkit/inline-absolute-quads",
+   "engine": "webkit",
+   "kind": "observation rule",
+   "declaredBy": "provisional (stage 5, feature families 2026-09-17)",
+   "tests": {
+    "present": [],
+    "stale": []
+   },
+   "facts": {
+    "specs": [],
+    "holds": 0,
+    "fails": 0,
+    "other": 0,
+    "specsWithoutFacts": []
+   },
+   "declaredFamilies": [],
+   "observedFamilies": [],
+   "derivedFamilies": [],
+   "coveredBy": [],
+   "annotated": false
+  },
+  {
+   "id": "lab/observe/gecko/all-in-flow-rects",
+   "engine": "gecko",
+   "kind": "observation rule",
+   "declaredBy": "provisional (stage 5, feature families 2026-09-17)",
+   "tests": {
+    "present": [],
+    "stale": []
+   },
+   "facts": {
+    "specs": [],
+    "holds": 0,
+    "fails": 0,
+    "other": 0,
+    "specsWithoutFacts": []
+   },
+   "declaredFamilies": [],
+   "observedFamilies": [],
+   "derivedFamilies": [],
+   "coveredBy": [],
+   "annotated": false
+  },
+  {
+   "id": "shared/lab/vertical-centre-grouping",
+   "engine": "shared",
+   "kind": "observer assumption",
+   "declaredBy": "provisional (stage 5, feature families 2026-09-17)",
+   "tests": {
+    "present": [],
+    "stale": []
+   },
+   "facts": {
+    "specs": [],
+    "holds": 0,
+    "fails": 0,
+    "other": 0,
+    "specsWithoutFacts": []
+   },
+   "declaredFamilies": [],
+   "observedFamilies": [],
+   "derivedFamilies": [],
+   "coveredBy": [],
+   "annotated": false
+  },
+  {
+   "id": "shared/lab/slot-rows",
+   "engine": "shared",
+   "kind": "observer assumption",
+   "declaredBy": "provisional (stage 5, feature families 2026-09-17)",
+   "tests": {
+    "present": [],
+    "stale": []
+   },
+   "facts": {
+    "specs": [],
+    "holds": 0,
+    "fails": 0,
+    "other": 0,
+    "specsWithoutFacts": []
+   },
+   "declaredFamilies": [],
+   "observedFamilies": [],
+   "derivedFamilies": [],
+   "coveredBy": [],
    "annotated": false
   }
  ],
