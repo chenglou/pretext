@@ -143,7 +143,7 @@ function orderFont(font: FontDecl): FontDecl {
 }
 
 // Field order as in types.ts, for readable output.
-function orderParagraph(p: Paragraph): Paragraph {
+export function orderParagraph(p: Paragraph): Paragraph {
   const runs: TextRun[] = p.runs.map(run => ({ text: run.text, node: run.node, font: orderFont(run.font), letterSpacing: run.letterSpacing, wordSpacing: run.wordSpacing, lang: run.lang }))
   return {
     runs, font: orderFont(p.font), letterSpacing: p.letterSpacing, wordSpacing: p.wordSpacing, width: p.width, lineHeight: p.lineHeight,

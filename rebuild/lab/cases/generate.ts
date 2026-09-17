@@ -1,21 +1,26 @@
 // Case generator CLI: writes NDJSON Case records (rebuild/lab/types.ts) plus a summary with family
 // counts next to each file. Never launches a browser.
 //
-//   bun rebuild/lab/cases/generate.ts all                  # runs, ws, policy, smoke, suite-sample
+//   bun rebuild/lab/cases/generate.ts all                  # runs, ws, policy, smoke, suite-sample, obligations
 //   bun rebuild/lab/cases/generate.ts runs [--families=split]
 //   bun rebuild/lab/cases/generate.ts suite --suite-sample=20000 [--suite-families=kinsoku]
 //   bun rebuild/lab/cases/generate.ts smoke --smoke-count=300
+//   bun rebuild/lab/cases/generate.ts obligations          # first-class cases from main's suite (obligations.ts)
 //
 // Options: --seed=S (default lab-20260916), --out=FILE (single kind only), --out-dir=DIR
 // (default .artifacts/lab/cases), --rows=DIR (default .artifacts/rows-20260916),
 // --exclude-ids=FILE[,FILE...] (drop every case whose id appears in these case files before sampling or writing;
 // for held-out sets).
+//
+// suite, smoke and obligations read the old suite's rows in one pass. The obligations summary adds `groups` (cases and
+// required pairs per group and browser) and `required` (per case, the lab metrics each browser requires).
 
 import { closeSync, mkdirSync, openSync, readFileSync, writeFileSync, writeSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import type { Case } from '../types.ts'
 import type { Generator } from './build.ts'
 import { mergeCases, sortByCaseOrder, sortCases } from './case.ts'
+import { ObligationImport } from './obligations.ts'
 import { POLICY_GENERATORS } from './policy.ts'
 import { RUN_GENERATORS } from './runs.ts'
 import { stratifiedSample } from './sample.ts'
@@ -23,7 +28,7 @@ import { streamRowInputs, SuiteImport, suiteRowFiles, type SuiteEntry } from './
 import { WS_GENERATORS } from './ws.ts'
 
 const REPO = resolve(import.meta.dir, '../../..')
-const KINDS = ['runs', 'ws', 'policy', 'suite', 'smoke', 'all'] as const
+const KINDS = ['runs', 'ws', 'policy', 'suite', 'smoke', 'obligations', 'all'] as const
 type Kind = (typeof KINDS)[number]
 // Suite families at or below this size are kept whole by --suite-sample.
 const SMALL_FAMILY = 200
@@ -99,6 +104,7 @@ function writeCases(path: string, cases: Iterable<Case>, summary: Record<string,
   return families
 }
 
+type RowsRead = { files: string[]; skipped: string[] }
 type SuiteData = { suite: SuiteImport; entries: SuiteEntry[]; files: string[]; skipped: string[]; excludedCases: number }
 
 // Case ids listed in NDJSON case files (--exclude-ids). Lines are split on LF only: JSON strings can hold U+2028.
@@ -114,17 +120,25 @@ function readCaseIds(paths: string): Set<string> {
   return ids
 }
 
-async function importSuite(rowsDir: string, familyFilter: string | undefined, excluded: ReadonlySet<string> | null): Promise<SuiteData> {
+// One pass over the old suite's finished row files, feeding the suite import and the obligations import.
+async function readRows(rowsDir: string, suite: SuiteImport | null, obligations: ObligationImport | null): Promise<RowsRead> {
   const { files, skipped } = suiteRowFiles(rowsDir)
   if (files.length === 0) throw new Error(`No finished row files under ${rowsDir} (${skipped.join('; ')})`)
   for (const note of skipped) console.error(`skipped rows ${note}`)
-  const suite = new SuiteImport()
   for (const file of files) {
     const started = Date.now()
-    const rows = await streamRowInputs(file.rows, input => suite.add(input))
+    const rows = await streamRowInputs(file.rows, input => {
+      suite?.add(input)
+      obligations?.add(input, file.browser)
+    })
     Bun.gc(true)
-    console.error(`read ${rows} rows from ${file.rows} in ${Date.now() - started}ms (${suite.size} cases so far)`)
+    const sizes = [suite === null ? null : `${suite.size} cases`, obligations === null ? null : `${obligations.size} obligation cases`].filter(value => value !== null)
+    console.error(`read ${rows} rows from ${file.rows} in ${Date.now() - started}ms (${sizes.join(', ')} so far)`)
   }
+  return { files: files.map(file => file.rows), skipped }
+}
+
+function selectSuite(suite: SuiteImport, read: RowsRead, familyFilter: string | undefined, excluded: ReadonlySet<string> | null): SuiteData {
   let entries = suite.entries()
   let excludedCases = 0
   if (excluded !== null) {
@@ -136,7 +150,7 @@ async function importSuite(rowsDir: string, familyFilter: string | undefined, ex
     entries = entries.filter(entry => entry.family.includes(familyFilter) || entry.oldFamilies.some(family => family.includes(familyFilter)))
     if (entries.length === 0) throw new Error(`--suite-families=${familyFilter} matches no suite case`)
   }
-  return { suite, entries, files: files.map(file => file.rows), skipped, excludedCases }
+  return { suite, entries, files: read.files, skipped: read.skipped, excludedCases }
 }
 
 function* materialize(suite: SuiteImport, entries: readonly SuiteEntry[]): IterableIterator<Case> {
@@ -172,7 +186,7 @@ async function main(): Promise<void> {
   // Summary fields for --exclude-ids, absent without it so existing summaries don't change.
   const exclusion = (removed: number): Record<string, unknown> => (excluded === null ? {} : { excludeIds, excludedIds: excluded.size, excludedCases: removed })
   const all = kinds.includes('all')
-  const expanded = new Set<Kind>(all ? ['runs', 'ws', 'policy', 'smoke', 'suite'] : kinds)
+  const expanded = new Set<Kind>(all ? ['runs', 'ws', 'policy', 'smoke', 'suite', 'obligations'] : kinds)
   const outFor = (name: string): string => resolve(flags.get('out') ?? resolve(outDir, `${name}.ndjson`))
 
   const generated = new Map<string, { cases: Case[]; removed: number }>()
@@ -197,7 +211,15 @@ async function main(): Promise<void> {
     }
   }
 
-  const suiteData = expanded.has('suite') || expanded.has('smoke') ? await importSuite(rowsDir, flags.get('suite-families'), excluded) : null
+  const needSuite = expanded.has('suite') || expanded.has('smoke')
+  const obligations = expanded.has('obligations') ? new ObligationImport() : null
+  let suiteData: SuiteData | null = null
+  let read: RowsRead | null = null
+  if (needSuite || obligations !== null) {
+    const suite = needSuite ? new SuiteImport() : null
+    read = await readRows(rowsDir, suite, obligations)
+    if (suite !== null) suiteData = selectSuite(suite, read, flags.get('suite-families'), excluded)
+  }
 
   if (expanded.has('suite') && suiteData !== null) {
     const { suite, entries } = suiteData
@@ -231,6 +253,16 @@ async function main(): Promise<void> {
       family: value => value.family, id: value => value.id, keepFamiliesUpTo: 0,
     }).selected
     writeCases(outFor('smoke'), sortCases(mergeCases([...fromGenerated, ...fromSuite])), { seed, suiteShare: fromSuite.length, ...exclusion(0) })
+  }
+
+  if (obligations !== null && read !== null) {
+    const cases = obligations.cases()
+    const kept = excluded === null ? cases : cases.filter(c => !excluded.has(c.id))
+    const table = obligations.table(new Set(kept.map(c => c.id)))
+    writeCases(outFor('obligations'), kept, {
+      rows: read.files, skippedRows: read.skipped, inputs: obligations.inputs, ...exclusion(cases.length - kept.length), groups: table.groups, required: table.required,
+    })
+    console.log(`obligations: ${obligations.inputs} row inputs -> ${kept.length} cases in ${Object.keys(table.groups).length} groups`)
   }
 }
 
