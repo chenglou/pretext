@@ -4,12 +4,15 @@ The lab observes how each installed browser lays out a styled paragraph and scor
 doesn't depend on the old library in `src/`.
 
 - `types.ts`: shared shapes. Cases (`Case`, `Paragraph`, `TextRun`, `FontDecl`) and lab rows (`LabRow` and its parts).
-- `page.ts`: the browser page. It builds the native paragraph, records Range geometry, runs the prediction hook and
-  records the painted lines.
+- `page.ts`: the browser page. It builds the native paragraph, records Range geometry, runs the prediction hook and the
+  observation port over its layout, and records the painted lines.
 - `predictor.ts`: the prediction hook, the only library-facing import in the page.
-- `run.ts`: the driver. It serves the page, opens one background browser session and streams rows to NDJSON.
+- `observe/`: the observation ports, one per engine (DESIGN.md §9). Each derives, from a layout, the Range rects its
+  browser reports, by that engine's geometry code, and imports only types from `src/model.ts`.
+- `run.ts`: the driver. It reads the browser build from the app bundle, serves the page, opens one background browser
+  session and streams rows to NDJSON.
 - `score.ts`: the offline scorer.
-- `score.test.ts`: the scorer's derivation rules on small hand-made rows (`bun test rebuild/lab/score.test.ts`).
+- `score.test.ts`: the scorer's comparison rules on small hand-made rows (`bun test rebuild/lab/score.test.ts`).
 - `tsconfig.json`: the repo's strict settings over the lab and its case generators
   (`bunx tsc -p rebuild/lab/tsconfig.json --noEmit`).
 - `VALIDATION.md`: what the end-to-end validation ran, found and fixed.
@@ -37,9 +40,14 @@ bun rebuild/lab/score.ts --rows=.artifacts/lab/smoke/chrome-rows.ndjson --cases=
 dependence"). `--allow-safari-frontmost` (Safari only, no value) skips the wait for Safari to leave the front
 (approved by the maintainer on 2026-09-16); the lab window then opens over the user's windows.
 
-It writes `<out>/<browser>-rows.ndjson`, one row per case, and `<out>/<browser>-run.json` with totals, the case
-order, page contexts, the environment and errors. It exits nonzero when anything goes wrong: invalid cases, a launch or page
-failure, a stall, a native observation error, a missing row, or a change of user agent, DPR or visual-viewport scale
+Before launching, it reads the build from the app bundles, because user agents can't tell builds apart (Chrome's says
+`153.0.0.0` for every 153 build): Chrome's and Firefox's `CFBundleShortVersionString`, which are also the engine builds;
+Safari's, with WebKit.framework's `CFBundleVersion` as the engine build, for Safari and for webkit-host, whose user agent
+copies installed Safari's version; and the OS build from `sw_vers -buildVersion`. Every row carries it as `build`, and the
+page gives the engine build to the predictor. It writes `<out>/<browser>-rows.ndjson`, one row per case, and
+`<out>/<browser>-run.json` with the build, totals, the case order, page contexts, the environment and errors. It exits
+nonzero when anything goes wrong: invalid cases, a launch or page failure, a stall, a native observation error, a missing
+row, a user agent that doesn't name the build read before launch, or a change of user agent, DPR or visual-viewport scale
 during the run. A prediction error is a result, not a lab failure.
 
 ## Browser sessions
@@ -104,105 +112,95 @@ For each case the page:
 4. Records the paragraph height and the environment: user agent, DPR, visual-viewport scale, page language,
    fixture fonts, window sizes, visibility and focus, plus the document's history: `documentCaseIndex`, how many
    cases the document observed before this one, and `previousCaseId`, the last of them (null for the first).
-5. Calls `predict(c, { browser, dpr })`. When it returns lines, it calls `paint(c, prediction, host)`. If that returns
-   elements, one per predicted line, the page appends them to a host of the paragraph's width. For each element it
-   records the height, the Range rects of every text node inside it and their horizontal extent, the text of those
-   nodes in document order, and every Range rect of each of its code points.
+5. Calls `predict(c, { browser, build })`. When it returns a layout, the page runs `observe/<engine>.ts` over it,
+   measuring Canvas live where the port asks (only the WebKit port does), and records the prediction. Then it calls
+   `paint(c, prediction, host)`. If that returns elements, one per line with a line box, the page appends them to a host
+   of the paragraph's width. For each element it records the height, the Range rects of every text node inside it and
+   their horizontal extent, the text of those nodes in document order, and every Range rect of each of its code points.
 
 ## Prediction hook
 
-`predictor.ts` exports `predict(c, env): Prediction | { error }` and `paint(c, prediction, host): HTMLElement[] |
-null`. A `Prediction` is `{ lines: [{ start, end, width }], measureLog? }`. `start` and `end` are UTF-16 offsets into
-the concatenated run text, `width` is the predicted line width in CSS px, and `measureLog` is the number of
-`measureText` calls. Until `rebuild/src` exists, the stand-in returns one line holding everything, with the sum of
-each run's Canvas width, and `paint` returns null.
+`predictor.ts` exports `predict(c, { browser, build }): LayoutPrediction | { error }` and `paint(c, prediction, host):
+HTMLElement[] | null`. A `LayoutPrediction` is the library's input, the case paragraph with the font facts the predictor
+gives (all unknown today), and the `ParagraphLayout` it computed with `build` as `GivenFacts.build`. The page records an
+`EnginePrediction`: the layout without its Canvas call log, `measure` with the counts of contexts, calls and memo hits,
+and `observation`, the rects the observation port expects, or the error it threw. `paint` paints the same layout.
+
+A predictor swapped in with `--predictor` may return line ranges alone, `{ lines: [{ start, end, width }], measureLog? }`
+(`baselines/main-predictor.ts` does). The page records those as they are and doesn't paint. Rows recorded before the
+observation ports, 2026-09-16 and earlier, carry that shape too.
 
 ## Scoring
 
-`score.ts` streams rows and derives native lines from the rects alone. The case carried by each row supplies the
-text and styles. `--cases` restricts scoring to those ids and fails when a row observed a different version of a case.
-`--native-compare=<other rows file>` compares the derivation with another run's (see "Page-history dependence").
-Imported as a module, `score.ts` runs nothing and exports `deriveNative`, `scoreRow`, `layoutGrid`, `nativeView`,
-`nativeDifference`, `rowText` and `readLines` with their types, so tools that compare rows use the scorer's rules.
+`score.ts` streams rows and compares each row's native rects exactly with the rects its observation port expects
+(DESIGN.md §9). The case carried by each row supplies the text and styles. `--cases` restricts scoring to those ids and
+fails when a row observed a different version of a case. `--native-compare=<other rows file>` compares two runs' native
+observations (see "Page-history dependence"). Imported as a module, `score.ts` runs nothing and exports `scoreRow`,
+`nativeLines`, `nativeView`, `nativeDifference`, `environmentKey`, `rowText` and `readLines` with their types, so tools
+that compare rows use the scorer's rules. `SCORER_VERSION` is 2; version 1 derived native lines and widths from visibility
+rules, and its rules and their evidence are in this file's git history.
 
-Lines. Positive-area rects (code point rects and whole-node rects) are sorted by vertical centre. A new line starts
-where consecutive centres are half a line height or more apart. Every inline box carries the paragraph's px line
-height and sits on its line's baseline, so centres on different lines are about a line height apart. On one line
-they differ only by font metrics. The spread is real: Safari rounds half-leading per line (Amiri 18px at line height
-30 gives lines 29.984375px apart), and Firefox sizes a text frame by the fonts it uses (an emoji line's rects are
-21px tall, the next line's 19px). A rect that exactly copies a positive soft hyphen rect places nothing but the
-hyphen: Chrome reports a chosen hyphen's box a second time, as a rect of the letter after it (before it in RTL).
+Native lines. One observer assumption stays until vertical metrics are ported: rect centres on one line differ by less
+than half the paragraph's px line height, and centres on different lines by half a line height or more. Every inline box
+carries the line height and sits on its line's baseline, so only font metrics move centres within a line: Safari rounds
+half-leading per line (Amiri 18px at line height 30 gives lines 29.984375px apart), and Firefox sizes a text frame by the
+fonts it uses (an emoji line's rects are 21px tall, the next line's 19px). Every code point rect and whole-node rect with
+positive height is grouped, zero-width ones included, and native lines are numbered from the top. A rect without positive
+height, as Firefox reports for a frame without height, is placed on no line. Re-scoring every final-20260916 row set,
+no line count version 1 observed moved from pass to fail. 5 WebKit cases moved from fail to pass: version 1 dropped a
+line whose code points report only zero-width rects while a whole-node rect has the width. Every case version 1 left
+unobserved because the paragraph height disagreed with its lines now has an observed count.
 
-A line can hold only zero-width content, such as a ZWSP, a joiner or a soft hyphen alone at a narrow width. A
-zero-area rect establishes such a line where it sits half a line height or more from every positive rect, but only for
-a code point that no positive rect places and that isn't SPACE, TAB or LF. Positive rects place a code point that has
-them, and collapsed white space can't make a line: WebKit reports the collapsed space after an inline box end
-(`</span> foo`) as a zero-width rect on the next line. Nearer, zero-area rects place nothing: Safari's extra zero-width
-rect on the previous line, collapsed spaces at a line edge. In a 5,000-case Chrome run, all 464 paragraphs whose height disagreed with the lines of positive rects had
-such lines, and every height agreed once they counted. A line's source range covers every code point with a rect on
-it, so a line still counts when its only code point also has rects on another line. With a preserved newline mode,
-consecutive LFs add empty lines (a trailing LF adds none). When all runs share the paragraph's font family, size and
-language, the paragraph height must equal the line count times the line height. A span with its own `lang` can
-resolve a generic family to another primary font, and baseline alignment then makes the line box taller.
+Facts. Per code point and per node, the observed rects equal the expected rects in count and order, and each x and width
+is bit-equal to the expected value, which the port computes after the engine's rounding. The summary and the per-case
+file count them apart:
 
-Visible code points. A visible code point has a positive rect on exactly one line. A control other than TAB, LF and
-CR with a positive rect is visible: CSS renders such a control as a visible glyph, and the engines that give it an
-advance draw one (see "Range geometry"). Where an engine gives a control no advance, its rects have zero width. Otherwise
-a visible code point isn't a default-ignorable, control or line/paragraph separator (TAB counts as white space), unless
-it carries its grapheme's ink: a grapheme with
-an inked code point is visible through whichever of its code points has the rect, other than white space. Firefox puts
-an emoji + VS16 cluster's advance on the VS16 and a letter + ZWNJ's on the ZWNJ, with a zero-width base, and Chrome and
-Safari give each code point of such a cluster a copy of its rect. It isn't hanging white space either: SPACE or TAB in
-a line's trailing run under `normal`, `nowrap`, `pre-line` or `pre-wrap`. Trailing spaces count under `pre` and
-`break-spaces`. The trailing run is the white space and invisible code points at the line's end, back to a code point
-with ink, a no-break space or a control other than TAB, LF and CR. The engines keep such a control as a character, so the
-space before it isn't at the line's end: Firefox keeps the space of `aaaa ` + VT in the line's width. The other space separators at a line end (U+3000, U+2000–U+200A and so on) are excluded, and that
-line's width is unobserved, because no engine's hanging rule for them is verified here. A line's first visible code
-point is compared at its cluster start. Firefox can give a precomposed base letter a zero-width rect and put the
-advance on its combining mark. A cluster is a grapheme of the lab's segmenter (`Intl.Segmenter` over the whole
-paragraph), split where native layout put the grapheme's code points with positive rects on different lines. The
-engines segment less than the lab does. WebKit and Firefox never form a cluster across a text node edge (`nai` + a
-span holding U+0308 `ve` breaks between `i` and U+0308), and Blink's break-all table breaks between two Thai
-characters inside a grapheme (`ท` | `ู`).
+- `counts`: rect counts, predicted by definition;
+- `predicted`: values the ported rule gives exactly;
+- `limited`, per gap: values the port computes from a Canvas stand-in, such as prefix widths inside a word. They are
+  compared exactly, and a difference is attributed to the gap, never to an engine rule;
+- `lines`: whether each rect of a range whose counts agree sits on the native line its engine line maps to;
+- `unobservable`, per rule: engine facts the port lists because no rect reflects them. They are never compared;
+- `unplaced`: native rects without positive height.
 
 Metrics per case. `unobserved` and `not-applicable` are never passes.
 
-- `lineCount`: native line count equals predicted.
-- `breaks`: every native line's first visible cluster equals the predicted line's, and no predicted line starts
-  inside a cluster or misses a visible code point. The fail reason still says 'predicted line splits a grapheme'.
-- `widths`: scored only when breaks pass. The observed width is the line's horizontal extent. When nothing on the
-  line except visible code points has width, the extent comes from the whole-node rects. Otherwise it comes from
-  the visible code points' own rects; in Safari and webkit-host, each of those edges other than a line start at the
-  content edge is taken from the whole-node rect of the box that ends at it, or the width is unobserved (see "Range
-  geometry"). In Chrome and Firefox the observed and predicted values are both snapped to the row's layout grid,
-  rounding half up, and the metric passes only on equality. Safari and webkit-host keep inline positions as float32 px,
-  so there it passes only where the line's end edge equals the float32 sum of its start edge and the predicted width,
-  and a box's right edge is the float32 sum of its rect's x and width. The grid follows each engine's layout unit and the
-  row's `devicePixelRatio`. Chrome lays out in LayoutUnits of zoomed px, so its grid is 1/(64 × DPR) CSS px (1/128 at
-  DPR 2). Safari and webkit-host use 1/64 CSS px at any DPR. Firefox uses app units, 1/60 CSS px without device-pixel
-  snapping. The summary keeps a histogram of predicted minus observed, in grid units.
-- `painter`: each painted line's text rects form one line, and its extent equals the predicted width under the same
-  grid rule. The painter paints trimmed and hanging white space, so the extent follows the widths rule over the painted
-  line's own code points: over its visible code points, from its whole-node rects when no excluded white space has
-  width there, otherwise from the visible code points' rects. Rows from before the page recorded painted code points
-  have only whole-node rects. There, a line whose predicted range ends in white space has its painter metric
-  unobserved; rerun the lab to score it.
+- `lineCount`: the number of native lines equals the number of engine lines with a line box; the k-th line box from the
+  top is native line k. Unobserved when a line box has no expected rect, so nothing shows it.
+- `breaks`: every code point and every node reports on the native lines the layout places it on: the native lines of
+  its placed rects equal the lines its expected rects map to. An expected rect on a line without a line box maps to no
+  native line, since that line has no block size (Firefox reports its rects with height 0). Where rect counts agree,
+  rects pair by index, so a native rect without positive height drops its partner; otherwise the lines compare only when
+  every native rect is placed. 'line count differs' when lineCount fails, unobserved when lineCount is.
+- `widths`: scored only when breaks pass. Per line box, the engine width against the union of the line's positive
+  whole-node rects, in the engine's units (DESIGN.md §2.6):
+  - Chrome, raw LayoutUnits: an edge v is `round(v × 64 × zoom)` where `f32(f32(raw / 64) × f32(1 / zoom))` gives v back
+    and the rect's width is the float difference of its edges; the extent is right minus left.
+  - Safari and webkit-host, float32 CSS px: a box's right edge is `f32(x + width)`, and the line's right edge must be
+    `f32(left + width)`, since box positions are float32 sums.
+  - Firefox, app units: an edge is `round(v × 60)` where `DOMRect::SetLayoutRect`'s encoding gives the rect back.
 
-The native observation is marked unobserved with a reason when a visible code point has positive rects on two lines
-or visible code points interleave between lines. The same happens when a grapheme with ink has no positive rect, when
-the height disagrees with the derived lines, or when derived lines overlap in source order (white space or a control
-with a rect on a line out of order, as when Chrome gives a U+2028 at a line start a copy of the next letter's rect).
-Widths are also unobserved for a line that ends at a positive-width soft hyphen (a Range rect doesn't establish
-whether a hyphen was drawn), and for the Safari case below.
+  A rect no engine value encodes as is a mismatch. The width is unobserved on a line whose expected node rects don't
+  span the engine width: Blink's hyphen that no node range reports (observe-blink U3), WebKit's content width a float32
+  step from its boxes after trimming. When an expected node rect on the line is limited, a mismatch says so in its reason.
+- `painter`: each painted line's rects, zero-width ones included, form one native line under the same grouping, and the
+  union of its positive whole-node rects spans the engine width of its line box by the same rule. Unobserved where the
+  width is. It compares extents only: painted code point rects aren't mapped to source code points, because `paint`
+  doesn't report the painted text's source offsets.
 
-The summary (`--out`) has counts per browser and per family, reasons, the width and painter histograms, timings and
-failure and unobserved examples with the case text, native lines and predicted lines. Its `native` block counts the
-derivation alone, whatever the predictor: native line counts, where line widths come from, and the reasons line
-counts, breaks and line widths are unobserved. `missingFonts` counts rows whose page couldn't resolve a named family.
-`grid` is the first row's layout grid in units per CSS px, and `grids` counts rows per grid. `rectGrid` counts
-positive code point rect values off the grid, and `native.widthGrid` counts observed line widths off it, with examples.
-Both allow two float32 steps for values and four for widths. `historyDependent` is described below. `--per-case`
-writes each case's four metrics, plus `historyDependent` with the difference when a comparison found one.
+A prediction without an engine layout (an external predictor, or a row from before the observation ports) is scored for
+lineCount against its predicted lines and for painted lines that wrap. Its breaks are unobserved, widths not applicable,
+and the painter otherwise unobserved. An observation port error leaves every metric unobserved.
+
+The summary (`--out`) has counts per browser and per family, reasons, facts, and per gap how many rows report it and how
+many of those fail lineCount or breaks. It keeps a histogram of engine width minus native extent (LayoutUnits in Chrome,
+app units in Firefox, 1/64 px in WebKit), timings, and failure and unobserved examples with the case text, the native
+lines' code points, the engine lines with their widths and gaps, and the first predicted value that differs.
+`environments` counts rows per `environmentKey`: browser, app and engine builds, OS build, DPR, visual-viewport scale and
+scorer version, or the user agent for rows from before the driver recorded builds. `missingFonts` counts rows whose page
+couldn't resolve a named family. `native` counts native line counts and unplaced rects. `historyDependent` is described
+below. `--per-case` writes each case's four metrics, its facts, the gaps its layout reports, and `historyDependent` with
+the difference when a comparison found one.
 
 ## Page-history dependence
 
@@ -223,17 +221,17 @@ bun rebuild/lab/score.ts --rows=<dir>/reverse/webkit-host-rows.ndjson --cases=<c
   generator. `--limit` and `--family` select first, then the order applies, then cases are grouped by page context.
   So contexts run in another order too, and cases in a shared document get other predecessors. `run.json` records
   `order`.
-- `--native-compare` derives native lines from the other run's row for each case. webkit-host and Safari rows compare
-  with each other. A case is history-dependent when the two derivations differ in any of: the line count, a line's
-  source range or first or last visible code point, where a width comes from or why it's unobserved, a width as scored
-  (grid units), or the unobserved reason for line counts or breaks. Two native observation errors agree.
-- History-dependent cases count in `rows` and in the native diagnostics, but not in the metric counts, reasons,
-  histograms, family counts or examples. Each browser's `historyDependent` block has `compared`, `rows` (the
-  history-dependent count) and `cases`, which lists each one with the difference, its metrics and both runs' derived
-  lines. `geometryOnly` counts cases whose raw geometry differs without changing the derivation, such as float32 noise
-  (12.28799819946289 against 12.288000106811523), and names up to 20. `missing` and `caseDiffers` count cases the other run
-  didn't observe, or observed in another version. Those are scored normally. The scorer exits nonzero when no case
-  could be compared.
+- `--native-compare` reads the other run's row for each case. webkit-host and Safari rows compare with each other. A
+  case is history-dependent when the two native observations differ in the native line count, or in any code point's or
+  node's rect count, or in any rect's x, width or native line: exactly the values the scorer compares. Float32 noise
+  counts (12.28799819946289 against 12.288000106811523), since a predicted value can't equal both. Two native
+  observation errors agree.
+- History-dependent cases count in `rows` and in the native diagnostics, but not in the metric counts, reasons, facts,
+  gaps, histograms, family counts or examples. Each browser's `historyDependent` block has `compared`, `rows` (the
+  history-dependent count) and `cases`, which lists each one with the difference, its metrics and its native lines.
+  `geometryOnly` counts cases whose raw geometry differs only in y or height, and names up to 20. `missing` and
+  `caseDiffers` count cases the other run didn't observe, or observed in another version. Those are scored normally. The
+  scorer exits nonzero when no case could be compared.
 - A comparison only finds the dependence the two orders expose. Compare runs of the same case file on the same browser
   build and environment; a shuffled run widens the net.
 - Each row's `env.documentCaseIndex` and `env.previousCaseId` say which cases the document observed before it. To test
@@ -242,7 +240,8 @@ bun rebuild/lab/score.ts --rows=<dir>/reverse/webkit-host-rows.ndjson --cases=<c
 
 ## Range geometry, per browser
 
-These findings from the smoke runs shape the rules above:
+These findings from the smoke runs shaped the previous scorer's visibility rules. The observation ports now explain them
+from engine source (research/observe-blink.md, observe-webkit.md, observe-gecko.md):
 
 - Chrome 153: at DPR 2, Range and element rects are LayoutUnits of zoomed px divided by 128 exactly (Arial `h` at
   16px is 8.8984375px). Every positive code point rect value and every observed line width in the smoke and 5,000-case

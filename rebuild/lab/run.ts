@@ -5,6 +5,7 @@ import { execFileSync } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import { closeSync, mkdirSync, openSync, readFileSync, writeFileSync, writeSync } from 'node:fs'
 import { join, resolve } from 'node:path'
+import { readBuild, userAgentMatches } from './browser-build.ts'
 import { createRng } from './cases/prng.ts'
 import type { BrowserKind, Case, FontDecl, LabRow } from './types.ts'
 
@@ -171,6 +172,9 @@ function asciiJsonResponse(value: unknown): Response {
   const body = JSON.stringify(value).replace(/[-￿]/g, char => `\\u${char.charCodeAt(0).toString(16).padStart(4, '0')}`)
   return new Response(body, { headers: { 'content-type': 'application/json; charset=utf-8' } })
 }
+
+// The build the run observes, from the app bundles, before launch (browser-build.ts).
+const build = readBuild(browser)
 
 // ---- Browser sessions ----
 
@@ -481,7 +485,8 @@ function writeRows(rows: PageRow[], start: number): void {
     const row = rows[i]!
     const c = cases[start + i]!
     if (row.id !== c.id) throw new Error(`Row ${i} of the chunk is ${row.id}; expected ${c.id}`)
-    const full: LabRow = { id: c.id, family: c.family, browser, case: c, env: row.env, native: row.native, prediction: row.prediction, painter: row.painter, timings: row.timings }
+    if (!userAgentMatches(browser, build, row.env.userAgent)) throw new Error(`Row ${c.id}: user agent ${row.env.userAgent} doesn't name the build read before launch (${JSON.stringify(build)})`)
+    const full: LabRow = { id: c.id, family: c.family, browser, build, case: c, env: row.env, native: row.native, prediction: row.prediction, painter: row.painter, timings: row.timings }
     text += JSON.stringify(full) + '\n'
     if ('error' in row.native) totals.nativeErrors++
     else if (row.native.rejectedStyles.length > 0) totals.rejectedStyleRows++
@@ -539,7 +544,7 @@ async function step(request: Request): Promise<Response> {
     pending = { seq: seqCounter++, start, end, sends: 0 }
   }
   pending.sends++
-  return asciiJsonResponse({ kind: 'chunk', seq: pending.seq, browser, cases: cases.slice(pending.start, pending.end) })
+  return asciiJsonResponse({ kind: 'chunk', seq: pending.seq, browser, build: build.engine, cases: cases.slice(pending.start, pending.end) })
 }
 
 function pageHtml(lang: string, families: string[]): string {
@@ -642,7 +647,7 @@ try {
   writeFileSync(runPath, JSON.stringify({
     status: errors.length === 0 ? 'ok' : 'error',
     errors,
-    browser, runId, casesFile: resolve(casesPath), rowsFile: rowsPath, predictor: predictorPath,
+    browser, build, runId, casesFile: resolve(casesPath), rowsFile: rowsPath, predictor: predictorPath,
     family: familyFilter ?? null, limit: limit === Number.MAX_SAFE_INTEGER ? null : limit, order, chunkSize, bundleBytes, allowSafariFrontmost,
     startedAt: startedAt.toISOString(), finishedAt: finishedAt.toISOString(), durationMs: finishedAt.getTime() - startedAt.getTime(),
     // From the start to the page's first request (bundle, launch, page load), then from there to the end.

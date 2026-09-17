@@ -1,7 +1,11 @@
 import { describe, expect, test } from 'bun:test'
-import { deriveNative, scoreRow, type Derived } from './score.ts'
-import type { BrowserKind, CodePointObservation, FontDecl, LabRow, Paragraph, PainterLine, Rect, TextRun } from './types.ts'
+import type { BlinkEnvironment, GeckoEnvironment, WebKitEnvironment } from '../src/env.ts'
+import type { BlinkLineGeometry, BlinkLine, Expected, ExpectedObservation, ExpectedRect, GeckoLine, GeckoLineGeometry, WebKitLine, WebKitLineGeometry } from '../src/model.ts'
+import { encodeEdges } from './observe/gecko.ts'
+import { environmentKey, nativeDifference, nativeLines, nativeView, scoreRow } from './score.ts'
+import type { BrowserKind, CodePointObservation, FontDecl, LabRow, NativeObservation, PainterLine, Paragraph, Rect, RecordedLayout, TextRun } from './types.ts'
 
+const f32 = Math.fround
 const arial: FontDecl = { family: 'Arial', size: 16, weight: 400, style: 'normal' }
 
 function paragraph(runs: Array<[text: string, node: TextRun['node']]>, overrides: Partial<Paragraph> = {}): Paragraph {
@@ -12,209 +16,258 @@ function paragraph(runs: Array<[text: string, node: TextRun['node']]>, overrides
   }
 }
 
-// A rect on line `line` (lines are 20px tall).
+// A native rect on line `line` (lines are 20px tall).
 const at = (x: number, width: number, line = 0): Rect => ({ x, y: line * 20, width, height: 20 })
+const predicted = (value: number): Expected => ({ state: 'predicted', value })
+// An expected rect of engine line `line`, both values predicted unless given.
+const expect32 = (line: number, x: number | Expected, width: number | Expected): ExpectedRect => ({
+  line, x: typeof x === 'number' ? predicted(x) : x, width: typeof width === 'number' ? predicted(width) : width,
+})
 
-// Code point observations for text, taking each code point's rects in order.
-function observe(text: string, rects: Rect[][]): CodePointObservation[] {
-  const points: CodePointObservation[] = []
+function points(text: string, rects: Rect[][]): CodePointObservation[] {
+  const out: CodePointObservation[] = []
   for (let offset = 0; offset < text.length;) {
     const length = text.codePointAt(offset)! > 0xffff ? 2 : 1
-    points.push({ offset, length, rects: rects[points.length]! })
+    out.push({ offset, length, rects: rects[out.length]! })
     offset += length
   }
-  if (points.length !== rects.length) throw new Error(`${rects.length} rect lists for ${points.length} code points`)
-  return points
+  if (out.length !== rects.length) throw new Error(`${rects.length} rect lists for ${out.length} code points`)
+  return out
 }
 
-function makeRow(browser: BrowserKind, p: Paragraph, rects: Rect[][], runRects: Rect[][], predicted: Array<[start: number, end: number, width: number]>,
-  painted: PainterLine[] | null = null): LabRow {
+function native(p: Paragraph, rects: Rect[][], runRects: Rect[][]): NativeObservation {
+  return { fontsStatusBefore: 'loaded', fontsStatusAfter: 'loaded', rejectedStyles: [], height: 0, width: p.width, points: points(p.runs.map(run => run.text).join(''), rects), runRects }
+}
+
+function observation(p: Paragraph, rects: ExpectedRect[][], nodes: ExpectedRect[][], unobservable: ExpectedObservation['unobservable'] = []): ExpectedObservation {
   const text = p.runs.map(run => run.text).join('')
+  const codePoints = points(text, rects.map(() => [])).map((point, i) => ({ offset: point.offset, length: point.length, rects: rects[i]! }))
+  return { codePoints, nodes, unobservable }
+}
+
+const blinkEnv: BlinkEnvironment = { engine: 'blink', build: '153.0.8010.48', devicePixelRatio: 2, pageLang: 'en', contentLanguage: null, uiLanguage: null, dictionaryBreaks: { kind: 'unavailable' } }
+const webkitEnv: WebKitEnvironment = { engine: 'webkit', build: '22625.1.29.11.27', devicePixelRatio: 2, pageZoom: 1, pageLang: 'en', contentLanguage: null, preferredLanguages: null, icuDefaultLocale: null, dictionaryBreaks: { kind: 'unavailable' } }
+const geckoEnv: GeckoEnvironment = { engine: 'gecko', build: '156.0', devicePixelRatio: 2, pageLang: 'en', contentLanguage: null, regionalPrefsLocale: null, dictionaryBreaks: { kind: 'unavailable' } }
+
+function engineLine<Geometry>(start: number, end: number, geometry: Geometry, hasLineBox = true): { start: number; end: number; fragments: []; hasLineBox: boolean; joinsNextLine: false; geometry: Geometry; gaps: []; next: null } {
+  return { start, end, fragments: [], hasLineBox, joinsNextLine: false, geometry, gaps: [], next: null }
+}
+
+// Blink lines by [start, end, width in raw LayoutUnits, hasLineBox], at layout zoom 2.
+function blink(lines: Array<[number, number, number, boolean?]>): RecordedLayout {
+  const out: BlinkLine[] = lines.map(([start, end, width, hasLineBox]) => engineLine<BlinkLineGeometry>(start, end, { layoutZoom: 2, availableWidth: 0, width, hangWidth: 0, mapping: [], items: [] }, hasLineBox ?? true))
+  return { engine: 'blink', env: blinkEnv, lines: out, gaps: [] }
+}
+
+function webkit(lines: Array<[number, number, number]>): RecordedLayout {
+  const out: WebKitLine[] = lines.map(([start, end, contentWidth]) => engineLine<WebKitLineGeometry>(start, end, { lineBoxWidth: 0, contentWidth, hangingWidth: 0, contentLogicalRight: contentWidth, boxes: [] }))
+  return { engine: 'webkit', env: webkitEnv, lines: out, gaps: [] }
+}
+
+function gecko(lines: Array<[number, number, number]>): RecordedLayout {
+  const out: GeckoLine[] = lines.map(([start, end, width]) => engineLine<GeckoLineGeometry>(start, end, { appUnitsPerDevPixel: 30, availableWidth: 0, width, hang: 0, frames: [] }))
+  return { engine: 'gecko', env: geckoEnv, lines: out, gaps: [] }
+}
+
+function row(browser: BrowserKind, p: Paragraph, observed: NativeObservation, layout: RecordedLayout, expected: ExpectedObservation | { error: string }, painted: PainterLine[] | null = null): LabRow {
   return {
     id: 'c-test', family: 'test', browser,
     case: { id: 'c-test', family: 'test', origin: 'test', pageLang: 'en', paragraph: p },
     env: { userAgent: 'test', devicePixelRatio: 2, visualViewportScale: 1, pageLang: 'en', fontFixtures: [], innerWidth: 0, innerHeight: 0, outerWidth: 0, outerHeight: 0, visibilityState: 'visible', hasFocus: false },
-    native: { fontsStatusBefore: 'loaded', fontsStatusAfter: 'loaded', rejectedStyles: [], height: predicted.length * p.lineHeight, width: p.width, points: observe(text, rects), runRects },
-    prediction: { lines: predicted.map(([start, end, width]) => ({ start, end, width })) },
+    native: observed,
+    prediction: { layout, measure: { contexts: 0, calls: 0, memoHits: 0 }, observation: expected },
     painter: painted === null ? null : { lines: painted },
-    timings: { nativeMs: 0, predictMs: 0, paintMs: 0, painterObserveMs: 0 },
+    timings: { nativeMs: 0, predictMs: 0, observeMs: 0, paintMs: 0, painterObserveMs: 0 },
   }
 }
 
-function derive(row: LabRow): Derived {
-  if ('error' in row.native) throw new Error(row.native.error)
-  const derived = deriveNative(row.case, row.native, row.case.paragraph.runs.map(run => run.text).join(''), row.browser, row.env.devicePixelRatio)
-  if ('error' in derived) throw new Error(derived.error)
-  return derived
-}
+// `ab cd` in one text node, broken after the space at DPR 2: `a` 1024 raw, `b` 976, the trimmed space a zero-width
+// boundary rect at the item end, `c` 896, `d` 904.
+const abcd = paragraph([['ab cd', 'text']])
+const abcdNative = native(abcd,
+  [[at(0, 8)], [at(8, 7.625)], [at(15.625, 0)], [at(0, 7, 1)], [at(7, 7.0625, 1)]],
+  [[at(0, 15.625), at(0, 14.0625, 1)]])
+const abcdExpected = observation(abcd,
+  [[expect32(0, 0, 8)], [expect32(0, 8, 7.625)], [expect32(0, 15.625, 0)], [expect32(1, 0, 7)], [expect32(1, 7, 7.0625)]],
+  [[expect32(0, 0, 15.625), expect32(1, 0, 14.0625)]])
+const abcdLayout = blink([[0, 3, 2000], [3, 5, 1800]])
 
-describe('a grapheme with ink is visible through the code point that has its rect', () => {
-  // Firefox puts an emoji + VS16 cluster's advance on the VS16 and gives U+2764 a zero-width rect.
-  const text = 'a ❤️❤️'
-  const firefoxRects = [[at(0, 10)], [at(10, 5)], [at(15, 0)], [at(15, 18)], [at(33, 0)], [at(33, 18)]]
-
-  test('Firefox: the VS16 carries the cluster, so the space before it is not hanging and the extent reaches the hearts', () => {
-    const row = makeRow('firefox', paragraph([[text, 'text']]), firefoxRects, [[at(0, 51)]], [[0, 6, 51]])
-    const line = derive(row).lines[0]!
-    expect(line.firstVisible).toBe(0)
-    expect(line.lastVisible).toBe(5)
-    expect(line.widthSource).toBe('nodes')
-    expect(line.right).toBe(51)
-    expect(scoreRow(row).metrics.widths).toEqual({ status: 'pass' })
+describe('native lines group rects by vertical centre', () => {
+  test('zero-width rects are placed, rects without height are not', () => {
+    const p = paragraph([['ab', 'text']])
+    const lines = nativeLines(native(p, [[at(0, 8), { x: 8, y: 30, width: 0, height: 0 }], [at(0, 0, 1)]], [[at(0, 8), at(0, 0, 1)]]), 20)
+    expect(lines).toEqual({ count: 2, points: [[0, -1], [1]], nodes: [[0, 1]], unplaced: 1 })
   })
 
-  test('Firefox: a line holding only an emoji + VS16 has a visible code point at the grapheme start', () => {
-    const row = makeRow('firefox', paragraph([['ab ❤️', 'text']], { width: 30 }),
-      [[at(0, 10)], [at(10, 10)], [at(20, 0)], [at(0, 0, 1)], [at(0, 18, 1)]], [[at(0, 20), at(0, 18, 1)]], [[0, 3, 20], [3, 5, 18]])
-    const lines = derive(row).lines
-    expect(lines.map(line => [line.firstVisible, line.lastVisible, line.right - line.left])).toEqual([[0, 1, 20], [3, 4, 18]])
-    expect(scoreRow(row).metrics.widths).toEqual({ status: 'pass' })
-  })
-
-  test('Chrome: every code point of the cluster copies its rect, so only the last visible code point moves', () => {
-    const chromeRects = [[at(0, 10)], [at(10, 5)], [at(15, 18)], [at(15, 18)], [at(33, 18)], [at(33, 18)]]
-    const row = makeRow('chrome', paragraph([[text, 'text']]), chromeRects, [[at(0, 51)]], [[0, 6, 51]])
-    const line = derive(row).lines[0]!
-    expect([line.lastVisible, line.widthSource, line.right]).toEqual([5, 'nodes', 51])
-  })
-
-  test('painter: painted code points follow the same rule', () => {
-    const painted: PainterLine = { box: at(0, 200), height: 20, rects: [at(0, 51)], extent: { left: 0, right: 51 }, text, points: observe(text, firefoxRects) }
-    const row = makeRow('firefox', paragraph([[text, 'text']]), firefoxRects, [[at(0, 51)]], [[0, 6, 51]], [painted])
-    expect(scoreRow(row).metrics.painter).toEqual({ status: 'pass' })
-  })
-
-  test('white space in a grapheme with ink keeps hanging', () => {
-    // A trailing SPACE + U+0301 at a line end under pre-wrap: the space has the rect, the mark none.
-    const row = makeRow('firefox', paragraph([['ab ́', 'text']], { whiteSpace: 'pre-wrap' }),
-      [[at(0, 10)], [at(10, 10)], [at(20, 5)], [at(25, 0)]], [[at(0, 25)]], [[0, 4, 20]])
-    const line = derive(row).lines[0]!
-    expect([line.lastVisible, line.widthSource, line.right]).toEqual([1, 'code points', 20])
+  test('centres of one line differ by font metrics, less than half a line height', () => {
+    const p = paragraph([['ab', 'span'], ['c', 'span']])
+    const lines = nativeLines(native(p, [[at(0, 8)], [at(8, 8)], [{ x: 16, y: -3.5, width: 7, height: 25 }]], [[at(0, 16)], [{ x: 16, y: -3.5, width: 7, height: 25 }]]), 20)
+    expect(lines.count).toBe(1)
   })
 })
 
-describe('Safari widths take box edges from whole-node rects', () => {
-  const f32 = Math.fround
+describe('rects compare exactly, and the metrics follow from the comparisons', () => {
+  test('equal rects: every metric passes and every value is a predicted equal', () => {
+    const score = scoreRow(row('chrome', abcd, abcdNative, abcdLayout, abcdExpected))
+    expect(score.metrics).toEqual({ lineCount: { status: 'pass' }, breaks: { status: 'pass' }, widths: { status: 'pass' }, painter: { status: 'not-applicable', reason: 'paint returned null' } })
+    expect(score.facts).toMatchObject({ counts: { equal: 6, differ: 0 }, predicted: { equal: 14, differ: 0 }, lines: { equal: 7, differ: 0 } })
+    expect(score.firstDifference).toBeNull()
+  })
 
-  test('a box right edge is the float32 sum of its x and width', () => {
+  test('a code point the layout puts on another line fails breaks', () => {
+    const moved = observation(abcd,
+      [[expect32(0, 0, 8)], [expect32(0, 8, 7.625)], [expect32(0, 15.625, 0)], [expect32(0, 15.625, 7)], [expect32(1, 0, 7.0625)]],
+      [[expect32(0, 0, 22.625), expect32(1, 0, 7.0625)]])
+    const score = scoreRow(row('chrome', abcd, abcdNative, blink([[0, 4, 2896], [4, 5, 904]]), moved))
+    expect(score.metrics.lineCount).toEqual({ status: 'pass' })
+    expect(score.metrics.breaks).toEqual({ status: 'fail', reason: 'code point on other lines', detail: 'code point 3 "c": native lines 1; expected 0' })
+    expect(score.metrics.widths).toEqual({ status: 'not-applicable', reason: 'breaks differ' })
+  })
+
+  test('another line count fails lineCount and breaks', () => {
+    const oneLine = observation(abcd, [[expect32(0, 0, 8)], [expect32(0, 8, 7.625)], [expect32(0, 15.625, 4)], [expect32(0, 19.625, 7)], [expect32(0, 26.625, 7.0625)]], [[expect32(0, 0, 33.6875)]])
+    const score = scoreRow(row('chrome', abcd, abcdNative, blink([[0, 5, 4312]]), oneLine))
+    expect(score.metrics.lineCount).toEqual({ status: 'fail', reason: 'line count differs', detail: 'native 2, predicted 1' })
+    expect(score.metrics.breaks.reason).toBe('line count differs')
+  })
+
+  test('a line box no Range reports leaves the line count unobserved', () => {
+    const score = scoreRow(row('chrome', abcd, abcdNative, blink([[0, 3, 2000], [3, 3, 0], [3, 5, 1800]]),
+      observation(abcd, abcdExpected.codePoints.map(point => point.rects.map(rect => ({ ...rect, line: rect.line === 1 ? 2 : 0 }))),
+        [[expect32(0, 0, 15.625), expect32(2, 0, 14.0625)]])))
+    expect(score.metrics.lineCount).toEqual({ status: 'unobserved', reason: 'a line box no Range reports', detail: 'engine line 1' })
+    expect(score.metrics.breaks.status).toBe('unobserved')
+  })
+
+  test('a line without a line box that nothing reports is skipped', () => {
+    const score = scoreRow(row('chrome', abcd, abcdNative, blink([[0, 3, 2000], [3, 3, 0, false], [3, 5, 1800]]),
+      observation(abcd, abcdExpected.codePoints.map(point => point.rects.map(rect => ({ ...rect, line: rect.line === 1 ? 2 : 0 }))),
+        [[expect32(0, 0, 15.625), expect32(2, 0, 14.0625)]])))
+    expect([score.metrics.lineCount.status, score.metrics.breaks.status, score.metrics.widths.status]).toEqual(['pass', 'pass', 'pass'])
+  })
+
+  test('expected rects on a line without a line box sit on no native line', () => {
+    // Firefox: a trailing space after `ab` in its own frame on a line of block size 0, reported with height 0.
+    const p = paragraph([['ab ', 'text']])
+    const observed = native(p, [[at(0, 8)], [at(8, 7.625)], [{ x: 15.625, y: 40, width: 0, height: 0 }]], [[at(0, 15.625), { x: 15.625, y: 40, width: 0, height: 0 }]])
+    const expected = observation(p, [[expect32(0, 0, 8)], [expect32(0, 8, 7.625)], [expect32(1, 15.625, 0)]], [[expect32(0, 0, 15.625), expect32(1, 15.625, 0)]])
+    const score = scoreRow(row('chrome', p, observed, blink([[0, 2, 2000], [2, 3, 0, false]]), expected))
+    expect([score.metrics.lineCount.status, score.metrics.breaks.status, score.metrics.widths.status]).toEqual(['pass', 'pass', 'pass'])
+    const placedNatively = native(p, [[at(0, 8)], [at(8, 7.625)], [at(15.625, 0, 1)]], [[at(0, 15.625), at(15.625, 0, 1)]])
+    expect(scoreRow(row('chrome', p, placedNatively, blink([[0, 2, 2000], [2, 3, 0, false]]), expected)).metrics.lineCount).toEqual({ status: 'fail', reason: 'line count differs', detail: 'native 2, predicted 1' })
+  })
+
+  test('limited values are tallied by gap and decide no metric', () => {
+    const limited = observation(abcd,
+      [[expect32(0, 0, 8)], [expect32(0, { state: 'limited', gap: 'in-word-prefix', value: 8.0078125 }, { state: 'limited', gap: 'in-word-prefix', value: 7.6171875 })], [expect32(0, 15.625, 0)], [expect32(1, 0, 7)], [expect32(1, 7, 7.0625)]],
+      abcdExpected.nodes)
+    const score = scoreRow(row('chrome', abcd, abcdNative, abcdLayout, limited))
+    expect(score.facts!.limited).toEqual({ 'in-word-prefix': { equal: 0, differ: 2 } })
+    expect(score.facts!.predicted).toEqual({ equal: 12, differ: 0 })
+    expect([score.metrics.breaks.status, score.metrics.widths.status]).toEqual(['pass', 'pass'])
+    expect(score.firstDifference).toBeNull()
+  })
+
+  test('a rect count that differs is a predicted fact, named first', () => {
+    const extra = observation(abcd,
+      [[expect32(0, 0, 8)], [expect32(0, 8, 7.625)], [expect32(0, 15.625, 0), expect32(1, 0, 0)], [expect32(1, 0, 7)], [expect32(1, 7, 7.0625)]],
+      abcdExpected.nodes)
+    const score = scoreRow(row('chrome', abcd, abcdNative, abcdLayout, extra))
+    expect(score.facts!.counts).toEqual({ equal: 5, differ: 1 })
+    expect(score.firstDifference).toBe('code point 2 " ": native 1 rects, expected 2')
+    expect(score.metrics.breaks).toEqual({ status: 'fail', reason: 'code point on other lines', detail: 'code point 2 " ": native lines 0; expected 0,1' })
+  })
+
+  test('unobservable facts are counted by rule', () => {
+    const rule = 'U8: a line that creates no line box has no fragment items'
+    const score = scoreRow(row('chrome', abcd, abcdNative, abcdLayout, { ...abcdExpected, unobservable: [{ line: 0, fact: 'lines[0]', rule }] }))
+    expect(score.facts!.unobservable).toEqual({ [rule]: 1 })
+  })
+
+  test('an observation port error leaves every metric unobserved', () => {
+    const score = scoreRow(row('chrome', abcd, abcdNative, abcdLayout, { error: 'boom' }))
+    expect(score.metrics.lineCount).toEqual({ status: 'unobserved', reason: 'observation port error', detail: 'boom' })
+  })
+})
+
+describe('widths: the engine width against the union of the line\'s node rects, in engine units', () => {
+  test('Blink: a width one LayoutUnit wider fails', () => {
+    const score = scoreRow(row('chrome', abcd, abcdNative, blink([[0, 3, 2001], [3, 5, 1800]]),
+      observation(abcd, abcdExpected.codePoints.map(point => point.rects), [[expect32(0, 0, 15.6328125), expect32(1, 0, 14.0625)]])))
+    expect(score.metrics.widths).toEqual({ status: 'fail', reason: 'width differs', detail: 'engine line 0: width 2001; native node rects span [0, 2000]' })
+    expect(score.widthDiffs).toEqual([1, 0])
+  })
+
+  test('Blink: a hyphen no node range reports (U3) makes the width unobservable', () => {
+    // The engine width holds a 660 raw hyphen item the port's node rects leave out.
+    const score = scoreRow(row('chrome', abcd, abcdNative, blink([[0, 3, 2660], [3, 5, 1800]]), abcdExpected))
+    expect(score.metrics.widths).toEqual({ status: 'unobserved', reason: 'the port\'s node rects on the line don\'t span the engine width', detail: 'engine line 0: width 2660; expected node rects span [0, 2000]' })
+  })
+
+  test('Gecko: app units through DOMRect::SetLayoutRect, and one app unit off fails', () => {
+    const p = paragraph([['ab', 'text']])
+    const box = encodeEdges(1733, 11760)
+    const gone = encodeEdges(1733, 11761)
+    const observed = native(p, [[at(box.x, 5)], [at(box.x + 5, box.width - 5)]], [[at(box.x, box.width)]])
+    const expected = observation(p, [[expect32(0, box.x, 5)], [expect32(0, box.x + 5, box.width - 5)]], [[expect32(0, box.x, box.width)]])
+    expect(scoreRow(row('firefox', p, observed, gecko([[0, 2, 10027]]), expected)).metrics.widths).toEqual({ status: 'pass' })
+    const wider = observation(p, expected.codePoints.map(point => point.rects), [[expect32(0, gone.x, gone.width)]])
+    expect(scoreRow(row('firefox', p, observed, gecko([[0, 2, 10028]]), wider)).metrics.widths.status).toBe('fail')
+  })
+
+  test('WebKit: box edges are float32 sums, and a content width a float32 step off the boxes is unobservable', () => {
+    const p = paragraph([['ab', 'span'], ['cd', 'span']])
     const left = f32(30.469196319580078)
     const width = f32(71.9345703125)
-    const row = makeRow('webkit-host', paragraph([['ab', 'span'], ['cd', 'span']]),
-      [[at(0, 16)], [at(15, f32(left - 15))], [at(left, 36)], [at(66, f32(f32(left + width) - 66))]],
-      [[at(0, left)], [at(left, width)]], [[0, 4, f32(left + width)]])
-    const line = derive(row).lines[0]!
-    expect(line.widthSource).toBe('nodes')
-    expect(line.right).toBe(f32(left + width))
-    expect(scoreRow(row).metrics.widths).toEqual({ status: 'pass' })
-  })
-
-  // `ab` in a span whose box ends at 20.6px, then a hanging space in a bare text node, so widths come from code points.
-  const boxEnd = f32(20.6)
-  const floored = Math.floor(boxEnd * 64) / 64
-  const spanThenSpace = paragraph([['ab', 'span'], [' ', 'text']], { whiteSpace: 'pre-wrap' })
-
-  test('an edge floored to 1/64px at a box end comes from that box', () => {
-    const row = makeRow('webkit-host', spanThenSpace, [[at(0, 11)], [at(10, floored - 10)], [at(boxEnd, 5)]],
-      [[at(0, boxEnd)], [at(boxEnd, 5)]], [[0, 3, boxEnd]])
-    const line = derive(row).lines[0]!
-    expect(floored).toBe(20.59375)
-    expect([line.widthSource, line.widthIssue, line.right]).toEqual(['code points', null, boxEnd])
-    expect(scoreRow(row).metrics.widths).toEqual({ status: 'pass' })
-  })
-
-  test('a whole-px edge that no box edge equals is unobserved', () => {
-    // One text node `ab `: `b` ends inside the box, so Safari snaps its right edge outward to 21.
-    const row = makeRow('webkit-host', paragraph([['ab ', 'text']], { whiteSpace: 'pre-wrap' }),
-      [[at(0, 11)], [at(10, 11)], [at(20, Math.floor(f32(25.6) * 64) / 64 - 20)]], [[at(0, f32(25.6))]], [[0, 3, boxEnd]])
-    expect(derive(row).lines[0]!.widthIssue).toBe('Safari snaps partial Range rects to whole CSS px; hanging white space rules out whole-node geometry')
-    expect(scoreRow(row).metrics.widths.status).toBe('unobserved')
-  })
-
-  test('an edge off the whole px that no box end floors to is unobserved', () => {
-    const row = makeRow('webkit-host', spanThenSpace, [[at(0, 11)], [at(10, floored - 10)], [at(f32(20.7), 5)]],
-      [[at(0, f32(20.7))], [at(f32(20.7), 5)]], [[0, 3, f32(20.7)]])
-    expect(derive(row).lines[0]!.widthIssue).toBe('Safari floors a text box end in Range rects to 1/64px; no whole-node rect ends at the edge code point')
-    expect(scoreRow(row).metrics.widths.status).toBe('unobserved')
-  })
-
-  test('a whole-px edge equal to a box edge is observed', () => {
-    const row = makeRow('webkit-host', paragraph([['ab', 'span'], [' ', 'text']], { whiteSpace: 'pre-wrap' }),
-      [[at(0, 16)], [at(16, 16)], [at(32, 4)]], [[at(0, 32)], [at(32, 4)]], [[0, 3, 32]])
-    const line = derive(row).lines[0]!
-    expect([line.widthIssue, line.right]).toEqual([null, 32])
-    expect(scoreRow(row).metrics.widths).toEqual({ status: 'pass' })
-  })
-
-  test('Chrome keeps the code point rect edge', () => {
-    const row = makeRow('chrome', spanThenSpace, [[at(0, 11)], [at(10, 10.59375)], [at(20.59375, 5)]],
-      [[at(0, 20.59375)], [at(20.59375, 5)]], [[0, 3, 20.59375]])
-    expect(derive(row).lines[0]!.right).toBe(20.59375)
+    const right = f32(left + width)
+    const observed = native(p, [[at(0, 16)], [at(15, f32(left - 15))], [at(left, 36)], [at(66, f32(right - 66))]], [[at(0, left)], [at(left, width)]])
+    const expected = observation(p, observed.points.map(point => point.rects.map(rect => expect32(0, rect.x, rect.width))), [[expect32(0, 0, left)], [expect32(0, left, width)]])
+    expect(right).toBe(102.40376281738281)
+    expect(scoreRow(row('webkit-host', p, observed, webkit([[0, 4, right]]), expected)).metrics.widths).toEqual({ status: 'pass' })
+    const stepped = f32(right + 2 ** -17)
+    expect(scoreRow(row('webkit-host', p, observed, webkit([[0, 4, stepped]]), expected)).metrics.widths.status).toBe('unobserved')
   })
 })
 
-describe('a control other than TAB, LF and CR with a positive rect is visible', () => {
-  test('Safari: a line holding only U+001C observes its .notdef advance', () => {
-    const row = makeRow('webkit-host', paragraph([['ab', 'text']], { width: 20 }),
-      [[at(0, 9)], [at(9, 9)], [at(0, 12, 1)]], [[at(0, 18), at(0, 12, 1)]], [[0, 2, 18], [2, 3, 12]])
-    const lines = derive(row).lines
-    expect(lines.map(line => [line.firstVisible, line.lastVisible, line.widthSource, line.right - line.left])).toEqual([[0, 1, 'nodes', 18], [2, 2, 'nodes', 12]])
-    expect(scoreRow(row).metrics.widths).toEqual({ status: 'pass' })
+describe('painter: painted lines against the engine width', () => {
+  const paintedLine = (rects: Rect[]): PainterLine => ({ box: at(0, 200), height: 20, rects, extent: null, points: [] })
+
+  test('painted node rects that span the engine width pass', () => {
+    const score = scoreRow(row('chrome', abcd, abcdNative, abcdLayout, abcdExpected, [paintedLine([at(0, 15.625)]), paintedLine([at(0, 14.0625)])]))
+    expect(score.metrics.painter).toEqual({ status: 'pass' })
   })
 
-  test('Safari: a trailing FF with an advance ends the extent instead of hanging', () => {
-    const row = makeRow('webkit-host', paragraph([['ab', 'span'], ['\f', 'text']], { whiteSpace: 'nowrap' }),
-      [[at(0, 9)], [at(9, 9)], [at(18, 16)]], [[at(0, 18)], [at(18, 16)]], [[0, 3, 34]])
-    const line = derive(row).lines[0]!
-    expect([line.lastVisible, line.widthSource, line.right]).toEqual([2, 'nodes', 34])
-    expect(scoreRow(row).metrics.widths).toEqual({ status: 'pass' })
-  })
-
-  test('Firefox: U+0000 with a 1px rect counts, and a zero-width VT does not', () => {
-    const nul = makeRow('firefox', paragraph([['a  b', 'text']], { whiteSpace: 'pre-wrap', width: 20 }),
-      [[at(0, 8.1)], [at(8.1, 1)], [at(9.1, 5)], [at(0, 9, 1)]], [[at(0, 14.1), at(0, 9, 1)]], [[0, 3, 9.1], [3, 4, 9]])
-    const first = derive(nul).lines[0]!
-    expect([first.lastVisible, first.widthSource]).toEqual([1, 'code points'])
-    expect(first.right - first.left).toBeCloseTo(9.1, 9)
-    expect(scoreRow(nul).metrics.widths).toEqual({ status: 'pass' })
-    const vt = makeRow('firefox', paragraph([['ab', 'text']], { whiteSpace: 'pre-wrap' }),
-      [[at(0, 9)], [at(9, 9)], [at(18, 0)]], [[at(0, 18)]], [[0, 3, 18]])
-    expect([derive(vt).lines[0]!.lastVisible, derive(vt).lines[0]!.right]).toEqual([1, 18])
+  test('a painted line on two lines wraps', () => {
+    const score = scoreRow(row('chrome', abcd, abcdNative, abcdLayout, abcdExpected, [paintedLine([at(0, 8), at(0, 7.625, 1)]), paintedLine([at(0, 14.0625)])]))
+    expect(score.metrics.painter).toEqual({ status: 'fail', reason: 'painted line wraps', detail: 'engine line 0 painted on 2 lines' })
   })
 })
 
-describe('breaks compare clusters as native layout drew them', () => {
-  // `nai` in one span, U+0308 U+0301 `v` in the next: WebKit and Firefox break between `i` and U+0308, which the lab's
-  // segmenter keeps in one grapheme. Native lines: `n`, `a`, `i`, then the marks, then `v`.
-  const p = paragraph([['nai', 'span'], ['̈́v', 'span']], { width: 1 })
-  const rects = [[at(0, 9, 0)], [at(0, 8, 1)], [at(0, 5, 2)], [at(0, 7, 3)], [at(0, 7, 3)], [at(0, 7, 4)]]
-  const runRects = [[at(0, 9, 0), at(0, 8, 1), at(0, 5, 2)], [at(0, 7, 3), at(0, 7, 4)]]
+describe('a prediction without an engine layout', () => {
+  test('only the line count is compared', () => {
+    const lines: LabRow = { ...row('chrome', abcd, abcdNative, abcdLayout, abcdExpected), prediction: { lines: [{ start: 0, end: 3, width: 15.625 }, { start: 3, end: 5, width: 14.0625 }] } }
+    expect(scoreRow(lines).metrics).toEqual({
+      lineCount: { status: 'pass' },
+      breaks: { status: 'unobserved', reason: 'the prediction has no engine layout' },
+      widths: { status: 'not-applicable', reason: 'breaks unobserved' },
+      painter: { status: 'not-applicable', reason: 'paint returned null' },
+    })
+  })
+})
 
-  test('a line start where native layout splits the grapheme is a cluster start', () => {
-    const row = makeRow('webkit-host', p, rects, runRects, [[0, 1, 9], [1, 2, 8], [2, 3, 5], [3, 5, 7], [5, 6, 7]])
-    const derived = derive(row)
-    expect([derived.graphemeStart[3], derived.clusterStart[3], derived.clusterStart[4]]).toEqual([2, 3, 3])
-    expect(derived.lines[3]!.firstVisible).toBe(3)
-    expect(scoreRow(row).metrics.breaks).toEqual({ status: 'pass' })
+describe('two runs of one case', () => {
+  test('rects that differ in x, width or line differ; y alone does not', () => {
+    const base = row('chrome', abcd, abcdNative, abcdLayout, abcdExpected)
+    const shifted = { ...base, native: native(abcd, [[at(0, 8)], [at(8, 7.625)], [at(15.625, 0)], [at(0, 7, 1)], [at(7, 7.0625, 1)]], [[{ x: 0, y: 1, width: 15.625, height: 20 }, at(0, 14.0625, 1)]]) }
+    expect(nativeDifference(nativeView(base), nativeView(shifted))).toBeNull()
+    const wider = { ...base, native: native(abcd, [[at(0, 8)], [at(8, 7.6328125)], [at(15.625, 0)], [at(0, 7, 1)], [at(7, 7.0625, 1)]], abcdNative.runRects) }
+    expect(nativeDifference(nativeView(base), nativeView(wider))).toBe('code point 1: [x, width, line] [8,7.625,0] vs [8,7.6328125,0]')
   })
 
-  test('a prediction that starts elsewhere inside the native cluster still splits it', () => {
-    const row = makeRow('webkit-host', p, rects, runRects, [[0, 1, 9], [1, 2, 8], [2, 4, 5], [4, 5, 7], [5, 6, 7]])
-    expect(scoreRow(row).metrics.breaks).toEqual({ status: 'fail', reason: 'predicted line splits a grapheme', detail: '3 "̈́v"' })
-  })
-
-  test('a grapheme native layout keeps on one line still counts as one', () => {
-    // One text node: Chrome keeps `i` + U+0308 on one line and gives the mark a copy of the letter's rect.
-    const q = paragraph([['naïv', 'text']], { width: 1 })
-    const row = makeRow('chrome', q, [[at(0, 9, 0)], [at(0, 8, 1)], [at(0, 5, 2)], [at(0, 5, 2)], [at(0, 7, 3)]],
-      [[at(0, 9, 0), at(0, 8, 1), at(0, 5, 2), at(0, 7, 3)]], [[0, 1, 9], [1, 2, 8], [2, 3, 5], [3, 5, 7]])
-    expect(derive(row).clusterStart[3]).toBe(2)
-    expect(scoreRow(row).metrics.breaks).toEqual({ status: 'fail', reason: 'predicted line splits a grapheme', detail: `2 ${JSON.stringify('ïv')}` })
-  })
-
-  test('Chrome break-all: a Thai vowel alone on its line in one text node', () => {
-    const row = makeRow('chrome', paragraph([['ทู', 'text']], { width: 2, wordBreak: 'break-all' }),
-      [[at(0, 12)], [at(0, 10, 1)]], [[at(0, 12), at(0, 10, 1)]], [[0, 1, 12], [1, 2, 10]])
-    expect(derive(row).lines.map(line => line.firstVisible)).toEqual([0, 1])
-    expect(scoreRow(row).metrics.breaks).toEqual({ status: 'pass' })
+  test('environments key on the recorded build', () => {
+    const base = row('chrome', abcd, abcdNative, abcdLayout, abcdExpected)
+    expect(environmentKey(base)).toBe('chrome: build not recorded, test; DPR 2, scale 1; scorer 2')
+    expect(environmentKey({ ...base, build: { app: 'Google Chrome', appVersion: '153.0.8010.48', engine: '153.0.8010.48', os: '26A428' } }))
+      .toBe('chrome: Google Chrome 153.0.8010.48, engine build 153.0.8010.48, macOS 26A428; DPR 2, scale 1; scorer 2')
   })
 })

@@ -149,3 +149,115 @@ export const scriptExtensionRunsBase64 = '${base64(runs(scxOf))}'
 // [opening punctuation, Bidi_Mirroring_Glyph] pairs.
 export const openingMirrors: readonly number[] = ${JSON.stringify(mirrors)}
 `)
+
+// ---- Likely subtags (src/engines/gecko/generated/likely-subtags.ts) ----
+//
+// nsLineBreaker decides whether a word's language is Chinese or Japanese through mozilla::intl::Locale::AddLikelySubtags,
+// which calls uloc_addLikelySubtags of the ICU Firefox bundles (nsLineBreaker.cpp:659-690, intl/components/src/
+// Locale.cpp:765-935). Firefox 156 bundles ICU 78.3 (intl/icu/source/common/unicode/uvernum.h), whose likely subtags are
+// the `likely` table of intl/icu/source/data/misc/langInfo.txt: language and region aliases, LSRs encoded as integers
+// (lsrnum, decoded by LikelySubtagsData::readLSREncodedStrings, loclikelysubtags.cpp:260-330) and the BytesTrie that
+// LikelySubtags::maximize walks. Script codes decode through uscript_getShortName, whose names are the ISO codes in
+// uscript.h's UScriptCode comments.
+const LANG_INFO = resolve(BROWSER_ENGINES, 'firefox-156.0/intl/icu/source/data/misc/langInfo.txt')
+const LANG_INFO_SHA256 = '799bfbd3524d337f85575a27b8a316b1eb93181c2103bdb2fb96b812dc554860'
+const USCRIPT_H = resolve(BROWSER_ENGINES, 'firefox-156.0/intl/icu/source/common/unicode/uscript.h')
+const USCRIPT_H_SHA256 = '293adf40390583c1c5394d3dc1794ed1669e8356cdf292ca5eaac145a2a5d1e0'
+
+const langInfo = new TextDecoder().decode(readVerified(LANG_INFO, LANG_INFO_SHA256))
+const uscript = new TextDecoder().decode(readVerified(USCRIPT_H, USCRIPT_H_SHA256))
+const scriptShortNames: string[] = []
+for (const m of uscript.matchAll(/USCRIPT_[A-Z_0-9]+\s*=\s*(\d+)\s*,\s*\/\*\s*([A-Z][a-z]{3})\s*\*\//g)) {
+  const code = Number(m[1])
+  if (scriptShortNames[code] !== undefined) throw new Error(`uscript.h: code ${code} twice`)
+  scriptShortNames[code] = m[2]!
+}
+const likelyFrom = langInfo.indexOf('    likely{')
+const likelyTo = langInfo.indexOf('\n    match{')
+if (likelyFrom < 0 || likelyTo < likelyFrom) throw new Error('langInfo.txt: no likely table')
+const likelyTable = langInfo.slice(likelyFrom, likelyTo)
+// The body of `name{ ... }` or `name:type{ ... }` inside the likely table.
+function section(name: string): string {
+  const m = new RegExp(`\\n        ${name}(?::[a-z]+)?\\{\\n([\\s\\S]*?)\\n        \\}`).exec(likelyTable)
+  if (m === null) throw new Error(`langInfo.txt: no likely/${name}`)
+  return m[1]!
+}
+const quoted = (body: string): string[] => [...body.matchAll(/"([^"]*)"/g)].map(m => m[1]!)
+const languageAliasPairs = quoted(section('languageAliases'))
+const regionAliasPairs = quoted(section('regionAliases'))
+const m49 = quoted(section('m49'))
+const lsrnum = section('lsrnum').split(/[\s,]+/).filter(s => s.length > 0).map(s => Number(s) | 0)
+const trieHex = section('trie').replace(/\s+/g, '')
+if (languageAliasPairs.length % 2 !== 0 || regionAliasPairs.length % 2 !== 0 || trieHex.length % 2 !== 0) throw new Error('langInfo.txt: malformed likely table')
+const trieBytes = new Uint8Array(trieHex.length / 2)
+for (let i = 0; i < trieBytes.length; i++) trieBytes[i] = parseInt(trieHex.slice(2 * i, 2 * i + 2), 16)
+const decodeLanguage = (encoded: number): string => {
+  if (encoded === 0) return ''
+  if (encoded === 1) return 'skip'
+  const e = (encoded & 0xffffff) % (27 * 27 * 27)
+  const letter = (k: number): string => String.fromCharCode(0x61 + k - 1)
+  const two = letter(e % 27) + letter(Math.floor(e / 27) % 27)
+  return Math.floor(e / (27 * 27)) === 0 ? two : two + letter(Math.floor(e / (27 * 27)))
+}
+const decodeScript = (encoded: number): string => {
+  if (encoded === 0) return ''
+  if (encoded === 1) return 'script'
+  return scriptShortNames[(encoded >> 24) & 0xff] ?? ''
+}
+const decodeRegion = (encoded: number): string => {
+  if (encoded === 0 || encoded === 1) return ''
+  const e = Math.floor((encoded & 0xffffff) / (27 * 27 * 27)) % (27 * 27)
+  if (e < 27) {
+    const code = m49[e]
+    if (code === undefined) throw new Error(`langInfo.txt: m49 index ${e}`)
+    return code
+  }
+  return String.fromCharCode(0x41 + (e % 27) - 1, 0x41 + (Math.floor(e / 27) % 27) - 1)
+}
+const lsrs: string[] = []
+for (let i = 0; i < lsrnum.length; i++) lsrs.push(`${decodeLanguage(lsrnum[i]!)} ${decodeScript(lsrnum[i]!)} ${decodeRegion(lsrnum[i]!)}`)
+// ulocimp_getSubtags turns a 3-letter language or region code into its 2-letter equivalent through uloc.cpp's parallel
+// ISO 639 and ISO 3166 tables, two nullptr-terminated lists each (uloc.cpp:103-470, _findIndex :1177-1195, _getLanguage
+// :1219-1271, _getRegion :1305-1343).
+const ULOC_CPP = resolve(BROWSER_ENGINES, 'firefox-156.0/intl/icu/source/common/uloc.cpp')
+const ULOC_CPP_SHA256 = 'bb47812d836dbfcbb2b7c858ff205b330c1033a273e0864a71f0083158e3717f'
+const uloc = new TextDecoder().decode(readVerified(ULOC_CPP, ULOC_CPP_SHA256))
+function ulocTable(name: string): Array<string | null> {
+  const from = uloc.indexOf(`constexpr const char* ${name}[] = {`)
+  if (from < 0) throw new Error(`uloc.cpp: no table ${name}`)
+  const body = uloc.slice(uloc.indexOf('{', from) + 1, uloc.indexOf('};', from)).replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '')
+  const out: Array<string | null> = []
+  for (const m of body.matchAll(/"([^"]*)"|nullptr/g)) out.push(m[1] ?? null)
+  if (out.filter(v => v === null).length !== 2) throw new Error(`uloc.cpp: ${name} is not two nullptr-terminated lists`)
+  return out
+}
+// [three-letter, two-letter] pairs where _findIndex's first match differs from its equivalent.
+function threeToTwo(twoName: string, threeName: string): string[] {
+  const two = ulocTable(twoName)
+  const three = ulocTable(threeName)
+  if (two.length !== three.length) throw new Error(`uloc.cpp: ${twoName} and ${threeName} differ in length`)
+  const seen = new Set<string>()
+  const pairs: string[] = []
+  for (let i = 0; i < three.length; i++) {
+    const code = three[i]!
+    if (code === null || seen.has(code)) continue
+    seen.add(code)
+    if (two[i] === null) throw new Error(`uloc.cpp: ${twoName} and ${threeName} don't align at ${i}`)
+    if (two[i] !== code) pairs.push(code, two[i]!)
+  }
+  return pairs
+}
+const languageCodes3 = threeToTwo('LANGUAGES', 'LANGUAGES_3')
+const countryCodes3 = threeToTwo('COUNTRIES', 'COUNTRIES_3')
+writeModule(resolve(REBUILD, 'src/engines/gecko/generated/likely-subtags.ts'), `// Generated by rebuild/tools/gen-gecko-data.ts from Firefox 156.0's bundled ICU 78.3 data. Do not edit.
+// intl/icu/source/data/misc/langInfo.txt (sha256 ${LANG_INFO_SHA256}), table likely; script names from
+// intl/icu/source/common/unicode/uscript.h (sha256 ${USCRIPT_H_SHA256}); 3-letter codes from
+// intl/icu/source/common/uloc.cpp (sha256 ${ULOC_CPP_SHA256}).
+// Aliases and codes are [from, to] pairs. Each LSR is "language script region" (any part may be empty), joined by ';'.
+export const likelyLanguageCodes3: readonly string[] = ${JSON.stringify(languageCodes3)}
+export const likelyCountryCodes3: readonly string[] = ${JSON.stringify(countryCodes3)}
+export const likelyLanguageAliases: readonly string[] = ${JSON.stringify(languageAliasPairs)}
+export const likelyRegionAliases: readonly string[] = ${JSON.stringify(regionAliasPairs)}
+export const likelyLsrs = '${lsrs.join(';')}'
+export const likelyTrieBase64 = '${base64(trieBytes)}'
+`)

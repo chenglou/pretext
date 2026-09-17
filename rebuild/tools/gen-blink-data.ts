@@ -8,7 +8,7 @@
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { BROWSER_ENGINES, DATA, REBUILD, base64, parsePairBitmap, readVerified, writeModule } from './gen-shared.ts'
-import { PPUCD_PATH, PPUCD_SHA256, forEachPpucdRange } from './ppucd.ts'
+import { PPUCD_PATH, PPUCD_SHA256, forEachPpucdBlock, forEachPpucdRange, type PpucdRange } from './ppucd.ts'
 
 type ManifestEntry = { name: string; bytes: number; sha256: string }
 const manifest = JSON.parse(readFileSync(resolve(DATA, 'blink/manifest.json'), 'utf8')) as { entries: ManifestEntry[] }
@@ -43,10 +43,17 @@ const LINE_BREAK = ['XX', 'AI', 'AL', 'B2', 'BA', 'BB', 'BK', 'CB', 'CL', 'CM', 
   'EB', 'EM', 'ZWJ', 'AK', 'AP', 'AS', 'VF', 'VI', 'HH']
 const ppucdPath = resolve(BROWSER_ENGINES, PPUCD_PATH)
 readVerified(ppucdPath, PPUCD_SHA256)
+// Every code point: block values first, then the cp and unassigned lines over them. ppucd writes no cp line for code points
+// whose values equal their block's (CJK Extension A except U+3405, Extension B, Hangul syllables, private use), so reading
+// cp lines alone left 210,383 code points at 0 (Line_Break XX, no General_Category, script Common).
+async function forEachPpucdCodePointRange(visit: (range: PpucdRange) => void): Promise<void> {
+  await forEachPpucdBlock(ppucdPath, visit)
+  await forEachPpucdRange(ppucdPath, visit)
+}
 // Joining_Type as HarfBuzz's Arabic shaper reads it for joining forms across shaping calls (specs/blink-text.md §2.E).
 const JOINING_TYPE = ['U', 'D', 'R', 'L', 'C', 'T']
 const props = new Uint16Array(0x110000)
-await forEachPpucdRange(ppucdPath, range => {
+await forEachPpucdCodePointRange(range => {
   const lb = LINE_BREAK.indexOf(range.props.get('lb') ?? '')
   const gc = range.props.get('gc') ?? ''
   const jt = JOINING_TYPE.indexOf(range.props.get('jt') ?? '')
@@ -65,7 +72,7 @@ const hanKerning = new Map<number, number>([
   [0x3000, HAN_MIDDLE], [0x3001, HAN_DOT], [0x3002, HAN_DOT], [0xff0c, HAN_DOT], [0xff0e, HAN_DOT], [0xff1a, HAN_COLON],
   [0xff1b, HAN_SEMICOLON], [0x00b7, HAN_MIDDLE], [0x2027, HAN_MIDDLE], [0x30fb, HAN_MIDDLE],
 ])
-await forEachPpucdRange(ppucdPath, range => {
+await forEachPpucdCodePointRange(range => {
   const gc = range.props.get('gc')
   if (gc !== 'Ps' && gc !== 'Pe') return
   const wide = range.props.get('blk') === 'CJK_Symbols' || range.props.get('ea') === 'F'
@@ -75,8 +82,8 @@ await forEachPpucdRange(ppucdPath, range => {
 // ScriptRunIterator's data (script_run_iterator.cc:133-236, :80-113): uscript_getScript and uscript_getScriptExtensions as
 // UScriptCode numbers from ICU 78.2's uscript.h, extension lists in ICU's order (ascending codes, as icu4c 78.3's
 // uscript_getScriptExtensions returns them), Bidi_Paired_Bracket_Type, and East_Asian_Width W, F or H for
-// FixScriptsByEastAsianWidth. The painted extent reads White_Space and the classes without ink of their own (gc Cc, Cf,
-// Zl, Zp, Default_Ignorable_Code_Point), which is how lab/score.ts classifies code points.
+// FixScriptsByEastAsianWidth; White_Space for the script comparison of Canvas strings; Extended_Pictographic, which
+// HarfBuzz reads to merge a ZWJ and the pictograph after it into the previous glyph cluster (hb-ot-shape.cc:466-522).
 const USCRIPT_PATH = 'chromium-icu-8cc91d9b/source/common/unicode/uscript.h'
 const USCRIPT_SHA256 = '293adf40390583c1c5394d3dc1794ed1669e8356cdf292ca5eaac145a2a5d1e0'
 const uscriptSource = new TextDecoder().decode(readVerified(resolve(BROWSER_ENGINES, USCRIPT_PATH), USCRIPT_SHA256))
@@ -92,7 +99,7 @@ function scriptCode(name: string): number {
 // Index 0 stands for "the code point's own script".
 const extensionLists: string[] = ['']
 const scriptProps = new Uint32Array(0x110000)
-await forEachPpucdRange(ppucdPath, range => {
+await forEachPpucdCodePointRange(range => {
   const sc = scriptCode(range.props.get('sc') ?? '')
   const scx = range.props.get('scx') ?? '<script>'
   let list = 0
@@ -106,9 +113,8 @@ await forEachPpucdRange(ppucdPath, range => {
   }
   const bpt = range.props.get('bpt') ?? 'n'
   const ea = range.props.get('ea') ?? 'N'
-  const gc = range.props.get('gc') ?? ''
   const flags = (bpt === 'o' ? 1 : 0) | (bpt === 'c' ? 2 : 0) | (ea === 'W' || ea === 'F' || ea === 'H' ? 4 : 0) |
-    (range.props.has('WSpace') ? 8 : 0) | (gc === 'Cc' || gc === 'Cf' || gc === 'Zl' || gc === 'Zp' || range.props.has('DI') ? 16 : 0)
+    (range.props.has('WSpace') ? 8 : 0) | (range.props.has('ExtPict') ? 16 : 0)
   scriptProps.fill(sc | (list << 8) | (flags << 18), range.first, range.last + 1)
 })
 if (extensionLists.length > 1024) throw new Error('more than 1024 Script_Extensions lists')
@@ -151,8 +157,8 @@ export const blinkHanKerningTypes: readonly number[] = [${hanKerningFlat.join(',
 
 // Runs over U+0000..U+10FFFF as little-endian uint32 pairs (first code point, value), value = UScriptCode (bits 0-7) |
 // Script_Extensions list index << 8 (0: the script alone) | Bidi_Paired_Bracket_Type open 0x40000, close 0x80000 |
-// East_Asian_Width W, F or H 0x100000 | White_Space 0x200000 | gc Cc, Cf, Zl, Zp or Default_Ignorable_Code_Point 0x400000,
-// from ICU 78.2 ppucd.txt and uscript.h (sha256 ${USCRIPT_SHA256}).
+// East_Asian_Width W, F or H 0x100000 | White_Space 0x200000 | Extended_Pictographic 0x400000, from ICU 78.2 ppucd.txt
+// and uscript.h (sha256 ${USCRIPT_SHA256}).
 export const blinkScriptPropsBase64 = '${base64(scriptPacked)}'
 
 // Script_Extensions lists by index, UScriptCode numbers in ICU's order.

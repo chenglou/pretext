@@ -1,19 +1,24 @@
 // Browser side of the lab. run.ts serves this bundle at /page.js inside a document whose <html lang> is the
 // chunk's pageLang, with the chunk's fixture web fonts listed in #lab-fonts. The page loads those fonts, asks the
-// server for chunks, observes each case natively, runs the prediction hook, observes the painted lines, and posts
-// the rows back before asking for the next chunk.
+// server for chunks, observes each case natively, runs the prediction hook and the observation port over its layout,
+// observes the painted lines, and posts the rows back before asking for the next chunk.
 //
 // Only fetch promises drive the loop (no timers), so background-window timer throttling doesn't stall it.
+import type { CanvasMeasure, ExpectedObservation, ParagraphLayout } from '../src/model.ts'
 import { parseFontFamilyList } from './cases/font.ts'
+import { observeBlink } from './observe/blink.ts'
+import { observeGecko } from './observe/gecko.ts'
+import { observeWebKit } from './observe/webkit.ts'
 import { paint, predict } from './predictor.ts'
 import type {
-  BrowserKind, Case, CodePointObservation, FontDecl, LabRow, NativeObservation, PageEnv, PainterLine, PainterObservation,
-  Paragraph, Prediction, Rect,
+  BrowserKind, Case, CodePointObservation, FontDecl, LabRow, LayoutPrediction, LinesPrediction, NativeObservation, PageEnv,
+  PainterLine, PainterObservation, Paragraph, Rect, RecordedLayout,
 } from './types.ts'
 
-type PageRow = Omit<LabRow, 'family' | 'browser' | 'case'>
+type PageRow = Omit<LabRow, 'family' | 'browser' | 'build' | 'case'>
 type StepReply =
-  | { kind: 'chunk'; seq: number; browser: BrowserKind; cases: Case[] }
+  // build: the engine build the driver read from the app bundle, given to the library as GivenFacts.build.
+  | { kind: 'chunk'; seq: number; browser: BrowserKind; build: string; cases: Case[] }
   | { kind: 'navigate'; lang: string; fonts: string[] }
   | { kind: 'done' }
 
@@ -213,7 +218,49 @@ async function observeNative(c: Case, range: Range): Promise<NativeObservation> 
   }
 }
 
-function observePainter(c: Case, prediction: Prediction, range: Range, timings: PageRow['timings']): PainterObservation | { error: string } | null {
+// The Canvas the observation ports measure with, live: one OffscreenCanvas per distinct settings, set up in the order the
+// library's measure/canvas.ts uses (lang before font). Only the WebKit port measures (research/observe-webkit.md §7).
+type ContextWithLang = OffscreenCanvasRenderingContext2D & { lang: string }
+const portContexts = new Map<string, ContextWithLang>()
+const measureLive: CanvasMeasure = (settings, text) => {
+  const key = JSON.stringify(settings)
+  let ctx = portContexts.get(key)
+  if (ctx === undefined) {
+    const created = new OffscreenCanvas(1, 1).getContext('2d') as ContextWithLang | null
+    if (created === null) throw new Error('OffscreenCanvas has no 2d context')
+    created.lang = settings.lang
+    created.font = settings.font
+    created.letterSpacing = settings.letterSpacing
+    created.wordSpacing = settings.wordSpacing
+    created.fontKerning = settings.fontKerning
+    created.textRendering = settings.textRendering
+    created.direction = settings.direction
+    portContexts.set(key, created)
+    ctx = created
+  }
+  return ctx.measureText(text).width
+}
+
+// What the browser will report for the layout, by the engine's own geometry code (DESIGN.md §9).
+function observeLayout(prediction: LayoutPrediction): ExpectedObservation {
+  const layout = prediction.layout
+  switch (layout.engine) {
+    case 'blink': return observeBlink(prediction.paragraph, layout, measureLive)
+    case 'webkit': return observeWebKit(prediction.paragraph, layout, measureLive)
+    case 'gecko': return observeGecko(prediction.paragraph, layout, measureLive)
+  }
+}
+
+// The layout without its Canvas call log, which the row counts instead.
+function recordedLayout(layout: ParagraphLayout): RecordedLayout {
+  switch (layout.engine) {
+    case 'blink': return { engine: layout.engine, env: layout.env, lines: layout.lines, gaps: layout.gaps }
+    case 'webkit': return { engine: layout.engine, env: layout.env, lines: layout.lines, gaps: layout.gaps }
+    case 'gecko': return { engine: layout.engine, env: layout.env, lines: layout.lines, gaps: layout.gaps }
+  }
+}
+
+function observePainter(c: Case, prediction: LayoutPrediction, range: Range, timings: PageRow['timings']): PainterObservation | { error: string } | null {
   const host = document.createElement('div')
   const s = host.style
   s.position = 'absolute'
@@ -278,8 +325,8 @@ function observePainter(c: Case, prediction: Prediction, range: Range, timings: 
   }
 }
 
-async function observeCase(c: Case, browser: BrowserKind, range: Range): Promise<PageRow> {
-  const timings = { nativeMs: 0, predictMs: 0, paintMs: 0, painterObserveMs: 0 }
+async function observeCase(c: Case, browser: BrowserKind, build: string, range: Range): Promise<PageRow> {
+  const timings = { nativeMs: 0, predictMs: 0, observeMs: 0, paintMs: 0, painterObserveMs: 0 }
   const env = readEnv()
   let start = performance.now()
   let native: PageRow['native']
@@ -290,23 +337,33 @@ async function observeCase(c: Case, browser: BrowserKind, range: Range): Promise
   }
   timings.nativeMs = performance.now() - start
   start = performance.now()
-  let prediction: PageRow['prediction']
+  // A predictor swapped in with run.ts --predictor may predict line ranges alone (baselines/main-predictor.ts).
+  let hook: LayoutPrediction | LinesPrediction | { error: string }
   try {
-    prediction = predict(c, { browser, dpr: window.devicePixelRatio })
+    hook = predict(c, { browser, build })
   } catch (error) {
-    prediction = { error: message(error) }
+    hook = { error: message(error) }
   }
   timings.predictMs = performance.now() - start
-  let painter: PageRow['painter'] = null
-  if ('lines' in prediction) {
-    try {
-      painter = observePainter(c, prediction, range, timings)
-    } catch (error) {
-      painter = { error: message(error) }
-    }
-  }
   casesObserved++
   previousCaseId = c.id
+  if (!('layout' in hook)) return { id: c.id, env, native, prediction: hook, painter: null, timings }
+  start = performance.now()
+  let observation: ExpectedObservation | { error: string }
+  try {
+    observation = observeLayout(hook)
+  } catch (error) {
+    observation = { error: message(error) }
+  }
+  timings.observeMs = performance.now() - start
+  const log = hook.layout.measure
+  const prediction: PageRow['prediction'] = { layout: recordedLayout(hook.layout), measure: { contexts: log.contexts.length, calls: log.calls.length, memoHits: log.memoHits }, observation }
+  let painter: PageRow['painter']
+  try {
+    painter = observePainter(c, hook, range, timings)
+  } catch (error) {
+    painter = { error: message(error) }
+  }
   return { id: c.id, env, native, prediction, painter, timings }
 }
 
@@ -329,7 +386,7 @@ async function main(): Promise<void> {
         for (let i = 0; i < reply.cases.length; i++) {
           const c = reply.cases[i]!
           if (c.pageLang !== pageLang) throw new Error(`Case ${c.id} needs <html lang="${c.pageLang}">; page has "${pageLang}"`)
-          rows.push(await observeCase(c, reply.browser, range))
+          rows.push(await observeCase(c, reply.browser, reply.build, range))
         }
         reply = await post<StepReply>('/api/step', { runId, pageLang, fonts: fontFixtures, seq: reply.seq, rows })
       }

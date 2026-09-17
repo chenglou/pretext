@@ -7,6 +7,7 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { createConnection } from 'node:net'
 import { basename, extname, join, resolve } from 'node:path'
 import { createBrowserSession, getAvailablePort } from '../../scripts/browser-automation.ts'
+import { readBuild } from '../lab/browser-build.ts'
 import { CANVAS_PROPERTIES } from './types.ts'
 import type { BrowserKind, PageEnv, Probe, ProbeOutput, ProbeResult } from './types.ts'
 
@@ -42,6 +43,9 @@ if (browserArg !== 'chrome' && browserArg !== 'safari' && browserArg !== 'firefo
 const browser: BrowserKind = browserArg
 // webkit-host runs installed Safari's engine, so it takes Safari's probes.
 const probeBrowser: BrowserKind = browser === 'webkit-host' ? 'safari' : browser
+// The build the run observes, read from the app bundles before launch; the output records it, so facts extracted from it
+// name their build (rebuild/tests/facts.ts).
+const build = readBuild(browser)
 const probesPath = resolve(args.get('probes') ?? fail(`--probes is required. ${USAGE}`))
 const outDir = resolve(args.get('out') ?? join(REPO, '.artifacts/probes', basename(probesPath, extname(probesPath))))
 const only = args.get('only') ?? null
@@ -836,7 +840,7 @@ try {
   const output: ProbeOutput = {
     status: errors.length === 0 ? 'ok' : 'error',
     errors,
-    browser, runId, probesFile: probesPath, only,
+    browser, build, runId, probesFile: probesPath, only,
     startedAt: startedAt.toISOString(), finishedAt: finishedAt.toISOString(), durationMs: finishedAt.getTime() - startedAt.getTime(),
     totals,
     envs: [...envs].map(([key, documents]) => ({ ...JSON.parse(key) as PageEnv, documents })),
