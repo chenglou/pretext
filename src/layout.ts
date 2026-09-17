@@ -108,42 +108,6 @@ export type PrepareOptions = {
 
 // --- Public API ---
 
-function createEmptyPrepared(includeSegments: boolean): InternalPreparedText | PreparedTextWithSegments {
-  if (includeSegments) {
-    return {
-      widths: [],
-      kinds: [],
-      simpleLineWalkFastPath: true,
-      breakableFitAdvances: [],
-      entryGeometry: null,
-      letterSpacing: 0,
-      spacingGraphemeCounts: [],
-      discretionaryHyphenWidth: 0,
-      discretionaryHyphenContexts: null,
-      breaksBefore: null,
-      lineStartProhibitions: null,
-      tabStopAdvance: 0,
-      chunks: [],
-      segments: [],
-    } as unknown as PreparedTextWithSegments
-  }
-  return {
-    widths: [],
-    kinds: [],
-    simpleLineWalkFastPath: true,
-    breakableFitAdvances: [],
-    entryGeometry: null,
-    letterSpacing: 0,
-    spacingGraphemeCounts: [],
-    discretionaryHyphenWidth: 0,
-    discretionaryHyphenContexts: null,
-    breaksBefore: null,
-    lineStartProhibitions: null,
-    tabStopAdvance: 0,
-    chunks: [],
-  } as unknown as InternalPreparedText
-}
-
 function countRenderedSpacingGraphemes(
   text: string,
   kind: SegmentBreakKind,
@@ -246,8 +210,6 @@ function measureAnalysis(
   const spaceWidth = getCorrectedSegmentWidth(' ', getSegmentMetrics(' ', cache), emojiCorrection)
   const tabStopAdvance = spaceWidth * 8
   const hasLetterSpacing = letterSpacing !== 0
-
-  if (analysis.len === 0) return createEmptyPrepared(includeSegments)
 
   // Collapsible runs keep their first source character for engines that look
   // at the source after a text item. Built only when normalization changed it.
@@ -665,25 +627,7 @@ function measureAnalysis(
       consumedEndSegmentIndex: widths.length,
     })
   }
-  if (segments !== null) {
-    return {
-      widths,
-      kinds,
-      simpleLineWalkFastPath,
-      breakableFitAdvances,
-      entryGeometry,
-      letterSpacing,
-      spacingGraphemeCounts,
-      discretionaryHyphenWidth,
-      discretionaryHyphenContexts,
-      breaksBefore,
-      lineStartProhibitions,
-      tabStopAdvance,
-      chunks,
-      segments,
-    } as unknown as PreparedTextWithSegments
-  }
-  return {
+  const prepared = {
     widths,
     kinds,
     simpleLineWalkFastPath,
@@ -697,7 +641,9 @@ function measureAnalysis(
     lineStartProhibitions,
     tabStopAdvance,
     chunks,
-  } as unknown as InternalPreparedText
+  } as unknown as PreparedTextWithSegments
+  if (segments !== null) prepared.segments = segments
+  return prepared
 }
 
 function prepareInternal(
