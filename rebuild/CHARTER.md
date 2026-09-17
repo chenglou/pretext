@@ -68,8 +68,8 @@ The lab declares those facts the way an app that knows its fonts would.
 
 ## Known deviations to remove
 
-From rebuild/research/{blink,webkit,gecko}-shortcut-audit.md, 2026-09-16, with their status after the charter evaluation
-of 2026-09-17 (REPORT.md §2-§7):
+From rebuild/research/{blink,webkit,gecko}-shortcut-audit.md, 2026-09-16, with their status after the ceiling round 1
+evaluation of 2026-09-17 (REPORT.md §2-§7):
 
 - Removed: each engine's public `width` copying the lab scorer's visibility rules. Engines return their own geometry, and
   the lab compares it through the observation ports (tentpoles 1, 2).
@@ -78,26 +78,49 @@ of 2026-09-17 (REPORT.md §2-§7):
   conditions) (tentpole 3).
 - Removed: name-keyed detection of system-ui in Blink, fixed pitch and the hyphen glyph in WebKit, and optical sizing in
   Gecko. They are font facts; the lab declares them for its fonts from an offline table (tentpole 3).
-- Still heuristics in the rule registry: Blink `measure/ignorables-left-out-if-8bit` (needs the RLM probe) and
-  `shape/wide-group-halved`; `shared/env/engine-from-user-agent`; the painter's `nowrap-hyphenated-or-joined`,
-  `leading-ascii-space-slice-in-span` and `zwj-at-joined-line-edges` (tentpoles 3, 7).
-- Structural deviations that need rework before inline boxes, `<br>`, text-indent, text-align or variable widths land:
-  per-span styles and box sizes (Blink F1-F4, F7, F8; WebKit F1, F2; Gecko F1, F2, F5, F6) (Gecko audit class f).
+- Removed in ceiling round 1: Blink's fitted length rule, "leave default ignorables out of the Canvas string at 1 or 2
+  code units" (Blink fix-r8, probe blink-followups-20260917). The registry id `blink/measure/ignorables-left-out-if-8bit`
+  now names what `engines/blink/shape.ts` does instead: an unsegmented Latin-1 paragraph's Canvas string leaves them out,
+  and every other string keeps them as U+2060.
+- Still heuristics in the rule registry: Blink `measure/ignorables-left-out-if-8bit` (until the new rule's citation is
+  recorded) and `shape/wide-group-halved`; `shared/env/engine-from-user-agent`; the painter's
+  `nowrap-hyphenated-or-joined`, `leading-ascii-space-slice-in-span` and `zwj-at-joined-line-edges` (tentpoles 3, 7).
+- Removed in ceiling round 1: the structural deviations before inline boxes, `<br>`, text-indent, text-align and variable
+  widths (per-span styles and box sizes; Blink F1-F4, F7, F8; WebKit F1, F2; Gecko F1, F2, F5, F6). All three engines lay
+  out the inline tree of DESIGN.md §1.1 with line slots, and no evaluation row raised `UnportedFeature`. Left: Blink throws
+  `UnportedFeature` for `text-align: justify` over a character at U+02C7 or above, which no lab case reaches, and `<wbr>`
+  rects are untraced in WebKit and Gecko.
 - The lab's `obligations` family and G0 baselines are derived from main's tests and the final runs; they are measurement
-  inputs until each obligation is triaged under tentpole 5. research/MAIN-TRIAGE.md (2026-09-17) re-observed main's
-  regressions and required cases with the charter library: every lab obligation pair passes in all three browsers, and
-  the cases main passes and the charter fails (Chrome 1,069, Firefox 745, webkit-host 736) are sorted into facts to
-  learn, accidental passes and dropped opinions. They aren't lab triage records yet (TEST-ARCHITECTURE §7.1). Scorer 2
-  baselines exist per build
-  (`rebuild/lab/baselines/gate-<browser>-<build>.json`); G0 is still keyed on user agents and scorer 1.
-- Found in the evaluation:
-  - The browser-process languages aren't recorded, so unlabeled content reports `ui-language` and Chrome loses 3 line
-    counts against the final runs (tentpole 6).
-  - A line whose WebKit `contentWidth` isn't the union of its boxes is marked unobserved by a scorer rule, not by a ported
-    engine rule: 503 cases (tentpole 2).
-  - Native lines come from vertical-centre grouping, a named observer assumption, and `y` and `height` are outside the
-    observation contract (tentpole 2).
-  - The painter is scored by extents and wraps only, because `paint` doesn't report painted source offsets (tentpole 7).
-  - Rows don't keep the Canvas call log, so nothing replays offline (DESIGN §8.3 stage 0).
-  - No library rule carries a `// rule <id>` annotation in source, and 19 registry ids are provisional (tentpole 4).
-  - The held-out sets of 2026-09-16 are burned; there is no sealed held-out set (tentpole 4).
+  inputs until each obligation is triaged under tentpole 5. research/MAIN-TRIAGE.md re-observed main's regressions and
+  required cases with the charter library, and `rebuild/lab/triage/` holds its records (Chrome 1,069, Firefox 745,
+  webkit-host 736), but `cases/obligations.ts` doesn't read them yet (TEST-ARCHITECTURE §7.1). The lab gate baselines
+  (`rebuild/lab/baselines/gate-<browser>-<build>.json`, re-seeded by this evaluation) block on the main-derived suite
+  samples and the burned 2026-09-16 held-out sets (CHARTER-CRITIC item 17); G0 is still keyed on user agents and scorer 1.
+- Found in the charter evaluation, with their status now:
+  - Removed: the browser-process languages are recorded per row and given to the library (Chrome `uiLanguage`, Firefox
+    `regionalPrefsLocale`, webkit-host `preferredLanguages` and ICU default locale). Left: Gecko reports `ui-language` for
+    every `lang=""` run even when `regionalPrefsLocale` is given, `contentLanguage` is read only by Blink, Chrome's accept
+    languages have no input, and WebKit's full preferred-language list isn't settled (tentpole 6).
+  - Still: a line whose WebKit `contentWidth` isn't the union of its boxes is marked unobserved by a scorer rule, not by a
+    ported engine rule: 244 development, 259 held-out and 243 sealed cases (tentpole 2).
+  - Still: native lines across nodes come from vertical-centre grouping, a named observer assumption (scorer 3 places a
+    code point rect by its own node's box), and `y` and `height` are outside the observation contract (tentpole 2).
+  - Still: the painter is scored by extents and wraps only, because `paint` doesn't report painted source offsets
+    (tentpole 7).
+  - Still: rows don't keep the Canvas call log, so nothing replays offline (DESIGN §8.3 stage 0).
+  - Still: no library rule carries a `// rule <id>` annotation in source; 19 registry ids are provisional, and so are the
+    55 stage 5 ids (tentpole 4).
+  - Removed: the sealed held-out set `sealed-20260917` exists and was run once, in the ceiling evaluation, scored counts
+    only (tentpole 4). Two of its generator sources (`lab/cases/case.ts`, `build.ts`) gained tree cases after sealing;
+    the case files' hashes are unchanged and flat cases keep their ids.
+- Found in ceiling round 1:
+  - The slot-rows observer assumption isn't checked. Where row 0's two insets and the text-indent together exceed the
+    width, Firefox and WebKit put row 0's right float one row lower, and the declared slots no longer describe the page:
+    9 Firefox and 2 webkit-host feature-family cases fail without a gap (tentpole 2).
+  - `Element.getClientRects()` isn't compared, so lines holding only atomic inlines or a `<br>` are unobserved: 719
+    Chrome, 670 Firefox and 705 webkit-host feature-family line counts (tentpole 2).
+  - Gecko failures without a gap name: 1 au per-glyph widths (specs/gecko-canvas.md §3 N7, inferred), a Helvetica Neue
+    ligature whose width equals its parts, and two 69 au span edges where only the observation port marks a value limited
+    (tentpole 3).
+  - CHARTER-CRITIC items since resolved: 1 (WebKit's coverage recipe reports `font-fallback`), 8 and 9 (quoted family
+    names), 12 (process languages given). Still open: 2, 3, 4 (4 library citations at Chromium 152), 10, 11, 13 to 16.

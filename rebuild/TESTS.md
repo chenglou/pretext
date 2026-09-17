@@ -32,7 +32,7 @@ Terms:
 | `rebuild/lab/browser-build.ts` | Reads the build from the app bundles for `lab/run.ts` and `probes/runner.ts` |
 
 - `bunx tsc --noEmit -p rebuild/tests/tsconfig.json`
-- `bun test rebuild/tests`: 31 tests in 8 files.
+- `bun test rebuild/tests`: 35 tests in 8 files.
 
 Derived case files, rows and derivation records live under `.artifacts/charter-20260916/tests/families-20260916/<browser>/`. A baseline names its case file with a sha256.
 
@@ -245,6 +245,22 @@ What the offsets say. They are lengths the derivation leaves to pass D, so they 
 - **webkit-host.** Only 131 of 4,699 brackets are at the derived width; most offsets lie between −1.3 and 0px, from partial Range edges snapped to whole px (§6 above). 144 `<wbr>` brackets sit one LayoutUnit above it.
 - **Process languages, Chrome zh-CN against en-US.** 18 of the 72 paragraphs have other break opportunities at width 1: all of them `aa”bb`, whether lang="" is on the block, a span or a span inside `lang=ja`, under `auto`, `strict` and `loose` alike. zh-CN breaks after `”` and en-US doesn't, and the line-break keyword changes nothing. The 162 targets resolved under both locales have the same brackets.
 
+### Stage 5 families with predictions, 2026-09-17
+
+The ceiling round 1 evaluation ran the stage 5 family cases forward and in reverse with `lab/predictor.ts`, scorer 3 and the given process languages (`.artifacts/ceiling-20260917/evaluate/<browser>/features-{forward,reverse}`, REPORT.md §2.3). No row had a prediction error or `UnportedFeature`.
+
+| Browser | Cases | lineCount pass / fail / unobserved | breaks pass / fail / unobserved | widths pass / fail / unobserved / not applicable | painter pass / fail / unobserved | History-dependent |
+|---|---:|---|---|---|---|---:|
+| Chrome, zh-CN | 12,882 | 12,135 / 28 / 719 | 12,135 / 28 / 719 | 6,943 / 220 / 4,972 / 747 | 6,992 / 430 / 5,460 | 0 |
+| Chrome, en-US | 468 | 468 / 0 / 0 | 468 / 0 / 0 | 468 / 0 / 0 / 0 | 468 / 0 / 0 | 0 |
+| webkit-host | 12,150 | 11,426 / 19 / 705 | 11,416 / 29 / 705 | 8,547 / 0 / 2,869 / 734 | 8,449 / 315 / 3,386 | 0 |
+| Firefox | 11,946 | 11,270 / 6 / 670 | 11,267 / 9 / 670 | 6,254 / 0 / 5,013 / 679 | 6,245 / 233 / 5,468 | 0 |
+
+- The unobserved line counts are `atomic-inlines` and `br-elements` lines that hold no Range rect; element rects aren't compared yet.
+- Chrome's 28 line count failures are all `text-align`, under `glyph-clusters` and `unsafe-to-break`.
+- webkit-host's 16 `br-elements` line count failures report `page-history` and pass alone in a fresh document (WebKit owner).
+- Firefox's 6 line count and 9 breaks failures, and 2 of webkit-host's `line-slots` failures, report no gap. They are rows where row 0's two insets and the text-indent exceed the width, so the page puts row 0's right float one row lower: the slot-rows assumption doesn't hold there, and the scorer doesn't check it yet (§13).
+
 ## 7. Versioned facts
 
 A facts file holds one engine build's facts, one record per fact and scope:
@@ -309,18 +325,19 @@ With `--previous`, a rule that loses its last observed family exits 1.
 
 Also listed: rules with a derived family, whose family has resolved brackets in the engine's browser but no scored prediction run yet (`derivedFamilies`, counted as `derivedOnly`). They don't count as covered.
 
-Regenerated 2026-09-17 with the stage 5 rules, from `rebuild/facts/*` and the derivation directories `.artifacts/charter-20260916/tests/families-20260916/<browser>` and `.artifacts/tests/features-20260917/<browser>` (plus `chrome-en-US`), against the previous matrix: no rule lost its last observed family.
+Regenerated 2026-09-17 by the ceiling round 1 evaluation, from `rebuild/facts/*` and derivation directories whose `file` and `reverse` runs are that evaluation's predicted runs: `.artifacts/ceiling-20260917/evaluate/<browser>/{families-derived,features-derived}` (plus `chrome/features-en-US-derived`), against the previous matrix: no rule lost its last observed family.
 
 | Engine | Current rules | Covered | By tests | By facts | By families | Uncovered | Uncovered with a derived family | Probe labels without a holding fact |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|
-| Blink | 175 | 122 | 39 | 57 | 90 | 53 | 18 | 8 |
-| WebKit | 144 | 86 | 23 | 47 | 74 | 58 | 17 | 10 |
-| Gecko | 122 | 85 | 51 | 55 | 60 | 37 | 16 | 2 |
+| Blink | 175 | 140 | 39 | 57 | 109 | 35 | 0 | 8 |
+| WebKit | 144 | 103 | 23 | 47 | 91 | 41 | 0 | 10 |
+| Gecko | 122 | 101 | 51 | 55 | 77 | 21 | 0 | 2 |
 | Shared | 29 | 12 | 6 | 6 | 0 | 17 | 0 | 0 |
 
 What stays uncovered:
 
-- the stage 5 rules: all 50 engine rules have derived families, which count once the ports predict structured paragraphs and the families run forward and reverse with `lab/predictor.ts`. The three `Element.getClientRects()` observation rules and the two observer assumptions have none;
+- of the stage 5 rules, the three `Element.getClientRects()` observation rules and the two observer assumptions (`shared/lab/vertical-centre-grouping`, `shared/lab/slot-rows`). All 50 stage 5 engine rules now have an observed family;
+- by kind: Blink 25 ported rules, 5 named gaps, 2 recipes and 2 heuristics; WebKit 36 ported rules, 3 named gaps and 1 recipe; Gecko 16 ported rules and 4 named gaps; shared 9 recipes, 3 ported rules, 2 heuristics and 1 choice by score;
 - the new output geometry rules. Their evidence is the observation ports' tests and scorer v2's comparisons, which the registry doesn't list yet;
 - builder scaffolding: `webkit/builder/*`, `webkit/ilb/*`, `gecko/script/*`;
 - gaps no family triggers: dictionary breaks unavailable, page zoom, page history, float32 precision, bitmap emoji size;
@@ -340,13 +357,17 @@ Six current rules are still heuristics or choices by score: `blink/measure/ignor
 
 | Baseline | Environment | Family cases | Pass pairs (lineCount / breaks / widths / painter) | History-dependent | Unstable pairs |
 |---|---|---:|---|---:|---:|
-| `chrome-153.0.8010.48.json` | Google Chrome 153.0.8010.48, macOS 26A428, DPR 2, scorer 2 | 10,976 | 41,525 (10,740 / 10,640 / 10,160 / 9,985) | 0 | 0 |
-| `webkit-host-22625.1.29.11.27.json` | webkit-host 27.0 on WebKit 22625.1.29.11.27 | 9,584 | 35,906 (9,447 / 9,365 / 8,764 / 8,330) | 6 | 0 |
-| `firefox-156.0.json` | Firefox 156.0 | 9,584 | 35,117 (9,422 / 9,166 / 8,481 / 8,048) | 0 | 0 |
+| `chrome-153.0.8010.48.json` | Google Chrome 153.0.8010.48, macOS 26A428, DPR 2, `uiLanguage` zh-CN, scorer 3 | 10,976 | 41,695 (10,772 / 10,690 / 10,258 / 9,975) | 0 | 0 |
+| `chrome-features-153.0.8010.48.json` | the same | 12,882 | 38,205 (12,135 / 12,135 / 6,943 / 6,992) | 0 | 0 |
+| `chrome-en-US-features-153.0.8010.48.json` | the same with `uiLanguage` en-US | 468 | 1,872 (468 / 468 / 468 / 468) | 0 | 0 |
+| `webkit-host-22625.1.29.11.27.json` | webkit-host 27.0 on WebKit 22625.1.29.11.27, `preferredLanguages` zh-CN, `icuDefaultLocale` en_US_POSIX | 9,584 | 36,038 (9,458 / 9,376 / 8,822 / 8,382) | 6 | 0 |
+| `webkit-host-features-22625.1.29.11.27.json` | the same | 12,150 | 39,838 (11,426 / 11,416 / 8,547 / 8,449) | 0 | 0 |
+| `firefox-156.0.json` | Firefox 156.0, `regionalPrefsLocale` zh-hans-us | 9,584 | 35,117 (9,422 / 9,166 / 8,481 / 8,048) | 0 | 0 |
+| `firefox-features-156.0.json` | the same | 11,946 | 35,036 (11,270 / 11,267 / 6,254 / 6,245) | 0 | 0 |
 
-Each baseline checked against its own runs: 0 lost pairs, pass.
+Seeded by the ceiling round 1 evaluation (REPORT.md §2.6) with the facts files and the regenerated coverage matrix, through derivation directories that link the evaluation's forward and reverse runs (`.artifacts/ceiling-20260917/evaluate/tools/derived-dirs.sh`). Each baseline checked against its own runs: 0 lost pairs, pass.
 
-The stage 5 families have no baseline yet. `gate.ts seed` needs forward and reverse runs scored with predictions, and the engine ports don't implement structured inputs yet. Their derived case files are ready: `.artifacts/tests/features-20260917/<browser>/final/family-cases.ndjson`. Once the ports predict, run `observe-families.sh` in each of those directories with `FINAL_RUNS` unset; derivation is already final, so only the forward and reverse runs happen. Then seed a new baseline per browser, and one for `chrome-en-US`, whose environment key names another `uiLanguage`.
+The previous rule-family baselines were keyed on scorer 2 without process languages, so `gate.ts check` refuses the new runs by design (exit 2). Checked by the same rules without the environment check, Chrome's rule families lost 44 painter pairs (`rule/joining`, the Blink owner's fix-r12), webkit-host's 22 line counts, 22 breaks and 6 painter pairs (`rule/joining` under `rtl-shaping-across-inline-boxes`), and Firefox's none.
 
 ## 10. Main's tests
 
@@ -374,12 +395,11 @@ A macOS update moves all three keys.
 ## 13. Not built yet
 
 - L3 offline replay: full Canvas call logs in rows (DESIGN §8.3 stage 0).
-- Sealed held-out sets and counts-only scoring (TEST-ARCHITECTURE §3).
 - Triage records for the census's main-only rows (§7).
 - Lock files and oracle answers under `rebuild/data`, with skipped oracle tests turned into failures (§5).
 - Environment reruns for rules that read DPR or app units: forced DPR 1 in Chrome, other apd in Firefox. `run.ts` takes no browser switches.
-- Family runs in installed Safari; webkit-host stands in.
+- Family runs in installed Safari; webkit-host stands in. The ceiling evaluation's combined families file never reached installed Safari, because its first job stopped (REPORT.md §2.7).
 - In-probe fact declarations with value-free check names (§4.1); painter probes.
 - Page-history preludes and per-case isolation protocols (§6.5).
-- For structured cases: the scorer's comparison of `elements` and the slot-rows assumption; line keys that place atomic inlines; baselines for the stage 5 families (§9).
+- For structured cases: the scorer's comparison of `elements` and the slot-rows assumption, which 11 feature-family rows break (§6); line keys that place atomic inlines.
 - A second controlled locale for Firefox and webkit-host: Firefox's Mac command line passes a Cocoa `-AppleLanguages` pair on as arguments to open, and webkit-host rejects arguments it doesn't know (lab README, "Browser-process languages").

@@ -2,138 +2,137 @@
   "format": "pretext-lab-gate/1",
   "engine": "webkit",
   "engineVersion": "22625.1.29.11.27",
-  "note": "charter evaluation 2026-09-17: rebuild-charter library through lab/predictor.ts with font facts, scorer 2; webkit-host on the development and held-out sets of final-20260916, forward and reverse Re-scored with scorer 3 on 2026-09-17, library unchanged.",
+  "note": "ceiling round 1 evaluation 2026-09-17 (webkit-host): development and 2026-09-16 held-out sets, forward and reverse, preferredLanguages zh-CN and icuDefaultLocale en_US_POSIX given, scorer 3",
   "environments": [
-    "webkit-host: webkit-host 27.0, engine build 22625.1.29.11.27, macOS 26A428; DPR 2, scale 1; scorer 3"
+    "webkit-host: webkit-host 27.0, engine build 22625.1.29.11.27, macOS 26A428; DPR 2, scale 1; preferredLanguages zh-CN, icuDefaultLocale en_US_POSIX; scorer 3"
   ],
   "seededFrom": [
     {
-      "perCase": ".artifacts/lab/rescore-v3-20260917/webkit-host/smoke-forward/webkit-host-per-case.ndjson",
+      "perCase": ".artifacts/ceiling-20260917/evaluate/webkit-host/smoke-forward/webkit-host-per-case.ndjson",
       "casesFile": ".artifacts/lab/cases/smoke.ndjson",
       "cases": 300,
       "historyDependent": 0
     },
     {
-      "perCase": ".artifacts/lab/rescore-v3-20260917/webkit-host/smoke-reverse/webkit-host-per-case.ndjson",
+      "perCase": ".artifacts/ceiling-20260917/evaluate/webkit-host/smoke-reverse/webkit-host-per-case.ndjson",
       "casesFile": ".artifacts/lab/cases/smoke.ndjson",
       "cases": 300,
       "historyDependent": 0
     },
     {
-      "perCase": ".artifacts/lab/rescore-v3-20260917/webkit-host/runs-forward/webkit-host-per-case.ndjson",
+      "perCase": ".artifacts/ceiling-20260917/evaluate/webkit-host/runs-forward/webkit-host-per-case.ndjson",
       "casesFile": ".artifacts/lab/cases/runs.ndjson",
       "cases": 2580,
       "historyDependent": 6
     },
     {
-      "perCase": ".artifacts/lab/rescore-v3-20260917/webkit-host/runs-reverse/webkit-host-per-case.ndjson",
+      "perCase": ".artifacts/ceiling-20260917/evaluate/webkit-host/runs-reverse/webkit-host-per-case.ndjson",
       "casesFile": ".artifacts/lab/cases/runs.ndjson",
       "cases": 2580,
       "historyDependent": 6
     },
     {
-      "perCase": ".artifacts/lab/rescore-v3-20260917/webkit-host/ws-forward/webkit-host-per-case.ndjson",
+      "perCase": ".artifacts/ceiling-20260917/evaluate/webkit-host/ws-forward/webkit-host-per-case.ndjson",
       "casesFile": ".artifacts/lab/cases/ws.ndjson",
       "cases": 1019,
       "historyDependent": 1
     },
     {
-      "perCase": ".artifacts/lab/rescore-v3-20260917/webkit-host/ws-reverse/webkit-host-per-case.ndjson",
+      "perCase": ".artifacts/ceiling-20260917/evaluate/webkit-host/ws-reverse/webkit-host-per-case.ndjson",
       "casesFile": ".artifacts/lab/cases/ws.ndjson",
       "cases": 1019,
       "historyDependent": 1
     },
     {
-      "perCase": ".artifacts/lab/rescore-v3-20260917/webkit-host/policy-forward/webkit-host-per-case.ndjson",
+      "perCase": ".artifacts/ceiling-20260917/evaluate/webkit-host/policy-forward/webkit-host-per-case.ndjson",
       "casesFile": ".artifacts/lab/cases/policy.ndjson",
       "cases": 1606,
       "historyDependent": 0
     },
     {
-      "perCase": ".artifacts/lab/rescore-v3-20260917/webkit-host/policy-reverse/webkit-host-per-case.ndjson",
+      "perCase": ".artifacts/ceiling-20260917/evaluate/webkit-host/policy-reverse/webkit-host-per-case.ndjson",
       "casesFile": ".artifacts/lab/cases/policy.ndjson",
       "cases": 1606,
       "historyDependent": 0
     },
     {
-      "perCase": ".artifacts/lab/rescore-v3-20260917/webkit-host/suite-sample-forward/webkit-host-per-case.ndjson",
+      "perCase": ".artifacts/ceiling-20260917/evaluate/webkit-host/suite-sample-forward/webkit-host-per-case.ndjson",
       "casesFile": ".artifacts/lab/cases/suite-sample.ndjson",
       "cases": 19933,
       "historyDependent": 75
     },
     {
-      "perCase": ".artifacts/lab/rescore-v3-20260917/webkit-host/suite-sample-reverse/webkit-host-per-case.ndjson",
+      "perCase": ".artifacts/ceiling-20260917/evaluate/webkit-host/suite-sample-reverse/webkit-host-per-case.ndjson",
       "casesFile": ".artifacts/lab/cases/suite-sample.ndjson",
       "cases": 19933,
       "historyDependent": 75
     },
     {
-      "perCase": ".artifacts/lab/rescore-v3-20260917/webkit-host/heldout-runs-forward/webkit-host-per-case.ndjson",
+      "perCase": ".artifacts/ceiling-20260917/evaluate/webkit-host/heldout-runs-forward/webkit-host-per-case.ndjson",
       "casesFile": ".artifacts/lab/cases/heldout-runs.ndjson",
       "cases": 2579,
       "historyDependent": 1
     },
     {
-      "perCase": ".artifacts/lab/rescore-v3-20260917/webkit-host/heldout-runs-reverse/webkit-host-per-case.ndjson",
+      "perCase": ".artifacts/ceiling-20260917/evaluate/webkit-host/heldout-runs-reverse/webkit-host-per-case.ndjson",
       "casesFile": ".artifacts/lab/cases/heldout-runs.ndjson",
       "cases": 2579,
       "historyDependent": 1
     },
     {
-      "perCase": ".artifacts/lab/rescore-v3-20260917/webkit-host/heldout-ws-forward/webkit-host-per-case.ndjson",
+      "perCase": ".artifacts/ceiling-20260917/evaluate/webkit-host/heldout-ws-forward/webkit-host-per-case.ndjson",
       "casesFile": ".artifacts/lab/cases/heldout-ws.ndjson",
       "cases": 1022,
       "historyDependent": 0
     },
     {
-      "perCase": ".artifacts/lab/rescore-v3-20260917/webkit-host/heldout-ws-reverse/webkit-host-per-case.ndjson",
+      "perCase": ".artifacts/ceiling-20260917/evaluate/webkit-host/heldout-ws-reverse/webkit-host-per-case.ndjson",
       "casesFile": ".artifacts/lab/cases/heldout-ws.ndjson",
       "cases": 1022,
       "historyDependent": 0
     },
     {
-      "perCase": ".artifacts/lab/rescore-v3-20260917/webkit-host/heldout-policy-forward/webkit-host-per-case.ndjson",
+      "perCase": ".artifacts/ceiling-20260917/evaluate/webkit-host/heldout-policy-forward/webkit-host-per-case.ndjson",
       "casesFile": ".artifacts/lab/cases/heldout-policy.ndjson",
       "cases": 1604,
       "historyDependent": 0
     },
     {
-      "perCase": ".artifacts/lab/rescore-v3-20260917/webkit-host/heldout-policy-reverse/webkit-host-per-case.ndjson",
+      "perCase": ".artifacts/ceiling-20260917/evaluate/webkit-host/heldout-policy-reverse/webkit-host-per-case.ndjson",
       "casesFile": ".artifacts/lab/cases/heldout-policy.ndjson",
       "cases": 1604,
       "historyDependent": 0
     },
     {
-      "perCase": ".artifacts/lab/rescore-v3-20260917/webkit-host/heldout-suite-sample-forward/webkit-host-per-case.ndjson",
+      "perCase": ".artifacts/ceiling-20260917/evaluate/webkit-host/heldout-suite-sample-forward/webkit-host-per-case.ndjson",
       "casesFile": ".artifacts/lab/cases/heldout-suite-sample.ndjson",
       "cases": 10000,
-      "historyDependent": 135
+      "historyDependent": 133
     },
     {
-      "perCase": ".artifacts/lab/rescore-v3-20260917/webkit-host/heldout-suite-sample-reverse/webkit-host-per-case.ndjson",
+      "perCase": ".artifacts/ceiling-20260917/evaluate/webkit-host/heldout-suite-sample-reverse/webkit-host-per-case.ndjson",
       "casesFile": ".artifacts/lab/cases/heldout-suite-sample.ndjson",
       "cases": 10000,
-      "historyDependent": 135
+      "historyDependent": 133
     }
   ],
   "counts": {
     "cases": 40385,
     "passPairs": {
-      "lineCount": 40100,
-      "breaks": 40007,
-      "widths": 39201,
-      "painter": 36052
+      "lineCount": 40102,
+      "breaks": 40008,
+      "widths": 39202,
+      "painter": 36053
     },
-    "historyDependentCases": 218,
+    "historyDependentCases": 216,
     "withoutPassesCases": 51,
-    "unstablePairs": 1
+    "unstablePairs": 3
   },
   "historyDependent": [
     "c-009242d722495e90",
     "c-012f58bab9cad28a",
     "c-02f7f353b2b9be90",
     "c-03a1ba516a645bd7",
-    "c-053cfbfd2afe0232",
     "c-07fe5e9322b50a33",
     "c-083464238991ffde",
     "c-09a7775ba6eea10d",
@@ -152,7 +151,6 @@
     "c-19ccdb6bbbc8089c",
     "c-1a5adb9a9c3f768f",
     "c-1eec362693e6d0da",
-    "c-1f409a158d1d9922",
     "c-1fae7ab53d594493",
     "c-21d7034740b52074",
     "c-26b67e0a044e561f",
@@ -165,7 +163,6 @@
     "c-3443598f0f77ff0b",
     "c-3716eb28befe916d",
     "c-37862fe7f12d1b3c",
-    "c-37b73d0429e9c8c8",
     "c-38c6f39166bffa7e",
     "c-38f55125173cbcd6",
     "c-3a93acc59dd867b4",
@@ -317,6 +314,7 @@
     "c-dc01d77ad162f769",
     "c-dc070f9692f0460f",
     "c-dce4fad99b42b154",
+    "c-e3478017361a15eb",
     "c-e40f40e946a7aa5e",
     "c-e42165bf112cb2c8",
     "c-e59b6469b3cec721",
@@ -402,7 +400,9 @@
     "c-f6c8d44a6fa0bab8"
   ],
   "unstable": {
-    "c-2abe3876793e1120": "p"
+    "c-2abe3876793e1120": "p",
+    "c-b06032f79f73fffa": "p",
+    "c-c2d1c62d0c2618c7": "p"
   },
   "passes": {
     "l": [
@@ -451,7 +451,6 @@
       "c-8e3a380ffa3722f6",
       "c-92fae84eaea5db69",
       "c-9394de2776d07b34",
-      "c-95e760a03486a674",
       "c-972ebb50be36ed36",
       "c-9a83dd176d9a3c9c",
       "c-9ac250eccb9ccc3f",
@@ -524,7 +523,6 @@
       "c-094212b161a42282",
       "c-09c82c472531f656",
       "c-0a6479ee049fd05f",
-      "c-0ad060cd384930bf",
       "c-0afbec1cb0119d84",
       "c-0b129aeef0eaa050",
       "c-0b4463f49c1d0ee9",
@@ -698,7 +696,6 @@
       "c-4b49e45494410160",
       "c-4bbfaaafb6f3d47f",
       "c-4be96ac008e01ec7",
-      "c-4c07405ff6eeb5fc",
       "c-4c542b5c8057f5fd",
       "c-4cafadcd4b3fb900",
       "c-4cc677547bb36ca2",
@@ -940,6 +937,7 @@
       "c-959ba5c8d55d9b3e",
       "c-95a3f094f87a8656",
       "c-95a7b64e35a2b0f4",
+      "c-95e760a03486a674",
       "c-967d5b3648951514",
       "c-9735e416058e45df",
       "c-97a2334c95cabf05",
@@ -1130,6 +1128,7 @@
       "c-cfae50a78d09a37a",
       "c-cfe01a4f43164152",
       "c-d012f0979b369eb1",
+      "c-d03f94e8fb53e7e2",
       "c-d0d7017ae4ea52ad",
       "c-d0e92973b04c36be",
       "c-d182998a56d5c5f5",
@@ -3523,6 +3522,7 @@
       "c-b01a07f177cc8ef5",
       "c-b0424014d3c2b11c",
       "c-b0494fe710f0cda6",
+      "c-b06032f79f73fffa",
       "c-b07a857e324677de",
       "c-b08ea2485eb32aa2",
       "c-b095cea33d13800d",
@@ -3729,6 +3729,7 @@
       "c-c23d1267873a03d5",
       "c-c258529222819bcd",
       "c-c2c50e840d96667f",
+      "c-c2d1c62d0c2618c7",
       "c-c2ea4d7e1050765d",
       "c-c31fff04a8829eaf",
       "c-c33a3ebeaf71779b",
@@ -5271,6 +5272,7 @@
       "c-053a98ff301eba58",
       "c-053aa46418959f75",
       "c-053c6a2d6ddfe9b5",
+      "c-053cfbfd2afe0232",
       "c-053f10218e3716a1",
       "c-054160c0fcbb15e7",
       "c-054252ed4b33ec73",
@@ -6040,6 +6042,7 @@
       "c-0ac8b8b5ead9aff6",
       "c-0aca55db9bd946cf",
       "c-0acfea3becc963a5",
+      "c-0ad060cd384930bf",
       "c-0ad40876be434663",
       "c-0ad4b489d43b8428",
       "c-0ad670f2a3e1073d",
@@ -15147,6 +15150,7 @@
       "c-4c03a24304215561",
       "c-4c0472919dbf5ce1",
       "c-4c04b25f2645dbb7",
+      "c-4c07405ff6eeb5fc",
       "c-4c09a624a227c1af",
       "c-4c0c0efd47a3a21f",
       "c-4c0c25dc7c23ab66",
@@ -29206,7 +29210,6 @@
       "c-b05b0e3e8cc2b786",
       "c-b05c9ca30eb7ed7e",
       "c-b05f572b88009dd1",
-      "c-b06032f79f73fffa",
       "c-b0616dffb9eb2400",
       "c-b0622d3ca74998d7",
       "c-b063574746118318",
@@ -31830,7 +31833,6 @@
       "c-c2ccd7779ee8fc35",
       "c-c2cec2443a91d98f",
       "c-c2cff91eb312f9a3",
-      "c-c2d1c62d0c2618c7",
       "c-c2d1e100569135ae",
       "c-c2d33d25b770e22f",
       "c-c2d4b8ac74e69278",
@@ -33680,7 +33682,6 @@
       "c-d03539267a16f44b",
       "c-d03756c353060e2e",
       "c-d03ddc007a59a989",
-      "c-d03f94e8fb53e7e2",
       "c-d043498ff3fc59a5",
       "c-d044f053cfc4e077",
       "c-d048ed6e0bcfb9c7",
@@ -36340,7 +36341,6 @@
       "c-e34148a5442daa19",
       "c-e3436f09e762b8b7",
       "c-e345f1de7ad7a551",
-      "c-e3478017361a15eb",
       "c-e34bff30059a40fb",
       "c-e3522e4774032e70",
       "c-e353ed95bd0971e1",
@@ -40502,7 +40502,9 @@
     ],
     "lp": [
       "c-149a0dfe22db3617",
+      "c-1f409a158d1d9922",
       "c-2a1fef66065962b0",
+      "c-37b73d0429e9c8c8",
       "c-3cb78d0a72864242",
       "c-6322358e1489e531",
       "c-67cd9bd538cb3e95",

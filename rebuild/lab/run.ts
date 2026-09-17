@@ -675,7 +675,9 @@ try {
   for (let port = 3002; port < 3100 && server === null; port++) {
     if (portInUse(port)) continue
     try {
-      server = Bun.serve({ hostname: '127.0.0.1', port, fetch: fetchHandler })
+      // A step posts whole rows. Bun.serve refuses bodies over 128 MiB by default, which the page sees as a NetworkError:
+      // Firefox's row for the 269,747-unit held-out corpus paragraph passed that limit once stage 5 geometry landed.
+      server = Bun.serve({ hostname: '127.0.0.1', port, fetch: fetchHandler, maxRequestBodySize: 1024 * 1024 * 1024 })
     } catch {
       // Taken between the check and the bind.
     }

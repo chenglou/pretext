@@ -1,6 +1,6 @@
 {
  "format": "pretext-coverage/1",
- "generatedAt": "2026-09-17T14:59:51.344Z",
+ "generatedAt": "2026-09-17T18:03:20.675Z",
  "inputs": {
   "facts": [
    "/Users/chenglou/github/pretext-rebuild/rebuild/facts/blink/153.0.8010.48.ndjson",
@@ -8,46 +8,46 @@
    "/Users/chenglou/github/pretext-rebuild/rebuild/facts/gecko/156.0.ndjson"
   ],
   "derived": [
-   "/Users/chenglou/github/pretext-rebuild/.artifacts/charter-20260916/tests/families-20260916/chrome",
-   "/Users/chenglou/github/pretext-rebuild/.artifacts/charter-20260916/tests/families-20260916/webkit-host",
-   "/Users/chenglou/github/pretext-rebuild/.artifacts/charter-20260916/tests/families-20260916/firefox",
-   "/Users/chenglou/github/pretext-rebuild/.artifacts/tests/features-20260917/chrome",
-   "/Users/chenglou/github/pretext-rebuild/.artifacts/tests/features-20260917/firefox",
-   "/Users/chenglou/github/pretext-rebuild/.artifacts/tests/features-20260917/webkit-host",
-   "/Users/chenglou/github/pretext-rebuild/.artifacts/tests/features-20260917/chrome-en-US"
+   "/Users/chenglou/github/pretext-rebuild/.artifacts/ceiling-20260917/evaluate/chrome/families-derived",
+   "/Users/chenglou/github/pretext-rebuild/.artifacts/ceiling-20260917/evaluate/chrome/features-derived",
+   "/Users/chenglou/github/pretext-rebuild/.artifacts/ceiling-20260917/evaluate/chrome/features-en-US-derived",
+   "/Users/chenglou/github/pretext-rebuild/.artifacts/ceiling-20260917/evaluate/firefox/families-derived",
+   "/Users/chenglou/github/pretext-rebuild/.artifacts/ceiling-20260917/evaluate/firefox/features-derived",
+   "/Users/chenglou/github/pretext-rebuild/.artifacts/ceiling-20260917/evaluate/webkit-host/families-derived",
+   "/Users/chenglou/github/pretext-rebuild/.artifacts/ceiling-20260917/evaluate/webkit-host/features-derived"
   ]
  },
  "counts": {
   "blink": {
    "current": 175,
-   "covered": 122,
+   "covered": 140,
    "byTest": 39,
    "byFact": 57,
-   "byFamily": 90,
-   "uncovered": 53,
-   "derivedOnly": 18,
+   "byFamily": 109,
+   "uncovered": 35,
+   "derivedOnly": 0,
    "withProbeButNoHoldingFact": 8,
    "deviations": 2
   },
   "webkit": {
    "current": 144,
-   "covered": 86,
+   "covered": 103,
    "byTest": 23,
    "byFact": 47,
-   "byFamily": 74,
-   "uncovered": 58,
-   "derivedOnly": 17,
+   "byFamily": 91,
+   "uncovered": 41,
+   "derivedOnly": 0,
    "withProbeButNoHoldingFact": 10,
    "deviations": 0
   },
   "gecko": {
    "current": 122,
-   "covered": 85,
+   "covered": 101,
    "byTest": 51,
    "byFact": 55,
-   "byFamily": 60,
-   "uncovered": 37,
-   "derivedOnly": 16,
+   "byFamily": 77,
+   "uncovered": 21,
+   "derivedOnly": 0,
    "withProbeButNoHoldingFact": 2,
    "deviations": 0
   },
@@ -78,6 +78,8 @@
   "blink/breaks/line-break-anywhere-settings",
   "blink/breaks/null-locale-ui-language",
   "blink/breaks/rule-file-per-locale",
+  "blink/content/atomic-inline-object-replacement",
+  "blink/content/br-forced-break-item",
   "blink/content/collapse-space-runs",
   "blink/content/cr-collapses-as-space",
   "blink/content/cr-ff-control-item",
@@ -85,6 +87,7 @@
   "blink/content/forced-break-item",
   "blink/content/newline-removed-next-to-zwsp",
   "blink/content/tab-run-control-item",
+  "blink/content/wbr-flow-control-zwsp",
   "blink/content/zwnj-splits-preserved-item",
   "blink/gap/control-character-width",
   "blink/gap/font-fallback-u-fffc",
@@ -108,24 +111,34 @@
   "blink/hankerning/start-context-halt",
   "blink/hyphen/glyph-from-fact",
   "blink/hyphen/shaped-alone-without-spacing",
+  "blink/lines/atomic-inline-item",
   "blink/lines/break-anywhere-retry",
   "blink/lines/break-at-previous-opportunity",
   "blink/lines/break-spaces-no-trailing-item",
   "blink/lines/close-tag-break-after",
+  "blink/lines/close-tag-edge-size",
   "blink/lines/cr-ff-empty-item",
   "blink/lines/fit-bound-plus-one-lu",
   "blink/lines/forced-break",
   "blink/lines/hyphen-retry-without-room",
+  "blink/lines/line-layout-opportunity",
+  "blink/lines/nowrap-item-added-whole",
+  "blink/lines/open-tag-edge-size",
   "blink/lines/open-tag-zero-size",
   "blink/lines/overflow-kept",
+  "blink/lines/overflow-moves-to-next-opportunity",
   "blink/lines/overflow-rebreak-at-size-minus-1px",
+  "blink/lines/per-item-wrap-style",
   "blink/lines/preserved-trailing-spaces-item",
   "blink/lines/remove-trailing-collapsible-space",
   "blink/lines/reshape-slice",
   "blink/lines/rewind-overflow",
+  "blink/lines/rewind-trailing-open-tags",
   "blink/lines/tab-item",
+  "blink/lines/text-indent-first-formatted-line",
   "blink/lines/trailing-collapsible-spaces-skipped",
   "blink/lines/trailing-space-truncated-without-reshape",
+  "blink/lines/wrap-span-inside-nowrap-recomputes-break",
   "blink/measure/ignorables-as-u2060",
   "blink/measure/joining-from-fact",
   "blink/measure/letter-spacing-cursive-adjust",
@@ -134,9 +147,11 @@
   "blink/measure/word-spacing-in-js",
   "blink/measure/zoomed-font-size",
   "blink/measure/zwj-inside-group-edge",
+  "blink/output/apply-text-align",
   "blink/output/cr-ff-text",
   "blink/output/hang-width",
   "blink/output/hyphen-fragment",
+  "blink/output/inline-box-item",
   "blink/output/joins-next-line-from-fact",
   "blink/shape/default-ignorables-skipped-in-pair",
   "blink/shape/joining-reads-5-code-points-context",
@@ -145,10 +160,14 @@
   "blink/shapeline/line-end-reshape",
   "blink/shapeline/line-end-reshape-walk-back",
   "blink/shapeline/line-start-reshape",
+  "blink/shapeline/needs-accurate-end-position",
   "blink/shapeline/no-reshape-at-space-line-end",
+  "blink/shaping/box-edge-ends-group",
   "blink/shaping/control-item-ends-group",
   "blink/shaping/zwnj-at-item-start-ends-group",
+  "blink/style/box-edge-layout-units",
   "blink/style/lang-empty-null-locale",
+  "blink/tabs/float-offset",
   "blink/tabs/half-space-minimum",
   "blink/tabs/tab-size-zero",
   "blink/tabs/tab-stops",
@@ -177,24 +196,37 @@
   "gecko/linebreaker/auto-strictness-is-strict",
   "gecko/linebreaker/compute-break-positions",
   "gecko/linebreaker/no-break-inside-cluster",
+  "gecko/linebreaker/nowrap-suppresses-breaks",
   "gecko/linebreaker/words-across-flows",
+  "gecko/lines/begin-span-line-data",
+  "gecko/lines/br-frame-always-placed",
+  "gecko/lines/break-after-non-text-frame",
   "gecko/lines/break-before-frame",
   "gecko/lines/break-spaces-after-space",
   "gecko/lines/can-place-frame-requests-backup",
+  "gecko/lines/continuation-reserves-end-edge",
+  "gecko/lines/end-margin-last-continuation",
   "gecko/lines/first-opportunity-taken-even-if-overflowing",
   "gecko/lines/fit-integer-au-le",
+  "gecko/lines/float-available-space",
   "gecko/lines/forced-break-in-redo",
   "gecko/lines/frame-ends-at-significant-newline",
   "gecko/lines/hyphen-in-frame-width",
+  "gecko/lines/impacted-by-floats",
   "gecko/lines/in-word-advance-unit-minus-suffix",
+  "gecko/lines/nowrap-span-fits",
   "gecko/lines/one-redo",
   "gecko/lines/pre-wrap-hangs-overflowing-part",
+  "gecko/lines/redo-next-band",
   "gecko/lines/soft-hyphen-at-frame-end",
   "gecko/lines/soft-hyphen-opportunity",
   "gecko/lines/tab-stops",
   "gecko/lines/tabs-zero-when-width-not-positive",
+  "gecko/lines/text-indent-root-span",
+  "gecko/lines/trim-recurses-into-spans",
   "gecko/lines/trim-trailing-at-break",
   "gecko/lines/trim-trailing-whitespace-floor-unclamped",
+  "gecko/lines/wbr-frame-opportunity",
   "gecko/lines/word-wrap-break-priority",
   "gecko/measure/au-by-rounding",
   "gecko/measure/min-tab-advance-and-hyphen-run",
@@ -202,10 +234,14 @@
   "gecko/measure/word-units",
   "gecko/output/hanging-from-char-is-space",
   "gecko/output/joins-next-line",
+  "gecko/output/text-align-line",
   "gecko/spacing/letter-spacing-after-cluster",
   "gecko/spacing/no-letter-spacing-cursive",
   "gecko/spacing/word-spacing-space-nbsp",
+  "gecko/style/box-edge-app-units",
   "gecko/style/break-word-is-overflow-wrap-anywhere",
+  "gecko/tabs/distance-from-content-edge",
+  "gecko/textrun/box-edges-end-run",
   "gecko/textrun/continue-across-frames",
   "gecko/transform/collapse-space-tab",
   "gecko/transform/cr-kept-stops-collapsing",
@@ -225,6 +261,7 @@
   "webkit/breaker/try-previous-runs",
   "webkit/breaker/wrap-with-hyphen",
   "webkit/breaks/apple-quote-overrides",
+  "webkit/breaks/atomic-soft-wrap-opportunity",
   "webkit/breaks/breakable-positions-scan",
   "webkit/breaks/da-has-no-overrides",
   "webkit/breaks/hyphen-before-digit",
@@ -236,10 +273,13 @@
   "webkit/breaks/latin1-pair-table",
   "webkit/breaks/line-tables-per-locale",
   "webkit/breaks/may-break-in-between",
+  "webkit/breaks/nearest-common-ancestor-white-space",
   "webkit/breaks/stale-fast-forward-state",
+  "webkit/builder/eligibility-over-style-record",
   "webkit/content/break-spaces-item-per-space",
   "webkit/content/complex-code-path",
   "webkit/content/courier-new-no-width-shortcut",
+  "webkit/content/hard-line-break-item",
   "webkit/content/item-ends-at-soft-hyphen",
   "webkit/content/items-at-breakable-positions",
   "webkit/content/monospace-from-fact",
@@ -248,6 +288,7 @@
   "webkit/content/soft-line-break-items",
   "webkit/content/u2028-u2029-force-in-collapse",
   "webkit/content/vt-is-not-ascii-whitespace",
+  "webkit/content/word-break-opportunity-item",
   "webkit/content/word-separator-tab-boundary",
   "webkit/gap/canvas-language",
   "webkit/gap/control-character-width",
@@ -261,13 +302,20 @@
   "webkit/ilb/next-wrap-opportunity",
   "webkit/ilb/soft-hyphen-counted-in-fit",
   "webkit/ilb/wrap-reverts-after-box-start",
+  "webkit/lines/atomic-margin-box-width",
   "webkit/lines/available-width-plus-1-64",
+  "webkit/lines/candidate-beside-float-wraps",
   "webkit/lines/conditional-hang-stops-when-fits",
+  "webkit/lines/decorated-box-is-content",
+  "webkit/lines/float-avoiding-rect",
   "webkit/lines/hanging-keeps-last-item",
+  "webkit/lines/inline-box-edge-widths",
+  "webkit/lines/line-spanning-inline-boxes",
   "webkit/lines/line-width-trunc64",
   "webkit/lines/partial-leading-uses-carried-width",
   "webkit/lines/remove-trimmable-trailing",
   "webkit/lines/rtl-trailing-whitespace-width",
+  "webkit/lines/text-indent-start-margin",
   "webkit/lines/trailing-hyphen",
   "webkit/lines/trimmable-trailing-content",
   "webkit/lines/white-space-collapses-completely",
@@ -285,8 +333,13 @@
   "webkit/measure/tab-size-zero",
   "webkit/measure/tab-stop-from-pen-position",
   "webkit/measure/word-spacing-in-js",
+  "webkit/output/horizontal-alignment-offset",
+  "webkit/output/justify-expansion",
+  "webkit/style/box-geometry-units",
   "webkit/style/han-lang-specialized-chinese-locale",
   "webkit/style/lang-empty-null-locale",
+  "webkit/style/per-box-style-record",
+  "webkit/tabs/content-edge-offset",
   "webkit/tos/revert-to-non-overflowing-hyphen"
  ],
  "uncovered": [
@@ -310,7 +363,6 @@
   "blink/lines/u3000-not-collapsible-trailing",
   "blink/lines/generated-zwsp-break-after",
   "blink/lines/split-trailing-bidi-space",
-  "blink/lines/rewind-trailing-open-tags",
   "blink/lines/paragraph-without-line-box",
   "blink/output/edge-caret-rounded-outward",
   "blink/gap/font-fallback-edge-in-cluster",
@@ -400,56 +452,6 @@
   "gecko/textrun/parsed-family-compare",
   "gecko/gap/font-fallback-figure-space",
   "gecko/gap/glyph-clusters-letter-spacing",
-  "blink/content/atomic-inline-object-replacement",
-  "blink/content/br-forced-break-item",
-  "blink/content/wbr-flow-control-zwsp",
-  "blink/lines/atomic-inline-item",
-  "blink/lines/open-tag-edge-size",
-  "blink/lines/close-tag-edge-size",
-  "blink/lines/line-layout-opportunity",
-  "blink/lines/overflow-moves-to-next-opportunity",
-  "blink/lines/per-item-wrap-style",
-  "blink/lines/text-indent-first-formatted-line",
-  "blink/lines/wrap-span-inside-nowrap-recomputes-break",
-  "blink/output/apply-text-align",
-  "blink/output/inline-box-item",
-  "blink/shapeline/needs-accurate-end-position",
-  "blink/shaping/box-edge-ends-group",
-  "blink/style/box-edge-layout-units",
-  "blink/tabs/float-offset",
-  "webkit/breaks/atomic-soft-wrap-opportunity",
-  "webkit/breaks/nearest-common-ancestor-white-space",
-  "webkit/builder/eligibility-over-style-record",
-  "webkit/content/hard-line-break-item",
-  "webkit/content/word-break-opportunity-item",
-  "webkit/lines/atomic-margin-box-width",
-  "webkit/lines/candidate-beside-float-wraps",
-  "webkit/lines/decorated-box-is-content",
-  "webkit/lines/float-avoiding-rect",
-  "webkit/lines/inline-box-edge-widths",
-  "webkit/lines/line-spanning-inline-boxes",
-  "webkit/lines/text-indent-start-margin",
-  "webkit/output/horizontal-alignment-offset",
-  "webkit/output/justify-expansion",
-  "webkit/style/box-geometry-units",
-  "webkit/style/per-box-style-record",
-  "webkit/tabs/content-edge-offset",
-  "gecko/lines/begin-span-line-data",
-  "gecko/lines/br-frame-always-placed",
-  "gecko/lines/break-after-non-text-frame",
-  "gecko/lines/continuation-reserves-end-edge",
-  "gecko/lines/end-margin-last-continuation",
-  "gecko/lines/float-available-space",
-  "gecko/lines/impacted-by-floats",
-  "gecko/lines/nowrap-span-fits",
-  "gecko/lines/redo-next-band",
-  "gecko/lines/text-indent-root-span",
-  "gecko/lines/trim-recurses-into-spans",
-  "gecko/lines/wbr-frame-opportunity",
-  "gecko/output/text-align-line",
-  "gecko/style/box-edge-app-units",
-  "gecko/tabs/distance-from-content-edge",
-  "gecko/textrun/box-edges-end-run",
   "lab/observe/blink/quads-for-self",
   "lab/observe/webkit/inline-absolute-quads",
   "lab/observe/gecko/all-in-flow-rects",
@@ -692,15 +694,13 @@
      "targets": 484,
      "cases": 848,
      "passes": {
-      "lineCount": 828,
-      "breaks": 818,
-      "widths": 818,
-      "painter": 828
+      "lineCount": 848,
+      "breaks": 848,
+      "widths": 848,
+      "painter": 848
      },
      "scored": 848
-    }
-   ],
-   "derivedFamilies": [
+    },
     {
      "family": "process-languages",
      "browser": "chrome",
@@ -708,8 +708,13 @@
      "resolvedTargets": 198,
      "targets": 270,
      "cases": 504,
-     "passes": {},
-     "scored": 0
+     "passes": {
+      "lineCount": 504,
+      "breaks": 504,
+      "widths": 504,
+      "painter": 504
+     },
+     "scored": 504
     },
     {
      "family": "process-languages",
@@ -718,10 +723,16 @@
      "resolvedTargets": 180,
      "targets": 270,
      "cases": 468,
-     "passes": {},
-     "scored": 0
+     "passes": {
+      "lineCount": 468,
+      "breaks": 468,
+      "widths": 468,
+      "painter": 468
+     },
+     "scored": 468
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "family"
    ],
@@ -965,9 +976,7 @@
       "painter": 608
      },
      "scored": 608
-    }
-   ],
-   "derivedFamilies": [
+    },
     {
      "family": "br-elements",
      "browser": "chrome",
@@ -975,10 +984,16 @@
      "resolvedTargets": 236,
      "targets": 268,
      "cases": 856,
-     "passes": {},
-     "scored": 0
+     "passes": {
+      "lineCount": 448,
+      "breaks": 448,
+      "widths": 224,
+      "painter": 428
+     },
+     "scored": 856
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "test",
     "fact",
@@ -2058,8 +2073,8 @@
      "passes": {
       "lineCount": 702,
       "breaks": 702,
-      "widths": 590,
-      "painter": 592
+      "widths": 638,
+      "painter": 548
      },
      "scored": 718
     }
@@ -2105,8 +2120,8 @@
      "passes": {
       "lineCount": 702,
       "breaks": 702,
-      "widths": 590,
-      "painter": 592
+      "widths": 638,
+      "painter": 548
      },
      "scored": 718
     }
@@ -2148,8 +2163,8 @@
      "passes": {
       "lineCount": 702,
       "breaks": 702,
-      "widths": 590,
-      "painter": 592
+      "widths": 638,
+      "painter": 548
      },
      "scored": 718
     }
@@ -2409,9 +2424,7 @@
       "painter": 348
      },
      "scored": 360
-    }
-   ],
-   "derivedFamilies": [
+    },
     {
      "family": "line-slots",
      "browser": "chrome",
@@ -2419,10 +2432,16 @@
      "resolvedTargets": 844,
      "targets": 1294,
      "cases": 1904,
-     "passes": {},
-     "scored": 0
+     "passes": {
+      "lineCount": 1904,
+      "breaks": 1904,
+      "widths": 924,
+      "painter": 924
+     },
+     "scored": 1904
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "test",
     "fact",
@@ -2523,9 +2542,7 @@
       "painter": 658
      },
      "scored": 796
-    }
-   ],
-   "derivedFamilies": [
+    },
     {
      "family": "text-indent",
      "browser": "chrome",
@@ -2533,10 +2550,16 @@
      "resolvedTargets": 412,
      "targets": 640,
      "cases": 992,
-     "passes": {},
-     "scored": 0
+     "passes": {
+      "lineCount": 992,
+      "breaks": 992,
+      "widths": 40,
+      "painter": 40
+     },
+     "scored": 992
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "fact",
     "family"
@@ -3099,10 +3122,10 @@
      "targets": 484,
      "cases": 848,
      "passes": {
-      "lineCount": 828,
-      "breaks": 818,
-      "widths": 818,
-      "painter": 828
+      "lineCount": 848,
+      "breaks": 848,
+      "widths": 848,
+      "painter": 848
      },
      "scored": 848
     },
@@ -3114,10 +3137,10 @@
      "targets": 176,
      "cases": 516,
      "passes": {
-      "lineCount": 504,
-      "breaks": 496,
-      "widths": 496,
-      "painter": 502
+      "lineCount": 516,
+      "breaks": 516,
+      "widths": 516,
+      "painter": 516
      },
      "scored": 516
     }
@@ -3165,15 +3188,13 @@
      "targets": 484,
      "cases": 848,
      "passes": {
-      "lineCount": 828,
-      "breaks": 818,
-      "widths": 818,
-      "painter": 828
+      "lineCount": 848,
+      "breaks": 848,
+      "widths": 848,
+      "painter": 848
      },
      "scored": 848
-    }
-   ],
-   "derivedFamilies": [
+    },
     {
      "family": "process-languages",
      "browser": "chrome",
@@ -3181,8 +3202,13 @@
      "resolvedTargets": 198,
      "targets": 270,
      "cases": 504,
-     "passes": {},
-     "scored": 0
+     "passes": {
+      "lineCount": 504,
+      "breaks": 504,
+      "widths": 504,
+      "painter": 504
+     },
+     "scored": 504
     },
     {
      "family": "process-languages",
@@ -3191,10 +3217,16 @@
      "resolvedTargets": 180,
      "targets": 270,
      "cases": 468,
-     "passes": {},
-     "scored": 0
+     "passes": {
+      "lineCount": 468,
+      "breaks": 468,
+      "widths": 468,
+      "painter": 468
+     },
+     "scored": 468
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "test",
     "fact",
@@ -3236,15 +3268,13 @@
      "targets": 484,
      "cases": 848,
      "passes": {
-      "lineCount": 828,
-      "breaks": 818,
-      "widths": 818,
-      "painter": 828
+      "lineCount": 848,
+      "breaks": 848,
+      "widths": 848,
+      "painter": 848
      },
      "scored": 848
-    }
-   ],
-   "derivedFamilies": [
+    },
     {
      "family": "process-languages",
      "browser": "chrome",
@@ -3252,8 +3282,13 @@
      "resolvedTargets": 198,
      "targets": 270,
      "cases": 504,
-     "passes": {},
-     "scored": 0
+     "passes": {
+      "lineCount": 504,
+      "breaks": 504,
+      "widths": 504,
+      "painter": 504
+     },
+     "scored": 504
     },
     {
      "family": "process-languages",
@@ -3262,10 +3297,16 @@
      "resolvedTargets": 180,
      "targets": 270,
      "cases": 468,
-     "passes": {},
-     "scored": 0
+     "passes": {
+      "lineCount": 468,
+      "breaks": 468,
+      "widths": 468,
+      "painter": 468
+     },
+     "scored": 468
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "test",
     "fact",
@@ -3741,9 +3782,7 @@
       "painter": 368
      },
      "scored": 368
-    }
-   ],
-   "derivedFamilies": [
+    },
     {
      "family": "wbr-elements",
      "browser": "chrome",
@@ -3751,10 +3790,16 @@
      "resolvedTargets": 532,
      "targets": 692,
      "cases": 1352,
-     "passes": {},
-     "scored": 0
+     "passes": {
+      "lineCount": 1352,
+      "breaks": 1352,
+      "widths": 1352,
+      "painter": 1332
+     },
+     "scored": 1352
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "test",
     "fact",
@@ -3794,10 +3839,10 @@
      "targets": 484,
      "cases": 848,
      "passes": {
-      "lineCount": 828,
-      "breaks": 818,
-      "widths": 818,
-      "painter": 828
+      "lineCount": 848,
+      "breaks": 848,
+      "widths": 848,
+      "painter": 848
      },
      "scored": 848
     },
@@ -3809,10 +3854,10 @@
      "targets": 176,
      "cases": 516,
      "passes": {
-      "lineCount": 504,
-      "breaks": 496,
-      "widths": 496,
-      "painter": 502
+      "lineCount": 516,
+      "breaks": 516,
+      "widths": 516,
+      "painter": 516
      },
      "scored": 516
     }
@@ -4071,8 +4116,7 @@
    "declaredFamilies": [
     "nowrap-spans"
    ],
-   "observedFamilies": [],
-   "derivedFamilies": [
+   "observedFamilies": [
     {
      "family": "nowrap-spans",
      "browser": "chrome",
@@ -4080,12 +4124,19 @@
      "resolvedTargets": 192,
      "targets": 264,
      "cases": 544,
-     "passes": {},
-     "scored": 0
+     "passes": {
+      "lineCount": 544,
+      "breaks": 544,
+      "widths": 356,
+      "painter": 356
+     },
+     "scored": 544
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
-    "fact"
+    "fact",
+    "family"
    ],
    "annotated": false
   },
@@ -4395,9 +4446,7 @@
       "painter": 190
      },
      "scored": 288
-    }
-   ],
-   "derivedFamilies": [
+    },
     {
      "family": "text-align",
      "browser": "chrome",
@@ -4405,10 +4454,16 @@
      "resolvedTargets": 432,
      "targets": 576,
      "cases": 1104,
-     "passes": {},
-     "scored": 0
+     "passes": {
+      "lineCount": 1076,
+      "breaks": 1076,
+      "widths": 800,
+      "painter": 749
+     },
+     "scored": 1104
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "fact",
     "family"
@@ -4472,9 +4527,7 @@
       "painter": 524
      },
      "scored": 600
-    }
-   ],
-   "derivedFamilies": [
+    },
     {
      "family": "text-align",
      "browser": "chrome",
@@ -4482,10 +4535,16 @@
      "resolvedTargets": 432,
      "targets": 576,
      "cases": 1104,
-     "passes": {},
-     "scored": 0
+     "passes": {
+      "lineCount": 1076,
+      "breaks": 1076,
+      "widths": 800,
+      "painter": 749
+     },
+     "scored": 1104
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "family"
    ],
@@ -4840,9 +4899,7 @@
       "painter": 224
      },
      "scored": 224
-    }
-   ],
-   "derivedFamilies": [
+    },
     {
      "family": "br-elements",
      "browser": "chrome",
@@ -4850,10 +4907,16 @@
      "resolvedTargets": 236,
      "targets": 268,
      "cases": 856,
-     "passes": {},
-     "scored": 0
+     "passes": {
+      "lineCount": 448,
+      "breaks": 448,
+      "widths": 224,
+      "painter": 428
+     },
+     "scored": 856
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "family"
    ],
@@ -4939,9 +5002,7 @@
       "painter": 360
      },
      "scored": 360
-    }
-   ],
-   "derivedFamilies": [
+    },
     {
      "family": "box-edges",
      "browser": "chrome",
@@ -4949,10 +5010,16 @@
      "resolvedTargets": 1152,
      "targets": 1728,
      "cases": 2880,
-     "passes": {},
-     "scored": 0
+     "passes": {
+      "lineCount": 2880,
+      "breaks": 2880,
+      "widths": 1426,
+      "painter": 1354
+     },
+     "scored": 2880
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "fact",
     "family"
@@ -5181,9 +5248,7 @@
       "painter": 360
      },
      "scored": 360
-    }
-   ],
-   "derivedFamilies": [
+    },
     {
      "family": "box-edges",
      "browser": "chrome",
@@ -5191,10 +5256,16 @@
      "resolvedTargets": 1152,
      "targets": 1728,
      "cases": 2880,
-     "passes": {},
-     "scored": 0
+     "passes": {
+      "lineCount": 2880,
+      "breaks": 2880,
+      "widths": 1426,
+      "painter": 1354
+     },
+     "scored": 2880
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "family"
    ],
@@ -5237,9 +5308,7 @@
       "painter": 190
      },
      "scored": 288
-    }
-   ],
-   "derivedFamilies": [
+    },
     {
      "family": "br-elements",
      "browser": "chrome",
@@ -5247,10 +5316,16 @@
      "resolvedTargets": 236,
      "targets": 268,
      "cases": 856,
-     "passes": {},
-     "scored": 0
+     "passes": {
+      "lineCount": 448,
+      "breaks": 448,
+      "widths": 224,
+      "painter": 428
+     },
+     "scored": 856
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "test",
     "family"
@@ -5340,8 +5415,7 @@
    "declaredFamilies": [
     "nested-box-edges"
    ],
-   "observedFamilies": [],
-   "derivedFamilies": [
+   "observedFamilies": [
     {
      "family": "nested-box-edges",
      "browser": "chrome",
@@ -5349,11 +5423,19 @@
      "resolvedTargets": 288,
      "targets": 432,
      "cases": 720,
-     "passes": {},
-     "scored": 0
+     "passes": {
+      "lineCount": 720,
+      "breaks": 720,
+      "widths": 309,
+      "painter": 297
+     },
+     "scored": 720
     }
    ],
-   "coveredBy": [],
+   "derivedFamilies": [],
+   "coveredBy": [
+    "family"
+   ],
    "annotated": false
   },
   {
@@ -5641,15 +5723,13 @@
      "targets": 484,
      "cases": 848,
      "passes": {
-      "lineCount": 828,
-      "breaks": 818,
-      "widths": 818,
-      "painter": 828
+      "lineCount": 848,
+      "breaks": 848,
+      "widths": 848,
+      "painter": 848
      },
      "scored": 848
-    }
-   ],
-   "derivedFamilies": [
+    },
     {
      "family": "process-languages",
      "browser": "chrome",
@@ -5657,8 +5737,13 @@
      "resolvedTargets": 198,
      "targets": 270,
      "cases": 504,
-     "passes": {},
-     "scored": 0
+     "passes": {
+      "lineCount": 504,
+      "breaks": 504,
+      "widths": 504,
+      "painter": 504
+     },
+     "scored": 504
     },
     {
      "family": "process-languages",
@@ -5667,10 +5752,16 @@
      "resolvedTargets": 180,
      "targets": 270,
      "cases": 468,
-     "passes": {},
-     "scored": 0
+     "passes": {
+      "lineCount": 468,
+      "breaks": 468,
+      "widths": 468,
+      "painter": 468
+     },
+     "scored": 468
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "fact",
     "family"
@@ -6105,10 +6196,10 @@
      "targets": 355,
      "cases": 752,
      "passes": {
-      "lineCount": 681,
-      "breaks": 654,
-      "widths": 444,
-      "painter": 334
+      "lineCount": 690,
+      "breaks": 663,
+      "widths": 500,
+      "painter": 386
      },
      "scored": 752
     }
@@ -6649,9 +6740,9 @@
      "targets": 96,
      "cases": 192,
      "passes": {
-      "lineCount": 190,
-      "breaks": 190,
-      "widths": 190,
+      "lineCount": 192,
+      "breaks": 192,
+      "widths": 192,
       "painter": 189
      },
      "scored": 192
@@ -6992,9 +7083,7 @@
       "painter": 786
      },
      "scored": 786
-    }
-   ],
-   "derivedFamilies": [
+    },
     {
      "family": "text-indent",
      "browser": "webkit-host",
@@ -7002,10 +7091,16 @@
      "resolvedTargets": 412,
      "targets": 640,
      "cases": 992,
-     "passes": {},
-     "scored": 0
+     "passes": {
+      "lineCount": 992,
+      "breaks": 992,
+      "widths": 992,
+      "painter": 992
+     },
+     "scored": 992
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "fact",
     "family"
@@ -7238,9 +7333,7 @@
       "painter": 273
      },
      "scored": 288
-    }
-   ],
-   "derivedFamilies": [
+    },
     {
      "family": "text-align",
      "browser": "webkit-host",
@@ -7248,10 +7341,16 @@
      "resolvedTargets": 432,
      "targets": 576,
      "cases": 1104,
-     "passes": {},
-     "scored": 0
+     "passes": {
+      "lineCount": 1104,
+      "breaks": 1104,
+      "widths": 1098,
+      "painter": 1018
+     },
+     "scored": 1104
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "fact",
     "family"
@@ -7435,10 +7534,10 @@
      "targets": 355,
      "cases": 752,
      "passes": {
-      "lineCount": 681,
-      "breaks": 654,
-      "widths": 444,
-      "painter": 334
+      "lineCount": 690,
+      "breaks": 663,
+      "widths": 500,
+      "painter": 386
      },
      "scored": 752
     }
@@ -8059,9 +8158,7 @@
       "painter": 273
      },
      "scored": 376
-    }
-   ],
-   "derivedFamilies": [
+    },
     {
      "family": "wbr-elements",
      "browser": "webkit-host",
@@ -8069,10 +8166,16 @@
      "resolvedTargets": 438,
      "targets": 612,
      "cases": 1164,
-     "passes": {},
-     "scored": 0
+     "passes": {
+      "lineCount": 1164,
+      "breaks": 1164,
+      "widths": 1160,
+      "painter": 1122
+     },
+     "scored": 1164
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "test",
     "fact",
@@ -8477,9 +8580,7 @@
       "painter": 273
      },
      "scored": 288
-    }
-   ],
-   "derivedFamilies": [
+    },
     {
      "family": "br-elements",
      "browser": "webkit-host",
@@ -8487,8 +8588,13 @@
      "resolvedTargets": 232,
      "targets": 264,
      "cases": 848,
-     "passes": {},
-     "scored": 0
+     "passes": {
+      "lineCount": 432,
+      "breaks": 424,
+      "widths": 204,
+      "painter": 416
+     },
+     "scored": 848
     },
     {
      "family": "nested-box-edges",
@@ -8497,10 +8603,16 @@
      "resolvedTargets": 288,
      "targets": 432,
      "cases": 720,
-     "passes": {},
-     "scored": 0
+     "passes": {
+      "lineCount": 720,
+      "breaks": 720,
+      "widths": 327,
+      "painter": 327
+     },
+     "scored": 720
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "family"
    ],
@@ -8630,9 +8742,7 @@
       "painter": 273
      },
      "scored": 288
-    }
-   ],
-   "derivedFamilies": [
+    },
     {
      "family": "br-elements",
      "browser": "webkit-host",
@@ -8640,10 +8750,16 @@
      "resolvedTargets": 232,
      "targets": 264,
      "cases": 848,
-     "passes": {},
-     "scored": 0
+     "passes": {
+      "lineCount": 432,
+      "breaks": 424,
+      "widths": 204,
+      "painter": 416
+     },
+     "scored": 848
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "fact",
     "family"
@@ -10411,10 +10527,10 @@
      "targets": 355,
      "cases": 752,
      "passes": {
-      "lineCount": 681,
-      "breaks": 654,
-      "widths": 444,
-      "painter": 334
+      "lineCount": 690,
+      "breaks": 663,
+      "widths": 500,
+      "painter": 386
      },
      "scored": 752
     }
@@ -12066,9 +12182,7 @@
       "painter": 368
      },
      "scored": 368
-    }
-   ],
-   "derivedFamilies": [
+    },
     {
      "family": "wbr-elements",
      "browser": "firefox",
@@ -12076,10 +12190,16 @@
      "resolvedTargets": 450,
      "targets": 612,
      "cases": 1188,
-     "passes": {},
-     "scored": 0
+     "passes": {
+      "lineCount": 1188,
+      "breaks": 1188,
+      "widths": 1188,
+      "painter": 1176
+     },
+     "scored": 1188
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "test",
     "fact",
@@ -12363,8 +12483,7 @@
    "declaredFamilies": [
     "nowrap-spans"
    ],
-   "observedFamilies": [],
-   "derivedFamilies": [
+   "observedFamilies": [
     {
      "family": "nowrap-spans",
      "browser": "firefox",
@@ -12372,13 +12491,20 @@
      "resolvedTargets": 160,
      "targets": 232,
      "cases": 480,
-     "passes": {},
-     "scored": 0
+     "passes": {
+      "lineCount": 480,
+      "breaks": 480,
+      "widths": 319,
+      "painter": 314
+     },
+     "scored": 480
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "test",
-    "fact"
+    "fact",
+    "family"
    ],
    "annotated": false
   },
@@ -13398,9 +13524,7 @@
       "painter": 528
      },
      "scored": 782
-    }
-   ],
-   "derivedFamilies": [
+    },
     {
      "family": "text-indent",
      "browser": "firefox",
@@ -13408,10 +13532,16 @@
      "resolvedTargets": 412,
      "targets": 640,
      "cases": 992,
-     "passes": {},
-     "scored": 0
+     "passes": {
+      "lineCount": 992,
+      "breaks": 992,
+      "widths": 40,
+      "painter": 40
+     },
+     "scored": 992
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "test",
     "fact",
@@ -13642,9 +13772,7 @@
       "painter": 288
      },
      "scored": 288
-    }
-   ],
-   "derivedFamilies": [
+    },
     {
      "family": "br-elements",
      "browser": "firefox",
@@ -13652,8 +13780,13 @@
      "resolvedTargets": 236,
      "targets": 268,
      "cases": 856,
-     "passes": {},
-     "scored": 0
+     "passes": {
+      "lineCount": 448,
+      "breaks": 448,
+      "widths": 224,
+      "painter": 428
+     },
+     "scored": 856
     },
     {
      "family": "text-align",
@@ -13662,10 +13795,16 @@
      "resolvedTargets": 432,
      "targets": 576,
      "cases": 1104,
-     "passes": {},
-     "scored": 0
+     "passes": {
+      "lineCount": 1104,
+      "breaks": 1104,
+      "widths": 1104,
+      "painter": 1004
+     },
+     "scored": 1104
     }
    ],
+   "derivedFamilies": [],
    "coveredBy": [
     "test",
     "fact",
@@ -15146,8 +15285,8 @@
      "passes": {
       "lineCount": 702,
       "breaks": 702,
-      "widths": 590,
-      "painter": 592
+      "widths": 638,
+      "painter": 548
      },
      "scored": 718
     }
@@ -15188,8 +15327,8 @@
      "passes": {
       "lineCount": 702,
       "breaks": 702,
-      "widths": 590,
-      "painter": 592
+      "widths": 638,
+      "painter": 548
      },
      "scored": 718
     }
@@ -15321,8 +15460,8 @@
      "passes": {
       "lineCount": 702,
       "breaks": 702,
-      "widths": 590,
-      "painter": 592
+      "widths": 638,
+      "painter": 548
      },
      "scored": 718
     }
@@ -16522,8 +16661,7 @@
    "declaredFamilies": [
     "atomic-inlines"
    ],
-   "observedFamilies": [],
-   "derivedFamilies": [
+   "observedFamilies": [
     {
      "family": "atomic-inlines",
      "browser": "chrome",
@@ -16531,11 +16669,19 @@
      "resolvedTargets": 725,
      "targets": 1004,
      "cases": 2026,
-     "passes": {},
-     "scored": 0
+     "passes": {
+      "lineCount": 1715,
+      "breaks": 1715,
+      "widths": 1008,
+      "painter": 1008
+     },
+     "scored": 2026
     }
    ],
-   "coveredBy": [],
+   "derivedFamilies": [],
+   "coveredBy": [
+    "family"
+   ],
    "annotated": false
   },
   {
@@ -16557,8 +16703,7 @@
    "declaredFamilies": [
     "br-elements"
    ],
-   "observedFamilies": [],
-   "derivedFamilies": [
+   "observedFamilies": [
     {
      "family": "br-elements",
      "browser": "chrome",
@@ -16566,11 +16711,19 @@
      "resolvedTargets": 236,
      "targets": 268,
      "cases": 856,
-     "passes": {},
-     "scored": 0
+     "passes": {
+      "lineCount": 448,
+      "breaks": 448,
+      "widths": 224,
+      "painter": 428
+     },
+     "scored": 856
     }
    ],
-   "coveredBy": [],
+   "derivedFamilies": [],
+   "coveredBy": [
+    "family"
+   ],
    "annotated": false
   },
   {
@@ -16592,8 +16745,7 @@
    "declaredFamilies": [
     "wbr-elements"
    ],
-   "observedFamilies": [],
-   "derivedFamilies": [
+   "observedFamilies": [
     {
      "family": "wbr-elements",
      "browser": "chrome",
@@ -16601,11 +16753,19 @@
      "resolvedTargets": 532,
      "targets": 692,
      "cases": 1352,
-     "passes": {},
-     "scored": 0
+     "passes": {
+      "lineCount": 1352,
+      "breaks": 1352,
+      "widths": 1352,
+      "painter": 1332
+     },
+     "scored": 1352
     }
    ],
-   "coveredBy": [],
+   "derivedFamilies": [],
+   "coveredBy": [
+    "family"
+   ],
    "annotated": false
   },
   {
@@ -16627,8 +16787,7 @@
    "declaredFamilies": [
     "atomic-inlines"
    ],
-   "observedFamilies": [],
-   "derivedFamilies": [
+   "observedFamilies": [
     {
      "family": "atomic-inlines",
      "browser": "chrome",
@@ -16636,11 +16795,19 @@
      "resolvedTargets": 725,
      "targets": 1004,
      "cases": 2026,
-     "passes": {},
-     "scored": 0
+     "passes": {
+      "lineCount": 1715,
+      "breaks": 1715,
+      "widths": 1008,
+      "painter": 1008
+     },
+     "scored": 2026
     }
    ],
-   "coveredBy": [],
+   "derivedFamilies": [],
+   "coveredBy": [
+    "family"
+   ],
    "annotated": false
   },
   {
@@ -16663,8 +16830,7 @@
     "box-edges",
     "nested-box-edges"
    ],
-   "observedFamilies": [],
-   "derivedFamilies": [
+   "observedFamilies": [
     {
      "family": "box-edges",
      "browser": "chrome",
@@ -16672,8 +16838,13 @@
      "resolvedTargets": 1152,
      "targets": 1728,
      "cases": 2880,
-     "passes": {},
-     "scored": 0
+     "passes": {
+      "lineCount": 2880,
+      "breaks": 2880,
+      "widths": 1426,
+      "painter": 1354
+     },
+     "scored": 2880
     },
     {
      "family": "nested-box-edges",
@@ -16682,11 +16853,19 @@
      "resolvedTargets": 288,
      "targets": 432,
      "cases": 720,
-     "passes": {},
-     "scored": 0
+     "passes": {
+      "lineCount": 720,
+      "breaks": 720,
+      "widths": 309,
+      "painter": 297
+     },
+     "scored": 720
     }
    ],
-   "coveredBy": [],
+   "derivedFamilies": [],
+   "coveredBy": [
+    "family"
+   ],
    "annotated": false
   },
   {
@@ -16709,8 +16888,7 @@
     "box-edges",
     "nested-box-edges"
    ],
-   "observedFamilies": [],
-   "derivedFamilies": [
+   "observedFamilies": [
     {
      "family": "box-edges",
      "browser": "chrome",
@@ -16718,8 +16896,13 @@
      "resolvedTargets": 1152,
      "targets": 1728,
      "cases": 2880,
-     "passes": {},
-     "scored": 0
+     "passes": {
+      "lineCount": 2880,
+      "breaks": 2880,
+      "widths": 1426,
+      "painter": 1354
+     },
+     "scored": 2880
     },
     {
      "family": "nested-box-edges",
@@ -16728,11 +16911,19 @@
      "resolvedTargets": 288,
      "targets": 432,
      "cases": 720,
-     "passes": {},
-     "scored": 0
+     "passes": {
+      "lineCount": 720,
+      "breaks": 720,
+      "widths": 309,
+      "painter": 297
+     },
+     "scored": 720
     }
    ],
-   "coveredBy": [],
+   "derivedFamilies": [],
+   "coveredBy": [
+    "family"
+   ],
    "annotated": false
   },
   {
@@ -16754,8 +16945,7 @@
    "declaredFamilies": [
     "line-slots"
    ],
-   "observedFamilies": [],
-   "derivedFamilies": [
+   "observedFamilies": [
     {
      "family": "line-slots",
      "browser": "chrome",
@@ -16763,11 +16953,19 @@
      "resolvedTargets": 844,
      "targets": 1294,
      "cases": 1904,
-     "passes": {},
-     "scored": 0
+     "passes": {
+      "lineCount": 1904,
+      "breaks": 1904,
+      "widths": 924,
+      "painter": 924
+     },
+     "scored": 1904
     }
    ],
-   "coveredBy": [],
+   "derivedFamilies": [],
+   "coveredBy": [
+    "family"
+   ],
    "annotated": false
   },
   {
@@ -16789,8 +16987,7 @@
    "declaredFamilies": [
     "line-slots"
    ],
-   "observedFamilies": [],
-   "derivedFamilies": [
+   "observedFamilies": [
     {
      "family": "line-slots",
      "browser": "chrome",
@@ -16798,11 +16995,19 @@
      "resolvedTargets": 844,
      "targets": 1294,
      "cases": 1904,
-     "passes": {},
-     "scored": 0
+     "passes": {
+      "lineCount": 1904,
+      "breaks": 1904,
+      "widths": 924,
+      "painter": 924
+     },
+     "scored": 1904
     }
    ],
-   "coveredBy": [],
+   "derivedFamilies": [],
+   "coveredBy": [
+    "family"
+   ],
    "annotated": false
   },
   {
@@ -16825,8 +17030,7 @@
     "nowrap-spans",
     "wbr-elements"
    ],
-   "observedFamilies": [],
-   "derivedFamilies": [
+   "observedFamilies": [
     {
      "family": "nowrap-spans",
      "browser": "chrome",
@@ -16834,8 +17038,13 @@
      "resolvedTargets": 192,
      "targets": 264,
      "cases": 544,
-     "passes": {},
-     "scored": 0
+     "passes": {
+      "lineCount": 544,
+      "breaks": 544,
+      "widths": 356,
+      "painter": 356
+     },
+     "scored": 544
     },
     {
      "family": "wbr-elements",
@@ -16844,11 +17053,19 @@
      "resolvedTargets": 532,
      "targets": 692,
      "cases": 1352,
-     "passes": {},
-     "scored": 0
+     "passes": {
+      "lineCount": 1352,
+      "breaks": 1352,
+      "widths": 1352,
+      "painter": 1332
+     },
+     "scored": 1352
     }
    ],
-   "coveredBy": [],
+   "derivedFamilies": [],
+   "coveredBy": [
+    "family"
+   ],
    "annotated": false
   },
   {
@@ -16870,8 +17087,7 @@
    "declaredFamilies": [
     "text-indent"
    ],
-   "observedFamilies": [],
-   "derivedFamilies": [
+   "observedFamilies": [
     {
      "family": "text-indent",
      "browser": "chrome",
@@ -16879,11 +17095,19 @@
      "resolvedTargets": 412,
      "targets": 640,
      "cases": 992,
-     "passes": {},
-     "scored": 0
+     "passes": {
+      "lineCount": 992,
+      "breaks": 992,
+      "widths": 40,
+      "painter": 40
+     },
+     "scored": 992
     }
    ],
-   "coveredBy": [],
+   "derivedFamilies": [],
+   "coveredBy": [
+    "family"
+   ],
    "annotated": false
   },
   {
@@ -16905,8 +17129,7 @@
    "declaredFamilies": [
     "nowrap-spans"
    ],
-   "observedFamilies": [],
-   "derivedFamilies": [
+   "observedFamilies": [
     {
      "family": "nowrap-spans",
      "browser": "chrome",
@@ -16914,11 +17137,19 @@
      "resolvedTargets": 192,
      "targets": 264,
      "cases": 544,
-     "passes": {},
-     "scored": 0
+     "passes": {
+      "lineCount": 544,
+      "breaks": 544,
+      "widths": 356,
+      "painter": 356
+     },
+     "scored": 544
     }
    ],
-   "coveredBy": [],
+   "derivedFamilies": [],
+   "coveredBy": [
+    "family"
+   ],
    "annotated": false
   },
   {
@@ -16941,8 +17172,7 @@
     "text-indent",
     "text-align"
    ],
-   "observedFamilies": [],
-   "derivedFamilies": [
+   "observedFamilies": [
     {
      "family": "text-align",
      "browser": "chrome",
@@ -16950,8 +17180,13 @@
      "resolvedTargets": 432,
      "targets": 576,
      "cases": 1104,
-     "passes": {},
-     "scored": 0
+     "passes": {
+      "lineCount": 1076,
+      "breaks": 1076,
+      "widths": 800,
+      "painter": 749
+     },
+     "scored": 1104
     },
     {
      "family": "text-indent",
@@ -16960,11 +17195,19 @@
      "resolvedTargets": 412,
      "targets": 640,
      "cases": 992,
-     "passes": {},
-     "scored": 0
+     "passes": {
+      "lineCount": 992,
+      "breaks": 992,
+      "widths": 40,
+      "painter": 40
+     },
+     "scored": 992
     }
    ],
-   "coveredBy": [],
+   "derivedFamilies": [],
+   "coveredBy": [
+    "family"
+   ],
    "annotated": false
   },
   {
@@ -16988,8 +17231,7 @@
     "nested-box-edges",
     "atomic-inlines"
    ],
-   "observedFamilies": [],
-   "derivedFamilies": [
+   "observedFamilies": [
     {
      "family": "atomic-inlines",
      "browser": "chrome",
@@ -16997,8 +17239,13 @@
      "resolvedTargets": 725,
      "targets": 1004,
      "cases": 2026,
-     "passes": {},
-     "scored": 0
+     "passes": {
+      "lineCount": 1715,
+      "breaks": 1715,
+      "widths": 1008,
+      "painter": 1008
+     },
+     "scored": 2026
     },
     {
      "family": "box-edges",
@@ -17007,8 +17254,13 @@
      "resolvedTargets": 1152,
      "targets": 1728,
      "cases": 2880,
-     "passes": {},
-     "scored": 0
+     "passes": {
+      "lineCount": 2880,
+      "breaks": 2880,
+      "widths": 1426,
+      "painter": 1354
+     },
+     "scored": 2880
     },
     {
      "family": "nested-box-edges",
@@ -17017,11 +17269,19 @@
      "resolvedTargets": 288,
      "targets": 432,
      "cases": 720,
-     "passes": {},
-     "scored": 0
+     "passes": {
+      "lineCount": 720,
+      "breaks": 720,
+      "widths": 309,
+      "painter": 297
+     },
+     "scored": 720
     }
    ],
-   "coveredBy": [],
+   "derivedFamilies": [],
+   "coveredBy": [
+    "family"
+   ],
    "annotated": false
   },
   {
@@ -17043,8 +17303,7 @@
    "declaredFamilies": [
     "text-align"
    ],
-   "observedFamilies": [],
-   "derivedFamilies": [
+   "observedFamilies": [
     {
      "family": "text-align",
      "browser": "chrome",
@@ -17052,11 +17311,19 @@
      "resolvedTargets": 432,
      "targets": 576,
      "cases": 1104,
-     "passes": {},
-     "scored": 0
+     "passes": {
+      "lineCount": 1076,
+      "breaks": 1076,
+      "widths": 800,
+      "painter": 749
+     },
+     "scored": 1104
     }
    ],
-   "coveredBy": [],
+   "derivedFamilies": [],
+   "coveredBy": [
+    "family"
+   ],
    "annotated": false
   },
   {
@@ -17078,8 +17345,7 @@
    "declaredFamilies": [
     "box-edges"
    ],
-   "observedFamilies": [],
-   "derivedFamilies": [
+   "observedFamilies": [
     {
      "family": "box-edges",
      "browser": "chrome",
@@ -17087,11 +17353,19 @@
      "resolvedTargets": 1152,
      "targets": 1728,
      "cases": 2880,
-     "passes": {},
-     "scored": 0
+     "passes": {
+      "lineCount": 2880,
+      "breaks": 2880,
+      "widths": 1426,
+      "painter": 1354
+     },
+     "scored": 2880
     }
    ],
-   "coveredBy": [],
+   "derivedFamilies": [],
+   "coveredBy": [
+    "family"
+   ],
    "annotated": false
   },
   {
@@ -17113,8 +17387,7 @@
    "declaredFamilies": [
     "box-edges"
    ],
-   "observedFamilies": [],
-   "derivedFamilies": [
+   "observedFamilies": [
     {
      "family": "box-edges",
      "browser": "chrome",
@@ -17122,11 +17395,19 @@
      "resolvedTargets": 1152,
      "targets": 1728,
      "cases": 2880,
-     "passes": {},
-     "scored": 0
+     "passes": {
+      "lineCount": 2880,
+      "breaks": 2880,
+      "widths": 1426,
+      "painter": 1354
+     },
+     "scored": 2880
     }
    ],
-   "coveredBy": [],
+   "derivedFamilies": [],
+   "coveredBy": [
+    "family"
+   ],
    "annotated": false
   },
   {
@@ -17148,8 +17429,7 @@
    "declaredFamilies": [
     "line-slots"
    ],
-   "observedFamilies": [],
-   "derivedFamilies": [
+   "observedFamilies": [
     {
      "family": "line-slots",
      "browser": "chrome",
@@ -17157,11 +17437,19 @@
      "resolvedTargets": 844,
      "targets": 1294,
      "cases": 1904,
-     "passes": {},
-     "scored": 0
+     "passes": {
+      "lineCount": 1904,
+      "breaks": 1904,
+      "widths": 924,
+      "painter": 924
+     },
+     "scored": 1904
     }
    ],
-   "coveredBy": [],
+   "derivedFamilies": [],
+   "coveredBy": [
+    "family"
+   ],
    "annotated": false
   },
   {
@@ -17183,8 +17471,7 @@
    "declaredFamilies": [
     "atomic-inlines"
    ],
-   "observedFamilies": [],
-   "derivedFamilies": [
+   "observedFamilies": [
     {
      "family": "atomic-inlines",
      "browser": "webkit-host",
@@ -17192,11 +17479,19 @@
      "resolvedTargets": 726,
      "targets": 1003,
      "cases": 2028,
-     "passes": {},
-     "scored": 0
+     "passes": {
+      "lineCount": 1723,
+      "breaks": 1723,
+      "widths": 988,
+      "painter": 964
+     },
+     "scored": 2028
     }
    ],
-   "coveredBy": [],
+   "derivedFamilies": [],
+   "coveredBy": [
+    "family"
+   ],
    "annotated": false
   },
   {
@@ -17218,8 +17513,7 @@
    "declaredFamilies": [
     "nowrap-spans"
    ],
-   "observedFamilies": [],
-   "derivedFamilies": [
+   "observedFamilies": [
     {
      "family": "nowrap-spans",
      "browser": "webkit-host",
@@ -17227,11 +17521,19 @@
      "resolvedTargets": 168,
      "targets": 240,
      "cases": 496,
-     "passes": {},
-     "scored": 0
+     "passes": {
+      "lineCount": 496,
+      "breaks": 496,
+      "widths": 329,
+      "painter": 329
+     },
+     "scored": 496
     }
    ],
-   "coveredBy": [],
+   "derivedFamilies": [],
+   "coveredBy": [
+    "family"
+   ],
    "annotated": false
   },
   {
@@ -17254,8 +17556,7 @@
     "nowrap-spans",
     "text-align"
    ],
-   "observedFamilies": [],
-   "derivedFamilies": [
+   "observedFamilies": [
     {
      "family": "nowrap-spans",
      "browser": "webkit-host",
@@ -17263,8 +17564,13 @@
      "resolvedTargets": 168,
      "targets": 240,
      "cases": 496,
-     "passes": {},
-     "scored": 0
+     "passes": {
+      "lineCount": 496,
+      "breaks": 496,
+      "widths": 329,
+      "painter": 329
+     },
+     "scored": 496
     },
     {
      "family": "text-align",
@@ -17273,11 +17579,19 @@
      "resolvedTargets": 432,
      "targets": 576,
      "cases": 1104,
-     "passes": {},
-     "scored": 0
+     "passes": {
+      "lineCount": 1104,
+      "breaks": 1104,
+      "widths": 1098,
+      "painter": 1018
+     },
+     "scored": 1104
     }
    ],
-   "coveredBy": [],
+   "derivedFamilies": [],
+   "coveredBy": [
+    "family"
+   ],
    "annotated": false
   },
   {
@@ -17299,8 +17613,7 @@
    "declaredFamilies": [
     "br-elements"
    ],
-   "observedFamilies": [],
-   "derivedFamilies": [
+   "observedFamilies": [
     {
      "family": "br-elements",
      "browser": "webkit-host",
@@ -17308,11 +17621,19 @@
      "resolvedTargets": 232,
      "targets": 264,
      "cases": 848,
-     "passes": {},
-     "scored": 0
+     "passes": {
+      "lineCount": 432,
+      "breaks": 424,
+      "widths": 204,
+      "painter": 416
+     },
+     "scored": 848
     }
    ],
-   "coveredBy": [],
+   "derivedFamilies": [],
+   "coveredBy": [
+    "family"
+   ],
    "annotated": false
   },
   {
@@ -17334,8 +17655,7 @@
    "declaredFamilies": [
     "wbr-elements"
    ],
-   "observedFamilies": [],
-   "derivedFamilies": [
+   "observedFamilies": [
     {
      "family": "wbr-elements",
      "browser": "webkit-host",
@@ -17343,11 +17663,19 @@
      "resolvedTargets": 438,
      "targets": 612,
      "cases": 1164,
-     "passes": {},
-     "scored": 0
+     "passes": {
+      "lineCount": 1164,
+      "breaks": 1164,
+      "widths": 1160,
+      "painter": 1122
+     },
+     "scored": 1164
     }
    ],
-   "coveredBy": [],
+   "derivedFamilies": [],
+   "coveredBy": [
+    "family"
+   ],
    "annotated": false
   },
   {
@@ -17369,8 +17697,7 @@
    "declaredFamilies": [
     "atomic-inlines"
    ],
-   "observedFamilies": [],
-   "derivedFamilies": [
+   "observedFamilies": [
     {
      "family": "atomic-inlines",
      "browser": "webkit-host",
@@ -17378,11 +17705,19 @@
      "resolvedTargets": 726,
      "targets": 1003,
      "cases": 2028,
-     "passes": {},
-     "scored": 0
+     "passes": {
+      "lineCount": 1723,
+      "breaks": 1723,
+      "widths": 988,
+      "painter": 964
+     },
+     "scored": 2028
     }
    ],
-   "coveredBy": [],
+   "derivedFamilies": [],
+   "coveredBy": [
+    "family"
+   ],
    "annotated": false
   },
   {
@@ -17404,8 +17739,7 @@
    "declaredFamilies": [
     "line-slots"
    ],
-   "observedFamilies": [],
-   "derivedFamilies": [
+   "observedFamilies": [
     {
      "family": "line-slots",
      "browser": "webkit-host",
@@ -17413,11 +17747,19 @@
      "resolvedTargets": 851,
      "targets": 1297,
      "cases": 1918,
-     "passes": {},
-     "scored": 0
+     "passes": {
+      "lineCount": 1915,
+      "breaks": 1913,
+      "widths": 1913,
+      "painter": 1745
+     },
+     "scored": 1918
     }
    ],
-   "coveredBy": [],
+   "derivedFamilies": [],
+   "coveredBy": [
+    "family"
+   ],
    "annotated": false
   },
   {
@@ -17439,8 +17781,7 @@
    "declaredFamilies": [
     "box-edges"
    ],
-   "observedFamilies": [],
-   "derivedFamilies": [
+   "observedFamilies": [
     {
      "family": "box-edges",
      "browser": "webkit-host",
@@ -17448,11 +17789,19 @@
      "resolvedTargets": 1152,
      "targets": 1728,
      "cases": 2880,
-     "passes": {},
-     "scored": 0
+     "passes": {
+      "lineCount": 2880,
+      "breaks": 2880,
+      "widths": 1536,
+      "painter": 1536
+     },
+     "scored": 2880
     }
    ],
-   "coveredBy": [],
+   "derivedFamilies": [],
+   "coveredBy": [
+    "family"
+   ],
    "annotated": false
   },
   {
@@ -17474,8 +17823,7 @@
    "declaredFamilies": [
     "line-slots"
    ],
-   "observedFamilies": [],
-   "derivedFamilies": [
+   "observedFamilies": [
     {
      "family": "line-slots",
      "browser": "webkit-host",
@@ -17483,11 +17831,19 @@
      "resolvedTargets": 851,
      "targets": 1297,
      "cases": 1918,
-     "passes": {},
-     "scored": 0
+     "passes": {
+      "lineCount": 1915,
+      "breaks": 1913,
+      "widths": 1913,
+      "painter": 1745
+     },
+     "scored": 1918
     }
    ],
-   "coveredBy": [],
+   "derivedFamilies": [],
+   "coveredBy": [
+    "family"
+   ],
    "annotated": false
   },
   {
@@ -17510,8 +17866,7 @@
     "box-edges",
     "nested-box-edges"
    ],
-   "observedFamilies": [],
-   "derivedFamilies": [
+   "observedFamilies": [
     {
      "family": "box-edges",
      "browser": "webkit-host",
@@ -17519,8 +17874,13 @@
      "resolvedTargets": 1152,
      "targets": 1728,
      "cases": 2880,
-     "passes": {},
-     "scored": 0
+     "passes": {
+      "lineCount": 2880,
+      "breaks": 2880,
+      "widths": 1536,
+      "painter": 1536
+     },
+     "scored": 2880
     },
     {
      "family": "nested-box-edges",
@@ -17529,11 +17889,19 @@
      "resolvedTargets": 288,
      "targets": 432,
      "cases": 720,
-     "passes": {},
-     "scored": 0
+     "passes": {
+      "lineCount": 720,
+      "breaks": 720,
+      "widths": 327,
+      "painter": 327
+     },
+     "scored": 720
     }
    ],
-   "coveredBy": [],
+   "derivedFamilies": [],
+   "coveredBy": [
+    "family"
+   ],
    "annotated": false
   },
   {
@@ -17556,8 +17924,7 @@
     "box-edges",
     "nested-box-edges"
    ],
-   "observedFamilies": [],
-   "derivedFamilies": [
+   "observedFamilies": [
     {
      "family": "box-edges",
      "browser": "webkit-host",
@@ -17565,8 +17932,13 @@
      "resolvedTargets": 1152,
      "targets": 1728,
      "cases": 2880,
-     "passes": {},
-     "scored": 0
+     "passes": {
+      "lineCount": 2880,
+      "breaks": 2880,
+      "widths": 1536,
+      "painter": 1536
+     },
+     "scored": 2880
     },
     {
      "family": "nested-box-edges",
@@ -17575,11 +17947,19 @@
      "resolvedTargets": 288,
      "targets": 432,
      "cases": 720,
-     "passes": {},
-     "scored": 0
+     "passes": {
+      "lineCount": 720,
+      "breaks": 720,
+      "widths": 327,
+      "painter": 327
+     },
+     "scored": 720
     }
    ],
-   "coveredBy": [],
+   "derivedFamilies": [],
+   "coveredBy": [
+    "family"
+   ],
    "annotated": false
   },
   {
@@ -17601,8 +17981,7 @@
    "declaredFamilies": [
     "text-indent"
    ],
-   "observedFamilies": [],
-   "derivedFamilies": [
+   "observedFamilies": [
     {
      "family": "text-indent",
      "browser": "webkit-host",
@@ -17610,11 +17989,19 @@
      "resolvedTargets": 412,
      "targets": 640,
      "cases": 992,
-     "passes": {},
-     "scored": 0
+     "passes": {
+      "lineCount": 992,
+      "breaks": 992,
+      "widths": 992,
+      "painter": 992
+     },
+     "scored": 992
     }
    ],
-   "coveredBy": [],
+   "derivedFamilies": [],
+   "coveredBy": [
+    "family"
+   ],
    "annotated": false
   },
   {
@@ -17636,8 +18023,7 @@
    "declaredFamilies": [
     "text-align"
    ],
-   "observedFamilies": [],
-   "derivedFamilies": [
+   "observedFamilies": [
     {
      "family": "text-align",
      "browser": "webkit-host",
@@ -17645,11 +18031,19 @@
      "resolvedTargets": 432,
      "targets": 576,
      "cases": 1104,
-     "passes": {},
-     "scored": 0
+     "passes": {
+      "lineCount": 1104,
+      "breaks": 1104,
+      "widths": 1098,
+      "painter": 1018
+     },
+     "scored": 1104
     }
    ],
-   "coveredBy": [],
+   "derivedFamilies": [],
+   "coveredBy": [
+    "family"
+   ],
    "annotated": false
   },
   {
@@ -17671,8 +18065,7 @@
    "declaredFamilies": [
     "text-align"
    ],
-   "observedFamilies": [],
-   "derivedFamilies": [
+   "observedFamilies": [
     {
      "family": "text-align",
      "browser": "webkit-host",
@@ -17680,11 +18073,19 @@
      "resolvedTargets": 432,
      "targets": 576,
      "cases": 1104,
-     "passes": {},
-     "scored": 0
+     "passes": {
+      "lineCount": 1104,
+      "breaks": 1104,
+      "widths": 1098,
+      "painter": 1018
+     },
+     "scored": 1104
     }
    ],
-   "coveredBy": [],
+   "derivedFamilies": [],
+   "coveredBy": [
+    "family"
+   ],
    "annotated": false
   },
   {
@@ -17706,8 +18107,7 @@
    "declaredFamilies": [
     "box-edges"
    ],
-   "observedFamilies": [],
-   "derivedFamilies": [
+   "observedFamilies": [
     {
      "family": "box-edges",
      "browser": "webkit-host",
@@ -17715,11 +18115,19 @@
      "resolvedTargets": 1152,
      "targets": 1728,
      "cases": 2880,
-     "passes": {},
-     "scored": 0
+     "passes": {
+      "lineCount": 2880,
+      "breaks": 2880,
+      "widths": 1536,
+      "painter": 1536
+     },
+     "scored": 2880
     }
    ],
-   "coveredBy": [],
+   "derivedFamilies": [],
+   "coveredBy": [
+    "family"
+   ],
    "annotated": false
   },
   {
@@ -17742,8 +18150,7 @@
     "nowrap-spans",
     "wbr-elements"
    ],
-   "observedFamilies": [],
-   "derivedFamilies": [
+   "observedFamilies": [
     {
      "family": "nowrap-spans",
      "browser": "webkit-host",
@@ -17751,8 +18158,13 @@
      "resolvedTargets": 168,
      "targets": 240,
      "cases": 496,
-     "passes": {},
-     "scored": 0
+     "passes": {
+      "lineCount": 496,
+      "breaks": 496,
+      "widths": 329,
+      "painter": 329
+     },
+     "scored": 496
     },
     {
      "family": "wbr-elements",
@@ -17761,11 +18173,19 @@
      "resolvedTargets": 438,
      "targets": 612,
      "cases": 1164,
-     "passes": {},
-     "scored": 0
+     "passes": {
+      "lineCount": 1164,
+      "breaks": 1164,
+      "widths": 1160,
+      "painter": 1122
+     },
+     "scored": 1164
     }
    ],
-   "coveredBy": [],
+   "derivedFamilies": [],
+   "coveredBy": [
+    "family"
+   ],
    "annotated": false
   },
   {
@@ -17788,8 +18208,7 @@
     "text-indent",
     "line-slots"
    ],
-   "observedFamilies": [],
-   "derivedFamilies": [
+   "observedFamilies": [
     {
      "family": "line-slots",
      "browser": "webkit-host",
@@ -17797,8 +18216,13 @@
      "resolvedTargets": 851,
      "targets": 1297,
      "cases": 1918,
-     "passes": {},
-     "scored": 0
+     "passes": {
+      "lineCount": 1915,
+      "breaks": 1913,
+      "widths": 1913,
+      "painter": 1745
+     },
+     "scored": 1918
     },
     {
      "family": "text-indent",
@@ -17807,11 +18231,19 @@
      "resolvedTargets": 412,
      "targets": 640,
      "cases": 992,
-     "passes": {},
-     "scored": 0
+     "passes": {
+      "lineCount": 992,
+      "breaks": 992,
+      "widths": 992,
+      "painter": 992
+     },
+     "scored": 992
     }
    ],
-   "coveredBy": [],
+   "derivedFamilies": [],
+   "coveredBy": [
+    "family"
+   ],
    "annotated": false
   },
   {
@@ -17835,8 +18267,7 @@
     "nested-box-edges",
     "nowrap-spans"
    ],
-   "observedFamilies": [],
-   "derivedFamilies": [
+   "observedFamilies": [
     {
      "family": "box-edges",
      "browser": "firefox",
@@ -17844,8 +18275,13 @@
      "resolvedTargets": 1152,
      "targets": 1728,
      "cases": 2880,
-     "passes": {},
-     "scored": 0
+     "passes": {
+      "lineCount": 2880,
+      "breaks": 2880,
+      "widths": 1356,
+      "painter": 1289
+     },
+     "scored": 2880
     },
     {
      "family": "nested-box-edges",
@@ -17854,8 +18290,13 @@
      "resolvedTargets": 288,
      "targets": 432,
      "cases": 720,
-     "passes": {},
-     "scored": 0
+     "passes": {
+      "lineCount": 720,
+      "breaks": 720,
+      "widths": 213,
+      "painter": 200
+     },
+     "scored": 720
     },
     {
      "family": "nowrap-spans",
@@ -17864,11 +18305,19 @@
      "resolvedTargets": 160,
      "targets": 232,
      "cases": 480,
-     "passes": {},
-     "scored": 0
+     "passes": {
+      "lineCount": 480,
+      "breaks": 480,
+      "widths": 319,
+      "painter": 314
+     },
+     "scored": 480
     }
    ],
-   "coveredBy": [],
+   "derivedFamilies": [],
+   "coveredBy": [
+    "family"
+   ],
    "annotated": false
   },
   {
@@ -17890,8 +18339,7 @@
    "declaredFamilies": [
     "br-elements"
    ],
-   "observedFamilies": [],
-   "derivedFamilies": [
+   "observedFamilies": [
     {
      "family": "br-elements",
      "browser": "firefox",
@@ -17899,11 +18347,19 @@
      "resolvedTargets": 236,
      "targets": 268,
      "cases": 856,
-     "passes": {},
-     "scored": 0
+     "passes": {
+      "lineCount": 448,
+      "breaks": 448,
+      "widths": 224,
+      "painter": 428
+     },
+     "scored": 856
     }
    ],
-   "coveredBy": [],
+   "derivedFamilies": [],
+   "coveredBy": [
+    "family"
+   ],
    "annotated": false
   },
   {
@@ -17925,8 +18381,7 @@
    "declaredFamilies": [
     "atomic-inlines"
    ],
-   "observedFamilies": [],
-   "derivedFamilies": [
+   "observedFamilies": [
     {
      "family": "atomic-inlines",
      "browser": "firefox",
@@ -17934,11 +18389,19 @@
      "resolvedTargets": 668,
      "targets": 920,
      "cases": 1912,
-     "passes": {},
-     "scored": 0
+     "passes": {
+      "lineCount": 1650,
+      "breaks": 1650,
+      "widths": 944,
+      "painter": 928
+     },
+     "scored": 1912
     }
    ],
-   "coveredBy": [],
+   "derivedFamilies": [],
+   "coveredBy": [
+    "family"
+   ],
    "annotated": false
   },
   {
@@ -17961,8 +18424,7 @@
     "box-edges",
     "nested-box-edges"
    ],
-   "observedFamilies": [],
-   "derivedFamilies": [
+   "observedFamilies": [
     {
      "family": "box-edges",
      "browser": "firefox",
@@ -17970,8 +18432,13 @@
      "resolvedTargets": 1152,
      "targets": 1728,
      "cases": 2880,
-     "passes": {},
-     "scored": 0
+     "passes": {
+      "lineCount": 2880,
+      "breaks": 2880,
+      "widths": 1356,
+      "painter": 1289
+     },
+     "scored": 2880
     },
     {
      "family": "nested-box-edges",
@@ -17980,11 +18447,19 @@
      "resolvedTargets": 288,
      "targets": 432,
      "cases": 720,
-     "passes": {},
-     "scored": 0
+     "passes": {
+      "lineCount": 720,
+      "breaks": 720,
+      "widths": 213,
+      "painter": 200
+     },
+     "scored": 720
     }
    ],
-   "coveredBy": [],
+   "derivedFamilies": [],
+   "coveredBy": [
+    "family"
+   ],
    "annotated": false
   },
   {
@@ -18007,8 +18482,7 @@
     "box-edges",
     "nested-box-edges"
    ],
-   "observedFamilies": [],
-   "derivedFamilies": [
+   "observedFamilies": [
     {
      "family": "box-edges",
      "browser": "firefox",
@@ -18016,8 +18490,13 @@
      "resolvedTargets": 1152,
      "targets": 1728,
      "cases": 2880,
-     "passes": {},
-     "scored": 0
+     "passes": {
+      "lineCount": 2880,
+      "breaks": 2880,
+      "widths": 1356,
+      "painter": 1289
+     },
+     "scored": 2880
     },
     {
      "family": "nested-box-edges",
@@ -18026,11 +18505,19 @@
      "resolvedTargets": 288,
      "targets": 432,
      "cases": 720,
-     "passes": {},
-     "scored": 0
+     "passes": {
+      "lineCount": 720,
+      "breaks": 720,
+      "widths": 213,
+      "painter": 200
+     },
+     "scored": 720
     }
    ],
-   "coveredBy": [],
+   "derivedFamilies": [],
+   "coveredBy": [
+    "family"
+   ],
    "annotated": false
   },
   {
@@ -18052,8 +18539,7 @@
    "declaredFamilies": [
     "line-slots"
    ],
-   "observedFamilies": [],
-   "derivedFamilies": [
+   "observedFamilies": [
     {
      "family": "line-slots",
      "browser": "firefox",
@@ -18061,11 +18547,19 @@
      "resolvedTargets": 829,
      "targets": 1319,
      "cases": 1814,
-     "passes": {},
-     "scored": 0
+     "passes": {
+      "lineCount": 1808,
+      "breaks": 1805,
+      "widths": 866,
+      "painter": 866
+     },
+     "scored": 1814
     }
    ],
-   "coveredBy": [],
+   "derivedFamilies": [],
+   "coveredBy": [
+    "family"
+   ],
    "annotated": false
   },
   {
@@ -18087,8 +18581,7 @@
    "declaredFamilies": [
     "line-slots"
    ],
-   "observedFamilies": [],
-   "derivedFamilies": [
+   "observedFamilies": [
     {
      "family": "line-slots",
      "browser": "firefox",
@@ -18096,11 +18589,19 @@
      "resolvedTargets": 829,
      "targets": 1319,
      "cases": 1814,
-     "passes": {},
-     "scored": 0
+     "passes": {
+      "lineCount": 1808,
+      "breaks": 1805,
+      "widths": 866,
+      "painter": 866
+     },
+     "scored": 1814
     }
    ],
-   "coveredBy": [],
+   "derivedFamilies": [],
+   "coveredBy": [
+    "family"
+   ],
    "annotated": false
   },
   {
@@ -18124,8 +18625,7 @@
     "atomic-inlines",
     "wbr-elements"
    ],
-   "observedFamilies": [],
-   "derivedFamilies": [
+   "observedFamilies": [
     {
      "family": "atomic-inlines",
      "browser": "firefox",
@@ -18133,8 +18633,13 @@
      "resolvedTargets": 668,
      "targets": 920,
      "cases": 1912,
-     "passes": {},
-     "scored": 0
+     "passes": {
+      "lineCount": 1650,
+      "breaks": 1650,
+      "widths": 944,
+      "painter": 928
+     },
+     "scored": 1912
     },
     {
      "family": "nowrap-spans",
@@ -18143,8 +18648,13 @@
      "resolvedTargets": 160,
      "targets": 232,
      "cases": 480,
-     "passes": {},
-     "scored": 0
+     "passes": {
+      "lineCount": 480,
+      "breaks": 480,
+      "widths": 319,
+      "painter": 314
+     },
+     "scored": 480
     },
     {
      "family": "wbr-elements",
@@ -18153,11 +18663,19 @@
      "resolvedTargets": 450,
      "targets": 612,
      "cases": 1188,
-     "passes": {},
-     "scored": 0
+     "passes": {
+      "lineCount": 1188,
+      "breaks": 1188,
+      "widths": 1188,
+      "painter": 1176
+     },
+     "scored": 1188
     }
    ],
-   "coveredBy": [],
+   "derivedFamilies": [],
+   "coveredBy": [
+    "family"
+   ],
    "annotated": false
   },
   {
@@ -18179,8 +18697,7 @@
    "declaredFamilies": [
     "line-slots"
    ],
-   "observedFamilies": [],
-   "derivedFamilies": [
+   "observedFamilies": [
     {
      "family": "line-slots",
      "browser": "firefox",
@@ -18188,11 +18705,19 @@
      "resolvedTargets": 829,
      "targets": 1319,
      "cases": 1814,
-     "passes": {},
-     "scored": 0
+     "passes": {
+      "lineCount": 1808,
+      "breaks": 1805,
+      "widths": 866,
+      "painter": 866
+     },
+     "scored": 1814
     }
    ],
-   "coveredBy": [],
+   "derivedFamilies": [],
+   "coveredBy": [
+    "family"
+   ],
    "annotated": false
   },
   {
@@ -18214,8 +18739,7 @@
    "declaredFamilies": [
     "text-indent"
    ],
-   "observedFamilies": [],
-   "derivedFamilies": [
+   "observedFamilies": [
     {
      "family": "text-indent",
      "browser": "firefox",
@@ -18223,11 +18747,19 @@
      "resolvedTargets": 412,
      "targets": 640,
      "cases": 992,
-     "passes": {},
-     "scored": 0
+     "passes": {
+      "lineCount": 992,
+      "breaks": 992,
+      "widths": 40,
+      "painter": 40
+     },
+     "scored": 992
     }
    ],
-   "coveredBy": [],
+   "derivedFamilies": [],
+   "coveredBy": [
+    "family"
+   ],
    "annotated": false
   },
   {
@@ -18250,8 +18782,7 @@
     "nested-box-edges",
     "br-elements"
    ],
-   "observedFamilies": [],
-   "derivedFamilies": [
+   "observedFamilies": [
     {
      "family": "br-elements",
      "browser": "firefox",
@@ -18259,8 +18790,13 @@
      "resolvedTargets": 236,
      "targets": 268,
      "cases": 856,
-     "passes": {},
-     "scored": 0
+     "passes": {
+      "lineCount": 448,
+      "breaks": 448,
+      "widths": 224,
+      "painter": 428
+     },
+     "scored": 856
     },
     {
      "family": "nested-box-edges",
@@ -18269,11 +18805,19 @@
      "resolvedTargets": 288,
      "targets": 432,
      "cases": 720,
-     "passes": {},
-     "scored": 0
+     "passes": {
+      "lineCount": 720,
+      "breaks": 720,
+      "widths": 213,
+      "painter": 200
+     },
+     "scored": 720
     }
    ],
-   "coveredBy": [],
+   "derivedFamilies": [],
+   "coveredBy": [
+    "family"
+   ],
    "annotated": false
   },
   {
@@ -18295,8 +18839,7 @@
    "declaredFamilies": [
     "wbr-elements"
    ],
-   "observedFamilies": [],
-   "derivedFamilies": [
+   "observedFamilies": [
     {
      "family": "wbr-elements",
      "browser": "firefox",
@@ -18304,11 +18847,19 @@
      "resolvedTargets": 450,
      "targets": 612,
      "cases": 1188,
-     "passes": {},
-     "scored": 0
+     "passes": {
+      "lineCount": 1188,
+      "breaks": 1188,
+      "widths": 1188,
+      "painter": 1176
+     },
+     "scored": 1188
     }
    ],
-   "coveredBy": [],
+   "derivedFamilies": [],
+   "coveredBy": [
+    "family"
+   ],
    "annotated": false
   },
   {
@@ -18330,8 +18881,7 @@
    "declaredFamilies": [
     "text-align"
    ],
-   "observedFamilies": [],
-   "derivedFamilies": [
+   "observedFamilies": [
     {
      "family": "text-align",
      "browser": "firefox",
@@ -18339,11 +18889,19 @@
      "resolvedTargets": 432,
      "targets": 576,
      "cases": 1104,
-     "passes": {},
-     "scored": 0
+     "passes": {
+      "lineCount": 1104,
+      "breaks": 1104,
+      "widths": 1104,
+      "painter": 1004
+     },
+     "scored": 1104
     }
    ],
-   "coveredBy": [],
+   "derivedFamilies": [],
+   "coveredBy": [
+    "family"
+   ],
    "annotated": false
   },
   {
@@ -18365,8 +18923,7 @@
    "declaredFamilies": [
     "box-edges"
    ],
-   "observedFamilies": [],
-   "derivedFamilies": [
+   "observedFamilies": [
     {
      "family": "box-edges",
      "browser": "firefox",
@@ -18374,11 +18931,19 @@
      "resolvedTargets": 1152,
      "targets": 1728,
      "cases": 2880,
-     "passes": {},
-     "scored": 0
+     "passes": {
+      "lineCount": 2880,
+      "breaks": 2880,
+      "widths": 1356,
+      "painter": 1289
+     },
+     "scored": 2880
     }
    ],
-   "coveredBy": [],
+   "derivedFamilies": [],
+   "coveredBy": [
+    "family"
+   ],
    "annotated": false
   },
   {
@@ -18401,8 +18966,7 @@
     "text-indent",
     "line-slots"
    ],
-   "observedFamilies": [],
-   "derivedFamilies": [
+   "observedFamilies": [
     {
      "family": "line-slots",
      "browser": "firefox",
@@ -18410,8 +18974,13 @@
      "resolvedTargets": 829,
      "targets": 1319,
      "cases": 1814,
-     "passes": {},
-     "scored": 0
+     "passes": {
+      "lineCount": 1808,
+      "breaks": 1805,
+      "widths": 866,
+      "painter": 866
+     },
+     "scored": 1814
     },
     {
      "family": "text-indent",
@@ -18420,11 +18989,19 @@
      "resolvedTargets": 412,
      "targets": 640,
      "cases": 992,
-     "passes": {},
-     "scored": 0
+     "passes": {
+      "lineCount": 992,
+      "breaks": 992,
+      "widths": 40,
+      "painter": 40
+     },
+     "scored": 992
     }
    ],
-   "coveredBy": [],
+   "derivedFamilies": [],
+   "coveredBy": [
+    "family"
+   ],
    "annotated": false
   },
   {
@@ -18446,8 +19023,7 @@
    "declaredFamilies": [
     "box-edges"
    ],
-   "observedFamilies": [],
-   "derivedFamilies": [
+   "observedFamilies": [
     {
      "family": "box-edges",
      "browser": "firefox",
@@ -18455,11 +19031,19 @@
      "resolvedTargets": 1152,
      "targets": 1728,
      "cases": 2880,
-     "passes": {},
-     "scored": 0
+     "passes": {
+      "lineCount": 2880,
+      "breaks": 2880,
+      "widths": 1356,
+      "painter": 1289
+     },
+     "scored": 2880
     }
    ],
-   "coveredBy": [],
+   "derivedFamilies": [],
+   "coveredBy": [
+    "family"
+   ],
    "annotated": false
   },
   {
