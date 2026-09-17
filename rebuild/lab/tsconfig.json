@@ -1,4 +1,5 @@
 {
   "extends": "../../tsconfig.json",
-  "include": ["./*.ts", "./cases/*.ts"]
+  "compilerOptions": { "resolveJsonModule": true },
+  "include": ["./*.ts", "./cases/*.ts", "./observe/*.ts"]
 }

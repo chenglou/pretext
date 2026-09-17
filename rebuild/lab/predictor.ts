@@ -1,17 +1,20 @@
 // The prediction hook. page.ts imports this file and nothing else from the library side, so the rebuilt
 // library plugs in by editing this file only (run.ts --predictor=<file> swaps it for experiments).
 //
-// predict() lays the paragraph out with rebuild/src for the running browser's engine. paint() lays it out again (with a
-// fresh measurer, so the same Canvas results) and paints the lines, because the hook passes only the lab's Prediction.
+// predict() lays the paragraph out with rebuild/src for the running browser's engine and returns the library's input and
+// layout; the page runs the observation port over them. paint() paints that layout.
 //
-// A case describes the page, so its fonts carry no font facts, and the hook passes no build or browser-process
-// languages yet. Until the driver records them (DESIGN.md §8.3, stage 0), every such fact is given as unknown, and
-// predictions report the engine-build, ui-language and font-fact gaps.
-import { detectEngine, detectEnvironment, type EngineName, type Environment, type GivenFacts } from '../src/env.ts'
+// A case describes the page, so its fonts carry no font facts. The lab declares them the way an app that knows its fonts
+// would: font-facts.ts gives the facts each engine reads for a declaration on this Mac, from a table generated offline
+// from the installed fonts and the fixtures the case loads (DESIGN.md §1.2). Facts the table can't give stay unknown and
+// report their gaps. The build comes from the driver, which reads it from the app bundle. The browser-process languages
+// aren't recorded yet (DESIGN.md §8.3, stage 0), so they are given as unknown and report ui-language.
+import { detectEnvironment, type EngineName, type Environment, type GivenFacts } from '../src/env.ts'
 import { layoutParagraph } from '../src/index.ts'
-import { UNKNOWN_FONT_FACTS, type FontDecl, type Paragraph as LayoutParagraph, type ParagraphLayout } from '../src/model.ts'
+import type { FontDecl, Paragraph as LayoutParagraph } from '../src/model.ts'
 import { paintLines } from '../src/paint.ts'
-import type { BrowserKind, Case, FontDecl as CaseFont, Paragraph as CaseParagraph, Prediction } from './types.ts'
+import { fontFactsFor } from './font-facts.ts'
+import type { BrowserKind, Case, FontDecl as CaseFont, LayoutPrediction } from './types.ts'
 
 function engineOf(browser: BrowserKind): EngineName {
   switch (browser) {
@@ -23,65 +26,44 @@ function engineOf(browser: BrowserKind): EngineName {
 }
 
 // The lab's pages send no Content-Language, and its sessions run at page zoom 1.
-function givenFacts(engine: EngineName): GivenFacts {
+function givenFacts(engine: EngineName, build: string): GivenFacts {
   switch (engine) {
-    case 'blink': return { engine, build: null, contentLanguage: null, uiLanguage: null }
-    case 'webkit': return { engine, build: null, contentLanguage: null, pageZoom: 1, preferredLanguages: null, icuDefaultLocale: null }
-    case 'gecko': return { engine, build: null, contentLanguage: null, regionalPrefsLocale: null }
+    case 'blink': return { engine, build, contentLanguage: null, uiLanguage: null }
+    case 'webkit': return { engine, build, contentLanguage: null, pageZoom: 1, preferredLanguages: null, icuDefaultLocale: null }
+    case 'gecko': return { engine, build, contentLanguage: null, regionalPrefsLocale: null }
   }
 }
 
-function environment(engine: EngineName): Environment | { error: string } {
-  const detected = detectEnvironment(givenFacts(engine))
+function environment(browser: BrowserKind, build: string): Environment | { error: string } {
+  const detected = detectEnvironment(givenFacts(engineOf(browser), build))
   if (detected.kind === 'unsupported') return { error: `Unsupported browser: ${detected.reason} (${detected.userAgent})` }
   return detected.env
 }
 
-function withFacts(font: CaseFont): FontDecl {
-  return { ...font, facts: UNKNOWN_FONT_FACTS }
+function withFacts(font: CaseFont, engine: EngineName, fixtures: readonly string[]): FontDecl {
+  return { ...font, facts: fontFactsFor(font, engine, fixtures) }
 }
 
-function layoutInput(paragraph: CaseParagraph): LayoutParagraph {
+function layoutInput(c: Case, engine: EngineName): LayoutParagraph {
+  const paragraph = c.paragraph
+  const fixtures = c.fontFixtures ?? []
   const runs: LayoutParagraph['runs'] = []
   for (let r = 0; r < paragraph.runs.length; r++) {
     const run = paragraph.runs[r]!
-    runs.push({ ...run, font: withFacts(run.font) })
+    runs.push({ ...run, font: withFacts(run.font, engine, fixtures) })
   }
-  return { ...paragraph, font: withFacts(paragraph.font), runs }
+  return { ...paragraph, font: withFacts(paragraph.font, engine, fixtures), runs }
 }
 
-// A line's width as its engine computes it, in CSS px, hanging white space and a chosen hyphen included: the extent of
-// the line's whole-node rects (research/observe-blink.md §8, observe-webkit.md E2, observe-gecko.md E3).
-function lineWidth(layout: ParagraphLayout, l: number): number {
-  switch (layout.engine) {
-    case 'blink': {
-      const g = layout.lines[l]!.geometry
-      return g.width / 64 / g.layoutZoom
-    }
-    case 'webkit': return layout.lines[l]!.geometry.contentWidth / (layout.env.pageZoom ?? 1)
-    case 'gecko': return layout.lines[l]!.geometry.width / 60
-  }
-}
-
-export function predict(c: Case, env: { browser: BrowserKind; dpr: number }): Prediction | { error: string } {
-  const e = environment(engineOf(env.browser))
+export function predict(c: Case, env: { browser: BrowserKind; build: string }): LayoutPrediction | { error: string } {
+  const e = environment(env.browser, env.build)
   if ('error' in e) return e
   if (c.pageLang !== e.pageLang) return { error: `Case ${c.id} needs <html lang="${c.pageLang}">; page has "${e.pageLang}"` }
-  const layout = layoutParagraph(layoutInput(c.paragraph), e)
-  const lines: Prediction['lines'] = []
-  for (let i = 0; i < layout.lines.length; i++) {
-    const line = layout.lines[i]!
-    if (line.hasLineBox) lines.push({ start: line.start, end: line.end, width: lineWidth(layout, i) })
-  }
-  return { lines, measureLog: layout.measure.calls.length }
+  const paragraph = layoutInput(c, e.engine)
+  return { paragraph, layout: layoutParagraph(paragraph, e) }
 }
 
-// One element per predicted line, or null when the predictor doesn't paint.
-export function paint(c: Case, _prediction: Prediction, host: HTMLElement): HTMLElement[] | null {
-  const detected = detectEngine()
-  if (detected.kind === 'unsupported') return null
-  const e = environment(detected.engine)
-  if ('error' in e) return null
-  const input = layoutInput(c.paragraph)
-  return paintLines(input, layoutParagraph(input, e), host.ownerDocument)
+// One element per line with a line box.
+export function paint(_c: Case, prediction: LayoutPrediction, host: HTMLElement): HTMLElement[] | null {
+  return paintLines(prediction.paragraph, prediction.layout, host.ownerDocument)
 }
