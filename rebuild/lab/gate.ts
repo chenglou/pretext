@@ -8,11 +8,13 @@
 // A run is a per-case file written by `score.ts --per-case`, next to the summary the same call wrote (`<name>-per-case.ndjson`
 // and `<name>-summary.json`). `--runs` takes files or directories (every `*-per-case.ndjson` directly inside) and can be
 // repeated. A baseline describes one engine version: the (case id, metric) pairs that passed in every seeding run that
-// observed the case, and the environments those runs reported (DPR, visual-viewport scale and user agent).
+// observed the case, and the environments those runs reported: the browser build the driver read from the app bundle, the
+// OS build, DPR, visual-viewport scale and the scorer version (score.ts environmentKey).
 //
 // Checking a run against a baseline:
 // - Every run's environments must be ones the baseline recorded. Anything else means the browser changed (a new version, a
-//   different DPR): re-observe with the same library, seed a new baseline and review the seed's diff. Exit 2.
+//   different DPR) or the scorer did: re-observe or re-score with the same library, seed a new baseline and review the
+//   seed's diff. Exit 2.
 // - Every run must have been scored with --native-compare against the same case file in the other order, so history-
 //   dependent cases are known. --allow-uncompared accepts single-order runs. Exit 2.
 // - A baseline pass that isn't a pass in a run observing the case is a lost pass. unobserved and not-applicable are never

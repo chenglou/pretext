@@ -31,7 +31,7 @@ without a Safari run is REPORT §7 item 1. Host rows count only when:
 
 Exact equality everywhere below: the case, paragraph height and width, every code point rect, the whole-node rects,
 `document.fonts.status`, rejected styles, missing fonts, and the native lines and unobserved reasons from `score.ts`'s
-own `deriveNative`.
+own `deriveNative` (scorer version 1, before the observation ports replaced its visibility rules).
 
 | Host rows | Installed Safari 27.0 rows | Cases | Result |
 |---|---|---|---|
@@ -207,6 +207,7 @@ python3 .artifacts/session/with-browser-lock.py lab-webkit-host -- \
 bun .artifacts/webkit-host/compare-20260916/compare-rows.ts --a=<dir>/safari-rows.ndjson --b=<dir>/webkit-host-rows.ndjson --out=<report.json>
 ```
 
-`compare-rows.ts` imports `deriveNative` from `score.ts`. The match is expected to be exact. To find cases that depend
+`compare-rows.ts` imports `deriveNative` from scorer version 1; with the current `score.ts`, compare `nativeView` and
+`nativeDifference` instead. The match is expected to be exact. To find cases that depend
 on page history rather than on the host, score a reverse-order run with `--native-compare` (README "Page-history
 dependence").

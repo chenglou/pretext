@@ -4,8 +4,8 @@
 // boundaries, which bun doesn't have (the lab runs them in Chrome), so only differences outside SA runs count.
 import { describe, expect, test } from 'bun:test'
 import { existsSync } from 'node:fs'
-import { BLINK, type Environment } from '../../env.js'
-import type { Paragraph } from '../../model.js'
+import { PINNED_BUILDS, type BlinkEnvironment } from '../../env.js'
+import { UNKNOWN_FONT_FACTS, type Paragraph } from '../../model.js'
 import { forEachLine } from '../../../tools/lines.ts'
 import { LineBreakIterator, lineTable } from './breaks.js'
 import { buildContent, styles } from './content.js'
@@ -17,7 +17,7 @@ type Request = { id: string; text: string; whiteSpace: 'normal' | 'pre-wrap'; wo
 type Answer = { id: string; rules?: string; perLine?: number[][]; error?: string }
 
 function paragraphOf(r: Request): Paragraph {
-  const font = { family: 'Arial', size: 16, weight: 400, style: 'normal' as const }
+  const font = { family: 'Arial', size: 16, weight: 400, style: 'normal' as const, facts: UNKNOWN_FONT_FACTS }
   // The oracle's page has <html lang="en">; a request's lang is the div's (null: none, "": lang="").
   return {
     runs: [{ text: r.text, node: 'text', font, letterSpacing: 0, wordSpacing: 0, lang: null }], font, letterSpacing: 0, wordSpacing: 0,
@@ -30,9 +30,9 @@ function paragraphOf(r: Request): Paragraph {
 export function opportunities(r: Request): number[] {
   const paragraph = paragraphOf(r)
   // The oracle resolved lang "" as a null locale with UI language zh-CN (tools/diff-blink.ts ResolveLocale).
-  const env: Environment = {
-    engine: BLINK, devicePixelRatio: 1, pageZoom: 1, pageLang: 'en', contentLanguage: null, uiLanguage: 'zh-CN',
-    preferredLanguages: ['zh-CN'], dictionaryBreaks: { kind: 'unavailable' },
+  const env: BlinkEnvironment = {
+    engine: 'blink', build: PINNED_BUILDS.blink, devicePixelRatio: 1, pageLang: 'en', contentLanguage: null, uiLanguage: 'zh-CN',
+    dictionaryBreaks: { kind: 'unavailable' },
   }
   const { styles: st, styleOfRun } = styles(paragraph)
   const content = buildContent(paragraph, styleOfRun)
@@ -71,6 +71,8 @@ describe('blink break opportunities', () => {
     expect(lineTable('ko', 'strict', 'en')).toBe('line_normal')
     expect(lineTable(null, 'strict', 'zh-CN')).toBe('line_normal_cj')
     expect(lineTable('en', 'loose', 'zh-CN')).toBe('line_loose')
+    // Without a given UI language, content without a locale opens line_normal (and reports ui-language).
+    expect(lineTable(null, 'default', null)).toBe('line_normal')
   })
 
   test('worked examples (specs/blink-text.md §2.F.5)', () => {

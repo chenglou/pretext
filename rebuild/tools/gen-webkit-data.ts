@@ -10,11 +10,12 @@
 // - which line table ubrk_open loads per requested locale and behaviour (specs/webkit-canvas.md §2.5);
 // - localeToScriptCode's tables, for the Han locale swap (specs/webkit-text.md §4.1).
 // - the Line_Break=SA combining marks the dictionary engines never stop before (ICU dictbe.cpp fMarkSet), from ICU 78.2's
-//   ppucd.txt: [[:LineBreak=SA:]&[:M:]] (specs/webkit-gaps.md §4), and Default_Ignorable_Code_Point for painted extents.
+//   ppucd.txt: [[:LineBreak=SA:]&[:M:]] (specs/webkit-gaps.md §4), and the Line_Break=SA code points of the four scripts
+//   with dictionary engines, by Script (brkeng.cpp:163-199 loads the engine by uscript_getScript).
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { BROWSER_ENGINES, DATA, REBUILD, base64, parsePairBitmap, readVerified, writeModule } from './gen-shared.ts'
-import { PPUCD_PATH, PPUCD_SHA256, forEachPpucdRange } from './ppucd.ts'
+import { PPUCD_PATH, PPUCD_SHA256, forEachPpucdBlock, forEachPpucdRange } from './ppucd.ts'
 
 const shaByPath = new Map<string, string>()
 const files = readFileSync(resolve(DATA, 'webkit/FILES.tsv'), 'utf8').trim().split('\n')
@@ -82,22 +83,36 @@ const punctuation: number[] = []
 // [[:LineBreak=SA:]&[:M:]] from ICU 78.2's ppucd.txt, which libicucore 78.1 shares for these properties
 // (data/webkit/icu-macos27-libicucore/unicode-properties-vs-upstream78.3.diff differs only in private use).
 const dictionaryMarks: number[] = []
-// Default_Ignorable_Code_Point from the same file: what the lab leaves out of a line's painted extent (DESIGN.md §2.1).
-const defaultIgnorables: number[] = []
+// Line_Break=SA code points whose Script has a dictionary engine: [first, last, engine] with engine 0 Thai, 1 Laoo, 2 Mymr,
+// 3 Khmr (ICULanguageBreakFactory::loadEngineFor, brkeng.cpp:163-199; the engines' sets [[:Thai:]&[:LineBreak=SA:]] and so
+// on, dictbe.cpp:208, 451, 651, 841). Block values come first, because ppucd writes no cp line for code points whose values
+// equal their block's (tools/ppucd.ts forEachPpucdBlock).
+const dictionaryScripts: number[] = []
 {
   const ppucdPath = resolve(BROWSER_ENGINES, PPUCD_PATH)
   readVerified(ppucdPath, PPUCD_SHA256)
+  const ENGINE_SCRIPTS = ['Thai', 'Laoo', 'Mymr', 'Khmr']
+  // -1: not SA or another script; 0..3 the engine.
+  const engineOf = new Int8Array(0x110000).fill(-1)
+  const assign = (first: number, last: number, props: Map<string, string>) => {
+    const engine = props.get('lb') === 'SA' ? ENGINE_SCRIPTS.indexOf(props.get('sc') ?? '') : -1
+    engineOf.fill(engine, first, last + 1)
+  }
+  await forEachPpucdBlock(ppucdPath, range => assign(range.first, range.last, range.props))
   await forEachPpucdRange(ppucdPath, range => {
-    if (range.props.has('DI')) {
-      const last = defaultIgnorables.length - 1
-      if (last > 0 && defaultIgnorables[last] === range.first - 1) defaultIgnorables[last] = range.last
-      else defaultIgnorables.push(range.first, range.last)
-    }
+    assign(range.first, range.last, range.props)
     if (range.props.get('lb') !== 'SA' || range.props.get('gc')?.[0] !== 'M') return
     const last = dictionaryMarks.length - 1
     if (last > 0 && dictionaryMarks[last] === range.first - 1) dictionaryMarks[last] = range.last
     else dictionaryMarks.push(range.first, range.last)
   })
+  for (let cp = 0; cp < 0x110000; cp++) {
+    const engine = engineOf[cp]!
+    if (engine < 0) continue
+    const last = dictionaryScripts.length - 3
+    if (last >= 0 && dictionaryScripts[last + 1] === cp - 1 && dictionaryScripts[last + 2] === engine) dictionaryScripts[last + 1] = cp
+    else dictionaryScripts.push(cp, cp, engine)
+  }
 }
 
 // delimiters.tsv: locale, quotationStart, quotationEnd, alternateQuotationStart, alternateQuotationEnd as
@@ -189,8 +204,9 @@ export const webkitPunctuationRanges: readonly number[] = [${punctuation.join(',
 // engines' fMarkSet per script (dictbe.cpp:210, 453, 648, 843).
 export const webkitDictionaryMarkRanges: readonly number[] = [${dictionaryMarks.join(', ')}]
 
-// Code points with Default_Ignorable_Code_Point (ICU 78.2 ppucd.txt), as [first, last] pairs.
-export const webkitDefaultIgnorableRanges: readonly number[] = [${defaultIgnorables.join(', ')}]
+// Line_Break=SA code points of the scripts with dictionary engines (ICU 78.2 ppucd.txt), as [first, last, engine] triples:
+// 0 Thai, 1 Lao, 2 Myanmar, 3 Khmer (brkeng.cpp:163-199, dictbe.cpp:208, 451, 651, 841).
+export const webkitDictionaryScriptRanges: readonly number[] = [${dictionaryScripts.join(', ')}]
 
 // CLDR delimiters per locale key (lowercase, '-'): [quotationStart, is QU, quotationEnd, is QU,
 // alternateQuotationStart, is QU, alternateQuotationEnd, is QU] (data/webkit/icu-macos27-libicucore/delimiters.tsv).

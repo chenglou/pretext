@@ -1,10 +1,11 @@
 // WebKit's break data: BreakablePositions' pair table, libicucore 78.1's line tables with Apple ICU's quote overrides,
-// the punctuation General_Category set, and WebKit's locale-to-script table (specs/webkit-text.md §4-§5,
-// specs/webkit-canvas.md §2.5-§2.6).
+// the punctuation General_Category set, the dictionary engines' scripts, and WebKit's locale-to-script table
+// (specs/webkit-text.md §4-§5, specs/webkit-canvas.md §2.5-§2.6, specs/webkit-gaps.md §4, §8).
 import { NO_OVERRIDES, getCategory, type BreakRules, type CategoryOverrides } from '../../breaks/rbbi.js'
 import { pairCanBreak, webkitBreakRules, webkitLinePairs } from '../../breaks/tables.js'
 import {
-  webkitDefaultIgnorableRanges, webkitDelimiters, webkitDictionaryMarkRanges, webkitLineTables, webkitLocaleScripts, webkitPunctuationRanges, webkitScriptNames,
+  webkitDelimiters, webkitDictionaryMarkRanges, webkitDictionaryScriptRanges, webkitLineTables, webkitLocaleScripts, webkitPunctuationRanges,
+  webkitScriptNames,
 } from '../../breaks/generated/webkit-break-tables.js'
 import type { LineBreakMode } from './types.js'
 
@@ -31,21 +32,39 @@ export function isPunctuation(c: number): boolean {
   return inRanges(webkitPunctuationRanges, c)
 }
 
-// Default_Ignorable_Code_Point (ICU 78.2 ppucd.txt).
-export function isDefaultIgnorable(cp: number): boolean {
-  return inRanges(webkitDefaultIgnorableRanges, cp)
-}
-
 // [[:LineBreak=SA:]&[:M:]]: the dictionary engines' fMarkSet for the script of c (ICU dictbe.cpp:210, 453, 648, 843).
 export function isDictionaryMark(cp: number): boolean {
   return inRanges(webkitDictionaryMarkRanges, cp)
 }
 
+export type DictionaryScript = 'thai' | 'lao' | 'burmese' | 'khmer'
+const DICTIONARY_SCRIPTS: readonly DictionaryScript[] = ['thai', 'lao', 'burmese', 'khmer']
+
+// uscript_getScript(c) where it is Thai, Lao, Myanmar or Khmer and Line_Break is SA: the engine
+// ICULanguageBreakFactory::loadEngineFor builds for c (brkeng.cpp:163-199) and the set it takes,
+// [[:Thai:]&[:LineBreak=SA:]] and so on (dictbe.cpp:208, 451, 651, 841). null for every other character, which reaches
+// UnhandledEngine and gets no breaks.
+export function dictionaryScript(cp: number): DictionaryScript | null {
+  const r = webkitDictionaryScriptRanges
+  let lo = 0
+  let hi = r.length / 3 - 1
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1
+    if (cp < r[mid * 3]!) hi = mid - 1
+    else if (cp > r[mid * 3 + 1]!) lo = mid + 1
+    else return DICTIONARY_SCRIPTS[r[mid * 3 + 2]!]!
+  }
+  return null
+}
+
+function localeKey(locale: string): string {
+  return locale.replaceAll('_', '-').toLowerCase()
+}
+
 // ICU resource lookup: the locale as dumped, else its parents by truncation, else root. Break tables open with
-// ures_openNoDefault, so the process default locale never enters (specs/webkit-gaps.md §8.3); for CLDR delimiters the
-// default (en_US_POSIX here) gives root's data too.
+// ures_openNoDefault, so the process default locale never enters (specs/webkit-gaps.md §8.3).
 function lookupLocale<T>(table: Readonly<Record<string, T>>, locale: string): T {
-  let key = locale.replaceAll('_', '-').toLowerCase()
+  let key = localeKey(locale)
   for (;;) {
     const found = table[key]
     if (found !== undefined) return found
@@ -58,8 +77,9 @@ function lookupLocale<T>(table: Readonly<Record<string, T>>, locale: string): T 
 export type LineRules = { rules: BreakRules; overrides: CategoryOverrides }
 
 // ubrk_open(UBRK_LINE, makeLocaleWithBreakKeyword(locale, mode)) (TextBreakIteratorICU.h:56-67, 150-193). The empty
-// locale ignores the mode; data/webkit's manifest records the table for every behaviour.
-export function lineRules(locale: string, mode: LineBreakMode): LineRules {
+// locale ignores the mode; data/webkit's manifest records the table for every behaviour. `icuDefaultLocale` is the
+// WebContent process's uloc_getDefault(), which only the quote overrides read.
+export function lineRules(locale: string, mode: LineBreakMode, icuDefaultLocale: string): LineRules {
   const tables = lookupLocale(webkitLineTables, locale)
   let table: (typeof tables)[number]
   switch (mode) {
@@ -69,15 +89,43 @@ export function lineRules(locale: string, mode: LineBreakMode): LineRules {
     case 'Strict': table = tables[3]; break
   }
   const rules = webkitBreakRules(table)
-  return { rules, overrides: quoteOverrides(rules, locale) }
+  return { rules, overrides: quoteOverrides(rules, locale, icuDefaultLocale) }
+}
+
+// Rows of delimiters.tsv that record the dump's own default locale rather than data: `und` and `xx` have no ICU locale
+// data, so ulocdata_open answered them through uloc_getDefault() = en_US_POSIX (the file's header; specs/webkit-gaps.md
+// §8.3, groundwork probes: under ja_JP `und` behaves like ja).
+const DEFAULT_LOCALE_ROWS = ['und', 'xx']
+
+// Whether ulocdata_open(locale) finds locale data itself, as far as the dumped table shows: a row for the locale or a
+// parent other than root. Otherwise it falls back through the process default locale (specs/webkit-canvas.md §2.6).
+export function hasDelimiterData(locale: string): boolean {
+  if (locale === '') return true
+  let key = localeKey(locale)
+  for (;;) {
+    if (webkitDelimiters[key] !== undefined && !DEFAULT_LOCALE_ROWS.includes(key)) return true
+    const cut = key.lastIndexOf('-')
+    if (cut < 0) return false
+    key = key.slice(0, cut)
+  }
+}
+
+// Every code point any CLDR delimiter row names as a quotation mark with Line_Break QU: the characters an override can
+// touch under some default locale.
+export function isDelimiterQuote(cp: number): boolean {
+  for (const row of Object.values(webkitDelimiters)) {
+    for (let k = 0; k < 8; k += 2) if (row[k] === cp && row[k + 1] === 1) return true
+  }
+  return false
 }
 
 // Apple ICU setCategoryOverrides (AppleICU76 rbbi.cpp:397-486; specs/webkit-canvas.md §2.6): a one-unit delimiter with
 // Line_Break QU reads as U+007B (opening) or U+007D (closing) in this table; a closing U+201C becomes U+201D, a closing
-// U+2018 is dropped, and da gets none. The @lb keyword doesn't change the lookup.
-function quoteOverrides(rules: BreakRules, locale: string): CategoryOverrides {
+// U+2018 is dropped, and da gets none. The @lb keyword doesn't change the lookup. The empty locale opens root
+// (specs/webkit-gaps.md §8.3); a locale without data takes the default locale's delimiters.
+function quoteOverrides(rules: BreakRules, locale: string, icuDefaultLocale: string): CategoryOverrides {
   if (locale.split(/[-_@]/)[0]!.toLowerCase() === 'da') return NO_OVERRIDES
-  const row = lookupLocale(webkitDelimiters, locale)
+  const row = hasDelimiterData(locale) ? lookupLocale(webkitDelimiters, locale === '' ? 'root' : locale) : lookupLocale(webkitDelimiters, icuDefaultLocale)
   const chars: number[] = []
   const categories: number[] = []
   for (let pair = 0; pair < 2; pair++) {
@@ -139,10 +187,12 @@ export function isHanLocale(locale: string): boolean {
 
 // FontDescription::setSpecifiedLocale (FontDescription.cpp:107-113): `lang=""` gives a null locale, and a Han locale
 // becomes the specialized Chinese locale, the first preferred language starting with "zh-", else "zh-hans" (:75-104).
-export function computedLocale(lang: string, preferredLanguages: readonly string[]): string {
+// Preferred languages that aren't given are laid out as a list without a zh- entry (gap ui-language).
+export function computedLocale(lang: string, preferredLanguages: readonly string[] | null): string {
   if (lang === '' || !isHanLocale(lang)) return lang
-  for (let i = 0; i < preferredLanguages.length; i++) {
-    if (preferredLanguages[i]!.startsWith('zh-')) return preferredLanguages[i]!
+  const languages = preferredLanguages ?? []
+  for (let i = 0; i < languages.length; i++) {
+    if (languages[i]!.startsWith('zh-')) return languages[i]!
   }
   return 'zh-hans'
 }

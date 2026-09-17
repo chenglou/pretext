@@ -5,6 +5,7 @@ import { execFileSync } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import { closeSync, mkdirSync, openSync, readFileSync, writeFileSync, writeSync } from 'node:fs'
 import { join, resolve } from 'node:path'
+import { readBuild, userAgentMatches } from './browser-build.ts'
 import { createRng } from './cases/prng.ts'
 import type { BrowserKind, Case, FontDecl, LabRow } from './types.ts'
 
@@ -29,20 +30,13 @@ const KNOWN = ['browser', 'cases', 'out', 'limit', 'family', 'chunk', 'predictor
 const args = new Map<string, string>()
 // Opens the Safari lab window without waiting for Safari to leave the front (see launchSafari).
 let allowSafariFrontmost = false
-// Records predictions (and painted lines) without observing native layout: each row's native is { skipped }. score.ts
-// --native-rows scores such rows against another run's native observations of the same cases.
-let predictOnly = false
 for (const raw of process.argv.slice(2)) {
   if (raw === '--allow-safari-frontmost') {
     allowSafariFrontmost = true
     continue
   }
-  if (raw === '--predict-only') {
-    predictOnly = true
-    continue
-  }
   const match = /^--([a-z-]+)=(.*)$/s.exec(raw)
-  if (match === null || !KNOWN.includes(match[1]!)) fail(`Unknown argument ${raw}. Usage: bun rebuild/lab/run.ts --browser=chrome|safari|firefox|webkit-host --cases=<cases.ndjson> --out=<dir> [--limit=N] [--family=substr] [--chunk=N] [--predictor=<file>] [--stall-ms=N] [--order=file|reverse|shuffle:<seed>] [--allow-safari-frontmost] [--predict-only]`)
+  if (match === null || !KNOWN.includes(match[1]!)) fail(`Unknown argument ${raw}. Usage: bun rebuild/lab/run.ts --browser=chrome|safari|firefox|webkit-host --cases=<cases.ndjson> --out=<dir> [--limit=N] [--family=substr] [--chunk=N] [--predictor=<file>] [--stall-ms=N] [--order=file|reverse|shuffle:<seed>] [--allow-safari-frontmost]`)
   args.set(match[1]!, match[2]!)
 }
 const browserArg = args.get('browser')
@@ -178,6 +172,9 @@ function asciiJsonResponse(value: unknown): Response {
   const body = JSON.stringify(value).replace(/[-￿]/g, char => `\\u${char.charCodeAt(0).toString(16).padStart(4, '0')}`)
   return new Response(body, { headers: { 'content-type': 'application/json; charset=utf-8' } })
 }
+
+// The build the run observes, from the app bundles, before launch (browser-build.ts).
+const build = readBuild(browser)
 
 // ---- Browser sessions ----
 
@@ -462,8 +459,6 @@ const rowsPath = join(outDir, `${browser}-rows.ndjson`)
 const runPath = join(outDir, `${browser}-run.json`)
 const errors: string[] = []
 const totals = { selected: cases.length, rows: 0, chunks: 0, navigations: 0, resends: 0, nativeErrors: 0, predictionErrors: 0, painterErrors: 0, rejectedStyleRows: 0, missingFontRows: 0 }
-// Rows whose native observation was skipped; every row under --predict-only, none otherwise.
-let skippedNativeRows = 0
 const missingFontCounts = new Map<string, number>()
 const envs = new Map<string, number>()
 const visibility = new Map<string, number>()
@@ -490,12 +485,12 @@ function writeRows(rows: PageRow[], start: number): void {
     const row = rows[i]!
     const c = cases[start + i]!
     if (row.id !== c.id) throw new Error(`Row ${i} of the chunk is ${row.id}; expected ${c.id}`)
-    const full: LabRow = { id: c.id, family: c.family, browser, case: c, env: row.env, native: row.native, prediction: row.prediction, painter: row.painter, timings: row.timings }
+    if (!userAgentMatches(browser, build, row.env.userAgent)) throw new Error(`Row ${c.id}: user agent ${row.env.userAgent} doesn't name the build read before launch (${JSON.stringify(build)})`)
+    const full: LabRow = { id: c.id, family: c.family, browser, build, case: c, env: row.env, native: row.native, prediction: row.prediction, painter: row.painter, timings: row.timings }
     text += JSON.stringify(full) + '\n'
-    if ('skipped' in row.native) skippedNativeRows++
-    else if ('error' in row.native) totals.nativeErrors++
+    if ('error' in row.native) totals.nativeErrors++
     else if (row.native.rejectedStyles.length > 0) totals.rejectedStyleRows++
-    if (!('error' in row.native) && !('skipped' in row.native) && (row.native.missingFonts ?? []).length > 0) {
+    if (!('error' in row.native) && (row.native.missingFonts ?? []).length > 0) {
       totals.missingFontRows++
       for (const family of row.native.missingFonts!) missingFontCounts.set(family, (missingFontCounts.get(family) ?? 0) + 1)
     }
@@ -549,7 +544,7 @@ async function step(request: Request): Promise<Response> {
     pending = { seq: seqCounter++, start, end, sends: 0 }
   }
   pending.sends++
-  return asciiJsonResponse({ kind: 'chunk', seq: pending.seq, browser, cases: cases.slice(pending.start, pending.end), ...(predictOnly ? { predictOnly: true } : {}) })
+  return asciiJsonResponse({ kind: 'chunk', seq: pending.seq, browser, build: build.engine, cases: cases.slice(pending.start, pending.end) })
 }
 
 function pageHtml(lang: string, families: string[]): string {
@@ -617,7 +612,7 @@ try {
   const baseUrl = `http://127.0.0.1:${server.port}`
   const first = cases[0]!
   const url = `${baseUrl}/lab?run=${runId}&lang=${encodeURIComponent(first.pageLang)}&fonts=${encodeURIComponent(fixtureFamilies(first).join('|'))}`
-  console.log(`[lab] ${browser}: ${cases.length} cases, ${casesByContext.size} page contexts${predictOnly ? ', predictions only' : ''}; serving ${baseUrl}`)
+  console.log(`[lab] ${browser}: ${cases.length} cases, ${casesByContext.size} page contexts; serving ${baseUrl}`)
   switch (browser) {
     case 'chrome': session = await launchChrome(url, runId); break
     case 'firefox': session = await launchFirefox(url, runId); break
@@ -635,7 +630,6 @@ try {
   }
   if (totals.rows !== cases.length) errors.push(`Wrote ${totals.rows} rows for ${cases.length} cases`)
   if (totals.nativeErrors > 0) errors.push(`${totals.nativeErrors} native observation errors`)
-  if (predictOnly ? skippedNativeRows !== totals.rows : skippedNativeRows > 0) errors.push(`${skippedNativeRows} of ${totals.rows} rows skipped native observation${predictOnly ? '; --predict-only expects all' : ''}`)
   if (envs.size > 1) errors.push(`The environment changed during the run: ${[...envs.keys()].join(' | ')}`)
 } catch (error) {
   errors.push(message(error))
@@ -653,9 +647,8 @@ try {
   writeFileSync(runPath, JSON.stringify({
     status: errors.length === 0 ? 'ok' : 'error',
     errors,
-    browser, runId, casesFile: resolve(casesPath), rowsFile: rowsPath, predictor: predictorPath,
+    browser, build, runId, casesFile: resolve(casesPath), rowsFile: rowsPath, predictor: predictorPath,
     family: familyFilter ?? null, limit: limit === Number.MAX_SAFE_INTEGER ? null : limit, order, chunkSize, bundleBytes, allowSafariFrontmost,
-    ...(predictOnly ? { predictOnly: true, skippedNativeRows } : {}),
     startedAt: startedAt.toISOString(), finishedAt: finishedAt.toISOString(), durationMs: finishedAt.getTime() - startedAt.getTime(),
     // From the start to the page's first request (bundle, launch, page load), then from there to the end.
     launchMs: firstStepAt === null ? null : firstStepAt - startedAt.getTime(),

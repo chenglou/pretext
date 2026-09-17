@@ -1,16 +1,18 @@
 // Content building for Gecko (Firefox 156.0): frames, bidi splits, text runs, TransformText per mapped flow, glyph
 // flags, nsLineBreaker breaks, spacing and the app-unit advances known before lines are filled.
 // specs/gecko-text.md §2-§12, specs/gecko-canvas.md §2-§3, specs/probes-firefox.md.
-import type { Environment } from '../../env.js'
+import type { GeckoEnvironment } from '../../env.js'
 import { measureContext, measureText, type Measurer } from '../../measure/canvas.js'
 import { canvasFont } from '../../measure/font.js'
-import type { FontDecl, Gap, Paragraph } from '../../model.js'
+import type { Gap, Paragraph } from '../../model.js'
+import { opticalSizeAxisOf, quantize10, sameFontForTextRun } from './fonts.js'
+import { canonicalLanguageTag } from './likely.js'
 import { bidiDataFor } from '../../unicode/bidi.js'
 import { graphemeBoundaries, graphemeRulesFor } from '../../unicode/grapheme.js'
 import { resolveUnicodeBidi } from '../../unicode/unicode-bidi.js'
 import {
   BREAK_EMERGENCY_WRAP, BREAK_NONE, BREAK_NORMAL, BREAK_SKIP_SETTING_NO_BREAKS, BREAK_SUPPRESS_INITIAL, BREAK_SUPPRESS_INSIDE,
-  LineBreakerState, type BreakSink,
+  LineBreakerState, complexLanguage, type BreakSink,
 } from './linebreak.js'
 import {
   hasScript, isAlphanumeric, isBidiControl, isBidiMirrored, isClosePunctuation, isClusterExtender,
@@ -37,14 +39,6 @@ export const pxToAu = (px: number): number => lroundf(f32(f32(px) * 60))
 // CanvasRenderingContext2D QuantizeFontSize, 7 significant bits (CanvasRenderingContext2D.cpp:4207-4217).
 function quantize7(size: number): number {
   const d = f32(size * 131073)
-  const t = f32(d - size)
-  return f32(d - t)
-}
-
-// Servo quantize_font_size, 10 significant bits, applied to every computed font size (specs/probes-firefox.md
-// correction 2, servo/components/style/values/specified/font.rs:993-1022).
-function quantize10(size: number): number {
-  const d = f32(size * 16385)
   const t = f32(d - size)
   return f32(d - t)
 }
@@ -492,11 +486,10 @@ function scriptContextFor(units: Uint16Array, runs: ScriptRun[], runStart: numbe
 // The Canvas au of transformed text [tStart, tEnd) of one shaping unit, shaped in the script the paragraph gives it:
 // `context + ' ' + piece` less `context + ' '` (or the mirror) where scriptContextFor names a context. U+0020 is a shaping
 // word boundary that nothing kerns across (gfxFont.cpp:3781-3866), and in the Canvas text run the space and the piece's
-// Common characters join the context's script run. `lead` goes before the piece (U+200D where letters join across
-// tStart, lines.ts). Units, suffixes and prefixes all go through this one recipe.
+// Common characters join the context's script run. Units, suffixes and prefixes all go through this one recipe.
 export function rangeAu(m: Measurer, run: Pick<GeckoTextRun, 'context' | 'scriptRuns' | 'tStart'>, units: Uint16Array,
-  tStart: number, tEnd: number, lead: string): number {
-  let piece = lead
+  tStart: number, tEnd: number): number {
+  let piece = ''
   for (let k = tStart; k < tEnd; k++) piece += String.fromCharCode(units[k]!)
   const w = (s: string) => Math.round(measureText(m, run.context, s) * 60)
   const context = scriptContextFor(units, run.scriptRuns, run.tStart, tStart, tEnd)
@@ -536,12 +529,10 @@ function replaceSeparators(text: string): string {
   return out
 }
 
-const sameFont = (a: FontDecl, b: FontDecl) => a.family === b.family && a.size === b.size && a.weight === b.weight &&
-  a.style === b.style
-
-// Named fonts with an opsz axis resolve through system-ui on macOS; OffscreenCanvas never sets auto optical sizing
-// (specs/gecko-canvas.md §1.2 C1a, probe H8, cross-cutting 5).
-const OPTICAL_SIZE_FAMILIES = /(^|,)\s*("?)(system-ui|-apple-system|BlinkMacSystemFont|ui-sans-serif|ui-serif|ui-monospace|ui-rounded|SF Pro[^,]*|SF Compact[^,]*|New York)\2\s*(,|$)/i
+// The color emoji font Core Text draws emoji with on macOS 27, a recorded browser fact of the pinned build (probe
+// gecko-port F3, rebuild/probes/gecko-emoji-font.ts; data/gecko/apple-color-emoji-advances-macos27.tsv). Its advances come
+// from Core Text at the device size (gfxMacFont.cpp:437-463).
+const COLOR_EMOJI_FAMILY = '"Apple Color Emoji"'
 
 // gfxFont::SynthesizeSpaceWidth (gfxFont.cpp:4792-4826): the em divisor of a Unicode space Gecko synthesizes from the
 // font size, or 0. U+2007 and U+2008 take the font's digit and space widths instead, which the port doesn't correct.
@@ -574,7 +565,7 @@ function prefersColorGlyph(presentation: EmojiPresentation, ch: number, next: nu
   return presentation === 'emoji-default' && next !== 0xfe0e
 }
 
-export function prepareGecko(paragraph: Paragraph, env: Environment, measurer: Measurer): GeckoPrepared {
+export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, measurer: Measurer): GeckoPrepared {
   const style = geckoStyle(paragraph)
   const apd = Math.max(1, Math.floor(60 / env.devicePixelRatio + 0.5)) // nsDeviceContext.cpp:52-63
   const runs = paragraph.runs
@@ -595,7 +586,7 @@ export function prepareGecko(paragraph: Paragraph, env: Environment, measurer: M
     const r = runs[i]!
     letterSpacingAu.push(pxToAu(r.letterSpacing))
     wordSpacingAu.push(pxToAu(r.wordSpacing))
-    langs.push(r.lang ?? paragraph.lang)
+    langs.push(canonicalLanguageTag(r.lang ?? paragraph.lang))
     let is8bit = true
     for (let k = 0; k < r.text.length; k++) if (r.text.charCodeAt(k) >= 0x100) { is8bit = false; break }
     runIs8bit.push(is8bit)
@@ -687,7 +678,7 @@ export function prepareGecko(paragraph: Paragraph, env: Environment, measurer: M
     const prev = k > 0 ? pieces[k - 1]! : null
     const continues = prev !== null && prev.level === p.level && prev.run !== p.run &&
       !(style.newlineIsSignificant && text.charCodeAt(prev.end - 1) === 0x0a) &&
-      sameFont(runs[prev.run]!.font, runs[p.run]!.font) && langs[prev.run] === langs[p.run] &&
+      sameFontForTextRun(runs[prev.run]!.font, runs[p.run]!.font) && langs[prev.run] === langs[p.run] &&
       (letterSpacingAu[prev.run] !== 0) === (letterSpacingAu[p.run] !== 0)
     if (!continues) {
       builds.push({ firstFrame: frames.length, frameCount: 0, tStart: tr.count, tEnd: tr.count, is8bit: true, level: p.level, hasShy: false, hasTab: false })
@@ -785,6 +776,7 @@ export function prepareGecko(paragraph: Paragraph, env: Environment, measurer: M
   const correction = new Int32Array(T)
   const textRuns: GeckoTextRun[] = []
   const quantizationReported = new Set<string>()
+  const opticalSizeReported = new Set<string>()
   let emojiGapReported = false
   let fallbackGapReported = false
   let spaceShapingGapReported = false
@@ -798,7 +790,15 @@ export function prepareGecko(paragraph: Paragraph, env: Environment, measurer: M
       quantizationReported.add(String(font.size))
       gaps.push({ gap: 'font-size-quantization', run: firstRun, detail: `DOM size ${domAu / 60}px, Canvas size ${quantize7(font.size)}px` })
     }
-    if (OPTICAL_SIZE_FAMILIES.test(font.family)) gaps.push({ gap: 'optical-size', run: firstRun, detail: font.family })
+    // No Canvas setting gives the DOM's auto optical sizing (specs/gecko-canvas.md §1.2 C1a), so a font with an opsz axis,
+    // or one whose axis isn't known, may measure differently (DESIGN.md §1.2).
+    if (font.facts.opticalSizeAxis !== false && !opticalSizeReported.has(font.family)) {
+      opticalSizeReported.add(font.family)
+      gaps.push({ gap: 'optical-size', run: firstRun, detail: font.facts.opticalSizeAxis === true ? `${font.family} has an opsz axis` : `whether ${font.family} has an opsz axis isn't given (default ${opticalSizeAxisOf(font)})` })
+    }
+    // CanAddSpacingAfter adds letter spacing only at ligature group starts (nsTextFrame.cpp:3860-3873). Letter spacing
+    // turns optional ligatures off; the required ligatures a font still forms aren't visible to Canvas.
+    if (letterSpacingAu[firstRun] !== 0) gaps.push({ gap: 'glyph-clusters', run: firstRun, detail: "letter spacing follows ligature group starts, which Canvas can't show (nsTextFrame.cpp:3860-3873)" })
     const settings = {
       font: canvasFont(font, font.size), lang, letterSpacing: letterSpacingAu[firstRun] !== 0 ? '0.001px' : '0px',
       wordSpacing: '0px', fontKerning: 'auto' as const, textRendering: 'auto' as const,
@@ -848,7 +848,7 @@ export function prepareGecko(paragraph: Paragraph, env: Environment, measurer: M
           const nx = e + 1 < b.tEnd ? tUnits[e + 1]! : 0x0a
           if (((c === 0x20 || c === 0xa0) && (b.is8bit || !isClusterExtender(nx))) || (b.is8bit ? isInvalidChar8(c) : isInvalidChar16(c))) break
         }
-        const w = rangeAu(measurer, run, tUnits, t, e, '')
+        const w = rangeAu(measurer, run, tUnits, t, e)
         let total = w
         if (apd !== 60 && !b.is8bit) {
           // Apple Color Emoji is an sbix font: the DOM takes its advances from Core Text at the device size, Canvas at the
@@ -860,7 +860,7 @@ export function prepareGecko(paragraph: Paragraph, env: Environment, measurer: M
           // fresh 1260 and 1920 au in both; pinned 1020 au in Arial and 1260 au in Apple Color Emoji, DOM 1020 au).
           const devSize = domAu / apd
           const deviceContext = measureContext(measurer, { ...settings, font: canvasFont(font, devSize) })
-          const emojiFontContext = (size: number) => measureContext(measurer, { ...settings, font: canvasFont({ ...font, family: '"Apple Color Emoji"' }, size) })
+          const emojiFontContext = (size: number) => measureContext(measurer, { ...settings, font: canvasFont({ ...font, family: COLOR_EMOJI_FAMILY }, size) })
           let word = ''
           for (let k = t; k < e; k++) word += String.fromCharCode(tUnits[k]!)
           const boundaries = graphemeBoundaries(word, graphemeRules)
@@ -951,20 +951,35 @@ export function prepareGecko(paragraph: Paragraph, env: Environment, measurer: M
     break
   }
 
-  let hasSA = false
-  for (let s = 0; s < n && !hasSA; s++) {
-    const u = text.charCodeAt(s)
-    if ((u >= 0xe01 && u <= 0xeff) || (u >= 0x1000 && u <= 0x109f) || (u >= 0x1780 && u <= 0x17ff) || (u >= 0x19e0 && u <= 0x19ff) ||
-      (u >= 0xa9e0 && u <= 0xa9ff) || (u >= 0xaa60 && u <= 0xaa7f)) hasSA = true
+  // Text of a language ICU4X breaks with its LSTM models (complex/language.rs:17-45, linebreak.ts segmentComplex).
+  switch (env.dictionaryBreaks.kind) {
+    case 'intl-segmenter-word':
+      break
+    case 'unavailable': {
+      let hasComplex = false
+      for (let s = 0; s < n && !hasComplex; s++) hasComplex = complexLanguage(text.charCodeAt(s)) !== ''
+      if (hasComplex) gaps.push({ gap: 'dictionary-breaks-unavailable', run: null, detail: 'Thai, Lao, Khmer or Myanmar text' })
+      break
+    }
   }
-  if (hasSA && env.dictionaryBreaks.kind === 'unavailable') {
-    gaps.push({ gap: 'dictionary-breaks-unavailable', run: null, detail: 'Thai, Lao, Khmer or Myanmar text' })
+  // gfxFont::SynthesizeSpaceWidth gives a U+2007 or U+2008 that no font in the list covers the font's figure or space width,
+  // rounded to whole device pixels (gfxTextRun.cpp:3032-3043, gfxFont.cpp:4809-4814). Canvas rounds at apd 60 and shows
+  // neither whether a font covers it nor the unrounded width.
+  if (apd !== 60) {
+    for (let s = 0; s < n; s++) {
+      const u = text.charCodeAt(s)
+      if (u !== 0x2007 && u !== 0x2008) continue
+      let run = 0
+      while (runStarts[run + 1]! <= s) run++
+      gaps.push({ gap: 'font-fallback', run, detail: `U+${u.toString(16).toUpperCase()} takes a synthesized width rounded to device pixels where no font covers it` })
+      break
+    }
   }
 
   return {
     paragraph, env, appUnitsPerDevPixel: apd, style, text, runStarts, letterSpacingAu, frames, textRuns, tUnits, tSource,
     breakFlags: g.breakFlags, clusterStart: g.clusterStart, isSpace: g.isSpace, kind: g.kind, spacingPrefix,
-    correctionPrefix, unitOf, units, sourceT, nextT, tabWidth, gaps, inWordGapReported: false,
+    correctionPrefix, unitOf, units, sourceT, nextT, tabWidth, gaps,
   }
 }
 

@@ -1,18 +1,19 @@
-// Gecko (Firefox 156.0, ICU4X icu_segmenter 2.1.2 with Firefox's baked data).
+// Gecko (Firefox 156.0, ICU4X icu_segmenter 2.1.2 with Firefox's baked data, bundled ICU 78.3).
 // - prepare.ts: frames, bidi splits, text runs, TransformText, glyph flags, nsLineBreaker breaks, spacing and unit
 //   advances (specs/gecko-text.md, specs/gecko-canvas.md §2-§3).
-// - linebreak.ts: nsLineBreaker and the ICU4X line iterator (specs/gecko-text.md §8-§10).
-// - lines.ts: the line loop with one redo, trimming and fragments (specs/gecko-lines.md §4-§6).
-import type { Environment } from '../../env.js'
+// - linebreak.ts: nsLineBreaker and the ICU4X line iterator (specs/gecko-text.md §8-§10); likely.ts: the language test.
+// - fonts.ts: family lists, the text-run font equality and the font facts.
+// - lines.ts: the line loop with one redo, trimming, hanging, positions and the placed frames (specs/gecko-lines.md §4-§6).
+import type { GeckoEnvironment } from '../../env.js'
 import type { Measurer } from '../../measure/canvas.js'
-import type { Gap, LineOf, Paragraph } from '../../model.js'
+import type { Gap, GeckoLine, GeckoLineGeometry, Paragraph } from '../../model.js'
 import type { EngineImplementation } from '../engine.js'
 import { firstGeckoLine, nextGeckoLine } from './lines.js'
 import { prepareGecko } from './prepare.js'
 import type { GeckoLineStart, GeckoPrepared } from './types.js'
 
-export const geckoEngine: EngineImplementation<GeckoPrepared, GeckoLineStart> = {
-  prepare(paragraph: Paragraph, env: Environment, measurer: Measurer): GeckoPrepared {
+export const geckoEngine: EngineImplementation<GeckoEnvironment, GeckoPrepared, GeckoLineStart, GeckoLineGeometry> = {
+  prepare(paragraph: Paragraph, env: GeckoEnvironment, measurer: Measurer): GeckoPrepared {
     return prepareGecko(paragraph, env, measurer)
   },
 
@@ -20,7 +21,7 @@ export const geckoEngine: EngineImplementation<GeckoPrepared, GeckoLineStart> = 
     return firstGeckoLine(prepared)
   },
 
-  nextLine(prepared: GeckoPrepared, start: GeckoLineStart, availableWidth: number, measurer: Measurer): LineOf<GeckoLineStart> {
+  nextLine(prepared: GeckoPrepared, start: GeckoLineStart, availableWidth: number, measurer: Measurer): GeckoLine {
     return nextGeckoLine(prepared, start, availableWidth, measurer)
   },
 

@@ -6,7 +6,7 @@
 // main's white-space normalization, so the adapter aligns that stream with the source once and converts each cursor to a
 // UTF-16 source offset. Widths are main's. paint returns null.
 import { prepareWithSegments, setLocale, walkLineRanges, type LayoutCursor, type PrepareOptions } from '../../../src/layout.ts'
-import type { BrowserKind, Case, FontDecl, Prediction, TextRun } from '../types.ts'
+import type { BrowserKind, Case, FontDecl, LinesPrediction as Prediction, TextRun } from '../types.ts'
 
 function sameFont(a: FontDecl, b: FontDecl): boolean {
   return a.family === b.family && a.size === b.size && a.weight === b.weight && a.style === b.style
@@ -96,7 +96,7 @@ export function alignStream(source: string, stream: string, whiteSpace: 'normal'
 
 const graphemes = new Intl.Segmenter(undefined, { granularity: 'grapheme' })
 
-export function predict(c: Case, _env: { browser: BrowserKind; dpr: number }): Prediction | { error: string } {
+export function predict(c: Case, _env: { browser: BrowserKind; build: string }): Prediction | { error: string } {
   const reasons = unsupportedReasons(c)
   if (reasons.length > 0) return { error: `unsupported by main: ${reasons.join('; ')}` }
   const p = c.paragraph

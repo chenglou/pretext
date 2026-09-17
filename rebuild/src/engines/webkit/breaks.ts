@@ -3,10 +3,10 @@
 // and mayBreakInBetween (specs/webkit-text.md §5.2-§5.5, §7.4). Cited at WebKit-7625.1.29.11.27 under Source/WebCore/:
 // BP.h = rendering/BreakablePositions.h, TU = layout/formattingContexts/inline/text/TextUtil.cpp,
 // IIB = layout/formattingContexts/inline/InlineItemsBuilder.cpp, TBI = WTF/wtf/text/icu/TextBreakIteratorICU.h.
-import type { DictionaryBreaks } from '../../env.js'
+import type { WebKitEnvironment } from '../../env.js'
 import { RuleBreakIterator, getCategory, ruleBoundaries, type BreakRules } from '../../breaks/rbbi.js'
 import type { LineBreak } from '../../model.js'
-import { isDictionaryMark, isPunctuation, lineRules, pairTableBreaks } from './data.js'
+import { dictionaryScript, isDictionaryMark, isPunctuation, lineRules, pairTableBreaks, type DictionaryScript } from './data.js'
 import type { LineBreakMode, WebKitStyle } from './types.js'
 
 // BreakClass, BP.h:80-102.
@@ -23,13 +23,16 @@ const kPi = 512
 const kPf = 1024
 const kWeird = 32768
 
+type DictionaryBreaks = WebKitEnvironment['dictionaryBreaks']
+
 // CachedLineBreakIteratorFactory (WTF TextBreakIterator.h:236-351): the box content, its locale and mode, and up to two
-// code units of prior context from the previous box.
+// code units of prior context from the previous box. `icuDefaultLocale` is the process default the quote overrides read.
 export type BreakFactory = {
   text: string
   is8Bit: boolean
   locale: string
   mode: LineBreakMode
+  icuDefaultLocale: string
   dictionaryBreaks: DictionaryBreaks
   secondToLast: number
   last: number
@@ -37,8 +40,8 @@ export type BreakFactory = {
   following: Int32Array | null
 }
 
-export function makeFactory(text: string, is8Bit: boolean, locale: string, mode: LineBreakMode, dictionaryBreaks: DictionaryBreaks): BreakFactory {
-  return { text, is8Bit, locale, mode, dictionaryBreaks, secondToLast: 0, last: 0, following: null }
+export function makeFactory(text: string, is8Bit: boolean, locale: string, mode: LineBreakMode, icuDefaultLocale: string, dictionaryBreaks: DictionaryBreaks): BreakFactory {
+  return { text, is8Bit, locale, mode, icuDefaultLocale, dictionaryBreaks, secondToLast: 0, last: 0, following: null }
 }
 
 // PriorContext::length counts trailing non-zero units (TextBreakIterator.h:277-283).
@@ -51,18 +54,14 @@ function isDictionaryCharacter(rules: BreakRules, cp: number): boolean {
   return getCategory(rules, cp) >= rules.dictCategoriesStart
 }
 
-// The dictionary engine a character reaches (ICULanguageBreakFactory::loadEngineFor, AppleICU76 brkeng.cpp:163-199, by
-// uscript_getScript) and the characters it takes, [[:Thai:]&[:LineBreak=SA:]] and so on (ICU 78.2 dictbe.cpp:208, 451,
-// 651, 841). Every Line_Break=SA character in these blocks has the block's script. Other SA scripts (Tai Tham, Tai Viet)
-// reach UnhandledEngine, which finds no breaks.
-type DictionaryEngine = 'thai' | 'lao' | 'burmese' | 'khmer' | 'unhandled'
+// The dictionary engine a character reaches (ICULanguageBreakFactory::loadEngineFor by uscript_getScript, brkeng.cpp:163-199)
+// and the characters it takes, [[:Thai:]&[:LineBreak=SA:]] and so on (dictbe.cpp:208, 451, 651, 841), from ICU 78.2's
+// ppucd Script and Line_Break values (data.ts dictionaryScript). Other SA scripts (Tai Tham, Tai Viet) reach
+// UnhandledEngine, which finds no breaks.
+type DictionaryEngine = DictionaryScript | 'unhandled'
 
 function dictionaryEngine(cp: number): DictionaryEngine {
-  if (cp >= 0x0e00 && cp <= 0x0e7f) return 'thai'
-  if (cp >= 0x0e80 && cp <= 0x0eff) return 'lao'
-  if ((cp >= 0x1000 && cp <= 0x109f) || (cp >= 0xa9e0 && cp <= 0xa9ff) || (cp >= 0xaa60 && cp <= 0xaa7f) || (cp >= 0x116d0 && cp <= 0x116ff)) return 'burmese'
-  if (cp >= 0x1780 && cp <= 0x17ff) return 'khmer'
-  return 'unhandled'
+  return dictionaryScript(cp) ?? 'unhandled'
 }
 
 // Whether an engine's range holds too few characters for two words, when divideUpDictionaryRange returns no breaks: Thai
@@ -120,8 +119,7 @@ function addDictionaryBoundaries(source: DictionaryBreaks, rules: BreakRules, te
         }
       })
       return
-    // Chrome's V8 break iterator runs Chrome's ICU data, not libicucore's; the paragraph reports the gap.
-    case 'v8-break-iterator':
+    // The paragraph reports dictionary-breaks-unavailable.
     case 'unavailable':
       return
   }
@@ -144,7 +142,7 @@ export function computeFollowing(f: BreakFactory): Int32Array {
   const priorLength = priorContextLength(f)
   const prior = priorLength === 2 ? String.fromCharCode(f.secondToLast, f.last) : priorLength === 1 ? String.fromCharCode(f.last) : ''
   const icuText = prior + f.text
-  const { rules, overrides } = lineRules(f.locale, f.mode)
+  const { rules, overrides } = lineRules(f.locale, f.mode, f.icuDefaultLocale)
   const boundaries = ruleBoundaries(new RuleBreakIterator(rules, overrides), icuText)
   const isBoundary = new Uint8Array(icuText.length + 1)
   let segmentStart = 0
@@ -376,8 +374,8 @@ export function moveToNextBreakablePosition(startPosition: number, f: BreakFacto
 // TextUtil::mayBreakInBetween (TU:374-396): a scan over the next box with the next box's locale and mode, seeded with the
 // previous box's last two code units. A 16-bit previous box makes the next content 16-bit (:379-383). The soft-hyphen
 // rule (:388-389) needs hyphens: none, which the model never has.
-export function mayBreakInBetween(previousText: string, previousIs8Bit: boolean, nextText: string, nextIs8Bit: boolean, nextLocale: string, style: WebKitStyle, dictionaryBreaks: DictionaryBreaks): boolean {
-  const f = makeFactory(nextText, nextIs8Bit && previousIs8Bit, nextLocale, style.lineBreakMode, dictionaryBreaks)
+export function mayBreakInBetween(previousText: string, previousIs8Bit: boolean, nextText: string, nextIs8Bit: boolean, nextLocale: string, style: WebKitStyle, icuDefaultLocale: string, dictionaryBreaks: DictionaryBreaks): boolean {
+  const f = makeFactory(nextText, nextIs8Bit && previousIs8Bit, nextLocale, style.lineBreakMode, icuDefaultLocale, dictionaryBreaks)
   const n = previousText.length
   f.last = n > 0 ? previousText.charCodeAt(n - 1) : 0
   f.secondToLast = n > 1 ? previousText.charCodeAt(n - 2) : 0

@@ -1,11 +1,13 @@
 // Line filling for Gecko (Firefox 156.0): nsBlockFrame::ReflowInlineFrames with at most one redo, nsLineLayout's
 // ReflowFrame / CanPlaceFrame / NotifyOptionalBreakPosition, nsTextFrame::ReflowText, gfxTextRun::BreakAndMeasureText,
-// and TrimTrailingWhiteSpace. specs/gecko-lines.md §4-§6; widths are integer app units throughout (§2.8).
+// TrimTrailingWhiteSpaceIn, TextAlignLine and nsBidiPresUtils::ReorderFrames. specs/gecko-lines.md §4-§6; widths are
+// integer app units throughout (§2.8). A line returns the frames Gecko placed on it (DESIGN.md §2.5), and fragments
+// classified by the frames' own flags.
 import type { Measurer } from '../../measure/canvas.js'
-import type { Fragment, LineOf } from '../../model.js'
+import type { Fragment, Gap, GeckoCharacter, GeckoFrameGeometry, GeckoLine } from '../../model.js'
 import { BREAK_EMERGENCY_WRAP, BREAK_NORMAL } from './linebreak.js'
 import { frameOfSource, isTrimmableChar, pxToAu, rangeAu } from './prepare.js'
-import { generalCategory, isDefaultIgnorable, joiningType } from './props.js'
+import { joiningType } from './props.js'
 import { KIND_NEWLINE, KIND_TAB, type GeckoLineStart, type GeckoPrepared, type GeckoTextRun } from './types.js'
 
 const SHY = 0x00ad
@@ -13,11 +15,21 @@ const NO_BREAK = 0 // gfxBreakPriority (gfxTypes.h:48)
 const WORD_WRAP_BREAK = 1
 const NORMAL_BREAK = 2
 
-// The glyph advance of text run characters before t, a DOM glyph record sum (gfxTextRun::GetAdvanceWidth,
+// The gaps one line's filling runs into (DESIGN.md §2.8): in-word-prefix at the first in-word offset the line consults
+// whose recipe Canvas can't confirm.
+type LineGaps = { list: Gap[]; inWordReported: boolean }
+
+function reportInWordGap(p: GeckoPrepared, gaps: LineGaps, t: number, detail: string): void {
+  gaps.inWordReported = true
+  gaps.list.push({ gap: 'in-word-prefix', run: p.frames[frameOfSource(p.frames, p.tSource[t]!)]!.run, detail })
+}
+
+// The glyph advance of text run characters before t, the sum of the DOM's glyph records (gfxTextRun::GetAdvanceWidth,
 // gfxTextRun.cpp:1214-1256): unit totals, and inside a unit W(unit) − W(suffix) (DESIGN.md §5 in-word-prefix,
-// specs/gecko-lines.md §9 "Not obtainable" 1). The layout records the first in-word offset where Canvas shows the recipe
-// can be wrong.
-function glyphBefore(p: GeckoPrepared, m: Measurer, run: GeckoTextRun, t: number): number {
+// specs/gecko-lines.md §9 "Not obtainable" 1). The records come from one shaping of the unit, which no Canvas string
+// exposes, so where kerning, ligatures or joining cross t the recipe is a stand-in. `gaps` is the line whose breaks
+// consult t, or null where the advance only places geometry.
+function glyphBefore(p: GeckoPrepared, m: Measurer, run: GeckoTextRun, t: number, gaps: LineGaps | null): number {
   if (t >= run.tEnd) return run.totalAdvance
   const unit = p.units[p.unitOf[t]!]!
   if (t === unit.tStart) return unit.startAdvance
@@ -30,37 +42,27 @@ function glyphBefore(p: GeckoPrepared, m: Measurer, run: GeckoTextRun, t: number
     // its own, the DOM can give it to either side.
     let end = t + 1
     while (end < unit.tEnd && p.clusterStart[end] === 0) end++
-    if (!p.inWordGapReported) {
-      const fromT = rangeAu(m, run, p.tUnits, t, unit.tEnd, '')
-      const fromEnd = end === unit.tEnd ? 0 : rangeAu(m, run, p.tUnits, end, unit.tEnd, '')
+    if (gaps !== null && !gaps.inWordReported) {
+      const fromT = rangeAu(m, run, p.tUnits, t, unit.tEnd)
+      const fromEnd = end === unit.tEnd ? 0 : rangeAu(m, run, p.tUnits, end, unit.tEnd)
       if (fromT !== fromEnd) {
-        reportInWordGap(p, t, `offset ${p.tSource[t]} inside a grapheme cluster: W(suffix) is ${fromT} au from the offset, ${fromEnd} au from the cluster's end; the DOM gives a ligature's width to its clusters (gfxTextRun.cpp:238-322)`)
+        reportInWordGap(p, gaps, t, `offset ${p.tSource[t]} inside a grapheme cluster: W(suffix) is ${fromT} au from the offset, ${fromEnd} au from the cluster's end; the DOM gives a ligature's width to its clusters (gfxTextRun.cpp:238-322)`)
       }
     }
-    return glyphBefore(p, m, run, end)
+    return glyphBefore(p, m, run, end, gaps)
   }
-  // The letters on both sides of t join: measured alone, the suffix would take its isolated or initial forms, while the
-  // DOM's glyph records keep the joined forms. U+200D is join-causing (Joining_Type C) and has no advance, so Canvas
-  // shapes the suffix's first letter joined, as the paragraph did; the prefix keeps what depends on the following letter.
-  const joins = joinsAcross(p, unit, t)
-  const suffixAu = rangeAu(m, run, p.tUnits, t, unit.tEnd, joins ? '‍' : '')
-  if (!p.inWordGapReported) {
-    // The recipe is exact when nothing in the unit's shaping crosses t: the prefix and suffix shaped alone then add up
-    // to the unit. Kerning, ligatures and contextual forms across t break the sum, and then which glyph carries the
-    // difference in the DOM isn't visible to Canvas.
-    const prefixAu = rangeAu(m, run, p.tUnits, unit.tStart, t, '')
+  const suffixAu = rangeAu(m, run, p.tUnits, t, unit.tEnd)
+  if (gaps !== null && !gaps.inWordReported) {
+    // The recipe is exact when nothing in the unit's shaping crosses t: the prefix and suffix shaped alone then add up to
+    // the unit. Kerning, ligatures and contextual forms across t break the sum. Letters that join across t take joined
+    // forms in the DOM and isolated or initial forms in W(suffix) (Joining_Type, ArabicShaping.txt).
+    const joins = joinsAcross(p, unit, t)
+    const prefixAu = rangeAu(m, run, p.tUnits, unit.tStart, t)
     if (joins || prefixAu + suffixAu !== unit.canvasAu) {
-      reportInWordGap(p, t, `offset ${p.tSource[t]}: ${joins ? 'letters join across it' : `W(prefix) + W(suffix) = ${prefixAu + suffixAu} au, W(unit) = ${unit.canvasAu} au`}`)
+      reportInWordGap(p, gaps, t, `offset ${p.tSource[t]}: ${joins ? 'letters join across it' : `W(prefix) + W(suffix) = ${prefixAu + suffixAu} au, W(unit) = ${unit.canvasAu} au`}`)
     }
   }
   return unit.startAdvance + unit.canvasAu - suffixAu + (p.correctionPrefix[t]! - p.correctionPrefix[unit.tStart]!)
-}
-
-// The in-word-prefix gap depends on the offsets the chosen lines consult, so nextLine records it in the prepared
-// paragraph, which lives for one layout at one width (index.ts), and gaps(prepared) returns it after the last line.
-function reportInWordGap(p: GeckoPrepared, t: number, detail: string): void {
-  p.inWordGapReported = true
-  p.gaps.push({ gap: 'in-word-prefix', run: p.frames[frameOfSource(p.frames, p.tSource[t]!)]!.run, detail })
 }
 
 function codePointAtT(p: GeckoPrepared, i: number): number {
@@ -95,15 +97,26 @@ type Provider = {
   tabs: Map<number, number>
 }
 
-function advance(p: GeckoPrepared, m: Measurer, prov: Provider, a: number, b: number): number {
+function rangeAdvance(p: GeckoPrepared, m: Measurer, prov: Provider, a: number, b: number, gaps: LineGaps | null): number {
   if (b <= a) return 0
-  let w = glyphBefore(p, m, prov.run, b) - glyphBefore(p, m, prov.run, a) + p.spacingPrefix[b]! - p.spacingPrefix[a]!
+  let w = glyphBefore(p, m, prov.run, b, gaps) - glyphBefore(p, m, prov.run, a, gaps) + p.spacingPrefix[b]! - p.spacingPrefix[a]!
   if (prov.run.hasTab) for (const [t, tab] of prov.tabs) if (t >= a && t < b) w += tab
   return w
 }
 
+// BreakAndMeasureText's running width: GetAdvanceForGlyph per character, a ligature's whole width on its first character,
+// with spacing and tabs (gfxTextRun.cpp:989, :1139-1159). Canvas can't see ligatures, so the recipe equals advanceWidth's.
+function scanAdvance(p: GeckoPrepared, m: Measurer, prov: Provider, a: number, b: number, gaps: LineGaps): number {
+  return rangeAdvance(p, m, prov, a, b, gaps)
+}
+
+// GetAdvanceWidth and MeasureText: partial ligature shares at the range ends (gfxTextRun.cpp:238-329, :1195, :1214-1256).
+function advanceWidth(p: GeckoPrepared, m: Measurer, prov: Provider, a: number, b: number, gaps: LineGaps | null): number {
+  return rangeAdvance(p, m, prov, a, b, gaps)
+}
+
 // CalcTabWidths and AdvanceToNextTab (nsTextFrame.cpp:4298-4378): tab stops from the block's content edge.
-function computeTabs(p: GeckoPrepared, m: Measurer, prov: Provider, end: number, xForTabs: number): void {
+function computeTabs(p: GeckoPrepared, m: Measurer, prov: Provider, end: number, xForTabs: number, gaps: LineGaps): void {
   // GetSpacing calls CalcTabWidths only for a positive tab width (nsTextFrame.cpp:4306-4309): tab-size 0, or letter
   // spacing below minus the space width, leaves tabs at 0.
   if (!prov.run.hasTab || p.tabWidth <= 0) return
@@ -111,7 +124,7 @@ function computeTabs(p: GeckoPrepared, m: Measurer, prov: Provider, end: number,
   let from = prov.startT
   for (let t = prov.startT; t < end; t++) {
     if (p.kind[t] !== KIND_TAB) continue
-    x += glyphBefore(p, m, prov.run, t) - glyphBefore(p, m, prov.run, from) + p.spacingPrefix[t]! - p.spacingPrefix[from]!
+    x += glyphBefore(p, m, prov.run, t, gaps) - glyphBefore(p, m, prov.run, from, gaps) + p.spacingPrefix[t]! - p.spacingPrefix[from]!
     const nextTab = Math.ceil((x + prov.run.minTabAdvance) / p.tabWidth) * p.tabWidth
     const w = Math.trunc(nextTab - x + (nextTab - x >= 0 ? 0.5 : -0.5)) // NSToIntRound
     prov.tabs.set(t, w)
@@ -142,7 +155,7 @@ type Measured = {
 // gfxTextRun::BreakAndMeasureText (gfxTextRun.cpp:922-1212), hyphens manual.
 function breakAndMeasureText(p: GeckoPrepared, m: Measurer, prov: Provider, aStart: number, aMaxLength: number,
   aWidth: number, suppress: 'none' | 'initial', canWordWrap: boolean, canWhitespaceWrap: boolean, isBreakSpaces: boolean,
-  wantTrimmable: boolean, priorityIn: number): Measured {
+  wantTrimmable: boolean, priorityIn: number, gaps: LineGaps): Measured {
   const run = prov.run
   aMaxLength = Math.min(aMaxLength, run.tEnd - aStart)
   const end = aStart + aMaxLength
@@ -173,8 +186,8 @@ function breakAndMeasureText(p: GeckoPrepared, m: Measurer, prov: Provider, aSta
       const whitespaceWrapping = i > aStart && isBreakSpaces &&
         (p.isSpace[i - 1] === 1 || p.kind[i - 1] === KIND_TAB || p.kind[i - 1] === KIND_NEWLINE)
       if (atBreak || wordWrapping || whitespaceWrapping) {
-        const pendingAdvance = advance(p, m, prov, pending, i)
-        const trimmableAdvance = trimmableChars > 0 ? advance(p, m, prov, trimStart, i) : 0
+        const pendingAdvance = scanAdvance(p, m, prov, pending, i, gaps)
+        const trimmableAdvance = trimmableChars > 0 ? scanAdvance(p, m, prov, trimStart, i, gaps) : 0
         const hyphenatedAdvance = pendingAdvance + (atHyphenationBreak ? hyphenWidth : 0)
         if (lastBreak < 0 || width + hyphenatedAdvance - trimmableAdvance <= aWidth) {
           lastBreak = i
@@ -206,8 +219,8 @@ function breakAndMeasureText(p: GeckoPrepared, m: Measurer, prov: Provider, aSta
     }
   }
   const scanEnd = aborted ? pending : end
-  if (!aborted) width += advance(p, m, prov, pending, end)
-  let trimmableAdvance = trimmableChars > 0 ? advance(p, m, prov, trimStart, scanEnd) : 0
+  if (!aborted) width += scanAdvance(p, m, prov, pending, end, gaps)
+  let trimmableAdvance = trimmableChars > 0 ? scanAdvance(p, m, prov, trimStart, scanEnd, gaps) : 0
   let charsFit: number
   let usedHyphenation = false
   if (width - trimmableAdvance <= aWidth) {
@@ -228,7 +241,7 @@ function breakAndMeasureText(p: GeckoPrepared, m: Measurer, prov: Provider, aSta
     charsFit = aMaxLength
   }
   return {
-    charsFit, advance: advance(p, m, prov, aStart, aStart + charsFit), trimmableChars, trimmableAdvance, usedHyphenation,
+    charsFit, advance: advanceWidth(p, m, prov, aStart, aStart + charsFit, gaps), trimmableChars, trimmableAdvance, usedHyphenation,
     lastBreak: charsFit === aMaxLength ? (lastBreak < 0 ? -1 : lastBreak - aStart) : -2, breakPriority,
   }
 }
@@ -261,6 +274,8 @@ type FrameResult = {
   length: number
   charsFit: number
   contentLength: number
+  // The transformed index where the frame's content ends.
+  tEnd: number
   advance: number
   width: number
   nonEmpty: boolean
@@ -268,6 +283,8 @@ type FrameResult = {
   brokeText: boolean
   trimmedTrailingWhitespace: boolean
   trimmableChars: number
+  // The HangableWhitespaceProperty ReflowText records under pre-wrap (nsTextFrame.cpp:11214-11229), 0 when cleared.
+  hangableISize: number
   status: 'complete' | 'break-before' | 'break-after'
   incomplete: boolean
   endsInNewline: boolean
@@ -275,14 +292,15 @@ type FrameResult = {
 }
 
 // nsTextFrame::ReflowText (nsTextFrame.cpp:10847-11532).
-function reflowText(p: GeckoPrepared, m: Measurer, ll: LineLayout, fi: number, contentStart: number): FrameResult {
+function reflowText(p: GeckoPrepared, m: Measurer, ll: LineLayout, fi: number, contentStart: number, gaps: LineGaps): FrameResult {
   const f = p.frames[fi]!
   const run = p.textRuns[f.textRun]!
   const style = p.style
   const maxContentLength = f.end - contentStart
   const empty = (offset: number): FrameResult => ({
-    frame: fi, contentStart, offset, length: 0, charsFit: 0, contentLength: maxContentLength, advance: 0, width: 0,
-    nonEmpty: false, usedHyphenation: false, brokeText: false, trimmedTrailingWhitespace: false, trimmableChars: 0,
+    frame: fi, contentStart, offset, length: 0, charsFit: 0, contentLength: maxContentLength,
+    tEnd: Math.min(p.nextT[contentStart + maxContentLength]!, f.tEnd), advance: 0, width: 0, nonEmpty: false,
+    usedHyphenation: false, brokeText: false, trimmedTrailingWhitespace: false, trimmableChars: 0, hangableISize: 0,
     status: 'complete', incomplete: false, endsInNewline: false, prov: null,
   })
   if (maxContentLength === 0) return empty(contentStart)
@@ -320,9 +338,9 @@ function reflowText(p: GeckoPrepared, m: Measurer, ll: LineLayout, fi: number, c
     run, frame: fi, start: offset, length, startT: tOffset, startOfLine: atStartOfLine, letterSpacingAu: p.letterSpacingAu[f.run]!,
     tabs: new Map(),
   }
-  computeTabs(p, m, prov, tOffset + tLength, ll.x)
+  computeTabs(p, m, prov, tOffset + tLength, ll.x, gaps)
   const r = breakAndMeasureText(p, m, prov, tOffset, tLength, availWidth, ll.totalPlaced > 0 ? 'none' : 'initial',
-    style.wordCanWrap, style.wrap, style.isBreakSpaces, canTrim || style.whitespaceCanHang, ll.lastOptPriority)
+    style.wordCanWrap, style.wrap, style.isBreakSpaces, canTrim || style.whitespaceCanHang, ll.lastOptPriority, gaps)
   const originalOffset = (t: number): number => t < p.tSource.length ? p.tSource[t]! : p.text.length
   let charsFit = originalOffset(tOffset + r.charsFit) - offset
   if (offset + charsFit === newLineOffset) charsFit++
@@ -338,6 +356,7 @@ function reflowText(p: GeckoPrepared, m: Measurer, ll: LineLayout, fi: number, c
   const brokeText = forceBreak >= 0 || r.charsFit < tLength
   let trimmable = r.trimmableAdvance
   let trimmedTrailingWhitespace = false
+  let hangableISize = 0
   if (trimmable > 0) {
     if (canTrim) {
       if (brokeText) {
@@ -347,6 +366,7 @@ function reflowText(p: GeckoPrepared, m: Measurer, ll: LineLayout, fi: number, c
       }
     } else if (style.whitespaceCanHang) {
       const hang = Math.min(Math.max(0, adv - availWidth), trimmable)
+      hangableISize = trimmable - hang
       adv -= hang
       trimmable = 0
     }
@@ -373,9 +393,9 @@ function reflowText(p: GeckoPrepared, m: Measurer, ll: LineLayout, fi: number, c
   else if (contentLength > 0 && contentStart + contentLength - 1 === newLineOffset) { status = 'break-after'; endsInNewline = true }
   else if (breakAfter) status = 'break-after'
   return {
-    frame: fi, contentStart, offset, length, charsFit, contentLength, advance: adv, width, nonEmpty, usedHyphenation,
-    brokeText, trimmedTrailingWhitespace, trimmableChars: r.trimmableChars, status,
-    incomplete: contentLength !== maxContentLength, endsInNewline, prov,
+    frame: fi, contentStart, offset, length, charsFit, contentLength, tEnd: Math.min(p.nextT[contentStart + contentLength]!, f.tEnd),
+    advance: adv, width, nonEmpty, usedHyphenation, brokeText, trimmedTrailingWhitespace, trimmableChars: r.trimmableChars,
+    hangableISize, status, incomplete: contentLength !== maxContentLength, endsInNewline, prov,
   }
 }
 
@@ -388,25 +408,28 @@ function hasSoftHyphenBefore(p: GeckoPrepared, start: number, end: number): bool
   return false
 }
 
-type Pass = { redo: boolean; placed: FrameResult[]; nextPos: number; ll: LineLayout }
+// `pushed`: the pass ended by pushing a frame to the next line (break-before).
+type Pass = { redo: boolean; placed: FrameResult[]; nextPos: number; pushed: boolean; ll: LineLayout }
 
 // nsBlockFrame::DoReflowInlineFrames (nsBlockFrame.cpp:5232-5476) over the frames from `pos`.
-function reflowPass(p: GeckoPrepared, m: Measurer, pos: number, avail: number, force: LineLayout['force']): Pass {
+function reflowPass(p: GeckoPrepared, m: Measurer, pos: number, avail: number, force: LineLayout['force'], gaps: LineGaps): Pass {
   const ll: LineLayout = {
     avail, x: 0, totalPlaced: 0, lineIsEmpty: true, lineAtStart: true, trimmableISize: 0, needBackup: false,
     lastOpt: null, lastOptPriority: NO_BREAK, force,
   }
   const placed: FrameResult[] = []
   let nextPos = p.text.length
+  let pushed = false
   let fi = 0
   while (fi < p.frames.length && p.frames[fi]!.end <= pos) fi++
   for (let first = true; fi < p.frames.length; fi++, first = false) {
     const f = p.frames[fi]!
     const contentStart = first ? Math.max(pos, f.start) : f.start
     const notSafeToBreak = ll.lineIsEmpty
-    const r = reflowText(p, m, ll, fi, contentStart)
+    const r = reflowText(p, m, ll, fi, contentStart, gaps)
     if (r.status === 'break-before') { // nsLineLayout.cpp:1081-1084, nsBlockFrame.cpp:5547-5566
       nextPos = contentStart
+      pushed = true
       break
     }
     // CanPlaceFrame (nsLineLayout.cpp:1189-1342) for a text frame: it is always placed; overflow requests backup.
@@ -424,99 +447,196 @@ function reflowPass(p: GeckoPrepared, m: Measurer, pos: number, avail: number, f
     }
   }
   const redo = ll.needBackup && ll.force === null && ll.lastOpt !== null // nsBlockFrame.cpp:5361-5379
-  return { redo, placed, nextPos, ll }
+  return { redo, placed, nextPos, pushed, ll }
 }
 
 // nsBlockFrame::ReflowInlineFrames (nsBlockFrame.cpp:5123-5199): one redo with the saved break forced.
-function reflowLine(p: GeckoPrepared, m: Measurer, pos: number, avail: number): Pass {
-  const pass = reflowPass(p, m, pos, avail, null)
+function reflowLine(p: GeckoPrepared, m: Measurer, pos: number, avail: number, gaps: LineGaps): Pass {
+  const pass = reflowPass(p, m, pos, avail, null, gaps)
   if (!pass.redo) return pass
-  return reflowPass(p, m, pos, avail, pass.ll.lastOpt)
+  return reflowPass(p, m, pos, avail, pass.ll.lastOpt, gaps)
 }
 
-// Everything from `pos` lays out to nothing: characters without a frame, skipped by TransformText, or trimmable white
-// space a line start skips.
-function restIsEmpty(p: GeckoPrepared, pos: number): boolean {
-  for (let s = pos; s < p.text.length; s++) {
-    if (p.frames.length === 0 || p.frames[frameOfSource(p.frames, s)]!.start > s || p.frames[frameOfSource(p.frames, s)]!.end <= s) continue
-    if (p.sourceT[s] === -1) continue
-    const f = p.frames[frameOfSource(p.frames, s)]!
-    // A significant newline is kept at a line start (nsTextFrame.cpp:10935-10951 skips white space before it only).
-    if (p.style.newlineIsSignificant && p.text.charCodeAt(s) === 0x0a) return false
-    if (!p.style.whiteSpaceIsSignificant && isTrimmableChar(p.text, s, f.end, f.is8bit)) continue
-    return false
-  }
-  return true
-}
-
+// A block with frames has at least one line; a paragraph whose text nodes all lack frames has none.
 export function firstGeckoLine(p: GeckoPrepared): GeckoLineStart | null {
-  return restIsEmpty(p, 0) ? null : { engine: 'gecko', contentOffset: 0 }
+  return p.frames.length === 0 ? null : { engine: 'gecko', contentOffset: 0 }
 }
 
-export function nextGeckoLine(p: GeckoPrepared, start: GeckoLineStart, availableWidth: number, m: Measurer): LineOf<GeckoLineStart> {
+export function nextGeckoLine(p: GeckoPrepared, start: GeckoLineStart, availableWidth: number, m: Measurer): GeckoLine {
   const avail = pxToAu(availableWidth)
-  let pos = start.contentOffset
-  let pass = reflowLine(p, m, pos, avail)
-  const emptyPrefix: FrameResult[] = []
-  // A pass whose frames all collapsed places an empty line box with block size 0 (nsLineLayout::VerticalAlignLine,
-  // nsLineLayout.cpp:1690-1712), which nothing observes as a line; its source range joins the next line so lines tile.
-  while (!pass.placed.some(r => r.nonEmpty) && pass.nextPos < p.text.length && !restIsEmpty(p, pass.nextPos)) {
-    if (pass.nextPos <= pos) throw new Error(`gecko: no progress at ${pos}`)
-    for (let k = 0; k < pass.placed.length; k++) emptyPrefix.push(pass.placed[k]!)
-    pos = pass.nextPos
-    pass = reflowLine(p, m, pos, avail)
-  }
-  if (pass.nextPos <= pos) throw new Error(`gecko: no progress at ${pos}`)
-  const end = pass.nextPos >= p.text.length || restIsEmpty(p, pass.nextPos) ? p.text.length : pass.nextPos
-  return buildLine(p, m, start.contentOffset, end, pass.placed, end === p.text.length ? null : { engine: 'gecko', contentOffset: end })
+  const gaps: LineGaps = { list: [], inWordReported: false }
+  const pass = reflowLine(p, m, start.contentOffset, avail, gaps)
+  if (pass.nextPos <= start.contentOffset) throw new Error(`gecko: no progress at ${start.contentOffset}`)
+  // Characters after the last frame belong to text nodes without frames, which no line holds.
+  const more = p.frames[p.frames.length - 1]!.end > pass.nextPos
+  const end = more ? pass.nextPos : p.text.length
+  return lineOutput(p, m, start.contentOffset, end, pass, avail, gaps, more ? { engine: 'gecko', contentOffset: end } : null)
 }
 
-// TrimTrailingWhiteSpace, fragments and the visible width of the final pass (nsLineLayout.cpp:2851-2985,
-// nsTextFrame.cpp:11540-11628).
-function buildLine(p: GeckoPrepared, m: Measurer, lineStart: number, lineEnd: number, placed: FrameResult[],
-  next: GeckoLineStart | null): LineOf<GeckoLineStart> {
+// Per source unit from the frame's measured start: what GetAdvanceWidth adds for it (gfxTextRun.cpp:1214-1256,
+// nsTextFrame.cpp:4089-4295): a cluster's glyph advance on its first character, the spacing after a character on that
+// character, a tab's width on the tab. Skipped characters add nothing.
+function characters(p: GeckoPrepared, m: Measurer, r: FrameResult, prov: Provider): GeckoCharacter[] {
+  const out: GeckoCharacter[] = []
+  let before = glyphBefore(p, m, prov.run, prov.startT, null)
+  for (let s = r.offset; s < r.contentStart + r.contentLength; s++) {
+    const t = p.sourceT[s]!
+    if (t === -1) {
+      out.push({ skipped: true, clusterStart: false, advance: 0 })
+      continue
+    }
+    const after = glyphBefore(p, m, prov.run, t + 1, null)
+    out.push({
+      skipped: false, clusterStart: p.clusterStart[t] === 1,
+      advance: after - before + p.spacingPrefix[t + 1]! - p.spacingPrefix[t]! + (prov.tabs.get(t) ?? 0),
+    })
+    before = after
+  }
+  return out
+}
+
+// The frames' visual order: UAX #9 L2 over their levels, as nsBidiPresUtils::ReorderFrames orders a line
+// (nsBidiPresUtils.cpp:1494-1533, Bidi::ReorderVisual through unicode-bidi).
+function visualOrder(levels: number[]): number[] {
+  const order: number[] = []
+  let maxLevel = 0
+  let minLevel = 255
+  for (let k = 0; k < levels.length; k++) {
+    order.push(k)
+    maxLevel = Math.max(maxLevel, levels[k]!)
+    minLevel = Math.min(minLevel, levels[k]!)
+  }
+  const lowestOdd = (minLevel & 1) === 1 ? minLevel : minLevel + 1
+  for (let level = maxLevel; level >= lowestOdd; level--) {
+    for (let i = 0; i < order.length;) {
+      if (levels[order[i]!]! < level) { i++; continue }
+      let j = i
+      while (j < order.length && levels[order[j]!]! >= level) j++
+      const reversed = order.slice(i, j).reverse()
+      for (let q = 0; q < reversed.length; q++) order[i + q] = reversed[q]!
+      i = j
+    }
+  }
+  return order
+}
+
+// The final pass as Gecko's line: TrimTrailingWhiteSpaceIn, TextAlignLine and ReorderFrames give the frames' boxes and
+// positions; the frames' flags classify the fragments.
+function lineOutput(p: GeckoPrepared, m: Measurer, lineStart: number, lineEnd: number, pass: Pass, avail: number, gaps: LineGaps,
+  next: GeckoLineStart | null): GeckoLine {
   const style = p.style
+  const placed = pass.placed
+
+  // TrimTrailingWhiteSpaceIn (nsLineLayout.cpp:2851-2985): from the last frame back to the first with content, a frame not
+  // already trimmed at its break loses the floored advance of its trailing IsTrimmableSpace characters, unclamped
+  // (nsTextFrame.cpp:11540-11628). trimmedEnd is where that white space starts.
+  const trimDelta: number[] = []
+  const trimmedEnd: number[] = []
+  for (let k = 0; k < placed.length; k++) {
+    trimDelta.push(0)
+    trimmedEnd.push(placed[k]!.contentStart + placed[k]!.contentLength)
+  }
+  for (let k = placed.length - 1; k >= 0; k--) {
+    const r = placed[k]!
+    const f = p.frames[r.frame]!
+    const contentEnd = r.contentStart + r.contentLength
+    let changed = false
+    if (!style.whiteSpaceIsSignificant && !r.trimmedTrailingWhitespace && r.prov !== null) {
+      let end = contentEnd
+      while (end > r.offset && isTrimmableChar(p.text, end - 1, f.end, f.is8bit)) end--
+      trimmedEnd[k] = end
+      const tA = Math.min(p.nextT[end]!, f.tEnd)
+      const tB = Math.min(p.nextT[contentEnd]!, f.tEnd)
+      if (tA < tB) {
+        trimDelta[k] = Math.floor(advanceWidth(p, m, r.prov, tA, tB, null))
+        changed = true
+      }
+    }
+    if (r.nonEmpty || changed) break
+  }
+
+  let lineWidth = 0
+  const frames: GeckoFrameGeometry[] = []
+  const levels: number[] = []
+  for (let k = 0; k < placed.length; k++) {
+    const r = placed[k]!
+    const f = p.frames[r.frame]!
+    const width = r.width - trimDelta[k]!
+    lineWidth += width
+    levels.push(f.level)
+    frames.push({
+      run: f.run, contentStart: r.contentStart, contentEnd: r.contentStart + r.contentLength, measuredStart: r.offset,
+      level: f.level, x: 0, width, hasHeight: r.nonEmpty, usedHyphen: r.usedHyphenation,
+      characters: r.prov === null ? [] : characters(p, m, r, r.prov),
+    })
+  }
+
+  // TextAlignLine under text-align: start (nsLineLayout.cpp:3482-3670): a wrapped line whose trailing white space hangs
+  // against the line's direction moves by the negative hang (GetHangFrom, :3420-3450, reads the last frame; :3598-3605).
+  // A line is wrapped when a frame was pushed to the next line or the last frame continues there (nsBlockFrame.cpp:5560-5566,
+  // :5598-5607). Positions then come from RepositionInlineFrames, which starts at dx and walks the visual order from the
+  // line's start edge, the right edge of an RTL line (nsBidiPresUtils.cpp:1860-1866, :1882-1905). A document without
+  // bidi keeps logical order, which equals the visual order of a line whose frames are all at level 0.
+  const rtl = p.paragraph.direction === 'rtl'
+  const last = placed.length === 0 ? null : placed[placed.length - 1]!
+  let hang = 0
+  if (last !== null && last.hangableISize !== 0) {
+    hang = ((p.frames[last.frame]!.level & 1) === 1) !== rtl ? -last.hangableISize : last.hangableISize
+  }
+  const wrapped = pass.pushed || (last !== null && last.incomplete)
+  const dx = wrapped && hang < 0 ? hang : 0
+  const order = visualOrder(levels)
+  let startOrEnd = dx
+  for (let v = 0; v < order.length; v++) {
+    const frame = frames[rtl ? order[order.length - 1 - v]! : order[v]!]!
+    frame.x = rtl ? avail - startOrEnd - frame.width : startOrEnd
+    startOrEnd += frame.width
+  }
+
+  // The white space the line end removed or hangs, by the frames' flags: trailing CharIsSpace characters trimmed at the
+  // break (TEXT_TRIMMED_TRAILING_WHITESPACE, nsTextFrame.cpp:11203-11213; CharIsSpace is U+0020 and U+3000,
+  // gfxFont.cpp:749-750), the IsTrimmableSpace characters TrimTrailingWhiteSpace removed, and under pre-wrap the trailing
+  // CharIsSpace characters of the line's last frames with content (:11214-11229).
+  const trimmed = new Set<number>()
+  const hanging = new Set<number>()
+  for (let k = 0; k < placed.length; k++) {
+    const r = placed[k]!
+    if (r.trimmedTrailingWhitespace) for (let t = r.tEnd - r.trimmableChars; t < r.tEnd; t++) trimmed.add(p.tSource[t]!)
+    for (let s = trimmedEnd[k]!; s < r.contentStart + r.contentLength; s++) if (p.sourceT[s] !== -1) trimmed.add(s)
+  }
+  if (style.whitespaceCanHang && style.whiteSpaceIsSignificant) {
+    for (let k = placed.length - 1; k >= 0; k--) {
+      const r = placed[k]!
+      if (r.prov === null) continue
+      for (let t = r.tEnd - r.trimmableChars; t < r.tEnd; t++) hanging.add(p.tSource[t]!)
+      if (r.trimmableChars < r.tEnd - r.prov.startT) break
+    }
+  }
+  const kindOf = (s: number): 'text' | 'trimmed' | 'hanging' => trimmed.has(s) ? 'trimmed' : hanging.has(s) ? 'hanging' : 'text'
+
   const fragments: Fragment[] = []
   const runOf = (s: number): number => {
     let r = 0
     while (p.runStarts[r + 1]! <= s) r++
     return r
   }
-  // Trailing white space at the line end: trimmed in collapsing modes, hanging under pre-wrap. The lab's visible
-  // extent leaves out trailing SPACE and TAB under normal, nowrap, pre-line and pre-wrap (lab/README.md "Visible code
-  // points").
-  const trailing = new Set<number>()
-  const trimsTrailing = style.collapse === 'collapse' || style.collapse === 'preserve-breaks'
-  const hangsTrailing = style.collapse === 'preserve' && style.wrap
-  if (trimsTrailing || hangsTrailing) {
-    outer: for (let k = placed.length - 1; k >= 0; k--) {
+  const frameAt = (s: number): FrameResult | null => {
+    for (let k = 0; k < placed.length; k++) {
       const r = placed[k]!
-      const end = r.contentStart + r.contentLength
-      for (let s = end - 1; s >= r.offset; s--) {
-        const t = p.sourceT[s]!
-        if (t === -1) continue
-        const ch = p.tUnits[t]!
-        const f = p.frames[r.frame]!
-        const trims = trimsTrailing && (isTrimmableChar(p.text, s, f.end, f.is8bit) || ch === 0x20 ||
-          (r.trimmedTrailingWhitespace && p.isSpace[t] === 1))
-        const hangs = hangsTrailing && (ch === 0x20 || ch === 0x09)
-        if (!trims && !hangs) break outer
-        trailing.add(s)
-      }
+      if (s >= r.contentStart && s < r.contentStart + r.contentLength) return r
     }
+    return null
   }
-  let widthAu = 0
   let lastT = -1
   for (let s = lineStart; s < lineEnd;) {
-    const inPlaced = placed.find(r => s >= r.contentStart && s < r.contentStart + r.contentLength)
-    if (inPlaced === undefined) {
+    const r = frameAt(s)
+    if (r === null) {
       let e = s + 1
-      while (e < lineEnd && placed.find(r => e >= r.contentStart && e < r.contentStart + r.contentLength) === undefined) e++
+      while (e < lineEnd && frameAt(e) === null) e++
       pushCollapsed(fragments, runOf, s, e)
       s = e
       continue
     }
-    const r = inPlaced
     const f = p.frames[r.frame]!
     const contentEnd = r.contentStart + r.contentLength
     if (s < r.offset) {
@@ -537,38 +657,27 @@ function buildLine(p: GeckoPrepared, m: Measurer, lineStart: number, lineEnd: nu
       s++
       continue
     }
-    const isTrailing = trailing.has(s)
+    const kind = kindOf(s)
     let e = s + 1
-    while (e < contentEnd && p.sourceT[e] !== -1 && trailing.has(e) === isTrailing &&
+    while (e < contentEnd && p.sourceT[e] !== -1 && kindOf(e) === kind &&
       !(r.endsInNewline && e === contentEnd - 1 && p.tUnits[p.sourceT[e]!] === 0x0a)) e++
     const tEnd = p.sourceT[e - 1]! + 1
     let painted = ''
     for (let k = t; k < tEnd; k++) painted += String.fromCharCode(p.tUnits[k]!)
-    const prov = r.prov!
-    const w = advance(p, m, prov, t, tEnd)
-    if (!isTrailing) {
-      fragments.push({ kind: 'text', run: f.run, start: s, end: e, painted, width: w / 60, level: f.level })
-      widthAu += w
-    } else if (hangsTrailing) {
-      fragments.push({ kind: 'hanging', run: f.run, start: s, end: e, painted, width: w / 60, level: f.level })
-    } else {
-      fragments.push({ kind: 'trimmed', run: f.run, start: s, end: e, painted, level: f.level })
-    }
+    fragments.push({ kind, run: f.run, start: s, end: e, painted, level: f.level })
     lastT = tEnd
     s = e
   }
-  // The hyphen of a used soft hyphen follows the frame's last fragment; its advance joins the frame width without
-  // letter spacing (AddHyphenToMetrics, nsTextFrame.cpp:6829-6845).
+  // The hyphen of a used soft hyphen follows the frame's content; its advance is inside the frame's box, without letter
+  // spacing (AddHyphenToMetrics, nsTextFrame.cpp:6829-6845).
   for (let k = 0; k < placed.length; k++) {
     const r = placed[k]!
     if (!r.usedHyphenation) continue
     const f = p.frames[r.frame]!
-    const run = p.textRuns[f.textRun]!
     const at = r.contentStart + r.contentLength
     let index = fragments.length
     while (index > 0 && fragments[index - 1]!.kind !== 'hyphen' && (fragments[index - 1] as { start: number }).start >= at) index--
-    fragments.splice(index, 0, { kind: 'hyphen', run: f.run, at, painted: '‐', letterSpacing: 0, width: run.hyphenAu / 60, level: f.level })
-    widthAu += run.hyphenAu
+    fragments.splice(index, 0, { kind: 'hyphen', run: f.run, at, painted: '‐', letterSpacing: 0, level: f.level })
   }
   // The paragraph shaped letters on both sides of this break inside one word: the painter keeps their joining forms.
   let joinsNextLine = false
@@ -576,189 +685,14 @@ function buildLine(p: GeckoPrepared, m: Measurer, lineStart: number, lineEnd: nu
     p.units[p.unitOf[lastT]!]!.kind === 'word') {
     joinsNextLine = joinsAcross(p, p.units[p.unitOf[lastT]!]!, lastT)
   }
-  // Gecko's line box width: placed frame widths less the trailing white space TrimTrailingWhiteSpaceIn removes from the
-  // last frame that has content (nsLineLayout.cpp:2851-2985, nsTextFrame.cpp:11540-11628).
-  let lineBoxAu = 0
-  const trimmedEnds = new Map<number, number>()
-  const trimDeltas = new Map<number, number>()
-  for (let k = 0; k < placed.length; k++) lineBoxAu += placed[k]!.width
-  for (let k = placed.length - 1; k >= 0; k--) {
-    const r = placed[k]!
-    const f = p.frames[r.frame]!
-    const contentEnd = r.contentStart + r.contentLength
-    let changed = false
-    if (!style.whiteSpaceIsSignificant && !r.trimmedTrailingWhitespace && r.prov !== null) {
-      let trimmedEnd = contentEnd
-      while (trimmedEnd > r.offset && isTrimmableChar(p.text, trimmedEnd - 1, f.end, f.is8bit)) trimmedEnd--
-      trimmedEnds.set(k, trimmedEnd)
-      const tA = Math.min(p.nextT[trimmedEnd]!, f.tEnd)
-      const tB = Math.min(p.nextT[contentEnd]!, f.tEnd)
-      if (tA < tB) {
-        const delta = Math.floor(advance(p, m, r.prov, tA, tB))
-        lineBoxAu -= delta
-        trimDeltas.set(k, delta)
-        changed = true
-      }
-    }
-    if (r.nonEmpty || changed) break
-  }
-  // The width the lab observes (DESIGN.md §2.1; lab/README.md "Visible code points" and "widths"), from Gecko's geometry.
-  // - Firefox's Range rects cover clusters: nsTextFrame::GetPointFromOffset aligns an offset to its cluster start, so a
-  //   cluster's advance and spacing sit on its last code point. A piece whose advance isn't positive has no rect: a
-  //   space under negative word spacing observes 0 wide inside a line and at a pre-wrap line end (c-4aafc349e1c161fd).
-  // - White space a frame removed from its width at the line end (trimmed at the break, nsTextFrame.cpp:11203-11213;
-  //   TrimTrailingWhiteSpace, :11540-11628; hung under pre-wrap, :11216-11230) spans from where it starts to the frame's
-  //   edge. That is 0 wide unless the removed advance was negative: TrimTrailingWhiteSpace floors a −90 au delta and
-  //   subtracts it unclamped, so the frame grows and the space gets a 90 au rect (c-79e5272a2644d9b8).
-  // - What counts: a piece with a rect, except invisible characters without ink (default ignorables, format and control
-  //   characters other than the hidden C0/C1 controls, line and paragraph separators, TAB aside) and, where trailing
-  //   white space hangs or is trimmed, SPACE, TAB and other space separators in the line's trailing run. The trailing run
-  //   stops at a piece with ink, a no-break space or a hidden control, which Gecko keeps as a character (CRITIC W3); such
-  //   a control counts where letter spacing gives it an advance (CanAddSpacingAfter, nsTextFrame.cpp:3860-3873).
-  const hangs = style.collapse === 'collapse' || style.collapse === 'preserve-breaks' || (style.collapse === 'preserve' && style.wrap)
-  type Piece = { frame: number; t0: number; t1: number; rect: boolean; ink: boolean; stop: boolean; hangable: boolean; whiteSpace: boolean; invisible: boolean }
-  const pieces: Piece[] = []
-  const frameBox: number[] = []
-  for (let k = 0; k < placed.length; k++) {
-    const r = placed[k]!
-    const box = r.width - (trimDeltas.get(k) ?? 0)
-    frameBox.push(box)
-    if (r.prov === null) continue
-    const f = p.frames[r.frame]!
-    const endT = Math.min(p.nextT[r.contentStart + r.contentLength]!, f.tEnd)
-    let cut = endT
-    if (trimDeltas.has(k)) cut = Math.min(p.nextT[trimmedEnds.get(k)!]!, f.tEnd)
-    else if (r.trimmedTrailingWhitespace || (style.whitespaceCanHang && style.whiteSpaceIsSignificant)) cut = endT - r.trimmableChars
-    for (let t0 = r.prov.startT; t0 < cut;) {
-      // A cluster, cut at unit edges: a word after an invalid character can start with a cluster extender (ZWSP + U+0E31).
-      let t1 = t0 + 1
-      while (t1 < cut && p.clusterStart[t1] === 0 && p.unitOf[t1] === p.unitOf[t0]) t1++
-      const unit = p.units[p.unitOf[t0]!]!
-      // Shaped clusters have advances; a space, NBSP or invalid character can have none (a control, negative spacing).
-      const rect = unit.kind === 'word' || unit.au + p.spacingPrefix[t0 + 1]! - p.spacingPrefix[t0]! + (r.prov.tabs.get(t0) ?? 0) > 0
-      let ink = false
-      let whiteSpace = false
-      for (let t = t0; t < t1; t++) {
-        if ((p.tUnits[t]! & 0xfc00) === 0xdc00 && t > t0) continue
-        const cp = p.text.codePointAt(p.tSource[t]!)!
-        ink ||= !isWhiteSpaceProperty(cp) && !isInvisible(cp)
-        whiteSpace ||= isWhiteSpaceProperty(cp)
-      }
-      const cp = p.text.codePointAt(p.tSource[t0]!)!
-      const control = isOtherControl(cp)
-      const noBreakSpace = cp === 0xa0 || cp === 0x2007 || cp === 0x202f
-      pieces.push({
-        frame: k, t0, t1, rect, ink, stop: ink || noBreakSpace || control,
-        hangable: cp === 0x20 || cp === 0x09 || (whiteSpace && generalCategory(cp) === 'Zs' && !noBreakSpace),
-        whiteSpace, invisible: !ink && isInvisible(cp) && cp !== 0x09 && !control,
-      })
-      t0 = t1
-    }
-    if (cut < endT) {
-      const rect = box - advance(p, m, r.prov, r.prov.startT, cut) > 0
-      pieces.push({ frame: k, t0: cut, t1: endT, rect, ink: false, stop: false, hangable: true, whiteSpace: true, invisible: false })
-    }
-  }
-  let trailingStart = pieces.length
-  while (trailingStart > 0 && (!pieces[trailingStart - 1]!.rect || !pieces[trailingStart - 1]!.stop)) trailingStart--
-  const visible: boolean[] = []
-  let anyVisible = false
-  let hangingInk = false
-  for (let i = 0; i < pieces.length; i++) {
-    const piece = pieces[i]!
-    const counts = piece.rect && !piece.invisible && !(hangs && i >= trailingStart && piece.hangable)
-    visible.push(counts)
-    anyVisible ||= counts
-    hangingInk ||= piece.rect && !counts && piece.whiteSpace
-  }
-  // Frames in visual order: UAX #9 L2 over the frames' levels, as nsBidiPresUtils::ReorderFrames orders a line
-  // (nsBidiPresUtils.cpp:1494-1532, Bidi::ReorderVisual through unicode-bidi). An odd-level frame draws right to left.
-  const order: number[] = []
-  let maxLevel = 0
-  let minLevel = 255
-  for (let k = 0; k < placed.length; k++) {
-    order.push(k)
-    const level = p.frames[placed[k]!.frame]!.level
-    maxLevel = Math.max(maxLevel, level)
-    minLevel = Math.min(minLevel, level)
-  }
-  const lowestOdd = (minLevel & 1) === 1 ? minLevel : minLevel + 1
-  for (let level = maxLevel; level >= lowestOdd; level--) {
-    for (let i = 0; i < order.length;) {
-      if (p.frames[placed[order[i]!]!.frame]!.level < level) { i++; continue }
-      let j = i
-      while (j < order.length && p.frames[placed[order[j]!]!.frame]!.level >= level) j++
-      const reversed = order.slice(i, j).reverse()
-      for (let q = 0; q < reversed.length; q++) order[i + q] = reversed[q]!
-      i = j
-    }
-  }
-  // Extents in visual order. A frame's glyphs start at its left edge, or at its right edge at an odd level; the hyphen of
-  // a used soft hyphen follows the frame's text inside its box (AddHyphenToMetrics).
-  let x = 0
-  let pointsLeft = Infinity
-  let pointsRight = -Infinity
-  let boxesLeft = Infinity
-  let boxesRight = -Infinity
-  let hyphenated = false
-  for (let v = 0; v < order.length; v++) {
-    const k = order[v]!
-    const r = placed[k]!
-    const box = frameBox[k]!
-    if (box > 0) {
-      boxesLeft = Math.min(boxesLeft, x)
-      boxesRight = Math.max(boxesRight, x + box)
-    }
-    if (r.prov !== null) {
-      const f = p.frames[r.frame]!
-      let first = -1
-      let last = -1
-      for (let i = 0; i < pieces.length; i++) {
-        if (pieces[i]!.frame !== k || !visible[i]) continue
-        if (first < 0) first = i
-        last = i
-      }
-      let v0 = -1
-      let v1 = -1
-      if (first >= 0) {
-        v0 = advance(p, m, r.prov, r.prov.startT, pieces[first]!.t0)
-        v1 = advance(p, m, r.prov, r.prov.startT, pieces[last]!.t1)
-      }
-      if (r.usedHyphenation) {
-        hyphenated = true
-        if (v0 < 0) v0 = box - p.textRuns[f.textRun]!.hyphenAu
-        v1 = box
-      }
-      if (v0 >= 0) {
-        const even = (f.level & 1) === 0
-        pointsLeft = Math.min(pointsLeft, x + (even ? Math.min(v0, v1) : box - Math.max(v0, v1)))
-        pointsRight = Math.max(pointsRight, x + (even ? Math.max(v0, v1) : box - Math.min(v0, v1)))
-      }
-    }
-    x += box
-  }
-  // The lab takes the whole-node boxes when no white space outside the counted pieces has a rect, else the counted
-  // pieces' own extent; a line with nothing counted observes 0.
-  const visibleAu = !anyVisible && !hyphenated ? 0
-    : !hangingInk ? (boxesRight > boxesLeft ? boxesRight - boxesLeft : 0)
-      : pointsRight > pointsLeft ? pointsRight - pointsLeft : 0
+  let hasLineBox = false
+  for (let k = 0; k < placed.length; k++) hasLineBox ||= placed[k]!.nonEmpty
   return {
-    start: lineStart, end: lineEnd, width: visibleAu / 60, engineWidth: { unit: 'gecko-app-unit', au: lineBoxAu }, fragments,
-    joinsNextLine, next,
+    start: lineStart, end: lineEnd, fragments, hasLineBox, joinsNextLine,
+    geometry: { appUnitsPerDevPixel: p.appUnitsPerDevPixel, availableWidth: avail, width: lineWidth, hang, frames },
+    gaps: gaps.list, next,
   }
 }
-
-// White_Space (PropList.txt).
-const isWhiteSpaceProperty = (cp: number) => (cp >= 0x09 && cp <= 0x0d) || cp === 0x20 || cp === 0x85 || cp === 0xa0 ||
-  cp === 0x1680 || (cp >= 0x2000 && cp <= 0x200a) || cp === 0x2028 || cp === 0x2029 || cp === 0x202f || cp === 0x205f || cp === 0x3000
-
-function isInvisible(cp: number): boolean {
-  const gc = generalCategory(cp)
-  return gc === 'Cc' || gc === 'Cf' || gc === 'Zl' || gc === 'Zp' || isDefaultIgnorable(cp)
-}
-
-const isOtherControl = (cp: number) => (cp <= 0x08) || cp === 0x0b || cp === 0x0c || (cp >= 0x0e && cp <= 0x1f) ||
-  (cp >= 0x7f && cp <= 0x9f)
 
 function pushCollapsed(fragments: Fragment[], runOf: (s: number) => number, start: number, end: number): void {
   for (let s = start; s < end;) {

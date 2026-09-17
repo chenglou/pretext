@@ -32,8 +32,9 @@ export const webkitPunctuationRanges: readonly number[] = [33, 35, 37, 42, 44, 4
 // engines' fMarkSet per script (dictbe.cpp:210, 453, 648, 843).
 export const webkitDictionaryMarkRanges: readonly number[] = [3633, 3633, 3636, 3642, 3655, 3662, 3761, 3761, 3764, 3772, 3784, 3790, 4139, 4158, 4182, 4185, 4190, 4192, 4194, 4196, 4199, 4205, 4209, 4212, 4226, 4237, 4239, 4239, 4250, 4253, 6068, 6099, 6109, 6109, 6741, 6750, 6752, 6780, 43493, 43493, 43643, 43645, 43696, 43696, 43698, 43700, 43703, 43704, 43710, 43711, 43713, 43713, 71453, 71467]
 
-// Code points with Default_Ignorable_Code_Point (ICU 78.2 ppucd.txt), as [first, last] pairs.
-export const webkitDefaultIgnorableRanges: readonly number[] = [173, 173, 847, 847, 1564, 1564, 4447, 4448, 6068, 6069, 6155, 6159, 8203, 8207, 8234, 8238, 8288, 8303, 12644, 12644, 65024, 65039, 65279, 65279, 65440, 65440, 65520, 65528, 113824, 113827, 119155, 119162, 917504, 921599]
+// Line_Break=SA code points of the scripts with dictionary engines (ICU 78.2 ppucd.txt), as [first, last, engine] triples:
+// 0 Thai, 1 Lao, 2 Myanmar, 3 Khmer (brkeng.cpp:163-199, dictbe.cpp:208, 451, 651, 841).
+export const webkitDictionaryScriptRanges: readonly number[] = [3585, 3642, 0, 3648, 3662, 0, 3713, 3714, 1, 3716, 3716, 1, 3718, 3722, 1, 3724, 3747, 1, 3749, 3749, 1, 3751, 3773, 1, 3776, 3780, 1, 3782, 3782, 1, 3784, 3790, 1, 3804, 3807, 1, 4096, 4159, 2, 4176, 4239, 2, 4250, 4255, 2, 6016, 6099, 3, 6103, 6103, 3, 6108, 6109, 3, 43488, 43503, 2, 43514, 43518, 2, 43616, 43647, 2]
 
 // CLDR delimiters per locale key (lowercase, '-'): [quotationStart, is QU, quotationEnd, is QU,
 // alternateQuotationStart, is QU, alternateQuotationEnd, is QU] (data/webkit/icu-macos27-libicucore/delimiters.tsv).

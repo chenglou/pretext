@@ -1,0 +1,137 @@
+// Font declarations as Gecko reads them (Firefox 156.0): the parsed family list, the equality text runs continue on, and
+// the facts about realized fonts the port reads (DESIGN.md §1.2).
+import type { FontDecl } from '../../model.js'
+
+export type FontFamilyEntry =
+  | { kind: 'generic'; name: 'serif' | 'sans-serif' | 'monospace' | 'cursive' | 'fantasy' | 'math' | 'system-ui' }
+  | { kind: 'named'; name: string; syntax: 'quoted' | 'identifiers' }
+
+// GenericFontFamily's keywords (servo/components/style/values/computed/font.rs:670-691), matched ignoring ASCII case;
+// -moz-fixed is monospace. math and system-ui are behind prefs that are on in Firefox 156
+// (StaticPrefList.yaml:10857, :12072).
+function genericFamily(ident: string): Extract<FontFamilyEntry, { kind: 'generic' }>['name'] | null {
+  switch (ident.toLowerCase()) {
+    case 'serif': return 'serif'
+    case 'sans-serif': return 'sans-serif'
+    case 'monospace': case '-moz-fixed': return 'monospace'
+    case 'cursive': return 'cursive'
+    case 'fantasy': return 'fantasy'
+    case 'math': return 'math'
+    case 'system-ui': return 'system-ui'
+    default: return null
+  }
+}
+
+// One CSS escape at text[i] === '\\' (CSS Syntax §4.3.7): the code point and where parsing continues.
+function escape(text: string, i: number): { value: string; next: number } {
+  let hex = ''
+  let k = i + 1
+  while (k < text.length && hex.length < 6 && /[0-9a-fA-F]/.test(text[k]!)) hex += text[k++]
+  if (hex.length > 0) {
+    if (k < text.length && /\s/.test(text[k]!)) k++
+    const cp = parseInt(hex, 16)
+    return { value: cp === 0 || cp > 0x10ffff || (cp >= 0xd800 && cp <= 0xdfff) ? '�' : String.fromCodePoint(cp), next: k }
+  }
+  return { value: k < text.length ? text[k]! : '�', next: k + 1 }
+}
+
+// FontFamilyList as parsed by SingleFontFamily::parse (font.rs:707-768): a quoted string is a quoted family name; an
+// identifier that is a generic keyword is that generic; other identifiers join with single spaces into one name, quoted
+// syntax only when an escaped identifier holds a space.
+export function parseFamilyList(list: string): FontFamilyEntry[] {
+  const out: FontFamilyEntry[] = []
+  let i = 0
+  while (i <= list.length) {
+    while (i < list.length && /\s/.test(list[i]!)) i++
+    const quote = list[i]
+    if (quote === '"' || quote === "'") {
+      let name = ''
+      i++
+      while (i < list.length && list[i] !== quote) {
+        if (list[i] === '\\') {
+          const e = escape(list, i)
+          name += e.value
+          i = e.next
+        } else {
+          name += list[i++]
+        }
+      }
+      out.push({ kind: 'named', name, syntax: 'quoted' })
+      i++
+    } else {
+      const idents: string[] = []
+      let spaced = false
+      for (;;) {
+        while (i < list.length && /\s/.test(list[i]!)) i++
+        if (i >= list.length || list[i] === ',') break
+        let ident = ''
+        while (i < list.length && !/\s/.test(list[i]!) && list[i] !== ',') {
+          if (list[i] === '\\') {
+            const e = escape(list, i)
+            ident += e.value
+            i = e.next
+          } else {
+            ident += list[i++]
+          }
+        }
+        spaced ||= ident.includes(' ')
+        idents.push(ident)
+      }
+      const generic = idents.length === 1 ? genericFamily(idents[0]!) : null
+      if (generic !== null) out.push({ kind: 'generic', name: generic })
+      else out.push({ kind: 'named', name: idents.join(' '), syntax: spaced ? 'quoted' : 'identifiers' })
+    }
+    while (i < list.length && /\s/.test(list[i]!)) i++
+    if (i >= list.length) break
+    i++ // ','
+  }
+  return out
+}
+
+function sameFamilies(a: FontFamilyEntry[], b: FontFamilyEntry[]): boolean {
+  if (a.length !== b.length) return false
+  for (let k = 0; k < a.length; k++) {
+    const x = a[k]!
+    const y = b[k]!
+    switch (x.kind) {
+      case 'generic':
+        if (y.kind !== 'generic' || y.name !== x.name) return false
+        break
+      case 'named':
+        if (y.kind !== 'named' || y.name !== x.name || y.syntax !== x.syntax) return false
+        break
+    }
+  }
+  return true
+}
+
+// Servo quantize_font_size, 10 significant bits (servo/components/style/values/specified/font.rs:993-1022).
+export function quantize10(size: number): number {
+  const d = Math.fround(size * 16385)
+  const t = Math.fround(d - size)
+  return Math.fround(d - t)
+}
+
+// The part of nsFont::CalcDifference the model can vary (gfx/src/nsFont.cpp:36-60): style, weight as FontWeight's
+// FixedPoint<u16, 6> (font.rs:92-96, :155), the quantized computed size and the parsed family list, whose FamilyName
+// equality includes the syntax (font.rs:512-533), so Arial and "Arial" differ. ContinueTextRunAcrossFrames compares
+// these (nsTextFrame.cpp:2168).
+export function sameFontForTextRun(a: FontDecl, b: FontDecl): boolean {
+  return a.style === b.style && Math.round(Math.fround(a.weight) * 64) === Math.round(Math.fround(b.weight) * 64) &&
+    quantize10(a.size) === quantize10(b.size) && sameFamilies(parseFamilyList(a.family), parseFamilyList(b.family))
+}
+
+// FontFacts.primaryFamily, defaulting to the first family in the list; a generic keyword stands for itself.
+export function primaryFamilyOf(font: FontDecl): string {
+  if (font.facts.primaryFamily !== null) return font.facts.primaryFamily
+  const first = parseFamilyList(font.family)[0]!
+  return first.name
+}
+
+// FontFacts.opticalSizeAxis with its documented default: true for Gecko's system-font keywords, which resolve to the
+// macOS system font, whose opsz axis is a recorded browser fact (probes cross-cutting 5, specs/gecko-canvas.md §1.2 C1a).
+export function opticalSizeAxisOf(font: FontDecl): boolean {
+  if (font.facts.opticalSizeAxis !== null) return font.facts.opticalSizeAxis
+  const primary = primaryFamilyOf(font)
+  return primary === 'system-ui' || primary === '-apple-system'
+}

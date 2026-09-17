@@ -1,12 +1,15 @@
 // Gecko port tests on the specs' worked examples and installed Firefox 156 verdicts (specs/probes-firefox.md), with a
 // stand-in OffscreenCanvas: every code point of 16px Courier New is 576 au (specs/gecko-lines.md §2.5), so widths are
 // known without a browser. Break scans come from the groundwork oracle's unit cases
-// (runtime-parity/gecko/tools/unit.ts, answered by Firefox's own nsLineBreaker and ICU4X data).
+// (runtime-parity/gecko/tools/unit.ts, answered by Firefox's own nsLineBreaker and ICU4X data). Widths here are Gecko's
+// own line boxes and frames; what a Range reports is lab/observe/gecko.ts's business.
 import { beforeAll, describe, expect, test } from 'bun:test'
-import { GECKO, type Environment } from '../../env.js'
+import { PINNED_BUILDS, type GeckoEnvironment } from '../../env.js'
 import { layoutParagraph } from '../../index.js'
 import { createMeasurer } from '../../measure/canvas.js'
-import type { Paragraph, TextRun } from '../../model.js'
+import { UNKNOWN_FONT_FACTS, type FontDecl, type Gap, type GeckoLayout, type Paragraph, type TextRun } from '../../model.js'
+import { parseFamilyList, sameFontForTextRun } from './fonts.js'
+import { geckoEngine } from './index.js'
 import { BREAK_EMERGENCY_WRAP, BREAK_NORMAL } from './linebreak.js'
 import { prepareGecko } from './prepare.js'
 
@@ -65,11 +68,13 @@ beforeAll(() => {
   }
 })
 
-const env: Environment = {
-  engine: GECKO, devicePixelRatio: 2, pageZoom: 1, pageLang: 'en', contentLanguage: null, uiLanguage: 'en-US',
-  preferredLanguages: ['en-US'], dictionaryBreaks: { kind: 'unavailable' },
+const env: GeckoEnvironment = {
+  engine: 'gecko', build: PINNED_BUILDS.gecko, devicePixelRatio: 2, pageLang: 'en', contentLanguage: null, regionalPrefsLocale: 'en-us',
+  dictionaryBreaks: { kind: 'unavailable' },
 }
-const courier = { family: '"Courier New"', size: 16, weight: 400, style: 'normal' as const }
+const facts = { ...UNKNOWN_FONT_FACTS, opticalSizeAxis: false }
+const courier: FontDecl = { family: '"Courier New"', size: 16, weight: 400, style: 'normal', facts }
+const arial = (size: number): FontDecl => ({ family: 'Arial', size, weight: 400, style: 'normal', facts })
 
 function run(text: string, node: 'span' | 'text' = 'text', extra: Partial<TextRun> = {}): TextRun {
   return { text, node, font: courier, letterSpacing: 0, wordSpacing: 0, lang: null, ...extra }
@@ -82,20 +87,32 @@ function paragraph(runs: TextRun[], width: number, extra: Partial<Paragraph> = {
   }
 }
 
-// The first visible character of each line, as the lab derives line starts.
+function layout(p: Paragraph): GeckoLayout {
+  const l = layoutParagraph(p, env)
+  if (l.engine !== 'gecko') throw new Error('expected a gecko layout')
+  return l
+}
+
+// The first laid-out character of each line with a line box.
 function starts(p: Paragraph): number[] {
-  const layout = layoutParagraph(p, env)
   const out: number[] = []
-  for (let l = 0; l < layout.lines.length; l++) {
-    const line = layout.lines[l]!
+  const lines = layout(p).lines
+  for (let l = 0; l < lines.length; l++) {
+    const line = lines[l]!
+    if (!line.hasLineBox) continue
     const first = line.fragments.find(f => f.kind === 'text' || f.kind === 'hanging' || f.kind === 'trimmed')
     out.push(first === undefined ? line.start : first.start)
   }
   return out
 }
 
+// Gecko's line box widths (psd->mICoord after TrimTrailingWhiteSpaceIn) of the lines with a line box, in au.
 function widths(p: Paragraph): number[] {
-  return layoutParagraph(p, env).lines.map(l => l.engineWidth.unit === 'gecko-app-unit' ? l.engineWidth.au : -1)
+  return layout(p).lines.filter(l => l.hasLineBox).map(l => l.geometry.width)
+}
+
+function allGaps(l: GeckoLayout): Gap[] {
+  return l.gaps.concat(...l.lines.map(line => line.gaps))
 }
 
 describe('gecko line filling (probes-firefox verdicts)', () => {
@@ -132,10 +149,11 @@ describe('gecko line filling (probes-firefox verdicts)', () => {
   })
   test('H13 pre-wrap hangs trailing spaces; H14 break-spaces moves the third space', () => {
     expect(starts(paragraph([run('aaaa   bb')], 57.6, { whiteSpace: 'pre-wrap' }))).toEqual([0, 7])
-    // The line box keeps the non-overflowing part of the spaces (3456 − 2304 au = the hangable 1728 − 576); the visible
-    // width leaves them out.
+    // The line box keeps the non-overflowing part of the spaces: 3456 − 2304 au of the hangable 1728.
     expect(widths(paragraph([run('aaaa   bb')], 57.6, { whiteSpace: 'pre-wrap' }))).toEqual([3456, 1152])
-    expect(layoutParagraph(paragraph([run('aaaa   bb')], 57.6, { whiteSpace: 'pre-wrap' }), env).lines[0]!.width).toBe(38.4)
+    const first = layout(paragraph([run('aaaa   bb')], 57.6, { whiteSpace: 'pre-wrap' })).lines[0]!
+    expect(first.fragments.map(f => f.kind)).toEqual(['text', 'hanging'])
+    expect(first.geometry.hang).toBe(1152)
     expect(starts(paragraph([run('aaaa   bb')], 57.6, { whiteSpace: 'break-spaces' }))).toEqual([0, 6])
   })
   test('H15 tab stops', () => {
@@ -153,6 +171,9 @@ describe('gecko line filling (probes-firefox verdicts)', () => {
     const p = paragraph([run('aaaa­bbbb', 'span', { letterSpacing: 1 })], 53)
     expect(starts(p)).toEqual([0, 5])
     expect(widths(p)[0]).toBe(4 * 636 + 576)
+    const frame = layout(p).lines[0]!.geometry.frames[0]!
+    expect(frame.usedHyphen).toBe(true)
+    expect(frame.characters.map(c => [c.skipped, c.advance])).toEqual([[false, 636], [false, 636], [false, 636], [false, 636], [true, 0]])
   })
   test('H22 soft hyphen at a frame end plus backup', () => {
     expect(starts(paragraph([run('aaaa­'), run('bbbb', 'span')], 57.6))).toEqual([0, 5])
@@ -186,32 +207,101 @@ describe('gecko line filling (probes-firefox verdicts)', () => {
   })
   test('tiling: lines cover the source', () => {
     const p = paragraph([run('  Hello  '), run(' world ', 'span'), run('  ')], 60)
-    const layout = layoutParagraph(p, env)
+    const l = layout(p)
     let at = 0
-    for (let l = 0; l < layout.lines.length; l++) {
-      expect(layout.lines[l]!.start).toBe(at)
+    for (let k = 0; k < l.lines.length; k++) {
+      expect(l.lines[k]!.start).toBe(at)
       let f = at
-      for (const fragment of layout.lines[l]!.fragments) {
+      for (const fragment of l.lines[k]!.fragments) {
         const s = fragment.kind === 'hyphen' ? fragment.at : fragment.start
         expect(s).toBe(f)
         if (fragment.kind !== 'hyphen') f = fragment.end
       }
-      expect(f).toBe(layout.lines[l]!.end)
-      at = layout.lines[l]!.end
+      expect(f).toBe(l.lines[k]!.end)
+      at = l.lines[k]!.end
     }
     expect(at).toBe(p.runs.reduce((n, r) => n + r.text.length, 0))
   })
 })
 
-describe('gecko Canvas recipes (specs/gecko-AUDIT.md B1-B4)', () => {
-  const arial = (size: number) => ({ family: 'Arial', size, weight: 400, style: 'normal' as const })
-  const gapNames = (p: Paragraph) => layoutParagraph(p, env).gaps.map(g => g.gap)
-
-  test('B2: in-word-prefix only where a prefix and suffix shaped alone differ from the unit', () => {
-    expect(gapNames(paragraph([run('aaaa')], 20, { overflowWrap: 'anywhere' }))).not.toContain('in-word-prefix')
-    expect(gapNames(paragraph([run('AVAV')], 20, { overflowWrap: 'anywhere' }))).toContain('in-word-prefix')
+describe('gecko engine output', () => {
+  test('a line of only collapsed white space is returned without a line box (nsLineLayout.cpp:1690-1712)', () => {
+    const l = layout(paragraph([run('aaa\n   ', 'span')], 500, { whiteSpace: 'pre-line' }))
+    expect(l.lines.map(line => [line.start, line.end, line.hasLineBox])).toEqual([[0, 4, true], [4, 7, false]])
+    expect(l.lines[1]!.fragments.map(f => f.kind)).toEqual(['collapsed'])
+    expect(l.lines[1]!.geometry.frames.map(f => [f.contentStart, f.contentEnd, f.measuredStart, f.width, f.hasHeight])).toEqual([[4, 7, 7, 0, false]])
   })
+  test('hanging white space is CharIsSpace only: a trailing TAB stays text (gfxTextRun.cpp:1152-1159, gfxFont.cpp:749-750)', () => {
+    const l = layout(paragraph([run('aaaa\t ')], 500, { whiteSpace: 'pre-wrap' }))
+    expect(l.lines[0]!.fragments.map(f => [f.kind, 'start' in f ? f.start : -1])).toEqual([['text', 0], ['hanging', 5]])
+  })
+  test('trimmed at a break and by TrimTrailingWhiteSpace', () => {
+    const broken = layout(paragraph([run('aaaa bbbb')], 57.6)).lines[0]!
+    expect(broken.fragments.map(f => f.kind)).toEqual(['text', 'trimmed'])
+    expect(broken.geometry.frames[0]!.width).toBe(2304)
+    const trailing = layout(paragraph([run('aaaa '), run(' ', 'span')], 500)).lines[0]!
+    expect(trailing.fragments.map(f => f.kind)).toEqual(['text', 'trimmed', 'collapsed'])
+    expect(trailing.geometry.width).toBe(2304)
+  })
+  test('an RTL block places frames from the right edge (nsBidiPresUtils.cpp:1860-1866)', () => {
+    const line = layout(paragraph([run('אב גד')], 500, { direction: 'rtl' })).lines[0]!
+    expect(line.geometry.frames.map(f => [f.level, f.x, f.width])).toEqual([[1, 30000 - 2880, 2880]])
+  })
+  test('a wrapped line whose trailing white space hangs against the line direction moves by the hang (nsLineLayout.cpp:3598-3605)', () => {
+    // "a אב " fits 48px exactly; the space after אב is at level 1, so its hangable 576 au sits at the start edge.
+    const l = layout(paragraph([run('a אב גד')], 48, { whiteSpace: 'pre-wrap' }))
+    const first = l.lines[0]!.geometry
+    expect(first.hang).toBe(-576)
+    expect(first.frames.map(f => [f.contentStart, f.contentEnd, f.level, f.x, f.width])).toEqual([[0, 2, 0, -576, 1152], [2, 5, 1, 576, 1728]])
+    expect(l.lines[1]!.geometry.frames.map(f => [f.contentStart, f.x])).toEqual([[5, 0]])
+  })
+  test('characters carry cluster flags and advances from the measured start', () => {
+    const frame = layout(paragraph([run('é b')], 500)).lines[0]!.geometry.frames[0]!
+    // The stand-in gives U+0301 576 au, so the cluster e U+0301 is 1152 au on its first character.
+    expect(frame.characters.map(c => [c.clusterStart, c.advance])).toEqual([[true, 1152], [false, 0], [true, 576], [true, 576]])
+  })
+  test('in-word-prefix goes on the line whose breaks consult the offset; the prepared paragraph never changes', () => {
+    const p = paragraph([run('AVAV')], 20, { overflowWrap: 'anywhere' })
+    const measurer = createMeasurer()
+    const prepared = geckoEngine.prepare(p, env, measurer)
+    const before = prepared.gaps.length
+    const first = geckoEngine.nextLine(prepared, geckoEngine.firstLine(prepared)!, 20, measurer)
+    expect(first.gaps.map(g => g.gap)).toContain('in-word-prefix')
+    const wide = geckoEngine.nextLine(prepared, geckoEngine.firstLine(prepared)!, 500, measurer)
+    expect(wide.gaps).not.toBe(first.gaps)
+    expect(wide.gaps.length).toBeLessThanOrEqual(1)
+    expect(prepared.gaps.length).toBe(before)
+    expect(allGaps(layout(paragraph([run('aaaa')], 20, { overflowWrap: 'anywhere' }))).map(g => g.gap)).not.toContain('in-word-prefix')
+  })
+  test('letters joined across an in-word offset report in-word-prefix, and no U+200D is measured', () => {
+    const l = layout(paragraph([run('بببب')], 20, { overflowWrap: 'anywhere', direction: 'rtl' }))
+    expect(allGaps(l).some(g => g.gap === 'in-word-prefix' && g.detail.includes('letters join'))).toBe(true)
+    expect(l.measure.calls.some(c => c.text.includes('‍'))).toBe(false)
+  })
+  test('font facts: optical-size is reported where opsz is true or not given', () => {
+    const unknown = { ...courier, facts: UNKNOWN_FONT_FACTS }
+    expect(allGaps(layout(paragraph([run('a', 'text', { font: unknown })], 500, { font: unknown }))).map(g => g.gap)).toContain('optical-size')
+    expect(allGaps(layout(paragraph([run('a')], 500))).map(g => g.gap)).not.toContain('optical-size')
+  })
+  test('nsLineBreaker takes Chinese or Japanese from likely subtags (specs/gecko-oracle-replay.md §4.1)', () => {
+    const p = (lang: string) => prepareGecko(paragraph([run('あ；', 'span')], 100, { lineBreak: 'loose', lang }), env, createMeasurer())
+    expect(p('yue').breakFlags[1]).toBe(BREAK_NORMAL)
+    expect(p('ko').breakFlags[1]).not.toBe(BREAK_NORMAL)
+  })
+})
 
+describe('gecko font declarations (servo font.rs)', () => {
+  test('family lists compare parsed, with syntax', () => {
+    expect(parseFamilyList('"Times New Roman", Times  New Roman, serif, "serif", -moz-fixed')).toEqual([
+      { kind: 'named', name: 'Times New Roman', syntax: 'quoted' }, { kind: 'named', name: 'Times New Roman', syntax: 'identifiers' },
+      { kind: 'generic', name: 'serif' }, { kind: 'named', name: 'serif', syntax: 'quoted' }, { kind: 'generic', name: 'monospace' },
+    ])
+    expect(sameFontForTextRun({ ...courier, family: 'Arial,serif' }, { ...courier, family: 'Arial , serif' })).toBe(true)
+    expect(sameFontForTextRun({ ...courier, family: 'Arial' }, { ...courier, family: '"Arial"' })).toBe(false)
+  })
+})
+
+describe('gecko Canvas recipes (specs/gecko-AUDIT.md B1-B4)', () => {
   test('B3: a suffix is measured in the script the paragraph gives it', () => {
     // W("ا ((") − W("ا ") = 1320 au for "((" after Arabic, where "((" alone is 734 au: line 1 is لا( at exactly 1812 au.
     const p = paragraph([run('لا((')], 30.2, { direction: 'rtl', overflowWrap: 'anywhere' })
@@ -221,6 +311,7 @@ describe('gecko Canvas recipes (specs/gecko-AUDIT.md B1-B4)', () => {
 
   test('B1a: the device-size emoji advance applies only where Canvas shows Apple Color Emoji draws the cluster', () => {
     const p = (text: string) => paragraph([run(text, 'span', { font: arial(16) })], 500, { font: arial(16) })
+    const gapNames = (q: Paragraph) => allGaps(layout(q)).map(g => g.gap)
     try {
       expect(widths(p('😀'))).toEqual([960])
       expect(gapNames(p('😀'))).not.toContain('font-fallback')
@@ -241,13 +332,12 @@ describe('gecko Canvas recipes (specs/gecko-AUDIT.md B1-B4)', () => {
     expect(widths(p)).toEqual([432, 750 + 432, 432])
   })
 
-  test('B4: trailing white space trimmed with a negative advance widens the line box, not the painted extent', () => {
+  test('B4: trailing white space trimmed with a negative advance widens the line box', () => {
     // c-79e5272a2644d9b8: the space is 576 − 60 − 600 = −84 au; TrimTrailingWhiteSpace subtracts floor(−84) unclamped.
     const p = paragraph([run('aaaa', 'span'), run(' bbbb', 'span', { letterSpacing: -1, wordSpacing: -10 })], 57.6)
-    const layout = layoutParagraph(p, env)
     expect(starts(p)).toEqual([0, 5])
-    expect(layout.lines[0]!.engineWidth).toEqual({ unit: 'gecko-app-unit', au: 2304 + 84 })
-    expect(layout.lines[0]!.width).toBe(38.4)
+    expect(layout(p).lines[0]!.geometry.frames.map(f => f.width)).toEqual([2304, 84])
+    expect(widths(p)[0]).toBe(2304 + 84)
   })
 
   test('a synthesized Unicode space rounds to whole device pixels', () => {
@@ -258,10 +348,9 @@ describe('gecko Canvas recipes (specs/gecko-AUDIT.md B1-B4)', () => {
     expect(widths(paragraph([run('a b', 'span', { font: courier18 })], 500, { font: courier18 }))).toEqual([648 * 3])
   })
 
-  test('B4: a hidden control with letter spacing has a rect', () => {
+  test('a hidden control with letter spacing has an advance', () => {
     // c-92b6963ae4344985: a lone VT with 1px letter spacing is 60 au natively.
-    const layout = layoutParagraph(paragraph([run('\v', 'span', { letterSpacing: 1 })], 500), env)
-    expect(layout.lines.map(l => [l.engineWidth.unit === 'gecko-app-unit' ? l.engineWidth.au : -1, l.width])).toEqual([[60, 1]])
+    expect(widths(paragraph([run('\v', 'span', { letterSpacing: 1 })], 500))).toEqual([60])
   })
 })
 

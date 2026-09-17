@@ -10,9 +10,9 @@ import { existsSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { DATA } from '../../../tools/gen-shared.ts'
 import { forEachLine } from '../../../tools/lines.ts'
-import { WEBKIT, type Environment } from '../../env.js'
+import { PINNED_BUILDS, type WebKitEnvironment } from '../../env.js'
 import { createMeasurer } from '../../measure/canvas.js'
-import type { Paragraph, TextRun } from '../../model.js'
+import { UNKNOWN_FONT_FACTS, type Paragraph, type TextRun } from '../../model.js'
 import { getCategory } from '../../breaks/rbbi.js'
 import { canBreakBefore, classify, computeFollowing, dictionaryRangeStartsWithMark, findNextBreakablePosition, makeFactory, mayBreakInBetween } from './breaks.js'
 import { lineRules, pairTableBreaks } from './data.js'
@@ -38,11 +38,12 @@ class FixedContext {
   }
 }
 
-const env: Environment = {
-  engine: WEBKIT, devicePixelRatio: 2, pageZoom: 1, pageLang: 'en', contentLanguage: null, uiLanguage: 'zh-CN',
-  preferredLanguages: ['zh-CN'], dictionaryBreaks: { kind: 'unavailable' },
+// The environment of the probe runs: installed Safari 27.0 on this Mac, preferred languages zh-CN (probe cross-cutting 6).
+const env: WebKitEnvironment = {
+  engine: 'webkit', build: PINNED_BUILDS.webkit, devicePixelRatio: 2, pageZoom: 1, pageLang: 'en', contentLanguage: null,
+  preferredLanguages: ['zh-CN'], icuDefaultLocale: 'en_US_POSIX', dictionaryBreaks: { kind: 'unavailable' },
 }
-const font = { family: 'Arial', size: 16, weight: 400, style: 'normal' as const }
+const font = { family: 'Arial', size: 16, weight: 400, style: 'normal' as const, facts: UNKNOWN_FONT_FACTS }
 
 function paragraph(runs: Array<[string, TextRun['node']]>, overrides: Partial<Paragraph> = {}): Paragraph {
   return {
@@ -72,11 +73,11 @@ function opportunities(p: WebKitPrepared): { breaks: number[]; forced: number[] 
         opportunity = true
       } else if (previous.box === item.box) {
         const box = p.boxes[item.box]!
-        opportunity = previous.level === item.level || findNextBreakablePosition(makeFactory(box.text, box.is8Bit, box.locale, p.style.lineBreakMode, p.env.dictionaryBreaks), item.start, p.style) === item.start
+        opportunity = previous.level === item.level || findNextBreakablePosition(makeFactory(box.text, box.is8Bit, box.locale, p.style.lineBreakMode, p.icuDefaultLocale, p.env.dictionaryBreaks), item.start, p.style) === item.start
       } else {
         const a = p.boxes[previous.box]!
         const b = p.boxes[item.box]!
-        opportunity = mayBreakInBetween(a.text, a.is8Bit, b.text, b.is8Bit, b.locale, p.style, p.env.dictionaryBreaks)
+        opportunity = mayBreakInBetween(a.text, a.is8Bit, b.text, b.is8Bit, b.locale, p.style, p.icuDefaultLocale, p.env.dictionaryBreaks)
       }
       if (opportunity) breaks.push(p.boxes[item.box]!.sourceStart + item.start)
     }
@@ -130,17 +131,17 @@ describe('BreakablePositions data', () => {
 
   test('libicucore line tables per locale (specs/webkit-canvas.md §2.5)', () => {
     const quoteCategory = (locale: string) => {
-      const { rules, overrides } = lineRules(locale, 'Default')
+      const { rules, overrides } = lineRules(locale, 'Default', 'en_US_POSIX')
       const index = overrides.chars.indexOf(0x201c)
       return index < 0 ? getCategory(rules, 0x201c) : overrides.categories[index]
     }
-    const { rules: en } = lineRules('en', 'Default')
+    const { rules: en } = lineRules('en', 'Default', 'en_US_POSIX')
     expect(quoteCategory('en')).toBe(getCategory(en, 0x7b))
-    expect(lineRules('ja', 'Default').overrides.chars).toEqual([])
-    expect(lineRules('da', 'Default').overrides.chars).toEqual([])
+    expect(lineRules('ja', 'Default', 'en_US_POSIX').overrides.chars).toEqual([])
+    expect(lineRules('da', 'Default', 'en_US_POSIX').overrides.chars).toEqual([])
     // fr's quotation and alternate quotation delimiters are both « », so the loop installs each override twice; the
     // first match wins (AppleICU76 rbbi.cpp:1065-1080).
-    expect([...new Set(lineRules('fr', 'Default').overrides.chars)]).toEqual([0xab, 0xbb])
+    expect([...new Set(lineRules('fr', 'Default', 'en_US_POSIX').overrides.chars)]).toEqual([0xab, 0xbb])
   })
 
   test('canBreakBefore (InlineContentBreaker.cpp:124-137)', () => {
@@ -216,7 +217,7 @@ describe.skipIf(process.platform !== 'darwin' || !existsSync(resolve(SA, 'result
   test('interior SA boundaries equal libicucore except where a dictionary range starts with a mark', async () => {
     const texts: string[] = []
     await forEachLine(resolve(SA, 'inputs/texts.jsonl'), line => { if (line.length > 0) texts.push((JSON.parse(line) as { text: string }).text) })
-    const { rules } = lineRules('', 'Default')
+    const { rules } = lineRules('', 'Default', 'en_US_POSIX')
     const dictionary = (cp: number) => getCategory(rules, cp) >= rules.dictCategoriesStart
     let positions = 0
     let markStart = 0
@@ -226,7 +227,7 @@ describe.skipIf(process.platform !== 'darwin' || !existsSync(resolve(SA, 'result
       const row = JSON.parse(line) as { i: number; line: Record<string, number[]> }
       const text = texts[row.i]!
       const expected = new Set(row.line['root']!)
-      const following = computeFollowing(makeFactory(text, false, '', 'Default', { kind: 'intl-segmenter-word' }))
+      const following = computeFollowing(makeFactory(text, false, '', 'Default', 'en_US_POSIX', { kind: 'intl-segmenter-word' }))
       for (let q = 1; q < text.length; q++) {
         if (!dictionary(text.codePointAt(q - 1)!) || !dictionary(text.codePointAt(q)!)) continue
         positions++
