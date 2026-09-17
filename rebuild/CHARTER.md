@@ -23,6 +23,10 @@ Stated by the maintainer on 2026-09-16:
 
 Everything else is open: data model, API, algorithms, harnesses and tests.
 
+Research tooling is outside these boundaries: offline programs may read OS settings or font tables to explain an
+observation or to produce objective inputs for tests, such as the lab's table of font facts for the fonts its cases use.
+The lab declares those facts the way an app that knows its fonts would.
+
 ## Tentpoles
 
 1. **Engine-true output.** Layout returns what the engine computes: line boxes, fragments, advances and positions in the
