@@ -490,6 +490,8 @@ out a negative width as 0, where the two also disagreed. Routing simple handles
 through the complex walker still made `layout()` about twice as slow on
 simple-path documents in a Node microbenchmark. Reusing batch traversal for
 statistics preserved output but made long-form statistics materially slower.
+The simple batch walker was later folded into the simple streaming stepper: batch
+walks, statistics and `layout()` loop the stepper, which predicts the same lines.
 
 A selected discretionary hyphen must fit. Chromium retries a text item whose
 hyphen does not fit against the available width minus the hyphen, WebKit reverts

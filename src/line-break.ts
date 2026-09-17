@@ -280,194 +280,29 @@ function normalizeLineStartChunkIndexFromHint(
   return normalizeLineStartInChunk(prepared, nextChunkIndex, cursor)
 }
 
-function walkPreparedLinesSimple(
-  prepared: PreparedLineBreakData,
-  maxWidth: number,
-  onLine?: InternalLineVisitor,
-): number {
-  const { widths, kinds, breakableFitAdvances } = prepared
-  if (widths.length === 0) return 0
-
-  const engineProfile = getEngineProfile()
-  const lineFitEpsilon = engineProfile.lineFitEpsilon
-  // CSS widths are never negative. Every walker lays out a negative width as 0,
-  // where zero-width content still fits, so the walkers agree there too.
-  const fitLimit = Math.max(0, maxWidth) + lineFitEpsilon
-
-  let lineCount = 0
-  let lineW = 0
-  let hasContent = false
-  let lineStartSegmentIndex = 0
-  let lineStartGraphemeIndex = 0
-  let lineEndSegmentIndex = 0
-  let lineEndGraphemeIndex = 0
-  let pendingBreakSegmentIndex = -1
-  let pendingBreakPaintWidth = 0
-
-  function clearPendingBreak(): void {
-    pendingBreakSegmentIndex = -1
-    pendingBreakPaintWidth = 0
-  }
-
-  function emitCurrentLine(
-    endSegmentIndex = lineEndSegmentIndex,
-    endGraphemeIndex = lineEndGraphemeIndex,
-    width = lineW,
-  ): void {
-    lineCount++
-    onLine?.(
-      width,
-      lineStartSegmentIndex,
-      lineStartGraphemeIndex,
-      endSegmentIndex,
-      endGraphemeIndex,
-    )
-    lineW = 0
-    hasContent = false
-    clearPendingBreak()
-  }
-
-  function startLineAtSegment(segmentIndex: number, width: number): void {
-    hasContent = true
-    lineStartSegmentIndex = segmentIndex
-    lineStartGraphemeIndex = 0
-    lineEndSegmentIndex = segmentIndex + 1
-    lineEndGraphemeIndex = 0
-    lineW = width
-  }
-
-  function startLineAtGrapheme(segmentIndex: number, graphemeIndex: number, width: number): void {
-    hasContent = true
-    lineStartSegmentIndex = segmentIndex
-    lineStartGraphemeIndex = graphemeIndex
-    lineEndSegmentIndex = segmentIndex
-    lineEndGraphemeIndex = graphemeIndex + 1
-    lineW = width
-  }
-
-  function appendWholeSegment(segmentIndex: number, width: number): void {
-    if (!hasContent) {
-      startLineAtSegment(segmentIndex, width)
-      return
-    }
-    lineW += width
-    lineEndSegmentIndex = segmentIndex + 1
-    lineEndGraphemeIndex = 0
-  }
-
-  function appendBreakableSegmentFrom(segmentIndex: number, startGraphemeIndex: number): void {
-    const fitAdvances = breakableFitAdvances[segmentIndex]!
-    for (let g = startGraphemeIndex; g < fitAdvances.length; g++) {
-      const gw = fitAdvances[g]!
-
-      if (!hasContent) {
-        startLineAtGrapheme(segmentIndex, g, gw)
-      } else if (lineW + gw > fitLimit) {
-        emitCurrentLine()
-        startLineAtGrapheme(segmentIndex, g, gw)
-      } else {
-        lineW += gw
-        lineEndSegmentIndex = segmentIndex
-        lineEndGraphemeIndex = g + 1
-      }
-
-      // A line that holds only this grapheme, overflowing, keeps the graphemes after it
-      // that can't start a line, and ends.
-      if (gw > fitLimit && lineStartSegmentIndex === segmentIndex && lineStartGraphemeIndex === g && lineEndGraphemeIndex === g + 1) {
-        const end = getOverflowingFirstGraphemeEnd(prepared, segmentIndex, g, fitAdvances.length)
-        if (end > g + 1) {
-          for (let k = g + 1; k < end; k++) lineW += fitAdvances[k]!
-          if (end === fitAdvances.length) emitCurrentLine(segmentIndex + 1, 0)
-          else emitCurrentLine(segmentIndex, end)
-          g = end - 1
-        }
-      }
-    }
-
-    if (hasContent && lineEndSegmentIndex === segmentIndex && lineEndGraphemeIndex === fitAdvances.length) {
-      lineEndSegmentIndex = segmentIndex + 1
-      lineEndGraphemeIndex = 0
-    }
-  }
-
-  let i = 0
-  while (i < widths.length) {
-    if (!hasContent) {
-      i = normalizeLineStartSegmentIndex(prepared, i, widths.length, i === 0)
-      if (i >= widths.length) break
-    }
-
-    const w = widths[i]!
-    const kind = kinds[i]!
-    const breakAfter = breaksAfter(kind)
-
-    if (!hasContent) {
-      if (w > fitLimit && breakableFitAdvances[i] !== null) {
-        appendBreakableSegmentFrom(i, 0)
-      } else {
-        startLineAtSegment(i, w)
-      }
-      if (breakAfter) {
-        pendingBreakSegmentIndex = i + 1
-        pendingBreakPaintWidth = lineW - w
-      }
-      i++
-      continue
-    }
-
-    const newW = lineW + w
-    if (newW > fitLimit) {
-      if (breakAfter) {
-        appendWholeSegment(i, w)
-        emitCurrentLine(i + 1, 0, lineW - w)
-        i++
-        continue
-      }
-
-      if (pendingBreakSegmentIndex >= 0) {
-        if (
-          lineEndSegmentIndex > pendingBreakSegmentIndex ||
-          (lineEndSegmentIndex === pendingBreakSegmentIndex && lineEndGraphemeIndex > 0)
-        ) {
-          emitCurrentLine()
-          continue
-        }
-        emitCurrentLine(pendingBreakSegmentIndex, 0, pendingBreakPaintWidth)
-        continue
-      }
-
-      if (w > fitLimit && breakableFitAdvances[i] !== null) {
-        emitCurrentLine()
-        appendBreakableSegmentFrom(i, 0)
-        i++
-        continue
-      }
-
-      emitCurrentLine()
-      continue
-    }
-
-    appendWholeSegment(i, w)
-    if (breakAfter) {
-      pendingBreakSegmentIndex = i + 1
-      pendingBreakPaintWidth = lineW - w
-    }
-    i++
-  }
-
-  if (hasContent) emitCurrentLine()
-  return lineCount
-}
-
 export function walkPreparedLinesRaw(
   prepared: PreparedLineBreakData,
   maxWidth: number,
   onLine?: InternalLineVisitor,
 ): number {
-  if (prepared.simpleLineWalkFastPath) return walkPreparedLinesSimple(prepared, maxWidth, onLine)
   const cursor: LineBreakCursor = { segmentIndex: 0, graphemeIndex: 0 }
-  const chunkIndex = normalizePreparedLineStart(prepared, cursor)
-  return walkPreparedComplexLines(prepared, cursor, chunkIndex, maxWidth, onLine).lineCount
+  if (!prepared.simpleLineWalkFastPath) {
+    const chunkIndex = normalizePreparedLineStart(prepared, cursor)
+    return walkPreparedComplexLines(prepared, cursor, chunkIndex, maxWidth, onLine).lineCount
+  }
+  // A fast-path handle is one chunk of text, spaces and ZWSPs, so each line steps
+  // from where the last one ended, past what a line can't start with.
+  const segmentCount = prepared.widths.length
+  let lineCount = 0
+  while (true) {
+    const startSegmentIndex = normalizeLineStartSegmentIndex(prepared, cursor.segmentIndex, segmentCount, cursor.segmentIndex === 0)
+    if (startSegmentIndex >= segmentCount) return lineCount
+    const startGraphemeIndex = cursor.graphemeIndex
+    cursor.segmentIndex = startSegmentIndex
+    const width = stepPreparedSimpleLineGeometry(prepared, cursor, maxWidth)!
+    lineCount++
+    onLine?.(width, startSegmentIndex, startGraphemeIndex, cursor.segmentIndex, cursor.graphemeIndex)
+  }
 }
 
 // A return from an unfit discretionary hyphen needs an overflow that isolated
@@ -1073,37 +908,9 @@ export function measurePreparedLineGeometry(
   lineCount: number
   maxLineWidth: number
 } {
-  if (prepared.widths.length === 0) {
-    return {
-      lineCount: 0,
-      maxLineWidth: 0,
-    }
-  }
-
-  const cursor: LineBreakCursor = {
-    segmentIndex: 0,
-    graphemeIndex: 0,
-  }
-  let lineCount = 0
   let maxLineWidth = 0
-
-  if (!prepared.simpleLineWalkFastPath) {
-    const chunkIndex = normalizePreparedLineStart(prepared, cursor)
-    lineCount = walkPreparedComplexLines(prepared, cursor, chunkIndex, maxWidth, width => {
-      if (width > maxLineWidth) maxLineWidth = width
-    }).lineCount
-    return { lineCount, maxLineWidth }
-  }
-
-  while (true) {
-    const lineWidth = stepPreparedLineGeometry(prepared, cursor, maxWidth)
-    if (lineWidth === null) {
-      return {
-        lineCount,
-        maxLineWidth,
-      }
-    }
-    lineCount++
-    if (lineWidth > maxLineWidth) maxLineWidth = lineWidth
-  }
+  const lineCount = walkPreparedLinesRaw(prepared, maxWidth, width => {
+    if (width > maxLineWidth) maxLineWidth = width
+  })
+  return { lineCount, maxLineWidth }
 }
