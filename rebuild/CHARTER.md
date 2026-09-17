@@ -8,6 +8,21 @@ helpers and objective facts (this glyph behaves like this in that browser), not 
 Correct means: for a paragraph of styled runs and an environment, predict the lines each installed browser's own layout
 produces (breaks, line count, widths) and paint them with the DOM, without DOM reads for widths and without font files.
 
+## Boundaries for this session
+
+Stated by the maintainer on 2026-09-16:
+
+- **No detection of system or OS languages** (macOS AppleLanguages and similar). The library reads only page facts: the
+  engine from the user agent, `devicePixelRatio`, `<html lang>`. The UI or system language an engine uses for unlabeled
+  content is an explicit input; when it isn't given, predictions for such content report the `ui-language` gap.
+  Offline research may read OS settings to explain an observation, but nothing in the library does.
+- **No glyph rendering.** The library never draws text to read pixels (no `fillText`/`getImageData`); Canvas
+  `measureText` results are the only font information.
+- **No font loading.** The library doesn't fetch or parse font files. Pages may use web fonts like any app; allowing the
+  library to load fonts is a possible future direction, deliberately out of scope now.
+
+Everything else is open: data model, API, algorithms, harnesses and tests.
+
 ## Tentpoles
 
 1. **Engine-true output.** Layout returns what the engine computes: line boxes, fragments, advances and positions in the
