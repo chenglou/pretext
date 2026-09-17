@@ -33,7 +33,7 @@ import { readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { gzipSync } from 'node:zlib'
-import { getBreakLanguage, getCategory, parseBreakRules, withCategoryOverrides, type BreakRules } from '../src/line-breaks.ts'
+import { getBreakLanguage, parseBreakRules, type BreakRules } from '../src/line-breaks.ts'
 
 const scriptsDir = dirname(fileURLToPath(import.meta.url))
 const dataDir = join(scriptsDir, 'engine-data')
@@ -111,103 +111,12 @@ function sameRules(a: BreakRules, b: BreakRules): boolean {
     same(a.trieIndex, b.trieIndex) && same(a.trieData, b.trieData)
 }
 
-// Overrides that make table A's categories stand for table B's: each A category pairs with
-// the B category most of its code points have, and each B category with the A category
-// most of its code points pair with. Code points whose B category pairs elsewhere take it.
-function deriveOverrides(a: BreakRules, b: BreakRules): Map<number, number> {
-  const count = new Map<number, number>()
-  for (let c = 0; c <= 0x10ffff; c++) {
-    const key = getCategory(a, c) * 65536 + getCategory(b, c)
-    count.set(key, (count.get(key) ?? 0) + 1)
-  }
-  const majorityB = new Map<number, [number, number]>()
-  for (const [key, n] of count) {
-    const m = majorityB.get(key >> 16)
-    if (m === undefined || n > m[1]) majorityB.set(key >> 16, [key & 0xffff, n])
-  }
-  const targetA = new Map<number, [number, number]>()
-  for (const [categoryA, [categoryB, n]] of majorityB) {
-    const t = targetA.get(categoryB)
-    if (t === undefined || n > t[1]) targetA.set(categoryB, [categoryA, n])
-  }
-  const overrides = new Map<number, number>()
-  for (let c = 0; c <= 0x10ffff; c++) {
-    const categoryA = getCategory(a, c)
-    const categoryB = getCategory(b, c)
-    if (majorityB.get(categoryA)![0] === categoryB) continue
-    const t = targetA.get(categoryB)
-    if (t === undefined) throw new Error(`No category of A pairs with B category ${categoryB}`)
-    if (t[0] !== categoryA) overrides.set(c, t[0])
-  }
-  return overrides
-}
-
-function statusVector(rules: BreakRules, index: number): string {
-  return Array.from(rules.statusTable.subarray(index + 1, index + 1 + rules.statusTable[index]!)).join(',')
-}
-
-// Walks the product of both state machines over every pair of categories a code point has
-// in A and B, from the start state. The tables behave the same for every input when no
-// reachable pair of states differs in stopping, accepting, look-ahead slots or rule
-// status, and dictionary categories agree.
-function findDifferences(a: BreakRules, b: BreakRules): string[] {
-  const EOF_PAIR = 1 * 65536 + 1
-  const BOF_PAIR = 2 * 65536 + 2
-  const pairSet = new Set<number>()
-  for (let c = 0; c <= 0x10ffff; c++) pairSet.add(getCategory(a, c) * 65536 + getCategory(b, c))
-  const pairs = Array.from(pairSet).sort((x, y) => x - y)
-  const differences: string[] = []
-  for (const pair of pairs) {
-    if (((pair >> 16) >= a.dictCategoriesStart) !== ((pair & 0xffff) >= b.dictCategoriesStart)) differences.push(`dictionary ${pair}`)
-  }
-  const slotAToB = new Map<number, number>()
-  const slotBToA = new Map<number, number>()
-  const mapSlot = (x: number, y: number): boolean => {
-    const mappedY = slotAToB.get(x)
-    const mappedX = slotBToA.get(y)
-    if (mappedY === undefined && mappedX === undefined) {
-      slotAToB.set(x, y)
-      slotBToA.set(y, x)
-      return true
-    }
-    return mappedY === y && mappedX === x
-  }
-  const seen = new Set<number>([1 * 65536 + 1])
-  const queue: number[] = []
-  const arrive = (stateA: number, stateB: number, via: number): void => {
-    const rowA = stateA * a.rowWidth
-    const rowB = stateB * b.rowWidth
-    const stops = (stateA === 0) !== (stateB === 0)
-    if (stops) differences.push(`stop ${stateA} ${stateB}`)
-    const acceptingA = a.rows[rowA]!
-    const acceptingB = b.rows[rowB]!
-    if ((acceptingA === 0) !== (acceptingB === 0) || (acceptingA === 1) !== (acceptingB === 1) || (acceptingA > 1 && !mapSlot(acceptingA, acceptingB))) {
-      differences.push(`accepting ${stateA} ${stateB}`)
-    }
-    const lookAheadA = a.rows[rowA + 1]!
-    const lookAheadB = b.rows[rowB + 1]!
-    if ((lookAheadA === 0) !== (lookAheadB === 0) || (lookAheadA > 1 && !mapSlot(lookAheadA, lookAheadB))) {
-      differences.push(`look-ahead ${stateA} ${stateB}`)
-    }
-    if (acceptingA !== 0 && acceptingB !== 0 && statusVector(a, a.rows[rowA + 2]!) !== statusVector(b, b.rows[rowB + 2]!)) {
-      differences.push(`status ${stateA} ${stateB}`)
-    }
-    const key = stateA * 65536 + stateB
-    if (!seen.has(key) && via !== EOF_PAIR && stateA !== 0 && stateB !== 0 && !stops) {
-      seen.add(key)
-      queue.push(key)
-    }
-  }
-  if (((a.flags & 2) !== 0) !== ((b.flags & 2) !== 0)) differences.push('flags')
-  if ((a.flags & 2) !== 0) arrive(a.rows[a.rowWidth + 3 + 2]!, b.rows[b.rowWidth + 3 + 2]!, BOF_PAIR)
-  else queue.push(1 * 65536 + 1)
-  for (let q = 0; q < queue.length && differences.length === 0; q++) {
-    const stateA = queue[q]! >> 16
-    const stateB = queue[q]! & 0xffff
-    for (const pair of pairs) arrive(a.rows[stateA * a.rowWidth + 3 + (pair >> 16)]!, b.rows[stateB * b.rowWidth + 3 + (pair & 0xffff)]!, pair)
-    arrive(a.rows[stateA * a.rowWidth + 3 + 1]!, b.rows[stateB * b.rowWidth + 3 + 1]!, EOF_PAIR)
-  }
-  return differences
+// A line table cut from an ICU data package, compacted and checked to parse the same.
+function readCompactBreakRules(path: string): Uint8Array {
+  const bytes = withoutDataHeader(readData(path))
+  const compact = compactBreakRules(bytes)
+  if (!sameRules(parseBreakRules(bytes), parseBreakRules(compact))) throw new Error(`The compact ${path} parses differently`)
+  return compact
 }
 
 // Pair tables.
@@ -216,34 +125,10 @@ const webkitPairs = parsePairTable(readText('safari-27.0/BreakablePositions.cpp'
 let differingPairs = 0
 for (let i = 0; i < blinkPairs.length; i++) for (let k = 0; k < 8; k++) if (((blinkPairs[i]! ^ webkitPairs[i]!) >> k) & 1) differingPairs++
 
-// Chromium's line table.
-const chromiumRulesBytes = withoutDataHeader(readData('chrome-153/line_normal.brk'))
-const chromiumCompact = compactBreakRules(chromiumRulesBytes)
-const chromiumRules = parseBreakRules(chromiumRulesBytes)
-if (!sameRules(chromiumRules, parseBreakRules(chromiumCompact))) throw new Error('The compact line_normal.brk parses differently')
-
-// libicucore's line tables as overrides on Chromium's.
-const appleLineOverrides: Record<string, number[]> = {}
-for (const table of ['line', 'line_normal', 'line_cj']) {
-  const appleRules = parseBreakRules(withoutDataHeader(readData(`safari-27.0/${table}.brk`)))
-  const overrides = deriveOverrides(chromiumRules, appleRules)
-  const codePoints = Array.from(overrides.keys()).sort((x, y) => x - y)
-  const ranges: number[] = []
-  for (let i = 0; i < codePoints.length; i++) {
-    const c = codePoints[i]!
-    const category = overrides.get(c)!
-    const n = ranges.length
-    if (n > 0 && ranges[n - 2] === c - 1 && ranges[n - 1] === category) ranges[n - 2] = c
-    else ranges.push(c, c, category)
-  }
-  const patched = withCategoryOverrides(chromiumRules, ranges)
-  for (let c = 0; c <= 0x10ffff; c++) {
-    if (getCategory(patched, c) !== (overrides.get(c) ?? getCategory(chromiumRules, c))) throw new Error(`Patched ${table} category wrong at U+${c.toString(16)}`)
-  }
-  const differences = findDifferences(patched, appleRules)
-  if (differences.length > 0) throw new Error(`Patched ${table} differs from ${table}.brk: ${differences.slice(0, 5).join('; ')}`)
-  appleLineOverrides[table] = ranges
-}
+// Line tables.
+const chromiumBase64 = base64(readCompactBreakRules('chrome-153/line_normal.brk'))
+const appleLineBase64: Record<string, string> = {}
+for (const table of ['line', 'line_normal', 'line_cj']) appleLineBase64[table] = base64(readCompactBreakRules(`safari-27.0/${table}.brk`))
 
 // Quotation remaps per locale, setCategoryOverrides in apple-rbbi.cpp:406-487.
 const quotation = new Set(JSON.parse(readText('safari-27.0/quotation.json')) as number[])
@@ -362,8 +247,7 @@ if (openMirrors.size !== bracketMirrors.size || Array.from(openMirrors).some(([o
   throw new Error('Open_Punctuation mirrors differ from the bidi bracket table')
 }
 
-const chromiumBase64 = base64(chromiumCompact)
-const overridesJson = JSON.stringify(appleLineOverrides)
+const appleJson = JSON.stringify(appleLineBase64)
 const remapsJson = JSON.stringify(appleQuoteRemaps)
 const geckoPropertiesJson = JSON.stringify([geckoBidiClassRanges, geckoEastAsianWidthRanges, geckoBidiPairs])
 const nextSource = `// Generated by scripts/generate-engine-break-data.ts from scripts/engine-data/.
@@ -372,9 +256,8 @@ const nextSource = `// Generated by scripts/generate-engine-break-data.ts from s
 // Chrome 153's line_normal.brk (ICU 78.2), without its reverse table and rule source.
 export const chromiumLineNormalBase64 = '${chromiumBase64}'
 
-// libicucore 78.1's line.brk, line_normal.brk and line_cj.brk as [start, end, category]
-// overrides on chromiumLineNormalBase64, each checked to behave the same for every input.
-export const appleLineOverrides: Record<'line' | 'line_normal' | 'line_cj', readonly number[]> = ${overridesJson}
+// libicucore 78.1's line.brk, line_normal.brk and line_cj.brk, cut the same way.
+export const appleLineBase64: Record<'line' | 'line_normal' | 'line_cj', string> = ${appleJson}
 
 // Chromium's generated kFastLineBreakTable, a bit per U+0021..U+00FF pair where a line may
 // start between them (character_property_data_generator.cc:422-551).
@@ -411,8 +294,8 @@ export const geckoScriptNames = '${properties.scriptNames.join(' ')}'
 `
 
 const summary = [
-  `line_normal.brk ${chromiumCompact.length} B compact, ${gzipSize(chromiumBase64)} B gzipped as base64`,
-  `overrides ${Object.entries(appleLineOverrides).map(([table, ranges]) => `${table} ${ranges.length / 3} ranges`).join(', ')} (${gzipSize(overridesJson)} B gzipped)`,
+  `line_normal.brk ${gzipSize(chromiumBase64)} B gzipped as base64`,
+  `libicucore tables ${Object.entries(appleLineBase64).map(([table, data]) => `${table} ${gzipSize(data)} B`).join(', ')} gzipped as base64`,
   `pair tables differ in ${differingPairs} pairs`,
   `quotation remaps ${Object.keys(appleQuoteRemaps).length} of ${ownRemaps.size} locales (${gzipSize(remapsJson)} B gzipped)`,
   `Firefox line data ${geckoLineIndex.length + geckoLineData.length + geckoLineStates.length} B, ${gzipSize(base64(geckoLineIndex) + base64(geckoLineData) + base64(geckoLineStates))} B gzipped as base64`,

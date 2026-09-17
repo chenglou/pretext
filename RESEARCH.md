@@ -36,11 +36,10 @@ closing quotation marks, so a quote next to a letter never breaks and one next t
 Asian text breaks before it opens or after it closes, without asking ICU. Its keep-all
 also breaks after punctuation in text holding a code unit above U+00FF, and a U+2028 or
 U+2029 that starts an item forces a break, in every white-space mode. Safari 26.5.2 on
-macOS 26 and iOS 26 breaks these shapes as Safari 26's source does. Both run a port of ICU's rule-based iterator
-over Chrome 153's compiled `line_normal.brk`. libicucore's `line.brk`,
-`line_normal.brk` and `line_cj.brk` ship as category overrides on that table, which
-the generator checks behave the same for every input, with Apple's per-locale
-quotation remap. Inside Thai, Lao, Khmer and Myanmar runs, `Intl.Segmenter` words
+macOS 26 and iOS 26 breaks these shapes as Safari 26's source does. Both run a port of ICU's rule-based iterator,
+Blink's over Chrome 153's compiled `line_normal.brk` and WebKit's over libicucore's
+`line.brk`, `line_normal.brk` and `line_cj.brk`, with Apple's per-locale quotation
+remap. Inside Thai, Lao, Khmer and Myanmar runs, `Intl.Segmenter` words
 stand in for the engines' dictionaries.
 
 Offline C++ ports of each engine's break code over its own ICU data found no native

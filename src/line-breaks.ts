@@ -29,7 +29,7 @@
 //   Pretext resolves no bidi levels and takes the page language as it is.
 
 import {
-  appleLineOverrides,
+  appleLineBase64,
   appleQuoteRemaps,
   blinkLinePairsBase64,
   chromiumLineNormalBase64,
@@ -145,7 +145,7 @@ export function parseBreakRules(bytes: Uint8Array): BreakRules {
 
 // UCPTRIE_FAST_GET with fastMax 0xffff (unicode/ucptrie.h:358, 601-620) and
 // ucptrie_internalSmallIndex for a fast trie (ucptrie.cpp:161-185).
-export function getCategory(rules: BreakRules, c: number): number {
+function getCategory(rules: BreakRules, c: number): number {
   const index = rules.trieIndex
   if (c <= 0xffff) return rules.trieData[index[c >> 6]! + (c & 0x3f)]!
   if (c >= rules.trieHighStart) return rules.trieData[rules.trieDataLength - 2]!
@@ -162,79 +162,6 @@ export function getCategory(rules: BreakRules, c: number): number {
     dataBlock |= index[i3Block + i3]!
   }
   return rules.trieData[dataBlock + (c & 0xf)]!
-}
-
-// The data block of index-3 entry k in a fast trie (ucptrie.cpp:161-185).
-function getDataBlock(index: number[], i3Block: number, k: number): number {
-  if ((i3Block & 0x8000) === 0) return index[i3Block + k]!
-  let at = (i3Block & 0x7fff) + (k & ~7) + (k >> 3)
-  const j = k & 7
-  return ((index[at++]! << (2 + 2 * j)) & 0x30000) | index[at + j]!
-}
-
-// Writes [start, end, category] triples into copies of the trie blocks that hold those
-// code points, so blocks shared with other code points keep their values: 64-unit BMP
-// data blocks, 32-entry index-2 and index-3 blocks and 16-unit supplementary data blocks
-// (unicode/ucptrie.h:358, 601-620). trieDataLength keeps pointing at the original high
-// value (ucptrie.cpp:74-81).
-export function withCategoryOverrides(base: BreakRules, ranges: readonly number[]): BreakRules {
-  const index = Array.from(base.trieIndex)
-  const data = Array.from(base.trieData)
-  const bmpCopies = new Map<number, number>()
-  const i2Copies = new Map<number, number>()
-  const i3Copies = new Map<number, number>()
-  const dataCopies = new Map<number, number>()
-  for (let r = 0; r < ranges.length; r += 3) {
-    const category = ranges[r + 2]!
-    for (let c = ranges[r]!; c <= ranges[r + 1]!; c++) {
-      if (c <= 0xffff) {
-        let block = bmpCopies.get(c >> 6)
-        if (block === undefined) {
-          block = data.length
-          const from = index[c >> 6]!
-          for (let k = 0; k < 64; k++) data.push(data[from + k]!)
-          index[c >> 6] = block
-          bmpCopies.set(c >> 6, block)
-        }
-        data[block + (c & 0x3f)] = category
-        continue
-      }
-      const i1 = (c >> 14) + 1020
-      let i2 = i2Copies.get(c >> 14)
-      if (i2 === undefined) {
-        i2 = index.length
-        const from = index[i1]!
-        for (let k = 0; k < 32; k++) index.push(index[from + k]!)
-        index[i1] = i2
-        i2Copies.set(c >> 14, i2)
-      }
-      const i2Entry = i2 + ((c >> 9) & 0x1f)
-      let i3 = i3Copies.get(c >> 9)
-      if (i3 === undefined) {
-        i3 = index.length
-        const from = index[i2Entry]!
-        for (let k = 0; k < 32; k++) {
-          const block = getDataBlock(index, from, k)
-          if (block > 0xffff) throw new Error('Override data block does not fit a 16-bit index-3 entry')
-          index.push(block)
-        }
-        index[i2Entry] = i3
-        i3Copies.set(c >> 9, i3)
-      }
-      const i3Entry = i3 + ((c >> 4) & 0x1f)
-      let block = dataCopies.get(c >> 4)
-      if (block === undefined) {
-        block = data.length
-        const from = index[i3Entry]!
-        for (let k = 0; k < 16; k++) data.push(data[from + k]!)
-        index[i3Entry] = block
-        dataCopies.set(c >> 4, block)
-      }
-      data[block + (c & 0xf)] = category
-    }
-  }
-  if (data.length > 0xffff || index.length > 0x7fff) throw new Error('Override blocks do not fit the trie')
-  return { ...base, trieIndex: Uint16Array.from(index), trieData: Uint16Array.from(data) }
 }
 
 const RUN = 0
@@ -370,12 +297,10 @@ function getChromiumLineRules(): BreakRules {
   return chromiumLineRules ??= parseBreakRules(decodeBase64(chromiumLineNormalBase64))
 }
 
-// libicucore's tables are Chromium's line_normal.brk with category overrides, which the
-// generator checks behave the same for every input.
 function getAppleLineRules(table: AppleLineTable): BreakRules {
   let rules = appleLineRules.get(table)
   if (rules === undefined) {
-    rules = withCategoryOverrides(getChromiumLineRules(), appleLineOverrides[table])
+    rules = parseBreakRules(decodeBase64(appleLineBase64[table]))
     appleLineRules.set(table, rules)
   }
   return rules
