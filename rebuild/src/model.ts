@@ -24,7 +24,7 @@ export type CssFont = {
 // when the caller doesn't know it. The engine then uses the default documented here, which Canvas measurement alone
 // gives, and reports the named gap wherever the fact decides a result.
 export type FontFacts = {
-  // The family the browser realizes first: Blink's primary font, the first with a space glyph (font.h:234-237); WebKit's
+  // The family the browser realizes first: Blink's primary font, the first listed family that exists (PrimaryFont with should_contain_glyph false, font_fallback_list.h:141-145); WebKit's
   // index-0 family (FontCascadeFonts.cpp:200-218); Gecko's first font of the font group. A generic keyword stands for
   // itself ('system-ui'). Default: the first family in the list. Blink and Gecko compare it with their system-font
   // keywords; WebKit compares it with Courier New, which gets no width shortcut (FontCoreText.cpp:776-782).
