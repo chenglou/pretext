@@ -285,6 +285,9 @@ Where main passes a line count and the charter fails:
 
 Main's breaks and widths can't be compared under scorer 2; the scorer-1 comparison is in git history.
 
+research/MAIN-TRIAGE.md triages these cases and the census's main-only cases, re-observed with the charter library in
+both orders: facts to learn, accidental passes, and opinions we no longer hold.
+
 ### 2.6 Gates
 
 New lab baselines keyed on scorer 2's environment keys, seeded from the forward and reverse development and held-out runs

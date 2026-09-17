@@ -84,7 +84,11 @@ of 2026-09-17 (REPORT.md §2-§7):
 - Structural deviations that need rework before inline boxes, `<br>`, text-indent, text-align or variable widths land:
   per-span styles and box sizes (Blink F1-F4, F7, F8; WebKit F1, F2; Gecko F1, F2, F5, F6) (Gecko audit class f).
 - The lab's `obligations` family and G0 baselines are derived from main's tests and the final runs; they are measurement
-  inputs until each obligation is triaged under tentpole 5. Scorer 2 baselines exist per build
+  inputs until each obligation is triaged under tentpole 5. research/MAIN-TRIAGE.md (2026-09-17) re-observed main's
+  regressions and required cases with the charter library: every lab obligation pair passes in all three browsers, and
+  the cases main passes and the charter fails (Chrome 1,069, Firefox 745, webkit-host 736) are sorted into facts to
+  learn, accidental passes and dropped opinions. They aren't lab triage records yet (TEST-ARCHITECTURE §7.1). Scorer 2
+  baselines exist per build
   (`rebuild/lab/baselines/gate-<browser>-<build>.json`); G0 is still keyed on user agents and scorer 1.
 - Found in the evaluation:
   - The browser-process languages aren't recorded, so unlabeled content reports `ui-language` and Chrome loses 3 line
