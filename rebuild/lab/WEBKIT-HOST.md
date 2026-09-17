@@ -4,22 +4,28 @@
 build 22625.1.29.11.27, the build installed Safari 27.0 runs on this Mac. It exists so WebKit work can continue while
 Safari runs are blocked. This file records how its rows compare with installed Safari's (measured 2026-09-16) and when
 they may stand in for Safari. Comparison scripts and reports are in `.artifacts/webkit-host/compare-20260916/`, and the
-host's rows are in `.artifacts/lab/webkit-host-20260916/`.
+host's rows are in `.artifacts/lab/webkit-host-20260916/`. The comparison over the final sets is in
+`.artifacts/lab/final-20260916/safari-vs-host/`, with its tools in `tools/` beside it.
 
 ## Rule
 
 Host rows may stand in for installed Safari while iterating on WebKit breaks and widths: developing the engine,
-triaging failures, bisecting. Every number that gets reported (docs, READMEs, PRs, accuracy snapshots) still comes
-from an installed Safari run. Host rows count only when:
+triaging failures, bisecting. A reported number (docs, READMEs, PRs, accuracy snapshots) comes from an installed Safari
+run, or names webkit-host as its source. Installed Safari 27.0 agreed with the host on every case of the final sets
+that isn't history-dependent ("Combined runs of the final sets" below). Whether host numbers may stand in for Safari
+without a Safari run is REPORT §7 item 1. Host rows count only when:
 
 - the host logs WebKit 22625.1.29.11.27 and installed Safari is 27.0. Any Safari or macOS update voids this until the
-  smoke comparison below runs again;
+  comparison below runs again;
 - the run reports DPR 2, visual-viewport scale 1 and `visibilityState` visible on every row;
 - a host row and a Safari row are only compared when both came from the same case file in the same order. A few
   WebKit cases depend on the cases observed before them in the same page (see "Order within a page"). In Safari that's
   true too;
-- the claim is about Range geometry (native lines, heights, widths). Canvas `measureText` values haven't been compared
-  with Safari, so host Canvas numbers are unverified.
+- the case isn't history-dependent in a two-order run. With the same document history, installed Safari and the host
+  still differed on 28 held-out observations of such cases;
+- the claim is about Range geometry (native lines, heights, widths) or the library's predictions. Predictions come from
+  OffscreenCanvas `measureText` and were equal on every case. Other Canvas values are covered only by the WebKit probes,
+  which also agreed.
 
 ## What matches
 
@@ -46,6 +52,37 @@ native errors, rejected styles or missing fonts, a constant environment, and 2,5
 launch. In the suite sample, the host and the lab's Chrome run report the same missing families: Noto Serif CJK SC (3)
 and DecoType Nastaleeq Urdu UI (1). Chrome also misses SimSun on 5 Chrome-only cases.
 
+### Combined runs of the final sets
+
+After the maintainer approved Safari runs, installed Safari 27.0 ran the final development and held-out sets as two
+combined case files, each in file order and in reverse (REPORT §2.2), from 16:22 to 16:34. webkit-host ran the same
+files in the same orders from 16:34 to 16:44. Every row had the same document history in both (`documentCaseIndex` and
+`previousCaseId`), and every run had no errors, DPR 2, scale 1 and every row visible. `tools/compare-safari-host.ts`
+compares the native derivation (`score.ts`'s `nativeView` and `nativeDifference`) and the raw geometry, and
+`tools/compare-predictions.ts` compares predictions.
+
+| Case file, order | Installed Safari rows | Cases | Derivations equal | Differ |
+|---|---|---:|---|---:|
+| `dev-all`, file order | `final-20260916/safari/dev-all-forward` (16:22) | 25,180 | all, raw geometry too | 0 |
+| `dev-all`, reverse | `dev-all-reverse` (16:23) | 25,180 | all, raw geometry too | 0 |
+| `heldout-all`, file order | `heldout-all-forward` (16:24) | 15,205 | 15,202; 1 of them has float32 noise in the raw geometry | 3 |
+| `heldout-all`, reverse | `heldout-all-reverse` (16:29) | 15,205 | 15,180 | 25 |
+
+- Each of the 28 differences is history-dependent in exactly one browser: installed Safari 10, webkit-host 18. They
+  are brackets and quotes at line edges (bracket 7, guillemet 6, fullwidth-paren 3, cjk-bracket 2, curly-single-open 2,
+  brace 1), Hebrew before `((` (3) and a soft hyphen next to a control (4). The document history matched, so these
+  layouts also depend on something outside the document, such as process state or timing.
+- The two-order runs mark the same 73 development cases history-dependent in both browsers. Held-out, installed
+  Safari marks 124 and the host 132.
+- Predictions, measure counts and gap reports are equal on every case of all four runs. The library's 350,162
+  measureText calls per development run and 306,620 per held-out run gave the same widths in both.
+- Among cases neither browser marks history-dependent, two metric statuses differ, both held-out:
+  `c-2abe3876793e1120`, whose painted line wraps only in the host, and `c-05621e0684c86d33`, the float32-noise case,
+  whose widths fail in installed Safari and are unobserved in the host.
+- Probes: all 89 `webkit-probes.ts` observations are equal, and 133 of 140 cross-check probes. The other 7 ran after
+  other documents in one Safari invocation, but in a fresh process in the host (specs/probes-safari.md "Installed
+  Safari 27.0").
+
 ## What differs
 
 ### Environment
@@ -57,8 +94,9 @@ and DecoType Nastaleeq Urdu UI (1). Chrome also misses SimSun on 5 Chrome-only c
   Safari run didn't. Neither changed any geometry.
 - Screen: the host window sits on the menu-bar display, and the old suite's Safari window was on the second display.
   Both are DPR 2.
-- `navigator.languages` is `zh-CN` in the host. No Safari value was recorded. It can only matter for `lang=""`, and the
-  one smoke case with it matched.
+- `navigator.languages` is `zh-CN` in the host and in installed Safari, and so are `navigator.language` and the Intl
+  locale (probe cross-cutting 6 env). No lang, `lang=""`, `und` and `xx` break like `en` in both
+  (specs/probes-safari.md "Installed Safari 27.0").
 
 ### Order within a page
 
@@ -96,19 +134,23 @@ Replaying 20,000 inputs left the same two differences: `https://ex.com\u00A0foo`
 `pre-wrap`. Old Safari breaks `m` | `\u00A0f`; the host breaks `m\u00A0` | `f`. The old run had observed about 119,000 more rows in
 that page context before them, including web-font rows the lab loads in other pages, so no replay can reproduce that
 history.
-These two are unresolved until installed Safari runs them in a fresh page.
+In the combined runs of the final sets, installed Safari and the host both break these two as old Safari did, `m` |
+`\u00A0f` (`c-2fa3fe5c1fdfdc44`, `c-a0a77ec55b210450`), in both orders. There they follow other cases in the same
+document, so a fresh page is still not run. The table's two URL cases give 380px in both browsers there too.
 
 A likely source is WebKit's text measurement cache (`Source/WebCore/platform/graphics/TextMeasurementCache.h`). It only
 stores a result when a countdown of recent lookups says caching pays, so whether a piece of text reuses a stored width
 or is measured again depends on what the page measured before. That fits the float-sized noise above
 (-11.351999282836914 vs -11.35200023651123) and break choices that flip exactly at a fitting edge. It hasn't been
-confirmed.
+confirmed. WebKit's break-position cache is a confirmed page-history input, in installed Safari too
+(specs/probes-safari.md "Installed Safari 27.0").
 
 ### Not compared
 
-- Canvas: no Safari probe output exists. The only Canvas use in the lab rows is the missing-font probe, whose yes/no
-  result matched on every row.
-- Painted lines: the host rows have no prediction yet (`TODO(webkit): prepare`), so there's no painter observation.
+- Canvas values other than what the library measures and the WebKit probes. The library's predictions were equal on
+  every case of the combined runs, and every `webkit-probes.ts` observation was equal (specs/probes-safari.md).
+- A fresh WebContent process in installed Safari. The runner opens its window in the user's Safari, so the
+  fresh-process probe follow-ups have host results only.
 
 ## Hosting differences checked in WebKit's source
 
@@ -143,7 +185,21 @@ From the WebKit 7625.1.29.11.27 checkout (`~/github/browser-engines/webkit-7625.
 ## Re-checking
 
 After a Safari or macOS update, or before relying on the host for a new kind of case, run the same case file in both
-(under the browser lock, while Safari isn't the frontmost app) and compare:
+under the browser lock and compare. `--allow-safari-frontmost` lets installed Safari run while it's the frontmost app
+(approved by the maintainer on 2026-09-16). The combined runs of the final sets used:
+
+```sh
+F=.artifacts/lab/final-20260916
+bash $F/tools/run-safari-combined.sh     # installed Safari: dev-all and heldout-all, both orders
+bash $F/tools/run-host-combined.sh       # webkit-host: the same files, orders and round-trip sizes
+bash $F/tools/score-combined.sh safari safari
+bash $F/tools/score-combined.sh webkit-host-combined webkit-host
+bun $F/tools/compare-safari-host.ts --safari=<safari rows> --host=<host rows> \
+  --safari-per-case=<safari forward per-case> --host-per-case=<host forward per-case> --out=<report.json>
+bun $F/tools/compare-predictions.ts --safari=<safari rows> --host=<host rows> --out=<report.json>
+```
+
+A single file:
 
 ```sh
 python3 .artifacts/session/with-browser-lock.py lab-webkit-host -- \

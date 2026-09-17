@@ -34,7 +34,8 @@ bun rebuild/lab/score.ts --rows=.artifacts/lab/smoke/chrome-rows.ndjson --cases=
 `--chunk=N` (cases per round trip, default 25), `--stall-ms=N` (fail after this long without page activity, default
 120000), `--predictor=<file>`, which bundles another module in place of `predictor.ts` for experiments, and
 `--order=file|reverse|shuffle:<seed>`, the order the selected cases run in (default `file`; see "Page-history
-dependence").
+dependence"). `--allow-safari-frontmost` (Safari only, no value) skips the wait for Safari to leave the front
+(approved by the maintainer on 2026-09-16); the lab window then opens over the user's windows.
 
 It writes `<out>/<browser>-rows.ndjson`, one row per case, and `<out>/<browser>-run.json` with totals, the case
 order, page contexts, the environment and errors. It exits nonzero when anything goes wrong: invalid cases, a launch or page
@@ -57,8 +58,8 @@ Sessions stay in the background and never activate a window.
 - Safari: a single-tab window in the user's Safari, created through AppleScript without activating it
   (safaridriver doesn't work on macOS 27). A new document in a frontmost Safari opens over the user's windows and
   takes keyboard focus there, so the driver first waits, for at most 10 minutes, until Safari isn't the frontmost
-  app, then exits with an error. If Safari takes focus anyway, the driver gives it back to the previously frontmost
-  app. Closing removes only that uniquely identified tab.
+  app, then exits with an error. `--allow-safari-frontmost` skips that wait. If Safari takes focus anyway, the driver
+  gives it back to the previously frontmost app. Closing removes only that uniquely identified tab.
 - webkit-host: the system WebKit.framework, which installed Safari runs, in a small WKWebView app
   (`rebuild/tools/webkit-host/main.swift`, built by `build.sh` into `.artifacts/webkit-host/webkit-host`). The driver
   spawns it with the page URL; it doesn't touch the user's Safari. The host never activates (accessory app, no Dock

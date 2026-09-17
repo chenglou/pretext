@@ -1,8 +1,10 @@
 # WebKit probe results
 
 Every verdict below was measured in **webkit-host (system WebKit 22625.1.29.11.27)**: a background WKWebView app on the
-system WebKit framework, the same WebKit build installed Safari 27.0 uses. Installed Safari itself was not driven, because
-it stayed the frontmost app. DPR 2, `visualViewport.scale` 1, host process languages `zh-CN`.
+system WebKit framework, the same WebKit build installed Safari 27.0 uses. DPR 2, `visualViewport.scale` 1, host process
+languages `zh-CN`. Installed Safari 27.0 ran both probe files later. Every observation of this file's probes equals the
+host's, so these verdicts hold in installed Safari, and it settles the rows that depend on Safari-app state ("Installed
+Safari 27.0" at the end).
 
 - Probes: `rebuild/probes/webkit-probes.ts` (89 probes, one fresh document each).
 - Raw results: `.artifacts/probes/webkit/webkit-host-probes.json` (run 2026-09-16 14:43, status ok, 0 errors).
@@ -179,19 +181,20 @@ Two measurement caveats found while probing:
 
 - **Page zoom** (webkit-lines H17, webkit-canvas H9, CRITIC C10 and W5): the host exposes no page zoom.
 - **DPR 1** (webkit-lines H16): this Mac has only a Retina display.
-- **Depends on Safari-app state; webkit-host values shown for reference only:**
+- **Depends on Safari-app state; webkit-host values shown for reference only.** Installed Safari has since measured
+  them, with the same values ("Installed Safari 27.0"):
   - the process ICU default locale: webkit-text H6 no lang, H7 `lang=""`, H8; webkit-canvas H11 `xx` and no lang;
     CRITIC C11;
   - preferred languages: webkit-text H30;
   - default generic font preferences: webkit-canvas H7, cross-cutting 4.
-- **Installed Safari 27.0 itself:** not driven, because Safari stayed the frontmost app. The runner's rule waits for it
-  to go to the background.
+- Page zoom and DPR 1 weren't run in installed Safari either.
 
 ## Independent cross-check, and WebKit's break-position cache
 
 A second agent was given the same task while installed Safari stayed frontmost (07:04 to at least 09:06). It encoded
 every hypothesis again, without reading the probes above, and ran them in the same webkit-host build (DPR 2, scale 1).
-Where the two encodings disagree, follow-up probes settled the cause. Installed Safari is still not run.
+Where the two encodings disagree, follow-up probes settled the cause. Installed Safari 27.0 ran it later ("Installed
+Safari 27.0").
 
 - Probes: `rebuild/probes/webkit-probes-crosscheck.ts` (118 hypothesis probes plus the follow-ups below). Verdicts:
   `bun rebuild/probes/webkit-verdicts-crosscheck.ts <output file>`.
@@ -200,7 +203,7 @@ Where the two encodings disagree, follow-up probes settled the cause. Installed 
 - Command: `python3 .artifacts/session/with-browser-lock.py <job> -- bun rebuild/probes/runner.ts --browser=webkit-host
   --probes=rebuild/probes/webkit-probes-crosscheck.ts --out=.artifacts/probes/webkit-crosscheck`. Follow-ups use
   `--only=storage`, `history`, `payload`, `cache A`, then `cache B` in a second invocation. Installed Safari:
-  `--browser=safari`, once Safari isn't the frontmost app.
+  `--browser=safari --allow-safari-frontmost`, every probe in one invocation.
 
 The cross-check's own table gives 73 confirmed, 6 refuted, 2 inconclusive and 4 not-run. After attribution, H13 (the
 empty div, correction 3 above) is the only spec error among its refuted rows. H9, webkit-text H15 and webkit-canvas
@@ -277,3 +280,63 @@ is the float32 step in correction 5.
   webkit-host process, or use content unique to one case.
 - Installed Safari: one waiter took the lock at 08:40 and found Safari frontmost again. It was stopped before opening
   a window. SIGTERM also stopped the lock helper before its cleanup ran; the dead-owner takeover recovered the lock.
+
+## Installed Safari 27.0
+
+The maintainer approved installed Safari runs on 2026-09-16 at about 14:15 ("go ahead and use safari!"). Installed
+Safari 27.0 (WebKit 22625.1.29.11.27) ran each probe file once, under the lock, at DPR 2, `visualViewport.scale` 1, every
+document visible, no focus. Terminal was the frontmost app at every check.
+
+- Runs: `webkit-probes.ts` 16:44:28 to 16:44:41 (89 documents), `webkit-probes-crosscheck.ts` 16:44:41 to 16:44:51 (140
+  probes in 61 documents). Status ok, 0 errors
+  (`.artifacts/lab/final-20260916/tools/run-safari-probes.sh`).
+- Raw results: `.artifacts/probes/webkit/installed-safari/webkit-probes/safari-probes.json` and
+  `.artifacts/probes/webkit/installed-safari/webkit-probes-crosscheck/safari-probes.json`, with `verdicts.md` beside it.
+- Command: `python3 .artifacts/session/with-browser-lock.py <job> -- bun rebuild/probes/runner.ts --browser=safari
+  --probes=rebuild/probes/<file>.ts --out=<dir> --allow-safari-frontmost`. With that flag the runner makes and closes
+  its window with AppleScript that never calls `activate`.
+- Comparison with webkit-host: `.artifacts/lab/final-20260916/tools/compare-probes.ts` compares every observation,
+  leaving out the user agent, window and screen sizes, focus and timings (`compare-host.json`). `probe-ok.ts` compares
+  each probe's own `ok` (`probe-ok.json`). There is no verdict script for `webkit-probes.ts`.
+
+### webkit-probes.ts
+
+All 89 observations equal webkit-host's. 2 probes differ only in host values: the user agent and window sizes. Each
+probe's own `ok` equals the host's too: 74 true, 4 false (webkit-lines H6, H11, H13, CRITIC §7 font-size), 10 null (the
+recorded rows) and 1 without a value (cross-cutting 6 env). No verdict in the table above changes.
+
+webkit-lines H11 kept all six spaces on line 1 under `break-spaces` in installed Safari too, after the same probe had
+laid the text out under `pre-wrap`: the break-position cache result of cross-check item 1.
+
+Rows that depend on Safari-app state, not run in webkit-host. Installed Safari gives the same values as the host:
+
+| id | installed Safari 27.0 | verdict |
+|---|---|---|
+| cross-cutting 6 env | page `lang` en; `navigator.language` zh-CN, `navigator.languages` [zh-CN], Intl locale zh-CN | recorded |
+| webkit-text H6, no lang | 5 lines | confirmed: like `en` |
+| webkit-text H7, `p lang=""` on page ja | 5 lines | confirmed |
+| webkit-text H8 | `und` and `xx`: 5 lines each | recorded: the process default has en-like quote overrides |
+| webkit-text H30 | zh, zh-Hans, zh-Hant-TW and zh-CN give identical starts on 4 strings | confirmed |
+| webkit-canvas H11, `xx` and no lang | [0, 5] | confirmed: like `en` |
+| CRITIC C11 | `lang="und"`: 2 lines [0, 5] | recorded: en-like |
+| webkit-canvas H7 | element canvas with `lang=ja` 53.327999 = DOM; OffscreenCanvas 52.445313 | confirmed |
+| cross-cutting 4 (永骨, 32px sans-serif) | ja, zh-Hans, en: DOM = OffscreenCanvas = element canvas = 64. ko: DOM = element canvas = 55.36, OffscreenCanvas 64. OffscreenCanvas draws the same pixels under all four langs | recorded |
+
+### Cross-check probes
+
+All 140 probes ran with no errors. The verdict table equals webkit-host's row by row: 73 confirmed, 6 refuted, 2
+inconclusive, 4 not run. 133 probes observe exactly what the host did. The other 7 are follow-ups whose host results
+came from separate `--only` runs, `cache B` in a fresh process. In installed Safari they ran in one invocation, after
+the documents before them:
+
+| probe | installed Safari | webkit-host, separate run | why |
+|---|---|---|---|
+| storage 8-bit vs 16-bit | keep-all `abc,def(ghi` rows: 3 lines | 1 line | likely the break-position cache (item 1): an earlier document, webkit-text H15's 8-bit row with a CJK payload, laid out the same text as 16-bit |
+| history keep-all: 16-bit then 8-bit; 8-bit then 16-bit; other prefix 16-bit then 8-bit; 16-bit then 8-bit, then 8-bit again | the 8-bit `abc,def(ghi` rows: 3 lines | 1 line | same |
+| cache B1, keep-all 8-bit payload alone | `pqr,stu(vwx`: 3 lines | 1 line | ran after cache A's 16-bit document |
+| cache B2, break-spaces `abc      xyz` alone | six spaces on line 1, 2 lines | per-space wrap, 3 lines | ran after cache A3's `pre-wrap` layout |
+
+So in installed Safari the cached results reproduce: identical text breaks differently after the same process laid out
+that text before. The fresh-process results come from webkit-host only, because the runner doesn't restart the user's
+Safari. The payload probes equal the host's: a document payload with a raw non-Latin-1 character gives 16-bit
+behaviour for Latin-1-only text in installed Safari too (item 2).

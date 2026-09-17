@@ -45,6 +45,8 @@ Options:
 - `--chrome-emulate-dsf=N`: Chrome only. DevTools device emulation (`Emulation.setDeviceMetricsOverride` with
   `deviceScaleFactor: N`), applied before the first navigation and kept for the whole run. For probes about emulated
   DPR, not for accuracy runs.
+- `--allow-safari-frontmost`: Safari only, no value. Skips the wait for Safari to leave the front (approved by the
+  maintainer on 2026-09-16); the probe window then opens over the user's windows.
 - `--dry-run`: validate the probes and print the document count without launching anything.
 
 The runner exits nonzero when anything goes wrong at run level: invalid probes, a launch or page failure, a stall, a
@@ -172,7 +174,9 @@ Sessions stay in the background and never activate a window. The driver launches
 - Safari: the repo's AppleScript session, `createBrowserSession('safari', { foreground: false })` from
   `scripts/browser-automation.ts`. It opens one single-tab window in the user's Safari (safaridriver doesn't work on
   macOS 27). The driver first waits until Safari isn't the frontmost app, because a new document in a frontmost Safari
-  opens over the user's windows. On close, the session closes its tab only if it can still identify it by URL.
+  opens over the user's windows. `--allow-safari-frontmost` skips that wait, and then the driver makes and closes its
+  window with plain AppleScript that never calls `activate` (the repo session hands focus back by activating the
+  previously frontmost app). On close, the session closes its tab only if it can still identify it by URL.
 - webkit-host: the WKWebView host on the system WebKit.framework, which installed Safari runs
   (`rebuild/tools/webkit-host`, built into `.artifacts/webkit-host/webkit-host`; the lab README's Browser sessions
   section describes it). The driver spawns it with the probe URL and a 1200 x 900 window. It never touches the user's

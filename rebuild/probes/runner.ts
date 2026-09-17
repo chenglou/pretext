@@ -28,8 +28,8 @@ function message(error: unknown): string {
 
 // ---- Arguments ----
 
-const USAGE = 'Usage: bun rebuild/probes/runner.ts --browser=chrome|safari|firefox|webkit-host --probes=<file.json|module.ts> [--out=<dir>] [--only=<id substring>] [--probe-timeout-ms=N] [--stall-ms=N] [--firefox-prefs=<file.json>] [--chrome-args=<switches>] [--chrome-emulate-dsf=N] [--dry-run]'
-const KNOWN = ['browser', 'probes', 'out', 'only', 'probe-timeout-ms', 'stall-ms', 'firefox-prefs', 'chrome-args', 'chrome-emulate-dsf', 'dry-run']
+const USAGE = 'Usage: bun rebuild/probes/runner.ts --browser=chrome|safari|firefox|webkit-host --probes=<file.json|module.ts> [--out=<dir>] [--only=<id substring>] [--probe-timeout-ms=N] [--stall-ms=N] [--firefox-prefs=<file.json>] [--chrome-args=<switches>] [--chrome-emulate-dsf=N] [--allow-safari-frontmost] [--dry-run]'
+const KNOWN = ['browser', 'probes', 'out', 'only', 'probe-timeout-ms', 'stall-ms', 'firefox-prefs', 'chrome-args', 'chrome-emulate-dsf', 'allow-safari-frontmost', 'dry-run']
 const args = new Map<string, string>()
 for (const raw of process.argv.slice(2)) {
   const match = /^--([a-z-]+)(?:=(.*))?$/s.exec(raw)
@@ -52,6 +52,10 @@ function positiveInteger(name: string, fallback: number): number {
   if (!Number.isSafeInteger(value) || value <= 0) fail(`--${name} must be a positive integer`)
   return value
 }
+// Opens the Safari probe window without waiting for Safari to leave the front (see launchSafari).
+const allowSafariFrontmost = args.has('allow-safari-frontmost')
+if (allowSafariFrontmost && args.get('allow-safari-frontmost') !== '') fail('--allow-safari-frontmost takes no value')
+if (allowSafariFrontmost && browser !== 'safari') fail('--allow-safari-frontmost applies only to --browser=safari')
 const probeTimeoutMs = positiveInteger('probe-timeout-ms', 20_000)
 const stallMs = positiveInteger('stall-ms', 90_000)
 // Extra Firefox prefs written to the profile's user.js, for example { "layout.css.devPixelsPerPx": "1.0" } to change
@@ -542,10 +546,64 @@ function frontmostApp(): string | null {
   }
 }
 
+// With --allow-safari-frontmost the user may be working in Safari. createBrowserSession's background mode hands focus
+// back after every script by calling `activate` on whichever app was frontmost, Safari itself in that case, so this path
+// never calls activate: plain AppleScript makes the one-tab window, sets its URL and closes only that uniquely identified
+// tab (the window handling of rebuild/lab/run.ts).
+function launchSafariWithoutActivate(url: string): Session {
+  const script = (lines: string[]): string => execFileSync('osascript', lines.flatMap(line => ['-e', line]), { encoding: 'utf8', timeout: 15_000 }).trim()
+  const marker = `about:blank#pretext-probes-${runId}`
+  const windowId = Number.parseInt(script([
+    'tell application "Safari"',
+    `make new document with properties {URL:${JSON.stringify(marker)}}`,
+    'repeat with targetWindow in windows',
+    `if (count of tabs of targetWindow) is 1 and URL of tab 1 of targetWindow is ${JSON.stringify(marker)} then return id of targetWindow as string`,
+    'end repeat',
+    'end tell',
+  ]), 10)
+  if (!Number.isFinite(windowId)) throw new Error('Could not find the Safari probe window')
+  script(['tell application "Safari"', `set targetWindow to first window whose id is ${windowId}`, `set URL of tab 1 of targetWindow to ${JSON.stringify(url)}`, 'end tell'])
+  const owns = (tabUrl: string): boolean => tabUrl === marker || tabUrl.startsWith(url)
+  return {
+    async close() {
+      try {
+        const urls = script([
+          'tell application "Safari"',
+          `set targetWindow to first window whose id is ${windowId}`,
+          'set tabURLs to {}',
+          'repeat with targetTab in tabs of targetWindow',
+          'set end of tabURLs to URL of targetTab',
+          'end repeat',
+          "set AppleScript's text item delimiters to linefeed",
+          'return tabURLs as string',
+          'end tell',
+        ]).split('\n').filter(owns)
+        // Close only a uniquely identifiable owned tab, never a window the user changed.
+        if (urls.length !== 1) return
+        script([
+          'tell application "Safari"',
+          `set targetWindow to first window whose id is ${windowId}`,
+          `set ownedTabs to tabs of targetWindow whose URL is ${JSON.stringify(urls[0])}`,
+          'if (count of ownedTabs) is 1 then close item 1 of ownedTabs',
+          'end tell',
+        ])
+      } catch {
+        // The owned window may already be gone.
+      }
+    },
+  }
+}
+
 // The repo's AppleScript session: a single-tab window in the user's Safari, never activated (safaridriver doesn't work
 // on macOS 27). A new document in a frontmost Safari opens over the user's windows, so wait until Safari is in the
-// background. The page reloads itself at the same URL, so the session can always identify and close its tab.
+// background, unless --allow-safari-frontmost is given: approved by the maintainer on 2026-09-16, it skips the wait and
+// opens the window over the user's windows while they use Safari, with the session above. The default still waits. The
+// page reloads itself at the same URL, so the session can always identify and close its tab.
 async function launchSafari(url: string): Promise<Session> {
+  if (allowSafariFrontmost) {
+    console.log(`[probes] safari: --allow-safari-frontmost; not waiting, no activate (frontmost app: ${frontmostApp() ?? 'unknown'})`)
+    return launchSafariWithoutActivate(url)
+  }
   const start = Date.now()
   for (let announced = false; frontmostApp() === 'Safari';) {
     if (Date.now() - start > 10 * 60_000) throw new Error('Safari stayed the frontmost app for 10 minutes; not opening the probe window over the user\'s windows')

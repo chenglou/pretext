@@ -12,8 +12,8 @@ The brief:
 
 Headlines:
 
-- **Line counts match the browser** on 98.8% to 99.9% of suite-sample cases, development and held-out: installed Chrome 153 and installed Firefox 156, and webkit-host for WebKit. Main's library gets 63.7% to 89.7% on the same cases (§2.3). The rates are pass ÷ (pass + fail); unobserved cases are left out.
-- **The rebuilt library never ran in installed Safari 27.0.** Safari was the frontmost app at every recorded check, from 07:04 to 13:25, and the checks weren't logged to a file. Every WebKit number comes from **webkit-host**: a background WKWebView app on the system WebKit 22625.1.29.11.27, the build Safari 27.0 runs. Host and Safari geometry matched exactly on all 300 smoke cases observed in both (lab/WEBKIT-HOST.md). lab/WEBKIT-HOST.md's rule says reported numbers come from installed Safari, so the WebKit numbers here don't meet it.
+- **Line counts match the browser** on 98.8% to 99.9% of suite-sample cases, development and held-out: installed Chrome 153, installed Firefox 156 and installed Safari 27.0, and webkit-host. Main's library gets 63.7% to 89.7% on the same cases (§2.3). The rates are pass ÷ (pass + fail); unobserved cases are left out.
+- **Installed Safari 27.0 lays out text exactly like webkit-host**, the background WKWebView app on the system WebKit 22625.1.29.11.27 that Safari 27.0 runs. Once the maintainer approved Safari runs (about 14:15), installed Safari ran every development and held-out case in both orders, from 16:22 to 16:34 (§2.2). With the same document history on every row, the two derive the same lines on every development case and on all but 28 of 30,410 held-out observations, each of those history-dependent in one of the two browsers. The rebuilt library's predictions are equal on every case, and so are all 89 WebKit probe observations (§5). The per-set WebKit tables still come from webkit-host.
 - **Cost:** in Chrome, about 2× main's Canvas calls on the development suite sample and 3.5× on the held-out one (mean), and prediction about 6× slower (§3).
 - **Findings for main** are in rebuild/TAKE-BACK.md, including 2 required checks main now fails in Safari 27.
 
@@ -83,8 +83,8 @@ Internally each engine implements `prepare`, `firstLine`, `nextLine(prepared, st
 
 ### 2.1 Method
 
-- Library `rebuild/src` at cb9cadb, unmodified, through the lab predictor plus gaps (`.artifacts/lab/final-20260916/tools/gaps-predictor.ts`). The one later commit, c00fd48, adds only a spec file.
-- Installed Chrome 153 and installed Firefox 156, plus webkit-host, all at DPR 2.
+- Library `rebuild/src` at cb9cadb, unmodified, through the lab predictor plus gaps (`.artifacts/lab/final-20260916/tools/gaps-predictor.ts`). No later commit, up to e5d9e54, touches `rebuild/src`.
+- Installed Chrome 153 and installed Firefox 156, plus webkit-host, all at DPR 2. Installed Safari 27.0 ran later, on combined case files (§2.2).
 - Every case file ran in file order and in reverse, one job per file under the browser lock. Each run was scored against the other with `--native-compare`.
 - Development sets, which the engine owners iterated on:
   - smoke: 299 Chrome, 297 Firefox, 300 WebKit;
@@ -103,9 +103,11 @@ What installed Safari observed:
 - main's old suite, 05:52 to 06:10;
 - two 25-case lab smoke runs at 06:20 and 06:28, and a 25-case painter probe at 06:29 (`.artifacts/lab/smoke-20260916/`, `smoke-20260916-r2/`);
 - a 300-case smoke attempt from 06:51 that ended in an error at 07:01 with no rows;
-- one 300-case lab smoke run at 07:06 (`.artifacts/lab/validate-20260916/safari/`). It ran under an idle-time exception, since reverted, while Safari was frontmost and the user had been idle 78 minutes. Its rects equal webkit-host's.
+- one 300-case lab smoke run at 07:06 (`.artifacts/lab/validate-20260916/safari/`). It ran under an idle-time exception, since reverted, while Safari was frontmost and the user had been idle 78 minutes. Its rects equal webkit-host's;
+- the combined development and held-out files in both orders, 16:22 to 16:34, predicting with the rebuilt library (§2.2);
+- both WebKit probe files, 16:44 to 16:45 (§5).
 
-None of these predicted with the rebuilt library.
+Before 16:22, nothing installed Safari observed predicted with the rebuilt library. Terminal was the frontmost app at every check around the later runs, so no window opened over a frontmost Safari.
 
 ### 2.2 Scores, forward runs
 
@@ -153,6 +155,39 @@ webkit-host (history-dependent: dev runs 5, dev suite 55, held-out runs 1, held-
 
 The reverse-order runs score the same apart from a few WebKit cells, such as dev suite widths 14383/31/5283/181 and dev ws widths 846/6/167/0.
 
+Installed Safari 27.0 ran two combined case files instead of one file per set (`tools/combine.ts`, `run-safari-combined.sh`, `score-combined.sh`). Each ran in file order and in reverse, one locked job per file per order, and the forward run was scored against the reverse one:
+
+- development `dev-all`: smoke, runs, ws, policy and suite-sample, in that order. 258 repeats of smoke cases were dropped (all identical), leaving 25,247 cases, and 25,180 after Safari's case filter. 25 cases per round trip;
+- held-out `heldout-all`: runs, ws, policy and suite-sample, 15,205 cases, 1 case per round trip, as in the per-set held-out suite-sample runs.
+
+So each case has other cases before it in its document than in the per-set runs above, and the history-dependent counts and a few cells differ from webkit-host's table. Every run had no errors, DPR 2, scale 1 and every row visible.
+
+Installed Safari 27.0 (history-dependent: dev smoke 1, dev runs 8, dev suite 64, held-out runs 1, held-out suite 123, others 0):
+
+| Group | Set (cases) | lineCount | breaks | widths | painter |
+|---|---|---|---|---|---|
+| dev | smoke (300) | 298/1/0 | 292/3/4 | 246/5/41/7 | 252/30/17 |
+| dev | runs (2,493) | 2472/9/4 | 2430/45/10 | 2176/80/174/55 | 2094/225/166 |
+| dev | ws (983) | 983/0/0 | 983/0/0 | 815/5/163/0 | 798/29/156 |
+| dev | policy (1,504) | 1501/1/2 | 1473/7/24 | 1446/19/8/31 | 1367/130/7 |
+| dev | suite (19,900) | 19818/15/3 | 19653/19/164 | 14345/42/5266/183 | 18499/946/391 |
+| dev | all (25,180) | 25072/26/9 | 24831/74/202 | 19028/151/5652/276 | 23010/1360/737 |
+| held-out | runs (2,579) | 2565/12/1 | 2527/40/11 | 2257/106/164/51 | 2181/245/152 |
+| held-out | ws (1,022) | 1019/3/0 | 1019/3/0 | 862/6/151/3 | 851/28/143 |
+| held-out | policy (1,604) | 1600/1/3 | 1577/2/25 | 1537/31/9/27 | 1424/172/8 |
+| held-out | suite (10,000) | 9822/34/21 | 9556/47/274 | 4651/47/4858/321 | 7078/1903/896 |
+| held-out | all (15,205) | 15006/50/25 | 14679/92/310 | 9307/190/5182/402 | 11534/2348/1199 |
+
+webkit-host ran the same combined files, orders and round-trip sizes from 16:34 to 16:44 (`webkit-host-combined/`). On development it scores exactly the same, with the same 73 history-dependent cases. Held-out it has 132 (runs 1, suite 131); its suite cells are 9814/34/21, 9548/47/274, 4645/46/4857/321 and 7072/1902/895, and its runs painter cell is 2180/246/152.
+
+Installed Safari against webkit-host, case by case, with the same document history on every row (`safari-vs-host/`, `tools/compare-safari-host.ts`, `tools/compare-predictions.ts`):
+
+- Development, both orders: all 25,180 native derivations are equal, and so is the raw geometry.
+- Held-out: in file order 15,202 are equal (1 of them with float32 noise in the raw geometry) and 3 differ; in reverse 15,180 are equal and 25 differ.
+- Each of the 28 differences is history-dependent in exactly one browser (installed Safari 10, webkit-host 18): brackets and quotes at line edges 21 (bracket 7, guillemet 6, fullwidth-paren 3, cjk-bracket 2, curly-single-open 2, brace 1), Hebrew before `((` 3, and a soft hyphen next to a control 4. The document history was identical, so these layouts depend on more than the earlier cases in the document, such as process state or timing.
+- Predictions, measure counts and gap reports are equal on every case of all four runs, so both browsers gave the library the same Canvas widths.
+- Among cases neither browser marks history-dependent, two metric statuses differ, both held-out: `c-2abe3876793e1120` (`runs/mixed-fonts-sizes`), whose painted line wraps only in webkit-host, and `c-05621e0684c86d33`, the float32-noise case, whose widths fail in installed Safari and are unobserved in webkit-host.
+
 Reading these:
 
 - Held-out line counts hold up.
@@ -160,7 +195,7 @@ Reading these:
 - Unobserved widths are common because many old-suite families put a soft hyphen at every width.
 - History-dependent cases:
   - Firefox: in development, 116 of 123 hold U+1F600 in Arial after an earlier `😀︎` in the same document. In held-out, 113 of 216 do; the other 103 are the `suite/U+FFFD` families, a soft hyphen next to U+FFFD, and their cause wasn't traced;
-  - WebKit: Amiri brackets, soft hyphens next to controls, and quotes at line edges (TAKE-BACK 5.1);
+  - WebKit: Amiri brackets, soft hyphens next to controls, and quotes at line edges (TAKE-BACK 5.1). In installed Safari's combined runs the largest families are `suite/original-vs-reshaped-admission` 13 and `runs/bidi-runs` 7 in development, and `suite/signed-spacing` 27 and `suite/physical-window-terminal-seam` 9 held-out;
   - Chrome: none.
 
 ### 2.3 Against main
@@ -169,6 +204,7 @@ Reading these:
 
 - On the suite samples, both sides were scored with the current scorer, leaving out cases history-dependent for either (`.artifacts/lab/final-20260916/baseline-main/<browser>/*/compare.json`).
 - On smoke, ws, policy and runs, main's rows are the 10:00 scoring in `.artifacts/lab/baseline-main/`, without `--native-compare`. Rescored with the current scorer, their line counts don't change. A few other metric statuses do: Chrome ws 1 case, webkit-host smoke 4 and ws 7. None of the rebuild's forward runs on those sets has a history-dependent case.
+- Main never ran in installed Safari, so its installed Safari rows reuse its webkit-host rows. They count on a case where installed Safari's observation derives the same native lines as the host row main was scored against: main's score then carries over unchanged (`.artifacts/lab/final-20260916/tools/safari-vs-main.ts`, `safari-vs-main/`). That held on every case compared, leaving out cases history-dependent in either run: smoke 103 (1 left out), ws 103, policy 408, runs 21, development suite 19,865 (68 left out), held-out suite 9,839 (161 left out). Main's small-set rows are rescored with the current scorer there. The rebuild's side is its installed Safari run. Main's predictions still come from webkit-host's Canvas; the rebuilt library's predictions are equal in both browsers on every case (§2.2).
 
 | Browser | Set | Cases | Main lineCount | Rebuild lineCount | Main-only passes | Rebuild-only passes |
 |---|---|---:|---|---|---:|---:|
@@ -181,6 +217,9 @@ Reading these:
 | webkit-host | smoke / ws / policy / runs | 104 / 103 / 408 / 21 | 81/23, 88/15, 383/25, 20/1 | 104/0, 103/0, 408/0, 21/0 | 0 | 23 / 15 / 25 / 1 |
 | webkit-host | dev suite | 19,878 | 15640/4235/3 | 19860/15/3 | 5 | 4,225 |
 | webkit-host | held-out suite | 9,846 | 6642/3183/21 | 9793/32/21 | 20 | 3,171 |
+| installed Safari | smoke / ws / policy / runs | 103 / 103 / 408 / 21 | 80/23, 88/15, 383/25, 20/1 | 103/0, 103/0, 408/0, 21/0 | 0 | 23 / 15 / 25 / 1 |
+| installed Safari | dev suite | 19,865 | 15631/4231/3 | 19847/15/3 | 5 | 4,221 |
+| installed Safari | held-out suite | 9,839 | 6636/3182/21 | 9786/32/21 | 20 | 3,170 |
 
 Suite widths, pass / fail / unobserved / not-applicable:
 
@@ -192,6 +231,8 @@ Suite widths, pass / fail / unobserved / not-applicable:
 | Firefox | held-out | 2312/3130/1158/3184 | 5728/424/3331/301 |
 | webkit-host | dev | 11009/2010/1876/4983 | 14376/37/5284/181 |
 | webkit-host | held-out | 3222/1210/1548/3866 | 4623/46/4858/319 |
+| installed Safari | dev | 11006/2010/1876/4973 | 14369/42/5273/181 |
+| installed Safari | held-out | 3220/1210/1545/3864 | 4619/47/4854/319 |
 
 Where main passes a line count and the rebuild fails (development suite):
 
@@ -202,7 +243,7 @@ Main's own failures are mostly control characters, the `suite/U+*` families: in 
 
 ## 3. Costs
 
-measureText calls per paragraph, mean, from the final forward runs. The rebuild counts calls that reach Canvas after its memo, over every row. Main's counts are one cold prepare per case. The smoke, runs, ws and policy columns are the development sets.
+measureText calls per paragraph, mean, from the final forward runs. The rebuild counts calls that reach Canvas after its memo, over every row. Main's counts are one cold prepare per case. The smoke, runs, ws and policy columns are the development sets. WebKit's counts are webkit-host's; installed Safari's equal them case by case on the combined files (§2.2).
 
 | Engine | smoke | runs | ws | policy | dev suite: mean / median / p95 / max | held-out suite: mean / median / p95 / max |
 |---|---:|---:|---:|---:|---|---|
@@ -265,11 +306,11 @@ Tests:
 - `bun test rebuild/src`: 137 tests in about 8 s, including building the ICU bidi oracle with clang.
 - `bunx tsc`: under 1 s.
 - `bun test rebuild/lab/score.test.ts`: 18 tests.
-- Lab case time for all sets, both orders: Chrome 316 s, Firefox 449 s, webkit-host 792 s. 638 s of webkit-host's time is the held-out suite sample.
+- Lab case time for all sets, both orders: Chrome 316 s, Firefox 449 s, webkit-host 792 s. 638 s of webkit-host's time is the held-out suite sample. On the combined files, both orders: installed Safari 683 s, webkit-host 621 s.
 
 ## 4. Canvas-versus-DOM gaps, how often they fired
 
-Counts cover all final forward runs, development and held-out, every scored case. For each gap:
+Counts cover all final forward runs, development and held-out, every scored case. WebKit's come from webkit-host; installed Safari's gap reports equal the host's on every case of the combined files (§2.2). For each gap:
 
 - **reports**: cases reporting it;
 - **all-pass**: reporting cases that pass every metric;
@@ -348,13 +389,17 @@ Verified:
   - 118 cross-check probes;
   - F1 and B5;
   - every WebKit lab run.
-- **Installed Safari 27.0**: only main's old suite rows and the lab smoke rows of §2.1. No probe, no prediction from the rebuilt library, and Canvas numbers never compared.
+- **Installed Safari 27.0**, 16:22 to 16:45:
+  - every development and held-out lab case in both orders (§2.2). Observations equal webkit-host's apart from 28 held-out ones, each history-dependent in one browser, and predictions are equal on every case;
+  - the 89 probes of `webkit-probes.ts`. Every observation and each probe's own `ok` equal webkit-host's, so its verdicts hold in installed Safari. The Safari-app-state rows the host couldn't settle now have installed Safari values, equal to the host's: `navigator.languages` is `zh-CN`; no lang, `lang=""`, `und` and `xx` break like `en` (webkit-text H6, H7, H8, webkit-canvas H11, CRITIC C11); the zh tags give identical breaks (H30); a `<canvas>` element follows the page language and OffscreenCanvas doesn't (webkit-canvas H7, cross-cutting 4) (specs/probes-safari.md "Installed Safari 27.0");
+  - the 140 cross-check probes, with the same verdicts as webkit-host row by row (73 confirmed, 6 refuted, 2 inconclusive, 4 not run). 7 follow-ups differ from the host's separate runs, all from process history: storage, 4 keep-all history probes, cache B1 and B2;
+  - main's old suite rows and the lab smoke rows of §2.1.
 
 From source or inference only:
 
 - page zoom in all browsers; WebKit has no page API for it, and C10 was checked only through CSS zoom;
 - a physical DPR 1 display;
-- Safari app state: the WebContent ICU default locale, preferred languages, default generic fonts;
+- a fresh WebContent process in installed Safari: the fresh-process results of the break-position cache and storage follow-ups come from webkit-host only;
 - painter.md probes, including probe 5 (R7), which Firefox rows contradict at narrow widths;
 - bidi paragraph builders, beyond lab rows;
 - WebKit H6, the soft-hyphen revert loop, and H22, the first line with letter spacing;
@@ -395,7 +440,7 @@ WebKit:
 - **Fonts chosen by language** (`canvas-language`): `runs/lang-spans`, development 133 of 373 and held-out 136 of 359; `policy/zh-lang` 27 in each.
 - Ligatures under letter spacing.
 - Controls: held-out C0 and C1 families fail 21 to 31 cases each (U+000B 31 of 132). The noncharacter families U+FFFF and U+FFFE fail 34 and 29.
-- Page history (TAKE-BACK 5.1).
+- Page history (TAKE-BACK 5.1), in installed Safari as in webkit-host.
 - Painter losses:
   - the carried rest of a split word, measured fresh when painted;
   - a word whose following space starts the next line;
@@ -405,7 +450,7 @@ WebKit:
 
 ## 7. Open decisions
 
-1. **Installed Safari numbers.** Run the final sets in installed Safari during a window while Safari isn't frontmost. webkit-host took 792 s of case time for all sets in both orders. **Recommendation:** schedule it before any WebKit claim leaves this branch.
+1. **Host rows in reported numbers.** Installed Safari has now run every set. Apart from history-dependent cases, it derives the same lines as webkit-host on every case, and its predictions are equal on every case (§2.2). **Recommendation:** let host rows stand in for reported WebKit geometry and predictions under lab/WEBKIT-HOST.md's conditions, named as webkit-host, and rerun the combined comparison after any Safari or macOS update.
 2. **Blink joining model** at shaping-group and line edges: OpenType, the current choice, against AAT. Over 5,272 Arabic cases the OpenType model gains 562 line counts and loses 111 widths. **Recommendation:** keep OpenType; Geeza Pro losses stay under `unsafe-to-break`.
 3. **History-dependent layouts** (WebKit's break-position cache and string storage, Firefox's emoji state, and Firefox's untraced U+FFFD cases). **Recommendation:** keep excluding them through two-order runs, add a named `page-history` gap, and file the WebKit and Firefox reports in TAKE-BACK §5.
 4. **String storage.** Text whose every character is at most U+00FF is assumed to be stored 8-bit. **Recommendation:** keep the assumption and document that text from `Response.json()` of a body with non-Latin-1 characters breaks under 16-bit rules in Safari.
@@ -442,4 +487,16 @@ Checked against `.artifacts/lab/final-20260916/`. `score.ts` re-scored five runs
   Safari frontmost (PLAN.md log). At 13:50 the maintainer was back and using Safari, so no installed-Safari run was started.
 - `rebuild/lab/FINAL-RESULTS.md` was never written; the full tables are `.artifacts/lab/final-20260916/analysis.md`, and §2
   above holds the summary tables.
+- Installed Safari after all. At about 14:15 the maintainer said "go ahead and use safari!". `run.ts` and
+  `probes/runner.ts` gained `--allow-safari-frontmost`, which skips the wait for Safari to leave the front (uncommitted).
+  Installed Safari ran the combined lab files from 16:22 to 16:34 and both probe files from 16:44 to 16:45, and
+  webkit-host ran the same combined files in between. Terminal was the frontmost app at every check, so no run opened a
+  window over a frontmost Safari. With that flag the probe runner never calls `activate`. The lab driver still gives
+  focus back with `activate` if Safari takes focus while it makes its window; whether that ever happened wasn't
+  recorded. `rebuild/src` was unchanged.
+- What that changed here: the headline, §2.1's method and observed list, §2.2's installed Safari tables and comparison,
+  §2.3's installed Safari rows, the notes in §3 and §4, §5's lists, §6's page-history line and §7 item 1. The numbers
+  come from `.artifacts/lab/final-20260916/combined-results.json`, `split-counts.json`, `safari-vs-host/` and the probe
+  comparisons. Installed Safari against main (`safari-vs-main/`) and the prediction comparison
+  (`safari-vs-host/predictions-*.json`) were computed offline afterwards, from the same rows.
 

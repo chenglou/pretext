@@ -27,14 +27,21 @@ function message(error: unknown): string {
 
 const KNOWN = ['browser', 'cases', 'out', 'limit', 'family', 'chunk', 'predictor', 'stall-ms', 'order']
 const args = new Map<string, string>()
+// Opens the Safari lab window without waiting for Safari to leave the front (see launchSafari).
+let allowSafariFrontmost = false
 for (const raw of process.argv.slice(2)) {
+  if (raw === '--allow-safari-frontmost') {
+    allowSafariFrontmost = true
+    continue
+  }
   const match = /^--([a-z-]+)=(.*)$/s.exec(raw)
-  if (match === null || !KNOWN.includes(match[1]!)) fail(`Unknown argument ${raw}. Usage: bun rebuild/lab/run.ts --browser=chrome|safari|firefox|webkit-host --cases=<cases.ndjson> --out=<dir> [--limit=N] [--family=substr] [--chunk=N] [--predictor=<file>] [--stall-ms=N] [--order=file|reverse|shuffle:<seed>]`)
+  if (match === null || !KNOWN.includes(match[1]!)) fail(`Unknown argument ${raw}. Usage: bun rebuild/lab/run.ts --browser=chrome|safari|firefox|webkit-host --cases=<cases.ndjson> --out=<dir> [--limit=N] [--family=substr] [--chunk=N] [--predictor=<file>] [--stall-ms=N] [--order=file|reverse|shuffle:<seed>] [--allow-safari-frontmost]`)
   args.set(match[1]!, match[2]!)
 }
 const browserArg = args.get('browser')
 if (browserArg !== 'chrome' && browserArg !== 'safari' && browserArg !== 'firefox' && browserArg !== 'webkit-host') fail('--browser must be chrome, safari, firefox or webkit-host')
 const browser: BrowserKind = browserArg
+if (allowSafariFrontmost && browser !== 'safari') fail('--allow-safari-frontmost applies only to --browser=safari')
 // webkit-host runs installed Safari's engine, so it takes Safari's cases.
 const caseBrowser: BrowserKind = browser === 'webkit-host' ? 'safari' : browser
 const casesPath = args.get('cases') ?? fail('--cases is required')
@@ -333,10 +340,13 @@ function backgroundAppleScript(lines: string[]): string {
 }
 
 // A new document in a frontmost Safari opens over the user's windows and takes keyboard focus there, and handing focus
-// back afterwards doesn't undo that. So the lab window is only created while Safari is in the background.
+// back afterwards doesn't undo that. So the lab window is only created while Safari is in the background, unless
+// --allow-safari-frontmost is given: approved by the maintainer on 2026-09-16, it skips the wait and opens the window
+// over the user's windows while they use Safari. The default still waits.
 async function launchSafari(url: string, runId: string, baseUrl: string): Promise<Session> {
+  if (allowSafariFrontmost) console.log(`[lab] safari: --allow-safari-frontmost; not waiting (frontmost app: ${frontmostApp() ?? 'unknown'})`)
   const waitStart = Date.now()
-  for (let announced = false; frontmostApp() === 'Safari';) {
+  for (let announced = false; !allowSafariFrontmost && frontmostApp() === 'Safari';) {
     if (Date.now() - waitStart > 10 * 60_000) throw new Error('Safari stayed the frontmost app for 10 minutes; not opening the lab window over the user\'s windows')
     if (!announced) console.log('[lab] safari: waiting until Safari is no longer the frontmost app')
     announced = true
@@ -633,7 +643,7 @@ try {
     status: errors.length === 0 ? 'ok' : 'error',
     errors,
     browser, runId, casesFile: resolve(casesPath), rowsFile: rowsPath, predictor: predictorPath,
-    family: familyFilter ?? null, limit: limit === Number.MAX_SAFE_INTEGER ? null : limit, order, chunkSize, bundleBytes,
+    family: familyFilter ?? null, limit: limit === Number.MAX_SAFE_INTEGER ? null : limit, order, chunkSize, bundleBytes, allowSafariFrontmost,
     startedAt: startedAt.toISOString(), finishedAt: finishedAt.toISOString(), durationMs: finishedAt.getTime() - startedAt.getTime(),
     // From the start to the page's first request (bundle, launch, page load), then from there to the end.
     launchMs: firstStepAt === null ? null : firstStepAt - startedAt.getTime(),
