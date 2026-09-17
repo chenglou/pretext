@@ -7,9 +7,9 @@
     "engine": "153.0.8010.48",
     "os": "26A428"
   },
-  "note": "rule families derived 2026-09-16/17; seeded from the forward and reverse runs of the derived cases",
+  "note": "charter evaluation 2026-09-17: families rerun forward and reverse with the evaluated library",
   "families": {
-    "casesFile": ".artifacts/charter-20260916/tests/families-20260916/chrome/final/family-cases.ndjson",
+    "casesFile": ".artifacts/charter-20260916/evaluate/chrome/families-derived/final/family-cases.ndjson",
     "casesSha256": "b6a19af1e276b2a5585018c85264c2bf83af9051ffbccace6a72a22ade64d78c",
     "cases": 10976,
     "totals": {
@@ -31,13 +31,13 @@
       ],
       "seededFrom": [
         {
-          "perCase": ".artifacts/charter-20260916/tests/families-20260916/chrome/final/file/chrome-per-case.ndjson",
+          "perCase": ".artifacts/charter-20260916/evaluate/chrome/families-derived/final/file/chrome-per-case.ndjson",
           "casesFile": ".artifacts/charter-20260916/tests/families-20260916/chrome/final/family-cases.ndjson",
           "cases": 10976,
           "historyDependent": 0
         },
         {
-          "perCase": ".artifacts/charter-20260916/tests/families-20260916/chrome/final/reverse/chrome-per-case.ndjson",
+          "perCase": ".artifacts/charter-20260916/evaluate/chrome/families-derived/final/reverse/chrome-per-case.ndjson",
           "casesFile": ".artifacts/charter-20260916/tests/families-20260916/chrome/final/family-cases.ndjson",
           "cases": 10976,
           "historyDependent": 0

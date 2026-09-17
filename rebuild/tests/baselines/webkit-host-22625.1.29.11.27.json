@@ -7,9 +7,9 @@
     "engine": "22625.1.29.11.27",
     "os": "26A428"
   },
-  "note": "rule families derived 2026-09-16/17; seeded from the forward and reverse runs of the derived cases",
+  "note": "charter evaluation 2026-09-17: families rerun forward and reverse with the evaluated library",
   "families": {
-    "casesFile": ".artifacts/charter-20260916/tests/families-20260916/webkit-host/final/family-cases.ndjson",
+    "casesFile": ".artifacts/charter-20260916/evaluate/webkit-host/families-derived/final/family-cases.ndjson",
     "casesSha256": "a315174d08cdb08fd454275cb00e7269e6e57a9fce20d6744a06bd43608651e2",
     "cases": 9584,
     "totals": {
@@ -31,13 +31,13 @@
       ],
       "seededFrom": [
         {
-          "perCase": ".artifacts/charter-20260916/tests/families-20260916/webkit-host/final/file/webkit-host-per-case.ndjson",
+          "perCase": ".artifacts/charter-20260916/evaluate/webkit-host/families-derived/final/file/webkit-host-per-case.ndjson",
           "casesFile": ".artifacts/charter-20260916/tests/families-20260916/webkit-host/final/family-cases.ndjson",
           "cases": 9584,
           "historyDependent": 6
         },
         {
-          "perCase": ".artifacts/charter-20260916/tests/families-20260916/webkit-host/final/reverse/webkit-host-per-case.ndjson",
+          "perCase": ".artifacts/charter-20260916/evaluate/webkit-host/families-derived/final/reverse/webkit-host-per-case.ndjson",
           "casesFile": ".artifacts/charter-20260916/tests/families-20260916/webkit-host/final/family-cases.ndjson",
           "cases": 9584,
           "historyDependent": 6

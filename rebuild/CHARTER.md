@@ -68,14 +68,32 @@ The lab declares those facts the way an app that knows its fonts would.
 
 ## Known deviations to remove
 
-From rebuild/research/{blink,webkit,gecko}-shortcut-audit.md, 2026-09-16:
+From rebuild/research/{blink,webkit,gecko}-shortcut-audit.md, 2026-09-16, with their status after the charter evaluation
+of 2026-09-17 (REPORT.md §2-§7):
 
-- Each engine's public `width` copies the lab scorer's visibility rules (tentpoles 1, 2).
-- Choices by lab score: Blink's global OpenType joining constant; Gecko's U+200D in-word suffix variant, which probe A2
-  contradicts; WebKit gap conditions reshaped to lab counts (tentpole 3).
-- Name-keyed detection: system-ui in Blink, fixed pitch and hyphen-glyph tests in WebKit, similar font-fact guesses in
-  Gecko (tentpole 3).
-- Structural deviations that need rework before inline boxes, `<br>`, text-indent, text-align or variable widths land
-  (Gecko audit class f).
-- The lab's `obligations` family and gate baselines are derived from main's tests and the final runs; they are measurement
-  inputs until each obligation is triaged under tentpole 5.
+- Removed: each engine's public `width` copying the lab scorer's visibility rules. Engines return their own geometry, and
+  the lab compares it through the observation ports (tentpoles 1, 2).
+- Removed: Blink's global OpenType joining constant (now the `joining` fact); Gecko's U+200D in-word suffix variant (now
+  `in-word-prefix`, at 77 line counts against the final runs); WebKit gap conditions reshaped to lab counts (now the source
+  conditions) (tentpole 3).
+- Removed: name-keyed detection of system-ui in Blink, fixed pitch and the hyphen glyph in WebKit, and optical sizing in
+  Gecko. They are font facts; the lab declares them for its fonts from an offline table (tentpole 3).
+- Still heuristics in the rule registry: Blink `measure/ignorables-left-out-if-8bit` (needs the RLM probe) and
+  `shape/wide-group-halved`; `shared/env/engine-from-user-agent`; the painter's `nowrap-hyphenated-or-joined`,
+  `leading-ascii-space-slice-in-span` and `zwj-at-joined-line-edges` (tentpoles 3, 7).
+- Structural deviations that need rework before inline boxes, `<br>`, text-indent, text-align or variable widths land:
+  per-span styles and box sizes (Blink F1-F4, F7, F8; WebKit F1, F2; Gecko F1, F2, F5, F6) (Gecko audit class f).
+- The lab's `obligations` family and G0 baselines are derived from main's tests and the final runs; they are measurement
+  inputs until each obligation is triaged under tentpole 5. Scorer 2 baselines exist per build
+  (`rebuild/lab/baselines/gate-<browser>-<build>.json`); G0 is still keyed on user agents and scorer 1.
+- Found in the evaluation:
+  - The browser-process languages aren't recorded, so unlabeled content reports `ui-language` and Chrome loses 3 line
+    counts against the final runs (tentpole 6).
+  - A line whose WebKit `contentWidth` isn't the union of its boxes is marked unobserved by a scorer rule, not by a ported
+    engine rule: 503 cases (tentpole 2).
+  - Native lines come from vertical-centre grouping, a named observer assumption, and `y` and `height` are outside the
+    observation contract (tentpole 2).
+  - The painter is scored by extents and wraps only, because `paint` doesn't report painted source offsets (tentpole 7).
+  - Rows don't keep the Canvas call log, so nothing replays offline (DESIGN §8.3 stage 0).
+  - No library rule carries a `// rule <id>` annotation in source, and 19 registry ids are provisional (tentpole 4).
+  - The held-out sets of 2026-09-16 are burned; there is no sealed held-out set (tentpole 4).

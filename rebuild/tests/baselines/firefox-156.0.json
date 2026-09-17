@@ -7,9 +7,9 @@
     "engine": "156.0",
     "os": "26A428"
   },
-  "note": "rule families derived 2026-09-16/17; seeded from the forward and reverse runs of the derived cases",
+  "note": "charter evaluation 2026-09-17: families rerun forward and reverse with the evaluated library",
   "families": {
-    "casesFile": ".artifacts/charter-20260916/tests/families-20260916/firefox/final/family-cases.ndjson",
+    "casesFile": ".artifacts/charter-20260916/evaluate/firefox/families-derived/final/family-cases.ndjson",
     "casesSha256": "d61d703f9a839cf6102c4091951f01817a82c961144c75e8492761953c757b7a",
     "cases": 9584,
     "totals": {
@@ -31,13 +31,13 @@
       ],
       "seededFrom": [
         {
-          "perCase": ".artifacts/charter-20260916/tests/families-20260916/firefox/final/file/firefox-per-case.ndjson",
+          "perCase": ".artifacts/charter-20260916/evaluate/firefox/families-derived/final/file/firefox-per-case.ndjson",
           "casesFile": ".artifacts/charter-20260916/tests/families-20260916/firefox/final/family-cases.ndjson",
           "cases": 9584,
           "historyDependent": 0
         },
         {
-          "perCase": ".artifacts/charter-20260916/tests/families-20260916/firefox/final/reverse/firefox-per-case.ndjson",
+          "perCase": ".artifacts/charter-20260916/evaluate/firefox/families-derived/final/reverse/firefox-per-case.ndjson",
           "casesFile": ".artifacts/charter-20260916/tests/families-20260916/firefox/final/family-cases.ndjson",
           "cases": 9584,
           "historyDependent": 0
