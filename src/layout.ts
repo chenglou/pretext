@@ -378,7 +378,12 @@ function measureAnalysis(
   const breakableFitAdvances: (number[] | null)[] = []
   let entryGeometry: (SegmentEntryGeometry | null)[] | null = null
   let lineStartProhibitions: (number[] | null)[] | null = null
-  const keepsLineStartPunctuation = engineProfile.keepsLineStartPunctuationAfterFirstCharacter && /[\u0100-\uFFFF]/.test(analysis.source)
+  // When not even the first character of an overflowing word fits an empty line,
+  // WebKit keeps the punctuation, NBSP, U+2010 and U+2013 after that character on the
+  // line, in text holding a code unit above U+00FF (InlineContentBreaker.cpp:124-158,
+  // 222-233), by its scan's line-start table. Blink and Gecko end the line after the
+  // first grapheme.
+  const keepsLineStartPunctuation = engineProfile.lineBreakScan === 'webkit' && /[\u0100-\uFFFF]/.test(analysis.source)
   let entryProfile: ReturnType<typeof getEntryMeasurementProfile> | undefined
   let measureEntry: ReturnType<typeof createEntryMeasurement> | undefined
   const getEntryProfile = () => {

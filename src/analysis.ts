@@ -35,32 +35,28 @@ export type TextAnalysis = { source: string; normalized: string } & Segmentation
 
 export type AnalysisProfile = {
   lineBreakScan: 'blink' | 'webkit' | 'gecko'
-  segmentBreakRemovalRun: SegmentBreakRemovalRun
   breakOnlyAfterNextLine: boolean
 }
-
-// The collapsible run that a ZWSP removes under the CSS segment break
-// transformation, per engine. WebKit never removes one.
-export type SegmentBreakRemovalRun = 'none' | 'blink' | 'gecko'
 
 const collapsibleWhitespaceRunRe = /[ \t\n\r\f]+/g
 const needsWhitespaceNormalizationRe = /[\t\n\r\f]| {2,}|^ | $/
 
-function isSegmentBreakRunSpace(code: number, run: SegmentBreakRemovalRun): boolean {
-  return code === 0x20 || code === 0x09 || code === 0x0A || (code === 0x0D && run === 'blink')
+function isSegmentBreakRunSpace(code: number, scan: AnalysisProfile['lineBreakScan']): boolean {
+  return code === 0x20 || code === 0x09 || code === 0x0A || (code === 0x0D && scan === 'blink')
 }
 
 // CSS segment break transformation in normal white space. Blink and Gecko
 // delete a collapsible run containing LF when a ZWSP immediately precedes or
-// follows the run. Each engine collects its own run:
+// follows the run; WebKit turns it into a space. Each engine collects its own
+// run, and engines Pretext doesn't recognize take Blink's, as they take its scan:
 // - Blink: SPACE, TAB, LF and CR.
 // - Gecko: SPACE, TAB and LF, continuing through the characters Gecko discards
 //   (SHY and bidi controls) without ending on one, and leaving out a last SPACE
 //   before a combining sequence tail. Text holding a ZWSP is 16-bit in Gecko.
 // Characters outside the run, such as FF, keep the ordinary collapse.
 export function removeSegmentBreaksNextToZeroWidthSpace(text: string, profile: AnalysisProfile): string {
-  const run = profile.segmentBreakRemovalRun
-  if (run === 'none' || !text.includes('\u200B')) return text
+  const scan = profile.lineBreakScan
+  if (scan === 'webkit' || !text.includes('\u200B')) return text
   let result = ''
   let copied = 0
   // Only a run containing LF can be removed. Expand each LF to its run once;
@@ -69,22 +65,22 @@ export function removeSegmentBreaksNextToZeroWidthSpace(text: string, profile: A
     let start = newline
     for (let index = newline - 1; index >= 0; index--) {
       const code = text.charCodeAt(index)
-      if (isSegmentBreakRunSpace(code, run)) start = index
-      else if (!(run === 'gecko' && isDiscardable(code, false))) break
+      if (isSegmentBreakRunSpace(code, scan)) start = index
+      else if (!(scan === 'gecko' && isDiscardable(code, false))) break
     }
     let end = newline + 1
     let index = end
     for (; index < text.length; index++) {
       const code = text.charCodeAt(index)
-      if (isSegmentBreakRunSpace(code, run)) end = index + 1
-      else if (!(run === 'gecko' && isDiscardable(code, false))) break
+      if (isSegmentBreakRunSpace(code, scan)) end = index + 1
+      else if (!(scan === 'gecko' && isDiscardable(code, false))) break
     }
     newline = text.indexOf('\n', index)
-    if (run === 'gecko' && text.charCodeAt(end - 1) === 0x20 && isSpaceCombiningSequenceTail(text, end)) end--
+    if (scan === 'gecko' && text.charCodeAt(end - 1) === 0x20 && isSpaceCombiningSequenceTail(text, end)) end--
     if (text.charCodeAt(start - 1) !== 0x200B && text.charCodeAt(end) !== 0x200B) continue
     result += text.slice(copied, start)
     for (let member = start; member < end; member++) {
-      if (!isSegmentBreakRunSpace(text.charCodeAt(member), run)) result += text[member]
+      if (!isSegmentBreakRunSpace(text.charCodeAt(member), scan)) result += text[member]
     }
     copied = end
   }

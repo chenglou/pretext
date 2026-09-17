@@ -531,10 +531,9 @@ describe('shared public contracts', () => {
 describe('boundary-policy regressions', () => {
   const baseProfile = {
     lineBreakScan: 'blink' as const,
-    segmentBreakRemovalRun: 'none' as const,
     breakOnlyAfterNextLine: false,
   }
-  const geckoProfile = { ...baseProfile, lineBreakScan: 'gecko' as const, segmentBreakRemovalRun: 'gecko' as const }
+  const geckoProfile = { ...baseProfile, lineBreakScan: 'gecko' as const }
 
   test('independent symbols use grapheme overflow without splitting attached marks', () => {
     for (const text of ['||||', '|\u0301|\u0301']) {
@@ -594,7 +593,7 @@ describe('boundary-policy regressions', () => {
 
   test('times and numbers keep a closing full-width comma (#225)', async () => {
     const { analyzeText } = await import('./analysis.ts')
-    const profile = { ...baseProfile, segmentBreakRemovalRun: 'blink' as const }
+    const profile = baseProfile
     for (const [text, expected] of [
       ['a 00:00:00\uFF0Cb', ['a', ' ', '00:00:00\uFF0C', 'b']],
       ['2025-08-01 00:00:00\uFF0C2025-08-01 00:00:00', ['2025-', '08-', '01', ' ', '00:00:00\uFF0C', '2025-', '08-', '01', ' ', '00:00:00']],
@@ -1008,10 +1007,12 @@ describe('boundary-policy regressions', () => {
           }
           const graphemes = getSegmentGraphemes(text).filter(grapheme => grapheme !== ' ')
           const width = Math.min(...graphemes.map(grapheme => measureWidth(grapheme, FONT))) + 0.1
+          // WebKit keeps `/` on the line of an overflowing first character in text above U+00FF.
+          const expected = scan === 'webkit' && text.includes('/') ? ['\u{1F1FA}\u{1F1F8}/', '\u{1F469}‍\u{1F4BB}'] : graphemes
           const result = layoutWithLines(prepared, width, LINE_HEIGHT)
-          expect(result.lines.map(line => line.text)).toEqual(graphemes)
+          expect(result.lines.map(line => line.text)).toEqual(expected)
           expect(collectStreamedLines(prepared, width)).toEqual(result.lines)
-          expect(layout(prepare(text, FONT), width, LINE_HEIGHT).lineCount).toBe(graphemes.length)
+          expect(layout(prepare(text, FONT), width, LINE_HEIGHT).lineCount).toBe(expected.length)
         }
       }
     } finally {
@@ -1170,10 +1171,10 @@ describe('boundary-policy regressions', () => {
   test('Chrome and Firefox remove a newline run next to a zero-width space through their own runs', async () => {
     const { getEngineProfile } = await import('./measurement.ts')
     const profile = getEngineProfile()
-    const previous = profile.segmentBreakRemovalRun
+    const previous = profile.lineBreakScan
     try {
-      for (const [browser, run, column] of [['safari', 'none', 1], ['chrome', 'blink', 2], ['firefox', 'gecko', 3]] as const) {
-        profile.segmentBreakRemovalRun = run
+      for (const [browser, scan, column] of [['safari', 'webkit', 1], ['chrome', 'blink', 2], ['firefox', 'gecko', 3]] as const) {
+        profile.lineBreakScan = scan
         // Source, then the normalized text in Safari, Chrome and Firefox.
         for (const shape of [
           ['ab\n\u200Bcd', 'ab \u200Bcd', 'ab\u200Bcd', 'ab\u200Bcd'],
@@ -1214,7 +1215,7 @@ describe('boundary-policy regressions', () => {
         }
       }
     } finally {
-      profile.segmentBreakRemovalRun = previous
+      profile.lineBreakScan = previous
     }
   })
 
@@ -1252,22 +1253,16 @@ describe('boundary-policy regressions', () => {
       const rich = prepareRichInline([{ text: 'ab\u0085', font: FONT }, { text: 'cd', font: FONT }])
       expect(measureRichInlineStats(rich, measureWidth('ab\u0085', FONT) + 0.5).lineCount).toBe(2)
       // A rich item that starts with NEL keeps the word before it, as the joined text does.
-      const previousItemBreaks = profile.inlineItemBreaks
-      profile.inlineItemBreaks = 'item-text'
-      try {
-        const parts = ['ab foo', '\u0085b'] as const
-        const width = measureWidth('ab foo', FONT) + 0.5
-        const leading = prepareRichInline(parts.map(part => ({ text: part, font: FONT })))
-        const richLines: string[] = []
-        walkRichInlineLineRanges(leading, width, range => {
-          richLines.push(materializeRichInlineLineRange(leading, range).fragments.map(fragment => fragment.text).join('').trimEnd())
-        })
-        const flatLines = lines(parts.join(''), width).map(line => line.text.trimEnd())
-        expect(flatLines).toEqual(['ab', 'foo\u0085b'])
-        expect(richLines).toEqual(flatLines)
-      } finally {
-        profile.inlineItemBreaks = previousItemBreaks
-      }
+      const parts = ['ab foo', '\u0085b'] as const
+      const width = measureWidth('ab foo', FONT) + 0.5
+      const leading = prepareRichInline(parts.map(part => ({ text: part, font: FONT })))
+      const richLines: string[] = []
+      walkRichInlineLineRanges(leading, width, range => {
+        richLines.push(materializeRichInlineLineRange(leading, range).fragments.map(fragment => fragment.text).join('').trimEnd())
+      })
+      const flatLines = lines(parts.join(''), width).map(line => line.text.trimEnd())
+      expect(flatLines).toEqual(['ab', 'foo\u0085b'])
+      expect(richLines).toEqual(flatLines)
 
       // NEL takes no letter spacing at either sign, but the gap after the
       // grapheme before it stays.
@@ -2587,13 +2582,13 @@ describe('prepare invariants', () => {
     }
     try {
       profile.lineBreakScan = 'webkit'
-      profile.keepsLineStartPunctuationAfterFirstCharacter = true
       // Safari 27 paints these at a width below one character; 8-bit `xb((c` takes one
       // character per line.
       expect(lines('xb((cā')).toEqual(['x', 'b((', 'c', 'ā'])
       expect(lines('xb((cā', { letterSpacing: 1 })).toEqual(['x', 'b((', 'c', 'ā'])
       expect(lines('xb((c')).toEqual(['x', 'b', '(', '(', 'c'])
-      profile.keepsLineStartPunctuationAfterFirstCharacter = false
+      // Blink and Gecko end the line after the first grapheme.
+      profile.lineBreakScan = 'blink'
       expect(lines('xb((cā')).toEqual(['x', 'b', '(', '(', 'c', 'ā'])
     } finally {
       Object.assign(profile, previous)
@@ -3006,35 +3001,27 @@ describe('rich-inline invariants', () => {
     // Run extents also come from the joined text: split words, dictionary
     // words, a kinsoku unit and a soft hyphen before a space. At width 30 the
     // item's own segmentation breaks inside a joined Lao word.
-    const { getEngineProfile } = await import('./measurement.ts')
-    const profile = getEngineProfile()
-    const previous = profile.inlineItemBreaks
-    profile.inlineItemBreaks = 'joined-text'
-    try {
-      for (const [parts, width] of [
-        [['Midjourney operates non-traditionally. Our features are suggested and prioritized by our ', 'community', ', projects are led by engineers and the founder, and the team is strikingly small compared to the size of our community and ambitions.'], 258],
-        [['Hello wor', 'ld again'], 85],
-        [['\u0E04\u0E27\u0E32\u0E21\u0E2A\u0E27\u0E22\u0E07', '\u0E32\u0E21\u0E02\u0E2D\u0E07\u0E18\u0E23\u0E23\u0E21\u0E0A\u0E32\u0E15\u0E34'], 50],
-        [['\u0E9E\u0EB2\u0EAA\u0EB2\u0EA5', '\u0EB2\u0EA7\u0EC0\u0E9B\u0EB1\u0E99\u0E9E\u0EB2\u0EAA\u0EB2'], 60],
-        [['\u0E9E\u0EB2\u0EAA\u0EB2\u0EA5', '\u0EB2\u0EA7\u0EC0\u0E9B\u0EB1\u0E99\u0E9E\u0EB2\u0EAA\u0EB2'], 30],
-        [['\u1019\u103C\u1014\u103A\u1019\u102C\u1018\u102C\u101E', '\u102C\u101E\u100A\u103A\u101C\u103E\u1015\u101E\u1031\u102C'], 100],
-        [['\u4E2D\u6587\u4E2D\u6587', '\u3002\u65E5\u672C\u8A9E'], 40],
-        [['foo ba', 'r\u00AD baz'], 64],
-        [['a xxxx', '\uFF0Cb'], 54.5],
-        [['T', 'po\u00ADd'], 28.8],
-      ] as const) {
-        const prepared = prepareRichInline(parts.map(text => ({ text, font: FONT })))
-        const richLines: string[] = []
-        walkRichInlineLineRanges(prepared, width, range => {
-          const line = materializeRichInlineLineRange(prepared, range)
-          richLines.push(line.fragments.map(fragment => (fragment.gapItemIndex < 0 ? '' : ' ') + fragment.text).join('').trimEnd())
-        })
-        const flat = layoutWithLines(prepareWithSegments(parts.join(''), FONT), width, LINE_HEIGHT)
-        expect(richLines).toEqual(flat.lines.map(line => line.text.trimEnd()))
-        expect(measureRichInlineStats(prepared, width).lineCount).toBe(flat.lineCount)
-      }
-    } finally {
-      profile.inlineItemBreaks = previous
+    for (const [parts, width] of [
+      [['Midjourney operates non-traditionally. Our features are suggested and prioritized by our ', 'community', ', projects are led by engineers and the founder, and the team is strikingly small compared to the size of our community and ambitions.'], 258],
+      [['Hello wor', 'ld again'], 85],
+      [['\u0E04\u0E27\u0E32\u0E21\u0E2A\u0E27\u0E22\u0E07', '\u0E32\u0E21\u0E02\u0E2D\u0E07\u0E18\u0E23\u0E23\u0E21\u0E0A\u0E32\u0E15\u0E34'], 50],
+      [['\u0E9E\u0EB2\u0EAA\u0EB2\u0EA5', '\u0EB2\u0EA7\u0EC0\u0E9B\u0EB1\u0E99\u0E9E\u0EB2\u0EAA\u0EB2'], 60],
+      [['\u0E9E\u0EB2\u0EAA\u0EB2\u0EA5', '\u0EB2\u0EA7\u0EC0\u0E9B\u0EB1\u0E99\u0E9E\u0EB2\u0EAA\u0EB2'], 30],
+      [['\u1019\u103C\u1014\u103A\u1019\u102C\u1018\u102C\u101E', '\u102C\u101E\u100A\u103A\u101C\u103E\u1015\u101E\u1031\u102C'], 100],
+      [['\u4E2D\u6587\u4E2D\u6587', '\u3002\u65E5\u672C\u8A9E'], 40],
+      [['foo ba', 'r\u00AD baz'], 64],
+      [['a xxxx', '\uFF0Cb'], 54.5],
+      [['T', 'po\u00ADd'], 28.8],
+    ] as const) {
+      const prepared = prepareRichInline(parts.map(text => ({ text, font: FONT })))
+      const richLines: string[] = []
+      walkRichInlineLineRanges(prepared, width, range => {
+        const line = materializeRichInlineLineRange(prepared, range)
+        richLines.push(line.fragments.map(fragment => (fragment.gapItemIndex < 0 ? '' : ' ') + fragment.text).join('').trimEnd())
+      })
+      const flat = layoutWithLines(prepareWithSegments(parts.join(''), FONT), width, LINE_HEIGHT)
+      expect(richLines).toEqual(flat.lines.map(line => line.text.trimEnd()))
+      expect(measureRichInlineStats(prepared, width).lineCount).toBe(flat.lineCount)
     }
   })
 
@@ -3085,10 +3072,7 @@ describe('rich-inline invariants', () => {
     }
   })
 
-  test('rich item boundaries keep their breaks while kinsoku units take emergency breaks', async () => {
-    const { getEngineProfile } = await import('./measurement.ts')
-    const profile = getEngineProfile()
-    const previous = profile.inlineItemBreaks
+  test('rich item boundaries keep their breaks while kinsoku units take emergency breaks', () => {
     const richLines = (parts: string[], width: number) => {
       const prepared = prepareRichInline(parts.map(text => ({ text, font: FONT })))
       const lines: string[] = []
@@ -3098,15 +3082,10 @@ describe('rich-inline invariants', () => {
       expect(measureRichInlineStats(prepared, width).lineCount).toBe(lines.length)
       return lines
     }
-    try {
-      profile.inlineItemBreaks = 'joined-text'
-      expect(richLines(['漢', '。字'], measureWidth('漢。', FONT) + 0.1)).toEqual(['漢。', '字'])
-      expect(richLines(['漢', '。字'], measureWidth('漢。', FONT) - 0.1)).toEqual(['漢', '。', '字'])
-      expect(richLines(['漢', '字。字'], measureWidth('字。', FONT) + 0.1)).toEqual(['漢', '字。', '字'])
-      expect(richLines(['漢', '字。字'], measureWidth('字', FONT) + 0.1)).toEqual(['漢', '字', '。', '字'])
-    } finally {
-      profile.inlineItemBreaks = previous
-    }
+    expect(richLines(['漢', '。字'], measureWidth('漢。', FONT) + 0.1)).toEqual(['漢。', '字'])
+    expect(richLines(['漢', '。字'], measureWidth('漢。', FONT) - 0.1)).toEqual(['漢', '。', '字'])
+    expect(richLines(['漢', '字。字'], measureWidth('字。', FONT) + 0.1)).toEqual(['漢', '字。', '字'])
+    expect(richLines(['漢', '字。字'], measureWidth('字', FONT) + 0.1)).toEqual(['漢', '字', '。', '字'])
   })
 
   test('split CJK rich inline items stay inside the line width', () => {
@@ -4001,16 +3980,16 @@ test('the Firefox profile breaks rich items only where their joined text breaks'
       })
     }
     const marks = ['\\u064B$', 'x\\n\\u064B$', 'x \\u064B$'].map(text => prepareWithSegments(text, '16px Test', { whiteSpace: 'pre-wrap' }).segments)
-    console.log(JSON.stringify({ inlineItemBreaks: getEngineProfile().inlineItemBreaks, rows, marks }))
+    console.log(JSON.stringify({ lineBreakScan: getEngineProfile().lineBreakScan, rows, marks }))
   `
   const child = Bun.spawnSync([process.execPath, '-e', script])
   if (child.exitCode !== 0) throw new Error(child.stderr.toString())
   const result = JSON.parse(child.stdout.toString()) as {
-    inlineItemBreaks: string
+    lineBreakScan: string
     rows: Array<{ rich: [string[], number], flat: [string[], number] }>
     marks: string[][]
   }
-  expect(result.inlineItemBreaks).toBe('joined-text')
+  expect(result.lineBreakScan).toBe('gecko')
   expect(result.rows).toHaveLength(7)
   for (const row of result.rows) expect(row.rich).toEqual(row.flat)
   // A mark after a line break or a space has no base and counts as a letter,

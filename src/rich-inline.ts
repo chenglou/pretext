@@ -410,7 +410,13 @@ export function prepareRichInline(items: RichInlineItem[]): PreparedRichInline {
   // boundary spaces share one more read.
   const documentLanguage = getDocumentLanguage()
   const profile = getEngineProfile()
-  const { inlineItemBreaks } = profile
+  // Blink runs one line-break iterator over the text of the whole inline formatting
+  // context, and Gecko collects a word across text frames until a space and breaks it
+  // in one pass, so every break fact near a boundary comes from the joined text, as
+  // for engines Pretext doesn't recognize, which take Blink's scan. WebKit finds breaks
+  // inside each inline box from that box's own text, and decides a boundary between
+  // boxes from the previous box's last two characters.
+  const breaksFromItemText = profile.lineBreakScan === 'webkit'
   // A collapsed SPACE can have zero or negative advance. Its existence and
   // ordinary break opportunity must survive independently of that number.
   let pendingGapWidth: number | null = null
@@ -437,7 +443,7 @@ export function prepareRichInline(items: RichInlineItem[]): PreparedRichInline {
         portion.start = joinedText.length
         for (let s = portion.startSegmentIndex; s < endSegmentIndex; s++) joinedText += segments[s]!
       }
-      if (inlineItemBreaks === 'joined-text') {
+      if (!breaksFromItemText) {
         const breakOffsets = getJoinedBreakOffsets(joinedText, profile, documentLanguage)
         let breakIndex = 0
         for (let i = 0; i < joinedPortions.length; i++) {
@@ -493,7 +499,7 @@ export function prepareRichInline(items: RichInlineItem[]): PreparedRichInline {
     const hasLeadingWhitespace = start > 0
     const hasTrailingWhitespace = end < text.length
     const whitespaceBefore = pendingGapWidth !== null || hasLeadingWhitespace
-    if (inlineItemBreaks === 'item-text') boundaryContexts[index] = text.slice(Math.max(0, end - 2), end)
+    if (breaksFromItemText) boundaryContexts[index] = text.slice(Math.max(0, end - 2), end)
 
     const gapBefore = pendingGapWidth ?? (
       hasLeadingWhitespace ? getCollapsedSpaceWidth(item.font, letterSpacing, documentLanguage) : 0

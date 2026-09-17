@@ -833,7 +833,7 @@ to a grapheme inside an item segment when needed. Where an item's segments hide 
 joined break, or offer one inside a joined word, the walker ends at the joined
 break or fills graphemes, as the flat walker splits a word.
 
-WebKit breaks differently, and `inlineItemBreaks` records that. Its inline items
+WebKit breaks differently, and the WebKit profile follows it. Its inline items
 builder runs a break iterator over each inline box's own text, and a boundary
 between boxes is breakable when the next box's text can break at its start with
 the previous box's last two characters as prior context. Installed Safari 26.5.2

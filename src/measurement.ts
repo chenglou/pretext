@@ -1,7 +1,4 @@
-import {
-  getSharedGraphemeSegmenter,
-  type SegmentBreakRemovalRun,
-} from './analysis.js'
+import { getSharedGraphemeSegmenter } from './analysis.js'
 import type { SegmentEntryGeometry } from './entry-geometry.js'
 
 type EntryMeasurement = {
@@ -44,9 +41,6 @@ export type EngineProfile = {
   // Canvas splits words at spaces and shows none of it; Gecko shapes words
   // without their spaces.
   measureTextWithFollowingSpace: boolean
-  // Blink and Gecko remove a collapsible newline run next to a ZWSP, each
-  // through its own run. WebKit turns it into a space.
-  segmentBreakRemovalRun: SegmentBreakRemovalRun
   // WebKit and Gecko letter-space the visible discretionary hyphen itself.
   // Blink shapes it separately, without spacing.
   letterSpaceDiscretionaryHyphen: boolean
@@ -77,12 +71,6 @@ export type EngineProfile = {
   // Gecko draws NEL with no advance while its Canvas measures a space, so both keep
   // NEL as ordinary text.
   breakOnlyAfterNextLine: boolean
-  // When not even the first character of an overflowing word fits an empty line,
-  // WebKit keeps the punctuation, NBSP, U+2010 and U+2013 after that character on the
-  // line, in text holding a code unit above U+00FF
-  // (InlineContentBreaker.cpp:124-158, 222-233). Blink and Gecko end the line after
-  // the first grapheme.
-  keepsLineStartPunctuationAfterFirstCharacter: boolean
   // WebKit moves a tab to the following stop when less than half a space would
   // remain before the next one (FontCascade::tabWidth).
   skipNarrowTabStops: boolean
@@ -100,14 +88,6 @@ export type EngineProfile = {
   // space (CanvasRenderingContext2D.cpp:4570-4573) and other controls as a hexbox. Chrome and
   // Safari give most controls an advance on the page, as their Canvas does.
   hidesControlCharacters: boolean
-  // Where rich-inline items break near a boundary. Blink runs one line-break
-  // iterator over the text of the whole inline formatting context, and Gecko
-  // collects a word across text frames until a space and breaks it in one pass,
-  // so every break fact near a boundary comes from the joined text. WebKit finds
-  // breaks inside each inline box from that box's own text, and decides a
-  // boundary between boxes from the previous box's last two characters. Engines
-  // Pretext doesn't recognize use the joined text, as Blink and Gecko do.
-  inlineItemBreaks: 'joined-text' | 'item-text'
 }
 
 export type BreakableFitMode = 'sum-graphemes' | 'segment-prefixes' | 'pair-context'
@@ -288,17 +268,14 @@ export function getEngineProfile(): EngineProfile {
     lineFitEpsilon: engine === 'webkit' ? 1 / 64 : 0.005,
     preferPrefixWidthsForBreakableRuns: engine === 'webkit' || engine === 'gecko',
     measureTextWithFollowingSpace: engine === 'webkit',
-    segmentBreakRemovalRun: engine === 'blink' ? 'blink' : engine === 'gecko' ? 'gecko' : 'none',
     letterSpaceDiscretionaryHyphen: engine !== 'blink',
     shapesMarksAcrossSoftHyphen: engine !== 'webkit' && engine !== 'gecko',
     unfitHyphenRetreat: engine === 'blink' ? 'reduced-width' : engine === 'gecko' ? 'full-width' : 'none',
     breakOnlyAfterNextLine: engine === 'webkit',
-    keepsLineStartPunctuationAfterFirstCharacter: engine === 'webkit',
     skipNarrowTabStops: engine === 'webkit',
     hangTabs: engine !== 'gecko',
     zeroWidthGlueTakesLine: engine !== 'gecko',
     hidesControlCharacters: engine === 'gecko',
-    inlineItemBreaks: engine === 'webkit' ? 'item-text' : 'joined-text',
   }
   cachedEngineProfile = profile
   return profile
