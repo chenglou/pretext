@@ -22,7 +22,7 @@ Terms:
 | Path | What |
 |---|---|
 | `rebuild/tests/rules.json`, `registry.ts`, `import-rules.ts`, `rule-changes.json` | The rule registry and how it's generated |
-| `rebuild/tests/families/` | Family declarations (`lines.ts`, `breaks.ts`, `fonts.ts`), `catalogue.ts`, the family types and pairwise covering rows (`covering.ts`) |
+| `rebuild/tests/families/` | Family declarations (`lines.ts`, `breaks.ts`, `fonts.ts`, and `inline.ts` for inline structure, line slots, alignment and process languages), `catalogue.ts`, the family types and pairwise covering rows (`covering.ts`) |
 | `rebuild/tests/fit.ts` | Each browser's fit arithmetic, from recorded probe verdicts |
 | `rebuild/tests/derive.ts`, `noop-predictor.ts`, `observe-families.sh` | Width derivation and the observation loop |
 | `rebuild/tests/facts.ts`, `seed-facts-20260916.sh`, `rerun-probes.sh`; `rebuild/facts/<engine>/<engine build>.ndjson` | Versioned probe facts |
@@ -52,13 +52,15 @@ Derived case files, rows and derivation records live under `.artifacts/charter-2
 - `bun rebuild/tests/import-rules.ts` writes `rules.json` from the 2026-09-16 catalogue (399 rules) and `rule-changes.json`:
   - 28 rules removed, each with its replacement: the lab-visibility widths, the choices by score and the name keys the owners replaced;
   - 7 reclassified;
-  - 44 added.
-  - 415 rules are current.
+  - 99 added: 44 from the owners' stage 1 reports, and 55 for stage 5 (2026-09-17).
+  - 470 rules are current.
 - `declaredBy` says where an id comes from:
   - the catalogue;
   - the Blink owner, who declared ids;
-  - `provisional`, for 19 WebKit and Gecko replacements that the owner reports gave only as table rows.
-- A rule's source annotation is `// rule <id>` in `rebuild/src`. `coverage.ts` lists rules without one (all 415 today) and annotations the registry doesn't know. Once owners annotate, the registry is regenerated from the annotations.
+  - `provisional`, for 19 WebKit and Gecko replacements that the owner reports gave only as table rows;
+  - `provisional (stage 5, feature families 2026-09-17)`, for the 55 stage 5 rules. They come from DESIGN.md §1.1, §2.9 and §8.3 stage 5 with the architect's citations; the engine owners confirm or rename them when they annotate the source.
+- The stage 5 rules are 17 Blink, 17 WebKit and 16 Gecko rules for box edges, per-element styles, atomic inlines, `<br>`, `<wbr>`, text-indent, text-align and line slots; 3 observation rules for `Element.getClientRects()`; and 2 observer assumptions (kind `observer assumption`): `shared/lab/vertical-centre-grouping` and `shared/lab/slot-rows`.
+- A rule's source annotation is `// rule <id>` in `rebuild/src`. `coverage.ts` lists rules without one (all 470 today) and annotations the registry doesn't know. Once owners annotate, the registry is regenerated from the annotations.
 
 ## 4. Rule-targeted families
 
@@ -103,6 +105,23 @@ Totals:
 - Chrome: 1,652 paragraphs in 22 families.
 - webkit-host and Firefox: 1,526 paragraphs in 20 families each.
 
+**Stage 5 families** (`families/inline.ts`, 2026-09-17). Their paragraphs are trees (lab/types.ts `InlineStructure`, built with `lab/cases/build.ts` `treeParagraph`); a tree that is flat becomes an ordinary flat case with its flat id.
+
+| Family | Engines | Relevant axes | Paragraphs per engine |
+|---|---|---|---:|
+| box-edges | all | padding, border, margin or negative margin × start, end or both sides × a span holding a word, crossing a break, or inside a word | 288 |
+| nested-box-edges | all | end edges on the inner, outer or both spans × padding, border and padding, or margin × start edges or none | 72 |
+| nowrap-spans | all | nowrap in normal, normal in nowrap, pre-wrap in nowrap, nowrap in pre-wrap, pre in normal × where the spaces sit against the span edges | 80 |
+| atomic-inlines | all | letter, space, NBSP or ideograph before × the same after × normal block, nowrap span or pre-wrap block | 288 |
+| br-elements | all | word, space, spaces and tab, or nothing before × word, space and word, or a second br after × normal, pre-wrap, pre-line, break-spaces | 192 |
+| wbr-elements | all | Latin, Hangul, before a space, ideographs × normal, keep-all, break-all × normal, pre-wrap, inside a nowrap span | 144 |
+| text-indent | all | 16, 40.3, −12, −40px × words, a tab, a br, a long word × LTR, RTL | 128 |
+| text-align | all | start, end, center, justify, left, right × LTR, RTL × a last word that kerns with the space | 144 |
+| line-slots | all | equal rows, a wide first row, a wide second row × left, right, both × 40 or 37.3px × words, a long first word, tabs | 216 |
+| process-languages | Blink | `a”b`, small kana, iteration marks, a middle dot × lang="" on the block, a span, a span inside `lang=ja` × auto, strict, loose; derived under two application locales | 72 |
+
+Totals: Chrome 1,624 paragraphs in 10 families (and the 72 process-languages paragraphs again under en-US); webkit-host and Firefox 1,552 in 9 each.
+
 ## 5. Deriving widths from observations
 
 `bun rebuild/tests/derive.ts --browser=<browser> --dir=<dir>` runs one offline step. It exits 10 and prints the case files to observe, or exits 0 once `<dir>/final` holds the family cases. It reads native rows only; derivation runs use `noop-predictor.ts`, so no library code runs in the page.
@@ -130,8 +149,12 @@ Totals:
     - `no-line-inside`: every width inside the window was observed without a line starting at s;
     - `no-short-width`: no width below the window where the line doesn't reach k;
     - `rounds-exhausted`: bisection ran out of rounds.
-- **Line keys.** A native line's key is its lowest code point offset with a positive rect, under `score.ts nativeLines` grouping (an observer assumption). Keys only decide where to look.
-- **Consistency.** Derivation refuses rounds observed under another build or DPR.
+- **Line keys.** A native line's key is its lowest code point offset with a positive rect, under `score.ts nativeLines` grouping (an observer assumption). Keys only decide where to look. An atomic inline, `<br>` or `<wbr>` holds no offset, so a break just before an atomic inline and one just after it have the same key; the bracket at that key still includes the box when the line can't break before it.
+- **Consistency.** Derivation refuses rounds observed under another build, DPR or set of given process languages.
+- **Structured paragraphs** (stage 5):
+  - Pass A cases leave out the line slots and the text-indent: break opportunities are properties of the content, floats wider than width 1 stack past their rows, and a negative indent lets the first line hold more than one piece. Pass A sets `overflow-wrap: normal` on every span as well as the block.
+  - No sized pass is narrower than the widest row's left plus right insets. Below that the row's floats don't fit side by side and one drops into the next row, which breaks the slot protocol (DESIGN.md §2.9).
+  - T adds the first row's insets, and for targets starting at 0 the text-indent, to the extent. Box edges and atomic inlines aren't added; where they decide a bracket, pass D finds it.
 - **Outputs** in `final/`:
   - `family-cases.ndjson`: per paragraph the A and B cases, and per resolved target the reach and short widths;
   - `derivation.ndjson`: each case's family, rules, role, target, offset and the case ids it was derived from;
@@ -144,7 +167,11 @@ Totals:
 3. Repeat until `final/` exists.
 4. Run the family file in file order and reversed with `lab/predictor.ts`, and score both with `--native-compare`.
 
-It stops after one failed job.
+It stops after one failed job, and pauses 20 s after every hold of the lock. Environment:
+
+- `FAMILIES=a,b`: derive only these families, read when the directory is first planned.
+- `LAB_RUN_ARGS`: more `run.ts` arguments for every job, such as `--chrome-apple-languages=en-US --chrome-accept-languages=en-US,en`.
+- `FINAL_RUNS=native`: the final runs use `noop-predictor.ts`, into `final/native-file` and `final/native-reverse`, and compare only native observations. This is for families whose inputs the engine ports don't implement yet. Coverage doesn't read these runs.
 
 ## 6. First runs, 2026-09-16/17
 
@@ -189,6 +216,34 @@ Families with the most line count or break losses. These are measurements of the
   - joining: lineCount 680 of 736, breaks 606;
   - fit-bound: lineCount 341 of 360, breaks 330, widths 240;
   - hyphen-classes 744 of 756; hyphen-glyph 536 of 544.
+
+### Stage 5 families, 2026-09-17
+
+Native derivation only, seed `feature-families-20260917`, into `.artifacts/tests/features-20260917/<browser>/` (`chain.sh` there). The same builds, macOS 26A428, DPR 2. The given process languages were Chrome `uiLanguage` zh-CN (and en-US for `chrome-en-US`), webkit-host `preferredLanguages` zh-CN with ICU default `en_US_POSIX`, Firefox `regionalPrefsLocale` zh-hans-us. The final runs used `noop-predictor.ts` (`FINAL_RUNS=native`), because the ports don't implement structured inputs yet. The last column compares the native observations of the forward and reverse runs.
+
+| Browser | Families | Paragraphs | Rounds | Targets | Resolved | At derived width | Unresolved | No reach | Non-monotone | Family cases | History-dependent |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| Chrome, zh-CN | 10 | 1,624 | 12 | 7,168 | 5,011 | 3,804 | 484 | 1,673 | 180 | 12,882 | 0 |
+| Chrome, en-US | 1 | 72 | 6 | 270 | 180 | 165 | 18 | 72 | 0 | 468 | 0 |
+| webkit-host | 9 | 1,552 | 12 | 6,792 | 4,699 | 131 | 489 | 1,604 | 184 | 12,150 | 0 |
+| Firefox | 9 | 1,552 | 12 | 6,727 | 4,627 | 3,520 | 477 | 1,623 | 186 | 11,946 | 0 |
+
+Every unresolved target is `no-line-inside`, most of them in line-slots (336 Chrome, 332 webkit-host, 339 Firefox), where the line before it moves between rows. No native observation errors, rejected styles or missing fonts; every code point rect found its node rect (`pointRectsByCentre` 0). The smoke runs before the chain saw one rect per `<wbr>` in Firefox and none in Chrome and webkit-host.
+
+What the offsets say. They are lengths the derivation leaves to pass D, so they show the rules at work:
+
+- **Box edges.**
+  - Chrome: 6px (134 brackets); 0.3984375px (86), the declared 0.4px in LayoutUnits; 0.5px (41), a 0.4px border snapped to one device pixel; −6px (30), negative margins.
+  - Firefox: 6px (146), 0.4px (93), 0.5px (48).
+  - Nested end edges: Chrome 8px (120) and 16px (18); Firefox 8px (136) and 16px (24).
+- **Atomic inlines and nowrap spans.** 24px, 13.296875px (13.3px in LayoutUnits) and 26px (24 + 4 − 2) in Chrome, 24, 13.3 and 26px in Firefox: brackets where the line can't break before the box. Nowrap spans: 4px padding.
+- **text-align, Chrome.** 32 brackets at 0.3671875px, 16 at 0.546875px and 16 at 1.109375px, where the line ends after a word that kerns with the space. They occur under `center`, `end`, `justify` and `right` in both directions (8 of 36 targets each), and never under `start` or `left`. `line_info.cc:127-175` gives NeedsAccurateEndPosition for `left` in RTL and `right` in LTR, and an RTL block has bidi (`inline_items_builder.cc:1486-1488`), so `right` in RTL and `left` in RTL aren't explained yet: a fact for the Blink owner to attribute. Firefox has every text-align and wbr bracket at the derived width, as Gecko doesn't reshape line ends.
+- **Line slots.**
+  - −80, −74.6 and −48.2px in Chrome, −80 and −74.6px in Firefox: the line reaching k sits below a wide first row, in a narrower row or at full width.
+  - +16.95 and +28.9px in Firefox's tab paragraphs: a tab beside floats takes more room than in the unwrapped pass.
+- **text-indent and br, Chrome.** −40.04, −80.08, −116.52 and −144.49px only in RTL `pre-wrap` paragraphs with a tab after the indent, and −40 to −76.5px in RTL `pre-wrap` and `break-spaces` lines that start with a preserved space after `<br>`. There the unwrapped extent overshoots, and pass D resolved every target.
+- **webkit-host.** Only 131 of 4,699 brackets are at the derived width; most offsets lie between −1.3 and 0px, from partial Range edges snapped to whole px (§6 above). 144 `<wbr>` brackets sit one LayoutUnit above it.
+- **Process languages, Chrome zh-CN against en-US.** 18 of the 72 paragraphs have other break opportunities at width 1: all of them `aa”bb`, whether lang="" is on the block, a span or a span inside `lang=ja`, under `auto`, `strict` and `loose` alike. zh-CN breaks after `”` and en-US doesn't, and the line-break keyword changes nothing. The 162 targets resolved under both locales have the same brackets.
 
 ## 7. Versioned facts
 
@@ -252,15 +307,20 @@ Reach from generic or main-derived case families is measurement and doesn't coun
 
 With `--previous`, a rule that loses its last observed family exits 1.
 
-| Engine | Current rules | Covered | By tests | By facts | By families | Uncovered | Probe labels without a holding fact |
-|---|---:|---:|---:|---:|---:|---:|---:|
-| Blink | 157 | 122 | 39 | 57 | 90 | 35 | 8 |
-| WebKit | 126 | 86 | 23 | 47 | 74 | 40 | 10 |
-| Gecko | 105 | 85 | 51 | 55 | 60 | 20 | 2 |
-| Shared | 27 | 12 | 6 | 6 | 0 | 15 | 0 |
+Also listed: rules with a derived family, whose family has resolved brackets in the engine's browser but no scored prediction run yet (`derivedFamilies`, counted as `derivedOnly`). They don't count as covered.
+
+Regenerated 2026-09-17 with the stage 5 rules, from `rebuild/facts/*` and the derivation directories `.artifacts/charter-20260916/tests/families-20260916/<browser>` and `.artifacts/tests/features-20260917/<browser>` (plus `chrome-en-US`), against the previous matrix: no rule lost its last observed family.
+
+| Engine | Current rules | Covered | By tests | By facts | By families | Uncovered | Uncovered with a derived family | Probe labels without a holding fact |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| Blink | 175 | 122 | 39 | 57 | 90 | 53 | 18 | 8 |
+| WebKit | 144 | 86 | 23 | 47 | 74 | 58 | 17 | 10 |
+| Gecko | 122 | 85 | 51 | 55 | 60 | 37 | 16 | 2 |
+| Shared | 29 | 12 | 6 | 6 | 0 | 17 | 0 | 0 |
 
 What stays uncovered:
 
+- the stage 5 rules: all 50 engine rules have derived families, which count once the ports predict structured paragraphs and the families run forward and reverse with `lab/predictor.ts`. The three `Element.getClientRects()` observation rules and the two observer assumptions have none;
 - the new output geometry rules. Their evidence is the observation ports' tests and scorer v2's comparisons, which the registry doesn't list yet;
 - builder scaffolding: `webkit/builder/*`, `webkit/ilb/*`, `gecko/script/*`;
 - gaps no family triggers: dictionary breaks unavailable, page zoom, page history, float32 precision, bitmap emoji size;
@@ -285,6 +345,8 @@ Six current rules are still heuristics or choices by score: `blink/measure/ignor
 | `firefox-156.0.json` | Firefox 156.0 | 9,584 | 35,117 (9,422 / 9,166 / 8,481 / 8,048) | 0 | 0 |
 
 Each baseline checked against its own runs: 0 lost pairs, pass.
+
+The stage 5 families have no baseline yet. `gate.ts seed` needs forward and reverse runs scored with predictions, and the engine ports don't implement structured inputs yet. Their derived case files are ready: `.artifacts/tests/features-20260917/<browser>/final/family-cases.ndjson`. Once the ports predict, run `observe-families.sh` in each of those directories with `FINAL_RUNS` unset; derivation is already final, so only the forward and reverse runs happen. Then seed a new baseline per browser, and one for `chrome-en-US`, whose environment key names another `uiLanguage`.
 
 ## 10. Main's tests
 
@@ -319,3 +381,5 @@ A macOS update moves all three keys.
 - Family runs in installed Safari; webkit-host stands in.
 - In-probe fact declarations with value-free check names (§4.1); painter probes.
 - Page-history preludes and per-case isolation protocols (§6.5).
+- For structured cases: the scorer's comparison of `elements` and the slot-rows assumption; line keys that place atomic inlines; baselines for the stage 5 families (§9).
+- A second controlled locale for Firefox and webkit-host: Firefox's Mac command line passes a Cocoa `-AppleLanguages` pair on as arguments to open, and webkit-host rejects arguments it doesn't know (lab README, "Browser-process languages").

@@ -5,10 +5,11 @@
 import { describe, expect, test } from 'bun:test'
 import { existsSync } from 'node:fs'
 import { PINNED_BUILDS, type BlinkEnvironment } from '../../env.js'
+import { indexContent } from '../../content.js'
 import { UNKNOWN_FONT_FACTS, type Paragraph } from '../../model.js'
 import { forEachLine } from '../../../tools/lines.ts'
 import { LineBreakIterator, lineTable } from './breaks.js'
-import { buildContent, styles } from './content.js'
+import { buildContent, stylesOf } from './content.js'
 import { LB_SA, lineBreakClass } from './props.js'
 
 const WORK = `${process.env['HOME']}/github/browser-engines/pretext-emulation-20260915/runtime-parity/blink-webkit/work`
@@ -20,10 +21,10 @@ function paragraphOf(r: Request): Paragraph {
   const font = { family: 'Arial', size: 16, weight: 400, style: 'normal' as const, facts: UNKNOWN_FONT_FACTS }
   // The oracle's page has <html lang="en">; a request's lang is the div's (null: none, "": lang="").
   return {
-    runs: [{ text: r.text, node: 'text', font, letterSpacing: 0, wordSpacing: 0, lang: null }], font, letterSpacing: 0, wordSpacing: 0,
+    content: [{ kind: 'text', text: r.text }], font, letterSpacing: 0, wordSpacing: 0,
     width: 100, lineHeight: 20, whiteSpace: r.whiteSpace, wordBreak: r.wordBreak, overflowWrap: 'normal', lineBreak: 'auto', tabSize: 8,
     // No lang on the div inherits <html lang="en">, which the model writes as the element's own lang.
-    direction: 'ltr', lang: r.lang ?? 'en',
+    direction: 'ltr', lang: r.lang ?? 'en', textIndent: 0, textAlign: 'start',
   }
 }
 
@@ -34,8 +35,9 @@ export function opportunities(r: Request): number[] {
     engine: 'blink', build: PINNED_BUILDS.blink, devicePixelRatio: 1, pageLang: 'en', contentLanguage: null, uiLanguage: 'zh-CN',
     dictionaryBreaks: { kind: 'unavailable' },
   }
-  const { styles: st, styleOfRun } = styles(paragraph)
-  const content = buildContent(paragraph, styleOfRun)
+  const index = indexContent(paragraph)
+  const { styles: st, styleOfLeaf, styleOfElement } = stylesOf(paragraph, index, 1)
+  const content = buildContent(index, st, styleOfLeaf, styleOfElement, () => false)
   let is8Bit = true
   for (let i = 0; i < content.text.length; i++) if (content.text.charCodeAt(i) > 0xff) { is8Bit = false; break }
   const it = new LineBreakIterator(content.text, is8Bit, {

@@ -1,64 +1,34 @@
-// Blink (Chrome 153.0.8010.48). prepare builds text_content, items, bidi levels, script runs and shaping groups and
-// measures the groups; nextLine runs LineBreaker::NextLine for one line and returns what LogicalLineBuilder and
-// InlineLayoutAlgorithm make of its item results: the fragment items in visual order at their LayoutUnit positions, with
-// glyph clusters and the offset mapping (DESIGN.md §2.3), and the fragments in logical order.
+// Blink (Chrome 153.0.8010.48). prepare builds text_content, items, bidi levels, script runs and shaping groups from the
+// inline tree and measures the groups; nextLine runs LineBreaker::NextLine for one line in one layout opportunity and
+// returns what LogicalLineBuilder and InlineLayoutAlgorithm make of its item results: the fragment items in visual order
+// at their LayoutUnit positions, with glyph clusters and the offset mapping (DESIGN.md §2.3), and the fragments in logical
+// order.
+import { indexContent } from '../../content.js'
 import type { BlinkEnvironment } from '../../env.js'
 import type { Measurer } from '../../measure/canvas.js'
-import type { BlinkGlyphCluster, BlinkItem, BlinkLine, BlinkLineGeometry, BlinkMappingUnit, Fragment, Gap, Paragraph } from '../../model.js'
+import type {
+  BlinkGlyphCluster, BlinkItem, BlinkLine, BlinkLineGeometry, BlinkLineResult, BlinkMappingUnit, Fragment, Gap, LineSlot, Paragraph, TextAlign,
+} from '../../model.js'
 import { graphemeBoundaries, graphemeRulesFor } from '../../unicode/grapheme.js'
-import type { EngineImplementation } from '../engine.js'
+import { UnportedFeature, type EngineImplementation } from '../engine.js'
 import { hasDictionaryCharacters, lineTable } from './breaks.js'
-import { buildContent, segmentBidiRuns, styles as stylesOf } from './content.js'
+import { breaksShapingAfter, breaksShapingBefore, buildContent, collapsesWhiteSpace, lengthLU, segmentBidiRuns, stylesOf, wrapsLines } from './content.js'
 import { addGap } from './gaps.js'
 import { hanKerningMayApply, measureHanKerningFontData } from './hankerning.js'
 import { LineBreaker, type LineInfo } from './line-breaker.js'
 import { USCRIPT_LATIN, isExtendedPictographic, isMark } from './props.js'
 import { scriptsPerUnit } from './script.js'
 import {
-  joinsAcross, luTrunc, measureGroups, pairAdjust16, styleContexts, viewPrefix16, widthOf16, type Shaper, type View,
+  isClusterBoundary, joinsAcross, luCeil, startsClusterInsideGrapheme, GRAPHEME_CLUSTERS_DETAIL, luTrunc, measureGroups, pairAdjust16, styleContexts, viewPrefix16, widthOf16, type Shaper, type View,
 } from './shape.js'
-import type { BlinkGroup, BlinkLineStart, BlinkPrepared, IteratorSettings } from './types.js'
+import type { BlinkGroup, BlinkLineStart, BlinkPrepared } from './types.js'
 
-// SetCurrentStyleForce's settings from the block's style (line_breaker.cc:4557-4643); spans inherit them in this model.
-function iteratorSettings(paragraph: Paragraph): IteratorSettings {
-  let autoWrap: boolean
-  switch (paragraph.whiteSpace) {
-    case 'normal': case 'pre-wrap': case 'pre-line': case 'break-spaces': autoWrap = true; break
-    case 'nowrap': case 'pre': autoWrap = false; break
-  }
-  let strictness: IteratorSettings['strictness']
-  let breakType: IteratorSettings['breakType']
-  let breakAnywhereIfOverflow = false
-  if (paragraph.lineBreak === 'anywhere') {
-    strictness = 'default'
-    breakType = 'break-character'
-  } else {
-    switch (paragraph.lineBreak) {
-      case 'auto': strictness = 'default'; break
-      case 'normal': strictness = 'normal'; break
-      case 'strict': strictness = 'strict'; break
-      case 'loose': strictness = 'loose'; break
-    }
-    switch (paragraph.wordBreak) {
-      case 'normal': breakType = 'normal'; break
-      case 'break-all': breakType = 'break-all'; break
-      case 'break-word': breakType = 'normal'; breakAnywhereIfOverflow = true; break
-      case 'keep-all': breakType = 'keep-all'; break
-    }
-    if (!breakAnywhereIfOverflow) breakAnywhereIfOverflow = paragraph.overflowWrap === 'anywhere' || paragraph.overflowWrap === 'break-word'
-  }
-  return {
-    autoWrap, strictness, breakType, breakAnywhereIfOverflow,
-    softHyphen: true, // hyphens: manual
-    breakSpace: paragraph.whiteSpace === 'break-spaces' ? 'after-every-space' : 'after-space-run',
-  }
-}
-
-// InlineNode::ShapeText's grouping (inline_node.cc:1625-1680): equal Font, equal direction, no control item between,
-// no ZWNJ at an item start; tags here have no inline margins, borders, padding or vertical-align. EqualsRunSegment
-// compares segment data that items only get in a paragraph with one segment (inline_item.cc:187-196, inline_node.cc:
-// 1256-1290), so it never splits a group here; each segment is its own HarfBuzz call inside the group
-// (harfbuzz_shaper.cc:1080-1101), which Canvas repeats for the strings it measures.
+// InlineNode::ShapeText's grouping (inline_node.cc:1625-1680): equal Font, equal direction, no control item or atomic
+// inline between, no ZWNJ at an item start, and no open or close tag whose box edges or vertical-align break shaping
+// (ShouldBreakShapingBeforeBox, ShouldBreakShapingAfterBox, :494-527). EqualsRunSegment compares segment data that items
+// only get in a paragraph with one segment (inline_item.cc:187-196, inline_node.cc:1256-1290), so it never splits a group
+// here; each segment is its own HarfBuzz call inside the group (harfbuzz_shaper.cc:1080-1101), which Canvas repeats for the
+// strings it measures.
 function shapingGroups(p: BlinkPrepared): void {
   const items = p.items
   for (let index = 0; index < items.length; index++) {
@@ -69,8 +39,15 @@ function shapingGroups(p: BlinkPrepared): void {
     let j = index + 1
     for (; j < items.length; j++) {
       const it = items[j]!
-      if (it.type === 'control') break
-      if (it.type !== 'text') continue
+      if (it.type === 'control' || it.type === 'atomic') break
+      if (it.type === 'open-tag') {
+        if (breaksShapingBefore(p.styles[it.style]!)) break
+        continue
+      }
+      if (it.type === 'close-tag') {
+        if (breaksShapingAfter(p.styles[it.style]!)) break
+        continue
+      }
       if (it.start === it.end) continue
       if (p.styles[it.style]!.fontKey !== p.styles[s.style]!.fontKey) break
       if ((it.bidiLevel & 1) !== (s.bidiLevel & 1)) break
@@ -81,7 +58,7 @@ function shapingGroups(p: BlinkPrepared): void {
     const group: BlinkGroup = { start: s.start, end, style: s.style, rtl: (s.bidiLevel & 1) === 1, cuts: [], prefixAtCut: [], startTrim16: 0, endTrim16: 0 }
     for (let k = 0; k < members.length; k++) items[members[k]!]!.group = p.groups.length
     p.groups.push(group)
-    index = j - 1
+    index = members[members.length - 1]!
   }
 }
 
@@ -130,15 +107,17 @@ function languageOf(tag: string): string {
 }
 
 const ATTRIBUTION_DETAIL = 'a line edge taken from the paragraph position where the shaping adjusted the glyphs on both sides: Canvas totals show the adjustment but not which glyph carries it (GPOS first-glyph values, legacy kern d >> 1; specs/blink-gaps.md §3.6 L1)'
+const LIGATURE_DETAIL = 'a chosen line edge where the pair total shows the shaping adjusted glyphs on both sides: a ligature may cover both, where Blink doesn\'t break, or a kern, where it may; Canvas totals don\'t show glyph clusters (shape_result.cc:684-694)'
+const JOINING_LIGATURE_DETAIL = 'a chosen line edge between joining letters: a font\'s ligature may cover letters on both sides, where Blink doesn\'t break (shape_result.cc:684-694); Canvas totals don\'t show glyph clusters'
 const IN_WORD_DETAIL = 'a line edge inside a word where the pair total shows no adjustment, so the port doesn\'t reshape: HarfBuzz can still flag the offset unsafe_to_break (contextual lookups, width-neutral flags) and Blink reshapes there (specs/blink-gaps.md §3.6 L2)'
 
 // The paragraph's gaps: its content, its fonts' facts and the environment (DESIGN.md §2.8).
 function prepareGaps(sh: Shaper): void {
   const p = sh.p
-  const collapses = p.paragraph.whiteSpace === 'normal' || p.paragraph.whiteSpace === 'nowrap' || p.paragraph.whiteSpace === 'pre-line'
   for (let i = 0; i < p.items.length; i++) {
     const item = p.items[i]!
     if (item.type !== 'text') continue
+    const collapses = collapsesWhiteSpace(p.styles[item.style]!.whiteSpace)
     for (let k = item.start; k < item.end; k++) {
       const c = p.text.charCodeAt(k)
       if ((c === 0x0c && collapses) || c === 0x0b || (c >= 0x01 && c <= 0x08) || (c >= 0x0e && c <= 0x1f) || (c >= 0x7f && c <= 0x9f)) {
@@ -148,13 +127,13 @@ function prepareGaps(sh: Shaper): void {
       if (c === 0xfffc) addGap(p.gaps, 'font-fallback', item.run, 'U+FFFC in text: Canvas measures it as U+200B')
     }
     if (p.env.dictionaryBreaks.kind === 'unavailable' && item.start < item.end &&
-      hasDictionaryCharacters(p.text, item.start, item.end, lineTable(p.styles[item.style]!.locale, p.settings.strictness, p.env.uiLanguage))) {
+      hasDictionaryCharacters(p.text, item.start, item.end, lineTable(p.styles[item.style]!.locale, p.settings[item.style]!.strictness, p.env.uiLanguage))) {
       addGap(p.gaps, 'dictionary-breaks-unavailable', item.run, 'Thai, Lao, Khmer or Myanmar text without the running browser\'s Intl.v8BreakIterator: no break opportunities inside such runs (DESIGN.md §6.3)')
     }
   }
   for (let s = 0; s < p.styles.length; s++) {
     const style = p.styles[s]!
-    if (p.env.uiLanguage === null && (style.locale === null || (languageOf(style.locale) === 'ko' && p.settings.strictness === 'strict'))) {
+    if (p.env.uiLanguage === null && (style.locale === null || (languageOf(style.locale) === 'ko' && p.settings[s]!.strictness === 'strict'))) {
       addGap(p.gaps, 'ui-language', style.run, 'content without a locale, or ko with line-break: strict, follows Chrome\'s application locale, which isn\'t given: break tables, generic families and the HarfBuzz language (specs/blink-canvas.md §2.3)')
     }
     if (p.layoutZoom !== 1) {
@@ -205,9 +184,19 @@ function edgeGap(sh: Shaper, k: number, fromPosition: boolean): void {
   if (g < 0) return
   const group = p.groups[g]!
   const run = runAt(p, k)
-  // A joining edge is reshaped; the reshape's measurement reports joining-technology where the fact isn't given.
-  if (joinsAcross(p, k, group.start, group.end)) return
-  if (pairAdjust16(sh, g, k, group.start, group.end) !== 0) {
+  const d = pairAdjust16(sh, g, k, group.start, group.end)
+  // The shaping adjusted glyphs across the chosen edge: a ligature may merge the clusters on both sides into one glyph,
+  // which Blink never breaks inside (OffsetToFit with BreakGlyphsOption(false), shape_result.cc:684-694; lam-alef in Apple
+  // fonts, research/SUPERSET-blink.md §2.2 F), and Canvas totals can't tell a ligature from a kern (DESIGN.md §5 glyph-clusters).
+  if (d !== 0 && isClusterBoundary(p, k)) addGap(sh.gaps, 'glyph-clusters', run, LIGATURE_DETAIL)
+  // A joining edge is reshaped; the reshape's measurement reports joining-technology or unsafe-to-break. Joining letters
+  // are where fonts form ligatures over several graphemes (lam-alef, the three-letter Allah ligature in Geeza Pro,
+  // c-1c0b1895a5de8849), which the one-grapheme pair window can't see, and Blink never breaks inside one.
+  if (joinsAcross(p, k, group.start, group.end)) {
+    addGap(sh.gaps, 'glyph-clusters', run, JOINING_LIGATURE_DETAIL)
+    return
+  }
+  if (d !== 0) {
     if (fromPosition) addGap(sh.gaps, 'unsafe-to-break', run, ATTRIBUTION_DETAIL)
     return
   }
@@ -225,25 +214,48 @@ function lineEdgeGaps(sh: Shaper, info: LineInfo, start: BlinkLineStart): void {
     if (p.items[r.itemIndex]!.type !== 'text' || r.end === r.start || r.hasOnlyPreWrapTrailingSpaces) continue
     let k = r.end
     while (k > r.start && isSpaceLB(p.text.charCodeAt(k - 1))) k--
-    // A line end before a space isn't reshaped (dont_reshape_end_if_at_space, line_breaker.cc:255-268).
-    edgeGap(sh, k, isSpaceLB(p.text.charCodeAt(k)))
+    // A line end before a space isn't reshaped (dont_reshape_end_if_at_space, line_breaker.cc:255-268) unless the line
+    // needs an accurate end position.
+    edgeGap(sh, k, isSpaceLB(p.text.charCodeAt(k)) && !info.needsAccurateEndPosition)
     return
   }
 }
 
 type UnitKind = 'text' | 'hanging' | 'trimmed' | 'collapsed' | 'forced-break'
 
-// The line's fragments in logical order (DESIGN.md §2.2), from its item results.
+// Which element fragments the line's item results hold (DESIGN.md §2.2): a span's start and end edges where its open and
+// close tag results sit, an atomic inline, a <br> that ended the line, a <wbr> consumed on it.
+type ElementsOnLine = { open: Set<number>; close: Set<number>; atomic: Map<number, number>; br: Set<number>; wbr: Set<number> }
+
+function elementsOn(p: BlinkPrepared, info: LineInfo): ElementsOnLine {
+  const on: ElementsOnLine = { open: new Set(), close: new Set(), atomic: new Map(), br: new Set(), wbr: new Set() }
+  for (let i = 0; i < info.results.length; i++) {
+    const item = p.items[info.results[i]!.itemIndex]!
+    switch (item.type) {
+      case 'open-tag': on.open.add(item.element); break
+      case 'close-tag': on.close.add(item.element); break
+      case 'atomic': on.atomic.set(item.element, item.bidiLevel); break
+      case 'control':
+        if (item.element >= 0 && item.control === 'forced-break') on.br.add(item.element)
+        if (item.control === 'wbr') on.wbr.add(item.element)
+        break
+      case 'text': break
+    }
+  }
+  return on
+}
+
+// The line's fragments in logical order (DESIGN.md §2.2), from its item results, in document order over the content events.
 function fragmentsOf(p: BlinkPrepared, info: LineInfo, contentStart: number, contentEnd: number, sourceStart: number, sourceEnd: number): Fragment[] {
   const n = Math.max(0, contentEnd - contentStart)
   const kinds: UnitKind[] = new Array(n).fill('collapsed')
   const levels = new Uint8Array(n)
   const resultOf = new Int32Array(n).fill(-1)
-  const hangs = p.paragraph.whiteSpace === 'pre-wrap' || p.paragraph.whiteSpace === 'normal' || p.paragraph.whiteSpace === 'pre-line' || p.paragraph.whiteSpace === 'nowrap'
   let lastTextUnit = -1
   for (let i = 0; i < info.results.length; i++) {
     const r = info.results[i]!
     const item = p.items[r.itemIndex]!
+    if (item.type === 'open-tag' || item.type === 'close-tag' || item.type === 'atomic' || item.element >= 0) continue
     const level = r.hasOnlyBidiTrailingSpaces && p.bidiEnabled ? p.baseLevel : item.bidiLevel
     // CR and FF in preserve modes are control items in text_content without a fragment item (HandleControlItem →
     // HandleEmptyText, line_breaker.cc:2988-2994, 2034-2042): content the engine keeps without placing, painted as text so
@@ -260,7 +272,9 @@ function fragmentsOf(p: BlinkPrepared, info: LineInfo, contentStart: number, con
       continue
     }
     const isText = item.type === 'text' || item.control === 'tab'
-    const isHanging = isText && r.hasOnlyPreWrapTrailingSpaces && hangs
+    // Preserved trailing spaces hang except under pre and break-spaces (line_info.cc:357-395).
+    const ws = p.styles[item.style]!.whiteSpace
+    const isHanging = isText && r.hasOnlyPreWrapTrailingSpaces && ws !== 'pre' && ws !== 'break-spaces'
     for (let t = r.start; t < r.end; t++) {
       const u = t - contentStart
       if (u < 0 || u >= n) continue
@@ -283,6 +297,7 @@ function fragmentsOf(p: BlinkPrepared, info: LineInfo, contentStart: number, con
       levels[u] = p.baseLevel
     }
   }
+  const on = elementsOn(p, info)
   const fragments: Fragment[] = []
   let open: { kind: UnitKind; run: number; level: number; start: number; end: number; painted: string; result: number } | null = null
   const close = (): void => {
@@ -304,21 +319,47 @@ function fragmentsOf(p: BlinkPrepared, info: LineInfo, contentStart: number, con
       }
     }
   }
-  for (let s = sourceStart; s < sourceEnd; s++) {
-    const t = p.contentOffsets[s]!
-    const u = t - contentStart
-    const inLine = t >= 0 && u >= 0 && u < n
-    const kind: UnitKind = inLine ? kinds[u]! : 'collapsed'
-    const run = p.sourceRuns[s]!
-    const level = inLine ? levels[u]! : p.baseLevel
-    const result = inLine ? resultOf[u]! : -1
-    if (open !== null && open.kind === kind && open.run === run && open.level === level && open.end === s && open.result === result) {
-      open.end = s + 1
-      if (inLine) open.painted += p.text.charAt(t)
-      continue
+  const events = p.index.events
+  for (let v = 0; v < events.length; v++) {
+    const event = events[v]!
+    switch (event.kind) {
+      case 'text': {
+        const leaf = p.index.leaves[event.run]!
+        const from = Math.max(sourceStart, leaf.start)
+        const to = Math.min(sourceEnd, leaf.start + leaf.text.length)
+        for (let s = from; s < to; s++) {
+          const t = p.contentOffsets[s]!
+          const u = t - contentStart
+          const inLine = t >= 0 && u >= 0 && u < n
+          const kind: UnitKind = inLine ? kinds[u]! : 'collapsed'
+          const level = inLine ? levels[u]! : p.baseLevel
+          const result = inLine ? resultOf[u]! : -1
+          if (open !== null && open.kind === kind && open.run === event.run && open.level === level && open.end === s && open.result === result) {
+            open.end = s + 1
+            if (inLine) open.painted += p.text.charAt(t)
+            continue
+          }
+          close()
+          open = { kind, run: event.run, level, start: s, end: s + 1, painted: inLine ? p.text.charAt(t) : '', result }
+        }
+        break
+      }
+      case 'open':
+        if (on.open.has(event.element)) { close(); fragments.push({ kind: 'box-start', element: event.element }) }
+        break
+      case 'close':
+        if (on.close.has(event.element)) { close(); fragments.push({ kind: 'box-end', element: event.element }) }
+        break
+      case 'atomic':
+        if (on.atomic.has(event.element)) { close(); fragments.push({ kind: 'atomic', element: event.element, level: on.atomic.get(event.element)! }) }
+        break
+      case 'br':
+        if (on.br.has(event.element)) { close(); fragments.push({ kind: 'br', element: event.element }) }
+        break
+      case 'wbr':
+        if (on.wbr.has(event.element)) { close(); fragments.push({ kind: 'wbr', element: event.element }) }
+        break
     }
-    close()
-    open = { kind, run, level, start: s, end: s + 1, painted: inLine ? p.text.charAt(t) : '', result }
   }
   close()
   return fragments
@@ -329,8 +370,8 @@ function isHangingSpace(c: number): boolean {
   return c === 0x20 || c === 0x3000
 }
 
-// LineInfo::ComputeTrailingSpaceWidth (line_info.cc:289-400) for a line whose trailing white space is preserved, with
-// every item under the block's white-space.
+// LineInfo::ComputeTrailingSpaceWidth (line_info.cc:289-400) for a line whose trailing white space is preserved, each
+// item under its own style's white-space.
 function hangWidthOf(sh: Shaper, info: LineInfo): number {
   const p = sh.p
   if (!info.hasTrailingSpaces) return 0
@@ -354,6 +395,7 @@ function hangWidthOf(sh: Shaper, info: LineInfo): number {
           willContinue = true
         } else {
           // PositionForOffset over the item result's shape, truncated to a LayoutUnit without reshaping (:340-356).
+          if (startsClusterInsideGrapheme(p, end)) addGap(sh.gaps, 'glyph-clusters', runAt(p, end), GRAPHEME_CLUSTERS_DETAIL)
           const view = r.shape!
           const before16 = viewPrefix16(sh, view, end)
           itemWidth = p.baseLevel === 1 ? luTrunc(widthOf16(viewPrefix16(sh, view, r.end) - before16)) : luTrunc(Math.fround(view.width - widthOf16(before16)))
@@ -361,14 +403,14 @@ function hangWidthOf(sh: Shaper, info: LineInfo): number {
       }
     }
     if (itemWidth !== 0) {
-      switch (p.paragraph.whiteSpace) {
+      switch (p.styles[item.style]!.whiteSpace) {
         case 'normal': case 'nowrap': case 'pre-line':
           trailing += itemWidth
           break
         case 'pre-wrap':
           if (trailing === 0 && (info.hasForcedBreak || info.isLastLine)) {
             // Conditional hang: only the part of the trailing spaces that overflows the line hangs (:370-381).
-            const itemEnd = info.width - trailing
+            const itemEnd = info.unclampedWidth - trailing
             const actual = Math.max(0, Math.min(itemWidth, itemEnd - info.availableWidth))
             if (actual !== itemWidth) willContinue = false
             trailing += actual
@@ -422,47 +464,289 @@ function indicesInVisualOrder(levels: number[]): number[] {
 // The glyph clusters of text_content[a, b) in a result's view, logical order: a cluster starts at every unit HarfBuzz
 // doesn't mark as a continuation, and the item's edges cut clusters (ShapeResultView slices at character indices).
 // Advances are the view's prefix differences, Canvas stand-ins for HarfBuzz's glyph advances.
-function clustersOf(sh: Shaper, view: View, a: number, b: number): BlinkGlyphCluster[] {
+function clustersOf(sh: Shaper, view: View, a: number, b: number, justification: { start: number; add16: number }[] = []): BlinkGlyphCluster[] {
   const p = sh.p
   const clusters: BlinkGlyphCluster[] = []
+  const extra = new Map<number, number>()
+  for (let i = 0; i < justification.length; i++) extra.set(justification[i]!.start, justification[i]!.add16)
   let start = a
   let before = viewPrefix16(sh, view, a)
   for (let k = a + 1; k <= b; k++) {
     if (k < b && p.continuations[k] === 1) continue
+    if (k < b && startsClusterInsideGrapheme(p, k)) addGap(sh.gaps, 'glyph-clusters', runAt(p, k), GRAPHEME_CLUSTERS_DETAIL)
     const graphemeStarts = [start]
     for (let x = start + 1; x < k; x++) if (p.graphemeStarts[x] === 1) graphemeStarts.push(x)
     const after = viewPrefix16(sh, view, k)
-    clusters.push({ textStart: start, textEnd: k, graphemeStarts, advance: after - before })
+    clusters.push({ textStart: start, textEnd: k, graphemeStarts, advance: after - before + (extra.get(start) ?? 0) })
     before = after
     start = k
   }
   return clusters
 }
 
-// LogicalLineBuilder::HandleItemResults (logical_line_builder.cc:200-464), BidiReorder (:688-760) and the positions of
-// InlineLayoutAlgorithm::CreateLine: ComputeInlinePositions from AdjustLineOffsetForHanging, then ApplyTextAlign with
-// text-align: start (inline_layout_algorithm.cc:303-311, 361-389, 943-970; inline_box_state.cc:845-856;
-// length_utils.cc:1607-1640).
-function itemsOf(sh: Shaper, info: LineInfo, hangWidth: number): BlinkItem[] {
+// LineOffsetForTextAlign (length_utils.cc:1607-1655).
+function lineOffsetForTextAlign(align: TextAlign, rtl: boolean, space: number): number {
+  let used: 'left' | 'right' | 'center'
+  switch (align) {
+    case 'start': case 'justify': used = rtl ? 'right' : 'left'; break
+    case 'end': used = rtl ? 'left' : 'right'; break
+    case 'left': used = 'left'; break
+    case 'right': used = 'right'; break
+    case 'center': used = 'center'; break
+  }
+  switch (used) {
+    case 'left': return rtl ? Math.min(0, space) : 0
+    case 'right': return rtl ? space : Math.max(0, space)
+    case 'center': return !rtl || space > 0 ? Math.max(0, Math.trunc(space / 2)) : space
+  }
+}
+
+// JustificationContext::CheckOpportunity with text-justify: auto (justification_opportunity.cc): expand after a space; in
+// 16-bit text also before and after a CJK ideograph or symbol. Default-ignorable characters are skipped without changing
+// the state. Returns null for a character whose CJK property this port can't decide.
+type JustifyState = { afterOpportunity: boolean }
+
+function checkOpportunity(p: BlinkPrepared, state: JustifyState, c: number): [boolean, boolean] {
+  if (c < 0x100 ? c === 0xad : isDefaultIgnorableIcu(c)) return [false, false]
+  if (c === 0x20 || c === 0x09 || c === 0x0a || c === 0xa0) {
+    state.afterOpportunity = true
+    return [false, true]
+  }
+  // Character::IsCjkIdeographOrSymbol is false below U+02C7 (character.h:97-100); above, it reads Blink's generated
+  // character property data (character_property_data_generator.cc), which the port's tables don't carry.
+  if (!p.is8Bit && c >= 0x2c7) {
+    throw new UnportedFeature('blink', 'text-align: justify over characters at U+02C7 or above', `U+${c.toString(16).toUpperCase()}: IsCjkIdeographOrSymbol needs Blink's character property table (character_property_data_generator.cc:104-140)`)
+  }
+  state.afterOpportunity = false
+  return [false, false]
+}
+
+// Character::IsDefaultIgnorable above U+00FF: ICU's Default_Ignorable_Code_Point (DerivedCoreProperties.txt 17.0).
+function isDefaultIgnorableIcu(c: number): boolean {
+  return c === 0x34f || c === 0x61c || c === 0x115f || c === 0x1160 || (c >= 0x17b4 && c <= 0x17b5) || (c >= 0x180b && c <= 0x180f) ||
+    (c >= 0x200b && c <= 0x200f) || (c >= 0x202a && c <= 0x202e) || (c >= 0x2060 && c <= 0x206f) || c === 0x3164 || (c >= 0xfe00 && c <= 0xfe0f) ||
+    c === 0xfeff || c === 0xffa0 || (c >= 0xfff0 && c <= 0xfff8) || (c >= 0x1bca0 && c <= 0x1bca3) || (c >= 0x1d173 && c <= 0x1d17a) || (c >= 0xe0000 && c <= 0xe0fff)
+}
+
+// ApplyJustification (justification_utils.cc:237-310): SetupJustificationOpportunity counts the opportunities of the item
+// results up to EndOffsetForJustify, ExpansionSetup drops the one after the last character and divides the space
+// (shape_result_spacing.cc:34-58, 87-100), and JustifyResults adds each expansion to the glyph cluster it belongs to
+// (ShapeResult::ApplySpacingOrExpansion, shape_result.cc:993-1046), resizing the item results. Returns whether it applied.
+function applyJustification(sh: Shaper, info: LineInfo, space: number): boolean {
   const p = sh.p
-  const logical: BlinkItem[] = []
-  const reorderLevels: number[] = []
+  if (!info.shouldCreateLineBox || space <= 0) return false
+  // EndOffsetForJustify: before preserved trailing spaces, else InflowEndOffset (line_info.cc:220-245, 275-288).
+  let endOffset = info.results.length > 0 ? info.results[0]!.start : 0
+  for (let i = info.results.length - 1; i >= 0; i--) {
+    const r = info.results[i]!
+    const item = p.items[r.itemIndex]!
+    if (item.type === 'text' || item.type === 'control' || item.type === 'atomic') { endOffset = r.end; break }
+  }
+  if (info.hasTrailingSpaces) {
+    for (let i = info.results.length - 1; i >= 0; i--) {
+      const r = info.results[i]!
+      if (r.hasOnlyPreWrapTrailingSpaces) { endOffset = Math.min(endOffset, r.start); continue }
+      break
+    }
+  }
+  const lineStart = info.results.length > 0 ? info.results[0]!.start : 0
+  if (endOffset === lineStart) return false
+  const rtl = p.baseLevel === 1
+  const state: JustifyState = { afterOpportunity: true }
+  let count = 0
+  const countText = (from: number, to: number): void => {
+    const starts: number[] = []
+    for (let k = from; k < to; k++) if (p.is8Bit || p.graphemeStarts[k] === 1) starts.push(k)
+    const order = rtl ? starts.reverse() : starts
+    for (let i = 0; i < order.length; i++) {
+      const [before, after] = checkOpportunity(p, state, p.text.codePointAt(order[i]!)!)
+      count += (before ? 1 : 0) + (after ? 1 : 0)
+    }
+  }
+  const countItem = (r: LineInfo['results'][number]): void => {
+    if (r.start >= endOffset || r.hasOnlyPreWrapTrailingSpaces) return
+    const item = p.items[r.itemIndex]!
+    if (r.shape !== null) countText(r.start, Math.min(r.end, endOffset))
+    else if (item.type === 'atomic') {
+      const [before, after] = checkOpportunity(p, state, 0xfffc)
+      count += (before ? 1 : 0) + (after ? 1 : 0)
+    }
+  }
+  const last = info.results[info.results.length - 1]
+  if (rtl) {
+    if (last !== undefined && last.hyphen !== null) countText16(p, state, last.hyphen.text, n => { count += n })
+    for (let i = info.results.length - 1; i >= 0; i--) countItem(info.results[i]!)
+  } else {
+    for (let i = 0; i < info.results.length; i++) countItem(info.results[i]!)
+    if (last !== undefined && last.hyphen !== null) countText16(p, state, last.hyphen.text, n => { count += n })
+  }
+  if (state.afterOpportunity && count > 0) count--
+  if (count === 0) return false
+  // InlineLayoutUnit of the space and the per-opportunity TextRunLayoutUnit, both 16.16 (layout_unit.h:474-475).
+  let expansion16 = space * 1024
+  const per16 = Math.trunc(expansion16 / count)
+  let remaining = count
+  const next = (): number => {
+    remaining--
+    if (remaining === 0) { const rest = expansion16; expansion16 = 0; return rest }
+    expansion16 -= per16
+    return per16
+  }
+  const applied: JustifyState = { afterOpportunity: true }
+  for (let i = 0; i < info.results.length; i++) {
+    const r = info.results[i]!
+    if (r.hasOnlyPreWrapTrailingSpaces) break
+    const item = p.items[r.itemIndex]!
+    if (r.shape === null) continue
+    const clusters: { start: number; add16: number }[] = []
+    const starts: number[] = []
+    for (let k = r.start; k < r.end; k++) if (k === r.start || p.continuations[k] !== 1 && p.graphemeStarts[k] === 1) starts.push(k)
+    const order = (item.bidiLevel & 1) === 1 ? starts.slice().reverse() : starts
+    let add = 0
+    for (let c = 0; c < order.length; c++) {
+      const k = order[c]!
+      // ComputeExpansion: nothing once no opportunity is left or past the justified text (shape_result_spacing.cc:140-150).
+      if (k >= endOffset || remaining === 0) continue
+      const [before, after] = checkOpportunity(p, applied, p.text.codePointAt(k)!)
+      let spacing = 0
+      // FinalizeComputeExpansion (:171-187).
+      if (before) spacing += next()
+      if (after && remaining > 0) spacing += next()
+      if (spacing !== 0) {
+        add += spacing
+        clusters.push({ start: k, add16: spacing })
+      }
+    }
+    r.justification = clusters
+    const view = r.shape
+    const width16 = viewPrefix16(sh, view, r.end) - viewPrefix16(sh, view, r.start) + add
+    r.inlineSize = Math.max(0, luCeil(widthOf16(width16))) + (r.isHyphenated ? r.hyphen!.inlineSize : 0)
+  }
+  return true
+}
+
+// CountOpportunities over a string outside text_content (the hyphen), per code unit.
+function countText16(p: BlinkPrepared, state: JustifyState, text: string, add: (n: number) => void): void {
+  for (let i = 0; i < text.length; i++) {
+    const [before, after] = checkOpportunity(p, state, text.charCodeAt(i))
+    add((before ? 1 : 0) + (after ? 1 : 0))
+  }
+}
+
+// ComputedStyle::GetTextAlign(is_last_line) with text-align-last: auto: justify on the last line and before a forced break
+// is start (line_info.cc:109-125, 275-276).
+function usedTextAlign(align: TextAlign, info: LineInfo): TextAlign {
+  return align === 'justify' && info.isLastLine ? 'start' : align
+}
+
+// A LogicalLineItem (logical_line_item.h): a leaf fragment item, or the placeholder a box that creates a box fragment adds
+// where it opens (InlineLayoutStateStack::AddBoxFragmentPlaceholder, inline_box_state.cc:505-545). `offset` is
+// rect.offset.inline_offset, `marginLineLeft` what ComputeInlinePositions stores as margin_line_left, and `box` the 1-based
+// BoxData index PrepareForReorder sets.
+type LineChild = {
+  item: BlinkItem | null
+  level: number
+  opaque: boolean
+  fragment: boolean
+  offset: number
+  inlineSize: number
+  marginLineLeft: number
+  box: number
+}
+
+// InlineLayoutStateStack::BoxData (inline_box_state.h): a box's range of children, its line-left and line-right edges and
+// its parent box.
+type BoxData = {
+  element: number
+  start: number
+  end: number
+  hasLineLeftEdge: boolean
+  hasLineRightEdge: boolean
+  marginLineLeft: number
+  marginLineRight: number
+  mbpLineLeft: number
+  mbpLineRight: number
+  parent: number
+  fragmentedFrom: number
+  rectLeft: number
+  rectRight: number
+}
+
+// LogicalLineBuilder::HandleItemResults (logical_line_builder.cc:200-464) with the box states of InlineLayoutStateStack
+// (OnBeginPlaceItems, OnOpenTag, OnCloseTag, OnEndPlaceItems, AddBoxData; inline_box_state.cc:290-691), BidiReorder
+// (logical_line_builder.cc:688-760) with PrepareForReorder and UpdateAfterReorder (inline_box_state.cc:661-848), and
+// ComputeInlinePositions (:845-935) from AdjustLineOffsetForHanging; then ApplyTextAlign (inline_layout_algorithm.cc:943-970)
+// and the line box at the opportunity's line left plus the alignment offset and, in LTR, the text-indent (:480-492).
+function itemsOf(sh: Shaper, info: LineInfo, hangWidth: number, alignOffset: number): BlinkItem[] {
+  const p = sh.p
+  const children: LineChild[] = []
+  const leaf = (item: BlinkItem, level: number, marginLineLeft: number, inlineSize: number): void => {
+    children.push({ item, level, opaque: false, fragment: true, offset: marginLineLeft, inlineSize, marginLineLeft: 0, box: 0 })
+  }
+  type BoxState = { element: number; style: number; needsBoxFragment: boolean; hasStartEdge: boolean; start: number; startEdge: { margin: number; mbp: number } }
+  const stack: BoxState[] = []
+  const boxes: BoxData[] = []
+  const rtlStyle = p.baseLevel === 1 // spans inherit the block's direction in the model
+  const placeholder = (): number => {
+    children.push({ item: null, level: 0, opaque: true, fragment: false, offset: 0, inlineSize: 0, marginLineLeft: 0, box: 0 })
+    return children.length - 1
+  }
+  // RebuildBoxStates (logical_line_builder.cc:790-813): boxes open at the line start get placeholders and no start edge.
+  if (info.results.length > 0) {
+    const open: number[] = []
+    const first = info.results[0]!.itemIndex
+    for (let i = 0; i < first; i++) {
+      const item = p.items[i]!
+      if (item.type === 'open-tag') open.push(i)
+      else if (item.type === 'close-tag') open.pop()
+    }
+    for (let o = 0; o < open.length; o++) {
+      const item = p.items[open[o]!]!
+      const start = children.length
+      if (item.shouldCreateBoxFragment) placeholder()
+      stack.push({ element: item.element, style: item.style, needsBoxFragment: item.shouldCreateBoxFragment, hasStartEdge: false, start, startEdge: { margin: 0, mbp: 0 } })
+    }
+  }
+  // AddBoxData (inline_box_state.cc:548-630).
+  const endBox = (box: BoxState, hasEndEdge: boolean): void => {
+    if (!box.needsBoxFragment) return
+    const style = p.styles[box.style]!
+    const endMbp = style.end.margin + style.end.border + style.end.padding
+    let data: BoxData = {
+      element: box.element, start: box.start, end: children.length,
+      hasLineLeftEdge: box.hasStartEdge, marginLineLeft: box.hasStartEdge ? box.startEdge.margin : 0, mbpLineLeft: box.hasStartEdge ? box.startEdge.mbp : 0,
+      hasLineRightEdge: hasEndEdge, marginLineRight: hasEndEdge ? style.end.margin : 0, mbpLineRight: hasEndEdge ? endMbp : 0,
+      parent: 0, fragmentedFrom: 0, rectLeft: 0, rectRight: 0,
+    }
+    if (rtlStyle) {
+      data = {
+        ...data, hasLineLeftEdge: data.hasLineRightEdge, hasLineRightEdge: data.hasLineLeftEdge, marginLineLeft: data.marginLineRight,
+        marginLineRight: data.marginLineLeft, mbpLineLeft: data.mbpLineRight, mbpLineRight: data.mbpLineLeft,
+      }
+    }
+    if (data.end > data.start + 1) {
+      boxes.push(data)
+      return
+    }
+    // An empty inline box is a flat fragment now, never deferred or reordered (:612-630).
+    const ph = children[data.start]!
+    ph.offset += data.marginLineLeft
+    ph.inlineSize = data.mbpLineLeft + data.mbpLineRight
+    ph.fragment = true
+    ph.item = { kind: 'inline-box', element: data.element, x: 0, inlineSize: ph.inlineSize - data.marginLineLeft - data.marginLineRight, hasStartEdge: rtlStyle ? data.hasLineRightEdge : data.hasLineLeftEdge, hasEndEdge: rtlStyle ? data.hasLineLeftEdge : data.hasLineRightEdge }
+  }
   for (let i = 0; i < info.results.length; i++) {
     const r = info.results[i]!
     const item = p.items[r.itemIndex]!
     // UAX #9 L1 for results holding only trailing spaces (:716-720).
-    const reorderLevel = r.hasOnlyBidiTrailingSpaces ? p.baseLevel : item.bidiLevel
+    const level = r.hasOnlyBidiTrailingSpaces ? p.baseLevel : item.bidiLevel
     switch (item.type) {
       case 'text': {
         // Empty or fully collapsed text makes no fragment item (:215-223).
         if (r.end === r.start) break
         const hyphen = r.isHyphenated ? r.hyphen!.inlineSize : 0
-        logical.push({ kind: 'text', run: item.run, textStart: r.start, textEnd: r.end, level: item.bidiLevel, x: 0, inlineSize: r.inlineSize - hyphen, clusters: clustersOf(sh, r.shape!, r.start, r.end) })
-        reorderLevels.push(reorderLevel)
-        if (r.isHyphenated) {
-          logical.push({ kind: 'hyphen', run: item.run, level: item.bidiLevel, x: 0, inlineSize: hyphen })
-          reorderLevels.push(item.bidiLevel)
-        }
+        leaf({ kind: 'text', run: item.run, textStart: r.start, textEnd: r.end, level: item.bidiLevel, x: 0, inlineSize: r.inlineSize - hyphen, clusters: clustersOf(sh, r.shape!, r.start, r.end, r.justification) }, level, 0, r.inlineSize - hyphen)
+        if (r.isHyphenated) leaf({ kind: 'hyphen', run: item.run, level: item.bidiLevel, x: 0, inlineSize: hyphen }, item.bidiLevel, 0, hyphen)
         break
       }
       case 'control':
@@ -470,43 +754,174 @@ function itemsOf(sh: Shaper, info: LineInfo, hangWidth: number): BlinkItem[] {
         switch (item.control) {
           case 'tab':
             if (r.end === r.start) break
-            logical.push({ kind: 'tab', run: item.run, textStart: r.start, textEnd: r.end, level: item.bidiLevel, x: 0, inlineSize: r.inlineSize, clusters: clustersOf(sh, r.shape!, r.start, r.end) })
-            reorderLevels.push(reorderLevel)
+            leaf({ kind: 'tab', run: item.run, textStart: r.start, textEnd: r.end, level: item.bidiLevel, x: 0, inlineSize: r.inlineSize, clusters: clustersOf(sh, r.shape!, r.start, r.end, r.justification) }, level, 0, r.inlineSize)
             break
           case 'forced-break':
             if (r.end === r.start) break
-            logical.push({ kind: 'forced-break', run: item.run, textStart: r.start, textEnd: r.end, level: item.bidiLevel, x: 0, inlineSize: r.inlineSize })
-            reorderLevels.push(reorderLevel)
+            if (item.element >= 0) leaf({ kind: 'br', element: item.element, level: item.bidiLevel, x: 0, inlineSize: r.inlineSize }, level, 0, r.inlineSize)
+            else leaf({ kind: 'forced-break', run: item.run, textStart: r.start, textEnd: r.end, level: item.bidiLevel, x: 0, inlineSize: r.inlineSize }, level, 0, r.inlineSize)
             break
-          case 'generated-zwsp': case 'cr-ff': case 'none':
+          case 'generated-zwsp': case 'wbr': case 'cr-ff': case 'none':
             break
         }
         break
-      // A span without margins, borders, padding or decorations is a culled inline box: no fragment item.
-      case 'open-tag': case 'close-tag':
+      case 'atomic':
+        // PlaceAtomicInline places the border box after the start margin (:470-490); the child is the margin box.
+        leaf({ kind: 'atomic', element: item.element, level: item.bidiLevel, x: 0, inlineSize: r.inlineSize - r.marginStart - r.marginEnd, marginStart: r.marginStart, marginEnd: r.marginEnd }, level, r.marginStart, r.inlineSize)
         break
+      case 'open-tag': {
+        const start = children.length
+        if (item.shouldCreateBoxFragment) placeholder()
+        const style = p.styles[item.style]!
+        const sized = r.inlineSize !== 0 || (item.shouldCreateBoxFragment && (style.start.margin !== 0 || style.start.border !== 0 || style.start.padding !== 0))
+        stack.push({
+          element: item.element, style: item.style, needsBoxFragment: item.shouldCreateBoxFragment, hasStartEdge: true, start,
+          startEdge: sized ? { margin: style.start.margin, mbp: style.start.margin + style.start.border + style.start.padding } : { margin: 0, mbp: 0 },
+        })
+        break
+      }
+      case 'close-tag': {
+        const box = stack.pop()
+        if (box !== undefined) endBox(box, true)
+        break
+      }
     }
   }
-  const order = p.bidiEnabled ? indicesInVisualOrder(reorderLevels) : null
-  const items: BlinkItem[] = []
+  // OnEndPlaceItems (:437-459): boxes still open end without their end edge.
+  while (stack.length > 0) endBox(stack.pop()!, false)
+  // Opaque children take the level of the next child, the paragraph's at the end (:720-736).
+  let lastLevel = p.baseLevel
+  for (let c = children.length - 1; c >= 0; c--) {
+    if (children[c]!.opaque) children[c]!.level = lastLevel
+    else lastLevel = children[c]!.level
+  }
+  let visual = children
+  if (p.bidiEnabled && children.length > 0) {
+    // PrepareForReorder (:661-691).
+    for (let b = 0; b < boxes.length; b++) {
+      const index = b + 1
+      for (let c = boxes[b]!.start; c < boxes[b]!.end; c++) {
+        const child = children[c]!
+        let childBox = child.box
+        if (childBox === 0) { child.box = index; continue }
+        while (childBox !== index) {
+          const inner = boxes[childBox - 1]!
+          childBox = inner.parent
+          if (childBox === 0) { inner.parent = index; break }
+        }
+      }
+    }
+    const order = indicesInVisualOrder(children.map(c => c.level))
+    visual = order.map(i => children[i]!)
+    // UpdateAfterReorder and UpdateBoxDataFragmentRange (:692-782).
+    for (let b = 0; b < boxes.length; b++) { boxes[b]!.start = 0; boxes[b]!.end = 0 }
+    const fragmented: BoxData[] = []
+    const update = (from: number): number => {
+      let index = from
+      for (; index < visual.length; index++) {
+        const startChild = visual[index]!
+        const boxIndex = startChild.box
+        if (boxIndex === 0) continue
+        startChild.box = boxes[boxIndex - 1]!.parent
+        const startIndex = index
+        for (index++; index < visual.length; index++) {
+          const endChild = visual[index]!
+          while (endChild.box !== 0 && endChild.box < boxIndex) update(index)
+          if (boxIndex !== endChild.box) break
+          endChild.box = boxes[boxIndex - 1]!.parent
+        }
+        if (boxes[boxIndex - 1]!.end === 0) {
+          boxes[boxIndex - 1]!.start = startIndex
+          boxes[boxIndex - 1]!.end = index
+        } else {
+          fragmented.push({ ...boxes[boxIndex - 1]!, start: startIndex, end: index, fragmentedFrom: boxIndex })
+        }
+        if (boxes[boxIndex - 1]!.parent !== 0) return startIndex
+        return index
+      }
+      return index
+    }
+    for (let index = 0; index < visual.length;) index = update(index)
+    // UpdateFragmentedBoxDataEdges (:784-826): fragments go right after their box, and the line-right edge moves to the last.
+    fragmented.sort((a, b) => a.fragmentedFrom !== b.fragmentedFrom ? a.fragmentedFrom - b.fragmentedFrom : a.start - b.start)
+    const lastOf = new Map<number, BoxData>()
+    for (let f = fragmented.length - 1; f >= 0; f--) {
+      const frag = fragmented[f]!
+      const from = frag.fragmentedFrom
+      boxes.splice(from, 0, { ...frag, fragmentedFrom: 0 })
+      for (const [key, value] of [...lastOf]) if (key >= from) { lastOf.delete(key); lastOf.set(key + 1, value) }
+      if (!lastOf.has(from - 1)) lastOf.set(from - 1, boxes[from]!)
+    }
+    for (const [original, last] of lastOf) {
+      const box = boxes[original]!
+      if (!box.hasLineRightEdge) continue
+      last.hasLineRightEdge = true
+      last.marginLineRight = box.marginLineRight
+      last.mbpLineRight = box.mbpLineRight
+      box.hasLineRightEdge = false
+      box.marginLineRight = 0
+      box.mbpLineRight = 0
+    }
+  }
+  // ComputeInlinePositions (:845-935).
   let position = p.baseLevel === 1 ? -hangWidth : 0
-  for (let v = 0; v < logical.length; v++) {
-    const item = logical[order === null ? v : order[v]!]!
-    item.x = position
-    position += item.inlineSize
-    items.push(item)
+  for (let c = 0; c < visual.length; c++) {
+    const child = visual[c]!
+    child.marginLineLeft = child.offset
+    child.offset += position
+    if (child.fragment) position += child.inlineSize
   }
-  if (p.baseLevel === 1) {
-    // LineOffsetForTextAlign: text-align: start in an RTL block aligns right, and a wide line spills out to the left.
-    const space = info.availableWidth - (info.width - hangWidth)
-    for (let i = 0; i < items.length; i++) items[i]!.x += space
+  for (let b = 0; b < boxes.length; b++) {
+    const box = boxes[b]!
+    if (box.mbpLineLeft !== 0) {
+      for (let c = box.start; c < visual.length; c++) visual[c]!.offset += box.mbpLineLeft
+      position += box.mbpLineLeft
+    }
+    if (box.mbpLineRight !== 0) {
+      for (let c = box.end; c < visual.length; c++) visual[c]!.offset += box.mbpLineRight
+      position += box.mbpLineRight
+    }
   }
-  return items
+  const padLeft = new Array<number>(visual.length).fill(0)
+  const padRight = new Array<number>(visual.length).fill(0)
+  for (let b = 0; b < boxes.length; b++) {
+    const box = boxes[b]!
+    const startChild = visual[box.start]!
+    const lastChild = visual[box.end - 1]!
+    let left = startChild.offset - startChild.marginLineLeft
+    let right = lastChild.offset - lastChild.marginLineLeft + lastChild.inlineSize
+    padLeft[box.start]! += box.mbpLineLeft
+    padRight[box.end - 1]! += box.mbpLineRight
+    left += box.marginLineLeft
+    right -= box.marginLineRight
+    left -= padLeft[box.start]!
+    right += padRight[box.end - 1]!
+    box.rectLeft = left
+    box.rectRight = right
+  }
+  const rtl = p.baseLevel === 1
+  const lineBoxLeft = info.lineLeft + alignOffset + (rtl ? 0 : info.textIndent)
+  const out: BlinkItem[] = []
+  for (let c = 0; c < visual.length; c++) {
+    const child = visual[c]!
+    if (child.item === null) continue
+    child.item.x = lineBoxLeft + child.offset
+    out.push(child.item)
+  }
+  for (let b = 0; b < boxes.length; b++) {
+    const box = boxes[b]!
+    out.push({
+      kind: 'inline-box', element: box.element, x: lineBoxLeft + box.rectLeft, inlineSize: box.rectRight - box.rectLeft,
+      hasStartEdge: rtlStyle ? box.hasLineRightEdge : box.hasLineLeftEdge, hasEndEdge: rtlStyle ? box.hasLineLeftEdge : box.hasLineRightEdge,
+    })
+  }
+  return out
 }
 
 // OffsetMapping units over the line's source units (offset_mapping_builder.cc:95-117, offset_mapping.cc:278-299): source
 // units kept in text_content map one to one, removed ones to an empty range where they collapsed, and a unit Blink
-// generated (U+200B after leading preserved spaces) has an empty source range before the unit that follows it.
+// generated for a text node (U+200B after leading preserved spaces) has an empty source range before the unit that follows
+// it. Elements' units (a <wbr>'s U+200B, a <br>'s LF, an atomic inline's U+FFFC) belong to no text node.
 function mappingOf(p: BlinkPrepared, sourceStart: number, sourceEnd: number, contentStart: number, contentEnd: number): BlinkMappingUnit[] {
   const units: BlinkMappingUnit[] = []
   const push = (unit: BlinkMappingUnit): void => {
@@ -522,7 +937,7 @@ function mappingOf(p: BlinkPrepared, sourceStart: number, sourceEnd: number, con
   const generated = (t: number, s: number): void => {
     for (let i = 0; i < p.items.length; i++) {
       const item = p.items[i]!
-      if (item.control === 'generated-zwsp' && item.start === t) {
+      if (item.control === 'generated-zwsp' && item.start === t && item.run >= 0) {
         push({ run: item.run, start: s, end: s, textStart: t, textEnd: t + 1, collapsed: false })
         return
       }
@@ -543,7 +958,7 @@ function mappingOf(p: BlinkPrepared, sourceStart: number, sourceEnd: number, con
   return units
 }
 
-function lineOutput(sh: Shaper, info: LineInfo, start: BlinkLineStart): BlinkLine {
+function lineOutput(sh: Shaper, info: LineInfo, start: BlinkLineStart, slot: LineSlot): BlinkLine {
   const p = sh.p
   const next = info.token
   const contentStart = start.textOffset
@@ -552,13 +967,25 @@ function lineOutput(sh: Shaper, info: LineInfo, start: BlinkLineStart): BlinkLin
   const sourceStart = isFirst ? 0 : sourceStartOf(p, contentStart)
   const sourceEnd = next === null ? p.sourceLength : sourceStartOf(p, contentEnd)
   const hangWidth = hangWidthOf(sh, info)
+  const align = usedTextAlign(p.paragraph.textAlign, info)
+  // ApplyTextAlign's space: AvailableWidth − WidthForAlignment, the unclamped width less the hanging width
+  // (inline_layout_algorithm.cc:949-952, line_info.h:157-167). Justification that finds opportunities expands the item
+  // results and moves nothing; otherwise the line falls back to start (:955-968).
+  const space = info.availableWidth - (info.unclampedWidth - hangWidth)
+  const justified = align === 'justify' && applyJustification(sh, info, space)
+  const alignOffset = justified ? 0 : lineOffsetForTextAlign(align === 'justify' ? 'start' : align, p.baseLevel === 1, space)
   const geometry: BlinkLineGeometry = {
     layoutZoom: p.layoutZoom,
+    lineLeft: info.lineLeft,
+    lineRight: info.lineRight,
     availableWidth: info.availableWidth,
+    textIndent: info.textIndent,
+    needsAccurateEndPosition: info.needsAccurateEndPosition,
     width: info.width,
     hangWidth,
+    alignOffset,
     mapping: mappingOf(p, sourceStart, sourceEnd, contentStart, contentEnd),
-    items: itemsOf(sh, info, hangWidth),
+    items: itemsOf(sh, info, hangWidth, alignOffset),
   }
   // Blink reshapes a line edge between joining letters, which are unsafe to break in every font; the reshaped side keeps
   // the joined forms only in a font that reads HarfBuzz's context (FontFacts.joining 'opentype').
@@ -580,15 +1007,35 @@ function lineOutput(sh: Shaper, info: LineInfo, start: BlinkLineStart): BlinkLin
     start: sourceStart, end: sourceEnd,
     fragments: fragmentsOf(p, info, contentStart, contentEnd, sourceStart, sourceEnd),
     hasLineBox: info.shouldCreateLineBox,
-    joinsNextLine, geometry, gaps: sh.gaps, next,
+    joinsNextLine, slot, indented: info.textIndent !== 0, align, geometry, gaps: sh.gaps, next,
+  }
+}
+
+// NeedsAccurateEndPosition from text-align and direction with text-align-last: auto (LineInfo::ComputeNeedsAccurateEndPosition,
+// line_info.cc:127-175).
+function needsAccurateEndPosition(align: TextAlign, rtl: boolean): boolean {
+  switch (align) {
+    case 'start': return false
+    case 'end': case 'center': case 'justify': return true
+    case 'left': return rtl
+    case 'right': return !rtl
   }
 }
 
 export const blinkEngine: EngineImplementation<BlinkEnvironment, BlinkPrepared, BlinkLineStart, BlinkLineGeometry> = {
   prepare(paragraph: Paragraph, env: BlinkEnvironment, measurer: Measurer): BlinkPrepared {
     const zoom = env.devicePixelRatio
-    const { styles, styleOfRun } = stylesOf(paragraph)
-    const content = buildContent(paragraph, styleOfRun)
+    const index = indexContent(paragraph)
+    const { styles, settings, styleOfLeaf, styleOfElement } = stylesOf(paragraph, index, zoom)
+    // BoxInfo::text_metrics compares FontHeight of the primary fonts (inline_items_builder.cc:236-266); equal font
+    // declarations have equal metrics. Different declarations are taken to differ, which only decides whether a span
+    // without box edges creates a box fragment for its element rects, never where lines break.
+    const fontHeightsDiffer = (a: number, b: number): boolean => {
+      const fa = styles[a]!.font
+      const fb = styles[b]!.font
+      return fa.family !== fb.family || fa.size !== fb.size || fa.weight !== fb.weight || fa.style !== fb.style
+    }
+    const content = buildContent(index, styles, styleOfLeaf, styleOfElement, fontHeightsDiffer)
     const bidi = segmentBidiRuns(paragraph, content)
     const text = content.text
     let is8Bit = true
@@ -597,13 +1044,9 @@ export const blinkEngine: EngineImplementation<BlinkEnvironment, BlinkPrepared, 
     // U+FFFC, or bidi.
     const segmented = !((is8Bit || !content.hasNonOrc16Bit) && !bidi.enabled)
     const scripts = segmented ? scriptsPerUnit(text) : new Uint8Array(text.length).fill(USCRIPT_LATIN)
-    let sourceLength = 0
-    for (let r = 0; r < paragraph.runs.length; r++) sourceLength += paragraph.runs[r]!.text.length
+    const sourceLength = index.text.length
     const sourceRuns = new Int32Array(sourceLength)
-    for (let r = 0, s = 0; r < paragraph.runs.length; r++) {
-      sourceRuns.fill(r, s, s + paragraph.runs[r]!.text.length)
-      s += paragraph.runs[r]!.text.length
-    }
+    for (let r = 0; r < index.leaves.length; r++) sourceRuns.fill(r, index.leaves[r]!.start, index.leaves[r]!.start + index.leaves[r]!.text.length)
     const contentOffsets = new Int32Array(sourceLength).fill(-1)
     for (let t = 0; t < text.length; t++) if (content.sourceOffsets[t]! >= 0) contentOffsets[content.sourceOffsets[t]!] = t
     const collapsedAt = new Int32Array(sourceLength)
@@ -620,13 +1063,16 @@ export const blinkEngine: EngineImplementation<BlinkEnvironment, BlinkPrepared, 
     }
     const contexts = []
     for (let s = 0; s < styles.length; s++) contexts.push(styleContexts(measurer, styles[s]!, zoom, segmented ? '16bit' : '8bit'))
+    const rtl = paragraph.direction === 'rtl'
     const p: BlinkPrepared = {
-      paragraph, env, layoutZoom: zoom, text, is8Bit, segmented, scripts, sourceOffsets: content.sourceOffsets, contentOffsets, collapsedAt,
-      sourceRuns, sourceLength, items: bidi.items, styles, groups: [], contexts, bidiEnabled: bidi.enabled,
-      baseLevel: paragraph.direction === 'rtl' ? 1 : 0, settings: iteratorSettings(paragraph), graphemeStarts,
+      paragraph, env, index, layoutZoom: zoom, text, is8Bit, segmented, scripts, sourceOffsets: content.sourceOffsets, contentOffsets, collapsedAt,
+      sourceRuns, sourceLength, items: bidi.items, styles, settings, groups: [], contexts, bidiEnabled: bidi.enabled,
+      baseLevel: rtl ? 1 : 0, graphemeStarts,
       continuations: new Uint8Array(text.length),
-      wordSpacingAnywhere: paragraph.whiteSpace === 'pre' || paragraph.whiteSpace === 'pre-wrap' || paragraph.whiteSpace === 'break-spaces',
-      hanKerning: styles.map(() => null), gaps: [],
+      wordSpacingAnywhere: !collapsesWhiteSpace(paragraph.whiteSpace),
+      hanKerning: styles.map(() => null),
+      textAlign: paragraph.textAlign, needsAccurateEndPosition: needsAccurateEndPosition(paragraph.textAlign, rtl),
+      gaps: [],
     }
     const sh: Shaper = { p, m: measurer, gaps: p.gaps }
     shapingGroups(p)
@@ -644,14 +1090,19 @@ export const blinkEngine: EngineImplementation<BlinkEnvironment, BlinkPrepared, 
   // line box (line_breaker.cc:945-975).
   firstLine(p: BlinkPrepared): BlinkLineStart | null {
     if (p.items.length === 0) return null
-    return { engine: 'blink', itemIndex: 0, textOffset: 0, style: 0, afterForcedBreak: false }
+    return { engine: 'blink', itemIndex: 0, textOffset: 0, style: 0, afterForcedBreak: false, isPastFirstFormattedLine: false, afterLeadingFloats: false }
   },
 
-  nextLine(p: BlinkPrepared, start: BlinkLineStart, availableWidth: number, measurer: Measurer): BlinkLine {
+  nextLine(p: BlinkPrepared, start: BlinkLineStart, slot: LineSlot, measurer: Measurer): BlinkLineResult {
     const sh: Shaper = { p, m: measurer, gaps: [] as Gap[] }
-    const info = new LineBreaker(sh, start, availableWidth).nextLine()
+    const info = new LineBreaker(sh, start, slot).nextLine()
     lineEdgeGaps(sh, info, start)
-    return lineOutput(sh, info, start)
+    // A line that overflows a layout opportunity narrower than the container, in a block that wraps, moves to the next
+    // opportunity (inline_layout_algorithm.cc:1341-1367).
+    if (info.hasOverflow && info.availableWidth !== lengthLU(p.paragraph.width, p.layoutZoom) && wrapsLines(p.paragraph.whiteSpace)) {
+      return { kind: 'below-floats', gaps: sh.gaps }
+    }
+    return { kind: 'line', line: lineOutput(sh, info, start, slot) }
   },
 
   gaps(p: BlinkPrepared): Gap[] {

@@ -126,6 +126,7 @@ function fillLines<Env, Prepared, Start, Geometry>(
       if (row >= slots.length) throw new Error(`the engine moved a line below floats in slot row ${row}, which has none`)
       belowFloats.push({ row, gaps: result.gaps })
       row++
+      if (result.next !== undefined) start = result.next
       continue
     }
     const line = result.line

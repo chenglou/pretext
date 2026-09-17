@@ -1,9 +1,9 @@
 // Gecko's prepared paragraph and line state (Firefox 156.0). The Gecko port owns this file.
 import type { GeckoEnvironment } from '../../env.js'
-import type { Gap, Paragraph } from '../../model.js'
+import type { Gap, Paragraph, TextStyle } from '../../model.js'
 
 // white-space as its two longhands and the predicates Gecko derives from them (nsStyleStruct.h:1303-1367,
-// specs/gecko-text.md §2.1).
+// specs/gecko-text.md §2.1), plus the other inherited text properties a frame reads from its own style.
 export type GeckoStyle = {
   collapse: 'collapse' | 'preserve' | 'preserve-breaks' | 'break-spaces'
   wrap: boolean
@@ -14,6 +14,7 @@ export type GeckoStyle = {
   isBreakSpaces: boolean
   // EffectiveWordBreak: break-word is normal plus overflow-wrap anywhere.
   wordBreak: 'normal' | 'break-all' | 'keep-all'
+  lineBreak: TextStyle['lineBreak']
 }
 
 // A text frame: one text node, or the piece of it bidi resolution split off as a non-fluid continuation
@@ -30,7 +31,47 @@ export type GeckoFrame = {
   tEnd: number
   // The node is stored 8-bit: every code unit is below U+0100 (CharacterDataBuffer.cpp:285-288, gap string-storage).
   is8bit: boolean
+  // Index of this frame's item in GeckoPrepared.items.
+  item: number
 }
+
+// A span's inline box edges in au as Gecko computes them: margins and padding through StyleCSSPixelLength::ToAppUnits
+// (NSToIntRound(px × 60), ServoStyleConstsInlines.h:584-595), border widths snapped down to whole device pixels but at
+// least one (snap_as_border_width, servo/components/style/values/specified/border.rs:235-246).
+export type GeckoSpanEdges = {
+  startMargin: number
+  // Border plus padding on each side (ComputedLogicalBorderPadding, nsInlineFrame.cpp:500-521).
+  startBorderPadding: number
+  endBorderPadding: number
+  endMargin: number
+}
+
+export type GeckoElement =
+  | {
+      // `open` and `close`: the element's own start and end items; `closes`: every close item of its continuations in order,
+      // the bidi splits' and then `close`.
+      kind: 'span'; parent: number; open: number; close: number; closes: number[]; style: GeckoStyle; edges: GeckoSpanEdges
+      // PreventCrossBoundaryShaping's test on each logical side: a nonzero margin, border or padding, or a vertical-align
+      // other than baseline (nsTextFrame.cpp:2054-2098).
+      breaksShapingAtStart: boolean
+      breaksShapingAtEnd: boolean
+      // nsInlineFrame::IsSelfEmpty: no border, padding or margin on either inline side (nsInlineFrame.cpp:87-154).
+      selfEmpty: boolean
+    }
+  // An inline-block of declared border box: its inline size and margins in au. `level` is the embedding level of the
+  // character bidi resolution stands it for: U+FFFC for an atomic inline, U+2028 for a <br>, U+200B for a <wbr>
+  // (TraverseFrames, nsBidiPresUtils.cpp:1381-1400; ResolveParagraph :975-982); 0 without bidi.
+  | { kind: 'atomic'; parent: number; item: number; iSize: number; startMargin: number; endMargin: number; level: number }
+  | { kind: 'br' | 'wbr'; parent: number; item: number; level: number }
+
+// The frames and element events of the paragraph in document order: what nsBlockFrame and nsInlineFrame reflow. `at` is the
+// source offset where the item sits: a text frame's start, the offset of the content after an element event.
+export type GeckoItem =
+  | { kind: 'text'; frame: number; at: number }
+  // `split`: where bidi resolution splits the span into another continuation at a level change (SplitInlineAncestors,
+  // nsBidiPresUtils.cpp:612-660), not the element's own start or end.
+  | { kind: 'open' | 'close'; element: number; at: number; split: boolean }
+  | { kind: 'atomic' | 'br' | 'wbr'; element: number; at: number }
 
 // A script run gfxFontGroup::InitTextRun shapes (gfxScriptItemizer.cpp:60-243): it ends before `limit`, a transformed
 // index. 'Zyyy' stands for Common resolved from the language.
@@ -49,7 +90,8 @@ export type GeckoTextRun = {
   scriptRuns: ScriptRun[]
   // TEXT_ENABLE_HYPHEN_BREAKS from a removed soft hyphen (nsTextFrame.cpp:2584-2586).
   hasShy: boolean
-  // Flags::HasTrailingBreak (nsTextFrame.cpp:1835-1848): the paragraph's last text run ended on breakable space.
+  // Flags::HasTrailingBreak (nsTextFrame.cpp:1835-1848): the line breaker ended on a break opportunity when this run was
+  // flushed with line breaks, at a frame text can't cross other than <br> or at the block's end.
   trailingBreak: boolean
   // 0.5 × NS_round(ZeroOrAveCharWidth × apd) (nsTextFrame.cpp:1931-1937); measured only for runs with tabs.
   minTabAdvance: number
@@ -87,13 +129,21 @@ export type GeckoPrepared = {
   env: GeckoEnvironment
   // max(1, round(60 / devicePixelRatio)) (specs/gecko-lines.md §2.1).
   appUnitsPerDevPixel: number
-  style: GeckoStyle
+  // The block's own style (the line container's), which the root span and tab widths read.
+  blockStyle: GeckoStyle
   text: string
+  // Per text leaf: its start offset (length leaves + 1), its style, and the span holding it (-1 for the block).
   runStarts: number[]
+  runStyles: GeckoStyle[]
+  runParents: number[]
+  // The style language of each leaf, canonicalized (MapLangAttributeInto, nsGenericHTMLElement.cpp:1337-1375).
+  runLangs: string[]
   // Resolved per run in au (nsTextFrame.cpp:1949-1980).
   letterSpacingAu: number[]
   // Frames in logical order; runs without a frame (white space at a line boundary) have none.
   frames: GeckoFrame[]
+  items: GeckoItem[]
+  elements: GeckoElement[]
   textRuns: GeckoTextRun[]
   // Per transformed code unit.
   tUnits: Uint16Array
@@ -114,14 +164,24 @@ export type GeckoPrepared = {
   nextT: Int32Array
   // ComputeTabWidthAppUnits (nsTextFrame.cpp:3875-3906), 0 when nothing measured it.
   tabWidth: number
+  // pxToAu of the block's text-indent (nsLineLayout.cpp:178-201).
+  textIndentAu: number
+  // The paragraph resolved bidi, so lines are reordered by frame levels (nsLineLayout.cpp:3646-3652): the port's stand-in
+  // for the document's BidiEnabled flag (gecko audit F3).
+  bidi: boolean
   // The gaps of the paragraph's content, fonts and environment. Line filling never writes here; gaps its breaks decide go
   // on the line (DESIGN.md §2.8).
   gaps: Gap[]
 }
 
-// Where the continuation frame starts (nsTextFrame.cpp:11253, :11523). No measured remainder carries over; a line's
-// single redo with a forced break happens inside nextLine (specs/gecko-lines.md §4.1, §4.7).
+// Where the next line starts (DESIGN.md §2.7): the item the line's first frame comes from, the content offset inside a text
+// frame (the item's `at` otherwise), and whether no earlier line of the block had content, so text-indent still applies:
+// BlockReflowState::AdvanceToNextLine counts only lines whose line layout wasn't empty (BlockReflowState.h:251-257), and
+// BeginLineReflow indents line number 0 (nsLineLayout.cpp:178-201). No measured remainder carries over; a line's single redo
+// with a forced break happens inside nextLine (specs/gecko-lines.md §4.1, §4.7).
 export type GeckoLineStart = {
   engine: 'gecko'
+  frame: number
   contentOffset: number
+  isFirstLine: boolean
 }

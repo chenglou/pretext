@@ -1,108 +1,48 @@
 import { describe, expect, test } from 'bun:test'
-import type { BlinkEnvironment, GeckoEnvironment, WebKitEnvironment } from '../src/env.ts'
-import type { BlinkLineGeometry, BlinkLine, Expected, ExpectedObservation, ExpectedRect, GeckoLine, GeckoLineGeometry, WebKitLine, WebKitLineGeometry } from '../src/model.ts'
+import { mkdtempSync, writeFileSync, readFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { encodeEdges } from './observe/gecko.ts'
-import { environmentKey, nativeDifference, nativeLines, nativeView, scoreRow } from './score.ts'
-import type { BrowserKind, CodePointObservation, FontDecl, LabRow, NativeObservation, PainterLine, Paragraph, Rect, RecordedLayout, TextRun } from './types.ts'
+import {
+  abcd, abcdExpected, abcdLayout, abcdNative, abcdOneLine, abcdOneLineExpected, at, blink, expect32, gecko, linesRow, native, observation, paragraph, row, webkit,
+} from './row-fixtures.ts'
+import { environmentKey, indexRows, lineRangeDiagnostics, nativeDifference, nativeLines, nativeView, readRowAt, scoreRow, withNativeRow } from './score.ts'
+import type { LabRow, PainterLine, Rect } from './types.ts'
 
 const f32 = Math.fround
-const arial: FontDecl = { family: 'Arial', size: 16, weight: 400, style: 'normal' }
 
-function paragraph(runs: Array<[text: string, node: TextRun['node']]>, overrides: Partial<Paragraph> = {}): Paragraph {
-  return {
-    runs: runs.map(([text, node]) => ({ text, node, font: arial, letterSpacing: 0, wordSpacing: 0, lang: null })),
-    font: arial, letterSpacing: 0, wordSpacing: 0, width: 200, lineHeight: 20, whiteSpace: 'normal', wordBreak: 'normal',
-    overflowWrap: 'normal', lineBreak: 'auto', tabSize: 8, direction: 'ltr', lang: 'en', ...overrides,
-  }
-}
-
-// A native rect on line `line` (lines are 20px tall).
-const at = (x: number, width: number, line = 0): Rect => ({ x, y: line * 20, width, height: 20 })
-const predicted = (value: number): Expected => ({ state: 'predicted', value })
-// An expected rect of engine line `line`, both values predicted unless given.
-const expect32 = (line: number, x: number | Expected, width: number | Expected): ExpectedRect => ({
-  line, x: typeof x === 'number' ? predicted(x) : x, width: typeof width === 'number' ? predicted(width) : width,
-})
-
-function points(text: string, rects: Rect[][]): CodePointObservation[] {
-  const out: CodePointObservation[] = []
-  for (let offset = 0; offset < text.length;) {
-    const length = text.codePointAt(offset)! > 0xffff ? 2 : 1
-    out.push({ offset, length, rects: rects[out.length]! })
-    offset += length
-  }
-  if (out.length !== rects.length) throw new Error(`${rects.length} rect lists for ${out.length} code points`)
-  return out
-}
-
-function native(p: Paragraph, rects: Rect[][], runRects: Rect[][]): NativeObservation {
-  return { fontsStatusBefore: 'loaded', fontsStatusAfter: 'loaded', rejectedStyles: [], height: 0, width: p.width, points: points(p.runs.map(run => run.text).join(''), rects), runRects }
-}
-
-function observation(p: Paragraph, rects: ExpectedRect[][], nodes: ExpectedRect[][], unobservable: ExpectedObservation['unobservable'] = []): ExpectedObservation {
-  const text = p.runs.map(run => run.text).join('')
-  const codePoints = points(text, rects.map(() => [])).map((point, i) => ({ offset: point.offset, length: point.length, rects: rects[i]! }))
-  return { codePoints, nodes, unobservable }
-}
-
-const blinkEnv: BlinkEnvironment = { engine: 'blink', build: '153.0.8010.48', devicePixelRatio: 2, pageLang: 'en', contentLanguage: null, uiLanguage: null, dictionaryBreaks: { kind: 'unavailable' } }
-const webkitEnv: WebKitEnvironment = { engine: 'webkit', build: '22625.1.29.11.27', devicePixelRatio: 2, pageZoom: 1, pageLang: 'en', contentLanguage: null, preferredLanguages: null, icuDefaultLocale: null, dictionaryBreaks: { kind: 'unavailable' } }
-const geckoEnv: GeckoEnvironment = { engine: 'gecko', build: '156.0', devicePixelRatio: 2, pageLang: 'en', contentLanguage: null, regionalPrefsLocale: null, dictionaryBreaks: { kind: 'unavailable' } }
-
-function engineLine<Geometry>(start: number, end: number, geometry: Geometry, hasLineBox = true): { start: number; end: number; fragments: []; hasLineBox: boolean; joinsNextLine: false; geometry: Geometry; gaps: []; next: null } {
-  return { start, end, fragments: [], hasLineBox, joinsNextLine: false, geometry, gaps: [], next: null }
-}
-
-// Blink lines by [start, end, width in raw LayoutUnits, hasLineBox], at layout zoom 2.
-function blink(lines: Array<[number, number, number, boolean?]>): RecordedLayout {
-  const out: BlinkLine[] = lines.map(([start, end, width, hasLineBox]) => engineLine<BlinkLineGeometry>(start, end, { layoutZoom: 2, availableWidth: 0, width, hangWidth: 0, mapping: [], items: [] }, hasLineBox ?? true))
-  return { engine: 'blink', env: blinkEnv, lines: out, gaps: [] }
-}
-
-function webkit(lines: Array<[number, number, number]>): RecordedLayout {
-  const out: WebKitLine[] = lines.map(([start, end, contentWidth]) => engineLine<WebKitLineGeometry>(start, end, { lineBoxWidth: 0, contentWidth, hangingWidth: 0, contentLogicalRight: contentWidth, boxes: [] }))
-  return { engine: 'webkit', env: webkitEnv, lines: out, gaps: [] }
-}
-
-function gecko(lines: Array<[number, number, number]>): RecordedLayout {
-  const out: GeckoLine[] = lines.map(([start, end, width]) => engineLine<GeckoLineGeometry>(start, end, { appUnitsPerDevPixel: 30, availableWidth: 0, width, hang: 0, frames: [] }))
-  return { engine: 'gecko', env: geckoEnv, lines: out, gaps: [] }
-}
-
-function row(browser: BrowserKind, p: Paragraph, observed: NativeObservation, layout: RecordedLayout, expected: ExpectedObservation | { error: string }, painted: PainterLine[] | null = null): LabRow {
-  return {
-    id: 'c-test', family: 'test', browser,
-    case: { id: 'c-test', family: 'test', origin: 'test', pageLang: 'en', paragraph: p },
-    env: { userAgent: 'test', devicePixelRatio: 2, visualViewportScale: 1, pageLang: 'en', fontFixtures: [], innerWidth: 0, innerHeight: 0, outerWidth: 0, outerHeight: 0, visibilityState: 'visible', hasFocus: false },
-    native: observed,
-    prediction: { layout, measure: { contexts: 0, calls: 0, memoHits: 0 }, observation: expected },
-    painter: painted === null ? null : { lines: painted },
-    timings: { nativeMs: 0, predictMs: 0, observeMs: 0, paintMs: 0, painterObserveMs: 0 },
-  }
-}
-
-// `ab cd` in one text node, broken after the space at DPR 2: `a` 1024 raw, `b` 976, the trimmed space a zero-width
-// boundary rect at the item end, `c` 896, `d` 904.
-const abcd = paragraph([['ab cd', 'text']])
-const abcdNative = native(abcd,
-  [[at(0, 8)], [at(8, 7.625)], [at(15.625, 0)], [at(0, 7, 1)], [at(7, 7.0625, 1)]],
-  [[at(0, 15.625), at(0, 14.0625, 1)]])
-const abcdExpected = observation(abcd,
-  [[expect32(0, 0, 8)], [expect32(0, 8, 7.625)], [expect32(0, 15.625, 0)], [expect32(1, 0, 7)], [expect32(1, 7, 7.0625)]],
-  [[expect32(0, 0, 15.625), expect32(1, 0, 14.0625)]])
-const abcdLayout = blink([[0, 3, 2000], [3, 5, 1800]])
-
-describe('native lines group rects by vertical centre', () => {
+describe('native lines', () => {
   test('zero-width rects are placed, rects without height are not', () => {
     const p = paragraph([['ab', 'text']])
-    const lines = nativeLines(native(p, [[at(0, 8), { x: 8, y: 30, width: 0, height: 0 }], [at(0, 0, 1)]], [[at(0, 8), at(0, 0, 1)]]), 20)
-    expect(lines).toEqual({ count: 2, points: [[0, -1], [1]], nodes: [[0, 1]], unplaced: 1 })
+    const lines = nativeLines(native(p, [[at(0, 8), { x: 8, y: 30, width: 0, height: 0 }], [at(0, 0, 1)]], [[at(0, 8), at(0, 0, 1)]]), p, 'chrome')
+    expect(lines).toEqual({ count: 2, points: [[0, -1], [1]], nodes: [[0, 1]], unplaced: 1, byCentre: 0 })
   })
 
-  test('centres of one line differ by font metrics, less than half a line height', () => {
+  test('across nodes, centres of one line differ by font metrics, less than half a line height', () => {
     const p = paragraph([['ab', 'span'], ['c', 'span']])
-    const lines = nativeLines(native(p, [[at(0, 8)], [at(8, 8)], [{ x: 16, y: -3.5, width: 7, height: 25 }]], [[at(0, 16)], [{ x: 16, y: -3.5, width: 7, height: 25 }]]), 20)
+    const lines = nativeLines(native(p, [[at(0, 8)], [at(8, 8)], [{ x: 16, y: -3.5, width: 7, height: 25 }]], [[at(0, 16)], [{ x: 16, y: -3.5, width: 7, height: 25 }]]), p, 'chrome')
     expect(lines.count).toBe(1)
+  })
+
+  test('a code point rect takes its line from the box its own node reports, by each engine\'s rule', () => {
+    // A WebKit partial rect: y is the box's y truncated to a LayoutUnit, and the snapped height differs.
+    const p = paragraph([['ab', 'text']])
+    const box: Rect = { x: 0, y: 10.3, width: 16, height: 20 }
+    const partial: Rect = { x: 0, y: Math.trunc(f32(10.3 * 64)) / 64, width: 8, height: 19 }
+    const observed = native(p, [[partial], [{ ...partial, x: 8 }]], [[box]])
+    expect(nativeLines(observed, p, 'webkit-host')).toMatchObject({ count: 1, points: [[0], [0]], byCentre: 0 })
+    // Blink and Gecko cut the box's own rect, so the same rects match no box there and fall back to centres.
+    expect(nativeLines(observed, p, 'chrome')).toMatchObject({ count: 1, byCentre: 2 })
+    expect(nativeLines(observed, p, 'firefox')).toMatchObject({ count: 1, byCentre: 2 })
+  })
+
+  test('rects of one node with equal tops share a line in Blink and WebKit; Gecko sizes each frame by its fonts', () => {
+    // Two boxes of one node on one line whose heights differ by more than a line height.
+    const p = paragraph([['ab', 'text']])
+    const observed = native(p, [[at(0, 8)], [{ x: 8, y: 0, width: 8, height: 60 }]], [[at(0, 8), { x: 8, y: 0, width: 8, height: 60 }]])
+    expect(nativeLines(observed, p, 'chrome').count).toBe(1)
+    expect(nativeLines(observed, p, 'webkit-host').count).toBe(1)
+    expect(nativeLines(observed, p, 'firefox').count).toBe(2)
   })
 })
 
@@ -112,6 +52,7 @@ describe('rects compare exactly, and the metrics follow from the comparisons', (
     expect(score.metrics).toEqual({ lineCount: { status: 'pass' }, breaks: { status: 'pass' }, widths: { status: 'pass' }, painter: { status: 'not-applicable', reason: 'paint returned null' } })
     expect(score.facts).toMatchObject({ counts: { equal: 6, differ: 0 }, predicted: { equal: 14, differ: 0 }, lines: { equal: 7, differ: 0 } })
     expect(score.firstDifference).toBeNull()
+    expect(score.diagnostics).toBeNull()
   })
 
   test('a code point the layout puts on another line fails breaks', () => {
@@ -125,8 +66,7 @@ describe('rects compare exactly, and the metrics follow from the comparisons', (
   })
 
   test('another line count fails lineCount and breaks', () => {
-    const oneLine = observation(abcd, [[expect32(0, 0, 8)], [expect32(0, 8, 7.625)], [expect32(0, 15.625, 4)], [expect32(0, 19.625, 7)], [expect32(0, 26.625, 7.0625)]], [[expect32(0, 0, 33.6875)]])
-    const score = scoreRow(row('chrome', abcd, abcdNative, blink([[0, 5, 4312]]), oneLine))
+    const score = scoreRow(row('chrome', abcd, abcdNative, abcdOneLine, abcdOneLineExpected))
     expect(score.metrics.lineCount).toEqual({ status: 'fail', reason: 'line count differs', detail: 'native 2, predicted 1' })
     expect(score.metrics.breaks.reason).toBe('line count differs')
   })
@@ -243,15 +183,102 @@ describe('painter: painted lines against the engine width', () => {
   })
 })
 
-describe('a prediction without an engine layout', () => {
-  test('only the line count is compared', () => {
-    const lines: LabRow = { ...row('chrome', abcd, abcdNative, abcdLayout, abcdExpected), prediction: { lines: [{ start: 0, end: 3, width: 15.625 }, { start: 3, end: 5, width: 14.0625 }] } }
-    expect(scoreRow(lines).metrics).toEqual({
+describe('a prediction of line ranges alone', () => {
+  const base = row('chrome', abcd, abcdNative, abcdLayout, abcdExpected)
+
+  test('only the line count is a metric', () => {
+    expect(scoreRow(linesRow(base, [[0, 3], [3, 5]])).metrics).toEqual({
       lineCount: { status: 'pass' },
       breaks: { status: 'unobserved', reason: 'the prediction has no engine layout' },
       widths: { status: 'not-applicable', reason: 'breaks unobserved' },
       painter: { status: 'not-applicable', reason: 'paint returned null' },
     })
+  })
+
+  test('visible breaks: code points with positive-width rects on one native line lie in the predicted line', () => {
+    expect(scoreRow(linesRow(base, [[0, 3], [3, 5]])).diagnostics).toEqual({
+      visibleBreaks: { status: 'pass' },
+      // The only zero-width code point is a space: white space is left out.
+      zeroWidthPlacement: { status: 'unobserved', reason: 'no zero-width code point to place' },
+    })
+    expect(scoreRow(linesRow(base, [[0, 4], [4, 5]])).diagnostics!.visibleBreaks).toEqual({ status: 'fail', reason: 'code point on other lines', detail: 'code point 3 "c": native line 1, predicted line 0' })
+    expect(scoreRow(linesRow(base, [[0, 5]])).diagnostics!.visibleBreaks).toEqual({ status: 'unobserved', reason: 'line count differs', detail: 'native 2, predicted 1' })
+  })
+
+  test('zero-width placement: a zero-width code point outside white space lies in the predicted line', () => {
+    const p = paragraph([['a​b', 'text']])
+    const observed = native(p, [[at(0, 8)], [at(0, 0, 1)], [at(0, 8, 1)]], [[at(0, 8), at(0, 8, 1)]])
+    const lines = nativeLines(observed, p, 'chrome')
+    const text = 'a​b'
+    expect(lineRangeDiagnostics(observed, lines, { lines: [{ start: 0, end: 2, width: 0 }, { start: 2, end: 3, width: 0 }] }, text)).toEqual({
+      visibleBreaks: { status: 'pass' },
+      zeroWidthPlacement: { status: 'fail', reason: 'zero-width code point on other lines', detail: 'code point 1 "​": native line 1, predicted line 0' },
+    })
+    expect(lineRangeDiagnostics(observed, lines, { lines: [{ start: 0, end: 1, width: 0 }, { start: 1, end: 3, width: 0 }] }, text).zeroWidthPlacement).toEqual({ status: 'pass' })
+  })
+})
+
+describe('rows from run.ts --predict-only take native observations from another run', () => {
+  const nativeRow = row('chrome', abcd, abcdNative, abcdLayout, abcdExpected)
+  const predictOnly = linesRow(nativeRow, [[0, 3], [3, 5]], { skipped: 'predict-only' })
+
+  test('without a native row, every metric is unobserved', () => {
+    expect(scoreRow(predictOnly).metrics.lineCount).toEqual({ status: 'unobserved', reason: 'native observation skipped', detail: 'predict-only' })
+    expect(nativeView(predictOnly).error).toBe('native observation skipped: predict-only')
+  })
+
+  test('combined with the native row of the same case in the same environment', () => {
+    const combined = withNativeRow(predictOnly, { ...nativeRow, env: { ...nativeRow.env, documentCaseIndex: 7 } })
+    expect('error' in combined).toBe(false)
+    const value = combined as LabRow
+    expect(value.env.documentCaseIndex).toBe(7)
+    expect(scoreRow(value).metrics.lineCount).toEqual({ status: 'pass' })
+  })
+
+  test('refusals', () => {
+    expect(withNativeRow(nativeRow, nativeRow)).toEqual({ error: 'row c-test has its own native observation; --native-rows takes rows from run.ts --predict-only' })
+    expect(withNativeRow(predictOnly, predictOnly)).toEqual({ error: 'the native row for c-test has no native observation either' })
+    expect(withNativeRow(predictOnly, { ...nativeRow, case: { ...nativeRow.case, pageLang: 'ja' } })).toEqual({ error: 'the native row for c-test observed a different case' })
+    const languages = { launch: null, os: { appleLanguages: null, appleLocale: null, launchdEnvironment: {} }, derivation: [] }
+    const zh = { ...predictOnly, languages: { ...languages, given: { engine: 'blink' as const, uiLanguage: 'zh-CN' } } }
+    const en = { ...nativeRow, languages: { ...languages, given: { engine: 'blink' as const, uiLanguage: 'en-US' } } }
+    expect((withNativeRow(zh, en) as { error: string }).error).toBe('the environments differ for c-test: languages "{\\"engine\\":\\"blink\\",\\"uiLanguage\\":\\"zh-CN\\"}" vs "{\\"engine\\":\\"blink\\",\\"uiLanguage\\":\\"en-US\\"}"')
+  })
+
+  test('rows index by byte offset past multi-byte text, U+2028 and blank lines, and refuse duplicate ids', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'lab-score-test-'))
+    const first = { ...nativeRow, id: 'c-first', case: { ...nativeRow.case, id: 'c-first', origin: 'suite 文字   line' } }
+    const second = { ...nativeRow, id: 'c-second', case: { ...nativeRow.case, id: 'c-second' } }
+    const path = join(dir, 'rows.ndjson')
+    writeFileSync(path, `${JSON.stringify(first)}\n\n${JSON.stringify(second)}\n`)
+    const index = await indexRows(path)
+    expect([...index.keys()]).toEqual(['c-first', 'c-second'])
+    const fd = (await import('node:fs')).openSync(path, 'r')
+    expect(readRowAt(fd, index.get('c-first')!).case.origin).toBe('suite 文字   line')
+    const duplicate = join(dir, 'duplicate.ndjson')
+    writeFileSync(duplicate, `${JSON.stringify(first)}\n${JSON.stringify(first)}\n`)
+    await expect(indexRows(duplicate)).rejects.toThrow('two rows for case c-first')
+  })
+
+  test('the command line scores predict-only rows against native rows, and sealed summaries hold counts only', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'lab-score-cli-'))
+    const rows = join(dir, 'main-rows.ndjson')
+    const natives = join(dir, 'native-rows.ndjson')
+    writeFileSync(rows, `${JSON.stringify(predictOnly)}\n`)
+    writeFileSync(natives, `${JSON.stringify(nativeRow)}\n`)
+    const script = join(import.meta.dir, 'score.ts')
+    const scored = Bun.spawnSync(['bun', script, `--rows=${rows}`, `--native-rows=${natives}`, `--out=${join(dir, 'summary.json')}`, `--per-case=${join(dir, 'per-case.ndjson')}`])
+    expect(scored.exitCode).toBe(0)
+    const perCase = JSON.parse(readFileSync(join(dir, 'per-case.ndjson'), 'utf8')) as { lineCount: { status: string }; diagnostics: { visibleBreaks: { status: string } } }
+    expect([perCase.lineCount.status, perCase.diagnostics.visibleBreaks.status]).toEqual(['pass', 'pass'])
+    expect((JSON.parse(readFileSync(join(dir, 'summary.json'), 'utf8')) as { nativeRows: unknown }).nativeRows).toEqual({ used: 1, missing: 0 })
+    const refused = Bun.spawnSync(['bun', script, `--rows=${natives}`, `--sealed`, `--out=${join(dir, 'sealed.json')}`, `--per-case=${join(dir, 'sealed-per-case.ndjson')}`])
+    expect(refused.exitCode).toBe(1)
+    const sealed = Bun.spawnSync(['bun', script, `--rows=${natives}`, '--sealed', `--out=${join(dir, 'sealed.json')}`])
+    expect(sealed.exitCode).toBe(0)
+    const text = readFileSync(join(dir, 'sealed.json'), 'utf8')
+    expect(text.includes('c-test')).toBe(false)
+    expect((JSON.parse(text) as { browsers: { chrome: { metrics: { lineCount: { pass: number } } } } }).browsers.chrome.metrics.lineCount.pass).toBe(1)
   })
 })
 
@@ -264,10 +291,12 @@ describe('two runs of one case', () => {
     expect(nativeDifference(nativeView(base), nativeView(wider))).toBe('code point 1: [x, width, line] [8,7.625,0] vs [8,7.6328125,0]')
   })
 
-  test('environments key on the recorded build', () => {
+  test('environments key on the recorded build and the given process languages', () => {
     const base = row('chrome', abcd, abcdNative, abcdLayout, abcdExpected)
-    expect(environmentKey(base)).toBe('chrome: build not recorded, test; DPR 2, scale 1; scorer 2')
-    expect(environmentKey({ ...base, build: { app: 'Google Chrome', appVersion: '153.0.8010.48', engine: '153.0.8010.48', os: '26A428' } }))
-      .toBe('chrome: Google Chrome 153.0.8010.48, engine build 153.0.8010.48, macOS 26A428; DPR 2, scale 1; scorer 2')
+    expect(environmentKey(base)).toBe('chrome: build not recorded, test; DPR 2, scale 1; scorer 3')
+    const built = { ...base, build: { app: 'Google Chrome', appVersion: '153.0.8010.48', engine: '153.0.8010.48', os: '26A428' } }
+    expect(environmentKey(built)).toBe('chrome: Google Chrome 153.0.8010.48, engine build 153.0.8010.48, macOS 26A428; DPR 2, scale 1; scorer 3')
+    const languages = { launch: null, os: { appleLanguages: null, appleLocale: null, launchdEnvironment: {} }, given: { engine: 'blink' as const, uiLanguage: 'zh-CN' }, derivation: [] }
+    expect(environmentKey({ ...built, languages })).toBe('chrome: Google Chrome 153.0.8010.48, engine build 153.0.8010.48, macOS 26A428; DPR 2, scale 1; uiLanguage zh-CN; scorer 3')
   })
 })

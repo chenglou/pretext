@@ -38,7 +38,7 @@ type Flags = Map<string, string>
 function parseArgs(argv: readonly string[]): { kinds: Kind[]; flags: Flags } {
   const kinds: Kind[] = []
   const flags: Flags = new Map()
-  const known = new Set(['seed', 'out', 'out-dir', 'rows', 'families', 'suite-sample', 'suite-families', 'smoke-count', 'exclude-ids'])
+  const known = new Set(['seed', 'seed-label', 'out', 'out-dir', 'rows', 'families', 'suite-sample', 'suite-keep-whole', 'suite-keep-required', 'suite-families', 'smoke-count', 'exclude-ids'])
   for (const arg of argv) {
     if (arg.startsWith('--')) {
       const eq = arg.indexOf('=')
@@ -178,6 +178,10 @@ function suiteFamilyTable(all: readonly SuiteEntry[], selected: readonly SuiteEn
 async function main(): Promise<void> {
   const { kinds, flags } = parseArgs(process.argv.slice(2))
   const seed = flags.get('seed') ?? 'lab-20260916'
+  // --seed-label names the seed in origins and summaries instead of the seed itself, so a sealed set's files don't hold
+  // the seed that regenerates them (cases/seal.ts). Origins aren't part of case ids.
+  const label = flags.get('seed-label') ?? seed
+  const relabel = (c: Case): Case => (label === seed || !c.origin.includes(seed) ? c : { ...c, origin: c.origin.split(seed).join(label) })
   const outDir = resolve(flags.get('out-dir') ?? resolve(REPO, '.artifacts/lab/cases'))
   const rowsDir = resolve(flags.get('rows') ?? resolve(REPO, '.artifacts/rows-20260916'))
   const familyFilter = flags.get('families')
@@ -196,7 +200,7 @@ async function main(): Promise<void> {
       const generators = name === 'runs' ? RUN_GENERATORS : name === 'ws' ? WS_GENERATORS : POLICY_GENERATORS
       const cases = generateFamilies(generators, seed, familyFilter)
       const kept = excluded === null ? cases : cases.filter(c => !excluded.has(c.id))
-      value = { cases: kept, removed: cases.length - kept.length }
+      value = { cases: kept.map(relabel), removed: cases.length - kept.length }
       generated.set(name, value)
     }
     return value
@@ -207,7 +211,7 @@ async function main(): Promise<void> {
   for (const name of ['runs', 'ws', 'policy'] as const) {
     if (expanded.has(name)) {
       const { cases, removed } = familyCases(name)
-      writeCases(outFor(name), sortCases(cases.slice()), { seed, familyFilter: familyFilter ?? null, ...exclusion(removed) })
+      writeCases(outFor(name), sortCases(cases.slice()), { seed: label, familyFilter: familyFilter ?? null, ...exclusion(removed) })
     }
   }
 
@@ -224,20 +228,28 @@ async function main(): Promise<void> {
   if (expanded.has('suite') && suiteData !== null) {
     const { suite, entries } = suiteData
     const sampleSize = positiveInt(flags, 'suite-sample', all ? 20000 : null)
+    // --suite-keep-whole=N keeps families of at most N cases whole (default 200), and --suite-keep-required=false stops
+    // keeping main's required cases: a held-out sample fills every family by the same quota instead (cases/seal.ts).
+    const keepWholeRaw = flags.get('suite-keep-whole')
+    const keepWhole = keepWholeRaw === undefined ? SMALL_FAMILY : Number(keepWholeRaw)
+    if (!Number.isInteger(keepWhole) || keepWhole < 0) throw new Error('--suite-keep-whole must be a non-negative integer')
+    const keepRequiredRaw = flags.get('suite-keep-required') ?? 'true'
+    if (keepRequiredRaw !== 'true' && keepRequiredRaw !== 'false') throw new Error('--suite-keep-required must be true or false')
+    const keepRequired = keepRequiredRaw === 'true'
     let selected: SuiteEntry[] = entries
     let sampleInfo: Record<string, unknown> = {}
     if (sampleSize !== null) {
       const result = stratifiedSample(entries, sampleSize, `${seed}/suite-sample`, {
-        family: entry => entry.family, id: entry => entry.id, keepFamiliesUpTo: SMALL_FAMILY, keep: entry => entry.required,
+        family: entry => entry.family, id: entry => entry.id, keepFamiliesUpTo: keepWhole, ...(keepRequired ? { keep: (entry: SuiteEntry) => entry.required } : {}),
       })
       selected = result.selected
-      sampleInfo = { sampleSize, keptWhole: result.kept, quotaPerLargeFamily: result.quota, overBudget: result.overBudget }
+      sampleInfo = { sampleSize, keepFamiliesUpTo: keepWhole, keepRequired, keptWhole: result.kept, quotaPerLargeFamily: result.quota, overBudget: result.overBudget }
       if (result.overBudget) console.error(`warning: ${result.kept} small-family and required cases exceed --suite-sample=${sampleSize}; kept them all`)
     }
     const required = entries.filter(entry => entry.required).length
     const families = new Set(entries.map(entry => entry.family)).size
     writeCases(outFor(sampleSize === null ? 'suite' : 'suite-sample'), materialize(suite, sortByCaseOrder(selected.slice())), {
-      seed, rows: suiteData.files, skippedRows: suiteData.skipped, inputs: suite.inputs, suiteCases: entries.length, requiredCases: required,
+      seed: label, rows: suiteData.files, skippedRows: suiteData.skipped, inputs: suite.inputs, suiteCases: entries.length, requiredCases: required,
       suiteFamilies: flags.get('suite-families') ?? null, ...exclusion(suiteData.excludedCases), ...sampleInfo, suiteFamilyTable: suiteFamilyTable(entries, selected),
     })
     console.log(`suite: ${suite.inputs} row inputs -> ${entries.length} cases (${required} with required metrics) in ${families} families; wrote ${selected.length}`)
@@ -252,7 +264,7 @@ async function main(): Promise<void> {
     const fromGenerated = stratifiedSample(pool, count - fromSuite.length, `${seed}/smoke`, {
       family: value => value.family, id: value => value.id, keepFamiliesUpTo: 0,
     }).selected
-    writeCases(outFor('smoke'), sortCases(mergeCases([...fromGenerated, ...fromSuite])), { seed, suiteShare: fromSuite.length, ...exclusion(0) })
+    writeCases(outFor('smoke'), sortCases(mergeCases([...fromGenerated, ...fromSuite])), { seed: label, suiteShare: fromSuite.length, ...exclusion(0) })
   }
 
   if (obligations !== null && read !== null) {

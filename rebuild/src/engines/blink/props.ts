@@ -1,6 +1,6 @@
 // Unicode properties Chrome 153 reads through ICU 78.2: Line_Break (break-all), General_Category L, N and M (keep-all),
-// Joining_Type (HarfBuzz's Arabic joining), scripts and paired brackets (ScriptRunIterator), and the classes the painted
-// extent reads, per code point, from tools/gen-blink-data.ts.
+// Joining_Type (HarfBuzz's Arabic joining), scripts and paired brackets (ScriptRunIterator), HanKerning types, White_Space
+// and Extended_Pictographic, per code point, from tools/gen-blink-data.ts.
 import { decodeBase64 } from '../../breaks/icu4x.js'
 import {
   blinkCharPropsBase64, blinkCursiveScripts, blinkHanKerningTypes, blinkScriptExtensions, blinkScriptPropsBase64,

@@ -10,23 +10,25 @@ const facts = { primaryFamily: null, mapsHyphen: null, monospace: null, opticalS
 
 function paragraph(texts: string[], direction: Paragraph['direction'] = 'ltr'): Paragraph {
   const decl = { ...(font as CssFont), facts }
+  const style = { font: decl, letterSpacing: 0, wordSpacing: 0, whiteSpace: 'pre-wrap' as const, wordBreak: 'normal' as const, overflowWrap: 'normal' as const, lineBreak: 'auto' as const, tabSize: 8 }
+  const edge = { margin: 0, border: 0, padding: 0 }
   return {
-    runs: texts.map(text => ({ text, node: 'span' as const, font: decl, letterSpacing: 0, wordSpacing: 0, lang: null })), font: decl,
-    letterSpacing: 0, wordSpacing: 0, width: 100, lineHeight: 20, whiteSpace: 'pre-wrap', wordBreak: 'normal', overflowWrap: 'normal',
-    lineBreak: 'auto', tabSize: 8, direction, lang: 'en',
+    ...style,
+    content: texts.map(text => ({ ...style, kind: 'span' as const, lang: null, inlineStart: edge, inlineEnd: edge, verticalAlign: 'baseline' as const, children: [{ kind: 'text' as const, text }] })),
+    width: 100, lineHeight: 20, direction, lang: 'en', textIndent: 0, textAlign: 'start',
   }
 }
 
 function line(items: BlinkItem[], mapping: BlinkMappingUnit[], hangWidth: number = 0): BlinkLine {
   return {
-    start: 0, end: 0, fragments: [], hasLineBox: true, joinsNextLine: false, gaps: [], next: null,
-    geometry: { layoutZoom: 2, availableWidth: 12800, width: 0, hangWidth, mapping, items },
+    start: 0, end: 0, fragments: [], hasLineBox: true, joinsNextLine: false, gaps: [], next: null, slot: { left: 0, right: 0 }, indented: false, align: 'start',
+    geometry: { layoutZoom: 2, lineLeft: 0, lineRight: 12800, availableWidth: 12800, textIndent: 0, needsAccurateEndPosition: false, width: 0, hangWidth, alignOffset: 0, mapping, items },
   }
 }
 
 function layout(lines: BlinkLine[]): BlinkLayout {
   return {
-    engine: 'blink', lines, gaps: [], measure: { contexts: [], calls: [], memoHits: 0 },
+    engine: 'blink', lines, belowFloats: [], gaps: [], measure: { contexts: [], calls: [], memoHits: 0 },
     env: { engine: 'blink', build: '153.0.8010.48', devicePixelRatio: 2, pageLang: 'en', contentLanguage: null, uiLanguage: null, dictionaryBreaks: { kind: 'unavailable' } },
   }
 }
@@ -51,6 +53,38 @@ function raw(rects: ExpectedRect[]): [number, number, number, boolean][] {
 }
 
 const unused = (): number => { throw new Error('the Blink port measures nothing') }
+
+describe('blink observation port, element rects', () => {
+  test('Element.getClientRects: a box fragment per line, an atomic border box, a <br> item, a culled span its items (layout_inline.cc:428-490)', () => {
+    const decl = { ...(font as CssFont), facts }
+    const style = { font: decl, letterSpacing: 0, wordSpacing: 0, whiteSpace: 'normal' as const, wordBreak: 'normal' as const, overflowWrap: 'normal' as const, lineBreak: 'auto' as const, tabSize: 8 }
+    const edge = { margin: 0, border: 0, padding: 10 }
+    const none = { margin: 0, border: 0, padding: 0 }
+    const p: Paragraph = {
+      ...style, width: 100, lineHeight: 20, direction: 'ltr', lang: 'en', textIndent: 0, textAlign: 'start',
+      content: [
+        { ...style, kind: 'span', lang: null, inlineStart: edge, inlineEnd: none, verticalAlign: 'baseline', children: [{ kind: 'text', text: 'ab' }] },
+        { kind: 'atomic', width: 5, height: 5, marginInlineStart: 2, marginInlineEnd: 0 },
+        { kind: 'br' },
+        { ...style, kind: 'span', lang: null, inlineStart: none, inlineEnd: none, verticalAlign: 'baseline', children: [{ kind: 'text', text: 'c' }] },
+      ],
+    }
+    const l0 = line([
+      text(0, 0, 2560, [640, 640]),
+      { kind: 'atomic', element: 1, level: 0, x: 4096, inlineSize: 640, marginStart: 256, marginEnd: 0 },
+      { kind: 'br', element: 2, level: 0, x: 4736, inlineSize: 0 },
+      { kind: 'inline-box', element: 0, x: 0, inlineSize: 3840, hasStartEdge: true, hasEndEdge: true },
+    ], [identity(0, 0, 2)])
+    const l1 = line([text(1, 2, 0, [640])], [identity(1, 2, 3)])
+    const o = observeBlink(p, layout([l0, l1]), unused)
+    expect(o.elements.map(rects => raw(rects))).toEqual([
+      [[0, 0, 3840, true]],
+      [[0, 4096, 640, true]],
+      [[0, 4736, 0, true]],
+      [[1, 0, 640, true]],
+    ])
+  })
+})
 
 describe('blink observation port', () => {
   test('observe-blink §5 item 11, c-be7f6b754e4527ff: an odd-level hyphen copies onto the letter before and the SHY', () => {

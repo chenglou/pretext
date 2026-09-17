@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test'
-import type { Case, FontDecl, Paragraph } from '../types.ts'
+import type { Case, FontDecl, InlineStructure, Paragraph } from '../types.ts'
+import { atomic, br, el, leaf, paragraph, span, text, treeParagraph, wbr } from './build.ts'
 import { canonicalJson, makeCase, mergeCases, validateCase } from './case.ts'
 import { POLICY_GENERATORS } from './policy.ts'
 import { RUN_GENERATORS } from './runs.ts'
@@ -93,6 +94,45 @@ describe('makeCase and validateCase', () => {
     ])
     expect(merged).toHaveLength(2)
     expect(merged[0]).toMatchObject({ family: 'a', origin: 'first; second', browsers: ['chrome', 'safari'] })
+  })
+})
+
+describe('cases with inline structure', () => {
+  const withWidth = (tree: { paragraph: Paragraph; inline: InlineStructure }): { paragraph: Paragraph; inline: InlineStructure } => ({ paragraph: { ...tree.paragraph, width: 80 }, inline: tree.inline })
+  const treeCase = (tree: { paragraph: Paragraph; inline: InlineStructure }): Case => makeCase({ family: 'test/tree', origin: 'test', pageLang: 'en', ...withWidth(tree) })
+
+  test('a flat tree carries no structure and keeps the flat id', () => {
+    const tree = treeCase(treeParagraph({ font: arial, lang: 'en', lineHeight: 20 }, [leaf('Hello '), el({}, leaf('world'))]))
+    const flat = makeCase({ family: 'test/flat', origin: 'test', pageLang: 'en', paragraph: { ...paragraph({ font: arial, lang: 'en', lineHeight: 20 }, [text('Hello '), span('world', arial)]), width: 80 } })
+    expect(tree.inline).toBeUndefined()
+    expect(tree.id).toBe(flat.id)
+  })
+
+  test('structure enters the id, and runs list the leaves', () => {
+    const edged = treeParagraph({ font: arial, lang: 'en', lineHeight: 20 }, [leaf('Hello '), el({ end: { padding: 4 }, lang: 'fr' }, leaf('wor'), el({ letterSpacing: 1 }, leaf('ld'))), br(), atomic(10, 12), wbr(), leaf('!')])
+    const value = treeCase(edged)
+    expect(value.inline).toBeDefined()
+    validateCase(value)
+    expect(value.paragraph.runs.map(run => [run.text, run.node, run.lang, run.letterSpacing])).toEqual([['Hello ', 'text', null, 0], ['wor', 'span', 'fr', 0], ['ld', 'span', 'fr', 1], ['!', 'text', null, 0]])
+    const ids = new Set([
+      value.id,
+      treeCase(treeParagraph({ font: arial, lang: 'en', lineHeight: 20 }, [leaf('Hello '), el({ end: { padding: 5 }, lang: 'fr' }, leaf('wor'), el({ letterSpacing: 1 }, leaf('ld'))), br(), atomic(10, 12), wbr(), leaf('!')])).id,
+      treeCase(treeParagraph({ font: arial, lang: 'en', lineHeight: 20, textIndent: 3 }, [leaf('Hello world')])).id,
+      treeCase(treeParagraph({ font: arial, lang: 'en', lineHeight: 20, textAlign: 'center' }, [leaf('Hello world')])).id,
+      treeCase(treeParagraph({ font: arial, lang: 'en', lineHeight: 20, lineSlots: [{ left: 10, right: 0 }] }, [leaf('Hello world')])).id,
+    ])
+    expect(ids.size).toBe(5)
+    expect(mergeCases([value, value])).toHaveLength(1)
+    expect(mergeCases([value])[0]!.inline).toEqual(value.inline)
+  })
+
+  test('reject inconsistent structure', () => {
+    expect(() => treeCase(treeParagraph({ font: arial, lang: 'en', lineHeight: 20 }, [leaf('a'), atomic(10, 21)]))).toThrow()
+    expect(() => treeCase(treeParagraph({ font: arial, lang: 'en', lineHeight: 20.5, lineSlots: [{ left: 10, right: 0 }] }, [leaf('a b')]))).toThrow()
+    expect(() => treeCase(treeParagraph({ font: arial, lang: 'en', lineHeight: 20, lineSlots: [{ left: 10, right: 0 }, { left: 0, right: 0 }] }, [leaf('a b')]))).toThrow()
+    expect(() => treeCase(treeParagraph({ font: arial, lang: 'en', lineHeight: 20 }, [leaf('a'), el({ start: { padding: -1 } }, leaf('b'))]))).toThrow()
+    const tree = withWidth(treeParagraph({ font: arial, lang: 'en', lineHeight: 20 }, [leaf('a'), br(), leaf('b')]))
+    expect(() => makeCase({ family: 'f', origin: 'o', pageLang: 'en', paragraph: { ...tree.paragraph, runs: [tree.paragraph.runs[0]!] }, inline: tree.inline })).toThrow()
   })
 })
 

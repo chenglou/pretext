@@ -261,10 +261,12 @@ export type LineOf<Start, Geometry> = {
 // with the next layout opportunity (inline_layout_algorithm.cc:1336-1367); WebKit wraps the candidate and moves the next
 // line top below the float (InlineLineBuilder.cpp:1452-1457, InlineFormattingUtils.cpp:54-103); Gecko redoes the line in
 // the next band (LineReflowStatus::RedoNextBand, nsBlockFrame.cpp:5289-5299, :5549-5555). A slot without insets never
-// gives below-floats. `gaps` are the gaps the decision rests on.
+// gives below-floats. `gaps` are the gaps the decision rests on. `next`, when given, is the start the next slot lays out
+// instead of the same one, because building the refused line changed the engine's state: WebKit's first build places the
+// slot floats, which later builds find in the formatting context (InlineLineBuilder.cpp:478, :1394-1396).
 export type LineResultOf<Start, Geometry> =
   | { kind: 'line'; line: LineOf<Start, Geometry> }
-  | { kind: 'below-floats'; gaps: Gap[] }
+  | { kind: 'below-floats'; gaps: Gap[]; next?: Start }
 
 // ---- Output: Blink geometry (Chrome 153). Raw LayoutUnits count 1/64 of a zoomed px (specs/blink-lines.md §1.1) ----
 
@@ -360,6 +362,12 @@ export type WebKitTextBox = {
   // The justification expansion included in width (InlineContentAligner::applyExpansionOnRange,
   // InlineContentAligner.cpp:230-266); 0 unless the line is justified.
   expansion: number
+  // The expansion behavior the aligner gave the run (InlineContentAligner.cpp:150-228), which the complex text controller
+  // reads to place the expansion among the box's glyphs (ComplexTextController.cpp:107-118, :800-845).
+  expansionBehavior: { left: 'allow' | 'forbid'; right: 'allow' | 'forbid' }
+  // The run's text was shaped with its neighbours across inline box edges as one RTL run (LineBuilder::applyShapingOnRunRange,
+  // InlineLineBuilder.cpp:920-967), so its width is its characters' share of that shaping.
+  shapedAcrossBoxes: boolean
 }
 
 export type WebKitDisplayBox =
@@ -377,7 +385,8 @@ export type WebKitLineGeometry = {
   // InlineLineBuilder.cpp:463-476, floatAvoidingRect :1185-1216), float32 px.
   lineLeft: number
   // m_lineContentEdgeOffset: how far floats and text-indent moved the line start, which tab stops read
-  // (InlineLineBuilder.cpp:478).
+  // (InlineLineBuilder.cpp:478). Floats the line places itself, the slot floats on the paragraph's first build, don't move
+  // it (:1394-1396).
   contentEdgeOffset: number
   // The line's available width after floats and text-indent: m_lineLogicalRect.width(), from LayoutUnit-truncated
   // lengths (StylePrimitiveData.h:341-360).

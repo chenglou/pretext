@@ -1,19 +1,23 @@
 // text_content and items on the specs' worked examples (specs/blink-text.md §2.C, DESIGN.md §2.2 example 1).
 import { describe, expect, test } from 'bun:test'
-import { UNKNOWN_FONT_FACTS, type Paragraph, type TextRun } from '../../model.js'
-import { buildContent, segmentBidiRuns, styles } from './content.js'
+import { indexContent } from '../../content.js'
+import { NO_BOX_EDGE, UNKNOWN_FONT_FACTS, type InlineNode, type Paragraph } from '../../model.js'
+import { buildContent, segmentBidiRuns, stylesOf, type Content } from './content.js'
 
 const font = { family: 'Arial', size: 16, weight: 400, style: 'normal' as const, facts: UNKNOWN_FONT_FACTS }
 
-function paragraph(runs: [string, TextRun['node']][], whiteSpace: Paragraph['whiteSpace'] = 'normal', direction: Paragraph['direction'] = 'ltr'): Paragraph {
-  return {
-    runs: runs.map(([text, node]) => ({ text, node, font, letterSpacing: 0, wordSpacing: 0, lang: null })), font, letterSpacing: 0, wordSpacing: 0,
-    width: 60, lineHeight: 20, whiteSpace, wordBreak: 'normal', overflowWrap: 'normal', lineBreak: 'auto', tabSize: 8, direction, lang: 'en',
-  }
+function paragraph(runs: [string, 'span' | 'text'][], whiteSpace: Paragraph['whiteSpace'] = 'normal', direction: Paragraph['direction'] = 'ltr'): Paragraph {
+  const style = { font, letterSpacing: 0, wordSpacing: 0, whiteSpace, wordBreak: 'normal' as const, overflowWrap: 'normal' as const, lineBreak: 'auto' as const, tabSize: 8 }
+  const content: InlineNode[] = runs.map(([text, node]) => node === 'text'
+    ? { kind: 'text', text }
+    : { ...style, kind: 'span', lang: null, inlineStart: NO_BOX_EDGE, inlineEnd: NO_BOX_EDGE, verticalAlign: 'baseline', children: [{ kind: 'text', text }] })
+  return { ...style, content, width: 60, lineHeight: 20, direction, lang: 'en', textIndent: 0, textAlign: 'start' }
 }
 
-function content(p: Paragraph): ReturnType<typeof buildContent> {
-  return buildContent(p, styles(p).styleOfRun)
+function content(p: Paragraph): Content {
+  const index = indexContent(p)
+  const s = stylesOf(p, index, 1)
+  return buildContent(index, s.styles, s.styleOfLeaf, s.styleOfElement, () => false)
 }
 
 describe('blink content', () => {
@@ -50,6 +54,30 @@ describe('blink content', () => {
   test('pre-line removes the space before a newline', () => {
     const c = content(paragraph([['a  \n  b', 'text']], 'pre-line'))
     expect(c.text).toBe('a\nb')
+  })
+
+  test('a nowrap space collapsing a wrapping space run leaves a generated break opportunity (inline_items_builder.cc:847-866)', () => {
+    const p = paragraph([['a ', 'span'], [' b', 'span']])
+    const first = p.content[0]!
+    if (first.kind !== 'span') throw new Error('expected a span')
+    first.whiteSpace = 'nowrap'
+    const c = content(p)
+    expect(c.text).toBe('a ​b')
+    expect(c.items.map(i => `${i.type}:${i.control}`)).toEqual([
+      'open-tag:none', 'text:none', 'close-tag:none', 'open-tag:none', 'control:generated-zwsp', 'text:none', 'close-tag:none',
+    ])
+  })
+
+  test('atomic inlines, <br> and <wbr> add U+FFFC, LF and U+200B without source units', () => {
+    const p = paragraph([['a ', 'text']])
+    p.content.push({ kind: 'atomic', width: 10, height: 10, marginInlineStart: 0, marginInlineEnd: 0 }, { kind: 'br' }, { kind: 'text', text: ' b' }, { kind: 'wbr' }, { kind: 'text', text: 'c' })
+    const c = content(p)
+    // The space after "a" is restored before the atomic inline; the leading space after <br> collapses.
+    expect(c.text).toBe('a \u{FFFC}\nb​c')
+    expect(Array.from(c.sourceOffsets)).toEqual([0, 1, -1, -1, 3, -1, 4])
+    expect(c.items.map(i => `${i.type}:${i.control}:${i.element}`)).toEqual([
+      'text:none:-1', 'atomic:none:0', 'control:forced-break:1', 'text:none:-1', 'control:wbr:2', 'text:none:-1',
+    ])
   })
 
   test('D5: text that ICU calls LTR and not mixed turns bidi off (specs/bidi.md §7.5)', () => {

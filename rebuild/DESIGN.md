@@ -743,9 +743,12 @@ floats (Blink hands the break token to the next opportunity, `inline_layout_algo
 `PreviousLine` with the carried width whatever the next line rect, `InlineFormattingContext.cpp:352-358`; Gecko continues
 from the pushed frame).
 
-- **Blink**: `{ engine: 'blink', itemIndex, textOffset, style, afterForcedBreak, isPastFirstFormattedLine }`, the break
+- **Blink**: `{ engine: 'blink', itemIndex, textOffset, style, afterForcedBreak, isPastFirstFormattedLine, afterLeadingFloats }`, the break
   token (specs/blink-lines.md §4.1). `isPastFirstFormattedLine` is `InlineBreakToken::kIsPastFirstFormattedLine`, which
-  decides text-indent (`line_breaker.cc:470-485`, `:4740`). No width carries over. The next line's start is reshaped
+  decides text-indent (`line_breaker.cc:470-485`, `:4740`). `afterLeadingFloats` says the leading floats were placed: the
+  first line handles the floats before any inline content, so later break tokens are past their items, and only the first
+  line runs the leading-floats rule that rewinds text-indent (`line_breaker.cc:4225-4248`); the model's slot floats aren't
+  items, so the token carries it (added by the Blink owner, 2026-09-17). No width carries over. The next line's start is reshaped
   when it falls inside a shape result at an offset HarfBuzz marked unsafe to break: `ShapeLine` shapes [start, first safe
   offset) alone and moves the available width by the difference between the old and new `ceil64` widths
   (specs/blink-lines.md §6, step 2). That measurement happens while the next line is filled, from the offset in the
@@ -806,11 +809,11 @@ Where each engine computes a line's available width with floats, and when it mov
 | Engine | The line's band | What reads the float offset | The line moves below the floats |
 |---|---|---|---|
 | Blink | `InlineLayoutAlgorithm::Layout` takes every layout opportunity of the exclusion space up front (`AllLayoutOpportunities`, `inline_layout_algorithm.cc:1166-1170`) and makes each line's `LineLayoutOpportunity` from the current one (`ComputeLineLayoutOpportunity`, `:1222-1224`); the available width is `line_right_offset − line_left_offset` (`line_layout_opportunity.h`) | tab stops: `position_ + ComputeFloatOffset()` (`line_breaker.cc:674-693`, `:2970`); item positions | when `line_info.HasOverflow()`, the opportunity is narrower than the container (`IsEqualToAvailableFloatInlineSize` false) and the block wraps, the line is laid out again in the next opportunity (`:1336-1367`); also when the line box is taller than the opportunity (`:1462-1469`) |
-| WebKit | `InlineFormattingContext::lineLayout` starts each line rect at the container's horizontal constraints (`InlineFormattingContext.cpp:315-322`); `LineBuilder::initialize` narrows it by the floats intersecting the line's initial height (`floatAvoidingRect`, `InlineLineBuilder.cpp:463-476`, `:1185-1216`; `floatConstraintsForLine`, `InlineFormattingUtils.cpp:185-195`; half-open intersection, `floatContainsLine`, `FloatingContext.cpp:352-359`), then applies text-indent as a start margin (`:454-478`). Candidate content taller than the line queries the floats again (`:1218-1239`) | tab stops: `m_lineContentEdgeOffset` (`:478`, `:1042`, `:1076`); box positions | a candidate whose minimum width doesn't fit while the line is constrained by a float wraps with nothing placed (`:1452-1457`), and the next line's top is the intrusive float's bottom (`logicalTopForNextLine`, `InlineFormattingUtils.cpp:54-103`) |
+| WebKit | `InlineFormattingContext::lineLayout` starts each line rect at the container's horizontal constraints (`InlineFormattingContext.cpp:315-322`); `LineBuilder::initialize` narrows it by the floats intersecting the line's initial height (`floatAvoidingRect`, `InlineLineBuilder.cpp:463-476`, `:1185-1216`; `floatConstraintsForLine`, `InlineFormattingUtils.cpp:185-195`; half-open intersection, `floatContainsLine`, `FloatingContext.cpp:352-359`), then applies text-indent as a start margin (`:454-478`). Candidate content taller than the line queries the floats again (`:1218-1239`) | tab stops: `m_lineContentEdgeOffset` (`:478`, `:1042`, `:1076`), which floats placed while building the line don't move (`:1394-1396`): the lab's slot floats come before the content, so the first build places them and counts from the indent alone; box positions | a candidate whose minimum width doesn't fit while the line is constrained by a float wraps with nothing placed (`:1452-1457`), and the next line's top is the intrusive float's bottom (`logicalTopForNextLine`, `InlineFormattingUtils.cpp:54-103`) |
 | Gecko | `nsBlockFrame::ReflowInlineFrames` takes the band at the line's block position (`GetFloatAvailableSpace`, `nsBlockFrame.cpp:5137`; `BlockReflowState.cpp:348-365`; `nsFloatManager::GetFlowArea`, `nsFloatManager.cpp:113-182`) and begins the line at its start and inline size, impacted by floats when the band has them (`nsBlockFrame.cpp:5252-5273`); `PlaceLine` queries again with the line's final block size and redoes the line when more floats narrow it (`RedoMoreFloats`, `:5441`, `:5881-5917`) | tab stops: the frame's distance from the block's content edge (`nsTextFrame.cpp:11063-11067`); frame positions | with floats in the band the line start is a soft break (`nsBlockFrame.cpp:5289-5299`), a first frame that doesn't fit breaks before instead of being placed (`nsLineLayout.cpp:785`), and a break before the first frame redoes the line in the next band (`RedoNextBand`, `nsBlockFrame.cpp:5549-5555`, :5172-5196) |
 
 **The shared loop.** `layoutParagraph(paragraph, env, slots)` lays the k-th line box out in `slots[k]` and later ones at
-the full width. A refused slot records `{ row, gaps }` in `belowFloats`, and the same start is laid out in the next slot.
+the full width. A refused slot records `{ row, gaps }` in `belowFloats`, and the same start is laid out in the next slot, or the refusal's `next` when the engine gives one because building the refused line changed its state (WebKit's first build places the slot floats).
 A line without a line box takes no block size, so the next line uses the same slot. This equals native layout for floats
 of one line height stacked at the block's start, because a line refused in one row is refused in every narrower row the
 engine skips at once: the fit tests are monotone in the available width.
@@ -1451,6 +1454,10 @@ its losses attributed in a seed diff.
        spaces, `<br>` after collapsible white space, `<wbr>` under keep-all and nowrap, negative and positive text-indent
        with tabs, `text-align` end, center and justify with trailing spaces at unsafe offsets (Blink's reshape), and slot
        rows too narrow for a word (below-floats).
+     - Done on 2026-09-17: the case format (`Case.inline`, `pretext-lab-case/2` ids for structured cases, flat trees keep
+       flat ids), the page's native half (tree, slot floats, `elements`, `floats`), `lineSlots` through the predictor, and
+       the families (`rebuild/tests/families/inline.ts`, TESTS.md §4). Not done: the scorer's `elements` comparison and
+       the slot-rows assumption, and painting structured cases.
    - Painter owner: run `paint.ts` over the flat sets first, losing no painter pair against the v2 seeds, then over the new
      families; painter probes for slot floats, box edges and `text-align-last`.
    - Tests owner: registry rules and coverage for the new rules and the observer assumption.
@@ -1530,7 +1537,9 @@ line box heights, which the model doesn't carry. That is a limit of the port, no
   positions, outside the contract; `needsAccurateEndPosition` and `impactedByFloats` themselves, which only widths and
   breaks show.
 - **`<wbr>`** to settle by probe. Blink's opaque flow-control item has an empty result, which produces no fragment item
-  (`logical_line_builder.cc:419-433`), so Blink should report no rect; WebKit and Gecko aren't traced.
+  (`logical_line_builder.cc:419-433`), so Blink should report no rect; WebKit and Gecko aren't traced. The stage 5 family
+  smoke runs of 2026-09-17 (5 `<wbr>` elements per browser) observed no rect in Chrome and webkit-host and one rect in
+  Firefox, so Gecko's `WBRFrame` has a box.
 
 How the lab compares:
 

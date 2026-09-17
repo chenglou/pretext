@@ -48,7 +48,8 @@ dependence"). `--allow-safari-frontmost` (Safari only, no value) skips the wait 
 (approved by the maintainer on 2026-09-16); the lab window then opens over the user's windows. `--predict-only` (no
 value) skips native observation: rows keep their format with `native: { skipped: 'predict-only' }`, the predictor and
 painter still run, and `run.json` records `predictOnly` and `totals.skippedNativeRows`. Score such rows with `score.ts
---native-rows`.
+--native-rows`. `--chrome-apple-languages=<tag>[,<tag>...]` with `--chrome-accept-languages=<list>` (Chrome only, both
+together) launch Chrome under other languages than this Mac's (see "Browser-process languages").
 
 Before launching, it reads the build from the app bundles, because user agents can't tell builds apart (Chrome's says
 `153.0.0.0` for every 153 build): Chrome's and Firefox's `CFBundleShortVersionString`, which are also the engine builds;
@@ -110,7 +111,11 @@ a browser takes them from (CHARTER.md, "Boundaries"). `languages.ts` holds the r
   `AppleLanguages`, and a `--lang` launch switch is ignored. So Chrome launches with `-AppleLanguages ("zh-Hans-US",
   "en-US")`, this Mac's list on 2026-09-17, which keeps the zh-CN locale every earlier Chrome run had without drifting
   with the OS settings, and the accept languages `zh-CN,zh`. The driver reads the given fact back from the renderer
-  processes' command lines at the page's first step.
+  processes' command lines at the page's first step. `--chrome-apple-languages` and `--chrome-accept-languages` replace
+  both, so unlabeled content can be observed under a second controlled locale; the rule families' `process-languages`
+  runs use `en-US` and `en-US,en`. Firefox and webkit-host have no such option: Firefox's Mac command line passes a Cocoa
+  `-AppleLanguages` pair on as arguments to open (`nsCommandLineServiceMac.mm:107` skips only `-psn_` and
+  `-foreground`), and webkit-host rejects arguments it doesn't know.
 - Firefox, `regionalPrefsLocale`: layout takes the first OS regional-prefs locale, which on macOS is
   `CFLocaleCopyPreferredLanguages()` canonicalized; no pref reaches it. The driver derives it from `AppleLanguages`
   (`zh-hans-us` here) and sets `intl.locale.requested`, `intl.accept_languages` and `intl.regional_prefs.use_os_locales`
@@ -143,7 +148,13 @@ For each case the page:
 1. Builds a `div` at (0, 0) with the paragraph's width, font, letter- and word-spacing, px line height, `white-space`,
    `word-break`, `overflow-wrap`, `line-break`, `tab-size`, `direction` and `lang`. Every run becomes a `span` with its
    own font, spacing and `lang`, or a bare text node, with its text inserted exactly as given. Keyword values the
-   browser refuses are recorded in `rejectedStyles`.
+   browser refuses are recorded in `rejectedStyles`. A case with inline structure (`Case.inline`, DESIGN.md §8.3 stage 5)
+   instead gets the block's `text-indent` and `text-align`, then, per slot row, a `float: left; clear: left` block of the
+   row's left inset and a `float: right; clear: right` block of its right inset, one line height tall, and then its tree:
+   every span with its own font, spacing, wrapping keywords, `lang`, logical margin, border and padding on each side,
+   `vertical-align` and the block's line height; every atomic inline as an empty top-aligned inline-block of its border
+   box and inline margins; `<br>` and `<wbr>` elements. A text leaf with empty text makes no DOM node. The case's `runs`
+   list the tree's leaves, so everything below indexes leaves.
 2. Lays it out, records `document.fonts.status`, awaits `document.fonts.ready` and records the status again. It also
    records `missingFonts`: the named families in the paragraph's and runs' font lists that the page can't resolve.
    A family resolves when a probe string measures differently in Canvas from at least one of two generic fallbacks;
@@ -151,7 +162,9 @@ For each case the page:
    fonts from web content.
 3. For every code point, records its UTF-16 offset in the concatenated run text, its length, and every Range client
    rect over the owning run's text node, relative to the paragraph's content box. It also records `runRects`: the
-   rects of a Range over each run's whole text node.
+   rects of a Range over each run's whole text node. For a case with inline structure it records `elements`, each
+   element's `getClientRects()` in document order (spans, atomic inlines, `<br>`, `<wbr>`), and `floats`, the slot floats'
+   border boxes. The scorer doesn't compare `elements` yet.
 4. Records the paragraph height and the environment: user agent, DPR, visual-viewport scale, page language,
    fixture fonts, window sizes, visibility and focus, `navigator.languages` and the default Intl locale, plus the
    document's history: `documentCaseIndex`, how many cases the document observed before this one, and `previousCaseId`,

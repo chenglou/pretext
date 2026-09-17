@@ -1,10 +1,11 @@
 // Content building for Gecko (Firefox 156.0): frames, bidi splits, text runs, TransformText per mapped flow, glyph
 // flags, nsLineBreaker breaks, spacing and the app-unit advances known before lines are filled.
 // specs/gecko-text.md §2-§12, specs/gecko-canvas.md §2-§3, specs/probes-firefox.md.
+import { indexContent, langUnder, styleUnder, type ContentIndex } from '../../content.js'
 import type { GeckoEnvironment } from '../../env.js'
 import { measureContext, measureText, type Measurer } from '../../measure/canvas.js'
 import { canvasFont } from '../../measure/font.js'
-import type { Gap, Paragraph } from '../../model.js'
+import type { BoxEdge, FontDecl, Gap, Paragraph, TextStyle } from '../../model.js'
 import { opticalSizeAxisOf, quantize10, sameFontForTextRun } from './fonts.js'
 import { canonicalLanguageTag } from './likely.js'
 import { bidiDataFor } from '../../unicode/bidi.js'
@@ -21,8 +22,8 @@ import {
   scriptOf,
 } from './props.js'
 import {
-  KIND_FORMAT, KIND_GLYPH, KIND_INVISIBLE, KIND_NEWLINE, KIND_TAB, type GeckoFrame, type GeckoPrepared, type GeckoStyle,
-  type GeckoTextRun, type GeckoUnit, type ScriptRun,
+  KIND_FORMAT, KIND_GLYPH, KIND_INVISIBLE, KIND_NEWLINE, KIND_TAB, type GeckoElement, type GeckoFrame, type GeckoItem,
+  type GeckoPrepared, type GeckoSpanEdges, type GeckoStyle, type GeckoTextRun, type GeckoUnit, type ScriptRun,
 } from './types.js'
 
 const f32 = Math.fround
@@ -42,11 +43,10 @@ function quantize7(size: number): number {
   const t = f32(d - size)
   return f32(d - t)
 }
-
-export function geckoStyle(p: Paragraph): GeckoStyle {
+export function geckoStyle(s: TextStyle): GeckoStyle {
   let collapse: GeckoStyle['collapse']
   let wrap: boolean
-  switch (p.whiteSpace) {
+  switch (s.whiteSpace) {
     case 'normal': collapse = 'collapse'; wrap = true; break
     case 'nowrap': collapse = 'collapse'; wrap = false; break
     case 'pre': collapse = 'preserve'; wrap = false; break
@@ -54,9 +54,9 @@ export function geckoStyle(p: Paragraph): GeckoStyle {
     case 'pre-line': collapse = 'preserve-breaks'; wrap = true; break
     case 'break-spaces': collapse = 'break-spaces'; wrap = true; break
   }
-  const overflowWrap = p.wordBreak === 'break-word' ? 'anywhere' : p.overflowWrap // nsStyleStruct.h:1303-1315
+  const overflowWrap = s.wordBreak === 'break-word' ? 'anywhere' : s.overflowWrap // nsStyleStruct.h:1303-1315
   let wordBreak: GeckoStyle['wordBreak']
-  switch (p.wordBreak) {
+  switch (s.wordBreak) {
     case 'break-word': case 'normal': wordBreak = 'normal'; break
     case 'break-all': wordBreak = 'break-all'; break
     case 'keep-all': wordBreak = 'keep-all'; break
@@ -70,6 +70,7 @@ export function geckoStyle(p: Paragraph): GeckoStyle {
     wordCanWrap: wrap && (overflowWrap === 'break-word' || overflowWrap === 'anywhere'),
     isBreakSpaces: collapse === 'break-spaces',
     wordBreak,
+    lineBreak: s.lineBreak,
   }
 }
 
@@ -492,6 +493,20 @@ export function rangeAu(m: Measurer, run: Pick<GeckoTextRun, 'context' | 'script
   let piece = ''
   for (let k = tStart; k < tEnd; k++) piece += String.fromCharCode(units[k]!)
   const w = (s: string) => Math.round(measureText(m, run.context, s) * 60)
+  // gfxFontGroup::ComputeRanges matches fonts over the whole script run, carrying the previous character and its matched font
+  // (gfxTextRun.cpp:3593-3875), and FindFontForChar reads them for a cluster extender and U+202F (:3181-3212). A piece that
+  // starts with one right after an invalid character begins a shaping unit, so the text before it shapes apart
+  // (gfxFont.cpp:3872-3897), and Canvas reproduces the DOM's advances with the script run's earlier text in front. Probe
+  // gecko-port F4 (.artifacts/probes/gecko/font-matching): `a WJ U+0301 ZWSP U+0308 U+093E b` in 16px Arial is 1329 au whole
+  // as in the DOM, where `U+0308 U+093E b` alone and after ZWSP measure 1429 au; `x U+2028 U+202F` gives U+202F 0 au whole
+  // as in the DOM and 192 au alone.
+  if (tStart > run.tStart && tStart < tEnd && isInvalidChar16(units[tStart - 1]!) && (isClusterExtender(units[tStart]!) || units[tStart] === 0x202f)) {
+    let from = run.tStart
+    for (let k = 0; k < run.scriptRuns.length && run.scriptRuns[k]!.limit <= tStart; k++) from = run.scriptRuns[k]!.limit
+    let prefix = ''
+    for (let k = from; k < tStart; k++) prefix += String.fromCharCode(units[k]!)
+    return w(prefix + piece) - w(prefix)
+  }
   const context = scriptContextFor(units, run.scriptRuns, run.tStart, tStart, tEnd)
   if (context === null) return w(piece)
   return context.before ? w(context.text + ' ' + piece) - w(context.text + ' ') : w(piece + ' ' + context.text) - w(' ' + context.text)
@@ -564,137 +579,437 @@ function prefersColorGlyph(presentation: EmojiPresentation, ch: number, next: nu
   if (next === 0xfe0f || (next >= 0x1f3fb && next <= 0x1f3ff) || (ch === 0x1f3f4 && next >= 0xe0061 && next <= 0xe007a)) return true
   return presentation === 'emoji-default' && next !== 0xfe0e
 }
+// The DOM children of the block in order, for the white-space-only text node rule: a leaf with empty text makes no node.
+function blockChildNodes(index: ContentIndex<FontDecl>): Array<{ kind: 'leaf'; run: number } | { kind: 'element'; element: number }> {
+  const out: Array<{ kind: 'leaf'; run: number } | { kind: 'element'; element: number }> = []
+  for (let e = 0; e < index.events.length; e++) {
+    const event = index.events[e]!
+    if (event.kind === 'text') {
+      const leaf = index.leaves[event.run]!
+      if (leaf.parent === -1 && leaf.text.length > 0) out.push({ kind: 'leaf', run: event.run })
+    } else if (event.kind !== 'close' && index.elements[event.element]!.parent === -1) {
+      out.push({ kind: 'element', element: event.element })
+    }
+  }
+  return out
+}
+
+// snap_as_border_width (servo/components/style/values/specified/border.rs:235-246): a nonzero border width rounds down to
+// whole device pixels, and to at least one.
+function borderAu(px: number, apd: number): number {
+  const au = pxToAu(px)
+  return au === 0 ? 0 : Math.max(apd, Math.trunc(au / apd) * apd)
+}
 
 export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, measurer: Measurer): GeckoPrepared {
-  const style = geckoStyle(paragraph)
+  const blockStyle = geckoStyle(paragraph)
   const apd = Math.max(1, Math.floor(60 / env.devicePixelRatio + 0.5)) // nsDeviceContext.cpp:52-63
-  const runs = paragraph.runs
-  const runStarts: number[] = []
-  let text = ''
-  for (let i = 0; i < runs.length; i++) {
-    runStarts.push(text.length)
-    text += runs[i]!.text
-  }
-  runStarts.push(text.length)
+  const index = indexContent(paragraph)
+  const leaves = index.leaves
+  const text = index.text
   const n = text.length
+  const runStarts: number[] = []
+  for (let i = 0; i < leaves.length; i++) runStarts.push(leaves[i]!.start)
+  runStarts.push(n)
   const gaps: Gap[] = []
   const letterSpacingAu: number[] = []
   const wordSpacingAu: number[] = []
   const langs: string[] = []
   const runIs8bit: boolean[] = []
-  for (let i = 0; i < runs.length; i++) {
-    const r = runs[i]!
-    letterSpacingAu.push(pxToAu(r.letterSpacing))
-    wordSpacingAu.push(pxToAu(r.wordSpacing))
-    langs.push(canonicalLanguageTag(r.lang ?? paragraph.lang))
+  const runTextStyles: TextStyle[] = []
+  const runStyles: GeckoStyle[] = []
+  const runParents: number[] = []
+  for (let i = 0; i < leaves.length; i++) {
+    const leaf = leaves[i]!
+    // A text frame reads its parent element's computed style: a text node inherits every property the model has.
+    const style = styleUnder(paragraph, index, leaf.parent)
+    runTextStyles.push(style)
+    runStyles.push(geckoStyle(style))
+    runParents.push(leaf.parent)
+    letterSpacingAu.push(pxToAu(style.letterSpacing))
+    wordSpacingAu.push(pxToAu(style.wordSpacing))
+    langs.push(canonicalLanguageTag(langUnder(paragraph, index, leaf.parent)))
     let is8bit = true
-    for (let k = 0; k < r.text.length; k++) if (r.text.charCodeAt(k) >= 0x100) { is8bit = false; break }
+    for (let k = 0; k < leaf.text.length; k++) if (leaf.text.charCodeAt(k) >= 0x100) { is8bit = false; break }
     runIs8bit.push(is8bit)
     if (langs[i] === '') gaps.push({ gap: 'ui-language', run: i, detail: 'lang="": font lists and generic families follow the OS locale, which pages cannot read' })
   }
 
-  // 1. Frames (nsCSSFrameConstructor.cpp:5220-5290): a bare white-space-only 8-bit text node that is the block's first or
-  //    last child gets no frame under white-space normal or nowrap. A span's own child list has no line boundary.
-  type Piece = { run: number; start: number; end: number; level: number }
+  // Elements: span box edges in au and the shaping boundary tests; atomic sizes (DESIGN.md §1.1, "Box edges").
+  const elements: GeckoElement[] = []
+  const rtlBlock = paragraph.direction === 'rtl'
+  for (let e = 0; e < index.elements.length; e++) {
+    const indexed = index.elements[e]!
+    const node = indexed.node
+    switch (node.kind) {
+      case 'span': {
+        const edges: GeckoSpanEdges = {
+          startMargin: pxToAu(node.inlineStart.margin),
+          startBorderPadding: borderAu(node.inlineStart.border, apd) + pxToAu(node.inlineStart.padding),
+          endBorderPadding: borderAu(node.inlineEnd.border, apd) + pxToAu(node.inlineEnd.padding),
+          endMargin: pxToAu(node.inlineEnd.margin),
+        }
+        const sideHasEdge = (edge: BoxEdge) => pxToAu(edge.margin) !== 0 || pxToAu(edge.padding) !== 0 || borderAu(edge.border, apd) !== 0
+        const startEdge = sideHasEdge(node.inlineStart)
+        const endEdge = sideHasEdge(node.inlineEnd)
+        elements.push({
+          kind: 'span', parent: indexed.parent, open: -1, close: -1, closes: [], style: geckoStyle(node), edges,
+          breaksShapingAtStart: startEdge || node.verticalAlign !== 'baseline',
+          breaksShapingAtEnd: endEdge || node.verticalAlign !== 'baseline',
+          selfEmpty: !startEdge && !endEdge,
+        })
+        break
+      }
+      case 'atomic':
+        elements.push({ kind: 'atomic', parent: indexed.parent, item: -1, iSize: pxToAu(node.width), startMargin: pxToAu(node.marginInlineStart), endMargin: pxToAu(node.marginInlineEnd), level: 0 })
+        break
+      case 'br':
+      case 'wbr':
+        elements.push({ kind: node.kind, parent: indexed.parent, item: -1, level: 0 })
+        break
+    }
+  }
+
+  // 1. Frames (nsCSSFrameConstructor.cpp:5220-5290, AtLineBoundary :5220-5258): a white-space-only 8-bit text node that is the
+  //    block's first or last child gets no frame when white space and newlines aren't significant. A span's own child list
+  //    has no line boundary.
+  // `para`: the bidi paragraph the piece was resolved in (0 without bidi).
+  type Piece = { run: number; start: number; end: number; level: number; para: number }
+  const children = blockChildNodes(index)
+  const boundaryLeaves = new Set<number>()
+  const firstChild = children[0]
+  const lastChild = children[children.length - 1]
+  if (firstChild !== undefined && firstChild.kind === 'leaf') boundaryLeaves.add(firstChild.run)
+  if (lastChild !== undefined && lastChild.kind === 'leaf') boundaryLeaves.add(lastChild.run)
   let pieces: Piece[] = []
-  for (let i = 0; i < runs.length; i++) {
-    const r = runs[i]!
-    if (r.text.length === 0) continue
-    if (r.node === 'text' && (i === 0 || i === runs.length - 1) && style.collapse === 'collapse' && runIs8bit[i]) {
+  for (let i = 0; i < leaves.length; i++) {
+    const leaf = leaves[i]!
+    if (leaf.text.length === 0) continue
+    if (boundaryLeaves.has(i) && runStyles[i]!.collapse === 'collapse' && runIs8bit[i]) {
       let onlyWhitespace = true
-      for (let k = 0; k < r.text.length; k++) {
-        const u = r.text.charCodeAt(k)
+      for (let k = 0; k < leaf.text.length; k++) {
+        const u = leaf.text.charCodeAt(k)
         if (u !== 0x20 && u !== 0x09 && u !== 0x0a && u !== 0x0d && u !== 0x0c) { onlyWhitespace = false; break }
       }
       if (onlyWhitespace) continue
     }
-    pieces.push({ run: i, start: runStarts[i]!, end: runStarts[i + 1]!, level: 0 })
+    pieces.push({ run: i, start: runStarts[i]!, end: runStarts[i + 1]!, level: 0, para: 0 })
   }
 
   // 2. Bidi (nsBidiPresUtils.cpp:790-1167): resolve when the block is RTL or a 16-bit node has RTL characters; each
   //    preserved line is its own paragraph, and frames split where the level run ends.
-  let resolveBidi = paragraph.direction === 'rtl'
+  let resolveBidi = rtlBlock
   for (let k = 0; k < pieces.length && !resolveBidi; k++) {
     const p = pieces[k]!
     if (runIs8bit[p.run]) continue
     for (let s = p.start; s < p.end; s++) if (isUtf16CodeUnitBidi(text.charCodeAt(s))) { resolveBidi = true; break }
   }
+  // The document resolves bidi once any text node holds a bidi code unit (CharacterData.cpp:298-302; nsBlockFrame.cpp:863-864),
+  // whatever this paragraph holds. An LTR paragraph with left-to-right embedding, override or isolate controls and no
+  // right-to-left character then splits frames at the level changes those controls make, and frames at different levels
+  // don't share a text run (nsTextFrame.cpp:2139-2148). The port predicts a fresh document (gecko audit F3).
+  if (!resolveBidi) {
+    for (let k = 0; k < pieces.length; k++) {
+      const p = pieces[k]!
+      let found = false
+      for (let s = p.start; s < p.end && !found; s++) {
+        const u = text.charCodeAt(s)
+        found = u === 0x202a || u === 0x202d || u === 0x2066 || u === 0x2068
+      }
+      if (found) {
+        gaps.push({ gap: 'page-history', run: p.run, detail: "left-to-right bidi controls split frames only once the document has seen right-to-left text (CharacterData.cpp:298-302, nsTextFrame.cpp:2139-2148); the port predicts a fresh document" })
+        break
+      }
+    }
+  }
+  let paraCount = 0
+  const elementPara = new Map<number, number>()
   if (resolveBidi) {
     const data = bidiDataFor('gecko')
     const split: Piece[] = []
-    let chunk: Piece[] = []
+    // TraverseFrames' paragraph buffer in document order (nsBidiPresUtils.cpp:1169-1429): each text piece's text, and one
+    // character per other leaf, whose run gives that frame its level (ResolveParagraph :975-982, :1027). A <br> appends
+    // U+2028 and ends the bidi paragraph (:1381-1384); an atomic inline is U+FFFC and a <wbr> U+200B (:1385-1400). An
+    // inline-block is inline-outside, so it doesn't end the paragraph. A span without children would be a leaf as U+200B,
+    // a boundary-neutral character that only gives the span its own level; the model gives empty spans no leaf.
+    type Entry = { kind: 'piece'; piece: Piece } | { kind: 'object'; element: number }
+    let chunk: Entry[] = []
     let chunkText = ''
     const flush = (): void => {
       if (chunk.length === 0) return
       const levels = resolveUnicodeBidi(replaceSeparators(chunkText), paragraph.direction, data).levels
+      const para = paraCount++
       let offset = 0
       for (let c = 0; c < chunk.length; c++) {
-        const p = chunk[c]!
+        const entry = chunk[c]!
+        if (entry.kind === 'object') {
+          (elements[entry.element] as Extract<GeckoElement, { kind: 'atomic' | 'br' | 'wbr' }>).level = levels[offset]!
+          elementPara.set(entry.element, para)
+          offset++
+          continue
+        }
+        const p = entry.piece
         let s = p.start
         for (let k = p.start + 1; k < p.end; k++) {
           if (levels[offset + k - p.start] !== levels[offset + k - 1 - p.start]) {
-            split.push({ run: p.run, start: s, end: k, level: levels[offset + s - p.start]! })
+            split.push({ run: p.run, start: s, end: k, level: levels[offset + s - p.start]!, para })
             s = k
           }
         }
-        split.push({ run: p.run, start: s, end: p.end, level: levels[offset + s - p.start]! })
+        split.push({ run: p.run, start: s, end: p.end, level: levels[offset + s - p.start]!, para })
         offset += p.end - p.start
       }
       chunk = []
       chunkText = ''
     }
-    for (let k = 0; k < pieces.length; k++) {
-      const p = pieces[k]!
-      let s = p.start
-      if (style.newlineIsSignificant) {
-        for (let i = p.start; i < p.end; i++) {
-          if (text.charCodeAt(i) !== 0x0a) continue
-          chunk.push({ run: p.run, start: s, end: i + 1, level: 0 })
-          chunkText += text.slice(s, i + 1)
-          flush()
-          s = i + 1
+    const pieceOfRun = new Map<number, Piece>()
+    for (let k = 0; k < pieces.length; k++) pieceOfRun.set(pieces[k]!.run, pieces[k]!)
+    for (let ev = 0; ev < index.events.length; ev++) {
+      const event = index.events[ev]!
+      switch (event.kind) {
+        case 'text': {
+          const p = pieceOfRun.get(event.run)
+          if (p === undefined) break
+          let s = p.start
+          if (runStyles[p.run]!.newlineIsSignificant) {
+            for (let i = p.start; i < p.end; i++) {
+              if (text.charCodeAt(i) !== 0x0a) continue
+              chunk.push({ kind: 'piece', piece: { run: p.run, start: s, end: i + 1, level: 0, para: 0 } })
+              chunkText += text.slice(s, i + 1)
+              flush()
+              s = i + 1
+            }
+          }
+          if (s < p.end) {
+            chunk.push({ kind: 'piece', piece: { run: p.run, start: s, end: p.end, level: 0, para: 0 } })
+            chunkText += text.slice(s, p.end)
+          }
+          break
         }
-      }
-      if (s < p.end) {
-        chunk.push({ run: p.run, start: s, end: p.end, level: 0 })
-        chunkText += text.slice(s, p.end)
+        case 'atomic':
+          chunk.push({ kind: 'object', element: event.element })
+          chunkText += '￼'
+          break
+        case 'br':
+          chunk.push({ kind: 'object', element: event.element })
+          chunkText += ' '
+          flush()
+          break
+        case 'wbr':
+          chunk.push({ kind: 'object', element: event.element })
+          chunkText += '​'
+          break
       }
     }
     flush()
     pieces = split
   }
+  const leafPieces: Piece[][] = leaves.map(() => [])
+  for (let k = 0; k < pieces.length; k++) leafPieces[pieces[k]!.run]!.push(pieces[k]!)
 
-  // 3. Text runs (ContinueTextRunAcrossFrames, nsTextFrame.cpp:2015-2174) and TransformText per mapped flow.
+  // Bidi continuations of spans (ResolveParagraph, nsBidiPresUtils.cpp:1039-1057, :1114-1147; CreateContinuation and
+  // SplitInlineAncestors :612-758): where two neighbouring leaves of one bidi paragraph differ in level, every span holding
+  // both is split, after the spans that close behind the first leaf. A split inside a text node goes between its pieces.
+  const splitBeforeEvent = new Set<number>()
+  const splitBeforePiece = new Set<Piece>()
+  if (resolveBidi) {
+    let prevLevel = -1
+    let prevPara = -1
+    let insertAt = -1
+    for (let ev = 0; ev < index.events.length; ev++) {
+      const event = index.events[ev]!
+      switch (event.kind) {
+        case 'open':
+          if (insertAt === -1) insertAt = ev
+          break
+        case 'close':
+          break
+        case 'text': {
+          const list = leafPieces[event.run]!
+          for (let k = 0; k < list.length; k++) {
+            const piece = list[k]!
+            if (prevPara === piece.para && prevLevel !== piece.level) {
+              if (k > 0) splitBeforePiece.add(piece)
+              else splitBeforeEvent.add(insertAt === -1 ? ev : insertAt)
+            }
+            prevLevel = piece.level
+            prevPara = piece.para
+          }
+          if (list.length > 0) insertAt = -1
+          break
+        }
+        default: {
+          const el = elements[event.element] as Extract<GeckoElement, { kind: 'atomic' | 'br' | 'wbr' }>
+          const para = elementPara.get(event.element) ?? -2
+          if (prevPara === para && prevLevel !== el.level) splitBeforeEvent.add(insertAt === -1 ? ev : insertAt)
+          prevLevel = el.level
+          prevPara = para
+          insertAt = -1
+        }
+      }
+    }
+  }
+
+  // 3. Items in document order, text runs (BuildTextRunsScanner::ScanFrame, nsTextFrame.cpp:2176-2276;
+  //    ContinueTextRunAcrossFrames :2015-2174) and TransformText per mapped flow. Spans continue text runs and the line
+  //    breaker (nsInlineFrame::CanContinueTextRun, nsInlineFrame.cpp:471-474); any other frame ends both
+  //    (CanTextCrossFrameBoundary, nsTextFrame.cpp:1395-1431), clears the incoming white-space bit and flushes the line
+  //    breaker, recording a trailing break on the run it flushes except before a <br> (:2246-2272, FlushLineBreaks
+  //    :1835-1855).
   const tr: TransformOut = {
     tUnits: new Uint16Array(n), tSource: new Int32Array(n), sourceT: new Int32Array(n).fill(-1), count: 0, hasShy: false,
     hasTab: false,
   }
   const frames: GeckoFrame[] = []
-  type RunBuild = { firstFrame: number; frameCount: number; tStart: number; tEnd: number; is8bit: boolean; level: number; hasShy: boolean; hasTab: boolean }
+  const items: GeckoItem[] = []
+  // Every frame of a build is its own mapped flow: frames of one node only continue a text run as fluid continuations,
+  // which line breaking makes later, and bidi splits don't continue one (nsTextFrame.cpp:2130-2139).
+  type Flow = { frame: number; initialBreakController: number }
+  type RunBuild = { flows: Flow[]; tStart: number; tEnd: number; is8bit: boolean; level: number; hasShy: boolean; hasTab: boolean; trailingBreak: boolean }
   const builds: RunBuild[] = []
+  // The line breaker's operations in document order: a text run's flows, or a reset with the run whose trailing break it
+  // records (-1 for none).
+  type BreakerOp = { kind: 'run'; build: number } | { kind: 'reset'; trailingOn: number }
+  const breakerOps: BreakerOp[] = []
+  let current: RunBuild | null = null
+  let lastFrame = -1
+  // mCommonAncestorWithLastFrame (nsTextFrame.cpp:1151-1156, :1886-1888, :2254-2275); -1 is the block, the line container
+  // SetupBreakSinksForTextRun falls back to (:2956-2963).
+  let commonAncestor = -1
   let inWhitespace = false
-  for (let k = 0; k < pieces.length; k++) {
-    const p = pieces[k]!
-    const prev = k > 0 ? pieces[k - 1]! : null
-    const continues = prev !== null && prev.level === p.level && prev.run !== p.run &&
-      !(style.newlineIsSignificant && text.charCodeAt(prev.end - 1) === 0x0a) &&
-      sameFontForTextRun(runs[prev.run]!.font, runs[p.run]!.font) && langs[prev.run] === langs[p.run] &&
-      (letterSpacingAu[prev.run] !== 0) === (letterSpacingAu[p.run] !== 0)
-    if (!continues) {
-      builds.push({ firstFrame: frames.length, frameCount: 0, tStart: tr.count, tEnd: tr.count, is8bit: true, level: p.level, hasShy: false, hasTab: false })
-    }
-    const b = builds[builds.length - 1]!
-    const tStart = tr.count
-    tr.hasShy = false
-    tr.hasTab = false
-    inWhitespace = transformFlow(text, p.start, p.end, runIs8bit[p.run]!, style, inWhitespace, langs[p.run]!, tr)
-    b.hasShy ||= tr.hasShy
-    b.hasTab ||= tr.hasTab
-    b.is8bit &&= runIs8bit[p.run]!
-    b.frameCount++
-    b.tEnd = tr.count
-    frames.push({ run: p.run, start: p.start, end: p.end, level: p.level, textRun: builds.length - 1, tStart, tEnd: tr.count, is8bit: runIs8bit[p.run]! })
+  const flushRun = (): void => {
+    if (current === null) return
+    builds.push(current)
+    breakerOps.push({ kind: 'run', build: builds.length - 1 })
+    current = null
+    lastFrame = -1
   }
+  // Whether `from` or an element below `ancestor` breaks shaping on its logical `side` (PreventCrossBoundaryShaping,
+  // nsTextFrame.cpp:2054-2098). A text node itself has no box edges.
+  const preventsShaping = (from: number, ancestor: number, side: 'start' | 'end'): boolean => {
+    for (let e = from; e !== ancestor && e >= 0; e = elements[e]!.parent) {
+      const el = elements[e]!
+      if (el.kind === 'span' && (side === 'start' ? el.breaksShapingAtStart : el.breaksShapingAtEnd)) return true
+    }
+    return false
+  }
+  const ancestorsOf = (e: number): number[] => {
+    const out: number[] = []
+    for (let a = e; a >= 0; a = elements[a]!.parent) out.push(a)
+    out.push(-1)
+    return out
+  }
+  const continuesAcross = (prevFrame: GeckoFrame, p: Piece): boolean => {
+    if (prevFrame.level !== p.level) return false
+    const prevStyle = runStyles[prevFrame.run]!
+    if (prevStyle.newlineIsSignificant && text.charCodeAt(prevFrame.end - 1) === 0x0a) return false // HasTerminalNewline
+    const parentA = runParents[prevFrame.run]!
+    const parentB = runParents[p.run]!
+    if (parentA !== parentB) {
+      const up = new Set(ancestorsOf(parentA))
+      let ancestor = -1
+      const down = ancestorsOf(parentB)
+      for (let k = 0; k < down.length; k++) if (up.has(down[k]!)) { ancestor = down[k]!; break }
+      // The inline end of the first frame's boxes and the inline start of the second's, swapped when the first frame's
+      // embedding level is against the block's direction (nsTextFrame.cpp:2112-2126).
+      const swap = ((prevFrame.level & 1) === 1) === !rtlBlock
+      if (preventsShaping(parentA, ancestor, swap ? 'start' : 'end') || preventsShaping(parentB, ancestor, swap ? 'end' : 'start')) return false
+    }
+    if (prevFrame.run === p.run) return false // a non-fluid continuation of the same node (:2130-2139)
+    if (parentA === parentB) return true // one computed style (:2141-2143)
+    const a = runTextStyles[prevFrame.run]!
+    const b = runTextStyles[p.run]!
+    return prevStyle.wordBreak === runStyles[p.run]!.wordBreak && a.lineBreak === b.lineBreak &&
+      sameFontForTextRun(a.font, b.font) && langs[prevFrame.run] === langs[p.run] &&
+      (letterSpacingAu[prevFrame.run] !== 0) === (letterSpacingAu[p.run] !== 0)
+  }
+  let offsetAt = 0
+  const openStack: number[] = []
+  // A bidi split: the open spans' continuations end, innermost first, and new ones begin (SplitInlineAncestors). The scanner
+  // lifts the common ancestor past each ended continuation as it does past a span (nsTextFrame.cpp:2275).
+  const emitSplit = (at: number): void => {
+    for (let d = openStack.length - 1; d >= 0; d--) {
+      const e = openStack[d]!
+      const el = elements[e] as Extract<GeckoElement, { kind: 'span' }>
+      el.closes.push(items.length)
+      items.push({ kind: 'close', element: e, at, split: true })
+      if (commonAncestor === e) commonAncestor = el.parent
+    }
+    for (let d = 0; d < openStack.length; d++) items.push({ kind: 'open', element: openStack[d]!, at, split: true })
+  }
+  for (let ev = 0; ev < index.events.length; ev++) {
+    const event = index.events[ev]!
+    if (splitBeforeEvent.has(ev)) emitSplit(offsetAt)
+    switch (event.kind) {
+      case 'text': {
+        const pieceList = leafPieces[event.run]!
+        for (let k = 0; k < pieceList.length; k++) {
+          const p = pieceList[k]!
+          if (splitBeforePiece.has(p)) emitSplit(p.start)
+          if (current === null || lastFrame < 0 || !continuesAcross(frames[lastFrame]!, p)) {
+            flushRun()
+            current = { flows: [], tStart: tr.count, tEnd: tr.count, is8bit: true, level: p.level, hasShy: false, hasTab: false, trailingBreak: false }
+          }
+          const b: RunBuild = current
+          const tStart = tr.count
+          tr.hasShy = false
+          tr.hasTab = false
+          inWhitespace = transformFlow(text, p.start, p.end, runIs8bit[p.run]!, runStyles[p.run]!, inWhitespace, langs[p.run]!, tr)
+          b.hasShy ||= tr.hasShy
+          b.hasTab ||= tr.hasTab
+          b.is8bit &&= runIs8bit[p.run]!
+          b.tEnd = tr.count
+          const fi = frames.length
+          // A new mapped flow records the common ancestor with the last frame as the element controlling its initial break
+          // (nsTextFrame.cpp:2229-2233); AccumulateRunInfo then makes the frame's parent the common ancestor (:1886-1888).
+          b.flows.push({ frame: fi, initialBreakController: commonAncestor })
+          frames.push({ run: p.run, start: p.start, end: p.end, level: p.level, textRun: builds.length, tStart, tEnd: tr.count, is8bit: runIs8bit[p.run]!, item: items.length })
+          items.push({ kind: 'text', frame: fi, at: p.start })
+          lastFrame = fi
+          commonAncestor = runParents[p.run]!
+        }
+        offsetAt += leaves[event.run]!.text.length
+        break
+      }
+      case 'open': {
+        const el = elements[event.element] as Extract<GeckoElement, { kind: 'span' }>
+        el.open = items.length
+        items.push({ kind: 'open', element: event.element, at: offsetAt, split: false })
+        openStack.push(event.element)
+        break
+      }
+      case 'close': {
+        const el = elements[event.element] as Extract<GeckoElement, { kind: 'span' }>
+        el.close = items.length
+        el.closes.push(items.length)
+        items.push({ kind: 'close', element: event.element, at: offsetAt, split: false })
+        openStack.pop()
+        // LiftCommonAncestorWithLastFrameToParent with the span's parent after the span is scanned (:2275).
+        if (commonAncestor === event.element) commonAncestor = el.parent
+        break
+      }
+      case 'atomic':
+      case 'br':
+      case 'wbr': {
+        const el = elements[event.element] as Extract<GeckoElement, { kind: 'atomic' | 'br' | 'wbr' }>
+        el.item = items.length
+        items.push({ kind: event.kind, element: event.element, at: offsetAt })
+        // FlushFrames(true, isBR) before and after the frame (:2246-2272): the first builds the pending run, feeds it to the
+        // line breaker and resets it; the second finds no pending run.
+        const trailingOn = current !== null && event.kind !== 'br' ? builds.length : -1
+        flushRun()
+        breakerOps.push({ kind: 'reset', trailingOn }, { kind: 'reset', trailingOn: -1 })
+        inWhitespace = false
+        // mCommonAncestorWithLastFrame = aFrame, then lifted to its parent (:2256, :2275).
+        commonAncestor = el.parent
+        break
+      }
+    }
+  }
+  // The block's last FlushFrames(true, false) (nsTextFrame.cpp:1730-1735).
+  const trailingOn = current !== null ? builds.length : -1
+  flushRun()
+  breakerOps.push({ kind: 'reset', trailingOn })
   const T = tr.count
   const tUnits = tr.tUnits.slice(0, T)
   const tSource = tr.tSource.slice(0, T)
@@ -707,18 +1022,29 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, measur
   const g: Glyphs = { units: tUnits, breakFlags: new Uint8Array(T), clusterStart: new Uint8Array(T).fill(1), isSpace: new Uint8Array(T), kind: new Uint8Array(T) }
   for (let r = 0; r < builds.length; r++) initTextRun(g, builds[r]!.tStart, builds[r]!.tEnd, builds[r]!.is8bit)
 
-  // 5. nsLineBreaker over every flow in order (SetupBreakSinksForTextRun, nsTextFrame.cpp:2889-2997), one scan for the
-  //    block: nothing in the model flushes it, so the Chinese/Japanese flag is sticky across words.
+  // 5. nsLineBreaker over every flow in document order (SetupBreakSinksForTextRun, nsTextFrame.cpp:2889-2997), with the
+  //    resets of frames text can't cross.
   const breaker = new LineBreakerState(env.dictionaryBreaks)
-  for (let r = 0; r < builds.length; r++) {
-    const b = builds[r]!
+  const styleOfElement = (e: number): GeckoStyle => e < 0 ? blockStyle : (elements[e] as Extract<GeckoElement, { kind: 'span' }>).style
+  for (let o = 0; o < breakerOps.length; o++) {
+    const op = breakerOps[o]!
+    if (op.kind === 'reset') {
+      const trailing = breaker.reset()
+      if (op.trailingOn >= 0 && trailing) builds[op.trailingOn]!.trailingBreak = true
+      continue
+    }
+    const b = builds[op.build]!
     const runState = { noBreaks: true }
-    for (let k = b.firstFrame; k < b.firstFrame + b.frameCount; k++) {
-      const f = frames[k]!
+    for (let k = 0; k < b.flows.length; k++) {
+      const flow = b.flows[k]!
+      const f = frames[flow.frame]!
+      const style = runStyles[f.run]!
+      // The CSS word-break and line-break of the flow's start frame (:2913-2940).
       breaker.setWordBreak(style.wordBreak)
-      breaker.setStrictness(paragraph.lineBreak)
+      breaker.setStrictness(style.lineBreak)
       let flags = 0
-      if (!style.wrap) flags |= BREAK_SUPPRESS_INITIAL | BREAK_SUPPRESS_INSIDE // the block controls the initial break
+      if (!styleOfElement(flow.initialBreakController).wrap) flags |= BREAK_SUPPRESS_INITIAL // :2956-2963
+      if (!style.wrap) flags |= BREAK_SUPPRESS_INSIDE // :2964-2967
       if (runState.noBreaks) flags |= BREAK_SKIP_SETTING_NO_BREAKS
       // HasCompressedLeadingWhitespace (nsTextFrame.cpp:2867-2887).
       for (let s = f.start; s < f.end && sourceT[s] === -1; s++) {
@@ -733,7 +1059,6 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, measur
       }
     }
   }
-  const trailingBreak = breaker.reset()
 
   // 6. Spacing after each character (GetSpacingInternal, nsTextFrame.cpp:4089-4295, letter-spacing model 0).
   const runOfT = new Int32Array(T)
@@ -743,6 +1068,7 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, measur
     const b = builds[r]!
     for (let t = b.tStart; t < b.tEnd; t++) {
       const run = runOfT[t]!
+      const style = runStyles[run]!
       let spacing = 0
       const ls = letterSpacingAu[run]!
       if (ls !== 0) {
@@ -750,8 +1076,10 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, measur
         const canAdd = !(style.newlineIsSignificant && g.kind[t] === KIND_NEWLINE) &&
           (t + 1 >= b.tEnd || (g.clusterStart[t + 1] === 1 && g.kind[t] !== KIND_FORMAT && g.kind[t] !== KIND_TAB))
         if (canAdd) {
+          // The cluster's base: FindClusterStart stops at a skipped original character, such as a removed soft hyphen
+          // (nsTextFrame.cpp:3549-3560, :4203-4213), so a mark after one is its own base.
           let base = t
-          while (base > b.tStart && g.clusterStart[base] === 0) base--
+          while (base > b.tStart && g.clusterStart[base] === 0 && tSource[base]! - 1 === tSource[base - 1]!) base--
           let cp = tUnits[base]!
           if (base + 1 < b.tEnd && isSurrogatePair(cp, tUnits[base + 1]!)) cp = combine(cp, tUnits[base + 1]!)
           if (!isCursiveScript(cp)) spacing += ls
@@ -782,8 +1110,8 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, measur
   let spaceShapingGapReported = false
   for (let r = 0; r < builds.length; r++) {
     const b = builds[r]!
-    const firstRun = frames[b.firstFrame]!.run
-    const font = runs[firstRun]!.font
+    const firstRun = frames[b.flows[0]!.frame]!.run
+    const font = runTextStyles[firstRun]!.font
     const lang = langs[firstRun]!
     const domAu = lroundf(f32(quantize10(font.size) * 60))
     if (quantize7(font.size) * 60 !== domAu && !quantizationReported.has(String(font.size))) {
@@ -809,6 +1137,10 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, measur
     const au = (s: string) => auIn(context, s)
     let advance = 0
     const run = { context, scriptRuns: textRunScripts(tUnits, b.tStart, b.tEnd, b.is8bit), tStart: b.tStart }
+    // gfxFontGroup::InitTextRun shapes each script run on its own (gfxTextRun.cpp:2779-2809), so no shaped word crosses a
+    // script run limit.
+    const scriptLimits = new Set<number>()
+    for (let k = 0; k < run.scriptRuns.length; k++) scriptLimits.add(run.scriptRuns[k]!.limit)
     let stretchStart = b.tStart
     let stretchWords = 0
     let stretchSpaces = 0
@@ -833,7 +1165,7 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, measur
       const invalid = !boundary && (b.is8bit ? isInvalidChar8(ch) : isInvalidChar16(ch))
       let unit: GeckoUnit
       if (boundary) {
-        const w = au(ch === 0x20 ? ' ' : ' ')
+        const w = au(ch === 0x20 ? ' ' : ' ')
         unit = { kind: ch === 0x20 ? 'space' : 'nbsp', tStart: t, tEnd: t + 1, canvasAu: w, au: w, startAdvance: advance }
         stretchSpaces++
         stretchSum += w
@@ -844,6 +1176,7 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, measur
       } else {
         let e = t + 1
         for (; e < b.tEnd; e++) {
+          if (scriptLimits.has(e)) break
           const c = tUnits[e]!
           const nx = e + 1 < b.tEnd ? tUnits[e + 1]! : 0x0a
           if (((c === 0x20 || c === 0xa0) && (b.is8bit || !isClusterExtender(nx))) || (b.is8bit ? isInvalidChar8(c) : isInvalidChar16(c))) break
@@ -898,6 +1231,15 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, measur
               }
               continue
             }
+            // A cluster that doesn't ask for a color glyph makes FindFontForChar look for a font without one first
+            // (gfxTextRun.cpp:3268-3308). Canvas runs the same matching in both contexts, except where the run's font string is
+            // Apple Color Emoji's own: then the two contexts are one and the test above can't fail. Probe gecko-port F4: `©︎`
+            // in 16px "Apple Color Emoji" draws with a text font at 729 au in Canvas and the DOM.
+            if (settings.font === canvasFont({ ...font, family: COLOR_EMOJI_FAMILY }, font.size) &&
+              !prefersColorGlyph(presentation, first, cluster.codePointAt(first >= 0x10000 ? 2 : 1) ?? 0) && !fallbackGapReported) {
+              fallbackGapReported = true
+              gaps.push({ gap: 'font-fallback', run: firstRun, detail: `U+${first.toString(16).toUpperCase()} asks for text presentation in Apple Color Emoji's own font list: which font the DOM draws it with depends on text fonts' coverage, which the Canvas test can't show there (gfxTextRun.cpp:3268-3308)` })
+            }
             if (quantize7(devSize) !== devSize && !emojiGapReported) {
               emojiGapReported = true
               gaps.push({ gap: 'bitmap-emoji-size', run: firstRun, detail: `device size ${devSize}px is not on Canvas's 7-bit size grid` })
@@ -929,7 +1271,7 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, measur
     endStretch(b.tEnd)
     textRuns.push({
       tStart: b.tStart, tEnd: b.tEnd, is8bit: b.is8bit, level: b.level, context, scriptRuns: run.scriptRuns, hasShy: b.hasShy,
-      trailingBreak: r === builds.length - 1 && trailingBreak, minTabAdvance: b.hasTab ? 0.5 * au('0') : 0,
+      trailingBreak: b.trailingBreak, minTabAdvance: b.hasTab ? 0.5 * au('0') : 0,
       hyphenAu: b.hasShy ? au('‐') : 0, hasTab: b.hasTab, totalAdvance: advance,
     })
   }
@@ -977,9 +1319,9 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, measur
   }
 
   return {
-    paragraph, env, appUnitsPerDevPixel: apd, style, text, runStarts, letterSpacingAu, frames, textRuns, tUnits, tSource,
-    breakFlags: g.breakFlags, clusterStart: g.clusterStart, isSpace: g.isSpace, kind: g.kind, spacingPrefix,
-    correctionPrefix, unitOf, units, sourceT, nextT, tabWidth, gaps,
+    paragraph, env, appUnitsPerDevPixel: apd, blockStyle, text, runStarts, runStyles, runParents, runLangs: langs, letterSpacingAu, frames, items,
+    elements, textRuns, tUnits, tSource, breakFlags: g.breakFlags, clusterStart: g.clusterStart, isSpace: g.isSpace, kind: g.kind,
+    spacingPrefix, correctionPrefix, unitOf, units, sourceT, nextT, tabWidth, textIndentAu: pxToAu(paragraph.textIndent), bidi: resolveBidi, gaps,
   }
 }
 

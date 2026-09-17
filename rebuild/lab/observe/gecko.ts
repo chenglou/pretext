@@ -1,11 +1,14 @@
-// What Firefox 156.0 reports through Range.getClientRects() for a Gecko layout: for each code point of the concatenated run
-// text, the rects of a Range over it in its run's text node, and for each run the rects of a Range over the whole node
-// (research/observe-gecko.md, DESIGN.md §9). The rules port GetPartialTextRect and ExtractRectFromOffset
-// (dom/base/AbstractRange.cpp:715-831), nsTextFrame::GetPointFromOffset (layout/generic/nsTextFrame.cpp:8667-8752) and
+// What Firefox 156.0 reports through Range.getClientRects() and Element.getClientRects() for a Gecko layout: for each code
+// point of the concatenated leaf text, the rects of a Range over it in its leaf's text node; for each leaf the rects of a
+// Range over the whole node; for each element its client rects (research/observe-gecko.md, DESIGN.md §9). The rules port
+// GetPartialTextRect and ExtractRectFromOffset (dom/base/AbstractRange.cpp:715-831), nsTextFrame::GetPointFromOffset
+// (layout/generic/nsTextFrame.cpp:8667-8752), nsLayoutUtils::GetAllInFlowRects (nsLayoutUtils.cpp:3477-3505, 3661-3667) and
 // DOMRect::SetLayoutRect (dom/base/DOMRect.cpp:152-164) over the frames the engine placed. Types only from
-// rebuild/src/model.ts: no expected value comes from the library's logic.
+// rebuild/src/model.ts: no expected value comes from the library's logic, and the tree is walked here, not through
+// src/content.ts (DESIGN.md §8.1).
 import type {
-  Expected, ExpectedObservation, ExpectedRect, GeckoFrameGeometry, GeckoLayout, ObservationPort, UnobservableFact,
+  Expected, ExpectedObservation, ExpectedRect, GeckoFrameGeometry, GeckoLayout, GeckoTextFrame, InlineNode, ObservationPort, Paragraph,
+  UnobservableFact,
 } from '../../src/model.ts'
 
 // DOMRect::SetLayoutRect rounds each app-unit edge to 1/65536 px, and SetRect narrows each field to float32 on its own
@@ -23,13 +26,40 @@ type Edge = { au: number; limited: boolean }
 type PlacedFrame = {
   line: number
   index: number
-  frame: GeckoFrameGeometry
+  frame: GeckoTextFrame
   // The text run's direction: the frame's level is odd (nsTextFrame.cpp:8712-8716).
   rtl: boolean
   // prefix[k]: the advance of characters [measuredStart, measuredStart + k).
   prefix: number[]
   widthLimited: boolean
   xLimited: boolean
+}
+
+// The paragraph's text leaves and element kinds in document order, as the page builds its DOM.
+function walkContent(paragraph: Paragraph): { texts: string[]; elementKinds: Array<'span' | 'atomic' | 'br' | 'wbr'> } {
+  const texts: string[] = []
+  const elementKinds: Array<'span' | 'atomic' | 'br' | 'wbr'> = []
+  const stack: { nodes: readonly InlineNode[]; next: number }[] = [{ nodes: paragraph.content, next: 0 }]
+  while (stack.length > 0) {
+    const top = stack[stack.length - 1]!
+    if (top.next === top.nodes.length) {
+      stack.pop()
+      continue
+    }
+    const node = top.nodes[top.next++]!
+    switch (node.kind) {
+      case 'text':
+        texts.push(node.text)
+        break
+      case 'span':
+        elementKinds.push('span')
+        stack.push({ nodes: node.children, next: 0 })
+        break
+      default:
+        elementKinds.push(node.kind)
+    }
+  }
+  return { texts, elementKinds }
 }
 
 // gfxFont::SplitAndInitTextRun ends a shaping unit at a boundary space and at an invalid character
@@ -45,22 +75,28 @@ function endsShapingUnit(text: string, s: number): boolean {
 }
 
 export const observeGecko: ObservationPort<GeckoLayout> = (paragraph, layout) => {
+  const { texts, elementKinds } = walkContent(paragraph)
   let text = ''
   const runStarts: number[] = []
-  for (let r = 0; r < paragraph.runs.length; r++) {
+  for (let r = 0; r < texts.length; r++) {
     runStarts.push(text.length)
-    text += paragraph.runs[r]!.text
+    text += texts[r]!
   }
   runStarts.push(text.length)
 
   // Which source units a frame kept: the in-word test looks at the kept neighbours on both sides of an offset.
   const kept = new Uint8Array(text.length)
-  const framesOfRun: PlacedFrame[][] = paragraph.runs.map(() => [])
+  const framesOfRun: PlacedFrame[][] = texts.map(() => [])
+  const elementFrames: Array<{ line: number; index: number; frame: Exclude<GeckoFrameGeometry, GeckoTextFrame> }> = []
   const unobservable: UnobservableFact[] = []
   for (let l = 0; l < layout.lines.length; l++) {
     const line = layout.lines[l]!
     for (let k = 0; k < line.geometry.frames.length; k++) {
       const frame = line.geometry.frames[k]!
+      if (frame.kind !== 'text') {
+        elementFrames.push({ line: l, index: k, frame })
+        continue
+      }
       const prefix = [0]
       for (let c = 0; c < frame.characters.length; c++) {
         const ch = frame.characters[c]!
@@ -138,11 +174,11 @@ export const observeGecko: ObservationPort<GeckoLayout> = (paragraph, layout) =>
     }
   }
 
-  // GetPartialTextRect over one code point [i, i + length) of run r: every continuation overlapping the range, its box cut
+  // GetPartialTextRect over one code point [i, i + length) of leaf r: every continuation overlapping the range, its box cut
   // at the offsets inside it, flush to the origin edge in RTL (AbstractRange.cpp:771-831, :715-765). A node without a
   // frame reports nothing (:775-778).
   const codePoints: ExpectedObservation['codePoints'] = []
-  for (let r = 0; r < paragraph.runs.length; r++) {
+  for (let r = 0; r < texts.length; r++) {
     const frames = framesOfRun[r]!
     let k = 0
     for (let i = runStarts[r]!; i < runStarts[r + 1]!;) {
@@ -174,8 +210,20 @@ export const observeGecko: ObservationPort<GeckoLayout> = (paragraph, layout) =>
 
   // selectNodeContents takes the same path over [0, length): each continuation's whole box.
   const nodes: ExpectedRect[][] = []
-  for (let r = 0; r < paragraph.runs.length; r++) {
+  for (let r = 0; r < texts.length; r++) {
     nodes.push(framesOfRun[r]!.map(pf => rect(pf, { au: 0, limited: false }, { au: pf.frame.width, limited: pf.widthLimited })))
+  }
+
+  // Element.getClientRects: GetAllInFlowRects walks an element's primary frame and its continuations, one border box each
+  // (nsLayoutUtils.cpp:3477-3505, :3661-3667): a span's inline frame on each line, an inline-block's box, a BRFrame's box.
+  // An inline frame's edges come from its children's boxes, so they rest on the same stand-ins as the line's text frames.
+  // A <wbr> has no geometry in the layout: which rects its WBRFrame reports isn't traced (DESIGN.md §9).
+  const elements: ExpectedRect[][] = elementKinds.map(() => [])
+  for (let e = 0; e < elementFrames.length; e++) {
+    const { line, frame } = elementFrames[e]!
+    const encoded = encodeEdges(frame.x, frame.x + frame.width)
+    const limited = lineHasLimitedWidth[line]! > 0
+    elements[frame.element]!.push({ line, x: expected(encoded.x, limited), width: expected(encoded.width, limited) })
   }
 
   // Engine facts no rect reflects, whatever their value (observe-gecko.md §8).
@@ -212,6 +260,12 @@ export const observeGecko: ObservationPort<GeckoLayout> = (paragraph, layout) =>
       }
     }
   }
+  for (let l = 0; l < layout.lines.length; l++) {
+    const geometry = layout.lines[l]!.geometry
+    if (geometry.impactedByFloats) {
+      unobservable.push({ line: l, fact: `lines[${l}].geometry.impactedByFloats`, rule: 'only breaks show whether floats narrowed the band: a first frame that overflows breaks before instead of being placed (nsLineLayout.cpp:785)' })
+    }
+  }
 
-  return { codePoints, nodes, unobservable }
+  return { codePoints, nodes, elements, unobservable }
 }

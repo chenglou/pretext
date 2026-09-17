@@ -2,115 +2,115 @@
   "format": "pretext-lab-gate/1",
   "engine": "gecko",
   "engineVersion": "156.0",
-  "note": "charter evaluation 2026-09-17: rebuild-charter library through lab/predictor.ts with font facts, scorer 2; development and held-out sets of final-20260916, forward and reverse",
+  "note": "charter evaluation 2026-09-17: rebuild-charter library through lab/predictor.ts with font facts, scorer 2; development and held-out sets of final-20260916, forward and reverse Re-scored with scorer 3 on 2026-09-17, library unchanged.",
   "environments": [
-    "firefox: Firefox 156.0, engine build 156.0, macOS 26A428; DPR 2, scale 1; scorer 2"
+    "firefox: Firefox 156.0, engine build 156.0, macOS 26A428; DPR 2, scale 1; scorer 3"
   ],
   "seededFrom": [
     {
-      "perCase": ".artifacts/charter-20260916/evaluate/firefox/smoke-forward/firefox-per-case.ndjson",
+      "perCase": ".artifacts/lab/rescore-v3-20260917/firefox/smoke-forward/firefox-per-case.ndjson",
       "casesFile": ".artifacts/lab/cases/smoke.ndjson",
       "cases": 297,
       "historyDependent": 0
     },
     {
-      "perCase": ".artifacts/charter-20260916/evaluate/firefox/smoke-reverse/firefox-per-case.ndjson",
+      "perCase": ".artifacts/lab/rescore-v3-20260917/firefox/smoke-reverse/firefox-per-case.ndjson",
       "casesFile": ".artifacts/lab/cases/smoke.ndjson",
       "cases": 297,
       "historyDependent": 0
     },
     {
-      "perCase": ".artifacts/charter-20260916/evaluate/firefox/runs-forward/firefox-per-case.ndjson",
+      "perCase": ".artifacts/lab/rescore-v3-20260917/firefox/runs-forward/firefox-per-case.ndjson",
       "casesFile": ".artifacts/lab/cases/runs.ndjson",
       "cases": 2580,
       "historyDependent": 0
     },
     {
-      "perCase": ".artifacts/charter-20260916/evaluate/firefox/runs-reverse/firefox-per-case.ndjson",
+      "perCase": ".artifacts/lab/rescore-v3-20260917/firefox/runs-reverse/firefox-per-case.ndjson",
       "casesFile": ".artifacts/lab/cases/runs.ndjson",
       "cases": 2580,
       "historyDependent": 0
     },
     {
-      "perCase": ".artifacts/charter-20260916/evaluate/firefox/ws-forward/firefox-per-case.ndjson",
+      "perCase": ".artifacts/lab/rescore-v3-20260917/firefox/ws-forward/firefox-per-case.ndjson",
       "casesFile": ".artifacts/lab/cases/ws.ndjson",
       "cases": 1019,
       "historyDependent": 0
     },
     {
-      "perCase": ".artifacts/charter-20260916/evaluate/firefox/ws-reverse/firefox-per-case.ndjson",
+      "perCase": ".artifacts/lab/rescore-v3-20260917/firefox/ws-reverse/firefox-per-case.ndjson",
       "casesFile": ".artifacts/lab/cases/ws.ndjson",
       "cases": 1019,
       "historyDependent": 0
     },
     {
-      "perCase": ".artifacts/charter-20260916/evaluate/firefox/policy-forward/firefox-per-case.ndjson",
+      "perCase": ".artifacts/lab/rescore-v3-20260917/firefox/policy-forward/firefox-per-case.ndjson",
       "casesFile": ".artifacts/lab/cases/policy.ndjson",
       "cases": 1606,
       "historyDependent": 0
     },
     {
-      "perCase": ".artifacts/charter-20260916/evaluate/firefox/policy-reverse/firefox-per-case.ndjson",
+      "perCase": ".artifacts/lab/rescore-v3-20260917/firefox/policy-reverse/firefox-per-case.ndjson",
       "casesFile": ".artifacts/lab/cases/policy.ndjson",
       "cases": 1606,
       "historyDependent": 0
     },
     {
-      "perCase": ".artifacts/charter-20260916/evaluate/firefox/suite-sample-forward/firefox-per-case.ndjson",
+      "perCase": ".artifacts/lab/rescore-v3-20260917/firefox/suite-sample-forward/firefox-per-case.ndjson",
       "casesFile": ".artifacts/lab/cases/suite-sample.ndjson",
       "cases": 19888,
       "historyDependent": 123
     },
     {
-      "perCase": ".artifacts/charter-20260916/evaluate/firefox/suite-sample-reverse/firefox-per-case.ndjson",
+      "perCase": ".artifacts/lab/rescore-v3-20260917/firefox/suite-sample-reverse/firefox-per-case.ndjson",
       "casesFile": ".artifacts/lab/cases/suite-sample.ndjson",
       "cases": 19888,
       "historyDependent": 123
     },
     {
-      "perCase": ".artifacts/charter-20260916/evaluate/firefox/heldout-runs-forward/firefox-per-case.ndjson",
+      "perCase": ".artifacts/lab/rescore-v3-20260917/firefox/heldout-runs-forward/firefox-per-case.ndjson",
       "casesFile": ".artifacts/lab/cases/heldout-runs.ndjson",
       "cases": 2579,
       "historyDependent": 0
     },
     {
-      "perCase": ".artifacts/charter-20260916/evaluate/firefox/heldout-runs-reverse/firefox-per-case.ndjson",
+      "perCase": ".artifacts/lab/rescore-v3-20260917/firefox/heldout-runs-reverse/firefox-per-case.ndjson",
       "casesFile": ".artifacts/lab/cases/heldout-runs.ndjson",
       "cases": 2579,
       "historyDependent": 0
     },
     {
-      "perCase": ".artifacts/charter-20260916/evaluate/firefox/heldout-ws-forward/firefox-per-case.ndjson",
+      "perCase": ".artifacts/lab/rescore-v3-20260917/firefox/heldout-ws-forward/firefox-per-case.ndjson",
       "casesFile": ".artifacts/lab/cases/heldout-ws.ndjson",
       "cases": 1022,
       "historyDependent": 0
     },
     {
-      "perCase": ".artifacts/charter-20260916/evaluate/firefox/heldout-ws-reverse/firefox-per-case.ndjson",
+      "perCase": ".artifacts/lab/rescore-v3-20260917/firefox/heldout-ws-reverse/firefox-per-case.ndjson",
       "casesFile": ".artifacts/lab/cases/heldout-ws.ndjson",
       "cases": 1022,
       "historyDependent": 0
     },
     {
-      "perCase": ".artifacts/charter-20260916/evaluate/firefox/heldout-policy-forward/firefox-per-case.ndjson",
+      "perCase": ".artifacts/lab/rescore-v3-20260917/firefox/heldout-policy-forward/firefox-per-case.ndjson",
       "casesFile": ".artifacts/lab/cases/heldout-policy.ndjson",
       "cases": 1604,
       "historyDependent": 0
     },
     {
-      "perCase": ".artifacts/charter-20260916/evaluate/firefox/heldout-policy-reverse/firefox-per-case.ndjson",
+      "perCase": ".artifacts/lab/rescore-v3-20260917/firefox/heldout-policy-reverse/firefox-per-case.ndjson",
       "casesFile": ".artifacts/lab/cases/heldout-policy.ndjson",
       "cases": 1604,
       "historyDependent": 0
     },
     {
-      "perCase": ".artifacts/charter-20260916/evaluate/firefox/heldout-suite-sample-forward/firefox-per-case.ndjson",
+      "perCase": ".artifacts/lab/rescore-v3-20260917/firefox/heldout-suite-sample-forward/firefox-per-case.ndjson",
       "casesFile": ".artifacts/lab/cases/heldout-suite-sample.ndjson",
       "cases": 10000,
       "historyDependent": 217
     },
     {
-      "perCase": ".artifacts/charter-20260916/evaluate/firefox/heldout-suite-sample-reverse/firefox-per-case.ndjson",
+      "perCase": ".artifacts/lab/rescore-v3-20260917/firefox/heldout-suite-sample-reverse/firefox-per-case.ndjson",
       "casesFile": ".artifacts/lab/cases/heldout-suite-sample.ndjson",
       "cases": 10000,
       "historyDependent": 217

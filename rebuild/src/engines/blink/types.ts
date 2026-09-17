@@ -1,27 +1,43 @@
 // Blink's prepared paragraph and line state (Chrome 153.0.8010.48). The Blink port owns this file.
+import type { ContentIndex } from '../../content.js'
 import type { BlinkEnvironment } from '../../env.js'
-import type { FontDecl, FontFacts, Gap, Paragraph } from '../../model.js'
+import type { FontDecl, FontFacts, Gap, LineBreak, OverflowWrap, Paragraph, TextAlign, VerticalAlign, WhiteSpace, WordBreak } from '../../model.js'
 import type { HanKerningFontData } from './hankerning.js'
 
-// InlineItem types this model produces (specs/blink-text.md §1). The model has no <br>, <wbr>, atomic inlines, floats
-// or unicode-bidi, so there are no bidi control, atomic or float items.
-export type InlineItemType = 'text' | 'control' | 'open-tag' | 'close-tag'
+// InlineItem types this model produces (specs/blink-text.md §1; inline_item.h): text, control items, the open and close
+// tags of spans, and atomic inlines. Floats, bidi controls, block-in-inline and ruby aren't in the model.
+export type InlineItemType = 'text' | 'control' | 'open-tag' | 'close-tag' | 'atomic'
 
-// TextItemType of a control item: kForcedLineBreak (LF in preserve-breaks modes), or kFlowControl: a tab run, a
-// generated U+200B after leading preserved spaces, CR or FF in preserve modes (inline_items_builder.cc:1040-1136).
-export type ControlKind = 'none' | 'forced-break' | 'tab' | 'generated-zwsp' | 'cr-ff'
+// TextItemType of a control item: kForcedLineBreak (LF in preserve-breaks modes, or a <br>'s LF), or kFlowControl: a tab
+// run, a U+200B generated for line breaking (after leading preserved spaces, or where a nowrap space run meets a wrapping
+// one), a <wbr>'s U+200B, CR or FF in preserve modes (inline_items_builder.cc:317-326, 1040-1136, 1163-1218).
+export type ControlKind = 'none' | 'forced-break' | 'tab' | 'generated-zwsp' | 'wbr' | 'cr-ff'
 
 // End collapse types (inline_item.h:307).
 export type EndCollapseType = 'not-collapsible' | 'collapsible' | 'collapsed' | 'opaque-to-collapsing'
 
-// A ComputedStyle as far as this model varies it: the block's (index 0, also every bare text node's) or a span's.
+// One inline side of a span's box in raw LayoutUnits: ComputeLineMarginsForSelf, ComputeLineBorders and ComputeLinePadding
+// resolve fixed lengths as LayoutUnit(float) of the zoomed px (line_breaker.cc:3937-3955; layout_unit.h:125-130).
+export type BlinkBoxEdge = { margin: number; border: number; padding: number }
+
+// A ComputedStyle as far as this model varies it: the block's (index 0, also every bare text node's) or a span's. Text
+// nodes share their parent element's style, so a text item's style is its span's (Text::AttachLayoutTree).
 export type BlinkStyle = {
+  // The span this style belongs to, or -1 for the block.
+  element: number
+  // The style index of the element's parent: HandleCloseTag sets the parent's style (line_breaker.cc:4034).
+  parent: number
+  // The first text leaf directly under the element, for gap reports; null when there is none.
   run: number | null
   font: FontDecl
   letterSpacing: number
   wordSpacing: number
-  // FontDescription::Locale(): the nearest non-empty lang; null for lang="" (element.cc:12568-12600,
-  // specs/blink-text.md §2.F.3).
+  whiteSpace: WhiteSpace
+  wordBreak: WordBreak
+  overflowWrap: OverflowWrap
+  lineBreak: LineBreak
+  tabSize: number
+  // FontDescription::Locale(): the nearest lang; null for lang="" (element.cc:12568-12600, specs/blink-text.md §2.F.3).
   locale: string | null
   // Equal keys mean equal Font (font_description.cc:136-157): family, size, weight, style, locale and spacing.
   fontKey: string
@@ -33,6 +49,10 @@ export type BlinkStyle = {
   // FontFacts.joining as given; null lays joining letters at shaping-call edges out as an AAT font does and reports
   // joining-technology there.
   joining: FontFacts['joining']
+  // A span's own box edges; zero for the block, whose edges aren't inline boxes.
+  start: BlinkBoxEdge
+  end: BlinkBoxEdge
+  verticalAlign: VerticalAlign
 }
 
 // Canvas contexts per style: shaping (LTR, RTL) and the hyphen (no spacing), and the factor from Canvas px to zoomed px
@@ -45,9 +65,13 @@ export type InlineItem = {
   // [start, end) into text_content.
   start: number
   end: number
-  // The run whose DOM node produced the item.
+  // The text leaf whose DOM node produced the item, or -1 for an element's item (tags, atomic inlines, a <br>'s LF, a
+  // <wbr>'s U+200B).
   run: number
-  // Index into BlinkPrepared.styles: the style the item is handled under (a span's text and tags: the span's).
+  // The element whose item this is: a span's tags, an atomic inline, <br>, <wbr>; -1 for items of text leaves.
+  element: number
+  // Index into BlinkPrepared.styles: the style the item is handled under (a span's text and tags: the span's; an atomic,
+  // <br> or <wbr> item: its parent's, which the model's elements inherit).
   style: number
   bidiLevel: number
   endCollapseType: EndCollapseType
@@ -56,6 +80,10 @@ export type InlineItem = {
   removedSpaceSource: number
   // The shaping group of a non-empty text item, -1 otherwise.
   group: number
+  // Open tags: InlineItem::ShouldCreateBoxFragment (layout_inline.cc:183-231, inline_items_builder.cc:244-273).
+  shouldCreateBoxFragment: boolean
+  // Open and close tags: IsInlineBoxStartEmpty / IsInlineBoxEndEmpty (inline_item.cc:32-67), no quirks mode.
+  isEmptyItem: boolean
 }
 
 // The text of one HarfBuzzShaper::Shape call over consecutive text items (inline_node.cc:1551-1796). Measured whole while
@@ -74,6 +102,7 @@ export type BlinkGroup = {
   endTrim16: number
 }
 
+// LazyLineBreakIterator's settings from SetCurrentStyleForce (line_breaker.cc:4557-4643) for one style.
 export type IteratorSettings = {
   autoWrap: boolean
   strictness: 'default' | 'normal' | 'strict' | 'loose'
@@ -88,6 +117,7 @@ export type IteratorSettings = {
 export type BlinkPrepared = {
   paragraph: Paragraph
   env: BlinkEnvironment
+  index: ContentIndex<FontDecl>
   // Device scale factor times browser zoom: every LayoutUnit counts 1/64 of a zoomed px (specs/blink-lines.md §2.1).
   layoutZoom: number
   // text_content: the paragraph string after white-space processing (specs/blink-text.md §2.C).
@@ -98,7 +128,8 @@ export type BlinkPrepared = {
   segmented: boolean
   // The script each text_content unit is shaped with (ScriptRunIterator over text_content, or Latin).
   scripts: Uint8Array
-  // Per text_content unit, its source offset, or -1 for a unit Blink generated (U+200B after leading spaces).
+  // Per text_content unit, its source offset, or -1 for a unit Blink generated or an element's (U+200B after leading
+  // spaces, a <wbr>'s U+200B, a <br>'s LF, an atomic inline's U+FFFC).
   sourceOffsets: Int32Array
   // Per source unit, its text_content unit, or -1 when white-space processing removed it.
   contentOffsets: Int32Array
@@ -110,11 +141,12 @@ export type BlinkPrepared = {
   sourceLength: number
   items: InlineItem[]
   styles: BlinkStyle[]
+  // Per style, its iterator settings.
+  settings: IteratorSettings[]
   groups: BlinkGroup[]
   contexts: StyleContexts[]
   bidiEnabled: boolean
   baseLevel: number
-  settings: IteratorSettings
   // Extended grapheme cluster boundaries over text_content (flags per offset, the end included).
   graphemeStarts: Uint8Array
   // Per text_content unit, 1 when HarfBuzz marks it a continuation of the glyph cluster before it: a mark, a ZWJ and the
@@ -125,6 +157,9 @@ export type BlinkPrepared = {
   wordSpacingAnywhere: boolean
   // HanKerning::FontData per style whose shaping groups HanKerning may apply to, measured in prepare.
   hanKerning: (HanKerningFontData | null)[]
+  // The block's used text-align (text-align-last is auto) and NeedsAccurateEndPosition from it (line_info.cc:127-175).
+  textAlign: TextAlign
+  needsAccurateEndPosition: boolean
   // The paragraph's gaps: its content, fonts and environment.
   gaps: Gap[]
 }
@@ -140,4 +175,12 @@ export type BlinkLineStart = {
   // The previous line ended in a forced break, so this line is not a wrapped line start and ShapeLine doesn't reshape
   // its start (shaping_line_breaker.cc IsStartOfWrappedLine).
   afterForcedBreak: boolean
+  // InlineBreakToken::kIsPastFirstFormattedLine: the previous lines include one that isn't empty
+  // (line_breaker.cc:4723-4724), so text-indent no longer applies (:45-56, :470-472).
+  isPastFirstFormattedLine: boolean
+  // The leading floats were placed: the first line handles the floats before any inline content (HandleFloat, their item
+  // results in that line; PositionLeadingFloats, inline_layout_algorithm.cc), so every later break token is past them and
+  // no later line has leading floats (line_breaker.cc:4225-4248 reads them). The model's slot floats aren't items, so the
+  // token carries this.
+  afterLeadingFloats: boolean
 }

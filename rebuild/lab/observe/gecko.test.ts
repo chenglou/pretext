@@ -2,8 +2,8 @@
 // value here comes from the observation model's rules and recorded rows, not from the library.
 import { describe, expect, test } from 'bun:test'
 import { PINNED_BUILDS } from '../../src/env.ts'
-import type { CssFont, ExpectedRect, GeckoCharacter, GeckoFrameGeometry, GeckoLayout, GeckoLine, Paragraph } from '../../src/model.ts'
-import { UNKNOWN_FONT_FACTS } from '../../src/model.ts'
+import type { CssFont, ExpectedRect, GeckoCharacter, GeckoLayout, GeckoLine, GeckoTextFrame, Paragraph } from '../../src/model.ts'
+import { FULL_WIDTH, NO_BOX_EDGE, UNKNOWN_FONT_FACTS } from '../../src/model.ts'
 import { encodeEdges, observeGecko } from './gecko.ts'
 
 const font: CssFont = { family: '"Courier New"', size: 16, weight: 400, style: 'normal' }
@@ -11,27 +11,35 @@ const decl = { ...font, facts: UNKNOWN_FONT_FACTS }
 
 function paragraph(texts: string[], direction: 'ltr' | 'rtl' = 'ltr'): Paragraph {
   return {
-    runs: texts.map(text => ({ text, node: 'span' as const, font: decl, letterSpacing: 0, wordSpacing: 0, lang: null })), font: decl,
+    content: texts.map(text => ({
+      kind: 'span' as const, font: decl, letterSpacing: 0, wordSpacing: 0, whiteSpace: 'normal' as const, wordBreak: 'normal' as const,
+      overflowWrap: 'normal' as const, lineBreak: 'auto' as const, tabSize: 8, lang: null, inlineStart: NO_BOX_EDGE, inlineEnd: NO_BOX_EDGE,
+      verticalAlign: 'baseline' as const, children: [{ kind: 'text' as const, text }],
+    })), font: decl,
     letterSpacing: 0, wordSpacing: 0, width: 500, lineHeight: 20, whiteSpace: 'normal', wordBreak: 'normal', overflowWrap: 'normal',
-    lineBreak: 'auto', tabSize: 8, direction, lang: 'en',
+    lineBreak: 'auto', tabSize: 8, direction, lang: 'en', textIndent: 0, textAlign: 'start',
   }
 }
 
 const ch = (advance: number, clusterStart = true): GeckoCharacter => ({ skipped: false, clusterStart, advance })
 const skip: GeckoCharacter = { skipped: true, clusterStart: false, advance: 0 }
 
-function frame(run: number, contentStart: number, contentEnd: number, x: number, width: number, characters: GeckoCharacter[], extra: Partial<GeckoFrameGeometry> = {}): GeckoFrameGeometry {
-  return { run, contentStart, contentEnd, measuredStart: contentStart, level: 0, x, width, hasHeight: true, usedHyphen: false, characters, ...extra }
+function frame(run: number, contentStart: number, contentEnd: number, x: number, width: number, characters: GeckoCharacter[], extra: Partial<GeckoTextFrame> = {}): GeckoTextFrame {
+  return { kind: 'text', run, contentStart, contentEnd, measuredStart: contentStart, level: 0, x, width, hasHeight: true, usedHyphen: false, characters, ...extra }
 }
 
-function line(frames: GeckoFrameGeometry[], start: number, end: number): GeckoLine {
-  return { start, end, fragments: [], hasLineBox: true, joinsNextLine: false, geometry: { appUnitsPerDevPixel: 30, availableWidth: 30000, width: frames.reduce((n, f) => n + f.width, 0), hang: 0, frames }, gaps: [], next: null }
+function line(frames: GeckoTextFrame[], start: number, end: number): GeckoLine {
+  return {
+    start, end, fragments: [], hasLineBox: true, joinsNextLine: false, slot: FULL_WIDTH, indented: false, align: 'start',
+    geometry: { appUnitsPerDevPixel: 30, lineLeft: 0, availableWidth: 30000, impactedByFloats: false, textIndent: 0, width: frames.reduce((n, f) => n + f.width, 0), hang: 0, alignOffset: 0, frames },
+    gaps: [], next: null,
+  }
 }
 
 function layout(lines: GeckoLine[]): GeckoLayout {
   return {
     engine: 'gecko', env: { engine: 'gecko', build: PINNED_BUILDS.gecko, devicePixelRatio: 2, pageLang: 'en', contentLanguage: null, regionalPrefsLocale: null, dictionaryBreaks: { kind: 'unavailable' } },
-    lines, measure: { contexts: [], calls: [], memoHits: 0 }, gaps: [],
+    lines, belowFloats: [], measure: { contexts: [], calls: [], memoHits: 0 }, gaps: [],
   }
 }
 

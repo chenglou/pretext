@@ -7,7 +7,7 @@ import { beforeAll, describe, expect, test } from 'bun:test'
 import { PINNED_BUILDS, type GeckoEnvironment } from '../../env.js'
 import { layoutParagraph } from '../../index.js'
 import { createMeasurer } from '../../measure/canvas.js'
-import { UNKNOWN_FONT_FACTS, type FontDecl, type Gap, type GeckoLayout, type Paragraph, type TextRun } from '../../model.js'
+import { FULL_WIDTH, NO_BOX_EDGE, UNKNOWN_FONT_FACTS, type FontDecl, type Gap, type GeckoLayout, type GeckoTextFrame, type InlineNode, type Paragraph } from '../../model.js'
 import { parseFamilyList, sameFontForTextRun } from './fonts.js'
 import { geckoEngine } from './index.js'
 import { BREAK_EMERGENCY_WRAP, BREAK_NORMAL } from './linebreak.js'
@@ -76,15 +76,30 @@ const facts = { ...UNKNOWN_FONT_FACTS, opticalSizeAxis: false }
 const courier: FontDecl = { family: '"Courier New"', size: 16, weight: 400, style: 'normal', facts }
 const arial = (size: number): FontDecl => ({ family: 'Arial', size, weight: 400, style: 'normal', facts })
 
-function run(text: string, node: 'span' | 'text' = 'text', extra: Partial<TextRun> = {}): TextRun {
+// The flat form the probe verdicts were written in: runs that are spans or bare text nodes, the block's wrapping styles
+// everywhere (DESIGN.md §1.1, "Flat paragraphs").
+type Run = { text: string; node: 'span' | 'text'; font: FontDecl; letterSpacing: number; wordSpacing: number; lang: string | null }
+type Flat = Omit<Paragraph, 'content'>
+
+function run(text: string, node: 'span' | 'text' = 'text', extra: Partial<Run> = {}): Run {
   return { text, node, font: courier, letterSpacing: 0, wordSpacing: 0, lang: null, ...extra }
 }
 
-function paragraph(runs: TextRun[], width: number, extra: Partial<Paragraph> = {}): Paragraph {
-  return {
-    runs, font: courier, letterSpacing: 0, wordSpacing: 0, width, lineHeight: 20, whiteSpace: 'normal', wordBreak: 'normal',
-    overflowWrap: 'normal', lineBreak: 'auto', tabSize: 8, direction: 'ltr', lang: 'en', ...extra,
+function paragraph(runs: Run[], width: number, extra: Partial<Flat> = {}): Paragraph {
+  const block: Flat = {
+    font: courier, letterSpacing: 0, wordSpacing: 0, width, lineHeight: 20, whiteSpace: 'normal', wordBreak: 'normal',
+    overflowWrap: 'normal', lineBreak: 'auto', tabSize: 8, direction: 'ltr', lang: 'en', textIndent: 0, textAlign: 'start', ...extra,
   }
+  const content: InlineNode[] = runs.map(r => r.node === 'text' ? { kind: 'text', text: r.text } : {
+    kind: 'span', font: r.font, letterSpacing: r.letterSpacing, wordSpacing: r.wordSpacing, whiteSpace: block.whiteSpace, wordBreak: block.wordBreak,
+    overflowWrap: block.overflowWrap, lineBreak: block.lineBreak, tabSize: block.tabSize, lang: r.lang, inlineStart: NO_BOX_EDGE,
+    inlineEnd: NO_BOX_EDGE, verticalAlign: 'baseline', children: [{ kind: 'text', text: r.text }],
+  })
+  return { ...block, content }
+}
+
+function textFrames(l: GeckoLayout['lines'][number]): GeckoTextFrame[] {
+  return l.geometry.frames.filter((f): f is GeckoTextFrame => f.kind === 'text')
 }
 
 function layout(p: Paragraph): GeckoLayout {
@@ -171,7 +186,7 @@ describe('gecko line filling (probes-firefox verdicts)', () => {
     const p = paragraph([run('aaaa­bbbb', 'span', { letterSpacing: 1 })], 53)
     expect(starts(p)).toEqual([0, 5])
     expect(widths(p)[0]).toBe(4 * 636 + 576)
-    const frame = layout(p).lines[0]!.geometry.frames[0]!
+    const frame = textFrames(layout(p).lines[0]!)[0]!
     expect(frame.usedHyphen).toBe(true)
     expect(frame.characters.map(c => [c.skipped, c.advance])).toEqual([[false, 636], [false, 636], [false, 636], [false, 636], [true, 0]])
   })
@@ -213,6 +228,7 @@ describe('gecko line filling (probes-firefox verdicts)', () => {
       expect(l.lines[k]!.start).toBe(at)
       let f = at
       for (const fragment of l.lines[k]!.fragments) {
+        if (fragment.kind === 'box-start' || fragment.kind === 'box-end' || fragment.kind === 'atomic' || fragment.kind === 'br' || fragment.kind === 'wbr') continue
         const s = fragment.kind === 'hyphen' ? fragment.at : fragment.start
         expect(s).toBe(f)
         if (fragment.kind !== 'hyphen') f = fragment.end
@@ -220,7 +236,7 @@ describe('gecko line filling (probes-firefox verdicts)', () => {
       expect(f).toBe(l.lines[k]!.end)
       at = l.lines[k]!.end
     }
-    expect(at).toBe(p.runs.reduce((n, r) => n + r.text.length, 0))
+    expect(at).toBe('  Hello  '.length + ' world '.length + 2)
   })
 })
 
@@ -228,8 +244,8 @@ describe('gecko engine output', () => {
   test('a line of only collapsed white space is returned without a line box (nsLineLayout.cpp:1690-1712)', () => {
     const l = layout(paragraph([run('aaa\n   ', 'span')], 500, { whiteSpace: 'pre-line' }))
     expect(l.lines.map(line => [line.start, line.end, line.hasLineBox])).toEqual([[0, 4, true], [4, 7, false]])
-    expect(l.lines[1]!.fragments.map(f => f.kind)).toEqual(['collapsed'])
-    expect(l.lines[1]!.geometry.frames.map(f => [f.contentStart, f.contentEnd, f.measuredStart, f.width, f.hasHeight])).toEqual([[4, 7, 7, 0, false]])
+    expect(l.lines[1]!.fragments.map(f => f.kind)).toEqual(['collapsed', 'box-end'])
+    expect(textFrames(l.lines[1]!).map(f => [f.contentStart, f.contentEnd, f.measuredStart, f.width, f.hasHeight])).toEqual([[4, 7, 7, 0, false]])
   })
   test('hanging white space is CharIsSpace only: a trailing TAB stays text (gfxTextRun.cpp:1152-1159, gfxFont.cpp:749-750)', () => {
     const l = layout(paragraph([run('aaaa\t ')], 500, { whiteSpace: 'pre-wrap' }))
@@ -240,23 +256,28 @@ describe('gecko engine output', () => {
     expect(broken.fragments.map(f => f.kind)).toEqual(['text', 'trimmed'])
     expect(broken.geometry.frames[0]!.width).toBe(2304)
     const trailing = layout(paragraph([run('aaaa '), run(' ', 'span')], 500)).lines[0]!
-    expect(trailing.fragments.map(f => f.kind)).toEqual(['text', 'trimmed', 'collapsed'])
+    expect(trailing.fragments.map(f => f.kind)).toEqual(['text', 'trimmed', 'box-start', 'collapsed', 'box-end'])
     expect(trailing.geometry.width).toBe(2304)
   })
   test('an RTL block places frames from the right edge (nsBidiPresUtils.cpp:1860-1866)', () => {
     const line = layout(paragraph([run('אב גד')], 500, { direction: 'rtl' })).lines[0]!
-    expect(line.geometry.frames.map(f => [f.level, f.x, f.width])).toEqual([[1, 30000 - 2880, 2880]])
+    expect(textFrames(line).map(f => [f.level, f.x, f.width])).toEqual([[1, 30000 - 2880, 2880]])
+  })
+  test('an RTL line places its visual order from the right edge (nsBidiPresUtils.cpp:1882-1905)', () => {
+    // "אב cd": אב and the space at level 1 at the right edge, cd at level 2 to their left.
+    const line = layout(paragraph([run('אב cd')], 500, { direction: 'rtl' })).lines[0]!
+    expect(textFrames(line).map(f => [f.contentStart, f.level, f.x, f.width])).toEqual([[0, 1, 30000 - 1728, 1728], [3, 2, 30000 - 1728 - 1152, 1152]])
   })
   test('a wrapped line whose trailing white space hangs against the line direction moves by the hang (nsLineLayout.cpp:3598-3605)', () => {
     // "a אב " fits 48px exactly; the space after אב is at level 1, so its hangable 576 au sits at the start edge.
     const l = layout(paragraph([run('a אב גד')], 48, { whiteSpace: 'pre-wrap' }))
     const first = l.lines[0]!.geometry
     expect(first.hang).toBe(-576)
-    expect(first.frames.map(f => [f.contentStart, f.contentEnd, f.level, f.x, f.width])).toEqual([[0, 2, 0, -576, 1152], [2, 5, 1, 576, 1728]])
-    expect(l.lines[1]!.geometry.frames.map(f => [f.contentStart, f.x])).toEqual([[5, 0]])
+    expect(textFrames(l.lines[0]!).map(f => [f.contentStart, f.contentEnd, f.level, f.x, f.width])).toEqual([[0, 2, 0, -576, 1152], [2, 5, 1, 576, 1728]])
+    expect(textFrames(l.lines[1]!).map(f => [f.contentStart, f.x])).toEqual([[5, 0]])
   })
   test('characters carry cluster flags and advances from the measured start', () => {
-    const frame = layout(paragraph([run('é b')], 500)).lines[0]!.geometry.frames[0]!
+    const frame = textFrames(layout(paragraph([run('é b')], 500)).lines[0]!)[0]!
     // The stand-in gives U+0301 576 au, so the cluster e U+0301 is 1152 au on its first character.
     expect(frame.characters.map(c => [c.clusterStart, c.advance])).toEqual([[true, 1152], [false, 0], [true, 576], [true, 576]])
   })
@@ -265,11 +286,12 @@ describe('gecko engine output', () => {
     const measurer = createMeasurer()
     const prepared = geckoEngine.prepare(p, env, measurer)
     const before = prepared.gaps.length
-    const first = geckoEngine.nextLine(prepared, geckoEngine.firstLine(prepared)!, 20, measurer)
-    expect(first.gaps.map(g => g.gap)).toContain('in-word-prefix')
-    const wide = geckoEngine.nextLine(prepared, geckoEngine.firstLine(prepared)!, 500, measurer)
-    expect(wide.gaps).not.toBe(first.gaps)
-    expect(wide.gaps.length).toBeLessThanOrEqual(1)
+    const first = geckoEngine.nextLine(prepared, geckoEngine.firstLine(prepared)!, FULL_WIDTH, measurer)
+    const again = geckoEngine.nextLine(prepared, geckoEngine.firstLine(prepared)!, FULL_WIDTH, measurer)
+    if (first.kind !== 'line' || again.kind !== 'line') throw new Error('expected lines')
+    expect(first.line.gaps.map(g => g.gap)).toContain('in-word-prefix')
+    expect(again.line.gaps).not.toBe(first.line.gaps)
+    expect(again.line.gaps.map(g => g.gap)).toEqual(first.line.gaps.map(g => g.gap))
     expect(prepared.gaps.length).toBe(before)
     expect(allGaps(layout(paragraph([run('aaaa')], 20, { overflowWrap: 'anywhere' }))).map(g => g.gap)).not.toContain('in-word-prefix')
   })
@@ -336,7 +358,7 @@ describe('gecko Canvas recipes (specs/gecko-AUDIT.md B1-B4)', () => {
     // c-79e5272a2644d9b8: the space is 576 − 60 − 600 = −84 au; TrimTrailingWhiteSpace subtracts floor(−84) unclamped.
     const p = paragraph([run('aaaa', 'span'), run(' bbbb', 'span', { letterSpacing: -1, wordSpacing: -10 })], 57.6)
     expect(starts(p)).toEqual([0, 5])
-    expect(layout(p).lines[0]!.geometry.frames.map(f => f.width)).toEqual([2304, 84])
+    expect(textFrames(layout(p).lines[0]!).map(f => f.width)).toEqual([2304, 84])
     expect(widths(p)[0]).toBe(2304 + 84)
   })
 
@@ -434,5 +456,135 @@ describe('gecko TransformText (specs/gecko-text.md §6.3)', () => {
     expect(transformed('a  \n  b', 'pre-line')).toBe('a\nb')
     expect(transformed('a\n\nb', 'pre-line')).toBe('a\n\nb')
     expect(transformed('a­b  c', 'pre-wrap')).toBe('ab  c')
+  })
+})
+
+// Inline structure, line slots and alignment (DESIGN.md §8.3 stage 5), over the stand-in's 576 au glyphs: expectations
+// from probe verdicts where one exists (specs/gecko-lines.md §10), else from the cited source arithmetic.
+describe('gecko inline structure', () => {
+  const block = (content: InlineNode[], width: number, extra: Partial<Flat> = {}): Paragraph => ({ ...paragraph([], width, extra), content })
+  const span = (children: InlineNode[], edges: { start?: number; end?: number; whiteSpace?: Paragraph['whiteSpace'] } = {}): InlineNode => ({
+    kind: 'span', font: courier, letterSpacing: 0, wordSpacing: 0, whiteSpace: edges.whiteSpace ?? 'normal', wordBreak: 'normal', overflowWrap: 'normal',
+    lineBreak: 'auto', tabSize: 8, lang: null, inlineStart: { margin: 0, border: 0, padding: edges.start ?? 0 },
+    inlineEnd: { margin: 0, border: 0, padding: edges.end ?? 0 }, verticalAlign: 'baseline', children,
+  })
+  const leaf = (text: string): InlineNode => ({ kind: 'text', text })
+
+  test('H12b: every continuation reserves the end padding (nsInlineFrame.cpp:514-521)', () => {
+    const lineStarts = (p: Paragraph) => layout(p).lines.filter(l => l.hasLineBox).map(l => l.start)
+    expect(lineStarts(block([span([leaf('aaa aaa b')], { end: 9.6 })], 67.2))).toEqual([0, 4])
+    expect(lineStarts(block([span([leaf('aaa aaa b')])], 67.2))).toEqual([0, 8])
+  })
+
+  test('a span with start padding places its text after the edge; box-start and box-end go on its first and last lines', () => {
+    const l = layout(block([span([leaf('aa bb')], { start: 9.6, end: 9.6 })], 57.6))
+    expect(l.lines.map(line => line.fragments.map(f => f.kind))).toEqual([['box-start', 'text', 'trimmed'], ['text', 'box-end']])
+    expect(l.lines[0]!.geometry.frames.map(f => [f.kind, f.x, f.width])).toEqual([['inline', 0, 1728], ['text', 576, 1152]])
+    expect(l.lines[1]!.geometry.frames.map(f => [f.kind, f.x, f.width])).toEqual([['inline', 0, 1728], ['text', 0, 1152]])
+    expect(l.lines.map(line => line.geometry.width)).toEqual([1728, 1728])
+  })
+
+  test('<br> ends the line after itself and trimming skips it (BRFrame.cpp:98-166, nsLineLayout.cpp:2851-2985)', () => {
+    const l = layout(block([leaf('aaa '), { kind: 'br' }, leaf('bbb')], 500))
+    expect(l.lines.map(line => [line.start, line.end])).toEqual([[0, 4], [4, 7]])
+    expect(l.lines[0]!.fragments.map(f => f.kind)).toEqual(['text', 'trimmed', 'br'])
+    expect(l.lines[0]!.geometry.width).toBe(1728)
+  })
+
+  test('<wbr> records a break after itself, taken by the redo (nsLineLayout.cpp:1057-1071)', () => {
+    const l = layout(block([leaf('aaaa'), { kind: 'wbr' }, leaf('bbbb')], 57.6))
+    expect(l.lines.map(line => [line.start, line.fragments.map(f => f.kind)])).toEqual([[0, ['text', 'wbr']], [4, ['text']]])
+  })
+
+  test('an atomic inline that overflows is pushed, and the text after it backs up to the break after it', () => {
+    const atomic: InlineNode = { kind: 'atomic', width: 28.8, height: 20, marginInlineStart: 0, marginInlineEnd: 0 }
+    const l = layout(block([leaf('aaa '), atomic, leaf(' bbb')], 57.6))
+    expect(l.lines.map(line => [line.start, line.fragments.map(f => f.kind)])).toEqual([
+      [0, ['text', 'trimmed']], [4, ['atomic', 'trimmed']], [5, ['text']],
+    ])
+    expect(l.lines[1]!.geometry.frames.map(f => [f.kind, f.x, f.width])).toEqual([['atomic', 0, 1728], ['text', 1728, 0]])
+  })
+
+  test('an atomic inline in an RTL block resolves as U+FFFC and is walked with its start margin on the right (nsBidiPresUtils.cpp:1385-1400, :1855-1867)', () => {
+    const atomic: InlineNode = { kind: 'atomic', width: 28.8, height: 20, marginInlineStart: 9.6, marginInlineEnd: 0 }
+    const l = layout(block([leaf('ab '), atomic, leaf(' cd')], 500, { direction: 'rtl' }))
+    // "ab ￼ cd": the neutrals sit between two L runs, so everything is level 2 and keeps its logical order left to right.
+    expect(l.lines[0]!.geometry.frames.map(f => [f.kind, f.kind === 'br' || f.kind === 'inline' ? -1 : f.level, f.x, f.width])).toEqual([
+      ['text', 2, 30000 - 1728 - 576 - 1728 - 1728, 1728], ['atomic', 2, 30000 - 1728 - 576 - 1728, 1728], ['text', 2, 30000 - 1728, 1728],
+    ])
+  })
+
+  test('a padded span in an RTL block splits at a level change and takes its edges by visual order (nsBidiPresUtils.cpp:612-758, :1561-1868)', () => {
+    const l = layout(block([span([leaf('ab גד')], { start: 9.6, end: 9.6 })], 500, { direction: 'rtl' }))
+    const line = l.lines[0]!
+    // "ab" is level 2 and " גד" level 1, so the span splits between them. Reflow gives the first continuation the start edge
+    // and the second the end edge (nsInlineFrame.cpp:510, :670); the walk from the right places the level 2 continuation
+    // first, so the start edge is on the right and the end edge on the left.
+    expect(line.geometry.frames.map(f => f.kind === 'inline' ? [f.kind, f.x, f.width, f.hasStartEdge, f.hasEndEdge] : [f.kind, f.x, f.width])).toEqual([
+      ['inline', 28272, 1728, true, false], ['text', 28272, 1152], ['inline', 25968, 2304, false, true], ['text', 26544, 1728],
+    ])
+    expect(line.geometry.width).toBe(4032)
+    expect(line.fragments.filter(f => f.kind === 'box-start' || f.kind === 'box-end').map(f => f.kind)).toEqual(['box-start', 'box-end'])
+  })
+
+  test('a <br> in an RTL block appends U+2028 and ends the bidi paragraph, so the space before it takes the paragraph level (nsBidiPresUtils.cpp:1381-1384)', () => {
+    const p = block([leaf('ab '), { kind: 'br' }, leaf('cd')], 500, { direction: 'rtl' })
+    expect(prepareGecko(p, env, createMeasurer()).elements.map(e => e.kind === 'span' ? -1 : e.level)).toEqual([1])
+    const l = layout(p)
+    expect(l.lines.map(line => textFrames(line).map(f => [f.level, f.x, f.width]))).toEqual([[[2, 30000 - 1152, 1152], [1, 30000 - 1152, 0]], [[2, 30000 - 1152, 1152]]])
+    expect(l.lines[0]!.geometry.frames.find(f => f.kind === 'br')!.x).toBe(30000 - 1152)
+  })
+
+  test('H15: tab stops count from the block edge, text-indent included (nsTextFrame.cpp:11063-11067)', () => {
+    const l = layout(block([leaf('a\tb')], 500, { whiteSpace: 'pre', textIndent: 57.6 }))
+    const line = l.lines[0]!
+    expect(line.indented).toBe(true)
+    const frame = textFrames(line)[0]!
+    expect(frame.x + frame.characters[0]!.advance + frame.characters[1]!.advance).toBe(4608)
+  })
+
+  test('H13: pre-wrap with text-align right moves the line by the remaining width plus the hang (nsLineLayout.cpp:3604-3629)', () => {
+    const l = layout(paragraph([run('aaaa   bb')], 57.6, { whiteSpace: 'pre-wrap', textAlign: 'right' }))
+    expect(textFrames(l.lines[0]!)[0]!.x).toBe(1152)
+    expect(l.lines[0]!.geometry.alignOffset).toBe(1152)
+  })
+
+  test('text-align center halves the remaining width (nsLineLayout.cpp:3622-3625)', () => {
+    const l = layout(paragraph([run('aa')], 57.6, { textAlign: 'center' }))
+    expect(textFrames(l.lines[0]!)[0]!.x).toBe(1152)
+  })
+
+  test('a slot too narrow for the first word moves the line below the floats (nsBlockFrame.cpp:5289-5299, :5549-5555)', () => {
+    const p = paragraph([run('aaaa bbbb')], 57.6)
+    const l = layoutParagraph(p, env, [{ left: 38.4, right: 0 }])
+    if (l.engine !== 'gecko') throw new Error('expected a gecko layout')
+    expect(l.belowFloats.map(b => b.row)).toEqual([0])
+    expect(l.lines.map(line => [line.start, line.geometry.lineLeft, line.geometry.availableWidth, line.geometry.impactedByFloats])).toEqual([[0, 0, 3456, false], [5, 0, 3456, false]])
+  })
+
+  test('a slot that holds the line places it after the float', () => {
+    const l = layoutParagraph(paragraph([run('aa bb')], 57.6), env, [{ left: 19.2, right: 0 }])
+    if (l.engine !== 'gecko') throw new Error('expected a gecko layout')
+    expect(l.belowFloats).toEqual([])
+    expect(l.lines.map(line => [line.start, line.geometry.lineLeft, line.geometry.availableWidth])).toEqual([[0, 1152, 2304], [3, 0, 3456]])
+    expect(textFrames(l.lines[0]!)[0]!.x).toBe(1152)
+  })
+
+  test('justify spreads the remaining width over the line\'s inner opportunities; the last line starts (nsLineLayout.cpp:3531-3570)', () => {
+    // "aa bb cc" at 72px (4320 au) breaks before "cc": line 1 is "aa bb" at 2880 au, and the one frame takes the remaining
+    // 1440 au. Spread over its characters, the space's two gaps take it all.
+    const l = layout(paragraph([run('aa bb cc')], 72, { textAlign: 'justify' }))
+    expect(l.lines.map(line => [line.align, line.geometry.width])).toEqual([['justify', 4320], ['start', 1152]])
+    const frame = textFrames(l.lines[0]!)[0]!
+    expect(frame.width).toBe(4320)
+    expect(frame.characters.map(c => c.advance)).toEqual([576, 576, 576 + 1440, 576, 576, 576])
+  })
+
+  test('pre-wrap justify leaves the trailing spaces out of the opportunities and spreads their width too (nsLineLayout.cpp:3531-3570)', () => {
+    // "aa bb cc" at 72px under pre-wrap: line 1 "aa bb " holds 3 inner opportunities, the trailing space's one is taken off
+    // (trimCount 1), and the 576 au hanging space adds to the 1440 au remaining width.
+    const l = layout(paragraph([run('aa bb cc')], 72, { textAlign: 'justify', whiteSpace: 'pre-wrap' }))
+    expect(l.lines.map(line => line.align)).toEqual(['justify', 'start'])
+    expect(l.lines[0]!.geometry.alignOffset).toBe(0)
   })
 })

@@ -98,7 +98,9 @@ type IntlWithV8 = { v8BreakIterator: new (locales: string[], options: { type: 'l
 export class LineBreakIterator {
   readonly text: string
   readonly is8Bit: boolean
-  readonly settings: IteratorSettings
+  // The current style's settings: SetCurrentStyleForce sets strictness, break type, soft hyphens and break-space on the
+  // one iterator (line_breaker.cc:4557-4643).
+  settings: IteratorSettings
   readonly uiLanguage: string | null
   readonly dictionaryBreaks: BlinkEnvironment['dictionaryBreaks']
   startOffset = 0

@@ -2,115 +2,115 @@
   "format": "pretext-lab-gate/1",
   "engine": "webkit",
   "engineVersion": "22625.1.29.11.27",
-  "note": "charter evaluation 2026-09-17: rebuild-charter library through lab/predictor.ts with font facts, scorer 2; webkit-host on the development and held-out sets of final-20260916, forward and reverse",
+  "note": "charter evaluation 2026-09-17: rebuild-charter library through lab/predictor.ts with font facts, scorer 2; webkit-host on the development and held-out sets of final-20260916, forward and reverse Re-scored with scorer 3 on 2026-09-17, library unchanged.",
   "environments": [
-    "webkit-host: webkit-host 27.0, engine build 22625.1.29.11.27, macOS 26A428; DPR 2, scale 1; scorer 2"
+    "webkit-host: webkit-host 27.0, engine build 22625.1.29.11.27, macOS 26A428; DPR 2, scale 1; scorer 3"
   ],
   "seededFrom": [
     {
-      "perCase": ".artifacts/charter-20260916/evaluate/webkit-host/smoke-forward/webkit-host-per-case.ndjson",
+      "perCase": ".artifacts/lab/rescore-v3-20260917/webkit-host/smoke-forward/webkit-host-per-case.ndjson",
       "casesFile": ".artifacts/lab/cases/smoke.ndjson",
       "cases": 300,
       "historyDependent": 0
     },
     {
-      "perCase": ".artifacts/charter-20260916/evaluate/webkit-host/smoke-reverse/webkit-host-per-case.ndjson",
+      "perCase": ".artifacts/lab/rescore-v3-20260917/webkit-host/smoke-reverse/webkit-host-per-case.ndjson",
       "casesFile": ".artifacts/lab/cases/smoke.ndjson",
       "cases": 300,
       "historyDependent": 0
     },
     {
-      "perCase": ".artifacts/charter-20260916/evaluate/webkit-host/runs-forward/webkit-host-per-case.ndjson",
+      "perCase": ".artifacts/lab/rescore-v3-20260917/webkit-host/runs-forward/webkit-host-per-case.ndjson",
       "casesFile": ".artifacts/lab/cases/runs.ndjson",
       "cases": 2580,
       "historyDependent": 6
     },
     {
-      "perCase": ".artifacts/charter-20260916/evaluate/webkit-host/runs-reverse/webkit-host-per-case.ndjson",
+      "perCase": ".artifacts/lab/rescore-v3-20260917/webkit-host/runs-reverse/webkit-host-per-case.ndjson",
       "casesFile": ".artifacts/lab/cases/runs.ndjson",
       "cases": 2580,
       "historyDependent": 6
     },
     {
-      "perCase": ".artifacts/charter-20260916/evaluate/webkit-host/ws-forward/webkit-host-per-case.ndjson",
+      "perCase": ".artifacts/lab/rescore-v3-20260917/webkit-host/ws-forward/webkit-host-per-case.ndjson",
       "casesFile": ".artifacts/lab/cases/ws.ndjson",
       "cases": 1019,
       "historyDependent": 1
     },
     {
-      "perCase": ".artifacts/charter-20260916/evaluate/webkit-host/ws-reverse/webkit-host-per-case.ndjson",
+      "perCase": ".artifacts/lab/rescore-v3-20260917/webkit-host/ws-reverse/webkit-host-per-case.ndjson",
       "casesFile": ".artifacts/lab/cases/ws.ndjson",
       "cases": 1019,
       "historyDependent": 1
     },
     {
-      "perCase": ".artifacts/charter-20260916/evaluate/webkit-host/policy-forward/webkit-host-per-case.ndjson",
+      "perCase": ".artifacts/lab/rescore-v3-20260917/webkit-host/policy-forward/webkit-host-per-case.ndjson",
       "casesFile": ".artifacts/lab/cases/policy.ndjson",
       "cases": 1606,
       "historyDependent": 0
     },
     {
-      "perCase": ".artifacts/charter-20260916/evaluate/webkit-host/policy-reverse/webkit-host-per-case.ndjson",
+      "perCase": ".artifacts/lab/rescore-v3-20260917/webkit-host/policy-reverse/webkit-host-per-case.ndjson",
       "casesFile": ".artifacts/lab/cases/policy.ndjson",
       "cases": 1606,
       "historyDependent": 0
     },
     {
-      "perCase": ".artifacts/charter-20260916/evaluate/webkit-host/suite-sample-forward/webkit-host-per-case.ndjson",
+      "perCase": ".artifacts/lab/rescore-v3-20260917/webkit-host/suite-sample-forward/webkit-host-per-case.ndjson",
       "casesFile": ".artifacts/lab/cases/suite-sample.ndjson",
       "cases": 19933,
       "historyDependent": 75
     },
     {
-      "perCase": ".artifacts/charter-20260916/evaluate/webkit-host/suite-sample-reverse/webkit-host-per-case.ndjson",
+      "perCase": ".artifacts/lab/rescore-v3-20260917/webkit-host/suite-sample-reverse/webkit-host-per-case.ndjson",
       "casesFile": ".artifacts/lab/cases/suite-sample.ndjson",
       "cases": 19933,
       "historyDependent": 75
     },
     {
-      "perCase": ".artifacts/charter-20260916/evaluate/webkit-host/heldout-runs-forward/webkit-host-per-case.ndjson",
+      "perCase": ".artifacts/lab/rescore-v3-20260917/webkit-host/heldout-runs-forward/webkit-host-per-case.ndjson",
       "casesFile": ".artifacts/lab/cases/heldout-runs.ndjson",
       "cases": 2579,
       "historyDependent": 1
     },
     {
-      "perCase": ".artifacts/charter-20260916/evaluate/webkit-host/heldout-runs-reverse/webkit-host-per-case.ndjson",
+      "perCase": ".artifacts/lab/rescore-v3-20260917/webkit-host/heldout-runs-reverse/webkit-host-per-case.ndjson",
       "casesFile": ".artifacts/lab/cases/heldout-runs.ndjson",
       "cases": 2579,
       "historyDependent": 1
     },
     {
-      "perCase": ".artifacts/charter-20260916/evaluate/webkit-host/heldout-ws-forward/webkit-host-per-case.ndjson",
+      "perCase": ".artifacts/lab/rescore-v3-20260917/webkit-host/heldout-ws-forward/webkit-host-per-case.ndjson",
       "casesFile": ".artifacts/lab/cases/heldout-ws.ndjson",
       "cases": 1022,
       "historyDependent": 0
     },
     {
-      "perCase": ".artifacts/charter-20260916/evaluate/webkit-host/heldout-ws-reverse/webkit-host-per-case.ndjson",
+      "perCase": ".artifacts/lab/rescore-v3-20260917/webkit-host/heldout-ws-reverse/webkit-host-per-case.ndjson",
       "casesFile": ".artifacts/lab/cases/heldout-ws.ndjson",
       "cases": 1022,
       "historyDependent": 0
     },
     {
-      "perCase": ".artifacts/charter-20260916/evaluate/webkit-host/heldout-policy-forward/webkit-host-per-case.ndjson",
+      "perCase": ".artifacts/lab/rescore-v3-20260917/webkit-host/heldout-policy-forward/webkit-host-per-case.ndjson",
       "casesFile": ".artifacts/lab/cases/heldout-policy.ndjson",
       "cases": 1604,
       "historyDependent": 0
     },
     {
-      "perCase": ".artifacts/charter-20260916/evaluate/webkit-host/heldout-policy-reverse/webkit-host-per-case.ndjson",
+      "perCase": ".artifacts/lab/rescore-v3-20260917/webkit-host/heldout-policy-reverse/webkit-host-per-case.ndjson",
       "casesFile": ".artifacts/lab/cases/heldout-policy.ndjson",
       "cases": 1604,
       "historyDependent": 0
     },
     {
-      "perCase": ".artifacts/charter-20260916/evaluate/webkit-host/heldout-suite-sample-forward/webkit-host-per-case.ndjson",
+      "perCase": ".artifacts/lab/rescore-v3-20260917/webkit-host/heldout-suite-sample-forward/webkit-host-per-case.ndjson",
       "casesFile": ".artifacts/lab/cases/heldout-suite-sample.ndjson",
       "cases": 10000,
       "historyDependent": 135
     },
     {
-      "perCase": ".artifacts/charter-20260916/evaluate/webkit-host/heldout-suite-sample-reverse/webkit-host-per-case.ndjson",
+      "perCase": ".artifacts/lab/rescore-v3-20260917/webkit-host/heldout-suite-sample-reverse/webkit-host-per-case.ndjson",
       "casesFile": ".artifacts/lab/cases/heldout-suite-sample.ndjson",
       "cases": 10000,
       "historyDependent": 135

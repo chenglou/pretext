@@ -1,14 +1,16 @@
 // Blink's observation port (DESIGN.md §9, research/observe-blink.md): what Chrome 153's Range.getClientRects() reports
-// for a Range over one code point and over a whole text node, derived from a Blink layout's own geometry by porting
-// LayoutText::AbsoluteQuadsForRange (layout_text.cc:556-648) and the code it calls. It imports types from src/model.ts
-// only, so no expected value comes from engine logic (research/TEST-ARCHITECTURE.md §0 rule 1).
+// for a Range over one code point and over a whole text node, and what Element.getClientRects() reports for each element,
+// derived from a Blink layout's own geometry by porting LayoutText::AbsoluteQuadsForRange (layout_text.cc:556-648),
+// LayoutInline::QuadsForSelfInternal (layout_inline.cc:428-490) and the code they call. It imports types from
+// src/model.ts only and walks the inline tree itself, so no expected value comes from engine logic
+// (research/TEST-ARCHITECTURE.md §0 rule 1).
 //
 // States (DESIGN.md §9): an edge that is an item edge, a whole item's size, a hyphen's size or a boundary at an item edge
 // is predicted. An edge from a caret position inside an item rests on the cluster advances the library took from Canvas
 // prefix widths, so it is limited by in-word-prefix. Facts no rect reflects are listed as unobservable with their rule.
 // Vertical placement is outside the contract.
 import type {
-  BlinkGlyphCluster, BlinkItem, BlinkLayout, BlinkMappingUnit, CanvasMeasure, Expected, ExpectedObservation, ExpectedRect, ObservationPort,
+  BlinkGlyphCluster, BlinkItem, BlinkLayout, BlinkMappingUnit, CanvasMeasure, Expected, ExpectedObservation, ExpectedRect, InlineNode, ObservationPort,
   Paragraph, UnobservableFact,
 } from '../../src/model.ts'
 
@@ -18,6 +20,7 @@ const f32 = Math.fround
 type Quad = { line: number; left: number; right: number; leftExact: boolean; rightExact: boolean }
 
 type TextItem = Extract<BlinkItem, { kind: 'text' | 'tab' }>
+type RunItem = Extract<BlinkItem, { kind: 'text' | 'tab' | 'forced-break' | 'hyphen' }>
 
 // LayoutUnit::FromFloatFloor and FromFloatCeil of a float32 zoomed px value (layout_unit.h:134-142).
 function floor64(v: number): number {
@@ -103,7 +106,7 @@ function caret(item: TextItem, offset: number, adjust: 'start' | 'end'): number 
 }
 
 // FragmentItem::LocalRect with LineLeftAndRightForOffsets (fragment_item.cc:1201-1235, 1132-1199), relative to the item.
-function localRect(item: BlinkItem, a: number, b: number, rtlStyle: boolean): { left: number; right: number; leftExact: boolean; rightExact: boolean } {
+function localRect(item: RunItem, a: number, b: number, rtlStyle: boolean): { left: number; right: number; leftExact: boolean; rightExact: boolean } {
   switch (item.kind) {
     case 'hyphen':
       return { left: 0, right: item.inlineSize, leftExact: true, rightExact: true }
@@ -183,7 +186,7 @@ function mapRange(units: BlinkMappingUnit[], s: number, e: number): [number, num
   return [ts, q === null || q <= p ? ts : textContentOffset(units, q)]
 }
 
-type ItemRef = { line: number; index: number; item: BlinkItem }
+type ItemRef = { line: number; index: number; item: RunItem }
 
 // LayoutText::AbsoluteQuadsForRange (layout_text.cc:556-648) over source offsets [s, e) of one run. `included` collects the
 // hyphen items the range reports.
@@ -226,19 +229,44 @@ function quadsForRange(units: BlinkMappingUnit[], items: ItemRef[], s: number, e
   return out.length > 0 ? out : boundary
 }
 
+// The paragraph's tree in document order: every text leaf with its source offset and the span holding it, and every
+// element with its parent span, as DESIGN.md §1.1 indexes them.
+type Leaf = { text: string; start: number; parent: number; rank: number }
+type Element = { node: Exclude<InlineNode, { kind: 'text' }>; parent: number; rank: number }
+
+function walk(paragraph: Paragraph): { leaves: Leaf[]; elements: Element[]; text: number } {
+  const leaves: Leaf[] = []
+  const elements: Element[] = []
+  let offset = 0
+  let rank = 0
+  const visit = (nodes: readonly InlineNode[], parent: number): void => {
+    for (let i = 0; i < nodes.length; i++) {
+      const node = nodes[i]!
+      if (node.kind === 'text') {
+        leaves.push({ text: node.text, start: offset, parent, rank: rank++ })
+        offset += node.text.length
+        continue
+      }
+      const index = elements.length
+      elements.push({ node, parent, rank: rank++ })
+      if (node.kind === 'span') visit(node.children, index)
+    }
+  }
+  visit(paragraph.content, -1)
+  return { leaves, elements, text: offset }
+}
+
 export const observeBlink: ObservationPort<BlinkLayout> = (paragraph: Paragraph, layout: BlinkLayout, _measure: CanvasMeasure): ExpectedObservation => {
   const zoom = layout.env.devicePixelRatio
   const rtlStyle = paragraph.direction === 'rtl'
-  const runCount = paragraph.runs.length
-  const runStarts: number[] = []
-  for (let r = 0, s = 0; r <= runCount; r++) {
-    runStarts.push(s)
-    if (r < runCount) s += paragraph.runs[r]!.text.length
-  }
+  const tree = walk(paragraph)
+  const runCount = tree.leaves.length
   // Per run, its mapping units and its fragment items: lines in order, items in visual order (InlineCursor).
   const units: BlinkMappingUnit[][] = []
   const items: ItemRef[][] = []
   for (let r = 0; r < runCount; r++) { units.push([]); items.push([]) }
+  // Per element, its own items (inline boxes, atomic inlines, <br>) in line order.
+  const elementItems: { line: number; item: BlinkItem }[][] = tree.elements.map(() => [])
   const unobservable: UnobservableFact[] = []
   for (let l = 0; l < layout.lines.length; l++) {
     const line = layout.lines[l]!
@@ -246,7 +274,14 @@ export const observeBlink: ObservationPort<BlinkLayout> = (paragraph: Paragraph,
     for (let i = 0; i < g.mapping.length; i++) units[g.mapping[i]!.run]!.push(g.mapping[i]!)
     for (let i = 0; i < g.items.length; i++) {
       const item = g.items[i]!
-      items[item.run]!.push({ line: l, index: i, item })
+      switch (item.kind) {
+        case 'text': case 'tab': case 'forced-break': case 'hyphen':
+          items[item.run]!.push({ line: l, index: i, item })
+          break
+        case 'inline-box': case 'atomic': case 'br':
+          elementItems[item.element]!.push({ line: l, item })
+          break
+      }
       if (item.kind === 'text' || item.kind === 'tab') {
         for (let c = 0; c < item.clusters.length; c++) {
           const cluster = item.clusters[c]!
@@ -259,22 +294,26 @@ export const observeBlink: ObservationPort<BlinkLayout> = (paragraph: Paragraph,
     if (!line.hasLineBox) {
       unobservable.push({ line: l, fact: `lines[${l}]`, rule: 'U8: a line that creates no line box has no fragment items, so no Range reports it (line_breaker.cc:945-975)' })
     }
-    if (!rtlStyle && g.hangWidth !== 0) {
-      unobservable.push({ line: l, fact: `lines[${l}].geometry.hangWidth`, rule: 'an LTR line starts at 0 whatever hangs: AdjustLineOffsetForHanging returns 0 and text-align: start adds no offset (inline_layout_algorithm.cc:303-311, length_utils.cc:1607-1640)' })
+    if (!rtlStyle && g.hangWidth !== 0 && (line.align === 'start' || line.align === 'left')) {
+      unobservable.push({ line: l, fact: `lines[${l}].geometry.hangWidth`, rule: 'an LTR line starts at its line left whatever hangs: AdjustLineOffsetForHanging returns 0 and text-align start or left adds no offset (inline_layout_algorithm.cc:303-311, length_utils.cc:1607-1640)' })
     }
+  }
+  for (let b = 0; b < layout.belowFloats.length; b++) {
+    unobservable.push({ line: -1, fact: `belowFloats[${b}]`, rule: 'a refused slot moves the line box down past the floats; only vertical positions show it, which are outside the contract (inline_layout_algorithm.cc:1341-1367)' })
   }
   const nodes: ExpectedRect[][] = []
   const includedHyphens = new Set<BlinkItem>()
   for (let r = 0; r < runCount; r++) {
-    const quads = paragraph.runs[r]!.text.length === 0 ? [] : quadsForRange(units[r]!, items[r]!, runStarts[r]!, runStarts[r + 1]!, rtlStyle, includedHyphens)
+    const leaf = tree.leaves[r]!
+    const quads = leaf.text.length === 0 ? [] : quadsForRange(units[r]!, items[r]!, leaf.start, leaf.start + leaf.text.length, rtlStyle, includedHyphens)
     nodes.push(quads.map(q => rectOf(q, zoom)))
   }
   const codePoints: ExpectedObservation['codePoints'] = []
   for (let r = 0; r < runCount; r++) {
-    const text = paragraph.runs[r]!.text
-    for (let k = 0; k < text.length;) {
-      const length = text.codePointAt(k)! > 0xffff ? 2 : 1
-      const offset = runStarts[r]! + k
+    const leaf = tree.leaves[r]!
+    for (let k = 0; k < leaf.text.length;) {
+      const length = leaf.text.codePointAt(k)! > 0xffff ? 2 : 1
+      const offset = leaf.start + k
       codePoints.push({ offset, length, rects: quadsForRange(units[r]!, items[r]!, offset, offset + length, rtlStyle, includedHyphens).map(q => rectOf(q, zoom)) })
       k += length
     }
@@ -287,5 +326,62 @@ export const observeBlink: ObservationPort<BlinkLayout> = (paragraph: Paragraph,
       }
     }
   }
-  return { codePoints, nodes, unobservable }
+  // Element.getClientRects(): LayoutInline::QuadsForSelfInternal walks the element's fragment items including a culled
+  // inline's (InlineCursor::MoveToIncludingCulledInline, layout_inline.cc:428-490): a span with a box fragment reports its
+  // border box per line; a culled span the items of the layout objects inside it, object by object in tree order and each
+  // object's items in line order, not descending into a child that has a box fragment (inline_cursor.cc:1626-1654). An
+  // atomic inline reports its border box and a <br> its forced-break item. An element with no items reports one empty rect
+  // (found_quad false, :485-492), which sits on no line.
+  const zeroQuad = (): ExpectedRect => ({ line: -1, x: predicted(0), width: predicted(0) })
+  const elements: ExpectedRect[][] = []
+  for (let e = 0; e < tree.elements.length; e++) {
+    const element = tree.elements[e]!
+    const own = elementItems[e]!
+    const rects: ExpectedRect[] = []
+    const push = (line: number, left: number, right: number): void => {
+      rects.push(rectOf({ line, left, right, leftExact: true, rightExact: true }, zoom))
+    }
+    switch (element.node.kind) {
+      case 'atomic': case 'br':
+        for (let i = 0; i < own.length; i++) push(own[i]!.line, own[i]!.item.x, own[i]!.item.x + own[i]!.item.inlineSize)
+        break
+      case 'wbr':
+        // Unsettled: a <wbr>'s flow-control item may or may not produce a fragment item (DESIGN.md §9, to settle by probe).
+        break
+      case 'span': {
+        if (own.length > 0) {
+          for (let i = 0; i < own.length; i++) push(own[i]!.line, own[i]!.item.x, own[i]!.item.x + own[i]!.item.inlineSize)
+          break
+        }
+        // A culled span: its descendants' layout objects in tree order (text leaves and elements, skipping the insides of
+        // children that report a box fragment of their own).
+        const visitObjects = (parent: number): void => {
+          const children: ({ kind: 'leaf'; index: number } | { kind: 'element'; index: number })[] = []
+          for (let r = 0; r < runCount; r++) if (tree.leaves[r]!.parent === parent) children.push({ kind: 'leaf', index: r })
+          for (let x = 0; x < tree.elements.length; x++) if (tree.elements[x]!.parent === parent) children.push({ kind: 'element', index: x })
+          const rankOf = (n: { kind: 'leaf' | 'element'; index: number }): number => n.kind === 'leaf' ? tree.leaves[n.index]!.rank : tree.elements[n.index]!.rank
+          children.sort((a, b) => rankOf(a) - rankOf(b))
+          for (let c = 0; c < children.length; c++) {
+            const child = children[c]!
+            if (child.kind === 'leaf') {
+              const refs = items[child.index]!
+              for (let i = 0; i < refs.length; i++) push(refs[i]!.line, refs[i]!.item.x, refs[i]!.item.x + refs[i]!.item.inlineSize)
+              continue
+            }
+            const childItems = elementItems[child.index]!
+            if (childItems.length > 0) {
+              for (let i = 0; i < childItems.length; i++) push(childItems[i]!.line, childItems[i]!.item.x, childItems[i]!.item.x + childItems[i]!.item.inlineSize)
+              continue
+            }
+            if (tree.elements[child.index]!.node.kind === 'span') visitObjects(child.index)
+          }
+        }
+        visitObjects(e)
+        break
+      }
+    }
+    if (rects.length === 0 && element.node.kind !== 'wbr') rects.push(zeroQuad())
+    elements.push(rects)
+  }
+  return { codePoints, nodes, elements, unobservable }
 }

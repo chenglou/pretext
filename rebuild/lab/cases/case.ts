@@ -4,7 +4,8 @@
 // folds them into one record.
 
 import { createHash } from 'node:crypto'
-import type { BrowserKind, Case, FontDecl, Paragraph } from '../types.ts'
+import type { BoxEdge } from '../../src/model.ts'
+import type { BrowserKind, Case, FontDecl, InlineNode, InlineStructure, Paragraph, TextRun } from '../types.ts'
 import { canonicalFontFamily } from './font.ts'
 
 export const ALL_BROWSERS: readonly BrowserKind[] = ['chrome', 'safari', 'firefox']
@@ -14,6 +15,10 @@ export const FIXTURE_FONT_FAMILIES: readonly string[] = ['Amiri', 'Noto Naskh Ar
 
 // Bump when the meaning of a case's content changes, so old ids can't silently describe new layouts.
 const ID_VERSION = 'pretext-lab-case/1'
+// Cases with inline structure hash their paragraph and structure under their own version (DESIGN.md §1.1); flat cases keep
+// ID_VERSION and their ids.
+const INLINE_ID_VERSION = 'pretext-lab-case/2'
+const TEXT_ALIGN = new Set<InlineStructure['textAlign']>(['start', 'end', 'left', 'right', 'center', 'justify'])
 
 const WHITE_SPACE = new Set<Paragraph['whiteSpace']>(['normal', 'pre', 'pre-wrap', 'pre-line', 'nowrap', 'break-spaces'])
 const WORD_BREAK = new Set<Paragraph['wordBreak']>(['normal', 'break-all', 'keep-all', 'break-word'])
@@ -49,8 +54,58 @@ export function canonicalJson(value: unknown): string {
   }
 }
 
-export function caseDigest(pageLang: string, paragraph: Paragraph, fontFixtures?: readonly string[]): string {
+export function caseDigest(pageLang: string, paragraph: Paragraph, fontFixtures?: readonly string[], inline?: InlineStructure): string {
+  if (inline !== undefined) {
+    const content = { ...(fontFixtures === undefined || fontFixtures.length === 0 ? {} : { fontFixtures }), inline, pageLang, paragraph }
+    return createHash('sha256').update(`${INLINE_ID_VERSION}\n${canonicalJson(content)}`).digest('hex')
+  }
   return caseDigestFromCanonical(pageLang, canonicalJson(paragraph), fontFixtures)
+}
+
+// The runs a case with inline structure lists: every text leaf in document order, a leaf under the block as a bare text
+// run with the block's font and spacing, a leaf under a span as a span run with that span's font and spacing and the
+// nearest lang an enclosing span sets (null when none does).
+export function leafRuns(paragraph: Pick<Paragraph, 'font' | 'letterSpacing' | 'wordSpacing'>, content: readonly InlineNode[]): TextRun[] {
+  const runs: TextRun[] = []
+  const walk = (nodes: readonly InlineNode[], under: { font: FontDecl; letterSpacing: number; wordSpacing: number; lang: string | null } | null): void => {
+    for (let i = 0; i < nodes.length; i++) {
+      const node = nodes[i]!
+      if (node.kind === 'text') {
+        runs.push(under === null
+          ? { text: node.text, node: 'text', font: paragraph.font, letterSpacing: paragraph.letterSpacing, wordSpacing: paragraph.wordSpacing, lang: null }
+          : { text: node.text, node: 'span', font: under.font, letterSpacing: under.letterSpacing, wordSpacing: under.wordSpacing, lang: under.lang })
+      } else if (node.kind === 'span') {
+        walk(node.children, { font: node.font, letterSpacing: node.letterSpacing, wordSpacing: node.wordSpacing, lang: node.lang ?? under?.lang ?? null })
+      }
+    }
+  }
+  walk(content, null)
+  return runs
+}
+
+function noEdge(edge: BoxEdge): boolean {
+  return edge.margin === 0 && edge.border === 0 && edge.padding === 0
+}
+
+// Whether inline structure describes a flat paragraph (DESIGN.md §1.1, "Flat paragraphs"): text leaves and spans holding
+// one leaf each, spans without box edges, at baseline and with the block's wrapping styles, text-indent 0, text-align start,
+// no line slots, and the runs a flat case allows (a bare leaf empty only when it's the only content, no two bare leaves
+// next to each other).
+export function flatStructure(paragraph: Paragraph, inline: InlineStructure): boolean {
+  if (inline.textIndent !== 0 || inline.textAlign !== 'start' || inline.lineSlots.length > 0 || inline.content.length === 0) return false
+  for (let i = 0; i < inline.content.length; i++) {
+    const node = inline.content[i]!
+    if (node.kind === 'text') {
+      if (node.text === '' && inline.content.length > 1) return false
+      if (i > 0 && inline.content[i - 1]!.kind === 'text') return false
+      continue
+    }
+    if (node.kind !== 'span' || node.children.length !== 1 || node.children[0]!.kind !== 'text') return false
+    if (!noEdge(node.inlineStart) || !noEdge(node.inlineEnd) || node.verticalAlign !== 'baseline') return false
+    if (node.whiteSpace !== paragraph.whiteSpace || node.wordBreak !== paragraph.wordBreak || node.overflowWrap !== paragraph.overflowWrap
+      || node.lineBreak !== paragraph.lineBreak || node.tabSize !== paragraph.tabSize) return false
+  }
+  return true
 }
 
 // The digest of canonicalJson({ fontFixtures, pageLang, paragraph }), given the paragraph's canonical
@@ -71,6 +126,8 @@ export type CaseInput = {
   paragraph: Paragraph
   browsers?: readonly BrowserKind[] | undefined
   fontFixtures?: readonly string[] | undefined
+  // Inline structure; a flat one is dropped, so the case keeps its flat id.
+  inline?: InlineStructure | undefined
 }
 
 function normalizeBrowsers(browsers: readonly BrowserKind[] | undefined): BrowserKind[] | undefined {
@@ -96,13 +153,15 @@ function normalizeFixtures(fixtures: readonly string[] | undefined): string[] | 
 export function makeCase(input: CaseInput): Case {
   const browsers = normalizeBrowsers(input.browsers)
   const fontFixtures = normalizeFixtures(input.fontFixtures)
-  const digest = caseDigest(input.pageLang, input.paragraph, fontFixtures)
+  const inline = input.inline === undefined || flatStructure(input.paragraph, input.inline) ? undefined : input.inline
+  const digest = caseDigest(input.pageLang, input.paragraph, fontFixtures, inline)
   const result: Case = {
     id: caseIdFromDigest(digest),
     family: input.family,
     origin: input.origin,
     pageLang: input.pageLang,
     paragraph: input.paragraph,
+    ...(inline === undefined ? {} : { inline }),
     ...(browsers === undefined ? {} : { browsers }),
     ...(fontFixtures === undefined ? {} : { fontFixtures }),
   }
@@ -142,7 +201,8 @@ export function validateCase(value: Case): void {
   if (p.direction !== 'ltr' && p.direction !== 'rtl') throw new Error(`${where}: unknown direction`)
   if (typeof p.lang !== 'string') throw new Error(`${where}: paragraph lang must be a string`)
   if (!Array.isArray(p.runs) || p.runs.length === 0) throw new Error(`${where}: a paragraph needs runs`)
-  for (let i = 0; i < p.runs.length; i++) {
+  if (value.inline !== undefined) validateInline(p, value.inline, where)
+  for (let i = 0; i < p.runs.length && value.inline === undefined; i++) {
     const run = p.runs[i]!
     const at = `${where} run ${i}`
     if (typeof run.text !== 'string') throw new Error(`${at}: text must be a string`)
@@ -163,8 +223,73 @@ export function validateCase(value: Case): void {
   if (value.browsers !== undefined && normalizeBrowsers(value.browsers)?.join() !== value.browsers.join()) {
     throw new Error(`${where}: browsers must be a canonical proper subset`)
   }
-  const digest = caseDigest(value.pageLang, p, value.fontFixtures)
+  const digest = caseDigest(value.pageLang, p, value.fontFixtures, value.inline)
   if (value.id !== caseIdFromDigest(digest)) throw new Error(`${where}: id does not match its content`)
+}
+
+function validateEdge(edge: BoxEdge, where: string): void {
+  if (!finite(edge.margin)) throw new Error(`${where}: margin must be finite`)
+  if (!finite(edge.border) || edge.border < 0 || !finite(edge.padding) || edge.padding < 0) throw new Error(`${where}: border and padding must be finite and non-negative`)
+}
+
+function validateInline(p: Paragraph, inline: InlineStructure, where: string): void {
+  if (flatStructure(p, inline)) throw new Error(`${where}: flat inline structure; a flat case carries runs only`)
+  if (!finite(inline.textIndent)) throw new Error(`${where}: textIndent must be finite`)
+  if (!TEXT_ALIGN.has(inline.textAlign)) throw new Error(`${where}: unknown text-align ${inline.textAlign}`)
+  if (!Array.isArray(inline.content) || !Array.isArray(inline.lineSlots)) throw new Error(`${where}: inline content and lineSlots must be arrays`)
+  if (inline.lineSlots.length > 0) {
+    if (!Number.isInteger(p.lineHeight)) throw new Error(`${where}: line slots need a whole-px line height`)
+    const sides = ['left', 'right'] as const
+    for (let k = 0; k < sides.length; k++) {
+      const side = sides[k]!
+      let positive = 0
+      for (let row = 0; row < inline.lineSlots.length; row++) {
+        const inset = inline.lineSlots[row]![side]
+        if (!finite(inset) || inset < 0) throw new Error(`${where}: slot row ${row} ${side} inset must be finite and non-negative`)
+        if (inset > 0) positive++
+      }
+      if (positive !== 0 && positive !== inline.lineSlots.length) throw new Error(`${where}: every row's ${side} inset must be positive, or every row's 0`)
+    }
+    if (inline.lineSlots.every(slot => slot.left === 0 && slot.right === 0)) throw new Error(`${where}: line slots without insets`)
+  }
+  const walk = (nodes: readonly InlineNode[], at: string): void => {
+    for (let i = 0; i < nodes.length; i++) {
+      const node = nodes[i]!
+      const here = `${at}/${i}`
+      switch (node.kind) {
+        case 'text':
+          if (typeof node.text !== 'string') throw new Error(`${here}: text must be a string`)
+          break
+        case 'span':
+          validateFont(node.font, here)
+          if (!finite(node.letterSpacing) || !finite(node.wordSpacing)) throw new Error(`${here}: spacing must be finite`)
+          if (!finite(node.tabSize) || node.tabSize < 0) throw new Error(`${here}: tabSize must be non-negative`)
+          if (!WHITE_SPACE.has(node.whiteSpace) || !WORD_BREAK.has(node.wordBreak) || !OVERFLOW_WRAP.has(node.overflowWrap) || !LINE_BREAK.has(node.lineBreak)) {
+            throw new Error(`${here}: unknown wrapping keyword`)
+          }
+          if (node.lang !== null && typeof node.lang !== 'string') throw new Error(`${here}: lang must be a string or null`)
+          validateEdge(node.inlineStart, `${here} inline start`)
+          validateEdge(node.inlineEnd, `${here} inline end`)
+          if (node.verticalAlign !== 'baseline' && node.verticalAlign !== '0px') throw new Error(`${here}: unknown vertical-align`)
+          if (!Array.isArray(node.children)) throw new Error(`${here}: children must be an array`)
+          walk(node.children, here)
+          break
+        case 'atomic':
+          if (!finite(node.width) || node.width < 0 || !finite(node.height) || node.height < 0) throw new Error(`${here}: atomic size must be finite and non-negative`)
+          // A taller box changes line box heights, which the model doesn't carry (DESIGN.md §1.1, "Atomic inlines").
+          if (node.height > p.lineHeight) throw new Error(`${here}: atomic inline taller than the line height`)
+          if (!finite(node.marginInlineStart) || !finite(node.marginInlineEnd)) throw new Error(`${here}: atomic margins must be finite`)
+          break
+        case 'br':
+        case 'wbr':
+          break
+        default:
+          throw new Error(`${here}: unknown node kind ${(node as { kind: unknown }).kind}`)
+      }
+    }
+  }
+  walk(inline.content, `${where} content`)
+  if (canonicalJson(p.runs) !== canonicalJson(leafRuns(p, inline.content))) throw new Error(`${where}: runs must list the tree's leaves (leafRuns)`)
 }
 
 export function paragraphText(paragraph: Paragraph): string {
@@ -177,7 +302,7 @@ export function paragraphText(paragraph: Paragraph): string {
 export function mergeCases(cases: Iterable<Case>): Case[] {
   const byId = new Map<string, { value: Case; digest: string; origins: string[]; browsers: Set<BrowserKind> | null }>()
   for (const value of cases) {
-    const digest = caseDigest(value.pageLang, value.paragraph, value.fontFixtures)
+    const digest = caseDigest(value.pageLang, value.paragraph, value.fontFixtures, value.inline)
     const previous = byId.get(value.id)
     if (previous === undefined) {
       byId.set(value.id, { value, digest, origins: [value.origin], browsers: value.browsers === undefined ? null : new Set(value.browsers) })
@@ -194,7 +319,7 @@ export function mergeCases(cases: Iterable<Case>): Case[] {
   for (const { value, origins, browsers } of byId.values()) {
     out.push(makeCase({
       family: value.family, origin: origins.join('; '), pageLang: value.pageLang, paragraph: value.paragraph,
-      browsers: browsers === null ? undefined : [...browsers], fontFixtures: value.fontFixtures,
+      browsers: browsers === null ? undefined : [...browsers], fontFixtures: value.fontFixtures, inline: value.inline,
     }))
   }
   return out

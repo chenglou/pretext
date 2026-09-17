@@ -2,115 +2,115 @@
   "format": "pretext-lab-gate/1",
   "engine": "blink",
   "engineVersion": "153.0.8010.48",
-  "note": "charter evaluation 2026-09-17: rebuild-charter library through lab/predictor.ts with font facts, scorer 2; development and held-out sets of final-20260916, forward and reverse",
+  "note": "charter evaluation 2026-09-17: rebuild-charter library through lab/predictor.ts with font facts, scorer 2; development and held-out sets of final-20260916, forward and reverse Re-scored with scorer 3 on 2026-09-17, library unchanged.",
   "environments": [
-    "chrome: Google Chrome 153.0.8010.48, engine build 153.0.8010.48, macOS 26A428; DPR 2, scale 1; scorer 2"
+    "chrome: Google Chrome 153.0.8010.48, engine build 153.0.8010.48, macOS 26A428; DPR 2, scale 1; scorer 3"
   ],
   "seededFrom": [
     {
-      "perCase": ".artifacts/charter-20260916/evaluate/chrome/smoke-forward/chrome-per-case.ndjson",
+      "perCase": ".artifacts/lab/rescore-v3-20260917/chrome/smoke-forward/chrome-per-case.ndjson",
       "casesFile": ".artifacts/lab/cases/smoke.ndjson",
       "cases": 299,
       "historyDependent": 0
     },
     {
-      "perCase": ".artifacts/charter-20260916/evaluate/chrome/smoke-reverse/chrome-per-case.ndjson",
+      "perCase": ".artifacts/lab/rescore-v3-20260917/chrome/smoke-reverse/chrome-per-case.ndjson",
       "casesFile": ".artifacts/lab/cases/smoke.ndjson",
       "cases": 299,
       "historyDependent": 0
     },
     {
-      "perCase": ".artifacts/charter-20260916/evaluate/chrome/runs-forward/chrome-per-case.ndjson",
+      "perCase": ".artifacts/lab/rescore-v3-20260917/chrome/runs-forward/chrome-per-case.ndjson",
       "casesFile": ".artifacts/lab/cases/runs.ndjson",
       "cases": 2580,
       "historyDependent": 0
     },
     {
-      "perCase": ".artifacts/charter-20260916/evaluate/chrome/runs-reverse/chrome-per-case.ndjson",
+      "perCase": ".artifacts/lab/rescore-v3-20260917/chrome/runs-reverse/chrome-per-case.ndjson",
       "casesFile": ".artifacts/lab/cases/runs.ndjson",
       "cases": 2580,
       "historyDependent": 0
     },
     {
-      "perCase": ".artifacts/charter-20260916/evaluate/chrome/ws-forward/chrome-per-case.ndjson",
+      "perCase": ".artifacts/lab/rescore-v3-20260917/chrome/ws-forward/chrome-per-case.ndjson",
       "casesFile": ".artifacts/lab/cases/ws.ndjson",
       "cases": 1019,
       "historyDependent": 0
     },
     {
-      "perCase": ".artifacts/charter-20260916/evaluate/chrome/ws-reverse/chrome-per-case.ndjson",
+      "perCase": ".artifacts/lab/rescore-v3-20260917/chrome/ws-reverse/chrome-per-case.ndjson",
       "casesFile": ".artifacts/lab/cases/ws.ndjson",
       "cases": 1019,
       "historyDependent": 0
     },
     {
-      "perCase": ".artifacts/charter-20260916/evaluate/chrome/policy-forward/chrome-per-case.ndjson",
+      "perCase": ".artifacts/lab/rescore-v3-20260917/chrome/policy-forward/chrome-per-case.ndjson",
       "casesFile": ".artifacts/lab/cases/policy.ndjson",
       "cases": 1606,
       "historyDependent": 0
     },
     {
-      "perCase": ".artifacts/charter-20260916/evaluate/chrome/policy-reverse/chrome-per-case.ndjson",
+      "perCase": ".artifacts/lab/rescore-v3-20260917/chrome/policy-reverse/chrome-per-case.ndjson",
       "casesFile": ".artifacts/lab/cases/policy.ndjson",
       "cases": 1606,
       "historyDependent": 0
     },
     {
-      "perCase": ".artifacts/charter-20260916/evaluate/chrome/suite-sample-forward/chrome-per-case.ndjson",
+      "perCase": ".artifacts/lab/rescore-v3-20260917/chrome/suite-sample-forward/chrome-per-case.ndjson",
       "casesFile": ".artifacts/lab/cases/suite-sample.ndjson",
       "cases": 19994,
       "historyDependent": 0
     },
     {
-      "perCase": ".artifacts/charter-20260916/evaluate/chrome/suite-sample-reverse/chrome-per-case.ndjson",
+      "perCase": ".artifacts/lab/rescore-v3-20260917/chrome/suite-sample-reverse/chrome-per-case.ndjson",
       "casesFile": ".artifacts/lab/cases/suite-sample.ndjson",
       "cases": 19994,
       "historyDependent": 0
     },
     {
-      "perCase": ".artifacts/charter-20260916/evaluate/chrome/heldout-runs-forward/chrome-per-case.ndjson",
+      "perCase": ".artifacts/lab/rescore-v3-20260917/chrome/heldout-runs-forward/chrome-per-case.ndjson",
       "casesFile": ".artifacts/lab/cases/heldout-runs.ndjson",
       "cases": 2579,
       "historyDependent": 0
     },
     {
-      "perCase": ".artifacts/charter-20260916/evaluate/chrome/heldout-runs-reverse/chrome-per-case.ndjson",
+      "perCase": ".artifacts/lab/rescore-v3-20260917/chrome/heldout-runs-reverse/chrome-per-case.ndjson",
       "casesFile": ".artifacts/lab/cases/heldout-runs.ndjson",
       "cases": 2579,
       "historyDependent": 0
     },
     {
-      "perCase": ".artifacts/charter-20260916/evaluate/chrome/heldout-ws-forward/chrome-per-case.ndjson",
+      "perCase": ".artifacts/lab/rescore-v3-20260917/chrome/heldout-ws-forward/chrome-per-case.ndjson",
       "casesFile": ".artifacts/lab/cases/heldout-ws.ndjson",
       "cases": 1022,
       "historyDependent": 0
     },
     {
-      "perCase": ".artifacts/charter-20260916/evaluate/chrome/heldout-ws-reverse/chrome-per-case.ndjson",
+      "perCase": ".artifacts/lab/rescore-v3-20260917/chrome/heldout-ws-reverse/chrome-per-case.ndjson",
       "casesFile": ".artifacts/lab/cases/heldout-ws.ndjson",
       "cases": 1022,
       "historyDependent": 0
     },
     {
-      "perCase": ".artifacts/charter-20260916/evaluate/chrome/heldout-policy-forward/chrome-per-case.ndjson",
+      "perCase": ".artifacts/lab/rescore-v3-20260917/chrome/heldout-policy-forward/chrome-per-case.ndjson",
       "casesFile": ".artifacts/lab/cases/heldout-policy.ndjson",
       "cases": 1604,
       "historyDependent": 0
     },
     {
-      "perCase": ".artifacts/charter-20260916/evaluate/chrome/heldout-policy-reverse/chrome-per-case.ndjson",
+      "perCase": ".artifacts/lab/rescore-v3-20260917/chrome/heldout-policy-reverse/chrome-per-case.ndjson",
       "casesFile": ".artifacts/lab/cases/heldout-policy.ndjson",
       "cases": 1604,
       "historyDependent": 0
     },
     {
-      "perCase": ".artifacts/charter-20260916/evaluate/chrome/heldout-suite-sample-forward/chrome-per-case.ndjson",
+      "perCase": ".artifacts/lab/rescore-v3-20260917/chrome/heldout-suite-sample-forward/chrome-per-case.ndjson",
       "casesFile": ".artifacts/lab/cases/heldout-suite-sample.ndjson",
       "cases": 10000,
       "historyDependent": 0
     },
     {
-      "perCase": ".artifacts/charter-20260916/evaluate/chrome/heldout-suite-sample-reverse/chrome-per-case.ndjson",
+      "perCase": ".artifacts/lab/rescore-v3-20260917/chrome/heldout-suite-sample-reverse/chrome-per-case.ndjson",
       "casesFile": ".artifacts/lab/cases/heldout-suite-sample.ndjson",
       "cases": 10000,
       "historyDependent": 0

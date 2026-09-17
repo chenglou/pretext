@@ -130,8 +130,12 @@ export function primaryFamilyOf(font: FontDecl): string {
 
 // FontFacts.opticalSizeAxis with its documented default: true for Gecko's system-font keywords, which resolve to the
 // macOS system font, whose opsz axis is a recorded browser fact (probes cross-cutting 5, specs/gecko-canvas.md §1.2 C1a).
+// Only the unquoted keyword is the generic: a quoted "system-ui" parses as a named family (SingleFontFamily::parse,
+// font.rs:707-768), so the default reads the parsed entry, not its name. A given primaryFamily names a family as the
+// browser realizes it, so the keywords there stand for themselves.
 export function opticalSizeAxisOf(font: FontDecl): boolean {
   if (font.facts.opticalSizeAxis !== null) return font.facts.opticalSizeAxis
-  const primary = primaryFamilyOf(font)
-  return primary === 'system-ui' || primary === '-apple-system'
+  if (font.facts.primaryFamily !== null) return font.facts.primaryFamily === 'system-ui' || font.facts.primaryFamily === '-apple-system'
+  const first = parseFamilyList(font.family)[0]!
+  return (first.kind === 'generic' && first.name === 'system-ui') || (first.kind === 'named' && first.syntax === 'identifiers' && first.name === '-apple-system')
 }
