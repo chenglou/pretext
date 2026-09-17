@@ -297,3 +297,7 @@ no lang, `und` and `xx` behave like `en`. Safari's own WebContent defaults weren
 - The Helvetica Neue feature that Firefox's OC letter spacing turns off.
 - Explanations marked [I] are inferred, not read at the pinned source: HarfBuzz's AAT shaper and context (blink-text
   H3), ICU `ubidi` and the trailing ZWJ (blink-text H29).
+
+## Installed Safari 27.0, 2026-09-16 16:44
+
+Statements above that installed Safari wasn't run predate this run. After the maintainer approved Safari runs, every WebKit probe ran in installed Safari 27.0 (22625.1.29.11.27): all 89 webkit-probes observations and `ok` values equal webkit-host's, the cross-check verdicts are identical row by row, and the 7 differing cross-check follow-ups come from process history (storage width, keep-all history, TextBreakingPositionCache). Details: specs/probes-safari.md, section 'Installed Safari 27.0'; outputs under .artifacts/probes/webkit/installed-safari/.
