@@ -1,4 +1,4 @@
-import { getGeckoLineBreaks } from './gecko-line-breaks.js'
+import { getGeckoLineBreaks, isDiscardable, isSpaceCombiningSequenceTail } from './gecko-line-breaks.js'
 import { canWebKitLineStartWith, getBlinkLineBreaks, getWebKitLineBreaks } from './line-breaks.js'
 
 export type WhiteSpaceMode = 'normal' | 'pre-wrap'
@@ -50,33 +50,13 @@ function isSegmentBreakRunSpace(code: number, run: SegmentBreakRemovalRun): bool
   return code === 0x20 || code === 0x09 || code === 0x0A || (code === 0x0D && run === 'blink')
 }
 
-function isGeckoBidiControl(code: number): boolean {
-  return code === 0x061C || code === 0x200E || code === 0x200F ||
-    (code >= 0x202A && code <= 0x202E) || (code >= 0x2066 && code <= 0x2069)
-}
-
-// A character a run continues through but never starts or ends on.
-function isSegmentBreakRunDiscardable(code: number, run: SegmentBreakRemovalRun): boolean {
-  return run === 'gecko' && (code === 0x00AD || isGeckoBidiControl(code))
-}
-
-// Gecko's combining sequence tail: bidi controls, then a cluster extender
-// other than ZWJ/ZWNJ, read as UTF-16 units.
-function startsGeckoSpaceCombiningSequenceTail(text: string, index: number): boolean {
-  for (; index < text.length; index++) {
-    const code = text.charCodeAt(index)
-    if (isGeckoBidiControl(code)) continue
-    return code === 0xFF9E || code === 0xFF9F || (code >= 0x0300 && combiningMarkRe.test(text[index]!))
-  }
-  return false
-}
-
 // CSS segment break transformation in normal white space. Blink and Gecko
 // delete a collapsible run containing LF when a ZWSP immediately precedes or
 // follows the run. Each engine collects its own run:
 // - Blink: SPACE, TAB, LF and CR.
-// - Gecko: SPACE, TAB and LF, continuing through SHY and bidi controls without
-//   ending on one, and leaving out a last SPACE before a combining sequence tail.
+// - Gecko: SPACE, TAB and LF, continuing through the characters Gecko discards
+//   (SHY and bidi controls) without ending on one, and leaving out a last SPACE
+//   before a combining sequence tail. Text holding a ZWSP is 16-bit in Gecko.
 // Characters outside the run, such as FF, keep the ordinary collapse.
 export function removeSegmentBreaksNextToZeroWidthSpace(text: string, profile: AnalysisProfile): string {
   const run = profile.segmentBreakRemovalRun
@@ -90,17 +70,17 @@ export function removeSegmentBreaksNextToZeroWidthSpace(text: string, profile: A
     for (let index = newline - 1; index >= 0; index--) {
       const code = text.charCodeAt(index)
       if (isSegmentBreakRunSpace(code, run)) start = index
-      else if (!isSegmentBreakRunDiscardable(code, run)) break
+      else if (!(run === 'gecko' && isDiscardable(code, false))) break
     }
     let end = newline + 1
     let index = end
     for (; index < text.length; index++) {
       const code = text.charCodeAt(index)
       if (isSegmentBreakRunSpace(code, run)) end = index + 1
-      else if (!isSegmentBreakRunDiscardable(code, run)) break
+      else if (!(run === 'gecko' && isDiscardable(code, false))) break
     }
     newline = text.indexOf('\n', index)
-    if (run === 'gecko' && text.charCodeAt(end - 1) === 0x20 && startsGeckoSpaceCombiningSequenceTail(text, end)) end--
+    if (run === 'gecko' && text.charCodeAt(end - 1) === 0x20 && isSpaceCombiningSequenceTail(text, end)) end--
     if (text.charCodeAt(start - 1) !== 0x200B && text.charCodeAt(end) !== 0x200B) continue
     result += text.slice(copied, start)
     for (let member = start; member < end; member++) {

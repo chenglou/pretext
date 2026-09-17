@@ -221,17 +221,18 @@ function isInvalidChar(ch: number): boolean {
 type Transformed = { text: string, units: Uint16Array, orig: Int32Array, skipped: Uint8Array }
 
 // IsDiscardable, nsTextFrameUtils.cpp:32-49
-function isDiscardable(ch: number, is8bit: boolean): boolean {
+export function isDiscardable(ch: number, is8bit: boolean): boolean {
   return ch === CH_SHY || (!is8bit && isBidiControl(ch))
 }
 const isSpaceOrTab = (ch: number) => ch === 0x20 || ch === 0x09
 const isSpaceOrTabOrSegmentBreak = (ch: number) => ch === 0x20 || ch === 0x09 || ch === 0x0a
 
 // IsSpaceCombiningSequenceTail(const char16_t*, int32_t), nsTextFrameUtils.cpp:24-30, on code units.
-function isSpaceCombiningSequenceTail(raw: Uint16Array, from: number): boolean {
-  for (let i = from; i < raw.length; i++) {
-    if (isClusterExtenderExcludingJoiners(raw[i]!)) return true
-    if (!isBidiControl(raw[i]!)) return false
+export function isSpaceCombiningSequenceTail(text: string, from: number): boolean {
+  for (let i = from; i < text.length; i++) {
+    const ch = text.charCodeAt(i)
+    if (isClusterExtenderExcludingJoiners(ch)) return true
+    if (!isBidiControl(ch)) return false
   }
   return false
 }
@@ -339,7 +340,7 @@ function transformText(input: string, raw: Uint16Array, is8bit: boolean, preserv
           j++
         }
         while (isDiscardable(raw[j - 1]!, is8bit)) { j--; trailingDiscardables++ } // :334-336
-        if (!is8bit && raw[j - 1] === 0x20 && j < len && isSpaceCombiningSequenceTail(raw, j)) { keepLastSpace = true; j-- } // :339-345
+        if (!is8bit && raw[j - 1] === 0x20 && j < len && isSpaceCombiningSequenceTail(input, j)) { keepLastSpace = true; j-- } // :339-345
         if (j > i) transformWhiteSpaces(i, j, hasSegmentBreak)
         if (keepLastSpace) { keep(j, 0x20); j++ }
         for (let k = 0; k < trailingDiscardables; k++) { skipped[j] = 1; j++ }
@@ -356,18 +357,18 @@ function transformText(input: string, raw: Uint16Array, is8bit: boolean, preserv
 }
 
 // IsTrimmableSpace, nsTextFrame.cpp:921-942, in normal white space.
-function isTrimmableSpace(raw: Uint16Array, pos: number, is8bit: boolean): boolean {
-  switch (raw[pos]) {
-    case 0x20: case 0x1680: return is8bit || !isSpaceCombiningSequenceTail(raw, pos + 1)
+function isTrimmableSpace(source: string, pos: number, is8bit: boolean): boolean {
+  switch (source.charCodeAt(pos)) {
+    case 0x20: case 0x1680: return is8bit || !isSpaceCombiningSequenceTail(source, pos + 1)
     case 0x0a: case 0x09: case 0x0d: case 0x0c: return true
     default: return false
   }
 }
 
 // HasCompressedLeadingWhitespace, nsTextFrame.cpp:2869-2887
-function hasCompressedLeadingWhitespace(raw: Uint16Array, skipped: Uint8Array, is8bit: boolean, preserveWhiteSpace: boolean): boolean {
+function hasCompressedLeadingWhitespace(source: string, skipped: Uint8Array, is8bit: boolean, preserveWhiteSpace: boolean): boolean {
   if (preserveWhiteSpace || skipped[0] === 0) return false
-  for (let k = 0; k < raw.length && skipped[k] === 1; k++) if (isTrimmableSpace(raw, k, is8bit)) return true
+  for (let k = 0; k < source.length && skipped[k] === 1; k++) if (isTrimmableSpace(source, k, is8bit)) return true
   return false
 }
 
@@ -996,7 +997,7 @@ export function getGeckoLineBreaks(
   for (let k = 0; k < words.length; k += 2) setupClusterBoundaries(g, tr.units, words[k]!, words[k + 1]!)
   for (let k = 0; k < runStarts.length; k++) g.clusterStart[runStarts[k]!] = 1 // gfxTextRun.cpp:2824-2831
 
-  const state = getBreakStates(tr.text, tr.units, is8bit, hasCompressedLeadingWhitespace(raw, tr.skipped, is8bit, preserveWhiteSpace), keepAll, wordSegmenter)
+  const state = getBreakStates(tr.text, tr.units, is8bit, hasCompressedLeadingWhitespace(source, tr.skipped, is8bit, preserveWhiteSpace), keepAll, wordSegmenter)
   for (let t = 1; t < n; t++) {
     const rawPos = tr.orig[t]!
     if ((state[t] === 1 && (g.clusterStart[t] === 1 || g.isSpace[t - 1] === 1)) || (tr.skipped[rawPos - 1] === 1 && raw[rawPos - 1] === CH_SHY)) {
