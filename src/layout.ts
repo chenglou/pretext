@@ -42,6 +42,7 @@ import {
   normalizePreparedLineStart,
   stepPreparedLineGeometryFromChunk,
   walkPreparedLinesRaw,
+  type PreparedLineBreakData,
 } from './line-break.js'
 import {
   buildLineTextFromRange,
@@ -52,32 +53,13 @@ import {
 
 declare const preparedTextBrand: unique symbol
 
-type PreparedCore = {
-  widths: number[] // Segment widths, e.g. [42.5, 4.4, 37.2]
-  kinds: SegmentBreakKind[] // Break behavior per segment, e.g. ['text', 'space', 'text']
-  simpleLineWalkFastPath: boolean // Normal text can use the simpler old line walker across all layout APIs
-  breakableFitAdvances: (number[] | null)[] // Per-grapheme fit advances for breakable segments, else null
-  letterSpacing: number // Extra advance between rendered graphemes on the same line
-  spacingGraphemeCounts: number[] // Rendered grapheme counts for letter-spacing gaps; empty when letterSpacing is 0
-  discretionaryHyphenWidth: number // Visible width added when a soft hyphen is chosen as the break
-  // Per segment, true for a soft hyphen whose neighboring text measures narrower
-  // joined than apart. Null when the text has no soft hyphen or the engine keeps
-  // an unfit hyphen.
-  discretionaryHyphenContexts: boolean[] | null
-  // Per segment, false where an engine's scan gives no break before text, glue,
-  // zero-width glue or a control, so no line ends there. Null without one.
-  breaksBefore: boolean[] | null
-  tabStopAdvance: number // Absolute advance between tab stops for pre-wrap tab segments
-  chunks: PreparedLineChunk[] // Precompiled hard-break chunks for line walking
-}
-
 // Keep the compact height-prediction handle opaque so the public API does not accidentally
 // calcify around the current parallel-array representation.
 export type PreparedText = {
   readonly [preparedTextBrand]: true
 }
 
-type InternalPreparedText = PreparedText & PreparedCore
+type InternalPreparedText = PreparedText & PreparedLineBreakData
 
 // Manual-layout handle that exposes the structural segment data used by
 // range/cursor APIs and custom rendering.
@@ -125,14 +107,6 @@ export type PrepareOptions = {
   letterSpacing?: number
 }
 
-// Internal hard-break chunk hint for the line walker. Not public because
-// callers should not depend on the current chunking representation.
-type PreparedLineChunk = {
-  startSegmentIndex: number
-  endSegmentIndex: number
-  consumedEndSegmentIndex: number
-}
-
 // --- Public API ---
 
 function createEmptyPrepared(includeSegments: boolean): InternalPreparedText | PreparedTextWithSegments {
@@ -148,6 +122,7 @@ function createEmptyPrepared(includeSegments: boolean): InternalPreparedText | P
       discretionaryHyphenWidth: 0,
       discretionaryHyphenContexts: null,
       breaksBefore: null,
+      lineStartProhibitions: null,
       tabStopAdvance: 0,
       chunks: [],
       segments: [],
@@ -417,7 +392,7 @@ function measureAnalysis(
   }
   const spacingGraphemeCounts: number[] = []
   const segments = includeSegments ? [] as string[] : null
-  const chunks: PreparedLineChunk[] = []
+  const chunks: PreparedLineBreakData['chunks'] = []
   let chunkStartSegmentIndex = 0
   const retreatsFromUnfitHyphen = engineProfile.unfitHyphenRetreat !== 'none'
   let discretionaryHyphenContexts: boolean[] | null = null

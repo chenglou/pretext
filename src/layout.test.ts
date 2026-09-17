@@ -1798,10 +1798,9 @@ describe('prepare invariants', () => {
       expect(layoutWithLines(prepareWithSegments('x 10\u201320\u00ADabcd', FONT), 58, LINE_HEIGHT).lines.map(line => line.text))
         .toEqual(['x 10\u201320-', 'abcd'])
 
-      // A hand-built handle without soft-hyphen contexts keeps the overflowing hyphen.
-      const handBuilt = { ...prepareWithSegments(text, FONT) } as Record<string, unknown>
-      Reflect.deleteProperty(handBuilt, 'discretionaryHyphenContexts')
-      expect(walkPreparedLinesRaw(handBuilt as unknown as Parameters<typeof walkPreparedLinesRaw>[0], width)).toBe(2)
+      // A handle without soft-hyphen contexts keeps the overflowing hyphen.
+      const withoutContexts = { ...prepareWithSegments(text, FONT), discretionaryHyphenContexts: null }
+      expect(walkPreparedLinesRaw(withoutContexts, width)).toBe(2)
     } finally {
       profile.unfitHyphenRetreat = previous
     }

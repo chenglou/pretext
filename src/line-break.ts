@@ -7,23 +7,28 @@ export type LineBreakCursor = {
   graphemeIndex: number
 }
 
+// The prepared handle's line-break data: parallel arrays per segment.
 export type PreparedLineBreakData = {
-  widths: number[]
-  kinds: SegmentBreakKind[]
-  simpleLineWalkFastPath: boolean
-  breakableFitAdvances: (number[] | null)[]
-  entryGeometry?: (SegmentEntryGeometry | null)[] | null
+  widths: number[] // Segment widths, e.g. [42.5, 4.4, 37.2]
+  kinds: SegmentBreakKind[] // Break behavior per segment, e.g. ['text', 'space', 'text']
+  simpleLineWalkFastPath: boolean // Normal text can use the simpler old line walker across all layout APIs
+  breakableFitAdvances: (number[] | null)[] // Per-grapheme fit advances for breakable segments, else null
+  entryGeometry: (SegmentEntryGeometry | null)[] | null // Per segment, how its tails fit on a fresh line; null without any
   // Per segment, false where an engine's scan gives no break before text, glue,
   // zero-width glue or a control, so no line ends there. Null without one.
-  breaksBefore?: boolean[] | null
+  breaksBefore: boolean[] | null
   // Per segment with breakable fit advances, the graphemes that can't start a line, which
   // a line holding only an overflowing first grapheme keeps. Null without any.
-  lineStartProhibitions?: (number[] | null)[] | null
-  letterSpacing: number
-  spacingGraphemeCounts: number[]
-  discretionaryHyphenWidth: number
-  discretionaryHyphenContexts?: boolean[] | null
-  tabStopAdvance: number
+  lineStartProhibitions: (number[] | null)[] | null
+  letterSpacing: number // Extra advance between rendered graphemes on the same line
+  spacingGraphemeCounts: number[] // Rendered grapheme counts for letter-spacing gaps; empty when letterSpacing is 0
+  discretionaryHyphenWidth: number // Visible width added when a soft hyphen is chosen as the break
+  // Per segment, true for a soft hyphen whose neighboring text measures narrower
+  // joined than apart. Null when the text has no soft hyphen or the engine keeps
+  // an unfit hyphen.
+  discretionaryHyphenContexts: boolean[] | null
+  tabStopAdvance: number // Absolute advance between tab stops for pre-wrap tab segments
+  // Hard-break chunks for line walking. Callers should not depend on this representation.
   chunks: {
     startSegmentIndex: number
     endSegmentIndex: number
@@ -523,12 +528,11 @@ export function canReturnFromUnfitHyphen(
   targetSegmentIndex: number,
   softHyphenIndex: number,
 ): boolean {
-  const discretionaryHyphenContexts = prepared.discretionaryHyphenContexts ?? null
+  const { discretionaryHyphenContexts, kinds } = prepared
   if (discretionaryHyphenContexts === null || getEngineProfile().unfitHyphenRetreat === 'none') return false
   for (let i = lineStartSegmentIndex; i <= softHyphenIndex; i++) {
     if (discretionaryHyphenContexts[i]) return false
   }
-  const { kinds } = prepared
   for (let i = targetSegmentIndex; i < softHyphenIndex; i++) {
     if (breaksAfter(kinds[i]!)) continue
     if (i > targetSegmentIndex && !breaksAfter(kinds[i - 1]!)) return false
@@ -555,6 +559,7 @@ function walkPreparedComplexLines(
     discretionaryHyphenWidth,
     letterSpacing,
     spacingGraphemeCounts,
+    breaksBefore,
   } = prepared
   const engineProfile = getEngineProfile()
   const lineFitEpsilon = engineProfile.lineFitEpsilon
@@ -563,15 +568,12 @@ function walkPreparedComplexLines(
   const availableWidth = Math.max(0, maxWidth)
   const fitLimit = availableWidth + lineFitEpsilon
   // Preparation records soft-hyphen contexts only where the engine retreats
-  // and the text has a soft hyphen; hand-built handles may omit them.
-  const discretionaryHyphenContexts = prepared.discretionaryHyphenContexts ?? null
-  const retreatsFromUnfitHyphen =
-    discretionaryHyphenContexts !== null && engineProfile.unfitHyphenRetreat !== 'none'
+  // and the text has a soft hyphen.
+  const retreatsFromUnfitHyphen = prepared.discretionaryHyphenContexts !== null && engineProfile.unfitHyphenRetreat !== 'none'
   // Blink's retry leaves room for the hyphen at every earlier opportunity. Gecko
   // returns to any opportunity whose line fits, such as a break between text segments.
   const retreatsAtFullWidth = retreatsFromUnfitHyphen && engineProfile.unfitHyphenRetreat === 'full-width'
   const reservedHyphenWidth = retreatsAtFullWidth ? 0 : discretionaryHyphenWidth
-  const breaksBefore = prepared.breaksBefore ?? null
 
   let lineStartSegmentIndex: number
   let lineStartGraphemeIndex: number
@@ -807,7 +809,7 @@ function walkPreparedComplexLines(
           if (hasContent) {
             lineEndSegmentIndex = i + 1
             lineEndGraphemeIndex = 0
-            if (i + 1 < chunk.endSegmentIndex && breaksBefore?.[i + 1] !== false) {
+            if (i + 1 < chunk.endSegmentIndex) {
               pendingBreakSegmentIndex = i + 1
               pendingBreakWidth = lineW + discretionaryHyphenWidth
               pendingBreakKind = kind
