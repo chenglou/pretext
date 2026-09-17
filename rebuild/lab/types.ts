@@ -5,12 +5,65 @@
 // apart from Safari's; it takes Safari's cases and is scored like Safari.
 export type BrowserKind = 'chrome' | 'safari' | 'firefox' | 'webkit-host'
 
-// The styled paragraph is defined once in rebuild/src/model.ts. A case describes the page, so its fonts are CSS fonts
-// without the font facts the library also takes; predictor.ts adds those (DESIGN.md §1.2), and they don't enter case ids.
-import type { CssFont, ExpectedObservation, Paragraph as LibraryParagraph, ParagraphLayout, ParagraphOf, TextRunOf } from '../src/model.ts'
+// The styled paragraph is defined once in rebuild/src/model.ts, as a tree of inline content (DESIGN.md §1.1). A case
+// describes the page, so its fonts are CSS fonts without the font facts the library also takes; predictor.ts adds those
+// (DESIGN.md §1.2), and they don't enter case ids.
+import type {
+  CssFont, ExpectedObservation, InlineElementOf, InlineNodeOf, LineSlot as LibraryLineSlot, Paragraph as LibraryParagraph, ParagraphLayout,
+  ParagraphOf,
+} from '../src/model.ts'
 export type FontDecl = CssFont
-export type TextRun = TextRunOf<CssFont>
-export type Paragraph = ParagraphOf<CssFont>
+// The tree the library takes, with the page's CSS fonts: what cases that use inline structure, atomic inlines, <br>,
+// <wbr>, text-indent or text-align describe (DESIGN.md §8.3 stage 5).
+export type InlineParagraph = ParagraphOf<CssFont>
+export type InlineNode = InlineNodeOf<CssFont>
+export type InlineElement = InlineElementOf<CssFont>
+export type LineSlot = LibraryLineSlot
+
+// The flat case format of every case file written through 2026-09-17: one level of spans and bare text nodes, the
+// block's wrapping styles on every run, no box edges. predictor.ts turns it into the equivalent tree (DESIGN.md §1.1,
+// "Flat paragraphs"). A case id hashes this form, so ids and baselines keep their keys.
+export type TextRun = {
+  text: string
+  // 'span': the text in its own <span> carrying this run's styles. 'text': a bare text node inheriting the paragraph's
+  // styles; its font, letterSpacing, wordSpacing and lang must equal the paragraph's.
+  node: 'span' | 'text'
+  font: CssFont
+  letterSpacing: number
+  wordSpacing: number
+  // The span's lang attribute; null inherits the paragraph's.
+  lang: string | null
+}
+export type Paragraph = {
+  runs: TextRun[]
+  font: CssFont
+  letterSpacing: number
+  wordSpacing: number
+  width: number
+  lineHeight: number
+  whiteSpace: InlineParagraph['whiteSpace']
+  wordBreak: InlineParagraph['wordBreak']
+  overflowWrap: InlineParagraph['overflowWrap']
+  lineBreak: InlineParagraph['lineBreak']
+  tabSize: number
+  direction: InlineParagraph['direction']
+  lang: string
+}
+
+// What a case whose content isn't flat adds to its paragraph (DESIGN.md §1.1, §2.9, §8.3 stage 5): the block's children as
+// the library's tree with the page's CSS fonts, the block's text-indent and text-align, and the line slots its floats make.
+// The case's `paragraph` keeps the block's styles and width, and its `runs` list the tree's text leaves in document order,
+// each with the font, spacing and language it sits under (cases/case.ts leafRuns), so tools that index text nodes by run
+// index leaves. A tree that is flat (DESIGN.md §1.1, "Flat paragraphs") never carries this: makeCase drops it, so the case
+// keeps its flat id.
+export type InlineStructure = {
+  content: InlineNode[]
+  textIndent: number
+  textAlign: InlineParagraph['textAlign']
+  // Per line box from the first, the CSS px its row's floats take off each side; empty without floats. On each side every
+  // row's inset is positive, or every row's is 0 (DESIGN.md §2.9, "The lab protocol").
+  lineSlots: LineSlot[]
+}
 
 export type Case = {
   id: string
@@ -21,6 +74,8 @@ export type Case = {
   // <html lang> of the page the case runs in.
   pageLang: string
   paragraph: Paragraph
+  // Absent for a flat paragraph.
+  inline?: InlineStructure
   // Browsers the case applies to; absent means all.
   browsers?: BrowserKind[]
   // Web fonts the page must load before observing, by family name from tests/wrapping/fonts/fonts.json
@@ -66,6 +121,30 @@ export type PageEnv = {
   // reloads on every page-context change, so this is the case's in-page history. Absent in rows from before these fields.
   documentCaseIndex?: number
   previousCaseId?: string | null
+  // navigator.languages and new Intl.DateTimeFormat().resolvedOptions().locale when the case ran: evidence of the browser
+  // process's languages, recorded next to the ones the driver gave (LabRow.languages). The library reads neither. Absent
+  // in rows from before these fields.
+  navigatorLanguages?: string[]
+  intlLocale?: string
+}
+
+// The languages a browser process uses for content without a usable lang (DESIGN.md §1.4, CHARTER.md "Boundaries"): what
+// the driver launched the browser with, the OS settings it read offline where the browser takes them from the OS, and the
+// given facts it derived for the library, each with its source. Research tooling may read OS settings; the library
+// doesn't.
+export type ProcessLanguages = {
+  // Launch arguments and profile prefs the driver set; null for a browser whose languages can't be set per launch.
+  launch: { arguments: string[]; prefs: Record<string, string> } | null
+  // `defaults read -g AppleLanguages` and `AppleLocale`, and launchd's LC_ALL, LC_MESSAGES and LANG (`launchctl getenv`),
+  // read before launch. null where a read failed.
+  os: { appleLanguages: string[] | null; appleLocale: string | null; launchdEnvironment: Record<string, string> }
+  // The process-language fields of GivenFacts for the engine (src/env.ts). null values report ui-language.
+  given:
+    | { engine: 'blink'; uiLanguage: string | null }
+    | { engine: 'webkit'; preferredLanguages: string[] | null; icuDefaultLocale: string | null }
+    | { engine: 'gecko'; regionalPrefsLocale: string | null }
+  // How each given value was derived, citing the engine source it follows.
+  derivation: string[]
 }
 
 // One code point of the concatenated run text.
@@ -93,6 +172,11 @@ export type NativeObservation = {
   // Named families in the paragraph's or runs' font lists that the page couldn't resolve (a probe string measured the
   // same as with two generic fallbacks), so native layout used a fallback. Absent in rows from before this field.
   missingFonts?: string[]
+  // Cases with inline structure only. Per element in document order (spans, atomic inlines, <br>, <wbr>; the block
+  // excluded): Element.getClientRects() relative to the paragraph's content box.
+  elements?: Rect[][]
+  // Cases with line slots only: the border boxes of the slot floats, row by row, the left float before the right one.
+  floats?: Rect[]
 }
 
 export type PredictionLine = {
@@ -151,10 +235,14 @@ export type LabRow = {
   browser: BrowserKind
   // The browser build the driver read before launch. Absent in rows from before the driver recorded it.
   build?: BrowserBuild
+  // The browser process's languages as the driver set, read and gave them. Absent in rows from before 2026-09-17.
+  languages?: ProcessLanguages
   // The case exactly as the driver served it.
   case: Case
   env: PageEnv
-  native: NativeObservation | { error: string }
+  // `skipped`: run.ts --predict-only records predictions without observing native layout; score.ts --native-rows takes the
+  // native observation from another run's row for the same case.
+  native: NativeObservation | { error: string } | { skipped: string }
   prediction: EnginePrediction | LinesPrediction | { error: string }
   // null when paint returned null or there was no prediction.
   painter: PainterObservation | { error: string } | null

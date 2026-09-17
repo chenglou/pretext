@@ -9,10 +9,17 @@ doesn't depend on the old library in `src/`.
 - `predictor.ts`: the prediction hook, the only library-facing import in the page.
 - `observe/`: the observation ports, one per engine (DESIGN.md §9). Each derives, from a layout, the Range rects its
   browser reports, by that engine's geometry code, and imports only types from `src/model.ts`.
-- `run.ts`: the driver. It reads the browser build from the app bundle, serves the page, opens one background browser
-  session and streams rows to NDJSON.
+- `run.ts`: the driver. It reads the browser build from the app bundle, sets or reads the browser process's languages,
+  serves the page, opens one background browser session and streams rows to NDJSON.
+- `languages.ts`: the browser-process languages each browser launches with, and the given facts the driver derives for
+  the library (see "Browser-process languages"); `languages.test.ts` its rules.
 - `score.ts`: the offline scorer.
-- `score.test.ts`: the scorer's comparison rules on small hand-made rows (`bun test rebuild/lab/score.test.ts`).
+- `score.test.ts`: the scorer's comparison rules on small hand-made rows (`bun test rebuild/lab/score.test.ts`), built with
+  `row-fixtures.ts`.
+- `triage.ts`: triage records for the cases where main passes and the rebuild fails (see "Triage records");
+  `triage.test.ts` its rules.
+- `gate.ts`: the no-regression gate over scored runs, and `gate.test.ts` its rules.
+- `cases/seal.ts`: seals a held-out case set (see "Sealed held-out sets").
 - `tsconfig.json`: the repo's strict settings over the lab and its case generators
   (`bunx tsc -p rebuild/lab/tsconfig.json --noEmit`).
 - `VALIDATION.md`: what the end-to-end validation ran, found and fixed.
@@ -38,31 +45,37 @@ bun rebuild/lab/score.ts --rows=.artifacts/lab/smoke/chrome-rows.ndjson --cases=
 120000), `--predictor=<file>`, which bundles another module in place of `predictor.ts` for experiments, and
 `--order=file|reverse|shuffle:<seed>`, the order the selected cases run in (default `file`; see "Page-history
 dependence"). `--allow-safari-frontmost` (Safari only, no value) skips the wait for Safari to leave the front
-(approved by the maintainer on 2026-09-16); the lab window then opens over the user's windows.
+(approved by the maintainer on 2026-09-16); the lab window then opens over the user's windows. `--predict-only` (no
+value) skips native observation: rows keep their format with `native: { skipped: 'predict-only' }`, the predictor and
+painter still run, and `run.json` records `predictOnly` and `totals.skippedNativeRows`. Score such rows with `score.ts
+--native-rows`.
 
 Before launching, it reads the build from the app bundles, because user agents can't tell builds apart (Chrome's says
 `153.0.0.0` for every 153 build): Chrome's and Firefox's `CFBundleShortVersionString`, which are also the engine builds;
 Safari's, with WebKit.framework's `CFBundleVersion` as the engine build, for Safari and for webkit-host, whose user agent
 copies installed Safari's version; and the OS build from `sw_vers -buildVersion`. Every row carries it as `build`, and the
-page gives the engine build to the predictor. It writes `<out>/<browser>-rows.ndjson`, one row per case, and
-`<out>/<browser>-run.json` with the build, totals, the case order, page contexts, the environment and errors. It exits
-nonzero when anything goes wrong: invalid cases, a launch or page failure, a stall, a native observation error, a missing
-row, a user agent that doesn't name the build read before launch, or a change of user agent, DPR or visual-viewport scale
-during the run. A prediction error is a result, not a lab failure.
+page gives the engine build to the predictor. Every row also carries `languages` (see "Browser-process languages"). It
+writes `<out>/<browser>-rows.ndjson`, one row per case, and `<out>/<browser>-run.json` with the build, the languages,
+totals, the case order, page contexts, the environment, the languages pages report and errors. It exits nonzero when
+anything goes wrong: invalid cases, a launch or page failure, a stall, a native observation error, a missing row, a user
+agent that doesn't name the build read before launch, Chrome renderers without one agreed `--lang`, or a change of user
+agent, DPR, visual-viewport scale or reported languages during the run. A prediction error is a result, not a lab
+failure.
 
 ## Browser sessions
 
 Sessions stay in the background and never activate a window.
 
 - Chrome: installed Chrome, headed, in its own `--user-data-dir` under `.artifacts/profiles/`, started with
-  `open -n -g -a` and `--no-startup-window --remote-debugging-port=0`. Headless Chrome can lay out at zoom 1 while
-  reporting DPR 2. Chrome activates itself whenever it shows a window the normal way, `open -g` or not (a startup
-  window took focus for half a second), so the driver opens the lab window with the DevTools protocol's
+  `open -n -g -a` and `--no-startup-window --remote-debugging-port=0`, plus `-AppleLanguages` and a
+  `Default/Preferences` file with the accept languages (see "Browser-process languages"). Headless Chrome can lay out at
+  zoom 1 while reporting DPR 2. Chrome activates itself whenever it shows a window the normal way, `open -g` or not (a
+  startup window took focus for half a second), so the driver opens the lab window with the DevTools protocol's
   `Target.createTarget { newWindow: true, background: true }`, which Chrome shows inactive. It uses the protocol for
   nothing else.
 - Firefox: headed, in its own profile under `.artifacts/profiles/`, started with `open -n -g -a Firefox --args
-  --new-instance`. macOS 27 blocks a shell-spawned Firefox from its data folders, and headless Firefox draws emoji at
-  odd widths.
+  --new-instance`, with its language prefs in `user.js`. macOS 27 blocks a shell-spawned Firefox from its data folders,
+  and headless Firefox draws emoji at odd widths.
 - Safari: a single-tab window in the user's Safari, created through AppleScript without activating it
   (safaridriver doesn't work on macOS 27). A new document in a frontmost Safari opens over the user's windows and
   takes keyboard focus there, so the driver first waits, for at most 10 minutes, until Safari isn't the frontmost
@@ -84,14 +97,44 @@ The page navigates itself. Apart from opening Chrome's window, no remote debuggi
 closes the browser it opened (Chrome and Firefox get SIGTERM, then SIGKILL; webkit-host gets 2 s to exit by itself
 first) and moves their profiles to the Trash. It launches once and never retries.
 
+## Browser-process languages
+
+The languages an engine uses for content without a usable `lang` are given facts of the library (DESIGN.md §1.4). The
+library never reads them from the OS; the driver is research tooling, so it may set them at launch or read the OS setting
+a browser takes them from (CHARTER.md, "Boundaries"). `languages.ts` holds the rules with their citations. Each row's
+`languages` records `launch` (arguments and prefs), `os` (`defaults read -g AppleLanguages` and `AppleLocale`, launchd's
+`LC_ALL`, `LC_MESSAGES` and `LANG`), `given` (the facts the page passes to `predict`) and `derivation`.
+
+- Chrome, `uiLanguage`: Blink's `DefaultLanguage()` is the renderer's `--lang` switch, which the browser appends from its
+  application locale. On macOS that locale is the bundle's first preferred localization over the process's
+  `AppleLanguages`, and a `--lang` launch switch is ignored. So Chrome launches with `-AppleLanguages ("zh-Hans-US",
+  "en-US")`, this Mac's list on 2026-09-17, which keeps the zh-CN locale every earlier Chrome run had without drifting
+  with the OS settings, and the accept languages `zh-CN,zh`. The driver reads the given fact back from the renderer
+  processes' command lines at the page's first step.
+- Firefox, `regionalPrefsLocale`: layout takes the first OS regional-prefs locale, which on macOS is
+  `CFLocaleCopyPreferredLanguages()` canonicalized; no pref reaches it. The driver derives it from `AppleLanguages`
+  (`zh-hans-us` here) and sets `intl.locale.requested`, `intl.accept_languages` and `intl.regional_prefs.use_os_locales`
+  explicitly, which decide only the app locale, `navigator.languages` and Intl formatters.
+- Safari and webkit-host, `preferredLanguages` and `icuDefaultLocale`: Safari takes its languages from the OS and can't
+  take others per launch, and webkit-host stands in for Safari, so neither is launched with languages. The page sends
+  `navigator.languages` with its first step, which WebKit fills with the first entry of the WebContent process's
+  preferred languages, the list `FontDescription` reads for a Han `lang`. When that entry starts with `zh-` it decides the
+  rule, and the given list is that entry; otherwise the list stays unknown and reports `ui-language`. webkit-host on this
+  Mac shows `zh-CN` where the global `AppleLanguages` start with `zh-Hans-US`, so the list isn't the UI process's raw
+  `AppleLanguages`, whatever WebKit does in between. The ICU default locale comes from launchd's locale variables, else
+  `en_US_POSIX` (specs/webkit-gaps.md §8.2 [I]).
+
+Pages record `navigatorLanguages` and `intlLocale` in `env` as evidence next to the given facts. `environmentKey` names
+the given facts, so rows with other process languages never meet in a baseline.
+
 ## Page protocol
 
 The server serves `/lab?run=<id>&lang=<pageLang>&fonts=<families>`. `<html lang>` is set in the markup, so it holds
 before any script measures. The page loads the listed fixture web fonts (`Case.fontFixtures`, from
 `tests/wrapping/fonts`, hashes checked by the driver) as `FontFace` objects, then posts to `/api/step`. Replies carry
-a chunk of cases, a navigation to another page context, or done. A page context is a page language plus its fixture
-fonts. Cases are put in `--order`, then grouped by context, stable in order of first appearance, and every context
-change reloads the page.
+a chunk of cases with the build, the given languages and whether native observation is skipped, a navigation to another
+page context, or done. A page context is a page language plus its fixture fonts. Cases are put in `--order`, then grouped
+by context, stable in order of first appearance, and every context change reloads the page.
 Canvas contexts therefore start fresh under the new language, and installed-font cases never share a document with
 web fonts. Only fetch promises drive the loop, so background timer throttling can't stall it.
 
@@ -110,21 +153,25 @@ For each case the page:
    rect over the owning run's text node, relative to the paragraph's content box. It also records `runRects`: the
    rects of a Range over each run's whole text node.
 4. Records the paragraph height and the environment: user agent, DPR, visual-viewport scale, page language,
-   fixture fonts, window sizes, visibility and focus, plus the document's history: `documentCaseIndex`, how many
-   cases the document observed before this one, and `previousCaseId`, the last of them (null for the first).
-5. Calls `predict(c, { browser, build })`. When it returns a layout, the page runs `observe/<engine>.ts` over it,
-   measuring Canvas live where the port asks (only the WebKit port does), and records the prediction. Then it calls
+   fixture fonts, window sizes, visibility and focus, `navigator.languages` and the default Intl locale, plus the
+   document's history: `documentCaseIndex`, how many cases the document observed before this one, and `previousCaseId`,
+   the last of them (null for the first).
+5. Calls `predict(c, { browser, build, languages })`. When it returns a layout, the page runs `observe/<engine>.ts` over
+   it, measuring Canvas live where the port asks (only the WebKit port does), and records the prediction. Then it calls
    `paint(c, prediction, host)`. If that returns elements, one per line with a line box, the page appends them to a host
    of the paragraph's width. For each element it records the height, the Range rects of every text node inside it and
    their horizontal extent, the text of those nodes in document order, and every Range rect of each of its code points.
 
+Under `--predict-only` the page skips steps 1-3 and records `native: { skipped: 'predict-only' }`.
+
 ## Prediction hook
 
-`predictor.ts` exports `predict(c, { browser, build }): LayoutPrediction | { error }` and `paint(c, prediction, host):
-HTMLElement[] | null`. A `LayoutPrediction` is the library's input, the case paragraph with the font facts the predictor
-gives (all unknown today), and the `ParagraphLayout` it computed with `build` as `GivenFacts.build`. The page records an
-`EnginePrediction`: the layout without its Canvas call log, `measure` with the counts of contexts, calls and memo hits,
-and `observation`, the rects the observation port expects, or the error it threw. `paint` paints the same layout.
+`predictor.ts` exports `predict(c, { browser, build, languages }): LayoutPrediction | { error }` and `paint(c, prediction,
+host): HTMLElement[] | null`. A `LayoutPrediction` is the library's input, the case paragraph with the font facts the
+predictor gives and the process languages the driver gave, and the `ParagraphLayout` it computed with `build` as
+`GivenFacts.build`. The page records an `EnginePrediction`: the layout without its Canvas call log, `measure` with the
+counts of contexts, calls and memo hits, and `observation`, the rects the observation port expects, or the error it
+threw. `paint` paints the same layout.
 
 A predictor swapped in with `--predictor` may return line ranges alone, `{ lines: [{ start, end, width }], measureLog? }`
 (`baselines/main-predictor.ts` does). The page records those as they are and doesn't paint. Rows recorded before the
@@ -135,21 +182,40 @@ observation ports, 2026-09-16 and earlier, carry that shape too.
 `score.ts` streams rows and compares each row's native rects exactly with the rects its observation port expects
 (DESIGN.md §9). The case carried by each row supplies the text and styles. `--cases` restricts scoring to those ids and
 fails when a row observed a different version of a case. `--native-compare=<other rows file>` compares two runs' native
-observations (see "Page-history dependence"). Imported as a module, `score.ts` runs nothing and exports `scoreRow`,
-`nativeLines`, `nativeView`, `nativeDifference`, `environmentKey`, `rowText` and `readLines` with their types, so tools
-that compare rows use the scorer's rules. `SCORER_VERSION` is 2; version 1 derived native lines and widths from visibility
-rules, and its rules and their evidence are in this file's git history.
+observations (see "Page-history dependence"). `--native-rows=<rows file>` scores rows from `run.ts --predict-only`
+against another run's native observations: each row takes the native observation, environment and native timing of the
+other file's row for its case id (found by byte offset, not held in memory). The scorer refuses (exit 1) a row that has
+its own native observation, a native row without one, a different case, or another environment (browser, app bundle
+build, given process languages, user agent, DPR, visual-viewport scale, page language or fixture fonts). A row with no
+native row stays unobserved ('native observation skipped'), the summary's `nativeRows` counts `used` and `missing`, and
+any missing row makes the scorer exit 1. `--sealed` writes counts only, per browser, metric, reason category and gap, with
+no case ids, texts, families or examples, and takes no `--per-case` or `--examples` (see "Sealed held-out sets").
+Imported as a module, `score.ts` runs nothing and exports `scoreRow`, `nativeLines`, `nativeView`, `nativeDifference`,
+`lineRangeDiagnostics`, `withNativeRow`, `indexRows`, `readRowAt`, `environmentKey`, `rowText` and `readLines` with their
+types, so tools that compare rows use the scorer's rules. `SCORER_VERSION` is 3. Version 1 derived native lines and
+widths from visibility rules; version 2 grouped every rect into native lines by vertical centre. Their rules and evidence
+are in this file's git history.
 
-Native lines. One observer assumption stays until vertical metrics are ported: rect centres on one line differ by less
-than half the paragraph's px line height, and centres on different lines by half a line height or more. Every inline box
-carries the line height and sits on its line's baseline, so only font metrics move centres within a line: Safari rounds
-half-leading per line (Amiri 18px at line height 30 gives lines 29.984375px apart), and Firefox sizes a text frame by the
-fonts it uses (an emoji line's rects are 21px tall, the next line's 19px). Every code point rect and whole-node rect with
-positive height is grouped, zero-width ones included, and native lines are numbered from the top. A rect without positive
-height, as Firefox reports for a frame without height, is placed on no line. Re-scoring every final-20260916 row set,
-no line count version 1 observed moved from pass to fail. 5 WebKit cases moved from fail to pass: version 1 dropped a
-line whose code points report only zero-width rects while a whole-node rect has the width. Every case version 1 left
-unobserved because the paragraph height disagreed with its lines now has an observed count.
+Native lines. A rect without positive height, as Firefox reports for a frame without height, is placed on no line.
+The rest follow three rules:
+
+1. A code point rect is on the line of the whole-node rect of its own node that reports the same box. Blink slices the
+   fragment item's rect and Gecko cuts the continuation frame's rect, so y and height equal the box's; WebKit reports a
+   whole box's rect, or a snapped selection rect whose y is the box's y truncated to a LayoutUnit (observe-webkit E3).
+   A code point rect no node rect holds falls back to rule 3; the summary counts them as `native.pointRectsByCentre`.
+2. Rects of one node with equal tops are on one line in Blink and WebKit, since a node's boxes share one style and so one
+   ascent on the line's baseline. Gecko sizes each text frame by the fonts it uses, so each Firefox node rect stands alone.
+3. Observer assumption, across nodes, until vertical metrics are ported: the node lines of rule 2 group by vertical
+   centre. Centres on one line differ by less than half the paragraph's px line height, and centres on different lines
+   by half a line height or more. Every inline box carries the line height and sits on its line's baseline, so only
+   font metrics move centres within a line: Safari rounds half-leading per line (Amiri 18px at line height 30 gives
+   lines 29.984375px apart), and Firefox sizes a text frame by the fonts it uses (an emoji line's rects are 21px tall,
+   the next line's 19px). Native lines are numbered from the top. Painted lines still group all their rects by centre,
+   because painted code points aren't mapped to nodes.
+
+Re-scoring the evaluation rows of 2026-09-17 (smoke, runs, ws and policy, forward against reverse, in Chrome, Firefox and
+webkit-host) with version 3 gives per-case files equal to version 2's on all 16,511 cases, with every positive code point
+rect placed by rule 1.
 
 Facts. Per code point and per node, the observed rects equal the expected rects in count and order, and each x and width
 is bit-equal to the expected value, which the port computes after the engine's rounding. The summary and the per-case
@@ -188,19 +254,29 @@ Metrics per case. `unobserved` and `not-applicable` are never passes.
   width is. It compares extents only: painted code point rects aren't mapped to source code points, because `paint`
   doesn't report the painted text's source offsets.
 
-A prediction without an engine layout (an external predictor, or a row from before the observation ports) is scored for
-lineCount against its predicted lines and for painted lines that wrap. Its breaks are unobserved, widths not applicable,
-and the painter otherwise unobserved. An observation port error leaves every metric unobserved.
+A prediction of line ranges alone (main's predictor, or a row from before the observation ports) is scored for lineCount
+against its predicted lines and for painted lines that wrap. Its breaks are unobserved and its widths not applicable: no
+port derives the rects such a prediction implies, and its widths are its own observer's extents. Two diagnostics go in
+the per-case file (`diagnostics`) and the summary (`lineRangeDiagnostics`); they are not metrics and never gate:
+
+- `visibleBreaks`: every code point whose positive-width rects all sit on one native line lies in the predicted line of
+  that index;
+- `zeroWidthPlacement`: every code point outside white space whose placed rects all have zero width and sit on one native
+  line lies in the predicted line of that index.
+
+Both are unobserved when the line counts differ or nothing qualifies. An observation port error leaves every metric
+unobserved.
 
 The summary (`--out`) has counts per browser and per family, reasons, facts, and per gap how many rows report it and how
 many of those fail lineCount or breaks. It keeps a histogram of engine width minus native extent (LayoutUnits in Chrome,
 app units in Firefox, 1/64 px in WebKit), timings, and failure and unobserved examples with the case text, the native
 lines' code points, the engine lines with their widths and gaps, and the first predicted value that differs.
-`environments` counts rows per `environmentKey`: browser, app and engine builds, OS build, DPR, visual-viewport scale and
-scorer version, or the user agent for rows from before the driver recorded builds. `missingFonts` counts rows whose page
-couldn't resolve a named family. `native` counts native line counts and unplaced rects. `historyDependent` is described
-below. `--per-case` writes each case's four metrics, its facts, the gaps its layout reports, and `historyDependent` with
-the difference when a comparison found one.
+`environments` counts rows per `environmentKey`: browser, app and engine builds, OS build, DPR, visual-viewport scale, the
+given process languages and scorer version, or the user agent for rows from before the driver recorded builds.
+`missingFonts` counts rows whose page couldn't resolve a named family. `native` counts native line counts, unplaced rects
+and code point rects placed by centre. `historyDependent` is described below. `--per-case` writes each case's four
+metrics, its facts, its diagnostics, the gaps its layout reports, and `historyDependent` with the difference when a
+comparison found one.
 
 ## Page-history dependence
 
@@ -237,6 +313,54 @@ bun rebuild/lab/score.ts --rows=<dir>/reverse/webkit-host-rows.ndjson --cases=<c
 - Each row's `env.documentCaseIndex` and `env.previousCaseId` say which cases the document observed before it. To test
   one suspect, run a case file holding the case alone and one holding the suspect then the case: a single-case run
   gets a fresh document in a fresh browser process.
+
+## Comparing another predictor on the same observations
+
+Main's predictor, or any predictor returning line ranges, runs with `--predict-only` and scores against a native run of
+the same case file in the same environment:
+
+```sh
+python3 .artifacts/session/with-browser-lock.py lab-main -- bun rebuild/lab/run.ts --browser=chrome --cases=<cases> \
+  --out=<dir>/main --predictor=rebuild/lab/baselines/main-predictor.ts --predict-only
+bun rebuild/lab/score.ts --rows=<dir>/main/chrome-rows.ndjson --native-rows=<dir>/forward/chrome-rows.ndjson \
+  --out=<dir>/main/chrome-summary.json --per-case=<dir>/main/chrome-per-case.ndjson
+```
+
+## Triage records
+
+`triage.ts` writes research/TEST-ARCHITECTURE.md §7.1's records for the cases where main passes and the rebuild fails,
+from rows only, with the scorer's rules:
+
+```sh
+bun rebuild/lab/triage.ts --rows=<rebuild rows, file order> --reverse-rows=<rebuild rows, reverse> \
+  --main-rows=<main rows> [--main-reverse-rows=<main rows, reverse>] [--decisions=<decisions.ndjson>] \
+  --out=rebuild/lab/triage/main-<browser>.ndjson --summary=<summary.json>
+```
+
+- Population: main's line count passes, and the rebuild fails lineCount, or fails breaks while main's visible breaks don't
+  fail. Main's predict-only rows take the rebuild row's native observation.
+- `class`: A, main's count right and visible breaks wrong; B, nothing shows where main's lines start; C, main passes
+  everything observable. Class D (widths only) can't arise, since main's widths aren't compared.
+- `isolation`: `moved` when the reverse run, or main's own session, derives other native lines; `unchecked` without
+  reverse rows.
+- `outcome`, by the first rule that applies: undecided when the isolation moved (a page-history case, TEST-ARCHITECTURE
+  §6.5); accidental for class A; accidental when main's prediction changes and fails in reverse order; accidental,
+  `provisional`, when main's zero-width placement fails; undecided for class B; a fact to learn for class C, with `fact`,
+  `probe` and `family` null until they exist. An opinion dropped needs a decision record (`{ labCase, browser, outcome,
+  fact?, probe?, family?, reason }`), which overrides the rule and sets `decidedBy: 'hand'`.
+- Each record also names main's case ids from the lab case's origin, the metrics main's suite required, the rebuild's and
+  main's statuses, the gaps the rebuild's layout reports, and the environment key.
+
+## Sealed held-out sets
+
+`bun rebuild/lab/cases/seal.ts --out-dir=.artifacts/lab/sealed --label=sealed-<date>` generates runs, ws and policy from a
+fresh random seed and a 10,000-case suite sample drawn by one quota per family, without any case id used so far: every
+case file a `run.json` under `.artifacts` names, every file under `.artifacts/lab/cases` and
+`.artifacts/lab/final-20260916/cases`, and `smoke-cases.ndjson`. The census's full-suite chunks aren't excluded, since they
+hold every suite case. The seed goes only into `<out-dir>/SEAL.json`, with the sha256 of every file; origins and
+summaries name it by its label (`generate.ts --seed-label`). `rebuild/lab/baselines/<label>.json` holds the same record
+without the seed, for the repository. Owners must not open, run or score the files before the evaluation stage; then
+they run like any case file and score with `score.ts --sealed`. Any look at a case burns the set (TEST-ARCHITECTURE §3).
 
 ## Range geometry, per browser
 

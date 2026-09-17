@@ -11,7 +11,43 @@ export type EngineName = 'blink' | 'webkit' | 'gecko'
 // A layout for another build, or for an unknown one, reports the engine-build gap.
 export const PINNED_BUILDS = { blink: '153.0.8010.48', webkit: '22625.1.29.11.27', gecko: '156.0' } as const satisfies Record<EngineName, string>
 
-export type BlinkEnvironment = {
+// The languages a browser process uses for content without a usable lang, per engine (DESIGN.md §1.4). No page API shows
+// them, and the library never reads them from the OS, so they are given facts; the lab sets or reads them when it
+// launches a browser (lab/types.ts ProcessLanguages). A null value is laid out with the root locale and reports
+// ui-language wherever it decides a result.
+export type BlinkProcessLanguages = {
+  // DefaultLanguage(): the canonicalized Platform::DefaultLocale(), Chrome's application locale, taken once per renderer
+  // (InitializePlatformLanguage and DefaultLanguage, language.cc:62-99). It opens the break table for content with no
+  // locale, is the retry locale of ko@lb=strict, and picks generic families and the HarfBuzz language
+  // (specs/blink-canvas.md §2.3; probes blink-canvas H22, H23).
+  uiLanguage: string | null
+}
+
+export type WebKitProcessLanguages = {
+  // WTF::userPreferredLanguages() of the WebContent process: the override languages the UI process sends in the bootstrap
+  // message when it sets them (XPCServiceMain.mm:62-78, 181-192; WebProcessPool.cpp:990; OverrideLanguages.cpp:38), else
+  // the system's preferred languages. A Han lang becomes the first entry starting with zh- (specs/webkit-canvas.md §1.3).
+  preferredLanguages: readonly string[] | null
+  // uloc_getDefault() of the WebContent process: en_US_POSIX unless launchd passes LANG or LC_* (specs/webkit-gaps.md
+  // §8.2). The quote overrides of a locale ICU has no data for fall back through it (§8.3).
+  icuDefaultLocale: string | null
+}
+
+export type GeckoProcessLanguages = {
+  // The first OSPreferences::GetRegionalPrefsLocales entry, lowercased (nsLanguageAtomService::GetLocaleLanguage,
+  // nsLanguageAtomService.cpp:107-138). On macOS that is the OS's system locales (OSPreferences.cpp:445-458,
+  // mac/OSPreferences_mac.cpp:59-63), whatever intl.locale.requested says: the style language of content without lang in
+  // a UTF-8 document, which decides the ja/zh segment-break rule and the shaping language (specs/gecko-text.md §2.4; probe
+  // gecko-text H15). Firefox's navigator.language comes from accept-languages instead.
+  regionalPrefsLocale: string | null
+}
+
+export type ProcessLanguages =
+  | ({ engine: 'blink' } & BlinkProcessLanguages)
+  | ({ engine: 'webkit' } & WebKitProcessLanguages)
+  | ({ engine: 'gecko' } & GeckoProcessLanguages)
+
+export type BlinkEnvironment = BlinkProcessLanguages & {
   engine: 'blink'
   // The app bundle version the caller runs, or null.
   build: string | null
@@ -23,15 +59,11 @@ export type BlinkEnvironment = {
   // The document's Content-Language (HTTP header or <meta http-equiv>), or null when it has none: the root locale when
   // no element has lang (specs/blink-text.md §2.F.3). Pages can't read the header, so it is given.
   contentLanguage: string | null
-  // DefaultLanguage(), Chrome's application locale: the break table for content without a locale, the retry locale of
-  // ko@lb=strict, generic families and the HarfBuzz language (specs/blink-canvas.md §2.3; probes blink-canvas H22, H23).
-  // null: such content reports ui-language.
-  uiLanguage: string | null
   // Intl.v8BreakIterator runs the same ICU 78.2 and icudtl.dat as layout (specs/blink-canvas.md §2.6).
   dictionaryBreaks: { kind: 'v8-break-iterator' } | { kind: 'unavailable' }
 }
 
-export type WebKitEnvironment = {
+export type WebKitEnvironment = WebKitProcessLanguages & {
   engine: 'webkit'
   build: string | null
   // The backing scale factor; no line-breaking code reads it (specs/webkit-lines.md §1.6).
@@ -41,30 +73,17 @@ export type WebKitEnvironment = {
   pageZoom: number | null
   pageLang: string
   contentLanguage: string | null
-  // WTF::userPreferredLanguages() of the WebContent process, the system's preferred languages passed at launch
-  // (XPCServiceMain.mm:67-78). A Han lang becomes the first entry starting with zh- (specs/webkit-canvas.md §1.3). null:
-  // such content reports ui-language.
-  preferredLanguages: readonly string[] | null
-  // uloc_getDefault() of the WebContent process: en_US_POSIX unless launchd passes LANG or LC_* (specs/webkit-gaps.md
-  // §8.2). The quote overrides of a locale ICU has no data for fall back through it (§8.3). null: such content reports
-  // ui-language.
-  icuDefaultLocale: string | null
   // JSC's Intl.Segmenter word granularity over libicucore's dictionaries (specs/webkit-text.md §5.5).
   dictionaryBreaks: { kind: 'intl-segmenter-word' } | { kind: 'unavailable' }
 }
 
-export type GeckoEnvironment = {
+export type GeckoEnvironment = GeckoProcessLanguages & {
   engine: 'gecko'
   build: string | null
   // 60 / app units per device pixel, browser zoom included (specs/gecko-lines.md §2.1).
   devicePixelRatio: number
   pageLang: string
   contentLanguage: string | null
-  // The OS regional-preferences locale, lowercased (nsLanguageAtomService.cpp:107-127): the style language of content
-  // without lang in a UTF-8 document, which decides the ja/zh segment-break rule and the shaping language
-  // (specs/gecko-text.md §2.4; probe gecko-text H15). Firefox's navigator.language comes from accept-languages instead.
-  // null: such content reports ui-language.
-  regionalPrefsLocale: string | null
   // Firefox's Intl.Segmenter word granularity runs ICU4X's word segmenter with layout's LSTM models (specs/gecko-text.md §10).
   dictionaryBreaks: { kind: 'intl-segmenter-word' } | { kind: 'unavailable' }
 }
@@ -73,9 +92,9 @@ export type Environment = BlinkEnvironment | WebKitEnvironment | GeckoEnvironmen
 
 // What the caller knows about the browser it runs and the document, for that engine.
 export type GivenFacts =
-  | { engine: 'blink'; build: string | null; contentLanguage: string | null; uiLanguage: string | null }
-  | { engine: 'webkit'; build: string | null; contentLanguage: string | null; pageZoom: number | null; preferredLanguages: readonly string[] | null; icuDefaultLocale: string | null }
-  | { engine: 'gecko'; build: string | null; contentLanguage: string | null; regionalPrefsLocale: string | null }
+  | (BlinkProcessLanguages & { engine: 'blink'; build: string | null; contentLanguage: string | null })
+  | (WebKitProcessLanguages & { engine: 'webkit'; build: string | null; contentLanguage: string | null; pageZoom: number | null })
+  | (GeckoProcessLanguages & { engine: 'gecko'; build: string | null; contentLanguage: string | null })
 
 export type DetectedEngine =
   | { kind: 'supported'; engine: EngineName }

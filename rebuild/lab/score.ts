@@ -1,16 +1,18 @@
 // Offline scorer: compares each row's native Range rects exactly with the rects lab/observe/<engine>.ts expects from the
 // row's layout, and derives lineCount, breaks, widths and painter from those comparisons (DESIGN.md §9).
 //   bun rebuild/lab/score.ts --rows=<file> [--cases=<file>] --out=<summary.json> [--examples=K] [--per-case=<file>]
-//     [--native-compare=<other rows file>]
+//     [--native-compare=<other rows file>] [--native-rows=<rows file that observed natively>] [--sealed]
 // Imported as a module it runs nothing. It exports the per-row score, the native line grouping and the comparison of two
 // runs, so tools use the scorer's own rules instead of copying them.
-import { closeSync, openSync, readFileSync, writeFileSync, writeSync } from 'node:fs'
+import { closeSync, openSync, readFileSync, readSync, writeFileSync, writeSync } from 'node:fs'
 import type { Expected, ExpectedObservation, ExpectedRect, GapName } from '../src/model.ts'
-import type { BrowserKind, Case, EnginePrediction, LabRow, LinesPrediction, NativeObservation, PainterLine, Rect, RecordedLayout } from './types.ts'
+import { describeGiven } from './languages.ts'
+import type { BrowserKind, Case, EnginePrediction, LabRow, LinesPrediction, NativeObservation, PainterLine, Paragraph, Rect, RecordedLayout } from './types.ts'
 
 // Part of every environment key, so rows scored by different scorers never meet in a baseline. Version 1 derived native
-// lines and widths from visibility rules (git history of this file, 2026-09-16).
-export const SCORER_VERSION = 2
+// lines and widths from visibility rules; version 2 grouped every rect into native lines by vertical centre (git history of
+// this file, 2026-09-16 and 2026-09-17).
+export const SCORER_VERSION = 3
 
 export type Status = 'pass' | 'fail' | 'unobserved' | 'not-applicable'
 // `reason` is a fixed category (counted in the summary); `detail` names offsets and values for this case.
@@ -28,24 +30,33 @@ export function rowText(c: Case): string {
 
 // ---- Native lines ----
 
-// Observer assumption, vertical-centre grouping: rect centres on one line differ by less than half the paragraph's px line
-// height, and centres on different lines by half a line height or more. Every inline box carries the line height and sits
-// on its line's baseline, so only font metrics move centres within a line (Safari rounds half-leading per line; Firefox
-// sizes a text frame by the fonts it uses). Vertical metrics aren't ported (DESIGN.md §9), so this stays an assumption, and
-// a rect without positive height is placed on no line: Firefox reports one for a frame without height.
+// Which native line each rect is on. Rects without positive height are placed on no line: Firefox reports them for a frame
+// without height. The rest follow three rules:
+//
+// 1. A code point rect is on the line of the whole-node rect of its own node that reports the same box. A Range over part
+//    of a text box reports a cut of the box's rect: Blink slices the fragment item's rect (LayoutText::
+//    AbsoluteQuadsForRange, research/observe-blink.md §4.6), Gecko cuts the continuation frame's rect
+//    (GetPartialTextRect, observe-gecko.md §2), so y and height equal the box's; WebKit reports a whole box's rect, or a
+//    snapped selection rect whose y is the box's y truncated to a LayoutUnit (observe-webkit.md E3). Over the 2026-09-17
+//    development rows every positive code point rect matched such a node rect (Chrome 245,005, Firefox 241,735,
+//    webkit-host 241,219). A code point rect no node rect holds falls back to rule 3 and is counted (`byCentre`).
+// 2. Rects of one node on one line share their top in Blink and WebKit: the node's boxes have one style, so one ascent on
+//    the line's baseline. A node rect whose y equals the previous positive rect's y continues that rect's line; rects come
+//    in line order (InlineCursor; InlineIterator::textBoxesFor, observe-webkit.md E1). Gecko sizes each text frame by the
+//    fonts it uses, so there each node rect stands alone.
+// 3. Observer assumption, across nodes: vertical metrics aren't ported (DESIGN.md §9), so the node lines of rule 2 group by
+//    vertical centre. Centres on one line differ by less than half the paragraph's px line height, and centres on
+//    different lines by half a line height or more; every inline box carries the line height and sits on its line's
+//    baseline, so only font metrics move centres within a line (Safari rounds half-leading per line; Firefox sizes a text
+//    frame by the fonts it uses).
 export type NativeLines = {
   count: number
   // Per code point and per node, the native line of each rect in order, top to bottom from 0; -1 without positive height.
   points: number[][]
   nodes: number[][]
   unplaced: number
-}
-
-function addCentres(rects: Rect[], into: number[]): void {
-  for (let k = 0; k < rects.length; k++) {
-    const rect = rects[k]!
-    if (rect.height > 0) into.push(rect.y + rect.height / 2)
-  }
+  // Code point rects placed by centre because no node rect of their node reports their box (rule 1's fallback).
+  byCentre: number
 }
 
 function groupCentres(centres: number[], lineHeight: number): { lineOf: Int32Array; count: number } {
@@ -62,31 +73,87 @@ function groupCentres(centres: number[], lineHeight: number): { lineOf: Int32Arr
   return { lineOf, count }
 }
 
-export function nativeLines(native: NativeObservation, lineHeight: number): NativeLines {
+function webkitBrowser(browser: BrowserKind): boolean {
+  return browser === 'safari' || browser === 'webkit-host'
+}
+
+// Whether a code point rect reports the box of a whole-node rect (rule 1).
+function reportsBox(browser: BrowserKind, point: Rect, node: Rect): boolean {
+  if (webkitBrowser(browser)) return point.y === node.y || point.y === Math.trunc(f32(node.y * 64)) / 64
+  return point.y === node.y && point.height === node.height
+}
+
+export function nativeLines(native: NativeObservation, paragraph: Pick<Paragraph, 'lineHeight' | 'runs'>, browser: BrowserKind): NativeLines {
   const centres: number[] = []
-  for (let i = 0; i < native.points.length; i++) addCentres(native.points[i]!.rects, centres)
-  for (let r = 0; r < native.runRects.length; r++) addCentres(native.runRects[r]!, centres)
-  const { lineOf, count } = groupCentres(centres, lineHeight)
-  let next = 0
-  let unplaced = 0
-  const assign = (rects: Rect[]): number[] => {
-    const out: number[] = []
+  const shareTops = browser !== 'firefox'
+  // Per node, per rect: its centre index, or -1 without positive height.
+  const nodeCentre: number[][] = []
+  for (let r = 0; r < native.runRects.length; r++) {
+    const rects = native.runRects[r]!
+    const indices: number[] = []
+    let previous = -1
     for (let k = 0; k < rects.length; k++) {
-      if (rects[k]!.height > 0) {
-        out.push(lineOf[next]!)
-        next++
-      } else {
-        out.push(-1)
-        unplaced++
+      const rect = rects[k]!
+      if (!(rect.height > 0)) {
+        indices.push(-1)
+        continue
       }
+      if (shareTops && previous >= 0 && rects[previous]!.y === rect.y) {
+        indices.push(indices[previous]!)
+      } else {
+        centres.push(rect.y + rect.height / 2)
+        indices.push(centres.length - 1)
+      }
+      previous = k
     }
-    return out
+    nodeCentre.push(indices)
   }
-  const points: number[][] = []
-  for (let i = 0; i < native.points.length; i++) points.push(assign(native.points[i]!.rects))
-  const nodes: number[][] = []
-  for (let r = 0; r < native.runRects.length; r++) nodes.push(assign(native.runRects[r]!))
-  return { count, points, nodes, unplaced }
+  // Code point rects: the centre index of the node rect reporting their box, or their own centre.
+  const runEnds: number[] = []
+  for (let r = 0, end = 0; r < paragraph.runs.length; r++) {
+    end += paragraph.runs[r]!.text.length
+    runEnds.push(end)
+  }
+  const pointCentre: number[][] = []
+  let byCentre = 0
+  let run = 0
+  for (let i = 0; i < native.points.length; i++) {
+    const point = native.points[i]!
+    while (run < runEnds.length - 1 && point.offset >= runEnds[run]!) run++
+    const nodes = native.runRects[run] ?? []
+    const indices: number[] = []
+    for (let k = 0; k < point.rects.length; k++) {
+      const rect = point.rects[k]!
+      if (!(rect.height > 0)) {
+        indices.push(-1)
+        continue
+      }
+      // The first node rect reporting the box. Several can: bidi continuations of one frame, or a node's boxes on one line.
+      // They share their y, so they sit on one line.
+      let index = -1
+      for (let n = 0; n < nodes.length && index < 0; n++) {
+        const centre = nodeCentre[run]![n]!
+        if (centre >= 0 && reportsBox(browser, rect, nodes[n]!)) index = centre
+      }
+      if (index < 0) {
+        centres.push(rect.y + rect.height / 2)
+        index = centres.length - 1
+        byCentre++
+      }
+      indices.push(index)
+    }
+    pointCentre.push(indices)
+  }
+  const { lineOf, count } = groupCentres(centres, paragraph.lineHeight)
+  let unplaced = 0
+  const place = (indices: number[][]): number[][] => indices.map(list => list.map(index => {
+    if (index >= 0) return lineOf[index]!
+    unplaced++
+    return -1
+  }))
+  const points = place(pointCentre)
+  const nodes = place(nodeCentre)
+  return { count, points, nodes, unplaced, byCentre }
 }
 
 // The rows' code point observations must walk the concatenated text code point by code point.
@@ -312,6 +379,8 @@ export type CaseScore = {
   gaps: GapName[]
   // Per line whose widths compared: the engine width minus the native extent (widthDifference).
   widthDiffs: number[]
+  // For a prediction of line ranges alone (lineRangeDiagnostics); null otherwise.
+  diagnostics: LineRangeDiagnostics | null
 }
 
 function allMetrics(metric: Metric): Record<MetricName, Metric> {
@@ -332,32 +401,90 @@ function describeCodePoint(text: string, offset: number, length: number): string
   return `code point ${offset} ${JSON.stringify(text.slice(offset, offset + length))}`
 }
 
-// The painted rects of one line, node rects and code point rects, grouped by the same assumption as native lines.
+// The painted rects of one line, node rects and code point rects, grouped by vertical centre alone (rule 3 of
+// nativeLines). Painted code points aren't mapped to their nodes, so rules 1 and 2 don't apply here.
 function paintedLineCount(line: PainterLine, lineHeight: number): number {
   const centres: number[] = []
-  addCentres(line.rects, centres)
+  const add = (rects: Rect[]): void => {
+    for (let k = 0; k < rects.length; k++) if (rects[k]!.height > 0) centres.push(rects[k]!.y + rects[k]!.height / 2)
+  }
+  add(line.rects)
   const points = line.points ?? []
-  for (let i = 0; i < points.length; i++) addCentres(points[i]!.rects, centres)
+  for (let i = 0; i < points.length; i++) add(points[i]!.rects)
   return groupCentres(centres, lineHeight).count
 }
 
+function noNative(metric: Metric): CaseScore {
+  return { metrics: allMetrics(metric), facts: null, firstDifference: null, native: null, gaps: [], widthDiffs: [], diagnostics: null }
+}
+
 export function scoreRow(row: LabRow): CaseScore {
-  if ('error' in row.native) return { metrics: allMetrics({ status: 'unobserved', reason: 'native observation error', detail: row.native.error }), facts: null, firstDifference: null, native: null, gaps: [], widthDiffs: [] }
+  if ('skipped' in row.native) return noNative({ status: 'unobserved', reason: 'native observation skipped', detail: row.native.skipped })
+  if ('error' in row.native) return noNative({ status: 'unobserved', reason: 'native observation error', detail: row.native.error })
   const text = rowText(row.case)
   const problem = nativeProblem(row.native, text)
-  if (problem !== null) return { metrics: allMetrics({ status: 'unobserved', reason: 'malformed native observation', detail: problem }), facts: null, firstDifference: null, native: null, gaps: [], widthDiffs: [] }
-  const native = nativeLines(row.native, row.case.paragraph.lineHeight)
+  if (problem !== null) return noNative({ status: 'unobserved', reason: 'malformed native observation', detail: problem })
+  const native = nativeLines(row.native, row.case.paragraph, row.browser)
   const prediction = row.prediction
   if ('error' in prediction) {
     const metric: Metric = { status: 'fail', reason: 'prediction error', detail: prediction.error }
-    return { metrics: { ...allMetrics(metric), painter: { status: 'not-applicable', reason: 'no prediction' } }, facts: null, firstDifference: null, native, gaps: [], widthDiffs: [] }
+    return { metrics: { ...allMetrics(metric), painter: { status: 'not-applicable', reason: 'no prediction' } }, facts: null, firstDifference: null, native, gaps: [], widthDiffs: [], diagnostics: null }
   }
   if ('layout' in prediction) return scoreEngine(row, row.native, prediction, native, text)
-  return scoreLines(row, prediction, native)
+  return scoreLines(row, row.native, prediction, native, text)
 }
 
-// A prediction without an engine layout has no expected rects: only its line count can be compared.
-function scoreLines(row: LabRow, prediction: LinesPrediction, native: NativeLines): CaseScore {
+// ---- Predictions of line ranges alone ----
+
+// What can be said about a prediction that carries line ranges and nothing an observation port could read (main's
+// predictor rows). lineCount is a metric: the number of native lines against the number of predicted lines. Breaks can't be
+// scored as a metric, because no port derives the rects such a prediction implies, and widths aren't comparable, because
+// its widths are its own observer's visible extents. Two diagnostics, never metrics and never passes in a gate
+// (research/MAIN-TRIAGE.md §2):
+// - visibleBreaks: every code point whose positive-width rects all sit on one native line lies in the predicted line of that
+//   index. Unobserved when no code point has such rects, or when the line counts differ.
+// - zeroWidthPlacement: every code point outside white space whose placed rects all have zero width and sit on one native
+//   line lies in the predicted line of that index. Where collapsed or hanging white space reports is engine geometry, so
+//   white space is left out. Unobserved when there's no such code point, or when the line counts differ.
+export type LineRangeDiagnostics = { visibleBreaks: Metric; zeroWidthPlacement: Metric }
+
+const DIAGNOSTIC_WHITE_SPACE = /^[ \t\n\r\f　]$/
+
+export function lineRangeDiagnostics(native: NativeObservation, lines: NativeLines, prediction: LinesPrediction, text: string): LineRangeDiagnostics {
+  if (lines.count !== prediction.lines.length) {
+    const metric: Metric = { status: 'unobserved', reason: 'line count differs', detail: `native ${lines.count}, predicted ${prediction.lines.length}` }
+    return { visibleBreaks: metric, zeroWidthPlacement: metric }
+  }
+  const predictedLine = (offset: number): number => {
+    for (let l = 0; l < prediction.lines.length; l++) if (offset >= prediction.lines[l]!.start && offset < prediction.lines[l]!.end) return l
+    return -1
+  }
+  let visible: Metric = { status: 'unobserved', reason: 'no code point has positive-width rects on one native line' }
+  let zeroWidth: Metric = { status: 'unobserved', reason: 'no zero-width code point to place' }
+  for (let i = 0; i < native.points.length; i++) {
+    const point = native.points[i]!
+    // The one native line of its positive-width placed rects (-1: several), and of all its placed rects.
+    let positiveLine = -2
+    let placedLine = -2
+    for (let k = 0; k < point.rects.length; k++) {
+      const line = lines.points[i]![k]!
+      if (line < 0) continue
+      placedLine = placedLine === -2 || placedLine === line ? line : -1
+      if (point.rects[k]!.width > 0) positiveLine = positiveLine === -2 || positiveLine === line ? line : -1
+    }
+    const where = describeCodePoint(text, point.offset, point.length)
+    if (positiveLine >= 0) {
+      const l = predictedLine(point.offset)
+      if (visible.status !== 'fail') visible = l === positiveLine ? { status: 'pass' } : { status: 'fail', reason: 'code point on other lines', detail: `${where}: native line ${positiveLine}, predicted line ${l}` }
+    } else if (positiveLine === -2 && placedLine >= 0 && !DIAGNOSTIC_WHITE_SPACE.test(text.slice(point.offset, point.offset + point.length))) {
+      const l = predictedLine(point.offset)
+      if (zeroWidth.status !== 'fail') zeroWidth = l === placedLine ? { status: 'pass' } : { status: 'fail', reason: 'zero-width code point on other lines', detail: `${where}: native line ${placedLine}, predicted line ${l}` }
+    }
+  }
+  return { visibleBreaks: visible, zeroWidthPlacement: zeroWidth }
+}
+
+function scoreLines(row: LabRow, nativeObservation: NativeObservation, prediction: LinesPrediction, native: NativeLines, text: string): CaseScore {
   const lineCount: Metric = native.count === prediction.lines.length
     ? { status: 'pass' }
     : { status: 'fail', reason: 'line count differs', detail: `native ${native.count}, predicted ${prediction.lines.length}` }
@@ -382,6 +509,7 @@ function scoreLines(row: LabRow, prediction: LinesPrediction, native: NativeLine
   return {
     metrics: { lineCount, breaks: noLayout, widths: { status: 'not-applicable', reason: 'breaks unobserved' }, painter },
     facts: null, firstDifference: null, native, gaps: [], widthDiffs: [],
+    diagnostics: lineRangeDiagnostics(nativeObservation, native, prediction, text),
   }
 }
 
@@ -398,9 +526,9 @@ function scoreEngine(row: LabRow, nativeObservation: NativeObservation, predicti
   const layout = prediction.layout
   const gaps = gapNames(layout)
   const observation = prediction.observation
-  if ('error' in observation) return { metrics: allMetrics({ status: 'unobserved', reason: 'observation port error', detail: observation.error }), facts: null, firstDifference: null, native, gaps, widthDiffs: [] }
+  if ('error' in observation) return { metrics: allMetrics({ status: 'unobserved', reason: 'observation port error', detail: observation.error }), facts: null, firstDifference: null, native, gaps, widthDiffs: [], diagnostics: null }
   const shape = observationProblem(observation, nativeObservation)
-  if (shape !== null) return { metrics: allMetrics({ status: 'unobserved', reason: 'the observation covers other ranges than the row', detail: shape }), facts: null, firstDifference: null, native, gaps, widthDiffs: [] }
+  if (shape !== null) return { metrics: allMetrics({ status: 'unobserved', reason: 'the observation covers other ranges than the row', detail: shape }), facts: null, firstDifference: null, native, gaps, widthDiffs: [], diagnostics: null }
 
   const facts = newFacts()
   const first: FirstDifference = { value: null }
@@ -541,7 +669,7 @@ function scoreEngine(row: LabRow, nativeObservation: NativeObservation, predicti
     }
     if (painter.status === 'pass' && issue !== null) painter = issue
   }
-  return { metrics: { lineCount, breaks, widths, painter }, facts, firstDifference: first.value, native, gaps, widthDiffs }
+  return { metrics: { lineCount, breaks, widths, painter }, facts, firstDifference: first.value, native, gaps, widthDiffs, diagnostics: null }
 }
 
 // ---- Comparing two runs ----
@@ -557,8 +685,9 @@ function flatten(rects: Rect[], lines: number[]): number[] {
 }
 
 export function nativeView(row: LabRow): NativeView {
+  if ('skipped' in row.native) return { error: `native observation skipped: ${row.native.skipped}`, lines: 0, points: [], nodes: [] }
   if ('error' in row.native) return { error: row.native.error, lines: 0, points: [], nodes: [] }
-  const lines = nativeLines(row.native, row.case.paragraph.lineHeight)
+  const lines = nativeLines(row.native, row.case.paragraph, row.browser)
   const points: number[][] = []
   for (let i = 0; i < row.native.points.length; i++) points.push(flatten(row.native.points[i]!.rects, lines.points[i]!))
   const nodes: number[][] = []
@@ -586,14 +715,91 @@ export function nativeDifference(a: NativeView, b: NativeView): string | null {
   return null
 }
 
+// ---- Native observations from another run ----
+
+// Where each row of a rows file sits: its UTF-8 byte offset and length, by case id.
+export type RowIndex = Map<string, { offset: number; length: number }>
+
+// Indexes a rows file by case id without parsing the rows. run.ts writes every row as JSON that starts with `{"id":"<id>"`;
+// a line that doesn't is parsed whole to find its id. Throws on a row without an id or a duplicate id.
+export async function indexRows(path: string): Promise<RowIndex> {
+  // Start and end byte offsets of each non-empty line, in pairs.
+  const bounds: number[] = []
+  let base = 0
+  let lineStart = 0
+  for await (const chunk of Bun.file(path).stream()) {
+    for (let newline = chunk.indexOf(10); newline !== -1; newline = chunk.indexOf(10, newline + 1)) {
+      if (base + newline > lineStart) bounds.push(lineStart, base + newline)
+      lineStart = base + newline + 1
+    }
+    base += chunk.length
+  }
+  if (base > lineStart) bounds.push(lineStart, base)
+  const index: RowIndex = new Map()
+  const fd = openSync(path, 'r')
+  try {
+    const head = Buffer.alloc(256)
+    for (let k = 0; k < bounds.length; k += 2) {
+      const entry = { offset: bounds[k]!, length: bounds[k + 1]! - bounds[k]! }
+      const read = readSync(fd, head, 0, Math.min(head.length, entry.length), entry.offset)
+      const match = /^\{"id":("(?:[^"\\]|\\.)*")/.exec(head.toString('utf8', 0, read))
+      const id: unknown = match !== null ? JSON.parse(match[1]!) : readRowAt(fd, entry).id
+      if (typeof id !== 'string') throw new Error(`${path}: the row at byte ${entry.offset} has no id`)
+      if (index.has(id)) throw new Error(`${path}: two rows for case ${id}`)
+      index.set(id, entry)
+    }
+  } finally {
+    closeSync(fd)
+  }
+  return index
+}
+
+// The row at an index entry of an open rows file.
+export function readRowAt(fd: number, entry: { offset: number; length: number }): LabRow {
+  const bytes = Buffer.alloc(entry.length)
+  for (let done = 0; done < entry.length;) {
+    const read = readSync(fd, bytes, done, entry.length - done, entry.offset + done)
+    if (read === 0) throw new Error(`Short read at byte ${entry.offset + done}`)
+    done += read
+  }
+  return JSON.parse(bytes.toString('utf8')) as LabRow
+}
+
+// A row from run.ts --predict-only with the native observation of another run's row for the same case: the other row's
+// native observation, environment (so its document history) and native timing, with this row's prediction and painted
+// lines. Returns why not instead when the row has its own native observation, the other row has none, the rows observed
+// different cases, or they ran under other environments: browser, app bundle build, the browser process's given languages,
+// user agent, devicePixelRatio, visual-viewport scale, page language or fixture fonts.
+export function withNativeRow(row: LabRow, other: LabRow): LabRow | { error: string } {
+  if (!('skipped' in row.native)) return { error: `row ${row.id} has its own native observation; --native-rows takes rows from run.ts --predict-only` }
+  if ('skipped' in other.native) return { error: `the native row for ${row.id} has no native observation either` }
+  if (other.id !== row.id || JSON.stringify(other.case) !== JSON.stringify(row.case)) return { error: `the native row for ${row.id} observed a different case` }
+  const differences: string[] = []
+  const compare = (name: string, a: unknown, b: unknown): void => {
+    if (a !== b) differences.push(`${name} ${JSON.stringify(a)} vs ${JSON.stringify(b)}`)
+  }
+  compare('browser', row.browser, other.browser)
+  compare('build', JSON.stringify(row.build ?? null), JSON.stringify(other.build ?? null))
+  compare('languages', JSON.stringify(row.languages?.given ?? null), JSON.stringify(other.languages?.given ?? null))
+  compare('userAgent', row.env.userAgent, other.env.userAgent)
+  compare('devicePixelRatio', row.env.devicePixelRatio, other.env.devicePixelRatio)
+  compare('visualViewportScale', row.env.visualViewportScale, other.env.visualViewportScale)
+  compare('pageLang', row.env.pageLang, other.env.pageLang)
+  compare('fontFixtures', row.env.fontFixtures.join('|'), other.env.fontFixtures.join('|'))
+  if (differences.length > 0) return { error: `the environments differ for ${row.id}: ${differences.join('; ')}` }
+  return { ...row, env: other.env, native: other.native, timings: { ...row.timings, nativeMs: other.timings.nativeMs } }
+}
+
 // ---- Summary ----
 
-// The environment a row was observed under: the browser build from the driver, the device and the scorer version. Rows
-// from before the driver recorded builds fall back to the user agent, which can't tell builds apart.
+// The environment a row was observed under: the browser build from the driver, the device, the browser process's given
+// languages and the scorer version. Rows from before the driver recorded builds fall back to the user agent, which can't
+// tell builds apart; rows from before it recorded languages have no language part.
 export function environmentKey(row: LabRow): string {
   const e = row.env
   const build = row.build === undefined ? `build not recorded, ${e.userAgent}` : `${row.build.app} ${row.build.appVersion}, engine build ${row.build.engine}, macOS ${row.build.os}`
-  return `${row.browser}: ${build}; DPR ${e.devicePixelRatio}, scale ${e.visualViewportScale}; scorer ${SCORER_VERSION}`
+  const languages = row.languages === undefined ? '' : `; ${describeGiven(row.languages.given)}`
+  return `${row.browser}: ${build}; DPR ${e.devicePixelRatio}, scale ${e.visualViewportScale}${languages}; scorer ${SCORER_VERSION}`
 }
 
 type Counts = Record<Status, number>
@@ -601,6 +807,8 @@ const emptyCounts = (): Counts => ({ pass: 0, fail: 0, unobserved: 0, 'not-appli
 type BrowserSummary = {
   rows: number
   nativeErrors: number
+  // Rows from run.ts --predict-only that no --native-rows row supplied.
+  skippedNativeRows: number
   predictionErrors: number
   // Rows whose prediction has no engine layout (external predictors, rows from before the observation port).
   linesOnly: number
@@ -609,6 +817,8 @@ type BrowserSummary = {
   environments: Record<string, number>
   metrics: Record<MetricName, Counts>
   reasons: Record<MetricName, Record<string, number>>
+  // lineRangeDiagnostics over the lines-only rows.
+  lineRangeDiagnostics: Record<keyof LineRangeDiagnostics, Counts>
   facts: Facts
   // Per gap: rows reporting it, and how many of those fail lineCount or breaks.
   gaps: Partial<Record<GapName, { rows: number; failingLinesOrBreaks: number }>>
@@ -618,7 +828,8 @@ type BrowserSummary = {
   // Rows whose page couldn't resolve a named family, by family.
   missingFontRows: number
   missingFonts: Record<string, number>
-  native: { lineCounts: Record<string, number>; unplacedRects: number }
+  // Native line counts; rects without positive height; code point rects placed by centre (nativeLines rule 1 fallback).
+  native: { lineCounts: Record<string, number>; unplacedRects: number; pointRectsByCentre: number }
   // With --native-compare: rows of this run compared with the other run's row for the same case, and the cases whose rect
   // x, width or native line differ. Those are left out of every count above that scores the prediction (metrics, reasons,
   // facts, gaps, histograms, families, examples) and listed here.
@@ -637,20 +848,21 @@ type BrowserSummary = {
 
 function newBrowserSummary(): BrowserSummary {
   return {
-    rows: 0, nativeErrors: 0, predictionErrors: 0, linesOnly: 0, observationErrors: 0, rejectedStyleRows: 0, environments: {},
+    rows: 0, nativeErrors: 0, skippedNativeRows: 0, predictionErrors: 0, linesOnly: 0, observationErrors: 0, rejectedStyleRows: 0, environments: {},
     metrics: { lineCount: emptyCounts(), breaks: emptyCounts(), widths: emptyCounts(), painter: emptyCounts() },
     reasons: { lineCount: {}, breaks: {}, widths: {}, painter: {} },
+    lineRangeDiagnostics: { visibleBreaks: emptyCounts(), zeroWidthPlacement: emptyCounts() },
     facts: newFacts(), gaps: {}, widthDiffs: {},
     timingsMs: { native: 0, predict: 0, observe: 0, paint: 0, painterObserve: 0 },
     missingFontRows: 0, missingFonts: {},
-    native: { lineCounts: {}, unplacedRects: 0 },
+    native: { lineCounts: {}, unplacedRects: 0, pointRectsByCentre: 0 },
     historyDependent: { compared: 0, rows: 0, missing: 0, caseDiffers: 0, geometryOnly: 0, geometryOnlyIds: [], cases: [] },
   }
 }
 
 // Per native line, the text of the code points with a rect on it.
 function nativeLinesView(row: LabRow, text: string, native: NativeLines | null): string[] | null {
-  if (native === null || 'error' in row.native) return null
+  if (native === null || 'error' in row.native || 'skipped' in row.native) return null
   const lines: string[] = []
   for (let k = 0; k < native.count; k++) lines.push('')
   for (let i = 0; i < row.native.points.length; i++) {
@@ -694,6 +906,7 @@ function example(row: LabRow, text: string, score: CaseScore, metric: MetricName
     gaps: score.gaps,
     nativeLines: nativeLinesView(row, text, score.native),
     predictedLines: predictedLinesView(row, text),
+    ...(score.diagnostics === null ? {} : { diagnostics: score.diagnostics }),
     ...(metric === 'painter' && row.painter !== null && !('error' in row.painter)
       ? { painterLines: row.painter.lines.map(line => ({ height: line.height, extent: line.extent, text: line.text })) }
       : {}),
@@ -730,12 +943,31 @@ function compactFacts(facts: Facts): unknown {
   return { counts: [facts.counts.equal, facts.counts.differ], predicted: [facts.predicted.equal, facts.predicted.differ], limited, lines: [facts.lines.equal, facts.lines.differ], unobservable, unplaced: facts.unplaced }
 }
 
+// A summary for a sealed held-out set (research/TEST-ARCHITECTURE.md §3): counts per browser, metric, reason category and
+// gap, with no case ids, texts, families or examples.
+function sealedSummary(browsers: Partial<Record<BrowserKind, BrowserSummary>>): unknown {
+  const out: Record<string, unknown> = {}
+  for (const [browser, s] of Object.entries(browsers)) {
+    out[browser] = {
+      rows: s.rows, nativeErrors: s.nativeErrors, skippedNativeRows: s.skippedNativeRows, predictionErrors: s.predictionErrors, linesOnly: s.linesOnly,
+      observationErrors: s.observationErrors, environments: s.environments, metrics: s.metrics, reasons: s.reasons, facts: s.facts, gaps: s.gaps,
+      historyDependent: { compared: s.historyDependent.compared, rows: s.historyDependent.rows, missing: s.historyDependent.missing, caseDiffers: s.historyDependent.caseDiffers },
+    }
+  }
+  return out
+}
+
 async function main(): Promise<void> {
-  const USAGE = 'Usage: bun rebuild/lab/score.ts --rows=<file> [--cases=<file>] --out=<summary.json> [--examples=K] [--per-case=<file>] [--native-compare=<other rows file>]'
+  const USAGE = 'Usage: bun rebuild/lab/score.ts --rows=<file> [--cases=<file>] --out=<summary.json> [--examples=K] [--per-case=<file>] [--native-compare=<other rows file>] [--native-rows=<rows file that observed natively>] [--sealed]'
   const args = new Map<string, string>()
+  let sealed = false
   for (const raw of process.argv.slice(2)) {
+    if (raw === '--sealed') {
+      sealed = true
+      continue
+    }
     const match = /^--([a-z-]+)=(.*)$/s.exec(raw)
-    if (match === null || !['rows', 'cases', 'out', 'examples', 'per-case', 'native-compare'].includes(match[1]!)) {
+    if (match === null || !['rows', 'cases', 'out', 'examples', 'per-case', 'native-compare', 'native-rows'].includes(match[1]!)) {
       console.error(`Unknown argument ${raw}. ${USAGE}`)
       process.exit(1)
     }
@@ -747,8 +979,12 @@ async function main(): Promise<void> {
     console.error('--rows and --out are required')
     process.exit(1)
   }
-  const examplesPerMetric = Number(args.get('examples') ?? 5)
+  const examplesPerMetric = Number(args.get('examples') ?? (sealed ? 0 : 5))
   const perCasePath = args.get('per-case')
+  if (sealed && (perCasePath !== undefined || examplesPerMetric !== 0)) {
+    console.error('--sealed writes counts only; it takes no --per-case or --examples')
+    process.exit(1)
+  }
 
   // --cases restricts scoring to those ids and checks each row observed exactly that case.
   let casesById: Map<string, string> | null = null
@@ -762,16 +998,27 @@ async function main(): Promise<void> {
     }
   }
 
-  // --native-compare: the other run's view per case, and a hash of its raw native observation.
+  // --native-compare: per case of the other run, hashes of its case, its native view and its raw native observation, and
+  // where its row sits. Views of huge paragraphs don't fit in memory together; a view is read again only when its hash
+  // differs, to name the difference.
   const comparePath = args.get('native-compare')
-  let other: Map<string, { caseJson: string; view: NativeView; geometry: bigint | number }> | null = null
+  let other: Map<string, { caseHash: bigint | number; viewHash: bigint | number; geometry: bigint | number; entry: { offset: number; length: number } }> | null = null
+  const compareFd = comparePath === undefined ? null : openSync(comparePath, 'r')
   if (comparePath !== undefined) {
     other = new Map()
-    for await (const line of readLines(comparePath)) {
-      const row = JSON.parse(line) as LabRow
-      other.set(compareKey(row.browser, row.id), { caseJson: JSON.stringify(row.case), view: nativeView(row), geometry: Bun.hash(JSON.stringify(row.native)) })
+    const index = await indexRows(comparePath)
+    for (const [id, entry] of index) {
+      const row = readRowAt(compareFd!, entry)
+      other.set(compareKey(row.browser, id), { caseHash: Bun.hash(JSON.stringify(row.case)), viewHash: Bun.hash(JSON.stringify(nativeView(row))), geometry: Bun.hash(JSON.stringify(row.native)), entry })
     }
   }
+
+  // --native-rows: rows from run.ts --predict-only take their native observation from another run's row for the same case
+  // (withNativeRow). The scorer refuses rows it can't combine; a row with no native row stays unobserved and makes the
+  // scorer exit nonzero.
+  const nativeRowsPath = args.get('native-rows')
+  const nativeRows = nativeRowsPath === undefined ? null : { fd: openSync(nativeRowsPath, 'r'), index: await indexRows(nativeRowsPath) }
+  const nativeRowCounts = { used: 0, missing: 0 }
 
   const browsers: Partial<Record<BrowserKind, BrowserSummary>> = {}
   const families: Record<string, Partial<Record<BrowserKind, Record<MetricName, Counts>>>> = {}
@@ -784,7 +1031,7 @@ async function main(): Promise<void> {
   const bump = (counts: Record<string, number>, key: string): void => { counts[key] = (counts[key] ?? 0) + 1 }
 
   for await (const line of readLines(rowsPath)) {
-    const row = JSON.parse(line) as LabRow
+    let row = JSON.parse(line) as LabRow
     const caseJson = JSON.stringify(row.case)
     if (casesById !== null) {
       const expected = casesById.get(row.id)
@@ -797,13 +1044,28 @@ async function main(): Promise<void> {
         continue
       }
     }
+    if (nativeRows !== null) {
+      const entry = nativeRows.index.get(row.id)
+      if (entry === undefined) {
+        nativeRowCounts.missing++
+      } else {
+        const combined = withNativeRow(row, readRowAt(nativeRows.fd, entry))
+        if ('error' in combined) {
+          console.error(`--native-rows=${nativeRowsPath}: ${combined.error}`)
+          process.exit(1)
+        }
+        row = combined
+        nativeRowCounts.used++
+      }
+    }
     const text = rowText(row.case)
     const score = scoreRow(row)
     const summary = browsers[row.browser] ??= newBrowserSummary()
     if (!seen.has(row.browser)) seen.set(row.browser, new Set())
     seen.get(row.browser)!.add(row.id)
     summary.rows++
-    if ('error' in row.native) summary.nativeErrors++
+    if ('skipped' in row.native) summary.skippedNativeRows++
+    else if ('error' in row.native) summary.nativeErrors++
     else if (row.native.rejectedStyles.length > 0) summary.rejectedStyleRows++
     const prediction = row.prediction
     if ('error' in prediction) summary.predictionErrors++
@@ -815,13 +1077,14 @@ async function main(): Promise<void> {
     summary.timingsMs.observe += row.timings.observeMs ?? 0
     summary.timingsMs.paint += row.timings.paintMs
     summary.timingsMs.painterObserve += row.timings.painterObserveMs
-    if (!('error' in row.native) && (row.native.missingFonts ?? []).length > 0) {
+    if (!('error' in row.native) && !('skipped' in row.native) && (row.native.missingFonts ?? []).length > 0) {
       summary.missingFontRows++
       for (const family of row.native.missingFonts!) bump(summary.missingFonts, family)
     }
     if (score.native !== null) {
       bump(summary.native.lineCounts, String(score.native.count))
       summary.native.unplacedRects += score.native.unplaced
+      summary.native.pointRectsByCentre += score.native.byCentre
     }
 
     let history: string | null = null
@@ -830,18 +1093,19 @@ async function main(): Promise<void> {
       const entry = other.get(compareKey(row.browser, row.id))
       if (entry === undefined) {
         hd.missing++
-      } else if (entry.caseJson !== caseJson) {
+      } else if (entry.caseHash !== Bun.hash(caseJson)) {
         hd.caseDiffers++
       } else {
         hd.compared++
         const view = nativeView(row)
-        history = nativeDifference(view, entry.view)
+        // Equal hashes are equal views; otherwise the other row is read again to name the difference.
+        history = Bun.hash(JSON.stringify(view)) === entry.viewHash ? null : nativeDifference(view, nativeView(readRowAt(compareFd!, entry.entry)))
         if (history !== null) {
           hd.rows++
-          hd.cases.push({ id: row.id, family: row.family, detail: history, text, metrics: score.metrics, nativeLines: nativeLinesView(row, text, score.native) })
+          if (!sealed) hd.cases.push({ id: row.id, family: row.family, detail: history, text, metrics: score.metrics, nativeLines: nativeLinesView(row, text, score.native) })
         } else if (entry.geometry !== Bun.hash(JSON.stringify(row.native))) {
           hd.geometryOnly++
-          if (hd.geometryOnlyIds.length < 20) hd.geometryOnlyIds.push(row.id)
+          if (!sealed && hd.geometryOnlyIds.length < 20) hd.geometryOnlyIds.push(row.id)
         }
       }
     }
@@ -849,6 +1113,7 @@ async function main(): Promise<void> {
       writeSync(perCaseFd, JSON.stringify({
         id: row.id, family: row.family, browser: row.browser, ...score.metrics,
         ...(score.facts === null ? {} : { facts: compactFacts(score.facts) }),
+        ...(score.diagnostics === null ? {} : { diagnostics: score.diagnostics }),
         gaps: score.gaps,
         ...(history === null ? {} : { historyDependent: history }),
       }) + '\n')
@@ -856,6 +1121,10 @@ async function main(): Promise<void> {
     if (history !== null) continue
 
     if (score.facts !== null) addFacts(summary.facts, score.facts)
+    if (score.diagnostics !== null) {
+      summary.lineRangeDiagnostics.visibleBreaks[score.diagnostics.visibleBreaks.status]++
+      summary.lineRangeDiagnostics.zeroWidthPlacement[score.diagnostics.zeroWidthPlacement.status]++
+    }
     for (let i = 0; i < score.widthDiffs.length; i++) bump(summary.widthDiffs, String(score.widthDiffs[i]!))
     const failing = score.metrics.lineCount.status === 'fail' || score.metrics.breaks.status === 'fail'
     for (let g = 0; g < score.gaps.length; g++) {
@@ -863,30 +1132,40 @@ async function main(): Promise<void> {
       entry.rows++
       if (failing) entry.failingLinesOrBreaks++
     }
-    const familyCounts = (families[row.family] ??= {})[row.browser] ??= { lineCount: emptyCounts(), breaks: emptyCounts(), widths: emptyCounts(), painter: emptyCounts() }
+    const familyCounts = sealed ? null : (families[row.family] ??= {})[row.browser] ??= { lineCount: emptyCounts(), breaks: emptyCounts(), widths: emptyCounts(), painter: emptyCounts() }
     const fails = failExamples[row.browser] ??= { lineCount: [], breaks: [], widths: [], painter: [] }
     const unobserved = unobservedExamples[row.browser] ??= { lineCount: [], breaks: [], widths: [], painter: [] }
     for (let k = 0; k < METRICS.length; k++) {
       const name = METRICS[k]!
       const metric = score.metrics[name]
       summary.metrics[name][metric.status]++
-      familyCounts[name][metric.status]++
+      if (familyCounts !== null) familyCounts[name][metric.status]++
       if (metric.reason !== undefined) bump(summary.reasons[name], `${metric.status}: ${metric.reason}`)
       const bucket = metric.status === 'fail' ? fails[name] : metric.status === 'unobserved' ? unobserved[name] : null
       if (bucket !== null && bucket.length < examplesPerMetric) bucket.push(example(row, text, score, name))
     }
   }
   if (perCaseFd !== null) closeSync(perCaseFd)
+  if (nativeRows !== null) closeSync(nativeRows.fd)
+  if (compareFd !== null) closeSync(compareFd)
 
   const missingRows: Partial<Record<BrowserKind, number>> = {}
   if (casesById !== null) for (const [browser, ids] of seen) missingRows[browser] = [...casesById.keys()].filter(id => !ids.has(id)).length
-  const summary = {
-    generatedAt: new Date().toISOString(), scorer: SCORER_VERSION,
-    rowsFile: rowsPath, casesFile: casesPath ?? null, nativeCompareFile: comparePath ?? null,
-    note: 'unobserved and not-applicable are never passes; widths are compared only on cases whose breaks pass; with --native-compare, history-dependent cases are excluded from the metric counts',
-    skippedRows, mismatchedCases, missingRows,
-    browsers, families, failExamples, unobservedExamples,
-  }
+  const summary = sealed
+    ? {
+      generatedAt: new Date().toISOString(), scorer: SCORER_VERSION, sealed: true,
+      note: 'counts only, for a sealed held-out set (research/TEST-ARCHITECTURE.md §3): no case ids, texts, families or examples',
+      skippedRows, mismatchedCases, missingRows, ...(nativeRowsPath === undefined ? {} : { nativeRows: nativeRowCounts }),
+      browsers: sealedSummary(browsers),
+    }
+    : {
+      generatedAt: new Date().toISOString(), scorer: SCORER_VERSION,
+      rowsFile: rowsPath, casesFile: casesPath ?? null, nativeCompareFile: comparePath ?? null,
+      ...(nativeRowsPath === undefined ? {} : { nativeRowsFile: nativeRowsPath, nativeRows: nativeRowCounts }),
+      note: 'unobserved and not-applicable are never passes; widths are compared only on cases whose breaks pass; with --native-compare, history-dependent cases are excluded from the metric counts; lineRangeDiagnostics are diagnostics, not metrics',
+      skippedRows, mismatchedCases, missingRows,
+      browsers, families, failExamples, unobservedExamples,
+    }
   writeFileSync(outPath, JSON.stringify(summary, null, 2) + '\n')
   for (const [browser, s] of Object.entries(browsers)) {
     const line = METRICS.map(name => `${name} ${s.metrics[name].pass}/${s.metrics[name].fail}/${s.metrics[name].unobserved}/${s.metrics[name]['not-applicable']}`).join(' | ')
@@ -896,6 +1175,10 @@ async function main(): Promise<void> {
   console.log(`summary: ${outPath}`)
   if (mismatchedCases > 0) {
     console.error(`${mismatchedCases} rows observed a case that differs from --cases`)
+    process.exit(1)
+  }
+  if (nativeRowCounts.missing > 0) {
+    console.error(`${nativeRowCounts.missing} rows have no row for their case in --native-rows=${nativeRowsPath}; scored as unobserved`)
     process.exit(1)
   }
   if (Object.keys(browsers).length === 0) {

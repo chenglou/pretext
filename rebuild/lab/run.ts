@@ -7,7 +7,8 @@ import { closeSync, mkdirSync, openSync, readFileSync, writeFileSync, writeSync 
 import { join, resolve } from 'node:path'
 import { readBuild, userAgentMatches } from './browser-build.ts'
 import { createRng } from './cases/prng.ts'
-import type { BrowserKind, Case, FontDecl, LabRow } from './types.ts'
+import { CHROME_LANGUAGES, derivedLanguages, FIREFOX_LANGUAGE_PREFS, rendererLanguage, webkitPreferredLanguages, type ChromeLanguages } from './languages.ts'
+import type { BrowserKind, Case, FontDecl, LabRow, ProcessLanguages } from './types.ts'
 
 const LAB_DIR = import.meta.dir
 const PROFILES_DIR = resolve(LAB_DIR, '../../.artifacts/profiles')
@@ -26,17 +27,25 @@ function message(error: unknown): string {
 
 // ---- Arguments ----
 
-const KNOWN = ['browser', 'cases', 'out', 'limit', 'family', 'chunk', 'predictor', 'stall-ms', 'order']
+const KNOWN = ['browser', 'cases', 'out', 'limit', 'family', 'chunk', 'predictor', 'stall-ms', 'order', 'chrome-apple-languages', 'chrome-accept-languages']
+const USAGE = 'Usage: bun rebuild/lab/run.ts --browser=chrome|safari|firefox|webkit-host --cases=<cases.ndjson> --out=<dir> [--limit=N] [--family=substr] [--chunk=N] [--predictor=<file>] [--stall-ms=N] [--order=file|reverse|shuffle:<seed>] [--allow-safari-frontmost] [--predict-only] [--chrome-apple-languages=<tag>[,<tag>...] --chrome-accept-languages=<list>]'
 const args = new Map<string, string>()
 // Opens the Safari lab window without waiting for Safari to leave the front (see launchSafari).
 let allowSafariFrontmost = false
+// Records predictions (and painted lines) without observing native layout: each row's native is { skipped }. score.ts
+// --native-rows scores such rows against another run's native observations of the same cases.
+let predictOnly = false
 for (const raw of process.argv.slice(2)) {
   if (raw === '--allow-safari-frontmost') {
     allowSafariFrontmost = true
     continue
   }
+  if (raw === '--predict-only') {
+    predictOnly = true
+    continue
+  }
   const match = /^--([a-z-]+)=(.*)$/s.exec(raw)
-  if (match === null || !KNOWN.includes(match[1]!)) fail(`Unknown argument ${raw}. Usage: bun rebuild/lab/run.ts --browser=chrome|safari|firefox|webkit-host --cases=<cases.ndjson> --out=<dir> [--limit=N] [--family=substr] [--chunk=N] [--predictor=<file>] [--stall-ms=N] [--order=file|reverse|shuffle:<seed>] [--allow-safari-frontmost]`)
+  if (match === null || !KNOWN.includes(match[1]!)) fail(`Unknown argument ${raw}. ${USAGE}`)
   args.set(match[1]!, match[2]!)
 }
 const browserArg = args.get('browser')
@@ -87,6 +96,9 @@ function caseProblem(c: Case): string | null {
   if (typeof p !== 'object' || p === null || !Array.isArray(p.runs)) return 'paragraph.runs must be an array'
   // An empty lang is a real case: lang="" marks the paragraph's language as unknown instead of inheriting <html lang>.
   if (typeof p.lang !== 'string') return 'paragraph.lang must be a string'
+  if (c.inline !== undefined && (typeof c.inline !== 'object' || c.inline === null || !Array.isArray(c.inline.content) || !Array.isArray(c.inline.lineSlots))) {
+    return 'inline.content and inline.lineSlots must be arrays'
+  }
   for (let i = 0; i < p.runs.length; i++) {
     const run = p.runs[i]!
     if (typeof run.text !== 'string') return `run ${i} text must be a string`
@@ -176,9 +188,22 @@ function asciiJsonResponse(value: unknown): Response {
 // The build the run observes, from the app bundles, before launch (browser-build.ts).
 const build = readBuild(browser)
 
+// The browser process's languages (languages.ts): launch arguments and prefs, the OS settings read before launch, and the
+// given facts the page passes to predict(). Chrome's application locale is read from its renderers at the first step.
+// Chrome may launch under other languages than this Mac's (languages.ts ChromeLanguages); both options go together.
+const chromeAppleLanguages = args.get('chrome-apple-languages')
+const chromeAcceptLanguages = args.get('chrome-accept-languages')
+if ((chromeAppleLanguages === undefined) !== (chromeAcceptLanguages === undefined)) fail('--chrome-apple-languages and --chrome-accept-languages go together')
+if (chromeAppleLanguages !== undefined && browser !== 'chrome') fail('--chrome-apple-languages applies only to --browser=chrome')
+const chromeLanguages: ChromeLanguages = chromeAppleLanguages === undefined || chromeAcceptLanguages === undefined
+  ? CHROME_LANGUAGES
+  : { appleLanguages: chromeAppleLanguages.split(',').filter(tag => tag !== ''), acceptLanguages: chromeAcceptLanguages }
+if (chromeLanguages.appleLanguages.length === 0 || chromeLanguages.appleLanguages.some(tag => !/^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$/.test(tag))) fail('--chrome-apple-languages must list language tags')
+const languages: ProcessLanguages = derivedLanguages(browser, undefined, chromeLanguages)
+
 // ---- Browser sessions ----
 
-type Session = { close: () => Promise<void> }
+type Session = { pid: number | null; close: () => Promise<void> }
 
 function isAlive(pid: number): boolean {
   try {
@@ -206,13 +231,28 @@ async function stopProcess(pid: number): Promise<void> {
   }
 }
 
-function findPid(executable: string, marker: string): number | null {
-  const lines = execFileSync('ps', ['-axo', 'pid=,command='], { encoding: 'utf8' }).split('\n')
+function processTable(): Array<{ pid: number; ppid: number; command: string }> {
+  const lines = execFileSync('ps', ['-axo', 'pid=,ppid=,command='], { encoding: 'utf8', maxBuffer: 64 << 20 }).split('\n')
+  const out: Array<{ pid: number; ppid: number; command: string }> = []
   for (let i = 0; i < lines.length; i++) {
-    const match = /^\s*(\d+) (.*)$/.exec(lines[i]!)
-    if (match !== null && match[2]!.startsWith(`${executable} `) && match[2]!.includes(marker)) return Number(match[1])
+    const match = /^\s*(\d+)\s+(\d+) (.*)$/.exec(lines[i]!)
+    if (match !== null) out.push({ pid: Number(match[1]), ppid: Number(match[2]), command: match[3]! })
+  }
+  return out
+}
+
+function findPid(executable: string, marker: string): number | null {
+  const table = processTable()
+  for (let i = 0; i < table.length; i++) {
+    const entry = table[i]!
+    if (entry.command.startsWith(`${executable} `) && entry.command.includes(marker)) return entry.pid
   }
   return null
+}
+
+// Chrome's application locale as its renderers received it (languages.ts rendererLanguage).
+function chromeUiLanguage(browserPid: number): { value: string; renderers: number } {
+  return rendererLanguage(processTable(), browserPid)
 }
 
 function trash(path: string): void {
@@ -236,6 +276,7 @@ async function launchApp(app: string, executable: string, marker: string, profil
   if (pid === null) throw new Error(`Could not find the launched ${app} process`)
   const owned = pid
   return {
+    pid: owned,
     async close() {
       await stopProcess(owned)
       // Helpers can hold the profile for a moment after the main process exits.
@@ -252,12 +293,18 @@ async function launchApp(app: string, executable: string, marker: string, profil
 // else; the page drives itself as in the other browsers.
 async function launchChrome(url: string, runId: string): Promise<Session> {
   const profile = join(PROFILES_DIR, `lab-chrome-${runId}`)
-  mkdirSync(profile, { recursive: true })
+  mkdirSync(join(profile, 'Default'), { recursive: true })
+  // Profile prefs Chrome reads at startup: the accept languages (types.ts ProcessLanguages.launch).
+  const prefs = languages.launch!.prefs
+  writeFileSync(join(profile, 'Default', 'Preferences'), JSON.stringify({ intl: { accept_languages: prefs['intl.accept_languages'], selected_languages: prefs['intl.selected_languages'] } }))
   const session = await launchApp(CHROME_APP, `${CHROME_APP}/Contents/MacOS/Google Chrome`, `--user-data-dir=${profile}`, profile, [
     `--user-data-dir=${profile}`, '--no-first-run', '--no-default-browser-check', '--disable-sync', '--disable-extensions',
     '--disable-component-update', '--disable-background-timer-throttling', '--disable-backgrounding-occluded-windows',
     '--disable-renderer-backgrounding', '--window-size=1200,900', '--no-startup-window', '--remote-debugging-port=0',
+    ...languages.launch!.arguments,
   ])
+  // Known before the window opens, so the page's first step can read the renderers (chromeUiLanguage).
+  chromePid = session.pid
   try {
     await openBackgroundChromeWindow(profile, url)
   } catch (error) {
@@ -312,6 +359,7 @@ function launchFirefox(url: string, runId: string): Promise<Session> {
     ['startup.homepage_welcome_url.additional', ''], ['datareporting.policy.firstRunURL', ''],
     ['datareporting.policy.dataSubmissionPolicyBypassNotification', true], ['toolkit.telemetry.reportingpolicy.firstRun', false],
     ['browser.sessionstore.resume_from_crash', false], ['dom.timeout.enable_budget_timer_throttling', false],
+    ...FIREFOX_LANGUAGE_PREFS,
   ]
   writeFileSync(join(profile, 'user.js'), prefs.map(([name, value]) => `user_pref(${JSON.stringify(name)}, ${JSON.stringify(value)});\n`).join(''))
   return launchApp(FIREFOX_APP, `${FIREFOX_APP}/Contents/MacOS/firefox`, ` --profile ${profile} `, profile,
@@ -374,6 +422,7 @@ async function launchSafari(url: string, runId: string, baseUrl: string): Promis
   ])
   const owns = (tabUrl: string): boolean => tabUrl === marker || tabUrl.startsWith(`${baseUrl}/lab?run=${runId}`)
   return {
+    pid: null,
     async close() {
       try {
         const urls = appleScript([
@@ -416,6 +465,7 @@ async function launchWebKitHost(url: string): Promise<Session> {
   })
   const exited = (ms: number): Promise<boolean> => Promise.race([host.exited.then(() => true), Bun.sleep(ms).then(() => false)])
   return {
+    pid: host.pid,
     async close() {
       closing = true
       if (await exited(2_000)) return
@@ -449,7 +499,7 @@ function portInUse(port: number): boolean {
   return Bun.spawnSync(['lsof', '-nP', `-iTCP:${port}`, '-sTCP:LISTEN']).exitCode === 0
 }
 
-type PageRow = Omit<LabRow, 'family' | 'browser' | 'case'>
+type PageRow = Omit<LabRow, 'family' | 'browser' | 'build' | 'languages' | 'case'>
 type Pending = { seq: number; start: number; end: number; sends: number }
 
 const runId = randomUUID()
@@ -458,10 +508,12 @@ mkdirSync(outDir, { recursive: true })
 const rowsPath = join(outDir, `${browser}-rows.ndjson`)
 const runPath = join(outDir, `${browser}-run.json`)
 const errors: string[] = []
-const totals = { selected: cases.length, rows: 0, chunks: 0, navigations: 0, resends: 0, nativeErrors: 0, predictionErrors: 0, painterErrors: 0, rejectedStyleRows: 0, missingFontRows: 0 }
+const totals = { selected: cases.length, rows: 0, chunks: 0, navigations: 0, resends: 0, nativeErrors: 0, predictionErrors: 0, painterErrors: 0, rejectedStyleRows: 0, missingFontRows: 0, skippedNativeRows: 0 }
 const missingFontCounts = new Map<string, number>()
 const envs = new Map<string, number>()
 const visibility = new Map<string, number>()
+// The browser's languages as pages report them, next to the given facts (types.ts PageEnv.navigatorLanguages).
+const pageLanguages = new Map<string, number>()
 let firstEnv: PageRow['env'] | null = null
 let next = 0
 let seqCounter = 0
@@ -474,6 +526,9 @@ let settle: { resolve: () => void; reject: (error: Error) => void } | null = nul
 const completion = new Promise<void>((resolve, reject) => { settle = { resolve, reject } })
 completion.catch(() => {})
 const rowsFd = openSync(rowsPath, 'w')
+let session: Session | null = null
+// Chrome's browser process, set by launchChrome as soon as it runs.
+let chromePid: number | null = null
 
 function stopRun(error: Error): void {
   settle?.reject(error)
@@ -486,11 +541,12 @@ function writeRows(rows: PageRow[], start: number): void {
     const c = cases[start + i]!
     if (row.id !== c.id) throw new Error(`Row ${i} of the chunk is ${row.id}; expected ${c.id}`)
     if (!userAgentMatches(browser, build, row.env.userAgent)) throw new Error(`Row ${c.id}: user agent ${row.env.userAgent} doesn't name the build read before launch (${JSON.stringify(build)})`)
-    const full: LabRow = { id: c.id, family: c.family, browser, build, case: c, env: row.env, native: row.native, prediction: row.prediction, painter: row.painter, timings: row.timings }
+    const full: LabRow = { id: c.id, family: c.family, browser, build, languages, case: c, env: row.env, native: row.native, prediction: row.prediction, painter: row.painter, timings: row.timings }
     text += JSON.stringify(full) + '\n'
-    if ('error' in row.native) totals.nativeErrors++
+    if ('skipped' in row.native) totals.skippedNativeRows++
+    else if ('error' in row.native) totals.nativeErrors++
     else if (row.native.rejectedStyles.length > 0) totals.rejectedStyleRows++
-    if (!('error' in row.native) && (row.native.missingFonts ?? []).length > 0) {
+    if (!('error' in row.native) && !('skipped' in row.native) && (row.native.missingFonts ?? []).length > 0) {
       totals.missingFontRows++
       for (const family of row.native.missingFonts!) missingFontCounts.set(family, (missingFontCounts.get(family) ?? 0) + 1)
     }
@@ -499,6 +555,8 @@ function writeRows(rows: PageRow[], start: number): void {
     const key = JSON.stringify({ userAgent: row.env.userAgent, devicePixelRatio: row.env.devicePixelRatio, visualViewportScale: row.env.visualViewportScale })
     envs.set(key, (envs.get(key) ?? 0) + 1)
     visibility.set(row.env.visibilityState, (visibility.get(row.env.visibilityState) ?? 0) + 1)
+    const reported = JSON.stringify({ navigatorLanguages: row.env.navigatorLanguages ?? null, intlLocale: row.env.intlLocale ?? null })
+    pageLanguages.set(reported, (pageLanguages.get(reported) ?? 0) + 1)
     firstEnv ??= row.env
   }
   writeSync(rowsFd, text)
@@ -506,9 +564,24 @@ function writeRows(rows: PageRow[], start: number): void {
 }
 
 async function step(request: Request): Promise<Response> {
-  const body = await request.json() as { runId: string; pageLang: string; fonts: string[]; seq: number | null; rows: PageRow[] }
+  const body = await request.json() as { runId: string; pageLang: string; fonts: string[]; navigatorLanguages?: string[]; seq: number | null; rows: PageRow[] }
   if (body.runId !== runId) return new Response('Inactive run', { status: 409 })
-  firstStepAt ??= Date.now()
+  if (firstStepAt === null) {
+    firstStepAt = Date.now()
+    // A renderer runs now; its --lang is Chrome's application locale.
+    if (browser === 'chrome') {
+      if (chromePid === null) throw new Error('Chrome asked for work before its process was known')
+      const read = chromeUiLanguage(chromePid)
+      languages.given = { engine: 'blink', uiLanguage: read.value }
+      languages.derivation.push(`read --lang=${read.value} from ${read.renderers} renderer process${read.renderers === 1 ? '' : 'es'}`)
+    }
+    // WebKit's process languages as the first page shows them (languages.ts webkitPreferredLanguages).
+    if ((browser === 'safari' || browser === 'webkit-host') && languages.given.engine === 'webkit') {
+      const shown = body.navigatorLanguages ?? []
+      languages.given = { ...languages.given, preferredLanguages: webkitPreferredLanguages(shown) }
+      languages.derivation.push(`preferredLanguages ${JSON.stringify(languages.given.preferredLanguages)} from navigator.languages ${JSON.stringify(shown)}, the first entry of WebContent's userPreferredLanguages(); the global AppleLanguages were ${JSON.stringify(languages.os.appleLanguages)}`)
+    }
+  }
   if (body.seq !== null) {
     if (pending === null || body.seq !== pending.seq) throw new Error(`Page acknowledged chunk ${body.seq}; pending is ${pending?.seq ?? 'none'}`)
     if (!Array.isArray(body.rows) || body.rows.length !== pending.end - pending.start) throw new Error(`Chunk ${pending.seq} returned ${body.rows?.length} rows; expected ${pending.end - pending.start}`)
@@ -544,7 +617,7 @@ async function step(request: Request): Promise<Response> {
     pending = { seq: seqCounter++, start, end, sends: 0 }
   }
   pending.sends++
-  return asciiJsonResponse({ kind: 'chunk', seq: pending.seq, browser, build: build.engine, cases: cases.slice(pending.start, pending.end) })
+  return asciiJsonResponse({ kind: 'chunk', seq: pending.seq, browser, build: build.engine, languages: languages.given, ...(predictOnly ? { predictOnly: true } : {}), cases: cases.slice(pending.start, pending.end) })
 }
 
 function pageHtml(lang: string, families: string[]): string {
@@ -556,7 +629,6 @@ function pageHtml(lang: string, families: string[]): string {
     + '<script type="module" src="/page.js"></script></body></html>'
 }
 
-let session: Session | null = null
 let server: ReturnType<typeof Bun.serve> | null = null
 let bundleBytes = 0
 process.on('SIGINT', () => stopRun(new Error('Interrupted')))
@@ -612,7 +684,7 @@ try {
   const baseUrl = `http://127.0.0.1:${server.port}`
   const first = cases[0]!
   const url = `${baseUrl}/lab?run=${runId}&lang=${encodeURIComponent(first.pageLang)}&fonts=${encodeURIComponent(fixtureFamilies(first).join('|'))}`
-  console.log(`[lab] ${browser}: ${cases.length} cases, ${casesByContext.size} page contexts; serving ${baseUrl}`)
+  console.log(`[lab] ${browser}: ${cases.length} cases, ${casesByContext.size} page contexts${predictOnly ? ', predictions only' : ''}; serving ${baseUrl}`)
   switch (browser) {
     case 'chrome': session = await launchChrome(url, runId); break
     case 'firefox': session = await launchFirefox(url, runId); break
@@ -630,7 +702,9 @@ try {
   }
   if (totals.rows !== cases.length) errors.push(`Wrote ${totals.rows} rows for ${cases.length} cases`)
   if (totals.nativeErrors > 0) errors.push(`${totals.nativeErrors} native observation errors`)
+  if (predictOnly ? totals.skippedNativeRows !== totals.rows : totals.skippedNativeRows > 0) errors.push(`${totals.skippedNativeRows} of ${totals.rows} rows skipped native observation${predictOnly ? '; --predict-only expects all' : ''}`)
   if (envs.size > 1) errors.push(`The environment changed during the run: ${[...envs.keys()].join(' | ')}`)
+  if (pageLanguages.size > 1) errors.push(`The languages pages report changed during the run: ${[...pageLanguages.keys()].join(' | ')}`)
 } catch (error) {
   errors.push(message(error))
 } finally {
@@ -647,8 +721,9 @@ try {
   writeFileSync(runPath, JSON.stringify({
     status: errors.length === 0 ? 'ok' : 'error',
     errors,
-    browser, build, runId, casesFile: resolve(casesPath), rowsFile: rowsPath, predictor: predictorPath,
+    browser, build, languages, runId, casesFile: resolve(casesPath), rowsFile: rowsPath, predictor: predictorPath,
     family: familyFilter ?? null, limit: limit === Number.MAX_SAFE_INTEGER ? null : limit, order, chunkSize, bundleBytes, allowSafariFrontmost,
+    predictOnly,
     startedAt: startedAt.toISOString(), finishedAt: finishedAt.toISOString(), durationMs: finishedAt.getTime() - startedAt.getTime(),
     // From the start to the page's first request (bundle, launch, page load), then from there to the end.
     launchMs: firstStepAt === null ? null : firstStepAt - startedAt.getTime(),
@@ -658,6 +733,7 @@ try {
     pageContexts: [...casesByContext].map(([key, list]) => ({ context: JSON.parse(key) as [string, string[]], cases: list.length })),
     env: firstEnv,
     envs: [...envs].map(([key, rows]) => ({ ...JSON.parse(key) as object, rows })),
+    pageLanguages: [...pageLanguages].map(([key, rows]) => ({ ...JSON.parse(key) as object, rows })),
     visibility: Object.fromEntries(visibility),
   }, null, 2) + '\n')
   console.log(`[lab] ${browser}: ${errors.length === 0 ? 'ok' : 'error'}; ${totals.rows} rows; ${runPath}`)

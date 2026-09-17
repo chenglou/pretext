@@ -1,6 +1,7 @@
-// The library's data: the styled paragraph it takes, with the facts about its fonts that Canvas can't show, and the lines
-// each engine computes, in that engine's own geometry and units. DESIGN.md §1 and §2 explain every field with examples.
-// The observation contract at the end (DESIGN.md §9) is what the lab computes from a layout; the library never does.
+// The library's data: the styled paragraph it takes, a tree of inline content with the facts about its fonts that Canvas
+// can't show, and the lines each engine computes, in that engine's own geometry and units. DESIGN.md §1 and §2 explain
+// every field with examples. The observation contract at the end (DESIGN.md §9) is what the lab computes from a layout;
+// the library never does.
 import type { BlinkLineStart } from './engines/blink/types.js'
 import type { GeckoLineStart } from './engines/gecko/types.js'
 import type { WebKitLineStart } from './engines/webkit/types.js'
@@ -62,54 +63,133 @@ export type WordBreak = 'normal' | 'break-all' | 'keep-all' | 'break-word'
 export type OverflowWrap = 'normal' | 'break-word' | 'anywhere'
 export type LineBreak = 'auto' | 'loose' | 'normal' | 'strict' | 'anywhere'
 export type Direction = 'ltr' | 'rtl'
+// text-align of the block. text-align-last is fixed at auto: the last line and a line ending at a forced break take
+// start where text-align is justify, and text-align otherwise (Blink LineInfo::GetTextAlign, line_info.cc:109-125;
+// WebKit horizontalAlignmentOffset, InlineFormattingUtils.cpp:198-260; Gecko nsLineLayout::TextAlignLine,
+// nsLineLayout.cpp:3482-3670).
+export type TextAlign = 'start' | 'end' | 'left' | 'right' | 'center' | 'justify'
+// vertical-align of an inline element as far as it decides shaping edges. '0px' is a length that moves nothing, but a
+// value other than baseline ends shaping at the element's edges in Blink (ShouldBreakShapingBeforeBox and AfterBox,
+// inline_node.cc:494-527) and ends a text run in Gecko (ContinueTextRunAcrossFrames, nsTextFrame.cpp:2054-2137). Vertical
+// positions aren't modeled, so no value that moves the baseline is offered.
+export type VerticalAlign = 'baseline' | '0px'
 
-export type TextRunOf<Font> = {
-  text: string
-  // 'span': the text in its own <span> carrying this run's styles.
-  // 'text': a bare text node inheriting the paragraph's styles (for example white space between spans);
-  // its font, letterSpacing, wordSpacing and lang must equal the paragraph's.
-  node: 'span' | 'text'
+// The inherited properties that decide lines, as computed for one element: the block's own, or an inline element's.
+// Every element carries all of them written out, so the library never computes inheritance: an element whose author
+// set nothing carries its parent's values. Engines read the style the source reads: Blink the item's style
+// (SetCurrentStyleForce, line_breaker.cc:4557-4643), WebKit the item's, parent's, nearest common ancestor's or root's
+// depending on the site (specs/webkit-lines.md; webkit-shortcut-audit F1), Gecko the frame's and each span's
+// (nsLineLayout::BeginSpan, nsLineLayout.cpp:378-416).
+export type TextStyleOf<Font> = {
   font: Font
+  // CSS px.
   letterSpacing: number
   wordSpacing: number
-  // The span's lang attribute; null inherits the paragraph's.
-  lang: string | null
-}
-
-// The paragraph with fonts of one kind: CSS fonts as a page declares them (the lab's cases), or declarations with
-// facts (the library's input).
-export type ParagraphOf<Font> = {
-  runs: TextRunOf<Font>[]
-  // The block's own styles, inherited by bare text nodes.
-  font: Font
-  letterSpacing: number
-  wordSpacing: number
-  // Content-box width in CSS px.
-  width: number
-  // Fixed line height in CSS px.
-  lineHeight: number
   whiteSpace: WhiteSpace
   wordBreak: WordBreak
   overflowWrap: OverflowWrap
   lineBreak: LineBreak
   tabSize: number
-  direction: Direction
-  // The paragraph element's lang attribute.
-  lang: string
 }
 
-export type TextRun = TextRunOf<FontDecl>
+// One inline side of an inline element's box, CSS px as declared: margin (may be negative), border width and padding.
+// Engines turn each into their units as their style systems do: Blink ComputeLineMarginsForSelf, ComputeLineBorders
+// and ComputeLinePadding (line_breaker.cc:3937-3955, :245-252), WebKit's BoxGeometry (InlineFormattingUtils.cpp:321-325),
+// Gecko's computed border and padding and the frame's margin (nsInlineFrame.cpp:501-521, nsLineLayout.cpp:1199-1228).
+export type BoxEdge = { margin: number; border: number; padding: number }
+
+export const NO_BOX_EDGE: BoxEdge = { margin: 0, border: 0, padding: 0 }
+
+// A DOM text node, styled by its parent element. A leaf with empty text makes no DOM node; it keeps the run indices of
+// a flat paragraph whose span holds no text (DESIGN.md §1.1).
+export type TextLeaf = { kind: 'text'; text: string }
+
+// An inline element (<span>, display: inline): its computed style, its lang attribute, the edges of its box at its
+// inline start and end, and its children. With box-decoration-break: slice, the start edge goes on the element's first
+// line and the end edge on its last (Blink HandleOpenTag and HandleCloseTag, line_breaker.cc:3957-4025; WebKit
+// inlineItemWidth, InlineFormattingUtils.cpp:300-333; Gecko nsInlineFrame::ReflowFrames, nsInlineFrame.cpp:505-522).
+export type InlineElementOf<Font> = TextStyleOf<Font> & {
+  kind: 'span'
+  // The element's lang attribute; null when it has none, so the nearest ancestor's applies. '' is lang="".
+  lang: string | null
+  inlineStart: BoxEdge
+  inlineEnd: BoxEdge
+  verticalAlign: VerticalAlign
+  children: InlineNodeOf<Font>[]
+}
+
+// An atomic inline of declared size: an inline-block such as a chip, or an image. Its contents aren't modeled. The
+// engines place its margin box as one unbreakable item, with a soft wrap opportunity on both sides whatever the text
+// around it (Blink U+FFFC in text_content, inline_items_builder.cc:1269-1283, and HandleAtomicInline, line_breaker.cc:3043;
+// WebKit isAtSoftWrapOpportunity, InlineFormattingUtils.cpp:446-450, and its margin box width, :321-333; Gecko's non-text
+// frame path, nsLineLayout.cpp:1057-1080). Wrapping around it follows its parent's white-space.
+export type AtomicInline = {
+  kind: 'atomic'
+  // The border box in CSS px (box-sizing: border-box). The painter aligns the box to the line top, so while height is at
+  // most the paragraph's line height the line box height stays the line height (CSS 2.1 §10.8).
+  width: number
+  height: number
+  marginInlineStart: number
+  marginInlineEnd: number
+}
+
+// <br>: a forced line break (Blink LayoutBR's LF control item, inline_items_builder.cc:1163-1198, layout_br.cc:33-37;
+// WebKit's line break box, InlineItemsBuilder.cpp:1076; Gecko BRFrame, always placed, nsLineLayout.cpp:1273-1278).
+export type LineBreakElement = { kind: 'br' }
+
+// <wbr>: a soft wrap opportunity that holds no character (Blink LayoutWordBreak, an empty LayoutText,
+// layout_word_break.cc:35, appends an opaque U+200B flow-control item, inline_items_builder.cc:597-607, 1211-1218; WebKit's
+// word break opportunity item, InlineFormattingUtils.cpp:311, 469; Gecko WBRFrame).
+export type WordBreakElement = { kind: 'wbr' }
+
+export type InlineNodeOf<Font> = TextLeaf | InlineElementOf<Font> | AtomicInline | LineBreakElement | WordBreakElement
+
+// The paragraph with fonts of one kind: CSS fonts as a page declares them (the lab's cases), or declarations with
+// facts (the library's input). It stands for one block element: <div lang style="…">content</div>.
+export type ParagraphOf<Font> = TextStyleOf<Font> & {
+  // The block's children in document order.
+  content: InlineNodeOf<Font>[]
+  // The block's lang attribute. '' is lang="": the language is unknown and doesn't inherit <html lang>.
+  lang: string
+  direction: Direction
+  // Content-box width in CSS px. Line slots narrow it per line (LineSlot).
+  width: number
+  // Fixed line height in CSS px, on the block and every inline element.
+  lineHeight: number
+  // text-indent in CSS px (no percentages, each-line or hanging): applied to the first formatted line (Blink
+  // ShouldApplyTextIndent, line_breaker.cc:45-56, :846-857, :878-879; WebKit computedTextIndent,
+  // InlineFormattingUtils.cpp:143-176; Gecko nsLineLayout::BeginLineReflow, nsLineLayout.cpp:178-201).
+  textIndent: number
+  textAlign: TextAlign
+}
+
+export type TextStyle = TextStyleOf<FontDecl>
+export type InlineElement = InlineElementOf<FontDecl>
+export type InlineNode = InlineNodeOf<FontDecl>
 export type Paragraph = ParagraphOf<FontDecl>
 
 // ---- Output: shared by every engine ----
 
-// A piece of a line in logical order, as the engine classifies its content. `run` indexes paragraph.runs; offsets are
-// UTF-16 offsets into the concatenation of all run texts. Fragments carry no widths: widths and positions are in the
+// Where a line box sits between floats: the CSS px its band takes off the paragraph's content box at the left and right
+// edges, the widths of the float margin boxes there (DESIGN.md §2.9). A zero inset is no float on that side. Each engine
+// turns the insets into its own line offsets with its own arithmetic: Blink's LineLayoutOpportunity (line_left_offset,
+// line_right_offset, line_layout_opportunity.h), WebKit's float-avoiding line rect (InlineLineBuilder.cpp:1185-1216),
+// Gecko's float available space (nsBlockFrame.cpp:5252-5273).
+export type LineSlot = { left: number; right: number }
+
+export const FULL_WIDTH: LineSlot = { left: 0, right: 0 }
+
+// A piece of a line in logical order, as the engine classifies its content. `run` indexes the paragraph's text leaves in
+// document order; `element` indexes its elements (span, atomic, br, wbr) in document order, the block excluded. Offsets
+// are UTF-16 offsets into the concatenation of all text leaves. Fragments carry no widths: widths and positions are in the
 // line's geometry, in the engine's units.
 //
 // `level` is the bidi embedding level the engine reorders the piece with, after its own line-end rule for trailing white
 // space (Blink compares levels, WebKit parity, Gecko has none; specs/bidi.md §6). Engines split pieces where the level
 // changes, as they split items and frames, so the painter can rebuild the paragraph's levels (specs/painter.md §4.4).
+//
+// Every source unit belongs to exactly one line's fragments, and so does every atomic, br and wbr element and every
+// span's start edge and end edge.
 export type Fragment =
   // Content the engine lays out on this line: the source range as it is in the engine's content (collapsed white space
   // is one space, a newline in normal is a space). It includes controls the engine keeps in its content without placing
@@ -130,25 +210,45 @@ export type Fragment =
   | { kind: 'hyphen'; run: number; at: number; painted: string; letterSpacing: number; level: number }
   // A preserved newline, U+2028 or U+2029 that ended the line. Not painted.
   | { kind: 'forced-break'; run: number; start: number; end: number }
+  // The line holds this span's start edge or end edge: Blink's open or close tag result (line_breaker.cc:3957-4025),
+  // WebKit's inline box start or end item on the line, Gecko's first or last continuation of the nsInlineFrame. A span
+  // with nothing on a line but its descendants has neither on that line.
+  | { kind: 'box-start'; element: number }
+  | { kind: 'box-end'; element: number }
+  // An atomic inline placed on this line.
+  | { kind: 'atomic'; element: number; level: number }
+  // A <br> that ended this line. Not painted.
+  | { kind: 'br'; element: number }
+  // A <wbr> consumed on this line. Not painted.
+  | { kind: 'wbr'; element: number }
 
 // The state the next line starts from, per engine (DESIGN.md §2.7).
 export type LineStart = BlinkLineStart | WebKitLineStart | GeckoLineStart
 
 export type LineOf<Start, Geometry> = {
-  // [start, end) covers every source unit the line consumed; consecutive lines tile the text.
+  // [start, end) covers every source unit the line consumed; consecutive lines tile the text. Elements that hold no text
+  // are placed by fragments.
   start: number
   end: number
   fragments: Fragment[]
   // Whether the engine gives the line a line box that holds content: false for Blink's empty lines
   // (LineInfo::ShouldCreateLineBox, line_breaker.cc:945-975), WebKit lines without contentful inline content
-  // (LineLayoutResult.h:94-105) and Gecko line boxes of block size 0 (nsLineLayout.cpp:1690-1712). Such a line is still a
-  // line of the engine and is returned; it paints nothing, and the lab and the painter skip it.
+  // (LineLayoutResult.h:94-105) and Gecko line boxes of block size 0 (nsLineLayout.cpp:1690-1712). A span's box edge,
+  // an atomic inline or a <br> makes content. Such a line is still a line of the engine and is returned; it paints
+  // nothing, takes no block size, and the lab and the painter skip it.
   hasLineBox: boolean
   // The paragraph's shaping joined the letters on both sides of this line's end: Blink reshaped the edge with HarfBuzz
   // context under an OpenType joining font (FontFacts.joining), Gecko broke inside one shaped word. The painter puts
   // U+200D on both sides of the edge (specs/painter.md R7). Always false in WebKit, which never shapes across a line
   // edge (specs/painter.md §3.2 c).
   joinsNextLine: boolean
+  // The slot the line was laid out in.
+  slot: LineSlot
+  // The engine applied the paragraph's text-indent to this line.
+  indented: boolean
+  // The alignment the engine used for this line: text-align, or start for the last line and a line ending at a forced
+  // break under justify (TextAlign).
+  align: TextAlign
   geometry: Geometry
   // Gaps that depend on this line's breaks (DESIGN.md §2.8).
   gaps: Gap[]
@@ -156,11 +256,21 @@ export type LineOf<Start, Geometry> = {
   next: Start | null
 }
 
+// What an engine returns for one slot: the line it places there, or its decision to move the line box down past the
+// floats narrowing the slot, because the line's first content doesn't fit beside them (CSS 2.1 §9.5). Blink continues
+// with the next layout opportunity (inline_layout_algorithm.cc:1336-1367); WebKit wraps the candidate and moves the next
+// line top below the float (InlineLineBuilder.cpp:1452-1457, InlineFormattingUtils.cpp:54-103); Gecko redoes the line in
+// the next band (LineReflowStatus::RedoNextBand, nsBlockFrame.cpp:5289-5299, :5549-5555). A slot without insets never
+// gives below-floats. `gaps` are the gaps the decision rests on.
+export type LineResultOf<Start, Geometry> =
+  | { kind: 'line'; line: LineOf<Start, Geometry> }
+  | { kind: 'below-floats'; gaps: Gap[] }
+
 // ---- Output: Blink geometry (Chrome 153). Raw LayoutUnits count 1/64 of a zoomed px (specs/blink-lines.md §1.1) ----
 
 // One unit of Blink's OffsetMapping over the line's source units (offset_mapping.cc:278-299, 405-459): source [start,
 // end) maps to text_content [textStart, textEnd). A collapsed unit maps to an empty range; a unit Blink generated, such
-// as U+200B after leading preserved spaces, has an empty source range.
+// as U+200B after leading preserved spaces or U+FFFC for an atomic inline, has an empty source range.
 export type BlinkMappingUnit = { run: number; start: number; end: number; textStart: number; textEnd: number; collapsed: boolean }
 
 // A HarfBuzz cluster of a shape result: consecutive glyphs sharing one character index, at
@@ -173,13 +283,13 @@ export type BlinkGlyphCluster = {
   // one grapheme per code unit except CR LF for 8-bit, character_break_iterator.cc:76-87, 180-198). ShapeResult splits a
   // cluster's advance equally among its graphemes (shape_result.cc:310-329).
   graphemeStarts: number[]
-  // The cluster's advance in 16.16 fixed point of zoomed px (TextRunLayoutUnit).
+  // The cluster's advance in 16.16 fixed point of zoomed px (TextRunLayoutUnit), justification spacing included.
   advance: number
 }
 
 // A FragmentItem of a line (logical_line_builder.cc:200-464), positioned by ComputeInlinePositions and ApplyTextAlign
-// (inline_box_state.cc:845-856, inline_layout_algorithm.cc:303-311, 361-389). x and inlineSize are raw LayoutUnits from
-// the content box's left edge; level is the item's bidi level, whose parity is its direction.
+// (inline_box_state.cc:845-856, inline_layout_algorithm.cc:303-311, 361-389, 943-970). x and inlineSize are raw
+// LayoutUnits from the content box's left edge; level is the item's bidi level, whose parity is its direction.
 export type BlinkItem =
   // Text with a ShapeResultView over [textStart, textEnd).
   | { kind: 'text'; run: number; textStart: number; textEnd: number; level: number; x: number; inlineSize: number; clusters: BlinkGlyphCluster[] }
@@ -191,17 +301,38 @@ export type BlinkItem =
   // The generated hyphen of a chosen soft hyphen, after the text item it ends at an even level and before it at an odd
   // level (PlaceHyphen, logical_line_builder.cc:447-464).
   | { kind: 'hyphen'; run: number; level: number; x: number; inlineSize: number }
+  // The box fragment of a span that creates one (InlineItem::ShouldCreateBoxFragment: box edges, among other reasons,
+  // line_breaker.cc:3944-3946); a culled span has no item. x and inlineSize are its border box on this line; the start
+  // edge is on its first line and the end edge on its last (LayoutInline::QuadsForSelfInternal, layout_inline.cc:428-470).
+  | { kind: 'inline-box'; element: number; x: number; inlineSize: number; hasStartEdge: boolean; hasEndEdge: boolean }
+  // An atomic inline: its border box, and its inline margins as raw LayoutUnits (HandleAtomicInline, line_breaker.cc:3043-3110).
+  | { kind: 'atomic'; element: number; level: number; x: number; inlineSize: number; marginStart: number; marginEnd: number }
+  // A <br>: LayoutBR's forced-break control item (inline_items_builder.cc:1163-1198).
+  | { kind: 'br'; element: number; level: number; x: number; inlineSize: number }
 
 export type BlinkLineGeometry = {
   // Device scale factor times browser zoom. raw / 64 / layoutZoom is CSS px.
   layoutZoom: number
-  // LineInfo::AvailableWidth: trunc(f32(f32(width × layoutZoom) × 64)) raw.
+  // LineLayoutOpportunity::line_left_offset and line_right_offset from the content box's left edge, raw: the band between
+  // the slot's floats (line_layout_opportunity.h; inline_layout_algorithm.cc:1222-1224).
+  lineLeft: number
+  lineRight: number
+  // LineInfo::AvailableWidth: lineRight − lineLeft; for a slot without insets trunc(f32(f32(width × layoutZoom) × 64)).
   availableWidth: number
-  // LineInfo::Width (line_breaker.cc:1149-1161): the sum of the line's item results, hanging spaces included.
+  // LineInfo::TextIndent(), the text-indent applied to this line and the position line filling starts from
+  // (line_breaker.cc:846-857, :878-879), raw; 0 on lines it doesn't apply to.
+  textIndent: number
+  // LineInfo::NeedsAccurateEndPosition from text-align and direction (line_info.cc:127-175): whether a line ending at a
+  // space is reshaped at its end (line_breaker.cc:255-268).
+  needsAccurateEndPosition: boolean
+  // LineInfo::Width (line_breaker.cc:1149-1161): the sum of the line's item results, hanging spaces, text-indent and box
+  // edges included.
   width: number
   // The part of width that hangs: preserved trailing spaces that don't count against availableWidth
   // (LineInfo::ComputeTrailingSpaceWidth, line_info.cc:289-400).
   hangWidth: number
+  // The offset ApplyTextAlign added to every item, raw (inline_layout_algorithm.cc:943-970); 0 under start in LTR.
+  alignOffset: number
   mapping: BlinkMappingUnit[]
   // In visual order (logical_line_builder.cc:688-760).
   items: BlinkItem[]
@@ -211,7 +342,7 @@ export type BlinkLineGeometry = {
 
 // An InlineDisplay::Box of type Text, WordSeparator or SoftLineBreak, one per text or soft-line-break Line::Run after
 // close() (InlineDisplayContentBuilder.cpp:118-144, 196-325).
-export type WebKitDisplayBox = {
+export type WebKitTextBox = {
   kind: 'text' | 'soft-line-break'
   run: number
   // [start, end): the box's content as offsets into the run's text (InlineDisplay::Box::Text start and length).
@@ -226,12 +357,32 @@ export type WebKitDisplayBox = {
   width: number
   // needsHyphen: the rendered content is the box text followed by this string (InlineDisplayContentBuilder.cpp:279-281).
   hyphen: string | null
+  // The justification expansion included in width (InlineContentAligner::applyExpansionOnRange,
+  // InlineContentAligner.cpp:230-266); 0 unless the line is justified.
+  expansion: number
 }
 
+export type WebKitDisplayBox =
+  | WebKitTextBox
+  // A NonRootInlineBox: a span's border box on this line, with its start edge on its first line and its end edge on its
+  // last (RenderInline::absoluteQuads reports these, RenderInline.cpp:237-241).
+  | { kind: 'inline-box'; element: number; x: number; width: number; hasStartEdge: boolean; hasEndEdge: boolean }
+  // An AtomicInlineBox: the border box of an atomic inline.
+  | { kind: 'atomic'; element: number; level: number; x: number; width: number }
+  // A LineBreakBox for <br> (RenderLineBreak::absoluteQuads, RenderLineBreak.cpp:97-104).
+  | { kind: 'line-break'; element: number; x: number; width: number }
+
 export type WebKitLineGeometry = {
-  // The line's available width: trunc64(f32(width × pageZoom)) as float32 (StylePrimitiveData.h:341-360).
+  // m_lineLogicalRect's left edge after floats, before text-indent, from the content box (LineBuilder::initialize,
+  // InlineLineBuilder.cpp:463-476, floatAvoidingRect :1185-1216), float32 px.
+  lineLeft: number
+  // m_lineContentEdgeOffset: how far floats and text-indent moved the line start, which tab stops read
+  // (InlineLineBuilder.cpp:478).
+  contentEdgeOffset: number
+  // The line's available width after floats and text-indent: m_lineLogicalRect.width(), from LayoutUnit-truncated
+  // lengths (StylePrimitiveData.h:341-360).
   lineBoxWidth: number
-  // Line::contentLogicalWidth after close(): trimmed content removed, hanging content and the hyphen included
+  // Line::contentLogicalWidth after close(): trimmed content removed, hanging content, box edges and the hyphen included
   // (InlineLine.cpp:745-778).
   contentWidth: number
   // HangingContent's trailing white-space width, which doesn't count against the available width (InlineLine.h:370-376).
@@ -239,6 +390,9 @@ export type WebKitLineGeometry = {
   // contentGeometry.logicalRightIncludingNegativeMargin, where an RTL line's content edge is computed from
   // (InlineDisplayLineBuilder.cpp:136-138).
   contentLogicalRight: number
+  // horizontalAlignmentOffset (InlineFormattingUtils.cpp:198-260, InlineLineBuilder.cpp:363): where content starts
+  // inside the line rect; 0 under start in LTR.
+  alignmentOffset: number
   // In box index order: visual order (InlineIteratorTextBox.cpp:71-102).
   boxes: WebKitDisplayBox[]
 }
@@ -251,13 +405,14 @@ export type GeckoCharacter = {
   skipped: boolean
   // The text run's IsClusterStart flag at the unit's transformed index (gfxFont.cpp:708-769); false when skipped.
   clusterStart: boolean
-  // What GetAdvanceWidth adds for the unit: its glyph advance or ligature share and the letter spacing, word spacing and
-  // tab width after it (gfxTextRun.cpp:1214-1256, nsTextFrame.cpp:4089-4295).
+  // What GetAdvanceWidth adds for the unit: its glyph advance or ligature share and the letter spacing, word spacing,
+  // justification spacing and tab width after it (gfxTextRun.cpp:1214-1256, nsTextFrame.cpp:4089-4295).
   advance: number
 }
 
 // An nsTextFrame continuation placed on the line (nsTextFrame::ReflowText, nsTextFrame.cpp:10847-11532).
-export type GeckoFrameGeometry = {
+export type GeckoTextFrame = {
+  kind: 'text'
   run: number
   // GetContentOffset and GetContentEnd, as source offsets.
   contentStart: number
@@ -277,23 +432,48 @@ export type GeckoFrameGeometry = {
   characters: GeckoCharacter[]
 }
 
+export type GeckoFrameGeometry =
+  | GeckoTextFrame
+  // An nsInlineFrame continuation: a span's border box on this line, x from the content box. It has its start edge only
+  // without a previous continuation, and its end margin, border and padding only as the last one
+  // (nsInlineFrame.cpp:505-522, nsLineLayout.cpp:1199-1228); its children follow it in the list.
+  | { kind: 'inline'; element: number; x: number; width: number; hasStartEdge: boolean; hasEndEdge: boolean }
+  // The frame of an atomic inline: its border box.
+  | { kind: 'atomic'; element: number; level: number; x: number; width: number }
+  // A BRFrame.
+  | { kind: 'br'; element: number; x: number; width: number }
+
 export type GeckoLineGeometry = {
   // max(1, round(60 / devicePixelRatio)) (nsDeviceContext.cpp:52-63).
   appUnitsPerDevPixel: number
-  // The available inline size: NSToIntRound(f32(width) × 60).
+  // The float available space of the line's band: its physical left edge from the content box and its inline size,
+  // BeginLineReflow's iStart and availISize (nsBlockFrame.cpp:5252-5273).
+  lineLeft: number
   availableWidth: number
+  // aFloatAvailableSpace.HasFloats(), nsLineLayout's mImpactedByFloats: the band is narrowed by floats, so a first frame
+  // that doesn't fit breaks before and the line moves down (nsLineLayout.cpp:785, nsBlockFrame.cpp:5289-5299).
+  impactedByFloats: boolean
+  // mTextIndent added to the root span's position (nsLineLayout.cpp:178-201); 0 on lines it doesn't apply to.
+  textIndent: number
   // The line box inline size psd->mICoord after TrimTrailingWhiteSpaceIn (nsLineLayout.cpp:2851-2985).
   width: number
-  // GetHangFrom (nsLineLayout.cpp:3420-3450): trailing white space hanging past the available width; TextAlignLine moves
+  // GetHangFrom (nsLineLayout.cpp:3416-3450): trailing white space hanging past the available width; TextAlignLine moves
   // a wrapped line by it when it hangs against the line's direction (:3503-3512, 3594-3602).
   hang: number
-  // In logical order.
+  // The inline offset TextAlignLine added to the line's frames, au (nsLineLayout.cpp:3482-3670); 0 under start in LTR.
+  alignOffset: number
+  // In logical order; an inline frame comes before the frames of its children.
   frames: GeckoFrameGeometry[]
 }
 
 export type BlinkLine = LineOf<BlinkLineStart, BlinkLineGeometry>
 export type WebKitLine = LineOf<WebKitLineStart, WebKitLineGeometry>
 export type GeckoLine = LineOf<GeckoLineStart, GeckoLineGeometry>
+
+export type BlinkLineResult = LineResultOf<BlinkLineStart, BlinkLineGeometry>
+export type WebKitLineResult = LineResultOf<WebKitLineStart, WebKitLineGeometry>
+export type GeckoLineResult = LineResultOf<GeckoLineStart, GeckoLineGeometry>
+export type LineResult = BlinkLineResult | WebKitLineResult | GeckoLineResult
 
 // A Canvas-versus-DOM gap a paragraph or line runs into: the prediction can be wrong where it applies (DESIGN.md §5).
 export type GapName =
@@ -328,20 +508,24 @@ export type GapName =
 
 export type Gap = { gap: GapName; run: number | null; detail: string }
 
+// A slot the engine refused because it moved the line below the slot's floats (LineResultOf), with the row of the slot
+// list it was, and the gaps the decision rests on.
+export type BelowFloats = { row: number; gaps: Gap[] }
+
 // `engine` is the environment's engine, the union's tag. `gaps` holds the conditions of the paragraph's content, fonts
 // and environment; lines hold the ones their breaks decide.
 export type ParagraphLayout =
-  | { engine: 'blink'; env: BlinkEnvironment; lines: BlinkLine[]; measure: MeasureLog; gaps: Gap[] }
-  | { engine: 'webkit'; env: WebKitEnvironment; lines: WebKitLine[]; measure: MeasureLog; gaps: Gap[] }
-  | { engine: 'gecko'; env: GeckoEnvironment; lines: GeckoLine[]; measure: MeasureLog; gaps: Gap[] }
+  | { engine: 'blink'; env: BlinkEnvironment; lines: BlinkLine[]; belowFloats: BelowFloats[]; measure: MeasureLog; gaps: Gap[] }
+  | { engine: 'webkit'; env: WebKitEnvironment; lines: WebKitLine[]; belowFloats: BelowFloats[]; measure: MeasureLog; gaps: Gap[] }
+  | { engine: 'gecko'; env: GeckoEnvironment; lines: GeckoLine[]; belowFloats: BelowFloats[]; measure: MeasureLog; gaps: Gap[] }
 
 export type BlinkLayout = Extract<ParagraphLayout, { engine: 'blink' }>
 export type WebKitLayout = Extract<ParagraphLayout, { engine: 'webkit' }>
 export type GeckoLayout = Extract<ParagraphLayout, { engine: 'gecko' }>
 
 // ---- Observation contract (DESIGN.md §9) ----
-// What rebuild/lab/observe/<engine>.ts derives from a layout by porting each engine's Range geometry code. The library
-// never computes it; the types live here because the lab may import types from this file only.
+// What rebuild/lab/observe/<engine>.ts derives from a layout by porting each engine's Range and element geometry code.
+// The library never computes it; the types live here because the lab may import types from this file only.
 
 // One observed number. There is no third state for a rect field: a reported rect is observable by definition.
 export type Expected =
@@ -359,8 +543,8 @@ export type ExpectedRect = {
   width: Expected
 }
 
-// An engine output fact that no Range rect of either kind reflects, by the cited geometry rule: the rects are the same
-// whatever its value. Listed, never compared, and never counted as coverage for the rule that computed it.
+// An engine output fact that no rect of any kind reflects, by the cited geometry rule: the rects are the same whatever its
+// value. Listed, never compared, and never counted as coverage for the rule that computed it.
 export type UnobservableFact = {
   line: number
   // A field path into the layout, e.g. 'lines[2].geometry.items[3].inlineSize'.
@@ -370,11 +554,16 @@ export type UnobservableFact = {
 }
 
 export type ExpectedObservation = {
-  // Per code point of the concatenated run text, in order: the rects of a Range over it in its run's text node, in the
+  // Per code point of the concatenated leaf text, in order: the rects of a Range over it in its leaf's text node, in the
   // order the engine reports them.
   codePoints: { offset: number; length: number; rects: ExpectedRect[] }[]
-  // Per run: the rects of a Range over its whole text node.
+  // Per text leaf: the rects of a Range over its whole text node; empty for a leaf without a DOM node.
   nodes: ExpectedRect[][]
+  // Per element in document order: Element.getClientRects(). A span reports one rect per box it has on each line (Blink
+  // LayoutInline::QuadsForSelfInternal, layout_inline.cc:428-470; WebKit RenderInline::absoluteQuads, RenderInline.cpp:237-241;
+  // Gecko nsLayoutUtils::GetAllInFlowRects over its continuations, nsLayoutUtils.cpp:3477-3505, 3661-3667), an atomic
+  // inline its border box, a <br> its line break box; the rules for <wbr> are in DESIGN.md §9.
+  elements: ExpectedRect[][]
   unobservable: UnobservableFact[]
 }
 

@@ -1,36 +1,49 @@
 // Paints predicted lines so the browser draws each one as the paragraph's own layout did: form A-wrap of
 // specs/painter.md §6. DESIGN.md §7 explains the choices and what painting a line alone still changes.
 //
-// - One block per line at the paragraph's content width, with its white-space, word-break, overflow-wrap, line-break and
-//   tab-size, so the engine runs its own line-end rules again (Blink's CJK punctuation trimming in ShapeLine, Gecko's
-//   pre-wrap hang width), and a line wider than predicted wraps visibly (R1).
+// - One block per line at the paragraph's content width, with the block's text style, direction, lang and text-align,
+//   the text-indent where the engine indented the line, and the line's slot as floats of its insets, so the engine runs
+//   its own line rules again (Blink's CJK punctuation trimming in ShapeLine, Gecko's pre-wrap hang width, a band's
+//   arithmetic), and a line wider than predicted wraps visibly (R1). A paragraph that isn't start-aligned gives the block
+//   the line's used alignment as text-align-last, since the painted line is its block's last line.
 // - A line that ends at a chosen soft hyphen or starts with the U+200D of R7 doesn't wrap: it holds a boundary the
 //   paragraph never offered as a break (the hyphen, the joiner), which the browser would break at when the line overflows.
-// - Each run's slice of the line is one node with the run's styles, and a bare text node stays a bare text node. Slices
-//   of different runs are never merged, and a slice is split only where its bidi level changes (R2). A span between two
-//   painted slices without painted text of its own is painted empty, so its neighbours keep the element between them.
-//   A bare slice of ASCII white space alone at the start of a line goes in a span, because a text node of only such
-//   white space as a block's first child isn't laid out.
+// - The line's pieces are painted in logical order inside the elements that hold them. Between two consecutive painted
+//   pieces the painter replays the paragraph's element structure, so a span between them with nothing painted of its own
+//   is painted empty and its neighbours keep the element between them. A span's start and end edges are painted on the
+//   lines that hold its box-start and box-end fragments, and a span with such an edge on a line where none of its content
+//   is painted is painted for the edge alone. Each leaf's slice of the line is one text node, split only where its bidi
+//   level changes (R2). A bare slice of ASCII white space alone at the start of a line goes in a span, because a text
+//   node of only such white space as a block's first child isn't laid out.
 // - Trailing collapsible white space stays in its slice, so the engine trims it and shapes the text before it the same
-//   way (R3). Preserved white space is painted as laid out. Collapsed white space and forced breaks aren't painted.
+//   way (R3). Preserved white space is painted as laid out. Collapsed white space, forced breaks, <br> and <wbr> aren't
+//   painted.
 // - The text is painted as the engine laid it out (R5).
 // - The hyphen at a soft-hyphen break is its own span, styled per engine so that it shapes alone where the engine
 //   shapes it alone (R6).
 // - Where the paragraph's shaping joined letters across a line edge, U+200D on both sides keeps the joining forms (R7).
-// - A line with a fragment at a level other than the paragraph's base level is drawn under bidi-override: the line
-//   block overrides to the base direction and nested override spans add one level each, so the browser reorders the
-//   line with the paragraph's levels instead of resolving the line alone (R8, specs/painter.md §4.4). Text never sits
-//   directly in an override element, and the line's trailing white space takes the level of the text before it.
+// - A line with a piece at a level other than the paragraph's base level is drawn under bidi-override: the line block
+//   overrides to the base direction and nested override spans add one level each, so the browser reorders the line with
+//   the paragraph's levels instead of resolving the line alone (R8, specs/painter.md §4.4). Override spans sit inside the
+//   innermost element of a piece, never around elements. Text never sits directly in an override element, and the line's
+//   trailing white space takes the level of the text before it.
+// - An atomic inline is painted as an empty inline-block of its declared border box and margins, aligned to the line top,
+//   for the app to fill.
 // - A line without a line box paints nothing and gets no block.
 // Nothing sets a text width: the lab compares the painted rects with the rects the observation contract expects
 // (DESIGN.md §7, §9).
+import { indexContent, styleUnder } from './content.js'
 import type { EngineName } from './env.js'
-import type { CssFont, Fragment, Paragraph, ParagraphLayout, TextRun } from './model.js'
+import type { AtomicInline, BoxEdge, CssFont, Fragment, LineOf, Paragraph, TextStyle } from './model.js'
 
 // U+0020 and U+0009..U+000D, the white space of Blink's IsASCIISpace: a text node holding only these as a block's first
 // child gets no layout object in collapsing modes (Blink text.cc:319-364, the Blink port's layoutTextNeeded).
 const ASCII_SPACE_ONLY = /^[\t-\r ]+$/
 const SPACES_AND_TABS = /^[\t ]+$/
+
+// The shared fields of a line: all the painter reads.
+export type PaintedLine = Pick<LineOf<unknown, unknown>, 'fragments' | 'hasLineBox' | 'joinsNextLine' | 'slot' | 'indented' | 'align'>
+export type PaintableLayout = { engine: EngineName; lines: readonly PaintedLine[] }
 
 function setFont(style: CSSStyleDeclaration, font: CssFont): void {
   style.fontFamily = font.family
@@ -39,15 +52,31 @@ function setFont(style: CSSStyleDeclaration, font: CssFont): void {
   style.fontStyle = font.style
 }
 
-// A span with the run's styles.
-function runSpan(doc: Document, parent: HTMLElement, run: TextRun): HTMLSpanElement {
+function hasEdge(edge: BoxEdge): boolean {
+  return edge.margin !== 0 || edge.border !== 0 || edge.padding !== 0
+}
+
+// A span with an element's styles: its font, spacing and lang always, as flat runs painted them, and the inherited
+// properties that decide lines where they differ from its parent's.
+function styledSpan(doc: Document, style: TextStyle, parent: TextStyle, lang: string | null): HTMLSpanElement {
   const span = doc.createElement('span')
-  setFont(span.style, run.font)
-  span.style.letterSpacing = `${run.letterSpacing}px`
-  span.style.wordSpacing = `${run.wordSpacing}px`
-  if (run.lang !== null) span.lang = run.lang
-  parent.append(span)
+  const s = span.style
+  setFont(s, style.font)
+  s.letterSpacing = `${style.letterSpacing}px`
+  s.wordSpacing = `${style.wordSpacing}px`
+  if (lang !== null) span.lang = lang
+  if (style.whiteSpace !== parent.whiteSpace) s.whiteSpace = style.whiteSpace
+  if (style.wordBreak !== parent.wordBreak) s.wordBreak = style.wordBreak
+  if (style.overflowWrap !== parent.overflowWrap) s.overflowWrap = style.overflowWrap
+  if (style.lineBreak !== parent.lineBreak) s.setProperty('line-break', style.lineBreak)
+  if (style.tabSize !== parent.tabSize) s.setProperty('tab-size', String(style.tabSize))
   return span
+}
+
+function paintEdge(style: CSSStyleDeclaration, side: 'start' | 'end', edge: BoxEdge): void {
+  if (edge.margin !== 0) style.setProperty(`margin-inline-${side}`, `${edge.margin}px`)
+  if (edge.border !== 0) style.setProperty(`border-inline-${side}`, `${edge.border}px solid`)
+  if (edge.padding !== 0) style.setProperty(`padding-inline-${side}`, `${edge.padding}px`)
 }
 
 // R6: the hyphen, shaped the way the engine shapes it.
@@ -74,7 +103,36 @@ function hyphenSpan(doc: Document, engine: EngineName, fragment: Extract<Fragmen
   return span
 }
 
-export function paintLines(paragraph: Paragraph, layout: ParagraphLayout, doc: Document): HTMLDivElement[] {
+// An atomic inline's border box and margins, empty. Top alignment keeps the line box at the line height while the box is
+// no taller (CSS 2.1 §10.8).
+function atomicBox(doc: Document, atomic: AtomicInline): HTMLSpanElement {
+  const span = doc.createElement('span')
+  const s = span.style
+  s.display = 'inline-block'
+  s.boxSizing = 'border-box'
+  s.width = `${atomic.width}px`
+  s.height = `${atomic.height}px`
+  s.verticalAlign = 'top'
+  if (atomic.marginInlineStart !== 0) s.setProperty('margin-inline-start', `${atomic.marginInlineStart}px`)
+  if (atomic.marginInlineEnd !== 0) s.setProperty('margin-inline-end', `${atomic.marginInlineEnd}px`)
+  return span
+}
+
+// A float of one line height that takes a slot's inset off one side of the painted block, as the paragraph's floats did.
+function floatInset(doc: Document, side: 'left' | 'right', width: number, height: number): HTMLDivElement {
+  const div = doc.createElement('div')
+  const s = div.style
+  s.cssFloat = side
+  s.margin = '0'
+  s.padding = '0'
+  s.border = '0'
+  s.width = `${width}px`
+  s.height = `${height}px`
+  return div
+}
+
+export function paintLines(paragraph: Paragraph, layout: PaintableLayout, doc: Document): HTMLDivElement[] {
+  const index = indexContent(paragraph)
   const base = paragraph.direction === 'rtl' ? 1 : 0
   const collapses = paragraph.whiteSpace === 'normal' || paragraph.whiteSpace === 'nowrap'
   const out: HTMLDivElement[] = []
@@ -103,35 +161,43 @@ export function paintLines(paragraph: Paragraph, layout: ParagraphLayout, doc: D
     s.setProperty('line-break', paragraph.lineBreak)
     s.setProperty('tab-size', String(paragraph.tabSize))
     s.direction = paragraph.direction
-    s.textAlign = 'start'
-    s.textIndent = '0'
+    s.textAlign = paragraph.textAlign
+    if (paragraph.textAlign !== 'start') s.setProperty('text-align-last', line.align)
+    s.textIndent = line.indented ? `${paragraph.textIndent}px` : '0'
     s.textTransform = 'none'
     element.lang = paragraph.lang
+    if (line.slot.left < 0 || line.slot.right < 0) throw new Error(`the painter paints a slot as floats and can't paint negative insets (${line.slot.left}, ${line.slot.right})`)
+    if (line.slot.left > 0) element.append(floatInset(doc, 'left', line.slot.left, paragraph.lineHeight))
+    if (line.slot.right > 0) element.append(floatInset(doc, 'right', line.slot.right, paragraph.lineHeight))
 
     // The line's trailing white space. A painted line is a bidi paragraph of its own, and all three browsers resolve
     // it with ICU's ubidi_setPara, which gives white space at the end of a paragraph the paragraph level (UAX #9 L1), so
     // the level it's painted at only decides node division. Painting it at the level of the text before it in the same
-    // run keeps that slice one text node, as it was in the paragraph: WebKit measures a word together with the space
-    // after it in its text box (TextUtil.cpp:76-77), and Blink keeps the space in the text item.
+    // leaf keeps that slice one text node, as it was in the paragraph: WebKit measures a word together with the space
+    // after it in its text box (TextUtil.cpp:76-77), and Blink keeps the space in the text item. Box edges, <br> and
+    // <wbr> don't end the trailing white space.
     let trailing = line.fragments.length
     while (trailing > 0) {
       const fragment = line.fragments[trailing - 1]!
       const white = fragment.kind === 'collapsed' || fragment.kind === 'forced-break' || fragment.kind === 'trimmed' ||
-        fragment.kind === 'hanging' || (fragment.kind === 'text' && SPACES_AND_TABS.test(fragment.painted))
+        fragment.kind === 'hanging' || fragment.kind === 'box-start' || fragment.kind === 'box-end' || fragment.kind === 'br' ||
+        fragment.kind === 'wbr' || (fragment.kind === 'text' && SPACES_AND_TABS.test(fragment.painted))
       if (!white) break
       trailing--
     }
     const beforeTrailing = trailing > 0 ? line.fragments[trailing - 1]! : null
-    const levelOf = (f: number, fragment: Extract<Fragment, { level: number }>): number =>
+    const levelOf = (f: number, fragment: Extract<Fragment, { kind: 'text' | 'trimmed' | 'hanging' }>): number =>
       f >= trailing && beforeTrailing !== null && beforeTrailing.kind === 'text' && beforeTrailing.run === fragment.run ? beforeTrailing.level : fragment.level
 
     let reorders = false
     let hyphenated = false
     let firstText = -1
     let lastText = -1
-    // The first painted run of the line and its painted text.
+    // The first painted leaf of the line and its painted text.
     let firstRun = -1
     let firstRunText = ''
+    const startEdges = new Set<number>()
+    const endEdges = new Set<number>()
     for (let f = 0; f < line.fragments.length; f++) {
       const fragment = line.fragments[f]!
       switch (fragment.kind) {
@@ -150,8 +216,19 @@ export function paintLines(paragraph: Paragraph, layout: ParagraphLayout, doc: D
           hyphenated = true
           if (fragment.level !== base) reorders = true
           break
+        case 'atomic':
+          if (fragment.level !== base) reorders = true
+          break
+        case 'box-start':
+          startEdges.add(fragment.element)
+          break
+        case 'box-end':
+          endEdges.add(fragment.element)
+          break
         case 'collapsed':
         case 'forced-break':
+        case 'br':
+        case 'wbr':
           break
       }
     }
@@ -161,12 +238,18 @@ export function paintLines(paragraph: Paragraph, layout: ParagraphLayout, doc: D
     // an overflowing line would break before (Blink HandleOverflow's break-anywhere retry, WebKit's soft wrap opportunity
     // after a soft hyphen at a text box end, InlineFormattingUtils.cpp:385-437, Gecko's word-wrap break before a frame).
     if (hyphenated || joinsPreviousLine) s.setProperty('text-wrap-mode', 'nowrap')
-    const firstInSpan = firstRun >= 0 && paragraph.runs[firstRun]!.node === 'text' && collapses && ASCII_SPACE_ONLY.test(firstRunText)
+    const firstInSpan = firstRun >= 0 && index.leaves[firstRun]!.parent === -1 && collapses && ASCII_SPACE_ONLY.test(firstRunText)
 
-    // stack[0] holds the current run's slice; stack[d] is the override span for level base + d.
+    // The painted spans of the elements open at this point of the walk, outermost first.
+    const open: { element: number; node: HTMLElement }[] = []
+    // The event of the last painted piece, or -1 before the first.
+    let cursor = -1
+    // The leaf whose slice is being painted; -1 when none is.
     let run = -1
+    // stack[0] holds the current piece's container; stack[d] is the override span for level base + d.
     const stack: HTMLElement[] = []
     let text = ''
+    const container = (): HTMLElement => open.length > 0 ? open[open.length - 1]!.node : element
     const flush = (): void => {
       if (text.length === 0) return
       let parent = stack[stack.length - 1]!
@@ -178,16 +261,46 @@ export function paintLines(paragraph: Paragraph, layout: ParagraphLayout, doc: D
       parent.append(doc.createTextNode(text))
       text = ''
     }
-    const enter = (fragmentRun: number, level: number): void => {
-      if (fragmentRun !== run) {
-        flush()
-        // Spans between the previous painted run and this one hold no painted text on this line.
-        if (run >= 0) for (let r = run + 1; r < fragmentRun; r++) if (paragraph.runs[r]!.node === 'span') runSpan(doc, element, paragraph.runs[r]!)
-        run = fragmentRun
-        stack.length = 0
-        const textRun = paragraph.runs[fragmentRun]!
-        stack.push(textRun.node === 'span' || (fragmentRun === firstRun && firstInSpan) ? runSpan(doc, element, textRun) : element)
+    const endPiece = (): void => {
+      flush()
+      run = -1
+      stack.length = 0
+    }
+    const openElement = (e: number): void => {
+      endPiece()
+      const indexed = index.elements[e]!
+      const node = indexed.node
+      if (node.kind !== 'span') throw new Error(`the painter can't open element ${e}, a ${node.kind}`)
+      const span = styledSpan(doc, node, styleUnder(paragraph, index, indexed.parent), node.lang)
+      if (startEdges.has(e)) paintEdge(span.style, 'start', node.inlineStart)
+      if (endEdges.has(e)) paintEdge(span.style, 'end', node.inlineEnd)
+      if (node.verticalAlign !== 'baseline') span.style.verticalAlign = node.verticalAlign
+      container().append(span)
+      open.push({ element: e, node: span })
+    }
+    const closeElement = (e: number): void => {
+      endPiece()
+      const top = open.pop()
+      if (top === undefined || top.element !== e) throw new Error(`the painter closed element ${e} out of document order`)
+    }
+    // Brings the walk to the event at `target`, the next painted piece. Before the first piece it opens the elements
+    // holding the piece, outermost first; later it replays the opens and closes strictly between the last piece and this
+    // one.
+    const reach = (parent: number, target: number): void => {
+      if (cursor < 0) {
+        const chain: number[] = []
+        for (let e = parent; e >= 0; e = index.elements[e]!.parent) chain.push(e)
+        for (let k = chain.length - 1; k >= 0; k--) openElement(chain[k]!)
+      } else {
+        for (let k = cursor + 1; k < target; k++) {
+          const event = index.events[k]!
+          if (event.kind === 'open') openElement(event.element)
+          else if (event.kind === 'close') closeElement(event.element)
+        }
       }
+      cursor = Math.max(cursor, target)
+    }
+    const setLevel = (level: number): void => {
       const depth = level - base
       if (stack.length - 1 === depth) return
       flush()
@@ -201,27 +314,70 @@ export function paintLines(paragraph: Paragraph, layout: ParagraphLayout, doc: D
         stack.push(span)
       }
     }
+    const enterLeaf = (leaf: number, level: number): void => {
+      if (leaf !== run) {
+        const indexed = index.leaves[leaf]!
+        reach(indexed.parent, indexed.event)
+        endPiece()
+        run = leaf
+        if (leaf === firstRun && firstInSpan) {
+          const span = styledSpan(doc, paragraph, paragraph, null)
+          container().append(span)
+          stack.push(span)
+        } else {
+          stack.push(container())
+        }
+      }
+      setLevel(level)
+    }
     for (let f = 0; f < line.fragments.length; f++) {
       const fragment = line.fragments[f]!
       switch (fragment.kind) {
         case 'text':
-          enter(fragment.run, levelOf(f, fragment))
+          enterLeaf(fragment.run, levelOf(f, fragment))
           if (f === firstText && joinsPreviousLine) text += '‍'
           text += fragment.painted
           if (f === lastText && line.joinsNextLine) text += '‍'
           break
         case 'trimmed':
         case 'hanging':
-          enter(fragment.run, levelOf(f, fragment))
+          enterLeaf(fragment.run, levelOf(f, fragment))
           text += fragment.painted
           break
         case 'hyphen':
-          enter(fragment.run, fragment.level)
+          enterLeaf(fragment.run, fragment.level)
           flush()
           stack[stack.length - 1]!.append(hyphenSpan(doc, layout.engine, fragment))
           break
+        case 'atomic': {
+          const indexed = index.elements[fragment.element]!
+          if (indexed.node.kind !== 'atomic') throw new Error(`fragment names element ${fragment.element}, a ${indexed.node.kind}, as atomic`)
+          reach(indexed.parent, indexed.open)
+          endPiece()
+          stack.push(container())
+          setLevel(fragment.level)
+          stack[stack.length - 1]!.append(atomicBox(doc, indexed.node))
+          break
+        }
+        case 'box-start': {
+          const indexed = index.elements[fragment.element]!
+          if (indexed.node.kind !== 'span' || !hasEdge(indexed.node.inlineStart)) break
+          reach(indexed.parent, indexed.open)
+          openElement(fragment.element)
+          break
+        }
+        case 'box-end': {
+          const indexed = index.elements[fragment.element]!
+          if (indexed.node.kind !== 'span' || !hasEdge(indexed.node.inlineEnd)) break
+          // Before the first piece, the span itself is among the elements to open.
+          reach(cursor < 0 ? fragment.element : indexed.parent, indexed.close)
+          closeElement(fragment.element)
+          break
+        }
         case 'collapsed':
         case 'forced-break':
+        case 'br':
+        case 'wbr':
           break
       }
     }

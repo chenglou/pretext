@@ -11,14 +11,16 @@ import { observeGecko } from './observe/gecko.ts'
 import { observeWebKit } from './observe/webkit.ts'
 import { paint, predict } from './predictor.ts'
 import type {
-  BrowserKind, Case, CodePointObservation, FontDecl, LabRow, LayoutPrediction, LinesPrediction, NativeObservation, PageEnv,
-  PainterLine, PainterObservation, Paragraph, Rect, RecordedLayout,
+  BrowserKind, Case, CodePointObservation, FontDecl, InlineNode, LabRow, LayoutPrediction, LinesPrediction, NativeObservation, PageEnv,
+  PainterLine, PainterObservation, ProcessLanguages, Rect, RecordedLayout,
 } from './types.ts'
 
-type PageRow = Omit<LabRow, 'family' | 'browser' | 'build' | 'case'>
+type PageRow = Omit<LabRow, 'family' | 'browser' | 'build' | 'languages' | 'case'>
 type StepReply =
-  // build: the engine build the driver read from the app bundle, given to the library as GivenFacts.build.
-  | { kind: 'chunk'; seq: number; browser: BrowserKind; build: string; cases: Case[] }
+  // build: the engine build the driver read from the app bundle, given to the library as GivenFacts.build. languages: the
+  // browser process's languages the driver gave (ProcessLanguages.given). predictOnly: run.ts --predict-only; the page
+  // skips native observation.
+  | { kind: 'chunk'; seq: number; browser: BrowserKind; build: string; languages: ProcessLanguages['given']; predictOnly?: true; cases: Case[] }
   | { kind: 'navigate'; lang: string; fonts: string[] }
   | { kind: 'done' }
 
@@ -54,9 +56,20 @@ function resolves(name: string): boolean {
   return known
 }
 
-function missingFonts(p: Paragraph): string[] {
+function spanFamilies(nodes: readonly InlineNode[], into: Set<string>): void {
+  for (let i = 0; i < nodes.length; i++) {
+    const node = nodes[i]!
+    if (node.kind !== 'span') continue
+    into.add(node.font.family)
+    spanFamilies(node.children, into)
+  }
+}
+
+function missingFonts(c: Case): string[] {
+  const p = c.paragraph
   const missing = new Set<string>()
   const lists = new Set([p.font.family, ...p.runs.map(run => run.font.family)])
+  if (c.inline !== undefined) spanFamilies(c.inline.content, lists)
   for (const list of lists) {
     const names = parseFontFamilyList(list)
     for (let i = 0; i < names.length; i++) if (!names[i]!.generic && !resolves(names[i]!.name)) missing.add(names[i]!.name)
@@ -108,6 +121,8 @@ function readEnv(): PageEnv {
     hasFocus: document.hasFocus(),
     documentCaseIndex: casesObserved,
     previousCaseId,
+    navigatorLanguages: [...navigator.languages],
+    intlLocale: new Intl.DateTimeFormat().resolvedOptions().locale,
   }
 }
 
@@ -126,8 +141,98 @@ function setFont(style: CSSStyleDeclaration, font: FontDecl): void {
   style.fontStyle = font.style
 }
 
-// The paragraph and its runs, with the run text inserted exactly as given. nodes[i] is run i's text node.
-function buildParagraph(p: Paragraph): { element: HTMLDivElement; nodes: Text[]; rejectedStyles: string[] } {
+// Sets keyword properties and records the ones the browser refused, prefixed with `where`.
+function setKeywords(s: CSSStyleDeclaration, keywords: ReadonlyArray<readonly [string, string]>, where: string, rejected: string[]): void {
+  for (let i = 0; i < keywords.length; i++) {
+    const [property, value] = keywords[i]!
+    s.setProperty(property, value)
+    if (s.getPropertyValue(property) === '') rejected.push(`${where}${property}: ${value}`)
+  }
+}
+
+type BuiltParagraph = {
+  element: HTMLDivElement
+  // Per run (for a case with inline structure, per text leaf): its text node, appended only when it holds text.
+  nodes: Text[]
+  // Cases with inline structure: per element in document order, its DOM element.
+  elements: HTMLElement[]
+  floats: HTMLElement[]
+  rejectedStyles: string[]
+}
+
+// Inline content under `parent` (DESIGN.md §8.3 stage 5, the lab page): a span with its computed styles, lang, logical box
+// edges, vertical-align and the block's line height; an atomic inline as an empty top-aligned inline-block of its border
+// box; <br> and <wbr> elements. A leaf's text goes in as given, and an empty leaf makes no DOM node.
+function appendContent(parent: HTMLElement, nodes: readonly InlineNode[], lineHeight: number, built: BuiltParagraph): void {
+  for (let i = 0; i < nodes.length; i++) {
+    const node = nodes[i]!
+    switch (node.kind) {
+      case 'text': {
+        const text = document.createTextNode(node.text)
+        built.nodes.push(text)
+        if (node.text.length > 0) parent.append(text)
+        break
+      }
+      case 'span': {
+        const span = document.createElement('span')
+        const where = `element ${built.elements.length} `
+        built.elements.push(span)
+        const s = span.style
+        setFont(s, node.font)
+        s.letterSpacing = `${node.letterSpacing}px`
+        s.wordSpacing = `${node.wordSpacing}px`
+        s.lineHeight = `${lineHeight}px`
+        setKeywords(s, [
+          ['white-space', node.whiteSpace], ['word-break', node.wordBreak], ['overflow-wrap', node.overflowWrap],
+          ['line-break', node.lineBreak], ['tab-size', String(node.tabSize)], ['vertical-align', node.verticalAlign],
+        ], where, built.rejectedStyles)
+        if (node.lang !== null) span.lang = node.lang
+        const edges = [['inline-start', node.inlineStart], ['inline-end', node.inlineEnd]] as const
+        for (let k = 0; k < edges.length; k++) {
+          const [side, edge] = edges[k]!
+          s.setProperty(`margin-${side}`, `${edge.margin}px`)
+          s.setProperty(`border-${side}-width`, `${edge.border}px`)
+          s.setProperty(`border-${side}-style`, edge.border > 0 ? 'solid' : 'none')
+          s.setProperty(`padding-${side}`, `${edge.padding}px`)
+        }
+        appendContent(span, node.children, lineHeight, built)
+        parent.append(span)
+        break
+      }
+      case 'atomic': {
+        const box = document.createElement('span')
+        built.elements.push(box)
+        const s = box.style
+        s.display = 'inline-block'
+        s.boxSizing = 'border-box'
+        s.width = `${node.width}px`
+        s.height = `${node.height}px`
+        s.padding = '0'
+        s.border = '0'
+        s.setProperty('margin-inline-start', `${node.marginInlineStart}px`)
+        s.setProperty('margin-inline-end', `${node.marginInlineEnd}px`)
+        s.verticalAlign = 'top'
+        parent.append(box)
+        break
+      }
+      case 'br':
+      case 'wbr': {
+        const value = document.createElement(node.kind)
+        built.elements.push(value)
+        parent.append(value)
+        break
+      }
+    }
+  }
+}
+
+// The paragraph and its runs, with the run text inserted exactly as given. nodes[i] is run i's text node. A case with
+// inline structure gets text-indent, text-align, the slot floats before its content (DESIGN.md §2.9, "The lab protocol":
+// per row a float: left; clear: left block of the row's left inset and a float: right; clear: right block of its right
+// inset, each a line height tall, left before right so no float rises above an earlier one) and its tree.
+function buildParagraph(c: Case): BuiltParagraph {
+  const p = c.paragraph
+  const inline = c.inline
   const element = document.createElement('div')
   const s = element.style
   s.position = 'absolute'
@@ -142,22 +247,40 @@ function buildParagraph(p: Paragraph): { element: HTMLDivElement; nodes: Text[];
   s.letterSpacing = `${p.letterSpacing}px`
   s.wordSpacing = `${p.wordSpacing}px`
   s.lineHeight = `${p.lineHeight}px`
-  s.textAlign = 'start'
-  s.textIndent = '0'
+  s.textAlign = inline === undefined ? 'start' : inline.textAlign
+  s.textIndent = inline === undefined ? '0' : `${inline.textIndent}px`
   s.textTransform = 'none'
   s.hyphens = 'manual'
-  const keywords: Array<[string, string]> = [
+  const built: BuiltParagraph = { element, nodes: [], elements: [], floats: [], rejectedStyles: [] }
+  setKeywords(s, [
     ['white-space', p.whiteSpace], ['word-break', p.wordBreak], ['overflow-wrap', p.overflowWrap],
     ['line-break', p.lineBreak], ['tab-size', String(p.tabSize)], ['direction', p.direction],
-  ]
-  const rejectedStyles: string[] = []
-  for (let i = 0; i < keywords.length; i++) {
-    const [property, value] = keywords[i]!
-    s.setProperty(property, value)
-    if (s.getPropertyValue(property) === '') rejectedStyles.push(`${property}: ${value}`)
-  }
+  ], '', built.rejectedStyles)
   element.lang = p.lang
-  const nodes: Text[] = []
+  if (inline !== undefined) {
+    const slots = inline.lineSlots
+    const sides = ['left', 'right'] as const
+    for (let row = 0; row < slots.length; row++) {
+      for (let k = 0; k < sides.length; k++) {
+        const side = sides[k]!
+        if (!slots.some(slot => slot[side] > 0)) continue
+        const float = document.createElement('div')
+        const fs = float.style
+        fs.setProperty('float', side)
+        fs.setProperty('clear', side)
+        fs.width = `${slots[row]![side]}px`
+        fs.height = `${p.lineHeight}px`
+        fs.margin = '0'
+        fs.padding = '0'
+        fs.border = '0'
+        built.floats.push(float)
+        element.append(float)
+      }
+    }
+    appendContent(element, inline.content, p.lineHeight, built)
+    return built
+  }
+  const nodes = built.nodes
   for (let i = 0; i < p.runs.length; i++) {
     const run = p.runs[i]!
     const text = document.createTextNode(run.text)
@@ -174,12 +297,12 @@ function buildParagraph(p: Paragraph): { element: HTMLDivElement; nodes: Text[];
     if (run.text.length > 0) span.append(text)
     element.append(span)
   }
-  return { element, nodes, rejectedStyles }
+  return built
 }
 
 async function observeNative(c: Case, range: Range): Promise<NativeObservation> {
   const p = c.paragraph
-  const { element, nodes, rejectedStyles } = buildParagraph(p)
+  const { element, nodes, elements, floats, rejectedStyles } = buildParagraph(c)
   document.body.append(element)
   try {
     element.getBoundingClientRect()
@@ -212,7 +335,18 @@ async function observeNative(c: Case, range: Range): Promise<NativeObservation> 
       }
       runRects.push(rects)
     }
-    return { fontsStatusBefore, fontsStatusAfter, rejectedStyles, height: origin.height, width: origin.width, points, runRects, missingFonts: missingFonts(p) }
+    const observation: NativeObservation = { fontsStatusBefore, fontsStatusAfter, rejectedStyles, height: origin.height, width: origin.width, points, runRects, missingFonts: missingFonts(c) }
+    if (c.inline !== undefined) {
+      const elementRects: Rect[][] = []
+      for (let e = 0; e < elements.length; e++) {
+        const rects: Rect[] = []
+        pushRects(elements[e]!.getClientRects(), origin, rects)
+        elementRects.push(rects)
+      }
+      observation.elements = elementRects
+      if (floats.length > 0) observation.floats = floats.map(float => relative(float.getBoundingClientRect(), origin))
+    }
+    return observation
   } finally {
     element.remove()
   }
@@ -254,9 +388,9 @@ function observeLayout(prediction: LayoutPrediction): ExpectedObservation {
 // The layout without its Canvas call log, which the row counts instead.
 function recordedLayout(layout: ParagraphLayout): RecordedLayout {
   switch (layout.engine) {
-    case 'blink': return { engine: layout.engine, env: layout.env, lines: layout.lines, gaps: layout.gaps }
-    case 'webkit': return { engine: layout.engine, env: layout.env, lines: layout.lines, gaps: layout.gaps }
-    case 'gecko': return { engine: layout.engine, env: layout.env, lines: layout.lines, gaps: layout.gaps }
+    case 'blink': return { engine: layout.engine, env: layout.env, lines: layout.lines, belowFloats: layout.belowFloats, gaps: layout.gaps }
+    case 'webkit': return { engine: layout.engine, env: layout.env, lines: layout.lines, belowFloats: layout.belowFloats, gaps: layout.gaps }
+    case 'gecko': return { engine: layout.engine, env: layout.env, lines: layout.lines, belowFloats: layout.belowFloats, gaps: layout.gaps }
   }
 }
 
@@ -325,22 +459,26 @@ function observePainter(c: Case, prediction: LayoutPrediction, range: Range, tim
   }
 }
 
-async function observeCase(c: Case, browser: BrowserKind, build: string, range: Range): Promise<PageRow> {
+async function observeCase(c: Case, reply: Extract<StepReply, { kind: 'chunk' }>, range: Range): Promise<PageRow> {
   const timings = { nativeMs: 0, predictMs: 0, observeMs: 0, paintMs: 0, painterObserveMs: 0 }
   const env = readEnv()
   let start = performance.now()
   let native: PageRow['native']
-  try {
-    native = await observeNative(c, range)
-  } catch (error) {
-    native = { error: message(error) }
+  if (reply.predictOnly === true) {
+    native = { skipped: 'predict-only' }
+  } else {
+    try {
+      native = await observeNative(c, range)
+    } catch (error) {
+      native = { error: message(error) }
+    }
+    timings.nativeMs = performance.now() - start
   }
-  timings.nativeMs = performance.now() - start
   start = performance.now()
   // A predictor swapped in with run.ts --predictor may predict line ranges alone (baselines/main-predictor.ts).
   let hook: LayoutPrediction | LinesPrediction | { error: string }
   try {
-    hook = predict(c, { browser, build })
+    hook = predict(c, { browser: reply.browser, build: reply.build, languages: reply.languages })
   } catch (error) {
     hook = { error: message(error) }
   }
@@ -372,7 +510,9 @@ async function main(): Promise<void> {
   await document.fonts.ready
   const range = document.createRange()
   const pageLang = document.documentElement.lang
-  let reply = await post<StepReply>('/api/step', { runId, pageLang, fonts: fontFixtures, seq: null, rows: [] })
+  // navigator.languages goes with the first step: WebKit exposes the first of its process's preferred languages there
+  // (languages.ts webkitPreferredLanguages).
+  let reply = await post<StepReply>('/api/step', { runId, pageLang, fonts: fontFixtures, navigatorLanguages: [...navigator.languages], seq: null, rows: [] })
   while (true) {
     switch (reply.kind) {
       case 'done':
@@ -386,7 +526,7 @@ async function main(): Promise<void> {
         for (let i = 0; i < reply.cases.length; i++) {
           const c = reply.cases[i]!
           if (c.pageLang !== pageLang) throw new Error(`Case ${c.id} needs <html lang="${c.pageLang}">; page has "${pageLang}"`)
-          rows.push(await observeCase(c, reply.browser, reply.build, range))
+          rows.push(await observeCase(c, reply, range))
         }
         reply = await post<StepReply>('/api/step', { runId, pageLang, fonts: fontFixtures, seq: reply.seq, rows })
       }

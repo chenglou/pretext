@@ -25,9 +25,9 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSy
 import { join, resolve } from 'node:path'
 import { makeCase, mergeCases, paragraphText, sortCases } from '../lab/cases/case.ts'
 import { nativeLines, readLines, rowText } from '../lab/score.ts'
-import type { BrowserBuild, BrowserKind, Case, LabRow } from '../lab/types.ts'
+import type { BrowserBuild, BrowserKind, Case, InlineNode, InlineStructure, LabRow } from '../lab/types.ts'
 import { FAMILIES } from './families/catalogue.ts'
-import { expandFamily, type Engine, type FamilyParagraph } from './families/types.ts'
+import { expandFamily, type Draft, type Engine, type FamilyParagraph } from './families/types.ts'
 import { fitThreshold, gridWidth, widthGrid } from './fit.ts'
 
 export const DERIVATION_FORMAT = 'pretext-rule-derivation/1'
@@ -102,8 +102,9 @@ function roundName(round: number): string {
 function observationOf(row: LabRow, withExtents: boolean): Observation {
   const text = rowText(row.case)
   const base = { caseId: row.id, dpr: row.env.devicePixelRatio, textLength: text.length }
+  if ('skipped' in row.native) return { ...base, keys: null, issue: `native observation skipped: ${row.native.skipped}` }
   if ('error' in row.native) return { ...base, keys: null, issue: row.native.error }
-  const lines = nativeLines(row.native, row.case.paragraph.lineHeight)
+  const lines = nativeLines(row.native, row.case.paragraph, row.browser)
   const lowest: number[] = new Array(lines.count).fill(Infinity)
   for (let i = 0; i < row.native.points.length; i++) {
     const point = row.native.points[i]!
@@ -187,6 +188,35 @@ export function buildOfRun(observed: string, browser: BrowserKind): BrowserBuild
 
 export function sameBuild(a: BrowserBuild, b: BrowserBuild): boolean {
   return a.app === b.app && a.appVersion === b.appVersion && a.engine === b.engine && a.os === b.os
+}
+
+// The browser process's given languages the run recorded (lab/types.ts ProcessLanguages), as one string; runs from before
+// the driver recorded them give 'not recorded'. Rounds under other languages can't be combined: unlabeled content breaks by
+// them (DESIGN.md §1.4).
+export function languagesOfRun(observed: string, browser: BrowserKind): string {
+  const run = JSON.parse(readFileSync(join(observed, `${browser}-run.json`), 'utf8')) as { languages?: { given: unknown } }
+  return run.languages === undefined ? 'not recorded' : JSON.stringify(run.languages.given)
+}
+
+// Whether the paragraph sets an overflow-wrap other than normal on the block or on any span: pass A then observes it
+// twice.
+export function hasOwnOverflowWrap(draft: Pick<Draft, 'paragraph' | 'inline'>): boolean {
+  if (draft.paragraph.overflowWrap !== 'normal') return true
+  const any = (nodes: readonly InlineNode[]): boolean => nodes.some(node => node.kind === 'span' && (node.overflowWrap !== 'normal' || any(node.children)))
+  return draft.inline !== undefined && any(draft.inline.content)
+}
+
+function overflowWrapNormal(nodes: readonly InlineNode[]): InlineNode[] {
+  return nodes.map(node => node.kind === 'span' ? { ...node, overflowWrap: 'normal' as const, children: overflowWrapNormal(node.children) } : node)
+}
+
+// Lengths the case declares that narrow or widen the line at s besides its text: the first row's slot insets (DESIGN.md
+// §2.9) and, for the first line, the text-indent. They only decide where to look. Box edges and atomic inlines aren't
+// added; where they decide a bracket, pass D finds it.
+export function declaredOffset(inline: InlineStructure | undefined, s: number): number {
+  if (inline === undefined) return 0
+  const slot = inline.lineSlots[0]
+  return (slot === undefined ? 0 : slot.left + slot.right) + (s === 0 ? inline.textIndent : 0)
 }
 
 // ---- Targets ----
@@ -291,11 +321,13 @@ export function chooseByFocus(candidates: readonly number[], focus: readonly num
 type ParagraphData = { p: FamilyParagraph; text: string; normal: Observation | null; own: Observation | null; b: Observation | null; sized: Observed[] }
 type Requested = { c: boolean; dRounds: number }
 
-function familyCase(p: FamilyParagraph, browser: BrowserKind, width: number, overflowWrapNormal: boolean, note: string): Case {
-  const paragraph = overflowWrapNormal ? { ...p.draft.paragraph, width, overflowWrap: 'normal' as const } : { ...p.draft.paragraph, width }
+function familyCase(p: FamilyParagraph, browser: BrowserKind, width: number, normalOverflowWrap: boolean, note: string): Case {
+  const draft = p.draft
+  const paragraph = normalOverflowWrap ? { ...draft.paragraph, width, overflowWrap: 'normal' as const } : { ...draft.paragraph, width }
+  const inline = draft.inline === undefined || !normalOverflowWrap ? draft.inline : { ...draft.inline, content: overflowWrapNormal(draft.inline.content) }
   return makeCase({
-    family: `rule/${p.family}`, origin: `rule-family=${p.family} paragraph=${p.key} ${note}`, pageLang: p.draft.pageLang,
-    paragraph, browsers: [caseBrowser(browser)], fontFixtures: p.draft.fontFixtures,
+    family: `rule/${p.family}`, origin: `rule-family=${p.family} paragraph=${p.key} ${note}`, pageLang: draft.pageLang,
+    paragraph, inline, browsers: [caseBrowser(browser)], fontFixtures: draft.fontFixtures,
   })
 }
 
@@ -319,6 +351,7 @@ async function step(dir: string, browser: BrowserKind, seed: string, familyFilte
   for (const p of paragraphs) data.set(p.key, { p, text: paragraphText(p.draft.paragraph), normal: null, own: null, b: null, sized: [] })
   const requested = new Map<string, Requested>()
   let build: BrowserBuild | null = null
+  let languages: string | null = null
   let dpr: number | null = null
   for (const round of rounds) {
     const meta = new Map<string, MetaRecord[]>()
@@ -343,6 +376,9 @@ async function step(dir: string, browser: BrowserKind, seed: string, familyFilte
       const fileBuild = buildOfRun(file.observed, browser)
       if (build === null) build = fileBuild
       else if (!sameBuild(build, fileBuild)) throw new Error(`${file.observed}: observed under another browser build than earlier rounds; derive again for the new build`)
+      const fileLanguages = languagesOfRun(file.observed, browser)
+      if (languages === null) languages = fileLanguages
+      else if (languages !== fileLanguages) throw new Error(`${file.observed}: observed under other process languages (${fileLanguages}) than earlier rounds (${languages})`)
       for (const obs of await loadObservations(file, browser, meta)) {
         if (dpr === null) dpr = obs.dpr
         else if (dpr !== obs.dpr) throw new Error(`${file.observed}: DPR ${obs.dpr}, earlier rounds ${dpr}`)
@@ -392,7 +428,7 @@ async function step(dir: string, browser: BrowserKind, seed: string, familyFilte
   }
   for (const entry of data.values()) {
     const { p, text, b, normal } = entry
-    const ownNarrow = p.draft.paragraph.overflowWrap === 'normal' ? normal : entry.own
+    const ownNarrow = hasOwnOverflowWrap(p.draft) ? entry.own : normal
     if (b === null || b.keys === null || normal === null || normal.keys === null || ownNarrow === null || ownNarrow.keys === null) continue
     const narrow: Observed = { units: NARROW * grid, keys: ownNarrow.keys, textLength: ownNarrow.textLength, caseId: ownNarrow.caseId }
     const own: Observed[] = [narrow, ...entry.sized, { units: unwrappedUnits, keys: b.keys, textLength: b.textLength, caseId: b.caseId }]
@@ -405,7 +441,7 @@ async function step(dir: string, browser: BrowserKind, seed: string, familyFilte
     const makeTarget = (s: number, k: number, wave: 1 | 2): Target | null => {
       const extent = extentOf(b, text, p.draft.paragraph.whiteSpace, s, k)
       if (extent === null) return null
-      return { id: `${p.key}:${s}:${k}`, paragraph: p.key, wave, s, k, derived: fitThreshold(browser, dpr!, extent), extent }
+      return { id: `${p.key}:${s}:${k}`, paragraph: p.key, wave, s, k, derived: fitThreshold(browser, dpr!, extent + declaredOffset(p.draft.inline, s)), extent }
     }
     const wave1: Target[] = []
     for (let i = 0; i < segments.length; i++) {
@@ -449,7 +485,7 @@ async function step(dir: string, browser: BrowserKind, seed: string, familyFilte
   }
 
   writeNdjson(join(dir, 'targets.ndjson'), targets.map(target => ({ ...target, outcome: outcomes.get(target.id), requested: requested.get(target.id) ?? null })))
-  if (requests.size === 0) return finalize(dir, browser, state, data, targets, outcomes, requested, grid, build!, dpr!)
+  if (requests.size === 0) return finalize(dir, browser, state, data, targets, outcomes, requested, grid, build!, dpr!, languages!)
   const cases: Case[] = []
   const meta: MetaRecord[] = []
   for (const [key, widths] of requests) {
@@ -498,7 +534,7 @@ function plan(dir: string, browser: BrowserKind, engine: Engine, seed: string, f
     const normal = familyCase(p, browser, NARROW, true, 'pass=A-normal')
     cases.push(normal)
     meta.push({ caseId: normal.id, paragraph: p.key, pass: 'A-normal', units: null, targets: [] })
-    if (p.draft.paragraph.overflowWrap !== 'normal') {
+    if (hasOwnOverflowWrap(p.draft)) {
       const own = familyCase(p, browser, NARROW, false, 'pass=A-own')
       cases.push(own)
       meta.push({ caseId: own.id, paragraph: p.key, pass: 'A-own', units: null, targets: [] })
@@ -523,7 +559,7 @@ export function unresolvedReason(outcome: Extract<Outcome, { kind: 'window' }>, 
 }
 
 function finalize(dir: string, browser: BrowserKind, state: State, data: ReadonlyMap<string, ParagraphData>, targets: readonly Target[], outcomes: ReadonlyMap<string, Outcome>,
-  requested: ReadonlyMap<string, Requested>, grid: number, build: BrowserBuild, dpr: number): number {
+  requested: ReadonlyMap<string, Requested>, grid: number, build: BrowserBuild, dpr: number, languages: string): number {
   const finalDir = join(dir, 'final')
   mkdirSync(finalDir, { recursive: true })
   const cases: Case[] = []
@@ -546,7 +582,7 @@ function finalize(dir: string, browser: BrowserKind, state: State, data: Readonl
     s.paragraphs++
     const derivedFrom = [entry.normal?.caseId, entry.own?.caseId, entry.b?.caseId].filter((id): id is string => id !== undefined)
     const roles: Array<[Case, FinalRole]> = [[familyCase(p, browser, NARROW, true, 'role=A-normal'), 'A-normal']]
-    if (p.draft.paragraph.overflowWrap !== 'normal') roles.push([familyCase(p, browser, NARROW, false, 'role=A-own'), 'A-own'])
+    if (hasOwnOverflowWrap(p.draft)) roles.push([familyCase(p, browser, NARROW, false, 'role=A-own'), 'A-own'])
     roles.push([familyCase(p, browser, UNWRAPPED, false, 'role=B'), 'B'])
     for (const [value, role] of roles) {
       cases.push(value)
@@ -596,7 +632,7 @@ function finalize(dir: string, browser: BrowserKind, state: State, data: Readonl
     totals.unresolved += value.unresolved
   }
   const summary = {
-    format: DERIVATION_FORMAT, browser, seed: state.seed, build, dpr, grid, rounds: roundsIn(dir).length, maxDRoundsUsed: dRounds,
+    format: DERIVATION_FORMAT, browser, seed: state.seed, build, languages, dpr, grid, rounds: roundsIn(dir).length, maxDRoundsUsed: dRounds,
     cases: merged.length, totals, finishedAt: new Date().toISOString(),
     families: Object.fromEntries([...stats].sort((a, b) => (a[0] < b[0] ? -1 : 1))),
   }
