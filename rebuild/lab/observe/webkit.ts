@@ -262,11 +262,12 @@ function boxRect(port: Port, line: number, box: { x: number; width: number }): E
 }
 
 // A text box's whole rect. A box shaped across inline boxes takes its characters' share of one shaping of the joined text
-// (InlineLineBuilder.cpp:920-967), which the engine estimates from Canvas prefixes, so its edges are limited.
+// (InlineLineBuilder.cpp:920-967), which the engine estimates from Canvas prefixes, so its edges are limited by the gap its
+// line reports for that shaping.
 function textBoxRect(port: Port, own: OwnBox): ExpectedRect {
   const rect = boxRect(port, own.line, own.box)
   if (!own.box.shapedAcrossBoxes) return rect
-  return { line: own.line, x: limited(port, 'in-word-prefix', rect.x.value), width: limited(port, 'in-word-prefix', rect.width.value) }
+  return { line: own.line, x: limited(port, 'rtl-shaping-across-inline-boxes', rect.x.value), width: limited(port, 'rtl-shaping-across-inline-boxes', rect.width.value) }
 }
 
 // selectionRectForTextBox (RenderText.cpp:352-396) followed by snappedSelectionRect (LegacyInlineTextBox.cpp:146-160) and

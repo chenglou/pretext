@@ -321,11 +321,31 @@ export function chooseByFocus(candidates: readonly number[], focus: readonly num
 type ParagraphData = { p: FamilyParagraph; text: string; normal: Observation | null; own: Observation | null; b: Observation | null; sized: Observed[] }
 type Requested = { c: boolean; dRounds: number }
 
-// The widest row's insets in grid units: below it a row's left and right floats don't fit side by side, and the next float
-// drops into another row, so the slot protocol doesn't hold (DESIGN.md §2.9).
-export function minimumUnits(inline: InlineStructure | undefined, grid: number): number {
+// The narrowest width in grid units at which the page describes the case's slots (DESIGN.md §2.9, lab score.ts
+// slotProtocol), by each engine's float placement:
+// - every engine: the widest row's insets, or a row's left and right floats don't fit side by side and the next float drops
+//   into another row (CSS 2.1 §9.5.1 rule 7);
+// - Gecko: row 0's second float is placed on the first line only when its margin box fits in the line's remaining inline
+//   size, text-indent included (nsLineLayout::TryToPlaceFloat, nsLineLayout.cpp:1485-1492, BlockReflowState::AddFloat,
+//   :604-607, FlowAndPlaceFloat, :793-798): left + right + indent must not exceed the width;
+// - WebKit: a float with clear that shrinks a line already constrained by a float needs the indented line's room
+//   (LineBuilder::tryPlacingFloatBox, haveEnoughSpaceForFloatWithClear, InlineLineBuilder.cpp:1317-1328, :1368-1380; the
+//   indent moves the line's start, :470-476). In LTR the right float is placed against left float + indent; in RTL it is
+//   start-positioned and the indent overlaps it, so left + max(right, indent) must not exceed the width;
+// - Blink positions leading floats in the exclusion space before any line and before text-indent applies
+//   (InlineLayoutAlgorithm::PositionLeadingFloats, inline_layout_algorithm.cc:1115, :1738), so only the first rule holds.
+// Round 1's feature-family rows agree: Firefox moved row 0's right float in exactly the 15 rows over its bound, webkit-host
+// in the 7 LTR rows over its bound and none of the 6 RTL ones, and Chrome in none.
+export function minimumUnits(inline: InlineStructure | undefined, grid: number, engine: Engine, direction: 'ltr' | 'rtl'): number {
   let widest = 0
-  for (const slot of inline?.lineSlots ?? []) widest = Math.max(widest, slot.left + slot.right)
+  const slots = inline?.lineSlots ?? []
+  for (const slot of slots) widest = Math.max(widest, slot.left + slot.right)
+  const first = slots[0]
+  if (first !== undefined && first.left > 0 && first.right > 0) {
+    const indent = inline!.textIndent
+    if (engine === 'gecko' || (engine === 'webkit' && direction === 'ltr')) widest = Math.max(widest, first.left + first.right + indent)
+    else if (engine === 'webkit') widest = Math.max(widest, first.left + Math.max(first.right, indent))
+  }
   return Math.ceil(widest * grid)
 }
 
@@ -416,7 +436,7 @@ async function step(dir: string, browser: BrowserKind, seed: string, familyFilte
   const outcomes = new Map<string, Outcome>()
   const requests = new Map<string, Map<number, { pass: Pass; targets: string[] }>>()
   const request = (entry: ParagraphData, own: readonly Observed[], units: number, pass: Pass, target: string): boolean => {
-    if (units < grid || units < minimumUnits(entry.p.draft.inline, grid) || units >= unwrappedUnits || own.some(obs => obs.units === units)) return false
+    if (units < grid || units < minimumUnits(entry.p.draft.inline, grid, engine, entry.p.draft.paragraph.direction) || units >= unwrappedUnits || own.some(obs => obs.units === units)) return false
     let widths = requests.get(entry.p.key)
     if (widths === undefined) requests.set(entry.p.key, (widths = new Map()))
     const existing = widths.get(units) ?? { pass, targets: [] }
@@ -436,7 +456,7 @@ async function step(dir: string, browser: BrowserKind, seed: string, familyFilte
       if (any) return
     }
     if (seen.dRounds >= MAX_D_ROUNDS) return
-    for (const u of bisectionWidths(Math.max(outcome.lo ?? grid - 1, minimumUnits(entry.p.draft.inline, grid) - 1), outcome.hi)) request(entry, own, u, 'D', target.id)
+    for (const u of bisectionWidths(Math.max(outcome.lo ?? grid - 1, minimumUnits(entry.p.draft.inline, grid, engine, entry.p.draft.paragraph.direction) - 1), outcome.hi)) request(entry, own, u, 'D', target.id)
   }
   for (const entry of data.values()) {
     const { p, text, b, normal } = entry

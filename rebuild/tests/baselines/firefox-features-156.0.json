@@ -46,14 +46,15 @@
       "counts": {
         "cases": 11946,
         "passPairs": {
-          "lineCount": 11270,
-          "breaks": 11267,
+          "lineCount": 11261,
+          "breaks": 11261,
           "widths": 6254,
           "painter": 6245
         },
         "historyDependentCases": 0,
-        "withoutPassesCases": 472,
-        "unstablePairs": 0
+        "withoutPassesCases": 466,
+        "unstablePairs": 0,
+        "protocolCases": 15
       },
       "historyDependent": [],
       "withoutPasses": [
@@ -140,7 +141,6 @@
         "c-2a74200f4dc04bd6",
         "c-2ac5358fe0eeb273",
         "c-2bb4a258df905116",
-        "c-2c6803d9cbcda5b2",
         "c-2c79c0e56b535fe1",
         "c-2d7cfb6c3bdce6dc",
         "c-2def6d7cd079734f",
@@ -195,7 +195,6 @@
         "c-4552b9662133bab1",
         "c-460c8f916f58c645",
         "c-4651b997d99042b7",
-        "c-467eed32265be1fc",
         "c-46bf5d0a2bc500c5",
         "c-4761cdbe3de1bb8f",
         "c-4789d3d665a70643",
@@ -218,7 +217,6 @@
         "c-5626a32c81d4159e",
         "c-56c2376dea5c7699",
         "c-585fd8d8e9bdf1e4",
-        "c-58a71c38160c6bcc",
         "c-58f247f43599f5fa",
         "c-59a009f99849f4b6",
         "c-5b01647a4e0ff28e",
@@ -269,7 +267,6 @@
         "c-71e8752e467b1a12",
         "c-721446eab7a91928",
         "c-727fa3ed55d259ce",
-        "c-728762d7d388e5d1",
         "c-729a0a180cf72328",
         "c-72bf05e6d284588c",
         "c-733ee1f964723408",
@@ -482,7 +479,6 @@
         "c-e109eb341734f350",
         "c-e20a9763d62f2563",
         "c-e2881b5c4140ece1",
-        "c-e2c34906071b2178",
         "c-e2ea10c2c686ef52",
         "c-e43d0e7910384527",
         "c-e549e56ab7a62497",
@@ -501,7 +497,6 @@
         "c-ead9be0d3aaeb631",
         "c-eb2fdd6d8cce184d",
         "c-edc7c4c0771eb1c5",
-        "c-edcf7f94dd9ac9be",
         "c-edf2b68b931b00e6",
         "c-ee0506101708f769",
         "c-ee7e04fbd85344b3",
@@ -532,11 +527,6 @@
       ],
       "unstable": {},
       "passes": {
-        "l": [
-          "c-0011200bf7ddcc7c",
-          "c-68ab6ca019458ae8",
-          "c-f168de2a9b06fbe6"
-        ],
         "lb": [
           "c-001169f0f19d8155",
           "c-001901986ea11cbd",
@@ -1047,7 +1037,6 @@
           "c-1ad25381b22cd60d",
           "c-1ad8548df7bf80ec",
           "c-1aeab7312215ebd1",
-          "c-1aef4574dd1250ea",
           "c-1af0780240385891",
           "c-1af55675480b660c",
           "c-1af58f1ba4e4d0fc",
@@ -1463,7 +1452,6 @@
           "c-2fbbc745a3b8adc8",
           "c-2fd0f67de570f9c1",
           "c-2fd1830dbf4c32e1",
-          "c-2fd5edce375eed97",
           "c-2fd8c7bddfc4328f",
           "c-2fe5f50889d890f1",
           "c-300383b248f5d646",
@@ -2433,7 +2421,6 @@
           "c-61f5d44a61639b9e",
           "c-61fd972b7f5a05ab",
           "c-61ffb2e51f83caa4",
-          "c-62023f087b82cf84",
           "c-620bcf1c33705523",
           "c-621a6d42e6ed6f94",
           "c-62230b600d9484c0",
@@ -3970,7 +3957,6 @@
           "c-b02c6bf45392909a",
           "c-b04c492b99f0d063",
           "c-b057892d7bb70c30",
-          "c-b05e6dc9f2484874",
           "c-b06592d6869ca6f4",
           "c-b0664cfec417d417",
           "c-b087973db66f884b",
@@ -4492,7 +4478,6 @@
           "c-cac6a3634cfe18d0",
           "c-cad04b803ffb842e",
           "c-cad1ce024b60ebd2",
-          "c-cad5800872370777",
           "c-cadae26bf7a68bb7",
           "c-cae86e9b397fc33e",
           "c-cae9fcca59c5cf1f",
@@ -4953,7 +4938,6 @@
           "c-e22fe1c8b6a1e4a0",
           "c-e23eda91f377b76e",
           "c-e24292879823d8be",
-          "c-e263a901ce298cab",
           "c-e2908d4b16849b0c",
           "c-e2a3b26771581ce4",
           "c-e2afdfa8c199a12f",
@@ -12016,6 +12000,23 @@
           "c-fdb41aee55b34e8e",
           "c-ff05de21ec386609"
         ]
+      },
+      "protocol": {
+        "c-0011200bf7ddcc7c": ".artifacts/ceiling-20260917/evaluate/firefox/features-derived/final/file/firefox-rows.ndjson: row 0's right float (inset 120) is at y 32, height 32; the row is at y 0",
+        "c-1aef4574dd1250ea": ".artifacts/ceiling-20260917/evaluate/firefox/features-derived/final/file/firefox-rows.ndjson: row 0's right float (inset 111.89999999999999) is at y 32, height 32; the row is at y 0",
+        "c-2c6803d9cbcda5b2": ".artifacts/ceiling-20260917/evaluate/firefox/features-derived/final/file/firefox-rows.ndjson: row 0's right float (inset 111.89999999999999) is at y 32, height 32; the row is at y 0",
+        "c-2fd5edce375eed97": ".artifacts/ceiling-20260917/evaluate/firefox/features-derived/final/file/firefox-rows.ndjson: row 0's right float (inset 40) is at y 32, height 32; the row is at y 0",
+        "c-467eed32265be1fc": ".artifacts/ceiling-20260917/evaluate/firefox/features-derived/final/file/firefox-rows.ndjson: row 0's right float (inset 120) is at y 32, height 32; the row is at y 0",
+        "c-58a71c38160c6bcc": ".artifacts/ceiling-20260917/evaluate/firefox/features-derived/final/file/firefox-rows.ndjson: row 0's right float (inset 120) is at y 32, height 32; the row is at y 0",
+        "c-62023f087b82cf84": ".artifacts/ceiling-20260917/evaluate/firefox/features-derived/final/file/firefox-rows.ndjson: row 0's right float (inset 40) is at y 32, height 32; the row is at y 0",
+        "c-68ab6ca019458ae8": ".artifacts/ceiling-20260917/evaluate/firefox/features-derived/final/file/firefox-rows.ndjson: row 0's right float (inset 111.89999999999999) is at y 32, height 32; the row is at y 0",
+        "c-728762d7d388e5d1": ".artifacts/ceiling-20260917/evaluate/firefox/features-derived/final/file/firefox-rows.ndjson: row 0's right float (inset 120) is at y 32, height 32; the row is at y 0",
+        "c-b05e6dc9f2484874": ".artifacts/ceiling-20260917/evaluate/firefox/features-derived/final/file/firefox-rows.ndjson: row 0's right float (inset 111.89999999999999) is at y 32, height 32; the row is at y 0",
+        "c-cad5800872370777": ".artifacts/ceiling-20260917/evaluate/firefox/features-derived/final/file/firefox-rows.ndjson: row 0's right float (inset 40) is at y 32, height 32; the row is at y 0",
+        "c-e263a901ce298cab": ".artifacts/ceiling-20260917/evaluate/firefox/features-derived/final/file/firefox-rows.ndjson: row 0's right float (inset 40) is at y 32, height 32; the row is at y 0",
+        "c-e2c34906071b2178": ".artifacts/ceiling-20260917/evaluate/firefox/features-derived/final/file/firefox-rows.ndjson: row 0's right float (inset 120) is at y 32, height 32; the row is at y 0",
+        "c-edcf7f94dd9ac9be": ".artifacts/ceiling-20260917/evaluate/firefox/features-derived/final/file/firefox-rows.ndjson: row 0's right float (inset 111.89999999999999) is at y 32, height 32; the row is at y 0",
+        "c-f168de2a9b06fbe6": ".artifacts/ceiling-20260917/evaluate/firefox/features-derived/final/file/firefox-rows.ndjson: row 0's right float (inset 120) is at y 32, height 32; the row is at y 0"
       }
     }
   },

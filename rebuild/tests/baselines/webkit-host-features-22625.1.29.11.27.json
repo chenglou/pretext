@@ -46,14 +46,15 @@
       "counts": {
         "cases": 12150,
         "passPairs": {
-          "lineCount": 11426,
-          "breaks": 11416,
-          "widths": 8547,
-          "painter": 8449
+          "lineCount": 11422,
+          "breaks": 11414,
+          "widths": 8545,
+          "painter": 8445
         },
         "historyDependentCases": 0,
-        "withoutPassesCases": 515,
-        "unstablePairs": 0
+        "withoutPassesCases": 513,
+        "unstablePairs": 0,
+        "protocolCases": 7
       },
       "historyDependent": [],
       "withoutPasses": [
@@ -140,7 +141,6 @@
         "c-2a74200f4dc04bd6",
         "c-2bb4a258df905116",
         "c-2bc18e5172a1beb9",
-        "c-2c1c63e51f6896f4",
         "c-2c79c0e56b535fe1",
         "c-2d5611cc8dad59c2",
         "c-2d7cfb6c3bdce6dc",
@@ -416,7 +416,6 @@
         "c-b152504e049b91fe",
         "c-b1d64961f8ec643e",
         "c-b286ed70acac8c79",
-        "c-b3398f1cd2253c3a",
         "c-b3905dd8823ec6ef",
         "c-b39252e6f494d77a",
         "c-b3b29334fdeeb4c5",
@@ -579,7 +578,6 @@
           "c-357e4ce08f51853c",
           "c-41ef8c42404f3840",
           "c-aaf9e5852b8d21d3",
-          "c-c65cea28b4a8ed7d",
           "c-f9792eb6c81407ee"
         ],
         "lb": [
@@ -8721,7 +8719,6 @@
           "c-984edf37b1c12c9b",
           "c-985d68b5a1a4af07",
           "c-985dc61b7aafebbc",
-          "c-9863334967bab8a9",
           "c-98780644f21aea56",
           "c-9886913c65aaae61",
           "c-988e932cd8252519",
@@ -10494,7 +10491,6 @@
           "c-cf50490ec86b05ee",
           "c-cf6126390e29412e",
           "c-cf62c96030956bdc",
-          "c-cf65999ebc0ce208",
           "c-cf65eba80c83a0fb",
           "c-cf845dcf85fbf5ac",
           "c-cf8af883161e6325",
@@ -12005,7 +12001,6 @@
           "c-fffb68654295c763"
         ],
         "lp": [
-          "c-303d850e42b725dd",
           "c-39b39cef21af962c",
           "c-8adbfd664817102a",
           "c-ca4971f665bf4916",
@@ -12048,7 +12043,6 @@
           "c-2a3edcee311e15da",
           "c-2ded09e360c6bc96",
           "c-30ffc2646c2bc39c",
-          "c-32a0d43aea9861a7",
           "c-33d2570b8c13b00c",
           "c-3403348a57059e54",
           "c-3566f48256735540",
@@ -12222,6 +12216,15 @@
           "c-fca61a79c08f521f",
           "c-fdb41aee55b34e8e"
         ]
+      },
+      "protocol": {
+        "c-2c1c63e51f6896f4": ".artifacts/ceiling-20260917/evaluate/webkit-host/features-derived/final/file/webkit-host-rows.ndjson: row 0's right float (inset 120) is at y 32, height 32; the row is at y 0",
+        "c-303d850e42b725dd": ".artifacts/ceiling-20260917/evaluate/webkit-host/features-derived/final/file/webkit-host-rows.ndjson: row 0's right float (inset 120) is at y 32, height 32; the row is at y 0",
+        "c-32a0d43aea9861a7": ".artifacts/ceiling-20260917/evaluate/webkit-host/features-derived/final/file/webkit-host-rows.ndjson: row 0's right float (inset 111.89999999999999) is at y 32, height 32; the row is at y 0",
+        "c-9863334967bab8a9": ".artifacts/ceiling-20260917/evaluate/webkit-host/features-derived/final/file/webkit-host-rows.ndjson: row 0's right float (inset 40) is at y 32, height 32; the row is at y 0",
+        "c-b3398f1cd2253c3a": ".artifacts/ceiling-20260917/evaluate/webkit-host/features-derived/final/file/webkit-host-rows.ndjson: row 0's right float (inset 111.89999999999999) is at y 32, height 32; the row is at y 0",
+        "c-c65cea28b4a8ed7d": ".artifacts/ceiling-20260917/evaluate/webkit-host/features-derived/final/file/webkit-host-rows.ndjson: row 0's right float (inset 111.89999999999999) is at y 32, height 32; the row is at y 0",
+        "c-cf65999ebc0ce208": ".artifacts/ceiling-20260917/evaluate/webkit-host/features-derived/final/file/webkit-host-rows.ndjson: row 0's right float (inset 40) is at y 32, height 32; the row is at y 0"
       }
     }
   },

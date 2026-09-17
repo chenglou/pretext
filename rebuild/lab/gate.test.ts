@@ -2,23 +2,23 @@ import { describe, expect, test } from 'bun:test'
 import { mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { checkRuns, diffBaselines, formatBaseline, parseBaseline, parsePerCase, readRun, runProblems, seedBaseline, type Baseline, type CaseResult, type Run } from './gate.ts'
+import { checkRuns, diffBaselines, environmentParts, environmentProblem, formatBaseline, parseBaseline, parsePerCase, pruneProtocol, readRun, runProblems, seedBaseline, type Baseline, type CaseResult, type Run } from './gate.ts'
 import type { Metric, MetricName, Status } from './score.ts'
 import type { BrowserKind } from './types.ts'
 
 const CODES: Record<string, Status> = { P: 'pass', F: 'fail', U: 'unobserved', N: 'not-applicable' }
 const NAMES: readonly MetricName[] = ['lineCount', 'breaks', 'widths', 'painter']
-const CHROME = 'DPR 2, scale 1, Chrome/153.0.0.0'
+const CHROME = 'chrome: Google Chrome 153.0.8010.48, engine build 153.0.8010.48, macOS 26A428; DPR 2, scale 1; uiLanguage zh-CN; scorer 4'
 
 // `codes` gives lineCount, breaks, widths and painter, each P, F, U or N.
-function result(id: string, codes: string, options: { browser?: BrowserKind; historyDependent?: string } = {}): CaseResult {
+function result(id: string, codes: string, options: { browser?: BrowserKind; historyDependent?: string; protocol?: string } = {}): CaseResult {
   const metrics = {} as Record<MetricName, Metric>
   for (let i = 0; i < NAMES.length; i++) {
     const status = CODES[codes[i]!]
     if (status === undefined) throw new Error(`bad codes ${codes}`)
     metrics[NAMES[i]!] = status === 'pass' ? { status } : { status, reason: `${status} here` }
   }
-  return { id, family: 'test/family', browser: options.browser ?? 'chrome', metrics, historyDependent: options.historyDependent ?? null }
+  return { id, family: 'test/family', browser: options.browser ?? 'chrome', metrics, historyDependent: options.historyDependent ?? null, protocol: options.protocol ?? null }
 }
 
 function run(name: string, cases: CaseResult[], options: { environments?: string[]; compared?: boolean } = {}): Run {
@@ -101,24 +101,72 @@ describe('history dependence and unstable pairs', () => {
   })
 })
 
+describe('protocol rows', () => {
+  const dropped = 'row 0\'s right float (inset 40) is at y 32, height 32; the row is at y 0'
+
+  test('seeding lists a protocol row apart, never as a pass, and the gate never fails on one', () => {
+    const baseline = seed([run('forward', [result('c-1', 'UUUU', { protocol: dropped }), result('c-2', 'PPPP')]), run('reverse', [result('c-1', 'PPPP'), result('c-2', 'PPPP')])])
+    expect(baseline.protocol).toEqual({ 'c-1': dropped })
+    expect(baseline.passes).toEqual({ lbwp: ['c-2'] })
+    expect(baseline.counts.protocolCases).toBe(1)
+    const report = checkRuns(baseline, [run('b', [result('c-1', 'FFFF'), result('c-2', 'PPPP')])], unchecked)
+    expect(report.ok).toBe(true)
+    expect(report.protocol).toEqual([{ id: 'c-1', family: 'test/family', now: null, inBaseline: true, baselinePasses: '' }])
+    expect(report.newPasses).toEqual([])
+  })
+
+  test('a baseline pass that a current run marks as a protocol row isn\'t a loss', () => {
+    const baseline = seed([run('a', [result('c-1', 'PPPP')])])
+    const report = checkRuns(baseline, [run('b', [result('c-1', 'UUUU', { protocol: dropped })])], unchecked)
+    expect([report.ok, report.counts.protocolCases, report.protocol[0]!.baselinePasses]).toEqual([true, 1, 'lbwp'])
+  })
+
+  test('pruning moves protocol rows out of passes, cases without passes and unstable pairs, and names every removed pair', () => {
+    const before = seed([run('forward', [result('c-1', 'PPPP'), result('c-2', 'FFNN'), result('c-3', 'PPPP')]), run('reverse', [result('c-1', 'PPFP'), result('c-2', 'FFNN'), result('c-3', 'PPPP')])])
+    const { baseline, removed } = pruneProtocol(before, new Map([['c-1', dropped], ['c-2', dropped], ['c-9', dropped]]))
+    expect(removed.map(value => [value.id, value.metric])).toEqual([['c-1', 'lineCount'], ['c-1', 'breaks'], ['c-1', 'painter']])
+    expect(baseline.passes).toEqual({ lbwp: ['c-3'] })
+    expect([baseline.withoutPasses, baseline.unstable, Object.keys(baseline.protocol!)]).toEqual([[], {}, ['c-1', 'c-2']])
+    expect(baseline.counts).toMatchObject({ passPairs: { lineCount: 1, breaks: 1, widths: 1, painter: 1 }, withoutPassesCases: 0, unstablePairs: 0, protocolCases: 2 })
+    expect(parseBaseline(formatBaseline(baseline), 'test')).toEqual(baseline)
+    expect(() => parseBaseline(JSON.stringify({ ...baseline, protocol: { 'c-3': dropped } }), 'test')).toThrow('listed elsewhere')
+  })
+})
+
 describe('runs the gate refuses', () => {
   test('another environment, another engine, or no history comparison', () => {
     const baseline = seed([run('a', [result('c-1', 'PPPP')])])
     const problems = runProblems('blink', [
-      run('newer', [result('c-1', 'PPPP')], { environments: ['DPR 2, scale 1, Chrome/154.0.0.0'] }),
+      run('newer', [result('c-1', 'PPPP')], { environments: [CHROME.replace('153.0.8010.48', '154.0.0.1')] }),
       run('foreign', [result('c-2', 'PPPP', { browser: 'firefox' })]),
       run('single', [result('c-3', 'PPPP')], { compared: false }),
     ], { allowUncompared: false, environments: baseline.environments })
     expect(problems).toHaveLength(3)
-    expect(problems[0]).toContain('environment not in the baseline')
+    expect(problems[0]).toContain('browser build or device not in the baseline')
     expect(problems[1]).toContain('rows from firefox, not blink')
     expect(problems[2]).toContain('not scored with --native-compare')
     expect(runProblems('blink', [run('single', [result('c-3', 'PPPP')], { compared: false })], { allowUncompared: true, environments: baseline.environments })).toEqual([])
   })
 
+  test('environments compare part by part: process languages must match the baseline\'s recorded languages', () => {
+    expect(environmentParts(CHROME)).toEqual({ build: 'chrome: Google Chrome 153.0.8010.48, engine build 153.0.8010.48, macOS 26A428', device: 'DPR 2, scale 1', languages: 'uiLanguage zh-CN', scorer: 'scorer 4' })
+    expect(environmentParts('DPR 2, scale 1, Chrome/153.0.0.0')).toEqual({ build: 'DPR 2, scale 1, Chrome/153.0.0.0', device: '', languages: null, scorer: null })
+    expect(environmentProblem(CHROME, [CHROME])).toBeNull()
+    expect(environmentProblem(CHROME.replace('zh-CN', 'en-US'), [CHROME])).toContain('process languages uiLanguage en-US don\'t match the baseline\'s recorded languages (uiLanguage zh-CN)')
+    // A baseline seeded from rows that recorded no languages accepts no run that does.
+    expect(environmentProblem(CHROME, [CHROME.replace('; uiLanguage zh-CN', '')])).toContain('(none recorded)')
+    expect(environmentProblem(CHROME.replace('scorer 4', 'scorer 3'), [CHROME])).toContain('scorer 3 against the baseline\'s scorer 4: re-score')
+  })
+
+  test('seeding refuses runs whose environment records no process languages', () => {
+    const problems = runProblems('blink', [run('old', [result('c-1', 'PPPP')], { environments: [CHROME.replace('; uiLanguage zh-CN', '')] })], { allowUncompared: false, environments: null })
+    expect(problems).toHaveLength(1)
+    expect(problems[0]).toContain('records no process languages')
+  })
+
   test('webkit-host and installed Safari runs share one WebKit baseline', () => {
-    const safari = 'DPR 2, scale 1, Version/27.0 Safari/605.1.15'
-    const host = `${safari} webkit-host/22625.1.29.11.27`
+    const safari = 'safari: Safari 27.0, engine build 22625.1.29.11.27, macOS 26A428; DPR 2, scale 1; preferredLanguages zh-CN,zh-Hans, icuDefaultLocale en_US_POSIX; scorer 4'
+    const host = safari.replace('safari: Safari 27.0', 'webkit-host: webkit-host 27.0')
     const runs = [
       run('host', [result('c-1', 'PPPP', { browser: 'webkit-host' }), result('c-2', 'PPPP', { browser: 'webkit-host' })], { environments: [host] }),
       run('safari', [result('c-1', 'PPPP', { browser: 'safari' }), result('c-2', 'PPFP', { browser: 'safari' })], { environments: [safari] }),
@@ -137,7 +185,7 @@ describe('files', () => {
     const baseline = seed([run('a', [result('c-b', 'PPPP'), result('c-a', 'PPPP'), result('c-c', 'PFNN'), result('c-d', 'FFNU')])])
     expect(baseline.passes).toEqual({ l: ['c-c'], lbwp: ['c-a', 'c-b'] })
     expect(baseline.withoutPasses).toEqual(['c-d'])
-    expect(baseline.counts).toEqual({ cases: 4, passPairs: { lineCount: 3, breaks: 2, widths: 2, painter: 2 }, historyDependentCases: 0, withoutPassesCases: 1, unstablePairs: 0 })
+    expect(baseline.counts).toEqual({ cases: 4, passPairs: { lineCount: 3, breaks: 2, widths: 2, painter: 2 }, historyDependentCases: 0, withoutPassesCases: 1, unstablePairs: 0, protocolCases: 0 })
     const text = formatBaseline(baseline)
     expect(parseBaseline(text, 'test')).toEqual(baseline)
     expect(text.split('\n').filter(line => /^ {6}"c-[abc]",?$/.test(line))).toHaveLength(3)
@@ -152,9 +200,9 @@ describe('files', () => {
     expect(() => parseBaseline(JSON.stringify({ ...baseline, passes: { lx: ['c-1'] } }), 'test')).toThrow('unknown metric letter')
   })
 
-  test('a new seed names the pairs it loses and gains, leaving out history-dependent and one-sided cases', () => {
-    const before = seed([run('a', [result('c-1', 'PPPP'), result('c-2', 'PPPP'), result('c-3', 'FFNN')])])
-    const after = seed([run('b', [result('c-1', 'PPFP'), result('c-2', 'FFFF', { historyDependent: 'x' }), result('c-3', 'PPPP'), result('c-4', 'PPPP')])])
+  test('a new seed names the pairs it loses and gains, leaving out history-dependent, protocol and one-sided cases', () => {
+    const before = seed([run('a', [result('c-1', 'PPPP'), result('c-2', 'PPPP'), result('c-3', 'FFNN'), result('c-5', 'PPPP')])])
+    const after = seed([run('b', [result('c-1', 'PPFP'), result('c-2', 'FFFF', { historyDependent: 'x' }), result('c-3', 'PPPP'), result('c-4', 'PPPP'), result('c-5', 'UUUU', { protocol: 'y' })])])
     const diff = diffBaselines(before, after)
     expect(diff.lost).toEqual([['c-1', 'widths']])
     expect(diff.gained).toEqual([['c-3', 'lineCount'], ['c-3', 'breaks'], ['c-3', 'widths'], ['c-3', 'painter']])
@@ -167,21 +215,21 @@ describe('files', () => {
     const row = (id: string, extra: Record<string, unknown> = {}): string => JSON.stringify({
       id, family: 'f', browser: 'chrome', lineCount: { status: 'pass' }, breaks: { status: 'pass' }, widths: { status: 'unobserved', reason: 'r' }, painter: { status: 'pass' }, ...extra,
     })
-    writeFileSync(perCase, `${row('c-1')}\n${row('c-2', { historyDependent: '2 derived lines vs 1' })}\n`)
+    writeFileSync(perCase, `${row('c-1')}\n${row('c-2', { historyDependent: '2 derived lines vs 1' })}\n${row('c-3', { protocol: 'row 0 float' })}\n`)
     expect(() => readRun(perCase)).toThrow('no summary')
     const summary = (rows: number, compared: boolean): string => JSON.stringify({
       casesFile: '/cases.ndjson', nativeCompareFile: compared ? '/other-rows.ndjson' : null,
       browsers: { chrome: { rows, environments: { [CHROME]: rows }, historyDependent: { compared: compared ? rows : 0 } } },
     })
-    writeFileSync(join(dir, 'chrome-summary.json'), summary(2, true))
+    writeFileSync(join(dir, 'chrome-summary.json'), summary(3, true))
     const value = readRun(perCase)
     expect(value.environments).toEqual([CHROME])
     expect(value.compared).toBe(true)
-    expect(value.cases.map(entry => [entry.id, entry.metrics.widths.status, entry.historyDependent])).toEqual([['c-1', 'unobserved', null], ['c-2', 'unobserved', '2 derived lines vs 1']])
-    writeFileSync(join(dir, 'chrome-summary.json'), summary(2, false))
+    expect(value.cases.map(entry => [entry.id, entry.metrics.widths.status, entry.historyDependent, entry.protocol])).toEqual([['c-1', 'unobserved', null, null], ['c-2', 'unobserved', '2 derived lines vs 1', null], ['c-3', 'unobserved', null, 'row 0 float']])
+    writeFileSync(join(dir, 'chrome-summary.json'), summary(3, false))
     expect(readRun(perCase).compared).toBe(false)
-    writeFileSync(join(dir, 'chrome-summary.json'), summary(3, true))
-    expect(() => readRun(perCase)).toThrow('scored 3')
+    writeFileSync(join(dir, 'chrome-summary.json'), summary(4, true))
+    expect(() => readRun(perCase)).toThrow('scored 4')
     expect(() => parsePerCase(`${row('c-1')}\n${row('c-1')}\n`, 'test')).toThrow('appears twice')
     expect(() => parsePerCase(row('c-1', { widths: { status: 'skipped' } }), 'test')).toThrow('unknown status')
   })

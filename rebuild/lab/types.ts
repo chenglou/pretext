@@ -138,6 +138,10 @@ export type ProcessLanguages = {
   // `defaults read -g AppleLanguages` and `AppleLocale`, and launchd's LC_ALL, LC_MESSAGES and LANG (`launchctl getenv`),
   // read before launch. null where a read failed.
   os: { appleLanguages: string[] | null; appleLocale: string | null; launchdEnvironment: Record<string, string> }
+  // Safari and webkit-host: WebKit's steps from the UI process's AppleLanguages to the WebContent process's preferred
+  // languages, as `webkit-host --print-languages` evaluated them before launch (languages.ts); null where the helper
+  // couldn't run. Absent for other browsers and in rows from before 2026-09-17 13:00.
+  webContent?: WebContentLanguages | null
   // The process-language fields of GivenFacts for the engine (src/env.ts). null values report ui-language.
   given:
     | { engine: 'blink'; uiLanguage: string | null }
@@ -146,6 +150,11 @@ export type ProcessLanguages = {
   // How each given value was derived, citing the engine source it follows.
   derivation: string[]
 }
+
+// WebKit's language steps as `webkit-host --print-languages` evaluates them (rebuild/lab/languages.ts): the UI process's
+// AppleLanguages passed as OverrideLanguages, CFLocaleCopyPreferredLanguages() under them, whether +[NSLocale
+// minimizedLanguagesFromLanguages:] ran and its result, and the canonicalized list userPreferredLanguages() gives.
+export type WebContentLanguages = { overrideLanguages: string[]; cfPreferredLanguages: string[]; minimizes: boolean; minimized: string[]; preferredLanguages: string[] }
 
 // One code point of the concatenated run text.
 export type CodePointObservation = {

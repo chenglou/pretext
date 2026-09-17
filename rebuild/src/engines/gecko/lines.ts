@@ -3,7 +3,7 @@
 // nsInlineFrame::ReflowFrames, nsTextFrame::ReflowText, gfxTextRun::BreakAndMeasureText, TrimTrailingWhiteSpaceIn,
 // TextAlignLine and nsBidiPresUtils::ReorderFrames. specs/gecko-lines.md §4-§6; widths are integer app units throughout
 // (§2.8). A line returns the frames Gecko placed on it (DESIGN.md §2.5), and fragments classified by the frames' own flags.
-import type { Measurer } from '../../measure/canvas.js'
+import { measureContext, measureTextBounds, type Measurer } from '../../measure/canvas.js'
 import type { Fragment, Gap, GeckoCharacter, GeckoFrameGeometry, GeckoLine, GeckoLineResult, LineSlot, TextAlign } from '../../model.js'
 import { BREAK_EMERGENCY_WRAP, BREAK_NORMAL } from './linebreak.js'
 import { frameOfSource, isTrimmableChar, pxToAu, rangeAu } from './prepare.js'
@@ -23,8 +23,42 @@ type LineGaps = { list: Gap[]; inWordReported: boolean }
 
 function reportInWordGap(p: GeckoPrepared, gaps: LineGaps, t: number, detail: string): void {
   gaps.inWordReported = true
-  gaps.list.push({ gap: 'in-word-prefix', run: p.frames[frameOfSource(p.frames, p.tSource[t]!)]!.run, detail })
+  const s = p.tSource[t]!
+  gaps.list.push({ gap: 'in-word-prefix', run: p.frames[frameOfSource(p.frames, s)]!.run, detail, at: { start: s, end: s } })
 }
+
+// A ligature across offset t inside a shaping unit: the grapheme clusters on both sides of t measure differently, in width or
+// ink box, with ligatures off. letterSpacing 0.001px turns liga, clig, dlig and hlig off in Gecko's Canvas and adds no app
+// unit (specs/gecko-canvas.md §1.10). The DOM gives a range edge inside a ligature the ligature's advance in shares by
+// started clusters (ComputeLigatureData, gfxTextRun.cpp:238-322), which W(unit) − W(suffix) doesn't. Probe gecko-port F9
+// (.artifacts/probes/gecko/round2): `fi` in 14px "Helvetica Neue" is 435 au either way, as wide as `f` and `i` apart, but its
+// ink box ends at 438 au with ligatures and 438.36 without; the DOM gives `f` 217 au and `i` 218 inside `firstname`, where
+// the recipe gives 249 and 186. Necessary, not sufficient: a ligature that moves neither the pair's width nor its box, or
+// one that begins more than a cluster before t, doesn't show. A run with letter spacing has ligatures off in the DOM too
+// (nsLayoutUtils.cpp:6901-6904).
+function ligatureAcross(p: GeckoPrepared, m: Measurer, run: GeckoTextRun, unit: { tStart: number; tEnd: number }, t: number): boolean {
+  const settings = m.log.contexts[run.context]!
+  if (settings.letterSpacing !== '0px') return false
+  let a = t - 1
+  while (a > unit.tStart && p.clusterStart[a] === 0) a--
+  let b = t + 1
+  while (b < unit.tEnd && p.clusterStart[b] === 0) b++
+  let pair = ''
+  for (let k = a; k < b; k++) pair += String.fromCharCode(p.tUnits[k]!)
+  // The answer depends only on the context and the string, and a line consults an offset several times (the scan, the
+  // measured edges, the redo): answer each once per measurer.
+  let memo = ligatureMemo.get(m)
+  if (memo === undefined) ligatureMemo.set(m, memo = new Map())
+  const key = `${run.context} ${pair}`
+  const known = memo.get(key)
+  if (known !== undefined) return known
+  const on = measureTextBounds(m, run.context, pair)
+  const off = measureTextBounds(m, measureContext(m, { ...settings, letterSpacing: '0.001px' }), pair)
+  const differs = on.width !== off.width || on.left !== off.left || on.right !== off.right
+  memo.set(key, differs)
+  return differs
+}
+const ligatureMemo = new WeakMap<Measurer, Map<string, boolean>>()
 
 // The glyph advance of text run characters before t, the sum of the DOM's glyph records (gfxTextRun::GetAdvanceWidth,
 // gfxTextRun.cpp:1214-1256): unit totals, and inside a unit W(unit) − W(suffix) (DESIGN.md §5 in-word-prefix,
@@ -63,6 +97,8 @@ function glyphBefore(p: GeckoPrepared, m: Measurer, run: GeckoTextRun, t: number
     const prefixAu = rangeAu(m, run, p.tUnits, unit.tStart, t)
     if (joins || prefixAu + suffixAu !== unit.canvasAu) {
       reportInWordGap(p, gaps, t, `offset ${p.tSource[t]}: ${joins ? 'letters join across it' : `W(prefix) + W(suffix) = ${prefixAu + suffixAu} au, W(unit) = ${unit.canvasAu} au`}`)
+    } else if (ligatureAcross(p, m, run, unit, t)) {
+      reportInWordGap(p, gaps, t, `offset ${p.tSource[t]}: the clusters around it measure differently with ligatures off, so the DOM may give it a ligature's share (gfxTextRun.cpp:238-322)`)
     }
   }
   // A shaping buffer against its script's native direction is shaped reversed (hb_ensure_native_direction,
@@ -70,6 +106,18 @@ function glyphBefore(p: GeckoPrepared, m: Measurer, run: GeckoTextRun, t: number
   // glyph, and the advance before t is the prefix's own.
   const corrections = p.correctionPrefix[t]! - p.correctionPrefix[unit.tStart]!
   if (reversed) return unit.startAdvance + rangeAu(m, run, p.tUnits, unit.tStart, t) + corrections
+  // A font whose pair adjustments HarfBuzz applies through the kern and kerx pair machine gives the glyph before t only
+  // `kern >> 1` of the adjustment across t, and the rest to the glyph after it (hb-kern.hh:102-106 in Firefox's HarfBuzz
+  // 14.3.1; hb-ot-shape.cc:130-187 chooses it where GPOS has no kern feature). Canvas shows the adjustment as
+  // W(unit) − W(prefix) − W(suffix), in app units already rounded per glyph, so an odd adjustment's half can round either
+  // way in the DOM (probe gecko-port F12: Times New Roman `AV` 710 + 710 against 780 + 780 and 1420; Verdana `Wa` 1042 + 622
+  // where −53 au halves to −26 on `W`). `in-word-prefix` is reported there. GPOS puts all of it on the first glyph, which
+  // is W(unit) − W(suffix), and so does the default where the fact isn't given.
+  if (run.pairKerning === 'split' && !joinsAcross(p, unit, t)) {
+    const prefixAu = rangeAu(m, run, p.tUnits, unit.tStart, t)
+    const adjustment = unit.canvasAu - prefixAu - suffixAu
+    return unit.startAdvance + prefixAu + (adjustment >> 1) + corrections
+  }
   return unit.startAdvance + unit.canvasAu - suffixAu + corrections
 }
 
@@ -872,12 +920,12 @@ function characters(p: GeckoPrepared, m: Measurer, r: FrameResult, prov: Provide
   for (let s = r.offset; s < r.contentStart + r.contentLength; s++) {
     const t = p.sourceT[s]!
     if (t === -1) {
-      out.push({ skipped: true, clusterStart: false, advance: 0 })
+      out.push({ skipped: true, clusterStart: false, unitStart: false, advance: 0 })
       continue
     }
     const after = glyphBefore(p, m, prov.run, t + 1, null)
     out.push({
-      skipped: false, clusterStart: p.clusterStart[t] === 1,
+      skipped: false, clusterStart: p.clusterStart[t] === 1, unitStart: p.units[p.unitOf[t]!]!.tStart === t,
       advance: after - before + p.spacingPrefix[t + 1]! - p.spacingPrefix[t]! + (prov.tabs.get(t) ?? 0) + (justification?.get(t) ?? 0),
     })
     before = after
@@ -1236,9 +1284,15 @@ function lineOutput(p: GeckoPrepared, m: Measurer, start: GeckoLineStart, lineEn
           geometryOf.set(pf, geometry)
           break
         }
-        case 'wbr':
-          // The model has no geometry kind for a WBRFrame: 0 × 0, and which rects a <wbr> reports isn't traced (DESIGN.md §9).
+        case 'wbr': {
+          // A WBRFrame is 0 × 0 where it was placed; Firefox reports that box through getClientRects (feature family rows,
+          // round 1: `c-00370d538345f01b` reports x 3558 au, width 0, height 0 after a 3558 au frame).
+          const level = (p.elements[pf.element] as Extract<GeckoElement, { kind: 'br' | 'wbr' }>).level
+          const geometry: GeckoFrameGeometry = { kind: 'wbr', element: pf.element, level, x: logical, width: 0 }
+          frames.push(geometry)
+          geometryOf.set(pf, geometry)
           break
+        }
       }
     }
   }

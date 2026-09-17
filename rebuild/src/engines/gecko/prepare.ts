@@ -3,7 +3,7 @@
 // specs/gecko-text.md §2-§12, specs/gecko-canvas.md §2-§3, specs/probes-firefox.md.
 import { indexContent, langUnder, styleUnder, type ContentIndex } from '../../content.js'
 import type { GeckoEnvironment } from '../../env.js'
-import { measureContext, measureText, type Measurer } from '../../measure/canvas.js'
+import { measureContext, measureText, measureTextBounds, type Measurer } from '../../measure/canvas.js'
 import { canvasFont } from '../../measure/font.js'
 import type { BoxEdge, FontDecl, Gap, Paragraph, TextStyle } from '../../model.js'
 import { opticalSizeAxisOf, quantize10, sameFontForTextRun } from './fonts.js'
@@ -433,9 +433,14 @@ const isCommonScript = (s: string) => s === 'Zyyy' || s === 'Zinh' || s === 'Zzz
 const fastLatin = (ch: number) => ((ch & ~0x20) >= 0x41 && (ch & ~0x20) <= 0x5a) || (ch >= 0xc0 && ch <= 0xd6) ||
   (ch >= 0xd8 && ch <= 0xf6) || (ch >= 0xf8 && ch <= 0x2b8) || (ch & ~0x10) === 0xaa || (ch >= 0x2e0 && ch <= 0x2e4)
 
-// The script runs gfxFontGroup::InitTextRun shapes [start, end) with (gfxTextRun.cpp:2700-2800): text with every code
-// unit below U+02EA is one run, Latin when it has a Latin letter (8-bit: A-Z only), else Common resolved from the
-// language; other text goes through the itemizer. Common stays Common here, standing for "resolved from the language".
+// The script runs gfxFontGroup::InitTextRun shapes [start, end) with (gfxTextRun.cpp:2729-2757): text with every code
+// unit below U+02EA is one run, Latin when it has a Latin letter, else Common resolved from the language; other text goes
+// through the itemizer. Common stays Common here, standing for "resolved from the language". An 8-bit text run tests
+// `const uint8_t c = aString[j] & ~0x20; hasLetter = (c - 'A' <= 'Z' - 'A')` (:2744-2747): `c - 'A'` is a signed int, so
+// every unit whose masked value is at most 'Z' counts, digits, spaces and ASCII punctuation included. Probe gecko-port F8
+// (.artifacts/probes/gecko/round2): ` 7:00-9:00` in 18px bold "Apple SD Gothic Neo" under lang="ko" kerns `7:` and `-9` as
+// an 8-bit node (5184 au) and doesn't within a 16-bit text run (4969 au), where Common resolves to Hangul and CJK scripts
+// turn kerning off (gfxHarfBuzzShaper.cpp:1405-1438).
 function textRunScripts(units: Uint16Array, start: number, end: number, is8bit: boolean): ScriptRun[] {
   let allCommonOrLatin = true
   for (let i = start; i < end; i++) if (units[i]! >= 0x02ea) { allCommonOrLatin = false; break }
@@ -443,7 +448,7 @@ function textRunScripts(units: Uint16Array, start: number, end: number, is8bit: 
   let hasLetter = false
   for (let i = start; i < end && !hasLetter; i++) {
     const u = units[i]!
-    hasLetter = is8bit ? ((u & ~0x20) >= 0x41 && (u & ~0x20) <= 0x5a) : fastLatin(u)
+    hasLetter = is8bit ? (u & 0xdf) <= 0x5a : fastLatin(u)
   }
   return [{ limit: end, script: hasLetter ? 'Latn' : 'Zyyy' }]
 }
@@ -481,6 +486,10 @@ function scriptContextFor(units: Uint16Array, runs: ScriptRun[], runStart: numbe
     if (isSurrogatePair(u, units[i + 1] ?? 0)) return { text: String.fromCharCode(u, units[i + 1]!), before: false }
     return { text: String.fromCharCode(u), before: false }
   }
+  // An 8-bit text run is Latin without a Latin letter (textRunScripts), and Canvas's 16-bit string itemizes Latin only with
+  // one: a letter of its own gives it that script. Probe gecko-port F8: `a 7:00-9:00` less `a ` in 18px bold "Apple SD Gothic
+  // Neo" with lang ko is 4900 au, the DOM's width of the 8-bit node, where `7:00-9:00` alone is 4969 au.
+  if (domScript === 'Latn') return { text: 'a', before: true }
   return null
 }
 
@@ -632,7 +641,11 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, measur
     let is8bit = true
     for (let k = 0; k < leaf.text.length; k++) if (leaf.text.charCodeAt(k) >= 0x100) { is8bit = false; break }
     runIs8bit.push(is8bit)
-    if (langs[i] === '') gaps.push({ gap: 'ui-language', run: i, detail: 'lang="": font lists and generic families follow the OS locale, which pages cannot read' })
+    // lang="" leaves the style language empty (MapLangAttributeInto, nsGenericHTMLElement.cpp:1337-1375), and nsFontCache gives
+    // such text the locale language, the first regional-prefs locale lowercased (nsFontCache.cpp:34, :61-63;
+    // nsLanguageAtomService.cpp:107-138), for font matching and shaping. Line breaking and TransformText still see the empty
+    // tag. The measure contexts take that locale when the caller gives it; otherwise it can't be known.
+    if (langs[i] === '' && env.regionalPrefsLocale === null) gaps.push({ gap: 'ui-language', run: i, detail: 'lang="": font lists and generic families follow the OS regional-prefs locale, which pages cannot read (nsFontCache.cpp:61-63)', at: { start: leaf.start, end: leaf.start + leaf.text.length } })
   }
 
   // Elements: span box edges in au and the shaping boundary tests; atomic sizes (DESIGN.md §1.1, "Box edges").
@@ -717,8 +730,7 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, measur
         found = u === 0x202a || u === 0x202d || u === 0x2066 || u === 0x2068
       }
       if (found) {
-        gaps.push({ gap: 'page-history', run: p.run, detail: "left-to-right bidi controls split frames only once the document has seen right-to-left text (CharacterData.cpp:298-302, nsTextFrame.cpp:2139-2148); the port predicts a fresh document" })
-        break
+        gaps.push({ gap: 'page-history', run: p.run, detail: "left-to-right bidi controls split frames only once the document has seen right-to-left text (CharacterData.cpp:298-302, nsTextFrame.cpp:2139-2148); the port predicts a fresh document", at: { start: p.start, end: p.end } })
       }
     }
   }
@@ -1103,32 +1115,30 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, measur
   const units: GeckoUnit[] = []
   const correction = new Int32Array(T)
   const textRuns: GeckoTextRun[] = []
-  const quantizationReported = new Set<string>()
-  const opticalSizeReported = new Set<string>()
-  let emojiGapReported = false
-  let fallbackGapReported = false
-  let spaceShapingGapReported = false
   for (let r = 0; r < builds.length; r++) {
     const b = builds[r]!
     const firstRun = frames[b.flows[0]!.frame]!.run
     const font = runTextStyles[firstRun]!.font
     const lang = langs[firstRun]!
+    // The source range of the text run's characters: the text whose widths a condition of the run concerns (DESIGN.md §2.8).
+    const at = b.tEnd > b.tStart ? { start: tSource[b.tStart]!, end: tSource[b.tEnd - 1]! + 1 } : { start: frames[b.flows[0]!.frame]!.start, end: frames[b.flows[0]!.frame]!.start }
     const domAu = lroundf(f32(quantize10(font.size) * 60))
-    if (quantize7(font.size) * 60 !== domAu && !quantizationReported.has(String(font.size))) {
-      quantizationReported.add(String(font.size))
-      gaps.push({ gap: 'font-size-quantization', run: firstRun, detail: `DOM size ${domAu / 60}px, Canvas size ${quantize7(font.size)}px` })
+    if (quantize7(font.size) * 60 !== domAu) {
+      gaps.push({ gap: 'font-size-quantization', run: firstRun, detail: `DOM size ${domAu / 60}px, Canvas size ${quantize7(font.size)}px`, at })
     }
     // No Canvas setting gives the DOM's auto optical sizing (specs/gecko-canvas.md §1.2 C1a), so a font with an opsz axis,
     // or one whose axis isn't known, may measure differently (DESIGN.md §1.2).
-    if (font.facts.opticalSizeAxis !== false && !opticalSizeReported.has(font.family)) {
-      opticalSizeReported.add(font.family)
-      gaps.push({ gap: 'optical-size', run: firstRun, detail: font.facts.opticalSizeAxis === true ? `${font.family} has an opsz axis` : `whether ${font.family} has an opsz axis isn't given (default ${opticalSizeAxisOf(font)})` })
+    if (font.facts.opticalSizeAxis !== false) {
+      gaps.push({ gap: 'optical-size', run: firstRun, detail: font.facts.opticalSizeAxis === true ? `${font.family} has an opsz axis` : `whether ${font.family} has an opsz axis isn't given (default ${opticalSizeAxisOf(font)})`, at })
     }
     // CanAddSpacingAfter adds letter spacing only at ligature group starts (nsTextFrame.cpp:3860-3873). Letter spacing
     // turns optional ligatures off; the required ligatures a font still forms aren't visible to Canvas.
-    if (letterSpacingAu[firstRun] !== 0) gaps.push({ gap: 'glyph-clusters', run: firstRun, detail: "letter spacing follows ligature group starts, which Canvas can't show (nsTextFrame.cpp:3860-3873)" })
+    if (letterSpacingAu[firstRun] !== 0) gaps.push({ gap: 'glyph-clusters', run: firstRun, detail: "letter spacing follows ligature group starts, which Canvas can't show (nsTextFrame.cpp:3860-3873)", at })
+    // An explicit ctx.lang: OffscreenCanvas would otherwise take the root element's lang (CanvasRenderingContext2D.cpp:5446-5465).
+    // Content with lang="" matches fonts under the locale language (nsFontCache.cpp:61-63).
+    const canvasLang = lang === '' && env.regionalPrefsLocale !== null ? env.regionalPrefsLocale : lang
     const settings = {
-      font: canvasFont(font, font.size), lang, letterSpacing: letterSpacingAu[firstRun] !== 0 ? '0.001px' : '0px',
+      font: canvasFont(font, font.size), lang: canvasLang, letterSpacing: letterSpacingAu[firstRun] !== 0 ? '0.001px' : '0px',
       wordSpacing: '0px', fontKerning: 'auto' as const, textRendering: 'auto' as const,
       direction: (b.level & 1) === 1 ? 'rtl' as const : 'ltr' as const, partition: '',
     }
@@ -1149,9 +1159,8 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, measur
       if (stretchWords >= 2 && stretchSpaces >= 1) {
         let s = ''
         for (let t = stretchStart; t < end; t++) s += String.fromCharCode(tUnits[t]!)
-        if (au(s) !== stretchSum && !spaceShapingGapReported) {
-          spaceShapingGapReported = true
-          gaps.push({ gap: 'space-in-shaping', run: firstRun, detail: `the whole range measures ${au(s)} au, its units ${stretchSum} au` })
+        if (au(s) !== stretchSum) {
+          gaps.push({ gap: 'space-in-shaping', run: firstRun, detail: `the whole range measures ${au(s)} au, its units ${stretchSum} au`, at: { start: tSource[stretchStart]!, end: tSource[end - 1]! + 1 } })
         }
       }
       stretchWords = 0
@@ -1221,13 +1230,19 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, measur
             const presentation = emojiPresentation(first)
             if (presentation === 'text-only') continue
             const atCssSize = au(cluster)
+            // The ink box too: a text font whose widths happen to equal Apple Color Emoji's at both sizes still draws another
+            // glyph. Probe gecko-port F11 (.artifacts/probes/gecko/round2b): U+1F600 in Arial, Menlo, "Apple Symbols" and
+            // "Times New Roman" measures as in "Apple Color Emoji" alone, box [60, 1020] au, and U+263A in Arial doesn't (980 au,
+            // box [−131.25, 848.91]).
+            const sameBox = (a: { left: number; right: number }, b: { left: number; right: number }) => a.left === b.left && a.right === b.right
             const inEmojiFont = atCssSize === auIn(emojiFontContext(font.size), cluster) &&
-              auIn(deviceContext, cluster) === auIn(emojiFontContext(devSize), cluster)
+              auIn(deviceContext, cluster) === auIn(emojiFontContext(devSize), cluster) &&
+              sameBox(measureTextBounds(measurer, context, cluster), measureTextBounds(measurer, emojiFontContext(font.size), cluster))
+            const clusterAt = { start: tSource[t + boundaries[c]!]!, end: tSource[t + boundaries[c + 1]! - 1]! + 1 }
             if (!inEmojiFont) {
               const next = cluster.codePointAt(first >= 0x10000 ? 2 : 1) ?? 0
-              if (prefersColorGlyph(presentation, first, next) && !fallbackGapReported) {
-                fallbackGapReported = true
-                gaps.push({ gap: 'font-fallback', run: firstRun, detail: `U+${first.toString(16).toUpperCase()} asks for a color glyph, but Canvas draws it with another font than Apple Color Emoji (${atCssSize} au): the document's font fallback has pinned it, and the DOM follows the state at its own layout time (probes gecko-port F2, F3)` })
+              if (prefersColorGlyph(presentation, first, next)) {
+                gaps.push({ gap: 'font-fallback', run: firstRun, detail: `U+${first.toString(16).toUpperCase()} asks for a color glyph, but Canvas draws it with another font than Apple Color Emoji (${atCssSize} au): the document's font fallback has pinned it, and the DOM follows the state at its own layout time (probes gecko-port F2, F3)`, at: clusterAt })
               }
               continue
             }
@@ -1236,23 +1251,20 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, measur
             // Apple Color Emoji's own: then the two contexts are one and the test above can't fail. Probe gecko-port F4: `©︎`
             // in 16px "Apple Color Emoji" draws with a text font at 729 au in Canvas and the DOM.
             if (settings.font === canvasFont({ ...font, family: COLOR_EMOJI_FAMILY }, font.size) &&
-              !prefersColorGlyph(presentation, first, cluster.codePointAt(first >= 0x10000 ? 2 : 1) ?? 0) && !fallbackGapReported) {
-              fallbackGapReported = true
-              gaps.push({ gap: 'font-fallback', run: firstRun, detail: `U+${first.toString(16).toUpperCase()} asks for text presentation in Apple Color Emoji's own font list: which font the DOM draws it with depends on text fonts' coverage, which the Canvas test can't show there (gfxTextRun.cpp:3268-3308)` })
+              !prefersColorGlyph(presentation, first, cluster.codePointAt(first >= 0x10000 ? 2 : 1) ?? 0)) {
+              gaps.push({ gap: 'font-fallback', run: firstRun, detail: `U+${first.toString(16).toUpperCase()} asks for text presentation in Apple Color Emoji's own font list: which font the DOM draws it with depends on text fonts' coverage, which the Canvas test can't show there (gfxTextRun.cpp:3268-3308)`, at: clusterAt })
             }
-            if (quantize7(devSize) !== devSize && !emojiGapReported) {
-              emojiGapReported = true
-              gaps.push({ gap: 'bitmap-emoji-size', run: firstRun, detail: `device size ${devSize}px is not on Canvas's 7-bit size grid` })
+            if (quantize7(devSize) !== devSize) {
+              gaps.push({ gap: 'bitmap-emoji-size', run: firstRun, detail: `device size ${devSize}px is not on Canvas's 7-bit size grid`, at: clusterAt })
             }
             // The DOM stores floor(apd × device advance + 0.5) (gfxHarfBuzzShaper.cpp:1559); a lone regional indicator's
             // advance isn't a whole pixel (28.683px at 28px), so round once from the Canvas au at the device size.
             const deviceAu60 = auIn(deviceContext, cluster)
             const dom = Math.floor(deviceAu60 * apd / 60 + 0.5)
-            if ((deviceAu60 * apd) % 60 !== 0 && !emojiGapReported) {
+            if ((deviceAu60 * apd) % 60 !== 0) {
               // Canvas's au at the device size rounds once at apd 60; the DOM rounds at the page's apd, and adds synthetic
               // bold after rounding (gfxFont.cpp:3551-3562), so the DOM value isn't determined (+1 au per bold flag, runs-r4).
-              emojiGapReported = true
-              gaps.push({ gap: 'bitmap-emoji-size', run: firstRun, detail: `device-size advance ${deviceAu60} au at apd 60 doesn't give an exact au at apd ${apd}` })
+              gaps.push({ gap: 'bitmap-emoji-size', run: firstRun, detail: `device-size advance ${deviceAu60} au at apd 60 doesn't give an exact au at apd ${apd}`, at: clusterAt })
             }
             const delta = dom - atCssSize
             correction[t + boundaries[c]!] = delta
@@ -1272,7 +1284,7 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, measur
     textRuns.push({
       tStart: b.tStart, tEnd: b.tEnd, is8bit: b.is8bit, level: b.level, context, scriptRuns: run.scriptRuns, hasShy: b.hasShy,
       trailingBreak: b.trailingBreak, minTabAdvance: b.hasTab ? 0.5 * au('0') : 0,
-      hyphenAu: b.hasShy ? au('‐') : 0, hasTab: b.hasTab, totalAdvance: advance,
+      hyphenAu: b.hasShy ? au('‐') : 0, hasTab: b.hasTab, totalAdvance: advance, pairKerning: font.facts.pairKerning,
     })
   }
   const correctionPrefix = new Int32Array(T + 1)
@@ -1298,9 +1310,14 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, measur
     case 'intl-segmenter-word':
       break
     case 'unavailable': {
-      let hasComplex = false
-      for (let s = 0; s < n && !hasComplex; s++) hasComplex = complexLanguage(text.charCodeAt(s)) !== ''
-      if (hasComplex) gaps.push({ gap: 'dictionary-breaks-unavailable', run: null, detail: 'Thai, Lao, Khmer or Myanmar text' })
+      // Each stretch of such text: the break opportunities inside it are unknown.
+      for (let s = 0; s < n;) {
+        if (complexLanguage(text.charCodeAt(s)) === '') { s++; continue }
+        let e = s + 1
+        while (e < n && complexLanguage(text.charCodeAt(e)) !== '') e++
+        gaps.push({ gap: 'dictionary-breaks-unavailable', run: null, detail: 'Thai, Lao, Khmer or Myanmar text', at: { start: s, end: e } })
+        s = e
+      }
       break
     }
   }
@@ -1313,8 +1330,7 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, measur
       if (u !== 0x2007 && u !== 0x2008) continue
       let run = 0
       while (runStarts[run + 1]! <= s) run++
-      gaps.push({ gap: 'font-fallback', run, detail: `U+${u.toString(16).toUpperCase()} takes a synthesized width rounded to device pixels where no font covers it` })
-      break
+      gaps.push({ gap: 'font-fallback', run, detail: `U+${u.toString(16).toUpperCase()} takes a synthesized width rounded to device pixels where no font covers it`, at: { start: s, end: s + 1 } })
     }
   }
 

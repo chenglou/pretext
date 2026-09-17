@@ -123,6 +123,52 @@ for (let cp = 0; cp < scriptProps.length; cp++) if (cp === 0 || scriptProps[cp] 
 const scriptPacked = new Uint8Array(new Uint32Array(scriptRuns).buffer)
 const cursiveScripts = ['Arab', 'Rohg', 'Mand', 'Mong', 'Nkoo', 'Phag', 'Syrc'].map(scriptCode)
 
+// Character::IsCjkIdeographOrSymbol (character.h:97-100, character_property_data_generator.cc:89-140): the explicit values
+// and ranges of character_property_data.h:17-111, every Emoji_Presentation character (ICU 78.2 ppucd.txt EPres), and the
+// Extended_Pictographic characters of RGI_Emoji_ZWJ_Sequence and RGI_Emoji_Modifier_Sequence strings (ICU builds those
+// properties of strings from Unicode 17's emoji-zwj-sequences.txt and emoji-sequences.txt, which chromium-152's ICU 78.2
+// checkout carries; Chrome 153 pins the same ICU release). Justification reads it (justification_opportunity.cc:105-120).
+const CPD_PATH = 'chromium-153.0.8010.48/third_party/blink/renderer/platform/text/character_property_data.h'
+const CPD_SHA256 = '3d7724d334e0ab019d536b7cec054df31635c96e4d6c7d854ddaee98883dc8b2'
+const ZWJ_SEQUENCES_PATH = 'chromium-152/src/third_party/icu/source/data/unidata/emoji-zwj-sequences.txt'
+const ZWJ_SEQUENCES_SHA256 = '5b25441daed2322b068c5e70cda522946a4f0274df864445a1965a92e5fc5cad'
+const SEQUENCES_PATH = 'chromium-152/src/third_party/icu/source/data/unidata/emoji-sequences.txt'
+const SEQUENCES_SHA256 = '12cc8267dc33cbd11ed32bcf6fc5dc2ad9c7a77bae1bdfba2f41b1b9b3ead8dd'
+const cpdSource = new TextDecoder().decode(readVerified(resolve(BROWSER_ENGINES, CPD_PATH), CPD_SHA256))
+function cpdList(name: string): number[] {
+  const start = cpdSource.indexOf(`static constexpr auto ${name} = std::to_array<UChar32>({`)
+  if (start < 0) throw new Error(`character_property_data.h has no ${name}`)
+  const body = cpdSource.slice(start, cpdSource.indexOf('});', start)).replace(/\/\/[^\n]*/g, '')
+  return [...body.slice(body.indexOf('({') + 2).matchAll(/0x([0-9A-Fa-f]+)/g)].map(m => parseInt(m[1]!, 16))
+}
+const cjkSymbol = new Uint8Array(0x110000)
+for (const cp of cpdList('kIsCjkIdeographOrSymbolArray')) cjkSymbol[cp] = 1
+const cjkRanges = cpdList('kIsCjkIdeographOrSymbolRanges')
+if (cjkRanges.length % 2 !== 0) throw new Error('kIsCjkIdeographOrSymbolRanges has an odd count')
+for (let i = 0; i < cjkRanges.length; i += 2) cjkSymbol.fill(1, cjkRanges[i]!, cjkRanges[i + 1]! + 1)
+await forEachPpucdCodePointRange(range => {
+  if (range.props.has('EPres')) cjkSymbol.fill(1, range.first, range.last + 1)
+})
+function markSequencePictographs(path: string, sha: string, property: string): void {
+  const text = new TextDecoder().decode(readVerified(resolve(BROWSER_ENGINES, path), sha))
+  for (const line of text.split('\n')) {
+    const data = line.split('#')[0]!
+    const fields = data.split(';').map(f => f.trim())
+    if (fields.length < 2 || fields[1] !== property) continue
+    for (const hex of fields[0]!.split(/\s+/)) {
+      const cp = parseInt(hex, 16)
+      if ((scriptProps[cp]! & (16 << 18)) !== 0) cjkSymbol[cp] = 1
+    }
+  }
+}
+markSequencePictographs(ZWJ_SEQUENCES_PATH, ZWJ_SEQUENCES_SHA256, 'RGI_Emoji_ZWJ_Sequence')
+markSequencePictographs(SEQUENCES_PATH, SEQUENCES_SHA256, 'RGI_Emoji_Modifier_Sequence')
+const cjkSymbolRanges: number[] = []
+for (let cp = 0; cp < cjkSymbol.length; cp++) {
+  if (cjkSymbol[cp] === 1 && (cp === 0 || cjkSymbol[cp - 1] !== 1)) cjkSymbolRanges.push(cp)
+  if (cjkSymbol[cp] === 1 && (cp + 1 === cjkSymbol.length || cjkSymbol[cp + 1] !== 1)) cjkSymbolRanges.push(cp)
+}
+
 const hanKerningFlat: number[] = []
 for (const [cp, type] of [...hanKerning.entries()].sort((a, b) => a[0] - b[0])) if (type !== HAN_OTHER) hanKerningFlat.push(cp, type)
 
@@ -166,4 +212,9 @@ export const blinkScriptExtensions: readonly (readonly number[])[] = [${extensio
 
 // IsCursiveScript (shape_result.cc:977-990): Arab, Rohg, Mand, Mong, Nkoo, Phag, Syrc as UScriptCode numbers.
 export const blinkCursiveScripts: readonly number[] = [${cursiveScripts.join(',')}]
+
+// Character::IsCjkIdeographOrSymbol as sorted inclusive [first, last] pairs: character_property_data.h (sha256 ${CPD_SHA256}),
+// Emoji_Presentation, and the Extended_Pictographic characters of RGI emoji ZWJ and modifier sequences (emoji-zwj-sequences.txt
+// sha256 ${ZWJ_SEQUENCES_SHA256}, emoji-sequences.txt sha256 ${SEQUENCES_SHA256}).
+export const blinkCjkIdeographOrSymbolRanges: readonly number[] = [${cjkSymbolRanges.join(',')}]
 `)

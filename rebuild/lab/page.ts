@@ -505,8 +505,22 @@ async function observeCase(c: Case, reply: Extract<StepReply, { kind: 'chunk' }>
   return { id: c.id, env, native, prediction, painter, timings }
 }
 
+// Installed Safari only: the markup holds a hidden image that keeps this document loading, so WebKit keeps the hidden
+// page's process runnable until the page's title change does (run.ts, "Installed Safari keeps each lab document runnable").
+// The server answers /api/hold-ready once enough time has passed since it served the document, the title changes, and
+// then the image is released, so the load ends and document.fonts.ready can resolve.
+async function releaseHold(): Promise<void> {
+  const hold = document.querySelector<HTMLImageElement>('img[data-lab-hold]')
+  if (hold === null) return
+  const n = Number(hold.dataset['labHold'])
+  await post<{ ok: true }>('/api/hold-ready', { runId, n })
+  document.title = `pretext-rebuild lab (running ${n})`
+  await post<{ ok: true }>('/api/hold-release', { runId, n })
+}
+
 async function main(): Promise<void> {
   fontFixtures = await loadFontFixtures()
+  await releaseHold()
   await document.fonts.ready
   const range = document.createRange()
   const pageLang = document.documentElement.lang

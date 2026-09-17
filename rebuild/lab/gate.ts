@@ -4,17 +4,21 @@
 //     [--complete] [--allow-uncompared] [--out=<report.json>]
 //   bun rebuild/lab/gate.ts --seed --engine=blink|webkit|gecko --engine-version=<label> [--note=<text>]
 //     --baseline=<file> --runs=<per-case file or dir>[,...] [--allow-uncompared] [--out=<diff.json>]
+//   bun rebuild/lab/gate.ts --prune-protocol --baseline=<lab gate file or tests gate file> [--out=<report.json>]
 //
 // A run is a per-case file written by `score.ts --per-case`, next to the summary the same call wrote (`<name>-per-case.ndjson`
 // and `<name>-summary.json`). `--runs` takes files or directories (every `*-per-case.ndjson` directly inside) and can be
 // repeated. A baseline describes one engine version: the (case id, metric) pairs that passed in every seeding run that
 // observed the case, and the environments those runs reported: the browser build the driver read from the app bundle, the
-// OS build, DPR, visual-viewport scale and the scorer version (score.ts environmentKey).
+// OS build, DPR, visual-viewport scale, the browser process's given languages and the scorer version (score.ts
+// environmentKey).
 //
 // Checking a run against a baseline:
-// - Every run's environments must be ones the baseline recorded. Anything else means the browser changed (a new version, a
-//   different DPR) or the scorer did: re-observe or re-score with the same library, seed a new baseline and review the
-//   seed's diff. Exit 2.
+// - Every run's environments must be ones the baseline recorded: the same browser build and device, the same given process
+//   languages, and the same scorer. Each part is compared on its own, so a refusal names what differs. A new browser build
+//   or DPR means re-observing; other process languages are another environment, since unlabeled content breaks by them
+//   (DESIGN.md §1.4); another scorer means re-scoring the seeding runs. Then seed a new baseline and review the seed's diff.
+//   Exit 2.
 // - Every run must have been scored with --native-compare against the same case file in the other order, so history-
 //   dependent cases are known. --allow-uncompared accepts single-order runs. Exit 2.
 // - A baseline pass that isn't a pass in a run observing the case is a lost pass. unobserved and not-applicable are never
@@ -23,15 +27,24 @@
 //   gate. Its baseline passes and current statuses are reported apart. So are pairs that were unstable when the baseline
 //   was seeded: passing in some seeding runs and not in others with no history-dependent mark (float32 noise at a WebKit
 //   line edge, or installed Safari against webkit-host).
+// - A protocol row (score.ts slotProtocol: its page doesn't describe the declared input) is never a pass: seeding lists it
+//   apart, and a case that a current run or the baseline marks as one never fails the gate and is reported apart.
 // - A pair that passes in every current run observing the case, and isn't a baseline pass, is a new pass (reported).
 // - A baseline case that no current run observes is missing. It fails the gate only with --complete, and only when the
 //   case holds baseline passes (exit 1).
 //
 // Seeding writes the baseline and, when the file already exists, reports the pairs the new seed loses or gains against it.
-import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
-import { relative, resolve } from 'node:path'
-import type { Metric, MetricName, Status } from './score.ts'
-import type { BrowserKind } from './types.ts'
+// It refuses runs whose environment records no process languages, since no run could then match the baseline's languages.
+//
+// Pruning (--prune-protocol) applies score.ts slotProtocol to the rows of every seeding run a baseline names (the
+// `<browser>-rows.ndjson` next to each per-case file) and moves each protocol row out of the baseline's passes, cases
+// without passes and unstable pairs into `protocol`, with the rule's reason. It lists every pair it removes. Nothing else
+// changes, so a baseline seeded before scorer 4 loses the passes its protocol rows recorded by accident.
+import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { statSync } from 'node:fs'
+import { dirname, join, relative, resolve } from 'node:path'
+import { readLines, slotProtocol, type Metric, type MetricName, type Status } from './score.ts'
+import type { BrowserKind, LabRow } from './types.ts'
 
 export const GATE_FORMAT = 'pretext-lab-gate/1'
 const REPO = resolve(import.meta.dir, '../..')
@@ -43,7 +56,7 @@ const BROWSERS = new Set<BrowserKind>(['chrome', 'safari', 'firefox', 'webkit-ho
 export type Engine = 'blink' | 'webkit' | 'gecko'
 export const ENGINE_BROWSERS: Record<Engine, readonly BrowserKind[]> = { blink: ['chrome'], webkit: ['safari', 'webkit-host'], gecko: ['firefox'] }
 
-export type CaseResult = { id: string; family: string; browser: BrowserKind; metrics: Record<MetricName, Metric>; historyDependent: string | null }
+export type CaseResult = { id: string; family: string; browser: BrowserKind; metrics: Record<MetricName, Metric>; historyDependent: string | null; protocol: string | null }
 export type Run = { path: string; environments: string[]; compared: boolean; casesFile: string | null; cases: CaseResult[] }
 
 export type Baseline = {
@@ -53,7 +66,7 @@ export type Baseline = {
   note: string
   environments: string[]
   seededFrom: Array<{ perCase: string; casesFile: string | null; cases: number; historyDependent: number }>
-  counts: { cases: number; passPairs: Record<MetricName, number>; historyDependentCases: number; withoutPassesCases: number; unstablePairs: number }
+  counts: { cases: number; passPairs: Record<MetricName, number>; historyDependentCases: number; withoutPassesCases: number; unstablePairs: number; protocolCases?: number }
   // Cases a seeding run marked history-dependent.
   historyDependent: string[]
   // Cases observed outside history dependence that pass no metric in every seeding run observing them.
@@ -62,6 +75,8 @@ export type Baseline = {
   unstable: Record<string, string>
   // Case ids by the letters of the metrics they pass, one list per combination.
   passes: Record<string, string[]>
+  // Protocol rows by case id, with why the page doesn't describe the declared input. Absent in baselines from before 2026-09-17.
+  protocol?: Record<string, string>
 }
 
 export type LostPass = { id: string; family: string; metric: MetricName; status: Status; reason: string | null; detail: string | null; run: string }
@@ -79,11 +94,14 @@ export type GateReport = {
     unstablePairs: number
     missingCases: number
     missingPairs: number
+    protocolCases: number
   }
   lost: LostPass[]
   newPasses: Array<{ id: string; family: string; metric: MetricName }>
   // Cases history-dependent now or in the baseline: never a gate failure.
   historyDependent: Array<{ id: string; family: string; now: string | null; inBaseline: boolean; baselinePasses: string; currentPasses: string }>
+  // Protocol rows now or in the baseline: never a gate failure.
+  protocol: Array<{ id: string; family: string; now: string | null; inBaseline: boolean; baselinePasses: string }>
   // Pairs unstable at seeding, with whether every current run passes them.
   unstable: Array<{ id: string; family: string; metric: MetricName; passesNow: boolean }>
   missing: { cases: number; pairs: number; ids: string[] }
@@ -124,10 +142,12 @@ export function parsePerCase(text: string, path: string): CaseResult[] {
     seen.add(id)
     const history = record['historyDependent']
     if (history !== undefined && typeof history !== 'string') fail(`${where}: historyDependent must be a string`)
+    const protocol = record['protocol']
+    if (protocol !== undefined && typeof protocol !== 'string') fail(`${where}: protocol must be a string`)
     out.push({
       id, family, browser: browser as BrowserKind,
       metrics: { lineCount: parseMetric(record['lineCount'], where), breaks: parseMetric(record['breaks'], where), widths: parseMetric(record['widths'], where), painter: parseMetric(record['painter'], where) },
-      historyDependent: history ?? null,
+      historyDependent: history ?? null, protocol: protocol ?? null,
     })
   }
   return out
@@ -179,7 +199,7 @@ export function runPaths(values: readonly string[]): string[] {
   return out
 }
 
-type Observed = { family: string; historyDependent: string | null; results: Array<{ run: number; metrics: Record<MetricName, Metric> }> }
+type Observed = { family: string; historyDependent: string | null; protocol: string | null; results: Array<{ run: number; metrics: Record<MetricName, Metric> }> }
 
 function observe(runs: readonly Run[]): Map<string, Observed> {
   const byId = new Map<string, Observed>()
@@ -188,8 +208,9 @@ function observe(runs: readonly Run[]): Map<string, Observed> {
     for (let i = 0; i < cases.length; i++) {
       const value = cases[i]!
       let entry = byId.get(value.id)
-      if (entry === undefined) byId.set(value.id, (entry = { family: value.family, historyDependent: null, results: [] }))
+      if (entry === undefined) byId.set(value.id, (entry = { family: value.family, historyDependent: null, protocol: null, results: [] }))
       entry.historyDependent ??= value.historyDependent
+      entry.protocol ??= value.protocol
       entry.results.push({ run: r, metrics: value.metrics })
     }
   }
@@ -210,8 +231,37 @@ function metricsOf(value: string, where: string): Set<MetricName> {
   return out
 }
 
+// The parts of an environment key (score.ts environmentKey): `<browser>: <build>; DPR <d>, scale <s>[; <languages>]; scorer
+// <n>`. Keys from before the driver recorded builds (`DPR <d>, scale <s>, <user agent>`) have neither languages nor scorer.
+export type EnvironmentParts = { build: string; device: string; languages: string | null; scorer: string | null }
+
+export function environmentParts(key: string): EnvironmentParts {
+  const parts = key.split('; ')
+  if (parts.length < 3 || !parts[parts.length - 1]!.startsWith('scorer ')) return { build: key, device: '', languages: null, scorer: null }
+  return { build: parts[0]!, device: parts[1]!, languages: parts.length > 3 ? parts.slice(2, -1).join('; ') : null, scorer: parts[parts.length - 1]! }
+}
+
+// Why a run's environment isn't one the baseline recorded, part by part, or null when it is.
+export function environmentProblem(environment: string, recorded: readonly string[]): string | null {
+  if (recorded.includes(environment)) return null
+  const run = environmentParts(environment)
+  const candidates = recorded.map(environmentParts).filter(value => value.build === run.build && value.device === run.device)
+  if (candidates.length === 0) return `browser build or device not in the baseline (re-observe and seed a new baseline): ${environment}`
+  const differences: string[] = []
+  if (run.languages === null) differences.push('the run records no process languages')
+  else if (!candidates.some(value => value.languages === run.languages)) {
+    const known = [...new Set(candidates.map(value => value.languages ?? 'none recorded'))].join(' | ')
+    differences.push(`process languages ${run.languages} don't match the baseline's recorded languages (${known}): another environment; seed a baseline for it`)
+  }
+  if (!candidates.some(value => value.scorer === run.scorer)) {
+    differences.push(`${run.scorer ?? 'no scorer recorded'} against the baseline's ${[...new Set(candidates.map(value => value.scorer ?? 'none'))].join(' | ')}: re-score the seeding runs and seed a new baseline`)
+  }
+  if (differences.length === 0) differences.push('the languages and the scorer each appear in the baseline, but not together')
+  return `${differences.join('; ')}: ${environment}`
+}
+
 // Problems that make runs unusable with this engine (or baseline): browsers of another engine, environments the baseline
-// didn't record, runs without a history comparison.
+// didn't record, runs without a history comparison. Seeding (environments null) refuses runs without recorded languages.
 export function runProblems(engine: Engine, runs: readonly Run[], options: { allowUncompared: boolean; environments: readonly string[] | null }): string[] {
   const problems: string[] = []
   for (const run of runs) {
@@ -219,9 +269,12 @@ export function runProblems(engine: Engine, runs: readonly Run[], options: { all
     const foreign = [...new Set(run.cases.map(value => value.browser))].filter(browser => !ENGINE_BROWSERS[engine].includes(browser))
     if (foreign.length > 0) problems.push(`${name}: rows from ${foreign.join(', ')}, not ${engine}`)
     if (run.environments.length === 0) problems.push(`${name}: its summary records no environment`)
-    if (options.environments !== null) {
-      for (const environment of run.environments) {
-        if (!options.environments.includes(environment)) problems.push(`${name}: environment not in the baseline (browser changed; re-observe and seed a new baseline): ${environment}`)
+    for (const environment of run.environments) {
+      if (options.environments !== null) {
+        const problem = environmentProblem(environment, options.environments)
+        if (problem !== null) problems.push(`${name}: ${problem}`)
+      } else if (environmentParts(environment).languages === null) {
+        problems.push(`${name}: its environment records no process languages, so no run could match the baseline's: ${environment}`)
       }
     }
     if (!run.compared && !options.allowUncompared) problems.push(`${name}: not scored with --native-compare, so history-dependent cases are unknown`)
@@ -235,6 +288,7 @@ export function seedBaseline(runs: readonly Run[], options: { engine: Engine; en
   const unstable: Record<string, string> = {}
   const historyDependent: string[] = []
   const withoutPasses: string[] = []
+  const protocol: Record<string, string> = {}
   const passPairs: Record<MetricName, number> = { lineCount: 0, breaks: 0, widths: 0, painter: 0 }
   let unstablePairs = 0
   const observed = observe(runs)
@@ -244,6 +298,10 @@ export function seedBaseline(runs: readonly Run[], options: { engine: Engine; en
     const entry = observed.get(id)!
     if (entry.historyDependent !== null) {
       historyDependent.push(id)
+      continue
+    }
+    if (entry.protocol !== null) {
+      protocol[id] = entry.protocol
       continue
     }
     const always = new Set<MetricName>()
@@ -277,9 +335,10 @@ export function seedBaseline(runs: readonly Run[], options: { engine: Engine; en
   return {
     format: GATE_FORMAT, engine: options.engine, engineVersion: options.engineVersion, note: options.note, environments,
     seededFrom: runs.map(run => ({ perCase: relative(REPO, run.path), casesFile: run.casesFile === null ? null : relative(REPO, run.casesFile), cases: run.cases.length, historyDependent: run.cases.filter(value => value.historyDependent !== null).length })),
-    counts: { cases: observed.size, passPairs, historyDependentCases: historyDependent.length, withoutPassesCases: withoutPasses.length, unstablePairs },
+    counts: { cases: observed.size, passPairs, historyDependentCases: historyDependent.length, withoutPassesCases: withoutPasses.length, unstablePairs, protocolCases: Object.keys(protocol).length },
     historyDependent, withoutPasses, unstable,
     passes: Object.fromEntries([...passes].sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0))),
+    protocol,
   }
 }
 
@@ -290,6 +349,7 @@ export function parseBaseline(text: string, where: string): Baseline {
   if (!Array.isArray(value.environments) || !Array.isArray(value.historyDependent) || !Array.isArray(value.withoutPasses) || typeof value.passes !== 'object' || typeof value.unstable !== 'object') {
     fail(`${where}: malformed baseline`)
   }
+  if (value.protocol !== undefined && (typeof value.protocol !== 'object' || value.protocol === null)) fail(`${where}: malformed protocol list`)
   const seen = new Set<string>()
   for (const [key, ids] of Object.entries(value.passes)) {
     metricsOf(key, where)
@@ -301,6 +361,7 @@ export function parseBaseline(text: string, where: string): Baseline {
   const history = new Set(value.historyDependent)
   for (const id of history) if (seen.has(id)) fail(`${where}: case ${id} is both history-dependent and a pass`)
   for (const id of value.withoutPasses) if (seen.has(id) || history.has(id)) fail(`${where}: case ${id} is listed without passes and elsewhere`)
+  for (const id of Object.keys(value.protocol ?? {})) if (seen.has(id) || value.withoutPasses.includes(id) || id in value.unstable) fail(`${where}: protocol row ${id} is listed elsewhere`)
   for (const [id, key] of Object.entries(value.unstable)) metricsOf(key, `${where} unstable ${id}`)
   return value
 }
@@ -323,18 +384,20 @@ function baselineCases(baseline: Baseline): Set<string> {
   const ids = new Set<string>(baseline.historyDependent)
   for (const list of Object.values(baseline.passes)) for (let i = 0; i < list.length; i++) ids.add(list[i]!)
   for (let i = 0; i < baseline.withoutPasses.length; i++) ids.add(baseline.withoutPasses[i]!)
+  for (const id of Object.keys(baseline.protocol ?? {})) ids.add(id)
   return ids
 }
 
 export function checkRuns(baseline: Baseline, runs: readonly Run[], options: { complete: boolean }): GateReport {
   const passes = passMap(baseline)
   const baselineHistory = new Set(baseline.historyDependent)
+  const baselineProtocol = baseline.protocol ?? {}
   const observed = observe(runs)
   const report: GateReport = {
     ok: true, engine: baseline.engine, engineVersion: baseline.engineVersion,
     runs: runs.map(run => ({ perCase: relative(REPO, run.path), cases: run.cases.length, historyDependent: run.cases.filter(value => value.historyDependent !== null).length, compared: run.compared })),
-    counts: { baselineCases: 0, observedCases: observed.size, lostPairs: 0, newPairs: 0, historyDependentCases: 0, unstablePairs: 0, missingCases: 0, missingPairs: 0 },
-    lost: [], newPasses: [], historyDependent: [], unstable: [], missing: { cases: 0, pairs: 0, ids: [] },
+    counts: { baselineCases: 0, observedCases: observed.size, lostPairs: 0, newPairs: 0, historyDependentCases: 0, unstablePairs: 0, missingCases: 0, missingPairs: 0, protocolCases: 0 },
+    lost: [], newPasses: [], historyDependent: [], protocol: [], unstable: [], missing: { cases: 0, pairs: 0, ids: [] },
   }
   const ids = [...observed.keys()].sort()
   for (let i = 0; i < ids.length; i++) {
@@ -345,6 +408,10 @@ export function checkRuns(baseline: Baseline, runs: readonly Run[], options: { c
     for (const metric of METRIC_ORDER) if (entry.results.every(result => result.metrics[metric].status === 'pass')) passingNow.add(metric)
     if (entry.historyDependent !== null || baselineHistory.has(id)) {
       report.historyDependent.push({ id, family: entry.family, now: entry.historyDependent, inBaseline: baselineHistory.has(id), baselinePasses: letters(baselinePasses), currentPasses: letters(passingNow) })
+      continue
+    }
+    if (entry.protocol !== null || id in baselineProtocol) {
+      report.protocol.push({ id, family: entry.family, now: entry.protocol, inBaseline: id in baselineProtocol, baselinePasses: letters(baselinePasses) })
       continue
     }
     const unstable = baseline.unstable[id] === undefined ? new Set<MetricName>() : metricsOf(baseline.unstable[id]!, `baseline unstable ${id}`)
@@ -374,6 +441,7 @@ export function checkRuns(baseline: Baseline, runs: readonly Run[], options: { c
   report.counts.lostPairs = report.lost.length
   report.counts.newPairs = report.newPasses.length
   report.counts.historyDependentCases = report.historyDependent.length
+  report.counts.protocolCases = report.protocol.length
   report.counts.unstablePairs = report.unstable.length
   report.counts.missingCases = report.missing.cases
   report.counts.missingPairs = report.missing.pairs
@@ -381,17 +449,18 @@ export function checkRuns(baseline: Baseline, runs: readonly Run[], options: { c
   return report
 }
 
-// Pairs a new seed loses or gains against the existing baseline, over cases both observed outside history dependence.
+// Pairs a new seed loses or gains against the existing baseline, over cases both observed outside history dependence and
+// outside protocol rows.
 export function diffBaselines(before: Baseline, after: Baseline): { lost: Array<[string, MetricName]>; gained: Array<[string, MetricName]>; casesOnlyBefore: number; casesOnlyAfter: number } {
   const a = passMap(before)
   const b = passMap(after)
   const observedBefore = baselineCases(before)
   const observedAfter = baselineCases(after)
-  const history = new Set([...before.historyDependent, ...after.historyDependent])
+  const excluded = new Set([...before.historyDependent, ...after.historyDependent, ...Object.keys(before.protocol ?? {}), ...Object.keys(after.protocol ?? {})])
   const lost: Array<[string, MetricName]> = []
   const gained: Array<[string, MetricName]> = []
   for (const id of [...new Set([...a.keys(), ...b.keys()])].sort()) {
-    if (history.has(id) || !observedBefore.has(id) || !observedAfter.has(id)) continue
+    if (excluded.has(id) || !observedBefore.has(id) || !observedAfter.has(id)) continue
     for (const metric of METRIC_ORDER) {
       const was = a.get(id)?.has(metric) === true
       const is = b.get(id)?.has(metric) === true
@@ -406,13 +475,80 @@ export function diffBaselines(before: Baseline, after: Baseline): { lost: Array<
   }
 }
 
+// Moves the given protocol rows out of a baseline's passes, cases without passes and unstable pairs (--prune-protocol),
+// and returns the pairs that stop being passes.
+export function pruneProtocol(baseline: Baseline, protocol: ReadonlyMap<string, string>): { baseline: Baseline; removed: Array<{ id: string; metric: MetricName; reason: string }> } {
+  const removed: Array<{ id: string; metric: MetricName; reason: string }> = []
+  const passes: Record<string, string[]> = {}
+  const passPairs: Record<MetricName, number> = { ...baseline.counts.passPairs }
+  for (const [key, ids] of Object.entries(baseline.passes)) {
+    const metrics = metricsOf(key, 'baseline')
+    const kept: string[] = []
+    for (const id of ids) {
+      const reason = protocol.get(id)
+      if (reason === undefined) {
+        kept.push(id)
+        continue
+      }
+      for (const metric of METRIC_ORDER) {
+        if (!metrics.has(metric)) continue
+        removed.push({ id, metric, reason })
+        passPairs[metric]--
+      }
+    }
+    if (kept.length > 0) passes[key] = kept
+  }
+  const unstable: Record<string, string> = {}
+  let unstablePairs = baseline.counts.unstablePairs
+  for (const [id, key] of Object.entries(baseline.unstable)) {
+    if (protocol.has(id)) unstablePairs -= key.length
+    else unstable[id] = key
+  }
+  const withoutPasses = baseline.withoutPasses.filter(id => !protocol.has(id))
+  const known = baselineCases(baseline)
+  const own: Record<string, string> = { ...(baseline.protocol ?? {}) }
+  for (const [id, reason] of [...protocol].sort((x, y) => (x[0] < y[0] ? -1 : 1))) if (known.has(id) && !baseline.historyDependent.includes(id)) own[id] = reason
+  return {
+    baseline: {
+      ...baseline, passes, unstable, withoutPasses, protocol: own,
+      counts: { ...baseline.counts, passPairs, withoutPassesCases: withoutPasses.length, unstablePairs, protocolCases: Object.keys(own).length },
+    },
+    removed,
+  }
+}
+
+// Protocol rows of the rows files next to a baseline's seeding per-case files, by score.ts slotProtocol.
+export async function protocolRowsOf(baseline: Baseline): Promise<{ rows: number; files: string[]; protocol: Map<string, string> }> {
+  const protocol = new Map<string, string>()
+  const files: string[] = []
+  let rows = 0
+  for (const seed of baseline.seededFrom) {
+    const perCase = resolve(REPO, seed.perCase)
+    const browser = perCase.slice(dirname(perCase).length + 1, -PER_CASE.length)
+    const rowsPath = join(dirname(perCase), `${browser}-rows.ndjson`)
+    if (!existsSync(rowsPath)) fail(`${seed.perCase}: no rows file ${relative(REPO, rowsPath)} next to it, so the protocol rule can't run`)
+    files.push(relative(REPO, rowsPath))
+    for await (const line of readLines(rowsPath)) {
+      rows++
+      // Only rows with line slots can be protocol rows; the rest aren't parsed.
+      if (!line.includes('"lineSlots":[{')) continue
+      const row = JSON.parse(line) as LabRow
+      if ('error' in row.native || 'skipped' in row.native) continue
+      const reason = slotProtocol(row.case, row.native, row.browser, row.env.devicePixelRatio)
+      if (reason !== null && !protocol.has(row.id)) protocol.set(row.id, `${relative(REPO, rowsPath)}: ${reason}`)
+    }
+  }
+  return { rows, files, protocol }
+}
+
 function describeLost(value: LostPass): string {
   return `  ${value.id} ${value.family} ${value.metric}: ${value.status}${value.reason === null ? '' : ` (${value.reason})`}${value.detail === null ? '' : `: ${value.detail}`} [${value.run}]`
 }
 
 async function main(): Promise<number> {
   const USAGE = 'Usage: bun rebuild/lab/gate.ts --baseline=<file> --runs=<per-case file or dir>[,...] [--complete] [--allow-uncompared] [--out=<file>]\n' +
-    '       bun rebuild/lab/gate.ts --seed --engine=blink|webkit|gecko --engine-version=<label> [--note=<text>] --baseline=<file> --runs=... [--allow-uncompared] [--out=<file>]'
+    '       bun rebuild/lab/gate.ts --seed --engine=blink|webkit|gecko --engine-version=<label> [--note=<text>] --baseline=<file> --runs=... [--allow-uncompared] [--out=<file>]\n' +
+    '       bun rebuild/lab/gate.ts --prune-protocol --baseline=<lab gate file or tests gate file> [--out=<file>]'
   const values = new Map<string, string>()
   const runValues: string[] = []
   const switches = new Set<string>()
@@ -420,7 +556,7 @@ async function main(): Promise<number> {
     const match = /^--([a-z-]+)(?:=(.*))?$/s.exec(raw)
     const name = match?.[1]
     if (match === null || name === undefined) fail(`Unknown argument ${raw}\n${USAGE}`)
-    if (['seed', 'complete', 'allow-uncompared'].includes(name)) {
+    if (['seed', 'complete', 'allow-uncompared', 'prune-protocol'].includes(name)) {
       if (match[2] !== undefined) fail(`--${name} takes no value`)
       switches.add(name)
     } else if (['baseline', 'runs', 'engine', 'engine-version', 'note', 'out'].includes(name)) {
@@ -432,11 +568,28 @@ async function main(): Promise<number> {
     }
   }
   const baselinePath = values.get('baseline')
-  if (baselinePath === undefined || runValues.length === 0) fail(`--baseline and --runs are required\n${USAGE}`)
+  const outPath = values.get('out')
+  if (baselinePath === undefined) fail(`--baseline is required\n${USAGE}`)
+
+  if (switches.has('prune-protocol')) {
+    const resolved = resolve(baselinePath)
+    const raw = JSON.parse(readFileSync(resolved, 'utf8')) as { format?: string; families?: { baseline: unknown } }
+    const tests = raw.format === 'pretext-tests-gate/1'
+    const baseline = parseBaseline(JSON.stringify(tests ? raw.families!.baseline : raw), resolved)
+    const found = await protocolRowsOf(baseline)
+    const { baseline: pruned, removed } = pruneProtocol(baseline, found.protocol)
+    const written = tests ? { ...raw, families: { ...raw.families!, baseline: pruned } } : pruned
+    writeFileSync(resolved, `${JSON.stringify(written, null, 2)}\n`)
+    console.log(`pruned ${relative(REPO, resolved)}: ${found.rows} seeding rows in ${found.files.length} files, ${found.protocol.size} protocol rows, ${removed.length} pairs removed`)
+    for (const value of removed) console.log(`  removed ${value.id} ${value.metric}: protocol row (${value.reason})`)
+    if (outPath !== undefined) writeFileSync(resolve(outPath), `${JSON.stringify({ baseline: relative(REPO, resolved), rows: found.rows, files: found.files, protocol: Object.fromEntries(found.protocol), removed }, null, 2)}\n`)
+    return 0
+  }
+
+  if (runValues.length === 0) fail(`--runs is required\n${USAGE}`)
   const paths = runPaths(runValues)
   const runs = paths.map(readRun)
   const allowUncompared = switches.has('allow-uncompared')
-  const outPath = values.get('out')
 
   if (switches.has('seed')) {
     const engine = values.get('engine') as Engine | undefined
@@ -452,7 +605,7 @@ async function main(): Promise<number> {
     if (existsSync(resolved)) diff = diffBaselines(parseBaseline(readFileSync(resolved, 'utf8'), resolved), baseline)
     writeFileSync(resolved, formatBaseline(baseline))
     const pairs = Object.values(baseline.counts.passPairs).reduce((sum, n) => sum + n, 0)
-    console.log(`seeded ${relative(REPO, resolved)}: ${baseline.engineVersion}, ${runs.length} runs, ${baseline.counts.cases} cases, ${pairs} pass pairs (${METRIC_ORDER.map(metric => `${metric} ${baseline.counts.passPairs[metric]}`).join(', ')}), ${baseline.counts.historyDependentCases} history-dependent cases, ${baseline.counts.withoutPassesCases} cases without passes, ${baseline.counts.unstablePairs} unstable pairs`)
+    console.log(`seeded ${relative(REPO, resolved)}: ${baseline.engineVersion}, ${runs.length} runs, ${baseline.counts.cases} cases, ${pairs} pass pairs (${METRIC_ORDER.map(metric => `${metric} ${baseline.counts.passPairs[metric]}`).join(', ')}), ${baseline.counts.historyDependentCases} history-dependent cases, ${baseline.counts.protocolCases ?? 0} protocol rows, ${baseline.counts.withoutPassesCases} cases without passes, ${baseline.counts.unstablePairs} unstable pairs`)
     if (diff !== null) {
       console.log(`against the previous baseline: ${diff.lost.length} pairs lost, ${diff.gained.length} gained, ${diff.casesOnlyBefore} cases only before, ${diff.casesOnlyAfter} only now`)
       for (const [id, metric] of diff.lost.slice(0, 20)) console.log(`  lost ${id} ${metric}`)
@@ -471,7 +624,7 @@ async function main(): Promise<number> {
   if (outPath !== undefined) writeFileSync(resolve(outPath), `${JSON.stringify(report, null, 2)}\n`)
   const c = report.counts
   console.log(`gate ${baseline.engine} (${baseline.engineVersion}): ${runs.length} runs, ${c.observedCases} cases observed; the baseline has ${c.baselineCases}`)
-  console.log(`  lost passes ${c.lostPairs}; new passes ${c.newPairs}; history-dependent cases ${c.historyDependentCases} (never gate); unstable pairs ${c.unstablePairs} (never gate); missing cases ${c.missingCases} (${c.missingPairs} pass pairs${switches.has('complete') ? ', gating' : ', not gating without --complete'})`)
+  console.log(`  lost passes ${c.lostPairs}; new passes ${c.newPairs}; history-dependent cases ${c.historyDependentCases} (never gate); protocol rows ${c.protocolCases} (never gate); unstable pairs ${c.unstablePairs} (never gate); missing cases ${c.missingCases} (${c.missingPairs} pass pairs${switches.has('complete') ? ', gating' : ', not gating without --complete'})`)
   for (const value of report.lost.slice(0, 30)) console.log(describeLost(value))
   if (report.lost.length > 30) console.log(`  ... ${report.lost.length - 30} more${outPath === undefined ? '; --out writes them all' : ''}`)
   console.log(report.ok ? 'gate: pass' : 'gate: FAIL')

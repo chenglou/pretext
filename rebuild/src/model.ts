@@ -51,9 +51,17 @@ export type FontFacts = {
   // shaping-call edges between joining letters (group edges and line-edge reshapes). Default: the call's text measured
   // alone, which is what an AAT font gives. Gap joining-technology at such an edge.
   joining: 'opentype' | 'aat' | null
+  // Where HarfBuzz puts a pair adjustment between two glyphs of Latin text in the primary font: 'first-advance', the whole
+  // adjustment on the first glyph's advance (GPOS PairPos with ValueFormat1 XAdvance and no ValueFormat2; PairSet.hh:126-127),
+  // or 'split', kern >> 1 on the first glyph's advance and the rest on the second's (the kern and kerx pair machine,
+  // hb-kern.hh:102-106), which one HarfBuzz applies following the font's GPOS, kern and kerx tables (hb-ot-shape.cc:150-185).
+  // Canvas totals show the adjustment, not which glyph carries it. Blink reads it at a position between the two glyphs: a
+  // line edge taken from the paragraph's positions, and caret edges inside an item. Default: the first glyph's advance. Gap
+  // unsafe-to-break at such a line edge where the adjustment isn't 0.
+  pairKerning: 'first-advance' | 'split' | null
 }
 
-export const UNKNOWN_FONT_FACTS: FontFacts = { primaryFamily: null, mapsHyphen: null, monospace: null, opticalSizeAxis: null, joining: null }
+export const UNKNOWN_FONT_FACTS: FontFacts = { primaryFamily: null, mapsHyphen: null, monospace: null, opticalSizeAxis: null, joining: null, pairKerning: null }
 
 // A font declaration the library lays out with.
 export type FontDecl = CssFont & { facts: FontFacts }
@@ -414,6 +422,10 @@ export type GeckoCharacter = {
   skipped: boolean
   // The text run's IsClusterStart flag at the unit's transformed index (gfxFont.cpp:708-769); false when skipped.
   clusterStart: boolean
+  // The unit begins a shaping unit: gfxFont::SplitAndInitTextRun shapes words between boundary spaces and invalid
+  // characters on their own (gfxFont.cpp:3708-3900), and the text run's script runs apart (gfxTextRun.cpp:2779-2809), so
+  // the glyph records before it don't depend on it. false when skipped.
+  unitStart: boolean
   // What GetAdvanceWidth adds for the unit: its glyph advance or ligature share and the letter spacing, word spacing,
   // justification spacing and tab width after it (gfxTextRun.cpp:1214-1256, nsTextFrame.cpp:4089-4295).
   advance: number
@@ -451,6 +463,8 @@ export type GeckoFrameGeometry =
   | { kind: 'atomic'; element: number; level: number; x: number; width: number }
   // A BRFrame.
   | { kind: 'br'; element: number; x: number; width: number }
+  // A WBRFrame: 0 × 0 at its place on the line (WBRFrame.cpp; nsIFrame::IsEmpty is false, nsIFrame.cpp:9380-9382).
+  | { kind: 'wbr'; element: number; level: number; x: number; width: number }
 
 export type GeckoLineGeometry = {
   // max(1, round(60 / devicePixelRatio)) (nsDeviceContext.cpp:52-63).
@@ -515,7 +529,11 @@ export type GapName =
   | 'page-history'
   | 'engine-build'
 
-export type Gap = { gap: GapName; run: number | null; detail: string }
+// `at`, when given, is the source range the condition concerns, in UTF-16 offsets into the concatenated text leaves: the
+// characters whose widths or breaks the prediction can get wrong, or a break offset (start === end). A gap in `line.gaps`
+// or `belowFloats[k].gaps` concerns its line or refused slot, and needs no range; a paragraph gap concerns a line only
+// through `at`. The lab attributes a failing line to the gaps that concern it (lab/README.md, "Line-local gaps").
+export type Gap = { gap: GapName; run: number | null; detail: string; at?: { start: number; end: number } }
 
 // A slot the engine refused because it moved the line below the slot's floats (LineResultOf), with the row of the slot
 // list it was, and the gaps the decision rests on.

@@ -179,6 +179,24 @@ From the WebKit 7625.1.29.11.27 checkout (`~/github/browser-engines/webkit-7625.
   reports itself visible. It may still count as visually idle when the window server sees no window changes
   (`PageClientImpl::isVisuallyIdle`). That only throttles DOM timers. The lab and probe loops run on fetch, and no run
   was slow.
+- Installed Safari's hidden page (ceiling round 2). The lab window in installed Safari opens behind the frontmost app's
+  windows, and on this Mac both displays are covered by maximized windows, so the page is hidden from its first row.
+  Safari is built with RunningBoard (`USE(RUNNINGBOARD)`), so a hidden page's WebContent process loses its foreground
+  activity (`WebPageProxy::updateThrottleState`, `WebPageProxy.cpp:3733-3742`) and is suspended once no background activity
+  is left (`ProcessThrottler.cpp:240-249, :360-395`). Round 1's installed Safari run stopped after 1,585 hidden rows with no
+  page activity for 120 s. A hidden page keeps a background activity while it loads (`NavigationState.mm:1630-1656`, until
+  3 s after the load) and once it changes its title more than 5 s after the committed load
+  (`WebPageProxy.cpp:9250-9270`, until the next commit). The driver uses both, for Safari only (`run.ts`, "Installed Safari
+  keeps each lab document runnable"): the markup holds a hidden image open, the page waits 6 s after the document was
+  served, changes its title, then releases the image. The load has to end before measuring, because
+  `document.fonts.ready` resolves only after the load event (`FontFaceSet.cpp:269-280`, from `Document::implicitClose`,
+  `Document.cpp:4399-4402`); the first attempt kept the image open for the whole run, and its page never posted a row.
+  Nothing activates or moves to the front. webkit-host doesn't need it: its window reports itself visible. Validated on
+  2026-09-17 (`.artifacts/lab/round2-scorer4/safari-hold-2`): installed Safari ran the first 4,000 cases of `dev-all` with
+  Sublime Text frontmost, 13 documents and 12 navigations, every row hidden, 4,000 rows in 105 s without an error. WebKit's
+  own log for the lab's WebContent process (`webkit-log.txt`, `log stream` on `com.apple.WebKit` ProcessSuspension and
+  ActivityState) shows 13 'Page updates its title' background activities, one per document, the window occluded, and no
+  `processReadyToSuspend` or `Suspended` state.
 - Site quirks and content blockers act on real sites' domains and subresources. The lab page is served from 127.0.0.1
   and loads only its script and the fixture fonts.
 

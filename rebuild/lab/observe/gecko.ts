@@ -31,8 +31,6 @@ type PlacedFrame = {
   rtl: boolean
   // prefix[k]: the advance of characters [measuredStart, measuredStart + k).
   prefix: number[]
-  widthLimited: boolean
-  xLimited: boolean
 }
 
 // The paragraph's text leaves and element kinds in document order, as the page builds its DOM.
@@ -62,18 +60,6 @@ function walkContent(paragraph: Paragraph): { texts: string[]; elementKinds: Arr
   return { texts, elementKinds }
 }
 
-// gfxFont::SplitAndInitTextRun ends a shaping unit at a boundary space and at an invalid character
-// (gfxFont.cpp:3708-3900, IsBoundarySpace gfxTextRun.cpp:1612-1619, IsInvalidChar gfxTextRun.h:971-992). Kept white space
-// in collapsing modes is U+0020 in the transformed text, and C0 controls are invalid, so a kept source unit below U+0020
-// ends a unit too. A space followed by a combining mark continues the unit (\p{M}, the zero-width joiners, halfwidth
-// voiced marks, emoji modifiers and tags stand in for IsClusterExtender here; this only decides the state of a value).
-const CLUSTER_EXTENDER = /^[\p{M}‌‍ﾞﾟ\u{1f3fb}-\u{1f3ff}\u{e0020}-\u{e007f}]/u
-function endsShapingUnit(text: string, s: number): boolean {
-  const c = text.charCodeAt(s)
-  if (c === 0x20 || c === 0xa0) return !CLUSTER_EXTENDER.test(text.slice(s + 1, s + 3))
-  return c < 0x20 || (c >= 0x7f && c <= 0x9f) || c === 0x200b || c === 0x2028 || c === 0x2029 || c === 0x2060 || c === 0xfeff
-}
-
 export const observeGecko: ObservationPort<GeckoLayout> = (paragraph, layout) => {
   const { texts, elementKinds } = walkContent(paragraph)
   let text = ''
@@ -84,8 +70,6 @@ export const observeGecko: ObservationPort<GeckoLayout> = (paragraph, layout) =>
   }
   runStarts.push(text.length)
 
-  // Which source units a frame kept: the in-word test looks at the kept neighbours on both sides of an offset.
-  const kept = new Uint8Array(text.length)
   const framesOfRun: PlacedFrame[][] = texts.map(() => [])
   const elementFrames: Array<{ line: number; index: number; frame: Exclude<GeckoFrameGeometry, GeckoTextFrame> }> = []
   const unobservable: UnobservableFact[] = []
@@ -98,53 +82,28 @@ export const observeGecko: ObservationPort<GeckoLayout> = (paragraph, layout) =>
         continue
       }
       const prefix = [0]
-      for (let c = 0; c < frame.characters.length; c++) {
-        const ch = frame.characters[c]!
-        if (!ch.skipped) kept[frame.measuredStart + c] = 1
-        prefix.push(prefix[c]! + ch.advance)
-      }
-      framesOfRun[frame.run]!.push({ line: l, index: k, frame, rtl: (frame.level & 1) === 1, prefix, widthLimited: false, xLimited: false })
+      for (let c = 0; c < frame.characters.length; c++) prefix.push(prefix[c]! + frame.characters[c]!.advance)
+      framesOfRun[frame.run]!.push({ line: l, index: k, frame, rtl: (frame.level & 1) === 1, prefix })
     }
   }
-  const previousKept = new Int32Array(text.length + 1)
-  let lastKept = -1
-  for (let s = 0; s <= text.length; s++) {
-    previousKept[s] = lastKept
-    if (s < text.length && kept[s] === 1) lastKept = s
-  }
-  const nextKept = new Int32Array(text.length + 1)
-  let firstKept = -1
-  for (let s = text.length; s >= 0; s--) {
-    if (s < text.length && kept[s] === 1) firstKept = s
-    nextKept[s] = firstKept
-  }
-  // An offset strictly inside a shaping unit: glyph records there come from W(unit) − W(suffix) (DESIGN.md §5).
-  const inWord = (o: number): boolean => {
-    const a = previousKept[o]!
-    const b = nextKept[o]!
-    return a >= 0 && b >= 0 && !endsShapingUnit(text, a) && !endsShapingUnit(text, b)
-  }
+  for (let r = 0; r < framesOfRun.length; r++) framesOfRun[r]!.sort((a, b) => a.frame.contentStart - b.frame.contentStart)
 
-  for (let r = 0; r < framesOfRun.length; r++) {
-    const frames = framesOfRun[r]!
-    frames.sort((a, b) => a.frame.contentStart - b.frame.contentStart)
-    for (let k = 0; k < frames.length; k++) {
-      const f = frames[k]!.frame
-      frames[k]!.widthLimited = f.characters.length > 0 && (inWord(f.measuredStart) || inWord(f.contentEnd))
+  // Whether the advance before source offset s in frame f rests on the in-word stand-in: s is inside the frame's measured
+  // content and the first kept character from s doesn't begin a shaping unit. The DOM's glyph records inside a unit come
+  // from one shaping of the unit, which Canvas can't show, so the layout's characters there are W(unit) − W(suffix)
+  // (DESIGN.md §5, `in-word-prefix`). The frame's edges and box are engine output and predicted.
+  const inWord = (f: GeckoTextFrame, s: number): boolean => {
+    for (let c = s - f.measuredStart; c < f.characters.length; c++) {
+      const ch = f.characters[c]!
+      if (!ch.skipped) return !ch.unitStart
     }
-  }
-  // A frame's position sums the boxes before it on its line, and in an RTL line starts from the right edge less its own box
-  // (RepositionInlineFrames and RepositionFrame, nsBidiPresUtils.cpp:1860-1866, :1882-1905).
-  const rtlLine = paragraph.direction === 'rtl'
-  const lineHasLimitedWidth: number[] = layout.lines.map(() => 0)
-  for (let r = 0; r < framesOfRun.length; r++) for (const pf of framesOfRun[r]!) if (pf.widthLimited) lineHasLimitedWidth[pf.line]!++
-  for (let r = 0; r < framesOfRun.length; r++) {
-    for (const pf of framesOfRun[r]!) pf.xLimited = lineHasLimitedWidth[pf.line]! - (pf.widthLimited && !rtlLine ? 1 : 0) > 0
+    return false
   }
 
   // nsTextFrame::GetPointFromOffset in frame-local au (nsTextFrame.cpp:8667-8752): clamp to the content and the trimmed
   // start (GetTrimmedOffsets without trimming the end, :3287-3330), snap back to the cluster start (FindClusterStart,
-  // :3549-3558), sum the advances from the trimmed start, and count from the box's right edge in an RTL text run.
+  // :3549-3558), sum the advances from the trimmed start, and count from the box's right edge in an RTL text run. The sum
+  // rests on the stand-in where either end of it is inside a shaping unit.
   const point = (pf: PlacedFrame, offset: number): Edge => {
     const f = pf.frame
     let o = Math.max(f.contentStart, Math.min(f.contentEnd, offset))
@@ -154,8 +113,8 @@ export const observeGecko: ObservationPort<GeckoLayout> = (paragraph, layout) =>
       while (o > f.measuredStart && !at(o).skipped && !at(o).clusterStart) o--
     }
     const iSize = pf.prefix[o - f.measuredStart]!
-    const limited = o > f.measuredStart && (inWord(f.measuredStart) || inWord(o))
-    return pf.rtl ? { au: f.width - iSize, limited: limited || pf.widthLimited } : { au: iSize, limited }
+    const limited = o > f.measuredStart && o < f.contentEnd && (inWord(f, f.measuredStart) || inWord(f, o))
+    return pf.rtl ? { au: f.width - iSize, limited } : { au: iSize, limited }
   }
   // nsRect::ClampPoint into the rect as already cut (gfx/2d/BaseRect.h:701-705).
   const clamp = (p: Edge, lo: Edge, hi: Edge): Edge => {
@@ -167,11 +126,7 @@ export const observeGecko: ObservationPort<GeckoLayout> = (paragraph, layout) =>
     limited ? { state: 'limited', gap: 'in-word-prefix', value } : { state: 'predicted', value }
   const rect = (pf: PlacedFrame, x0: Edge, x1: Edge): ExpectedRect => {
     const encoded = encodeEdges(pf.frame.x + x0.au, pf.frame.x + x1.au)
-    return {
-      line: pf.line,
-      x: expected(encoded.x, pf.xLimited || x0.limited),
-      width: expected(encoded.width, pf.xLimited || x0.limited || x1.limited),
-    }
+    return { line: pf.line, x: expected(encoded.x, x0.limited), width: expected(encoded.width, x0.limited || x1.limited) }
   }
 
   // GetPartialTextRect over one code point [i, i + length) of leaf r: every continuation overlapping the range, its box cut
@@ -190,7 +145,7 @@ export const observeGecko: ObservationPort<GeckoLayout> = (paragraph, layout) =>
         const f = pf.frame
         if (f.contentStart >= i + length) break
         let x0: Edge = { au: 0, limited: false }
-        let x1: Edge = { au: f.width, limited: pf.widthLimited }
+        let x1: Edge = { au: f.width, limited: false }
         if (f.contentStart < i) {
           const p = clamp(point(pf, i), x0, x1)
           if (pf.rtl) x1 = p
@@ -211,19 +166,17 @@ export const observeGecko: ObservationPort<GeckoLayout> = (paragraph, layout) =>
   // selectNodeContents takes the same path over [0, length): each continuation's whole box.
   const nodes: ExpectedRect[][] = []
   for (let r = 0; r < texts.length; r++) {
-    nodes.push(framesOfRun[r]!.map(pf => rect(pf, { au: 0, limited: false }, { au: pf.frame.width, limited: pf.widthLimited })))
+    nodes.push(framesOfRun[r]!.map(pf => rect(pf, { au: 0, limited: false }, { au: pf.frame.width, limited: false })))
   }
 
   // Element.getClientRects: GetAllInFlowRects walks an element's primary frame and its continuations, one border box each
-  // (nsLayoutUtils.cpp:3477-3505, :3661-3667): a span's inline frame on each line, an inline-block's box, a BRFrame's box.
-  // An inline frame's edges come from its children's boxes, so they rest on the same stand-ins as the line's text frames.
-  // A <wbr> has no geometry in the layout: which rects its WBRFrame reports isn't traced (DESIGN.md §9).
+  // (nsLayoutUtils.cpp:3477-3505, :3661-3667): a span's inline frame on each line, an inline-block's box, a BRFrame's box,
+  // a WBRFrame's 0 × 0 box.
   const elements: ExpectedRect[][] = elementKinds.map(() => [])
   for (let e = 0; e < elementFrames.length; e++) {
     const { line, frame } = elementFrames[e]!
     const encoded = encodeEdges(frame.x, frame.x + frame.width)
-    const limited = lineHasLimitedWidth[line]! > 0
-    elements[frame.element]!.push({ line, x: expected(encoded.x, limited), width: expected(encoded.width, limited) })
+    elements[frame.element]!.push({ line, x: expected(encoded.x, false), width: expected(encoded.width, false) })
   }
 
   // Engine facts no rect reflects, whatever their value (observe-gecko.md §8).

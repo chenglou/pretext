@@ -7,8 +7,8 @@ import { blockingLosses } from './gate.ts'
 function families(ok: boolean, lostPairs = 0): GateReport {
   return {
     ok, engine: 'blink', engineVersion: '153.0.8010.48', runs: [],
-    counts: { baselineCases: 1, observedCases: 1, lostPairs, newPairs: 0, historyDependentCases: 0, unstablePairs: 0, missingCases: 0, missingPairs: 0 },
-    lost: [], newPasses: [], historyDependent: [], unstable: [], missing: { cases: 0, pairs: 0, ids: [] },
+    counts: { baselineCases: 1, observedCases: 1, lostPairs, newPairs: 0, historyDependentCases: 0, unstablePairs: 0, missingCases: 0, missingPairs: 0, protocolCases: 0 },
+    lost: [], newPasses: [], historyDependent: [], protocol: [], unstable: [], missing: { cases: 0, pairs: 0, ids: [] },
   }
 }
 

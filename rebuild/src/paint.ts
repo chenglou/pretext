@@ -5,7 +5,11 @@
 //   the text-indent where the engine indented the line, and the line's slot as floats of its insets, so the engine runs
 //   its own line rules again (Blink's CJK punctuation trimming in ShapeLine, Gecko's pre-wrap hang width, a band's
 //   arithmetic), and a line wider than predicted wraps visibly (R1). A paragraph that isn't start-aligned gives the block
-//   the line's used alignment as text-align-last, since the painted line is its block's last line.
+//   the line's used alignment as text-align-last, since the painted line is its block's last line. A line from a later
+//   line build than the paragraph's first gets its floats from a holder block around the line block, where they are
+//   already in the formatting context, as in the paragraph.
+// - Where an engine's handling of a line's trailing white space reads whether content follows, a line that ended at a
+//   soft wrap ends with softWrapBox, which wraps to the painted block's second line (DESIGN.md §7, "Soft wraps").
 // - A line that ends at a chosen soft hyphen or starts with the U+200D of R7 doesn't wrap: it holds a boundary the
 //   paragraph never offered as a break (the hyphen, the joiner), which the browser would break at when the line overflows.
 // - The line's pieces are painted in logical order inside the elements that hold them. Between two consecutive painted
@@ -16,8 +20,8 @@
 //   level changes (R2). A bare slice of ASCII white space alone at the start of a line goes in a span, because a text
 //   node of only such white space as a block's first child isn't laid out.
 // - Trailing collapsible white space stays in its slice, so the engine trims it and shapes the text before it the same
-//   way (R3). Preserved white space is painted as laid out. Collapsed white space, forced breaks, <br> and <wbr> aren't
-//   painted.
+//   way (R3). Preserved white space is painted as laid out, and in Blink hanging spaces are their own text node, as they
+//   are their own item result. Collapsed white space, forced breaks and <br> aren't painted; <wbr> is.
 // - The text is painted as the engine laid it out (R5).
 // - The hyphen at a soft-hyphen break is its own span, styled per engine so that it shapes alone where the engine
 //   shapes it alone (R6).
@@ -34,7 +38,7 @@
 // (DESIGN.md §7, §9).
 import { indexContent, styleUnder } from './content.js'
 import type { EngineName } from './env.js'
-import type { AtomicInline, BoxEdge, CssFont, Fragment, LineOf, Paragraph, TextStyle } from './model.js'
+import type { AtomicInline, BelowFloats, BlinkLineGeometry, BoxEdge, CssFont, Fragment, LineOf, Paragraph, TextStyle } from './model.js'
 
 // U+0020 and U+0009..U+000D, the white space of Blink's IsASCIISpace: a text node holding only these as a block's first
 // child gets no layout object in collapsing modes (Blink text.cc:319-364, the Blink port's layoutTextNeeded).
@@ -43,7 +47,10 @@ const SPACES_AND_TABS = /^[\t ]+$/
 
 // The shared fields of a line: all the painter reads.
 export type PaintedLine = Pick<LineOf<unknown, unknown>, 'fragments' | 'hasLineBox' | 'joinsNextLine' | 'slot' | 'indented' | 'align'>
-export type PaintableLayout = { engine: EngineName; lines: readonly PaintedLine[] }
+export type PaintableLayout = { belowFloats: readonly Pick<BelowFloats, 'row'>[] } & (
+  | { engine: 'blink'; lines: readonly (PaintedLine & { geometry: Pick<BlinkLineGeometry, 'needsAccurateEndPosition'> })[] }
+  | { engine: Exclude<EngineName, 'blink'>; lines: readonly PaintedLine[] }
+)
 
 function setFont(style: CSSStyleDeclaration, font: CssFont): void {
   style.fontFamily = font.family
@@ -131,6 +138,26 @@ function floatInset(doc: Document, side: 'left' | 'right', width: number, height
   return div
 }
 
+// An empty inline-block wider than any band, after a line that ended at a soft wrap: it can't share a line with anything,
+// so the browser wraps the painted line before it, and the painted line is a wrapped line followed by more content, as
+// it was in the paragraph, instead of its block's last line.
+function softWrapBox(doc: Document): HTMLSpanElement {
+  const span = doc.createElement('span')
+  const s = span.style
+  s.display = 'inline-block'
+  s.width = 'calc(100% + 1px)'
+  s.height = '0'
+  s.margin = '0'
+  s.padding = '0'
+  s.border = '0'
+  s.verticalAlign = 'top'
+  return span
+}
+
+function wraps(whiteSpace: TextStyle['whiteSpace']): boolean {
+  return whiteSpace !== 'nowrap' && whiteSpace !== 'pre'
+}
+
 export function paintLines(paragraph: Paragraph, layout: PaintableLayout, doc: Document): HTMLDivElement[] {
   const index = indexContent(paragraph)
   const base = paragraph.direction === 'rtl' ? 1 : 0
@@ -167,8 +194,27 @@ export function paintLines(paragraph: Paragraph, layout: PaintableLayout, doc: D
     s.textTransform = 'none'
     element.lang = paragraph.lang
     if (line.slot.left < 0 || line.slot.right < 0) throw new Error(`the painter paints a slot as floats and can't paint negative insets (${line.slot.left}, ${line.slot.right})`)
-    if (line.slot.left > 0) element.append(floatInset(doc, 'left', line.slot.left, paragraph.lineHeight))
-    if (line.slot.right > 0) element.append(floatInset(doc, 'right', line.slot.right, paragraph.lineHeight))
+    // The paragraph's slot floats come before its content (DESIGN.md §2.9), so only the paragraph's first line build
+    // places them, and every later build, a retry after a refused slot included, finds them in the formatting context.
+    // WebKit counts tab stops from the line rect's left after the floats it finds but before those the build places
+    // itself (InlineLineBuilder.cpp:478, :1394-1396). A painted line block places floats it holds, so a line from a later
+    // build gets its floats from a holder block around it instead, where they intrude on the line block's first line.
+    const firstBuild = l === 0 && !layout.belowFloats.some(refused => refused.row === 0)
+    const intruding = (line.slot.left > 0 || line.slot.right > 0) && !firstBuild
+    let root = element
+    if (intruding) {
+      root = doc.createElement('div')
+      const r = root.style
+      r.display = 'block'
+      r.margin = '0'
+      r.padding = '0'
+      r.border = '0'
+      r.width = `${paragraph.width}px`
+      r.height = `${paragraph.lineHeight}px`
+    }
+    if (line.slot.left > 0) root.append(floatInset(doc, 'left', line.slot.left, paragraph.lineHeight))
+    if (line.slot.right > 0) root.append(floatInset(doc, 'right', line.slot.right, paragraph.lineHeight))
+    if (intruding) root.append(element)
 
     // The line's trailing white space. A painted line is a bidi paragraph of its own, and all three browsers resolve
     // it with ICU's ubidi_setPara, which gives white space at the end of a paragraph the paragraph level (UAX #9 L1), so
@@ -239,6 +285,32 @@ export function paintLines(paragraph: Paragraph, layout: PaintableLayout, doc: D
     // after a soft hyphen at a text box end, InlineFormattingUtils.cpp:385-437, Gecko's word-wrap break before a frame).
     if (hyphenated || joinsPreviousLine) s.setProperty('text-wrap-mode', 'nowrap')
     const firstInSpan = firstRun >= 0 && index.leaves[firstRun]!.parent === -1 && collapses && ASCII_SPACE_ONLY.test(firstRunText)
+    // The line ended at a soft wrap: another line follows and no forced break ended it. Painted alone it's its block's
+    // last line, where white space at the line's end is handled as before a forced break, so the painter ends the line
+    // with softWrapBox where the engine's rules for that white space read whether more content follows:
+    // - WebKit and Gecko, trailing white space that hangs: a pre-wrap sequence hangs unconditionally at a soft wrap and
+    //   only conditionally at the end (WebKit horizontalAlignmentOffset, InlineFormattingUtils.cpp:198-217), Gecko's
+    //   TextAlignLine hangs or trims it for alignment and justification only on a wrapped line (nsLineLayout.cpp:3505-3516),
+    //   reserves a span's end border and padding on each of its lines (nsInlineFrame.cpp:512-513), and resolves white space
+    //   at the paragraph's end to the base level (UAX #9 L1) where the paragraph kept its level.
+    // - Blink, a trimmed collapsible space where the line's end isn't reshaped: the paragraph shaped the text with the space
+    //   after it and trimmed the space afterwards (line_breaker.cc:255-268), while a block's end removes the space from
+    //   the text before shaping (ExitBlock, inline_items_builder.cc:1622-1629). Where the end is reshaped
+    //   (needsAccurateEndPosition), the paragraph shaped the text without the space, as the block's end does.
+    // A line block that doesn't wrap gets no box, and neither does a line ending with R7's U+200D, which allows no break
+    // after it (UAX #14 LB8a, ICU line.txt:151-153).
+    let lastContent: Fragment['kind'] | null = null
+    for (let f = line.fragments.length - 1; f >= 0 && lastContent === null; f--) {
+      const kind = line.fragments[f]!.kind
+      if (kind !== 'box-start' && kind !== 'box-end' && kind !== 'collapsed' && kind !== 'wbr') lastContent = kind
+    }
+    let softWrap = l < layout.lines.length - 1 && wraps(paragraph.whiteSpace) && !hyphenated && !joinsPreviousLine && !line.joinsNextLine &&
+      lastContent !== 'forced-break' && lastContent !== 'br'
+    switch (layout.engine) {
+      case 'blink': softWrap &&= lastContent === 'trimmed' && !layout.lines[l]!.geometry.needsAccurateEndPosition; break
+      case 'webkit':
+      case 'gecko': softWrap &&= lastContent === 'hanging'; break
+    }
 
     // The painted spans of the elements open at this point of the walk, outermost first.
     const open: { element: number; node: HTMLElement }[] = []
@@ -273,7 +345,8 @@ export function paintLines(paragraph: Paragraph, layout: PaintableLayout, doc: D
       if (node.kind !== 'span') throw new Error(`the painter can't open element ${e}, a ${node.kind}`)
       const span = styledSpan(doc, node, styleUnder(paragraph, index, indexed.parent), node.lang)
       if (startEdges.has(e)) paintEdge(span.style, 'start', node.inlineStart)
-      if (endEdges.has(e)) paintEdge(span.style, 'end', node.inlineEnd)
+      // A span without its box end on the line continues past it; on a soft wrap its end edge goes to the painted next line.
+      if (endEdges.has(e) || softWrap) paintEdge(span.style, 'end', node.inlineEnd)
       if (node.verticalAlign !== 'baseline') span.style.verticalAlign = node.verticalAlign
       container().append(span)
       open.push({ element: e, node: span })
@@ -342,6 +415,9 @@ export function paintLines(paragraph: Paragraph, layout: PaintableLayout, doc: D
         case 'trimmed':
         case 'hanging':
           enterLeaf(fragment.run, levelOf(f, fragment))
+          // Blink gives preserved trailing spaces an item result of their own, rounded up alone (HandleTrailingSpaces,
+          // line_breaker.cc:2418-2534). A text node of their own is an item of its own, still shaped with the text before.
+          if (layout.engine === 'blink' && fragment.kind === 'hanging' && f > 0 && line.fragments[f - 1]!.kind !== 'hanging') flush()
           text += fragment.painted
           break
         case 'hyphen':
@@ -374,15 +450,40 @@ export function paintLines(paragraph: Paragraph, layout: PaintableLayout, doc: D
           closeElement(fragment.element)
           break
         }
+        case 'wbr': {
+          // The paragraph's <wbr> between two leaves, painted as it was.
+          const indexed = index.elements[fragment.element]!
+          reach(indexed.parent, indexed.open)
+          endPiece()
+          container().append(doc.createElement('wbr'))
+          break
+        }
         case 'collapsed':
         case 'forced-break':
         case 'br':
-        case 'wbr':
           break
       }
     }
     flush()
-    out.push(element)
+    if (softWrap) {
+      // Spans whose box ends on this line close before the wrap.
+      while (open.length > 0 && endEdges.has(open[open.length - 1]!.element)) closeElement(open[open.length - 1]!.element)
+      // The white space of the box's parent decides the break before it (CSS Text §5.1: at the boundary of two inline
+      // boxes the nearest common ancestor's white space applies), as the paragraph's break inside that span did.
+      if (open.length === 0 || wraps(styleUnder(paragraph, index, open[open.length - 1]!.element).whiteSpace)) {
+        container().append(softWrapBox(doc))
+      } else {
+        // The span holding the line's end doesn't wrap, so nothing can wrap before the box: the line stays its block's
+        // last line, without the end edges of the spans that continue.
+        for (let k = 0; k < open.length; k++) {
+          const style = open[k]!.node.style
+          style.removeProperty('margin-inline-end')
+          style.removeProperty('border-inline-end')
+          style.removeProperty('padding-inline-end')
+        }
+      }
+    }
+    out.push(root)
   }
   return out
 }

@@ -552,6 +552,15 @@ What does not touch measurement: `white-space` (except which characters reach th
   `gfxTextRun.cpp`): need `aveCharWidth` and DPR, which Canvas totals do not expose.
 - **N7** Rare 1-au per-glyph differences between the DOM at DPR ≠ 1 and Canvas at apd 60 from 16.16 truncation at
   different scales (§1.10 row 4) [I].
+  - Measured in installed Firefox 156 on 2026-09-17 (probe gecko-port F7, `rebuild/probes/gecko-round2.ts`,
+    `.artifacts/probes/gecko/round2`) [P]: single shaping units whose DOM box is 1 au off the OffscreenCanvas width, with
+    nothing else on the node: `ووفقك` in 10px Geeza Pro (DOM 1173, OC 1172), `รมชาติทำให้ผู้คนมีคว` in 500 32px Thonburi (16899
+    against 16898), `modern` in 15px Helvetica Neue (3118 against 3119). A `<canvas>` element, detached or connected,
+    doesn't reproduce them: it measures on whole device pixels (1174, 16900, 3118; `In` 734 where the DOM and OC give 733).
+    The source path: advances from hmtx as `FloatToFixed(float32 factor × units)` truncated to 16.16 at the device size
+    (gfxHarfBuzzShaper.cpp:354-379), the HarfBuzz scale in 16.16 device px (:1262-1263), and each glyph's advance rounded to
+    app units at the page's apd (:1699-1702). No Canvas string shows a glyph's sub-app-unit fraction, so the class has no
+    Canvas-observable condition.
 - **N8** Anything from a connected `<canvas>`: 1/apd grid, `size/DPR` quantization, `opsz` and `trak` at `size/DPR`.
 
 ---

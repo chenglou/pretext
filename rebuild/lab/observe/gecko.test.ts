@@ -21,8 +21,8 @@ function paragraph(texts: string[], direction: 'ltr' | 'rtl' = 'ltr'): Paragraph
   }
 }
 
-const ch = (advance: number, clusterStart = true): GeckoCharacter => ({ skipped: false, clusterStart, advance })
-const skip: GeckoCharacter = { skipped: true, clusterStart: false, advance: 0 }
+const ch = (advance: number, clusterStart = true, unitStart = true): GeckoCharacter => ({ skipped: false, clusterStart, unitStart, advance })
+const skip: GeckoCharacter = { skipped: true, clusterStart: false, unitStart: false, advance: 0 }
 
 function frame(run: number, contentStart: number, contentEnd: number, x: number, width: number, characters: GeckoCharacter[], extra: Partial<GeckoTextFrame> = {}): GeckoTextFrame {
   return { kind: 'text', run, contentStart, contentEnd, measuredStart: contentStart, level: 0, x, width, hasHeight: true, usedHyphen: false, characters, ...extra }
@@ -116,15 +116,29 @@ describe('Range rects over Gecko frames', () => {
     expect(values(o.codePoints[2]!.rects)).toEqual([[0, 0, 9.600006103515625]])
   })
 
-  test('points inside a word are limited by in-word-prefix; a frame broken inside a word limits its box and later frames', () => {
+  test('a <wbr> reports its WBRFrame, 0 × 0 where it was placed (c-00370d538345f01b: x 3558 au after a 3558 au frame)', () => {
+    const p: Paragraph = { ...paragraph(['aaaaaaa']), content: [{ kind: 'text', text: 'aaaaaaa' }, { kind: 'wbr' }, { kind: 'text', text: 'b' }] }
+    const l = layout([line([frame(0, 0, 7, 0, 3558, [ch(3558), skip, skip, skip, skip, skip, skip]), frame(1, 7, 8, 3558, 576, [ch(576)])], 0, 8)])
+    l.lines[0]!.geometry.frames.splice(1, 0, { kind: 'wbr', element: 0, level: 0, x: 3558, width: 0 })
+    const o = observeGecko(p, l, noMeasure)
+    expect(values(o.elements[0]!)).toEqual([[0, encodeEdges(3558, 3558).x, 0]])
+    expect(states(o.elements[0]!)).toEqual([['predicted', 'predicted']])
+  })
+
+  test('points inside a shaping unit are limited by in-word-prefix; frame boxes are engine output and predicted', () => {
     const a = ch(576)
-    const words = layout([line([frame(0, 0, 5, 0, 2880, [a, a, a, a, a])], 0, 5)])
+    const inside = ch(576, true, false)
+    const words = layout([line([frame(0, 0, 5, 0, 2880, [a, inside, a, a, inside])], 0, 5)])
     const o = observeGecko(paragraph(['ab cd']), words, noMeasure)
     expect(states(o.codePoints[0]!.rects)).toEqual([['predicted', 'limited']])
     expect(states(o.codePoints[2]!.rects)).toEqual([['predicted', 'predicted']])
     expect(states(o.codePoints[3]!.rects)).toEqual([['predicted', 'limited']])
     expect(states(o.nodes[0]!)).toEqual([['predicted', 'predicted']])
-    const split = layout([line([frame(0, 0, 2, 0, 1152, [a, a])], 0, 2), line([frame(0, 2, 4, 0, 1152, [a, a])], 2, 4)])
-    expect(states(observeGecko(paragraph(['abcd']), split, noMeasure).nodes[0]!)).toEqual([['predicted', 'limited'], ['predicted', 'limited']])
+    // A frame that starts inside a unit: every point after its start rests on the stand-in, its box doesn't.
+    const split = layout([line([frame(0, 0, 2, 0, 1152, [a, inside])], 0, 2), line([frame(0, 2, 4, 0, 1152, [inside, inside])], 2, 4)])
+    const s = observeGecko(paragraph(['abcd']), split, noMeasure)
+    expect(states(s.nodes[0]!)).toEqual([['predicted', 'predicted'], ['predicted', 'predicted']])
+    expect(states(s.codePoints[2]!.rects)).toEqual([['predicted', 'limited']])
+    expect(states(s.codePoints[3]!.rects)).toEqual([['limited', 'limited']])
   })
 })

@@ -96,7 +96,7 @@ function edgeLU(edge: { margin: number; border: number; padding: number }, zoom:
 }
 
 // Element::MapLanguageAttributeToLocale: a non-empty lang sets -webkit-locale, lang="" sets it to auto, a null locale,
-// "the language is explicitly unknown" (element.cc:12568-12600 at 152; the lab's native lines agree, case
+// "the language is explicitly unknown" (element.cc:12653-12686 at 153; the lab's native lines agree, case
 // c-faf5ba9af9ede412: lang="" breaks after ” under the zh-CN UI table). specs/blink-text.md §2.F.3 says lang="" inherits;
 // the source says otherwise. A span without lang inherits its parent's locale. The root element starts from
 // Content-Language (style_resolver.cc:2405-2406), but in this model the block always has a lang attribute (lang="" when
@@ -141,6 +141,7 @@ function styleOf(element: number, parent: number, style: TextStyle, locale: stri
     primaryFamily,
     measuresAtCssSize: font.facts.opticalSizeAxis ?? keyword,
     joining: font.facts.joining,
+    pairKerning: font.facts.pairKerning,
     start, end, verticalAlign,
   }
 }

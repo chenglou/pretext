@@ -31,11 +31,18 @@ export function maybeHanKerningClose(c: number): boolean {
   return maybeHanKerningFast(c) && (type === HAN_CLOSE || type === HAN_CLOSE_QUOTE)
 }
 
-// HanKerning::MayApply (han_kerning.h:152-156) for text_content[start, end).
-export function hanKerningMayApply(text: string, is8Bit: boolean, start: number, end: number): boolean {
-  if (is8Bit) return false
-  for (let i = start; i < end; i++) if (maybeHanKerningFast(text.charCodeAt(i))) return true
-  return false
+// Per text_content offset, how many units before it pass MaybeHanKerningOpenOrCloseFast, the end included. An 8-bit text
+// has none (every such character is above U+00FF).
+export function hanKerningCandidates(text: string): Int32Array {
+  const counts = new Int32Array(text.length + 1)
+  for (let i = 0; i < text.length; i++) counts[i + 1] = counts[i]! + (maybeHanKerningFast(text.charCodeAt(i)) ? 1 : 0)
+  return counts
+}
+
+// HanKerning::MayApply (han_kerning.h:152-156) for text_content[start, end), from hanKerningCandidates: a scan of the range
+// on every position made a 256,837-unit Arabic paragraph's positions quadratic.
+export function hanKerningMayApply(candidates: Int32Array, start: number, end: number): boolean {
+  return candidates[end]! - candidates[start]! > 0
 }
 
 // CharTypeFromBounds (han_kerning.cc:37-63), horizontal.

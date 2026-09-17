@@ -7,7 +7,7 @@ import { closeSync, mkdirSync, openSync, readFileSync, writeFileSync, writeSync 
 import { join, resolve } from 'node:path'
 import { readBuild, userAgentMatches } from './browser-build.ts'
 import { createRng } from './cases/prng.ts'
-import { CHROME_LANGUAGES, derivedLanguages, FIREFOX_LANGUAGE_PREFS, rendererLanguage, webkitPreferredLanguages, type ChromeLanguages } from './languages.ts'
+import { CHROME_LANGUAGES, derivedLanguages, FIREFOX_LANGUAGE_PREFS, rendererLanguage, webkitLanguageCheck, type ChromeLanguages } from './languages.ts'
 import type { BrowserKind, Case, FontDecl, LabRow, ProcessLanguages } from './types.ts'
 
 const LAB_DIR = import.meta.dir
@@ -575,11 +575,12 @@ async function step(request: Request): Promise<Response> {
       languages.given = { engine: 'blink', uiLanguage: read.value }
       languages.derivation.push(`read --lang=${read.value} from ${read.renderers} renderer process${read.renderers === 1 ? '' : 'es'}`)
     }
-    // WebKit's process languages as the first page shows them (languages.ts webkitPreferredLanguages).
+    // WebKit's process languages were derived before launch; the first page only checks them (languages.ts webkitLanguageCheck).
     if ((browser === 'safari' || browser === 'webkit-host') && languages.given.engine === 'webkit') {
       const shown = body.navigatorLanguages ?? []
-      languages.given = { ...languages.given, preferredLanguages: webkitPreferredLanguages(shown) }
-      languages.derivation.push(`preferredLanguages ${JSON.stringify(languages.given.preferredLanguages)} from navigator.languages ${JSON.stringify(shown)}, the first entry of WebContent's userPreferredLanguages(); the global AppleLanguages were ${JSON.stringify(languages.os.appleLanguages)}`)
+      const problem = webkitLanguageCheck(languages.given.preferredLanguages, shown)
+      if (problem !== null) throw new Error(problem)
+      languages.derivation.push(`checked: navigator.languages ${JSON.stringify(shown)} shows the first given entry`)
     }
   }
   if (body.seq !== null) {
@@ -620,11 +621,42 @@ async function step(request: Request): Promise<Response> {
   return asciiJsonResponse({ kind: 'chunk', seq: pending.seq, browser, build: build.engine, languages: languages.given, ...(predictOnly ? { predictOnly: true } : {}), cases: cases.slice(pending.start, pending.end) })
 }
 
+// Installed Safari keeps each lab document runnable while its window is hidden. The lab window opens behind the frontmost
+// app's windows, so WebKit sees it occluded and hides the page (PageClientImpl::isViewVisible, PageClientImplMac.mm), and
+// the UI process drops the page's foreground activity (WebPageProxy::updateThrottleState, WebPageProxy.cpp:3733-3742). With
+// no activity left, the ProcessThrottler moves the WebContent process to suspended after PrepareToSuspend
+// (ProcessThrottler.cpp:240-249, :360-395, processSuspensionTimeout 20 s), and the page stops posting rows: round 1's
+// installed Safari run stopped at 1,585 rows with every row hidden. Two activities keep a hidden page runnable, and the
+// page takes them in turn, never activating anything:
+// 1. While the page loads. NavigationState::didChangeIsLoading holds a background activity while the page is loading and
+//    releases it 3 s after (NavigationState.mm:1630-1656), and a frame stays loading while a request it started before
+//    its load event is pending (DocumentLoader::isLoadingInAPISense, DocumentLoader.cpp:1701-1723). So Safari's lab markup
+//    holds a hidden image whose response the server leaves open.
+// 2. Once the page updates its title. A main-frame title change without user action more than 5 s after the committed
+//    load takes a background activity until the next commit (WebPageProxy::didReceiveTitleForFrame, WebPageProxy.cpp:9250-
+//    9270, cleared at :8517). The page asks the server when HOLD_READY_MS have passed since the document was served
+//    (/api/hold-ready), changes its title, then releases the image (/api/hold-release).
+// The load has to end before the page measures anything: document.fonts.ready resolves only after the load event
+// (FontFaceSet::documentDidFinishLoading, FontFaceSet.cpp:269-280, called from Document::implicitClose, Document.cpp:4399-
+// 4402), which the held image would otherwise block. The other browsers get no hold: Chrome runs with
+// --disable-renderer-backgrounding and --disable-backgrounding-occluded-windows, Firefox has no such suspension, and
+// webkit-host's window reports itself visible.
+const HOLD_READY_MS = 6_000
+const holds = new Map<number, { servedAt: number; controller: ReadableStreamDefaultController<Uint8Array> | null }>()
+let holdCount = 0
+
 function pageHtml(lang: string, families: string[]): string {
   const escaped = lang.replace(/[&"<>]/g, ch => `&#${ch.charCodeAt(0)};`)
   const fixtures = FONT_FIXTURES.filter(fixture => families.includes(fixture.family)).map(fixture => ({ family: fixture.family, weight: fixture.weight, url: `/fonts/${fixture.file}` }))
+  let hold = ''
+  if (browser === 'safari') {
+    const n = holdCount++
+    holds.set(n, { servedAt: Date.now(), controller: null })
+    hold = `<img hidden alt="" data-lab-hold="${n}" src="/api/hold?run=${runId}&amp;n=${n}">`
+  }
   return `<!doctype html><html lang="${escaped}"><head><meta charset="utf-8"><title>pretext-rebuild lab</title>`
     + '<style>html,body{margin:0;padding:0;background:#fff;color:#000}</style></head><body>'
+    + hold
     + `<script id="lab-fonts" type="application/json">${JSON.stringify(fixtures).replace(/</g, '\\u003c')}</script>`
     + '<script type="module" src="/page.js"></script></body></html>'
 }
@@ -647,6 +679,41 @@ try {
           const families = (url.searchParams.get('fonts') ?? '').split('|').filter(family => family !== '').sort()
           if (families.some(family => !FONT_FIXTURES.some(fixture => fixture.family === family))) return new Response('Unknown font fixture', { status: 400 })
           return new Response(pageHtml(url.searchParams.get('lang') ?? '', families), { headers: { ...noStore, 'content-type': 'text/html; charset=utf-8' } })
+        }
+        case '/api/hold': {
+          if (url.searchParams.get('run') !== runId) return new Response('Inactive run', { status: 409 })
+          const entry = holds.get(Number(url.searchParams.get('n')))
+          if (entry === undefined) return new Response('Unknown hold', { status: 404 })
+          // Headers go out at once; the body ends when the page releases the hold, or the document goes away.
+          const body = new ReadableStream<Uint8Array>({
+            start(controller) {
+              entry.controller = controller
+            },
+            cancel() {
+              entry.controller = null
+            },
+          })
+          return new Response(body, { headers: { ...noStore, 'content-type': 'image/png' } })
+        }
+        case '/api/hold-ready': {
+          if (request.method !== 'POST') return new Response('POST required', { status: 405 })
+          const body = await request.json() as { runId: string; n: number }
+          if (body.runId !== runId) return new Response('Inactive run', { status: 409 })
+          const entry = holds.get(body.n)
+          if (entry === undefined) return new Response('Unknown hold', { status: 404 })
+          const wait = entry.servedAt + HOLD_READY_MS - Date.now()
+          if (wait > 0) await Bun.sleep(wait)
+          return Response.json({ ok: true })
+        }
+        case '/api/hold-release': {
+          if (request.method !== 'POST') return new Response('POST required', { status: 405 })
+          const body = await request.json() as { runId: string; n: number }
+          if (body.runId !== runId) return new Response('Inactive run', { status: 409 })
+          const entry = holds.get(body.n)
+          if (entry === undefined) return new Response('Unknown hold', { status: 404 })
+          try { entry.controller?.close() } catch { /* the document already went away */ }
+          holds.delete(body.n)
+          return Response.json({ ok: true })
         }
         case '/page.js':
           return new Response(bundle, { headers: { ...noStore, 'content-type': 'text/javascript; charset=utf-8' } })
@@ -677,7 +744,8 @@ try {
     try {
       // A step posts whole rows. Bun.serve refuses bodies over 128 MiB by default, which the page sees as a NetworkError:
       // Firefox's row for the 269,747-unit held-out corpus paragraph passed that limit once stage 5 geometry landed.
-      server = Bun.serve({ hostname: '127.0.0.1', port, fetch: fetchHandler, maxRequestBodySize: 1024 * 1024 * 1024 })
+      // idleTimeout 0: Bun closes a connection after 10 s without bytes by default, which would end Safari's held image.
+      server = Bun.serve({ hostname: '127.0.0.1', port, fetch: fetchHandler, maxRequestBodySize: 1024 * 1024 * 1024, idleTimeout: 0 })
     } catch {
       // Taken between the check and the bind.
     }

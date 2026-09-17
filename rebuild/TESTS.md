@@ -349,23 +349,26 @@ Six current rules are still heuristics or choices by score: `blink/measure/ignor
 
 `bun rebuild/tests/gate.ts seed|check --derived=<derivation dir> --baseline=<file> [--facts=<file>] [--coverage=<file>] [--corpus-baseline=<lab gate file> --corpus-runs=<per-case files>] [--out=<report>]`
 
-- **Rule families, blocking.** The (case id, metric) pairs that passed in both seeding runs, forward and reverse. The seed and check rules are `lab/gate.ts`'s, with `--complete`. History-dependent cases and unstable pairs never fail.
+- **Rule families, blocking.** The (case id, metric) pairs that passed in both seeding runs, forward and reverse. The seed and check rules are `lab/gate.ts`'s, with `--complete`. History-dependent cases, protocol rows and unstable pairs never fail.
 - **Facts, blocking.** The build's facts file against the one the baseline recorded; a verdict flip or a missing fact fails.
 - **Coverage, blocking.** A rule of the engine that had an observed family at seeding and has none now fails.
 - **Measurement corpus, report only.** Main-derived runs (`suite/`, `obligations/`) checked against a lab G0 baseline. Losses are counted per family group and never fail.
-- **Exit 2** when runs come from another environment key than the baseline (derive the families again for the new build and seed a new baseline), when the derived cases changed, or when a run wasn't scored against the other order.
+- **Exit 2** when runs come from another environment than the baseline, when the derived cases changed, or when a run wasn't scored against the other order. `lab/gate.ts` compares an environment key part by part and names what differs: another browser build or device (derive the families again for the new build and seed a new baseline); process languages that don't match the baseline's recorded languages, or a baseline that recorded none (another environment: seed a baseline for it); another scorer version (re-score the seeding runs and seed a new baseline). Seeding refuses runs whose environment records no process languages.
+- **Protocol rows.** A row whose page doesn't describe its declared input (lab `score.ts` `slotProtocol`: slot floats outside their rows) is never a pass. Seeding lists it under `protocol`, and a check never fails on it. `lab/gate.ts --prune-protocol --baseline=<file>` applies the rule to the rows of every seeding run a baseline names and moves such rows out of its passes, listing each removed pair.
 
-| Baseline | Environment | Family cases | Pass pairs (lineCount / breaks / widths / painter) | History-dependent | Unstable pairs |
-|---|---|---:|---|---:|---:|
-| `chrome-153.0.8010.48.json` | Google Chrome 153.0.8010.48, macOS 26A428, DPR 2, `uiLanguage` zh-CN, scorer 3 | 10,976 | 41,695 (10,772 / 10,690 / 10,258 / 9,975) | 0 | 0 |
-| `chrome-features-153.0.8010.48.json` | the same | 12,882 | 38,205 (12,135 / 12,135 / 6,943 / 6,992) | 0 | 0 |
-| `chrome-en-US-features-153.0.8010.48.json` | the same with `uiLanguage` en-US | 468 | 1,872 (468 / 468 / 468 / 468) | 0 | 0 |
-| `webkit-host-22625.1.29.11.27.json` | webkit-host 27.0 on WebKit 22625.1.29.11.27, `preferredLanguages` zh-CN, `icuDefaultLocale` en_US_POSIX | 9,584 | 36,038 (9,458 / 9,376 / 8,822 / 8,382) | 6 | 0 |
-| `webkit-host-features-22625.1.29.11.27.json` | the same | 12,150 | 39,838 (11,426 / 11,416 / 8,547 / 8,449) | 0 | 0 |
-| `firefox-156.0.json` | Firefox 156.0, `regionalPrefsLocale` zh-hans-us | 9,584 | 35,117 (9,422 / 9,166 / 8,481 / 8,048) | 0 | 0 |
-| `firefox-features-156.0.json` | the same | 11,946 | 35,036 (11,270 / 11,267 / 6,254 / 6,245) | 0 | 0 |
+| Baseline | Environment | Family cases | Pass pairs (lineCount / breaks / widths / painter) | History-dependent | Protocol rows | Unstable pairs |
+|---|---|---:|---|---:|---:|---:|
+| `chrome-153.0.8010.48.json` | Google Chrome 153.0.8010.48, macOS 26A428, DPR 2, `uiLanguage` zh-CN, scorer 3 | 10,976 | 41,695 (10,772 / 10,690 / 10,258 / 9,975) | 0 | – | 0 |
+| `chrome-features-153.0.8010.48.json` | the same | 12,882 | 38,205 (12,135 / 12,135 / 6,943 / 6,992) | 0 | 0 | 0 |
+| `chrome-en-US-features-153.0.8010.48.json` | the same with `uiLanguage` en-US | 468 | 1,872 (468 / 468 / 468 / 468) | 0 | 0 | 0 |
+| `webkit-host-22625.1.29.11.27.json` | webkit-host 27.0 on WebKit 22625.1.29.11.27, `preferredLanguages` zh-CN, `icuDefaultLocale` en_US_POSIX | 9,584 | 36,038 (9,458 / 9,376 / 8,822 / 8,382) | 6 | – | 0 |
+| `webkit-host-features-22625.1.29.11.27.json` | the same | 12,150 | 39,826 (11,422 / 11,414 / 8,545 / 8,445) | 0 | 7 | 0 |
+| `firefox-156.0.json` | Firefox 156.0, `regionalPrefsLocale` zh-hans-us | 9,584 | 35,117 (9,422 / 9,166 / 8,481 / 8,048) | 0 | – | 0 |
+| `firefox-features-156.0.json` | the same | 11,946 | 35,021 (11,261 / 11,261 / 6,254 / 6,245) | 0 | 15 | 0 |
 
 Seeded by the ceiling round 1 evaluation (REPORT.md §2.6) with the facts files and the regenerated coverage matrix, through derivation directories that link the evaluation's forward and reverse runs (`.artifacts/ceiling-20260917/evaluate/tools/derived-dirs.sh`). Each baseline checked against its own runs: 0 lost pairs, pass.
+
+Pruned by rule in ceiling round 2 (`lab/gate.ts --prune-protocol`, reports in `.artifacts/lab/round2-scorer4/prune/`, the previous files beside them as `*.before.json`): Firefox's feature baseline lost 15 pairs in its 15 protocol rows (9 line counts, 6 breaks), webkit-host's 12 pairs in 7 rows (4 line counts, 2 breaks, 2 widths, 4 painter), Chrome's none. These baselines still key on scorer 3 and, for webkit-host, on the `preferredLanguages` round 1 took from the page, so round 2 runs (scorer 4, `preferredLanguages` zh-CN,zh-Hans from `webkit-host --print-languages`) need new seeds under the baseline rule: every lost pair attributed, protocol rows excluded.
 
 The previous rule-family baselines were keyed on scorer 2 without process languages, so `gate.ts check` refuses the new runs by design (exit 2). Checked by the same rules without the environment check, Chrome's rule families lost 44 painter pairs (`rule/joining`, the Blink owner's fix-r12), webkit-host's 22 line counts, 22 breaks and 6 painter pairs (`rule/joining` under `rtl-shaping-across-inline-boxes`), and Firefox's none.
 
@@ -401,5 +404,5 @@ A macOS update moves all three keys.
 - Family runs in installed Safari; webkit-host stands in. The ceiling evaluation's combined families file never reached installed Safari, because its first job stopped (REPORT.md §2.7).
 - In-probe fact declarations with value-free check names (§4.1); painter probes.
 - Page-history preludes and per-case isolation protocols (§6.5).
-- For structured cases: the scorer's comparison of `elements` and the slot-rows assumption, which 11 feature-family rows break (§6); line keys that place atomic inlines.
+- For structured cases: line keys that place atomic inlines, and a check that no line box is taller than the line height in slot cases. Scorer 4 compares `elements` and marks slot protocol rows (lab README "Elements", "Protocol rows"); round 1's feature families had 22 such rows (Firefox 15, webkit-host 7), and `derive.ts` `minimumUnits` now keeps derived widths at or above each engine's bound. A re-derivation of `line-slots` with it produced no protocol row in Firefox or webkit-host (lab README "Protocol rows"); the feature-family baselines and `.artifacts/tests/features-20260917` still hold round 1's cases until the families are derived again.
 - A second controlled locale for Firefox and webkit-host: Firefox's Mac command line passes a Cocoa `-AppleLanguages` pair on as arguments to open, and webkit-host rejects arguments it doesn't know (lab README, "Browser-process languages").

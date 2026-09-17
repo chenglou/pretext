@@ -7,10 +7,11 @@
 //
 // States (DESIGN.md §9): an edge that is an item edge, a whole item's size, a hyphen's size or a boundary at an item edge
 // is predicted. An edge from a caret position inside an item rests on the cluster advances the library took from Canvas
-// prefix widths, so it is limited by in-word-prefix. Facts no rect reflects are listed as unobservable with their rule.
-// Vertical placement is outside the contract.
+// prefix widths: it is limited by a gap the layout reports concerning it (a gap of its line, or a paragraph gap whose `at`
+// meets the code point), and predicted where the layout reports none. Facts no rect reflects are listed as unobservable
+// with their rule. Vertical placement is outside the contract.
 import type {
-  BlinkGlyphCluster, BlinkItem, BlinkLayout, BlinkMappingUnit, CanvasMeasure, Expected, ExpectedObservation, ExpectedRect, InlineNode, ObservationPort,
+  BlinkGlyphCluster, BlinkItem, BlinkLayout, BlinkMappingUnit, CanvasMeasure, Expected, ExpectedObservation, ExpectedRect, GapName, InlineNode, ObservationPort,
   Paragraph, UnobservableFact,
 } from '../../src/model.ts'
 
@@ -41,18 +42,64 @@ function predicted(value: number): Expected {
   return { state: 'predicted', value }
 }
 
-function limited(value: number): Expected {
-  return { state: 'limited', gap: 'in-word-prefix', value }
+// An edge inside an item: limited by the gap the layout reports concerning it, else predicted.
+function inside(value: number, gap: GapName | null): Expected {
+  return gap === null ? predicted(value) : { state: 'limited', gap, value }
+}
+
+// The layout's paragraph gaps with source ranges, by 64-unit blocks of the offsets they cover: a range [start, end) sits
+// in the blocks of units start to end − 1, and an empty range in the block of its offset. A paragraph can report
+// thousands of ranged gaps (5,317 `script-context` ranges in a 256,837-unit Arabic suite paragraph), and every code
+// point asks for one, so a scan of all of them per code point never finished a held-out suite part.
+const GAP_BLOCK = 64
+type GapIndex = { gaps: BlinkLayout['gaps']; blocks: Map<number, number[]> }
+
+function gapIndex(layout: BlinkLayout): GapIndex {
+  const blocks = new Map<number, number[]>()
+  for (let i = 0; i < layout.gaps.length; i++) {
+    const at = layout.gaps[i]!.at
+    if (at === undefined) continue
+    const last = Math.floor((at.start === at.end ? at.start : at.end - 1) / GAP_BLOCK)
+    for (let b = Math.floor(at.start / GAP_BLOCK); b <= last; b++) {
+      const list = blocks.get(b)
+      if (list === undefined) blocks.set(b, [i])
+      else list.push(i)
+    }
+  }
+  return { gaps: layout.gaps, blocks }
+}
+
+function meets(at: { start: number; end: number } | undefined, s: number, e: number): boolean {
+  return at === undefined || (at.start === at.end ? at.start >= s && at.start <= e : at.start < e && at.end > s)
+}
+
+// The first gap the layout reports concerning source range [s, e) on a line: a gap of the line, or the first paragraph gap
+// whose range meets it (a break offset at either end counts). A range meeting [s, e) covers a unit of it, or unit s when
+// s = e, or is empty at an offset in [s, e], so its blocks include one of s's to e's.
+function gapConcerning(layout: BlinkLayout, index: GapIndex, line: number, s: number, e: number): GapName | null {
+  const lineGaps = line >= 0 && line < layout.lines.length ? layout.lines[line]!.gaps : []
+  for (let i = 0; i < lineGaps.length; i++) if (meets(lineGaps[i]!.at, s, e)) return lineGaps[i]!.gap
+  let first = -1
+  const last = Math.floor(e / GAP_BLOCK)
+  for (let b = Math.floor(s / GAP_BLOCK); b <= last; b++) {
+    const list = index.blocks.get(b)
+    if (list === undefined) continue
+    for (let j = 0; j < list.length; j++) {
+      const i = list[j]!
+      if ((first === -1 || i < first) && meets(index.gaps[i]!.at, s, e)) first = i
+    }
+  }
+  return first === -1 ? null : index.gaps[first]!.gap
 }
 
 // DOMRect::FromRectF(quad.BoundingBox()): x is the left edge, width the float difference of the edges.
-function rectOf(q: Quad, zoom: number): ExpectedRect {
+function rectOf(q: Quad, zoom: number, gap: GapName | null = null): ExpectedRect {
   const left = css(q.left, zoom)
   const width = f32(css(q.right, zoom) - left)
   return {
     line: q.line,
-    x: q.leftExact ? predicted(left) : limited(left),
-    width: q.leftExact && q.rightExact ? predicted(width) : limited(width),
+    x: q.leftExact ? predicted(left) : inside(left, gap),
+    width: q.leftExact && q.rightExact ? predicted(width) : inside(width, gap),
   }
 }
 
@@ -301,12 +348,13 @@ export const observeBlink: ObservationPort<BlinkLayout> = (paragraph: Paragraph,
   for (let b = 0; b < layout.belowFloats.length; b++) {
     unobservable.push({ line: -1, fact: `belowFloats[${b}]`, rule: 'a refused slot moves the line box down past the floats; only vertical positions show it, which are outside the contract (inline_layout_algorithm.cc:1341-1367)' })
   }
+  const paragraphGaps = gapIndex(layout)
   const nodes: ExpectedRect[][] = []
   const includedHyphens = new Set<BlinkItem>()
   for (let r = 0; r < runCount; r++) {
     const leaf = tree.leaves[r]!
     const quads = leaf.text.length === 0 ? [] : quadsForRange(units[r]!, items[r]!, leaf.start, leaf.start + leaf.text.length, rtlStyle, includedHyphens)
-    nodes.push(quads.map(q => rectOf(q, zoom)))
+    nodes.push(quads.map(q => rectOf(q, zoom, gapConcerning(layout, paragraphGaps, q.line, leaf.start, leaf.start + leaf.text.length))))
   }
   const codePoints: ExpectedObservation['codePoints'] = []
   for (let r = 0; r < runCount; r++) {
@@ -314,7 +362,7 @@ export const observeBlink: ObservationPort<BlinkLayout> = (paragraph: Paragraph,
     for (let k = 0; k < leaf.text.length;) {
       const length = leaf.text.codePointAt(k)! > 0xffff ? 2 : 1
       const offset = leaf.start + k
-      codePoints.push({ offset, length, rects: quadsForRange(units[r]!, items[r]!, offset, offset + length, rtlStyle, includedHyphens).map(q => rectOf(q, zoom)) })
+      codePoints.push({ offset, length, rects: quadsForRange(units[r]!, items[r]!, offset, offset + length, rtlStyle, includedHyphens).map(q => rectOf(q, zoom, gapConcerning(layout, paragraphGaps, q.line, offset, offset + length))) })
       k += length
     }
   }

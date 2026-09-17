@@ -73,7 +73,20 @@ describe('structured paragraphs', () => {
 
   test('sized passes stay at or above the widest row of insets, in grid units', () => {
     const tree = treeParagraph({ font: arial, lang: 'en', lineSlots: [{ left: 40, right: 0 }, { left: 111.9, right: 0 }] }, [leaf('a b')])
-    expect(minimumUnits(tree.inline, 128)).toBe(Math.ceil(111.9 * 128))
-    expect(minimumUnits(treeParagraph({ font: arial, lang: 'en', textIndent: 3 }, [leaf('a b')]).inline, 128)).toBe(0)
+    for (const engine of ['blink', 'webkit', 'gecko'] as const) expect(minimumUnits(tree.inline, 128, engine, 'ltr')).toBe(Math.ceil(111.9 * 128))
+    expect(minimumUnits(treeParagraph({ font: arial, lang: 'en', textIndent: 3 }, [leaf('a b')]).inline, 128, 'gecko', 'ltr')).toBe(0)
+  })
+
+  test('Gecko and WebKit keep row 0\'s second float beside the indented first line only where it fits; Blink places floats first', () => {
+    const both = treeParagraph({ font: arial, lang: 'en', textIndent: 10, lineSlots: [{ left: 40, right: 40 }, { left: 40, right: 40 }] }, [leaf('a b')]).inline
+    expect(minimumUnits(both, 64, 'blink', 'ltr')).toBe(80 * 64)
+    expect(minimumUnits(both, 60, 'gecko', 'ltr')).toBe(90 * 60)
+    expect(minimumUnits(both, 60, 'gecko', 'rtl')).toBe(90 * 60)
+    expect(minimumUnits(both, 64, 'webkit', 'ltr')).toBe(90 * 64)
+    // RTL: the right float is start-positioned, and the indent overlaps it.
+    expect(minimumUnits(both, 64, 'webkit', 'rtl')).toBe(80 * 64)
+    // One side only: the first float is always placed, whatever the indent.
+    const left = treeParagraph({ font: arial, lang: 'en', textIndent: 10, lineSlots: [{ left: 40, right: 0 }] }, [leaf('a b')]).inline
+    expect(minimumUnits(left, 60, 'gecko', 'ltr')).toBe(40 * 60)
   })
 })

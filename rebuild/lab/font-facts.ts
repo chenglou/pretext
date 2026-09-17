@@ -32,6 +32,7 @@ type Face = {
   gsubArabFeatures: string[] | null
   cmapU0628: boolean
   substituteForU0628: string
+  pairKerning: FontFacts['pairKerning']
 }
 
 type GenericKeyword = 'serif' | 'sans-serif' | 'monospace'
@@ -228,6 +229,8 @@ function resolve(font: CssFont, engine: EngineName, fixtures: ReadonlySet<string
       monospace: agree(faces.map(fixedPitch)),
       opticalSizeAxis: agree(faces.map(face => face.opsz)),
       joining,
+      // The primary faces: they draw the Latin text whose pair adjustments the fact places.
+      pairKerning: agree(faces.map(face => face.pairKerning)),
     },
     primaryFaces: primary.faces,
     joiningFaces: joiningFaces ?? [],

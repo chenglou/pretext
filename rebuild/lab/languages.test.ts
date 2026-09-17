@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { canonicalizeLanguageId, derivedLanguages, describeGiven, icuDefaultLocale, parsePlistArray, rendererLanguage, webkitPreferredLanguages, type CommandReader } from './languages.ts'
+import { canonicalizeLanguageId, derivedLanguages, describeGiven, icuDefaultLocale, parsePlistArray, readWebContentLanguages, rendererLanguage, WEBKIT_HOST_EXECUTABLE, webkitLanguageCheck, type CommandReader } from './languages.ts'
 
 // A command reader over fixed outputs, keyed by the command line.
 function reader(outputs: Record<string, string>): CommandReader {
@@ -7,6 +7,9 @@ function reader(outputs: Record<string, string>): CommandReader {
 }
 
 const THIS_MAC = { 'defaults read -g AppleLanguages': '(\n    "zh-Hans-US",\n    "en-US"\n)', 'defaults read -g AppleLocale': 'zh_Hans_US' }
+// What `webkit-host --print-languages` printed on this Mac on 2026-09-17.
+const HOST_LANGUAGES = '{"cfPreferredLanguages":["zh-Hans-US","en-US"],"minimized":["zh-CN","zh-Hans"],"minimizes":true,"overrideLanguages":["zh-Hans-US","en-US"],"preferredLanguages":["zh-CN","zh-Hans"]}'
+const WITH_HOST = { ...THIS_MAC, [`${WEBKIT_HOST_EXECUTABLE} --print-languages`]: HOST_LANGUAGES }
 
 describe('OS settings as research tooling reads them', () => {
   test('defaults prints an old-style plist array', () => {
@@ -47,18 +50,28 @@ describe('given facts per browser', () => {
     expect(own.given).toEqual({ engine: 'gecko', regionalPrefsLocale: null })
   })
 
-  test('Safari and webkit-host wait for the page\'s languages and take launchd\'s locale variables', () => {
+  test('Safari and webkit-host take the WebContent process\'s languages from webkit-host --print-languages before launch', () => {
+    const host = derivedLanguages('webkit-host', reader(WITH_HOST))
+    expect(host.given).toEqual({ engine: 'webkit', preferredLanguages: ['zh-CN', 'zh-Hans'], icuDefaultLocale: 'en_US_POSIX' })
+    expect(host.webContent).toEqual(JSON.parse(HOST_LANGUAGES))
+    expect(host.launch).toBeNull()
+    const safari = derivedLanguages('safari', reader({ ...WITH_HOST, 'launchctl getenv LANG': 'ja_JP.UTF-8' }))
+    expect(safari.given).toEqual({ engine: 'webkit', preferredLanguages: ['zh-CN', 'zh-Hans'], icuDefaultLocale: 'ja_JP' })
+    // Without the helper, or with an app domain of its own, the list is unknown.
     expect(derivedLanguages('webkit-host', reader(THIS_MAC)).given).toEqual({ engine: 'webkit', preferredLanguages: null, icuDefaultLocale: 'en_US_POSIX' })
-    const safari = derivedLanguages('safari', reader({ ...THIS_MAC, 'launchctl getenv LANG': 'ja_JP.UTF-8' }))
-    expect(safari.given).toEqual({ engine: 'webkit', preferredLanguages: null, icuDefaultLocale: 'ja_JP' })
-    expect(safari.launch).toBeNull()
+    expect(derivedLanguages('safari', reader({ ...WITH_HOST, 'defaults read com.apple.Safari AppleLanguages': '(\n    "ja-JP"\n)' })).given).toEqual({ engine: 'webkit', preferredLanguages: null, icuDefaultLocale: 'en_US_POSIX' })
   })
 
-  test('WebKit\'s pages show the first preferred language, which decides the specialized Chinese locale', () => {
-    expect(webkitPreferredLanguages(['zh-CN'])).toEqual(['zh-CN'])
-    expect(webkitPreferredLanguages(['ZH-tw'])).toEqual(['ZH-tw'])
-    expect(webkitPreferredLanguages(['en-US'])).toBeNull()
-    expect(webkitPreferredLanguages([])).toBeNull()
+  test('the helper\'s output is read strictly', () => {
+    expect(readWebContentLanguages(reader(WITH_HOST))).toEqual(JSON.parse(HOST_LANGUAGES))
+    expect(readWebContentLanguages(reader({ [`${WEBKIT_HOST_EXECUTABLE} --print-languages`]: '{"preferredLanguages":["zh-CN"]}' }))).toBeNull()
+    expect(readWebContentLanguages(reader({}))).toBeNull()
+  })
+
+  test('the page only checks the derived list: navigator.languages shows its first entry', () => {
+    expect(webkitLanguageCheck(['zh-CN', 'zh-Hans'], ['zh-CN'])).toBeNull()
+    expect(webkitLanguageCheck(['zh-CN', 'zh-Hans'], ['en-US'])).toBe('the page shows navigator.languages ["en-US"], but the WebContent process\'s derived preferred languages are ["zh-CN","zh-Hans"]')
+    expect(webkitLanguageCheck(null, ['zh-CN'])).toBeNull()
   })
 
   test('Chrome\'s renderers under the launched browser carry its application locale', () => {

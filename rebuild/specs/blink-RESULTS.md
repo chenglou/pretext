@@ -16,6 +16,177 @@ Baselines for transitions:
 - the triage population (research/MAIN-TRIAGE.md §2.1, Chrome small file, 8,933 cases): the charter triage rows
   (`.artifacts/charter-20260916/triage/runs/chrome/charter-file/small`), scored again with scorer 3.
 
+## Ceiling round 2
+
+Chrome 153.0.8010.48 as above, scorer 4 (lab/README.md "Line-local gaps": a failing line is covered only by a gap of that
+line, of the decision that ended the line before it, or a paragraph gap whose `at` range meets them; slot protocol rows
+and element rects). Each chain bundles a frozen copy of the library (`scratchpad/blink-r2/builds/<build>`); rows are under
+`.artifacts/lab/blink/<build>/<set>-<order>/`, forward scored against reverse. No Chrome case was history-dependent.
+
+| Build | What changed |
+|---|---|
+| r2-a | Gap attribution: the content's conditions are computed in `prepare` with `at` ranges and copied onto a line whose break decision measured them past its end (`contentGaps`, `lineEdgeGaps`); `control-character-width` only for VT and collapsible FF, the characters Canvas turns into spaces (plain_text_node.cc:47-58); `script-context` for a grapheme some Canvas string the port measures resolves otherwise than the paragraph, and a Latin range stays an 8-bit string at any length; `NeedsAccurateEndPosition` as `PrepareNextLine` computes it, before the base direction is set; tab-size 0 |
+| r2-b | r2-a plus the font fact `pairKerning` (model.ts, lab font table), the pair window over whole glyph clusters, and the edge after preserved trailing spaces |
+| r2-c | r2-b plus `IsCjkIdeographOrSymbol` for justification from generated data, the no-ligature pair test for `glyph-clusters` at adjusted edges, the margin and wide-window conditions of `in-word-prefix`, in-item limits in the observation port from the layout's gaps, and citations read at Chrome 153's HarfBuzz (dfdc088c) and V8 (6b96683d) |
+| r2-d | r2-c plus item results and views that take glyph clusters by their first character (CopyRanges and FindGlyphDataRange, inline_node.cc:1781, glyph_data_range.cc:56-90), and U+2060 before a short Latin-1 range the paragraph shapes under another script than Latin, so Canvas shapes it as Common rather than as one Latin segment |
+| r2-e | r2-d plus `glyph-clusters` on a line where a pair window in the content its break decision measured past the end, up to the next break opportunity under the style's own break type, adjusts otherwise with ligatures off; HanKerning::MayApply from a per-paragraph count instead of a scan per position; and the observation port's paragraph gaps indexed by source blocks. No prediction changes by construction (below) |
+
+### Offline replay
+
+`scratchpad/blink-r2/capture-predictor.ts` runs the working tree's predictor in Chrome and returns the layout's Canvas call
+log as the prediction's error text; `replay.ts` lays each captured case out again in bun with those widths, runs the
+observation port and scores the result with `score.ts`. On the 12 cases of `capture-1b` it reproduced the Chrome rows'
+lines, advances and widths, and a trace (`trace.ts`, `trace2.ts`) patches `LineBreaker` and `LineBreakIterator` methods.
+A string the capture didn't measure throws, so a change that measures new strings needs a new capture.
+
+### Classes traced to source
+
+1. **Tab stops under tab-size 0** (`rule/tabs`, 97 failures in round 1, covered only by `tab-stops`). `TabWidth(font_data,
+   tab_size)` returns the letter spacing as the base when the pixel size is 0 (TabWidthInternal, font.cc:303-317,
+   font.h:260-264), so `TabWidth(…, position)` stops at multiples of the letter spacing with the half-space minimum
+   (font.cc:319-340); the port returned the letter spacing. Helvetica Neue 16px, `xx aaaaaaa` TAB: the tab is 234 LayoutUnits
+   natively, predicted 128 before and 234 now (`c-0470827bf3f9951d`). r2-a against round 1, rule families: lineCount
+   fail→pass 12, breaks 18, widths 78 (and 18 not-applicable→pass); nothing lost.
+2. **Line-end reshapes under `text-align: left` and `right`** (round 1's "reshape offsets under right but not left").
+   `LineBreaker::PrepareNextLine` calls `LineInfo::Reset`, which sets the base direction to LTR (line_info.cc:48-75), then
+   `SetLineStyle`, which computes `needs_accurate_end_position_` from `BaseDirection()` (line_info.cc:127-175,
+   line_breaker.cc:842), and only then `SetBaseDirection` (:870-871). So left never needs an accurate end and right always
+   does, in RTL too: Arial `xx AAAA` RTL right reshapes the end natively (6830 LayoutUnits), RTL left doesn't (6689). r2-a
+   against round 1, feature families: lineCount fail→pass 16, pass→fail 4, widths fail→pass 50. The 4 losses
+   (`c-39e85a9de00bf85b`, `c-c1f755d340d7f35c`, `c-d64de8a4a5a0c8b2` and one more, Times New Roman, RTL left) had passed
+   because the wrong reshape dropped the whole kern at the line end, where Blink keeps half of it (class 3).
+3. **Pair adjustments split by the kern machine.** Times New Roman (GPOS without a kern feature, and a `kern` table),
+   Helvetica Neue and Hoefler Text kern through HarfBuzz's pair machine, which adds `kern >> 1` to the first glyph's advance
+   and the rest to the second's (hb-kern.hh:102-106; plan hb-ot-shape.cc:150-185); GPOS PairPos in Arial adds all of it to
+   the first (PairSet.hh:126-127). A position between the two glyphs differs by `d − (d >> 1)`: Times New Roman 20px `AAAA`
+   before a trimmed space is 7325 natively where the first-glyph placement gave 7254. Canvas totals can't show which, so it
+   is the font fact `pairKerning`, read offline from the GPOS kern lookups' value formats and the kern and kerx subtable
+   formats (`.artifacts/charter-20260916/font-facts/tools/tables.py`, `build-facts.ts`; SHARED-CHANGES.md). r2-b against
+   r2-a: rule families lineCount fail→pass 26 (`following-space` 16, `in-word-breaks` 6, `hyphen-glyph` 4), breaks 41,
+   widths 56 and 41 not-applicable→pass; feature families lineCount 16, widths 164; runs widths 2; no prediction metric lost.
+4. **A mark after a default-ignorable character measured alone** (`c-01763358db8471a3`, held-out `suite/space`, `a` TAB
+   `ب` SHY kasra `ب` in Shantell Sans, the round 1 critic's unsettled `glyph-clusters` edge). The pair window at offset 5
+   took one grapheme on each side, the kasra alone, which in Canvas is a broken cluster, and gave `ب` a −2 px adjustment;
+   `offsetForPosition` then found the candidate at 5 instead of 2, and the port kept `ب` SHY kasra on one line. HarfBuzz
+   merges the kasra into SHY's cluster (hb_form_clusters, hb-ot-shape.cc:578-586), so the window now takes whole clusters.
+   Replayed from `capture-1c`: 4 lines `a` TAB / `ب` / SHY kasra / `ب`, as native.
+5. **Emoji sequences split across spans** (`runs/letter-spacing-spans`, `runs/split-word`): a span edge inside
+   `🏳️‍🌈` starts the second span with ZWJ, where Canvas starts a word before the pictograph (plain_text_node.cc:117-153,
+   `IsCjkIdeographOrSymbolBase`) and letter-spaces it while the DOM keeps it in the ZWJ's cluster; `❤` in one span and VS16
+   in the next take emoji presentation natively from RunSegmenter over the whole text. Covered by `font-fallback` at the
+   grapheme's range ("a shaping-group edge inside a grapheme cluster"); no recipe.
+6. **U+FFFC in text** (`rule/object-replacement`, `suite/U+FFFC/*`): `font-fallback` at the character (probe
+   blink-followups-20260917: no Canvas character stands in for every font).
+7. **Null font facts**: `system-ui` and `BlinkMacSystemFont` (`rule/system-fonts-and-sizes`) report `optical-size` and
+   `page-history` on their text; Hoefler Text, `-apple-system`, Kohinoor Bangla and Monaco, which only the rule families use,
+   aren't in the lab's font table, so their facts are null (`rule/in-word-breaks`: `optical-size`, and `unsafe-to-break` at
+   kerned edges). With `pairKerning` 'split' (Hoefler Text has a format 0 `kern` table) the widths case
+   `c-0ace7f5d64c2d61f` passes in replay.
+
+### Transitions
+
+Forward rows, outside history dependence. r2-b against r2-a and round 1's are in the classes above.
+
+- **r2-c against r2-b** (smoke, ws, policy, runs, rule and feature families, held-out runs, ws and policy): no line count,
+  break or width changed. The narrowed conditions change only which gaps fire.
+- **r2-d against r2-c**, the same sets: smoke widths fail→pass 1 (`c-26a7a7b28da24b44`, `سلام((tail` in Amiri: the brackets
+  after Arabic measured as Common through U+2060, 1407 units each as natively, where the 8-bit string gave 784). Nothing
+  else changed.
+- **r2-e against r2-d** (smoke, runs, ws, policy, held-out runs, ws and policy, rule and feature families in both
+  languages, the four suite sample parts and the triage population's small file): no line count, break, width or painter
+  status changed on any case. The changes add gaps and remove work. Failures without a line-local gap: triage 11 → 1
+  (`c-8c84627af834611f`), none on the other sets.
+- **r2-d against round 1's evaluation rows**, no line count, break or width lost on any set:
+
+| Set (cases) | lineCount | breaks | widths |
+|---|---|---|---|
+| smoke (299) | – | – | fail→pass 1 |
+| runs (2,580) | – | – | fail→pass 2 |
+| ws, policy, held-out policy, features en-US | – | – | – |
+| held-out runs (2,579) | – | – | fail→pass 3 |
+| held-out ws (1,039) | – | – | fail→pass 1 |
+| rule families (10,976) | fail→pass 38 | fail→pass 59 | fail→pass 138, not-applicable→pass 59 |
+| feature families (12,882) | fail→pass 28, unobserved→pass 719 (element rects) | the same | fail→pass 212, unobserved→pass 1,938, not-applicable→pass 640 |
+| suite sample (19,994) | fail→pass 33 | fail→pass 42 | fail→pass 83, not-applicable→pass 42 |
+| held-out suite sample (10,000; r2-e) | fail→pass 18 | fail→pass 39 | fail→pass 81, not-applicable→pass 39 |
+
+  Suite sample gains: `original-vs-reshaped-admission` 23 line counts and 41 widths and `partial-source-context` 3 and 8
+  (U+2060 before brackets under Arabic), `negative-space` 34 widths (`pairKerning` in Times New Roman),
+  `separator-grapheme` 6 widths (clusters by their first character). Held-out suite gains (r2-e, both parts, forward rows
+  against `.artifacts/ceiling-20260917/evaluate/chrome/heldout-suite-sample-forward/`): the Amiri families whose text puts
+  `((` or `[[` after Hebrew, Arabic or Cyrillic (`source-shaped-arabic` 13 widths, 10 breaks, 4 line counts; the
+  `hanging-*`, `missing-*` and `spacing-hanging-*` space families, `physical-window-terminal-seam`, `raw-context`,
+  `script-prefix-heldout`, `hidden-control-spacing`, `joined-mark`, `space`, `mixed`), which is the U+2060 prefix;
+  `separator-grapheme` 16 and `ideographic-source-edge` 6 widths (Arial `a` U+3000 and a mark: clusters by their first
+  character); Times New Roman `space-context` 4, `spacing-tail` 8, `following-space-context` and `following-space-scope`
+  (`pairKerning`); `chromium-script-spacing` 1 width (Courier New `a` SP U+0301 `b`), not traced. Painter pass→fail 25:
+  22 on cases whose line count, breaks or widths changed on the same case, and 3 (`spacing-tail` 2,
+  `following-space-scope` 1) with no prediction change, where paint.ts changed. Every held-out suite prediction failure
+  (193 cases) has a line-local gap; round 1 left 29 without one. The triage population (8,933 cases) against fix-r11:
+  lineCount fail→pass 264, pass→fail 2; breaks fail→pass 296, pass→fail 2 (below).
+- **Painter.** Feature families pass→fail 36, all `rule/text-align` cases whose widths are now right (the painted line is
+  laid out alone and doesn't repeat the paragraph's line-end reshape). Rule families `in-word-breaks` 16 and `controls` 8,
+  and suite sample `negative-space` 28 and `spacing-tail` 2, lost painter passes where no prediction metric changed: paint.ts
+  changed between the frozen builds (the painter owner's hanging-space node and soft-wrap boxes, SHARED-CHANGES.md).
+
+### A stalled held-out suite run
+
+r2-d's held-out suite part 0 in file order stopped twice with "No page activity for 120000ms": with 25 cases per round
+trip after 0 rows (`.artifacts/lab/blink/r2-d/heldout-suite-sample-part0-forward-stalled-chunk25/`), and once more, with
+one case per round trip as round 1 ran it, after 4 rows (`r2-d/heldout-suite-sample-part0-forward/`). Its 5th case,
+`c-c8110fb16910a3a7`, is a 256,837-unit Arabic paragraph. Round 1's evaluation row of it
+(`.artifacts/ceiling-20260917/evaluate/chrome/heldout-suite-sample-forward/part0`) took 95.4 s to predict, 7.2 s to observe
+and 2.9 s natively, already near the limit. r2-d's rows before it predicted in 14-17 s against round 1's 11-15 s and
+observed in 1.4-3.8 s against 0.6-1.9 s. Two costs, both exact to remove:
+
+- **Positions scanned the whole shaping group.** A bun profile of the prediction with a stand-in Canvas
+  (`scratchpad/blink-r2/prof/`) put 95% of the time in `groupPrefix16`, with round 1's code and r2-d's alike: every position
+  asked `kernsAfter`, which asked HanKerning::MayApply over the group by scanning it, and a group without Han punctuation
+  scans to its end. The paragraph now counts candidates once (`hanKerningCandidates`), so MayApply over any range is a
+  subtraction. Same case in bun: 59.1 s → 3.3 s, the same 230,129 Canvas calls, and the lines, gaps and call log hash
+  equal (`hash-layout.ts`). The prefix count agrees with the scan on 100,000 random ranges of mixed text (`hk-check.ts`).
+- **The observation port scanned every paragraph gap for every code point.** r2-a gives content gaps source ranges, 5,317
+  `script-context` ranges here, and `gapConcerning` checked all of them for each of the 256,837 code points. The port now
+  indexes the ranged gaps by 64-unit blocks and still returns the first gap in the layout's order: observation 10.8 s →
+  7.1 s in bun with an equal hash of the expected observation (`obs-time.ts`), and the `capture-4c` replay byte-equal.
+
+Build r2-e has both; its held-out suite parts ran with one case per round trip. In Chrome the two paragraphs predict in
+5.2 and 6.7 s (round 1: 95.4 and 102.5 s) with the same Canvas call counts as r2-d's rows before them, and part 0 in file
+order took 92 s against round 1's 341 s. Observation stays at 7.1 and 9.8 s, most of it the port's per-code-point quads.
+The first rerun with one case per round trip came from a wrong reading of the bun timings: the stand-in Canvas runs are no
+guide to Chrome's time, and that run failed on the same case before the two costs above were found.
+
+### Gap firing on the development set
+
+Smoke, runs, ws, policy and the suite sample (25,498 cases), forward rows. Lift: a gap's share of cases failing a prediction
+metric over its share of all-pass cases. Round 1 (223 prediction-failing cases) → r2-d (95) → r2-e (95):
+
+| Gap | Reports | Prediction-failing cases reporting it | Lift |
+|---|---|---|---|
+| `script-context` | 18,298 → 19,394 → 19,394 | 173 → 86 → 86 | 1.09 → 1.20 → 1.20 |
+| `in-word-prefix` | 13,638 → 732 → 724 | 133 → 6 → 6 | 1.10 → 2.13 → 2.16 |
+| `glyph-clusters` | 3,165 → 2,724 → 3,953 | 155 → 57 → 58 | 7.44 → 7.58 → 4.74 |
+| `unsafe-to-break` | 2,223 → 1,523 → 1,523 | 156 → 48 → 48 | 11.79 → 14.61 → 14.61 |
+| `font-fallback` | 697 → 697 → 697 | 52 → 52 → 52 | 11.23 → 26.44 → 26.44 |
+| `soft-hyphen-shaping` | 390 → 434 → 434 | 10 → 10 → 10 | 2.90 → 6.08 → 6.08 |
+| `tab-stops` | 250 → 250 → 250 | 4 → 1 → 1 | 1.82 → 1.06 → 1.06 |
+| `control-character-width` | 970 → 127 → 127 | 0 | 0 |
+| `han-kerning` | 229 → 228 → 228 | 0 | 0 |
+
+`script-context` stays weak (Other open items). `tab-stops` fires on every tab and covers one failure: whether the platform
+space advance differs from Canvas's needs a tracking fact. r2-e's look-ahead makes `glyph-clusters` weaker on this set
+(1,229 more reports, one more failing case). It is what covers the triage population's 10 ligature cases, where no other
+condition fires, so the condition stays; a tighter one would need where the decision's own measurement crosses the
+ligature, which the look-ahead doesn't compute.
+
+### Round 1 rows under scorer 4
+
+Chrome prediction failures outside history dependence without a line-local gap, round 1's evaluation rows re-scored
+(`scratchpad/blink-r2/uncovered-all.ts`): runs 3, held-out runs 4, held-out ws 1, rule families 72 (`system-fonts-and-sizes`
+64 with paragraph gaps only, `following-space` 8 with gaps on the next line), feature families 52 (`text-align`), suite
+sample 9 and held-out suite sample 29 (`U+FFFC/*` with paragraph gaps only, one `rich-boundaries`, one `space-context`).
+round 1's "0 without a gap" counted paragraph gaps.
+
 ## Builds
 
 | Build | What changed |
@@ -251,11 +422,11 @@ cases) with fix-r6: every case lays out; line count failures only in `rule/text-
 unobserved values are the scorer's width rule over lines with text-indent, slot offsets, box edges and atomic inlines,
 and lines holding only an atomic inline or a `<br>`: the lab doesn't record element rects yet.
 
-What the port throws `UnportedFeature` for instead of laying out silently:
-
-- `text-align: justify` over a character at U+02C7 or above that isn't white space or default-ignorable:
-  `IsCjkIdeographOrSymbol` reads Blink's generated character property data (character_property_data_generator.cc:104-140),
-  which the port's tables don't carry.
+What the port throws `UnportedFeature` for instead of laying out silently: nothing since ceiling round 2 (r2-c). Justification
+over a character at U+02C7 or above reads `IsCjkIdeographOrSymbol` from `blinkCjkIdeographOrSymbolRanges`, which
+tools/gen-blink-data.ts generates from character_property_data.h:17-111, ICU 78.2's `Emoji_Presentation` and the
+Extended_Pictographic characters of RGI emoji ZWJ and modifier sequences (character_property_data_generator.cc:89-140); no
+lab case reaches it, and `lines.test.ts` checks the opportunities before and after ideographs.
 
 Where the port decides something the lab can't show yet:
 
@@ -283,15 +454,53 @@ range widths against `ceil(W × 64)` of Canvas strings at the zoomed size:
   cascade, which Canvas doesn't show. `font-fallback` stays the named gap.
 
 ## Other open items
-- The broad gaps: `glyph-clusters` at adjusted edges fires on kerned Latin line edges too (the justify cases report it).
-  Telling a kern from a ligature needs a font fact the model doesn't have (FontFacts has no ligature field).
-- `text-align: justify` over a character at U+02C7 or above still throws `UnportedFeature`. Blink's `IsCjkIdeographOrSymbol`
-  is the explicit arrays and ranges of character_property_data.h:17-111 plus ICU's `Emoji_Presentation` and the
-  Extended_Pictographic characters of RGI emoji sequences (character_property_data_generator.cc:89-140). No feature
-  family case reaches it (fix-r6: 0 of 12,882 throw).
-- CHARTER.md "Known deviations" still describes `blink/measure/ignorables-left-out-if-8bit` with its fitted length rule,
-  which fix-r8 removed (probe blink-followups-20260917); the shared charter is the orchestrator's to update.
-- Element rects aren't scored yet (lab), so the nested-span font-height rule and `<wbr>` rects have no lab check.
+Round 1's items, as of ceiling round 2:
+- Resolved: `glyph-clusters` at adjusted edges fired on kerned Latin edges; r2-c reports it only where the pair window
+  measured with liga, clig and calt off (a 1/64 px letter spacing, font_features.cc:54-86) gives another adjustment.
+  Ligatures from rlig or ccmp stay unseen; joining letters report `glyph-clusters` whatever the window shows.
+- Resolved: justification over U+02C7 and above (above).
+- Resolved: CHARTER.md "Known deviations" names `ignorables-left-out-if-8bit` a ported rule cited at Chrome 153's V8, and
+  registers `shape/cluster-unit-grapheme` as a heuristic chosen by counts.
+- Resolved: scorer 4 compares element rects; r2-c's feature families pass every line count and break (12,882 cases), so
+  the nested-span font-height rule decides no failing rect there. `<wbr>` rects stay unsettled (DESIGN.md §9).
+
+Open:
+- `script-context` fires about as often on passing cases as on failing ones (lift 1.0 on smoke, runs, ws and policy). The
+  condition holds by source: Canvas does shape those characters under another script. It can't change a width where the
+  font selects the same lookups for both, and HarfBuzz gives Common text the `latn` lookups of a font without a `DFLT`
+  script (hb-ot-layout.cc:549-600); Arial, Times New Roman, Georgia, Verdana and Courier New have no `DFLT` record, and
+  Shantell Sans and SF have equal `DFLT` and `latn` systems, while Amiri and Noto Naskh Arabic don't. Narrowing it needs
+  that as a font fact and the primary font's coverage of the characters, which Canvas doesn't show either.
+- The lab's font table lacks five families only the rule families use (Hoefler Text 200 cases, `-apple-system` 160,
+  `BlinkMacSystemFont` 160, Kohinoor Bangla 152, Monaco 136), so their facts are null; `rule/in-word-breaks` Hoefler Text
+  cases fail under `optical-size` and `unsafe-to-break` where `pairKerning` 'split' would pass in replay.
+- The triage population's provisional soft-hyphen cases (`c-5ad66fca9795e477`, `c-b6353fa535b61f06`, `ب` kasra SHY kasra
+  `ب` at width 0 under break-word): natively SHY and the kasra that continues its cluster share a line. r2-d gives the
+  Shantell Sans case its 3 native lines (replay of `capture-3`). The Noto Nastaliq Urdu case still ends a line after SHY
+  with a hyphen: from the line start at 2 every offset up to 5 is unsafe, the start reshape leaves no space, and the
+  break-character retry takes the grapheme boundary at 3 (trace from `capture-3`). HandleOverflow matches the source
+  (line_breaker.cc:4079-4125); what keeps the kasra with SHY natively isn't traced. The failing lines report
+  `unsafe-to-break` and `glyph-clusters`.
+- `c-8c84627af834611f` (`suite/mixed`, `1111({tail` in Shantell Sans, letter spacing −1px, break-word): natively `1({`
+  shares a line, where the port ends it before `{`. Line 1's decision rejects the candidate at 6 because the end reshape of
+  `{` alone measures 959,447 raw units (14.64 px), over the 14.5 px left, while the paragraph's positions give `{` 13.2 px
+  with its pair adjustment before `t` (trace from `capture-4b`). Kerning stays on under letter spacing (font_features.cc:39-50)
+  and no line-end letter-spacing trim exists in line_breaker.cc, so no source reading explains the native line yet. The
+  line reports no gap. Every line of this case overflows (18.92 px against glyphs of 11-13 px), so each is an emergency
+  break: the port gives `111` / `1(` / `{t` / `ail`, natively code point 5 is on line 1 with the same line count. With the
+  fixture font through `hb-shape` (HarfBuzz 14.2.0, not Chrome's pin; liga, clig and calt off as letter spacing turns them
+  off), `{` takes a −45-unit kern before `t`, which marks offset 6 unsafe to break, and a required substitution swaps its
+  glyph by context (1283 alone, 1282 before another glyph) at the same 520-unit advance. So the reshape of `{` at the line
+  end differs from its position only by the kern, as the port models it. The case stays without a line-local gap in r2-e,
+  the only one of the triage population's 422 prediction failures.
+- 1 au of reshapes and positions, ligatures at emergency breaks: `ffiffl` in ProbeShantell and `office`, `affinity` in
+  Shantell Sans fit one more `f` natively, where Blink gives characters inside a ligature glyph the glyph's position
+  (shape_result.cc:2113-2200). r2-d reported nothing on those lines; the working tree reports `glyph-clusters` where a
+  pair window in the content the decision measured past the line's end, under the style's own break type, adjusts
+  otherwise with ligatures off. Replayed from `capture-4c` (13 triage cases): the 10 ligature cases (`ligature-thresholds-v3`
+  4, `word` 3, `mixed` 2, `space` 1) report `glyph-clusters` on their failing lines, and predictions are unchanged. With
+  break-character mode the decision's end was one grapheme past the line, which holds no pair window, so the look-ahead
+  takes the next break opportunity under the style's own break type.
 
 ## measureText calls
 

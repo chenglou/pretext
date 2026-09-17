@@ -159,7 +159,7 @@ describe('blink lines', () => {
     expect(layout.lines[0]!.geometry.mapping).toEqual([{ run: 0, start: 0, end: 5, textStart: 0, textEnd: 5, collapsed: false }])
   })
 
-  test('glyph clusters follow HarfBuzz continuations (hb-ot-shape.cc:466-522): marks, regional indicator pairs, ZWJ + pictograph', () => {
+  test('glyph clusters follow HarfBuzz continuations (hb-ot-shape.cc:470-546): marks, regional indicator pairs, ZWJ + pictograph', () => {
     const clusters = (text: string): number[][] => {
       const item = blink(paragraph([[text, 'text']], 400)).lines[0]!.geometry.items[0]!
       if (item.kind !== 'text') throw new Error('expected a text item')
@@ -288,5 +288,93 @@ describe('blink inline structure', () => {
     const lines = blink(p).lines
     expect(lines.map(l => [l.start, l.end])).toEqual([[0, 1], [1, 3], [3, 4], [4, 5]])
     expect(lines.map(l => l.geometry.width > 0)).toEqual([true, false, true, true])
+  })
+})
+
+describe('blink round 2', () => {
+  test('justify expands before and after CJK ideographs in 16-bit text (justification_opportunity.cc:105-120)', () => {
+    // Four ideographs at 10px in 35px: line 0 holds three and expands by 5px over two opportunities (after each but the
+    // last); nothing throws.
+    const layout = blink(paragraph([['中中中中', 'text']], 35, { textAlign: 'justify' }))
+    expect(layout.lines.map(l => [l.start, l.end])).toEqual([[0, 3], [3, 4]])
+    const item = layout.lines[0]!.geometry.items[0]!
+    if (item.kind !== 'text') throw new Error('expected a text item')
+    expect(item.inlineSize).toBe(2240)
+    expect(item.clusters.map(c => c.advance)).toEqual([655360 + 163840, 655360 + 163840, 655360])
+  })
+
+  test('with tab-size 0 and letter spacing, tabs stop at multiples of the letter spacing (font.cc:303-340)', () => {
+    const base = paragraph([['ab\tc', 'text']], 400, { whiteSpace: 'pre-wrap' })
+    const p: Paragraph = { ...base, letterSpacing: 2, tabSize: 0 }
+    const tab = blink(p).lines[0]!.geometry.items.find(i => i.kind === 'tab')!
+    // The stand-in Canvas gives "ab" 20px whatever the spacing: 20 is a multiple of 2, the distance 2 is under half a space
+    // (5px), so the tab takes one more stop: 4px.
+    expect(tab.inlineSize).toBe(256)
+  })
+
+  test('NeedsAccurateEndPosition reads the base direction before it is set: left never, right always (line_breaker.cc:811-871)', () => {
+    const accurate = (align: Paragraph['textAlign'], direction: Paragraph['direction']): boolean =>
+      blink(paragraph([['ab cd', 'text']], 400, { textAlign: align, direction })).lines[0]!.geometry.needsAccurateEndPosition
+    expect([accurate('left', 'ltr'), accurate('left', 'rtl'), accurate('right', 'ltr'), accurate('right', 'rtl')]).toEqual([false, false, true, true])
+    expect([accurate('start', 'rtl'), accurate('center', 'ltr')]).toEqual([false, true])
+  })
+
+  test('a pair adjustment sits on the first glyph, or kern >> 1 on it under the pair machine (hb-kern.hh:102-106)', () => {
+    const saved = (globalThis as { OffscreenCanvas?: unknown }).OffscreenCanvas
+    class Kerned {
+      font = '16px x'; lang = ''; letterSpacing = '0px'; wordSpacing = '0px'; fontKerning = 'auto'; textRendering = 'auto'; direction = 'ltr'
+      measureText(text: string): { width: number; actualBoundingBoxLeft: number; actualBoundingBoxRight: number } {
+        let n = 0
+        for (const c of text) if (c !== '\u200d' && c !== '\u200b') n++
+        return { width: n * 10 - (text.includes('AV') ? 2 : 0), actualBoundingBoxLeft: 0, actualBoundingBoxRight: 0 }
+      }
+    }
+    ;(globalThis as { OffscreenCanvas?: unknown }).OffscreenCanvas = class { getContext(): Kerned { return new Kerned() } }
+    try {
+      const advances = (pairKerning: FontFacts['pairKerning']): number[] => {
+        const item = blink(paragraph([['AV', 'text']], 400, { facts: { ...UNKNOWN_FONT_FACTS, pairKerning } })).lines[0]!.geometry.items[0]!
+        if (item.kind !== 'text') throw new Error('expected a text item')
+        return item.clusters.map(c => c.advance)
+      }
+      expect(advances('first-advance')).toEqual([655360 - 131072, 655360])
+      expect(advances('split')).toEqual([655360 - 65536, 655360 - 65536])
+    } finally {
+      ;(globalThis as { OffscreenCanvas?: unknown }).OffscreenCanvas = saved
+    }
+  })
+
+  test('a ligature in the word the break decision measured past the line end reports glyph-clusters on the line', () => {
+    // The stand-in ligates `fi` to one 10px glyph unless letter spacing turns ligatures off (font_features.cc:54-86), so
+    // the pair window f|i adjusts by −10px with ligatures and by 0 without: positions inside the ligature glyph are the
+    // glyph's (shape_result.cc:2113-2200), which the decision over `fi` used.
+    const saved = (globalThis as { OffscreenCanvas?: unknown }).OffscreenCanvas
+    class Ligating {
+      font = '16px x'; lang = ''; letterSpacing = '0px'; wordSpacing = '0px'; fontKerning = 'auto'; textRendering = 'auto'; direction = 'ltr'
+      measureText(text: string): { width: number; actualBoundingBoxLeft: number; actualBoundingBoxRight: number } {
+        let n = 0
+        for (const c of text) if (c !== '‍' && c !== '​') n++
+        const ligatures = this.letterSpacing === '0px' ? text.split('fi').length - 1 : 0
+        return { width: (n - ligatures) * 10, actualBoundingBoxLeft: 0, actualBoundingBoxRight: 0 }
+      }
+    }
+    ;(globalThis as { OffscreenCanvas?: unknown }).OffscreenCanvas = class { getContext(): Ligating { return new Ligating() } }
+    try {
+      const firstLineGaps = (text: string): string[] => blink(paragraph([[text, 'text']], 35)).lines[0]!.gaps.map(g => g.gap)
+      expect(firstLineGaps('ab fi')).toContain('glyph-clusters')
+      expect(firstLineGaps('ab gh')).not.toContain('glyph-clusters')
+    } finally {
+      ;(globalThis as { OffscreenCanvas?: unknown }).OffscreenCanvas = saved
+    }
+  })
+
+  test('a view takes the glyph clusters that start in its range, so an item edge inside a cluster gives it to the earlier item (glyph_data_range.cc:56-90)', () => {
+    // U+0301 continues U+3000's HarfBuzz cluster across the text node edge: the first item holds a and the whole cluster.
+    const items = blink(paragraph([['a\u3000', 'span'], ['\u0301b', 'span']], 400)).lines[0]!.geometry.items.filter(i => i.kind === 'text')
+    expect(items.map(i => i.inlineSize)).toEqual([1920, 640])
+  })
+
+  test('content conditions carry the source range they concern (DESIGN.md §2.8)', () => {
+    const gaps = blink(paragraph([['a\vb', 'text']], 400)).gaps
+    expect(gaps.filter(g => g.gap === 'control-character-width').map(g => g.at)).toEqual([{ start: 1, end: 2 }])
   })
 })

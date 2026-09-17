@@ -100,6 +100,8 @@ export type GeckoTextRun = {
   hasTab: boolean
   // Glyph advance of the whole run.
   totalAdvance: number
+  // FontFacts.pairKerning of the run's font: which glyph of a pair carries HarfBuzz's pair adjustment.
+  pairKerning: 'first-advance' | 'split' | null
 }
 
 // A shaping unit (gfxFont::SplitAndInitTextRun, gfxFont.cpp:3708-3900): a word between boundary spaces and invalid

@@ -258,6 +258,7 @@ type FontFacts = {
   monospace: boolean | null
   opticalSizeAxis: boolean | null
   joining: 'opentype' | 'aat' | null
+  pairKerning: 'first-advance' | 'split' | null
 }
 const UNKNOWN_FONT_FACTS: FontFacts   // every fact null
 ```
@@ -276,6 +277,7 @@ result. A given fact never produces a gap of its own.
 | `monospace`: the primary font has `kCTFontMonoSpaceTrait` or `kCTFontFixedAdvanceAttribute` | WebKit | `Font::determinePitch` (`FontCoreText.cpp:753-785`); fixed pitch enables the width shortcut and the breakWord shortcut (specs/webkit-gaps.md §2.3) | variable pitch: real advances | `fixed-pitch-path` where a text item of a box that allows simplified measuring doesn't measure `f32(length × W(' '))` (webkit-gaps §2.5, test T1) |
 | `opticalSizeAxis`: the fonts drawing the declaration have an opsz axis | Blink at layout zoom ≠ 1; Gecko | Blink's DOM shapes at the zoomed size with opsz at the CSS size (`font_platform_data_mac.mm:170-176`); Gecko's OffscreenCanvas uses the axis default (specs/gecko-canvas.md §1.2 C1a) | true when `primaryFamily` is the engine's system-font keyword (Blink: `system-ui`, `BlinkMacSystemFont`; Gecko: `system-ui`, `-apple-system`), else false | `optical-size`: Blink wherever layout zoom ≠ 1; Gecko for every run |
 | `joining`: how the font drawing joining-script text shapes | Blink | HarfBuzz's Arabic shaper reads the shaping call's context for OpenType fonts; `morx` fonts never read it (`hb-ot-shape.cc:60-66, 100-101`) | each shaping call's text measured alone, which is what an AAT font gives | `joining-technology` at a shaping-call edge between joining letters |
+| `pairKerning`: where HarfBuzz puts a pair adjustment between two glyphs of the primary font's Latin text | Blink | GPOS PairPos with ValueFormat1 XAdvance and no ValueFormat2 adds it to the first glyph's advance (`PairSet.hh:126-127`); the kern and kerx pair machine adds `kern >> 1` to the first glyph and the rest to the second (`hb-kern.hh:102-106`); which one applies follows the font's GPOS, kern and kerx tables (`hb-ot-shape.cc:150-185`, harfbuzz dfdc088c) | all of it on the first glyph | `unsafe-to-break` at a line edge taken from the paragraph's positions where the adjustment isn't 0 |
 
 What a given fact does:
 
@@ -290,6 +292,9 @@ What a given fact does:
   gives the DOM's opsz.
 - `joining` `'opentype'`: Blink measures joined forms at call edges through U+200D (probe blink-followups F1) and sets
   `joinsNextLine` where a line-edge reshape joined letters. `'aat'`: the call's text alone, and `joinsNextLine` false.
+- `pairKerning` `'split'`: Blink's position at an offset between two kerned glyphs takes `d >> 1` of the Canvas pair
+  adjustment `d`, which moves line edges taken from positions and caret edges inside items (Times New Roman, Helvetica
+  Neue and Hoefler Text kern through the legacy table; features `rule/text-align`). `'first-advance'`: all of `d`.
 
 The keyword defaults of `opticalSizeAxis` aren't name keys. `system-ui` is CSS, each engine resolves it in source to the
 platform UI font, and that font's axis is a recorded browser fact (probes-chrome correction 7, probe cross-cutting 5).
@@ -684,7 +689,8 @@ type GeckoFrameGeometry =
   | { kind: 'inline'; element: number; x: number; width: number; hasStartEdge: boolean; hasEndEdge: boolean }
   | { kind: 'atomic'; element: number; level: number; x: number; width: number }
   | { kind: 'br'; element: number; x: number; width: number }
-type GeckoCharacter = { skipped: boolean; clusterStart: boolean; advance: number }
+  | { kind: 'wbr'; element: number; level: number; x: number; width: number }   // 0 × 0 (ceiling round 2)
+type GeckoCharacter = { skipped: boolean; clusterStart: boolean; unitStart: boolean; advance: number }
 ```
 
 - **Frames** are the `nsTextFrame` continuations placed on the line by `ReflowText` (`nsTextFrame.cpp:10847-11532`),
@@ -779,6 +785,15 @@ where it may be wrong.
   shaping-call edge between joining letters. `belowFloats[k].gaps` holds what a refused slot rests on. `nextLine` never
   changes the prepared paragraph, so a prepared paragraph can serve lines in other slots without mixing their gaps
   (DESIGN-REVIEW.md §3.5).
+- WebKit reports every condition of the content and fonts on the lines whose filling measured the characters it concerns,
+  the content that ended the line included, with `at` naming them; its paragraph keeps only `page-zoom` (added in ceiling
+  round 2).
+- Blink reports the conditions of the content in `layout.gaps` with `at`, computed in `prepare` from the content alone
+  (control characters Canvas replaces, U+FFFC, graphemes whose Canvas strings shape under another script, default
+  ignorables left out of 8-bit strings, shaping-group edges inside graphemes, joining edges at group edges), and adds each
+  one that concerns the content a line's break decision measured past its end, up to the next break opportunity, to that
+  line's gaps. Edge conditions (reshapes, pair adjustments at a chosen edge, positions inside graphemes) stay line gaps
+  with `at` naming the offset (added in ceiling round 2).
 
 `measure` is the call log (§4.6).
 
@@ -825,10 +840,15 @@ Every row's float on a side has a positive width, since a row without a float wo
 and a zero-width float narrows nothing in WebKit (`floatContainsLine` refuses an empty rect) while it still marks a band
 impacted in Gecko. `lineHeight` is a whole px on the block and every element, so LayoutUnits, float32 px and app units all
 hold row edges exactly, and atomic inlines are top-aligned and no taller than a line. The predictor calls
-`layoutParagraph(paragraph, env, lineSlots)`. The scorer adds one named observer assumption, **slot rows**: the native
-line of engine line k has its rect centres inside the row the loop gave it, rows refused by `belowFloats` skipped. Mixed
-fonts can make a line box taller than the line height (lab/VALIDATION.md problem 8), which moves every later row, and such
-a case's metrics are unobserved rather than failed. The painter paints each line with floats of its slot (§7).
+`layoutParagraph(paragraph, env, lineSlots)`. The declared slots describe the page only when every float sits in its row on
+its side, and the scorer checks that from the observed float rects (lab `score.ts` `slotProtocol`): a row whose floats
+moved is a protocol row, every metric unobserved. Gecko and WebKit place row 0's second float on the first line only where
+it fits beside the indented line (nsLineLayout.cpp:1485-1492, BlockReflowState.cpp:793-798; InlineLineBuilder.cpp:1317-1328,
+:1368-1380), so derivation keeps widths at or above each engine's bound (tests `derive.ts` `minimumUnits`); Blink positions
+leading floats before any line (inline_layout_algorithm.cc:1115, :1738). The rest of the **slot rows** assumption stays
+unchecked: the native line of engine line k has its rect centres inside the row the loop gave it, rows refused by
+`belowFloats` skipped. Mixed fonts can make a line box taller than the line height (lab/VALIDATION.md problem 8), which moves
+every later row. The painter paints each line with floats of its slot (§7).
 
 ## 3. Pipeline per engine
 
@@ -929,7 +949,7 @@ one OffscreenCanvas per distinct settings. Identity matters because Chrome cache
 | `font` | size `f32(size × layoutZoom)`, or the CSS size for fonts with `opticalSizeAxis` (§4.3) | size × `pageZoom` | size behind the quantization gate; Apple Color Emoji at size × DPR |
 | `lang` | the run's locale, explicit | `''`: OffscreenCanvas has no locale | the run's language, explicit, so Gecko's `explicitLang` is true |
 | `letterSpacing` | the run's px: Canvas truncates to 16.16 and turns off liga, clig and calt like the DOM (blink-text H27) | the run's px: the same `WidthIterator` rule | `'0.001px'` when the resolved spacing isn't 0 au (ligatures off, no spacing added), else `'0px'`; spacing added in JS |
-| `wordSpacing` | `'0px'`; JS adds `trunc(ws × 65536)` per space except text_content index 0 (blink-text §2.E) | `'0px'`; JS adds the offsets of specs/webkit-lines.md §6.2 | `'0px'`; JS adds au after U+0020 and NBSP (gecko-text §12.2) |
+| `wordSpacing` | `'0px'`; JS adds `trunc(ws × 65536)` per space except text_content index 0 (blink-text §2.E) | the box's word spacing, which setWordSpacing gives the context's FontCascade (CanvasRenderingContext2DBase.cpp:3299-3324), so WidthIterator adds it in the DOM's float32 order within one item's TextRun; strings split at TABs add it in JS, and the offsets between items follow specs/webkit-lines.md §6.2 (ceiling round 2) | `'0px'`; JS adds au after U+0020 and NBSP (gecko-text §12.2) |
 | `textRendering` | `'optimizeLegibility'`: Canvas then shapes whole items exactly for fonts whose GPOS or GSUB lookups contain the space glyph (blink-canvas §1.3, H6) | `'auto'` (no such attribute) | `'auto'` (no width effect) |
 | `direction` | the item's direction | `'ltr'`: DOM items measure LTR unless `unicode-bidi` overrides | the bidi run's direction |
 | `partition` | `'8bit'` or `'16bit'` | `''` | `''` |
@@ -1037,32 +1057,32 @@ the stated condition. A given fact never reports a gap; its null default does.
 
 | Gap | Engines | What differs | Handling | Predictions can be wrong when |
 |---|---|---|---|---|
-| CR, FF, VT and other controls (`control-character-width`) | all | Every Canvas turns U+0009-U+000D into spaces; Gecko's also turns U+001C-U+001F, U+0085 and U+2029 into spaces (CRITIC.md C12). DOM: Blink collapses CR as a space in collapse modes and keeps FF and VT as characters of unknown width; in preserve modes CR and FF are zero-width control items that end a shaping group (blink-text §2.C.9, H5, H6). WebKit keeps U+000D's glyph advance on the simple path and 0 on the complex path; FF, VT and other Cc take the `.notdef` advance (webkit-text §5.3). Gecko: CR, FF, VT and hidden C0/C1 controls are zero width. | Never pass them to Canvas. Blink: CR in collapse modes is a space in text_content; CR and FF in preserve modes measure 0 and split the group. WebKit: measure FF, VT and other Cc as U+0001 in the same string, which also takes `.notdef` (webkit-canvas H10). Gecko: strip them. | Blink: FF, VT or other C0 in `normal`, `nowrap` or `pre-line`, or VT in any mode. WebKit: CR on the simple path; a control whose `.notdef` comes from another font. |
+| CR, FF, VT and other controls (`control-character-width`) | all | Every Canvas turns U+0009-U+000D into spaces; Gecko's also turns U+001C-U+001F, U+0085 and U+2029 into spaces (CRITIC.md C12). DOM: Blink collapses CR as a space in collapse modes and keeps FF and VT as characters of unknown width; in preserve modes CR and FF are zero-width control items that end a shaping group (blink-text §2.C.9, H5, H6). WebKit keeps U+000D's glyph advance on the simple path and 0 on the complex path; FF, VT and other Cc take the `.notdef` advance (webkit-text §5.3). Gecko: CR, FF, VT and hidden C0/C1 controls are zero width. | Never pass them to Canvas. Blink: CR in collapse modes is a space in text_content; CR and FF in preserve modes measure 0 and split the group. WebKit: measure FF, VT and other Cc as U+0001 in the same string, which also takes `.notdef` (webkit-canvas H10). Gecko: strip them. | Blink: VT in any mode, or FF in `normal`, `nowrap` or `pre-line`, which Canvas turns into a space where the port measures U+0001; other controls reach Canvas and the DOM as they are (plain_text_node.cc:47-58). WebKit: CR on the simple path; a control whose `.notdef` comes from another font. |
 | Soft hyphen shaping (`soft-hyphen-shaping`) | Blink | Blink's Canvas turns SHY into ZWSP, which splits a 16-bit Canvas word; the DOM shapes SHY inside the item as a hidden glyph. WebKit's Canvas and DOM both keep SHY during shaping. Gecko's DOM discards SHY before shaping. | Blink: measure the word without the SHY. WebKit: keep it. Gecko: strip it. | Blink: a kerning or ligature pair across a soft hyphen. |
 | Hyphen glyph (`hyphen-glyph`) | Blink, WebKit | The hyphen is U+2010 if the primary font maps it, else `-`. Canvas can't show whether the primary font maps U+2010, because fallback supplies it. | Fact `mapsHyphen` (§1.2). Gecko's Canvas substitutes as its DOM does. | `mapsHyphen` null and `W('‐') ≠ W('-')` in the run's context at a chosen soft hyphen. |
-| Letter spacing and ligatures (`letter-spacing-ligatures`) | WebKit | The DOM turns off liga, clig, dlig and hlig when letter spacing isn't 0; OffscreenCanvas keeps them (webkit-canvas §1.3, H3). Blink's Canvas and DOM agree (H27). Gecko's DOM decides on the rounded au value, Canvas on the float. | Blink: `ctx.letterSpacing`. Gecko: `'0.001px'` plus JS spacing. WebKit: none. | WebKit: letter spacing with a font that forms those ligatures in the text. |
-| Canvas language (`canvas-language`) | WebKit | Blink's OffscreenCanvas resolves `<html lang>` when the font string is set and keeps it until the string changes (blink-canvas H13); Gecko's resolves per call; WebKit's has no locale. The DOM uses the element's language for generic families, CJK fallback and `locl`. | Blink and Gecko: an explicit `ctx.lang` per context. WebKit: none. | WebKit: a box with a locale whose fonts depend on it: generic families resolved per script, `system-ui` and `ui-*`, Han, kana or Hangul fallback (§1.3). |
+| Letter spacing and ligatures (`letter-spacing-ligatures`) | WebKit | The DOM turns off liga, clig, dlig and hlig when letter spacing isn't 0; OffscreenCanvas keeps them (webkit-canvas §1.3, H3). Blink's Canvas and DOM agree (H27). Gecko's DOM decides on the rounded au value, Canvas on the float. | Blink: `ctx.letterSpacing`. Gecko: `'0.001px'` plus JS spacing. WebKit: none. | WebKit: a line measuring two adjacent characters that aren't white space or controls, in a box with letter spacing (a ligature replaces at least two glyphs; Canvas can't show which pairs a font ligates). |
+| Canvas language (`canvas-language`) | WebKit | Blink's OffscreenCanvas resolves `<html lang>` when the font string is set and keeps it until the string changes (blink-canvas H13); Gecko's resolves per call; WebKit's has no locale. The DOM uses the element's language for generic families, CJK fallback and `locl`. | Blink and Gecko: an explicit `ctx.lang` per context. WebKit: none. | WebKit: a line measuring text of a box with a locale whose fonts depend on it: any of its text under generic families resolved per script, `system-ui` and `ui-*`; its Han, kana or Hangul code points under fallback (§1.3). |
 | Optical size (`optical-size`) | Blink at zoom ≠ 1, Gecko | Blink's DOM shapes at the zoomed Core Text size with opsz and ptem at the CSS size (blink-canvas §1.8). Gecko's OffscreenCanvas never sets auto optical sizing (gecko-canvas §1.2 C1a). WebKit shares the DOM path. | Fact `opticalSizeAxis` (§1.2): Blink measures at the CSS size and scales. | Blink: `opticalSizeAxis` null at layout zoom ≠ 1. Gecko: `opticalSizeAxis` true or null. |
 | Gecko size quantization (`font-size-quantization`) | Gecko | Canvas keeps 7 significant bits; the DOM uses Servo's 10-bit size on a 1/60 px grid. | The gate in §4.3. | Sizes such as 13.33px, 16.8px or odd eighths. |
 | Bitmap emoji (`bitmap-emoji-size`) | Blink, Gecko at DPR ≠ 1 | The DOM asks Core Text for the sbix advance at the device size. | Measure at size × DPR and divide. | Gecko: fractional apd (one device pixel off at apd 27, probe cross-cutting 1). Blink: until H17 is verified. |
 | Chrome's per-canvas shape cache | Blink | The first shaping of a word per canvas wins: script context, word spacing at offset 0 (blink-canvas §1.7). | Handled: partitions, JS word spacing, a fresh measurer per prepared paragraph. | — |
-| Unsafe-to-break offsets (`unsafe-to-break`) | Blink | Line-start and line-end reshapes happen at HarfBuzz's unsafe-to-break offsets, which Canvas doesn't expose (CRITIC.md §5 item 6). | An offset is safe when the pair total shows no adjustment, the grapheme boundary holds and nothing joins: necessary, not sufficient (blink audit B7). | At a chosen line edge where the test can't vouch for the offset: kerning, ligatures or contextual forms across it. |
+| Unsafe-to-break offsets (`unsafe-to-break`) | Blink | Line-start and line-end reshapes happen at HarfBuzz's unsafe-to-break offsets, which Canvas doesn't expose (CRITIC.md §5 item 6). | An offset is safe when the pair total shows no adjustment, the grapheme boundary holds and nothing joins: necessary, not sufficient (blink audit B7). Which glyph carries a pair adjustment: fact `pairKerning` (§1.2). | At a chosen line edge where the test can't vouch for the offset: contextual forms across it, a line edge taken from positions where the pair adjustment isn't 0 and `pairKerning` is null, a shaping group of 256 px with no safe cut. |
 | Joining technology (`joining-technology`) | Blink | Letters joined across a shaping call's edge keep joined forms in OpenType fonts, which read the call's context, and lose them in `morx` fonts (hb-ot-shape.cc:60-66, 100-101). | Fact `joining` (§1.2). | `joining` null at a group edge or chosen line edge between joining letters (Geeza Pro is AAT; Amiri and Noto Naskh Arabic are OpenType). |
-| Script context (`script-context`) | Blink | The DOM shapes an 8-bit paragraph as one Latin segment and merges Common punctuation into the surrounding script in 16-bit paragraphs; Canvas segments each word alone (blink-canvas §1.4). | Measure a Common-only word in the context whose storage class matches the paragraph. | Common-only words in fonts whose Latin and DFLT lookups differ (Amiri, Noto Naskh Arabic). |
+| Script context (`script-context`) | Blink | The DOM shapes an 8-bit paragraph as one Latin segment and merges Common punctuation into the surrounding script in 16-bit paragraphs; Canvas segments each word alone (blink-canvas §1.4). | Measure a range the paragraph shapes as Latin as an 8-bit string, one Latin segment; slice other ranges into 16-bit strings. | A grapheme without a strong character that some Canvas string the port measures (the grapheme alone, or in the pair window with its neighbour) resolves to another script than the paragraph: the brackets and digits of Arabic or Hebrew text, a curly quote or emoji beside a space in a Latin paragraph; its width can differ in fonts whose lookups depend on the script (Amiri, Noto Naskh Arabic). Reported with the grapheme's range. |
 | Spaces in shaping (`space-in-shaping`) | Blink, Gecko | The DOM kerns across spaces when the font's lookups involve the space glyph. Blink's word-by-word check ignores legacy `kern`, `kerx` and `morx`; Gecko shapes whole ranges when `SpaceMayParticipateInShaping` (gecko-text §7.2). | Blink: `optimizeLegibility` contexts. Gecko: measure the whole range when `au(a + ' ' + b) ≠ au(a) + au(' ') + au(b)`, a hypothesis to probe. | Blink: cross-space legacy kerning. Gecko: until the detection is verified. |
-| In-word prefixes (`in-word-prefix`) | all | Gecko's DOM uses per-glyph advances from one shaping of the unit, with integer shares of ligatures; Blink uses `ceil64` of prefix positions; WebKit's selection shapes a box once (`ComplexTextController`). Canvas measures a prefix alone. | Gecko: `W(unit) − W(suffix)` where the suffix doesn't depend on what precedes it (gecko-lines §9). Blink: prefix sums and pair adjustments at cluster boundaries. | Breaks inside words (overflow-wrap, break-all, CJK, soft hyphens) in fonts with kerning, ligatures or contextual forms; and code point edges inside an item, box or frame in §9. |
-| Glyph clusters (`glyph-clusters`) | all | Which code points one glyph covers: a font's ligatures merge HarfBuzz clusters, Core Text can give a code point no glyph of its own. Canvas shows totals only. | Clusters from Unicode data (marks, joiners, modifiers, regional indicators). | Ligatures across graphemes; zero-advance code points without their own glyph, in §9's code point rects. |
-| WebKit measuring paths (`simplified-measuring`, `fixed-pitch-path`) | WebKit | The DOM's simplified path doesn't restore space advances and sums in another float32 order; the fixed-pitch path returns `length × spaceWidth` for eligible fonts. | The full-path recipe; fact `monospace` for the fixed-pitch path (§1.2). | `simplified-measuring`: a simplified-path box outside the width shortcut. `fixed-pitch-path`: `monospace` null and an item of such a box fails T1. |
+| In-word prefixes (`in-word-prefix`) | all | Gecko's DOM uses per-glyph advances from one shaping of the unit, with integer shares of ligatures; Blink uses `ceil64` of prefix positions; WebKit's selection shapes a box once (`ComplexTextController`). Canvas measures a prefix alone. | Gecko: `W(unit) − W(suffix)` where the suffix doesn't depend on what precedes it (gecko-lines §9); the gap is reported at a consulted offset where the prefix and suffix don't add up to the unit, letters join across it, or the clusters on both sides measure differently in width or ink box with ligatures off (probe gecko-port F9). Blink: prefix sums and pair adjustments at cluster boundaries. | Breaks inside words (overflow-wrap, break-all, CJK, soft hyphens) in fonts with kerning, ligatures or contextual forms; and code point edges inside an item, box or frame in §9. Blink, at a chosen line edge inside a word where the pair window shows no adjustment: where the line's decision is within 2 LayoutUnits of going the other way (a width-neutral unsafe offset makes Blink reshape, which moves only LayoutUnit rounding), or at a wrapped start where a window of two clusters on each side adjusts. |
+| Glyph clusters (`glyph-clusters`) | all | Which code points one glyph covers: a font's ligatures merge HarfBuzz clusters, Core Text can give a code point no glyph of its own. Canvas shows totals only. | Clusters from Unicode data (marks, joiners, modifiers, regional indicators). | Ligatures across graphemes; zero-advance code points without their own glyph, in §9's code point rects. Blink: a position inside a grapheme at a unit HarfBuzz may start a cluster at; a chosen edge between joining letters; a chosen edge where the pair adjustment measured with liga, clig and calt off (a letter spacing, font_features.cc:54-86) differs from the one with them on. |
+| WebKit measuring paths (`simplified-measuring`, `fixed-pitch-path`) | WebKit | The DOM's simplified path doesn't restore space advances and sums in another float32 order; the fixed-pitch path returns `length × spaceWidth` for eligible fonts. | The full-path recipe; fact `monospace` for the fixed-pitch path (§1.2). | `simplified-measuring`: a line measuring a string of a simplified-path box outside the width shortcut that holds U+0020 (WidthIterator restores a space's unshaped advance, the simplified path keeps the shaped one, WidthIterator.cpp:84-120 and :473-474 against FontCascade.cpp:381-412) or whose Canvas total isn't the float32 sum of its code points' advances in order (shaping moved advances, which the two paths sum in other orders). `fixed-pitch-path`: a line measuring an item of such a box that fails T1 while `monospace` is null, or while `primaryFamily` is null and the font is fixed pitch (whether the realized family is Courier New decides the shortcut). |
 | RTL shaping across inline boxes (`rtl-shaping-across-inline-boxes`) | WebKit | `LineBuilder` reshapes complex RTL text joined across decoration-free boxes as one run (webkit-lines §9.3). | none | RTL complex-script text split over same-font spans without box edges. |
 | Page zoom (`page-zoom`) | WebKit | No page API shows Safari's page zoom. | `env.pageZoom`, given. | `pageZoom` null. |
 | Font fallback (`font-fallback`) | all | Which font draws a cluster; hexbox and `.notdef` widths; Gecko's synthesized widths for Unicode spaces no font covers, rounded to device pixels. | Canvas totals include fallback. | Text no listed family covers, where Canvas and DOM fall back differently (Blink falls back per cluster over the whole item; Gecko's fallback can arrive later). |
 | Float32 precision (`float32-precision`) | Blink | 16.16 values are exact in float32 only below 256 px. | Measure per Canvas word. | One Canvas item of 256 zoomed px or more. |
-| String storage (`string-storage`) | all | Blink's single Latin segment, WebKit's keep-all punctuation breaks and 1-unit emergency breaks, and Gecko's white-space-only frames depend on whether a text node is stored 8-bit (CRITIC.md §5 item 14). The page can't see storage. | Treat text whose code units are all ≤ U+00FF as 8-bit, what JS-created nodes get. | Parser-created or edited nodes stored 16-bit. |
+| String storage (`string-storage`) | all | Blink's single Latin segment, WebKit's keep-all punctuation breaks and 1-unit emergency breaks, and Gecko's white-space-only frames depend on whether a text node is stored 8-bit (CRITIC.md §5 item 14). The page can't see storage. | Treat text whose code units are all ≤ U+00FF as 8-bit, what JS-created nodes get. | Parser-created or edited nodes stored 16-bit. WebKit: a line measuring keep-all punctuation in Latin-1 text, or taking an emergency break in Latin-1 text whose second unit can't start a line. |
 | Dictionary breaks (`dictionary-breaks-unavailable`, `dictionary-breaks-stand-in`) | all | Thai, Lao, Khmer and Myanmar need dictionary or LSTM data (§6.3). | The running browser's own segmenter. | `unavailable`: SA runs get no interior opportunities. WebKit stand-in: a dictionary range that starts with a combining mark (27 of 282,337 positions). |
 | HanKerning (`han-kerning`) | Blink | Blink trims fullwidth punctuation with `halt` using characters outside the shaped range and at line ends (han_kerning.cc, shaping_line_breaker.cc:344-378). | The trims from Canvas facts (blink audit B6). | Fonts whose `halt` detection isn't probed; neighbours on another line. |
 | Tab stops (`tab-stops`) | Blink | Blink counts stops from the platform space advance without `trak` (simple_font_data.cc:225-240). | Canvas space advance. | Fonts with `trak` tracking, such as Helvetica Neue (probe blink-followups F4). |
 | UI language (`ui-language`) | all | §1.4 | The engine's given process languages. | The fact is null and content has no `lang`, `lang=""`, a Han `lang` (WebKit), or a locale ICU has no data for (WebKit quotes). |
-| Page history (`page-history`) | all | Layout state earlier content leaves in the document or process: WebKit's `TextBreakingPositionCache`, Gecko's document-wide bidi flag and pinned emoji fallback, Blink's platform font created at another size (TEST-ARCHITECTURE.md §6.5). | none: the library predicts a fresh document | A paragraph with the conditions of those effects. |
+| Page history (`page-history`) | all | Layout state earlier content leaves in the document or process: WebKit's `TextBreakingPositionCache`, Gecko's document-wide bidi flag and pinned emoji fallback, Blink's platform font created at another size (TEST-ARCHITECTURE.md §6.5). | none: the library predicts a fresh document | A paragraph with the conditions of those effects. WebKit: a line measuring an item that another box of the same text and wrapping styles could end elsewhere, where the parts would measure otherwise or the item is content whose fit ended the line (or the builder reverted): a level boundary the text gets under either paragraph direction or one or two characters of context (UAX #9 classes), or preserved white space of two units, which break-spaces and word spacing split and pre-wrap keeps whole (TextBreakingPositionContext.h:30-80). |
 | Engine build (`engine-build`) | all | The ports follow one build each. | `env.build`, given. | `build` null or not `PINNED_BUILDS[engine]`. |
 
 Inline structure adds no gap: box edges, atomic sizes, indents and slot insets are lengths the engine converts exactly,
@@ -1134,16 +1154,24 @@ opportunities and the paragraph reports `dictionary-breaks-unavailable`.
 ## 7. Painter
 
 `paintLines(paragraph, layout, document)` in `src/paint.ts` returns one `div` per line with a line box, in form A-wrap
-(specs/painter.md §1, §6). It reads the shared fields only: `fragments`, `hasLineBox`, `joinsNextLine`, `slot`,
-`indented`, `align`, and `layout.engine` for the hyphen span.
+(specs/painter.md §1, §6). It reads the shared fields `fragments`, `hasLineBox`, `joinsNextLine`, `slot`, `indented`,
+`align` and the layout's `belowFloats`, and in its one engine switch `layout.engine` for the hyphen span and the soft
+wrap box, with Blink's `geometry.needsAccurateEndPosition`.
 
 - **The line block** has the paragraph's content width, font, spacing, `lang`, `direction`, `white-space`, `word-break`,
   `overflow-wrap`, `line-break`, `tab-size`, `text-align` and fixed line height, the fixed styles of §1.1, the
   text-indent where the engine indented the line, and, when the paragraph isn't start-aligned, `text-align-last` set to
-  the line's used alignment, since the painted line is its block's last line. Where the slot has insets, the block starts
-  with a `float: left` and a `float: right` block of those widths and one line height, so the engine computes the
-  painted line's band with the paragraph's arithmetic. The browser then runs its own line-end rules on the painted line
-  as it did in the paragraph. Blink trims CJK punctuation at a line end in `ShapeLine`, which only runs while wrapping
+  the line's used alignment, since the painted line is its block's last line. Where the slot has insets, a
+  `float: left` and a `float: right` block of those widths and one line height give the painted line its band with the
+  paragraph's arithmetic. The paragraph's slot floats come before its content (§2.9), so only the paragraph's first line
+  build places them, and every later build, a retry after a refused slot included, finds them in the formatting context.
+  WebKit counts tab stops from the line rect's left after the floats it finds but before those the build places itself
+  (`InlineLineBuilder.cpp:478`, `:1394-1396`). So the painted line of the first build (engine line 0 with no refused
+  slot in row 0) holds its floats, and every other painted line is a holder block, the floats and then the line block,
+  where they intrude on the line block's line as floats already placed do. Blink and Gecko place the band the same way
+  in both forms (`LineLayoutOpportunity`; Gecko's float available space), and their tab stops read the same float
+  offset. Before this, 173 webkit-host feature-family cases painted a tab beside a left float up to 16 px off. The
+  browser then runs its own line-end rules on the painted line as it did in the paragraph. Blink trims CJK punctuation at a line end in `ShapeLine`, which only runs while wrapping
   (`あいうえお。` is 88px natively and 96px under `pre`), and Gecko counts only the non-overflowing part of hanging
   `pre-wrap` spaces (painter.md §3.1 e, §3.3 f). A line wider than predicted wraps, and the lab sees the painted line on
   two lines. Tab stops count from the line start in both. A line that ends with a hyphen fragment, or starts with the
@@ -1152,6 +1180,28 @@ opportunities and the paragraph reports `dictionary-breaks-unavailable`.
   widths, broke there again: Blink and WebKit at the chosen soft hyphen left in the slice
   (`InlineFormattingUtils.cpp:385-437`), Gecko after the joiner under `overflow-wrap`. A line that ends at a hyphen has
   no line-end punctuation or hanging white space for the wrapping rules to act on.
+- **Soft wraps.** A painted line is its block's last line, where white space at the line's end is handled as before a
+  forced break. Where an engine's rule for that white space reads whether more content follows, a line that ended at a
+  soft wrap (another engine line follows, no `<br>` or forced break ended it) ends with an empty inline-block of width
+  `calc(100% + 1px)`, which fits no band, so the browser wraps before it and the painted line is a wrapped line again.
+  The box goes inside the spans that continue on the next line, which carry their end edges there. It applies, in the
+  painter's engine switch:
+  - WebKit and Gecko, a line ending in `hanging` white space. A `pre-wrap` sequence hangs unconditionally at a soft wrap
+    and conditionally at the end (WebKit `horizontalAlignmentOffset`, `InlineFormattingUtils.cpp:198-217`), which moves
+    alignment and justification. Gecko's `TextAlignLine` hangs or trims trailing white space only on a wrapped line
+    (`nsLineLayout.cpp:3505-3516`), reserves a span's end border and padding on each line of it
+    (`nsInlineFrame.cpp:512-513`), and resolves white space at the paragraph's end to the base level (UAX #9 L1) where
+    the paragraph kept its level.
+  - Blink, a line ending in a `trimmed` collapsible space whose end isn't reshaped (`needsAccurateEndPosition` false,
+    `line_info.cc:127-175`). The paragraph shaped the text with the space after it and trimmed the space afterwards
+    (`line_breaker.cc:255-268`); a block's end removes the space from the text before shaping (`ExitBlock`,
+    `inline_items_builder.cc:1622-1629`), so `LYAY ` lost Arial's Y+space kerning. Where the end is reshaped, the
+    paragraph shaped the text without the space, as a block's end does, and the line gets no box. Blink's hanging
+    `pre-wrap` spaces get none either: under override spans the bidi control items between the spaces and the box end
+    the trailing spaces, and the overflowing line backs up to an earlier break (`c-049fe22e37c2b9cb`).
+  A nowrap line block, a line whose innermost continuing span doesn't wrap (CSS Text §5.1: the nearest common ancestor's
+  `white-space` decides a break between boxes), and a line ending with R7's U+200D (UAX #14 LB8a, ICU `line.txt:151-153`)
+  get no box. Nothing measures the box: it only ends the line where the paragraph's next content did.
 - **Elements and slices.** The painter paints the line's pieces in logical order inside the elements that hold them,
   and between two consecutive pieces it replays the paragraph's element structure from the content index: spans that
   close are closed, spans that open are opened, and a span that opens and closes between them is painted empty. A span
@@ -1168,13 +1218,21 @@ opportunities and the paragraph reports `dictionary-breaks-unavailable`.
   as a block's first child it gets no layout object, where the paragraph's node had text on another line (a VT alone on
   a line, `c-18cb262b839dc1d5`). That white-space set is Blink's for every engine today; §1.3 lists the per-engine sets.
 - **Atomic inlines** are painted as empty inline-blocks of their border box and margins, `vertical-align: top`, at their
-  level, for the app to fill. `<br>` and `<wbr>` aren't painted.
+  level, for the app to fill. `<br>` isn't painted. A `<wbr>` fragment is painted as a `<wbr>` element between its
+  leaves, as the paragraph had it: in a nowrap span, `aaaa` and ` bbbb` painted without it wrapped in Firefox where the
+  paragraph with it didn't (`c-46b2a8b889e1361c`, all 12 Firefox `rule/wbr-elements` painter failures; Gecko gives `<wbr>`
+  a U+200B for bidi, `nsBidiPresUtils.cpp:1389-1393`; the break side not traced). The probe in
+  `.artifacts/lab/painter-r2/probe-box-edges.ts` agrees: in Firefox the line wraps without `<wbr>` and as one text node,
+  and holds with it. Chrome breaks at that `<wbr>` in the paragraph too, and WebKit holds the line in every form.
 - **White space.** `text` and `hanging` fragments are painted as laid out, Blink's CR and FF in preserve modes
   included, so the painted line splits its shaping group there as the paragraph did. A `trimmed` fragment stays in its
   slice, so the browser trims it again and shapes the text before it the same way. Blink keeps Arial's A+space
   adjustment on the last `A` of `AAAA `, because a line ending at a space isn't reshaped: 2676 raw units at 60px, where a
   painted `AAAA` measures 2732. WebKit measures a word together with its following space (painter.md §3.1 c, §3.2 a).
-  `collapsed` and `forced-break` fragments aren't painted.
+  `collapsed` and `forced-break` fragments aren't painted. In Blink a `hanging` fragment starts a text node of its own:
+  preserved trailing spaces are an item result of their own, rounded up alone (`HandleTrailingSpaces`,
+  `line_breaker.cc:2418-2534`), and a node of their own is an item of its own that `ShapeText` still shapes with the text
+  before it (`inline_node.cc:1636-1673`): painted as one node, `b ` rounded to one LayoutUnit less.
 - **The hyphen** is its own span with the letter spacing the engine gives it, styled in the painter's one engine switch:
   `vertical-align: 0px` in Blink, which ends the shaping group, so `‐` doesn't kern with the `r` of `super`;
   `unicode-bidi: isolate` in Gecko, which ends the text run; nothing in WebKit, whose layout measures the hyphen alone
@@ -1200,8 +1258,10 @@ opportunities and the paragraph reports `dictionary-breaks-unavailable`.
   in Blink and WebKit, unicode-bidi's `visual_runs` over the whole paragraph in Gecko,
   `intl/bidi/rust/unicode-bidi-ffi/src/lib.rs:54`), so the painted level only decides node division, and one text node
   keeps WebKit's measurement of a word with the space after it (`TextUtil.cpp:76-77`).
-- Nothing sets a text width, so the painted geometry is an independent check of the predicted geometry. The painter
-  throws for negative slot insets, which floats can't paint.
+- Nothing sets a text width, so the painted geometry is an independent check of the predicted geometry. The widths the
+  painter sets are the declared ones (slot floats, atomic boxes) and the soft wrap box's `calc(100% + 1px)`, which only
+  makes it fit no band and sits on the painted block's second line, where the lab reads no text. The painter throws for
+  negative slot insets, which floats can't paint.
 
 What painting a line alone still changes (specs/painter.md §7):
 
@@ -1213,12 +1273,13 @@ What painting a line alone still changes (specs/painter.md §7):
   the paragraph shaped together (L9).
 - WebKit: when the font kerns a letter with the hyphen, the painted line matches the layout width or the ink, not both
   (L3); RTL shaping across inline boxes on candidates cut by a line edge (L5).
-- All engines, alignment: a painted line is its block's last line, so a wrapped line's `pre-wrap` spaces hang
-  conditionally when painted where the paragraph hung them unconditionally (WebKit `horizontalAlignmentOffset`,
-  `InlineFormattingUtils.cpp:198-217`; Blink `ComputeTrailingSpaceWidth`, `line_info.cc:289-400`), which moves `center`,
-  `end` and `justify` lines by the hanging width.
-- Gecko: every continuation of a span reserves the span's end border and padding (`nsInlineFrame.cpp:514-521`); a painted
-  line without the span's end edge reserves nothing, which can only keep more on an overflowing painted line.
+- Blink, alignment: a painted line without the soft wrap box is its block's last line, so a wrapped line's `pre-wrap`
+  spaces hang conditionally when painted where the paragraph hung them unconditionally (`ComputeTrailingSpaceWidth`,
+  `line_info.cc:289-400`), which moves `center`, `end` and `justify` lines by the hanging width. WebKit and Gecko lines
+  ending in hanging white space get the box.
+- Gecko: every line of a span reserves the span's end border and padding (`nsInlineFrame.cpp:512-513`). A painted line
+  with the soft wrap box keeps the span open past the line and reserves them; a line without it, whose span's box end
+  isn't on it, reserves nothing, which can only keep more on an overflowing painted line.
 
 The lab names more (specs/PAINTER-RESULTS.md has the counts):
 
@@ -1232,8 +1293,60 @@ The lab names more (specs/PAINTER-RESULTS.md has the counts):
   `nsTextFrame.cpp:3860-3873`), and a painted line ends its text run. A line that ends with a format character, a tab,
   or a base letter whose marks sit on the next line gets spacing the paragraph didn't give it (`c-2ccbff7837117855`,
   1px narrower at `letter-spacing: -1px`; `c-a1cc790386f04a1a`).
-- Gecko: trailing white space above the base level. At a soft wrap the paragraph keeps its level, and the painted line,
-  a paragraph of its own, moves it to the base level at the line end (`c-01cfe05b2ffd874b`).
+- Gecko: trailing white space above the base level on a line without the soft wrap box. At a soft wrap the paragraph
+  keeps its level, and the painted line, a paragraph of its own, moves it to the base level at the line end
+  (`c-01cfe05b2ffd874b`). Lines ending in hanging white space get the box, which keeps content after the space.
+- Gecko: `justify` on a line ending in a trimmed collapsible space. The paragraph's text frame breaks inside itself and
+  keeps the space among its justification opportunities (the Gecko port's `computeJustification` over the fitted
+  content, `nsTextFrame.cpp:11513-11521`), so `xx ` spreads the line's remaining width (3765 au natively). Painted, the
+  space ends the block's text and nothing expands (`c-0755bd21e4fae9d3`: 1200 au). With the soft wrap box after the
+  space the painted line is still unexpanded, and on lines whose span end margins overflow the band the box makes
+  `CanPlaceFrame` back up to an earlier break (`nsLineLayout.cpp:1189-1342`; 10 `rule/box-edges` cases wrapped), so
+  these lines get no box. The painted side isn't traced further.
+- Gecko: a line ending in a trimmed space whose span end margin overflows the band (`c-54dcffce84a8fbdb`: margins of 6px
+  on a span filling the band exactly). The paragraph ended the line inside the next text frame, which placed without a
+  fit test on a later frame; painted, the line ends at its block's end, and the margin overflow makes `CanPlaceFrame`
+  back up to an earlier break inside the span (`nsLineLayout.cpp:1189-1342`), so the painted line wraps. 8 feature-family
+  lines. Such lines get no soft wrap box, which backs up the same way.
+- WebKit: an RTL line ending in a trimmed space after a letter that kerns with it. The paragraph trims the space's width
+  with the kerning, the text measured with the space minus without it (`Line::Run::removeTrailingWhitespace`,
+  `InlineLine.cpp:963-987`, `TextUtil.cpp:124-130`), and the text box keeps its unkerned width (`c-03173940fdc1dd4e`:
+  82.77 px natively). The painted line also trims at its end (`InlineLineBuilder.cpp:646`) but paints the kerned width
+  (81.67 px). Not traced further.
+- WebKit: RTL `pre-wrap` lines with an atomic inline and hanging spaces paint box positions one float32 step from the
+  paragraph's once the soft wrap box follows them (`c-56ae197b4b7b2e5d`, 8 `rule/atomic-inlines` cases that passed
+  without the box). Not traced further.
+- Blink: a line ending in hanging spaces after a letter that kerns with the space, where the end isn't reshaped (`start`,
+  `left` in LTR). Painted as their own text node, the text and the spaces round up as two items, as in the paragraph, but
+  the painted line is one LayoutUnit wider (`c-0e799f2b144cea2c`: `LYAY` then a space, 6880 natively, 6881 painted;
+  10 `rule/text-align` cases that passed while text and spaces shared a node). Not traced further.
+- Blink: a line ending in hanging spaces where the line's end needs an accurate position (`center`, `end`, `justify`,
+  `left` in RTL, `right` in LTR; `line_info.cc:127-175`). The paragraph cut the item before the spaces and reshaped the
+  text there, without its kerning with the space (`LYAY` 46.6953 px); painted, the text keeps the kerning (46.33 px).
+- Blink: a `pre-wrap` RTL line ending in hanging spaces, drawn under override spans. Painted as its block's last line,
+  the text before the spaces measures without its kerning with them (`c-0985b4f121df8555`: `LYAY` 46.6953 px painted,
+  46.328 px natively). The soft wrap box brings the paragraph's width back on 22 such `rule/text-align` cases, but on the
+  same kind of line in `rule/atomic-inlines` the bidi control items between the spaces and the box make an overflowing
+  line back up to an earlier break (`c-049fe22e37c2b9cb`). The painter has no source reading that separates the two, so
+  Blink lines ending in hanging spaces get no box. Not traced further.
+- Blink: an RTL line whose pieces sit in override spans and hold a span's box end with a nonzero edge. The paragraph puts
+  the end edge on the span's line-left side, between `b` and `bbb` (`c-00e368136546bdb1`: a 6px border natively at
+  [18.39, 24.39] px). Painted, the text is contiguous and the edge lands left of `b`, so the text extent is the edge
+  narrower: 72 `rule/box-edges` and 18 `rule/nested-box-edges` Chrome cases. The probe
+  (`.artifacts/lab/painter-r2/probe-box-edges.ts`, installed Chrome 153) shows the painted span as two box fragments, a
+  lone 6px fragment at the line's left end holding the edge and one around `bbb`. The override span's bidi controls
+  inside the span take other levels than the text (ICU gives an explicit code the level before it, `ubidi.cpp:1173-1218`),
+  so after `BidiReorder` (`logical_line_builder.cc:688-760`) the box's items aren't contiguous, and Blink splits the box
+  and puts its edges on the outer fragments (`UpdateBoxDataFragmentRange`, `UpdateFragmentedBoxDataEdges`,
+  `inline_box_state.cc:720-830`). WebKit and Firefox paint the same markup with the edge between the words, as their
+  paragraphs do. An override span around the element keeps one fragment, but the element then takes the override's
+  direction and its end edge moves to the right; giving the element its own direction there isn't tested.
+- WebKit: an RTL line where `xx ` is followed by an overflowing nowrap span holding an atomic inline. The paragraph keeps
+  the span on the line and overflows; painted, with its pieces in override spans, WebKit wraps before the span
+  (`c-02fd6a0a213bb1bf`, 21 `rule/atomic-inlines` cases). The probe in the same file (webkit-host) wraps in every variant
+  with `unicode-bidi: bidi-override` on the line block, with override spans around the pieces, plain text for `xx `, or
+  one override span around everything, and doesn't wrap without the block override. So the block's override, not the
+  spans, changes the break before the span. The source path isn't traced.
 - Blink: `HanKerning` trims fullwidth punctuation by its neighbour. Where the neighbour is on the next line, the painted
   mark keeps its full width (`。` is 8px natively and 16px painted, `c-b408d44e962b357e`), and a line that fit wraps
   (`c-342b6a8c28ff1dab`).
@@ -1514,7 +1627,7 @@ line box heights, which the model doesn't carry. That is a limit of the port, no
 |---|---|---|---|
 | Blink (observe-blink.md §4-§9) | whole item rects; slice edges at item edges; boundary rects of uncovered units at the items they touch; the hyphen that a range includes after an included item end (`layout_text.cc:616-621`); collapsed units mapping to the next non-collapsed content; nodes without a layout object report nothing; line membership | caret positions inside an item, floored and ceiled to LayoutUnits, under `in-word-prefix` or `unsafe-to-break`; equal shares of clusters a font's ligatures merge, under `glyph-clusters` | positions finer than a LayoutUnit (U1); how one grapheme's advance divides among its code points (U2); the hyphen of an odd-level item on its node's first line with items (U3); whether a zero-advance code point is covered or only touches an item (U4); which rule dropped a node that reports nothing (U5); which glyph a character draws (U6) |
 | WebKit (observe-webkit.md §5-§10) | whole-box rects, x and width bit-equal as `f32(f32(x + w) − x)`; which boxes report for a range and on which lines; caret rects at a box start, `floor(x)`; rects of white space outside boxes; nodes without a renderer | partial rects' interior edges and the right edge of a box's last code point (U2, U4), from in-context advances measured through `measure` under `in-word-prefix`; whether a zero-advance code point has a glyph of its own (U3), under `glyph-clusters`; page zoom ≠ 1, under `page-zoom` | whether trailing white space hangs under `text-align: start` (U5); which hyphen glyph was drawn when both advances are equal (U6); the line of a collapsed unit after the first of its run (U7) |
-| Gecko (observe-gecko.md §2-§8) | every frame box edge, encoded `fround(R(au))` field by field; one rect per overlapping continuation; nodes without a frame report nothing; the chosen hyphen's width inside its box (E5); line membership where the frame has height | points inside a frame from characters' advances, under `in-word-prefix`; ligature shares, under `glyph-clusters` | the advance of white space trimmed at a break or by `TrimTrailingWhiteSpace`, and the overflowing part of hanging spaces (U2, except the growth of a negative delta); how a cluster's advance splits among its code points (U3); glyph widths inside a ligature beyond shares (U4); which zero-advance characters exist (U5); letter spacing apart from the glyph advance (U6); where frames split between zero-width characters (U9); which hyphen glyph (U10) |
+| Gecko (observe-gecko.md §2-§8) | every frame box edge, encoded `fround(R(au))` field by field; one rect per overlapping continuation; nodes without a frame report nothing; the chosen hyphen's width inside its box (E5); line membership where the frame has height | points inside a frame whose advance sum starts or ends inside a shaping unit (the layout's `unitStart`), under `in-word-prefix`; frame boxes, later frames' positions and element rects are engine output and predicted (ceiling round 2) | the advance of white space trimmed at a break or by `TrimTrailingWhiteSpace`, and the overflowing part of hanging spaces (U2, except the growth of a negative delta); how a cluster's advance splits among its code points (U3); glyph widths inside a ligature beyond shares (U4); which zero-advance characters exist (U5); letter spacing apart from the glyph advance (U6); where frames split between zero-width characters (U9); which hyphen glyph (U10) |
 
 **Boxes.** What elements report, and what box edges do to text rects:
 
@@ -1539,7 +1652,9 @@ line box heights, which the model doesn't carry. That is a limit of the port, no
 - **`<wbr>`** to settle by probe. Blink's opaque flow-control item has an empty result, which produces no fragment item
   (`logical_line_builder.cc:419-433`), so Blink should report no rect; WebKit and Gecko aren't traced. The stage 5 family
   smoke runs of 2026-09-17 (5 `<wbr>` elements per browser) observed no rect in Chrome and webkit-host and one rect in
-  Firefox, so Gecko's `WBRFrame` has a box.
+  Firefox, so Gecko's `WBRFrame` has a box. Ceiling round 2: Gecko's layout places the WBRFrame (§2.5 `wbr` frame, 0 × 0 at
+  its place on the line), and the port reports that box, as round 1's feature rows show (`c-00370d538345f01b`: x 3558 au,
+  width 0, height 0 after a 3558 au frame).
 
 How the lab compares:
 

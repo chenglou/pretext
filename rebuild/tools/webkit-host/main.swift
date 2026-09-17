@@ -206,6 +206,49 @@ final class Host: NSObject, NSApplicationDelegate, WKNavigationDelegate {
   }
 }
 
+// The preferred languages a WebContent process of this UI process computes, by WebKit's own steps, printed as one JSON line
+// on stdout. The lab driver records them as the environment before any page runs (rebuild/lab/languages.ts):
+// 1. The UI process launches every auxiliary process with OverrideLanguages, its overrideLanguages() when an app set them
+//    (this host sets none), else platformOverrideLanguages(): [[NSUserDefaults standardUserDefaults]
+//    stringArrayForKey:@"AppleLanguages"] (AuxiliaryProcessProxy.cpp:141-160, :203; AuxiliaryProcessProxyCocoa.mm:73-77).
+// 2. The WebContent process puts that list in its NSArgumentDomain as AppleLanguages (XPCServiceMain.mm:61-78, :181-190;
+//    LanguageCocoa.mm:83-91).
+// 3. userPreferredLanguages() is then platformUserPreferredLanguages(ShouldMinimizeLanguages::Yes): CFLocaleCopyPreferredLanguages(),
+//    +[NSLocale minimizedLanguagesFromLanguages:] when canMinimizeLanguages() (SDK-aligned behaviour MinimizesLanguages, on
+//    for Safari's SDK, which build.sh records; LanguageCocoa.mm:68-81), each through httpStyleLanguageCode: canonicalized
+//    by CFLocaleCreateCanonicalLanguageIdentifierFromString, then '_' after a two-letter code becomes '-' (LanguageCF.cpp:47-110,
+//    Language.cpp:92-110). navigator.languages shows the first entry (NavigatorBase.cpp:148-152), and FontDescription picks
+//    the first entry starting with zh- for a Han lang (FontDescription.cpp:69-80).
+// The minimization is platform API that WebKit's source doesn't contain, so this helper evaluates it in a process like the
+// UI process.
+func printLanguages() -> Never {
+  let uiLanguages = UserDefaults.standard.stringArray(forKey: "AppleLanguages") ?? []
+  var arguments = UserDefaults.standard.volatileDomain(forName: UserDefaults.argumentDomain)
+  arguments["AppleLanguages"] = uiLanguages
+  UserDefaults.standard.setVolatileDomain(arguments, forName: UserDefaults.argumentDomain)
+  let platform = (CFLocaleCopyPreferredLanguages() as? [String]) ?? []
+  let selector = NSSelectorFromString("minimizedLanguagesFromLanguages:")
+  var minimized = platform
+  var minimizes = false
+  if NSLocale.responds(to: selector), let result = (NSLocale.self as AnyObject).perform(selector, with: platform)?.takeUnretainedValue() as? [String] {
+    minimized = result
+    minimizes = true
+  }
+  let preferred = minimized.map { language -> String in
+    var code = CFLocaleCreateCanonicalLanguageIdentifierFromString(kCFAllocatorDefault, language as CFString).map { $0.rawValue as String } ?? language
+    if code.count >= 3, code[code.index(code.startIndex, offsetBy: 2)] == "_" {
+      code.replaceSubrange(code.index(code.startIndex, offsetBy: 2)...code.index(code.startIndex, offsetBy: 2), with: "-")
+    }
+    return code
+  }
+  let record: [String: Any] = ["overrideLanguages": uiLanguages, "cfPreferredLanguages": platform, "minimizes": minimizes, "minimized": minimized, "preferredLanguages": preferred.isEmpty ? ["en"] : preferred]
+  let data = (try? JSONSerialization.data(withJSONObject: record, options: [.sortedKeys])) ?? Data("{}".utf8)
+  FileHandle.standardOutput.write(data)
+  FileHandle.standardOutput.write(Data("\n".utf8))
+  exit(0)
+}
+
+if CommandLine.arguments.dropFirst().elementsEqual(["--print-languages"]) { printLanguages() }
 let options = parseOptions(Array(CommandLine.arguments.dropFirst()))
 let webKitBundle = Bundle(for: WKWebView.self)
 let webKitVersion = infoString(webKitBundle, "CFBundleVersion")

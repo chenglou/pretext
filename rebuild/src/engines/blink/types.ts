@@ -37,7 +37,7 @@ export type BlinkStyle = {
   overflowWrap: OverflowWrap
   lineBreak: LineBreak
   tabSize: number
-  // FontDescription::Locale(): the nearest lang; null for lang="" (element.cc:12568-12600, specs/blink-text.md §2.F.3).
+  // FontDescription::Locale(): the nearest lang; null for lang="" (element.cc:12653-12686 at 153, specs/blink-text.md §2.F.3).
   locale: string | null
   // Equal keys mean equal Font (font_description.cc:136-157): family, size, weight, style, locale and spacing.
   fontKey: string
@@ -49,15 +49,18 @@ export type BlinkStyle = {
   // FontFacts.joining as given; null lays joining letters at shaping-call edges out as an AAT font does and reports
   // joining-technology there.
   joining: FontFacts['joining']
+  // FontFacts.pairKerning as given: where a pair adjustment sits between two glyphs. null places it on the first glyph and
+  // reports unsafe-to-break at line edges taken from positions where it isn't 0.
+  pairKerning: FontFacts['pairKerning']
   // A span's own box edges; zero for the block, whose edges aren't inline boxes.
   start: BlinkBoxEdge
   end: BlinkBoxEdge
   verticalAlign: VerticalAlign
 }
 
-// Canvas contexts per style: shaping (LTR, RTL) and the hyphen (no spacing), and the factor from Canvas px to zoomed px
-// (the layout zoom for fonts measured at the CSS size, else 1).
-export type StyleContexts = { ltr: number; rtl: number; hyphen: number; scale: number }
+// Canvas contexts per style: shaping (LTR, RTL), shaping without liga, clig and calt (1/64 px letter spacing), the hyphen
+// (no spacing), and the factor from Canvas px to zoomed px (the layout zoom for fonts measured at the CSS size, else 1).
+export type StyleContexts = { ltr: number; rtl: number; ltrNoLigatures: number; rtlNoLigatures: number; hyphen: number; scale: number }
 
 export type InlineItem = {
   type: InlineItemType
@@ -149,9 +152,11 @@ export type BlinkPrepared = {
   baseLevel: number
   // Extended grapheme cluster boundaries over text_content (flags per offset, the end included).
   graphemeStarts: Uint8Array
+  // hanKerningCandidates(text_content), for HanKerning::MayApply over any range.
+  hanKerningCandidates: Int32Array
   // Per text_content unit, 1 when HarfBuzz marks it a continuation of the glyph cluster before it: a mark, a ZWJ and the
   // pictograph after it, an emoji modifier, the second of a regional indicator pair, a halfwidth voiced sound mark or a
-  // tag character (hb-ot-shape.cc:466-522, hb-ot-layout.hh:246-251), or the trail unit of a surrogate pair.
+  // tag character (hb-ot-shape.cc:470-546, hb-ot-layout.hh:247 at harfbuzz dfdc088c), or the trail unit of a surrogate pair.
   continuations: Uint8Array
   // Word spacing at text_content index 0 (WordSpacingWhiteSpacePre, inline_node.cc:1561-1565).
   wordSpacingAnywhere: boolean

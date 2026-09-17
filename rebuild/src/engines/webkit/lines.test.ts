@@ -9,8 +9,10 @@ import { FULL_WIDTH, UNKNOWN_FONT_FACTS, type FontFacts, type LineSlot, type Par
 import { webkitEngine } from './index.js'
 import { atomic, flatParagraph, span, treeParagraph, type FlatNode } from './test-paragraph.js'
 
-// Advance per code unit: SPACE 4, everything else 8, unless a test sets `advance`.
+// Advance per code unit: SPACE 4, everything else 8, unless a test sets `advance`. `pairAdjust` stands in for shaping that
+// moves a string's total away from the sum of its parts, such as kerning.
 let advance = (c: number): number => c === 0x20 ? 4 : 8
+let pairAdjust = (_s: string): number => 0
 class StandInContext {
   font = ''
   lang = ''
@@ -22,7 +24,7 @@ class StandInContext {
   measureText(s: string): { width: number } {
     let w = 0
     for (let i = 0; i < s.length; i++) w += advance(s.charCodeAt(i))
-    return { width: w }
+    return { width: w + pairAdjust(s) }
   }
 }
 ;(globalThis as { OffscreenCanvas?: unknown }).OffscreenCanvas = class {
@@ -44,24 +46,28 @@ function paragraph(runs: Array<[string, FlatNode]>, overrides: Partial<Paragraph
   return flatParagraph(runs, fontWith(facts), overrides)
 }
 
-function layout(p: Paragraph, slots: LineSlot[] = []): { lines: WebKitLine[]; gaps: string[]; belowFloats: number[] } {
+function layout(p: Paragraph, slots: LineSlot[] = [], environment: WebKitEnvironment = env): { lines: WebKitLine[]; gaps: string[]; belowFloats: number[] } {
   const m = createMeasurer()
-  const prepared = webkitEngine.prepare(p, env, m)
+  const prepared = webkitEngine.prepare(p, environment, m)
   const lines: WebKitLine[] = []
   const belowFloats: number[] = []
   let row = 0
+  const gaps = webkitEngine.gaps(prepared).map(g => g.gap)
   for (let start = webkitEngine.firstLine(prepared); start !== null;) {
     const result = webkitEngine.nextLine(prepared, start, slots[row] ?? FULL_WIDTH, m)
     if (result.kind === 'below-floats') {
+      for (const gap of result.gaps) gaps.push(gap.gap)
       belowFloats.push(row++)
       if (result.next !== undefined) start = result.next
       continue
     }
     lines.push(result.line)
+    for (const gap of result.line.gaps) gaps.push(gap.gap)
     if (result.line.hasLineBox) row++
     start = result.line.next
   }
-  return { lines, gaps: webkitEngine.gaps(prepared).map(g => g.gap), belowFloats }
+  // The paragraph's gaps, then every line's and refused slot's: content conditions are reported on the lines that measure them.
+  return { lines, gaps, belowFloats }
 }
 
 function textBoxes(boxes: WebKitDisplayBox[]): WebKitTextBox[] {
@@ -170,6 +176,13 @@ describe('font facts (DESIGN.md §1.2)', () => {
     expect(courier.gaps).toContain('simplified-measuring')
   })
 
+  test('a fixed-pitch font without a given primary family reports fixed-pitch-path where the Courier New test decides T1', () => {
+    const unknownFamily = layout(paragraph([['foo bar', 'text']], { width: 1000 }, { ...UNKNOWN_FONT_FACTS, monospace: true }))
+    expect(unknownFamily.lines[0]!.gaps.map(g => g.gap)).toContain('fixed-pitch-path')
+    const givenFamily = layout(paragraph([['foo bar', 'text']], { width: 1000 }, { ...UNKNOWN_FONT_FACTS, monospace: true, primaryFamily: 'Menlo' }))
+    expect(givenFamily.gaps).not.toContain('fixed-pitch-path')
+  })
+
   test('uniform advances pass T1', () => {
     advance = () => 8
     const { gaps } = layout(paragraph([['foo bar', 'text']]))
@@ -179,35 +192,88 @@ describe('font facts (DESIGN.md §1.2)', () => {
 })
 
 describe('environment facts (DESIGN.md §1.4)', () => {
-  test('a Han lang without preferred languages reports ui-language', () => {
+  test('a Han lang without preferred languages reports ui-language on the line measuring it', () => {
     const p = paragraph([['中文', 'text']], { lang: 'zh' })
-    const m = createMeasurer()
-    const given = webkitEngine.gaps(webkitEngine.prepare(p, env, m)).map(g => g.gap)
-    const unknown = webkitEngine.gaps(webkitEngine.prepare(p, { ...env, preferredLanguages: null }, m)).map(g => g.gap)
-    expect(given).not.toContain('ui-language')
-    expect(unknown).toContain('ui-language')
+    expect(layout(p).gaps).not.toContain('ui-language')
+    expect(layout(p, [], { ...env, preferredLanguages: null }).lines[0]!.gaps.map(g => g.gap)).toContain('ui-language')
   })
 
   test('quotes under a locale without delimiter data report ui-language when the ICU default locale is null', () => {
     const p = paragraph([['“a”', 'text']], { lang: 'und' })
-    const m = createMeasurer()
-    expect(webkitEngine.gaps(webkitEngine.prepare(p, { ...env, icuDefaultLocale: null }, m)).map(g => g.gap)).toContain('ui-language')
-    expect(webkitEngine.gaps(webkitEngine.prepare(p, env, m)).map(g => g.gap)).not.toContain('ui-language')
-    expect(webkitEngine.gaps(webkitEngine.prepare(paragraph([['“a”', 'text']]), { ...env, icuDefaultLocale: null }, m)).map(g => g.gap)).not.toContain('ui-language')
+    expect(layout(p, [], { ...env, icuDefaultLocale: null }).gaps).toContain('ui-language')
+    expect(layout(p).gaps).not.toContain('ui-language')
+    expect(layout(paragraph([['“a”', 'text']]), [], { ...env, icuDefaultLocale: null }).gaps).not.toContain('ui-language')
   })
 
-  test('page zoom not given reports page-zoom', () => {
+  test('page zoom not given reports page-zoom on the paragraph', () => {
     const m = createMeasurer()
     expect(webkitEngine.gaps(webkitEngine.prepare(paragraph([['a', 'text']]), { ...env, pageZoom: null }, m)).map(g => g.gap)).toContain('page-zoom')
   })
 
   test('a quoted "system-ui" names a family, not the system design (research/CHARTER-CRITIC.md item 9)', () => {
-    const m = createMeasurer()
     const facts = UNKNOWN_FONT_FACTS
     const quoted = { ...paragraph([['a', 'text']]), font: { ...fontWith(facts), family: '"system-ui"' } }
     const keyword = { ...paragraph([['a', 'text']]), font: { ...fontWith(facts), family: 'system-ui' } }
-    expect(webkitEngine.gaps(webkitEngine.prepare(quoted, env, m)).map(g => g.gap)).not.toContain('canvas-language')
-    expect(webkitEngine.gaps(webkitEngine.prepare(keyword, env, m)).map(g => g.gap)).toContain('canvas-language')
+    expect(layout(quoted).gaps).not.toContain('canvas-language')
+    expect(layout(keyword).gaps).toContain('canvas-language')
+  })
+})
+
+describe('line-local gaps (DESIGN.md §2.8)', () => {
+  test('a control character reports on the line that measured it, not on the others', () => {
+    const { lines } = layout(paragraph([['aaaa bbbb cc\vcc', 'text']], { width: 40 }))
+    expect(lines.length).toBe(3)
+    expect(lines[0]!.gaps.map(g => g.gap)).not.toContain('control-character-width')
+    expect(lines[2]!.gaps.find(g => g.gap === 'control-character-width')!.at).toEqual({ start: 12, end: 13 })
+  })
+
+  test('the content that ended a line counts: a word that overflowed reports on the line it didn\'t fit on', () => {
+    const { lines } = layout(paragraph([['aaaa b\vb', 'text']], { width: 40 }))
+    expect(lines.map(l => [l.start, l.end])).toEqual([[0, 5], [5, 8]])
+    expect(lines[0]!.gaps.map(g => g.gap)).toContain('control-character-width')
+    expect(lines[1]!.gaps.map(g => g.gap)).toContain('control-character-width')
+  })
+
+  test('page-history: an RTL paragraph gives the same Latin text a level boundary before its trailing full stop', () => {
+    // The item [8, 12) overflows the line, so a cached end at 11 would be a wrap opportunity of this line's break decision.
+    const overflowing = layout(paragraph([['aaa bbb ccc.', 'text']], { width: 60 }))
+    expect(overflowing.lines.map(l => [l.start, l.end])).toEqual([[0, 8], [8, 12]])
+    expect(overflowing.lines[0]!.gaps.find(g => g.gap === 'page-history')!.at).toEqual({ start: 11, end: 11 })
+    // Everything fits: a split changes nothing where the parts measure what the whole does,
+    expect(layout(paragraph([['aaa bbb ccc.', 'text']], { width: 1000 })).gaps).not.toContain('page-history')
+    // and changes the width where they don't.
+    pairAdjust = s => s.includes('c.') ? -1 : 0
+    const kerned = layout(paragraph([['aaa bbb ccc.', 'text']], { width: 1000 }))
+    pairAdjust = () => 0
+    expect(kerned.gaps).toContain('page-history')
+    // Interior punctuation between two L letters takes their level in either direction.
+    expect(layout(paragraph([['aaa b,bb ccc', 'text']], { width: 60 })).gaps).not.toContain('page-history')
+  })
+
+  test('canvas-language: a generic family under a locale whose script isn\'t Common concerns Latin text too (FontDescriptionCocoa.cpp:77-118)', () => {
+    const generic = { ...paragraph([['foo bar', 'text']], { lang: 'ja', width: 1000 }), font: { ...fontWith(), family: 'serif' } }
+    expect(layout(generic).lines[0]!.gaps.map(g => g.gap)).toContain('canvas-language')
+    const named = { ...paragraph([['foo bar', 'text']], { lang: 'ja', width: 1000 }), font: { ...fontWith(), family: 'Arial' } }
+    expect(layout(named).gaps).not.toContain('canvas-language')
+  })
+
+  test('page-history: an end inside the placed part of the candidate that ended the line reports on that line', () => {
+    // suite/glue c-cf7bb1ee29b5b4cf's shape: in an RTL block the items [2, 4) and [4, 5) split at a level boundary with no wrap
+    // opportunity between them, so they form one candidate. An LTR box of the same text ends an item at 3 (NBSP between R and
+    // L takes the paragraph level), which would be a wrap opportunity of the decision that places [2, 4).
+    const { lines } = layout(paragraph([['ب­ب x', 'text']], { direction: 'rtl', width: 19.25, overflowWrap: 'break-word' }))
+    expect(lines.length).toBeGreaterThan(1)
+    const placing = lines.find(l => l.start <= 2 && l.end >= 4)!
+    expect(placing.gaps.find(g => g.gap === 'page-history')!.at).toEqual({ start: 3, end: 3 })
+  })
+
+  test('page-history: preserved white space of two units, which break-spaces splits per space', () => {
+    pairAdjust = s => s.includes('  ') ? -1 : 0
+    const kerned = layout(paragraph([['aaa  bbb', 'text']], { whiteSpace: 'pre-wrap', width: 1000 }))
+    pairAdjust = () => 0
+    expect(kerned.gaps).toContain('page-history')
+    expect(layout(paragraph([['aaa  bbb', 'text']], { whiteSpace: 'pre-wrap', width: 1000 })).gaps).not.toContain('page-history')
+    expect(layout(paragraph([['aaa bbb c', 'text']], { whiteSpace: 'pre-wrap', width: 1000 })).gaps).not.toContain('page-history')
   })
 })
 

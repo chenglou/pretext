@@ -18,7 +18,11 @@ doesn't depend on the old library in `src/`.
   `row-fixtures.ts`.
 - `triage.ts`: triage records for the cases where main passes and the rebuild fails (see "Triage records");
   `triage.test.ts` its rules.
-- `gate.ts`: the no-regression gate over scored runs, and `gate.test.ts` its rules.
+- `gate.ts`: the no-regression gate over scored runs, and `gate.test.ts` its rules. It compares a run's environment with
+  the baseline's part by part (browser build and device, process languages, scorer) and names what differs; seeding refuses
+  runs that record no process languages. Protocol rows are never passes: seeding lists them under `protocol`, and a check
+  never fails on them. `--prune-protocol --baseline=<file>` applies `score.ts` `slotProtocol` to the rows of the baseline's
+  seeding runs and removes the passes its protocol rows recorded, listing each pair (rebuild/TESTS.md §9).
 - `cases/seal.ts`: seals a held-out case set (see "Sealed held-out sets").
 - `tsconfig.json`: the repo's strict settings over the lab and its case generators
   (`bunx tsc -p rebuild/lab/tsconfig.json --noEmit`).
@@ -81,7 +85,17 @@ Sessions stay in the background and never activate a window.
   (safaridriver doesn't work on macOS 27). A new document in a frontmost Safari opens over the user's windows and
   takes keyboard focus there, so the driver first waits, for at most 10 minutes, until Safari isn't the frontmost
   app, then exits with an error. `--allow-safari-frontmost` skips that wait. If Safari takes focus anyway, the driver
-  gives it back to the previously frontmost app. Closing removes only that uniquely identified tab.
+  gives it back to the previously frontmost app. Closing removes only that uniquely identified tab. A window opened
+  behind the frontmost app's windows is occluded, so WebKit hides the page and drops its foreground activity, and the
+  WebContent process gets suspended once no activity is left (PageClientImplMac.mm `isViewVisible`, WebPageProxy.cpp:3733-3742,
+  ProcessThrottler.cpp:240-249, :360-395). That stopped round 1's installed Safari run at 1,585 rows. A page that is still
+  loading keeps a background activity (NavigationState.mm:1630-1656), and a frame keeps loading while a request it
+  started before its load event is pending (DocumentLoader.cpp:1701-1723), and a page that changes its title more than 5 s
+  after its committed load keeps one until the next commit (WebPageProxy.cpp:9250-9270). So Safari's lab markup holds a
+  hidden image open (`/api/hold`, the server with `idleTimeout: 0`); the page asks `/api/hold-ready`, which answers 6 s after
+  the document was served, changes its title, and releases the image (`/api/hold-release`). The load has to end before
+  measuring, since `document.fonts.ready` waits for the load event (FontFaceSet.cpp:269-280). Nothing is activated or
+  brought to the front. The first 4,000 `dev-all` cases ran to the end with every row hidden (WEBKIT-HOST.md).
 - webkit-host: the system WebKit.framework, which installed Safari runs, in a small WKWebView app
   (`rebuild/tools/webkit-host/main.swift`, built by `build.sh` into `.artifacts/webkit-host/webkit-host`). The driver
   spawns it with the page URL; it doesn't touch the user's Safari. The host never activates (accessory app, no Dock
@@ -121,13 +135,20 @@ a browser takes them from (CHARTER.md, "Boundaries"). `languages.ts` holds the r
   (`zh-hans-us` here) and sets `intl.locale.requested`, `intl.accept_languages` and `intl.regional_prefs.use_os_locales`
   explicitly, which decide only the app locale, `navigator.languages` and Intl formatters.
 - Safari and webkit-host, `preferredLanguages` and `icuDefaultLocale`: Safari takes its languages from the OS and can't
-  take others per launch, and webkit-host stands in for Safari, so neither is launched with languages. The page sends
-  `navigator.languages` with its first step, which WebKit fills with the first entry of the WebContent process's
-  preferred languages, the list `FontDescription` reads for a Han `lang`. When that entry starts with `zh-` it decides the
-  rule, and the given list is that entry; otherwise the list stays unknown and reports `ui-language`. webkit-host on this
-  Mac shows `zh-CN` where the global `AppleLanguages` start with `zh-Hans-US`, so the list isn't the UI process's raw
-  `AppleLanguages`, whatever WebKit does in between. The ICU default locale comes from launchd's locale variables, else
-  `en_US_POSIX` (specs/webkit-gaps.md §8.2 [I]).
+  take others per launch, and webkit-host stands in for Safari, so neither is launched with languages. The UI process
+  launches each WebContent process with `OverrideLanguages`, its own `[NSUserDefaults AppleLanguages]` when the app set
+  none (`AuxiliaryProcessProxy.cpp:141-160, :203`, `AuxiliaryProcessProxyCocoa.mm:73-77`). The WebContent process puts them
+  in its argument domain (`XPCServiceMain.mm:61-78, :181-190`, `LanguageCocoa.mm:83-91`), and its preferred languages are
+  `CFLocaleCopyPreferredLanguages()` minimized by `+[NSLocale minimizedLanguagesFromLanguages:]` and canonicalized
+  (`LanguageCF.cpp:47-110`, `LanguageCocoa.mm:68-81`). The minimization is platform API outside WebKit's source, so before
+  launch the driver runs `webkit-host --print-languages` (`rebuild/tools/webkit-host/main.swift`), which evaluates those
+  steps. The result is the given list, recorded with each step in `languages.webContent`. On this Mac on 2026-09-17:
+  `["zh-Hans-US", "en-US"]` minimizes to `["zh-CN", "zh-Hans"]`. An app domain with its own `AppleLanguages`
+  (`dev.pretext-rebuild.webkit-host`, `com.apple.Safari`) leaves the list unknown, and it reports `ui-language`. A page shows
+  the list's first entry as `navigator.languages` (`NavigatorBase.cpp:148-152`). The driver only checks that the first page
+  agrees, and fails the run when it doesn't; no page result enters the given facts. Round 1's rows carry `["zh-CN"]`,
+  taken from the page, so their environment key differs from rows since. The ICU default locale comes from launchd's
+  locale variables, else `en_US_POSIX` (specs/webkit-gaps.md §8.2 [I]).
 
 Pages record `navigatorLanguages` and `intlLocale` in `env` as evidence next to the given facts. `environmentKey` names
 the given facts, so rows with other process languages never meet in a baseline.
@@ -205,9 +226,34 @@ any missing row makes the scorer exit 1. `--sealed` writes counts only, per brow
 no case ids, texts, families or examples, and takes no `--per-case` or `--examples` (see "Sealed held-out sets").
 Imported as a module, `score.ts` runs nothing and exports `scoreRow`, `nativeLines`, `nativeView`, `nativeDifference`,
 `lineRangeDiagnostics`, `withNativeRow`, `indexRows`, `readRowAt`, `environmentKey`, `rowText` and `readLines` with their
-types, so tools that compare rows use the scorer's rules. `SCORER_VERSION` is 3. Version 1 derived native lines and
-widths from visibility rules; version 2 grouped every rect into native lines by vertical centre. Their rules and evidence
-are in this file's git history.
+types, so tools that compare rows use the scorer's rules. It also exports `slotProtocol` and `lineLocalGaps`.
+`SCORER_VERSION` is 4. Version 1 derived native lines and widths from visibility rules; version 2 grouped every rect into
+native lines by vertical centre; version 3 placed code point rects by their own node's box. Their rules and evidence are
+in this file's git history.
+
+**Scorer 4 is in (2026-09-17, ceiling round 2).** Engine owners re-score with it. What changed from version 3: element
+rects are compared ("Elements" below), slot protocol rows are marked ("Protocol rows"), and failing lines are attributed to
+the gaps that concern them ("Line-local gaps"). Rows and cases don't change. Re-scoring round 1's feature-family rows
+(`.artifacts/lab/round2-scorer4/rescore-r1/`, forward against reverse) turns the line counts left unobserved there into
+passes, Chrome 719, Firefox 670 and webkit-host 701, with no new lineCount failure in Chrome or Firefox. webkit-host gains 4
+lineCount and 4 breaks failures in `rule/br-elements`, whose layouts place text on lines native layout doesn't
+(`c-178367f98108fb03`: 6 text rects on 4 lines where native layout has 4 on 2). Widths go from unobserved or not
+applicable to pass on Chrome 2,550, Firefox 2,608 and webkit-host 2,395 cases. The 22 protocol rows (Firefox 15,
+webkit-host 7) are unobserved, and 17 webkit-host `rule/box-edges` widths go from pass to unobserved: with a negative
+margin the span's border box reaches past the engine width. Rule-family statuses don't change.
+
+Failures without a line-local gap in round 1's rows under scorer 4 (lineCount / breaks / widths, forward order, history-
+dependent cases excluded; `rescore-r1/<browser>-<set>-forward/<browser>-summary.json`, `lineLocal`):
+
+| Browser | Suite sample | Held-out 09-16 suite sample | Rule families | Feature families |
+|---|---|---|---|---|
+| Chrome | 4 / 5 / 4 of 89 / 100 / 108 | 11 / 11 / 18 of 102 / 131 / 182 | 8 / 24 / 48 of 204 / 286 / 368 | 8 / 8 / 44 of 28 / 28 / 220 |
+| Firefox | 0 / 0 / 7 of 63 / 78 / 901 | 0 / 0 / 1 of 49 / 72 / 758 | 79 / 210 / 374 of 162 / 418 / 685 | 0 / 0 / 0 of 0 / 0 / 0 |
+| webkit-host | 15 / 17 / 26, every failure | 32 / 47 / 37, every failure | 58 / 113 / 194 of 120 / 202 / 291 | 20 / 32 / 0, every failure |
+
+Round 1's WebKit engine reports its content conditions as paragraph gaps without a range, so no webkit-host failure there
+is covered line-locally; Firefox's rule-family failures without one all have paragraph gaps. These count the round 1
+library; owners re-score their own rows.
 
 Native lines. A rect without positive height, as Firefox reports for a frame without height, is placed on no line.
 The rest follow three rules:
@@ -277,8 +323,54 @@ the per-case file (`diagnostics`) and the summary (`lineRangeDiagnostics`); they
 - `zeroWidthPlacement`: every code point outside white space whose placed rects all have zero width and sit on one native
   line lies in the predicted line of that index.
 
-Both are unobserved when the line counts differ or nothing qualifies. An observation port error leaves every metric
+Both are unobserved when the line counts differ or nothing qualifies. A code point that no predicted line covers is left
+out of both: main's line ranges leave zero-width content at a line edge outside every line, which says nothing about where
+its lines start (research/ROUND1-CRITIC.md item 3, `c-aad1cfdbd82a76b7`). An observation port error leaves every metric
 unobserved.
+
+Elements. A case with inline structure records `Element.getClientRects()` per element (spans, atomic inlines, `<br>`,
+`<wbr>`), and its observation port expects them (DESIGN.md §9). They compare like node rects: counts, x and width per rect,
+and line membership ('element on other lines'). Element rects group into native lines by centre with the rest, each rect
+on its own, since a culled span in Blink reports other objects' items and an atomic inline is top-aligned. A line box that
+only an element reports (a line holding atomics, a box edge or a `<br>`) is observed through it. Widths take the union of
+the line's whole-node rects and element rects, so box edges and atomics count. Painted lines record text node rects alone,
+so the painter's extents keep node rects. An element the port expects nothing for gets one empty rect on no line (Blink's
+`found_quad` false). A flat case records no elements, and its spans aren't compared as elements.
+
+Protocol rows. A row whose page doesn't describe the case's declared input is a protocol row (`slotProtocol`): every metric
+is unobserved with the reason 'protocol row: the slot floats don't describe the declared slots', and the per-case file has
+`protocol` with the float that moved. It is never a pass or a fail. For a case with line slots, every slot float must sit
+in its row on its side: top r × lineHeight, height lineHeight, a left float at the content box's left edge, a right float
+ending at its right edge in engine units. Gecko and WebKit move a later float of row 0 down when it doesn't fit beside the
+indented first line (nsLineLayout.cpp:1485-1492, BlockReflowState.cpp:793-798; InlineLineBuilder.cpp:1317-1328, :1368-1380).
+Re-scoring round 1's feature-family rows finds exactly the critic's 22: Firefox 15, webkit-host 7, all in
+`rule/line-slots`. The float widths aren't checked, because each engine converts the declared inset with its own
+arithmetic. Derivation's width floor follows each engine's float rule (`rebuild/tests/derive.ts` `minimumUnits`).
+Re-deriving `line-slots` with it (seed `feature-families-20260917`, native-only final runs,
+`.artifacts/lab/round2-scorer4/line-slots/`) gives 0 protocol rows in every round and final run: Firefox 26,061 round
+rows and 1,790 final cases, webkit-host 41,296 and 1,908; round 1's Firefox rounds r03-r05 had 83. The 6 webkit-host RTL
+final cases whose row 0 insets and indent exceed the width keep their floats in rows, as WebKit's start-positioned rule
+says. The committed feature derivation (`.artifacts/tests/features-20260917`) still holds round 1's cases until the families
+are derived again. Line boxes taller than the line height (mixed fonts) would move rows too; the feature families' slot cases use
+one font, and no rule checks that yet.
+
+Line-local gaps. A failing row is covered by a gap only where a condition concerns the failing line or the break decision
+the failing line starts from (research/ROUND1-CRITIC.md item 4). The per-case file's `lineGaps` has, per failing metric,
+`lines` (the native line index, its engine line, and the covering gaps with their scope), `covered` (every failing line has
+a gap) and `paragraphGaps` (paragraph gaps without a range, which cover nothing). Scopes:
+
+- `line`: the failing engine line's own `gaps`;
+- `previous-line`: the `gaps` of the line box before it, and of lines without a line box between the two;
+- `below-floats`: gaps of slots the engine refused between the two lines;
+- `paragraph-range`: a paragraph gap whose `at` range (src/model.ts `Gap.at`) meets those lines' source range.
+
+lineCount and breaks attribute the first native line where native layout and the prediction disagree: for every code point,
+node and element, the lowest line in one of its two line sets and not the other, or the first line only one side has. Widths
+and the painter attribute every line whose extent differs. A prediction error, a painter error and a painted line count
+that differs have no line and are never covered. The summary's `lineLocal` counts, per metric, `failures`,
+`withoutLineGap` (a failing line no gap concerns), `withoutLineGapButParagraphGap` (of those, rows with a paragraph gap
+without a range) and `byGap` (failing rows each gap covers on some failing line). A limited expected value names a gap in a
+width failure's reason, but it comes from the observation port, not the layout, and covers nothing.
 
 The summary (`--out`) has counts per browser and per family, reasons, facts, and per gap how many rows report it and how
 many of those fail lineCount or breaks. It keeps a histogram of engine width minus native extent (LayoutUnits in Chrome,
@@ -369,7 +461,11 @@ bun rebuild/lab/triage.ts --rows=<rebuild rows, file order> --reverse-rows=<rebu
 `bun rebuild/lab/cases/seal.ts --out-dir=.artifacts/lab/sealed --label=sealed-<date>` generates runs, ws and policy from a
 fresh random seed and a 10,000-case suite sample drawn by one quota per family, without any case id used so far: every
 case file a `run.json` under `.artifacts` names, every file under `.artifacts/lab/cases` and
-`.artifacts/lab/final-20260916/cases`, and `smoke-cases.ndjson`. The census's full-suite chunks aren't excluded, since they
+`.artifacts/lab/final-20260916/cases`, every case file of an earlier sealed set (a folder with a `SEAL.json`), and
+`smoke-cases.ndjson`. Two sets exist: `sealed-20260917` in `.artifacts/lab/sealed` (run once in the ceiling round 1
+evaluation) and `sealed-2-20260917` in `.artifacts/lab/sealed-2`, generated in ceiling round 2 without any of 669,645 used
+ids from 270 files, the first sealed set's included: runs 2,579, ws 1,014, policy 1,597 and suite sample 10,000 cases,
+with 0 ids shared with the first set (checked by id only). The census's full-suite chunks aren't excluded, since they
 hold every suite case. The seed goes only into `<out-dir>/SEAL.json`, with the sha256 of every file; origins and
 summaries name it by its label (`generate.ts --seed-label`). `rebuild/lab/baselines/<label>.json` holds the same record
 without the seed, for the repository. Owners must not open, run or score the files before the evaluation stage; then

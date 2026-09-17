@@ -16,13 +16,22 @@
 //   FIREFOX_156_0_RELEASE). No pref reaches it: the prefs set here decide the app locale, navigator.languages and the Intl
 //   formatters only (LocaleService.cpp:494-535, all.js:1485-1492). So the given fact comes from the OS setting.
 // - Safari and webkit-host: Safari takes its languages from the OS and can't take others per launch, and webkit-host stands
-//   in for Safari, so neither launches with languages. FontDescription replaces a Han lang with the first entry of the
-//   WebContent process's userPreferredLanguages() starting with zh- (FontDescription.cpp:75-104), and a page shows the
-//   first entry of that list as navigator.languages (NavigatorBase.cpp:148-152); the driver takes it at the first step
-//   (webkitPreferredLanguages). The WebContent ICU default locale comes from launchd's LC_ALL, LC_MESSAGES or LANG, else
-//   en_US_POSIX (specs/webkit-gaps.md §8.2 [I]).
+//   in for Safari, so neither launches with languages. The UI process launches every WebContent process with
+//   OverrideLanguages, its own [NSUserDefaults AppleLanguages] when the app set none (AuxiliaryProcessProxy.cpp:141-160,
+//   :203; AuxiliaryProcessProxyCocoa.mm:73-77); the WebContent process puts them in its argument domain
+//   (XPCServiceMain.mm:61-78, :181-190; LanguageCocoa.mm:83-91), and userPreferredLanguages() minimizes and canonicalizes
+//   CFLocaleCopyPreferredLanguages() (LanguageCF.cpp:47-110, LanguageCocoa.mm:68-81). FontDescription replaces a Han lang
+//   with the first entry starting with zh- (FontDescription.cpp:69-80). The driver evaluates those steps before launch with
+//   `webkit-host --print-languages` (rebuild/tools/webkit-host/main.swift), because the minimization is platform API outside
+//   WebKit's source, and gives the result. A page shows the first entry as navigator.languages (NavigatorBase.cpp:148-152):
+//   the driver only checks that it agrees (webkitLanguageCheck). The WebContent ICU default locale comes from launchd's
+//   LC_ALL, LC_MESSAGES or LANG, else en_US_POSIX (specs/webkit-gaps.md §8.2 [I]).
 import { execFileSync } from 'node:child_process'
-import type { BrowserKind, ProcessLanguages } from './types.ts'
+import { resolve } from 'node:path'
+import type { BrowserKind, ProcessLanguages, WebContentLanguages } from './types.ts'
+
+// The host binary rebuild/tools/webkit-host/build.sh writes; its --print-languages evaluates WebKit's language steps.
+export const WEBKIT_HOST_EXECUTABLE = resolve(import.meta.dir, '../../.artifacts/webkit-host/webkit-host')
 
 // This Mac's AppleLanguages on 2026-09-17. Chrome launches with them, so its application locale stays the zh-CN every
 // earlier Chrome run had, without drifting with the OS settings.
@@ -148,27 +157,49 @@ export function derivedLanguages(kind: BrowserKind, read: CommandReader = readCo
       }
     }
     case 'safari':
-    case 'webkit-host':
-      return {
-        launch, os, given: { engine: 'webkit', preferredLanguages: null, icuDefaultLocale: icuDefaultLocale(os.launchdEnvironment) },
-        derivation: [
-          'preferredLanguages: the first entry navigator.languages shows once the page loads (webkitPreferredLanguages)',
-          `icuDefaultLocale: launchd environment ${JSON.stringify(os.launchdEnvironment)} through uprv_getDefaultLocaleID [I: the WebContent process environment isn't readable]`,
-        ],
-      }
+    case 'webkit-host': {
+      const webContent = readWebContentLanguages(read)
+      const safariOwn = kind === 'safari' ? read('defaults', ['read', 'com.apple.Safari', 'AppleLanguages']) : null
+      const own = kind === 'webkit-host' ? read('defaults', ['read', 'dev.pretext-rebuild.webkit-host', 'AppleLanguages']) : safariOwn
+      const derivation = [
+        webContent === null
+          ? 'preferredLanguages: unknown; webkit-host --print-languages didn\'t run (build it with rebuild/tools/webkit-host/build.sh)'
+          : `preferredLanguages: the UI process's AppleLanguages ${JSON.stringify(webContent.overrideLanguages)} as OverrideLanguages (AuxiliaryProcessProxy.cpp:141-160, :203; AuxiliaryProcessProxyCocoa.mm:73-77), the WebContent argument domain (LanguageCocoa.mm:83-91), CFLocaleCopyPreferredLanguages ${JSON.stringify(webContent.cfPreferredLanguages)}, ${webContent.minimizes ? `minimized to ${JSON.stringify(webContent.minimized)}` : 'not minimized'} (LanguageCocoa.mm:68-81) and canonicalized (LanguageCF.cpp:47-110), evaluated by webkit-host --print-languages`,
+        `icuDefaultLocale: launchd environment ${JSON.stringify(os.launchdEnvironment)} through uprv_getDefaultLocaleID [I: the WebContent process environment isn't readable]`,
+      ]
+      if (kind === 'safari') derivation.push('[I] Safari\'s own defaults domain lives in its container; the helper reads the global domain, which Safari takes when its domain sets no AppleLanguages')
+      // An app domain with its own AppleLanguages changes the UI process's list, which the helper doesn't see.
+      const ownList = own === null ? null : parsePlistArray(own)
+      const preferredLanguages = webContent === null || (ownList !== null && ownList.length > 0) ? null : webContent.preferredLanguages
+      if (ownList !== null && ownList.length > 0) derivation.push(`preferredLanguages: unknown; the ${kind} domain has its own AppleLanguages ${JSON.stringify(ownList)}`)
+      return { launch, os, webContent, given: { engine: 'webkit', preferredLanguages, icuDefaultLocale: icuDefaultLocale(os.launchdEnvironment) }, derivation }
+    }
   }
 }
 
-// WebKit's preferredLanguages as far as a page shows them. navigator.languages is { defaultLanguage() }, the first entry of
-// the WebContent process's userPreferredLanguages() (NavigatorBase.cpp:148-152, Language.cpp:92-102), and FontDescription
-// replaces a Han lang with the first entry of that same list starting with zh-, else zh-hans (FontDescription.cpp:75-104).
-// So a first entry starting with zh- decides the rule, and the list [that entry] gives the same result. Any other first
-// entry leaves the later entries unknown, which report ui-language. Whether WebContent holds the UI process's raw
-// AppleLanguages or the platform's minimized list isn't settled: webkit-host on this Mac reports zh-CN where the global
-// AppleLanguages start with zh-Hans-US.
-export function webkitPreferredLanguages(navigatorLanguages: readonly string[]): string[] | null {
-  const first = navigatorLanguages[0]
-  return first !== undefined && first.slice(0, 3).toLowerCase() === 'zh-' ? [first] : null
+// What `webkit-host --print-languages` prints: WebKit's steps from the UI process's AppleLanguages to the WebContent
+// process's userPreferredLanguages() (rebuild/tools/webkit-host/main.swift printLanguages). null when the helper can't run
+// or prints something else.
+export function readWebContentLanguages(read: CommandReader, executable = WEBKIT_HOST_EXECUTABLE): WebContentLanguages | null {
+  const text = read(executable, ['--print-languages'])
+  if (text === null) return null
+  try {
+    const value = JSON.parse(text) as Partial<WebContentLanguages>
+    const strings = (list: unknown): list is string[] => Array.isArray(list) && list.every(item => typeof item === 'string')
+    if (!strings(value.overrideLanguages) || !strings(value.cfPreferredLanguages) || !strings(value.minimized) || !strings(value.preferredLanguages) || typeof value.minimizes !== 'boolean') return null
+    return { overrideLanguages: value.overrideLanguages, cfPreferredLanguages: value.cfPreferredLanguages, minimizes: value.minimizes, minimized: value.minimized, preferredLanguages: value.preferredLanguages }
+  } catch {
+    return null
+  }
+}
+
+// A page shows { defaultLanguage() }, the first entry of the WebContent process's userPreferredLanguages()
+// (NavigatorBase.cpp:148-152, Language.cpp:92-110). The driver gives the list before launch; this checks that the page agrees
+// and returns why not. The page never supplies the list.
+export function webkitLanguageCheck(given: readonly string[] | null, navigatorLanguages: readonly string[]): string | null {
+  if (given === null) return null
+  if (navigatorLanguages.length === 1 && navigatorLanguages[0] === given[0]) return null
+  return `the page shows navigator.languages ${JSON.stringify(navigatorLanguages)}, but the WebContent process's derived preferred languages are ${JSON.stringify(given)}`
 }
 
 // Chrome's application locale as its renderers received it: the --lang switch of every renderer process descending from

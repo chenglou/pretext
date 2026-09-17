@@ -134,3 +134,92 @@ Untraced, on good cases: Chrome `mark-context` letter spacing after U+200B (3), 
   cases.
 - `.artifacts/lab/painter/compare.ts`: scores two row files and prints painter counts per set, transitions and reasons.
 - `bun test rebuild/src`: 137 pass. `bunx tsc --noEmit -p rebuild/tsconfig.json` is clean.
+
+## Round 2 (2026-09-17)
+
+Painter-only failures of ceiling round 1 on the feature families (lineCount and breaks pass, widths pass or unobserved),
+with the slot protocol rows excluded (native floats that don't match the declared slots: webkit-host
+`c-2c1c63e51f6896f4`, `c-b3398f1cd2253c3a`, `c-c65cea28b4a8ed7d`; none among the Firefox and Chrome painter failures):
+Chrome 240, Firefox 233, webkit-host 312. Every run bundles `.artifacts/lab/painter-r2/head/rebuild/lab/predictor.ts`,
+the committed engines (HEAD `b5e2211`) with this round's painter, so the engine owners' uncommitted work doesn't enter,
+and scores with the committed scorer, so the rows compare with the round 1 evaluation rows case by case.
+
+### What changed
+
+- **Slot floats of later line builds intrude from a holder block.** The paragraph's slot floats come before its content,
+  so only its first line build places them. WebKit counts tab stops from the line rect's left after the floats already
+  in the formatting context and before those the build places itself (`InlineLineBuilder.cpp:478`, `:1394-1396`), and
+  a painted line block placed its own floats: every webkit-host `rule/line-slots` painter failure was a tab beside a
+  left float (`c-0150d8ad3497ba83`: 80.77 px natively, 77.06 px painted).
+- **A soft wrap box ends lines whose trailing white space depends on what follows.** An empty inline-block of width
+  `calc(100% + 1px)` inside the continuing spans, per engine: WebKit and Gecko after hanging white space, Blink after a
+  trimmed space whose line end isn't reshaped. A first version that added it after every soft wrap lost Chrome 218
+  feature cases (reshaped line ends, bidi control items before the box), webkit-host 14 (float32 steps) and made 10
+  Firefox lines with overflowing span end margins wrap; the per-engine conditions keep its gains without those losses.
+- **Blink hanging spaces are their own text node**, as they are their own item result natively.
+- **`<wbr>` is painted.**
+
+DESIGN.md §7 has the sources and the classes that stay named.
+
+### Scores
+
+Painter pass / fail / unobserved, before (round 1 evaluation rows) and after (this round's painter), with the painter
+transitions. No lineCount, breaks or widths status changed on any case in any set: the engines and the scorer are the
+committed ones.
+
+| Browser | Set | Before | After | Transitions |
+|---|---|---|---|---|
+| Chrome | feature families | 6,992 / 430 / 5,460 | 7,054 / 353 / 5,475 | fail→pass 72, fail→unobserved 15, pass→fail 10 |
+| Chrome | smoke | 294 / 3 / 2 | 296 / 1 / 2 | fail→pass 2 |
+| Chrome | runs | 2,507 / 69 / 4 | 2,554 / 22 / 4 | fail→pass 47 |
+| Chrome | ws | 995 / 24 / 0 | 1,013 / 6 / 0 | fail→pass 18 |
+| Chrome | policy | 1,595 / 11 / 0 | 1,598 / 8 / 0 | fail→pass 3 |
+| Firefox | feature families | 6,245 / 233 / 5,468 | 6,425 / 41 / 5,480 | fail→pass 180, fail→unobserved 12 |
+| Firefox | smoke | 283 / 14 / 0 | 283 / 14 / 0 | none |
+| Firefox | runs | 2,483 / 97 / 0 | 2,486 / 94 / 0 | fail→pass 3 |
+| Firefox | ws | 1,001 / 18 / 0 | 1,001 / 18 / 0 | none |
+| Firefox | policy | 1,583 / 23 / 0 | 1,583 / 23 / 0 | none |
+| webkit-host | feature families | 8,449 / 315 / 3,386 | 8,650 / 114 / 3,386 | fail→pass 209, pass→fail 8 |
+| webkit-host | smoke | 263 / 32 / 5 | 263 / 32 / 5 | none |
+| webkit-host | runs | 2,241 / 220 / 119 | 2,241 / 220 / 119 | none |
+| webkit-host | ws | 993 / 26 / 0 | 993 / 26 / 0 | none |
+| webkit-host | policy | 1,451 / 139 / 16 | 1,451 / 139 / 16 | none |
+
+Losses, attributed in DESIGN.md §7: webkit-host 8 `rule/atomic-inlines` (RTL `pre-wrap` lines starting with an atomic and
+ending in a hanging space, one float32 step once the soft wrap box follows) and Chrome 10 `rule/text-align` (LTR
+`pre-wrap` lines where a letter kerns with the hanging space, one LayoutUnit wider once the spaces are their own node).
+
+The round 1 painter-only failures, after:
+
+| Browser | Family | Pass | Fail | Unobserved | What the failures are (DESIGN.md §7) |
+|---|---|---:|---:|---:|---|
+| webkit-host | line-slots | 170 | 0 | 0 | |
+| webkit-host | text-align | 36 | 44 | 0 | RTL trimmed space kerning with the letter before it |
+| webkit-host | wbr-elements | 0 | 38 | 0 | the rest of an item split by the overflow breaker, measured fresh (float32) |
+| webkit-host | atomic-inlines | 0 | 24 | 0 | 21 wrap under the line block's override before a nowrap span; 3 float32 under overrides |
+| Chrome | wbr-elements | 20 | 0 | 0 | |
+| Chrome | text-align | 45 | 78 | 0 | line-end reshape before hanging spaces; RTL hanging spaces under override spans |
+| Chrome | box-edges, nested-box-edges | 0 | 90 | 0 | the span split into two box fragments by the override span's bidi controls |
+| Chrome | atomic-inlines | 0 | 0 | 3 | |
+| Chrome | br-elements, nowrap-spans | 0 | 4 | 0 | not traced (`c-ac6b59190d0c4ac4` reports `tab-stops` on its line) |
+| Firefox | atomic-inlines, box-edges, nested, nowrap-spans | 100 | 9 | 12 | 8 lines back up at an overflowing span end margin; 1 not traced |
+| Firefox | text-align | 68 | 32 | 0 | `justify` on a line ending in a trimmed collapsible space |
+| Firefox | wbr-elements | 12 | 0 | 0 | |
+
+Probes (`.artifacts/lab/painter-r2/probe-r2/<browser>-probes.json`, one run per browser under the lock): the Blink span
+splits into two box fragments under the painted override spans, where WebKit and Firefox keep the edge between the
+words; every webkit-host variant with `bidi-override` on the line block wraps before the nowrap span and the one without
+it doesn't; Firefox holds the nowrap line only with the `<wbr>` painted.
+
+Not rerun: the Blink owner's 53 fix-r12 cases (rule families and development sets) where the painted line doesn't repeat
+the paragraph's reshaped line start or following span; they are painter.md L1/L2 forms, and the rule families weren't in
+this round's sets.
+
+### Files (round 2)
+
+- `rebuild/src/paint.ts`, `rebuild/DESIGN.md` §7, `rebuild/SHARED-CHANGES.md` (painter owner, round 2).
+- `.artifacts/lab/painter-r2/`: `cases/cases-good-<browser>.ndjson` (the round 1 painter-only failures), `head/` (the
+  committed `rebuild/src` and `rebuild/lab` with this round's painter, bundled with `--predictor`), `<browser>/<set>-v2`
+  and `-v3` rows and per-case files, `report.ts` (painter counts and transitions against the round 1 evaluation),
+  `attribute.ts` (every loss with its line's fragments and painted DOM), `dump-paint.ts` (a row's painted DOM offline),
+  `run-v3.sh`, `probe-box-edges.ts` (Blink box edge, WebKit nowrap span and Gecko `<wbr>` forms).

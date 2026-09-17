@@ -2,8 +2,173 @@
 
 Lab runs of `rebuild/src/engines/webkit` in `webkit-host`, the system WebKit.framework that installed Safari 27.0 runs
 (CFBundleVersion 22625.1.29.11.27, macOS 27, libicucore 78.1), on this Mac (Retina, `devicePixelRatio` 2). Rows,
-summaries and per-case files are under `.artifacts/lab/webkit-stage5/<run>/`, scored with `rebuild/lab/score.ts`
-(scorer 3). Installed Safari wasn't run in this round.
+summaries and per-case files are under `.artifacts/lab/webkit-round2/<run>/` for ceiling round 2 and
+`.artifacts/lab/webkit-stage5/<run>/` before it. Installed Safari wasn't run by the WebKit owner in either round.
+
+## 2026-09-17: ceiling round 2 (line-local gaps)
+
+### What changed
+
+The round 2 definition covers a failing line only with a gap on that line or on the break decision that ended the line
+before it (lab/README.md, "Line-local gaps"), and round 1's WebKit gaps were all on the paragraph. Every condition of the
+content and fonts is now reported on the lines whose filling measured the characters it concerns, with `at` naming them;
+the paragraph keeps only `page-zoom`.
+
+- **Which characters a line concerns** (`lineGaps`, engines/webkit/lines.ts). The items from the line start to the end of
+  the last candidate content the builder formed: the placed content and the content whose fit ended the line, which the
+  next line starts with. The builders record how far they read (`measuredEnd`), where the last candidate began
+  (`decisionStart`), whether InlineContentBreaker ran on it (`overflowStart`) and whether they rebuilt the line back to an
+  earlier wrap opportunity (`reverted`).
+- **Conditions narrowed from source, per line:**
+  - `control-character-width`: a measured CR on the simple font code path, or another Cc (specs/webkit-text.md §5.3).
+  - `tab-stops`: a measured TAB where tabs are allowed.
+  - `letter-spacing-ligatures`: two adjacent measured characters that aren't white space or controls, in a box with letter
+    spacing. liga, clig, dlig and hlig replace at least two glyphs and the DOM turns them off
+    (ComputedStyleBase.cpp:324-331, UnrealizedCoreTextFont.cpp:258-264); Canvas keeps them and shows no ligature apart from
+    kerning.
+  - `canvas-language`: every measured character of a box with a locale whose fonts depend on it, or its Han, kana and Hangul
+    characters where only system fallback does. **Corrected reading:** serif, sans-serif, cursive, fantasy and monospace
+    resolve through CoreText's per-locale families whenever the locale's script isn't Common
+    (FontDescription::platformResolveGenericFamily, FontDescriptionCocoa.cpp:77-118, called first by
+    CSSFontSelector::resolveGenericFamily, CSSFontSelector.cpp:334-353). The port had read only -webkit-standard as per
+    script, so Latin in `serif` under `ja` had no gap (`c-dfa5a082c19b5785`: native `語f` 23.904px, predicted 23.994px from
+    Times).
+  - `simplified-measuring`: a measured string of a simplified-path box outside the width shortcut that holds U+0020, or whose
+    Canvas total isn't the float32 sum of its code points' advances in order. The DOM's simplified path sums the shaped
+    advances in one loop (FontCascade.cpp:381-412); WidthIterator sums unshaped advances, adds what shaping moved and
+    restores every character treated as a space to its unshaped advance (WidthIterator.cpp:84-120, :473-474), so the two
+    agree where shaping moved nothing. Canvas can't show a space's shaped advance.
+  - `fixed-pitch-path`: an item failing test T1 while `monospace` is null, and now also while `primaryFamily` is null in a
+    fixed-pitch box: whether the realized family is Courier New decides the width shortcut (FontCoreText.cpp:776-782), and
+    the first listed family only stands in for it (research/ROUND1-CRITIC.md item 8).
+  - `font-fallback`: a measured code point as wide as LastResort's box in a box taking the width shortcut.
+  - `string-storage`: keep-all punctuation in Latin-1 text (BreakablePositions.h:257-274, :292-299), or an emergency break in
+    Latin-1 text whose second unit can't start a line (InlineContentBreaker.cpp:143-157), reported where the break is taken.
+  - `ui-language`, `dictionary-breaks-unavailable`, `dictionary-breaks-stand-in`: the measured characters the condition
+    reads (the box of a Han locale, its quotes, its dictionary ranges).
+  - `page-history` (below).
+- **`page-history` from the break position cache's key.** TextBreakingPositionCache stores a box's item ends after its bidi
+  splits under (content, TextBreakingPositionContext, origin), for boxes of at least 5 units and 3 items, and a later box
+  with the same key builds its items from those ends, then takes its own bidi splits (InlineItemsBuilder.cpp:858-924,
+  1082-1148; TextBreakingPositionCache.h:41-42). The context holds white-space collapse (preserve and break-spaces share a
+  value), overflow-wrap, line-break, word-break, nbsp mode and locale (TextBreakingPositionContext.h:30-80). So another box
+  of the same text can differ only by its bidi splits and by how it splits preserved white space. Each box records:
+  - the level boundaries its text gets under either paragraph direction and one or two characters of context standing for
+    each resolved class UAX #9's rules read across its edges (sos and eos with L1, L, R, AL, EN alone or after L or R, AN),
+    less the ends its items already have (`historyEnds`, content.ts `collectHistoryFacts`);
+  - preserved white space of two units or more (`historyWhitespace`).
+  A line reports the gap where such an end falls inside a measured item and either the parts measure otherwise than the
+  whole, or the item is content whose fit ended the line (or the builder reverted over it): an extra end is a wrap
+  opportunity there (endsWithSoftWrapOpportunity, InlineFormattingUtils.cpp:336-355). For white space the whole run of the
+  box's white-space items counts, in both directions. Round 1 reported the gap for any box with strong RTL content or an RTL
+  block, and missed Latin text laid out after an RTL box of the same text. The contexts are a declared approximation of
+  "every context": longer contexts aren't enumerated.
+- **Observation port.** A text box shaped across inline boxes is limited under `rtl-shaping-across-inline-boxes`, the gap
+  its line reports, instead of `in-word-prefix`.
+
+### Runs
+
+Scorer 4 throughout. Native runs of the round 1 combined files in webkit-host with the first round 2 library, file order and
+reverse (`<set>-forward-r1`, `<set>-reverse-r1`, 12:51 to 13:11, every row observed, no native, prediction or painter
+error), scored forward against reverse. The last two source corrections (generic families by locale; decision content from
+where the last candidate began, only where it overflowed; white-space runs in both directions) change gaps and not
+predictions, so they ran predict-only against the r1 native rows (`<set>-predict-p2`, history flags from r1). Cells are
+cases, history-dependent cases, prediction failures, and lineCount / breaks / widths failures without a line-local gap.
+
+| Set | Cases | History-dependent | Prediction failures | Without a line-local gap: round 1 re-scored | r1 | p2 |
+|---|---:|---:|---:|---|---|---|
+| development combined file | 25,180 | 96 | 209 | 25 / 75 / 131 | 0 / 1 / 4 | 0 / 0 / 0 |
+| held-out 09-16 combined file | 15,205 | 144 | 266 | 43 / 88 / 176 | 0 / 1 / 2 | 0 / 0 / 1 |
+| rule and feature families (7 protocol rows) | 21,734 | 6 | 525 | 78 / 145 / 194 | 14 / 14 / 0 | 0 / 0 / 0 |
+
+- **p2 against r1:** 0 lineCount, breaks or widths transitions on any set. The painter transitions (development 1 lost, 11
+  gained; held-out 2 lost, 10 gained; families 4 gained) came with the painter owner's working-tree changes to paint.ts
+  between the runs; the WebKit changes don't move geometry.
+- **Failures r1 left uncovered, attributed:**
+  - `runs/lang-spans` `c-accaa5a60eb82121`, `c-bd0a609e0aec120b`, `c-295b6c791fc3f4e9`, `suite/keep-all` `c-dfa5a082c19b5785`,
+    held-out `policy/zh-lang` `c-c63614c0ae195f5d`: `serif` under a Han, kana or Hangul locale draws Latin and punctuation
+    from CoreText's per-locale family (`‘` 3.744px against Times' 5.328px; `¥` 13.84px against 10px). Generic families by
+    locale, above.
+  - `suite/glue` `c-cf7bb1ee29b5b4cf` and held-out `c-67cd9bd538cb3e95` (`ب` SHY `ب` NBSP `x` in an RTL block): the cached end
+    at 3 sits inside [2, 4), placed on line 1 as part of the candidate [2, 5) whose overflow ended the line. Decision content
+    from where the last candidate began.
+  - 14 `rule/br-elements` cases (`c-178367f98108fb03`, `c-06105f785157b4bd`, `c-3403348a57059e54` traced): `xx aaaa␠␠⇥<br>`
+    under break-spaces keeps `aaaa␠␠⇥` on one line natively, the run whole as a pre-wrap box of the same text cached it; the
+    port splits per space, and line 1's overflowing item [8, 9) belongs to the run [7, 10) that starts before it. White-space
+    runs in both directions.
+  - held-out `runs/word-spacing-spans` `c-064c3e678034473f`: not a gap. Line 8's box `ه` NBSP in a span with 16px word
+    spacing measures 26.596744537px, native 26.596746444px, one float32 step: WebKit adds word spacing per character inside
+    its float32 loop, the port added it to the Canvas total afterwards. Same class: development `c-4303efdc328a680d`,
+    `c-a797931f634f8091`, held-out `c-d6f5ad1dde30cfa1` (letter- and word-spaced lines, covered by `letter-spacing-ligatures`
+    on their lines). Recipe change below.
+- **Weak gaps, case-level lift (share of failing cases over share of all-pass cases), r1 then p2:**
+
+  | Gap | Development | Held-out 09-16 | Families | Round 1 re-scored, all three |
+  |---|---|---|---|---|
+  | `page-history` | 3,552 reports, 3.11; 3,689, 2.99 | 2,378, 3.09; 2,483, 2.99 | 809, 7.60; 825, 7.98 | 13,692, 0.35 |
+  | `canvas-language` | 5,645, 3.48; 11,361, 1.71 | 2,741, 3.35; 2,773, 3.32 | 3,828, 1.39; 3,828, 1.39 | 12,213, 2.30 |
+  | `simplified-measuring` | 4,955, 0.46; 4,955, 0.46 | 2,101, 0.70; 2,101, 0.70 | 11,476, 0.39; 11,476, 0.39 | 22,367, 0.52 |
+  | `letter-spacing-ligatures` | 2,501, 0.95 | 1,939, 0.74 | 2,360, 2.19 | 7,377, 1.41 |
+  | `control-character-width` | 1,176, 0.74 | 3,793, 0.91 | 336, 28.63 | 5,312, 2.89 |
+  | `string-storage` | 111, 0 | 131, 0 | 32, 0 | 1,264, 0.28 |
+
+  Failures covered only by gaps below lift 2 over development and families r1 together: lineCount 45, breaks 107, widths
+  186 (`canvas-language` 19 / 68 / 152, `letter-spacing-ligatures` 17 / 25 / 12, `simplified-measuring` 8 / 8 / 0). See Open.
+- **c-90c2ca856ed4ab91** (`بِبِ((tail` SHY `word`, Amiri 24px, 24px wide; round 1 critic item 3): alone in a fresh document
+  the ceiling library passes lineCount, breaks and widths (`c-90c2ca856ed4ab91/`); the charter-era native lines (`بِ((` /
+  `tai`) came from the document it ran in. Lines 0 and 1 report `page-history` at 6. The painter fails with a wrapped line
+  (painter owner).
+- **Feature rows:** `c-303d850e42b725dd`, `c-32a0d43aea9861a7` and the accidental pass `c-9863334967bab8a9` are protocol rows
+  under scorer 4.
+
+### Word spacing in the Canvas context
+
+WebKit adds word spacing inside WidthIterator's per-character float32 loop (calculateAdditionalWidth: after SPACE, LF, NBSP
+and TAB without tabs, past the TextRun's index 0 unless NBSP; the complex text controller likewise per glyph,
+ComplexTextController.cpp:790-845). The port measured a Canvas total without word spacing and added the spacing to it,
+another float32 order, which moved line widths by one float32 step on letter- and word-spaced lines. OffscreenCanvas's
+setWordSpacing gives the context's FontCascade the spacing (CanvasRenderingContext2DBase.cpp:3299-3324), so each box with word
+spacing now measures in a context that carries it (`spacedContext`); only strings split at TABs, whose parts start past the
+DOM's index 0, add it in JS. This replaces the registry's `webkit/measure/word-spacing-in-js` for strings without TABs
+(rules.json belongs to the tests owner).
+
+- Development combined file, predict-only against the r1 native rows (`dev-all-predict-p3`): widths 0 lost, 2 gained
+  (`runs/word-spacing-spans` `c-4303efdc328a680d`, `c-a797931f634f8091`, which now pass every metric); lineCount and breaks 0
+  transitions; prediction failures 209 to 207, none without a line-local gap.
+- Held-out 09-16 combined file (`heldout-all-predict-p3`): widths 0 lost, 1 gained (`c-d6f5ad1dde30cfa1`, every metric passes);
+  `c-064c3e678034473f`'s line 8 now equals native, and its widths are unobserved (line 4, a TAB box, isn't spanned by the
+  expected node rects); lineCount and breaks 0 transitions; prediction failures 266 to 264, none without a line-local gap.
+- Painter transitions against r1 (development 1 lost, 13 gained; held-out 3 lost, 11 gained) include the 3 word-spacing gains;
+  the rest came with the painter owner's paint.ts changes (12:51 r1, paint.ts changed again at 13:22, before held-out p3):
+  `c-3ef09a2630650b9b` has no word spacing.
+
+- Rule and feature families (`families-all-predict-p3`; 540 of their cases have word spacing, `rule/following-space` among
+  them): 0 transitions on lineCount, breaks and widths against r1; painter the same 4 gains as p2; prediction failures 525.
+
+With p3, prediction failures without a line-local gap are 0 / 0 / 0 on the development and held-out 09-16 combined files
+and on the rule and feature families.
+- measureText calls per paragraph on the development combined file, mean / median / p90 / p95 / max: round 1 evaluation 15.1
+  / 7 / 33 / 50 / 2,059; round 2 r1 17.7 / 8 / 37 / 56 / 2,069; p3 the same as r1. The line-local conditions add about 17% on
+  the mean (code point singles for `simplified-measuring`, split parts for `page-history`, T1 widths); the spaced context adds
+  nothing measurable.
+
+### Open
+
+- **Three conditions stay weak because WebKit's OffscreenCanvas can't show what they concern.** On the development combined
+  file's r1 rows (88,384 engine lines, 25,084 cases outside history dependence, 209 failing a prediction metric),
+  `simplified-measuring` is on 15,995 lines of 4,955 cases (19 failing), `letter-spacing-ligatures` on 6,741 lines of 2,501
+  cases (20 failing), `canvas-language` on 17,033 lines of 5,645 cases (166 failing).
+  - A space's shaped advance: WidthIterator restores it before Canvas reports a total (WidthIterator.cpp:103-117), so the
+    simplified path's kept advance has no Canvas reading, and every simplified-path string with U+0020 reports the gap.
+  - Which pairs a font ligates: Canvas keeps liga, clig, dlig and hlig under letter spacing and has no setting that turns
+    them off, and a pair total differs from its parts by kerning too.
+  - The locale's fonts: OffscreenCanvas has no locale attribute, so no measurement shows a locale-chosen font.
+  Each would close with an explicit input (a font fact, a per-locale realized family) or with a maintainer decision on a
+  connected `<canvas>` (SUPERSET-webkit §3.3); neither is an engine change.
+- **`page-history` contexts.** The level boundaries come from a declared set of one- and two-character contexts, standing for
+  the resolved classes UAX #9 reads across a box's edges; longer contexts aren't enumerated.
+- **`contentWidth` unobserved by a scorer rule** (CHARTER known deviations, tentpole 2): unchanged.
+- Installed Safari: not run by the WebKit owner; webkit-host stands in (lab/WEBKIT-HOST.md).
 
 ## 2026-09-17: stage 5 (inline structure, line slots, alignment)
 

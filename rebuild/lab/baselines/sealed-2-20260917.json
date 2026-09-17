@@ -1,0 +1,1244 @@
+{
+  "format": "pretext-lab-sealed/1",
+  "label": "sealed-2-20260917",
+  "createdAt": "2026-09-17T19:37:36.847Z",
+  "seedSha256": "e91c2d09bdcd01f67e06519eb2f34568e341f3d25a84b6c31ae9e92d444472ea",
+  "command": "bun rebuild/lab/cases/generate.ts runs ws policy suite --seed=<seed> --seed-label=sealed-2-20260917 --suite-sample=10000 --exclude-ids=.artifacts/lab/sealed-2/excluded-ids.ndjson --out-dir=.artifacts/lab/sealed-2",
+  "generatorSources": [
+    {
+      "path": "rebuild/lab/cases/build.ts",
+      "sha256": "770226f1adbdefd15b20199cba154a1482f5fc8fecd3c773652413c7eaf298a6"
+    },
+    {
+      "path": "rebuild/lab/cases/case.ts",
+      "sha256": "948f44cbae52a08955a8a4a1fbf3feea9757e2c498d59f3f468d440b35fc0298"
+    },
+    {
+      "path": "rebuild/lab/cases/font.ts",
+      "sha256": "eceeae2c58330991fa9e8ac85a43f66b61676e607aeed79c88341f2ed1d35d69"
+    },
+    {
+      "path": "rebuild/lab/cases/generate.ts",
+      "sha256": "bd553d4895fe638294655d5b00265997dab21f8a81bd3896e21b27bb22b79c2f"
+    },
+    {
+      "path": "rebuild/lab/cases/obligations.ts",
+      "sha256": "9be662307ca9fdd61d3dfd32a75677dae0247303974b1d4bf6941192c6ea81da"
+    },
+    {
+      "path": "rebuild/lab/cases/policy.ts",
+      "sha256": "1e1673d51ae291218649b5dbe78cba7d5512b274c18f6329522aa7ca525d272b"
+    },
+    {
+      "path": "rebuild/lab/cases/prng.ts",
+      "sha256": "4f39ee1665559c57887f27f75089050f12085330ccdd00f0ca576f85836da40d"
+    },
+    {
+      "path": "rebuild/lab/cases/runs.ts",
+      "sha256": "59bcf576a9ed83ca00825fb28b1993e87fa14d54e2799beef3ce1c3486a10c78"
+    },
+    {
+      "path": "rebuild/lab/cases/sample.ts",
+      "sha256": "94774a12751128c924c3d565a9a25f7deb2a18f7ae733bae1d247001f810818f"
+    },
+    {
+      "path": "rebuild/lab/cases/seal.ts",
+      "sha256": "2c5d61f52db30e88b66e0ab0c257c2d551eb8903d7160933e50e1f3c2fe09677"
+    },
+    {
+      "path": "rebuild/lab/cases/suite.ts",
+      "sha256": "93c3064b2a505f77c76adcafcb701d49aebf9c97e4a1a42e468cc3bfa619fe07"
+    },
+    {
+      "path": "rebuild/lab/cases/texts.ts",
+      "sha256": "ef3d792f86eb9894ee89ceb035fa32432c60c33a89d751728ba636db09f537b8"
+    },
+    {
+      "path": "rebuild/lab/cases/widths.ts",
+      "sha256": "d143250292e494f6dac897b263b6fd05e4f9c5c6fd5a8399a3c413ab8de83587"
+    },
+    {
+      "path": "rebuild/lab/cases/ws.ts",
+      "sha256": "06a7338569880a1ae5eb269c6764f8f28c1ff58f22d1a7cf86c377871c20928f"
+    }
+  ],
+  "excluded": {
+    "ids": 669645,
+    "idsFile": ".artifacts/lab/sealed-2/excluded-ids.ndjson",
+    "idsFileSha256": "0c7b0955eab242265e294ceba37d837850d4c2de01d3222deae73299dcf8268a",
+    "sources": [
+      {
+        "path": ".artifacts/ceiling-20260917/cases/families-all.ndjson",
+        "ids": 21734
+      },
+      {
+        "path": ".artifacts/ceiling-20260917/cases/sealed-all.ndjson",
+        "ids": 15218
+      },
+      {
+        "path": ".artifacts/charter-20260916/blink/attribution/changed-cases.ndjson",
+        "ids": 559
+      },
+      {
+        "path": ".artifacts/charter-20260916/evaluate/probe-big/cases.ndjson",
+        "ids": 1
+      },
+      {
+        "path": ".artifacts/charter-20260916/evaluate/webkit-host/families-derived/final/family-cases.ndjson",
+        "ids": 9584
+      },
+      {
+        "path": ".artifacts/charter-20260916/gecko/probe-in-word/cases.ndjson",
+        "ids": 63
+      },
+      {
+        "path": ".artifacts/charter-20260916/tests/families-20260916/chrome/final/family-cases.ndjson",
+        "ids": 10976
+      },
+      {
+        "path": ".artifacts/charter-20260916/tests/families-20260916/chrome/rounds/r00/cases-0.ndjson",
+        "ids": 3408
+      },
+      {
+        "path": ".artifacts/charter-20260916/tests/families-20260916/chrome/rounds/r01/cases-0.ndjson",
+        "ids": 12000
+      },
+      {
+        "path": ".artifacts/charter-20260916/tests/families-20260916/chrome/rounds/r01/cases-1.ndjson",
+        "ids": 9563
+      },
+      {
+        "path": ".artifacts/charter-20260916/tests/families-20260916/chrome/rounds/r02/cases-0.ndjson",
+        "ids": 12000
+      },
+      {
+        "path": ".artifacts/charter-20260916/tests/families-20260916/chrome/rounds/r02/cases-1.ndjson",
+        "ids": 51
+      },
+      {
+        "path": ".artifacts/charter-20260916/tests/families-20260916/chrome/rounds/r03/cases-0.ndjson",
+        "ids": 12000
+      },
+      {
+        "path": ".artifacts/charter-20260916/tests/families-20260916/chrome/rounds/r03/cases-1.ndjson",
+        "ids": 432
+      },
+      {
+        "path": ".artifacts/charter-20260916/tests/families-20260916/chrome/rounds/r04/cases-0.ndjson",
+        "ids": 6513
+      },
+      {
+        "path": ".artifacts/charter-20260916/tests/families-20260916/chrome/rounds/r05/cases-0.ndjson",
+        "ids": 4196
+      },
+      {
+        "path": ".artifacts/charter-20260916/tests/families-20260916/chrome/rounds/r06/cases-0.ndjson",
+        "ids": 1175
+      },
+      {
+        "path": ".artifacts/charter-20260916/tests/families-20260916/chrome/rounds/r07/cases-0.ndjson",
+        "ids": 473
+      },
+      {
+        "path": ".artifacts/charter-20260916/tests/families-20260916/chrome/rounds/r08/cases-0.ndjson",
+        "ids": 64
+      },
+      {
+        "path": ".artifacts/charter-20260916/tests/families-20260916/chrome/rounds/r09/cases-0.ndjson",
+        "ids": 8482
+      },
+      {
+        "path": ".artifacts/charter-20260916/tests/families-20260916/chrome/rounds/r10/cases-0.ndjson",
+        "ids": 6029
+      },
+      {
+        "path": ".artifacts/charter-20260916/tests/families-20260916/chrome/rounds/r11/cases-0.ndjson",
+        "ids": 4307
+      },
+      {
+        "path": ".artifacts/charter-20260916/tests/families-20260916/chrome/rounds/r12/cases-0.ndjson",
+        "ids": 2664
+      },
+      {
+        "path": ".artifacts/charter-20260916/tests/families-20260916/chrome/rounds/r13/cases-0.ndjson",
+        "ids": 935
+      },
+      {
+        "path": ".artifacts/charter-20260916/tests/families-20260916/chrome/rounds/r14/cases-0.ndjson",
+        "ids": 11
+      },
+      {
+        "path": ".artifacts/charter-20260916/tests/families-20260916/firefox/final/family-cases.ndjson",
+        "ids": 9584
+      },
+      {
+        "path": ".artifacts/charter-20260916/tests/families-20260916/firefox/rounds/r00/cases-0.ndjson",
+        "ids": 3156
+      },
+      {
+        "path": ".artifacts/charter-20260916/tests/families-20260916/firefox/rounds/r01/cases-0.ndjson",
+        "ids": 12000
+      },
+      {
+        "path": ".artifacts/charter-20260916/tests/families-20260916/firefox/rounds/r01/cases-1.ndjson",
+        "ids": 6586
+      },
+      {
+        "path": ".artifacts/charter-20260916/tests/families-20260916/firefox/rounds/r02/cases-0.ndjson",
+        "ids": 9811
+      },
+      {
+        "path": ".artifacts/charter-20260916/tests/families-20260916/firefox/rounds/r03/cases-0.ndjson",
+        "ids": 8301
+      },
+      {
+        "path": ".artifacts/charter-20260916/tests/families-20260916/firefox/rounds/r04/cases-0.ndjson",
+        "ids": 4162
+      },
+      {
+        "path": ".artifacts/charter-20260916/tests/families-20260916/firefox/rounds/r05/cases-0.ndjson",
+        "ids": 3619
+      },
+      {
+        "path": ".artifacts/charter-20260916/tests/families-20260916/firefox/rounds/r06/cases-0.ndjson",
+        "ids": 362
+      },
+      {
+        "path": ".artifacts/charter-20260916/tests/families-20260916/firefox/rounds/r07/cases-0.ndjson",
+        "ids": 132
+      },
+      {
+        "path": ".artifacts/charter-20260916/tests/families-20260916/firefox/rounds/r08/cases-0.ndjson",
+        "ids": 6566
+      },
+      {
+        "path": ".artifacts/charter-20260916/tests/families-20260916/firefox/rounds/r09/cases-0.ndjson",
+        "ids": 2502
+      },
+      {
+        "path": ".artifacts/charter-20260916/tests/families-20260916/firefox/rounds/r10/cases-0.ndjson",
+        "ids": 3507
+      },
+      {
+        "path": ".artifacts/charter-20260916/tests/families-20260916/firefox/rounds/r11/cases-0.ndjson",
+        "ids": 524
+      },
+      {
+        "path": ".artifacts/charter-20260916/tests/families-20260916/firefox/rounds/r12/cases-0.ndjson",
+        "ids": 51
+      },
+      {
+        "path": ".artifacts/charter-20260916/tests/families-20260916/webkit-host/final/family-cases.ndjson",
+        "ids": 9584
+      },
+      {
+        "path": ".artifacts/charter-20260916/tests/families-20260916/webkit-host/rounds/r00/cases-0.ndjson",
+        "ids": 3156
+      },
+      {
+        "path": ".artifacts/charter-20260916/tests/families-20260916/webkit-host/rounds/r01/cases-0.ndjson",
+        "ids": 12000
+      },
+      {
+        "path": ".artifacts/charter-20260916/tests/families-20260916/webkit-host/rounds/r01/cases-1.ndjson",
+        "ids": 6520
+      },
+      {
+        "path": ".artifacts/charter-20260916/tests/families-20260916/webkit-host/rounds/r02/cases-0.ndjson",
+        "ids": 12000
+      },
+      {
+        "path": ".artifacts/charter-20260916/tests/families-20260916/webkit-host/rounds/r02/cases-1.ndjson",
+        "ids": 12000
+      },
+      {
+        "path": ".artifacts/charter-20260916/tests/families-20260916/webkit-host/rounds/r02/cases-2.ndjson",
+        "ids": 8700
+      },
+      {
+        "path": ".artifacts/charter-20260916/tests/families-20260916/webkit-host/rounds/r03/cases-0.ndjson",
+        "ids": 11727
+      },
+      {
+        "path": ".artifacts/charter-20260916/tests/families-20260916/webkit-host/rounds/r04/cases-0.ndjson",
+        "ids": 5715
+      },
+      {
+        "path": ".artifacts/charter-20260916/tests/families-20260916/webkit-host/rounds/r05/cases-0.ndjson",
+        "ids": 9481
+      },
+      {
+        "path": ".artifacts/charter-20260916/tests/families-20260916/webkit-host/rounds/r06/cases-0.ndjson",
+        "ids": 3884
+      },
+      {
+        "path": ".artifacts/charter-20260916/tests/families-20260916/webkit-host/rounds/r07/cases-0.ndjson",
+        "ids": 1110
+      },
+      {
+        "path": ".artifacts/charter-20260916/tests/families-20260916/webkit-host/rounds/r08/cases-0.ndjson",
+        "ids": 122
+      },
+      {
+        "path": ".artifacts/charter-20260916/tests/families-20260916/webkit-host/rounds/r09/cases-0.ndjson",
+        "ids": 16
+      },
+      {
+        "path": ".artifacts/charter-20260916/tests/families-20260916/webkit-host/rounds/r10/cases-0.ndjson",
+        "ids": 5739
+      },
+      {
+        "path": ".artifacts/charter-20260916/tests/families-20260916/webkit-host/rounds/r11/cases-0.ndjson",
+        "ids": 8067
+      },
+      {
+        "path": ".artifacts/charter-20260916/tests/families-20260916/webkit-host/rounds/r12/cases-0.ndjson",
+        "ids": 5493
+      },
+      {
+        "path": ".artifacts/charter-20260916/tests/families-20260916/webkit-host/rounds/r13/cases-0.ndjson",
+        "ids": 5155
+      },
+      {
+        "path": ".artifacts/charter-20260916/tests/families-20260916/webkit-host/rounds/r14/cases-0.ndjson",
+        "ids": 1721
+      },
+      {
+        "path": ".artifacts/charter-20260916/tests/families-20260916/webkit-host/rounds/r15/cases-0.ndjson",
+        "ids": 210
+      },
+      {
+        "path": ".artifacts/charter-20260916/tests/families-20260916/webkit-host/rounds/r16/cases-0.ndjson",
+        "ids": 45
+      },
+      {
+        "path": ".artifacts/charter-20260916/triage/cases/chrome-long.ndjson",
+        "ids": 55
+      },
+      {
+        "path": ".artifacts/charter-20260916/triage/cases/chrome-small.ndjson",
+        "ids": 8933
+      },
+      {
+        "path": ".artifacts/charter-20260916/triage/cases/chrome-widths.ndjson",
+        "ids": 519
+      },
+      {
+        "path": ".artifacts/charter-20260916/triage/cases/firefox-small.ndjson",
+        "ids": 8518
+      },
+      {
+        "path": ".artifacts/charter-20260916/triage/cases/firefox-widths.ndjson",
+        "ids": 85
+      },
+      {
+        "path": ".artifacts/charter-20260916/triage/cases/webkit-host-small.ndjson",
+        "ids": 9854
+      },
+      {
+        "path": ".artifacts/charter-20260916/triage/cases/webkit-host-widths.ndjson",
+        "ids": 386
+      },
+      {
+        "path": ".artifacts/lab/baseline-main/cases/policy.ndjson",
+        "ids": 408
+      },
+      {
+        "path": ".artifacts/lab/baseline-main/cases/runs.ndjson",
+        "ids": 21
+      },
+      {
+        "path": ".artifacts/lab/baseline-main/cases/smoke.ndjson",
+        "ids": 104
+      },
+      {
+        "path": ".artifacts/lab/baseline-main/cases/suite-sample-1.ndjson",
+        "ids": 5000
+      },
+      {
+        "path": ".artifacts/lab/baseline-main/cases/suite-sample-2.ndjson",
+        "ids": 5000
+      },
+      {
+        "path": ".artifacts/lab/baseline-main/cases/suite-sample-3.ndjson",
+        "ids": 5000
+      },
+      {
+        "path": ".artifacts/lab/baseline-main/cases/suite-sample-4.ndjson",
+        "ids": 5000
+      },
+      {
+        "path": ".artifacts/lab/baseline-main/cases/ws.ndjson",
+        "ids": 103
+      },
+      {
+        "path": ".artifacts/lab/blink/cases/arabic-0.ndjson",
+        "ids": 2636
+      },
+      {
+        "path": ".artifacts/lab/blink/cases/arabic-1.ndjson",
+        "ids": 2636
+      },
+      {
+        "path": ".artifacts/lab/blink/cases/suite-00.ndjson",
+        "ids": 2500
+      },
+      {
+        "path": ".artifacts/lab/blink/cases/suite-01.ndjson",
+        "ids": 2500
+      },
+      {
+        "path": ".artifacts/lab/blink/cases/suite-02.ndjson",
+        "ids": 2500
+      },
+      {
+        "path": ".artifacts/lab/blink/cases/suite-03.ndjson",
+        "ids": 2500
+      },
+      {
+        "path": ".artifacts/lab/blink/cases/suite-04.ndjson",
+        "ids": 2500
+      },
+      {
+        "path": ".artifacts/lab/blink/cases/suite-05.ndjson",
+        "ids": 2500
+      },
+      {
+        "path": ".artifacts/lab/blink/cases/suite-06.ndjson",
+        "ids": 2500
+      },
+      {
+        "path": ".artifacts/lab/blink/cases/suite-07.ndjson",
+        "ids": 2500
+      },
+      {
+        "path": ".artifacts/lab/cases/heldout-policy.ndjson",
+        "ids": 1604
+      },
+      {
+        "path": ".artifacts/lab/cases/heldout-runs.ndjson",
+        "ids": 2579
+      },
+      {
+        "path": ".artifacts/lab/cases/heldout-suite-sample.ndjson",
+        "ids": 10000
+      },
+      {
+        "path": ".artifacts/lab/cases/heldout-ws.ndjson",
+        "ids": 1022
+      },
+      {
+        "path": ".artifacts/lab/cases/policy.ndjson",
+        "ids": 1606
+      },
+      {
+        "path": ".artifacts/lab/cases/runs.ndjson",
+        "ids": 2580
+      },
+      {
+        "path": ".artifacts/lab/cases/smoke.ndjson",
+        "ids": 300
+      },
+      {
+        "path": ".artifacts/lab/cases/suite-sample-5000.ndjson",
+        "ids": 5000
+      },
+      {
+        "path": ".artifacts/lab/cases/suite-sample.ndjson",
+        "ids": 20000
+      },
+      {
+        "path": ".artifacts/lab/cases/ws.ndjson",
+        "ids": 1019
+      },
+      {
+        "path": ".artifacts/lab/final-20260916/cases/dev-all.ndjson",
+        "ids": 25247
+      },
+      {
+        "path": ".artifacts/lab/final-20260916/cases/heldout-all.ndjson",
+        "ids": 15205
+      },
+      {
+        "path": ".artifacts/lab/final-20260916/cases/heldout-suite-sample-part0.ndjson",
+        "ids": 5000
+      },
+      {
+        "path": ".artifacts/lab/final-20260916/cases/heldout-suite-sample-part1.ndjson",
+        "ids": 5000
+      },
+      {
+        "path": ".artifacts/lab/final-20260916/cases/suite-sample-part0.ndjson",
+        "ids": 5000
+      },
+      {
+        "path": ".artifacts/lab/final-20260916/cases/suite-sample-part1.ndjson",
+        "ids": 5000
+      },
+      {
+        "path": ".artifacts/lab/final-20260916/cases/suite-sample-part2.ndjson",
+        "ids": 5000
+      },
+      {
+        "path": ".artifacts/lab/final-20260916/cases/suite-sample-part3.ndjson",
+        "ids": 5000
+      },
+      {
+        "path": ".artifacts/lab/gecko/audit/fe0e-cases.ndjson",
+        "ids": 0
+      },
+      {
+        "path": ".artifacts/lab/gecko/audit/sample-cases.ndjson",
+        "ids": 0
+      },
+      {
+        "path": ".artifacts/lab/gecko/debug-cases.ndjson",
+        "ids": 4
+      },
+      {
+        "path": ".artifacts/lab/gecko/debug2-cases.ndjson",
+        "ids": 21
+      },
+      {
+        "path": ".artifacts/lab/gecko/debug3-cases.ndjson",
+        "ids": 7
+      },
+      {
+        "path": ".artifacts/lab/gecko/debug4-cases.ndjson",
+        "ids": 5
+      },
+      {
+        "path": ".artifacts/lab/gecko/debug5-cases.ndjson",
+        "ids": 19
+      },
+      {
+        "path": ".artifacts/lab/gecko/debug6-cases.ndjson",
+        "ids": 3
+      },
+      {
+        "path": ".artifacts/lab/gecko/debug7-cases.ndjson",
+        "ids": 4
+      },
+      {
+        "path": ".artifacts/lab/gecko/families-s5/final/family-cases.ndjson",
+        "ids": 21530
+      },
+      {
+        "path": ".artifacts/lab/gecko/families-s5/rounds/r00/cases-0.ndjson",
+        "ids": 5968
+      },
+      {
+        "path": ".artifacts/lab/gecko/families-s5/rounds/r01/cases-0.ndjson",
+        "ids": 12000
+      },
+      {
+        "path": ".artifacts/lab/gecko/families-s5/rounds/r01/cases-1.ndjson",
+        "ids": 12000
+      },
+      {
+        "path": ".artifacts/lab/gecko/families-s5/rounds/r01/cases-2.ndjson",
+        "ids": 12000
+      },
+      {
+        "path": ".artifacts/lab/gecko/families-s5/rounds/r01/cases-3.ndjson",
+        "ids": 11227
+      },
+      {
+        "path": ".artifacts/lab/gecko/families-s5/rounds/r02/cases-0.ndjson",
+        "ids": 12000
+      },
+      {
+        "path": ".artifacts/lab/gecko/families-s5/rounds/r02/cases-1.ndjson",
+        "ids": 12000
+      },
+      {
+        "path": ".artifacts/lab/gecko/families-s5/rounds/r02/cases-2.ndjson",
+        "ids": 5585
+      },
+      {
+        "path": ".artifacts/lab/gecko/families-s5/rounds/r03/cases-0.ndjson",
+        "ids": 12000
+      },
+      {
+        "path": ".artifacts/lab/gecko/families-s5/rounds/r03/cases-1.ndjson",
+        "ids": 11484
+      },
+      {
+        "path": ".artifacts/lab/gecko/families-s5/rounds/r04/cases-0.ndjson",
+        "ids": 12000
+      },
+      {
+        "path": ".artifacts/lab/gecko/families-s5/rounds/r04/cases-1.ndjson",
+        "ids": 1
+      },
+      {
+        "path": ".artifacts/lab/gecko/families-s5/rounds/r05/cases-0.ndjson",
+        "ids": 10015
+      },
+      {
+        "path": ".artifacts/lab/gecko/families-s5/rounds/r06/cases-0.ndjson",
+        "ids": 7856
+      },
+      {
+        "path": ".artifacts/lab/gecko/families-s5/rounds/r07/cases-0.ndjson",
+        "ids": 3993
+      },
+      {
+        "path": ".artifacts/lab/gecko/families-s5/rounds/r08/cases-0.ndjson",
+        "ids": 3715
+      },
+      {
+        "path": ".artifacts/lab/gecko/families-s5/rounds/r09/cases-0.ndjson",
+        "ids": 945
+      },
+      {
+        "path": ".artifacts/lab/gecko/families-s5/rounds/r10/cases-0.ndjson",
+        "ids": 541
+      },
+      {
+        "path": ".artifacts/lab/gecko/families-s5/rounds/r11/cases-0.ndjson",
+        "ids": 16
+      },
+      {
+        "path": ".artifacts/lab/history-20260916/after-ltr.ndjson",
+        "ids": 2
+      },
+      {
+        "path": ".artifacts/lab/history-20260916/alone.ndjson",
+        "ids": 1
+      },
+      {
+        "path": ".artifacts/lab/painter-r2/cases/cases-good-chrome.ndjson",
+        "ids": 240
+      },
+      {
+        "path": ".artifacts/lab/painter-r2/cases/cases-good-firefox.ndjson",
+        "ids": 233
+      },
+      {
+        "path": ".artifacts/lab/painter-r2/cases/cases-good-webkit-host.ndjson",
+        "ids": 312
+      },
+      {
+        "path": ".artifacts/lab/painter/cases/painter-failing-chrome.ndjson",
+        "ids": 0
+      },
+      {
+        "path": ".artifacts/lab/painter/cases/painter-failing-firefox.ndjson",
+        "ids": 0
+      },
+      {
+        "path": ".artifacts/lab/painter/cases/painter-failing-webkit-host.ndjson",
+        "ids": 0
+      },
+      {
+        "path": ".artifacts/lab/painter/cases/probe-bidi-chrome.ndjson",
+        "ids": 0
+      },
+      {
+        "path": ".artifacts/lab/painter/cases/probe-bidi-webkit-host.ndjson",
+        "ids": 0
+      },
+      {
+        "path": ".artifacts/lab/sealed/excluded-ids.ndjson",
+        "ids": 330930
+      },
+      {
+        "path": ".artifacts/lab/sealed/policy.ndjson",
+        "ids": 1600
+      },
+      {
+        "path": ".artifacts/lab/sealed/runs.ndjson",
+        "ids": 2579
+      },
+      {
+        "path": ".artifacts/lab/sealed/suite-sample.ndjson",
+        "ids": 10000
+      },
+      {
+        "path": ".artifacts/lab/sealed/ws.ndjson",
+        "ids": 1039
+      },
+      {
+        "path": ".artifacts/lab/verify-8bit/cases.ndjson",
+        "ids": 0
+      },
+      {
+        "path": ".artifacts/lab/webkit-host-20260916/replay-old-order-20k/cases.ndjson",
+        "ids": 16594
+      },
+      {
+        "path": ".artifacts/lab/webkit-host-20260916/replay-old-order/cases.ndjson",
+        "ids": 1544
+      },
+      {
+        "path": ".artifacts/lab/webkit-host-20260916/suite-diff13-reversed/cases.ndjson",
+        "ids": 13
+      },
+      {
+        "path": ".artifacts/lab/webkit-host-20260916/suite-diff13/cases.ndjson",
+        "ids": 13
+      },
+      {
+        "path": ".artifacts/lab/webkit-host-20260916/suite5000-reversed/cases.ndjson",
+        "ids": 5000
+      },
+      {
+        "path": ".artifacts/lab/webkit-stage5/isolate-br/cases.ndjson",
+        "ids": 24
+      },
+      {
+        "path": ".artifacts/lab/webkit-stage5/isolate-triage-cases.ndjson",
+        "ids": 6
+      },
+      {
+        "path": ".artifacts/lab/webkit-stage5/isolate/c-17af0e41879fc51f.ndjson",
+        "ids": 1
+      },
+      {
+        "path": ".artifacts/lab/webkit-stage5/isolate/c-18d8eb5618d3e354.ndjson",
+        "ids": 1
+      },
+      {
+        "path": ".artifacts/lab/webkit-stage5/isolate/c-311b65d1c9ab10e4.ndjson",
+        "ids": 1
+      },
+      {
+        "path": ".artifacts/lab/webkit-stage5/isolate/c-49feb03a06bd4b90.ndjson",
+        "ids": 1
+      },
+      {
+        "path": ".artifacts/lab/webkit-stage5/isolate/c-4bb3746469073e4d.ndjson",
+        "ids": 1
+      },
+      {
+        "path": ".artifacts/lab/webkit-stage5/isolate/c-4e3711b398474ca8.ndjson",
+        "ids": 1
+      },
+      {
+        "path": ".artifacts/lab/webkit-stage5/isolate/c-66ae4ab7d56cb0ae.ndjson",
+        "ids": 1
+      },
+      {
+        "path": ".artifacts/lab/webkit-stage5/isolate/c-79a3f3d4cd1d6e51.ndjson",
+        "ids": 1
+      },
+      {
+        "path": ".artifacts/lab/webkit-stage5/isolate/c-7f8a33ff01d121d8.ndjson",
+        "ids": 1
+      },
+      {
+        "path": ".artifacts/lab/webkit-stage5/isolate/c-819d869118158055.ndjson",
+        "ids": 1
+      },
+      {
+        "path": ".artifacts/lab/webkit-stage5/isolate/c-a07d21a7de19c6ca.ndjson",
+        "ids": 1
+      },
+      {
+        "path": ".artifacts/lab/webkit-stage5/isolate/c-b8ae48d3b53dbe50.ndjson",
+        "ids": 1
+      },
+      {
+        "path": ".artifacts/lab/webkit-stage5/isolate/c-c8bc76153e6c48e2.ndjson",
+        "ids": 1
+      },
+      {
+        "path": ".artifacts/lab/webkit-stage5/isolate/c-cbe822191931c1e8.ndjson",
+        "ids": 1
+      },
+      {
+        "path": ".artifacts/lab/webkit-stage5/isolate/c-d39c50988614eb82.ndjson",
+        "ids": 1
+      },
+      {
+        "path": ".artifacts/lab/webkit-stage5/isolate/c-dde68f266727e5a1.ndjson",
+        "ids": 1
+      },
+      {
+        "path": ".artifacts/lab/webkit-stage5/isolate/c-f6c8d44a6fa0bab8.ndjson",
+        "ids": 1
+      },
+      {
+        "path": ".artifacts/lab/webkit-stage5/probe-features/cases.ndjson",
+        "ids": 129
+      },
+      {
+        "path": ".artifacts/lab/webkit-stage5/probe-glue/cases.ndjson",
+        "ids": 30
+      },
+      {
+        "path": ".artifacts/lab/webkit/audit/debug-r1/cases.ndjson",
+        "ids": 52
+      },
+      {
+        "path": ".artifacts/lab/webkit/gaps-r1/cases.ndjson",
+        "ids": 254
+      },
+      {
+        "path": ".artifacts/lab/webkit/measurement-r2/cases.ndjson",
+        "ids": 7
+      },
+      {
+        "path": ".artifacts/lab/webkit/runs-failing.ndjson",
+        "ids": 172
+      },
+      {
+        "path": ".artifacts/lab/webkit/suite-sample-part0.ndjson",
+        "ids": 5000
+      },
+      {
+        "path": ".artifacts/lab/webkit/suite-sample-part1.ndjson",
+        "ids": 5000
+      },
+      {
+        "path": ".artifacts/lab/webkit/suite-sample-part2.ndjson",
+        "ids": 5000
+      },
+      {
+        "path": ".artifacts/lab/webkit/suite-sample-part3.ndjson",
+        "ids": 5000
+      },
+      {
+        "path": ".artifacts/lab/webkit/suite-targeted-r2.ndjson",
+        "ids": 491
+      },
+      {
+        "path": ".artifacts/research-20260916/census/main-only/chrome-cases.ndjson",
+        "ids": 1191
+      },
+      {
+        "path": ".artifacts/research-20260916/census/main-only/firefox-cases.ndjson",
+        "ids": 731
+      },
+      {
+        "path": ".artifacts/research-20260916/census/main-only/webkit-host-cases.ndjson",
+        "ids": 2056
+      },
+      {
+        "path": ".artifacts/research-20260916/superset-blink/affected-cases.ndjson",
+        "ids": 23640
+      },
+      {
+        "path": ".artifacts/research-20260916/superset-blink/affected-short-cases.ndjson",
+        "ids": 23396
+      },
+      {
+        "path": ".artifacts/research-20260916/superset-blink/mainonly-cases.ndjson",
+        "ids": 1710
+      },
+      {
+        "path": ".artifacts/research-20260916/superset-gecko/experiment-cases.ndjson",
+        "ids": 5816
+      },
+      {
+        "path": ".artifacts/research-20260916/superset-webkit/rerun-widths/cases.ndjson",
+        "ids": 386
+      },
+      {
+        "path": ".artifacts/tests/features-20260917/chrome-en-US/final/family-cases.ndjson",
+        "ids": 468
+      },
+      {
+        "path": ".artifacts/tests/features-20260917/chrome-en-US/rounds/r00/cases-0.ndjson",
+        "ids": 144
+      },
+      {
+        "path": ".artifacts/tests/features-20260917/chrome-en-US/rounds/r01/cases-0.ndjson",
+        "ids": 918
+      },
+      {
+        "path": ".artifacts/tests/features-20260917/chrome-en-US/rounds/r02/cases-0.ndjson",
+        "ids": 288
+      },
+      {
+        "path": ".artifacts/tests/features-20260917/chrome-en-US/rounds/r03/cases-0.ndjson",
+        "ids": 432
+      },
+      {
+        "path": ".artifacts/tests/features-20260917/chrome-en-US/rounds/r04/cases-0.ndjson",
+        "ids": 120
+      },
+      {
+        "path": ".artifacts/tests/features-20260917/chrome-en-US/rounds/r05/cases-0.ndjson",
+        "ids": 87
+      },
+      {
+        "path": ".artifacts/tests/features-20260917/chrome/final/family-cases.ndjson",
+        "ids": 12882
+      },
+      {
+        "path": ".artifacts/tests/features-20260917/chrome/rounds/r00/cases-0.ndjson",
+        "ids": 2956
+      },
+      {
+        "path": ".artifacts/tests/features-20260917/chrome/rounds/r01/cases-0.ndjson",
+        "ids": 12000
+      },
+      {
+        "path": ".artifacts/tests/features-20260917/chrome/rounds/r01/cases-1.ndjson",
+        "ids": 12000
+      },
+      {
+        "path": ".artifacts/tests/features-20260917/chrome/rounds/r01/cases-2.ndjson",
+        "ids": 5540
+      },
+      {
+        "path": ".artifacts/tests/features-20260917/chrome/rounds/r02/cases-0.ndjson",
+        "ids": 12000
+      },
+      {
+        "path": ".artifacts/tests/features-20260917/chrome/rounds/r02/cases-1.ndjson",
+        "ids": 5483
+      },
+      {
+        "path": ".artifacts/tests/features-20260917/chrome/rounds/r03/cases-0.ndjson",
+        "ids": 12000
+      },
+      {
+        "path": ".artifacts/tests/features-20260917/chrome/rounds/r03/cases-1.ndjson",
+        "ids": 5247
+      },
+      {
+        "path": ".artifacts/tests/features-20260917/chrome/rounds/r04/cases-0.ndjson",
+        "ids": 10867
+      },
+      {
+        "path": ".artifacts/tests/features-20260917/chrome/rounds/r05/cases-0.ndjson",
+        "ids": 5832
+      },
+      {
+        "path": ".artifacts/tests/features-20260917/chrome/rounds/r06/cases-0.ndjson",
+        "ids": 5225
+      },
+      {
+        "path": ".artifacts/tests/features-20260917/chrome/rounds/r07/cases-0.ndjson",
+        "ids": 4960
+      },
+      {
+        "path": ".artifacts/tests/features-20260917/chrome/rounds/r08/cases-0.ndjson",
+        "ids": 1818
+      },
+      {
+        "path": ".artifacts/tests/features-20260917/chrome/rounds/r09/cases-0.ndjson",
+        "ids": 309
+      },
+      {
+        "path": ".artifacts/tests/features-20260917/chrome/rounds/r10/cases-0.ndjson",
+        "ids": 88
+      },
+      {
+        "path": ".artifacts/tests/features-20260917/chrome/rounds/r11/cases-0.ndjson",
+        "ids": 16
+      },
+      {
+        "path": ".artifacts/tests/features-20260917/firefox/final/family-cases.ndjson",
+        "ids": 11946
+      },
+      {
+        "path": ".artifacts/tests/features-20260917/firefox/rounds/r00/cases-0.ndjson",
+        "ids": 2812
+      },
+      {
+        "path": ".artifacts/tests/features-20260917/firefox/rounds/r01/cases-0.ndjson",
+        "ids": 12000
+      },
+      {
+        "path": ".artifacts/tests/features-20260917/firefox/rounds/r01/cases-1.ndjson",
+        "ids": 12000
+      },
+      {
+        "path": ".artifacts/tests/features-20260917/firefox/rounds/r01/cases-2.ndjson",
+        "ids": 4641
+      },
+      {
+        "path": ".artifacts/tests/features-20260917/firefox/rounds/r02/cases-0.ndjson",
+        "ids": 12000
+      },
+      {
+        "path": ".artifacts/tests/features-20260917/firefox/rounds/r02/cases-1.ndjson",
+        "ids": 5104
+      },
+      {
+        "path": ".artifacts/tests/features-20260917/firefox/rounds/r03/cases-0.ndjson",
+        "ids": 12000
+      },
+      {
+        "path": ".artifacts/tests/features-20260917/firefox/rounds/r03/cases-1.ndjson",
+        "ids": 1495
+      },
+      {
+        "path": ".artifacts/tests/features-20260917/firefox/rounds/r04/cases-0.ndjson",
+        "ids": 6569
+      },
+      {
+        "path": ".artifacts/tests/features-20260917/firefox/rounds/r05/cases-0.ndjson",
+        "ids": 5276
+      },
+      {
+        "path": ".artifacts/tests/features-20260917/firefox/rounds/r06/cases-0.ndjson",
+        "ids": 4713
+      },
+      {
+        "path": ".artifacts/tests/features-20260917/firefox/rounds/r07/cases-0.ndjson",
+        "ids": 3297
+      },
+      {
+        "path": ".artifacts/tests/features-20260917/firefox/rounds/r08/cases-0.ndjson",
+        "ids": 1217
+      },
+      {
+        "path": ".artifacts/tests/features-20260917/firefox/rounds/r09/cases-0.ndjson",
+        "ids": 893
+      },
+      {
+        "path": ".artifacts/tests/features-20260917/firefox/rounds/r10/cases-0.ndjson",
+        "ids": 533
+      },
+      {
+        "path": ".artifacts/tests/features-20260917/firefox/rounds/r11/cases-0.ndjson",
+        "ids": 16
+      },
+      {
+        "path": ".artifacts/tests/features-20260917/webkit-host/final/family-cases.ndjson",
+        "ids": 12150
+      },
+      {
+        "path": ".artifacts/tests/features-20260917/webkit-host/rounds/r00/cases-0.ndjson",
+        "ids": 2812
+      },
+      {
+        "path": ".artifacts/tests/features-20260917/webkit-host/rounds/r01/cases-0.ndjson",
+        "ids": 12000
+      },
+      {
+        "path": ".artifacts/tests/features-20260917/webkit-host/rounds/r01/cases-1.ndjson",
+        "ids": 12000
+      },
+      {
+        "path": ".artifacts/tests/features-20260917/webkit-host/rounds/r01/cases-2.ndjson",
+        "ids": 4177
+      },
+      {
+        "path": ".artifacts/tests/features-20260917/webkit-host/rounds/r02/cases-0.ndjson",
+        "ids": 12000
+      },
+      {
+        "path": ".artifacts/tests/features-20260917/webkit-host/rounds/r02/cases-1.ndjson",
+        "ids": 12000
+      },
+      {
+        "path": ".artifacts/tests/features-20260917/webkit-host/rounds/r02/cases-2.ndjson",
+        "ids": 12000
+      },
+      {
+        "path": ".artifacts/tests/features-20260917/webkit-host/rounds/r02/cases-3.ndjson",
+        "ids": 12000
+      },
+      {
+        "path": ".artifacts/tests/features-20260917/webkit-host/rounds/r02/cases-4.ndjson",
+        "ids": 7199
+      },
+      {
+        "path": ".artifacts/tests/features-20260917/webkit-host/rounds/r03/cases-0.ndjson",
+        "ids": 12000
+      },
+      {
+        "path": ".artifacts/tests/features-20260917/webkit-host/rounds/r03/cases-1.ndjson",
+        "ids": 7617
+      },
+      {
+        "path": ".artifacts/tests/features-20260917/webkit-host/rounds/r04/cases-0.ndjson",
+        "ids": 11141
+      },
+      {
+        "path": ".artifacts/tests/features-20260917/webkit-host/rounds/r05/cases-0.ndjson",
+        "ids": 12000
+      },
+      {
+        "path": ".artifacts/tests/features-20260917/webkit-host/rounds/r05/cases-1.ndjson",
+        "ids": 7108
+      },
+      {
+        "path": ".artifacts/tests/features-20260917/webkit-host/rounds/r06/cases-0.ndjson",
+        "ids": 12000
+      },
+      {
+        "path": ".artifacts/tests/features-20260917/webkit-host/rounds/r06/cases-1.ndjson",
+        "ids": 1332
+      },
+      {
+        "path": ".artifacts/tests/features-20260917/webkit-host/rounds/r07/cases-0.ndjson",
+        "ids": 6622
+      },
+      {
+        "path": ".artifacts/tests/features-20260917/webkit-host/rounds/r08/cases-0.ndjson",
+        "ids": 2940
+      },
+      {
+        "path": ".artifacts/tests/features-20260917/webkit-host/rounds/r09/cases-0.ndjson",
+        "ids": 1316
+      },
+      {
+        "path": ".artifacts/tests/features-20260917/webkit-host/rounds/r10/cases-0.ndjson",
+        "ids": 363
+      },
+      {
+        "path": ".artifacts/tests/features-20260917/webkit-host/rounds/r11/cases-0.ndjson",
+        "ids": 14
+      },
+      {
+        "path": "rebuild/lab/smoke-cases.ndjson",
+        "ids": 0
+      },
+      {
+        "path": "../../../../private/tmp/claude-501/-Users-chenglou-github-pretext/7e07dee5-fc27-4046-b679-3f61a43f7436/scratchpad/blink/debug-cases-2.ndjson",
+        "ids": 3
+      },
+      {
+        "path": "../../../../private/tmp/claude-501/-Users-chenglou-github-pretext/7e07dee5-fc27-4046-b679-3f61a43f7436/scratchpad/blink/debug-cases-3.ndjson",
+        "ids": 3
+      },
+      {
+        "path": "../../../../private/tmp/claude-501/-Users-chenglou-github-pretext/7e07dee5-fc27-4046-b679-3f61a43f7436/scratchpad/blink/debug-cases-4.ndjson",
+        "ids": 3
+      },
+      {
+        "path": "../../../../private/tmp/claude-501/-Users-chenglou-github-pretext/7e07dee5-fc27-4046-b679-3f61a43f7436/scratchpad/blink/debug-cases-5.ndjson",
+        "ids": 2
+      },
+      {
+        "path": "../../../../private/tmp/claude-501/-Users-chenglou-github-pretext/7e07dee5-fc27-4046-b679-3f61a43f7436/scratchpad/blink/debug-cases.ndjson",
+        "ids": 8
+      },
+      {
+        "path": "../../../../private/tmp/claude-501/-Users-chenglou-github-pretext/7e07dee5-fc27-4046-b679-3f61a43f7436/scratchpad/debug-cases-2.ndjson",
+        "ids": 6
+      },
+      {
+        "path": "../../../../private/tmp/claude-501/-Users-chenglou-github-pretext/7e07dee5-fc27-4046-b679-3f61a43f7436/scratchpad/debug-cases.ndjson",
+        "ids": 14
+      },
+      {
+        "path": "../../../../private/tmp/claude-501/-Users-chenglou-github-pretext/7e07dee5-fc27-4046-b679-3f61a43f7436/scratchpad/gecko/changed-cases.ndjson",
+        "ids": 121
+      },
+      {
+        "path": "../../../../private/tmp/claude-501/-Users-chenglou-github-pretext/7e07dee5-fc27-4046-b679-3f61a43f7436/scratchpad/gecko/families-objects-cases.ndjson",
+        "ids": 4948
+      },
+      {
+        "path": "../../../../private/tmp/claude-501/-Users-chenglou-github-pretext/7e07dee5-fc27-4046-b679-3f61a43f7436/scratchpad/gecko/feature-cases.ndjson",
+        "ids": 139
+      },
+      {
+        "path": "../../../../private/tmp/claude-501/-Users-chenglou-github-pretext/7e07dee5-fc27-4046-b679-3f61a43f7436/scratchpad/gecko/superset-cases.ndjson",
+        "ids": 5816
+      },
+      {
+        "path": "../../../../private/tmp/claude-501/-Users-chenglou-github-pretext/7e07dee5-fc27-4046-b679-3f61a43f7436/scratchpad/probe-zw.ndjson",
+        "ids": 96
+      },
+      {
+        "path": "../../../../private/tmp/claude-501/-Users-chenglou-github-pretext/7e07dee5-fc27-4046-b679-3f61a43f7436/scratchpad/probe-zw2.ndjson",
+        "ids": 80
+      },
+      {
+        "path": "../../../../private/tmp/claude-501/-Users-chenglou-github-pretext/7e07dee5-fc27-4046-b679-3f61a43f7436/scratchpad/probe-zw3.ndjson",
+        "ids": 48
+      }
+    ],
+    "notExcluded": {
+      "files": [
+        ".artifacts/research-20260916/census/cases/chunks/chunk00.ndjson",
+        ".artifacts/research-20260916/census/cases/chunks/chunk01.ndjson",
+        ".artifacts/research-20260916/census/cases/chunks/chunk02.ndjson",
+        ".artifacts/research-20260916/census/cases/chunks/chunk03.ndjson",
+        ".artifacts/research-20260916/census/cases/chunks/chunk04.ndjson",
+        ".artifacts/research-20260916/census/cases/chunks/chunk05.ndjson",
+        ".artifacts/research-20260916/census/cases/chunks/chunk06.ndjson",
+        ".artifacts/research-20260916/census/cases/chunks/chunk07.ndjson",
+        ".artifacts/research-20260916/census/cases/chunks/chunk08.ndjson",
+        ".artifacts/research-20260916/census/cases/chunks/chunk09.ndjson",
+        ".artifacts/research-20260916/census/cases/chunks/chunk10.ndjson",
+        ".artifacts/research-20260916/census/cases/chunks/chunk11.ndjson",
+        ".artifacts/research-20260916/census/cases/chunks/corpus00.ndjson",
+        ".artifacts/research-20260916/census/cases/chunks/corpus01.ndjson",
+        ".artifacts/research-20260916/census/cases/chunks/corpus02.ndjson",
+        ".artifacts/research-20260916/census/cases/chunks/corpus03.ndjson",
+        ".artifacts/research-20260916/census/cases/chunks/corpus04.ndjson",
+        ".artifacts/research-20260916/census/cases/chunks/corpus05.ndjson",
+        ".artifacts/research-20260916/census/cases/chunks/corpus06.ndjson",
+        ".artifacts/research-20260916/census/cases/chunks/corpus07.ndjson",
+        ".artifacts/research-20260916/census/cases/chunks/corpus08.ndjson",
+        ".artifacts/research-20260916/census/cases/chunks/corpus09.ndjson",
+        ".artifacts/research-20260916/census/cases/chunks/corpus10.ndjson"
+      ],
+      "reason": "the 2026-09-16 census observed every suite case once in these chunks; excluding them would leave no suite case"
+    }
+  },
+  "files": [
+    {
+      "name": "excluded-ids.ndjson",
+      "sha256": "0c7b0955eab242265e294ceba37d837850d4c2de01d3222deae73299dcf8268a",
+      "cases": null,
+      "families": null
+    },
+    {
+      "name": "generate.log",
+      "sha256": "80e173a5c549d62f5726fa2ddf2b52771475cbd4debb1b6ee79f361741745163",
+      "cases": null,
+      "families": null
+    },
+    {
+      "name": "policy.ndjson",
+      "sha256": "ae9c254075908dbdacb3fb84b4554c43d98165a04b67e235563375571450be8e",
+      "cases": null,
+      "families": null
+    },
+    {
+      "name": "policy.summary.json",
+      "sha256": "fd5721f775653773cc4d071dcf244124c99d67b26788aa2b18c8f7f1456f4375",
+      "cases": 1597,
+      "families": 8
+    },
+    {
+      "name": "runs.ndjson",
+      "sha256": "f3b1989a9ce72d0a6a7ff78c9067e81b185c06f2dd6f6f5d5acb0eb89ff8c0df",
+      "cases": null,
+      "families": null
+    },
+    {
+      "name": "runs.summary.json",
+      "sha256": "954782373226f581fc35d7ef94b4d654810b6f1a659ab4a509ee5cfeec59cd2c",
+      "cases": 2579,
+      "families": 7
+    },
+    {
+      "name": "suite-sample.ndjson",
+      "sha256": "eaac115c84f8ea5fb863f15449e971e68fc57aa0f1cc8a4c8d7c70b35f09ffa8",
+      "cases": null,
+      "families": null
+    },
+    {
+      "name": "suite-sample.summary.json",
+      "sha256": "a4e60511a491b21d9a470f591f684fe61cb1c40a18f9c424d3dd1303a1dc33a7",
+      "cases": 10000,
+      "families": 216
+    },
+    {
+      "name": "ws.ndjson",
+      "sha256": "532df860dd34b6dcbb212cda3dba02ac83ddd5abd193771a21349270d50f7cc6",
+      "cases": null,
+      "families": null
+    },
+    {
+      "name": "ws.summary.json",
+      "sha256": "314dd1f212af36290463efe3d49bdb0b34a09490f79cb121d83df920b96b4d24",
+      "cases": 1014,
+      "families": 3
+    }
+  ],
+  "rules": "Owners must not open, run or score these files before the evaluation stage. At evaluation: score.ts --sealed (counts only). Any look at a case burns the set (TEST-ARCHITECTURE §3).",
+  "sealDirectory": ".artifacts/lab/sealed-2"
+}

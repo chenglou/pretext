@@ -22,10 +22,10 @@
     "sha256": "1f99722733ad54c0079a3fd0e8426cf6585b663d8fa927b50c887b3f2b22d476"
    },
    ".artifacts/charter-20260916/font-facts/tools/tables.py": {
-    "sha256": "a0043c9061de5dd510d0978713d1d8ddf11ffb3803b5620e457799601e46ca03"
+    "sha256": "da0f73ba7161b2c1c6448195fe6501ff3cfc91191f91a78df3ec6edc5c42ff8b"
    },
    ".artifacts/charter-20260916/font-facts/tools/build-facts.ts": {
-    "sha256": "737404003f4ab826eccc4928add1a1ad87866336f9ce0e4e29c0682cdefe67d8"
+    "sha256": "b9e0fa199e8f3d2390b4a4730a9861ac477e806e66a1bac3ccec7b19b38fc836"
    }
   },
   "fontTools": "4.65.0",
@@ -81,6 +81,7 @@
    "gsub": "CTFontCopyTable GSUB non-null, checked against the file",
    "gsubArabFeatures": "GSUB features under script 'arab' (default and every language system); null when there is no GSUB; tables.py",
    "cmapU0628": "best cmap maps U+0628 (Arabic coverage); tables.py",
+   "pairKerning": "where HarfBuzz puts a pair adjustment in Latin text: 'first-advance' (GPOS PairPos XAdvance on the first glyph), 'split' (kern or kerx pair machine: kern >> 1 on the first glyph), null otherwise; from the kerning column of tables.py (GPOS kern scripts and PairPos value formats, kern and kerx subtable formats) and the morx and GSUB columns (build-facts.ts pairKerning)",
    "substituteForU0628": "the face CTFontCreateForString(face, U+0628) returns, Blink's system fallback for a character no listed font has (font_cache_mac.mm:127-150, 199-249); ctprobe.swift"
   }
  },
@@ -934,7 +935,8 @@
    "gsub": false,
    "gsubArabFeatures": null,
    "cmapU0628": true,
-   "substituteForU0628": "/System/Library/Fonts/Supplemental/AlBayan.ttc#0"
+   "substituteForU0628": "/System/Library/Fonts/Supplemental/AlBayan.ttc#0",
+   "pairKerning": null
   },
   "/System/Library/Fonts/Supplemental/AlBayan.ttc#2": {
    "postScriptName": "AlBayan-Bold",
@@ -955,7 +957,8 @@
    "gsub": false,
    "gsubArabFeatures": null,
    "cmapU0628": true,
-   "substituteForU0628": "/System/Library/Fonts/Supplemental/AlBayan.ttc#2"
+   "substituteForU0628": "/System/Library/Fonts/Supplemental/AlBayan.ttc#2",
+   "pairKerning": null
   },
   "/System/Library/Fonts/Supplemental/Al Nile.ttc#0": {
    "postScriptName": "AlNile",
@@ -976,7 +979,8 @@
    "gsub": false,
    "gsubArabFeatures": null,
    "cmapU0628": true,
-   "substituteForU0628": "/System/Library/Fonts/Supplemental/Al Nile.ttc#0"
+   "substituteForU0628": "/System/Library/Fonts/Supplemental/Al Nile.ttc#0",
+   "pairKerning": null
   },
   "/System/Library/Fonts/Supplemental/Al Nile.ttc#2": {
    "postScriptName": "AlNile-Bold",
@@ -997,7 +1001,8 @@
    "gsub": false,
    "gsubArabFeatures": null,
    "cmapU0628": true,
-   "substituteForU0628": "/System/Library/Fonts/Supplemental/Al Nile.ttc#2"
+   "substituteForU0628": "/System/Library/Fonts/Supplemental/Al Nile.ttc#2",
+   "pairKerning": null
   },
   "/System/Library/Fonts/Supplemental/Apple Chancery.ttf#0": {
    "postScriptName": "Apple-Chancery",
@@ -1018,7 +1023,8 @@
    "gsub": false,
    "gsubArabFeatures": null,
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0",
+   "pairKerning": "split"
   },
   "/System/Library/Fonts/Apple Color Emoji.ttc#0": {
    "postScriptName": "AppleColorEmoji",
@@ -1039,7 +1045,8 @@
    "gsub": false,
    "gsubArabFeatures": null,
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0",
+   "pairKerning": null
   },
   "/System/Library/Fonts/AppleSDGothicNeo.ttc#0": {
    "postScriptName": "AppleSDGothicNeo-Regular",
@@ -1060,7 +1067,8 @@
    "gsub": true,
    "gsubArabFeatures": [],
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0",
+   "pairKerning": "first-advance"
   },
   "/System/Library/Fonts/AppleSDGothicNeo.ttc#10": {
    "postScriptName": "AppleSDGothicNeo-Thin",
@@ -1081,7 +1089,8 @@
    "gsub": true,
    "gsubArabFeatures": [],
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0",
+   "pairKerning": "first-advance"
   },
   "/System/Library/Fonts/AppleSDGothicNeo.ttc#12": {
    "postScriptName": "AppleSDGothicNeo-UltraLight",
@@ -1102,7 +1111,8 @@
    "gsub": true,
    "gsubArabFeatures": [],
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0",
+   "pairKerning": "first-advance"
   },
   "/System/Library/Fonts/AppleSDGothicNeo.ttc#8": {
    "postScriptName": "AppleSDGothicNeo-Light",
@@ -1123,7 +1133,8 @@
    "gsub": true,
    "gsubArabFeatures": [],
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0",
+   "pairKerning": "first-advance"
   },
   "/System/Library/Fonts/AppleSDGothicNeo.ttc#2": {
    "postScriptName": "AppleSDGothicNeo-Medium",
@@ -1144,7 +1155,8 @@
    "gsub": true,
    "gsubArabFeatures": [],
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#1"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#1",
+   "pairKerning": "first-advance"
   },
   "/System/Library/Fonts/AppleSDGothicNeo.ttc#4": {
    "postScriptName": "AppleSDGothicNeo-SemiBold",
@@ -1165,7 +1177,8 @@
    "gsub": true,
    "gsubArabFeatures": [],
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#1"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#1",
+   "pairKerning": "first-advance"
   },
   "/System/Library/Fonts/AppleSDGothicNeo.ttc#6": {
    "postScriptName": "AppleSDGothicNeo-Bold",
@@ -1186,7 +1199,8 @@
    "gsub": true,
    "gsubArabFeatures": [],
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#1"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#1",
+   "pairKerning": "first-advance"
   },
   "/System/Library/Fonts/AppleSDGothicNeo.ttc#14": {
    "postScriptName": "AppleSDGothicNeo-ExtraBold",
@@ -1207,7 +1221,8 @@
    "gsub": true,
    "gsubArabFeatures": [],
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#1"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#1",
+   "pairKerning": "first-advance"
   },
   "/System/Library/Fonts/AppleSDGothicNeo.ttc#16": {
    "postScriptName": "AppleSDGothicNeo-Heavy",
@@ -1228,7 +1243,8 @@
    "gsub": true,
    "gsubArabFeatures": [],
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#1"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#1",
+   "pairKerning": "first-advance"
   },
   "/System/Library/Fonts/Supplemental/AppleGothic.ttf#0": {
    "postScriptName": "AppleGothic",
@@ -1249,7 +1265,8 @@
    "gsub": false,
    "gsubArabFeatures": null,
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0",
+   "pairKerning": null
   },
   "/System/Library/Fonts/Supplemental/AppleMyungjo.ttf#0": {
    "postScriptName": "AppleMyungjo",
@@ -1270,7 +1287,8 @@
    "gsub": false,
    "gsubArabFeatures": null,
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0",
+   "pairKerning": null
   },
   "/System/Library/Fonts/Supplemental/Arial.ttf#0": {
    "postScriptName": "ArialMT",
@@ -1300,7 +1318,8 @@
     "rlig"
    ],
    "cmapU0628": true,
-   "substituteForU0628": "/System/Library/Fonts/Supplemental/Arial.ttf#0"
+   "substituteForU0628": "/System/Library/Fonts/Supplemental/Arial.ttf#0",
+   "pairKerning": "first-advance"
   },
   "/System/Library/Fonts/Supplemental/Arial Italic.ttf#0": {
    "postScriptName": "Arial-ItalicMT",
@@ -1321,7 +1340,8 @@
    "gsub": true,
    "gsubArabFeatures": [],
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0",
+   "pairKerning": "first-advance"
   },
   "/System/Library/Fonts/Supplemental/Arial Bold.ttf#0": {
    "postScriptName": "Arial-BoldMT",
@@ -1351,7 +1371,8 @@
     "rlig"
    ],
    "cmapU0628": true,
-   "substituteForU0628": "/System/Library/Fonts/Supplemental/Arial Bold.ttf#0"
+   "substituteForU0628": "/System/Library/Fonts/Supplemental/Arial Bold.ttf#0",
+   "pairKerning": "first-advance"
   },
   "/System/Library/Fonts/Supplemental/Arial Bold Italic.ttf#0": {
    "postScriptName": "Arial-BoldItalicMT",
@@ -1372,7 +1393,8 @@
    "gsub": true,
    "gsubArabFeatures": [],
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#1"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#1",
+   "pairKerning": "first-advance"
   },
   "/System/Library/Fonts/ArialHB.ttc#0": {
    "postScriptName": "ArialHebrew",
@@ -1393,7 +1415,8 @@
    "gsub": true,
    "gsubArabFeatures": [],
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0",
+   "pairKerning": null
   },
   "/System/Library/Fonts/ArialHB.ttc#2": {
    "postScriptName": "ArialHebrew-Light",
@@ -1414,7 +1437,8 @@
    "gsub": true,
    "gsubArabFeatures": [],
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0",
+   "pairKerning": null
   },
   "/System/Library/Fonts/ArialHB.ttc#1": {
    "postScriptName": "ArialHebrew-Bold",
@@ -1435,7 +1459,8 @@
    "gsub": true,
    "gsubArabFeatures": [],
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#1"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#1",
+   "pairKerning": null
   },
   "/System/Library/Fonts/Supplemental/Ayuthaya.ttf#0": {
    "postScriptName": "Ayuthaya",
@@ -1456,7 +1481,8 @@
    "gsub": true,
    "gsubArabFeatures": [],
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0",
+   "pairKerning": null
   },
   "/System/Library/AssetsV2/com_apple_MobileAsset_Font8/42529d87b12845309dd4a57dea9e58446826e94c.asset/AssetData/BIZ_UDGothic.ttc#0": {
    "postScriptName": "BIZUDGothic-Regular",
@@ -1477,7 +1503,8 @@
    "gsub": true,
    "gsubArabFeatures": [],
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/Supplemental/Courier New.ttf#0"
+   "substituteForU0628": "/System/Library/Fonts/Supplemental/Courier New.ttf#0",
+   "pairKerning": null
   },
   "/System/Library/AssetsV2/com_apple_MobileAsset_Font8/42529d87b12845309dd4a57dea9e58446826e94c.asset/AssetData/BIZ_UDGothic.ttc#1": {
    "postScriptName": "BIZUDGothic-Bold",
@@ -1498,7 +1525,8 @@
    "gsub": true,
    "gsubArabFeatures": [],
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/Supplemental/Courier New Bold.ttf#0"
+   "substituteForU0628": "/System/Library/Fonts/Supplemental/Courier New Bold.ttf#0",
+   "pairKerning": null
   },
   "/System/Library/Fonts/Supplemental/Corsiva.ttc#0": {
    "postScriptName": "CorsivaHebrew",
@@ -1519,7 +1547,8 @@
    "gsub": false,
    "gsubArabFeatures": null,
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0",
+   "pairKerning": null
   },
   "/System/Library/Fonts/Supplemental/Corsiva.ttc#1": {
    "postScriptName": "CorsivaHebrew-Bold",
@@ -1540,7 +1569,8 @@
    "gsub": false,
    "gsubArabFeatures": null,
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#1"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#1",
+   "pairKerning": null
   },
   "/System/Library/Fonts/Courier.ttc#0": {
    "postScriptName": "Courier",
@@ -1561,7 +1591,8 @@
    "gsub": false,
    "gsubArabFeatures": null,
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/Supplemental/Courier New.ttf#0"
+   "substituteForU0628": "/System/Library/Fonts/Supplemental/Courier New.ttf#0",
+   "pairKerning": null
   },
   "/System/Library/Fonts/Courier.ttc#2": {
    "postScriptName": "Courier-Oblique",
@@ -1582,7 +1613,8 @@
    "gsub": false,
    "gsubArabFeatures": null,
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0",
+   "pairKerning": null
   },
   "/System/Library/Fonts/Courier.ttc#1": {
    "postScriptName": "Courier-Bold",
@@ -1603,7 +1635,8 @@
    "gsub": false,
    "gsubArabFeatures": null,
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/Supplemental/Courier New Bold.ttf#0"
+   "substituteForU0628": "/System/Library/Fonts/Supplemental/Courier New Bold.ttf#0",
+   "pairKerning": null
   },
   "/System/Library/Fonts/Courier.ttc#3": {
    "postScriptName": "Courier-BoldOblique",
@@ -1624,7 +1657,8 @@
    "gsub": false,
    "gsubArabFeatures": null,
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#1"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#1",
+   "pairKerning": null
   },
   "/System/Library/Fonts/Supplemental/Courier New.ttf#0": {
    "postScriptName": "CourierNewPSMT",
@@ -1654,7 +1688,8 @@
     "rlig"
    ],
    "cmapU0628": true,
-   "substituteForU0628": "/System/Library/Fonts/Supplemental/Courier New.ttf#0"
+   "substituteForU0628": "/System/Library/Fonts/Supplemental/Courier New.ttf#0",
+   "pairKerning": null
   },
   "/System/Library/Fonts/Supplemental/Courier New Italic.ttf#0": {
    "postScriptName": "CourierNewPS-ItalicMT",
@@ -1675,7 +1710,8 @@
    "gsub": true,
    "gsubArabFeatures": [],
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0",
+   "pairKerning": null
   },
   "/System/Library/Fonts/Supplemental/Courier New Bold.ttf#0": {
    "postScriptName": "CourierNewPS-BoldMT",
@@ -1705,7 +1741,8 @@
     "rlig"
    ],
    "cmapU0628": true,
-   "substituteForU0628": "/System/Library/Fonts/Supplemental/Courier New Bold.ttf#0"
+   "substituteForU0628": "/System/Library/Fonts/Supplemental/Courier New Bold.ttf#0",
+   "pairKerning": null
   },
   "/System/Library/Fonts/Supplemental/Courier New Bold Italic.ttf#0": {
    "postScriptName": "CourierNewPS-BoldItalicMT",
@@ -1726,7 +1763,8 @@
    "gsub": true,
    "gsubArabFeatures": [],
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#1"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#1",
+   "pairKerning": null
   },
   "/System/Library/Fonts/Supplemental/DevanagariMT.ttc#0": {
    "postScriptName": "DevanagariMT",
@@ -1747,7 +1785,8 @@
    "gsub": false,
    "gsubArabFeatures": null,
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0",
+   "pairKerning": null
   },
   "/System/Library/Fonts/Supplemental/DevanagariMT.ttc#1": {
    "postScriptName": "DevanagariMT-Bold",
@@ -1768,7 +1807,8 @@
    "gsub": false,
    "gsubArabFeatures": null,
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#1"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#1",
+   "pairKerning": null
   },
   "/System/Library/Fonts/Supplemental/Devanagari Sangam MN.ttc#0": {
    "postScriptName": "DevanagariSangamMN",
@@ -1789,7 +1829,8 @@
    "gsub": true,
    "gsubArabFeatures": [],
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0",
+   "pairKerning": "split"
   },
   "/System/Library/Fonts/Supplemental/Devanagari Sangam MN.ttc#1": {
    "postScriptName": "DevanagariSangamMN-Bold",
@@ -1810,7 +1851,8 @@
    "gsub": true,
    "gsubArabFeatures": [],
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#1"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#1",
+   "pairKerning": "split"
   },
   "/System/Library/Fonts/GeezaPro.ttc#0": {
    "postScriptName": "GeezaPro",
@@ -1831,7 +1873,8 @@
    "gsub": false,
    "gsubArabFeatures": null,
    "cmapU0628": true,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0",
+   "pairKerning": null
   },
   "/System/Library/Fonts/GeezaPro.ttc#1": {
    "postScriptName": "GeezaPro-Bold",
@@ -1852,7 +1895,8 @@
    "gsub": false,
    "gsubArabFeatures": null,
    "cmapU0628": true,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#1"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#1",
+   "pairKerning": null
   },
   "/System/Library/Fonts/Geneva.ttf#0": {
    "postScriptName": "Geneva",
@@ -1873,7 +1917,8 @@
    "gsub": false,
    "gsubArabFeatures": null,
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0",
+   "pairKerning": null
   },
   "/System/Library/Fonts/Supplemental/Georgia.ttf#0": {
    "postScriptName": "Georgia",
@@ -1894,7 +1939,8 @@
    "gsub": true,
    "gsubArabFeatures": [],
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0",
+   "pairKerning": null
   },
   "/System/Library/Fonts/Supplemental/Georgia Italic.ttf#0": {
    "postScriptName": "Georgia-Italic",
@@ -1915,7 +1961,8 @@
    "gsub": true,
    "gsubArabFeatures": [],
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0",
+   "pairKerning": null
   },
   "/System/Library/Fonts/Supplemental/Georgia Bold.ttf#0": {
    "postScriptName": "Georgia-Bold",
@@ -1936,7 +1983,8 @@
    "gsub": true,
    "gsubArabFeatures": [],
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#1"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#1",
+   "pairKerning": null
   },
   "/System/Library/Fonts/Supplemental/Georgia Bold Italic.ttf#0": {
    "postScriptName": "Georgia-BoldItalic",
@@ -1957,7 +2005,8 @@
    "gsub": true,
    "gsubArabFeatures": [],
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#1"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#1",
+   "pairKerning": null
   },
   "/System/Library/Fonts/STHeiti Light.ttc#1": {
    "postScriptName": "STHeitiSC-Light",
@@ -1978,7 +2027,8 @@
    "gsub": false,
    "gsubArabFeatures": null,
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0",
+   "pairKerning": null
   },
   "/System/Library/Fonts/STHeiti Medium.ttc#1": {
    "postScriptName": "STHeitiSC-Medium",
@@ -1999,7 +2049,8 @@
    "gsub": false,
    "gsubArabFeatures": null,
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#1"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#1",
+   "pairKerning": null
   },
   "/System/Library/Fonts/STHeiti Light.ttc#0": {
    "postScriptName": "STHeitiTC-Light",
@@ -2020,7 +2071,8 @@
    "gsub": false,
    "gsubArabFeatures": null,
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0",
+   "pairKerning": null
   },
   "/System/Library/Fonts/STHeiti Medium.ttc#0": {
    "postScriptName": "STHeitiTC-Medium",
@@ -2041,7 +2093,8 @@
    "gsub": false,
    "gsubArabFeatures": null,
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#1"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#1",
+   "pairKerning": null
   },
   "/System/Library/Fonts/Helvetica.ttc#0": {
    "postScriptName": "Helvetica",
@@ -2062,7 +2115,8 @@
    "gsub": false,
    "gsubArabFeatures": null,
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0",
+   "pairKerning": "split"
   },
   "/System/Library/Fonts/Helvetica.ttc#2": {
    "postScriptName": "Helvetica-Oblique",
@@ -2083,7 +2137,8 @@
    "gsub": false,
    "gsubArabFeatures": null,
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0",
+   "pairKerning": "split"
   },
   "/System/Library/Fonts/Helvetica.ttc#4": {
    "postScriptName": "Helvetica-Light",
@@ -2104,7 +2159,8 @@
    "gsub": false,
    "gsubArabFeatures": null,
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0",
+   "pairKerning": "split"
   },
   "/System/Library/Fonts/Helvetica.ttc#5": {
    "postScriptName": "Helvetica-LightOblique",
@@ -2125,7 +2181,8 @@
    "gsub": false,
    "gsubArabFeatures": null,
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0",
+   "pairKerning": "split"
   },
   "/System/Library/Fonts/Helvetica.ttc#1": {
    "postScriptName": "Helvetica-Bold",
@@ -2146,7 +2203,8 @@
    "gsub": false,
    "gsubArabFeatures": null,
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#1"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#1",
+   "pairKerning": "split"
   },
   "/System/Library/Fonts/Helvetica.ttc#3": {
    "postScriptName": "Helvetica-BoldOblique",
@@ -2167,7 +2225,8 @@
    "gsub": false,
    "gsubArabFeatures": null,
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#1"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#1",
+   "pairKerning": "split"
   },
   "/System/Library/Fonts/HelveticaNeue.ttc#0": {
    "postScriptName": "HelveticaNeue",
@@ -2188,7 +2247,8 @@
    "gsub": false,
    "gsubArabFeatures": null,
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0",
+   "pairKerning": "split"
   },
   "/System/Library/Fonts/HelveticaNeue.ttc#2": {
    "postScriptName": "HelveticaNeue-Italic",
@@ -2209,7 +2269,8 @@
    "gsub": false,
    "gsubArabFeatures": null,
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0",
+   "pairKerning": "split"
   },
   "/System/Library/Fonts/HelveticaNeue.ttc#5": {
    "postScriptName": "HelveticaNeue-UltraLight",
@@ -2230,7 +2291,8 @@
    "gsub": false,
    "gsubArabFeatures": null,
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0",
+   "pairKerning": "split"
   },
   "/System/Library/Fonts/HelveticaNeue.ttc#6": {
    "postScriptName": "HelveticaNeue-UltraLightItalic",
@@ -2251,7 +2313,8 @@
    "gsub": false,
    "gsubArabFeatures": null,
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0",
+   "pairKerning": "split"
   },
   "/System/Library/Fonts/HelveticaNeue.ttc#12": {
    "postScriptName": "HelveticaNeue-Thin",
@@ -2272,7 +2335,8 @@
    "gsub": false,
    "gsubArabFeatures": null,
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0",
+   "pairKerning": "split"
   },
   "/System/Library/Fonts/HelveticaNeue.ttc#13": {
    "postScriptName": "HelveticaNeue-ThinItalic",
@@ -2293,7 +2357,8 @@
    "gsub": false,
    "gsubArabFeatures": null,
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0",
+   "pairKerning": "split"
   },
   "/System/Library/Fonts/HelveticaNeue.ttc#7": {
    "postScriptName": "HelveticaNeue-Light",
@@ -2314,7 +2379,8 @@
    "gsub": false,
    "gsubArabFeatures": null,
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0",
+   "pairKerning": "split"
   },
   "/System/Library/Fonts/HelveticaNeue.ttc#8": {
    "postScriptName": "HelveticaNeue-LightItalic",
@@ -2335,7 +2401,8 @@
    "gsub": false,
    "gsubArabFeatures": null,
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0",
+   "pairKerning": "split"
   },
   "/System/Library/Fonts/HelveticaNeue.ttc#10": {
    "postScriptName": "HelveticaNeue-Medium",
@@ -2356,7 +2423,8 @@
    "gsub": false,
    "gsubArabFeatures": null,
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#1"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#1",
+   "pairKerning": "split"
   },
   "/System/Library/Fonts/HelveticaNeue.ttc#11": {
    "postScriptName": "HelveticaNeue-MediumItalic",
@@ -2377,7 +2445,8 @@
    "gsub": false,
    "gsubArabFeatures": null,
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#1"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#1",
+   "pairKerning": "split"
   },
   "/System/Library/Fonts/HelveticaNeue.ttc#1": {
    "postScriptName": "HelveticaNeue-Bold",
@@ -2398,7 +2467,8 @@
    "gsub": false,
    "gsubArabFeatures": null,
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#1"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#1",
+   "pairKerning": "split"
   },
   "/System/Library/Fonts/HelveticaNeue.ttc#3": {
    "postScriptName": "HelveticaNeue-BoldItalic",
@@ -2419,7 +2489,8 @@
    "gsub": false,
    "gsubArabFeatures": null,
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#1"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#1",
+   "pairKerning": "split"
   },
   "/System/Library/Fonts/HelveticaNeue.ttc#4": {
    "postScriptName": "HelveticaNeue-CondensedBold",
@@ -2440,7 +2511,8 @@
    "gsub": false,
    "gsubArabFeatures": null,
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#1"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#1",
+   "pairKerning": "split"
   },
   "/System/Library/Fonts/HelveticaNeue.ttc#9": {
    "postScriptName": "HelveticaNeue-CondensedBlack",
@@ -2461,7 +2533,8 @@
    "gsub": false,
    "gsubArabFeatures": null,
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#1"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#1",
+   "pairKerning": "split"
   },
   "/System/Library/Fonts/ヒラギノ角ゴシック W3.ttc#3": {
    "postScriptName": "HiraKakuPro-W3",
@@ -2482,7 +2555,8 @@
    "gsub": true,
    "gsubArabFeatures": [],
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0",
+   "pairKerning": "first-advance"
   },
   "/System/Library/Fonts/ヒラギノ角ゴシック W6.ttc#3": {
    "postScriptName": "HiraKakuPro-W6",
@@ -2503,7 +2577,8 @@
    "gsub": true,
    "gsubArabFeatures": [],
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#1"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#1",
+   "pairKerning": "first-advance"
   },
   "/System/Library/Fonts/ヒラギノ角ゴシック W3.ttc#2": {
    "postScriptName": "HiraKakuProN-W3",
@@ -2524,7 +2599,8 @@
    "gsub": true,
    "gsubArabFeatures": [],
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0",
+   "pairKerning": "first-advance"
   },
   "/System/Library/Fonts/ヒラギノ角ゴシック W6.ttc#2": {
    "postScriptName": "HiraKakuProN-W6",
@@ -2545,7 +2621,8 @@
    "gsub": true,
    "gsubArabFeatures": [],
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#1"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#1",
+   "pairKerning": "first-advance"
   },
   "/System/Library/Fonts/ヒラギノ明朝 ProN.ttc#1": {
    "postScriptName": "HiraMinPro-W3",
@@ -2566,7 +2643,8 @@
    "gsub": true,
    "gsubArabFeatures": [],
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0",
+   "pairKerning": "first-advance"
   },
   "/System/Library/Fonts/ヒラギノ明朝 ProN.ttc#3": {
    "postScriptName": "HiraMinPro-W6",
@@ -2587,7 +2665,8 @@
    "gsub": true,
    "gsubArabFeatures": [],
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#1"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#1",
+   "pairKerning": "first-advance"
   },
   "/System/Library/Fonts/ヒラギノ明朝 ProN.ttc#0": {
    "postScriptName": "HiraMinProN-W3",
@@ -2608,7 +2687,8 @@
    "gsub": true,
    "gsubArabFeatures": [],
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0",
+   "pairKerning": "first-advance"
   },
   "/System/Library/Fonts/ヒラギノ明朝 ProN.ttc#2": {
    "postScriptName": "HiraMinProN-W6",
@@ -2629,7 +2709,8 @@
    "gsub": true,
    "gsubArabFeatures": [],
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#1"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#1",
+   "pairKerning": "first-advance"
   },
   "/System/Library/Fonts/ヒラギノ角ゴシック W0.ttc#0": {
    "postScriptName": "HiraginoSans-W0",
@@ -2650,7 +2731,8 @@
    "gsub": true,
    "gsubArabFeatures": [],
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0",
+   "pairKerning": "first-advance"
   },
   "/System/Library/Fonts/ヒラギノ角ゴシック W1.ttc#0": {
    "postScriptName": "HiraginoSans-W1",
@@ -2671,7 +2753,8 @@
    "gsub": true,
    "gsubArabFeatures": [],
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0",
+   "pairKerning": "first-advance"
   },
   "/System/Library/Fonts/ヒラギノ角ゴシック W2.ttc#0": {
    "postScriptName": "HiraginoSans-W2",
@@ -2692,7 +2775,8 @@
    "gsub": true,
    "gsubArabFeatures": [],
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0",
+   "pairKerning": "first-advance"
   },
   "/System/Library/Fonts/ヒラギノ角ゴシック W3.ttc#0": {
    "postScriptName": "HiraginoSans-W3",
@@ -2713,7 +2797,8 @@
    "gsub": true,
    "gsubArabFeatures": [],
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0",
+   "pairKerning": "first-advance"
   },
   "/System/Library/Fonts/ヒラギノ角ゴシック W4.ttc#0": {
    "postScriptName": "HiraginoSans-W4",
@@ -2734,7 +2819,8 @@
    "gsub": true,
    "gsubArabFeatures": [],
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#1"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#1",
+   "pairKerning": "first-advance"
   },
   "/System/Library/Fonts/ヒラギノ角ゴシック W5.ttc#0": {
    "postScriptName": "HiraginoSans-W5",
@@ -2755,7 +2841,8 @@
    "gsub": true,
    "gsubArabFeatures": [],
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#1"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#1",
+   "pairKerning": "first-advance"
   },
   "/System/Library/Fonts/ヒラギノ角ゴシック W6.ttc#0": {
    "postScriptName": "HiraginoSans-W6",
@@ -2776,7 +2863,8 @@
    "gsub": true,
    "gsubArabFeatures": [],
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#1"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#1",
+   "pairKerning": "first-advance"
   },
   "/System/Library/Fonts/ヒラギノ角ゴシック W7.ttc#0": {
    "postScriptName": "HiraginoSans-W7",
@@ -2797,7 +2885,8 @@
    "gsub": true,
    "gsubArabFeatures": [],
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#1"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#1",
+   "pairKerning": "first-advance"
   },
   "/System/Library/Fonts/ヒラギノ角ゴシック W8.ttc#0": {
    "postScriptName": "HiraginoSans-W8",
@@ -2818,7 +2907,8 @@
    "gsub": true,
    "gsubArabFeatures": [],
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#1"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#1",
+   "pairKerning": "first-advance"
   },
   "/System/Library/Fonts/ヒラギノ角ゴシック W9.ttc#0": {
    "postScriptName": "HiraginoSans-W9",
@@ -2839,7 +2929,8 @@
    "gsub": true,
    "gsubArabFeatures": [],
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#1"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#1",
+   "pairKerning": "first-advance"
   },
   "/System/Library/Fonts/Supplemental/ITFDevanagari.ttc#0": {
    "postScriptName": "ITFDevanagari-Book",
@@ -2860,7 +2951,8 @@
    "gsub": true,
    "gsubArabFeatures": [],
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0",
+   "pairKerning": null
   },
   "/System/Library/Fonts/Supplemental/ITFDevanagari.ttc#3": {
    "postScriptName": "ITFDevanagari-Light",
@@ -2881,7 +2973,8 @@
    "gsub": true,
    "gsubArabFeatures": [],
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0",
+   "pairKerning": null
   },
   "/System/Library/Fonts/Supplemental/ITFDevanagari.ttc#4": {
    "postScriptName": "ITFDevanagari-Medium",
@@ -2902,7 +2995,8 @@
    "gsub": true,
    "gsubArabFeatures": [],
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#1"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#1",
+   "pairKerning": null
   },
   "/System/Library/Fonts/Supplemental/ITFDevanagari.ttc#2": {
    "postScriptName": "ITFDevanagari-Demi",
@@ -2923,7 +3017,8 @@
    "gsub": true,
    "gsubArabFeatures": [],
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#1"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#1",
+   "pairKerning": null
   },
   "/System/Library/Fonts/Supplemental/ITFDevanagari.ttc#1": {
    "postScriptName": "ITFDevanagari-Bold",
@@ -2944,7 +3039,8 @@
    "gsub": true,
    "gsubArabFeatures": [],
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#1"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#1",
+   "pairKerning": null
   },
   "/System/Library/AssetsV2/com_apple_MobileAsset_Font8/88d6cc32a907955efa1d014207889413890573be.asset/AssetData/Kaiti.ttc#0": {
    "postScriptName": "STKaitiSC-Regular",
@@ -2965,7 +3061,8 @@
    "gsub": false,
    "gsubArabFeatures": null,
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0",
+   "pairKerning": null
   },
   "/System/Library/AssetsV2/com_apple_MobileAsset_Font8/88d6cc32a907955efa1d014207889413890573be.asset/AssetData/Kaiti.ttc#3": {
    "postScriptName": "STKaitiSC-Bold",
@@ -2986,7 +3083,8 @@
    "gsub": false,
    "gsubArabFeatures": null,
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#1"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#1",
+   "pairKerning": null
   },
   "/System/Library/AssetsV2/com_apple_MobileAsset_Font8/88d6cc32a907955efa1d014207889413890573be.asset/AssetData/Kaiti.ttc#5": {
    "postScriptName": "STKaitiSC-Black",
@@ -3007,7 +3105,8 @@
    "gsub": false,
    "gsubArabFeatures": null,
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#1"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#1",
+   "pairKerning": null
   },
   "/System/Library/AssetsV2/com_apple_MobileAsset_Font8/88d6cc32a907955efa1d014207889413890573be.asset/AssetData/Kaiti.ttc#2": {
    "postScriptName": "STKaitiTC-Regular",
@@ -3028,7 +3127,8 @@
    "gsub": false,
    "gsubArabFeatures": null,
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0",
+   "pairKerning": null
   },
   "/System/Library/AssetsV2/com_apple_MobileAsset_Font8/88d6cc32a907955efa1d014207889413890573be.asset/AssetData/Kaiti.ttc#4": {
    "postScriptName": "STKaitiTC-Bold",
@@ -3049,7 +3149,8 @@
    "gsub": false,
    "gsubArabFeatures": null,
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#1"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#1",
+   "pairKerning": null
   },
   "/System/Library/AssetsV2/com_apple_MobileAsset_Font8/88d6cc32a907955efa1d014207889413890573be.asset/AssetData/Kaiti.ttc#6": {
    "postScriptName": "STKaitiTC-Black",
@@ -3070,7 +3171,8 @@
    "gsub": false,
    "gsubArabFeatures": null,
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#1"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#1",
+   "pairKerning": null
   },
   "/System/Library/Fonts/Supplemental/Khmer MN.ttc#0": {
    "postScriptName": "KhmerMN",
@@ -3091,7 +3193,8 @@
    "gsub": true,
    "gsubArabFeatures": [],
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0",
+   "pairKerning": "split"
   },
   "/System/Library/Fonts/Supplemental/Khmer MN.ttc#1": {
    "postScriptName": "KhmerMN-Bold",
@@ -3112,7 +3215,8 @@
    "gsub": true,
    "gsubArabFeatures": [],
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#1"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#1",
+   "pairKerning": "split"
   },
   "/System/Library/Fonts/Supplemental/Khmer Sangam MN.ttf#0": {
    "postScriptName": "KhmerSangamMN",
@@ -3133,7 +3237,8 @@
    "gsub": true,
    "gsubArabFeatures": [],
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0",
+   "pairKerning": null
   },
   "/System/Library/Fonts/Kohinoor.ttc#0": {
    "postScriptName": "KohinoorDevanagari-Regular",
@@ -3154,7 +3259,8 @@
    "gsub": true,
    "gsubArabFeatures": [],
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0",
+   "pairKerning": "first-advance"
   },
   "/System/Library/Fonts/Kohinoor.ttc#4": {
    "postScriptName": "KohinoorDevanagari-Light",
@@ -3175,7 +3281,8 @@
    "gsub": true,
    "gsubArabFeatures": [],
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0",
+   "pairKerning": "first-advance"
   },
   "/System/Library/Fonts/Kohinoor.ttc#1": {
    "postScriptName": "KohinoorDevanagari-Medium",
@@ -3196,7 +3303,8 @@
    "gsub": true,
    "gsubArabFeatures": [],
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#1"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#1",
+   "pairKerning": "first-advance"
   },
   "/System/Library/Fonts/Kohinoor.ttc#2": {
    "postScriptName": "KohinoorDevanagari-Semibold",
@@ -3217,7 +3325,8 @@
    "gsub": true,
    "gsubArabFeatures": [],
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#1"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#1",
+   "pairKerning": "first-advance"
   },
   "/System/Library/Fonts/Kohinoor.ttc#3": {
    "postScriptName": "KohinoorDevanagari-Bold",
@@ -3238,7 +3347,8 @@
    "gsub": true,
    "gsubArabFeatures": [],
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#1"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#1",
+   "pairKerning": "first-advance"
   },
   "/System/Library/AssetsV2/com_apple_MobileAsset_Font8/5d3a1229823fff781c0d9dac611c90f9fc31e138.asset/AssetData/LiHeiPro.ttf#0": {
    "postScriptName": "LiHeiPro",
@@ -3259,7 +3369,8 @@
    "gsub": false,
    "gsubArabFeatures": null,
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0",
+   "pairKerning": null
   },
   "/System/Library/AssetsV2/com_apple_MobileAsset_Font8/6372627020b45393e500bb1661c460d4a93aff49.asset/AssetData/LiSongPro.ttf#0": {
    "postScriptName": "LiSongPro",
@@ -3280,7 +3391,8 @@
    "gsub": false,
    "gsubArabFeatures": null,
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0",
+   "pairKerning": null
   },
   "/System/Library/Fonts/LucidaGrande.ttc#0": {
    "postScriptName": "LucidaGrande",
@@ -3301,7 +3413,8 @@
    "gsub": false,
    "gsubArabFeatures": null,
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0",
+   "pairKerning": null
   },
   "/System/Library/Fonts/LucidaGrande.ttc#1": {
    "postScriptName": "LucidaGrande-Bold",
@@ -3322,7 +3435,8 @@
    "gsub": false,
    "gsubArabFeatures": null,
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#1"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#1",
+   "pairKerning": null
   },
   "/System/Library/Fonts/Menlo.ttc#0": {
    "postScriptName": "Menlo-Regular",
@@ -3343,7 +3457,8 @@
    "gsub": false,
    "gsubArabFeatures": null,
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/Supplemental/Courier New.ttf#0"
+   "substituteForU0628": "/System/Library/Fonts/Supplemental/Courier New.ttf#0",
+   "pairKerning": null
   },
   "/System/Library/Fonts/Menlo.ttc#2": {
    "postScriptName": "Menlo-Italic",
@@ -3364,7 +3479,8 @@
    "gsub": false,
    "gsubArabFeatures": null,
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0",
+   "pairKerning": null
   },
   "/System/Library/Fonts/Menlo.ttc#1": {
    "postScriptName": "Menlo-Bold",
@@ -3385,7 +3501,8 @@
    "gsub": false,
    "gsubArabFeatures": null,
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/Supplemental/Courier New Bold.ttf#0"
+   "substituteForU0628": "/System/Library/Fonts/Supplemental/Courier New Bold.ttf#0",
+   "pairKerning": null
   },
   "/System/Library/Fonts/Menlo.ttc#3": {
    "postScriptName": "Menlo-BoldItalic",
@@ -3406,7 +3523,8 @@
    "gsub": false,
    "gsubArabFeatures": null,
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#1"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#1",
+   "pairKerning": null
   },
   "/System/Library/Fonts/Supplemental/Myanmar MN.ttc#0": {
    "postScriptName": "MyanmarMN",
@@ -3427,7 +3545,8 @@
    "gsub": true,
    "gsubArabFeatures": [],
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0",
+   "pairKerning": null
   },
   "/System/Library/Fonts/Supplemental/Myanmar MN.ttc#1": {
    "postScriptName": "MyanmarMN-Bold",
@@ -3448,7 +3567,8 @@
    "gsub": true,
    "gsubArabFeatures": [],
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#1"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#1",
+   "pairKerning": null
   },
   "/System/Library/Fonts/Supplemental/Myanmar Sangam MN.ttc#0": {
    "postScriptName": "MyanmarSangamMN",
@@ -3469,7 +3589,8 @@
    "gsub": true,
    "gsubArabFeatures": [],
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0",
+   "pairKerning": null
   },
   "/System/Library/Fonts/Supplemental/Myanmar Sangam MN.ttc#1": {
    "postScriptName": "MyanmarSangamMN-Bold",
@@ -3490,7 +3611,8 @@
    "gsub": true,
    "gsubArabFeatures": [],
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#1"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#1",
+   "pairKerning": null
   },
   "/System/Library/Fonts/Supplemental/NewPeninimMT.ttc#0": {
    "postScriptName": "NewPeninimMT",
@@ -3511,7 +3633,8 @@
    "gsub": false,
    "gsubArabFeatures": null,
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0",
+   "pairKerning": null
   },
   "/System/Library/Fonts/Supplemental/NewPeninimMT.ttc#1": {
    "postScriptName": "NewPeninimMT-Inclined",
@@ -3532,7 +3655,8 @@
    "gsub": false,
    "gsubArabFeatures": null,
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0",
+   "pairKerning": null
   },
   "/System/Library/Fonts/Supplemental/NewPeninimMT.ttc#3": {
    "postScriptName": "NewPeninimMT-Bold",
@@ -3553,7 +3677,8 @@
    "gsub": false,
    "gsubArabFeatures": null,
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#1"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#1",
+   "pairKerning": null
   },
   "/System/Library/Fonts/Supplemental/NewPeninimMT.ttc#2": {
    "postScriptName": "NewPeninimMT-BoldInclined",
@@ -3574,7 +3699,8 @@
    "gsub": false,
    "gsubArabFeatures": null,
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#1"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#1",
+   "pairKerning": null
   },
   "/System/Library/Fonts/NotoNastaliq.ttc#0": {
    "postScriptName": "NotoNastaliqUrdu",
@@ -3602,7 +3728,8 @@
     "rlig"
    ],
    "cmapU0628": true,
-   "substituteForU0628": "/System/Library/Fonts/NotoNastaliq.ttc#0"
+   "substituteForU0628": "/System/Library/Fonts/NotoNastaliq.ttc#0",
+   "pairKerning": null
   },
   "/System/Library/Fonts/NotoNastaliq.ttc#2": {
    "postScriptName": "NotoNastaliqUrdu-Bold",
@@ -3630,7 +3757,8 @@
     "rlig"
    ],
    "cmapU0628": true,
-   "substituteForU0628": "/System/Library/Fonts/NotoNastaliq.ttc#2"
+   "substituteForU0628": "/System/Library/Fonts/NotoNastaliq.ttc#2",
+   "pairKerning": null
   },
   "/System/Library/Fonts/NotoSansMyanmar.ttc#6": {
    "postScriptName": "NotoSansMyanmar-Regular",
@@ -3651,7 +3779,8 @@
    "gsub": true,
    "gsubArabFeatures": [],
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0",
+   "pairKerning": null
   },
   "/System/Library/Fonts/NotoSansMyanmar.ttc#8": {
    "postScriptName": "NotoSansMyanmar-Thin",
@@ -3672,7 +3801,8 @@
    "gsub": true,
    "gsubArabFeatures": [],
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0",
+   "pairKerning": null
   },
   "/System/Library/Fonts/NotoSansMyanmar.ttc#3": {
    "postScriptName": "NotoSansMyanmar-ExtraLight",
@@ -3693,7 +3823,8 @@
    "gsub": true,
    "gsubArabFeatures": [],
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0",
+   "pairKerning": null
   },
   "/System/Library/Fonts/NotoSansMyanmar.ttc#4": {
    "postScriptName": "NotoSansMyanmar-Light",
@@ -3714,7 +3845,8 @@
    "gsub": true,
    "gsubArabFeatures": [],
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0",
+   "pairKerning": null
   },
   "/System/Library/Fonts/NotoSansMyanmar.ttc#5": {
    "postScriptName": "NotoSansMyanmar-Medium",
@@ -3735,7 +3867,8 @@
    "gsub": true,
    "gsubArabFeatures": [],
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#1"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#1",
+   "pairKerning": null
   },
   "/System/Library/Fonts/NotoSansMyanmar.ttc#7": {
    "postScriptName": "NotoSansMyanmar-SemiBold",
@@ -3756,7 +3889,8 @@
    "gsub": true,
    "gsubArabFeatures": [],
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#1"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#1",
+   "pairKerning": null
   },
   "/System/Library/Fonts/NotoSansMyanmar.ttc#1": {
    "postScriptName": "NotoSansMyanmar-Bold",
@@ -3777,7 +3911,8 @@
    "gsub": true,
    "gsubArabFeatures": [],
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#1"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#1",
+   "pairKerning": null
   },
   "/System/Library/Fonts/NotoSansMyanmar.ttc#2": {
    "postScriptName": "NotoSansMyanmar-ExtraBold",
@@ -3798,7 +3933,8 @@
    "gsub": true,
    "gsubArabFeatures": [],
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#1"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#1",
+   "pairKerning": null
   },
   "/System/Library/Fonts/NotoSansMyanmar.ttc#0": {
    "postScriptName": "NotoSansMyanmar-Black",
@@ -3819,7 +3955,8 @@
    "gsub": true,
    "gsubArabFeatures": [],
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#1"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#1",
+   "pairKerning": null
   },
   "/System/Library/AssetsV2/com_apple_MobileAsset_Font8/0b5bb0a7f7e82279e049e3c943133f4b186ff8a2.asset/AssetData/Osaka.ttf#0": {
    "postScriptName": "Osaka",
@@ -3840,7 +3977,8 @@
    "gsub": false,
    "gsubArabFeatures": null,
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0",
+   "pairKerning": null
   },
   "/System/Library/AssetsV2/com_apple_MobileAsset_Font8/37b7a41df590ab4ef2d6826c6ec7c69f0fd7379f.asset/AssetData/OsakaMono.ttf#0": {
    "postScriptName": "Osaka-Mono",
@@ -3861,7 +3999,8 @@
    "gsub": false,
    "gsubArabFeatures": null,
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/Supplemental/Courier New.ttf#0"
+   "substituteForU0628": "/System/Library/Fonts/Supplemental/Courier New.ttf#0",
+   "pairKerning": null
   },
   "/System/Library/Fonts/Supplemental/Papyrus.ttc#1": {
    "postScriptName": "Papyrus",
@@ -3882,7 +4021,8 @@
    "gsub": true,
    "gsubArabFeatures": [],
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0",
+   "pairKerning": "first-advance"
   },
   "/System/Library/Fonts/Supplemental/Papyrus.ttc#0": {
    "postScriptName": "Papyrus-Condensed",
@@ -3903,7 +4043,8 @@
    "gsub": true,
    "gsubArabFeatures": [],
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0",
+   "pairKerning": "first-advance"
   },
   "/System/Library/AssetsV2/com_apple_MobileAsset_Font8/86ba2c91f017a3749571a82f2c6d890ac7ffb2fb.asset/AssetData/PingFang.ttc#3": {
    "postScriptName": "PingFangSC-Regular",
@@ -3924,7 +4065,8 @@
    "gsub": true,
    "gsubArabFeatures": [],
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0",
+   "pairKerning": null
   },
   "/System/Library/AssetsV2/com_apple_MobileAsset_Font8/86ba2c91f017a3749571a82f2c6d890ac7ffb2fb.asset/AssetData/PingFang.ttc#23": {
    "postScriptName": "PingFangSC-Ultralight",
@@ -3945,7 +4087,8 @@
    "gsub": true,
    "gsubArabFeatures": [],
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0",
+   "pairKerning": null
   },
   "/System/Library/AssetsV2/com_apple_MobileAsset_Font8/86ba2c91f017a3749571a82f2c6d890ac7ffb2fb.asset/AssetData/PingFang.ttc#19": {
    "postScriptName": "PingFangSC-Thin",
@@ -3966,7 +4109,8 @@
    "gsub": true,
    "gsubArabFeatures": [],
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0",
+   "pairKerning": null
   },
   "/System/Library/AssetsV2/com_apple_MobileAsset_Font8/86ba2c91f017a3749571a82f2c6d890ac7ffb2fb.asset/AssetData/PingFang.ttc#15": {
    "postScriptName": "PingFangSC-Light",
@@ -3987,7 +4131,8 @@
    "gsub": true,
    "gsubArabFeatures": [],
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0",
+   "pairKerning": null
   },
   "/System/Library/AssetsV2/com_apple_MobileAsset_Font8/86ba2c91f017a3749571a82f2c6d890ac7ffb2fb.asset/AssetData/PingFang.ttc#7": {
    "postScriptName": "PingFangSC-Medium",
@@ -4008,7 +4153,8 @@
    "gsub": true,
    "gsubArabFeatures": [],
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#1"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#1",
+   "pairKerning": null
   },
   "/System/Library/AssetsV2/com_apple_MobileAsset_Font8/86ba2c91f017a3749571a82f2c6d890ac7ffb2fb.asset/AssetData/PingFang.ttc#11": {
    "postScriptName": "PingFangSC-Semibold",
@@ -4029,7 +4175,8 @@
    "gsub": true,
    "gsubArabFeatures": [],
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#1"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#1",
+   "pairKerning": null
   },
   "/System/Library/AssetsV2/com_apple_MobileAsset_Font8/86ba2c91f017a3749571a82f2c6d890ac7ffb2fb.asset/AssetData/PingFang.ttc#2": {
    "postScriptName": "PingFangTC-Regular",
@@ -4050,7 +4197,8 @@
    "gsub": true,
    "gsubArabFeatures": [],
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0",
+   "pairKerning": null
   },
   "/System/Library/AssetsV2/com_apple_MobileAsset_Font8/86ba2c91f017a3749571a82f2c6d890ac7ffb2fb.asset/AssetData/PingFang.ttc#22": {
    "postScriptName": "PingFangTC-Ultralight",
@@ -4071,7 +4219,8 @@
    "gsub": true,
    "gsubArabFeatures": [],
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0",
+   "pairKerning": null
   },
   "/System/Library/AssetsV2/com_apple_MobileAsset_Font8/86ba2c91f017a3749571a82f2c6d890ac7ffb2fb.asset/AssetData/PingFang.ttc#18": {
    "postScriptName": "PingFangTC-Thin",
@@ -4092,7 +4241,8 @@
    "gsub": true,
    "gsubArabFeatures": [],
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0",
+   "pairKerning": null
   },
   "/System/Library/AssetsV2/com_apple_MobileAsset_Font8/86ba2c91f017a3749571a82f2c6d890ac7ffb2fb.asset/AssetData/PingFang.ttc#14": {
    "postScriptName": "PingFangTC-Light",
@@ -4113,7 +4263,8 @@
    "gsub": true,
    "gsubArabFeatures": [],
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0",
+   "pairKerning": null
   },
   "/System/Library/AssetsV2/com_apple_MobileAsset_Font8/86ba2c91f017a3749571a82f2c6d890ac7ffb2fb.asset/AssetData/PingFang.ttc#6": {
    "postScriptName": "PingFangTC-Medium",
@@ -4134,7 +4285,8 @@
    "gsub": true,
    "gsubArabFeatures": [],
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#1"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#1",
+   "pairKerning": null
   },
   "/System/Library/AssetsV2/com_apple_MobileAsset_Font8/86ba2c91f017a3749571a82f2c6d890ac7ffb2fb.asset/AssetData/PingFang.ttc#10": {
    "postScriptName": "PingFangTC-Semibold",
@@ -4155,7 +4307,8 @@
    "gsub": true,
    "gsubArabFeatures": [],
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#1"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#1",
+   "pairKerning": null
   },
   "/System/Library/Fonts/Supplemental/Raanana.ttc#0": {
    "postScriptName": "Raanana",
@@ -4176,7 +4329,8 @@
    "gsub": false,
    "gsubArabFeatures": null,
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0",
+   "pairKerning": null
   },
   "/System/Library/Fonts/Supplemental/Raanana.ttc#1": {
    "postScriptName": "RaananaBold",
@@ -4197,7 +4351,8 @@
    "gsub": false,
    "gsubArabFeatures": null,
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#1"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#1",
+   "pairKerning": null
   },
   "/System/Library/AssetsV2/com_apple_MobileAsset_Font8/10e7a462a671950b802274fad767b566ff8457d1.asset/AssetData/STXIHEI.ttf#0": {
    "postScriptName": "STXihei",
@@ -4218,7 +4373,8 @@
    "gsub": true,
    "gsubArabFeatures": [],
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0",
+   "pairKerning": null
   },
   "/System/Library/AssetsV2/com_apple_MobileAsset_Font8/53fe5be564086fefc7523ccd0a31200acf92e0e5.asset/AssetData/STHEITI.ttf#0": {
    "postScriptName": "STHeiti",
@@ -4239,7 +4395,8 @@
    "gsub": false,
    "gsubArabFeatures": null,
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#1"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#1",
+   "pairKerning": null
   },
   "/System/Library/Fonts/Supplemental/Songti.ttc#4": {
    "postScriptName": "STSong",
@@ -4260,7 +4417,8 @@
    "gsub": false,
    "gsubArabFeatures": null,
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0",
+   "pairKerning": null
   },
   "/System/Library/Fonts/Supplemental/Songti.ttc#6": {
    "postScriptName": "STSongti-SC-Regular",
@@ -4281,7 +4439,8 @@
    "gsub": false,
    "gsubArabFeatures": null,
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0",
+   "pairKerning": null
   },
   "/System/Library/Fonts/Supplemental/Songti.ttc#3": {
    "postScriptName": "STSongti-SC-Light",
@@ -4302,7 +4461,8 @@
    "gsub": false,
    "gsubArabFeatures": null,
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0",
+   "pairKerning": null
   },
   "/System/Library/Fonts/Supplemental/Songti.ttc#1": {
    "postScriptName": "STSongti-SC-Bold",
@@ -4323,7 +4483,8 @@
    "gsub": false,
    "gsubArabFeatures": null,
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#1"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#1",
+   "pairKerning": null
   },
   "/System/Library/Fonts/Supplemental/Songti.ttc#0": {
    "postScriptName": "STSongti-SC-Black",
@@ -4344,7 +4505,8 @@
    "gsub": false,
    "gsubArabFeatures": null,
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#1"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#1",
+   "pairKerning": null
   },
   "/System/Library/Fonts/Supplemental/Songti.ttc#7": {
    "postScriptName": "STSongti-TC-Regular",
@@ -4365,7 +4527,8 @@
    "gsub": false,
    "gsubArabFeatures": null,
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0",
+   "pairKerning": null
   },
   "/System/Library/Fonts/Supplemental/Songti.ttc#5": {
    "postScriptName": "STSongti-TC-Light",
@@ -4386,7 +4549,8 @@
    "gsub": false,
    "gsubArabFeatures": null,
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0",
+   "pairKerning": null
   },
   "/System/Library/Fonts/Supplemental/Songti.ttc#2": {
    "postScriptName": "STSongti-TC-Bold",
@@ -4407,7 +4571,8 @@
    "gsub": false,
    "gsubArabFeatures": null,
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#1"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#1",
+   "pairKerning": null
   },
   "/System/Library/Fonts/Supplemental/Thonburi.ttc#0": {
    "postScriptName": "Thonburi",
@@ -4428,7 +4593,8 @@
    "gsub": false,
    "gsubArabFeatures": null,
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0",
+   "pairKerning": null
   },
   "/System/Library/Fonts/Supplemental/Thonburi.ttc#2": {
    "postScriptName": "Thonburi-Light",
@@ -4449,7 +4615,8 @@
    "gsub": false,
    "gsubArabFeatures": null,
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0",
+   "pairKerning": null
   },
   "/System/Library/Fonts/Supplemental/Thonburi.ttc#1": {
    "postScriptName": "Thonburi-Bold",
@@ -4470,7 +4637,8 @@
    "gsub": false,
    "gsubArabFeatures": null,
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#1"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#1",
+   "pairKerning": null
   },
   "/System/Library/Fonts/Times.ttc#0": {
    "postScriptName": "Times-Roman",
@@ -4491,7 +4659,8 @@
    "gsub": false,
    "gsubArabFeatures": null,
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0",
+   "pairKerning": "split"
   },
   "/System/Library/Fonts/Times.ttc#2": {
    "postScriptName": "Times-Italic",
@@ -4512,7 +4681,8 @@
    "gsub": false,
    "gsubArabFeatures": null,
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0",
+   "pairKerning": "split"
   },
   "/System/Library/Fonts/Times.ttc#1": {
    "postScriptName": "Times-Bold",
@@ -4533,7 +4703,8 @@
    "gsub": false,
    "gsubArabFeatures": null,
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#1"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#1",
+   "pairKerning": "split"
   },
   "/System/Library/Fonts/Times.ttc#3": {
    "postScriptName": "Times-BoldItalic",
@@ -4554,7 +4725,8 @@
    "gsub": false,
    "gsubArabFeatures": null,
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#1"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#1",
+   "pairKerning": "split"
   },
   "/System/Library/Fonts/Supplemental/Times New Roman.ttf#0": {
    "postScriptName": "TimesNewRomanPSMT",
@@ -4584,7 +4756,8 @@
     "rlig"
    ],
    "cmapU0628": true,
-   "substituteForU0628": "/System/Library/Fonts/Supplemental/Times New Roman.ttf#0"
+   "substituteForU0628": "/System/Library/Fonts/Supplemental/Times New Roman.ttf#0",
+   "pairKerning": "split"
   },
   "/System/Library/Fonts/Supplemental/Times New Roman Italic.ttf#0": {
    "postScriptName": "TimesNewRomanPS-ItalicMT",
@@ -4605,7 +4778,8 @@
    "gsub": true,
    "gsubArabFeatures": [],
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0",
+   "pairKerning": "first-advance"
   },
   "/System/Library/Fonts/Supplemental/Times New Roman Bold.ttf#0": {
    "postScriptName": "TimesNewRomanPS-BoldMT",
@@ -4635,7 +4809,8 @@
     "rlig"
    ],
    "cmapU0628": true,
-   "substituteForU0628": "/System/Library/Fonts/Supplemental/Times New Roman Bold.ttf#0"
+   "substituteForU0628": "/System/Library/Fonts/Supplemental/Times New Roman Bold.ttf#0",
+   "pairKerning": "split"
   },
   "/System/Library/Fonts/Supplemental/Times New Roman Bold Italic.ttf#0": {
    "postScriptName": "TimesNewRomanPS-BoldItalicMT",
@@ -4656,7 +4831,8 @@
    "gsub": true,
    "gsubArabFeatures": [],
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#1"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#1",
+   "pairKerning": "first-advance"
   },
   "/System/Library/Fonts/Supplemental/Verdana.ttf#0": {
    "postScriptName": "Verdana",
@@ -4677,7 +4853,8 @@
    "gsub": true,
    "gsubArabFeatures": [],
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0",
+   "pairKerning": "split"
   },
   "/System/Library/Fonts/Supplemental/Verdana Italic.ttf#0": {
    "postScriptName": "Verdana-Italic",
@@ -4698,7 +4875,8 @@
    "gsub": true,
    "gsubArabFeatures": [],
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0",
+   "pairKerning": null
   },
   "/System/Library/Fonts/Supplemental/Verdana Bold.ttf#0": {
    "postScriptName": "Verdana-Bold",
@@ -4719,7 +4897,8 @@
    "gsub": true,
    "gsubArabFeatures": [],
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#1"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#1",
+   "pairKerning": null
   },
   "/System/Library/Fonts/Supplemental/Verdana Bold Italic.ttf#0": {
    "postScriptName": "Verdana-BoldItalic",
@@ -4740,7 +4919,8 @@
    "gsub": true,
    "gsubArabFeatures": [],
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#1"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#1",
+   "pairKerning": null
   },
   "tests/wrapping/fonts/amiri.ttf#0": {
    "postScriptName": "Amiri-Regular",
@@ -4774,7 +4954,8 @@
     "rtlm"
    ],
    "cmapU0628": true,
-   "substituteForU0628": "tests/wrapping/fonts/amiri.ttf#0"
+   "substituteForU0628": "tests/wrapping/fonts/amiri.ttf#0",
+   "pairKerning": null
   },
   "tests/wrapping/fonts/noto-naskh-arabic.ttf#0": {
    "postScriptName": "NotoNaskhArabic-Regular",
@@ -4806,7 +4987,8 @@
     "tnum"
    ],
    "cmapU0628": true,
-   "substituteForU0628": "tests/wrapping/fonts/noto-naskh-arabic.ttf#0"
+   "substituteForU0628": "tests/wrapping/fonts/noto-naskh-arabic.ttf#0",
+   "pairKerning": "first-advance"
   },
   "tests/wrapping/fonts/noto-nastaliq-urdu.ttf#0": {
    "postScriptName": "NotoNastaliqUrdu-Regular",
@@ -4834,7 +5016,8 @@
     "rlig"
    ],
    "cmapU0628": true,
-   "substituteForU0628": "tests/wrapping/fonts/noto-nastaliq-urdu.ttf#0"
+   "substituteForU0628": "tests/wrapping/fonts/noto-nastaliq-urdu.ttf#0",
+   "pairKerning": "first-advance"
   },
   "tests/wrapping/fonts/shantell-sans-bold.ttf#0": {
    "postScriptName": "ShantellSans-Bold",
@@ -4855,7 +5038,8 @@
    "gsub": true,
    "gsubArabFeatures": [],
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#1"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#1",
+   "pairKerning": "first-advance"
   },
   "tests/wrapping/fonts/shantell-sans-regular.ttf#0": {
    "postScriptName": "ShantellSans-Regular",
@@ -4876,7 +5060,8 @@
    "gsub": true,
    "gsubArabFeatures": [],
    "cmapU0628": false,
-   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0"
+   "substituteForU0628": "/System/Library/Fonts/GeezaPro.ttc#0",
+   "pairKerning": "first-advance"
   }
  },
  "labDeclarations": [

@@ -129,11 +129,27 @@ function addDictionaryBoundaries(source: DictionaryBreaks, rules: BreakRules, te
 // its dictionary (ThaiBreakEngine::divideUpDictionaryRange's "Look for a plausible word boundary") and the word segmenter
 // starts its range after the mark. The text is taken as one rule segment.
 export function dictionaryRangeStartsWithMark(rules: BreakRules, text: string): boolean {
-  let found = false
+  return dictionaryRangesStartingWithMark(rules, text).length > 0
+}
+
+// The engine ranges of dictionaryRangeStartsWithMark, [start, end) in text offsets.
+export function dictionaryRangesStartingWithMark(rules: BreakRules, text: string): Array<[number, number]> {
+  const ranges: Array<[number, number]> = []
   forEachDictionaryRange(rules, text, 0, text.length, (engine, rangeStart, rangeEnd) => {
-    if (!tooShortForTwoWords(engine, text, rangeStart, rangeEnd) && isDictionaryMark(text.codePointAt(rangeStart)!)) found = true
+    if (!tooShortForTwoWords(engine, text, rangeStart, rangeEnd) && isDictionaryMark(text.codePointAt(rangeStart)!)) ranges.push([rangeStart, rangeEnd])
   })
-  return found
+  return ranges
+}
+
+// Whether the text holds a character of the line rules' dictionary categories: Thai, Lao, Khmer or Myanmar text the line
+// iterator hands to a dictionary engine (rbbi_cache.cpp:120-200).
+export function hasDictionaryCharacter(rules: BreakRules, text: string, from: number, to: number): boolean {
+  for (let i = from; i < to; i++) {
+    const cp = text.codePointAt(i)!
+    if (cp > 0xffff) i++
+    if (isDictionaryCharacter(rules, cp)) return true
+  }
+  return false
 }
 
 // ubrk_following over prior context + text (TBI:99-147). Boundaries come from one forward pass, which equals

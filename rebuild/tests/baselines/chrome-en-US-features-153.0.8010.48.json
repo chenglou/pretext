@@ -53,7 +53,8 @@
         },
         "historyDependentCases": 0,
         "withoutPassesCases": 0,
-        "unstablePairs": 0
+        "unstablePairs": 0,
+        "protocolCases": 0
       },
       "historyDependent": [],
       "withoutPasses": [],
@@ -529,7 +530,8 @@
           "c-feeb675d15c4694b",
           "c-ff484f99b9dfdeec"
         ]
-      }
+      },
+      "protocol": {}
     }
   },
   "facts": {

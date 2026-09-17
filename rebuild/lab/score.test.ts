@@ -6,8 +6,9 @@ import { encodeEdges } from './observe/gecko.ts'
 import {
   abcd, abcdExpected, abcdLayout, abcdNative, abcdOneLine, abcdOneLineExpected, at, blink, expect32, gecko, linesRow, native, observation, paragraph, row, webkit,
 } from './row-fixtures.ts'
-import { environmentKey, indexRows, lineRangeDiagnostics, nativeDifference, nativeLines, nativeView, readRowAt, scoreRow, withNativeRow } from './score.ts'
-import type { LabRow, PainterLine, Rect } from './types.ts'
+import type { Gap, GapName } from '../src/model.ts'
+import { environmentKey, indexRows, lineLocalGaps, lineRangeDiagnostics, nativeDifference, nativeLines, nativeView, readRowAt, scoreRow, slotProtocol, withNativeRow, type CaseScore } from './score.ts'
+import type { LabRow, NativeObservation, PainterLine, Rect, RecordedLayout } from './types.ts'
 
 const f32 = Math.fround
 
@@ -15,7 +16,7 @@ describe('native lines', () => {
   test('zero-width rects are placed, rects without height are not', () => {
     const p = paragraph([['ab', 'text']])
     const lines = nativeLines(native(p, [[at(0, 8), { x: 8, y: 30, width: 0, height: 0 }], [at(0, 0, 1)]], [[at(0, 8), at(0, 0, 1)]]), p, 'chrome')
-    expect(lines).toEqual({ count: 2, points: [[0, -1], [1]], nodes: [[0, 1]], unplaced: 1, byCentre: 0 })
+    expect(lines).toEqual({ count: 2, points: [[0, -1], [1]], nodes: [[0, 1]], elements: [], unplaced: 1, byCentre: 0 })
   })
 
   test('across nodes, centres of one line differ by font metrics, less than half a line height', () => {
@@ -75,7 +76,7 @@ describe('rects compare exactly, and the metrics follow from the comparisons', (
     const score = scoreRow(row('chrome', abcd, abcdNative, blink([[0, 3, 2000], [3, 3, 0], [3, 5, 1800]]),
       observation(abcd, abcdExpected.codePoints.map(point => point.rects.map(rect => ({ ...rect, line: rect.line === 1 ? 2 : 0 }))),
         [[expect32(0, 0, 15.625), expect32(2, 0, 14.0625)]])))
-    expect(score.metrics.lineCount).toEqual({ status: 'unobserved', reason: 'a line box no Range reports', detail: 'engine line 1' })
+    expect(score.metrics.lineCount).toEqual({ status: 'unobserved', reason: 'a line box no Range or element reports', detail: 'engine line 1' })
     expect(score.metrics.breaks.status).toBe('unobserved')
   })
 
@@ -127,6 +128,96 @@ describe('rects compare exactly, and the metrics follow from the comparisons', (
   test('an observation port error leaves every metric unobserved', () => {
     const score = scoreRow(row('chrome', abcd, abcdNative, abcdLayout, { error: 'boom' }))
     expect(score.metrics.lineCount).toEqual({ status: 'unobserved', reason: 'observation port error', detail: 'boom' })
+  })
+})
+
+describe('slot protocol rows', () => {
+  const slotted = (floats: Rect[] | undefined): LabRow => {
+    const base = row('firefox', abcd, abcdNative, gecko([[0, 3, 937], [3, 5, 844]]), abcdExpected)
+    const inline = { content: [], textIndent: 10, textAlign: 'start' as const, lineSlots: [{ left: 40, right: 40 }, { left: 40, right: 40 }] }
+    return { ...base, case: { ...base.case, inline }, native: floats === undefined ? { ...abcdNative, width: 90 } : { ...abcdNative, width: 90, floats } }
+  }
+
+  test('floats in their rows on their sides describe the slots', () => {
+    const floats = [{ x: 0, y: 0, width: 40, height: 20 }, { x: 50, y: 0, width: 40, height: 20 }, { x: 0, y: 20, width: 40, height: 20 }, { x: 50, y: 20, width: 40, height: 20 }]
+    const value = slotted(floats)
+    expect(slotProtocol(value.case, value.native as NativeObservation, 'firefox', 2)).toBeNull()
+  })
+
+  test('a float that moved to another row makes a protocol row: every metric unobserved, never a pass', () => {
+    // Gecko places row 0's right float below the first line when it doesn't fit beside the indented line.
+    const floats = [{ x: 0, y: 0, width: 40, height: 20 }, { x: 50, y: 20, width: 40, height: 20 }, { x: 0, y: 20, width: 40, height: 20 }, { x: 50, y: 40, width: 40, height: 20 }]
+    const score = scoreRow(slotted(floats))
+    expect(score.protocol).toBe('row 0\'s right float (inset 40) is at y 20, height 20; the row is at y 0')
+    expect(new Set(Object.values(score.metrics).map(metric => metric.status))).toEqual(new Set(['unobserved']))
+    expect(scoreRow(slotted(undefined)).protocol).toBe('the row recorded no slot floats')
+  })
+
+  test('a right float that doesn\'t reach the content box\'s right edge, in app units', () => {
+    const floats = [{ x: 0, y: 0, width: 40, height: 20 }, { x: 49.98333, y: 0, width: 40, height: 20 }, { x: 0, y: 20, width: 40, height: 20 }, { x: 50, y: 20, width: 40, height: 20 }]
+    expect(scoreRow(slotted(floats)).protocol).toBe('row 0\'s right float (inset 40) ends at x 89.98333; the content box ends at 90')
+  })
+})
+
+describe('elements: Element.getClientRects() of cases with inline structure', () => {
+  // `ab` then an atomic inline alone on line 1, 15px: 1920 raw LayoutUnits at zoom 2.
+  const p = paragraph([['ab', 'text']])
+  const layout = blink([[0, 2, 2000], [2, 2, 1920]])
+  const base = row('chrome', p, native(p, [[at(0, 8)], [at(8, 7.625)]], [[at(0, 15.625)]]), layout,
+    { ...observation(p, [[expect32(0, 0, 8)], [expect32(0, 8, 7.625)]], [[expect32(0, 0, 15.625)]]), elements: [[expect32(1, 0, 15)]] })
+  const withElements = (elements: Rect[][]): LabRow => ({ ...base, case: { ...base.case, inline: { content: [], textIndent: 0, textAlign: 'start', lineSlots: [] } }, native: { ...(base.native as NativeObservation), elements } })
+
+  test('a line holding only an atomic inline is observed through its element rect', () => {
+    const score = scoreRow(withElements([[{ x: 0, y: 26, width: 15, height: 10 }]]))
+    expect(score.native!.count).toBe(2)
+    expect([score.metrics.lineCount.status, score.metrics.breaks.status, score.metrics.widths.status]).toEqual(['pass', 'pass', 'pass'])
+    // A flat case records no elements, so the same layout leaves that line unobserved.
+    expect(scoreRow(base).metrics.lineCount.reason).toBe('a line box no Range or element reports')
+  })
+
+  test('an element on another line fails breaks, and a wider element rect fails widths', () => {
+    expect(scoreRow(withElements([[{ x: 16, y: 5, width: 15, height: 10 }]])).metrics.lineCount).toEqual({ status: 'fail', reason: 'line count differs', detail: 'native 1, predicted 2' })
+    const wider = scoreRow(withElements([[{ x: 0, y: 26, width: 15.5, height: 10 }]]))
+    expect(wider.metrics.widths).toEqual({ status: 'fail', reason: 'width differs', detail: 'engine line 1: width 1920; native node and element rects span [0, 1984]' })
+    expect(wider.facts!.predicted.differ).toBe(1)
+  })
+})
+
+describe('line-local gaps', () => {
+  const gap = (name: GapName, at?: { start: number; end: number }): Gap => ({ gap: name, run: 0, detail: 'test', ...(at === undefined ? {} : { at }) })
+  // abcdOneLine against abcdNative: the prediction keeps `cd` on line 0, so native line 0 is the first to differ.
+  const failing = (layout: RecordedLayout): CaseScore => scoreRow(row('chrome', abcd, abcdNative, layout, abcdOneLineExpected))
+
+  test('a gap on the failing line covers it; a paragraph gap without a range doesn\'t', () => {
+    const covered = failing({ ...abcdOneLine, lines: abcdOneLine.lines.map(line => ({ ...line, gaps: [gap('unsafe-to-break')] })) } as RecordedLayout)
+    expect(covered.lineGaps.lineCount).toEqual({ lines: [{ nativeLine: 0, engineLine: 0, gaps: [{ gap: 'unsafe-to-break', scope: 'line' }] }], covered: true, paragraphGaps: [] })
+    const paragraphOnly = failing({ ...abcdOneLine, gaps: [gap('engine-build')] })
+    expect(paragraphOnly.lineGaps.breaks).toEqual({ lines: [{ nativeLine: 0, engineLine: 0, gaps: [] }], covered: false, paragraphGaps: ['engine-build'] })
+  })
+
+  test('a paragraph gap covers the lines its range meets', () => {
+    expect(failing({ ...abcdOneLine, gaps: [gap('control-character-width', { start: 4, end: 5 })] }).lineGaps.lineCount!.covered).toBe(true)
+    expect(failing({ ...abcdOneLine, gaps: [gap('control-character-width', { start: 5, end: 5 })] }).lineGaps.lineCount!.lines[0]!.gaps).toEqual([{ gap: 'control-character-width', scope: 'paragraph-range' }])
+  })
+
+  test('the previous line\'s gaps and refused slots between the lines cover a line', () => {
+    const layout = blink([[0, 3, 2000], [3, 3, 0, false], [3, 5, 1800]])
+    layout.lines[0]!.gaps.push(gap('in-word-prefix'))
+    layout.lines[1]!.gaps.push(gap('glyph-clusters'))
+    const withRefusal = { ...layout, belowFloats: [{ row: 1, gaps: [gap('font-fallback')] }, { row: 3, gaps: [gap('tab-stops')] }] }
+    expect(lineLocalGaps(withRefusal, [0, 2], 1).gaps).toEqual([
+      { gap: 'font-fallback', scope: 'below-floats' }, { gap: 'glyph-clusters', scope: 'previous-line' }, { gap: 'in-word-prefix', scope: 'previous-line' },
+    ])
+    // Native line 0 is engine line 0: its own gaps concern it, and no refusal comes before it.
+    expect(lineLocalGaps(withRefusal, [0, 2], 0).gaps).toEqual([{ gap: 'in-word-prefix', scope: 'line' }])
+  })
+
+  test('a failing width attributes every failing line', () => {
+    const layout = blink([[0, 3, 2001], [3, 5, 1801]])
+    layout.lines[1]!.gaps.push(gap('in-word-prefix'))
+    const score = scoreRow(row('chrome', abcd, abcdNative, layout, observation(abcd, abcdExpected.codePoints.map(point => point.rects), [[expect32(0, 0, 15.6328125), expect32(1, 0, 14.0703125)]])))
+    expect(score.lineGaps.widths!.lines.map(line => [line.nativeLine, line.gaps.length])).toEqual([[0, 0], [1, 1]])
+    expect(score.lineGaps.widths!.covered).toBe(false)
   })
 })
 
@@ -216,6 +307,17 @@ describe('a prediction of line ranges alone', () => {
     })
     expect(lineRangeDiagnostics(observed, lines, { lines: [{ start: 0, end: 1, width: 0 }, { start: 1, end: 3, width: 0 }] }, text).zeroWidthPlacement).toEqual({ status: 'pass' })
   })
+
+  test('a code point no predicted line covers is left out, not a failure', () => {
+    // Main's line ranges leave out the ZWSP at the line edge: [0, 1) and [2, 3).
+    const p = paragraph([['a​b', 'text']])
+    const observed = native(p, [[at(0, 8)], [at(8, 0)], [at(0, 8, 1)]], [[at(0, 8), at(0, 8, 1)]])
+    const lines = nativeLines(observed, p, 'chrome')
+    expect(lineRangeDiagnostics(observed, lines, { lines: [{ start: 0, end: 1, width: 0 }, { start: 2, end: 3, width: 0 }] }, 'a​b')).toEqual({
+      visibleBreaks: { status: 'pass' },
+      zeroWidthPlacement: { status: 'unobserved', reason: 'no zero-width code point to place' },
+    })
+  })
 })
 
 describe('rows from run.ts --predict-only take native observations from another run', () => {
@@ -293,10 +395,10 @@ describe('two runs of one case', () => {
 
   test('environments key on the recorded build and the given process languages', () => {
     const base = row('chrome', abcd, abcdNative, abcdLayout, abcdExpected)
-    expect(environmentKey(base)).toBe('chrome: build not recorded, test; DPR 2, scale 1; scorer 3')
+    expect(environmentKey(base)).toBe('chrome: build not recorded, test; DPR 2, scale 1; scorer 4')
     const built = { ...base, build: { app: 'Google Chrome', appVersion: '153.0.8010.48', engine: '153.0.8010.48', os: '26A428' } }
-    expect(environmentKey(built)).toBe('chrome: Google Chrome 153.0.8010.48, engine build 153.0.8010.48, macOS 26A428; DPR 2, scale 1; scorer 3')
+    expect(environmentKey(built)).toBe('chrome: Google Chrome 153.0.8010.48, engine build 153.0.8010.48, macOS 26A428; DPR 2, scale 1; scorer 4')
     const languages = { launch: null, os: { appleLanguages: null, appleLocale: null, launchdEnvironment: {} }, given: { engine: 'blink' as const, uiLanguage: 'zh-CN' }, derivation: [] }
-    expect(environmentKey({ ...built, languages })).toBe('chrome: Google Chrome 153.0.8010.48, engine build 153.0.8010.48, macOS 26A428; DPR 2, scale 1; uiLanguage zh-CN; scorer 3')
+    expect(environmentKey({ ...built, languages })).toBe('chrome: Google Chrome 153.0.8010.48, engine build 153.0.8010.48, macOS 26A428; DPR 2, scale 1; uiLanguage zh-CN; scorer 4')
   })
 })

@@ -23,7 +23,7 @@ import { prepareGecko } from './prepare.js'
 //   text-presentation U+1F600 U+FE0E, and U+1F600 alone once `stub.pinned` (probe gecko-port F3), which draw with a text
 //   font at 1020 au outside "Apple Color Emoji". U+200D, U+FE0E and U+FE0F have no advance.
 const stub = { pinned: false }
-function stubAu(font: string, text: string): number {
+function stubAu(font: string, text: string, lang: string): number {
   const size = Number(/([\d.]+)px/.exec(font)![1])
   const emojiFont = font.includes('Apple Color Emoji')
   const emoji = size === 12 ? 960 : size === 16 ? 1260 : size === 24 ? 1500 : size === 32 ? 1920 : Math.round(size * 60)
@@ -52,6 +52,9 @@ function stubAu(font: string, text: string): number {
     }
     au += Math.round(576 * size / 16)
     if (c === 'A' && cps[i + 1] === 'V') au -= 60
+    // "7:" kerns by −40 au, except where Common text resolves to Hangul from the language and CJK scripts turn kerning off
+    // (probe gecko-port F8): a string without a Latin letter under lang="ko".
+    if (c === '7' && cps[i + 1] === ':' && !(lang.startsWith('ko') && !/[A-Za-z]/.test(text))) au -= 40
   }
   return au
 }
@@ -60,7 +63,10 @@ beforeAll(() => {
   class StubContext {
     font = ''; lang = ''; letterSpacing = '0px'; wordSpacing = '0px'; fontKerning = 'auto'; textRendering = 'auto'; direction = 'ltr'
     measureText(s: string) {
-      return { width: Math.fround(stubAu(this.font, s) / 60) }
+      const width = Math.fround(stubAu(this.font, s, this.lang) / 60)
+      // "fi" forms a ligature as wide as its parts whose ink box ends 0.36 au further with ligatures off (probe gecko-port F9).
+      const right = s === 'fi' && this.letterSpacing !== '0px' ? width + 0.006 : width
+      return { width, actualBoundingBoxLeft: 0, actualBoundingBoxRight: right }
     }
   }
   ;(globalThis as { OffscreenCanvas?: unknown }).OffscreenCanvas = class {
@@ -586,5 +592,54 @@ describe('gecko inline structure', () => {
     const l = layout(paragraph([run('aa bb cc')], 72, { textAlign: 'justify', whiteSpace: 'pre-wrap' }))
     expect(l.lines.map(line => line.align)).toEqual(['justify', 'start'])
     expect(l.lines[0]!.geometry.alignOffset).toBe(0)
+  })
+})
+
+describe('ceiling round 2', () => {
+  test('an 8-bit text run without letters shapes as Latin: digits kern under lang="ko" (probe gecko-port F8)', () => {
+    // InitTextRun's signed `c - 'A' <= 'Z' - 'A'` (gfxTextRun.cpp:2744-2747) makes ` 7:00` Latin, so `7:` kerns; Canvas's
+    // 16-bit string needs a Latin letter in front to itemize the same way.
+    const digits = paragraph([run('7:00', 'span', { lang: 'ko' })], 500, { lang: 'ko' })
+    expect(widths(digits)).toEqual([576 * 4 - 40])
+    expect(layout(digits).measure.calls.some(call => call.text === 'a 7:00')).toBe(true)
+    // With a letter in the same script run, that letter gives Canvas the script.
+    const letters = paragraph([run('x 7:00', 'span', { lang: 'ko' })], 500, { lang: 'ko' })
+    expect(widths(letters)).toEqual([576 * 6 - 40])
+  })
+
+  test('an in-word break inside a ligature as wide as its parts reports in-word-prefix at the offset (probe gecko-port F9)', () => {
+    const l = layout(paragraph([run('fi')], 2, { overflowWrap: 'anywhere' }))
+    expect(l.lines.map(line => line.start)).toEqual([0, 1])
+    const gaps = l.lines[0]!.gaps.filter(g => g.gap === 'in-word-prefix')
+    expect(gaps.map(g => g.at)).toEqual([{ start: 1, end: 1 }])
+    expect(gaps[0]!.detail).toContain('ligatures off')
+  })
+
+  test('lang="" measures under the given regional-prefs locale and reports ui-language only without it (nsFontCache.cpp:61-63)', () => {
+    const p = paragraph([run('abc', 'span', { lang: '' })], 500)
+    const given = layout(p)
+    expect(allGaps(given).some(g => g.gap === 'ui-language')).toBe(false)
+    expect(given.measure.contexts.some(c => c.lang === 'en-us')).toBe(true)
+    const unknown = layoutParagraph(p, { ...env, regionalPrefsLocale: null })
+    expect(unknown.gaps.filter(g => g.gap === 'ui-language').map(g => g.at)).toEqual([{ start: 0, end: 3 }])
+  })
+
+  test('a split pair kerning fact gives the glyph before an in-word offset half the adjustment (hb-kern.hh:102-106, probe gecko-port F12)', () => {
+    // The stub kerns `AV` by −60 au. At 11px `A` alone overflows, so overflow-wrap breaks between A and V.
+    const split = { ...courier, facts: { ...facts, pairKerning: 'split' as const } }
+    const splitLines = layout(paragraph([run('AV', 'span', { font: split })], 11, { overflowWrap: 'anywhere', font: split }))
+    expect(splitLines.lines.map(line => line.geometry.width)).toEqual([576 - 30, 576 - 30])
+    const first = layout(paragraph([run('AV', 'span')], 11, { overflowWrap: 'anywhere' }))
+    expect(first.lines.map(line => line.geometry.width)).toEqual([576 - 60, 576])
+    expect(splitLines.lines[0]!.gaps.some(g => g.gap === 'in-word-prefix')).toBe(true)
+  })
+
+  test('paragraph gaps name the source range they concern', () => {
+    const system = { ...courier, facts: { ...facts, opticalSizeAxis: null } }
+    const p = paragraph([run('aa '), run('bb', 'span', { font: { ...system, size: 16.8 } })], 500)
+    const l = layout(p)
+    for (const g of l.gaps) expect(g.at).toBeDefined()
+    expect(l.gaps.filter(g => g.gap === 'optical-size').map(g => g.at)).toEqual([{ start: 3, end: 5 }])
+    expect(l.gaps.filter(g => g.gap === 'font-size-quantization').map(g => g.at)).toEqual([{ start: 3, end: 5 }])
   })
 })

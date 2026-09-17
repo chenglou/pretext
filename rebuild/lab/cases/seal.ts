@@ -80,6 +80,10 @@ for (const path of walk(ARTIFACTS, outDir)) {
     else sources.add(file)
   } else if ((path.includes('/.artifacts/lab/cases/') || path.includes('/.artifacts/lab/final-20260916/cases/')) && path.endsWith('.ndjson')) {
     sources.add(path)
+  } else if (path.endsWith('/SEAL.json')) {
+    // Every earlier sealed set, whether or not a run named its files: its case files go in whole, read for ids only.
+    const dir = resolve(path, '..')
+    for (const name of readdirSync(dir)) if (name.endsWith('.ndjson')) sources.add(join(dir, name))
   }
 }
 sources.add(join(REPO, 'rebuild/lab/smoke-cases.ndjson'))

@@ -10,8 +10,9 @@
 // A group's advances come from one Canvas call while the total is below 256 zoomed px, where Canvas totals are exact 16.16
 // values (blink-canvas §1.5). A wider group is halved at an offset the pair test calls safe (blink-gaps §3.6 L4). The
 // paragraph position of an offset k inside a piece is the piece prefix measured alone plus the adjustment HarfBuzz made
-// between the clusters on both sides of k, d = R(xy) − R(x) − R(y), on the glyph before k as GPOS first-glyph pair values
-// put it (blink-gaps §3.4-§3.5; legacy `kern` puts d >> 1 there, reported as unsafe-to-break at line edges).
+// between the clusters on both sides of k, d = R(xy) − R(x) − R(y), the part the glyph before k carries: all of it as GPOS
+// first-glyph pair values put it, or d >> 1 where the kern and kerx pair machine applies it (blink-gaps §3.4-§3.5,
+// FontFacts.pairKerning; unsafe-to-break at line edges where the fact isn't given).
 //
 // Every shaping call carries up to 5 code points of text_content on each side as context
 // (case_mapping_harfbuzz_buffer_filler.cc:32-43, hb-buffer.hh:109-111), and Arabic joining reads it
@@ -24,9 +25,9 @@
 import { measureContext, measureText, type Measurer } from '../../measure/canvas.js'
 import { canvasFont } from '../../measure/font.js'
 import type { Gap } from '../../model.js'
-import { addGap } from './gaps.js'
+import { addGap, sourceOffsetAt, sourceRange } from './gaps.js'
 import { hanKerningFontData, hanKerningMayApply, resolvedCharType, shouldKern, shouldKernLast, trim16 } from './hankerning.js'
-import { HAN_CLOSE, HAN_OPEN, USCRIPT_LATIN, isCursiveScript, isWhiteSpace, joiningType } from './props.js'
+import { HAN_CLOSE, HAN_OPEN, USCRIPT_LATIN, isCursiveScript, joiningType } from './props.js'
 import { scriptsPerUnit } from './script.js'
 import type { BlinkPrepared, BlinkStyle, StyleContexts } from './types.js'
 
@@ -74,9 +75,14 @@ export function styleContexts(m: Measurer, style: BlinkStyle, zoom: number, part
   // GPOS or GSUB coverage holds the space glyph (font_fallback_list.cc:264-286; blink-canvas H6 confirmed). It adds no
   // HarfBuzz feature (font_features.cc:32-240). Other fonts still split before CJK bases (plain_text_node.cc:115-153).
   const base = { font, lang, wordSpacing: '0px', fontKerning: 'auto' as const, textRendering: 'optimizeLegibility' as const, partition }
+  // A letter spacing of 1/64 px turns liga, clig and calt off (font_features.cc:54-86) and adds 1024 raw16 per character,
+  // which cancels in a pair adjustment's differences (edgeGap in index.ts).
+  const noLigatures = `${NO_LIGATURES_SPACING_PX}px`
   return {
     ltr: measureContext(m, { ...base, letterSpacing, direction: 'ltr' }),
     rtl: measureContext(m, { ...base, letterSpacing, direction: 'rtl' }),
+    ltrNoLigatures: measureContext(m, { ...base, letterSpacing: noLigatures, direction: 'ltr' }),
+    rtlNoLigatures: measureContext(m, { ...base, letterSpacing: noLigatures, direction: 'rtl' }),
     // The hyphen is shaped alone without spacing (hyphen_result.cc:12-16).
     hyphen: measureContext(m, { ...base, letterSpacing: '0px', direction: 'ltr' }),
     scale,
@@ -95,6 +101,8 @@ export type Shaper = {
 export function raw16Of(sh: Shaper, contexts: StyleContexts, context: number, s: string): number {
   return Math.round(measureText(sh.m, context, s) * contexts.scale * 65536)
 }
+
+const NO_LIGATURES_SPACING_PX = 0.015625
 
 // Joining_Type D, L or C joins the following character; D, R or C the preceding one; T is transparent.
 function joinsFollowing(jt: number): boolean { return jt === 1 || jt === 3 || jt === 4 }
@@ -159,11 +167,11 @@ function joinedAtEdge(sh: Shaper, g: number, k: number, callStart: number, callE
   switch (style.joining) {
     case 'opentype':
       if (!joinsAcross(p, k, callStart, callEnd)) return false
-      addGap(sh.gaps, 'unsafe-to-break', style.run, CONTEXT_DETAIL)
+      addGap(sh.gaps, 'unsafe-to-break', style.run, CONTEXT_DETAIL, sourceOffsetAt(p, k))
       return true
     case 'aat': return false
     case null:
-      if (joinsAcross(p, k, callStart, callEnd)) addGap(sh.gaps, 'joining-technology', style.run, JOINING_DETAIL)
+      if (joinsAcross(p, k, callStart, callEnd)) addGap(sh.gaps, 'joining-technology', style.run, JOINING_DETAIL, sourceOffsetAt(p, k))
       return false
   }
 }
@@ -206,8 +214,8 @@ export function joinsAcross(p: BlinkPrepared, k: number, lo: number, hi: number)
 // for 16-bit strings. A string holding a code unit above U+00FF is 16-bit as String.fromCharCode builds it. A Latin-1-only
 // string can be made 16-bit only as a slice of 13 code units or more of a 16-bit string: String.prototype.slice copies a
 // shorter substring into a one-byte string whenever its units fit, and returns single characters from the one-byte table
-// (v8 string-slice.tq:8-33; builtins-string-gen.cc SubString, AllocAndCopyStringCharacters; SlicedString::kMinLength 13,
-// string.h:1078; read at Chrome 152's V8 4323497a, Chrome 153 pins 6b96683d). Such a string is measured 8-bit.
+// (v8 string-slice.tq:8-33; builtins-string-gen.cc:2154 SubString, AllocAndCopyStringCharacters; SlicedString::kMinLength
+// 13, string.h:1181; at Chrome 153's V8 6b96683d). Such a string is measured 8-bit.
 //
 // The default-ignorable characters Canvas turns into U+200B end a Canvas word (TreatAsZeroWidthSpaceInComplexScriptLegacy,
 // character.h:167-175; plain_text_node.cc:47-62, 85-91): SHY, ZWSP, LRM, RLM, U+202A..U+202E and U+FEFF. The DOM keeps
@@ -223,9 +231,14 @@ export function joinsAcross(p: BlinkPrepared, k: number, lo: number, hi: number)
 // segmented paragraph the string carries U+2060 whatever its length: probe blink-followups-20260917 gives RLM `((` in
 // Amiri 2814 units in the DOM and with U+2060, against 1567 with the RLM left out. The 1567 an earlier probe saw came from
 // the brackets resolving to the following Latin run's script, which script-context names.
-type CanvasString = { s: string; units: Int32Array; twoByte: boolean; leftOut: boolean }
+//
+// `domScript` is the script the paragraph shapes [from, to) with (measure16 splits ranges at script edges). A Latin range
+// stays an 8-bit string whatever its length, since Canvas shapes an 8-bit string as one Latin segment exactly as the DOM
+// shapes a Latin segment; only a range under another script is sliced into a 16-bit string, so RunSegmenter resolves its
+// characters as the paragraph does.
+export type CanvasString = { s: string; units: Int32Array; twoByte: boolean; leftOut: boolean }
 
-function canvasString(p: BlinkPrepared, from: number, to: number, zwjBefore: boolean, zwjAfter: boolean): CanvasString {
+export function canvasString(p: BlinkPrepared, from: number, to: number, zwjBefore: boolean, zwjAfter: boolean, domScript: number): CanvasString {
   let codes: number[] = []
   let units: number[] = []
   if (zwjBefore) { codes.push(0x200d); units.push(-1) }
@@ -259,15 +272,21 @@ function canvasString(p: BlinkPrepared, from: number, to: number, zwjBefore: boo
   }
   let s = ''
   for (let i = 0; i < codes.length; i += 4096) s += String.fromCharCode(...codes.slice(i, i + 4096))
-  // A segmented paragraph's Latin-1-only string is 16-bit when V8 slices it, from 13 code units on.
-  const forced = keeps && !wide && substituted.length === 0 && codes.length >= 13
-  const twoByte = wide || (keeps && substituted.length > 0) || forced
+  // A segmented paragraph's Latin-1-only string is 16-bit when V8 slices it, from 13 code units on; a Latin range keeps the
+  // one Latin segment of an 8-bit string. A shorter range the paragraph shapes under another script gets U+2060 before it,
+  // which makes the string 16-bit without a glyph or a script (the ignorables probe above: U+2060 alone measures 0, and
+  // U+2060 `((` gives Amiri's DOM width where the 8-bit `((` shapes as Latin), so RunSegmenter resolves it as Common.
+  const nonLatin = keeps && !wide && substituted.length === 0 && domScript !== USCRIPT_LATIN
+  const forced = nonLatin && codes.length >= 13
+  const prefixed = nonLatin && !forced && codes.length > 0
+  const twoByte = wide || (keeps && substituted.length > 0) || forced || prefixed
+  if (prefixed) return { s: '\u2060' + s, units: Int32Array.from([-1, ...units]), twoByte, leftOut }
   return { s: forced ? ('Ā' + s).slice(1) : s, units: Int32Array.from(units), twoByte, leftOut }
 }
 
 // Math.round(W × 65536) of text_content[from, to) of group g, measured as part of a shaping call over [callStart,
 // callEnd), in its context, with JS word spacing and the letter spacing Canvas gives other characters than the DOM does.
-export function measure16(sh: Shaper, g: number, from: number, to: number, callStart: number, callEnd: number): number {
+export function measure16(sh: Shaper, g: number, from: number, to: number, callStart: number, callEnd: number, noLigatures: boolean = false): number {
   const p = sh.p
   if (from >= to) return 0
   // RunSegmenter splits a 16-bit paragraph at script runs, and HarfBuzzShaper shapes every segment in its own call
@@ -276,19 +295,19 @@ export function measure16(sh: Shaper, g: number, from: number, to: number, callS
   if (p.segmented) {
     for (let k = from + 1; k < to; k++) {
       if (p.scripts[k] !== p.scripts[k - 1] && (p.text.charCodeAt(k) & 0xfc00) !== 0xdc00) {
-        return measure16(sh, g, from, k, callStart, callEnd) + measure16(sh, g, k, to, callStart, callEnd)
+        return measure16(sh, g, from, k, callStart, callEnd, noLigatures) + measure16(sh, g, k, to, callStart, callEnd, noLigatures)
       }
     }
   }
   const group = p.groups[g]!
   const contexts = p.contexts[group.style]!
-  const cs = canvasString(p, from, to, joinedAtEdge(sh, g, from, callStart, callEnd), joinedAtEdge(sh, g, to, callStart, callEnd))
-  const w = cs.s.length === 0 ? 0 : raw16Of(sh, contexts, group.rtl ? contexts.rtl : contexts.ltr, cs.s)
+  const cs = canvasString(p, from, to, joinedAtEdge(sh, g, from, callStart, callEnd), joinedAtEdge(sh, g, to, callStart, callEnd), p.scripts[from]!)
+  const context = noLigatures ? (group.rtl ? contexts.rtlNoLigatures : contexts.ltrNoLigatures) : (group.rtl ? contexts.rtl : contexts.ltr)
+  const w = cs.s.length === 0 ? 0 : raw16Of(sh, contexts, context, cs.s)
   const scripts = cs.twoByte ? scriptsPerUnit(cs.s) : null
   const st = p.styles[group.style]!
-  if (cs.leftOut && cs.s.length > 1) {
-    addGap(sh.gaps, 'soft-hyphen-shaping', st.run, `text_content [${from}, ${to}) is measured as an 8-bit string without its default-ignorable characters, whose glyphs a \`morx\` substitution across them still sees in the DOM (hb-aat-layout-common.hh:1226-1241)`)
-  }
+  // What the string can shape otherwise than the DOM (script-context, soft-hyphen-shaping) depends only on the content, so
+  // prepare reports it with its range (contentGaps in index.ts).
   const ls16 = st.letterSpacing === 0 ? 0 : raw16Trunc(f32(st.letterSpacing * p.layoutZoom))
   let adjust = wordSpacing16(p, group.style, from, to)
   for (let u = 0; u < cs.units.length; u++) {
@@ -297,11 +316,6 @@ export function measure16(sh: Shaper, g: number, from: number, to: number, callS
     const c = p.text.charCodeAt(t)
     if ((c & 0xfc00) === 0xdc00) continue
     const canvasScript = scripts === null ? USCRIPT_LATIN : scripts[u]!
-    // A word's characters shaped under another script than the paragraph's (DESIGN.md §5 script-context); white space is
-    // the space glyph's own matter (space-in-shaping).
-    if (canvasScript !== p.scripts[t] && !isWhiteSpace(c)) {
-      addGap(sh.gaps, 'script-context', st.run, `text_content [${from}, ${to}) shapes a character as UScriptCode ${canvasScript} in Canvas and ${p.scripts[t]} in the paragraph (harfbuzz_shaper.cc:1072-1101)`)
-    }
     if (ls16 === 0) continue
     // ShapeResultSpacing::ComputeSpacing (shape_result_spacing.cc:103-139): letter spacing on a character that isn't a zero
     // width space, and in a cursive script run only on a space (IgnoreLetterSpacingInCursiveScripts, stable). The DOM reads
@@ -329,11 +343,6 @@ function wordSpacing16(p: BlinkPrepared, style: number, from: number, to: number
     if ((c === 0x20 || c === 0x09 || c === 0x0a || c === 0xa0) && (i !== 0 || c === 0xa0 || p.wordSpacingAnywhere)) n++
   }
   return n * raw
-}
-
-function graphemeStartAtOrBefore(p: BlinkPrepared, k: number, min: number): number {
-  while (k > min && p.graphemeStarts[k] !== 1) k--
-  return k
 }
 
 // A HarfBuzz glyph cluster starts at a unit that isn't a continuation (hb_form_clusters, hb-ot-shape.cc:578-586). Blink gives
@@ -367,22 +376,42 @@ function clusterEndAfter(p: BlinkPrepared, k: number, max: number): number {
   return e
 }
 
-function graphemeEndAfter(p: BlinkPrepared, k: number, max: number): number {
-  let e = k + 1
-  while (e < max && p.graphemeStarts[e] !== 1) e++
-  return e
-}
-
 // d at offset k inside a shaping call over [lo, hi) of group g: the adjustment between the clusters on both sides of k.
+// Each side is whole glyph clusters (isClusterBoundary): a mark after SHY, ZWSP or U+2060 starts a grapheme but continues
+// the ignorable's HarfBuzz cluster (hb_form_clusters, hb-ot-shape.cc:578-586), and measured alone Canvas shapes it as a
+// broken cluster the paragraph never has (c-01763358db8471a3: a kasra after SHY gave its neighbour a -2 px adjustment).
 // HarfBuzz's lookups skip default-ignorable glyphs (hb-ot-layout-gsubgpos.hh:558-571), so a side that holds only
 // default-ignorable characters (U+200B between two letters) reaches to the next cluster.
 export function pairAdjust16(sh: Shaper, g: number, k: number, lo: number, hi: number): number {
   const p = sh.p
   if (k <= lo || k >= hi) return 0
-  let a = graphemeStartAtOrBefore(p, k - 1, lo)
-  while (a > lo && allDefaultIgnorable(p, a, k)) a = graphemeStartAtOrBefore(p, a - 1, lo)
-  let b = graphemeEndAfter(p, k, hi)
-  while (b < hi && allDefaultIgnorable(p, k, b)) b = graphemeEndAfter(p, b, hi)
+  let a = clusterStartAtOrBefore(p, k - 1, lo)
+  while (a > lo && allDefaultIgnorable(p, a, k)) a = clusterStartAtOrBefore(p, a - 1, lo)
+  let b = clusterEndAfter(p, k, hi)
+  while (b < hi && allDefaultIgnorable(p, k, b)) b = clusterEndAfter(p, b, hi)
+  return measure16(sh, g, a, b, lo, hi) - measure16(sh, g, a, k, lo, hi) - measure16(sh, g, k, b, lo, hi)
+}
+
+// pairAdjust16 measured through the no-ligature contexts: the adjustment without liga, clig and calt.
+export function pairAdjustNoLigatures16(sh: Shaper, g: number, k: number, lo: number, hi: number): number {
+  const p = sh.p
+  if (k <= lo || k >= hi) return 0
+  let a = clusterStartAtOrBefore(p, k - 1, lo)
+  while (a > lo && allDefaultIgnorable(p, a, k)) a = clusterStartAtOrBefore(p, a - 1, lo)
+  let b = clusterEndAfter(p, k, hi)
+  while (b < hi && allDefaultIgnorable(p, k, b)) b = clusterEndAfter(p, b, hi)
+  return measure16(sh, g, a, b, lo, hi, true) - measure16(sh, g, a, k, lo, hi, true) - measure16(sh, g, k, b, lo, hi, true)
+}
+
+// The adjustment across offset k with two glyph clusters on each side, where HarfBuzz context lookups can read further
+// than the one-cluster pair window.
+export function wideAdjust16(sh: Shaper, g: number, k: number, lo: number, hi: number): number {
+  const p = sh.p
+  if (k <= lo || k >= hi) return 0
+  let a = clusterStartAtOrBefore(p, k - 1, lo)
+  if (a > lo) a = clusterStartAtOrBefore(p, a - 1, lo)
+  let b = clusterEndAfter(p, k, hi)
+  if (b < hi) b = clusterEndAfter(p, b, hi)
   return measure16(sh, g, a, b, lo, hi) - measure16(sh, g, a, k, lo, hi) - measure16(sh, g, k, b, lo, hi)
 }
 
@@ -421,13 +450,13 @@ function addCuts(sh: Shaper, g: number, a: number, b: number, cuts: number[]): v
     }
   }
   if (boundary < 0) {
-    addGap(sh.gaps, 'float32-precision', p.styles[group.style]!.run, 'a grapheme cluster of 256 zoomed px or more')
+    addGap(sh.gaps, 'float32-precision', p.styles[group.style]!.run, 'a grapheme cluster of 256 zoomed px or more', sourceRange(p, a, b))
     return
   }
   let k = spaceCut >= 0 ? spaceCut : safeCut
   if (k < 0) {
     k = boundary
-    addGap(sh.gaps, 'unsafe-to-break', p.styles[group.style]!.run, 'a shaping group of 256 zoomed px or more has no offset near its middle that the pair test calls safe; the pieces add the pair adjustment there')
+    addGap(sh.gaps, 'unsafe-to-break', p.styles[group.style]!.run, 'a shaping group of 256 zoomed px or more has no offset near its middle that the pair test calls safe; the pieces add the pair adjustment there', sourceOffsetAt(p, k))
   }
   addCuts(sh, g, a, k, cuts)
   cuts.push(k)
@@ -454,6 +483,16 @@ export function measureGroups(sh: Shaper): void {
   }
 }
 
+// The part of pair adjustment d between the clusters on both sides of an offset that the glyph before it carries
+// (FontFacts.pairKerning): all of it on the first glyph's advance, or kern >> 1 where the kern and kerx pair machine applies
+// it (hb-kern.hh:102-106). Where the fact isn't given, the first glyph's.
+export function pairBefore16(sh: Shaper, g: number, d: number): number {
+  switch (sh.p.styles[sh.p.groups[g]!.style]!.pairKerning) {
+    case 'split': return d >> 1
+    case 'first-advance': case null: return d
+  }
+}
+
 // The 16.16 advance sum of group g before offset k: the glyphs of the clusters before k in the paragraph's shaping.
 export function groupPrefix16(sh: Shaper, g: number, k: number): number {
   const p = sh.p
@@ -469,8 +508,9 @@ export function groupPrefix16(sh: Shaper, g: number, k: number): number {
     if (cuts[mid]! <= k) lo = mid
     else hi = mid - 1
   }
-  const pair = pairAdjust16(sh, g, k, group.start, group.end)
-  let base = cuts[lo] === k ? group.prefixAtCut[lo]! : group.prefixAtCut[lo]! + measure16(sh, g, cuts[lo]!, k, group.start, group.end) + pair
+  const pair = pairBefore16(sh, g, pairAdjust16(sh, g, k, group.start, group.end))
+  // prefixAtCut holds the whole adjustment at its cut, which belongs to both glyphs around it.
+  let base = cuts[lo] === k ? group.prefixAtCut[lo]! - pairAdjust16(sh, g, k, group.start, group.end) + pair : group.prefixAtCut[lo]! + measure16(sh, g, cuts[lo]!, k, group.start, group.end) + pair
   // An open mark halted after the character before it carries the adjustment itself (ShouldKern), so it isn't before k.
   if (kernsAfter(sh, g, k, group.start, group.end)) base -= pair
   // HanKerning halted the group's first character (han_kerning.cc:235-262), which every later position includes.
@@ -479,7 +519,7 @@ export function groupPrefix16(sh: Shaper, g: number, k: number): number {
 
 function kernsAfter(sh: Shaper, g: number, k: number, lo: number, hi: number): boolean {
   const p = sh.p
-  if (p.is8Bit || k <= lo || k >= hi || !hanKerningMayApply(p.text, p.is8Bit, lo, hi)) return false
+  if (p.is8Bit || k <= lo || k >= hi || !hanKerningMayApply(p.hanKerningCandidates, lo, hi)) return false
   const data = hanKerningFontData(p, p.groups[g]!.style)
   if (!data.hasHalt) return false
   const type = resolvedCharType(data, p.text.charCodeAt(k))
@@ -493,26 +533,26 @@ const HAN_KERNING_DETAIL = 'a HanKerning trim added from Canvas facts: `halt` th
 // character when ShouldKern holds with the character before it.
 function hanKerningStartTrim16(sh: Shaper, g: number, a: number, b: number, isLineStart: boolean): number {
   const p = sh.p
-  if (a === 0 || isLineStart || !hanKerningMayApply(p.text, p.is8Bit, a, b)) return 0
+  if (a === 0 || isLineStart || !hanKerningMayApply(p.hanKerningCandidates, a, b)) return 0
   const style = p.groups[g]!.style
   const data = hanKerningFontData(p, style)
   if (!data.hasHalt) return 0
   const c = p.text.charCodeAt(a)
   if (!shouldKern(resolvedCharType(data, c), resolvedCharType(data, p.text.charCodeAt(a - 1)))) return 0
-  addGap(sh.gaps, 'han-kerning', p.styles[style]!.run, HAN_KERNING_DETAIL)
+  addGap(sh.gaps, 'han-kerning', p.styles[style]!.run, HAN_KERNING_DETAIL, sourceRange(p, a, a + 1))
   return trim16(sh, style, c)
 }
 
 // The end context (han_kerning.cc:264-300): the last character halts when ShouldKernLast holds with the one after.
 function hanKerningEndTrim16(sh: Shaper, g: number, a: number, b: number): number {
   const p = sh.p
-  if (b >= p.text.length || !hanKerningMayApply(p.text, p.is8Bit, a, b)) return 0
+  if (b >= p.text.length || !hanKerningMayApply(p.hanKerningCandidates, a, b)) return 0
   const style = p.groups[g]!.style
   const data = hanKerningFontData(p, style)
   if (!data.hasHalt) return 0
   const c = p.text.charCodeAt(b - 1)
   if (!shouldKernLast(resolvedCharType(data, p.text.charCodeAt(b)), resolvedCharType(data, c))) return 0
-  addGap(sh.gaps, 'han-kerning', p.styles[style]!.run, HAN_KERNING_DETAIL)
+  addGap(sh.gaps, 'han-kerning', p.styles[style]!.run, HAN_KERNING_DETAIL, sourceRange(p, b - 1, b))
   return trim16(sh, style, c)
 }
 
@@ -521,12 +561,16 @@ export type ShapeResult =
   | { kind: 'group'; group: number; start: number; end: number; rtl: boolean; width16: number; base16: number }
   | { kind: 'tabs'; start: number; end: number; rtl: boolean; first16: number; rest16: number; width16: number }
 
+// An item's result is the group's glyphs whose cluster starts in the item's range (CopyRange through FindGlyphDataRange), so
+// an item edge inside a glyph cluster counts as the next cluster boundary.
 export function itemShapeResult(sh: Shaper, itemIndex: number): ShapeResult {
-  const item = sh.p.items[itemIndex]!
-  const base16 = groupPrefix16(sh, item.group, item.start)
+  const p = sh.p
+  const item = p.items[itemIndex]!
+  const group = p.groups[item.group]!
+  const base16 = groupPrefix16(sh, item.group, sliceEdge(p, item.start, group.start, group.end))
   return {
     kind: 'group', group: item.group, start: item.start, end: item.end, rtl: (item.bidiLevel & 1) === 1,
-    width16: groupPrefix16(sh, item.group, item.end) - base16, base16,
+    width16: groupPrefix16(sh, item.group, sliceEdge(p, item.end, group.start, group.end)) - base16, base16,
   }
 }
 
@@ -650,20 +694,48 @@ export function callPrefix16(sh: Shaper, call: ReshapeCall, k: number): number {
   const p = sh.p
   k = clusterStartAtOrBefore(p, k, call.start)
   if (k <= call.start) return 0
-  const pair = pairAdjust16(sh, call.group, k, call.start, call.end)
+  const pair = pairBefore16(sh, call.group, pairAdjust16(sh, call.group, k, call.start, call.end))
   let base = measure16(sh, call.group, call.start, k, call.start, call.end) + pair
   if (kernsAfter(sh, call.group, k, call.start, call.end)) base -= pair
   return base - call.startTrim16
 }
 
+// A view takes the glyphs whose character index, their cluster's first character, lies in its range
+// (GlyphDataRange::FindGlyphDataRange, glyph_data_range.cc:56-90), so a range edge inside a glyph cluster gives the cluster to
+// the part holding its start: the edge counts as the next cluster boundary. Positions (CachedPositionForOffset) snap the
+// other way, to the cluster's start (shape_result.cc:2113-2200).
+function sliceEdge(p: BlinkPrepared, k: number, lo: number, hi: number): number {
+  if (k <= lo || k >= hi) return k
+  let e = k
+  while (e < hi && !isClusterBoundary(p, e)) e++
+  return e
+}
+
+function rangeSlicePrefix16(sh: Shaper, sr: ShapeResult, k: number): number {
+  return prefix16(sh, sr, sr.kind === 'group' ? sliceEdge(sh.p, k, sr.start, sr.end) : k)
+}
+
+function callSlicePrefix16(sh: Shaper, call: ReshapeCall, k: number): number {
+  return callPrefix16(sh, call, sliceEdge(sh.p, k, call.start, call.end))
+}
+
 export function partWidth16(sh: Shaper, part: Part): number {
   switch (part.kind) {
-    case 'range': return prefix16(sh, part.sr, part.end) - prefix16(sh, part.sr, part.start)
-    case 'reshape': return callPrefix16(sh, part.call, part.end) - callPrefix16(sh, part.call, part.start)
+    case 'range': return rangeSlicePrefix16(sh, part.sr, part.end) - rangeSlicePrefix16(sh, part.sr, part.start)
+    case 'reshape': return callSlicePrefix16(sh, part.call, part.end) - callSlicePrefix16(sh, part.call, part.start)
   }
 }
 
-export const GRAPHEME_CLUSTERS_DETAIL = 'a position inside a grapheme at a character HarfBuzz doesn\'t mark a continuation: the glyphs form one cluster or two as the font\'s lookups merge them (ligate_input, hb-ot-layout-gsubgpos.hh:1500-1510), which Canvas totals don\'t show; the port gives the grapheme one position'
+// The source range of the grapheme around text_content offset k (k inside it or at its start).
+export function graphemeSourceRange(p: BlinkPrepared, k: number): { start: number; end: number } {
+  let a = Math.min(k, p.text.length)
+  while (a > 0 && p.graphemeStarts[a] !== 1) a--
+  let b = a + 1
+  while (b < p.text.length && p.graphemeStarts[b] !== 1) b++
+  return sourceRange(p, a, Math.min(b, p.text.length))
+}
+
+export const GRAPHEME_CLUSTERS_DETAIL ='a position inside a grapheme at a character HarfBuzz doesn\'t mark a continuation: the glyphs form one cluster or two as the font\'s lookups merge them (ligate_input, hb-ot-layout-gsubgpos.hh:1500-1510), which Canvas totals don\'t show; the port gives the grapheme one position'
 
 function makeView(sh: Shaper, parts: Part[], rtl: boolean, startIndex: number, charIndexOffset: number, numCharacters: number): View {
   let width = 0
@@ -671,8 +743,10 @@ function makeView(sh: Shaper, parts: Part[], rtl: boolean, startIndex: number, c
     const part = parts[i]!
     // A view edge inside a grapheme (a line edge, a bidi run edge, trailing spaces split off) takes the grapheme's position.
     const g = part.kind === 'reshape' ? part.call.group : part.sr.kind === 'group' ? part.sr.group : -1
-    if (g >= 0 && (startsClusterInsideGrapheme(sh.p, part.start) || startsClusterInsideGrapheme(sh.p, part.end))) {
-      addGap(sh.gaps, 'glyph-clusters', sh.p.styles[sh.p.groups[g]!.style]!.run, GRAPHEME_CLUSTERS_DETAIL)
+    if (g >= 0) {
+      for (const edge of [part.start, part.end]) {
+        if (startsClusterInsideGrapheme(sh.p, edge)) addGap(sh.gaps, 'glyph-clusters', sh.p.styles[sh.p.groups[g]!.style]!.run, GRAPHEME_CLUSTERS_DETAIL, graphemeSourceRange(sh.p, edge))
+      }
     }
     width = f32(width + widthOf16(partWidth16(sh, part)))
   }
@@ -775,8 +849,8 @@ export function viewPrefix16(sh: Shaper, view: View, k: number): number {
     }
     if (start < k) {
       switch (part.kind) {
-        case 'range': sum += prefix16(sh, part.sr, k) - prefix16(sh, part.sr, part.start); break
-        case 'reshape': sum += callPrefix16(sh, part.call, k) - callPrefix16(sh, part.call, part.start); break
+        case 'range': sum += rangeSlicePrefix16(sh, part.sr, k) - rangeSlicePrefix16(sh, part.sr, part.start); break
+        case 'reshape': sum += callSlicePrefix16(sh, part.call, k) - callSlicePrefix16(sh, part.call, part.start); break
       }
     }
     break
@@ -798,7 +872,7 @@ export function reshapeHanKerningEnd(sh: Shaper, g: number, start: number, end: 
   const p = sh.p
   const startTrim16 = hanKerningStartTrim16(sh, g, start, end, false)
   let endTrim16 = 0
-  if (hanKerningMayApply(p.text, p.is8Bit, start, end)) {
+  if (hanKerningMayApply(p.hanKerningCandidates, start, end)) {
     const style = p.groups[g]!.style
     const data = hanKerningFontData(p, style)
     if (data.hasHalt) {
@@ -807,11 +881,11 @@ export function reshapeHanKerningEnd(sh: Shaper, g: number, start: number, end: 
       // other types the difference is ordinary kerning (Arial `’’`), and `hasHalt` describes the font `「` falls back to.
       switch (resolvedCharType(data, c)) {
         case HAN_OPEN: case HAN_CLOSE:
-          addGap(sh.gaps, 'han-kerning', p.styles[style]!.run, HAN_KERNING_DETAIL)
+          addGap(sh.gaps, 'han-kerning', p.styles[style]!.run, HAN_KERNING_DETAIL, sourceRange(p, end - 1, end))
           endTrim16 = trim16(sh, style, c)
           break
         default:
-          addGap(sh.gaps, 'han-kerning', p.styles[style]!.run, 'a line-end halt on a character that isn\'t a fullwidth open or close mark: Canvas can\'t show whether its font halts it (shaping_line_breaker.cc:344-363)')
+          addGap(sh.gaps, 'han-kerning', p.styles[style]!.run, 'a line-end halt on a character that isn\'t a fullwidth open or close mark: Canvas can\'t show whether its font halts it (shaping_line_breaker.cc:344-363)', sourceRange(p, end - 1, end))
       }
     }
   }
@@ -856,7 +930,7 @@ export function shapeHyphen(sh: Shaper, style: number): { text: string; inlineSi
 // and before 16.16 truncation; Canvas gives the shaping advance (gap tab-stops, probe blink-followups F4).
 export function tabShapeResult(sh: Shaper, start: number, end: number, rtl: boolean, positionLU: number, run: number, style: number): ShapeResult {
   const p = sh.p
-  addGap(sh.gaps, 'tab-stops', run, 'tab stops count from the platform space advance, without `trak` tracking and untruncated; Canvas gives the tracked 16.16 advance (simple_font_data.cc:225-240, font.cc:303-340)')
+  addGap(sh.gaps, 'tab-stops', run, 'tab stops count from the platform space advance, without `trak` tracking and untruncated; Canvas gives the tracked 16.16 advance (simple_font_data.cc:225-240, font.cc:303-340)', sourceRange(p, start, end))
   // The item's tab-size (style.GetTabSize(), line_breaker.cc:2968) with the block's font and spacing (FontForTab under
   // TabSizeAncestor, inline_node.cc:2130-2140).
   const block = p.styles[0]!
@@ -864,8 +938,13 @@ export function tabShapeResult(sh: Shaper, start: number, end: number, rtl: bool
   const space = widthOf16(raw16Of(sh, contexts, contexts.hyphen, ' '))
   const ls = f32(block.letterSpacing * p.layoutZoom)
   const ws = f32(block.wordSpacing * p.layoutZoom)
-  const base = f32(f32(p.styles[style]!.tabSize) * f32(f32(space + ls) + ws))
+  // TabWidthInternal: TabSize::GetPixelSize with TabSizeWithSpacing (stable, runtime_enabled_features.json5:6172), and the
+  // letter spacing when that is 0, which TabWidth(font_data, tab_size) returns as the base whatever it is (font.h:260-264,
+  // font.cc:303-317). So under tab-size 0 with letter spacing, tabs stop at multiples of the letter spacing.
+  const pixelSize = f32(f32(p.styles[style]!.tabSize) * f32(f32(space + ls) + ws))
+  const base = pixelSize !== 0 ? pixelSize : ls
   const tabWidth = (position: number | null): number => {
+    // TabWidth(font_data, tab_size, position) returns the letter spacing only when the base is 0 (font.cc:319-340).
     if (base === 0) return ls
     if (position === null) return base
     let modulo = f32(position % base)

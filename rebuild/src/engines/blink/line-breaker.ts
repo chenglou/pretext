@@ -64,6 +64,10 @@ export type LineInfo = {
   hasOverflow: boolean
   // LineInfo::NeedsAccurateEndPosition (line_info.cc:127-175).
   needsAccurateEndPosition: boolean
+  // Not Blink's: the end of the content the break decision measured, the next break opportunity after the line's end under
+  // the current style's own break type, before any break-character override (at least one unit past it), for the gaps the
+  // decision rests on.
+  decisionEnd: number
 }
 
 // line_breaker.cc:186-188
@@ -319,7 +323,15 @@ export class LineBreaker {
     for (let i = 0; i < this.results.length; i++) if (this.results[i]!.shouldCreateLineBox) shouldCreateLineBox = true
     // CreateBreakToken (line_breaker.cc:4723-4744): past the first formatted line once a line isn't empty.
     const isPastFirstFormattedLine = !this.isFirstFormattedLine || shouldCreateLineBox
+    const contentEnd = this.atEnd() ? this.text.length : this.current.textOffset
+    // The first ShapeLine pass reads positions up to its candidate under the style's own break type, before an overflow
+    // switches to break-character (RetryAfterOverflow), so the look-ahead is the next opportunity under that type.
+    const breakType = this.iterator.breakType
+    this.iterator.breakType = this.iterator.settings.breakType
+    const decisionEnd = contentEnd >= this.text.length ? contentEnd : Math.max(contentEnd + 1, Math.min(this.text.length, this.iterator.nextBreakOpportunity(contentEnd + 1)))
+    this.iterator.breakType = breakType
     return {
+      decisionEnd,
       results: this.results,
       lineLeft: this.lineLeft,
       lineRight: this.lineRight,

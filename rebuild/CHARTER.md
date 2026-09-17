@@ -82,14 +82,24 @@ evaluation of 2026-09-17 (REPORT.md §2-§7):
   code units" (Blink fix-r8, probe blink-followups-20260917). The registry id `blink/measure/ignorables-left-out-if-8bit`
   now names what `engines/blink/shape.ts` does instead: an unsegmented Latin-1 paragraph's Canvas string leaves them out,
   and every other string keeps them as U+2060.
-- Still heuristics in the rule registry: Blink `measure/ignorables-left-out-if-8bit` (until the new rule's citation is
-  recorded) and `shape/wide-group-halved`; `shared/env/engine-from-user-agent`; the painter's
-  `nowrap-hyphenated-or-joined`, `leading-ascii-space-slice-in-span` and `zwj-at-joined-line-edges` (tentpoles 3, 7).
+- Still heuristics in the rule registry: Blink `shape/wide-group-halved` and `shape/cluster-unit-grapheme`;
+  `shared/env/engine-from-user-agent`; the painter's `nowrap-hyphenated-or-joined`, `leading-ascii-space-slice-in-span`
+  and `zwj-at-joined-line-edges` (tentpoles 3, 7). In ceiling round 2 Blink's `measure/ignorables-left-out-if-8bit`
+  became a ported rule, cited at Chrome 153's V8 (6b96683d). `shape/cluster-unit-grapheme` was chosen by lab counts in
+  round 1: a position inside a grapheme takes the grapheme's position; treating every unit HarfBuzz doesn't mark a
+  continuation as a cluster start (fix-r9) passed 2 cases (U+0600 U+3000 in Amiri) and lost 8 (Bengali conjuncts in
+  Kohinoor Bangla). The source leaves it to the font, whose syllabic shaper and ligatures merge clusters
+  (hb-ot-shaper-indic.cc:806-824, hb-ot-layout-gsubgpos.hh:1611), and the layout reports `glyph-clusters` there.
 - Removed in ceiling round 1: the structural deviations before inline boxes, `<br>`, text-indent, text-align and variable
   widths (per-span styles and box sizes; Blink F1-F4, F7, F8; WebKit F1, F2; Gecko F1, F2, F5, F6). All three engines lay
-  out the inline tree of DESIGN.md §1.1 with line slots, and no evaluation row raised `UnportedFeature`. Left: Blink throws
-  `UnportedFeature` for `text-align: justify` over a character at U+02C7 or above, which no lab case reaches, and `<wbr>`
-  rects are untraced in WebKit and Gecko.
+  out the inline tree of DESIGN.md §1.1 with line slots, and no evaluation row raised `UnportedFeature`. Left: `<wbr>`
+  rects are untraced in WebKit; Gecko's WBRFrame box is placed and reported since ceiling round 2. Removed in ceiling round 2: Blink threw `UnportedFeature` for `text-align:
+  justify` over a character at U+02C7 or above; it now reads `IsCjkIdeographOrSymbol` from data generated from
+  character_property_data.h and ICU 78.2's emoji data (tools/gen-blink-data.ts).
+- Removed in ceiling round 2: Blink put every pair adjustment on the glyph before the offset, a default Canvas can't check.
+  The font fact `pairKerning` now says where HarfBuzz puts it (GPOS on the first glyph, or the kern and kerx machine's
+  `kern >> 1`), from the lab's font table; where it isn't given, the default stands and line edges report
+  `unsafe-to-break` (tentpole 3).
 - The lab's `obligations` family and G0 baselines are derived from main's tests and the final runs; they are measurement
   inputs until each obligation is triaged under tentpole 5. research/MAIN-TRIAGE.md re-observed main's regressions and
   required cases with the charter library, and `rebuild/lab/triage/` holds its records (Chrome 1,069, Firefox 745,
@@ -114,13 +124,25 @@ evaluation of 2026-09-17 (REPORT.md §2-§7):
     only (tentpole 4). Two of its generator sources (`lab/cases/case.ts`, `build.ts`) gained tree cases after sealing;
     the case files' hashes are unchanged and flat cases keep their ids.
 - Found in ceiling round 1:
-  - The slot-rows observer assumption isn't checked. Where row 0's two insets and the text-indent together exceed the
-    width, Firefox and WebKit put row 0's right float one row lower, and the declared slots no longer describe the page:
-    9 Firefox and 2 webkit-host feature-family cases fail without a gap (tentpole 2).
-  - `Element.getClientRects()` isn't compared, so lines holding only atomic inlines or a `<br>` are unobserved: 719
-    Chrome, 670 Firefox and 705 webkit-host feature-family line counts (tentpole 2).
+  - Removed in ceiling round 2: the slot-rows observer assumption wasn't checked. Scorer 4 marks a row whose slot floats
+    sit outside their rows as a protocol row, never a pass or a fail (lab `score.ts` `slotProtocol`): Firefox 15 and
+    webkit-host 7 of round 1's feature-family rows, the critic's 22. Firefox and WebKit move row 0's second float below the
+    first line when it doesn't fit beside the indented line; derivation's width floor now follows each engine's rule
+    (`tests/derive.ts` `minimumUnits`), and `lab/gate.ts --prune-protocol` removed the accidental passes from the feature
+    baselines. Line boxes taller than the line height would move rows too, and no rule checks that yet (tentpole 2).
+  - Removed in ceiling round 2: `Element.getClientRects()` wasn't compared. Scorer 4 compares element rects, so the 719
+    Chrome, 670 Firefox and 701 webkit-host feature-family line counts left unobserved there are observed (tentpole 2).
+  - Removed in ceiling round 2: webkit-host's `preferredLanguages` came from the tested page's `navigator.languages`. The
+    driver now evaluates WebKit's steps from the UI process's `AppleLanguages` to the WebContent process's list with
+    `webkit-host --print-languages` before launch, and the page only checks the first entry (lab README, "Browser-process
+    languages"; tentpole 6).
   - Gecko failures without a gap name: 1 au per-glyph widths (specs/gecko-canvas.md §3 N7, inferred), a Helvetica Neue
     ligature whose width equals its parts, and two 69 au span edges where only the observation port marks a value limited
-    (tentpole 3).
+    (tentpole 3). Status in ceiling round 2 (specs/gecko-RESULTS.md): the 69 au rows were a port bug, an 8-bit text run's
+    script (fixed from gfxTextRun.cpp:2744-2747, probe F8); the ligature is `f` taking half of `fi` at an emergency break,
+    now reported as `in-word-prefix` where the clusters around the break measure differently with ligatures off (probe
+    F9); the 1 au class is verified (probe F7) and has no Canvas-observable condition, so it stays a failure without a gap.
   - CHARTER-CRITIC items since resolved: 1 (WebKit's coverage recipe reports `font-fallback`), 8 and 9 (quoted family
-    names), 12 (process languages given). Still open: 2, 3, 4 (4 library citations at Chromium 152), 10, 11, 13 to 16.
+    names), 12 (process languages given). Still open: 2, 3, 4 (library citations at Chromium 152; in ceiling round 2 Blink's
+    V8 and HarfBuzz citations were read again at Chrome 153's pins 6b96683d and dfdc088c, and element.cc and
+    locale_settings_mac.grd stay at 152), 10, 11, 13 to 16.

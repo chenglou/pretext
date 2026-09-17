@@ -398,14 +398,66 @@ What they are:
   scorer doesn't check it. The fix belongs in derivation or the scorer, not in an engine.
 - **Gecko, 1 au on one line, no gap name:** development `c-13c64a6ce641374d`, `c-8f9cd18c645671da`, `c-fcbb3bc755b5a5e8`
   (`maintained/accuracy`) and `c-268ee59b15a407a8` (`runs/mixed-fonts-sizes`, in smoke and runs); held-out
-  `c-02e7d131f09e05b9`, `c-d575ffd182517ddc` and `c-e05daec9b21bfc36` (`runs/mixed-fonts-sizes`). specs/gecko-canvas.md §3
-  N7 infers 16.16 truncation at the device scale; no Canvas-observable condition is known.
-- **Gecko, other widths:** `c-daf9c7047097f77b` (`policy/overflow-wrap`, a Helvetica Neue ligature whose width equals its
-  parts, 249 au against 217); held-out `c-9d23fb8693d45e81` and `c-f716dcbf1c7bbf6f` (`runs/span-at-space`, 69 au). In
-  these and three of the 1 au cases, the observation port marks the differing value limited by `in-word-prefix`, but the
-  layout reports no gap.
+  `c-02e7d131f09e05b9`, `c-d575ffd182517ddc` and `c-e05daec9b21bfc36` (`runs/mixed-fonts-sizes`). Corrected by the round 1
+  critic and the Gecko owner's round 2 probe F7: the differing line holds a shaping unit whose DOM width is 1 au off its
+  Canvas width. `c-268ee59b15a407a8`, `c-02e7d131f09e05b9`, `c-d575ffd182517ddc` and `c-e05daec9b21bfc36` have `ووفقك` in
+  10px Geeza Pro (DOM 1173 au, OffscreenCanvas 1172); the `maintained/accuracy` lines are Latin in 15px Helvetica Neue
+  (`modern`: DOM 3118, Canvas 3119). The same class explains `c-79f342df6e23e13a` and `c-f52cf560ae801fed` below. The DOM
+  shapes at the device size and rounds each glyph's advance to app units at 30 per device pixel from 16.16 values
+  (gfxHarfBuzzShaper.cpp:354-379, :1262-1263, :1699-1702); neither an OffscreenCanvas nor a `<canvas>` element gives those
+  values (F7: the element measures on whole device pixels), so no Canvas-observable condition exists.
+- **Gecko, other widths:** `c-daf9c7047097f77b` (`policy/overflow-wrap`) is not a ligature equal to its parts but `f` at an
+  emergency break inside `firstname`, which the DOM gives half of the `fi` ligature's 435 au (217, `i` 218;
+  ComputeLigatureData, gfxTextRun.cpp:238-322) where the port measured `f` alone at 249. Held-out `c-9d23fb8693d45e81` and
+  `c-f716dcbf1c7bbf6f` (`runs/span-at-space`) are digit widths inside the span ` 7:00-9:00` (18px bold Apple SD Gothic Neo,
+  `lang="ko"`): the DOM kerns `7:` by −40 au and `-9` by −29 because an 8-bit text run counts as Latin whatever its
+  letters (gfxTextRun.cpp:2744-2747), and the port resolved it from the language to Hangul, where kerning is off. In these
+  and three of the 1 au cases, the observation port marked the differing value limited by `in-word-prefix` itself, where
+  the layout reported no gap; round 2 takes that state from the layout's shaping units instead.
+- **Gecko, gaps only on other lines** (round 1 critic): `c-79f342df6e23e13a` and `c-f52cf560ae801fed`
+  (`runs/mixed-fonts-sizes`), widths wrong on line 0 by 1 au on `รมชาติทำให้ผู้คนมีคว` in 32px Thonburi (DOM 16899 au,
+  Canvas 16898; probe F7), with `in-word-prefix` only on later lines.
 - **webkit-host sealed, 6:** 4 line counts and 2 breaks in the sealed suite sample, with the reasons "line count differs"
   and "code point on other lines". Counts only; naming them would burn the set.
+- **webkit-host, "0 without a gap" rested on paragraph gaps** (corrected in ceiling round 2). Round 1's WebKit engine reported
+  every condition on the paragraph, so under the round 2 definition, where a gap must concern the failing line or the break
+  decision it starts from (lab/README.md, "Line-local gaps"), no webkit-host prediction failure had one. Re-scored with
+  scorer 4 (`.artifacts/lab/webkit-round2/rescore-r1/`), cases outside history dependence and protocol rows, lineCount /
+  breaks / widths without a line-local gap: development combined file 25 / 75 / 131, held-out 09-16 combined file 43 / 88 /
+  176, rule and feature families 78 / 145 / 194. The two slot rows above are protocol rows under scorer 4, as is the
+  accidental pass `c-9863334967bab8a9`. The round 2 WebKit engine reports its conditions on lines (specs/webkit-RESULTS.md,
+  "ceiling round 2"), and tracing the failures that still lacked a line gap found a wrong source reading: CSS generic
+  families resolve by locale through CoreText on macOS (FontDescriptionCocoa.cpp:77-118), where the port had read only
+  -webkit-standard as per script, so `canvas-language` missed Latin in `serif` under `ja` or `zh-Hans`.
+- **webkit-host, weak gaps** (round 1 critic item 4): `page-history` fired for any box with strong RTL content or an RTL
+  block, not where the break position cache's key can change a line, and missed Latin text laid out after an RTL box of
+  the same text; round 2 takes the condition from TextBreakingPositionContext and the item ends another direction gives.
+- **Chrome, "0 without a gap" rested on paragraph gaps and gaps of other lines** (corrected in ceiling round 2). Re-scored
+  with scorer 4 (`scratchpad/blink-r2/uncovered-all.ts` over `.artifacts/ceiling-20260917/evaluate/chrome/`), 170 of round
+  1's Chrome prediction failures outside history dependence had no line-local gap: runs 3, held-out runs 4, held-out ws 1,
+  rule families 72, feature families 52, suite sample 9, held-out suite sample 29. `rule/system-fonts-and-sizes` (64),
+  `U+FFFC/*` (38), `runs/bidi-runs` and three `runs/split-word` cases had only paragraph gaps without a range;
+  `rule/text-align` (52), `rule/following-space` (8) and three more had their gaps on the next line. The round 2 Blink
+  engine reports the content's conditions with ranges and copies them onto the line whose decision measured them, and the
+  traced classes turned out to be port bugs fixed from source, not gap cases: tab-size 0 stops at multiples of the letter
+  spacing (font.cc:303-340; the 97 `rule/tabs` failures round 1 covered only by `tab-stops`); `NeedsAccurateEndPosition` is
+  computed before the base direction is set (line_breaker.cc:811-871), which explains round 1's "reshape offsets under
+  right but not left"; Times New Roman, Helvetica Neue and Hoefler Text kern through HarfBuzz's pair machine, which puts
+  `kern >> 1` on the first glyph (hb-kern.hh:102-106), now the font fact `pairKerning`; the pair window measured a mark
+  after a soft hyphen as a broken cluster (`c-01763358db8471a3`, the critic's unsettled `glyph-clusters` edge); and a view
+  or an item takes whole glyph clusters by their first character (glyph_data_range.cc:56-90). specs/blink-RESULTS.md,
+  "Ceiling round 2", has the transitions.
+- **Chrome, weak gaps** (round 1 critic item 4). On the development set (smoke, runs, ws, policy, suite sample; 223
+  prediction-failing cases in round 1, 95 in round 2), `in-word-prefix` went from 13,638 reports and lift 1.10 to 732 and
+  2.16, where the source says a width-neutral unsafe offset can only move a decision within about 2 LayoutUnits or a
+  wrapped start's reshape can drop an interaction two clusters wide; `glyph-clusters` from 3,165 to 2,724 (lift 7.6) where a
+  pair window with liga, clig and calt off (letter spacing, font_features.cc:54-86) shows a ligature, then 3,953 (lift 4.7)
+  once it also fires where the word the break decision measured past the line end holds such a window, which covers the
+  triage population's 10 ligature cases (`ffiffl`, `office`); `control-character-width`
+  from 970 to 127, only VT and FF, which Canvas turns into spaces. `script-context` still fires on 19,394 cases with lift
+  1.20: Canvas does shape those characters under another script, and whether the font's lookups differ by script isn't in
+  Canvas or in the font facts. `tab-stops` fires on every tab (lift 1.06) and covers no rule-family failure since the tab
+  fix.
 - **Painter-only failures without a gap** are painting form, not prediction: the prediction metrics pass. Most are "painted
   extent differs". DESIGN §7 names classes of them, but no painter limit is reported per case, so they aren't attributed
   case by case. The largest groups: Chrome `box-edges` 72 and `nested-box-edges` 18; Firefox `text-align` 100 and
@@ -414,9 +466,15 @@ What they are:
 
 By this rule:
 
-- Chrome has no prediction failure without a gap on any set.
+- Chrome has no prediction failure without a gap by the paragraph rule. By the round 2 line-local rule, 170 of round 1's
+  Chrome prediction failures are open (above). The round 2 Blink build (r2-e) leaves none open on smoke, runs, ws, policy,
+  the held-out runs, ws and policy, rule families, feature families in both languages, the suite sample and the held-out
+  suite sample (193 failing cases, all under line-local gaps), and 1 of the triage population's 422
+  (`c-8c84627af834611f`, an emergency break-word line in Shantell Sans that no source reading explains yet;
+  specs/blink-RESULTS.md).
 - Firefox has 20: 9 are the slot protocol, 8 (7 cases) the unnamed 1 au class and 3 other unnamed widths.
-- webkit-host has 8: 2 are the slot protocol and 6 are in the sealed set.
+- webkit-host has 8 by the paragraph rule: 2 are the slot protocol and 6 are in the sealed set. By the round 2 line-local
+  rule, every webkit-host prediction failure of round 1 is open, since its gaps concerned no line (above).
 - Every input of the stage 5 model predicts in all three engines, but element rects and slot rows aren't scored, so part of
   what the feature families exercise is unobserved.
 
@@ -601,7 +659,8 @@ Gecko:
 - **System fonts and sizes** (`optical-size`, `font-size-quantization`): rule family `system-fonts-and-sizes` fails 60 of
   680 line counts and 284 widths; `joining` 56 of 736 and `fit-bound` 19 of 360.
 - **Device-size emoji** (`bitmap-emoji-size`).
-- **Without a gap name:** the 1 au class, a ligature equal to its parts, and two 69 au span edges (§2.8).
+- **Without a gap name:** the 1 au class, `f` taking half of an `fi` ligature at an emergency break, and digits kerned in an
+  8-bit run under `lang="ko"` (§2.8, as corrected in ceiling round 2; specs/gecko-RESULTS.md has the round 2 status).
 - **Slot protocol:** 9 `line-slots` cases (§2.8).
 - **Painter:** `text-align` 100 painted lines (a painted line is its block's last line, which moves `center`, `end` and
   `justify` lines, DESIGN §7), `box-edges` 73 and `nested-box-edges` 27 extents; development suite 1,647 painter failures.

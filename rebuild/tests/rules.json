@@ -609,8 +609,8 @@
    "id": "blink/measure/ignorables-left-out-if-8bit",
    "engine": "blink",
    "area": "measure",
-   "kind": "heuristic",
-   "statement": "where the string without the ignorable would be 8-bit, the ignorable is left out instead of substituted",
+   "kind": "ported rule",
+   "statement": "an unsegmented Latin-1 paragraph's Canvas string leaves default-ignorable characters out and stays 8-bit; every other string keeps them as U+2060 (inline_node.cc:1256-1290, harfbuzz_shaper.cc:1072-1101; V8 slices from string-slice.tq:8-33 and builtins-string-gen.cc:2154 at 6b96683d)",
    "source": "fitted to the probed Latin-1 strings; the RLM before (( in Amiri is unexplained (shape.ts:200-202)",
    "probes": [
     "blink-ignorables: every probed Latin-1 string equal"
@@ -619,7 +619,7 @@
    "audit": "blink D2",
    "status": "current",
    "replacedBy": [],
-   "declaredBy": "catalogue 2026-09-16"
+   "declaredBy": "blink owner (round 2, 2026-09-17)"
   },
   {
    "id": "blink/measure/v8-short-slice-storage",
@@ -739,7 +739,7 @@
    "engine": "blink",
    "area": "shape",
    "kind": "recipe",
-   "statement": "the adjustment between the clusters around an offset, R(xy) − R(x) − R(y), is placed on the glyph before the offset",
+   "statement": "the adjustment between the clusters around an offset, R(xy) - R(x) - R(y), is placed on the glyph before the offset as FontFacts.pairKerning says: all of it ('first-advance', or not given), or d >> 1 ('split')",
    "source": "specs/blink-gaps.md §3.4-§3.6 (GPOS first-glyph values; legacy kern puts d >> 1 there)",
    "probes": [
     "blink-gaps H12: run 2026-09-16 11:18, verdict not recorded in a spec"
@@ -748,7 +748,7 @@
    "audit": "blink B7",
    "status": "current",
    "replacedBy": [],
-   "declaredBy": "catalogue 2026-09-16"
+   "declaredBy": "blink owner (round 2, 2026-09-17)"
   },
   {
    "id": "blink/shape/default-ignorables-skipped-in-pair",
@@ -907,14 +907,14 @@
    "engine": "blink",
    "area": "tabs",
    "kind": "ported rule",
-   "statement": "with tab-size 0 a tab is as wide as the letter spacing",
+   "statement": "with tab-size 0 the base tab width is the letter spacing (TabWidthInternal, font.cc:303-317): tabs stop at its multiples with the half-space minimum, and are as wide as the letter spacing only when it is 0 too (font.cc:319-340)",
    "source": "font.cc:303-340",
    "probes": [],
    "tests": [],
    "audit": null,
    "status": "current",
    "replacedBy": [],
-   "declaredBy": "catalogue 2026-09-16"
+   "declaredBy": "blink owner (round 2, 2026-09-17)"
   },
   {
    "id": "blink/hyphen/glyph-by-two-fallback-test",
@@ -2236,14 +2236,14 @@
    "engine": "blink",
    "area": "gap",
    "kind": "named gap",
-   "statement": "reports script-context where a character shapes under another script in Canvas than in the paragraph",
+   "statement": "reports script-context, with the grapheme's source range, where the Canvas string that measures a grapheme alone or in a pair window with its neighbour shapes a character under another script than the paragraph",
    "source": "harfbuzz_shaper.cc:1072-1101; specs/blink-canvas.md §1.4",
    "probes": [],
    "tests": [],
    "audit": null,
    "status": "current",
    "replacedBy": [],
-   "declaredBy": "catalogue 2026-09-16"
+   "declaredBy": "blink owner (round 2, 2026-09-17)"
   },
   {
    "id": "blink/gap/float32-precision",
@@ -4790,10 +4790,14 @@
    "engine": "gecko",
    "area": "script",
    "kind": "ported rule",
-   "statement": "text with every code unit below U+02EA is one run, Latin or Common, without the itemizer",
-   "source": "gfxTextRun.cpp:2700-2800",
-   "probes": [],
-   "tests": [],
+   "statement": "text with every code unit below U+02EA is one run without the itemizer: Latin when it has a Latin letter, else Common resolved from the language; an 8-bit run counts every unit whose value masked with ~0x20 is at most Z (a signed comparison), so it is Latin with digits, spaces or ASCII punctuation alone",
+   "source": "gfxTextRun.cpp:2729-2757",
+   "probes": [
+    "gecko-port F8: confirmed"
+   ],
+   "tests": [
+    "src/engines/gecko/gecko.test.ts :: ceiling round 2 > an 8-bit text run without letters shapes as Latin: digits kern under lang=\"ko\" (probe gecko-port F8)"
+   ],
    "audit": null,
    "status": "current",
    "replacedBy": [],
@@ -4804,11 +4808,14 @@
    "engine": "gecko",
    "area": "measure",
    "kind": "recipe",
-   "statement": "a piece measured alone whose script differs from its run's script is measured after a space and a character of that script",
+   "statement": "a piece measured alone whose script differs from its run's script is measured after a space and a character of that script, or after \"a \" for a Latin run without a letter",
    "source": "gfxScriptItemizer.cpp:60-243; gfxFont.cpp:3781-3866; audit probe A1; lab trace c-d0840b740198cf4d (assumes nothing shapes across the U+0020)",
-   "probes": [],
+   "probes": [
+    "gecko-port F8: confirmed"
+   ],
    "tests": [
-    "src/engines/gecko/gecko.test.ts :: B3: a suffix is measured in the script the paragraph gives it"
+    "src/engines/gecko/gecko.test.ts :: B3: a suffix is measured in the script the paragraph gives it",
+    "src/engines/gecko/gecko.test.ts :: ceiling round 2 > an 8-bit text run without letters shapes as Latin: digits kern under lang=\"ko\" (probe gecko-port F8)"
    ],
    "audit": "gecko B2",
    "status": "current",
@@ -5267,13 +5274,14 @@
    "engine": "gecko",
    "area": "measure",
    "kind": "recipe",
-   "statement": "where Canvas shows Apple Color Emoji draws a cluster, its advance is measured at the device size and rounded at the page apd",
+   "statement": "where Canvas shows Apple Color Emoji draws a cluster (equal widths in the run's list and in \"Apple Color Emoji\" alone at the CSS and device sizes, and equal ink boxes at the CSS size), its advance is measured at the device size and rounded at the page apd",
    "source": "gfxMacFont.cpp:437-463; gfxHarfBuzzShaper.cpp:1559",
    "probes": [
     "gecko-port F3: confirmed",
     "gecko-canvas H5: confirmed",
     "gecko-canvas H6: confirmed",
-    "cross-cutting 1: refuted at apd 27, correction 4"
+    "cross-cutting 1: refuted at apd 27, correction 4",
+    "gecko-port F11: confirmed"
    ],
    "tests": [
     "src/engines/gecko/gecko.test.ts :: B1a: the device-size emoji advance applies only where Canvas shows Apple Color Emoji draws the cluster"
@@ -5896,11 +5904,14 @@
    "engine": "gecko",
    "area": "gap",
    "kind": "named gap",
-   "statement": "reports in-word-prefix at the first consulted in-word offset where prefix + suffix ≠ unit or letters join (stored in the prepared paragraph)",
-   "source": "DESIGN.md §5",
-   "probes": [],
+   "statement": "reports in-word-prefix, with the offset, at the first consulted in-word offset of a line where prefix + suffix ≠ unit, letters join across it, or the grapheme clusters on both sides measure differently in width or ink box with ligatures off (letterSpacing 0.001px)",
+   "source": "DESIGN.md §5; gfxTextRun.cpp:238-322",
+   "probes": [
+    "gecko-port F9: confirmed"
+   ],
    "tests": [
-    "src/engines/gecko/gecko.test.ts :: B2: in-word-prefix only where a prefix and suffix shaped alone differ from the unit"
+    "src/engines/gecko/gecko.test.ts :: B2: in-word-prefix only where a prefix and suffix shaped alone differ from the unit",
+    "src/engines/gecko/gecko.test.ts :: ceiling round 2 > an in-word break inside a ligature as wide as its parts reports in-word-prefix at the offset (probe gecko-port F9)"
    ],
    "audit": "gecko C5, F4",
    "status": "current",
@@ -5998,13 +6009,15 @@
    "engine": "gecko",
    "area": "gap",
    "kind": "named gap",
-   "statement": "reports ui-language for lang=\"\"",
-   "source": "specs/gecko-text.md §2.4",
+   "statement": "reports ui-language for lang=\"\" text, over the leaf, when regionalPrefsLocale isn't given",
+   "source": "nsFontCache.cpp:34, :61-63; nsLanguageAtomService.cpp:107-138",
    "probes": [
     "gecko-text H15: confirmed",
     "gecko-canvas H10: confirmed"
    ],
-   "tests": [],
+   "tests": [
+    "src/engines/gecko/gecko.test.ts :: ceiling round 2 > lang=\"\" measures under the given regional-prefs locale and reports ui-language only without it (nsFontCache.cpp:61-63)"
+   ],
    "audit": null,
    "status": "current",
    "replacedBy": [],
@@ -6634,7 +6647,7 @@
    "area": "output",
    "kind": "ported rule",
    "statement": "HarfBuzz cluster continuations per shaping call",
-   "source": "hb-ot-shape.cc:466-522 (HarfBuzz at Chromium 152)",
+   "source": "hb-ot-shape.cc:470-546 and hb-ot-layout.hh:247 at harfbuzz dfdc088c (Chrome 153's pin)",
    "probes": [],
    "tests": [],
    "declaredBy": "blink owner",
@@ -6692,11 +6705,11 @@
    "engine": "blink",
    "area": "measure",
    "kind": "ported rule",
-   "statement": "a Latin-1-only Canvas string is 16-bit only as a slice of 13 or more units",
+   "statement": "a Latin-1-only Canvas string of a range the paragraph shapes under another script than Latin is made 16-bit as a slice of 13 or more units (SlicedString::kMinLength, string.h:1181 at V8 6b96683d); a Latin range stays one 8-bit Latin segment",
    "source": "V8 4323497a string-slice.tq:8-33; builtins-string-gen.cc SubString; string.h:1078",
    "probes": [],
    "tests": [],
-   "declaredBy": "blink owner",
+   "declaredBy": "blink owner (round 2, 2026-09-17)",
    "audit": null,
    "status": "current",
    "replacedBy": []
@@ -7299,11 +7312,11 @@
    "engine": "blink",
    "area": "shapeline",
    "kind": "ported rule",
-   "statement": "NeedsAccurateEndPosition is true for end, center, justify, left in RTL and right in LTR; a line ending at a space is then reshaped at its end",
+   "statement": "NeedsAccurateEndPosition is true for end, center, justify and right, and false for start and left, whatever the direction: PrepareNextLine computes it in SetLineStyle after Reset set the base direction to LTR and before SetBaseDirection (line_breaker.cc:811-871, line_info.cc:48-75, 127-175); a line ending at a space is then not reshaped at its end",
    "source": "line_info.cc:127-175; line_breaker.cc:255-268, :1658, :2387",
    "probes": [],
    "tests": [],
-   "declaredBy": "provisional (stage 5, feature families 2026-09-17)",
+   "declaredBy": "blink owner (round 2, 2026-09-17)",
    "audit": null,
    "status": "current",
    "replacedBy": []
@@ -7881,6 +7894,100 @@
    "audit": null,
    "status": "current",
    "replacedBy": []
+  },
+  {
+   "id": "gecko/measure/lang-empty-locale-language",
+   "engine": "gecko",
+   "area": "measure",
+   "kind": "ported rule",
+   "statement": "text with lang=\"\" is measured under the given regionalPrefsLocale: nsFontCache gives an empty style language the first regional-prefs locale, lowercased, for font matching and shaping; line breaking and TransformText keep the empty tag",
+   "source": "nsFontCache.cpp:34, :61-63; nsLanguageAtomService.cpp:107-138; gfxTextRun.cpp:2958",
+   "probes": [],
+   "tests": [
+    "src/engines/gecko/gecko.test.ts :: ceiling round 2 > lang=\"\" measures under the given regional-prefs locale and reports ui-language only without it (nsFontCache.cpp:61-63)"
+   ],
+   "audit": null,
+   "status": "current",
+   "replacedBy": [],
+   "declaredBy": "gecko owner (ceiling round 2)"
+  },
+  {
+   "id": "blink/measure/pair-kerning-from-fact",
+   "engine": "blink",
+   "area": "measure",
+   "kind": "fact",
+   "statement": "FontFacts.pairKerning places a pair adjustment between two glyphs: the first glyph's advance, or kern >> 1 there under the kern and kerx pair machine; null places it on the first glyph and reports unsafe-to-break at a line edge taken from positions",
+   "source": "hb-ot-shape.cc:150-185, hb-kern.hh:102-106, OT/Layout/GPOS/PairSet.hh:126-127 at harfbuzz dfdc088c; DESIGN §1.2",
+   "probes": [],
+   "tests": [
+    "src/engines/blink/lines.test.ts :: blink round 2 > a pair adjustment sits on the first glyph, or kern >> 1 on it under the pair machine (hb-kern.hh:102-106)"
+   ],
+   "audit": null,
+   "status": "current",
+   "replacedBy": [],
+   "declaredBy": "blink owner (round 2, 2026-09-17)"
+  },
+  {
+   "id": "blink/shape/pair-window-whole-clusters",
+   "engine": "blink",
+   "area": "shape",
+   "kind": "ported rule",
+   "statement": "each side of the pair window holds whole glyph clusters, so a mark continuing a default-ignorable character's cluster is measured with it",
+   "source": "hb_form_clusters, hb-ot-shape.cc:578-586 at harfbuzz dfdc088c",
+   "probes": [],
+   "tests": [],
+   "audit": null,
+   "status": "current",
+   "replacedBy": [],
+   "declaredBy": "blink owner (round 2, 2026-09-17)"
+  },
+  {
+   "id": "blink/justify/cjk-ideograph-or-symbol",
+   "engine": "blink",
+   "area": "justify",
+   "kind": "ported rule",
+   "statement": "under text-align: justify in 16-bit text a CJK ideograph or symbol (Character::IsCjkIdeographOrSymbol) expands after itself and before itself unless the previous character expanded after",
+   "source": "justification_opportunity.cc:105-120, character.h:97-100, character_property_data_generator.cc:89-140, character_property_data.h:17-111",
+   "probes": [],
+   "tests": [
+    "src/engines/blink/lines.test.ts :: blink round 2 > justify expands before and after CJK ideographs in 16-bit text (justification_opportunity.cc:105-120)"
+   ],
+   "audit": null,
+   "status": "current",
+   "replacedBy": [],
+   "declaredBy": "blink owner (round 2, 2026-09-17)"
+  },
+  {
+   "id": "blink/shape/cluster-unit-grapheme",
+   "engine": "blink",
+   "area": "shape",
+   "kind": "heuristic",
+   "statement": "a position asked inside an extended grapheme cluster takes the grapheme's position, though HarfBuzz starts a glyph cluster at every unit it doesn't mark a continuation, which syllabic shapers and a font's ligatures merge again; the layout reports glyph-clusters at such a position",
+   "source": "chosen by lab counts: every non-continuation unit as a boundary (fix-r9) passed 2 cases (U+0600 U+3000 in Amiri) and lost 8 (Bengali conjuncts in Kohinoor Bangla), specs/blink-RESULTS.md; the source leaves it to the font (hb-ot-shape.cc:578-586, hb-ot-shaper-indic.cc:806-824, hb-ot-layout-gsubgpos.hh:1611 at harfbuzz dfdc088c)",
+   "probes": [],
+   "tests": [],
+   "audit": null,
+   "status": "current",
+   "replacedBy": [],
+   "declaredBy": "blink owner (round 2, 2026-09-17)"
+  },
+  {
+   "id": "gecko/lines/in-word-advance-split-kerning",
+   "engine": "gecko",
+   "area": "lines",
+   "kind": "ported rule",
+   "statement": "where FontFacts.pairKerning is split, the advance before an in-word offset is W(prefix) plus kern >> 1 of the adjustment W(unit) − W(prefix) − W(suffix); otherwise W(unit) − W(suffix)",
+   "source": "hb-kern.hh:102-106 (Firefox 156 HarfBuzz 14.3.1); hb-ot-shape.cc:130-187",
+   "probes": [
+    "gecko-port F12: confirmed for even adjustments; odd ones round either way"
+   ],
+   "tests": [
+    "src/engines/gecko/gecko.test.ts :: ceiling round 2 > a split pair kerning fact gives the glyph before an in-word offset half the adjustment (hb-kern.hh:102-106, probe gecko-port F12)"
+   ],
+   "audit": null,
+   "status": "current",
+   "replacedBy": [],
+   "declaredBy": "gecko owner (ceiling round 2)"
   }
  ]
 }

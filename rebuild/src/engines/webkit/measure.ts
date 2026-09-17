@@ -108,23 +108,26 @@ function containsTab(text: string, from: number, to: number): boolean {
 
 // The end of a range measured with UseTrailingWhitespaceMeasuringOptimization: a range followed by U+0020 in the same box
 // takes that space along (TextUtil.cpp:72-76).
-function measuredEnd(box: WebKitBox, to: number, trailingSpace: boolean): number {
+export function measuredEnd(box: WebKitBox, to: number, trailingSpace: boolean): number {
   return trailingSpace && to < box.text.length && box.text.charCodeAt(to) === 0x20 ? to + 1 : to
 }
 
 // TextUtil::width over a box range (TextUtil.cpp:62-104). With `trailingSpace` a range followed by U+0020 in the same box is
 // measured with that space, then the space and word spacing are subtracted.
-export function boxWidth(p: WebKitPrepared, m: Measurer, box: WebKitBox, from: number, to: number, left: number, trailingSpace: boolean): number {
+export function boxWidth(p: WebKitPrepared, m: Measurer, box: WebKitBox, from: number, to: number, left: number, trailingSpace: boolean, fixedPitchShortcut = true): number {
   if (from === to) return 0
   const end = measuredEnd(box, to, trailingSpace)
   let width: number
-  if (box.simplifiedMeasuring && box.fixedPitchFastMeasuring) {
+  if (fixedPitchShortcut && box.simplifiedMeasuring && box.fixedPitchFastMeasuring) {
     width = fixedPitchWidth(p, m, box, from, end)
+  } else if (tabsAllowed(box.style) && containsTab(box.text, from, end)) {
+    // Canvas strings split at TABs start past the TextRun's index 0, where WidthIterator gives a space word spacing, so the
+    // tab path adds word spacing itself.
+    width = addWordSpacing(box, from, end, tabbedWidth(p, m, box, from, end, left))
   } else {
-    const measured = tabsAllowed(box.style) && containsTab(box.text, from, end)
-      ? tabbedWidth(p, m, box, from, end, left)
-      : measureText(m, box.context, canvasString(box.text.slice(from, end)))
-    width = addWordSpacing(box, from, end, measured)
+    // The spaced context adds word spacing where WidthIterator does, in its float32 order: after SPACE, LF and NBSP past index
+    // 0 of the TextRun, which starts at `from` in both (TextUtil.cpp:84-89; WidthIterator.cpp calculateAdditionalWidth).
+    width = measureText(m, box.spacedContext, canvasString(box.text.slice(from, end)))
   }
   if (end > to) width = f32(width - f32(singleSpaceWidth(m, box) + box.wordSpacing))
   return Number.isNaN(width) ? 0 : Math.max(0, width)

@@ -3,7 +3,7 @@
 // and Extended_Pictographic, per code point, from tools/gen-blink-data.ts.
 import { decodeBase64 } from '../../breaks/icu4x.js'
 import {
-  blinkCharPropsBase64, blinkCursiveScripts, blinkHanKerningTypes, blinkScriptExtensions, blinkScriptPropsBase64,
+  blinkCharPropsBase64, blinkCjkIdeographOrSymbolRanges, blinkCursiveScripts, blinkHanKerningTypes, blinkScriptExtensions, blinkScriptPropsBase64,
 } from '../../breaks/generated/blink-break-tables.js'
 
 // ULineBreak values used by name (unicode/uchar.h:2487-2565).
@@ -116,4 +116,19 @@ export function isExtendedPictographic(cp: number): boolean {
 // IsCursiveScript (shape_result.cc:977-990) over UScriptCode numbers.
 export function isCursiveScript(script: number): boolean {
   return blinkCursiveScripts.includes(script)
+}
+
+// Character::IsCjkIdeographOrSymbol (character.h:97-100): false below U+02C7, else Blink's generated property
+// (character_property_data_generator.cc:89-140), from the ranges tools/gen-blink-data.ts generates.
+export function isCjkIdeographOrSymbol(cp: number): boolean {
+  if (cp < 0x2c7) return false
+  const ranges = blinkCjkIdeographOrSymbolRanges
+  let lo = 0
+  let hi = ranges.length / 2 - 1
+  while (lo < hi) {
+    const mid = (lo + hi + 1) >> 1
+    if (ranges[2 * mid]! <= cp) lo = mid
+    else hi = mid - 1
+  }
+  return ranges[2 * lo]! <= cp && cp <= ranges[2 * lo + 1]!
 }

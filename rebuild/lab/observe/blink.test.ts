@@ -6,7 +6,7 @@ import type { BlinkItem, BlinkLayout, BlinkLine, BlinkMappingUnit, CssFont, Expe
 import { observeBlink } from './blink.ts'
 
 const font = { family: 'Arial', size: 16, weight: 400, style: 'normal' as const }
-const facts = { primaryFamily: null, mapsHyphen: null, monospace: null, opticalSizeAxis: null, joining: null }
+const facts = { primaryFamily: null, mapsHyphen: null, monospace: null, opticalSizeAxis: null, joining: null, pairKerning: null }
 
 function paragraph(texts: string[], direction: Paragraph['direction'] = 'ltr'): Paragraph {
   const decl = { ...(font as CssFont), facts }
@@ -118,8 +118,9 @@ describe('blink observation port', () => {
     const p = paragraph(['를 x'])
     const l = layout([line([text(0, 0, 0, [17629.5])], [identity(0, 0, 2)]), line([text(0, 2, 0, [640])], [identity(0, 2, 3)])])
     const o = observeBlink(p, l, unused)
-    // The end boundary floors the float width: it rests on the summed advances, so it is limited.
-    expect(raw(o.codePoints[1]!.rects)).toEqual([[0, 17629, 0, false], [1, 0, 0, true]])
+    // The end boundary floors the float width: it rests on the summed advances, and with no gap concerning it the port
+    // states it as predicted.
+    expect(raw(o.codePoints[1]!.rects)).toEqual([[0, 17629, 0, true], [1, 0, 0, true]])
     expect(raw(o.nodes[0]!)).toEqual([[0, 0, 17630, true], [1, 0, 640, true]])
   })
 
@@ -129,9 +130,9 @@ describe('blink observation port', () => {
     const mapping = [identity(0, 0, 2), { run: 0, start: 2, end: 3, textStart: 2, textEnd: 2, collapsed: true }, { run: 0, start: 3, end: 4, textStart: 2, textEnd: 3, collapsed: false }]
     const l = layout([line([text(0, 0, 0, [640, 320, 640])], mapping)])
     const o = observeBlink(p, l, unused)
-    // The boundary sits at a caret inside the item, floor64 of a Canvas prefix: limited.
-    expect(raw(o.codePoints[2]!.rects)).toEqual([[0, 960, 0, false]])
-    expect(raw(o.codePoints[3]!.rects)).toEqual([[0, 960, 640, false]])
+    // The boundary sits at a caret inside the item, floor64 of a Canvas prefix; no gap concerns it.
+    expect(raw(o.codePoints[2]!.rects)).toEqual([[0, 960, 0, true]])
+    expect(raw(o.codePoints[3]!.rects)).toEqual([[0, 960, 640, true]])
     expect(raw(o.nodes[0]!)).toEqual([[0, 0, 1600, true]])
   })
 
@@ -143,10 +144,15 @@ describe('blink observation port', () => {
       clusters: [{ textStart: 0, textEnd: 1, graphemeStarts: [0], advance: 35945 * 1024 }, { textStart: 1, textEnd: 3, graphemeStarts: [1, 2], advance: 1300 * 1024 }],
     }
     const o = observeBlink(p, layout([line([item], [identity(0, 0, 3)])]), unused)
-    expect(raw(o.codePoints[1]!.rects)).toEqual([[0, 35945, 650, false]])
-    expect(raw(o.codePoints[2]!.rects)).toEqual([[0, 36595, 650, false]])
-    // Inner edges rest on Canvas advances: limited by in-word-prefix.
-    expect(o.codePoints[1]!.rects[0]!.x).toEqual({ state: 'limited', gap: 'in-word-prefix', value: 35945 / 128 })
+    expect(raw(o.codePoints[1]!.rects)).toEqual([[0, 35945, 650, true]])
+    expect(raw(o.codePoints[2]!.rects)).toEqual([[0, 36595, 650, true]])
+    // Inner edges rest on Canvas advances: limited by the gap the layout reports concerning them, here glyph-clusters over
+    // the grapheme, and only there.
+    const gapped = line([item], [identity(0, 0, 3)])
+    gapped.gaps = [{ gap: 'glyph-clusters', run: 0, detail: '', at: { start: 1, end: 3 } }]
+    const g = observeBlink(p, layout([gapped]), unused)
+    expect(g.codePoints[1]!.rects[0]!.x).toEqual({ state: 'limited', gap: 'glyph-clusters', value: 35945 / 128 })
+    expect(g.codePoints[0]!.rects[0]!.width.state).toBe('predicted')
   })
 
   test('§5 item 11: an even-level hyphen copies onto the code point after the soft hyphen', () => {
@@ -154,29 +160,34 @@ describe('blink observation port', () => {
     const hyphen: BlinkItem = { kind: 'hyphen', run: 0, level: 0, x: 3200, inlineSize: 682 }
     const l = layout([line([text(0, 0, 0, [640, 640, 640, 640, 640, 0]), hyphen], [identity(0, 0, 6)]), line([text(0, 6, 0, [640, 640, 640, 640])], [identity(0, 6, 10)])])
     const o = observeBlink(p, l, unused)
-    expect(raw(o.codePoints[6]!.rects)).toEqual([[0, 3200, 682, true], [1, 0, 640, false]])
-    expect(raw(o.codePoints[5]!.rects)).toEqual([[0, 3200, 0, false], [0, 3200, 682, true]])
+    expect(raw(o.codePoints[6]!.rects)).toEqual([[0, 3200, 682, true], [1, 0, 640, true]])
+    expect(raw(o.codePoints[5]!.rects)).toEqual([[0, 3200, 0, true], [0, 3200, 682, true]])
   })
 
-  test('c-0f4d71d14a32dd6c: a floored caret at an RTL item\'s start is limited', () => {
+  test('c-0f4d71d14a32dd6c: a floored caret at an RTL item\'s start is limited where the layout reports a gap there', () => {
     // `لا` in an RTL item whose Canvas advances put nothing on ل (Courier New's lam-alef ligature splits it in Chrome).
     const p = paragraph(['لا'])
     const item: BlinkItem = {
       kind: 'text', run: 0, textStart: 0, textEnd: 2, level: 1, x: 0, inlineSize: 1538,
       clusters: [{ textStart: 0, textEnd: 1, graphemeStarts: [0], advance: 0 }, { textStart: 1, textEnd: 2, graphemeStarts: [1], advance: Math.round(1537.5 * 1024) }],
     }
-    const o = observeBlink(p, layout([line([item], [identity(0, 0, 2)])]), unused)
+    const gapped = line([item], [identity(0, 0, 2)])
+    gapped.gaps = [{ gap: 'glyph-clusters', run: 0, detail: '', at: { start: 0, end: 2 } }]
+    const o = observeBlink(p, layout([gapped]), unused)
     const rects = o.codePoints[0]!.rects
     expect(rects.map(r => [r.x.state, r.width.state])).toEqual([['limited', 'limited']])
     // ا: its left edge is the RTL end's caret 0, predicted; its right edge is a caret inside the item, limited.
     expect(o.codePoints[1]!.rects.map(r => [r.x.state, r.width.state])).toEqual([['predicted', 'limited']])
+    // Without the gap both are predicted.
+    const plain = observeBlink(p, layout([line([item], [identity(0, 0, 2)])]), unused)
+    expect(plain.codePoints[0]!.rects.map(r => [r.x.state, r.width.state])).toEqual([['predicted', 'predicted']])
   })
 
   test('§4.2: an RTL item\'s code point rects run from its right edge', () => {
     const p = paragraph(['אב'], 'rtl')
     const o = observeBlink(p, layout([line([text(0, 0, 11520, [640, 640], 1)], [identity(0, 0, 2)])]), unused)
-    expect(raw(o.codePoints[0]!.rects)).toEqual([[0, 12160, 640, false]])
-    expect(raw(o.codePoints[1]!.rects)).toEqual([[0, 11520, 640, false]])
+    expect(raw(o.codePoints[0]!.rects)).toEqual([[0, 12160, 640, true]])
+    expect(raw(o.codePoints[1]!.rects)).toEqual([[0, 11520, 640, true]])
     expect(raw(o.nodes[0]!)).toEqual([[0, 11520, 1280, true]])
   })
 })

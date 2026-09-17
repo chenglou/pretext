@@ -10,6 +10,182 @@ the baseline every transition below is counted against.
 
 Earlier rounds (1-11, 2026-09-16) and their failure classes are in this file's git history.
 
+## Ceiling round 2, 2026-09-17
+
+Round 2's definition of an open model bug (research/ROUND1-CRITIC.md, the orchestrator's round 2 brief): a failing row is
+covered only by a gap on the failing line or on the break decision the line starts from, whose source reading says the
+prediction can be wrong there. Scores come from `rebuild/lab/score.ts` version 4 (lab/README.md, "Line-local gaps",
+"Protocol rows", "Elements"). Round 1's Firefox rows re-scored with version 4 are the baseline
+(`.artifacts/lab/gecko/r2-rescore-r1/`, and the lab owner's `.artifacts/lab/round2-scorer4/rescore-r1/firefox-*` for the
+families).
+
+### Probes
+
+Installed Firefox 156 at DPR 2, one job each under the lock: `rebuild/probes/gecko-round2.ts`
+(`.artifacts/probes/gecko/round2`) and `gecko-round2b.ts` (`.artifacts/probes/gecko/round2b`).
+
+- **F7, 1 au unit widths.** Single shaping units in their own node, DOM box against measureText:
+  - `ووفقك` in 10px Geeza Pro: DOM 1173 au, OffscreenCanvas 1172, `<canvas>` element 1174;
+  - `รมชาติทำให้ผู้คนมีคว` in 500 32px Thonburi: 16899, 16898, 16900;
+  - `modern` in 15px Helvetica Neue: 3118, 3119, 3118; `ancient` 2932, 2932, 2936.
+  - An element canvas, detached or connected, measures on whole device pixels, so it is further off than an
+    OffscreenCanvas. The DOM rounds each glyph's 16.16 advance at the device size to app units (gfxHarfBuzzShaper.cpp:354-379,
+    :1262-1263, :1699-1702); Canvas shows no glyph's sub-app-unit fraction. specs/gecko-canvas.md N7 is now [P].
+- **F8, digits in an 8-bit run.** ` 7:00-9:00` in 18px bold Apple SD Gothic Neo under `lang="ko"`: the 8-bit node's box is 5184
+  au with `7` at 516 and `-` at 377; the same digits in a 16-bit text run (a node holding `한` follows) are 4969 au, `7` 556,
+  `-` 406. Canvas: `7:00-9:00` alone under ko is 4969, under en 4900, and `a 7:00-9:00` less `a ` under ko is 4900.
+  - Source: `InitTextRun` tests an 8-bit run for a Latin letter with `const uint8_t c = aString[j] & ~0x20; hasLetter = (c - 'A' <=
+    'Z' - 'A')` (gfxTextRun.cpp:2744-2747). `c - 'A'` is a signed int, so digits, spaces and ASCII punctuation count, and the
+    run is Latin. A 16-bit run without a letter resolves Common from the language, Hangul here, and CJK scripts turn
+    kerning off (gfxHarfBuzzShaper.cpp:1405-1438).
+- **F9, a partial ligature.** 14px Helvetica Neue: inside `firstname` the DOM gives `f` 217 au and `i` 218, the two shares of
+  the 435 au `fi` ligature (ComputeLigatureData, gfxTextRun.cpp:238-322), also at a 2px emergency break. Canvas: `f` 249,
+  `i` 186, `fi` 435 with ligatures on and off (letterSpacing 0.001px), but the ink box of `fi` ends at 438 au on and 438.36
+  off. `ffi` and `office` differ in width (671 against 668). Arial and Georgia show no ligature either way.
+- **F10, coverage through LastResort.** `16px <family>, LastResort` measures exactly like `<family>` for every probed
+  character (中, ب, ก, 😀, U+2010, U+0301 and Latin in Arial, Georgia, Times New Roman, Menlo, Hiragino Sans and Geeza Pro),
+  though `document.fonts.check('16px LastResort')` is true. Gecko's font matching doesn't reach LastResort, so Canvas has no
+  coverage signal this way.
+- **F11, emoji boxes.** Where Apple Color Emoji draws a cluster, the cluster measures the same in Arial, Menlo, Apple Symbols,
+  Times New Roman and "Apple Color Emoji" alone, box [60, 1020] au at 16px. Text presentation doesn't: `©︎` is 707 au in Arial
+  (DOM 707) and 729 in "Apple Color Emoji"; `☺` is 980 au in Arial with box [−131.25, 848.91].
+- **F12, how a pair's kerning divides.** DOM code point rects of `AV`, `To`, `Wa`, `LT`, `Yo` at 18px:
+  - Times New Roman, Verdana, Helvetica and Helvetica Neue (a legacy `kern` table, no GPOS `kern` feature) give each glyph
+    half the adjustment: Times New Roman `AV` 710 + 710 where Canvas gives `A` 780, `V` 780 and `AV` 1420 (hb-kern.hh's machine,
+    `kern1 = kern >> 1` on the first glyph, the rest on the second with an offset). With odd adjustments the split rounds
+    either way (Verdana `Wa` 1042 + 622 against 1068 + 649 and 1664).
+  - Arial, Hiragino Sans and Apple SD Gothic Neo (GPOS) put it on the first glyph (Arial `AV` 640 + 720).
+  - Canvas totals are the same either way.
+
+### Fixes and new conditions
+
+- **8-bit script (F8).** `textRunScripts` counts an 8-bit run as Latin when any unit's masked value is at most `Z`, and
+  `scriptContextFor` gives a Latin run whose piece has no letter the context `a`. Fixes `c-9d23fb8693d45e81` and
+  `c-f716dcbf1c7bbf6f`.
+- **Ligatures at in-word offsets (F9).** Where the prefix and suffix sum test passes, `glyphBefore` also measures the clusters
+  on both sides of the offset with ligatures off, and reports `in-word-prefix` at the offset where the width or the ink box
+  differs. Necessary, not sufficient: a ligature that moves neither, or one starting two clusters earlier, doesn't show. It
+  covers `c-daf9c7047097f77b`.
+- **Pair kerning split (F12).** The font fact `pairKerning` (added to src/model.ts and the lab's font table in this round)
+  says where HarfBuzz puts a pair adjustment. Where it is `split`, `glyphBefore` gives the glyph before an in-word offset
+  `kern >> 1` of the adjustment Canvas shows across it, W(unit) − W(prefix) − W(suffix), instead of all of it
+  (hb-kern.hh:102-106 in Firefox 156's HarfBuzz 14.3.1; hb-ot-shape.cc:130-187 applies the legacy `kern` table where GPOS
+  has no kern feature). Canvas's adjustment is already rounded per glyph, so an odd one can land either way in the DOM,
+  and `in-word-prefix` is still reported wherever the adjustment isn't 0. The lab's table gives `split` for Times New Roman
+  (regular and bold), Helvetica, Helvetica Neue and Verdana (regular), `first-advance` for Arial and the Times New Roman
+  italics.
+- **Emoji font identity (F11, CHARTER-CRITIC item 2).** The Apple Color Emoji test also compares ink boxes at the CSS size, so a
+  text font with equal widths at both sizes isn't taken for the color font.
+- **`lang=""` (CHARTER-CRITIC item 11).** nsFontCache gives text with an empty style language the locale language, the first
+  regional-prefs locale lowercased (nsFontCache.cpp:34, :61-63; nsLanguageAtomService.cpp:107-138), for font matching and
+  shaping; the explicit-language flag it lacks is read only for synthetic small caps (gfxTextRun.cpp:2958). The measure
+  contexts of such runs take `regionalPrefsLocale` when the caller gives it, and `ui-language` is reported only when it
+  isn't. Line breaking and TransformText still see the empty tag.
+- **Line-local gaps.** Every paragraph gap carries `at`: the leaf (ui-language, page-history), the text run's source range
+  (font-size-quantization, optical-size, letter-spacing `glyph-clusters`), the measured stretch (space-in-shaping), the
+  cluster (the emoji `font-fallback` and `bitmap-emoji-size`), the character (U+2007 and U+2008 `font-fallback`) or each
+  complex-script stretch (dictionary-breaks-unavailable). `in-word-prefix` line gaps carry their offset.
+- **`<wbr>` rects.** The layout returns a `wbr` frame, 0 × 0 where the WBRFrame was placed, and the port reports it as the
+  element's one rect, as round 1's feature rows show (`c-00370d538345f01b`: x 3558 au, width 0, height 0 after a 3558 au
+  frame). A 0 × 0 rect is placed on no native line, so no metric reads it; the facts compare its x.
+- **Costs.** The ligature test answers each context and cluster pair once per layout (a memo keyed by the measurer), since a
+  line consults an offset in the scan, at its measured edges and again in the redo. Smoke takes 71.2 measureText calls per
+  paragraph against round 1's 49.8 (`.artifacts/lab/gecko/r2-2/smoke-forward`); without the memo it was 115.8
+  (`.artifacts/lab/gecko/r2-1/smoke-forward`, a run stopped after smoke).
+- **Observation port (ROUND1-CRITIC item 5, CHARTER-CRITIC item 13).** The layout records `unitStart` per character. The port
+  marks a point limited only where an end of its advance sum lies inside a shaping unit, the DESIGN.md §9 rule, and takes
+  the unit edges from the layout instead of a `\p{M}` stand-in. Frame boxes, the positions of later frames and element rects
+  are engine output and predicted, so a width failure no longer says "under a named gap" where the layout reports none.
+  - Feature families, forward (`.artifacts/lab/gecko/r2-2/features-forward` against round 1 re-scored with scorer 4): rect
+    counts that differ 1,188 → 0, since `<wbr>` elements now report their box; predicted values that differ 291 → 349 and
+    limited ones 2,651 → 2,593. The 58 more differing predicted values are code point x values 1 au off in RTL paragraphs
+    of 100000px blocks (`rule/box-edges` 27, `rule/atomic-inlines` 21, `rule/br-elements` 10; `c-075ed472cb01888e` x
+    5991128.906 au against 5991129.844): probe F6's float32 steps far from the origin, which round 1 counted as limited only
+    because an earlier frame on the line had a limited width. No metric reads them.
+
+### Scores
+
+Installed Firefox 156.0, every set in file order and in reverse, one job per case file under the lock, each order scored
+with scorer 4 against the other (`scratchpad chain.sh`, outputs `.artifacts/lab/gecko/r2-3/<set>-{forward,reverse}`). The
+library is the working tree with every change above; `r2-2` is the same without the split kerning recipe. Forward cells,
+pass / fail / unobserved, widths adding not-applicable; the reverse runs give the same lineCount and breaks cells on every
+set.
+
+| Set (cases) | lineCount | breaks | widths | painter | History-dependent | Without a line-local gap (lineCount, breaks, widths) |
+|---|---|---|---|---|---:|---|
+| smoke (297) | 297/0/0 | 297/0/0 | 292/5/0/0 | 283/14/0 | 0 | 0, 0, 1 |
+| runs (2,580) | 2580/0/0 | 2576/4/0 | 2541/35/0/4 | 2486/94/0 | 0 | 0, 0, 1 |
+| ws (1,019) | 1019/0/0 | 1019/0/0 | 1019/0/0/0 | 1002/17/0 | 0 | 0, 0, 0 |
+| policy (1,606) | 1606/0/0 | 1605/1/0 | 1598/7/0/1 | 1583/23/0 | 0 | 0, 0, 0 |
+| suite sample (19,888) | 19816/63/0 | 19802/77/0 | 18918/884/0/77 | 18233/1646/0 | 9 | 0, 0, 7 |
+| held-out 09-16 runs (2,579) | 2571/8/0 | 2568/11/0 | 2525/43/0/11 | 2479/100/0 | 0 | 0, 0, 6 |
+| held-out 09-16 ws (1,022) | 1022/0/0 | 1022/0/0 | 1021/1/0/0 | 1008/14/0 | 0 | 0, 0, 0 |
+| held-out 09-16 policy (1,604) | 1604/0/0 | 1602/2/0 | 1594/8/0/2 | 1573/31/0 | 0 | 0, 0, 0 |
+| held-out 09-16 suite sample (10,000) | 9762/48/0 | 9739/71/0 | 8997/742/0/71 | 8523/1287/0 | 190 | 0, 0, 0 |
+| rule families (9,584) | 9432/152/0 | 9200/384/0 | 8592/608/0/384 | 8048/1536/0 | 0 | 0, 0, 0 |
+| feature families (11,946) | 11931/0/15 | 11931/0/15 | 8862/0/3084/0 | 6425/41/5480 | 0 | 0, 0, 0 |
+| the 36 provisional triage cases | 36/0/0 | 36/0/0 | 36/0/0/0 | 6/30/0 | 0 | 0, 0, 0 |
+
+- **Failures without a line-local gap: 15 rows, every one the 1 au class** (smoke and runs `c-268ee59b15a407a8`; held-out
+  runs 6; suite sample 7, all `suite/maintained/accuracy` in 15px Helvetica Neue). Round 1's rows re-scored with scorer 4
+  have smoke 1, runs 16, policy 1, suite sample 7, held-out runs 27, held-out suite sample 1, rule families lineCount 79,
+  breaks 210 and widths 374; the rest were covered only by paragraph gaps without a range, or were the port bugs above.
+- **The 15 feature-family protocol rows** are unobserved by scorer 4's slot rule, no longer failures.
+- **Suite-sample history dependence** is 9 rows where round 1's evaluation had 123: this chain ran the suite parts 25 cases
+  per round trip where the evaluation ran one, so the documents see other histories. The transitions below leave out the
+  rows either run marks.
+
+Transitions, forward, cases neither run marks history-dependent. Round 1 re-scored with scorer 4 → `r2-2`: held-out runs
+widths +2 and painter +2 (F8); runs painter +3 and feature families painter +180 and 12 to unobserved. 180 of those 192 feature
+cases have the same layout as round 1, so the painted lines changed, with the painter owner's `paint.ts` in the same tree;
+the other 12 differ in their frame lists. Nothing else changed, nothing lost.
+`r2-2` → `r2-3`, the split kerning recipe, nothing lost:
+
+| Set | lineCount | breaks | widths | painter |
+|---|---|---|---|---|
+| smoke | 0 | 0 | +1 | 0 |
+| runs | 0 | +1 | +8, 1 n/a → fail (`c-3ae0e772055c21ec`, `runs/split-word`, 1 au on line 6 under `in-word-prefix`) | 0 |
+| ws | +1 | +2 | +11, +2 from n/a | +1 |
+| policy | 0 | 0 | +6 | 0 |
+| suite sample | 0 | +1 | +17, +1 from n/a | +1 |
+| held-out runs | 0 | +1 | +6, +1 from n/a | +1 |
+| held-out ws | 0 | 0 | +3 | 0 |
+| held-out policy | 0 | 0 | +11 | 0 |
+| held-out suite sample | +1 | +1 | +16, +1 from n/a | 0 |
+| rule families | +10 | +34 | +78, +33 from n/a, 1 n/a → fail (covered) | 0 |
+| provisional triage cases | +30 | +30 | +30 from n/a | 0 |
+
+Every gained case breaks inside a word in Times New Roman, Helvetica, Helvetica Neue or Verdana with a kerned pair across the
+break; `in-word-prefix` still reports there.
+
+Costs, measureText calls per paragraph, forward, round 1 → round 2: smoke 49.8 → 72.9, runs 66.7 → 97.7, ws 38.1 → 57.9,
+policy 51.1 → 84.5, held-out runs 65.5 → 95.1, held-out ws 38.7 → 58.9, held-out policy 51.7 → 85.6, rule families 17.3 →
+20.0, feature families 21.2 → 21.8. The ligature test at consulted in-word offsets and the split recipe's W(prefix) add them.
+
+### Traced, not changed
+
+- **The 1 au class (F7):** `c-268ee59b15a407a8` (smoke, runs), `c-02e7d131f09e05b9`, `c-d575ffd182517ddc`, `c-e05daec9b21bfc36`
+  (Geeza Pro 10px), `c-13c64a6ce641374d`, `c-8f9cd18c645671da`, `c-fcbb3bc755b5a5e8` (Helvetica Neue 15px), the two rows
+  round 1's critic found with gaps on other lines, `c-79f342df6e23e13a` and `c-f52cf560ae801fed` (Thonburi 32px), and
+  `c-78c9f151226956de` (the same Thonburi run on line 0; round 1 covered it only by a paragraph gap without a range). No
+  Canvas-observable condition exists, so they stay failures without a gap; a condition that fired on every unit at DPR 2
+  would cover every Firefox width failure and hide real port bugs like F8.
+- **`c-aad1cfdbd82a76b7` and the 30 provisional accidental passes** (`suite/following-space-scope` and
+  `following-space-context`, `A­V​​  B` and `AV​​ tail` in 18px Times New Roman at 12px, run with the round 2 library
+  before the fixes: `.artifacts/lab/gecko/r2-0/provisional-forward`). Natively `V ZWSP ZWSP SP` share a line; the port puts
+  the zero-width characters on their own line. Cause (F12): Times New Roman's legacy `kern` gives `A` and `V` 710 au each,
+  so `V` fits the 720 au line and the break after the spaces wins; the port's `W(unit) − W(suffix)` gives `V` 780 au, which
+  overflows, so the emergency break before the ZWSP is taken (gfxTextRun.cpp BreakAndMeasureText, the port's loop is the
+  same). Not a loop bug. `in-word-prefix` fires at offset 1 (or 4) on the failing lines. Main's visible lines match native for
+  another reason: its rows (`.artifacts/charter-20260916/triage/runs/firefox/main-file`) give `V` 13px, 780 au, like the
+  port, but main keeps the ZWSP on `V`'s overflowing line (`[1, 3) "V​"`) and leaves the rest of the white space outside
+  every line, so its line count isn't evidence of the split. The other 6 provisional cases (`suite/cross-item`) pass every
+  metric now.
+- **Emergency-break `font-fallback` (critic: 21 Firefox failures covered only by it, 20 `rule/hyphen-classes` and 1
+  held-out `suite/measurement`).** The condition is on the line whose break it decides. It can't be narrowed from Canvas: the
+  emergency break needs the alphanumeric, the hyphen and the next alphanumeric in one font range (gfxFont.cpp:741-753,
+  gfxTextRun.cpp:2930-3000), and F10 finds no Canvas signal for which characters the listed families cover.
+
 ## Stage 5, 2026-09-17: the port
 
 The model became a tree of inline content (DESIGN.md §1.1), and lines are laid out one slot at a time (§2.9).

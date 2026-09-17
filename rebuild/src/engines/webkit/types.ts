@@ -82,6 +82,11 @@ export type WebKitBox = {
   // does), and the same font with no spacing (the primary font's space advance for tab stops and the fixed-pitch shortcut).
   context: number
   plainContext: number
+  // The run's font with its letter spacing and word spacing: CanvasRenderingContext2DBase::setWordSpacing gives the context's
+  // FontCascade the spacing (CanvasRenderingContext2DBase.cpp:3299-3324), so Canvas adds it per character inside the same
+  // float32 loop as the DOM (WidthIterator::calculateAdditionalWidth, ComplexTextController.cpp:790-845). `context` when the
+  // box has no word spacing.
+  spacedContext: number
   // float32 px after page zoom.
   letterSpacing: number
   wordSpacing: number
@@ -89,8 +94,28 @@ export type WebKitBox = {
   cssLetterSpacing: number
   // InlineTextBox::hasStrongDirectionalityContent (TextUtil.cpp:486-576).
   hasStrongDirectionality: boolean
-  // The primary-font coverage test found a code point as wide as LastResort's box, where it can't tell (gap font-fallback).
-  coverageUnverified: boolean
+  // The code points the primary-font coverage test found as wide as LastResort's box, where it can't tell (gap font-fallback).
+  unverifiedCoverage: number[]
+  // FontFacts.primaryFamily was null: the first listed family stands in for the realized one, which the Courier New test of the
+  // width shortcut reads (gap fixed-pitch-path where the shortcut decides a width).
+  primaryFamilyUnknown: boolean
+  // Which of the box's code points take a font chosen by the box's locale, which OffscreenCanvas doesn't have (gap
+  // canvas-language): every one for a system design or per-script standard family, the Han, kana and Hangul ones that fall
+  // back, or none.
+  localeChoosesFonts: 'all' | 'fallback' | null
+  // The box's Han locale takes the preferred languages, which aren't given; or its quote overrides take the ICU default
+  // locale, which isn't given (gap ui-language).
+  hanLocaleUnknown: boolean
+  quoteLocaleUnknown: boolean
+  // The engine ranges of dictionary text that start with a combining mark, [start, end) in box offsets (gap
+  // dictionary-breaks-stand-in).
+  dictionaryRangesStartingWithMark: Array<[number, number]>
+  // Positions another box of the same text and wrapping styles can end items at, which this box's items don't end at: level
+  // boundaries of the text under another paragraph direction or neighbouring content (gap page-history). Sorted box offsets.
+  historyEnds: number[]
+  // Preserved white space whose items another box of the same text splits per space or at word separators, or keeps whole
+  // (gap page-history).
+  historyWhitespace: boolean
 }
 
 // InlineTextItem (InlineTextItem.h). `level` is UBIDI_DEFAULT_LTR (254) when bidi didn't run.
