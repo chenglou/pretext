@@ -171,6 +171,9 @@ export type GeckoPrepared = {
   nextT: Int32Array
   // ComputeTabWidthAppUnits (nsTextFrame.cpp:3875-3906), 0 when nothing measured it.
   tabWidth: number
+  // Transformed indices of the emergency breaks after a hyphen that the coverage facts couldn't confirm: whether the
+  // letters around the hyphen are one font's isn't known (prepare.ts step 4).
+  emergencyUnconfirmed: Set<number>
   // pxToAu of the block's text-indent (nsLineLayout.cpp:178-201).
   textIndentAu: number
   // The paragraph resolved bidi, so lines are reordered by frame levels (nsLineLayout.cpp:3646-3652): the port's stand-in

@@ -130,8 +130,14 @@ doesn't depend on the old library in `src/`.
     start only at alef, reh and lam (the Allah and rial ligatures and a few lam ones), and lam-alef is `rlig`, which
     letter-spacing keeps. Amiri and Noto Naskh Arabic draw lam-alef as two glyphs in two clusters; Noto Naskh's one
     ligature is U+FDF2 with its marks. Helvetica, Helvetica Neue, Times, Menlo, Geeza Pro, Thonburi and Hoefler Text shape
-    through `morx`, where HarfBuzz reads no GSUB or GPOS script at all. Core Text reports an invalid `morx` subtable in
-    Thonburi and ligates nothing there, where HarfBuzz ligates `fi` and the Thai mark compositions.
+    through `morx`, where HarfBuzz reads no GSUB or GPOS script at all.
+  - *Checked in the browsers, and corrected by them.* `tools/probe-letter-spacing.ts` measured 221 strings in 20 fonts at
+    letter-spacing 0, 1px and 2px in Chrome, Firefox and webkit-host. No string the facts call untouched by letter-spacing
+    (none of its characters in `spacingInputs`) changed its shaping: 0 of 128, 127 and 129. The probe also showed the
+    offline Core Text run wrong about Thonburi: Core Text logged an invalid `morx` subtable there and ligated nothing, but
+    Firefox and webkit-host ligate its `fi`. So `ligatures` is null for WebKit and Gecko on a face whose table Core Text
+    rejected, and `complete` is false for them wherever the two shapers disagree on any string (Arial, Times New Roman and
+    Courier New, on three presentation-form strings; Songti). It checked nothing about `coverage` or `scriptLookups`.
 
 ## Running
 
@@ -482,6 +488,10 @@ swiftc -O tools/ctligatures.swift -o /tmp/ctligatures && /tmp/ctligatures ligatu
 bun tools/build-facts.ts && bun test rebuild/lab/font-facts.test.ts
 ```
 
+`ctligatures`' stderr goes to `ctligatures-r3.log` (`2> ctligatures-r3.log`): the builder reads Core Text's own "Invalid
+'morx' Subtable" lines from it. To check the letter-spacing facts in the browsers, run `tools/probe-letter-spacing.ts`
+with `rebuild/probes/runner.ts` (its header has the command) and then `bun tools/verdict-letter-spacing.ts <out dir>`.
+
 The whole chain takes under two minutes and no browser.
 
 What the facts don't say:
@@ -490,8 +500,12 @@ What the facts don't say:
 - Ligatures inside one grapheme cluster (emoji sequences, Indic conjuncts), and the ligatures of fonts whose forms need
   neighbours the program never tried: the Devanagari, Bangla, Khmer and Myanmar fonts, Noto Nastaliq Urdu, Apple Chancery,
   Hoefler Text's italics, Raanana and Apple Color Emoji have `complete: false`.
+- Marks between a ligature's characters. Patterns list base characters; `acrossMark` says whether one combining mark after
+  the first character leaves the first two in one glyph, and nothing else about marks was shaped. Arial's `liga` draws
+  `اللّٰه` (with shadda and superscript alef before the heh) as its Allah ligature in all three browsers: a consumer has
+  to take marks out before matching and treat a match across marks as unsettled. `complete` is about base characters.
 - Anything under a language system other than the default. `languageSystems` names the ones that change lookups.
-- Core Text's default features aren't in source. Of 16,233 strings from ligature entries outside HarfBuzz's default
+- Core Text's default features aren't in source. Of 16,212 strings from ligature entries outside HarfBuzz's default
   features, Core Text ligated 2 by default, both of which HarfBuzz ligates through an entry inside them
   (`provenance.coreTextDefaultFeatures`).
 

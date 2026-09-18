@@ -162,10 +162,10 @@ describe('Range rects over Gecko frames', () => {
     expect(o.nodes[1]!.map(r => [r.x, r.width].map(v => v.state === 'limited' ? v.gap : v.state))).toEqual([['font-size-quantization', 'font-size-quantization']])
   })
 
-  test('an edge 2^17 device px from the origin is limited by float32-precision (probe gecko-port F6)', () => {
+  test('an edge 2^16 device px from the origin is limited by float32-precision (probe gecko-port F6)', () => {
     const a = ch(576)
-    // 131072 device px at 30 au each.
-    const far = 131072 * 30
+    // 65536 device px at 30 au each.
+    const far = 65536 * 30
     const l = layout([line([frame(0, 0, 2, far - 576, 1152, [a, a])], 0, 2)])
     const o = observeGecko(paragraph(['ab']), l, noMeasure)
     const gaps = (r: ExpectedRect) => [r.x, r.width].map(v => v.state === 'limited' ? v.gap : v.state)

@@ -293,7 +293,8 @@ describe('ligatures', () => {
 
   test('lam-alef: a required ligature in Arial and Geeza Pro that letter-spacing keeps; two glyphs in Amiri and Noto Naskh Arabic', () => {
     for (const engine of ENGINES) {
-      expect([engine, has('Arial', engine, 'لا')]).toMatchObject([engine, { spaced: true, everyContext: true, acrossMark: true }])
+      // HarfBuzz keeps it with a mark after the lam; Core Text, which shapes for WebKit, wasn't asked about marks.
+      expect([engine, has('Arial', engine, 'لا')]).toMatchObject([engine, { spaced: true, everyContext: true, acrossMark: engine === 'webkit' ? null : true }])
       expect([engine, has('"Geeza Pro"', engine, 'لا')]).toMatchObject([engine, { spaced: true, everyContext: true }])
       expect([engine, has('Amiri', engine, 'لا'), has('"Noto Naskh Arabic"', engine, 'لا')]).toEqual([engine, undefined, undefined])
       expect([engine, patternsOf('Amiri', engine).complete, patternsOf('"Noto Naskh Arabic"', engine).complete]).toEqual([engine, true, true])
@@ -315,10 +316,18 @@ describe('ligatures', () => {
     expect(p[0]).toMatchObject({ exact: false, spaced: false })
   })
 
-  test('Thonburi: HarfBuzz applies its morx, Core Text reports an invalid subtable and ligates nothing', () => {
+  test("Thonburi: not known where Core Text shapes. The offline Core Text run rejected its morx table and ligated nothing, and Firefox and webkit-host ligate fi (probe-letter-spacing)", () => {
     expect(has('Thonburi', 'blink', 'fi')).toMatchObject({ spaced: false })
-    expect(patternsOf('Thonburi', 'webkit').patterns).toEqual([])
-    expect(patternsOf('Thonburi', 'gecko').patterns).toEqual([])
+    expect(listed('Thonburi', 'webkit')[0]!.ligatures).toBe(null)
+    expect(listed('Thonburi', 'gecko')[0]!.ligatures).toBe(null)
+    // What letter-spacing can act on comes from the tables, and still names f, i and l.
+    expect(listed('Thonburi', 'webkit')[0]!.spacingInputs).toEqual([0x66, 0x66, 0x69, 0x69, 0x6c, 0x6c])
+  })
+
+  test('where the two shapers disagree on a string, the list can confirm a ligature for a Core Text engine but not rule one out', () => {
+    // Arial: three strings with presentation-form code points.
+    expect([patternsOf('Arial', 'blink').complete, patternsOf('Arial', 'gecko').complete, patternsOf('Arial', 'webkit').complete]).toEqual([true, true, false])
+    expect(has('Arial', 'webkit', 'لا')).toMatchObject({ spaced: true })
   })
 
   test('a conjunct-forming font is incomplete: half forms need neighbours the program never tried', () => {

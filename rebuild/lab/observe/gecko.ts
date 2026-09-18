@@ -15,9 +15,9 @@ import type {
 // (DOMRect.cpp:152-164, DOMRect.h:122-127). Before that, TransformFrameRectToAncestor takes the rect through float32 device
 // pixels: the edges become floats, every frame's offset up to the root is added in float32, and the result is rounded back
 // to app units (nsLayoutUtils.cpp:2517-2537). Each of those steps is off by at most half a float32 step, so the edges come
-// back as the frames' own while four such halves stay under half an app unit: below 2^17 device px, where a step is 1/128
-// device px. From there on a step is 1/64 device px or more, and an edge can come back 1 au off (probe gecko-port F6: x
-// 1459.688 au where the frame's is 1459, 100000px from the origin): `float32-precision`.
+// back as the frames' own while the halves add up to less than half an app unit: below 2^16 device px a step is 1/256
+// device px, and eight halves are 0.47 au at 30 au per device px. From there on an edge can come back 1 au off (probe
+// gecko-port F6: x 1459.688 au where the frame's is 1459, 100000px from the origin): `float32-precision`.
 const R = (au: number): number => Math.floor(au * (65536 / 60) + 0.5) / 65536
 
 export function encodeEdges(a0: number, a1: number): { x: number; width: number } {
@@ -152,9 +152,9 @@ export const observeGecko: ObservationPort<GeckoLayout> = (paragraph, layout) =>
     const placed = placedByLimited[l]![k]!
     return { x: leftToRight ? placed : placed ?? width, width }
   }
-  // An edge 2^17 device px or more from the origin can come back 1 au off (see R above).
+  // An edge 2^16 device px or more from the origin can come back 1 au off (see R above).
   const apd = layout.lines.length === 0 ? 60 : layout.lines[0]!.geometry.appUnitsPerDevPixel
-  const farEdge = (au: number): GapName | null => Math.abs(au) / apd >= 131072 ? 'float32-precision' : null
+  const farEdge = (au: number): GapName | null => Math.abs(au) / apd >= 65536 ? 'float32-precision' : null
 
   // nsTextFrame::GetPointFromOffset in frame-local au (nsTextFrame.cpp:8667-8752): clamp to the content and the trimmed
   // start (GetTrimmedOffsets without trimming the end, :3287-3330), snap back to the cluster start (FindClusterStart,

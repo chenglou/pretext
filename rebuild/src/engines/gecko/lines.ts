@@ -90,71 +90,107 @@ function advanceBefore(p: GeckoPrepared, m: Measurer, run: GeckoTextRun, t: numb
 
 function inWordAdvance(p: GeckoPrepared, m: Measurer, run: GeckoTextRun, unit: { tStart: number; tEnd: number; canvasAu: number; startAdvance: number }, t: number): InWordAdvance {
   if (p.clusterStart[t] === 0) {
-    // Inside a grapheme cluster (only a soft hyphen breaks there, GetHyphenationBreaks). HarfBuzz attaches a clump's
-    // glyphs to its first character and marks the rest ligature continuations (gfxHarfBuzzShaper.cpp:1705-1786), and a
-    // range edge inside a ligature gets the ligature's width per started cluster (ComputeLigatureData,
-    // gfxTextRun.cpp:238-322): the part holding the cluster start takes the whole cluster. So the advance before t is
-    // the advance before the cluster's end. Canvas can't show ligature groups: where [t, cluster end) has an advance of
-    // its own, the DOM can give it to either side.
+    // Inside a grapheme cluster: a soft hyphen breaks there (GetHyphenationBreaks), and a text node can start there.
+    // HarfBuzz keeps a mark in a cluster of its own unless the font merges it (HB_BUFFER_CLUSTER_LEVEL_MONOTONE_CHARACTERS,
+    // gfxHarfBuzzShaper.cpp:1233-1234), Gecko attaches each clump's glyphs to the clump's first character and marks the rest
+    // ligature continuations (:1705-1786), and a range edge inside a ligature group gets the group's width per started
+    // cluster, so the part holding the cluster start takes the group (ComputeLigatureData, gfxTextRun.cpp:238-322). The
+    // value follows that last rule: the advance before t is the advance before the cluster's end. Which clumps a cluster
+    // has, and what each advances, no Canvas string shows: a mark measured at a string's start has no base (fresh
+    // c-7421ac03d17f9f11: 14px Geeza Pro gives seen 448 au and the sukun after it, in the next span, 171 au, where the
+    // cluster is 619 au and the sukun alone measures nothing).
     let end = t + 1
     while (end < unit.tEnd && p.clusterStart[end] === 0) end++
     const inner = advanceBefore(p, m, run, end)
-    const fromT = rangeAu(m, run, p.tUnits, t, unit.tEnd)
-    const fromEnd = end === unit.tEnd ? 0 : rangeAu(m, run, p.tUnits, end, unit.tEnd)
-    if (fromT === fromEnd) return inner
-    return { au: inner.au, standIn: `offset ${p.tSource[t]} inside a grapheme cluster: W(suffix) is ${fromT} au from the offset, ${fromEnd} au from the cluster's end; the DOM gives a ligature's width to its clusters (gfxTextRun.cpp:238-322)` }
+    return { au: inner.au, standIn: `offset ${p.tSource[t]} inside a grapheme cluster: the DOM divides the cluster's advance by its glyph records and ligature groups, which Canvas can't show (gfxHarfBuzzShaper.cpp:1705-1786, gfxTextRun.cpp:238-322)` }
   }
-  const joins = joinsAcross(p, unit, t)
-  const prefixAu = rangeAu(m, run, p.tUnits, unit.tStart, t)
-  const suffixAu = rangeAu(m, run, p.tUnits, t, unit.tEnd)
-  const corrections = p.correctionPrefix[t]! - p.correctionPrefix[unit.tStart]!
-  // The stand-in where the sides don't add up:
-  // - A shaping buffer against its script's native direction is shaped reversed (hb_ensure_native_direction,
-  //   hb-ot-shape.cc:588-645, in Chromium 152's HarfBuzz copy), so a pair adjustment across t lands on the logically later
-  //   glyph, and the advance before t is the prefix's own.
-  // - A font whose pair adjustments HarfBuzz applies through the kern and kerx pair machine gives the glyph before t only
-  //   `kern >> 1` of the adjustment across t, and the rest to the glyph after it (hb-kern.hh:102-106 in Firefox's HarfBuzz
-  //   14.3.1; hb-ot-shape.cc:130-187 chooses it where GPOS has no kern feature). Canvas shows the adjustment as
-  //   W(unit) − W(prefix) − W(suffix), in app units already rounded per glyph, so an odd adjustment's half can round either
-  //   way in the DOM (probe gecko-port F12: Times New Roman `AV` 710 + 710 against 780 + 780 and 1420; Verdana `Wa` 1042 + 622
-  //   where −53 au halves to −26 on `W`).
-  // - GPOS puts all of it on the first glyph, which is W(unit) − W(suffix), and so does the default where the fact isn't given.
-  let standInAu: number
-  if (shapedReversed(p, run, unit, t)) standInAu = unit.startAdvance + prefixAu + corrections
-  else if (run.pairKerning === 'split' && !joins) standInAu = unit.startAdvance + prefixAu + ((unit.canvasAu - prefixAu - suffixAu) >> 1) + corrections
-  else standInAu = unit.startAdvance + unit.canvasAu - suffixAu + corrections
-  const joiner = joins ? ZWJ : ''
-  const sidePrefix = joins ? rangeAu(m, run, p.tUnits, unit.tStart, t, '', ZWJ) : prefixAu
-  const sideSuffix = joins ? rangeAu(m, run, p.tUnits, t, unit.tEnd, ZWJ, '') : suffixAu
-  if (sidePrefix + sideSuffix !== unit.canvasAu && !joins && !shapedReversed(p, run, unit, t)) {
-    // The sides don't add up, and the font's pair kerning says where an adjustment across t goes: the advance is exact where
-    // Canvas shows the difference is that pair's adjustment and no ligature group spans t.
-    const kerned = pairKernedPrefix(p, m, run, unit, t, prefixAu, suffixAu)
-    if (kerned !== null && !ligatureAcross(p, m, run, unit, t) && !groupAcross(p, m, run, unit, t, '')) {
-      return { au: unit.startAdvance + kerned + corrections, standIn: null }
+  const joiner = joinsAcross(p, unit, t) ? ZWJ : ''
+  // A ligature group over t: the DOM gives a range edge inside it the group's advance in equal shares per started cluster,
+  // the rounding left to the last part (ComputeLigatureData, gfxTextRun.cpp:238-322). The group reaches as far as Canvas
+  // shows one at each offset on the way (groupSpans), and its advance is what lies between its two ends, which are offsets
+  // like any other. Probe gecko-port F17: lam and alef in 16px Geeza Pro are 280 and 281 au of a 561 au group, lam lam heh
+  // 223 au each of 669, U+0E24 U+0E32 in 20px Thonburi 663 each; F9: `f` 217 and `i` 218 au of "Helvetica Neue"'s 435 au `fi`.
+  const group = groupAround(p, m, run, unit, t)
+  if (group !== null) {
+    const from = advanceBefore(p, m, run, group.start)
+    const to = advanceBefore(p, m, run, group.end)
+    let clusters = 0
+    let before = 0
+    for (let k = group.start; k < group.end; k++) {
+      if (p.clusterStart[k] === 0 && k !== group.start) continue
+      clusters++
+      if (k < t) before++
+    }
+    const edges = from.standIn ?? to.standIn
+    return {
+      au: from.au + before * Math.floor((to.au - from.au) / clusters),
+      standIn: edges === null ? null : `offset ${p.tSource[t]} inside a ligature group whose ends Canvas can't confirm: ${edges}`,
     }
   }
-  if (sidePrefix + sideSuffix !== unit.canvasAu) {
-    return { au: standInAu, standIn: joins
-      ? `offset ${p.tSource[t]}: letters join across it, and W(prefix U+200D) + W(U+200D suffix) = ${sidePrefix + sideSuffix} au, W(unit) = ${unit.canvasAu} au`
-      : `offset ${p.tSource[t]}: W(prefix) + W(suffix) = ${sidePrefix + sideSuffix} au, W(unit) = ${unit.canvasAu} au` }
+  const corrections = p.correctionPrefix[t]! - p.correctionPrefix[unit.tStart]!
+  const reversed = shapedReversed(p, run, unit, t)
+  const suffixAu = rangeAu(m, run, p.tUnits, t, unit.tEnd, joiner, '')
+  // What the unit's shaping moves across t, and the prefix's advance if nothing does.
+  let across: number
+  let prefixAu: number
+  let sides: string
+  let a = t - 1
+  while (a > unit.tStart && p.clusterStart[a] === 0) a--
+  const before = joiningType(codePointAtT(p, a))
+  if (joiner !== '' || reversed || before === 'R' || before === 'D' || before === 'L' || before === 'C') {
+    // The two sides as the unit shapes them: with U+200D at the cut between joined letters.
+    prefixAu = rangeAu(m, run, p.tUnits, unit.tStart, t, '', joiner)
+    across = unit.canvasAu - prefixAu - suffixAu
+    sides = joiner !== '' ? `letters join across it, and W(prefix U+200D) + W(U+200D suffix) = ${prefixAu + suffixAu} au` : `W(prefix) + W(suffix) = ${prefixAu + suffixAu} au`
+  } else {
+    // Where the cluster before t has no joining forms, it shapes alone as it does after its own neighbour, and put in front
+    // of the suffix it shows the same thing: what the two gain from each other is W(cluster and suffix) − W(suffix) −
+    // W(cluster). That asks Canvas for one long string per offset instead of two, and the offset before it has asked for
+    // the other already (a paragraph of 9,428 Han characters is one unit). A letter with joining forms takes the form its
+    // own neighbour gives it, and what it gains from the suffix goes by that form (fresh c-b44094d264947ac3: a final alef
+    // before lam in 16px Amiri is 220 au, where alef alone in front of the suffix adds its isolated 217 au).
+    const withCluster = a === unit.tStart ? unit.canvasAu : rangeAu(m, run, p.tUnits, a, unit.tEnd)
+    across = withCluster - suffixAu - rangeAu(m, run, p.tUnits, a, t)
+    prefixAu = unit.canvasAu - suffixAu - across
+    sides = `W(cluster before it and suffix) − W(suffix) − W(cluster) = ${across} au`
   }
-  if (ligatureAcross(p, m, run, unit, t)) return { au: standInAu, standIn: `offset ${p.tSource[t]}: the clusters around it measure differently with ligatures off, so the DOM may give it a ligature's share (gfxTextRun.cpp:238-322)` }
-  if (groupAcross(p, m, run, unit, t, joiner)) return { au: standInAu, standIn: `offset ${p.tSource[t]}: Canvas letter spacing counts fewer ligature groups in the unit than in its two sides, so a group spans the offset and the DOM gives it a share of the group's width (gfxTextRun.cpp:238-322)` }
-  return { au: unit.startAdvance + sidePrefix + corrections, standIn: null }
+  if (across !== 0 && joiner === '' && !reversed) {
+    // The sides don't add up, and the font's pair kerning says where an adjustment across t goes: the advance is exact where
+    // Canvas shows the difference is that pair's adjustment and no ligature group spans t.
+    const after = pairKernedShare(p, m, run, unit, t, across)
+    if (after !== null) {
+      return { au: unit.startAdvance + unit.canvasAu - suffixAu - after + corrections, standIn: null }
+    }
+  }
+  const standIn = across !== 0 ? `offset ${p.tSource[t]}: ${sides}, W(unit) = ${unit.canvasAu} au` : null
+  // The value, exact where nothing crosses t and a stand-in otherwise, takes what crosses t as a pair adjustment:
+  // - A shaping buffer against its script's native direction is shaped reversed (hb_ensure_native_direction,
+  //   hb-ot-shape.cc:588-645, in Chromium 152's HarfBuzz copy), so the adjustment lands on the logically later glyph, and
+  //   the advance before t is the prefix's own.
+  // - A font whose pair adjustments HarfBuzz applies through the kern and kerx pair machine gives the glyph before t
+  //   `kern >> 1` of it and the rest to the glyph after it (hb-kern.hh:102-106 in Firefox's HarfBuzz 14.3.1;
+  //   hb-ot-shape.cc:130-187 chooses it where GPOS has no kern feature; probe gecko-port F12: Times New Roman `AV`
+  //   710 + 710 against 780 + 780 and 1420).
+  // - GPOS puts all of it on the first glyph, W(unit) − W(suffix), and so does the default where the fact isn't given.
+  let au: number
+  if (reversed) au = prefixAu
+  else if (run.pairKerning === 'split' && joiner === '') au = prefixAu + (across >> 1)
+  else au = unit.canvasAu - suffixAu
+  return { au: unit.startAdvance + au + corrections, standIn }
 }
 
-// The advance of the prefix's glyphs inside the unit where a pair adjustment crosses t, or null where Canvas can't confirm
-// it. R = W(unit) − W(prefix) − W(suffix) is what the unit's shaping moved across t, in app units rounded per glyph.
-// - 'first-advance': GPOS adds the whole adjustment to the first glyph's advance (PairSet.hh:126-127), so the glyph after
-//   t is the suffix's own and the advance before t is W(unit) − W(suffix). The pair measured alone must show the same
-//   adjustment as R: the same glyph rounds the same sum in both.
+// Where a pair adjustment crosses t: the part of it that lands after t, on the suffix's first glyph, or null where Canvas
+// can't confirm it. The advance before t is then W(unit) − W(suffix) less that part, since the suffix measured alone lacks
+// exactly it. R = W(cluster before t and suffix) − W(suffix) − W(cluster) is what the pair moves, in app units rounded per
+// glyph.
+// - 'first-advance': GPOS adds the whole adjustment to the first glyph's advance (PairSet.hh:126-127), so nothing lands
+//   after t. The pair measured alone must show the same adjustment as R: the same glyph rounds the same sum in both.
 // - 'split': the kern and kerx pair machine adds kern1 = kern >> 1 to the first glyph's advance and the rest, kern2, to the
 //   second's (hb-kern.hh:102-106), in 16.16 device px, and Gecko then rounds each glyph's advance to app units
-//   (gfxHarfBuzzShaper.cpp:1699-1702). With y the advance of the glyph before t in the prefix and z of the glyph after it in
-//   the suffix, R is (round(y + kern1) − round(y)) + (round(z + kern2) − round(z)), each term floor(kern / 2) or that plus
-//   one in app units, since kern1 and kern2 differ by one 16.16 unit at most. So an even R is twice the first term. An odd
-//   R leaves the two terms one apart, and which one is larger depends on the fractions of y and z, which Canvas shows at a
+//   (gfxHarfBuzzShaper.cpp:1699-1702). With y the advance of the cluster before t alone and z of the glyph after it in the
+//   suffix, R is (round(y + kern1) − round(y)) + (round(z + kern2) − round(z)), each term floor(kern / 2) or that plus one
+//   in app units, since kern1 and kern2 differ by one 16.16 unit at most. So an even R is twice the second term. An odd R
+//   leaves the two terms one apart, and which one is larger depends on the fractions of y and z, which Canvas shows at a
 //   larger font size: at size × 2^k every advance and adjustment is 2^k times as large before it is rounded, so a cluster
 //   measured there gives its advance to within half a step, 0.5 / 2^k au, and a pair less its two clusters the pair's
 //   adjustment to within four half steps, so half of it to within 1 / 2^k au. Both terms are then computed, and count only
@@ -165,28 +201,28 @@ function inWordAdvance(p: GeckoPrepared, m: Measurer, run: GeckoTextRun, unit: {
 // The pair measured alone must show an adjustment within 2 au of R, which the three rounded terms allow.
 // A total can't tell a pair adjustment from a second cluster that changes with its neighbour, and font matching gives one a
 // neighbour's font: a character after U+200D takes the previous font where it can, and one that no listed or preferred font
-// has takes the previous character's (gfxTextRun.cpp:3318-3327, :3553-3562; held-out `a U+3000 U+200D b` in 16px Arial:
-// `b` is 563 au after the fallback font's U+3000 and 534 au alone). So both clusters must be printable ASCII, which the
-// preferred fonts of every language group cover before the previous font is tried (:3536-3552).
-function pairKernedPrefix(p: GeckoPrepared, m: Measurer, run: GeckoTextRun, unit: { tStart: number; tEnd: number; canvasAu: number }, t: number,
-  prefixAu: number, suffixAu: number): number | null {
+// has takes the previous character's (gfxTextRun.cpp:3319-3325, :3559-3569; held-out `a U+3000 U+200D b` in 16px Arial:
+// `b` is 563 au after the fallback font's U+3000 and 534 au alone). So both clusters, and the one after them, whose
+// adjustment with the second enters z, must be printable ASCII, which the preferred fonts of every language group cover
+// before the previous font is tried (:3533-3552).
+function pairKernedShare(p: GeckoPrepared, m: Measurer, run: GeckoTextRun, unit: { tStart: number; tEnd: number }, t: number, R: number): number | null {
   if (run.pairKerning === null) return null
-  const R = unit.canvasAu - prefixAu - suffixAu
-  // The clusters around t, and the ones before and after them inside the unit.
   let a = t - 1
   while (a > unit.tStart && p.clusterStart[a] === 0) a--
   let b = t + 1
   while (b < unit.tEnd && p.clusterStart[b] === 0) b++
-  for (let k = a; k < b; k++) if (p.tUnits[k]! < 0x21 || p.tUnits[k]! > 0x7e) return null
+  let b1 = b
+  if (b < unit.tEnd) { b1 = b + 1; while (b1 < unit.tEnd && p.clusterStart[b1] === 0) b1++ }
+  for (let k = a; k < b1; k++) if (p.tUnits[k]! < 0x21 || p.tUnits[k]! > 0x7e) return null
   const alone = rangeAu(m, run, p.tUnits, a, b) - rangeAu(m, run, p.tUnits, a, t) - rangeAu(m, run, p.tUnits, t, b)
-  if (run.pairKerning === 'first-advance') return alone === R ? unit.canvasAu - suffixAu : null
+  if (run.pairKerning === 'first-advance') return alone === R ? 0 : null
   if (Math.abs(alone - R) > 2) return null
-  if (R % 2 === 0) return prefixAu + R / 2
-  // An odd adjustment: the fractions, from the run's context at 2^k times its font size (at most 1024px).
+  if (R % 2 === 0) return R / 2
+  // An odd adjustment: the fractions, from the run's context at 2^k times its font size. gfxFont clamps a font's size at
+  // 2000px (gfxFont.cpp:4956-4960).
   const settings = m.log.contexts[run.context]!
   const size = /(\d+(?:\.\d+)?)px/.exec(settings.font)
-  if (size === null) return null
-  // gfxFont clamps a font's size at 2000px (gfxFont.cpp:4956-4960).
+  if (size === null || !(Number(size[1]) > 0)) return null
   let k = 0
   while (Number(size[1]) * 2 ** (k + 1) <= 2000) k++
   if (k < 3) return null
@@ -194,24 +230,49 @@ function pairKernedPrefix(p: GeckoPrepared, m: Measurer, run: GeckoTextRun, unit
   const large = { ...run, context: measureContext(m, { ...settings, font: settings.font.replace(size[0], `${String(Number(size[1]) * scale)}px`) }) }
   const w = (from: number, to: number): number => rangeAu(m, large, p.tUnits, from, to) / scale
   const kern = (from: number, mid: number, to: number): number => w(from, to) - w(from, mid) - w(mid, to)
-  let a0 = a
-  if (a > unit.tStart) { a0 = a - 1; while (a0 > unit.tStart && p.clusterStart[a0] === 0) a0-- }
-  let b1 = b
-  if (b < unit.tEnd) { b1 = b + 1; while (b1 < unit.tEnd && p.clusterStart[b1] === 0) b1++ }
-  // The clusters next to the pair enter through their adjustments with it, so they must be printable ASCII too.
-  for (let k = a0; k < b1; k++) if (p.tUnits[k]! < 0x21 || p.tUnits[k]! > 0x7e) return null
-  const across = kern(a, t, b) / 2
-  const y = w(a, t) + (a0 < a ? kern(a0, a, t) / 2 : 0)
+  const half = kern(a, t, b) / 2
+  const y = w(a, t)
   const z = w(t, b) + (b1 > b ? kern(t, b, b1) / 2 : 0)
   // floor(x + 0.5), or null where x is within `reach` au of a tie.
   const rounded = (x: number, reach: number): number | null => Math.abs(x - Math.floor(x) - 0.5) <= reach ? null : Math.floor(x + 0.5)
-  const reachY = (0.5 + (a0 < a ? 1 : 0)) / scale
+  const reachY = 0.5 / scale
   const reachZ = (0.5 + (b1 > b ? 1 : 0)) / scale
-  const first = [rounded(y + across, reachY + 1 / scale), rounded(y, reachY)]
-  const second = [rounded(z + across, reachZ + 1 / scale), rounded(z, reachZ)]
+  const first = [rounded(y + half, reachY + 1 / scale), rounded(y, reachY)]
+  const second = [rounded(z + half, reachZ + 1 / scale), rounded(z, reachZ)]
   if (first[0] === null || first[1] === null || second[0] === null || second[1] === null) return null
   if (first[0]! - first[1]! + second[0]! - second[1]! !== R) return null
-  return prefixAu + first[0]! - first[1]!
+  return second[0]! - second[1]!
+}
+
+// Whether Canvas shows a ligature group over cluster boundary t: an optional ligature (ligatureAcross) or a group required
+// shaping forms (groupAcross).
+function groupSpans(p: GeckoPrepared, m: Measurer, run: GeckoTextRun, unit: { tStart: number; tEnd: number }, t: number): boolean {
+  let memo = spansMemo.get(p)
+  if (memo === undefined) spansMemo.set(p, memo = new Map())
+  let spans = memo.get(t)
+  if (spans === undefined) {
+    spans = ligatureAcross(p, m, run, unit, t) || groupAcross(p, m, run, unit, t, joinsAcross(p, unit, t) ? ZWJ : '')
+    memo.set(t, spans)
+  }
+  return spans
+}
+const spansMemo = new WeakMap<GeckoPrepared, Map<number, boolean>>()
+
+// The ligature group over cluster boundary t, or null: it runs from the nearest cluster boundary before t that no group
+// spans, or the unit's start, to the nearest such boundary after t, or the unit's end.
+function groupAround(p: GeckoPrepared, m: Measurer, run: GeckoTextRun, unit: { tStart: number; tEnd: number }, t: number): { start: number; end: number } | null {
+  if (!groupSpans(p, m, run, unit, t)) return null
+  let start = t
+  do {
+    start--
+    while (start > unit.tStart && p.clusterStart[start] === 0) start--
+  } while (start > unit.tStart && groupSpans(p, m, run, unit, start))
+  let end = t
+  do {
+    end++
+    while (end < unit.tEnd && p.clusterStart[end] === 0) end++
+  } while (end < unit.tEnd && groupSpans(p, m, run, unit, end))
+  return { start, end }
 }
 
 // A ligature group across offset t that required shaping forms: a ligature glyph, or glyphs HarfBuzz returns as one cluster
@@ -233,16 +294,19 @@ function groupAcross(p: GeckoPrepared, m: Measurer, run: GeckoTextRun, unit: { t
     (rangeAu(m, spaced, p.tUnits, tStart, tEnd, before, after) - rangeAu(m, off, p.tUnits, tStart, tEnd, before, after)) / (2 * run.auPerPx)
   let memo = groupMemo.get(p)
   if (memo === undefined) groupMemo.set(p, memo = new Map())
-  let inUnit = memo.get(unit.tStart)
-  if (inUnit === undefined) memo.set(unit.tStart, inUnit = groups(unit.tStart, unit.tEnd, '', ''))
-  let clusters = 0
-  for (let k = unit.tStart; k < unit.tEnd; k++) clusters += p.clusterStart[k]!
-  if (inUnit === clusters) return false
+  let counts = memo.get(unit.tStart)
+  if (counts === undefined) {
+    let clusters = 0
+    for (let k = unit.tStart; k < unit.tEnd; k++) clusters += p.clusterStart[k]!
+    memo.set(unit.tStart, counts = { groups: groups(unit.tStart, unit.tEnd, '', ''), clusters })
+  }
+  const inUnit = counts.groups
+  if (inUnit === counts.clusters) return false
   // U+200D before the suffix is a cluster of its own, which the joiner measured alone counts too.
   const joinerGroups = joiner === '' ? 0 : (Math.round(measureText(m, spaced.context, joiner) * run.auPerPx) - Math.round(measureText(m, off.context, joiner) * run.auPerPx)) / (2 * run.auPerPx)
   return groups(unit.tStart, t, '', joiner) + groups(t, unit.tEnd, joiner, '') - joinerGroups !== inUnit
 }
-const groupMemo = new WeakMap<GeckoPrepared, Map<number, number>>()
+const groupMemo = new WeakMap<GeckoPrepared, Map<number, { groups: number; clusters: number }>>()
 
 // `gaps` is the line whose breaks consult t, or null where the advance only places geometry.
 function glyphBefore(p: GeckoPrepared, m: Measurer, run: GeckoTextRun, t: number, gaps: LineGaps | null): number {
@@ -335,10 +399,25 @@ function rangeAdvance(p: GeckoPrepared, m: Measurer, prov: Provider, a: number, 
   return w
 }
 
-// BreakAndMeasureText's running width: GetAdvanceForGlyph per character, a ligature's whole width on its first character,
-// with spacing and tabs (gfxTextRun.cpp:989, :1139-1159). Canvas can't see ligatures, so the recipe equals advanceWidth's.
-function scanAdvance(p: GeckoPrepared, m: Measurer, prov: Provider, a: number, b: number, gaps: LineGaps): number {
-  return rangeAdvance(p, m, prov, a, b, gaps)
+// BreakAndMeasureText's running width: GetAdvanceForGlyph per character, a ligature group's whole advance on its first
+// character, with spacing and tabs; only a group the scanned range starts inside goes by shares (the ligature range,
+// gfxTextRun.cpp:989-1000, :1139-1159). So a position inside a group that starts at or after `from` counts the whole group
+// (policy c-5ba3b0da55cb63ad: after alef, 16px Geeza Pro's lam lam heh scans as 669 au at once and goes to the next line).
+function scanAdvance(p: GeckoPrepared, m: Measurer, prov: Provider, from: number, a: number, b: number, gaps: LineGaps): number {
+  const position = (t: number): number => {
+    if (t < prov.run.tEnd && p.clusterStart[t] === 1) {
+      const unit = p.units[p.unitOf[t]!]!
+      if (t > unit.tStart) {
+        const group = groupAround(p, m, prov.run, unit, t)
+        if (group !== null && group.start >= from) return glyphBefore(p, m, prov.run, group.end, gaps)
+      }
+    }
+    return glyphBefore(p, m, prov.run, t, gaps)
+  }
+  if (b <= a) return 0
+  let w = position(b) - position(a) + p.spacingPrefix[b]! - p.spacingPrefix[a]!
+  if (prov.run.hasTab) for (const [t, tab] of prov.tabs) if (t >= a && t < b) w += tab
+  return w
 }
 
 // GetAdvanceWidth and MeasureText: partial ligature shares at the range ends (gfxTextRun.cpp:238-329, :1195, :1214-1256).
@@ -418,8 +497,8 @@ function breakAndMeasureText(p: GeckoPrepared, m: Measurer, prov: Provider, aSta
       const whitespaceWrapping = i > aStart && isBreakSpaces &&
         (p.isSpace[i - 1] === 1 || p.kind[i - 1] === KIND_TAB || p.kind[i - 1] === KIND_NEWLINE)
       if (atBreak || wordWrapping || whitespaceWrapping) {
-        const pendingAdvance = scanAdvance(p, m, prov, pending, i, gaps)
-        const trimmableAdvance = trimmableChars > 0 ? scanAdvance(p, m, prov, trimStart, i, gaps) : 0
+        const pendingAdvance = scanAdvance(p, m, prov, aStart, pending, i, gaps)
+        const trimmableAdvance = trimmableChars > 0 ? scanAdvance(p, m, prov, aStart, trimStart, i, gaps) : 0
         const hyphenatedAdvance = pendingAdvance + (atHyphenationBreak ? hyphenWidth : 0)
         if (lastBreak < 0 || width + hyphenatedAdvance - trimmableAdvance <= aWidth) {
           lastBreak = i
@@ -451,8 +530,8 @@ function breakAndMeasureText(p: GeckoPrepared, m: Measurer, prov: Provider, aSta
     }
   }
   const scanEnd = aborted ? pending : end
-  if (!aborted) width += scanAdvance(p, m, prov, pending, end, gaps)
-  let trimmableAdvance = trimmableChars > 0 ? scanAdvance(p, m, prov, trimStart, scanEnd, gaps) : 0
+  if (!aborted) width += scanAdvance(p, m, prov, aStart, pending, end, gaps)
+  let trimmableAdvance = trimmableChars > 0 ? scanAdvance(p, m, prov, aStart, trimStart, scanEnd, gaps) : 0
   let charsFit: number
   let usedHyphenation = false
   if (width - trimmableAdvance <= aWidth) {
@@ -704,8 +783,10 @@ function reflowText(p: GeckoPrepared, m: Measurer, ll: LineLayout, psd: SpanData
     style.wordCanWrap, style.wrap, style.isBreakSpaces, canTrim || style.whitespaceCanHang, ll.lastOptPriority, gaps)
   // An emergency break after a hyphen exists where SetupClusterBoundaries saw an alphanumeric, the hyphen and the next
   // alphanumeric in one shaped word (gfxFont.cpp:741-753), and InitScriptRun shapes words per font range
-  // (gfxTextRun.cpp:2930-3000), so fallback between them removes it. Canvas totals don't show font ranges.
-  if (r.charsFit < tLength && r.breakPriority === WORD_WRAP_BREAK && !style.wordCanWrap && p.breakFlags[tOffset + r.charsFit] === BREAK_EMERGENCY_WRAP) {
+  // (gfxTextRun.cpp:2930-3000), so fallback between them removes it. Canvas totals don't show font ranges; the coverage
+  // facts do, and only a break they couldn't settle is reported (prepare.ts step 4).
+  if (r.charsFit < tLength && r.breakPriority === WORD_WRAP_BREAK && !style.wordCanWrap && p.breakFlags[tOffset + r.charsFit] === BREAK_EMERGENCY_WRAP &&
+    p.emergencyUnconfirmed.has(tOffset + r.charsFit)) {
     gaps.list.push({ gap: 'font-fallback', run: f.run, detail: `offset ${p.tSource[tOffset + r.charsFit]}: the emergency break after a hyphen needs the hyphen and the letters around it in one font range, which Canvas can't show (gfxFont.cpp:741-753, gfxTextRun.cpp:2930-3000)` })
   }
   const originalOffset = (t: number): number => t < p.tSource.length ? p.tSource[t]! : p.text.length
@@ -1626,6 +1707,9 @@ function lineOutput(p: GeckoPrepared, m: Measurer, start: GeckoLineStart, lineEn
       const run = textRunAt(p, Math.min(from, p.tUnits.length - 1))
       if (run === null) return
       for (let t = from; t <= to && t < p.tUnits.length; t++) {
+        // A position inside a cluster counts only where it is asked for by itself: a frame's edge, or one a skipped
+        // character exposes. Elsewhere points snap to the cluster's start.
+        if (p.clusterStart[t] === 0 && from !== to) continue
         const standIn = advanceBefore(p, m, run, t).standIn
         if (standIn !== null) report.set(p.tSource[t]!, standIn)
       }
@@ -1643,6 +1727,15 @@ function lineOutput(p: GeckoPrepared, m: Measurer, start: GeckoLineStart, lineEn
       const to = p.nextT[f.contentEnd]!
       if (from < p.tUnits.length) partOf(from, from)
       if (to < p.tUnits.length && to > from) partOf(to, to)
+      // A position inside a cluster shows only behind a skipped character: a point snaps back to its cluster's start, but
+      // not across a character TransformText removed (FindClusterStart, nsTextFrame.cpp:3549-3560, :8683-8689).
+      let skippedInCluster = false
+      for (let c = 0; c < f.characters.length; c++) {
+        const ch = f.characters[c]!
+        if (ch.skipped) skippedInCluster = true
+        else if (ch.clusterStart) skippedInCluster = false
+        else if (skippedInCluster && ch.standInBefore) partOf(p.sourceT[f.measuredStart + c]!, p.sourceT[f.measuredStart + c]!)
+      }
     }
     const endS = lastT >= 0 && lastT < p.tUnits.length ? p.tSource[lastT]! : -1
     let past = -1

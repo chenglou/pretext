@@ -102,19 +102,20 @@ export type WebKitBox = {
   // FontFacts.primaryFamily was null: the first listed family stands in for the realized one, which the Courier New test of the
   // width shortcut reads (gap fixed-pitch-path where the shortcut decides a width).
   primaryFamilyUnknown: boolean
+  // The listed families that realize, in list order, each with the code points it draws and the ones its liga, clig, dlig
+  // and hlig lookups can act on (ListedFontFacts.coverage and spacingInputs); null where the declaration's facts don't give
+  // both for every family that may realize (measure.ts mergedGlyphs).
+  spacingFacts: ReadonlyArray<{ coverage: readonly number[]; inputs: readonly number[] }> | null
   // FontFacts.pairKerning was null: whether the font's tables put a pair adjustment on the pair's second glyph isn't given,
   // which decides the shaped advance of the U+0020 a text item is measured with (gap simplified-measuring).
   pairKerningUnknown: boolean
   // How the box's locale, which OffscreenCanvas doesn't have, chooses fonts (gap canvas-language; content.ts collectBoxFacts).
-  // `families`: the font list holds a family the locale resolves (a CSS generic, -webkit-standard, a system design).
-  // `fallback`: the locale's script is Han, kana or Hangul, where Core Text picks system fallback for Han, kana, Hangul, CJK
-  // punctuation and fullwidth forms by language. null: neither. Either way only a code point no named family before the
-  // first locale-resolved one draws is concerned (localeIndependentGlyph).
+  // `families`: the font list holds a family the locale resolves (a CSS generic, -webkit-standard, a system design); a
+  // character is concerned unless a named family before it draws it (namedFamilyDraws: `namedContext`, those families
+  // followed by LastResort, against `lastResortContext`, LastResort alone). `fallback`: the locale's script is Han, kana or
+  // Hangul, where Core Text picks fonts for Han, kana, Hangul, CJK punctuation and fullwidth forms by language, whatever
+  // the list names. null: neither.
   localeChoosesFonts: { families: boolean; fallback: boolean } | null
-  // Coverage of the named families before the first locale-resolved family of the list (all of them when none is): the
-  // families' facts where FontFacts.fonts gives realizes and coverage for each, else null and Canvas decides with
-  // `namedContext`, those families followed by LastResort, against `lastResortContext`, LastResort alone.
-  namedCoverage: ReadonlyArray<readonly number[]> | null
   namedContext: number
   lastResortContext: number
   // The box's Han locale takes the preferred languages, which aren't given; or its quote overrides take the ICU default
@@ -195,6 +196,8 @@ export type WebKitLineStart = {
     // (AbstractLineBuilder.cpp:54-98), or null when the rest is measured fresh.
     carriedWidth: number | null
     endsWithLineBreak: boolean
+    // The carried width comes from a run shaped across inline boxes (gap rtl-shaping-across-inline-boxes on this line too).
+    carriedFromShaping: boolean
   } | null
   // IsFirstFormattedLine: no earlier line had contentful in-flow content (InlineFormattingContext.cpp:313, :331-333).
   isFirstFormattedLine: boolean

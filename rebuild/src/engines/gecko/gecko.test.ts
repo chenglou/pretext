@@ -35,7 +35,7 @@ function stubAu(font: string, text: string, lang: string): number {
   let au = 0
   for (let i = 0; i < cps.length; i++) {
     const c = cps[i]!
-    if (c === '‍' || c === '︎' || c === '️') continue
+    if (c === '‍' || c === '‌' || c === '︎' || c === '️') continue
     if (c === '👩' && cps[i + 1] === '‍' && cps[i + 2] === '🚀') {
       au += emoji
       i += 2
@@ -54,6 +54,11 @@ function stubAu(font: string, text: string, lang: string): number {
     if (c === 'T' || c === 'o') {
       const kerned = (c === 'T' && cps[i + 1] === 'o') || (c === 'o' && cps[i - 1] === 'T')
       au += Math.floor(((c === 'T' ? 576.4 : 576.8) - (kerned ? 22.5 : 0)) * size / 16 + 0.5)
+      continue
+    }
+    // Lam with alef madda is one glyph of 1001 au: the alef adds 425 au after a lam.
+    if (c === 'آ' && cps[i - 1] === 'ل') {
+      au += Math.round(425 * size / 16)
       continue
     }
     if (c === 'ب') {
@@ -80,12 +85,13 @@ beforeAll(() => {
     font = ''; lang = ''; letterSpacing = '0px'; wordSpacing = '0px'; fontKerning = 'auto'; textRendering = 'auto'; direction = 'ltr'
     measureText(s: string) {
       // Letter spacing goes after every ligature group (CanvasRenderingContext2D.cpp:4759-4790): a code point, with the
-      // joiners and selectors after it; lam with alef is one group (a required ligature, as wide as its parts here).
+      // joiners and selectors after it; lam with alef is one group (a required ligature, as wide as its parts here), and so
+      // is U+0E24 U+0E32 (Thonburi, probe gecko-port F17).
       let groups = 0
       const cps = [...s]
       for (let i = 0; i < cps.length; i++) {
-        if (i > 0 && (cps[i] === '‍' || cps[i] === '︎' || cps[i] === '️' || /\p{M}/u.test(cps[i]!))) continue
-        if (cps[i] === 'ا' && cps[i - 1] === 'ل') continue
+        if (i > 0 && (cps[i] === '‍' || cps[i] === '‌' || cps[i] === '︎' || cps[i] === '️' || /\p{M}/u.test(cps[i]!))) continue
+        if (((cps[i] === 'ا' || cps[i] === 'آ') && cps[i - 1] === 'ل') || (cps[i] === 'า' && cps[i - 1] === 'ฤ')) continue
         groups++
       }
       const spacing = this.letterSpacing === '2px' ? 120 * groups : 0
@@ -182,6 +188,21 @@ describe('gecko line filling (probes-firefox verdicts)', () => {
     expect(starts(paragraph([run('x aaaa-1111')], 57.6))).toEqual([0, 2, 7])
     expect(starts(paragraph([run('aaaa-1111')], 57.6))).toEqual([0, 5])
     expect(starts(paragraph([run('aaaa-1111')], 57.6, { whiteSpace: 'nowrap' }))).toEqual([0])
+  })
+  test('coverage facts settle the emergency break after a hyphen (gfxFont.cpp:741-753, gfxTextRun.cpp:2930-3000)', () => {
+    const listed = (coverage: number[] | null): FontDecl => ({ ...courier, facts: { ...facts, fonts: [{ family: '"Courier New"', realizes: true, coverage, ligatures: null, scriptLookups: null }] } })
+    const broken = (font: FontDecl, text: string) => layout(paragraph([run(text, 'span', { font })], 57.6, { font }))
+    // One font draws a, the hyphen and 1: the break exists, and nothing is reported.
+    const ascii = broken(listed([0x20, 0x7e]), 'aaaa-1111')
+    expect(ascii.lines.map(line => line.start)).toEqual([0, 5])
+    expect(allGaps(ascii).map(g => g.gap)).not.toContain('font-fallback')
+    // The letter before the hyphen falls back: the hyphen starts another shaped word, and no break follows it.
+    const fallback = broken(listed([0x20, 0x7e]), '中中中中-1111')
+    expect(fallback.lines.map(line => line.start)).toEqual([0, 3]) // 中-1111 stays whole: six characters fit
+    expect(allGaps(fallback).map(g => g.gap)).not.toContain('font-fallback')
+    // Without the fact the break stays, under font-fallback.
+    expect(allGaps(broken(listed(null), 'aaaa-1111')).map(g => g.gap)).toContain('font-fallback')
+    expect(allGaps(broken(courier, 'aaaa-1111')).map(g => g.gap)).toContain('font-fallback')
   })
   test('H9 overflow-wrap splits a word only on a line without an ordinary break', () => {
     expect(starts(paragraph([run('aa bbbbbbbbbb')], 57.6, { overflowWrap: 'anywhere' }))).toEqual([0, 3, 9])
@@ -336,12 +357,25 @@ describe('gecko engine output', () => {
     expect(starts(p)).toEqual([0, 2])
     expect(widths(p)).toEqual([1032, 1032])
   })
-  test('a ligature group as wide as its parts: Canvas letter spacing counts one group fewer, and only the offset inside it is a stand-in', () => {
-    // دلاد: lam and alef form one group of 1152 au, which the DOM shares 576 and 576; U+200D sides add up at every offset.
-    const l = layout(paragraph([run('دلاد')], 500, { direction: 'rtl' }))
+  test('a ligature group: Canvas letter spacing counts one group fewer, and its clusters share its advance (gfxTextRun.cpp:238-322)', () => {
+    // دلآد: lam and alef madda form one group of 1001 au, which the DOM shares 500 and 501; the group's two ends add up.
+    const l = layout(paragraph([run('دلآد')], 500, { direction: 'rtl' }))
     const frame = textFrames(l.lines[0]!)[0]!
-    expect(frame.characters.map(c => c.standInBefore)).toEqual([false, false, true, false])
-    expect(frame.standInAtEnd).toBe(false)
+    expect(frame.characters.map(c => c.advance)).toEqual([576, 500, 501, 576])
+    expect(frame.characters.map(c => c.standInBefore)).toEqual([false, false, false, false])
+    expect(allGaps(l).map(g => g.gap)).not.toContain('in-word-prefix')
+  })
+  test('the break scan takes a ligature group whole on its first character (gfxTextRun.cpp:989-1000, :1139-1159)', () => {
+    // 20px holds د and half the group, 1076 au, but the scan adds the group's 1001 au at lam: 1577 au overflows, so the
+    // line ends before lam. The next line starts with the group and ends inside it only when the scan says so.
+    const p = paragraph([run('دلآد')], 20, { direction: 'rtl', overflowWrap: 'anywhere' })
+    expect(starts(p)).toEqual([0, 1, 3])
+    expect(widths(p)).toEqual([576, 1001, 576])
+  })
+  test('glyph-clusters names a letter-spaced unit only where Canvas counts fewer ligature groups than clusters', () => {
+    const spaced = (text: string) => layout(paragraph([run(text, 'span', { letterSpacing: 1 })], 500))
+    expect(allGaps(spaced('abc ฤา')).filter(g => g.gap === 'glyph-clusters').map(g => g.at)).toEqual([{ start: 4, end: 6 }])
+    expect(allGaps(spaced('abc def')).map(g => g.gap)).not.toContain('glyph-clusters')
   })
   test('letters joined across an in-word offset whose sides do not add up report in-word-prefix on both lines of the break', () => {
     // ببحب: the second beh takes a narrower form before hah, 396 au, so W(بب U+200D) + W(U+200D حب) is 2144 au and the word 2044.
@@ -652,12 +686,12 @@ describe('ceiling round 2', () => {
     expect(widths(letters)).toEqual([576 * 6 - 40])
   })
 
-  test('an in-word break inside a ligature as wide as its parts reports in-word-prefix at the offset (probe gecko-port F9)', () => {
+  test('an in-word break inside a ligature as wide as its parts: the ink box shows it, and its letters share its advance (probe gecko-port F9)', () => {
     const l = layout(paragraph([run('fi')], 2, { overflowWrap: 'anywhere' }))
     expect(l.lines.map(line => line.start)).toEqual([0, 1])
-    const gaps = l.lines[0]!.gaps.filter(g => g.gap === 'in-word-prefix')
-    expect(gaps.map(g => g.at)).toEqual([{ start: 1, end: 1 }])
-    expect(gaps[0]!.detail).toContain('ligatures off')
+    expect(l.lines.map(line => line.geometry.width)).toEqual([576, 576])
+    expect(allGaps(l).map(g => g.gap)).not.toContain('in-word-prefix')
+    expect(l.measure.contexts.some(c => c.letterSpacing === '0.001px')).toBe(true)
   })
 
   test('lang="" measures under the given regional-prefs locale and reports ui-language only without it (nsFontCache.cpp:61-63)', () => {

@@ -131,6 +131,24 @@ export function isMarkOrModifier(cp: number): boolean {
   return isMark(cp) || (scriptPropsOf(cp) & 0x2000000) !== 0
 }
 
+// Character::IsEmoji (Emoji), IsEmojiEmojiDefault (Emoji_Presentation) and IsEmojiModifierBase (character_emoji.cc:320-335),
+// and u_charType(c) == U_UNASSIGNED (:337-343).
+export function isEmoji(cp: number): boolean {
+  return (scriptPropsOf(cp) & 0x4000000) !== 0
+}
+
+export function isEmojiPresentation(cp: number): boolean {
+  return (scriptPropsOf(cp) & 0x8000000) !== 0
+}
+
+export function isEmojiModifierBase(cp: number): boolean {
+  return (scriptPropsOf(cp) & 0x10000000) !== 0
+}
+
+export function isUnassigned(cp: number): boolean {
+  return (scriptPropsOf(cp) & 0x20000000) !== 0
+}
+
 // IsCursiveScript (shape_result.cc:977-990) over UScriptCode numbers.
 export function isCursiveScript(script: number): boolean {
   return blinkCursiveScripts.includes(script)

@@ -9,6 +9,7 @@
 import { blinkOtLanguageTags } from '../../breaks/generated/blink-break-tables.js'
 import type { LigatureFacts, LigaturePattern, ListedFontFacts } from '../../model.js'
 import { isMark } from './props.js'
+import { isSegmentEdge } from './shape.js'
 import type { BlinkPrepared } from './types.js'
 
 // What the facts say about the boundary before a text_content unit: nothing; no glyph cluster covers it; a ligature's
@@ -173,7 +174,7 @@ export function fontFactsOfText(p: BlinkPrepared): { ligature: Uint8Array; fontR
       if (facts !== null) {
         // The stretch of clusters in the same font and script segment.
         let limitCluster = c
-        while (limitCluster + 1 < starts.length - 1 && fontAt[limitCluster + 1] === f && (!p.segmented || p.scripts[starts[limitCluster + 1]!] === p.scripts[starts[c]!])) limitCluster++
+        while (limitCluster + 1 < starts.length - 1 && fontAt[limitCluster + 1] === f && !isSegmentEdge(p, starts[limitCluster + 1]!)) limitCluster++
         const limit = starts[limitCluster + 1]!
         let best: Match | null = null
         for (let n = 0; n < facts.patterns.length; n++) {

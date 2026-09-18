@@ -98,8 +98,10 @@ export type ListedFontFacts = {
 
 export type LigatureFacts = {
   patterns: readonly LigaturePattern[]
-  // true: every ligature the font's default features can form between two grapheme clusters, under the default language
-  // system, is in `patterns`. false: there may be others, so the list can only confirm a ligature, never rule one out.
+  // true: every sequence of base characters the font's default features ligate across grapheme clusters, under the
+  // default language system, is in `patterns`. false: there may be others, so the list can only confirm a ligature, never
+  // rule one out. Either way it says nothing about combining marks between the characters beyond `acrossMark`: take marks
+  // out before matching, and treat a match across marks as unsettled.
   complete: boolean
   // OpenType 'table/script/language' tags of the language systems whose lookups differ from their script's default.
   // Nothing in `patterns` was tried under them.

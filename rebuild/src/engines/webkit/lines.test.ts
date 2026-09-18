@@ -16,6 +16,8 @@ let pairAdjust = (_s: string): number => 0
 // Sequences the stand-in font draws with one glyph of the given advance, as a liga lookup does. Letter spacing goes once to
 // every glyph with an advance, as WidthIterator adds it; U+200C has no advance and keeps a sequence from matching.
 let ligatures: Record<string, number> = {}
+// A letter's advance in its string, for fonts whose joining forms differ in width; null takes `advance`.
+let contextual = (_s: string, _i: number): number | null => null
 class StandInContext {
   font = ''
   lang = ''
@@ -24,11 +26,13 @@ class StandInContext {
   fontKerning = 'auto'
   textRendering = 'auto'
   direction = 'ltr'
-  measureText(s: string): { width: number } {
+  measureText(raw: string): { width: number } {
+    // Canvas turns U+0009-U+000D into spaces before it measures (CanvasRenderingContext2DBase.cpp:2847-2875).
+    const s = raw.replace(/[\t\n\v\f\r]/g, ' ')
     const spacing = parseFloat(this.letterSpacing)
     let w = 0
     for (let i = 0; i < s.length; i++) {
-      let glyph = s.charCodeAt(i) === 0x200c ? 0 : advance(s.charCodeAt(i))
+      let glyph = s.charCodeAt(i) === 0x200c || s.charCodeAt(i) === 0x200d ? 0 : contextual(s, i) ?? advance(s.charCodeAt(i))
       for (const sequence in ligatures) {
         if (!s.startsWith(sequence, i)) continue
         glyph = ligatures[sequence]!
@@ -315,6 +319,28 @@ describe('letter spacing and ligatures (measure.ts mergedGlyphs; probe webkit-ro
     expect(unspaced.gaps).not.toContain('letter-spacing-ligatures')
   })
 
+  test('glyphs that merge inside a grapheme cluster are not ligatures the DOM turns off', () => {
+    // A base with its mark is one glyph here, alone and in the string.
+    ligatures = { 'a\u0301': 8 }
+    const { gaps, lines } = layout(paragraph([['xa\u0301y', 'text']], { letterSpacing: 1 }))
+    ligatures = {}
+    expect(gaps).not.toContain('letter-spacing-ligatures')
+    expect(lines[0]!.geometry.contentWidth).toBe(27)
+  })
+
+  test('the listed families\' spacing inputs say where letter-spacing changes nothing (ListedFontFacts.spacingInputs)', () => {
+    const facts = (inputs: number[]): FontFacts => ({ ...UNKNOWN_FONT_FACTS, fonts: [{ family: 'Arial', realizes: true, coverage: [0x20, 0x7e], ligatures: null, spacingInputs: inputs, scriptLookups: null }] })
+    ligatures = { fi: 10 }
+    const kept = layout(paragraph([['office', 'text']], { letterSpacing: 1 }, facts([])))
+    const off = layout(paragraph([['office', 'text']], { letterSpacing: 1 }, facts([0x66, 0x66])))
+    ligatures = {}
+    // No input: the merge is one the DOM keeps, five glyphs. `f` is an input: measured apart, six glyphs.
+    expect(kept.lines[0]!.geometry.contentWidth).toBe(47)
+    expect(kept.gaps).not.toContain('letter-spacing-ligatures')
+    expect(off.lines[0]!.geometry.contentWidth).toBe(54)
+    expect(off.gaps).toContain('letter-spacing-ligatures')
+  })
+
   test('a letter-spaced string whose glyphs Canvas counts one per character reports nothing', () => {
     expect(layout(paragraph([['office hours', 'text']], { letterSpacing: 2 })).gaps).not.toContain('letter-spacing-ligatures')
   })
@@ -330,25 +356,38 @@ describe('letter spacing and ligatures (measure.ts mergedGlyphs; probe webkit-ro
   })
 })
 
-describe('canvas-language concerns what no named family draws (probe webkit-round3 R3)', () => {
-  const listed = (coverage: number[]): FontFacts => ({ ...UNKNOWN_FONT_FACTS, fonts: [{ family: 'Arial', realizes: true, coverage, ligatures: null, scriptLookups: null }] })
-
-  test('under a Hangul locale, Han that the listed font lacks goes to system fallback; what the font draws does not', () => {
-    const { lines } = layout(paragraph([['ab 中 cd', 'text']], { lang: 'ko' }, listed([0x20, 0x7e])))
+describe('canvas-language (probes webkit-round3 R3, R3b, R3c)', () => {
+  test('under a Han, kana or Hangul locale every Han, kana and Hangul character is concerned, whatever the list names', () => {
+    const { lines } = layout(paragraph([['ab 中 cd', 'text']], { lang: 'ko' }))
     expect(lines[0]!.gaps.filter(g => g.gap === 'canvas-language').map(g => g.at)).toEqual([{ start: 3, end: 4 }])
-    expect(layout(paragraph([['ab 中 cd', 'text']], { lang: 'ko' }, listed([0x20, 0x7e, 0x4e00, 0x9fff]))).gaps).not.toContain('canvas-language')
   })
 
   test('a locale of another script leaves system fallback to the preferred languages, as Canvas does', () => {
-    expect(layout(paragraph([['ab 中 cd', 'text']], { lang: 'en' }, listed([0x20, 0x7e]))).gaps).not.toContain('canvas-language')
-    expect(layout(paragraph([['ab 中 cd', 'text']], { lang: 'th' }, listed([0x20, 0x7e]))).gaps).not.toContain('canvas-language')
+    expect(layout(paragraph([['ab 中 cd', 'text']], { lang: 'en' })).gaps).not.toContain('canvas-language')
+    expect(layout(paragraph([['ab 中 cd', 'text']], { lang: 'th' })).gaps).not.toContain('canvas-language')
   })
 
-  test('a generic family after a named one concerns only what the named one lacks', () => {
-    const p = { ...paragraph([['ab 中', 'text']], { lang: 'ja' }, listed([0x20, 0x7e])), font: { ...fontWith(listed([0x20, 0x7e])), family: 'Arial, serif' } }
-    const facts: FontFacts = { ...UNKNOWN_FONT_FACTS, fonts: [{ family: 'Arial', realizes: true, coverage: [0x20, 0x7e], ligatures: null, scriptLookups: null }, { family: 'serif', realizes: true, coverage: null, ligatures: null, scriptLookups: null }] }
-    const withFacts = { ...p, font: { ...p.font, facts } }
-    expect(layout(withFacts).lines[0]!.gaps.filter(g => g.gap === 'canvas-language').map(g => g.at)).toEqual([{ start: 3, end: 4 }])
+  test('a generic family after a named one concerns only what the named one does not draw', () => {
+    // The stand-in Canvas draws ASCII from Arial (8 wide, LastResort 16) and nothing else.
+    const previous = (globalThis as { OffscreenCanvas?: unknown }).OffscreenCanvas
+    ;(globalThis as { OffscreenCanvas?: unknown }).OffscreenCanvas = class {
+      getContext() {
+        const context = new StandInContext()
+        const measure = context.measureText.bind(context)
+        context.measureText = (s: string) => {
+          const lastResortOnly = / LastResort$/.test(context.font) && !context.font.includes(',')
+          const named = context.font.includes('Arial')
+          let w = 0
+          for (let i = 0; i < s.length; i++) w += lastResortOnly || (!(named && s.charCodeAt(i) < 0x80) && context.font.includes('LastResort')) ? 16 : measure(s[i]!).width
+          return { width: w }
+        }
+        return context
+      }
+    }
+    const p = { ...paragraph([['ab é', 'text']], { lang: 'th' }), font: { ...fontWith(), family: 'Arial, sans-serif' } }
+    const { lines } = layout(p)
+    ;(globalThis as { OffscreenCanvas?: unknown }).OffscreenCanvas = previous
+    expect(lines[0]!.gaps.filter(g => g.gap === 'canvas-language').map(g => g.at)).toEqual([{ start: 3, end: 4 }])
   })
 })
 
@@ -487,6 +526,17 @@ describe('bidi lines with inline structure (InlineDisplayContentBuilder.cpp:728-
 })
 
 describe('text shaping across inline boxes (InlineLineBuilder.cpp:780-1028)', () => {
+  test('a run is measured in its joining context: U+200D on the sides where the neighbouring run joins it', () => {
+    // A beh followed by a joiner or a letter is 5 wide (initial or medial form); a last one is 7 after one (final), else 8.
+    contextual = (s, i) => s.charCodeAt(i) !== 0x628 ? null : i + 1 < s.length ? 5 : i > 0 ? 7 : null
+    const block = treeParagraph([], fontWith(), { direction: 'rtl', width: 500 })
+    const p = treeParagraph([{ kind: 'text', text: 'بب' }, span(block, [{ kind: 'text', text: 'بب' }])], fontWith(), { direction: 'rtl', width: 500 })
+    const { lines } = layout(p)
+    contextual = () => null
+    // The first run's last letter joins the span's first: 5 + 5, where the run alone is 5 + 7.
+    expect(textBoxes(lines[0]!.geometry.boxes).map(b => [b.run, b.width])).toEqual([[1, 12], [0, 10]])
+  })
+
   test('RTL complex text joined over an undecorated span edge is one shaping range: one run per box, the line gap', () => {
     // The stand-in Canvas is additive, so the widths equal separate measurement; the ranges, run splits and gap are the rule.
     const block = treeParagraph([], fontWith(), { direction: 'rtl', width: 500 })

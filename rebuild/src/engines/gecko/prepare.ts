@@ -6,9 +6,9 @@ import type { GeckoEnvironment } from '../../env.js'
 import { measureContext, measureText, measureTextBounds, type Measurer } from '../../measure/canvas.js'
 import { canvasFont } from '../../measure/font.js'
 import type { BoxEdge, FontDecl, Gap, Paragraph, TextStyle } from '../../model.js'
-import { opticalSizeAxisOf, quantize10, sameFontForTextRun } from './fonts.js'
+import { listedFontOf, opticalSizeAxisOf, quantize10, sameFontForTextRun } from './fonts.js'
 import { canonicalLanguageTag } from './likely.js'
-import { bidiDataFor } from '../../unicode/bidi.js'
+import { AL, R, bidiClassOf, bidiDataFor } from '../../unicode/bidi.js'
 import { graphemeBoundaries, graphemeRulesFor } from '../../unicode/grapheme.js'
 import { resolveUnicodeBidi } from '../../unicode/unicode-bidi.js'
 import {
@@ -503,6 +503,20 @@ export function rangeAu(m: Measurer, run: Pick<GeckoTextRun, 'context' | 'script
   let piece = before
   for (let k = tStart; k < tEnd; k++) piece += String.fromCharCode(units[k]!)
   piece += after
+  // Canvas gives a string of one character, or of one surrogate pair, a direction of its own: right to left for the bidi
+  // classes R and AL, else left to right, whatever ctx.direction says (nsBidiPresUtils::ProcessText and ProcessSimpleRun,
+  // nsBidiPresUtils.cpp:2180-2190, :2395-2414). The DOM shapes the character at its resolved level, so a neutral at an odd
+  // level is mirrored there and not in Canvas (fresh c-a76a521c12628bd7: `(` alone at level 1 in 16px Shantell Sans is 392
+  // au natively, the advance of `)`, and 420 au in a right-to-left context). U+200C after it makes the string two characters,
+  // which takes Canvas's bidi path, where a neutral gets the context's direction; it is a join control, drawn with no
+  // advance by the font before it (gfxTextRun.cpp:3309-3332). Only a mirrored character needs it, and a lone mark shapes
+  // otherwise with U+200C after it (held-out c-0b2ac06557b89cf6: U+0301 alone at level 1 in 16px Georgia is 480 au natively
+  // and alone in Canvas, and nothing with U+200C after it).
+  if (m.log.contexts[run.context]!.direction === 'rtl' && (piece.length === 1 || (piece.length === 2 && isSurrogatePair(piece.charCodeAt(0), piece.charCodeAt(1))))) {
+    const cp = piece.codePointAt(0)!
+    const bidiClass = bidiClassOf(bidiDataFor('gecko'), cp)
+    if (bidiClass !== R && bidiClass !== AL && isBidiMirrored(cp)) piece += '\u200c'
+  }
   const w = (s: string) => Math.round(measureText(m, run.context, s) * run.auPerPx)
   // gfxFontGroup::ComputeRanges matches fonts over the whole script run, carrying the previous character and its matched font
   // (gfxTextRun.cpp:3593-3875), and FindFontForChar reads them for a cluster extender and U+202F (:3181-3212). A piece that
@@ -1035,6 +1049,25 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, measur
   // 4. Glyph flags per text run.
   const g: Glyphs = { units: tUnits, breakFlags: new Uint8Array(T), clusterStart: new Uint8Array(T).fill(1), isSpace: new Uint8Array(T), kind: new Uint8Array(T) }
   for (let r = 0; r < builds.length; r++) initTextRun(g, builds[r]!.tStart, builds[r]!.tEnd, builds[r]!.is8bit)
+  // The emergency break after a hyphen is set inside one shaped word (SetupClusterBoundaries, gfxFont.cpp:741-753), and
+  // InitScriptRun shapes a word per font range (gfxTextRun.cpp:2930-3000): it exists only where the letter before the
+  // hyphen, the hyphen and the letter after it are one font's. The coverage facts say which listed family draws each
+  // (fonts.ts listedFontOf). One family for all three keeps the flag, two families or a listed one next to the engine's
+  // fallback take it away, and where the facts don't say, or all three fall back, the line it decides reports font-fallback.
+  const emergencyUnconfirmed = new Set<number>()
+  for (let r = 0; r < builds.length; r++) {
+    const b = builds[r]!
+    if (b.flows.length === 0) continue
+    const font = runTextStyles[frames[b.flows[0]!.frame]!.run]!.font
+    for (let t = b.tStart + 2; t < b.tEnd; t++) {
+      if (g.breakFlags[t] !== BREAK_EMERGENCY_WRAP) continue
+      const before = listedFontOf(font, tUnits[t - 2]!)
+      const hyphen = listedFontOf(font, tUnits[t - 1]!)
+      const after = listedFontOf(font, tUnits[t]!)
+      if (before === null || hyphen === null || after === null || (before === -1 && hyphen === -1 && after === -1)) emergencyUnconfirmed.add(t)
+      else if (before !== hyphen || hyphen !== after) g.breakFlags[t] = BREAK_NONE
+    }
+  }
 
   // 5. nsLineBreaker over every flow in document order (SetupBreakSinksForTextRun, nsTextFrame.cpp:2889-2997), with the
   //    resets of frames text can't cross.
@@ -1076,7 +1109,13 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, measur
 
   // 6. Spacing after each character (GetSpacingInternal, nsTextFrame.cpp:4089-4295, letter-spacing model 0).
   const runOfT = new Int32Array(T)
-  for (let k = 0; k < frames.length; k++) for (let t = frames[k]!.tStart; t < frames[k]!.tEnd; t++) runOfT[t] = frames[k]!.run
+  const frameStartOfT = new Int32Array(T)
+  for (let k = 0; k < frames.length; k++) {
+    for (let t = frames[k]!.tStart; t < frames[k]!.tEnd; t++) {
+      runOfT[t] = frames[k]!.run
+      frameStartOfT[t] = frames[k]!.tStart
+    }
+  }
   const spacingPrefix = new Int32Array(T + 1)
   for (let r = 0; r < builds.length; r++) {
     const b = builds[r]!
@@ -1090,13 +1129,20 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, measur
         const canAdd = !(style.newlineIsSignificant && g.kind[t] === KIND_NEWLINE) &&
           (t + 1 >= b.tEnd || (g.clusterStart[t + 1] === 1 && g.kind[t] !== KIND_FORMAT && g.kind[t] !== KIND_TAB))
         if (canAdd) {
-          // The cluster's base: FindClusterStart stops at a skipped original character, such as a removed soft hyphen
-          // (nsTextFrame.cpp:3549-3560, :4203-4213), so a mark after one is its own base.
+          // The cluster's base: FindClusterStart stops at a skipped original character, such as a removed soft hyphen, and
+          // at the start of the frame's own characters, which is where the provider's run of kept characters begins
+          // (nsTextFrame.cpp:3549-3560, :4203-4213). So a mark after a soft hyphen is its own base, and so is a mark that
+          // starts a text node (fresh c-7421ac03d17f9f11: U+0652 starting a span after its seen takes the span's 60 au of
+          // letter spacing in 14px Geeza Pro, where the seen's cluster takes none).
           let base = t
-          while (base > b.tStart && g.clusterStart[base] === 0 && tSource[base]! - 1 === tSource[base - 1]!) base--
+          while (base > frameStartOfT[t]! && g.clusterStart[base] === 0 && tSource[base]! - 1 === tSource[base - 1]!) base--
           let cp = tUnits[base]!
           if (base + 1 < b.tEnd && isSurrogatePair(cp, tUnits[base + 1]!)) cp = combine(cp, tUnits[base + 1]!)
-          if (!isCursiveScript(cp)) spacing += ls
+          // Probe gecko-port F19 (.artifacts/probes/gecko/round3-f19), not traced to source: a cluster of a letter outside
+          // the BMP and a mark takes the spacing though the letter's script is cursive. U+10D02 U+0301 is 428, 488 and 668
+          // au under 0, 1 and 4px of letter spacing, where U+10D02 alone stays 441 au and beh with U+0301 576 au. Hanifi
+          // Rohingya is the one cursive script outside the BMP (UnicodeProperties.h:350-355).
+          if (!isCursiveScript(cp) || (cp >= 0x10000 && t > base + 1)) spacing += ls
         }
       }
       const ws = wordSpacingAu[run]!
@@ -1153,9 +1199,6 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, measur
     if (!elementCanvas && font.facts.opticalSizeAxis !== false) {
       gaps.push({ gap: 'optical-size', run: firstRun, detail: font.facts.opticalSizeAxis === true ? `${font.family} has an opsz axis` : `whether ${font.family} has an opsz axis isn't given (default ${opticalSizeAxisOf(font)})`, at })
     }
-    // CanAddSpacingAfter adds letter spacing only at ligature group starts (nsTextFrame.cpp:3860-3873). Letter spacing
-    // turns optional ligatures off; the required ligatures a font still forms aren't visible to Canvas.
-    if (letterSpacingAu[firstRun] !== 0) gaps.push({ gap: 'glyph-clusters', run: firstRun, detail: "letter spacing follows ligature group starts, which Canvas can't show (nsTextFrame.cpp:3860-3873)", at })
     // An explicit ctx.lang: OffscreenCanvas would otherwise take the root element's lang (CanvasRenderingContext2D.cpp:5446-5465).
     // Content with lang="" matches fonts under the locale language (nsFontCache.cpp:61-63).
     const canvasLang = lang === '' && env.regionalPrefsLocale !== null ? env.regionalPrefsLocale : lang
@@ -1198,7 +1241,16 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, measur
       const invalid = !boundary && (b.is8bit ? isInvalidChar8(ch) : isInvalidChar16(ch))
       let unit: GeckoUnit
       if (boundary) {
-        const w = au(ch === 0x20 ? ' ' : ' ')
+        let w = au(ch === 0x20 ? ' ' : ' ')
+        // A character after U+200D takes the font of the character before it where that font has it (FindFontForChar,
+        // gfxTextRun.cpp:3319-3325), and a boundary space is the space glyph of its own font run (gfxTextRun.cpp:1590-1622).
+        // So after a word that ends in U+200D the space is the word's last font's: the word with the space after it, less
+        // the word (fresh c-9d8986212ef18179: after Hebrew and U+200D in 18px Georgia the space is 270 au, the fallback
+        // font's, where Georgia's is 261 au).
+        const last = units.length > 0 ? units[units.length - 1]! : null
+        if (last !== null && last.kind === 'word' && last.tEnd === t && tUnits[t - 1] === 0x200d) {
+          w = rangeAu(measurer, run, tUnits, last.tStart, t + 1) - last.canvasAu
+        }
         unit = { kind: ch === 0x20 ? 'space' : 'nbsp', tStart: t, tEnd: t + 1, canvasAu: w, au: w, startAdvance: advance }
         stretchSpaces++
         stretchSum += w
@@ -1215,12 +1267,44 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, measur
           if (((c === 0x20 || c === 0xa0) && (b.is8bit || !isClusterExtender(nx))) || (b.is8bit ? isInvalidChar8(c) : isInvalidChar16(c))) break
         }
         const w = rangeAu(measurer, run, tUnits, t, e)
+        if (letterSpacingAu[firstRun] !== 0) {
+          // CanAddSpacingAfter adds letter spacing only before a character that starts a cluster and a ligature group
+          // (nsTextFrame.cpp:3860-3873), and the spacing above counts clusters. Letter spacing turns optional ligatures off;
+          // the groups required shaping still forms show in Canvas's own letter spacing, which goes by the same two flags
+          // (CanvasRenderingContext2D.cpp:4759-4790): W at 2px less W at 0.001px, over 2px, counts the unit's groups (probe
+          // gecko-port F17). A unit with as many groups as clusters is spaced as the DOM spaces it. With fewer, Canvas
+          // doesn't say which cluster lost its spacing, unless the unit's script is cursive and takes none (:4107-4133).
+          let clusters = 0
+          let spaced = false
+          for (let k = t; k < e; k++) {
+            clusters += g.clusterStart[k]!
+            if (spacingPrefix[k + 1] !== spacingPrefix[k]) spaced = true
+          }
+          if (spaced) {
+            const wide = rangeAu(measurer, { ...run, context: measureContext(measurer, { ...settings, letterSpacing: '2px' }) }, tUnits, t, e)
+            const groups = (wide - w) / (2 * auPerPx)
+            if (groups !== clusters) {
+              gaps.push({ gap: 'glyph-clusters', run: firstRun, detail: `Canvas letter spacing counts ${groups} ligature groups in a unit of ${clusters} clusters, and the DOM spaces by ligature group starts (nsTextFrame.cpp:3860-3873)`, at: { start: tSource[t]!, end: tSource[e - 1]! + 1 } })
+            }
+          }
+        }
         let total = w
         if (elementCanvas) {
-          // Nothing to correct: the context's advances are the DOM's. What stays is time: font matching pins a fallback font
-          // per character in the document (probes gecko-port F2, F3: after one U+1F600 U+FE0E, Canvas and the DOM both draw
-          // U+1F600 with a text font), and the DOM laid its text out before this measurement. Canvas shows a pinned cluster:
-          // it asks for a color glyph and doesn't measure as in "Apple Color Emoji" alone, in width or ink box (F11).
+          // Nothing to correct: the context's advances are the DOM's. What stays is time. Outside the listed fonts, which
+          // font draws a character with the Emoji property follows font matching's state: the preferred-font cache answers
+          // for a language group without looking at the presentation asked for (gfxFontGroup::WhichPrefFontSupportsChar,
+          // gfxTextRun.cpp:4003-4005, :4038-4040, :4083-4086), the previous character's font is tried before system fallback
+          // (:3559-3569), a color font found on the way is kept as the candidate where no text font turns up (:3385-3390),
+          // and system fallback sees the fonts whose character maps are loaded by then. The font group is the DOM's own, and
+          // every lookup since the DOM's layout, this port's included, moved that state (probes gecko-port F2, F3: after one
+          // U+1F600 U+FE0E, Canvas and the DOM both draw U+1F600 with a text font; fresh c-a2ed29d78da443cd: U+1F3F3 at the
+          // end of a text run is 960 au natively, Apple Color Emoji's, and 1020 au in Canvas afterwards; held-out
+          // c-6403c221b98778d6: U+1F600 U+FE0E is Apple Color Emoji's 1440 au natively and 1020 au in Canvas). Canvas shows
+          // where it can matter: the cluster doesn't measure as in "Apple Color Emoji" alone, in width or ink box (F11), so
+          // two fonts can draw it. The port never adds U+FE0E to a string: asking for text presentation is what pins a text
+          // font for the document's later text (F2). Basic Latin and Latin-1 never get that far: the preferred fonts of
+          // their language group, which come before the previous font and system fallback, cover them (:3533-3552;
+          // GetFontPrefLangFor, gfxPlatformFontList.cpp:2448-2461).
           if (!b.is8bit) {
             let word = ''
             for (let k = t; k < e; k++) word += String.fromCharCode(tUnits[k]!)
@@ -1228,13 +1312,12 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, measur
             for (let c = 0; c + 1 < boundaries.length; c++) {
               const cluster = word.slice(boundaries[c]!, boundaries[c + 1]!)
               const first = cluster.codePointAt(0)!
-              const presentation = emojiPresentation(first)
-              if (presentation === 'text-only' || !prefersColorGlyph(presentation, first, cluster.codePointAt(first >= 0x10000 ? 2 : 1) ?? 0)) continue
+              if (first < 0x100 || emojiPresentation(first) === 'text-only') continue
               const emojiContext = measureContext(measurer, { ...settings, font: canvasFont({ ...font, family: COLOR_EMOJI_FAMILY }, canvasSize) })
               const here = measureTextBounds(measurer, context, cluster)
               const there = measureTextBounds(measurer, emojiContext, cluster)
               if (here.width !== there.width || here.left !== there.left || here.right !== there.right) {
-                gaps.push({ gap: 'page-history', run: firstRun, detail: `U+${first.toString(16).toUpperCase()} asks for a color glyph, but Canvas draws it with another font than Apple Color Emoji (${Math.round(here.width * auPerPx)} au): the document's font fallback has pinned it, and the DOM follows the state at its own layout time (probes gecko-port F2, F3)`, at: { start: tSource[t + boundaries[c]!]!, end: tSource[t + boundaries[c + 1]! - 1]! + 1 } })
+                gaps.push({ gap: 'page-history', run: firstRun, detail: `U+${first.toString(16).toUpperCase()} measures ${Math.round(here.width * auPerPx)} au here and ${Math.round(there.width * auPerPx)} au in "Apple Color Emoji" alone: outside the listed fonts, which of the two fonts draws it follows font matching's state at the DOM's layout time (gfxTextRun.cpp:4003-4005, :3559-3569; probes gecko-port F2, F3)`, at: { start: tSource[t + boundaries[c]!]!, end: tSource[t + boundaries[c + 1]! - 1]! + 1 } })
               }
             }
           }
@@ -1399,7 +1482,7 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, measur
   return {
     paragraph, env, appUnitsPerDevPixel: apd, blockStyle, text, runStarts, runStyles, runParents, runLangs: langs, letterSpacingAu, frames, items,
     elements, textRuns, tUnits, tSource, breakFlags: g.breakFlags, clusterStart: g.clusterStart, isSpace: g.isSpace, kind: g.kind,
-    spacingPrefix, correctionPrefix, unitOf, units, sourceT, nextT, tabWidth, textIndentAu: pxToAu(paragraph.textIndent), bidi: resolveBidi, gaps,
+    spacingPrefix, correctionPrefix, unitOf, units, sourceT, nextT, tabWidth, emergencyUnconfirmed, textIndentAu: pxToAu(paragraph.textIndent), bidi: resolveBidi, gaps,
   }
 }
 

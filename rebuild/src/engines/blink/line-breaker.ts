@@ -6,12 +6,15 @@ import { WS, bidiClassOf, bidiDataFor } from '../../unicode/bidi.js'
 import { LineBreakIterator } from './breaks.js'
 import { collapsesWhiteSpace, hasBorder, lengthLU, mayHaveMargin, mayHavePadding, wrapsLines } from './content.js'
 import { maybeHanKerningClose } from './hankerning.js'
+import { addGap, sourceOffsetAt } from './gaps.js'
 import {
-  isStartSafeToBreak, itemShapeResult, luCeil, nextSafeToBreak, offsetForPosition, positionForOffset,
+  isClusterBoundary, isSegmentEdge, isStartSafeToBreak, itemShapeResult, luCeil, nextSafeToBreak, offsetForPosition, positionBounds, positionForOffset,
   previousSafeToBreak, reshape, reshapeHanKerningEnd, shapeHyphen, snappedWidth, tabShapeResult, truncateView, viewOf, widthOf16,
   viewFromSegments, WHOLE, type ReshapePart, type Segment, type ShapeResult, type Shaper, type View,
 } from './shape.js'
 import type { BlinkLineStart, BlinkStyle, InlineItem } from './types.js'
+
+const CANDIDATE_DETAIL = 'the break candidate came from a paragraph position the port can\'t place: the shaping adjusts the glyphs on both sides of the offset (joined forms that change each other, a kern no fact places), Canvas totals show the sum and not which glyph carries it, and the space left ends between the two places it could be (CachedOffsetForPosition, shaping_line_breaker.cc:326-329)'
 
 const ONE_PX = 64 // LayoutUnit ± int adds whole px (layout_unit.h:653-655, 684-686)
 
@@ -34,7 +37,8 @@ export type ItemResult = {
   isHyphenated: boolean
   // The end before RemoveTrailingCollapsibleSpace removed a space, or -1.
   trimmedEnd: number
-  // An atomic inline's inline margins (ComputeLineMarginsForVisualContainer, line_breaker.cc:3073-3075), raw.
+  // An atomic inline's margins in visual order, line left then line right (ComputeLineMarginsForVisualContainer,
+  // line_breaker.cc:3073-3075), raw.
   marginStart: number
   marginEnd: number
   // What JustifyResults added to glyph clusters, by cluster start, 16.16 (justification_utils.cc:115-178); absent otherwise.
@@ -73,6 +77,9 @@ export type LineInfo = {
   // safe offset the port found there is safe by the pair test alone; if HarfBuzz flags them all, Blink has no safe offset
   // before the opportunity, reshapes the whole range and takes it without a fit test (shaping_line_breaker.cc:497-506).
   untestedEnds: number[]
+  // Not Blink's: whether the line's breaks could fall between any two grapheme clusters: the iterator ended the line under
+  // break-all or break-character (line-break: anywhere, or the overflow retry, line_breaker.cc:4557-4643).
+  breaksInsideWords: boolean
 }
 
 // line_breaker.cc:186-188
@@ -339,6 +346,7 @@ export class LineBreaker {
     return {
       decisionEnd,
       untestedEnds: this.untestedEnds,
+      breaksInsideWords: breakType === 'break-character' || breakType === 'break-all',
       results: this.results,
       lineLeft: this.lineLeft,
       lineRight: this.lineRight,
@@ -574,6 +582,7 @@ export class LineBreaker {
     }
     const endPosition = startPosition + flip(availableSpace)
     let candidate = offsetForPosition(sh, sr, endPosition)
+    this.reportUncertainCandidate(sr, endPosition, candidate, start)
     // ShapeToEnd (shaping_line_breaker.cc:640-670).
     const shapeToEnd = (): View => {
       if (lineStartResult === null) return start === rangeStart ? viewOf(sh, sr) : viewOf(sh, sr, start, rangeEnd)
@@ -684,14 +693,35 @@ export class LineBreaker {
     return concat(lastSafe, lineEndResult)
   }
 
+  // The candidate rests on the positions of the offsets around it. Where one of them is a stand-in whose adjustment the port
+  // can't place and the end position lies within what it could be (positionBounds), the candidate can be another one
+  // natively: the line reports unsafe-to-break at that offset.
+  reportUncertainCandidate(sr: ShapeResult, endPosition: number, candidate: number, start: number): void {
+    if (sr.kind !== 'group') return
+    const p = this.sh.p
+    const near: number[] = []
+    let before = candidate - 1
+    while (before > start && !isClusterBoundary(p, before)) before--
+    let after = candidate + 1
+    while (after < sr.end && !isClusterBoundary(p, after)) after++
+    near.push(before, candidate, after)
+    for (let i = 0; i < near.length; i++) {
+      const k = near[i]!
+      if (k <= start || k >= sr.end) continue
+      const bounds = positionBounds(this.sh, sr, k)
+      if (bounds === null || endPosition < bounds[0] || endPosition > bounds[1]) continue
+      const source = p.sourceOffsets[k]!
+      addGap(this.sh.gaps, 'unsafe-to-break', source >= 0 ? p.sourceRuns[source]! : null, CANDIDATE_DETAIL, sourceOffsetAt(p, k))
+    }
+  }
+
   // Whether a shaping run starts in [from, to): the item's shaping group, or a script segment inside it, which HarfBuzzShaper
   // shapes in its own call (harfbuzz_shaper.cc:1080-1101). A run's first glyph is safe to break before in every font.
   hasRunEdge(item: InlineItem, from: number, to: number): boolean {
     const p = this.sh.p
     if (item.group < 0) return true
     if (p.groups[item.group]!.start >= from && p.groups[item.group]!.start < to) return true
-    if (!p.segmented) return false
-    for (let k = Math.max(from, 1); k < to; k++) if (p.scripts[k] !== p.scripts[k - 1] && (p.text.charCodeAt(k) & 0xfc00) !== 0xdc00) return true
+    for (let k = Math.max(from, 1); k < to; k++) if (isSegmentEdge(p, k)) return true
     return false
   }
 
@@ -817,8 +847,14 @@ export class LineBreaker {
       ignoreOverflowIfNegativeMargin = true
     }
     const r = this.addItem(item.end)
-    r.marginStart = lengthLU(node.marginInlineStart, p.layoutZoom)
-    r.marginEnd = lengthLU(node.marginInlineEnd, p.layoutZoom)
+    // ComputeLineMarginsForVisualContainer takes the physical margins in visual order, "always assumes LTR, ignoring the
+    // direction" (length_utils.h:555-567), and PlaceAtomicInline offsets the box by that inline_start
+    // (logical_line_builder.cc:479-484): the line-left margin. The model's atomic inlines inherit the block's direction, so
+    // in an RTL block the line-left margin is the inline-end one (fresh set r3-blink-2, rule/atomic-inlines
+    // c-042ae0f6f8f98763: margins 4px and -2px, natively 768 units further left than with the margins in logical order).
+    const rtlStyle = p.baseLevel === 1
+    r.marginStart = lengthLU(rtlStyle ? node.marginInlineEnd : node.marginInlineStart, p.layoutZoom)
+    r.marginEnd = lengthLU(rtlStyle ? node.marginInlineStart : node.marginInlineEnd, p.layoutZoom)
     const inlineMargins = r.marginStart + r.marginEnd
     if (ignoreOverflowIfNegativeMargin) {
       if (inlineMargins >= remainingWidth) {

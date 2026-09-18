@@ -86,7 +86,8 @@ await forEachPpucdCodePointRange(range => {
 // HarfBuzz reads to merge a ZWJ and the pictograph after it into the previous glyph cluster (hb-ot-shape.cc:466-522);
 // Default_Ignorable_Code_Point, which Character::IsDefaultIgnorable reads above U+00FF (character.h:184-189);
 // Emoji_Component and General_Category Lm or Sk, which Canvas's word splitting reads (plain_text_node.cc:115-153,
-// character.h:101-104).
+// character.h:101-104); Emoji, Emoji_Presentation, Emoji_Modifier_Base and General_Category Cn, which RunSegmenter's emoji
+// categories read (emoji_segmentation_category_inline_header.h:15-77, character_emoji.cc:320-347).
 const USCRIPT_PATH = 'chromium-icu-8cc91d9b/source/common/unicode/uscript.h'
 const USCRIPT_SHA256 = '293adf40390583c1c5394d3dc1794ed1669e8356cdf292ca5eaac145a2a5d1e0'
 const uscriptSource = new TextDecoder().decode(readVerified(resolve(BROWSER_ENGINES, USCRIPT_PATH), USCRIPT_SHA256))
@@ -119,7 +120,8 @@ await forEachPpucdCodePointRange(range => {
   const gc = range.props.get('gc') ?? ''
   const flags = (bpt === 'o' ? 1 : 0) | (bpt === 'c' ? 2 : 0) | (ea === 'W' || ea === 'F' || ea === 'H' ? 4 : 0) |
     (range.props.has('WSpace') ? 8 : 0) | (range.props.has('ExtPict') ? 16 : 0) | (range.props.has('DI') ? 32 : 0) |
-    (range.props.has('EComp') ? 64 : 0) | (gc === 'Lm' || gc === 'Sk' ? 128 : 0)
+    (range.props.has('EComp') ? 64 : 0) | (gc === 'Lm' || gc === 'Sk' ? 128 : 0) | (range.props.has('Emoji') ? 256 : 0) |
+    (range.props.has('EPres') ? 512 : 0) | (range.props.has('EBase') ? 1024 : 0) | (gc === 'Cn' ? 2048 : 0)
   scriptProps.fill(sc | (list << 8) | (flags << 18), range.first, range.last + 1)
 })
 if (extensionLists.length > 1024) throw new Error('more than 1024 Script_Extensions lists')
@@ -231,8 +233,9 @@ export const blinkHanKerningTypes: readonly number[] = [${hanKerningFlat.join(',
 // Runs over U+0000..U+10FFFF as little-endian uint32 pairs (first code point, value), value = UScriptCode (bits 0-7) |
 // Script_Extensions list index << 8 (0: the script alone) | Bidi_Paired_Bracket_Type open 0x40000, close 0x80000 |
 // East_Asian_Width W, F or H 0x100000 | White_Space 0x200000 | Extended_Pictographic 0x400000 |
-// Default_Ignorable_Code_Point 0x800000 | Emoji_Component 0x1000000 | General_Category Lm or Sk 0x2000000, from ICU 78.2
-// ppucd.txt and uscript.h (sha256 ${USCRIPT_SHA256}).
+// Default_Ignorable_Code_Point 0x800000 | Emoji_Component 0x1000000 | General_Category Lm or Sk 0x2000000 | Emoji 0x4000000 |
+// Emoji_Presentation 0x8000000 | Emoji_Modifier_Base 0x10000000 | General_Category Cn 0x20000000, from ICU 78.2 ppucd.txt
+// and uscript.h (sha256 ${USCRIPT_SHA256}).
 export const blinkScriptPropsBase64 = '${base64(scriptPacked)}'
 
 // Script_Extensions lists by index, UScriptCode numbers in ICU's order.

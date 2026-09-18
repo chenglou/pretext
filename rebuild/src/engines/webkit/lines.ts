@@ -10,7 +10,7 @@ import type { Measurer } from '../../measure/canvas.js'
 import type { Fragment, Gap, GapName, LineResultOf, LineSlot, TextAlign, WebKitDisplayBox, WebKitLineGeometry } from '../../model.js'
 import { canBreakBefore, findNextBreakablePosition, hasDictionaryCharacter, inBetweenRangeStartingWithMark, makeFactory, mayBreakInBetween } from './breaks.js'
 import { applyTextAlignJustify, type ExpandableRun, type ExpansionBehavior } from './expansion.js'
-import { DEFAULT_BIDI_LEVEL, hasLanguageDependentFallback, localeIndependentGlyph } from './content.js'
+import { DEFAULT_BIDI_LEVEL, hasLanguageDependentFallback, namedFamilyDraws } from './content.js'
 import { isDelimiterQuote, isPunctuation, lineRules } from './data.js'
 import { measureText } from '../../measure/canvas.js'
 import { boxWidth, breakWord, canvasString, controlsMeasureExactly, firstUserPerceivedCharacterLength, fixedPitchShortcutWidth, forwardOneCodePoint, hyphenGlyphsDiffer, hyphenWidth, itemWidth, measuredEnd, mergedGlyphs } from './measure.js'
@@ -27,7 +27,8 @@ const OPAQUE_BIDI_LEVEL = 255
 // opportunity of the line took part in its break decision. `decisionStart` is the item index where the last candidate content
 // the builder formed begins: from there to `measuredEnd` is the content whose fit ended the line. `overflowStart` is the
 // `decisionStart` of the last candidate that didn't fit (InlineContentBreaker ran on it), or null.
-type Layout = { p: WebKitPrepared; m: Measurer; lineWidth: number; contentEdgeOffset: number; constrainedByFloat: boolean; gaps: Gap[]; measuredEnd: number; reverted: boolean; decisionStart: number; overflowStart: number | null }
+// `shapedCarry` says the width carried to the next line comes from a candidate shaped across inline boxes.
+type Layout = { p: WebKitPrepared; m: Measurer; lineWidth: number; contentEdgeOffset: number; constrainedByFloat: boolean; gaps: Gap[]; measuredEnd: number; reverted: boolean; decisionStart: number; overflowStart: number | null; shapedCarry: boolean }
 type SoftLineBreakItem = Extract<WebKitItem, { kind: 'soft-line-break' }>
 type HardLineBreakItem = Extract<WebKitItem, { kind: 'hard-line-break' }>
 type LineBreakItem = SoftLineBreakItem | HardLineBreakItem
@@ -1258,6 +1259,7 @@ function endsWithSoftWrapOpportunity(L: Layout, previous: WebKitTextItem, next: 
   return breakInBetween(L, prevBox, L.p.boxes[next.box]!)
 }
 
+// rule webkit/gap/dictionary-stand-in-between-boxes
 // TextUtil::mayBreakInBetween between two boxes, reporting dictionary-breaks-stand-in on the line that asks where the
 // iterator's text starts a dictionary range with a combining mark (breaks.ts inBetweenRangeStartingWithMark).
 function breakInBetween(L: Layout, prevBox: WebKitBox, nextBox: WebKitBox): boolean {
@@ -1500,11 +1502,16 @@ function collectShapeRanges(L: Layout, c: Content): Array<[number, number]> {
   return ranges
 }
 
+// rule webkit/lines/shaped-run-in-joining-context
 // LineBuilder::applyShapingOnRunRange (ILB:920-967): the range's text shaped as one RTL run, each text run taking the
-// advances of its own characters, and the candidate's logical width set to their sum. Canvas shows totals only: a run's
-// width is the Canvas prefix difference of the joined text. glyphAdvancesForTextRun sums CoreText base advances without
-// letter spacing (ComplexTextController.cpp:186-205), so the plain context measures, and a Canvas total that positions glyphs
-// otherwise differs even at the range's ends (c-d03f94e8fb53e7e2: 0.51px in Geeza Pro). The line reports the gap.
+// CoreText base advances of its own characters, summed per character in logical order, negative ones as 0
+// (ComplexTextController::glyphAdvancesForTextRun, ComplexTextController.cpp:186-205, without letter spacing), and the
+// candidate's logical width set to their sum. Canvas shows totals only. A run's letters take the forms the joined text gives
+// them, so the run is measured in its joining context: with U+200D, which joins and has no advance, on each side where the
+// neighbouring run's text joins it. Whether two runs join is read from Canvas: the two texts measured as one string are
+// nearer to the sum of the two with U+200D between them than to the sum of the two alone (where the sums are equal the forms
+// have equal advances and it doesn't matter to a width). What this leaves out: a ligature or pair adjustment across the
+// edge, and the float32 order of the per-character sum. The line reports the gap.
 function applyShapingOnRunRange(L: Layout, c: Content, range: [number, number]): void {
   const runs = c.runs
   const [first, second] = range
@@ -1512,30 +1519,39 @@ function applyShapingOnRunRange(L: Layout, c: Content, range: [number, number]):
   runs[first]!.shapingBoundary = 'start'
   runs[second]!.shapingBoundary = 'end'
   const firstBox = L.p.boxes[(runs[first]!.item as WebKitTextItem).box]!
-  let text = ''
-  const ends: Array<[number, number]> = []
+  const texts: string[] = []
+  const indices: number[] = []
   for (let index = first; index <= second; index++) {
     const item = runs[index]!.item
     if (item.kind !== 'text') continue
-    const start = text.length
-    text += L.p.boxes[item.box]!.text.slice(item.start, item.end)
-    ends.push([index, start])
+    texts.push(L.p.boxes[item.box]!.text.slice(item.start, item.end))
+    indices.push(index)
+  }
+  const ZWJ = '\u200d'
+  const measure = (text: string): number => measureText(L.m, firstBox.plainContext, canvasString(text))
+  const joins = (a: string, b: string): boolean => {
+    const joined = f32(measure(a + ZWJ) + measure(ZWJ + b))
+    const apart = f32(measure(a) + measure(b))
+    if (joined === apart) return false
+    const whole = measure(a + b)
+    return Math.abs(whole - joined) < Math.abs(whole - apart)
   }
   let shapedContentWidth = 0
-  for (let k = 0; k < ends.length; k++) {
-    const [index, start] = ends[k]!
-    const end = k + 1 < ends.length ? ends[k + 1]![1] : text.length
-    const before = start === 0 ? 0 : measureText(L.m, firstBox.plainContext, canvasString(text.slice(0, start)))
-    const after = measureText(L.m, firstBox.plainContext, canvasString(text.slice(0, end)))
-    const runWidth = Math.max(0, f32(after - before))
-    runs[index]!.contentWidth = runWidth
+  for (let k = 0; k < texts.length; k++) {
+    const before = k > 0 && joins(texts[k - 1]!, texts[k]!)
+    const after = k + 1 < texts.length && joins(texts[k]!, texts[k + 1]!)
+    const runWidth = Math.max(0, measure((before ? ZWJ : '') + texts[k]! + (after ? ZWJ : '')))
+    runs[indices[k]!]!.contentWidth = runWidth
     shapedContentWidth = f32(shapedContentWidth + runWidth)
   }
   c.logicalWidth = shapedContentWidth
   c.hasShapedContent = true
-  if (!L.gaps.some(g => g.gap === 'rtl-shaping-across-inline-boxes')) {
-    L.gaps.push({ gap: 'rtl-shaping-across-inline-boxes', run: firstBox.run, detail: 'RTL text shaped across inline boxes as one run: its widths are Canvas prefixes of the joined text, where WebKit sums CoreText base advances per character' })
-  }
+  const firstItem = runs[indices[0]!]!.item as WebKitTextItem
+  const lastItem = runs[indices[indices.length - 1]!]!.item as WebKitTextItem
+  const at = { start: L.p.boxes[firstItem.box]!.sourceStart + firstItem.start, end: L.p.boxes[lastItem.box]!.sourceStart + lastItem.end }
+  const known = L.gaps.find(g => g.gap === 'rtl-shaping-across-inline-boxes' && g.at !== undefined && g.at.start <= at.end && g.at.end >= at.start)
+  if (known !== undefined) known.at = { start: Math.min(known.at!.start, at.start), end: Math.max(known.at!.end, at.end) }
+  else L.gaps.push({ gap: 'rtl-shaping-across-inline-boxes', run: firstBox.run, detail: 'RTL text shaped across inline boxes as one run: each run is a Canvas total of its text in its joining context, where WebKit sums CoreText base advances per character of the joined text', at })
 }
 
 // LineBuilder::applyShapingIfNeeded (ILB:969-979); TextShapingAcrossInlineBoxes is on by default
@@ -1679,6 +1695,7 @@ function processLineBreakingResult(b: Builder, candidate: Candidate, r: BreakRes
         b.wrapOpportunityList.pop()
         return lineBuilderResult(true, rebuildLineWithInlineContent(b, b.wrapOpportunityList[b.wrapOpportunityList.length - 1]!), true)
       }
+      b.L.shapedCarry = candidate.content.hasShapedContent
       return lineBuilderResult(true, 0, false, 0, overflowWidthAsLeadingForNextLine(runs, r))
     }
     case 'wrap-with-hyphen':
@@ -1696,6 +1713,7 @@ function processLineBreakingResult(b: Builder, candidate: Candidate, r: BreakRes
       const committed = t.trailingRunIndex + 1
       if (t.partialRun === null) return lineBuilderResult(true, committed)
       const item = runs[t.trailingRunIndex]!.item as WebKitTextItem
+      b.L.shapedCarry = candidate.content.hasShapedContent
       return lineBuilderResult(true, committed, false, item.end - item.start - t.partialRun.length, overflowWidthAsLeadingForNextLine(runs, r))
     }
   }
@@ -2435,12 +2453,15 @@ function lineGaps(L: Layout, start: WebKitLineStart): void {
     const lineFrom = index === start.itemIndex ? item.start + start.offset : item.start
     if (lineFrom >= item.end) continue
     itemGaps(item, lineFrom, item.end, add)
+    // rule webkit/gap/carried-width-conditions
     // A line that starts inside an item with a carried width lays out the whole item's width less what the lines before it
     // took (overflowWidthAsLeadingForNextLine, ALB:54-98; InlineTextItem::right, InlineTextItem.cpp:65-71), so what concerns
-    // the part of the item before the line start concerns the width of the rest (triage c-0033f34a9d6b3f85: `ty` after
-    // `affini` is 9.439998626708984px natively, 9.44000244140625px from a whole that leaves out a pair adjustment).
+    // the whole item's measurement concerns the width of the rest (triage c-0033f34a9d6b3f85: `ty` after `affini` is
+    // 9.439998626708984px natively, 9.44000244140625px from a whole that leaves out a pair adjustment; suite
+    // c-790a15d5d04b7c3a: FF after `A` is 11.1171875px, the whole with `A` kerned as before a space, less `A` alone).
     if (index === start.itemIndex && start.offset > 0 && start.previousLine !== null && start.previousLine.carriedWidth !== null) {
-      itemGaps(item, item.start, lineFrom, (gap, box, _from, _to, detail) => add(gap, box, lineFrom, item.end, `${detail}; in the part of the item before this line, which the carried width of the rest comes from`))
+      itemGaps(item, item.start, item.end, (gap, box, _from, _to, detail) => add(gap, box, lineFrom, item.end, `${detail}; in the whole item, which the carried width of the rest comes from`))
+      if (start.previousLine.carriedFromShaping) add('rtl-shaping-across-inline-boxes', p.boxes[item.box]!, lineFrom, item.end, 'the carried width of the rest comes from a run shaped across inline boxes, a Canvas total of its text in its joining context')
     }
   }
 
@@ -2490,11 +2511,10 @@ function lineGaps(L: Layout, start: WebKitLineStart): void {
       for (let i = from; i < to; i++) {
         const cp = text.codePointAt(i)!
         const length = cp > 0xffff ? 2 : 1
-        const concerned = box.localeChoosesFonts.families || (box.localeChoosesFonts.fallback && hasLanguageDependentFallback(cp))
-        if (concerned && cp > 0x1f && !(cp >= 0x7f && cp <= 0x9f) && !localeIndependentGlyph(L.m, box, cp)) {
-          add('canvas-language', box, i, i + length, box.localeChoosesFonts.families
-            ? `no named family before the one locale ${box.locale} resolves draws this character; OffscreenCanvas has no locale`
-            : `locale ${box.locale} chooses the fallback font for Han, kana or Hangul; OffscreenCanvas has no locale`)
+        if (box.localeChoosesFonts.fallback && hasLanguageDependentFallback(cp)) {
+          add('canvas-language', box, i, i + length, `locale ${box.locale} chooses the font for Han, kana or Hangul; OffscreenCanvas has no locale`)
+        } else if (box.localeChoosesFonts.families && cp > 0x1f && !(cp >= 0x7f && cp <= 0x9f) && !namedFamilyDraws(L.m, box, cp)) {
+          add('canvas-language', box, i, i + length, `no named family before the one locale ${box.locale} resolves draws this character; OffscreenCanvas has no locale`)
         }
         i += length - 1
       }
@@ -2523,6 +2543,7 @@ function lineGaps(L: Layout, start: WebKitLineStart): void {
           : "the primary family isn't given, and whether it is Courier New decides the width shortcut, which gives this item another width (test T1)")
       }
     }
+    // rule webkit/gap/simplified-measuring-space-advance
     // The DOM's simplified path sums the shaped advances of the primary font's glyphs in one float32 loop
     // (FontCascade::widthForSimpleTextSlow, FontCascade.cpp:381-412). Canvas runs WidthIterator: the unshaped sum U, plus the
     // shaped sum S less U, after it puts every character treated as a space back to its unshaped advance
@@ -2562,6 +2583,7 @@ function lineGaps(L: Layout, start: WebKitLineStart): void {
 }
 
 // ---- Page history (content.ts, "Page history") ----
+// rule webkit/gap/page-history-worlds
 
 type WebKitLineResult = LineResultOf<WebKitLineStart, WebKitLineGeometry>
 
@@ -2675,7 +2697,7 @@ function buildLine(p: WebKitPrepared, start: WebKitLineStart, slot: LineSlot, m:
   // The paragraph's first build places the slot floats; a refused first build hands its start on with hasFloats set.
   const placesSlotFloats = start.previousLine === null && !start.hasFloats
   const rect = lineRect(p, builder === 'line-builder' ? slot : { left: 0, right: 0 }, builder === 'line-builder' ? indent : 0, placesSlotFloats)
-  const L: Layout = { p, m, lineWidth: rect.width, contentEdgeOffset: rect.contentEdgeOffset, constrainedByFloat: rect.constrainedByFloat, gaps: [], measuredEnd: start.itemIndex, reverted: false, decisionStart: start.itemIndex, overflowStart: null }
+  const L: Layout = { p, m, lineWidth: rect.width, contentEdgeOffset: rect.contentEdgeOffset, constrainedByFloat: rect.constrainedByFloat, gaps: [], measuredEnd: start.itemIndex, reverted: false, decisionStart: start.itemIndex, overflowStart: null, shapedCarry: false }
   const items = p.items
   const itemsEnd: Position = { index: items.length, offset: 0 }
   const partialLeading = (index: number): WebKitTextItem | null => {
@@ -2801,7 +2823,7 @@ function buildLine(p: WebKitPrepared, start: WebKitLineStart, slot: LineSlot, m:
       gaps: L.gaps,
       next: isEnd ? null : {
         engine: 'webkit', itemIndex: next.index, offset: next.offset,
-        previousLine: { carriedWidth: overflowLogicalWidth, endsWithLineBreak: lastRun !== undefined && (lastRun.kind === 'soft-line-break' || lastRun.kind === 'hard-line-break') },
+        previousLine: { carriedWidth: overflowLogicalWidth, endsWithLineBreak: lastRun !== undefined && (lastRun.kind === 'soft-line-break' || lastRun.kind === 'hard-line-break'), carriedFromShaping: overflowLogicalWidth !== null && L.shapedCarry },
         isFirstFormattedLine: start.isFirstFormattedLine && !hasContentfulInFlowContent,
         hasFloats,
       },

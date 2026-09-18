@@ -13,14 +13,15 @@ import { graphemeBoundaries, graphemeRulesFor } from '../../unicode/grapheme.js'
 import type { EngineImplementation } from '../engine.js'
 import { hasDictionaryCharacters, lineTable } from './breaks.js'
 import { breaksShapingAfter, breaksShapingBefore, buildContent, collapsesWhiteSpace, lengthLU, segmentBidiRuns, stylesOf, wrapsLines } from './content.js'
+import { emojiPriorities } from './emoji.js'
 import { addGap, sourceOffsetAt, sourceRange } from './gaps.js'
 import { hanKerningCandidates, hanKerningMayApply, measureHanKerningFontData } from './hankerning.js'
-import { LIGATURE_MERGED, LIGATURE_NONE, fontFactsOfText } from './ligatures.js'
+import { LIGATURE_MERGED, LIGATURE_NONE, LIGATURE_UNCERTAIN, fontFactsOfText } from './ligatures.js'
 import { LineBreaker, type LineInfo } from './line-breaker.js'
 import { USCRIPT_LATIN, isCjkIdeographOrSymbol, isDefaultIgnorable, isExtendedPictographic, isMark } from './props.js'
 import { scriptsPerUnit } from './script.js'
 import {
-  adjust16, ceilFrom16, positionAdjust16, graphemeSourceRange, groupPrefix16, isClusterBoundary, joinsAcross, luCeil, startsClusterInsideGrapheme, GRAPHEME_CLUSTERS_DETAIL, luTrunc, measureGroups,
+  adjust16, ceilFrom16, isSegmentEdge, positionAdjust16, graphemeSourceRange, groupPrefix16, isClusterBoundary, joinsAcross, luCeil, startsClusterInsideGrapheme, GRAPHEME_CLUSTERS_DETAIL, luTrunc, measureGroups,
   pairAdjust16, pairAdjustNoLigatures16, positionLimit, styleContexts, viewPositionLimit, viewPrefix16, widthOf16, type Shaper, type View,
 } from './shape.js'
 import type { BlinkGroup, BlinkLineStart, BlinkPrepared } from './types.js'
@@ -88,7 +89,7 @@ function markContinuations(p: BlinkPrepared): void {
           regional = !continuation
         } else if (cp === 0x200d) {
           continuation = true
-          if (next < group.end && isExtendedPictographic(text.codePointAt(next)!)) {
+          if (next < group.end && isExtendedPictographic(text.codePointAt(next)!) && !isSegmentEdge(p, next)) {
             const nextSize = text.codePointAt(next)! > 0xffff ? 2 : 1
             for (let u = next; u < next + nextSize; u++) p.continuations[u] = 1
             next += nextSize
@@ -97,7 +98,8 @@ function markContinuations(p: BlinkPrepared): void {
           continuation = true
         }
       }
-      if (continuation) p.continuations[i] = 1
+      // A continuation merges into a cluster of its own shaping call; a segment starts another one (emoji.ts).
+      if (continuation && !isSegmentEdge(p, i)) p.continuations[i] = 1
       previousRegionalBase = regional
       i = next
     }
@@ -112,6 +114,8 @@ const ATTRIBUTION_DETAIL = 'a line edge taken from the paragraph position where 
 const LIGATURE_DETAIL = 'a chosen line edge where the pair total shows the shaping adjusted glyphs on both sides: a ligature may cover both, where Blink doesn\'t break, or a kern, where it may; Canvas totals don\'t show glyph clusters (shape_result.cc:684-694)'
 const JOINING_LIGATURE_DETAIL = 'a chosen line edge between joining letters: a font\'s ligature may cover letters on both sides, where Blink doesn\'t break (shape_result.cc:684-694); Canvas totals don\'t show glyph clusters'
 const IN_WORD_DETAIL = 'a line edge inside a word where the pair total shows no adjustment, so the port doesn\'t reshape: HarfBuzz can still flag the offset unsafe_to_break (contextual lookups, width-neutral flags) and Blink reshapes there (specs/blink-gaps.md §3.6 L2)'
+
+const UNCERTAIN_LIGATURE_DETAIL = 'a ligature the font declaration lists as forming in some contexts only, on a line that can break between any two glyph clusters: Blink never breaks inside a glyph and gives its characters one position (shape_result.cc:684-694, 2113-2200), and whether the glyph forms here isn\'t known'
 
 const UNTESTED_END_DETAIL = 'a later break opportunity whose line-end reshape failed the fit test: every safe offset the port found between the line start and it is safe by the pair test alone, and where HarfBuzz flags them all (contextual lookups that change no width, as Shantell Sans\'s alternates do) Blink reshapes the whole range and takes the opportunity without a fit test (shaping_line_breaker.cc:497-506)'
 
@@ -324,6 +328,20 @@ function lineEdgeGaps(sh: Shaper, info: LineInfo, start: BlinkLineStart): void {
           break
         }
       }
+    }
+  }
+  // A listed ligature the facts don't settle (one that forms in some contexts only, ligatures.ts) inside what the decision
+  // measured, on a line that may break between any two clusters: whether its letters are one glyph cluster decides where
+  // such a break can fall and what the positions around it are (Courier New draws `لله` as one glyph after some letters:
+  // c-06218d32a4b76797 keeps `له` together where natively every letter, reshaped alone, takes a line).
+  if (info.breaksInsideWords) {
+    for (let k = start.textOffset + 1; k < info.decisionEnd; k++) {
+      if (p.ligature[k] !== LIGATURE_UNCERTAIN) continue
+      let a = k - 1
+      while (a > 0 && !isClusterBoundary(p, a)) a--
+      let b = k + 1
+      while (b < p.text.length && !isClusterBoundary(p, b)) b++
+      addGap(sh.gaps, 'glyph-clusters', runAt(p, k), UNCERTAIN_LIGATURE_DETAIL, sourceRange(p, a, b))
     }
   }
   // An opportunity the port gave up after its end reshape failed the fit test, which Blink takes untested where HarfBuzz
@@ -1177,6 +1195,7 @@ export const blinkEngine: EngineImplementation<BlinkEnvironment, BlinkPrepared, 
     // U+FFFC, or bidi.
     const segmented = !((is8Bit || !content.hasNonOrc16Bit) && !bidi.enabled)
     const scripts = segmented ? scriptsPerUnit(text) : new Uint8Array(text.length).fill(USCRIPT_LATIN)
+    const priorities = segmented ? emojiPriorities(text) : new Uint8Array(text.length)
     const sourceLength = index.text.length
     const sourceRuns = new Int32Array(sourceLength)
     for (let r = 0; r < index.leaves.length; r++) sourceRuns.fill(r, index.leaves[r]!.start, index.leaves[r]!.start + index.leaves[r]!.text.length)
@@ -1198,12 +1217,13 @@ export const blinkEngine: EngineImplementation<BlinkEnvironment, BlinkPrepared, 
     for (let s = 0; s < styles.length; s++) contexts.push(styleContexts(measurer, styles[s]!, zoom, segmented ? '16bit' : '8bit'))
     const rtl = paragraph.direction === 'rtl'
     const p: BlinkPrepared = {
-      paragraph, env, index, layoutZoom: zoom, text, is8Bit, segmented, scripts, sourceOffsets: content.sourceOffsets, contentOffsets, collapsedAt,
+      paragraph, env, index, layoutZoom: zoom, text, is8Bit, segmented, scripts, priorities, sourceOffsets: content.sourceOffsets, contentOffsets, collapsedAt,
       sourceRuns, sourceLength, items: bidi.items, styles, settings, groups: [], contexts, bidiEnabled: bidi.enabled,
       baseLevel: rtl ? 1 : 0, graphemeStarts, hanKerningCandidates: hanKerningCandidates(text),
       continuations: new Uint8Array(text.length),
       ligature: new Uint8Array(text.length + 1),
       fontRun: new Int16Array(text.length).fill(-1),
+      groupOfUnit: new Int32Array(text.length).fill(-1),
       wordSpacingAnywhere: !collapsesWhiteSpace(paragraph.whiteSpace),
       canvasSplitsWords: styles.map(() => undefined),
       hanKerning: styles.map(() => null),
@@ -1213,6 +1233,7 @@ export const blinkEngine: EngineImplementation<BlinkEnvironment, BlinkPrepared, 
     const sh: Shaper = { p, m: measurer, gaps: p.gaps }
     shapingGroups(p)
     markContinuations(p)
+    for (let g = 0; g < p.groups.length; g++) p.groupOfUnit.fill(g, p.groups[g]!.start, p.groups[g]!.end)
     const fontFacts = fontFactsOfText(p)
     p.ligature = fontFacts.ligature
     p.fontRun = fontFacts.fontRun

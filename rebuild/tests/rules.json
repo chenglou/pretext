@@ -6875,14 +6875,16 @@
    "engine": "webkit",
    "area": "measure",
    "kind": "ported rule",
-   "statement": "a word-spaced string without TABs is measured in a context that carries ctx.wordSpacing (CanvasRenderingContext2DBase.cpp:3299-3324); only a string split at TABs adds its word spacing in JS, per WidthIterator::calculateAdditionalWidth (SPACE, LF, NBSP, index > 0 or NBSP)",
+   "statement": "a word-spaced string without TABs is measured in a context that carries ctx.wordSpacing (CanvasRenderingContext2DBase.cpp:3299-3324); only a string split at TABs adds its word spacing in JS, per WidthIterator::calculateAdditionalWidth (SPACE, LF, NBSP, index > 0 or NBSP) [removed: the id said JS; since ceiling round 2 a word-spaced string without TABs measures in a context that carries ctx.wordSpacing]",
    "source": "CanvasRenderingContext2DBase.cpp:3299-3324; WidthIterator.cpp calculateAdditionalWidth",
    "probes": [],
    "tests": [],
    "declaredBy": "webkit owner (ceiling round 2 report); the id keeps its name until the owner annotates the source",
    "audit": null,
-   "status": "current",
-   "replacedBy": []
+   "status": "removed",
+   "replacedBy": [
+    "webkit/measure/word-spacing-in-context"
+   ]
   },
   {
    "id": "webkit/breaks/dictionary-engine-by-script",
@@ -7988,6 +7990,158 @@
    "audit": null,
    "status": "current",
    "replacedBy": []
+  },
+  {
+   "id": "webkit/measure/word-spacing-in-context",
+   "engine": "webkit",
+   "area": "measure",
+   "kind": "ported rule",
+   "statement": "a word-spaced string without TABs is measured in a context that carries ctx.wordSpacing, which adds the spacing per character inside WidthIterator's float32 loop as the DOM does; only a string split at TABs adds its word spacing in JS, per WidthIterator::calculateAdditionalWidth (SPACE, LF, NBSP, index > 0 or NBSP)",
+   "source": "CanvasRenderingContext2DBase.cpp:3299-3324; WidthIterator.cpp:491-519; ComplexTextController.cpp:790-845",
+   "probes": [],
+   "tests": [],
+   "declaredBy": "webkit owner (ceiling round 3)",
+   "audit": null,
+   "status": "current",
+   "replacedBy": []
+  },
+  {
+   "id": "webkit/measure/letter-spacing-merged-glyphs",
+   "engine": "webkit",
+   "area": "measure",
+   "kind": "recipe",
+   "statement": "in a letter-spaced box, a total at 64px of letter spacing less the total at none counts a string's spacing-bearing glyphs; adjacent grapheme clusters that count fewer together than alone are merged by a lookup the DOM turns off, and on the simple path the string is measured with U+200C between them; the listed families' spacingInputs facts, where given for every character, say where nothing can change",
+   "source": "StyleComputedStyleBase.cpp:324-331; UnrealizedCoreTextFont.cpp:258-264; CanvasRenderingContext2DBase.cpp:3271-3296; WidthIterator.cpp:318-323, :491-517, :654-690; ComplexTextController.cpp:792-796",
+   "probes": [
+    "webkit-round3 R1: confirmed (247 of 247 unmerged strings equal the letter-spaced DOM; U+200C leaves out the pair adjustment)"
+   ],
+   "tests": [
+    "src/engines/webkit/lines.test.ts :: a pair Canvas merges is measured with U+200C between its letters, and the gap sits on the pair"
+   ],
+   "declaredBy": "webkit owner (ceiling round 3)",
+   "audit": null,
+   "status": "current",
+   "replacedBy": []
+  },
+  {
+   "id": "webkit/measure/vt-ff-cr-as-space-shaped",
+   "engine": "webkit",
+   "area": "measure",
+   "kind": "recipe",
+   "statement": "Core Text kerns the letter before VT, FF or CR as before a space; VT and FF then take .notdef's advance and CR keeps its shaped advance. The in-place stand-in (U+0001, U+0000) is exact where Canvas shows no pair adjustment around the control; elsewhere the width is pieced from the text before the control shaped before a space, the control's advance and the text after it",
+   "source": "FontCoreText.cpp:689-700; WidthIterator.cpp:84-120, :792-823; CanvasRenderingContext2DBase.cpp:2847-2875",
+   "probes": [
+    "webkit-round3 R5: confirmed (46 of 48 VT and FF strings equal the pieces, 2 a float32 step off; 96 of 96 other Cc strings measure the same in Canvas)"
+   ],
+   "tests": [
+    "src/engines/webkit/lines.test.ts :: the letter before VT or FF is kerned as before a space, not against the letter after the control"
+   ],
+   "declaredBy": "webkit owner (ceiling round 3)",
+   "audit": null,
+   "status": "current",
+   "replacedBy": []
+  },
+  {
+   "id": "webkit/lines/shaped-run-in-joining-context",
+   "engine": "webkit",
+   "area": "lines",
+   "kind": "recipe",
+   "statement": "a text run of a range shaped across inline boxes is the Canvas total of its text with U+200D on each side where the neighbouring run joins it; two runs join where their texts measured as one string are nearer to the sum with U+200D between them than to the sum of the two alone",
+   "source": "InlineLineBuilder.cpp:920-967; ComplexTextController.cpp:186-205",
+   "probes": [],
+   "tests": [
+    "src/engines/webkit/lines.test.ts :: a run is measured in its joining context: U+200D on the sides where the neighbouring run joins it"
+   ],
+   "declaredBy": "webkit owner (ceiling round 3)",
+   "audit": null,
+   "status": "current",
+   "replacedBy": []
+  },
+  {
+   "id": "webkit/gap/page-history-worlds",
+   "engine": "webkit",
+   "area": "gap",
+   "kind": "named gap",
+   "statement": "page-history is reported on a line that a history world lays out otherwise: the paragraph with one box built from another item list the break position cache can hand it (another paragraph's bidi splits under the contexts of content.ts, another white-space structure, the cached word-separator flag), laid out from the same line start; and on a line whose carried width a world would start from another whole",
+   "source": "InlineItemsBuilder.cpp:858-924, :1082-1148; TextBreakingPositionCache.h:41-42; TextBreakingPositionCache.cpp:36-60; TextBreakingPositionContext.h:30-80; LayoutIntegrationLineLayout.cpp:210-220; AbstractLineBuilder.cpp:54-98; ICU 78.2 ubidi.cpp:1007-1018, :2684-2693",
+   "probes": [],
+   "tests": [
+    "src/engines/webkit/lines.test.ts :: page-history: an RTL paragraph gives the same Latin text a level boundary before its trailing full stop",
+    "src/engines/webkit/lines.test.ts :: the rest of an item another world ends earlier: the carried width comes from another whole"
+   ],
+   "declaredBy": "webkit owner (ceiling round 3)",
+   "audit": null,
+   "status": "current",
+   "replacedBy": []
+  },
+  {
+   "id": "webkit/gap/simplified-measuring-space-advance",
+   "engine": "webkit",
+   "area": "gap",
+   "kind": "named gap",
+   "statement": "simplified-measuring is reported only where shaping can change a space's own advance, which Canvas puts back: a U+0020 before the measured string's last unit, or the following U+0020 where FontFacts.pairKerning isn't given; elsewhere WidthIterator's total is the shaped sum to the bit (Sterbenz)",
+   "source": "FontCascade.cpp:381-412; WidthIterator.cpp:84-120; TextUtil.cpp:72-89",
+   "probes": [
+    "webkit-round3 R1: confirmed (162 of 162 strings without a space equal the DOM at no letter spacing)",
+    "webkit-round3 R2: confirmed (2,350 of 2,350 pre boxes of a character and a space equal the Canvas recipe, 47 with a pair adjustment)"
+   ],
+   "tests": [
+    "src/engines/webkit/lines.test.ts :: a string without a space reports nothing; one measured with its following space reports only without the pairKerning fact"
+   ],
+   "declaredBy": "webkit owner (ceiling round 3)",
+   "audit": null,
+   "status": "current",
+   "replacedBy": []
+  },
+  {
+   "id": "webkit/gap/canvas-language-scope",
+   "engine": "webkit",
+   "area": "gap",
+   "kind": "named gap",
+   "statement": "canvas-language concerns, under a Han, kana or Hangul locale, every Han, kana, Hangul, CJK punctuation and fullwidth character whatever the list names; and in a list holding a family the locale resolves, every character no named family before it draws (Canvas: the named families followed by LastResort). System fallback under a locale of another script follows the preferred languages, as Canvas does",
+   "source": "FontDescriptionCocoa.cpp:77-118; CSSFontSelector.cpp:334-353; FontCacheCoreText.cpp:585-598, :775-822; FontCascadeFonts.cpp:426-470",
+   "probes": [
+    "webkit-round3 R3: confirmed (117 of 117 strings under each of 18 languages of other scripts; 36 of 117 under ko)",
+    "webkit-round3 R3b: recorded (PingFang SC kana under ko)",
+    "webkit-round3 R3c: recorded (U+2027 through a list)"
+   ],
+   "tests": [
+    "src/engines/webkit/lines.test.ts :: under a Han, kana or Hangul locale every Han, kana and Hangul character is concerned, whatever the list names"
+   ],
+   "declaredBy": "webkit owner (ceiling round 3)",
+   "audit": null,
+   "status": "current",
+   "replacedBy": []
+  },
+  {
+   "id": "webkit/gap/carried-width-conditions",
+   "engine": "webkit",
+   "area": "gap",
+   "kind": "named gap",
+   "statement": "a line that starts with a carried width reports, on the rest of the item, every condition of the whole item's measurement, and rtl-shaping-across-inline-boxes where the width was carried from a shaped run",
+   "source": "AbstractLineBuilder.cpp:54-98; InlineTextItem.cpp:65-71",
+   "probes": [],
+   "tests": [
+    "src/engines/webkit/lines.test.ts :: a line that starts with a carried width reports what concerns the part of the item before it"
+   ],
+   "declaredBy": "webkit owner (ceiling round 3)",
+   "audit": null,
+   "status": "current",
+   "replacedBy": []
+  },
+  {
+   "id": "webkit/gap/dictionary-stand-in-between-boxes",
+   "engine": "webkit",
+   "area": "gap",
+   "kind": "named gap",
+   "statement": "dictionary-breaks-stand-in is also reported where the break test between two text boxes starts a dictionary range with a combining mark from the previous box's last two units",
+   "source": "TextUtil.cpp:374-396; ThaiBreakEngine::divideUpDictionaryRange",
+   "probes": [],
+   "tests": [],
+   "declaredBy": "webkit owner (ceiling round 3)",
+   "audit": null,
+   "status": "current",
+   "replacedBy": []
   }
  ],
  "generated": {
@@ -8417,7 +8571,7 @@
   "lab/observe/blink/boundary-quads-only-when-nothing-covers": "c44d2302f3c6abb3",
   "webkit/content/monospace-from-fact": "4aa53b9068604d19",
   "webkit/measure/hyphen-from-fact": "0b4126e8372add2e",
-  "webkit/measure/word-spacing-in-js": "07578a7763ffab5f",
+  "webkit/measure/word-spacing-in-js": "599cea85708123c7",
   "webkit/breaks/dictionary-engine-by-script": "88b09d1183d88f67",
   "webkit/output/display-boxes": "11f7e0c65267cc82",
   "webkit/output/fragments-from-runs": "639b3ae80137ee42",
@@ -8494,6 +8648,15 @@
   "blink/justify/cjk-ideograph-or-symbol": "2f2420b2adaca266",
   "blink/shape/cluster-unit-grapheme": "485c059a2e885242",
   "gecko/measure/lang-empty-locale-language": "0d382373fd6a33ac",
-  "gecko/lines/in-word-advance-split-kerning": "8feec34ba5ddf4e1"
+  "gecko/lines/in-word-advance-split-kerning": "8feec34ba5ddf4e1",
+  "webkit/measure/word-spacing-in-context": "dc94a3a0ead6cd65",
+  "webkit/measure/letter-spacing-merged-glyphs": "b96f4bf9234616c1",
+  "webkit/measure/vt-ff-cr-as-space-shaped": "c90c2504477532cc",
+  "webkit/lines/shaped-run-in-joining-context": "5bb90ef4091cd2bd",
+  "webkit/gap/page-history-worlds": "5591ba5bcbaf5ff6",
+  "webkit/gap/simplified-measuring-space-advance": "28e72bbb2b84063c",
+  "webkit/gap/canvas-language-scope": "fa44068c6ba3c57c",
+  "webkit/gap/carried-width-conditions": "df4ee855552ebd2b",
+  "webkit/gap/dictionary-stand-in-between-boxes": "313c8931816e87d6"
  }
 }

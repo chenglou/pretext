@@ -421,6 +421,38 @@ function hasScriptNeutral(p: BlinkPrepared, from: number, to: number): boolean {
   return false
 }
 
+// Scripts HarfBuzz shapes with its default shaper (hb_ot_shaper_categorize, hb-ot-shaper.hh: none of them is in its
+// switch), as UScriptCode numbers with their ISO 15924 codes: Common, Inherited, Bopomofo, Cyrillic, Greek, Han, Hiragana,
+// Katakana, Latin.
+const DEFAULT_SHAPER_SCRIPTS = new Map<number, string>([[0, 'Zyyy'], [1, 'Zinh'], [5, 'Bopo'], [8, 'Cyrl'], [14, 'Grek'], [17, 'Hani'], [20, 'Hira'], [22, 'Kana'], [25, 'Latn']])
+
+// Whether HarfBuzz shapes the character at text_content unit t alike under the two scripts: the font that draws it, by the
+// declaration's coverage facts, selects the same GSUB and GPOS lookups for both (ListedFontFacts.scriptLookups: scripts of
+// one group, or both outside every group, share their lookups under every language system;
+// hb_ot_layout_table_select_script, hb-ot-layout.cc:561-608), and both take the default shaper, so nothing else in the
+// shaping plan follows the script. The direction is the call's either way. Then Canvas resolving the character otherwise
+// than the paragraph changes no glyph and no advance. Without the facts, or under a script with a shaper of its own
+// (Arabic, Hebrew, Thai, Hangul, the Indic and USE scripts), the difference stays a condition.
+function shapesAlike(p: BlinkPrepared, t: number, canvasScript: number, domScript: number): boolean {
+  const a = DEFAULT_SHAPER_SCRIPTS.get(canvasScript)
+  const b = DEFAULT_SHAPER_SCRIPTS.get(domScript)
+  if (a === undefined || b === undefined) return false
+  const f = p.fontRun[t]!
+  if (f < 0) return false
+  const g = p.groupOfUnit[t]!
+  if (g < 0) return false
+  const fonts = p.styles[p.groups[g]!.style]!.font.facts.fonts
+  const lookups = fonts === undefined ? null : fonts[f]!.scriptLookups
+  if (lookups === null) return false
+  let groupA = -1
+  let groupB = -1
+  for (let i = 0; i < lookups.length; i++) {
+    if (lookups[i]!.includes(a)) groupA = i
+    if (lookups[i]!.includes(b)) groupB = i
+  }
+  return groupA === groupB
+}
+
 // script-context for every stretch of the measured string, white space apart, that Canvas shapes under another script than
 // the paragraph does. It goes where gaps go while measuring: the paragraph's in prepare, the line's being filled.
 function reportScriptContext(sh: Shaper, cs: CanvasString, scripts: Uint8Array): void {
@@ -438,7 +470,11 @@ function reportScriptContext(sh: Shaper, cs: CanvasString, scripts: Uint8Array):
     if (t < 0) continue
     const c = p.text.charCodeAt(t)
     if ((c & 0xfc00) === 0xdc00) { if (start >= 0) end = t + 1; continue }
-    if (isWhiteSpace(p.text.codePointAt(t)!) || scripts[u] === p.scripts[t]) { flush(); continue }
+    const cp = p.text.codePointAt(t)!
+    // A default-ignorable character keeps no advance under any script: HarfBuzz zeroes it after positioning, and Blink sets
+    // no buffer flag that would keep it (hb_ot_zero_width_default_ignorables, hb-ot-shape.cc:779-799). What it does to its
+    // neighbours' lookups is soft-hyphen-shaping's and the cluster rules' business.
+    if (isWhiteSpace(cp) || isDefaultIgnorableHarfBuzz(cp) || scripts[u] === p.scripts[t] || shapesAlike(p, t, scripts[u]!, p.scripts[t]!)) { flush(); continue }
     if (start < 0) start = t
     end = t + 1
   }
@@ -483,6 +519,13 @@ function wordSpacing16(p: BlinkPrepared, style: number, from: number, to: number
   return n * raw
 }
 
+// Whether a RunSegmenter segment starts at text_content offset k: the script or the font fallback priority changes
+// (run_segmenter.cc:46-72). HarfBuzzShaper shapes every segment in its own call (harfbuzz_shaper.cc:1080-1101).
+export function isSegmentEdge(p: BlinkPrepared, k: number): boolean {
+  if (!p.segmented || k <= 0 || k >= p.text.length || (p.text.charCodeAt(k) & 0xfc00) === 0xdc00) return false
+  return p.scripts[k] !== p.scripts[k - 1] || p.priorities[k] !== p.priorities[k - 1]
+}
+
 // A HarfBuzz glyph cluster starts at a unit that isn't a continuation (hb_form_clusters, hb-ot-shape.cc:578-586). Blink gives
 // every character that isn't a cluster base the cluster's position and never marks it safe to break before
 // (ShapeResult::ComputePositionData, shape_result.cc:2113-2200; CachedOffsetForPosition, :2261-2323). HarfBuzz marks a mark
@@ -514,7 +557,8 @@ function clusterEndAfter(p: BlinkPrepared, k: number, max: number): number {
   return e
 }
 
-// d at offset k inside a shaping call over [lo, hi) of group g: the adjustment between the clusters on both sides of k.
+// d at offset k inside a shaping call over [lo, hi) of group g: the adjustment between the clusters on both sides of k
+// (the pair window).
 // Each side is whole glyph clusters (isClusterBoundary): a mark after SHY, ZWSP or U+2060 starts a grapheme but continues
 // the ignorable's HarfBuzz cluster (hb_form_clusters, hb-ot-shape.cc:578-586), and measured alone Canvas shapes it as a
 // broken cluster the paragraph never has (c-01763358db8471a3: a kasra after SHY gave its neighbour a -2 px adjustment).
@@ -784,6 +828,24 @@ export function prefix16(sh: Shaper, sr: ShapeResult, k: number): number {
   }
 }
 
+// The positions offset k of an item's result could have where the port's is a stand-in with an adjustment it can't place
+// (positionLimit): from the adjustment sitting wholly on the glyphs after k to wholly on those before it. Null where the
+// port knows the position or no adjustment shows. ShapeLine finds its candidate by comparing positions with the space
+// left (CachedOffsetForPosition, shaping_line_breaker.cc:326-329), so a candidate inside such a range can be another one
+// natively: in Amiri `ب` SHY `ب` measure 111 units less together than their joined forms apart, and natively the first
+// keeps more of its width than the port gives it (c-57f4be10e9b75f4e).
+export function positionBounds(sh: Shaper, sr: ShapeResult, k: number): [number, number] | null {
+  if (sr.kind !== 'group' || k <= sr.start || k >= sr.end) return null
+  const group = sh.p.groups[sr.group]!
+  if (positionLimit(sh, sr.group, k, group.start, group.end) === null) return null
+  const d = positionAdjust16(sh, sr.group, clusterStartAtOrBefore(sh.p, k, group.start), group.start, group.end)
+  if (d === 0) return null
+  const before = prefix16(sh, sr, k) - pairBefore16(sh, sr.group, d)
+  const a = !sr.rtl ? ceilFrom16(before) : ceilFrom16(sr.width16 - before)
+  const b = !sr.rtl ? ceilFrom16(before + d) : ceilFrom16(sr.width16 - before - d)
+  return [Math.min(a, b), Math.max(a, b)]
+}
+
 // safe_to_break_before per offset (shape_result.cc:1360-1392). Tab glyphs are all safe (shape_result.cc:1932). A group's
 // start is a run start, safe unless HanKerning halted its first character and added the offset to the unsafe ones
 // (harfbuzz_shaper.cc:1044-1048). Inside a group: never inside a cluster, never between joining letters, which HarfBuzz
@@ -990,7 +1052,7 @@ function floatWidthOfParts(sh: Shaper, parts: Part[], rtl: boolean): number {
     const edges = [a]
     for (let k = a + 1; k < b; k++) {
       if (!isClusterBoundary(p, k)) continue
-      if ((p.segmented && p.scripts[k] !== p.scripts[k - 1]) || p.fontRun[k] !== p.fontRun[k - 1]) edges.push(k)
+      if (isSegmentEdge(p, k) || p.fontRun[k] !== p.fontRun[k - 1]) edges.push(k)
     }
     edges.push(b)
     for (let k = a; k < b; k++) if (p.fontRun[k]! < 0 && isClusterBoundary(p, k)) unknownClusters++
@@ -1140,7 +1202,7 @@ export function positionLimit(sh: Shaper, g: number, k: number, lo: number, hi: 
   if (startsClusterInsideGrapheme(p, k)) return 'glyph-clusters'
   k = clusterStartAtOrBefore(p, k, lo)
   if (k <= lo) return null
-  if (p.segmented && p.scripts[k] !== p.scripts[k - 1]) return null
+  if (isSegmentEdge(p, k)) return null
   if (p.ligature[k] !== LIGATURE_NONE) return 'glyph-clusters'
   if (joinsAcross(p, k, lo, hi)) return 'in-word-prefix'
   const style = p.styles[p.groups[g]!.style]!

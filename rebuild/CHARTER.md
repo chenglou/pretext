@@ -172,7 +172,12 @@ evaluation of 2026-09-17 (REPORT.md §2-§7):
     doesn't give (tentpole 3).
   - The painter regressed on sets its owner didn't run: Blink's hanging spaces painted in their own text node move the
     letter before them by its pair adjustment with the space, 58 Chrome pairs with the prediction unchanged, not traced to
-    source (tentpole 7).
+    source (tentpole 7). Removed in ceiling round 3: traced to `ShapeLine` (a node of its own ends the text's item, whose
+    end is never reshaped, where the paragraph's overflow break reshaped it), and the spaces take one of three forms by
+    that reading; the 33 hanging-space cases pass again. 24 pairs that round 2's trimmed-space box lost still fail: the
+    paragraph reshaped the whole part (`first_safe.offset >= break_opportunity.offset`), which the layout doesn't say.
+    Round 2's Blink hanging-space exclusion from the soft wrap box, settled by which family regressed, is replaced by
+    source readings. `painterLimits` names a limit per line (DESIGN §7 "Limits"); the lab doesn't record it yet.
   - Installed Chrome is 153.0.8010.50 since 2026-09-17 and the library pins .48: every Chrome row reports `engine-build`,
     native views are equal on every case both rounds ran, and TESTS.md §12 hadn't run for .50. Chrome's round 2 gate seeds
     are new files that say their family cases were derived under .48 (tentpole 6). Status in ceiling round 3: the lab and

@@ -51,11 +51,12 @@ type Face = {
 
 type LigatureSet = {
   complete: boolean
+  coreText: { rejectedTable: boolean; shapersDisagree: number }
   languageSystems: string[]
   patterns: Array<{
     positions: string[][]; exact: boolean; feature: string | null; everyContext: boolean; acrossMark: boolean | null
     harfBuzz: { spacedBlink: boolean; spacedGecko: boolean }
-    coreText: { default: Share; spacedWebKit: Share; spacedGecko: Share }
+    coreText: { default: Share; spacedWebKit: Share; spacedGecko: Share; everyContext: boolean }
   }>
   coreTextOnly: Array<{ text: string; spacedWebKit: boolean; spacedGecko: boolean }>
 }
@@ -301,9 +302,10 @@ function ligaturesOf(id: string, engine: EngineName): LigatureFacts | null {
   const face = data.faces[id]!
   const set = face.ligatures === null ? undefined : data.sets.ligatures[face.ligatures]
   let facts: LigatureFacts | null = null
-  if (set !== undefined) {
+  const coreText = usesCoreText(face, engine)
+  // Core Text rejected the face's morx table in the offline run, and the browsers ligate where it didn't: not known.
+  if (set !== undefined && !(coreText && set.coreText.rejectedTable)) {
     const patterns: LigaturePattern[] = []
-    const coreText = usesCoreText(face, engine)
     for (let i = 0; i < set.patterns.length; i++) {
       const p = set.patterns[i]!
       if (!coreText) {
@@ -312,9 +314,8 @@ function ligaturesOf(id: string, engine: EngineName): LigatureFacts | null {
       }
       if (p.coreText.default === 'none') continue
       const spaced = engine === 'webkit' ? p.coreText.spacedWebKit : p.coreText.spacedGecko
-      // HarfBuzz's contexts and mark test don't carry over where Core Text ligates only some of the strings.
-      const all = p.coreText.default === 'all'
-      patterns.push({ positions: p.positions, exact: p.exact && all, spaced: spaced === 'all', everyContext: p.everyContext && all, acrossMark: all ? p.acrossMark : null })
+      // Core Text wasn't asked about marks between the components.
+      patterns.push({ positions: p.positions, exact: p.exact && p.coreText.default === 'all', spaced: spaced === 'all', everyContext: p.coreText.everyContext, acrossMark: null })
     }
     if (coreText) {
       for (let i = 0; i < set.coreTextOnly.length; i++) {
@@ -322,7 +323,9 @@ function ligaturesOf(id: string, engine: EngineName): LigatureFacts | null {
         patterns.push({ positions: [[only.text]], exact: true, spaced: engine === 'webkit' ? only.spacedWebKit : only.spacedGecko, everyContext: false, acrossMark: null })
       }
     }
-    facts = { patterns, complete: set.complete, languageSystems: set.languageSystems }
+    // The candidates come from HarfBuzz's view of the font, so where the shapers disagree on any planned string the list
+    // can't rule a ligature out for an engine Core Text shapes for.
+    facts = { patterns, complete: set.complete && !(coreText && set.coreText.shapersDisagree > 0), languageSystems: set.languageSystems }
   }
   ligatureCache.set(key, facts)
   return facts

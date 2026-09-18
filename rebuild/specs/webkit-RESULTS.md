@@ -2,8 +2,216 @@
 
 Lab runs of `rebuild/src/engines/webkit` in `webkit-host`, the system WebKit.framework that installed Safari 27.0 runs
 (CFBundleVersion 22625.1.29.11.27, macOS 27, libicucore 78.1), on this Mac (Retina, `devicePixelRatio` 2). Rows,
-summaries and per-case files are under `.artifacts/lab/webkit-round2/<run>/` for ceiling round 2 and
-`.artifacts/lab/webkit-stage5/<run>/` before it. Installed Safari wasn't run by the WebKit owner in either round.
+summaries and per-case files are under `.artifacts/lab/webkit-round3/` and `.artifacts/lab/fresh/webkit-host/` for ceiling
+round 3, `.artifacts/lab/webkit-round2/<run>/` for round 2 and `.artifacts/lab/webkit-stage5/<run>/` before it. Installed
+Safari ran once in round 3, as a spot check.
+
+## 2026-09-17: ceiling round 3 (covered failures, fresh sets)
+
+Scorer 5 throughout: a gap covers a failing line only where its range touches what differs there (lab/README.md, "Covered
+failures"). Round 2's rows were re-scored with it first (`webkit-round3/rescore-r2/`); every library change then ran
+predict-only against round 2's native rows in both orders (`webkit-round3/runs/<set>-p<n>/`, tools in
+`webkit-round3/tools/`), and on fresh sets from the lab's `fresh.ts`. Probes are in `rebuild/probes/webkit-round3.ts`
+(webkit-host; outputs under `.artifacts/probes/webkit/round3*`).
+
+### What round 2's zero hid
+
+Round 2's rows under scorer 5, prediction failures without a covered explanation: development 7, held-out 09-16 27, rule and
+feature families 0, triage 8. Every one traced to a condition that was narrower than its source reading:
+
+- **`page-history` missed three things the break position cache reaches.**
+  - *The carried width.* The rest of an item split across lines keeps the whole item's width less what earlier lines took
+    (overflowWidthAsLeadingForNextLine, AbstractLineBuilder.cpp:54-98). A cached end inside the item starts that chain from
+    another whole, so the lines after the one that read the end differ. Triage `c-66ae4ab7d56cb0ae` (round 2's open row): an LTR
+    box of the same text, laid out earlier in the process in both orders, ends an item between `((` and `بببب`; line 6 then
+    keeps `ببب` at 16.27px, the rest of `بببب` alone, where the rest of `((بببب` is 26.02px. 12 of the critic's 13 rows
+    (`suite/original-vs-reshaped-admission`, `c-38c6f39166bffa7e`) are the same chain one float32 step apart.
+  - *float32 order.* The parts of a split item enter the line's sums as separate terms, so a line can move by a float32 step
+    although the parts add up to the whole. Round 2 reported only where the parts measured otherwise (`c-b15c696c7d085af8`,
+    `c-9ebcbc805266199c`, `c-c63d3cd84183da36`).
+  - *ICU's direction shortcut.* ubidi_setPara gives a text without RTL characters the paragraph level everywhere
+    (directionFromFlags, ICU 78.2 ubidi.cpp:1007-1018, :2684-2693), so `a` SHY LRI `b` PDI `c` has no level boundary alone
+    and has two once its paragraph holds an RTL character anywhere (held-out `c-7cc5e3e26ff7c30d`). The contexts are now
+    resolved as mixed, over the whole text where a bracket pair or an explicit code reaches past an edge, with the contexts
+    that open an isolate or embedding before the box or close one after it, and with AL before a European number.
+- **`page-history` is now the cache's effect, computed.** Each other item list the cache can hand a box is a history world:
+  the paragraph's items with that box built as buildInlineItemListForTextFromBreakingPositionsCache builds it (another
+  paragraph's level boundaries per direction and context pair, the three preserved white-space structures, the cached
+  word-separator flag of a white-space item that starts with a TAB, InlineItemsBuilder.cpp:893), then the box's own bidi
+  splits. Every line is laid out in each world that changes an item the line read, from the same line start, and the gap is
+  reported where the world's line differs in its range or display boxes, on the text between the two breaks or the boxes
+  that differ. A line that starts with a carried width inside an item a world ends earlier can't be laid out in that world and
+  reports. Declared approximations: one box differs per world, and the contexts stand for every neighbouring text.
+- **Carried widths carry conditions.** A line that starts with a carried width reports, on the rest of the item, every
+  condition of the whole item's measurement (triage `c-0033f34a9d6b3f85`: `ty` after `affini`, a float32 step off a whole that
+  leaves out a pair adjustment), and `rtl-shaping-across-inline-boxes` where the width was carried from a shaped run.
+- **`dictionary-breaks-stand-in` between boxes.** mayBreakInBetween's iterator text is the previous box's last two units and
+  the next box's text, so a box edge inside a Thai word can start a dictionary range with a combining mark (held-out
+  `c-964d495e90c81b81`: U+0E49 U+0E27 before the next node's `ยกั`, where WebKit breaks between the nodes).
+- Gaps name every stretch of characters they concern, one entry per gap, leaf and stretch, instead of the first.
+
+### Weak conditions turned into predictions or narrow conditions
+
+Probes R1 to R6 (`rebuild/probes/webkit-round3.ts`). Firing rates are on the fresh set `r3-webkit-1` (11,235 cases, the same
+native rows): round 2's library, then the final one, as shares of passing lines with the lift against failing lines.
+
+| Gap | Round 2 library | Final library | What changed |
+|---|---|---|---|
+| `letter-spacing-ligatures` | 8.68%, lift 1.08 | 0.04%, lift 55.7 | Canvas shows merged glyphs; a recipe measures without them |
+| `simplified-measuring` | 20.66%, lift 0.34 | 5.69%, no failing line | Only where a space's own advance can be shaped |
+| `control-character-width` | 5.80%, lift 1.56 | 0.37%, lift 16.3 | VT, FF and CR measured as Core Text shapes them; other Cc exact |
+| `canvas-language` | 28.82%, lift 2.45 | 15.88%, lift 5.03 | Han, kana or Hangul locales; characters no named family draws |
+| `page-history` | 6.31%, lift 3.92 | 4.38%, lift 3.67 | The cache's effect per line (above) |
+| `rtl-shaping-across-inline-boxes` | 0.07% | 0.13% | Also on lines with a carried shaped width; the recipe changed |
+| `tab-stops` | 1.32% | 1.32% | The TAB's float32 order ported; the condition stands |
+
+Failures covered only by gaps with a case-level lift below 2: development 180 of 207 under round 2's library, 2 of 202 now;
+held-out 09-16 33 of 268, now 5 of 250; families 153 of 525, now 0 of 263 (the rest sit under `tab-stops`).
+
+- **Letter spacing (probe R1, 16 fonts).** The DOM turns off liga, clig, dlig and hlig where letter-spacing isn't 0
+  (StyleComputedStyleBase.cpp:324-331, UnrealizedCoreTextFont.cpp:258-264); Canvas keeps them. WidthIterator adds letter
+  spacing once per character that keeps glyphs of non-zero width after shaping (WidthIterator.cpp:491-517, :654-690), and the
+  complex text controller once per glyph with an advance (ComplexTextController.cpp:792-796), so a total at 64px of letter
+  spacing less the total at none counts a string's spacing-bearing glyphs.
+  - A string whose count equals its grapheme clusters' counts measures the same in Canvas as in the letter-spaced DOM: 247 of
+    247 probed strings without a space. No gap there.
+  - On the simple path a merged pair is measured with U+200C between its letters, which no lookup matches across
+    (WidthIterator.cpp:318-323) and which takes no spacing. That leaves out the pair adjustment between the two with the
+    features off: equal to the DOM in Amiri (64 of 64 probed strings) and Hoefler Text (24 of 24), 0.29px narrow for
+    ProbeShantell's `fi`, 0.29px wide for Helvetica Neue's. The gap stays on the pair.
+  - On the complex path nothing is separated (U+200C would break joining, and lam-alef merges in the DOM too), and the gap
+    stays on the item.
+  - Font facts: where `ListedFontFacts.coverage` and `spacingInputs` say every character of a string is drawn by a listed
+    family and none is an input of a lookup letter-spacing turns off, nothing is separated and nothing reported (Geeza Pro's
+    lam-alef and Allah ligatures, which the DOM keeps). On `r3-webkit-3` the gap went from 364 lines to 21 with grapheme
+    clusters and the facts together; the facts' part is Geeza Pro's 48 lines. They convert no failing row: the failing rows
+    are the pair adjustments no fact places.
+  - Triage (`triage-small`, 9,854 cases): lineCount 483 failing to 131, breaks 732 to 302. 15 line counts went the other way,
+    all `suite/ligature-thresholds-v3` at widths between the DOM's width and the recipe's (`waffles` 33.664px natively,
+    33.456px measured, in 33.633px): their breaks were failing before, and the pair gap covers them.
+- **Simplified measuring (probes R1, R2).** The DOM sums shaped advances in one float32 loop (FontCascade.cpp:381-412);
+  WidthIterator adds (shaped sum less unshaped sum) to the unshaped sum after putting spaces back to their unshaped advances
+  (WidthIterator.cpp:84-120). The two sums are within a factor of two of each other, so their difference is exact in float32
+  and WidthIterator's total is the shaped sum: 162 of 162 strings without a space equal the DOM, kerned and ligated ones
+  included. What Canvas can't show is a shaped advance on a space itself: a U+0020 before the string's last unit (a
+  preserved run of spaces), or the following U+0020 where the font's tables adjust a pair's second glyph. R2: 2,350 of 2,350
+  pre boxes of an ASCII character and a space equal the recipe in 25 fonts, 47 of them with a pair adjustment, which Core
+  Text puts on the letter. `FontFacts.pairKerning`, where given, says the tables hold no second-glyph record; where it is
+  null the gap stays on strings measured with their following space. A face without any pair kerning has a null fact in
+  the lab's table, so Georgia, Courier New, Menlo, PingFang and Amiri boxes keep the gap (a value for "none" would clear it).
+- **VT, FF and CR (probe R5, 6 fonts).** Font::applyTransforms hands Core Text the characters with the glyphs
+  (FontCoreText.cpp:689-700), and Core Text kerns the letter before the control as before a space: `A` FF `V` in 16px Arial is
+  A less 113 units, .notdef's 12px, V. applyCSSVisibilityRules then overwrites a control's advance with .notdef's and leaves
+  CR's as shaped (WidthIterator.cpp:792-823). Canvas never sees the control (it turns U+0009-U+000D into spaces), and its
+  `A` U+0001 `V` kerns A against V across the stand-in. The stand-in in place is exact where Canvas shows no pair adjustment
+  around the control; elsewhere the width is the text before the control shaped before a space, the control's advance and
+  the text after it (46 of 48 probed strings equal, 2 a float32 step off), under the gap. Other Cc characters reach Canvas as
+  they are: 96 of 96 equal, no gap. Families: `rule/controls` 142 failing rows to 64, all now one float32 step off in
+  Helvetica Neue's non-dyadic advances.
+- **TAB.** WidthIterator sums a TAB as the space glyph and then adds f32(stop less space) to it (calculateAdditionalWidth,
+  WidthIterator.cpp:491-517), so a lone TAB is f32(space + f32(stop - space)), not the stop (`c-6607fcdcc27aec94`:
+  22.880001068115234px for a stop 22.8799991607666px away). Without spacing the Canvas total of the string, TABs as spaces,
+  plus the additions in order is WidthIterator's own order.
+- **`canvas-language` (probes R3, R3b, R3c).**
+  - System fallback under a locale whose script isn't Han, kana or Hangul follows the preferred languages, as Canvas does:
+    117 of 117 strings under each of 18 languages and under none; under ko 36 of 117. No gap for such a box unless its list
+    holds a family the locale resolves.
+  - In a list with such a family (a CSS generic, -webkit-standard, a system design), only a character no named family
+    before it draws is concerned; Canvas decides that with the named families followed by LastResort. R3c: U+2027 through
+    `"Hiragino Sans", "PingFang SC", "Apple SD Gothic Neo", Arial, sans-serif` is no named family's glyph and differs under hi,
+    zh-Hant and ko.
+  - Under a Han, kana or Hangul locale a named family doesn't settle Han, kana, Hangul, CJK punctuation and fullwidth forms:
+    `"PingFang SC"` draws kana 18px wide under en, hi and zh-Hant and 15.57px wide under ko, Apple SD Gothic Neo's advance,
+    though Canvas finds the family's own kana glyph. A first narrowing by coverage lost 65 rows' cover on the iterated sets
+    and was taken back. Core Text is closed, so these stay concerned whatever the list names.
+  - The listed families' `coverage` facts weren't used: they say PingFang SC maps U+2027, which WebKit doesn't draw from it
+    (R3c).
+- **Text shaped across inline boxes.** A run's share is the sum of Core Text base advances of its characters in the joined
+  text (ComplexTextController.cpp:186-205). Round 2 took Canvas prefix differences of the joined text, which reshape the
+  letter at each cut. Now a run is the Canvas total of its text with U+200D on each side where the neighbouring run joins it,
+  and two runs join where their texts as one string are nearer to the sum with U+200D between them than to the sum alone.
+  Families: lineCount +62, breaks +89, widths +19 against the prefix recipe; `c-0ad060cd384930bf`'s boxes are now exact
+  (23.924049377441406px and 55.62748718261719px, round 2 had 32.80px and 46.75px) and its line sum is one float32 step off,
+  under the gap. 8 `rule/joining` line counts were lost: letter-spaced, `overflow-wrap: anywhere`, one letter per line,
+  passing by accident with failing widths (carried 1.23px predicted, -11.78px natively); still not explained beyond the gap.
+
+### Sets
+
+Round 2's rows under scorer 5 against the final library (predict-only, history flags from round 2's two orders):
+
+| Set | Cases | lineCount fail | breaks fail | widths fail | Prediction failures | Without a covered explanation |
+|---|---:|---|---|---|---|---|
+| development combined file | 25,180 | 25 to 20 | 75 to 70 | 132 to 132 | 207 to 202 | 7 to 0 |
+| held-out 09-16 combined file (9 giants moved out) | 15,196 | 44 to 40 | 91 to 86 | 177 to 164 | 268 to 250 | 27 to 0 |
+| rule and feature families | 21,734 | 140 to 51 | 234 to 86 | 291 to 177 | 525 to 263 | 0 to 0 |
+| triage-small | 9,854 | 483 to 131 | 732 to 302 | 17 to 398 | 749 to 700 | 8 to 1 |
+
+- Lost pairs, all with a covering gap: development 1 width (`c-0ad060cd384930bf`, above); families 8 lineCount and 8 breaks
+  (`rule/joining`, above); triage 15 lineCount (`suite/ligature-thresholds-v3`, above) and 2 widths (`suite/raw-context`
+  `c-210779861cd564ec`, `c-829d50fd5c613373`: `a` VT `f` in Noto Nastaliq Urdu, pieced together one float32 step off where
+  the stand-in in place was exact). Triage widths rise because breaks now pass and widths get scored.
+- The one triage row left, `c-4bb3746469073e4d`: native is the history world with an item end before the CR (line 1 ends
+  there), and the gap sits on line 1 at [4, 6). The scorer names line 0 as the first line that differs, because WebKit reports
+  a zero-width rect for a line's first character at the end of the line before when the next box in box order starts later
+  (RenderText.cpp:777-783), which depends on line 1's boxes.
+- The 8 `rule/br-elements` rows of round 2's evaluation: `rule/br-elements` has 32 failing rows, `rule/hanging-white-space`
+  12, all under `page-history`. Each alone in a fresh process (`sharded.ts --isolate`, 76 rows with the `rule/controls` ones):
+  lineCount 76 of 76, breaks 76 of 76; the 32 widths that still fail alone are the `rule/controls` float32 steps.
+
+Fresh sets (`bun rebuild/lab/fresh.ts --browser=webkit-host --seed=<seed>`, file order, about 11,200 cases each: runs, ws,
+policy, a 3,000-case suite sample and the family paragraphs at new widths):
+
+| Seed | Library | Cases | lineCount / breaks / widths fail | Prediction failures | Open | Classes |
+|---|---|---:|---|---:|---:|---|
+| `r3-webkit-1` | page-history worlds, letter spacing, simplified measuring | 11,235 | 23 / 67 / 159 | 226 | 1 | a float32 step after a moved box (below) |
+| `r3-webkit-2` | + controls, canvas-language, shaped runs | 11,216 | 22 / 66 / 187 | 253 | 0 | none |
+| `r3-webkit-3` | + zero-width characters draw no font's glyph | 11,221 | 27 / 78 / 187 | 265 | 0 | none |
+| `r3-webkit-4` | final (clusters, spacing facts, TAB order) | 11,198 | 26 / 90 / 154 | 244 | 0 | none |
+| `r3-webkit-5` | final | 11,184 | 26 / 81 / 152 | 233 | 0 | none |
+
+- `r3-webkit-1` under round 2's library: 24 / 70 / 160, 230 prediction failures, 10 open: 9 widths rows of
+  `suite/U+001E/middle`, `suite/U+001F/middle`, `suite/U+000C/middle` and `suite/glue` where only the line's sum is off (the
+  classes above, not traced one by one), and the row below. Under the final library: 19 / 57 / 135, 192 failures, 1 open.
+- The open row, `c-653ac96abf5487ff` (`runs/lang-spans`): line 1's Hangul node is 2.7px wider natively (`canvas-language`
+  covers it), which moves the next node. That node's width is the same in the engine, 60.336002349853516px; FloatQuad's
+  bounding box reports f32(f32(x + w) - x), 60.33599853515625px at the predicted x and 60.33601379394531px at the native x.
+  No gap concerns the node, so scorer 5 counts it open: an observation consequence of the covered node, not a class.
+- `page-history` under the fresh sets, which ran one order: the 79 failing cases of `r3-webkit-3` it covers ran each alone in
+  a fresh process. lineCount 79 of 79 pass, breaks 76, widths 59; the 19 that still fail alone are also under
+  `canvas-language`, `control-character-width` or `letter-spacing-ligatures`.
+- Installed Safari, spot check (`r3-webkit-5`'s runs, ws and policy, 5,184 cases in two parts of 44 s and 90 s,
+  `--allow-safari-frontmost`): lineCount 12, breaks 50, widths 117 failing, 167 prediction failures, 0 open, and the three
+  statuses equal webkit-host's on all 5,184 cases.
+- Painter-only failures without a covered explanation rose on `r3-webkit-1` from 312 to 772 as the conditions narrowed: most
+  are painted extents under 0.01 units off (69 Amiri Latin, 31 Helvetica Neue), which `simplified-measuring` and
+  `letter-spacing-ligatures` used to sit on. Painter owner.
+
+### Costs
+
+measureText calls per paragraph on the development combined file, mean / median / p90 / p95 / max: round 2 17.7 / 8 / 37 /
+56 / 2,069; final 37.2 / 12 / 102 / 120 / 2,273. Prediction time per paragraph in webkit-host: mean 0.10 ms to 0.33 ms (2.5 s
+to 8.3 s over the file). The additions are all condition work, not layout: the named-family test of `canvas-language` (three
+totals per distinct character of a box whose list holds a locale-resolved family), the glyph counts of letter-spaced boxes
+(two totals per string, grapheme cluster and merged pair), the pair adjustment tests around VT, FF and CR, and the split
+parts and second layouts of history worlds. Not reduced: performance is deferred.
+
+### Open
+
+- `canvas-language` under Han, kana and Hangul locales still fires on every such character (16% of passing lines on fresh
+  sets). What would close it: the per-language cascade of the OS as a given fact, or a connected `<canvas>` with `lang`
+  (SUPERSET-webkit §3.3, a maintainer decision). Under ko the fallback for Han and kana is Apple SD Gothic Neo in every probed
+  list (R3, R3b); a recipe that names it would predict most of the 130 ko rows, as a platform table.
+- Pair adjustments inside a separated ligature pair, and the float32 order of pieced control widths and shaped run sums, are
+  stand-ins under their gaps. A `FontFace` of `local()` with `font-feature-settings` would give Canvas the DOM's features
+  under letter-spacing; it is font loading, outside the charter's boundary, and wasn't tried.
+- The locale also reaches shaping (applyTransforms and the complex path's string attributes take computedLocale), so a named
+  font with language-specific lookups can shape otherwise under a locale than in Canvas. No lab row shows it; no condition
+  reports it.
+- `page-history`'s worlds vary one box at a time, and the glyph geometry cache (TextMeasurementCache, shared by the simplified
+  path, the fixed-pitch path and WidthIterator under one key, sampled) is a second process-wide cache; with the
+  simplified-measuring result above its three writers agree except on a shaped space, and no row shows it.
+- Registry: `webkit/measure/word-spacing-in-js` is retired for `webkit/measure/word-spacing-in-context`, and round 3's rules
+  are registered and annotated in source (`// rule <id>`).
 
 ## 2026-09-17: ceiling round 2 (line-local gaps)
 

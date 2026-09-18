@@ -192,6 +192,13 @@ function localRect(item: RunItem, limits: ItemLimits | null, a: number, b: numbe
       let s: number
       let e: number
       if (fs < fe) { s = floor64(fs); e = ceil64(fe) } else if (fs > fe) { s = ceil64(fs); e = floor64(fe) } else { s = floor64(fs); e = s }
+      // Which caret is the rect's left edge follows their order. Where the carets run against the item's direction (a
+      // negative advance) and one of them is a stand-in, the order itself rests on it, so both edges do: the advance the port
+      // gives a letter a listed ligature may cover can come out negative (Geeza Pro lam before meem, c-38536c357f3a1dc7).
+      const rtl = (item.level & 1) === 1
+      const against = rtl ? fs < fe : fs > fe
+      const either = cs.limit ?? ce.limit
+      if (against && either !== null) return s <= e ? { left: s, right: e, leftLimit: either, rightLimit: either } : { left: e, right: s, leftLimit: either, rightLimit: either }
       return s <= e ? { left: s, right: e, leftLimit: cs.limit, rightLimit: ce.limit } : { left: e, right: s, leftLimit: ce.limit, rightLimit: cs.limit }
     }
   }

@@ -275,6 +275,16 @@ function makeBox(p: WebKitPrepared, m: Measurer, leaf: LeafInput, sourceStart: n
       if (simplifiedMeasuring && covered === measureText(m, lastResortContext, s) && !unverifiedCoverage.includes(cp)) unverifiedCoverage.push(cp)
     }
   }
+  let spacingFacts: Array<{ coverage: readonly number[]; inputs: readonly number[] }> | null = null
+  if (letterSpacing !== 0 && facts.fonts !== undefined && facts.fonts.length === familyNames(font.family).length) {
+    spacingFacts = []
+    for (let i = 0; i < facts.fonts.length && spacingFacts !== null; i++) {
+      const listed = facts.fonts[i]!
+      if (listed.realizes === false) continue
+      if (listed.realizes === null || listed.coverage === null || listed.spacingInputs === undefined || listed.spacingInputs === null) spacingFacts = null
+      else spacingFacts.push({ coverage: listed.coverage, inputs: listed.spacingInputs })
+    }
+  }
   return {
     run: leaf.run, parent: leaf.parent, style: leaf.style, sourceStart, text, is8Bit, simpleFontCodePath, simplifiedMeasuring, fixedPitch,
     fixedPitchFastMeasuring: fixedPitch && primaryFamily !== 'courier new',
@@ -287,7 +297,8 @@ function makeBox(p: WebKitPrepared, m: Measurer, leaf: LeafInput, sourceStart: n
     hasStrongDirectionality: hasStrongDirectionality(text, is8Bit, bidi), unverifiedCoverage,
     primaryFamilyUnknown: facts.primaryFamily === null,
     pairKerningUnknown: facts.pairKerning === null,
-    localeChoosesFonts: null, namedCoverage: null, namedContext: plainContext, lastResortContext: plainContext, hanLocaleUnknown: false, quoteLocaleUnknown: false,
+    spacingFacts,
+    localeChoosesFonts: null, namedContext: plainContext, lastResortContext: plainContext, hanLocaleUnknown: false, quoteLocaleUnknown: false,
     dictionaryRangesStartingWithMark: [],
   }
 }
@@ -501,18 +512,13 @@ function computeItemWidths(p: WebKitPrepared, m: Measurer): void {
   }
 }
 
-// Whether a named family of the box's list draws the code point before the list reaches a family the locale resolves: from
-// the listed families' coverage facts, else from Canvas, where the named families followed by LastResort give the box's own
-// advance and not LastResort's box (the recipe of makeBox's coverage test; a glyph as wide as LastResort's box can't be told
-// from it and counts as not drawn).
-export function localeIndependentGlyph(m: Measurer, box: WebKitBox, cp: number): boolean {
-  if (box.namedCoverage !== null) {
-    for (let k = 0; k < box.namedCoverage.length; k++) {
-      const ranges = box.namedCoverage[k]!
-      for (let i = 0; i + 1 < ranges.length; i += 2) if (cp >= ranges[i]! && cp <= ranges[i + 1]!) return true
-    }
-    return false
-  }
+// Whether a named family of the box's list draws the code point before the list reaches a family the locale resolves: in
+// Canvas the named families followed by LastResort give the box's own advance and not LastResort's box (the recipe of
+// makeBox's coverage test; a glyph as wide as LastResort's box can't be told from it and counts as not drawn).
+export function namedFamilyDraws(m: Measurer, box: WebKitBox, cp: number): boolean {
+  // FontCascade::treatAsZeroWidthSpace (FontCascadeInlines.h:160-176): drawn as a zero-width space whatever font has it,
+  // so no font choice shows in a width. Controls below U+0020 and U+007F-U+009F never reach here.
+  if (cp === 0xad || cp === 0x200b || cp === 0x200c || cp === 0x200d || cp === 0x200e || cp === 0x200f || (cp >= 0x202a && cp <= 0x202e) || cp === 0xfeff || cp === 0xfffc) return true
   const s = String.fromCodePoint(cp)
   const named = measureText(m, box.namedContext, s)
   return named === measureText(m, box.plainContext, s) && named !== measureText(m, box.lastResortContext, s)
@@ -546,6 +552,7 @@ function collectBoxFacts(p: WebKitPrepared, m: Measurer, leaves: LeafInput[]): v
       if (hasLanguageDependentFallback(cp)) languageFallback = true
       if (isDelimiterQuote(cp)) quote = true
     }
+    // rule webkit/gap/canvas-language-scope
     // OffscreenCanvas has a null locale (specs/webkit-canvas.md §1.3), so its font description's script is Common. The DOM
     // passes the box's locale where fonts are chosen:
     // - serif, sans-serif, cursive, fantasy and monospace through CoreText's per-locale CSS families whenever the locale's
@@ -558,8 +565,13 @@ function collectBoxFacts(p: WebKitPrepared, m: Measurer, leaves: LeafInput[]): v
     //   CJK punctuation and fullwidth forms (DESIGN.md §1.3). Probe webkit-round3 R3: under 18 languages of other scripts, and
     //   under no language, the DOM's fallback glyphs have Canvas's advances (117 of 117 strings each); under ko, 36 of 117.
     // A font list draws a character with its first family that has a glyph (FontCascadeFonts::glyphDataForVariant,
-    // FontCascadeFonts.cpp:426-470), so a character a named family draws before the list reaches a locale-resolved family
-    // doesn't depend on the locale. Only unquoted names are the keywords.
+    // FontCascadeFonts.cpp:426-470), so under a locale of another script a character a named family draws before the list
+    // reaches a locale-resolved family doesn't depend on the locale (probe R3c: U+2027 through `"Hiragino Sans", "PingFang
+    // SC", "Apple SD Gothic Neo", Arial, sans-serif` is no named family's glyph, and differs under hi, zh-Hant and ko). Under a
+    // Han, kana or Hangul locale a named family doesn't settle it for those characters: `"PingFang SC"` draws kana 18px wide
+    // under en, hi and zh-Hant and 15.57px wide under ko, Apple SD Gothic Neo's advance, though Canvas finds the family's own
+    // kana glyph (probe R3b, R3c). Core Text is closed; the listed families' coverage facts say PingFang SC maps U+2027, which
+    // WebKit doesn't draw from it (R3c), so Canvas decides what a named family draws. Only unquoted names are the keywords.
     const families = familyNames(leaf.textStyle.font.family)
     const script = localeScript(box.locale)
     const cjkLocale = ['HAN', 'SIMPLIFIED_HAN', 'TRADITIONAL_HAN', 'KATAKANA_OR_HIRAGANA', 'HANGUL'].includes(script)
@@ -572,18 +584,7 @@ function collectBoxFacts(p: WebKitPrepared, m: Measurer, leaves: LeafInput[]): v
     }
     if (box.locale !== '' && (firstLocaleFamily < families.length || (cjkLocale && languageFallback))) {
       box.localeChoosesFonts = { families: firstLocaleFamily < families.length, fallback: cjkLocale }
-      const listed = leaf.textStyle.font.facts.fonts
-      if (listed !== undefined && listed.length === families.length) {
-        let coverage: Array<readonly number[]> | null = []
-        for (let i = 0; i < firstLocaleFamily && coverage !== null; i++) {
-          const entry = listed[i]!
-          if (entry.realizes === false) continue
-          if (entry.realizes === null || entry.coverage === null) coverage = null
-          else coverage.push(entry.coverage)
-        }
-        box.namedCoverage = coverage
-      }
-      if (box.namedCoverage === null) {
+      if (firstLocaleFamily < families.length) {
         const font = leaf.textStyle.font
         const size = f32(f32(font.size) * f32(p.zoom))
         const named = leaf.textStyle.font.family.split(',').slice(0, firstLocaleFamily).map(part => part.trim())
@@ -601,6 +602,7 @@ function collectBoxFacts(p: WebKitPrepared, m: Measurer, leaves: LeafInput[]): v
 }
 
 // ---- Page history: the break position cache ----
+// rule webkit/gap/page-history-worlds
 
 // TextBreakingPositionCache (InlineItemsBuilder.cpp:858-924, 936-939, 1082-1148; TextBreakingPositionCache.h:41-42): when a
 // block's line layout goes away (LineLayout::~LineLayout, LayoutIntegrationLineLayout.cpp:210-220), a box of at least 5 units

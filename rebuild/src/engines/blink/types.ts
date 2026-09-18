@@ -131,6 +131,9 @@ export type BlinkPrepared = {
   segmented: boolean
   // The script each text_content unit is shaped with (ScriptRunIterator over text_content, or Latin).
   scripts: Uint8Array
+  // The font fallback priority RunSegmenter gives each text_content unit (emoji.ts): text, or one of the emoji kinds. A
+  // change of priority ends a shaping segment like a change of script.
+  priorities: Uint8Array
   // Per text_content unit, its source offset, or -1 for a unit Blink generated or an element's (U+200B after leading
   // spaces, a <wbr>'s U+200B, a <br>'s LF, an atomic inline's U+FFFC).
   sourceOffsets: Int32Array
@@ -164,6 +167,8 @@ export type BlinkPrepared = {
   // Per text_content unit of a shaping group, the listed family that draws its glyph cluster by the declaration's coverage
   // facts, or -1 for a font they don't name. HarfBuzzShaper makes a run of every stretch one font draws.
   fontRun: Int16Array
+  // Per text_content unit, its shaping group, or -1.
+  groupOfUnit: Int32Array
   // Word spacing at text_content index 0 (WordSpacingWhiteSpacePre, inline_node.cc:1561-1565).
   wordSpacingAnywhere: boolean
   // Per style, whether Canvas shapes its strings word by word (Font::CanShapeWordByWord), measured when a 16-bit string

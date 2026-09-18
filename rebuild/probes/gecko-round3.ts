@@ -239,6 +239,30 @@ v.cuts = {
 return v;
 `
 
+// - F19, letter spacing in a cursive script with a mark in another font (fresh c-c408f28194762a1e: three Hanifi Rohingya
+//   letters and U+0301 in 16px "Courier New" under 1px of letter spacing are 60 au wider natively than their Canvas total,
+//   though the DOM gives a cursive script's clusters no letter spacing, nsTextFrame.cpp:4107-4133).
+const F19 = String.raw`
+const row = (font, ls, text, direction) => {
+  const div = document.createElement('div');
+  div.style.cssText = 'position: absolute; left: 0; top: 0; white-space: pre; font: ' + font + '; letter-spacing: ' + ls + 'px; direction: ' + (direction || 'ltr');
+  div.lang = 'en';
+  const n = document.createTextNode(text); div.append(n); host.append(div);
+  const range = document.createRange();
+  const points = [];
+  for (let i = 0; i < text.length;) { const len = text.codePointAt(i) > 0xffff ? 2 : 1; range.setStart(n, i); range.setEnd(n, i + len); points.push(Math.round([...range.getClientRects()].reduce((a, r) => a + r.width, 0) * 60)); i += len; }
+  range.selectNodeContents(n);
+  const whole = Math.round([...range.getClientRects()].reduce((a, r) => a + r.width, 0) * 60);
+  div.remove();
+  const c = ctxOf('ec', font.replace(/(\d+)px/, (m, px) => (px * dpr) + 'px'), 'en', 'ltr');
+  return { font, ls, text, whole, points, canvas: Math.round(c.measureText(text).width * 60 / dpr) };
+};
+const courier = '400 16px "Courier New"';
+const out = [];
+for (const text of ['\u{10D00}\u{10D01}\u{10D02}́', '\u{10D00}\u{10D01}\u{10D02}', '\u{10D02}́', 'بب́', 'ببب', 'ab́c']) for (const ls of [0, 1, 4]) for (const font of [courier, '400 16px Arial']) out.push(row(font, ls, text));
+return out;
+`
+
 export default function probes(): Probe[] {
   const probe = (id: string, spec: string, source: string, fontFixtures?: string[]): Probe => ({
     id,
@@ -255,6 +279,7 @@ export default function probes(): Probe[] {
     probe('gecko-port F15', 'gecko-port F15: in-word advances against prefix, suffix and U+200D recipes', F15, ['Amiri', 'Noto Naskh Arabic', 'Noto Nastaliq Urdu', 'Shantell Sans']),
     probe('gecko-port F16', 'gecko-port F16: how an odd pair adjustment divides between two glyphs', F16),
     probe('gecko-port F18', 'gecko-port F18: a grapheme cluster split across two spans of one text run', F18),
+    probe('gecko-port F19', 'gecko-port F19: letter spacing in a cursive script with a mark in another font', F19),
     probe('gecko-port F17', 'gecko-port F17: ligature groups counted through Canvas letter spacing', F17, ['Amiri', 'Noto Naskh Arabic', 'Noto Nastaliq Urdu']),
   ]
 }

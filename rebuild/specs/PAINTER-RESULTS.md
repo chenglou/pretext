@@ -223,3 +223,167 @@ this round's sets.
   and `-v3` rows and per-case files, `report.ts` (painter counts and transitions against the round 1 evaluation),
   `attribute.ts` (every loss with its line's fragments and painted DOM), `dump-paint.ts` (a row's painted DOM offline),
   `run-v3.sh`, `probe-box-edges.ts` (Blink box edge, WebKit nowrap span and Gecko `<wbr>` forms).
+
+## Round 3 (2026-09-17)
+
+Painter failures on every set where the prediction passes (lineCount and breaks pass, widths pass or unobserved), in
+installed Chrome 153.0.8010.50, installed Firefox 156 and webkit-host, with the engines and the lab frozen at `b37c477`
+(`.artifacts/lab/painter-r3/head/`, the round 2 library and scorer 4) and only `paint.ts` changing, so lineCount, breaks
+and widths are equal in every run and every transition is the painter's. The **before** run (`*-base`) is round 2's
+painter from that snapshot: all 45 jobs reproduce the round 2 evaluation's rows case by case, with no painter status
+changed. Every painter version ran all sets at the same time under the browser lock (45 jobs, about 6 minutes):
+the development and held-out 09-16 suite samples, the rule families, the feature families, and the development and
+held-out 09-16 smoke, runs, ws and policy sets. 25 paragraphs over 20,000 UTF-16 units are left out of the suite samples
+(`cases/*-nogiants.ndjson`).
+
+### Scores
+
+Cases whose prediction passes; painter pass / fail / unobserved, and pass as a share of pass and fail.
+
+| Browser | Set | Cases | Before | After | Transitions |
+|---|---|---:|---|---|---|
+| Chrome | development suite sample | 19,908 | 19,030 / 238 / 640 (98.76%) | 19,217 / 51 / 640 (99.74%) | fail→pass 187 |
+| Chrome | held-out 09-16 suite sample | 9,791 | 8,831 / 193 / 767 (97.86%) | 8,944 / 78 / 769 (99.14%) | fail→pass 113, fail→unobserved 2 |
+| Chrome | rule families | 10,519 | 10,200 / 255 / 64 (97.56%) | 10,293 / 162 / 64 (98.45%) | fail→pass 95, pass→fail 2 |
+| Chrome | feature families | 12,882 | 7,098 / 312 / 5,472 (95.79%) | 7,241 / 156 / 5,485 (97.89%) | fail→pass 143, fail→unobserved 13 |
+| Chrome | development smoke, runs, ws, policy | 5,492 | 5,461 / 25 / 6 (99.54%) | 5,469 / 17 / 6 (99.69%) | fail→pass 8 |
+| Chrome | held-out 09-16 runs, ws, policy | 5,193 | 5,160 / 32 / 1 (99.38%) | 5,165 / 26 / 2 (99.50%) | fail→pass 5, fail→unobserved 1 |
+| Chrome | all | 63,785 | 55,780 / 1,055 / 6,950 (98.14%) | 56,329 / 490 / 6,966 (99.14%) | fail→pass 551, fail→unobserved 16, pass→fail 2 |
+| Firefox | development suite sample | 18,923 | 18,236 / 687 / 0 (96.37%) | 18,453 / 470 / 0 (97.52%) | fail→pass 217 |
+| Firefox | held-out 09-16 suite sample | 9,135 | 8,660 / 475 / 0 (94.80%) | 8,807 / 328 / 0 (96.41%) | fail→pass 147 |
+| Firefox | rule families | 8,592 | 8,012 / 580 / 0 (93.25%) | 8,266 / 326 / 0 (96.21%) | fail→pass 254 |
+| Firefox | feature families | 11,931 | 6,425 / 41 / 5,465 (99.37%) | 6,425 / 41 / 5,465 (99.37%) | none |
+| Firefox | development smoke, runs, ws, policy | 5,450 | 5,353 / 97 / 0 (98.22%) | 5,357 / 93 / 0 (98.29%) | fail→pass 4 |
+| Firefox | held-out 09-16 runs, ws, policy | 5,140 | 5,060 / 80 / 0 (98.44%) | 5,061 / 79 / 0 (98.46%) | fail→pass 1 |
+| Firefox | all | 59,171 | 51,746 / 1,960 / 5,465 (96.35%) | 52,369 / 1,337 / 5,465 (97.51%) | fail→pass 623 |
+| webkit-host | development suite sample | 19,849 | 18,784 / 987 / 78 (95.01%) | 18,913 / 856 / 80 (95.67%) | fail→pass 129, fail→unobserved 2 |
+| webkit-host | held-out 09-16 suite sample | 9,832 | 7,959 / 1,819 / 54 (81.40%) | 7,975 / 1,800 / 57 (81.59%) | fail→pass 16, fail→unobserved 3 |
+| webkit-host | rule families | 9,085 | 8,344 / 540 / 201 (93.92%) | 8,346 / 538 / 201 (93.94%) | fail→pass 2 |
+| webkit-host | feature families | 12,111 | 8,627 / 114 / 3,370 (98.70%) | 8,703 / 38 / 3,370 (99.57%) | fail→pass 76 |
+| webkit-host | development smoke, runs, ws, policy | 5,337 | 4,948 / 250 / 139 (95.19%) | 4,960 / 235 / 142 (95.48%) | fail→pass 12, fail→unobserved 3 |
+| webkit-host | held-out 09-16 runs, ws, policy | 5,025 | 4,632 / 255 / 138 (94.78%) | 4,645 / 241 / 139 (95.07%) | fail→pass 13, fail→unobserved 1 |
+| webkit-host | all | 61,239 | 53,294 / 3,965 / 3,980 (93.08%) | 53,542 / 3,708 / 3,989 (93.52%) | fail→pass 248, fail→unobserved 9 |
+
+Painter pairs lost with the prediction unchanged, over all cases of all sets: Chrome 2, Firefox 0, webkit-host 0. The
+two are `rule/joining` `c-9fff38c828d7e27f` and `c-ce2fafbcb2bf85b3`: a line that ends one span of `ببب` and starts the
+next in AAT Geeza Pro under `break-all`. Blink reshaped each cut part without context, and the painted line now shapes
+the two parts as one shaping group, where round 2's override controls happened to sit between the two spans (DESIGN.md
+§7 `edge-inside-shaped-text`). Intermediate versions lost more and were fixed before the final run: each loss is named
+with its source reading in DESIGN.md §7 (trailing boundary neutrals joined to a level they didn't have, elements with
+another direction than their text holders in Gecko, nowrap on lines HanKerning trims or that end in hanging space, the
+script mark alone on an overflowing line's first line, a box before a glued character).
+
+webkit-host's held-out suite sample stays at 81.6%: 1,761 of its 1,800 failures are `carried-width` lines, most of them
+one float32 step off, which a line painted alone can't reproduce.
+
+### What changed
+
+DESIGN.md §7 has each form with its source reading and probe. By the classes of the task:
+
+- **Round 2's regression, 58 Chrome pairs (hanging spaces in their own text node).** Traced to `ShapeLine`: a text node
+  of its own ends the text's item where the item's end is never reshaped, so the text keeps its pair adjustment with the
+  space, which the paragraph dropped where an overflow break at a character reshaped the text's end. Blink's hanging
+  spaces now take one of three forms by that reading (own node, same node, own shaping group). Of the 60 case ids the
+  round 2 record attributes to the painter change, the 33 hanging-space ones pass (`suite/negative-space` 28,
+  `suite/spacing-tail` 4, `suite/source-views` 1). The other 27 came from round 2's trimmed-space box, not from the
+  hanging spaces, and still fail: `rule/controls` 8, `rule/in-word-breaks` 16 and 3 suite cases, where `ShapeLine`
+  reshaped the whole part because no offset before its end was safe to break, which the layout doesn't say.
+- **Round 2's Blink hanging-space exclusion** (no soft wrap box, settled by which family regressed) is replaced by two
+  source readings, the conditional hang of a block's last line and ICU's reset of trailing spaces at a paragraph's end,
+  and these lines get the box. The one line that had backed up with it paints at the native width in the forms probe
+  and in the runs.
+- **Chrome's 90 RTL box-edge cases**: the override span now holds whole elements, which keep the paragraph's direction.
+  72 `rule/box-edges` and 12 `rule/nested-box-edges` pass and 6 are unobserved.
+- **webkit-host's atomic-inline cases**: all 32 pass in the same form, the 21 wraps before a nowrap span, the 8 extents
+  one float32 step off and 3 more.
+- **webkit-host's untraced wrap** (`c-77a026e622496098`): the line starts with the rest of a split item (U+200B, a soft
+  hyphen and a hanging space after `a`, carried width 0). Painted alone the U+200B is an item of its own with a soft
+  wrap opportunity after it, which the painted line takes. It has the `carried-width` limit; the break itself isn't
+  traced further.
+- **Firefox justify with a trimmed space (32)**: traced to `brokeText` (`nsTextFrame.cpp:11201-11213`): only a frame that
+  breaks inside itself keeps the trimmed space among its justification opportunities, and a painted frame ends with its
+  text. No form without visible text after the line reproduces it: limit `frame-ended-at-break`, which also names the
+  trimmed U+3000 class (140 more failing lines).
+- **Chrome's 4 br-elements and nowrap-spans wraps**: forced breaks and `<br>` are painted, and in Blink the soft wrap box
+  follows the wrapping of the leaf that holds the line's last character. None of the four wraps any more; their lines'
+  widths are unobserved by the port, so they count as unobserved.
+- **Suite classes, biggest first.** Firefox: a tab or formatting character at a line's end under letter spacing (about
+  470 failing lines in the before run; 254 `rule/tabs` and most suite ones pass with a character after it). Chrome:
+  U+200C or U+200D at a line's end under override (69 wraps, all pass), Common characters after Arabic at a line start
+  under letter spacing (U+061C, 146 pass), lines wider than their band that broke again and hanging spaces after an
+  overflow break (nowrap and the same-node form, 124 pass together). webkit-host:
+  trailing boundary neutrals and RTL trimmed spaces reset at the painted paragraph's end (box inside the override span,
+  173 pass), text node storage (31 pass), collapsed white space between two pieces (9 pass).
+
+### Limits
+
+`painterLimits` names the limits of every painted line (DESIGN.md §7 "Limits"). The lab doesn't read them yet, so
+`.artifacts/lab/painter-r3/tools/limits.ts` counts them from the final rows: a failing case counts on its first failing
+painted line, and every line of a passing case is a passing line.
+
+| Browser | Failing cases | With a limit on the failing line | Passing lines | Passing lines with a limit |
+|---|---:|---:|---:|---:|
+| Chrome | 490 | 478 | 198,570 | 90,413 (45.5%) |
+| Firefox | 1,337 | 1,322 | 173,256 | 101,576 (58.6%) |
+| webkit-host | 3,708 | 3,668 | 175,848 | 42,034 (23.9%) |
+
+Per limit, failing lines it sits on and passing lines it fires on:
+
+| Limit | Chrome | Firefox | webkit-host |
+|---|---|---|---|
+| `carried-width` | | | 3,530 / 29,425 (16.7%) |
+| `word-measured-with-next-space` | | | 261 / 1,010 (0.6%) |
+| `edge-inside-shaped-text` | 218 / 58,869 (29.6%) | 1,141 / 95,419 (55.1%) | 0 / 11 |
+| `edge-inside-cluster` | 5 / 354 (0.2%) | 308 / 553 (0.3%) | 12 / 732 (0.4%) |
+| `space-shaped-with-next-line` | 229 / 11,937 (6.0%) | | |
+| `hanging-space-kern-share` | 92 / 156 (0.1%) | | |
+| `han-kerning-at-edge` | 32 / 7,923 (4.0%) | | |
+| `script-at-line-start` | 98 / 12,671 (6.4%) | 323 / 8,465 (4.9%) | |
+| `controls-between-pieces` | 3 / 370 (0.2%) | | |
+| `frame-ended-at-break` | | 172 / 98 (0.1%) | |
+| `overflowing-line-rebreaks` | 95 / 13,570 (6.8%) | 11 / 6,201 (3.6%) | 31 / 11,765 (6.7%) |
+
+`edge-inside-shaped-text` and `carried-width` fire on a large share of passing lines because these sets are built at
+break thresholds and narrow widths, where most lines start or end inside a word; the conditions are the source
+conditions and weren't shaped to the counts. Two narrowings came from source readings and are in the table: WebKit's
+`carried-width` needs a line that starts inside an item (54.9% before, since a whole item that wrapped is measured
+again the same way), and Blink's `edge-inside-shaped-text` needs a joining or reordering script or a font whose pair
+adjustments may move the second glyph (59.4% before, one failing line lost).
+
+Failing lines without a limit: Chrome 12 (`rule/in-word-breaks` 4, a Times New Roman line 18 or 27 units narrower that
+starts and ends at spaces; 8 single cases), Firefox 15 (`ws/controls` 4, `suite/raw-cr-whitespace-scope` 3,
+`suite/hanging-OGHAM` 3, 5 single cases), webkit-host 40 (`policy/thai` 9 and `rule/hyphen-glyph` 8, a float32 step;
+`rule/zwnj` 3 single-line paragraphs under override, a float32 step; 20 others, mostly a float32 step). Not traced.
+
+### Notes for owners
+
+- **Lab.** `painterLimits(paragraph, layout)` is exported from `src/paint.ts` but not from `src/index.ts`, and the page
+  doesn't record it. Recording it per painted line would let the scorer count painter failures without a limit, as it
+  counts prediction failures without a gap.
+- **Blink.** Whether the text before a line's trailing space was reshaped (and lost its pair adjustment with the space)
+  is in the port's shape views and not in `BlinkLineGeometry`. The painter reads it from the line's widths and styles
+  for hanging spaces and from `needsAccurateEndPosition` for trimmed ones, which misses the whole-part reshape (24 pairs
+  above). A geometry field would replace both.
+- **specs/painter.md** still describes round 0's forms where DESIGN.md §7 now differs: §4.4 builds the override spans
+  inside each slice's node span (they now hold whole elements), R8 keeps trailing white space at the base level (it takes
+  the level of the text before it, and so does a piece that continues a cluster), §6 paints no forced break, `<br>` or
+  collapsed white space, and L7 and L9 name as limits what the U+061C mark and the wider override spans now reproduce in
+  part.
+- **A form with context.** The largest remaining classes (WebKit's carried width, Blink's space shaped with the next
+  line, Gecko's frame that broke inside itself, line edges inside shaped text) all need text of the neighbouring line in
+  the painted line's own text node. That text would wrap to a second, hidden line of the block, which the lab reads
+  today as a painted wrap; it needs the painter to report which painted ranges are the line (the charter's open item on
+  painted source offsets).
+
+### Files (round 3)
+
+- `rebuild/src/paint.ts`, `rebuild/src/paint.test.ts` (12 tests of the forms and limits on hand-made layouts),
+  `rebuild/DESIGN.md` §7.
+- `.artifacts/lab/painter-r3/`: `head/` (the frozen library, lab and probe runner), `tools/run-all.sh` (all sets, three
+  browsers, under the lock), `tools/compare.py` (transitions against the before run or the round 2 evaluation),
+  `tools/features.ts`, `group.py`, `sample.py`, `show.ts`, `showid.sh`, `html.ts` (classification and one case's painted
+  DOM offline), `tools/limits.ts`, `limits-all.sh`, `limits-dump.ts` (limits against results), `tools/forms-probe.ts`
+  with `probes/forms-*.json` (painted forms in a browser), `tools/storage-probe.ts` and `sibling-probe.ts` (WebKit
+  string storage), `runs/<browser>/<set>-base` and `-final` (rows compressed), `limits/` and `classify/`.
+- `bun test rebuild/src`: the painter's 12 tests pass with the rest. `bunx tsc --noEmit -p rebuild/tsconfig.json` is
+  clean.

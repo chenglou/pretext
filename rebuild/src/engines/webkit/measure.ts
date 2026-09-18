@@ -25,6 +25,7 @@ export function canvasString(text: string): string {
 }
 
 // ---- Letter spacing and ligatures ----
+// rule webkit/measure/letter-spacing-merged-glyphs
 //
 // The DOM turns off liga, clig, dlig and hlig where letter-spacing isn't 0 (StyleComputedStyleBase.cpp:324-331,
 // UnrealizedCoreTextFont.cpp:258-264). An OffscreenCanvas context keeps them: setLetterSpacing changes the FontCascade's
@@ -42,35 +43,68 @@ function spacedGlyphCount(m: Measurer, box: WebKitBox, s: string): number {
   return Math.round((measureText(m, box.countContext, s) - measureText(m, box.plainContext, s)) / LETTER_SPACING_PROBE)
 }
 
-// What Canvas shows of merged glyphs in a string a letter-spaced box measures. `merged`: the string counts fewer
-// spacing-bearing glyphs than its code points do alone. `pairs`: the offsets of adjacent code point pairs that merge when
-// measured as a pair, [first, end of second). `separated`: on the simple font code path, the string with U+200C between the
-// code points of each such pair, when that leaves nothing merged; else null. WidthIterator commits the font range before a
-// default-ignorable without a glyph and adds it as a deleted glyph of width 0 (commitIgnorable, WidthIterator.cpp:318-323),
-// and a U+200C glyph sits between the two letters otherwise, so no lookup matches across it, and it gets no letter spacing
-// (calculateAdditionalWidth's baseWidth test). The separated string is the DOM's glyphs less what shaping does across each
-// separated pair with those features off: a pair adjustment between the two letters (probe R1: ProbeShantell 700 `fi` is
-// 0.288px wider in the DOM, Amiri's is equal). On the complex path U+200C would break joining, and a required ligature such
-// as lam-alef merges in the DOM too (probe R1), so nothing is separated there.
+// What Canvas shows of merged glyphs in a string a letter-spaced box measures. The features the DOM turns off join separate
+// grapheme clusters; inside a cluster glyphs merge by other rules the DOM keeps (marks, conjuncts, emoji sequences), so
+// clusters are counted, not code points. `merged`: the string counts fewer spacing-bearing glyphs than its grapheme clusters
+// do alone. `pairs`: the offsets of adjacent cluster pairs that merge when measured as a pair, [first, end of second).
+// `separated`: on the simple font code path, the string with U+200C between the clusters of each such pair, when that
+// leaves nothing merged; else null. WidthIterator commits the font range before a default-ignorable without a glyph and
+// adds it as a deleted glyph of width 0 (commitIgnorable, WidthIterator.cpp:318-323), and a U+200C glyph sits between the
+// two letters otherwise, so no lookup matches across it, and it gets no letter spacing (calculateAdditionalWidth's baseWidth
+// test). The separated string is the DOM's glyphs less what shaping does across each separated pair with those features
+// off: a pair adjustment between the two letters (probe R1: ProbeShantell 700 `fi` is 0.288px wider in the DOM, Amiri's is
+// equal). On the complex path U+200C would break joining, and a required ligature such as lam-alef merges in the DOM too
+// (probe R1), so nothing is separated there.
+// Where the listed families' facts say which font draws every character of the string and none of them is an input of a
+// liga, clig, dlig or hlig lookup there (ListedFontFacts.spacingInputs), letter-spacing changes nothing in the string:
+// whatever merges, merges in the DOM too (Geeza Pro's lam-alef and Allah ligatures are morx ligatures the DOM keeps).
 export type MergedGlyphs = { merged: boolean; pairs: Array<[number, number]>; separated: string | null }
 const NOTHING_MERGED: MergedGlyphs = { merged: false, pairs: [], separated: null }
 
+// Whether letter-spacing can change the string's shaping by the listed families' facts: false where every character is
+// drawn by a listed family that gives coverage and spacing inputs and none is an input; null where the facts don't say.
+function spacingCanChangeShaping(box: WebKitBox, s: string): boolean | null {
+  if (box.spacingFacts === null) return null
+  for (let i = 0; i < s.length; i++) {
+    const cp = s.codePointAt(i)!
+    if (cp > 0xffff) i++
+    let drawn = false
+    for (let k = 0; k < box.spacingFacts.length && !drawn; k++) {
+      const family = box.spacingFacts[k]!
+      if (!inRanges(family.coverage, cp)) continue
+      if (inRanges(family.inputs, cp)) return true
+      drawn = true
+    }
+    if (!drawn) return null
+  }
+  return false
+}
+
+function inRanges(ranges: readonly number[], cp: number): boolean {
+  let low = 0
+  let high = ranges.length / 2 - 1
+  while (low <= high) {
+    const middle = (low + high) >> 1
+    if (cp < ranges[2 * middle]!) high = middle - 1
+    else if (cp > ranges[2 * middle + 1]!) low = middle + 1
+    else return true
+  }
+  return false
+}
+
 export function mergedGlyphs(m: Measurer, box: WebKitBox, text: string): MergedGlyphs {
   if (box.letterSpacing === 0 || text.length < 2) return NOTHING_MERGED
+  if (spacingCanChangeShaping(box, text) === false) return NOTHING_MERGED
   const s = canvasString(text)
-  const starts: number[] = []
+  const starts = graphemeBoundaries(s, graphemeRulesFor('webkit'))
   const counts: number[] = []
   let alone = 0
-  for (let i = 0; i < s.length;) {
-    const length = s.codePointAt(i)! > 0xffff ? 2 : 1
-    const count = spacedGlyphCount(m, box, s.slice(i, i + length))
-    starts.push(i)
+  for (let k = 0; k + 1 < starts.length; k++) {
+    const count = spacedGlyphCount(m, box, s.slice(starts[k]!, starts[k + 1]!))
     counts.push(count)
     alone += count
-    i += length
   }
   if (spacedGlyphCount(m, box, s) >= alone) return NOTHING_MERGED
-  starts.push(s.length)
   const pairs: Array<[number, number]> = []
   let separated = ''
   for (let k = 0; k + 1 < counts.length; k++) {
@@ -84,6 +118,7 @@ export function mergedGlyphs(m: Measurer, box: WebKitBox, text: string): MergedG
 }
 
 // ---- VT, FF and CR ----
+// rule webkit/measure/vt-ff-cr-as-space-shaped
 //
 // Canvas turns U+0009-U+000D into spaces before it measures (CanvasRenderingContext2DBase.cpp:2847-2875), so it never shapes
 // the DOM's string. What the DOM does with VT, FF and CR, all on the WidthIterator path (a control keeps a box off
@@ -146,7 +181,13 @@ function measureDomString(m: Measurer, box: WebKitBox, context: number, text: st
       if (segment !== '') width = f32(width + measureText(m, context, segment))
       break
     }
-    if (segment !== '') width = f32(width + f32(measureText(m, context, `${segment} `) - space))
+    // The text before the control, shaped before a space: its own total where Canvas shows no adjustment between its last
+    // letter and a space (exact), else the total with the space less the space.
+    if (segment !== '') {
+      const last = segment[segment.length - 1]!
+      const adjusted = measureText(m, context, `${last} `) !== f32(measureText(m, context, last) + space)
+      width = f32(width + (adjusted ? f32(measureText(m, context, `${segment} `) - space) : measureText(m, context, segment)))
+    }
     if (s.charCodeAt(i) !== 0x0d) width = f32(width + measureText(m, context, String.fromCharCode(1)))
     segmentStart = i + 1
   }
@@ -197,19 +238,41 @@ function addWordSpacing(box: WebKitBox, from: number, to: number, width: number)
   return w
 }
 
-// WidthIterator with tabs allowed (WidthIterator.cpp:500-519): a TAB's advance is its tab stop, and letter spacing is
-// added after it as after every glyph with an advance; the text between TABs is a Canvas total.
+// WidthIterator with tabs allowed. It first sums every glyph, a TAB as the space glyph, and shapes (advanceInternal,
+// WidthIterator.cpp:440-488; a TAB is treated as a space, FontCascadeInlines.h:140-143), which is what Canvas totals for the
+// string, since Canvas turns a TAB into a space too. Then it adds, per character in order, what spacing and tab stops add
+// (applyExtraSpacingAfterShaping, :654-690): for a TAB f32(stop - space glyph) and then the letter spacing
+// (calculateAdditionalWidth, :491-517; applyAdditionalWidth, :556-563), the stop counted from the TextRun's xPos plus the
+// advances so far. So a lone TAB is f32(space + f32(stop - space)), not the stop (suite c-6607fcdcc27aec94: 22.880001068115234px
+// for a stop 22.8799991607666px away). Without letter and word spacing the Canvas total plus the TABs' additions in order is
+// WidthIterator's own float32 order; with spacing the additions interleave with the spacing's, and the text between TABs is
+// summed piece by piece. The pen position before a TAB is a Canvas prefix total, where WidthIterator adds advances per
+// character from xPos (gap tab-stops).
 function tabbedWidth(_p: WebKitPrepared, m: Measurer, box: WebKitBox, from: number, to: number, left: number): number {
   const text = box.text
   const spaceWidth = measureText(m, box.plainContext, ' ')
+  const tabAddition = (position: number): number => f32(tabWidth(box, spaceWidth, position) - spaceWidth)
+  if (box.letterSpacing === 0 && box.wordSpacing === 0) {
+    let width = measureDomString(m, box, box.context, text.slice(from, to))
+    let added = 0
+    for (let i = from; i < to; i++) {
+      if (text.charCodeAt(i) !== 0x09) continue
+      const before = i > from ? measureDomString(m, box, box.context, text.slice(from, i)) : 0
+      const addition = tabAddition(f32(left + f32(before + added)))
+      added = f32(added + addition)
+      width = f32(width + addition)
+    }
+    return width
+  }
   let width = 0
   let segmentStart = from
   for (let i = from; i <= to; i++) {
     if (i < to && text.charCodeAt(i) !== 0x09) continue
     if (i > segmentStart) width = f32(width + measureDomString(m, box, box.context, text.slice(segmentStart, i)))
     if (i < to) {
-      width = f32(width + tabWidth(box, spaceWidth, f32(left + width)))
-      if (box.letterSpacing !== 0) width = f32(width + box.letterSpacing)
+      let addition = tabAddition(f32(left + width))
+      if (box.letterSpacing !== 0) addition = f32(addition + box.letterSpacing)
+      width = f32(width + f32(spaceWidth + addition))
     }
     segmentStart = i + 1
   }
@@ -254,6 +317,7 @@ export function boxWidth(p: WebKitPrepared, m: Measurer, box: WebKitBox, from: n
     // tab path adds word spacing itself.
     width = addWordSpacing(box, from, end, tabbedWidth(p, m, box, from, end, left))
   } else {
+    // rule webkit/measure/word-spacing-in-context
     // The spaced context adds word spacing where WidthIterator does, in its float32 order: after SPACE, LF and NBSP past index
     // 0 of the TextRun, which starts at `from` in both (TextUtil.cpp:84-89; WidthIterator.cpp calculateAdditionalWidth).
     width = measureDomString(m, box, box.spacedContext, box.text.slice(from, end))

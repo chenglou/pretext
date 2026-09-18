@@ -186,6 +186,23 @@ function r5(id: string, fonts: string[], controls: number[], pairs: Array<[strin
   }
 }
 
+// R6: plain Canvas totals of strings, with U+200D written as {J} in the list.
+const R6 = String.raw`
+const out = [];
+for (const font of FONTS) for (const spacing of SPACINGS) {
+  const c = ctxOf(font, spacing);
+  for (const raw of TEXTS) { const text = raw.split('{J}').join(String.fromCharCode(0x200d)); out.push({ font, spacing, text: raw, width: c.measureText(text).width }); }
+}
+return out;
+`
+
+function r6(id: string, fonts: string[], spacings: number[], texts: string[], fixtures: string[] | undefined): Probe {
+  return {
+    id, spec: 'round 3 R6 Canvas totals', pageLang: 'en', ...(fixtures === undefined ? {} : { fontFixtures: fixtures }), html: '<div id="t"></div>',
+    observe: [{ kind: 'script', source: `${HELPERS}\nconst FONTS = ${JSON.stringify(fonts)}; const SPACINGS = ${JSON.stringify(spacings)}; const TEXTS = ${JSON.stringify(texts)};\n${R6}` }],
+  }
+}
+
 function r3(id: string, langs: Array<string | null>, fonts: string[], texts: string[]): Probe {
   return {
     id, spec: 'webkit-canvas §1.3 locale and system fallback; round 3 R3', pageLang: 'en', html: '<div id="t"></div>',
@@ -227,6 +244,7 @@ export default async function round3Probes(): Promise<Probe[]> {
     r3('webkit-round3 R3c (one character through a list)', ['en', 'hi', 'zh-Hant', 'ko'],
       ['18px "Hiragino Sans"', '18px "PingFang SC"', '18px "Apple SD Gothic Neo"', '18px Arial', '18px sans-serif', '18px "Hiragino Sans", "PingFang SC", "Apple SD Gothic Neo", Arial, sans-serif', '18px "Hiragino Sans", "PingFang SC", "Apple SD Gothic Neo", Arial, LastResort', '18px "Hiragino Sans", "PingFang SC", "Apple SD Gothic Neo", Arial', '18px LastResort', '18px "Hiragino Sans", LastResort', '18px Arial, LastResort'],
       ['‧', '—', '臺', 'あ']),
+    r6('webkit-round3 R6 (joining forms in Amiri and Arial)', ['24px Amiri', '16px Arial', '16px "Geeza Pro"'], [0, 1], ['ب', 'بب', 'ببب', 'بببببب', 'ببب{J}', '{J}ببب', '{J}ببب{J}', 'ب{J}', '{J}ب', '{J}ب{J}', 'بببب', 'ببببب'], ['Amiri']),
     r5('webkit-round3 R5 (controls between letters)', ['16px Arial', '16px "Helvetica Neue"', '16px "Times New Roman"', '16px Georgia', '16px Menlo', '13px Verdana'],
       [0x0b, 0x0c, 0x0d, 0x01, 0x1c, 0x1f, 0x7f, 0x85, 0x9f], [['A', 'V'], ['T', 'o'], ['a', 'b'], ['V', 'A']]),
     r1('webkit-round3 R1 (Arabic, fixture fonts)', ['16px Amiri', '16px "Noto Naskh Arabic"'], [1, -1], ['صلىالله', 'لالِا', 'الله', 'لا', 'سلام', 'بِبِ', 'كل'], ['Amiri', 'Noto Naskh Arabic'], 'rtl'),

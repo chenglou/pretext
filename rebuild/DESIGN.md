@@ -322,7 +322,7 @@ known about which later family draws a character.
 | Fact | What it says | From | Can narrow or replace |
 |---|---|---|---|
 | `coverage` | the code points the engine finds in the font | Blink asks the cmap, and Core Text for U+2010 and U+2011 only (`harfbuzz_face.cc:210-231`); WebKit asks Core Text for every character, which synthesizes some glyphs (U+2010, U+2011, NBSP, LF, U+2028) and withholds some of the platform UI font's (`GlyphPageCoreText.cpp:51-73`); Gecko reads the cmap and clears a complex script range in an installed font that has neither `morx` nor a GSUB script for it (`CoreTextFontList.cpp:271-336`, `gfxPlatformFontList.cpp:79-155`) | Gecko `font-fallback` at an emergency break after a hyphen (whether the hyphen and the letters around it come from one listed font); WebKit `font-fallback` and `canvas-language` (what no named family draws); Blink `script-context` (which font draws a character, so whose `scriptLookups` apply) |
-| `ligatures` | the character sequences the font's default features draw as one glyph across grapheme clusters: every string made of one alternative per `positions` entry. `spaced`: still a ligature under the features the engine sets for non-zero letter-spacing. `exact`: every such string was shaped. `everyContext`: alone and, for Arabic script, joined on either side. `acrossMark`: with a combining mark after the first character. `complete`: no other ligature exists under the default language system; when false the list can confirm a ligature, never rule one out | the font's GSUB LigatureSubst entries and `morx` ligature subtables, mapped back to characters and shaped: HarfBuzz for Blink, Core Text for WebKit, and for Gecko Core Text where it shapes the font through it (`gfxMacFont.cpp:154-160`), else HarfBuzz | Blink `glyph-clusters` at line and item edges, and positions inside a ligature; Gecko `in-word-prefix`; WebKit `letter-spacing-ligatures` |
+| `ligatures` | the character sequences the font's default features draw as one glyph across grapheme clusters: every string made of one alternative per `positions` entry. `spaced`: still a ligature under the features the engine sets for non-zero letter-spacing. `exact`: every such string was shaped. `everyContext`: alone and, for Arabic script, joined on either side. `acrossMark`: with a combining mark after the first character. `complete`: no other sequence of base characters ligates under the default language system; when false the list can confirm a ligature, never rule one out. Patterns list base characters only: marks between them aren't listed, and `acrossMark` is all that was shaped about them | the font's GSUB LigatureSubst entries and `morx` ligature subtables, mapped back to characters and shaped: HarfBuzz for Blink, Core Text for WebKit, and for Gecko Core Text where it shapes the font through it (`gfxMacFont.cpp:154-160`), else HarfBuzz. For an engine Core Text shapes for, null on a face whose `morx` table the offline Core Text run rejected (its verdicts there were wrong: the browsers ligate Thonburi's `fi`), and `complete` false where the two shapers disagree on any string | Blink `glyph-clusters` at line and item edges, and positions inside a ligature; Gecko `in-word-prefix`; WebKit `letter-spacing-ligatures` |
 | `spacingInputs` | the characters that can become a glyph at which a lookup starts that belongs to a default-on feature the engine turns off for non-zero letter-spacing: `liga` and `clig` in all three, `calt` in Blink too (`font_features.cc:54-86`; `UnrealizedCoreTextFont.cpp:258-264`; `gfxFont.cpp:675-700`), or their `morx` feature settings. Text holding none of them shapes the same with those features on and off; an empty list says letter-spacing never changes the font's shaping | the coverage of those features' lookups (a lookup acts only where the glyph is in a subtable's coverage) and the glyph classes of those `morx` subtables, mapped back to characters | WebKit `letter-spacing-ligatures`, which fires today on any two adjacent characters under letter-spacing; the same condition in Blink and Gecko where Canvas and the DOM set different features |
 | `scriptLookups` | Unicode scripts grouped by the GSUB and GPOS script records HarfBuzz selects for them; scripts in one group get the same features and lookups under every language system, and a script that isn't listed shares the font's fallback records (`DFLT`, else `dflt`, else `latn`). `[]`: the script never changes the lookups. The shaper, the direction and fallback positioning still follow the script | `hb_ot_layout_table_select_script` (`hb-ot-layout.cc:561-608`) over the script's tags (`hb-ot-tag.cc:36-181`); a table HarfBuzz doesn't apply counts as equal for all scripts (GSUB with `morx`, GPOS under `kerx`; `hb-ot-shape.cc:59-65, 150-185`). null where Core Text shapes | Blink `script-context`: a character Canvas shapes under another script than the paragraph differs only when the two scripts are in different groups of the font that draws it (Arial has no `DFLT`, so Common text falls to `latn` and equals Latin) |
 
@@ -1201,9 +1201,14 @@ opportunities and the paragraph reports `dictionary-breaks-unavailable`.
 ## 7. Painter
 
 `paintLines(paragraph, layout, document)` in `src/paint.ts` returns one `div` per line with a line box, in form A-wrap
-(specs/painter.md §1, §6). It reads the shared fields `fragments`, `hasLineBox`, `joinsNextLine`, `slot`, `indented`,
-`align` and the layout's `belowFloats`, and in its one engine switch `layout.engine` for the hyphen span and the soft
-wrap box, with Blink's `geometry.needsAccurateEndPosition`.
+(specs/painter.md §1, §6), and `painterLimits(paragraph, layout)` returns, for the same lines, the named limits of what
+painting that line alone can't reproduce (tentpole 7; "Limits" below). Both plan a line first (`planLine`), from the
+shared fields `fragments`, `hasLineBox`, `joinsNextLine`, `slot`, `indented`, `align`, the layout's `belowFloats` and,
+per engine, the widths that say whether the line reaches past its band (Blink `width`, `hangWidth`, `availableWidth`;
+WebKit `contentWidth`, `hangingWidth`, `lineBoxWidth`; Gecko `width`, `hang`, `availableWidth`), Blink's
+`needsAccurateEndPosition`, and WebKit's `next.offset` and `next.previousLine.carriedWidth` and its boxes'
+`shapedAcrossBoxes`, which only the limits read. The plan turns the line into tokens (`lineTokens`: text nodes, element
+opens and closes, the nodes the painter makes), which need no document, and `paintLines` builds the DOM from them.
 
 - **The line block** has the paragraph's content width, font, spacing, `lang`, `direction`, `white-space`, `word-break`,
   `overflow-wrap`, `line-break`, `tab-size`, `text-align` and fixed line height, the fixed styles of §1.1, the
@@ -1217,38 +1222,89 @@ wrap box, with Blink's `geometry.needsAccurateEndPosition`.
   slot in row 0) holds its floats, and every other painted line is a holder block, the floats and then the line block,
   where they intrude on the line block's line as floats already placed do. Blink and Gecko place the band the same way
   in both forms (`LineLayoutOpportunity`; Gecko's float available space), and their tab stops read the same float
-  offset. Before this, 173 webkit-host feature-family cases painted a tab beside a left float up to 16 px off. The
-  browser then runs its own line-end rules on the painted line as it did in the paragraph. Blink trims CJK punctuation at a line end in `ShapeLine`, which only runs while wrapping
-  (`あいうえお。` is 88px natively and 96px under `pre`), and Gecko counts only the non-overflowing part of hanging
-  `pre-wrap` spaces (painter.md §3.1 e, §3.3 f). A line wider than predicted wraps, and the lab sees the painted line on
-  two lines. Tab stops count from the line start in both. A line that ends with a hyphen fragment, or starts with the
-  U+200D of R7, gets `text-wrap-mode: nowrap`. The paragraph offered no break before the hyphen or after the joiner, but
-  painted they begin a new item and a new grapheme cluster, and an overflowing line, as every line is at the narrowest
-  widths, broke there again: Blink and WebKit at the chosen soft hyphen left in the slice
-  (`InlineFormattingUtils.cpp:385-437`), Gecko after the joiner under `overflow-wrap`. A line that ends at a hyphen has
-  no line-end punctuation or hanging white space for the wrapping rules to act on.
-- **Soft wraps.** A painted line is its block's last line, where white space at the line's end is handled as before a
-  forced break. Where an engine's rule for that white space reads whether more content follows, a line that ended at a
-  soft wrap (another engine line follows, no `<br>` or forced break ended it) ends with an empty inline-block of width
-  `calc(100% + 1px)`, which fits no band, so the browser wraps before it and the painted line is a wrapped line again.
-  The box goes inside the spans that continue on the next line, which carry their end edges there. It applies, in the
-  painter's engine switch:
+  offset. The browser then runs its own line-end rules on the painted line as it did in the paragraph. Blink trims CJK
+  punctuation at a line end in `ShapeLine`, which only runs while wrapping (`あいうえお。` is 88px natively and 96px
+  under `pre`), and Gecko counts only the non-overflowing part of hanging `pre-wrap` spaces (painter.md §3.1 e, §3.3 f).
+  A line wider than predicted wraps, and the lab sees the painted line on two lines. Tab stops count from the line start
+  in both.
+- **Lines that don't wrap** get `text-wrap-mode: nowrap` on the line block.
+  - A line that ends with a hyphen fragment, or starts with the U+200D of R7. The paragraph offered no break before the
+    hyphen or after the joiner, but painted they begin a new item and a new grapheme cluster, and an overflowing line,
+    as every line is at the narrowest widths, broke there again: Blink and WebKit at the chosen soft hyphen left in the
+    slice (`InlineFormattingUtils.cpp:385-437`), Gecko after the joiner under `overflow-wrap`. A line that ends at a
+    hyphen has no line-end punctuation or hanging white space for the wrapping rules to act on.
+  - A line that reaches past its band by the engine's own widths, hanging white space left out. The paragraph kept it
+    whole: nothing before its end could take the break, or the break was chosen with other widths than the line ended
+    up with. Blink chooses a break with the positions of the paragraph's shape result and reshapes the line's end
+    afterwards, and the reshaped end is wider where the last glyph had a pair adjustment with the next line's first
+    (`ShapeLine`, `shaping_line_breaker.cc:500-600`; `rule/in-word-breaks` `c-0306e405706818cd`: `AVAVAVAV` under
+    `break-all` is 123.59 px in a 121.80 px band). Painted alone the browser sees the final widths first and breaks the
+    line again wherever its own rules let it. Three kinds of such lines keep wrapping: one that ends in white space,
+    which hangs or trims as it did because the line wraps (`rule/br-elements` lost its hanging space under nowrap); one
+    with a single grapheme cluster, which nothing can break; and in Blink one that ends with a character HanKerning may
+    trim (`Character::MaybeHanKerningOpenOrCloseFast`'s ranges, `character.h:138-141`), because `ShapeLine` trims it
+    only while it breaks lines (`shaping_line_breaker.cc:344-376`; `rule/hankerning` painted 8 px wider under nowrap).
+- **Soft wraps.** A painted line is its block's last line and its bidi paragraph's end. Where an engine's rule for the
+  line's end reads whether more content follows, a line that ended at a soft wrap (another engine line follows, no
+  `<br>` or forced break ended it) ends with an empty inline-block of width `calc(100% + 1px)`, which fits no band, so
+  the browser wraps before it and the painted line is a wrapped line again. The box goes inside the spans that continue
+  on the next line, which carry their end edges there. It applies, in the painter's engine switch:
+  - Every engine, a last character that a bidi paragraph's end resets and that the paragraph kept at another level than
+    the base level: a boundary neutral such as U+200C or U+200D after a letter of another direction, Gecko's trailing
+    white space, which has no line-end rule, and in WebKit and Gecko a trimmed space. ICU gives the run of white space,
+    separators, boundary neutrals and explicit and isolate codes before a paragraph's end the paragraph level
+    (`adjustWSLevels`, `ubidi.cpp:2289-2324`, `ubidiimp.h:94-102`; Blink and WebKit), and so does unicode-bidi's
+    `reorder_levels`, which Gecko runs over its whole paragraph (`lib.rs:1146-1200`, `unicode-bidi-ffi/src/lib.rs:54`).
+    Reset, the character becomes an item, box or frame of its own: shaped apart from the letter before it (`ب` before
+    U+200D took its isolated form, 11.41 px for 3.91 px, `c-18f83148f2a14065`), open to an overflow break before it
+    (WebKit and Gecko moved a U+200C to a second line, `c-0da61e56106f1f0b`, `c-027754d73c591d1d`), and in WebKit removed
+    at the line's end as a run of its own with its plain width, where the paragraph took the space's width inside its
+    run (in an RTL box the word with the space less the word, `Line::Run::removeTrailingWhitespace`,
+    `InlineLine.cpp:963-987`; all 44 `rule/text-align` webkit-host failures of round 2, `c-27daf54faef90b34`). The box
+    isn't such a character, so the run before it isn't at the paragraph's end. ICU gives a boundary neutral the level of
+    the character after it (`ubidi.cpp:2309-2321`), so this box goes inside the override span that holds the character,
+    where the override forces it to the character's level too; after the span it handed the block's level to the
+    character (`c-ede93b4ce64f1921`). Blink breaks before the box by UAX #14, which allows no break after U+200D (LB8a)
+    or a word joiner (LB11), so there a line ending in one of them gets no box: the box took the character to the second
+    line with it (`c-abda075f770468f9`). WebKit breaks between any text and an atomic inline (`isAtSoftWrapOpportunity`,
+    `InlineFormattingUtils.cpp:385-437`).
   - WebKit and Gecko, a line ending in `hanging` white space. A `pre-wrap` sequence hangs unconditionally at a soft wrap
     and conditionally at the end (WebKit `horizontalAlignmentOffset`, `InlineFormattingUtils.cpp:198-217`), which moves
     alignment and justification. Gecko's `TextAlignLine` hangs or trims trailing white space only on a wrapped line
-    (`nsLineLayout.cpp:3505-3516`), reserves a span's end border and padding on each line of it
-    (`nsInlineFrame.cpp:512-513`), and resolves white space at the paragraph's end to the base level (UAX #9 L1) where
-    the paragraph kept its level.
+    (`nsLineLayout.cpp:3505-3516`) and reserves a span's end border and padding on each line of it
+    (`nsInlineFrame.cpp:512-513`).
+  - Blink, a line ending in hanging spaces. They hang conditionally on a block's last line and unconditionally on a
+    wrapped one (`ComputeTrailingSpaceWidth`, `line_info.cc:353-366`), which moves `center`, `end` and `justify` lines by
+    the hanging width, and at the paragraph's end ICU gives them the base level, which splits them from the item of a
+    text of another level, so the two are shaped apart and the text loses its pair adjustment with the space
+    (`c-0985b4f121df8555`: `LYAY` 46.6953 px without the box, 46.328 px natively and with it). Round 2 left these lines
+    without a box because one `rule/atomic-inlines` line had backed up to an earlier break with it; the forms probe
+    (`.artifacts/lab/painter-r3/probes/forms-chrome-1.json`, variants `A-*`) paints that line (`c-049fe22e37c2b9cb`) at
+    the native width with the box after the spaces, inside or after the override span, and in round 3's runs no pair
+    is lost to it.
   - Blink, a line ending in a `trimmed` collapsible space whose end isn't reshaped (`needsAccurateEndPosition` false,
     `line_info.cc:127-175`). The paragraph shaped the text with the space after it and trimmed the space afterwards
     (`line_breaker.cc:255-268`); a block's end removes the space from the text before shaping (`ExitBlock`,
     `inline_items_builder.cc:1622-1629`), so `LYAY ` lost Arial's Y+space kerning. Where the end is reshaped, the
-    paragraph shaped the text without the space, as a block's end does, and the line gets no box. Blink's hanging
-    `pre-wrap` spaces get none either: under override spans the bidi control items between the spaces and the box end
-    the trailing spaces, and the overflowing line backs up to an earlier break (`c-049fe22e37c2b9cb`).
-  A nowrap line block, a line whose innermost continuing span doesn't wrap (CSS Text §5.1: the nearest common ancestor's
-  `white-space` decides a break between boxes), and a line ending with R7's U+200D (UAX #14 LB8a, ICU `line.txt:151-153`)
-  get no box. Nothing measures the box: it only ends the line where the paragraph's next content did.
+    paragraph shaped the text without the space, as a block's end does, and the line gets no box.
+  The break before the box is the business of the box holding the line's last character: for a soft wrap opportunity
+  made by a character that disappears at the break, the properties of the box directly containing it control the break
+  (CSS Text 3 §5.1). In Blink the painter reads the wrapping of that leaf's style, so a wrapping span's trimmed space
+  ends a line in a `nowrap` block with the box: after trailing spaces the line is in its trailing state, which ends at
+  the first item that can't trail, whatever that item's own wrapping (`BreakLine`, `line_breaker.cc:1100-1107`; the two
+  `rule/nowrap-spans` wraps of round 2, `c-1a3fdb57af71a97c`). In WebKit the same box moved the fit decision of a line
+  at its threshold (`c-a98e884c6f665a5d`, not traced), so there and in Gecko the block's own `white-space` decides. A
+  line whose innermost continuing span doesn't wrap and a line ending with R7's U+200D (UAX #14 LB8a, ICU
+  `line.txt:151-153`) get no box. Nothing measures the box: it only ends the line where the paragraph's next content
+  did.
+- **Forced breaks.** A preserved newline, U+2028 or U+2029 that ended the line is painted as it was, after everything
+  else on the line (Gecko's hyphen at a soft hyphen before a newline comes after the newline among the fragments,
+  `c-6ed3f560105d1120`), and a `<br>` is painted as a `<br>`. The painted line then ends at a forced break as the
+  paragraph's did and not at its block's end, which the engines don't treat alike: Blink ends a line at a forced break
+  whatever hangs past the band, where at a block's end it handles the overflow and backs up to an earlier break
+  (`BreakLine`'s `IsAtEnd`, `line_breaker.cc:1030-1040`; the two `rule/br-elements` wraps of round 2,
+  `c-ac6b59190d0c4ac4`, where a tab after hanging spaces reached past the band). A forced break at a block's end makes
+  no line of its own.
 - **Elements and slices.** The painter paints the line's pieces in logical order inside the elements that hold them,
   and between two consecutive pieces it replays the paragraph's element structure from the content index: spans that
   close are closed, spans that open are opened, and a span that opens and closes between them is painted empty. A span
@@ -1257,18 +1313,41 @@ wrap box, with Blink's `geometry.needsAccurateEndPosition`.
   its `box-end`. A span with a nonzero edge on a line where none of its content is painted is painted for that edge
   alone; a span without edges is painted only around painted content or between painted pieces. The painted pieces of
   one leaf on a line become one text node, split only where the level changes. Slices of different leaves are never
-  merged, since WebKit never measures across a text box and Blink rounds up each item's width. Two rules keep the
-  paragraph's layout objects. A span with no painted text on the line between two painted pieces is painted empty: a
-  text node of only white space is laid out after an inline box and dropped after white space (the Blink port's
-  `layoutTextNeeded`, text.cc:319-364), and `c-0ca55250962649aa` lost a form feed's 5.33px when its empty span wasn't
-  painted. A bare slice of U+0020 and U+0009..U+000D that starts a line in `normal` or `nowrap` goes in a span, because
-  as a block's first child it gets no layout object, where the paragraph's node had text on another line (a VT alone on
-  a line, `c-18cb262b839dc1d5`). That white-space set is Blink's for every engine today; §1.3 lists the per-engine sets.
+  merged, since WebKit never measures across a text box and Blink rounds up each item's width. Rules that keep the
+  paragraph's layout objects and text:
+  - A span with no painted text on the line between two painted pieces is painted empty: a text node of only white
+    space is laid out after an inline box and dropped after white space (the Blink port's `layoutTextNeeded`,
+    text.cc:319-364), and `c-0ca55250962649aa` lost a form feed's 5.33px when its empty span wasn't painted.
+  - A bare slice of U+0020 and U+0009..U+000D that starts a line in `normal` or `nowrap` goes in a span, because as a
+    block's first child it gets no layout object, where the paragraph's node had text on another line (a VT alone on a
+    line, `c-18cb262b839dc1d5`). That white-space set is Blink's for every engine today; §1.3 lists the per-engine sets.
+  - White space the engine collapsed between two painted pieces of one leaf is painted where it was, and the browser
+    collapses it again. In WebKit a run whose trailing white space was collapsed takes no more text
+    (`Line::appendTextContent`'s `needsNewRun`, `InlineLine.cpp:374-385`), so the pieces on the two sides are two boxes,
+    whose float32 widths sum to another line width than one box's (a newline after a space in `normal`: 46.66 + 500 px
+    against one box of 546.66003 px, `c-334d212830923ac4`). Other collapsed text stays out, since an unused soft hyphen
+    would offer the painted line a break, with one exception: where the line's last piece ends in a collapsible space
+    that the engine kept because text it didn't place follows it, that text is painted too. Gecko counts a frame's
+    trimmable white space back from its last character, and an unused soft hyphen there stops the count
+    (`GetTrimmedOffsets`, `nsTextFrame.cpp:3319-3328`; `c-c3098254ada63761`: 19.17 px natively, 14.5 px with the space
+    at the block's end).
+  - WebKit: a text node gets the string storage the paragraph's node had. WebKit keeps a text node's string in 8 bits
+    when it's made from Latin-1 text and in 16 when the leaf held any character above U+00FF, and its layout reads the
+    storage (the WebKit port's `is8Bit`): an emergency break of 8-bit text keeps one code unit at the line start, where
+    16-bit text also keeps the characters after it that can't start a line
+    (`firstCharacterBreakRespectingLineStartProhibitions`, `InlineContentBreaker.cpp:139-158`). A Latin-1 slice of a
+    16-bit leaf made an 8-bit node: `a` and U+00A0 from `a`, U+00A0, U+3000, `b` broke after `a`
+    (`c-c2d1c62d0c2618c7`, which passed in round 2's rows only through the page's history and fails alone with round
+    2's painter too). `deleteData` builds its string from views of the old one, which keep its 16 bits
+    (`CharacterData.cpp:148-156`, `WTFString.cpp:90-100`), so such a node is made with a wide character after the text
+    and loses it again. Probe `.artifacts/lab/painter-r3/tools/storage-probe.ts` (webkit-host): every string a script
+    builds from those characters gives the 8-bit break, and `deleteData`, `replaceData` and `splitText` give the
+    paragraph's.
 - **Atomic inlines** are painted as empty inline-blocks of their border box and margins, `vertical-align: top`, at their
-  level, for the app to fill. `<br>` isn't painted. A `<wbr>` fragment is painted as a `<wbr>` element between its
-  leaves, as the paragraph had it: in a nowrap span, `aaaa` and ` bbbb` painted without it wrapped in Firefox where the
-  paragraph with it didn't (`c-46b2a8b889e1361c`, all 12 Firefox `rule/wbr-elements` painter failures; Gecko gives `<wbr>`
-  a U+200B for bidi, `nsBidiPresUtils.cpp:1389-1393`; the break side not traced). The probe in
+  level, for the app to fill. A `<wbr>` fragment is painted as a `<wbr>` element between its leaves, as the paragraph
+  had it: in a nowrap span, `aaaa` and ` bbbb` painted without it wrapped in Firefox where the paragraph with it didn't
+  (`c-46b2a8b889e1361c`, all 12 Firefox `rule/wbr-elements` painter failures; Gecko gives `<wbr>` a U+200B for bidi,
+  `nsBidiPresUtils.cpp:1389-1393`; the break side not traced). The probe in
   `.artifacts/lab/painter-r2/probe-box-edges.ts` agrees: in Firefox the line wraps without `<wbr>` and as one text node,
   and holds with it. Chrome breaks at that `<wbr>` in the paragraph too, and WebKit holds the line in every form.
 - **White space.** `text` and `hanging` fragments are painted as laid out, Blink's CR and FF in preserve modes
@@ -1276,10 +1355,29 @@ wrap box, with Blink's `geometry.needsAccurateEndPosition`.
   slice, so the browser trims it again and shapes the text before it the same way. Blink keeps Arial's A+space
   adjustment on the last `A` of `AAAA `, because a line ending at a space isn't reshaped: 2676 raw units at 60px, where a
   painted `AAAA` measures 2732. WebKit measures a word together with its following space (painter.md §3.1 c, §3.2 a).
-  `collapsed` and `forced-break` fragments aren't painted. In Blink a `hanging` fragment starts a text node of its own:
-  preserved trailing spaces are an item result of their own, rounded up alone (`HandleTrailingSpaces`,
-  `line_breaker.cc:2418-2534`), and a node of their own is an item of its own that `ShapeText` still shapes with the text
-  before it (`inline_node.cc:1636-1673`): painted as one node, `b ` rounded to one LayoutUnit less.
+  In Blink `hanging` spaces after text of the same leaf are painted in one of three forms. They are an item result of
+  their own, rounded up alone (`HandleTrailingSpaces`, `line_breaker.cc:2418-2534`), and the text before them either
+  keeps its pair adjustment with the first space or lost it when the paragraph reshaped its end. `ShapeLine` reshapes the
+  end of an item's part unless the break sits after a space and the line needs no accurate end position
+  (`dont_reshape_end_if_at_space_`, `shaping_line_breaker.cc:481-488`, `line_breaker.cc:1655-1659`). The break before
+  hanging spaces sits after them (`non_hangable_run_end` moves the part's end back to the text, `:492-497`), except
+  where the text overflowed and `HandleOverflow`'s retry broke it at a character (`override_break_anywhere_`,
+  `line_breaker.cc:4258-4265`, `:4612-4623`): that break sits at the text's end.
+  - A text node of their own, where the text kept the adjustment: the node is an item of its own that `ShapeText` still
+    shapes with the text before it (`inline_node.cc:1636-1673`), and the text's end is its item's end, which `ShapeLine`
+    never reshapes (`:466-473`). As one node a line that fits is one item result, rounded once (`:283-299`): `b `
+    rounded to one LayoutUnit less.
+  - The same node, where the line reaches past its band under `overflow-wrap` other than `normal`, `word-break:
+    break-word` or `line-break: anywhere`: the painted line overflows and breaks the same way, so the text is reshaped and
+    the spaces keep their part of a split pair adjustment, as in the paragraph. This is round 2's regression: 58 Chrome
+    pairs, 41 of them Arial `A` before hanging spaces at 16px, painted 113 units narrower by the A+space adjustment once
+    the spaces had their own node (`c-03e033cbc5d87077`).
+  - A span with `vertical-align: 0px` around them, which ends the shaping group (`inline_node.cc:494-527`), where the
+    line needs an accurate end position and the text was reshaped whatever the break: the text is shaped without the
+    spaces (`c-02082381a42bc70c`: `LYAY` 46.6953 px natively and in this form, 46.328 px as a node of their own). The
+    spaces lose their part of a pair adjustment that HarfBuzz splits between the two glyphs (limit
+    `hanging-space-kern-share`).
+  The forms probe has all three (`D-*`, `E-*`).
 - **The hyphen** is its own span with the letter spacing the engine gives it, styled in the painter's one engine switch:
   `vertical-align: 0px` in Blink, which ends the shaping group, so `‐` doesn't kern with the `r` of `super`;
   `unicode-bidi: isolate` in Gecko, which ends the text run; nothing in WebKit, whose layout measures the hyphen alone
@@ -1287,137 +1385,168 @@ wrap box, with Blink's `geometry.needsAccurateEndPosition`.
 - **Joining at a line edge.** Where `joinsNextLine` is true, U+200D goes after line n's text and before the next painted
   line's, so joining scripts keep their joined forms (R7; painter.md probe 5 hasn't run). Engines set it only where their
   shaping joined letters across the break, so the painter needs no engine switch for it. In Firefox the joiner doesn't
-  bring the paragraph's widths back in the lab rows (below).
+  bring the paragraph's widths back in the lab rows, and under letter spacing it takes spacing itself (limit
+  `edge-inside-shaped-text`).
+- **Text run ends in Gecko.** Gecko adds letter spacing after a text run's last character whatever it is, and after any
+  other character only when it isn't a tab or a formatting character (General_Category Cf, `gfxFont.cpp:3661-3667`) and
+  a cluster starts after it (`CanAddSpacingAfter`, `nsTextFrame.cpp:3860-3873`). A painted line's text run ends with the
+  line. The paragraph's went on where the next character it kept was in the same leaf at the same level (a text run ends
+  between frames of different levels, `ContinueTextRunAcrossFrames`, `nsTextFrame.cpp:2022-2030`; a preserved newline
+  resolves to the base level), and there a tab or a formatting character at the line's end took no spacing: a tab alone
+  on a `pre-wrap` line under 1px letter spacing is 43.6 px natively and 44.6 px painted alone (`c-00c37ed0ef4a8064`), the
+  largest Firefox class on the held-out suite sample. One character after it keeps it from being last: a collapsible
+  space, which the line's end trims with its spacing, or where spaces are preserved a newline, which takes no spacing
+  (`:3864-3866`) and ends the block's last line as the block's end does (probe
+  `.artifacts/lab/painter-r3/probes/forms-firefox-1.json`, `T-*`, `Z-*`). A newline is a paragraph separator for the bidi
+  algorithm and would reset the character before it, which the soft wrap box is there to prevent; a formatting character
+  has no width, so its place among the line's pieces shows in no box while its spacing does, and the newline wins. The
+  line's own painted forced break serves as that character where it has one.
+- **Script at a line start in Blink.** The engines give a character of script Common or Inherited the script of the run
+  it continues, so at a line's start that of the text before the line (Blink's `ScriptRunIterator` merges it into the
+  current set, `script_run_iterator.cc:491-540`), and painted alone it takes the script of what follows. Blink reads a
+  run's script where it applies letter spacing, which a cursive script's run doesn't take
+  (`IsCursiveScript(run->script_)`, `shape_result.cc:977-1024`), and where it picks fonts and shapes. Where the text
+  before the line is Arabic and the line's own first script isn't, the painted line starts with U+061C ARABIC LETTER
+  MARK, which has no width and script Arabic, in the first piece's text node (probe
+  `.artifacts/lab/painter-r3/probes/forms-l7.json`, Chrome 153: a guillemet after Arabic under −1px letter spacing is
+  17.797 px in the paragraph and with the mark, 16.797 px without; `<tai` under 1.5px is 30.742 px against 32.242 px).
+  The mark is a grapheme cluster of its own, which a line that reaches past its band and still wraps would keep alone on
+  its first line, so such a line gets none, and a line of one cluster that reaches past its band doesn't wrap when it
+  takes the mark. Unicode has no such character for the other scripts (limit `script-at-line-start`). In Firefox the
+  mark changes no width: Gecko's cursive exemption reads each character's own script (`nsTextFrame.cpp:4209-4213`).
 - **Bidi.** A line with a piece at a level other than the base level gets `unicode-bidi: bidi-override` on the line
-  block, and inside each piece's innermost element one nested `bidi-override` span per level step, alternating direction.
-  Override spans never enclose elements, and a plain span doesn't change the embedding, so every code unit sits inside
+  block, and one nested `bidi-override` span per level step, alternating direction, so every code unit sits inside
   exactly as many overrides as its level is above the base, and the browser reorders the line with the paragraph's levels
   (R8, painter.md §4.4). Painted alone, `שלום (עולם` would resolve the unpaired `(` by N1 and reverse the whole line; with
   levels `1 1 1 1 0 0 1 1 1 1` it draws `שלום` at the left, as the paragraph does (painter.md §4.3, probe 7). Lines whose
   pieces all sit at the base level get no override. The base level is `paragraph.direction` while the model has no
-  `unicode-bidi: plaintext`; that planned field adds a base level per line. Text never sits directly in an override
-  element; a plain span goes between. WebKit measures a text box with its parent's `unicode-bidi` and `direction`
-  (`TextUtil.cpp:89-90`), so an RTL box right under an override is measured as an RTL override run where the paragraph
-  measures an LTR run without override, and its float32 width moves by a step (66 of 154 WebKit bidi lines in the lab
-  passed once the span was added). The line's trailing white space is painted at the level of the text before it in the
-  same leaf; box edges, `<br>` and `<wbr>` don't end the trailing white space. A painted line is a bidi paragraph of its
-  own, and white space at a paragraph's end takes the base level in all three browsers (UAX #9 L1: ICU's `ubidi_setPara`
-  in Blink and WebKit, unicode-bidi's `visual_runs` over the whole paragraph in Gecko,
-  `intl/bidi/rust/unicode-bidi-ffi/src/lib.rs:54`), so the painted level only decides node division, and one text node
-  keeps WebKit's measurement of a word with the space after it (`TextUtil.cpp:76-77`).
+  `unicode-bidi: plaintext`; that planned field adds a base level per line.
+  - An override span holds the longest run of pieces above its level, whole elements included; an element whose pieces
+    straddle the run holds its own override spans. Round 2 put the override spans inside the innermost element of each
+    piece. Blink then split a span with an edge into two box fragments: the override's closing control inside the span
+    sits at the painted paragraph's end, takes the base level, and after `BidiReorder`
+    (`logical_line_builder.cc:688-760`) the box's items aren't contiguous, so its edges go on the outer fragments
+    (`UpdateBoxDataFragmentRange`, `UpdateFragmentedBoxDataEdges`, `inline_box_state.cc:720-830`): all 90 Chrome
+    `rule/box-edges` and `rule/nested-box-edges` painter failures (`c-00e368136546bdb1`: the 6px border natively between
+    `b` and `bbb`, painted at the line's left end). With the override around the element the forms probe (`C-outer-dir`)
+    gives the native rects. The controls between pieces also ended Blink's shaping groups (any item that isn't text or a
+    tag does, `ShapeText`, `inline_node.cc:1636-1673`) and changed WebKit's break before a nowrap span: all 32 webkit-host
+    `rule/atomic-inlines` failures pass in this form, the 21 wraps, the 8 extents a float32 step off and 3 more.
+  - Elements and the spans that hold text keep the paragraph's direction, which an override span would hand down
+    instead. The direction decides the side of a span's edges; Gecko ends a text run between two frames whose writing
+    modes differ, direction included (`ContinueTextRunAcrossFrames`, `nsTextFrame.cpp:2033-2038`), which cost the joined
+    `ل` of `السلام` across spans 3.67 px (`c-137d09bcc442f307`, forms probe `W-*`); and WebKit trims an RTL box's trailing
+    space by its style's direction (`Line::Run::inlineDirection`, `InlineLine.h:395-398`).
+  - Text never sits directly in an override element; a plain span goes between. WebKit measures a text box with its
+    parent's `unicode-bidi` and `direction` (`TextUtil.cpp:89-90`), so an RTL box right under an override is measured as
+    an RTL override run where the paragraph measures an LTR run without override, and its float32 width moves by a step
+    (66 of 154 WebKit bidi lines in the lab passed once the span was added).
+  - The line's trailing white space is painted at the level of the text before it in the same leaf; box edges, `<br>`
+    and `<wbr>` don't end the trailing white space. At a paragraph's end it takes the base level in all three browsers
+    (above), so the painted level only decides node division, and one text node keeps WebKit's measurement of a word
+    with the space after it (`TextUtil.cpp:76-77`).
+  - A piece that continues the grapheme cluster of the piece before it in the same leaf takes that piece's level too.
+    The engines split pieces where the level changes, inside a cluster as well: at the paragraph's end a U+200C after a
+    letter of another direction has the base level. Painted at its own level it followed the override span's closing
+    control, which ends the letter's cluster (UAX #29 GB4), and an overflowing line that breaks at clusters broke there
+    (Blink's break-anywhere retry; 69 Chrome wraps in `suite/U+200C/end` and `suite/U+200D/end`,
+    `c-4793c60cfde7b77d`). At the letter's level the browser splits the two by level itself, as the paragraph did, with
+    no control between them.
 - Nothing sets a text width, so the painted geometry is an independent check of the predicted geometry. The widths the
   painter sets are the declared ones (slot floats, atomic boxes) and the soft wrap box's `calc(100% + 1px)`, which only
   makes it fit no band and sits on the painted block's second line, where the lab reads no text. The painter throws for
-  negative slot insets, which floats can't paint.
+  negative slot insets, which floats can't paint. The characters it adds to the paragraph's text are R7's U+200D,
+  Blink's U+061C, Gecko's space or newline after a line's last character, and in WebKit a character that `deleteData`
+  removes again.
 
-What painting a line alone still changes (specs/painter.md §7):
+### Limits
 
-- Gecko: at a break inside a word, kerning across the edge, integer ligature shares and contextual forms (L1); fonts
-  whose default lookups involve the space glyph, at line edges (L4).
-- Blink and Gecko: contextual lookups other than joining across a mid-word edge (L2), and the script that Common
-  characters inherit at a line start (L7).
-- Blink: override spans insert bidi control items, which end shaping groups at same-parity level changes (0 to 2) that
-  the paragraph shaped together (L9).
-- WebKit: when the font kerns a letter with the hyphen, the painted line matches the layout width or the ink, not both
-  (L3); RTL shaping across inline boxes on candidates cut by a line edge (L5).
-- Blink, alignment: a painted line without the soft wrap box is its block's last line, so a wrapped line's `pre-wrap`
-  spaces hang conditionally when painted where the paragraph hung them unconditionally (`ComputeTrailingSpaceWidth`,
-  `line_info.cc:289-400`), which moves `center`, `end` and `justify` lines by the hanging width. WebKit and Gecko lines
-  ending in hanging white space get the box.
-- Gecko: every line of a span reserves the span's end border and padding (`nsInlineFrame.cpp:512-513`). A painted line
-  with the soft wrap box keeps the span open past the line and reserves them; a line without it, whose span's box end
-  isn't on it, reserves nothing, which can only keep more on an overflowing painted line.
+`painterLimits` names, per line, why the painted line can differ from the paragraph's although the prediction is
+right. A limit is a condition on the layout read from the engine's source; it says the painted line can differ, not
+that it does. `PainterLimitName` in `src/paint.ts` has each condition with its citations. specs/PAINTER-RESULTS.md has,
+per limit, the failing lines it sits on and the share of passing lines it fires on; the lab doesn't read limits yet, so
+those counts come from `.artifacts/lab/painter-r3/tools/limits.ts` over the rows.
 
-The lab names more (specs/PAINTER-RESULTS.md has the counts):
-
-- All engines: a soft hyphen inside an emoji sequence or ligated cluster. The paragraph gives the cluster to the line
-  before the break, and painted alone the rest draws as a glyph of its own.
-- Gecko: the U+200D of R7 doesn't reproduce the paragraph's joined widths. A join control at the start of a text run has
-  no previous font to match (`gfxTextRun.cpp:3276-3334`), and with joiners on both sides `ب` still takes its isolated
-  advance at the lab's narrow widths (`c-18f83148f2a14065`, `c-1f5bdb4aa7cd37d2`: 12.35px painted, 13.07px natively).
-  Cursive attachment and kerning with the letter on the other line are lost as well (L1).
-- Gecko: letter spacing after the last character of a text run is always added (`CanAddSpacingAfter`,
-  `nsTextFrame.cpp:3860-3873`), and a painted line ends its text run. A line that ends with a format character, a tab,
-  or a base letter whose marks sit on the next line gets spacing the paragraph didn't give it (`c-2ccbff7837117855`,
-  1px narrower at `letter-spacing: -1px`; `c-a1cc790386f04a1a`).
-- Gecko: trailing white space above the base level on a line without the soft wrap box. At a soft wrap the paragraph
-  keeps its level, and the painted line, a paragraph of its own, moves it to the base level at the line end
-  (`c-01cfe05b2ffd874b`). Lines ending in hanging white space get the box, which keeps content after the space.
-- Gecko: `justify` on a line ending in a trimmed collapsible space. The paragraph's text frame breaks inside itself and
-  keeps the space among its justification opportunities (the Gecko port's `computeJustification` over the fitted
-  content, `nsTextFrame.cpp:11513-11521`), so `xx ` spreads the line's remaining width (3765 au natively). Painted, the
-  space ends the block's text and nothing expands (`c-0755bd21e4fae9d3`: 1200 au). With the soft wrap box after the
-  space the painted line is still unexpanded, and on lines whose span end margins overflow the band the box makes
-  `CanPlaceFrame` back up to an earlier break (`nsLineLayout.cpp:1189-1342`; 10 `rule/box-edges` cases wrapped), so
-  these lines get no box. The painted side isn't traced further.
-- Gecko: a line ending in a trimmed space whose span end margin overflows the band (`c-54dcffce84a8fbdb`: margins of 6px
-  on a span filling the band exactly). The paragraph ended the line inside the next text frame, which placed without a
-  fit test on a later frame; painted, the line ends at its block's end, and the margin overflow makes `CanPlaceFrame`
-  back up to an earlier break inside the span (`nsLineLayout.cpp:1189-1342`), so the painted line wraps. 8 feature-family
-  lines. Such lines get no soft wrap box, which backs up the same way.
-- WebKit: an RTL line ending in a trimmed space after a letter that kerns with it. The paragraph trims the space's width
-  with the kerning, the text measured with the space minus without it (`Line::Run::removeTrailingWhitespace`,
-  `InlineLine.cpp:963-987`, `TextUtil.cpp:124-130`), and the text box keeps its unkerned width (`c-03173940fdc1dd4e`:
-  82.77 px natively). The painted line also trims at its end (`InlineLineBuilder.cpp:646`) but paints the kerned width
-  (81.67 px). Not traced further.
-- WebKit: RTL `pre-wrap` lines with an atomic inline and hanging spaces paint box positions one float32 step from the
-  paragraph's once the soft wrap box follows them (`c-56ae197b4b7b2e5d`, 8 `rule/atomic-inlines` cases that passed
-  without the box). Not traced further.
-- Blink: a line ending in hanging spaces after a letter that kerns with the space, where the end isn't reshaped (`start`,
-  `left` in LTR). Painted as their own text node, the text and the spaces round up as two items, as in the paragraph, but
-  the painted line is one LayoutUnit wider (`c-0e799f2b144cea2c`: `LYAY` then a space, 6880 natively, 6881 painted;
-  10 `rule/text-align` cases that passed while text and spaces shared a node). Not traced further.
-- Blink: a line ending in hanging spaces where the line's end needs an accurate position (`center`, `end`, `justify`,
-  `left` in RTL, `right` in LTR; `line_info.cc:127-175`). The paragraph cut the item before the spaces and reshaped the
-  text there, without its kerning with the space (`LYAY` 46.6953 px); painted, the text keeps the kerning (46.33 px).
-- Blink: a `pre-wrap` RTL line ending in hanging spaces, drawn under override spans. Painted as its block's last line,
-  the text before the spaces measures without its kerning with them (`c-0985b4f121df8555`: `LYAY` 46.6953 px painted,
-  46.328 px natively). The soft wrap box brings the paragraph's width back on 22 such `rule/text-align` cases, but on the
-  same kind of line in `rule/atomic-inlines` the bidi control items between the spaces and the box make an overflowing
-  line back up to an earlier break (`c-049fe22e37c2b9cb`). The painter has no source reading that separates the two, so
-  Blink lines ending in hanging spaces get no box. Not traced further.
-- Blink: an RTL line whose pieces sit in override spans and hold a span's box end with a nonzero edge. The paragraph puts
-  the end edge on the span's line-left side, between `b` and `bbb` (`c-00e368136546bdb1`: a 6px border natively at
-  [18.39, 24.39] px). Painted, the text is contiguous and the edge lands left of `b`, so the text extent is the edge
-  narrower: 72 `rule/box-edges` and 18 `rule/nested-box-edges` Chrome cases. The probe
-  (`.artifacts/lab/painter-r2/probe-box-edges.ts`, installed Chrome 153) shows the painted span as two box fragments, a
-  lone 6px fragment at the line's left end holding the edge and one around `bbb`. The override span's bidi controls
-  inside the span take other levels than the text (ICU gives an explicit code the level before it, `ubidi.cpp:1173-1218`),
-  so after `BidiReorder` (`logical_line_builder.cc:688-760`) the box's items aren't contiguous, and Blink splits the box
-  and puts its edges on the outer fragments (`UpdateBoxDataFragmentRange`, `UpdateFragmentedBoxDataEdges`,
-  `inline_box_state.cc:720-830`). WebKit and Firefox paint the same markup with the edge between the words, as their
-  paragraphs do. An override span around the element keeps one fragment, but the element then takes the override's
-  direction and its end edge moves to the right; giving the element its own direction there isn't tested.
-- WebKit: an RTL line where `xx ` is followed by an overflowing nowrap span holding an atomic inline. The paragraph keeps
-  the span on the line and overflows; painted, with its pieces in override spans, WebKit wraps before the span
-  (`c-02fd6a0a213bb1bf`, 21 `rule/atomic-inlines` cases). The probe in the same file (webkit-host) wraps in every variant
-  with `unicode-bidi: bidi-override` on the line block, with override spans around the pieces, plain text for `xx `, or
-  one override span around everything, and doesn't wrap without the block override. So the block's override, not the
-  spans, changes the break before the span. The source path isn't traced.
-- Blink: `HanKerning` trims fullwidth punctuation by its neighbour. Where the neighbour is on the next line, the painted
-  mark keeps its full width (`。` is 8px natively and 16px painted, `c-b408d44e962b357e`), and a line that fit wraps
-  (`c-342b6a8c28ff1dab`).
-- Blink: a line that ends at a space isn't reshaped (`dont_reshape_end_if_at_space`, `line_breaker.cc:255-268`), so the
-  space keeps its kerning with the next line's first glyph (Arial space and `Y`, `c-0fe656a162eb2508`, 37 units).
-- Blink: some bidi lines painted with override spans are one LayoutUnit wider, at opposite-parity level changes too
-  (`c-05bbcacc0fe2f0e5`). Not traced beyond L9.
-- Blink: Common characters at a line start also lose the cursive script's letter-spacing exemption (L7): `<` after
-  Arabic takes `letter-spacing` painted alone (`c-7715aaeaa4fa426b`, 1.5px).
-- WebKit: some RTL lines under overrides still differ from the paragraph by a float32 step: 88 of the 154 bidi lines
-  of the plain-span probe, and two suite lines (`c-354eed076f010028`, `c-6704d9a31cfdc2f0`) that matched while their
-  trailing space was a node of its own at the base level and don't once it shares the Arabic slice's node.
-- WebKit: the rest of an item split by the overflow breaker keeps `f32(W − prefix width)` without being measured again
-  (§2.7). Painted alone it's measured fresh: a float32 step in Latin (`c-c62182c46f2a130d`, 71.16799926757812px against
-  71.16796875px), other forms in joined Arabic (`c-16de89e4db9184ec`, 11.42px against 3.91px).
-- WebKit: a word whose following space starts the next line is measured with that space in the paragraph
-  (`TextUtil.cpp:76-77`) and without it painted (Times New Roman `A`, 10.67px natively, 11.55px painted,
+- `carried-width` (WebKit): the line starts inside an item (`next.offset` above 0) and its first text keeps the width
+  the overflow breaker carried, the item's width less the part left on the line before
+  (`overflowWidthAsLeadingForNextLine`, `AbstractLineBuilder.cpp:54-98`). Painted alone the rest is measured fresh:
+  another float32 sum in Latin (`c-c62182c46f2a130d`, 71.16799926757812px against 71.16796875px), no pair adjustment
+  or joining across the cut elsewhere (`c-16de89e4db9184ec`, 11.42px against 3.91px). A whole item that wrapped carries
+  its width too, which is the width the painted line measures again. This is 95% of webkit-host's painter failures.
+  Reproducing it needs the item's earlier part in the same text box, so more than one painted line in a block.
+- `word-measured-with-next-space` (WebKit): the line's last word is followed in its leaf by a space that isn't on the
+  line. The paragraph measured the word with that space and took the space's width off (`TextUtil::width`'s
+  `extendedMeasuring`, `TextUtil.cpp:76-81`, `:103-104`; Times New Roman `A`, 10.67px natively, 11.55px painted,
   `c-0145610398f11164`).
+- `edge-inside-shaped-text` (every engine): a line edge between two characters that aren't white space, in one leaf or
+  in leaves the engine shapes as one (one font and spacing, no box edge with a size between them, which ends shaping:
+  CSS Text 3 §7.3, Blink `ShouldBreakShapingBeforeBox`, Gecko `ContinueTextRunAcrossFrames`), or where the engine set
+  `joinsNextLine`. Gecko keeps the glyphs of the word it shaped whole, so pair adjustments, ligature shares and
+  contextual forms across the cut differ (L1; `11` in Arial across an edge is 71 au, `c-627dc43bf0b22611`), and R7's
+  joiner doesn't bring the joined widths back and takes letter spacing itself. Blink reshapes an edge that isn't safe to
+  break, which leaves each side as the painted line shapes it, so there the limit needs more: letters at the cut of a
+  script whose HarfBuzz shaper joins or reorders them (not the default, Hangul, Hebrew and Thai shapers' scripts,
+  `hb_ot_shaper_categorize`, `hb-ot-shaper.hh:176-220`; the painter lists the larger ones), or a font
+  whose pair adjustments aren't known to sit on the first glyph (`FontFacts.pairKerning`), since the kern and kerx
+  machine moves the second glyph too and an edge after a chosen soft hyphen isn't reshaped (`super` before `‐` in
+  Helvetica Neue, 18 units). With an AAT joining font Blink reshapes each cut part without context, where the painted
+  line shapes the parts of one shaping group together: 2 `rule/joining` pairs that passed while round 2's override
+  controls happened to separate the two spans (`c-9fff38c828d7e27f`). WebKit measures a part of an item alone, as the
+  painted box does, so there the limit needs an RTL run shaped across inline boxes (`applyShapingOnRunRange`,
+  `InlineLineBuilder.cpp:920-967`; L5).
+- `edge-inside-cluster` (every engine): a line edge inside a grapheme cluster, as after a soft hyphen or U+200B inside
+  an emoji sequence. The paragraph gave the cluster's glyph to one side, and painted alone the other side draws glyphs
+  of its own (`c-012cd24fb976dc63`; in Gecko also the letter spacing a base without its marks takes).
+- `space-shaped-with-next-line` (Blink): the line ends with a preserved space that the next line's first character
+  follows in the same leaf. A line's end at a space isn't reshaped, and trailing spaces are a view of the paragraph's
+  shape result, so the space keeps its pair adjustment with that character (Arial space before `A`, 4.453 px for
+  5.5625 px at 20px; all 156 remaining Chrome `rule/text-align` failures).
+- `hanging-space-kern-share` (Blink): the third hanging-space form with a font whose pair adjustments aren't known to
+  sit on the first glyph.
+- `han-kerning-at-edge` (Blink): the line starts or ends with a character HanKerning may trim next to another line of
+  the same leaf. The trim reads the neighbouring character's type, and a painted line's start isn't the start of a
+  wrapped line, where `ShapeLine` trims an opening bracket (`FirstSafeOffset`, `shaping_line_breaker.cc:92-108`; `。` is
+  8px natively and 16px painted, `c-b408d44e962b357e`).
+- `script-at-line-start` (Blink, Gecko): the line starts with characters of script Common or Inherited, other than
+  white space, that continued a run of another script than the line's own first script, and Blink's U+061C doesn't
+  apply. The painter tells 30 scripts apart and counts every other script as one kind.
+- `controls-between-pieces` (Blink): two consecutive text pieces of one direction sit in different override spans,
+  whose bidi controls end the shaping group between them (L9): pieces of one level that an element with pieces of
+  another level separates (`النعاج` and `جيد` across two spans, 54 units, `c-17554815da2915b5`), and pieces two levels
+  apart.
+- `spacing-at-run-end` (Gecko): letter spacing is set, the line ends with a tab or a formatting character that the
+  paragraph's text run went on after, and the painter couldn't add a character after it.
+- `frame-ended-at-break` (Gecko): the line ends in trimmed white space inside a leaf, where the paragraph's text frame
+  broke inside itself (`brokeText`, `nsTextFrame.cpp:11201-11213`). Only such a frame trims a trailing U+3000, which the
+  line's end doesn't trim (`IsTrimmableSpace`, `:904-919`; 24 px on a painted line in 24px Amiri), and under `justify` it
+  keeps the trimmed space among its justification opportunities (`:11513-11521`; `xx ` spreads to 3765 au natively and
+  paints 1200 au wide, `c-0755bd21e4fae9d3`, all 32 Firefox `rule/text-align` failures). The painted frame ends with its
+  text, and no character after it can overflow without showing.
+- `overflowing-line-rebreaks` (every engine): the line reaches past its band and still wraps when painted, because it
+  ends in white space or, in Blink, with a character HanKerning may trim. Gecko's lines whose span end margin overflows
+  the band are here: the paragraph ended the line inside the next text frame, which placed without a fit test on a later
+  frame, and painted the margin overflow makes `CanPlaceFrame` back up to an earlier break
+  (`nsLineLayout.cpp:1189-1342`, `c-54dcffce84a8fbdb`).
+
+Painter failures on cases whose prediction passes that no limit names, on the final runs: Chrome 12 of 490, Firefox 15
+of 1,337, webkit-host 40 of 3,708 (PAINTER-RESULTS.md lists them). Known among them: WebKit lines a float32 step off
+with dictionary-segmented text, where the line alone may segment into other items than the paragraph did (9 Thai
+lines).
+
+One Blink class has a limit only by accident (`overflowing-line-rebreaks`, because its lines are 1 px wide): 8
+`rule/controls` and 16 `rule/in-word-breaks` pairs that round 2's trimmed-space box lost and that still fail. The text
+before the trimmed space lost its pair adjustment with it in the paragraph although the line's end needs no accurate
+position: `ShapeLine` reshapes a part whole when no offset before its end is safe to break (`first_safe.offset >=
+break_opportunity.offset`, `shaping_line_breaker.cc:500-507`), as after a space that kerns with the line's first letter
+(`A ` after `aaaa ` in Arial: 10.67 px natively, 9.79 px painted with the box, `c-0f0589498b1c5837`). The layout doesn't
+say which parts a line's shape came from, so the painter can't choose the form; `hangingForm` reads the same fact from
+the line's widths and styles instead. A Blink geometry field for it would replace both.
 
 The lab appends the elements to a host of the paragraph's width (lab/README.md, "Page protocol" step 5). Under the
 observation contract (§9) the painter metric compares each painted line's code point and node rects with the expected
 rects of that line: the painted block has the paragraph's width, direction and the line's floats, so an LTR line's items
 still start at the band's start and an RTL line's still end at its end. When the prediction metrics pass and the painter
-fails, the painting form is wrong, not the prediction, and the rows above name why. Positioning line blocks absolutely
+fails, the painting form is wrong, not the prediction, and the limits above name why. Positioning line blocks absolutely
 (form C) gives the same shaping and stays the fallback if a case class needs it.
 
 `lab/predictor.ts` calls `layoutParagraph()` in `predict()`, and `paint()` paints the layout `predict()` returned.

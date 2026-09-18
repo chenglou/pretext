@@ -139,3 +139,34 @@ export function opticalSizeAxisOf(font: FontDecl): boolean {
   const first = parseFamilyList(font.family)[0]!
   return (first.kind === 'generic' && first.name === 'system-ui') || (first.kind === 'named' && first.syntax === 'identifiers' && first.name === '-apple-system')
 }
+
+// Which family of the list draws a code point, by the optional coverage facts (FontFacts.fonts): the index of the first
+// family that realizes and maps it, -1 where every family is known and none maps it (the engine's fallback draws it, with a
+// font the facts don't name), or null where the facts don't say. gfxFontGroup::FindFontForChar takes the first font of the
+// group that has the character (gfxTextRun.cpp:3276-3300, :3394-3500), and for U+2010 and U+2011 one that has U+002D
+// (:3228-3232). It doesn't hold for the characters font matching places by their neighbours: cluster extenders, join
+// controls and variation selectors, a character after U+200D, U+202F, and characters with an emoji presentation.
+export function listedFontOf(font: FontDecl, cp: number): number | null {
+  const fonts = font.facts.fonts
+  if (fonts === undefined) return null
+  for (let i = 0; i < fonts.length; i++) {
+    const f = fonts[i]!
+    if (f.realizes === false) continue
+    if (f.realizes === null || f.coverage === null) return null
+    if (covers(f.coverage, cp) || ((cp === 0x2010 || cp === 0x2011) && covers(f.coverage, 0x2d))) return i
+  }
+  return -1
+}
+
+// Sorted inclusive ranges, flat.
+function covers(ranges: readonly number[], cp: number): boolean {
+  let lo = 0
+  let hi = ranges.length / 2 - 1
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1
+    if (cp < ranges[2 * mid]!) hi = mid - 1
+    else if (cp > ranges[2 * mid + 1]!) lo = mid + 1
+    else return true
+  }
+  return false
+}
