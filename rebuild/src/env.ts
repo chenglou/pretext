@@ -92,11 +92,6 @@ export type GeckoEnvironment = GeckoProcessLanguages & {
   contentLanguage: string | null
   // Firefox's Intl.Segmenter word granularity runs ICU4X's word segmenter with layout's LSTM models (specs/gecko-text.md §10).
   dictionaryBreaks: { kind: 'intl-segmenter-word' } | { kind: 'unavailable' }
-  // The page can create a `<canvas>` element, so the port measures on a detached one at the DOM's device font size: its
-  // text runs have the page's app units per device pixel and its fonts come from the DOM's font cache, which an
-  // OffscreenCanvas's don't (CanvasRenderingContext2D.cpp:4256-4269, :7132-7155; probe gecko-port F13). Absent or false (a
-  // worker, a test): an OffscreenCanvas at the CSS size, with the gaps that leaves.
-  canvasElement?: boolean
 }
 
 export type Environment = BlinkEnvironment | WebKitEnvironment | GeckoEnvironment
@@ -158,7 +153,6 @@ export function detectEnvironment(given: GivenFacts): DetectedEnvironment {
           engine: 'gecko', build: given.build, devicePixelRatio, pageLang, contentLanguage: given.contentLanguage,
           regionalPrefsLocale: given.regionalPrefsLocale,
           dictionaryBreaks: typeof Intl.Segmenter === 'function' ? { kind: 'intl-segmenter-word' } : { kind: 'unavailable' },
-          canvasElement: typeof document.createElement === 'function',
         },
       }
   }
