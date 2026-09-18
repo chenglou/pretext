@@ -6,6 +6,7 @@ import { beginCase, beginPhase, endCase, installRecorder } from '../lab/record.t
 import { makeCase } from '../lab/cases/case.ts'
 import { font, paragraph, text } from '../lab/cases/build.ts'
 import * as predictor from '../lab/baselines/no-facts-predictor.ts'
+import type { PredictEnv } from '../lab/predictor-core.ts'
 import type { Case, LayoutPrediction } from '../lab/types.ts'
 import { firstDifference, replayCase, type InputCase, type ReferenceCase } from './replay.ts'
 
@@ -65,7 +66,7 @@ afterAll(() => {
   else Object.defineProperty(intl, 'v8BreakIterator', v8Before)
 })
 
-const ENV = { browser: 'chrome' as const, build: BUILD.engine, languages: { engine: 'blink' as const, uiLanguage: 'en-US' } }
+const ENV: PredictEnv = { browser: 'chrome', build: BUILD.engine, languages: { engine: 'blink', uiLanguage: 'en-US' } }
 
 function testCase(words: string, width: number): Case {
   return makeCase({ family: 'test/replay', origin: 'test', pageLang: 'en', paragraph: { ...paragraph({ font: font('Arial', 16), lang: 'en' }, [text(words)]), width } })
@@ -109,7 +110,7 @@ describe('offline replay', () => {
     // An engine whose arithmetic changed: the same questions, and the second line one LayoutUnit wider.
     const wider = {
       ...predictor,
-      predict: (c: Case, env: typeof ENV) => {
+      predict: (c: Case, env: PredictEnv) => {
         const hook = predictor.predict(c, env) as LayoutPrediction
         if (hook.layout.engine === 'blink') hook.layout.lines[1]!.geometry.width += 1
         return hook
@@ -123,7 +124,7 @@ describe('offline replay', () => {
 
   test('a question the record doesn\'t hold is never answered: the case needs the browser', () => {
     const { input } = recordInBrowser(testCase('The quick brown fox jumps over the lazy dog', 120))
-    const larger = { ...predictor, predict: (c: Case, env: typeof ENV) => predictor.predict({ ...c, paragraph: { ...c.paragraph, font: font('Arial', 17), runs: c.paragraph.runs.map(run => ({ ...run, font: font('Arial', 17) })) } }, env) }
+    const larger = { ...predictor, predict: (c: Case, env: PredictEnv) => predictor.predict({ ...c, paragraph: { ...c.paragraph, font: font('Arial', 17), runs: c.paragraph.runs.map(run => ({ ...run, font: font('Arial', 17) })) } }, env) }
     const replayed = replayCase(input, larger)
     expect(replayed).toMatchObject({ kind: 'new-question', phase: 'predict' })
     if (replayed.kind === 'new-question') expect(replayed.question).toContain('is not in the record')

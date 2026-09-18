@@ -18,7 +18,8 @@
 // - reference/: the frozen reference, the replay's output at one commit, with manifest.json; `freeze` also copies the
 //   manifest to rebuild/tests/reference/<browser>-<config>.json, so the repository pins the reference by hash. A reference
 //   is never overwritten without --force and --reason, and the manifest keeps the record of what it replaced.
-// - ledger/: the known-status ledger of the recorded runs (ledger.ts), beside the reference.
+// - ledger/: the known-status ledger of the recorded runs (ledger.ts), beside the reference. `pack` copies it from the run,
+//   so the inputs, the browser's predictions and the statuses come from one recording; `freeze` pins its hash too.
 //
 // The full prediction of a case is what the row of a browser run keeps of it (lab/types.ts EnginePrediction): the layout
 // (every line with its geometry, fragments, gaps and limits, the slots below floats, the paragraph's gaps, the environment),
@@ -124,6 +125,14 @@ type ReferenceManifest = {
   replaced: Array<{ commit: string; createdAt: string; reason: string; cases: number }>
   sets: Record<string, Array<{ file: string; cases: number; sha256: string }>>
   cases: number
+  // The ledger beside the reference, by the hashes of its two files; null when the recording left none.
+  ledger: { headerSha256: string; entriesSha256: string } | null
+}
+
+function ledgerHashes(dir: string): ReferenceManifest['ledger'] {
+  const header = join(dir, 'ledger/ledger.json')
+  const entries = join(dir, 'ledger/entries.ndjson')
+  return existsSync(header) && existsSync(entries) ? { headerSha256: sha256(readFileSync(header)), entriesSha256: sha256(readFileSync(entries)) } : null
 }
 
 // ---- Small tools ----
@@ -375,8 +384,13 @@ async function pack(): Promise<number> {
   if (run.sets.some(set => set.subset)) fail('A run of --ids-file subsets can\'t be packed: the inputs hold whole sets')
   if (existsSync(join(dir, 'inputs/manifest.json')) && !flags.has('force')) fail(`${relative(REPO, dir)}/inputs exists; --force replaces it (and makes the frozen reference stale: freeze again)`)
   const started = Date.now()
-  for (const name of ['inputs', 'browser']) if (existsSync(join(dir, name))) execFileSync('trash', [join(dir, name)])
+  for (const name of ['inputs', 'browser', 'ledger']) if (existsSync(join(dir, name))) execFileSync('trash', [join(dir, name)])
   mkdirSync(join(dir, 'inputs'), { recursive: true })
+  // The run's ledger goes beside the inputs: the statuses of the recording the inputs come from.
+  if (existsSync(join(runsDir, 'ledger/ledger.json'))) {
+    mkdirSync(join(dir, 'ledger'))
+    for (const name of ['ledger.json', 'entries.ndjson']) writeFileSync(join(dir, 'ledger', name), readFileSync(join(runsDir, 'ledger', name)))
+  }
   type Part = { set: string; part: number; rows: string; measurements: string; record: { bundleSha256: string | null } }
   const parts: Part[] = []
   for (const set of run.sets) for (const part of set.parts) {
@@ -415,7 +429,7 @@ async function pack(): Promise<number> {
   writeFileSync(join(dir, 'inputs/manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`)
   const browserManifest: ReferenceManifest = {
     format: REFERENCE_FORMAT, kind: 'browser', browser, config, inputsSha256: sha256(readFileSync(join(dir, 'inputs/manifest.json'))), commit: git('rev-parse', 'HEAD'), dirty: dirtyLibraryFiles(),
-    createdAt: new Date().toISOString(), reason: `the predictions the browser recorded in ${relative(REPO, runsDir)}`, replaced: [], sets: browserSets, cases: manifest.cases,
+    createdAt: new Date().toISOString(), reason: `the predictions the browser recorded in ${relative(REPO, runsDir)}`, replaced: [], sets: browserSets, cases: manifest.cases, ledger: ledgerHashes(dir),
   }
   writeFileSync(join(dir, 'browser/manifest.json'), `${JSON.stringify(browserManifest, null, 2)}\n`)
   console.log(`[replay] packed ${manifest.cases} cases, ${manifest.calls} recorded calls, ${Object.values(manifest.sets).reduce((sum, set) => sum + set.shards.length, 0)} shards into ${relative(REPO, dir)}/inputs in ${Math.round((Date.now() - started) / 1000)} s; ${manifest.logDisagrees.length} cases where the library's call log and the recorder disagree`)
@@ -654,7 +668,7 @@ async function freeze(): Promise<number> {
     format: REFERENCE_FORMAT, kind: 'replay', browser, config, inputsSha256: sha256(readFileSync(join(dir, 'inputs/manifest.json'))), commit: git('rev-parse', 'HEAD'), dirty,
     createdAt: new Date().toISOString(), reason: reason === '' ? 'first reference' : reason,
     replaced: before === null ? [] : [...before.replaced, { commit: before.commit, createdAt: before.createdAt, reason: before.reason, cases: before.cases }],
-    sets: report.emitted, cases: report.counts.cases,
+    sets: report.emitted, cases: report.counts.cases, ledger: ledgerHashes(dir),
   }
   writeFileSync(join(staging, 'manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`)
   if (before !== null) execFileSync('trash', [join(dir, 'reference')])
