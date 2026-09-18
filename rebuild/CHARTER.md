@@ -128,18 +128,20 @@ heuristic, or named here.
   grapheme takes the grapheme's position; treating every unit HarfBuzz doesn't mark a continuation as a cluster start
   passed 2 cases, U+0600 U+3000 in Amiri, and lost 8, Bengali conjuncts in Kohinoor Bangla; the source leaves it to the
   font, hb-ot-shaper-indic.cc:806-824, hb-ot-layout-gsubgpos.hh:1611, and the layout reports `glyph-clusters` there);
-  `positionAdjust16` (`engines/blink/shape.ts`), which decides the side of an offset an adjustment sits on that Canvas
-  totals show only as a sum: the wide window before white space (probe blink-round3 R1), the pair window elsewhere. No
-  source reading places a contextual adjustment, since the input glyphs of a chaining rule are the font's; where the two
-  windows differ and the offset isn't before white space the position is a stand-in, and a line edge taken from it
-  reports `unsafe-to-break`.
-- Gecko: "the two sides measured with U+200D add up to the unit, so the prefix is the advance" holds to the app unit only:
-  6 passing Noto Nastaliq Urdu cases hold a position 1 au off (probe F22; F15 1,013 of 1,015). The suffix-side in-word
-  recipe for clusters without joining forms has a probe verdict (F26, 567 of 567 offsets) and no source reading. A font's
-  `rtla` lookups on a lone character at an odd level aren't predicted or named.
-- WebKit: a run's share of text shaped across inline boxes is a suffix difference of Canvas totals, chosen over the run
-  alone in its joining context and over prefix differences by probe R10's counts (509, 492 and 474 of 770); that the
-  shares add up to the joined total is from source. `hasLanguageDependentFallback`, the table of characters whose system
+  `positionAdjust16` (`engines/blink/shape.ts`; `shape/position-adjust-window`), which decides the side of an offset an
+  adjustment sits on that Canvas totals show only as a sum: the wide window before white space (probe blink-round3 R1),
+  the pair window elsewhere. No source reading places a contextual adjustment, since the input glyphs of a chaining rule
+  are the font's; where the two windows differ and the offset isn't before white space the position is a stand-in, and a
+  line edge taken from it reports `unsafe-to-break`.
+- Gecko: "the two sides measured with U+200D add up to the unit, so the prefix is the advance"
+  (`measure/sides-add-up-is-exact`) holds to the app unit only: 6 passing Noto Nastaliq Urdu cases hold a position 1 au
+  off (probe F22; F15 1,013 of 1,015). The suffix-side in-word recipe for clusters without joining forms
+  (`measure/suffix-side-recipe`) has a probe verdict (F26, 567 of 567 offsets) and no source reading. A font's `rtla`
+  lookups on a lone character at an odd level aren't predicted or named.
+- WebKit: a run's share of text shaped across inline boxes (`lines/shaped-run-in-joining-context`) is a suffix
+  difference of Canvas totals, chosen over the run alone in its joining context and over prefix differences by probe
+  R10's counts (509, 492 and 474 of 770); that the shares add up to the joined total is from source.
+  `hasLanguageDependentFallback` (`gap/language-dependent-fallback-table`), the table of characters whose system
   fallback a language moves (Han, kana, Hangul, CJK punctuation, fullwidth forms, enclosed alphanumerics, box drawing,
   geometric shapes and vertical forms under Han, kana and Hangul scripts; Arabic under ur and ks), comes from probes R3,
   R13 and R14, which see a font change only where advances differ: the source reading (every character no list family
@@ -147,10 +149,10 @@ heuristic, or named here.
   Ethiopic word differs from Canvas under every language but am and none, R13; no lab case holds Ethiopic). History
   worlds vary one box at a time, a declared approximation: checked against the isolation protocol on 400 cases and not
   contradicted; products of worlds aren't laid out.
-- Runtime font checks: `monospace` in WebKit is inferred from equal advances of `i`, `M`, `.` and the space, where WebKit
-  reads a Core Text trait and three names Canvas doesn't show (FontCoreText.cpp:753-785); it is wrong for a font whose
-  trait and advances disagree (MS-PGothic, MonotypeCorsiva). The linearity bound of the `opticalSizeAxis` check is a
-  constant from source arithmetic, not from counts.
+- Runtime font checks: `monospace` in WebKit (`measure/font-check-fixed-pitch`) is inferred from equal advances of `i`,
+  `M`, `.` and the space, where WebKit reads a Core Text trait and three names Canvas doesn't show
+  (FontCoreText.cpp:753-785); it is wrong for a font whose trait and advances disagree (MS-PGothic, MonotypeCorsiva).
+  The linearity bound of the `opticalSizeAxis` check is a constant from source arithmetic, not from counts.
 - Painter: `nowrap-hyphenated-or-joined`, `leading-ascii-space-slice-in-span` and `zwj-at-joined-line-edges` (tentpole 7).
 - The scorer (tentpole 2), lab `score.ts` "Covered failures". Scorer 5: a unit is the grapheme cluster of a differing
   code point with its widthless and default-ignorable neighbours (in WebKit the differing node); runs of units whose
@@ -202,8 +204,8 @@ Core Text glyph runs) and ligatures or pair adjustments across a box edge are st
   rect by its own node's box), and `y` and `height` are outside the observation contract. Line boxes taller than the line
   height would move slot rows, and no rule checks that.
 - Firefox's history-dependent emoji cases aren't a stable set between identical runs (190 and 104 on the held-out suite
-  sample with the same files, parts and orders: the asynchronous character map loading, gfxPlatformFontList.cpp:1474-1486),
-  so the ledger can't compare them as a fixed set.
+  sample with the same files, parts and orders: the asynchronous character map loading,
+  gfxPlatformFontList.cpp:1474-1486), so the ledger can't compare them as a fixed set.
 - 75 passing webkit-host family cases hold one wrong predicted value each (a code point or element rect; untraced), and
   the WebKit observation port measures its in-box stand-ins with the declared family list where the engine names the
   generic's family; those values are limited, never predicted. Both are round 4b items.
@@ -219,8 +221,8 @@ Core Text glyph runs) and ligatures or pair adjustments across a box edge are st
 - The lab's page doesn't call `detectEngine()`: its predictor derives the engine from the browser it launched, so a lab
   run in a browser whose Canvas lacks an assumption still predicts. The probe `probes/canvas-checks.ts` is the check per
   release until the page refuses (tests owner).
-- Tier 1 can't see V8 string storage; Chrome's 4,528 storage-sensitive cases go to tier 2 by rule when the code that builds
-  Canvas strings changed, a path rule, not a detection.
+- Tier 1 can't see V8 string storage; Chrome's 4,528 storage-sensitive cases go to tier 2 by rule when the code that
+  builds Canvas strings changed, a path rule, not a detection.
 
 **Tests (tentpoles 4, 5).**
 
@@ -228,11 +230,11 @@ Core Text glyph runs) and ligatures or pair adjustments across a box edge are st
   provisional in the registry (`declaredBy` says which).
 - The lab's `obligations` family and G0 baselines are derived from main's tests and the final runs; they are measurement
   inputs until each obligation is triaged under tentpole 5. research/MAIN-TRIAGE.md and `rebuild/lab/triage/` hold the
-  records, but `cases/obligations.ts` doesn't read them (TEST-ARCHITECTURE §7.1). The adopted lab gate baselines block on
-  the main-derived suite samples and the burned 2026-09-16 held-out sets (CHARTER-CRITIC item 17) and are scorer 4's; G0 is
-  still keyed on user agents and scorer 1. Round 3's staged seeds (scorer 5) refuse scorer 6's runs; tier 2's seeds are
-  staged in `rebuild/tests/baselines/staged-round4-sets` and describe the round 3 library until they are made again
-  after round 4's merges.
+  records, but `cases/obligations.ts` doesn't read them (TEST-ARCHITECTURE §7.1). The adopted lab gate baselines block
+  on the main-derived suite samples and the burned 2026-09-16 held-out sets (CHARTER-CRITIC item 17) and are scorer 4's;
+  G0 is still keyed on user agents and scorer 1. Round 3's staged seeds (scorer 5) refuse scorer 6's runs; tier 2's
+  seeds are staged in `rebuild/tests/baselines/staged-round4-sets` and describe the round 3 library until they are made
+  again after round 4's merges.
 - `lab/gate.ts` keys on case ids alone; 714 ids sit in two tier sets (the smoke sample, `features-en-US`), where the gate
   is coarser than the ledger, which keys on set and id.
 - Sealed sets 1 to 3 each ran once, counts only; no sealed-4 exists yet.
