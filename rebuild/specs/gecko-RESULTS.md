@@ -21,7 +21,9 @@ job cuts (same case files, parts and chunk size as `.artifacts/ceiling-20260917/
 after the same document history): `.artifacts/lab/gecko/r4-<n>/<set>-<order>`, tools in `.artifacts/lab/gecko/r4-tools`. The
 rule and feature families are round 3's derivations (`.artifacts/tests/derive-r3-20260917`). `r4-1` is the round 3 library
 with only the element path removed, in both orders; `r4-3` is the final library in both orders, with the giants; fresh sets
-are `.artifacts/lab/fresh/firefox/r4-gecko-<n>`. No browser job failed.
+are `.artifacts/lab/fresh/firefox/r4-gecko-<n>`. No browser job failed. The branch's commits after `r4-3` change comments, a test
+timeout and one equivalent line; `r4-4` (runs, ws, policy and smoke with the last commit) equals `r4-3` in native
+observations, predictions and painted lines on all 5,502 cases (`lab/compare-rows.ts`).
 
 ### One measuring path, and what it costs
 
