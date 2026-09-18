@@ -49,6 +49,9 @@ export const SETS: readonly TestSet[] = [
   one('runs', 'development', `${A}/lab/cases/runs.ndjson`),
   one('ws', 'development', `${A}/lab/cases/ws.ndjson`),
   one('policy', 'development', `${A}/lab/cases/policy.ndjson`),
+  // White-space: pre-wrap in rich inline content (lab/cases/rich-prewrap.ts, research/PREWRAP-RICH.md): the only set that
+  // reaches tab-size on a span, and justify beside a preserved newline or beside preserved spaces across a box end.
+  one('rich-prewrap', 'development', `${A}/lab/cases/rich-prewrap.ndjson`),
   { name: 'suite-sample', group: 'development', parts: [0, 1, 2, 3].map(k => `${A}/lab/final-20260916/cases/suite-sample-part${k}.ndjson`), runArgs: [], browsers: ALL },
   one('families', 'families', `${DERIVED}/{browser}/families/final/family-cases.ndjson`),
   one('features', 'families', `${DERIVED}/{browser}/features/final/family-cases.ndjson`),

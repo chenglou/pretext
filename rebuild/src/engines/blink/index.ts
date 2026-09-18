@@ -615,11 +615,25 @@ function isHangingSpace(c: number): boolean {
   return c === 0x20 || c === 0x3000
 }
 
-// LineInfo::ComputeTrailingSpaceWidth (line_info.cc:289-400) for a line whose trailing white space is preserved, each
-// item under its own style's white-space.
-function hangWidthOf(sh: Shaper, info: LineInfo): number {
+// LineInfo::InflowEndOffset (line_info.cc:220-245): the end of the line's last text, control or atomic inline item result.
+function inflowEndOffset(p: BlinkPrepared, info: LineInfo): number {
+  for (let i = info.results.length - 1; i >= 0; i--) {
+    const r = info.results[i]!
+    const item = p.items[r.itemIndex]!
+    if (item.type === 'text' || item.type === 'control' || item.type === 'atomic') return r.end
+  }
+  return info.results.length > 0 ? info.results[0]!.start : 0
+}
+
+// rule blink/output/hang-width
+// rule blink/output/end-offset-for-justify
+// LineInfo::ComputeTrailingSpaceWidth (line_info.cc:289-415) for a line whose trailing white space is preserved, each
+// item under its own style's white-space: the hang width, and the offset the walk stops at, which is EndOffsetForJustify
+// (UpdateTextAlign, line_info.cc:275-288). The walk skips items that are opaque to collapsing, so trailing spaces before
+// a close tag are found like any others and stay out of justification (rich-prewrap/trailing-spaces c-bb8068601ab36af7).
+function trailingSpacesOf(sh: Shaper, info: LineInfo): { width: number; endOffset: number } {
   const p = sh.p
-  if (!info.hasTrailingSpaces) return 0
+  if (!info.hasTrailingSpaces) return { width: 0, endOffset: inflowEndOffset(p, info) }
   let trailing = 0
   for (let i = info.results.length - 1; i >= 0; i--) {
     const r = info.results[i]!
@@ -627,12 +641,12 @@ function hangWidthOf(sh: Shaper, info: LineInfo): number {
     if (item.endCollapseType === 'opaque-to-collapsing') continue
     let itemWidth = 0
     let willContinue = false
+    let end = r.end
     if (item.type === 'control' || r.hasOnlyPreWrapTrailingSpaces) {
       itemWidth = r.inlineSize
       willContinue = true
     } else if (item.type === 'text') {
       if (r.end === r.start) continue
-      let end = r.end
       if (isHangingSpace(p.text.charCodeAt(end - 1))) {
         do end--; while (end > r.start && isHangingSpace(p.text.charCodeAt(end - 1)))
         if (end === r.start) {
@@ -664,13 +678,16 @@ function hangWidthOf(sh: Shaper, info: LineInfo): number {
           }
           break
         case 'pre': case 'break-spaces':
+          // No hang, and the item's spaces are justified with the rest (:397-401).
+          if (willContinue) end = item.end
           willContinue = false
           break
       }
     }
-    if (!willContinue) return trailing
+    if (!willContinue) return { width: trailing, endOffset: end }
   }
-  return trailing
+  // An empty line, or only trailing spaces (:411-414).
+  return { width: trailing, endOffset: info.results.length > 0 ? info.results[0]!.start : 0 }
 }
 
 // BidiParagraph::IndicesInVisualOrder, ubidi_reorderVisual (ubidi.cpp): runs at or above each level from the highest down
@@ -829,23 +846,10 @@ function checkOpportunity(p: BlinkPrepared, state: JustifyState, c: number): [bo
 // results up to EndOffsetForJustify, ExpansionSetup drops the one after the last character and divides the space
 // (shape_result_spacing.cc:34-58, 87-100), and JustifyResults adds each expansion to the glyph cluster it belongs to
 // (ShapeResult::ApplySpacingOrExpansion, shape_result.cc:993-1046), resizing the item results. Returns whether it applied.
-function applyJustification(sh: Shaper, info: LineInfo, space: number): boolean {
+// `endOffset` is EndOffsetForJustify, the offset trailingSpacesOf's walk stopped at.
+function applyJustification(sh: Shaper, info: LineInfo, space: number, endOffset: number): boolean {
   const p = sh.p
   if (!info.shouldCreateLineBox || space <= 0) return false
-  // EndOffsetForJustify: before preserved trailing spaces, else InflowEndOffset (line_info.cc:220-245, 275-288).
-  let endOffset = info.results.length > 0 ? info.results[0]!.start : 0
-  for (let i = info.results.length - 1; i >= 0; i--) {
-    const r = info.results[i]!
-    const item = p.items[r.itemIndex]!
-    if (item.type === 'text' || item.type === 'control' || item.type === 'atomic') { endOffset = r.end; break }
-  }
-  if (info.hasTrailingSpaces) {
-    for (let i = info.results.length - 1; i >= 0; i--) {
-      const r = info.results[i]!
-      if (r.hasOnlyPreWrapTrailingSpaces) { endOffset = Math.min(endOffset, r.start); continue }
-      break
-    }
-  }
   const lineStart = info.results.length > 0 ? info.results[0]!.start : 0
   if (endOffset === lineStart) return false
   const rtl = p.baseLevel === 1
@@ -1136,6 +1140,7 @@ function itemsOf(sh: Shaper, info: LineInfo, hangWidth: number, alignOffset: num
           boxes[boxIndex - 1]!.start = startIndex
           boxes[boxIndex - 1]!.end = index
         } else {
+          // rule blink/output/box-fragment-edges
           // A fragment takes the box's item and rect alone; its edges start unset (BoxData(other, start, end),
           // inline_box_state.h:328-332), and the box's line-right edge moves to the last one below.
           fragmented.push({
@@ -1273,13 +1278,14 @@ function lineOutput(sh: Shaper, info: LineInfo, start: BlinkLineStart, slot: Lin
   const isFirst = start.itemIndex === 0 && start.textOffset === 0
   const sourceStart = isFirst ? 0 : sourceStartOf(p, contentStart)
   const sourceEnd = next === null ? p.sourceLength : sourceStartOf(p, contentEnd)
-  const hangWidth = hangWidthOf(sh, info)
+  const trailingSpaces = trailingSpacesOf(sh, info)
+  const hangWidth = trailingSpaces.width
   const align = usedTextAlign(p.paragraph.textAlign, info)
   // ApplyTextAlign's space: AvailableWidth − WidthForAlignment, the unclamped width less the hanging width
   // (inline_layout_algorithm.cc:949-952, line_info.h:157-167). Justification that finds opportunities expands the item
   // results and moves nothing; otherwise the line falls back to start (:955-968).
   const space = info.availableWidth - (info.unclampedWidth - hangWidth)
-  const justified = align === 'justify' && applyJustification(sh, info, space)
+  const justified = align === 'justify' && applyJustification(sh, info, space, trailingSpaces.endOffset)
   const alignOffset = justified ? 0 : lineOffsetForTextAlign(align === 'justify' ? 'start' : align, p.baseLevel === 1, space)
   const geometry: BlinkLineGeometry = {
     layoutZoom: p.layoutZoom,

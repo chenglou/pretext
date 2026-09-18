@@ -76,6 +76,7 @@ export function geckoStyle(s: TextStyle): GeckoStyle {
     isBreakSpaces: collapse === 'break-spaces',
     wordBreak,
     lineBreak: s.lineBreak,
+    tabSize: s.tabSize,
   }
 }
 
@@ -1505,9 +1506,9 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, measur
   const correctionPrefix = new Int32Array(T + 1)
   for (let t = 0; t < T; t++) correctionPrefix[t + 1] = correctionPrefix[t]! + correction[t]!
 
-  // ComputeTabWidthAppUnits (nsTextFrame.cpp:3875-3906): tab-size spaces of the containing block's space, plus its
-  // letter and word spacing.
-  let tabWidth = 0
+  // ComputeTabWidthAppUnits (nsTextFrame.cpp:3875-3906) reads the space, the letter spacing and the word spacing from the
+  // containing block, and tab-size from the text frame (lines.ts computeTabs).
+  let tabUnit = 0
   for (let r = 0; r < textRuns.length; r++) {
     if (!textRuns[r]!.hasTab) continue
     const context = measureContext(measurer, {
@@ -1516,7 +1517,7 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, measur
       textRendering: 'auto', direction: 'ltr', partition: '',
     })
     const space = Math.round(measureText(measurer, context, ' ') * CANVAS_AU_PER_PX)
-    tabWidth = paragraph.tabSize * (space + pxToAu(paragraph.letterSpacing) + pxToAu(paragraph.wordSpacing))
+    tabUnit = space + pxToAu(paragraph.letterSpacing) + pxToAu(paragraph.wordSpacing)
     break
   }
 
@@ -1568,7 +1569,7 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, measur
   return {
     paragraph, env, appUnitsPerDevPixel: apd, blockStyle, text, runStarts, runStyles, runParents, runLangs: langs, letterSpacingAu, frames, items,
     elements, textRuns, tUnits, tSource, breakFlags: g.breakFlags, clusterStart: g.clusterStart, isSpace: g.isSpace, kind: g.kind,
-    spacingPrefix, scanSpacingPrefix, tabSpacingPrefix, correctionPrefix, unitOf, units, sourceT, nextT, tabWidth, emergencyUnconfirmed, textIndentAu: pxToAu(paragraph.textIndent), bidi: resolveBidi, gaps,
+    spacingPrefix, scanSpacingPrefix, tabSpacingPrefix, correctionPrefix, unitOf, units, sourceT, nextT, tabUnit, emergencyUnconfirmed, textIndentAu: pxToAu(paragraph.textIndent), bidi: resolveBidi, gaps,
   }
 }
 

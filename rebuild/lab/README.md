@@ -213,12 +213,19 @@ Times are from this Mac (18 cores, 36 GB) on 2026-09-18 while other owners' brow
 upper bounds. `--config=facts` selects the other configuration in tier 2; tier 1 checks every frozen reference there is.
 
 **The sets** (`rebuild/tests/sets.ts`): `smoke-hand` (the 25 cases of `smoke-cases.ndjson`) and `smoke`; the development
-sets `runs`, `ws`, `policy` and `suite-sample`; the rule and feature families derived in round 3 (`families`, `features`,
-and Chrome's `features-en-US` under its second locale; `.artifacts/tests/derive-r3-20260917`); and the 09-16 held-out sets
-`heldout-runs`, `heldout-ws`, `heldout-policy` and `heldout-suite-sample`. Chrome 65,351 cases, Firefox 62,437, webkit-host
-62,653. A case id can sit in two sets (the smoke set samples the others, and `features-en-US` observes `features` ids under
-another locale), so everything keys on set and id. Giants are in no set: a giant's record is as large as its calls and one
-can take minutes, so they stay an evaluation job.
+sets `runs`, `ws`, `policy`, `rich-prewrap` and `suite-sample`; the rule and feature families derived in round 3 (`families`,
+`features`, and Chrome's `features-en-US` under its second locale; `.artifacts/tests/derive-r3-20260917`); and the 09-16
+held-out sets `heldout-runs`, `heldout-ws`, `heldout-policy` and `heldout-suite-sample`. Chrome 66,685 cases, Firefox 63,771,
+webkit-host 63,987. A case id can sit in two sets (the smoke set samples the others, and `features-en-US` observes
+`features` ids under another locale), so everything keys on set and id. Giants are in no set: a giant's record is as large
+as its calls and one can take minutes, so they stay an evaluation job.
+
+`rich-prewrap` (1,334 cases; `bun rebuild/lab/cases/rich-prewrap.ts --out=.artifacts/lab/cases/rich-prewrap.ndjson`, sha256
+61bdf919…; research/PREWRAP-RICH.md) joined in round 4c, after the references of 2026-09-18 were recorded, so the counts
+elsewhere in this section are without it. It is the only set that reaches tab-size on a span, and justify beside a
+preserved newline or beside preserved spaces across a box end: round 4c's three fixes (Gecko's tab-size and preserved
+newline, Blink's justify end offset) changed the prediction of 0 cases of the other sets in Chrome and 2 in Firefox, and
+corrected observed values in 7 and 47 cases of this one. Both orders with recording take 4 to 6 s a browser.
 
 **The protocol is part of a result.** Native layout can depend on what a document and a browser process saw before a case,
 which follows from how a set is cut into jobs: round 3's held-out history-dependent counts moved when the run method did
@@ -368,7 +375,8 @@ bun rebuild/tests/known-tail.ts check                                       # va
 after` with the case ids, for every case that belongs to the item by its status before or after. So a change that moves a
 class left open on purpose shows by the item's name, whether cases left it, entered it or moved inside it, and
 `transitions.json` holds the same under `knownTail`. To append, write the item as JSON and run `add`, or edit the file and
-run `check`; case ids from fresh sets are in no ledger and only document the class. The first 41 items came from
+run `check`; case ids from fresh sets are in no ledger and only document the class. Round 4c added 4 items for the
+`rich-prewrap` set's open row, its lab limits and two WebKit rows `page-history` covers by position. The first 41 items came from
 research/ROUND3-CRITIC.md's convertible classes and unneeded conditions, the round 4a reports' open items and this round's
 measure-first check.
 

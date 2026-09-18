@@ -650,7 +650,8 @@ for i in range:
   x += spacing(i).after
 ```
 
-A tab has no glyph and no letter spacing (sections 3.4 and 4.6). Tabs exist in the text run only under
+`tab-size` (N, or the length) is the text frame's own, `aFrame->StyleText()`; the space, the letter spacing and the word
+spacing are the containing block's. A tab has no glyph and no letter spacing (sections 3.4 and 4.6). Tabs exist in the text run only under
 `COMPRESS_NONE` (`nsTextFrameUtils.cpp:261-263`), so only `pre`, `pre-wrap` and `break-spaces` have tab stops.
 
 Soft hyphens (`hyphens: manual`):

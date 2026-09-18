@@ -843,3 +843,41 @@ describe('ceiling round 2', () => {
     expect(l.gaps.filter(g => g.gap === 'font-size-quantization').map(g => g.at)).toEqual([{ start: 3, end: 5 }])
   })
 })
+
+describe('round 4c', () => {
+  test('tab-size comes from the text frame, the space and spacing from the block (nsTextFrame.cpp:3875-3906)', () => {
+    // Courier New at 16px: 576 au a character. The block's tab-size is 8, the span's 4: its tab stops every 2304 au.
+    const spanWith = (tabSize: number, blockTabSize: number): Paragraph => {
+      const p = paragraph([run('a\tb', 'span'), run('\tc')], 500, { whiteSpace: 'pre', tabSize: blockTabSize })
+      const span = p.content[0]!
+      if (span.kind !== 'span') throw new Error('expected a span')
+      span.tabSize = tabSize
+      return p
+    }
+    // `a`, a tab to 2304, `b`, then the block's own tab to 4608, `c`.
+    expect(textFrames(layout(spanWith(4, 8)).lines[0]!).map(f => f.width)).toEqual([2304 + 576, 4608 - 2880 + 576])
+    // The span's tab-size 0 leaves its tab at 0 (:4306-4309); the block's text node still stops at 4608.
+    expect(textFrames(layout(spanWith(0, 8)).lines[0]!).map(f => f.width)).toEqual([1152, 4608 - 1152 + 576])
+    // And the other way round: the block's tab-size 0 doesn't reach the span.
+    expect(textFrames(layout(spanWith(4, 0)).lines[0]!).map(f => f.width)).toEqual([2304 + 576, 576])
+  })
+
+  test('a text frame that ends in a preserved newline ends its line like a <br> (nsTextFrame.cpp:11472-11476)', () => {
+    // "aa bb\ncc dd ee" under pre-wrap and justify at 72px: line 0 ends in the newline, so it takes the last line's
+    // alignment, start, and keeps its 2880 au; line 1 wraps before "ee" and is justified to 4320 au.
+    const l = layout(paragraph([run('aa bb\ncc dd ee')], 72, { textAlign: 'justify', whiteSpace: 'pre-wrap' }))
+    expect(l.lines.map(line => [line.start, line.align])).toEqual([[0, 'start'], [6, 'justify'], [12, 'start']])
+    expect(textFrames(l.lines[0]!)[0]!.characters.map(c => c.advance)).toEqual([576, 576, 576, 576, 576, 0])
+    expect(textFrames(l.lines[1]!)[0]!.characters.slice(0, 5).map(c => c.advance)).toEqual([576, 576, 576 + 1440, 576, 576])
+  })
+
+  test('a line that ends in a preserved newline isn\'t wrapped, so TextAlignLine reads no hang on it (nsBlockFrame.cpp:5604-5606, nsLineLayout.cpp:3505-3516)', () => {
+    // "aa bb    \ncc" under pre-wrap at 57.6px (3456 au): "aa bb" and one of the four spaces fit, and the line box keeps
+    // that space's 576 au. On a wrapped line text-align: end would move the text by that hang; this line ends in a BR.
+    const l = layout(paragraph([run('aa bb    \ncc')], 57.6, { textAlign: 'end', whiteSpace: 'pre-wrap' }))
+    expect(l.lines.map(line => [line.start, line.geometry.width, line.geometry.hang, line.geometry.alignOffset])).toEqual([[0, 3456, 0, 0], [10, 1152, 0, 2304]])
+    // The same spaces before a soft wrap do hang: the text moves to the line's end.
+    const wrapped = layout(paragraph([run('aa bb    cc')], 57.6, { textAlign: 'end', whiteSpace: 'pre-wrap' }))
+    expect(wrapped.lines.map(line => [line.start, line.geometry.width, line.geometry.hang, line.geometry.alignOffset])).toEqual([[0, 3456, 576, 576], [9, 1152, 0, 2304]])
+  })
+})

@@ -12,6 +12,40 @@ Earlier rounds (1-11, 2026-09-16) and their failure classes are in this file's g
 its own scorer, baseline and run folders. Since ceiling round 4 the port measures on an OffscreenCanvas always; round 3's
 section describes the detached canvas element it measured on then.
 
+## Round 4c, 2026-09-18: two port rules from the rich pre-wrap exploration
+
+research/PREWRAP-RICH.md found two rules the port lacked; both also reach flat paragraphs. Each was read again in the pinned
+source, ported by hand, given unit tests (`gecko.test.ts` "round 4c") and registered. Scorer 7, pinned Firefox 156.0. The
+baseline is the merged round 4b tree (7567cf3), recorded on the tier 2 sets in both configurations and both orders and frozen
+as a private tier 1 reference, since the shared references still describe round 3: `.artifacts/tests/runs/r4c-ports/`
+(`base/`, `fixed/`, `replay/`, `tier1/`, `rich-prewrap/`, `set-rich/`).
+
+1. **tab-size comes from the text frame** (`gecko/measure/tab-width-containing-block`, restated). `ComputeTabWidthAppUnits`
+   reads `aFrame->StyleText()->mTabSize` and takes the space, the letter spacing and the word spacing from the containing
+   block (nsTextFrame.cpp:3875-3906). The port multiplied the block's tab-size for every run. `GeckoPrepared.tabUnit` is now
+   the block's part, and `computeTabs` multiplies it by the frame's own tab-size (`GeckoStyle.tabSize`), so a span with
+   tab-size 0 has no tab stops in a block that has them, and the other way round. `c-07ac640c4ed9f71f` (a tab in a span with
+   tab-size 12 in a block with tab-size 3): the engine line was 1,728 au where the native one is 6,912.
+2. **A text frame that ends in a preserved newline sets LineEndsInBR** (`gecko/lines/preserved-newline-ends-line-in-br`;
+   nsTextFrame.cpp:11472-11476). The port set it for `<br>` alone. nsBlockFrame reads it twice: such a line takes the last
+   line's alignment, so justify doesn't expand it (:5971-5974), and it isn't marked wrapped (:5604-5606), so `TextAlignLine`
+   reads no hang on it (nsLineLayout.cpp:3505-3516; under `end`, `right` and `center` a wrapped line moves by its hang).
+   `c-b4c6bea8cb3653f5`: the space after `alpha` is 4.3px natively and was 15.4px.
+
+| Check | Result |
+|---|---|
+| `bun test rebuild` | 716 pass (3 new Gecko tests, 1 Blink) |
+| tier 1, 62,437 cases, either configuration | 2 predictions changed, both `geometry.hang` on a line that ends in a preserved newline under `start` (277 au and 240 au to 0: `smoke/pre-wrap-trailing-spaces`, `c-7a02a07faf555205`); nothing else moves, no question changes |
+| tier 2, both orders, either configuration | 0 status transitions against the baseline's ledger; differing predicted values the same in total (1,488 in 418 rows with facts, 12 of them in the 6 known Noto Nastaliq Urdu cases that fail no metric) |
+| rich pre-wrap, main set (1,259 cases), either configuration | lineCount 1,251 to 1,259, breaks 1,243 to 1,259, widths 1,140 pass and 20 fail to 1,176 and 0: every prediction metric passes; painter failures 48 to 12 |
+| rich pre-wrap, slots family (75) | lineCount 74 to 75, breaks 72 to 75, widths 64 to 67 with 0 failing; painter failures 5 to 2 |
+| rich pre-wrap, exact values with facts | 753 of 93,816 predicted values differed in 42 cases of the main set (6 of them failing no metric) and 143 in 5 slots cases (2); now 0 of 93,852 and 0 of 6,672, and no rect count differs (15 and 3 before) |
+
+What moved on the rich pre-wrap set: 39 `tabs` cases and 5 `slots` cases (rule 1), 2 `newlines` cases and 1 `bidi` case
+(rule 2); nothing was lost. The tier sets don't reach rule 1 at all and reach rule 2 only through the unobserved hang, so
+`rich-prewrap` is a tier set since this round (lab README, "Test tiers"): under the tier protocol Firefox passes lineCount and
+breaks on all 1,334 cases and widths on 1,243, with 91 unobserved.
+
 ## Ceiling round 4, 2026-09-18
 
 The maintainer decided on 2026-09-18 that Firefox measures on an OffscreenCanvas always: one measuring path, no `document`.

@@ -15,6 +15,8 @@ export type GeckoStyle = {
   // EffectiveWordBreak: break-word is normal plus overflow-wrap anywhere.
   wordBreak: 'normal' | 'break-all' | 'keep-all'
   lineBreak: TextStyle['lineBreak']
+  // tab-size as a number of spaces, the one style value ComputeTabWidthAppUnits reads from the text frame itself.
+  tabSize: number
 }
 
 // A text frame: one text node, or the piece of it bidi resolution split off as a non-fluid continuation
@@ -180,8 +182,9 @@ export type GeckoPrepared = {
   sourceT: Int32Array
   // Per source offset (length + 1): the first transformed index at or after it (gfxSkipCharsIterator).
   nextT: Int32Array
-  // ComputeTabWidthAppUnits (nsTextFrame.cpp:3875-3906), 0 when nothing measured it.
-  tabWidth: number
+  // What ComputeTabWidthAppUnits (nsTextFrame.cpp:3875-3906) multiplies a text frame's tab-size by: the containing
+  // block's space plus its letter and word spacing, au. 0 when nothing measured it.
+  tabUnit: number
   // Transformed indices of the emergency breaks after a hyphen that the coverage facts couldn't confirm: whether the
   // letters around the hyphen are one font's isn't known (prepare.ts step 4).
   emergencyUnconfirmed: Set<number>

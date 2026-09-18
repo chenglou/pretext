@@ -1004,6 +1004,189 @@
       "cases": [],
       "source": "research/ROUND3-EVALUATION.md",
       "note": "Counts only; opening them burns the set."
+    },
+    {
+      "id": "lab/blink-rect-of-a-span-holding-only-a-trimmed-space",
+      "engine": "blink",
+      "kind": "lab",
+      "title": "A pre-line span whose only text is a trimmed trailing space reports a zero-width rect at the line end natively; the Blink observation port expects none",
+      "conditions": [],
+      "cases": [
+        {
+          "id": "c-a37545c096e939be",
+          "browser": "chrome",
+          "where": "rich-prewrap"
+        }
+      ],
+      "source": "research/PREWRAP-RICH.md §3 C; specs/blink-RESULTS.md \"Round 4c\"; the rich-prewrap set's one open prediction row (breaks) in both configurations on 2026-09-18",
+      "note": "Every code point is on the right line; only Element.getClientRects() of the span differs (native lines 2, expected none). It is the observation port's rule for a span without laid-out text (lab/observe/blink.ts), not the engine."
+    },
+    {
+      "id": "lab/blink-element-rects-of-spans-without-a-box-fragment",
+      "engine": "blink",
+      "kind": "lab",
+      "title": "Element rects of spans that create no box fragment: a <wbr> inside one, and a span the port takes for another font height",
+      "conditions": [],
+      "cases": [
+        {
+          "id": "c-1cef17b63706b01e",
+          "browser": "chrome",
+          "where": "rich-prewrap"
+        },
+        {
+          "id": "c-43b2450047abf23f",
+          "browser": "chrome",
+          "where": "rich-prewrap"
+        },
+        {
+          "id": "c-468d29a893d8250c",
+          "browser": "chrome",
+          "where": "rich-prewrap"
+        },
+        {
+          "id": "c-541a237457123e8f",
+          "browser": "chrome",
+          "where": "rich-prewrap"
+        },
+        {
+          "id": "c-5cf68c0005067d1c",
+          "browser": "chrome",
+          "where": "rich-prewrap"
+        },
+        {
+          "id": "c-9963973c1b44c0ae",
+          "browser": "chrome",
+          "where": "rich-prewrap"
+        },
+        {
+          "id": "c-b5ae5e46e85a9a62",
+          "browser": "chrome",
+          "where": "rich-prewrap"
+        },
+        {
+          "id": "c-b792e96b5ce3e592",
+          "browser": "chrome",
+          "where": "rich-prewrap"
+        },
+        {
+          "id": "c-b7e4afa90637861e",
+          "browser": "chrome",
+          "where": "rich-prewrap"
+        },
+        {
+          "id": "c-bd80b571c11c69b3",
+          "browser": "chrome",
+          "where": "rich-prewrap"
+        },
+        {
+          "id": "c-d6b908ae5c6fc93b",
+          "browser": "chrome",
+          "where": "rich-prewrap"
+        },
+        {
+          "id": "c-f76f02494af866dc",
+          "browser": "chrome",
+          "where": "rich-prewrap"
+        }
+      ],
+      "source": "research/PREWRAP-RICH.md §3 C; lab/observe/blink.ts (wbr \"unsettled\"); engines/blink/index.ts (the font height stand-in); 12 differing rect counts on the rich-prewrap set, 2026-09-18",
+      "note": "Only rect counts differ and no metric reads them. 9 hold a <wbr> inside a span without box edges, which natively reports a zero-width rect at the wbr (c-1cef17b63706b01e); 3 come from the stand-in that takes any other font declaration for another font height, where Verdana regular around Verdana bold italic creates no box fragment natively (c-43b2450047abf23f)."
+    },
+    {
+      "id": "blink/rtl-tab-run-partial-advance",
+      "engine": "blink",
+      "kind": "convertible class",
+      "title": "In an RTL tab run the partial first advance sits on the other tab of the pair",
+      "conditions": [
+        "tab-stops"
+      ],
+      "cases": [
+        {
+          "id": "c-0adcb6799b870bf3",
+          "browser": "chrome",
+          "where": "rich-prewrap"
+        },
+        {
+          "id": "c-14efecdd5183627a",
+          "browser": "chrome",
+          "where": "rich-prewrap"
+        },
+        {
+          "id": "c-21aaa276202c7e85",
+          "browser": "chrome",
+          "where": "rich-prewrap"
+        },
+        {
+          "id": "c-2225fc7e8702a20b",
+          "browser": "chrome",
+          "where": "rich-prewrap"
+        },
+        {
+          "id": "c-30df8c6e948429fa",
+          "browser": "chrome",
+          "where": "rich-prewrap"
+        },
+        {
+          "id": "c-af6ab09631d77bc1",
+          "browser": "chrome",
+          "where": "rich-prewrap"
+        },
+        {
+          "id": "c-ca7e787d39fc3743",
+          "browser": "chrome",
+          "where": "rich-prewrap"
+        },
+        {
+          "id": "c-cc297b20794ba459",
+          "browser": "chrome",
+          "where": "rich-prewrap"
+        },
+        {
+          "id": "c-f234777611eca7bb",
+          "browser": "chrome",
+          "where": "rich-prewrap"
+        },
+        {
+          "id": "c-f49b06cdf7366db6",
+          "browser": "chrome",
+          "where": "rich-prewrap"
+        },
+        {
+          "id": "c-f674ab174567e813",
+          "browser": "chrome",
+          "where": "rich-prewrap"
+        },
+        {
+          "id": "c-fbaeccfa5a9d3927",
+          "browser": "chrome",
+          "where": "rich-prewrap"
+        }
+      ],
+      "source": "research/PREWRAP-RICH.md §3 C: 63 limited tab-stops values differ on the rich-prewrap set (facts configuration, 2026-09-18), and flat ws rows show the same differences",
+      "note": "The sum of the pair is the same and the values are limited under tab-stops, so no metric fails. Converting it means reading which tab of an RTL run takes the partial advance (shape_result.cc tab runs)."
+    },
+    {
+      "id": "webkit/reordered-line-width-one-float-step",
+      "engine": "webkit",
+      "kind": "diagnosing condition",
+      "title": "A reordered line with box edges whose width is one float32 step from the span of its native rects, covered by page-history without being history",
+      "conditions": [
+        "page-history"
+      ],
+      "cases": [
+        {
+          "id": "c-7ab87463d0a47df0",
+          "browser": "webkit-host",
+          "where": "rich-prewrap"
+        },
+        {
+          "id": "c-ea6d4a54b03e0a22",
+          "browser": "webkit-host",
+          "where": "rich-prewrap"
+        }
+      ],
+      "source": "specs/webkit-RESULTS.md \"round 4c\"; research/PREWRAP-RICH.md §3 A W1 (\"3 cases remain one float32 step off\"); isolation and installed Safari runs of 2026-09-18 under .artifacts/tests/runs/r4c-ports",
+      "note": "Both fail widths the same way alone in a fresh process and in installed Safari 27.0, with equal native layouts, so page history is not the cause: the engine line width is 109.06256103515625 where the native rects span 109.06256866455078 (the display boxes accumulate in visual order). page-history fires on the line for its preserved spaces and the port limits the whole line, so no value is reported as predicted; the cover is by position."
     }
   ]
 }

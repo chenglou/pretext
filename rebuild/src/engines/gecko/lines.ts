@@ -687,9 +687,14 @@ function advanceWidth(p: GeckoPrepared, m: Measurer, prov: Provider, a: number, 
 // holds those tabs with the condition and the reason. A later tab counts from the stop before it; it stays a stand-in,
 // since a stand-in that crosses a stop moves every stop after it.
 function computeTabs(p: GeckoPrepared, m: Measurer, ll: LineLayout, prov: Provider, end: number, xForTabs: number, gaps: LineGaps): void {
+  // rule gecko/measure/tab-width-containing-block
+  // ComputeTabWidthAppUnits (nsTextFrame.cpp:3875-3906): tab-size is the text frame's own (aFrame->StyleText()->mTabSize);
+  // the space, the letter spacing and the word spacing are the containing block's (rich-prewrap/tabs c-07ac640c4ed9f71f:
+  // a span with tab-size 12 in a block with tab-size 3).
+  const tabWidth = p.runStyles[p.frames[prov.frame]!.run]!.tabSize * p.tabUnit
   // GetSpacing calls CalcTabWidths only for a positive tab width (nsTextFrame.cpp:4306-4309): tab-size 0, or letter
   // spacing below minus the space width, leaves tabs at 0.
-  if (!prov.run.hasTab || p.tabWidth <= 0) return
+  if (!prov.run.hasTab || tabWidth <= 0) return
   const tabSpacing = p.tabSpacingPrefix!
   let x = xForTabs
   let standIn = placedStandIn(p, m, ll.root)
@@ -703,7 +708,7 @@ function computeTabs(p: GeckoPrepared, m: Measurer, ll: LineLayout, prov: Provid
       if (reason !== null) standIn = { gap: 'in-word-prefix', detail: reason }
     }
     x += glyphBefore(p, m, prov.run, t, gaps) - glyphBefore(p, m, prov.run, first, gaps) + tabSpacing[t]! - tabSpacing[from]!
-    const nextTab = Math.ceil((x + prov.run.minTabAdvance) / p.tabWidth) * p.tabWidth
+    const nextTab = Math.ceil((x + prov.run.minTabAdvance) / tabWidth) * tabWidth
     const w = Math.trunc(nextTab - x + (nextTab - x >= 0 ? 0.5 : -0.5)) // NSToIntRound
     prov.tabs.set(t, w)
     if (standIn !== null) prov.tabStandIn.set(t, standIn)
@@ -1131,7 +1136,15 @@ function reflowText(p: GeckoPrepared, m: Measurer, ll: LineLayout, psd: SpanData
   let status: FrameResult['status'] = 'complete'
   let endsInNewline = false
   if (charsFit === 0 && length > 0 && !usedHyphenation) status = 'break-before'
-  else if (contentLength > 0 && contentStart + contentLength - 1 === newLineOffset) { status = 'break-after'; endsInNewline = true }
+  else if (contentLength > 0 && contentStart + contentLength - 1 === newLineOffset) {
+    // rule gecko/lines/preserved-newline-ends-line-in-br
+    // A frame that ends in a preserved newline marks the line as ending in a BR (nsTextFrame.cpp:11472-11476), as a <br>
+    // does: the line takes the last line's alignment, so justify doesn't expand it, and it isn't marked wrapped
+    // (nsBlockFrame.cpp:5971-5974, :5604-5606; rich-prewrap/newlines c-b4c6bea8cb3653f5).
+    status = 'break-after'
+    endsInNewline = true
+    ll.lineEndsInBR = true
+  }
   else if (breakAfter) status = 'break-after'
   // Justification opportunities over [offset, offset + charsFit) when the block justifies (nsTextFrame.cpp:11513-11521).
   const justification = p.paragraph.textAlign === 'justify' ? computeJustification(p, fi, offset, offset + charsFit).info : NO_JUSTIFICATION

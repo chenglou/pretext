@@ -5328,18 +5328,19 @@
    "engine": "gecko",
    "area": "measure",
    "kind": "ported rule",
-   "statement": "the tab width is tab-size × (the containing block's space + letter spacing + word spacing)",
+   "statement": "the tab width is the text frame's own tab-size × (the containing block's space + letter spacing + word spacing)",
    "source": "nsTextFrame.cpp:3875-3906",
    "probes": [
     "gecko-lines H15: confirmed"
    ],
    "tests": [
-    "src/engines/gecko/gecko.test.ts :: H15 tab stops"
+    "src/engines/gecko/gecko.test.ts :: H15 tab stops",
+    "src/engines/gecko/gecko.test.ts :: tab-size comes from the text frame, the space and spacing from the block (nsTextFrame.cpp:3875-3906)"
    ],
    "audit": null,
    "status": "current",
    "replacedBy": [],
-   "declaredBy": "catalogue 2026-09-16"
+   "declaredBy": "catalogue 2026-09-16; restated in round 4c (research/PREWRAP-RICH.md G1)"
   },
   {
    "id": "gecko/measure/min-tab-advance-and-hyphen-run",
@@ -9013,6 +9014,71 @@
    "audit": null,
    "status": "current",
    "replacedBy": []
+  },
+  {
+   "id": "gecko/lines/preserved-newline-ends-line-in-br",
+   "engine": "gecko",
+   "area": "lines",
+   "kind": "ported rule",
+   "statement": "a text frame that ends in a preserved newline sets LineEndsInBR, as a <br> does: the line takes the last line's alignment (justify becomes start) and isn't marked wrapped, so TextAlignLine reads no hang on it",
+   "source": "nsTextFrame.cpp:11472-11476; nsBlockFrame.cpp:5604-5606, :5971-5974; nsLineLayout.cpp:3505-3516",
+   "probes": [],
+   "tests": [
+    "src/engines/gecko/gecko.test.ts :: a text frame that ends in a preserved newline ends its line like a <br> (nsTextFrame.cpp:11472-11476)",
+    "src/engines/gecko/gecko.test.ts :: a line that ends in a preserved newline isn"
+   ],
+   "declaredBy": "round 4c port fixes (research/PREWRAP-RICH.md G2)",
+   "audit": null,
+   "status": "current",
+   "replacedBy": []
+  },
+  {
+   "id": "blink/output/box-fragment-edges",
+   "engine": "blink",
+   "area": "output",
+   "kind": "ported rule",
+   "statement": "a box that bidi reordering splits on a line gets a box fragment per visual stretch; a fragment copies the box's item and rect alone, so its edges start unset: the first fragment keeps the line-left edge and the line-right edge moves to the last",
+   "source": "inline_box_state.h:328-332; inline_box_state.cc:692-826",
+   "probes": [],
+   "tests": [
+    "src/engines/blink/lines.test.ts :: a box that reordering splits on a line keeps its line-left edge on the first fragment and moves the line-right one to the last (inline_box_state.h:328-332)"
+   ],
+   "declaredBy": "blink owner (round 4b), registered in round 4c (research/PREWRAP-RICH.md B1)",
+   "audit": null,
+   "status": "current",
+   "replacedBy": []
+  },
+  {
+   "id": "blink/output/end-offset-for-justify",
+   "engine": "blink",
+   "area": "output",
+   "kind": "ported rule",
+   "statement": "EndOffsetForJustify is the offset ComputeTrailingSpaceWidth's walk stops at: the walk goes back over the line's item results, skips items opaque to collapsing (tags), passes results that are only trailing spaces, and stops inside the last text before its hanging spaces, so preserved trailing spaces before a box end aren't justified; without preserved trailing spaces it is InflowEndOffset",
+   "source": "line_info.cc:220-245, :275-288, :289-415; justification_utils.cc:37-48, :248",
+   "probes": [],
+   "tests": [
+    "src/engines/blink/lines.test.ts :: justify ends before preserved trailing spaces that lie across a box end (line_info.cc:289-415)"
+   ],
+   "declaredBy": "round 4c port fixes (research/PREWRAP-RICH.md B2)",
+   "audit": null,
+   "status": "current",
+   "replacedBy": []
+  },
+  {
+   "id": "webkit/output/first-and-last-display-box",
+   "engine": "webkit",
+   "area": "output",
+   "kind": "ported rule",
+   "statement": "on a reordered line a span whose content isn't contiguous in visual order has several display boxes; of those only the first in box order is its first box, with the start edge, and only the last its last box, with the end edge",
+   "source": "InlineDisplayContentBuilder.cpp:1036-1060, :770-772",
+   "probes": [],
+   "tests": [
+    "src/engines/webkit/lines.test.ts :: a span in two places on a reordered line: only its first display box is its first box (computeIsFirstIsLastBox)"
+   ],
+   "declaredBy": "webkit owner (round 4b), registered in round 4c (research/PREWRAP-RICH.md W1)",
+   "audit": null,
+   "status": "current",
+   "replacedBy": []
   }
  ],
  "generated": {
@@ -9346,7 +9412,7 @@
   "gecko/measure/emoji-device-size-advance": "aee8322d0e1941b5",
   "gecko/measure/apple-color-emoji-family-literal": "b38a3f4b40c59779",
   "gecko/measure/synthesized-space-width": "fed68abdb5a4da02",
-  "gecko/measure/tab-width-containing-block": "c8d431af3d2b5671",
+  "gecko/measure/tab-width-containing-block": "9668a75e84d49583",
   "gecko/measure/min-tab-advance-and-hyphen-run": "cb3c455c649db588",
   "gecko/lines/break-and-measure-text": "f2b02bb7c729c011",
   "gecko/lines/fit-integer-au-le": "396b11fdcb31a868",
@@ -9579,6 +9645,10 @@
   "shared/lab/webkit-moved-x-width": "88ae42b6912a61e2",
   "shared/lab/webkit-sum-addends": "1b2df15307b463f9",
   "blink/shape/position-adjust-window": "f7d6193a25c06158",
-  "webkit/gap/language-dependent-fallback-table": "46607a9ed3cd6741"
+  "webkit/gap/language-dependent-fallback-table": "46607a9ed3cd6741",
+  "gecko/lines/preserved-newline-ends-line-in-br": "43dd81a874c4b251",
+  "blink/output/box-fragment-edges": "23e662c11e9f7f70",
+  "blink/output/end-offset-for-justify": "72714947a9cdeee7",
+  "webkit/output/first-and-last-display-box": "f48c4f0b11cc5689"
  }
 }

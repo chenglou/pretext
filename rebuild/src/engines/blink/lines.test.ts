@@ -526,3 +526,22 @@ describe('blink round 4b', () => {
     }
   })
 })
+
+describe('blink round 4c', () => {
+  test('justify ends before preserved trailing spaces that lie across a box end (line_info.cc:289-415)', () => {
+    // A pre-wrap block at 150px: line 0 is `aa bb cc`, three spaces inside the span, its 6px end padding and three spaces
+    // after it, 146px. The spaces inside the span fit, so they stay in the item result of `cc   `; the ones after it are
+    // the trailing item result. ComputeTrailingSpaceWidth's walk skips the close tag and stops inside `cc   `: 60px hang,
+    // and EndOffsetForJustify is the end of `cc`. The 64px of free space (150 − (146 − 60)) goes to the two spaces of
+    // `aa bb `, 32px each, and none to the spaces inside the span.
+    const pad: BoxEdge = { margin: 0, border: 0, padding: 6 }
+    const p = tree([{ kind: 'text', text: 'aa bb ' }, span([{ kind: 'text', text: 'cc   ' }], { end: pad, whiteSpace: 'pre-wrap' }), { kind: 'text', text: '   dd ee' }], 150, { whiteSpace: 'pre-wrap', textAlign: 'justify' })
+    const layout = blink(p)
+    expect(layout.lines.map(l => [l.start, l.end, l.align])).toEqual([[0, 14, 'justify'], [14, 19, 'start']])
+    const g = layout.lines[0]!.geometry
+    expect(g.hangWidth).toBe(60 * 64)
+    const texts = g.items.filter(i => i.kind === 'text').map(i => [i.textStart, i.x, i.inlineSize])
+    // The spaces after the span are two items: a break opportunity is generated after a leading preserved space.
+    expect(texts).toEqual([[0, 0, 124 * 64], [6, 124 * 64, 50 * 64], [11, 180 * 64, 10 * 64], [12, 190 * 64, 20 * 64]])
+  })
+})

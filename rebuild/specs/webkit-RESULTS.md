@@ -7,6 +7,30 @@ for round 4b, `.artifacts/lab/webkit-round4/` and `.artifacts/lab/fresh/webkit-h
 `.artifacts/lab/webkit-round2/<run>/` for round 2 and `.artifacts/lab/webkit-stage5/<run>/` before it. Installed Safari ran
 once in round 3, as a spot check.
 
+## 2026-09-18: round 4c (the first and last display box rule, checked and registered)
+
+research/PREWRAP-RICH.md's WebKit rule, `computeIsFirstIsLastBox` (InlineDisplayContentBuilder.cpp:1036-1060, read at
+:770-772), is round 4b's display box fix. It was read again in the pinned source (the first display box of a span in box
+order keeps the start edge, the last the end edge) and is registered as `webkit/output/first-and-last-display-box`; nothing
+was ported. Scorer 7; runs under `.artifacts/tests/runs/r4c-ports/`.
+
+- Tier 1 (62,653 cases, either configuration) and tier 2 (both orders) against the merged round 4b tree: nothing moves, as
+  the round's other fixes are Blink's and Gecko's.
+- Rich pre-wrap set, either configuration: 0 predicted values differ (of 3,213 without facts, 7,917 with). 10 cases of the
+  main set fail a prediction metric, all under `page-history`. 8 are the break cache handing a pre-wrap node the item
+  structure of an earlier break-spaces paragraph (PREWRAP-RICH §3 B): alone in a fresh process each has another native
+  layout and passes every metric (`rich-prewrap/isolate-host`). 2 aren't history: `c-7ab87463d0a47df0` and
+  `c-ea6d4a54b03e0a22` fail widths the same way alone and in installed Safari, one float32 step (engine line width
+  109.06256103515625, native rects span 109.06256866455078 on a reordered line with padded spans); the whole line is
+  limited, so no value is reported as predicted, and `page-history` covers it by position. Known tail:
+  `webkit/reordered-line-width-one-float-step`.
+- Installed Safari 27.0 spot check, which round 4b couldn't run (150 cases in 8 s, `safari-spot/`, with
+  `--allow-safari-frontmost`): the 42 cases the display box fix moved pass lineCount, breaks and widths; the 108
+  `rich-prewrap/bidi` cases pass lineCount and breaks, widths 103 pass, 3 unobserved and the 2 above fail; 0 of 506
+  predicted values and 0 of 5,147 rect counts differ.
+- `rich-prewrap` is a tier set since this round. Under the tier protocol (one document history for the 1,334 cases, both
+  orders): 11 history-dependent cases, lineCount 1 and breaks 6 failing under `page-history`, widths the 2 above.
+
 ## 2026-09-18: round 4b (what the observation port reports as predicted; the Canvas family in the layout)
 
 A trimmed round: the round 3 critic's finding 3 (research/ROUND3-CRITIC.md: the port reports values as predicted under the

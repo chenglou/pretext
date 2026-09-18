@@ -16,6 +16,37 @@ Baselines for transitions:
 - the triage population (research/MAIN-TRIAGE.md §2.1, Chrome small file, 8,933 cases): the charter triage rows
   (`.artifacts/charter-20260916/triage/runs/chrome/charter-file/small`), scored again with scorer 3.
 
+## Round 4c
+
+Pinned Chrome 153.0.8010.50, scorer 7, 2026-09-18: the two Blink rules research/PREWRAP-RICH.md found. The baseline is the
+merged round 4b tree (7567cf3), recorded on the tier 2 sets in both configurations and both orders and frozen as a private
+tier 1 reference (`.artifacts/tests/runs/r4c-ports/`: `base/`, `fixed/`, `replay/`, `tier1/`, `rich-prewrap/`, `set-rich/`).
+
+1. **A box that bidi reordering splits** (`blink/output/box-fragment-edges`, inline_box_state.h:328-332): round 4b's fix, read
+   again here and registered with its annotation; nothing to port. On the rich pre-wrap set its cases hold no differing
+   value.
+2. **EndOffsetForJustify** (`blink/output/end-offset-for-justify`). `UpdateTextAlign` takes it from
+   `ComputeTrailingSpaceWidth`'s own walk (line_info.cc:275-288, :289-415): back over the item results, skipping items
+   opaque to collapsing, passing results that are only trailing spaces, and stopping inside the last text before its hanging
+   spaces. The port had a loop of its own that stopped at the first result that wasn't only trailing spaces, a close tag
+   included, so preserved spaces that fit before a box end, with more trailing spaces after it, were counted and expanded
+   as justification opportunities. `hangWidthOf` is now `trailingSpacesOf`, which returns the width and the offset from one
+   walk, and `applyJustification` takes the offset. `c-bb8068601ab36af7`: `alpha beta ` is 111.906px natively and was
+   86.344px. Only positions moved; the hang width was right.
+
+| Check | Result |
+|---|---|
+| `bun test rebuild` | 716 pass (1 new Blink test, `lines.test.ts` "blink round 4c"; 3 Gecko) |
+| tier 1, 65,351 cases, either configuration | 65,351 the same: no tier case holds preserved spaces across a box end under justify |
+| tier 2, both orders, either configuration | 0 status transitions against the baseline's ledger; differing predicted values equal (0 in cases failing no metric) |
+| rich pre-wrap (1,334 cases), with facts | differing predicted values 126 in 8 cases, 7 of them failing no metric, to 1 in 1 case (`c-a37545c096e939be`, below); statuses unchanged: lineCount 1,334, breaks 1,333, widths 1,221 pass and 0 fail |
+| rich pre-wrap, no facts | the same 7 cases (6 `trailing-spaces`, 1 `newlines`): limited values that differ 422 to 297 |
+
+Left on the rich pre-wrap set, all in the known tail (`rebuild/tests/known-tail.json`): `c-a37545c096e939be`, the set's one
+open row (a pre-line span whose only text is a trimmed space reports a zero-width rect natively; an observation port rule,
+every code point is on the right line); 12 differing rect counts of spans without a box fragment (`<wbr>` inside one, the
+font height stand-in); 63 limited `tab-stops` values in RTL tab runs. `rich-prewrap` is a tier set since this round.
+
 ## Round 4b
 
 Pinned Chrome 153.0.8010.50, scorer 6, 2026-09-18, from the worktree branch `r4b-blink` on the merged round 4a tree
