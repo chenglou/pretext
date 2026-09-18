@@ -486,6 +486,14 @@ describe('gecko Canvas recipes (specs/gecko-AUDIT.md B1-B4)', () => {
     expect(allGaps(l).map(g => g.gap)).not.toContain('bitmap-emoji-size')
   })
 
+  test('the space-in-shaping test reads Canvas widths only below 2^18 px (CanvasRenderingContext2D.cpp:5277)', () => {
+    // 9,134 words of `aa ` are 15,783,552 au, 263,059.2px: measureText's float width is 1/32 px steps there and reads back
+    // as 15,783,551 au. The test runs in windows under 2^18 px, which read back exactly, so nothing is reported.
+    const long = prepareGecko(paragraph([run('aa '.repeat(9134))], 500), env, createMeasurer())
+    expect(Math.round(Math.fround(15783552 / 60) * 60)).toBe(15783551)
+    expect(long.gaps.map(g => g.gap)).toEqual([])
+  })
+
   test('B1b: a soft hyphen inside a grapheme cluster puts the whole cluster before the break', () => {
     // c-27e5b02212b7324f: natively line 2 holds the ligated cluster (750 au) and the hyphen; U+1F680 starts line 3 at 0 au.
     const p = paragraph([run('a👩‍­🚀b', 'text', { font: arial(12) })], 8, { font: arial(12), whiteSpace: 'pre-wrap', overflowWrap: 'break-word' })

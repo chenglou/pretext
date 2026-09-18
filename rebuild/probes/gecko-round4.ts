@@ -1,4 +1,4 @@
-// Gecko port round 4 probes F20 to F26 (pinned Firefox 156, DPR 2). Measurement only: Range rects of text nodes in au
+// Gecko port round 4 probes F20 to F27 (pinned Firefox 156, DPR 2). Measurement only: Range rects of text nodes in au
 // (px × 60) and measureText widths from a main-thread OffscreenCanvas. Every probe returns `checks` (name, measured,
 // expected, ok) and `pre` (what a claim depends on), so each gives facts (rebuild/tests/facts.ts).
 // - F20, the unbounded frame of F18, traced: gfxTextRun::ComputeLigatureData divides a ligature group's signed advance by an
@@ -270,6 +270,28 @@ check('where nothing crosses an offset by the three-string test and the ink box 
 return { apd, cuts, rows, checks, pre };
 `
 
+// - F27, the units of the residual class gecko/one-shaping-unit-one-app-unit that the round 4 sets met beyond F7's and F13's
+//   strings: per word of each node, the DOM box against an OffscreenCanvas at the CSS size.
+const F27 = String.raw`
+const nodes = [
+  ['400 10px "Helvetica Neue"', 'en', 'ltr', 'Ty To Yo LT: kerning'],
+  ['700 32px Thonburi', 'th', 'ltr', 'รมชาติทำให้ผู้คนมีความสุขมากขึ้'],
+  ['500 32px Thonburi', 'th', 'ltr', 'รมชาติทำให้ผู้คนมีคว'],
+  ['400 10px "Geeza Pro"', 'ar', 'rtl', 'خروج تروك'],
+  ['400 10px "Geeza Pro"', 'ar', 'rtl', 'ووفقك لطاعته'],
+  ['300 10px "Geeza Pro"', 'ar', 'rtl', 'على شكره ووفقك'],
+  ['400 15px "Helvetica Neue", Helvetica, Arial, sans-serif', 'en', 'ltr', 'In the heart of you can find ancient mosques alongside modern cafés.'],
+];
+const rows = [];
+for (const [font, lang, direction, text] of nodes) for (const word of text.split(' ')) {
+  const box = widthOf(dom('white-space: pre; direction: ' + direction + '; font: ' + font, lang, [word])[0].whole);
+  rows.push([font, word, oc(font, lang, direction, word) - box]);
+}
+check('an OffscreenCanvas at the CSS size is within 1 au of the DOM box on every word', rows.filter(r => Math.abs(r[2]) > 1), []);
+check('the words where it is 1 au off, OffscreenCanvas less DOM', rows.filter(r => r[2] !== 0), [['400 10px "Helvetica Neue"', 'LT:', 1], ['700 32px Thonburi', 'รมชาติทำให้ผู้คนมีความสุขมากขึ้', -1], ['500 32px Thonburi', 'รมชาติทำให้ผู้คนมีคว', -1], ['400 10px "Geeza Pro"', 'تروك', -1], ['400 10px "Geeza Pro"', 'ووفقك', -1], ['300 10px "Geeza Pro"', 'ووفقك', -1], ['400 15px "Helvetica Neue", Helvetica, Arial, sans-serif', 'modern', 1]]);
+return { apd, rows, checks, pre };
+`
+
 export default function probes(): Probe[] {
   const probe = (id: string, spec: string, source: string, fontFixtures?: string[]): Probe => ({
     id,
@@ -288,5 +310,6 @@ export default function probes(): Probe[] {
     probe('gecko-port F24', 'gecko-port F24: synthetic bold on an OffscreenCanvas', F24),
     probe('gecko-port F25', 'gecko-port F25: letter spacing on a cursive run whose last cluster holds a mark of another font', F25),
     probe('gecko-port F26', 'gecko-port F26: the suffix-side in-word recipe against the DOM', F26),
+    probe('gecko-port F27', 'gecko-port F27: words an OffscreenCanvas measures 1 au off the DOM', F27),
   ]
 }
