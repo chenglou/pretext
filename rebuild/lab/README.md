@@ -25,8 +25,11 @@ doesn't depend on the old library in `src/`.
 - `record.ts` and `measurements.ts`: `run.ts --record-measurements`, the page side and the offline side (see "Recorded
   measurements").
 - `compare-rows.ts`: whether two runs of the same cases recorded the same native observations, predictions and painted
-  lines, case by case (`bun rebuild/lab/compare-rows.ts <rows> <other rows>`). The checks of the lab itself use it: a pinned
-  browser against the installed one, a recorded run against a plain one, installed Safari against webkit-host.
+  lines, case by case (`bun rebuild/lab/compare-rows.ts <rows> <other rows> [--report=<file.json>]`). The checks of the lab
+  itself use it: a pinned browser against the installed one, a recorded run against a plain one, installed Safari against
+  webkit-host, the usual protocol against measure first. `--report` lists every differing case: for a native observation
+  what the scorer compares (line count, every rect's x, width and native line) or that only values outside it differ, for a
+  prediction and painted lines the first differing field. `rebuild/tests/compare-sets.ts` runs it over two tier 2 folders.
 - `languages.ts`: the browser-process languages each browser launches with, and the given facts the driver derives for
   the library (see "Browser-process languages"); `languages.test.ts` its rules.
 - `score.ts`: the offline scorer.
@@ -54,6 +57,9 @@ doesn't depend on the old library in `src/`.
   (`bunx tsc -p rebuild/lab/tsconfig.json --noEmit`).
 - `VALIDATION.md`: what the end-to-end validation ran, found and fixed.
 - `WEBKIT-HOST.md`: how the WKWebView host's rows compare with installed Safari's, and when they may stand in for it.
+- `measure-first-cases.ndjson`: 20 hand-written cases per browser for the measure-first check ("Measure first"): the
+  platform UI font at sizes one of which is another's zoomed size, controls without an optical size axis, and an emoji before
+  and after a text presentation request.
 - `smoke-cases.ndjson`: 25 hand-written cases covering spans, bare white-space text nodes, pre-wrap with trailing
   spaces and empty lines, `pre`, `pre-line`, `break-spaces`, `nowrap`, RTL Hebrew and Arabic, CJK, keep-all, emoji,
   soft hyphens, combining marks, ZWSP, mixed font sizes, tabs, a span with its own `lang`, a fixture web font and a
@@ -170,6 +176,25 @@ doesn't depend on the old library in `src/`.
 - **`rebuild/tests/gate.ts seed` stages its seed** like `gate.ts --seed` ("Seeds go to a staging folder").
 - **`rebuild/bench/run.ts` launches the pinned Chrome and Firefox**, the bundles whose build it records.
 
+## Landed in ceiling round 4b
+
+- **Measure first** ("Measure first" below): `run.ts --measure-first` and `browser-sets.ts --measure-first` predict every case
+  of a document before its first native layout, as an application measures; `rebuild/tests/compare-sets.ts` compares such a
+  run with a usual one case by case.
+- **Scorer 7** ("Scoring" below; `SCORER_VERSION` is 7, so ledgers and seeds of scorer 6 refuse its runs; compare across them
+  knowingly with `ledger.ts transitions --allow=scorer`). No metric's status, no covered flag and no residual membership
+  changes between scorers 6 and 7 on the tier sets of 2026-09-18 (every set, the three browsers, both configurations, forward
+  order: 380,882 scored rows); the line a lineCount or breaks failure is attributed to changes on 16 Chrome rows with the
+  lab's facts and 18 without, all covered before and after. What changed: Blink's hyphen rect is found on whichever range of
+  the node reports it and, on the expected side, from the layout's hyphen items; differing units inside one stand-in span
+  are one run; Gecko's synthetic bold class is registered ("Covered failures", "Residual classes").
+- **The known tail** ("The known tail" below): `rebuild/tests/known-tail.json` lists the classes left open on purpose, and the
+  ledger's transitions name the items a moved case belongs to.
+- **Seed records list the passes that leave with a dropped case** by id (`leftWithTheirCase`, "Seeds go to a staging folder").
+- **Probe releases**: `rebuild/tests/rerun-probes.sh` runs Gecko's follow-up sets (F7 to F27, 83 facts) and WebKit's round 4
+  set, whose probes return raw values alone: each gives one undecided fact that holds its record's hash (`rebuild/tests/facts.ts`),
+  so a release reports when the browser's answers changed. The ten records of 2026-09-18 equal the WebKit owner's earlier runs.
+
 ## Test tiers
 
 Four tiers by time, one command each. The first three give a signal in seconds to minutes; the fourth is the round's
@@ -279,6 +304,8 @@ reference ledger; and checks the runs against the build-keyed seed through `gate
   two sets share counts as passing only where every set passes it; the ledger keeps them apart.
 - A failed job is never run again: the command stops and names its log, and `--rerun-failed` runs the failed jobs once
   after the cause is fixed. Jobs that finished are kept, so the command resumes.
+- `--measure-first` runs every job under `run.ts --measure-first` ("Measure first"). The protocol is part of the ledger, so
+  the transitions against the reference are printed across protocols, knowingly, and the gate doesn't run.
 - The rule families' facts and coverage layers stay in `rebuild/tests/gate.ts` (rebuild/TESTS.md §9); tier 2 is about the
   sets' statuses.
 
@@ -316,6 +343,34 @@ protocol row. It refuses, by name, ledgers of another browser, build, process la
 | A fresh or sealed set drawing used ids | `cases/used-ids.ts`, which also finds case files named by a worktree that is gone; tier 2 names shared case files by their real paths | `cases/parts.test.ts` |
 | Compressed rows looking like a missing run | `rows.ts` | `rows.test.ts` |
 | Host differences between bun and a browser (tier 1) | `pack`'s fidelity check; unfaithful cases always go to tier 2 | the six recordings: none |
+| The lab predicts after native layout, an application before | `--measure-first` with `compare-sets.ts` ("Measure first") | 2026-09-18: Chrome and webkit-host move nothing; Firefox moves 121 emoji cases, 116 of them known history-dependent |
+| A class left open on purpose moves | the known tail names it on the transition ("The known tail") | `rebuild/tests/known-tail.test.ts` |
+
+### The known tail
+
+`rebuild/tests/known-tail.json` lists the classes deliberately left open when the correctness line is frozen: convertible
+classes under gaps, conditions that only diagnose, open rows with a traced cause Canvas can't settle, the residual classes,
+history dependence, heuristics, painter exactness, browser bugs, rare scripts and the lab's own limits. Each item has an id
+(`<engine or area>/<short-name>`), a kind, a title, the conditions its rows sit under today, the named cases that show it
+with where each was found (a tier set, a fresh seed, `triage`), a source (documents, probes, source lines) and a note on what
+would convert or reopen it. An item can also have a `match` rule over a tier 2 ledger: browsers, a status kind (`covered`,
+`open`, `residual`, `history-dependent`, `unobserved`), the conditions a covered failure lists, family prefixes, metrics
+(without them a rule reads lineCount, breaks and widths, never the painter) and configurations. A rule keeps a class of a
+thousand rows to one item.
+
+```sh
+bun rebuild/tests/known-tail.ts status <ledger dir> [--item=<id>] [--all]   # where every item's cases stand in a ledger
+bun rebuild/tests/known-tail.ts add --from=<items.json>                     # validate and append an item or an array of items
+bun rebuild/tests/known-tail.ts check                                       # validate the file (known-tail.test.ts runs it)
+```
+
+`ledger.ts transitions` and tier 2 print, after the transitions, the ones on known-tail items: per item, `metric: before ->
+after` with the case ids, for every case that belongs to the item by its status before or after. So a change that moves a
+class left open on purpose shows by the item's name, whether cases left it, entered it or moved inside it, and
+`transitions.json` holds the same under `knownTail`. To append, write the item as JSON and run `add`, or edit the file and
+run `check`; case ids from fresh sets are in no ledger and only document the class. The first 41 items came from
+research/ROUND3-CRITIC.md's convertible classes and unneeded conditions, the round 4a reports' open items and this round's
+measure-first check.
 
 ## Running
 
@@ -340,6 +395,8 @@ painter still run, and `run.json` records `predictOnly` and `totals.skippedNativ
 together) launch Chrome under other languages than this Mac's (see "Browser-process languages"). `--part-cases=N`,
 `--part-ms=N` and `--parts-from=<run.json>` cut the run into parts, each in a fresh browser process (see "Parts").
 `--record-measurements` (no value) stores every Canvas call of every case beside the rows (see "Recorded measurements").
+`--measure-first` (no value) predicts every case of a document before the document's first native layout (see "Measure
+first").
 
 Before launching, it reads the build from the app bundles, because user agents can't tell builds apart (Chrome's says
 `153.0.0.0` for every 153 build): Chrome's and Firefox's `CFBundleShortVersionString`, which are also the engine builds;
@@ -622,7 +679,10 @@ For each case the page:
    of the paragraph's width. For each element it records the height, the Range rects of every text node inside it and
    their horizontal extent, the text of those nodes in document order, and every Range rect of each of its code points.
 
-Under `--predict-only` the page skips steps 1-3 and records `native: { skipped: 'predict-only' }`.
+Under `--predict-only` the page skips steps 1-3 and records `native: { skipped: 'predict-only' }`. Under `--measure-first`
+the replies carry a document's cases twice: `predict` chunks, for which the page runs step 5's prediction, observation port
+and painter limits and holds the result, touching no DOM, and then `observe` chunks, for which it runs steps 1 to 4 and
+paints the held prediction ("Measure first").
 
 ## Prediction hook
 
@@ -715,13 +775,16 @@ Imported as a module, `score.ts` runs nothing and exports `scoreRow`, `nativeLin
 `lineRangeDiagnostics`, `withNativeRow`, `indexRows`, `readRowAt`, `environmentKey`, `rowText` and `readLines` with their
 types, so tools that compare rows use the scorer's rules. It also exports `slotProtocol`, `lineLocalGaps`,
 `RESIDUAL_CLASSES` and `residualMembership`.
-`SCORER_VERSION` is 6. Version 1 derived native lines and widths from visibility rules; version 2 grouped every rect into
+`SCORER_VERSION` is 7. Version 1 derived native lines and widths from visibility rules; version 2 grouped every rect into
 native lines by vertical centre; version 3 placed code point rects by their own node's box; version 4 compared element
 rects, marked slot protocol rows and counted every gap that concerned a failing line as covering it; version 5 counts a gap
 as covering only where its range touches what differs, observes indented lines' widths and matches residual classes.
 Version 6 changes no metric's status: it attributes three observation consequences by their engines' rules ("Covered
 failures", the last three paragraphs), counts painter limits ("Painter limits") and records gap firing ("Gap firing and
-lift"). Their rules and evidence are in this file's git history. It also exports `gapFiring`.
+lift"). Version 7 (ceiling round 4b) changes no metric's status either: it finds Blink's hyphen rect on whichever range
+reports it, keeps differing units inside one stand-in span in one run ("Covered failures") and registers a second residual
+class ("Residual classes"). Their rules and evidence are in this file's git history. It also exports `gapFiring` and
+`syntheticBoldStep`.
 
 **Round 2 re-counted under scorer 5 (2026-09-17, ceiling round 3).** Round 2's evaluation rows
 (`.artifacts/ceiling-20260917/evaluate-r2`, the round 2 library) re-scored into `.artifacts/ceiling-20260917/rescore-s5/`,
@@ -923,7 +986,17 @@ away. The rule has two steps, and `score.ts` "Covered failures" states it in ful
      after a soft hyphen concerns the letter before it); where only a node rect shows the difference, the node's part of
      the line. In WebKit a unit is always a differing node's part of the line, because its code point rects snap to whole
      px. x alone never makes a unit, and element rects make none.
-   - *Runs*: units that follow each other without a break. A run whose widths add up to the same natively as expected
+   - *Runs*: units that follow each other without a break, or with nothing between them but code points of one *stand-in
+     span* (scorer 7, `standInSpans`): code points that follow each other inside one word and whose expected width the port
+     marks limited under `in-word-prefix`. That state says the port divided a shaped word's width among its code points by
+     Canvas prefix widths, so the division is a stand-in and the word's sum is what was measured; a code point that happens to
+     equal its stand-in doesn't end a run. Round 3's open Firefox row `c-f3e8314c35b33990` is the case: three Phags-pa letters
+     and U+0301 under 1px of letter spacing, natively +68 au on the first letter, nothing on the second and −8 au on the marked
+     cluster, 60 au in all, the letter spacing the `font-fallback` range on the marked cluster says the DOM adds (probe
+     gecko-port F25); it is covered now. Values limited under another gap make no span: without font facts Blink marks every
+     value of a line under `glyph-clusters`, and one span per line would let any gap cover any difference on it (tried on
+     2026-09-18: 8 open no-facts Chrome rows of kerned positions came out covered by a gap elsewhere on the line). A run
+     whose widths add up to the same natively as expected
      (Gecko: the sum in app units; Blink: the extent of its rects, within the one-LayoutUnit rounding of floored and
      ceiled carets when its left edge moved) changes neither the line's width nor its break and needs no gap: Blink
      reports the letters of a joined word as exact where they aren't, and that is counted under exact observation
@@ -952,10 +1025,19 @@ metrics compare every rect as before, and `score.test.ts` ("attribution follows 
 for each. Round 3 counted their rows as open although their cause was covered:
 
 - *Report-only rects* (`reportOnlyRects`) place no text, so they don't decide which line a lineCount or breaks failure is
-  attributed to, or its decision text. Blink reports a line's hyphen item to every range that holds the end of the item
-  before it ("Hyphens. Include if the last end was included", `layout_text.cc:616-621`), so the code point after a chosen
-  soft hyphen reports the hyphen's rect on the hyphen's line beside its own on the next: a rect equal to a positive-width
-  rect the soft hyphen before it reports on that line is the hyphen's. Where only one side broke at the soft hyphen, that
+  attributed to, or its decision text. Blink reports a line's hyphen item to every range that reached the end of the text
+  item before it in item order ("Hyphens. Include if the last end was included", `layout_text.cc:592-621`), and a line's
+  items are in visual order. In a left-to-right line that item ends with the soft hyphen, so the code point after a chosen
+  soft hyphen reports the hyphen's rect on the hyphen's line beside its own on the next. In a right-to-left line the hyphen
+  item comes first, so the item before it is the last one of the line above, and the code point that ends that item reports
+  the hyphen: the letter before the soft hyphen in the three `suite/space` rows (`c-909a7a77bad03225`, `c-4decc6eae7517325`,
+  `c-e9e314847e481d69`), which scorer 6 attributed to line 0 and scorer 7 attributes to the line that starts at the soft
+  hyphen, where the Blink owner's `in-word-prefix` condition sits. Since scorer 7 a rect of any other code point of the node
+  equal to a positive-width rect a soft hyphen reports on that line is the hyphen's, and on the expected side a rect that is
+  its line's hyphen item in the layout is too, whoever reports it (`c-ccbcd11b754a7299`, where the prediction's hyphen is
+  reported by `(` from the line above and not by the soft hyphen). Left: natively, in a right-to-left line whose soft
+  hyphen shares its item with the letter before it, no soft hyphen reports the hyphen, and geometry alone doesn't say which
+  rect is its copy (`rebuild/tests/known-tail.json`, `lab/rtl-hyphen-rect-native-side`). Where only one side broke at the soft hyphen, that
   rect made the line after the hyphen's the first that differs, where the cause's gap doesn't reach (`suite/U+FFFC/start`:
   `c-23e11e5c3a96497d`, `c-a43249c733c43a9c`, `c-b0af41f52ed23824`, now covered by `font-fallback` on U+FFFC). WebKit
   reports a range that starts where a text box ends on that box's line when the next box in box order starts later
@@ -1029,7 +1111,18 @@ F13: a `<canvas>` element that runs the DOM's arithmetic reproduces every member
 font's units, the Geeza Pro and Thonburi members weren't). It stays a residual class because the library measures on
 OffscreenCanvas only (the maintainer's decision of 2026-09-18), where no measurement shows the difference. To add a probed
 string or a class, edit the registry with the probe record named, and add a test next to "residual classes" in
-`score.test.ts`. `fresh.ts` and `rebuild/tests/ledger.ts` read the per-case `residual`; there is no other registry.
+`score.test.ts`. `fresh.ts` and `rebuild/tests/ledger.ts` read the per-case `residual`; there is no other registry. F27's
+probed strings joined the first entry in ceiling round 4b (`LT:` at weight 400, a Thonburi word at weight 700, `تروك`).
+The second entry, since scorer 7, is `gecko/synthetic-bold-offset`: lineCount and breaks pass, widths fail, every node has
+the expected number of rects, every node rect that differs belongs to a node of font weight 600 or more and differs by a
+whole number of steps, from 1 to the grapheme clusters of the node's text on the line, and the painter drew every failing
+line at the native width. A step is what one synthetic bold character is wider in the DOM than on an OffscreenCanvas:
+`NS_round(offset(size × 60 / apd) × apd) − NS_round(offset(size) × 60)` app units with `offset(s) = 0.25 + 0.75 s / 48`
+below 48px and `s / 48` from there (`syntheticBoldStep`; gfxFont.h:1899-1904, gfxFont.cpp:901-939 and :3551-3562), −7 au at
+16px and DPR 2. Its mechanism is verified from source and by probe F24 on 24 of 24 rows; a member is probed where F24 or F14
+measured the text in the node's first family, size and weight. The Gecko owner's nine fresh rows (`r4-gecko-2`, `r4-gecko-3`)
+are probed members; the tier sets hold none. Of the owner's 11 rows of the 1 au class on `r4-gecko-1`, 10 match and
+`c-4c685cf01d01f006` doesn't: the painter drew its line with the trimmed space, so the class's painter condition fails.
 
 The summary (`--out`) has counts per browser and per family, reasons, facts, and per gap how many rows report it and how
 many of those fail lineCount or breaks. It keeps a histogram of engine width minus native extent (LayoutUnits in Chrome,
@@ -1063,6 +1156,11 @@ bun rebuild/lab/gate.ts --seed --staging=rebuild/lab/baselines/staged-round3 --e
   and whether the pair passes now (they stop gating without failing, which round 2's record left out: Firefox 134 pairs,
   webkit-host 8); `leftThroughProtocol`, the same for rows that are protocol rows now; the pairs gained; and the cases
   only one side observed. Protocol rows and history-dependent cases are never passes of a seed.
+- `leftWithTheirCase` (since ceiling round 4b; research/ROUND3-CRITIC.md item 9): the adopted seed's passes of cases no
+  seeding run observed, by id and metric. A case dropped from the new case files takes its passes out of the gate without
+  losing them, so they are listed like every other pass that leaves. The staged round 3 records hold them too: 18 Firefox
+  feature pairs of 9 cases, 6 webkit-host family pairs of 2 cases and 12 webkit-host feature pairs of 3 cases, the critic's
+  count.
 - A check reports `leftThroughHistoryPairs`: baseline passes of cases that are history-dependent now and weren't at
   seeding.
 - Seeding refuses runs without recorded process languages and runs scored by different scorers. It doesn't skip the
@@ -1107,6 +1205,84 @@ bun rebuild/lab/score.ts --rows=<dir>/reverse/webkit-host-rows.ndjson --cases=<c
   suspects, run them each alone in a fresh browser process with `sharded.ts --isolate` ("Sharded runs and isolation"), or
   put a part boundary right before them with `run.ts --part-cases` ("Parts"). Two orders of one set can't show history both
   orders share; an isolated row can.
+
+## Measure first
+
+The usual protocol lays a case out natively and then predicts it. An application does the opposite: it measures before any
+DOM text exists. Under `run.ts --measure-first` every case of a document is predicted (the library's layout, the observation
+port's expected rects, the painter limits) before the document's first native layout, and then the cases are laid out natively
+and painted from the held predictions, in the same order. A document is what it is under the usual protocol: the cases of one
+page context inside one part. The driver sends a document's cases twice, as `predict` chunks and then as `observe` chunks; the
+page holds the predictions meanwhile, so a page that starts again inside a document fails the run, and a timed part
+(`--part-ms`) ends only where a document does. Rows keep their format, with `env.measureFirst` (`predictionIndex`,
+`documentPredictions`), and `run.json` lists the documents. It goes with neither `--record-measurements` nor `--predict-only`.
+
+```sh
+# tier 2 under the protocol; the transitions against the reference are printed across protocols, and the gate doesn't run
+bun rebuild/tests/browser-sets.ts --browser=firefox --groups=smoke,development --measure-first --out=<dir>/mf
+bun rebuild/tests/browser-sets.ts --browser=firefox --groups=smoke,development --out=<dir>/usual
+# case by case: native observations, predictions, painted lines; a second usual run is the control
+bun rebuild/tests/compare-sets.ts <dir>/usual <dir>/mf --out=<dir>/compare.json
+bun rebuild/tests/ledger.ts transitions <dir>/usual/ledger <dir>/mf/ledger --allow=protocol
+# the hand-written cases, one run.ts job per protocol, then compare-rows.ts
+python3 .artifacts/session/with-browser-lock.py mf -- bun rebuild/lab/run.ts --browser=chrome --cases=rebuild/lab/measure-first-cases.ndjson --out=<dir> --measure-first
+```
+
+A ledger records the protocol in each set's `runArgs`, so a measure-first ledger meets a usual one only with
+`--allow=protocol`.
+
+**What ran on 2026-09-18** (pinned Chrome 153.0.8010.50 and Firefox 156.0, webkit-host; forward order; both configurations;
+`.artifacts/tests/runs/r4b-mf`, reports under `compare/`): smoke and the development sets, usual, measure first and usual
+again as the control, and the family sets, usual and measure first. The control differs from the first usual run on no case
+in any browser or configuration.
+
+| Browser | Cases (development / families) | Native observations that differ | Predictions | Painted lines |
+|---|---|---|---|---|
+| Chrome | 25,523 / 24,632 | 0 / 0 | 0 / 0 | 0 / 0 |
+| Firefox | 25,415 / 21,826 | 120 / 0 | 121 without facts, 115 with / 0 | 121 / 0 |
+| webkit-host | 25,463 / 21,994 | 0 / 0 | 0 / 0 | 0 / 0 |
+
+- **Firefox: the process's font fallback state.** Every case that moves holds U+1F600, all in one suite sample part, from
+  the first case that asks for its text presentation (`😀︎`, `suite/measurement`) on: a plain `😀` in 16px Arial is 17px wide
+  under the usual protocol and 16px under measure first, where the Canvas pass has made every lookup of the document,
+  the U+FE0E requests among them, before the first native layout. It is the Gecko owner's `page-history` class
+  (`GlobalFontFallback` and the character maps loaded so far, gfxPlatformFontList.cpp:1474-1486; font matching's state,
+  gfxTextRun.cpp:3559-3569): 116 of the 121 cases are history-dependent in the two-order reference, and the other 5 are the
+  U+FE0E cases that change the state. The OffscreenCanvas follows the state: without supplied facts 119 of the 121 pass all
+  four metrics under both protocols, and the ledger has no status transition; with the lab's facts 5 cases go from pass to
+  `fail covered by page-history` on widths (the prediction is pinned where the native width moved). Two identical usual
+  runs agree on every case, so on these sets it is order, not timing.
+- **Firefox, the hand-written cases**: a paragraph with a plain emoji that comes before the U+FE0E paragraph
+  (`measure-first/emoji-before-16px`) is predicted at 16px per emoji, exact when it was measured, and laid out at 17px after
+  the later paragraph's prediction moved the state: widths and painter fail, with no gap when the facts are supplied (without
+  them only `optical-size` covers it, which fires everywhere). Under the usual protocol it passes. A run whose predictor asks
+  Canvas nothing observes what the usual protocol observes; under measure first it is the Canvas lookup for the later
+  paragraph that moves the state before the earlier one is laid out.
+- **Chrome: nothing moves**, the 960 platform UI font cases of `rule/system-fonts-and-sizes` and the hand-written ones (the
+  system font at 8, 12, 16, 24 and 32px in one document) included, and a run whose predictor asks Canvas nothing observes
+  the same native layouts. Chrome's font cache keys a platform font by the zoomed size and the font description's options,
+  text-rendering among them, and not by the specified size (font_description.cc:308-331), while opsz and HarfBuzz's ptem come
+  from the specified size of whichever text made the font (platform bug ledger item A). The probes of
+  `rebuild/probes/measure-first.ts`, each alone in a fresh process at DPR 2, DOM `system-ui` text at 8px to 16px after a
+  context measured at the zoomed size: a context with default settings changes the DOM's widths (16px: 71.24px for 81.125px);
+  the library's measuring context, which sets text-rendering `optimizeLegibility`, doesn't; the same context does where the
+  page's text sets `text-rendering: optimizeLegibility`; and the font checks' contexts (text-rendering auto, asked about a
+  space and U+2010 only) do. The checks measure at 16px, which is the zoomed size of 8px text, where the system font's
+  optical size is the same, and never measure the system font at the zoomed size, so nothing shows on the lab's fonts. For a
+  named font with an opsz axis check 4's zoomed-size context shares the DOM text's key: after the DOM it gets the DOM's
+  font, the advances look linear and the fact comes out false; before the DOM the fact stays unknown and the DOM text takes
+  the check's font. No lab font has the axis, so this is read from the probes and the source, not observed
+  (`rebuild/tests/known-tail.json`, `blink/font-check-contexts-share-the-dom-font`).
+- **webkit-host: nothing moves.** The break cache is the DOM's alone, and both protocols lay the cases out and paint them in
+  one order; Canvas has no part in it.
+
+**What an application should be told.** In Chrome and WebKit, nothing: measuring first gives the lines that measuring after
+gives, on every case here. Two Chrome notes belong to platform bug A rather than to an order: a page whose text sets
+`text-rendering: optimizeLegibility` shares platform fonts with the library's contexts, and the font checks' contexts share
+them with default text, which matters only for fonts with an optical size axis at a zoom other than 1. In Firefox, the width of
+an emoji depends on whether the process has looked up an emoji's text presentation (U+FE0E) before: a prediction holds for
+the state it was measured in, so text measured before such a lookup and laid out after it can be 1px per emoji off (at 16px),
+and the library reports `page-history` on the text that makes the lookup, not on the emoji measured earlier.
 
 ## Comparing another predictor on the same observations
 
@@ -1201,7 +1377,8 @@ browser and seed resumes: nothing that exists is generated, run or scored again.
      form.
    - *Residual classes* (`score.ts` `RESIDUAL_CLASSES`, read from the per-case `residual`): failures without a covered
      explanation on rows the scorer matched to a class are counted apart, probed members apart from members matched by
-     signature alone. A signature match is not a probe. One class is registered: Gecko's one shaping unit 1 au off.
+     signature alone. A signature match is not a probe. Two classes are registered, both Gecko's on an OffscreenCanvas: one
+     shaping unit 1 au off, and the synthetic bold offset.
    - *Gap firing*, from the per-case `firing` and `fires` ("Gap firing and lift"): per gap, the share of passing lines it
      fires on, the share of passing cases, the share of the failing lines of prediction failures and the lift between them;
      painter-only failures are in neither. An owner who adds or widens a condition quotes these before and after.

@@ -17,6 +17,11 @@ may read the DOM freely; this is research, not the library.
   under `.artifacts/probes/blink/` for `rebuild/specs/probes-chrome.md`; the commands are in the header of
   `blink-probes.ts`.
 
+- `measure-first.ts`: six Chrome probes of which Canvas contexts share a platform font with DOM text of the same zoomed
+  size (a context with default settings, the library's measuring context, the font checks' contexts, a page at
+  `text-rendering: optimizeLegibility`, and no context first). Each returns checks and is meaningful only alone in a fresh
+  browser process (`--only`); its header has the loop, and rebuild/lab/README.md "Measure first" the verdicts.
+
 ## Running
 
 Every command that drives a browser runs under the shared browser lock, one browser per locked job. `runner.ts`
