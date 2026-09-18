@@ -127,8 +127,8 @@ export type ReferenceCase = { id: string; prediction: FullPrediction; questions:
 // Questions asked and distinct ones (lab/measurements.ts Replay), per phase.
 type AskCounts = { predict: { asked: number; distinct: number }; observe: { asked: number; distinct: number } }
 
-type Shard = { file: string; cases: number; calls: number; sha256: string }
-type InputsManifest = {
+export type Shard = { file: string; cases: number; calls: number; sha256: string }
+export type InputsManifest = {
   format: typeof INPUTS_FORMAT
   browser: TierBrowser
   config: Config
@@ -182,7 +182,7 @@ function fail(text: string): never {
 
 const sha256 = (bytes: Uint8Array | string): string => createHash('sha256').update(bytes).digest('hex')
 
-function readShard<T>(path: string): T[] {
+export function readShard<T>(path: string): T[] {
   const text = new TextDecoder().decode(Bun.zstdDecompressSync(readFileSync(path)))
   const out: T[] = []
   for (const line of text.split('\n')) if (line !== '') out.push(JSON.parse(line) as T)
@@ -227,7 +227,7 @@ function storageFilesChangedSince(commit: string): string[] {
 
 // Where a command keeps its shards' results while it runs, and where `check` writes its report by default: in the working
 // tree, never in the replay folder, which worktrees share through .artifacts.
-const checkDir = (browser: TierBrowser, config: Config): string => join(REPO, 'rebuild/tests/.check', `${browser}-${config}`)
+export const checkDir = (browser: TierBrowser, config: Config): string => join(REPO, 'rebuild/tests/.check', `${browser}-${config}`)
 
 // What a prediction depends on in the working tree: the library, the predictors with their font facts, and the ports.
 const LIBRARY_PATHS = ['rebuild/src', 'rebuild/lab/predictor.ts', 'rebuild/lab/predictor-core.ts', 'rebuild/lab/baselines/no-facts-predictor.ts', 'rebuild/lab/font-facts.ts', 'rebuild/lab/font-facts.json', 'rebuild/lab/observe', 'rebuild/lab/port-measure.ts']
@@ -362,15 +362,17 @@ function parseArguments(rest: readonly string[]): void {
   }
 }
 
+export const referenceDir = (browser: TierBrowser, config: Config): string => join(REPO, `.artifacts/tests/reference/${browser}-${config}`)
+
 function replayDir(): { browser: TierBrowser; config: Config; dir: string } {
   const browser = options.get('browser') as TierBrowser | undefined
   if (browser === undefined || !TIER_BROWSERS.includes(browser)) fail('--browser must be chrome, firefox or webkit-host')
   const config = (options.get('config') ?? 'no-facts') as Config
   if (!CONFIGS.includes(config)) fail('--config must be no-facts or facts')
-  return { browser, config, dir: resolve(options.get('dir') ?? join(REPO, `.artifacts/tests/reference/${browser}-${config}`)) }
+  return { browser, config, dir: resolve(options.get('dir') ?? referenceDir(browser, config)) }
 }
 
-function readInputs(dir: string): InputsManifest {
+export function readInputs(dir: string): InputsManifest {
   const path = join(dir, 'inputs/manifest.json')
   if (!existsSync(path)) fail(`${relative(REPO, dir)} holds no inputs; record the sets (browser-sets.ts --record) and pack them`)
   const manifest = JSON.parse(readFileSync(path, 'utf8')) as InputsManifest
@@ -385,12 +387,58 @@ async function pool<T>(items: readonly T[], width: number, work: (item: T, index
   await Promise.all(workers)
 }
 
-const jobsWidth = (): number => Math.max(1, Number(options.get('jobs') ?? Math.max(1, cpus().length - 2)))
+export const defaultJobs = (): number => Math.max(1, cpus().length - 2)
+const jobsWidth = (): number => Math.max(1, Number(options.get('jobs') ?? defaultJobs()))
+
+// Runs bun as a child; resolves with its exit code.
+async function bun(args: readonly string[], env: Record<string, string> = {}): Promise<number> {
+  const proc = Bun.spawn(['bun', ...args], { cwd: REPO, env: { ...process.env, ...env }, stdin: 'ignore', stdout: 'inherit', stderr: 'inherit' })
+  return await proc.exited
+}
 
 // Runs this file as a child with a hidden command; resolves with its exit code.
-async function child(args: string[]): Promise<number> {
-  const proc = Bun.spawn(['bun', import.meta.path, ...args], { cwd: REPO, stdin: 'ignore', stdout: 'inherit', stderr: 'inherit' })
-  return await proc.exited
+const child = (args: string[]): Promise<number> => bun([import.meta.path, ...args])
+
+// One shard of a replay folder as a child process's job: its inputs, the reference's shard of the same cases when the
+// command compares with one, and the file the child writes its result to. The other checks that run over the recorded
+// cases (function-set.ts, coverage-map.ts) cut their work the same way.
+export type ShardJob = { set: string; index: number; shard: Shard; inputs: string; reference: string | null; result: string }
+
+// The chosen sets' shards in the sets' order, every file checked against the hash its manifest names.
+export function shardJobs(dir: string, inputs: InputsManifest, against: 'reference' | 'browser' | null, sets: readonly string[], scratch: string): ShardJob[] {
+  const reference = against === null ? null : readReference(dir, against, sha256(readFileSync(join(dir, 'inputs/manifest.json'))))
+  const jobs: ShardJob[] = []
+  mkdirSync(scratch, { recursive: true })
+  for (const name of sets) {
+    const set = inputs.sets[name]
+    if (set === undefined) continue
+    for (let k = 0; k < set.shards.length; k++) {
+      const shard = set.shards[k]!
+      let referencePath: string | null = null
+      if (reference !== null) {
+        const entry = reference.sets[name]?.[k]
+        if (entry === undefined || entry.cases !== shard.cases) fail(`${against}/manifest.json doesn't hold shard ${k} of ${name} as the inputs do`)
+        referencePath = join(dir, against!, entry.file)
+        if (sha256(readFileSync(referencePath)) !== entry.sha256) fail(`${relative(REPO, referencePath)} isn't the file its manifest names (sha256 differs)`)
+      }
+      if (sha256(readFileSync(join(dir, 'inputs', shard.file))) !== shard.sha256) fail(`inputs/${shard.file} isn't the file its manifest names (sha256 differs)`)
+      jobs.push({ set: name, index: k, shard, inputs: join(dir, 'inputs', shard.file), reference: referencePath, result: join(scratch, `${jobs.length}.json`) })
+    }
+  }
+  return jobs
+}
+
+// One bun child per job, `width` at a time, the largest shard first so the last to finish are small. `command` gives a
+// job's arguments to bun and the environment it adds.
+export async function runShardJobs(jobs: readonly ShardJob[], width: number, command: (job: ShardJob) => { args: string[]; env?: Record<string, string> }): Promise<void> {
+  const order = jobs.map((_, i) => i).sort((a, b) => jobs[b]!.shard.calls - jobs[a]!.shard.calls)
+  const failures: string[] = []
+  await pool(order, width, async i => {
+    const job = jobs[i]!
+    const { args, env } = command(job)
+    if (await bun(args, env) !== 0) failures.push(`${job.set} shard ${job.index}`)
+  })
+  if (failures.length > 0) fail(`the replay failed on ${failures.sort().join(', ')}`)
 }
 
 // ---- pack ----
@@ -705,37 +753,15 @@ function readReference(dir: string, against: 'reference' | 'browser', inputsSha2
 
 // Replays the chosen sets and compares with a reference; with `emitTo`, writes the replay's output there as well.
 async function compare(dir: string, inputs: InputsManifest, against: 'reference' | 'browser' | null, sets: readonly string[], emitTo: string | null): Promise<CheckReport & { emitted: ReferenceManifest['sets'] }> {
-  const inputsSha256 = sha256(readFileSync(join(dir, 'inputs/manifest.json')))
-  const reference = against === null ? null : readReference(dir, against, inputsSha256)
-  type Job = { set: string; index: number; shard: Shard; reference: string | null; emit: string | null; result: string }
-  const jobs: Job[] = []
+  const reference = against === null ? null : readReference(dir, against, sha256(readFileSync(join(dir, 'inputs/manifest.json'))))
   const scratch = join(checkDir(inputs.browser, inputs.config), `work-${process.pid}`)
-  mkdirSync(scratch, { recursive: true })
-  for (const name of sets) {
-    const set = inputs.sets[name]
-    if (set === undefined) continue
-    for (let k = 0; k < set.shards.length; k++) {
-      const shard = set.shards[k]!
-      let referencePath: string | null = null
-      if (reference !== null) {
-        const entry = reference.sets[name]?.[k]
-        if (entry === undefined || entry.cases !== shard.cases) fail(`${against}/manifest.json doesn't hold shard ${k} of ${name} as the inputs do`)
-        referencePath = join(dir, against!, entry.file)
-        if (sha256(readFileSync(referencePath)) !== entry.sha256) fail(`${relative(REPO, referencePath)} isn't the file its manifest names (sha256 differs)`)
-      }
-      if (sha256(readFileSync(join(dir, 'inputs', shard.file))) !== shard.sha256) fail(`inputs/${shard.file} isn't the file its manifest names (sha256 differs)`)
-      jobs.push({ set: name, index: k, shard, reference: referencePath, emit: emitTo === null ? null : join(emitTo, shard.file), result: join(scratch, `${jobs.length}.json`) })
-    }
-  }
-  // Largest first, so the last shards to finish are small.
-  const order = jobs.map((_, i) => i).sort((a, b) => jobs[b]!.shard.calls - jobs[a]!.shard.calls)
-  const failures: string[] = []
-  await pool(order, jobsWidth(), async i => {
-    const job = jobs[i]!
-    const code = await child(['work', `--inputs=${join(dir, 'inputs', job.shard.file)}`, `--predictor=${inputs.predictor}`, `--result=${job.result}`, ...(job.reference === null ? [] : [`--reference=${job.reference}`]), ...(job.emit === null ? [] : [`--emit=${job.emit}`]), ...(flags.has('sites') ? ['--sites'] : [])])
-    if (code !== 0) failures.push(`${job.set} shard ${job.index}`)
-  })
-  if (failures.length > 0) fail(`the replay failed on ${failures.sort().join(', ')}`)
+  const jobs = shardJobs(dir, inputs, against, sets, scratch)
+  await runShardJobs(jobs, jobsWidth(), job => ({
+    args: [
+      import.meta.path, 'work', `--inputs=${job.inputs}`, `--predictor=${inputs.predictor}`, `--result=${job.result}`, ...(job.reference === null ? [] : [`--reference=${job.reference}`]),
+      ...(emitTo === null ? [] : [`--emit=${join(emitTo, job.shard.file)}`]), ...(flags.has('sites') ? ['--sites'] : []),
+    ],
+  }))
   // The ledger beside the reference says what each changed case's statuses were. Against a frozen reference it must be
   // the ledger the reference pinned: another one describes another recording.
   let ledger: Map<string, LedgerEntry> | null = null
