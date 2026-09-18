@@ -121,9 +121,9 @@ export type WebKitBox = {
   //   -webkit-standard under USCRIPT_HAN without the preferred languages);
   // - `namedGeneric`: the list holds a generic named for Canvas, which concerns a character with default emoji presentation,
   //   since the DOM skips a generic family's outline glyph for it.
-  // `fallback`: the locale's script is Han, kana or Hangul, where Core Text picks system fallback fonts for Han, kana, Hangul,
-  // CJK punctuation and fullwidth forms by language; such a character is concerned unless a family of the whole list draws
-  // it (`listContext`, the Canvas list followed by LastResort). null: none of these.
+  // `fallback`: the box holds a character whose system fallback font Core Text picks by the locale's language (content.ts
+  // hasLanguageDependentFallback); such a character is concerned unless a family of the whole list draws it (`listContext`,
+  // the Canvas list followed by LastResort). null: none of these.
   localeChoosesFonts: { unknownFamily: boolean; namedGeneric: boolean; fallback: boolean } | null
   namedContext: number
   listContext: number

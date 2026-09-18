@@ -549,12 +549,28 @@ export function familyDraws(m: Measurer, box: WebKitBox, context: number, cp: nu
   return measureText(m, context, s) !== measureText(m, box.lastResortContext, s)
 }
 
-// Code points whose system fallback CoreText picks by language: Hangul, CJK symbols and punctuation, kana, Bopomofo, Han
-// and fullwidth forms, by block (specs/webkit-canvas.md §1.3, probes-safari cross-cutting 4).
-export function hasLanguageDependentFallback(cp: number): boolean {
-  return (cp >= 0x1100 && cp <= 0x11ff) || (cp >= 0x2e80 && cp <= 0x4dbf) || (cp >= 0x4e00 && cp <= 0x9fff) || (cp >= 0xa960 && cp <= 0xa97f)
-    || (cp >= 0xac00 && cp <= 0xd7ff) || (cp >= 0xf900 && cp <= 0xfaff) || (cp >= 0xfe30 && cp <= 0xfe4f) || (cp >= 0xff00 && cp <= 0xffef)
-    || (cp >= 0x1aff0 && cp <= 0x1b16f) || (cp >= 0x1f200 && cp <= 0x1f2ff) || (cp >= 0x20000 && cp <= 0x3ffff)
+// Whether system fallback for the code point can change a width under the locale. lookupFallbackFont hands Core Text the
+// computed locale for every character no family of the list draws (FontCacheCoreText.cpp:775-790, :822), and Core Text is
+// closed, so which characters a language moves is a table of probe verdicts, a registered heuristic (CHARTER known
+// deviations): as the source reads, every such character under any locale, the condition fires on 29% of passing development
+// lines at a lift of 0.8.
+// - Under a Han, kana or Hangul script: Hangul, CJK symbols and punctuation, kana, Bopomofo, Han and fullwidth forms, by
+//   block (specs/webkit-canvas.md §1.3, probes-safari cross-cutting 4; probe webkit-round3 R3: under ko 36 of 117 strings
+//   equal Canvas), and enclosed alphanumerics, box drawing, geometric shapes and vertical forms (probe webkit-round4 R14
+//   under ko). The font follows the original font's class too: Han under ko is AppleMyungjo after Times and Georgia and Apple
+//   SD Gothic Neo after Helvetica, Arial and Menlo (R12).
+// - Under Urdu and Kashmiri: the Arabic blocks, which fall back to Noto Nastaliq Urdu where Canvas has Geeza Pro (R13, R14).
+// R14 (70 languages, three sample characters of each of 321 blocks after Helvetica, Times and Geeza Pro) found no other pair;
+// it sees a font change only where advances differ, and three samples don't stand for a block.
+export function hasLanguageDependentFallback(cp: number, locale: string, script: string): boolean {
+  if (['HAN', 'SIMPLIFIED_HAN', 'TRADITIONAL_HAN', 'KATAKANA_OR_HIRAGANA', 'HANGUL'].includes(script)) {
+    return (cp >= 0x1100 && cp <= 0x11ff) || (cp >= 0x2460 && cp <= 0x257f) || (cp >= 0x25a0 && cp <= 0x25ff) || (cp >= 0x2e80 && cp <= 0x4dbf) || (cp >= 0x4e00 && cp <= 0x9fff)
+      || (cp >= 0xa960 && cp <= 0xa97f) || (cp >= 0xac00 && cp <= 0xd7ff) || (cp >= 0xf900 && cp <= 0xfaff) || (cp >= 0xfe10 && cp <= 0xfe1f) || (cp >= 0xfe30 && cp <= 0xfe4f)
+      || (cp >= 0xff00 && cp <= 0xffef) || (cp >= 0x1aff0 && cp <= 0x1b16f) || (cp >= 0x1f200 && cp <= 0x1f2ff) || (cp >= 0x20000 && cp <= 0x3ffff)
+  }
+  const language = locale.toLowerCase().split(/[-_]/)[0]
+  if (language === 'ur' || language === 'ks') return (cp >= 0x600 && cp <= 0x6ff) || (cp >= 0x750 && cp <= 0x77f) || (cp >= 0x8a0 && cp <= 0x8ff) || (cp >= 0xfb50 && cp <= 0xfdff) || (cp >= 0xfe70 && cp <= 0xfeff)
+  return false
 }
 
 // The paragraph's gaps are conditions of the environment alone (DESIGN.md §2.8, §5): page zoom not given. Every condition of
@@ -569,12 +585,13 @@ function collectBoxFacts(p: WebKitPrepared, m: Measurer, leaves: LeafInput[]): v
     const box = p.boxes[b]!
     const leaf = leaves[box.run]!
     const text = box.text
+    const script = localeScript(box.locale)
     let languageFallback = false
     let quote = false
     for (let i = 0; i < text.length; i++) {
       const cp = text.codePointAt(i)!
       if (cp > 0xffff) i++
-      if (hasLanguageDependentFallback(cp)) languageFallback = true
+      if (hasLanguageDependentFallback(cp, box.locale, script)) languageFallback = true
       if (isDelimiterQuote(cp)) quote = true
     }
     // rule webkit/gap/canvas-language-scope
@@ -586,9 +603,7 @@ function collectBoxFacts(p: WebKitPrepared, m: Measurer, leaves: LeafInput[]): v
     // - -webkit-standard under USCRIPT_HAN where the preferred languages that choose it aren't given
     //   (FontGenericFamilies.cpp:56-60);
     // - system-ui and the ui-* designs (FontCacheCoreText.cpp:585-598, SystemFontDatabaseCoreText.cpp:236);
-    // - system fallback after the list (FontCacheCoreText.cpp:822), which Core Text picks by language for Han, kana, Hangul,
-    //   CJK punctuation and fullwidth forms (DESIGN.md §1.3). Probe webkit-round3 R3: under 18 languages of other scripts, and
-    //   under no language, the DOM's fallback glyphs have Canvas's advances (117 of 117 strings each); under ko, 36 of 117.
+    // - system fallback after the list (FontCacheCoreText.cpp:822), for the characters hasLanguageDependentFallback lists.
     // Nothing else reads it: a family named by a string is looked up by name (fontWithFamily, FontCacheCoreText.cpp:624-643;
     // only fontDescriptorWithFamilySpecialCase's system names take the locale), its glyphs are CTFontGetGlyphsForCharacters
     // of that font (GlyphPageCoreText.cpp:51-73), and a list draws a character with its first family that has a glyph
@@ -603,7 +618,6 @@ function collectBoxFacts(p: WebKitPrepared, m: Measurer, leaves: LeafInput[]): v
     // fallback (R7; an unsandboxed process finds the downloaded PingFang.ttc asset, which the lab's coverage facts read, so
     // Canvas decides what a named family draws).
     const families = familyNames(box.canvasFamily)
-    const script = localeScript(box.locale)
     const cjkLocale = ['HAN', 'SIMPLIFIED_HAN', 'TRADITIONAL_HAN', 'KATAKANA_OR_HIRAGANA', 'HANGUL'].includes(script)
     let firstUnknownFamily = families.length
     for (let i = 0; i < families.length && firstUnknownFamily === families.length; i++) {
@@ -611,8 +625,8 @@ function collectBoxFacts(p: WebKitPrepared, m: Measurer, leaves: LeafInput[]): v
       if (!family.quoted && ((family.name === '-webkit-standard' && cjkLocale) || SYSTEM_DESIGN_FAMILIES.includes(family.name))) firstUnknownFamily = i
     }
     const namedGeneric = box.firstNamedGeneric >= 0
-    if (box.locale !== '' && (firstUnknownFamily < families.length || namedGeneric || (cjkLocale && languageFallback))) {
-      box.localeChoosesFonts = { unknownFamily: firstUnknownFamily < families.length, namedGeneric, fallback: cjkLocale }
+    if (box.locale !== '' && (firstUnknownFamily < families.length || namedGeneric || languageFallback)) {
+      box.localeChoosesFonts = { unknownFamily: firstUnknownFamily < families.length, namedGeneric, fallback: languageFallback }
       const font = leaf.textStyle.font
       const size = f32(f32(font.size) * f32(p.zoom))
       const parts = box.canvasFamily.split(',').map(part => part.trim())

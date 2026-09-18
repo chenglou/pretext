@@ -11,7 +11,7 @@ import type { Fragment, Gap, GapName, LineResultOf, LineSlot, TextAlign, WebKitD
 import { canBreakBefore, findNextBreakablePosition, hasDictionaryCharacter, inBetweenRangeStartingWithMark, makeFactory, mayBreakInBetween } from './breaks.js'
 import { applyTextAlignJustify, type ExpandableRun, type ExpansionBehavior } from './expansion.js'
 import { DEFAULT_BIDI_LEVEL, familyDraws, hasLanguageDependentFallback } from './content.js'
-import { isDelimiterQuote, isPunctuation, lineRules } from './data.js'
+import { isDelimiterQuote, isPunctuation, lineRules, localeScript } from './data.js'
 import { hasEmojiPresentation } from './fonts.js'
 import { joinsAcross } from './joining.js'
 import { measureText } from '../../measure/canvas.js'
@@ -2535,8 +2535,8 @@ function lineGaps(L: Layout, start: WebKitLineStart): void {
             add('canvas-language', box, i, i + length, localeChooses.unknownFamily
               ? `no named family before the one locale ${box.locale} resolves draws this character; OffscreenCanvas has no locale`
               : `a character with default emoji presentation that no family before the generic one draws: the DOM skips the generic family's outline glyph, and Canvas measures the family locale ${box.locale} resolves it to by name`)
-          } else if (localeChooses.fallback && hasLanguageDependentFallback(cp) && !familyDraws(L.m, box, box.listContext, cp)) {
-            add('canvas-language', box, i, i + length, `no family of the list draws this character, and locale ${box.locale} chooses the system fallback font for Han, kana or Hangul; OffscreenCanvas has no locale`)
+          } else if (localeChooses.fallback && hasLanguageDependentFallback(cp, box.locale, localeScript(box.locale)) && !familyDraws(L.m, box, box.listContext, cp)) {
+            add('canvas-language', box, i, i + length, `no family of the list draws this character, and locale ${box.locale} chooses its system fallback font; OffscreenCanvas has no locale`)
           }
         }
         i += length - 1

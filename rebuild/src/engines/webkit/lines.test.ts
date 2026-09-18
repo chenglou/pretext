@@ -395,6 +395,15 @@ describe('canvas-language (probes webkit-round3 R3, R3b, R3c, webkit-round4 R7)'
     expect(layout(p).lines[0]!.gaps.filter(g => g.gap === 'canvas-language').map(g => g.at)).toEqual([{ start: 3, end: 4 }])
   })
 
+  test('Arabic falls back by language under Urdu and Kashmiri, enclosed alphanumerics under Korean (probes webkit-round4 R13, R14)', () => {
+    const at = (text: string, lang: string) => layout(paragraph([[text, 'text']], { lang })).lines[0]!.gaps.filter(g => g.gap === 'canvas-language').map(g => g.at)
+    expect(at('ab سلام', 'ur')).toEqual([{ start: 3, end: 7 }])
+    expect(at('ab سلام', 'ks-Arab')).toEqual([{ start: 3, end: 7 }])
+    expect(at('ab سلام', 'ar')).toEqual([])
+    expect(at('ab ① cd', 'ko')).toEqual([{ start: 3, end: 4 }])
+    expect(at('ab ① cd', 'en')).toEqual([])
+  })
+
   test('a locale of another script leaves system fallback to the preferred languages, as Canvas does', () => {
     expect(layout(paragraph([['ab 中 cd', 'text']], { lang: 'en' })).gaps).not.toContain('canvas-language')
     expect(layout(paragraph([['ab 中 cd', 'text']], { lang: 'th' })).gaps).not.toContain('canvas-language')

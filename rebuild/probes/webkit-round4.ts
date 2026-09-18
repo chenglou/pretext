@@ -35,6 +35,9 @@
 //
 // Run: python3 .artifacts/session/with-browser-lock.py probes-webkit-round4 -- \
 //   bun rebuild/probes/runner.ts --browser=webkit-host --probes=rebuild/probes/webkit-round4.ts --out=.artifacts/probes/webkit/round4
+import { resolve } from 'node:path'
+import { BROWSER_ENGINES } from '../tools/gen-shared.ts'
+import { PPUCD_PATH, forEachPpucdBlock, forEachPpucdRange } from '../tools/ppucd.ts'
 import type { Probe } from './types.ts'
 
 const HELPERS = String.raw`
@@ -205,6 +208,44 @@ for (const font of FONTS) {
 return out;
 `
 
+const R14 = String.raw`
+// Per language, base font and Unicode block: whether the DOM's box of the block's sample string differs from the Canvas total
+// (no locale) by more than a float32 step. The base fonts draw few of the samples, so what differs is system fallback, which
+// takes the box's locale (lookupFallbackFont, FontCacheCoreText.cpp:775-790).
+const out = { blocks: BLOCKS.length, fonts: FONTS, drawn: {}, differing: {} };
+const canvas = {};
+for (const font of FONTS) {
+  const c = ctxOf(font, 0);
+  const lastResort = ctxOf(font.replace(/px .*/, 'px LastResort'), 0);
+  const named = ctxOf(font + ', LastResort', 0);
+  canvas[font] = BLOCKS.map(block => c.measureText(block[2]).width);
+  // Blocks whose sample the base font draws at least part of: no verdict on fallback from this font.
+  out.drawn[font] = BLOCKS.map((block, i) => named.measureText(block[2]).width !== lastResort.measureText(block[2]).width ? i : -1).filter(i => i >= 0);
+}
+const div = document.createElement('div');
+div.style.cssText = 'position: absolute; left: 0; top: 0; margin: 0; padding: 0; border: 0; line-height: 40px; white-space: pre';
+const node = document.createTextNode('');
+div.append(node);
+host.append(div);
+for (const lang of LANGS) {
+  div.lang = lang;
+  out.differing[lang] = {};
+  for (const font of FONTS) {
+    div.style.font = font;
+    const differing = [];
+    for (let i = 0; i < BLOCKS.length; i++) {
+      node.data = BLOCKS[i][2];
+      const dom = boxWidth(node);
+      const width = canvas[font][i];
+      if (Math.abs(dom - width) / Math.max(1, width) > 1e-6) differing.push(i);
+    }
+    out.differing[lang][font] = differing;
+  }
+}
+div.remove();
+return out;
+`
+
 function probe(id: string, spec: string, constants: Record<string, unknown>, body: string, fixtures?: string[], timeoutNote?: string): Probe {
   let header = ''
   for (const name of Object.keys(constants)) header += `const ${name} = ${JSON.stringify(constants[name])}; `
@@ -231,8 +272,37 @@ const ARABIC_RUNS = [
   ['الرَّحِي', 'مِ'], ['كتا', 'بة'], ['مستش', 'فى'], ['يستخد', 'مون'], ['جم', 'يل'], ['شك', 'را'], ['لغ', 'ة'], ['مر', 'حبا'], ['تث', 'بيت'], ['بين', 'هما'], ['ال', 'له'], ['عل', 'ي', 'كم'],
 ]
 
+// Unicode blocks with up to three sample characters each, the first, middle and last assigned letter, number, symbol or
+// punctuation of the block (ICU 78.2 ppucd.txt), separated by spaces: [first, last, sample].
+async function sampledBlocks(): Promise<Array<[number, number, string]>> {
+  const path = resolve(BROWSER_ENGINES, PPUCD_PATH)
+  const blocks: Array<{ first: number; last: number; samples: number[] }> = []
+  await forEachPpucdBlock(path, range => { blocks.push({ first: range.first, last: range.last, samples: [] }) })
+  await forEachPpucdRange(path, range => {
+    const gc = range.props.get('gc') ?? 'Cn'
+    if (!/^(L|N|S|P)/.test(gc) || range.props.has('DI')) return
+    const block = blocks.find(b => range.first >= b.first && range.first <= b.last)
+    if (block === undefined) return
+    for (let cp = range.first; cp <= Math.min(range.last, block.last) && cp < range.first + 4096; cp++) block.samples.push(cp)
+  })
+  const out: Array<[number, number, string]> = []
+  for (let i = 0; i < blocks.length; i++) {
+    const b = blocks[i]!
+    if (b.samples.length === 0 || (b.first >= 0xd800 && b.first <= 0xf8ff) || b.first >= 0xf0000) continue
+    b.samples.sort((x, y) => x - y)
+    const picks = [...new Set([b.samples[0]!, b.samples[b.samples.length >> 1]!, b.samples[b.samples.length - 1]!])]
+    out.push([b.first, b.last, picks.map(cp => String.fromCodePoint(cp)).join(' ')])
+  }
+  return out
+}
+
+// Every language with a CSS generic family of its own in data/webkit/coretext-macos27/css-families.tsv, and languages of the
+// default answer.
+const FALLBACK_LANGS = ['en', 'de', 'fr', 'es', 'it', 'pt', 'nl', 'pl', 'vi', 'id', 'el', 'und', 'am', 'ar', 'bg', 'bn', 'bo', 'chr', 'ckb', 'fa', 'fil', 'gu', 'he', 'hi', 'hy', 'iu', 'ja', 'ka', 'km', 'kn', 'ko', 'ks', 'lo', 'lrc', 'ml', 'mr', 'my', 'mzn', 'ne', 'or', 'pa', 'ps', 'ro', 'ru', 'sd', 'si', 'sr', 'ta', 'te', 'th', 'tr', 'ug', 'uk', 'ur', 'yi', 'yue', 'zh-Hans', 'zh-Hant', 'zh-HK', 'kk-Arab', 'pa-Arab', 'uz-Arab', 'mn', 'mn-Mong', 'ti', 'dz', 'dv', 'syr', 'nqo', 'ff-Adlm']
+
 export default async function round4Probes(): Promise<Probe[]> {
   return [
+    probe('webkit-round4 R14 (system fallback by language, every block)', 'webkit-canvas §1.3 locale; round 4 R14', { LANGS: FALLBACK_LANGS, FONTS: ['16px Helvetica', '16px Times', '16px "Geeza Pro"'], BLOCKS: await sampledBlocks() }, R14),
     probe('webkit-round4 R7 (named CJK families by language)', 'webkit-canvas §1.3 locale; round 4 R7', { LANGS, FAMILIES: NAMED_CJK, TEXTS: CJK_TEXTS, SIZE: 18 }, R7),
     probe('webkit-round4 R7 (more named CJK families by language)', 'webkit-canvas §1.3 locale; round 4 R7', { LANGS, FAMILIES: NAMED_CJK_2, TEXTS: CJK_TEXTS, SIZE: 18 }, R7),
     probe('webkit-round4 R7 (other named families by language)', 'webkit-canvas §1.3 locale; round 4 R7', { LANGS, FAMILIES: NAMED_OTHER, TEXTS: CJK_TEXTS, SIZE: 18 }, R7),
