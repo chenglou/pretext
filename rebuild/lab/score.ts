@@ -7,6 +7,7 @@
 import { closeSync, openSync, readFileSync, readSync, writeFileSync, writeSync } from 'node:fs'
 import type { Expected, ExpectedObservation, ExpectedRect, Gap, GapName } from '../src/model.ts'
 import { describeGiven } from './languages.ts'
+import { plainRows, readLines } from './rows.ts'
 import type { BrowserKind, Case, EnginePrediction, FontDecl, LabRow, LinesPrediction, NativeObservation, PainterLine, Paragraph, Rect, RecordedLayout } from './types.ts'
 
 // Part of every environment key, so rows scored by different scorers never meet in a baseline. Version 1 derived native
@@ -15,7 +16,13 @@ import type { BrowserKind, Case, EnginePrediction, FontDecl, LabRow, LinesPredic
 // Element.getClientRects(), marks slot protocol rows and attributes failing lines to the gaps that concern them. Version 5
 // counts a gap as covering a failing line only where its range touches what differs there ("Covered failures"), observes
 // the widths of lines Blink and Gecko indented (observedWidth), and matches failing rows against the residual classes.
-export const SCORER_VERSION = 5
+// Version 6 (ceiling round 4) leaves report-only rects out of the line a lineCount or breaks failure is attributed to
+// (reportOnlyRects), doesn't take a WebKit box whose engine width reports as the native width at a moved x for a differing
+// unit and gives a WebKit line where only the sum differs its stand-in addends as units (webkitReportedWidth,
+// webkitStandInAddends), counts the library's painter limits as explanations of painter failures (LineAttribution.limits),
+// and records per case where each gap fires (CaseScore.firing), from which lift is counted over prediction failures alone.
+// No metric's status changes between versions 5 and 6.
+export const SCORER_VERSION = 6
 
 export type Status = 'pass' | 'fail' | 'unobserved' | 'not-applicable'
 // `reason` is a fixed category (counted in the summary); `detail` names offsets and values for this case.
@@ -481,6 +488,39 @@ export type CaseScore = {
   lineGaps: Partial<Record<MetricName, MetricAttribution>>
   // The residual class whose signature the row has (see "Residual classes"), or null. Absent counts as null.
   residual?: ResidualMembership | null
+  // Where the layout's gaps fire (gapFiring); null without an engine layout. Absent counts as null.
+  firing?: GapFiring | null
+}
+
+// Gap firing. A gap fires on a line box when the line's own gaps hold it, or a paragraph gap with a range meets the line's
+// source range (a point at either end included). Per case: its line boxes, and per gap how many of them it fires on. Lift
+// is counted from these over prediction failures alone: a gap's share of the failing lines of lineCount, breaks and widths
+// failures against its share of the line boxes of cases whose three prediction metrics pass. Painter-only failures (the
+// painter fails where the prediction passes) are counted apart, so a browser whose painter fails often doesn't make every
+// condition read weak (research/ROUND3-EVALUATION.md, "Weak coverage"; the orchestrator's decision of 2026-09-18).
+export type GapFiring = { lines: number; gaps: Partial<Record<GapName, number>> }
+
+function firesOn(layout: RecordedLayout, line: number): GapName[] {
+  const value = layout.lines[line]!
+  const names: GapName[] = []
+  for (let g = 0; g < value.gaps.length; g++) if (!names.includes(value.gaps[g]!.gap)) names.push(value.gaps[g]!.gap)
+  for (let g = 0; g < layout.gaps.length; g++) {
+    const gap = layout.gaps[g]!
+    if (gap.at === undefined || names.includes(gap.gap)) continue
+    if (gap.at.start === gap.at.end ? gap.at.start >= value.start && gap.at.start <= value.end : gap.at.start < value.end && gap.at.end > value.start) names.push(gap.gap)
+  }
+  return names.sort()
+}
+
+export function gapFiring(layout: RecordedLayout): GapFiring {
+  const out: GapFiring = { lines: 0, gaps: {} }
+  for (let l = 0; l < layout.lines.length; l++) {
+    if (!layout.lines[l]!.hasLineBox) continue
+    out.lines++
+    const names = firesOn(layout, l)
+    for (let i = 0; i < names.length; i++) out.gaps[names[i]!] = (out.gaps[names[i]!] ?? 0) + 1
+  }
+  return out
 }
 
 // ---- Covered failures ----
@@ -604,10 +644,18 @@ export type LineAttribution = {
   // Gaps that concern the line and cover nothing: their range touches nothing that counts (scorer 4 counted them).
   elsewhere?: Array<{ gap: GapName; scope: GapScope }>
   evidence?: LineEvidence
+  // Painter lines: the painter limits the library names for the line (src/paint.ts painterLimits, recorded per painted
+  // line as EnginePrediction.painterLimits): conditions on the layout, read from engine source, under which a line painted
+  // alone can differ. A limit explains a painter failure the way a gap explains a prediction failure. Absent without one,
+  // and in rows that recorded no limits.
+  limits?: string[]
+  // The gaps that fire on the attributed engine line (gapFiring) whether or not they cover it, and the gaps that cover it
+  // from a neighbouring line. Absent without an engine line.
+  fires?: GapName[]
 }
 export type MetricAttribution = {
   lines: LineAttribution[]
-  // Every failing line has a covering gap.
+  // Every failing line has a covering gap; a painter line may have a painter limit instead.
   covered: boolean
   // Paragraph gaps without a range, which cover no line.
   paragraphGaps: GapName[]
@@ -841,6 +889,8 @@ export function lineLocalGaps(layout: RecordedLayout, boxes: readonly number[], 
 function attribution(layout: RecordedLayout, boxes: readonly number[], failing: readonly number[], text: string, evidence: ((k: number) => FailingLineEvidence) | null): MetricAttribution {
   const lines = failing.map(k => lineLocalGaps(layout, boxes, k, evidence === null ? null : evidence(k)))
   for (let i = 0; i < lines.length; i++) {
+    // A gap that covers the line from a neighbouring line fires for it too.
+    if (lines[i]!.engineLine !== null) lines[i]!.fires = [...new Set([...firesOn(layout, lines[i]!.engineLine!), ...lines[i]!.gaps.map(gap => gap.gap)])].sort()
     const value = lines[i]!.evidence
     if (value === undefined) continue
     if (value.first !== null) value.firstText = text.slice(value.first.start, Math.min(value.first.end, value.first.start + 40))
@@ -849,32 +899,80 @@ function attribution(layout: RecordedLayout, boxes: readonly number[], failing: 
   return { lines, covered: lines.length > 0 && lines.every(line => line.gaps.length > 0), paragraphGaps: paragraphGapNames(layout) }
 }
 
+// Rects that report on a line without placing the code point's text there. Two rules of the engines' range geometry make a
+// code point report on a line its text isn't on, and each moved the line the scorer attributed (ceiling round 3):
+// - Blink reports a line's hyphen item to every range that holds the end of the item before it ("Hyphens. Include if the
+//   last end was included", LayoutText::AbsoluteQuadsForRange, layout_text.cc:616-621). The code point after a chosen soft
+//   hyphen starts where that item ends, so it reports the hyphen's rect on the hyphen's line beside its own rect on the
+//   next line: a rect equal to a positive-width rect the soft hyphen before it reports on the same line is the hyphen's.
+//   Where only one side breaks at the soft hyphen, that rect made the line after the hyphen's the first that differs
+//   (`c-23e11e5c3a96497d`: U+FFFC, `a`, a soft hyphen, `b`; natively `b` sits on line 1 and reports on lines 0 and 1).
+// - WebKit reports a range that starts where a text box ends on that box's line when the next box in box order starts
+//   later: "trailing content on the current line" (selectionRectForTextBox, RenderText.cpp:373-380). The rect is a caret at
+//   the box's end, with no width. A line's first character gets it on the line before whenever bidi reordering puts
+//   another box of its line first, so it depends on the boxes of the character's own line, not on where the line before
+//   ends (`c-4bb3746469073e4d`): a zero-width rect on a line above another rect of the same code point is that report.
+// The metrics compare every rect as before; only the line a lineCount or breaks failure is attributed to, and its decision
+// text, leave these rects out, on the native side and on the expected side alike.
+type ReportOnly = { native: boolean[][]; expected: boolean[][] }
+
+function reportOnlyRects(engine: RecordedLayout['engine'], text: string, observation: ExpectedObservation, nativeObservation: NativeObservation, native: NativeLines, nativeLineOf: Int32Array): ReportOnly | null {
+  if (engine === 'gecko') return null
+  const out: ReportOnly = { native: [], expected: [] }
+  type Placed = { line: number; x: number; width: number }
+  const mark = (own: Placed[], hyphen: Placed[] | null): boolean[] => {
+    const flags: boolean[] = []
+    for (let k = 0; k < own.length; k++) {
+      const rect = own[k]!
+      let reportOnly = false
+      if (rect.line >= 0) {
+        if (engine === 'blink' && hyphen !== null) {
+          for (let h = 0; h < hyphen.length && !reportOnly; h++) reportOnly = hyphen[h]!.width > 0 && hyphen[h]!.line === rect.line && hyphen[h]!.x === rect.x && hyphen[h]!.width === rect.width
+        } else if (engine === 'webkit' && rect.width === 0) {
+          for (let o = 0; o < own.length && !reportOnly; o++) reportOnly = o !== k && own[o]!.line > rect.line
+        }
+      }
+      flags.push(reportOnly)
+    }
+    return flags
+  }
+  const nativeRects = (i: number): Placed[] => nativeObservation.points[i]!.rects.map((rect, k) => ({ line: native.points[i]![k]!, x: rect.x, width: rect.width }))
+  const expectedRects = (i: number): Placed[] => observation.codePoints[i]!.rects.map(rect => ({ line: rect.line >= 0 ? nativeLineOf[rect.line]! : -1, x: rect.x.value, width: rect.width.value }))
+  for (let i = 0; i < observation.codePoints.length; i++) {
+    const afterSoftHyphen = engine === 'blink' && i > 0 && text.charCodeAt(observation.codePoints[i - 1]!.offset) === 0xad && text.charCodeAt(observation.codePoints[i]!.offset) !== 0xad
+    out.native.push(mark(nativeRects(i), afterSoftHyphen ? nativeRects(i - 1) : null))
+    out.expected.push(mark(expectedRects(i), afterSoftHyphen ? expectedRects(i - 1) : null))
+  }
+  return out
+}
+
 // The native lines of a range's placed rects and the native lines its expected rects map to (see lineDifference for the
-// pairing), or null where they can't be compared: the rect counts differ and a native rect sits on no line.
-function lineSets(expected: ExpectedRect[], placed: number[], nativeLineOf: Int32Array): { native: Set<number>; expected: Set<number> } | null {
+// pairing), or null where they can't be compared: the rect counts differ and a native rect sits on no line. Rects marked
+// report-only (reportOnlyRects) place nothing.
+function lineSets(expected: ExpectedRect[], placed: number[], nativeLineOf: Int32Array, skipNative: readonly boolean[] | null = null, skipExpected: readonly boolean[] | null = null): { native: Set<number>; expected: Set<number> } | null {
   const nativeSet = new Set<number>()
   const expectedSet = new Set<number>()
   const mapped = (rect: ExpectedRect): number => (rect.line >= 0 ? nativeLineOf[rect.line]! : -1)
   if (expected.length === placed.length) {
     for (let k = 0; k < expected.length; k++) {
       if (placed[k]! < 0) continue
-      nativeSet.add(placed[k]!)
-      if (mapped(expected[k]!) >= 0) expectedSet.add(mapped(expected[k]!))
+      if (skipNative?.[k] !== true) nativeSet.add(placed[k]!)
+      if (skipExpected?.[k] !== true && mapped(expected[k]!) >= 0) expectedSet.add(mapped(expected[k]!))
     }
   } else {
     for (let k = 0; k < placed.length; k++) {
       if (placed[k]! < 0) return null
-      nativeSet.add(placed[k]!)
+      if (skipNative?.[k] !== true) nativeSet.add(placed[k]!)
     }
-    for (let k = 0; k < expected.length; k++) if (mapped(expected[k]!) >= 0) expectedSet.add(mapped(expected[k]!))
+    for (let k = 0; k < expected.length; k++) if (skipExpected?.[k] !== true && mapped(expected[k]!) >= 0) expectedSet.add(mapped(expected[k]!))
   }
   return { native: nativeSet, expected: expectedSet }
 }
 
 // The lowest native line in one of a range's two line sets and not the other, or Infinity where the sets agree or can't
 // be compared.
-function divergence(expected: ExpectedRect[], placed: number[], nativeLineOf: Int32Array): number {
-  const sets = lineSets(expected, placed, nativeLineOf)
+function divergence(expected: ExpectedRect[], placed: number[], nativeLineOf: Int32Array, skipNative: readonly boolean[] | null = null, skipExpected: readonly boolean[] | null = null): number {
+  const sets = lineSets(expected, placed, nativeLineOf, skipNative, skipExpected)
   if (sets === null) return Infinity
   let lowest = Infinity
   for (const line of sets.native) if (!sets.expected.has(line)) lowest = Math.min(lowest, line)
@@ -898,6 +996,55 @@ function compareRect(layout: RecordedLayout, line: number, expected: ExpectedRec
 }
 
 const DEFAULT_IGNORABLE = /^\p{Default_Ignorable_Code_Point}$/u
+
+// The width WebKit reports for a box of engine width w at x: the box's float rect goes through localToAbsoluteQuad and
+// FloatQuad::boundingBox (platform/graphics/FloatQuad.cpp:90-99), the corners' min and max in float, so the width is
+// f32(f32(x + w) - x), and one float32 step of x + w coarser than w itself. lab/observe/webkit.ts boundingBox is the port's copy.
+function webkitReportedWidth(x: number, width: number): number {
+  const right = f32(x + width)
+  return f32(Math.max(x, right) - Math.min(x, right))
+}
+
+// Per node, the engine widths of its text boxes in box index order, line then visual order, which is the order of the
+// node's whole-box rects (InlineIterator::textBoxesFor; lab/observe/webkit.ts `own`). null for other engines.
+function webkitBoxWidths(layout: RecordedLayout): number[][] | null {
+  if (layout.engine !== 'webkit') return null
+  const widths: number[][] = []
+  for (let l = 0; l < layout.lines.length; l++) {
+    const boxes = layout.lines[l]!.geometry.boxes
+    for (let b = 0; b < boxes.length; b++) {
+      const box = boxes[b]!
+      if (box.kind !== 'text' && box.kind !== 'soft-line-break') continue
+      while (widths.length <= box.run) widths.push([])
+      widths[box.run]!.push(box.width)
+    }
+  }
+  return widths
+}
+
+// WebKit, a widths line on which no box is shown to differ (every reported width that differs is the predicted engine width
+// at a moved x): what differs is the line's float32 sum, Line::contentLogicalWidth, whose addends are the line's runs. A
+// reported width settles its box's engine width only to a float32 step of the box's right edge, so an addend the port
+// computed from a Canvas stand-in (an expected width in state `limited`) can be a step off without its rect showing it
+// (`c-9a66d090891a825d`: the sum of runs shaped across inline boxes is 224.06697px natively and 224.06696px predicted, and
+// every box reports the predicted width at its native x). Those addends are the line's units then: the nodes' parts of the
+// line whose expected width is limited. A line without one stays without units, and is never covered.
+function webkitStandInAddends(layout: RecordedLayout, paragraph: Pick<Paragraph, 'runs'>, observation: ExpectedObservation, line: number): Unit[] {
+  const units: Unit[] = []
+  if (layout.engine !== 'webkit') return units
+  for (let r = 0, start = 0; r < observation.nodes.length; r++) {
+    const end = start + paragraph.runs[r]!.text.length
+    const rects = observation.nodes[r]!
+    for (let k = 0; k < rects.length; k++) {
+      if (rects[k]!.line !== line || rects[k]!.width.state !== 'limited') continue
+      const s = Math.max(start, layout.lines[line]!.start)
+      const e = Math.min(end, layout.lines[line]!.end)
+      if (e > s && !units.some(unit => unit.start === s && unit.end === e)) units.push({ start: s, end: e, node: true, sum: NaN, nativeLeft: NaN, nativeRight: NaN, expectedLeft: NaN, expectedRight: NaN })
+    }
+    start = end
+  }
+  return units
+}
 
 // Per engine line, the differing units (see "Covered failures"). `only` restricts them to one line, the first line that
 // differs of a lineCount or breaks failure, and to text before the decision text.
@@ -979,7 +1126,8 @@ function differingUnits(
       known.expectedRight = Math.max(known.expectedRight, value.expectedRight)
     }
   }
-  const compare = (expected: ExpectedRect[], observed: Rect[], placed: number[], start: number, end: number, node: boolean): void => {
+  // `boxWidths`: for a WebKit node, the engine width of the text box behind each rect (webkitBoxWidths).
+  const compare = (expected: ExpectedRect[], observed: Rect[], placed: number[], start: number, end: number, node: boolean, boxWidths: readonly number[] | null = null): void => {
     if (expected.length !== observed.length) {
       // Other rect counts: a unit on each line both sides place the range on; with other lines it is moved text.
       const sets = lineSets(expected, placed, nativeLineOf)
@@ -992,7 +1140,12 @@ function differingUnits(
       const l = expected[k]!.line
       if (l < 0 || placed[k]! < 0 || nativeLineOf[l] !== placed[k]) continue
       const value = compareRect(layout, l, expected[k]!, observed[k]!)
-      if (value.width !== 0) push(l, start, end, node, value)
+      if (value.width === 0) continue
+      // WebKit reports a box's width through its float corners, f32(f32(x + w) - x) (webkitReportedWidth): where the box's
+      // engine width reports as the native width at the native x, the box is as wide as predicted and only its x moved,
+      // which is never a unit. What moved it differs elsewhere on the line.
+      if (boxWidths !== null && k < boxWidths.length && webkitReportedWidth(observed[k]!.x, boxWidths[k]!) === observed[k]!.width) continue
+      push(l, start, end, node, value)
     }
   }
   if (layout.engine !== 'webkit') {
@@ -1003,11 +1156,12 @@ function differingUnits(
   }
   // Nodes: in WebKit every node rect that differs; in Blink and Gecko only where no code point of the node on the line does.
   const pointUnits = units.map(list => list.slice())
+  const boxWidths = webkitBoxWidths(layout)
   for (let r = 0, start = 0; r < observation.nodes.length; r++) {
     const end = start + paragraph.runs[r]!.text.length
     const before = units.map(list => list.length)
     if (only === null || end <= only.before) {
-      compare(observation.nodes[r]!, nativeObservation.runRects[r]!, native.nodes[r]!, start, end, true)
+      compare(observation.nodes[r]!, nativeObservation.runRects[r]!, native.nodes[r]!, start, end, true, boxWidths === null ? null : boxWidths[r] ?? [])
     } else if (layout.engine === 'webkit' && start < only.before && observation.nodes[r]!.some(rect => rect.line === only.line)) {
       // WebKit's node that reaches the decision text: its part of the line before the decision text. Nothing finer says
       // whether its text there measures as expected, and the node is what differs.
@@ -1026,14 +1180,14 @@ function differingUnits(
 // failures").
 function decisionText(
   layout: RecordedLayout, boxes: readonly number[], k: number, observation: ExpectedObservation, nativeObservation: NativeObservation, native: NativeLines,
-  nativeLineOf: Int32Array,
+  nativeLineOf: Int32Array, reportOnly: ReportOnly | null,
 ): { decision: SourceRange; failingLine: number } {
   const lines = layout.lines
   let start = Infinity
   let end = -Infinity
   for (let i = 0; i < observation.codePoints.length; i++) {
     const point = observation.codePoints[i]!
-    const sets = lineSets(point.rects, native.points[i]!, nativeLineOf)
+    const sets = lineSets(point.rects, native.points[i]!, nativeLineOf, reportOnly?.native[i] ?? null, reportOnly?.expected[i] ?? null)
     if (sets === null || sets.native.has(k) === sets.expected.has(k)) continue
     start = Math.min(start, point.offset)
     end = Math.max(end, point.offset + point.length)
@@ -1138,22 +1292,24 @@ function probedUnitOf(value: NodeWidthDifference, probed: readonly ProbedUnit[])
 
 export const RESIDUAL_CLASSES: ResidualClass[] = [
   {
-    // The id `residual-classes.json` (lab/fresh.ts) gives the same class.
+    // The one registry: lab/fresh.ts and rebuild/tests/ledger.ts read the per-case `residual` this gives.
     name: 'gecko/one-shaping-unit-one-app-unit',
     engine: 'gecko',
     description: 'One shaping unit is 1 app unit wider or narrower in the DOM than OffscreenCanvas measures it at the CSS font size.',
     probes: [
       'F7, rebuild/probes/gecko-round2.ts (records in .artifacts/probes/gecko/round2; specs/gecko-RESULTS.md "Probes"), Firefox 156 at DPR 2: single shaping units in their own node, DOM box against OffscreenCanvas and canvas elements, all at the CSS font size.',
       'research/ROUND2-CRITIC.md item 4 (probe gecko-device-size, 94 units, Firefox 156 at DPR 2): an OffscreenCanvas at the device font size, halved, equals the DOM in 22 units only, so that recipe is refuted; 12 units differ by exactly 1 au at the CSS size, all in Geeza Pro, Thonburi or Helvetica Neue.',
+      'F13, rebuild/probes/gecko-round3.ts (record .artifacts/probes/gecko/round3/firefox-probes.json; specs/gecko-RESULTS.md "Ceiling round 3"), Firefox 156 at DPR 2, 243 units in 15 font lists: a detached <canvas> element at the DOM\'s device font size gives the DOM\'s width on every unit, the ones an OffscreenCanvas at the CSS size measures 1 au off among them.',
     ],
     mechanism: {
-      status: 'inferred',
-      reading: 'The DOM rounds each glyph\'s 16.16 advance at the device font size to app units (gfxHarfBuzzShaper.cpp:354-379, :1262-1263, :1699-1702), and Canvas shows no glyph\'s sub-app-unit fraction (specs/gecko-canvas.md N7). The probes verify the difference, not this cause.',
+      status: 'verified',
+      reading: 'The DOM\'s text run shapes at the device font size and rounds each glyph at the page\'s app units per device pixel (gfxHarfBuzzShaper.cpp:1559, :1699-1702); an OffscreenCanvas shapes at the CSS size at 60 app units per px with a font group of its own (CanvasRenderingContext2D.cpp:4423-4492, :7135-7140), so a glyph\'s 16.16 rounding can fall on the other side. Verified by probe F13, where a <canvas> element that runs the DOM\'s arithmetic reproduces every member, and for `modern` by simulation from the font\'s units (the `n` after the kern split is 508.4999 au at the DOM\'s scale and 508.5004 au at Canvas\'s; specs/gecko-RESULTS.md "Ceiling round 3" item 1). The Geeza Pro and Thonburi members weren\'t simulated. The library measures on OffscreenCanvas only (the maintainer\'s decision of 2026-09-18), where no measurement shows the difference, so it stays a residual class.',
     },
     signature: 'lineCount and breaks pass and widths fail; every node has the expected number of rects; exactly one node rect differs in width, by exactly 1 app unit; and the painter drew every failing line at the native width.',
     probed: [
       { family: 'Geeza Pro', size: 10, weights: [300, 400, 500], text: 'ووفقك', difference: 1, probe: 'F7; ROUND2-CRITIC item 4' },
-      { family: 'Geeza Pro', size: 10, weights: [300, 400, 500], text: 'وأعانك', difference: 1, probe: 'ROUND2-CRITIC item 4' },
+      { family: 'Geeza Pro', size: 10, weights: [300, 400, 500], text: 'وأعانك', difference: 1, probe: 'ROUND2-CRITIC item 4; F13' },
+      { family: 'Geeza Pro', size: 10, weights: [300, 400, 500], text: 'وما', difference: 1, probe: 'F13' },
       { family: 'Thonburi', size: 32, weights: [500], text: 'รมชาติทำให้ผู้คนมีคว', difference: 1, probe: 'F7; ROUND2-CRITIC item 4' },
       { family: 'Thonburi', size: 32, weights: [500], text: 'รมชาติทำให้ผู้คนมี', difference: 1, probe: 'ROUND2-CRITIC item 4' },
       { family: 'Thonburi', size: 32, weights: [500], text: 'ทำให้', difference: 1, probe: 'ROUND2-CRITIC item 4' },
@@ -1448,12 +1604,14 @@ function scoreEngine(row: LabRow, nativeObservation: NativeObservation, predicti
   }
   const lineGaps: CaseScore['lineGaps'] = {}
   if (lineCount.status === 'fail' || breaks.status === 'fail') {
+    // Rects that report on a line without placing text there don't say where the two sides first disagree.
+    const reportOnly = reportOnlyRects(layout.engine, text, observation, nativeObservation, native, nativeLineOf)
     let k = Infinity
-    for (let i = 0; i < observation.codePoints.length; i++) k = Math.min(k, divergence(observation.codePoints[i]!.rects, native.points[i]!, nativeLineOf))
+    for (let i = 0; i < observation.codePoints.length; i++) k = Math.min(k, divergence(observation.codePoints[i]!.rects, native.points[i]!, nativeLineOf, reportOnly?.native[i] ?? null, reportOnly?.expected[i] ?? null))
     for (let r = 0; r < observation.nodes.length; r++) k = Math.min(k, divergence(observation.nodes[r]!, native.nodes[r]!, nativeLineOf))
     for (let e = 0; e < elements.length; e++) k = Math.min(k, divergence(elements[e]!, native.elements[e]!, nativeLineOf))
     if (k === Infinity) k = Math.min(native.count, boxes.length)
-    const { decision, failingLine } = decisionText(layout, boxes, k, observation, nativeObservation, native, nativeLineOf)
+    const { decision, failingLine } = decisionText(layout, boxes, k, observation, nativeObservation, native, nativeLineOf, reportOnly)
     const units = failingLine < boxes.length
       ? differingUnits(layout, row.case.paragraph, text, observation, nativeObservation, native, nativeLineOf, { line: boxes[failingLine]!, before: decision.start })[boxes[failingLine]!]!
       : []
@@ -1532,6 +1690,11 @@ function scoreEngine(row: LabRow, nativeObservation: NativeObservation, predicti
     if (widths.status === 'pass' && issue !== null) widths = issue
     if (widths.status === 'fail') {
       const units = differingUnits(layout, row.case.paragraph, text, observation, nativeObservation, native, nativeLineOf, null)
+      // A WebKit line where only the sum differs takes its stand-in addends as units (webkitStandInAddends).
+      for (let i = 0; i < failing.length; i++) {
+        const l = boxes[failing[i]!]!
+        if (units[l]!.length === 0) units[l] = webkitStandInAddends(layout, row.case.paragraph, observation, l)
+      }
       lineGaps.widths = attribution(layout, boxes, failing, text, k => ({ units: units[boxes[k]!]!, decision: null }))
       failingWidthLines = failing
       widthUnits = units
@@ -1574,7 +1737,19 @@ function scoreEngine(row: LabRow, nativeObservation: NativeObservation, predicti
       }
     }
     if (painter.status === 'pass' && issue !== null) painter = issue
-    if (painter.status === 'fail') lineGaps.painter = attribution(layout, boxes, failing, text, null)
+    if (painter.status === 'fail') {
+      const value = attribution(layout, boxes, failing, text, null)
+      // The library's painter limits, one list per painted line: a failing line one of them names is explained.
+      const limits = prediction.painterLimits
+      if (Array.isArray(limits) && limits.length === boxes.length) {
+        for (let i = 0; i < value.lines.length; i++) {
+          const names = [...new Set(limits[value.lines[i]!.nativeLine]!.map(limit => limit.limit))].sort()
+          if (names.length > 0) value.lines[i]!.limits = names
+        }
+        value.covered = value.lines.length > 0 && value.lines.every(line => line.gaps.length > 0 || line.limits !== undefined)
+      }
+      lineGaps.painter = value
+    }
   }
   let residual: ResidualMembership | null = null
   if (lineCount.status === 'fail' || breaks.status === 'fail' || widths.status === 'fail') {
@@ -1596,7 +1771,7 @@ function scoreEngine(row: LabRow, nativeObservation: NativeObservation, predicti
       paintedAtNativeWidth,
     })
   }
-  return { metrics: { lineCount, breaks, widths, painter }, facts, firstDifference: first.value, native, gaps, widthDiffs, diagnostics: null, protocol: null, lineGaps, residual }
+  return { metrics: { lineCount, breaks, widths, painter }, facts, firstDifference: first.value, native, gaps, widthDiffs, diagnostics: null, protocol: null, lineGaps, residual, firing: gapFiring(layout) }
 }
 
 // ---- Comparing two runs ----
@@ -1774,6 +1949,16 @@ type BrowserSummary = {
     predictionRows: { failing: number; withoutCoveredExplanation: number; residualProbed: number; residualSignatureOnly: number; open: number }
     // Per residual class: members without a covered explanation (counted above), and members a gap covers.
     residual: Record<string, { probed: number; signatureOnly: number; coveredProbed: number; coveredSignatureOnly: number }>
+    // Painter failures by what explains them: a gap on every failing line; else a gap or a painter limit on every failing
+    // line; else nothing (these are `withoutLineGap.painter`). `byLimit`: failing rows a limit names on some failing line.
+    painter: { failures: number; coveredByGap: number; coveredWithLimits: number; withoutExplanation: number; byLimit: Record<string, number> }
+    // Gap firing (GapFiring), for lift over prediction failures alone: the line boxes of cases whose lineCount, breaks and
+    // widths pass, the failing lines of prediction failures (the engine lines the scorer attributes, once per case), and
+    // apart from both the failing lines of painter-only failures; then the same per gap, with the cases it fires in.
+    firing: {
+      passingCases: number; passingLines: number; failingLines: number; painterOnlyFailingLines: number
+      byGap: Partial<Record<GapName, { passingCases: number; passingLines: number; failingLines: number; painterOnlyFailingLines: number }>>
+    }
   }
   // Protocol rows (slotProtocol): excluded from pass and fail; their metrics count as unobserved.
   protocolRows: number
@@ -1817,12 +2002,61 @@ function newBrowserSummary(): BrowserSummary {
       byGap: {},
       predictionRows: { failing: 0, withoutCoveredExplanation: 0, residualProbed: 0, residualSignatureOnly: 0, open: 0 },
       residual: {},
+      painter: { failures: 0, coveredByGap: 0, coveredWithLimits: 0, withoutExplanation: 0, byLimit: {} },
+      firing: { passingCases: 0, passingLines: 0, failingLines: 0, painterOnlyFailingLines: 0, byGap: {} },
     },
     protocolRows: 0, protocolIds: [],
     timingsMs: { native: 0, predict: 0, observe: 0, paint: 0, painterObserve: 0 },
     missingFontRows: 0, missingFonts: {},
     native: { lineCounts: {}, unplacedRects: 0, pointRectsByCentre: 0 },
     historyDependent: { compared: 0, rows: 0, missing: 0, caseDiffers: 0, geometryOnly: 0, geometryOnlyIds: [], cases: [] },
+  }
+}
+
+// One scored row's part of the painter and firing counts (BrowserSummary.lineLocal). Protocol rows and rows without an
+// engine layout have no firing.
+function addFiring(local: BrowserSummary['lineLocal'], score: CaseScore): void {
+  const painterAttribution = score.lineGaps.painter
+  if (score.metrics.painter.status === 'fail') {
+    const value = painterAttribution ?? UNATTRIBUTED
+    local.painter.failures++
+    if (value.lines.length > 0 && value.lines.every(line => line.gaps.length > 0)) local.painter.coveredByGap++
+    else if (value.covered) local.painter.coveredWithLimits++
+    else local.painter.withoutExplanation++
+    const named = new Set<string>()
+    for (const line of value.lines) for (const limit of line.limits ?? []) named.add(limit)
+    for (const limit of named) local.painter.byLimit[limit] = (local.painter.byLimit[limit] ?? 0) + 1
+  }
+  const firing = score.firing ?? null
+  if (firing === null) return
+  const bucket = (gap: GapName): NonNullable<BrowserSummary['lineLocal']['firing']['byGap'][GapName]> => local.firing.byGap[gap] ??= { passingCases: 0, passingLines: 0, failingLines: 0, painterOnlyFailingLines: 0 }
+  const prediction: MetricName[] = ['lineCount', 'breaks', 'widths']
+  const failing = prediction.filter(name => score.metrics[name].status === 'fail')
+  // The engine lines attributed to the given metrics, once each, with the gaps that fire on them.
+  const attributed = (names: readonly MetricName[]): Map<number, GapName[]> => {
+    const lines = new Map<number, GapName[]>()
+    for (const name of names) for (const line of score.lineGaps[name]?.lines ?? []) if (line.engineLine !== null) lines.set(line.engineLine, line.fires ?? [])
+    return lines
+  }
+  if (failing.length > 0) {
+    for (const fires of attributed(failing).values()) {
+      local.firing.failingLines++
+      for (const gap of fires) bucket(gap).failingLines++
+    }
+    return
+  }
+  if (!prediction.every(name => score.metrics[name].status === 'pass')) return
+  local.firing.passingCases++
+  local.firing.passingLines += firing.lines
+  for (const [gap, lines] of Object.entries(firing.gaps) as Array<[GapName, number]>) {
+    bucket(gap).passingCases++
+    bucket(gap).passingLines += lines
+  }
+  if (score.metrics.painter.status === 'fail') {
+    for (const fires of attributed(['painter']).values()) {
+      local.firing.painterOnlyFailingLines++
+      for (const gap of fires) bucket(gap).painterOnlyFailingLines++
+    }
   }
 }
 
@@ -1882,21 +2116,8 @@ function example(row: LabRow, text: string, score: CaseScore, metric: MetricName
   }
 }
 
-export async function* readLines(path: string): AsyncGenerator<string> {
-  const decoder = new TextDecoder()
-  let buffer = ''
-  for await (const chunk of Bun.file(path).stream()) {
-    buffer += decoder.decode(chunk, { stream: true })
-    let start = 0
-    for (let index = buffer.indexOf('\n'); index !== -1; index = buffer.indexOf('\n', start)) {
-      if (index > start) yield buffer.slice(start, index)
-      start = index + 1
-    }
-    buffer = buffer.slice(start)
-  }
-  buffer += decoder.decode()
-  if (buffer.trim() !== '') yield buffer
-}
+// Rows are read through rows.ts, plain or compressed; tools that import readLines from here keep working.
+export { readLines }
 
 // webkit-host runs installed Safari's engine, so its rows compare with Safari's.
 function compareKey(browser: BrowserKind, id: string): string {
@@ -1971,12 +2192,14 @@ async function main(): Promise<void> {
   // --native-compare: per case of the other run, hashes of its case, its native view and its raw native observation, and
   // where its row sits. Views of huge paragraphs don't fit in memory together; a view is read again only when its hash
   // differs, to name the difference.
+  // Rows are indexed by byte offset, so a compressed file is read from a plain temporary copy (rows.ts plainRows).
   const comparePath = args.get('native-compare')
   let other: Map<string, { caseHash: bigint | number; viewHash: bigint | number; geometry: bigint | number; entry: { offset: number; length: number } }> | null = null
-  const compareFd = comparePath === undefined ? null : openSync(comparePath, 'r')
-  if (comparePath !== undefined) {
+  const comparePlain = comparePath === undefined ? null : plainRows(comparePath)
+  const compareFd = comparePlain === null ? null : openSync(comparePlain.path, 'r')
+  if (comparePlain !== null) {
     other = new Map()
-    const index = await indexRows(comparePath)
+    const index = await indexRows(comparePlain.path)
     for (const [id, entry] of index) {
       const row = readRowAt(compareFd!, entry)
       other.set(compareKey(row.browser, id), { caseHash: Bun.hash(JSON.stringify(row.case)), viewHash: Bun.hash(JSON.stringify(nativeView(row))), geometry: Bun.hash(JSON.stringify(row.native)), entry })
@@ -1987,7 +2210,8 @@ async function main(): Promise<void> {
   // (withNativeRow). The scorer refuses rows it can't combine; a row with no native row stays unobserved and makes the
   // scorer exit nonzero.
   const nativeRowsPath = args.get('native-rows')
-  const nativeRows = nativeRowsPath === undefined ? null : { fd: openSync(nativeRowsPath, 'r'), index: await indexRows(nativeRowsPath) }
+  const nativePlain = nativeRowsPath === undefined ? null : plainRows(nativeRowsPath)
+  const nativeRows = nativePlain === null ? null : { fd: openSync(nativePlain.path, 'r'), index: await indexRows(nativePlain.path) }
   const nativeRowCounts = { used: 0, missing: 0 }
 
   const browsers: Partial<Record<BrowserKind, BrowserSummary>> = {}
@@ -2087,6 +2311,7 @@ async function main(): Promise<void> {
         gaps: score.gaps,
         ...(Object.keys(score.lineGaps).length === 0 ? {} : { lineGaps: score.lineGaps }),
         ...(score.residual === null || score.residual === undefined ? {} : { residual: score.residual }),
+        ...(score.firing === null || score.firing === undefined ? {} : { firing: score.firing }),
         ...(score.protocol === null ? {} : { protocol: score.protocol }),
         ...(history === null ? {} : { historyDependent: history }),
       }) + '\n')
@@ -2142,6 +2367,7 @@ async function main(): Promise<void> {
         rows.open++
       }
     }
+    addFiring(summary.lineLocal, score)
     if (score.facts !== null) addFacts(summary.facts, score.facts)
     if (score.diagnostics !== null) {
       summary.lineRangeDiagnostics.visibleBreaks[score.diagnostics.visibleBreaks.status]++
@@ -2170,6 +2396,8 @@ async function main(): Promise<void> {
   if (perCaseFd !== null) closeSync(perCaseFd)
   if (nativeRows !== null) closeSync(nativeRows.fd)
   if (compareFd !== null) closeSync(compareFd)
+  nativePlain?.release()
+  comparePlain?.release()
 
   const missingRows: Partial<Record<BrowserKind, number>> = {}
   if (casesById !== null) for (const [browser, ids] of seen) missingRows[browser] = [...casesById.keys()].filter(id => !ids.has(id)).length

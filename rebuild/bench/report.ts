@@ -2,6 +2,7 @@
 // cross-browser summary:
 //   bun rebuild/bench/report.ts <out>/chrome-bench.json <out>/firefox-bench.json <out>/safari-bench.json > summary.md
 import { readFileSync } from 'node:fs'
+import type { LabApp } from '../lab/browser-build.ts'
 import type { BrowserBuild } from '../lab/types.ts'
 import type { BrowserKind, PageEnvironment, RowCount, RowTiming, Scenario, Script, ScriptStyle, Settings, SizeClass } from './protocol.ts'
 
@@ -38,6 +39,9 @@ export type BenchReport = {
   smoke: boolean
   browser: BrowserKind
   build: BrowserBuild
+  // The bundle the run launched (lab/browser-build.ts labApp): its path, whether it is a pinned copy, and the copy's tree
+  // hash; null for webkit-host. Absent in reports from before 2026-09-18, which launched the installed browsers.
+  app?: LabApp | null
   runId: string
   startedAt: string
   finishedAt: string

@@ -9,7 +9,8 @@
 //   bun rebuild/tests/coverage.ts --facts=<facts file>[,...] --derived=<derivation dir>[,...] [--out=rebuild/tests/coverage.json]
 //     [--previous=<coverage.json>]
 //
-// With --previous, a rule that had an observed family there and has none now is a loss (exit 1).
+// With --previous, a rule that had an observed family there and has none now is a loss (exit 1), unless it was removed
+// from the registry and every rule that replaced it has one (lostObservedFamilies).
 import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import type { MetricName } from '../lab/score.ts'
@@ -120,6 +121,20 @@ function familyEvidence(dir: string): FamilyEvidence[] {
   return out
 }
 
+// The rules that had an observed family before and have none now. A rule that was removed from the registry since doesn't
+// lose its family when every rule that replaced it has one: the families name the new id, so the coverage moved with it
+// (ceiling round 3's staged matrix failed on `webkit/measure/word-spacing-in-js`, retired for
+// `webkit/measure/word-spacing-in-context`). A removed rule without a replacement, or with one no family observes, is a loss.
+export function lostObservedFamilies(before: readonly string[], now: Pick<Coverage, 'rulesWithObservedFamily' | 'removed'>): string[] {
+  const observed = new Set(now.rulesWithObservedFamily)
+  const replacements = new Map(now.removed.map(rule => [rule.id, rule.replacedBy]))
+  return before.filter(id => {
+    if (observed.has(id)) return false
+    const replacedBy = replacements.get(id)
+    return replacedBy === undefined || replacedBy.length === 0 || !replacedBy.every(replacement => observed.has(replacement))
+  })
+}
+
 export function buildCoverage(registry: readonly RuleRecord[], facts: readonly FactRecord[], evidence: readonly FamilyEvidence[], annotatedIds: ReadonlySet<string>, inputs: Coverage['inputs'], previous: Coverage | null): Coverage {
   const factsBySpec = new Map<string, FactRecord[]>()
   for (const fact of facts) {
@@ -191,14 +206,15 @@ export function buildCoverage(registry: readonly RuleRecord[], facts: readonly F
   }
   const rulesWithObservedFamily = rules.filter(rule => rule.observedFamilies.length > 0).map(rule => rule.id).sort()
   const known = new Set(registry.map(rule => rule.id))
+  const removed = registry.filter(rule => rule.status === 'removed').map(rule => ({ id: rule.id, replacedBy: rule.replacedBy }))
   return {
     format: 'pretext-coverage/1', generatedAt: new Date().toISOString(), inputs, counts, rulesWithObservedFamily,
     uncovered: rules.filter(rule => rule.coveredBy.length === 0).map(rule => rule.id),
     withProbeButNoHoldingFact, deviations,
     annotations: { annotated: rules.filter(rule => rule.annotated).length, missing: rules.filter(rule => !rule.annotated).length, unknown: [...annotatedIds].filter(id => !known.has(id)).sort() },
-    removed: registry.filter(rule => rule.status === 'removed').map(rule => ({ id: rule.id, replacedBy: rule.replacedBy })),
+    removed,
     rules,
-    lostFamilies: previous === null ? [] : previous.rulesWithObservedFamily.filter(id => !rulesWithObservedFamily.includes(id)),
+    lostFamilies: previous === null ? [] : lostObservedFamilies(previous.rulesWithObservedFamily, { rulesWithObservedFamily, removed }),
   }
 }
 

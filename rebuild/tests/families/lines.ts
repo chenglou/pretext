@@ -63,7 +63,7 @@ export const LINE_FAMILIES: readonly RuleFamily[] = [
     name: 'following-space',
     rules: {
       blink: ['blink/shapeline/no-reshape-at-space-line-end', 'blink/lines/trailing-space-truncated-without-reshape', 'blink/lines/remove-trailing-collapsible-space', 'blink/content/collapse-space-runs', 'blink/measure/word-spacing-in-js'],
-      webkit: ['webkit/measure/following-space-rule', 'webkit/measure/collapsible-space-one-space', 'webkit/lines/trimmable-trailing-content', 'webkit/lines/remove-trimmable-trailing', 'webkit/measure/word-spacing-in-js'],
+      webkit: ['webkit/measure/following-space-rule', 'webkit/measure/collapsible-space-one-space', 'webkit/lines/trimmable-trailing-content', 'webkit/lines/remove-trimmable-trailing', 'webkit/measure/word-spacing-in-context'],
       gecko: ['gecko/lines/trim-trailing-at-break', 'gecko/transform/collapse-space-tab', 'gecko/spacing/word-spacing-space-nbsp', 'gecko/gap/space-in-shaping'],
     },
     why: 'A word is measured with the space after it (WebKit TextUtil.cpp:76-77, webkit-lines H19), and a line end at a space is not reshaped (Blink NeedsAccurateEndPosition, blink-lines H6: Arial (A, space) kerning −0.8828125). Relevant: a last glyph that kerns with a space, how many spaces, and a font with such a pair.',
@@ -119,7 +119,7 @@ export const LINE_FAMILIES: readonly RuleFamily[] = [
     name: 'tabs',
     rules: {
       blink: ['blink/tabs/tab-stops', 'blink/tabs/half-space-minimum', 'blink/tabs/tab-size-zero', 'blink/lines/tab-item', 'blink/content/tab-run-control-item', 'blink/gap/tab-stops'],
-      webkit: ['webkit/measure/tab-stop-from-pen-position', 'webkit/measure/tab-half-space-jump', 'webkit/measure/tab-size-zero', 'webkit/measure/letter-spacing-after-tab', 'webkit/measure/word-spacing-in-js', 'webkit/content/word-separator-tab-boundary', 'webkit/content/preserved-tab-defers-width', 'webkit/gap/tab-stops'],
+      webkit: ['webkit/measure/tab-stop-from-pen-position', 'webkit/measure/tab-half-space-jump', 'webkit/measure/tab-size-zero', 'webkit/measure/letter-spacing-after-tab', 'webkit/measure/word-spacing-in-context', 'webkit/content/word-separator-tab-boundary', 'webkit/content/preserved-tab-defers-width', 'webkit/gap/tab-stops'],
       gecko: ['gecko/lines/tab-stops', 'gecko/measure/tab-width-containing-block', 'gecko/measure/min-tab-advance-and-hyphen-run', 'gecko/lines/tabs-zero-when-width-not-positive'],
     },
     why: 'Tab stops count from the line start in units of the space advance times tab-size, with a jump when the remainder is below half a space (webkit-lines H15; Blink simple_font_data.cc:225-240, blink-followups F4 with Helvetica Neue trak; gecko-lines H15). Relevant: tab-size including 0, the pen position before the tab, and fonts with and without trak.',

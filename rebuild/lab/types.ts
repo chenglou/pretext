@@ -213,6 +213,11 @@ export type LayoutPrediction = { paragraph: LibraryParagraph; layout: ParagraphL
 type WithoutMeasure<Layout> = Layout extends unknown ? Omit<Layout, 'measure'> : never
 export type RecordedLayout = WithoutMeasure<ParagraphLayout>
 
+// Per line with a line box, in the painter's order, what painting the line alone can't reproduce: the library's
+// painterLimits (src/paint.ts PainterLimit), a condition on the layout read from engine source. It says a painted line can
+// differ, not that it does.
+export type PainterLimits = Array<Array<{ limit: string; detail: string }>>
+
 // What rebuild/src computed for the case, and what lab/observe/<engine>.ts expects the browser to report for it, measured
 // live in the page (DESIGN.md §9).
 export type EnginePrediction = {
@@ -220,6 +225,8 @@ export type EnginePrediction = {
   measure: { contexts: number; calls: number; memoHits: number }
   // An error when the observation port threw: a lab failure, not a prediction.
   observation: ExpectedObservation | { error: string }
+  // Absent in rows from before 2026-09-18, and where the predictor exports no limits().
+  painterLimits?: PainterLimits | { error: string }
 }
 
 export type PainterLine = {
@@ -255,6 +262,6 @@ export type LabRow = {
   prediction: EnginePrediction | LinesPrediction | { error: string }
   // null when paint returned null or there was no prediction.
   painter: PainterObservation | { error: string } | null
-  // observeMs: the observation port. Absent in rows from before the page ran it.
-  timings: { nativeMs: number; predictMs: number; observeMs?: number; paintMs: number; painterObserveMs: number }
+  // observeMs: the observation port; limitsMs: the painter limits. Absent in rows from before the page ran them.
+  timings: { nativeMs: number; predictMs: number; observeMs?: number; limitsMs?: number; paintMs: number; painterObserveMs: number }
 }

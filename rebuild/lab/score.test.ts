@@ -8,7 +8,7 @@ import {
 } from './row-fixtures.ts'
 import type { Gap, GapName } from '../src/model.ts'
 import { environmentKey, indexRows, lineLocalGaps, lineRangeDiagnostics, nativeDifference, nativeLines, nativeView, readRowAt, residualMembership, RESIDUAL_CLASSES, scoreRow, slotProtocol, withNativeRow, type CaseScore } from './score.ts'
-import type { BrowserKind, LabRow, NativeObservation, PainterLine, Rect, RecordedLayout } from './types.ts'
+import type { BrowserKind, LabRow, NativeObservation, PainterLimits, PainterLine, Rect, RecordedLayout } from './types.ts'
 
 const f32 = Math.fround
 
@@ -352,7 +352,7 @@ describe('covered failures', () => {
   test('lineCount and breaks: a pure break decision is covered at the decision text', () => {
     const at = failing({ ...abcdOneLine, gaps: [gap('dictionary-breaks-stand-in', { start: 4, end: 4 })] }).lineGaps.lineCount!
     expect(at).toEqual({
-      lines: [{ nativeLine: 0, engineLine: 0, gaps: [{ gap: 'dictionary-breaks-stand-in', scope: 'paragraph-range', touch: 'decision' }], evidence: { units: 1, nodeUnits: 0, runs: 1, deciding: 0, touched: 0, first: { start: 2, end: 3 }, firstText: ' ', decision: { start: 3, end: 5 }, decisionText: 'cd', pureDecision: true } }],
+      lines: [{ nativeLine: 0, engineLine: 0, gaps: [{ gap: 'dictionary-breaks-stand-in', scope: 'paragraph-range', touch: 'decision' }], fires: ['dictionary-breaks-stand-in'], evidence: { units: 1, nodeUnits: 0, runs: 1, deciding: 0, touched: 0, first: { start: 2, end: 3 }, firstText: ' ', decision: { start: 3, end: 5 }, decisionText: 'cd', pureDecision: true } }],
       covered: true, paragraphGaps: [],
     })
     expect(failing({ ...abcdOneLine, gaps: [gap('control-character-width', { start: 4, end: 5 })] }).lineGaps.breaks!.covered).toBe(true)
@@ -503,7 +503,7 @@ describe('residual classes', () => {
     const scored = Bun.spawnSync(['bun', join(import.meta.dir, 'score.ts'), `--rows=${path}`, `--out=${join(dir, 'summary.json')}`, `--per-case=${join(dir, 'per-case.ndjson')}`])
     expect(scored.exitCode).toBe(0)
     const summary = JSON.parse(readFileSync(join(dir, 'summary.json'), 'utf8')) as { scorer: number; browsers: { firefox: { lineLocal: Record<string, unknown> } } }
-    expect(summary.scorer).toBe(5)
+    expect(summary.scorer).toBe(6)
     expect(summary.browsers.firefox.lineLocal['predictionRows']).toEqual({ failing: 4, withoutCoveredExplanation: 3, residualProbed: 1, residualSignatureOnly: 1, open: 1 })
     expect(summary.browsers.firefox.lineLocal['residual']).toEqual({ 'gecko/one-shaping-unit-one-app-unit': { probed: 1, signatureOnly: 1, coveredProbed: 0, coveredSignatureOnly: 0 } })
     expect(summary.browsers.firefox.lineLocal['withoutLineGap']).toEqual({ lineCount: 0, breaks: 0, widths: 3, painter: 3 })
@@ -577,6 +577,173 @@ describe('widths: the engine width against the union of the line\'s node rects, 
     expect(scoreRow(row('webkit-host', p, observed, webkit([[0, 4, right]]), expected)).metrics.widths).toEqual({ status: 'pass' })
     const stepped = f32(right + 2 ** -17)
     expect(scoreRow(row('webkit-host', p, observed, webkit([[0, 4, stepped]]), expected)).metrics.widths.status).toBe('unobserved')
+  })
+})
+
+// Scorer 6: the three observation consequences that moved or made up the scorer's evidence in ceiling round 3's rows.
+describe('attribution follows the engines\' range geometry', () => {
+  const gap = (name: GapName, at?: { start: number; end: number }): Gap => ({ gap: name, run: 0, detail: 'test', ...(at === undefined ? {} : { at }) })
+
+  test('Blink: the hyphen rect a letter after a chosen soft hyphen reports doesn\'t place the letter on the hyphen\'s line', () => {
+    // `a`, a soft hyphen, `b`. Natively the line breaks at the soft hyphen: the hyphen is 5px wide at x 8, and `b` reports
+    // that rect on line 0 beside its own on line 1 (layout_text.cc:616-621). The prediction keeps everything on one line,
+    // because natively `a` is wider than Canvas says (as U+FFFC is in `c-23e11e5c3a96497d`).
+    const p = paragraph([['a\u00adb', 'text']])
+    const observed = native(p, [[at(0, 8)], [at(8, 0), at(8, 5)], [at(8, 5), at(0, 7, 1)]], [[at(0, 8), at(8, 5), at(0, 7, 1)]])
+    const expected = observation(p, [[expect32(0, 0, 3)], [expect32(0, 3, 0)], [expect32(0, 3, 7)]], [[expect32(0, 0, 10)]])
+    const layout = blink([[0, 3, 1280]])
+    layout.gaps.push(gap('font-fallback', { start: 0, end: 1 }))
+    const score = scoreRow(row('chrome', p, observed, layout, expected))
+    expect(score.metrics.lineCount).toEqual({ status: 'fail', reason: 'line count differs', detail: 'native 2, predicted 1' })
+    // Line 0 is the line whose end the two sides disagree about, and what differs on it before `b` is `a`.
+    expect(score.lineGaps.lineCount).toMatchObject({
+      covered: true,
+      lines: [{ nativeLine: 0, engineLine: 0, gaps: [{ gap: 'font-fallback', scope: 'paragraph-range', touch: 'unit' }], evidence: { decision: { start: 2, end: 3 }, decisionText: 'b' } }],
+    })
+    // A rect that isn't the hyphen's still places the letter: `b` split across the two lines for another reason.
+    const split = native(p, [[at(0, 8)], [at(8, 0), at(8, 5)], [at(8, 4), at(0, 7, 1)]], [[at(0, 8), at(8, 5), at(0, 7, 1)]])
+    expect(scoreRow(row('chrome', p, split, layout, expected)).lineGaps.lineCount!.lines[0]).toMatchObject({ nativeLine: 1, engineLine: null })
+  })
+
+  test('WebKit: a zero-width rect on the line above a character\'s own rect is a box-end report and places nothing', () => {
+    // `abcd`: both sides break after `ab`. The prediction ends line 1 after `c`, and its boxes make `c` report a caret at
+    // the end of line 0 too (RenderText.cpp:373-380); natively `cd` is one box, so `c` reports no such rect
+    // (`c-4bb3746469073e4d`). What the two sides disagree about is where line 1 ends.
+    const p = paragraph([['abcd', 'text']])
+    const observed = native(p, [[at(0, 8)], [at(8, 8)], [at(0, 8, 1)], [at(8, 8, 1)]], [[at(0, 16), at(0, 16, 1)]])
+    const expected = observation(p, [[expect32(0, 0, 8)], [expect32(0, 8, 8)], [expect32(0, 16, 0), expect32(1, 0, 8)], [expect32(2, 0, 8)]], [[expect32(0, 0, 16), expect32(1, 0, 8), expect32(2, 0, 8)]])
+    const layout = webkit([[0, 2, 16], [2, 3, 8], [3, 4, 8]])
+    layout.lines[1]!.gaps.push(gap('page-history', { start: 3, end: 4 }))
+    const score = scoreRow(row('webkit-host', p, observed, layout, expected))
+    expect(score.metrics.lineCount.status).toBe('fail')
+    expect(score.lineGaps.lineCount).toMatchObject({ covered: true, lines: [{ nativeLine: 1, engineLine: 1, gaps: [{ gap: 'page-history', scope: 'line', touch: 'decision' }], evidence: { decision: { start: 3, end: 4 } } }] })
+    // The same rect with a width is text on line 0, and line 0 is the first line that differs.
+    const wide = observation(p, [[expect32(0, 0, 8)], [expect32(0, 8, 8)], [expect32(0, 16, 1), expect32(1, 0, 8)], [expect32(2, 0, 8)]], expected.nodes)
+    expect(scoreRow(row('webkit-host', p, observed, layout, wide)).lineGaps.lineCount!.lines[0]!.nativeLine).toBe(0)
+  })
+
+  // Two WebKit nodes on one line, with the text boxes behind them in the layout.
+  const twoBoxes = (boxes: Array<{ x: number; width: number; shapedAcrossBoxes?: boolean }>, contentWidth: number): RecordedLayout => {
+    const layout = webkit([[0, 6, contentWidth]])
+    if (layout.engine !== 'webkit') throw new Error('unreachable')
+    layout.lines[0]!.geometry.boxes = boxes.map((box, run) => ({
+      kind: 'text', run, start: 0, end: 3, level: 0, isWordSeparator: false, x: box.x, width: box.width, hyphen: null, expansion: 0,
+      expansionBehavior: { left: 'forbid', right: 'forbid' }, shapedAcrossBoxes: box.shapedAcrossBoxes === true,
+    }))
+    return layout
+  }
+  // FloatQuad::boundingBox: what a box of engine width w reports at x.
+  const reported = (x: number, w: number): number => f32(f32(x + w) - x)
+  const flatPoints = (): Rect[][] => [[at(0, 1)], [at(1, 1)], [at(2, 1)], [at(3, 1)], [at(4, 1)], [at(5, 1)]]
+  const flatExpected = (): ReturnType<typeof expect32>[][] => [[expect32(0, 0, 1)], [expect32(0, 1, 1)], [expect32(0, 2, 1)], [expect32(0, 3, 1)], [expect32(0, 4, 1)], [expect32(0, 5, 1)]]
+
+  test('WebKit: a box whose engine width reports as the native width at its moved x is not a differing unit', () => {
+    // `c-653ac96abf5487ff`: the first node is 2.7px wider natively, under a gap; the second has the predicted engine width,
+    // 60.336002349853516px, which reports as 60.33599853515625px at the predicted x and 60.33601379394531px at the native one.
+    const p = paragraph([['abc', 'span'], ['def', 'span']])
+    const w0 = f32(220.44732666015625)
+    const w0Native = f32(223.14732360839844)
+    const w1 = f32(60.336002349853516)
+    expect([reported(w0, w1), reported(w0Native, w1)]).toEqual([60.33599853515625, 60.33601379394531])
+    const layout = twoBoxes([{ x: 0, width: w0 }, { x: w0, width: w1 }], f32(w0 + w1))
+    layout.lines[0]!.gaps.push(gap('canvas-language', { start: 0, end: 3 }))
+    const observed = native(p, flatPoints(), [[at(0, w0Native)], [at(w0Native, reported(w0Native, w1))]])
+    const expected = observation(p, flatExpected(), [[expect32(0, 0, w0)], [expect32(0, w0, reported(w0, w1))]])
+    const score = scoreRow(row('webkit-host', p, observed, layout, expected))
+    expect(score.metrics.widths.status).toBe('fail')
+    expect(score.lineGaps.widths).toMatchObject({ covered: true, lines: [{ gaps: [{ gap: 'canvas-language', touch: 'unit' }], evidence: { units: 1, nodeUnits: 1, first: { start: 0, end: 3 } } }] })
+    // A second node that is wider than its engine width reports at the native x is a differing unit of its own.
+    const wider = native(p, flatPoints(), [[at(0, w0Native)], [at(w0Native, f32(reported(w0Native, w1) + 0.5))]])
+    expect(scoreRow(row('webkit-host', p, wider, layout, expected)).lineGaps.widths).toMatchObject({ lines: [{ evidence: { units: 2, nodeUnits: 2 } }] })
+  })
+
+  test('WebKit: where only the line\'s sum differs, the units are the addends the port computed from a stand-in', () => {
+    // `c-9a66d090891a825d`: every box reports its predicted engine width at its native x, one float32 step to the right.
+    const p = paragraph([['abc', 'span'], ['def', 'span']])
+    const step = 1.52587890625e-5
+    const x0 = f32(67.93304443359375)
+    const w0 = f32(149.52790832519531)
+    const w1 = f32(74.5390625)
+    const x1 = f32(x0 + w0)
+    const x0Native = f32(x0 + step)
+    const x1Native = f32(x0Native + w0)
+    const limitedWidth = (value: number) => ({ state: 'limited' as const, gap: 'rtl-shaping-across-inline-boxes' as const, value })
+    const layout = twoBoxes([{ x: x0, width: w0, shapedAcrossBoxes: true }, { x: x1, width: w1 }], f32(f32(x1 + w1) - x0))
+    const observed = native(p, flatPoints(), [[at(x0Native, reported(x0Native, w0))], [at(x1Native, reported(x1Native, w1))]])
+    const expected = observation(p, flatExpected(), [[expect32(0, limitedWidth(x0), limitedWidth(reported(x0, w0)))], [expect32(0, x1, reported(x1, w1))]])
+    // The premise: the stand-in node reports the same width on both sides, the other node a step more, and the width fails.
+    expect(reported(x0Native, w0)).toBe(reported(x0, w0))
+    expect(reported(x1Native, w1)).not.toBe(reported(x1, w1))
+    const uncovered = scoreRow(row('webkit-host', p, observed, layout, expected))
+    expect(uncovered.metrics.widths.status).toBe('fail')
+    expect(uncovered.lineGaps.widths).toMatchObject({ covered: false, lines: [{ evidence: { units: 1, nodeUnits: 1, first: { start: 0, end: 3 } } }] })
+    layout.lines[0]!.gaps.push(gap('rtl-shaping-across-inline-boxes', { start: 0, end: 3 }))
+    expect(scoreRow(row('webkit-host', p, observed, layout, expected)).lineGaps.widths).toMatchObject({ covered: true, lines: [{ gaps: [{ gap: 'rtl-shaping-across-inline-boxes', touch: 'unit' }] }] })
+    // Without a stand-in addend the line has no unit, and a line without units is never covered.
+    const exact = observation(p, flatExpected(), [[expect32(0, x0, reported(x0, w0))], [expect32(0, x1, reported(x1, w1))]])
+    expect(scoreRow(row('webkit-host', p, observed, layout, exact)).lineGaps.widths).toMatchObject({ covered: false, lines: [{ gaps: [], evidence: { units: 0 } }] })
+  })
+})
+
+describe('painter limits and gap firing', () => {
+  const gap = (name: GapName, at?: { start: number; end: number }): Gap => ({ gap: name, run: 0, detail: 'test', ...(at === undefined ? {} : { at }) })
+  // `abcdef` on two Firefox lines; the prediction is right, and line 1 is painted 20 au narrow.
+  const paintedNarrow = (limits: PainterLimits | { error: string } | undefined): LabRow => {
+    const { row: value } = unitRow({ browser: 'firefox', runs: ['abcdef'], lines: [[0, 3], [3, 6]], native: [600, 600, 600, 600, 600, 600], expected: [600, 600, 600, 600, 600, 600] }, 'expected')
+    const narrow = encodeEdges(0, 1780)
+    ;(value.painter as { lines: PainterLine[] }).lines[1]!.rects = [at(narrow.x, narrow.width)]
+    if ('layout' in value.prediction && limits !== undefined) value.prediction.painterLimits = limits
+    return value
+  }
+
+  test('a painter limit on every failing painted line explains a painter failure; rows without limits keep the gap rule', () => {
+    const without = scoreRow(paintedNarrow(undefined))
+    expect(without.metrics.painter.status).toBe('fail')
+    expect(without.lineGaps.painter).toMatchObject({ covered: false, lines: [{ nativeLine: 1, engineLine: 1, gaps: [] }] })
+    const limited = scoreRow(paintedNarrow([[], [{ limit: 'edge-inside-shaped-text', detail: 'test' }, { limit: 'edge-inside-shaped-text', detail: 'again' }]])).lineGaps.painter!
+    expect(limited.covered).toBe(true)
+    expect(limited.lines[0]!.limits).toEqual(['edge-inside-shaped-text'])
+    // A limit on another line explains nothing, and neither does a limits record of another length or an error.
+    expect(scoreRow(paintedNarrow([[{ limit: 'carried-width', detail: 'test' }], []])).lineGaps.painter!.covered).toBe(false)
+    expect(scoreRow(paintedNarrow([[{ limit: 'carried-width', detail: 'test' }]])).lineGaps.painter!.covered).toBe(false)
+    expect(scoreRow(paintedNarrow({ error: 'threw' })).lineGaps.painter!.covered).toBe(false)
+  })
+
+  test('a case records where its gaps fire: a line\'s own gaps, and ranged paragraph gaps that meet the line', () => {
+    const { row: value, layout } = unitRow({ browser: 'firefox', runs: ['abcdef'], lines: [[0, 3], [3, 6]], native: [600, 600, 600, 600, 600, 605], expected: [600, 600, 600, 600, 600, 600] })
+    layout.lines[0]!.gaps.push(gap('in-word-prefix', { start: 3, end: 3 }))
+    layout.gaps.push(gap('script-context', { start: 4, end: 5 }), gap('engine-build'))
+    const score = scoreRow(value)
+    expect(score.firing).toEqual({ lines: 2, gaps: { 'in-word-prefix': 1, 'script-context': 1 } })
+    expect(score.lineGaps.widths!.lines[0]!.fires).toEqual(['script-context'])
+  })
+
+  test('the summary counts firing over prediction failures alone, painter-only failures apart', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'lab-firing-'))
+    const withGap = (value: { row: LabRow; layout: RecordedLayout }, id: string): LabRow => {
+      value.layout.lines[1]!.gaps.push(gap('in-word-prefix', { start: 3, end: 6 }))
+      return { ...value.row, id, case: { ...value.row.case, id } }
+    }
+    const widths = [600, 600, 600, 600, 600, 600]
+    const passing = withGap(unitRow({ browser: 'firefox', runs: ['abcdef'], lines: [[0, 3], [3, 6]], native: widths, expected: widths }, 'expected'), 'c-pass')
+    const failing = withGap(unitRow({ browser: 'firefox', runs: ['abcdef'], lines: [[0, 3], [3, 6]], native: [600, 600, 600, 600, 600, 640], expected: widths }, 'expected'), 'c-fail')
+    const painterOnly = withGap(unitRow({ browser: 'firefox', runs: ['abcdef'], lines: [[0, 3], [3, 6]], native: widths, expected: widths }, 'expected'), 'c-painter')
+    const narrow = encodeEdges(0, 1780)
+    ;(painterOnly.painter as { lines: PainterLine[] }).lines[1]!.rects = [at(narrow.x, narrow.width)]
+    const path = join(dir, 'rows.ndjson')
+    writeFileSync(path, [passing, failing, painterOnly].map(value => JSON.stringify(value)).join('\n') + '\n')
+    const scored = Bun.spawnSync(['bun', join(import.meta.dir, 'score.ts'), `--rows=${path}`, `--out=${join(dir, 'summary.json')}`, `--per-case=${join(dir, 'per-case.ndjson')}`])
+    expect(scored.exitCode).toBe(0)
+    const summary = JSON.parse(readFileSync(join(dir, 'summary.json'), 'utf8')) as { browsers: { firefox: { lineLocal: { firing: unknown; painter: unknown } } } }
+    // Two cases pass the prediction (4 line boxes, the gap on 2); one fails widths on a line the gap fires on; the
+    // painter-only failure's line is counted apart, so it doesn't weaken the gap's lift (1 of 1 against 2 of 4).
+    expect(summary.browsers.firefox.lineLocal.firing).toEqual({
+      passingCases: 2, passingLines: 4, failingLines: 1, painterOnlyFailingLines: 1,
+      byGap: { 'in-word-prefix': { passingCases: 2, passingLines: 2, failingLines: 1, painterOnlyFailingLines: 1 } },
+    })
+    expect(summary.browsers.firefox.lineLocal.painter).toEqual({ failures: 1, coveredByGap: 1, coveredWithLimits: 0, withoutExplanation: 0, byLimit: {} })
+    const perCase = readFileSync(join(dir, 'per-case.ndjson'), 'utf8').trim().split('\n').map(line => JSON.parse(line) as { id: string; firing?: unknown })
+    expect(perCase.find(value => value.id === 'c-pass')!.firing).toEqual({ lines: 2, gaps: { 'in-word-prefix': 1 } })
   })
 })
 
@@ -715,10 +882,10 @@ describe('two runs of one case', () => {
 
   test('environments key on the recorded build and the given process languages', () => {
     const base = row('chrome', abcd, abcdNative, abcdLayout, abcdExpected)
-    expect(environmentKey(base)).toBe('chrome: build not recorded, test; DPR 2, scale 1; scorer 5')
+    expect(environmentKey(base)).toBe('chrome: build not recorded, test; DPR 2, scale 1; scorer 6')
     const built = { ...base, build: { app: 'Google Chrome', appVersion: '153.0.8010.48', engine: '153.0.8010.48', os: '26A428' } }
-    expect(environmentKey(built)).toBe('chrome: Google Chrome 153.0.8010.48, engine build 153.0.8010.48, macOS 26A428; DPR 2, scale 1; scorer 5')
+    expect(environmentKey(built)).toBe('chrome: Google Chrome 153.0.8010.48, engine build 153.0.8010.48, macOS 26A428; DPR 2, scale 1; scorer 6')
     const languages = { launch: null, os: { appleLanguages: null, appleLocale: null, launchdEnvironment: {} }, given: { engine: 'blink' as const, uiLanguage: 'zh-CN' }, derivation: [] }
-    expect(environmentKey({ ...built, languages })).toBe('chrome: Google Chrome 153.0.8010.48, engine build 153.0.8010.48, macOS 26A428; DPR 2, scale 1; uiLanguage zh-CN; scorer 5')
+    expect(environmentKey({ ...built, languages })).toBe('chrome: Google Chrome 153.0.8010.48, engine build 153.0.8010.48, macOS 26A428; DPR 2, scale 1; uiLanguage zh-CN; scorer 6')
   })
 })

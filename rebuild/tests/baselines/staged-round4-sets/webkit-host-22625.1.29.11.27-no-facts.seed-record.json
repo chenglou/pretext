@@ -1,0 +1,23 @@
+{
+  "staged": "rebuild/tests/baselines/staged-round4-sets/webkit-host-22625.1.29.11.27-no-facts.json",
+  "against": null,
+  "counts": {
+    "cases": 62395,
+    "passPairs": {
+      "lineCount": 62012,
+      "breaks": 61884,
+      "widths": 59319,
+      "painter": 53626
+    },
+    "historyDependentCases": 268,
+    "withoutPassesCases": 75,
+    "unstablePairs": 1,
+    "protocolCases": 0
+  },
+  "lost": [],
+  "leftThroughHistory": [],
+  "leftThroughProtocol": [],
+  "gained": [],
+  "casesOnlyBefore": 0,
+  "casesOnlyAfter": 0
+}

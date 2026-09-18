@@ -1,7 +1,9 @@
 // No expected value, threshold width or verdict comes from rebuild/src (research/TEST-ARCHITECTURE.md §0 rule 1). The
 // test tooling, the lab's observer, scorer, gate and case generators, the observation ports and the probes may import from
 // rebuild/src only the shared contract: types from src/model.ts and src/env.ts, and data constants from them that aren't
-// functions (UNKNOWN_FONT_FACTS, PINNED_BUILDS). The prediction adapter lab/predictor.ts is the one exemption.
+// functions (UNKNOWN_FONT_FACTS, PINNED_BUILDS). The prediction adapter lab/predictor-core.ts is the one exemption: the lab's
+// predictors (lab/predictor.ts, lab/baselines/no-facts-predictor.ts) are made from it and import nothing else from rebuild/src
+// but contract constants.
 import { describe, expect, test } from 'bun:test'
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { dirname, join, relative, resolve } from 'node:path'
@@ -10,7 +12,7 @@ const REBUILD = resolve(import.meta.dir, '..')
 const SRC = join(REBUILD, 'src')
 const CONTRACT = new Set([join(SRC, 'model.ts'), join(SRC, 'env.ts')])
 const CHECKED_DIRS = ['tests', 'lab', 'probes']
-const EXEMPT = new Set([join(REBUILD, 'lab/predictor.ts')])
+const EXEMPT = new Set([join(REBUILD, 'lab/predictor-core.ts')])
 
 function files(dir: string): string[] {
   const out: string[] = []

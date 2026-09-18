@@ -5,23 +5,30 @@
 // - rule families, blocking: the pairs (case id, metric) of the derived family cases that passed in both seeding runs,
 //   forward and reverse (lab/gate.ts seed and check rules, --complete);
 // - facts, blocking: the build's facts file against the one the baseline recorded; a verdict flip or a missing fact fails;
-// - coverage, blocking: a rule that had an observed family at seeding and has none now fails;
+// - coverage, blocking: a rule that had an observed family at seeding and has none now fails, unless it was removed and
+//   its replacements have one (coverage.ts lostObservedFamilies);
 // - measurement corpus, report only: main-derived runs (suite/, obligations/) against a lab G0 baseline. Their losses are
 //   listed and never fail the gate, until each obligation is triaged (CHARTER.md tentpole 5).
 //
-//   bun rebuild/tests/gate.ts seed --derived=<derivation dir> --baseline=<file> [--facts=<file>] [--coverage=<file>] [--note=<text>]
+//   bun rebuild/tests/gate.ts seed --staging=<dir> --derived=<derivation dir> --baseline=<file> [--facts=<file>] [--coverage=<file>] [--note=<text>]
 //   bun rebuild/tests/gate.ts check --derived=<derivation dir> --baseline=<file> [--facts=<file>] [--coverage=<file>]
 //     [--corpus-baseline=<lab gate file> --corpus-runs=<per-case file or dir>[,...]] [--out=<report.json>]
+//
+// `seed` never writes the baseline it names, like lab/gate.ts --seed (lab README, "Seeds go to a staging folder"):
+// `--baseline` is the adopted seed, which stays as it is; the new seed goes to `<staging>/<the baseline's file name>` with its
+// record next to it (`<name>.seed-record.json`: the family pairs the new seed loses against the adopted one with their
+// covering gaps, the pairs that leave through new history dependence or as protocol rows, the pairs gained). Whoever is
+// allowed to adopts it by copying it over the baseline, after review.
 //
 // Exit 2 when the runs come from another environment than the baseline (a new browser build: derive the families again,
 // seed a new baseline for the new key, and attribute the pairs the old key had), when the derived cases changed, or when a
 // run wasn't scored against the other order. Exit 1 on a blocking loss.
 import { createHash } from 'node:crypto'
-import { existsSync, readFileSync, writeFileSync } from 'node:fs'
-import { join, relative, resolve } from 'node:path'
-import { checkRuns, parseBaseline, readRun, runPaths, runProblems, seedBaseline, type Baseline, type GateReport } from '../lab/gate.ts'
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { dirname, join, relative, resolve } from 'node:path'
+import { checkRuns, parseBaseline, readRun, runPaths, runProblems, seedBaseline, seedRecord, stagedPath, type Baseline, type GateReport } from '../lab/gate.ts'
 import type { BrowserBuild, BrowserKind } from '../lab/types.ts'
-import type { Coverage } from './coverage.ts'
+import { lostObservedFamilies, type Coverage } from './coverage.ts'
 import { engineOfBrowser, readNdjson, type FamilyStats } from './derive.ts'
 import { diffFacts, type FactRecord, type FactsDiff } from './facts.ts'
 
@@ -109,9 +116,19 @@ function main(): number {
         facts: factsPath === null ? null : { file: relative(REPO, factsPath), sha256: sha256File(factsPath), facts: readNdjson<unknown>(factsPath).length },
         coverage: coverage === null ? null : { rulesWithObservedFamily: coverage.rulesWithObservedFamily.filter(id => id.startsWith(`${engine}/`) || id.startsWith(`lab/observe/${engine}/`)) },
       }
-      writeFileSync(baselinePath, `${JSON.stringify(baseline, null, 2)}\n`)
+      // Staged, never written over the adopted baseline; the record says what the new seed loses against it.
+      const staged = stagedPath(baselinePath, values.get('staging'))
+      const adopted = existsSync(baselinePath) ? JSON.parse(readFileSync(baselinePath, 'utf8')) as TestsBaseline : null
+      if (adopted !== null && adopted.format !== TESTS_GATE_FORMAT) throw new Error(`${baselinePath}: format ${JSON.stringify(adopted.format)}`)
+      const before = adopted === null ? null : parseBaseline(JSON.stringify(adopted.families.baseline), baselinePath)
+      const record = seedRecord(before, baseline.families.baseline, runs, { staged: relative(REPO, staged), against: relative(REPO, baselinePath) })
+      mkdirSync(dirname(staged), { recursive: true })
+      writeFileSync(staged, `${JSON.stringify(baseline, null, 2)}\n`)
+      const recordPath = `${staged.replace(/\.json$/, '')}.seed-record.json`
+      writeFileSync(recordPath, `${JSON.stringify({ ...record, casesChanged: adopted !== null && adopted.families.casesSha256 !== baseline.families.casesSha256 }, null, 2)}\n`)
       const pairs = Object.values(baseline.families.baseline.counts.passPairs).reduce((sum, n) => sum + n, 0)
-      console.log(`seeded ${relative(REPO, baselinePath)}: ${baseline.families.baseline.counts.cases} family cases, ${pairs} pass pairs ${JSON.stringify(baseline.families.baseline.counts.passPairs)}, ${baseline.families.baseline.counts.historyDependentCases} history-dependent, ${baseline.families.baseline.counts.unstablePairs} unstable pairs; environments ${baseline.families.baseline.environments.join(' | ')}`)
+      if (before !== null) console.log(`against ${relative(REPO, baselinePath)}: ${record.lost.length} pairs lost (${record.lost.filter(value => !value.covered).length} without a covered explanation), ${record.leftThroughHistory.length} leave through new history dependence, ${record.leftThroughProtocol.length} leave as protocol rows, ${record.gained.length} gained; record ${relative(REPO, recordPath)}`)
+      console.log(`staged ${relative(REPO, staged)} (not adopted; ${relative(REPO, baselinePath)} is unchanged): ${baseline.families.baseline.counts.cases} family cases, ${pairs} pass pairs ${JSON.stringify(baseline.families.baseline.counts.passPairs)}, ${baseline.families.baseline.counts.historyDependentCases} history-dependent, ${baseline.families.baseline.counts.unstablePairs} unstable pairs; environments ${baseline.families.baseline.environments.join(' | ')}`)
       return 0
     }
     case 'check': {
@@ -131,7 +148,7 @@ function main(): number {
         if (!existsSync(before)) throw new Error(`${baseline.facts.file}: the baseline's facts file is gone`)
         facts = diffFacts(readNdjson<FactRecord>(before), readNdjson<FactRecord>(factsPath), null)
       }
-      const coverageLayer = baseline.coverage === null || coverage === null ? null : { lost: baseline.coverage.rulesWithObservedFamily.filter(id => !coverage.rulesWithObservedFamily.includes(id)) }
+      const coverageLayer = baseline.coverage === null || coverage === null ? null : { lost: lostObservedFamilies(baseline.coverage.rulesWithObservedFamily, coverage) }
       let corpus: TestsReport['corpus'] = null
       if (values.get('corpus-baseline') !== undefined && corpusRuns.length > 0) {
         const corpusBaseline = parseBaseline(readFileSync(need('corpus-baseline'), 'utf8'), need('corpus-baseline'))
@@ -156,7 +173,7 @@ function main(): number {
       return report.ok ? 0 : 1
     }
     default:
-      throw new Error('Usage: bun rebuild/tests/gate.ts seed|check --derived=<dir> --baseline=<file> ...')
+      throw new Error('Usage: bun rebuild/tests/gate.ts seed --staging=<dir> --derived=<dir> --baseline=<file> ... | check --derived=<dir> --baseline=<file> ...')
   }
 }
 

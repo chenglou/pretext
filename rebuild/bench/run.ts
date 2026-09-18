@@ -7,7 +7,7 @@ import { execFileSync } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import { mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { join, relative, resolve } from 'node:path'
-import { readBuild, userAgentMatches } from '../lab/browser-build.ts'
+import { CHROME_PIN_ARGS, FIREFOX_PIN_PREFS, labApp, readBuild, userAgentMatches } from '../lab/browser-build.ts'
 import { buildContexts, SCENARIOS, SCRIPTS, SIZES, type ContextSpec } from './cases.ts'
 import type { BrowserKind, ContextDonePost, ContextPlan, RowPost, Scenario, Script, Settings, SizeClass } from './protocol.ts'
 import { formatMs, renderMarkdown, type BenchReport, type ContextReport, type LockState, type MachineSnapshot } from './report.ts'
@@ -16,8 +16,11 @@ const BENCH_DIR = import.meta.dir
 const REPO = resolve(BENCH_DIR, '../..')
 const PROFILES_DIR = join(REPO, '.artifacts/profiles')
 const LOCK_OWNER = '/private/tmp/pretext-eng-20260912/browser-lock.owner'
-const CHROME_APP = '/Applications/Google Chrome.app'
-const FIREFOX_APP = '/Applications/Firefox.app'
+// The bench launches the apps the lab launches (lab/browser-build.ts LAB_APPS): the pinned copies of Chrome and Firefox,
+// whose build readBuild reads. The installed browsers update themselves, so launching them would run one build under
+// another build's name (Chrome's user agent names the major version only).
+const CHROME_APP = (): string => labApp('chrome')!.path
+const FIREFOX_APP = (): string => labApp('firefox')!.path
 const WEBKIT_HOST = join(REPO, '.artifacts/webkit-host/webkit-host')
 
 function fail(text: string): never {
@@ -378,10 +381,12 @@ async function launchApp(app: string, executable: string, marker: string, profil
 async function launchChrome(url: string): Promise<Session> {
   const profile = join(PROFILES_DIR, `bench-chrome-${runId}`)
   mkdirSync(profile, { recursive: true })
-  const common = [`--user-data-dir=${profile}`, '--no-first-run', '--no-default-browser-check', '--disable-sync', '--disable-extensions',
+  const app = CHROME_APP()
+  // CHROME_PIN_ARGS keeps the copy out of Chrome's updater (lab README, "Pinned browsers").
+  const common = [`--user-data-dir=${profile}`, ...CHROME_PIN_ARGS, '--no-first-run', '--no-default-browser-check', '--disable-sync', '--disable-extensions',
     '--disable-component-update', '--enable-precise-memory-info', '--window-size=1200,900']
-  if (foreground) return await launchApp(CHROME_APP, `${CHROME_APP}/Contents/MacOS/Google Chrome`, `--user-data-dir=${profile}`, profile, [...common, '--new-window', url])
-  const session = await launchApp(CHROME_APP, `${CHROME_APP}/Contents/MacOS/Google Chrome`, `--user-data-dir=${profile}`, profile, [
+  if (foreground) return await launchApp(app, `${app}/Contents/MacOS/Google Chrome`, `--user-data-dir=${profile}`, profile, [...common, '--new-window', url])
+  const session = await launchApp(app, `${app}/Contents/MacOS/Google Chrome`, `--user-data-dir=${profile}`, profile, [
     ...common, '--disable-background-timer-throttling', '--disable-backgrounding-occluded-windows', '--disable-renderer-backgrounding',
     '--no-startup-window', '--remote-debugging-port=0',
   ])
@@ -440,9 +445,12 @@ function launchFirefox(url: string): Promise<Session> {
     ['startup.homepage_welcome_url.additional', ''], ['datareporting.policy.firstRunURL', ''],
     ['datareporting.policy.dataSubmissionPolicyBypassNotification', true], ['toolkit.telemetry.reportingpolicy.firstRun', false],
     ['browser.sessionstore.resume_from_crash', false], ['dom.timeout.enable_budget_timer_throttling', false], ['dom.max_script_run_time', 0],
+    // Firefox updates the bundle it runs from; these keep the pinned copy at its build.
+    ...FIREFOX_PIN_PREFS,
   ]
   writeFileSync(join(profile, 'user.js'), prefs.map(([name, value]) => `user_pref(${JSON.stringify(name)}, ${JSON.stringify(value)});\n`).join(''))
-  return launchApp(FIREFOX_APP, `${FIREFOX_APP}/Contents/MacOS/firefox`, ` --profile ${profile} `, profile, ['--new-instance', '--profile', profile, url])
+  const app = FIREFOX_APP()
+  return launchApp(app, `${app}/Contents/MacOS/firefox`, ` --profile ${profile} `, profile, ['--new-instance', '--profile', profile, url])
 }
 
 function appleScript(lines: string[]): string {
@@ -571,6 +579,8 @@ try {
     smoke,
     browser,
     build,
+    // The bundle launched, whether it is a pinned copy, and the copy's tree hash (null for webkit-host).
+    app: labApp(browser),
     runId,
     startedAt: startedAt.toISOString(),
     finishedAt: finishedAt.toISOString(),

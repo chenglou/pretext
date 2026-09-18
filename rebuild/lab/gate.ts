@@ -55,7 +55,8 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { statSync } from 'node:fs'
 import { basename, dirname, join, relative, resolve } from 'node:path'
-import { readLines, slotProtocol, type Metric, type MetricName, type Status } from './score.ts'
+import { existingRows, readLines } from './rows.ts'
+import { slotProtocol, type Metric, type MetricName, type Status } from './score.ts'
 import type { BrowserKind, LabRow } from './types.ts'
 
 export const GATE_FORMAT = 'pretext-lab-gate/1'
@@ -642,8 +643,8 @@ export async function protocolRowsOf(baseline: Baseline): Promise<{ rows: number
   for (const seed of baseline.seededFrom) {
     const perCase = resolve(REPO, seed.perCase)
     const browser = perCase.slice(dirname(perCase).length + 1, -PER_CASE.length)
-    const rowsPath = join(dirname(perCase), `${browser}-rows.ndjson`)
-    if (!existsSync(rowsPath)) fail(`${seed.perCase}: no rows file ${relative(REPO, rowsPath)} next to it, so the protocol rule can't run`)
+    const rowsPath = existingRows(join(dirname(perCase), `${browser}-rows.ndjson`))
+    if (rowsPath === null) fail(`${seed.perCase}: no rows file ${browser}-rows.ndjson (plain or .zst) next to it, so the protocol rule can't run`)
     files.push(relative(REPO, rowsPath))
     for await (const line of readLines(rowsPath)) {
       rows++

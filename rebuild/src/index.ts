@@ -27,7 +27,7 @@ export type {
 } from './model.js'
 export { FULL_WIDTH, NO_BOX_EDGE, UNKNOWN_FONT_FACTS } from './model.js'
 export { UnportedFeature } from './engines/engine.js'
-export { paintLines, type PaintableLayout, type PaintedLine } from './paint.js'
+export { paintLines, painterLimits, type PaintableLayout, type PaintedLine, type PainterLimit, type PainterLimitName } from './paint.js'
 
 // A paragraph prepared for one engine, from which lines are laid out one slot at a time (DESIGN.md §2.9). The measurer
 // holds the Canvas contexts, the memo and the call log of preparation and of every line laid out from it.

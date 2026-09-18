@@ -24,7 +24,8 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { makeCase, mergeCases, paragraphText, sortCases } from '../lab/cases/case.ts'
-import { nativeLines, readLines, rowText } from '../lab/score.ts'
+import { existingRows, readLines } from '../lab/rows.ts'
+import { nativeLines, rowText } from '../lab/score.ts'
 import type { BrowserBuild, BrowserKind, Case, InlineNode, InlineStructure, LabRow } from '../lab/types.ts'
 import { FAMILIES } from './families/catalogue.ts'
 import { expandFamily, type Draft, type Engine, type FamilyParagraph } from './families/types.ts'
@@ -158,15 +159,17 @@ export function roundsIn(dir: string): number[] {
 
 function observedComplete(file: RoundFile, browser: BrowserKind): boolean {
   const runPath = join(file.observed, `${browser}-run.json`)
-  if (!existsSync(runPath) || !existsSync(join(file.observed, `${browser}-rows.ndjson`))) return false
+  if (!existsSync(runPath) || existingRows(join(file.observed, `${browser}-rows.ndjson`)) === null) return false
   const run = JSON.parse(readFileSync(runPath, 'utf8')) as { status: string; totals: { selected: number; rows: number } }
   return run.status === 'ok' && run.totals.rows === run.totals.selected
 }
 
 async function loadObservations(file: RoundFile, browser: BrowserKind, meta: ReadonlyMap<string, MetaRecord[]>): Promise<Observation[]> {
   const cache = join(file.observed, 'derived.ndjson')
-  const rows = join(file.observed, `${browser}-rows.ndjson`)
-  if (existsSync(cache) && statSync(cache).mtimeMs >= statSync(rows).mtimeMs) return readNdjson<Observation>(cache)
+  // A round's rows may be compressed by now (compress-rows.sh); compressing them doesn't make the cache stale.
+  const rows = existingRows(join(file.observed, `${browser}-rows.ndjson`))
+  if (rows === null) throw new Error(`${file.observed}: no ${browser}-rows.ndjson, plain or .zst`)
+  if (existsSync(cache) && (rows.endsWith('.zst') || statSync(cache).mtimeMs >= statSync(rows).mtimeMs)) return readNdjson<Observation>(cache)
   const out: Observation[] = []
   for await (const line of readLines(rows)) {
     const row = JSON.parse(line) as LabRow
