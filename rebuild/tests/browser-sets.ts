@@ -36,6 +36,7 @@ import { readBuild } from '../lab/browser-build.ts'
 import { appliesTo, readCaseLines, writeCaseLines } from '../lab/cases/parts.ts'
 import { checkRuns, formatBaseline, parseBaseline, readRun, runProblems, seedBaseline, seedRecord, stagedPath, type Engine } from '../lab/gate.ts'
 import { existingRows } from '../lab/rows.ts'
+import { readKnownTail } from './known-tail.ts'
 import { buildLedger, printTransitions, readLedger, transitionsBetween, writeLedger, METRIC_NAMES, type SetsRun } from './ledger.ts'
 import { CONFIGS, PREDICTORS, REPO, TIER_BROWSERS, partFiles, selectSets, setProtocol, type Config, type TestSet, type TierBrowser } from './sets.ts'
 
@@ -231,7 +232,7 @@ if (ledger.header.bundles.length > 1) {
 }
 if (reference !== null) {
   console.log(`transitions against ${relative(REPO, referenceDir)}${measureFirst ? ' (the usual protocol; this run measured first)' : ''}:`)
-  const report = transitionsBetween(reference, ledger, measureFirst ? ['protocol'] : [])
+  const report = transitionsBetween(reference, ledger, measureFirst ? ['protocol'] : [], readKnownTail().items)
   writeFileSync(join(outDir, 'transitions.json'), `${JSON.stringify(report, null, 2)}\n`)
   printTransitions(report)
   if (report.comparable.length > 0) exit = 2

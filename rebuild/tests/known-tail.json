@@ -1,0 +1,1009 @@
+{
+  "format": "pretext-known-tail/1",
+  "note": "The classes deliberately left open when the correctness line is frozen (ceiling round 4). rebuild/tests/known-tail.ts has the format and the commands; rebuild/lab/README.md \"The known tail\" says how to read and append it. Counts and statuses in notes are of 2026-09-18.",
+  "items": [
+    {
+      "id": "blink/cluster-split-across-spans",
+      "engine": "blink",
+      "kind": "convertible class",
+      "title": "A grapheme cluster split across spans (emoji ZWJ sequences, keycaps, flags) is predicted as the merged cluster",
+      "conditions": [
+        "font-fallback",
+        "glyph-clusters"
+      ],
+      "cases": [
+        {
+          "id": "c-24cbaf244be355e6",
+          "browser": "chrome",
+          "where": "runs"
+        },
+        {
+          "id": "c-9cf41c55d201c362",
+          "browser": "chrome",
+          "where": "runs"
+        },
+        {
+          "id": "c-a9a30d8f3dbfd4bb",
+          "browser": "chrome",
+          "where": "runs"
+        },
+        {
+          "id": "c-18df17ab8ee200fc",
+          "browser": "chrome",
+          "where": "runs"
+        },
+        {
+          "id": "c-23e3483b3b25122f",
+          "browser": "chrome",
+          "where": "runs"
+        },
+        {
+          "id": "c-8862f0d3be757916",
+          "browser": "chrome",
+          "where": "runs"
+        },
+        {
+          "id": "c-a2dd057c72d6223f",
+          "browser": "chrome",
+          "where": "runs"
+        },
+        {
+          "id": "c-e94235cfd4d6fb5f",
+          "browser": "chrome",
+          "where": "runs"
+        },
+        {
+          "id": "c-ff67569e876a1ea9",
+          "browser": "chrome",
+          "where": "runs"
+        },
+        {
+          "id": "c-34f02b6f4570210c",
+          "browser": "chrome",
+          "where": "heldout-runs"
+        },
+        {
+          "id": "c-7da83d6c4f10900a",
+          "browser": "chrome",
+          "where": "heldout-runs"
+        },
+        {
+          "id": "c-8657b126c1d07354",
+          "browser": "chrome",
+          "where": "heldout-runs"
+        },
+        {
+          "id": "c-d3e358e16a547320",
+          "browser": "chrome",
+          "where": "heldout-runs"
+        },
+        {
+          "id": "c-ea58319c5aaa09ba",
+          "browser": "chrome",
+          "where": "heldout-runs"
+        }
+      ],
+      "source": "research/ROUND3-CRITIC.md item 6 (22 of the evaluation's 181 fresh Chrome failures, 28 of the critic's 86); every Chrome prediction failure of runs and heldout-runs on 2026-09-18 is this class",
+      "note": "The port knows the shaping-group edge is inside the grapheme and still predicts the merged cluster (a second regional indicator 0 wide against 20px natively). Each side shaped alone is measurable in Canvas. Converting it means measuring the two sides of the span edge apart."
+    },
+    {
+      "id": "blink/object-replacement-fallback-font",
+      "engine": "blink",
+      "kind": "convertible class",
+      "title": "U+FFFC drawn by a fallback font",
+      "conditions": [
+        "font-fallback"
+      ],
+      "cases": [],
+      "match": {
+        "browsers": [
+          "chrome"
+        ],
+        "status": "covered",
+        "conditions": [
+          "font-fallback"
+        ],
+        "families": [
+          "suite/U+FFFC",
+          "rule/object-replacement",
+          "suite/unicode-space"
+        ]
+      },
+      "source": "research/ROUND3-CRITIC.md item 6 (108 of 181 fresh failures); research/ROUND3-EVALUATION.md \"What the remaining failures are made of\"",
+      "note": "Most of Chrome's prediction failures on every set. The Blink owner's stand-in idea was left at 3 probed fonts."
+    },
+    {
+      "id": "blink/system-font-rows-under-page-history",
+      "engine": "blink",
+      "kind": "diagnosing condition",
+      "title": "system-ui rows that fail the same way alone in a fresh process sit under page-history",
+      "conditions": [
+        "page-history"
+      ],
+      "cases": [
+        {
+          "id": "c-131e2c0e95d82416",
+          "browser": "chrome",
+          "where": "critic-r3-1, isolated"
+        },
+        {
+          "id": "c-66461a50ce2699b5",
+          "browser": "chrome",
+          "where": "critic-r3-1, isolated"
+        }
+      ],
+      "match": {
+        "browsers": [
+          "chrome"
+        ],
+        "status": "covered",
+        "conditions": [
+          "page-history"
+        ],
+        "families": [
+          "rule/system-fonts-and-sizes"
+        ]
+      },
+      "source": "research/ROUND3-CRITIC.md item 1 (28 isolated rows; all 64 rule-family rows are 16.8px); ceiling round 4b gives this to the Blink owner",
+      "note": "The condition covers every run measured at the CSS size whenever layout zoom isn't 1, by position. DOM 204.742188px against the recipe's 204.6875px at 16.8px with no earlier text or canvas: deterministic, not history. Measure first found no case on any set where measuring moves these rows either (lab README \"Measure first\")."
+    },
+    {
+      "id": "blink/kerned-positions-without-pair-kerning-fact",
+      "engine": "blink",
+      "kind": "open rows",
+      "title": "With pairKerning unknown, positions between kerned glyphs inside a line are reported without a gap on the line",
+      "conditions": [],
+      "cases": [
+        {
+          "id": "c-71ad21a18a8a0713",
+          "browser": "chrome",
+          "where": "families (no-facts)"
+        },
+        {
+          "id": "c-8c90eb487b92aa73",
+          "browser": "chrome",
+          "where": "families (no-facts)"
+        },
+        {
+          "id": "c-07edc35c22f24f4d",
+          "browser": "chrome",
+          "where": "features (no-facts)"
+        },
+        {
+          "id": "c-2d816ce632aca052",
+          "browser": "chrome",
+          "where": "features (no-facts)"
+        },
+        {
+          "id": "c-43e506e066d2ef32",
+          "browser": "chrome",
+          "where": "features (no-facts)"
+        },
+        {
+          "id": "c-b9ae768b3c0fdbda",
+          "browser": "chrome",
+          "where": "features (no-facts)"
+        },
+        {
+          "id": "c-638e24bb090f9fb0",
+          "browser": "chrome",
+          "where": "heldout-runs (no-facts)"
+        },
+        {
+          "id": "c-c4af3814fc390dbd",
+          "browser": "chrome",
+          "where": "heldout-runs (no-facts)"
+        }
+      ],
+      "match": {
+        "browsers": [
+          "chrome"
+        ],
+        "status": "open",
+        "configs": [
+          "no-facts"
+        ]
+      },
+      "source": "round 4a font-checks report (43 rows of one class once optical-size stopped covering every line); ceiling round 4b gives this to the Blink owner",
+      "note": "rule/text-align `xx LYAY bbbb cc dddd` in 20px Times New Roman and runs/split-word: the kern moves between the space and the letter, and the line's sum is one LayoutUnit off. Open in the no-facts configuration only."
+    },
+    {
+      "id": "blink/exact-fit-under-letter-spacing",
+      "engine": "blink",
+      "kind": "open rows",
+      "title": "ProbeShantell exact-fit break under letter spacing: the fit test depends on which offsets HarfBuzz left safe",
+      "conditions": [
+        "in-word-prefix"
+      ],
+      "cases": [
+        {
+          "id": "c-0342c2bb3e2138fd",
+          "browser": "chrome",
+          "where": "eval-r3 fresh sets"
+        },
+        {
+          "id": "c-c3eeb836fa28c562",
+          "browser": "chrome",
+          "where": "eval-r3 fresh sets"
+        },
+        {
+          "id": "c-7e131b748aca6cb5",
+          "browser": "chrome",
+          "where": "eval-r3 fresh sets"
+        },
+        {
+          "id": "c-a4bdefa792ae621e",
+          "browser": "chrome",
+          "where": "eval-r3 fresh sets"
+        },
+        {
+          "id": "c-75d0317451d66b3d",
+          "browser": "chrome",
+          "where": "critic-r3-1"
+        }
+      ],
+      "source": "research/ROUND3-EVALUATION.md Chrome class 1; research/ROUND3-CRITIC.md item 2; round 4a Blink report item 1a (shaping_line_breaker.cc:543-553, :309-324)",
+      "note": "Natively the line is the floored available width plus one LayoutUnit. HarfBuzz flags every offset of this font unsafe and Canvas can't show the flags, so the rows stay failures, covered since build b8."
+    },
+    {
+      "id": "blink/clamped-start-reshape",
+      "engine": "blink",
+      "kind": "open rows",
+      "title": "A wrapped line start whose reshape alone takes the space left (Amiri beh, soft hyphen, kasra, beh)",
+      "conditions": [
+        "in-word-prefix"
+      ],
+      "cases": [
+        {
+          "id": "c-909a7a77bad03225",
+          "browser": "chrome",
+          "where": "triage"
+        },
+        {
+          "id": "c-4decc6eae7517325",
+          "browser": "chrome",
+          "where": "triage"
+        },
+        {
+          "id": "c-e9e314847e481d69",
+          "browser": "chrome",
+          "where": "triage"
+        }
+      ],
+      "source": "round 4a Blink report leftovers item 1 (shaping_line_breaker.cc:309-324); attributed to the line that holds the condition since scorer 7",
+      "note": "The clamp of ShapeLine's start correction rests on a stand-in position: a contextual form's share of a joined pair, 247 and 772 units natively where U+200D gives 190 and 829."
+    },
+    {
+      "id": "blink/rtl-view-cut-after-start-reshape",
+      "engine": "blink",
+      "kind": "open rows",
+      "title": "The cut of an RTL view after a start reshape whose extent a morx font's flags decide",
+      "conditions": [
+        "in-word-prefix"
+      ],
+      "cases": [
+        {
+          "id": "c-a3b5719bcaf20813",
+          "browser": "chrome",
+          "where": "r4-blink-2"
+        }
+      ],
+      "source": "round 4a Blink report, fresh set 2 (shape_result_view.cc:215-308)",
+      "note": "`حين. ` at a wrapped RTL line start in Geeza Pro: 2533 units predicted, 3762 natively. Covered in b8, not predicted."
+    },
+    {
+      "id": "blink/arabic-at-shaping-edges",
+      "engine": "blink",
+      "kind": "open rows",
+      "title": "Arabic at shaping call edges: contextual forms beyond what U+200D stands in for",
+      "conditions": [
+        "unsafe-to-break",
+        "glyph-clusters"
+      ],
+      "cases": [
+        {
+          "id": "c-328ba3307635942f",
+          "browser": "chrome",
+          "where": "held-out, doubtful cover"
+        }
+      ],
+      "match": {
+        "browsers": [
+          "chrome"
+        ],
+        "status": "covered",
+        "conditions": [
+          "unsafe-to-break"
+        ],
+        "families": [
+          "rule/joining",
+          "suite/joined",
+          "suite/U+200",
+          "suite/U+2060",
+          "suite/U+FEFF",
+          "suite/U+2028",
+          "suite/U+00",
+          "suite/U+FFFD",
+          "suite/mixed"
+        ]
+      },
+      "source": "research/ROUND3-EVALUATION.md (16 fresh failures); research/ROUND3-CRITIC.md item 5: `c-328ba3307635942f` has a predicted line 0 wide for a letter 8.98px wide natively, outside what the reading allows",
+      "note": "Ligatures that form in some contexts only (Geeza Pro lam-meem and lam-lam-heh, Courier New Allah and rial) stay stand-ins under glyph-clusters."
+    },
+    {
+      "id": "blink/script-context-fires-widely",
+      "engine": "blink",
+      "kind": "diagnosing condition",
+      "title": "script-context fires on about 31% of passing development lines at a lift near 1",
+      "conditions": [
+        "script-context"
+      ],
+      "cases": [],
+      "source": "research/ROUND3-CRITIC.md item 5 (30.78%, lift 1.48); research/FACTS-FREE.md (32.4% without facts)",
+      "note": "Narrowing it needs the font's DFLT against latn lookups, a fact Canvas doesn't give."
+    },
+    {
+      "id": "blink/position-heuristics",
+      "engine": "blink",
+      "kind": "heuristic",
+      "title": "positionAdjust16, shape/wide-group-halved and shape/cluster-unit-grapheme",
+      "conditions": [],
+      "cases": [],
+      "source": "CHARTER.md known deviations; round 4a Blink report leftovers item 6",
+      "note": "No source reading places a contextual adjustment: a chaining rule's input glyphs are the font's choice. Such positions are stand-ins, and a line edge taken from one reports unsafe-to-break."
+    },
+    {
+      "id": "blink/painter-kern-kept-across-a-wrap",
+      "engine": "blink",
+      "kind": "painter",
+      "title": "The painter lays a line out alone, so a first letter loses the kern it kept with U+3000 on the line before",
+      "conditions": [],
+      "cases": [
+        {
+          "id": "c-0ee8c36920378f9f",
+          "browser": "chrome",
+          "where": "eval-r3 fresh sets"
+        }
+      ],
+      "source": "round 4a Blink report item 1b and \"For shared files\" (DESIGN §7 needs a limit); the painter has no owner in round 4",
+      "note": "The prediction passes lineCount, breaks and widths with the coverage fact; the painter fails without a covered explanation."
+    },
+    {
+      "id": "blink/range-rects-hang",
+      "engine": "blink",
+      "kind": "browser bug",
+      "title": "Range.getClientRects() never returns over a line-end trimmed CJK full stop",
+      "conditions": [],
+      "cases": [
+        {
+          "id": "c-1fda71ce84fd9989",
+          "browser": "chrome",
+          "where": "reduced to a page"
+        }
+      ],
+      "source": "round 4a Blink report \"Bug report\" (shaping_line_breaker.cc:344-363, not traced further); rebuild/platform-bugs",
+      "note": "`。』` in an 8px block with overflow-wrap: break-word. The lab can't observe such a case."
+    },
+    {
+      "id": "gecko/in-word-prefix-sides-dont-add-up",
+      "engine": "gecko",
+      "kind": "convertible class",
+      "title": "Breaks between joined letters whose two sides measured with U+200D don't add up, and odd kern splits",
+      "conditions": [
+        "in-word-prefix"
+      ],
+      "cases": [
+        {
+          "id": "c-2ad5b0126a288f11",
+          "browser": "firefox",
+          "where": "suite-sample"
+        },
+        {
+          "id": "c-fc9b382c418b3022",
+          "browser": "firefox",
+          "where": "suite-sample"
+        },
+        {
+          "id": "c-1cdde4d508c76896",
+          "browser": "firefox",
+          "where": "critic-r3-1, read"
+        },
+        {
+          "id": "c-0a14e0120f50e4e3",
+          "browser": "firefox",
+          "where": "critic-r3-1, read"
+        },
+        {
+          "id": "c-0f2faf43fc19089f",
+          "browser": "firefox",
+          "where": "critic-r3-1, read"
+        },
+        {
+          "id": "c-37d6cef623a53363",
+          "browser": "firefox",
+          "where": "critic-r3-1, read"
+        }
+      ],
+      "match": {
+        "browsers": [
+          "firefox"
+        ],
+        "status": "covered",
+        "conditions": [
+          "in-word-prefix"
+        ]
+      },
+      "source": "research/ROUND3-EVALUATION.md (397 of 576 fresh failures; Amiri beh around a soft hyphen dominates); research/ROUND3-CRITIC.md items 5 and 6 (Amiri cross term 231, Noto Nastaliq Urdu 156, odd kern splits 1 au off at the break 59, untried)",
+      "note": "The condition sits on every failing development line and names real things. 1,034 of Firefox's 1,640 prediction failures on the tier sets on 2026-09-18."
+    },
+    {
+      "id": "gecko/hoefler-text-tied-faces",
+      "engine": "gecko",
+      "kind": "convertible class",
+      "title": "Hoefler Text ties with its Ornaments face, whose pairKerning is null, so the fact is lost",
+      "conditions": [
+        "in-word-prefix"
+      ],
+      "cases": [],
+      "source": "research/ROUND3-CRITIC.md item 7 (all 30 Hoefler Text fresh failures; the table's `split` matches the native layout)",
+      "note": "Resolve the fact by which tied face draws the characters."
+    },
+    {
+      "id": "gecko/font-size-quantization",
+      "engine": "gecko",
+      "kind": "convertible class",
+      "title": "Font sizes Canvas can't set, in fonts without an optical size axis",
+      "conditions": [
+        "font-size-quantization"
+      ],
+      "cases": [],
+      "match": {
+        "browsers": [
+          "firefox"
+        ],
+        "status": "covered",
+        "conditions": [
+          "font-size-quantization"
+        ]
+      },
+      "source": "research/ROUND3-CRITIC.md item 6 (Georgia 74, Arial 33, Courier New 31 of 767 fresh failures); research/VERSION-DRIFT.md class 3 (16.8px and 17.3px)",
+      "note": "Advances at a size equal to the units per em are exact in font units, so with the units per em as a fact the DOM's per-glyph rounding can be computed. Untested."
+    },
+    {
+      "id": "gecko/system-font-optical-size",
+      "engine": "gecko",
+      "kind": "decision",
+      "title": "An OffscreenCanvas never applies optical sizing: system-ui and -apple-system widths are stand-ins, and without supplied facts optical-size is reported on 98% of cases",
+      "conditions": [
+        "optical-size"
+      ],
+      "cases": [],
+      "match": {
+        "browsers": [
+          "firefox"
+        ],
+        "status": "covered",
+        "conditions": [
+          "optical-size"
+        ],
+        "families": [
+          "rule/system-fonts-and-sizes"
+        ]
+      },
+      "source": "round 4a Gecko report §1 and §7 (192 widths, 96 breaks and 32 line counts lost in rule/system-fonts-and-sizes against the canvas element; branch r4-gecko-alt-opsz-default unmerged)",
+      "note": "The maintainer decided on 2026-09-18 that Firefox measures on OffscreenCanvas only. Whether an unknown opticalSizeAxis takes its documented default is the maintainer's call."
+    },
+    {
+      "id": "gecko/one-app-unit-class",
+      "engine": "gecko",
+      "kind": "residual class",
+      "title": "One shaping unit 1 au off between the DOM and an OffscreenCanvas at the CSS size",
+      "conditions": [
+        "gecko/one-shaping-unit-one-app-unit"
+      ],
+      "cases": [
+        {
+          "id": "c-4c685cf01d01f006",
+          "browser": "firefox",
+          "where": "r4-gecko-1: the painter drew the line with its trimmed space, so the signature fails"
+        }
+      ],
+      "match": {
+        "browsers": [
+          "firefox"
+        ],
+        "status": "residual",
+        "conditions": [
+          "gecko/one-shaping-unit-one-app-unit"
+        ]
+      },
+      "source": "lab/score.ts RESIDUAL_CLASSES; probes F7, F13, F27; round 4a Gecko report §1 (17 rows on the defined sets, 11, 0 and 12 on three fresh sets)",
+      "note": "Every member is 10px or 15px Helvetica Neue, 10px Geeza Pro or 32px Thonburi, shaped through kern, kerx and morx. `c-4c685cf01d01f006` is `:` of F27's probed `LT:` alone on a line and counts as open."
+    },
+    {
+      "id": "gecko/synthetic-bold-class",
+      "engine": "gecko",
+      "kind": "residual class",
+      "title": "A synthetic bold character is a few au narrower in the DOM than on an OffscreenCanvas",
+      "conditions": [
+        "gecko/synthetic-bold-offset"
+      ],
+      "cases": [
+        {
+          "id": "c-190b357b7a3fcd31",
+          "browser": "firefox",
+          "where": "r4-gecko-2"
+        },
+        {
+          "id": "c-1f0cb8c954a0c1a6",
+          "browser": "firefox",
+          "where": "r4-gecko-2"
+        },
+        {
+          "id": "c-7e4acaab227268cb",
+          "browser": "firefox",
+          "where": "r4-gecko-2"
+        },
+        {
+          "id": "c-8369a8d6041762e6",
+          "browser": "firefox",
+          "where": "r4-gecko-3"
+        },
+        {
+          "id": "c-9d2bfb2243f58d6b",
+          "browser": "firefox",
+          "where": "r4-gecko-3"
+        },
+        {
+          "id": "c-a186177656f33bd7",
+          "browser": "firefox",
+          "where": "r4-gecko-3"
+        },
+        {
+          "id": "c-0148d6f0041f322a",
+          "browser": "firefox",
+          "where": "r4-gecko-3"
+        },
+        {
+          "id": "c-2bd834f606a730aa",
+          "browser": "firefox",
+          "where": "r4-gecko-3"
+        },
+        {
+          "id": "c-640f1283e35ed6c6",
+          "browser": "firefox",
+          "where": "r4-gecko-3"
+        }
+      ],
+      "match": {
+        "browsers": [
+          "firefox"
+        ],
+        "status": "residual",
+        "conditions": [
+          "gecko/synthetic-bold-offset"
+        ]
+      },
+      "source": "lab/score.ts RESIDUAL_CLASSES; probes F14, F24 (gfxFont.cpp:3551-3562, :901-939; gfxFont.h:1899-1904); branch r4-gecko-alt-synthetic-bold unmerged",
+      "note": "All nine fresh rows are U+2764 alone in a bold span. The alternative reads the step from Canvas at two sizes and passes all nine; it doesn't reach symbols without the Emoji property."
+    },
+    {
+      "id": "gecko/process-font-fallback-state",
+      "engine": "gecko",
+      "kind": "history dependence",
+      "title": "Which font draws an emoji depends on what the process looked up before (U+FE0E requests, U+FFFD), and the set isn't stable between identical runs",
+      "conditions": [
+        "page-history"
+      ],
+      "cases": [
+        {
+          "id": "measure-first/emoji-before-16px",
+          "browser": "firefox",
+          "where": "rebuild/lab/measure-first-cases.ndjson: open under measure first with facts"
+        },
+        {
+          "id": "c-29638bb1a4343fad",
+          "browser": "firefox",
+          "where": "suite-sample: moved by measure first, not history-dependent in the reference"
+        },
+        {
+          "id": "c-2aa210f8d63d5a8b",
+          "browser": "firefox",
+          "where": "suite-sample: moved by measure first, not history-dependent in the reference"
+        },
+        {
+          "id": "c-56afde0f3d04b557",
+          "browser": "firefox",
+          "where": "suite-sample: moved by measure first, not history-dependent in the reference"
+        },
+        {
+          "id": "c-611182808d3e8130",
+          "browser": "firefox",
+          "where": "suite-sample: moved by measure first, not history-dependent in the reference"
+        },
+        {
+          "id": "c-6b2b36f2a34baeee",
+          "browser": "firefox",
+          "where": "suite-sample: moved by measure first, not history-dependent in the reference"
+        },
+        {
+          "id": "c-8048bdb9cbcba7a2",
+          "browser": "firefox",
+          "where": "suite-sample: moved by measure first, not history-dependent in the reference"
+        },
+        {
+          "id": "c-bd4a89130a560c90",
+          "browser": "firefox",
+          "where": "suite-sample: moved by measure first, not history-dependent in the reference"
+        }
+      ],
+      "match": {
+        "browsers": [
+          "firefox"
+        ],
+        "status": "history-dependent"
+      },
+      "source": "round 4a Gecko report §3.4 (gfxPlatformFontList.cpp:1474-1486, gfxPlatformMac.cpp:147-262; 190 against 104 history-dependent held-out cases in identical runs); lab README \"Measure first\" (121 of 25,415 cases move, all holding U+1F600)",
+      "note": "A prediction holds for the state it was measured in. Text measured before another paragraph's U+FE0E request and laid out after it is 1px per emoji off, with no condition on it when the facts are supplied."
+    },
+    {
+      "id": "gecko/unbounded-frame",
+      "engine": "gecko",
+      "kind": "browser bug",
+      "title": "A frame edge between two marks that share a glyph cluster gives a frame nscoord_MAX wide",
+      "conditions": [
+        "in-word-prefix"
+      ],
+      "cases": [
+        {
+          "id": "c-4bbfaaafb6f3d47f",
+          "browser": "firefox",
+          "where": "heldout-suite-sample"
+        },
+        {
+          "id": "c-710f180e5314942f",
+          "browser": "firefox",
+          "where": "heldout-suite-sample"
+        },
+        {
+          "id": "c-9c05c70ce585fb82",
+          "browser": "firefox",
+          "where": "heldout-suite-sample"
+        }
+      ],
+      "source": "probes F18, F20; round 4a Gecko report §3.2 and §8 (gfxTextRun.cpp:249-289, an unsigned division; bug page written, not filed)",
+      "note": "Canvas shows neither the shared cluster nor the advance's sign, so it is named and not predicted."
+    },
+    {
+      "id": "gecko/nastaliq-position-one-au",
+      "engine": "gecko",
+      "kind": "heuristic",
+      "title": "\"The two sides add up, so the prefix is the advance\" holds to the app unit only",
+      "conditions": [],
+      "cases": [],
+      "source": "round 4a Gecko report §3.3 (probe F22; F15 1,013 of 1,015); 6 passing Noto Nastaliq Urdu cases hold a position 1 au off",
+      "note": "Testing the sum at 64 times the size would see it, at three more Canvas calls per joined position. Also registered: the suffix-side recipe (F26, 567 of 567, no source reading) and a font's rtla lookups on a lone character at an odd level, neither predicted nor named."
+    },
+    {
+      "id": "webkit/page-history",
+      "engine": "webkit",
+      "kind": "history dependence",
+      "title": "The process-wide break cache: lines that lay out otherwise after other cases",
+      "conditions": [
+        "page-history"
+      ],
+      "cases": [
+        {
+          "id": "c-66ae4ab7d56cb0ae",
+          "browser": "webkit-host",
+          "where": "suite-sample"
+        },
+        {
+          "id": "c-a749f1e7bd879df8",
+          "browser": "webkit-host",
+          "where": "runs: covered under scorer 6"
+        }
+      ],
+      "match": {
+        "browsers": [
+          "webkit-host"
+        ],
+        "status": "covered",
+        "conditions": [
+          "page-history"
+        ]
+      },
+      "source": "specs/webkit-RESULTS.md; round 4a WebKit report items 1 and 4 (400 cases isolated, all pass lineCount and breaks alone; 250 of 374 fresh failures)",
+      "note": "History worlds vary one box at a time, a declared approximation that isolation didn't contradict; products of worlds aren't laid out. A one-order fresh set overstates WebKit failures threefold. rule/br-elements fails 20 line counts and 32 breaks under it."
+    },
+    {
+      "id": "webkit/history-dependent-cases",
+      "engine": "webkit",
+      "kind": "history dependence",
+      "title": "Cases whose native layout differs between the two orders",
+      "conditions": [
+        "page-history"
+      ],
+      "cases": [],
+      "match": {
+        "browsers": [
+          "webkit-host"
+        ],
+        "status": "history-dependent"
+      },
+      "source": "lab README \"Page-history dependence\"; the round 4 reference ledgers carry 268",
+      "note": "Measure first moves none of them: Canvas has no part in the break cache."
+    },
+    {
+      "id": "webkit/system-fallback-by-language",
+      "engine": "webkit",
+      "kind": "convertible class",
+      "title": "Characters no listed family draws come from Core Text's system fallback, which follows the language",
+      "conditions": [
+        "canvas-language"
+      ],
+      "cases": [],
+      "match": {
+        "browsers": [
+          "webkit-host"
+        ],
+        "status": "covered",
+        "conditions": [
+          "canvas-language"
+        ]
+      },
+      "source": "round 4a WebKit report item 1 (FontCacheCoreText.cpp:775-790; probes R3, R13, R14; left: development 9, held-out 11, families 130)",
+      "note": "The character table `hasLanguageDependentFallback` is a probe-verdict heuristic: the source reading fires on 29% of passing lines at lift 0.8. The font also follows the original font's class, so predicting it needs a font fact."
+    },
+    {
+      "id": "webkit/letter-spacing-ligatures",
+      "engine": "webkit",
+      "kind": "convertible class",
+      "title": "Ligature pairs under letter spacing",
+      "conditions": [
+        "letter-spacing-ligatures"
+      ],
+      "cases": [],
+      "match": {
+        "browsers": [
+          "webkit-host"
+        ],
+        "status": "covered",
+        "conditions": [
+          "letter-spacing-ligatures"
+        ]
+      },
+      "source": "research/ROUND3-EVALUATION.md (84 fresh failures)",
+      "note": "Not traced further in round 4."
+    },
+    {
+      "id": "webkit/control-character-float-steps",
+      "engine": "webkit",
+      "kind": "open rows",
+      "title": "VT, FF, CR and the information separators: widths one float32 step off",
+      "conditions": [
+        "control-character-width"
+      ],
+      "cases": [],
+      "match": {
+        "browsers": [
+          "webkit-host"
+        ],
+        "status": "covered",
+        "conditions": [
+          "control-character-width"
+        ]
+      },
+      "source": "research/ROUND3-EVALUATION.md (38 fresh failures); lab README, round 2 re-count",
+      "note": "rule/controls holds 64 of them on the tier sets."
+    },
+    {
+      "id": "webkit/shaping-across-inline-boxes",
+      "engine": "webkit",
+      "kind": "heuristic",
+      "title": "A run's share of text shaped across inline boxes is a suffix difference of Canvas totals, chosen by probe counts",
+      "conditions": [
+        "rtl-shaping-across-inline-boxes"
+      ],
+      "cases": [
+        {
+          "id": "c-d03f94e8fb53e7e2",
+          "browser": "webkit-host",
+          "where": "suite: Core Text splits glyph runs, WebKit skips the shaping"
+        }
+      ],
+      "match": {
+        "browsers": [
+          "webkit-host"
+        ],
+        "status": "covered",
+        "conditions": [
+          "rtl-shaping-across-inline-boxes"
+        ]
+      },
+      "source": "round 4a WebKit report item 3 (probe R10: 509, 492 and 474 of 770; InlineLineBuilder.cpp:920-967, :943-946)",
+      "note": "No recipe is right throughout: Amiri's two-letter forms, ligatures and pair adjustments across an edge, ranges WebKit doesn't shape at all. Shaped boxes carry no letter spacing, which looks like a WebKit bug."
+    },
+    {
+      "id": "webkit/simplified-measuring-diagnoses-only",
+      "engine": "webkit",
+      "kind": "diagnosing condition",
+      "title": "simplified-measuring fires on 7.75% of passing lines at a lift of 0.04, and its per-code-point calls never decided a line",
+      "conditions": [
+        "simplified-measuring"
+      ],
+      "cases": [],
+      "source": "research/ROUND3-CRITIC.md item 5; round 4a WebKit report item 6 (14.5% of Canvas calls); without facts 18% of passing development lines",
+      "note": "`pairKerning: null` conflates unknown and none (Georgia, Courier New, Menlo); a value for none would clear most of it. For the clean-up."
+    },
+    {
+      "id": "webkit/tab-stops-weak",
+      "engine": "webkit",
+      "kind": "diagnosing condition",
+      "title": "tab-stops is the one condition that stays weak under the lift over prediction failures",
+      "conditions": [
+        "tab-stops"
+      ],
+      "cases": [],
+      "match": {
+        "browsers": [
+          "webkit-host"
+        ],
+        "status": "covered",
+        "conditions": [
+          "tab-stops"
+        ]
+      },
+      "source": "research/ROUND3-EVALUATION.md \"Weak coverage\"",
+      "note": "Seven tier-set rows on 2026-09-18."
+    },
+    {
+      "id": "webkit/wrong-values-in-passing-family-cases",
+      "engine": "webkit",
+      "kind": "open rows",
+      "title": "75 passing family cases hold one wrong predicted value each",
+      "conditions": [],
+      "cases": [],
+      "source": "round 4a WebKit report problems (rule/nested-box-edges 24, br-elements 12, joining 11, hanging-white-space 10, nowrap-spans 10, box-edges 8); 4b gives observation honesty to the WebKit owner",
+      "note": "Node rects are equal, so it is a code point or element rect. Not traced. `<wbr>` rects are untraced too."
+    },
+    {
+      "id": "webkit/ethiopic-under-a-locale",
+      "engine": "webkit",
+      "kind": "rare script",
+      "title": "Shaping under a locale has no condition: an Ethiopic word differs from Canvas under every language but am and none",
+      "conditions": [],
+      "cases": [],
+      "source": "round 4a WebKit report (probe R13)",
+      "note": "No lab case holds Ethiopic."
+    },
+    {
+      "id": "webkit/unexplained-zero-width-lines",
+      "engine": "webkit",
+      "kind": "open rows",
+      "title": "Two predicted lines 0 wide under a covering gap",
+      "conditions": [],
+      "cases": [
+        {
+          "id": "c-04e0e8a5bc4c4e2b",
+          "browser": "webkit-host",
+          "where": "critic-r3-1"
+        }
+      ],
+      "source": "research/ROUND3-CRITIC.md traces",
+      "note": "Covered; the native share is unexplained by the owner."
+    },
+    {
+      "id": "painter/named-limits",
+      "engine": "shared",
+      "kind": "painter",
+      "title": "Painter failures a painter limit or a gap explains",
+      "conditions": [],
+      "cases": [],
+      "match": {
+        "browsers": [
+          "chrome",
+          "firefox",
+          "webkit-host"
+        ],
+        "status": "covered",
+        "metrics": [
+          "painter"
+        ]
+      },
+      "source": "DESIGN.md §7 \"Limits\"; lab README \"Painter limits\" (the painter passes 81% to 97% of cases)",
+      "note": "Painter exactness is outside the frozen line. Its heuristics are registered: nowrap-hyphenated-or-joined, leading-ascii-space-slice-in-span, zwj-at-joined-line-edges; Blink's 24 trimmed-space pairs fail because the paragraph reshaped the whole part."
+    },
+    {
+      "id": "painter/without-explanation",
+      "engine": "shared",
+      "kind": "painter",
+      "title": "Painter failures without a gap or a limit",
+      "conditions": [],
+      "cases": [],
+      "match": {
+        "browsers": [
+          "chrome",
+          "firefox",
+          "webkit-host"
+        ],
+        "status": "open",
+        "metrics": [
+          "painter"
+        ]
+      },
+      "source": "lab README \"Painter limits\" (no-facts recordings of 2026-09-18: Chrome 0 of 1,430, Firefox 15 of 3,543, webkit-host 23 of 4,459)",
+      "note": "The painter is scored by extents and wraps only: `paint` doesn't report painted source offsets."
+    },
+    {
+      "id": "blink/font-check-contexts-share-the-dom-font",
+      "engine": "blink",
+      "kind": "open rows",
+      "title": "The font checks' contexts (text-rendering auto) share a platform font with DOM text of the same zoomed size, so check 4 depends on who came first",
+      "conditions": [],
+      "cases": [],
+      "source": "rebuild/probes/measure-first.ts M1 (font_description.cc:308-331: the cache key holds the effective size and text-rendering, not the specified size; font_platform_data_mac.mm:170-178); src/measure/font-checks.ts check 4",
+      "note": "For a named font with an opsz axis at a zoom other than 1: after the DOM, the zoomed-size context gets the DOM's font, the advances look linear, the fact comes out false and the engine measures at the zoomed size with another optical size, without a gap; before the DOM, the check leaves the fact unknown and the DOM text then takes the check's font. No lab font but the system font has the axis, so no lab case shows it; the checks never measure the system font at the zoomed size. A context at text-rendering optimizeLegibility, as the engine measures, would share nothing with default-rendered DOM text."
+    },
+    {
+      "id": "blink/pages-with-text-rendering-legibility",
+      "engine": "blink",
+      "kind": "open rows",
+      "title": "The library measures at text-rendering optimizeLegibility, so on a page whose text sets that value Canvas and DOM share platform fonts",
+      "conditions": [],
+      "cases": [],
+      "source": "rebuild/probes/measure-first.ts M1 (library-page-legibility: DOM system-ui text 10px to 16px changes width after the library's context measured at its zoomed size)",
+      "note": "Platform bug ledger item A reaches the library there. The lab lays every case out at text-rendering auto."
+    },
+    {
+      "id": "lab/rtl-hyphen-rect-native-side",
+      "engine": "shared",
+      "kind": "lab",
+      "title": "In a right-to-left line whose soft hyphen shares its item with the letter before it, natively only the item before the hyphen and that letter report the hyphen, which geometry alone doesn't identify",
+      "conditions": [],
+      "cases": [],
+      "source": "lab/score.ts reportOnlyRects (layout_text.cc:592-621)",
+      "note": "The expected side reads the layout's hyphen items. On the native side the code point that ends the line above keeps a rect on the hyphen's line, so the attributed line can be one too low where the two sides disagree there."
+    },
+    {
+      "id": "lab/observer-assumptions",
+      "engine": "shared",
+      "kind": "lab",
+      "title": "Native lines across nodes come from vertical-centre grouping; y and height are outside the contract; a WebKit line whose contentWidth isn't the union of its boxes is unobserved by a scorer rule",
+      "conditions": [],
+      "cases": [],
+      "source": "CHARTER.md known deviations (tentpole 2); lab README \"Scoring\"",
+      "note": "243 development and 257 held-out webkit-host cases. A one-node WebKit paragraph is covered by any ranged gap on the line (`c-3f271dba4d636a5e`)."
+    },
+    {
+      "id": "lab/probe-sets-without-checks",
+      "engine": "shared",
+      "kind": "lab",
+      "title": "Probe sets that return raw values alone give no checked fact",
+      "conditions": [],
+      "cases": [],
+      "source": "rebuild/tests/facts.ts; rebuild/tests/rerun-probes.sh",
+      "note": "WebKit round 4 is in the release list with one undecided fact per record. Not in the list: webkit-followups, webkit-round3, webkit-probes-crosscheck, blink-followups, blink-followups-20260917, blink-gaps-probes, blink-ignorables, blink-round3, gecko-followups, gecko-emoji-font, gecko-font-matching, gecko-rtl-rects, gecko-slot-indent, font-checks, measure-first (each probe needs a fresh process), textmetrics-api."
+    },
+    {
+      "id": "lab/replay-blind-spots",
+      "engine": "shared",
+      "kind": "lab",
+      "title": "Tier 1 can't see V8 string storage, and the gate keys on case ids alone",
+      "conditions": [],
+      "cases": [],
+      "source": "lab README \"Test tiers\"",
+      "note": "Chrome's 4,528 storage-sensitive cases go to tier 2 by a path rule; 714 ids sit in two tier sets, where the gate is coarser than the ledger. rebuild/bench/page.ts fails at its first row against the inline-tree model."
+    },
+    {
+      "id": "lab/sealed-3-open-rows",
+      "engine": "shared",
+      "kind": "lab",
+      "title": "Sealed-3's 3 open rows are unopened (Chrome 2 line counts, webkit-host 1)",
+      "conditions": [],
+      "cases": [],
+      "source": "research/ROUND3-EVALUATION.md",
+      "note": "Counts only; opening them burns the set."
+    }
+  ]
+}
