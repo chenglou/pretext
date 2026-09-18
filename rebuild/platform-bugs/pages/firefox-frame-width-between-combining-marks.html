@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="ar">
+<head>
+<meta charset="utf-8">
+<title>running</title>
+<style>
+  body { font: 14px/1.5 Helvetica, Arial, sans-serif; margin: 16px; max-width: 900px }
+  pre { font: 12px/1.5 Menlo, monospace; background: #f4f4f4; padding: 8px; white-space: pre-wrap }
+  .t { font: 20px/36px "Geeza Pro"; width: 400px; direction: rtl; outline: 1px solid #ccc; margin: 4px 0; overflow: hidden }
+</style>
+</head>
+<body>
+<h1>A text frame becomes about 17.9 million px wide when a span starts between two combining marks</h1>
+<p>Both lines hold the Arabic word U+0631 U+064E U+0651 U+062D U+064A U+0645 (reh, fatha, shadda, hah, yeh, meem) in
+20px Geeza Pro, in two <code>&lt;span&gt;</code>s without any style. In the first line the second span starts between
+the fatha and the shadda; in the second line it starts before both marks. Both lines should lay out alike.</p>
+<div class="t" id="between"><span>&#x631;&#x64e;</span><span>&#x651;&#x62d;&#x64a;&#x645;</span></div>
+<div class="t" id="before"><span>&#x631;</span><span>&#x64e;&#x651;&#x62d;&#x64a;&#x645;</span></div>
+<pre id="log"></pre>
+<script>
+const out = []
+function log(s) { out.push(s); document.getElementById('log').textContent = out.join('\n') }
+const range = document.createRange()
+function widths(id) {
+  const spans = document.getElementById(id).children
+  const result = []
+  for (let i = 0; i < spans.length; i++) {
+    range.selectNodeContents(spans[i].firstChild)
+    result.push([...range.getClientRects()].map(r => r.width))
+  }
+  return result
+}
+const between = widths('between'), before = widths('before')
+log('span boundary between fatha and shadda: first span ' + between[0].join(', ') + 'px; second span ' + between[1].join(', ') + 'px')
+log('span boundary before both marks:        first span ' + before[0].join(', ') + 'px; second span ' + before[1].join(', ') + 'px')
+log('')
+log('expected: no span wider than the 400px block')
+log('')
+log(navigator.userAgent)
+const widest = Math.max(...between[0], ...between[1])
+document.title = widest > 400 ? 'BUG: a span of the word is ' + widest + 'px wide' : 'NO BUG: the widest span is ' + widest.toFixed(3) + 'px'
+</script>
+</body>
+</html>

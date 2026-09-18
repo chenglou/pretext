@@ -15,7 +15,25 @@ may read the DOM freely; this is research, not the library.
   `checks` (expected next to measured). `blink-probes-zoom.ts` and `blink-probes-sysui.ts` select the subsets that the
   forced-DPR, emulated-DPR and fresh-browser system-ui runs repeat. `blink-verdicts.ts` summarizes the output files
   under `.artifacts/probes/blink/` for `rebuild/specs/probes-chrome.md`; the commands are in the header of
-  `blink-probes.ts`.
+  `blink-probes.ts`. `blink-probes-sysui-domfirst.ts` is the DOM-first system-ui probe alone in a fresh browser.
+- `gecko-probes.ts` with `gecko-verdicts.ts`, and `webkit-probes.ts` with its independently written cross-check
+  `webkit-probes-crosscheck.ts` and `webkit-verdicts-crosscheck.ts`: the same for the Firefox and WebKit hypotheses
+  (`rebuild/specs/probes-firefox.md`, `probes-safari.md`). `rebuild/tests/rerun-probes.sh` reruns these sets per browser
+  release and extracts their facts (rebuild/TESTS.md §7).
+- The ports' follow-ups, each written up in its engine's `rebuild/specs/<engine>-RESULTS.md` under the probe labels its
+  header names: `blink-followups.ts`, `blink-followups-20260917.ts`, `blink-gaps-probes.ts`, `blink-ignorables.ts`,
+  `blink-round3.ts`; `gecko-followups.ts` (F1, F2), `gecko-emoji-font.ts` (F3), `gecko-font-matching.ts` (F4),
+  `gecko-slot-indent.ts` (F5), `gecko-rtl-rects.ts` (F6), `gecko-round2.ts` (F7 to F9), `gecko-round2b.ts` (F10 to F12),
+  `gecko-round3.ts` (F13 to F19), `gecko-round4.ts` (F20 to F27); `webkit-followups.ts`, `webkit-round3.ts`,
+  `webkit-round4.ts`. The Gecko sets from round 2 on return `checks`, so they give facts.
+- The library's own runtime checks in a browser, with the page running the library's bundled module: `font-checks.ts`
+  (`src/measure/font-checks.ts` over every font declaration the lab's cases name, beside the DOM) and `canvas-checks.ts`
+  (`detectEngine()`'s Canvas checks, `src/measure/canvas-checks.ts`: a pinned browser must answer supported; run it in
+  another build with `LAB_CHROME_APP` or `LAB_FIREFOX_APP`).
+- `textmetrics-api.ts`: which TextMetrics members a page can use without flags. On 2026-09-17 Chrome 153, Firefox 156 and
+  webkit-host all had the ink box and none had `getSelectionRects`, `getActualBoundingBox`, `getIndexFromOffset`,
+  `getTextClusters` or `advances` (`.artifacts/probes/textmetrics-api/`). Worth a rerun per release: per-glyph positions
+  from Canvas would answer the font facts no check can (`pairKerning`, ligature positions).
 
 ## Running
 

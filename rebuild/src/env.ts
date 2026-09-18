@@ -1,8 +1,10 @@
 // The environment a prediction is for: the engine, the build the caller runs, and the page, device and browser-process
 // facts that engine's layout reads (DESIGN.md §1.4). The library reads only page facts itself (rebuild/CHARTER.md,
-// "Boundaries"): the engine from the user agent, devicePixelRatio, <html lang> and which segmenters the running browser
-// has. Everything else is given, and a fact given as null is laid out with its documented default and reported as a gap.
+// "Boundaries"): the engine from the user agent, devicePixelRatio, <html lang>, which segmenters the running browser has,
+// and whether its Canvas has what the engine's measuring recipes assume. Everything else is given, and a fact given as
+// null is laid out with its documented default and reported as a gap.
 // Tests, and predictions for another runtime, build an Environment directly.
+import { missingCanvasSupport } from './measure/canvas-checks.js'
 
 export type EngineName = 'blink' | 'webkit' | 'gecko'
 
@@ -111,7 +113,7 @@ export type DetectedEnvironment =
   | { kind: 'unsupported'; userAgent: string; reason: string }
 
 // The engine from the user agent. The build isn't read here: Chrome's reduced user agent shows only the major version.
-export function detectEngine(): DetectedEngine {
+function engineFromUserAgent(): DetectedEngine {
   const ua = navigator.userAgent
   if (/\bFirefox\//.test(ua)) return { kind: 'supported', engine: 'gecko' }
   if (/\bEdg\//.test(ua) || /\bOPR\//.test(ua)) return { kind: 'unsupported', userAgent: ua, reason: 'Chromium browsers other than Chrome are not modeled' }
@@ -120,8 +122,21 @@ export function detectEngine(): DetectedEngine {
   return { kind: 'unsupported', userAgent: ua, reason: 'unknown browser' }
 }
 
+// What can't change while the page lives, so a page asks once: the engine, and whether this browser's Canvas is one the
+// engine's measuring recipes can read (measure/canvas-checks.ts: two contexts and two measureText calls). A page learns
+// the engine here before it can give that engine's facts to detectEnvironment.
+export function detectEngine(): DetectedEngine {
+  const detected = engineFromUserAgent()
+  if (detected.kind === 'unsupported') return detected
+  const missing = missingCanvasSupport(detected.engine)
+  if (missing.length === 0) return detected
+  return { kind: 'unsupported', userAgent: navigator.userAgent, reason: `this browser's Canvas lacks what the ${detected.engine} port measures with: ${missing.join('; ')}` }
+}
+
+// What can change while the page lives (devicePixelRatio with zoom, <html lang>), with the given facts. It asks Canvas
+// nothing, so a page can call it again whenever those change.
 export function detectEnvironment(given: GivenFacts): DetectedEnvironment {
-  const detected = detectEngine()
+  const detected = engineFromUserAgent()
   if (detected.kind === 'unsupported') return detected
   const ua = navigator.userAgent
   if (detected.engine !== given.engine) return { kind: 'unsupported', userAgent: ua, reason: `the given facts are for ${given.engine}; the page runs ${detected.engine}` }

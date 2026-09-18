@@ -1,0 +1,23 @@
+{
+  "page": "firefox-frame-width-between-combining-marks.html",
+  "browser": "firefox",
+  "build": {
+    "app": "Firefox",
+    "appVersion": "156.0",
+    "engine": "156.0",
+    "os": "26A428"
+  },
+  "started": "2026-09-18T14:08:52.840Z",
+  "error": null,
+  "report": {
+    "title": "BUG: a span of the word is 17895698px wide",
+    "log": "span boundary between fatha and shadda: first span 17895698px; second span 0px\nspan boundary before both marks:        first span 6.350006103515625px; second span 26.333328247070312px\n\nexpected: no span wider than the 400px block\n\nMozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:156.0) Gecko/20100101 Firefox/156.0",
+    "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:156.0) Gecko/20100101 Firefox/156.0",
+    "devicePixelRatio": 2,
+    "visibility": "visible",
+    "languages": [
+      "en-US",
+      "en"
+    ]
+  }
+}

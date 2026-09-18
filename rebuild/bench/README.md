@@ -4,6 +4,12 @@ Compares the cost of the rebuild (`rebuild/src`, `layoutParagraph`) and main (`s
 installed browser, on inputs both can express. Performance comes after correctness here (`rebuild/CHARTER.md`), so these
 are recorded costs, not targets.
 
+**`page.ts` doesn't run today.** It builds flat paragraphs of `runs` and reads lines the way the library did before the
+inline-tree model (DESIGN.md §1.1, §2.9): `bunx tsc -p rebuild/bench/tsconfig.json` reports it, and a run throws at its
+first row. It is left as it is on purpose; the re-architecture ports it to the paragraph tree and line slots when it
+settles the measurer's lifetime, which is what the bench's numbers depend on. The driver, the cases, the statistics and
+the report (`run.ts`, `cases.ts`, `stats.ts`, `report.ts`, `bench.test.ts`) work, and `run.ts` launches the pinned browsers.
+
 - `run.ts`: the driver. It reads the browser build from the app bundle, bundles `page.ts` with both libraries, serves it
   cross-origin isolated, opens one browser session, collects rows and writes `<out>/<browser>-bench.json` and
   `<out>/<browser>-bench.md`.

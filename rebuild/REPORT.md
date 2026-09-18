@@ -10,11 +10,15 @@ The brief:
 - pin engine code and data to Chrome 153.0.8010.48, Safari 27.0 (WebKit 7625.1.29.11.27, macOS 27 libicucore) and Firefox 156.0 (ICU4X 2.1.2 baked data);
 - no epsilons, and every Canvas-versus-DOM gap handled on purpose or named.
 
-Headlines:
+Headlines (the ceiling round 3 evaluation of 2026-09-18, with the lab's font facts; "Round 4a" below has what changed
+since, and the headline configuration from here on is the one with no supplied font facts):
 
+- **With no supplied font facts and the library asking Canvas itself** (round 4a, five sets pooled, about 75,000 cases a
+  browser): line counts match on 99.50% in Chrome (99.60% with the lab's font table, 98.28% before the checks), 99.82% in
+  Firefox and 99.77% in webkit-host; widths on 94.52%, 95.54% and 95.18%.
 - **Line counts match the browser** on 99.23% to 99.94% of suite-sample cases: development, the burned held-out set of 2026-09-16 and the sealed-3 held-out set run for the first time, in Chrome 153, Firefox 156 and webkit-host, with installed Safari 27.0 in §2.7 (§2.3). Observed suite widths pass on 98.85% to 99.87% in Chrome, 95.81% to 97.86% in Firefox and 99.66% to 99.86% in webkit-host. The rates are pass ÷ (pass + fail); unobserved cases are left out. Main's library got 63.7% to 89.7% of line counts on the development and 2026-09-16 samples (§2.5, not refreshed this round).
 - **Against ceiling round 2 under the same scorer**, Chrome lost no line count, break or width; Firefox lost 10 line counts and 25 breaks and webkit-host 8, 8 and 1 width, every one with a covered explanation and an attribution (32 of Firefox's passed by accident before). Gained, lineCount / breaks / widths: Chrome 23 / 42 / 26, Firefox 187 / 378 / 1,242, webkit-host 106 / 166 / 98 (§2.4).
-- **The ceiling, measured on three fresh sets per browser that nobody had seen (100,749 cases, §2.8):** failures without a covered explanation are 1.76 per 10,000 cases in Chrome (6 rows in three new classes, one in every set), 0.30 in Firefox (1 row, in a class its owner had found) and 0.30 in webkit-host (1 row, a named observation consequence). Two unseen sets in a row without a new class: Firefox and webkit-host yes, Chrome no (without any open row at all: webkit-host only). **So the ceiling isn't reached in Chrome**, and known classes stay open in the other two. No residual class has a member on any set: Firefox's 1 au class is gone where the page can create a `<canvas>` element, which is a decision for the maintainer (§7 item 12).
+- **The ceiling, measured on three fresh sets per browser that nobody had seen (100,749 cases, §2.8):** failures without a covered explanation are 1.76 per 10,000 cases in Chrome (6 rows in three new classes, one in every set), 0.30 in Firefox (1 row, in a class its owner had found) and 0.30 in webkit-host (1 row, a named observation consequence). Two unseen sets in a row without a new class: Firefox and webkit-host yes, Chrome no (without any open row at all: webkit-host only). **So the ceiling isn't reached in Chrome**, and known classes stay open in the other two. No residual class had a member on any set, because Firefox measured on a detached `<canvas>` element; the maintainer has since decided that Firefox measures on an OffscreenCanvas always, which brings the 1 au class and synthetic bold back as named residual classes (Round 4a; CHARTER.md, decision 2).
 - **Installed Safari 27.0 lays out text exactly like webkit-host.** As a spot check in parts under 8 minutes it ran the combined development file and the combined rule and feature families file in both orders: every native view, prediction and score equals webkit-host's case by case, and no job failed (§2.7).
 - **Cost:** Canvas calls per paragraph rose again in round 3, by 13% to 34% in Chrome, 29% to 89% in Firefox and 12% to 153% in webkit-host, and summed prediction time on the small sets is 1.6 to 2.4 times round 2's in Chrome, 2.5 to 4.7 times in Firefox and 1.4 to 2.2 times in webkit-host (§3). Recorded only.
 - **Findings for main** are in rebuild/TAKE-BACK.md, including 2 required checks main now fails in Safari 27.
@@ -32,11 +36,115 @@ Terms:
 - A **gap** is a known place where Canvas can't supply what the DOM uses. The library still predicts, and reports the gap's name on the line whose content or break decision it concerns, with a source range where it has one.
 - A **protocol row** is a row whose page doesn't describe its declared input, such as slot floats outside their rows. It is left out of pass and fail alike.
 
+## Round 4a, 2026-09-18, after the evaluation below
+
+§2 to §7 hold the ceiling round 3 evaluation's numbers, measured with the lab's font facts and with Firefox on a detached
+`<canvas>` element. Round 4a changed both under the decisions of 2026-09-18 (CHARTER.md): the headline is with no
+supplied font facts, and Firefox measures on an OffscreenCanvas always. What follows are the owners' measurements
+(`.artifacts/session/round4a-reports.json`; the engines' write-ups are specs/{blink,gecko,webkit}-RESULTS.md, each under
+"round 4"), all in the pinned Chrome 153.0.8010.50 and Firefox 156.0 and in webkit-host, DPR 2, forward order, scorer 5
+unless said. Round 4b is trimmed on purpose (decision 3), and the evaluation after it replaces §2 to §7.
+
+**The headline with no supplied font facts** (font checks owner; FACTS-FREE.md's five sets: development, held-out 09-16,
+rule families, feature families and one fresh set; "table" is the lab's font table, "none" round 3's library with
+`UNKNOWN_FONT_FACTS`, "checks" the same no-facts predictor with `src/measure/font-checks.ts`):
+
+| Browser | Cases | lineCount: table / none / checks | breaks | widths | painter |
+|---|---:|---|---|---|---|
+| Chrome | 75,951 | 99.60 / 98.28 / **99.50** | 99.52 / 97.79 / **99.36** | 95.13 / 91.63 / **94.52** | 90.90 / 90.34 / 90.67 |
+| Firefox | 73,236 | 99.86 / 99.82 / **99.82** | 99.69 / 99.59 / **99.59** | 95.99 / 95.54 / **95.54** | 88.71 / 88.70 / 88.70 |
+| webkit-host | 73,414 | 99.77 / 99.76 / **99.77** | 99.44 / 99.43 / **99.44** | 95.18 / 95.14 / **95.18** | 85.92 / 85.88 / 85.92 |
+
+- Chrome recovers 925 of 1,001 lost line counts, 1,196 of 1,311 breaks and 2,197 of 2,658 widths, equal per set to
+  FACTS-FREE.md's projection; webkit-host equals the table on every set and metric; Firefox doesn't move, because nothing
+  it loses is learnable from its Canvas. Firefox's runs here still used the canvas element.
+- On a new fresh set (`r4-font-checks-1`), table / none / checks: Chrome (11,314 cases) lineCount 99.81 / 99.28 / 99.74,
+  breaks 99.75 / 98.66 / 99.65, widths 97.90 / 94.46 / 97.22; Firefox (11,066) 99.89 / 99.86 / 99.86, 99.78 / 99.73 /
+  99.73, 97.15 / 96.38 / 96.38; webkit-host (10,966) 99.78 / 99.78 / 99.78, 99.35 / 99.33 / 99.35, 94.29 / 94.23 / 94.29.
+- No case that passed lineCount, breaks and widths without facts fails with the checks, and no native observation differs
+  on 256,381 compared cases, so the checks' Canvas fonts moved no DOM layout. With the lab's table supplied the library
+  scores as round 3's did on the 8 big Chrome and webkit-host sets.
+- Against the lab's font table over 146 declarations the checks never disagree; Chrome's joining answers match the DOM at
+  a shaping edge on 143 of 143 and stay unknown for 10 fixed-pitch declarations.
+- Gaps on passing lines, table / none / checks: Chrome `optical-size` 0.21 / 99.92 / 3.80%, `joining-technology` 0 / 2.03 /
+  0.06, `hyphen-glyph` 0 / 1.05 / 0; webkit-host `fixed-pitch-path` 0.12 / 28.25 / 0.33, `hyphen-glyph` 0 / 2.71 / 0.
+- Chrome's 47 rows without a covered explanation under no facts (of 1,352 failing) are 4 known rows plus one class that
+  needs `pairKerning`: positions between kerned glyphs inside a line reported as predicted with no gap, which
+  `optical-size` masked while it fired on every line (a round 4b Blink item).
+- Cost: per declaration once per measurer, 9.5 calls in Chrome and 9.4 in webkit-host for Latin text, 0 in Firefox. While
+  a measurer lives one paragraph that is +13.7 calls a paragraph in Chrome (+16%) and in webkit-host (+61%).
+- Still needs a supplied fact: `pairKerning` (most of Chrome's 537 cases behind the table and 389 of Firefox's 412),
+  `ligatures` and `coverage`, `scriptLookups`, `joining` for fixed-pitch Arabic, `opticalSizeAxis` for the system UI font,
+  and everything in Firefox.
+
+**Firefox on an OffscreenCanvas only** (Gecko owner; the round 3 library with only that change, against the evaluation's
+element-path rows, both orders agreeing):
+
+| Sets | lineCount lost / gained | breaks | widths | What |
+|---|---|---|---|---|
+| development (25,390) | 0 / 0 | 0 / 0 | 26 / 3 | 11 rows of the 1 au class; 15 bold bitmap emoji under `bitmap-emoji-size` |
+| held-out 09-16 (15,196) | 0 / 0 | 0 / 0 | 25 / 0 | 6 rows of the 1 au class; 18 bold bitmap emoji; 1 U+1F600 U+FE0E history row |
+| rule families, r3 derivation (9,776) | 32 / 8 | 96 / 24 | 192 / 0 | all `rule/system-fonts-and-sizes` under `optical-size` |
+| feature families, r3 derivation (12,050) | 0 / 0 | 0 / 0 | 0 / 0 | |
+
+- The 33 bold bitmap emoji rows are predicted by the final library (synthetic bold's steps, probe F24), so they cost
+  nothing. The final library's failures without a covered explanation on the defined sets are the 17 rows of the 1 au
+  class, in both orders; passing cases with a wrong predicted value went from 30 to 6 (Noto Nastaliq Urdu, 1 au).
+- Three fresh sets (48,290 cases): prediction failures 236, 219 and 255; 1 au class 11, 0 and 12; open 0, 3 and 6, all
+  synthetic bold (U+2764 alone in a bold span), which the scorer's registry doesn't hold yet; no new class.
+- With no supplied facts: development lineCount 99.91% to 99.90%, breaks 99.90% to 99.88%, widths 98.26% to 98.06%;
+  held-out widths 97.35% to 97.07%; rule families lineCount 99.19% to 98.96%, widths 94.64% to 93.72%. `optical-size` is
+  then reported on 24,488 of 25,013 development cases, and values reported as predicted fall from 96.3% to 6.5%.
+- `page-history` in both orders reports 123 of 123 and 190 of 190 history-dependent cases; the history-dependent set itself
+  isn't stable between identical runs (190 and 104 on the held-out suite sample). The 9 giants pass. Canvas calls per
+  paragraph are within 2% of the element path.
+
+**Blink** (build b8 against round 3's w18): no line count, break or width lost on 73,260 cases, `suite/joined` gained 24
+breaks; of the evaluation's three classes the marked waw passes every metric, U+3000 across a wrap passes lineCount,
+breaks and widths with the coverage fact, and the ProbeShantell exact fit is traced and covered, still failing; passing
+cases with a wrong predicted value are 0 on every defined set and on three fresh sets; fresh sets `r4-blink-1` to `-3`
+(33,679 cases) have 0, 1 and 0 open rows, the one a new RTL view-cut class covered in b8; predicted values agree on
+99.983% to 99.987% with 72.5% to 73.8% of values predicted; all 14 giants pass every metric with exact values;
+`float32-precision` fires on 0.25% of passing development lines (5.69%).
+
+**WebKit** (predict-only against the evaluation's native rows, both orders; nothing lost on any metric of any set):
+
+| Set | Cases | lineCount fail | breaks fail | widths fail | painter fail | Prediction failures | Open |
+|---|---:|---|---|---|---|---|---|
+| development | 25,180 | 20 to 9 | 71 to 18 | 130 to 26 | 1,260 to 1,114 | 201 to 44 | 0 to 0 |
+| held-out 09-16 | 15,196 | 40 to 31 | 84 to 43 | 162 to 46 | 2,231 to 2,078 | 246 to 89 | 0 to 0 |
+| families | 21,734 | 51 to 43 | 86 to 78 | 177 to 177 | 910 to 910 | 263 to 255 | 0 to 0 |
+
+- `canvas-language` fires on 1.1% of passing development lines (15.4%), lift 18.3 (5.6): a named family settles its own
+  characters under every locale, and generic keywords are measured as the family Core Text resolves them to. With no
+  supplied facts: development 10 / 19 / 34 failing, held-out 32 / 46 / 55, open 0.
+- Fresh sets `r4-webkit-1` to `-3` (32,611 cases): 133, 155 and 86 prediction failures, 115 per 10,000 (evaluation: 207), 0
+  open. 250 of the 374 are `page-history`, and all 250 pass lineCount and breaks alone in a fresh process, so a one-order
+  fresh set overstates webkit-host's failures threefold; outside page history it is 38 per 10,000.
+- Canvas calls per paragraph on the development file: 22.7 (37.2), about a third of them diagnostic
+  (`simplified-measuring` singles 14.5%, `canvas-language` 10.1%, `font-fallback` 5.2%, `page-history` 3.9%).
+
+**Tests and scorer.** Tiers 0 to 2 (lab README, "Test tiers"; TESTS.md "Tiers"): on the six recordings of 2026-09-18 all
+380,882 cases replay the browser's own prediction exactly, and two independent both-orders runs of one library gave 0
+status transitions over 190,441 cases. Scorer 6 against scorer 5 on round 3's rows: no metric status changes; the three
+`suite/U+FFFC/start` rows go from open to covered, and the WebKit rows `c-653ac96abf5487ff`, `c-9a66d090891a825d` and
+`c-4bb3746469073e4d` are covered. With painter limits recorded, painter-only failures without an explanation (facts
+configuration, development) are Chrome 1 (14), Firefox 6 (451) and webkit-host 4 (960). The references, ledgers and staged
+seeds under `.artifacts/tests` describe the round 3 library until they are recorded again after round 4's merges.
+
+**Canvas checks at engine detection** (round 4b; DESIGN.md §1.4). `detectEngine()` answers unsupported, by name, where the
+running Canvas lacks what the engine's recipes assume. Probe `probes/canvas-checks.ts`, the library's own module in the
+page: supported in the pinned Chrome 153.0.8010.50, Firefox 156.0 and webkit-host and in Chrome 152.0.7977.82 and
+155.0.8048.0 and Firefox 153.3.0esr and 157.0b2; Firefox 140.16.0esr, where VERSION-DRIFT.md measured line counts at
+89.2%, is refused for the missing `lang`, the 0.001px letter spacing it keeps as a fraction (0.00104px a character over 16
+letters; nothing on one or two) and the ink box that spacing moves. Nothing in the lab calls it, so tier 1 (all six
+references) and tier 2 (Firefox, no facts, 62,437 cases) are unchanged case by case against the tree before it.
+
 ## 1. What was built
 
 ### 1.1 Architecture
 
-The library takes a paragraph and an environment. The paragraph is a list of styled runs, spans or bare text nodes, each with its own font, letter and word spacing and `lang`, plus the block's width, `white-space`, `word-break`, `overflow-wrap`, `line-break`, `tab-size`, direction and `lang`. The environment is the engine, the DPR, the page language and the UI languages.
+The library takes a paragraph and an environment. The paragraph is a tree of inline content (DESIGN.md §1.1): text leaves, spans with their own font, letter and word spacing, `lang`, wrapping styles, box edges and `vertical-align`, atomic inlines, `<br>` and `<wbr>`, plus the block's width, `text-indent`, `text-align`, direction and `lang`, and optionally an available width per line (line slots). The environment is the engine, the DPR, the page language and the UI languages.
 
 It returns:
 
@@ -60,7 +168,7 @@ What's shared:
 - `unicode/ubidi.ts`: an exact port of ICU 78.2 `ubidi`, for Blink and WebKit. It differs from icu4c 78.3 and libicucore on 0 of 770,241 BidiTest runs, 183,379 BidiCharacterTest lines and 405,000 fuzz strings. The crate resolver disagreed with ICU on 130,661 of 300,000 fuzz strings;
 - `unicode/unicode-bidi.ts`: the crate port, for Gecko;
 - grapheme clusters with each engine's data;
-- `measure/`: OffscreenCanvas contexts identified by their settings, a memo per layout, and the call log;
+- `measure/`: OffscreenCanvas contexts identified by their settings, a memo per layout, and the call log; the runtime font checks, which answer a font fact the caller left null where a Canvas check is sound (`font-checks.ts`); and the Canvas checks of engine detection (`canvas-checks.ts`);
 - `paint.ts`, with one engine switch, for the hyphen span;
 - the generators, which check sha256 hashes of pinned engine data.
 
@@ -73,14 +181,19 @@ The lab (`rebuild/lab/`) drives the browsers in background windows under the loc
 ### 1.2 API shape
 
 ```ts
-layoutParagraph(paragraph: Paragraph, env: Environment): { engine; lines: Line[]; measure: MeasureLog; gaps: Gap[] }
-detectEnvironment(): Environment
-paintLines(paragraph, layout, document): HTMLElement[]
-Line = { start; end; width; engineWidth: {blink LayoutUnit raw + zoom | webkit float32 px | gecko app units}; fragments; joinsNextLine; next: LineStart | null }
-Gap = { gap: GapName; run: number | null; detail: string; at?: { start; end } }   // on the paragraph, and since ceiling round 2 on each line
+detectEngine(): { kind: 'supported'; engine } | { kind: 'unsupported'; userAgent; reason }   // once per page: user agent, and what the engine's recipes assume of Canvas
+detectEnvironment(given: GivenFacts): { kind: 'supported'; env } | { kind: 'unsupported'; … }  // DPR, <html lang>, segmenters; again when they change
+layoutParagraph(paragraph, env, slots?): { engine; env; lines; belowFloats; measure: MeasureLog; gaps: Gap[] }
+prepareParagraph(paragraph, env) → firstLineStart(prepared) → layoutLine(prepared, start, slot)   // one line slot at a time
+paintLines(paragraph, layout, document): HTMLElement[]        painterLimits(paragraph, layout): PainterLimit[][]
+Line = { start; end; fragments; hasLineBox; joinsNextLine; slot; indented; align; gaps; next: LineStart | null;
+         geometry: the engine's own (Blink items in LayoutUnits, WebKit display boxes in float32 px, Gecko frames in app units) }
+Gap = { gap: GapName; run: number | null; detail: string; at?: { start; end } }   // on the paragraph and on each line
 ```
 
-Internally each engine implements `prepare`, `firstLine`, `nextLine(prepared, start, width, measurer)` and `gaps`, but that split isn't public. A `LineStart` is valid only at the width that produced it. There is no prepare-once, lay-out-at-many-widths API, and nothing is cached across paragraphs.
+Each engine implements `prepare`, `firstLine`, `nextLine(prepared, start, slot, measurer)` and `gaps`. A `LineStart` is valid
+only for the slot that produced it. There is no prepare-once, lay-out-at-many-widths API, and nothing is kept across
+paragraphs: a measurer lives one paragraph. API shape is an open question for after the freeze (CHARTER.md, decision 3).
 
 ## 2. Numbers
 
@@ -1118,6 +1231,8 @@ WebKit (686 in 33,202, 207 per 10,000):
 
 ## 7. Open decisions
 
+As the round 3 evaluation left them; an item round 4a settled says so at its end.
+
 1. **Host rows in reported numbers.** Installed Safari equals webkit-host on every case it ran in round 3: the development
    and family files in both orders, scores included, in parts under 8 minutes with no failed job (§2.7). **Recommendation:**
    let webkit-host rows stand in for WebKit geometry and predictions under lab/WEBKIT-HOST.md's conditions, named as
@@ -1137,7 +1252,8 @@ WebKit (686 in 33,202, 207 per 10,000):
    but it isn't exported or recorded, so painter failures without a covered explanation rose as the engines' conditions
    narrowed (§2.8). **Recommendation:** record the limits per painted line and let the scorer cover by them; decide whether a
    painted form may hold the neighbouring line's text (WebKit's carried width, Blink's space shaped with the next line,
-   Gecko's frame that broke inside itself).
+   Gecko's frame that broke inside itself). **Round 4a:** the limits are recorded per painted line and cover (scorer 6);
+   the painted form is open, and painter exactness is part of the known tail.
 7. **History-dependent layouts.** WebKit's `page-history` is computed from history worlds and reports every
    history-dependent case; in Firefox the canvas element follows the DOM's font state, so predictions are right in both
    orders while `page-history` names only part of the effect (§2.8). **Recommendation:** decide what the library promises
@@ -1146,13 +1262,16 @@ WebKit (686 in 33,202, 207 per 10,000):
    which counts painter-only failures, nearly everything there does (§2.8). `canvas-language` still fires on 15% of passing
    development lines and covers 474 of webkit-host's 686 fresh failures. **Recommendation:** fix one lift definition (the
    prediction one), and decide the inputs that would turn `canvas-language` into a prediction (the per-language cascade as a
-   fact, or a connected `<canvas>` with `lang`).
+   fact, or a connected `<canvas>` with `lang`). **Round 4a:** lift is over prediction failures alone, painter-only failures
+   apart; generic families are measured through Core Text's per-language family table, kept as engine data (CHARTER.md,
+   decision 4), and `canvas-language` fires on 1.1% of passing development lines.
 9. **Sealed held-out.** `sealed-3-20260917` ran once and stays sealed: only counts left the scorer. It shows 2 open Chrome
    rows and 1 webkit-host row that weren't opened. **Recommendation:** pursue them through fresh sets, not by opening the
    set; generate sealed-4 before the next round, and rotate per browser release (TEST-ARCHITECTURE §3).
 10. **Chrome 153.0.8010.50.** The lab launches a pinned copy, TESTS.md §12 ran for .50 (facts, derivations), the library
     accepts .50 as source-identical, and the staged tests seeds are .50's throughout. **Recommendation:** adopt the staged
-    seeds after the critic and move the library's own pin.
+    seeds after the critic and move the library's own pin. **Round 4a:** scorer 6 makes the staged scorer 5 seeds refuse;
+    seeds are made again after round 4's merges. The pin hasn't moved.
 11. **Blink in-word geometry.** Resolved in round 3 by limited states the layout marks: passing development cases with a
     wrong predicted value went from 2,022 to 18 (§2.2). Left: 18 development, 33 held-out and about 11 a fresh set, untraced.
 12. **Gecko's canvas element.** The Gecko port measures on a detached `<canvas>` element at the DOM's device font size. It
@@ -1160,58 +1279,28 @@ WebKit (686 in 33,202, 207 per 10,000):
     runs it follows the DOM's font state: 527 of 542 history-dependent suite cases pass in both orders. It needs
     `document`, so a worker falls back to the OffscreenCanvas path with round 2's gaps and classes, which no lab run covers.
     **Open decision for the maintainer:** whether the library may measure there. If yes, the lab should run the fallback path
-    too, so its classes stay counted.
+    too, so its classes stay counted. **Decided on 2026-09-18:** no; Firefox measures on an OffscreenCanvas always, with its
+    measured cost and two unmerged alternatives in CHARTER.md, decision 2.
 13. **Costs.** Record only, as tentpole 8 says. Calls rose again in all three engines in round 3 (§3).
 14. **API.** Open (tentpole 8).
 15. **UI and system language facts** can't be read from page APIs. **Recommendation:** keep them explicit inputs that report
     `ui-language` when absent, and tell developers to set `lang`.
 16. **Firefox bug candidate.** A grapheme cluster split between its two marks across spans in Geeza Pro gives a frame
     2^30 + 56 au wide natively (probe F18). **Recommendation:** trace it in source or report it, and give the scorer a way
-    to mark such rows instead of counting them covered by `in-word-prefix` (§2.8).
+    to mark such rows instead of counting them covered by `in-word-prefix` (§2.8). **Round 4a:** traced
+    (`ComputeLigatureData` divides a signed advance by an unsigned count, gfxTextRun.cpp:249-289, probe F20); the report
+    page is rebuild/platform-bugs entry 14, and `in-word-prefix`'s reading now names the function. Nothing is filed.
 17. **Scorer attribution rules.** Two known observation consequences count as open rows because scorer 5 has no rule for
     them: WebKit's `f32(f32(x + w) − x)` rect width at a moved x, and Blink's `suite/U+FFFC/start` rows where a soft hyphen's
     copied rect makes the scorer attribute the line after the cause. **Recommendation:** port them as observation rules with
-    their source, or keep counting them open.
+    their source, or keep counting them open. **Round 4a:** both are scorer 6 rules. Blink's 3 `suite/space` rows need the
+    same soft-hyphen attribution on the predicted line and still count as open (round 4b, tests owner).
 18. **Facts-free headline.** The maintainer's line is a library without supplied font facts; this evaluation's numbers are
     with the lab's facts, and research/FACTS-FREE.md has the other side. **Recommendation:** run the next evaluation both
-    ways on the same fresh sets.
-
-## Critic corrections (charter evaluation, 2026-09-17)
-
-Checked against `.artifacts/lab/final-20260916/`. `score.ts` re-scored five runs into a scratch directory: Chrome held-out policy and held-out suite sample, Firefox held-out runs, webkit-host dev ws and held-out suite sample. Every summary and per-case file came out byte-identical. Main's small-set rows were also rescored with the current scorer: same line counts. The §2.2 and §2.3 tables, §3 measure, timing and line counts, and §4 gap counts all match the files. Changed from the draft:
-
-- Headline: "match the installed browser" became "match the browser", naming webkit-host for WebKit and saying that unobserved cases are left out of the rates. "Installed Safari 27.0 wasn't run" became "the rebuilt library never ran in installed Safari", because Safari did observe lab rows.
-- Cost headline: added Chrome's held-out call ratio, 3.5×. The draft gave only development's 2×.
-- §2.1: added the per-browser suite-sample counts, and installed Safari's 25-case smoke runs at 06:20 and 06:28 and its failed 300-case attempt at 06:51. The draft said Safari observed only two things.
-- §2.2: Firefox history-dependent cases. U+1F600 explains 116 of 123 in development but only 113 of 216 held-out; the other 103 are `suite/U+FFFD`. Also, the claim that the Chrome held-out width drop is "mostly the family mix" had no evidence behind it. It is replaced by the pass rates without the soft-hyphen class (89% against 96%), and the reference to it now points to §6, not §5.
-- §2.3: the draft said both sides used the current scorer. Main's small-set rows were the 10:00 scoring; rescored, their line counts don't change. Control-family shares now come from the final rescoring.
-- §3: the held-out maximum paragraph is 269,747 UTF-16 units, not 257,000. webkit-host case time is 792 s, not about 420 s. The test time is about 8 s; the critic's run took 8.5 s.
-- §4: the draft's "3 / 21 / 16 prediction failures have no gap that locates failures" is really the count with no gap at all. The counts with only weak gaps are 225, 21 and 417. Added the missing weak flags and WebKit's `ui-language` lift. Added the DESIGN.md §5 gaps that engines don't report, and the reported gaps DESIGN.md has no row for.
-- §5: probe counts are now split into spec rows and cross-cutting rows, as in specs/PROBES.md.
-- §6: the Blink C0/C1 range was "35 to 51" and is 18 to 51. The soft-hyphen class is defined by Arabic or Hebrew text, not by paragraph direction. The Gecko "U+200C…U+FEFF 64 each" leaves out U+200D, which has 26. The emoji painter families have 84 or 85. The WebKit control range was "26 to 34" and is 21 to 31; 34 is U+FFFF, a noncharacter.
-- TAKE-BACK.md: §2.1 now uses the final rescoring's control-family counts, for development and held-out. §4's Firefox count of 130, from an earlier run, is now the final 123 and 216, with the U+FFFD share.
-
-## Orchestrator notes (charter evaluation, after the critic)
-
-- The Gecko break scan was replayed offline against the groundwork Rust oracle rebuilt on Firefox 156's data
-  (specs/gecko-oracle-replay.md). Every lab paragraph agrees position for position. Fuzzing found one port bug:
-  `scriptIsChineseOrJapanese` (engines/gecko/linebreak.ts) lacks ICU likely subtags, so `yue`, `wuu`, `cmn`, `hak`,
-  `nan`, `gan`, `lzh` and `und-TW` lose the Chinese/Japanese rules under `line-break: normal` and `loose` (400 fuzz
-  positions). Not fixed: no lab case uses those tags, and the final numbers describe the committed library.
-- Installed Safari: the orchestrator's own checks at 10:30 (user idle 283 min), 12:45 (idle 409 min) and 13:50 found
-  Safari frontmost (PLAN.md log). At 13:50 the maintainer was back and using Safari, so no installed-Safari run was started.
-- `rebuild/lab/FINAL-RESULTS.md` was never written; the full tables are `.artifacts/lab/final-20260916/analysis.md`, and §2
-  above holds the summary tables.
-- Installed Safari after all. At about 14:15 the maintainer said "go ahead and use safari!". `run.ts` and
-  `probes/runner.ts` gained `--allow-safari-frontmost`, which skips the wait for Safari to leave the front (uncommitted).
-  Installed Safari ran the combined lab files from 16:22 to 16:34 and both probe files from 16:44 to 16:45, and
-  webkit-host ran the same combined files in between. Terminal was the frontmost app at every check, so no run opened a
-  window over a frontmost Safari. With that flag the probe runner never calls `activate`. The lab driver still gives
-  focus back with `activate` if Safari takes focus while it makes its window; whether that ever happened wasn't
-  recorded. `rebuild/src` was unchanged.
-- What that changed here: the headline, §2.1's method and observed list, §2.2's installed Safari tables and comparison,
-  §2.3's installed Safari rows, the notes in §3 and §4, §5's lists, §6's page-history line and §7 item 1. The numbers
-  come from `.artifacts/lab/final-20260916/combined-results.json`, `split-counts.json`, `safari-vs-host/` and the probe
-  comparisons. Installed Safari against main (`safari-vs-main/`) and the prediction comparison
-  (`safari-vs-host/predictions-*.json`) were computed offline afterwards, from the same rows.
-
+    ways on the same fresh sets. **Decided on 2026-09-18:** the headline is with no supplied font facts, the library asks
+    Canvas itself where a check is sound, and every tier runs both configurations (Round 4a above).
+19. **The correctness line** freezes after round 4 with a known tail (CHARTER.md, decision 3): what is left under gaps
+    that could become predictions, conditions that only diagnose, the rare-script tail and painter exactness go to the
+    ledger's backlog with case ids instead of being worked on.
+20. **Browser bug reports.** rebuild/platform-bugs/LEDGER.md has 14 candidates with standalone pages checked in the three
+    lab browsers, and 7 facets of tracked bugs. Nothing is filed; filing is the maintainer's.

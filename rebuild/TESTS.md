@@ -1,12 +1,30 @@
 # Tests for the rebuild
 
-Status, 2026-09-17, branch `rebuild-charter`. This replaces the 2026-09-16 test strategy (research/TESTS.md). That strategy made main's accuracy grid, oracles and filed reports first-class obligations. Here main's suite and obligations are a measurement corpus (CHARTER.md tentpole 5). The blocking layers are the rebuild's own:
+Status, 2026-09-18, branch `rebuild-20260916` after round 4a (the sections below keep the date of what they describe). This replaces the 2026-09-16 test strategy (research/TESTS.md). That strategy made main's accuracy grid, oracles and filed reports first-class obligations. Here main's suite and obligations are a measurement corpus (CHARTER.md tentpole 5). The blocking layers are the rebuild's own:
 
 - rule-targeted families, at widths derived from the browsers' observations;
 - versioned probe facts;
 - coverage of library rules.
 
 The design is research/TEST-ARCHITECTURE.md. This document says what exists, how to run it and what the first runs found.
+
+## Tiers
+
+What to run after a change, by time (rebuild/lab/README.md, "Test tiers", has the sets, the protocol and what each tier
+can't see). Every tier runs two configurations: `no-facts`, the headline, and `facts`.
+
+| Tier | Command | Shows | Measured on 2026-09-18, other jobs running beside |
+|---|---|---|---|
+| 0 | `bun test rebuild` | a failing unit test | 11 to 15 s (689 tests) |
+| 1 | `bun rebuild/tests/replay.ts check --browser=all --config=all` | every case whose full prediction changed against a frozen reference, from recorded Canvas answers with no browser; the cases that need one | 77 s for six references, 380,882 cases |
+| 2 | `bun rebuild/tests/browser-sets.ts --browser=<browser> --out=<dir>` | status transitions against the reference ledger, lost pairs against the build-keyed seed | forward order, one browser: Chrome 88 s, Firefox 108 s, webkit-host 128 s |
+| 3 | the round's evaluation (fresh sets, sealed sets, giants, installed Safari) | new classes on cases nobody saw | REPORT.md |
+
+Tier 1 is a change detector, not an oracle: its expected values are the library's own at a commit. Its inputs are recorded
+per library, so a library that asks Canvas new questions needs a new recording (`browser-sets.ts --record`, `replay.ts
+pack`, `freeze --force --reason`). `replay.ts check` keeps its scratch folder inside the reference folder, so two checks of
+one reference at the same time collide; give each its own `--dir` that links the shared `inputs`, `reference`, `ledger` and
+`browser` folders.
 
 Terms:
 
@@ -29,11 +47,19 @@ Terms:
 | `rebuild/tests/coverage.ts` → `rebuild/tests/coverage.json` | The coverage matrix |
 | `rebuild/tests/gate.ts` → `rebuild/tests/baselines/<browser>-<engine build>.json` | The layered gate |
 | `rebuild/tests/independence.test.ts` | No expected value from `rebuild/src` |
+| `rebuild/tests/sets.ts` | The tiers' sets and run protocol |
+| `rebuild/tests/replay.ts`, `rebuild/tests/reference/` | Tier 1: offline replay against a frozen reference, pinned by hash in the manifests |
+| `rebuild/tests/browser-sets.ts`, `rebuild/tests/baselines/sets/`, `staged-round4-sets/` | Tier 2 and its seeds |
+| `rebuild/tests/ledger.ts` | The known-status ledger: transitions and conditions |
+| `rebuild/lab/rows.ts`, `predictor-core.ts`, `port-measure.ts` | Rows read plain or `.zst`; the one prediction adapter; the observation ports' live measuring |
+| `rebuild/src/measure/font-checks.test.ts`, `rebuild/probes/font-checks.ts` | The runtime font checks against a stand-in Canvas (18 tests; one ties the joining-script test to the Blink port's joining types), and in the browsers over the lab's font declarations, beside the font table and the DOM (`.artifacts/lab/font-checks/tools/verdict.ts`): a check per release |
+| `rebuild/src/measure/canvas-checks.test.ts`, `rebuild/probes/canvas-checks.ts` | `detectEngine()`'s Canvas checks against stand-in contexts, and the library's own `detectEngine()` in a browser: a pinned browser must answer supported (`LAB_CHROME_APP`, `LAB_FIREFOX_APP` for another build) |
+| `rebuild/knip.config.ts` | `bunx knip --config rebuild/knip.config.ts`: unused files and exports under `rebuild/`, tests ignored |
 | `rebuild/lab/browser-build.ts`, `rebuild/lab/pin-browser.sh` | The apps `lab/run.ts` and `probes/runner.ts` launch (pinned copies of Chrome and Firefox), and the build read from their bundles |
 | `rebuild/lab/sharded.ts` | One case file as several jobs at once; derivation observes through it |
 
 - `bunx tsc --noEmit -p rebuild/tests/tsconfig.json`
-- `bun test rebuild/tests`: 43 tests in 9 files.
+- `bun test rebuild/tests`: 70 tests in 13 files.
 
 Derived case files, rows and derivation records live under `.artifacts/charter-20260916/tests/families-20260916/<browser>/`. A baseline names its case file with a sha256.
 
@@ -46,15 +72,16 @@ Derived case files, rows and derivation records live under `.artifacts/charter-2
 | L2 browser facts | A claim about one browser build holds | Probe observations with in-probe verdicts | `rebuild/facts`, `facts.ts` | blocking: flips and missing facts |
 | L4 rule families | Named rules match the browser at the widths where its decision changes | Native observations at derived widths | `families/`, `derive.ts` | blocking: lost pairs |
 | L5 natural families and main's corpus | Realistic paragraphs and main's suite, measured | Native observations | `lab/cases` | report only |
-| L3 replay, L6 held-out | | | not built (§12) | |
+| L3 replay | The library's full prediction is unchanged against a frozen reference, from recorded Canvas answers, with no browser | the library's own output at a commit (a change detector, not an oracle) | `tests/replay.ts` | report only: tier 1 (lab README "Test tiers") |
+| L6 held-out | | | sealed sets run once per evaluation, counts only; not a gate layer (§13) | |
 
 ## 3. Rule registry
 
 - `bun rebuild/tests/import-rules.ts` writes `rules.json` from the 2026-09-16 catalogue (399 rules) and `rule-changes.json`:
-  - 28 rules removed, each with its replacement: the lab-visibility widths, the choices by score and the name keys the owners replaced;
-  - 18 reclassified entries;
-  - 105 added: 44 from the owners' stage 1 reports, 55 for stage 5 (2026-09-17), and 6 in ceiling round 2.
-  - 476 rules are current.
+  - 29 rules removed, each with its replacement: the lab-visibility widths, the choices by score and the name keys the owners replaced;
+  - 39 reclassified entries, 14 of them round 4's new names for tests renamed since the catalogue;
+  - 165 added: 44 from the owners' stage 1 reports, 55 for stage 5 (2026-09-17), 6 in ceiling round 2, 9 in ceiling round 3 and 51 in round 4 (the runtime font checks 6, the Canvas checks 1, Blink 12, Gecko's round 3 rules 11 and round 4 rules 16, WebKit 2, scorer 6's observer assumptions 3);
+  - 535 rules are current: Blink 192, WebKit 155, Gecko 151, shared 37.
 - **Change rules in `rule-changes.json`, never in `rules.json`.** A `reclassified` entry replaces the fields it names (kind, statement, source, probes, tests, area, declaredBy) on any rule, from the catalogue or added; entries for one rule apply in order. Until ceiling round 3 the importer threw on a reclassified id that wasn't in the catalogue, so round 2's owners edited `rules.json` by hand, and a regeneration would have lost those edits.
 - **Hand edits aren't lost.** `rules.json` keeps a hash of every rule as generated (`generated`). On the next import a rule whose file version moved while `rule-changes.json` didn't is written into `rule-changes.json` (a reclassified entry with the fields that differ, or an added entry for a rule added by hand), and the importer says so. When both moved and disagree, a rule was deleted by hand, or a hand edit touches id, engine, status, replacedBy or audit, it stops, names the rule and writes nothing. `--check` writes nothing and exits 1 when either file would change. The first run moved round 2's hand edits over: 5 Gecko rules' statements, sources, probes and tests, and the 2 Gecko rules added by hand. A registry without hashes counts as hand-edited wherever it differs from the generation, so on that first run a fresh change to `rule-changes.json` looks like a hand edit of the old text; it happened with two entries, which were put right by hand.
 - `declaredBy` says where an id comes from:
@@ -63,7 +90,7 @@ Derived case files, rows and derivation records live under `.artifacts/charter-2
   - `provisional`, for 19 WebKit and Gecko replacements that the owner reports gave only as table rows;
   - `provisional (stage 5, feature families 2026-09-17)`, for the 55 stage 5 rules. They come from DESIGN.md §1.1, §2.9 and §8.3 stage 5 with the architect's citations; the engine owners confirm or rename them when they annotate the source.
 - The stage 5 rules are 17 Blink, 17 WebKit and 16 Gecko rules for box edges, per-element styles, atomic inlines, `<br>`, `<wbr>`, text-indent, text-align and line slots; 3 observation rules for `Element.getClientRects()`; and 2 observer assumptions (kind `observer assumption`): `shared/lab/vertical-centre-grouping` and `shared/lab/slot-rows`.
-- A rule's source annotation is `// rule <id>` in `rebuild/src`. `coverage.ts` lists rules without one (all 476 today) and annotations the registry doesn't know. Once owners annotate, the registry is regenerated from the annotations.
+- A rule's source annotation is `// rule <id>` in `rebuild/src`. `coverage.ts` lists rules without one (all but the WebKit owner's 9 round 3 rules) and annotations the registry doesn't know. Once owners annotate, the registry is regenerated from the annotations.
 
 ## 4. Rule-targeted families
 
@@ -313,7 +340,7 @@ A facts file holds one engine build's facts, one record per fact and scope:
 | `rebuild/facts/blink/153.0.8010.48.ndjson` | 756 | blink-probes at DPR 2 (340) and forced DPR 1 (336); zoom probes at forced DPR 3.5 (15) and emulated DPR 2 (22); system-ui in fresh browsers (19, 17, 7) |
 | `rebuild/facts/blink/153.0.8010.50.ndjson` | 772 | the same seven sets, rerun in the pinned Chrome 153.0.8010.50 in ceiling round 3 (`rerun-probes.sh`, `.artifacts/tests/release-chrome-153.0.8010.50/probes`): all 756 facts of .48 compared, 756 unchanged, no decisive value changed, no flip, none missing; 16 new facts from probes added to `blink-probes.ts` since the seed (cross X5 with the DOM laid out first, a supplementary blink-text H29 check) |
 | `rebuild/facts/webkit/22625.1.29.11.27.ndjson` | 176 | webkit-probes in webkit-host (88) and installed Safari (88) |
-| `rebuild/facts/gecko/156.0.ndjson` | 321 | gecko-probes at apd 30 (269), 60 (13), 40 (12), 27 (12), 23 (12); follow-up (3) |
+| `rebuild/facts/gecko/156.0.ndjson` | 404 | gecko-probes at apd 30 (269), 60 (13), 40 (12), 27 (12), 23 (12); follow-up (3); the round 2, 2b, 3 and 4 follow-up sets at apd 30 (83, all holding; round 4) |
 
 - **No facts yet from:**
   - outputs that return raw values without checks: blink followups and gaps, webkit followups, gecko followups, followups-f2 and emoji-font;
@@ -329,7 +356,7 @@ Per release, `bash rebuild/tests/rerun-probes.sh <browser> <previous facts file>
 - extracts facts under the build the runner records, and refuses sets that ran different builds;
 - `facts.ts release` writes `rebuild/facts/<engine>/<new build>.ndjson` with `holdsIn` carried forward.
 
-A fact's `spec` is the probe's label up to a colon, as a rule's probe entry is read, so probes labelled `gecko-port F12: how pair kerning divides` join rules citing `gecko-port F12`. The round 2 Gecko probes (F7 to F12) and round 3's (F13 to F19, `rebuild/probes/gecko-round3.ts`) still return raw values without checks, so they give no facts yet; their verdicts, computed from the output files, are in specs/gecko-RESULTS.md ("Ceiling round 3", "Probes"), and F18 and F19 were each run more than once into one output folder, which holds the last run.
+A fact's `spec` is the probe's label up to a colon, as a rule's probe entry is read, so probes labelled `gecko-port F12: how pair kerning divides` join rules citing `gecko-port F12`. The Gecko follow-ups F7 to F27 (`gecko-round2.ts`, `gecko-round2b.ts`, `gecko-round3.ts`, `gecko-round4.ts`) return `checks` and `pre` over their raw values since round 4 (F19's rows are under `rows`), and give 83 facts; `rerun-probes.sh` doesn't list those four sets yet, so a release rerun would report their facts missing until it does.
 
 A flip or a missing fact exits 1. Either the browser changed (read the new source, update specs and port), or the claim depends on process history (narrow its scope to fresh processes).
 
@@ -372,13 +399,15 @@ Regenerated 2026-09-17 by the ceiling round 2 evaluation, from `rebuild/facts/*`
 | Gecko | 124 | 104 | 55 | 55 | 79 | 20 | 6 |
 | Shared | 29 | 12 | 6 | 6 | 0 | 17 | 0 |
 
-9 rules are annotated in source (`// rule <id>`, the WebKit owner's round 3 rules), 475 aren't. Round 3's Blink and Gecko rules aren't in the registry yet.
+9 rules are annotated in source (`// rule <id>`, the WebKit owner's round 3 rules); the others aren't. Round 4 registered Gecko's round 3 and round 4 rules, Blink's round 4 rules, the font checks and scorer 6's assumptions (§3); round 3's Blink rules aren't in the registry yet. No matrix has been regenerated since, so the tables above don't count them.
+
+The staged matrix's exit 1 is fixed since round 4: `coverage.ts` `lostObservedFamilies` doesn't count a removed rule whose replacements all have an observed family, and `following-space` and `tabs` name `webkit/measure/word-spacing-in-context`; regenerated over round 3's derived runs it exits 0 (WebKit 110 covered, 91 by families).
 
 Ceiling round 3 gave each of round 2's six rules what it lacked (below the list); the staged matrix above shows them. A trial regeneration over round 2's runs with the .50 facts file covers all six: four by test and family, `blink/shape/pair-window-whole-clusters` and `blink/shape/cluster-unit-grapheme` by family.
 
 Round 2 added six rules, and none had a test, fact or family in that matrix: `blink/justify/cjk-ideograph-or-symbol`, `blink/measure/pair-kerning-from-fact`, `blink/shape/cluster-unit-grapheme`, `blink/shape/pair-window-whole-clusters`, `gecko/lines/in-word-advance-split-kerning` and `gecko/measure/lang-empty-locale-language`. Four more Gecko rules carry probe labels without a holding fact, since the round 2 probes (F7 to F12) aren't in the facts files: `gecko/gap/in-word-prefix`, `gecko/lines/in-word-advance-split-kerning`, `gecko/measure/range-in-script-context` and `gecko/script/latin-fast-path`.
 
-- Four of the six had a test all along. The registry names it as bun prints it, `describe block > test name`, and `coverage.ts` looked for that whole string in the file; it now finds each part (`testPresent`). 14 other test references are still stale: the tests were renamed or the entry describes tests instead of naming one (`blink/lines/forced-break`, `blink/script/script-run-iterator`, four Gecko B2 and B4 entries, six shared entries).
+- Four of the six had a test all along. The registry names it as bun prints it, `describe block > test name`, and `coverage.ts` looked for that whole string in the file; it now finds each part (`testPresent`). 14 other test references were stale until round 4, which gave them the names the files hold now (`blink/lines/forced-break`, `blink/script/script-run-iterator`, four Gecko B2 and B4 entries, six shared entries): every test the registry lists is present. A name with an apostrophe is listed up to the apostrophe, because `testPresent` looks for the name in the source, where it is escaped.
 - Families now name the rules they exercise: `in-word-breaks` (`AV` and `Wa` words in Arial, Hoefler Text and Times New Roman, fonts on both sides of the `pairKerning` fact) names `blink/measure/pair-kerning-from-fact` and `gecko/lines/in-word-advance-split-kerning`; `clusters` (Bengali conjuncts in Kohinoor Bangla) names `blink/shape/cluster-unit-grapheme`; `languages` (`lang=""`) names `gecko/measure/lang-empty-locale-language`.
 - Two families grew: `joining` has a `shy-mark` word, a kasra right after the soft hyphen, for `blink/shape/pair-window-whole-clusters` (96 to 128 paragraphs an engine), and `text-align` has an ideograph word in PingFang SC under `justify` and `start`, for `blink/justify/cjk-ideograph-or-symbol` (144 to 160).
 
@@ -391,12 +420,13 @@ What stays uncovered:
 - gaps no family triggers: dictionary breaks unavailable, page zoom, page history, float32 precision, bitmap emoji size;
 - the painter's 12 rules, since painter probes haven't run.
 
-Six current rules are still heuristics or choices by score: `blink/shape/wide-group-halved`, `blink/shape/cluster-unit-grapheme` (registered in round 2), `shared/env/engine-from-user-agent` and three painter rules. `blink/measure/ignorables-left-out-if-8bit` became a ported rule in round 2.
+Twelve current rules are heuristics or choices by score: `blink/shape/wide-group-halved`, `blink/shape/cluster-unit-grapheme` (registered in round 2), `blink/shape/position-adjust-window`, `shared/env/engine-from-user-agent`, three painter rules, and since round 4 `webkit/lines/shaped-run-in-joining-context`, `webkit/gap/language-dependent-fallback-table`, `webkit/measure/font-check-fixed-pitch`, `gecko/measure/sides-add-up-is-exact` and `gecko/measure/suffix-side-recipe` (CHARTER.md, "Standing"). `blink/measure/ignorables-left-out-if-8bit` became a ported rule in round 2.
 
 ## 9. The gate
 
 `bun rebuild/tests/gate.ts seed|check --derived=<derivation dir> --baseline=<file> [--facts=<file>] [--coverage=<file>] [--corpus-baseline=<lab gate file> --corpus-runs=<per-case files>] [--out=<report>]`
 
+- **Seeds go to a staging folder.** `gate.ts seed` needs `--staging=<dir>`, writes `<staging>/<baseline name>` with `<name>.seed-record.json`, and never the baseline it names (round 4).
 - **Rule families, blocking.** The (case id, metric) pairs that passed in both seeding runs, forward and reverse. The seed and check rules are `lab/gate.ts`'s, with `--complete`. History-dependent cases, protocol rows and unstable pairs never fail.
 - **Facts, blocking.** The build's facts file against the one the baseline recorded; a verdict flip or a missing fact fails.
 - **Coverage, blocking.** A rule of the engine that had an observed family at seeding and has none now fails.
@@ -430,6 +460,8 @@ Seeded by the ceiling round 2 evaluation (REPORT.md §2.6; `.artifacts/ceiling-2
 
 The cases only the adopted feature seeds hold are the `rule/line-slots` cases under the new width floor, the 22 protocol rows among them. With these seeds Chrome's tests baselines hold one build throughout (cases derived under .50, .50's facts, .50's runs).
 
+**Scorer 6 (2026-09-18)** makes every scorer 5 staged seed above refuse. Tier 2's seeds for the same sets are staged in `rebuild/tests/baselines/staged-round4-sets/` (six files, both configurations); forward-only runs of each browser lose nothing against them. They describe the round 3 library, and are made again after round 4's merges.
+
 - Chrome's three files are new, for build 153.0.8010.50, which replaced .48 on 2026-09-17; the .48 seeds stay in their own files. Their family cases were derived under .48 (the `build` field), the runs are .50's, whose native views equal .48's on every family case in both orders (`evaluate-r2/native-rounds-chrome.json`), and their facts file is .48's. §12's procedure (probes, derivation) hasn't run for .50.
 - The feature seeds still hold round 1's cases, with their protocol rows listed apart (Firefox 15, webkit-host 7). Round 1's seeds were pruned of those rows by rule in ceiling round 2 (`lab/gate.ts --prune-protocol`, reports in `.artifacts/lab/round2-scorer4/prune/`). Ceiling round 3 derived the families again with `derive.ts` `minimumUnits` (§6, "Round 3 derivations"); the next seeds take `.artifacts/tests/derive-r3-20260917/<browser>/{families,features}`, whose Chrome cases were derived under .50 with .50's facts file beside them.
 
@@ -441,12 +473,12 @@ Main-derived families are a measurement corpus. In this gate they are the report
 
 ## 11. Independence
 
-`rebuild/tests/independence.test.ts` checks every file under `rebuild/tests`, `rebuild/lab` and `rebuild/probes` except `lab/predictor.ts`, the prediction adapter. They may import from `rebuild/src` only:
+`rebuild/tests/independence.test.ts` checks every file under `rebuild/tests`, `rebuild/lab` and `rebuild/probes` except `lab/predictor-core.ts`, the prediction adapter; `lab/predictor.ts` and `lab/baselines/no-facts-predictor.ts` are made from it and import only contract constants from `rebuild/src`. They may import from `rebuild/src` only:
 
 - types from `src/model.ts` and `src/env.ts`;
 - constants from those two files that aren't functions, such as `UNKNOWN_FONT_FACTS` and `PINNED_BUILDS`.
 
-Engine or library logic fails the test. At the tree the ceiling round 3 evaluation ran (2026-09-18) it fails on `lab/baselines/no-facts-predictor.ts`, the facts-free measurement's predictor, which imports `src/index.ts`, `src/paint.ts` and `detectEnvironment` like `lab/predictor.ts` does and isn't on the exception list.
+Engine or library logic fails the test. It passes since round 4. Two probes bundle a library module into their page to run it in a browser (`probes/font-checks.ts`, `probes/canvas-checks.ts`); they import nothing from it, and their expected values aren't the library's.
 
 ## 12. Per browser release
 
@@ -463,7 +495,7 @@ A macOS update moves all three keys.
 
 ## 13. Not built yet
 
-- L3 offline replay as a gate layer. Its parts exist since ceiling round 3: `run.ts --record-measurements` stores every Canvas call and dictionary segmentation of every case, and `lab/measurements.ts` replays a library build against them with no browser (lab README, "Recorded measurements"); on `runs` the replay gives the recorded layout on all 2,580 cases in each browser. No recorded set is kept as a baseline yet.
+- Tier 1 (L3) gates nothing by itself, and its inputs are recorded per library: a library that asks Canvas new questions needs a new recording (`browser-sets.ts --record`, `replay.ts pack`, `freeze --force --reason`).
 - Triage records for the census's main-only rows (§7).
 - Lock files and oracle answers under `rebuild/data`, with skipped oracle tests turned into failures (§5).
 - Environment reruns for rules that read DPR or app units: forced DPR 1 in Chrome, other apd in Firefox. `run.ts` takes no browser switches.

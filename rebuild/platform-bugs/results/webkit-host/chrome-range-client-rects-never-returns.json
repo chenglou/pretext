@@ -1,0 +1,22 @@
+{
+  "page": "chrome-range-client-rects-never-returns.html",
+  "browser": "webkit-host",
+  "build": {
+    "app": "webkit-host",
+    "appVersion": "27.0",
+    "engine": "22625.1.29.11.27",
+    "os": "26A428"
+  },
+  "started": "2026-09-18T14:09:09.606Z",
+  "error": null,
+  "report": {
+    "title": "NO BUG: Range.getClientRects() returned 1 rect(s)",
+    "log": "layout done: the block is 22px tall\nMozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/27.0 Safari/605.1.15 webkit-host/22625.1.29.11.27\n\ncalling getClientRects() on a range over U+3002 ...\nreturned 1 rect(s) in 0.0 ms: 16 x 22.390625 at 16,198.375\n\nexpected: the call returns",
+    "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/27.0 Safari/605.1.15 webkit-host/22625.1.29.11.27",
+    "devicePixelRatio": 2,
+    "visibility": "visible",
+    "languages": [
+      "zh-CN"
+    ]
+  }
+}
