@@ -151,6 +151,60 @@ for (const font of FONTS) for (const letterSpacing of SPACINGS) {
 return out;
 `
 
+const R11 = String.raw`
+// Per language and CSS generic family: the DOM's box of each text, and the Canvas totals of the same text under the bare
+// keyword and under each candidate family name, so the family the DOM drew with shows as an equal width.
+const out = [];
+for (const lang of LANGS) for (const generic of GENERICS) {
+  const row = { lang, generic, texts: [] };
+  for (const text of TEXTS) {
+    const div = document.createElement('div');
+    div.style.cssText = 'position: absolute; left: 0; top: 0; margin: 0; padding: 0; border: 0; line-height: 40px; white-space: pre';
+    div.style.font = '16px ' + generic;
+    if (lang !== null) div.lang = lang;
+    const node = document.createTextNode(text);
+    div.append(node);
+    host.append(div);
+    const dom = boxWidth(node);
+    div.remove();
+    row.texts.push({ text, dom });
+  }
+  out.push(row);
+}
+const canvas = {};
+for (const family of [...GENERICS, ...CANDIDATES.map(name => '"' + name + '"')]) {
+  const c = ctxOf('16px ' + family, 0);
+  canvas[family] = TEXTS.map(text => c.measureText(text).width);
+}
+return { rows: out, canvas };
+`
+
+const R12 = String.raw`
+// Named families under languages, whole strings: whether the locale reaches a named family's shaping (Font::applyTransforms and
+// the complex text controller hand Core Text the computed locale, FontCoreText.cpp:646-700, ComplexTextControllerCoreText.mm:199-203).
+const out = [];
+for (const font of FONTS) {
+  const c = ctxOf(font, 0);
+  for (const text of TEXTS) {
+    const canvas = c.measureText(text).width;
+    const dom = {};
+    for (const lang of LANGS) {
+      const div = document.createElement('div');
+      div.style.cssText = 'position: absolute; left: 0; top: 0; margin: 0; padding: 0; border: 0; line-height: 40px; white-space: pre';
+      div.style.font = font;
+      div.lang = lang;
+      const node = document.createTextNode(text);
+      div.append(node);
+      host.append(div);
+      dom[lang] = boxWidth(node);
+      div.remove();
+    }
+    out.push({ font, text, canvas, dom });
+  }
+}
+return out;
+`
+
 function probe(id: string, spec: string, constants: Record<string, unknown>, body: string, fixtures?: string[], timeoutNote?: string): Probe {
   let header = ''
   for (const name of Object.keys(constants)) header += `const ${name} = ${JSON.stringify(constants[name])}; `
@@ -169,6 +223,8 @@ const NAMED_CJK = ['"PingFang SC"', '"PingFang TC"', '"PingFang HK"', '"Hiragino
 const NAMED_CJK_2 = ['"Songti SC"', '"Songti TC"', '"Heiti SC"', '"Heiti TC"', 'STSong', 'STHeiti', '"Kaiti SC"', '"LiHei Pro"', '"LiSong Pro"', '"BIZ UDGothic"', 'Osaka']
 const NAMED_OTHER = ['Arial', '"Times New Roman"', '"Helvetica Neue"', 'Helvetica', 'Georgia', 'Verdana', 'Menlo', '"Courier New"', '"Lucida Grande"', '"Geeza Pro"', 'Thonburi', '"Arial Unicode MS"']
 
+const GENERIC_LANGS = [null, '', 'en', 'en-US', 'EN', 'fr', 'de', 'da', 'sv', 'ru', 'tr', 'el', 'vi', 'ar', 'fa', 'ur', 'he', 'th', 'hi', 'bn', 'my', 'km', 'ka', 'hy', 'ja', 'ko', 'zh', 'zh-Hans', 'zh-CN', 'zh-Hant', 'zh-TW', 'zh-HK', 'yue', 'mul', 'und', 'x-none']
+const GENERIC_CANDIDATES = ['Times', 'Times New Roman', 'Helvetica', 'Courier', 'Courier New', 'Menlo', 'Monaco', 'Apple Chancery', 'Papyrus', 'Zapfino', 'Snell Roundhand', 'Geeza Pro', 'Noto Nastaliq Urdu', 'Lucida Grande', 'Arial Hebrew', 'Thonburi', 'ITF Devanagari', 'Kohinoor Devanagari', 'Kohinoor Bangla', 'Noto Serif Myanmar', 'Noto Sans Myanmar', 'Khmer MN', 'Khmer Sangam MN', 'Noto Sans Armenian', 'Hiragino Mincho ProN', 'Hiragino Sans', 'AppleMyungjo', 'Apple SD Gothic Neo', 'Songti SC', 'Songti TC', 'PingFang SC', 'PingFang TC', 'PingFang HK', 'Kaiti SC', 'Kaiti TC']
 const ARABIC_RUNS = [
   ['ببب', 'ببب'], ['بب', 'ببب'], ['ب', 'ببب'], ['ببب', 'ب'], ['ب', 'ب'], ['سلا', 'م'], ['الس', 'لام'], ['لل', 'ه'], ['ل', 'ا'], ['مح', 'مد'], ['في', 'ها'], ['كت', 'اب'],
   ['در', 'س'], ['با', 'ب'], ['نستع', 'ليق'], ['بِ', 'بِ'], ['عر', 'بي'], ['خط', 'وط'], ['تح', 'ية'], ['ين', 'بغي'], ['ب', 'ب', 'ب'], ['سل', 'ا', 'م'], ['بب', 'بب', 'بب'], ['مح', 'م', 'د'],
@@ -181,6 +237,8 @@ export default async function round4Probes(): Promise<Probe[]> {
     probe('webkit-round4 R7 (more named CJK families by language)', 'webkit-canvas §1.3 locale; round 4 R7', { LANGS, FAMILIES: NAMED_CJK_2, TEXTS: CJK_TEXTS, SIZE: 18 }, R7),
     probe('webkit-round4 R7 (other named families by language)', 'webkit-canvas §1.3 locale; round 4 R7', { LANGS, FAMILIES: NAMED_OTHER, TEXTS: CJK_TEXTS, SIZE: 18 }, R7),
     probe('webkit-round4 R8 (glyph count of long strings)', 'webkit-canvas §1.3 letter spacing; round 4 R8', { FONTS: ['16px Arial', '16px "Times New Roman"', '13px Verdana', '48px Georgia', '16px Menlo'], LENGTHS: [10, 100, 1000, 2000, 5000, 10000, 20000, 50000], UNIT: 'abcdeghijk' }, R8),
+    probe('webkit-round4 R12 (named families under languages, whole strings)', 'webkit-canvas §1.3 locale; round 4 R12', { LANGS: ['', 'en', 'ja', 'ko', 'zh-Hans', 'zh-Hant', 'th', 'hi', 'ar', 'tr'], FONTS: ['16px "Hiragino Mincho ProN"', '16px "Hiragino Sans"', '16px "Songti SC"', '16px "PingFang SC"', '16px AppleMyungjo', '16px "Apple SD Gothic Neo"', '16px Thonburi', '16px "Kohinoor Devanagari"', '16px "Kohinoor Bangla"', '16px "Geeza Pro"', '16px Menlo', '16px Times', '16px Helvetica', '18px Arial', '16px Georgia'], TEXTS: ['Hamburgefonstiv', '0123456789', 'AVATAR', 'To Wave,', 'office fi', 'Hamburgefonstiv 0123456789', '“‘…—·¥’”', '“quoted”', '‘a’', '「、。」（！）', '中国語說臺', 'あア、いう。', '한국어', 'สวัสดี', 'नमस्ते', 'سلام', 'fıne', 'fi'] }, R12),
+    probe('webkit-round4 R11 (CSS generic families by language)', 'webkit-canvas §1.3 locale; round 4 R11', { LANGS: GENERIC_LANGS, GENERICS: ['serif', 'sans-serif', 'monospace', 'cursive', 'fantasy', '-webkit-standard'], CANDIDATES: GENERIC_CANDIDATES, TEXTS: ['Hamburgefonstiv 0123456789', '“‘…—·¥’”', '→≤✓│', 'سلام', 'שלום', 'สวัสดี', 'नमस्ते', 'বাংলা', 'မြန်မာ', 'ខ្មែរ', '中国語說臺', 'あア', '한국어', '「、。」（！）'] }, R11),
     probe('webkit-round4 R10 (shares across inline boxes, installed fonts)', 'webkit-lines shaping across inline boxes; round 4 R10', { FONTS: ['16px "Geeza Pro"', '16px Arial', '16px "Times New Roman"', '16px "Courier New"', '16px "Al Bayan"', '20px "Al Nile"'], SPACINGS: [0, 1], RUNS: ARABIC_RUNS }, R10),
     probe('webkit-round4 R10 (shares across inline boxes, fixture fonts)', 'webkit-lines shaping across inline boxes; round 4 R10', { FONTS: ['24px Amiri', '16px Amiri', '16px "Noto Naskh Arabic"', '18px "Noto Nastaliq Urdu"'], SPACINGS: [0, 1], RUNS: ARABIC_RUNS }, R10, ['Amiri', 'Noto Naskh Arabic', 'Noto Nastaliq Urdu']),
   ]

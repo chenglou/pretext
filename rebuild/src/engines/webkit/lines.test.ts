@@ -68,7 +68,7 @@ function paragraph(runs: Array<[string, FlatNode]>, overrides: Partial<Paragraph
   return flatParagraph(runs, fontWith(facts), overrides)
 }
 
-function layout(p: Paragraph, slots: LineSlot[] = [], environment: WebKitEnvironment = env): { lines: WebKitLine[]; gaps: string[]; belowFloats: number[] } {
+function layout(p: Paragraph, slots: LineSlot[] = [], environment: WebKitEnvironment = env): { lines: WebKitLine[]; gaps: string[]; belowFloats: number[]; fonts: string[] } {
   const m = createMeasurer()
   const prepared = webkitEngine.prepare(p, environment, m)
   const lines: WebKitLine[] = []
@@ -89,7 +89,7 @@ function layout(p: Paragraph, slots: LineSlot[] = [], environment: WebKitEnviron
     start = result.line.next
   }
   // The paragraph's gaps, then every line's and refused slot's: content conditions are reported on the lines that measure them.
-  return { lines, gaps, belowFloats }
+  return { lines, gaps, belowFloats, fonts: m.log.contexts.map(context => context.font) }
 }
 
 function textBoxes(boxes: WebKitDisplayBox[]): WebKitTextBox[] {
@@ -281,11 +281,17 @@ describe('line-local gaps (DESIGN.md §2.8)', () => {
     expect(layout(paragraph([['aaa b,bb ccc', 'text']], { width: 60 })).gaps).not.toContain('page-history')
   })
 
-  test('canvas-language: a generic family under a locale whose script isn\'t Common concerns Latin text too (FontDescriptionCocoa.cpp:77-118)', () => {
-    const generic = { ...paragraph([['foo bar', 'text']], { lang: 'ja', width: 1000 }), font: { ...fontWith(), family: 'serif' } }
-    expect(layout(generic).lines[0]!.gaps.map(g => g.gap)).toContain('canvas-language')
-    const named = { ...paragraph([['foo bar', 'text']], { lang: 'ja', width: 1000 }), font: { ...fontWith(), family: 'Arial' } }
-    expect(layout(named).gaps).not.toContain('canvas-language')
+  test('a generic family under a locale is measured as the family the locale resolves it to (fonts.ts), and reports nothing', () => {
+    const generic = { ...paragraph([['foo bar', 'text']], { lang: 'ja', width: 1000 }), font: { ...fontWith(), family: 'Arial, serif' } }
+    const underJa = layout(generic)
+    expect(underJa.gaps).not.toContain('canvas-language')
+    expect(underJa.fonts[0]).toBe('normal 400 16px Arial, "Hiragino Mincho ProN"')
+    // serif under en is the settings' Times, as in Canvas: the keyword stands; monospace is Menlo, where Canvas has Courier.
+    expect(layout({ ...generic, lang: 'en' }).fonts[0]).toBe('normal 400 16px Arial, serif')
+    expect(layout({ ...generic, lang: 'en', font: { ...fontWith(), family: 'monospace' } }).fonts[0]).toBe('normal 400 16px "Menlo"')
+    expect(layout({ ...generic, lang: 'en', font: { ...fontWith(), family: '"monospace"' } }).fonts[0]).toBe('normal 400 16px "monospace"')
+    expect(layout({ ...generic, lang: '', font: { ...fontWith(), family: 'monospace' } }).fonts[0]).toBe('normal 400 16px monospace')
+    expect(layout({ ...generic, lang: 'zh-Hant-HK', font: { ...fontWith(), family: 'sans-serif, -webkit-standard' } }).fonts[0]).toBe('normal 400 16px "PingFang HK", "Songti TC"')
   })
 
   test('page-history: an end inside the placed part of the candidate that ended the line reports on that line', () => {
@@ -373,14 +379,20 @@ describe('canvas-language (probes webkit-round3 R3, R3b, R3c, webkit-round4 R7)'
     expect(gaps).not.toContain('canvas-language')
   })
 
-  test('a list none of whose families resolves draws with the standard family, which a Han, kana or Hangul locale resolves', () => {
+  test('a list none of whose families resolves draws with the standard family, which is named after it under a Han, kana or Hangul locale', () => {
     namedDraws = () => false
     const underKo = layout(paragraph([['ab cd', 'text']], { lang: 'ko' }))
     const underEn = layout(paragraph([['ab cd', 'text']], { lang: 'en' }))
     namedDraws = c => c < 0x80
-    // The space is a white-space item of its own and is concerned like the letters.
-    expect(underKo.lines[0]!.gaps.filter(g => g.gap === 'canvas-language').map(g => g.at)).toEqual([{ start: 0, end: 5 }])
+    expect(underKo.fonts).toContain('normal 400 16px Arial, "AppleMyungjo"')
+    expect(underKo.gaps).not.toContain('canvas-language')
+    expect(underEn.fonts[0]).toBe('normal 400 16px Arial')
     expect(underEn.gaps).not.toContain('canvas-language')
+  })
+
+  test('a character with default emoji presentation that only a generic family named for Canvas could draw is concerned', () => {
+    const p = { ...paragraph([['ab ⚡ cd', 'text']], { lang: 'ja' }), font: { ...fontWith(), family: 'Arial, sans-serif' } }
+    expect(layout(p).lines[0]!.gaps.filter(g => g.gap === 'canvas-language').map(g => g.at)).toEqual([{ start: 3, end: 4 }])
   })
 
   test('a locale of another script leaves system fallback to the preferred languages, as Canvas does', () => {
@@ -388,8 +400,8 @@ describe('canvas-language (probes webkit-round3 R3, R3b, R3c, webkit-round4 R7)'
     expect(layout(paragraph([['ab 中 cd', 'text']], { lang: 'th' })).gaps).not.toContain('canvas-language')
   })
 
-  test('a generic family after a named one concerns only what the named one does not draw', () => {
-    const p = { ...paragraph([['ab é', 'text']], { lang: 'th' }), font: { ...fontWith(), family: 'Arial, sans-serif' } }
+  test('a system design family after a named one concerns only what the named one does not draw', () => {
+    const p = { ...paragraph([['ab é', 'text']], { lang: 'th' }), font: { ...fontWith(), family: 'Arial, system-ui' } }
     expect(layout(p).lines[0]!.gaps.filter(g => g.gap === 'canvas-language').map(g => g.at)).toEqual([{ start: 3, end: 4 }])
   })
 })

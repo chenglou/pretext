@@ -10,8 +10,9 @@ import type { Measurer } from '../../measure/canvas.js'
 import type { Fragment, Gap, GapName, LineResultOf, LineSlot, TextAlign, WebKitDisplayBox, WebKitLineGeometry } from '../../model.js'
 import { canBreakBefore, findNextBreakablePosition, hasDictionaryCharacter, inBetweenRangeStartingWithMark, makeFactory, mayBreakInBetween } from './breaks.js'
 import { applyTextAlignJustify, type ExpandableRun, type ExpansionBehavior } from './expansion.js'
-import { DEFAULT_BIDI_LEVEL, hasLanguageDependentFallback, namedFamilyDraws } from './content.js'
+import { DEFAULT_BIDI_LEVEL, familyDraws, hasLanguageDependentFallback } from './content.js'
 import { isDelimiterQuote, isPunctuation, lineRules } from './data.js'
+import { hasEmojiPresentation } from './fonts.js'
 import { joinsAcross } from './joining.js'
 import { measureText } from '../../measure/canvas.js'
 import { boxWidth, breakWord, canvasString, controlsMeasureExactly, firstUserPerceivedCharacterLength, fixedPitchShortcutWidth, forwardOneCodePoint, hyphenGlyphsDiffer, hyphenWidth, itemWidth, measuredEnd, mergedGlyphs } from './measure.js'
@@ -2522,19 +2523,21 @@ function lineGaps(L: Layout, start: WebKitLineStart): void {
           : "the string is too long to count its spacing-bearing glyphs exactly from two float32 totals, so Canvas can't show whether liga, clig, dlig or hlig, which the DOM turns off under letter-spacing, merged glyphs in it")
       }
     }
-    // OffscreenCanvas has a null locale (specs/webkit-canvas.md §1.3): collectBoxFacts in content.ts. The locale concerns a
-    // character no named family draws before the list reaches a locale-resolved family, or before system fallback for a
-    // character Core Text falls back for by language. A control is measured as another character (canvasString) and draws no
-    // font's glyph of its own.
-    if (box.localeChoosesFonts !== null) {
+    // OffscreenCanvas has a null locale (specs/webkit-canvas.md §1.3): collectBoxFacts in content.ts. A control is measured as
+    // another character (canvasString) and draws no font's glyph of its own.
+    const localeChooses = box.localeChoosesFonts
+    if (localeChooses !== null) {
       for (let i = from; i < to; i++) {
         const cp = text.codePointAt(i)!
         const length = cp > 0xffff ? 2 : 1
-        const byFallback = box.localeChoosesFonts.fallback && hasLanguageDependentFallback(cp)
-        if ((box.localeChoosesFonts.families || byFallback) && cp > 0x1f && !(cp >= 0x7f && cp <= 0x9f) && !namedFamilyDraws(L.m, box, cp)) {
-          add('canvas-language', box, i, i + length, box.localeChoosesFonts.families
-            ? `no named family before the one locale ${box.locale} resolves draws this character; OffscreenCanvas has no locale`
-            : `no named family draws this character, and locale ${box.locale} chooses the system fallback font for Han, kana or Hangul; OffscreenCanvas has no locale`)
+        if (cp > 0x1f && !(cp >= 0x7f && cp <= 0x9f)) {
+          if ((localeChooses.unknownFamily || (localeChooses.namedGeneric && hasEmojiPresentation(cp))) && !familyDraws(L.m, box, box.namedContext, cp)) {
+            add('canvas-language', box, i, i + length, localeChooses.unknownFamily
+              ? `no named family before the one locale ${box.locale} resolves draws this character; OffscreenCanvas has no locale`
+              : `a character with default emoji presentation that no family before the generic one draws: the DOM skips the generic family's outline glyph, and Canvas measures the family locale ${box.locale} resolves it to by name`)
+          } else if (localeChooses.fallback && hasLanguageDependentFallback(cp) && !familyDraws(L.m, box, box.listContext, cp)) {
+            add('canvas-language', box, i, i + length, `no family of the list draws this character, and locale ${box.locale} chooses the system fallback font for Han, kana or Hangul; OffscreenCanvas has no locale`)
+          }
         }
         i += length - 1
       }
