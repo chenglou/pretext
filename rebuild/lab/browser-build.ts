@@ -43,7 +43,7 @@ export function labApp(kind: BrowserKind): LabApp | null {
   return { path, pinned: !path.startsWith('/Applications/'), treeSha256: existsSync(hashFile) ? readFileSync(hashFile, 'utf8').trim() : null }
 }
 
-function bundleString(bundle: string, key: string): string {
+export function bundleString(bundle: string, key: string): string {
   return execFileSync('plutil', ['-extract', key, 'raw', '-o', '-', join(bundle, 'Contents/Info.plist')], { encoding: 'utf8', timeout: 15_000 }).trim()
 }
 
@@ -55,8 +55,9 @@ export function readBuild(kind: BrowserKind): BrowserBuild {
   const os = execFileSync('sw_vers', ['-buildVersion'], { encoding: 'utf8', timeout: 15_000 }).trim()
   switch (kind) {
     case 'chrome': {
+      // The executable's name tells Google Chrome from Google Chrome for Testing (LAB_CHROME_APP).
       const version = bundleString(labApp('chrome')!.path, 'CFBundleShortVersionString')
-      return { app: 'Google Chrome', appVersion: version, engine: version, os }
+      return { app: bundleString(labApp('chrome')!.path, 'CFBundleExecutable'), appVersion: version, engine: version, os }
     }
     case 'firefox': {
       const version = bundleString(labApp('firefox')!.path, 'CFBundleShortVersionString')
@@ -68,12 +69,13 @@ export function readBuild(kind: BrowserKind): BrowserBuild {
 }
 
 // Whether a page's user agent names the build the driver read: Chrome's reduced user agent keeps the major version only,
-// and webkit-host appends the WebKit build it loaded (rebuild/tools/webkit-host/main.swift). A mismatch means the browser
-// changed between reading the bundle and launching it.
+// Firefox's says `<major>.0` for every build of a major version (140.16.0esr says Firefox/140.0), and webkit-host appends
+// the WebKit build it loaded (rebuild/tools/webkit-host/main.swift). A mismatch means the browser changed between reading
+// the bundle and launching it.
 export function userAgentMatches(kind: BrowserKind, build: BrowserBuild, userAgent: string): boolean {
   switch (kind) {
     case 'chrome': return userAgent.includes(`Chrome/${build.appVersion.split('.')[0]}.`)
-    case 'firefox': return userAgent.includes(`Firefox/${build.appVersion}`)
+    case 'firefox': return new RegExp(`Firefox/${build.appVersion.split('.')[0]}\\.0$`).test(userAgent)
     case 'safari': return userAgent.includes(`Version/${build.appVersion} Safari/`) && !userAgent.includes('webkit-host/')
     case 'webkit-host': return userAgent.includes(`Version/${build.appVersion} Safari/`) && userAgent.endsWith(`webkit-host/${build.engine}`)
   }

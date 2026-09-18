@@ -437,7 +437,12 @@ holds for Firefox.
   156), so the lab's profiles set `app.update.auto` and `app.update.staging.enabled` to false (`FIREFOX_PIN_PREFS`); on
   macOS `app.update.auto` is an ordinary pref. The probe runner's sessions also run under Firefox's automation prefs.
 - `LAB_CHROME_APP=<bundle>` and `LAB_FIREFOX_APP=<bundle>` name another bundle for one command, to try a new release
-  before moving the pin. A new release gets a new copy and a new path in `LAB_APPS` (rebuild/TESTS.md §12).
+  before moving the pin. A new release gets a new copy and a new path in `LAB_APPS` (rebuild/TESTS.md §12). The bundle may
+  be a Chrome for Testing build: the driver launches the bundle's `CFBundleExecutable`, and rows record that name as
+  `build.app`. Firefox's user agent says `<major>.0` for every build of a major version (140.16.0esr says `Firefox/140.0`),
+  so the user agent check compares the major version only. A beta's bundle version has no beta number (157.0b2 reports
+  `157.0`); `run.json`'s `app.path` tells it apart. The neighbouring builds of the 2026-09-18 drift check are in
+  `~/github/browser-engines/apps/drift/`, with their rows in `.artifacts/lab/drift/`.
 - Installed Safari and the system WebKit.framework can't be pinned: they move with macOS.
 
 ## Parts

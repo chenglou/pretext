@@ -5,7 +5,7 @@ import { execFileSync } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import { closeSync, mkdirSync, openSync, readFileSync, writeFileSync, writeSync } from 'node:fs'
 import { join, resolve } from 'node:path'
-import { CHROME_PIN_ARGS, FIREFOX_PIN_PREFS, labApp, readBuild, userAgentMatches } from './browser-build.ts'
+import { bundleString, CHROME_PIN_ARGS, FIREFOX_PIN_PREFS, labApp, readBuild, userAgentMatches } from './browser-build.ts'
 import { createRng } from './cases/prng.ts'
 import { CHROME_LANGUAGES, derivedLanguages, FIREFOX_LANGUAGE_PREFS, rendererLanguage, webkitLanguageCheck, type ChromeLanguages } from './languages.ts'
 import type { CaseMeasurements } from './record.ts'
@@ -326,7 +326,7 @@ async function launchChrome(url: string): Promise<Session> {
   // Profile prefs Chrome reads at startup: the accept languages (types.ts ProcessLanguages.launch).
   const prefs = languages.launch!.prefs
   writeFileSync(join(profile, 'Default', 'Preferences'), JSON.stringify({ intl: { accept_languages: prefs['intl.accept_languages'], selected_languages: prefs['intl.selected_languages'] } }))
-  const session = await launchApp(app!.path, `${app!.path}/Contents/MacOS/Google Chrome`, `--user-data-dir=${profile}`, profile, [
+  const session = await launchApp(app!.path, `${app!.path}/Contents/MacOS/${bundleString(app!.path, 'CFBundleExecutable')}`, `--user-data-dir=${profile}`, profile, [
     `--user-data-dir=${profile}`, ...CHROME_PIN_ARGS, '--no-first-run', '--no-default-browser-check', '--disable-sync', '--disable-extensions',
     '--disable-component-update', '--disable-background-timer-throttling', '--disable-backgrounding-occluded-windows',
     '--disable-renderer-backgrounding', '--window-size=1200,900', '--no-startup-window', '--remote-debugging-port=0',
