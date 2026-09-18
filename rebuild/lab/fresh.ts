@@ -24,8 +24,8 @@
 // 4. Score every finished part with score.ts (forward against reverse under --both-orders). A part is scored again when
 //    score.ts is newer than its summary, or with --rescore.
 // 5. Report: failures without a covered explanation (score.ts per-case `lineGaps[metric].covered`) grouped by signature,
-//    residual classes (residual-classes.json) counted apart with probed members apart from signature-only ones, and gap
-//    firing rates on passing lines. Written to <out>/report.json and printed.
+//    residual classes (score.ts RESIDUAL_CLASSES, read from the per-case files' `residual`) counted apart with probed members
+//    apart from signature-only ones, and gap firing rates on passing lines. Written to <out>/report.json and printed.
 //
 // Output: .artifacts/lab/fresh/<browser>/<seed>/ with cases/, parts/, runs/part-NN-<order>/, report.json and round.json.
 import { spawn } from 'node:child_process'
@@ -42,7 +42,8 @@ import { stratifiedSample } from './cases/sample.ts'
 import { streamRowInputs, SuiteImport, suiteRowFiles } from './cases/suite.ts'
 import { collectUsedIds, generationLock } from './cases/used-ids.ts'
 import { WS_GENERATORS } from './cases/ws.ts'
-import { nativeLines, rowText, type MetricAttribution, type MetricName } from './score.ts'
+import { existingRows as existingRowsFile, readLines } from './rows.ts'
+import { nativeLines, RESIDUAL_CLASSES, rowText, type GapFiring, type MetricAttribution, type MetricName, type ResidualMembership } from './score.ts'
 import type { BrowserKind, Case, LabRow, TextRun } from './types.ts'
 
 const REPO = resolve(import.meta.dir, '../..')
@@ -111,29 +112,8 @@ function sha256File(path: string): string {
   return createHash('sha256').update(readFileSync(path)).digest('hex')
 }
 
-// Lines of an NDJSON file, split on LF only; a .zst file is read through zstd. One line is held at a time.
-async function* readLines(path: string): AsyncGenerator<string> {
-  const zstd = path.endsWith('.zst') ? Bun.spawn(['zstd', '-dc', '--', path], { stdout: 'pipe', stderr: 'inherit' }) : null
-  const stream: ReadableStream<Uint8Array> = zstd === null ? Bun.file(path).stream() : zstd.stdout
-  const decoder = new TextDecoder()
-  let buffer = ''
-  for await (const chunk of stream) {
-    buffer += decoder.decode(chunk, { stream: true })
-    let start = 0
-    for (let index = buffer.indexOf('\n'); index !== -1; index = buffer.indexOf('\n', start)) {
-      if (index > start) yield buffer.slice(start, index)
-      start = index + 1
-    }
-    buffer = buffer.slice(start)
-  }
-  buffer += decoder.decode()
-  if (buffer.trim() !== '') yield buffer
-  if (zstd !== null && (await zstd.exited) !== 0) throw new Error(`zstd -dc ${path} exited ${zstd.exitCode}`)
-}
-
 function existingRows(dir: string, name: BrowserKind): string | null {
-  const plain = join(dir, `${name}-rows.ndjson`)
-  return existsSync(plain) ? plain : existsSync(`${plain}.zst`) ? `${plain}.zst` : null
+  return existingRowsFile(join(dir, `${name}-rows.ndjson`))
 }
 
 // ---- Generation ----
@@ -370,6 +350,7 @@ function logTail(path: string, lines: number): string {
 
 // ---- Scoring ----
 
+// score.ts reads rows plain or compressed (rows.ts), so a part that compress-rows.sh compressed scores like any other.
 function scoreJob(job: Job, other: Job | null): Promise<number> {
   const rows = join(job.dir, `${browser}-rows.ndjson`)
   const args = ['-n', '10', 'bun', 'rebuild/lab/score.ts', `--rows=${rows}`, `--cases=${job.cases}`, `--out=${join(job.dir, `${browser}-summary.json`)}`,
@@ -394,17 +375,13 @@ function needsScore(job: Job, other: Job | null): boolean {
   const summary = join(job.dir, `${browser}-summary.json`)
   const perCase = join(job.dir, `${browser}-per-case.ndjson`)
   const state = join(job.dir, 'score-state.json')
-  const rows = join(job.dir, `${browser}-rows.ndjson`)
+  const rows = existingRows(job.dir, browser!)
+  if (rows === null) fail(`${relative(REPO, job.dir)} holds no ${browser}-rows.ndjson, plain or .zst`)
   const scoredBefore = existsSync(summary) && existsSync(perCase) && existsSync(state)
-  // Rows that compress-rows.sh compressed can be reported on, but score.ts reads plain rows: restore them with zstd -d first.
-  if (!existsSync(rows)) {
-    if (!scoredBefore || flags.has('rescore')) fail(`${relative(REPO, rows)} is compressed; restore it with zstd -d before scoring`)
-    if (statSync(join(REPO, 'rebuild/lab/score.ts')).mtimeMs > statSync(summary).mtimeMs) log(`${job.name}: score.ts is newer than its summary, but the rows are compressed; reporting the old scores`)
-    return false
-  }
   if (flags.has('rescore') || !scoredBefore) return true
   const scored = statSync(summary).mtimeMs
-  if (statSync(join(REPO, 'rebuild/lab/score.ts')).mtimeMs > scored || statSync(rows).mtimeMs > scored) return true
+  // Compressing rows doesn't change them, so only plain rows newer than the summary ask for another score.
+  if (statSync(join(REPO, 'rebuild/lab/score.ts')).mtimeMs > scored || (!rows.endsWith('.zst') && statSync(rows).mtimeMs > scored)) return true
   // A summary scored without the other order is stale once the other order's rows exist.
   return readJson<ScoreState>(state).comparedWith !== (other?.name ?? null)
 }
@@ -431,20 +408,15 @@ type PerCase = {
   painter: { status: string; reason?: string; detail?: string }
   gaps?: string[]
   lineGaps?: Partial<Record<MetricName, MetricAttribution>>
+  // The residual class score.ts matched the row against (score.ts RESIDUAL_CLASSES, the one registry).
+  residual?: ResidualMembership
+  // Where the case's gaps fire (score.ts GapFiring). Absent in files scored before scorer 6.
+  firing?: GapFiring
   protocol?: string
   historyDependent?: string
 }
 
 type ScoredRun = { name: string; rows: string; perCase: string }
-
-type ResidualClass = {
-  id: string
-  browsers: BrowserKind[]
-  signature: { kind: 'one-node-rect-width'; units: number }
-  difference: string
-  mechanism: string
-  probed: Array<{ text: string; family: string; size: number; weight: number }>
-}
 
 type OpenFailure = {
   id: string
@@ -682,26 +654,13 @@ function describeOpen(row: LabRow, per: PerCase, metric: MetricName, run: string
   }
 }
 
-// A class member when the signature holds; probed when the differing node's text holds a probed string in its font.
-function residualMatch(row: LabRow, per: PerCase, classes: readonly ResidualClass[]): { id: string; probed: boolean } | null {
-  if (per.lineCount.status !== 'pass' || per.breaks.status !== 'pass' || per.widths.status !== 'fail') return null
-  const { differences, countsDiffer } = nodeDifferences(row)
-  if (countsDiffer || differences.length !== 1) return null
-  const only = differences[0]!
-  for (const value of classes) {
-    if (!value.browsers.includes(row.browser) || value.signature.kind !== 'one-node-rect-width') continue
-    if (Math.abs(Math.abs(only.units) - value.signature.units) >= 0.01) continue
-    const run = row.case.paragraph.runs[only.run]!
-    const probed = value.probed.some(probe => run.text.includes(probe.text) && firstFamily(run.font.family) === probe.family && run.font.size === probe.size && run.font.weight === probe.weight)
-    return { id: value.id, probed }
-  }
-  return null
-}
-
 type Firing = { passingLines: number; passingCases: number; failingLines: number }
 
 async function report(runs: readonly ScoredRun[], reverse: readonly ScoredRun[], outPath: string, header: Record<string, unknown>): Promise<void> {
-  const classes = readJson<{ classes: ResidualClass[] }>(join(REPO, 'rebuild/lab/residual-classes.json')).classes
+  // Residual classes are the scorer's: score.ts matches every failing row against RESIDUAL_CLASSES and the per-case file
+  // carries the result, so this report only reads it.
+  const engine = browser === 'chrome' ? 'blink' : browser === 'firefox' ? 'gecko' : 'webkit'
+  const classes = RESIDUAL_CLASSES.filter(value => value.engine === engine)
   const totals = {
     cases: 0, historyDependent: 0, protocolRows: 0, predictionFailures: 0, coveredPredictionFailures: 0, openPredictionFailures: 0, residual: 0,
     metrics: {} as Record<string, Record<string, number>>, open: { lineCount: 0, breaks: 0, widths: 0, painter: 0 } as Record<MetricName, number>,
@@ -746,63 +705,48 @@ async function report(runs: readonly ScoredRun[], reverse: readonly ScoredRun[],
       const failing = PREDICTION.filter(metric => per[metric].status === 'fail')
       const uncovered = failing.filter(metric => per.lineGaps?.[metric]?.covered !== true)
       const painterOpenHere = per.painter.status === 'fail' && per.lineGaps?.painter?.covered !== true
-      const row = JSON.parse(line) as LabRow
-      // Gap firing: on the lines of cases whose three prediction metrics pass, and on failing lines.
-      if ('layout' in row.prediction) {
-        const layout = row.prediction.layout
-        const firedOn = (start: number, end: number, own: readonly { gap: string }[]): Set<string> => {
-          const names = new Set<string>()
-          for (const gap of own) names.add(gap.gap)
-          for (const gap of layout.gaps) {
-            if (gap.at === undefined) continue
-            if (gap.at.start === gap.at.end ? gap.at.start >= start && gap.at.start <= end : gap.at.start < end && gap.at.end > start) names.add(gap.gap)
-          }
-          return names
-        }
+      // Gap firing, from the scorer's per-case record (score.ts GapFiring): on the line boxes of cases whose three
+      // prediction metrics pass, and on the failing lines of prediction failures. Painter-only failures don't enter the lift.
+      if (per.firing !== undefined) {
         if (failing.length === 0 && PREDICTION.every(metric => per[metric].status === 'pass')) {
           passingCases++
-          const inCase = new Set<string>()
-          for (const value of layout.lines) {
-            if (!value.hasLineBox) continue
-            passingLines++
-            for (const gap of firedOn(value.start, value.end, value.gaps)) {
-              fire(gap).passingLines++
-              inCase.add(gap)
-            }
+          passingLines += per.firing.lines
+          for (const [gap, lines] of Object.entries(per.firing.gaps)) {
+            fire(gap).passingLines += lines
+            fire(gap).passingCases++
           }
-          for (const gap of inCase) fire(gap).passingCases++
         } else if (failing.length > 0) {
-          const engineLines = new Set<number>()
-          for (const metric of failing) for (const value of per.lineGaps?.[metric]?.lines ?? []) if (value.engineLine !== null) engineLines.add(value.engineLine)
-          for (const l of engineLines) {
-            const value = layout.lines[l]
-            if (value === undefined) continue
+          const engineLines = new Map<number, readonly string[]>()
+          for (const metric of failing) for (const value of per.lineGaps?.[metric]?.lines ?? []) if (value.engineLine !== null) engineLines.set(value.engineLine, value.fires ?? [])
+          for (const fires of engineLines.values()) {
             failingLines++
-            for (const gap of firedOn(value.start, value.end, value.gaps)) fire(gap).failingLines++
+            for (const gap of fires) fire(gap).failingLines++
           }
         }
       }
+      // Only a failure that gets described needs its row.
+      const row = uncovered.length > 0 || (painterOpenHere && failing.length === 0) ? JSON.parse(line) as LabRow : null
       if (per.painter.status === 'fail') totals.painterFailures++
       if (failing.length > 0) {
         totals.predictionFailures++
         if (uncovered.length === 0) totals.coveredPredictionFailures++
       }
       if (uncovered.length > 0) {
-        const match = residualMatch(row, per, classes)
-        if (match !== null) {
+        const match = per.residual
+        if (match !== undefined) {
           totals.residual++
-          let members = residual.get(match.id)
-          if (members === undefined) residual.set(match.id, (members = { probed: [], signatureOnly: [] }))
-          ;(match.probed ? members.probed : members.signatureOnly).push(row.id)
+          let members = residual.get(match.name)
+          if (members === undefined) residual.set(match.name, (members = { probed: [], signatureOnly: [] }))
+          ;(match.membership === 'probed' ? members.probed : members.signatureOnly).push(per.id)
         } else {
           totals.openPredictionFailures++
           for (const metric of uncovered) totals.open[metric]++
-          open.push(describeOpen(row, per, uncovered[0]!, run.name))
+          open.push(describeOpen(row!, per, uncovered[0]!, run.name))
         }
       } else if (painterOpenHere && failing.length === 0) {
         totals.openPainterOnly++
         totals.open.painter++
-        painterOpen.push(describeOpen(row, per, 'painter', run.name))
+        painterOpen.push(describeOpen(row!, per, 'painter', run.name))
       }
     }
   }
@@ -847,12 +791,12 @@ async function report(runs: readonly ScoredRun[], reverse: readonly ScoredRun[],
     open: group(open),
     openPainterOnlyCoarse: group(painterOpen, 'coarse').map(value => ({ signature: value.signature, cases: value.cases, ids: value.ids })),
     openPainterOnly: group(painterOpen),
-    residualClasses: classes.filter(value => value.browsers.includes(browser!)).map(value => ({
-      id: value.id, difference: value.difference, mechanism: value.mechanism,
-      probed: residual.get(value.id)?.probed ?? [], signatureOnly: residual.get(value.id)?.signatureOnly ?? [],
+    residualClasses: classes.map(value => ({
+      id: value.name, difference: value.description, mechanism: `${value.mechanism.status}: ${value.mechanism.reading}`,
+      probed: residual.get(value.name)?.probed ?? [], signatureOnly: residual.get(value.name)?.signatureOnly ?? [],
     })),
     reverseOnlyOpen: reverseOpen,
-    gapFiring: { note: 'a gap fires on a line when the line\'s own gaps hold it or a ranged paragraph gap meets the line\'s source range; passing lines are the line boxes of cases whose lineCount, breaks and widths pass; failing lines are the engine lines score.ts attributes', rates: firingRates },
+    gapFiring: { note: 'score.ts GapFiring: a gap fires on a line when the line\'s own gaps hold it or a ranged paragraph gap meets the line\'s source range; passing lines are the line boxes of cases whose lineCount, breaks and widths pass; failing lines are the engine lines score.ts attributes to lineCount, breaks and widths failures; painter-only failures are in neither, so the lift is over prediction failures alone', rates: firingRates },
   }
   writeJson(outPath, result)
 
@@ -886,7 +830,7 @@ async function report(runs: readonly ScoredRun[], reverse: readonly ScoredRun[],
   print('')
   print('-- Residual classes --')
   for (const value of result.residualClasses) print(`  ${value.id}: probed ${value.probed.length}, signature only ${value.signatureOnly.length}${value.signatureOnly.length === 0 ? '' : ` (${value.signatureOnly.slice(0, 8).join(', ')})`}\n    ${value.mechanism}`)
-  if (result.residualClasses.length === 0) print('  none registered for this browser (rebuild/lab/residual-classes.json)')
+  if (result.residualClasses.length === 0) print('  none registered for this engine (score.ts RESIDUAL_CLASSES)')
   if (reverseOpen !== null) print(`\nreverse order: ${reverseOpen.length} open cases the forward order doesn't have${reverseOpen.length === 0 ? '' : `: ${reverseOpen.slice(0, 12).join(', ')}`}`)
   print('')
   print(`-- Gap firing on ${passingLines} passing lines (${passingCases} cases) and ${failingLines} failing lines --`)

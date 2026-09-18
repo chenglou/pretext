@@ -9,12 +9,18 @@ import { parseFontFamilyList } from './cases/font.ts'
 import { observeBlink } from './observe/blink.ts'
 import { observeGecko } from './observe/gecko.ts'
 import { observeWebKit } from './observe/webkit.ts'
-import { paint, predict } from './predictor.ts'
+import * as predictorModule from './predictor.ts'
 import { beginCase, beginPhase, endCase, installRecorder, type CaseMeasurements } from './record.ts'
 import type {
   BrowserKind, Case, CodePointObservation, FontDecl, InlineNode, LabRow, LayoutPrediction, LinesPrediction, NativeObservation, PageEnv,
-  PainterLine, PainterObservation, ProcessLanguages, Rect, RecordedLayout,
+  PainterLimits, PainterLine, PainterObservation, ProcessLanguages, Rect, RecordedLayout,
 } from './types.ts'
+
+// The prediction hook (predictor.ts, or the module run.ts --predictor bundles in its place). A swapped-in predictor may
+// export no limits(): main's predictor returns line ranges alone.
+const predict = predictorModule.predict
+const paint = predictorModule.paint
+const limitsOf = (predictorModule as { limits?: (prediction: LayoutPrediction) => PainterLimits }).limits
 
 type PageRow = Omit<LabRow, 'family' | 'browser' | 'build' | 'languages' | 'case'>
 type StepReply =
@@ -481,7 +487,7 @@ async function observeCase(c: Case, reply: Extract<StepReply, { kind: 'chunk' }>
 }
 
 async function observeRow(c: Case, reply: Extract<StepReply, { kind: 'chunk' }>, range: Range, recording: boolean, libraryLog: (log: ParagraphLayout['measure']) => void): Promise<PageRow> {
-  const timings = { nativeMs: 0, predictMs: 0, observeMs: 0, paintMs: 0, painterObserveMs: 0 }
+  const timings = { nativeMs: 0, predictMs: 0, observeMs: 0, limitsMs: 0, paintMs: 0, painterObserveMs: 0 }
   const env = readEnv()
   let start = performance.now()
   let native: PageRow['native']
@@ -518,8 +524,23 @@ async function observeRow(c: Case, reply: Extract<StepReply, { kind: 'chunk' }>,
     observation = { error: message(error) }
   }
   timings.observeMs = performance.now() - start
+  // What the painter can't reproduce on each line, by the library's own reading. It stays in the observe phase of a
+  // recorded run: it asks Canvas nothing.
+  start = performance.now()
+  let painterLimits: PainterLimits | { error: string } | undefined
+  if (limitsOf !== undefined) {
+    try {
+      painterLimits = limitsOf(hook)
+    } catch (error) {
+      painterLimits = { error: message(error) }
+    }
+  }
+  timings.limitsMs = performance.now() - start
   const log = hook.layout.measure
-  const prediction: PageRow['prediction'] = { layout: recordedLayout(hook.layout), measure: { contexts: log.contexts.length, calls: log.calls.length, memoHits: log.memoHits }, observation }
+  const prediction: PageRow['prediction'] = {
+    layout: recordedLayout(hook.layout), measure: { contexts: log.contexts.length, calls: log.calls.length, memoHits: log.memoHits }, observation,
+    ...(painterLimits === undefined ? {} : { painterLimits }),
+  }
   let painter: PageRow['painter']
   if (recording) beginPhase('paint')
   try {

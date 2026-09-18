@@ -5,17 +5,20 @@
 //
 //   bun rebuild/lab/compare-rows.ts <rows.ndjson> <other rows.ndjson> [--ids=<id>[,<id>...]]
 //
-// It streams the first file and reads the second by byte offset. Exit 1 when a row is missing or anything differs.
+// It streams the first file and reads the second by byte offset; either may be compressed (rows.ts). Exit 1 when a row is
+// missing or anything differs.
 import { closeSync, openSync } from 'node:fs'
-import { indexRows, readLines, readRowAt } from './score.ts'
+import { plainRows, readLines } from './rows.ts'
+import { indexRows, readRowAt } from './score.ts'
 import type { LabRow } from './types.ts'
 
 const paths = process.argv.slice(2).filter(arg => !arg.startsWith('--'))
 const idsArg = process.argv.slice(2).find(arg => arg.startsWith('--ids='))
 if (paths.length !== 2) throw new Error('Usage: bun rebuild/lab/compare-rows.ts <rows.ndjson> <other rows.ndjson> [--ids=<id>[,<id>...]]')
 const wanted = idsArg === undefined ? null : new Set(idsArg.slice('--ids='.length).split(','))
-const index = await indexRows(paths[1]!)
-const fd = openSync(paths[1]!, 'r')
+const other = plainRows(paths[1]!)
+const index = await indexRows(other.path)
+const fd = openSync(other.path, 'r')
 const parts = ['native', 'prediction', 'painter'] as const
 const counts = { rows: 0, missing: 0, native: 0, prediction: 0, painter: 0 }
 const examples: string[] = []
@@ -29,15 +32,16 @@ try {
       counts.missing++
       continue
     }
-    const other = readRowAt(fd, entry)
+    const otherRow = readRowAt(fd, entry)
     for (let i = 0; i < parts.length; i++) {
-      if (JSON.stringify(row[parts[i]!]) === JSON.stringify(other[parts[i]!])) continue
+      if (JSON.stringify(row[parts[i]!]) === JSON.stringify(otherRow[parts[i]!])) continue
       counts[parts[i]!]++
       if (examples.length < 10) examples.push(`${row.id} ${parts[i]}`)
     }
   }
 } finally {
   closeSync(fd)
+  other.release()
 }
 console.log(`${counts.rows} rows: ${counts.missing} missing in the other file; differing native observations ${counts.native}, predictions ${counts.prediction}, painted lines ${counts.painter}${examples.length === 0 ? '' : `; ${examples.join(', ')}`}`)
 process.exit(counts.missing + counts.native + counts.prediction + counts.painter === 0 ? 0 : 1)

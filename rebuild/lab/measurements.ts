@@ -16,7 +16,7 @@
 // Exit 1 when any case differs or asks a new question.
 import { resolve } from 'node:path'
 import type { CaseMeasurements, RecordedCall, RecordedContext, RecordedSegmentation } from './record.ts'
-import { readLines } from './score.ts'
+import { readLines } from './rows.ts'
 import type { BrowserKind, Case, LabRow, LayoutPrediction, LinesPrediction, ProcessLanguages } from './types.ts'
 
 export async function* readMeasurements(path: string): AsyncGenerator<CaseMeasurements> {
