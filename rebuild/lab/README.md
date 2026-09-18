@@ -216,8 +216,8 @@ and `facts` (the lab's font facts, the optional input; `predictor.ts`).
 
 | Tier | Command | What a change shows as | Measured |
 |---|---|---|---|
-| 0 | `bun test rebuild` | a failing unit test | 11 to 12 s (644 tests); 20 s at load average 25 |
-| 1 | `bun rebuild/tests/replay.ts check --browser=all --config=all` | every case whose full prediction changed, with the first differing field; cases that need the browser | 77 s for the six references (380,882 cases) at load average 25; one reference (62,437 to 65,351 cases) 9 to 14 s on a quieter machine, 20 to 37 s at load average 38 |
+| 0 | `bun test rebuild` | a failing unit test | 11 to 12 s (727 tests); 20 s at load average 25 |
+| 1 | `bun rebuild/tests/replay.ts check --browser=all --config=all` | every case whose full prediction changed, with the first differing field; cases that need the browser | 42 s for the six frozen references (388,886 cases) on a quiet machine, 4 to 9 s a reference; 77 s at load average 25 |
 | 2 | `bun rebuild/tests/browser-sets.ts --browser=<browser> --out=<dir>` | status transitions against the reference ledger, of the four metrics and of the exact-value status, and lost pairs against the build-keyed seed | forward order, one browser at a time: Chrome 88 s, Firefox 108 s, webkit-host 128 s; both orders with recording, the three browsers at once: 3 to 5.5 minutes each |
 | 3 | the round's evaluation (`fresh.ts`, sealed sets, giants, installed Safari) | new classes on cases nobody saw | see REPORT.md |
 
@@ -235,8 +235,9 @@ webkit-host 63,987. A case id can sit in two sets (the smoke set samples the oth
 as its calls and one can take minutes, so they stay an evaluation job.
 
 `rich-prewrap` (1,334 cases; `bun rebuild/lab/cases/rich-prewrap.ts --out=.artifacts/lab/cases/rich-prewrap.ndjson`, sha256
-61bdf919…; research/PREWRAP-RICH.md) joined in round 4c, after the references of 2026-09-18 were recorded, so the counts
-elsewhere in this section are without it. It is the only set that reaches tab-size on a span, and justify beside a
+61bdf919…; research/PREWRAP-RICH.md) joined in round 4c, after the first references of 2026-09-18 were recorded, so the
+validation counts of that day in this section (65,351 Chrome cases, 380,882 in all) are without it; the frozen references
+hold it ("The correctness line"). It is the only set that reaches tab-size on a span, and justify beside a
 preserved newline or beside preserved spaces across a box end: round 4c's three fixes (Gecko's tab-size and preserved
 newline, Blink's justify end offset) changed the prediction of 0 cases of the other sets in Chrome and 2 in Firefox, and
 corrected observed values in 7 and 47 cases of this one. Both orders with recording take 4 to 6 s a browser.
@@ -248,6 +249,66 @@ their 4 and 2 part files), every part is one `run.ts` job in a fresh browser pro
 or reversed, and no tier takes `--chunk`. A ledger records each set's protocol with its case files' hashes, and two ledgers
 of different protocols don't compare. Under this protocol two both-orders runs of one library an hour apart gave the same
 status on every case and metric in all three browsers (0 transitions over 190,441 cases).
+
+### The correctness line
+
+Frozen on 2026-09-18 after research/ROUND4-CRITIC.md's verdict and its two fixes (the font checks' contexts; the ledger's
+exact-value status). A change to the library is held to it by three commands:
+
+```sh
+bun test rebuild                                                        # tier 0
+bun rebuild/tests/replay.ts check --browser=all --config=all            # tier 1: exit 0, or every changed case by its first field
+for b in chrome firefox webkit-host; do for c in no-facts facts; do     # tier 2, in pinned browsers; both configurations
+  bun rebuild/tests/browser-sets.ts --browser=$b --config=$c --out=<dir>/$b-$c [--both-orders] [--ids-file=<tier 1's needs-browser.ids>]
+done; done
+```
+
+Tier 2 reads the frozen reference's ledger and the adopted seed of its browser build and configuration by default, and
+exits 1 on a lost pair, a pass that became a failure or unobserved, or a case that stopped being exact. A change that means
+to move a prediction records again, packs and freezes with `--force --reason=<why>`; the manifest keeps what it replaced.
+
+- **What is frozen.** Six references in `.artifacts/tests/reference/<browser>-<config>` (inputs, the browser's own
+  predictions, the replay's reference, the ledger), pinned by hash in `rebuild/tests/reference/<browser>-<config>.json`, at
+  commit 6b21b68. They are packed from `.artifacts/tests/runs/line-20260918/<browser>-<config>`: every tier set with
+  `rich-prewrap`, both orders, recorded at feb3937 with nothing uncommitted under `rebuild/src` and `rebuild/lab`
+  (the two commits hold the same library, predictors, font facts, ports, page, runner and scorer; one library bundle a
+  configuration, `1545f944f502…` without facts and `2b23885ba492…` with). Pinned Chrome 153.0.8010.50 and Firefox 156.0,
+  webkit-host on WebKit 22625.1.29.11.27, macOS 26A428, DPR 2, scorer 7, ledger format 2. Chrome 66,685 cases, Firefox 63,771,
+  webkit-host 63,987; the three browsers at once took 3 to 4 minutes a configuration.
+- **Fidelity.** `pack` replayed all 388,886 cases to the browser's own prediction, the question sequences included: 0
+  unfaithful. Tier 1 against the frozen references: every case the same, exit 0. Planted afterwards, the font checks' old
+  context (text-rendering auto) makes all 66,685 no-facts Chrome cases ask a question the record lacks, exit 3.
+- **Against the round 4 evaluation's recordings** (3c17016, before the font checks' fix), whose ledgers were built again in
+  format 2 from their own per-case files (`.artifacts/ceiling-20260917/freeze-line/r4-ledgers`): 0 status transitions on the
+  four metrics and on the exact-value status in all six, the same history-dependent cases (Firefox 313, 314 on widths;
+  webkit-host 279, 283 on the painter), the same differing predicted values, rect counts and limited values; all 208
+  per-case files and the giants' 12 are byte for byte the evaluation's; `compare-sets.ts` over both orders finds no native
+  observation, prediction or painted line that differs (Chrome 133,370 rows a configuration, Firefox 127,542, webkit-host
+  127,974). The fix moved nothing, as the critic's forward Chrome run had said.
+
+| Frozen tier sets | lineCount / breaks / widths / painter, % | Prediction failures | Without a covered explanation | Exact-value status | History-dependent |
+|---|---|---:|---|---|---:|
+| Chrome, no facts | 99.48 / 99.38 / 99.04 / 98.07 | 1,022 | 1 (breaks, `c-a37545c096e939be`); painter 4 | 65,869 exact, 816 not; 266 of 586,352 predicted values differ, none in a case without a failing prediction metric | 0 |
+| Chrome, facts | 99.58 / 99.52 / 99.51 / 98.28 | 628 | the same 1; painter 10 | 65,965 exact, 720 not; 549 of 3,577,258, none in such a case | 0 |
+| Firefox, no facts | 99.77 / 99.47 / 97.54 / 93.68 | 1,863 | 0; painter 0 | 63,146 exact, 312 not; 301 of 378,400, none in such a case | 314 |
+| Firefox, facts | 99.81 / 99.56 / 97.82 / 93.68 | 1,625 | 0 open, 19 residual (the 1 au class); painter 34 | 63,172 exact, 286 not; 744 of 5,015,298, 6 such cases (the registered Nastaliq positions) | 314 |
+| webkit-host, no facts | 99.87 / 99.78 / 99.58 / 93.04 | 398 | 0; painter 24 | 63,583 exact, 125 not; 0 of 565,440 | 283 |
+| webkit-host, facts | 99.87 / 99.78 / 99.58 / 93.04 | 398 | 0; painter 25 | 63,583 exact, 125 not; 0 of 772,758 | 283 |
+
+Rates are pass ÷ (pass + fail) over every tier set; history-dependent, protocol and unobserved cases are left out. Rect
+counts differ in 992 and 869 of Chrome's 2,522,844, in 404 cases of each configuration whose prediction metrics all pass
+(`rule/wbr-elements` 392, `rich-prewrap/nested` 12), in 134 and 102 of Firefox's (none in such a case) and in 197 of
+webkit-host's (30 such cases): they are in the known tail, and being `not exact` already, they block only when a count
+rises. `.artifacts/ceiling-20260917/freeze-line/tools/headline.py` prints the table per group from the frozen ledgers. The
+rates on unseen cases are the round 4 evaluation's (REPORT.md "The correctness line"), which these recordings don't
+replace.
+
+**What the line doesn't hold.** One Mac at DPR 2 (`shared/one-device-pixel-ratio-one-os`); the painter and `src/paint.ts`
+only through tier 2 (`lab/replay-blind-spots`); giants in no tier (run with the lab gate's seeds: all 12 runs equal the
+evaluation's); Firefox's history-dependent set was stable between the two recordings of this day and wasn't on the
+critic's fresh set (`gecko/process-font-fallback-state`); with no supplied facts most values are limited, so exact-value
+regressions block in the facts configuration and only show as differing limited values in the headline one; installed
+Safari wasn't run again (webkit-host stands in; the evaluation's spot check equalled it on 46,914 cases).
 
 ### Tier 1: offline replay
 
@@ -284,7 +345,8 @@ bun rebuild/tests/replay.ts check --browser=chrome            # or --browser=all
   V8's storage, which follows how a string was built (`canvasString` makes a Latin-1-only string of 13 units or more 16-bit
   by slicing it out of a 16-bit string); no record shows storage and bun has none, so a replay can't differ there. `pack`
   lists the cases that ask a Latin-1-only string of 13 units or more (`inputs/storage-sensitive.ids`: 4,528 of Chrome's
-  65,351). Planted on 2026-09-18: without the slice, all 65,351 cases replay the same, `check` exits 3 with the 4,528 cases
+  65,351 then; in the frozen references 4,695 of 66,685 with the lab's facts and 65,384 without, where font check 4 asks
+  its 15-unit sample in nearly every case, so there a change to those files sends nearly everything to tier 2). Planted on 2026-09-18: without the slice, all 65,351 cases replay the same, `check` exits 3 with the 4,528 cases
   for tier 2 (where this change moved no status). On the six recordings of 2026-09-18 no case is unfaithful: all 380,882 replay
   exactly, the question sequences included, so nothing the library reads from its host outside Canvas and the segmenters
   (Unicode property escapes in `src/paint.ts`, case mapping, `Intl`) shows a difference between bun and the browsers on

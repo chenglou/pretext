@@ -115,8 +115,9 @@ The maintainer's, after ceiling round 3's evaluation and critic (research/ROUND3
 What still stands against the tentpoles, then what was removed, one line each. The detail of a removed item is in
 REPORT.md, specs/*-RESULTS.md and this file's history. Sources: research/{blink,webkit,gecko}-shortcut-audit.md
 (2026-09-16), the charter evaluation and ceiling rounds 1 to 3 (REPORT.md, research/ROUND*-EVALUATION.md and -CRITIC.md),
-the round 4a to 4c owners' reports and the round 4 evaluation (2026-09-18; REPORT.md "Round 4 evaluation"). What the frozen
-line leaves open is listed with case ids in `rebuild/tests/known-tail.json`.
+the round 4a to 4c owners' reports, the round 4 evaluation and its critic (2026-09-18; REPORT.md "Round 4 evaluation",
+research/ROUND4-CRITIC.md). The line was frozen on 2026-09-18 (decision 3; REPORT.md "The correctness line, frozen"): what it
+leaves open is listed with case ids in `rebuild/tests/known-tail.json`.
 
 ### Standing
 
@@ -198,9 +199,15 @@ Core Text glyph runs) and ligatures or pair adjustments across a box edge are st
   them. The headline configuration's open counts are read beside the facts configuration's (REPORT.md "The correctness
   line"). Blink's scaled recipe for the system UI font reports `optical-size` over the whole run, which also covers by
   position (4 of 2,860 values at 13.33px are one LayoutUnit off).
-- The WebKit observation port reports an element rect's width as predicted where WebKit reports `f32(f32(x + w) − x)` at an
-  x moved by centring, an RTL block or a box edge: 13 fresh rich pre-wrap cases pass every metric and hold one such value
-  (1 of them with no supplied facts); no tier set holds one. Scorer 6 has the rule for node rects only.
+- 13 fresh rich pre-wrap webkit-host cases pass every metric and hold one element rect width a float32 step or two off (1
+  of them with no supplied facts); no tier set holds one. Traced at the freeze on the bidi members: not an observation rule
+  but the engine's inline box width, which WebKit gets from `InlineRect::setRight` (`FloatRect::shiftMaxXEdgeTo`: the line
+  box's width plus a float32 delta, InlineDisplayContentBuilder.cpp:728-822) where the library sums the children
+  (`lab/webkit-element-rect-width-float-step`).
+- Rect counts, predicted by definition, differ in cases whose prediction metrics all pass: 404 Chrome tier cases in each
+  configuration (392 `rule/wbr-elements`, 12 `rich-prewrap/nested`) and 30 webkit-host ones; and the Blink observation port
+  reports the x after a fallback-font cluster (U+FFFC) as predicted in 14 failing tier cases (research/ROUND4-CRITIC.md §1).
+  The ledger's exact-value status shows them as `not exact` since the freeze.
 
 **Observation (tentpole 2).**
 
@@ -216,7 +223,8 @@ Core Text glyph runs) and ligatures or pair adjustments across a box edge are st
   element rect in Chrome where the Blink port expects none (`c-a37545c096e939be` on the tier sets, 26 of 11,892 fresh rich
   pre-wrap cases; every code point is on the right line), and a letter after preserved trailing spaces across a box end
   reports rects on two lines in WebKit (2 fresh cases, untraced). Element rects of spans without a box fragment (a `<wbr>`
-  inside one, the font height stand-in) differ in rect counts only (12 tier cases).
+  inside one, the font height stand-in) differ in rect counts only (404 tier cases: 392 of `rule/wbr-elements` and the 12
+  `rich-prewrap/nested` ones first counted).
 - Chrome's `Range.getClientRects()` hang (rebuild/platform-bugs entry 13) stalls a lab job, and the lab has no rule that
   sets such cases aside before a run: round 4b set 7 fresh cases aside by signature, and the evaluation one sealed-4 case
   without opening it.
@@ -232,8 +240,11 @@ Core Text glyph runs) and ligatures or pair adjustments across a box edge are st
 - The lab's page doesn't call `detectEngine()`: its predictor derives the engine from the browser it launched, so a lab
   run in a browser whose Canvas lacks an assumption still predicts. The probe `probes/canvas-checks.ts` is the check per
   release until the page refuses (tests owner).
-- Tier 1 can't see V8 string storage; Chrome's 4,528 storage-sensitive cases go to tier 2 by rule when the code that
-  builds Canvas strings changed, a path rule, not a detection.
+- Tier 1 can't see V8 string storage; Chrome's storage-sensitive cases (4,695 with the lab's facts, 65,384 of 66,685
+  without, where font check 4 asks a 15-unit sample) go to tier 2 by rule when the code that builds Canvas strings changed,
+  a path rule, not a detection. No such rule routes a change under `src/paint.ts`, which tier 1 can't see at all.
+- The frozen line is one Mac at a device pixel ratio of 2: the OS is no part of the environment, `detectEngine()` answers
+  supported for Chrome or Firefox on any OS, and no case runs at another ratio.
 
 **Tests (tentpoles 4, 5).**
 
@@ -243,10 +254,10 @@ Core Text glyph runs) and ligatures or pair adjustments across a box edge are st
   inputs until each obligation is triaged under tentpole 5. research/MAIN-TRIAGE.md and `rebuild/lab/triage/` hold the
   records, but `cases/obligations.ts` doesn't read them (TEST-ARCHITECTURE §7.1). The adopted lab gate baselines block
   on the main-derived suite samples and the burned 2026-09-16 held-out sets (CHARTER-CRITIC item 17) and are scorer 4's;
-  G0 is still keyed on user agents and scorer 1. The round 4 evaluation staged scorer 7 seeds for both configurations
-  (tier 2 in `rebuild/tests/baselines/staged-round4c-sets`, the lab gate and the tests gate in `staged-round4-no-facts` and
-  `staged-round4-facts`), with every lost pair attributed; they and the recorded references wait for the critic. The adopted
-  lab and tests seeds were recorded with the lab's facts, so the no-facts seeds lose the pairs that need a supplied fact.
+  G0 is still keyed on user agents and scorer 1. The scorer 7 seeds of both configurations are adopted since the freeze
+  (`rebuild/lab/baselines/{no-facts,facts}`, `rebuild/tests/baselines/{no-facts,facts}` and `sets`), with every lost pair
+  attributed; they still block on the main-derived suite samples and the burned held-out sets. The seeds they replaced were
+  recorded with the lab's facts, so the no-facts records list the pairs that need a supplied fact as lost.
 - `lab/gate.ts` keys on case ids alone; 714 ids sit in two tier sets (the smoke sample, `features-en-US`), where the gate
   is coarser than the ledger, which keys on set and id.
 - Sealed sets 1 to 4 each ran once, counts only. Every one of main's 238,524 suite cases has been used, so sealed-4 holds
@@ -330,6 +341,11 @@ record).
   the synthetic bold rows counted as open (a registered residual class); the scorer's attribution leftovers (scorer 7).
 - Round 4c: Gecko's tab-size read from the block instead of the text frame, a preserved newline that didn't set
   `lineEndsInBR`, Blink's justify end offset stopping at a close tag.
+- The freeze (2026-09-18, research/ROUND4-CRITIC.md "Fix first"): the runtime font checks' contexts at text-rendering auto,
+  which shared Blink's font cache key with the page's own text (they measure in the engine's own kind of context; WebKit's
+  key holds the size opsz comes from, and Gecko is asked nothing); tier 2 blind to a predicted value going wrong where every
+  metric passes (the ledger's exact-value status, format 2; tier 2 exits 1 on it); seeds staged and references not frozen
+  (adopted; six references frozen at 6b21b68, 388,886 cases replaying exactly).
 - Round 4b, shared: the build number as the only guard against a browser whose Canvas differs. `detectEngine()` checks what each
   port's recipes assume (context attributes, the ink box, what the ligature-free letter spacing adds) in two contexts and
   two `measureText` calls, and answers unsupported by name; Firefox 140.16.0esr, where predictions collapsed under an

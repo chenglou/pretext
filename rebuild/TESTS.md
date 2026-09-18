@@ -20,17 +20,15 @@ can't see). Every tier runs two configurations: `no-facts`, the headline, and `f
 | 2 | `bun rebuild/tests/browser-sets.ts --browser=<browser> --out=<dir>` | status transitions against the reference ledger, of the four metrics and of the exact-value status (a case whose predicted values stop equalling the browser's while every metric passes), lost pairs against the build-keyed seed | forward order, one browser: Chrome 88 s, Firefox 108 s, webkit-host 128 s |
 | 3 | the round's evaluation (fresh sets, sealed sets, giants, installed Safari) | new classes on cases nobody saw | REPORT.md |
 
-**State after the round 4 evaluation.** The six official references under `.artifacts/tests/reference` still describe the
-round 3 library: against them every no-facts Chrome and webkit-host case asks a question the record lacks (the font
-checks), 64,392 Chrome and 55,381 webkit-host predictions differ with facts (`runs[].reshaped`, `canvasFamily`), and 61,819
-Firefox cases ask new questions (OffscreenCanvas only). The evaluation recorded tier 2 again for round 4's library (3c17016)
-in both configurations and both orders, with the `rich-prewrap` set: `.artifacts/ceiling-20260917/evaluate-r4/tier2/
-<browser>-<config>` (Chrome 66,685 cases, Firefox 63,771, webkit-host 63,987; 169 s, 168 s and 247 s a configuration with
-the three browsers at once). Packed into a private folder (`evaluate-r4/replay/<browser>-<config>`, `replay.ts pack
---dir`), all 388,886 cases replay the browser's own prediction exactly, the question sequences included: 0 unfaithful.
-`replay.ts pack --runs=<that folder> --force` and `freeze --force --reason=<text>` make them the
-references; that is the orchestrator's step after the critic, as is adopting the staged seeds (§9). Transitions against the
-old reference ledgers need `--allow=scorer`; REPORT.md "What rounds 4a to 4c changed" has them.
+**State at the correctness line, 2026-09-18.** The six references under `.artifacts/tests/reference` are frozen at 6b21b68
+and pinned in `rebuild/tests/reference/`, packed from `.artifacts/tests/runs/line-20260918/<browser>-<config>` (every tier
+set with `rich-prewrap`, both orders, both configurations; Chrome 66,685 cases, Firefox 63,771, webkit-host 63,987; recorded
+at feb3937, the same library). All 388,886 cases replay the browser's own prediction exactly, the question sequences
+included, and tier 1 exits 0 in 42 s. The recordings equal the round 4 evaluation's (3c17016, before the font checks measured
+at text-rendering `optimizeLegibility` in Blink) on every status, per-case file, native observation, prediction and painted
+line. The ledger is format 2: beside the four metrics every case has an exact-value status, and tier 2 exits 1 when a case
+stops being exact (lab README "The ledger"). The seeds are adopted (§9). The lab README's "The correctness line" has the
+commands, the numbers and what the line doesn't hold; the references they replaced described the round 3 library.
 
 Tier 1 is a change detector, not an oracle: its expected values are the library's own at a commit. Its inputs are recorded
 per library, so a library that asks Canvas new questions needs a new recording (`browser-sets.ts --record`, `replay.ts

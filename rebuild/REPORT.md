@@ -35,6 +35,12 @@ Canvas what it can):
 - **Cost:** Canvas calls per paragraph are unchanged from round 3 with the lab's facts in Chrome and Firefox; with no
   supplied facts the runtime font checks add 4% to 25% in Chrome and 23% to 120% in webkit-host while a measurer lives one
   paragraph. Recorded only.
+- **The line is frozen** (2026-09-18, after research/ROUND4-CRITIC.md): its two fixes landed (the runtime font checks measure
+  in the engine's own kind of context, so in Blink they no longer share the font cache key of the page's own text; the
+  ledger carries an exact-value status per case, so tier 2 sees a predicted value going wrong where every metric still
+  passes), everything was recorded again on the committed tree and equals the evaluation's recordings on every status,
+  prediction, native observation and painted line, the seeds are adopted, and six references are frozen at 6b21b68: tier 1
+  replays all 388,886 cases exactly ("The correctness line, frozen" below).
 - **Findings for main** are in rebuild/TAKE-BACK.md, including 2 required checks main now fails in Safari 27.
 
 Terms:
@@ -49,6 +55,59 @@ Terms:
 - A **history-dependent** case is one the browser lays out differently when the same case file runs in reverse order. Those cases are left out of the counts.
 - A **gap** is a known place where Canvas can't supply what the DOM uses. The library still predicts, and reports the gap's name on the line whose content or break decision it concerns, with a source range where it has one.
 - A **protocol row** is a row whose page doesn't describe its declared input, such as slot floats outside their rows. It is left out of pass and fail alike.
+
+## The correctness line, frozen (2026-09-18)
+
+The round 4 critic's verdict (research/ROUND4-CRITIC.md) was to adopt the staged seeds and freeze the references after two
+fixes, with everything else in the known tail. What was done, on the main tree (tools and logs in
+`.artifacts/ceiling-20260917/freeze-line`; lab README "The correctness line" has the commands that define the line):
+
+- **Fix 1, the font checks' contexts** (feb3937). `src/measure/font-checks.ts` made its contexts at text-rendering auto, which
+  in Blink is the font cache key of the page's own text: the key holds text-rendering and the zoomed size, not the specified
+  size (font_description.cc:308-331), while opsz is set from the specified size for any font with the axis
+  (font_platform_data_mac.mm:170-178). For a named font with an opsz axis at DPR 2, check 4 after the DOM would learn
+  `false` from the DOM's font, with no gap, and before the DOM the page's text would take the check's font. The checks now
+  measure in the engine's own kind of context (Blink `optimizeLegibility`, as `styleContexts`; WebKit and Gecko assign the
+  default as their recipes do), with the reading in the file's header and two unit tests, one of which holds every check
+  context to the text rendering of the engine's own contexts through `prepareParagraph`. Probes `measure-first M1`
+  (`font-check`, `font-check-word`), each alone in a fresh pinned Chrome at DPR 2: DOM system UI text at 8px to 16px keeps
+  the clean rule's width after the checks' contexts measured at the zoomed sizes; at text-rendering auto (`font-check-auto`)
+  16px text is 71.2421875px for 81.125px. The other engines: WebKit's key holds the computed size, the text rendering mode
+  and optical sizing (FontCascadeCache.h:113-154), and opsz is set from the font's own size (UnrealizedCoreTextFont.cpp:303-
+  315), so a font a check makes is the font the page makes; its glyph geometry cache keeps computed values
+  (FontCascade.cpp:319-352); Gecko is asked nothing. No lab font but the system font has the axis, so no case could show the
+  defect, and none moved.
+- **Fix 2, exact values in the ledger** (feb3937). Ledger format 2 gives every case an exact-value status beside the four
+  metrics: `exact`, `not exact (values n, rect counts m)`, `history-dependent`, `protocol row`, `unobserved`, from the
+  scorer's per-case facts (rect counts, and the x and width of rects in the predicted state). `ledger.ts transitions` and
+  tier 2 list its transitions, name known-tail items on them, and exit 1 when an exact case stops being exact or a case
+  that wasn't holds more differing values or rect counts. Differing limited values are kept per case and printed as a sum,
+  never blocking. No metric's meaning changed. The critic's planted runs read again through it: Chrome 61 blocking cases
+  with the lab's facts and 10 without, Firefox 5 and 0 (without facts Firefox's change shows as limited values, 0 to 89,
+  which is why tier 2 runs both configurations).
+- **Recorded again** at feb3937: tier 2 in pinned Chrome 153.0.8010.50, Firefox 156.0 and webkit-host, both configurations,
+  both orders, recorded, with `rich-prewrap`, and the giants. Against the evaluation's recordings: 0 transitions of any
+  status in six ledgers, identical history-dependent sets, all 220 per-case files byte for byte the same, and no native
+  observation, prediction or painted line differs on any row of either order.
+- **Seeds adopted** (6b21b68): made again with the gates' own seed commands, equal to the evaluation's staged seeds, every
+  one of 2,251 lost pairs with the evaluation's attribution; where they sit is in the lab README ("Adopted at the
+  correctness line") and TESTS.md §9. **References frozen** at 6b21b68 for the three browsers and both configurations;
+  tier 1 exits 0 on 388,886 cases in 42 s.
+
+| Frozen tier sets | lineCount / breaks / widths / painter, % | Failures without a covered explanation | Cases not exact | Cases without a failing prediction metric that hold a wrong predicted value |
+|---|---|---|---:|---:|
+| Chrome, no facts / facts | 99.48 / 99.38 / 99.04 / 98.07, and 99.58 / 99.52 / 99.51 / 98.28 | 1 / 1 (`c-a37545c096e939be`, breaks); painter 4 / 10 | 816 / 720 of 66,685 | 0 / 0 |
+| Firefox | 99.77 / 99.47 / 97.54 / 93.68, and 99.81 / 99.56 / 97.82 / 93.68 | 0 / 0, with 19 residual rows with facts; painter 0 / 34 | 312 / 286 of 63,771 | 0 / 6 (the registered Nastaliq positions) |
+| webkit-host | 99.87 / 99.78 / 99.58 / 93.04 in both | 0 / 0; painter 24 / 25 | 125 / 125 of 63,987 | 0 / 0 |
+
+These are the development, family and burned held-out sets, which the ports iterated on; the rates on unseen cases are the
+evaluation's, below. What the critic found understated is in the known tail with case ids (rect counts that differ in 404
+passing Chrome tier cases and 30 webkit-host ones, the x after a U+FFFC cluster reported as predicted in 14 cases, Firefox's
+history-dependent set that isn't stable between sets, `src/paint.ts` outside tier 1, one Mac at DPR 2, Chrome's hang
+signature, the half-width ideographic full stop). One of them got a cause: WebKit's element rects a float32 step off in 12
+fresh rich pre-wrap cases are not an observation rule but the engine's inline box width, which on a bidi line is
+`InlineRect::setRight`'s float32 result from the line box's width (`FloatRect::shiftMaxXEdgeTo`, reproduced to the bit on two
+cases); it is a library change in two paths, so it stays in the tail, traced.
 
 ## Round 4 evaluation, 2026-09-18
 
@@ -318,7 +377,7 @@ no-facts giants.
 
 ### Seeds, references and the known tail
 
-- **Staged, not adopted** (the orchestrator adopts after the critic): tier 2 seeds in
+- **Adopted and frozen since** ("The correctness line, frozen" above); as the evaluation left them: tier 2 seeds in
   `rebuild/tests/baselines/staged-round4c-sets/` (six files, compared with round 4a's staged seeds), lab gate seeds in
   `rebuild/lab/baselines/staged-round4-{no-facts,facts}/` and tests gate seeds with a regenerated coverage matrix in
   `rebuild/tests/baselines/staged-round4-{no-facts,facts}/`, each compared with the adopted seed. Every staged seed passes
@@ -326,7 +385,8 @@ no-facts giants.
   the counts). With the lab's facts the lab and tests seeds lose what round 3's staged seeds lost and nothing more (Chrome 0
   and 2 painter pairs, Firefox 5 and 12, webkit-host 4 and 16); without facts Chrome's lose 79, 208 and 276 pairs and
   Firefox's 100 and 167, which pass with the lab's facts.
-- **References aren't frozen**: `tier2/<browser>-<config>` holds the recordings to pack.
+- **References weren't frozen** by the evaluation: `tier2/<browser>-<config>` holds its recordings, which the frozen line's
+  recordings equal.
 - **The known tail** (`rebuild/tests/known-tail.json`): 59 items, 427 named cases, 23 rules; the evaluation added 14 items
   and the named cases of what it found.
 
