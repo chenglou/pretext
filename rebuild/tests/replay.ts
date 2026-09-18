@@ -657,10 +657,14 @@ async function freeze(): Promise<number> {
   writeFileSync(join(staging, 'manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`)
   if (before !== null) execFileSync('trash', [join(dir, 'reference')])
   execFileSync('mv', [staging, join(dir, 'reference')])
+  // The repository pins the reference of the default folder only; a trial folder (--dir) pins nothing.
   const pinned = join(REPO, `rebuild/tests/reference/${browser}-${config}.json`)
-  mkdirSync(dirname(pinned), { recursive: true })
-  writeFileSync(pinned, `${JSON.stringify(manifest, null, 2)}\n`)
-  console.log(`[replay] froze ${manifest.cases} cases at ${manifest.commit.slice(0, 12)}${dirty.length === 0 ? '' : ' (dirty)'} into ${relative(REPO, join(dir, 'reference'))} in ${Math.round((Date.now() - started) / 1000)} s; ${report.counts.newQuestion} cases ask a question the record lacks; pinned in ${relative(REPO, pinned)}`)
+  const pins = options.get('dir') === undefined
+  if (pins) {
+    mkdirSync(dirname(pinned), { recursive: true })
+    writeFileSync(pinned, `${JSON.stringify(manifest, null, 2)}\n`)
+  }
+  console.log(`[replay] froze ${manifest.cases} cases at ${manifest.commit.slice(0, 12)}${dirty.length === 0 ? '' : ' (dirty)'} into ${relative(REPO, join(dir, 'reference'))} in ${Math.round((Date.now() - started) / 1000)} s; ${report.counts.newQuestion} cases ask a question the record lacks${pins ? `; pinned in ${relative(REPO, pinned)}` : ''}`)
   return 0
 }
 
