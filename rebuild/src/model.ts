@@ -490,6 +490,9 @@ export type WebKitTextBox = {
   // The run's text was shaped with its neighbours across inline box edges as one RTL run (LineBuilder::applyShapingOnRunRange,
   // InlineLineBuilder.cpp:920-967), so its width is its characters' share of that shaping.
   shapedAcrossBoxes: boolean
+  // The font-family list the box's text was measured with in Canvas: the declared list with the generic keywords the
+  // box's locale resolves named (engines/webkit/fonts.ts). The observation port measures its in-box stand-ins with it.
+  canvasFamily: string
 }
 
 export type WebKitDisplayBox =

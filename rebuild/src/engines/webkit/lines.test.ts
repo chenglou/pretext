@@ -540,6 +540,18 @@ describe('bidi lines with inline structure (InlineDisplayContentBuilder.cpp:728-
     expect(textBoxes(boxes)[0]!.x).toBe(78)
   })
 
+  test('a span in two places on a reordered line: only its first display box is its first box (computeIsFirstIsLastBox)', () => {
+    // rule/box-edges c-20592b0063422319: in an RTL block the span's hanging space goes to the line's left at the root level
+    // and its word stays with the LTR text at the right, so the span has two display boxes on line 0. The start padding goes
+    // on the first one in box order alone (InlineDisplayContentBuilder.cpp:1036-1060, :770-782).
+    const block = treeParagraph([], fontWith(), { direction: 'rtl', width: 100, whiteSpace: 'pre-wrap' })
+    const p = { ...block, content: [{ kind: 'text' as const, text: 'xx aaaa ' }, span(block, [{ kind: 'text', text: 'bbbb cccc' }], {}, { margin: 0, border: 0, padding: 6 }), { kind: 'text' as const, text: ' dddd' }] }
+    const { lines } = layout(p)
+    expect([lines[0]!.start, lines[0]!.end]).toEqual([0, 13])
+    const inlineBoxes = lines[0]!.geometry.boxes.filter(b => b.kind === 'inline-box')
+    expect(inlineBoxes.map(b => [b.width, b.hasStartEdge, b.hasEndEdge])).toEqual([[10, true, false], [32, false, false]])
+  })
+
   test('an RTL atomic inline follows visual order with its line-left margin', () => {
     const p = treeParagraph([{ kind: 'text', text: 'אב ' }, atomic(20, 3, 5), { kind: 'text', text: ' גד' }], fontWith(), { direction: 'rtl', width: 200 })
     const { lines } = layout(p)

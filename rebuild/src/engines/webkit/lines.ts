@@ -1987,6 +1987,7 @@ function textDisplayBox(p: WebKitPrepared, run: LineRun, x: number): WebKitDispl
     level: run.level, isWordSeparator: run.isWordSeparator, x, width: run.kind === 'soft-line-break' ? 0 : run.width,
     hyphen: run.needsHyphen ? box.hyphen : null, expansion: run.expansion,
     expansionBehavior: { left: run.expansionBehavior.left, right: run.expansionBehavior.right }, shapedAcrossBoxes: run.shapingBoundary !== null,
+    canvasFamily: box.canvasFamily,
   }
 }
 
@@ -2170,6 +2171,24 @@ function bidiDisplayBoxes(L: Layout, line: Line, lineLeft: number, alignmentOffs
     }
   }
   if (hasInlineBox) {
+    // computeIsFirstIsLastBox (:1036-1060): a span whose content isn't contiguous in visual order has several display boxes
+    // on the line, and of those only the first in box order is its first box and only the last its last box (rule/box-edges
+    // c-20592b0063422319: the hanging space of a span at the line's left and its word at the right, in an RTL block; the
+    // start border and padding go on the left box alone).
+    const seen = new Set<number>()
+    for (let i = 0; i < out.length; i++) {
+      const box = out[i]!
+      if (box.kind !== 'inline-box') continue
+      if (seen.has(box.element)) box.hasStartEdge = false
+      seen.add(box.element)
+    }
+    seen.clear()
+    for (let i = out.length - 1; i >= 0; i--) {
+      const box = out[i]!
+      if (box.kind !== 'inline-box') continue
+      if (seen.has(box.element)) box.hasEndEdge = false
+      seen.add(box.element)
+    }
     // adjustVisualGeometryForDisplayBox (:728-824).
     let right = contentLineLeftEdge
     const adjust = (index: number) => {
