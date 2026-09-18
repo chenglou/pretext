@@ -546,7 +546,7 @@ Main-derived families are a measurement corpus. In this gate they are the report
 - types from `src/model.ts` and `src/env.ts`;
 - constants from those two files that aren't functions, such as `UNKNOWN_FONT_FACTS` and `PINNED_BUILDS`.
 
-Engine or library logic fails the test. It passes since round 4. Two probes bundle a library module into their page to run it in a browser (`probes/font-checks.ts`, `probes/canvas-checks.ts`); they import nothing from it, and their expected values aren't the library's.
+Engine or library logic fails the test. It passes since round 4. The layout a row keeps and the observation contract are the lab's own types (`lab/types.ts`, `lab/observe/contract.ts`) since the re-architecture's S1, so the lab takes from `src/model.ts` the input tree, fragments, gaps and the engines' geometry, and nothing about rows. Two probes bundle a library module into their page to run it in a browser (`probes/font-checks.ts`, `probes/canvas-checks.ts`); they import nothing from it, and their expected values aren't the library's.
 
 ## 12. Per browser release
 

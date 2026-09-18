@@ -13,11 +13,8 @@
 // The recorder wraps the prototypes' methods and passes every argument through untouched, so the browser sees the same
 // string objects (Blink's Canvas results depend on V8's 8-bit or 16-bit storage, which JS can't read). It is installed only
 // when the driver asks for it: timings of a recorded run aren't comparable with other runs.
-import type { ParagraphLayout } from '../src/model.ts'
-
-// The library's call log and the settings it declares per context (src/measure/log.ts, canvas.ts), through the contract.
-type MeasureLog = ParagraphLayout['measure']
-export type DeclaredSettings = MeasureLog['contexts'][number]
+import type { CanvasSettings } from './observe/contract.ts'
+import type { MeasureLog } from './types.ts'
 
 // A context's drawing-state text settings as the context reports them; null where the browser's context lacks the
 // attribute (WebKit has no lang, fontKerning or textRendering; a value assigned there is an ordinary property, never read).
@@ -37,7 +34,7 @@ export type RecordedContext = {
   fontBox: [number, number]
   // The settings the library declared for this context (src/measure/canvas.ts CanvasSettings, with `partition`, which no
   // context attribute shows), joined through the library's own call log; null for contexts the library didn't log.
-  declared: DeclaredSettings | null
+  declared: CanvasSettings | null
 }
 
 // [index into contexts, string, width, actualBoundingBoxLeft, Right, Ascent, Descent]

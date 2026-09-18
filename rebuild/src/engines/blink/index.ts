@@ -6,9 +6,7 @@
 import { indexContent } from '../../content.js'
 import type { BlinkEnvironment } from '../../env.js'
 import type { Measurer } from '../../measure/canvas.js'
-import type {
-  BlinkGlyphCluster, BlinkItem, BlinkLine, BlinkLineGeometry, BlinkLineResult, BlinkMappingUnit, BlinkShapeRun, Fragment, Gap, LineSlot, Paragraph, TextAlign,
-} from '../../model.js'
+import type { BlinkGlyphCluster, BlinkItem, BlinkLineGeometry, BlinkMappingUnit, BlinkShapeRun, Fragment, Gap, LineSlot, Paragraph, TextAlign } from '../../model.js'
 import { graphemeBoundaries, graphemeRulesFor } from '../../unicode/grapheme.js'
 import type { EngineImplementation } from '../engine.js'
 import { hasDictionaryCharacters, lineTable } from './breaks.js'
@@ -24,7 +22,7 @@ import {
   adjust16, ceilFrom16, isSegmentEdge, positionAdjust16, graphemeSourceRange, groupPrefix16, isClusterBoundary, joinsAcross, luCeil, startsClusterInsideGrapheme, GRAPHEME_CLUSTERS_DETAIL, luTrunc, measureGroups,
   isFontRunEdge, pairAdjust16, pairAdjustNoLigatures16, pairPlacementUnknown, partGraphemeStarts, partPrefix16, partWidth16, positionLimit, requeuedSpaceAt, styleContexts, viewPositionLimit, viewPrefix16, widthOf16, type Shaper, type View,
 } from './shape.js'
-import type { BlinkGroup, BlinkLineStart, BlinkPrepared } from './types.js'
+import type { BlinkGroup, BlinkLine, BlinkLineResult, BlinkLineStart, BlinkPrepared } from './types.js'
 
 // InlineNode::ShapeText's grouping (inline_node.cc:1625-1680): equal Font, equal direction, no control item or atomic
 // inline between, no ZWNJ at an item start, and no open or close tag whose box edges or vertical-align break shaping

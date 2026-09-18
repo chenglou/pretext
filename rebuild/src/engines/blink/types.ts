@@ -1,7 +1,8 @@
 // Blink's prepared paragraph and line state (Chrome 153.0.8010.48). The Blink port owns this file.
 import type { ContentIndex } from '../../content.js'
 import type { BlinkEnvironment } from '../../env.js'
-import type { FontDecl, FontFacts, Gap, LineBreak, OverflowWrap, Paragraph, TextAlign, VerticalAlign, WhiteSpace, WordBreak } from '../../model.js'
+import type { BlinkLineGeometry, FontDecl, FontFacts, Gap, LineBreak, OverflowWrap, Paragraph, TextAlign, VerticalAlign, WhiteSpace, WordBreak } from '../../model.js'
+import type { LineOf, LineResultOf } from '../engine.js'
 import type { HanKerningFontData } from './hankerning.js'
 
 // InlineItem types this model produces (specs/blink-text.md §1; inline_item.h): text, control items, the open and close
@@ -203,3 +204,7 @@ export type BlinkLineStart = {
   // token carries this.
   afterLeadingFloats: boolean
 }
+
+// The line nextLine fills, and what it returns for a slot.
+export type BlinkLine = LineOf<BlinkLineStart, BlinkLineGeometry>
+export type BlinkLineResult = LineResultOf<BlinkLineStart, BlinkLineGeometry>

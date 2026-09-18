@@ -1,6 +1,7 @@
 // Gecko's prepared paragraph and line state (Firefox 156.0). The Gecko port owns this file.
 import type { GeckoEnvironment } from '../../env.js'
-import type { FontDecl, Gap, Paragraph, TextStyle } from '../../model.js'
+import type { FontDecl, Gap, GeckoLineGeometry, Paragraph, TextStyle } from '../../model.js'
+import type { LineOf, LineResultOf } from '../engine.js'
 
 // white-space as its two longhands and the predicates Gecko derives from them (nsStyleStruct.h:1303-1367,
 // specs/gecko-text.md §2.1), plus the other inherited text properties a frame reads from its own style.
@@ -209,3 +210,7 @@ export type GeckoLineStart = {
   contentOffset: number
   isFirstLine: boolean
 }
+
+// The line nextLine fills, and what it returns for a slot.
+export type GeckoLine = LineOf<GeckoLineStart, GeckoLineGeometry>
+export type GeckoLineResult = LineResultOf<GeckoLineStart, GeckoLineGeometry>

@@ -15,10 +15,9 @@
 //   to its right on the line is too (every x on the line where the line's offset depends on its width: an RTL block, or
 //   an alignment other than left), since item sizes are ceiled one by one.
 // Facts no rect reflects are listed as unobservable with their rule. Vertical placement is outside the contract.
-import type {
-  BlinkGlyphCluster, BlinkItem, BlinkLayout, BlinkMappingUnit, CanvasMeasure, Expected, ExpectedObservation, ExpectedRect, GapName, InlineNode, ObservationPort,
-  Paragraph, UnobservableFact,
-} from '../../src/model.ts'
+import type { BlinkGlyphCluster, BlinkItem, BlinkMappingUnit, GapName, InlineNode, Paragraph } from '../../src/model.ts'
+import type { BlinkLayout } from '../types.ts'
+import type { CanvasMeasure, Expected, ExpectedObservation, ExpectedRect, ObservationPort, UnobservableFact } from './contract.ts'
 
 const f32 = Math.fround
 

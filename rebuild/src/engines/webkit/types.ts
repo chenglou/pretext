@@ -1,6 +1,7 @@
 // WebKit's prepared paragraph and line state (Safari 27.0, WebKit 7625.1.29.11.27). The WebKit port owns this file.
 import type { WebKitEnvironment } from '../../env.js'
-import type { AtomicInline, Gap, Paragraph, TextAlign } from '../../model.js'
+import type { AtomicInline, Gap, Paragraph, TextAlign, WebKitLineGeometry } from '../../model.js'
+import type { LineOf, LineResultOf } from '../engine.js'
 
 // Which line builder InlineFormattingContext::layout picks (specs/webkit-lines.md §2, InlineFormattingContext.cpp:170-184).
 export type WebKitLineBuilder = 'text-only-simple' | 'range-based' | 'line-builder'
@@ -216,3 +217,7 @@ export type WebKitLineStart = {
   // (TextOnlySimpleLineBuilder.cpp:494), and a build that finds them narrows its rect in initialize (lines.ts lineRect).
   hasFloats: boolean
 }
+
+// The line nextLine fills, and what it returns for a slot.
+export type WebKitLine = LineOf<WebKitLineStart, WebKitLineGeometry>
+export type WebKitLineResult = LineResultOf<WebKitLineStart, WebKitLineGeometry>

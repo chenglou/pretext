@@ -3,19 +3,22 @@
 The lab observes how each installed browser lays out a styled paragraph and scores a prediction of those lines. It
 doesn't depend on the old library in `src/`.
 
-- `types.ts`: shared shapes. Cases (`Case`, `Paragraph`, `TextRun`, `FontDecl`) and lab rows (`LabRow` and its parts).
+- `types.ts`: shared shapes. Cases (`Case`, `Paragraph`, `TextRun`, `FontDecl`) and lab rows (`LabRow` and its parts), the
+  layout a row keeps among them (`ParagraphLayout`, `LineOf`, `BelowFloats`): the row's format is the lab's, not the library's.
 - `page.ts`: the browser page. It builds the native paragraph, records Range geometry, runs the prediction hook and the
   observation port over its layout, and records the painted lines.
 - `predictor.ts`: the prediction hook, the only library-facing import in the page. It and `baselines/no-facts-predictor.ts`
   (no supplied font facts) are made from `predictor-core.ts`, the one lab file that imports library logic
-  (`rebuild/tests/independence.test.ts`).
+  (`rebuild/tests/independence.test.ts`). It holds the slot loop (`layoutParagraph`) that makes a row's layout from the
+  library's lines, one slot at a time.
 - `port-measure.ts`: how an observation port measures live, shared by the page and the offline replay.
 - `rows.ts`: reading row files, plain or compressed (`<name>-rows.ndjson` or `.zst`); every tool that reads rows goes through
   it, and `rows.test.ts` checks that none reads them its own way.
 - `font-facts.ts`: the font facts the predictor declares for a case's fonts, per engine, from `font-facts.json`, a table
   built offline from the font files (see "Font facts"); `font-facts.test.ts` known fonts' facts.
-- `observe/`: the observation ports, one per engine (DESIGN.md §9). Each derives, from a layout, the Range rects its
-  browser reports, by that engine's geometry code, and imports only types from `src/model.ts`.
+- `observe/`: the observation ports, one per engine, and the contract they implement, `contract.ts` (DESIGN.md §9). Each
+  derives, from a layout, the Range rects its browser reports, by that engine's geometry code, and imports from the
+  library only types of `src/model.ts`.
 - `run.ts`: the driver. It reads the browser build from the app bundle, sets or reads the browser process's languages,
   serves the page, opens one background browser session and streams rows to NDJSON.
 - `browser-build.ts`: the apps the lab and the probe runner launch, the pinned copies of Chrome and Firefox among them, and

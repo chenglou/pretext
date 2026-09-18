@@ -2,8 +2,10 @@
 // value here comes from the observation model's rules and recorded rows, not from the library.
 import { describe, expect, test } from 'bun:test'
 import { PINNED_BUILDS } from '../../src/env.ts'
-import type { CssFont, ExpectedRect, GeckoCharacter, GeckoLayout, GeckoLine, GeckoTextFrame, Paragraph } from '../../src/model.ts'
+import type { CssFont, GeckoCharacter, GeckoTextFrame, Paragraph } from '../../src/model.ts'
 import { FULL_WIDTH, NO_BOX_EDGE, UNKNOWN_FONT_FACTS } from '../../src/model.ts'
+import type { GeckoLayout, GeckoLine } from '../types.ts'
+import type { ExpectedRect } from './contract.ts'
 import { encodeEdges, observeGecko } from './gecko.ts'
 
 const font: CssFont = { family: '"Courier New"', size: 16, weight: 400, style: 'normal' }

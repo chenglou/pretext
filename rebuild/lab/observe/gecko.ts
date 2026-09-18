@@ -6,10 +6,9 @@
 // DOMRect::SetLayoutRect (dom/base/DOMRect.cpp:152-164) over the frames the engine placed. Types only from
 // rebuild/src/model.ts: no expected value comes from the library's logic, and the tree is walked here, not through
 // src/content.ts (DESIGN.md §8.1).
-import type {
-  Expected, ExpectedObservation, ExpectedRect, GapName, GeckoFrameGeometry, GeckoLayout, GeckoTextFrame, InlineNode, ObservationPort,
-  Paragraph, UnobservableFact,
-} from '../../src/model.ts'
+import type { GapName, GeckoFrameGeometry, GeckoTextFrame, InlineNode, Paragraph } from '../../src/model.ts'
+import type { GeckoLayout } from '../types.ts'
+import type { Expected, ExpectedObservation, ExpectedRect, ObservationPort, UnobservableFact } from './contract.ts'
 
 // DOMRect::SetLayoutRect rounds each app-unit edge to 1/65536 px, and SetRect narrows each field to float32 on its own
 // (DOMRect.cpp:152-164, DOMRect.h:122-127). Before that, TransformFrameRectToAncestor takes the rect through float32 device

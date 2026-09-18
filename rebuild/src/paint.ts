@@ -56,7 +56,7 @@ import { USCRIPT_LATIN } from './engines/blink/props.js'
 import { scriptsPerUnit } from './engines/blink/script.js'
 import { resolveIcuBidi } from './unicode/ubidi.js'
 import type { EngineName } from './env.js'
-import type { AtomicInline, BelowFloats, BlinkLineGeometry, BoxEdge, CssFont, FontDecl, Fragment, GeckoLineGeometry, LineOf, Paragraph, TextStyle, WebKitLineGeometry } from './model.js'
+import type { AtomicInline, BlinkLineGeometry, BoxEdge, CssFont, FontDecl, Fragment, GeckoLineGeometry, LineSlot, Paragraph, TextAlign, TextStyle, WebKitLineGeometry } from './model.js'
 import { B, BN, FSI, LRE, LRI, LRO, PDF, PDI, RLE, RLI, RLO, S, WS, bidiClassOf, bidiDataFor, type BidiData } from './unicode/bidi.js'
 import { graphemeBoundaries, graphemeRulesFor, type GraphemeRules } from './unicode/grapheme.js'
 
@@ -87,8 +87,9 @@ function scriptOf(character: string): string {
 }
 
 // The shared fields of a line: all the painter reads.
-export type PaintedLine = Pick<LineOf<unknown, unknown>, 'fragments' | 'hasLineBox' | 'joinsNextLine' | 'slot' | 'indented' | 'align'>
-export type PaintableLayout = { belowFloats: readonly Pick<BelowFloats, 'row'>[] } & (
+export type PaintedLine = { fragments: Fragment[]; hasLineBox: boolean; joinsNextLine: boolean; slot: LineSlot; indented: boolean; align: TextAlign }
+// `belowFloats` holds the rows of the slot list the engine refused, which take no line.
+export type PaintableLayout = { belowFloats: readonly { row: number }[] } & (
   | { engine: 'blink'; lines: readonly (PaintedLine & { geometry: Pick<BlinkLineGeometry, 'needsAccurateEndPosition' | 'width' | 'hangWidth' | 'availableWidth'> })[] }
   | { engine: 'webkit'; lines: readonly (PaintedLine & { geometry: Pick<WebKitLineGeometry, 'contentWidth' | 'hangingWidth' | 'lineBoxWidth' | 'boxes'>; next: { offset: number; previousLine: { carriedWidth: number | null } | null } | null })[] }
   | { engine: 'gecko'; lines: readonly (PaintedLine & { geometry: Pick<GeckoLineGeometry, 'width' | 'hang' | 'availableWidth'> })[] }

@@ -4,10 +4,9 @@
 import { beforeAll, describe, expect, test } from 'bun:test'
 import { PINNED_BUILDS, type BlinkEnvironment } from '../../env.js'
 import { createMeasurer } from '../../measure/canvas.js'
-import {
-  FULL_WIDTH, NO_BOX_EDGE, UNKNOWN_FONT_FACTS, type BlinkLine, type BoxEdge, type FontFacts, type Gap, type InlineNode, type LineSlot, type Paragraph,
-} from '../../model.js'
+import { FULL_WIDTH, NO_BOX_EDGE, UNKNOWN_FONT_FACTS, type BoxEdge, type FontFacts, type Gap, type InlineNode, type LineSlot, type Paragraph } from '../../model.js'
 import { blinkEngine } from './index.js'
+import type { BlinkLine } from './types.js'
 
 beforeAll(() => {
   class Context {
@@ -66,7 +65,7 @@ function tree(content: InlineNode[], width: number, o: Options = {}): Paragraph 
   return { ...paragraph([], width, o), content }
 }
 
-// The line loop of src/index.ts over the Blink engine alone.
+// The lab's line loop (lab/predictor-core.ts) over the Blink engine alone.
 function blink(p: Paragraph, e: BlinkEnvironment = env, slots: LineSlot[] = []): { lines: BlinkLine[]; gaps: Gap[]; belowFloats: number[] } {
   const measurer = createMeasurer()
   const prepared = blinkEngine.prepare(p, e, measurer)

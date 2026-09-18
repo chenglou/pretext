@@ -4,17 +4,17 @@
 // observes the painted lines, and posts the rows back before asking for the next chunk.
 //
 // Only fetch promises drive the loop (no timers), so background-window timer throttling doesn't stall it.
-import type { CanvasMeasure, ExpectedObservation, ParagraphLayout } from '../src/model.ts'
 import { parseFontFamilyList } from './cases/font.ts'
 import { observeBlink } from './observe/blink.ts'
+import type { CanvasMeasure, ExpectedObservation } from './observe/contract.ts'
 import { observeGecko } from './observe/gecko.ts'
 import { observeWebKit } from './observe/webkit.ts'
 import { createPortMeasure } from './port-measure.ts'
 import * as predictorModule from './predictor.ts'
 import { beginCase, beginPhase, endCase, installRecorder, type CaseMeasurements } from './record.ts'
 import type {
-  BrowserKind, Case, CodePointObservation, FontDecl, InlineNode, LabRow, LayoutPrediction, LinesPrediction, NativeObservation, PageEnv,
-  PainterLimits, PainterLine, PainterObservation, ProcessLanguages, Rect, RecordedLayout,
+  BrowserKind, Case, CodePointObservation, FontDecl, InlineNode, LabRow, LayoutPrediction, LinesPrediction, MeasureLog, NativeObservation, PageEnv,
+  PainterLimits, PainterLine, PainterObservation, ParagraphLayout, ProcessLanguages, Rect, RecordedLayout,
 } from './types.ts'
 
 // The prediction hook (predictor.ts, or the module run.ts --predictor bundles in its place). A swapped-in predictor may
@@ -465,7 +465,7 @@ async function observeCase(c: Case, reply: Extract<StepReply, { kind: 'chunk' }>
     installRecorder()
     beginCase(c.id)
   }
-  let log: ParagraphLayout['measure'] | null = null
+  let log: MeasureLog | null = null
   try {
     const row = await observeRow(c, reply, range, recording, value => { log = value })
     return { row, measurements: recording ? endCase(log) : null }
@@ -478,7 +478,7 @@ async function observeCase(c: Case, reply: Extract<StepReply, { kind: 'chunk' }>
 // The prediction of a case and what the page records of it: the library's layout, what the observation port expects the
 // browser to report for it, and the painter limits. Nothing here touches the DOM, so under run.ts --measure-first a document
 // runs it for every case before its first native layout.
-function predictCase(c: Case, reply: Extract<StepReply, { kind: 'chunk' }>, recording: boolean, libraryLog: (log: ParagraphLayout['measure']) => void): Predicted {
+function predictCase(c: Case, reply: Extract<StepReply, { kind: 'chunk' }>, recording: boolean, libraryLog: (log: MeasureLog) => void): Predicted {
   const timings = { predictMs: 0, observeMs: 0, limitsMs: 0 }
   let start = performance.now()
   if (recording) beginPhase('predict')
@@ -524,7 +524,7 @@ function predictCase(c: Case, reply: Extract<StepReply, { kind: 'chunk' }>, reco
 // One case's row. Under the usual protocol: native layout, then the prediction, then the painted lines. Under run.ts
 // --measure-first the prediction was made before the document's first native layout (`held`), and this lays the case out
 // natively and paints the held prediction.
-async function observeRow(c: Case, reply: Extract<StepReply, { kind: 'chunk' }>, range: Range, recording: boolean, libraryLog: (log: ParagraphLayout['measure']) => void): Promise<PageRow> {
+async function observeRow(c: Case, reply: Extract<StepReply, { kind: 'chunk' }>, range: Range, recording: boolean, libraryLog: (log: MeasureLog) => void): Promise<PageRow> {
   const env = readEnv()
   let before: { predicted: Predicted; index: number } | null = null
   if (reply.measureFirst === 'observe') {

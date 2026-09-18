@@ -1,13 +1,9 @@
 // The library's data: the styled paragraph it takes, a tree of inline content with the facts about its fonts that Canvas
 // can't show, and the lines each engine computes, in that engine's own geometry and units. DESIGN.md §1 and §2 explain
-// every field with examples. The observation contract at the end (DESIGN.md §9) is what the lab computes from a layout;
-// the library never does.
+// every field with examples.
 import type { BlinkLineStart } from './engines/blink/types.js'
 import type { GeckoLineStart } from './engines/gecko/types.js'
 import type { WebKitLineStart } from './engines/webkit/types.js'
-import type { BlinkEnvironment, GeckoEnvironment, WebKitEnvironment } from './env.js'
-import type { CanvasSettings } from './measure/canvas.js'
-import type { MeasureLog } from './measure/log.js'
 
 // ---- Input ----
 
@@ -309,49 +305,6 @@ export type Fragment =
 // The state the next line starts from, per engine (DESIGN.md §2.7).
 export type LineStart = BlinkLineStart | WebKitLineStart | GeckoLineStart
 
-export type LineOf<Start, Geometry> = {
-  // [start, end) covers every source unit the line consumed; consecutive lines tile the text. Elements that hold no text
-  // are placed by fragments.
-  start: number
-  end: number
-  fragments: Fragment[]
-  // Whether the engine gives the line a line box that holds content: false for Blink's empty lines
-  // (LineInfo::ShouldCreateLineBox, line_breaker.cc:945-975), WebKit lines without contentful inline content
-  // (LineLayoutResult.h:94-105) and Gecko line boxes of block size 0 (nsLineLayout.cpp:1690-1712). A span's box edge,
-  // an atomic inline or a <br> makes content. Such a line is still a line of the engine and is returned; it paints
-  // nothing, takes no block size, and the lab and the painter skip it.
-  hasLineBox: boolean
-  // The paragraph's shaping joined the letters on both sides of this line's end: Blink reshaped the edge with HarfBuzz
-  // context under an OpenType joining font (FontFacts.joining), Gecko broke inside one shaped word. The painter puts
-  // U+200D on both sides of the edge (specs/painter.md R7). Always false in WebKit, which never shapes across a line
-  // edge (specs/painter.md §3.2 c).
-  joinsNextLine: boolean
-  // The slot the line was laid out in.
-  slot: LineSlot
-  // The engine applied the paragraph's text-indent to this line.
-  indented: boolean
-  // The alignment the engine used for this line: text-align, or start for the last line and a line ending at a forced
-  // break under justify (TextAlign).
-  align: TextAlign
-  geometry: Geometry
-  // Gaps that depend on this line's breaks (DESIGN.md §2.8).
-  gaps: Gap[]
-  // null after the paragraph's last line.
-  next: Start | null
-}
-
-// What an engine returns for one slot: the line it places there, or its decision to move the line box down past the
-// floats narrowing the slot, because the line's first content doesn't fit beside them (CSS 2.1 §9.5). Blink continues
-// with the next layout opportunity (inline_layout_algorithm.cc:1336-1367); WebKit wraps the candidate and moves the next
-// line top below the float (InlineLineBuilder.cpp:1452-1457, InlineFormattingUtils.cpp:54-103); Gecko redoes the line in
-// the next band (LineReflowStatus::RedoNextBand, nsBlockFrame.cpp:5289-5299, :5549-5555). A slot without insets never
-// gives below-floats. `gaps` are the gaps the decision rests on. `next`, when given, is the start the next slot lays out
-// instead of the same one, because building the refused line changed the engine's state: WebKit's first build places the
-// slot floats, which later builds find in the formatting context (InlineLineBuilder.cpp:478, :1394-1396).
-export type LineResultOf<Start, Geometry> =
-  | { kind: 'line'; line: LineOf<Start, Geometry> }
-  | { kind: 'below-floats'; gaps: Gap[]; next?: Start }
-
 // ---- Output: Blink geometry (Chrome 153). Raw LayoutUnits count 1/64 of a zoomed px (specs/blink-lines.md §1.1) ----
 
 // One unit of Blink's OffsetMapping over the line's source units (offset_mapping.cc:278-299, 405-459): source [start,
@@ -615,15 +568,6 @@ export type GeckoLineGeometry = {
   frames: GeckoFrameGeometry[]
 }
 
-export type BlinkLine = LineOf<BlinkLineStart, BlinkLineGeometry>
-export type WebKitLine = LineOf<WebKitLineStart, WebKitLineGeometry>
-export type GeckoLine = LineOf<GeckoLineStart, GeckoLineGeometry>
-
-export type BlinkLineResult = LineResultOf<BlinkLineStart, BlinkLineGeometry>
-export type WebKitLineResult = LineResultOf<WebKitLineStart, WebKitLineGeometry>
-export type GeckoLineResult = LineResultOf<GeckoLineStart, GeckoLineGeometry>
-export type LineResult = BlinkLineResult | WebKitLineResult | GeckoLineResult
-
 // A Canvas-versus-DOM gap a paragraph or line runs into: the prediction can be wrong where it applies (DESIGN.md §5).
 export type GapName =
   | 'control-character-width'
@@ -660,67 +604,3 @@ export type GapName =
 // or `belowFloats[k].gaps` concerns its line or refused slot, and needs no range; a paragraph gap concerns a line only
 // through `at`. The lab attributes a failing line to the gaps that concern it (lab/README.md, "Line-local gaps").
 export type Gap = { gap: GapName; run: number | null; detail: string; at?: { start: number; end: number } }
-
-// A slot the engine refused because it moved the line below the slot's floats (LineResultOf), with the row of the slot
-// list it was, and the gaps the decision rests on.
-export type BelowFloats = { row: number; gaps: Gap[] }
-
-// `engine` is the environment's engine, the union's tag. `gaps` holds the conditions of the paragraph's content, fonts
-// and environment; lines hold the ones their breaks decide.
-export type ParagraphLayout =
-  | { engine: 'blink'; env: BlinkEnvironment; lines: BlinkLine[]; belowFloats: BelowFloats[]; measure: MeasureLog; gaps: Gap[] }
-  | { engine: 'webkit'; env: WebKitEnvironment; lines: WebKitLine[]; belowFloats: BelowFloats[]; measure: MeasureLog; gaps: Gap[] }
-  | { engine: 'gecko'; env: GeckoEnvironment; lines: GeckoLine[]; belowFloats: BelowFloats[]; measure: MeasureLog; gaps: Gap[] }
-
-export type BlinkLayout = Extract<ParagraphLayout, { engine: 'blink' }>
-export type WebKitLayout = Extract<ParagraphLayout, { engine: 'webkit' }>
-export type GeckoLayout = Extract<ParagraphLayout, { engine: 'gecko' }>
-
-// ---- Observation contract (DESIGN.md §9) ----
-// What rebuild/lab/observe/<engine>.ts derives from a layout by porting each engine's Range and element geometry code.
-// The library never computes it; the types live here because the lab may import types from this file only.
-
-// One observed number. There is no third state for a rect field: a reported rect is observable by definition.
-export type Expected =
-  // The ported geometry rule gives the value exactly from engine output. Compared exactly.
-  | { state: 'predicted'; value: number }
-  // The value rests on a Canvas stand-in for data the engine had, named by the gap: glyph advances inside a word, which
-  // code points a glyph covers. Compared exactly; a mismatch is attributed to the gap, never to an engine rule.
-  | { state: 'limited'; gap: GapName; value: number }
-
-export type ExpectedRect = {
-  // The engine line of the item, box or frame the rect comes from.
-  line: number
-  // CSS px relative to the paragraph's content box, as the DOMRect reports them after the engine's rounding.
-  x: Expected
-  width: Expected
-}
-
-// An engine output fact that no rect of any kind reflects, by the cited geometry rule: the rects are the same whatever its
-// value. Listed, never compared, and never counted as coverage for the rule that computed it.
-export type UnobservableFact = {
-  line: number
-  // A field path into the layout, e.g. 'lines[2].geometry.items[3].inlineSize'.
-  fact: string
-  // The geometry rule, with its source citation.
-  rule: string
-}
-
-export type ExpectedObservation = {
-  // Per code point of the concatenated leaf text, in order: the rects of a Range over it in its leaf's text node, in the
-  // order the engine reports them.
-  codePoints: { offset: number; length: number; rects: ExpectedRect[] }[]
-  // Per text leaf: the rects of a Range over its whole text node; empty for a leaf without a DOM node.
-  nodes: ExpectedRect[][]
-  // Per element in document order: Element.getClientRects(). A span reports one rect per box it has on each line (Blink
-  // LayoutInline::QuadsForSelfInternal, layout_inline.cc:428-470; WebKit RenderInline::absoluteQuads, RenderInline.cpp:237-241;
-  // Gecko nsLayoutUtils::GetAllInFlowRects over its continuations, nsLayoutUtils.cpp:3477-3505, 3661-3667), an atomic
-  // inline its border box, a <br> its line break box; the rules for <wbr> are in DESIGN.md §9.
-  elements: ExpectedRect[][]
-  unobservable: UnobservableFact[]
-}
-
-// Canvas measureText in a context with these settings: live in the page, or answered from a recorded call log.
-export type CanvasMeasure = (settings: CanvasSettings, text: string) => number
-
-export type ObservationPort<Layout extends ParagraphLayout> = (paragraph: Paragraph, layout: Layout, measure: CanvasMeasure) => ExpectedObservation

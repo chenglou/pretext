@@ -105,7 +105,7 @@ const SHARED_FILES_THAT_NAME_ENGINES: Record<string, number> = {
   'breaks/tables.ts': 38,
   'measure/canvas-checks.ts': 3,
   'measure/font-checks.ts': 10,
-  'model.ts': 70,
+  'model.ts': 31,
   'paint.ts': 53,
   'unicode/bidi.ts': 3,
   'unicode/grapheme.ts': 9,

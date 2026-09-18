@@ -3,10 +3,9 @@
 // complex text controller had (the Canvas stand-in the port uses), so these check the ported geometry rules, not Canvas.
 import { describe, expect, test } from 'bun:test'
 import { PINNED_BUILDS } from '../../src/env.ts'
-import {
-  NO_BOX_EDGE, UNKNOWN_FONT_FACTS, type CanvasMeasure, type ExpectedRect, type InlineNode, type Paragraph, type WebKitDisplayBox, type WebKitLayout,
-  type WebKitLine, type WebKitTextBox,
-} from '../../src/model.ts'
+import { NO_BOX_EDGE, UNKNOWN_FONT_FACTS, type InlineNode, type Paragraph, type WebKitDisplayBox, type WebKitTextBox } from '../../src/model.ts'
+import type { WebKitLayout, WebKitLine } from '../types.ts'
+import type { CanvasMeasure, ExpectedRect } from './contract.ts'
 import { observeWebKit } from './webkit.ts'
 
 const font = { family: 'Arial', size: 16, weight: 400, style: 'normal' as const, facts: UNKNOWN_FONT_FACTS }

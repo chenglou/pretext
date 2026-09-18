@@ -2,20 +2,27 @@
 // baselines/no-facts-predictor.ts make their predict(), paint() and limits() from it, each with its own rule for the font
 // facts a case's fonts get, so neither copies the other and the facts-free bundle never holds the font table.
 //
-// predict() lays the paragraph out with rebuild/src for the running browser's engine and returns the library's input and
-// layout; the page runs the observation port over them. paint() paints that layout, and limits() names, per painted line,
-// what painting the line alone can't reproduce (src/paint.ts painterLimits).
+// predict() lays the paragraph out with rebuild/src for the running browser's engine, one line slot at a time, and returns
+// the library's input and the layout a row keeps (types.ts ParagraphLayout); the page runs the observation port over them.
+// paint() paints that layout, and limits() names, per painted line, what painting the line alone can't reproduce
+// (src/paint.ts painterLimits).
 //
 // A case describes the page, so its fonts carry no font facts; `factsFor` gives them (DESIGN.md §1.2). Facts it can't give
 // stay unknown and report their gaps. The build comes from the driver, which reads it from the app bundle. The browser
 // process's languages come from the driver too (types.ts ProcessLanguages): it launches Chrome with them, and reads the OS
 // settings Safari, webkit-host and Firefox's layout take them from, as research tooling may (DESIGN.md §8.3, stage 0). A
 // value the driver couldn't derive stays null and reports ui-language.
+import { blinkEngine } from '../src/engines/blink/index.ts'
+import { geckoEngine } from '../src/engines/gecko/index.ts'
+import { webkitEngine } from '../src/engines/webkit/index.ts'
 import { detectEnvironment, type EngineName, type Environment, type GivenFacts } from '../src/env.ts'
-import { layoutParagraph, painterLimits } from '../src/index.ts'
-import { NO_BOX_EDGE, type FontDecl, type FontFacts, type InlineNode, type Paragraph as LayoutParagraph, type TextStyle } from '../src/model.ts'
+import { painterLimits, paragraphGaps, prepareParagraph, type LineResultOf } from '../src/index.ts'
+import { FULL_WIDTH, NO_BOX_EDGE, type FontDecl, type FontFacts, type InlineNode, type Paragraph as LayoutParagraph, type TextStyle } from '../src/model.ts'
 import { paintLines } from '../src/paint.ts'
-import type { BrowserKind, Case, FontDecl as CaseFont, InlineNode as CaseInlineNode, LayoutPrediction, PainterLimits, ProcessLanguages } from './types.ts'
+import type {
+  BelowFloats, BrowserKind, Case, FontDecl as CaseFont, InlineNode as CaseInlineNode, LayoutPrediction, LineOf, LineSlot, PainterLimits, ParagraphLayout,
+  ProcessLanguages,
+} from './types.ts'
 
 // The font facts a predictor declares for one CSS font of a case, for the engine that lays it out, given the fixture web
 // fonts the case loads.
@@ -111,6 +118,56 @@ function layoutInput(c: Case, engine: EngineName, factsFor: FactsFor): LayoutPar
     ...style(paragraph.font, paragraph.letterSpacing, paragraph.wordSpacing), content, lang: paragraph.lang, direction: paragraph.direction,
     width: paragraph.width, lineHeight: paragraph.lineHeight, textIndent: 0, textAlign: 'start',
   }
+}
+
+// Lays out every line. The k-th line box goes in slots[k], and line boxes past the list at the full content width, which
+// is what a block with floats of one line height stacked at its start gives each line (DESIGN.md §2.9). A slot the engine
+// refuses because the line moves below its floats takes no line: the same line starts again in the next slot, and the
+// layout records the refusal. A line without a line box takes no block size, so the next line uses the same slot.
+export function layoutParagraph(paragraph: LayoutParagraph, env: Environment, slots: readonly LineSlot[] = []): ParagraphLayout {
+  const prepared = prepareParagraph(paragraph, env)
+  switch (prepared.engine) {
+    case 'blink': {
+      const { state, measurer } = prepared
+      const filled = fillLines(blinkEngine.firstLine(state), (start, slot) => blinkEngine.nextLine(state, start, slot, measurer), slots)
+      return { engine: 'blink', env: prepared.env, lines: filled.lines, belowFloats: filled.belowFloats, measure: measurer.log, gaps: paragraphGaps(prepared) }
+    }
+    case 'webkit': {
+      const { state, measurer } = prepared
+      const filled = fillLines(webkitEngine.firstLine(state), (start, slot) => webkitEngine.nextLine(state, start, slot, measurer), slots)
+      return { engine: 'webkit', env: prepared.env, lines: filled.lines, belowFloats: filled.belowFloats, measure: measurer.log, gaps: paragraphGaps(prepared) }
+    }
+    case 'gecko': {
+      const { state, measurer } = prepared
+      const filled = fillLines(geckoEngine.firstLine(state), (start, slot) => geckoEngine.nextLine(state, start, slot, measurer), slots)
+      return { engine: 'gecko', env: prepared.env, lines: filled.lines, belowFloats: filled.belowFloats, measure: measurer.log, gaps: paragraphGaps(prepared) }
+    }
+  }
+}
+
+// The engine's lines go into the row as they are: the row's LineOf (types.ts) is the lab's, and an engine's line must fit it.
+function fillLines<Start, Geometry>(
+  first: Start | null, nextLine: (start: Start, slot: LineSlot) => LineResultOf<Start, Geometry>, slots: readonly LineSlot[],
+): { lines: LineOf<Start, Geometry>[]; belowFloats: BelowFloats[] } {
+  const lines: LineOf<Start, Geometry>[] = []
+  const belowFloats: BelowFloats[] = []
+  let row = 0
+  for (let start = first; start !== null;) {
+    const slot = row < slots.length ? slots[row]! : FULL_WIDTH
+    const result = nextLine(start, slot)
+    if (result.kind === 'below-floats') {
+      if (row >= slots.length) throw new Error(`the engine moved a line below floats in slot row ${row}, which has none`)
+      belowFloats.push({ row, gaps: result.gaps })
+      row++
+      if (result.next !== undefined) start = result.next
+      continue
+    }
+    const line = result.line
+    lines.push(line)
+    if (line.hasLineBox) row++
+    start = line.next
+  }
+  return { lines, belowFloats }
 }
 
 export function makePredictor(factsFor: FactsFor): Predictor {
