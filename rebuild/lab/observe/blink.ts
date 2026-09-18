@@ -97,10 +97,13 @@ function gapConcerning(layout: BlinkLayout, index: GapIndex, line: number, s: nu
   return first === -1 ? null : index.gaps[first]!.gap
 }
 
-// DOMRect::FromRectF(quad.BoundingBox()): x is the left edge, width the float difference of the edges.
+// DOMRect::FromRectF(quad.BoundingBox()): x is the left edge, width the float difference of the edges. An item of negative
+// size (a hanging space under negative spacing: HandleTrailingSpaces doesn't clamp it, line_breaker.cc:2409-2416) reports
+// its whole rect from its origin with no width: LocalRectToAbsoluteQuad makes a gfx::RectF of it (layout_text.cc:634-637,
+// physical_rect.h:173-175), whose size clamps a negative width to 0 (ui/gfx/geometry/size_f.h:30-31, :108).
 function rectOf(q: Quad, zoom: number): ExpectedRect {
   const left = css(q.left, zoom)
-  const width = f32(css(q.right, zoom) - left)
+  const width = q.right < q.left ? 0 : f32(css(q.right, zoom) - left)
   return { line: q.line, x: expected(left, q.leftLimit), width: expected(width, q.leftLimit ?? q.rightLimit) }
 }
 
@@ -260,15 +263,17 @@ function localRect(item: RunItem, limits: ItemLimits | null, a: number, b: numbe
       let e: number
       if (fs < fe) { s = floor64(fs); e = ceil64(fe) } else if (fs > fe) { s = ceil64(fs); e = floor64(fe) } else { s = floor64(fs); e = s }
       // Which caret is the rect's left edge follows their order. Where the carets run against the item's direction (a
-      // negative advance) or meet (no advance) and one of them is a stand-in, the order itself rests on it, so both edges do:
-      // the advance the port gives a letter a listed ligature may cover can come out negative (Geeza Pro lam before meem,
-      // c-38536c357f3a1dc7) or 0 (Courier New lam before alef in an RTL item, where natively the lam is half the ligature
-      // wide and its left edge is the end caret, c-82fdb6df09ca942f).
+      // negative advance) and one of them is a stand-in, the order itself rests on it, so both edges do: the advance the port
+      // gives a letter a listed ligature may cover can come out negative (Geeza Pro lam before meem, c-38536c357f3a1dc7).
       const rtl = (item.level & 1) === 1
-      const against = rtl ? fs <= fe : fs >= fe
+      const against = rtl ? fs < fe : fs > fe
       const either = cs.limit ?? ce.limit
       if (against && either !== null) return s <= e ? { left: s, right: e, leftLimit: either, rightLimit: either } : { left: e, right: s, leftLimit: either, rightLimit: either }
-      return s <= e ? { left: s, right: e, leftLimit: cs.limit, rightLimit: ce.limit } : { left: e, right: s, leftLimit: ce.limit, rightLimit: cs.limit }
+      // Where the carets meet, the left edge is the one the item's direction puts left, the end caret in an RTL item: the
+      // port gives Courier New's lam before alef no advance, natively the lam is half the ligature wide, and its left edge
+      // is the stand-in caret between the letters (c-82fdb6df09ca942f).
+      const startIsLeft = s < e || (s === e && !rtl)
+      return startIsLeft ? { left: s, right: e, leftLimit: cs.limit, rightLimit: ce.limit } : { left: e, right: s, leftLimit: ce.limit, rightLimit: cs.limit }
     }
   }
 }

@@ -1136,7 +1136,12 @@ function itemsOf(sh: Shaper, info: LineInfo, hangWidth: number, alignOffset: num
           boxes[boxIndex - 1]!.start = startIndex
           boxes[boxIndex - 1]!.end = index
         } else {
-          fragmented.push({ ...boxes[boxIndex - 1]!, start: startIndex, end: index, fragmentedFrom: boxIndex })
+          // A fragment takes the box's item and rect alone; its edges start unset (BoxData(other, start, end),
+          // inline_box_state.h:328-332), and the box's line-right edge moves to the last one below.
+          fragmented.push({
+            ...boxes[boxIndex - 1]!, start: startIndex, end: index, fragmentedFrom: boxIndex, parent: 0,
+            hasLineLeftEdge: false, hasLineRightEdge: false, marginLineLeft: 0, marginLineRight: 0, mbpLineLeft: 0, mbpLineRight: 0,
+          })
         }
         if (boxes[boxIndex - 1]!.parent !== 0) return startIndex
         return index

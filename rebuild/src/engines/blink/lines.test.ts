@@ -458,6 +458,19 @@ describe('blink round 4', () => {
 })
 
 describe('blink round 4b', () => {
+  test('a box that reordering splits on a line keeps its line-left edge on the first fragment and moves the line-right one to the last (inline_box_state.h:328-332)', () => {
+    // An RTL block of LTR text: the pre-wrap span's hanging space takes the block's level and goes to the line's left, so the
+    // span has two box fragments on line 0. Each has one 4px padding; c-7d2264227b2141ba natively.
+    const pad: BoxEdge = { margin: 0, border: 0, padding: 4 }
+    const p = tree([{ kind: 'text', text: 'xx aaaa ' }, span([{ kind: 'text', text: 'bbbb cccc ' }], { start: pad, end: pad, whiteSpace: 'pre-wrap' }), { kind: 'text', text: 'dddd eeee' }], 190, { direction: 'rtl', whiteSpace: 'nowrap' })
+    const items = blink(p).lines[0]!.geometry.items
+    const boxes = items.filter(i => i.kind === 'inline-box')
+    expect(boxes.map(b => b.inlineSize).sort((a, b) => a - b)).toEqual([640 + 256, 9 * 640 + 256])
+    // The text fragment has no padding on its left: the letters start at the box's left edge.
+    const letters = items.find(i => i.kind === 'text' && i.textStart === 8)!
+    expect(boxes.some(b => b.x === letters.x && b.inlineSize === 9 * 640 + 256)).toBe(true)
+  })
+
   test('a font measured at the CSS size scales by the ratio of the two platform font sizes (font_description.cc:271-282)', () => {
     // A stand-in Canvas whose advances follow the platform font size as Blink floors it: 16.8px is a 16.79px font.
     const saved = (globalThis as { OffscreenCanvas?: unknown }).OffscreenCanvas
