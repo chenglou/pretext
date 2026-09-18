@@ -21,35 +21,44 @@ export type CssFont = {
   style: 'normal' | 'italic'
 }
 
-// Facts about the fonts a declaration realizes that engines read and Canvas can't show (DESIGN.md §1.2). Each is null
-// when the caller doesn't know it. The engine then uses the default documented here, which Canvas measurement alone
-// gives, and reports the named gap wherever the fact decides a result.
+// Facts about the fonts a declaration realizes that engines read and no measured width of the text shows (DESIGN.md
+// §1.2). Each is null when the caller doesn't know it. The library then asks Canvas itself where a check is sound for the
+// engine (measure/font-checks.ts, which cites each check's rule and says what it can't see); a supplied fact is never
+// checked. Where no check answers, the engine uses the default documented here and reports the named gap wherever the
+// fact decides a result.
 export type FontFacts = {
   // The family the browser realizes first: Blink's primary font, the first listed family that exists (PrimaryFont with should_contain_glyph false, font_fallback_list.h:141-145); WebKit's
   // index-0 family (FontCascadeFonts.cpp:200-218); Gecko's first font of the font group. A generic keyword stands for
   // itself ('system-ui'). Default: the first family in the list. Blink and Gecko compare it with their system-font
-  // keywords; WebKit compares it with Courier New, which gets no width shortcut (FontCoreText.cpp:776-782).
+  // keywords; WebKit compares it with Courier New, which gets no width shortcut (FontCoreText.cpp:776-782). Asked of
+  // Canvas in WebKit, and in Blink where another check needs it: the first listed family that draws the space.
   primaryFamily: string | null
   // The primary font maps U+2010, so a chosen soft hyphen is U+2010, else U+002D (Blink computed_style.cc:1804-1820,
   // WebKit StyleComputedStyle.cpp:419-435). Default: U+2010, measured in the run's context. Gap hyphen-glyph where
   // Canvas gives U+2010 and U+002D different widths there. Gecko doesn't read it: its Canvas substitutes U+002D the way
-  // the DOM does (gfxHarfBuzzShaper.cpp:119-124; specs/PROBES.md, Firefox corrections).
+  // the DOM does (gfxHarfBuzzShaper.cpp:119-124; specs/PROBES.md, Firefox corrections). Asked of Canvas in Blink and
+  // WebKit for a paragraph that holds a soft hyphen: whether the primary family draws U+2010.
   mapsHyphen: boolean | null
   // The primary font has kCTFontMonoSpaceTrait or kCTFontFixedAdvanceAttribute, so WebKit's Font::determinePitch treats
   // it as fixed pitch (FontCoreText.cpp:753-785) and its boxes take the width and breakWord shortcuts
   // (specs/webkit-gaps.md §2.3). Default: variable pitch. Gap fixed-pitch-path where a text item of a box that allows
-  // simplified measuring doesn't measure f32(length × W(' ')) (webkit-gaps §2.5 test T1).
+  // simplified measuring doesn't measure f32(length × W(' ')) (webkit-gaps §2.5 test T1). Inferred from Canvas in WebKit,
+  // a heuristic: whether sample characters and the space have one advance, which the trait needn't follow.
   monospace: boolean | null
   // The fonts drawing the declaration have an opsz axis. Blink's DOM shapes at the zoomed size with opsz at the CSS size,
   // which Canvas reproduces at the CSS size (probes-chrome correction 7). Gecko's OffscreenCanvas uses the axis default
   // (specs/gecko-canvas.md §1.2 C1a). Default: true when primaryFamily is the engine's system-font keyword (Blink:
   // system-ui, BlinkMacSystemFont; Gecko: system-ui, -apple-system; the macOS system font has the axis), else false.
-  // Gap optical-size wherever the fact decides a width.
+  // Gap optical-size wherever the fact decides a width. Canvas can say false in Blink, where the primary family's advances
+  // at the zoomed size are the CSS-size advances scaled, and never true; Gecko's Canvas shows nothing.
   opticalSizeAxis: boolean | null
   // How the font that draws joining-script text shapes: 'opentype' through GSUB and GPOS, where HarfBuzz reads the
   // shaping call's context, or 'aat' through morx, which doesn't (hb-ot-shape.cc:60-66, 100-101). Blink reads it at
   // shaping-call edges between joining letters (group edges and line-edge reshapes). Default: the call's text measured
-  // alone, which is what an AAT font gives. Gap joining-technology at such an edge.
+  // alone, which is what an AAT font gives. Gap joining-technology at such an edge. Asked of Canvas in Blink for a
+  // paragraph with letters of a joining script: whether U+0628 changes width next to a joining character of another
+  // script, which Canvas shapes in a call of its own with the rest as context. It stays null for a font whose joined forms
+  // are as wide as its isolated ones.
   joining: 'opentype' | 'aat' | null
   // Where HarfBuzz puts a pair adjustment between two glyphs of Latin text in the primary font: 'first-advance', the whole
   // adjustment on the first glyph's advance (GPOS PairPos with ValueFormat1 XAdvance and no ValueFormat2; PairSet.hh:126-127),
@@ -57,12 +66,13 @@ export type FontFacts = {
   // hb-kern.hh:102-106), which one HarfBuzz applies following the font's GPOS, kern and kerx tables (hb-ot-shape.cc:150-185).
   // Canvas totals show the adjustment, not which glyph carries it. Blink reads it at a position between the two glyphs: a
   // line edge taken from the paragraph's positions, and caret edges inside an item. Default: the first glyph's advance. Gap
-  // unsafe-to-break at such a line edge where the adjustment isn't 0.
+  // unsafe-to-break at such a line edge where the adjustment isn't 0. No Canvas check answers it.
   pairKerning: 'first-advance' | 'split' | null
   // Optional: facts about each family of the list, in list order, one entry per family. Left out when the caller doesn't
   // know them, and then every engine keeps the gap condition it has without them. DESIGN.md §1.2 says which gap conditions
   // each fact can narrow or turn into a prediction. The engine's own fallback after the list isn't described: a character
-  // no listed font covers is drawn by a font these facts don't name.
+  // no listed font covers is drawn by a font these facts don't name. Never asked of Canvas: these are whole sets, and a
+  // Canvas check answers one string.
   fonts?: readonly ListedFontFacts[]
 }
 
