@@ -102,6 +102,12 @@ export type GeckoTextRun = {
   totalAdvance: number
   // FontFacts.pairKerning of the run's font: which glyph of a pair carries HarfBuzz's pair adjustment.
   pairKerning: 'first-advance' | 'split' | null
+  // ListedFontFacts.scriptLookups of the first listed family that gives a font, or null where it isn't known: the scripts
+  // that select other lookups than Latin text, which pairKerning describes (lines.ts, pairKerningAt).
+  scriptLookups: readonly (readonly string[])[] | null
+  // FontFacts.joining of the run's font: whether HarfBuzz shapes it through GSUB and GPOS or through morx, kerx and kern
+  // state machines, where marks keep their advances (lines.ts, ligature groups).
+  joining: 'opentype' | 'aat' | null
   // The condition under which every Canvas width of the run is a stand-in, or null (GeckoTextFrame.advancesStandIn).
   advancesStandIn: 'font-size-quantization' | 'optical-size' | null
   // App units per px of the context's measureText widths: the page's app units per device pixel on a canvas element at the

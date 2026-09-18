@@ -234,7 +234,10 @@ painter from that snapshot: all 45 jobs reproduce the round 2 evaluation's rows 
 changed. Every painter version ran all sets at the same time under the browser lock (45 jobs, about 6 minutes):
 the development and held-out 09-16 suite samples, the rule families, the feature families, and the development and
 held-out 09-16 smoke, runs, ws and policy sets. 25 paragraphs over 20,000 UTF-16 units are left out of the suite samples
-(`cases/*-nogiants.ndjson`).
+(`cases/*-nogiants.ndjson`). The numbers below are the last run (`*-final6`). After the forms were settled on those sets,
+a fresh round from the lab's generator (`rebuild/lab/fresh.ts`, seed `r3-painter-1`, about 11,300 cases a browser: suite,
+runs, ws, policy and family-widths kinds) ran once with round 2's painter and once with the new one; what it found is
+under "Fresh round" below.
 
 ### Scores
 
@@ -243,38 +246,62 @@ Cases whose prediction passes; painter pass / fail / unobserved, and pass as a s
 | Browser | Set | Cases | Before | After | Transitions |
 |---|---|---:|---|---|---|
 | Chrome | development suite sample | 19,908 | 19,030 / 238 / 640 (98.76%) | 19,217 / 51 / 640 (99.74%) | fail→pass 187 |
-| Chrome | held-out 09-16 suite sample | 9,791 | 8,831 / 193 / 767 (97.86%) | 8,944 / 78 / 769 (99.14%) | fail→pass 113, fail→unobserved 2 |
+| Chrome | held-out 09-16 suite sample | 9,791 | 8,831 / 193 / 767 (97.86%) | 8,945 / 77 / 769 (99.15%) | fail→pass 114, fail→unobserved 2 |
 | Chrome | rule families | 10,519 | 10,200 / 255 / 64 (97.56%) | 10,293 / 162 / 64 (98.45%) | fail→pass 95, pass→fail 2 |
 | Chrome | feature families | 12,882 | 7,098 / 312 / 5,472 (95.79%) | 7,241 / 156 / 5,485 (97.89%) | fail→pass 143, fail→unobserved 13 |
 | Chrome | development smoke, runs, ws, policy | 5,492 | 5,461 / 25 / 6 (99.54%) | 5,469 / 17 / 6 (99.69%) | fail→pass 8 |
 | Chrome | held-out 09-16 runs, ws, policy | 5,193 | 5,160 / 32 / 1 (99.38%) | 5,165 / 26 / 2 (99.50%) | fail→pass 5, fail→unobserved 1 |
-| Chrome | all | 63,785 | 55,780 / 1,055 / 6,950 (98.14%) | 56,329 / 490 / 6,966 (99.14%) | fail→pass 551, fail→unobserved 16, pass→fail 2 |
+| Chrome | fresh round r3-painter-1 | 11,321 | 10,313 / 240 / 768 (97.73%) | 10,444 / 106 / 771 (99.00%) | fail→pass 132, fail→unobserved 3, pass→fail 1 |
+| Chrome | all but the fresh round | 63,785 | 55,780 / 1,055 / 6,950 (98.14%) | 56,330 / 489 / 6,966 (99.14%) | fail→pass 552, fail→unobserved 16, pass→fail 2 |
 | Firefox | development suite sample | 18,923 | 18,236 / 687 / 0 (96.37%) | 18,453 / 470 / 0 (97.52%) | fail→pass 217 |
 | Firefox | held-out 09-16 suite sample | 9,135 | 8,660 / 475 / 0 (94.80%) | 8,807 / 328 / 0 (96.41%) | fail→pass 147 |
 | Firefox | rule families | 8,592 | 8,012 / 580 / 0 (93.25%) | 8,266 / 326 / 0 (96.21%) | fail→pass 254 |
 | Firefox | feature families | 11,931 | 6,425 / 41 / 5,465 (99.37%) | 6,425 / 41 / 5,465 (99.37%) | none |
 | Firefox | development smoke, runs, ws, policy | 5,450 | 5,353 / 97 / 0 (98.22%) | 5,357 / 93 / 0 (98.29%) | fail→pass 4 |
 | Firefox | held-out 09-16 runs, ws, policy | 5,140 | 5,060 / 80 / 0 (98.44%) | 5,061 / 79 / 0 (98.46%) | fail→pass 1 |
-| Firefox | all | 59,171 | 51,746 / 1,960 / 5,465 (96.35%) | 52,369 / 1,337 / 5,465 (97.51%) | fail→pass 623 |
-| webkit-host | development suite sample | 19,849 | 18,784 / 987 / 78 (95.01%) | 18,913 / 856 / 80 (95.67%) | fail→pass 129, fail→unobserved 2 |
-| webkit-host | held-out 09-16 suite sample | 9,832 | 7,959 / 1,819 / 54 (81.40%) | 7,975 / 1,800 / 57 (81.59%) | fail→pass 16, fail→unobserved 3 |
-| webkit-host | rule families | 9,085 | 8,344 / 540 / 201 (93.92%) | 8,346 / 538 / 201 (93.94%) | fail→pass 2 |
+| Firefox | fresh round r3-painter-1 | 10,830 | 9,645 / 491 / 694 (95.16%) | 9,772 / 364 / 694 (96.41%) | fail→pass 127 |
+| Firefox | all but the fresh round | 59,171 | 51,746 / 1,960 / 5,465 (96.35%) | 52,369 / 1,337 / 5,465 (97.51%) | fail→pass 623 |
+| webkit-host | development suite sample | 19,849 | 18,784 / 987 / 78 (95.01%) | 18,914 / 854 / 81 (95.68%) | fail→pass 130, fail→unobserved 3 |
+| webkit-host | held-out 09-16 suite sample | 9,832 | 7,959 / 1,819 / 54 (81.40%) | 7,980 / 1,795 / 57 (81.64%) | fail→pass 21, fail→unobserved 3 |
+| webkit-host | rule families | 9,085 | 8,344 / 540 / 201 (93.92%) | 8,354 / 530 / 201 (94.03%) | fail→pass 10 |
 | webkit-host | feature families | 12,111 | 8,627 / 114 / 3,370 (98.70%) | 8,703 / 38 / 3,370 (99.57%) | fail→pass 76 |
 | webkit-host | development smoke, runs, ws, policy | 5,337 | 4,948 / 250 / 139 (95.19%) | 4,960 / 235 / 142 (95.48%) | fail→pass 12, fail→unobserved 3 |
 | webkit-host | held-out 09-16 runs, ws, policy | 5,025 | 4,632 / 255 / 138 (94.78%) | 4,645 / 241 / 139 (95.07%) | fail→pass 13, fail→unobserved 1 |
-| webkit-host | all | 61,239 | 53,294 / 3,965 / 3,980 (93.08%) | 53,542 / 3,708 / 3,989 (93.52%) | fail→pass 248, fail→unobserved 9 |
+| webkit-host | fresh round r3-painter-1 | 10,864 | 9,315 / 936 / 613 (90.87%) | 9,382 / 866 / 616 (91.55%) | fail→pass 67, fail→unobserved 3 |
+| webkit-host | all but the fresh round | 61,239 | 53,294 / 3,965 / 3,980 (93.08%) | 53,556 / 3,693 / 3,990 (93.55%) | fail→pass 262, fail→unobserved 10 |
 
-Painter pairs lost with the prediction unchanged, over all cases of all sets: Chrome 2, Firefox 0, webkit-host 0. The
-two are `rule/joining` `c-9fff38c828d7e27f` and `c-ce2fafbcb2bf85b3`: a line that ends one span of `ببب` and starts the
-next in AAT Geeza Pro under `break-all`. Blink reshaped each cut part without context, and the painted line now shapes
-the two parts as one shaping group, where round 2's override controls happened to sit between the two spans (DESIGN.md
-§7 `edge-inside-shaped-text`). Intermediate versions lost more and were fixed before the final run: each loss is named
-with its source reading in DESIGN.md §7 (trailing boundary neutrals joined to a level they didn't have, elements with
-another direction than their text holders in Gecko, nowrap on lines HanKerning trims or that end in hanging space, the
-script mark alone on an overflowing line's first line, a box before a glued character).
+Painter pairs lost with the prediction unchanged, over all cases of all sets: Chrome 2, Firefox 0, webkit-host 0, and on
+the fresh round Chrome 1, Firefox 0, webkit-host 0. The two are `rule/joining` `c-9fff38c828d7e27f` and
+`c-ce2fafbcb2bf85b3` (the fresh round's one, `c-bc14745d7e65143e`, is the same paragraph shape): a line that ends one
+span of `ببب` and starts the next in AAT Geeza Pro under `break-all`. Blink reshaped each cut part without context, and
+the painted line now shapes the two parts as one shaping group, where round 2's override controls happened to sit
+between the two spans (DESIGN.md §7 `edge-inside-shaped-text`). Intermediate versions lost more and were fixed before
+the final run: each loss is named with its source reading in DESIGN.md §7 (trailing boundary neutrals joined to a level
+they didn't have, elements with another direction than their text holders in Gecko, nowrap on lines HanKerning trims or
+that end in hanging space, the script mark alone on an overflowing line's first line, a box before a glued character).
 
-webkit-host's held-out suite sample stays at 81.6%: 1,761 of its 1,800 failures are `carried-width` lines, most of them
-one float32 step off, which a line painted alone can't reproduce.
+webkit-host's held-out suite sample stays at 81.6%: nearly all of its 1,795 failures are `carried-width` lines, most of
+them one float32 step off, which a line painted alone can't reproduce.
+
+### Fresh round
+
+The fresh round's runs with the new painter showed four classes the main sets hadn't, each traced and fixed by a source
+reading (DESIGN.md §7). On the main sets the fixes lost no pair and moved 1 Chrome and 14 webkit-host pairs from fail to
+pass and 1 webkit-host pair to unobserved:
+
+- Blink shaped `A` without the space after it where the two had different directions in the paragraph; the painter had
+  joined the space to the text's level (`c-1235f5a7105d6155`). The space now resolves as UAX #9 N1 and N2 resolved it.
+- A space after a U+200C moved to the previous piece's level with it; only the code units that continue the cluster
+  move (`c-d0d9e12845327e52`).
+- WebKit's content shows a collapsible tab or newline as a space; painted as a space it was measured as one where the
+  source character is painted now.
+- `)` after Arabic whose `(` stood after Latin took the U+061C mark. The 30-script comparison that decided the mark in
+  Blink is replaced by the port's `ScriptRunIterator` run over the paragraph, the line alone and the line after the
+  mark, and by `resolveIcuBidi` over the marked line where no override span holds the text (`c-ca3da1d5e7083f35`; an
+  intermediate version of this marked digits at a paragraph's start, which reordered, `c-bef92f5d154ec2f9`, fixed
+  before the last run).
+
+The round's results are in the table: Chrome 240 → 106 failing, Firefox 491 → 364, webkit-host 936 → 866.
 
 ### What changed
 
@@ -323,9 +350,12 @@ painted line, and every line of a passing case is a passing line.
 
 | Browser | Failing cases | With a limit on the failing line | Passing lines | Passing lines with a limit |
 |---|---:|---:|---:|---:|
-| Chrome | 490 | 478 | 198,570 | 90,413 (45.5%) |
+| Chrome | 489 | 479 | 198,573 | 89,416 (45.0%) |
 | Firefox | 1,337 | 1,322 | 173,256 | 101,576 (58.6%) |
-| webkit-host | 3,708 | 3,668 | 175,848 | 42,034 (23.9%) |
+| webkit-host | 3,693 | 3,660 | 176,014 | 42,042 (23.9%) |
+| Chrome, fresh round | 106 | 100 | 38,643 | 18,828 (48.7%) |
+| Firefox, fresh round | 364 | 361 | 33,675 | 19,217 (57.1%) |
+| webkit-host, fresh round | 866 | 856 | 31,251 | 6,474 (20.7%) |
 
 Per limit, failing lines it sits on and passing lines it fires on:
 
@@ -338,10 +368,10 @@ Per limit, failing lines it sits on and passing lines it fires on:
 | `space-shaped-with-next-line` | 229 / 11,937 (6.0%) | | |
 | `hanging-space-kern-share` | 92 / 156 (0.1%) | | |
 | `han-kerning-at-edge` | 32 / 7,923 (4.0%) | | |
-| `script-at-line-start` | 98 / 12,671 (6.4%) | 323 / 8,465 (4.9%) | |
-| `controls-between-pieces` | 3 / 370 (0.2%) | | |
+| `script-at-line-start` | 102 / 11,703 (5.9%) | 323 / 8,465 (4.9%) | |
+| `controls-between-pieces` | 3 / 379 (0.2%) | | |
 | `frame-ended-at-break` | | 172 / 98 (0.1%) | |
-| `overflowing-line-rebreaks` | 95 / 13,570 (6.8%) | 11 / 6,201 (3.6%) | 31 / 11,765 (6.7%) |
+| `overflowing-line-rebreaks` | 95 / 13,571 (6.8%) | 11 / 6,201 (3.6%) | 23 / 11,773 (6.7%) |
 
 `edge-inside-shaped-text` and `carried-width` fire on a large share of passing lines because these sets are built at
 break thresholds and narrow widths, where most lines start or end inside a word; the conditions are the source
@@ -350,10 +380,14 @@ conditions and weren't shaped to the counts. Two narrowings came from source rea
 again the same way), and Blink's `edge-inside-shaped-text` needs a joining or reordering script or a font whose pair
 adjustments may move the second glyph (59.4% before, one failing line lost).
 
-Failing lines without a limit: Chrome 12 (`rule/in-word-breaks` 4, a Times New Roman line 18 or 27 units narrower that
-starts and ends at spaces; 8 single cases), Firefox 15 (`ws/controls` 4, `suite/raw-cr-whitespace-scope` 3,
-`suite/hanging-OGHAM` 3, 5 single cases), webkit-host 40 (`policy/thai` 9 and `rule/hyphen-glyph` 8, a float32 step;
-`rule/zwnj` 3 single-line paragraphs under override, a float32 step; 20 others, mostly a float32 step). Not traced.
+The per-limit table is the main sets'; the fresh round's shares are within two points of them
+(`.artifacts/lab/painter-r3/limits-final6.txt` has both).
+
+Failing lines without a limit: Chrome 10 (`rule/in-word-breaks` 4, a Times New Roman line 18 or 27 units narrower that
+starts and ends at spaces; 6 single cases), Firefox 15 (`ws/controls` 4, `suite/raw-cr-whitespace-scope` 3,
+`suite/hanging-OGHAM` 3, 5 single cases), webkit-host 33 (`policy/thai` 9 and `rule/hyphen-glyph` 8, a float32 step;
+`rule/zwnj` 3 single-line paragraphs under override, a float32 step; 13 others, mostly a float32 step). On the fresh
+round: Chrome 6, Firefox 3, webkit-host 10, of the same families. Not traced.
 
 ### Notes for owners
 
@@ -377,13 +411,15 @@ starts and ends at spaces; 8 single cases), Firefox 15 (`ws/controls` 4, `suite/
 
 ### Files (round 3)
 
-- `rebuild/src/paint.ts`, `rebuild/src/paint.test.ts` (12 tests of the forms and limits on hand-made layouts),
+- `rebuild/src/paint.ts`, `rebuild/src/paint.test.ts` (14 tests of the forms and limits on hand-made layouts),
   `rebuild/DESIGN.md` §7.
 - `.artifacts/lab/painter-r3/`: `head/` (the frozen library, lab and probe runner), `tools/run-all.sh` (all sets, three
   browsers, under the lock), `tools/compare.py` (transitions against the before run or the round 2 evaluation),
+  `tools/run-fresh.sh`, `compare-fresh.py` and `table.py` (the fresh round and the table above),
   `tools/features.ts`, `group.py`, `sample.py`, `show.ts`, `showid.sh`, `html.ts` (classification and one case's painted
   DOM offline), `tools/limits.ts`, `limits-all.sh`, `limits-dump.ts` (limits against results), `tools/forms-probe.ts`
   with `probes/forms-*.json` (painted forms in a browser), `tools/storage-probe.ts` and `sibling-probe.ts` (WebKit
-  string storage), `runs/<browser>/<set>-base` and `-final` (rows compressed), `limits/` and `classify/`.
-- `bun test rebuild/src`: the painter's 12 tests pass with the rest. `bunx tsc --noEmit -p rebuild/tsconfig.json` is
+  string storage), `runs/<browser>/<set>-base` and `-final6` with the fresh round's `fresh0N-base` and `-final6` (rows
+  compressed), `limits/` and `classify/`.
+- `bun test rebuild/src`: the painter's 14 tests pass with the rest. `bunx tsc --noEmit -p rebuild/tsconfig.json` is
   clean.

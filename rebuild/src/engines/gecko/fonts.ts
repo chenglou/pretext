@@ -140,6 +140,18 @@ export function opticalSizeAxisOf(font: FontDecl): boolean {
   return (first.kind === 'generic' && first.name === 'system-ui') || (first.kind === 'named' && first.syntax === 'identifiers' && first.name === '-apple-system')
 }
 
+// ListedFontFacts.scriptLookups of the first listed family that gives a font, the font FontFacts.pairKerning describes; null
+// where the facts don't say which family that is.
+export function firstFontScriptLookups(font: FontDecl): readonly (readonly string[])[] | null {
+  const fonts = font.facts.fonts
+  if (fonts === undefined) return null
+  for (let i = 0; i < fonts.length; i++) {
+    if (fonts[i]!.realizes === false) continue
+    return fonts[i]!.realizes === true ? fonts[i]!.scriptLookups : null
+  }
+  return null
+}
+
 // Which family of the list draws a code point, by the optional coverage facts (FontFacts.fonts): the index of the first
 // family that realizes and maps it, -1 where every family is known and none maps it (the engine's fallback draws it, with a
 // font the facts don't name), or null where the facts don't say. gfxFontGroup::FindFontForChar takes the first font of the
@@ -156,6 +168,15 @@ export function listedFontOf(font: FontDecl, cp: number): number | null {
     if (covers(f.coverage, cp) || ((cp === 0x2010 || cp === 0x2011) && covers(f.coverage, 0x2d))) return i
   }
   return -1
+}
+
+// The family that draws a cluster extender after a character family `base` draws: the same one where it maps the extender
+// (FindFontForChar takes the previous character's font for a cluster extender it has, gfxTextRun.cpp:3181-3194), else the
+// extender's own (listedFontOf). `base` is a listedFontOf result.
+export function extenderFontOf(font: FontDecl, base: number | null, cp: number): number | null {
+  if (base === null) return null
+  if (base >= 0 && covers(font.facts.fonts![base]!.coverage!, cp)) return base
+  return listedFontOf(font, cp)
 }
 
 // Sorted inclusive ranges, flat.

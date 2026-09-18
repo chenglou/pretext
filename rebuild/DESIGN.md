@@ -1343,6 +1343,11 @@ opens and closes, the nodes the painter makes), which need no document, and `pai
     and loses it again. Probe `.artifacts/lab/painter-r3/tools/storage-probe.ts` (webkit-host): every string a script
     builds from those characters gives the 8-bit break, and `deleteData`, `replaceData` and `splitText` give the
     paragraph's.
+  - WebKit: a tab or newline that the engine's content shows as a space is painted as itself, and the browser collapses
+    it to the same space. WebKit's text box holds the node's own characters, and a word is measured together with the
+    character after it only where that is U+0020 (`TextUtil::width`'s `extendedMeasuring`, `TextUtil.cpp:76-81`): `A`
+    before a tab in `normal` is 10.67 px natively and 9.79 px before a painted space (`c-656822d19d89c4e8`, found on the
+    fresh set). Blink and Gecko build their own text from the node's, where the tab is a space already.
 - **Atomic inlines** are painted as empty inline-blocks of their border box and margins, `vertical-align: top`, at their
   level, for the app to fill. A `<wbr>` fragment is painted as a `<wbr>` element between its leaves, as the paragraph
   had it: in a nowrap span, `aaaa` and ` bbbb` painted without it wrapped in Firefox where the paragraph with it didn't
@@ -1405,15 +1410,25 @@ opens and closes, the nodes the painter makes), which need no document, and `pai
   it continues, so at a line's start that of the text before the line (Blink's `ScriptRunIterator` merges it into the
   current set, `script_run_iterator.cc:491-540`), and painted alone it takes the script of what follows. Blink reads a
   run's script where it applies letter spacing, which a cursive script's run doesn't take
-  (`IsCursiveScript(run->script_)`, `shape_result.cc:977-1024`), and where it picks fonts and shapes. Where the text
-  before the line is Arabic and the line's own first script isn't, the painted line starts with U+061C ARABIC LETTER
-  MARK, which has no width and script Arabic, in the first piece's text node (probe
+  (`IsCursiveScript(run->script_)`, `shape_result.cc:977-1024`), and where it picks fonts and shapes. The painter runs
+  the Blink port's `ScriptRunIterator` (`engines/blink/script.ts`) three times: over the text of all the lines' pieces,
+  over the line's text alone (one Latin segment when the painted text is 8-bit, `harfbuzz_shaper.cc:1072-1077`; a line
+  under override spans holds their controls and is 16-bit), and over the line's text after U+061C ARABIC LETTER MARK,
+  which has no width and script Arabic. Where the line alone gets other scripts than it had in the paragraph and gets
+  the paragraph's after the mark, the painted line starts with the mark, in the first piece's text node (probe
   `.artifacts/lab/painter-r3/probes/forms-l7.json`, Chrome 153: a guillemet after Arabic under −1px letter spacing is
   17.797 px in the paragraph and with the mark, 16.797 px without; `<tai` under 1.5px is 30.742 px against 32.242 px).
-  The mark is a grapheme cluster of its own, which a line that reaches past its band and still wraps would keep alone on
-  its first line, so such a line gets none, and a line of one cluster that reaches past its band doesn't wrap when it
-  takes the mark. Unicode has no such character for the other scripts (limit `script-at-line-start`). In Firefox the
-  mark changes no width: Gecko's cursive exemption reads each character's own script (`nsTextFrame.cpp:4209-4213`).
+  The iterator also follows a closing bracket to its opening bracket's script (`CloseBracket`,
+  `script_run_iterator.cc:443-470`): `)` after Arabic whose `(` stood after Latin is Latin and takes no mark
+  (`c-ca3da1d5e7083f35`, found on the fresh set). The mark is a strong character of bidi class AL, which would turn the
+  European numbers after it into Arabic numbers (UAX #9 W2): it changes nothing where override spans hold all the
+  line's text, and elsewhere the line takes it only if every character after it still resolves to the base level
+  (`resolveIcuBidi` over the mark and the line; digits at a paragraph's start that take script Arabic from the text
+  after them get none, `c-bef92f5d154ec2f9`). The mark is a grapheme cluster of its own, which a line that reaches past
+  its band and still wraps would keep alone on its first line, so such a line gets none, and a line of one cluster that
+  reaches past its band doesn't wrap when it takes the mark. Unicode has no such character for the other scripts, and
+  every line whose scripts the painted form doesn't reproduce has the limit `script-at-line-start`. In Firefox the mark
+  changes no width: Gecko's cursive exemption reads each character's own script (`nsTextFrame.cpp:4209-4213`).
 - **Bidi.** A line with a piece at a level other than the base level gets `unicode-bidi: bidi-override` on the line
   block, and one nested `bidi-override` span per level step, alternating direction, so every code unit sits inside
   exactly as many overrides as its level is above the base, and the browser reorders the line with the paragraph's levels
@@ -1444,8 +1459,16 @@ opens and closes, the nodes the painter makes), which need no document, and `pai
   - The line's trailing white space is painted at the level of the text before it in the same leaf; box edges, `<br>`
     and `<wbr>` don't end the trailing white space. At a paragraph's end it takes the base level in all three browsers
     (above), so the painted level only decides node division, and one text node keeps WebKit's measurement of a word
-    with the space after it (`TextUtil.cpp:76-77`).
-  - A piece that continues the grapheme cluster of the piece before it in the same leaf takes that piece's level too.
+    with the space after it (`TextUtil.cpp:76-77`). In Blink the space joins the text only where the two had one
+    direction in the paragraph: items split where the level changes, and a shaping group ends where the direction does
+    (`ShouldBreakShapingBeforeText`, `inline_node.cc:470-490`). The fragments' levels come after Blink's line-end rule,
+    which moves trailing spaces to the base level, so the painter resolves the space as the paragraph did (UAX #9 N1,
+    N2): the direction of the text on both sides where they agree, a number counting as right-to-left, and the base
+    direction otherwise. `A` before a space and Hebrew in an RTL paragraph was shaped without the space, 10.67 px, and
+    painted with it in one override span 9.79 px (`c-1235f5a7105d6155`, found on the fresh set).
+  - The start of a piece that continues the grapheme cluster of the piece before it in the same leaf takes that
+    piece's level too: the code units up to the first cluster boundary inside the piece, and the rest keeps its own (a
+    space after a U+200C stays a trailing space, `c-d0d9e12845327e52`, found on the fresh set).
     The engines split pieces where the level changes, inside a cluster as well: at the paragraph's end a U+200C after a
     letter of another direction has the base level. Painted at its own level it followed the override span's closing
     control, which ends the letter's cluster (UAX #29 GB4), and an overflowing line that breaks at clusters broke there
@@ -1507,9 +1530,11 @@ those counts come from `.artifacts/lab/painter-r3/tools/limits.ts` over the rows
   the same leaf. The trim reads the neighbouring character's type, and a painted line's start isn't the start of a
   wrapped line, where `ShapeLine` trims an opening bracket (`FirstSafeOffset`, `shaping_line_breaker.cc:92-108`; `。` is
   8px natively and 16px painted, `c-b408d44e962b357e`).
-- `script-at-line-start` (Blink, Gecko): the line starts with characters of script Common or Inherited, other than
-  white space, that continued a run of another script than the line's own first script, and Blink's U+061C doesn't
-  apply. The painter tells 30 scripts apart and counts every other script as one kind.
+- `script-at-line-start` (Blink, Gecko): characters of the line had another script in the paragraph than the line
+  painted alone gives them. In Blink the port's `ScriptRunIterator` says so, and the limit holds where U+061C doesn't
+  give the paragraph's scripts back or can't be painted. In Gecko the line starts with characters of script Common or
+  Inherited, other than white space, that continued a run of another script than the line's own first script; there
+  the painter tells 30 scripts apart and counts every other script as one kind.
 - `controls-between-pieces` (Blink): two consecutive text pieces of one direction sit in different override spans,
   whose bidi controls end the shaping group between them (L9): pieces of one level that an element with pieces of
   another level separates (`النعاج` and `جيد` across two spans, 54 units, `c-17554815da2915b5`), and pieces two levels
@@ -1528,8 +1553,9 @@ those counts come from `.artifacts/lab/painter-r3/tools/limits.ts` over the rows
   frame, and painted the margin overflow makes `CanPlaceFrame` back up to an earlier break
   (`nsLineLayout.cpp:1189-1342`, `c-54dcffce84a8fbdb`).
 
-Painter failures on cases whose prediction passes that no limit names, on the final runs: Chrome 12 of 490, Firefox 15
-of 1,337, webkit-host 40 of 3,708 (PAINTER-RESULTS.md lists them). Known among them: WebKit lines a float32 step off
+Painter failures on cases whose prediction passes that no limit names, on the final runs: Chrome 10 of 489, Firefox 15
+of 1,337, webkit-host 33 of 3,693, and on the fresh round Chrome 6 of 106, Firefox 3 of 364, webkit-host 10 of 866
+(PAINTER-RESULTS.md lists them). Known among them: WebKit lines a float32 step off
 with dictionary-segmented text, where the line alone may segment into other items than the paragraph did (9 Thai
 lines).
 

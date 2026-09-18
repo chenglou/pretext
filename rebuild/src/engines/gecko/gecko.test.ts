@@ -49,6 +49,12 @@ function stubAu(font: string, text: string, lang: string): number {
       au += arabic ? 660 : 367
       continue
     }
+    // `ff` is a ligature of 1140 au, taken from the start of the text: `fff` is `ff` and `f`.
+    if (c === 'f' && cps[i + 1] === 'f') {
+      au += Math.round(1140 * size / 16)
+      i++
+      continue
+    }
     // `To` under a kern table: T is 576.4 au and o 576.8 au at 16px, the pair adjustment −45 au, half on each glyph, and each
     // glyph's advance is rounded on its own (hb-kern.hh:102-106, gfxHarfBuzzShaper.cpp:1699-1702): 554 + 554 at 16px.
     if (c === 'T' || c === 'o') {
@@ -75,7 +81,7 @@ function stubAu(font: string, text: string, lang: string): number {
     if (c === 'A' && cps[i + 1] === 'V') au -= 60
     // "7:" kerns by −40 au, except where Common text resolves to Hangul from the language and CJK scripts turn kerning off
     // (probe gecko-port F8): a string without a Latin letter under lang="ko".
-    if (c === '7' && cps[i + 1] === ':' && !(lang.startsWith('ko') && !/[A-Za-z]/.test(text))) au -= 40
+    if (c === '7' && (cps[i + 1] === ':' || cps[i + 1] === '7') && !(lang.startsWith('ko') && !/[A-Za-z]/.test(text))) au -= 40
   }
   return au
 }
@@ -97,7 +103,8 @@ beforeAll(() => {
       const spacing = this.letterSpacing === '2px' ? 120 * groups : 0
       const width = Math.fround((stubAu(this.font, s, this.lang) + spacing) / 60)
       // "fi" forms a ligature as wide as its parts whose ink box ends 0.36 au further with ligatures off (probe gecko-port F9).
-      const right = s === 'fi' && this.letterSpacing !== '0px' ? width + 0.006 : width
+      // So does "ff", which the stub keeps as wide with ligatures off.
+      const right = (s === 'fi' || s === 'ff') && this.letterSpacing !== '0px' ? width + 0.006 : width
       return { width, actualBoundingBoxLeft: 0, actualBoundingBoxRight: right }
     }
   }
@@ -723,6 +730,28 @@ describe('ceiling round 2', () => {
     expect(l.lines.map(line => line.geometry.width)).toEqual([554, 554])
     expect(allGaps(l).map(g => g.gap)).not.toContain('in-word-prefix')
     expect(l.measure.contexts.some(c => c.font.includes(' 1024px '))).toBe(true)
+  })
+
+  test('ligature candidates in a row divide from the start and stay stand-ins (hb-ot-layout.cc:1917-1945)', () => {
+    // `ff` alone tests as a ligature at both boundaries of `fff`; the unit takes the first pair and leaves the third `f`.
+    const l = layout(paragraph([run('fff')], 2, { overflowWrap: 'anywhere' }))
+    expect(l.lines.map(line => line.start)).toEqual([0, 1, 2])
+    expect(l.lines.map(line => line.geometry.width)).toEqual([570, 570, 576])
+    expect(l.lines.map(line => line.gaps.some(g => g.gap === 'in-word-prefix'))).toEqual([true, true, true])
+  })
+
+  test('the pair kerning fact describes Latin lookups: a pair in a Hebrew script run stays a stand-in (hb-ot-shape.cc:134, :173-184)', () => {
+    // The stub kerns `77` by −40 au. Digits alone take the language's likely script (gfxTextRun.cpp:2581-2640, :2755-2756).
+    const split = { ...courier, facts: { ...facts, pairKerning: 'split' as const } }
+    const latin = layout(paragraph([run('77', 'span', { font: split })], 11, { overflowWrap: 'anywhere', font: split }))
+    expect(latin.lines.map(line => line.geometry.width)).toEqual([556, 556])
+    expect(allGaps(latin).map(g => g.gap)).not.toContain('in-word-prefix')
+    // U+2014 makes the text run 16-bit; an 8-bit run counts digits as Latin letters (textRunScripts).
+    const hebrew = layout(paragraph([run('77 —', 'span', { font: split, lang: 'he' })], 11, { overflowWrap: 'anywhere', font: split, lang: 'he' }))
+    expect(hebrew.lines.slice(0, 2).map(line => line.geometry.width)).toEqual([536, 576])
+    expect(hebrew.lines.slice(0, 2).map(line => line.gaps.some(g => g.gap === 'in-word-prefix'))).toEqual([true, true])
+    const english = layout(paragraph([run('77 —', 'span', { font: split })], 11, { overflowWrap: 'anywhere', font: split }))
+    expect(english.lines.slice(0, 2).map(line => line.geometry.width)).toEqual([556, 556])
   })
 
   test('paragraph gaps name the source range they concern', () => {

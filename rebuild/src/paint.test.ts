@@ -103,6 +103,17 @@ describe('Blink script mark', () => {
     expect(lines[2]!.textNodes().map(n => n.data)).toEqual(['tail'])
     expect(painterLimits(p, layout).map(limits => limits.map(x => x.limit))).toEqual([['edge-inside-shaped-text'], ['edge-inside-shaped-text'], ['edge-inside-shaped-text']])
   })
+  test('not a closing bracket whose opening bracket stood after Latin text, which is Latin in the paragraph too', () => {
+    const q = paragraph([{ kind: 'text', text: 'a(' + arabic + ')b' }], { overflowWrap: 'break-word' })
+    const lines = paint(q, blink([{ fragments: [text(0, 0, 'a(', 0), text(0, 2, arabic, 1)] }, { fragments: [text(0, 4, ')b', 0)] }]))
+    expect(lines[1]!.textNodes().map(n => n.data)).toEqual([')b'])
+  })
+  test('not digits that take script Arabic from the text after them: after the mark they would be Arabic numbers', () => {
+    const q = paragraph([{ kind: 'text', text: '12 ' + arabic }])
+    const layout = blink([{ fragments: [text(0, 0, '12', 0), { kind: 'trimmed', run: 0, start: 2, end: 3, painted: ' ', level: 0 } as Fragment] }, { fragments: [text(0, 3, arabic, 1)] }])
+    expect(paint(q, layout)[0]!.textNodes().map(n => n.data)[0]).toBe('12 ')
+    expect(painterLimits(q, layout)[0]!.map(x => x.limit)).toContain('script-at-line-start')
+  })
 })
 
 describe('WebKit text node storage', () => {

@@ -260,6 +260,8 @@ const row = (font, ls, text, direction) => {
 const courier = '400 16px "Courier New"';
 const out = [];
 for (const text of ['\u{10D00}\u{10D01}\u{10D02}́', '\u{10D00}\u{10D01}\u{10D02}', '\u{10D02}́', 'بب́', 'ببب', 'ab́c']) for (const ls of [0, 1, 4]) for (const font of [courier, '400 16px Arial']) out.push(row(font, ls, text));
+// Which clusters of a cursive script take letter spacing: a mark of the base's font, a mark another font draws, other scripts.
+for (const text of ['ܐܒܓ́', 'ܐܒܓ', 'ܓ́', 'ܓܰ', 'بب́', 'ببَ', 'ب́', 'ߒߞ́', 'ߒߞ߫', 'ᠮᠣ́', 'ᠮᠣ']) for (const ls of [0, 4]) for (const font of [courier, '400 16px "Geeza Pro"', '400 16px "Times New Roman"']) out.push(row(font, ls, text));
 return out;
 `
 

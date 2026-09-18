@@ -6,7 +6,7 @@ import { WS, bidiClassOf, bidiDataFor } from '../../unicode/bidi.js'
 import { LineBreakIterator } from './breaks.js'
 import { collapsesWhiteSpace, hasBorder, lengthLU, mayHaveMargin, mayHavePadding, wrapsLines } from './content.js'
 import { maybeHanKerningClose } from './hankerning.js'
-import { addGap, sourceOffsetAt } from './gaps.js'
+import { addGap, sourceRange } from './gaps.js'
 import {
   isClusterBoundary, isSegmentEdge, isStartSafeToBreak, itemShapeResult, luCeil, nextSafeToBreak, offsetForPosition, positionBounds, positionForOffset,
   previousSafeToBreak, reshape, reshapeHanKerningEnd, shapeHyphen, snappedWidth, tabShapeResult, truncateView, viewOf, widthOf16,
@@ -73,13 +73,17 @@ export type LineInfo = {
   // decision rests on.
   decisionEnd: number
   // Not Blink's: break opportunities the port gave up because their line-end reshape failed ShapeLine's fit test, on a
-  // wrapped line whose start the port reshapes, with no shaping run edge between the line start and the opportunity. Every
-  // safe offset the port found there is safe by the pair test alone; if HarfBuzz flags them all, Blink has no safe offset
-  // before the opportunity, reshapes the whole range and takes it without a fit test (shaping_line_breaker.cc:497-506).
+  // wrapped line start, with no shaping run edge after the line start and before the opportunity. Every safe offset the
+  // port found there, the start included, is safe by its width tests alone; if HarfBuzz flags them all, Blink has no safe
+  // offset before the opportunity, reshapes the whole range and takes it without a fit test
+  // (shaping_line_breaker.cc:497-506).
   untestedEnds: number[]
   // Not Blink's: whether the line's breaks could fall between any two grapheme clusters: the iterator ended the line under
   // break-all or break-character (line-break: anywhere, or the overflow retry, line_breaker.cc:4557-4643).
   breaksInsideWords: boolean
+  // Not Blink's: the start offsets of the item results whose view the line cut again (TruncateLineEndResult at a removed
+  // trailing space, the bidi split of preserved trailing spaces).
+  truncatedStarts: number[]
 }
 
 // line_breaker.cc:186-188
@@ -144,6 +148,7 @@ export class LineBreaker {
   readonly previousLineHadForcedBreak: boolean
   readonly shapeResults = new Map<number, ShapeResult>()
   untestedEnds: number[] = []
+  truncatedStarts: number[] = []
 
   constructor(sh: Shaper, token: BlinkLineStart, slot: LineSlot) {
     const p = sh.p
@@ -346,6 +351,7 @@ export class LineBreaker {
     return {
       decisionEnd,
       untestedEnds: this.untestedEnds,
+      truncatedStarts: this.truncatedStarts,
       breaksInsideWords: breakType === 'break-character' || breakType === 'break-all',
       results: this.results,
       lineLeft: this.lineLeft,
@@ -674,7 +680,9 @@ export class LineBreaker {
         lineEndResult = reshape(sh, item.group, lastSafe, bo.offset)
         if (widthOf16(lineEndResult.call.width16) <= Math.fround(flip(endPosition - safePosition) / 64)) break
         lineEndResult = null
-        if (firstSafe !== start && !this.hasRunEdge(item, start, bo.offset)) this.untestedEnds.push(bo.offset)
+        // Blink looks for its first safe offset from any wrapped line start (FirstSafeOffset), whether or not the port's
+        // pair test calls the start itself safe (fresh set r3-blink-4, c-03316764a11a9d04: natively `({` overflows its line).
+        if (isStartOfWrappedLine && !this.hasRunEdge(item, start + 1, bo.offset)) this.untestedEnds.push(bo.offset)
         bo = this.previousBO(bo.offset - 1, start)
         if (bo.offset > start) continue
         out.isOverflow = true
@@ -710,8 +718,13 @@ export class LineBreaker {
       if (k <= start || k >= sr.end) continue
       const bounds = positionBounds(this.sh, sr, k)
       if (bounds === null || endPosition < bounds[0] || endPosition > bounds[1]) continue
+      // The condition concerns the glyph clusters on both sides of k, whose shares of the adjustment aren't known.
+      let a = k - 1
+      while (a > sr.start && !isClusterBoundary(p, a)) a--
+      let b = k + 1
+      while (b < sr.end && !isClusterBoundary(p, b)) b++
       const source = p.sourceOffsets[k]!
-      addGap(this.sh.gaps, 'unsafe-to-break', source >= 0 ? p.sourceRuns[source]! : null, CANDIDATE_DETAIL, sourceOffsetAt(p, k))
+      addGap(this.sh.gaps, 'unsafe-to-break', source >= 0 ? p.sourceRuns[source]! : null, CANDIDATE_DETAIL, sourceRange(p, a, b))
     }
   }
 
@@ -1120,6 +1133,7 @@ export class LineBreaker {
   truncateLineEndResult(r: ItemResult, endOffset: number): View {
     const item = this.items[r.itemIndex]!
     const view = r.shape!
+    this.truncatedStarts.push(r.start)
     if (!this.needsAccurateEndPosition(item)) return truncateView(this.sh, view, r.start, endOffset)
     const sr = this.shapeResultOf(r.itemIndex)
     const lastSafe = previousSafeToBreak(this.sh, sr, endOffset)
@@ -1208,6 +1222,7 @@ export class LineBreaker {
         const previousSize = r.inlineSize
         const view = r.shape!
         const end = r.end
+        this.truncatedStarts.push(r.start)
         r.end = i
         r.shape = truncateView(this.sh, view, r.start, i)
         r.inlineSize = luCeil(r.shape.width)

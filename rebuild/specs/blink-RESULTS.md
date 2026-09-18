@@ -16,6 +16,220 @@ Baselines for transitions:
 - the triage population (research/MAIN-TRIAGE.md §2.1, Chrome small file, 8,933 cases): the charter triage rows
   (`.artifacts/charter-20260916/triage/runs/chrome/charter-file/small`), scored again with scorer 3.
 
+## Ceiling round 3
+
+Installed Chrome 153.0.8010.50 (source-identical to the pinned .48: `git diff --name-only 153.0.8010.48 153.0.8010.50` lists
+chrome/VERSION alone and DEPS is unchanged; `env.ts` `SOURCE_IDENTICAL_BUILDS` accepts it, so rows no longer report
+`engine-build`). Scorer 5 (a gap covers a failing line only by touching what differs there). Forward order only, as the
+round's rules ask of owners. Every job ran a frozen copy of the library and the lab (`scratchpad/blink-r3/builds/<build>`,
+with its own `run.ts`, so another owner's edit in progress never reached a run); rows are under
+`.artifacts/lab/blink/r3/<build>/<set>/`, fresh sets under `.artifacts/lab/fresh/chrome/<seed>/`. Sets: `dev-flat` (smoke,
+runs, ws, policy without the 225 ids they share: 5,279 cases), `dev-suite` (19,994), `families` (10,976), `features`
+(12,882), `heldout-small` (held-out runs, ws, policy: 5,205), `heldout-suite` (10,000, its 9 paragraphs over 50,000 units in
+a job of their own with `--chunk=1`), `triage-small` (8,933).
+
+| Build | What changed |
+|---|---|
+| w1 | Canvas's per-word scripts (item 1 below), the .50 build accepted, `fontKey` as JSON, ICU's Default_Ignorable_Code_Point generated |
+| w3 | Positions the layout can't know marked in its geometry (`startLimit`, `sizeLimit`) and read by the observation port; `glyph-clusters` or `in-word-prefix` at an item edge inside a shaping call; the untested-end condition (item 4); `in-word-prefix`'s window constant replaced |
+| w4-w6 | The adjustment across an offset over the widest exactly measured window (rejected as the position's adjustment at joined offsets and after spaces, see "The adjustment window") |
+| w7 | Ligature and coverage facts: a ligature's letters are one glyph cluster; a position is known only where the facts rule a ligature out |
+| w8 | A view's float width summed per HarfBuzz run in visual order, runs from the script segments and the coverage facts |
+| w9-w10 | `unsafe-to-break` where the break candidate rests on an adjustment no fact places; `glyph-clusters` for a listed ligature the facts don't settle on a line that breaks between clusters |
+| w12 | The observation port limits both edges of a rect whose carets run against the item's direction; atomic inline margins in visual order |
+| w13 | RunSegmenter's emoji segments (`emoji.ts`): a HarfBuzz continuation merges only inside its own shaping call |
+| w15-w16 | `script-context` reported for the strings the layout measures, narrowed by the `scriptLookups` fact and for default-ignorable characters |
+| w17-w18 | The candidate condition over the two clusters it concerns; the untested-end condition at every wrapped line start; the truncated RTL start condition |
+
+### Against round 2
+
+w18 against the round 2 evaluation's forward rows (`evaluate-r2/chrome`), outside history dependence. No line count, break or
+width that passed in round 2 fails on any set.
+
+| Set (cases) | lineCount | breaks | widths |
+|---|---|---|---|
+| dev-flat (5,279) | – | fail→pass 1 | not-applicable→pass 1 |
+| dev-suite (19,994) | fail→pass 5 | fail→pass 5 | fail→pass 1, not-applicable→pass 4, not-applicable→fail 1 |
+| families (10,976) | fail→pass 10 | fail→pass 25 | fail→pass 4, not-applicable→pass 25 |
+| features (12,882) | – | – | unobserved→pass 1,922 (scorer 5 observes indented lines) |
+| heldout-small (5,205) | fail→pass 1 | fail→pass 1 | fail→pass 6, not-applicable→pass 1 |
+| heldout-suite (10,000) | fail→pass 7 | fail→pass 10 | fail→pass 15, not-applicable→pass 9, not-applicable→fail 1 |
+| triage-small (8,933) | fail→pass 88 | fail→pass 222 | fail→pass 2, not-applicable→pass 218, not-applicable→fail 4 |
+
+The not-applicable→fail widths are cases whose breaks pass for the first time. Painter pass→fail: families 2 (`rule/joining`),
+triage 6 (`suite/following-space-scope`), with the prediction unchanged on the same case; paint.ts changed between the
+frozen builds (the painter owner's).
+
+Predicted values that agree with the browser, round 2 → w18: dev-flat 99.390% → 99.991%, dev-suite 97.993% → 99.992%,
+families 99.238% → 99.860%, features 99.951% → 99.998%, heldout-small 99.329% → 99.995%, heldout-suite 96.926% → 99.992%,
+triage-small 98.689% → 99.973%. Cases that pass every prediction metric and hold a differing predicted value: round 2
+2,030 on the development sets; w18 5 (dev-flat) and 17 (dev-suite). Most values that still differ sit on lines whose breaks
+fail (`rule/object-replacement` 129 of the families' 149 cases).
+
+### Items
+
+1. **U+3000 inside Arabic under letter spacing** (`runs/word-spacing-spans`; the critic's probe). Canvas makes a PlainTextItem
+   of every word and runs RunSegmenter over each alone (SegmentWord and NextWordEndIndex, plain_text_node.cc:93-155,
+   372-425), and a word ends before a CJK ideograph or symbol base, so U+3000 between Arabic letters is Common in Canvas and
+   takes letter spacing, where the paragraph keeps it in the Arabic run without any. `shape.ts` `canvasScriptsPerUnit` ports
+   the word split. Whether a font is shaped word by word at all follows `Font::CanShapeWordByWord` (the space glyph in the
+   primary font's GPOS or GSUB lookups under the contexts' optimizeLegibility, font_fallback_list.cc:264-286,
+   harfbuzz_face.cc:341-390), which Canvas shows: `ب` U+3000 `ب` measures 1/64 px more under 1/64 px of letter spacing when
+   words are split and the same when they aren't. Probe blink-round3 R2: Geeza Pro, Helvetica Neue, Georgia and Verdana split;
+   Arial, Times New Roman, Courier New, Hiragino Sans, PingFang SC, Amiri, both Noto fonts, Shantell Sans and system-ui don't.
+   All 8 rows pass every metric (5 fresh, 3 held-out).
+2. **Ligatures across a span edge and inside items** (`c-906c6bc491c83c9d` and two more, `c-4a04b13ad0ab4062`). With the
+   ligature facts (`FontFacts.fonts[].ligatures`, `ligatures.ts`) a listed ligature that forms in every context is one glyph
+   cluster: its letters take one position, carets share its advance among its graphemes, no break falls inside it, and an
+   item edge inside it gives the glyph to the item holding its first character. The three lam-alef rows pass widths and
+   painter. A listed ligature that forms in some contexts only (Geeza Pro lam-lam-heh, lam-meem) stays a stand-in: the item
+   edge reports `glyph-clusters` over the clusters around it (`itemEdgeGaps`), which covers `c-4a04b13ad0ab4062`'s one
+   LayoutUnit. Without facts every position between two characters of one shaping call is a stand-in.
+3. **In-word geometry reported as exact.** The layout marks a cluster start it can't know (`BlinkGlyphCluster.startLimit`)
+   and an item end (`sizeLimit`): between letters HarfBuzz joins (`in-word-prefix`), where the facts don't rule a ligature out
+   (`glyph-clusters`), where no fact places an adjustment (`unsafe-to-break`); `shape.ts` `positionLimit` has the source
+   rule. The observation port reports a rect edge as predicted only where the layout knows the item's x and the position in
+   the item: a gap on a character limits every position that sums its advance, and a limited size limits the x of what
+   follows on the line (every x where the line's offset depends on its width). `in-word-prefix`'s two-cluster window is gone
+   (the safe test reads the widest exactly measured window), and its 2 LayoutUnit margin is derived from ShapeLine's two
+   ceilings (`edgeGap`).
+4. **`c-8c84627af834611f` and `c-03316764a11a9d04`** (Shantell Sans `1111({tail`, −1px letter spacing, break-word). hb-shape
+   on the fixture font flags every offset of the string unsafe to break: the font cycles alternates through a contextual
+   chain that changes no advance. Blink then has no safe offset before the break opportunity, reshapes the whole range and
+   takes it without a fit test (shaping_line_breaker.cc:497-506): natively `1({` is 2,430 units wide on a 2,422 unit line.
+   The port's width tests call the offsets after `1` and `(` safe, so it runs the fit test, fails it and retreats. It can't
+   know HarfBuzz's flags, so a line that retreats after a failed end-reshape fit test, at a wrapped line start with no
+   shaping run edge before the opportunity, reports `in-word-prefix` over the text it gave up (`LineInfo.untestedEnds`).
+5. **Chrome .50**, 6. **`fontKey`**: the fields were joined with a bare U+0001, which reads as `join('')` in most editors;
+   now JSON, which also keeps a null locale apart from the locale `null`. 7. **Default ignorables**: ICU's
+   Default_Ignorable_Code_Point is generated from ppucd.txt (`props.ts` `isDefaultIgnorable`; the hand-written ICU set was
+   equal to it), `TreatAsZeroWidthSpace` reads it (it had read HarfBuzz's set plus extras and missed U+180F), and HarfBuzz's
+   own switch stays ported as `isDefaultIgnorableHarfBuzz` (hb-unicode.hh:170-197).
+8. **`script-context`.** It is reported where a string the layout measures resolves a character otherwise than the
+   paragraph (`reportScriptContext` in `measure16`), not for every character that could be measured alone. It doesn't fire
+   where HarfBuzz shapes the character alike under both scripts: the font that draws it (coverage facts) selects the same
+   lookups for both (`scriptLookups`) and both take the default shaper (hb_ot_shaper_categorize, hb-ot-shaper.hh); or the
+   character is default-ignorable, whose advance HarfBuzz zeroes under any script (hb-ot-shape.cc:779-799). Development
+   sets, passing lines / passing cases: 51.06% / 75.98% (w1) → 30.72% / 38.04% (w18); fresh sets 19%. What is left: emoji and
+   CJK punctuation drawn by a fallback font the facts don't name, and Common characters under scripts with a shaper of their
+   own (Arabic, Hebrew, Thai, Myanmar, Khmer).
+
+### The adjustment window
+
+Round 2 took the adjustment across an offset from one glyph cluster on each side. Noto Nastaliq Urdu widens a word-final
+letter before a space after some letters: `آگ` and a space measure 468 units more together than apart, `گ` and a space the
+same (probe blink-round3 R1; natively `گ` is 3,436 units before a space and 2,968 at the end of text, and the space 338
+either way). `windowAdjust16` measures the adjustment over the widest window around the offset whose Canvas total is exact
+(the measured piece; halved toward the offset past 256 zoomed px), and the safe test reads it: whatever it shows, the two
+sides shaped apart differ from the call, which is what HarfBuzz's flag means. Which side the adjustment sits on isn't in a
+Canvas total. As the position's adjustment everywhere (w4) the wide window gained 11 development, 16 rule-family and 28
+triage line counts, all at joined offsets, and lost 6 (`c-11abbf1905a0c6ef` and 5 more widths of it: after a space the
+letters of `ريال` make one Rial glyph in Courier New's fallback and four measured alone, which is the text after the offset
+changing). `positionAdjust16` takes the wide window before white space and the pair window elsewhere, and is registered as
+a heuristic in CHARTER.md; where the windows differ and the offset isn't before white space the position is a stand-in and
+a line edge taken from it reports `unsafe-to-break`. heldout-suite widths fail→pass 9 (w7 against w3).
+
+### Classes the fresh sets and scorer 5 found
+
+1. **One LayoutUnit on lines past 256 zoomed px** (`suite/maintained/corpus`, 6 held-out rows, uncovered under scorer 5). A
+   view's width is the float sum of its runs' widths, one run per script segment and per stretch a fallback font draws
+   (shape_result_view.cc:215-273, shape_result.cc:1539-1609), added in visual order; past 256 px the float32 sum rounds by
+   where the runs are. Geeza Pro lacks `!` and `:`, which the next listed family draws. `floatWidthOfParts` sums per run with
+   the font runs the coverage facts give; all 6 rows pass. Where a font isn't named by the facts and the exact total is
+   within the possible rounding of a LayoutUnit edge, the line reports `float32-precision` (5.69% of passing development
+   lines, 0.95% of fresh ones).
+2. **`ب` SHY `ب` in Amiri under break-word** (2 fresh rows of set 1, 4 development and held-out rows that `script-context` on
+   the SHY had covered). The two letters measure 111 units less together than their joined forms apart; the port put it
+   all on the first, so the first fit a space it doesn't fit natively. Which glyph carries it isn't in a Canvas total and
+   Amiri has no `pairKerning` fact: the line reports `unsafe-to-break` over the two clusters where the space left ends
+   between the two places the position could be (`positionBounds`, `reportUncertainCandidate`).
+3. **A listed ligature that forms in some contexts only, on a line that breaks between clusters** (`suite/joined`, 3 triage
+   rows): Courier New draws `لله` as one glyph after some letters, the prefixes don't, and positions ran backwards. The line
+   reports `glyph-clusters` over the ligature.
+4. **`ك` 0 wide at an RTL wrapped line start** (`c-a7d036caa5cf8f42`, set 4): class 3 of round 1 (the RTL view's part numbers)
+   at a start the port's tests call safe, after Geeza Pro's lam-alef. Reported as `in-word-prefix` over the first cluster of
+   a wrapped RTL line start inside a shaping run whose item result the line cuts again.
+5. **Atomic inline margins in an RTL block** (`rule/atomic-inlines`, 48 cases per fresh set, element rects only):
+   ComputeLineMarginsForVisualContainer takes the physical margins in visual order (length_utils.h:555-567). Fixed; features
+   99.951% → 99.998% of predicted values.
+6. **A ZWJ after an emoji with nothing to join** (`suite/woman-after-zwj`, 106 passing development cases with a wrong
+   predicted value): RunSegmenter's emoji scanner ends the emoji run before the ZWJ, so the ZWJ starts another shaping call
+   and a cluster of its own. `emoji.ts` ports the scanner (emoji_presentation_scanner.rl) and the segment edges.
+7. **Carets against the item's direction**: a stand-in advance can come out negative (Geeza Pro lam before meem), which
+   swaps the rect's edges; the port limits both then.
+
+### Fresh sets
+
+`bun rebuild/lab/fresh.ts --browser=chrome --seed=<seed>` from the frozen build's tree.
+
+| Set | Seed | Build | Cases | lineCount / breaks / widths fail | Prediction failures | Covered | Open | Classes found |
+|---|---|---|---:|---|---:|---:|---:|---|
+| 1 | r3-blink-1 | w8 | 11,441 | 27 / 33 / 32 | 65 | 65 | 0 | class 2 above (covered only by `script-context` on another character) |
+| 2 | r3-blink-2 | w10 | 11,442 | 29 / 38 / 26 | 64 | 64 | 0 | classes 5 and 7 (predicted values), a Chrome hang (below) |
+| 3 | r3-blink-3 | w13 | 11,417 | 38 / 47 / 44 | 91 | 91 | 0 | none |
+| 4 | r3-blink-4 | w17 | 11,377 | 26 / 39 / 26 | 65 | 63 | 2 | item 4's second width and class 4, after `script-context` was narrowed |
+| 5 | r3-blink-5 | w18 | 11,386 | 18 / 27 / 31 | 58 | 58 | 0 | none |
+| 6 | r3-blink-6 | w18 | 11,375 | 18 / 29 / 29 | 58 | 58 | 0 | none |
+
+Sets 5 and 6 are the two in a row without a new class. Their failures by covering gaps: `font-fallback` 36 and 39 (U+FFFC,
+which Canvas turns into U+200B), `font-fallback` with `script-context` 8 and 6, `page-history` 8 and 8 (system fonts), and 6
+and 5 others under `glyph-clusters`, `unsafe-to-break` and `tab-stops`. None is covered by `script-context` alone. Predicted
+values agree on 99.975% and 99.981%, and 73% of all values are predicted. The giants of sets 2 and 3 (3 and 2 paragraphs)
+weren't run.
+
+**Chrome never returns from `Range.getClientRects()`** over code point 50 or 51 of set 2's `c-1fda71ce84fd9989` (PingFang SC
+16px, `『阿呀呀，…我。』`, width 8px, keep-all, break-word, line-break strict): a probe page outside the lab stalls the same way
+(limit 50 returns, 52 doesn't; `.artifacts/probes/blink/round3-native-hang-*`), a null predictor stalls the lab page, and
+the prediction alone takes 34 ms. The case is set aside in the set's `parts/excluded-native-hang.ndjson` with its reason in
+`parts.json`; part 2 then ran once.
+
+### Gap firing on the development sets
+
+Passing lines of dev-flat and dev-suite that report each gap, w1 (round 2's conditions with item 1) → w18:
+
+| Gap | Passing lines | Passing cases | Lift |
+|---|---|---|---|
+| `script-context` | 51.06% → 30.72% | 75.98% → 38.04% | 1.19 → 1.21 |
+| `glyph-clusters` | 10.44% → 8.82% | 15.38% → 12.83% | 3.97 → 4.29 |
+| `float32-precision` | 0 → 5.69% | 0 → 11.06% | new; no failing case |
+| `unsafe-to-break` | 4.50% → 4.97% | 5.85% → 7.11% | 8.64 → 7.90 |
+| `in-word-prefix` | 1.54% → 1.58% | 2.83% → 2.97% | 2.23 → 0.76 |
+
+`font-fallback`, `soft-hyphen-shaping`, `control-character-width`, `tab-stops` and `han-kerning` are unchanged. New or widened
+conditions: `float32-precision` on wide lines with an unnamed font; `unsafe-to-break` for a candidate between two possible
+positions and for an adjustment that reads a longer context; `in-word-prefix` for an untested end and a truncated RTL start
+(29 more passing lines); `glyph-clusters` or `in-word-prefix` at an item edge inside a shaping call and for an unsettled
+ligature on a line that breaks between clusters.
+
+### What the font facts convert
+
+w18 with the listed-font facts left out (`w18-nofonts`) against w18, fail→pass: dev-flat breaks 1; dev-suite lineCount 4,
+breaks 4; families 3, 3; heldout-small lineCount 1, breaks 1, widths 3; heldout-suite lineCount 6, breaks 8, widths 6;
+triage-small lineCount 74, breaks 209. Ligatures account for the break and line count rows (lam-alef, `ffi`, `fl`), coverage
+for the 6 held-out corpus widths. Predicted values rise sixfold (dev-flat 62,900 → 375,379). `scriptLookups` converts no
+row; it takes `script-context` from 53.47% to 37.00% of passing development lines.
+
+### Costs
+
+Not optimized (CHARTER tentpole 8). Canvas calls per row, w1 → w18: dev-flat mean 117.6 → 132.6 (median 104 → 118), dev-suite
+part 0 mean 84.1 → 110.2 (max 14,439 → 26,381). Prediction time per row: dev-flat mean 0.61 → 1.07 ms, dev-suite part 0 mean
+0.40 → 1.06 ms, max 251 → 968 ms. The wide window adds two long strings per safe test, and script resolution runs for every
+measured string that holds a character without a script of its own. A variant that also widened the pair window until
+Canvas resolved its sides like the paragraph (w14) took `script-context` from 52.75% to 45.54% of passing lines, lost 5
+breaks and stalled three corpus jobs at 120 s; it was dropped for the `scriptLookups` narrowing.
+
+### Open under scorer 5
+
+- `suite/U+FFFC/start`, 3 rows (`c-23e11e5c3a96497d`, `c-a43249c733c43a9c`, `c-b0af41f52ed23824`): U+FFFC is 0 wide in Canvas
+  and 1,233 units natively, `font-fallback` sits on it, and the scorer takes the line after it as the failing one (the soft
+  hyphen's copied rect puts `b` on both native lines), where the gap doesn't reach. The cause is covered; the attribution is
+  the scorer's.
+- `suite/space`, 3 triage rows (`c-909a7a77bad03225` and two widths of it; Amiri `a` TAB `ب` SHY kasra `ب`, 1px): natively SHY
+  takes a line with its hyphen and the kasra the next one; the port keeps SHY and the kasra together, as ICU's line rules
+  and the hyphenation test read (shaping_line_breaker.cc:215). Not traced.
+- Passing cases that still hold a differing predicted value on the last two fresh sets: 26 and 14
+  (`suite/signed-spacing/ascii-matrix` 17, `suite/raw-context` 8, `suite/space-context` 5, 10 others). Not traced.
+
 ## Ceiling round 2
 
 Chrome 153.0.8010.48 as above, scorer 4 (lab/README.md "Line-local gaps": a failing line is covered only by a gap of that

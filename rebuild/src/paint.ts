@@ -52,6 +52,9 @@
 // Nothing sets a text width: the lab compares the painted rects with the rects the observation contract expects
 // (DESIGN.md §7, §9).
 import { indexContent, styleUnder } from './content.js'
+import { USCRIPT_LATIN } from './engines/blink/props.js'
+import { scriptsPerUnit } from './engines/blink/script.js'
+import { resolveIcuBidi } from './unicode/ubidi.js'
 import type { EngineName } from './env.js'
 import type { AtomicInline, BelowFloats, BlinkLineGeometry, BoxEdge, CssFont, FontDecl, Fragment, GeckoLineGeometry, LineOf, Paragraph, TextStyle, WebKitLineGeometry } from './model.js'
 import { B, BN, FSI, LRE, LRI, LRO, PDF, PDI, RLE, RLI, RLO, S, WS, bidiClassOf, bidiDataFor, type BidiData } from './unicode/bidi.js'
@@ -278,10 +281,11 @@ export type PainterLimitName =
   // same leaf. The trim reads the neighbouring character's type (han_kerning.cc), and a painted line's start isn't the
   // start of a wrapped line, where ShapeLine trims an opening bracket (FirstSafeOffset, shaping_line_breaker.cc:92-108).
   | 'han-kerning-at-edge'
-  // Blink and Gecko: the line starts with characters of script Common or Inherited, other than white space, that
-  // continued a run of another script than the line's own first script. The run's script decided their font, their
-  // shaping and in Blink their letter spacing (planLine's leadingScript). After Arabic text Blink's painted line starts
-  // with U+061C instead and has no such limit.
+  // Blink and Gecko: characters of the line had another script in the paragraph than the line painted alone gives them:
+  // characters of script Common or Inherited that continued a run of the text before the line, or took the script of the
+  // text after it. The run's script decided their font, their shaping and in Blink their letter spacing. Blink's scripts
+  // come from the port's ScriptRunIterator, and where U+061C gives the paragraph's scripts back the painted line starts
+  // with it and has no such limit; Gecko's come from planLine's leadingScript.
   | 'script-at-line-start'
   // Blink: the line needs an accurate end position and ends in hanging spaces, which are painted in a shaping group of
   // their own; they lose their part of a pair adjustment that HarfBuzz splits between the two glyphs
@@ -336,6 +340,14 @@ type Context = {
   // Per line, the script of the last character with a script of its own (not Common or Inherited) that the paragraph
   // holds before the line, or null.
   scriptBefore: (string | null)[]
+  // Blink: the text of every line's pieces in order, where each line's starts, and the script run of every unit of it as
+  // the paragraph's ScriptRunIterator gives it (the Blink port's, engines/blink/script.ts); null for the other engines.
+  blinkScripts: { text: string; lineStarts: number[]; scripts: Uint8Array } | null
+}
+
+// The script run of every unit of a text laid out alone: an 8-bit text is one Latin segment (harfbuzz_shaper.cc:1072-1077).
+function blinkScriptsOf(text: string): Uint8Array {
+  return WIDE.test(text) ? scriptsPerUnit(text) : new Uint8Array(text.length).fill(USCRIPT_LATIN)
 }
 
 function contextOf(paragraph: Paragraph, layout: PaintableLayout): Context {
@@ -351,9 +363,24 @@ function contextOf(paragraph: Paragraph, layout: PaintableLayout): Context {
       if (match !== null) script = scriptOf(match[0])
     }
   }
+  let blinkScripts: Context['blinkScripts'] = null
+  if (layout.engine === 'blink') {
+    let text = ''
+    const lineStarts: number[] = []
+    for (let l = 0; l < layout.lines.length; l++) {
+      lineStarts.push(text.length)
+      const fragments = layout.lines[l]!.fragments
+      for (let f = 0; f < fragments.length; f++) {
+        const fragment = fragments[f]!
+        if (fragment.kind === 'text' || fragment.kind === 'trimmed' || fragment.kind === 'hanging') text += fragment.painted
+      }
+    }
+    lineStarts.push(text.length)
+    blinkScripts = { text, lineStarts, scripts: blinkScriptsOf(text) }
+  }
   return {
     paragraph, layout, index: indexContent(paragraph), bidi: bidiDataFor(layout.engine), graphemes: graphemeRulesFor(layout.engine),
-    base: paragraph.direction === 'rtl' ? 1 : 0, collapses: paragraph.whiteSpace === 'normal' || paragraph.whiteSpace === 'nowrap', scriptBefore,
+    base: paragraph.direction === 'rtl' ? 1 : 0, collapses: paragraph.whiteSpace === 'normal' || paragraph.whiteSpace === 'nowrap', scriptBefore, blinkScripts,
   }
 }
 
@@ -408,6 +435,9 @@ function shapesWith(c: Context, a: number, b: number): boolean {
 // What the painter decided for one line, and the limits it names.
 type LinePlan = {
   paintedLevels: number[]
+  // Per fragment, how many units at its start continue the grapheme cluster of the fragment before it, painted at that
+  // fragment's level.
+  clusterPrefix: number[]
   reorders: boolean
   firstText: number
   lastText: number
@@ -475,21 +505,26 @@ function planLine(c: Context, l: number, joinsPreviousLine: boolean): LinePlan {
   // closing control, which ends the letter's cluster (UAX #29 GB4), and an overflowing line that breaks at clusters
   // breaks there (Blink's break-anywhere retry, c-4793c60cfde7b77d). At the letter's level the browser splits the two
   // by level itself, as the paragraph did, with no control between them.
-  const continuesCluster: boolean[] = []
+  // Only the units that continue the cluster move: a space after the U+200C keeps its own level (c-d0d9e12845327e52).
+  const clusterPrefix: number[] = []
   for (let f = 0; f < line.fragments.length; f++) {
     const fragment = line.fragments[f]!
     const before = f > 0 ? line.fragments[f - 1]! : null
-    let continues = false
+    let prefix = 0
     if (fragment.kind === 'text' && before !== null && before.kind === 'text' && before.run === fragment.run && before.end === fragment.start &&
       before.level !== fragment.level && before.painted.length > 0 && fragment.painted.length > 0) {
       const boundaries = graphemeBoundaries(before.painted + fragment.painted, graphemes)
-      continues = !boundaries.includes(before.painted.length)
+      if (!boundaries.includes(before.painted.length)) {
+        let next = before.painted.length + fragment.painted.length
+        for (let k = 0; k < boundaries.length; k++) if (boundaries[k]! > before.painted.length) { next = boundaries[k]!; break }
+        prefix = next - before.painted.length
+      }
     }
-    continuesCluster.push(continues)
+    clusterPrefix.push(prefix)
   }
   const paintedLevels: number[] = []
   const levelOf = (f: number, fragment: Extract<Fragment, { kind: 'text' | 'trimmed' | 'hanging' }>): number => {
-    if (continuesCluster[f]!) return paintedLevels[f - 1]!
+    if (clusterPrefix[f]! === fragment.painted.length && clusterPrefix[f]! > 0) return paintedLevels[f - 1]!
     return f >= trailing && spaceJoinsText && beforeTrailing !== null && beforeTrailing.kind === 'text' && beforeTrailing.run === fragment.run ? beforeTrailing.level : fragment.level
   }
   for (let f = 0; f < line.fragments.length; f++) {
@@ -725,7 +760,34 @@ function planLine(c: Context, l: number, joinsPreviousLine: boolean): LinePlan {
   // script of what follows on the line. `leadingScript` says the two differ: the text before the line has another
   // script than the first character with a script on the line, before which a character other than white space stands.
   let leadingScript: string | null = null
-  {
+  // In Blink the painter asks the port's ScriptRunIterator instead, which also follows a closing bracket to the script of
+  // its opening bracket (CloseBracket, script_run_iterator.cc:443-470: `)` after Arabic paired with `(` after Latin is
+  // Latin, c-ca3da1d5e7083f35): the line's scripts in the paragraph, alone, and after U+061C.
+  let blinkScriptMark = false
+  if (c.blinkScripts !== null) {
+    const from = c.blinkScripts.lineStarts[l]!
+    const to = c.blinkScripts.lineStarts[l + 1]!
+    const lineText = c.blinkScripts.text.slice(from, to)
+    const same = (scripts: Uint8Array, offset: number): boolean => {
+      for (let k = 0; k < lineText.length; k++) if (scripts[offset + k] !== c.blinkScripts!.scripts[from + k]) return false
+      return true
+    }
+    // A line under override spans holds their bidi controls, so its text is 16-bit whatever its characters.
+    if (!same(reorders ? scriptsPerUnit(lineText) : blinkScriptsOf(lineText), 0)) {
+      // The mark is a strong character of class AL, which turns the European numbers after it into Arabic numbers (UAX #9
+      // W2) and neutrals its way. It changes nothing where override spans hold all the line's text; elsewhere the line
+      // takes it only if every character after it still resolves to the base level (c-bef92f5d154ec2f9: digits at the
+      // paragraph's start take script Arabic from the text after them, and with the mark they would reorder).
+      let keepsLevels = reorders
+      if (!keepsLevels) {
+        const levels = resolveIcuBidi(ARABIC_LETTER_MARK + lineText, paragraph.direction, c.bidi).levels
+        keepsLevels = true
+        for (let k = 1; k < levels.length; k++) if (levels[k] !== c.base) keepsLevels = false
+      }
+      if (keepsLevels && same(scriptsPerUnit(ARABIC_LETTER_MARK + lineText), 1)) blinkScriptMark = true
+      else leadingScript = c.scriptBefore[l] ?? 'other'
+    }
+  } else {
     let painted = ''
     for (let f = 0; f < line.fragments.length && painted.length < 64; f++) {
       const fragment = line.fragments[f]!
@@ -744,7 +806,7 @@ function planLine(c: Context, l: number, joinsPreviousLine: boolean): LinePlan {
   // it did because the line wraps; one with a single cluster, which nothing can break; and in Blink one that ends with
   // a character HanKerning may trim, which ShapeLine does only while it breaks lines (shaping_line_breaker.cc:344-376;
   // the candidates are Character::MaybeHanKerningOpenOrCloseFast's ranges, character.h:138-141).
-  const wantsScriptMark = layout.engine === 'blink' && leadingScript === 'Arabic' && firstText >= 0 && firstText === firstAny
+  const wantsScriptMark = blinkScriptMark && firstText >= 0 && firstText === firstAny
   if (!softWrap && !trimmedAfter && lastPainted >= 0 && overflow(layout, l) > 0) {
     const last = line.fragments[lastPainted]!
     const endsInWhiteSpace = last.kind === 'hanging' || (last.kind === 'text' && /\s$/u.test(last.painted))
@@ -848,8 +910,8 @@ function planLine(c: Context, l: number, joinsPreviousLine: boolean): LinePlan {
         if ((startInWord || endInWord) && cutMatters) {
           limits.push({ limit: 'edge-inside-shaped-text', detail: `the line ${startInWord ? (endInWord ? 'starts and ends' : 'starts') : 'ends'} between two characters of one leaf that aren't white space` })
         }
-        if (leadingScript !== null && !scriptMark) {
-          limits.push({ limit: 'script-at-line-start', detail: `the line starts with characters that continued a run of script ${leadingScript}` })
+        if (leadingScript !== null || (blinkScriptMark && !scriptMark)) {
+          limits.push({ limit: 'script-at-line-start', detail: `characters of the line continued a script run of the text before it${leadingScript === null ? '' : ` (${leadingScript})`}` })
         }
         if (layout.engine === 'blink') {
           if (endInLeaf && softEnd && (last.kind === 'hanging' || (last.kind === 'text' && /\s$/u.test(last.painted)))) {
@@ -887,7 +949,7 @@ function planLine(c: Context, l: number, joinsPreviousLine: boolean): LinePlan {
     }
     if (graphemeBoundaries(painted, graphemes).length > 2) limits.push({ limit: 'overflowing-line-rebreaks', detail: 'the line reaches past its band and wraps when painted' })
   }
-  return { paintedLevels, reorders, firstText, lastText, firstRun, firstInSpan, lastPainted, startEdges, endEdges, nowrap, softWrap, boxLevel, hangingForm, continuation, keptSpace, scriptMark, limits }
+  return { paintedLevels, clusterPrefix, reorders, firstText, lastText, firstRun, firstInSpan, lastPainted, startEdges, endEdges, nowrap, softWrap, boxLevel, hangingForm, continuation, keptSpace, scriptMark, limits }
 }
 
 // What goes in a line's block, in logical order, and whether the spans that continue past the line carry their end edges
@@ -895,7 +957,7 @@ function planLine(c: Context, l: number, joinsPreviousLine: boolean): LinePlan {
 function lineTokens(c: Context, l: number, plan: LinePlan, joinsPreviousLine: boolean): { tokens: Token[]; continues: boolean } {
   const { paragraph, layout, index, base } = c
   const line = layout.lines[l]!
-  const { paintedLevels, firstText, lastText, firstRun, firstInSpan, lastPainted, endEdges, softWrap, boxLevel, hangingForm, continuation, keptSpace, scriptMark } = plan
+  const { paintedLevels, clusterPrefix, firstText, lastText, firstRun, firstInSpan, lastPainted, endEdges, softWrap, boxLevel, hangingForm, continuation, keptSpace, scriptMark } = plan
   const tokens: Token[] = []
   // The last fragment with painted text of each leaf on the line.
   const lastPieceOfRun = new Map<number, number>()
@@ -951,6 +1013,21 @@ function lineTokens(c: Context, l: number, plan: LinePlan, joinsPreviousLine: bo
     }
     cursor = Math.max(cursor, target)
   }
+  // A piece's text. WebKit's text box holds the node's own characters, and its measuring reads them: a word is
+  // measured together with the character after it only where that is U+0020 (TextUtil::width's extendedMeasuring,
+  // TextUtil.cpp:76-81), so a tab or newline that the engine's content shows as a space is painted as itself, and the
+  // browser collapses it to the same space. `A` before a tab in `normal` is 10.67 px natively and 9.79 px before a painted
+  // space (c-656822d19d89c4e8, found on the fresh set).
+  const paintedText = (fragment: TextPiece): string => {
+    const painted = fragment.painted
+    if (layout.engine !== 'webkit' || fragment.end - fragment.start !== painted.length || !painted.includes(' ')) return painted
+    let out = ''
+    for (let i = 0; i < painted.length; i++) {
+      const source = index.text.charCodeAt(fragment.start + i)
+      out += painted.charCodeAt(i) === 0x20 && (source === 0x09 || source === 0x0a || source === 0x0c || source === 0x0d) ? index.text[fragment.start + i]! : painted[i]!
+    }
+    return out
+  }
   const enterLeaf = (leaf: number, pieceLevel: number): void => {
     if (leaf !== run) {
       const indexed = index.leaves[leaf]!
@@ -966,14 +1043,26 @@ function lineTokens(c: Context, l: number, plan: LinePlan, joinsPreviousLine: bo
   for (let f = 0; f < line.fragments.length; f++) {
     const fragment = line.fragments[f]!
     switch (fragment.kind) {
-      case 'text':
+      case 'text': {
+        const prefix = clusterPrefix[f]!
+        if (prefix > 0 && prefix < fragment.painted.length) {
+          // The start of the piece continues the cluster before it, at that piece's level; the rest follows at its own.
+          enterLeaf(fragment.run, paintedLevels[f - 1]!)
+          text += paintedText(fragment).slice(0, prefix)
+          enterLeaf(fragment.run, paintedLevels[f]!)
+          text += paintedText(fragment).slice(prefix)
+          if (f === lastText && line.joinsNextLine) text += ZWJ
+          if (f === lastPainted) text += continuation
+          break
+        }
         enterLeaf(fragment.run, paintedLevels[f]!)
         if (f === firstText && joinsPreviousLine) text += ZWJ
         if (f === firstText && scriptMark) text += ARABIC_LETTER_MARK
-        text += fragment.painted
+        text += paintedText(fragment)
         if (f === lastText && line.joinsNextLine) text += ZWJ
         if (f === lastPainted) text += continuation
         break
+      }
       case 'trimmed':
       case 'hanging':
         enterLeaf(fragment.run, paintedLevels[f]!)
@@ -983,7 +1072,7 @@ function lineTokens(c: Context, l: number, plan: LinePlan, joinsPreviousLine: bo
           if (form !== 'same-node') flush()
           if (form === 'own-group') wrap = 'shaping-group'
         }
-        text += fragment.painted
+        text += paintedText(fragment)
         break
       case 'hyphen':
         enterLeaf(fragment.run, fragment.level)

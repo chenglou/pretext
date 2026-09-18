@@ -6,7 +6,7 @@ import type { GeckoEnvironment } from '../../env.js'
 import { measureContext, measureText, measureTextBounds, type Measurer } from '../../measure/canvas.js'
 import { canvasFont } from '../../measure/font.js'
 import type { BoxEdge, FontDecl, Gap, Paragraph, TextStyle } from '../../model.js'
-import { listedFontOf, opticalSizeAxisOf, quantize10, sameFontForTextRun } from './fonts.js'
+import { extenderFontOf, firstFontScriptLookups, listedFontOf, opticalSizeAxisOf, quantize10, sameFontForTextRun } from './fonts.js'
 import { canonicalLanguageTag } from './likely.js'
 import { AL, R, bidiClassOf, bidiDataFor } from '../../unicode/bidi.js'
 import { graphemeBoundaries, graphemeRulesFor } from '../../unicode/grapheme.js'
@@ -1138,11 +1138,34 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, measur
           while (base > frameStartOfT[t]! && g.clusterStart[base] === 0 && tSource[base]! - 1 === tSource[base - 1]!) base--
           let cp = tUnits[base]!
           if (base + 1 < b.tEnd && isSurrogatePair(cp, tUnits[base + 1]!)) cp = combine(cp, tUnits[base + 1]!)
-          // Probe gecko-port F19 (.artifacts/probes/gecko/round3-f19), not traced to source: a cluster of a letter outside
-          // the BMP and a mark takes the spacing though the letter's script is cursive. U+10D02 U+0301 is 428, 488 and 668
-          // au under 0, 1 and 4px of letter spacing, where U+10D02 alone stays 441 au and beh with U+0301 576 au. Hanifi
-          // Rohingya is the one cursive script outside the BMP (UnicodeProperties.h:350-355).
-          if (!isCursiveScript(cp) || (cp >= 0x10000 && t > base + 1)) spacing += ls
+          // Probe gecko-port F19 (.artifacts/probes/gecko/round3-f19), not traced to source: a cursive cluster takes the
+          // spacing after all where another font draws one of its marks than draws its base. Under 4px of letter spacing
+          // beh with U+0301 stays 576 au in "Courier New" and 685 au in "Times New Roman", which have both, and grows from 934
+          // to 1174 au in "Geeza Pro", which lacks U+0301; Syriac, N'Ko, Mongolian and Hanifi Rohingya letters, all drawn by
+          // fallback fonts, grow with U+0301 after them and not with a mark of their own script (U+0730, U+07EB). The
+          // coverage facts say which listed family draws each (fonts.ts). Where they don't, or where base and mark both
+          // fall back, the cluster keeps the cursive rule and reports font-fallback.
+          let otherFont = false
+          if (isCursiveScript(cp) && t > base + (cp >= 0x10000 ? 1 : 0)) {
+            const font = runTextStyles[run]!.font
+            const baseFont = listedFontOf(font, cp)
+            let unknown = baseFont === null
+            for (let k = base + (cp >= 0x10000 ? 2 : 1); k <= t && !unknown; k++) {
+              let mark = tUnits[k]!
+              if ((mark & 0xfc00) === 0xdc00) continue
+              if (k + 1 <= t && isSurrogatePair(mark, tUnits[k + 1]!)) mark = combine(mark, tUnits[k + 1]!)
+              // Join controls, variation selectors and default ignorables take the previous font whatever it maps
+              // (gfxTextRun.cpp:3309-3332).
+              if (isDefaultIgnorable(mark) || (mark >= 0xfe00 && mark <= 0xfe0f) || mark === 0x200c || mark === 0x200d) continue
+              const markFont = extenderFontOf(font, baseFont, mark)
+              if (markFont === null || (markFont === -1 && baseFont === -1)) unknown = true
+              else if (markFont !== baseFont) otherFont = true
+            }
+            if (unknown && !otherFont) {
+              gaps.push({ gap: 'font-fallback', run, detail: `a cursive cluster with a mark takes letter spacing where another font draws the mark than the base (probe gecko-port F19), and the font facts don't say which fonts draw U+${cp.toString(16).toUpperCase()} and its marks`, at: { start: tSource[base]!, end: tSource[t]! + 1 } })
+            }
+          }
+          if (!isCursiveScript(cp) || otherFont) spacing += ls
         }
       }
       const ws = wordSpacingAu[run]!
@@ -1412,7 +1435,7 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, measur
     textRuns.push({
       tStart: b.tStart, tEnd: b.tEnd, is8bit: b.is8bit, level: b.level, context, scriptRuns: run.scriptRuns, hasShy: b.hasShy,
       trailingBreak: b.trailingBreak, minTabAdvance: b.hasTab ? 0.5 * au('0') : 0,
-      hyphenAu: b.hasShy ? au('‐') : 0, hasTab: b.hasTab, totalAdvance: advance, pairKerning: font.facts.pairKerning, auPerPx,
+      hyphenAu: b.hasShy ? au('‐') : 0, hasTab: b.hasTab, totalAdvance: advance, pairKerning: font.facts.pairKerning, scriptLookups: firstFontScriptLookups(font), joining: font.facts.joining, auPerPx,
       advancesStandIn: canvasAuSize !== domAu ? 'font-size-quantization' : !elementCanvas && font.facts.opticalSizeAxis !== false ? 'optical-size' : null,
     })
   }

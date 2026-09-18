@@ -117,6 +117,8 @@ const IN_WORD_DETAIL = 'a line edge inside a word where the pair total shows no 
 
 const UNCERTAIN_LIGATURE_DETAIL = 'a ligature the font declaration lists as forming in some contexts only, on a line that can break between any two glyph clusters: Blink never breaks inside a glyph and gives its characters one position (shape_result.cc:684-694, 2113-2200), and whether the glyph forms here isn\'t known'
 
+const TRUNCATED_START_DETAIL = 'a wrapped line start inside an RTL shaping run that the port\'s width tests call safe, in an item result the line cuts again at its trailing spaces: where HarfBuzz flags the start unsafe (contextual lookups and ligatures before it that change no width), Blink reshapes it, joins the reshape and the rest in one view whose parts it numbers in visual order, and the cut gives the first cluster\'s glyph to the part after it (shape_result_view.cc:215-308)'
+
 const UNTESTED_END_DETAIL = 'a later break opportunity whose line-end reshape failed the fit test: every safe offset the port found between the line start and it is safe by the pair test alone, and where HarfBuzz flags them all (contextual lookups that change no width, as Shantell Sans\'s alternates do) Blink reshapes the whole range and takes the opportunity without a fit test (shaping_line_breaker.cc:497-506)'
 
 const SOFT_HYPHEN_DETAIL = 'a default-ignorable character left out of an 8-bit Canvas string, whose glyph a `morx` substitution across it still sees in the DOM (hb-aat-layout-common.hh:1226-1241)'
@@ -350,6 +352,21 @@ function lineEdgeGaps(sh: Shaper, info: LineInfo, start: BlinkLineStart): void {
   for (let i = 0; i < info.untestedEnds.length; i++) {
     const end = info.untestedEnds[i]!
     if (end > contentEnd) addGap(sh.gaps, 'in-word-prefix', runAt(p, contentEnd), UNTESTED_END_DETAIL, sourceRange(p, contentEnd, end))
+  }
+  // A wrapped line start inside an RTL shaping run that the port's tests call safe, in an item result the line cut again:
+  // where HarfBuzz flags the start, Blink's view joins the reshaped start and the rest, numbers its parts in visual order,
+  // and the later cut gives the first letter's glyph to the part after it (shape_result_view.cc:215-308, class 3 of
+  // specs/blink-RESULTS.md). Natively `ك` before a trimmed space is 0 wide at such a start after Geeza Pro's lam-alef, which
+  // the pair and wide windows call safe (fresh set r3-blink-4, c-a7d036caa5cf8f42).
+  if (start.textOffset > 0 && !start.afterForcedBreak && info.truncatedStarts.includes(start.textOffset)) {
+    const k = start.textOffset
+    const g = groupAround(p, k)
+    const first = info.results.find(r => r.start === k && r.shape !== null)
+    if (g >= 0 && p.groups[g]!.rtl && !isSegmentEdge(p, k) && first !== undefined && first.shape!.parts.length > 0 && first.shape!.parts[0]!.kind === 'range') {
+      let b = k + 1
+      while (b < p.groups[g]!.end && !isClusterBoundary(p, b)) b++
+      addGap(sh.gaps, 'in-word-prefix', runAt(p, k), TRUNCATED_START_DETAIL, sourceRange(p, k, b))
+    }
   }
   // A wrapped line start: ShapeLine reshapes [start, first safe) and corrects the available width by the paragraph's
   // positions (shaping_line_breaker.cc:309-324).

@@ -190,3 +190,23 @@ evaluation of 2026-09-17 (REPORT.md §2-§7):
     combined files didn't finish in installed Safari; the development and family files did, equal to webkit-host case by
     case. The cause is read from WebKit's background CPU limit and process throttler, not verified from Safari's logs
     (REPORT §2.7).
+- Blink, ceiling round 3 (specs/blink-RESULTS.md "Ceiling round 3"):
+  - Removed: Chrome 153.0.8010.50 no longer reports `engine-build`. `env.ts` `SOURCE_IDENTICAL_BUILDS` accepts it with its
+    evidence (`git diff --name-only 153.0.8010.48 153.0.8010.50` lists chrome/VERSION alone, DEPS unchanged).
+  - Removed: in-word positions reported as exact. The Blink layout marks the positions it takes from Canvas stand-ins
+    (`BlinkGlyphCluster.startLimit`, the text item's `sizeLimit`), and the observation port reports a value as predicted
+    only where the layout knows the item's x and the position inside it. Predicted values agree on 99.85% (rule families,
+    where most differing values sit on lines whose breaks fail) to 99.998% of the development, held-out, family and fresh
+    sets (round 2: 96.9% to 99.95%); 73% of the fresh sets' values are predicted with the lab's ligature and coverage
+    facts.
+  - Removed: `in-word-prefix`'s two unregistered constants. The two-cluster window is gone: the safe test reads the
+    adjustment over the widest exactly measured window around the offset. The 2 LayoutUnit margin is derived in
+    `engines/blink/index.ts` `edgeGap` from ShapeLine's two ceilings (shaping_line_breaker.cc:309-324, :543-553).
+  - Still a heuristic, new: `engines/blink/shape.ts` `positionAdjust16` decides which side of an offset an adjustment sits
+    on that Canvas totals only show as a sum: the wide window's before white space (probe blink-round3 R1, Noto Nastaliq
+    Urdu's word-final forms), the pair window's elsewhere. The full window everywhere gained 11 development and 16
+    rule-family line counts at joined positions and lost 6 (`ريال` in Courier New's fallback, c-11abbf1905a0c6ef); the pair
+    window everywhere loses the Nastaliq lines. Where the two windows differ and the offset isn't before white space, the
+    position is marked as a stand-in and a line edge taken from it reports `unsafe-to-break`.
+  - Still: the ligature facts don't settle ligatures that form in some contexts only (Geeza Pro lam-meem and lam-lam-heh,
+    Courier New `لله` and `ريال`); their positions stay stand-ins and their lines report `glyph-clusters`.
