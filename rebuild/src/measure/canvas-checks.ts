@@ -30,13 +30,17 @@ type CanvasNeeds = {
   // The letter spacing the recipes turn optional ligatures off with, what it must add to each character's width, and
   // whether the recipes also read the ink box under it, which then must not move.
   ligaturesOffSpacing: { value: string; addsPx: number; inkBoxStays: boolean } | null
+  // The text rendering the check's two contexts take, null for the default. Blink's font cache key holds text-rendering
+  // and not the specified size (font_description.cc:308-331), so a context at the default would share a platform font with
+  // the page's own default text; the port's contexts are at optimizeLegibility (measure/font-checks.ts, last section).
+  textRendering: CanvasTextRendering | null
 }
 
 function canvasNeeds(engine: EngineName): CanvasNeeds {
   switch (engine) {
-    case 'blink': return { attributes: ['lang', 'letterSpacing', 'textRendering', 'direction'], inkBox: true, ligaturesOffSpacing: { value: '0.015625px', addsPx: 0.015625, inkBoxStays: false } }
-    case 'webkit': return { attributes: ['letterSpacing', 'wordSpacing'], inkBox: false, ligaturesOffSpacing: null }
-    case 'gecko': return { attributes: ['lang', 'letterSpacing', 'direction'], inkBox: true, ligaturesOffSpacing: { value: '0.001px', addsPx: 0, inkBoxStays: true } }
+    case 'blink': return { attributes: ['lang', 'letterSpacing', 'textRendering', 'direction'], inkBox: true, ligaturesOffSpacing: { value: '0.015625px', addsPx: 0.015625, inkBoxStays: false }, textRendering: 'optimizeLegibility' }
+    case 'webkit': return { attributes: ['letterSpacing', 'wordSpacing'], inkBox: false, ligaturesOffSpacing: null, textRendering: null }
+    case 'gecko': return { attributes: ['lang', 'letterSpacing', 'direction'], inkBox: true, ligaturesOffSpacing: { value: '0.001px', addsPx: 0, inkBoxStays: true }, textRendering: null }
   }
 }
 
@@ -63,6 +67,7 @@ export function missingCanvasSupport(engine: EngineName): string[] {
   for (let i = 0; i < needs.attributes.length; i++) {
     if (!(needs.attributes[i]! in context)) missing.push(`the context attribute ${needs.attributes[i]!}`)
   }
+  if (needs.textRendering !== null && 'textRendering' in context) context.textRendering = needs.textRendering
   context.font = CHECK_FONT
   const plain: MeasuredText = context.measureText(CHECK_TEXT)
   if (needs.inkBox && (typeof plain.actualBoundingBoxLeft !== 'number' || typeof plain.actualBoundingBoxRight !== 'number')) {
@@ -71,6 +76,7 @@ export function missingCanvasSupport(engine: EngineName): string[] {
   const spacing = needs.ligaturesOffSpacing
   if (spacing !== null && 'letterSpacing' in context) {
     const spaced = new OffscreenCanvas(1, 1).getContext('2d')!
+    if (needs.textRendering !== null && 'textRendering' in spaced) spaced.textRendering = needs.textRendering
     spaced.font = CHECK_FONT
     spaced.letterSpacing = spacing.value
     const under: MeasuredText = spaced.measureText(CHECK_TEXT)

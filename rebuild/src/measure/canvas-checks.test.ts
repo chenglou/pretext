@@ -26,6 +26,8 @@ const FRACTION_KEPT: StandIn['measure'] = (letters, px) => ({ width: Math.round(
 
 let measureTextCalls = 0
 let contexts = 0
+// The context's textRendering at each measureText call ('' is the stand-in's untouched default).
+let renderingAtMeasure: unknown[] = []
 
 function canvasOf(standIn: StandIn): unknown {
   return class {
@@ -35,6 +37,7 @@ function canvasOf(standIn: StandIn): unknown {
         font: '10px sans-serif',
         measureText(this: Record<string, unknown>, text: string): object {
           measureTextCalls++
+          renderingAtMeasure.push(this['textRendering'])
           const spacing = typeof this['letterSpacing'] === 'string' && standIn.attributes.includes('letterSpacing') ? Number.parseFloat(this['letterSpacing']) : 0
           const measured = standIn.measure(text.length, spacing)
           return standIn.inkBox ? { width: measured.width, actualBoundingBoxLeft: 0, actualBoundingBoxRight: measured.right } : { width: measured.width }
@@ -63,6 +66,7 @@ beforeEach(() => {
   before = NAMES.map(name => Object.getOwnPropertyDescriptor(globals, name))
   measureTextCalls = 0
   contexts = 0
+  renderingAtMeasure = []
 })
 afterEach(() => {
   for (let i = 0; i < NAMES.length; i++) {
@@ -109,6 +113,16 @@ describe('Canvas checks at engine detection', () => {
     expect(missingCanvasSupport('webkit')).toEqual([])
     page('webkit', { attributes: ['direction'], inkBox: true, measure: WEBKIT.measure })
     expect(missingCanvasSupport('webkit')).toEqual(['the context attribute letterSpacing', 'the context attribute wordSpacing'])
+  })
+
+  test("Blink's check measures at the port's own text rendering, off the font cache key of the page's default text", () => {
+    page('blink', BLINK)
+    expect(missingCanvasSupport('blink')).toEqual([])
+    expect(renderingAtMeasure).toEqual(['optimizeLegibility', 'optimizeLegibility'])
+    renderingAtMeasure = []
+    page('gecko', GECKO)
+    expect(missingCanvasSupport('gecko')).toEqual([])
+    expect(renderingAtMeasure).toEqual(['', ''])
   })
 
   test('no OffscreenCanvas is named', () => {
