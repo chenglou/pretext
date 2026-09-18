@@ -53,9 +53,13 @@
 //   recorded library; they are the `unfaithful` ones;
 // - dictionary-segmenter scripts (Thai, Lao, Khmer, Myanmar; Intl.Segmenter, Intl.v8BreakIterator) replay from the recorded
 //   segmentations as long as the library segments the same strings; another string is a new question;
-// - string storage: Blink's Canvas answers depend on whether V8 stores a string in 8 or 16 bits, which no record shows.
-//   The record keeps answers in call order, so a library that asks the same strings in the same order replays exactly;
-//   one that builds its strings another way shows as questions changed at most, and needs the browser;
+// - string storage: Blink's Canvas answers depend on whether V8 stores a string in 8 or 16 bits (harfbuzz_shaper.cc:1072-1101,
+//   to_blink_string.cc:216-227), which no record shows and bun doesn't have: the Blink port makes a Latin-1-only string of
+//   13 code units or more 16-bit by slicing it out of a 16-bit string (engines/blink/shape.ts canvasString), and a library
+//   that built the same characters another way would replay the same and measure another width in Chrome. So `pack` lists
+//   Chrome's storage-sensitive cases (inputs/storage-sensitive.ids: a Latin-1-only question of 13 units or more), and
+//   `check` sends them to tier 2 whenever a file that builds the strings Canvas measures differs from the reference's
+//   commit (STORAGE_PATHS);
 // - a library that keeps Canvas answers across paragraphs would ask less in a browser document than in a replayed case;
 //   it shows as new questions. Today every measurer is per paragraph;
 // - giants (paragraphs over 50,000 units) are in no recorded set.
@@ -163,6 +167,24 @@ function writeShard(path: string, lines: readonly string[]): { sha256: string } 
 
 function git(...args: string[]): string {
   return execFileSync('git', args, { cwd: REPO, encoding: 'utf8' }).trim()
+}
+
+// The files that build the strings Canvas measures and hand them to Canvas. A change there can change a string's V8
+// storage without changing its characters, which only Chrome shows (the file comment, "string storage").
+const STORAGE_PATHS = ['rebuild/src/measure', 'rebuild/src/engines/blink/shape.ts']
+// V8 copies a shorter Latin-1-only substring into a one-byte string, so only longer ones keep their parent's storage
+// (SlicedString::kMinLength, v8 string.h:1181).
+const STORAGE_SENSITIVE_UNITS = 13
+
+// Which of STORAGE_PATHS differ between a commit and the working tree; every path when the commit isn't known here.
+function storageFilesChangedSince(commit: string): string[] {
+  try {
+    const changed = git('diff', '--name-only', commit, '--', ...STORAGE_PATHS).split('\n').filter(line => line !== '')
+    const untracked = git('ls-files', '--others', '--exclude-standard', '--', ...STORAGE_PATHS).split('\n').filter(line => line !== '')
+    return [...new Set([...changed, ...untracked])].sort()
+  } catch {
+    return [...STORAGE_PATHS]
+  }
 }
 
 // What a prediction depends on in the working tree: the library, the predictors with their font facts, and the ports.
@@ -338,6 +360,7 @@ async function packPart(): Promise<void> {
   const shards: Shard[] = []
   const browserShards: Array<{ file: string; cases: number; sha256: string }> = []
   const logDisagrees: string[] = []
+  const storageSensitive: string[] = []
   let inputs: string[] = []
   let browserLines: string[] = []
   let weight = 0
@@ -360,6 +383,14 @@ async function packPart(): Promise<void> {
     if (record.id !== row.id) throw new Error(`Record ${record.id} doesn't belong to row ${row.id}: the files come from different runs`)
     if (row.build === undefined) throw new Error(`Row ${row.id} records no build`)
     if (record.library !== null && !record.library.agrees) logDisagrees.push(row.id)
+    if (row.browser === 'chrome') {
+      for (let i = record.phases.predict[0]; i < record.phases.predict[1]; i++) {
+        const asked = record.calls[i]![1]
+        if (asked.length < STORAGE_SENSITIVE_UNITS || !/^[\x00-\xff]*$/.test(asked)) continue
+        storageSensitive.push(row.id)
+        break
+      }
+    }
     // The replay reads the predict and observe phases; the lab's own font probe and the painter's calls stay out.
     const predict = record.calls.slice(record.phases.predict[0], record.phases.predict[1])
     const observed = record.calls.slice(record.phases.observe[0], record.phases.observe[1])
@@ -376,7 +407,7 @@ async function packPart(): Promise<void> {
   }
   flush()
   await records.return(undefined)
-  writeFileSync(options.get('result')!, JSON.stringify({ shards, browserShards, logDisagrees }))
+  writeFileSync(options.get('result')!, JSON.stringify({ shards, browserShards, logDisagrees, storageSensitive }))
 }
 
 async function pack(): Promise<number> {
@@ -402,7 +433,7 @@ async function pack(): Promise<number> {
     if (!existsSync(measurements)) fail(`${part.forward} holds no measurement record: run browser-sets.ts with --record`)
     parts.push({ set: set.name, part: part.part, rows: join(folder, `${browser}-rows.ndjson`), measurements, record: JSON.parse(readFileSync(join(folder, `${browser}-run.json`), 'utf8')) as { bundleSha256: string | null } })
   }
-  const results: Array<{ shards: Shard[]; browserShards: Array<{ file: string; cases: number; sha256: string }>; logDisagrees: string[] }> = []
+  const results: Array<{ shards: Shard[]; browserShards: Array<{ file: string; cases: number; sha256: string }>; logDisagrees: string[]; storageSensitive: string[] }> = []
   const failures: string[] = []
   await pool(parts, jobsWidth(), async (part, index) => {
     const result = join(dir, 'inputs', `.part-${index}.json`)
@@ -417,6 +448,7 @@ async function pack(): Promise<number> {
     recordedFrom: relative(REPO, runsDir), sets: {}, cases: 0, calls: 0, logDisagrees: [],
   }
   const browserSets: ReferenceManifest['sets'] = {}
+  const storageSensitive: string[] = []
   for (let i = 0; i < parts.length; i++) {
     const part = parts[i]!
     const set = (manifest.sets[part.set] ??= { protocol: run.sets.find(value => value.name === part.set)!.protocol, shards: [] })
@@ -427,7 +459,10 @@ async function pack(): Promise<number> {
     }
     for (const shard of results[i]!.browserShards) (browserSets[part.set] ??= []).push({ ...shard, file: relative(join(dir, 'browser'), shard.file) })
     manifest.logDisagrees.push(...results[i]!.logDisagrees)
+    storageSensitive.push(...results[i]!.storageSensitive)
   }
+  // Chrome only: the cases `check` sends to tier 2 when the code that builds Canvas strings changed (STORAGE_PATHS).
+  writeFileSync(join(dir, 'inputs/storage-sensitive.ids'), [...new Set(storageSensitive)].sort().map(id => `${id}\n`).join(''))
   if (manifest.bundles.length !== 1) fail(`The recorded jobs ran ${manifest.bundles.length} library bundles: record again with one library`)
   writeFileSync(join(dir, 'inputs/manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`)
   const browserManifest: ReferenceManifest = {
@@ -538,6 +573,9 @@ type CheckReport = {
   byField: Record<string, { cases: number; families: Record<string, number> }>
   // Changed predictions by what the ledger says of the case's lineCount, breaks and widths.
   byLedgerStatus: Record<string, number> | null
+  // Set when files that build Canvas strings differ from the reference's commit: Chrome's storage-sensitive cases are in
+  // `needsBrowser` by rule.
+  storage?: { changedFiles: string[]; cases: number }
   needsBrowser: string[]
 }
 
@@ -637,6 +675,17 @@ async function compare(dir: string, inputs: InputsManifest, against: 'reference'
     report.counts.unfaithful++
     needs.add(id)
   }
+  // String storage, by rule: when the code that builds Canvas strings differs from the reference's commit, Chrome's
+  // storage-sensitive cases go to tier 2 although their replay can't differ.
+  const sensitivePath = join(dir, 'inputs/storage-sensitive.ids')
+  if (against === 'reference' && reference !== null && inputs.browser === 'chrome' && existsSync(sensitivePath)) {
+    const changed = storageFilesChangedSince(reference.commit)
+    if (changed.length > 0) {
+      const ids = readFileSync(sensitivePath, 'utf8').split('\n').filter(id => id !== '')
+      for (const id of ids) needs.add(id)
+      report.storage = { changedFiles: changed, cases: ids.length }
+    }
+  }
   report.counts.predictionChanged = report.predictionChanged.length
   report.counts.questionsChanged = report.questionsChanged.length
   report.counts.newQuestion = report.newQuestions.length
@@ -709,10 +758,11 @@ async function check(): Promise<number> {
     }
     for (const value of report.predictionChanged.slice(0, 8)) console.log(`    ${value.set} ${value.id} ${value.family}: ${value.first.path}: ${value.first.before} -> ${value.first.after}`)
   }
+  if (report.storage !== undefined) console.log(`  string storage: ${report.storage.changedFiles.join(', ')} differ${report.storage.changedFiles.length === 1 ? 's' : ''} from the reference's commit and build${report.storage.changedFiles.length === 1 ? 's' : ''} the strings Canvas measures; Chrome stores a string in 8 or 16 bits by how it was built, which a replay can't see, so the ${report.storage.cases} storage-sensitive cases go to tier 2`)
   for (const value of report.newQuestions.slice(0, 5)) console.log(`    new question, ${value.set} ${value.id}: ${value.question.slice(0, 200)}`)
   for (const value of report.questionsChanged.slice(0, 5)) console.log(`    questions changed, ${value.set} ${value.id}: ${value.detail}`)
   console.log(`  report: ${relative(REPO, out)}; cases for tier 2: ${relative(REPO, out.replace(/\.json$/, '') + '.needs-browser.ids')} (${report.needsBrowser.length})`)
-  return c.predictionChanged > 0 ? 1 : c.questionsChanged + c.newQuestion > 0 ? 3 : 0
+  return c.predictionChanged > 0 ? 1 : c.questionsChanged + c.newQuestion > 0 || report.storage !== undefined ? 3 : 0
 }
 
 if (import.meta.main) {
