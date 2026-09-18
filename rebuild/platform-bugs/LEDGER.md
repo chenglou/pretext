@@ -77,7 +77,7 @@ New facets of bugs that are already tracked, for a comment on the existing repor
   (`:268-270`). It doesn't ask ICU or look at the next character. `:292-298` takes that path only for 16-bit
   strings. This is the fix for WebKit #312099 (311090@main), which was written for CJK punctuation.
 - **How sure:** high. Deterministic, five of five boxes, and the code reads the same way. It is a regression that
-  Korean pages will show, since `keep-all` is mostly used there and Korean text is always 16-bit.
+  Korean pages will show: `keep-all` is mostly used there, and a text node that holds Hangul is always 16-bit.
 - **Tracker:** nothing found for it. Refer to #312099, and to #298022 (open), which asks for the general rule.
 - **Pretext:** main still carries the older `webkit-spaces` keep-all pair model and fails one required check on
   Safari 27 (TAKE-BACK §1). The rebuild ports the new rule as it is (`engines/webkit/breaks.ts:376`).
@@ -260,8 +260,8 @@ New facets of bugs that are already tracked, for a comment on the existing repor
   `gfxFontGroup::FindFontForChar` then returns early for that code point whatever presentation is asked for, before
   it tries the preferred emoji font (`F/gfx/thebes/gfxTextRun.cpp:3524-3531`, before step 2 at `:3533`). When the
   loader finishes, the set is cleared and everything reflows (`gfxPlatformFontList.cpp:1157-1169`).
-- **How sure:** high on the behaviour (7 of 7 fresh browser processes, both variants). Medium on the cause. Medium on acceptance, because the DOM
-  heals itself.
+- **How sure:** high on the behaviour (7 of 7 fresh browser processes, both variants). Medium on the cause. Medium on
+  acceptance, because the DOM heals itself.
 - **Tracker:** nothing found. Mozilla #1502718 (open) is about U+FE0E being ignored.
 - **Pretext:** this is TAKE-BACK 5.5, now explained: the "text glyph" was a missing-glyph box, and the state ends
   when the loader finishes. It made 116 lab cases depend on order. Main can cache a wrong width from that window. The
@@ -365,7 +365,7 @@ New facets of bugs that are already tracked, for a comment on the existing repor
 | Firefox's 1 app unit differences between OffscreenCanvas and DOM | Rounding at two scales, 0.017px. Not a bug. |
 | Every Canvas turns U+000B into a space, though VT isn't ASCII white space in the HTML spec | All three engines agree. |
 | Chrome draws FF and VT with a fallback glyph in DOM text, and Firefox gives them no width | Chrome follows CSS Text. Firefox hides them on purpose (`layout.css.control-characters.visible`). |
-| Chrome treats U+2028 like a space where WebKit 7625 and Firefox break the line | Known difference between engines, no effect on Pretext beyond the model. |
+| Chrome treats U+2028 like a space where WebKit 7625 forces a line break (Firefox wasn't checked) | A difference between engines that the rebuild models per engine. Not reduced. |
 | Servo's 10-bit font sizes, Gecko's 7-bit canvas font sizes, WebKit's one-float32-step shortcut path, Safari 27's 1/64px heights, DevTools DPR emulation laying out at zoom 1 | Intentional or too small, as TAKE-BACK §5 says. |
 | A Firefox worker's OffscreenCanvas follows the macOS locale | Already under "Investigated" in PLATFORM_BUGS (Mozilla #1869001). |
 | `document.fonts.check()` is true for a missing family in Firefox | The CSS Font Loading spec allows it. |
