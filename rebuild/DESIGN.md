@@ -1648,25 +1648,32 @@ fails, the painting form is wrong, not the prediction, and the limits above name
 
 ```
 rebuild/
-  CHARTER.md DESIGN.md
+  CHARTER.md DESIGN.md REPORT.md TESTS.md TAKE-BACK.md SHARED-CHANGES.md
   tsconfig.json                   bunx tsc --noEmit -p rebuild/tsconfig.json
+  knip.config.ts                  bunx knip --config rebuild/knip.config.ts (from the repository root)
   specs/ research/ data/ probes/  other owners
-  lab/                            lab owner; types.ts re-exports and predictor.ts are wired by the architect
+  lab/                            lab owner; predictor-core.ts is the one file that imports library logic
     observe/                      the observation ports of §9, one per engine
+  tests/                          rule registry, families, facts, coverage, gate; the tiers (sets, replay, browser-sets, ledger)
+  bench/                          costs against main; page.ts doesn't run since the inline-tree model (bench/README.md)
+  platform-bugs/                  browser bug candidates: LEDGER.md, standalone pages, results, verify.ts
   tools/
     gen-shared.ts lines.ts ppucd.ts          generator helpers                         architect
     gen-unicode-data.ts                      → src/unicode/generated/bidi-data.ts       architect
     icu-bidi-oracle.c icu-bidi-oracle.ts     ICU's own ubidi, for the bidi tests        architect
     gen-blink-data.ts                        → src/breaks/generated/blink-break-tables.ts   Blink owner
     gen-webkit-data.ts                       → src/breaks/generated/webkit-break-tables.ts  WebKit owner
-    gen-gecko-data.ts                        → src/breaks/generated/gecko-break-data.ts     Gecko owner
+    gen-gecko-data.ts                        → src/breaks/generated/gecko-break-data.ts, src/engines/gecko/generated/   Gecko owner
+    gen-webkit-fonts.ts gen-webkit-joining.ts  → src/engines/webkit/generated/{fonts,joining}.ts                        WebKit owner
+    webkit-host/                             the WKWebView host on the system WebKit (build.sh, main.swift)             lab owner
   src/
     index.ts        prepareParagraph, layoutLine, layoutParagraph: the one switch over engines, the engine-build gap   architect
     model.ts        input tree, font facts, line slots, output with per-engine geometry, the observation contract     architect
     env.ts          Environment, process languages, GivenFacts, PINNED_BUILDS, detectEngine(), detectEnvironment()   architect
     content.ts      indexContent, styleUnder, langUnder, and its test                                               architect
     paint.ts        paintLines()                                                                                      architect
-    measure/        canvas.ts (contexts, memo), font.ts (font strings), log.ts                                       architect
+    measure/        canvas.ts (contexts, memo), font.ts (font strings), log.ts, font-checks.ts (font facts asked of
+                    Canvas, §1.2), canvas-checks.ts (what the recipes assume of Canvas, §1.4)                        architect
     unicode/        bidi.ts, ubidi.ts, unicode-bidi.ts, grapheme.ts, tests, generated/                                architect
     breaks/         rbbi.ts, icu4x.ts, tables.ts, rbbi.test.ts, generated/                                            architect
     engines/
