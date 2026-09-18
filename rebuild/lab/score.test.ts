@@ -628,7 +628,7 @@ describe('attribution follows the engines\' range geometry', () => {
     if (layout.engine !== 'webkit') throw new Error('unreachable')
     layout.lines[0]!.geometry.boxes = boxes.map((box, run) => ({
       kind: 'text', run, start: 0, end: 3, level: 0, isWordSeparator: false, x: box.x, width: box.width, hyphen: null, expansion: 0,
-      expansionBehavior: { left: 'forbid', right: 'forbid' }, shapedAcrossBoxes: box.shapedAcrossBoxes === true,
+      expansionBehavior: { left: 'forbid', right: 'forbid' }, shapedAcrossBoxes: box.shapedAcrossBoxes === true, canvasFamily: 'Arial',
     }))
     return layout
   }

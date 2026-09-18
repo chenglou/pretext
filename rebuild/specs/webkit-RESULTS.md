@@ -2,10 +2,173 @@
 
 Lab runs of `rebuild/src/engines/webkit` in `webkit-host`, the system WebKit.framework that installed Safari 27.0 runs
 (CFBundleVersion 22625.1.29.11.27, macOS 27, libicucore 78.1), on this Mac (Retina, `devicePixelRatio` 2). Rows,
-summaries and per-case files are under `.artifacts/lab/webkit-round4/` and `.artifacts/lab/fresh/webkit-host/r4-webkit-*` for
-round 4, `.artifacts/lab/webkit-round3/` and `.artifacts/lab/fresh/webkit-host/` for ceiling round 3,
+summaries and per-case files are under `.artifacts/lab/webkit-round4b/` and `.artifacts/lab/fresh/webkit-host/r4b-webkit-*`
+for round 4b, `.artifacts/lab/webkit-round4/` and `.artifacts/lab/fresh/webkit-host/r4-webkit-*` for round 4, `.artifacts/lab/webkit-round3/` and `.artifacts/lab/fresh/webkit-host/` for ceiling round 3,
 `.artifacts/lab/webkit-round2/<run>/` for round 2 and `.artifacts/lab/webkit-stage5/<run>/` before it. Installed Safari ran
 once in round 3, as a spot check.
+
+## 2026-09-18: round 4b (what the observation port reports as predicted; the Canvas family in the layout)
+
+A trimmed round: the round 3 critic's finding 3 (research/ROUND3-CRITIC.md: the port reports values as predicted under the
+layout's own gaps) and the port's Canvas family. Scorer 6. Baseline: the round 4a library (`584e359`), recorded on the tier 2
+sets in both configurations and both orders (`webkit-round4b/sets/base-<config>`), and packed and frozen as a private tier 1
+reference (`webkit-round4b/replay/webkit-host-<config>`, `replay.ts --dir`), since the shared references describe the round 3
+library: against them every no-facts case asks a question the record lacks. Tools are in `webkit-round4b/tools/`:
+`wrong-values.ts` (every predicted value that differs from the browser in scored runs), `offline-wrong.ts` (the same from
+the working tree's replay of a recording against its native rows, 4 s), `state-diff.ts` (layout fields and state moves
+against the private reference), `dump-values.ts`, `debug-case.ts` and `critic-remeasure.sh`.
+
+### Predicted values that differ from the browser
+
+| Set | Library | Predicted values | Differing | Cases holding one | Of them failing no prediction metric |
+|---|---|---:|---:|---:|---:|
+| the critic's fresh set `critic-r3-1`, 21,042 cases, facts | round 3 (the critic's rows) | 418,057 | 2,310 | 481 | 13 |
+| | round 4a | 418,298 | 349 | 123 | 13 |
+| | round 4b | 281,545 | 0 | 0 | 0 |
+| | round 4b, no facts | 194,702 | 0 | 0 | 0 |
+| tier 2 sets, 62,384 cases, either configuration | round 4a | 985,796 | 1,110 | 476 | 98 (42 pass all three) |
+| tier 2 sets, no facts, either order | round 4b | 561,968 | 0 | 0 | 0 |
+| tier 2 sets, facts, either order | round 4b | 764,570 | 0 | 0 | 0 |
+| fresh `r4b-webkit-1`, 9,875 cases, no facts | round 4b | 85,273 | 0 | 0 | 0 |
+| fresh `r4b-webkit-2`, 7,723 cases, facts | round 4b | 103,434 | 0 | 0 | 0 |
+
+History-dependent cases and protocol rows are left out, as everywhere; the tier 2 sets' 268 history-dependent cases hold no
+differing predicted value in either order either. Round 4a had narrowed `canvas-language`, which took most of the critic's
+1,254 values with it; what it left sat under `letter-spacing-ligatures` (122), `canvas-language` (60), `page-history` (48)
+and `rtl-shaping-across-inline-boxes` (65), and on lines with no gap after a line whose break a gap had moved (37).
+
+The 98 tier 2 cases that failed no prediction metric and held a wrong predicted value, traced (round 4 counted 75 of them in
+its family file; the tier 2 sets hold 15 more `rule/joining` cases and 8 suite and runs cases):
+
+- 42 were an engine bug (`rule/nested-box-edges` 24, `rule/nowrap-spans` 10, `rule/box-edges` 8), fixed. In an RTL block a
+  span's hanging space goes to the line's left at the root level and its word stays with the LTR text at the right, so the
+  span has two display boxes on one line, and the port gave both the span's start edge: 44.53px where the DOM reports
+  38.53px (`c-20592b0063422319`). `computeIsFirstIsLastBox` (InlineDisplayContentBuilder.cpp:1036-1060) makes only the first
+  display box in box order the span's first box and only the last its last box (:770-782). Their widths go from unobserved
+  to pass, the round's only status transitions on the tier 2 sets, in both configurations.
+- 28 are page history (`rule/br-elements` 12, `rule/hanging-white-space` 10, four `suite/*/middle` cases, `suite/glue` 1,
+  `suite/mixed` 1): alone in a fresh process all 28 hold exact predicted values (`runs/isolate-passing-wrong-base`), and in
+  their sets the break cache hands their boxes other item ends, so the DOM has one box `[7,10)` where the prediction has
+  two (`c-0560e2fd253c8ca1`), or `)` and U+200B in boxes of their own (`c-4c58dcad97d2cfb6`). Their lines report
+  `page-history`; the port now limits them.
+- 28 sit on lines with runs shaped across inline boxes (`rule/joining` 26, `runs/bidi-runs` 2): the x of boxes around the
+  shaped runs, a float32 step off. Their lines report `rtl-shaping-across-inline-boxes`; the port now limits them.
+
+### What the port reports as predicted
+
+A value is predicted only where no gap the layout reports can move it (`lab/observe/webkit.ts`, the file's header):
+
+- A line that reports a gap is limited as a whole, every x and every width on it, by that gap. The line's break rests on
+  every width the line measured, so which text each box holds rests on a stand-in; a box sits at the widths of the runs
+  before it, an RTL line's edge and an alignment offset come from the content width, a justified line shares out what its
+  content leaves, and a reported width is `f32(f32(x + width) − x)`.
+- The lines after it are limited by the same gap, up to a forced break: a line starts where the line before it ended
+  (`leadingInlineItemPositionForNextLine`, InlineFormattingUtils.cpp:278-298). With line slots nothing starts over, since the
+  rows shift with the line count, and a slot the engine refused on a gap moves every line after it.
+- A paragraph gap concerns the lines its range meets, and every line without a range.
+- Only the 0 width of a soft line break's box and of a `<br>`'s stays predicted on such a line. A caret's doesn't: a collapsed
+  space reports a caret only while it ends its line (`c-a749f1e7bd879df8`: 6px natively where the line goes on).
+
+Two narrower rules were built and measured first, offline over the 59,759 replayable tier 2 cases, no facts and facts:
+
+| Rule | Predicted share | Differing predicted values |
+|---|---|---:|
+| boxes a gap's range meets, and what is placed after them on the line (box order in an LTR block, the whole line in an RTL block or under an alignment offset; expansion on a justified line; an inline box by what it holds) | 18.1% (no facts) | 109 in 64 cases, all failing breaks: the box that ends the failing line, and the lines after it |
+| the same, with the text box that ends a line that reports a gap, and the lines after such a line up to a forced break | 14.2% and 19.1% | 0 |
+| a line that reports a gap as a whole, and the lines after it up to a forced break (adopted) | 13.2% and 18.6% | 0 |
+
+The second holds a claim no source reading gives (a moved break changes only the line's last box), takes about twice the
+code of the third, and keeps half a point to a point more of the values predicted. The third is what `line.gaps` already says: a line
+with a gap can be wrong, and then so can what follows it. In the browser runs the predicted share of all values goes from
+18.9% (round 4a, either configuration) to 10.8% with no facts and 14.6% with facts; with no facts `simplified-measuring`
+alone fires on 23% of passing fresh lines (lift 0.26), because `pairKerning` is unknown. No metric reads a state: lineCount,
+breaks, widths and the painter compare rects whatever their state, and tier 1 compares every value of every case. What the
+states decide is the evaluation's predicted-value agreement, which is now exact on every set above, so a predicted value
+that differs is a bug in the port or the engine and nothing else.
+
+How often a value limited by a line's gap differs from the browser, tier 2 sets, no facts, forward order (the scorer's
+`facts.limited`; `in-word-prefix` and `glyph-clusters` are the in-box stand-ins, as before):
+
+| Gap | Equal | Differ |
+|---|---:|---:|
+| `simplified-measuring` | 295,340 | 122 |
+| `page-history` | 46,897 | 257 |
+| `tab-stops` | 34,235 | 153 |
+| `canvas-language` | 17,782 | 318 |
+| `rtl-shaping-across-inline-boxes` | 6,916 | 247 |
+| `letter-spacing-ligatures` | 6,415 | 52 |
+| `string-storage` | 5,856 | 0 |
+| `fixed-pitch-path` | 5,259 | 0 |
+| `control-character-width` | 3,998 | 53 |
+| `dictionary-breaks-stand-in` | 851 | 11 |
+
+One scorer rule reads the states: `webkitStandInAddends` (scorer 6) takes the nodes whose expected width is limited as the
+units of a line where only the float32 sum differs. Every node of a limited line is limited now, and they follow each other,
+so such a line is covered where a gap's range touches any node on it: where the line holds a stand-in, which is what the rule
+means to ask. No status moved on the tier 2 sets, the critic's set or the fresh sets.
+
+### The Canvas family in the layout
+
+`WebKitTextBox.canvasFamily` is the font-family list the box's text was measured with: the declared list with the generic
+keywords the box's locale resolves named, and the script's standard family appended where no listed family resolves
+(`engines/webkit/content.ts` makeBox). The port measures a leaf's in-box stand-ins with it, where it used the declared list
+(it can't import `fonts.ts` under the independence rule). Those values were and are limited under `in-word-prefix`; on the
+tier 2 sets 5,362 fewer of them differ from the browser (452,972 to 447,610 of 4.1 million). 2,626 tier 2 cases ask the port's questions under another font string than the
+recording holds, so tier 1 sends them to tier 2.
+
+The per-language table of generic families (`data/webkit/coretext-macos27/css-families.tsv`, generated into
+`engines/webkit/generated/fonts.ts`) is macOS 27 Core Text data kept as engine data beside the libicucore break tables, by
+the orchestrator's decision of 2026-09-18; it could become an environment input later. For the maintainer.
+
+### Sets
+
+Tier 2 (`webkit-round4b/sets/final-<config>`, both orders, 62,653 cases, 268 history-dependent), either configuration:
+lineCount 81, breaks 133 and widths 257 failures, all covered, none open; against round 4a's ledger 42 transitions, widths
+unobserved to pass. The critic's set, scored against the critic's native rows in both orders: no transition but 8 widths
+unobserved to pass, 0 open.
+
+Fresh sets (the round's cap of two, both orders):
+
+| Seed | Configuration | Cases | History-dependent | lineCount / breaks / widths fail | Prediction failures | Open | Painter-only without an explanation |
+|---|---|---:|---:|---|---:|---:|---:|
+| `r4b-webkit-1` | no facts | 9,893 | 18 | 13 / 34 / 40 | 74 | 0 | 15 |
+| `r4b-webkit-2` | facts | 7,735 | 12 | 4 / 10 / 32 | 42 | 0 | 5 |
+
+No open row in either order and no new class. The second set's suite kind drew no case (the first drew 2,156).
+
+Installed Safari didn't run: Safari was the frontmost app for the driver's whole ten-minute wait, and the driver doesn't open
+a window over the user's (`runs/safari-spot-first-box.log`; the 42 cases of the display box fix).
+
+### Known tail
+
+Left for the ledger's backlog; nothing here was worked on.
+
+- Painter-only failures without a covered explanation on the fresh sets: Thonburi, Thai with and without marks, under a
+  hundredth of a unit (`c-017911e809ca65cc`, `c-1167f190a0c2eb1a`, `c-40579247e82324fa`, `c-fd3085c497b6baed`,
+  `c-59b7dfffb03afe7a`, `c-06fa7b3ece3135e2`, `c-76f49356245aa1de`, `c-fc6f0aef0d4dbd76`); Georgia with Arabic, the same size
+  (`c-035e3e87fbd4b6b6`, `c-bb8240573c72b7eb`, `c-265fa5ac9392927f`, `c-6dec45404fcc6dfd`); Times New Roman with Latin and
+  Arabic, 33 to 64 units (`c-7f76e001defaf681`, `c-8ae74f1f8584217e`).
+- `page-history` in the families' own documents: the same paragraphs at other widths give the break cache its entries, so
+  `rule/br-elements` and `rule/hanging-white-space` cases pass every metric and differ in box structure from the case alone
+  (`c-0560e2fd253c8ca1`, `c-0584f659aa240683`, `c-2831e2b52af7ff89`, `c-21ecede4442ac69d`, `c-357e4ce08f51853c`), and
+  `suite/maintained/kinsoku-units` holds 29 of the first fresh set's 31 failures under `page-history` alone
+  (`c-222b897d174bb6b7`, `c-2ced3e7672c3fc7d`, `c-37d85f3be46b8591`, `c-3cbdacac26c35e1e`). Predictable only with the cache's
+  state as an input.
+- `simplified-measuring` with no facts: 23% of passing fresh lines at lift 0.26, none of the first fresh set's failures but
+  5 lines beside other gaps. It only diagnoses, and it now costs the predicted state of those lines and the lines after
+  them. A Canvas-learnable reading of `pairKerning`, or a default, would clear it.
+- `canvas-language`, system fallback by language: 22 and 20 fresh failures (`rule/keep-all-storage` 12 each,
+  `policy/line-break`, `rule/languages`; `c-14d638d1d2d9cd24`, `c-4d0e304955ee9c29`, `c-90085c8df1d1bed6`,
+  `c-3fe4e791b820fc5f`, `c-6f28d2483ce5e923`). Convertible with a font fact for the fallback font's class (round 4).
+- `control-character-width`: 12 fresh failures a set in `rule/controls` (`c-36790cd39470be40`, `c-614b46c6f3889c92`,
+  `c-03f66b457c62d5b7`, `c-32cc0163b5e17acc`), half of them beside `page-history`.
+- `rtl-shaping-across-inline-boxes`: 7 a set (`c-7f344b45601ac620`, `c-831565fe24e24ef2`, `c-2bd2cb161d145aac`,
+  `c-9538b1d868b0f616`); `dictionary-breaks-stand-in`: 3 in `runs/letter-spacing-spans` (`c-865597c8631ac2ca`,
+  `c-e2636af0c0d4c0ed`, `c-fecc7f07676530b7`).
+- The port reads a whole line as limited where a gap names a few characters, so on a line with a gap nothing says which
+  boxes are still exact. The ranged rule above would say so for 5 points of the values, with its claim about the last box
+  registered as a heuristic.
+- An unranged line gap (`hyphen-glyph`) and the unported `inverseFrameScale` under page zoom limit as before.
 
 ## 2026-09-18: round 4 (generic families by locale, shaped runs, registered constants, isolation)
 

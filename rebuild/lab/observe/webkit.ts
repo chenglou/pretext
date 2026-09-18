@@ -13,6 +13,23 @@
 //   nothing.
 // It imports types from rebuild/src/model.ts only, so no expected value comes from the library (TEST-ARCHITECTURE.md §0
 // rule 1, DESIGN.md §8.1), and walks the inline tree itself. y and height are outside the contract (DESIGN.md §9).
+//
+// States (DESIGN.md §9). A value is reported as predicted only where no gap the layout reports can move it, and a gap moves
+// more than the characters it names:
+// - a line's break rests on every width the line measured, its own content and the content that ended it
+//   (LineBuilder::placeInlineAndFloatContent, InlineLineBuilder.cpp; lines.ts lineGaps reports both on the line), so on a
+//   line that reports a gap, which text each box holds rests on a stand-in, and so does every width and x on it: a box sits
+//   at the line's left plus the alignment offset plus the widths of the runs before it (Line::appendText,
+//   InlineLine.cpp:346-440; processNonBidiContent, InlineDisplayContentBuilder.cpp:504-645; a running edge in visual order
+//   on a reordered line, :871-1028), an RTL line's left edge and an alignment offset come from the content width
+//   (InlineDisplayLineBuilder.cpp:136-138, InlineFormattingUtils.cpp:198-276), a justified line shares out what its content
+//   leaves (InlineContentAligner.cpp:230-266), and a reported width is f32(f32(x + width) - x) (FloatQuad::boundingBox);
+// - the next line starts where the line ended (leadingInlineItemPositionForNextLine, InlineFormattingUtils.cpp:278-298), so
+//   the lines after such a line are limited by the same gap, up to a forced break, after which a line starts at the same
+//   item whatever came before. With line slots the rows shift with the line count, so nothing starts over there, and a slot
+//   the engine refused on a gap (BelowFloats.gaps) moves every line after it;
+// - a paragraph gap concerns the lines its range meets, and every line without a range.
+// The width of a soft line break's box and of a <br>'s stays predicted: it is 0 by rule, wherever the box sits.
 import type {
   CanvasMeasure, Expected, ExpectedObservation, ExpectedRect, GapName, InlineNode, ObservationPort, Paragraph, TextStyle, UnobservableFact,
   WebKitDisplayBox, WebKitLayout, WebKitTextBox,
@@ -22,8 +39,10 @@ const f32 = Math.fround
 
 type Settings = Parameters<CanvasMeasure>[0]
 
-// A text display box with its engine line.
-type OwnBox = { box: WebKitTextBox; line: number }
+type Limit = GapName | null
+
+// A text display box with its engine line and the gap that limits the line's values, if any.
+type OwnBox = { box: WebKitTextBox; line: number; limit: Limit }
 
 // LayoutUnit(float) (platform/LayoutUnit.h:83-88): the value times 64 in float, truncated toward zero. In 64ths.
 function toLayoutUnit(v: number): number {
@@ -74,12 +93,13 @@ function walkTree(paragraph: Paragraph): { leaves: { text: string; style: TextSt
 }
 
 // The Canvas stand-in for a box's in-context shaping: the same OffscreenCanvas settings layout measures with (font at the
-// CSS size times page zoom, letter spacing, no locale, no word spacing).
-function leafCanvas(text: string, style: TextStyle, zoom: number): LeafCanvas {
+// CSS size times page zoom, letter spacing, no locale, no word spacing). `family` is the list the layout measured the leaf's
+// boxes with (WebKitTextBox.canvasFamily), which names the families the locale resolves generic keywords to.
+function leafCanvas(text: string, style: TextStyle, family: string, zoom: number): LeafCanvas {
   const size = f32(f32(style.font.size) * f32(zoom))
   const letterSpacing = f32(f32(style.letterSpacing) * f32(zoom))
   const context: Settings = {
-    font: `${style.font.style} ${style.font.weight} ${String(size)}px ${style.font.family}`, lang: '', letterSpacing: `${letterSpacing}px`,
+    font: `${style.font.style} ${style.font.weight} ${String(size)}px ${family}`, lang: '', letterSpacing: `${letterSpacing}px`,
     wordSpacing: '0px', fontKerning: 'auto', textRendering: 'auto', direction: 'ltr', partition: '',
   }
   return {
@@ -255,19 +275,16 @@ function boundingBox(x: number, width: number): { x: number; width: number } {
   return { x: left, width: f32(Math.max(x, right) - left) }
 }
 
-// The whole-box branch (RenderText.cpp:815-831), and any element's display box: its float rect.
-function boxRect(port: Port, line: number, box: { x: number; width: number }): ExpectedRect {
-  const rect = boundingBox(box.x, box.width)
-  return { line, x: predicted(port, rect.x), width: predicted(port, rect.width) }
+function expected(port: Port, limit: Limit, value: number): Expected {
+  return limit === null ? predicted(port, value) : limited(port, limit, value)
 }
 
-// A text box's whole rect. A box shaped across inline boxes takes its characters' share of one shaping of the joined text
-// (InlineLineBuilder.cpp:920-967), which the engine estimates from Canvas prefixes, so its edges are limited by the gap its
-// line reports for that shaping.
-function textBoxRect(port: Port, own: OwnBox): ExpectedRect {
-  const rect = boxRect(port, own.line, own.box)
-  if (!own.box.shapedAcrossBoxes) return rect
-  return { line: own.line, x: limited(port, 'rtl-shaping-across-inline-boxes', rect.x.value), width: limited(port, 'rtl-shaping-across-inline-boxes', rect.width.value) }
+// The whole-box branch (RenderText.cpp:815-831), and any element's display box: its float rect. A soft line break's box and
+// a <br>'s are 0 wide by rule (InlineDisplayContentBuilder.cpp:305-341), which no x moves; a text box that measures 0 isn't.
+function boxRect(port: Port, line: number, box: { kind?: WebKitDisplayBox['kind']; x: number; width: number }, limit: Limit): ExpectedRect {
+  const rect = boundingBox(box.x, box.width)
+  const zeroByRule = box.kind === 'soft-line-break' || box.kind === 'line-break'
+  return { line, x: expected(port, limit, rect.x), width: expected(port, zeroByRule ? null : limit, rect.width) }
 }
 
 // selectionRectForTextBox (RenderText.cpp:352-396) followed by snappedSelectionRect (LegacyInlineTextBox.cpp:146-160) and
@@ -350,10 +367,14 @@ function partialRect(port: Port, layout: WebKitLayout, own: OwnBox, next: OwnBox
   // (ComplexTextController.cpp:740-800), so an unknown width can be negative only under negative spacing.
   const canvas = port.leaves[b.run]!
   const xOnBoxEdge = xKnown && (widthKnown || (canvas.letterSpacing >= 0 && canvas.wordSpacing >= 0))
+  // A rect on the box's edge sits where the box does, and a caret is 0 wide, as long as the box holds the text the layout
+  // gave it: page-history hands a box other item ends, and a range over a whole box reports the box's float rect, not a
+  // snapped one (suite c-4c58dcad97d2cfb6); a collapsed space reports a caret only while it ends its line (runs
+  // c-a749f1e7bd879df8, 6px wide natively where the line goes on).
   return {
     line: own.line,
-    x: xOnBoxEdge ? predicted(port, rect.x) : limited(port, gap, rect.x),
-    width: xKnown && widthKnown ? predicted(port, rect.width) : limited(port, gap, rect.width),
+    x: xOnBoxEdge ? expected(port, own.limit, rect.x) : limited(port, gap, rect.x),
+    width: xKnown && widthKnown ? expected(port, own.limit, rect.width) : limited(port, gap, rect.width),
   }
 }
 
@@ -372,7 +393,7 @@ function rangeRects(port: Port, layout: WebKitLayout, own: OwnBox[], start: numb
   for (let k = 0; k < own.length; k++) {
     const b = own[k]!
     if (s <= b.box.start && b.box.end <= e) {
-      rects.push(textBoxRect(port, b))
+      rects.push(boxRect(port, b.line, b.box, b.limit))
       continue
     }
     const rect = partialRect(port, layout, b, k + 1 < own.length ? own[k + 1]! : null, k === own.length - 1, s, e)
@@ -385,28 +406,65 @@ function isTextBox(box: WebKitDisplayBox): box is WebKitTextBox {
   return box.kind === 'text' || box.kind === 'soft-line-break'
 }
 
+// rule lab/observe/webkit/limited-lines
+// Per line, the gap that limits every value on it, or null (the rules are in the file's header).
+function lineLimits(layout: WebKitLayout): Limit[] {
+  let everywhere: Limit = null
+  for (let g = 0; g < layout.gaps.length && everywhere === null; g++) if (layout.gaps[g]!.at === undefined) everywhere = layout.gaps[g]!.gap
+  let slotted = layout.belowFloats.length > 0
+  for (let l = 0; l < layout.lines.length && !slotted; l++) slotted = layout.lines[l]!.slot.left !== 0 || layout.lines[l]!.slot.right !== 0
+  const limits: Limit[] = []
+  let moved = everywhere
+  // Rows as the library's fillLines counts them: a line box takes one, and so does a refused slot.
+  let row = 0
+  let refused = 0
+  for (let l = 0; l < layout.lines.length; l++) {
+    const line = layout.lines[l]!
+    for (; refused < layout.belowFloats.length && layout.belowFloats[refused]!.row === row; refused++, row++) {
+      if (layout.belowFloats[refused]!.gaps.length > 0) moved ??= layout.belowFloats[refused]!.gaps[0]!.gap
+    }
+    let limit = moved
+    if (limit === null && line.gaps.length > 0) limit = line.gaps[0]!.gap
+    for (let g = 0; g < layout.gaps.length && limit === null; g++) {
+      const at = layout.gaps[g]!.at
+      if (at !== undefined && at.start <= line.end && at.end >= line.start) limit = layout.gaps[g]!.gap
+    }
+    limits.push(limit)
+    if (line.hasLineBox) row++
+    let forced = false
+    for (let f = 0; f < line.fragments.length && !forced; f++) forced = line.fragments[f]!.kind === 'forced-break' || line.fragments[f]!.kind === 'br'
+    moved = forced && !slotted ? everywhere : limit
+  }
+  return limits
+}
+
 export const observeWebKit: ObservationPort<WebKitLayout> = (paragraph, layout, measure) => {
   const zoom = layout.env.pageZoom ?? 1
   const tree = walkTree(paragraph)
   const port: Port = { paragraph, measure, leaves: [], zoomGap: layout.env.pageZoom !== 1 }
-  for (let r = 0; r < tree.leaves.length; r++) port.leaves.push(leafCanvas(tree.leaves[r]!.text, tree.leaves[r]!.style, zoom))
   // InlineIterator::textBoxesFor: a node's boxes in box index order, line then visual order
   // (LayoutIntegrationLineLayout.cpp:1048-1059, InlineIteratorTextBox.cpp:71-102); inlineBoxesFor likewise for an element.
   const own: OwnBox[][] = []
   for (let r = 0; r < tree.leaves.length; r++) own.push([])
   const elements: ExpectedRect[][] = []
   for (let e = 0; e < tree.elements.length; e++) elements.push([])
+  const limits = lineLimits(layout)
   for (let l = 0; l < layout.lines.length; l++) {
     const boxes = layout.lines[l]!.geometry.boxes
     for (let k = 0; k < boxes.length; k++) {
       const box = boxes[k]!
-      if (isTextBox(box)) own[box.run]!.push({ box, line: l })
+      if (isTextBox(box)) own[box.run]!.push({ box, line: l, limit: limits[l]! })
       // An atomic inline reports its renderer's frame (RenderBox::absoluteQuads, rendering/RenderBox.cpp:694-701), whose
       // location InlineDisplayContentBuilder set from the display box through toLayoutPoint, truncating to a LayoutUnit
       // (InlineDisplayContentBuilder.cpp:632-640, platform/LayoutUnit.h:76-78); its border box width is a LayoutUnit already.
-      else if (box.kind === 'atomic') elements[box.element]!.push(boxRect(port, l, { x: toLayoutUnit(box.x) / 64, width: box.width }))
-      else elements[box.element]!.push(boxRect(port, l, box))
+      else if (box.kind === 'atomic') elements[box.element]!.push(boxRect(port, l, { x: toLayoutUnit(box.x) / 64, width: box.width }, limits[l]!))
+      else elements[box.element]!.push(boxRect(port, l, box, limits[l]!))
     }
+  }
+  // A leaf measures with the family list its boxes were measured with; a leaf without a box measures nothing.
+  for (let r = 0; r < tree.leaves.length; r++) {
+    const leaf = tree.leaves[r]!
+    port.leaves.push(leafCanvas(leaf.text, leaf.style, own[r]!.length === 0 ? leaf.style.font.family : own[r]![0]!.box.canvasFamily, zoom))
   }
   const nodes: ExpectedRect[][] = []
   const codePoints: ExpectedObservation['codePoints'] = []
@@ -415,7 +473,7 @@ export const observeWebKit: ObservationPort<WebKitLayout> = (paragraph, layout, 
     const text = tree.leaves[r]!.text
     const boxes = own[r]!
     const nodeRects: ExpectedRect[] = []
-    for (let k = 0; k < boxes.length; k++) nodeRects.push(textBoxRect(port, boxes[k]!))
+    for (let k = 0; k < boxes.length; k++) nodeRects.push(boxRect(port, boxes[k]!.line, boxes[k]!.box, boxes[k]!.limit))
     nodes.push(nodeRects)
     for (let i = 0; i < text.length;) {
       const length = text.codePointAt(i)! > 0xffff ? 2 : 1
