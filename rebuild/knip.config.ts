@@ -10,7 +10,7 @@ const config: KnipConfig = {
     // Command-line tools (each parses its own arguments or runs on import).
     'rebuild/tools/*.ts',
     'rebuild/lab/{run,score,gate,fresh,sharded,measurements,compare-rows,triage}.ts',
-    'rebuild/lab/cases/{generate,giants,parts,seal}.ts',
+    'rebuild/lab/cases/{generate,giants,parts,seal,twins}.ts',
     'rebuild/tests/{browser-sets,coverage,derive,facts,gate,import-rules,ledger,replay}.ts',
     'rebuild/bench/{run,report}.ts',
     'rebuild/platform-bugs/verify.ts',
