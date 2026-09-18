@@ -6,9 +6,9 @@ import { encodeEdges } from './observe/gecko.ts'
 import {
   abcd, abcdExpected, abcdLayout, abcdNative, abcdOneLine, abcdOneLineExpected, at, blink, expect32, gecko, linesRow, native, observation, paragraph, row, webkit,
 } from './row-fixtures.ts'
-import type { Gap, GapName } from '../src/model.ts'
-import { environmentKey, indexRows, lineLocalGaps, lineRangeDiagnostics, nativeDifference, nativeLines, nativeView, readRowAt, residualMembership, RESIDUAL_CLASSES, scoreRow, slotProtocol, withNativeRow, type CaseScore } from './score.ts'
-import type { BrowserKind, LabRow, NativeObservation, PainterLimits, PainterLine, Rect, RecordedLayout } from './types.ts'
+import type { ExpectedObservation, Gap, GapName } from '../src/model.ts'
+import { environmentKey, indexRows, lineLocalGaps, lineRangeDiagnostics, nativeDifference, nativeLines, nativeView, readRowAt, residualMembership, RESIDUAL_CLASSES, scoreRow, slotProtocol, syntheticBoldStep, withNativeRow, type CaseScore } from './score.ts'
+import type { BrowserKind, EnginePrediction, LabRow, NativeObservation, PainterLimits, PainterLine, Rect, RecordedLayout } from './types.ts'
 
 const f32 = Math.fround
 
@@ -444,6 +444,33 @@ describe('covered failures', () => {
     expect(lineLocalGaps(withRefusal, [0, 2], 0, { units: [], decision: null }).elsewhere).toEqual([{ gap: 'glyph-clusters', scope: 'next-line' }, { gap: 'in-word-prefix', scope: 'line' }, { gap: 'tab-stops', scope: 'next-line' }])
   })
 
+  test('differing units inside one stand-in span are one run, whatever lies between them', () => {
+    // Four letters of one shaped word whose widths the port marks as stand-ins (`c-f3e8314c35b33990`): natively the first is
+    // 68 au wider, the second equal, the last 8 au narrower, 60 au in all, and the gap sits on the last.
+    const make = (standIn: boolean[], under: GapName = 'in-word-prefix', letters = 'abcd'): ReturnType<typeof scoreRow> => {
+      const { row: value, layout } = unitRow({ browser: 'firefox', runs: [letters], lines: [[0, 4]], native: [699, 685, 600, 676], expected: [631, 685, 600, 684] }, 'native')
+      layout.gaps.push(gap('font-fallback', { start: 3, end: 4 }))
+      const points = (value.prediction as EnginePrediction).observation as ExpectedObservation
+      for (let i = 0; i < standIn.length; i++) {
+        const rect = points.codePoints[i]!.rects[0]!
+        if (standIn[i]!) rect.width = { state: 'limited', gap: under, value: rect.width.value }
+      }
+      return scoreRow(value)
+    }
+    const span = make([true, true, true, true]).lineGaps.widths!
+    expect(span.covered).toBe(true)
+    expect(span.lines[0]).toMatchObject({ gaps: [{ gap: 'font-fallback', scope: 'paragraph-range', touch: 'unit' }], evidence: { units: 2, runs: 1, deciding: 1, touched: 1 } })
+    // A predicted value between them is an observation of the engine: two runs, and the first has no gap.
+    const split = make([true, false, true, true]).lineGaps.widths!
+    expect(split.covered).toBe(false)
+    expect(split.lines[0]!.evidence).toMatchObject({ runs: 2, deciding: 2, touched: 1, first: { start: 0, end: 1 } })
+    // So are two units the port predicts: nothing joins them.
+    expect(make([false, false, false, false]).lineGaps.widths!.covered).toBe(false)
+    // Values limited under another gap say nothing about a sum, and a span never crosses a space.
+    expect(make([true, true, true, true], 'glyph-clusters').lineGaps.widths!.covered).toBe(false)
+    expect(make([true, true, true, true], 'in-word-prefix', 'a cd').lineGaps.widths!.covered).toBe(false)
+  })
+
   test('a failing width attributes every failing line, and the painter keeps every gap that concerns its line', () => {
     const { row: value, layout } = unitRow({ browser: 'firefox', runs: ['abcdef'], lines: [[0, 3], [3, 6]], native: [600, 610, 600, 600, 620, 600], expected: [600, 600, 600, 600, 600, 600] }, 'native')
     layout.lines[1]!.gaps.push(gap('in-word-prefix', { start: 4, end: 4 }), gap('script-context', { start: 5, end: 6 }))
@@ -488,7 +515,42 @@ describe('residual classes', () => {
     expect(scoreRow(two).residual).toBeNull()
     const twoUnits = unitRow({ browser: 'firefox', runs: ['abcdef'], lines: [[0, 6]], native: [500, 498, 500, 500, 500, 500], expected: [500, 500, 500, 500, 500, 500] }, 'native').row
     expect(scoreRow(twoUnits).residual).toBeNull()
-    expect(residualMembership({ engine: 'blink', metrics: { lineCount: 'pass', breaks: 'pass', widths: 'fail', painter: 'fail' }, nodeWidths: [], paintedAtNativeWidth: true })).toBeNull()
+    expect(residualMembership({ engine: 'blink', metrics: { lineCount: 'pass', breaks: 'pass', widths: 'fail', painter: 'fail' }, nodeWidths: [], paintedAtNativeWidth: true, appUnitsPerDevPixel: null })).toBeNull()
+  })
+
+  // `a`, U+2764 alone in a bold span, `b`, all 16px Arial, as the Gecko owner's fresh rows have it: natively the heart is 7 au
+  // narrower than the OffscreenCanvas says (probe F24).
+  const heart = (size: number, weight: number, difference: number, painted: 'native' | 'expected' = 'native', hearts = '\u2764'): LabRow => {
+    const widths = [500, ...[...hearts].map(() => 900), 500]
+    const native = widths.map((w, i) => (i >= 1 && i <= hearts.length ? w + difference / hearts.length : w))
+    const value = unitRow({ browser: 'firefox', runs: ['a', hearts, 'b'], lines: [[0, hearts.length + 2]], native, expected: widths }, painted).row
+    for (let r = 0; r < 3; r++) value.case.paragraph.runs[r]!.font = { family: 'Arial', size, weight: r === 1 ? weight : 400, style: 'normal' }
+    return value
+  }
+
+  test('Gecko\'s synthetic bold class: a bold node a whole number of steps off, probed where F24 measured the text in the font', () => {
+    // The registry's probed differences are the formula's at 30 app units per device pixel.
+    const bold = RESIDUAL_CLASSES.find(value => value.name === 'gecko/synthetic-bold-offset')!
+    for (const unit of bold.probed) expect([unit.text, unit.size, syntheticBoldStep(unit.size, 30)]).toEqual([unit.text, unit.size, unit.difference])
+    expect([16, 24, 32].map(size => syntheticBoldStep(size, 60))).toEqual([0, 0, 0])
+    const score = scoreRow(heart(16, 700, -7))
+    expect(score.metrics.widths.status).toBe('fail')
+    expect(score.lineGaps.widths!.covered).toBe(false)
+    expect(score.residual).toEqual({ name: 'gecko/synthetic-bold-offset', membership: 'probed', detail: 'node 1 on engine line 0 is -7 au at "\u2764", 1 × the step of -7 au at 16px (probed, F24)' })
+    // Two hearts in the node, two steps: the signature, and no probe measured that text.
+    expect(scoreRow(heart(16, 700, -14, 'native', '\u2764\u2764')).residual).toMatchObject({ name: 'gecko/synthetic-bold-offset', membership: 'signature' })
+    // At 13px F24 measured nothing: the step is the formula's, by signature alone.
+    expect(syntheticBoldStep(13, 30)).toBe(-7)
+    expect(scoreRow(heart(13, 700, -7)).residual).toMatchObject({ name: 'gecko/synthetic-bold-offset', membership: 'signature' })
+  })
+
+  test('no synthetic bold member at a regular weight, off the step, past the node\'s clusters, or where the painter didn\'t draw the native width', () => {
+    expect(scoreRow(heart(16, 400, -7)).residual).toBeNull()
+    expect(scoreRow(heart(16, 700, -6)).residual).toBeNull()
+    expect(scoreRow(heart(16, 700, -14)).residual).toBeNull()
+    expect(scoreRow(heart(16, 700, -7, 'expected')).residual).toBeNull()
+    // A bold node exactly 1 au off keeps the first class.
+    expect(scoreRow(heart(16, 700, -1)).residual).toMatchObject({ name: 'gecko/one-shaping-unit-one-app-unit' })
   })
 
   test('the summary counts residual members apart from open failures, probed apart from signature alone', () => {
@@ -503,7 +565,7 @@ describe('residual classes', () => {
     const scored = Bun.spawnSync(['bun', join(import.meta.dir, 'score.ts'), `--rows=${path}`, `--out=${join(dir, 'summary.json')}`, `--per-case=${join(dir, 'per-case.ndjson')}`])
     expect(scored.exitCode).toBe(0)
     const summary = JSON.parse(readFileSync(join(dir, 'summary.json'), 'utf8')) as { scorer: number; browsers: { firefox: { lineLocal: Record<string, unknown> } } }
-    expect(summary.scorer).toBe(6)
+    expect(summary.scorer).toBe(7)
     expect(summary.browsers.firefox.lineLocal['predictionRows']).toEqual({ failing: 4, withoutCoveredExplanation: 3, residualProbed: 1, residualSignatureOnly: 1, open: 1 })
     expect(summary.browsers.firefox.lineLocal['residual']).toEqual({ 'gecko/one-shaping-unit-one-app-unit': { probed: 1, signatureOnly: 1, coveredProbed: 0, coveredSignatureOnly: 0 } })
     expect(summary.browsers.firefox.lineLocal['withoutLineGap']).toEqual({ lineCount: 0, breaks: 0, widths: 3, painter: 3 })
@@ -603,6 +665,48 @@ describe('attribution follows the engines\' range geometry', () => {
     // A rect that isn't the hyphen's still places the letter: `b` split across the two lines for another reason.
     const split = native(p, [[at(0, 8)], [at(8, 0), at(8, 5)], [at(8, 4), at(0, 7, 1)]], [[at(0, 8), at(8, 5), at(0, 7, 1)]])
     expect(scoreRow(row('chrome', p, split, layout, expected)).lineGaps.lineCount!.lines[0]).toMatchObject({ nativeLine: 1, engineLine: null })
+  })
+
+  test('Blink: in a right-to-left line the letter before a chosen soft hyphen reports the hyphen, and isn\'t placed on its line', () => {
+    // `b`, a soft hyphen, a mark, `c`, right to left in a box nothing fits in (`c-909a7a77bad03225`). Natively the line that
+    // starts at the soft hyphen ends after it, with its hyphen, 5px wide at x 0, and the mark goes to a line of its own; the
+    // hyphen item is that line's first item, so `b`, which ends the item before it, reports the hyphen's rect on line 1
+    // beside its own on line 0. The prediction keeps the soft hyphen and the mark on one line and reports why on that line.
+    const p = paragraph([['b\u00ad\u0650c', 'text']])
+    const observed = native(p, [[at(0, 3), at(0, 5, 1)], [at(0, 5, 1), at(5, 0, 1)], [at(0, 0, 2)], [at(0, 14, 3)]], [[at(0, 3), at(0, 5, 1), at(0, 0, 2), at(0, 14, 3)]])
+    const expected = observation(p, [[expect32(0, 0, 3)], [expect32(1, 0, 0)], [expect32(1, 0, 0)], [expect32(2, 0, 14)]], [[expect32(0, 0, 3), expect32(1, 0, 0), expect32(2, 0, 14)]])
+    const layout = blink([[0, 1, 384], [1, 3, 0], [3, 4, 1792]])
+    layout.lines[1]!.gaps.push(gap('in-word-prefix', { start: 1, end: 3 }))
+    const score = scoreRow(row('chrome', p, observed, layout, expected))
+    expect(score.metrics.lineCount).toEqual({ status: 'fail', reason: 'line count differs', detail: 'native 4, predicted 3' })
+    // The line the two sides disagree about is the one that starts at the soft hyphen, and the mark is the decision text.
+    expect(score.lineGaps.lineCount).toMatchObject({
+      covered: true,
+      lines: [{ nativeLine: 1, engineLine: 1, gaps: [{ gap: 'in-word-prefix', scope: 'line' }], evidence: { decision: { start: 2, end: 3 }, pureDecision: true } }],
+    })
+    // A rect of `b` on line 1 that isn't the hyphen's places `b` there: line 0 is then the line whose end is disputed.
+    const split = native(p, [[at(0, 3), at(0, 4, 1)], [at(0, 5, 1), at(5, 0, 1)], [at(0, 0, 2)], [at(0, 14, 3)]], [[at(0, 3), at(0, 5, 1), at(0, 0, 2), at(0, 14, 3)]])
+    expect(scoreRow(row('chrome', p, split, layout, expected)).lineGaps.lineCount!.lines[0]!.nativeLine).toBe(0)
+  })
+
+  test('Blink: an expected rect that is its line\'s hyphen item is report-only whoever reports it', () => {
+    // `(`, `b`, a soft hyphen, `c`, right to left (`c-ccbcd11b754a7299`). The prediction breaks at the soft hyphen with `b` and
+    // the soft hyphen in one item, so its hyphen item, 5px at x 0, is reported by `(`, which ends the item before it, and by
+    // `b`, and not by the soft hyphen. Natively `b` is alone on line 1 and the soft hyphen with its hyphen on line 2.
+    const p = paragraph([['(b\u00adc', 'text']])
+    const observed = native(p, [[at(0, 7)], [at(0, 3, 1), at(0, 5, 2)], [at(0, 5, 2), at(5, 0, 2)], [at(0, 14, 3)]], [[at(0, 7), at(0, 3, 1), at(0, 5, 2), at(0, 14, 3)]])
+    const expected = observation(p, [[expect32(0, 0, 7), expect32(1, 0, 5)], [expect32(1, 0, 5), expect32(1, 5, 3)], [expect32(1, 5, 0)], [expect32(2, 0, 14)]], [[expect32(0, 0, 7), expect32(1, 0, 5), expect32(1, 5, 3), expect32(2, 0, 14)]])
+    const layout = blink([[0, 1, 896], [1, 3, 1024], [3, 4, 1792]])
+    if (layout.engine !== 'blink') throw new Error('fixture')
+    layout.lines[1]!.geometry.items.push({ kind: 'hyphen', run: 0, level: 1, x: 0, inlineSize: 640 })
+    layout.lines[1]!.gaps.push(gap('unsafe-to-break', { start: 2, end: 3 }))
+    const score = scoreRow(row('chrome', p, observed, layout, expected))
+    expect(score.metrics.lineCount.status).toBe('fail')
+    // `(` stays on line 0 on both sides, so the first line that differs is line 1, where the soft hyphen is the decision text.
+    expect(score.lineGaps.lineCount).toMatchObject({ covered: true, lines: [{ nativeLine: 1, engineLine: 1, gaps: [{ gap: 'unsafe-to-break', scope: 'line' }], evidence: { decision: { start: 2, end: 3 } } }] })
+    // Without the item in the layout the rect places `(` on line 1, and line 0 is attributed.
+    if (layout.engine === 'blink') layout.lines[1]!.geometry.items.length = 0
+    expect(scoreRow(row('chrome', p, observed, layout, expected)).lineGaps.lineCount!.lines[0]!.nativeLine).toBe(0)
   })
 
   test('WebKit: a zero-width rect on the line above a character\'s own rect is a box-end report and places nothing', () => {
@@ -882,10 +986,10 @@ describe('two runs of one case', () => {
 
   test('environments key on the recorded build and the given process languages', () => {
     const base = row('chrome', abcd, abcdNative, abcdLayout, abcdExpected)
-    expect(environmentKey(base)).toBe('chrome: build not recorded, test; DPR 2, scale 1; scorer 6')
+    expect(environmentKey(base)).toBe('chrome: build not recorded, test; DPR 2, scale 1; scorer 7')
     const built = { ...base, build: { app: 'Google Chrome', appVersion: '153.0.8010.48', engine: '153.0.8010.48', os: '26A428' } }
-    expect(environmentKey(built)).toBe('chrome: Google Chrome 153.0.8010.48, engine build 153.0.8010.48, macOS 26A428; DPR 2, scale 1; scorer 6')
+    expect(environmentKey(built)).toBe('chrome: Google Chrome 153.0.8010.48, engine build 153.0.8010.48, macOS 26A428; DPR 2, scale 1; scorer 7')
     const languages = { launch: null, os: { appleLanguages: null, appleLocale: null, launchdEnvironment: {} }, given: { engine: 'blink' as const, uiLanguage: 'zh-CN' }, derivation: [] }
-    expect(environmentKey({ ...built, languages })).toBe('chrome: Google Chrome 153.0.8010.48, engine build 153.0.8010.48, macOS 26A428; DPR 2, scale 1; uiLanguage zh-CN; scorer 6')
+    expect(environmentKey({ ...built, languages })).toBe('chrome: Google Chrome 153.0.8010.48, engine build 153.0.8010.48, macOS 26A428; DPR 2, scale 1; uiLanguage zh-CN; scorer 7')
   })
 })

@@ -35,6 +35,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join, relative, resolve } from 'node:path'
 import type { MetricAttribution, MetricName, ResidualMembership, GapFiring } from '../lab/score.ts'
 import type { BrowserBuild } from '../lab/types.ts'
+import { itemsOf, readKnownTail, type KnownTailItem } from './known-tail.ts'
 import { REPO, SETS, type Config, type SetProtocol, type TierBrowser } from './sets.ts'
 
 export const LEDGER_FORMAT = 'pretext-ledger/1'
@@ -189,7 +190,8 @@ export function carryHistory(entries: LedgerEntry[], from: readonly LedgerEntry[
 
 // ---- Transitions ----
 
-export type Transition = { set: string; id: string; family: string; metric: MetricName; before: LedgerStatus; after: LedgerStatus }
+// knownTail: the known-tail items (known-tail.ts) the case belongs to by its status before or after, when any.
+export type Transition = { set: string; id: string; family: string; metric: MetricName; before: LedgerStatus; after: LedgerStatus; knownTail?: string[] }
 export type TransitionReport = {
   comparable: string[]
   allowed: string[]
@@ -201,6 +203,9 @@ export type TransitionReport = {
   transitions: Transition[]
   // Per metric, per `before -> after`, per family: the case ids.
   grouped: Record<MetricName, Record<string, Record<string, string[]>>>
+  // Per known-tail item, per `metric: before -> after`: the case ids. A change that moves a class left open on purpose shows
+  // here by the item's name, whether it left the class, entered it or moved inside it.
+  knownTail: Record<string, Record<string, string[]>>
 }
 
 // Why two ledgers don't compare like with like, by name, or an empty list.
@@ -223,12 +228,12 @@ export function incomparable(before: LedgerHeader, after: LedgerHeader): Array<{
   return out
 }
 
-export function transitionsBetween(before: Ledger, after: Ledger, allowed: readonly string[]): TransitionReport {
+export function transitionsBetween(before: Ledger, after: Ledger, allowed: readonly string[], tail: readonly KnownTailItem[] = []): TransitionReport {
   const problems = incomparable(before.header, after.header)
   const report: TransitionReport = {
     comparable: problems.filter(problem => !allowed.includes(problem.name)).map(problem => `${problem.name}: ${problem.detail}`),
     allowed: problems.filter(problem => allowed.includes(problem.name)).map(problem => `${problem.name}: ${problem.detail}`),
-    compared: 0, onlyBefore: 0, onlyAfter: 0, blocking: 0, transitions: [], grouped: { lineCount: {}, breaks: {}, widths: {}, painter: {} },
+    compared: 0, onlyBefore: 0, onlyAfter: 0, blocking: 0, transitions: [], grouped: { lineCount: {}, breaks: {}, widths: {}, painter: {} }, knownTail: {},
   }
   if (report.comparable.length > 0) return report
   const old = new Map<string, LedgerEntry>()
@@ -246,6 +251,11 @@ export function transitionsBetween(before: Ledger, after: Ledger, allowed: reado
     for (const metric of METRIC_NAMES) {
       if (was.status[metric] === entry.status[metric]) continue
       const transition: Transition = { set: entry.set, id: entry.id, family: entry.family, metric, before: was.status[metric], after: entry.status[metric] }
+      if (tail.length > 0) {
+        const items = [...new Set([...itemsOf(tail, before.header.browser, before.header.config, was, metric, was.status[metric]), ...itemsOf(tail, after.header.browser, after.header.config, entry, metric, entry.status[metric])])]
+        if (items.length > 0) transition.knownTail = items
+        for (const item of items) ((report.knownTail[item] ??= {})[`${metric}: ${transition.before} -> ${transition.after}`] ??= []).push(entry.id)
+      }
       report.transitions.push(transition)
       if (transition.before === 'pass' && transition.after !== 'history-dependent' && transition.after !== 'protocol row') report.blocking++
       const families = (report.grouped[metric][`${transition.before} -> ${transition.after}`] ??= {})
@@ -258,7 +268,10 @@ export function transitionsBetween(before: Ledger, after: Ledger, allowed: reado
 }
 
 export function printTransitions(report: TransitionReport, limit = 12): void {
-  for (const line of report.allowed) console.log(`allowed difference: ${line}`)
+  // One line per kind of difference: a protocol that differs does so for every set.
+  const allowedKinds = new Map<string, string[]>()
+  for (const line of report.allowed) allowedKinds.set(line.split(':')[0]!, [...(allowedKinds.get(line.split(':')[0]!) ?? []), line])
+  for (const lines of allowedKinds.values()) console.log(`allowed difference: ${lines[0]}${lines.length > 1 ? ` (and ${lines.length - 1} more of this kind)` : ''}`)
   if (report.comparable.length > 0) {
     for (const line of report.comparable) console.log(`not comparable: ${line}`)
     return
@@ -273,6 +286,12 @@ export function printTransitions(report: TransitionReport, limit = 12): void {
       for (const [family, ids] of rows.slice(0, limit)) console.log(`      ${String(ids.length).padStart(5)}  ${family}  ${ids.slice(0, 3).join(' ')}${ids.length > 3 ? ' …' : ''}`)
       if (rows.length > limit) console.log(`      … ${rows.length - limit} more families`)
     }
+  }
+  const items = Object.entries(report.knownTail).sort((a, b) => (a[0] < b[0] ? -1 : 1))
+  if (items.length > 0) console.log('on known-tail items (rebuild/tests/known-tail.json):')
+  for (const [item, kinds] of items) {
+    console.log(`  ${item}`)
+    for (const [kind, ids] of Object.entries(kinds).sort((a, b) => b[1].length - a[1].length)) console.log(`      ${String(ids.length).padStart(5)}  ${kind}  ${ids.slice(0, 3).join(' ')}${ids.length > 3 ? ' …' : ''}`)
   }
 }
 
@@ -432,7 +451,7 @@ function main(): number {
     }
     case 'transitions': {
       if (positional.length !== 2) throw new Error('Usage: bun rebuild/tests/ledger.ts transitions <before ledger dir> <after ledger dir> [--out=<report.json>] [--allow=<difference>[,...]]')
-      const report = transitionsBetween(readLedger(resolve(positional[0]!)), readLedger(resolve(positional[1]!)), (options.get('allow') ?? '').split(',').filter(name => name !== ''))
+      const report = transitionsBetween(readLedger(resolve(positional[0]!)), readLedger(resolve(positional[1]!)), (options.get('allow') ?? '').split(',').filter(name => name !== ''), readKnownTail().items)
       if (options.get('out') !== undefined) writeFileSync(resolve(options.get('out')!), `${JSON.stringify(report, null, 2)}\n`)
       printTransitions(report)
       return report.comparable.length > 0 ? 2 : report.blocking > 0 ? 1 : 0

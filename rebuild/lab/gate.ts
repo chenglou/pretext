@@ -494,12 +494,15 @@ export function checkRuns(baseline: Baseline, runs: readonly Run[], options: { c
 
 // Pairs a new seed loses or gains against the existing baseline, over cases both observed outside history dependence and
 // outside protocol rows; and the passes of the existing baseline that leave without being lost: their case is history-
-// dependent in the new seed and wasn't before, or is a protocol row in the new seed and wasn't before.
+// dependent in the new seed and wasn't before, is a protocol row in the new seed and wasn't before, or isn't observed by the
+// new seed at all (`leftWithTheirCase`: a case dropped from the new case files takes its passes out of the gate, so they
+// are listed by id like every other pass that leaves; research/ROUND3-CRITIC.md item 9).
 export type BaselineDiff = {
   lost: Array<[string, MetricName]>
   gained: Array<[string, MetricName]>
   leftThroughHistory: Array<[string, MetricName]>
   leftThroughProtocol: Array<[string, MetricName]>
+  leftWithTheirCase: Array<[string, MetricName]>
   casesOnlyBefore: number
   casesOnlyAfter: number
 }
@@ -533,8 +536,13 @@ export function diffBaselines(before: Baseline, after: Baseline): BaselineDiff {
       else if (!was && is) gained.push([id, metric])
     }
   }
+  const leftWithTheirCase: Array<[string, MetricName]> = []
+  for (const id of [...a.keys()].sort()) {
+    if (observedAfter.has(id)) continue
+    for (const metric of METRIC_ORDER) if (a.get(id)!.has(metric)) leftWithTheirCase.push([id, metric])
+  }
   return {
-    lost, gained, leftThroughHistory, leftThroughProtocol,
+    lost, gained, leftThroughHistory, leftThroughProtocol, leftWithTheirCase,
     casesOnlyBefore: [...observedBefore].filter(id => !observedAfter.has(id)).length,
     casesOnlyAfter: [...observedAfter].filter(id => !observedBefore.has(id)).length,
   }
@@ -549,13 +557,16 @@ export type SeedRecord = {
   lost: Array<{ id: string; family: string; metric: MetricName; status: Status; reason: string | null; detail: string | null; run: string; covered: boolean; coveringGaps: string[]; residual: string | null; attribution: string | null }>
   leftThroughHistory: Array<{ id: string; family: string; metric: MetricName; difference: string; passesNow: boolean }>
   leftThroughProtocol: Array<{ id: string; family: string; metric: MetricName; protocol: string }>
+  // The adopted seed's passes of cases no seeding run observed (dropped from the new case files), by id and metric. The runs
+  // don't hold such a case, so the record has no family for it. Absent in records from before 2026-09-18.
+  leftWithTheirCase?: Array<[string, MetricName]>
   gained: Array<[string, MetricName]>
   casesOnlyBefore: number
   casesOnlyAfter: number
 }
 
 export function seedRecord(before: Baseline | null, after: Baseline, runs: readonly Run[], paths: { staged: string; against: string | null }): SeedRecord {
-  const record: SeedRecord = { staged: paths.staged, against: before === null ? null : paths.against, counts: after.counts, lost: [], leftThroughHistory: [], leftThroughProtocol: [], gained: [], casesOnlyBefore: 0, casesOnlyAfter: 0 }
+  const record: SeedRecord = { staged: paths.staged, against: before === null ? null : paths.against, counts: after.counts, lost: [], leftThroughHistory: [], leftThroughProtocol: [], leftWithTheirCase: [], gained: [], casesOnlyBefore: 0, casesOnlyAfter: 0 }
   if (before === null) return record
   const diff = diffBaselines(before, after)
   const observed = observe(runs)
@@ -578,6 +589,7 @@ export function seedRecord(before: Baseline | null, after: Baseline, runs: reado
     const entry = observed.get(id)!
     record.leftThroughProtocol.push({ id, family: entry.family, metric, protocol: entry.protocol ?? '' })
   }
+  record.leftWithTheirCase = diff.leftWithTheirCase
   record.gained = diff.gained
   record.casesOnlyBefore = diff.casesOnlyBefore
   record.casesOnlyAfter = diff.casesOnlyAfter
@@ -734,7 +746,7 @@ async function main(): Promise<number> {
       console.log(`no baseline at ${relative(REPO, resolved)} to compare with`)
     } else {
       const uncovered = record.lost.filter(value => !value.covered).length
-      console.log(`against ${relative(REPO, resolved)}: ${record.lost.length} pairs lost (${uncovered} without a covered explanation), ${record.leftThroughHistory.length} leave through new history dependence (${record.leftThroughHistory.filter(value => value.passesNow).length} of them pass now), ${record.leftThroughProtocol.length} leave as protocol rows, ${record.gained.length} gained, ${record.casesOnlyBefore} cases only before, ${record.casesOnlyAfter} only now`)
+      console.log(`against ${relative(REPO, resolved)}: ${record.lost.length} pairs lost (${uncovered} without a covered explanation), ${record.leftThroughHistory.length} leave through new history dependence (${record.leftThroughHistory.filter(value => value.passesNow).length} of them pass now), ${record.leftThroughProtocol.length} leave as protocol rows, ${record.leftWithTheirCase?.length ?? 0} leave with a case the runs don't hold, ${record.gained.length} gained, ${record.casesOnlyBefore} cases only before, ${record.casesOnlyAfter} only now`)
       for (const value of record.lost.slice(0, 20)) console.log(`  lost ${value.id} ${value.metric}: ${value.status}${value.covered ? ` (covered by ${value.coveringGaps.join(', ')})` : ' (no covered explanation)'}${value.residual === null ? '' : ` [${value.residual}]`}`)
       for (const value of record.leftThroughHistory.slice(0, 20)) console.log(`  left through history dependence ${value.id} ${value.metric}${value.passesNow ? ' (passes now)' : ''}`)
     }

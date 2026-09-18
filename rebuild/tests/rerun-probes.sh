@@ -32,13 +32,22 @@ sysui-dpr1|chrome|blink-probes-sysui|probeSet=blink-probes-sysui,process=fresh,f
 sysui-domfirst-dpr2|chrome|blink-probes-sysui-domfirst|probeSet=blink-probes-sysui-domfirst,process=fresh||" ;;
   webkit-host)
     engine=webkit
-    sets="webkit-host|webkit-host|webkit-probes|probeSet=webkit-probes||"
+    # round4: the WebKit owner's round 4 probes (R7, R8, R10 to R14) return raw values alone, so each gives one undecided fact
+    # that holds its record's hash (facts.ts): a release reports when the browser's answers changed. R14 takes about a minute.
+    sets="webkit-host|webkit-host|webkit-probes|probeSet=webkit-probes||
+round4|webkit-host|webkit-round4|probeSet=webkit-round4||--probe-timeout-ms=240000 --stall-ms=300000"
     if [ "${ALLOW_SAFARI:-0}" = 1 ]; then sets="$sets
 safari|safari|webkit-probes|probeSet=webkit-probes||--allow-safari-frontmost"; fi ;;
   firefox)
     engine=gecko
+    # round2 to round4: the Gecko owner's follow-up probes F7 to F27 (rebuild/probes/gecko-round*.ts), which return checks
+    # since ceiling round 4: 83 facts in rebuild/facts/gecko/156.0.ndjson.
     sets="main|firefox|gecko-probes|probeSet=gecko-probes,apd=30||
-followup|firefox|gecko-probes|probeSet=gecko-probes-followup,apd=30||--only=H3b"
+followup|firefox|gecko-probes|probeSet=gecko-probes-followup,apd=30||--only=H3b
+round2|firefox|gecko-round2|probeSet=gecko-round2,apd=30||
+round2b|firefox|gecko-round2b|probeSet=gecko-round2b,apd=30||
+round3|firefox|gecko-round3|probeSet=gecko-round3,apd=30||--probe-timeout-ms=240000
+round4|firefox|gecko-round4|probeSet=gecko-round4,apd=30||--probe-timeout-ms=240000"
     for entry in 60:1.0 40:1.5 27:2.2222222 23:2.6086957; do
       printf '{ "layout.css.devPixelsPerPx": "%s" }\n' "${entry#*:}" > "$out/prefs-apd${entry%%:*}.json"
       sets="$sets

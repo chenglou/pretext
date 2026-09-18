@@ -26,5 +26,8 @@ describe('the tiers\' sets', () => {
     expect(protocol).toEqual({ set: 'smoke-hand', parts: [{ casesFile: 'rebuild/lab/smoke-cases.ndjson', casesSha256: sha256File(partFiles(set, 'chrome')[0]!) }], casesPerRoundTrip: CASES_PER_ROUND_TRIP, freshProcessPerPart: true, runArgs: [] })
     // A browser's own derived family files are part of its protocol.
     expect(SETS.find(value => value.name === 'families')!.parts[0]).toContain('{browser}')
+    // So is a run argument a command adds to every job: measure first is another protocol than the usual one.
+    expect(setProtocol(set, 'chrome', ['--measure-first']).runArgs).toEqual(['--measure-first'])
+    expect(JSON.stringify(setProtocol(set, 'chrome', ['--measure-first']))).not.toBe(JSON.stringify(protocol))
   })
 })

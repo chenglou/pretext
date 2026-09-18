@@ -8,7 +8,8 @@
 //
 // extract: every decisive check of a probe output becomes a fact. Blink and Gecko probes return `checks` (name, ok,
 // expected, measured, and in Blink a DPR the check applies at); Gecko adds `pre`, preconditions whose failure makes the
-// probe's checks precondition-failed; WebKit probes return one `ok`. A check at another DPR than the run's is outside the
+// probe's checks precondition-failed; WebKit probes return one `ok`. A script observation that returns raw values alone
+// becomes one undecided fact holding the record's hash, so a release still reports when the browser's answers changed. A check at another DPR than the run's is outside the
 // run's scope and isn't evaluated. The build comes from the output (the probe runner records it) or from --build for
 // outputs recorded before it did, and the record says which.
 // diff: by fact and scope. Unchanged facts carry holdsIn forward; a verdict flip or a missing fact exits 1; changed
@@ -109,6 +110,11 @@ export function extractFacts(output: ProbeOutput & { build?: { engine: string; o
       } else if ('ok' in value) {
         const { ok, ...raw } = value
         record(entry, unique('ok'), verdictOf(ok), raw)
+      } else {
+        // Raw values alone (WebKit's round 3 and 4 probes, whose verdicts were computed from the output files): no claim a
+        // release could check, so the fact is the record itself, by hash. A release reports a changed record like any changed
+        // decisive value, and the verdict stays undecided, so it never counts as a holding fact of a rule.
+        record(entry, unique('raw values'), 'undecided', { rawSha256: sha256(value), bytes: JSON.stringify(value).length })
       }
     }
   }
