@@ -29,7 +29,7 @@
 //   item whatever came before. With line slots the rows shift with the line count, so nothing starts over there, and a slot
 //   the engine refused on a gap (BelowFloats.gaps) moves every line after it;
 // - a paragraph gap concerns the lines its range meets, and every line without a range.
-// A width of 0 that the geometry rule gives (a caret, a soft line break's box, a <br>'s) stays predicted: no x moves it.
+// The width of a soft line break's box and of a <br>'s stays predicted: it is 0 by rule, wherever the box sits.
 import type {
   CanvasMeasure, Expected, ExpectedObservation, ExpectedRect, GapName, InlineNode, ObservationPort, Paragraph, TextStyle, UnobservableFact,
   WebKitDisplayBox, WebKitLayout, WebKitTextBox,
@@ -367,13 +367,14 @@ function partialRect(port: Port, layout: WebKitLayout, own: OwnBox, next: OwnBox
   // (ComplexTextController.cpp:740-800), so an unknown width can be negative only under negative spacing.
   const canvas = port.leaves[b.run]!
   const xOnBoxEdge = xKnown && (widthKnown || (canvas.letterSpacing >= 0 && canvas.wordSpacing >= 0))
-  // A rect on the box's edge sits where the box does, as long as the box holds the text the layout gave it (page-history
-  // hands a box other item ends, and a range over a whole box reports the box's float rect, not a snapped one: suite
-  // c-4c58dcad97d2cfb6). A caret's width is 0 wherever it sits.
+  // A rect on the box's edge sits where the box does, and a caret is 0 wide, as long as the box holds the text the layout
+  // gave it: page-history hands a box other item ends, and a range over a whole box reports the box's float rect, not a
+  // snapped one (suite c-4c58dcad97d2cfb6); a collapsed space reports a caret only while it ends its line (runs
+  // c-a749f1e7bd879df8, 6px wide natively where the line goes on).
   return {
     line: own.line,
     x: xOnBoxEdge ? expected(port, own.limit, rect.x) : limited(port, gap, rect.x),
-    width: xKnown && widthKnown ? predicted(port, rect.width) : limited(port, gap, rect.width),
+    width: xKnown && widthKnown ? expected(port, own.limit, rect.width) : limited(port, gap, rect.width),
   }
 }
 
