@@ -1,0 +1,163 @@
+diff -ru a/rebuild/src/engines/blink/index.ts b/rebuild/src/engines/blink/index.ts
+--- a/rebuild/src/engines/blink/index.ts	2026-09-18 05:43:44
++++ b/rebuild/src/engines/blink/index.ts	2026-09-18 06:18:55
+@@ -542,8 +542,14 @@
+ // LineInfo::ComputeTrailingSpaceWidth (line_info.cc:289-400) for a line whose trailing white space is preserved, each
+ // item under its own style's white-space.
+ function hangWidthOf(sh: Shaper, info: LineInfo): number {
++  return trailingSpacesOf(sh, info).width
++}
++
++// EXPERIMENT: the same walk also gives end_offset_out, which EndOffsetForJustify reads (line_info.cc:275-288, :404-415).
++function trailingSpacesOf(sh: Shaper, info: LineInfo): { width: number; endOffset: number } {
+   const p = sh.p
+-  if (!info.hasTrailingSpaces) return 0
++  const lineStart = info.results.length > 0 ? info.results[0]!.start : 0
++  if (!info.hasTrailingSpaces) return { width: 0, endOffset: lineStart }
+   let trailing = 0
+   for (let i = info.results.length - 1; i >= 0; i--) {
+     const r = info.results[i]!
+@@ -551,12 +557,12 @@
+     if (item.endCollapseType === 'opaque-to-collapsing') continue
+     let itemWidth = 0
+     let willContinue = false
++    let end = r.end
+     if (item.type === 'control' || r.hasOnlyPreWrapTrailingSpaces) {
+       itemWidth = r.inlineSize
+       willContinue = true
+     } else if (item.type === 'text') {
+       if (r.end === r.start) continue
+-      let end = r.end
+       if (isHangingSpace(p.text.charCodeAt(end - 1))) {
+         do end--; while (end > r.start && isHangingSpace(p.text.charCodeAt(end - 1)))
+         if (end === r.start) {
+@@ -588,13 +594,14 @@
+           }
+           break
+         case 'pre': case 'break-spaces':
++          if (willContinue) end = item.end
+           willContinue = false
+           break
+       }
+     }
+-    if (!willContinue) return trailing
++    if (!willContinue) return { width: trailing, endOffset: end }
+   }
+-  return trailing
++  return { width: trailing, endOffset: lineStart }
+ }
+ 
+ // BidiParagraph::IndicesInVisualOrder, ubidi_reorderVisual (ubidi.cpp): runs at or above each level from the highest down
+@@ -707,13 +714,7 @@
+     const item = p.items[r.itemIndex]!
+     if (item.type === 'text' || item.type === 'control' || item.type === 'atomic') { endOffset = r.end; break }
+   }
+-  if (info.hasTrailingSpaces) {
+-    for (let i = info.results.length - 1; i >= 0; i--) {
+-      const r = info.results[i]!
+-      if (r.hasOnlyPreWrapTrailingSpaces) { endOffset = Math.min(endOffset, r.start); continue }
+-      break
+-    }
+-  }
++  if (info.hasTrailingSpaces) endOffset = trailingSpacesOf(sh, info).endOffset // EXPERIMENT
+   const lineStart = info.results.length > 0 ? info.results[0]!.start : 0
+   if (endOffset === lineStart) return false
+   const rtl = p.baseLevel === 1
+@@ -1002,7 +1003,8 @@
+           boxes[boxIndex - 1]!.start = startIndex
+           boxes[boxIndex - 1]!.end = index
+         } else {
+-          fragmented.push({ ...boxes[boxIndex - 1]!, start: startIndex, end: index, fragmentedFrom: boxIndex })
++          // EXPERIMENT: BoxData(other, start, end) copies only the item and the rect (inline_box_state.h:328-332): no edges.
++          fragmented.push({ ...boxes[boxIndex - 1]!, start: startIndex, end: index, fragmentedFrom: boxIndex, hasLineLeftEdge: false, marginLineLeft: 0, mbpLineLeft: 0, hasLineRightEdge: false, marginLineRight: 0, mbpLineRight: 0 })
+         }
+         if (boxes[boxIndex - 1]!.parent !== 0) return startIndex
+         return index
+diff -ru a/rebuild/src/engines/gecko/lines.ts b/rebuild/src/engines/gecko/lines.ts
+--- a/rebuild/src/engines/gecko/lines.ts	2026-09-18 05:43:44
++++ b/rebuild/src/engines/gecko/lines.ts	2026-09-18 06:17:38
+@@ -643,13 +643,15 @@
+ function computeTabs(p: GeckoPrepared, m: Measurer, prov: Provider, end: number, xForTabs: number, gaps: LineGaps): void {
+   // GetSpacing calls CalcTabWidths only for a positive tab width (nsTextFrame.cpp:4306-4309): tab-size 0, or letter
+   // spacing below minus the space width, leaves tabs at 0.
+-  if (!prov.run.hasTab || p.tabWidth <= 0) return
++  // EXPERIMENT: aFrame->StyleText()->mTabSize is the text frame's own; the space and spacing are the containing block's.
++  const tabWidth = p.runTabSize[p.frames[prov.frame]!.run]! * p.tabWidth
++  if (!prov.run.hasTab || tabWidth <= 0) return
+   let x = xForTabs
+   let from = prov.startT
+   for (let t = prov.startT; t < end; t++) {
+     if (p.kind[t] !== KIND_TAB) continue
+     x += glyphBefore(p, m, prov.run, t, gaps) - glyphBefore(p, m, prov.run, from, gaps) + spacingIn(p, m, prov, from, t)
+-    const nextTab = Math.ceil((x + prov.run.minTabAdvance) / p.tabWidth) * p.tabWidth
++    const nextTab = Math.ceil((x + prov.run.minTabAdvance) / tabWidth) * tabWidth
+     const w = Math.trunc(nextTab - x + (nextTab - x >= 0 ? 0.5 : -0.5)) // NSToIntRound
+     prov.tabs.set(t, w)
+     x = nextTab + p.spacingPrefix[t + 1]! - p.spacingPrefix[t]!
+@@ -1054,7 +1056,7 @@
+   let status: FrameResult['status'] = 'complete'
+   let endsInNewline = false
+   if (charsFit === 0 && length > 0 && !usedHyphenation) status = 'break-before'
+-  else if (contentLength > 0 && contentStart + contentLength - 1 === newLineOffset) { status = 'break-after'; endsInNewline = true }
++  else if (contentLength > 0 && contentStart + contentLength - 1 === newLineOffset) { status = 'break-after'; endsInNewline = true; ll.lineEndsInBR = true /* EXPERIMENT: nsTextFrame.cpp:11472-11476 */ }
+   else if (breakAfter) status = 'break-after'
+   // Justification opportunities over [offset, offset + charsFit) when the block justifies (nsTextFrame.cpp:11513-11521).
+   const justification = p.paragraph.textAlign === 'justify' ? computeJustification(p, fi, offset, offset + charsFit).info : NO_JUSTIFICATION
+diff -ru a/rebuild/src/engines/gecko/prepare.ts b/rebuild/src/engines/gecko/prepare.ts
+--- a/rebuild/src/engines/gecko/prepare.ts	2026-09-18 05:43:44
++++ b/rebuild/src/engines/gecko/prepare.ts	2026-09-18 06:13:19
+@@ -1473,7 +1473,7 @@
+       textRendering: 'auto', direction: 'ltr', partition: '', element: elementCanvas,
+     })
+     const space = Math.round(measureText(measurer, context, ' ') * (elementCanvas ? apd : 60))
+-    tabWidth = paragraph.tabSize * (space + pxToAu(paragraph.letterSpacing) + pxToAu(paragraph.wordSpacing))
++    tabWidth = space + pxToAu(paragraph.letterSpacing) + pxToAu(paragraph.wordSpacing) // EXPERIMENT: the block's unit; tab-size per frame in lines.ts
+     break
+   }
+ 
+@@ -1522,7 +1522,7 @@
+   return {
+     paragraph, env, appUnitsPerDevPixel: apd, blockStyle, text, runStarts, runStyles, runParents, runLangs: langs, letterSpacingAu, frames, items,
+     elements, textRuns, tUnits, tSource, breakFlags: g.breakFlags, clusterStart: g.clusterStart, isSpace: g.isSpace, kind: g.kind,
+-    spacingPrefix, scanSpacingPrefix, correctionPrefix, unitOf, units, sourceT, nextT, tabWidth, emergencyUnconfirmed, textIndentAu: pxToAu(paragraph.textIndent), bidi: resolveBidi, gaps,
++    spacingPrefix, scanSpacingPrefix, correctionPrefix, unitOf, units, sourceT, nextT, tabWidth, runTabSize: runTextStyles.map(style => style.tabSize), emergencyUnconfirmed, textIndentAu: pxToAu(paragraph.textIndent), bidi: resolveBidi, gaps,
+   }
+ }
+ 
+diff -ru a/rebuild/src/engines/gecko/types.ts b/rebuild/src/engines/gecko/types.ts
+--- a/rebuild/src/engines/gecko/types.ts	2026-09-18 05:43:44
++++ b/rebuild/src/engines/gecko/types.ts	2026-09-18 06:13:19
+@@ -182,6 +182,7 @@
+   nextT: Int32Array
+   // ComputeTabWidthAppUnits (nsTextFrame.cpp:3875-3906), 0 when nothing measured it.
+   tabWidth: number
++  runTabSize: number[]
+   // Transformed indices of the emergency breaks after a hyphen that the coverage facts couldn't confirm: whether the
+   // letters around the hyphen are one font's isn't known (prepare.ts step 4).
+   emergencyUnconfirmed: Set<number>
+diff -ru a/rebuild/src/engines/webkit/lines.ts b/rebuild/src/engines/webkit/lines.ts
+--- a/rebuild/src/engines/webkit/lines.ts	2026-09-18 05:43:44
++++ b/rebuild/src/engines/webkit/lines.ts	2026-09-18 06:22:31
+@@ -2154,6 +2154,22 @@
+     }
+   }
+   if (hasInlineBox) {
++    // EXPERIMENT: computeIsFirstIsLastBox (IDCB:1036-1060): of a span's display boxes on the line, in box order, the first
++    // one is its first box and the last one its last box.
++    const firstIndex = new Map<number, number>()
++    const lastIndex = new Map<number, number>()
++    for (let i = 0; i < out.length; i++) {
++      const b = out[i]!
++      if (b.kind !== 'inline-box') continue
++      if (firstBox.has(b.element) && !firstIndex.has(b.element)) firstIndex.set(b.element, i)
++      if (lastBox.has(b.element)) lastIndex.set(b.element, i)
++    }
++    for (let i = 0; i < out.length; i++) {
++      const b = out[i]!
++      if (b.kind !== 'inline-box') continue
++      b.hasStartEdge = firstIndex.get(b.element) === i
++      b.hasEndEdge = lastIndex.get(b.element) === i
++    }
+     // adjustVisualGeometryForDisplayBox (:728-824).
+     let right = contentLineLeftEdge
+     const adjust = (index: number) => {
