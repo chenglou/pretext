@@ -162,6 +162,19 @@ describe('Range rects over Gecko frames', () => {
     expect(o.nodes[1]!.map(r => [r.x, r.width].map(v => v.state === 'limited' ? v.gap : v.state))).toEqual([['font-size-quantization', 'font-size-quantization']])
   })
 
+  test('a sum over text a ranged paragraph gap names is limited by that gap', () => {
+    const a = ch(576)
+    const l = layout([line([frame(0, 0, 4, 0, 2304, [a, a, a, a])], 0, 4)])
+    l.gaps = [{ gap: 'page-history', run: 0, detail: 'the second character', at: { start: 1, end: 2 } }]
+    const o = observeGecko(paragraph(['abcd']), l, noMeasure)
+    const gaps = (r: ExpectedRect) => [r.x, r.width].map(v => v.state === 'limited' ? v.gap : v.state)
+    expect(o.codePoints.map(c => gaps(c.rects[0]!))).toEqual([['predicted', 'predicted'], ['predicted', 'page-history'], ['page-history', 'page-history'], ['page-history', 'page-history']])
+    expect(gaps(o.nodes[0]![0]!)).toEqual(['predicted', 'page-history'])
+    // A gap about breaks names no advance.
+    l.gaps = [{ gap: 'dictionary-breaks-unavailable', run: null, detail: 'Thai', at: { start: 0, end: 4 } }]
+    expect(observeGecko(paragraph(['abcd']), l, noMeasure).codePoints.map(c => gaps(c.rects[0]!))).toEqual([['predicted', 'predicted'], ['predicted', 'predicted'], ['predicted', 'predicted'], ['predicted', 'predicted']])
+  })
+
   test('an edge 2^16 device px from the origin is limited by float32-precision (probe gecko-port F6)', () => {
     const a = ch(576)
     // 65536 device px at 30 au each.
@@ -171,5 +184,13 @@ describe('Range rects over Gecko frames', () => {
     const gaps = (r: ExpectedRect) => [r.x, r.width].map(v => v.state === 'limited' ? v.gap : v.state)
     expect(gaps(o.codePoints[0]!.rects[0]!)).toEqual(['predicted', 'float32-precision'])
     expect(gaps(o.codePoints[1]!.rects[0]!)).toEqual(['float32-precision', 'float32-precision'])
+    // At 60 au per device px the bound is 2^15 device px: a float32 step is worth twice the app units.
+    const at60 = (x: number): GeckoLayout => {
+      const l60 = layout([line([frame(0, 0, 2, x, 1152, [a, a])], 0, 2)])
+      l60.lines[0]!.geometry.appUnitsPerDevPixel = 60
+      return l60
+    }
+    expect(gaps(observeGecko(paragraph(['ab']), at60(32768 * 60 - 576), noMeasure).codePoints[1]!.rects[0]!)).toEqual(['float32-precision', 'float32-precision'])
+    expect(gaps(observeGecko(paragraph(['ab']), at60(32768 * 60 - 1152), noMeasure).codePoints[1]!.rects[0]!)).toEqual(['predicted', 'float32-precision'])
   })
 })

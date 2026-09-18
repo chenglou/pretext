@@ -112,9 +112,6 @@ export type GeckoTextRun = {
   joining: 'opentype' | 'aat' | null
   // The condition under which every Canvas width of the run is a stand-in, or null (GeckoTextFrame.advancesStandIn).
   advancesStandIn: 'font-size-quantization' | 'optical-size' | null
-  // App units per px of the context's measureText widths: the page's app units per device pixel on a canvas element at the
-  // device font size, 60 on an OffscreenCanvas at the CSS size (CanvasRenderingContext2D.cpp:5277, :7132-7155).
-  auPerPx: number
 }
 
 // A shaping unit (gfxFont::SplitAndInitTextRun, gfxFont.cpp:3708-3900): a word between boundary spaces and invalid
@@ -172,6 +169,9 @@ export type GeckoPrepared = {
   // The same as the break scan gets it: without the letter spacing a cursive cluster takes only where spacing is asked for
   // one glyph run at a time (prepare.ts step 6; gfxTextRun.cpp:946-958, :1011-1018).
   scanSpacingPrefix: Int32Array
+  // The same as CalcTabWidths gets it, one character at a time, so each character is its own base (prepare.ts step 6;
+  // nsTextFrame.cpp:4345-4347). Null in a paragraph without a tab.
+  tabSpacingPrefix: Int32Array | null
   // correctionPrefix[t]: color emoji and synthesized space corrections of the clusters before t, in au.
   correctionPrefix: Int32Array
   unitOf: Int32Array

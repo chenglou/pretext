@@ -43,6 +43,8 @@ function stubAu(font: string, text: string, lang: string): number {
     }
     if (c === '😀' || c === '👩' || c === '🚀') {
       au += !emojiFont && (cps[i + 1] === '︎' || (stub.pinned && c === '😀')) ? 1020 : emoji
+      // Synthetic bold: NS_round(offset × 60) at weight 700, offset = 0.25 + 0.75 × size / 48 (gfxFont.h:1899-1904).
+      if (/ 700 /.test(font)) au += Math.floor((0.25 + 0.75 * size / 48) * 60 + 0.5)
       continue
     }
     if (c === '(') {
@@ -242,6 +244,29 @@ describe('gecko line filling (probes-firefox verdicts)', () => {
     // width is ceil(max(0, −48)) = 0 (nsTextFrame.cpp:11272-11273).
     expect(widths(paragraph([run('a\tb', 'text', { letterSpacing: -10 })], 500, { whiteSpace: 'pre', letterSpacing: -10 }))).toEqual([0])
   })
+  test('a tab counts only clusters that start in its frame, and is a stand-in after one (nsTextFrame.cpp:4349-4357)', () => {
+    // A span starts at U+0301 inside the cluster of `e`: the frame before it takes the cluster (a stand-in), the mark adds
+    // nothing to the tab's position, and the tab is the stop less a position that rests on the stand-in.
+    const l = layout(paragraph([run('ae'), run('\u0301x\tb', 'span')], 500, { whiteSpace: 'pre' }))
+    const frames = textFrames(l.lines[0]!)
+    expect(frames.map(f => f.width)).toEqual([1728, 576 + 2304 + 576])
+    expect(frames[1]!.characters.map(c => c.standInBefore)).toEqual([true, false, false, true])
+    expect(frames[1]!.standInAtEnd).toBe(true)
+    expect(l.lines[0]!.gaps.filter(g => g.at !== undefined && g.at.end === g.at.start + 1).map(g => [g.gap, g.at])).toEqual([['in-word-prefix', { start: 4, end: 5 }]])
+    // Without a stand-in before it, a tab is exact.
+    const plain = layout(paragraph([run('ae'), run('x\tb', 'span')], 500, { whiteSpace: 'pre' }))
+    expect(plain.lines[0]!.gaps).toEqual([])
+    expect(textFrames(plain.lines[0]!)[1]!.characters.map(c => c.standInBefore)).toEqual([false, false, false])
+  })
+  test('a tab position takes spacing one character at a time: a mark is its own base (nsTextFrame.cpp:4345-4347, :4203-4213)', () => {
+    // Beh with fatha under 1px of letter spacing: the cluster takes none (a cursive base), but CalcTabWidths asks for the
+    // fatha alone, script Inherited, so the tab counts from 1152 + 60 au: the stop at 8 × (576 + 60) au less that, and the
+    // tab ends 60 au before the stop. The block is right-to-left, so the tab stays in the letter's frame, whose text run it
+    // ends: a text run's last character takes letter spacing whatever it is (CanAddSpacingAfter, :3860-3873).
+    const spaced = { letterSpacing: 1 }
+    expect(widths(paragraph([run('\u0628\u064e\tb')], 500, { whiteSpace: 'pre', direction: 'rtl', ...spaced }))).toEqual([1152 + (5088 - 1212) + 60 + 636])
+    expect(widths(paragraph([run('a\u0301\tb')], 500, { whiteSpace: 'pre', ...spaced }))).toEqual([5088 + 636])
+  })
   test('H16 the hyphen letter spacing counts for fit, not width', () => {
     const p = paragraph([run('aaaa­bbbb', 'span', { letterSpacing: 1 })], 53)
     expect(starts(p)).toEqual([0, 5])
@@ -429,14 +454,44 @@ describe('gecko Canvas recipes (specs/gecko-AUDIT.md B1-B4)', () => {
     try {
       expect(widths(p('😀'))).toEqual([960])
       expect(gapNames(p('😀'))).not.toContain('page-history')
+      // U+FE0E on an emoji-default character: only the system-wide search finds a glyph without color, among the families
+      // whose character maps the process has loaded by then (gfxPlatformFontList.cpp:1474-1486), unless a listed family has it.
       expect(widths(p('😀︎'))).toEqual([1020])
-      expect(gapNames(p('😀︎'))).not.toContain('page-history')
+      expect(gapNames(p('😀︎'))).toContain('page-history')
+      const listed = { ...arial(16), facts: { ...facts, fonts: [{ family: 'Arial', realizes: true, coverage: [0x20, 0x7e, 0x1f600, 0x1f600], ligatures: null, scriptLookups: null }] } }
+      expect(gapNames(paragraph([run('😀︎', 'span', { font: listed })], 500, { font: listed }))).not.toContain('page-history')
       stub.pinned = true
       expect(widths(p('😀'))).toEqual([1020])
       expect(gapNames(p('😀'))).toContain('page-history')
     } finally {
       stub.pinned = false
     }
+  })
+
+  test('a position before a mark that starts a cluster is a stand-in (hb-ot-shaper-syllabic.cc:32-99, probe gecko-port F23)', () => {
+    // U+102B and U+1038 are spacing marks outside Grapheme_Cluster_Break=SpacingMark, so each starts a cluster, but a string
+    // that starts with one is a broken syllable to HarfBuzz and gets a dotted circle.
+    const frame = textFrames(layout(paragraph([run('ငါးမ')], 500)).lines[0]!)[0]!
+    expect(frame.characters.map(c => c.clusterStart)).toEqual([true, true, true, true])
+    expect(frame.characters.map(c => c.standInBefore)).toEqual([false, true, true, false])
+    expect(frame.characters.map(c => c.advance)).toEqual([576, 576, 576, 576])
+  })
+
+  test('B1c: a bitmap emoji under a bold font takes the DOM\'s synthetic bold step (gfxFont.cpp:3551-3562, probe gecko-port F24)', () => {
+    // 20px: the device size is 40px, where the stub's emoji is 2400 au and Canvas's step NS_round(0.875 × 60) = 53; the DOM
+    // has 1200 au and NS_round(0.875 × 30) = 26, where 2453 au × 30 / 60 rounds to 1227.
+    const bold = { ...arial(20), weight: 700 }
+    const l = layout(paragraph([run('😀', 'span', { font: bold })], 500, { font: bold }))
+    expect(l.lines[0]!.geometry.width).toBe(1226)
+    expect(allGaps(l).map(g => g.gap)).not.toContain('bitmap-emoji-size')
+  })
+
+  test('the space-in-shaping test reads Canvas widths only below 2^18 px (CanvasRenderingContext2D.cpp:5277)', () => {
+    // 9,134 words of `aa ` are 15,783,552 au, 263,059.2px: measureText's float width is 1/32 px steps there and reads back
+    // as 15,783,551 au. The test runs in windows under 2^18 px, which read back exactly, so nothing is reported.
+    const long = prepareGecko(paragraph([run('aa '.repeat(9134))], 500), env, createMeasurer())
+    expect(Math.round(Math.fround(15783552 / 60) * 60)).toBe(15783551)
+    expect(long.gaps.map(g => g.gap)).toEqual([])
   })
 
   test('B1b: a soft hyphen inside a grapheme cluster puts the whole cluster before the break', () => {

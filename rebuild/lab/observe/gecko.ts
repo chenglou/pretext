@@ -13,11 +13,14 @@ import type {
 
 // DOMRect::SetLayoutRect rounds each app-unit edge to 1/65536 px, and SetRect narrows each field to float32 on its own
 // (DOMRect.cpp:152-164, DOMRect.h:122-127). Before that, TransformFrameRectToAncestor takes the rect through float32 device
-// pixels: the edges become floats, every frame's offset up to the root is added in float32, and the result is rounded back
-// to app units (nsLayoutUtils.cpp:2517-2537). Each of those steps is off by at most half a float32 step, so the edges come
-// back as the frames' own while the halves add up to less than half an app unit: below 2^16 device px a step is 1/256
-// device px, and eight halves are 0.47 au at 30 au per device px. From there on an edge can come back 1 au off (probe
-// gecko-port F6: x 1459.688 au where the frame's is 1459, 100000px from the origin): `float32-precision`.
+// pixels: the edges become floats (au over the page's app units per device pixel), the transform to the ancestor adds in
+// float32, and the result is scaled and rounded back to app units (nsLayoutUtils.cpp:2517-2537). Each float32 operation is off
+// by at most half a step, and the port counts up to eight of them on an edge (conversion, the right edge's sum, the
+// transform's product and sum for each corner, the bounds' difference, the scaling back). The edge comes back as the frame's
+// own while that adds up to less than half an app unit: 8 × step / 2 × apd < 1/2, a step below 1 / (8 × apd) device px, which
+// holds for magnitudes below 2^k with 2^k the first power of two at or above 2^20 / apd (a float32 step is 2^−23 of its
+// power of two): 2^16 device px at 30 au per device px, 2^15 at 60. From there on an edge can come back 1 au off (probe
+// gecko-port F6 at apd 30: x 1459.688 au where the frame's is 1459, 100000px from the origin): `float32-precision`.
 const R = (au: number): number => Math.floor(au * (65536 / 60) + 0.5) / 65536
 
 export function encodeEdges(a0: number, a1: number): { x: number; width: number } {
@@ -92,6 +95,29 @@ export const observeGecko: ObservationPort<GeckoLayout> = (paragraph, layout) =>
   }
   for (let r = 0; r < framesOfRun.length; r++) framesOfRun[r]!.sort((a, b) => a.frame.contentStart - b.frame.contentStart)
 
+  // A paragraph gap with a range names text whose advances are Canvas stand-ins under its condition (DESIGN.md §2.8): a
+  // cluster whose font follows the process's history, a cursive cluster whose letter spacing the font facts don't settle, a
+  // bitmap emoji at a size Canvas can't set. A sum of advances over such text is a stand-in too. `dictionary-breaks-
+  // unavailable` names breaks, not advances. rangeGap(a, b): the condition of a ranged gap meeting source [a, b), or null.
+  const ranged = layout.gaps.filter(g => g.at !== undefined && g.at.end > g.at.start && g.gap !== 'dictionary-breaks-unavailable')
+    .map(g => ({ start: g.at!.start, end: g.at!.end, gap: g.gap })).sort((a, b) => a.start - b.start)
+  // furthest[i]: the gap among the first i + 1 that reaches furthest.
+  const furthest: number[] = []
+  for (let i = 0; i < ranged.length; i++) furthest.push(i > 0 && ranged[furthest[i - 1]!]!.end >= ranged[i]!.end ? furthest[i - 1]! : i)
+  const rangeGap = (a: number, b: number): GapName | null => {
+    if (b <= a || ranged.length === 0) return null
+    let lo = 0
+    let hi = ranged.length
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1
+      if (ranged[mid]!.start < b) lo = mid + 1
+      else hi = mid
+    }
+    if (lo === 0) return null
+    const reach = ranged[furthest[lo - 1]!]!
+    return reach.end > a ? reach.gap : null
+  }
+
   // The condition under which the position before source offset s in frame f is a stand-in, or null. Every advance of a
   // frame whose Canvas widths are stand-ins is one (GeckoTextFrame.advancesStandIn). Otherwise the layout says so per unit,
   // where the position lies inside a shaping unit and Canvas couldn't confirm it (GeckoCharacter.standInBefore,
@@ -107,7 +133,7 @@ export const observeGecko: ObservationPort<GeckoLayout> = (paragraph, layout) =>
   }
   // A frame's box is the advance between its two ends (nsTextFrame.cpp:11268-11273): a stand-in where either end is one.
   const widthLimited = (f: GeckoTextFrame): GapName | null =>
-    f.advancesStandIn ?? standIn(f, f.measuredStart) ?? (f.standInAtEnd ? 'in-word-prefix' : null)
+    f.advancesStandIn ?? standIn(f, f.measuredStart) ?? (f.standInAtEnd ? 'in-word-prefix' : null) ?? rangeGap(f.measuredStart, f.contentEnd)
 
   // A frame's place on its line. TextAlignLine and ReorderFrames put frames one after another from the line's start edge,
   // after an offset that start alignment takes from the hang alone and every other alignment from the line's remaining
@@ -152,15 +178,18 @@ export const observeGecko: ObservationPort<GeckoLayout> = (paragraph, layout) =>
     const placed = placedByLimited[l]![k]!
     return { x: leftToRight ? placed : placed ?? width, width }
   }
-  // An edge 2^16 device px or more from the origin can come back 1 au off (see R above).
+  // An edge this many device px or more from the origin can come back 1 au off (see R above).
   const apd = layout.lines.length === 0 ? 60 : layout.lines[0]!.geometry.appUnitsPerDevPixel
-  const farEdge = (au: number): GapName | null => Math.abs(au) / apd >= 65536 ? 'float32-precision' : null
+  let farBound = 1
+  while (farBound < 2 ** 20 / apd) farBound *= 2
+  const farEdge = (au: number): GapName | null => Math.abs(au) / apd >= farBound ? 'float32-precision' : null
 
   // nsTextFrame::GetPointFromOffset in frame-local au (nsTextFrame.cpp:8667-8752): clamp to the content and the trimmed
   // start (GetTrimmedOffsets without trimming the end, :3287-3330), snap back to the cluster start (FindClusterStart,
   // :3549-3558), sum the advances from the trimmed start, and count from the box's right edge in an RTL text run. The sum
   // is a stand-in where either end of it is one: the frame's start and the offset, or in an RTL text run, where the point is
-  // the box's width less the sum, the offset and the frame's end.
+  // the box's width less the sum, the offset and the frame's end. It is one too where it sums text a ranged paragraph gap
+  // names (rangeGap); in an RTL text run the box's width stands for that.
   const point = (pf: PlacedFrame, offset: number): Edge => {
     const f = pf.frame
     let o = Math.max(f.contentStart, Math.min(f.contentEnd, offset))
@@ -176,7 +205,7 @@ export const observeGecko: ObservationPort<GeckoLayout> = (paragraph, layout) =>
     let keptFrom = false
     for (let c = o - f.measuredStart; c < f.characters.length && !keptFrom; c++) keptFrom = !f.characters[c]!.skipped
     if (pf.rtl) return { au: f.width - iSize, limited: keptFrom ? standIn(f, o) ?? widthLimited(f) : null }
-    return { au: iSize, limited: keptBefore ? standIn(f, f.measuredStart) ?? standIn(f, o) : null }
+    return { au: iSize, limited: keptBefore ? standIn(f, f.measuredStart) ?? standIn(f, o) ?? rangeGap(f.measuredStart, o) : null }
   }
   // nsRect::ClampPoint into the rect as already cut (gfx/2d/BaseRect.h:701-705).
   const clamp = (p: Edge, lo: Edge, hi: Edge): Edge => {

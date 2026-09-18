@@ -12,6 +12,8 @@
 //   Canvas at the CSS size adds another amount than the DOM. Per string: the DOM's code point rects, and oc at weights 400
 //   and 700 at the CSS and the device size.
 //
+// Each probe returns its raw values with `checks` and `pre` over them (added in round 4; F19's rows are under `rows`).
+//
 // Run: python3 .artifacts/session/with-browser-lock.py probes-gecko-round3 -- \
 //   bun rebuild/probes/runner.ts --browser=firefox --probes=rebuild/probes/gecko-round3.ts --out=.artifacts/probes/gecko/round3
 import type { Probe } from './types.ts'
@@ -265,23 +267,112 @@ for (const text of ['ܐܒܓ́', 'ܐܒܓ', 'ܓ́', 'ܓܰ', 'بب́', 'ببَ', '�
 return out;
 `
 
+// Checks over each probe's raw values (round 4), as in gecko-round2.ts.
+const CHECKS = String.raw`
+const checks = [];
+const pre = [];
+const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+const check = (name, measured, expected) => { checks.push({ name, measured, expected, ok: same(measured, expected) }); };
+const need = (name, measured, expected) => { pre.push({ name, measured, expected, ok: same(measured, expected) }); };
+`
+const withChecks = (source: string, checks: string): string => `${HELPERS}${CHECKS}const raw = (() => {${source}})();\n${checks}\nreturn { ...(Array.isArray(raw) ? { rows: raw } : raw), checks, pre };`
+
+const F13_CHECKS = String.raw`
+const units = raw.units.map(u => ({ css: u.css, text: u.text, dom: Math.round(u.dom), oc: Math.round(u.ocCss), element: Math.round(u.ecDev) }));
+const emojiOrSystem = u => /system-ui|-apple-system/.test(u.css) || /\p{Extended_Pictographic}|\u20e3/u.test(u.text);
+check('a detached canvas element at the device font size, width × apd, is the DOM box on every unit', units.filter(u => u.element !== u.dom).map(u => [u.css, u.text]), []);
+check('the units an OffscreenCanvas at the CSS size gets exactly 1 au off, OffscreenCanvas less DOM: the residual class gecko/one-shaping-unit-one-app-unit', units.filter(u => Math.abs(u.oc - u.dom) === 1).map(u => [u.css, u.text, u.oc - u.dom]), [["500 32px Thonburi", "รมชาติทำให้ผู้คนมีคว", -1], ["500 32px Thonburi", "รมชาติทำให้ผู้คนมี", -1], ["500 32px Thonburi", "ทำให้", -1], ["300 10px \"Geeza Pro\"", "ووفقك", -1], ["400 10px \"Geeza Pro\"", "ووفقك", -1], ["500 10px \"Geeza Pro\"", "ووفقك", -1], ["300 10px \"Geeza Pro\"", "وأعانك", -1], ["400 10px \"Geeza Pro\"", "وأعانك", -1], ["500 10px \"Geeza Pro\"", "وأعانك", -1], ["300 10px \"Geeza Pro\"", "وما", -1], ["400 10px \"Geeza Pro\"", "وما", -1], ["500 10px \"Geeza Pro\"", "وما", -1], ["400 15px \"Helvetica Neue\", Helvetica, Arial, sans-serif", "modern", 1], ["700 10px \"Helvetica Neue\"", "LT:", 1]]);
+check('units further off on the OffscreenCanvas are bitmap emoji or the system font at its optical size', units.filter(u => Math.abs(u.oc - u.dom) > 1 && !emojiOrSystem(u)).map(u => [u.css, u.text, u.oc - u.dom]), []);
+`
+
+const F14_CHECKS = String.raw`
+const parts = raw.rows.flatMap(r => r.canvas.map((c, i) => ({ size: r.size, family: r.family, text: c.text, dom: Math.round(r.dom[i].whole), element: Math.round(c.ec700Dev), oc: Math.round(c.oc700) })));
+const heart = parts.find(x => x.size === 14 && x.text === '⃣❤');
+check('a canvas element at the device size holds the DOM box of every part, synthetic bold included', parts.filter(x => x.element !== x.dom).map(x => [x.size, x.family, x.text]), []);
+check('U+20E3 U+2764 in bold 14px "Helvetica Neue": DOM 786 au, OffscreenCanvas at the CSS size 793 (the residual class gecko/synthetic-bold-offset)', [heart.dom, heart.oc], [786, 793]);
+`
+
+const F15_CHECKS = String.raw`
+// Where the two sides add up to the unit, plainly or with U+200D at the cut, the prefix is the DOM's advance before the cut.
+const exceptions = [];
+let plain = 0, joined = 0;
+for (const w of raw.words) {
+  const offsets = []; let o = 0;
+  for (const ch of w.text) { offsets.push(o); o += ch.length; }
+  for (const c of w.cuts) {
+    const domBefore = w.dom.reduce((a, width, i) => offsets[i] < c.t ? a + Math.round(width) : a, 0);
+    if (c.prefix + c.suffix === w.unit) { plain++; if (c.prefix !== domBefore) exceptions.push([w.css, w.text, c.t]); }
+    else if (c.prefixZwj + c.zwjSuffix === w.unit) { joined++; if (c.prefixZwj !== domBefore) exceptions.push([w.css, w.text, c.t]); }
+  }
+}
+need('many cuts add up, plainly and with U+200D', plain > 300 && joined > 300, true);
+check('where the two sides add up to the unit, the prefix is the DOM advance before the cut, except inside the fi ligature of "Helvetica Neue", which is as wide as its parts (probe F9)', exceptions, [['400 14px "Helvetica Neue"', 'firstname', 1], ['400 14px "Helvetica Neue"', 'office', 3]]);
+`
+
+const F16_CHECKS = String.raw`
+const legacy = ['Verdana', '"Times New Roman"', '"Helvetica Neue"', 'Helvetica'];
+const width = rects => Math.round(rects.reduce((a, r) => a + r, 0));
+const even = [], odd = [];
+for (const row of raw.rows) {
+  if (!legacy.some(f => row.css.endsWith(f))) continue;
+  const at = row.sizes[0];
+  const R = at.pair - at.first - at.second;
+  if (R === 0) continue;
+  const d0 = Math.round(row.dom[0]), d1 = Math.round(row.dom[1]);
+  if (R % 2 === 0) { if (!(d0 === at.first + R / 2 && d1 === at.second + R / 2)) even.push([row.css, row.pair, R, d0 - at.first, d1 - at.second]); }
+  else if (!(d0 + d1 === at.pair && Math.abs((d0 - at.first) - (d1 - at.second)) === 1)) odd.push([row.css, row.pair, R, d0 - at.first, d1 - at.second]);
+}
+check('under a legacy kern table an even pair adjustment divides in halves between the two glyphs (hb-kern.hh:102-106)', even, []);
+check('an odd one leaves the two glyphs one au apart, adding up to the pair', odd, []);
+`
+
+const F17_CHECKS = String.raw`
+check('Canvas letter spacing counts a whole number of ligature groups, no more than the grapheme clusters', raw.words.filter(w => !Number.isInteger(w.groups) || w.groups > w.graphemes || w.groups < 1).map(w => [w.css, w.text, w.groups]), []);
+check('the words with fewer groups than clusters: lam-alef and the fonts\u2019 other required ligatures, U+0E24 U+0E32', raw.words.filter(w => w.groups < w.graphemes).map(w => [w.css, w.text, w.graphemes, w.groups]), [["400 16px \"Geeza Pro\"", "سلام", 4, 3], ["400 16px \"Geeza Pro\"", "السلام", 6, 5], ["400 16px \"Geeza Pro\"", "المرابحة", 8, 7], ["400 16px \"Geeza Pro\"", "اللَّهِ", 4, 2], ["400 16px \"Geeza Pro\"", "لله", 3, 1], ["400 16px \"Geeza Pro\"", "الله.", 5, 3], ["400 16px \"Geeza Pro\"", "لا", 2, 1], ["400 16px \"Geeza Pro\"", "بلا", 3, 2], ["400 16px \"Geeza Pro\"", "فلان", 4, 3], ["400 16px Arial", "سلام", 4, 3], ["400 16px Arial", "السلام", 6, 5], ["400 16px Arial", "لا", 2, 1], ["400 16px Arial", "بلا", 3, 2], ["400 16px Arial", "فلان", 4, 3], ["400 18px \"Times New Roman\"", "سلام", 4, 3], ["400 18px \"Times New Roman\"", "السلام", 6, 5], ["400 18px \"Times New Roman\"", "لا", 2, 1], ["400 18px \"Times New Roman\"", "بلا", 3, 2], ["400 18px \"Times New Roman\"", "فلان", 4, 3], ["400 16px \"Courier New\"", "سلام", 4, 3], ["400 16px \"Courier New\"", "السلام", 6, 5], ["400 16px \"Courier New\"", "لا", 2, 1], ["400 16px \"Courier New\"", "بلا", 3, 2], ["400 16px \"Courier New\"", "فلان", 4, 3], ["400 16px \"Noto Nastaliq Urdu\"", "اللَّهِ", 4, 2], ["400 20px Thonburi", "ฤา", 2, 1], ["400 16px Arial", "ฤา", 2, 1]]);
+`
+
+const F18_CHECKS = String.raw`
+// nscoord_MAX, 2^30 − 1 au, through float32 px: 17895698px × 60.
+const UNBOUNDED = 1073741880;
+const unbounded = v => v.nodes.some(node => node.some(r => r[1] === UNBOUNDED));
+check('reh fatha | shadda across two spans in 20px "Geeza Pro": a frame is nscoord_MAX wide', unbounded(raw.asIs), true);
+check('whatever the word spacing, white-space, direction, width and the text before the word', ['noWordSpacing', 'equalWordSpacing', 'normal', 'ltr', 'wordAlone', 'wordAloneWide', 'wordAloneNoSpacing', 'wide'].filter(k => !unbounded(raw[k])), []);
+check('a cut before both marks is bounded', unbounded(raw.cutAtClusterStart), false);
+check('of the single-word cuts only the one between the two marks in "Geeza Pro" is unbounded (the Amiri row loaded no web font and is "Geeza Pro" too)', Object.keys(raw.cuts).filter(k => raw.cuts[k].some(node => node.some(r => r[1] === UNBOUNDED))), ['geezaBaseMark_Mark', 'amiriBaseMark_Mark']);
+`
+
+const F19_CHECKS = String.raw`
+// Per string and font: which code points grow under letter spacing, by how much per px.
+const by = {};
+for (const r of raw) (by[r.font + '|' + r.text] = by[r.font + '|' + r.text] || {})[r.ls] = r;
+const growth = (font, text, ls) => { const a = by[font + '|' + text][0], b = by[font + '|' + text][ls]; return b.points.map((w, i) => (w - a.points[i]) / ls); };
+const courier = '400 16px "Courier New"', geeza = '400 16px "Geeza Pro"', times = '400 16px "Times New Roman"';
+check('beh beh with U+0301 under 4px: no cluster grows in "Courier New" and "Times New Roman", which have U+0301', [growth(courier, 'بب́', 4), growth(times, 'بب́', 4)], [[0, 0, 0], [0, 0, 0]]);
+check('in "Geeza Pro", which lacks U+0301, the marked cluster grows by the letter spacing', growth(geeza, 'بب́', 4), [0, 0, 60]);
+check('with a mark of the base font (fatha) nothing grows in "Geeza Pro"', growth(geeza, 'ببَ', 4), [0, 0, 0]);
+check('Syriac, N\u2019Ko and Mongolian letters, drawn by fallback fonts, grow only in the cluster marked with U+0301', [growth(courier, 'ܐܒܓ́', 4), growth(courier, 'ߒߞ́', 4), growth(courier, 'ᠮᠣ́', 4)], [[0, 0, 0, 60], [0, 0, 60], [0, 0, 60]]);
+check('and not with a mark of their own script', [growth(courier, 'ܓܰ', 4), growth(courier, 'ߒߞ߫', 4)], [[0, 0], [0, 0, 0]]);
+check('Hanifi Rohingya letters with U+0301 under 1px: only the marked cluster grows', growth(courier, '\u{10D00}\u{10D01}\u{10D02}́', 1), [0, 0, 0, 60]);
+check('a Latin cluster takes the spacing whatever draws its mark', growth(courier, 'ab́c', 4), [60, 0, 60, 60]);
+`
+
 export default function probes(): Probe[] {
-  const probe = (id: string, spec: string, source: string, fontFixtures?: string[]): Probe => ({
+  const probe = (id: string, spec: string, source: string, checks: string, fontFixtures?: string[]): Probe => ({
     id,
     spec,
     pageLang: 'en',
-    observe: [{ kind: 'script', source: HELPERS + source }],
+    observe: [{ kind: 'script', source: withChecks(source, checks) }],
     browsers: ['firefox'],
     ...(fontFixtures === undefined ? {} : { fontFixtures }),
     note: 'Measurement only.',
   })
   return [
-    probe('gecko-port F13', 'gecko-port F13: a canvas element at the device font size against the DOM for the 1 au class', F13),
-    probe('gecko-port F14', 'gecko-port F14: synthetic bold at the CSS and the device size', F14, ['Amiri']),
-    probe('gecko-port F15', 'gecko-port F15: in-word advances against prefix, suffix and U+200D recipes', F15, ['Amiri', 'Noto Naskh Arabic', 'Noto Nastaliq Urdu', 'Shantell Sans']),
-    probe('gecko-port F16', 'gecko-port F16: how an odd pair adjustment divides between two glyphs', F16),
-    probe('gecko-port F18', 'gecko-port F18: a grapheme cluster split across two spans of one text run', F18),
-    probe('gecko-port F19', 'gecko-port F19: letter spacing in a cursive script with a mark in another font', F19),
-    probe('gecko-port F17', 'gecko-port F17: ligature groups counted through Canvas letter spacing', F17, ['Amiri', 'Noto Naskh Arabic', 'Noto Nastaliq Urdu']),
+    probe('gecko-port F13', 'gecko-port F13: a canvas element at the device font size against the DOM for the 1 au class', F13, F13_CHECKS),
+    probe('gecko-port F14', 'gecko-port F14: synthetic bold at the CSS and the device size', F14, F14_CHECKS, ['Amiri']),
+    probe('gecko-port F15', 'gecko-port F15: in-word advances against prefix, suffix and U+200D recipes', F15, F15_CHECKS, ['Amiri', 'Noto Naskh Arabic', 'Noto Nastaliq Urdu', 'Shantell Sans']),
+    probe('gecko-port F16', 'gecko-port F16: how an odd pair adjustment divides between two glyphs', F16, F16_CHECKS),
+    probe('gecko-port F18', 'gecko-port F18: a grapheme cluster split across two spans of one text run', F18, F18_CHECKS),
+    probe('gecko-port F19', 'gecko-port F19: letter spacing in a cursive script with a mark in another font', F19, F19_CHECKS),
+    probe('gecko-port F17', 'gecko-port F17: ligature groups counted through Canvas letter spacing', F17, F17_CHECKS, ['Amiri', 'Noto Naskh Arabic', 'Noto Nastaliq Urdu']),
   ]
 }
