@@ -1,6 +1,7 @@
 // The runtime font checks against a stand-in Canvas whose fonts are small tables: which characters a family draws and how
 // wide. The browsers' answers are rebuild/probes/font-checks.ts.
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test'
+import { joiningType } from '../engines/blink/props.ts'
 import { PINNED_BUILDS, type BlinkEnvironment, type Environment, type GeckoEnvironment, type WebKitEnvironment } from '../env.ts'
 import { UNKNOWN_FONT_FACTS, type FontDecl, type FontFacts, type Paragraph } from '../model.ts'
 import { createMeasurer, type Measurer } from './canvas.ts'
@@ -173,6 +174,18 @@ describe('joining (Blink)', () => {
     expect(learn('Naskh', 'ab', blink(1)).joining).toBe(null)
     expect(learn('Naskh', BEH, blink(1)).joining).toBe('opentype')
     expect(learn('Naskh', BEH, webkit).joining).toBe(null)
+  })
+
+  test('every letter with a joining type asks, by the Blink port\'s own data (U+200D alone doesn\'t)', () => {
+    const unasked: string[] = []
+    for (let cp = 0; cp <= 0x10ffff; cp++) {
+      const jt = joiningType(cp)
+      if (jt === 0 || jt === 5 || cp === 0x200d) continue
+      calls = 0
+      learn('Prop', String.fromCodePoint(cp), blink(1))
+      if (calls === 0) unasked.push(cp.toString(16))
+    }
+    expect(unasked).toEqual([])
   })
 
   test('aat where context changes nothing and the font has joined forms of another width', () => {

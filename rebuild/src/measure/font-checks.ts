@@ -222,7 +222,10 @@ function joining(p: Probe): FontFacts['joining'] {
 }
 
 // What the paragraph's text can ask of its fonts: a soft hyphen draws a hyphen, and joining letters meet shaping call
-// edges. Joining scripts sit in the right-to-left blocks, but for Mongolian and Phags-pa.
+// edges. The blocks that hold every script with Joining_Type letters (ArabicShaping.txt): Arabic to Arabic Extended-A with
+// Syriac, N'Ko and Mandaic between them, Mongolian, Phags-pa, the Arabic presentation forms, and the right-to-left planes
+// U+10800..U+10FFF and U+1E800..U+1EFFF (Manichaean to Old Uyghur, Adlam), by their lead surrogates. More text than
+// joins only costs the check; U+200D, which joins too, asks nothing on its own.
 type TextNeeds = { hyphen: boolean; joining: boolean }
 
 function addTextNeeds(nodes: readonly InlineNode[], needs: TextNeeds): void {
@@ -233,8 +236,7 @@ function addTextNeeds(nodes: readonly InlineNode[], needs: TextNeeds): void {
     for (let i = 0; i < node.text.length; i++) {
       const c = node.text.charCodeAt(i)
       if (c === 0xad) needs.hyphen = true
-      else if ((c >= 0x0590 && c <= 0x08ff) || (c >= 0x1800 && c <= 0x18af) || (c >= 0xa840 && c <= 0xa87f) || (c >= 0xfb1d && c <= 0xfdff) || (c >= 0xfe70 && c <= 0xfeff)) needs.joining = true
-      // U+10800..U+10FFF and U+1E800..U+1EFFF, by their lead surrogates.
+      else if ((c >= 0x0600 && c <= 0x08ff) || (c >= 0x1800 && c <= 0x18af) || (c >= 0xa840 && c <= 0xa87f) || (c >= 0xfb50 && c <= 0xfdff) || (c >= 0xfe70 && c <= 0xfeff)) needs.joining = true
       else if (c === 0xd802 || c === 0xd803 || c === 0xd83a || c === 0xd83b) needs.joining = true
     }
   }
