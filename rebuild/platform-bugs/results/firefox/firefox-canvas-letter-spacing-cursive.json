@@ -1,0 +1,23 @@
+{
+  "page": "firefox-canvas-letter-spacing-cursive.html",
+  "browser": "firefox",
+  "build": {
+    "app": "Firefox",
+    "appVersion": "156.0",
+    "engine": "156.0",
+    "os": "26A428"
+  },
+  "started": "2026-09-18T11:52:37.693Z",
+  "error": null,
+  "report": {
+    "title": "BUG: canvas adds 24.0px to a joined Arabic word, the DOM adds 0.0px",
+    "log": "added by 8px of letter spacing:\n  DOM span          0.000   (49.350 -> 49.350)\n  canvas element    24.000   (49.367 -> 73.367)\n  OffscreenCanvas   24.000   (49.350 -> 73.350)\n\nexpected: the canvases add what the DOM adds (0.000)\n\nMozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:156.0) Gecko/20100101 Firefox/156.0",
+    "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:156.0) Gecko/20100101 Firefox/156.0",
+    "devicePixelRatio": 2,
+    "visibility": "visible",
+    "languages": [
+      "en-US",
+      "en"
+    ]
+  }
+}

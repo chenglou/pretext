@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>running</title>
+<style>
+  body { font: 14px/1.5 Helvetica, Arial, sans-serif; margin: 16px; max-width: 900px }
+  pre { font: 12px/1.5 Menlo, monospace; background: #f4f4f4; padding: 8px; white-space: pre-wrap }
+  #stage span { font: 18px/28px Arial; white-space: pre; outline: 1px solid #c00 }
+  canvas { outline: 1px solid #ccc }
+</style>
+</head>
+<body>
+<h1>An OffscreenCanvas and a canvas outside the document measure invisible characters that a canvas in the document and DOM text skip</h1>
+<p>18px Arial. <code>A</code> U+200E <code>V</code> holds a left-to-right mark, and <code>a</code> U+0001 <code>b</code>
+holds a C0 control. A <code>&lt;canvas&gt;</code> element in the document measures both like <code>AV</code> and
+<code>ab</code>, as DOM text does. A canvas element outside the document and an OffscreenCanvas on the same thread, with
+the same font and the same string, should measure the same as the one in the document.</p>
+<div id="stage"></div>
+<canvas id="connected" width="10" height="10"></canvas>
+<pre id="log"></pre>
+<script>
+const out = []
+function log(s) { out.push(s); document.getElementById('log').textContent = out.join('\n') }
+const FONT = '18px Arial'
+function domWidth(text) {
+  const line = document.createElement('div'), span = document.createElement('span')
+  span.textContent = text
+  line.append(span)
+  document.getElementById('stage').append(line)
+  return span.getBoundingClientRect().width
+}
+const connected = document.getElementById('connected').getContext('2d')
+const detached = document.createElement('canvas').getContext('2d')
+const offscreen = new OffscreenCanvas(1, 1).getContext('2d')
+connected.font = detached.font = offscreen.font = FONT
+const CASES = [['AV', 'AV'], ['A U+200E V', 'A\u200eV'], ['ab', 'ab'], ['a U+0001 b', 'a\u0001b']]
+let failures = 0
+log(''.padEnd(14) + 'DOM        canvas in document   canvas not in document   OffscreenCanvas')
+for (const [name, text] of CASES) {
+  const inDocument = connected.measureText(text).width, outside = detached.measureText(text).width, off = offscreen.measureText(text).width
+  const ok = Math.abs(inDocument - off) < 0.1 && Math.abs(inDocument - outside) < 0.1
+  if (!ok) failures++
+  log(name.padEnd(14) + domWidth(text).toFixed(3).padEnd(11) + inDocument.toFixed(3).padEnd(21) + outside.toFixed(3).padEnd(25) + off.toFixed(3) + (ok ? '' : '   <-- differ'))
+}
+log('')
+log('expected: the three canvas columns agree on every row')
+log('devicePixelRatio ' + devicePixelRatio)
+log(navigator.userAgent)
+document.title = failures > 0 ? 'BUG: the three kinds of canvas disagree on ' + failures + ' of 4 strings' : 'NO BUG: the three kinds of canvas agree'
+</script>
+</body>
+</html>

@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>running</title>
+<style>
+  /* No system-ui anywhere except the two test spans: the page's own text must not create the font first. */
+  body { font: 14px/1.5 Helvetica, Arial, sans-serif; margin: 16px; max-width: 900px }
+  pre { font: 12px/1.5 Menlo, monospace; background: #f4f4f4; padding: 8px; white-space: pre-wrap }
+  #stage span { font-family: system-ui; white-space: pre; outline: 1px solid #c00 }
+</style>
+</head>
+<body>
+<h1>system-ui DOM text changes width after a canvas measured system-ui at that size x devicePixelRatio</h1>
+<p>Needs <code>devicePixelRatio</code> above 1 (a Retina display, or page zoom) and a fresh renderer: open the page in a
+new tab of a new window, and don't reload. Two spans hold <code>Hello world</code> in <code>system-ui</code>. The 13px
+span is laid out before any canvas touched <code>system-ui</code>. Before the 15px span is laid out, a canvas measures
+<code>system-ui</code> at 15px x devicePixelRatio. A canvas measurement should not change how DOM text lays out, so
+both spans should be as wide as a canvas measures the same text at the span's CSS size (within a layout unit).</p>
+<div id="stage"></div>
+<pre id="log"></pre>
+<script>
+const out = []
+function log(s) { out.push(s); document.getElementById('log').textContent = out.join('\n') }
+const TEXT = 'Hello world'
+function canvasWidth(px) {
+  const ctx = new OffscreenCanvas(1, 1).getContext('2d')
+  ctx.font = px + 'px system-ui'
+  return ctx.measureText(TEXT).width
+}
+function domWidth(px) {
+  const line = document.createElement('div'), span = document.createElement('span')
+  span.style.fontSize = px + 'px'
+  span.textContent = TEXT
+  line.append(span)
+  document.getElementById('stage').append(line)
+  return span.getBoundingClientRect().width
+}
+const dpr = devicePixelRatio
+log('devicePixelRatio ' + dpr)
+// 13px: DOM first.
+const dom13 = domWidth(13)
+const canvas13 = canvasWidth(13)
+// 15px: a canvas at the device size first.
+const canvas30 = canvasWidth(15 * dpr)
+const dom15 = domWidth(15)
+const canvas15 = canvasWidth(15)
+log('13px, DOM laid out first:                    DOM ' + dom13 + '   canvas at 13px ' + canvas13 + '   difference ' + (dom13 - canvas13).toFixed(4))
+log('15px, canvas measured ' + 15 * dpr + 'px system-ui first:   DOM ' + dom15 + '   canvas at 15px ' + canvas15 + '   difference ' + (dom15 - canvas15).toFixed(4))
+log('(canvas at ' + 15 * dpr + 'px measured ' + canvas30 + ', half of it ' + canvas30 / dpr + ')')
+log('')
+log('expected: both differences under 0.02px')
+log('actual:   ' + (dom13 - canvas13).toFixed(4) + ' and ' + (dom15 - canvas15).toFixed(4))
+log('')
+log(navigator.userAgent)
+const clean = Math.abs(dom13 - canvas13) < 0.02, moved = Math.abs(dom15 - canvas15) >= 0.02
+document.title = dpr === 1 ? 'NO BUG: needs devicePixelRatio above 1 to show' : moved && clean ? 'BUG: DOM system-ui text is ' + (canvas15 - dom15).toFixed(3) + 'px narrower after the canvas measurement' : moved ? 'BUG (another one, or the renderer was not fresh): both spans differ from canvas' : 'NO BUG: both spans match canvas'
+</script>
+</body>
+</html>

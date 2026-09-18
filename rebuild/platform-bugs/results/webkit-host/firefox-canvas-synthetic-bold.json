@@ -1,0 +1,22 @@
+{
+  "page": "firefox-canvas-synthetic-bold.html",
+  "browser": "webkit-host",
+  "build": {
+    "app": "webkit-host",
+    "appVersion": "27.0",
+    "engine": "22625.1.29.11.27",
+    "os": "26A428"
+  },
+  "started": "2026-09-18T11:52:25.657Z",
+  "error": null,
+  "report": {
+    "title": "NO BUG: canvas and DOM agree",
+    "log": "font                          DOM        OffscreenCanvas   difference\n14px \"Helvetica Neue\"         127.422    127.422           0.000\nbold 14px \"Helvetica Neue\"    131.311    131.311           -0.000\n16px \"Helvetica Neue\"         145.625    145.625           0.000\nbold 16px \"Helvetica Neue\"    150.069    150.069           -0.000\nbold 24px \"Helvetica Neue\"    225.104    225.104           0.000\n\nexpected: no difference on any row\ndevicePixelRatio 2\nMozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/27.0 Safari/605.1.15 webkit-host/22625.1.29.11.27",
+    "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/27.0 Safari/605.1.15 webkit-host/22625.1.29.11.27",
+    "devicePixelRatio": 2,
+    "visibility": "visible",
+    "languages": [
+      "zh-CN"
+    ]
+  }
+}

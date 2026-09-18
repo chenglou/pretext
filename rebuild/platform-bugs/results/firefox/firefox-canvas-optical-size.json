@@ -1,0 +1,23 @@
+{
+  "page": "firefox-canvas-optical-size.html",
+  "browser": "firefox",
+  "build": {
+    "app": "Firefox",
+    "appVersion": "156.0",
+    "engine": "156.0",
+    "os": "26A428"
+  },
+  "started": "2026-09-18T11:53:03.571Z",
+  "error": null,
+  "report": {
+    "title": "BUG: canvas system-ui widths differ from DOM text at 4 of 4 sizes",
+    "log": "size   DOM auto    DOM none    OffscreenCanvas   canvas element\n13px   270.433     235.733     235.733           289.933   <-- canvas differs from DOM auto\n14px   289.150     251.717     251.717           310.700   <-- canvas differs from DOM auto\n16px   325.383     282.750     282.750           350.533   <-- canvas differs from DOM auto\n20px   392.217     351.350     351.350           428.933   <-- canvas differs from DOM auto\n\nexpected: both canvas columns = DOM auto, within rounding\ndevicePixelRatio 2\nMozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:156.0) Gecko/20100101 Firefox/156.0",
+    "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:156.0) Gecko/20100101 Firefox/156.0",
+    "devicePixelRatio": 2,
+    "visibility": "visible",
+    "languages": [
+      "en-US",
+      "en"
+    ]
+  }
+}

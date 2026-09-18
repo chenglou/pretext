@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>running</title>
+<style>
+  body { font: 14px/1.5 Helvetica, Arial, sans-serif; margin: 16px; max-width: 900px }
+  pre { font: 12px/1.5 Menlo, monospace; background: #f4f4f4; padding: 8px; white-space: pre-wrap }
+  #stage span { font: 32px/48px Arial; outline: 1px solid #c00 }
+</style>
+</head>
+<body>
+<h1>After U+1F600 U+FE0E is shaped once, plain U+1F600 draws as a missing-glyph box</h1>
+<p>Needs a fresh content process: open the page in a new window of a newly started browser, and don't reload. The page
+measures and draws U+1F600 (grinning face) in 32px Arial, then U+1F600 followed by U+FE0E (the text presentation
+selector), then plain U+1F600 again, and once more 3 seconds later. With <code>?via=dom</code> the U+FE0E text is a DOM
+span instead of a canvas measurement. No text-style font has U+1F600 on macOS, so the second string may fall back
+either way, but plain U+1F600 should always be the 32px colour emoji.</p>
+<div id="stage"></div>
+<pre id="log"></pre>
+<script>
+const out = []
+function log(s) { out.push(s); document.getElementById('log').textContent = out.join('\n') }
+const FONT = '32px Arial', FACE = '\u{1F600}', TEXT_STYLE = '\u{1F600}\ufe0e'
+const viaDom = new URLSearchParams(location.search).get('via') === 'dom'
+function canvasWidth(text) {
+  const ctx = new OffscreenCanvas(1, 1).getContext('2d')
+  ctx.font = FONT
+  return ctx.measureText(text).width
+}
+function domSpan(text) {
+  const line = document.createElement('div'), span = document.createElement('span')
+  span.textContent = text
+  line.append(span)
+  document.getElementById('stage').append(line)
+  return span
+}
+// Whether the glyph drawn for the text has coloured pixels (a colour emoji) or only black ones (a text glyph or a
+// missing-glyph box).
+function drawnInColour(text) {
+  const canvas = document.createElement('canvas')
+  canvas.width = 64; canvas.height = 48
+  const ctx = canvas.getContext('2d', { willReadFrequently: true })
+  ctx.font = FONT
+  ctx.fillText(text, 4, 36)
+  const data = ctx.getImageData(0, 0, 64, 48).data
+  for (let i = 0; i < data.length; i += 4) {
+    if (data[i + 3] > 0 && Math.max(data[i], data[i + 1], data[i + 2]) - Math.min(data[i], data[i + 1], data[i + 2]) > 40) return true
+  }
+  return false
+}
+function state(label) {
+  const width = canvasWidth(FACE), span = domSpan(FACE), colour = drawnInColour(FACE)
+  log(label.padEnd(44) + 'canvas ' + width + 'px   DOM ' + span.getBoundingClientRect().width + 'px   ' + (colour ? 'colour glyph' : 'no colour: text glyph or missing-glyph box'))
+  return { width, span, colour }
+}
+;(async () => {
+  const before = state('U+1F600, first use:')
+  const selectorWidth = viaDom ? domSpan(TEXT_STYLE).getBoundingClientRect().width : canvasWidth(TEXT_STYLE)
+  log(('U+1F600 U+FE0E, ' + (viaDom ? 'DOM span' : 'canvas') + ':').padEnd(44) + selectorWidth + 'px')
+  const after = state('U+1F600 again:')
+  await new Promise(resolve => setTimeout(resolve, 3000))
+  const later = state('U+1F600, 3 s later:')
+  log('the "again" span, never touched, 3 s later:'.padEnd(44) + 'DOM ' + after.span.getBoundingClientRect().width + 'px')
+  log('')
+  log('expected: every plain U+1F600 is ' + before.width + 'px and drawn in colour')
+  log('actual:   again ' + after.width + 'px ' + (after.colour ? 'colour' : 'no colour') + ', 3 s later ' + later.width + 'px ' + (later.colour ? 'colour' : 'no colour'))
+  log('')
+  log(navigator.userAgent)
+  const bug = after.width !== before.width || after.colour !== before.colour
+  document.title = bug ? 'BUG: plain U+1F600 went from ' + before.width + 'px to ' + after.width + 'px after U+1F600 U+FE0E' + (later.width === before.width ? ' (back to normal 3 s later)' : ' (still wrong 3 s later)') : 'NO BUG: U+1F600 stays ' + before.width + 'px'
+})()
+</script>
+</body>
+</html>

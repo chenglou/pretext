@@ -1,0 +1,22 @@
+{
+  "page": "webkit-keep-all-breaks-after-punctuation.html",
+  "browser": "webkit-host",
+  "build": {
+    "app": "webkit-host",
+    "appVersion": "27.0",
+    "engine": "22625.1.29.11.27",
+    "os": "26A428"
+  },
+  "started": "2026-09-18T11:52:15.743Z",
+  "error": null,
+  "report": {
+    "title": "BUG: keep-all broke after punctuation where no break is allowed in 5 of 5 boxes",
+    "log": "\"가격 1,000,000원\"\n  expected [\"가격 \",\"1,000,000원\"]\n  actual   [\"가격 1,\",\"000,\",\"000원\"]  <-- differs\n\"원주율 3.14159265\"\n  expected [\"원주율 \",\"3.14159265\"]\n  actual   [\"원주율 3.\",\"14159265\"]  <-- differs\n\"미국 U.S.A.U.S.A.\"\n  expected [\"미국 \",\"U.S.A.U.S.A.\"]\n  actual   [\"미국 U.S.\",\"A.U.S.A.\"]  <-- differs\n\"시간 12:30:45:00\"\n  expected [\"시간 \",\"12:30:45:00\"]\n  actual   [\"시간 12:\",\"30:45:\",\"00\"]  <-- differs\n\"서울 (대한민국)\"\n  expected [\"서울 \",\"(대한민국)\"]\n  actual   [\"서울 (\",\"대한민국)\"]  <-- differs\n\nMozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/27.0 Safari/605.1.15 webkit-host/22625.1.29.11.27",
+    "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/27.0 Safari/605.1.15 webkit-host/22625.1.29.11.27",
+    "devicePixelRatio": 2,
+    "visibility": "visible",
+    "languages": [
+      "zh-CN"
+    ]
+  }
+}

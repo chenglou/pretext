@@ -1,0 +1,22 @@
+{
+  "page": "webkit-break-spaces-after-pre-wrap.html",
+  "browser": "webkit-host",
+  "build": {
+    "app": "webkit-host",
+    "appVersion": "27.0",
+    "engine": "22625.1.29.11.27",
+    "os": "26A428"
+  },
+  "started": "2026-09-18T11:52:16.087Z",
+  "error": null,
+  "report": {
+    "title": "BUG: break-spaces text lays out like pre-wrap after a pre-wrap layout of the same text",
+    "log": "box 1, break-spaces, first layout of this text:      3 lines\nbox 2, pre-wrap, laid out once and removed:          2 lines\nbox 3, break-spaces, same text and style as box 1:   2 lines\n\nexpected: box 1 = box 3 = 3 lines, box 2 = 2 lines (its spaces hang)\nactual:   box 1 3, box 3 2  <-- differ\n\nMozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/27.0 Safari/605.1.15 webkit-host/22625.1.29.11.27",
+    "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/27.0 Safari/605.1.15 webkit-host/22625.1.29.11.27",
+    "devicePixelRatio": 2,
+    "visibility": "visible",
+    "languages": [
+      "zh-CN"
+    ]
+  }
+}

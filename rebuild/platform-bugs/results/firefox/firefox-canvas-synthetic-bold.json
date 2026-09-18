@@ -1,0 +1,23 @@
+{
+  "page": "firefox-canvas-synthetic-bold.html",
+  "browser": "firefox",
+  "build": {
+    "app": "Firefox",
+    "appVersion": "156.0",
+    "engine": "156.0",
+    "os": "26A428"
+  },
+  "started": "2026-09-18T11:53:00.877Z",
+  "error": null,
+  "report": {
+    "title": "BUG: canvas and DOM disagree on 3 of 5 rows",
+    "log": "font                          DOM        OffscreenCanvas   difference\n14px \"Helvetica Neue\"         127.500    127.500           0.000\nbold 14px \"Helvetica Neue\"    131.000    132.167           1.167   <-- differs\n16px \"Helvetica Neue\"         145.667    145.667           0.000\nbold 16px \"Helvetica Neue\"    149.500    150.667           1.167   <-- differs\nbold 24px \"Helvetica Neue\"    223.500    224.833           1.333   <-- differs\n\nexpected: no difference on any row\ndevicePixelRatio 2\nMozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:156.0) Gecko/20100101 Firefox/156.0",
+    "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:156.0) Gecko/20100101 Firefox/156.0",
+    "devicePixelRatio": 2,
+    "visibility": "visible",
+    "languages": [
+      "en-US",
+      "en"
+    ]
+  }
+}

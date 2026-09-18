@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>running</title>
+<style>
+  body { font: 14px/1.5 Helvetica, Arial, sans-serif; margin: 16px; max-width: 900px }
+  pre { font: 12px/1.5 Menlo, monospace; background: #f4f4f4; padding: 8px; white-space: pre-wrap }
+  .sample { font: 32px/48px "Hoefler Text"; white-space: pre }
+  canvas { outline: 1px solid #ccc }
+</style>
+</head>
+<body>
+<h1>Canvas letterSpacing keeps optional ligatures that CSS letter-spacing turns off</h1>
+<p><code>ffi fl</code> in 32px Hoefler Text. CSS Text says optional ligatures aren't applied when letter spacing isn't
+zero, and the canvas text preparation algorithm applies <code>letterSpacing</code> as the CSS property. So at 1px of
+spacing the canvas should measure what the DOM span measures: six separate glyphs plus 6px.</p>
+<div class="sample"><span id="dom0">ffi fl</span> &nbsp; <span id="dom1" style="letter-spacing: 1px">ffi fl</span> &nbsp; DOM, 0 and 1px</div>
+<canvas id="canvas" width="520" height="56"></canvas> canvas, 0px and 1px
+<pre id="log"></pre>
+<script>
+const out = []
+function log(s) { out.push(s); document.getElementById('log').textContent = out.join('\n') }
+const TEXT = 'ffi fl', FONT = '32px "Hoefler Text"'
+const ctx = document.getElementById('canvas').getContext('2d')
+ctx.font = FONT
+ctx.letterSpacing = '0px'
+const canvas0 = ctx.measureText(TEXT).width
+ctx.fillText(TEXT, 8, 40)
+ctx.letterSpacing = '1px'
+const canvas1 = ctx.measureText(TEXT).width
+ctx.fillText(TEXT, 140, 40)
+const off = new OffscreenCanvas(1, 1).getContext('2d')
+off.font = FONT
+off.letterSpacing = '1px'
+const offscreen1 = off.measureText(TEXT).width
+const dom0 = document.getElementById('dom0').getBoundingClientRect().width
+const dom1 = document.getElementById('dom1').getBoundingClientRect().width
+
+log('ctx.letterSpacing supported: ' + ('letterSpacing' in ctx))
+log('                         0px        1px')
+log('DOM span              ' + dom0.toFixed(3).padStart(8) + '   ' + dom1.toFixed(3).padStart(8))
+log('canvas element        ' + canvas0.toFixed(3).padStart(8) + '   ' + canvas1.toFixed(3).padStart(8))
+log('OffscreenCanvas                  ' + offscreen1.toFixed(3).padStart(8))
+log('')
+log('expected: canvas at 1px = DOM at 1px (' + dom1.toFixed(3) + ')')
+log('actual:   canvas at 1px = ' + canvas1.toFixed(3) + ', canvas at 0px + ' + (canvas1 - canvas0).toFixed(3) + ' (3 means the ffi and fl ligatures were kept)')
+log('')
+log(navigator.userAgent)
+// Six glyphs take 6px of spacing; with both ligatures kept there are three glyphs and 3px.
+const bug = canvas1 - canvas0 < 5 && dom1 - dom0 > 5
+document.title = bug ? 'BUG: canvas at 1px letterSpacing keeps the ligatures and is ' + (dom1 - canvas1).toFixed(3) + 'px narrower than the DOM' : 'NO BUG: canvas drops the ligatures as the DOM does'
+</script>
+</body>
+</html>

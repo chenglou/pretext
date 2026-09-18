@@ -1,0 +1,22 @@
+{
+  "page": "chrome-canvas-inherits-css-letter-spacing.html",
+  "browser": "webkit-host",
+  "build": {
+    "app": "webkit-host",
+    "appVersion": "27.0",
+    "engine": "22625.1.29.11.27",
+    "os": "26A428"
+  },
+  "started": "2026-09-18T11:52:16.977Z",
+  "error": null,
+  "report": {
+    "title": "NO BUG: both canvases measure 97.8515625",
+    "log": "devicePixelRatio 2\nplain canvas:                         letterSpacing \"0px\", wordSpacing \"0px\", width 97.8515625\ncanvas inside the spaced div:         letterSpacing \"0px\", wordSpacing \"0px\", width 97.8515625  (+0)\nafter letterSpacing = wordSpacing = '0px':  width 97.8515625  (+0)\nafter setting the same font again:    width 97.8515625  (+0)\nafter '1px' and then '0px' on both:   width 97.8515625  (+0)\n\nexpected: every width = 97.8515625\nactual:   97.8515625, 97.8515625, 97.8515625, 97.8515625\n\nMozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/27.0 Safari/605.1.15 webkit-host/22625.1.29.11.27",
+    "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/27.0 Safari/605.1.15 webkit-host/22625.1.29.11.27",
+    "devicePixelRatio": 2,
+    "visibility": "visible",
+    "languages": [
+      "zh-CN"
+    ]
+  }
+}

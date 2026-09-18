@@ -1,0 +1,23 @@
+{
+  "page": "firefox-emoji-missing-after-text-presentation.html",
+  "browser": "chrome",
+  "build": {
+    "app": "Google Chrome",
+    "appVersion": "153.0.8010.50",
+    "engine": "153.0.8010.50",
+    "os": "26A428"
+  },
+  "started": "2026-09-18T11:52:33.054Z",
+  "error": null,
+  "report": {
+    "title": "NO BUG: U+1F600 stays 32px",
+    "log": "U+1F600, first use:                         canvas 32px   DOM 32px   colour glyph\nU+1F600 U+FE0E, canvas:                     32px\nU+1F600 again:                              canvas 32px   DOM 32px   colour glyph\nU+1F600, 3 s later:                         canvas 32px   DOM 32px   colour glyph\nthe \"again\" span, never touched, 3 s later: DOM 32px\n\nexpected: every plain U+1F600 is 32px and drawn in colour\nactual:   again 32px colour, 3 s later 32px colour\n\nMozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36",
+    "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36",
+    "devicePixelRatio": 2,
+    "visibility": "visible",
+    "languages": [
+      "zh-CN",
+      "zh"
+    ]
+  }
+}

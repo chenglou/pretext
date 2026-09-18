@@ -1,0 +1,23 @@
+{
+  "page": "firefox-canvas-word-spacing-separators.html",
+  "browser": "firefox",
+  "build": {
+    "app": "Firefox",
+    "appVersion": "156.0",
+    "engine": "156.0",
+    "os": "26A428"
+  },
+  "started": "2026-09-18T11:52:34.872Z",
+  "error": null,
+  "report": {
+    "title": "BUG: canvas wordSpacing treats 2 of 3 spaces differently from CSS word-spacing",
+    "log": "added by 10px of word spacing     expected   DOM      canvas element   OffscreenCanvas\nU+0020 SPACE                      10         10.00    10.00            10.00\nU+00A0 NO-BREAK SPACE             10         10.00    0.00             0.00   <-- canvas differs\nU+3000 IDEOGRAPHIC SPACE          0          0.00     10.00            10.00   <-- canvas differs\n\nctx.wordSpacing supported: true\nMozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:156.0) Gecko/20100101 Firefox/156.0",
+    "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:156.0) Gecko/20100101 Firefox/156.0",
+    "devicePixelRatio": 2,
+    "visibility": "visible",
+    "languages": [
+      "en-US",
+      "en"
+    ]
+  }
+}

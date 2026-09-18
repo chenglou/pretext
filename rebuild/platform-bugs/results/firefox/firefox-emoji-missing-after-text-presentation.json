@@ -1,0 +1,23 @@
+{
+  "page": "firefox-emoji-missing-after-text-presentation.html",
+  "browser": "firefox",
+  "build": {
+    "app": "Firefox",
+    "appVersion": "156.0",
+    "engine": "156.0",
+    "os": "26A428"
+  },
+  "started": "2026-09-18T11:52:43.273Z",
+  "error": null,
+  "report": {
+    "title": "BUG: plain U+1F600 went from 32px to 17px after U+1F600 U+FE0E (back to normal 3 s later)",
+    "log": "U+1F600, first use:                         canvas 32px   DOM 32px   colour glyph\nU+1F600 U+FE0E, canvas:                     17px\nU+1F600 again:                              canvas 17px   DOM 17px   no colour: text glyph or missing-glyph box\nU+1F600, 3 s later:                         canvas 32px   DOM 32px   colour glyph\nthe \"again\" span, never touched, 3 s later: DOM 32px\n\nexpected: every plain U+1F600 is 32px and drawn in colour\nactual:   again 17px no colour, 3 s later 32px colour\n\nMozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:156.0) Gecko/20100101 Firefox/156.0",
+    "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:156.0) Gecko/20100101 Firefox/156.0",
+    "devicePixelRatio": 2,
+    "visibility": "visible",
+    "languages": [
+      "en-US",
+      "en"
+    ]
+  }
+}

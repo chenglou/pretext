@@ -1,0 +1,23 @@
+{
+  "page": "chrome-system-ui-font-cache-order.html",
+  "browser": "chrome",
+  "build": {
+    "app": "Google Chrome",
+    "appVersion": "153.0.8010.50",
+    "engine": "153.0.8010.50",
+    "os": "26A428"
+  },
+  "started": "2026-09-18T11:52:25.781Z",
+  "error": null,
+  "report": {
+    "title": "BUG: DOM system-ui text is 9.262px narrower after the canvas measurement",
+    "log": "devicePixelRatio 2\n13px, DOM laid out first:                    DOM 67.875   canvas at 13px 67.869140625   difference 0.0059\n15px, canvas measured 30px system-ui first:   DOM 67.4375   canvas at 15px 76.69921875   difference -9.2617\n(canvas at 30px measured 144.375, half of it 72.1875)\n\nexpected: both differences under 0.02px\nactual:   0.0059 and -9.2617\n\nMozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36",
+    "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36",
+    "devicePixelRatio": 2,
+    "visibility": "visible",
+    "languages": [
+      "zh-CN",
+      "zh"
+    ]
+  }
+}

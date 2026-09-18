@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>running</title>
+<style>
+  body { font: 14px/1.5 Helvetica, Arial, sans-serif; margin: 16px; max-width: 900px }
+  pre { font: 12px/1.5 Menlo, monospace; background: #f4f4f4; padding: 8px; white-space: pre-wrap }
+  #stage span { font-family: "Helvetica Neue"; white-space: pre; outline: 1px solid #c00 }
+</style>
+</head>
+<body>
+<h1>Synthetic bold widens glyphs by a different amount in canvas text and in DOM text on a HiDPI display</h1>
+<p>Needs <code>devicePixelRatio</code> 2. Ten U+2764 HEAVY BLACK HEART in bold Helvetica Neue. Helvetica Neue has no
+heart, and the fallback font that draws it has no bold face, so the glyphs get synthetic bold, which also widens each
+advance. The regular-weight row is the control. A canvas should measure what the DOM lays out.</p>
+<div id="stage"></div>
+<pre id="log"></pre>
+<script>
+const out = []
+function log(s) { out.push(s); document.getElementById('log').textContent = out.join('\n') }
+const TEXT = '\u2764'.repeat(10)
+function domWidth(font) {
+  const line = document.createElement('div'), span = document.createElement('span')
+  span.style.font = font
+  span.textContent = TEXT
+  line.append(span)
+  document.getElementById('stage').append(line)
+  return span.getBoundingClientRect().width
+}
+const offscreen = new OffscreenCanvas(1, 1).getContext('2d')
+let failures = 0
+log('font                          DOM        OffscreenCanvas   difference')
+for (const font of ['14px "Helvetica Neue"', 'bold 14px "Helvetica Neue"', '16px "Helvetica Neue"', 'bold 16px "Helvetica Neue"', 'bold 24px "Helvetica Neue"']) {
+  offscreen.font = font
+  const dom = domWidth(font), off = offscreen.measureText(TEXT).width
+  const ok = Math.abs(off - dom) < 0.05
+  if (!ok) failures++
+  log(font.padEnd(30) + dom.toFixed(3).padEnd(11) + off.toFixed(3).padEnd(18) + (off - dom).toFixed(3) + (ok ? '' : '   <-- differs'))
+}
+log('')
+log('expected: no difference on any row')
+log('devicePixelRatio ' + devicePixelRatio)
+log(navigator.userAgent)
+document.title = failures > 0 ? 'BUG: canvas and DOM disagree on ' + failures + ' of 5 rows' : 'NO BUG: canvas and DOM agree'
+</script>
+</body>
+</html>

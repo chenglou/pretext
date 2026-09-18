@@ -1,0 +1,23 @@
+{
+  "page": "firefox-tab-after-split-cluster.html",
+  "browser": "chrome",
+  "build": {
+    "app": "Google Chrome",
+    "appVersion": "153.0.8010.50",
+    "engine": "153.0.8010.50",
+    "os": "26A428"
+  },
+  "started": "2026-09-18T11:52:42.743Z",
+  "error": null,
+  "report": {
+    "title": "NO BUG: x starts at 46.086px in both lines",
+    "log": "first tab stop, 8 x the space advance:        46.080px\nx starts at, one span:                        46.086px\nx starts at, span boundary inside the cluster: 46.086px\n\nexpected: both 46.080\n\nMozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36",
+    "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36",
+    "devicePixelRatio": 2,
+    "visibility": "visible",
+    "languages": [
+      "zh-CN",
+      "zh"
+    ]
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "page": "webkit-canvas-letter-spacing-keeps-ligatures.html",
+  "browser": "webkit-host",
+  "build": {
+    "app": "webkit-host",
+    "appVersion": "27.0",
+    "engine": "22625.1.29.11.27",
+    "os": "26A428"
+  },
+  "started": "2026-09-18T11:52:16.686Z",
+  "error": null,
+  "report": {
+    "title": "BUG: canvas at 1px letterSpacing keeps the ligatures and is 6.008px narrower than the DOM",
+    "log": "ctx.letterSpacing supported: true\n                         0px        1px\nDOM span                54.400     63.408\ncanvas element          54.400     57.400\nOffscreenCanvas                    57.400\n\nexpected: canvas at 1px = DOM at 1px (63.408)\nactual:   canvas at 1px = 57.400, canvas at 0px + 3.000 (3 means the ffi and fl ligatures were kept)\n\nMozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/27.0 Safari/605.1.15 webkit-host/22625.1.29.11.27",
+    "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/27.0 Safari/605.1.15 webkit-host/22625.1.29.11.27",
+    "devicePixelRatio": 2,
+    "visibility": "visible",
+    "languages": [
+      "zh-CN"
+    ]
+  }
+}

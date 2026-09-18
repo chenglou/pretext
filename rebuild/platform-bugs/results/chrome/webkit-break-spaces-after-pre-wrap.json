@@ -1,0 +1,23 @@
+{
+  "page": "webkit-break-spaces-after-pre-wrap.html",
+  "browser": "chrome",
+  "build": {
+    "app": "Google Chrome",
+    "appVersion": "153.0.8010.50",
+    "engine": "153.0.8010.50",
+    "os": "26A428"
+  },
+  "started": "2026-09-18T11:52:17.474Z",
+  "error": null,
+  "report": {
+    "title": "NO BUG: both break-spaces boxes have 3 lines",
+    "log": "box 1, break-spaces, first layout of this text:      3 lines\nbox 2, pre-wrap, laid out once and removed:          2 lines\nbox 3, break-spaces, same text and style as box 1:   3 lines\n\nexpected: box 1 = box 3 = 3 lines, box 2 = 2 lines (its spaces hang)\nactual:   box 1 3, box 3 3\n\nMozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36",
+    "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36",
+    "devicePixelRatio": 2,
+    "visibility": "visible",
+    "languages": [
+      "zh-CN",
+      "zh"
+    ]
+  }
+}

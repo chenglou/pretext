@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>running</title>
+<style>
+  body { font: 14px/1.5 Helvetica, Arial, sans-serif; margin: 16px; max-width: 900px }
+  pre { font: 12px/1.5 Menlo, monospace; background: #f4f4f4; padding: 8px; white-space: pre-wrap }
+  .t { font: 16px/20px "Apple SD Gothic Neo", sans-serif; width: 60px; outline: 1px solid #c00; margin: 8px 0 12px 8px; word-break: keep-all }
+</style>
+</head>
+<body>
+<h1>word-break: keep-all breaks after commas and full stops inside numbers and abbreviations, and after an opening parenthesis</h1>
+<p>Each red box is 60px wide with <code>word-break: keep-all</code>. UAX #14 allows no break after the comma in
+<code>1,000,000</code> (LB25), after the full stops in <code>3.14</code> (LB25) or <code>U.S.A.</code> (LB29), or after
+the colon in <code>12:30</code> or after an opening parenthesis (LB14), and <code>keep-all</code> only removes break
+opportunities. So every box should break at
+its spaces only and let the long word overflow. The text of each box holds a Korean letter, so the text node is stored
+as UTF-16.</p>
+<div id="stage"></div>
+<pre id="log"></pre>
+<script>
+const out = []
+function log(s) { out.push(s); document.getElementById('log').textContent = out.join('\n') }
+// Lines from the top of each character's first client rect.
+function lines(el) {
+  const node = el.firstChild, text = node.data, range = document.createRange(), starts = []
+  let lastTop = null
+  for (let i = 0; i < text.length; i++) {
+    range.setStart(node, i); range.setEnd(node, i + 1)
+    let top = null
+    for (const rect of range.getClientRects()) if (rect.width > 0) { top = rect.top; break }
+    if (top === null) continue
+    if (lastTop === null || Math.abs(top - lastTop) > 10) starts.push(i)
+    lastTop = top
+  }
+  return starts.map((start, k) => text.slice(start, starts[k + 1] ?? text.length))
+}
+const CASES = [
+  ['\uac00\uaca9 1,000,000\uc6d0', ['\uac00\uaca9 ', '1,000,000\uc6d0']],
+  ['\uc6d0\uc8fc\uc728 3.14159265', ['\uc6d0\uc8fc\uc728 ', '3.14159265']],
+  ['\ubbf8\uad6d U.S.A.U.S.A.', ['\ubbf8\uad6d ', 'U.S.A.U.S.A.']],
+  ['\uc2dc\uac04 12:30:45:00', ['\uc2dc\uac04 ', '12:30:45:00']],
+  ['\uc11c\uc6b8 (\ub300\ud55c\ubbfc\uad6d)', ['\uc11c\uc6b8 ', '(\ub300\ud55c\ubbfc\uad6d)']],
+]
+let failures = 0
+for (const [text, expected] of CASES) {
+  const el = document.createElement('div')
+  el.className = 't'
+  el.textContent = text
+  document.getElementById('stage').append(el)
+  const actual = lines(el)
+  const same = JSON.stringify(actual) === JSON.stringify(expected)
+  if (!same) failures++
+  log(JSON.stringify(text))
+  log('  expected ' + JSON.stringify(expected))
+  log('  actual   ' + JSON.stringify(actual) + (same ? '' : '  <-- differs'))
+}
+log('')
+log(navigator.userAgent)
+document.title = failures > 0 ? 'BUG: keep-all broke after punctuation where no break is allowed in ' + failures + ' of ' + CASES.length + ' boxes' : 'NO BUG: breaks at spaces only'
+</script>
+</body>
+</html>
