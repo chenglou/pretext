@@ -75,14 +75,14 @@ export const FONT_FAMILIES: readonly RuleFamily[] = [
   {
     name: 'joining',
     rules: {
-      blink: ['blink/measure/joining-from-fact', 'blink/output/joins-next-line-from-fact', 'blink/gap/joining-technology', 'blink/measure/zwj-inside-group-edge', 'blink/shape/joining-reads-5-code-points-context', 'blink/measure/letter-spacing-cursive-adjust'],
+      blink: ['blink/measure/joining-from-fact', 'blink/output/joins-next-line-from-fact', 'blink/gap/joining-technology', 'blink/measure/zwj-inside-group-edge', 'blink/shape/joining-reads-5-code-points-context', 'blink/measure/letter-spacing-cursive-adjust', 'blink/shape/pair-window-whole-clusters'],
       webkit: ['webkit/gap/rtl-shaping-across-inline-boxes', 'webkit/measure/break-word-complex-graphemes', 'webkit/content/complex-code-path'],
       gecko: ['gecko/lines/in-word-advance-unit-minus-suffix', 'gecko/output/joins-next-line', 'gecko/spacing/no-letter-spacing-cursive', 'gecko/gap/in-word-prefix'],
     },
-    why: "Letters joined across a shaping-call edge keep joined forms in OpenType fonts and lose them in morx fonts (hb-ot-shape.cc:60-66, 100-101; blink-text H3: Geeza Pro is AAT; blink-followups F1: Amiri joins). Gecko's in-word advance at a break inside a joined word had no exact recipe in any font (probe-in-word, 2026-09-16). Relevant: fonts on both sides of the joining fact, how the word breaks, and a span edge inside it.",
+    why: "Letters joined across a shaping-call edge keep joined forms in OpenType fonts and lose them in morx fonts (hb-ot-shape.cc:60-66, 100-101; blink-text H3: Geeza Pro is AAT; blink-followups F1: Amiri joins). Gecko's in-word advance at a break inside a joined word had no exact recipe in any font (probe-in-word, 2026-09-16). A mark after a soft hyphen continues the soft hyphen's glyph cluster (hb_form_clusters, hb-ot-shape.cc:578-586), so what is measured around that break holds both. Relevant: fonts on both sides of the joining fact, how the word breaks, a mark after the soft hyphen, and a span edge inside it.",
     relevant: [
       { name: 'family', values: ['Geeza Pro', 'Arial', 'Noto Naskh Arabic', 'Amiri'] },
-      { name: 'breaking', values: ['shy', 'break-all', 'anywhere'] },
+      { name: 'breaking', values: ['shy', 'shy-mark', 'break-all', 'anywhere'] },
       { name: 'span', values: ['none', 'split'] },
     ],
     neighbours: [
@@ -94,12 +94,14 @@ export const FONT_FAMILIES: readonly RuleFamily[] = [
       const family = str(v, 'family')
       const f = font(family, num(v, 'size'))
       const breaking = str(v, 'breaking')
-      const word = breaking === 'shy' ? 'ببب­ببب' : 'بببببب'
-      const half = breaking === 'shy' ? 4 : 3
+      // 'shy-mark': a kasra right after the soft hyphen.
+      const shy = breaking === 'shy' || breaking === 'shy-mark'
+      const word = breaking === 'shy' ? 'ببب­ببب' : breaking === 'shy-mark' ? 'ببب­ِببب' : 'بببببب'
+      const half = shy ? 4 : 3
       const parts: Part[] = str(v, 'span') === 'none'
         ? [text(`بب ${word} بب`)]
         : [text('بب '), span(word.slice(0, half), f), span(word.slice(half), f), text(' بب')]
-      const styles = breaking === 'shy' ? {} : breakingStyles(breaking)
+      const styles = shy ? {} : breakingStyles(breaking)
       return {
         pageLang: 'en',
         paragraph: paragraph({ font: f, lang: 'ar', letterSpacing: num(v, 'letterSpacing'), direction: direction(str(v, 'direction')), ...styles }, parts),

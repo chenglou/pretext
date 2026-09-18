@@ -21,11 +21,11 @@ function paragraph(texts: string[], direction: 'ltr' | 'rtl' = 'ltr'): Paragraph
   }
 }
 
-const ch = (advance: number, clusterStart = true, unitStart = true): GeckoCharacter => ({ skipped: false, clusterStart, unitStart, advance })
-const skip: GeckoCharacter = { skipped: true, clusterStart: false, unitStart: false, advance: 0 }
+const ch = (advance: number, clusterStart = true, unitStart = true, standInBefore = false): GeckoCharacter => ({ skipped: false, clusterStart, unitStart, advance, standInBefore })
+const skip: GeckoCharacter = { skipped: true, clusterStart: false, unitStart: false, advance: 0, standInBefore: false }
 
 function frame(run: number, contentStart: number, contentEnd: number, x: number, width: number, characters: GeckoCharacter[], extra: Partial<GeckoTextFrame> = {}): GeckoTextFrame {
-  return { kind: 'text', run, contentStart, contentEnd, measuredStart: contentStart, level: 0, x, width, hasHeight: true, usedHyphen: false, characters, ...extra }
+  return { kind: 'text', run, contentStart, contentEnd, measuredStart: contentStart, level: 0, x, width, hasHeight: true, usedHyphen: false, characters, standInAtEnd: false, advancesStandIn: null, ...extra }
 }
 
 function line(frames: GeckoTextFrame[], start: number, end: number): GeckoLine {
@@ -125,20 +125,51 @@ describe('Range rects over Gecko frames', () => {
     expect(states(o.elements[0]!)).toEqual([['predicted', 'predicted']])
   })
 
-  test('points inside a shaping unit are limited by in-word-prefix; frame boxes are engine output and predicted', () => {
+  test('a position the layout marks a stand-in is limited by in-word-prefix, with everything measured from it', () => {
     const a = ch(576)
-    const inside = ch(576, true, false)
-    const words = layout([line([frame(0, 0, 5, 0, 2880, [a, inside, a, a, inside])], 0, 5)])
+    const confirmed = ch(576, true, false)
+    const standIn = ch(576, true, false, true)
+    const words = layout([line([frame(0, 0, 5, 0, 2880, [a, standIn, a, a, confirmed])], 0, 5)])
     const o = observeGecko(paragraph(['ab cd']), words, noMeasure)
     expect(states(o.codePoints[0]!.rects)).toEqual([['predicted', 'limited']])
+    expect(states(o.codePoints[1]!.rects)).toEqual([['limited', 'limited']])
     expect(states(o.codePoints[2]!.rects)).toEqual([['predicted', 'predicted']])
-    expect(states(o.codePoints[3]!.rects)).toEqual([['predicted', 'limited']])
+    // Inside a unit, at a position Canvas confirmed.
+    expect(states(o.codePoints[3]!.rects)).toEqual([['predicted', 'predicted']])
     expect(states(o.nodes[0]!)).toEqual([['predicted', 'predicted']])
-    // A frame that starts inside a unit: every point after its start rests on the stand-in, its box doesn't.
-    const split = layout([line([frame(0, 0, 2, 0, 1152, [a, inside])], 0, 2), line([frame(0, 2, 4, 0, 1152, [inside, inside])], 2, 4)])
-    const s = observeGecko(paragraph(['abcd']), split, noMeasure)
-    expect(states(s.nodes[0]!)).toEqual([['predicted', 'predicted'], ['predicted', 'predicted']])
+    // A break at a stand-in: both frames' widths rest on it, and so does every point of the second frame, which counts from
+    // its start. A second frame on that line is placed after a stand-in width.
+    const split = layout([
+      line([frame(0, 0, 2, 0, 1152, [a, confirmed], { standInAtEnd: true })], 0, 2),
+      line([frame(0, 2, 4, 0, 1152, [standIn, confirmed]), frame(1, 4, 5, 1152, 576, [a])], 2, 5),
+    ])
+    const s = observeGecko(paragraph(['abcd', 'e']), split, noMeasure)
+    expect(states(s.nodes[0]!)).toEqual([['predicted', 'limited'], ['predicted', 'limited']])
+    // Its width is the float32 difference of its two edges, so it can move a float32 step with its place.
+    expect(states(s.nodes[1]!)).toEqual([['limited', 'limited']])
+    expect(states(s.codePoints[0]!.rects)).toEqual([['predicted', 'predicted']])
+    expect(states(s.codePoints[1]!.rects)).toEqual([['predicted', 'limited']])
     expect(states(s.codePoints[2]!.rects)).toEqual([['predicted', 'limited']])
     expect(states(s.codePoints[3]!.rects)).toEqual([['limited', 'limited']])
+  })
+
+  test('a frame whose Canvas size is not the DOM size: every value is limited by font-size-quantization', () => {
+    const a = ch(576)
+    const l = layout([line([frame(0, 0, 2, 0, 1152, [a, a], { advancesStandIn: 'font-size-quantization' }), frame(1, 2, 3, 1152, 576, [a])], 0, 3)])
+    const o = observeGecko(paragraph(['ab', 'c']), l, noMeasure)
+    expect(o.codePoints[1]!.rects.map(r => [r.x, r.width].map(v => v.state === 'limited' ? v.gap : v.state))).toEqual([['font-size-quantization', 'font-size-quantization']])
+    expect(o.nodes[0]!.map(r => [r.x, r.width].map(v => v.state === 'limited' ? v.gap : v.state))).toEqual([['predicted', 'font-size-quantization']])
+    expect(o.nodes[1]!.map(r => [r.x, r.width].map(v => v.state === 'limited' ? v.gap : v.state))).toEqual([['font-size-quantization', 'font-size-quantization']])
+  })
+
+  test('an edge 2^17 device px from the origin is limited by float32-precision (probe gecko-port F6)', () => {
+    const a = ch(576)
+    // 131072 device px at 30 au each.
+    const far = 131072 * 30
+    const l = layout([line([frame(0, 0, 2, far - 576, 1152, [a, a])], 0, 2)])
+    const o = observeGecko(paragraph(['ab']), l, noMeasure)
+    const gaps = (r: ExpectedRect) => [r.x, r.width].map(v => v.state === 'limited' ? v.gap : v.state)
+    expect(gaps(o.codePoints[0]!.rects[0]!)).toEqual(['predicted', 'float32-precision'])
+    expect(gaps(o.codePoints[1]!.rects[0]!)).toEqual(['float32-precision', 'float32-precision'])
   })
 })

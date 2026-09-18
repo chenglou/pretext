@@ -294,15 +294,15 @@ export const INLINE_FAMILIES: readonly RuleFamily[] = [
   {
     name: 'text-align',
     rules: {
-      blink: ['blink/shapeline/needs-accurate-end-position', 'blink/shapeline/no-reshape-at-space-line-end', 'blink/shapeline/line-end-reshape', 'blink/output/apply-text-align'],
+      blink: ['blink/shapeline/needs-accurate-end-position', 'blink/shapeline/no-reshape-at-space-line-end', 'blink/shapeline/line-end-reshape', 'blink/output/apply-text-align', 'blink/justify/cjk-ideograph-or-symbol'],
       webkit: ['webkit/output/horizontal-alignment-offset', 'webkit/output/justify-expansion', 'webkit/builder/eligibility-over-style-record', 'webkit/measure/following-space-rule'],
       gecko: ['gecko/output/text-align-line', 'gecko/lines/trim-trailing-at-break'],
     },
-    why: "Blink's NeedsAccurateEndPosition is true for end, center, justify, left in RTL and right in LTR (line_info.cc:127-175), and a line ending at a space is then reshaped at its end where under start it isn't (line_breaker.cc:255-268, :1658, :2387): with Arial's (A, space) kerning the fit changes by a fraction of a px (blink-lines H6). WebKit's simple builder refuses justify (TextOnlySimpleLineBuilder.cpp:488-528) and justification expands boxes (InlineContentAligner.cpp:230-302); Gecko aligns in TextAlignLine (nsLineLayout.cpp:3482-3670). Relevant: every text-align value, the direction, and a last word that kerns with the space after it.",
+    why: "Blink's NeedsAccurateEndPosition is true for end, center, justify and right and false for start and left, whatever the direction, since PrepareNextLine computes it before the base direction is set (line_breaker.cc:811-871, line_info.cc:127-175), and a line ending at a space is then reshaped at its end where under start it isn't (line_breaker.cc:255-268, :1658, :2387): with Arial's (A, space) kerning the fit changes by a fraction of a px (blink-lines H6). Under justify Blink expands before and after a CJK ideograph in 16-bit text (justification_opportunity.cc:105-120), so one word is ideographs, in a font that has them, under justify and start. WebKit's simple builder refuses justify (TextOnlySimpleLineBuilder.cpp:488-528) and justification expands boxes (InlineContentAligner.cpp:230-302); Gecko aligns in TextAlignLine (nsLineLayout.cpp:3482-3670). Relevant: every text-align value, the direction, and a last word that kerns with the space after it.",
     relevant: [
       { name: 'align', values: ['start', 'end', 'center', 'justify', 'left', 'right'] },
       { name: 'direction', values: LTR_RTL },
-      { name: 'word', values: ['AAAA', 'LYAY', 'nnnn'] },
+      { name: 'word', values: ['AAAA', 'LYAY', 'nnnn', '中文字中'] },
     ],
     neighbours: [
       { name: 'spaces', values: [' ', '   '] },
@@ -310,8 +310,10 @@ export const INLINE_FAMILIES: readonly RuleFamily[] = [
       { name: 'family', values: ['Arial', 'Times New Roman'] },
     ],
     build(v) {
+      const ideographs = str(v, 'word') === '中文字中'
+      if (ideographs && str(v, 'align') !== 'justify' && str(v, 'align') !== 'start') return null
       const before = `xx ${str(v, 'word')}${str(v, 'spaces')}`
-      const tree = treeParagraph({ font: font(str(v, 'family'), 20), lang: 'en', whiteSpace: whiteSpace(str(v, 'whiteSpace')), direction: direction(str(v, 'direction')), textAlign: textAlign(str(v, 'align')) },
+      const tree = treeParagraph({ font: font(ideographs ? 'PingFang SC' : str(v, 'family'), 20), lang: 'en', whiteSpace: whiteSpace(str(v, 'whiteSpace')), direction: direction(str(v, 'direction')), textAlign: textAlign(str(v, 'align')) },
         [leaf(`${before}bbbb cc dddd`)])
       return { pageLang: 'en', ...tree, focus: [before.length, before.length + 5], note: `text-align ${str(v, 'align')}, line ends after the kerning word and its spaces` }
     },

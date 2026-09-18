@@ -13,6 +13,9 @@ import { atomic, flatParagraph, span, treeParagraph, type FlatNode } from './tes
 // moves a string's total away from the sum of its parts, such as kerning.
 let advance = (c: number): number => c === 0x20 ? 4 : 8
 let pairAdjust = (_s: string): number => 0
+// Sequences the stand-in font draws with one glyph of the given advance, as a liga lookup does. Letter spacing goes once to
+// every glyph with an advance, as WidthIterator adds it; U+200C has no advance and keeps a sequence from matching.
+let ligatures: Record<string, number> = {}
 class StandInContext {
   font = ''
   lang = ''
@@ -22,8 +25,19 @@ class StandInContext {
   textRendering = 'auto'
   direction = 'ltr'
   measureText(s: string): { width: number } {
+    const spacing = parseFloat(this.letterSpacing)
     let w = 0
-    for (let i = 0; i < s.length; i++) w += advance(s.charCodeAt(i))
+    for (let i = 0; i < s.length; i++) {
+      let glyph = s.charCodeAt(i) === 0x200c ? 0 : advance(s.charCodeAt(i))
+      for (const sequence in ligatures) {
+        if (!s.startsWith(sequence, i)) continue
+        glyph = ligatures[sequence]!
+        i += sequence.length - 1
+        break
+      }
+      w += glyph
+      if (glyph !== 0) w += spacing
+    }
     return { width: w + pairAdjust(s) }
   }
 }
@@ -221,24 +235,33 @@ describe('environment facts (DESIGN.md §1.4)', () => {
 
 describe('line-local gaps (DESIGN.md §2.8)', () => {
   test('a control character reports on the line that measured it, not on the others', () => {
+    // Canvas shows a pair adjustment between `c` and a space, so VT after `c` is pieced together (measure.ts).
+    pairAdjust = s => s.endsWith('c ') ? -1 : 0
     const { lines } = layout(paragraph([['aaaa bbbb cc\vcc', 'text']], { width: 40 }))
+    pairAdjust = () => 0
     expect(lines.length).toBe(3)
     expect(lines[0]!.gaps.map(g => g.gap)).not.toContain('control-character-width')
     expect(lines[2]!.gaps.find(g => g.gap === 'control-character-width')!.at).toEqual({ start: 12, end: 13 })
   })
 
   test('the content that ended a line counts: a word that overflowed reports on the line it didn\'t fit on', () => {
+    pairAdjust = s => s.endsWith('b ') ? -1 : 0
     const { lines } = layout(paragraph([['aaaa b\vb', 'text']], { width: 40 }))
+    pairAdjust = () => 0
     expect(lines.map(l => [l.start, l.end])).toEqual([[0, 5], [5, 8]])
     expect(lines[0]!.gaps.map(g => g.gap)).toContain('control-character-width')
     expect(lines[1]!.gaps.map(g => g.gap)).toContain('control-character-width')
   })
 
   test('page-history: an RTL paragraph gives the same Latin text a level boundary before its trailing full stop', () => {
-    // The item [8, 12) overflows the line, so a cached end at 11 would be a wrap opportunity of this line's break decision.
-    const overflowing = layout(paragraph([['aaa bbb ccc.', 'text']], { width: 60 }))
+    // The item [8, 12) overflows the line and `ccc` alone fits, so with a cached end at 11 the line ends there: the history
+    // world's line differs from this one by the text between the two breaks.
+    const overflowing = layout(paragraph([['aaa bbb ccc.', 'text']], { width: 84 }))
     expect(overflowing.lines.map(l => [l.start, l.end])).toEqual([[0, 8], [8, 12]])
-    expect(overflowing.lines[0]!.gaps.find(g => g.gap === 'page-history')!.at).toEqual({ start: 11, end: 11 })
+    expect(overflowing.lines[0]!.gaps.find(g => g.gap === 'page-history')!.at).toEqual({ start: 8, end: 11 })
+    expect(overflowing.lines[1]!.gaps.map(g => g.gap)).not.toContain('page-history')
+    // Where `ccc` alone doesn't fit either, the world's line is the same line.
+    expect(layout(paragraph([['aaa bbb ccc.', 'text']], { width: 60 })).gaps).not.toContain('page-history')
     // Everything fits: a split changes nothing where the parts measure what the whole does,
     expect(layout(paragraph([['aaa bbb ccc.', 'text']], { width: 1000 })).gaps).not.toContain('page-history')
     // and changes the width where they don't.
@@ -264,7 +287,8 @@ describe('line-local gaps (DESIGN.md §2.8)', () => {
     const { lines } = layout(paragraph([['ب­ب x', 'text']], { direction: 'rtl', width: 19.25, overflowWrap: 'break-word' }))
     expect(lines.length).toBeGreaterThan(1)
     const placing = lines.find(l => l.start <= 2 && l.end >= 4)!
-    expect(placing.gaps.find(g => g.gap === 'page-history')!.at).toEqual({ start: 3, end: 3 })
+    // The world's line ends at 3 where this one ends at 4: the text between the two breaks.
+    expect(placing.gaps.find(g => g.gap === 'page-history')!.at).toEqual({ start: 3, end: 4 })
   })
 
   test('page-history: preserved white space of two units, which break-spaces splits per space', () => {
@@ -274,6 +298,117 @@ describe('line-local gaps (DESIGN.md §2.8)', () => {
     expect(kerned.gaps).toContain('page-history')
     expect(layout(paragraph([['aaa  bbb', 'text']], { whiteSpace: 'pre-wrap', width: 1000 })).gaps).not.toContain('page-history')
     expect(layout(paragraph([['aaa bbb c', 'text']], { whiteSpace: 'pre-wrap', width: 1000 })).gaps).not.toContain('page-history')
+  })
+})
+
+describe('letter spacing and ligatures (measure.ts mergedGlyphs; probe webkit-round3 R1)', () => {
+  test('a pair Canvas merges is measured with U+200C between its letters, and the gap sits on the pair', () => {
+    ligatures = { fi: 10 }
+    const spaced = layout(paragraph([['office', 'text']], { letterSpacing: 1 }))
+    const unspaced = layout(paragraph([['office', 'text']]))
+    ligatures = {}
+    // Six glyphs with 1px each where the DOM turns the ligature off; Canvas alone gives five glyphs, 42 + 5.
+    expect(spaced.lines[0]!.geometry.contentWidth).toBe(54)
+    expect(spaced.lines[0]!.gaps.find(g => g.gap === 'letter-spacing-ligatures')!.at).toEqual({ start: 2, end: 4 })
+    // Without letter spacing the DOM keeps the ligature, and so does the measurement.
+    expect(unspaced.lines[0]!.geometry.contentWidth).toBe(42)
+    expect(unspaced.gaps).not.toContain('letter-spacing-ligatures')
+  })
+
+  test('a letter-spaced string whose glyphs Canvas counts one per character reports nothing', () => {
+    expect(layout(paragraph([['office hours', 'text']], { letterSpacing: 2 })).gaps).not.toContain('letter-spacing-ligatures')
+  })
+
+  test('a line that starts with a carried width reports what concerns the part of the item before it', () => {
+    ligatures = { fi: 10 }
+    // `fi` stays on the first line; the rest keeps the whole item's width less what the first line took.
+    const { lines } = layout(paragraph([['fiabcdefgh', 'text']], { letterSpacing: 1, width: 40, overflowWrap: 'break-word' }))
+    ligatures = {}
+    expect(lines.length).toBeGreaterThan(1)
+    expect(lines[1]!.start).toBeGreaterThan(1)
+    expect(lines[1]!.gaps.find(g => g.gap === 'letter-spacing-ligatures')!.at).toEqual({ start: lines[1]!.start, end: 10 })
+  })
+})
+
+describe('canvas-language concerns what no named family draws (probe webkit-round3 R3)', () => {
+  const listed = (coverage: number[]): FontFacts => ({ ...UNKNOWN_FONT_FACTS, fonts: [{ family: 'Arial', realizes: true, coverage, ligatures: null, scriptLookups: null }] })
+
+  test('under a Hangul locale, Han that the listed font lacks goes to system fallback; what the font draws does not', () => {
+    const { lines } = layout(paragraph([['ab 中 cd', 'text']], { lang: 'ko' }, listed([0x20, 0x7e])))
+    expect(lines[0]!.gaps.filter(g => g.gap === 'canvas-language').map(g => g.at)).toEqual([{ start: 3, end: 4 }])
+    expect(layout(paragraph([['ab 中 cd', 'text']], { lang: 'ko' }, listed([0x20, 0x7e, 0x4e00, 0x9fff]))).gaps).not.toContain('canvas-language')
+  })
+
+  test('a locale of another script leaves system fallback to the preferred languages, as Canvas does', () => {
+    expect(layout(paragraph([['ab 中 cd', 'text']], { lang: 'en' }, listed([0x20, 0x7e]))).gaps).not.toContain('canvas-language')
+    expect(layout(paragraph([['ab 中 cd', 'text']], { lang: 'th' }, listed([0x20, 0x7e]))).gaps).not.toContain('canvas-language')
+  })
+
+  test('a generic family after a named one concerns only what the named one lacks', () => {
+    const p = { ...paragraph([['ab 中', 'text']], { lang: 'ja' }, listed([0x20, 0x7e])), font: { ...fontWith(listed([0x20, 0x7e])), family: 'Arial, serif' } }
+    const facts: FontFacts = { ...UNKNOWN_FONT_FACTS, fonts: [{ family: 'Arial', realizes: true, coverage: [0x20, 0x7e], ligatures: null, scriptLookups: null }, { family: 'serif', realizes: true, coverage: null, ligatures: null, scriptLookups: null }] }
+    const withFacts = { ...p, font: { ...p.font, facts } }
+    expect(layout(withFacts).lines[0]!.gaps.filter(g => g.gap === 'canvas-language').map(g => g.at)).toEqual([{ start: 3, end: 4 }])
+  })
+})
+
+describe('VT, FF and CR (measure.ts; probe webkit-round3 R5)', () => {
+  test('without a pair adjustment around it, a control is measured in place and reports nothing', () => {
+    const { lines, gaps } = layout(paragraph([['ab\fcd', 'text']]))
+    expect(gaps).not.toContain('control-character-width')
+    expect(lines[0]!.geometry.contentWidth).toBe(40)
+  })
+
+  test('the letter before VT or FF is kerned as before a space, not against the letter after the control', () => {
+    // `b` loses 1 before a space and 2 before `c`, also across the stand-in.
+    pairAdjust = s => (s.includes('b ') ? -1 : 0) + (s.includes('bc') || s.includes('b\u0001c') ? -2 : 0)
+    const { lines, gaps } = layout(paragraph([['ab\fcd', 'text']]))
+    pairAdjust = () => 0
+    expect(lines[0]!.geometry.contentWidth).toBe(39)
+    expect(gaps).toContain('control-character-width')
+  })
+
+  test('text after a CR in the measured string reports: the adjustment on CR itself is not observable', () => {
+    expect(layout(paragraph([['ab\rcd', 'text']])).gaps).toContain('control-character-width')
+    expect(layout(paragraph([['ab\r', 'text']])).gaps).not.toContain('control-character-width')
+  })
+})
+
+describe('simplified measuring (probes webkit-round3 R1 and R2)', () => {
+  test('a string without a space reports nothing; one measured with its following space reports only without the pairKerning fact', () => {
+    const known: FontFacts = { ...UNKNOWN_FONT_FACTS, monospace: false, pairKerning: 'first-advance' }
+    const unknown: FontFacts = { ...UNKNOWN_FONT_FACTS, monospace: false }
+    pairAdjust = s => s.includes('ab') ? -1 : 0
+    expect(layout(paragraph([['abab', 'text']], {}, unknown)).gaps).not.toContain('simplified-measuring')
+    expect(layout(paragraph([['abab cd', 'text']], {}, known)).gaps).not.toContain('simplified-measuring')
+    expect(layout(paragraph([['abab cd', 'text']], {}, unknown)).gaps).toContain('simplified-measuring')
+    // A preserved run of spaces holds a space that is a pair's first glyph.
+    expect(layout(paragraph([['ab  cd', 'text']], { whiteSpace: 'pre-wrap' }, known)).gaps).toContain('simplified-measuring')
+    pairAdjust = () => 0
+  })
+})
+
+describe('page history worlds (content.ts, "Page history")', () => {
+  test('ICU resolves a text without RTL characters at the paragraph level, so another paragraph gives an isolate its own level', () => {
+    // `a` SHY LRI `b` PDI `c`: alone every level is 0; in a paragraph with an RTL character `b` is at level 2, so a box of the
+    // same text there ends items at 3 and 4 (held-out c-7cc5e3e26ff7c30d).
+    const p = paragraph([['a\u00ad\u2066b\u2069c', 'text']], { width: 45, overflowWrap: 'break-word' })
+    const { lines } = layout(p)
+    expect(lines.map(l => [l.start, l.end])).toEqual([[0, 3], [3, 6]])
+    expect(lines[0]!.gaps.find(g => g.gap === 'page-history')!.at).toEqual({ start: 3, end: 4 })
+  })
+
+  test('the rest of an item another world ends earlier: the carried width comes from another whole', () => {
+    // RTL block, `ab((` then Arabic: `((` takes level 1 with the Arabic here and level 0 after `ab` in an LTR paragraph, which
+    // ends an item between `((` and the Arabic (triage c-66ae4ab7d56cb0ae).
+    const { lines } = layout(paragraph([['ab((بببب', 'text']], { direction: 'rtl', width: 20, overflowWrap: 'break-word' }))
+    const carried = lines.filter(l => l.start > 4)
+    expect(carried.length).toBeGreaterThan(0)
+    for (const line of carried) expect(line.gaps.map(g => g.gap)).toContain('page-history')
+  })
+
+  test('a text whose levels no context changes has no world', () => {
+    expect(layout(paragraph([['aaa bbb ccc', 'text']], { width: 60 })).gaps).not.toContain('page-history')
   })
 })
 

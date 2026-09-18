@@ -59,6 +59,70 @@ export type FontFacts = {
   // line edge taken from the paragraph's positions, and caret edges inside an item. Default: the first glyph's advance. Gap
   // unsafe-to-break at such a line edge where the adjustment isn't 0.
   pairKerning: 'first-advance' | 'split' | null
+  // Optional: facts about each family of the list, in list order, one entry per family. Left out when the caller doesn't
+  // know them, and then every engine keeps the gap condition it has without them. DESIGN.md §1.2 says which gap conditions
+  // each fact can narrow or turn into a prediction. The engine's own fallback after the list isn't described: a character
+  // no listed font covers is drawn by a font these facts don't name.
+  fonts?: readonly ListedFontFacts[]
+}
+
+// Facts about one family of a font-family list, as the engine sees the font it realizes (DESIGN.md §1.2).
+export type ListedFontFacts = {
+  // The family as the list names it; a generic keyword stands for itself.
+  family: string
+  // Whether the family gives the engine a font: a loaded web font or an installed family. null: not known, and then
+  // nothing is known about which font draws a character the earlier families don't cover.
+  realizes: boolean | null
+  // The code points the font maps, as the engine asks it: sorted inclusive ranges, flat ([first, last, first, last, ...]).
+  // Blink asks the cmap, plus Core Text for U+2010 and U+2011 (harfbuzz_face.cc:210-231); WebKit asks Core Text, which
+  // synthesizes some glyphs and withholds others (GlyphPageCoreText.cpp:51-73); Gecko reads the cmap and clears complex
+  // script ranges an installed font has no shaping tables for (CoreTextFontList.cpp:271-313). null: not known, or the
+  // family doesn't realize.
+  coverage: readonly number[] | null
+  // The character sequences the font draws as one ligature glyph across grapheme clusters. null: not known.
+  ligatures: LigatureFacts | null
+  // The code points that can become a glyph at which a lookup starts that belongs to a default-on feature the engine
+  // turns off for non-zero letter-spacing: liga and clig in all three, calt in Blink too (font_features.cc:54-86;
+  // UnrealizedCoreTextFont.cpp:258-264; gfxFont.cpp:675-700), and their morx counterparts. Sorted inclusive ranges, flat.
+  // Text holding none of them shapes the same with those features on and off, so an empty list says letter-spacing never
+  // changes this font's shaping. Left out or null: not known.
+  spacingInputs?: readonly number[] | null
+  // Unicode scripts (ISO 15924 codes) grouped by the GSUB and GPOS lookups HarfBuzz selects for them in this font
+  // (hb_ot_layout_table_select_script, hb-ot-layout.cc:561-608, with the script's tags from hb-ot-tag.cc:36-181). Scripts in
+  // one group get the same features and lookups under every language system; every script not listed shares the font's
+  // fallback records ('DFLT', else 'dflt', else 'latn'), so an empty list says the script never changes the lookups. What
+  // else follows the script (the shaper, the direction, fallback positioning) isn't covered. null: not known, or the
+  // engine doesn't shape this font with HarfBuzz.
+  scriptLookups: readonly (readonly string[])[] | null
+}
+
+export type LigatureFacts = {
+  patterns: readonly LigaturePattern[]
+  // true: every ligature the font's default features can form between two grapheme clusters, under the default language
+  // system, is in `patterns`. false: there may be others, so the list can only confirm a ligature, never rule one out.
+  complete: boolean
+  // OpenType 'table/script/language' tags of the language systems whose lookups differ from their script's default.
+  // Nothing in `patterns` was tried under them.
+  languageSystems: readonly string[]
+}
+
+// Every string made of one alternative per position, in order, is drawn as a ligature. Alternatives are character
+// sequences, usually one character. Combining marks and format characters between the components aren't listed.
+export type LigaturePattern = {
+  positions: readonly (readonly string[])[]
+  // true: every such string was shaped and ligates. false: alternatives were shaped one at a time, so some combinations may
+  // not ligate.
+  exact: boolean
+  // Whether it is still a ligature under the features the engine sets for non-zero letter-spacing (Blink liga, clig and
+  // calt off, font_features.cc:54-86; WebKit liga, clig, dlig and hlig off, UnrealizedCoreTextFont.cpp:258-264; Gecko
+  // liga, clig, dlig and hlig off, gfxFont.cpp:675-700, or common ligatures off in its Core Text shaper,
+  // gfxCoreTextShaper.cpp:620-622).
+  spaced: boolean
+  // Whether it forms in every context tried: alone and, for Arabic-script text, joined to a letter before, after and on
+  // both sides. false: in some of them only.
+  everyContext: boolean
+  // Whether the first two characters still share a glyph with a combining mark after the first. null: not tried.
+  acrossMark: boolean | null
 }
 
 export const UNKNOWN_FONT_FACTS: FontFacts = { primaryFamily: null, mapsHyphen: null, monospace: null, opticalSizeAxis: null, joining: null, pairKerning: null }
@@ -295,6 +359,13 @@ export type BlinkGlyphCluster = {
   graphemeStarts: number[]
   // The cluster's advance in 16.16 fixed point of zoomed px (TextRunLayoutUnit), justification spacing included.
   advance: number
+  // Set where the cluster's start, the advance sum before it in its item, is a Canvas stand-in Blink's own value can
+  // differ from, with the condition's name: a position between letters HarfBuzz joins, measured as a prefix
+  // (in-word-prefix); a position a font's lookups may cover with one glyph cluster where the declaration gives no
+  // ligature fact (glyph-clusters); a pair adjustment no fact places (unsafe-to-break). Absent at a shaping call's edge
+  // and wherever the port's model gives the position. The sum of an item's advances keeps the item's measured width, so
+  // such a position moves advance between the clusters around it.
+  startLimit?: GapName
 }
 
 // A FragmentItem of a line (logical_line_builder.cc:200-464), positioned by ComputeInlinePositions and ApplyTextAlign
@@ -302,7 +373,10 @@ export type BlinkGlyphCluster = {
 // LayoutUnits from the content box's left edge; level is the item's bidi level, whose parity is its direction.
 export type BlinkItem =
   // Text with a ShapeResultView over [textStart, textEnd).
-  | { kind: 'text'; run: number; textStart: number; textEnd: number; level: number; x: number; inlineSize: number; clusters: BlinkGlyphCluster[] }
+  // sizeLimit is set where the item's end position is such a stand-in too (BlinkGlyphCluster.startLimit): an item edge
+  // inside a shaping call, where a glyph cluster over the edge goes to the item holding its first character
+  // (glyph_data_range.cc:56-90). The item's size, and with it the x of the items after it on the line, can then differ.
+  | { kind: 'text'; run: number; textStart: number; textEnd: number; level: number; x: number; inlineSize: number; clusters: BlinkGlyphCluster[]; sizeLimit?: GapName }
   // A tab run: flow control with a shape result of one space glyph per tab carrying its tab-stop advance
   // (shape_result.cc:1898-1938).
   | { kind: 'tab'; run: number; textStart: number; textEnd: number; level: number; x: number; inlineSize: number; clusters: BlinkGlyphCluster[] }
@@ -429,6 +503,10 @@ export type GeckoCharacter = {
   // What GetAdvanceWidth adds for the unit: its glyph advance or ligature share and the letter spacing, word spacing,
   // justification spacing and tab width after it (gfxTextRun.cpp:1214-1256, nsTextFrame.cpp:4089-4295).
   advance: number
+  // The position before the unit is a stand-in: it lies inside a shaping unit, whose glyph records come from one shaping
+  // of the whole unit, and Canvas couldn't confirm it (`in-word-prefix`; engines/gecko/lines.ts advanceBefore). The
+  // advances on both sides of such a position are stand-ins; their sum isn't. false when skipped.
+  standInBefore: boolean
 }
 
 // An nsTextFrame continuation placed on the line (nsTextFrame::ReflowText, nsTextFrame.cpp:10847-11532).
@@ -451,6 +529,11 @@ export type GeckoTextFrame = {
   usedHyphen: boolean
   // [measuredStart, contentEnd), one per source unit.
   characters: GeckoCharacter[]
+  // The position after the last unit is a stand-in (GeckoCharacter.standInBefore): the frame ends inside a shaping unit.
+  standInAtEnd: boolean
+  // Every advance of the frame is a Canvas stand-in under this condition, or null: no Canvas font size gives the DOM's
+  // (`font-size-quantization`), or an OffscreenCanvas can't take the DOM's optical size (`optical-size`).
+  advancesStandIn: GapName | null
 }
 
 export type GeckoFrameGeometry =

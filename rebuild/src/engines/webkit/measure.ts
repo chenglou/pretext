@@ -24,6 +24,135 @@ export function canvasString(text: string): string {
   return from === 0 ? text : out + text.slice(from)
 }
 
+// ---- Letter spacing and ligatures ----
+//
+// The DOM turns off liga, clig, dlig and hlig where letter-spacing isn't 0 (StyleComputedStyleBase.cpp:324-331,
+// UnrealizedCoreTextFont.cpp:258-264). An OffscreenCanvas context keeps them: setLetterSpacing changes the FontCascade's
+// spacing, not its description (CanvasRenderingContext2DBase.cpp:3271-3296, FontCascade.cpp:81). Canvas still shows where such
+// a lookup merged glyphs. WidthIterator adds letter spacing once per character that keeps glyphs of non-zero width after
+// shaping (applyExtraSpacingAfterShaping and calculateAdditionalWidth, WidthIterator.cpp:491-517, :654-690), and the complex
+// text controller once per glyph with an advance (ComplexTextController.cpp:792-796), so a total at LETTER_SPACING_PROBE px of
+// letter spacing less the total at none counts a string's spacing-bearing glyphs, and a ligature counts one where its
+// letters alone count one each (probe webkit-round3 R1: every string whose count equals its letters' counts measures the
+// same in Canvas as in the letter-spaced DOM, 247 of 247 strings without a space in 15 fonts, and 26 of the 237 that count
+// fewer do).
+const LETTER_SPACING_PROBE = 64
+
+function spacedGlyphCount(m: Measurer, box: WebKitBox, s: string): number {
+  return Math.round((measureText(m, box.countContext, s) - measureText(m, box.plainContext, s)) / LETTER_SPACING_PROBE)
+}
+
+// What Canvas shows of merged glyphs in a string a letter-spaced box measures. `merged`: the string counts fewer
+// spacing-bearing glyphs than its code points do alone. `pairs`: the offsets of adjacent code point pairs that merge when
+// measured as a pair, [first, end of second). `separated`: on the simple font code path, the string with U+200C between the
+// code points of each such pair, when that leaves nothing merged; else null. WidthIterator commits the font range before a
+// default-ignorable without a glyph and adds it as a deleted glyph of width 0 (commitIgnorable, WidthIterator.cpp:318-323),
+// and a U+200C glyph sits between the two letters otherwise, so no lookup matches across it, and it gets no letter spacing
+// (calculateAdditionalWidth's baseWidth test). The separated string is the DOM's glyphs less what shaping does across each
+// separated pair with those features off: a pair adjustment between the two letters (probe R1: ProbeShantell 700 `fi` is
+// 0.288px wider in the DOM, Amiri's is equal). On the complex path U+200C would break joining, and a required ligature such
+// as lam-alef merges in the DOM too (probe R1), so nothing is separated there.
+export type MergedGlyphs = { merged: boolean; pairs: Array<[number, number]>; separated: string | null }
+const NOTHING_MERGED: MergedGlyphs = { merged: false, pairs: [], separated: null }
+
+export function mergedGlyphs(m: Measurer, box: WebKitBox, text: string): MergedGlyphs {
+  if (box.letterSpacing === 0 || text.length < 2) return NOTHING_MERGED
+  const s = canvasString(text)
+  const starts: number[] = []
+  const counts: number[] = []
+  let alone = 0
+  for (let i = 0; i < s.length;) {
+    const length = s.codePointAt(i)! > 0xffff ? 2 : 1
+    const count = spacedGlyphCount(m, box, s.slice(i, i + length))
+    starts.push(i)
+    counts.push(count)
+    alone += count
+    i += length
+  }
+  if (spacedGlyphCount(m, box, s) >= alone) return NOTHING_MERGED
+  starts.push(s.length)
+  const pairs: Array<[number, number]> = []
+  let separated = ''
+  for (let k = 0; k + 1 < counts.length; k++) {
+    const isMerged = spacedGlyphCount(m, box, s.slice(starts[k]!, starts[k + 2]!)) < counts[k]! + counts[k + 1]!
+    if (isMerged) pairs.push([starts[k]!, starts[k + 2]!])
+    separated += s.slice(starts[k]!, starts[k + 1]!) + (isMerged ? '\u200c' : '')
+  }
+  separated += s.slice(starts[counts.length - 1]!)
+  if (!box.simpleFontCodePath || pairs.length === 0 || spacedGlyphCount(m, box, separated) < alone) return { merged: true, pairs, separated: null }
+  return { merged: true, pairs, separated }
+}
+
+// ---- VT, FF and CR ----
+//
+// Canvas turns U+0009-U+000D into spaces before it measures (CanvasRenderingContext2DBase.cpp:2847-2875), so it never shapes
+// the DOM's string. What the DOM does with VT, FF and CR, all on the WidthIterator path (a control keeps a box off
+// simplified measuring, WidthIterator.cpp:694-742):
+// - Font::applyTransforms hands Core Text the glyphs and the characters (CTFontShapeGlyphs, FontCoreText.cpp:689-700), and
+//   Core Text kerns the letter before the control as before a space: `A` FF `V` in 16px Arial is 32.4609375px, A's advance
+//   less 113 units, .notdef's 12px and V's advance, where Canvas's `A` U+0001 `V` kerns A against V across the control and
+//   gives 32.15625px (probe webkit-round3 R5);
+// - applyCSSVisibilityRules then overwrites a control's advance with .notdef's, VT and FF among them, and leaves CR's as
+//   shaping left it, with the space glyph (WidthIterator.cpp:792-823). So a pair adjustment on the control's own advance
+//   is lost for VT and FF and kept for CR, where Canvas can't show it: WidthIterator puts a space's advance back
+//   (:84-120). Other Cc characters reach Canvas as they are and measure the same there (probe R5: 96 of 96).
+// The stand-in with the control as U+0001 (VT, FF) or U+0000 (CR, no advance) is the DOM's own float32 sum wherever Canvas
+// shows no pair adjustment around the control: the letter before it against a space, and the two letters around it across
+// the stand-in. Elsewhere the width is pieced together, the text before the control shaped before a space, less the space,
+// then the control's advance, then the text after it, and the pieces don't add up in the DOM's float32 order, so the line
+// reports control-character-width (probe R5: 46 of 48 VT and FF strings equal the pieces, 2 are a float32 step off). A CR
+// followed by more of the measured string always reports it: the adjustment on CR's own advance isn't observable.
+function isPiecedControl(c: number): boolean {
+  return c === 0x0b || c === 0x0c || c === 0x0d
+}
+
+// Whether Canvas shows a pair adjustment around the control at `index` of `text`.
+function controlIsAdjusted(m: Measurer, context: number, text: string, index: number): boolean {
+  const before = index > 0 && !isPiecedControl(text.charCodeAt(index - 1)) ? text[index - 1]! : ''
+  const after = index + 1 < text.length && !isPiecedControl(text.charCodeAt(index + 1)) ? text[index + 1]! : ''
+  const standIn = text.charCodeAt(index) === 0x0d ? String.fromCharCode(0) : String.fromCharCode(1)
+  const space = measureText(m, context, ' ')
+  if (before !== '' && measureText(m, context, `${before} `) !== f32(measureText(m, context, before) + space)) return true
+  if (before !== '' && after !== '' && measureText(m, context, before + standIn + after) !== f32(f32(measureText(m, context, before) + measureText(m, context, standIn)) + measureText(m, context, after))) return true
+  return false
+}
+
+// Whether the width of a string holding VT, FF or CR is the DOM's own float32 sum (see above).
+export function controlsMeasureExactly(m: Measurer, context: number, text: string): boolean {
+  for (let i = 0; i < text.length; i++) {
+    const c = text.charCodeAt(i)
+    if (!isPiecedControl(c)) continue
+    if (c === 0x0d && i + 1 < text.length) return false
+    if (controlIsAdjusted(m, context, text, i)) return false
+  }
+  return true
+}
+
+// The Canvas width of a range the DOM measures: in a letter-spaced box the separated string where Canvas shows merged pairs,
+// and VT, FF and CR by the stand-in or the pieces above.
+function measureDomString(m: Measurer, box: WebKitBox, context: number, text: string): number {
+  const separated = mergedGlyphs(m, box, text).separated
+  const s = separated === null ? text : separated
+  let pieced = false
+  for (let i = 0; i < s.length && !pieced; i++) pieced = isPiecedControl(s.charCodeAt(i)) && controlIsAdjusted(m, context, s, i)
+  if (!pieced) return measureText(m, context, canvasString(s))
+  const space = measureText(m, context, ' ')
+  let width = 0
+  let segmentStart = 0
+  for (let i = 0; i <= s.length; i++) {
+    if (i < s.length && !isPiecedControl(s.charCodeAt(i))) continue
+    const segment = canvasString(s.slice(segmentStart, i))
+    if (i === s.length) {
+      if (segment !== '') width = f32(width + measureText(m, context, segment))
+      break
+    }
+    if (segment !== '') width = f32(width + f32(measureText(m, context, `${segment} `) - space))
+    if (s.charCodeAt(i) !== 0x0d) width = f32(width + measureText(m, context, String.fromCharCode(1)))
+    segmentStart = i + 1
+  }
+  return width
+}
+
 // TextUtil::singleSpaceWidth (TextUtil.cpp:54-60): widthOfSpaceString, a TextRun of one space, which gets letter spacing
 // and no word spacing (index 0), or the primary font's space advance on the simplified path, which has no spacing.
 export function singleSpaceWidth(m: Measurer, box: WebKitBox): number {
@@ -77,7 +206,7 @@ function tabbedWidth(_p: WebKitPrepared, m: Measurer, box: WebKitBox, from: numb
   let segmentStart = from
   for (let i = from; i <= to; i++) {
     if (i < to && text.charCodeAt(i) !== 0x09) continue
-    if (i > segmentStart) width = f32(width + measureText(m, box.context, canvasString(text.slice(segmentStart, i))))
+    if (i > segmentStart) width = f32(width + measureDomString(m, box, box.context, text.slice(segmentStart, i)))
     if (i < to) {
       width = f32(width + tabWidth(box, spaceWidth, f32(left + width)))
       if (box.letterSpacing !== 0) width = f32(width + box.letterSpacing)
@@ -127,7 +256,7 @@ export function boxWidth(p: WebKitPrepared, m: Measurer, box: WebKitBox, from: n
   } else {
     // The spaced context adds word spacing where WidthIterator does, in its float32 order: after SPACE, LF and NBSP past index
     // 0 of the TextRun, which starts at `from` in both (TextUtil.cpp:84-89; WidthIterator.cpp calculateAdditionalWidth).
-    width = measureText(m, box.spacedContext, canvasString(box.text.slice(from, end)))
+    width = measureDomString(m, box, box.spacedContext, box.text.slice(from, end))
   }
   if (end > to) width = f32(width - f32(singleSpaceWidth(m, box) + box.wordSpacing))
   return Number.isNaN(width) ? 0 : Math.max(0, width)

@@ -5,15 +5,17 @@
 // Imported as a module it runs nothing. It exports the per-row score, the native line grouping and the comparison of two
 // runs, so tools use the scorer's own rules instead of copying them.
 import { closeSync, openSync, readFileSync, readSync, writeFileSync, writeSync } from 'node:fs'
-import type { Expected, ExpectedObservation, ExpectedRect, GapName } from '../src/model.ts'
+import type { Expected, ExpectedObservation, ExpectedRect, Gap, GapName } from '../src/model.ts'
 import { describeGiven } from './languages.ts'
-import type { BrowserKind, Case, EnginePrediction, LabRow, LinesPrediction, NativeObservation, PainterLine, Paragraph, Rect, RecordedLayout } from './types.ts'
+import type { BrowserKind, Case, EnginePrediction, FontDecl, LabRow, LinesPrediction, NativeObservation, PainterLine, Paragraph, Rect, RecordedLayout } from './types.ts'
 
 // Part of every environment key, so rows scored by different scorers never meet in a baseline. Version 1 derived native
 // lines and widths from visibility rules; version 2 grouped every rect into native lines by vertical centre; version 3
 // placed code point rects by their own node's box (git history of this file, 2026-09-16 and 2026-09-17). Version 4 compares
-// Element.getClientRects(), marks slot protocol rows and attributes failing lines to the gaps that concern them.
-export const SCORER_VERSION = 4
+// Element.getClientRects(), marks slot protocol rows and attributes failing lines to the gaps that concern them. Version 5
+// counts a gap as covering a failing line only where its range touches what differs there ("Covered failures"), observes
+// the widths of lines Blink and Gecko indented (observedWidth), and matches failing rows against the residual classes.
+export const SCORER_VERSION = 5
 
 export type Status = 'pass' | 'fail' | 'unobserved' | 'not-applicable'
 // `reason` is a fixed category (counted in the summary); `detail` names offsets and values for this case.
@@ -248,6 +250,30 @@ function engineWidth(layout: RecordedLayout, line: number): number {
   }
 }
 
+// The text-indent inside a line's engine width, in engine units. Blink's line position starts at the indent
+// (`position_ = applied_text_indent_`, line_breaker.cc:877-879) and LineInfo::Width is that position after the last item
+// (ComputeLineLocation, line_breaker.cc:1149-1156); Gecko adds mTextIndent to the root span's mICoord (nsLineLayout.cpp:197-199),
+// which becomes the line's inline size. No box holds the indent, so the line's rects span the engine width less the indent,
+// whichever side the indent is on. WebKit moves the line's rect by the indent before it places content (m_lineMarginStart,
+// InlineLineBuilder.cpp:453, :474-476), so its content width starts after the indent and nothing comes off it.
+function indentInWidth(layout: RecordedLayout, line: number): number {
+  switch (layout.engine) {
+    case 'blink': return layout.lines[line]!.geometry.textIndent
+    case 'gecko': return layout.lines[line]!.geometry.textIndent
+    case 'webkit': return 0
+  }
+}
+
+// The width a line's rects span when the prediction is right: the engine width less the indent inside it.
+function observedWidth(layout: RecordedLayout, line: number): number {
+  return engineWidth(layout, line) - indentInWidth(layout, line)
+}
+
+function describeWidth(layout: RecordedLayout, line: number): string {
+  const indent = indentInWidth(layout, line)
+  return indent === 0 ? `width ${engineWidth(layout, line)}` : `width ${engineWidth(layout, line)} less text-indent ${indent}`
+}
+
 // The horizontal extent of a line's node rects in engine units: 'none' without a positive rect, 'off-encoding' when a
 // rect's edges aren't what any engine value reports as.
 type Extent = { kind: 'none' } | { kind: 'off-encoding'; rect: Rect } | { kind: 'extent'; left: number; right: number }
@@ -451,37 +477,137 @@ export type CaseScore = {
   diagnostics: LineRangeDiagnostics | null
   // Why the page doesn't describe the case's declared input (slotProtocol), or null. Every metric is then unobserved.
   protocol: string | null
-  // Per failing metric, the failing lines and the gaps that concern them (see "Line-local gaps" below).
+  // Per failing metric, the failing lines and the gaps that cover them (see "Covered failures" below).
   lineGaps: Partial<Record<MetricName, MetricAttribution>>
+  // The residual class whose signature the row has (see "Residual classes"), or null. Absent counts as null.
+  residual?: ResidualMembership | null
 }
 
-// ---- Line-local gaps ----
+// ---- Covered failures ----
 
-// A failing row is covered by a gap only where a gap condition concerns the failing line itself or the break decision that
-// ended the line before it, the decision the failing line starts from. The scorer names, per failing line:
-// - 'line': a gap in the failing engine line's own `gaps`;
-// - 'previous-line': a gap in the `gaps` of the engine line before it, or of a line without a line box between the two;
-// - 'below-floats': a gap of a slot the engine refused between the two lines (`belowFloats`);
+// A gap covers a failing line only where its range touches what differs there (research/ROUND2-CRITIC.md item 1). Round 2
+// counted every gap that concerned the failing line or the line before it, so a `script-context` range on a quote covered a
+// ligature 15 characters away. Two steps per failing line: the gaps that concern it (scorer 4's rule, below), then which of
+// those touch the evidence.
+//
+// The gaps that concern a line, with the source range of each:
+// - 'line': a gap in the failing engine line's own `gaps`. Its range is `at`, or the line's whole range without one
+//   (src/model.ts: a line gap concerns its line and needs no range); such a gap is marked `unranged`.
+// - 'previous-line': a gap in the `gaps` of the line box before it, or of a line without a line box between the two, with
+//   `at` or that line's range.
+// - 'next-line': a gap in the `gaps` of the line box after it, or of a line without a line box between the two, with `at`
+//   or that line's range. Scorer 4 didn't look there. The decision text of a line that the prediction ends early lies on
+//   the predicted next line, and a range reported there can reach back into the failing line.
+// A gap reported on a neighbouring line ('previous-line', 'next-line') covers only with a range that reaches the evidence.
+// A point there is that line's own edge: Blink reports a line's start edge and end edge on the line itself, so
+// `unsafe-to-break` at the next line's start says nothing about the U+3000 that ends the failing line
+// (`c-45d738663a9704be`). An engine that reports a break's gap only on the line that starts there (Gecko's
+// `in-word-prefix` between joined letters in round 2's rows) leaves the line that ends there without it; the gap is then
+// listed under `elsewhere` with its scope, which says where it was reported.
+// - 'below-floats': a gap of a slot the engine refused between the two lines (`belowFloats`), with `at` or the range of the
+//   failing line, the line the refusal moved.
 // - 'paragraph-range': a paragraph gap whose `at` range meets the source range of those lines, [previous line start,
-//   failing line end], a break offset at either end included.
+//   failing line end], a break offset at either end included; for lineCount and breaks the range reaches to the end of the
+//   decision text, which can lie past the predicted line's end.
 // A paragraph gap without `at` concerns the paragraph, not a line, and covers nothing; it is listed apart.
+//
+// The evidence:
+// - Differing units: the source ranges on the failing engine line whose observed width differs from the expected one, in
+//   engine units (rectUnits), whatever state the port gave the value. In Blink and Gecko a unit is the grapheme cluster
+//   (UAX #29, Intl.Segmenter) of a code point whose rect differs: an engine reports a cluster's advance on one of its code
+//   points (Gecko gives an RTL letter's advance to the mark after it), so a gap at the letter concerns the mark's rect too.
+//   The unit also takes in the code points next to it that report no width on either side (ZWNJ, a collapsed space) or
+//   are default ignorable (a soft hyphen, whose rect at a break is the hyphen the engine adds): the letters on both sides
+//   of them shape and break as neighbours, so a gap at a break after a soft hyphen concerns the letter before it.
+//   Where only a node rect shows the difference (no code point of the node on the line differs), the unit is the node's
+//   part of the line.
+//   In WebKit a unit is always a node's part of the line: its code point rects are selection rects snapped to whole px
+//   (research/observe-webkit.md E3), so they don't say which code point differs. A range whose rect count differs is a unit
+//   on each line both sides place it on. A rect the two sides place on different lines is moved text, not a unit. x alone
+//   never makes a unit: every rect after a wider one moves, so x doesn't say where the difference is. Element rects make no
+//   unit: a box edge or an atomic inline isn't text a gap's range could touch.
+// - Runs: differing units that follow each other in source order without a break between them. Widths can move inside a run
+//   and add up to the same (Blink reports joined letters' positions as exact where Canvas prefix widths can't give them),
+//   and such a run changes neither the line's width nor where it breaks. A run contributes unless its widths add up to the
+//   same natively as expected: in Gecko the sum of its rects' widths in app units; in Blink the extent of its rects, since a
+//   code point rect's edges are the carets floored and ceiled relative to the item (FragmentItem::LocalRect,
+//   fragment_item.cc:1201-1235; LayoutUnit::FromFloatFloor and FromFloatCeil, layout_unit.h:134-142), so widths don't add up
+//   and an extent one LayoutUnit off whose left edge also moved is within that rounding. A run holding a node unit, an
+//   unknown rect, or any WebKit unit always contributes.
+// - The decision text, for lineCount and breaks: the text between the predicted and the native break of the first line
+//   that differs, [m, M], from the first to the last code point that one side places on that line and the other doesn't,
+//   and out to the predicted break where that lies before them, or after them past code points without width. Without
+//   such a code point (a line box only one side has), it is the range of the engine lines after the previous line box up
+//   to the failing one.
+//
+// Which lines are covered, and by which gaps:
+// - widths: every run that contributes is touched by some gap (when none contributes, every run); a line without a unit is
+//   not covered. A gap touches a run when its range touches one of the run's units: a range must overlap the unit, a point
+//   touches the units on both sides of its offset. One touched unit is not enough: a gap at a line edge touches whatever
+//   differs there, while the difference that makes the width sits elsewhere (round 2's U+3000 rows end in a U+3000 that
+//   `unsafe-to-break` touches). The line before isn't evidence: its break agrees, and what its break carries into the
+//   failing line (a reshaped line start, the rest of a split word) shows in the failing line's first units.
+// - lineCount and breaks: the units are those of the first line that differs, before the decision text. A node that
+//   reaches the decision text holds other text on that line natively than in the prediction, so its rect there says
+//   nothing: in Blink and Gecko its code points before the decision text still compare; in WebKit its part of the line
+//   before the decision text is a unit, since nothing finer is observed (in a one-node paragraph that is the line up to
+//   the break, so there the rule only drops the gaps of other lines and of text after the decision). The run
+//   that runs back from m belongs to the decision: the side that broke at m trims, hangs, hyphenates or reshapes what ends
+//   its line, so those widths differ because the break does. With no other contributing run the failure is a pure break
+//   decision, covered by a gap that touches the decision text (a range must meet [m, M); a point may sit at m or M; the
+//   failing line's own gap without a range also counts when the decision text starts where the line ends, since such a
+//   gap concerns the line's breaks) or that run. Otherwise observed geometry differs before the decision, and every other
+//   contributing run must be touched.
+// - The gaps listed as covering a covered line are those that take part: they touch a run that had to be touched, or the
+//   decision. The rest, and every gap of a line that isn't covered, are listed under `elsewhere`.
+// - painter: scorer 4's rule, every gap that concerns the line ('next-line' apart, which scorer 4 didn't have). Painted
+//   rects aren't mapped to source offsets (CHARTER.md, tentpole 7's open item), so nothing says which painted unit differs.
+// The scorer checks where a gap's range is, not what its source reading says: whether a condition's reading allows the
+// prediction to be wrong at the unit it touches is for whoever reads the row.
+//
 // Which line fails:
 // - lineCount and breaks: the first native line where the prediction and native layout disagree. Line boxes pair with
 //   native lines from the top; for every code point, node and element whose native lines and expected lines differ, the
 //   lowest line in one set and not the other. With no such difference and other line counts, the first line that only one
-//   side has. Later lines follow from it, so only this one is attributed.
+//   side has. Later lines follow from it, so only this one is attributed. When the decision text starts before that
+//   line (a code point one side splits across two lines makes the second of them the first that differs), the line box
+//   that holds the text before the decision text is attributed instead: the line whose end the two sides disagree about.
 // - widths and painter: every line whose width or painted extent differs, each on its own.
-export type GapScope = 'line' | 'previous-line' | 'below-floats' | 'paragraph-range'
+export type GapScope = 'line' | 'previous-line' | 'next-line' | 'below-floats' | 'paragraph-range'
+// What a covering gap's range touches: a differing unit, or the decision text.
+export type GapTouch = 'unit' | 'decision'
+export type SourceRange = { start: number; end: number }
+export type LineEvidence = {
+  // Differing units on the line, and how many of them are known only as a node's part of the line; the runs they form,
+  // the runs a gap must touch (`deciding`), and how many of those some gap touches; the range of the first deciding run no
+  // gap touches (else of the first deciding run, else of the first run) with its text (texts are cut at 40 UTF-16 units).
+  units: number
+  nodeUnits: number
+  runs: number
+  deciding: number
+  touched: number
+  first: SourceRange | null
+  firstText?: string
+  // lineCount and breaks: the decision text, and whether the units leave the failure a pure break decision.
+  decision?: SourceRange
+  decisionText?: string
+  pureDecision?: boolean
+}
 export type LineAttribution = {
   // The native line index (the k-th line box from the top), and its engine line; null where the prediction has no k-th
   // line box.
   nativeLine: number
   engineLine: number | null
-  gaps: Array<{ gap: GapName; scope: GapScope }>
+  // The gaps that cover the line. `touch` is absent on a painter line (every concerning gap counts there); `unranged`
+  // marks a line gap without `at`, which has its whole line's range.
+  gaps: Array<{ gap: GapName; scope: GapScope; touch?: GapTouch; unranged?: true }>
+  // Gaps that concern the line and cover nothing: their range touches nothing that counts (scorer 4 counted them).
+  elsewhere?: Array<{ gap: GapName; scope: GapScope }>
+  evidence?: LineEvidence
 }
 export type MetricAttribution = {
   lines: LineAttribution[]
-  // Every failing line has a line-local gap.
+  // Every failing line has a covering gap.
   covered: boolean
   // Paragraph gaps without a range, which cover no line.
   paragraphGaps: GapName[]
@@ -493,21 +619,32 @@ function paragraphGapNames(layout: RecordedLayout): GapName[] {
   return names.sort()
 }
 
-// The gaps that concern native line k, given the engine lines with a line box (boxes, top to bottom).
-export function lineLocalGaps(layout: RecordedLayout, boxes: readonly number[], k: number): LineAttribution {
+type Concern = { gap: GapName; scope: GapScope; range: SourceRange; ranged: boolean }
+
+// The gaps that concern native line k, given the engine lines with a line box (boxes, top to bottom). `reach` is the end
+// of the decision text, or 0.
+function concerningGaps(layout: RecordedLayout, boxes: readonly number[], k: number, reach: number): { engineLine: number | null; concerns: Concern[] } {
   const lines = layout.lines
   const engineLine = k < boxes.length ? boxes[k]! : null
   const previous = k > 0 && k - 1 < boxes.length ? boxes[k - 1]! : -1
   // The engine lines after the previous line box up to and including the failing one (to the end without one).
   const last = engineLine ?? lines.length - 1
-  const gaps: LineAttribution['gaps'] = []
-  const add = (gap: GapName, scope: GapScope): void => {
-    if (!gaps.some(value => value.gap === gap && value.scope === scope)) gaps.push({ gap, scope })
+  const concerns: Concern[] = []
+  const add = (gap: Gap, scope: GapScope, fallback: SourceRange): void => {
+    concerns.push({ gap: gap.gap, scope, range: gap.at ?? fallback, ranged: gap.at !== undefined })
   }
-  if (engineLine !== null) for (const gap of lines[engineLine]!.gaps) add(gap.gap, 'line')
+  const rangeOf = (l: number): SourceRange => ({ start: lines[l]!.start, end: lines[l]!.end })
+  if (engineLine !== null) for (const gap of lines[engineLine]!.gaps) add(gap, 'line', rangeOf(engineLine))
   for (let l = Math.max(previous, 0); l <= last && l < lines.length; l++) {
     if (l === engineLine) continue
-    if (l === previous || !lines[l]!.hasLineBox) for (const gap of lines[l]!.gaps) add(gap.gap, 'previous-line')
+    if (l === previous || !lines[l]!.hasLineBox) for (const gap of lines[l]!.gaps) add(gap, 'previous-line', rangeOf(l))
+  }
+  // The engine lines after the failing one up to and including the next line box.
+  if (engineLine !== null) {
+    for (let l = engineLine + 1; l < lines.length; l++) {
+      for (const gap of lines[l]!.gaps) add(gap, 'next-line', rangeOf(l))
+      if (lines[l]!.hasLineBox) break
+    }
   }
   // Slot rows: a line box takes the next row, a refused slot records its row and takes the next one (index.ts fillLines).
   // The refusals between the previous line box and the failing line are those whose row is past the previous box's row
@@ -526,24 +663,566 @@ export function lineLocalGaps(layout: RecordedLayout, boxes: readonly number[], 
       if (l === engineLine) failingRow = row
       if (lines[l]!.hasLineBox) row++
     }
+    const textEnd = lines.length === 0 ? 0 : lines[lines.length - 1]!.end
+    const moved = engineLine === null ? { start: textEnd, end: textEnd } : rangeOf(engineLine)
     for (const value of layout.belowFloats) {
-      if (value.row > previousRow && value.row <= failingRow) for (const gap of value.gaps) add(gap.gap, 'below-floats')
+      if (value.row > previousRow && value.row <= failingRow) for (const gap of value.gaps) add(gap, 'below-floats', moved)
     }
   }
   const start = lines.length === 0 ? 0 : lines[Math.max(previous, 0)]!.start
-  const end = lines.length === 0 ? 0 : lines[Math.min(last, lines.length - 1)]!.end
+  const end = Math.max(reach, lines.length === 0 ? 0 : lines[Math.min(last, lines.length - 1)]!.end)
   for (const gap of layout.gaps) {
     const at = gap.at
     if (at === undefined) continue
-    if (at.start === at.end ? at.start >= start && at.start <= end : at.start < end && at.end > start) add(gap.gap, 'paragraph-range')
+    if (at.start === at.end ? at.start >= start && at.start <= end : at.start < end && at.end > start) concerns.push({ gap: gap.gap, scope: 'paragraph-range', range: at, ranged: true })
   }
-  gaps.sort((a, b) => (a.gap < b.gap ? -1 : a.gap > b.gap ? 1 : a.scope < b.scope ? -1 : a.scope > b.scope ? 1 : 0))
-  return { nativeLine: k, engineLine, gaps }
+  return { engineLine, concerns }
 }
 
-function attribution(layout: RecordedLayout, boxes: readonly number[], failing: readonly number[]): MetricAttribution {
-  const lines = failing.map(k => lineLocalGaps(layout, boxes, k))
+// Whether a gap's range touches a unit: a range must overlap it, a point touches the units on both sides of its offset.
+function touchesUnit(range: SourceRange, unit: SourceRange): boolean {
+  return range.start === range.end ? range.start >= unit.start && range.start <= unit.end : range.start < unit.end && range.end > unit.start
+}
+
+// Whether a gap's range touches the decision text [m, M]: a range must meet [m, M) (or hold the offset when m = M), a
+// point may sit at either end.
+function touchesDecision(range: SourceRange, decision: SourceRange): boolean {
+  if (range.start === range.end) return range.start >= decision.start && range.start <= decision.end
+  if (decision.start === decision.end) return range.start <= decision.start && range.end >= decision.start
+  return range.start < decision.end && range.end > decision.start
+}
+
+// What differs on a failing line: its differing units, and for lineCount and breaks the decision text.
+type FailingLineEvidence = { units: readonly Unit[]; decision: SourceRange | null }
+// A differing unit with what its rects say, in engine units: the sum of native minus expected widths over the rects that
+// differ, and the extent of those rects natively and as expected. NaN where a rect count differs or a rect is off the
+// engine's encoding. `node`: known only as a node's part of the line.
+type Unit = SourceRange & { node: boolean; sum: number; nativeLeft: number; nativeRight: number; expectedLeft: number; expectedRight: number }
+// Units that follow each other in source order without a break between them.
+type Run = { start: number; end: number; units: number[]; contributes: boolean }
+
+function runsOf(engine: RecordedLayout['engine'], units: readonly Unit[]): Run[] {
+  const order: number[] = []
+  for (let u = 0; u < units.length; u++) order.push(u)
+  order.sort((a, b) => units[a]!.start - units[b]!.start || units[a]!.end - units[b]!.end)
+  const runs: Run[] = []
+  for (let i = 0; i < order.length; i++) {
+    const unit = units[order[i]!]!
+    const run = runs[runs.length - 1]
+    if (run !== undefined && unit.start <= run.end) {
+      run.end = Math.max(run.end, unit.end)
+      run.units.push(order[i]!)
+    } else {
+      runs.push({ start: unit.start, end: unit.end, units: [order[i]!], contributes: true })
+    }
+  }
+  for (let r = 0; r < runs.length; r++) {
+    const run = runs[r]!
+    let sum = 0
+    let node = false
+    let nativeLeft = Infinity
+    let nativeRight = -Infinity
+    let expectedLeft = Infinity
+    let expectedRight = -Infinity
+    for (let i = 0; i < run.units.length; i++) {
+      const unit = units[run.units[i]!]!
+      sum += unit.sum
+      node ||= unit.node
+      nativeLeft = Math.min(nativeLeft, unit.nativeLeft)
+      nativeRight = Math.max(nativeRight, unit.nativeRight)
+      expectedLeft = Math.min(expectedLeft, unit.expectedLeft)
+      expectedRight = Math.max(expectedRight, unit.expectedRight)
+    }
+    if (node || Number.isNaN(sum)) continue
+    switch (engine) {
+      case 'gecko':
+        // Integer app units: the widths moved inside the run and add up to the same.
+        run.contributes = sum !== 0
+        break
+      case 'blink': {
+        // A code point rect's edges are its carets floored and ceiled (see "Covered failures"), so widths don't add up; the
+        // run's extent does, within one LayoutUnit when the run's left edge moved.
+        const extent = (nativeRight - nativeLeft) - (expectedRight - expectedLeft)
+        run.contributes = !(extent === 0 || (Math.abs(extent) === 1 && nativeLeft !== expectedLeft))
+        break
+      }
+      case 'webkit': break
+    }
+  }
+  return runs
+}
+
+// The attribution of native line k. Without evidence (a painter line), every gap that concerns the line covers it.
+export function lineLocalGaps(layout: RecordedLayout, boxes: readonly number[], k: number, evidence: FailingLineEvidence | null = null): LineAttribution {
+  const { engineLine, concerns } = concerningGaps(layout, boxes, k, evidence?.decision?.end ?? 0)
+  const order = <T extends { gap: GapName; scope: GapScope }>(a: T, b: T): number => (a.gap < b.gap ? -1 : a.gap > b.gap ? 1 : a.scope < b.scope ? -1 : a.scope > b.scope ? 1 : 0)
+  const gaps: LineAttribution['gaps'] = []
+  const add = (value: Concern, touch: GapTouch | undefined): void => {
+    const known = gaps.find(other => other.gap === value.gap && other.scope === value.scope)
+    if (known === undefined) {
+      gaps.push({ gap: value.gap, scope: value.scope, ...(touch === undefined ? {} : { touch }), ...(value.ranged ? {} : { unranged: true as const }) })
+    } else {
+      // Several gaps of one name and scope: a touched unit says more than the decision text, a range more than a whole line.
+      if (touch === 'unit') known.touch = 'unit'
+      if (value.ranged) delete known.unranged
+    }
+  }
+  if (evidence === null) {
+    // Scorer 4's rule, which didn't look at the next line.
+    for (let c = 0; c < concerns.length; c++) if (concerns[c]!.scope !== 'next-line') add(concerns[c]!, undefined)
+    return { nativeLine: k, engineLine, gaps: gaps.sort(order) }
+  }
+  const units = evidence.units
+  const runs = runsOf(layout.engine, units)
+  // lineCount and breaks: the run that runs back from the decision text belongs to the decision.
+  let edgeRun = -1
+  if (evidence.decision !== null) {
+    for (let r = 0; r < runs.length; r++) if (runs[r]!.start < evidence.decision.start && runs[r]!.end >= evidence.decision.start) edgeRun = r
+  }
+  // The runs a gap must touch: those that contribute, the edge run apart; every run when none contributes.
+  const deciding: number[] = []
+  for (let r = 0; r < runs.length; r++) if (r !== edgeRun && runs[r]!.contributes) deciding.push(r)
+  if (deciding.length === 0 && evidence.decision === null) for (let r = 0; r < runs.length; r++) deciding.push(r)
+  const pureDecision = evidence.decision !== null && deciding.length === 0
+  // Per concern, the runs it touches, and whether it touches the decision text.
+  const touchedRuns = new Set<number>()
+  const touching: Array<{ value: Concern; runs: number[]; decision: boolean }> = []
+  for (let c = 0; c < concerns.length; c++) {
+    const value = concerns[c]!
+    const hit: number[] = []
+    // A point reported on a neighbouring line is that line's edge.
+    if ((value.scope === 'previous-line' || value.scope === 'next-line') && value.ranged && value.range.start === value.range.end) {
+      touching.push({ value, runs: hit, decision: false })
+      continue
+    }
+    for (let r = 0; r < runs.length; r++) {
+      const run = runs[r]!
+      for (let i = 0; i < run.units.length; i++) {
+        if (!touchesUnit(value.range, units[run.units[i]!]!)) continue
+        hit.push(r)
+        touchedRuns.add(r)
+        break
+      }
+    }
+    // A line gap without a range concerns its line's breaks too: the decision text can start where the line ends.
+    const ownBreak = evidence.decision !== null && value.scope === 'line' && !value.ranged && value.range.end === evidence.decision.start
+    touching.push({ value, runs: hit, decision: evidence.decision !== null && (ownBreak || touchesDecision(value.range, evidence.decision)) })
+  }
+  const lineCovered = pureDecision
+    ? touching.some(value => value.decision || value.runs.includes(edgeRun))
+    : deciding.length > 0 && deciding.every(r => touchedRuns.has(r))
+  const elsewhere: NonNullable<LineAttribution['elsewhere']> = []
+  for (let c = 0; c < touching.length; c++) {
+    const { value, runs: hit, decision } = touching[c]!
+    // A gap covers when the line is covered and the gap takes part: it touches a deciding run, or the decision.
+    const unit = pureDecision ? hit.includes(edgeRun) : hit.some(r => deciding.includes(r))
+    if (lineCovered && (unit || (pureDecision && decision))) add(value, unit ? 'unit' : 'decision')
+    else if (!elsewhere.some(other => other.gap === value.gap && other.scope === value.scope)) elsewhere.push({ gap: value.gap, scope: value.scope })
+  }
+  let nodeUnits = 0
+  for (let u = 0; u < units.length; u++) if (units[u]!.node) nodeUnits++
+  let touched = 0
+  let firstRun = -1
+  for (let i = 0; i < deciding.length; i++) {
+    if (touchedRuns.has(deciding[i]!)) touched++
+    else if (firstRun < 0) firstRun = deciding[i]!
+  }
+  if (firstRun < 0) firstRun = deciding.length > 0 ? deciding[0]! : runs.length > 0 ? 0 : -1
+  const first = firstRun < 0 ? null : { start: runs[firstRun]!.start, end: runs[firstRun]!.end }
+  return {
+    nativeLine: k, engineLine, gaps: gaps.sort(order), ...(elsewhere.length === 0 ? {} : { elsewhere: elsewhere.sort(order) }),
+    evidence: {
+      units: units.length, nodeUnits, runs: runs.length, deciding: deciding.length, touched, first,
+      ...(evidence.decision === null ? {} : { decision: evidence.decision, pureDecision }),
+    },
+  }
+}
+
+function attribution(layout: RecordedLayout, boxes: readonly number[], failing: readonly number[], text: string, evidence: ((k: number) => FailingLineEvidence) | null): MetricAttribution {
+  const lines = failing.map(k => lineLocalGaps(layout, boxes, k, evidence === null ? null : evidence(k)))
+  for (let i = 0; i < lines.length; i++) {
+    const value = lines[i]!.evidence
+    if (value === undefined) continue
+    if (value.first !== null) value.firstText = text.slice(value.first.start, Math.min(value.first.end, value.first.start + 40))
+    if (value.decision !== undefined) value.decisionText = text.slice(value.decision.start, Math.min(value.decision.end, value.decision.start + 40))
+  }
   return { lines, covered: lines.length > 0 && lines.every(line => line.gaps.length > 0), paragraphGaps: paragraphGapNames(layout) }
+}
+
+// The native lines of a range's placed rects and the native lines its expected rects map to (see lineDifference for the
+// pairing), or null where they can't be compared: the rect counts differ and a native rect sits on no line.
+function lineSets(expected: ExpectedRect[], placed: number[], nativeLineOf: Int32Array): { native: Set<number>; expected: Set<number> } | null {
+  const nativeSet = new Set<number>()
+  const expectedSet = new Set<number>()
+  const mapped = (rect: ExpectedRect): number => (rect.line >= 0 ? nativeLineOf[rect.line]! : -1)
+  if (expected.length === placed.length) {
+    for (let k = 0; k < expected.length; k++) {
+      if (placed[k]! < 0) continue
+      nativeSet.add(placed[k]!)
+      if (mapped(expected[k]!) >= 0) expectedSet.add(mapped(expected[k]!))
+    }
+  } else {
+    for (let k = 0; k < placed.length; k++) {
+      if (placed[k]! < 0) return null
+      nativeSet.add(placed[k]!)
+    }
+    for (let k = 0; k < expected.length; k++) if (mapped(expected[k]!) >= 0) expectedSet.add(mapped(expected[k]!))
+  }
+  return { native: nativeSet, expected: expectedSet }
+}
+
+// The lowest native line in one of a range's two line sets and not the other, or Infinity where the sets agree or can't
+// be compared.
+function divergence(expected: ExpectedRect[], placed: number[], nativeLineOf: Int32Array): number {
+  const sets = lineSets(expected, placed, nativeLineOf)
+  if (sets === null) return Infinity
+  let lowest = Infinity
+  for (const line of sets.native) if (!sets.expected.has(line)) lowest = Math.min(lowest, line)
+  for (const line of sets.expected) if (!sets.native.has(line)) lowest = Math.min(lowest, line)
+  return lowest
+}
+
+// An observed rect against the expected one in engine units: native minus expected width, and both rects' edges. WebKit
+// compares the float32 width a box reports as it is (in px); Blink and Gecko compare decoded edges, so a Gecko width that
+// encodes to other float bits at another x doesn't differ. NaN where a rect is off the engine's encoding.
+type RectComparison = { width: number; nativeLeft: number; nativeRight: number; expectedLeft: number; expectedRight: number }
+
+function compareRect(layout: RecordedLayout, line: number, expected: ExpectedRect, observed: Rect): RectComparison {
+  if (layout.engine === 'webkit') {
+    return { width: observed.width - expected.width.value, nativeLeft: observed.x, nativeRight: observed.x + observed.width, expectedLeft: expected.x.value, expectedRight: expected.x.value + expected.width.value }
+  }
+  const e = rectUnits(layout, line, { x: expected.x.value, width: expected.width.value })
+  const n = rectUnits(layout, line, observed)
+  if (e === null || n === null) return { width: NaN, nativeLeft: NaN, nativeRight: NaN, expectedLeft: NaN, expectedRight: NaN }
+  return { width: (n.right - n.left) - (e.right - e.left), nativeLeft: n.left, nativeRight: n.right, expectedLeft: e.left, expectedRight: e.right }
+}
+
+const DEFAULT_IGNORABLE = /^\p{Default_Ignorable_Code_Point}$/u
+
+// Per engine line, the differing units (see "Covered failures"). `only` restricts them to one line, the first line that
+// differs of a lineCount or breaks failure, and to text before the decision text.
+function differingUnits(
+  layout: RecordedLayout, paragraph: Pick<Paragraph, 'runs'>, text: string, observation: ExpectedObservation, nativeObservation: NativeObservation,
+  native: NativeLines, nativeLineOf: Int32Array, only: { line: number; before: number } | null,
+): Unit[][] {
+  const lines = layout.lines
+  const units: Unit[][] = []
+  for (let l = 0; l < lines.length; l++) units.push([])
+  // Where grapheme clusters start, found when the first code point differs.
+  let clusterStarts: number[] | null = null
+  const cluster = (offset: number): SourceRange => {
+    if (clusterStarts === null) {
+      clusterStarts = []
+      for (const segment of new Intl.Segmenter('en', { granularity: 'grapheme' }).segment(text)) clusterStarts.push(segment.index)
+    }
+    let low = 0
+    let high = clusterStarts.length - 1
+    while (low < high) {
+      const middle = (low + high + 1) >> 1
+      if (clusterStarts[middle]! <= offset) low = middle
+      else high = middle - 1
+    }
+    return { start: clusterStarts[low] ?? 0, end: low + 1 < clusterStarts.length ? clusterStarts[low + 1]! : text.length }
+  }
+  // Whether the code point at index i is default ignorable, or reports no width natively and in the expected rects.
+  const points = observation.codePoints
+  const widthless = (i: number): boolean => {
+    if (DEFAULT_IGNORABLE.test(text.slice(points[i]!.offset, points[i]!.offset + points[i]!.length))) return true
+    const expected = points[i]!.rects
+    const observed = nativeObservation.points[i]!.rects
+    for (let k = 0; k < expected.length; k++) if (expected[k]!.width.value !== 0) return false
+    for (let k = 0; k < observed.length; k++) if (observed[k]!.width !== 0) return false
+    return true
+  }
+  // The index of the first code point at or after an offset.
+  const indexAt = (offset: number): number => {
+    let low = 0
+    let high = points.length
+    while (low < high) {
+      const middle = (low + high) >> 1
+      if (points[middle]!.offset < offset) low = middle + 1
+      else high = middle
+    }
+    return low
+  }
+  // Whether every code point of a range is widthless. An RTL letter whose mark reports the cluster's advance is not.
+  const widthlessRange = (range: SourceRange): boolean => {
+    for (let i = indexAt(range.start); i < points.length && points[i]!.offset < range.end; i++) if (!widthless(i)) return false
+    return true
+  }
+  // A grapheme cluster with the widthless clusters on both sides of it.
+  const withWidthless = (range: SourceRange): SourceRange => {
+    let start = range.start
+    let end = range.end
+    for (let before = start > 0 ? cluster(start - 1) : null; before !== null && widthlessRange(before); before = start > 0 ? cluster(start - 1) : null) start = before.start
+    for (let after = end < text.length ? cluster(end) : null; after !== null && widthlessRange(after); after = end < text.length ? cluster(end) : null) end = after.end
+    return { start, end }
+  }
+  // A node's part of the line, or a code point's unit. Rects of one unit add up.
+  const UNKNOWN: RectComparison = { width: NaN, nativeLeft: NaN, nativeRight: NaN, expectedLeft: NaN, expectedRight: NaN }
+  const push = (l: number, start: number, end: number, node: boolean, value: RectComparison): void => {
+    if (only !== null && l !== only.line) return
+    if (only !== null && start >= only.before) return
+    const range = node ? null : withWidthless(cluster(start))
+    const s = range === null ? Math.max(start, lines[l]!.start) : range.start
+    const e = range === null ? Math.min(end, lines[l]!.end) : range.end
+    if (e <= s) return
+    const list = units[l]!
+    const known = list.find(unit => unit.start === s && unit.end === e && unit.node === node)
+    if (known === undefined) {
+      list.push({ start: s, end: e, node, sum: value.width, nativeLeft: value.nativeLeft, nativeRight: value.nativeRight, expectedLeft: value.expectedLeft, expectedRight: value.expectedRight })
+    } else {
+      known.sum += value.width
+      known.nativeLeft = Math.min(known.nativeLeft, value.nativeLeft)
+      known.nativeRight = Math.max(known.nativeRight, value.nativeRight)
+      known.expectedLeft = Math.min(known.expectedLeft, value.expectedLeft)
+      known.expectedRight = Math.max(known.expectedRight, value.expectedRight)
+    }
+  }
+  const compare = (expected: ExpectedRect[], observed: Rect[], placed: number[], start: number, end: number, node: boolean): void => {
+    if (expected.length !== observed.length) {
+      // Other rect counts: a unit on each line both sides place the range on; with other lines it is moved text.
+      const sets = lineSets(expected, placed, nativeLineOf)
+      if (sets === null || sets.native.size !== sets.expected.size) return
+      for (const line of sets.native) if (!sets.expected.has(line)) return
+      for (let k = 0; k < expected.length; k++) if (expected[k]!.line >= 0 && nativeLineOf[expected[k]!.line]! >= 0) push(expected[k]!.line, start, end, node, UNKNOWN)
+      return
+    }
+    for (let k = 0; k < expected.length; k++) {
+      const l = expected[k]!.line
+      if (l < 0 || placed[k]! < 0 || nativeLineOf[l] !== placed[k]) continue
+      const value = compareRect(layout, l, expected[k]!, observed[k]!)
+      if (value.width !== 0) push(l, start, end, node, value)
+    }
+  }
+  if (layout.engine !== 'webkit') {
+    for (let i = 0; i < observation.codePoints.length; i++) {
+      const point = observation.codePoints[i]!
+      compare(point.rects, nativeObservation.points[i]!.rects, native.points[i]!, point.offset, point.offset + point.length, false)
+    }
+  }
+  // Nodes: in WebKit every node rect that differs; in Blink and Gecko only where no code point of the node on the line does.
+  const pointUnits = units.map(list => list.slice())
+  for (let r = 0, start = 0; r < observation.nodes.length; r++) {
+    const end = start + paragraph.runs[r]!.text.length
+    const before = units.map(list => list.length)
+    if (only === null || end <= only.before) {
+      compare(observation.nodes[r]!, nativeObservation.runRects[r]!, native.nodes[r]!, start, end, true)
+    } else if (layout.engine === 'webkit' && start < only.before && observation.nodes[r]!.some(rect => rect.line === only.line)) {
+      // WebKit's node that reaches the decision text: its part of the line before the decision text. Nothing finer says
+      // whether its text there measures as expected, and the node is what differs.
+      push(only.line, start, only.before, true, UNKNOWN)
+    }
+    for (let l = 0; l < units.length; l++) {
+      if (units[l]!.length === before[l]) continue
+      if (pointUnits[l]!.some(unit => unit.start < end && unit.end > start)) units[l]!.length = before[l]!
+    }
+    start = end
+  }
+  return units
+}
+
+// The decision text of the first line that differs, native line k, and the native line it is attributed to (see "Covered
+// failures").
+function decisionText(
+  layout: RecordedLayout, boxes: readonly number[], k: number, observation: ExpectedObservation, nativeObservation: NativeObservation, native: NativeLines,
+  nativeLineOf: Int32Array,
+): { decision: SourceRange; failingLine: number } {
+  const lines = layout.lines
+  let start = Infinity
+  let end = -Infinity
+  for (let i = 0; i < observation.codePoints.length; i++) {
+    const point = observation.codePoints[i]!
+    const sets = lineSets(point.rects, native.points[i]!, nativeLineOf)
+    if (sets === null || sets.native.has(k) === sets.expected.has(k)) continue
+    start = Math.min(start, point.offset)
+    end = Math.max(end, point.offset + point.length)
+  }
+  if (start === Infinity) {
+    // No code point sits on line k on one side only: a line box only one side has.
+    if (lines.length === 0) return { decision: { start: 0, end: 0 }, failingLine: k }
+    const first = (k > 0 && k - 1 < boxes.length ? boxes[k - 1]! : -1) + 1
+    const last = k < boxes.length ? boxes[k]! : lines.length - 1
+    const textEnd = lines[lines.length - 1]!.end
+    return { decision: first <= last ? { start: lines[first]!.start, end: lines[last]!.end } : { start: textEnd, end: textEnd }, failingLine: k }
+  }
+  // The line whose end the two sides disagree about. A code point one side splits across two lines makes the second of
+  // them the first that differs, while the text sits at the end of the line before: then that line is attributed.
+  let failingLine = k
+  if (k < boxes.length && start < lines[boxes[k]!]!.start) {
+    while (failingLine > 0 && lines[boxes[failingLine]!]!.start >= start) failingLine--
+  }
+  if (failingLine >= boxes.length) return { decision: { start, end }, failingLine }
+  // The predicted break belongs to the decision text. It can come before the first such code point (the code point after
+  // it expects an empty rect at the end of the old line too), or after the last one, past code points without width on
+  // either side (a collapsed space that natively sits on no line).
+  const predictedBreak = lines[boxes[failingLine]!]!.end
+  if (predictedBreak < start) {
+    start = predictedBreak
+  } else if (predictedBreak > end) {
+    let widthless = true
+    for (let i = 0; i < observation.codePoints.length && widthless; i++) {
+      const point = observation.codePoints[i]!
+      if (point.offset < end || point.offset >= predictedBreak) continue
+      for (let r = 0; r < point.rects.length; r++) if (point.rects[r]!.width.value !== 0) widthless = false
+      const observed = nativeObservation.points[i]!.rects
+      for (let r = 0; r < observed.length; r++) if (observed[r]!.width !== 0) widthless = false
+    }
+    if (widthless) end = predictedBreak
+  }
+  return { decision: { start, end }, failingLine }
+}
+
+// ---- Residual classes ----
+
+// A residual class is a failure class that a probe showed to be a Canvas-versus-DOM difference no Canvas measurement
+// detects. It is not a gap: it has no Canvas-observable condition, so a layout can't report it and it covers nothing. The
+// scorer matches every row that fails lineCount, breaks or widths against the registry by signature, and the summary
+// counts the members without a covered explanation apart from open failures (`lineLocal.predictionRows`). A member whose
+// differing text a probe measured in the DOM and in Canvas is `probed`; one that only has the signature is `signature`: a
+// port bug that moves one node by the same amount has the signature too, so signature-only members stay suspects until
+// probed. An entry needs its probe record in the repository or named in a research document, and says whether its
+// mechanism is verified (by probe or a source trace that the probe confirms) or inferred.
+export type ResidualMembership = { name: string; membership: 'probed' | 'signature'; detail: string }
+
+// A string a probe measured both ways: the first family of the node's font list, its size and weight, the text, and the
+// DOM width minus the Canvas width in engine units.
+export type ProbedUnit = { family: string; size: number; weights: number[]; text: string; difference: number; probe: string }
+
+// A node rect whose width differs: native minus expected in engine units (Blink LayoutUnits, Gecko app units, WebKit
+// 1/64 px, unrounded), the node's text on the rect's engine line, and the text from the first to the last code point of it
+// whose own rect width differs there (null in WebKit, or when no code point shows the difference).
+export type NodeWidthDifference = { node: number; line: number; difference: number; font: FontDecl; lineText: string; differingText: string | null }
+
+export type ResidualEvidence = {
+  engine: RecordedLayout['engine']
+  metrics: Record<MetricName, Status>
+  // Every node rect whose width differs, or null when a node's rect count differs or a rect is off the engine's encoding.
+  nodeWidths: NodeWidthDifference[] | null
+  // Whether the painter, which draws the predicted lines with the DOM, drew every line whose width fails at the native
+  // width: then the same text measures differently in the DOM than in Canvas, and the line's content isn't what differs.
+  // null without a widths failure or without a painted observation of those lines.
+  paintedAtNativeWidth: boolean | null
+}
+
+export type ResidualClass = {
+  name: string
+  engine: RecordedLayout['engine']
+  description: string
+  // Probe evidence: what was measured, in which build, and where the record is.
+  probes: string[]
+  // What causes the difference, and whether that is verified or inferred from the evidence.
+  mechanism: { status: 'verified' | 'inferred'; reading: string }
+  // The signature in words; `match` implements it.
+  signature: string
+  probed: ProbedUnit[]
+  match: (evidence: ResidualEvidence, self: ResidualClass) => Omit<ResidualMembership, 'name'> | null
+}
+
+function firstFamily(family: string): string {
+  return (family.split(',')[0] ?? '').trim().replace(/^["']|["']$/g, '')
+}
+
+// Whether a probe measured the text that differs: a probed unit of the node's font whose text holds the differing text
+// (or, when no code point shows the difference, sits in the node's text on the line) and whose difference has the same
+// sign and size.
+function probedUnitOf(value: NodeWidthDifference, probed: readonly ProbedUnit[]): ProbedUnit | null {
+  for (let i = 0; i < probed.length; i++) {
+    const unit = probed[i]!
+    if (unit.family !== firstFamily(value.font.family) || unit.size !== value.font.size || !unit.weights.includes(value.font.weight) || value.font.style !== 'normal') continue
+    if (unit.difference !== value.difference || !value.lineText.includes(unit.text)) continue
+    if (value.differingText === null || unit.text.includes(value.differingText)) return unit
+  }
+  return null
+}
+
+export const RESIDUAL_CLASSES: ResidualClass[] = [
+  {
+    // The id `residual-classes.json` (lab/fresh.ts) gives the same class.
+    name: 'gecko/one-shaping-unit-one-app-unit',
+    engine: 'gecko',
+    description: 'One shaping unit is 1 app unit wider or narrower in the DOM than OffscreenCanvas measures it at the CSS font size.',
+    probes: [
+      'F7, rebuild/probes/gecko-round2.ts (records in .artifacts/probes/gecko/round2; specs/gecko-RESULTS.md "Probes"), Firefox 156 at DPR 2: single shaping units in their own node, DOM box against OffscreenCanvas and canvas elements, all at the CSS font size.',
+      'research/ROUND2-CRITIC.md item 4 (probe gecko-device-size, 94 units, Firefox 156 at DPR 2): an OffscreenCanvas at the device font size, halved, equals the DOM in 22 units only, so that recipe is refuted; 12 units differ by exactly 1 au at the CSS size, all in Geeza Pro, Thonburi or Helvetica Neue.',
+    ],
+    mechanism: {
+      status: 'inferred',
+      reading: 'The DOM rounds each glyph\'s 16.16 advance at the device font size to app units (gfxHarfBuzzShaper.cpp:354-379, :1262-1263, :1699-1702), and Canvas shows no glyph\'s sub-app-unit fraction (specs/gecko-canvas.md N7). The probes verify the difference, not this cause.',
+    },
+    signature: 'lineCount and breaks pass and widths fail; every node has the expected number of rects; exactly one node rect differs in width, by exactly 1 app unit; and the painter drew every failing line at the native width.',
+    probed: [
+      { family: 'Geeza Pro', size: 10, weights: [300, 400, 500], text: 'ووفقك', difference: 1, probe: 'F7; ROUND2-CRITIC item 4' },
+      { family: 'Geeza Pro', size: 10, weights: [300, 400, 500], text: 'وأعانك', difference: 1, probe: 'ROUND2-CRITIC item 4' },
+      { family: 'Thonburi', size: 32, weights: [500], text: 'รมชาติทำให้ผู้คนมีคว', difference: 1, probe: 'F7; ROUND2-CRITIC item 4' },
+      { family: 'Thonburi', size: 32, weights: [500], text: 'รมชาติทำให้ผู้คนมี', difference: 1, probe: 'ROUND2-CRITIC item 4' },
+      { family: 'Thonburi', size: 32, weights: [500], text: 'ทำให้', difference: 1, probe: 'ROUND2-CRITIC item 4' },
+      { family: 'Helvetica Neue', size: 15, weights: [400], text: 'modern', difference: -1, probe: 'F7; ROUND2-CRITIC item 4' },
+      { family: 'Helvetica Neue', size: 10, weights: [700], text: 'LT:', difference: -1, probe: 'ROUND2-CRITIC item 4' },
+      { family: 'Helvetica Neue', size: 10, weights: [700], text: 'LT: kerning pairs', difference: -1, probe: 'ROUND2-CRITIC item 4' },
+    ],
+    match: (evidence, self) => {
+      if (evidence.metrics.lineCount !== 'pass' || evidence.metrics.breaks !== 'pass' || evidence.metrics.widths !== 'fail') return null
+      if (evidence.nodeWidths === null || evidence.nodeWidths.length !== 1 || evidence.paintedAtNativeWidth !== true) return null
+      const value = evidence.nodeWidths[0]!
+      if (Math.abs(value.difference) !== 1) return null
+      const unit = probedUnitOf(value, self.probed)
+      const where = `node ${value.node} on engine line ${value.line} is ${value.difference > 0 ? '+' : ''}${value.difference} au${value.differingText === null ? '' : ` at ${JSON.stringify(value.differingText)}`}`
+      return unit === null ? { membership: 'signature', detail: `${where}; no probe measured this text in this font` } : { membership: 'probed', detail: `${where}; probed ${JSON.stringify(unit.text)} (${unit.probe})` }
+    },
+  },
+]
+
+export function residualMembership(evidence: ResidualEvidence, classes: readonly ResidualClass[] = RESIDUAL_CLASSES): ResidualMembership | null {
+  for (let c = 0; c < classes.length; c++) {
+    const value = classes[c]!
+    if (value.engine !== evidence.engine) continue
+    const match = value.match(evidence, value)
+    if (match !== null) return { name: value.name, ...match }
+  }
+  return null
+}
+
+// Every node rect whose width differs (ResidualEvidence.nodeWidths). `units` are the row's differing units per engine line.
+function nodeWidthDifferences(layout: RecordedLayout, paragraph: Pick<Paragraph, 'runs'>, text: string, observation: ExpectedObservation, nativeObservation: NativeObservation, units: Unit[][]): NodeWidthDifference[] | null {
+  const out: NodeWidthDifference[] = []
+  for (let r = 0, start = 0; r < observation.nodes.length; r++) {
+    const end = start + paragraph.runs[r]!.text.length
+    const expected = observation.nodes[r]!
+    const observed = nativeObservation.runRects[r]!
+    if (expected.length !== observed.length) return null
+    for (let k = 0; k < expected.length; k++) {
+      const l = expected[k]!.line
+      let difference: number
+      if (layout.engine === 'webkit') {
+        difference = (observed[k]!.width - expected[k]!.width.value) * 64
+      } else {
+        if (l < 0) {
+          if (expected[k]!.width.value !== observed[k]!.width) return null
+          continue
+        }
+        const e = rectUnits(layout, l, { x: expected[k]!.x.value, width: expected[k]!.width.value })
+        const n = rectUnits(layout, l, observed[k]!)
+        if (e === null || n === null) return null
+        difference = (n.right - n.left) - (e.right - e.left)
+      }
+      if (difference === 0) continue
+      const from = l < 0 ? start : Math.max(start, layout.lines[l]!.start)
+      const to = l < 0 ? end : Math.max(from, Math.min(end, layout.lines[l]!.end))
+      let first = Infinity
+      let last = -Infinity
+      const onLine = l < 0 ? [] : units[l]!
+      for (let u = 0; u < onLine.length; u++) {
+        const unit = onLine[u]!
+        if (unit.node || unit.start < from || unit.end > to) continue
+        first = Math.min(first, unit.start)
+        last = Math.max(last, unit.end)
+      }
+      out.push({ node: r, line: l, difference, font: paragraph.runs[r]!.font, lineText: text.slice(from, to), differingText: first === Infinity ? null : text.slice(first, last) })
+    }
+    start = end
+  }
+  return out
 }
 
 const UNATTRIBUTED: MetricAttribution = { lines: [], covered: false, paragraphGaps: [] }
@@ -774,7 +1453,11 @@ function scoreEngine(row: LabRow, nativeObservation: NativeObservation, predicti
     for (let r = 0; r < observation.nodes.length; r++) k = Math.min(k, divergence(observation.nodes[r]!, native.nodes[r]!, nativeLineOf))
     for (let e = 0; e < elements.length; e++) k = Math.min(k, divergence(elements[e]!, native.elements[e]!, nativeLineOf))
     if (k === Infinity) k = Math.min(native.count, boxes.length)
-    const value = attribution(layout, boxes, [k])
+    const { decision, failingLine } = decisionText(layout, boxes, k, observation, nativeObservation, native, nativeLineOf)
+    const units = failingLine < boxes.length
+      ? differingUnits(layout, row.case.paragraph, text, observation, nativeObservation, native, nativeLineOf, { line: boxes[failingLine]!, before: decision.start })[boxes[failingLine]!]!
+      : []
+    const value = attribution(layout, boxes, [failingLine], text, () => ({ units, decision }))
     if (lineCount.status === 'fail') lineGaps.lineCount = value
     if (breaks.status === 'fail') lineGaps.breaks = value
   }
@@ -802,11 +1485,15 @@ function scoreEngine(row: LabRow, nativeObservation: NativeObservation, predicti
   for (let e = 0; e < elements.length; e++) collect(elements[e]!, [expectedAll])
   const observable = (l: number, expectedRects: Rect[][], what: string): Metric | null => {
     const expected = extentOf(layout, l, expectedRects[l]!)
-    if (spans(layout, expected, engineWidth(layout, l))) return null
-    return { status: 'unobserved', reason: `the port's ${what} on the line don't span the engine width`, detail: `engine line ${l}: width ${engineWidth(layout, l)}; expected ${what} span ${describeExtent(expected)}` }
+    if (spans(layout, expected, observedWidth(layout, l))) return null
+    return { status: 'unobserved', reason: `the port's ${what} on the line don't span the engine width`, detail: `engine line ${l}: ${describeWidth(layout, l)}; expected ${what} span ${describeExtent(expected)}` }
   }
 
   const widthDiffs: number[] = []
+  // For the residual classes: the lines whose width fails with their native extents, and the row's differing units.
+  let failingWidthLines: number[] = []
+  const nativeExtents: Extent[] = []
+  let widthUnits: Unit[][] | null = null
   let widths: Metric
   if (breaks.status !== 'pass') {
     widths = { status: 'not-applicable', reason: breaks.status === 'fail' ? 'breaks differ' : 'breaks unobserved' }
@@ -829,20 +1516,26 @@ function scoreEngine(row: LabRow, nativeObservation: NativeObservation, predicti
         issue ??= unobservable
         continue
       }
-      const width = engineWidth(layout, l)
+      const width = observedWidth(layout, l)
       const extent = extentOf(layout, l, nativeAll[k]!)
+      nativeExtents[k] = extent
       const difference = widthDifference(layout, extent, width)
       if (difference !== null) widthDiffs.push(difference)
       if (!spans(layout, extent, width)) {
         failing.push(k)
         if (widths.status === 'pass') {
           const gap = limitedBy[l]!
-          widths = { status: 'fail', reason: gap === null ? 'width differs' : 'width differs under a named gap', detail: `engine line ${l}: width ${width}; native ${what} span ${describeExtent(extent)}${gap === null ? '' : `; limited by ${gap}`}` }
+          widths = { status: 'fail', reason: gap === null ? 'width differs' : 'width differs under a named gap', detail: `engine line ${l}: ${describeWidth(layout, l)}; native ${what} span ${describeExtent(extent)}${gap === null ? '' : `; limited by ${gap}`}` }
         }
       }
     }
     if (widths.status === 'pass' && issue !== null) widths = issue
-    if (widths.status === 'fail') lineGaps.widths = attribution(layout, boxes, failing)
+    if (widths.status === 'fail') {
+      const units = differingUnits(layout, row.case.paragraph, text, observation, nativeObservation, native, nativeLineOf, null)
+      lineGaps.widths = attribution(layout, boxes, failing, text, k => ({ units: units[boxes[k]!]!, decision: null }))
+      failingWidthLines = failing
+      widthUnits = units
+    }
   }
 
   let painter: Metric
@@ -873,42 +1566,37 @@ function scoreEngine(row: LabRow, nativeObservation: NativeObservation, predicti
         issue ??= unobservable
         continue
       }
-      const width = engineWidth(layout, l)
+      const width = observedWidth(layout, l)
       const extent = extentOf(layout, l, line.rects)
       if (!spans(layout, extent, width)) {
         failing.push(k)
-        if (painter.status === 'pass') painter = { status: 'fail', reason: 'painted extent differs', detail: `engine line ${l}: width ${width}; painted node rects span ${describeExtent(extent)}` }
+        if (painter.status === 'pass') painter = { status: 'fail', reason: 'painted extent differs', detail: `engine line ${l}: ${describeWidth(layout, l)}; painted node rects span ${describeExtent(extent)}` }
       }
     }
     if (painter.status === 'pass' && issue !== null) painter = issue
-    if (painter.status === 'fail') lineGaps.painter = attribution(layout, boxes, failing)
+    if (painter.status === 'fail') lineGaps.painter = attribution(layout, boxes, failing, text, null)
   }
-  return { metrics: { lineCount, breaks, widths, painter }, facts, firstDifference: first.value, native, gaps, widthDiffs, diagnostics: null, protocol: null, lineGaps }
-}
-
-// The lowest native line in one of a range's two line sets and not the other (see lineDifference for the pairing), or
-// Infinity where the sets agree or can't be compared.
-function divergence(expected: ExpectedRect[], placed: number[], nativeLineOf: Int32Array): number {
-  const nativeSet = new Set<number>()
-  const expectedSet = new Set<number>()
-  const mapped = (rect: ExpectedRect): number => (rect.line >= 0 ? nativeLineOf[rect.line]! : -1)
-  if (expected.length === placed.length) {
-    for (let k = 0; k < expected.length; k++) {
-      if (placed[k]! < 0) continue
-      nativeSet.add(placed[k]!)
-      if (mapped(expected[k]!) >= 0) expectedSet.add(mapped(expected[k]!))
+  let residual: ResidualMembership | null = null
+  if (lineCount.status === 'fail' || breaks.status === 'fail' || widths.status === 'fail') {
+    let paintedAtNativeWidth: boolean | null = null
+    if (failingWidthLines.length > 0 && painted !== null && !('error' in painted) && painted.lines.length === boxes.length) {
+      paintedAtNativeWidth = true
+      for (let i = 0; i < failingWidthLines.length; i++) {
+        const k = failingWidthLines[i]!
+        const paintedExtent = paintedLineCount(painted.lines[k]!, row.case.paragraph.lineHeight) > 1 ? null : extentOf(layout, boxes[k]!, painted.lines[k]!.rects)
+        const nativeExtent = nativeExtents[k]!
+        if (paintedExtent === null || paintedExtent.kind !== 'extent' || nativeExtent.kind !== 'extent' || paintedExtent.right - paintedExtent.left !== nativeExtent.right - nativeExtent.left) paintedAtNativeWidth = false
+      }
     }
-  } else {
-    for (let k = 0; k < placed.length; k++) {
-      if (placed[k]! < 0) return Infinity
-      nativeSet.add(placed[k]!)
-    }
-    for (let k = 0; k < expected.length; k++) if (mapped(expected[k]!) >= 0) expectedSet.add(mapped(expected[k]!))
+    const units = widthUnits ?? layout.lines.map(() => [])
+    residual = residualMembership({
+      engine: layout.engine,
+      metrics: { lineCount: lineCount.status, breaks: breaks.status, widths: widths.status, painter: painter.status },
+      nodeWidths: nodeWidthDifferences(layout, row.case.paragraph, text, observation, nativeObservation, units),
+      paintedAtNativeWidth,
+    })
   }
-  let lowest = Infinity
-  for (const line of nativeSet) if (!expectedSet.has(line)) lowest = Math.min(lowest, line)
-  for (const line of expectedSet) if (!nativeSet.has(line)) lowest = Math.min(lowest, line)
-  return lowest
+  return { metrics: { lineCount, breaks, widths, painter }, facts, firstDifference: first.value, native, gaps, widthDiffs, diagnostics: null, protocol: null, lineGaps, residual }
 }
 
 // ---- Comparing two runs ----
@@ -1067,14 +1755,25 @@ type BrowserSummary = {
   facts: Facts
   // Per gap: rows reporting it, and how many of those fail lineCount or breaks.
   gaps: Partial<Record<GapName, { rows: number; failingLinesOrBreaks: number }>>
-  // Line-local gaps (CaseScore.lineGaps), per metric: failing rows; failing rows with a failing line no gap concerns; of
-  // those, rows whose layout reports a paragraph gap without a range; and per gap, the failing rows it covers on some
-  // failing line.
+  // Covered failures (CaseScore.lineGaps), per metric: failing rows; failing rows without a covered explanation (a failing
+  // line no gap covers; the name is scorer 4's); of those, rows whose layout reports a paragraph gap without a range, and
+  // rows every failing line of which has a gap that concerns it and covers nothing (scorer 4 counted them covered); covered
+  // rows with a failing line covered only by line gaps without a range, and only at the decision text; and per gap, the
+  // failing rows it covers on some failing line.
   lineLocal: {
     failures: Record<MetricName, number>
     withoutLineGap: Record<MetricName, number>
     withoutLineGapButParagraphGap: Record<MetricName, number>
+    withoutLineGapButGapElsewhere: Record<MetricName, number>
+    coveredOnlyByUnrangedGap: Record<MetricName, number>
+    coveredOnlyAtDecision: Record<MetricName, number>
     byGap: Partial<Record<GapName, Partial<Record<MetricName, number>>>>
+    // Rows that fail lineCount, breaks or widths: all of them; those without a covered explanation on some failing
+    // prediction metric; of those, members of a residual class, probed and by signature alone; and the rest, the open
+    // failures.
+    predictionRows: { failing: number; withoutCoveredExplanation: number; residualProbed: number; residualSignatureOnly: number; open: number }
+    // Per residual class: members without a covered explanation (counted above), and members a gap covers.
+    residual: Record<string, { probed: number; signatureOnly: number; coveredProbed: number; coveredSignatureOnly: number }>
   }
   // Protocol rows (slotProtocol): excluded from pass and fail; their metrics count as unobserved.
   protocolRows: number
@@ -1112,7 +1811,12 @@ function newBrowserSummary(): BrowserSummary {
     facts: newFacts(), gaps: {}, widthDiffs: {},
     lineLocal: {
       failures: { lineCount: 0, breaks: 0, widths: 0, painter: 0 }, withoutLineGap: { lineCount: 0, breaks: 0, widths: 0, painter: 0 },
-      withoutLineGapButParagraphGap: { lineCount: 0, breaks: 0, widths: 0, painter: 0 }, byGap: {},
+      withoutLineGapButParagraphGap: { lineCount: 0, breaks: 0, widths: 0, painter: 0 },
+      withoutLineGapButGapElsewhere: { lineCount: 0, breaks: 0, widths: 0, painter: 0 },
+      coveredOnlyByUnrangedGap: { lineCount: 0, breaks: 0, widths: 0, painter: 0 }, coveredOnlyAtDecision: { lineCount: 0, breaks: 0, widths: 0, painter: 0 },
+      byGap: {},
+      predictionRows: { failing: 0, withoutCoveredExplanation: 0, residualProbed: 0, residualSignatureOnly: 0, open: 0 },
+      residual: {},
     },
     protocolRows: 0, protocolIds: [],
     timingsMs: { native: 0, predict: 0, observe: 0, paint: 0, painterObserve: 0 },
@@ -1167,6 +1871,7 @@ function example(row: LabRow, text: string, score: CaseScore, metric: MetricName
     pageLang: row.case.pageLang,
     gaps: score.gaps,
     ...(score.lineGaps[metric] === undefined ? {} : { lineGaps: score.lineGaps[metric] }),
+    ...(score.residual === null || score.residual === undefined ? {} : { residual: score.residual }),
     ...(score.protocol === null ? {} : { protocol: score.protocol }),
     nativeLines: nativeLinesView(row, text, score.native),
     predictedLines: predictedLinesView(row, text),
@@ -1381,6 +2086,7 @@ async function main(): Promise<void> {
         ...(score.diagnostics === null ? {} : { diagnostics: score.diagnostics }),
         gaps: score.gaps,
         ...(Object.keys(score.lineGaps).length === 0 ? {} : { lineGaps: score.lineGaps }),
+        ...(score.residual === null || score.residual === undefined ? {} : { residual: score.residual }),
         ...(score.protocol === null ? {} : { protocol: score.protocol }),
         ...(history === null ? {} : { historyDependent: history }),
       }) + '\n')
@@ -1391,21 +2097,49 @@ async function main(): Promise<void> {
       summary.protocolRows++
       if (!sealed && summary.protocolIds.length < 200) summary.protocolIds.push(row.id)
     }
+    let predictionFails = false
+    let predictionUncovered = false
     for (let k = 0; k < METRICS.length; k++) {
       const name = METRICS[k]!
       if (score.metrics[name].status !== 'fail') continue
       const local = summary.lineLocal
       local.failures[name]++
       const value = score.lineGaps[name] ?? UNATTRIBUTED
+      if (name !== 'painter') {
+        predictionFails = true
+        if (!value.covered) predictionUncovered = true
+      }
       if (!value.covered) {
         local.withoutLineGap[name]++
         if (value.paragraphGaps.length > 0) local.withoutLineGapButParagraphGap[name]++
+        if (value.lines.length > 0 && value.lines.every(line => line.gaps.length > 0 || (line.elsewhere ?? []).some(gap => gap.scope !== 'next-line'))) local.withoutLineGapButGapElsewhere[name]++
+      } else {
+        if (value.lines.some(line => line.gaps.every(gap => gap.unranged === true))) local.coveredOnlyByUnrangedGap[name]++
+        if (value.lines.some(line => line.gaps.every(gap => gap.touch === 'decision'))) local.coveredOnlyAtDecision[name]++
       }
       const covering = new Set<GapName>()
       for (const line of value.lines) for (const gap of line.gaps) covering.add(gap.gap)
       for (const gap of covering) {
         const counts = local.byGap[gap] ??= {}
         counts[name] = (counts[name] ?? 0) + 1
+      }
+    }
+    if (predictionFails) {
+      const rows = summary.lineLocal.predictionRows
+      const residual = score.residual ?? null
+      rows.failing++
+      if (predictionUncovered) rows.withoutCoveredExplanation++
+      if (residual !== null) {
+        const counts = summary.lineLocal.residual[residual.name] ??= { probed: 0, signatureOnly: 0, coveredProbed: 0, coveredSignatureOnly: 0 }
+        if (predictionUncovered) {
+          if (residual.membership === 'probed') { counts.probed++; rows.residualProbed++ } else { counts.signatureOnly++; rows.residualSignatureOnly++ }
+        } else if (residual.membership === 'probed') {
+          counts.coveredProbed++
+        } else {
+          counts.coveredSignatureOnly++
+        }
+      } else if (predictionUncovered) {
+        rows.open++
       }
     }
     if (score.facts !== null) addFacts(summary.facts, score.facts)

@@ -497,11 +497,13 @@ function scriptContextFor(units: Uint16Array, runs: ScriptRun[], runStart: numbe
 // `context + ' ' + piece` less `context + ' '` (or the mirror) where scriptContextFor names a context. U+0020 is a shaping
 // word boundary that nothing kerns across (gfxFont.cpp:3781-3866), and in the Canvas text run the space and the piece's
 // Common characters join the context's script run. Units, suffixes and prefixes all go through this one recipe.
-export function rangeAu(m: Measurer, run: Pick<GeckoTextRun, 'context' | 'scriptRuns' | 'tStart'>, units: Uint16Array,
-  tStart: number, tEnd: number): number {
-  let piece = ''
+// `before` and `after` are put around the piece: U+200D where the piece is cut between joined letters (lines.ts).
+export function rangeAu(m: Measurer, run: Pick<GeckoTextRun, 'context' | 'scriptRuns' | 'tStart' | 'auPerPx'>, units: Uint16Array,
+  tStart: number, tEnd: number, before = '', after = ''): number {
+  let piece = before
   for (let k = tStart; k < tEnd; k++) piece += String.fromCharCode(units[k]!)
-  const w = (s: string) => Math.round(measureText(m, run.context, s) * 60)
+  piece += after
+  const w = (s: string) => Math.round(measureText(m, run.context, s) * run.auPerPx)
   // gfxFontGroup::ComputeRanges matches fonts over the whole script run, carrying the previous character and its matched font
   // (gfxTextRun.cpp:3593-3875), and FindFontForChar reads them for a cluster extender and U+202F (:3181-3212). A piece that
   // starts with one right after an invalid character begins a shaping unit, so the text before it shapes apart
@@ -1123,12 +1125,32 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, measur
     // The source range of the text run's characters: the text whose widths a condition of the run concerns (DESIGN.md §2.8).
     const at = b.tEnd > b.tStart ? { start: tSource[b.tStart]!, end: tSource[b.tEnd - 1]! + 1 } : { start: frames[b.flows[0]!.frame]!.start, end: frames[b.flows[0]!.frame]!.start }
     const domAu = lroundf(f32(quantize10(font.size) * 60))
-    if (quantize7(font.size) * 60 !== domAu) {
-      gaps.push({ gap: 'font-size-quantization', run: firstRun, detail: `DOM size ${domAu / 60}px, Canvas size ${quantize7(font.size)}px`, at })
+    // The DOM shapes at the device font size, the nsFont size in au over the page's apd (nsFontMetrics.cpp:124-134), and
+    // rounds every glyph to the page's app units (gfxHarfBuzzShaper.cpp:1559, :1699-1702). A canvas element does the same
+    // with its own font size: SetFontInternal takes the size over the CSS-to-device scale, quantized to 7 bits, to the pres
+    // context's font cache, the DOM's own (CanvasRenderingContext2D.cpp:4256-4269, :4353), and its text run has the pres
+    // context's apd (:7132-7155). So a detached canvas element whose font size is the DOM's device size gives the DOM's
+    // advances: width × apd. Probe gecko-port F13 (.artifacts/probes/gecko/round3): equal to the DOM's node width on 243 of
+    // 243 units, among them the units an OffscreenCanvas at the CSS size gets 1 au off (`modern` in 15px "Helvetica Neue":
+    // DOM and element 3118 au, OffscreenCanvas 3119, where `n` after the kern split is 508.5 au and the 16.16 kern rounds
+    // apart at the two scales), system-ui's optical sizing (16px `workers` 3430 au against 3038) and Apple Color Emoji's
+    // bitmap sizes; F14: equal on 126 of 126 rows with synthetic bold, whose offset isn't linear in the device size
+    // (gfxFont.h:1899-1904). An OffscreenCanvas has apd 60 and its own font group at the CSS size (:4423-4492, :7135-7140).
+    const elementCanvas = env.canvasElement === true
+    const devSize = domAu / apd
+    const canvasSize = elementCanvas ? devSize : font.size
+    // The size Canvas takes to the font cache, in au: 7 bits of the canvas size, which an element canvas first divides by
+    // the CSS-to-device scale, a float (:4263-4269).
+    const canvasAuSize = elementCanvas
+      ? lroundf(f32(quantize7(f32(quantize10(devSize) * f32(1 / f32(60 / apd)))) * 60))
+      : quantize7(font.size) * 60
+    if (canvasAuSize !== domAu) {
+      gaps.push({ gap: 'font-size-quantization', run: firstRun, detail: `DOM size ${domAu / 60}px, Canvas size ${canvasAuSize / 60}px`, at })
     }
-    // No Canvas setting gives the DOM's auto optical sizing (specs/gecko-canvas.md §1.2 C1a), so a font with an opsz axis,
-    // or one whose axis isn't known, may measure differently (DESIGN.md §1.2).
-    if (font.facts.opticalSizeAxis !== false) {
+    // No OffscreenCanvas setting gives the DOM's auto optical sizing (specs/gecko-canvas.md §1.2 C1a), so there a font with
+    // an opsz axis, or one whose axis isn't known, may measure differently (DESIGN.md §1.2). A canvas element's font group
+    // is the DOM's, optical size included (probe gecko-port F13: system-ui and -apple-system, 22 of 22 units).
+    if (!elementCanvas && font.facts.opticalSizeAxis !== false) {
       gaps.push({ gap: 'optical-size', run: firstRun, detail: font.facts.opticalSizeAxis === true ? `${font.family} has an opsz axis` : `whether ${font.family} has an opsz axis isn't given (default ${opticalSizeAxisOf(font)})`, at })
     }
     // CanAddSpacingAfter adds letter spacing only at ligature group starts (nsTextFrame.cpp:3860-3873). Letter spacing
@@ -1138,15 +1160,17 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, measur
     // Content with lang="" matches fonts under the locale language (nsFontCache.cpp:61-63).
     const canvasLang = lang === '' && env.regionalPrefsLocale !== null ? env.regionalPrefsLocale : lang
     const settings = {
-      font: canvasFont(font, font.size), lang: canvasLang, letterSpacing: letterSpacingAu[firstRun] !== 0 ? '0.001px' : '0px',
+      font: canvasFont(font, canvasSize), lang: canvasLang, letterSpacing: letterSpacingAu[firstRun] !== 0 ? '0.001px' : '0px',
       wordSpacing: '0px', fontKerning: 'auto' as const, textRendering: 'auto' as const,
-      direction: (b.level & 1) === 1 ? 'rtl' as const : 'ltr' as const, partition: '',
+      direction: (b.level & 1) === 1 ? 'rtl' as const : 'ltr' as const, partition: '', element: elementCanvas,
     }
     const context = measureContext(measurer, settings)
-    const auIn = (ctx: number, s: string) => Math.round(measureText(measurer, ctx, s) * 60)
+    // A Canvas total is its text runs' au over the context's apd (CanvasRenderingContext2D.cpp:5277).
+    const auPerPx = elementCanvas ? apd : 60
+    const auIn = (ctx: number, s: string) => Math.round(measureText(measurer, ctx, s) * auPerPx)
     const au = (s: string) => auIn(context, s)
     let advance = 0
-    const run = { context, scriptRuns: textRunScripts(tUnits, b.tStart, b.tEnd, b.is8bit), tStart: b.tStart }
+    const run = { context, scriptRuns: textRunScripts(tUnits, b.tStart, b.tEnd, b.is8bit), tStart: b.tStart, auPerPx }
     // gfxFontGroup::InitTextRun shapes each script run on its own (gfxTextRun.cpp:2779-2809), so no shaped word crosses a
     // script run limit.
     const scriptLimits = new Set<number>()
@@ -1192,7 +1216,29 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, measur
         }
         const w = rangeAu(measurer, run, tUnits, t, e)
         let total = w
-        if (apd !== 60 && !b.is8bit) {
+        if (elementCanvas) {
+          // Nothing to correct: the context's advances are the DOM's. What stays is time: font matching pins a fallback font
+          // per character in the document (probes gecko-port F2, F3: after one U+1F600 U+FE0E, Canvas and the DOM both draw
+          // U+1F600 with a text font), and the DOM laid its text out before this measurement. Canvas shows a pinned cluster:
+          // it asks for a color glyph and doesn't measure as in "Apple Color Emoji" alone, in width or ink box (F11).
+          if (!b.is8bit) {
+            let word = ''
+            for (let k = t; k < e; k++) word += String.fromCharCode(tUnits[k]!)
+            const boundaries = graphemeBoundaries(word, graphemeRules)
+            for (let c = 0; c + 1 < boundaries.length; c++) {
+              const cluster = word.slice(boundaries[c]!, boundaries[c + 1]!)
+              const first = cluster.codePointAt(0)!
+              const presentation = emojiPresentation(first)
+              if (presentation === 'text-only' || !prefersColorGlyph(presentation, first, cluster.codePointAt(first >= 0x10000 ? 2 : 1) ?? 0)) continue
+              const emojiContext = measureContext(measurer, { ...settings, font: canvasFont({ ...font, family: COLOR_EMOJI_FAMILY }, canvasSize) })
+              const here = measureTextBounds(measurer, context, cluster)
+              const there = measureTextBounds(measurer, emojiContext, cluster)
+              if (here.width !== there.width || here.left !== there.left || here.right !== there.right) {
+                gaps.push({ gap: 'page-history', run: firstRun, detail: `U+${first.toString(16).toUpperCase()} asks for a color glyph, but Canvas draws it with another font than Apple Color Emoji (${Math.round(here.width * auPerPx)} au): the document's font fallback has pinned it, and the DOM follows the state at its own layout time (probes gecko-port F2, F3)`, at: { start: tSource[t + boundaries[c]!]!, end: tSource[t + boundaries[c + 1]! - 1]! + 1 } })
+              }
+            }
+          }
+        } else if (apd !== 60 && !b.is8bit) {
           // Apple Color Emoji is an sbix font: the DOM takes its advances from Core Text at the device size, Canvas at the
           // CSS size (gfxMacFont.cpp:437-463; specs/gecko-canvas.md §1.9, §2 A12). Which font draws a cluster is font
           // matching's decision (gfxFontGroup::FindFontForChar, gfxTextRun.cpp:3178-3600), and the document's fallback
@@ -1200,7 +1246,6 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, measur
           // gecko-port F2, F3). Canvas shows which: Apple Color Emoji draws the cluster when it measures the same in the
           // run's font list as in "Apple Color Emoji" alone, at the CSS size and at the device size (F3, 16px Arial:
           // fresh 1260 and 1920 au in both; pinned 1020 au in Arial and 1260 au in Apple Color Emoji, DOM 1020 au).
-          const devSize = domAu / apd
           const deviceContext = measureContext(measurer, { ...settings, font: canvasFont(font, devSize) })
           const emojiFontContext = (size: number) => measureContext(measurer, { ...settings, font: canvasFont({ ...font, family: COLOR_EMOJI_FAMILY }, size) })
           let word = ''
@@ -1242,7 +1287,7 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, measur
             if (!inEmojiFont) {
               const next = cluster.codePointAt(first >= 0x10000 ? 2 : 1) ?? 0
               if (prefersColorGlyph(presentation, first, next)) {
-                gaps.push({ gap: 'font-fallback', run: firstRun, detail: `U+${first.toString(16).toUpperCase()} asks for a color glyph, but Canvas draws it with another font than Apple Color Emoji (${atCssSize} au): the document's font fallback has pinned it, and the DOM follows the state at its own layout time (probes gecko-port F2, F3)`, at: clusterAt })
+                gaps.push({ gap: 'page-history', run: firstRun, detail: `U+${first.toString(16).toUpperCase()} asks for a color glyph, but Canvas draws it with another font than Apple Color Emoji (${atCssSize} au): the document's font fallback has pinned it, and the DOM follows the state at its own layout time (probes gecko-port F2, F3)`, at: clusterAt })
               }
               continue
             }
@@ -1284,7 +1329,8 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, measur
     textRuns.push({
       tStart: b.tStart, tEnd: b.tEnd, is8bit: b.is8bit, level: b.level, context, scriptRuns: run.scriptRuns, hasShy: b.hasShy,
       trailingBreak: b.trailingBreak, minTabAdvance: b.hasTab ? 0.5 * au('0') : 0,
-      hyphenAu: b.hasShy ? au('‐') : 0, hasTab: b.hasTab, totalAdvance: advance, pairKerning: font.facts.pairKerning,
+      hyphenAu: b.hasShy ? au('‐') : 0, hasTab: b.hasTab, totalAdvance: advance, pairKerning: font.facts.pairKerning, auPerPx,
+      advancesStandIn: canvasAuSize !== domAu ? 'font-size-quantization' : !elementCanvas && font.facts.opticalSizeAxis !== false ? 'optical-size' : null,
     })
   }
   const correctionPrefix = new Int32Array(T + 1)
@@ -1295,12 +1341,15 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, measur
   let tabWidth = 0
   for (let r = 0; r < textRuns.length; r++) {
     if (!textRuns[r]!.hasTab) continue
+    // The block's space on the run's kind of canvas: a canvas element at the block font's device size, else an
+    // OffscreenCanvas at its CSS size.
+    const elementCanvas = env.canvasElement === true
     const context = measureContext(measurer, {
-      font: canvasFont(paragraph.font, paragraph.font.size), lang: paragraph.lang,
+      font: canvasFont(paragraph.font, elementCanvas ? lroundf(f32(quantize10(paragraph.font.size) * 60)) / apd : paragraph.font.size), lang: paragraph.lang,
       letterSpacing: pxToAu(paragraph.letterSpacing) !== 0 ? '0.001px' : '0px', wordSpacing: '0px', fontKerning: 'auto',
-      textRendering: 'auto', direction: 'ltr', partition: '',
+      textRendering: 'auto', direction: 'ltr', partition: '', element: elementCanvas,
     })
-    const space = Math.round(measureText(measurer, context, ' ') * 60)
+    const space = Math.round(measureText(measurer, context, ' ') * (elementCanvas ? apd : 60))
     tabWidth = paragraph.tabSize * (space + pxToAu(paragraph.letterSpacing) + pxToAu(paragraph.wordSpacing))
     break
   }
@@ -1321,10 +1370,23 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, measur
       break
     }
   }
+  // U+FFFD outside the listed fonts takes the family the process cached the first time system fallback placed one, whatever
+  // this run's style and neighbours would choose (gfxPlatformFontList::SystemFindFontForChar,
+  // gfxPlatformFontList.cpp:1244-1268, :1328-1330): its width follows the process's history. Canvas reads the same cache, so
+  // the prediction follows the state at measuring time. Which fonts cover U+FFFD isn't a Canvas fact, so every U+FFFD reports
+  // it (the round 2 held-out suite's 104 history-dependent suite/U+FFFD rows: 16px natively after one history, 13.133px
+  // after another).
+  for (let s = 0; s < n; s++) {
+    if (text.charCodeAt(s) !== 0xfffd) continue
+    let run = 0
+    while (runStarts[run + 1]! <= s) run++
+    gaps.push({ gap: 'page-history', run, detail: 'U+FFFD outside the listed fonts takes the family the process first fell back to for U+FFFD (gfxPlatformFontList.cpp:1244-1268, :1328-1330)', at: { start: s, end: s + 1 } })
+  }
+
   // gfxFont::SynthesizeSpaceWidth gives a U+2007 or U+2008 that no font in the list covers the font's figure or space width,
   // rounded to whole device pixels (gfxTextRun.cpp:3032-3043, gfxFont.cpp:4809-4814). Canvas rounds at apd 60 and shows
-  // neither whether a font covers it nor the unrounded width.
-  if (apd !== 60) {
+  // neither whether a font covers it nor the unrounded width. A canvas element at the device size synthesizes the DOM's width.
+  if (apd !== 60 && env.canvasElement !== true) {
     for (let s = 0; s < n; s++) {
       const u = text.charCodeAt(s)
       if (u !== 0x2007 && u !== 0x2008) continue

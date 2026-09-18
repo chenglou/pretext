@@ -1,8 +1,8 @@
 import { describe, expect, test } from 'bun:test'
-import { mkdtempSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { checkRuns, diffBaselines, environmentParts, environmentProblem, formatBaseline, parseBaseline, parsePerCase, pruneProtocol, readRun, runProblems, seedBaseline, type Baseline, type CaseResult, type Run } from './gate.ts'
+import { checkRuns, diffBaselines, environmentParts, environmentProblem, formatBaseline, parseBaseline, parsePerCase, pruneProtocol, readRun, runProblems, seedBaseline, seedRecord, stagedPath, type Baseline, type CaseResult, type Coverage, type Run, type SeedRecord } from './gate.ts'
 import type { Metric, MetricName, Status } from './score.ts'
 import type { BrowserKind } from './types.ts'
 
@@ -11,14 +11,14 @@ const NAMES: readonly MetricName[] = ['lineCount', 'breaks', 'widths', 'painter'
 const CHROME = 'chrome: Google Chrome 153.0.8010.48, engine build 153.0.8010.48, macOS 26A428; DPR 2, scale 1; uiLanguage zh-CN; scorer 4'
 
 // `codes` gives lineCount, breaks, widths and painter, each P, F, U or N.
-function result(id: string, codes: string, options: { browser?: BrowserKind; historyDependent?: string; protocol?: string } = {}): CaseResult {
+function result(id: string, codes: string, options: { browser?: BrowserKind; historyDependent?: string; protocol?: string; coverage?: Coverage; residual?: string } = {}): CaseResult {
   const metrics = {} as Record<MetricName, Metric>
   for (let i = 0; i < NAMES.length; i++) {
     const status = CODES[codes[i]!]
     if (status === undefined) throw new Error(`bad codes ${codes}`)
     metrics[NAMES[i]!] = status === 'pass' ? { status } : { status, reason: `${status} here` }
   }
-  return { id, family: 'test/family', browser: options.browser ?? 'chrome', metrics, historyDependent: options.historyDependent ?? null, protocol: options.protocol ?? null }
+  return { id, family: 'test/family', browser: options.browser ?? 'chrome', metrics, historyDependent: options.historyDependent ?? null, protocol: options.protocol ?? null, coverage: options.coverage ?? {}, residual: options.residual ?? null }
 }
 
 function run(name: string, cases: CaseResult[], options: { environments?: string[]; compared?: boolean } = {}): Run {
@@ -164,6 +164,11 @@ describe('runs the gate refuses', () => {
     expect(problems[0]).toContain('records no process languages')
   })
 
+  test('seeding refuses runs scored by different scorers', () => {
+    const runs = [run('forward', [result('c-1', 'PPPP')]), run('reverse', [result('c-1', 'PPPP')], { environments: [CHROME.replace('scorer 4', 'scorer 5')] })]
+    expect(runProblems('blink', runs, { allowUncompared: false, environments: null })).toEqual(['the seeding runs were scored by different scorers (scorer 4, scorer 5): re-score them with one'])
+  })
+
   test('webkit-host and installed Safari runs share one WebKit baseline', () => {
     const safari = 'safari: Safari 27.0, engine build 22625.1.29.11.27, macOS 26A428; DPR 2, scale 1; preferredLanguages zh-CN,zh-Hans, icuDefaultLocale en_US_POSIX; scorer 4'
     const host = safari.replace('safari: Safari 27.0', 'webkit-host: webkit-host 27.0')
@@ -207,6 +212,64 @@ describe('files', () => {
     expect(diff.lost).toEqual([['c-1', 'widths']])
     expect(diff.gained).toEqual([['c-3', 'lineCount'], ['c-3', 'breaks'], ['c-3', 'widths'], ['c-3', 'painter']])
     expect([diff.casesOnlyBefore, diff.casesOnlyAfter]).toEqual([0, 1])
+    // The passes of c-2 and c-5 aren't lost, and they no longer gate: they are listed apart.
+    expect(diff.leftThroughHistory).toEqual([['c-2', 'lineCount'], ['c-2', 'breaks'], ['c-2', 'widths'], ['c-2', 'painter']])
+    expect(diff.leftThroughProtocol).toEqual([['c-5', 'lineCount'], ['c-5', 'breaks'], ['c-5', 'widths'], ['c-5', 'painter']])
+  })
+
+  test('the seed record lists every lost pair with its covering gaps, and the pairs that leave through new history dependence', () => {
+    const before = seed([run('a', [result('c-1', 'PPPP'), result('c-2', 'PPPP'), result('c-3', 'PPPP'), result('c-4', 'PPFP', { historyDependent: 'was already' })])])
+    const runs = [
+      run('forward', [
+        result('c-1', 'PPFP', { coverage: { widths: { covered: true, gaps: ['in-word-prefix'] } } }),
+        result('c-2', 'PPPP', { historyDependent: 'code point 3: [x, width, line] [0,8,1] vs [0,8,2]' }),
+        result('c-3', 'PPFF', { coverage: { widths: { covered: false, gaps: [] } }, residual: 'gecko/one-shaping-unit-one-app-unit (signature)' }),
+        result('c-4', 'PPPP', { historyDependent: 'still' }),
+      ]),
+      run('reverse', [result('c-1', 'PPPP'), result('c-2', 'PPFP'), result('c-3', 'PPFF'), result('c-4', 'PPPP')]),
+    ]
+    const record = seedRecord(before, seed(runs), runs, { staged: 'staged/gate.json', against: 'baselines/gate.json' })
+    expect(record.lost).toEqual([
+      { id: 'c-1', family: 'test/family', metric: 'widths', status: 'fail', reason: 'fail here', detail: null, run: expect.stringContaining('forward-per-case.ndjson'), covered: true, coveringGaps: ['in-word-prefix'], residual: null, attribution: null },
+      { id: 'c-3', family: 'test/family', metric: 'widths', status: 'fail', reason: 'fail here', detail: null, run: expect.stringContaining('forward-per-case.ndjson'), covered: false, coveringGaps: [], residual: 'gecko/one-shaping-unit-one-app-unit (signature)', attribution: null },
+      { id: 'c-3', family: 'test/family', metric: 'painter', status: 'fail', reason: 'fail here', detail: null, run: expect.stringContaining('forward-per-case.ndjson'), covered: false, coveringGaps: [], residual: 'gecko/one-shaping-unit-one-app-unit (signature)', attribution: null },
+    ])
+    // c-2 is history-dependent only now: its four baseline passes leave without failing; widths doesn't pass in every run.
+    expect(record.leftThroughHistory.map(value => [value.id, value.metric, value.passesNow])).toEqual([['c-2', 'lineCount', true], ['c-2', 'breaks', true], ['c-2', 'widths', false], ['c-2', 'painter', true]])
+    expect(record.leftThroughHistory[0]!.difference).toBe('code point 3: [x, width, line] [0,8,1] vs [0,8,2]')
+    expect(seedRecord(null, seed(runs), runs, { staged: 'staged/gate.json', against: null })).toMatchObject({ against: null, lost: [], leftThroughHistory: [] })
+    // A check against the old baseline counts those pairs too.
+    expect(checkRuns(before, runs, unchecked).counts.leftThroughHistoryPairs).toBe(4)
+  })
+
+  test('a seed goes to a staging folder, never over the baseline', () => {
+    expect(() => stagedPath('/repo/baselines/gate-chrome.json', undefined)).toThrow('--staging=<dir> is required')
+    expect(() => stagedPath('/repo/baselines/gate-chrome.json', '/repo/baselines')).toThrow('the folder the baseline is in')
+    expect(stagedPath('/repo/baselines/gate-chrome.json', '/repo/baselines/staged-round3')).toBe('/repo/baselines/staged-round3/gate-chrome.json')
+    // The command line: the adopted baseline stays as it is, and the staged seed comes with its record.
+    const dir = mkdtempSync(join(tmpdir(), 'lab-gate-seed-'))
+    const row = (id: string, widths: string, extra: Record<string, unknown> = {}): string => JSON.stringify({
+      id, family: 'f', browser: 'chrome', lineCount: { status: 'pass' }, breaks: { status: 'pass' }, widths: { status: widths }, painter: { status: 'pass' }, ...extra,
+    })
+    const perCase = join(dir, 'chrome-per-case.ndjson')
+    writeFileSync(perCase, `${row('c-1', 'fail', { lineGaps: { widths: { lines: [{ nativeLine: 0, engineLine: 0, gaps: [{ gap: 'script-context', scope: 'line', touch: 'unit' }] }], covered: true, paragraphGaps: [] } } })}\n${row('c-2', 'pass', { historyDependent: '2 native lines vs 1' })}\n`)
+    writeFileSync(join(dir, 'chrome-summary.json'), JSON.stringify({ casesFile: '/cases.ndjson', nativeCompareFile: '/other-rows.ndjson', browsers: { chrome: { rows: 2, environments: { [CHROME]: 2 }, historyDependent: { compared: 2 } } } }))
+    const adopted = join(dir, 'gate-chrome.json')
+    const adoptedText = formatBaseline(seed([run('a', [result('c-1', 'PPPP'), result('c-2', 'PPPP')])]))
+    writeFileSync(adopted, adoptedText)
+    const script = join(import.meta.dir, 'gate.ts')
+    const common = ['--seed', '--engine=blink', '--engine-version=Chrome 153', `--baseline=${adopted}`, `--runs=${perCase}`]
+    expect(Bun.spawnSync(['bun', script, ...common]).exitCode).toBe(2)
+    expect(Bun.spawnSync(['bun', script, ...common, `--staging=${dir}`]).exitCode).toBe(2)
+    const staging = join(dir, 'staged')
+    const seeded = Bun.spawnSync(['bun', script, ...common, `--staging=${staging}`])
+    expect(seeded.exitCode).toBe(0)
+    expect(readFileSync(adopted, 'utf8')).toBe(adoptedText)
+    expect(parseBaseline(readFileSync(join(staging, 'gate-chrome.json'), 'utf8'), 'staged').passes).toEqual({ lbp: ['c-1'] })
+    const record = JSON.parse(readFileSync(join(staging, 'gate-chrome.seed-record.json'), 'utf8')) as SeedRecord
+    expect(record.lost.map(value => [value.id, value.metric, value.covered, value.coveringGaps])).toEqual([['c-1', 'widths', true, ['script-context']]])
+    expect(record.leftThroughHistory.map(value => `${value.id} ${value.metric}`)).toEqual(['c-2 lineCount', 'c-2 breaks', 'c-2 widths', 'c-2 painter'])
+    expect(existsSync(join(dir, 'gate-chrome.seed-record.json'))).toBe(false)
   })
 
   test('a per-case file needs its own summary, unique ids and the same row count', () => {

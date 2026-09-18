@@ -10,6 +10,7 @@ import { observeBlink } from './observe/blink.ts'
 import { observeGecko } from './observe/gecko.ts'
 import { observeWebKit } from './observe/webkit.ts'
 import { paint, predict } from './predictor.ts'
+import { beginCase, beginPhase, endCase, installRecorder, type CaseMeasurements } from './record.ts'
 import type {
   BrowserKind, Case, CodePointObservation, FontDecl, InlineNode, LabRow, LayoutPrediction, LinesPrediction, NativeObservation, PageEnv,
   PainterLine, PainterObservation, ProcessLanguages, Rect, RecordedLayout,
@@ -19,9 +20,12 @@ type PageRow = Omit<LabRow, 'family' | 'browser' | 'build' | 'languages' | 'case
 type StepReply =
   // build: the engine build the driver read from the app bundle, given to the library as GivenFacts.build. languages: the
   // browser process's languages the driver gave (ProcessLanguages.given). predictOnly: run.ts --predict-only; the page
-  // skips native observation.
-  | { kind: 'chunk'; seq: number; browser: BrowserKind; build: string; languages: ProcessLanguages['given']; predictOnly?: true; cases: Case[] }
+  // skips native observation. recordMeasurements: run.ts --record-measurements; the page posts each case's Canvas calls
+  // beside its row (record.ts).
+  | { kind: 'chunk'; seq: number; browser: BrowserKind; build: string; languages: ProcessLanguages['given']; predictOnly?: true; recordMeasurements?: true; cases: Case[] }
   | { kind: 'navigate'; lang: string; fonts: string[] }
+  // The driver starts the run's next part in a fresh browser process (run.ts, "Parts"); this page is finished.
+  | { kind: 'retire' }
   | { kind: 'done' }
 
 const runId = new URLSearchParams(location.search).get('run') ?? ''
@@ -459,7 +463,24 @@ function observePainter(c: Case, prediction: LayoutPrediction, range: Range, tim
   }
 }
 
-async function observeCase(c: Case, reply: Extract<StepReply, { kind: 'chunk' }>, range: Range): Promise<PageRow> {
+// The case's row and, under run.ts --record-measurements, what it asked the browser (record.ts).
+async function observeCase(c: Case, reply: Extract<StepReply, { kind: 'chunk' }>, range: Range): Promise<{ row: PageRow; measurements: CaseMeasurements | null }> {
+  const recording = reply.recordMeasurements === true
+  if (recording) {
+    installRecorder()
+    beginCase(c.id)
+  }
+  let log: ParagraphLayout['measure'] | null = null
+  try {
+    const row = await observeRow(c, reply, range, recording, value => { log = value })
+    return { row, measurements: recording ? endCase(log) : null }
+  } catch (error) {
+    if (recording) endCase(null)
+    throw error
+  }
+}
+
+async function observeRow(c: Case, reply: Extract<StepReply, { kind: 'chunk' }>, range: Range, recording: boolean, libraryLog: (log: ParagraphLayout['measure']) => void): Promise<PageRow> {
   const timings = { nativeMs: 0, predictMs: 0, observeMs: 0, paintMs: 0, painterObserveMs: 0 }
   const env = readEnv()
   let start = performance.now()
@@ -475,6 +496,7 @@ async function observeCase(c: Case, reply: Extract<StepReply, { kind: 'chunk' }>
     timings.nativeMs = performance.now() - start
   }
   start = performance.now()
+  if (recording) beginPhase('predict')
   // A predictor swapped in with run.ts --predictor may predict line ranges alone (baselines/main-predictor.ts).
   let hook: LayoutPrediction | LinesPrediction | { error: string }
   try {
@@ -486,7 +508,9 @@ async function observeCase(c: Case, reply: Extract<StepReply, { kind: 'chunk' }>
   casesObserved++
   previousCaseId = c.id
   if (!('layout' in hook)) return { id: c.id, env, native, prediction: hook, painter: null, timings }
+  libraryLog(hook.layout.measure)
   start = performance.now()
+  if (recording) beginPhase('observe')
   let observation: ExpectedObservation | { error: string }
   try {
     observation = observeLayout(hook)
@@ -497,6 +521,7 @@ async function observeCase(c: Case, reply: Extract<StepReply, { kind: 'chunk' }>
   const log = hook.layout.measure
   const prediction: PageRow['prediction'] = { layout: recordedLayout(hook.layout), measure: { contexts: log.contexts.length, calls: log.calls.length, memoHits: log.memoHits }, observation }
   let painter: PageRow['painter']
+  if (recording) beginPhase('paint')
   try {
     painter = observePainter(c, hook, range, timings)
   } catch (error) {
@@ -530,6 +555,7 @@ async function main(): Promise<void> {
   while (true) {
     switch (reply.kind) {
       case 'done':
+      case 'retire':
         document.title = 'lab done'
         return
       case 'navigate':
@@ -537,12 +563,15 @@ async function main(): Promise<void> {
         return
       case 'chunk': {
         const rows: PageRow[] = []
+        const measurements: CaseMeasurements[] = []
         for (let i = 0; i < reply.cases.length; i++) {
           const c = reply.cases[i]!
           if (c.pageLang !== pageLang) throw new Error(`Case ${c.id} needs <html lang="${c.pageLang}">; page has "${pageLang}"`)
-          rows.push(await observeCase(c, reply, range))
+          const observed = await observeCase(c, reply, range)
+          rows.push(observed.row)
+          if (observed.measurements !== null) measurements.push(observed.measurements)
         }
-        reply = await post<StepReply>('/api/step', { runId, pageLang, fonts: fontFixtures, seq: reply.seq, rows })
+        reply = await post<StepReply>('/api/step', { runId, pageLang, fonts: fontFixtures, seq: reply.seq, rows, ...(reply.recordMeasurements === true ? { measurements } : {}) })
       }
     }
   }

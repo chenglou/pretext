@@ -28,7 +28,9 @@ export type RuleRecord = {
   declaredBy: string
 }
 
-export type Registry = { format: 'pretext-rules/1'; note: string; rules: RuleRecord[] }
+// generated: per rule id, a hash of the rule as import-rules.ts last generated it, so the importer can tell a hand edit of
+// this file from a change in rule-changes.json. Absent in registries from before 2026-09-17 20:00.
+export type Registry = { format: 'pretext-rules/1'; note: string; rules: RuleRecord[]; generated?: Record<string, string> }
 
 export const REGISTRY_PATH = resolve(import.meta.dir, 'rules.json')
 

@@ -1,6 +1,7 @@
 // Shared shapes for the probe runner. A probe is plain data (JSON-serializable): the driver validates it, serves it
 // to the page, and the page records raw observations. Verdicts are computed afterwards from the output file.
 
+import type { LabApp } from '../lab/browser-build.ts'
 import type { BrowserBuild } from '../lab/types.ts'
 
 // 'webkit-host': the system WebKit.framework, the engine installed Safari runs, in rebuild/tools/webkit-host. Its output
@@ -236,6 +237,8 @@ export type ProbeOutput = {
   // The browser build the runner read from the app bundles before launch (lab/browser-build.ts). Absent in outputs recorded
   // before 2026-09-16 23:40; facts extracted from those take the build as given (rebuild/tests/facts.ts).
   build?: BrowserBuild
+  // The app bundle the runner launched (lab/browser-build.ts LabApp); null for webkit-host. Absent before 2026-09-17 20:00.
+  app?: LabApp | null
   runId: string
   probesFile: string
   only: string | null

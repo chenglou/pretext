@@ -7,7 +7,7 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { createConnection } from 'node:net'
 import { basename, extname, join, resolve } from 'node:path'
 import { createBrowserSession, getAvailablePort } from '../../scripts/browser-automation.ts'
-import { readBuild } from '../lab/browser-build.ts'
+import { CHROME_PIN_ARGS, FIREFOX_PIN_PREFS, labApp, readBuild } from '../lab/browser-build.ts'
 import { CANVAS_PROPERTIES } from './types.ts'
 import type { BrowserKind, PageEnv, Probe, ProbeOutput, ProbeResult } from './types.ts'
 
@@ -15,8 +15,6 @@ const PROBES_DIR = import.meta.dir
 const REPO = resolve(PROBES_DIR, '../..')
 const PROFILES_DIR = join(REPO, '.artifacts/profiles')
 const FONTS_DIR = join(REPO, 'tests/wrapping/fonts')
-const CHROME_APP = '/Applications/Google Chrome.app'
-const FIREFOX_APP = '/Applications/Firefox.app'
 
 function fail(text: string): never {
   console.error(`[probes] ${text}`)
@@ -46,6 +44,8 @@ const probeBrowser: BrowserKind = browser === 'webkit-host' ? 'safari' : browser
 // The build the run observes, read from the app bundles before launch; the output records it, so facts extracted from it
 // name their build (rebuild/tests/facts.ts).
 const build = readBuild(browser)
+// The app the run launches (lab/browser-build.ts): Chrome and Firefox are the lab's pinned copies, never the installed apps.
+const app = labApp(browser)
 const probesPath = resolve(args.get('probes') ?? fail(`--probes is required. ${USAGE}`))
 const outDir = resolve(args.get('out') ?? join(REPO, '.artifacts/probes', basename(probesPath, extname(probesPath))))
 const only = args.get('only') ?? null
@@ -328,7 +328,7 @@ async function closeLaunched(pid: number, profile: string): Promise<void> {
   trash(profile)
 }
 
-// Installed Chrome, headed, in its own profile under .artifacts/profiles, started through LaunchServices without
+// The lab's pinned Chrome (lab/browser-build.ts), headed, in its own profile under .artifacts/profiles, started through LaunchServices without
 // activation. Headless Chrome can lay out at zoom 1 while reporting DPR 2. One attempt only.
 //
 // Chrome activates itself whenever it shows a browser window the normal way, `open -g` or not (a startup window takes
@@ -339,13 +339,13 @@ async function closeLaunched(pid: number, profile: string): Promise<void> {
 async function launchChrome(url: string): Promise<Session> {
   const profile = join(PROFILES_DIR, `probes-chrome-${runId}`)
   mkdirSync(profile, { recursive: true })
-  openApp(CHROME_APP, [
-    `--user-data-dir=${profile}`, '--no-first-run', '--no-default-browser-check', '--disable-sync', '--disable-extensions',
+  openApp(app!.path, [
+    `--user-data-dir=${profile}`, ...CHROME_PIN_ARGS, '--no-first-run', '--no-default-browser-check', '--disable-sync', '--disable-extensions',
     '--disable-component-update', '--disable-background-timer-throttling', '--disable-backgrounding-occluded-windows',
     '--disable-renderer-backgrounding', '--window-size=1200,900', '--no-startup-window', '--remote-debugging-port=0',
     ...chromeArgs,
   ])
-  const pid = await waitForPid(`${CHROME_APP}/Contents/MacOS/Google Chrome`, `--user-data-dir=${profile}`)
+  const pid = await waitForPid(`${app!.path}/Contents/MacOS/Google Chrome`, `--user-data-dir=${profile}`)
   if (pid === null) {
     trash(profile)
     throw new Error('Could not find the launched Chrome process')
@@ -510,12 +510,12 @@ async function launchFirefox(url: string): Promise<Session> {
     ['startup.homepage_welcome_url.additional', ''], ['datareporting.policy.firstRunURL', ''],
     ['datareporting.policy.dataSubmissionPolicyBypassNotification', true], ['toolkit.telemetry.reportingpolicy.firstRun', false],
     ['browser.sessionstore.resume_from_crash', false], ['dom.timeout.enable_budget_timer_throttling', false],
-    ...firefoxPrefs,
+    ...FIREFOX_PIN_PREFS, ...firefoxPrefs,
   ]
   writeFileSync(join(profile, 'user.js'), prefs.map(([name, value]) => `user_pref(${JSON.stringify(name)}, ${JSON.stringify(value)});\n`).join(''))
   const port = await getAvailablePort()
-  openApp(FIREFOX_APP, ['--new-instance', '--profile', profile, '--remote-debugging-port', String(port), 'about:blank'])
-  const pid = await waitForPid(`${FIREFOX_APP}/Contents/MacOS/firefox`, ` --profile ${profile} `)
+  openApp(app!.path, ['--new-instance', '--profile', profile, '--remote-debugging-port', String(port), 'about:blank'])
+  const pid = await waitForPid(`${app!.path}/Contents/MacOS/firefox`, ` --profile ${profile} `)
   if (pid === null) {
     trash(profile)
     throw new Error('Could not find the launched Firefox process')
@@ -840,7 +840,7 @@ try {
   const output: ProbeOutput = {
     status: errors.length === 0 ? 'ok' : 'error',
     errors,
-    browser, build, runId, probesFile: probesPath, only,
+    browser, app, build, runId, probesFile: probesPath, only,
     startedAt: startedAt.toISOString(), finishedAt: finishedAt.toISOString(), durationMs: finishedAt.getTime() - startedAt.getTime(),
     totals,
     envs: [...envs].map(([key, documents]) => ({ ...JSON.parse(key) as PageEnv, documents })),

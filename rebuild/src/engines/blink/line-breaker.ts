@@ -68,6 +68,11 @@ export type LineInfo = {
   // the current style's own break type, before any break-character override (at least one unit past it), for the gaps the
   // decision rests on.
   decisionEnd: number
+  // Not Blink's: break opportunities the port gave up because their line-end reshape failed ShapeLine's fit test, on a
+  // wrapped line whose start the port reshapes, with no shaping run edge between the line start and the opportunity. Every
+  // safe offset the port found there is safe by the pair test alone; if HarfBuzz flags them all, Blink has no safe offset
+  // before the opportunity, reshapes the whole range and takes it without a fit test (shaping_line_breaker.cc:497-506).
+  untestedEnds: number[]
 }
 
 // line_breaker.cc:186-188
@@ -131,6 +136,7 @@ export class LineBreaker {
   hasOverflow = false
   readonly previousLineHadForcedBreak: boolean
   readonly shapeResults = new Map<number, ShapeResult>()
+  untestedEnds: number[] = []
 
   constructor(sh: Shaper, token: BlinkLineStart, slot: LineSlot) {
     const p = sh.p
@@ -332,6 +338,7 @@ export class LineBreaker {
     this.iterator.breakType = breakType
     return {
       decisionEnd,
+      untestedEnds: this.untestedEnds,
       results: this.results,
       lineLeft: this.lineLeft,
       lineRight: this.lineRight,
@@ -439,7 +446,7 @@ export class LineBreaker {
       return
     }
     if (r.start === item.start) {
-      r.inlineSize = Math.max(0, snappedWidth(sr))
+      r.inlineSize = Math.max(0, snappedWidth(this.sh, sr))
       r.shape = viewOf(this.sh, sr)
     } else {
       r.shape = viewOf(this.sh, sr, r.start, r.end)
@@ -551,7 +558,7 @@ export class LineBreaker {
     const flip = (v: number): number => rtl ? -v : v
     const lineStart = this.token.textOffset
     const isStartOfWrappedLine = start !== 0 && start === lineStart && !this.previousLineHadForcedBreak
-    if (start === rangeStart && availableSpace >= snappedWidth(sr) && isStartSafeToBreak(sh, sr)) {
+    if (start === rangeStart && availableSpace >= snappedWidth(sh, sr) && isStartSafeToBreak(sh, sr)) {
       this.setBreakOffset(out, rangeEnd)
       return viewOf(sh, sr)
     }
@@ -658,6 +665,7 @@ export class LineBreaker {
         lineEndResult = reshape(sh, item.group, lastSafe, bo.offset)
         if (widthOf16(lineEndResult.call.width16) <= Math.fround(flip(endPosition - safePosition) / 64)) break
         lineEndResult = null
+        if (firstSafe !== start && !this.hasRunEdge(item, start, bo.offset)) this.untestedEnds.push(bo.offset)
         bo = this.previousBO(bo.offset - 1, start)
         if (bo.offset > start) continue
         out.isOverflow = true
@@ -674,6 +682,17 @@ export class LineBreaker {
     if (lineEndResult === null) lastSafe = bo.offset
     this.setBreakOffset(out, bo.offset)
     return concat(lastSafe, lineEndResult)
+  }
+
+  // Whether a shaping run starts in [from, to): the item's shaping group, or a script segment inside it, which HarfBuzzShaper
+  // shapes in its own call (harfbuzz_shaper.cc:1080-1101). A run's first glyph is safe to break before in every font.
+  hasRunEdge(item: InlineItem, from: number, to: number): boolean {
+    const p = this.sh.p
+    if (item.group < 0) return true
+    if (p.groups[item.group]!.start >= from && p.groups[item.group]!.start < to) return true
+    if (!p.segmented) return false
+    for (let k = Math.max(from, 1); k < to; k++) if (p.scripts[k] !== p.scripts[k - 1] && (p.text.charCodeAt(k) & 0xfc00) !== 0xdc00) return true
+    return false
   }
 
   // HandleTrailingSpaces (line_breaker.cc:2418-2534).
@@ -708,7 +727,7 @@ export class LineBreaker {
       const result = sr!
       if (r.start === item.start && r.end === item.end) {
         r.shape = viewOf(this.sh, result)
-        r.inlineSize = snappedWidth(result)
+        r.inlineSize = snappedWidth(this.sh, result)
       } else {
         r.shape = viewOf(this.sh, result, r.start, r.end)
         r.inlineSize = luCeil(r.shape.width)

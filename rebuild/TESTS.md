@@ -21,7 +21,7 @@ Terms:
 
 | Path | What |
 |---|---|
-| `rebuild/tests/rules.json`, `registry.ts`, `import-rules.ts`, `rule-changes.json` | The rule registry and how it's generated |
+| `rebuild/tests/rules.json`, `registry.ts`, `import-rules.ts`, `import-rules.test.ts`, `rule-changes.json` | The rule registry and how it's generated |
 | `rebuild/tests/families/` | Family declarations (`lines.ts`, `breaks.ts`, `fonts.ts`, and `inline.ts` for inline structure, line slots, alignment and process languages), `catalogue.ts`, the family types and pairwise covering rows (`covering.ts`) |
 | `rebuild/tests/fit.ts` | Each browser's fit arithmetic, from recorded probe verdicts |
 | `rebuild/tests/derive.ts`, `noop-predictor.ts`, `observe-families.sh` | Width derivation and the observation loop |
@@ -29,10 +29,11 @@ Terms:
 | `rebuild/tests/coverage.ts` → `rebuild/tests/coverage.json` | The coverage matrix |
 | `rebuild/tests/gate.ts` → `rebuild/tests/baselines/<browser>-<engine build>.json` | The layered gate |
 | `rebuild/tests/independence.test.ts` | No expected value from `rebuild/src` |
-| `rebuild/lab/browser-build.ts` | Reads the build from the app bundles for `lab/run.ts` and `probes/runner.ts` |
+| `rebuild/lab/browser-build.ts`, `rebuild/lab/pin-browser.sh` | The apps `lab/run.ts` and `probes/runner.ts` launch (pinned copies of Chrome and Firefox), and the build read from their bundles |
+| `rebuild/lab/sharded.ts` | One case file as several jobs at once; derivation observes through it |
 
 - `bunx tsc --noEmit -p rebuild/tests/tsconfig.json`
-- `bun test rebuild/tests`: 35 tests in 8 files.
+- `bun test rebuild/tests`: 43 tests in 9 files.
 
 Derived case files, rows and derivation records live under `.artifacts/charter-20260916/tests/families-20260916/<browser>/`. A baseline names its case file with a sha256.
 
@@ -51,9 +52,11 @@ Derived case files, rows and derivation records live under `.artifacts/charter-2
 
 - `bun rebuild/tests/import-rules.ts` writes `rules.json` from the 2026-09-16 catalogue (399 rules) and `rule-changes.json`:
   - 28 rules removed, each with its replacement: the lab-visibility widths, the choices by score and the name keys the owners replaced;
-  - 7 reclassified;
-  - 99 added: 44 from the owners' stage 1 reports, and 55 for stage 5 (2026-09-17).
-  - 470 rules are current.
+  - 18 reclassified entries;
+  - 105 added: 44 from the owners' stage 1 reports, 55 for stage 5 (2026-09-17), and 6 in ceiling round 2.
+  - 476 rules are current.
+- **Change rules in `rule-changes.json`, never in `rules.json`.** A `reclassified` entry replaces the fields it names (kind, statement, source, probes, tests, area, declaredBy) on any rule, from the catalogue or added; entries for one rule apply in order. Until ceiling round 3 the importer threw on a reclassified id that wasn't in the catalogue, so round 2's owners edited `rules.json` by hand, and a regeneration would have lost those edits.
+- **Hand edits aren't lost.** `rules.json` keeps a hash of every rule as generated (`generated`). On the next import a rule whose file version moved while `rule-changes.json` didn't is written into `rule-changes.json` (a reclassified entry with the fields that differ, or an added entry for a rule added by hand), and the importer says so. When both moved and disagree, a rule was deleted by hand, or a hand edit touches id, engine, status, replacedBy or audit, it stops, names the rule and writes nothing. `--check` writes nothing and exits 1 when either file would change. The first run moved round 2's hand edits over: 5 Gecko rules' statements, sources, probes and tests, and the 2 Gecko rules added by hand. A registry without hashes counts as hand-edited wherever it differs from the generation, so on that first run a fresh change to `rule-changes.json` looks like a hand edit of the old text; it happened with two entries, which were put right by hand.
 - `declaredBy` says where an id comes from:
   - the catalogue;
   - the Blink owner, who declared ids;
@@ -167,11 +170,12 @@ Totals: Chrome 1,624 paragraphs in 10 families (and the 72 process-languages par
 3. Repeat until `final/` exists.
 4. Run the family file in file order and reversed with `lab/predictor.ts`, and score both with `--native-compare`.
 
-It stops after one failed job, and pauses 20 s after every hold of the lock. Environment:
+Every observation goes through `lab/sharded.ts`: the case file is cut into shards that run at the same time, each under the browser lock in its own browser instance, and the joined folder reads like one run. It stops after one failed job, runs nothing twice and doesn't pause; a full derivation of the rule families takes two to three minutes a browser. Environment:
 
 - `FAMILIES=a,b`: derive only these families, read when the directory is first planned.
+- `SHARDS=N`: shards per case file (default: the browser's lock slots, 3).
 - `LAB_RUN_ARGS`: more `run.ts` arguments for every job, such as `--chrome-apple-languages=en-US --chrome-accept-languages=en-US,en`.
-- `FINAL_RUNS=native`: the final runs use `noop-predictor.ts`, into `final/native-file` and `final/native-reverse`, and compare only native observations. This is for families whose inputs the engine ports don't implement yet. Coverage doesn't read these runs.
+- `FINAL_RUNS=native`: the final runs use `noop-predictor.ts`, into `final/native-file` and `final/native-reverse`, and compare only native observations. This is for families whose inputs the engine ports don't implement yet, and for derivations made while the library is being changed. Coverage doesn't read these runs.
 
 ## 6. First runs, 2026-09-16/17
 
@@ -261,6 +265,26 @@ The ceiling round 1 evaluation ran the stage 5 family cases forward and in rever
 - webkit-host's 16 `br-elements` line count failures report `page-history` and pass alone in a fresh document (WebKit owner).
 - Firefox's 6 line count and 9 breaks failures, and 2 of webkit-host's `line-slots` failures, report no gap. They are rows where row 0's two insets and the text-indent exceed the width, so the page puts row 0's right float one row lower: the slot-rows assumption doesn't hold there, and the scorer doesn't check it yet (§13).
 
+### Round 3 derivations, 2026-09-17
+
+Every family derived again, natively, into `.artifacts/tests/derive-r3-20260917/<browser>/{families,features}` (`chain.sh` there; Chrome's process-languages family under en-US in `chrome-en-US/features`): the pinned Chrome 153.0.8010.50, Firefox 156.0 and webkit-host on WebKit 22625.1.29.11.27, macOS 26A428, DPR 2, the same seeds and given process languages as before. The three browsers ran beside each other with every observation sharded (§5), and the whole chain took 8.5 minutes. Final runs are native (`final/native-file`, `final/native-reverse`), since the library was being changed; the evaluation runs the predictions. The rounds' rows are compressed (`zstd`), so a directory can't be stepped again without restoring them.
+
+| Browser | Set | Paragraphs | Rounds | Targets | Resolved | At derived width | Unresolved | No reach | Non-monotone | Family cases | Protocol rows | History-dependent |
+|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| Chrome .50 | rule families (22) | 1,684 | 12 | 5,399 | 4,110 | 2,902 | 444 | 845 | 16 | 11,154 | 0 | 0 |
+| Chrome .50 | feature families (10) | 1,640 | 12 | 7,232 | 5,059 | 3,848 | 500 | 1,673 | 180 | 13,010 | 0 | 0 |
+| Chrome .50, en-US | process-languages | 72 | 6 | 270 | 180 | 165 | 18 | 72 | 0 | 468 | 0 | 0 |
+| Firefox | rule families (20) | 1,558 | 11 | 4,492 | 3,511 | 2,876 | 261 | 720 | 0 | 9,776 | 0 | 0 |
+| Firefox | feature families (9) | 1,568 | 12 | 6,760 | 4,656 | 3,568 | 482 | 1,622 | 169 | 12,050 | 0 | 0 |
+| webkit-host | rule families (20) | 1,558 | 13 | 4,454 | 3,477 | 149 | 230 | 747 | 7 | 9,726 | 0 | 6 |
+| webkit-host | feature families (9) | 1,568 | 12 | 6,853 | 4,742 | 131 | 507 | 1,604 | 180 | 12,268 | 0 | 0 |
+
+Every unresolved target is `no-line-inside`, apart from 2 `rounds-exhausted` in Firefox's feature families.
+
+- **Chrome .50 against .48.** The derivation under .50 gives every family case derived under .48 again, all 10,976 rule family cases, all 12,882 feature family cases and all 468 en-US cases, so every bracket sits where it sat. What is new comes from round 3's family changes: 178 `rule/joining` cases (the `shy-mark` word) and 128 `rule/text-align` cases (the ideograph word).
+- **The width floor.** With `derive.ts` `minimumUnits` no final run has a protocol row. Against round 1's feature case files, 24 `rule/line-slots` cases left Firefox's file and 10 webkit-host's, among them all 15 and all 7 protocol rows of the round 2 seeds; both files gain the 128 `rule/text-align` cases.
+- **Firefox and webkit-host rule families.** Firefox's file holds all 9,584 earlier cases and 192 new `rule/joining` ones. webkit-host's holds all but 2 and 144 new ones: one wave-2 target of `rule/in-word-breaks` (`p-32090e410e46ef61:7:14`, a `WaWa…` word) resolved on 09-16 and stays a window now, because no native line starts at offset 7 at the widths observed inside it. In-word breaks in WebKit depend on the process's history, and a sharded run gives every shard a fresh one; not traced further.
+
 ## 7. Versioned facts
 
 A facts file holds one engine build's facts, one record per fact and scope:
@@ -285,6 +309,7 @@ A facts file holds one engine build's facts, one record per fact and scope:
 | File | Facts | From |
 |---|---:|---|
 | `rebuild/facts/blink/153.0.8010.48.ndjson` | 756 | blink-probes at DPR 2 (340) and forced DPR 1 (336); zoom probes at forced DPR 3.5 (15) and emulated DPR 2 (22); system-ui in fresh browsers (19, 17, 7) |
+| `rebuild/facts/blink/153.0.8010.50.ndjson` | 772 | the same seven sets, rerun in the pinned Chrome 153.0.8010.50 in ceiling round 3 (`rerun-probes.sh`, `.artifacts/tests/release-chrome-153.0.8010.50/probes`): all 756 facts of .48 compared, 756 unchanged, no decisive value changed, no flip, none missing; 16 new facts from probes added to `blink-probes.ts` since the seed (cross X5 with the DOM laid out first, a supplementary blink-text H29 check) |
 | `rebuild/facts/webkit/22625.1.29.11.27.ndjson` | 176 | webkit-probes in webkit-host (88) and installed Safari (88) |
 | `rebuild/facts/gecko/156.0.ndjson` | 321 | gecko-probes at apd 30 (269), 60 (13), 40 (12), 27 (12), 23 (12); follow-up (3) |
 
@@ -298,9 +323,11 @@ A facts file holds one engine build's facts, one record per fact and scope:
 
 Per release, `bash rebuild/tests/rerun-probes.sh <browser> <previous facts file> <out dir>`:
 
-- reruns the engine's probe set under the lock;
-- extracts facts under the build the runner records;
+- reruns every probe set the previous build's facts file holds, each in its setup (Chrome: DPR 2, forced DPR 1, the zoom probes at forced DPR 3.5 and emulated DPR 2, the three fresh-browser system-ui sets; Firefox: apd 30 and the apd 60, 40, 27 and 23 subsets and the H3b follow-up; webkit-host, and installed Safari with `ALLOW_SAFARI=1`), as short jobs under the lock at the same time. Until ceiling round 3 it reran only the main set, so a release would have reported every other scope missing;
+- extracts facts under the build the runner records, and refuses sets that ran different builds;
 - `facts.ts release` writes `rebuild/facts/<engine>/<new build>.ndjson` with `holdsIn` carried forward.
+
+A fact's `spec` is the probe's label up to a colon, as a rule's probe entry is read, so probes labelled `gecko-port F12: how pair kerning divides` join rules citing `gecko-port F12`. The round 2 Gecko probes (F7 to F12) and round 3's still return raw values without checks, so they give no facts yet.
 
 A flip or a missing fact exits 1. Either the browser changed (read the new source, update specs and port), or the claim depends on process history (narrow its scope to fresh processes).
 
@@ -334,7 +361,13 @@ Regenerated 2026-09-17 by the ceiling round 2 evaluation, from `rebuild/facts/*`
 | Gecko | 124 | 101 | 51 | 55 | 77 | 23 | 0 | 6 |
 | Shared | 29 | 12 | 6 | 6 | 0 | 17 | 0 | 0 |
 
-Round 2 added six rules, and none has a test, fact or family yet: `blink/justify/cjk-ideograph-or-symbol`, `blink/measure/pair-kerning-from-fact`, `blink/shape/cluster-unit-grapheme`, `blink/shape/pair-window-whole-clusters`, `gecko/lines/in-word-advance-split-kerning` and `gecko/measure/lang-empty-locale-language`. Four more Gecko rules carry probe labels without a holding fact, since the round 2 probes (F7 to F12) aren't in the facts files: `gecko/gap/in-word-prefix`, `gecko/lines/in-word-advance-split-kerning`, `gecko/measure/range-in-script-context` and `gecko/script/latin-fast-path`.
+Ceiling round 3 gave each of round 2's six rules what it lacked (below the list); the matrix shows them once it is regenerated from round 3's scored family runs. A trial regeneration over round 2's runs with the .50 facts file covers all six: four by test and family, `blink/shape/pair-window-whole-clusters` and `blink/shape/cluster-unit-grapheme` by family.
+
+Round 2 added six rules, and none had a test, fact or family in that matrix: `blink/justify/cjk-ideograph-or-symbol`, `blink/measure/pair-kerning-from-fact`, `blink/shape/cluster-unit-grapheme`, `blink/shape/pair-window-whole-clusters`, `gecko/lines/in-word-advance-split-kerning` and `gecko/measure/lang-empty-locale-language`. Four more Gecko rules carry probe labels without a holding fact, since the round 2 probes (F7 to F12) aren't in the facts files: `gecko/gap/in-word-prefix`, `gecko/lines/in-word-advance-split-kerning`, `gecko/measure/range-in-script-context` and `gecko/script/latin-fast-path`.
+
+- Four of the six had a test all along. The registry names it as bun prints it, `describe block > test name`, and `coverage.ts` looked for that whole string in the file; it now finds each part (`testPresent`). 14 other test references are still stale: the tests were renamed or the entry describes tests instead of naming one (`blink/lines/forced-break`, `blink/script/script-run-iterator`, four Gecko B2 and B4 entries, six shared entries).
+- Families now name the rules they exercise: `in-word-breaks` (`AV` and `Wa` words in Arial, Hoefler Text and Times New Roman, fonts on both sides of the `pairKerning` fact) names `blink/measure/pair-kerning-from-fact` and `gecko/lines/in-word-advance-split-kerning`; `clusters` (Bengali conjuncts in Kohinoor Bangla) names `blink/shape/cluster-unit-grapheme`; `languages` (`lang=""`) names `gecko/measure/lang-empty-locale-language`.
+- Two families grew: `joining` has a `shy-mark` word, a kasra right after the soft hyphen, for `blink/shape/pair-window-whole-clusters` (96 to 128 paragraphs an engine), and `text-align` has an ideograph word in PingFang SC under `justify` and `start`, for `blink/justify/cjk-ideograph-or-symbol` (144 to 160).
 
 What stays uncovered:
 
@@ -371,7 +404,7 @@ Six current rules are still heuristics or choices by score: `blink/shape/wide-gr
 Seeded by the ceiling round 2 evaluation (REPORT.md §2.6; `.artifacts/ceiling-20260917/evaluate-r2/tools/reseed.sh`) with `gate.ts seed`, the facts files and the regenerated coverage matrix, through derivation directories that link the evaluation's forward and reverse runs (`evaluate-r2/tools/derived-dirs.sh`). Each baseline checked against its own runs with the environment check on: 0 lost pairs, pass. The round 1 seeds refuse the round 2 runs by environment (scorer 4; Chrome's new build; webkit-host's `preferredLanguages`), and nothing was checked without that check. What each new seed loses against the round 1 seed and against the pre-round-1 seed is listed pair by pair, with its category, line-local gaps and attribution, in `rebuild/lab/baselines/reseed-round2-lost-pairs.json`: Chrome's rule families 24 painter pairs and feature families 33, webkit-host's feature families 17 widths that scorer 4 alone leaves unobserved and 8 painter pairs, Firefox none.
 
 - Chrome's three files are new, for build 153.0.8010.50, which replaced .48 on 2026-09-17; the .48 seeds stay in their own files. Their family cases were derived under .48 (the `build` field), the runs are .50's, whose native views equal .48's on every family case in both orders (`evaluate-r2/native-rounds-chrome.json`), and their facts file is .48's. §12's procedure (probes, derivation) hasn't run for .50.
-- The feature seeds still hold round 1's cases, with their protocol rows listed apart (Firefox 15, webkit-host 7). Round 1's seeds were pruned of those rows by rule in ceiling round 2 (`lab/gate.ts --prune-protocol`, reports in `.artifacts/lab/round2-scorer4/prune/`). The families should be derived again with `derive.ts` `minimumUnits` before the next seed (§13).
+- The feature seeds still hold round 1's cases, with their protocol rows listed apart (Firefox 15, webkit-host 7). Round 1's seeds were pruned of those rows by rule in ceiling round 2 (`lab/gate.ts --prune-protocol`, reports in `.artifacts/lab/round2-scorer4/prune/`). Ceiling round 3 derived the families again with `derive.ts` `minimumUnits` (§6, "Round 3 derivations"); the next seeds take `.artifacts/tests/derive-r3-20260917/<browser>/{families,features}`, whose Chrome cases were derived under .50 with .50's facts file beside them.
 
 Round 1 history: the pre-round-1 rule-family baselines were keyed on scorer 2 without process languages, so `gate.ts check` refused round 1's runs by design (exit 2). Round 1's evaluation compared them by the same rules without the environment check, which its critic rejected (research/ROUND1-CRITIC.md item 2) and round 2 doesn't do: Chrome's rule families lost 44 painter pairs (`rule/joining`, the Blink owner's fix-r12), webkit-host's 22 line counts, 22 breaks and 6 painter pairs (`rule/joining` under `rtl-shaping-across-inline-boxes`), and Firefox's none.
 
@@ -390,7 +423,8 @@ Engine or library logic fails the test. It passes today.
 
 ## 12. Per browser release
 
-1. `run.ts` and `probes/runner.ts` read the new build from the app bundles; rows and outputs carry it.
+0. Pin the new build: `bash rebuild/lab/pin-browser.sh chrome|firefox` copies the installed bundle and checks the copy byte for byte; try it with `LAB_CHROME_APP=<copy>` or `LAB_FIREFOX_APP=<copy>` on a smoke run, then point `lab/browser-build.ts` `LAB_APPS` at it (lab README, "Pinned browsers"). The lab never launches the installed Chrome or Firefox, so a release arrives when the pin moves, not when the updater runs. Check the engine source between the two tags first.
+1. `run.ts` and `probes/runner.ts` read the new build from the pinned bundle; rows and outputs carry it, with the app path and the copy's tree hash in the run record.
 2. `rerun-probes.sh` per browser: a new facts file, and flips block that engine.
 3. `observe-families.sh` into a new derivation directory, deriving the families under the new key.
 4. `coverage.ts` over the new facts and derivation directories, with `--previous`.
@@ -398,14 +432,16 @@ Engine or library logic fails the test. It passes today.
 
 A macOS update moves all three keys.
 
+**Chrome 153.0.8010.50, ceiling round 3.** Between the tags 153.0.8010.48 and .50 only `chrome/VERSION` differs and `DEPS` is unchanged, so every file the port reads is identical. Steps 0 to 3 ran: the pinned copy (tree sha256 `712aa9f5…`), whose native observations equal the installed .50's on all 2,580 `runs` cases; the facts file, with all 756 of .48's facts unchanged (§7); and the derivation, which gives every one of the 10,976 family cases derived under .48 again, and the feature families' cases likewise apart from the ones round 3 changed on purpose (§6, "Round 3 derivations"). Steps 4 and 5 belong to the evaluation, which scores the new case files and stages the seeds; the library's own pin (`src/env.ts` `PINNED_BUILDS`) is the Blink owner's to move.
+
 ## 13. Not built yet
 
-- L3 offline replay: full Canvas call logs in rows (DESIGN §8.3 stage 0).
+- L3 offline replay as a gate layer. Its parts exist since ceiling round 3: `run.ts --record-measurements` stores every Canvas call and dictionary segmentation of every case, and `lab/measurements.ts` replays a library build against them with no browser (lab README, "Recorded measurements"); on `runs` the replay gives the recorded layout on all 2,580 cases in each browser. No recorded set is kept as a baseline yet.
 - Triage records for the census's main-only rows (§7).
 - Lock files and oracle answers under `rebuild/data`, with skipped oracle tests turned into failures (§5).
 - Environment reruns for rules that read DPR or app units: forced DPR 1 in Chrome, other apd in Firefox. `run.ts` takes no browser switches.
-- Family baselines for installed Safari; webkit-host stands in. The ceiling round 2 evaluation ran the combined rule and feature families file (21,734 cases) in installed Safari in both orders: every native view, prediction and score equals webkit-host's (REPORT.md §2.7). Its held-out and sealed-2 combined files didn't finish there, because a hidden Safari page stops in a job longer than about 8 minutes.
+- Family baselines for installed Safari; webkit-host stands in. The ceiling round 2 evaluation ran the combined rule and feature families file (21,734 cases) in installed Safari in both orders: every native view, prediction and score equals webkit-host's (REPORT.md §2.7). Its held-out and sealed-2 combined files didn't finish there, because a hidden Safari page stops in a job longer than about 8 minutes. Since ceiling round 3 an installed Safari run goes through 5-minute parts, each in a fresh tab (lab README, "Parts"), and `run.ts --parts-from` repeats its parts in webkit-host so both see every case after the same history.
 - In-probe fact declarations with value-free check names (§4.1); painter probes.
-- Page-history preludes and per-case isolation protocols (§6.5).
-- For structured cases: line keys that place atomic inlines, and a check that no line box is taller than the line height in slot cases. Scorer 4 compares `elements` and marks slot protocol rows (lab README "Elements", "Protocol rows"); round 1's feature families had 22 such rows (Firefox 15, webkit-host 7), and `derive.ts` `minimumUnits` now keeps derived widths at or above each engine's bound. A re-derivation of `line-slots` with it produced no protocol row in Firefox or webkit-host (lab README "Protocol rows"); the feature-family baselines and `.artifacts/tests/features-20260917` still hold round 1's cases until the families are derived again.
+- Page-history preludes (§6.5). The per-case isolation protocol exists since ceiling round 3: `lab/sharded.ts --isolate` runs given cases each in a fresh browser process (lab README, "Sharded runs and isolation").
+- For structured cases: line keys that place atomic inlines, and a check that no line box is taller than the line height in slot cases. Scorer 4 compares `elements` and marks slot protocol rows (lab README "Elements", "Protocol rows"); round 1's feature families had 22 such rows (Firefox 15, webkit-host 7), and `derive.ts` `minimumUnits` now keeps derived widths at or above each engine's bound. A re-derivation of `line-slots` with it produced no protocol row in Firefox or webkit-host (lab README "Protocol rows"), and ceiling round 3 derived every family again with it (§6, "Round 3 derivations": no protocol row in any browser). The feature-family baselines still hold round 1's cases until the evaluation seeds from the new case files.
 - A second controlled locale for Firefox and webkit-host: Firefox's Mac command line passes a Cocoa `-AppleLanguages` pair on as arguments to open, and webkit-host rejects arguments it doesn't know (lab README, "Browser-process languages").

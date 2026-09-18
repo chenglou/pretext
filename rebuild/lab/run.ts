@@ -5,16 +5,15 @@ import { execFileSync } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import { closeSync, mkdirSync, openSync, readFileSync, writeFileSync, writeSync } from 'node:fs'
 import { join, resolve } from 'node:path'
-import { readBuild, userAgentMatches } from './browser-build.ts'
+import { CHROME_PIN_ARGS, FIREFOX_PIN_PREFS, labApp, readBuild, userAgentMatches } from './browser-build.ts'
 import { createRng } from './cases/prng.ts'
 import { CHROME_LANGUAGES, derivedLanguages, FIREFOX_LANGUAGE_PREFS, rendererLanguage, webkitLanguageCheck, type ChromeLanguages } from './languages.ts'
+import type { CaseMeasurements } from './record.ts'
 import type { BrowserKind, Case, FontDecl, LabRow, ProcessLanguages } from './types.ts'
 
 const LAB_DIR = import.meta.dir
 const PROFILES_DIR = resolve(LAB_DIR, '../../.artifacts/profiles')
 const FONTS_DIR = resolve(LAB_DIR, '../../tests/wrapping/fonts')
-const CHROME_APP = '/Applications/Google Chrome.app'
-const FIREFOX_APP = '/Applications/Firefox.app'
 
 function fail(text: string): never {
   console.error(`[lab] ${text}`)
@@ -27,14 +26,17 @@ function message(error: unknown): string {
 
 // ---- Arguments ----
 
-const KNOWN = ['browser', 'cases', 'out', 'limit', 'family', 'chunk', 'predictor', 'stall-ms', 'order', 'chrome-apple-languages', 'chrome-accept-languages']
-const USAGE = 'Usage: bun rebuild/lab/run.ts --browser=chrome|safari|firefox|webkit-host --cases=<cases.ndjson> --out=<dir> [--limit=N] [--family=substr] [--chunk=N] [--predictor=<file>] [--stall-ms=N] [--order=file|reverse|shuffle:<seed>] [--allow-safari-frontmost] [--predict-only] [--chrome-apple-languages=<tag>[,<tag>...] --chrome-accept-languages=<list>]'
+const KNOWN = ['browser', 'cases', 'out', 'limit', 'family', 'chunk', 'predictor', 'stall-ms', 'order', 'chrome-apple-languages', 'chrome-accept-languages', 'part-ms', 'part-cases', 'parts-from']
+const USAGE = 'Usage: bun rebuild/lab/run.ts --browser=chrome|safari|firefox|webkit-host --cases=<cases.ndjson> --out=<dir> [--limit=N] [--family=substr] [--chunk=N] [--predictor=<file>] [--stall-ms=N] [--order=file|reverse|shuffle:<seed>] [--part-ms=N] [--part-cases=N] [--parts-from=<run.json>] [--record-measurements] [--allow-safari-frontmost] [--predict-only] [--chrome-apple-languages=<tag>[,<tag>...] --chrome-accept-languages=<list>]'
 const args = new Map<string, string>()
 // Opens the Safari lab window without waiting for Safari to leave the front (see launchSafari).
 let allowSafariFrontmost = false
 // Records predictions (and painted lines) without observing native layout: each row's native is { skipped }. score.ts
 // --native-rows scores such rows against another run's native observations of the same cases.
 let predictOnly = false
+// Stores every Canvas measureText call and dictionary segmentation of every case beside the rows (record.ts), for offline
+// checks of another library build against the same browser answers (measurements.ts).
+let recordMeasurements = false
 for (const raw of process.argv.slice(2)) {
   if (raw === '--allow-safari-frontmost') {
     allowSafariFrontmost = true
@@ -42,6 +44,10 @@ for (const raw of process.argv.slice(2)) {
   }
   if (raw === '--predict-only') {
     predictOnly = true
+    continue
+  }
+  if (raw === '--record-measurements') {
+    recordMeasurements = true
     continue
   }
   const match = /^--([a-z-]+)=(.*)$/s.exec(raw)
@@ -66,6 +72,14 @@ function positiveInteger(name: string, fallback: number): number {
 const limit = positiveInteger('limit', Number.MAX_SAFE_INTEGER)
 const chunkSize = positiveInteger('chunk', 25)
 const stallMs = positiveInteger('stall-ms', 120_000)
+// Parts: a run's cases go through one browser process after another, each a fresh one (see "Parts" below). A part ends after
+// --part-cases cases, or once it has run for --part-ms less the run's longest chunk. Installed Safari gets 5-minute parts
+// unless told otherwise: WebKit stops a hidden page's process once its CPU use, averaged over 8 minutes, passes the limit.
+// --parts-from=<run.json> starts parts at the rows where that run of the same cases did, so two browsers see every case
+// after the same history (installed Safari's timed parts, repeated in webkit-host).
+const partCases = positiveInteger('part-cases', Number.MAX_SAFE_INTEGER)
+const partsFrom = args.get('parts-from')
+const partMs = positiveInteger('part-ms', browser === 'safari' && partsFrom === undefined ? 300_000 : Number.MAX_SAFE_INTEGER)
 const familyFilter = args.get('family')
 const predictorPath = resolve(args.get('predictor') ?? join(LAB_DIR, 'predictor.ts'))
 // The order the selected cases run in: the file's, reversed, or shuffled by a seeded generator. It applies before cases
@@ -164,6 +178,13 @@ const casesByContext = new Map<string, Case[]>()
 }
 const cases: Case[] = [...casesByContext.values()].flat()
 if (cases.length === 0) fail('No cases selected')
+// Rows at which --parts-from's run started its parts.
+const givenPartStarts: number[] = []
+if (partsFrom !== undefined) {
+  const other = JSON.parse(readFileSync(resolve(partsFrom), 'utf8')) as { order: string; totals: { selected: number }; parts?: Array<{ firstRow: number }> }
+  if (other.totals.selected !== cases.length || other.order !== order || other.parts === undefined) fail(`${partsFrom} ran ${other.totals.selected} cases in order ${other.order}${other.parts === undefined ? ' without recording parts' : ''}; this run has ${cases.length} in order ${order}`)
+  for (let i = 0; i < other.parts.length; i++) if (other.parts[i]!.firstRow > 0) givenPartStarts.push(other.parts[i]!.firstRow)
+}
 {
   // Fixture bytes are checked once here; the page loads them as FontFace objects.
   const used = new Set(cases.flatMap(fixtureFamilies))
@@ -185,7 +206,14 @@ function asciiJsonResponse(value: unknown): Response {
   return new Response(body, { headers: { 'content-type': 'application/json; charset=utf-8' } })
 }
 
-// The build the run observes, from the app bundles, before launch (browser-build.ts).
+// The app the run launches and the build it observes, from the app bundles, before launch (browser-build.ts). Chrome and
+// Firefox are the lab's pinned copies, never the installed apps.
+let app: ReturnType<typeof labApp>
+try {
+  app = labApp(browser)
+} catch (error) {
+  fail(error instanceof Error ? error.message : String(error))
+}
 const build = readBuild(browser)
 
 // The browser process's languages (languages.ts): launch arguments and prefs, the OS settings read before launch, and the
@@ -203,7 +231,8 @@ const languages: ProcessLanguages = derivedLanguages(browser, undefined, chromeL
 
 // ---- Browser sessions ----
 
-type Session = { pid: number | null; close: () => Promise<void> }
+// expectExit: the page is about to finish (a 'retire' or 'done' title ends webkit-host), so an exit is no failure.
+type Session = { pid: number | null; close: () => Promise<void>; expectExit?: () => void }
 
 function isAlive(pid: number): boolean {
   try {
@@ -291,14 +320,14 @@ async function launchApp(app: string, executable: string, marker: string, profil
 // with no window, and the lab opens its one window through the DevTools protocol with Target.createTarget { newWindow,
 // background }, which Chrome shows inactive (NavigateParams kShowWindowInactive). The protocol is used for nothing
 // else; the page drives itself as in the other browsers.
-async function launchChrome(url: string, runId: string): Promise<Session> {
-  const profile = join(PROFILES_DIR, `lab-chrome-${runId}`)
+async function launchChrome(url: string): Promise<Session> {
+  const profile = join(PROFILES_DIR, `lab-chrome-${partTag()}`)
   mkdirSync(join(profile, 'Default'), { recursive: true })
   // Profile prefs Chrome reads at startup: the accept languages (types.ts ProcessLanguages.launch).
   const prefs = languages.launch!.prefs
   writeFileSync(join(profile, 'Default', 'Preferences'), JSON.stringify({ intl: { accept_languages: prefs['intl.accept_languages'], selected_languages: prefs['intl.selected_languages'] } }))
-  const session = await launchApp(CHROME_APP, `${CHROME_APP}/Contents/MacOS/Google Chrome`, `--user-data-dir=${profile}`, profile, [
-    `--user-data-dir=${profile}`, '--no-first-run', '--no-default-browser-check', '--disable-sync', '--disable-extensions',
+  const session = await launchApp(app!.path, `${app!.path}/Contents/MacOS/Google Chrome`, `--user-data-dir=${profile}`, profile, [
+    `--user-data-dir=${profile}`, ...CHROME_PIN_ARGS, '--no-first-run', '--no-default-browser-check', '--disable-sync', '--disable-extensions',
     '--disable-component-update', '--disable-background-timer-throttling', '--disable-backgrounding-occluded-windows',
     '--disable-renderer-backgrounding', '--window-size=1200,900', '--no-startup-window', '--remote-debugging-port=0',
     ...languages.launch!.arguments,
@@ -350,8 +379,8 @@ async function openBackgroundChromeWindow(profile: string, url: string): Promise
   }
 }
 
-function launchFirefox(url: string, runId: string): Promise<Session> {
-  const profile = join(PROFILES_DIR, `lab-firefox-${runId}`)
+function launchFirefox(url: string): Promise<Session> {
+  const profile = join(PROFILES_DIR, `lab-firefox-${partTag()}`)
   mkdirSync(profile, { recursive: true })
   const prefs: Array<[string, boolean | string]> = [
     ['browser.shell.checkDefaultBrowser', false], ['browser.aboutwelcome.enabled', false],
@@ -359,10 +388,10 @@ function launchFirefox(url: string, runId: string): Promise<Session> {
     ['startup.homepage_welcome_url.additional', ''], ['datareporting.policy.firstRunURL', ''],
     ['datareporting.policy.dataSubmissionPolicyBypassNotification', true], ['toolkit.telemetry.reportingpolicy.firstRun', false],
     ['browser.sessionstore.resume_from_crash', false], ['dom.timeout.enable_budget_timer_throttling', false],
-    ...FIREFOX_LANGUAGE_PREFS,
+    ...FIREFOX_PIN_PREFS, ...FIREFOX_LANGUAGE_PREFS,
   ]
   writeFileSync(join(profile, 'user.js'), prefs.map(([name, value]) => `user_pref(${JSON.stringify(name)}, ${JSON.stringify(value)});\n`).join(''))
-  return launchApp(FIREFOX_APP, `${FIREFOX_APP}/Contents/MacOS/firefox`, ` --profile ${profile} `, profile,
+  return launchApp(app!.path, `${app!.path}/Contents/MacOS/firefox`, ` --profile ${profile} `, profile,
     ['--new-instance', '--profile', profile, url])
 }
 
@@ -395,7 +424,7 @@ function backgroundAppleScript(lines: string[]): string {
 // back afterwards doesn't undo that. So the lab window is only created while Safari is in the background, unless
 // --allow-safari-frontmost is given: approved by the maintainer on 2026-09-16, it skips the wait and opens the window
 // over the user's windows while they use Safari. The default still waits.
-async function launchSafari(url: string, runId: string, baseUrl: string): Promise<Session> {
+async function launchSafari(url: string, baseUrl: string): Promise<Session> {
   if (allowSafariFrontmost) console.log(`[lab] safari: --allow-safari-frontmost; not waiting (frontmost app: ${frontmostApp() ?? 'unknown'})`)
   const waitStart = Date.now()
   for (let announced = false; !allowSafariFrontmost && frontmostApp() === 'Safari';) {
@@ -404,7 +433,7 @@ async function launchSafari(url: string, runId: string, baseUrl: string): Promis
     announced = true
     await Bun.sleep(2_000)
   }
-  const marker = `about:blank#pretext-lab-${runId}`
+  const marker = `about:blank#pretext-lab-${partTag()}`
   const windowId = Number.parseInt(backgroundAppleScript([
     'tell application "Safari"',
     `make new document with properties {URL:${JSON.stringify(marker)}}`,
@@ -466,6 +495,9 @@ async function launchWebKitHost(url: string): Promise<Session> {
   const exited = (ms: number): Promise<boolean> => Promise.race([host.exited.then(() => true), Bun.sleep(ms).then(() => false)])
   return {
     pid: host.pid,
+    expectExit() {
+      closing = true
+    },
     async close() {
       closing = true
       if (await exited(2_000)) return
@@ -500,7 +532,9 @@ function portInUse(port: number): boolean {
 }
 
 type PageRow = Omit<LabRow, 'family' | 'browser' | 'build' | 'languages' | 'case'>
-type Pending = { seq: number; start: number; end: number; sends: number }
+type Pending = { seq: number; start: number; end: number; sends: number; sentAt: number }
+// One part of the run: the rows one browser process observed.
+type Part = { index: number; reason: 'start' | 'cases' | 'time' | 'given'; firstRow: number; rows: number; startedAt: string; ms: number }
 
 const runId = randomUUID()
 const startedAt = new Date()
@@ -522,6 +556,16 @@ let navigationsWithoutProgress = 0
 let lastActivity = Date.now()
 // When the page first asked for work, so launch time and case throughput can be told apart.
 let firstStepAt: number | null = null
+// Parts finished so far, and the one running.
+const parts: Part[] = []
+let part: { reason: Part['reason']; firstRow: number; startedAt: number; firstStep: boolean } = { reason: 'start', firstRow: 0, startedAt: Date.now(), firstStep: true }
+let longestChunkMs = 0
+let baseUrl = ''
+// Names the running part's profile or Safari tab.
+function partTag(): string {
+  return `${runId}-p${parts.length}`
+}
+const measurementTotals = { cases: 0, contexts: 0, calls: 0, segmentations: 0, libraryLogDisagrees: 0 }
 let settle: { resolve: () => void; reject: (error: Error) => void } | null = null
 const completion = new Promise<void>((resolve, reject) => { settle = { resolve, reject } })
 completion.catch(() => {})
@@ -564,29 +608,36 @@ function writeRows(rows: PageRow[], start: number): void {
 }
 
 async function step(request: Request): Promise<Response> {
-  const body = await request.json() as { runId: string; pageLang: string; fonts: string[]; navigatorLanguages?: string[]; seq: number | null; rows: PageRow[] }
+  const body = await request.json() as { runId: string; pageLang: string; fonts: string[]; navigatorLanguages?: string[]; seq: number | null; rows: PageRow[]; measurements?: CaseMeasurements[] }
   if (body.runId !== runId) return new Response('Inactive run', { status: 409 })
-  if (firstStepAt === null) {
-    firstStepAt = Date.now()
+  // The first step of every part checks the browser process's languages; the run's first step records them.
+  if (part.firstStep) {
+    part.firstStep = false
+    const first = firstStepAt === null
+    firstStepAt ??= Date.now()
     // A renderer runs now; its --lang is Chrome's application locale.
     if (browser === 'chrome') {
       if (chromePid === null) throw new Error('Chrome asked for work before its process was known')
       const read = chromeUiLanguage(chromePid)
+      if (!first && (languages.given.engine !== 'blink' || languages.given.uiLanguage !== read.value)) throw new Error(`Part ${parts.length}: Chrome's renderers run under --lang=${read.value}; the run's first part read ${JSON.stringify(languages.given)}`)
       languages.given = { engine: 'blink', uiLanguage: read.value }
-      languages.derivation.push(`read --lang=${read.value} from ${read.renderers} renderer process${read.renderers === 1 ? '' : 'es'}`)
+      if (first) languages.derivation.push(`read --lang=${read.value} from ${read.renderers} renderer process${read.renderers === 1 ? '' : 'es'}`)
     }
     // WebKit's process languages were derived before launch; the first page only checks them (languages.ts webkitLanguageCheck).
     if ((browser === 'safari' || browser === 'webkit-host') && languages.given.engine === 'webkit') {
       const shown = body.navigatorLanguages ?? []
       const problem = webkitLanguageCheck(languages.given.preferredLanguages, shown)
       if (problem !== null) throw new Error(problem)
-      languages.derivation.push(`checked: navigator.languages ${JSON.stringify(shown)} shows the first given entry`)
+      if (first) languages.derivation.push(`checked: navigator.languages ${JSON.stringify(shown)} shows the first given entry`)
     }
   }
   if (body.seq !== null) {
     if (pending === null || body.seq !== pending.seq) throw new Error(`Page acknowledged chunk ${body.seq}; pending is ${pending?.seq ?? 'none'}`)
     if (!Array.isArray(body.rows) || body.rows.length !== pending.end - pending.start) throw new Error(`Chunk ${pending.seq} returned ${body.rows?.length} rows; expected ${pending.end - pending.start}`)
+    if (recordMeasurements && (!Array.isArray(body.measurements) || body.measurements.length !== body.rows.length)) throw new Error(`Chunk ${pending.seq} returned ${body.measurements?.length} measurement records for ${body.rows.length} rows`)
     writeRows(body.rows, pending.start)
+    if (recordMeasurements) await writeMeasurements(body.measurements!, pending.start)
+    longestChunkMs = Math.max(longestChunkMs, Date.now() - pending.sentAt)
     totals.chunks++
     next = pending.end
     pending = null
@@ -603,6 +654,15 @@ async function step(request: Request): Promise<Response> {
     settle?.resolve()
     return Response.json({ kind: 'done' })
   }
+  // A part ends only on an acknowledged chunk, so every part makes progress.
+  if (body.seq !== null && pending === null) {
+    const reason = givenPartStarts.includes(next) ? 'given' : next - part.firstRow >= partCases ? 'cases' : Date.now() - part.startedAt + longestChunkMs > partMs ? 'time' : null
+    if (reason !== null) {
+      session?.expectExit?.()
+      setTimeout(() => { nextPart(reason).catch(stopRun) }, 0)
+      return Response.json({ kind: 'retire' })
+    }
+  }
   const start = pending?.start ?? next
   const lang = cases[start]!.pageLang
   const fonts = fixtureFamilies(cases[start]!)
@@ -614,11 +674,79 @@ async function step(request: Request): Promise<Response> {
   }
   if (pending === null) {
     let end = start
-    while (end < cases.length && end - start < chunkSize && contextKey(cases[end]!.pageLang, fixtureFamilies(cases[end]!)) === key) end++
-    pending = { seq: seqCounter++, start, end, sends: 0 }
+    // A chunk never runs past its part's --part-cases or the next --parts-from start.
+    const size = Math.min(chunkSize, part.firstRow + partCases - start, ...givenPartStarts.filter(row => row > start).map(row => row - start))
+    while (end < cases.length && end - start < size && contextKey(cases[end]!.pageLang, fixtureFamilies(cases[end]!)) === key) end++
+    pending = { seq: seqCounter++, start, end, sends: 0, sentAt: Date.now() }
   }
   pending.sends++
-  return asciiJsonResponse({ kind: 'chunk', seq: pending.seq, browser, build: build.engine, languages: languages.given, ...(predictOnly ? { predictOnly: true } : {}), cases: cases.slice(pending.start, pending.end) })
+  return asciiJsonResponse({ kind: 'chunk', seq: pending.seq, browser, build: build.engine, languages: languages.given, ...(predictOnly ? { predictOnly: true } : {}), ...(recordMeasurements ? { recordMeasurements: true } : {}), cases: cases.slice(pending.start, pending.end) })
+}
+
+// ---- Measurements ----
+
+// run.ts --record-measurements: one line per case, in row order, streamed through zstd so neither the driver nor the disk
+// holds them uncompressed (read with `zstd -dc`, or measurements.ts readMeasurements).
+const measurementsPath = join(outDir, `${browser}-measurements.ndjson.zst`)
+const zstd = recordMeasurements ? Bun.spawn(['zstd', '-q', '-f', '-3', '-o', measurementsPath], { stdin: 'pipe', stdout: 'ignore', stderr: 'inherit' }) : null
+
+async function writeMeasurements(records: CaseMeasurements[], start: number): Promise<void> {
+  let text = ''
+  for (let i = 0; i < records.length; i++) {
+    const record = records[i]!
+    if (record.id !== cases[start + i]!.id) throw new Error(`Measurement record ${i} of the chunk is ${record.id}; expected ${cases[start + i]!.id}`)
+    text += JSON.stringify(record) + '\n'
+    measurementTotals.cases++
+    measurementTotals.contexts += record.contexts.length
+    measurementTotals.calls += record.calls.length
+    measurementTotals.segmentations += record.segmentations.length
+    if (record.library !== null && !record.library.agrees) measurementTotals.libraryLogDisagrees++
+  }
+  zstd!.stdin.write(text)
+  await zstd!.stdin.flush()
+}
+
+// ---- Parts ----
+
+// A part is a fresh browser process. Chrome and Firefox relaunch in a new profile and webkit-host is spawned again, after
+// the part before them closed, so a job never runs two instances. Installed Safari gets a new single-tab window, opened
+// before the old tab closes. A new tab's first load is about:blank, which has no site, so WebKit gives the tab a prewarmed
+// or new WebContent process, never a cached one (WebProcessPool.cpp processForSite :1271-1296), and the lab URL then stays
+// in it ("Navigation is treated as same-site", processForNavigationInternal). Checked with cases whose layout depends on
+// the process's history (lab README, "Parts"): right after a part boundary they lay out as in a fresh process, in installed
+// Safari as in webkit-host. ps can't show it: WebContent processes don't name their client, and other jobs' webkit-host
+// processes run beside Safari's. The page learns that its part is over from a 'retire' reply to its last chunk.
+function finishPart(): void {
+  parts.push({ index: parts.length, reason: part.reason, firstRow: part.firstRow, rows: totals.rows - part.firstRow, startedAt: new Date(part.startedAt).toISOString(), ms: Date.now() - part.startedAt })
+}
+
+function labUrl(c: Case): string {
+  return `${baseUrl}/lab?run=${runId}&lang=${encodeURIComponent(c.pageLang)}&fonts=${encodeURIComponent(fixtureFamilies(c).join('|'))}`
+}
+
+function launch(url: string): Promise<Session> {
+  switch (browser) {
+    case 'chrome': return launchChrome(url)
+    case 'firefox': return launchFirefox(url)
+    case 'safari': return launchSafari(url, baseUrl)
+    case 'webkit-host': return launchWebKitHost(url)
+  }
+}
+
+async function nextPart(reason: Part['reason']): Promise<void> {
+  finishPart()
+  part = { reason, firstRow: totals.rows, startedAt: Date.now(), firstStep: true }
+  const old = session
+  if (browser === 'safari') {
+    session = await launch(labUrl(cases[next]!))
+    await old?.close()
+  } else {
+    session = null
+    await old?.close()
+    session = await launch(labUrl(cases[next]!))
+  }
+  lastActivity = Date.now()
+  console.log(`[lab] ${browser}: part ${parts.length} from row ${totals.rows} (${reason})`)
 }
 
 // Installed Safari keeps each lab document runnable while its window is hidden. The lab window opens behind the frontmost
@@ -662,12 +790,15 @@ function pageHtml(lang: string, families: string[]): string {
 }
 
 let server: ReturnType<typeof Bun.serve> | null = null
+// The library bundle the pages ran, by content: rows of two runs come from the same library when these agree.
+let bundleSha256: string | null = null
 let bundleBytes = 0
 process.on('SIGINT', () => stopRun(new Error('Interrupted')))
 process.on('SIGTERM', () => stopRun(new Error('Terminated')))
 try {
   const bundle = await buildBundle()
   bundleBytes = bundle.length
+  bundleSha256 = new Bun.CryptoHasher('sha256').update(bundle).digest('hex')
   const noStore = { 'cache-control': 'no-store' }
   const fetchHandler = async (request: Request): Promise<Response> => {
     lastActivity = Date.now()
@@ -751,16 +882,10 @@ try {
     }
   }
   if (server === null) throw new Error('No free port in 3002-3099')
-  const baseUrl = `http://127.0.0.1:${server.port}`
-  const first = cases[0]!
-  const url = `${baseUrl}/lab?run=${runId}&lang=${encodeURIComponent(first.pageLang)}&fonts=${encodeURIComponent(fixtureFamilies(first).join('|'))}`
-  console.log(`[lab] ${browser}: ${cases.length} cases, ${casesByContext.size} page contexts${predictOnly ? ', predictions only' : ''}; serving ${baseUrl}`)
-  switch (browser) {
-    case 'chrome': session = await launchChrome(url, runId); break
-    case 'firefox': session = await launchFirefox(url, runId); break
-    case 'safari': session = await launchSafari(url, runId, baseUrl); break
-    case 'webkit-host': session = await launchWebKitHost(url); break
-  }
+  baseUrl = `http://127.0.0.1:${server.port}`
+  console.log(`[lab] ${browser}: ${cases.length} cases, ${casesByContext.size} page contexts${predictOnly ? ', predictions only' : ''}${recordMeasurements ? ', recording measurements' : ''}; serving ${baseUrl}`)
+  part = { reason: 'start', firstRow: 0, startedAt: Date.now(), firstStep: true }
+  session = await launch(labUrl(cases[0]!))
   lastActivity = Date.now()
   const watchdog = setInterval(() => {
     if (Date.now() - lastActivity > stallMs) stopRun(new Error(`No page activity for ${stallMs}ms; ${totals.rows}/${cases.length} rows written`))
@@ -787,13 +912,25 @@ try {
   }
   server?.stop(true)
   closeSync(rowsFd)
+  finishPart()
+  if (zstd !== null) {
+    zstd.stdin.end()
+    const code = await zstd.exited
+    if (code !== 0) errors.push(`zstd exited with code ${code} writing ${measurementsPath}`)
+    if (measurementTotals.cases !== totals.rows) errors.push(`Wrote ${measurementTotals.cases} measurement records for ${totals.rows} rows`)
+  }
   const finishedAt = new Date()
   writeFileSync(runPath, JSON.stringify({
     status: errors.length === 0 ? 'ok' : 'error',
     errors,
-    browser, build, languages, runId, casesFile: resolve(casesPath), rowsFile: rowsPath, predictor: predictorPath,
-    family: familyFilter ?? null, limit: limit === Number.MAX_SAFE_INTEGER ? null : limit, order, chunkSize, bundleBytes, allowSafariFrontmost,
+    browser, app, build, languages, runId, casesFile: resolve(casesPath), rowsFile: rowsPath, predictor: predictorPath,
+    family: familyFilter ?? null, limit: limit === Number.MAX_SAFE_INTEGER ? null : limit, order, chunkSize, bundleSha256, bundleBytes, allowSafariFrontmost,
     predictOnly,
+    // Parts: the fresh browser processes the run went through, and what ends one (null: nothing but the run's end).
+    partCases: partCases === Number.MAX_SAFE_INTEGER ? null : partCases, partMs: partMs === Number.MAX_SAFE_INTEGER ? null : partMs, partsFrom: partsFrom === undefined ? null : resolve(partsFrom), parts,
+    // run.ts --record-measurements. libraryLogDisagrees: cases whose recorded predict-phase calls differ from the library's own
+    // call log, so their contexts carry no declared settings.
+    measurements: recordMeasurements ? { file: measurementsPath, ...measurementTotals } : null,
     startedAt: startedAt.toISOString(), finishedAt: finishedAt.toISOString(), durationMs: finishedAt.getTime() - startedAt.getTime(),
     // From the start to the page's first request (bundle, launch, page load), then from there to the end.
     launchMs: firstStepAt === null ? null : firstStepAt - startedAt.getTime(),

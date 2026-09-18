@@ -5,11 +5,16 @@
 // src/model.ts only and walks the inline tree itself, so no expected value comes from engine logic
 // (research/TEST-ARCHITECTURE.md §0 rule 1).
 //
-// States (DESIGN.md §9): an edge that is an item edge, a whole item's size, a hyphen's size or a boundary at an item edge
-// is predicted. An edge from a caret position inside an item rests on the cluster advances the library took from Canvas
-// prefix widths: it is limited by a gap the layout reports concerning it (a gap of its line, or a paragraph gap whose `at`
-// meets the code point), and predicted where the layout reports none. Facts no rect reflects are listed as unobservable
-// with their rule. Vertical placement is outside the contract.
+// States (DESIGN.md §9). A rect edge is an item's x plus a position inside the item, and the port reports it as predicted
+// only where the layout says it knows both:
+// - a position inside an item is limited where the layout marks the cluster boundary it rests on as a Canvas stand-in
+//   (`BlinkGlyphCluster.startLimit`, the item's `sizeLimit`), and where a gap the layout reports (a gap of the line, or a
+//   paragraph gap with a range) meets a character whose advance the position sums: the advances from the item's start in
+//   an even-level item, from its end in an odd-level one;
+// - an item's size is limited by its `sizeLimit` or by such a gap on any of its characters, and then the x of everything
+//   to its right on the line is too (every x on the line where the line's offset depends on its width: an RTL block, or
+//   an alignment other than left), since item sizes are ceiled one by one.
+// Facts no rect reflects are listed as unobservable with their rule. Vertical placement is outside the contract.
 import type {
   BlinkGlyphCluster, BlinkItem, BlinkLayout, BlinkMappingUnit, CanvasMeasure, Expected, ExpectedObservation, ExpectedRect, GapName, InlineNode, ObservationPort,
   Paragraph, UnobservableFact,
@@ -17,8 +22,9 @@ import type {
 
 const f32 = Math.fround
 
-// A quad in raw LayoutUnits from the content box's left edge, with whether each edge comes from an item edge.
-type Quad = { line: number; left: number; right: number; leftExact: boolean; rightExact: boolean }
+// A quad in raw LayoutUnits from the content box's left edge, with the condition each edge is limited by, if any.
+type Limit = GapName | null
+type Quad = { line: number; left: number; right: number; leftLimit: Limit; rightLimit: Limit }
 
 type TextItem = Extract<BlinkItem, { kind: 'text' | 'tab' }>
 type RunItem = Extract<BlinkItem, { kind: 'text' | 'tab' | 'forced-break' | 'hyphen' }>
@@ -42,9 +48,8 @@ function predicted(value: number): Expected {
   return { state: 'predicted', value }
 }
 
-// An edge inside an item: limited by the gap the layout reports concerning it, else predicted.
-function inside(value: number, gap: GapName | null): Expected {
-  return gap === null ? predicted(value) : { state: 'limited', gap, value }
+function expected(value: number, limit: Limit): Expected {
+  return limit === null ? predicted(value) : { state: 'limited', gap: limit, value }
 }
 
 // The layout's paragraph gaps with source ranges, by 64-unit blocks of the offsets they cover: a range [start, end) sits
@@ -93,14 +98,10 @@ function gapConcerning(layout: BlinkLayout, index: GapIndex, line: number, s: nu
 }
 
 // DOMRect::FromRectF(quad.BoundingBox()): x is the left edge, width the float difference of the edges.
-function rectOf(q: Quad, zoom: number, gap: GapName | null = null): ExpectedRect {
+function rectOf(q: Quad, zoom: number): ExpectedRect {
   const left = css(q.left, zoom)
   const width = f32(css(q.right, zoom) - left)
-  return {
-    line: q.line,
-    x: q.leftExact ? predicted(left) : inside(left, gap),
-    width: q.leftExact && q.rightExact ? predicted(width) : inside(width, gap),
-  }
+  return { line: q.line, x: expected(left, q.leftLimit), width: expected(width, q.leftLimit ?? q.rightLimit) }
 }
 
 // The grapheme index of text_content offset x inside an item: CharacterBreakIterator's cluster list over the run
@@ -122,14 +123,20 @@ function numGraphemes(item: TextItem, start: number, end: number): number {
   return graphemeIndex(item, end - 1) - graphemeIndex(item, start) + 1
 }
 
+// Per text item, the limit of each cluster boundary's position from the item's left edge: boundary j is the start of
+// cluster j, boundary n the item's end. An even-level item sums the advances before the boundary and an odd-level one
+// those after it, so a gap on a character carries to every boundary past it in that direction; the layout's own marks
+// say which boundaries and whether the item's size are stand-ins.
+type ItemLimits = { boundaries: Limit[]; size: Limit }
+
 // ShapeResult::CaretPositionForOffset (shape_result.cc:735-741, 696-733, 228-349) for an item's shape result as one run:
-// float32 zoomed px from the item's left edge.
-function caret(item: TextItem, offset: number, adjust: 'start' | 'end'): number {
+// float32 zoomed px from the item's left edge, and the limit of the boundaries it rests on.
+function caret(item: TextItem, limits: ItemLimits, offset: number, adjust: 'start' | 'end'): { value: number; limit: Limit } {
   const rtl = (item.level & 1) === 1
   const clusters = item.clusters
   let total = 0
   for (let c = 0; c < clusters.length; c++) total += clusters[c]!.advance
-  if (offset === item.textEnd) return rtl ? 0 : f32(total / 65536)
+  if (offset === item.textEnd) return rtl ? { value: 0, limit: null } : { value: f32(total / 65536), limit: limits.size }
   let index = 0
   while (!(clusters[index]!.textStart <= offset && offset < clusters[index]!.textEnd)) index++
   const cluster: BlinkGlyphCluster = clusters[index]!
@@ -140,56 +147,54 @@ function caret(item: TextItem, offset: number, adjust: 'start' | 'end'): number 
   let advance = cluster.advance
   let atStart = offset === cluster.textStart
   const graphemes = cluster.graphemeStarts.length
+  // How many shares of the cluster's advance the position adds to the advances left of the cluster: the graphemes before
+  // the offset, one more for an end edge past a grapheme's start, counted from the right in RTL (:296-349).
+  let shares = 0
   if (graphemes > 1) {
     const next = offset + 1
     const toOffset = numGraphemes(item, cluster.textStart, next) - 1
     if (offset > item.textStart) atStart = numGraphemes(item, offset - 1, next) !== 1
     advance = Math.trunc(advance / graphemes)
-    accumulated += advance * (rtl ? graphemes - toOffset - 1 : toOffset)
+    shares = rtl ? graphemes - toOffset - 1 : toOffset
   }
-  if (!atStart && adjust === 'end') accumulated += rtl ? -advance : advance
-  if (rtl) accumulated += advance
-  return f32(accumulated / 65536)
+  if (!atStart && adjust === 'end') shares += rtl ? -1 : 1
+  if (rtl) shares += 1
+  accumulated += advance * shares
+  // Without a share the value rests on the cluster's left boundary alone; with the whole advance of a one-grapheme
+  // cluster on its right boundary alone; otherwise on both.
+  const left = limits.boundaries[rtl ? index + 1 : index]!
+  const right = limits.boundaries[rtl ? index : index + 1]!
+  const limit = shares === 0 ? left : graphemes === 1 ? right : left ?? right
+  return { value: f32(accumulated / 65536), limit }
 }
 
 // FragmentItem::LocalRect with LineLeftAndRightForOffsets (fragment_item.cc:1201-1235, 1132-1199), relative to the item.
-function localRect(item: RunItem, a: number, b: number, rtlStyle: boolean): { left: number; right: number; leftExact: boolean; rightExact: boolean } {
+function localRect(item: RunItem, limits: ItemLimits | null, a: number, b: number, rtlStyle: boolean): { left: number; right: number; leftLimit: Limit; rightLimit: Limit } {
   switch (item.kind) {
     case 'hyphen':
-      return { left: 0, right: item.inlineSize, leftExact: true, rightExact: true }
+      return { left: 0, right: item.inlineSize, leftLimit: null, rightLimit: null }
     case 'forced-break': {
-      if (a === item.textStart && b === item.textEnd) return { left: 0, right: item.inlineSize, leftExact: true, rightExact: true }
+      if (a === item.textStart && b === item.textEnd) return { left: 0, right: item.inlineSize, leftLimit: null, rightLimit: null }
       // Flow control without a shape result: 0 or the item's size, 0 in an RTL style.
       const s = a === item.textStart || rtlStyle ? 0 : item.inlineSize
       const e = b === item.textStart || rtlStyle ? 0 : item.inlineSize
-      return { left: Math.min(s, e), right: Math.max(s, e), leftExact: true, rightExact: true }
+      return { left: Math.min(s, e), right: Math.max(s, e), leftLimit: null, rightLimit: null }
     }
     case 'text': case 'tab': {
-      if (a === item.textStart && b === item.textEnd) return { left: 0, right: item.inlineSize, leftExact: true, rightExact: true }
-      const fs = caret(item, a, 'start')
-      const fe = caret(item, b, 'end')
+      const size = limits === null ? null : limits.size
+      if (a === item.textStart && b === item.textEnd) return { left: 0, right: item.inlineSize, leftLimit: null, rightLimit: size }
+      const none: ItemLimits = { boundaries: new Array<Limit>(item.clusters.length + 1).fill(null), size: null }
+      const cs = caret(item, limits ?? none, a, 'start')
+      const ce = caret(item, limits ?? none, b, 'end')
+      const fs = cs.value
+      const fe = ce.value
       // LayoutUnit::FromFloatEncompassRound (layout_unit.h:164-184).
       let s: number
       let e: number
-      let sCeil: boolean
-      let eCeil: boolean
-      if (fs < fe) { s = floor64(fs); e = ceil64(fe); sCeil = false; eCeil = true } else if (fs > fe) { s = ceil64(fs); e = floor64(fe); sCeil = true; eCeil = false } else { s = floor64(fs); e = s; sCeil = false; eCeil = false }
-      const sExact = edgeExact(item, a, sCeil)
-      const eExact = edgeExact(item, b, eCeil)
-      return s <= e ? { left: s, right: e, leftExact: sExact, rightExact: eExact } : { left: e, right: s, leftExact: eExact, rightExact: sExact }
+      if (fs < fe) { s = floor64(fs); e = ceil64(fe) } else if (fs > fe) { s = ceil64(fs); e = floor64(fe) } else { s = floor64(fs); e = s }
+      return s <= e ? { left: s, right: e, leftLimit: cs.limit, rightLimit: ce.limit } : { left: e, right: s, leftLimit: ce.limit, rightLimit: cs.limit }
     }
   }
-}
-
-// Whether a rounded caret edge is an edge of the item's box, whatever the Canvas advances inside: a caret of 0 (the LTR
-// start, the RTL end), or the caret at the other end, the shape result's float width, when it is rounded up to the item's
-// size (SnappedWidth, shape_result_view.h:124). Floored, that float edge rests on the advances the library summed
-// (the lam-alef ligature a font merges in c-0f4d71d14a32dd6c; float32 sums past 256 zoomed px in c-828626c7b8dcd332).
-function edgeExact(item: TextItem, offset: number, ceiled: boolean): boolean {
-  const rtl = (item.level & 1) === 1
-  const zero = rtl ? offset === item.textEnd : offset === item.textStart
-  const full = rtl ? offset === item.textStart : offset === item.textEnd
-  return zero || (full && ceiled)
 }
 
 // OffsetMapping lookups over one text node's units in DOM order (offset_mapping.cc:278-299, 405-459).
@@ -233,7 +238,52 @@ function mapRange(units: BlinkMappingUnit[], s: number, e: number): [number, num
   return [ts, q === null || q <= p ? ts : textContentOffset(units, q)]
 }
 
-type ItemRef = { line: number; index: number; item: RunItem }
+// An item of a run with the limits of the positions inside it (text and tab items) and the line's x limit.
+type ItemRef = { line: number; index: number; item: RunItem; limits: ItemLimits | null; xLimit: (x: number) => Limit }
+
+// The source range of text_content [t0, t1) of a run on a line, from the line's mapping units; null when no source unit maps
+// there (a unit Blink generated).
+function sourceRangeOf(mapping: BlinkMappingUnit[], run: number, t0: number, t1: number): [number, number] | null {
+  let s = Infinity
+  let e = -Infinity
+  for (let i = 0; i < mapping.length; i++) {
+    const u = mapping[i]!
+    if (u.run !== run || u.collapsed || u.textEnd <= t0 || u.textStart >= t1 || u.start === u.end) continue
+    s = Math.min(s, u.start + (Math.max(t0, u.textStart) - u.textStart))
+    e = Math.max(e, u.start + (Math.min(t1, u.textEnd) - u.textStart))
+  }
+  return s < e ? [s, e] : null
+}
+
+function itemLimits(layout: BlinkLayout, index: GapIndex, line: number, item: TextItem, mapping: BlinkMappingUnit[]): ItemLimits {
+  const clusters = item.clusters
+  const n = clusters.length
+  const rtl = (item.level & 1) === 1
+  // The gap the layout reports on each cluster's characters.
+  const gapOf: Limit[] = []
+  for (let c = 0; c < n; c++) {
+    const range = sourceRangeOf(mapping, item.run, clusters[c]!.textStart, clusters[c]!.textEnd)
+    gapOf.push(range === null ? null : gapConcerning(layout, index, line, range[0], range[1]))
+  }
+  const structural = (j: number): Limit => (j < n ? clusters[j]!.startLimit : item.kind === 'text' ? item.sizeLimit : undefined) ?? null
+  const boundaries = new Array<Limit>(n + 1).fill(null)
+  let carried: Limit = null
+  if (!rtl) {
+    for (let j = 1; j <= n; j++) {
+      carried = carried ?? gapOf[j - 1]!
+      boundaries[j] = carried ?? structural(j)
+    }
+  } else {
+    // total − pos(j): the clusters from j on, the boundary itself and the item's end.
+    for (let j = n - 1; j >= 0; j--) {
+      carried = carried ?? gapOf[j]!
+      boundaries[j] = carried ?? structural(j) ?? structural(n)
+    }
+  }
+  let size: Limit = structural(n)
+  for (let c = 0; c < n && size === null; c++) size = gapOf[c]!
+  return { boundaries, size }
+}
 
 // LayoutText::AbsoluteQuadsForRange (layout_text.cc:556-648) over source offsets [s, e) of one run. `included` collects the
 // hyphen items the range reports.
@@ -245,14 +295,14 @@ function quadsForRange(units: BlinkMappingUnit[], items: ItemRef[], s: number, e
   const boundary: Quad[] = []
   let lastEndIncluded = false
   for (let i = 0; i < items.length; i++) {
-    const { line, item } = items[i]!
-    let rect: { left: number; right: number; leftExact: boolean; rightExact: boolean }
+    const { line, item, limits, xLimit } = items[i]!
+    let rect: { left: number; right: number; leftLimit: Limit; rightLimit: Limit }
     let isBoundary: boolean
     switch (item.kind) {
       case 'hyphen':
         // "Hyphens. Include if the last end was included." (:616-621)
         if (!lastEndIncluded) continue
-        rect = localRect(item, 0, 0, rtlStyle)
+        rect = localRect(item, null, 0, 0, rtlStyle)
         isBoundary = false
         if (included !== null) included.add(item)
         break
@@ -264,12 +314,14 @@ function quadsForRange(units: BlinkMappingUnit[], items: ItemRef[], s: number, e
         lastEndIncluded = item.textEnd <= te
         const a = Math.max(ts, item.textStart)
         const b = Math.min(te, item.textEnd)
-        rect = localRect(item, a, b, rtlStyle)
+        rect = localRect(item, limits, a, b, rtlStyle)
         isBoundary = a >= b
         break
       }
     }
-    const quad: Quad = { line, left: item.x + rect.left, right: item.x + rect.right, leftExact: rect.leftExact, rightExact: rect.rightExact }
+    // Every edge also rests on the item's x: the sizes of the items to its left on the line.
+    const atItem = xLimit(item.x)
+    const quad: Quad = { line, left: item.x + rect.left, right: item.x + rect.right, leftLimit: atItem ?? rect.leftLimit, rightLimit: atItem ?? rect.rightLimit }
     if (isBoundary) boundary.push(quad)
     else out.push(quad)
   }
@@ -315,15 +367,35 @@ export const observeBlink: ObservationPort<BlinkLayout> = (paragraph: Paragraph,
   // Per element, its own items (inline boxes, atomic inlines, <br>) in line order.
   const elementItems: { line: number; item: BlinkItem }[][] = tree.elements.map(() => [])
   const unobservable: UnobservableFact[] = []
+  const paragraphGaps = gapIndex(layout)
+  const xLimits: ((x: number) => Limit)[] = []
   for (let l = 0; l < layout.lines.length; l++) {
     const line = layout.lines[l]!
     const g = line.geometry
     for (let i = 0; i < g.mapping.length; i++) units[g.mapping[i]!.run]!.push(g.mapping[i]!)
+    // The limits of every text item's positions and size, then the line's: x values right of the first item of limited
+    // size rest on it; every x does where the line's offset depends on the line's width (ApplyTextAlign and the RTL line
+    // offset, inline_layout_algorithm.cc:943-970, length_utils.cc:1607-1655).
+    const limitsOf = new Map<BlinkItem, ItemLimits>()
+    let from = Infinity
+    let lineLimit: Limit = null
+    for (let i = 0; i < g.items.length; i++) {
+      const item = g.items[i]!
+      if (item.kind !== 'text' && item.kind !== 'tab') continue
+      const limits = itemLimits(layout, paragraphGaps, l, item, g.mapping)
+      limitsOf.set(item, limits)
+      if (limits.size !== null && item.x < from) { from = item.x; lineLimit = limits.size }
+    }
+    const leftAnchored = !rtlStyle && (line.align === 'start' || line.align === 'left')
+    const limit = lineLimit
+    const threshold = from
+    const xLimit = (x: number): Limit => limit !== null && (!leftAnchored || x > threshold) ? limit : null
+    xLimits.push(xLimit)
     for (let i = 0; i < g.items.length; i++) {
       const item = g.items[i]!
       switch (item.kind) {
         case 'text': case 'tab': case 'forced-break': case 'hyphen':
-          items[item.run]!.push({ line: l, index: i, item })
+          items[item.run]!.push({ line: l, index: i, item, limits: limitsOf.get(item) ?? null, xLimit })
           break
         case 'inline-box': case 'atomic': case 'br':
           elementItems[item.element]!.push({ line: l, item })
@@ -348,13 +420,12 @@ export const observeBlink: ObservationPort<BlinkLayout> = (paragraph: Paragraph,
   for (let b = 0; b < layout.belowFloats.length; b++) {
     unobservable.push({ line: -1, fact: `belowFloats[${b}]`, rule: 'a refused slot moves the line box down past the floats; only vertical positions show it, which are outside the contract (inline_layout_algorithm.cc:1341-1367)' })
   }
-  const paragraphGaps = gapIndex(layout)
   const nodes: ExpectedRect[][] = []
   const includedHyphens = new Set<BlinkItem>()
   for (let r = 0; r < runCount; r++) {
     const leaf = tree.leaves[r]!
     const quads = leaf.text.length === 0 ? [] : quadsForRange(units[r]!, items[r]!, leaf.start, leaf.start + leaf.text.length, rtlStyle, includedHyphens)
-    nodes.push(quads.map(q => rectOf(q, zoom, gapConcerning(layout, paragraphGaps, q.line, leaf.start, leaf.start + leaf.text.length))))
+    nodes.push(quads.map(q => rectOf(q, zoom)))
   }
   const codePoints: ExpectedObservation['codePoints'] = []
   for (let r = 0; r < runCount; r++) {
@@ -362,7 +433,7 @@ export const observeBlink: ObservationPort<BlinkLayout> = (paragraph: Paragraph,
     for (let k = 0; k < leaf.text.length;) {
       const length = leaf.text.codePointAt(k)! > 0xffff ? 2 : 1
       const offset = leaf.start + k
-      codePoints.push({ offset, length, rects: quadsForRange(units[r]!, items[r]!, offset, offset + length, rtlStyle, includedHyphens).map(q => rectOf(q, zoom, gapConcerning(layout, paragraphGaps, q.line, offset, offset + length))) })
+      codePoints.push({ offset, length, rects: quadsForRange(units[r]!, items[r]!, offset, offset + length, rtlStyle, includedHyphens).map(q => rectOf(q, zoom)) })
       k += length
     }
   }
@@ -386,8 +457,10 @@ export const observeBlink: ObservationPort<BlinkLayout> = (paragraph: Paragraph,
     const element = tree.elements[e]!
     const own = elementItems[e]!
     const rects: ExpectedRect[] = []
+    // An element's rect edges are item and box edges: they rest on the sizes of the items to their left on the line.
     const push = (line: number, left: number, right: number): void => {
-      rects.push(rectOf({ line, left, right, leftExact: true, rightExact: true }, zoom))
+      const xLimit = xLimits[line]!
+      rects.push(rectOf({ line, left, right, leftLimit: xLimit(left), rightLimit: xLimit(right) }, zoom))
     }
     switch (element.node.kind) {
       case 'atomic': case 'br':

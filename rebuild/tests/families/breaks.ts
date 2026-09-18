@@ -31,7 +31,7 @@ export const BREAK_FAMILIES: readonly RuleFamily[] = [
     rules: {
       blink: ['blink/style/lang-empty-null-locale', 'blink/breaks/null-locale-ui-language', 'blink/breaks/rule-file-per-locale', 'blink/breaks/ko-strict-retries-ui-language', 'blink/breaks/icu-following-for-unknown-pairs', 'blink/gap/ui-language'],
       webkit: ['webkit/style/lang-empty-null-locale', 'webkit/breaks/line-tables-per-locale', 'webkit/style/han-lang-specialized-chinese-locale', 'webkit/gap/ui-language'],
-      gecko: ['gecko/gap/ui-language', 'gecko/icu4x/cj-as-id-under-loose-normal', 'gecko/icu4x/normal-ja-zh-wave-dash', 'gecko/icu4x/loose-rules', 'gecko/linebreaker/auto-strictness-is-strict', 'gecko/transform/ja-zh-language-test'],
+      gecko: ['gecko/gap/ui-language', 'gecko/icu4x/cj-as-id-under-loose-normal', 'gecko/icu4x/normal-ja-zh-wave-dash', 'gecko/icu4x/loose-rules', 'gecko/linebreaker/auto-strictness-is-strict', 'gecko/transform/ja-zh-language-test', 'gecko/measure/lang-empty-locale-language'],
     },
     why: 'The break table depends on the locale and the line-break keyword: Blink opens the UI language table for text without a locale (blink-text H15, H16: あぁ strict gives 1 line under <html lang=en> and 2 with no lang anywhere) and retries it for ko strict; WebKit replaces a Han lang; Gecko applies CJ rules under loose and normal. lang="" gives a null locale (blink style resolver; webkit-text H7). Relevant: the paragraph lang including "", the keyword, and text whose breaks the tables disagree on.',
     relevant: [
@@ -175,7 +175,7 @@ export const BREAK_FAMILIES: readonly RuleFamily[] = [
   {
     name: 'clusters',
     rules: {
-      blink: ['blink/breaks/break-character-graphemes', 'blink/breaks/line-break-anywhere-settings', 'blink/breaks/break-all-table'],
+      blink: ['blink/breaks/break-character-graphemes', 'blink/breaks/line-break-anywhere-settings', 'blink/breaks/break-all-table', 'blink/shape/cluster-unit-grapheme'],
       webkit: ['webkit/measure/break-word-complex-graphemes', 'webkit/measure/first-user-perceived-character', 'webkit/breaker/break-rule-anywhere'],
       gecko: ['gecko/glyphs/bengali-ya-phala', 'gecko/glyphs/cluster-boundaries', 'gecko/linebreaker/no-break-inside-cluster', 'gecko/icu4x/anywhere', 'gecko/icu4x/lb9-combining-marks-and-zwj'],
     },

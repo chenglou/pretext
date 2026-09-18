@@ -1,6 +1,6 @@
 // What counts as coverage (rebuild/tests/coverage.ts) on a hand-made registry.
 import { describe, expect, test } from 'bun:test'
-import { buildCoverage, type Coverage, type FamilyEvidence } from './coverage.ts'
+import { buildCoverage, testPresent, type Coverage, type FamilyEvidence } from './coverage.ts'
 import type { FactRecord } from './facts.ts'
 import type { RuleRecord } from './registry.ts'
 
@@ -62,5 +62,13 @@ describe('coverage', () => {
     expect(open.coveredBy).toEqual([])
     expect(open.derivedFamilies.map(value => value.family)).toEqual(['box-edges'])
     expect(coverage.counts['blink']!.derivedOnly).toBe(1)
+  })
+
+  test('a listed test is found by its name, alone or under its describe block as bun prints it', () => {
+    expect(testPresent('tests/coverage.test.ts')).toBe(true)
+    expect(testPresent('tests/coverage.test.ts :: a listed test is found by its name')).toBe(true)
+    expect(testPresent('tests/coverage.test.ts :: coverage > a listed test is found by its name')).toBe(true)
+    expect(testPresent(`tests/coverage.test.ts :: coverage > no test ${'has this name'}`)).toBe(false)
+    expect(testPresent('tests/no-such.test.ts :: coverage')).toBe(false)
   })
 })

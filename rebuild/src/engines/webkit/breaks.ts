@@ -398,6 +398,22 @@ export function mayBreakInBetween(previousText: string, previousIs8Bit: boolean,
   return findNextBreakablePosition(f, 0, style) === 0
 }
 
+// mayBreakInBetween's iterator text is the previous box's last two code units and the next box's text (TBI:99-147), so a
+// box edge inside a Thai, Lao, Khmer or Myanmar word starts a dictionary range mid-word. Where that range starts with a
+// combining mark the word segmenter stands in badly (dictionaryRangeStartsWithMark). Returns the range's end as an offset
+// into the next box's text, or null (held-out c-964d495e90c81b81: U+0E49 U+0E27 before the next node's `ยกั`, where WebKit
+// breaks between the nodes and the stand-in doesn't).
+export function inBetweenRangeStartingWithMark(previousText: string, nextText: string, nextLocale: string, mode: LineBreakMode, icuDefaultLocale: string): number | null {
+  const prior = previousText.slice(Math.max(0, previousText.length - 2))
+  if (prior.length === 0) return null
+  const ranges = dictionaryRangesStartingWithMark(lineRules(nextLocale, mode, icuDefaultLocale).rules, prior + nextText)
+  for (let k = 0; k < ranges.length; k++) {
+    const [start, end] = ranges[k]!
+    if (start < prior.length && end > prior.length) return end - prior.length
+  }
+  return null
+}
+
 // InlineContentBreaker.cpp:124-137. Callers pass UTF-16 code units.
 export function canBreakBefore(c: number, lineBreak: LineBreak): boolean {
   if (lineBreak !== 'loose' && (c === 0x2010 || c === 0x2013)) return false

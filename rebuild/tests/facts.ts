@@ -21,6 +21,7 @@ import { readFileSync, writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import type { ProbeOutput } from '../probes/types.ts'
 import { readNdjson, writeNdjson } from './derive.ts'
+import { probeSpec } from './registry.ts'
 
 export const FACT_FORMAT = 'pretext-fact/1'
 export type FactVerdict = 'holds' | 'fails' | 'undecided' | 'precondition-failed' | 'errored'
@@ -31,7 +32,8 @@ export type FactRecord = {
   // `<probe id> :: <check name>`. Provisional: check names still carry measured values in some probes, so a fact can
   // change id between DPRs (research/TEST-ARCHITECTURE.md §4.2).
   fact: string
-  // The probe's spec label ('blink-lines H2'), which registry rules cite.
+  // The probe's spec label ('blink-lines H2'), which registry rules cite. A probe whose spec goes on after a colon
+  // ('gecko-port F12: how pair kerning divides') gives the label before it, as a rule's probe entry does.
   spec: string
   scope: Scope
   verdict: FactVerdict
@@ -72,7 +74,7 @@ export function extractFacts(output: ProbeOutput & { build?: { engine: string; o
   const out: FactRecord[] = []
   const record = (entry: ProbeOutput['results'][number], check: string, verdict: FactVerdict, decisive: unknown): void => {
     out.push({
-      format: FACT_FORMAT, fact: `${entry.id} :: ${check}`, spec: entry.spec, scope, verdict, decisive, supplementary: check.startsWith('supplementary:'),
+      format: FACT_FORMAT, fact: `${entry.id} :: ${check}`, spec: probeSpec(entry.spec), scope, verdict, decisive, supplementary: check.startsWith('supplementary:'),
       probeSha256: sha256(entry.probe), env, observedAt: output.startedAt, run, holdsIn: verdict === 'holds' ? [build] : [],
     })
   }

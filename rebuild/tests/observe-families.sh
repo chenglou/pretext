@@ -1,8 +1,9 @@
 #!/bin/bash
-# Observes the rule families in one browser. derive.ts runs offline steps; every case file it asks for is observed under
-# the shared browser lock with the no-prediction predictor, one short job per file (run.ts records the app bundle build
-# in every row). Once the family cases exist, they run forward and in reverse with the real predictor, and both runs are
-# scored against each other so history-dependent cases are known. One failed launch stops the loop.
+# Observes the rule families in one browser. derive.ts runs offline steps; every case file it asks for is observed with the
+# no-prediction predictor through lab/sharded.ts, which cuts it into shards and runs them at the same time, each under the
+# browser lock in its own browser instance (run.ts records the app bundle build in every row). Once the family cases exist,
+# they run forward and in reverse with the real predictor, and both runs are scored against each other so history-dependent
+# cases are known. One failed job stops the loop, and nothing runs twice.
 #
 #   bash rebuild/tests/observe-families.sh <chrome|webkit-host|firefox> <dir> [seed]
 #
@@ -11,7 +12,8 @@
 #   LAB_RUN_ARGS=...    more run.ts arguments for every job, such as --chrome-apple-languages=en-US --chrome-accept-languages=en-US,en
 #   FINAL_RUNS=native   run the family cases forward and reverse with the no-prediction predictor into final/native-file and
 #                       final/native-reverse, and compare only their native observations: for families whose inputs the
-#                       engine ports don't implement yet
+#                       engine ports don't implement yet, and for derivations made while the library is being changed
+#   SHARDS=N            shards per case file (default: the browser's lock slots)
 set -uo pipefail
 browser=$1
 dir=$2
@@ -19,19 +21,15 @@ seed=${3:-rule-families-20260916}
 families=${FAMILIES:-}
 extra=${LAB_RUN_ARGS:-}
 final_runs=${FINAL_RUNS:-predict}
+shards=${SHARDS:-}
 repo=$(cd "$(dirname "$0")/../.." && pwd)
-lock="$HOME/github/pretext-rebuild/.artifacts/session/with-browser-lock.py"
 cd "$repo" || exit 1
 
 observe() {
   local cases=$1 out=$2 predictor=$3 order=$4 job=$5
   mkdir -p "$out"
   # shellcheck disable=SC2086
-  python3 "$lock" "$job" --max-wait-min=240 -- bun rebuild/lab/run.ts --browser="$browser" --cases="$cases" --out="$out" --predictor="$predictor" --order="$order" $extra
-  local code=$?
-  # A short pause between holds, so other sessions waiting on the lock get a turn.
-  sleep 20
-  return $code
+  bun rebuild/lab/sharded.ts --browser="$browser" --cases="$cases" --out="$out" --job="$job" ${shards:+--shards=$shards} -- --predictor="$predictor" --order="$order" $extra
 }
 
 derive_args=(--browser="$browser" --dir="$dir" --seed="$seed")

@@ -1,6 +1,7 @@
 // Unicode properties Chrome 153 reads through ICU 78.2: Line_Break (break-all), General_Category L, N and M (keep-all),
-// Joining_Type (HarfBuzz's Arabic joining), scripts and paired brackets (ScriptRunIterator), HanKerning types, White_Space
-// and Extended_Pictographic, per code point, from tools/gen-blink-data.ts.
+// Joining_Type (HarfBuzz's Arabic joining), scripts and paired brackets (ScriptRunIterator), HanKerning types, White_Space,
+// Extended_Pictographic, Default_Ignorable_Code_Point, Emoji_Component and General_Category Lm and Sk, per code point, from
+// tools/gen-blink-data.ts.
 import { decodeBase64 } from '../../breaks/icu4x.js'
 import {
   blinkCharPropsBase64, blinkCjkIdeographOrSymbolRanges, blinkCursiveScripts, blinkHanKerningTypes, blinkScriptExtensions, blinkScriptPropsBase64,
@@ -113,6 +114,23 @@ export function isExtendedPictographic(cp: number): boolean {
   return (scriptPropsOf(cp) & 0x400000) !== 0
 }
 
+// Character::IsDefaultIgnorable (character.h:184-189): SHY alone below U+0100, else ICU's Default_Ignorable_Code_Point.
+// HarfBuzz's own set is another one (hb-unicode.hh:170-197, shape.ts isDefaultIgnorableHarfBuzz).
+export function isDefaultIgnorable(cp: number): boolean {
+  if (cp < 0x100) return cp === 0xad
+  return (scriptPropsOf(cp) & 0x800000) !== 0
+}
+
+// Character::IsEmojiComponent (character.cc:245-247): Emoji_Component.
+export function isEmojiComponent(cp: number): boolean {
+  return (scriptPropsOf(cp) & 0x1000000) !== 0
+}
+
+// U_GET_GC_MASK(c) & (U_GC_M_MASK | U_GC_LM_MASK | U_GC_SK_MASK) (plain_text_node.cc:136-137, character.h:101-104).
+export function isMarkOrModifier(cp: number): boolean {
+  return isMark(cp) || (scriptPropsOf(cp) & 0x2000000) !== 0
+}
+
 // IsCursiveScript (shape_result.cc:977-990) over UScriptCode numbers.
 export function isCursiveScript(script: number): boolean {
   return blinkCursiveScripts.includes(script)
@@ -131,4 +149,9 @@ export function isCjkIdeographOrSymbol(cp: number): boolean {
     else hi = mid - 1
   }
   return ranges[2 * lo]! <= cp && cp <= ranges[2 * lo + 1]!
+}
+
+// Character::IsCjkIdeographOrSymbolBase (character.h:101-104).
+export function isCjkIdeographOrSymbolBase(cp: number): boolean {
+  return isCjkIdeographOrSymbol(cp) && !isMarkOrModifier(cp)
 }

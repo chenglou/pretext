@@ -83,7 +83,10 @@ await forEachPpucdCodePointRange(range => {
 // UScriptCode numbers from ICU 78.2's uscript.h, extension lists in ICU's order (ascending codes, as icu4c 78.3's
 // uscript_getScriptExtensions returns them), Bidi_Paired_Bracket_Type, and East_Asian_Width W, F or H for
 // FixScriptsByEastAsianWidth; White_Space for the script comparison of Canvas strings; Extended_Pictographic, which
-// HarfBuzz reads to merge a ZWJ and the pictograph after it into the previous glyph cluster (hb-ot-shape.cc:466-522).
+// HarfBuzz reads to merge a ZWJ and the pictograph after it into the previous glyph cluster (hb-ot-shape.cc:466-522);
+// Default_Ignorable_Code_Point, which Character::IsDefaultIgnorable reads above U+00FF (character.h:184-189);
+// Emoji_Component and General_Category Lm or Sk, which Canvas's word splitting reads (plain_text_node.cc:115-153,
+// character.h:101-104).
 const USCRIPT_PATH = 'chromium-icu-8cc91d9b/source/common/unicode/uscript.h'
 const USCRIPT_SHA256 = '293adf40390583c1c5394d3dc1794ed1669e8356cdf292ca5eaac145a2a5d1e0'
 const uscriptSource = new TextDecoder().decode(readVerified(resolve(BROWSER_ENGINES, USCRIPT_PATH), USCRIPT_SHA256))
@@ -113,8 +116,10 @@ await forEachPpucdCodePointRange(range => {
   }
   const bpt = range.props.get('bpt') ?? 'n'
   const ea = range.props.get('ea') ?? 'N'
+  const gc = range.props.get('gc') ?? ''
   const flags = (bpt === 'o' ? 1 : 0) | (bpt === 'c' ? 2 : 0) | (ea === 'W' || ea === 'F' || ea === 'H' ? 4 : 0) |
-    (range.props.has('WSpace') ? 8 : 0) | (range.props.has('ExtPict') ? 16 : 0)
+    (range.props.has('WSpace') ? 8 : 0) | (range.props.has('ExtPict') ? 16 : 0) | (range.props.has('DI') ? 32 : 0) |
+    (range.props.has('EComp') ? 64 : 0) | (gc === 'Lm' || gc === 'Sk' ? 128 : 0)
   scriptProps.fill(sc | (list << 8) | (flags << 18), range.first, range.last + 1)
 })
 if (extensionLists.length > 1024) throw new Error('more than 1024 Script_Extensions lists')
@@ -169,6 +174,28 @@ for (let cp = 0; cp < cjkSymbol.length; cp++) {
   if (cjkSymbol[cp] === 1 && (cp + 1 === cjkSymbol.length || cjkSymbol[cp + 1] !== 1)) cjkSymbolRanges.push(cp)
 }
 
+// HarfBuzz's OpenType language system tags per ISO 639 code (hb_ot_tags_from_language, hb-ot-tag.cc:322-420, over
+// ot_languages2 and ot_languages3 of hb-ot-tag-table.hh at Chrome 153's HarfBuzz dfdc088c): which language system of a
+// font a locale's first subtag selects. Longer locales go through hb_ot_tags_from_complex_language first, which isn't
+// generated; the port treats them as unknown where a font has language systems of its own.
+const OT_TAG_PATH = 'harfbuzz-dfdc088c/src/hb-ot-tag-table.hh'
+const OT_TAG_SHA256 = '2aa80e3fe65f262c602e58ef1ece8152cd221cfa1549da5bf0e78d084161a375'
+const otTagSource = new TextDecoder().decode(readVerified(resolve(BROWSER_ENGINES, OT_TAG_PATH), OT_TAG_SHA256))
+const otLanguageTags = new Map<string, string[]>()
+for (const table of ['ot_languages2', 'ot_languages3']) {
+  const start = otTagSource.indexOf(`static const LangTag ${table}[] = {`)
+  if (start < 0) throw new Error(`hb-ot-tag-table.hh has no ${table}`)
+  const body = otTagSource.slice(start, otTagSource.indexOf('};', start))
+  for (const m of body.matchAll(/\{HB_TAG\('(.)','(.)','(.)','(.)'\),\s*(HB_TAG_NONE|HB_TAG\('(.)','(.)','(.)','(.)'\))\s*\}/g)) {
+    const language = (m[1]! + m[2]! + m[3]! + m[4]!).trim()
+    const list = otLanguageTags.get(language) ?? []
+    if (m[5] !== 'HB_TAG_NONE') list.push(m[6]! + m[7]! + m[8]! + m[9]!)
+    otLanguageTags.set(language, list)
+  }
+}
+if (otLanguageTags.size < 900) throw new Error(`only ${otLanguageTags.size} languages parsed from hb-ot-tag-table.hh`)
+const otLanguageFlat = [...otLanguageTags.entries()].sort((a, b) => a[0] < b[0] ? -1 : 1).map(([language, tags]) => `${language}=${tags.join(',')}`).join('|')
+
 const hanKerningFlat: number[] = []
 for (const [cp, type] of [...hanKerning.entries()].sort((a, b) => a[0] - b[0])) if (type !== HAN_OTHER) hanKerningFlat.push(cp, type)
 
@@ -203,8 +230,9 @@ export const blinkHanKerningTypes: readonly number[] = [${hanKerningFlat.join(',
 
 // Runs over U+0000..U+10FFFF as little-endian uint32 pairs (first code point, value), value = UScriptCode (bits 0-7) |
 // Script_Extensions list index << 8 (0: the script alone) | Bidi_Paired_Bracket_Type open 0x40000, close 0x80000 |
-// East_Asian_Width W, F or H 0x100000 | White_Space 0x200000 | Extended_Pictographic 0x400000, from ICU 78.2 ppucd.txt
-// and uscript.h (sha256 ${USCRIPT_SHA256}).
+// East_Asian_Width W, F or H 0x100000 | White_Space 0x200000 | Extended_Pictographic 0x400000 |
+// Default_Ignorable_Code_Point 0x800000 | Emoji_Component 0x1000000 | General_Category Lm or Sk 0x2000000, from ICU 78.2
+// ppucd.txt and uscript.h (sha256 ${USCRIPT_SHA256}).
 export const blinkScriptPropsBase64 = '${base64(scriptPacked)}'
 
 // Script_Extensions lists by index, UScriptCode numbers in ICU's order.
@@ -212,6 +240,10 @@ export const blinkScriptExtensions: readonly (readonly number[])[] = [${extensio
 
 // IsCursiveScript (shape_result.cc:977-990): Arab, Rohg, Mand, Mong, Nkoo, Phag, Syrc as UScriptCode numbers.
 export const blinkCursiveScripts: readonly number[] = [${cursiveScripts.join(',')}]
+
+// HarfBuzz's OpenType language system tags per ISO 639 code, 'code=TAG,TAG|...' (tags keep their trailing spaces), from
+// ot_languages2 and ot_languages3 of hb-ot-tag-table.hh at harfbuzz dfdc088c (sha256 ${OT_TAG_SHA256}).
+export const blinkOtLanguageTags = ${JSON.stringify(otLanguageFlat)}
 
 // Character::IsCjkIdeographOrSymbol as sorted inclusive [first, last] pairs: character_property_data.h (sha256 ${CPD_SHA256}),
 // Emoji_Presentation, and the Extended_Pictographic characters of RGI emoji ZWJ and modifier sequences (emoji-zwj-sequences.txt

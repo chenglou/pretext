@@ -259,8 +259,9 @@ type FontFacts = {
   opticalSizeAxis: boolean | null
   joining: 'opentype' | 'aat' | null
   pairKerning: 'first-advance' | 'split' | null
+  fonts?: readonly ListedFontFacts[]          // optional: one entry per listed family, below
 }
-const UNKNOWN_FONT_FACTS: FontFacts   // every fact null
+const UNKNOWN_FONT_FACTS: FontFacts   // every fact null, no `fonts`
 ```
 
 Engines read facts about the fonts a declaration realizes: which family is primary, whether it maps U+2010, whether it
@@ -296,13 +297,50 @@ What a given fact does:
   adjustment `d`, which moves line edges taken from positions and caret edges inside items (Times New Roman, Helvetica
   Neue and Hoefler Text kern through the legacy table; features `rule/text-align`). `'first-advance'`: all of `d`.
 
+#### Facts per listed family (optional)
+
+```ts
+type ListedFontFacts = {
+  family: string                                       // as the list names it; a generic keyword stands for itself
+  realizes: boolean | null                             // a loaded web font or an installed family
+  coverage: readonly number[] | null                   // [first, last, first, last, ...], sorted, inclusive
+  ligatures: LigatureFacts | null
+  spacingInputs?: readonly number[] | null             // ranges like coverage
+  scriptLookups: readonly (readonly string[])[] | null // ISO 15924 codes, grouped
+}
+type LigatureFacts = { patterns: readonly LigaturePattern[]; complete: boolean; languageSystems: readonly string[] }
+type LigaturePattern = { positions: readonly (readonly string[])[]; exact: boolean; spaced: boolean; everyContext: boolean; acrossMark: boolean | null }
+```
+
+`fonts` has one entry per family of the `font-family` list, in list order, each about the font that family realizes as
+this engine sees it. All of it is optional: `fonts` may be left out, and any field may be null. An engine that doesn't
+get a fact keeps the gap condition it has today, and none of these facts produces a gap of its own. They are properties
+of a font, never expected layout results. The engine's own fallback after the list isn't described: a character no
+listed font covers is drawn by a font these facts don't name, and after an entry whose `realizes` is null nothing is
+known about which later family draws a character.
+
+| Fact | What it says | From | Can narrow or replace |
+|---|---|---|---|
+| `coverage` | the code points the engine finds in the font | Blink asks the cmap, and Core Text for U+2010 and U+2011 only (`harfbuzz_face.cc:210-231`); WebKit asks Core Text for every character, which synthesizes some glyphs (U+2010, U+2011, NBSP, LF, U+2028) and withholds some of the platform UI font's (`GlyphPageCoreText.cpp:51-73`); Gecko reads the cmap and clears a complex script range in an installed font that has neither `morx` nor a GSUB script for it (`CoreTextFontList.cpp:271-336`, `gfxPlatformFontList.cpp:79-155`) | Gecko `font-fallback` at an emergency break after a hyphen (whether the hyphen and the letters around it come from one listed font); WebKit `font-fallback` and `canvas-language` (what no named family draws); Blink `script-context` (which font draws a character, so whose `scriptLookups` apply) |
+| `ligatures` | the character sequences the font's default features draw as one glyph across grapheme clusters: every string made of one alternative per `positions` entry. `spaced`: still a ligature under the features the engine sets for non-zero letter-spacing. `exact`: every such string was shaped. `everyContext`: alone and, for Arabic script, joined on either side. `acrossMark`: with a combining mark after the first character. `complete`: no other ligature exists under the default language system; when false the list can confirm a ligature, never rule one out | the font's GSUB LigatureSubst entries and `morx` ligature subtables, mapped back to characters and shaped: HarfBuzz for Blink, Core Text for WebKit, and for Gecko Core Text where it shapes the font through it (`gfxMacFont.cpp:154-160`), else HarfBuzz | Blink `glyph-clusters` at line and item edges, and positions inside a ligature; Gecko `in-word-prefix`; WebKit `letter-spacing-ligatures` |
+| `spacingInputs` | the characters that can become a glyph at which a lookup starts that belongs to a default-on feature the engine turns off for non-zero letter-spacing: `liga` and `clig` in all three, `calt` in Blink too (`font_features.cc:54-86`; `UnrealizedCoreTextFont.cpp:258-264`; `gfxFont.cpp:675-700`), or their `morx` feature settings. Text holding none of them shapes the same with those features on and off; an empty list says letter-spacing never changes the font's shaping | the coverage of those features' lookups (a lookup acts only where the glyph is in a subtable's coverage) and the glyph classes of those `morx` subtables, mapped back to characters | WebKit `letter-spacing-ligatures`, which fires today on any two adjacent characters under letter-spacing; the same condition in Blink and Gecko where Canvas and the DOM set different features |
+| `scriptLookups` | Unicode scripts grouped by the GSUB and GPOS script records HarfBuzz selects for them; scripts in one group get the same features and lookups under every language system, and a script that isn't listed shares the font's fallback records (`DFLT`, else `dflt`, else `latn`). `[]`: the script never changes the lookups. The shaper, the direction and fallback positioning still follow the script | `hb_ot_layout_table_select_script` (`hb-ot-layout.cc:561-608`) over the script's tags (`hb-ot-tag.cc:36-181`); a table HarfBuzz doesn't apply counts as equal for all scripts (GSUB with `morx`, GPOS under `kerx`; `hb-ot-shape.cc:59-65, 150-185`). null where Core Text shapes | Blink `script-context`: a character Canvas shapes under another script than the paragraph differs only when the two scripts are in different groups of the font that draws it (Arial has no `DFLT`, so Common text falls to `latn` and equals Latin) |
+
+Examples from the lab's table: Georgia and Verdana have no ligature, empty `spacingInputs` and one set of lookups for
+every script. Arial's `liga` lookups start only at alef, reh and lam, and its lam-alef is `rlig`, which letter-spacing
+keeps (`spaced: true`). Amiri and Noto Naskh Arabic draw lam-alef as two glyphs in two clusters. Helvetica Neue's `morx`
+ligates `fi`, `fl`, `ff`, `ffi` and `ffl` under common ligatures (`spaced: false`), and HarfBuzz reads no script from it
+(`scriptLookups: []`).
+
 The keyword defaults of `opticalSizeAxis` aren't name keys. `system-ui` is CSS, each engine resolves it in source to the
 platform UI font, and that font's axis is a recorded browser fact (probes-chrome correction 7, probe cross-cutting 5).
 
 Where the facts come from is the caller's business. The lab takes them from a pinned table per OS build, generated
 offline from the installed fonts and checked by hash (§8.3, stage 3). The table's columns are the monospace trait, cmap
 coverage of U+2010, fvar axes and `morx` against GSUB and GPOS, from the same tools as specs/webkit-gaps.md §2.4 and §3.2,
-specs/blink-gaps.md §5.3 and specs/gecko-gaps.md §3.3. It is keyed by family, weight and style. `lab/predictor.ts`
+specs/blink-gaps.md §5.3 and specs/gecko-gaps.md §3.3, and since ceiling round 3 the whole cmap with Core Text's
+additions, the scripts grouped by lookups, the ligature patterns and the letter-spacing inputs (lab/README.md, "Font
+facts", names the programs). It is keyed by family, weight and style. `lab/predictor.ts`
 attaches facts from `lab/font-facts.json`, the lab's objective table for the fonts its cases use, built by offline
 font-table research (charter boundaries); apps declare their own facts. Atomic inlines carry no font.
 
@@ -930,14 +968,22 @@ with spaces and starts a paragraph after each preserved newline (gecko-text §4.
 
 ### 4.1 Which Canvas
 
-All three engines measure with a main-thread `OffscreenCanvas`:
+Blink and WebKit measure with a main-thread `OffscreenCanvas`, and Gecko with a detached `<canvas>` element where the page
+can create one:
 
 - Blink: a connected `<canvas>` keeps the element's CSS letter and word spacing, feature settings and optical sizing in
   its font description (specs/blink-canvas.md §1.2), and a worker canvas uses the UI language.
 - WebKit: a connected `<canvas>` copies the element's font description (specs/webkit-canvas.md §1.3). It would supply a
   locale, but it needs style updates, and the rest of the description leaks in.
-- Gecko: a connected `<canvas>` quantizes `size / DPR`, measures on a 1/apd grid and sets opsz and `trak` at `size / DPR`
-  (specs/gecko-canvas.md §1.10).
+- Gecko: a `<canvas>` element quantizes `size / DPR`, measures on a 1/apd grid and sets opsz and `trak` at `size / DPR`
+  (specs/gecko-canvas.md §1.10). At the DOM's device font size, size × 60 / apd, that is the DOM's own arithmetic: its
+  font comes from the pres context's font cache at the DOM's size, and its text runs have the page's apd
+  (CanvasRenderingContext2D.cpp:4256-4269, :4353, :7132-7155), so width × apd is the DOM's advance, per glyph rounding,
+  bitmap emoji sizes, synthetic bold and optical sizing included (probes gecko-port F13, F14: 369 of 369 units and rows
+  equal). The element is never connected, so nothing is styled or laid out for it. Without a document
+  (`GeckoEnvironment.canvasElement` absent) the port falls back to an OffscreenCanvas at the CSS size, which shapes at
+  another scale with apd 60 and its own font group, and reports the gaps that leaves (ceiling round 3,
+  specs/gecko-RESULTS.md).
 
 ### 4.2 Context settings
 
@@ -946,7 +992,7 @@ one OffscreenCanvas per distinct settings. Identity matters because Chrome cache
 
 | Setting | Blink | WebKit | Gecko |
 |---|---|---|---|
-| `font` | size `f32(size × layoutZoom)`, or the CSS size for fonts with `opticalSizeAxis` (§4.3) | size × `pageZoom` | size behind the quantization gate; Apple Color Emoji at size × DPR |
+| `font` | size `f32(size × layoutZoom)`, or the CSS size for fonts with `opticalSizeAxis` (§4.3) | size × `pageZoom` | the device size, size × 60 / apd, behind the quantization gate, on a canvas element (`element: true`); on the OffscreenCanvas fallback the CSS size, and Apple Color Emoji at size × DPR |
 | `lang` | the run's locale, explicit | `''`: OffscreenCanvas has no locale | the run's language, explicit, so Gecko's `explicitLang` is true |
 | `letterSpacing` | the run's px: Canvas truncates to 16.16 and turns off liga, clig and calt like the DOM (blink-text H27) | the run's px: the same `WidthIterator` rule | `'0.001px'` when the resolved spacing isn't 0 au (ligatures off, no spacing added), else `'0px'`; spacing added in JS |
 | `wordSpacing` | `'0px'`; JS adds `trunc(ws × 65536)` per space except text_content index 0 (blink-text §2.E) | the box's word spacing, which setWordSpacing gives the context's FontCascade (CanvasRenderingContext2DBase.cpp:3299-3324), so WidthIterator adds it in the DOM's float32 order within one item's TextRun; strings split at TABs add it in JS, and the offsets between items follow specs/webkit-lines.md §6.2 (ceiling round 2) | `'0px'`; JS adds au after U+0020 and NBSP (gecko-text §12.2) |
@@ -974,9 +1020,10 @@ decimal that parses back to the same double, so a float32 size reaches the CSS p
 - **Gecko**: the DOM size is `NSToIntRound(f32(q10(px)) × 60) / 60`, with Servo's 10-bit size quantization, and Canvas
   quantizes to 7 significant bits (specs/PROBES.md, gecko-canvas H3 correction). An engine measures only when the two
   agree: integers, halves and quarters below 32px agree; 13.33px becomes 13.375px in Canvas, so it reports
-  `font-size-quantization`. For Apple Color Emoji at DPR d the DOM asks Core Text at the device size: measure at that
-  size and scale, `au = round(W × 60) × apd / 60` (specs/gecko-canvas.md §2 A12). 12px at DPR 2: Canvas at 24px gives
-  25px, so the DOM width is 12.5px.
+  `font-size-quantization`. A canvas element takes its font size over the CSS-to-device scale before it quantizes, so at
+  the device size the same gate holds and `au = round(W × apd)`. On the OffscreenCanvas fallback, for Apple Color Emoji
+  at DPR d the DOM asks Core Text at the device size: measure at that size and scale, `au = round(W × 60) × apd / 60`
+  (specs/gecko-canvas.md §2 A12). 12px at DPR 2: Canvas at 24px gives 25px, so the DOM width is 12.5px.
 
 ### 4.4 Recipes
 

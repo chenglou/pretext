@@ -7,21 +7,25 @@
 // rebuild/src/model.ts: no expected value comes from the library's logic, and the tree is walked here, not through
 // src/content.ts (DESIGN.md §8.1).
 import type {
-  Expected, ExpectedObservation, ExpectedRect, GeckoFrameGeometry, GeckoLayout, GeckoTextFrame, InlineNode, ObservationPort, Paragraph,
-  UnobservableFact,
+  Expected, ExpectedObservation, ExpectedRect, GapName, GeckoFrameGeometry, GeckoLayout, GeckoTextFrame, InlineNode, ObservationPort,
+  Paragraph, UnobservableFact,
 } from '../../src/model.ts'
 
 // DOMRect::SetLayoutRect rounds each app-unit edge to 1/65536 px, and SetRect narrows each field to float32 on its own
-// (DOMRect.cpp:152-164, DOMRect.h:122-127). TransformFrameRectToAncestor's float32 round trip returns integer au below
-// 2^23 au (nsLayoutUtils.cpp:2517-2537), so the edges are the frames' own.
+// (DOMRect.cpp:152-164, DOMRect.h:122-127). Before that, TransformFrameRectToAncestor takes the rect through float32 device
+// pixels: the edges become floats, every frame's offset up to the root is added in float32, and the result is rounded back
+// to app units (nsLayoutUtils.cpp:2517-2537). Each of those steps is off by at most half a float32 step, so the edges come
+// back as the frames' own while four such halves stay under half an app unit: below 2^17 device px, where a step is 1/128
+// device px. From there on a step is 1/64 device px or more, and an edge can come back 1 au off (probe gecko-port F6: x
+// 1459.688 au where the frame's is 1459, 100000px from the origin): `float32-precision`.
 const R = (au: number): number => Math.floor(au * (65536 / 60) + 0.5) / 65536
 
 export function encodeEdges(a0: number, a1: number): { x: number; width: number } {
   return { x: Math.fround(R(a0)), width: Math.fround(R(a1) - R(a0)) }
 }
 
-// An inline position in au and whether it rests on a Canvas stand-in for glyph records.
-type Edge = { au: number; limited: boolean }
+// An inline position in au, and the condition under which it rests on a Canvas stand-in, or null.
+type Edge = { au: number; limited: GapName | null }
 
 type PlacedFrame = {
   line: number
@@ -88,22 +92,75 @@ export const observeGecko: ObservationPort<GeckoLayout> = (paragraph, layout) =>
   }
   for (let r = 0; r < framesOfRun.length; r++) framesOfRun[r]!.sort((a, b) => a.frame.contentStart - b.frame.contentStart)
 
-  // Whether the advance before source offset s in frame f rests on the in-word stand-in: s is inside the frame's measured
-  // content and the first kept character from s doesn't begin a shaping unit. The DOM's glyph records inside a unit come
-  // from one shaping of the unit, which Canvas can't show, so the layout's characters there are W(unit) − W(suffix)
-  // (DESIGN.md §5, `in-word-prefix`). The frame's edges and box are engine output and predicted.
-  const inWord = (f: GeckoTextFrame, s: number): boolean => {
+  // The condition under which the position before source offset s in frame f is a stand-in, or null. Every advance of a
+  // frame whose Canvas widths are stand-ins is one (GeckoTextFrame.advancesStandIn). Otherwise the layout says so per unit,
+  // where the position lies inside a shaping unit and Canvas couldn't confirm it (GeckoCharacter.standInBefore,
+  // `in-word-prefix`; the DOM's glyph records inside a unit come from one shaping of the unit, DESIGN.md §5). A skipped
+  // unit holds no position of its own: the next kept one's counts, or the frame's end.
+  const standIn = (f: GeckoTextFrame, s: number): GapName | null => {
+    if (f.advancesStandIn !== null) return f.advancesStandIn
     for (let c = s - f.measuredStart; c < f.characters.length; c++) {
       const ch = f.characters[c]!
-      if (!ch.skipped) return !ch.unitStart
+      if (!ch.skipped) return ch.standInBefore ? 'in-word-prefix' : null
     }
-    return false
+    return f.standInAtEnd ? 'in-word-prefix' : null
   }
+  // A frame's box is the advance between its two ends (nsTextFrame.cpp:11268-11273): a stand-in where either end is one.
+  const widthLimited = (f: GeckoTextFrame): GapName | null =>
+    f.advancesStandIn ?? standIn(f, f.measuredStart) ?? (f.standInAtEnd ? 'in-word-prefix' : null)
+
+  // A frame's place on its line. TextAlignLine and ReorderFrames put frames one after another from the line's start edge,
+  // after an offset that start alignment takes from the hang alone and every other alignment from the line's remaining
+  // inline size (nsLineLayout.cpp:3482-3670; nsBidiPresUtils.cpp:1882-1905). So the edge a frame is placed by (its left
+  // edge when frames go left to right, else its right one) is a stand-in where a text frame placed before it has a
+  // stand-in width, and on a line that isn't start-aligned where any text frame has one.
+  const leftToRight = paragraph.direction !== 'rtl'
+  const placedByLimited = layout.lines.map(line => {
+    const frames = line.geometry.frames
+    const startAligned = line.align === 'start' || (line.align === 'left' && leftToRight) || (line.align === 'right' && !leftToRight)
+    const limitedText: Array<{ k: number; gap: GapName }> = []
+    for (let k = 0; k < frames.length; k++) {
+      const f = frames[k]!
+      const gap = f.kind === 'text' ? widthLimited(f) : null
+      if (gap !== null) limitedText.push({ k, gap })
+    }
+    return frames.map((f, k): GapName | null => {
+      if (limitedText.length === 0) return null
+      if (!startAligned) return limitedText[0]!.gap
+      const edge = leftToRight ? f.x : f.x + f.width
+      for (const { k: j, gap } of limitedText) {
+        if (j === k) continue
+        const other = frames[j]!
+        const otherEdge = leftToRight ? other.x : other.x + other.width
+        if (leftToRight ? (otherEdge < edge || (otherEdge === edge && j < k)) : (otherEdge > edge || (otherEdge === edge && j < k))) return gap
+      }
+      return null
+    })
+  })
+  // The left edge and the width of a frame's box as stand-ins. An inline frame's width is its children's: a stand-in where a
+  // text frame inside it has one.
+  const boxLimited = (l: number, k: number): { x: GapName | null; width: GapName | null } => {
+    const frames = layout.lines[l]!.geometry.frames
+    const f = frames[k]!
+    let width = f.kind === 'text' ? widthLimited(f) : null
+    if (f.kind === 'inline') {
+      for (let j = 0; j < frames.length && width === null; j++) {
+        const other = frames[j]!
+        if (other.kind === 'text' && other.x >= f.x && other.x + other.width <= f.x + f.width) width = widthLimited(other)
+      }
+    }
+    const placed = placedByLimited[l]![k]!
+    return { x: leftToRight ? placed : placed ?? width, width }
+  }
+  // An edge 2^17 device px or more from the origin can come back 1 au off (see R above).
+  const apd = layout.lines.length === 0 ? 60 : layout.lines[0]!.geometry.appUnitsPerDevPixel
+  const farEdge = (au: number): GapName | null => Math.abs(au) / apd >= 131072 ? 'float32-precision' : null
 
   // nsTextFrame::GetPointFromOffset in frame-local au (nsTextFrame.cpp:8667-8752): clamp to the content and the trimmed
   // start (GetTrimmedOffsets without trimming the end, :3287-3330), snap back to the cluster start (FindClusterStart,
   // :3549-3558), sum the advances from the trimmed start, and count from the box's right edge in an RTL text run. The sum
-  // rests on the stand-in where either end of it is inside a shaping unit.
+  // is a stand-in where either end of it is one: the frame's start and the offset, or in an RTL text run, where the point is
+  // the box's width less the sum, the offset and the frame's end.
   const point = (pf: PlacedFrame, offset: number): Edge => {
     const f = pf.frame
     let o = Math.max(f.contentStart, Math.min(f.contentEnd, offset))
@@ -113,20 +170,29 @@ export const observeGecko: ObservationPort<GeckoLayout> = (paragraph, layout) =>
       while (o > f.measuredStart && !at(o).skipped && !at(o).clusterStart) o--
     }
     const iSize = pf.prefix[o - f.measuredStart]!
-    const limited = o > f.measuredStart && o < f.contentEnd && (inWord(f, f.measuredStart) || inWord(f, o))
-    return pf.rtl ? { au: f.width - iSize, limited } : { au: iSize, limited }
+    // No kept unit before the offset, or none from it on: the point is the frame's own start or end.
+    let keptBefore = false
+    for (let c = 0; c < o - f.measuredStart && !keptBefore; c++) keptBefore = !f.characters[c]!.skipped
+    let keptFrom = false
+    for (let c = o - f.measuredStart; c < f.characters.length && !keptFrom; c++) keptFrom = !f.characters[c]!.skipped
+    if (pf.rtl) return { au: f.width - iSize, limited: keptFrom ? standIn(f, o) ?? widthLimited(f) : null }
+    return { au: iSize, limited: keptBefore ? standIn(f, f.measuredStart) ?? standIn(f, o) : null }
   }
   // nsRect::ClampPoint into the rect as already cut (gfx/2d/BaseRect.h:701-705).
   const clamp = (p: Edge, lo: Edge, hi: Edge): Edge => {
-    if (p.au <= lo.au) return { au: lo.au, limited: p.limited || lo.limited }
-    if (p.au >= hi.au) return { au: hi.au, limited: p.limited || hi.limited }
+    if (p.au <= lo.au) return { au: lo.au, limited: p.limited ?? lo.limited }
+    if (p.au >= hi.au) return { au: hi.au, limited: p.limited ?? hi.limited }
     return p
   }
-  const expected = (value: number, limited: boolean): Expected =>
-    limited ? { state: 'limited', gap: 'in-word-prefix', value } : { state: 'predicted', value }
+  const expected = (value: number, limited: GapName | null): Expected =>
+    limited !== null ? { state: 'limited', gap: limited, value } : { state: 'predicted', value }
   const rect = (pf: PlacedFrame, x0: Edge, x1: Edge): ExpectedRect => {
     const encoded = encodeEdges(pf.frame.x + x0.au, pf.frame.x + x1.au)
-    return { line: pf.line, x: expected(encoded.x, x0.limited), width: expected(encoded.width, x0.limited || x1.limited) }
+    // Both edges count from the frame's left edge, which is a stand-in where the frame's place is. The width is the float32
+    // difference of the two encoded edges (DOMRect.cpp:152-164), so it can move a float32 step with them.
+    const placed = boxLimited(pf.line, pf.index).x
+    const x = placed ?? x0.limited ?? farEdge(pf.frame.x + x0.au)
+    return { line: pf.line, x: expected(encoded.x, x), width: expected(encoded.width, x ?? x1.limited ?? farEdge(pf.frame.x + x1.au)) }
   }
 
   // GetPartialTextRect over one code point [i, i + length) of leaf r: every continuation overlapping the range, its box cut
@@ -144,8 +210,8 @@ export const observeGecko: ObservationPort<GeckoLayout> = (paragraph, layout) =>
         const pf = frames[j]!
         const f = pf.frame
         if (f.contentStart >= i + length) break
-        let x0: Edge = { au: 0, limited: false }
-        let x1: Edge = { au: f.width, limited: false }
+        let x0: Edge = { au: 0, limited: null }
+        let x1: Edge = { au: f.width, limited: widthLimited(f) }
         if (f.contentStart < i) {
           const p = clamp(point(pf, i), x0, x1)
           if (pf.rtl) x1 = p
@@ -166,7 +232,7 @@ export const observeGecko: ObservationPort<GeckoLayout> = (paragraph, layout) =>
   // selectNodeContents takes the same path over [0, length): each continuation's whole box.
   const nodes: ExpectedRect[][] = []
   for (let r = 0; r < texts.length; r++) {
-    nodes.push(framesOfRun[r]!.map(pf => rect(pf, { au: 0, limited: false }, { au: pf.frame.width, limited: false })))
+    nodes.push(framesOfRun[r]!.map(pf => rect(pf, { au: 0, limited: null }, { au: pf.frame.width, limited: widthLimited(pf.frame) })))
   }
 
   // Element.getClientRects: GetAllInFlowRects walks an element's primary frame and its continuations, one border box each
@@ -174,9 +240,11 @@ export const observeGecko: ObservationPort<GeckoLayout> = (paragraph, layout) =>
   // a WBRFrame's 0 × 0 box.
   const elements: ExpectedRect[][] = elementKinds.map(() => [])
   for (let e = 0; e < elementFrames.length; e++) {
-    const { line, frame } = elementFrames[e]!
+    const { line, index, frame } = elementFrames[e]!
     const encoded = encodeEdges(frame.x, frame.x + frame.width)
-    elements[frame.element]!.push({ line, x: expected(encoded.x, false), width: expected(encoded.width, false) })
+    const limited = boxLimited(line, index)
+    const x = limited.x ?? farEdge(frame.x)
+    elements[frame.element]!.push({ line, x: expected(encoded.x, x), width: expected(encoded.width, x ?? limited.width ?? farEdge(frame.x + frame.width)) })
   }
 
   // Engine facts no rect reflects, whatever their value (observe-gecko.md §8).

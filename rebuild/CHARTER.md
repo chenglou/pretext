@@ -119,7 +119,10 @@ evaluation of 2026-09-17 (REPORT.md §2-§7):
     code point rect by its own node's box), and `y` and `height` are outside the observation contract (tentpole 2).
   - Still: the painter is scored by extents and wraps only, because `paint` doesn't report painted source offsets
     (tentpole 7).
-  - Still: rows don't keep the Canvas call log, so nothing replays offline (DESIGN §8.3 stage 0).
+  - Removed in ceiling round 3: rows didn't keep the Canvas call log, so nothing replayed offline (DESIGN §8.3 stage 0).
+    `lab/run.ts --record-measurements` stores every Canvas call and dictionary segmentation of every case beside the rows,
+    and `lab/measurements.ts` replays a library build against them with no browser: on the development `runs` set the
+    replay gives the recorded layout on all 2,580 cases in each browser. Left: it is opt-in, and no recorded set is kept.
   - Still: no library rule carries a `// rule <id>` annotation in source; 19 registry ids are provisional, and so are the
     55 stage 5 ids (tentpole 4).
   - Removed: the sealed held-out set `sealed-20260917` exists and was run once, in the ceiling evaluation, scored counts
@@ -171,9 +174,14 @@ evaluation of 2026-09-17 (REPORT.md §2-§7):
     letter before them by its pair adjustment with the space, 58 Chrome pairs with the prediction unchanged, not traced to
     source (tentpole 7).
   - Installed Chrome is 153.0.8010.50 since 2026-09-17 and the library pins .48: every Chrome row reports `engine-build`,
-    native views are equal on every case both rounds ran, and TESTS.md §12 hasn't run for .50. Chrome's round 2 gate seeds
-    are new files that say their family cases were derived under .48 (tentpole 6).
-  - A hidden installed Safari page stopped in the one job that ran longer than 8 minutes, so the held-out and sealed-2
+    native views are equal on every case both rounds ran, and TESTS.md §12 hadn't run for .50. Chrome's round 2 gate seeds
+    are new files that say their family cases were derived under .48 (tentpole 6). Status in ceiling round 3: the lab and
+    the probe runner launch pinned byte-identical copies of Chrome and Firefox, so a browser no longer moves in the middle
+    of a round; §12 ran for .50 (all 756 facts of .48 unchanged, every family case derived under .48 derived again). Left:
+    the library's own pin, and seeds from the new case files.
+  - Removed in ceiling round 3 (an installed Safari run goes through 5-minute parts, each in a fresh tab with a WebContent
+    process of its own, checked with history-dependent cases; lab README "Parts"): a hidden installed Safari page stopped
+    in the one job that ran longer than 8 minutes, so the held-out and sealed-2
     combined files didn't finish in installed Safari; the development and family files did, equal to webkit-host case by
     case. The cause is read from WebKit's background CPU limit and process throttler, not verified from Safari's logs
     (REPORT §2.7).

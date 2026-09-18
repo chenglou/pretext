@@ -11,6 +11,12 @@ export type EngineName = 'blink' | 'webkit' | 'gecko'
 // A layout for another build, or for an unknown one, reports the engine-build gap.
 export const PINNED_BUILDS = { blink: '153.0.8010.48', webkit: '22625.1.29.11.27', gecko: '156.0' } as const satisfies Record<EngineName, string>
 
+// Builds accepted as source-identical to the pinned one, each with its evidence. They report no engine-build gap.
+// Chrome 153.0.8010.50 (installed since 2026-09-17): in the Chromium checkout, `git diff --name-only 153.0.8010.48
+// 153.0.8010.50` lists chrome/VERSION alone and DEPS is unchanged, so Blink, V8, HarfBuzz, ICU and Skia are the pinned
+// revisions; the lab's native views are equal on all 76,029 cases both builds observed (REPORT.md §2).
+export const SOURCE_IDENTICAL_BUILDS: Record<EngineName, readonly string[]> = { blink: ['153.0.8010.50'], webkit: [], gecko: [] }
+
 // The languages a browser process uses for content without a usable lang, per engine (DESIGN.md §1.4). No page API shows
 // them, and the library never reads them from the OS, so they are given facts; the lab sets or reads them when it
 // launches a browser (lab/types.ts ProcessLanguages). A null value is laid out with the root locale and reports
@@ -86,6 +92,11 @@ export type GeckoEnvironment = GeckoProcessLanguages & {
   contentLanguage: string | null
   // Firefox's Intl.Segmenter word granularity runs ICU4X's word segmenter with layout's LSTM models (specs/gecko-text.md §10).
   dictionaryBreaks: { kind: 'intl-segmenter-word' } | { kind: 'unavailable' }
+  // The page can create a `<canvas>` element, so the port measures on a detached one at the DOM's device font size: its
+  // text runs have the page's app units per device pixel and its fonts come from the DOM's font cache, which an
+  // OffscreenCanvas's don't (CanvasRenderingContext2D.cpp:4256-4269, :7132-7155; probe gecko-port F13). Absent or false (a
+  // worker, a test): an OffscreenCanvas at the CSS size, with the gaps that leaves.
+  canvasElement?: boolean
 }
 
 export type Environment = BlinkEnvironment | WebKitEnvironment | GeckoEnvironment
@@ -147,6 +158,7 @@ export function detectEnvironment(given: GivenFacts): DetectedEnvironment {
           engine: 'gecko', build: given.build, devicePixelRatio, pageLang, contentLanguage: given.contentLanguage,
           regionalPrefsLocale: given.regionalPrefsLocale,
           dictionaryBreaks: typeof Intl.Segmenter === 'function' ? { kind: 'intl-segmenter-word' } : { kind: 'unavailable' },
+          canvasElement: typeof document.createElement === 'function',
         },
       }
   }

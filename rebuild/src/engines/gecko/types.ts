@@ -102,6 +102,11 @@ export type GeckoTextRun = {
   totalAdvance: number
   // FontFacts.pairKerning of the run's font: which glyph of a pair carries HarfBuzz's pair adjustment.
   pairKerning: 'first-advance' | 'split' | null
+  // The condition under which every Canvas width of the run is a stand-in, or null (GeckoTextFrame.advancesStandIn).
+  advancesStandIn: 'font-size-quantization' | 'optical-size' | null
+  // App units per px of the context's measureText widths: the page's app units per device pixel on a canvas element at the
+  // device font size, 60 on an OffscreenCanvas at the CSS size (CanvasRenderingContext2D.cpp:5277, :7132-7155).
+  auPerPx: number
 }
 
 // A shaping unit (gfxFont::SplitAndInitTextRun, gfxFont.cpp:3708-3900): a word between boundary spaces and invalid
@@ -110,10 +115,10 @@ export type GeckoUnit = {
   kind: 'word' | 'space' | 'nbsp' | 'invalid'
   tStart: number
   tEnd: number
-  // measureText of the unit in its text run's context and its DOM script (rangeAu), in au at apd 60.
+  // measureText of the unit in its text run's context and its DOM script (rangeAu), in the context's au.
   canvasAu: number
-  // The DOM advance: canvasAu plus the color emoji and synthesized space corrections at the page's apd
-  // (specs/gecko-canvas.md §2 A12).
+  // The DOM advance: canvasAu, plus on an OffscreenCanvas the color emoji, synthesized space and synthetic bold corrections
+  // at the page's apd (specs/gecko-canvas.md §2 A12).
   au: number
   // Glyph advance of the text run before this unit.
   startAdvance: number

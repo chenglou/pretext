@@ -146,13 +146,29 @@ describe('blink observation port', () => {
     const o = observeBlink(p, layout([line([item], [identity(0, 0, 3)])]), unused)
     expect(raw(o.codePoints[1]!.rects)).toEqual([[0, 35945, 650, true]])
     expect(raw(o.codePoints[2]!.rects)).toEqual([[0, 36595, 650, true]])
-    // Inner edges rest on Canvas advances: limited by the gap the layout reports concerning them, here glyph-clusters over
-    // the grapheme, and only there.
+    // A gap over the grapheme limits the positions that sum its characters' advances, and only those: the cluster's start
+    // rests on the cluster before it alone.
     const gapped = line([item], [identity(0, 0, 3)])
     gapped.gaps = [{ gap: 'glyph-clusters', run: 0, detail: '', at: { start: 1, end: 3 } }]
     const g = observeBlink(p, layout([gapped]), unused)
-    expect(g.codePoints[1]!.rects[0]!.x).toEqual({ state: 'limited', gap: 'glyph-clusters', value: 35945 / 128 })
+    expect(g.codePoints[1]!.rects[0]!.x).toEqual({ state: 'predicted', value: 35945 / 128 })
+    expect(g.codePoints[1]!.rects[0]!.width).toEqual({ state: 'limited', gap: 'glyph-clusters', value: 650 / 128 })
+    expect(g.codePoints[2]!.rects[0]!.x).toEqual({ state: 'limited', gap: 'glyph-clusters', value: 36595 / 128 })
     expect(g.codePoints[0]!.rects[0]!.width.state).toBe('predicted')
+    // A position the layout marks as a Canvas stand-in limits the edges resting on it, not the ones past it; a limited size
+    // limits the x of the items after it on the line.
+    const marked: BlinkItem = {
+      kind: 'text', run: 0, textStart: 0, textEnd: 3, level: 0, x: 0, inlineSize: 1600, sizeLimit: 'glyph-clusters',
+      clusters: [{ textStart: 0, textEnd: 1, graphemeStarts: [0], advance: 640 * 1024 }, { textStart: 1, textEnd: 2, graphemeStarts: [1], advance: 320 * 1024, startLimit: 'in-word-prefix' }, { textStart: 2, textEnd: 3, graphemeStarts: [2], advance: 640 * 1024 }],
+    }
+    const after: BlinkItem = { kind: 'text', run: 1, textStart: 3, textEnd: 4, level: 0, x: 1600, inlineSize: 640, clusters: [{ textStart: 3, textEnd: 4, graphemeStarts: [3], advance: 640 * 1024 }] }
+    const m = observeBlink(paragraph(['abc', 'd']), layout([line([marked, after], [identity(0, 0, 3), identity(1, 3, 4)])]), unused)
+    expect(m.codePoints[0]!.rects[0]!.width).toEqual({ state: 'limited', gap: 'in-word-prefix', value: 5 })
+    expect(m.codePoints[1]!.rects[0]!.x).toEqual({ state: 'limited', gap: 'in-word-prefix', value: 5 })
+    expect(m.codePoints[2]!.rects[0]!.x).toEqual({ state: 'predicted', value: 7.5 })
+    expect(m.codePoints[2]!.rects[0]!.width).toEqual({ state: 'limited', gap: 'glyph-clusters', value: 5 })
+    expect(m.nodes[0]![0]!.width).toEqual({ state: 'limited', gap: 'glyph-clusters', value: 12.5 })
+    expect(m.nodes[1]![0]!.x).toEqual({ state: 'limited', gap: 'glyph-clusters', value: 12.5 })
   })
 
   test('§5 item 11: an even-level hyphen copies onto the code point after the soft hyphen', () => {

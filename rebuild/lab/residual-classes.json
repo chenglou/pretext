@@ -1,0 +1,117 @@
+{
+  "format": "pretext-lab-residual-classes/1",
+  "note": "Residual classes (CHARTER.md, 'Found in the ceiling round 2 evaluation'): failure classes shown by probe to be a Canvas-versus-DOM difference no Canvas measurement detects. lab/fresh.ts counts failures without a covered explanation that match a class's signature apart from the open ones, and counts members whose differing node holds a probed string in the probed font apart from members matched by signature alone. A signature match is not a probe: a port bug that moves one node by one unit matches too. Engine owners add probed strings with the probe that measured them; a new class needs its probe and says whether its mechanism is verified or inferred.",
+  "classes": [
+    {
+      "id": "gecko/one-shaping-unit-one-app-unit",
+      "browsers": [
+        "firefox"
+      ],
+      "signature": {
+        "kind": "one-node-rect-width",
+        "units": 1
+      },
+      "signatureText": "lineCount and breaks pass, widths fail, and exactly one native node rect differs in width from the observation port's predicted node rect, by exactly 1 app unit",
+      "difference": "verified: the DOM box and OffscreenCanvas at the CSS font size differ by 1 au on these strings (probe F7, specs/gecko-RESULTS.md; research/ROUND2-CRITIC.md item 4, probe gecko-device-size, which also refutes an OffscreenCanvas at the device font size as a detector)",
+      "mechanism": "inferred: the DOM rounds each glyph's 16.16 advance at the device size to app units (gfxHarfBuzzShaper.cpp:354-379, :1262-1263, :1699-1702; specs/gecko-canvas.md §3 N7)",
+      "probed": [
+        {
+          "text": "ووفقك",
+          "family": "Geeza Pro",
+          "size": 10,
+          "weight": 300,
+          "domMinusCanvasUnits": 1,
+          "probe": "research/ROUND2-CRITIC.md item 4 (gecko-device-size, Firefox 156 at DPR 2)"
+        },
+        {
+          "text": "ووفقك",
+          "family": "Geeza Pro",
+          "size": 10,
+          "weight": 400,
+          "domMinusCanvasUnits": 1,
+          "probe": "F7 (specs/gecko-RESULTS.md); research/ROUND2-CRITIC.md item 4 (gecko-device-size, Firefox 156 at DPR 2)"
+        },
+        {
+          "text": "ووفقك",
+          "family": "Geeza Pro",
+          "size": 10,
+          "weight": 500,
+          "domMinusCanvasUnits": 1,
+          "probe": "research/ROUND2-CRITIC.md item 4 (gecko-device-size, Firefox 156 at DPR 2)"
+        },
+        {
+          "text": "وأعانك",
+          "family": "Geeza Pro",
+          "size": 10,
+          "weight": 300,
+          "domMinusCanvasUnits": 1,
+          "probe": "research/ROUND2-CRITIC.md item 4 (gecko-device-size, Firefox 156 at DPR 2)"
+        },
+        {
+          "text": "وأعانك",
+          "family": "Geeza Pro",
+          "size": 10,
+          "weight": 400,
+          "domMinusCanvasUnits": 1,
+          "probe": "research/ROUND2-CRITIC.md item 4 (gecko-device-size, Firefox 156 at DPR 2)"
+        },
+        {
+          "text": "وأعانك",
+          "family": "Geeza Pro",
+          "size": 10,
+          "weight": 500,
+          "domMinusCanvasUnits": 1,
+          "probe": "research/ROUND2-CRITIC.md item 4 (gecko-device-size, Firefox 156 at DPR 2)"
+        },
+        {
+          "text": "รมชาติทำให้ผู้คนมีคว",
+          "family": "Thonburi",
+          "size": 32,
+          "weight": 500,
+          "domMinusCanvasUnits": 1,
+          "probe": "F7 (specs/gecko-RESULTS.md); research/ROUND2-CRITIC.md item 4 (gecko-device-size, Firefox 156 at DPR 2)"
+        },
+        {
+          "text": "รมชาติทำให้ผู้คนมี",
+          "family": "Thonburi",
+          "size": 32,
+          "weight": 500,
+          "domMinusCanvasUnits": 1,
+          "probe": "research/ROUND2-CRITIC.md item 4 (gecko-device-size, Firefox 156 at DPR 2)"
+        },
+        {
+          "text": "ทำให้",
+          "family": "Thonburi",
+          "size": 32,
+          "weight": 500,
+          "domMinusCanvasUnits": 1,
+          "probe": "research/ROUND2-CRITIC.md item 4 (gecko-device-size, Firefox 156 at DPR 2)"
+        },
+        {
+          "text": "modern",
+          "family": "Helvetica Neue",
+          "size": 15,
+          "weight": 400,
+          "domMinusCanvasUnits": -1,
+          "probe": "F7 (specs/gecko-RESULTS.md); research/ROUND2-CRITIC.md item 4 (gecko-device-size, Firefox 156 at DPR 2)"
+        },
+        {
+          "text": "LT:",
+          "family": "Helvetica Neue",
+          "size": 10,
+          "weight": 700,
+          "domMinusCanvasUnits": -1,
+          "probe": "research/ROUND2-CRITIC.md item 4 (gecko-device-size, Firefox 156 at DPR 2)"
+        },
+        {
+          "text": "LT: kerning pairs",
+          "family": "Helvetica Neue",
+          "size": 10,
+          "weight": 700,
+          "domMinusCanvasUnits": -1,
+          "probe": "research/ROUND2-CRITIC.md item 4 (gecko-device-size, Firefox 156 at DPR 2)"
+        }
+      ]
+    }
+  ]
+}

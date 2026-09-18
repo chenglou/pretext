@@ -22,6 +22,9 @@ import { prepareGecko } from './prepare.js'
 //   (960, 1260, 1500 and 1920 au at 12, 16, 24 and 32px, specs/gecko-canvas.md §1.9) in every family, except a
 //   text-presentation U+1F600 U+FE0E, and U+1F600 alone once `stub.pinned` (probe gecko-port F3), which draw with a text
 //   font at 1020 au outside "Apple Color Emoji". U+200D, U+FE0E and U+FE0F have no advance.
+// - Beh (U+0628) is 40 au narrower on each side it joins: next to another beh, a hah (U+062D) or U+200D. Before a hah it
+//   takes a form 100 au narrower still, which no U+200D gives (a contextual form, as Amiri's meem before reh in probe
+//   gecko-port F15).
 const stub = { pinned: false }
 function stubAu(font: string, text: string, lang: string): number {
   const size = Number(/([\d.]+)px/.exec(font)![1])
@@ -46,6 +49,19 @@ function stubAu(font: string, text: string, lang: string): number {
       au += arabic ? 660 : 367
       continue
     }
+    // `To` under a kern table: T is 576.4 au and o 576.8 au at 16px, the pair adjustment −45 au, half on each glyph, and each
+    // glyph's advance is rounded on its own (hb-kern.hh:102-106, gfxHarfBuzzShaper.cpp:1699-1702): 554 + 554 at 16px.
+    if (c === 'T' || c === 'o') {
+      const kerned = (c === 'T' && cps[i + 1] === 'o') || (c === 'o' && cps[i - 1] === 'T')
+      au += Math.floor(((c === 'T' ? 576.4 : 576.8) - (kerned ? 22.5 : 0)) * size / 16 + 0.5)
+      continue
+    }
+    if (c === 'ب') {
+      const before = cps[i - 1]
+      const after = cps[i + 1]
+      au += Math.round(576 * size / 16) - (before === 'ب' || before === 'ح' || before === '‍' ? 40 : 0) - (after === 'ب' || after === 'ح' || after === '‍' ? 40 : 0) - (after === 'ح' ? 100 : 0)
+      continue
+    }
     if (c === ' ' && font.includes('Arial')) {
       au += 60 * Math.floor(size / 5 + 0.5) // Arial has no U+2009: Gecko synthesizes it (gfxTextRun.cpp:3032-3043)
       continue
@@ -63,7 +79,17 @@ beforeAll(() => {
   class StubContext {
     font = ''; lang = ''; letterSpacing = '0px'; wordSpacing = '0px'; fontKerning = 'auto'; textRendering = 'auto'; direction = 'ltr'
     measureText(s: string) {
-      const width = Math.fround(stubAu(this.font, s, this.lang) / 60)
+      // Letter spacing goes after every ligature group (CanvasRenderingContext2D.cpp:4759-4790): a code point, with the
+      // joiners and selectors after it; lam with alef is one group (a required ligature, as wide as its parts here).
+      let groups = 0
+      const cps = [...s]
+      for (let i = 0; i < cps.length; i++) {
+        if (i > 0 && (cps[i] === '‍' || cps[i] === '︎' || cps[i] === '️' || /\p{M}/u.test(cps[i]!))) continue
+        if (cps[i] === 'ا' && cps[i - 1] === 'ل') continue
+        groups++
+      }
+      const spacing = this.letterSpacing === '2px' ? 120 * groups : 0
+      const width = Math.fround((stubAu(this.font, s, this.lang) + spacing) / 60)
       // "fi" forms a ligature as wide as its parts whose ink box ends 0.36 au further with ligatures off (probe gecko-port F9).
       const right = s === 'fi' && this.letterSpacing !== '0px' ? width + 0.006 : width
       return { width, actualBoundingBoxLeft: 0, actualBoundingBoxRight: right }
@@ -301,10 +327,29 @@ describe('gecko engine output', () => {
     expect(prepared.gaps.length).toBe(before)
     expect(allGaps(layout(paragraph([run('aaaa')], 20, { overflowWrap: 'anywhere' }))).map(g => g.gap)).not.toContain('in-word-prefix')
   })
-  test('letters joined across an in-word offset report in-word-prefix, and no U+200D is measured', () => {
-    const l = layout(paragraph([run('بببب')], 20, { overflowWrap: 'anywhere', direction: 'rtl' }))
-    expect(allGaps(l).some(g => g.gap === 'in-word-prefix' && g.detail.includes('letters join'))).toBe(true)
-    expect(l.measure.calls.some(c => c.text.includes('‍'))).toBe(false)
+  test('letters joined across an in-word offset: both sides are measured with U+200D, and the prefix is exact where they add up', () => {
+    // بببب is 536 + 496 + 496 + 536 au; ب alone is 576 au, and بب with U+200D after it 1032 au, its advance in the word.
+    const p = paragraph([run('بببب')], 20, { overflowWrap: 'anywhere', direction: 'rtl' })
+    const l = layout(p)
+    expect(allGaps(l).map(g => g.gap)).not.toContain('in-word-prefix')
+    expect(l.measure.calls.some(c => c.text === 'بب‍')).toBe(true)
+    expect(starts(p)).toEqual([0, 2])
+    expect(widths(p)).toEqual([1032, 1032])
+  })
+  test('a ligature group as wide as its parts: Canvas letter spacing counts one group fewer, and only the offset inside it is a stand-in', () => {
+    // دلاد: lam and alef form one group of 1152 au, which the DOM shares 576 and 576; U+200D sides add up at every offset.
+    const l = layout(paragraph([run('دلاد')], 500, { direction: 'rtl' }))
+    const frame = textFrames(l.lines[0]!)[0]!
+    expect(frame.characters.map(c => c.standInBefore)).toEqual([false, false, true, false])
+    expect(frame.standInAtEnd).toBe(false)
+  })
+  test('letters joined across an in-word offset whose sides do not add up report in-word-prefix on both lines of the break', () => {
+    // ببحب: the second beh takes a narrower form before hah, 396 au, so W(بب U+200D) + W(U+200D حب) is 2144 au and the word 2044.
+    const l = layout(paragraph([run('ببحب')], 20, { overflowWrap: 'anywhere', direction: 'rtl' }))
+    expect(l.lines.map(line => line.start)).toEqual([0, 2])
+    for (const line of l.lines) {
+      expect(line.gaps.filter(g => g.gap === 'in-word-prefix' && g.detail.includes('letters join')).map(g => g.at)).toEqual([{ start: 2, end: 2 }])
+    }
   })
   test('font facts: optical-size is reported where opsz is true or not given', () => {
     const unknown = { ...courier, facts: UNKNOWN_FONT_FACTS }
@@ -342,12 +387,12 @@ describe('gecko Canvas recipes (specs/gecko-AUDIT.md B1-B4)', () => {
     const gapNames = (q: Paragraph) => allGaps(layout(q)).map(g => g.gap)
     try {
       expect(widths(p('😀'))).toEqual([960])
-      expect(gapNames(p('😀'))).not.toContain('font-fallback')
+      expect(gapNames(p('😀'))).not.toContain('page-history')
       expect(widths(p('😀︎'))).toEqual([1020])
-      expect(gapNames(p('😀︎'))).not.toContain('font-fallback')
+      expect(gapNames(p('😀︎'))).not.toContain('page-history')
       stub.pinned = true
       expect(widths(p('😀'))).toEqual([1020])
-      expect(gapNames(p('😀'))).toContain('font-fallback')
+      expect(gapNames(p('😀'))).toContain('page-history')
     } finally {
       stub.pinned = false
     }
@@ -631,7 +676,19 @@ describe('ceiling round 2', () => {
     expect(splitLines.lines.map(line => line.geometry.width)).toEqual([576 - 30, 576 - 30])
     const first = layout(paragraph([run('AV', 'span')], 11, { overflowWrap: 'anywhere' }))
     expect(first.lines.map(line => line.geometry.width)).toEqual([576 - 60, 576])
-    expect(splitLines.lines[0]!.gaps.some(g => g.gap === 'in-word-prefix')).toBe(true)
+    // An even adjustment divides in halves exactly; without the fact the position stays a stand-in.
+    expect(splitLines.lines[0]!.gaps.some(g => g.gap === 'in-word-prefix')).toBe(false)
+    expect(first.lines[0]!.gaps.some(g => g.gap === 'in-word-prefix')).toBe(true)
+  })
+
+  test('an odd split adjustment: the fractions come from the context at 64 times the size (probe gecko-port F16)', () => {
+    // `To` is 554 + 554 au where T and o alone are 576 and 577: −22 on T and −23 on o, since 576.4 − 22.5 rounds up and
+    // 576.8 − 22.5 down. Halving −45 au gives −23 on T.
+    const split = { ...courier, facts: { ...facts, pairKerning: 'split' as const } }
+    const l = layout(paragraph([run('To', 'span', { font: split })], 11, { overflowWrap: 'anywhere', font: split }))
+    expect(l.lines.map(line => line.geometry.width)).toEqual([554, 554])
+    expect(allGaps(l).map(g => g.gap)).not.toContain('in-word-prefix')
+    expect(l.measure.contexts.some(c => c.font.includes(' 1024px '))).toBe(true)
   })
 
   test('paragraph gaps name the source range they concern', () => {

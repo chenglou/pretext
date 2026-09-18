@@ -7,10 +7,21 @@ doesn't depend on the old library in `src/`.
 - `page.ts`: the browser page. It builds the native paragraph, records Range geometry, runs the prediction hook and the
   observation port over its layout, and records the painted lines.
 - `predictor.ts`: the prediction hook, the only library-facing import in the page.
+- `font-facts.ts`: the font facts the predictor declares for a case's fonts, per engine, from `font-facts.json`, a table
+  built offline from the font files (see "Font facts"); `font-facts.test.ts` known fonts' facts.
 - `observe/`: the observation ports, one per engine (DESIGN.md §9). Each derives, from a layout, the Range rects its
   browser reports, by that engine's geometry code, and imports only types from `src/model.ts`.
 - `run.ts`: the driver. It reads the browser build from the app bundle, sets or reads the browser process's languages,
   serves the page, opens one background browser session and streams rows to NDJSON.
+- `browser-build.ts`: the apps the lab and the probe runner launch, the pinned copies of Chrome and Firefox among them, and
+  the build read from their bundles; `pin-browser.sh` makes and checks a pinned copy (see "Pinned browsers").
+- `sharded.ts`: one case file as several `run.ts` jobs at the same time, and the isolation protocol (see "Sharded runs and
+  isolation").
+- `record.ts` and `measurements.ts`: `run.ts --record-measurements`, the page side and the offline side (see "Recorded
+  measurements").
+- `compare-rows.ts`: whether two runs of the same cases recorded the same native observations, predictions and painted
+  lines, case by case (`bun rebuild/lab/compare-rows.ts <rows> <other rows>`). The checks of the lab itself use it: a pinned
+  browser against the installed one, a recorded run against a plain one, installed Safari against webkit-host.
 - `languages.ts`: the browser-process languages each browser launches with, and the given facts the driver derives for
   the library (see "Browser-process languages"); `languages.test.ts` its rules.
 - `score.ts`: the offline scorer.
@@ -20,10 +31,18 @@ doesn't depend on the old library in `src/`.
   `triage.test.ts` its rules.
 - `gate.ts`: the no-regression gate over scored runs, and `gate.test.ts` its rules. It compares a run's environment with
   the baseline's part by part (browser build and device, process languages, scorer) and names what differs; seeding refuses
-  runs that record no process languages. Protocol rows are never passes: seeding lists them under `protocol`, and a check
-  never fails on them. `--prune-protocol --baseline=<file>` applies `score.ts` `slotProtocol` to the rows of the baseline's
-  seeding runs and removes the passes its protocol rows recorded, listing each pair (rebuild/TESTS.md §9).
+  runs that record no process languages, and runs scored by different scorers. Protocol rows are never passes: seeding
+  lists them under `protocol`, and a check never fails on them. `--prune-protocol --baseline=<file>` applies `score.ts`
+  `slotProtocol` to the rows of the baseline's seeding runs and removes the passes its protocol rows recorded, listing each
+  pair (rebuild/TESTS.md §9). Since ceiling round 3 a seed is never written over the baseline it replaces (see "Seeds go
+  to a staging folder").
 - `cases/seal.ts`: seals a held-out case set (see "Sealed held-out sets").
+- `fresh.ts`: a fresh round, from new cases to a report of failures by signature (see "Fresh rounds"), with
+  `residual-classes.json`, the registry of residual classes it counts apart.
+- `cases/used-ids.ts`: every case id used so far and the generation lock, shared by `seal.ts` and `fresh.ts`;
+  `cases/parts.ts`: contiguous parts of a case file for parallel jobs and the giants rule, with a command line that splits a
+  file and prints counts only; `cases/giants.ts`: the giants set (see "Giants"); `cases/family-widths.ts`: the rule and
+  feature family paragraphs at seeded widths; `cases/parts.test.ts` their rules.
 - `tsconfig.json`: the repo's strict settings over the lab and its case generators
   (`bunx tsc -p rebuild/lab/tsconfig.json --noEmit`).
 - `VALIDATION.md`: what the end-to-end validation ran, found and fixed.
@@ -32,6 +51,87 @@ doesn't depend on the old library in `src/`.
   spaces and empty lines, `pre`, `pre-line`, `break-spaces`, `nowrap`, RTL Hebrew and Arabic, CJK, keep-all, emoji,
   soft hyphens, combining marks, ZWSP, mixed font sizes, tabs, a span with its own `lang`, a fixture web font and a
   fractional line height.
+
+## Landed in ceiling round 3
+
+- **Fresh rounds: landed 2026-09-17 20:10** (`fresh.ts`, "Fresh rounds" below). One command per browser and seed:
+  `bun rebuild/lab/fresh.ts --browser=chrome --seed=<new name>` (add `--both-orders` in evaluation). Don't wrap it in the
+  lock; it starts its browser jobs under the lock itself. Validated in Chrome, Firefox and webkit-host on seed
+  `r3-tool-check-1`: 11,477 cases in both orders took 27 s in Chrome, and Firefox and webkit-host ran beside each other in
+  about 40 s each. A round with both orders leaves about 0.9 GB of rows; when you are done with one, run
+  `.artifacts/session/compress-rows.sh lab/fresh/<browser>/<seed>`. The report still reads compressed rows; scoring again
+  needs `zstd -d` first. The two tool-check seeds are development sets now, not fresh ones.
+- **Giants: landed 2026-09-17 20:10, validated 20:35** (`cases/giants.ts`, "Giants" below). 9 cases left
+  `heldout-suite-sample.ndjson`, and the combined `final-20260916/cases/heldout-all.ndjson` and
+  `heldout-suite-sample-part0.ndjson`, for `.artifacts/lab/cases/giants.ndjson`; `giants.moves.json` records every move.
+  The set ran exclusively with `--chunk=1` in Chrome (84 s), Firefox (13 s) and webkit-host (328 s), and in all three every
+  giant's native observation equals its row in round 2's held-out run (`.artifacts/lab/giants-20260917`, `score.ts
+  --native-compare`). Installed Safari took about 5 minutes a giant in round 2, so there a giant is a job of its own.
+- **sealed-3: generated 2026-09-17 20:12** (`.artifacts/lab/sealed-3`, `baselines/sealed-3-20260917.json`; "Sealed held-out
+  sets" below). Not run and not opened: only the evaluator scores it, once. `bun rebuild/lab/cases/parts.ts --cases=<file>
+  --parts=3 --out-dir=<dir> --browser=<browser>` splits a sealed file for parallel jobs and prints counts only.
+
+- **Scorer 5 and the staging gate: landed 2026-09-17 20:50, the coverage rule final at 21:10** (`score.ts`, `gate.ts`;
+  "Scoring" and "Seeds go to a staging folder" below). Re-score with it before counting anything, and again if you scored
+  between 20:50 and 21:10 (the rule for gaps reported on neighbouring lines and the decision text changed in between; the
+  metrics didn't). `SCORER_VERSION` is 5, so baselines seeded under scorer 4 refuse its runs by environment, as they
+  should. What changed:
+  - *Covered failures.* A gap covers a failing line only where its range touches what differs there ("Covered failures"
+    below). The per-case `lineGaps[metric].covered` and the summary's `lineLocal.withoutLineGap` keep their names and their
+    meaning, no covered explanation, so tools that read them need no change; `lines[].gaps` now lists only the gaps that
+    cover, and `lines[].elsewhere` the ones scorer 4 counted. The round 2 critic's six rows (`c-906c6bc491c83c9d`,
+    `c-a52d0bfda6f53a43`, `c-f1877e45ed22478e`, `c-522324a27e5bb6bd`, `c-430fa200ce40d3eb`, `c-4cafadcd4b3fb900`) come out
+    uncovered, and `score.test.ts` holds the rule's cases.
+  - *Residual classes.* `RESIDUAL_CLASSES` in `score.ts`; per-case `residual`, summary `lineLocal.predictionRows`
+    (`failing`, `withoutCoveredExplanation`, `residualProbed`, `residualSignatureOnly`, `open`) and `lineLocal.residual`.
+    `fresh.ts` still matches on its own from `residual-classes.json` (same class id, a looser probed test: the run's whole
+    text, no painter condition); it should read the scorer's `residual` field, so that one registry decides.
+  - *Indented lines.* Chrome's and Firefox's widths and painter extents on indented lines are observed ("Metrics per
+    case", widths).
+  - *Gate.* `--seed` and `--prune-protocol` need `--staging=<dir>` and never write the baseline; the seed record lists lost
+    pairs with their covering gaps and the pairs that leave through new history dependence.
+  - *Round 2 re-counted.* `.artifacts/ceiling-20260917/rescore-s5/`: `uncovered.txt` (per browser, per set: rows failing a
+    prediction metric, without a line-local gap under scorer 4, without a covered explanation under scorer 5, residual
+    members, open; then the classes with example ids) and `uncovered-<browser>.json` (every such row with its failing
+    lines, evidence and the gaps elsewhere); per-set summaries and per-case files under `<browser>/<set>-<order>/`.
+    `tools/rescore.sh <browser> [set...]` re-scores round 2's rows (one scorer process at a time: a process peaks at 5.8 GB
+    on the held-out suite sample, and three at once passed the watchdog's 10 GB), `tools/uncovered.ts` writes the listing.
+    Sealed-2 is counts only.
+
+- **Pinned Chrome and Firefox: landed 2026-09-17 20:45** ("Pinned browsers" below). `run.ts` and `probes/runner.ts` launch
+  private byte-identical copies under `~/github/browser-engines/apps/`, never `/Applications`. Nothing changes in how you
+  run them. `run.json` records `app` (path, `pinned`, the copy's tree hash) beside `build`, and `bundleSha256`, a content
+  hash of the library bundle the pages ran, beside `bundleBytes`.
+- **Parts, sharded runs, isolation: landed 2026-09-17 20:45** ("Parts" and "Sharded runs and isolation" below).
+  `bun rebuild/lab/sharded.ts --browser=<b> --cases=<file> --out=<dir> [-- <run.ts arguments>]` runs a file as three jobs
+  at once and joins the rows; don't wrap it in the lock. With `--isolate` and `--ids=` or `--ids-file=` it runs the given
+  cases each in a fresh browser process, for page-history questions. Installed Safari runs in 5-minute parts by default, each
+  in a fresh tab.
+- **`--record-measurements`: landed 2026-09-17 20:45** ("Recorded measurements" below). Opt-in; it writes
+  `<browser>-measurements.ndjson.zst` beside the rows, and `bun rebuild/lab/measurements.ts --rows=<rows> --measurements=<file>
+  [--predictor=<file>]` replays a library build against it with no browser.
+- **Font facts: landed 2026-09-17 21:35** (`font-facts.json`, `font-facts.ts`, `font-facts.test.ts`; "Font facts" below and
+  DESIGN.md §1.2). `predictor.ts` already attaches them: nothing to run. Every fact is optional, and an engine that doesn't
+  read one keeps the gap condition it has. What is there:
+  - *The five missing families.* Hoefler Text, Kohinoor Bangla and Monaco are in the table. The platform UI font is too:
+    `system-ui` in all three engines, `BlinkMacSystemFont` in Blink, `-apple-system` in WebKit and Gecko. `-apple-system`
+    in Blink and `BlinkMacSystemFont` in WebKit and Gecko are family names that match nothing, so alone they still give
+    unknown facts (the engine's standard family isn't resolved).
+  - *Equally good faces.* Blink takes the first in AppKit's member order and WebKit the first in Core Text's matching order,
+    both from source, so Osaka and Hoefler Text give them facts; Gecko keeps every tied face and gets a fact only where
+    they agree.
+  - *`FontFacts.fonts`*, one entry per listed family in list order: `realizes`, `coverage` (code point ranges as that
+    engine asks the font), `ligatures` (patterns of character sequences, with `spaced`: still a ligature under the features
+    the engine sets for letter-spacing, and `complete`: no other ligature exists between grapheme clusters),
+    `spacingInputs` (the characters that liga, clig and, in Blink, calt lookups can act on at all) and `scriptLookups`
+    (scripts whose GSUB and GPOS lookups differ from the font's fallback records, as HarfBuzz selects them).
+  - *What the tables say about the lab's main fonts.* Georgia and Verdana have no ligature and nothing letter-spacing can
+    change. Arial, Times New Roman and Courier New ligate no Latin (their `fi` glyph has no lookup); their `liga` lookups
+    start only at alef, reh and lam (the Allah and rial ligatures and a few lam ones), and lam-alef is `rlig`, which
+    letter-spacing keeps. Amiri and Noto Naskh Arabic draw lam-alef as two glyphs in two clusters; Noto Naskh's one
+    ligature is U+FDF2 with its marks. Helvetica, Helvetica Neue, Times, Menlo, Geeza Pro, Thonburi and Hoefler Text shape
+    through `morx`, where HarfBuzz reads no GSUB or GPOS script at all. Core Text reports an invalid `morx` subtable in
+    Thonburi and ligates nothing there, where HarfBuzz ligates `fi` and the Thai mark compositions.
 
 ## Running
 
@@ -53,15 +153,19 @@ dependence"). `--allow-safari-frontmost` (Safari only, no value) skips the wait 
 value) skips native observation: rows keep their format with `native: { skipped: 'predict-only' }`, the predictor and
 painter still run, and `run.json` records `predictOnly` and `totals.skippedNativeRows`. Score such rows with `score.ts
 --native-rows`. `--chrome-apple-languages=<tag>[,<tag>...]` with `--chrome-accept-languages=<list>` (Chrome only, both
-together) launch Chrome under other languages than this Mac's (see "Browser-process languages").
+together) launch Chrome under other languages than this Mac's (see "Browser-process languages"). `--part-cases=N`,
+`--part-ms=N` and `--parts-from=<run.json>` cut the run into parts, each in a fresh browser process (see "Parts").
+`--record-measurements` (no value) stores every Canvas call of every case beside the rows (see "Recorded measurements").
 
 Before launching, it reads the build from the app bundles, because user agents can't tell builds apart (Chrome's says
 `153.0.0.0` for every 153 build): Chrome's and Firefox's `CFBundleShortVersionString`, which are also the engine builds;
 Safari's, with WebKit.framework's `CFBundleVersion` as the engine build, for Safari and for webkit-host, whose user agent
 copies installed Safari's version; and the OS build from `sw_vers -buildVersion`. Every row carries it as `build`, and the
 page gives the engine build to the predictor. Every row also carries `languages` (see "Browser-process languages"). It
-writes `<out>/<browser>-rows.ndjson`, one row per case, and `<out>/<browser>-run.json` with the build, the languages,
-totals, the case order, page contexts, the environment, the languages pages report and errors. It exits nonzero when
+writes `<out>/<browser>-rows.ndjson`, one row per case, and `<out>/<browser>-run.json` with the app it launched (`app`: the
+bundle path, whether it is a pinned copy, and the copy's tree hash), the build, the languages, `bundleSha256` (the sha256
+of the library bundle the pages ran: two runs' rows come from the same library when these agree), totals, the case order,
+the parts, page contexts, the environment, the languages pages report and errors. It exits nonzero when
 anything goes wrong: invalid cases, a launch or page failure, a stall, a native observation error, a missing row, a user
 agent that doesn't name the build read before launch, Chrome renderers without one agreed `--lang`, or a change of user
 agent, DPR, visual-viewport scale or reported languages during the run. A prediction error is a result, not a lab
@@ -71,15 +175,16 @@ failure.
 
 Sessions stay in the background and never activate a window.
 
-- Chrome: installed Chrome, headed, in its own `--user-data-dir` under `.artifacts/profiles/`, started with
-  `open -n -g -a` and `--no-startup-window --remote-debugging-port=0`, plus `-AppleLanguages` and a
+- Chrome: the lab's pinned copy of Chrome ("Pinned browsers"), headed, in its own `--user-data-dir` under
+  `.artifacts/profiles/`, started with `open -n -g -a` and `--no-startup-window --remote-debugging-port=0
+  --disable-updater-scheduler`, plus `-AppleLanguages` and a
   `Default/Preferences` file with the accept languages (see "Browser-process languages"). Headless Chrome can lay out at
   zoom 1 while reporting DPR 2. Chrome activates itself whenever it shows a window the normal way, `open -g` or not (a
   startup window took focus for half a second), so the driver opens the lab window with the DevTools protocol's
   `Target.createTarget { newWindow: true, background: true }`, which Chrome shows inactive. It uses the protocol for
   nothing else.
-- Firefox: headed, in its own profile under `.artifacts/profiles/`, started with `open -n -g -a Firefox --args
-  --new-instance`, with its language prefs in `user.js`. macOS 27 blocks a shell-spawned Firefox from its data folders,
+- Firefox: the lab's pinned copy ("Pinned browsers"), headed, in its own profile under `.artifacts/profiles/`, started
+  with `open -n -g -a <copy> --args --new-instance`, with its language prefs and `app.update.auto` false in `user.js`. macOS 27 blocks a shell-spawned Firefox from its data folders,
   and headless Firefox draws emoji at odd widths.
 - Safari: a single-tab window in the user's Safari, created through AppleScript without activating it
   (safaridriver doesn't work on macOS 27). A new document in a frontmost Safari opens over the user's windows and
@@ -103,8 +208,10 @@ Sessions stay in the background and never activate a window.
   client's limit (WebProcessCocoa.mm:220, :1180-1205), and past it the UI process drops every activity and suspends it
   (`WebProcessProxy::didExceedCPULimit`, WebProcessProxy.cpp:2360-2395); the page keeps its invalid title activity until
   the next commit (WebPageProxy.cpp:9266-9268), so from then on it is suspended like any hidden page, about 20 s plus 4
-  minutes after it is covered (ProcessThrottler.cpp:49-50). Not fixed: keep an installed Safari job, or its WebContent
-  process, under that window, or keep the lab window visible (REPORT.md §2.7).
+  minutes after it is covered (ProcessThrottler.cpp:49-50). Since ceiling round 3 an installed Safari run goes through
+  5-minute parts, each in a new single-tab window with a WebContent process of its own ("Parts"), so no process reaches that
+  window. A single chunk that takes longer than 8 minutes still would: keep giants out of installed Safari jobs, or give
+  each its own job.
 - webkit-host: the system WebKit.framework, which installed Safari runs, in a small WKWebView app
   (`rebuild/tools/webkit-host/main.swift`, built by `build.sh` into `.artifacts/webkit-host/webkit-host`). The driver
   spawns it with the page URL; it doesn't touch the user's Safari. The host never activates (accessory app, no Dock
@@ -120,6 +227,123 @@ Sessions stay in the background and never activate a window.
 The page navigates itself. Apart from opening Chrome's window, no remote debugging protocol is used. The driver
 closes the browser it opened (Chrome and Firefox get SIGTERM, then SIGKILL; webkit-host gets 2 s to exit by itself
 first) and moves their profiles to the Trash. It launches once and never retries.
+
+## Pinned browsers
+
+Chrome updated itself from 153.0.8010.48 to .50 in the middle of ceiling round 2. So the lab and the probe runner launch
+private copies: `~/github/browser-engines/apps/Google Chrome 153.0.8010.50.app` and `Firefox 156.0.app`
+(`browser-build.ts` `LAB_APPS`). `bash rebuild/lab/pin-browser.sh chrome|firefox` makes a copy with `ditto`, which clones
+the files on APFS, so a copy costs no disk until the installed app changes. It hashes both trees (every file's path and
+sha256, every link's target), refuses a copy that differs, and writes the hash beside the copy as `<copy>.tree-sha256`. The
+installed apps aren't touched, the copies aren't edited, and both copies launch through `open -n -g -a` like the installed
+apps did. `run.json` and the probe outputs record the app path and the tree hash (`app`), and rows keep `build` as before,
+so rows of a pinned run and of the installed app at the same build still meet (`score.ts --native-rows` compares `build`).
+In the pinned Chrome all 2,580 `runs` cases give the native observations the installed .50 gave in round 2, and the same
+holds for Firefox.
+
+- Chrome's updater keeps one path per app id. A Chrome started from another path registers that path 19 s after startup
+  (`chrome_browser_main.cc` `PreCreateMainMessageLoop`, `browser_updater_client_util_mac.mm` `EnsureUpdater`,
+  `browser_updater_client_mac.mm` `AppMatches`, read at Chromium 152), and the updater would then update the copy and leave
+  the installed Chrome alone until it runs again. `--disable-updater-scheduler` skips that scheduling (the switch is in
+  153.0.8010.50's framework binary), and both drivers always pass it (`CHROME_PIN_ARGS`). Never start the copy by hand
+  without it. After the round's pinned jobs the updater's record still names `/Applications/Google Chrome.app`
+  (`~/Library/Application Support/Google/GoogleUpdater/prefs.json`, `updateclientdata.apps`).
+- Firefox updates the bundle it runs from. A release build ignores `app.update.disabledForTesting` outside automation and
+  takes the `appUpdate` policy only from the bundle or the system (`UpdateServiceStub.sys.mjs` `updateDisabled`, Firefox
+  156), so the lab's profiles set `app.update.auto` and `app.update.staging.enabled` to false (`FIREFOX_PIN_PREFS`); on
+  macOS `app.update.auto` is an ordinary pref. The probe runner's sessions also run under Firefox's automation prefs.
+- `LAB_CHROME_APP=<bundle>` and `LAB_FIREFOX_APP=<bundle>` name another bundle for one command, to try a new release
+  before moving the pin. A new release gets a new copy and a new path in `LAB_APPS` (rebuild/TESTS.md §12).
+- Installed Safari and the system WebKit.framework can't be pinned: they move with macOS.
+
+## Parts
+
+A part is a fresh browser process, and a run can go through several: `--part-cases=N` ends a part after exactly N cases,
+`--part-ms=N` once the part has run for N ms less the run's longest chunk so far, and `--parts-from=<run.json>` where that
+run of the same cases in the same order started its parts, so two browsers see every case after the same history. A part
+ends only on an acknowledged chunk, with a `retire` reply to the page, and `run.json` lists the parts (`parts`: reason,
+first row, rows, ms). Chrome and Firefox relaunch in a new profile and webkit-host is spawned again, after the part
+before them closed, so a job never runs two instances; every part's first step checks the process languages again.
+
+Installed Safari runs in 5-minute parts unless `--part-ms` says otherwise. Each part gets a new single-tab window, opened
+the way the first one is, without activating anything, before the old tab closes. A new tab's first load is `about:blank`,
+which has no site, so WebKit gives the tab a prewarmed or new WebContent process and never a cached one
+(WebProcessPool.cpp `processForSite` :1271-1296), and the lab URL then stays in that process ("Navigation is treated as
+same-site", `processForNavigationInternal`). `ps` can't confirm it: WebContent processes don't name their client, and
+other jobs' webkit-host processes run beside Safari's. Cases whose layout depends on the process's history do
+(`.artifacts/lab/round3-infra/fresh-process-probe`): of the development suite sample's first 2,048 cases in run order, 8
+lay out differently than alone in a fresh process, and with a part boundary before the first three (`--part-cases=1463`)
+those three lay out as in a fresh process, in installed Safari exactly as in webkit-host, while the five that come 500
+cases later are affected again in both. Every row of both Safari jobs was hidden. Without `--allow-safari-frontmost` a
+later part waits like the first one while Safari is the frontmost app, and the run fails once `--stall-ms` has passed.
+
+Validated on `dev-all` (25,180 cases): installed Safari with `--part-ms=120000` ran two parts in 179 s, and webkit-host
+with `--parts-from` that run gave equal native observations, predictions and painted lines on every case
+(`.artifacts/lab/round3-infra/safari-parts`). The family file (21,734 cases) ran in two 40-second parts. The lab window
+was visible during `dev-all` and partly hidden during the family file; the driver can't choose.
+
+## Sharded runs and isolation
+
+`bun rebuild/lab/sharded.ts --browser=<browser> --cases=<cases.ndjson> --out=<dir> [--shards=N] [--ids=<id>[,<id>...]]
+[--ids-file=<file>] [--isolate] [--job=<lock job name>] [-- <more run.ts arguments>]` runs one case file as several
+`run.ts` jobs at the same time. It starts each job under the browser lock itself, so don't wrap it in the lock.
+
+- The selected cases are cut into N runs of neighbours in file order with about equal text length (N defaults to the
+  browser's lock slots: 3, and 1 for installed Safari). Each shard writes `<out>/shards/<k>/` like any run.
+- When every shard is ok, the rows are joined in shard order into `<out>/<browser>-rows.ndjson` (and measurement records
+  into `<out>/<browser>-measurements.ndjson.zst`), the shards' own rows go to the Trash, and `<out>/<browser>-run.json` sums
+  the shards' records, in the shape `run.ts` writes, so `score.ts`, `derive.ts` and the gates read the folder like any run.
+  It refuses shards that ran another build, other given languages or another library bundle. A failed shard fails the run;
+  nothing is joined and nothing runs again.
+- A shard's cases keep their neighbours, but every shard starts a fresh document, so history-dependent cases near a cut can
+  differ from an unsharded run. Compare two orders of the same sharding. On `ws` (1,019 cases) a sharded run's rows equal an
+  unsharded run's in native observation, prediction and painted lines in Chrome, Firefox and webkit-host
+  (`.artifacts/lab/round3-infra/sharded-check`).
+- **Isolation protocol** (research/TEST-ARCHITECTURE.md §6.5): `--isolate` with `--ids=` or `--ids-file=` runs every given
+  case alone in a fresh browser process (`run.ts --part-cases=1 --chunk=1`), so its row shows the case with no document or
+  process history. Score the joined rows alone, and against a run of the whole set with `score.ts --native-compare`. A case
+  costs about a third of a second in webkit-host and two to three seconds in Chrome and Firefox. First use
+  (`.artifacts/lab/round3-infra/isolate-host`): the 75 webkit-host development suite sample cases round 2 found
+  history-dependent. Alone, every one equals exactly one of the two orders' native views (38 differ from the forward run, 37
+  from the reverse run, none from both), and the round 3 library passes lineCount and breaks on all 75 and widths on 74.
+
+## Recorded measurements
+
+`run.ts --record-measurements` (opt-in) writes `<out>/<browser>-measurements.ndjson.zst`: one line per case, in row order,
+streamed through `zstd` (read it with `zstd -dc`, or `measurements.ts` `readMeasurements`). `record.ts` has the format. Per
+case:
+
+- `calls`: every `measureText` call on an OffscreenCanvas or `<canvas>` 2D context, in call order: `[context, string, width,
+  actualBoundingBoxLeft, Right, Ascent, Descent]`. `phases` gives the range of calls made while the case was observed
+  natively (the lab's own font probe), predicted, run through the observation port (the WebKit port measures live) and
+  painted.
+- `contexts`: per context, the settings the caller assigned, as it spelled them (`assigned`), the settings the context
+  reports (`settings`; null where the browser's context lacks the attribute, as WebKit's lacks `lang`, `fontKerning` and
+  `textRendering`), its font box, its number in the document, and `declared`: the settings the library declared for it, with
+  the `partition` no context attribute shows, joined through the library's own call log. `library.agrees` says whether that
+  log and the predict phase hold the same strings and widths in the same order.
+- `segmentations`: every dictionary segmentation asked of the browser (`Intl.Segmenter.segment`, `Intl.v8BreakIterator`),
+  since a layout of Thai text can't be repeated without them. The other page facts a layout reads (user agent, DPR,
+  `<html lang>`) are in the row's `env`.
+
+The recorder wraps the prototypes' methods and setters and passes every argument through untouched. It can't see whether a
+string is stored in 8 or 16 bits, which Blink's Canvas results depend on; the library's `partition` says what it meant.
+Timings of a recorded run aren't comparable with other runs, and a giant's record is as large as its calls: keep giants out
+of recorded runs.
+
+`bun rebuild/lab/measurements.ts --rows=<rows.ndjson> --measurements=<file> [--predictor=<file>] [--limit=N]
+[--out=<report.json>]` checks a library build against a record with no browser running. Per case it installs the row's page
+facts and a replay of the record's predict phase as the globals a layout reads (`OffscreenCanvas`, `document.createElement(
+'canvas')`, `Intl.Segmenter`, `Intl.v8BreakIterator`), runs the predictor's `predict()`, and reports whether the layout as a
+row keeps it equals the row's, how many `measureText` calls it made against the record's, and every case that asked a
+question the record lacks, which can't be answered offline. A question is a context and a string, and a context is found
+by its assigned settings, spelled the same way. Exit 1 when any case differs or asks a new question.
+
+Validated on `runs` (2,580 cases) in Chrome, Firefox and webkit-host (`.artifacts/lab/round3-infra/record`): a recorded run's
+rows equal an unrecorded run's of the same library in native observation, prediction and painted lines, the library's log
+agrees with the recorder on every case, and the offline replay of the same library gives the same layout on all 2,580 cases
+in each browser with exactly the recorded number of calls (Chrome 368,962, Firefox 213,552, webkit-host 80,012; webkit-host's
+record holds 361,636 calls with its observation port's). A record is about 1 to 2 KB a case compressed.
 
 ## Browser-process languages
 
@@ -220,6 +444,57 @@ A predictor swapped in with `--predictor` may return line ranges alone, `{ lines
 (`baselines/main-predictor.ts` does). The page records those as they are and doesn't paint. Rows recorded before the
 observation ports, 2026-09-16 and earlier, carry that shape too.
 
+## Font facts
+
+`font-facts.ts` resolves a CSS font declaration to the `FontFacts` each engine reads on this Mac (DESIGN.md §1.2), from
+`font-facts.json`, a table of properties of the installed fonts and the web font fixtures. Facts are properties of a font,
+never expected layout results. The library never reads the table or a font file; the lab declares the facts the way an app
+that knows its fonts would. `font-facts.test.ts` holds known fonts' facts.
+
+The table is built offline by the programs under `.artifacts/charter-20260916/font-facts/tools/`, which the table records
+with their hashes, the font files' hashes and the engine source behind every column (`provenance`, `rules`):
+
+- `collect-families.ts`: every font declaration the case files name (flat runs and the spans of tree cases).
+- `ctprobe.swift`: Core Text. A family's faces in Core Text's and in AppKit's order, traits, the platform UI font, the
+  substitute for U+0628, and every code point Core Text gives a glyph.
+- `tables.py` (fontTools): the cmap as ranges, the tables present, kerning formats, GSUB and GPOS script tags, and the
+  scripts grouped by the lookups HarfBuzz selects for them.
+- `ligatures.py` (fontTools and HarfBuzz through uharfbuzz): the ligature patterns and the letter-spacing inputs. Its
+  header says how candidates come from the font's GSUB LigatureSubst entries and `morx` ligature subtables, how they are
+  shaped, and what makes a face's list incomplete.
+- `ctligatures.swift`: Core Text's verdict on every string `ligatures.py` shaped, under its defaults and under the features
+  WebKit and Gecko's Core Text shaper set for letter-spacing.
+- `build-facts.ts`: joins them into `font-facts.json`. It refuses to write when Core Text and fontTools disagree on a table,
+  when a cmap code point has no Core Text glyph (except in the platform UI font, where Core Text withholds some), or when a
+  fixture's hash isn't `fonts.json`'s.
+
+To rebuild after a case generator names a new family or an OS update changes a font, from that folder: add the family to
+`query-r3.json`, then
+
+```sh
+bun tools/collect-families.ts declarations-r3.json <case files>
+swiftc -O tools/ctprobe.swift -o /tmp/ctprobe && /tmp/ctprobe query-r3.json ctprobe-r3.json
+python3 tools/font-files.py ctprobe-r3.json > installed-paths-r3.txt
+venv/bin/python tools/tables.py tables-installed-r3.json @installed-paths-r3.txt
+venv/bin/python tools/tables.py tables-fixtures-r3.json @fixture-paths-r3.txt
+venv/bin/python tools/ligatures.py ligatures-r3.ndjson @installed-paths-r3.txt @fixture-paths-r3.txt
+swiftc -O tools/ctligatures.swift -o /tmp/ctligatures && /tmp/ctligatures ligatures-r3.ndjson ctligatures-r3.ndjson
+bun tools/build-facts.ts && bun test rebuild/lab/font-facts.test.ts
+```
+
+The whole chain takes under two minutes and no browser.
+
+What the facts don't say:
+- The engine's fallback after the listed families, and the family a generic keyword realizes when the engine has more
+  than one candidate (Blink and Gecko choose by the content's script and language). Those entries have null facts.
+- Ligatures inside one grapheme cluster (emoji sequences, Indic conjuncts), and the ligatures of fonts whose forms need
+  neighbours the program never tried: the Devanagari, Bangla, Khmer and Myanmar fonts, Noto Nastaliq Urdu, Apple Chancery,
+  Hoefler Text's italics, Raanana and Apple Color Emoji have `complete: false`.
+- Anything under a language system other than the default. `languageSystems` names the ones that change lookups.
+- Core Text's default features aren't in source. Of 16,233 strings from ligature entries outside HarfBuzz's default
+  features, Core Text ligated 2 by default, both of which HarfBuzz ligates through an entry inside them
+  (`provenance.coreTextDefaultFeatures`).
+
 ## Scoring
 
 `score.ts` streams rows and compares each row's native rects exactly with the rects its observation port expects
@@ -235,10 +510,57 @@ any missing row makes the scorer exit 1. `--sealed` writes counts only, per brow
 no case ids, texts, families or examples, and takes no `--per-case` or `--examples` (see "Sealed held-out sets").
 Imported as a module, `score.ts` runs nothing and exports `scoreRow`, `nativeLines`, `nativeView`, `nativeDifference`,
 `lineRangeDiagnostics`, `withNativeRow`, `indexRows`, `readRowAt`, `environmentKey`, `rowText` and `readLines` with their
-types, so tools that compare rows use the scorer's rules. It also exports `slotProtocol` and `lineLocalGaps`.
-`SCORER_VERSION` is 4. Version 1 derived native lines and widths from visibility rules; version 2 grouped every rect into
-native lines by vertical centre; version 3 placed code point rects by their own node's box. Their rules and evidence are
-in this file's git history.
+types, so tools that compare rows use the scorer's rules. It also exports `slotProtocol`, `lineLocalGaps`,
+`RESIDUAL_CLASSES` and `residualMembership`.
+`SCORER_VERSION` is 5. Version 1 derived native lines and widths from visibility rules; version 2 grouped every rect into
+native lines by vertical centre; version 3 placed code point rects by their own node's box; version 4 compared element
+rects, marked slot protocol rows and counted every gap that concerned a failing line as covering it. Their rules and
+evidence are in this file's git history.
+
+**Round 2 re-counted under scorer 5 (2026-09-17, ceiling round 3).** Round 2's evaluation rows
+(`.artifacts/ceiling-20260917/evaluate-r2`, the round 2 library) re-scored into `.artifacts/ceiling-20260917/rescore-s5/`,
+every set in both orders, sealed-2 counts only. Between scorer 4 and scorer 5 no metric status changes on any set in
+either order except the feature families, where the widths and painter extents of indented lines go from unobserved to
+pass: Chrome 1,922 cases, Firefox 1,885 (`rule/line-slots` and `rule/text-indent`; 10 Chrome `rule/text-indent` widths stay
+unobserved, clamped to 0 by a negative indent). No newly observed width fails. History-dependent cases are the same.
+
+Rows failing lineCount, breaks or widths without a covered explanation, forward order, history-dependent and protocol
+rows left out: scorer 4's count → scorer 5's (residual probed / residual by signature alone / open), of the rows failing
+a prediction metric:
+
+| Browser | Rule families | Feature families | Development | Held-out 09-16 | Sealed-2 (counts) | Fresh runs 1-4 | Triage |
+|---|---|---|---|---|---|---|---|
+| Chrome | 0 → 0 of 457 | 0 → 0 of 0 | 0 → 2 (0 / 0 / 2) of 95 | 0 → 15 (0 / 0 / 15) of 205 | 0 → 8 (0 / 0 / 8) of 184 | 6 → 9 (0 / 0 / 9) of 48 | 1 → 8 (0 / 0 / 8) of 454 |
+| Firefox | 0 → 52 (0 / 0 / 52) of 992 | 0 → 0 of 0 | 9 → 19 (4 / 6 / 9) of 1,013 | 6 → 19 (3 / 3 / 13) of 877 | 8 → 17 (0 / 5 / 12) of 938 | 7 → 28 (2 / 7 / 19) of 160 | 7 → 19 (4 / 3 / 12) of 653 |
+| webkit-host | 0 → 0 of 493 | 0 → 0 of 32 | 0 → 3 (0 / 0 / 3) of 210 | 0 → 22 (0 / 0 / 22) of 261 | 0 → 40 (0 / 0 / 40) of 195 | 0 → 2 (0 / 0 / 2) of 475 | 1 → 11 (0 / 0 / 11) of 759 |
+
+The held-out column includes the 9 giants that left `heldout-suite-sample.ndjson` for `giants.ndjson` this round, scored
+from round 2's held-out rows as the set `heldout-giants` (Chrome: 6 of them fail widths, none covered; Firefox and
+webkit-host: none fails a prediction metric). Over all sets but triage that is Chrome 6 → 34 of 989 failing rows, Firefox 30 → 135 (9 probed, 21 by signature alone, 105
+open) of 3,980, and webkit-host 0 → 67 of 1,666. webkit-host's combined files: dev-all 5, families-all 0, heldout-all 25,
+sealed2-all 40; installed Safari's dev-all 5 and families-all 0, the same cases as webkit-host's. The classes, with example ids, are in `rescore-s5/uncovered.txt`, and
+every row with its failing lines, evidence and the gaps elsewhere in `rescore-s5/uncovered-<browser>.json`. In short:
+
+- Chrome: Arabic corpus lines where a space and the letter after it differ with nothing on them (`suite/maintained/corpus`,
+  6 giants and `c-d5c9e88814700c97`); the round 2 critic's two classes, now also where round 2 had them covered (U+3000 inside Arabic under letter
+  spacing, `runs/word-spacing-spans`, held-out, fresh and sealed-2; the lam-alef and Allah ligatures across a span edge,
+  `runs/bidi-runs` and `runs/letter-spacing-spans`), `suite/U+FFFC/start` break decisions with `script-context`,
+  `font-fallback` and `soft-hyphen-shaping` elsewhere on the line, `suite/script-prefix-heldout`, and in triage
+  `suite/joined` and `suite/mixed` break decisions with `glyph-clusters` and `unsafe-to-break` elsewhere, beside
+  `c-8c84627af834611f`.
+- Firefox: `in-word-prefix` reported at another offset than the text that differs. `rule/joining` (48 rows) and
+  `rule/in-word-breaks`, `runs/bidi-runs`, `runs/split-word`, `policy/overflow-wrap`: a line reports one offset (often one
+  it consulted, `c-1799ae7756792660`: line [0,7) reports offset 2 while the letters before the break at 7 differ), or the
+  break's gap sits only on the line that starts there (`c-7754e1930fc6a95a`). The 1 au class: 9 probed and 21 by signature
+  alone over all sets but triage; the keycap-heart rows (`c-a2661c5b12f20aec`, `c-29e69bcf2dd4945f`, `c-e69a2cc0039e247a`)
+  stay open. The rows the round 2 critic traced as backed by source stay covered: the break between joined letters across
+  a soft hyphen (`c-1815bd730254961c`), and `font-fallback` on the line of the emergency break (`c-65224845034de429`).
+- webkit-host: `suite/U+000B`, `U+000C`, `U+001C` to `U+001F` `/middle` widths, where `control-character-width` names the
+  control character on the line before and the letter after it differs (`c-c11c64d333d30506`, 0.03px); `suite/word` widths
+  with `letter-spacing-ligatures` elsewhere; `suite/physical-window-terminal-seam` and `suite/raw-context` breaks with
+  `page-history` on the line before; `c-66ae4ab7d56cb0ae`. `c-67cd9bd538cb3e95`, which the critic traced as backed, stays
+  covered. In a one-node paragraph the node is the unit, so there the
+  rule only drops gaps of other lines: webkit-host's weak coverage (REPORT §2.8) is as weak as before.
 
 **Scorer 4 is in (2026-09-17, ceiling round 2).** Engine owners re-score with it. What changed from version 3: element
 rects are compared ("Elements" below), slot protocol rows are marked ("Protocol rows"), and failing lines are attributed to
@@ -314,9 +636,18 @@ Metrics per case. `unobserved` and `not-applicable` are never passes.
     `f32(left + width)`, since box positions are float32 sums.
   - Firefox, app units: an edge is `round(v × 60)` where `DOMRect::SetLayoutRect`'s encoding gives the rect back.
 
+  On a line Blink or Gecko indented, the engine width holds the text-indent and no rect does, so the rects are compared
+  with the engine width less the indent (`observedWidth`): Blink's line position starts at the indent and
+  `LineInfo::Width` is that position after the last item (line_breaker.cc:877-879, :1149-1156), and Gecko adds
+  `mTextIndent` to the root span's `mICoord`, which becomes the line's inline size (nsLineLayout.cpp:197-199). WebKit moves
+  the line's rect by the indent before it places content (InlineLineBuilder.cpp:453, :474-476), so nothing comes off its
+  content width. A failure's detail then reads `width W less text-indent I`. Before scorer 5 these widths were unobserved
+  in Chrome and Firefox: 96% of `rule/text-indent` and half of `rule/line-slots`, whose first lines are indented.
+
   A rect no engine value encodes as is a mismatch. The width is unobserved on a line whose expected node rects don't
   span the engine width: Blink's hyphen that no node range reports (observe-blink U3), WebKit's content width a float32
-  step from its boxes after trimming. When an expected node rect on the line is limited, a mismatch says so in its reason.
+  step from its boxes after trimming, a Blink width that a negative indent clamped to 0 (`c-0afd262e43442524`). When an
+  expected node rect on the line is limited, a mismatch says so in its reason.
 - `painter`: each painted line's rects, zero-width ones included, form one native line under the same grouping, and the
   union of its positive whole-node rects spans the engine width of its line box by the same rule. Unobserved where the
   width is. It compares extents only: painted code point rects aren't mapped to source code points, because `paint`
@@ -359,27 +690,85 @@ Re-deriving `line-slots` with it (seed `feature-families-20260917`, native-only 
 `.artifacts/lab/round2-scorer4/line-slots/`) gives 0 protocol rows in every round and final run: Firefox 26,061 round
 rows and 1,790 final cases, webkit-host 41,296 and 1,908; round 1's Firefox rounds r03-r05 had 83. The 6 webkit-host RTL
 final cases whose row 0 insets and indent exceed the width keep their floats in rows, as WebKit's start-positioned rule
-says. The committed feature derivation (`.artifacts/tests/features-20260917`) still holds round 1's cases until the families
-are derived again. Line boxes taller than the line height (mixed fonts) would move rows too; the feature families' slot cases use
+says. Ceiling round 3 derived every family again with it (`.artifacts/tests/derive-r3-20260917`, rebuild/TESTS.md §6): no
+final run has a protocol row, and round 2's 22 are gone from the case files. Line boxes taller than the line height (mixed fonts) would move rows too; the feature families' slot cases use
 one font, and no rule checks that yet.
 
-Line-local gaps. A failing row is covered by a gap only where a condition concerns the failing line or the break decision
-the failing line starts from (research/ROUND1-CRITIC.md item 4). The per-case file's `lineGaps` has, per failing metric,
-`lines` (the native line index, its engine line, and the covering gaps with their scope), `covered` (every failing line has
-a gap) and `paragraphGaps` (paragraph gaps without a range, which cover nothing). Scopes:
+Covered failures (scorer 5). A gap covers a failing line only where its range touches what differs there
+(research/ROUND2-CRITIC.md item 1): under scorer 4 a `script-context` range on a quote covered a ligature 15 characters
+away. The rule has two steps, and `score.ts` "Covered failures" states it in full.
 
-- `line`: the failing engine line's own `gaps`;
-- `previous-line`: the `gaps` of the line box before it, and of lines without a line box between the two;
-- `below-floats`: gaps of slots the engine refused between the two lines;
-- `paragraph-range`: a paragraph gap whose `at` range (src/model.ts `Gap.at`) meets those lines' source range.
+1. The gaps that concern the line, each with a source range: the failing engine line's own `gaps` (`line`), those of the
+   line box before it and of lines without a line box between the two (`previous-line`), those of the line box after it
+   (`next-line`, new in scorer 5: the decision text of a line the prediction ends early lies on the predicted next line),
+   those of slots the engine refused between the two lines (`below-floats`), and paragraph gaps whose `at` range meets
+   those lines' source range (`paragraph-range`). A line gap's range is its `at` (src/model.ts `Gap.at`), or its whole
+   line without one; such a gap is marked `unranged`. A paragraph gap without `at` covers nothing and is listed under
+   `paragraphGaps`. A gap reported on a neighbouring line covers only with a range that reaches the evidence; a point
+   there is that line's own edge (Blink's `unsafe-to-break` at the next line's start says nothing about the U+3000 that
+   ends the failing line, `c-45d738663a9704be`). So an engine reports a break's gap on every line whose width or break it
+   can make wrong: round 2's Gecko rows report `in-word-prefix` between joined letters only on the line that starts at
+   the break, and the line that ends there comes out without a covered explanation, with the gap under `elsewhere` as
+   `next-line`.
+2. The evidence those ranges must touch:
+   - *Differing units*: the text on the failing engine line whose observed width differs from the expected one in engine
+     units, whatever state the port gave the value. In Chrome and Firefox a unit is the grapheme cluster of a code point
+     whose rect differs, with the code points next to it that report no width or are default ignorable (a gap at a break
+     after a soft hyphen concerns the letter before it); where only a node rect shows the difference, the node's part of
+     the line. In WebKit a unit is always a differing node's part of the line, because its code point rects snap to whole
+     px. x alone never makes a unit, and element rects make none.
+   - *Runs*: units that follow each other without a break. A run whose widths add up to the same natively as expected
+     (Gecko: the sum in app units; Blink: the extent of its rects, within the one-LayoutUnit rounding of floored and
+     ceiled carets when its left edge moved) changes neither the line's width nor its break and needs no gap: Blink
+     reports the letters of a joined word as exact where they aren't, and that is counted under exact observation
+     agreement, not here.
+   - *The decision text*, for lineCount and breaks: the text between the predicted and the native break of the first
+     line that differs, from the first to the last code point one side places on that line and the other doesn't, and
+     out to the predicted break where that lies before them, or after them past code points without width.
 
-lineCount and breaks attribute the first native line where native layout and the prediction disagree: for every code point,
-node and element, the lowest line in one of its two line sets and not the other, or the first line only one side has. Widths
-and the painter attribute every line whose extent differs. A prediction error, a painter error and a painted line count
-that differs have no line and are never covered. The summary's `lineLocal` counts, per metric, `failures`,
-`withoutLineGap` (a failing line no gap concerns), `withoutLineGapButParagraphGap` (of those, rows with a paragraph gap
-without a range) and `byGap` (failing rows each gap covers on some failing line). A limited expected value names a gap in a
-width failure's reason, but it comes from the observation port, not the layout, and covers nothing.
+   A widths line is covered when every run that contributes is touched by some gap (every run when none contributes;
+   never a line without units). One touched unit isn't enough: round 2's U+3000 rows end in a hanging U+3000 that
+   `unsafe-to-break` at the line edge touches, while the U+3000 that makes the width sits mid-line. A lineCount or breaks
+   line is a pure break decision when no contributing run lies before the run that runs back from the decision text
+   (what ends a line is trimmed, hung, hyphenated or reshaped because of the break); then a gap at the decision text or
+   on that run covers it, and so does the failing line's own gap without a range when the decision text starts where the
+   line ends. Otherwise every other contributing run must be touched. In WebKit the node that reaches the
+   decision text is a unit up to it, so in a one-node paragraph the rule only drops gaps of other lines and of text
+   after the decision. Painter lines keep scorer 4's rule (every gap that concerns the line), because painted rects
+   aren't mapped to source offsets.
+
+The scorer checks where a range is, not what the condition's source reading says. A condition whose `at` names less than
+the text it concerns (a first character, a consulted offset instead of the break taken) now covers less; widening `at` is
+widening the condition, and needs the source reading and firing rates the round asks for.
+
+The per-case file's `lineGaps` has, per failing metric, `lines`, `covered` (every failing line is covered) and
+`paragraphGaps`, as before. Each line has `nativeLine`, `engineLine`, `gaps` (the gaps that cover it, with `scope`, `touch`
+`unit` or `decision`, and `unranged`), `elsewhere` (gaps that concern the line and cover nothing: what scorer 4 counted)
+and `evidence`: `units`, `nodeUnits`, `runs`, `deciding` (runs a gap must touch), `touched`, `first` and `firstText` (the
+first deciding run no gap touches), and for lineCount and breaks `decision`, `decisionText` and `pureDecision`. lineCount
+and breaks attribute the first native line where native layout and the prediction disagree, or the line before it when the
+decision text sits at that line's end (a space one side splits across two lines); widths and the painter attribute
+every line whose extent differs. A prediction error, a painter error and a painted line count that differs have no line and
+are never covered. The summary's `lineLocal` keeps `failures`, `withoutLineGap` (failing rows without a covered
+explanation; the name is scorer 4's), `withoutLineGapButParagraphGap` and `byGap`, and adds
+`withoutLineGapButGapElsewhere` (of those, rows every failing line of which has a gap that scorer 4 counted),
+`coveredOnlyByUnrangedGap`, `coveredOnlyAtDecision`, `predictionRows` and `residual` (next paragraph). A limited expected
+value names a gap in a width failure's reason, but it comes from the observation port, not the layout, and covers nothing.
+
+Residual classes. A residual class is a failure class a probe showed to be a Canvas-versus-DOM difference that no Canvas
+measurement detects (CHARTER.md). It is not a gap and covers nothing. `score.ts` holds the registry, `RESIDUAL_CLASSES`:
+per class its name, engine, probe evidence, mechanism (`verified` or `inferred`), signature in words, the strings a probe
+measured both ways, and the predicate. Every row that fails lineCount, breaks or widths is matched; the per-case file
+gets `residual` (`name`, `membership`, `detail`), and the summary counts, in `lineLocal.predictionRows`, the rows `failing`,
+those `withoutCoveredExplanation`, of those `residualProbed` and `residualSignatureOnly`, and the rest as `open`;
+`lineLocal.residual` has the same per class, with the members a gap covers apart. A member is `probed` when a probe
+measured the text that differs: the differing code points lie inside a probed string of the node's first family, size
+and weight, on the failing line, and the difference has the probed sign and size. Otherwise it is `signature`: a port bug
+that moves one node by one unit has the signature too, so such rows stay suspects until probed. The first entry is
+`gecko/one-shaping-unit-one-app-unit`: lineCount and breaks pass, widths fail, every node has the expected number of rects,
+exactly one node rect differs in width by exactly 1 app unit, and the painter drew every failing line at the native
+width. Its difference is probed (F7, ROUND2-CRITIC item 4); its mechanism is inferred. To add a probed string or a class,
+edit the registry with the probe record named, and add a test next to "residual classes" in `score.test.ts`.
 
 The summary (`--out`) has counts per browser and per family, reasons, facts, and per gap how many rows report it and how
 many of those fail lineCount or breaks. It keeps a histogram of engine width minus native extent (LayoutUnits in Chrome,
@@ -391,6 +780,33 @@ given process languages and scorer version, or the user agent for rows from befo
 and code point rects placed by centre. `historyDependent` is described below. `--per-case` writes each case's four
 metrics, its facts, its diagnostics, the gaps its layout reports, and `historyDependent` with the difference when a
 comparison found one.
+
+## Seeds go to a staging folder
+
+`gate.ts --seed` never writes the baseline it names (ceiling round 3; the round's baseline rule: nobody but the evaluator
+writes seeds, to a staging folder, and they are adopted only after the critic has checked them).
+
+```sh
+bun rebuild/lab/gate.ts --seed --staging=rebuild/lab/baselines/staged-round3 --engine=gecko --engine-version=<label> \
+  --baseline=rebuild/lab/baselines/gate-firefox-<build>.json --runs=<forward per-case>,<reverse per-case> [--note=<text>]
+```
+
+- `--baseline` is the adopted seed, which stays as it is. The new seed goes to `<staging>/<the baseline's file name>` and
+  its record to `<staging>/<name>.seed-record.json`. `--staging` is required and can't be the folder the baseline is in.
+  `--prune-protocol` writes to the staging folder too. Adopting a seed is copying it over the baseline, by whoever is
+  allowed to.
+- The record compares the new seed with the adopted one: every lost pair with its status, reason and detail in the first
+  seeding run that doesn't pass it, whether that run found a covered explanation and the gaps that cover it (`lineGaps`),
+  its residual class if any, and an empty `attribution` for the source reading a person adds; `leftThroughHistory`, the
+  adopted seed's passes whose case a seeding run now marks history-dependent, with the difference the two orders showed
+  and whether the pair passes now (they stop gating without failing, which round 2's record left out: Firefox 134 pairs,
+  webkit-host 8); `leftThroughProtocol`, the same for rows that are protocol rows now; the pairs gained; and the cases
+  only one side observed. Protocol rows and history-dependent cases are never passes of a seed.
+- A check reports `leftThroughHistoryPairs`: baseline passes of cases that are history-dependent now and weren't at
+  seeding.
+- Seeding refuses runs without recorded process languages and runs scored by different scorers. It doesn't skip the
+  environment check of a later `gate.ts` run: a seed's environments are the ones its runs recorded.
+- `rebuild/tests/gate.ts seed` still writes its baseline in place. `gate.ts` exports `stagedPath` and `seedRecord` for it.
 
 ## Page-history dependence
 
@@ -425,8 +841,9 @@ bun rebuild/lab/score.ts --rows=<dir>/reverse/webkit-host-rows.ndjson --cases=<c
 - A comparison only finds the dependence the two orders expose. Compare runs of the same case file on the same browser
   build and environment; a shuffled run widens the net.
 - Each row's `env.documentCaseIndex` and `env.previousCaseId` say which cases the document observed before it. To test
-  one suspect, run a case file holding the case alone and one holding the suspect then the case: a single-case run
-  gets a fresh document in a fresh browser process.
+  suspects, run them each alone in a fresh browser process with `sharded.ts --isolate` ("Sharded runs and isolation"), or
+  put a part boundary right before them with `run.ts --part-cases` ("Parts"). Two orders of one set can't show history both
+  orders share; an isolated row can.
 
 ## Comparing another predictor on the same observations
 
@@ -465,16 +882,109 @@ bun rebuild/lab/triage.ts --rows=<rebuild rows, file order> --reverse-rows=<rebu
 - Each record also names main's case ids from the lab case's origin, the metrics main's suite required, the rebuild's and
   main's statuses, the gaps the rebuild's layout reports, and the environment key.
 
+## Fresh rounds
+
+Fresh generated cases find classes that iterated and sealed sets don't (research/ROUND2-EVALUATION.md), so the ceiling is
+measured on sets nobody iterated on. `fresh.ts` makes one, runs it and reports it:
+
+```sh
+bun rebuild/lab/fresh.ts --browser=chrome --seed=r3-blink-1                 # an owner's loop: file order only
+bun rebuild/lab/fresh.ts --browser=firefox --seed=r3-eval-1 --both-orders   # evaluation: history dependence checked
+bun rebuild/lab/fresh.ts --browser=chrome --seed=r3-blink-1 --report-only   # print the report again, re-scoring if score.ts changed
+bun rebuild/lab/fresh.ts report --browser=firefox --runs=<scored run dir>[,<dir>...]   # the same report over any scored runs
+```
+
+Start it without the lock: it runs every browser job under `with-browser-lock.py` itself. A seed is a new name
+(letters, digits, dots, dashes); everything lands in `.artifacts/lab/fresh/<browser>/<seed>/`. A second call with the same
+browser and seed resumes: nothing that exists is generated, run or scored again.
+
+1. **Generate**, without any case id used so far (`cases/used-ids.ts`: every case file a `run.json` under `.artifacts`
+   names, `.artifacts/lab/cases`, `final-20260916/cases`, every sealed set, every earlier fresh set, the smoke cases), under
+   a generation lock so two rounds started together can't draw the same case. Kinds (`--kinds=`, default all):
+   - `runs`, `ws`, `policy`: the generators of `cases/` under the seed, about 5,200 cases; `--repeat=N` adds the seeds
+     `<seed>#2` to `<seed>#N`.
+   - `suite`: `--suite-sample=N` (default 3,000) unused suite cases by one quota per family, as sealed sets draw them.
+     144,156 of the suite's 238,524 cases were unused on 2026-09-17; each round uses what it draws.
+   - `family-widths`: the rule and feature family paragraphs at seeded widths (`cases/family-widths.ts`). The family
+     builders in `rebuild/tests/families` never draw from their seeded stream, so every seed gives the same 3,276 paragraphs
+     at the same derived widths and a new derivation would make no new case. This kind takes the browser's derived family
+     cases (`--family-dirs=`, default the 09-16 rule and 09-17 feature derivations) and lays each paragraph out at
+     `--widths-per-paragraph=N` (default 1) new widths: 70% within ±2 to ±128 units of 1/64 px of a derived bracket, 30%
+     between the paragraph's narrowest and widest brackets. A paragraph with line slots stays at or above its narrowest
+     derived width, so the slot protocol holds.
+   A seed names one set of flat cases: a second browser asking for the same seed copies the first one's `runs`, `ws`,
+   `policy` and `suite` files, so browsers compare on the same cases. `family-widths` is per browser. Giants (below) go to
+   `cases/giants.ndjson` and run only with `--giants=run`, exclusively, after the parts.
+2. **Split** this browser's cases into `--parts=N` contiguous parts in file order, balanced by text length (default 3, the
+   browser's slots; installed Safari 1, where `--run-args=--allow-safari-frontmost` is needed and a part must stay under 8
+   minutes).
+3. **Run** every part at the same time, one job per part and order under the lock. A failed job is never run again: the
+   round reports it with the log's tail and exits 2, and `--rerun-failed` runs it once more after the cause is fixed (the
+   failed folder is renamed, not removed). A job that was interrupted counts as failed.
+4. **Score** every finished part with `score.ts` (`--native-compare` between the orders under `--both-orders`). A part is
+   scored again when `score.ts` is newer than its summary, or with `--rescore`.
+5. **Report**, printed and written to `report.json`, over the forward parts, outside history-dependent cases and protocol
+   rows:
+   - *Open failures*: lineCount, breaks or widths failures whose per-case `lineGaps[metric].covered` isn't true. `score.ts`
+     decides coverage; the report only reads it. Each gets a signature: family | metric | the fonts, scripts and named
+     characters (spaces other than U+0020, format characters, controls) and styles involved | the size. For widths the
+     involved text is the nodes on the failing lines whose native width differs from the port's, and the size is the
+     largest such difference in engine units (LayoutUnits of zoomed px, app units, 1/64 px) times the number of differing
+     node rects; `no-node-differs` says only the line's sum is off. For lineCount and breaks it is the text between the
+     predicted and the native break on the first line that disagrees, and the size is the line count difference and how
+     many UTF-16 units moved. A coarse table (metric | fonts | scripts | size) comes first, because one cause often spreads
+     over many suite families.
+   - *Painter-only*: painter failures without a covered explanation where the three prediction metrics pass, in the coarse
+     form.
+   - *Residual classes* (`residual-classes.json`): open failures that match a class's signature are counted apart, and
+     members whose differing node holds a probed string in the probed font apart from members matched by signature alone.
+     A signature match is not a probe. One class is registered: Gecko's one shaping unit 1 au off (difference verified by
+     probe F7 and the round 2 critic's probe, mechanism inferred), with 12 probed strings.
+   - *Gap firing*: per gap, the share of passing lines it fires on (the line's own gaps, or a ranged paragraph gap that
+     meets the line), the share of passing cases, the share of failing lines and the lift between them. An owner who adds
+     or widens a condition quotes these before and after.
+   - With both orders, the ids that are open in reverse order only.
+
+On `r3-tool-check-1` (11,477 Chrome, 11,265 Firefox and 11,255 webkit-host cases, both orders, scorer 5) the report's
+open counts equal the summaries' `lineLocal.withoutLineGap` less the residual members.
+
+## Giants
+
+A giant is a case whose paragraph exceeds 50,000 UTF-16 units (`cases/parts.ts` `GIANT_UNITS`). One can take minutes, so
+at 25 cases a round trip they stalled round 2's jobs. They live in `.artifacts/lab/cases/giants.ndjson` and run on their own,
+exclusively, one case per round trip:
+
+```sh
+python3 .artifacts/session/with-browser-lock.py giants-chrome --browser=all -- \
+  bun rebuild/lab/run.ts --browser=chrome --cases=.artifacts/lab/cases/giants.ndjson --out=<dir> --chunk=1 --stall-ms=1800000
+```
+
+`bun rebuild/lab/cases/giants.ts --move` takes them out of the case files under `.artifacts/lab/cases` and
+`.artifacts/lab/final-20260916/cases` and records the move in `giants.moves.json`: per case its id, the file and line it came
+from and its length, and per file the sha256 and case count before and after. Before it replaces a file it checks that
+putting the giants back at their recorded lines gives the original hash, and the original goes to the Trash. Ids don't
+change, so a giant's row in an old run of `heldout-suite-sample.ndjson` compares with its row in a giants run by id:
+`score.ts --rows=<giants rows> --cases=giants.ndjson --native-compare=<old rows>`, and a gate check that wants every
+baseline case (`gate.ts --complete`) takes the giants run beside the held-out run. `--scan=<file>[,<file>...]` only lists
+giants. Fresh rounds, and sealed sets from sealed-3 on, keep their giants in a `giants.ndjson` of their own; sealed and
+sealed-2 keep theirs inside `suite-sample.ndjson`, so split those files with `cases/parts.ts`, which sets giants apart by
+length without showing anything.
+
 ## Sealed held-out sets
 
 `bun rebuild/lab/cases/seal.ts --out-dir=.artifacts/lab/sealed --label=sealed-<date>` generates runs, ws and policy from a
 fresh random seed and a 10,000-case suite sample drawn by one quota per family, without any case id used so far: every
 case file a `run.json` under `.artifacts` names, every file under `.artifacts/lab/cases` and
-`.artifacts/lab/final-20260916/cases`, every case file of an earlier sealed set (a folder with a `SEAL.json`), and
-`smoke-cases.ndjson`. Two sets exist: `sealed-20260917` in `.artifacts/lab/sealed` (run once in the ceiling round 1
-evaluation) and `sealed-2-20260917` in `.artifacts/lab/sealed-2`, generated in ceiling round 2 without any of 669,645 used
-ids from 270 files, the first sealed set's included: runs 2,579, ws 1,014, policy 1,597 and suite sample 10,000 cases,
-with 0 ids shared with the first set (checked by id only). The census's full-suite chunks aren't excluded, since they
+`.artifacts/lab/final-20260916/cases`, every case file of an earlier sealed set (a folder with a `SEAL.json`), every fresh
+round's set, and `smoke-cases.ndjson` (`cases/used-ids.ts`, under the generation lock that fresh rounds also take). Since
+sealed-3, giants leave the generated files for `<out-dir>/giants.ndjson` before hashing, by length alone. The suite import
+reads the suite's row files through `zstd` now that `compress-rows.sh` compressed them. Three sets exist: `sealed-3-20260917`
+in `.artifacts/lab/sealed-3`, generated in ceiling round 3 without any of 714,404 used ids from 359 files, both earlier
+sealed sets and the first fresh sets included: runs 2,580, ws 1,011, policy 1,594, suite sample 9,996 and 4 giants, with 0
+ids shared with any other set (checked by id only), unopened; and two spent ones: `sealed-20260917` in
+`.artifacts/lab/sealed` (run once in the ceiling round 1 evaluation) and `sealed-2-20260917` in `.artifacts/lab/sealed-2`,
+generated in ceiling round 2 without any of 669,645 used ids from 270 files, the first sealed set's included: runs 2,579,
+ws 1,014, policy 1,597 and suite sample 10,000 cases, with 0 ids shared with the first set (checked by id only). The census's full-suite chunks aren't excluded, since they
 hold every suite case. The seed goes only into `<out-dir>/SEAL.json`, with the sha256 of every file; origins and
 summaries name it by its label (`generate.ts --seed-label`). `rebuild/lab/baselines/<label>.json` holds the same record
 without the seed, for the repository. Owners must not open, run or score the files before the evaluation stage; then

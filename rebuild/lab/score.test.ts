@@ -7,8 +7,8 @@ import {
   abcd, abcdExpected, abcdLayout, abcdNative, abcdOneLine, abcdOneLineExpected, at, blink, expect32, gecko, linesRow, native, observation, paragraph, row, webkit,
 } from './row-fixtures.ts'
 import type { Gap, GapName } from '../src/model.ts'
-import { environmentKey, indexRows, lineLocalGaps, lineRangeDiagnostics, nativeDifference, nativeLines, nativeView, readRowAt, scoreRow, slotProtocol, withNativeRow, type CaseScore } from './score.ts'
-import type { LabRow, NativeObservation, PainterLine, Rect, RecordedLayout } from './types.ts'
+import { environmentKey, indexRows, lineLocalGaps, lineRangeDiagnostics, nativeDifference, nativeLines, nativeView, readRowAt, residualMembership, RESIDUAL_CLASSES, scoreRow, slotProtocol, withNativeRow, type CaseScore } from './score.ts'
+import type { BrowserKind, LabRow, NativeObservation, PainterLine, Rect, RecordedLayout } from './types.ts'
 
 const f32 = Math.fround
 
@@ -183,41 +183,361 @@ describe('elements: Element.getClientRects() of cases with inline structure', ()
   })
 })
 
-describe('line-local gaps', () => {
+// Rows for the coverage rules: text nodes laid out left to right from x 0 on each line, from per code point widths in
+// engine units natively and as expected (Blink raw LayoutUnits at zoom 2, Gecko app units, WebKit px).
+type UnitRow = { browser: BrowserKind; runs: string[]; lines: Array<[number, number]>; native: number[]; expected: number[] }
+const encode = (browser: BrowserKind, left: number, right: number): { x: number; width: number } =>
+  browser === 'firefox' ? encodeEdges(left, right) : browser === 'chrome' ? { x: left / 128, width: (right - left) / 128 } : { x: left, width: right - left }
+
+function unitRow(value: UnitRow, painted: 'native' | 'expected' | null = null): { row: LabRow; layout: RecordedLayout } {
+  const p = paragraph(value.runs.map(text => [text, 'span']))
+  const nativePoints: Rect[][] = []
+  const expectedPoints: ReturnType<typeof expect32>[][] = []
+  const nativeNodes: Rect[][] = value.runs.map(() => [])
+  const expectedNodes: ReturnType<typeof expect32>[][] = value.runs.map(() => [])
+  const widths: number[] = []
+  const paintedLines: PainterLine[] = []
+  const runEnds: number[] = []
+  for (let r = 0, end = 0; r < value.runs.length; r++) runEnds.push(end += value.runs[r]!.length)
+  for (let l = 0; l < value.lines.length; l++) {
+    const [start, end] = value.lines[l]!
+    let nativeX = 0
+    let expectedX = 0
+    // Per node on the line: [native left, native right, expected left, expected right].
+    const spans = new Map<number, [number, number, number, number]>()
+    for (let i = start; i < end; i++) {
+      const run = runEnds.findIndex(runEnd => i < runEnd)
+      const n = encode(value.browser, nativeX, nativeX + value.native[i]!)
+      const e = encode(value.browser, expectedX, expectedX + value.expected[i]!)
+      nativePoints.push([{ x: n.x, y: l * 20, width: n.width, height: 20 }])
+      expectedPoints.push([expect32(l, e.x, e.width)])
+      const span = spans.get(run) ?? [nativeX, nativeX, expectedX, expectedX]
+      span[1] = nativeX + value.native[i]!
+      span[3] = expectedX + value.expected[i]!
+      spans.set(run, span)
+      nativeX += value.native[i]!
+      expectedX += value.expected[i]!
+    }
+    for (const [run, span] of spans) {
+      const n = encode(value.browser, span[0], span[1])
+      const e = encode(value.browser, span[2], span[3])
+      nativeNodes[run]!.push({ x: n.x, y: l * 20, width: n.width, height: 20 })
+      expectedNodes[run]!.push(expect32(l, e.x, e.width))
+    }
+    widths.push(expectedX)
+    const whole = encode(value.browser, 0, painted === 'native' ? nativeX : expectedX)
+    paintedLines.push({ box: at(0, 200), height: 20, rects: [at(whole.x, whole.width)], extent: null, points: [] })
+  }
+  const lines = value.lines.map(([start, end], l): [number, number, number] => [start, end, widths[l]!])
+  const layout = value.browser === 'firefox' ? gecko(lines) : value.browser === 'chrome' ? blink(lines) : webkit(lines)
+  return { row: row(value.browser, p, native(p, nativePoints, nativeNodes), layout, observation(p, expectedPoints, expectedNodes), painted === null ? null : paintedLines), layout }
+}
+
+describe('covered failures', () => {
   const gap = (name: GapName, at?: { start: number; end: number }): Gap => ({ gap: name, run: 0, detail: 'test', ...(at === undefined ? {} : { at }) })
-  // abcdOneLine against abcdNative: the prediction keeps `cd` on line 0, so native line 0 is the first to differ.
+  // `abcdef` on one Firefox line; natively `c` is 5 au wider.
+  const wide = (gaps: Gap[], lineGaps: Gap[] = []): CaseScore => {
+    const { row: value, layout } = unitRow({ browser: 'firefox', runs: ['abcdef'], lines: [[0, 6]], native: [600, 600, 605, 600, 600, 600], expected: [600, 600, 600, 600, 600, 600] })
+    layout.gaps.push(...gaps)
+    layout.lines[0]!.gaps.push(...lineGaps)
+    return scoreRow(value)
+  }
+
+  test('widths: a gap covers only by touching the unit that differs', () => {
+    const elsewhere = wide([gap('script-context', { start: 4, end: 5 })]).lineGaps.widths!
+    expect(elsewhere.covered).toBe(false)
+    expect(elsewhere.lines[0]).toMatchObject({ gaps: [], elsewhere: [{ gap: 'script-context', scope: 'paragraph-range' }], evidence: { units: 1, runs: 1, deciding: 1, touched: 0, first: { start: 2, end: 3 }, firstText: 'c' } })
+    const touching = wide([gap('script-context', { start: 2, end: 3 })]).lineGaps.widths!
+    expect(touching.covered).toBe(true)
+    expect(touching.lines[0]!.gaps).toEqual([{ gap: 'script-context', scope: 'paragraph-range', touch: 'unit' }])
+    // A point touches the units on both sides of its offset, and no other.
+    expect(wide([], [gap('in-word-prefix', { start: 3, end: 3 })]).lineGaps.widths!.covered).toBe(true)
+    expect(wide([], [gap('in-word-prefix', { start: 2, end: 2 })]).lineGaps.widths!.covered).toBe(true)
+    expect(wide([], [gap('in-word-prefix', { start: 4, end: 4 })]).lineGaps.widths!.covered).toBe(false)
+  })
+
+  test('a line gap without a range has its whole line, and is marked', () => {
+    expect(wide([], [gap('font-fallback')]).lineGaps.widths!.lines[0]!.gaps).toEqual([{ gap: 'font-fallback', scope: 'line', touch: 'unit', unranged: true }])
+    const paragraphOnly = wide([gap('engine-build')]).lineGaps.widths!
+    expect([paragraphOnly.covered, paragraphOnly.paragraphGaps]).toEqual([false, ['engine-build']])
+  })
+
+  test('widths: every run that contributes must be touched; one touched unit at the line edge is not enough', () => {
+    // `f` at the line end differs and a gap at the break touches it, but `b` differs too and nothing touches it.
+    const { row: value, layout } = unitRow({ browser: 'firefox', runs: ['abcdef'], lines: [[0, 6]], native: [600, 640, 600, 600, 600, 620], expected: [600, 600, 600, 600, 600, 600] })
+    layout.lines[0]!.gaps.push(gap('unsafe-to-break', { start: 6, end: 6 }))
+    const partly = scoreRow(value).lineGaps.widths!
+    expect(partly.covered).toBe(false)
+    expect(partly.lines[0]).toMatchObject({ gaps: [], elsewhere: [{ gap: 'unsafe-to-break', scope: 'line' }], evidence: { runs: 2, deciding: 2, touched: 1, firstText: 'b' } })
+    layout.gaps.push(gap('glyph-clusters', { start: 1, end: 2 }))
+    expect(scoreRow(value).lineGaps.widths!.covered).toBe(true)
+  })
+
+  test('a run whose widths add up to the same needs no gap: Gecko by the sum, Blink by the extent', () => {
+    // `bc` move 30 units between them; `e` is wider.
+    for (const browser of ['firefox', 'chrome'] as const) {
+      const { row: value, layout } = unitRow({ browser, runs: ['abcdef'], lines: [[0, 6]], native: [600, 630, 570, 600, 640, 600], expected: [600, 600, 600, 600, 600, 600] })
+      expect(scoreRow(value).lineGaps.widths!.lines[0]!.evidence).toMatchObject({ units: 3, runs: 2, deciding: 1, touched: 0, firstText: 'e' })
+      layout.gaps.push(gap('glyph-clusters', { start: 4, end: 5 }))
+      expect(scoreRow(value).lineGaps.widths!.covered).toBe(true)
+    }
+    // When no run contributes (here the node rect is 1 au wider than its code points say), every run must be touched.
+    const { row: moved } = unitRow({ browser: 'firefox', runs: ['abc', 'def'], lines: [[0, 6]], native: [600, 630, 570, 600, 600, 600], expected: [600, 600, 600, 600, 600, 600] })
+    const observed = moved.native as NativeObservation
+    observed.runRects[0]![0] = { ...observed.runRects[0]![0]!, width: encodeEdges(0, 1801).width }
+    observed.runRects[1]![0] = { ...observed.runRects[1]![0]!, x: encodeEdges(1801, 3601).x, width: encodeEdges(1801, 3601).width }
+    expect(scoreRow(moved).lineGaps.widths!.lines[0]!.evidence).toMatchObject({ units: 2, nodeUnits: 0, runs: 1, deciding: 1, touched: 0 })
+  })
+
+  test('Blink: an extent one LayoutUnit off whose left edge moved is within the rounding of its carets', () => {
+    // `b` is 64 units wider, so `d` moves; natively `d` is also 1 unit wider.
+    const { row: value, layout } = unitRow({ browser: 'chrome', runs: ['abcdef'], lines: [[0, 6]], native: [1024, 1088, 1024, 1025, 1024, 1024], expected: [1024, 1024, 1024, 1024, 1024, 1024] })
+    layout.gaps.push(gap('script-context', { start: 1, end: 2 }))
+    const score = scoreRow(value).lineGaps.widths!
+    expect(score.lines[0]!.evidence).toMatchObject({ units: 2, runs: 2, deciding: 1, touched: 1 })
+    expect(score.covered).toBe(true)
+    // The same unit at an unmoved left edge contributes.
+    const { row: still } = unitRow({ browser: 'chrome', runs: ['abcdef'], lines: [[0, 6]], native: [1024, 1025, 1024, 1024, 1024, 1024], expected: [1024, 1024, 1024, 1024, 1024, 1024] })
+    expect(scoreRow(still).lineGaps.widths!.lines[0]!.evidence).toMatchObject({ units: 1, deciding: 1 })
+  })
+
+  test('a unit is a grapheme cluster with the widthless and default ignorable code points next to it', () => {
+    // Gecko reports an RTL letter's advance on the mark after it: the gap at the letter concerns the mark's rect.
+    const marked = unitRow({ browser: 'firefox', runs: ['abهِd'], lines: [[0, 5]], native: [600, 600, 0, 300, 600], expected: [600, 600, 0, 420, 600] })
+    marked.layout.lines[0]!.gaps.push(gap('in-word-prefix', { start: 2, end: 2 }))
+    expect(scoreRow(marked.row).lineGaps.widths!.lines[0]).toMatchObject({ gaps: [{ gap: 'in-word-prefix', touch: 'unit' }], evidence: { first: { start: 2, end: 4 } } })
+    // A soft hyphen at the break draws the hyphen, the same on both sides: the gap at the break concerns the letter before it.
+    const hyphenated = unitRow({ browser: 'firefox', runs: ['ab­cd'], lines: [[0, 3], [3, 5]], native: [600, 640, 350, 600, 600], expected: [600, 600, 350, 600, 600] })
+    hyphenated.layout.lines[0]!.gaps.push(gap('in-word-prefix', { start: 3, end: 3 }))
+    expect(scoreRow(hyphenated.row).lineGaps.widths!.lines[0]).toMatchObject({ gaps: [{ gap: 'in-word-prefix', scope: 'line', touch: 'unit' }], evidence: { first: { start: 1, end: 3 } } })
+  })
+
+  test('a gap reported on a neighbouring line covers with a range that reaches the unit, not with a point at the shared break', () => {
+    const rows = (): ReturnType<typeof unitRow> => unitRow({ browser: 'firefox', runs: ['abcdef'], lines: [[0, 3], [3, 6]], native: [600, 600, 640, 600, 600, 600], expected: [600, 600, 600, 600, 600, 600] })
+    const point = rows()
+    point.layout.lines[1]!.gaps.push(gap('unsafe-to-break', { start: 3, end: 3 }))
+    expect(scoreRow(point.row).lineGaps.widths!).toMatchObject({ covered: false, lines: [{ gaps: [], elsewhere: [{ gap: 'unsafe-to-break', scope: 'next-line' }] }] })
+    const range = rows()
+    range.layout.lines[1]!.gaps.push(gap('simplified-measuring', { start: 2, end: 5 }))
+    expect(scoreRow(range.row).lineGaps.widths!.lines[0]!.gaps).toEqual([{ gap: 'simplified-measuring', scope: 'next-line', touch: 'unit' }])
+    // The same point as a paragraph gap belongs to no line, and touches the units on both sides of it.
+    const paragraphPoint = rows()
+    paragraphPoint.layout.gaps.push(gap('unsafe-to-break', { start: 3, end: 3 }))
+    expect(scoreRow(paragraphPoint.row).lineGaps.widths!.covered).toBe(true)
+  })
+
+  test('WebKit: the unit is the differing node\'s part of the line', () => {
+    const { row: value, layout } = unitRow({ browser: 'webkit-host', runs: ['abc', 'def'], lines: [[0, 6]], native: [10, 10, 10, 10, 10.5, 10], expected: [10, 10, 10, 10, 10, 10] })
+    layout.lines[0]!.gaps.push(gap('canvas-language', { start: 0, end: 2 }))
+    const other = scoreRow(value).lineGaps.widths!
+    expect(other.covered).toBe(false)
+    expect(other.lines[0]!.evidence).toMatchObject({ units: 1, nodeUnits: 1, first: { start: 3, end: 6 } })
+    layout.lines[0]!.gaps.push(gap('simplified-measuring', { start: 3, end: 4 }))
+    expect(scoreRow(value).lineGaps.widths!.lines[0]!.gaps).toEqual([{ gap: 'simplified-measuring', scope: 'line', touch: 'unit' }])
+  })
+
+  test('Blink and Gecko: where only the node rect differs, the unit is the node\'s part of the line', () => {
+    const { row: value } = unitRow({ browser: 'firefox', runs: ['abc', 'def'], lines: [[0, 6]], native: [600, 600, 600, 600, 600, 600], expected: [600, 600, 600, 600, 600, 600] })
+    const observed = value.native as NativeObservation
+    const wider = encodeEdges(1800, 3607)
+    observed.runRects[1]![0] = { ...observed.runRects[1]![0]!, width: wider.width }
+    expect(scoreRow(value).lineGaps.widths!.lines[0]!.evidence).toMatchObject({ units: 1, nodeUnits: 1, first: { start: 3, end: 6 } })
+  })
+
+  // abcdOneLine against abcdNative: the prediction keeps `cd` on line 0, so native line 0 is the first to differ and `cd`
+  // is the decision text. The space before it is trimmed natively and 4px wide as expected: it runs back from the
+  // decision text, so the failure is a pure break decision.
   const failing = (layout: RecordedLayout): CaseScore => scoreRow(row('chrome', abcd, abcdNative, layout, abcdOneLineExpected))
 
-  test('a gap on the failing line covers it; a paragraph gap without a range doesn\'t', () => {
-    const covered = failing({ ...abcdOneLine, lines: abcdOneLine.lines.map(line => ({ ...line, gaps: [gap('unsafe-to-break')] })) } as RecordedLayout)
-    expect(covered.lineGaps.lineCount).toEqual({ lines: [{ nativeLine: 0, engineLine: 0, gaps: [{ gap: 'unsafe-to-break', scope: 'line' }] }], covered: true, paragraphGaps: [] })
-    const paragraphOnly = failing({ ...abcdOneLine, gaps: [gap('engine-build')] })
-    expect(paragraphOnly.lineGaps.breaks).toEqual({ lines: [{ nativeLine: 0, engineLine: 0, gaps: [] }], covered: false, paragraphGaps: ['engine-build'] })
+  test('lineCount and breaks: a pure break decision is covered at the decision text', () => {
+    const at = failing({ ...abcdOneLine, gaps: [gap('dictionary-breaks-stand-in', { start: 4, end: 4 })] }).lineGaps.lineCount!
+    expect(at).toEqual({
+      lines: [{ nativeLine: 0, engineLine: 0, gaps: [{ gap: 'dictionary-breaks-stand-in', scope: 'paragraph-range', touch: 'decision' }], evidence: { units: 1, nodeUnits: 0, runs: 1, deciding: 0, touched: 0, first: { start: 2, end: 3 }, firstText: ' ', decision: { start: 3, end: 5 }, decisionText: 'cd', pureDecision: true } }],
+      covered: true, paragraphGaps: [],
+    })
+    expect(failing({ ...abcdOneLine, gaps: [gap('control-character-width', { start: 4, end: 5 })] }).lineGaps.breaks!.covered).toBe(true)
+    expect(failing({ ...abcdOneLine, gaps: [gap('control-character-width', { start: 5, end: 5 })] }).lineGaps.breaks!.covered).toBe(true)
+    // Elsewhere on the line doesn't cover; the trimmed space, which runs back from the decision text, does.
+    const elsewhere = failing({ ...abcdOneLine, gaps: [gap('script-context', { start: 0, end: 1 })] }).lineGaps.breaks!
+    expect([elsewhere.covered, elsewhere.lines[0]!.elsewhere]).toEqual([false, [{ gap: 'script-context', scope: 'paragraph-range' }]])
+    expect(failing({ ...abcdOneLine, gaps: [gap('script-context', { start: 2, end: 3 })] }).lineGaps.breaks!.lines[0]!.gaps).toEqual([{ gap: 'script-context', scope: 'paragraph-range', touch: 'unit' }])
+    // A line gap without a range has its whole line, the decision text included.
+    expect(failing({ ...abcdOneLine, lines: abcdOneLine.lines.map(line => ({ ...line, gaps: [gap('unsafe-to-break')] })) } as RecordedLayout).lineGaps.lineCount!.covered).toBe(true)
+    expect(failing({ ...abcdOneLine, gaps: [gap('engine-build')] }).lineGaps.breaks).toMatchObject({ covered: false, paragraphGaps: ['engine-build'] })
   })
 
-  test('a paragraph gap covers the lines its range meets', () => {
-    expect(failing({ ...abcdOneLine, gaps: [gap('control-character-width', { start: 4, end: 5 })] }).lineGaps.lineCount!.covered).toBe(true)
-    expect(failing({ ...abcdOneLine, gaps: [gap('control-character-width', { start: 5, end: 5 })] }).lineGaps.lineCount!.lines[0]!.gaps).toEqual([{ gap: 'control-character-width', scope: 'paragraph-range' }])
+  test('lineCount and breaks: the line whose end differs is attributed, and its own gap without a range covers its break', () => {
+    // `ab cd`: natively the space has a rect on both lines; the prediction keeps it on line 0. Native line 1 is the first
+    // whose code points differ, and the decision text is the space at the end of line 0.
+    const observed: NativeObservation = { ...abcdNative, points: abcdNative.points.map((point, i) => (i === 2 ? { ...point, rects: [at(15.625, 0), at(0, 0, 1)] } : point)) }
+    const score = (layout: RecordedLayout): CaseScore => scoreRow(row('chrome', abcd, observed, layout, abcdExpected))
+    const plain = score(abcdLayout)
+    expect(plain.metrics.breaks).toEqual({ status: 'fail', reason: 'code point on other lines', detail: 'code point 2 " ": native lines 0,1; expected 0' })
+    expect(plain.lineGaps.breaks!.lines[0]).toMatchObject({ nativeLine: 0, engineLine: 0, evidence: { units: 0, decision: { start: 2, end: 3 }, pureDecision: true } })
+    // A point at the break reported on line 0 is line 0's own edge; reported on line 1 it is line 1's.
+    const own = structuredClone(abcdLayout)
+    own.lines[0]!.gaps.push(gap('page-history', { start: 3, end: 3 }))
+    expect(score(own).lineGaps.breaks!.lines[0]!.gaps).toEqual([{ gap: 'page-history', scope: 'line', touch: 'decision' }])
+    const next = structuredClone(abcdLayout)
+    next.lines[1]!.gaps.push(gap('page-history', { start: 3, end: 3 }))
+    expect(score(next).lineGaps.breaks!).toMatchObject({ covered: false, lines: [{ elsewhere: [{ gap: 'page-history', scope: 'next-line' }] }] })
+    // The prediction ends line 0 at `ab`, natively `c` follows on it: line 0's gap without a range concerns that break.
+    const early = observation(abcd, [[expect32(0, 0, 8)], [expect32(0, 8, 7.625)], [expect32(0, 15.625, 0)], [expect32(1, 0, 7)], [expect32(1, 7, 7.0625)]], [[expect32(0, 0, 15.625), expect32(1, 0, 14.0625)]])
+    const later: NativeObservation = { ...abcdNative, points: abcdNative.points.map((point, i) => (i === 3 ? { ...point, rects: [at(15.625, 7)] } : point)) }
+    const unranged = structuredClone(abcdLayout)
+    unranged.lines[0]!.gaps.push(gap('font-fallback'))
+    const value = scoreRow(row('chrome', abcd, later, unranged, early)).lineGaps.breaks!
+    expect(value.lines[0]).toMatchObject({ engineLine: 0, gaps: [{ gap: 'font-fallback', scope: 'line', touch: 'decision', unranged: true }], evidence: { decision: { start: 3, end: 4 } } })
   })
 
-  test('the previous line\'s gaps and refused slots between the lines cover a line', () => {
+  test('the decision text reaches out to the predicted break', () => {
+    // The prediction breaks `ab cd` after `a`, and expects `b` to report an empty rect at the end of line 0 too, so `b` is on
+    // line 0 on both sides; natively the break is after the space. Only the space sits on line 0 on one side alone.
+    const expected = observation(abcd,
+      [[expect32(0, 0, 8)], [expect32(0, 8, 0), expect32(1, 0, 7.625)], [expect32(1, 7.625, 4)], [expect32(1, 11.625, 7)], [expect32(1, 18.625, 7.0625)]],
+      [[expect32(0, 0, 8), expect32(1, 0, 25.6875)]])
+    const layout = blink([[0, 1, 1024], [1, 5, 3288]])
+    layout.lines[0]!.gaps.push(gap('page-history', { start: 1, end: 1 }))
+    const score = scoreRow(row('chrome', abcd, abcdNative, layout, expected)).lineGaps.breaks!
+    expect(score.lines[0]).toMatchObject({ engineLine: 0, gaps: [{ gap: 'page-history', scope: 'line', touch: 'decision' }], evidence: { decision: { start: 1, end: 3 }, decisionText: 'b ' } })
+  })
+
+  test('lineCount and breaks: geometry that differs before the decision must be touched', () => {
+    // As above, and `a` is wider natively: a gap at the decision text no longer covers.
+    const observed: NativeObservation = { ...abcdNative, points: abcdNative.points.map((point, i) => (i === 0 ? { ...point, rects: [at(0, 8.5)] } : point)) }
+    const score = (gaps: Gap[]): CaseScore => scoreRow(row('chrome', abcd, observed, { ...abcdOneLine, gaps }, abcdOneLineExpected))
+    const decisionOnly = score([gap('dictionary-breaks-stand-in', { start: 3, end: 3 })]).lineGaps.breaks!
+    expect(decisionOnly.covered).toBe(false)
+    expect(decisionOnly.lines[0]!.evidence).toMatchObject({ units: 2, runs: 2, deciding: 1, touched: 0, pureDecision: false, firstText: 'a' })
+    expect(score([gap('script-context', { start: 0, end: 1 })]).lineGaps.breaks!.covered).toBe(true)
+  })
+
+  test('WebKit, lineCount and breaks: the node that reaches the decision text is a unit up to it', () => {
+    // `abc def` in one node; natively `def` wraps, the prediction keeps it on line 0.
+    const p = paragraph([['abc def', 'text']])
+    const observed = native(p, [[at(0, 10)], [at(10, 10)], [at(20, 10)], [at(30, 0)], [at(0, 10, 1)], [at(10, 10, 1)], [at(20, 10, 1)]], [[at(0, 30), at(0, 30, 1)]])
+    const expected = observation(p, [0, 10, 20, 30, 34, 44, 54].map((x, i) => [expect32(0, x, i === 3 ? 4 : 10)]), [[expect32(0, 0, 64)]])
+    const score = (gaps: Gap[]): CaseScore => scoreRow(row('webkit-host', p, observed, { ...webkit([[0, 7, 64]]), gaps }, expected))
+    const early = score([gap('canvas-language', { start: 0, end: 1 })]).lineGaps.breaks!
+    expect(early.covered).toBe(true)
+    expect(early.lines[0]).toMatchObject({ gaps: [{ gap: 'canvas-language', scope: 'paragraph-range', touch: 'unit' }], evidence: { units: 1, nodeUnits: 1, deciding: 0, pureDecision: true, first: { start: 0, end: 4 }, decision: { start: 4, end: 7 } } })
+    // The same rects in Chrome compare code point by code point: only the trimmed space differs, and it runs back from
+    // the decision text, so a gap at `a` covers nothing.
+    const chrome = scoreRow(row('chrome', p, observed, { ...blink([[0, 7, 8192]]), gaps: [gap('script-context', { start: 0, end: 1 })] }, expected)).lineGaps.breaks!
+    expect([chrome.covered, chrome.lines[0]!.evidence!.first]).toEqual([false, { start: 3, end: 4 }])
+  })
+
+  test('the previous line\'s, the next line\'s and refused slots\' gaps concern a line', () => {
     const layout = blink([[0, 3, 2000], [3, 3, 0, false], [3, 5, 1800]])
     layout.lines[0]!.gaps.push(gap('in-word-prefix'))
     layout.lines[1]!.gaps.push(gap('glyph-clusters'))
+    layout.lines[2]!.gaps.push(gap('tab-stops'))
     const withRefusal = { ...layout, belowFloats: [{ row: 1, gaps: [gap('font-fallback')] }, { row: 3, gaps: [gap('tab-stops')] }] }
+    // Without evidence (the painter's rule) every gap that concerns the line is listed.
     expect(lineLocalGaps(withRefusal, [0, 2], 1).gaps).toEqual([
-      { gap: 'font-fallback', scope: 'below-floats' }, { gap: 'glyph-clusters', scope: 'previous-line' }, { gap: 'in-word-prefix', scope: 'previous-line' },
+      { gap: 'font-fallback', scope: 'below-floats', unranged: true }, { gap: 'glyph-clusters', scope: 'previous-line', unranged: true },
+      { gap: 'in-word-prefix', scope: 'previous-line', unranged: true }, { gap: 'tab-stops', scope: 'line', unranged: true },
     ])
-    // Native line 0 is engine line 0: its own gaps concern it, and no refusal comes before it.
-    expect(lineLocalGaps(withRefusal, [0, 2], 0).gaps).toEqual([{ gap: 'in-word-prefix', scope: 'line' }])
+    // Native line 0 is engine line 0: its own gaps concern it, and no refusal comes before it. With evidence, the gaps up to
+    // the next line box concern it too.
+    expect(lineLocalGaps(withRefusal, [0, 2], 0).gaps.map(value => [value.gap, value.scope])).toEqual([['in-word-prefix', 'line']])
+    expect(lineLocalGaps(withRefusal, [0, 2], 0, { units: [], decision: null }).elsewhere).toEqual([{ gap: 'glyph-clusters', scope: 'next-line' }, { gap: 'in-word-prefix', scope: 'line' }, { gap: 'tab-stops', scope: 'next-line' }])
   })
 
-  test('a failing width attributes every failing line', () => {
-    const layout = blink([[0, 3, 2001], [3, 5, 1801]])
-    layout.lines[1]!.gaps.push(gap('in-word-prefix'))
-    const score = scoreRow(row('chrome', abcd, abcdNative, layout, observation(abcd, abcdExpected.codePoints.map(point => point.rects), [[expect32(0, 0, 15.6328125), expect32(1, 0, 14.0703125)]])))
-    expect(score.lineGaps.widths!.lines.map(line => [line.nativeLine, line.gaps.length])).toEqual([[0, 0], [1, 1]])
+  test('a failing width attributes every failing line, and the painter keeps every gap that concerns its line', () => {
+    const { row: value, layout } = unitRow({ browser: 'firefox', runs: ['abcdef'], lines: [[0, 3], [3, 6]], native: [600, 610, 600, 600, 620, 600], expected: [600, 600, 600, 600, 600, 600] }, 'native')
+    layout.lines[1]!.gaps.push(gap('in-word-prefix', { start: 4, end: 4 }), gap('script-context', { start: 5, end: 6 }))
+    const score = scoreRow(value)
+    expect(score.lineGaps.widths!.lines.map(line => [line.nativeLine, line.gaps.map(other => other.gap)])).toEqual([[0, []], [1, ['in-word-prefix']]])
     expect(score.lineGaps.widths!.covered).toBe(false)
+    expect(score.metrics.painter.status).toBe('fail')
+    expect(score.lineGaps.painter!.lines[1]!.gaps).toEqual([{ gap: 'in-word-prefix', scope: 'line' }, { gap: 'script-context', scope: 'line' }])
+  })
+})
+
+describe('residual classes', () => {
+  // `ab modern cd` in 15px Helvetica Neue: natively `modern` is 1 au narrower, on `o`.
+  const font = { family: '"Helvetica Neue", Helvetica, Arial, sans-serif', size: 15, weight: 400, style: 'normal' as const }
+  const oneUnit = (text: string, painted: 'native' | 'expected' | null, narrow = 4): LabRow => {
+    const widths = [...text].map(() => 500)
+    const value = unitRow({ browser: 'firefox', runs: [text], lines: [[0, text.length]], native: widths.map((w, i) => (i === narrow ? w - 1 : w)), expected: widths }, painted).row
+    value.case.paragraph.runs[0]!.font = font
+    return value
+  }
+
+  test('Gecko\'s 1 au class: probed where a probe measured the differing text in the node\'s font', () => {
+    const score = scoreRow(oneUnit('ab modern cd', 'native'))
+    expect(score.metrics.widths.status).toBe('fail')
+    expect(score.lineGaps.widths!.covered).toBe(false)
+    expect(score.residual).toEqual({ name: 'gecko/one-shaping-unit-one-app-unit', membership: 'probed', detail: 'node 0 on engine line 0 is -1 au at "o"; probed "modern" (F7; ROUND2-CRITIC item 4)' })
+  })
+
+  test('by signature alone where no probe measured the text, or in another font', () => {
+    expect(scoreRow(oneUnit('ab modest cd', 'native')).residual).toMatchObject({ membership: 'signature' })
+    // The differing code point is outside the probed word.
+    expect(scoreRow(oneUnit('ab modern cd', 'native', 0)).residual).toMatchObject({ membership: 'signature' })
+    const bold = oneUnit('ab modern cd', 'native')
+    bold.case.paragraph.runs[0]!.font = { ...font, weight: 700 }
+    expect(scoreRow(bold).residual).toMatchObject({ membership: 'signature' })
+  })
+
+  test('no member without the signature: the painter must draw the line at the native width, and one node rect differ by 1 au', () => {
+    expect(scoreRow(oneUnit('ab modern cd', 'expected')).residual).toBeNull()
+    expect(scoreRow(oneUnit('ab modern cd', null)).residual).toBeNull()
+    const two = unitRow({ browser: 'firefox', runs: ['abc', 'def'], lines: [[0, 6]], native: [500, 499, 500, 500, 499, 500], expected: [500, 500, 500, 500, 500, 500] }, 'native').row
+    expect(scoreRow(two).residual).toBeNull()
+    const twoUnits = unitRow({ browser: 'firefox', runs: ['abcdef'], lines: [[0, 6]], native: [500, 498, 500, 500, 500, 500], expected: [500, 500, 500, 500, 500, 500] }, 'native').row
+    expect(scoreRow(twoUnits).residual).toBeNull()
+    expect(residualMembership({ engine: 'blink', metrics: { lineCount: 'pass', breaks: 'pass', widths: 'fail', painter: 'fail' }, nodeWidths: [], paintedAtNativeWidth: true })).toBeNull()
+  })
+
+  test('the summary counts residual members apart from open failures, probed apart from signature alone', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'lab-score-residual-'))
+    const named = (value: LabRow, id: string): LabRow => ({ ...value, id, case: { ...value.case, id } })
+    const covered = unitRow({ browser: 'firefox', runs: ['abcdef'], lines: [[0, 6]], native: [600, 600, 605, 600, 600, 600], expected: [600, 600, 600, 600, 600, 600] }, 'native')
+    covered.layout.gaps.push({ gap: 'glyph-clusters', run: 0, detail: 'test', at: { start: 2, end: 3 } })
+    const open = unitRow({ browser: 'firefox', runs: ['abcdef'], lines: [[0, 6]], native: [600, 600, 605, 600, 600, 600], expected: [600, 600, 600, 600, 600, 600] }, 'native')
+    const rows = [named(oneUnit('ab modern cd', 'native'), 'c-probed'), named(oneUnit('ab modest cd', 'native'), 'c-signature'), named(covered.row, 'c-covered'), named(open.row, 'c-open'), named(oneUnit('ab modern cd', 'native', 99), 'c-pass')]
+    const path = join(dir, 'rows.ndjson')
+    writeFileSync(path, rows.map(value => JSON.stringify(value)).join('\n') + '\n')
+    const scored = Bun.spawnSync(['bun', join(import.meta.dir, 'score.ts'), `--rows=${path}`, `--out=${join(dir, 'summary.json')}`, `--per-case=${join(dir, 'per-case.ndjson')}`])
+    expect(scored.exitCode).toBe(0)
+    const summary = JSON.parse(readFileSync(join(dir, 'summary.json'), 'utf8')) as { scorer: number; browsers: { firefox: { lineLocal: Record<string, unknown> } } }
+    expect(summary.scorer).toBe(5)
+    expect(summary.browsers.firefox.lineLocal['predictionRows']).toEqual({ failing: 4, withoutCoveredExplanation: 3, residualProbed: 1, residualSignatureOnly: 1, open: 1 })
+    expect(summary.browsers.firefox.lineLocal['residual']).toEqual({ 'gecko/one-shaping-unit-one-app-unit': { probed: 1, signatureOnly: 1, coveredProbed: 0, coveredSignatureOnly: 0 } })
+    expect(summary.browsers.firefox.lineLocal['withoutLineGap']).toEqual({ lineCount: 0, breaks: 0, widths: 3, painter: 3 })
+    const perCase = readFileSync(join(dir, 'per-case.ndjson'), 'utf8').trim().split('\n').map(line => JSON.parse(line) as { id: string; residual?: { membership: string } })
+    expect(perCase.map(value => [value.id, value.residual?.membership ?? null])).toEqual([['c-probed', 'probed'], ['c-signature', 'signature'], ['c-covered', null], ['c-open', null], ['c-pass', null]])
+  })
+
+  test('every entry names its probes and says whether its mechanism is verified or inferred', () => {
+    for (const value of RESIDUAL_CLASSES) {
+      expect(value.probes.length).toBeGreaterThan(0)
+      expect(['verified', 'inferred']).toContain(value.mechanism.status)
+      expect(value.signature.length).toBeGreaterThan(0)
+    }
+  })
+})
+
+describe('indented lines: Blink and Gecko count the text-indent in the engine width', () => {
+  test('the rects span the engine width less the indent', () => {
+    for (const browser of ['firefox', 'chrome'] as const) {
+      const { row: value, layout } = unitRow({ browser, runs: ['abc'], lines: [[0, 3]], native: [640, 640, 640], expected: [640, 640, 640] }, 'expected')
+      if (layout.engine === 'webkit') throw new Error('unreachable')
+      layout.lines[0]!.geometry.textIndent = -256
+      // Before scorer 5 this width was unobserved: the engine width holds the indent and no rect does.
+      expect(scoreRow(value).metrics.widths).toEqual({ status: 'unobserved', reason: 'the port\'s node rects on the line don\'t span the engine width', detail: `engine line 0: width 1920 less text-indent -256; expected node rects span [0, 1920]` })
+      layout.lines[0]!.geometry.width = 1920 - 256
+      expect([scoreRow(value).metrics.widths, scoreRow(value).metrics.painter]).toEqual([{ status: 'pass' }, { status: 'pass' }])
+      layout.lines[0]!.geometry.width = 1921 - 256
+      expect(scoreRow(value).metrics.widths.status).toBe('unobserved')
+    }
+    const { row: wider, layout } = unitRow({ browser: 'firefox', runs: ['abc'], lines: [[0, 3]], native: [640, 641, 640], expected: [640, 640, 640] })
+    if (layout.engine !== 'gecko') throw new Error('unreachable')
+    layout.lines[0]!.geometry.textIndent = 600
+    layout.lines[0]!.geometry.width = 1920 + 600
+    expect(scoreRow(wider).metrics.widths).toEqual({ status: 'fail', reason: 'width differs', detail: 'engine line 0: width 2520 less text-indent 600; native node rects span [0, 1921]' })
   })
 })
 
@@ -395,10 +715,10 @@ describe('two runs of one case', () => {
 
   test('environments key on the recorded build and the given process languages', () => {
     const base = row('chrome', abcd, abcdNative, abcdLayout, abcdExpected)
-    expect(environmentKey(base)).toBe('chrome: build not recorded, test; DPR 2, scale 1; scorer 4')
+    expect(environmentKey(base)).toBe('chrome: build not recorded, test; DPR 2, scale 1; scorer 5')
     const built = { ...base, build: { app: 'Google Chrome', appVersion: '153.0.8010.48', engine: '153.0.8010.48', os: '26A428' } }
-    expect(environmentKey(built)).toBe('chrome: Google Chrome 153.0.8010.48, engine build 153.0.8010.48, macOS 26A428; DPR 2, scale 1; scorer 4')
+    expect(environmentKey(built)).toBe('chrome: Google Chrome 153.0.8010.48, engine build 153.0.8010.48, macOS 26A428; DPR 2, scale 1; scorer 5')
     const languages = { launch: null, os: { appleLanguages: null, appleLocale: null, launchdEnvironment: {} }, given: { engine: 'blink' as const, uiLanguage: 'zh-CN' }, derivation: [] }
-    expect(environmentKey({ ...built, languages })).toBe('chrome: Google Chrome 153.0.8010.48, engine build 153.0.8010.48, macOS 26A428; DPR 2, scale 1; uiLanguage zh-CN; scorer 4')
+    expect(environmentKey({ ...built, languages })).toBe('chrome: Google Chrome 153.0.8010.48, engine build 153.0.8010.48, macOS 26A428; DPR 2, scale 1; uiLanguage zh-CN; scorer 5')
   })
 })

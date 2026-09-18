@@ -158,8 +158,17 @@ export type BlinkPrepared = {
   // pictograph after it, an emoji modifier, the second of a regional indicator pair, a halfwidth voiced sound mark or a
   // tag character (hb-ot-shape.cc:470-546, hb-ot-layout.hh:247 at harfbuzz dfdc088c), or the trail unit of a surrogate pair.
   continuations: Uint8Array
+  // Per text_content offset, what the font declaration's ligature facts say about a glyph cluster over the boundary before
+  // it (ligatures.ts): unknown, none, merged into a ligature's cluster, or uncertain.
+  ligature: Uint8Array
+  // Per text_content unit of a shaping group, the listed family that draws its glyph cluster by the declaration's coverage
+  // facts, or -1 for a font they don't name. HarfBuzzShaper makes a run of every stretch one font draws.
+  fontRun: Int16Array
   // Word spacing at text_content index 0 (WordSpacingWhiteSpacePre, inline_node.cc:1561-1565).
   wordSpacingAnywhere: boolean
+  // Per style, whether Canvas shapes its strings word by word (Font::CanShapeWordByWord), measured when a 16-bit string
+  // first holds a word edge; undefined until then (shape.ts canvasSplitsWords).
+  canvasSplitsWords: (boolean | undefined)[]
   // HanKerning::FontData per style whose shaping groups HanKerning may apply to, measured in prepare.
   hanKerning: (HanKerningFontData | null)[]
   // The block's used text-align (text-align-last is auto) and NeedsAccurateEndPosition from it (line_info.cc:127-175).

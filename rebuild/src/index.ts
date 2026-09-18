@@ -7,7 +7,7 @@ import { geckoEngine } from './engines/gecko/index.js'
 import type { GeckoPrepared } from './engines/gecko/types.js'
 import { webkitEngine } from './engines/webkit/index.js'
 import type { WebKitPrepared } from './engines/webkit/types.js'
-import { PINNED_BUILDS, type BlinkEnvironment, type Environment, type GeckoEnvironment, type WebKitEnvironment } from './env.js'
+import { PINNED_BUILDS, SOURCE_IDENTICAL_BUILDS, type BlinkEnvironment, type Environment, type GeckoEnvironment, type WebKitEnvironment } from './env.js'
 import { createMeasurer, type Measurer } from './measure/canvas.js'
 import { FULL_WIDTH, type BelowFloats, type Gap, type LineOf, type LineResult, type LineSlot, type LineStart, type Paragraph, type ParagraphLayout } from './model.js'
 
@@ -108,7 +108,7 @@ export function layoutParagraph(paragraph: Paragraph, env: Environment, slots: r
 // Each port follows one build's source; any other build, or an unknown one, is laid out by that port all the same.
 function buildGaps(env: Environment): Gap[] {
   const pinned = PINNED_BUILDS[env.engine]
-  if (env.build === pinned) return []
+  if (env.build === pinned || (env.build !== null && SOURCE_IDENTICAL_BUILDS[env.engine].includes(env.build))) return []
   const detail = env.build === null ? `the build isn't given; the port follows ${pinned}` : `build ${env.build}; the port follows ${pinned}`
   return [{ gap: 'engine-build', run: null, detail }]
 }

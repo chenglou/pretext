@@ -87,6 +87,9 @@ export type WebKitBox = {
   // float32 loop as the DOM (WidthIterator::calculateAdditionalWidth, ComplexTextController.cpp:790-845). `context` when the
   // box has no word spacing.
   spacedContext: number
+  // The run's font with 64px of letter spacing and no word spacing, which counts a string's spacing-bearing glyphs against
+  // `plainContext` (measure.ts mergedGlyphs). `plainContext` when the box has no letter spacing.
+  countContext: number
   // float32 px after page zoom.
   letterSpacing: number
   wordSpacing: number
@@ -99,10 +102,21 @@ export type WebKitBox = {
   // FontFacts.primaryFamily was null: the first listed family stands in for the realized one, which the Courier New test of the
   // width shortcut reads (gap fixed-pitch-path where the shortcut decides a width).
   primaryFamilyUnknown: boolean
-  // Which of the box's code points take a font chosen by the box's locale, which OffscreenCanvas doesn't have (gap
-  // canvas-language): every one for a system design or per-script standard family, the Han, kana and Hangul ones that fall
-  // back, or none.
-  localeChoosesFonts: 'all' | 'fallback' | null
+  // FontFacts.pairKerning was null: whether the font's tables put a pair adjustment on the pair's second glyph isn't given,
+  // which decides the shaped advance of the U+0020 a text item is measured with (gap simplified-measuring).
+  pairKerningUnknown: boolean
+  // How the box's locale, which OffscreenCanvas doesn't have, chooses fonts (gap canvas-language; content.ts collectBoxFacts).
+  // `families`: the font list holds a family the locale resolves (a CSS generic, -webkit-standard, a system design).
+  // `fallback`: the locale's script is Han, kana or Hangul, where Core Text picks system fallback for Han, kana, Hangul, CJK
+  // punctuation and fullwidth forms by language. null: neither. Either way only a code point no named family before the
+  // first locale-resolved one draws is concerned (localeIndependentGlyph).
+  localeChoosesFonts: { families: boolean; fallback: boolean } | null
+  // Coverage of the named families before the first locale-resolved family of the list (all of them when none is): the
+  // families' facts where FontFacts.fonts gives realizes and coverage for each, else null and Canvas decides with
+  // `namedContext`, those families followed by LastResort, against `lastResortContext`, LastResort alone.
+  namedCoverage: ReadonlyArray<readonly number[]> | null
+  namedContext: number
+  lastResortContext: number
   // The box's Han locale takes the preferred languages, which aren't given; or its quote overrides take the ICU default
   // locale, which isn't given (gap ui-language).
   hanLocaleUnknown: boolean
@@ -110,12 +124,6 @@ export type WebKitBox = {
   // The engine ranges of dictionary text that start with a combining mark, [start, end) in box offsets (gap
   // dictionary-breaks-stand-in).
   dictionaryRangesStartingWithMark: Array<[number, number]>
-  // Positions another box of the same text and wrapping styles can end items at, which this box's items don't end at: level
-  // boundaries of the text under another paragraph direction or neighbouring content (gap page-history). Sorted box offsets.
-  historyEnds: number[]
-  // Preserved white space whose items another box of the same text splits per space or at word separators, or keeps whole
-  // (gap page-history).
-  historyWhitespace: boolean
 }
 
 // InlineTextItem (InlineTextItem.h). `level` is UBIDI_DEFAULT_LTR (254) when bidi didn't run.
@@ -166,7 +174,15 @@ export type WebKitPrepared = {
   runTexts: string[]
   items: WebKitItem[]
   gaps: Gap[]
+  // The paragraph as it lays out where the break position cache hands one of its boxes another item list (content.ts, "Page
+  // history"). Empty in a world.
+  historyWorlds: WebKitHistoryWorld[]
 }
+
+// A history world: the prepared paragraph with `box` built from a cached list. `itemIndex` maps each of the paragraph's own
+// item indices to the world's item that holds the own item's start, and `changed` marks the own items the world splits,
+// merges or flags otherwise.
+export type WebKitHistoryWorld = { prepared: WebKitPrepared; box: number; itemIndex: number[]; changed: boolean[] }
 
 // InlineItemPosition plus the PreviousLine facts the next line reads (specs/webkit-lines.md §5, §8.2).
 export type WebKitLineStart = {

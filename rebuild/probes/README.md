@@ -147,6 +147,8 @@ A failing observation is recorded as `{ kind, error }`, and the remaining observ
 `<out>/<browser>-probes.json`:
 
 - `status` and `errors`: run-level problems.
+- `build` and `app`: the browser build read from the app bundle before launch, and the bundle the runner launched (path,
+  whether it is a pinned copy, and the copy's tree hash).
 - `totals`: selected probes, documents, results, probes with probe-level errors, observation errors, reloads and
   resends.
 - `envs`: each distinct user agent, DPR, visual-viewport scale, visibility and focus the page reported, with the
@@ -160,14 +162,15 @@ A failing observation is recorded as `{ kind, error }`, and the remaining observ
 
 Sessions stay in the background and never activate a window. The driver launches once and never retries.
 
-- Chrome: installed Chrome, headed, with its own `--user-data-dir` under `.artifacts/profiles/`, started with
-  `open -n -g -a` plus `--no-startup-window --remote-debugging-port=0`. Headless Chrome can lay out at zoom 1 while
+- Chrome: the lab's pinned copy of Chrome (`rebuild/lab/browser-build.ts`, the lab README's "Pinned browsers"), headed,
+  with its own `--user-data-dir` under `.artifacts/profiles/`, started with `open -n -g -a` plus `--no-startup-window
+  --remote-debugging-port=0 --disable-updater-scheduler`. Headless Chrome can lay out at zoom 1 while
   reporting DPR 2. Chrome activates itself whenever it shows a window the normal way, `open -g` or not, so the driver
   opens its one window over the DevTools protocol with `Target.createTarget { newWindow: true, background: true }`,
   which Chrome shows inactive (the same technique as `rebuild/lab/run.ts`). The protocol is used for nothing else,
   except that `--chrome-emulate-dsf` attaches to that target, sets the device metrics override, navigates, and keeps
   the socket open until the run ends.
-- Firefox: `open -n -g -a /Applications/Firefox.app --args --new-instance --profile <.artifacts/profiles/...>
+- Firefox: `open -n -g -a <the lab's pinned copy of Firefox> --args --new-instance --profile <.artifacts/profiles/...>
   --remote-debugging-port <port> about:blank`, headed, then navigated over WebDriver BiDi. The BiDi session applies
   Firefox's recommended automation prefs (`remote/shared/RecommendedPreferences.sys.mjs` at 156). At 156 none of them
   touch fonts, text or layout; they cover first-run pages, telemetry, updates, focus test mode and hang timeouts.

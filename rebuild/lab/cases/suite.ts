@@ -222,14 +222,16 @@ export class SuiteImport {
 
 export type RowsFile = { browser: BrowserKind; direction: 'ltr' | 'rtl'; rows: string; report: string }
 
-// Row files whose completion report exists with status 'ready'; others are listed as skipped.
+// Row files whose completion report exists with status 'ready'; others are listed as skipped. A rows file that
+// .artifacts/session/compress-rows.sh compressed is named with its .zst suffix, and streamRowInputs reads it through zstd.
 export function suiteRowFiles(dir: string): { files: RowsFile[]; skipped: string[] } {
   const files: RowsFile[] = []
   const skipped: string[] = []
   for (const browser of ALL_BROWSERS) {
     for (const direction of ['ltr', 'rtl'] as const) {
       const report = resolve(dir, browser, `${browser}-${direction}.json`)
-      const rows = resolve(dir, browser, `${browser}-${direction}-rows.ndjson`)
+      const plain = resolve(dir, browser, `${browser}-${direction}-rows.ndjson`)
+      const rows = !existsSync(plain) && existsSync(`${plain}.zst`) ? `${plain}.zst` : plain
       if (!existsSync(report)) {
         skipped.push(`${browser}-${direction}: no report`)
         continue
@@ -287,7 +289,9 @@ export async function streamRowInputs(path: string, visit: (input: unknown) => v
     visit(row.input)
   }
   let pending: Uint8Array | null = null
-  for await (const chunk of Bun.file(path).stream()) {
+  const zstd = path.endsWith('.zst') ? Bun.spawn(['zstd', '-dc', '--', path], { stdout: 'pipe', stderr: 'inherit' }) : null
+  const stream: ReadableStream<Uint8Array> = zstd === null ? Bun.file(path).stream() : zstd.stdout
+  for await (const chunk of stream) {
     let start = 0
     for (let newline = chunk.indexOf(10); newline !== -1; newline = chunk.indexOf(10, start)) {
       if (pending !== null) {
@@ -313,5 +317,6 @@ export async function streamRowInputs(path: string, visit: (input: unknown) => v
     }
   }
   if (pending !== null) handle(pending)
+  if (zstd !== null && (await zstd.exited) !== 0) throw new Error(`zstd -dc ${path} exited ${zstd.exitCode}`)
   return rows
 }

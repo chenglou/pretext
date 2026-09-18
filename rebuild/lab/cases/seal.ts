@@ -6,21 +6,24 @@
 //   bun rebuild/lab/cases/seal.ts --out-dir=.artifacts/lab/sealed [--label=sealed-YYYYMMDD] [--suite-sample=10000]
 //     [--public=rebuild/lab/baselines/sealed-<label>.json]
 //
-// Used ids: every case file a run.json under .artifacts names (casesFile), every case file under .artifacts/lab/cases and
-// .artifacts/lab/final-20260916/cases, and rebuild/lab/smoke-cases.ndjson. The census of 2026-09-16 observed all of main's
-// suite once, in chunk files under census/cases/chunks; those chunks aren't excluded, or no suite case would be left. The
-// census published aggregates, and its per-case lists (main-only cases, history reruns) are excluded through their own
-// run.json files. SEAL.json records all of this.
+// Used ids (cases/used-ids.ts): every case file a run.json under .artifacts names (casesFile), every case file under
+// .artifacts/lab/cases and .artifacts/lab/final-20260916/cases, every earlier sealed set, every fresh round's set
+// (lab/fresh.ts) and rebuild/lab/smoke-cases.ndjson. The census of 2026-09-16 observed all of main's suite once, in chunk
+// files under census/cases/chunks; those chunks aren't excluded, or no suite case would be left. The census published
+// aggregates, and its per-case lists (main-only cases, history reruns) are excluded through their own run.json files.
+// SEAL.json records all of this. Generation holds the generation lock, so no fresh round draws cases at the same time.
+//
+// Giants (cases/parts.ts: a paragraph over 50,000 UTF-16 units) leave the generated files for <out-dir>/giants.ndjson before
+// the files are hashed, by length alone, with their ids and lines unchanged: they run on their own, exclusively, with
+// --chunk=1 (lab/README.md, "Giants"). The first two sealed sets keep theirs inside suite-sample.ndjson.
 import { spawnSync } from 'node:child_process'
 import { createHash, randomBytes } from 'node:crypto'
-import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join, relative, resolve } from 'node:path'
+import { isGiant, readCaseLines, writeCaseLines, type CaseLine } from './parts.ts'
+import { collectUsedIds, generationLock, writeIdsFile } from './used-ids.ts'
 
 const REPO = resolve(import.meta.dir, '../../..')
-const ARTIFACTS = join(REPO, '.artifacts')
-// Directories that hold no case files a run used: browser profiles, virtualenvs and source caches.
-const SKIP_DIRS = new Set(['profiles', 'venv', 'src-cache', 'node_modules', 'scratchpad-backup'])
-const CENSUS_CHUNKS = '/research-20260916/census/cases/chunks/'
 
 function fail(text: string): never {
   console.error(`[seal] ${text}`)
@@ -29,24 +32,6 @@ function fail(text: string): never {
 
 function sha256(path: string): string {
   return createHash('sha256').update(readFileSync(path)).digest('hex')
-}
-
-function* walk(dir: string, into: string): Generator<string> {
-  for (const name of readdirSync(dir)) {
-    const path = join(dir, name)
-    if (path === into) continue
-    let stat
-    try {
-      stat = statSync(path)
-    } catch {
-      continue
-    }
-    if (stat.isDirectory()) {
-      if (!SKIP_DIRS.has(name)) yield* walk(path, into)
-    } else {
-      yield path
-    }
-  }
 }
 
 const args = new Map<string, string>()
@@ -62,64 +47,45 @@ const publicPath = resolve(args.get('public') ?? join(REPO, `rebuild/lab/baselin
 if (existsSync(join(outDir, 'SEAL.json'))) fail(`${outDir} is already sealed`)
 mkdirSync(outDir, { recursive: true })
 
-// ---- Used ids ----
-
-const sources = new Set<string>()
-const notExcluded = new Set<string>()
-for (const path of walk(ARTIFACTS, outDir)) {
-  if (path.endsWith('run.json')) {
-    let casesFile: unknown
-    try {
-      casesFile = (JSON.parse(readFileSync(path, 'utf8')) as { casesFile?: unknown }).casesFile
-    } catch {
-      continue
-    }
-    if (typeof casesFile !== 'string') continue
-    const file = resolve(casesFile.replace('/pretext-rebuild-charter/', '/pretext-rebuild/'))
-    if (file.includes(CENSUS_CHUNKS)) notExcluded.add(file)
-    else sources.add(file)
-  } else if ((path.includes('/.artifacts/lab/cases/') || path.includes('/.artifacts/lab/final-20260916/cases/')) && path.endsWith('.ndjson')) {
-    sources.add(path)
-  } else if (path.endsWith('/SEAL.json')) {
-    // Every earlier sealed set, whether or not a run named its files: its case files go in whole, read for ids only.
-    const dir = resolve(path, '..')
-    for (const name of readdirSync(dir)) if (name.endsWith('.ndjson')) sources.add(join(dir, name))
-  }
-}
-sources.add(join(REPO, 'rebuild/lab/smoke-cases.ndjson'))
-const used = new Set<string>()
-const sourceList: Array<{ path: string; ids: number }> = []
-for (const file of [...sources].sort()) {
-  if (!existsSync(file)) fail(`A run names ${file}, which is gone`)
-  const text = readFileSync(file, 'utf8')
-  let ids = 0
-  for (let start = 0; start < text.length;) {
-    let end = text.indexOf('\n', start)
-    if (end === -1) end = text.length
-    const match = /"id":"(c-[0-9a-f]{16})"/.exec(text.slice(start, Math.min(end, start + 4096)))
-    if (match !== null) {
-      used.add(match[1]!)
-      ids++
-    }
-    start = end + 1
-  }
-  sourceList.push({ path: relative(REPO, file), ids })
-}
-const idsPath = join(outDir, 'excluded-ids.ndjson')
-writeFileSync(idsPath, [...used].sort().map(id => `{"id":"${id}"}\n`).join(''))
-console.log(`[seal] ${used.size} used case ids from ${sourceList.length} files; census chunks not excluded: ${notExcluded.size}`)
-
-// ---- Generation ----
+// ---- Used ids, generation and giants, under the generation lock ----
 
 const seed = randomBytes(32).toString('hex')
-const generator = join(REPO, 'rebuild/lab/cases/generate.ts')
-// The suite sample fills every family by one quota: no family kept whole and no required case kept, so the sample has exactly
-// --suite-sample cases (a held-out set has no reason to favour main's small families or its required cases).
-const SUITE_OPTIONS = ['--suite-keep-whole=0', '--suite-keep-required=false']
-const result = spawnSync('bun', [generator, 'runs', 'ws', 'policy', 'suite', `--seed=${seed}`, `--seed-label=${label}`, `--suite-sample=${suiteSample}`, ...SUITE_OPTIONS, `--exclude-ids=${idsPath}`, `--out-dir=${outDir}`], { cwd: REPO, stdio: ['ignore', 'pipe', 'pipe'], encoding: 'utf8', maxBuffer: 256 << 20 })
-const log = `${result.stdout ?? ''}${result.stderr ?? ''}`.split(seed).join('<seed>')
-writeFileSync(join(outDir, 'generate.log'), log)
-if (result.status !== 0) fail(`generate.ts exited ${result.status}; see ${join(outDir, 'generate.log')}`)
+const idsPath = join(outDir, 'excluded-ids.ndjson')
+const { used, sourceList, notExcluded, giantCount } = await generationLock(`seal ${label}`, () => {
+  const collected = collectUsedIds({ skip: outDir, failOnMissing: true })
+  writeIdsFile(idsPath, collected.ids)
+  console.log(`[seal] ${collected.ids.size} used case ids from ${collected.sources.length} files; census chunks not excluded: ${collected.notExcluded.length}`)
+  const generator = join(REPO, 'rebuild/lab/cases/generate.ts')
+  // The suite sample fills every family by one quota: no family kept whole and no required case kept, so the sample has exactly
+  // --suite-sample cases (a held-out set has no reason to favour main's small families or its required cases).
+  const SUITE_OPTIONS = ['--suite-keep-whole=0', '--suite-keep-required=false']
+  const result = spawnSync('bun', [generator, 'runs', 'ws', 'policy', 'suite', `--seed=${seed}`, `--seed-label=${label}`, `--suite-sample=${suiteSample}`, ...SUITE_OPTIONS, `--exclude-ids=${idsPath}`, `--out-dir=${outDir}`], { cwd: REPO, stdio: ['ignore', 'pipe', 'pipe'], encoding: 'utf8', maxBuffer: 256 << 20 })
+  const log = `${result.stdout ?? ''}${result.stderr ?? ''}`.split(seed).join('<seed>')
+  writeFileSync(join(outDir, 'generate.log'), log)
+  if (result.status !== 0) fail(`generate.ts exited ${result.status}; see ${join(outDir, 'generate.log')}`)
+  // Giants leave the case files by length alone. A file's summary keeps its family table and gets the new case count.
+  const giants: CaseLine[] = []
+  for (const name of readdirSync(outDir).sort()) {
+    if (!name.endsWith('.ndjson') || name === 'excluded-ids.ndjson' || name === 'giants.ndjson') continue
+    const path = join(outDir, name)
+    const lines = readCaseLines(path)
+    const big = lines.filter(isGiant)
+    if (big.length === 0) continue
+    giants.push(...big)
+    writeCaseLines(path, lines.filter(line => !isGiant(line)))
+    const summaryPath = path.replace(/\.ndjson$/, '.summary.json')
+    const summary = JSON.parse(readFileSync(summaryPath, 'utf8')) as { cases: number; families: Record<string, number>; movedToGiants?: number }
+    summary.cases = lines.length - big.length
+    for (const line of big) {
+      summary.families[line.family]!--
+      if (summary.families[line.family] === 0) delete summary.families[line.family]
+    }
+    summary.movedToGiants = big.length
+    writeFileSync(summaryPath, `${JSON.stringify(summary, null, 2)}\n`)
+  }
+  if (giants.length > 0) writeCaseLines(join(outDir, 'giants.ndjson'), giants)
+  return { used: collected.ids, sourceList: collected.sources, notExcluded: collected.notExcluded, giantCount: giants.length }
+})
 
 // ---- Seal ----
 
@@ -148,9 +114,10 @@ const common = {
   generatorSources,
   excluded: {
     ids: used.size, idsFile: relative(REPO, idsPath), idsFileSha256: sha256(idsPath), sources: sourceList,
-    notExcluded: { files: [...notExcluded].sort().map(file => relative(REPO, file)), reason: 'the 2026-09-16 census observed every suite case once in these chunks; excluding them would leave no suite case' },
+    notExcluded: { files: notExcluded, reason: 'the 2026-09-16 census observed every suite case once in these chunks; excluding them would leave no suite case' },
   },
   files,
+  giants: { file: giantCount === 0 ? null : 'giants.ndjson', cases: giantCount, run: 'exclusively (with-browser-lock.py <job> --browser=all), with run.ts --chunk=1' },
   rules: 'Owners must not open, run or score these files before the evaluation stage. At evaluation: score.ts --sealed (counts only). Any look at a case burns the set (TEST-ARCHITECTURE §3).',
 }
 writeFileSync(join(outDir, 'SEAL.json'), `${JSON.stringify({ ...common, seed }, null, 2)}\n`)
@@ -165,8 +132,9 @@ writeFileSync(join(outDir, 'README'), [
   'Why: these cases measure whether the library generalizes to paragraphs nobody iterated on. Looking at a case, a family',
   'breakdown or a failure example burns the set, and burned cases become development cases (research/TEST-ARCHITECTURE.md §3).',
   '',
-  'At the evaluation stage, run them like any case file, one browser job at a time under the browser lock, and score with',
-  'bun rebuild/lab/score.ts --sealed, which writes counts per browser, metric and gap and nothing about single cases.',
+  'At the evaluation stage, run them like any case file under the browser lock (split by a tool, never by hand), run',
+  'giants.ndjson, when there is one, exclusively with --chunk=1, and score with bun rebuild/lab/score.ts --sealed, which',
+  'writes counts per browser, metric and gap and nothing about single cases.',
   '',
   `SEAL.json holds the seed and the sha256 of every file. ${relative(REPO, publicPath)} holds the same record without the seed,`,
   'for the repository.',
@@ -174,3 +142,4 @@ writeFileSync(join(outDir, 'README'), [
 ].join('\n'))
 console.log(`[seal] sealed ${files.filter(file => file.name.endsWith('.ndjson') && file.name !== 'excluded-ids.ndjson').length} case files in ${relative(REPO, outDir)} (label ${label})`)
 for (const file of files) if (file.cases !== null) console.log(`[seal]   ${file.name}: ${file.cases} cases, ${file.families} families`)
+console.log(`[seal]   giants.ndjson: ${giantCount} cases${giantCount === 0 ? ' (no file)' : ', to run exclusively with --chunk=1'}`)

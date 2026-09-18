@@ -8,14 +8,14 @@
 // LBB = InlineLineBoxBuilder.cpp.
 import type { Measurer } from '../../measure/canvas.js'
 import type { Fragment, Gap, GapName, LineResultOf, LineSlot, TextAlign, WebKitDisplayBox, WebKitLineGeometry } from '../../model.js'
-import { canBreakBefore, findNextBreakablePosition, hasDictionaryCharacter, makeFactory, mayBreakInBetween } from './breaks.js'
+import { canBreakBefore, findNextBreakablePosition, hasDictionaryCharacter, inBetweenRangeStartingWithMark, makeFactory, mayBreakInBetween } from './breaks.js'
 import { applyTextAlignJustify, type ExpandableRun, type ExpansionBehavior } from './expansion.js'
-import { DEFAULT_BIDI_LEVEL, hasLanguageDependentFallback } from './content.js'
+import { DEFAULT_BIDI_LEVEL, hasLanguageDependentFallback, localeIndependentGlyph } from './content.js'
 import { isDelimiterQuote, isPunctuation, lineRules } from './data.js'
 import { measureText } from '../../measure/canvas.js'
-import { boxWidth, breakWord, canvasString, firstUserPerceivedCharacterLength, fixedPitchShortcutWidth, forwardOneCodePoint, hyphenGlyphsDiffer, hyphenWidth, itemWidth, measuredEnd, singleSpaceWidth } from './measure.js'
+import { boxWidth, breakWord, canvasString, controlsMeasureExactly, firstUserPerceivedCharacterLength, fixedPitchShortcutWidth, forwardOneCodePoint, hyphenGlyphsDiffer, hyphenWidth, itemWidth, measuredEnd, mergedGlyphs } from './measure.js'
 import { collapsesWhiteSpace, endEdgeWidth, layoutUnit, preservesSpacesAndTabs, startEdgeWidth, tabsAllowed, trailingWhitespaceHangs } from './style.js'
-import type { WebKitBox, WebKitBoxEdges, WebKitItem, WebKitLineStart, WebKitPrepared, WebKitStyle, WebKitTextItem } from './types.js'
+import type { WebKitBox, WebKitBoxEdges, WebKitHistoryWorld, WebKitItem, WebKitLineStart, WebKitPrepared, WebKitStyle, WebKitTextItem } from './types.js'
 
 const f32 = Math.fround
 const F32_MAX = 3.4028234663852886e38
@@ -1161,7 +1161,7 @@ function placeInlineTextContent(b: Builder): { end: Position; overflowLogicalWid
     if (item.box === nextText.box) return true
     const prevBox = L.p.boxes[item.box]!
     const nextBox = L.p.boxes[nextText.box]!
-    return mayBreakInBetween(prevBox.text, prevBox.is8Bit, nextBox.text, nextBox.is8Bit, nextBox.locale, nextBox.style, L.p.icuDefaultLocale, L.p.env.dictionaryBreaks)
+    return breakInBetween(L, prevBox, nextBox)
   }
   const process = (): boolean => {
     L.decisionStart = candidateStart
@@ -1255,7 +1255,21 @@ function endsWithSoftWrapOpportunity(L: Layout, previous: WebKitTextItem, next: 
     const f = makeFactory(prevBox.text, prevBox.is8Bit, prevBox.locale, prevBox.style.lineBreakMode, L.p.icuDefaultLocale, L.p.env.dictionaryBreaks)
     return findNextBreakablePosition(f, next.start, prevBox.style) === next.start
   }
-  const nextBox = L.p.boxes[next.box]!
+  return breakInBetween(L, prevBox, L.p.boxes[next.box]!)
+}
+
+// TextUtil::mayBreakInBetween between two boxes, reporting dictionary-breaks-stand-in on the line that asks where the
+// iterator's text starts a dictionary range with a combining mark (breaks.ts inBetweenRangeStartingWithMark).
+function breakInBetween(L: Layout, prevBox: WebKitBox, nextBox: WebKitBox): boolean {
+  if (L.p.env.dictionaryBreaks.kind === 'intl-segmenter-word') {
+    const end = inBetweenRangeStartingWithMark(prevBox.text, nextBox.text, nextBox.locale, nextBox.style.lineBreakMode, L.p.icuDefaultLocale)
+    if (end !== null) {
+      const at = { start: nextBox.sourceStart - Math.min(2, prevBox.text.length), end: nextBox.sourceStart + end }
+      if (!L.gaps.some(g => g.gap === 'dictionary-breaks-stand-in' && g.at !== undefined && g.at.start === at.start && g.at.end === at.end)) {
+        L.gaps.push({ gap: 'dictionary-breaks-stand-in', run: nextBox.run, detail: "the break test between two text boxes starts a dictionary range with a combining mark from the previous box's last two units, where the line engine resynchronizes from its dictionary and the word segmenter breaks after the mark", at })
+      }
+    }
+  }
   return mayBreakInBetween(prevBox.text, prevBox.is8Bit, nextBox.text, nextBox.is8Bit, nextBox.locale, nextBox.style, L.p.icuDefaultLocale, L.p.env.dictionaryBreaks)
 }
 
@@ -2396,40 +2410,60 @@ function horizontalAlignmentOffset(s: WebKitStyle, contentLogicalRightIn: number
 
 // ---- The gaps a line's filling decides (DESIGN.md §2.8, §5) ----
 
-// Code points that can form a ligature with a neighbour: not white space the text iterators treat as a space, not a control.
-function mayLigate(c: number): boolean {
-  return !(c === 0x20 || c === 0x09 || c === 0x0a || c === 0xa0 || c <= 0x1f || (c >= 0x7f && c <= 0x9f))
-}
-
 // Every condition of the characters this line's filling measured: the items from the line start to the end of the last
 // candidate content the builder formed, placed or not, so the content whose width ended the line counts. Each gap names the
-// characters its condition concerns (`at`), and is reported once per gap and text leaf. `placedEnd` is where the line's content
-// ends: items from there to `measuredEnd` are the content whose fit ended the line.
-function lineGaps(L: Layout, start: WebKitLineStart, placedEnd: Position): void {
+// characters its condition concerns (`at`): one entry per gap, text leaf and stretch of concerned characters, since a gap
+// covers a failure only where its range touches what differs (lab scorer 5). Ranges of one gap and leaf that touch are one
+// entry.
+function lineGaps(L: Layout, start: WebKitLineStart): void {
   const p = L.p
   const env = p.env
   const add = (gap: GapName, box: WebKitBox, from: number, to: number, detail: string): void => {
-    if (L.gaps.some(g => g.gap === gap && g.run === box.run)) return
-    L.gaps.push({ gap, run: box.run, detail, at: { start: box.sourceStart + from, end: box.sourceStart + to } })
+    const at = { start: box.sourceStart + from, end: box.sourceStart + to }
+    for (let k = L.gaps.length - 1; k >= 0; k--) {
+      const known = L.gaps[k]!
+      if (known.gap !== gap || known.run !== box.run || known.at === undefined || at.start > known.at.end || at.end < known.at.start) continue
+      known.at = { start: Math.min(known.at.start, at.start), end: Math.max(known.at.end, at.end) }
+      return
+    }
+    L.gaps.push({ gap, run: box.run, detail, at })
   }
   const end = Math.min(L.measuredEnd, p.items.length)
   for (let index = start.itemIndex; index < end; index++) {
     const item = p.items[index]!
     if (item.kind !== 'text') continue
+    const lineFrom = index === start.itemIndex ? item.start + start.offset : item.start
+    if (lineFrom >= item.end) continue
+    itemGaps(item, lineFrom, item.end, add)
+    // A line that starts inside an item with a carried width lays out the whole item's width less what the lines before it
+    // took (overflowWidthAsLeadingForNextLine, ALB:54-98; InlineTextItem::right, InlineTextItem.cpp:65-71), so what concerns
+    // the part of the item before the line start concerns the width of the rest (triage c-0033f34a9d6b3f85: `ty` after
+    // `affini` is 9.439998626708984px natively, 9.44000244140625px from a whole that leaves out a pair adjustment).
+    if (index === start.itemIndex && start.offset > 0 && start.previousLine !== null && start.previousLine.carriedWidth !== null) {
+      itemGaps(item, item.start, lineFrom, (gap, box, _from, _to, detail) => add(gap, box, lineFrom, item.end, `${detail}; in the part of the item before this line, which the carried width of the rest comes from`))
+    }
+  }
+
+  function itemGaps(item: WebKitTextItem, from: number, to: number, add: (gap: GapName, box: WebKitBox, from: number, to: number, detail: string) => void): void {
     const box = p.boxes[item.box]!
     const style = box.style
     const text = box.text
-    const from = index === start.itemIndex ? item.start + start.offset : item.start
-    const to = item.end
-    if (from >= to) continue
     // A collapsible white space item, or a lone preserved space, measures one space alone (TextUtil.cpp:111-122).
     const singleSpace = item.isWhitespace && (!preservesSpacesAndTabs(style) || (to - from === 1 && text.charCodeAt(from) === 0x20))
+    // The string TextUtil::width measures for the item: with the U+0020 that follows a text item (TextUtil.cpp:72-76).
+    const measured = text.slice(from, measuredEnd(box, to, !item.isWhitespace))
+    // VT, FF and CR (measure.ts, "VT, FF and CR"): the stand-in is the DOM's sum unless Canvas shows a pair adjustment around
+    // the control, or text follows a CR in the measured string. The complex text controller gives VT and FF .notdef's advance
+    // and CR none (ComplexTextController.cpp:773-782): its kerning around VT and FF wasn't probed, so they report there.
+    let controlsExact: boolean | null = null
     for (let i = from; i < to; i++) {
       const c = text.charCodeAt(i)
-      // specs/webkit-text.md §5.3: on the simple font code path the DOM keeps CR's glyph advance, measured as U+0000 (0 in
-      // Arial); VT, FF and other Cc take .notdef, measured as U+0001, which another font can supply.
-      if (c === 0x0d && box.simpleFontCodePath) add('control-character-width', box, i, i + 1, "CR keeps its glyph advance on the simple path; measured as U+0000, 0 in Arial")
-      else if ((c <= 0x1f && c !== 0x09 && c !== 0x0a && c !== 0x00 && c !== 0x0d) || (c >= 0x7f && c <= 0x9f)) add('control-character-width', box, i, i + 1, 'VT, FF and other Cc take .notdef, measured as U+0001; the .notdef can come from another font')
+      if (c === 0x0b || c === 0x0c || (c === 0x0d && box.simpleFontCodePath)) {
+        controlsExact ??= box.simpleFontCodePath && controlsMeasureExactly(L.m, box.spacedContext, measured)
+        if (!controlsExact) add('control-character-width', box, i, i + 1, box.simpleFontCodePath
+          ? 'Core Text kerns the letter before VT, FF or CR as before a space and keeps an adjustment on CR itself; Canvas shapes another string, so the width is pieced together outside the DOM\'s float32 order'
+          : 'VT, FF and CR on the complex path are measured as U+0001 and U+0000, which Core Text shapes otherwise than the control')
+      }
       // FontCascade::tabWidth counts stops from the primary font's spaceWidth() (FontCascadeInlines.h:76-94), taken from Canvas
       // W(' '), and letter spacing after a TAB follows WidthIterator; neither is probed (webkit audit E3).
       if (c === 0x09 && tabsAllowed(style)) add('tab-stops', box, i, i + 1, "tab stops count from Canvas W(' ') for the primary font's spaceWidth()")
@@ -2437,48 +2471,46 @@ function lineGaps(L: Layout, start: WebKitLineStart, placedEnd: Position): void 
       // :292-299). Latin-1 text is assumed 8-bit (specs/webkit-gaps.md §7.5).
       if (box.is8Bit && style.wordBreak === 'keep-all' && isPunctuation(c) && i + 1 < text.length) add('string-storage', box, i, i + 1, 'keep-all breaks after punctuation in 16-bit text only; Latin-1 text assumed 8-bit')
     }
-    // The DOM turns off liga, clig, dlig and hlig under non-zero letter spacing (ComputedStyleBase.cpp:324-331,
-    // UnrealizedCoreTextFont.cpp:258-264); OffscreenCanvas keeps them (specs/webkit-canvas.md §1.3). A ligature replaces at
-    // least two adjacent glyphs of one measured string.
-    if (box.letterSpacing !== 0) {
-      for (let i = from; i < to;) {
-        const cp = text.codePointAt(i)!
-        const next = i + (cp > 0xffff ? 2 : 1)
-        if (next < to && mayLigate(cp) && mayLigate(text.codePointAt(next)!)) {
-          add('letter-spacing-ligatures', box, i, Math.min(to, next + (text.codePointAt(next)! > 0xffff ? 2 : 1)), 'the DOM turns off liga, clig, dlig and hlig under letter-spacing; OffscreenCanvas keeps them')
-          break
-        }
-        i = next
+    // Letter spacing and ligatures (measure.ts mergedGlyphs): the gap sits where Canvas shows merged glyphs in the measured
+    // string. On the simple path the string is measured with the merged pairs separated, which leaves what shaping does
+    // across each pair with liga, clig, dlig and hlig off, a pair adjustment, unmeasured; on the complex path, or where
+    // separating leaves glyphs merged, the string is measured as Canvas shapes it, and a merge the DOM keeps too (a
+    // required ligature) can't be told from one it turns off.
+    if (box.letterSpacing !== 0 && !singleSpace) {
+      const merge = mergedGlyphs(L.m, box, measured)
+      if (merge.separated !== null) {
+        for (let k = 0; k < merge.pairs.length; k++) add('letter-spacing-ligatures', box, from + merge.pairs[k]![0], Math.min(to, from + merge.pairs[k]![1]), 'Canvas merges this pair under liga, clig, dlig or hlig, which the DOM turns off under letter-spacing; measured with U+200C between the two, which leaves out a pair adjustment between them')
+      } else if (merge.merged) {
+        add('letter-spacing-ligatures', box, from, to, 'Canvas shows fewer spacing-bearing glyphs than characters here, and the DOM turns off liga, clig, dlig and hlig under letter-spacing; OffscreenCanvas keeps them')
       }
     }
-    // OffscreenCanvas has a null locale (specs/webkit-canvas.md §1.3): collectBoxFacts in content.ts.
-    if (box.localeChoosesFonts === 'all') add('canvas-language', box, from, to, `locale ${box.locale} chooses the system or standard font; OffscreenCanvas has no locale`)
-    if (box.localeChoosesFonts === 'fallback') {
+    // OffscreenCanvas has a null locale (specs/webkit-canvas.md §1.3): collectBoxFacts in content.ts. A control is measured
+    // as another character (canvasString) and draws no font's glyph of its own.
+    if (box.localeChoosesFonts !== null) {
       for (let i = from; i < to; i++) {
         const cp = text.codePointAt(i)!
-        if (hasLanguageDependentFallback(cp)) {
-          add('canvas-language', box, i, i + (cp > 0xffff ? 2 : 1), `locale ${box.locale} chooses the fallback font for Han, kana or Hangul; OffscreenCanvas has no locale`)
-          break
+        const length = cp > 0xffff ? 2 : 1
+        const concerned = box.localeChoosesFonts.families || (box.localeChoosesFonts.fallback && hasLanguageDependentFallback(cp))
+        if (concerned && cp > 0x1f && !(cp >= 0x7f && cp <= 0x9f) && !localeIndependentGlyph(L.m, box, cp)) {
+          add('canvas-language', box, i, i + length, box.localeChoosesFonts.families
+            ? `no named family before the one locale ${box.locale} resolves draws this character; OffscreenCanvas has no locale`
+            : `locale ${box.locale} chooses the fallback font for Han, kana or Hangul; OffscreenCanvas has no locale`)
         }
-        if (cp > 0xffff) i++
+        i += length - 1
       }
     }
     if (box.hanLocaleUnknown) add('ui-language', box, from, to, "the Han locale becomes the first preferred language starting with zh-, and the preferred languages aren't given; laid out as zh-hans")
     if (box.quoteLocaleUnknown) {
       for (let i = from; i < to; i++) {
-        if (!isDelimiterQuote(text.charCodeAt(i))) continue
-        add('ui-language', box, i, i + 1, `ICU has no delimiter data for ${box.locale}, so the quote overrides follow the WebContent process's default locale, which isn't given; laid out as en_US_POSIX`)
-        break
+        if (isDelimiterQuote(text.charCodeAt(i))) add('ui-language', box, i, i + 1, `ICU has no delimiter data for ${box.locale}, so the quote overrides follow the WebContent process's default locale, which isn't given; laid out as en_US_POSIX`)
       }
     }
     if (box.fixedPitchFastMeasuring && box.unverifiedCoverage.length > 0) {
       for (let i = from; i < to; i++) {
         const cp = text.codePointAt(i)!
-        if (box.unverifiedCoverage.includes(cp)) {
-          add('font-fallback', box, i, i + (cp > 0xffff ? 2 : 1), "a code point measures as wide as LastResort's box, so the Canvas coverage test can't tell whether the primary font maps it, which decides the fixed-pitch width shortcut")
-          break
-        }
-        if (cp > 0xffff) i++
+        const length = cp > 0xffff ? 2 : 1
+        if (box.unverifiedCoverage.includes(cp)) add('font-fallback', box, i, i + length, "a code point measures as wide as LastResort's box, so the Canvas coverage test can't tell whether the primary font maps it, which decides the fixed-pitch width shortcut")
+        i += length - 1
       }
     }
     // Test T1 of specs/webkit-gaps.md §2.5: where the width shortcut of a fixed-pitch primary font gives another width than
@@ -2492,24 +2524,32 @@ function lineGaps(L: Layout, start: WebKitLineStart, placedEnd: Position): void 
       }
     }
     // The DOM's simplified path sums the shaped advances of the primary font's glyphs in one float32 loop
-    // (FontCascade::widthForSimpleTextSlow, FontCascade.cpp:381-412). Canvas runs WidthIterator, which sums the unshaped
-    // advances, adds the difference shaping made, and first restores every character treated as a space to its unshaped
-    // advance (WidthIterator.cpp:84-120, :473-474). So the two agree where shaping moved nothing: a string without U+0020 whose
-    // Canvas total is the float32 sum of its code points' own advances, in order.
+    // (FontCascade::widthForSimpleTextSlow, FontCascade.cpp:381-412). Canvas runs WidthIterator: the unshaped sum U, plus the
+    // shaped sum S less U, after it puts every character treated as a space back to its unshaped advance
+    // (applyFontTransforms, WidthIterator.cpp:84-120). Where U and S are within a factor of two of each other, S - U is exact
+    // in float32 (Sterbenz), so the WidthIterator total is S: the two paths agree to the bit unless shaping changed a space's
+    // own advance, which Canvas can't show (probe webkit-round3 R1: 162 of 162 strings without a space, kerned and ligated
+    // ones included, measure the same in the DOM and in Canvas).
+    // - A U+0020 before the string's last unit is the first glyph of a pair, where CoreText puts a pair adjustment: a
+    //   preserved run of spaces.
+    // - The U+0020 a text item is measured with is the string's last glyph, a pair's second glyph. CoreText puts the pair
+    //   adjustment of kern, kerx and first-glyph GPOS value records on the letter (probe webkit-round3 R2: 2,350 of 2,350
+    //   pre boxes `x` U+0020 in 25 fonts, 47 of them with an adjustment, equal the Canvas recipe). A GPOS value record for
+    //   the pair's second glyph would move the space itself, and FontFacts.pairKerning says the font has none.
     if (box.simplifiedMeasuring && !box.fixedPitchFastMeasuring && !singleSpace) {
-      const measured = text.slice(from, measuredEnd(box, to, !item.isWhitespace))
-      let moved = measured.includes(' ')
+      const space = measured.indexOf(' ')
+      let moved = space >= 0 && (space < measured.length - 1 || box.pairKerningUnknown)
       if (!moved) {
-        let sum = 0
+        let unshaped = 0
         for (let i = 0; i < measured.length; i++) {
           const cp = measured.codePointAt(i)!
-          const unit = String.fromCodePoint(cp)
-          sum = f32(sum + measureText(L.m, box.context, canvasString(unit)))
+          unshaped = f32(unshaped + measureText(L.m, box.context, canvasString(String.fromCodePoint(cp))))
           if (cp > 0xffff) i++
         }
-        moved = sum !== measureText(L.m, box.context, canvasString(measured))
+        const total = measureText(L.m, box.context, canvasString(measured))
+        moved = total !== unshaped && !(total >= 0.75 * unshaped && total <= 1.5 * unshaped)
       }
-      if (moved) add('simplified-measuring', box, from, to, 'the DOM keeps shaped advances in one float32 sum on the simplified path, where Canvas restores spaces and adds what shaping moved')
+      if (moved) add('simplified-measuring', box, from, to, "the DOM keeps a space's shaped advance on the simplified path, where Canvas puts it back to the unshaped one")
     }
     if (env.dictionaryBreaks.kind === 'unavailable' && hasDictionaryCharacter(lineRules(box.locale, style.lineBreakMode, p.icuDefaultLocale).rules, text, from, to)) {
       add('dictionary-breaks-unavailable', box, from, to, 'Thai, Lao, Khmer or Myanmar text gets no dictionary boundaries')
@@ -2518,69 +2558,113 @@ function lineGaps(L: Layout, start: WebKitLineStart, placedEnd: Position): void 
       const [rangeStart, rangeEnd] = box.dictionaryRangesStartingWithMark[k]!
       if (rangeStart < to && rangeEnd > from) add('dictionary-breaks-stand-in', box, rangeStart, rangeEnd, 'a dictionary range starts with a combining mark, where the line engine resynchronizes from its dictionary and the word segmenter breaks after the mark')
     }
-    // TextBreakingPositionCache: collectHistoryFacts in content.ts. Other item ends change this line in two ways only: the
-    // parts of a split item are measured apart (nonWhitespaceContentWidth per item, IIB:890-900), and item boundaries are
-    // where wrap opportunities sit (endsWithSoftWrapOpportunity, isAtSoftWrapOpportunity; IFU:336-454), which decide the
-    // line where they sit in the content whose fit ended the line, or in any content the builder reverted over.
-    // The content whose fit ended the line starts where its last candidate began, at or before the end of what it placed, and
-    // only a candidate that didn't fit makes a break decision (InlineContentBreaker runs where content overflows, ILB:1432-1481,
-    // TOS:343-421); a line that ended with the content or at a forced break decided nothing between its items.
-    const decides = L.reverted || (L.overflowStart !== null && L.overflowStart === L.decisionStart && index >= Math.min(L.decisionStart, placedEnd.index))
-    if (box.historyEnds.length > 0) {
-      const inside: number[] = []
-      for (let k = 0; k < box.historyEnds.length; k++) {
-        const position = box.historyEnds[k]!
-        if (position > item.start && position < item.end && position > from && position < to) inside.push(position)
-      }
-      if (inside.length > 0) {
-        let widthMoves = item.isWhitespace || text.slice(item.start, item.end).includes('\t')
-        if (!widthMoves) {
-          let parts = 0
-          let partStart = item.start
-          for (let k = 0; k <= inside.length; k++) {
-            const partEnd = k < inside.length ? inside[k]! : item.end
-            parts = f32(parts + boxWidth(p, L.m, box, partStart, partEnd, 0, true))
-            partStart = partEnd
-          }
-          widthMoves = parts !== boxWidth(p, L.m, box, item.start, item.end, 0, true)
-        }
-        if (decides || widthMoves) add('page-history', box, inside[0]!, inside[0]!, 'the break position cache keys a box by its text and wrapping styles, not by paragraph direction or bidi levels, so a box of the same text laid out earlier can end an item here, which moves this line\'s widths or wrap opportunities')
-      }
-    }
-    if (box.historyWhitespace && item.isWhitespace) {
-      // The run of this box's white-space items around the item: one item under pre-wrap, one per unit under break-spaces.
-      let runFirst = index
-      while (runFirst > 0) {
-        const previous = p.items[runFirst - 1]!
-        if (previous.kind !== 'text' || previous.box !== item.box || !previous.isWhitespace || previous.end !== (p.items[runFirst] as WebKitTextItem).start) break
-        runFirst--
-      }
-      let runLast = index
-      while (runLast + 1 < p.items.length) {
-        const following = p.items[runLast + 1]!
-        if (following.kind !== 'text' || following.box !== item.box || !following.isWhitespace || following.start !== (p.items[runLast] as WebKitTextItem).end) break
-        runLast++
-      }
-      const runStart = (p.items[runFirst] as WebKitTextItem).start
-      const runEnd = (p.items[runLast] as WebKitTextItem).end
-      if (runEnd - runStart > 1) {
-        // Whole white space measures the run; per-unit items each measure one space (TextUtil.cpp:111-122). A TAB's width
-        // depends on its position, and word spacing adds per separator.
-        let widthMoves = box.wordSpacing !== 0 || text.slice(runStart, runEnd).includes('\t')
-        if (!widthMoves) {
-          let perUnit = 0
-          for (let i = runStart; i < runEnd; i++) perUnit = f32(perUnit + Math.max(0, singleSpaceWidth(L.m, box)))
-          widthMoves = perUnit !== boxWidth(p, L.m, box, runStart, runEnd, 0, false)
-        }
-        if (decides || widthMoves) add('page-history', box, runStart, runEnd, 'a box of the same text laid out earlier under break-spaces or pre-wrap, or with other word spacing, leaves other white-space items in the break position cache, which moves this line\'s widths or wrap opportunities')
-      }
-    }
   }
+}
+
+// ---- Page history (content.ts, "Page history") ----
+
+type WebKitLineResult = LineResultOf<WebKitLineStart, WebKitLineGeometry>
+
+// Where a line of the paragraph and the same line in a history world differ, as a source range, or null where they agree in
+// everything the observation port reads: the line's range, its line box and its display boxes.
+function lineDifference(p: WebKitPrepared, own: WebKitLineResult, world: WebKitLineResult): { start: number; end: number } | null {
+  if (own.kind !== 'line' || world.kind !== 'line') return own.kind === world.kind ? null : own.kind === 'line' ? { start: own.line.start, end: own.line.end } : { start: 0, end: 0 }
+  const a = own.line
+  const b = world.line
+  let start = Infinity
+  let end = -Infinity
+  const mark = (from: number, to: number): void => {
+    start = Math.min(start, from)
+    end = Math.max(end, to)
+  }
+  // Another break: the text between the two breaks. What else differs on the line follows from the break.
+  if (a.end !== b.end) return { start: Math.min(a.end, b.end), end: Math.max(a.end, b.end) }
+  const ga = a.geometry
+  const gb = b.geometry
+  for (let k = 0; k < ga.boxes.length && k < gb.boxes.length; k++) {
+    const x = ga.boxes[k]!
+    const y = gb.boxes[k]!
+    let same = x.kind === y.kind && x.x === y.x && x.width === y.width
+    if (same && (x.kind === 'text' || x.kind === 'soft-line-break') && (y.kind === 'text' || y.kind === 'soft-line-break')) {
+      same = x.run === y.run && x.start === y.start && x.end === y.end && x.level === y.level && x.hyphen === y.hyphen && x.expansion === y.expansion
+    }
+    if (same) continue
+    if (x.kind === 'text' || x.kind === 'soft-line-break') mark(p.runStarts[x.run]! + x.start, p.runStarts[x.run]! + x.end)
+    else mark(a.start, a.end)
+  }
+  // The line's own sums alone: no box says where.
+  if (start === Infinity && (a.hasLineBox !== b.hasLineBox || ga.contentWidth !== gb.contentWidth || ga.hangingWidth !== gb.hangingWidth || ga.contentLogicalRight !== gb.contentLogicalRight || ga.alignmentOffset !== gb.alignmentOffset || ga.boxes.length !== gb.boxes.length)) mark(a.start, a.end)
+  return start === Infinity ? null : { start, end }
+}
+
+// The line start in a history world that stands where `start` stands, or null where the world can't be at that start: the
+// line begins inside an item with a width carried from the lines before it (overflowWidthAsLeadingForNextLine, ALB:54-98;
+// InlineTextItem::right, InlineTextItem.cpp:65-71), and the world ends an item between that item's start and the line start,
+// so its rest started from another whole (triage c-66ae4ab7d56cb0ae: line 6 keeps `ببب` at 16.27px, the rest of `بببب` alone,
+// where the rest of `((بببب` is 26.02px); or the world has no item boundary at a line start between two of the own items.
+function worldLineStart(p: WebKitPrepared, world: WebKitHistoryWorld, start: WebKitLineStart): WebKitLineStart | null {
+  if (start.itemIndex >= p.items.length) return { ...start, itemIndex: world.prepared.items.length }
+  const own = p.items[start.itemIndex]!
+  let index = world.itemIndex[start.itemIndex]!
+  if (own.kind !== 'text') return { ...start, itemIndex: index }
+  const position = own.start + start.offset
+  const items = world.prepared.items
+  let first = items[index] as WebKitTextItem
+  if (first.start > own.start) return null
+  while (first.end <= position) {
+    const following = items[index + 1]
+    if (following === undefined || following.kind !== 'text' || following.box !== own.box || following.start !== first.end) return null
+    first = following
+    index++
+  }
+  if (start.offset === 0) return first.start === position ? { ...start, itemIndex: index } : null
+  if (first.start === own.start) return { ...start, itemIndex: index }
+  if (start.previousLine !== null && start.previousLine.carriedWidth !== null) return null
+  return { ...start, itemIndex: index, offset: position - first.start }
+}
+
+const PAGE_HISTORY_DETAIL = "the break position cache keys a box by its text and wrapping styles, not by its paragraph's direction, neighbouring content, white-space or word spacing, so a box of the same text laid out earlier in the process can hand this box other item ends, and with them this line differs here"
+
+function pageHistoryGaps(p: WebKitPrepared, start: WebKitLineStart, slot: LineSlot, m: Measurer, measuredEnd: number, result: WebKitLineResult): void {
+  const gaps = result.kind === 'line' ? result.line.gaps : result.gaps
+  const readEnd = Math.min(Math.max(measuredEnd, start.itemIndex + 1), p.items.length)
+  for (let w = 0; w < p.historyWorlds.length; w++) {
+    const world = p.historyWorlds[w]!
+    let reads = false
+    for (let i = start.itemIndex; i < readEnd && !reads; i++) reads = world.changed[i]!
+    if (!reads) continue
+    const worldStart = worldLineStart(p, world, start)
+    let at: { start: number; end: number } | null
+    if (worldStart === null) {
+      const from = start.itemIndex === 0 && start.offset === 0 ? 0 : sourceOffset(p, { index: start.itemIndex, offset: start.offset })
+      const own = p.items[start.itemIndex]!
+      at = { start: from, end: own.kind === 'text' ? p.boxes[own.box]!.sourceStart + own.end : from }
+    } else {
+      at = lineDifference(p, result, buildLine(world.prepared, worldStart, slot, m).result)
+    }
+    if (at === null) continue
+    const run = p.boxes[world.box]!.run
+    let known = false
+    for (let k = 0; k < gaps.length && !known; k++) {
+      const gap = gaps[k]!
+      if (gap.gap !== 'page-history' || gap.run !== run || gap.at === undefined) continue
+      gap.at = { start: Math.min(gap.at.start, at.start), end: Math.max(gap.at.end, at.end) }
+      known = true
+    }
+    if (!known) gaps.push({ gap: 'page-history', run, detail: PAGE_HISTORY_DETAIL, at })
+  }
+}
+
+// One line (InlineFormattingContext::lineLayout), and page-history where a history world lays it out otherwise.
+export function webkitNextLine(p: WebKitPrepared, start: WebKitLineStart, slot: LineSlot, m: Measurer): WebKitLineResult {
+  const built = buildLine(p, start, slot, m)
+  if (p.historyWorlds.length > 0) pageHistoryGaps(p, start, slot, m, built.measuredEnd, built.result)
+  return built.result
 }
 
 // One line of InlineFormattingContext::lineLayout (InlineFormattingContext.cpp:293-360) with the builder the paragraph
 // chose, then leadingInlineItemPositionForNextLine (IFU:278-298).
-export function webkitNextLine(p: WebKitPrepared, start: WebKitLineStart, slot: LineSlot, m: Measurer): LineResultOf<WebKitLineStart, WebKitLineGeometry> {
+function buildLine(p: WebKitPrepared, start: WebKitLineStart, slot: LineSlot, m: Measurer): { result: WebKitLineResult; measuredEnd: number } {
   if (slot.left < 0 || slot.right < 0) throw new Error(`a line slot's insets are float widths and can't be negative (${slot.left}, ${slot.right})`)
   const hasFloats = start.hasFloats || slot.left > 0 || slot.right > 0
   // computedTextIndent (IFU:143-179): the first formatted line of a non-anonymous block, the fixed amount in px at zoom.
@@ -2665,12 +2749,12 @@ export function webkitNextLine(p: WebKitPrepared, start: WebKitLineStart, slot: 
     }
   }
   const line = b.line
-  lineGaps(L, start, lineContentEnd)
+  lineGaps(L, start)
   // Floats kept every content from the line: the next line box moves below them (IFU:54-103, :286-289).
   const placedNothing = lineContentEnd.index === start.itemIndex && lineContentEnd.offset === start.offset
   if (placedNothing && L.constrainedByFloat && !(lineContentEnd.index === itemsEnd.index && lineContentEnd.offset === 0)) {
     // The refused build placed the slot floats, so the next build finds them in the formatting context.
-    return { kind: 'below-floats', gaps: L.gaps, next: { ...start, hasFloats: true } }
+    return { result: { kind: 'below-floats', gaps: L.gaps, next: { ...start, hasFloats: true } }, measuredEnd: L.measuredEnd }
   }
   let next: Position = lineContentEnd
   if (start.previousLine !== null) {
@@ -2691,7 +2775,7 @@ export function webkitNextLine(p: WebKitPrepared, start: WebKitLineStart, slot: 
   // The display line's left edge (IDLB:124-129): the line rect's left, mirrored across the container in an RTL block.
   const containerWidth = f32(layoutUnit(f32(f32(p.paragraph.width) * f32(p.zoom))))
   const lineLeft = p.style.rtl ? f32(containerWidth - f32(rect.left + rect.width)) : rect.left
-  return {
+  const result: WebKitLineResult = {
     kind: 'line',
     line: {
       start: lineStart,
@@ -2723,4 +2807,5 @@ export function webkitNextLine(p: WebKitPrepared, start: WebKitLineStart, slot: 
       },
     },
   }
+  return { result, measuredEnd: L.measuredEnd }
 }

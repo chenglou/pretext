@@ -2,9 +2,9 @@
 //
 //   bun rebuild/lab/gate.ts --baseline=rebuild/lab/baselines/gate-chrome.json --runs=<per-case file or dir>[,...]
 //     [--complete] [--allow-uncompared] [--out=<report.json>]
-//   bun rebuild/lab/gate.ts --seed --engine=blink|webkit|gecko --engine-version=<label> [--note=<text>]
-//     --baseline=<file> --runs=<per-case file or dir>[,...] [--allow-uncompared] [--out=<diff.json>]
-//   bun rebuild/lab/gate.ts --prune-protocol --baseline=<lab gate file or tests gate file> [--out=<report.json>]
+//   bun rebuild/lab/gate.ts --seed --staging=<dir> --engine=blink|webkit|gecko --engine-version=<label> [--note=<text>]
+//     --baseline=<file> --runs=<per-case file or dir>[,...] [--allow-uncompared] [--out=<record.json>]
+//   bun rebuild/lab/gate.ts --prune-protocol --staging=<dir> --baseline=<lab gate file or tests gate file> [--out=<report.json>]
 //
 // A run is a per-case file written by `score.ts --per-case`, next to the summary the same call wrote (`<name>-per-case.ndjson`
 // and `<name>-summary.json`). `--runs` takes files or directories (every `*-per-case.ndjson` directly inside) and can be
@@ -33,16 +33,28 @@
 // - A baseline case that no current run observes is missing. It fails the gate only with --complete, and only when the
 //   case holds baseline passes (exit 1).
 //
-// Seeding writes the baseline and, when the file already exists, reports the pairs the new seed loses or gains against it.
-// It refuses runs whose environment records no process languages, since no run could then match the baseline's languages.
+// Seeding never writes the baseline it names. `--baseline` is the adopted seed, the file a later check reads; the new seed
+// goes to `<staging>/<the baseline's file name>`, with its record next to it (`<name>.seed-record.json`), and is adopted by
+// whoever copies it over the baseline after review. The staging folder is required and can't be the folder the baseline
+// is in. The record compares the new seed with the adopted one, when that exists:
+// - every pair the new seed loses, with its status, reason and detail in the first seeding run that doesn't pass it, the
+//   gaps that cover it there (score.ts lineGaps) or that it has no covered explanation, its residual class if any, and an
+//   empty `attribution` for the source reading a person adds;
+// - the pairs that leave through new history dependence: passes of the adopted seed whose case a seeding run now marks
+//   history-dependent. They stop gating without failing, so they are listed with the difference the two orders showed and
+//   the metrics the case passes now;
+// - the pairs that leave because their row is a protocol row now; pairs gained; cases only one of the two observed.
+// Seeding refuses runs whose environment records no process languages, since no run could then match the baseline's
+// languages, and runs scored by different scorers, since a check could then never match them all.
 //
 // Pruning (--prune-protocol) applies score.ts slotProtocol to the rows of every seeding run a baseline names (the
 // `<browser>-rows.ndjson` next to each per-case file) and moves each protocol row out of the baseline's passes, cases
 // without passes and unstable pairs into `protocol`, with the rule's reason. It lists every pair it removes. Nothing else
-// changes, so a baseline seeded before scorer 4 loses the passes its protocol rows recorded by accident.
-import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
+// changes, so a baseline seeded before scorer 4 loses the passes its protocol rows recorded by accident. The pruned file
+// goes to the staging folder too.
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { statSync } from 'node:fs'
-import { dirname, join, relative, resolve } from 'node:path'
+import { basename, dirname, join, relative, resolve } from 'node:path'
 import { readLines, slotProtocol, type Metric, type MetricName, type Status } from './score.ts'
 import type { BrowserKind, LabRow } from './types.ts'
 
@@ -56,7 +68,14 @@ const BROWSERS = new Set<BrowserKind>(['chrome', 'safari', 'firefox', 'webkit-ho
 export type Engine = 'blink' | 'webkit' | 'gecko'
 export const ENGINE_BROWSERS: Record<Engine, readonly BrowserKind[]> = { blink: ['chrome'], webkit: ['safari', 'webkit-host'], gecko: ['firefox'] }
 
-export type CaseResult = { id: string; family: string; browser: BrowserKind; metrics: Record<MetricName, Metric>; historyDependent: string | null; protocol: string | null }
+// Per failing metric, whether the scorer found a covered explanation and the gaps that cover it (score.ts lineGaps).
+export type Coverage = Partial<Record<MetricName, { covered: boolean; gaps: string[] }>>
+export type CaseResult = {
+  id: string; family: string; browser: BrowserKind; metrics: Record<MetricName, Metric>; historyDependent: string | null; protocol: string | null
+  // Absent in results built by hand; parsePerCase always sets them.
+  coverage?: Coverage
+  residual?: string | null
+}
 export type Run = { path: string; environments: string[]; compared: boolean; casesFile: string | null; cases: CaseResult[] }
 
 export type Baseline = {
@@ -91,6 +110,9 @@ export type GateReport = {
     lostPairs: number
     newPairs: number
     historyDependentCases: number
+    // Baseline passes of cases that are history-dependent now and weren't when the baseline was seeded: they stopped gating.
+    // checkRuns always sets it; optional so reports built by hand before it existed still type-check.
+    leftThroughHistoryPairs?: number
     unstablePairs: number
     missingCases: number
     missingPairs: number
@@ -144,10 +166,23 @@ export function parsePerCase(text: string, path: string): CaseResult[] {
     if (history !== undefined && typeof history !== 'string') fail(`${where}: historyDependent must be a string`)
     const protocol = record['protocol']
     if (protocol !== undefined && typeof protocol !== 'string') fail(`${where}: protocol must be a string`)
+    const coverage: Coverage = {}
+    const lineGaps = record['lineGaps'] as Record<string, { covered?: unknown; lines?: Array<{ gaps?: Array<{ gap?: unknown }> }> }> | undefined
+    if (typeof lineGaps === 'object' && lineGaps !== null) {
+      for (const metric of METRIC_ORDER) {
+        const value = lineGaps[metric]
+        if (value === undefined) continue
+        const gaps = new Set<string>()
+        for (const line of value.lines ?? []) for (const gap of line.gaps ?? []) if (typeof gap.gap === 'string') gaps.add(gap.gap)
+        coverage[metric] = { covered: value.covered === true, gaps: [...gaps].sort() }
+      }
+    }
+    const residual = record['residual'] as { name?: unknown; membership?: unknown } | undefined
     out.push({
       id, family, browser: browser as BrowserKind,
       metrics: { lineCount: parseMetric(record['lineCount'], where), breaks: parseMetric(record['breaks'], where), widths: parseMetric(record['widths'], where), painter: parseMetric(record['painter'], where) },
-      historyDependent: history ?? null, protocol: protocol ?? null,
+      historyDependent: history ?? null, protocol: protocol ?? null, coverage,
+      residual: typeof residual?.name === 'string' ? `${residual.name} (${String(residual.membership)})` : null,
     })
   }
   return out
@@ -199,7 +234,7 @@ export function runPaths(values: readonly string[]): string[] {
   return out
 }
 
-type Observed = { family: string; historyDependent: string | null; protocol: string | null; results: Array<{ run: number; metrics: Record<MetricName, Metric> }> }
+type Observed = { family: string; historyDependent: string | null; protocol: string | null; results: Array<{ run: number; metrics: Record<MetricName, Metric>; coverage: Coverage; residual: string | null }> }
 
 function observe(runs: readonly Run[]): Map<string, Observed> {
   const byId = new Map<string, Observed>()
@@ -211,7 +246,7 @@ function observe(runs: readonly Run[]): Map<string, Observed> {
       if (entry === undefined) byId.set(value.id, (entry = { family: value.family, historyDependent: null, protocol: null, results: [] }))
       entry.historyDependent ??= value.historyDependent
       entry.protocol ??= value.protocol
-      entry.results.push({ run: r, metrics: value.metrics })
+      entry.results.push({ run: r, metrics: value.metrics, coverage: value.coverage ?? {}, residual: value.residual ?? null })
     }
   }
   return byId
@@ -278,6 +313,10 @@ export function runProblems(engine: Engine, runs: readonly Run[], options: { all
       }
     }
     if (!run.compared && !options.allowUncompared) problems.push(`${name}: not scored with --native-compare, so history-dependent cases are unknown`)
+  }
+  if (options.environments === null) {
+    const scorers = new Set(runs.flatMap(run => run.environments.map(environment => environmentParts(environment).scorer ?? 'no scorer recorded')))
+    if (scorers.size > 1) problems.push(`the seeding runs were scored by different scorers (${[...scorers].sort().join(', ')}): re-score them with one`)
   }
   return problems
 }
@@ -396,7 +435,7 @@ export function checkRuns(baseline: Baseline, runs: readonly Run[], options: { c
   const report: GateReport = {
     ok: true, engine: baseline.engine, engineVersion: baseline.engineVersion,
     runs: runs.map(run => ({ perCase: relative(REPO, run.path), cases: run.cases.length, historyDependent: run.cases.filter(value => value.historyDependent !== null).length, compared: run.compared })),
-    counts: { baselineCases: 0, observedCases: observed.size, lostPairs: 0, newPairs: 0, historyDependentCases: 0, unstablePairs: 0, missingCases: 0, missingPairs: 0, protocolCases: 0 },
+    counts: { baselineCases: 0, observedCases: observed.size, lostPairs: 0, newPairs: 0, historyDependentCases: 0, leftThroughHistoryPairs: 0, unstablePairs: 0, missingCases: 0, missingPairs: 0, protocolCases: 0 },
     lost: [], newPasses: [], historyDependent: [], protocol: [], unstable: [], missing: { cases: 0, pairs: 0, ids: [] },
   }
   const ids = [...observed.keys()].sort()
@@ -441,6 +480,9 @@ export function checkRuns(baseline: Baseline, runs: readonly Run[], options: { c
   report.counts.lostPairs = report.lost.length
   report.counts.newPairs = report.newPasses.length
   report.counts.historyDependentCases = report.historyDependent.length
+  let leftThroughHistory = 0
+  for (const value of report.historyDependent) if (!value.inBaseline) leftThroughHistory += value.baselinePasses.length
+  report.counts.leftThroughHistoryPairs = leftThroughHistory
   report.counts.protocolCases = report.protocol.length
   report.counts.unstablePairs = report.unstable.length
   report.counts.missingCases = report.missing.cases
@@ -450,8 +492,18 @@ export function checkRuns(baseline: Baseline, runs: readonly Run[], options: { c
 }
 
 // Pairs a new seed loses or gains against the existing baseline, over cases both observed outside history dependence and
-// outside protocol rows.
-export function diffBaselines(before: Baseline, after: Baseline): { lost: Array<[string, MetricName]>; gained: Array<[string, MetricName]>; casesOnlyBefore: number; casesOnlyAfter: number } {
+// outside protocol rows; and the passes of the existing baseline that leave without being lost: their case is history-
+// dependent in the new seed and wasn't before, or is a protocol row in the new seed and wasn't before.
+export type BaselineDiff = {
+  lost: Array<[string, MetricName]>
+  gained: Array<[string, MetricName]>
+  leftThroughHistory: Array<[string, MetricName]>
+  leftThroughProtocol: Array<[string, MetricName]>
+  casesOnlyBefore: number
+  casesOnlyAfter: number
+}
+
+export function diffBaselines(before: Baseline, after: Baseline): BaselineDiff {
   const a = passMap(before)
   const b = passMap(after)
   const observedBefore = baselineCases(before)
@@ -459,6 +511,18 @@ export function diffBaselines(before: Baseline, after: Baseline): { lost: Array<
   const excluded = new Set([...before.historyDependent, ...after.historyDependent, ...Object.keys(before.protocol ?? {}), ...Object.keys(after.protocol ?? {})])
   const lost: Array<[string, MetricName]> = []
   const gained: Array<[string, MetricName]> = []
+  const leftThroughHistory: Array<[string, MetricName]> = []
+  const leftThroughProtocol: Array<[string, MetricName]> = []
+  const historyBefore = new Set(before.historyDependent)
+  const protocolBefore = before.protocol ?? {}
+  for (const id of [...after.historyDependent].sort()) {
+    if (historyBefore.has(id)) continue
+    for (const metric of METRIC_ORDER) if (a.get(id)?.has(metric) === true) leftThroughHistory.push([id, metric])
+  }
+  for (const id of Object.keys(after.protocol ?? {}).sort()) {
+    if (id in protocolBefore || after.historyDependent.includes(id)) continue
+    for (const metric of METRIC_ORDER) if (a.get(id)?.has(metric) === true) leftThroughProtocol.push([id, metric])
+  }
   for (const id of [...new Set([...a.keys(), ...b.keys()])].sort()) {
     if (excluded.has(id) || !observedBefore.has(id) || !observedAfter.has(id)) continue
     for (const metric of METRIC_ORDER) {
@@ -469,10 +533,63 @@ export function diffBaselines(before: Baseline, after: Baseline): { lost: Array<
     }
   }
   return {
-    lost, gained,
+    lost, gained, leftThroughHistory, leftThroughProtocol,
     casesOnlyBefore: [...observedBefore].filter(id => !observedAfter.has(id)).length,
     casesOnlyAfter: [...observedAfter].filter(id => !observedBefore.has(id)).length,
   }
+}
+
+// The record a re-seed is reviewed by (see the file comment): the diff against the adopted baseline with what the seeding
+// runs say about each pair that is lost or leaves.
+export type SeedRecord = {
+  staged: string
+  against: string | null
+  counts: Baseline['counts']
+  lost: Array<{ id: string; family: string; metric: MetricName; status: Status; reason: string | null; detail: string | null; run: string; covered: boolean; coveringGaps: string[]; residual: string | null; attribution: string | null }>
+  leftThroughHistory: Array<{ id: string; family: string; metric: MetricName; difference: string; passesNow: boolean }>
+  leftThroughProtocol: Array<{ id: string; family: string; metric: MetricName; protocol: string }>
+  gained: Array<[string, MetricName]>
+  casesOnlyBefore: number
+  casesOnlyAfter: number
+}
+
+export function seedRecord(before: Baseline | null, after: Baseline, runs: readonly Run[], paths: { staged: string; against: string | null }): SeedRecord {
+  const record: SeedRecord = { staged: paths.staged, against: before === null ? null : paths.against, counts: after.counts, lost: [], leftThroughHistory: [], leftThroughProtocol: [], gained: [], casesOnlyBefore: 0, casesOnlyAfter: 0 }
+  if (before === null) return record
+  const diff = diffBaselines(before, after)
+  const observed = observe(runs)
+  for (const [id, metric] of diff.lost) {
+    const entry = observed.get(id)!
+    // The first seeding run that doesn't pass the pair.
+    const result = entry.results.find(value => value.metrics[metric].status !== 'pass') ?? entry.results[0]!
+    const value = result.metrics[metric]
+    const coverage = result.coverage[metric]
+    record.lost.push({
+      id, family: entry.family, metric, status: value.status, reason: value.reason ?? null, detail: value.detail ?? null, run: relative(REPO, runs[result.run]!.path),
+      covered: coverage?.covered ?? false, coveringGaps: coverage?.gaps ?? [], residual: result.residual, attribution: null,
+    })
+  }
+  for (const [id, metric] of diff.leftThroughHistory) {
+    const entry = observed.get(id)!
+    record.leftThroughHistory.push({ id, family: entry.family, metric, difference: entry.historyDependent ?? '', passesNow: entry.results.every(value => value.metrics[metric].status === 'pass') })
+  }
+  for (const [id, metric] of diff.leftThroughProtocol) {
+    const entry = observed.get(id)!
+    record.leftThroughProtocol.push({ id, family: entry.family, metric, protocol: entry.protocol ?? '' })
+  }
+  record.gained = diff.gained
+  record.casesOnlyBefore = diff.casesOnlyBefore
+  record.casesOnlyAfter = diff.casesOnlyAfter
+  return record
+}
+
+// Where a seed for `baselinePath` is staged. Seeds are never written over the baseline they replace: the staging folder
+// must be given, and can't be the folder the baseline is in.
+export function stagedPath(baselinePath: string, staging: string | undefined): string {
+  if (staging === undefined || staging === '') fail('--staging=<dir> is required: a seed is written to a staging folder and adopted after review, never over the baseline')
+  const folder = resolve(staging)
+  if (folder === dirname(resolve(baselinePath))) fail(`--staging=${staging} is the folder the baseline is in; name another folder`)
+  return join(folder, basename(baselinePath))
 }
 
 // Moves the given protocol rows out of a baseline's passes, cases without passes and unstable pairs (--prune-protocol),
@@ -547,8 +664,8 @@ function describeLost(value: LostPass): string {
 
 async function main(): Promise<number> {
   const USAGE = 'Usage: bun rebuild/lab/gate.ts --baseline=<file> --runs=<per-case file or dir>[,...] [--complete] [--allow-uncompared] [--out=<file>]\n' +
-    '       bun rebuild/lab/gate.ts --seed --engine=blink|webkit|gecko --engine-version=<label> [--note=<text>] --baseline=<file> --runs=... [--allow-uncompared] [--out=<file>]\n' +
-    '       bun rebuild/lab/gate.ts --prune-protocol --baseline=<lab gate file or tests gate file> [--out=<file>]'
+    '       bun rebuild/lab/gate.ts --seed --staging=<dir> --engine=blink|webkit|gecko --engine-version=<label> [--note=<text>] --baseline=<file> --runs=... [--allow-uncompared] [--out=<file>]\n' +
+    '       bun rebuild/lab/gate.ts --prune-protocol --staging=<dir> --baseline=<lab gate file or tests gate file> [--out=<file>]'
   const values = new Map<string, string>()
   const runValues: string[] = []
   const switches = new Set<string>()
@@ -559,7 +676,7 @@ async function main(): Promise<number> {
     if (['seed', 'complete', 'allow-uncompared', 'prune-protocol'].includes(name)) {
       if (match[2] !== undefined) fail(`--${name} takes no value`)
       switches.add(name)
-    } else if (['baseline', 'runs', 'engine', 'engine-version', 'note', 'out'].includes(name)) {
+    } else if (['baseline', 'runs', 'engine', 'engine-version', 'note', 'out', 'staging'].includes(name)) {
       if (match[2] === undefined) fail(`--${name} needs a value`)
       if (name === 'runs') runValues.push(match[2])
       else values.set(name, match[2])
@@ -579,10 +696,12 @@ async function main(): Promise<number> {
     const found = await protocolRowsOf(baseline)
     const { baseline: pruned, removed } = pruneProtocol(baseline, found.protocol)
     const written = tests ? { ...raw, families: { ...raw.families!, baseline: pruned } } : pruned
-    writeFileSync(resolved, `${JSON.stringify(written, null, 2)}\n`)
-    console.log(`pruned ${relative(REPO, resolved)}: ${found.rows} seeding rows in ${found.files.length} files, ${found.protocol.size} protocol rows, ${removed.length} pairs removed`)
+    const staged = stagedPath(resolved, values.get('staging'))
+    mkdirSync(dirname(staged), { recursive: true })
+    writeFileSync(staged, `${JSON.stringify(written, null, 2)}\n`)
+    console.log(`pruned ${relative(REPO, resolved)} into ${relative(REPO, staged)}: ${found.rows} seeding rows in ${found.files.length} files, ${found.protocol.size} protocol rows, ${removed.length} pairs removed`)
     for (const value of removed) console.log(`  removed ${value.id} ${value.metric}: protocol row (${value.reason})`)
-    if (outPath !== undefined) writeFileSync(resolve(outPath), `${JSON.stringify({ baseline: relative(REPO, resolved), rows: found.rows, files: found.files, protocol: Object.fromEntries(found.protocol), removed }, null, 2)}\n`)
+    if (outPath !== undefined) writeFileSync(resolve(outPath), `${JSON.stringify({ baseline: relative(REPO, resolved), staged: relative(REPO, staged), rows: found.rows, files: found.files, protocol: Object.fromEntries(found.protocol), removed }, null, 2)}\n`)
     return 0
   }
 
@@ -599,18 +718,27 @@ async function main(): Promise<number> {
       console.error(problems.join('\n'))
       return 2
     }
-    const baseline = seedBaseline(runs, { engine, engineVersion: values.get('engine-version') ?? '', note: values.get('note') ?? '' })
     const resolved = resolve(baselinePath)
-    let diff: ReturnType<typeof diffBaselines> | null = null
-    if (existsSync(resolved)) diff = diffBaselines(parseBaseline(readFileSync(resolved, 'utf8'), resolved), baseline)
-    writeFileSync(resolved, formatBaseline(baseline))
+    const staged = stagedPath(resolved, values.get('staging'))
+    const baseline = seedBaseline(runs, { engine, engineVersion: values.get('engine-version') ?? '', note: values.get('note') ?? '' })
+    const before = existsSync(resolved) ? parseBaseline(readFileSync(resolved, 'utf8'), resolved) : null
+    const record = seedRecord(before, baseline, runs, { staged: relative(REPO, staged), against: relative(REPO, resolved) })
+    mkdirSync(dirname(staged), { recursive: true })
+    writeFileSync(staged, formatBaseline(baseline))
+    const recordPath = `${staged.replace(/\.json$/, '')}.seed-record.json`
+    writeFileSync(recordPath, `${JSON.stringify(record, null, 2)}\n`)
     const pairs = Object.values(baseline.counts.passPairs).reduce((sum, n) => sum + n, 0)
-    console.log(`seeded ${relative(REPO, resolved)}: ${baseline.engineVersion}, ${runs.length} runs, ${baseline.counts.cases} cases, ${pairs} pass pairs (${METRIC_ORDER.map(metric => `${metric} ${baseline.counts.passPairs[metric]}`).join(', ')}), ${baseline.counts.historyDependentCases} history-dependent cases, ${baseline.counts.protocolCases ?? 0} protocol rows, ${baseline.counts.withoutPassesCases} cases without passes, ${baseline.counts.unstablePairs} unstable pairs`)
-    if (diff !== null) {
-      console.log(`against the previous baseline: ${diff.lost.length} pairs lost, ${diff.gained.length} gained, ${diff.casesOnlyBefore} cases only before, ${diff.casesOnlyAfter} only now`)
-      for (const [id, metric] of diff.lost.slice(0, 20)) console.log(`  lost ${id} ${metric}`)
+    console.log(`staged ${relative(REPO, staged)} (not adopted; the baseline ${relative(REPO, resolved)} is unchanged): ${baseline.engineVersion}, ${runs.length} runs, ${baseline.counts.cases} cases, ${pairs} pass pairs (${METRIC_ORDER.map(metric => `${metric} ${baseline.counts.passPairs[metric]}`).join(', ')}), ${baseline.counts.historyDependentCases} history-dependent cases, ${baseline.counts.protocolCases ?? 0} protocol rows, ${baseline.counts.withoutPassesCases} cases without passes, ${baseline.counts.unstablePairs} unstable pairs`)
+    if (before === null) {
+      console.log(`no baseline at ${relative(REPO, resolved)} to compare with`)
+    } else {
+      const uncovered = record.lost.filter(value => !value.covered).length
+      console.log(`against ${relative(REPO, resolved)}: ${record.lost.length} pairs lost (${uncovered} without a covered explanation), ${record.leftThroughHistory.length} leave through new history dependence (${record.leftThroughHistory.filter(value => value.passesNow).length} of them pass now), ${record.leftThroughProtocol.length} leave as protocol rows, ${record.gained.length} gained, ${record.casesOnlyBefore} cases only before, ${record.casesOnlyAfter} only now`)
+      for (const value of record.lost.slice(0, 20)) console.log(`  lost ${value.id} ${value.metric}: ${value.status}${value.covered ? ` (covered by ${value.coveringGaps.join(', ')})` : ' (no covered explanation)'}${value.residual === null ? '' : ` [${value.residual}]`}`)
+      for (const value of record.leftThroughHistory.slice(0, 20)) console.log(`  left through history dependence ${value.id} ${value.metric}${value.passesNow ? ' (passes now)' : ''}`)
     }
-    if (outPath !== undefined) writeFileSync(resolve(outPath), `${JSON.stringify({ baseline: relative(REPO, resolved), counts: baseline.counts, diff }, null, 2)}\n`)
+    console.log(`record: ${relative(REPO, recordPath)}`)
+    if (outPath !== undefined) writeFileSync(resolve(outPath), `${JSON.stringify(record, null, 2)}\n`)
     return 0
   }
 
@@ -624,7 +752,7 @@ async function main(): Promise<number> {
   if (outPath !== undefined) writeFileSync(resolve(outPath), `${JSON.stringify(report, null, 2)}\n`)
   const c = report.counts
   console.log(`gate ${baseline.engine} (${baseline.engineVersion}): ${runs.length} runs, ${c.observedCases} cases observed; the baseline has ${c.baselineCases}`)
-  console.log(`  lost passes ${c.lostPairs}; new passes ${c.newPairs}; history-dependent cases ${c.historyDependentCases} (never gate); protocol rows ${c.protocolCases} (never gate); unstable pairs ${c.unstablePairs} (never gate); missing cases ${c.missingCases} (${c.missingPairs} pass pairs${switches.has('complete') ? ', gating' : ', not gating without --complete'})`)
+  console.log(`  lost passes ${c.lostPairs}; new passes ${c.newPairs}; history-dependent cases ${c.historyDependentCases} (never gate; ${c.leftThroughHistoryPairs ?? 0} baseline passes left through new history dependence); protocol rows ${c.protocolCases} (never gate); unstable pairs ${c.unstablePairs} (never gate); missing cases ${c.missingCases} (${c.missingPairs} pass pairs${switches.has('complete') ? ', gating' : ', not gating without --complete'})`)
   for (const value of report.lost.slice(0, 30)) console.log(describeLost(value))
   if (report.lost.length > 30) console.log(`  ... ${report.lost.length - 30} more${outPath === undefined ? '; --out writes them all' : ''}`)
   console.log(report.ok ? 'gate: pass' : 'gate: FAIL')

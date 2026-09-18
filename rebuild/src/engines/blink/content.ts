@@ -137,7 +137,9 @@ function styleOf(element: number, parent: number, style: TextStyle, locale: stri
   return {
     element, parent, run: null, font, letterSpacing: style.letterSpacing, wordSpacing: style.wordSpacing, whiteSpace: style.whiteSpace,
     wordBreak: style.wordBreak, overflowWrap: style.overflowWrap, lineBreak: style.lineBreak, tabSize: style.tabSize, locale,
-    fontKey: [font.family, font.size, font.weight, font.style, locale, style.letterSpacing, style.wordSpacing].join(''),
+    // JSON keeps the fields apart and a null locale apart from the locale 'null' (the fields were joined with a bare U+0001
+    // before, which reads as join('') in most editors).
+    fontKey: JSON.stringify([font.family, font.size, font.weight, font.style, locale, style.letterSpacing, style.wordSpacing]),
     primaryFamily,
     measuresAtCssSize: font.facts.opticalSizeAxis ?? keyword,
     joining: font.facts.joining,

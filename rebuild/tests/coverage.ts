@@ -80,12 +80,16 @@ function sourceFiles(dir: string): string[] {
   return out
 }
 
-// 'path :: test name' is present when the file exists and holds the name; a bare path when the file exists.
-function testPresent(entry: string): boolean {
-  const [path, name] = entry.split(' :: ')
-  const file = join(REBUILD, path!)
+// 'path :: test name' is present when the file exists and holds the name; a bare path when the file exists. A name may be
+// written as bun prints it, 'describe block > test name': then the file holds each part.
+export function testPresent(entry: string): boolean {
+  const separator = entry.indexOf(' :: ')
+  const file = join(REBUILD, separator === -1 ? entry : entry.slice(0, separator))
   if (!existsSync(file)) return false
-  return name === undefined || readFileSync(file, 'utf8').includes(name)
+  if (separator === -1) return true
+  const name = entry.slice(separator + 4)
+  const text = readFileSync(file, 'utf8')
+  return text.includes(name) || name.split(' > ').every(part => text.includes(part))
 }
 
 function familyEvidence(dir: string): FamilyEvidence[] {
