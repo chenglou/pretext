@@ -1257,8 +1257,12 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, measur
     }
     // No OffscreenCanvas setting gives the DOM's auto optical sizing (specs/gecko-canvas.md §1.2 C1a), so a font with an
     // opsz axis, or one whose axis isn't known, may measure differently (DESIGN.md §1.2).
-    if (font.facts.opticalSizeAxis !== false) {
-      gaps.push({ gap: 'optical-size', run: firstRun, detail: font.facts.opticalSizeAxis === true ? `${font.family} has an opsz axis` : `whether ${font.family} has an opsz axis isn't given (default ${opticalSizeAxisOf(font)})`, at })
+    // Alternative (round 4, not merged): where the fact isn't given, its documented default decides (fonts.ts
+    // opticalSizeAxisOf: true for the system font keywords, whose opsz axis is a recorded browser fact, false for a named
+    // family). Firefox's OffscreenCanvas never applies optical sizing, so no Canvas measurement can tell, and reporting every
+    // unknown family puts the gap on every line of a caller that supplies no facts.
+    if (opticalSizeAxisOf(font)) {
+      gaps.push({ gap: 'optical-size', run: firstRun, detail: font.facts.opticalSizeAxis === true ? `${font.family} has an opsz axis` : `${font.family} is the system font, which has an opsz axis`, at })
     }
     // An explicit ctx.lang: OffscreenCanvas would otherwise take the root element's lang (CanvasRenderingContext2D.cpp:5446-5465).
     // Content with lang="" matches fonts under the locale language (nsFontCache.cpp:61-63).
@@ -1497,7 +1501,7 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, measur
       tStart: b.tStart, tEnd: b.tEnd, is8bit: b.is8bit, level: b.level, context, font, scriptRuns: run.scriptRuns, hasShy: b.hasShy,
       trailingBreak: b.trailingBreak, minTabAdvance: b.hasTab ? 0.5 * au('0') : 0,
       hyphenAu: b.hasShy ? au('‐') : 0, hasTab: b.hasTab, totalAdvance: advance, pairKerning: font.facts.pairKerning, scriptLookups: firstFontScriptLookups(font), joining: font.facts.joining,
-      advancesStandIn: canvasAuSize !== domAu ? 'font-size-quantization' : font.facts.opticalSizeAxis !== false ? 'optical-size' : null,
+      advancesStandIn: canvasAuSize !== domAu ? 'font-size-quantization' : opticalSizeAxisOf(font) ? 'optical-size' : null,
     })
   }
   const correctionPrefix = new Int32Array(T + 1)
