@@ -21,8 +21,11 @@ import type { BrowserKind, Case, EnginePrediction, FontDecl, LabRow, LinesPredic
 // unit and gives a WebKit line where only the sum differs its stand-in addends as units (webkitReportedWidth,
 // webkitStandInAddends), counts the library's painter limits as explanations of painter failures (LineAttribution.limits),
 // and records per case where each gap fires (CaseScore.firing), from which lift is counted over prediction failures alone.
-// No metric's status changes between versions 5 and 6.
-export const SCORER_VERSION = 6
+// No metric's status changes between versions 5 and 6. Version 7 (ceiling round 4b) changes no metric's status either: it
+// finds Blink's hyphen rect on whichever range of the node reports it and, on the expected side, from the layout's hyphen
+// items (reportOnlyRects), keeps differing units inside one stand-in span in one run (standInSpans), and registers Gecko's
+// synthetic bold class beside the 1 au class (RESIDUAL_CLASSES).
+export const SCORER_VERSION = 7
 
 export type Status = 'pass' | 'fail' | 'unobserved' | 'not-applicable'
 // `reason` is a fixed category (counted in the summary); `detail` names offsets and values for this case.
@@ -566,7 +569,9 @@ export function gapFiring(layout: RecordedLayout): GapFiring {
 //   on each line both sides place it on. A rect the two sides place on different lines is moved text, not a unit. x alone
 //   never makes a unit: every rect after a wider one moves, so x doesn't say where the difference is. Element rects make no
 //   unit: a box edge or an atomic inline isn't text a gap's range could touch.
-// - Runs: differing units that follow each other in source order without a break between them. Widths can move inside a run
+// - Runs: differing units that follow each other in source order without a break between them, or with nothing between them
+//   but code points of the same stand-in span (standInSpans: under `in-word-prefix` the port's split of one shaped word among
+//   its code points is a stand-in, so a code point that happens to equal its stand-in doesn't end a run). Widths can move inside a run
 //   and add up to the same (Blink reports joined letters' positions as exact where Canvas prefix widths can't give them),
 //   and such a run changes neither the line's width nor where it breaks. A run contributes unless its widths add up to the
 //   same natively as expected: in Gecko the sum of its rects' widths in app units; in Blink the extent of its rects, since a
@@ -740,8 +745,9 @@ function touchesDecision(range: SourceRange, decision: SourceRange): boolean {
   return range.start < decision.end && range.end > decision.start
 }
 
-// What differs on a failing line: its differing units, and for lineCount and breaks the decision text.
-type FailingLineEvidence = { units: readonly Unit[]; decision: SourceRange | null }
+// What differs on a failing line: its differing units, and for lineCount and breaks the decision text. `standIns`: the
+// line's stand-in spans (standInSpans), inside which units are one run.
+type FailingLineEvidence = { units: readonly Unit[]; decision: SourceRange | null; standIns?: readonly SourceRange[] }
 // A differing unit with what its rects say, in engine units: the sum of native minus expected widths over the rects that
 // differ, and the extent of those rects natively and as expected. NaN where a rect count differs or a rect is off the
 // engine's encoding. `node`: known only as a node's part of the line.
@@ -749,15 +755,20 @@ type Unit = SourceRange & { node: boolean; sum: number; nativeLeft: number; nati
 // Units that follow each other in source order without a break between them.
 type Run = { start: number; end: number; units: number[]; contributes: boolean }
 
-function runsOf(engine: RecordedLayout['engine'], units: readonly Unit[]): Run[] {
+function runsOf(engine: RecordedLayout['engine'], units: readonly Unit[], standIns: readonly SourceRange[] = []): Run[] {
   const order: number[] = []
   for (let u = 0; u < units.length; u++) order.push(u)
   order.sort((a, b) => units[a]!.start - units[b]!.start || units[a]!.end - units[b]!.end)
+  // Whether one stand-in span holds the text from the last code point before `end` to the first one at `start`.
+  const inOneSpan = (end: number, start: number): boolean => {
+    for (let k = 0; k < standIns.length; k++) if (standIns[k]!.start < end && standIns[k]!.end > start) return true
+    return false
+  }
   const runs: Run[] = []
   for (let i = 0; i < order.length; i++) {
     const unit = units[order[i]!]!
     const run = runs[runs.length - 1]
-    if (run !== undefined && unit.start <= run.end) {
+    if (run !== undefined && (unit.start <= run.end || inOneSpan(run.end, unit.start))) {
       run.end = Math.max(run.end, unit.end)
       run.units.push(order[i]!)
     } else {
@@ -821,7 +832,7 @@ export function lineLocalGaps(layout: RecordedLayout, boxes: readonly number[], 
     return { nativeLine: k, engineLine, gaps: gaps.sort(order) }
   }
   const units = evidence.units
-  const runs = runsOf(layout.engine, units)
+  const runs = runsOf(layout.engine, units, evidence.standIns)
   // lineCount and breaks: the run that runs back from the decision text belongs to the decision.
   let edgeRun = -1
   if (evidence.decision !== null) {
@@ -904,9 +915,12 @@ function attribution(layout: RecordedLayout, boxes: readonly number[], failing: 
 // - Blink reports a line's hyphen item to every range that holds the end of the item before it ("Hyphens. Include if the
 //   last end was included", LayoutText::AbsoluteQuadsForRange, layout_text.cc:616-621). The code point after a chosen soft
 //   hyphen starts where that item ends, so it reports the hyphen's rect on the hyphen's line beside its own rect on the
-//   next line: a rect equal to a positive-width rect the soft hyphen before it reports on the same line is the hyphen's.
-//   Where only one side breaks at the soft hyphen, that rect made the line after the hyphen's the first that differs
-//   (`c-23e11e5c3a96497d`: U+FFFC, `a`, a soft hyphen, `b`; natively `b` sits on line 1 and reports on lines 0 and 1).
+//   next line: a rect of another code point of the node equal to a positive-width rect a soft hyphen reports on the same
+//   line is the hyphen's. Where only one side breaks at the soft hyphen, that rect made the line after the hyphen's the
+//   first that differs (`c-23e11e5c3a96497d`: U+FFFC, `a`, a soft hyphen, `b`; natively `b` sits on line 1 and reports on
+//   lines 0 and 1). In a right-to-left line the hyphen item comes first in item order, so the code point that reports it
+//   ends the line above (`c-909a7a77bad03225`), and on the expected side the layout's hyphen items say which rects they
+//   are (reportOnlyRects has both readings).
 // - WebKit reports a range that starts where a text box ends on that box's line when the next box in box order starts
 //   later: "trailing content on the current line" (selectionRectForTextBox, RenderText.cpp:373-380). The rect is a caret at
 //   the box's end, with no width. A line's first character gets it on the line before whenever bidi reordering puts
@@ -916,18 +930,56 @@ function attribution(layout: RecordedLayout, boxes: readonly number[], failing: 
 // text, leave these rects out, on the native side and on the expected side alike.
 type ReportOnly = { native: boolean[][]; expected: boolean[][] }
 
-function reportOnlyRects(engine: RecordedLayout['engine'], text: string, observation: ExpectedObservation, nativeObservation: NativeObservation, native: NativeLines, nativeLineOf: Int32Array): ReportOnly | null {
+function reportOnlyRects(layout: RecordedLayout, runs: Paragraph['runs'], text: string, observation: ExpectedObservation, nativeObservation: NativeObservation, native: NativeLines, nativeLineOf: Int32Array): ReportOnly | null {
+  const engine = layout.engine
   if (engine === 'gecko') return null
   const out: ReportOnly = { native: [], expected: [] }
   type Placed = { line: number; x: number; width: number }
-  const mark = (own: Placed[], hyphen: Placed[] | null): boolean[] => {
+  const points = observation.codePoints
+  const softHyphen = (i: number): boolean => text.charCodeAt(points[i]!.offset) === 0xad
+  // Blink: per text node, the positive-width rects its soft hyphens report, which are hyphen items' rects, since a soft
+  // hyphen has no width of its own. Whichever range also reports one reports that item: a range gets the hyphen item when
+  // it reached the end of the text item before it in item order (`is_last_end_included`, layout_text.cc:592-621), and a
+  // line's items are in visual order. In a left-to-right line that item ends with the soft hyphen, so the code point after
+  // it, whose range touches the item's end, reports the hyphen. In a right-to-left line the hyphen item comes first, so
+  // the item before it is the last one of the line above, and the code point that ends that item reports the hyphen: the
+  // letter before the soft hyphen in `c-909a7a77bad03225`, where `ب` on line 1 reports the hyphen of line 2.
+  const nodeOf: number[] = []
+  const hyphens: { native: Placed[]; expected: Placed[] }[] = runs.map(() => ({ native: [], expected: [] }))
+  const nativeRects = (i: number): Placed[] => nativeObservation.points[i]!.rects.map((rect, k) => ({ line: native.points[i]![k]!, x: rect.x, width: rect.width }))
+  const expectedRects = (i: number): Placed[] => points[i]!.rects.map(rect => ({ line: rect.line >= 0 ? nativeLineOf[rect.line]! : -1, x: rect.x.value, width: rect.width.value }))
+  for (let i = 0, r = 0, runEnd = runs.length > 0 ? runs[0]!.text.length : 0; i < points.length; i++) {
+    while (r + 1 < runs.length && points[i]!.offset >= runEnd) runEnd += runs[++r]!.text.length
+    nodeOf.push(r)
+    if (engine !== 'blink' || !softHyphen(i)) continue
+    const own = { native: nativeRects(i), expected: expectedRects(i) }
+    for (let k = 0; k < own.native.length; k++) if (own.native[k]!.width > 0 && own.native[k]!.line >= 0) hyphens[r]!.native.push(own.native[k]!)
+    for (let k = 0; k < own.expected.length; k++) if (own.expected[k]!.width > 0 && own.expected[k]!.line >= 0) hyphens[r]!.expected.push(own.expected[k]!)
+  }
+  // Blink, the expected side: the layout says where its hyphen items are, so an expected rect that is one needs no soft
+  // hyphen to report it too (in a right-to-left line whose soft hyphen shares its item with the letter before it, the
+  // soft hyphen's own range doesn't reach the item before the hyphen, and only that item's last code point and the letter
+  // report the hyphen: `(` and `ب` in the prediction of `c-ccbcd11b754a7299`).
+  const isHyphenItem = (rect: ExpectedRect): boolean => {
+    if (layout.engine !== 'blink' || rect.line < 0) return false
+    const units = rectUnits(layout, rect.line, { x: rect.x.value, width: rect.width.value })
+    if (units === null) return false
+    const items = layout.lines[rect.line]!.geometry.items
+    for (let k = 0; k < items.length; k++) {
+      const item = items[k]!
+      if (item.kind === 'hyphen' && item.inlineSize > 0 && item.x === units.left && item.x + item.inlineSize === units.right) return true
+    }
+    return false
+  }
+  const mark = (i: number, own: Placed[], hyphen: Placed[], expected: ExpectedRect[] | null): boolean[] => {
     const flags: boolean[] = []
     for (let k = 0; k < own.length; k++) {
       const rect = own[k]!
       let reportOnly = false
       if (rect.line >= 0) {
-        if (engine === 'blink' && hyphen !== null) {
-          for (let h = 0; h < hyphen.length && !reportOnly; h++) reportOnly = hyphen[h]!.width > 0 && hyphen[h]!.line === rect.line && hyphen[h]!.x === rect.x && hyphen[h]!.width === rect.width
+        if (engine === 'blink' && !softHyphen(i)) {
+          for (let h = 0; h < hyphen.length && !reportOnly; h++) reportOnly = hyphen[h]!.line === rect.line && hyphen[h]!.x === rect.x && hyphen[h]!.width === rect.width
+          if (!reportOnly && expected !== null) reportOnly = isHyphenItem(expected[k]!)
         } else if (engine === 'webkit' && rect.width === 0) {
           for (let o = 0; o < own.length && !reportOnly; o++) reportOnly = o !== k && own[o]!.line > rect.line
         }
@@ -936,12 +988,9 @@ function reportOnlyRects(engine: RecordedLayout['engine'], text: string, observa
     }
     return flags
   }
-  const nativeRects = (i: number): Placed[] => nativeObservation.points[i]!.rects.map((rect, k) => ({ line: native.points[i]![k]!, x: rect.x, width: rect.width }))
-  const expectedRects = (i: number): Placed[] => observation.codePoints[i]!.rects.map(rect => ({ line: rect.line >= 0 ? nativeLineOf[rect.line]! : -1, x: rect.x.value, width: rect.width.value }))
-  for (let i = 0; i < observation.codePoints.length; i++) {
-    const afterSoftHyphen = engine === 'blink' && i > 0 && text.charCodeAt(observation.codePoints[i - 1]!.offset) === 0xad && text.charCodeAt(observation.codePoints[i]!.offset) !== 0xad
-    out.native.push(mark(nativeRects(i), afterSoftHyphen ? nativeRects(i - 1) : null))
-    out.expected.push(mark(expectedRects(i), afterSoftHyphen ? expectedRects(i - 1) : null))
+  for (let i = 0; i < points.length; i++) {
+    out.native.push(mark(i, nativeRects(i), hyphens[nodeOf[i]!]!.native, null))
+    out.expected.push(mark(i, expectedRects(i), hyphens[nodeOf[i]!]!.expected, points[i]!.rects))
   }
   return out
 }
@@ -1044,6 +1093,42 @@ function webkitStandInAddends(layout: RecordedLayout, paragraph: Pick<Paragraph,
     start = end
   }
   return units
+}
+
+// Per engine line, the stand-in spans: the source ranges of code points that follow each other on the line inside one word
+// (no U+0020 between them) and whose expected width the observation port marks limited under `in-word-prefix`. That state
+// says the port divided a shaped word's width among its code points by Canvas prefix widths (DESIGN.md §5): the division
+// is a stand-in and the word's sum is what was measured. So which code point of the span shows a difference, and whether
+// one between two others happens to equal its stand-in, says nothing about the engine, and differing units inside one span
+// are one run (runsOf). Round 3's open Firefox row `c-f3e8314c35b33990` is the case: three Phags-pa letters and U+0301 under
+// 1px of letter spacing, every width a stand-in under `in-word-prefix`; natively the first letter is 68 au wider than its
+// stand-in, the second equal, the marked cluster 8 au narrower, 60 au in all, the letter spacing that the `font-fallback`
+// range on the marked cluster says the DOM adds (probe gecko-port F25). Split at the equal letter, the first letter was a
+// run no gap touched. Values limited under another gap don't make a span: `glyph-clusters` says a cluster's own extent may
+// be another, not that a sum holds (without font facts Blink marks every value of a line so, and one span per line would
+// let any gap on the line cover any difference on it). WebKit's units are nodes, so it has no spans.
+function standInSpans(layout: RecordedLayout, text: string, observation: ExpectedObservation): SourceRange[][] {
+  const spans: SourceRange[][] = layout.lines.map(() => [])
+  if (layout.engine === 'webkit') return spans
+  const open: Array<SourceRange | null> = layout.lines.map(() => null)
+  for (let i = 0; i < observation.codePoints.length; i++) {
+    const point = observation.codePoints[i]!
+    const space = text.charCodeAt(point.offset) === 0x20
+    for (let k = 0; k < point.rects.length; k++) {
+      const rect = point.rects[k]!
+      if (rect.line < 0) continue
+      const standIn = !space && rect.width.state === 'limited' && rect.width.gap === 'in-word-prefix'
+      const current = open[rect.line]!
+      if (standIn && current !== null && current.end === point.offset) {
+        current.end = point.offset + point.length
+        continue
+      }
+      if (current !== null) spans[rect.line]!.push(current)
+      open[rect.line] = standIn ? { start: point.offset, end: point.offset + point.length } : null
+    }
+  }
+  for (let l = 0; l < open.length; l++) if (open[l] !== null) spans[l]!.push(open[l]!)
+  return spans
 }
 
 // Per engine line, the differing units (see "Covered failures"). `only` restricts them to one line, the first line that
@@ -1257,6 +1342,9 @@ export type ResidualEvidence = {
   // width: then the same text measures differently in the DOM than in Canvas, and the line's content isn't what differs.
   // null without a widths failure or without a painted observation of those lines.
   paintedAtNativeWidth: boolean | null
+  // Gecko: the page's app units per device pixel (GeckoLineGeometry.appUnitsPerDevPixel); null in the other engines and for
+  // a layout without lines.
+  appUnitsPerDevPixel: number | null
 }
 
 export type ResidualClass = {
@@ -1290,6 +1378,28 @@ function probedUnitOf(value: NodeWidthDifference, probed: readonly ProbedUnit[])
   return null
 }
 
+// Gecko's synthetic bold, per character that holds glyphs: the DOM adds NS_round(offset(device size) × apd) app units and an
+// OffscreenCanvas at the CSS size NS_round(offset(size) × 60), offset(s) = 0.25 + 0.75 s / 48 below 48px and s / 48 from
+// there (gfxFont.h:1899-1904; gfxShapedText::ApplyTrackingToClusters, gfxFont.cpp:901-939, called from PostShapingFixup,
+// :3551-3562). The DOM's step less Canvas's, in app units: what one such character is wider natively than Canvas says.
+export function syntheticBoldStep(size: number, appUnitsPerDevPixel: number): number {
+  const offset = (s: number): number => (s < 48 ? 0.25 + 0.75 * s / 48 : s / 48)
+  const nsRound = (x: number): number => Math.floor(x + 0.5)
+  return nsRound(offset(size * 60 / appUnitsPerDevPixel) * appUnitsPerDevPixel) - nsRound(offset(size) * 60)
+}
+
+function graphemeCount(text: string): number {
+  let count = 0
+  for (const _ of new Intl.Segmenter('en', { granularity: 'grapheme' }).segment(text)) count++
+  return count
+}
+
+// F24's rows: U+2764 alone in a bold node of three families at eight sizes, DOM less OffscreenCanvas in app units at 30 app
+// units per device pixel, as the probe record has them (rebuild/facts/gecko/156.0.ndjson, "the DOM less the OffscreenCanvas,
+// per synthetic bold glyph").
+const F24_STEPS: ReadonlyArray<readonly [number, number]> = [[12, -7], [14, -7], [16, -7], [18, -8], [20, -8], [24, -8], [28, -6], [32, -5]]
+const F24_PROBED: ProbedUnit[] = ['Helvetica Neue', 'Georgia', 'Arial'].flatMap(family => F24_STEPS.map(([size, difference]) => ({ family, size, weights: [700], text: '\u2764', difference, probe: 'F24' })))
+
 export const RESIDUAL_CLASSES: ResidualClass[] = [
   {
     // The one registry: lab/fresh.ts and rebuild/tests/ledger.ts read the per-case `residual` this gives.
@@ -1300,10 +1410,11 @@ export const RESIDUAL_CLASSES: ResidualClass[] = [
       'F7, rebuild/probes/gecko-round2.ts (records in .artifacts/probes/gecko/round2; specs/gecko-RESULTS.md "Probes"), Firefox 156 at DPR 2: single shaping units in their own node, DOM box against OffscreenCanvas and canvas elements, all at the CSS font size.',
       'research/ROUND2-CRITIC.md item 4 (probe gecko-device-size, 94 units, Firefox 156 at DPR 2): an OffscreenCanvas at the device font size, halved, equals the DOM in 22 units only, so that recipe is refuted; 12 units differ by exactly 1 au at the CSS size, all in Geeza Pro, Thonburi or Helvetica Neue.',
       'F13, rebuild/probes/gecko-round3.ts (record .artifacts/probes/gecko/round3/firefox-probes.json; specs/gecko-RESULTS.md "Ceiling round 3"), Firefox 156 at DPR 2, 243 units in 15 font lists: a detached <canvas> element at the DOM\'s device font size gives the DOM\'s width on every unit, the ones an OffscreenCanvas at the CSS size measures 1 au off among them.',
+      'F27, rebuild/probes/gecko-round4.ts (facts in rebuild/facts/gecko/156.0.ndjson; specs/gecko-RESULTS.md "Ceiling round 4"), Firefox 156 at DPR 2: the words of ceiling round 4\'s rows, DOM box against an OffscreenCanvas at the CSS size: within 1 au on every word, and 1 au off on seven.',
     ],
     mechanism: {
       status: 'verified',
-      reading: 'The DOM\'s text run shapes at the device font size and rounds each glyph at the page\'s app units per device pixel (gfxHarfBuzzShaper.cpp:1559, :1699-1702); an OffscreenCanvas shapes at the CSS size at 60 app units per px with a font group of its own (CanvasRenderingContext2D.cpp:4423-4492, :7135-7140), so a glyph\'s 16.16 rounding can fall on the other side. Verified by probe F13, where a <canvas> element that runs the DOM\'s arithmetic reproduces every member, and for `modern` by simulation from the font\'s units (the `n` after the kern split is 508.4999 au at the DOM\'s scale and 508.5004 au at Canvas\'s; specs/gecko-RESULTS.md "Ceiling round 3" item 1). The Geeza Pro and Thonburi members weren\'t simulated. The library measures on OffscreenCanvas only (the maintainer\'s decision of 2026-09-18), where no measurement shows the difference, so it stays a residual class.',
+      reading: 'The DOM\'s text run shapes at the device font size and rounds each glyph at the page\'s app units per device pixel (gfxHarfBuzzShaper.cpp:1559, :1699-1702); an OffscreenCanvas shapes at the CSS size at 60 app units per px with a font group of its own (CanvasRenderingContext2D.cpp:4423-4492, :7135-7140), so a glyph\'s 16.16 rounding can fall on the other side. Verified by probe F13, where a <canvas> element that runs the DOM\'s arithmetic reproduces every member, and for `modern` by simulation from the font\'s units (the `n` after the kern split is 508.4999 au at the DOM\'s scale and 508.5004 au at Canvas\'s; specs/gecko-RESULTS.md "Ceiling round 3" item 1). The Geeza Pro and Thonburi members weren\'t simulated; they are reproduced by measurement (F13) and pinned as facts (F7, F13, F27). The library measures on OffscreenCanvas only (the maintainer\'s decision of 2026-09-18), where no measurement shows the difference, so it stays a residual class.',
     },
     signature: 'lineCount and breaks pass and widths fail; every node has the expected number of rects; exactly one node rect differs in width, by exactly 1 app unit; and the painter drew every failing line at the native width.',
     probed: [
@@ -1316,6 +1427,9 @@ export const RESIDUAL_CLASSES: ResidualClass[] = [
       { family: 'Helvetica Neue', size: 15, weights: [400], text: 'modern', difference: -1, probe: 'F7; ROUND2-CRITIC item 4' },
       { family: 'Helvetica Neue', size: 10, weights: [700], text: 'LT:', difference: -1, probe: 'ROUND2-CRITIC item 4' },
       { family: 'Helvetica Neue', size: 10, weights: [700], text: 'LT: kerning pairs', difference: -1, probe: 'ROUND2-CRITIC item 4' },
+      { family: 'Helvetica Neue', size: 10, weights: [400], text: 'LT:', difference: -1, probe: 'F27' },
+      { family: 'Thonburi', size: 32, weights: [700], text: 'รมชาติทำให้ผู้คนมีความสุขมากขึ้', difference: 1, probe: 'F27' },
+      { family: 'Geeza Pro', size: 10, weights: [400], text: 'تروك', difference: 1, probe: 'F27' },
     ],
     match: (evidence, self) => {
       if (evidence.metrics.lineCount !== 'pass' || evidence.metrics.breaks !== 'pass' || evidence.metrics.widths !== 'fail') return null
@@ -1325,6 +1439,42 @@ export const RESIDUAL_CLASSES: ResidualClass[] = [
       const unit = probedUnitOf(value, self.probed)
       const where = `node ${value.node} on engine line ${value.line} is ${value.difference > 0 ? '+' : ''}${value.difference} au${value.differingText === null ? '' : ` at ${JSON.stringify(value.differingText)}`}`
       return unit === null ? { membership: 'signature', detail: `${where}; no probe measured this text in this font` } : { membership: 'probed', detail: `${where}; probed ${JSON.stringify(unit.text)} (${unit.probe})` }
+    },
+  },
+  {
+    name: 'gecko/synthetic-bold-offset',
+    engine: 'gecko',
+    description: 'A character drawn in synthetic bold is a few app units narrower in the DOM than OffscreenCanvas measures it at the CSS font size: the two add different whole numbers of app units per character.',
+    probes: [
+      'F14, rebuild/probes/gecko-round3.ts (facts in rebuild/facts/gecko/156.0.ndjson; specs/gecko-RESULTS.md "Ceiling round 3"), Firefox 156 at DPR 2: U+20E3 U+2764 in bold 14px "Helvetica Neue" is 786 au in the DOM and 793 on an OffscreenCanvas at the CSS size.',
+      'F24, rebuild/probes/gecko-round4.ts (facts in rebuild/facts/gecko/156.0.ndjson; specs/gecko-RESULTS.md "Ceiling round 4"), Firefox 156 at DPR 2: U+2764 in bold "Helvetica Neue", Georgia and Arial at 12px to 32px, 24 of 24 rows: the DOM less the OffscreenCanvas is the two steps\' difference per synthetic bold glyph, and nothing at weight 400.',
+    ],
+    mechanism: {
+      status: 'verified',
+      reading: 'PostShapingFixup adds NS_round(GetSyntheticBoldOffset() × app units per device unit) to every character that holds glyphs with an advance (gfxFont.cpp:3551-3562, :901-939), and the offset isn\'t linear in the size (0.25 + 0.75 s / 48 below 48px, gfxFont.h:1899-1904). The DOM\'s text run shapes at the device font size at the page\'s app units per device pixel, an OffscreenCanvas at the CSS size at 60, so the two add other whole numbers (at 16px and DPR 2: 23 against 30). Verified from source and by probe F24 on 24 of 24 rows. Canvas shows the step (weight 700 less weight 400 is a whole number of its own steps), and the branch r4-gecko-alt-synthetic-bold reads it; the library doesn\'t, by the maintainer\'s decision of 2026-09-18 that Firefox measures on OffscreenCanvas only with this class named.',
+    },
+    signature: 'lineCount and breaks pass and widths fail; every node has the expected number of rects; every node rect that differs in width belongs to a node of font weight 600 or more and differs by k × (NS_round(offset(size × 60 / apd) × apd) − NS_round(offset(size) × 60)) app units, k a whole number from 1 to the grapheme clusters of the node\'s text on the line; and the painter drew every failing line at the native width.',
+    probed: [
+      ...F24_PROBED,
+      { family: 'Helvetica Neue', size: 14, weights: [700], text: '\u20e3\u2764', difference: -7, probe: 'F14; F24' },
+    ],
+    match: (evidence, self) => {
+      if (evidence.metrics.lineCount !== 'pass' || evidence.metrics.breaks !== 'pass' || evidence.metrics.widths !== 'fail') return null
+      if (evidence.nodeWidths === null || evidence.nodeWidths.length === 0 || evidence.paintedAtNativeWidth !== true || evidence.appUnitsPerDevPixel === null) return null
+      let probed = true
+      const where: string[] = []
+      for (let i = 0; i < evidence.nodeWidths.length; i++) {
+        const value = evidence.nodeWidths[i]!
+        if (value.font.weight < 600) return null
+        const step = syntheticBoldStep(value.font.size, evidence.appUnitsPerDevPixel)
+        if (step === 0) return null
+        const characters = value.difference / step
+        if (!Number.isInteger(characters) || characters < 1 || characters > graphemeCount(value.lineText)) return null
+        const unit = probedUnitOf(value, self.probed)
+        if (unit === null) probed = false
+        where.push(`node ${value.node} on engine line ${value.line} is ${value.difference} au${value.differingText === null ? '' : ` at ${JSON.stringify(value.differingText)}`}, ${characters} × the step of ${step} au at ${value.font.size}px${unit === null ? '' : ` (probed, ${unit.probe})`}`)
+      }
+      return { membership: probed ? 'probed' : 'signature', detail: `${where.join('; ')}${probed ? '' : '; no probe measured this text in this font'}` }
     },
   },
 ]
@@ -1605,7 +1755,7 @@ function scoreEngine(row: LabRow, nativeObservation: NativeObservation, predicti
   const lineGaps: CaseScore['lineGaps'] = {}
   if (lineCount.status === 'fail' || breaks.status === 'fail') {
     // Rects that report on a line without placing text there don't say where the two sides first disagree.
-    const reportOnly = reportOnlyRects(layout.engine, text, observation, nativeObservation, native, nativeLineOf)
+    const reportOnly = reportOnlyRects(layout, row.case.paragraph.runs, text, observation, nativeObservation, native, nativeLineOf)
     let k = Infinity
     for (let i = 0; i < observation.codePoints.length; i++) k = Math.min(k, divergence(observation.codePoints[i]!.rects, native.points[i]!, nativeLineOf, reportOnly?.native[i] ?? null, reportOnly?.expected[i] ?? null))
     for (let r = 0; r < observation.nodes.length; r++) k = Math.min(k, divergence(observation.nodes[r]!, native.nodes[r]!, nativeLineOf))
@@ -1615,7 +1765,8 @@ function scoreEngine(row: LabRow, nativeObservation: NativeObservation, predicti
     const units = failingLine < boxes.length
       ? differingUnits(layout, row.case.paragraph, text, observation, nativeObservation, native, nativeLineOf, { line: boxes[failingLine]!, before: decision.start })[boxes[failingLine]!]!
       : []
-    const value = attribution(layout, boxes, [failingLine], text, () => ({ units, decision }))
+    const standIns = failingLine < boxes.length ? standInSpans(layout, text, observation)[boxes[failingLine]!]! : []
+    const value = attribution(layout, boxes, [failingLine], text, () => ({ units, decision, standIns }))
     if (lineCount.status === 'fail') lineGaps.lineCount = value
     if (breaks.status === 'fail') lineGaps.breaks = value
   }
@@ -1695,7 +1846,8 @@ function scoreEngine(row: LabRow, nativeObservation: NativeObservation, predicti
         const l = boxes[failing[i]!]!
         if (units[l]!.length === 0) units[l] = webkitStandInAddends(layout, row.case.paragraph, observation, l)
       }
-      lineGaps.widths = attribution(layout, boxes, failing, text, k => ({ units: units[boxes[k]!]!, decision: null }))
+      const standIns = standInSpans(layout, text, observation)
+      lineGaps.widths = attribution(layout, boxes, failing, text, k => ({ units: units[boxes[k]!]!, decision: null, standIns: standIns[boxes[k]!]! }))
       failingWidthLines = failing
       widthUnits = units
     }
@@ -1769,6 +1921,7 @@ function scoreEngine(row: LabRow, nativeObservation: NativeObservation, predicti
       metrics: { lineCount: lineCount.status, breaks: breaks.status, widths: widths.status, painter: painter.status },
       nodeWidths: nodeWidthDifferences(layout, row.case.paragraph, text, observation, nativeObservation, units),
       paintedAtNativeWidth,
+      appUnitsPerDevPixel: layout.engine === 'gecko' && layout.lines.length > 0 ? layout.lines[0]!.geometry.appUnitsPerDevPixel : null,
     })
   }
   return { metrics: { lineCount, breaks, widths, painter }, facts, firstDifference: first.value, native, gaps, widthDiffs, diagnostics: null, protocol: null, lineGaps, residual, firing: gapFiring(layout) }
