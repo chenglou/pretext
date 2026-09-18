@@ -5,10 +5,11 @@
 // (§2.8). A line returns the frames Gecko placed on it (DESIGN.md §2.5), and fragments classified by the frames' own flags.
 import { measureContext, measureText, measureTextBounds, type Measurer } from '../../measure/canvas.js'
 import type { Fragment, Gap, GeckoCharacter, GeckoFrameGeometry, GeckoLine, GeckoLineResult, LineSlot, TextAlign } from '../../model.js'
+import { listedFontOf } from './fonts.js'
 import { addLikelySubtags, tryParseLocale } from './likely.js'
 import { BREAK_EMERGENCY_WRAP, BREAK_NORMAL } from './linebreak.js'
 import { frameOfSource, isTrimmableChar, pxToAu, rangeAu } from './prepare.js'
-import { generalCategory, isBidiControl, isClusterExtenderExcludingJoiners, joiningType } from './props.js'
+import { generalCategory, isBidiControl, isClusterExtenderExcludingJoiners, isCursiveScript, joiningType } from './props.js'
 import { KIND_NEWLINE, KIND_TAB, type GeckoElement, type GeckoLineStart, type GeckoPrepared, type GeckoTextRun } from './types.js'
 
 const SHY = 0x00ad
@@ -147,8 +148,9 @@ function inWordAdvance(p: GeckoPrepared, m: Measurer, run: GeckoTextRun, unit: {
         : edges === null ? null : `offset ${p.tSource[t]} inside a ligature group whose ends Canvas can't confirm: ${edges}`,
     }
   }
-  // A ligature candidate that groupAround's division left as a group's end.
-  const leftOver = groupSpans(p, m, run, unit, t)
+  // A ligature candidate that ends a part of a row of them (rowAround), and the facts don't say so.
+  const row = rowAround(p, m, run, unit, t)
+  const leftOver = row !== null && row.unconfirmed
   const corrections = p.correctionPrefix[t]! - p.correctionPrefix[unit.tStart]!
   const reversed = shapedReversed(p, run, unit, t)
   const suffixAu = rangeAu(m, run, p.tUnits, t, unit.tEnd, joiner, '')
@@ -317,17 +319,18 @@ function groupSpans(p: GeckoPrepared, m: Measurer, run: GeckoTextRun, unit: { tS
 }
 const spansMemo = new WeakMap<GeckoPrepared, Map<number, boolean>>()
 
-// The ligature group over cluster boundary t, or null: it runs from the nearest cluster boundary before t that no group
-// spans, or the unit's start, to the nearest such boundary after t, or the unit's end.
-// Several boundaries in a row can test as spanned. groupAcross counts groups in the unit's own shaping, but ligatureAcross
-// tests a pair alone, and in the unit a ligature lookup walks the glyphs once from the start and goes on after the
-// components a ligature took (apply_forward, hb-ot-layout.cc:1917-1945, and ligate_input; morx's ligature machine runs
-// forward too, hb-aat-layout-morx-table.hh:447-600), so the second of two optional candidates in a row has lost its first
-// letter to the first: `fff` in 16px "Helvetica Neue" is an `ff` ligature of 277 au shares and an `f` of 284 au (fresh
-// c-545b8fb978408502), where `ff` alone tests as a ligature at both boundaries. The row is divided that way, from its
-// start, and every part of it is unconfirmed: a ligature of three letters, or one a required form took a letter from,
-// shows in no pair.
-function groupAround(p: GeckoPrepared, m: Measurer, run: GeckoTextRun, unit: { tStart: number; tEnd: number }, t: number): { start: number; end: number; unconfirmed: boolean } | null {
+// The row of ligature candidates over cluster boundary t, or null: it runs from the nearest cluster boundary before t that
+// Canvas shows no group over, or the unit's start, to the nearest such boundary after t, or the unit's end. `edges` are the
+// ends of its ligature groups, the row's own two included.
+// With one candidate the row is one group. With several, groupAcross counts groups in the unit's own shaping, but
+// ligatureAcross tests a pair alone, and in the unit a ligature lookup walks the glyphs once from the start and goes on
+// after the components a ligature took (apply_forward, hb-ot-layout.cc:1917-1945, and ligate_input; morx's ligature
+// machine runs forward too, hb-aat-layout-morx-table.hh:447-600), so a candidate can have lost its first letter to the one
+// before it: `fff` in 16px "Helvetica Neue" is an `ff` ligature of 277 au shares and an `f` of 284 au (fresh
+// c-545b8fb978408502), where `ff` alone tests as a ligature at both boundaries, and its `ffi` is one ligature of three.
+// The ligatures fact settles it (listedParts). Without it the row stands in as one group, unconfirmed.
+type Row = { edges: number[]; unconfirmed: boolean }
+function rowAround(p: GeckoPrepared, m: Measurer, run: GeckoTextRun, unit: { tStart: number; tEnd: number }, t: number): Row | null {
   if (!groupSpans(p, m, run, unit, t)) return null
   let start = t
   do {
@@ -339,24 +342,116 @@ function groupAround(p: GeckoPrepared, m: Measurer, run: GeckoTextRun, unit: { t
     end++
     while (end < unit.tEnd && p.clusterStart[end] === 0) end++
   } while (end < unit.tEnd && groupSpans(p, m, run, unit, end))
+  let memo = rowMemo.get(p)
+  if (memo === undefined) rowMemo.set(p, memo = new Map())
+  let row = memo.get(start)
+  if (row !== undefined) return row
   let boundaries = 0
   let optional = false
-  let taken = false
-  let partStart = start
-  let partEnd = end
+  const required: number[] = []
   for (let b = start + 1; b < end; b++) {
     if (p.clusterStart[b] === 0) continue
     boundaries++
-    const required = groupAcross(p, m, run, unit, b, joinsAcross(p, unit, b) ? ZWJ : '')
-    if (!required) optional = true
-    if (required || !taken) { taken = true; continue }
-    // b ends a part.
-    taken = false
-    if (b <= t) partStart = b
-    else if (partEnd === end) partEnd = b
+    if (groupAcross(p, m, run, unit, b, joinsAcross(p, unit, b) ? ZWJ : '')) required.push(b)
+    else optional = true
   }
-  if (boundaries < 2 || !optional) return { start, end, unconfirmed: false }
-  return partStart === t ? null : { start: partStart, end: partEnd, unconfirmed: true }
+  if (boundaries < 2 || !optional) row = { edges: [start, end], unconfirmed: false }
+  else {
+    const edges = listedParts(p, m, run, start, end)
+    // A group that required forms made, which the unit's own shaping showed, can't end inside the facts' parts.
+    let agrees = edges !== null
+    for (let k = 0; agrees && k < required.length; k++) agrees = !edges!.includes(required[k]!)
+    row = agrees ? { edges: edges!, unconfirmed: false } : { edges: [start, end], unconfirmed: true }
+  }
+  memo.set(start, row)
+  return row
+}
+const rowMemo = new WeakMap<GeckoPrepared, Map<number, Row>>()
+
+// The ligature group over cluster boundary t, or null where no group spans it.
+function groupAround(p: GeckoPrepared, m: Measurer, run: GeckoTextRun, unit: { tStart: number; tEnd: number }, t: number): { start: number; end: number; unconfirmed: boolean } | null {
+  const row = rowAround(p, m, run, unit, t)
+  if (row === null) return null
+  for (let k = 0; k + 1 < row.edges.length; k++) {
+    if (row.edges[k]! < t && t < row.edges[k + 1]!) return { start: row.edges[k]!, end: row.edges[k + 1]!, unconfirmed: row.unconfirmed }
+  }
+  return null
+}
+
+// The ligature groups of a row of candidates [start, end) by the ligatures fact of the listed font that draws it
+// (ListedFontFacts.ligatures), as ends of groups, or null where the fact doesn't settle them. From the row's start, the
+// longest listed pattern that matches is a ligature, as the fact defines a pattern, and a letter no pattern starts at stands
+// alone: the lookup tries a glyph's ligatures where it stands and goes on after the one it formed. Settled only where every
+// cluster is one character that one listed font draws, the fact lists every ligature (`complete`), each pattern that
+// matches was shaped in every combination and context (`exact`, `everyContext`), none reaches past the row, where Canvas
+// showed no ligature, and the language selects no language system the fact left untried: a font without any, or English,
+// whose tag 'ENG ' (hb-ot-tag-table.hh:54; Gecko gives HarfBuzz the style language, gfxHarfBuzzShaper.cpp:1470-1481) the
+// fact doesn't list.
+function listedParts(p: GeckoPrepared, m: Measurer, run: GeckoTextRun, start: number, end: number): number[] | null {
+  const fonts = run.font.facts.fonts
+  if (fonts === undefined) return null
+  const clusters: string[] = []
+  const at: number[] = []
+  let listed = -2
+  for (let k = start; k < end;) {
+    const cp = codePointAtT(p, k)
+    const length = cp > 0xffff ? 2 : 1
+    if (k + length < end && p.clusterStart[k + length] === 0) return null
+    const index = listedFontOf(run.font, cp)
+    if (index === null || index < 0 || (listed !== -2 && index !== listed)) return null
+    listed = index
+    clusters.push(String.fromCodePoint(cp))
+    at.push(k)
+    k += length
+  }
+  at.push(end)
+  const facts = fonts[listed]!.ligatures
+  if (facts === null || !facts.complete) return null
+  if (facts.languageSystems.length > 0) {
+    const lang = m.log.contexts[run.context]!.lang.toLowerCase()
+    if (lang !== 'en' && !lang.startsWith('en-')) return null
+    for (let k = 0; k < facts.languageSystems.length; k++) if (facts.languageSystems[k]!.split('/')[2] === 'ENG ') return null
+  }
+  const edges = [start]
+  for (let i = 0; i < clusters.length;) {
+    let longest = 1
+    for (let k = 0; k < facts.patterns.length; k++) {
+      const pattern = facts.patterns[k]!
+      const n = pattern.positions.length
+      if (n <= longest || !pattern.positions[0]!.includes(clusters[i]!)) continue
+      let matches = true
+      for (let j = 0; j < n && matches; j++) {
+        const alternatives = pattern.positions[j]!
+        // An alternative of several characters could match across clusters, which this doesn't try.
+        for (let a = 0; a < alternatives.length; a++) if ([...alternatives[a]!].length !== 1) return null
+        matches = i + j < clusters.length ? alternatives.includes(clusters[i + j]!) : false
+      }
+      // A pattern that would match with the text after the row: Canvas showed no ligature there.
+      if (!matches && i + n > clusters.length) {
+        let prefix = true
+        for (let j = 0; i + j < clusters.length && prefix; j++) prefix = pattern.positions[j]!.includes(clusters[i + j]!)
+        if (prefix && rowContinues(p, pattern, clusters.length - i, end)) return null
+      }
+      if (!matches) continue
+      if (!pattern.exact || !pattern.everyContext) return null
+      longest = n
+    }
+    i += longest
+    edges.push(at[i]!)
+  }
+  return edges
+}
+
+// Whether the text from `end` on completes a pattern whose first `matched` positions matched the row's last clusters.
+function rowContinues(p: GeckoPrepared, pattern: { positions: readonly (readonly string[])[] }, matched: number, end: number): boolean {
+  let k = end
+  for (let j = matched; j < pattern.positions.length; j++) {
+    if (k >= p.tUnits.length) return false
+    const cp = codePointAtT(p, k)
+    if (!pattern.positions[j]!.includes(String.fromCodePoint(cp))) return false
+    k += cp > 0xffff ? 2 : 1
+  }
+  return true
 }
 
 // A ligature group across offset t that required shaping forms: a ligature glyph, or glyphs HarfBuzz returns as one cluster
@@ -476,9 +571,43 @@ type Provider = {
   tabs: Map<number, number>
 }
 
+// The letter and word spacing of [a, b) as the frame's measured ranges get it: the paragraph's spacing (prepare.ts step 6),
+// and one more rule that needs the frame. A range that starts inside a ligature group measures its part of the group apart,
+// and where the part reaches the group's end it asks the spacing after the group's last character for that character alone
+// (ComputeLigatureData, gfxTextRun.cpp:306-320; BreakAndMeasureText and MeasureText both go through it, :809-836,
+// :989-1000). GetSpacingInternal looks for the cluster's base no further back than the range it was asked for
+// (FindClusterStart from run.GetOriginalOffset(), nsTextFrame.cpp:3549-3560, :4203-4213), so a mark that ends the group is
+// its own base, and a mark of script Inherited isn't cursive: the group takes the letter spacing its cursive letter
+// wouldn't. Fresh c-66f10943bae83d88: a span starts at the second lam of lam lam-shadda-fatha heh-kasra in 16px "Geeza Pro"
+// under 5px of letter spacing, one ligature group, and the kasra's part is 523 au, its 223 au share and 300 au.
+function spacingIn(p: GeckoPrepared, m: Measurer, prov: Provider, a: number, b: number, scan = false): number {
+  const spacing = scan ? p.scanSpacingPrefix[b]! - p.scanSpacingPrefix[a]! : p.spacingPrefix[b]! - p.spacingPrefix[a]!
+  const extra = groupEndSpacing(p, m, prov)
+  return extra !== null && a <= extra.at && extra.at < b ? spacing + extra.au : spacing
+}
+
+function groupEndSpacing(p: GeckoPrepared, m: Measurer, prov: Provider): { at: number; au: number } | null {
+  let extra = groupEndMemo.get(prov)
+  if (extra !== undefined) return extra
+  extra = null
+  const from = prov.startT
+  if (prov.letterSpacingAu !== 0 && from < prov.run.tEnd && p.clusterStart[from] === 1) {
+    const unit = p.units[p.unitOf[from]!]!
+    const group = from > unit.tStart ? groupAround(p, m, prov.run, unit, from) : null
+    const f = p.frames[prov.frame]!
+    if (group !== null && !group.unconfirmed && group.end <= f.tEnd && p.spacingPrefix[group.end] === p.spacingPrefix[group.end - 1] &&
+      !isCursiveScript(codePointAtT(p, group.end - 1))) {
+      extra = { at: group.end - 1, au: prov.letterSpacingAu }
+    }
+  }
+  groupEndMemo.set(prov, extra)
+  return extra
+}
+const groupEndMemo = new WeakMap<Provider, { at: number; au: number } | null>()
+
 function rangeAdvance(p: GeckoPrepared, m: Measurer, prov: Provider, a: number, b: number, gaps: LineGaps | null): number {
   if (b <= a) return 0
-  let w = glyphBefore(p, m, prov.run, b, gaps) - glyphBefore(p, m, prov.run, a, gaps) + p.spacingPrefix[b]! - p.spacingPrefix[a]!
+  let w = glyphBefore(p, m, prov.run, b, gaps) - glyphBefore(p, m, prov.run, a, gaps) + spacingIn(p, m, prov, a, b)
   if (prov.run.hasTab) for (const [t, tab] of prov.tabs) if (t >= a && t < b) w += tab
   return w
 }
@@ -500,7 +629,7 @@ function scanAdvance(p: GeckoPrepared, m: Measurer, prov: Provider, from: number
     return glyphBefore(p, m, prov.run, t, gaps)
   }
   if (b <= a) return 0
-  let w = position(b) - position(a) + p.spacingPrefix[b]! - p.spacingPrefix[a]!
+  let w = position(b) - position(a) + spacingIn(p, m, prov, a, b, true)
   if (prov.run.hasTab) for (const [t, tab] of prov.tabs) if (t >= a && t < b) w += tab
   return w
 }
@@ -519,7 +648,7 @@ function computeTabs(p: GeckoPrepared, m: Measurer, prov: Provider, end: number,
   let from = prov.startT
   for (let t = prov.startT; t < end; t++) {
     if (p.kind[t] !== KIND_TAB) continue
-    x += glyphBefore(p, m, prov.run, t, gaps) - glyphBefore(p, m, prov.run, from, gaps) + p.spacingPrefix[t]! - p.spacingPrefix[from]!
+    x += glyphBefore(p, m, prov.run, t, gaps) - glyphBefore(p, m, prov.run, from, gaps) + spacingIn(p, m, prov, from, t)
     const nextTab = Math.ceil((x + prov.run.minTabAdvance) / p.tabWidth) * p.tabWidth
     const w = Math.trunc(nextTab - x + (nextTab - x >= 0 ? 0.5 : -0.5)) // NSToIntRound
     prov.tabs.set(t, w)
@@ -1234,7 +1363,7 @@ function characters(p: GeckoPrepared, m: Measurer, r: FrameResult, prov: Provide
     const after = advanceBefore(p, m, prov.run, t + 1)
     out.push({
       skipped: false, clusterStart: p.clusterStart[t] === 1, unitStart: p.units[p.unitOf[t]!]!.tStart === t,
-      advance: after.au - before.au + p.spacingPrefix[t + 1]! - p.spacingPrefix[t]! + (prov.tabs.get(t) ?? 0) + (justification?.get(t) ?? 0),
+      advance: after.au - before.au + spacingIn(p, m, prov, t, t + 1) + (prov.tabs.get(t) ?? 0) + (justification?.get(t) ?? 0),
       standInBefore: before.standIn !== null,
     })
     before = after

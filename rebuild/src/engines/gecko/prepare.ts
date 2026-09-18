@@ -1117,12 +1117,14 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, measur
     }
   }
   const spacingPrefix = new Int32Array(T + 1)
+  const scanSpacingPrefix = new Int32Array(T + 1)
   for (let r = 0; r < builds.length; r++) {
     const b = builds[r]!
     for (let t = b.tStart; t < b.tEnd; t++) {
       const run = runOfT[t]!
       const style = runStyles[run]!
       let spacing = 0
+      let scanSpacing = 0
       const ls = letterSpacingAu[run]!
       if (ls !== 0) {
         // CanAddSpacingAfter (nsTextFrame.cpp:3860-3873).
@@ -1138,18 +1140,25 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, measur
           while (base > frameStartOfT[t]! && g.clusterStart[base] === 0 && tSource[base]! - 1 === tSource[base - 1]!) base--
           let cp = tUnits[base]!
           if (base + 1 < b.tEnd && isSurrogatePair(cp, tUnits[base + 1]!)) cp = combine(cp, tUnits[base + 1]!)
-          // Probe gecko-port F19 (.artifacts/probes/gecko/round3-f19), not traced to source: a cursive cluster takes the
-          // spacing after all where another font draws one of its marks than draws its base. Under 4px of letter spacing
-          // beh with U+0301 stays 576 au in "Courier New" and 685 au in "Times New Roman", which have both, and grows from 934
-          // to 1174 au in "Geeza Pro", which lacks U+0301; Syriac, N'Ko, Mongolian and Hanifi Rohingya letters, all drawn by
-          // fallback fonts, grow with U+0301 after them and not with a mark of their own script (U+0730, U+07EB). The
-          // coverage facts say which listed family draws each (fonts.ts). Where they don't, or where base and mark both
-          // fall back, the cluster keeps the cursive rule and reports font-fallback.
-          let otherFont = false
+          // The frame's width comes from MeasureText, which asks for spacing one glyph run at a time (gfxTextRun.cpp:809-829,
+          // :752-765, :372-392), and the base search goes no further back than the range asked for (nsTextFrame.cpp:4203-4213,
+          // from run.GetOriginalOffset()). So where another font draws a mark than the character before it, the mark starts a
+          // glyph run and is the base found, and a mark of script Inherited isn't cursive: the cluster takes the spacing its
+          // cursive letter wouldn't. Probe gecko-port F19 (.artifacts/probes/gecko/round3-f19): under 4px of letter spacing
+          // beh with U+0301 stays 576 au in "Courier New" and 685 au in "Times New Roman", which have both, and grows from
+          // 934 to 1174 au in "Geeza Pro", which lacks U+0301; Syriac, N'Ko, Mongolian and Hanifi Rohingya letters, all
+          // drawn by fallback fonts, grow with U+0301 after them and not with a mark of their own script (U+0730, U+07EB).
+          // A mark takes the font of the character before it where that font has it (gfxTextRun.cpp:3181-3212), which the
+          // coverage facts answer for the listed families (fonts.ts). Where they don't say, or a fallback font draws the
+          // character before the mark, the cluster keeps the cursive rule and reports font-fallback.
+          // The break scan asks for spacing over its own buffer of up to 100 characters from the range's start
+          // (gfxTextRun.cpp:946-958, :1011-1018), whatever the glyph runs, so it fits lines without this spacing
+          // (scanSpacingPrefix).
+          let found = cp
           if (isCursiveScript(cp) && t > base + (cp >= 0x10000 ? 1 : 0)) {
             const font = runTextStyles[run]!.font
-            const baseFont = listedFontOf(font, cp)
-            let unknown = baseFont === null
+            let previous = listedFontOf(font, cp)
+            let unknown = false
             for (let k = base + (cp >= 0x10000 ? 2 : 1); k <= t && !unknown; k++) {
               let mark = tUnits[k]!
               if ((mark & 0xfc00) === 0xdc00) continue
@@ -1157,15 +1166,19 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, measur
               // Join controls, variation selectors and default ignorables take the previous font whatever it maps
               // (gfxTextRun.cpp:3309-3332).
               if (isDefaultIgnorable(mark) || (mark >= 0xfe00 && mark <= 0xfe0f) || mark === 0x200c || mark === 0x200d) continue
-              const markFont = extenderFontOf(font, baseFont, mark)
-              if (markFont === null || (markFont === -1 && baseFont === -1)) unknown = true
-              else if (markFont !== baseFont) otherFont = true
+              if (previous === null || previous === -1) { unknown = true; break }
+              const markFont = extenderFontOf(font, previous, mark)
+              if (markFont === null) { unknown = true; break }
+              if (markFont !== previous) found = mark
+              previous = markFont
             }
-            if (unknown && !otherFont) {
-              gaps.push({ gap: 'font-fallback', run, detail: `a cursive cluster with a mark takes letter spacing where another font draws the mark than the base (probe gecko-port F19), and the font facts don't say which fonts draw U+${cp.toString(16).toUpperCase()} and its marks`, at: { start: tSource[base]!, end: tSource[t]! + 1 } })
+            if (unknown) {
+              found = cp
+              gaps.push({ gap: 'font-fallback', run, detail: `a cursive cluster takes letter spacing where another font draws one of its marks than the character before it (gfxTextRun.cpp:809-829), and the font facts don't say which fonts draw U+${cp.toString(16).toUpperCase()} and its marks`, at: { start: tSource[base]!, end: tSource[t]! + 1 } })
             }
           }
-          if (!isCursiveScript(cp) || otherFont) spacing += ls
+          if (!isCursiveScript(cp)) scanSpacing += ls
+          if (!isCursiveScript(found)) spacing += ls
         }
       }
       const ws = wordSpacingAu[run]!
@@ -1175,9 +1188,13 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, measur
         const ch = text.charCodeAt(s)
         const f = frames[frameOfSource(frames, s)]!
         if (((ch === 0x20 || ch === 0xa0) && !isSpaceCombiningSequenceTail(text, s + 1, f.end)) ||
-          ((ch === 0x0d || ch === 0x09) && !style.whiteSpaceIsSignificant) || (ch === 0x0a && !style.newlineIsSignificant)) spacing += ws
+          ((ch === 0x0d || ch === 0x09) && !style.whiteSpaceIsSignificant) || (ch === 0x0a && !style.newlineIsSignificant)) {
+          spacing += ws
+          scanSpacing += ws
+        }
       }
       spacingPrefix[t + 1] = spacingPrefix[t]! + spacing
+      scanSpacingPrefix[t + 1] = scanSpacingPrefix[t]! + scanSpacing
     }
   }
 
@@ -1433,7 +1450,7 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, measur
     }
     endStretch(b.tEnd)
     textRuns.push({
-      tStart: b.tStart, tEnd: b.tEnd, is8bit: b.is8bit, level: b.level, context, scriptRuns: run.scriptRuns, hasShy: b.hasShy,
+      tStart: b.tStart, tEnd: b.tEnd, is8bit: b.is8bit, level: b.level, context, font, scriptRuns: run.scriptRuns, hasShy: b.hasShy,
       trailingBreak: b.trailingBreak, minTabAdvance: b.hasTab ? 0.5 * au('0') : 0,
       hyphenAu: b.hasShy ? au('‐') : 0, hasTab: b.hasTab, totalAdvance: advance, pairKerning: font.facts.pairKerning, scriptLookups: firstFontScriptLookups(font), joining: font.facts.joining, auPerPx,
       advancesStandIn: canvasAuSize !== domAu ? 'font-size-quantization' : !elementCanvas && font.facts.opticalSizeAxis !== false ? 'optical-size' : null,
@@ -1505,7 +1522,7 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, measur
   return {
     paragraph, env, appUnitsPerDevPixel: apd, blockStyle, text, runStarts, runStyles, runParents, runLangs: langs, letterSpacingAu, frames, items,
     elements, textRuns, tUnits, tSource, breakFlags: g.breakFlags, clusterStart: g.clusterStart, isSpace: g.isSpace, kind: g.kind,
-    spacingPrefix, correctionPrefix, unitOf, units, sourceT, nextT, tabWidth, emergencyUnconfirmed, textIndentAu: pxToAu(paragraph.textIndent), bidi: resolveBidi, gaps,
+    spacingPrefix, scanSpacingPrefix, correctionPrefix, unitOf, units, sourceT, nextT, tabWidth, emergencyUnconfirmed, textIndentAu: pxToAu(paragraph.textIndent), bidi: resolveBidi, gaps,
   }
 }
 

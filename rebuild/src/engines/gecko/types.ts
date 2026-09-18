@@ -1,6 +1,6 @@
 // Gecko's prepared paragraph and line state (Firefox 156.0). The Gecko port owns this file.
 import type { GeckoEnvironment } from '../../env.js'
-import type { Gap, Paragraph, TextStyle } from '../../model.js'
+import type { FontDecl, Gap, Paragraph, TextStyle } from '../../model.js'
 
 // white-space as its two longhands and the predicates Gecko derives from them (nsStyleStruct.h:1303-1367,
 // specs/gecko-text.md §2.1), plus the other inherited text properties a frame reads from its own style.
@@ -86,6 +86,8 @@ export type GeckoTextRun = {
   level: number
   // Measure context: the first flow's font and language, ligatures off when its letter spacing isn't 0 au.
   context: number
+  // The first flow's font declaration, for its facts about the listed families (lines.ts, ligature rows).
+  font: FontDecl
   // The run's script runs, which decide the script context a measured piece of a unit needs (rangeAu in prepare.ts).
   scriptRuns: ScriptRun[]
   // TEXT_ENABLE_HYPHEN_BREAKS from a removed soft hyphen (nsTextFrame.cpp:2584-2586).
@@ -167,6 +169,9 @@ export type GeckoPrepared = {
   kind: Uint8Array
   // spacingPrefix[t]: letter and word spacing after the characters before t, in au (nsTextFrame.cpp:4089-4295).
   spacingPrefix: Int32Array
+  // The same as the break scan gets it: without the letter spacing a cursive cluster takes only where spacing is asked for
+  // one glyph run at a time (prepare.ts step 6; gfxTextRun.cpp:946-958, :1011-1018).
+  scanSpacingPrefix: Int32Array
   // correctionPrefix[t]: color emoji and synthesized space corrections of the clusters before t, in au.
   correctionPrefix: Int32Array
   unitOf: Int32Array

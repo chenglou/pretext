@@ -732,12 +732,27 @@ describe('ceiling round 2', () => {
     expect(l.measure.contexts.some(c => c.font.includes(' 1024px '))).toBe(true)
   })
 
-  test('ligature candidates in a row divide from the start and stay stand-ins (hb-ot-layout.cc:1917-1945)', () => {
+  test('ligature candidates in a row: the ligatures fact divides them, and without it the row stands in as one group (hb-ot-layout.cc:1917-1945)', () => {
     // `ff` alone tests as a ligature at both boundaries of `fff`; the unit takes the first pair and leaves the third `f`.
-    const l = layout(paragraph([run('fff')], 2, { overflowWrap: 'anywhere' }))
-    expect(l.lines.map(line => line.start)).toEqual([0, 1, 2])
-    expect(l.lines.map(line => line.geometry.width)).toEqual([570, 570, 576])
-    expect(l.lines.map(line => line.gaps.some(g => g.gap === 'in-word-prefix'))).toEqual([true, true, true])
+    const unknown = layout(paragraph([run('fff')], 2, { overflowWrap: 'anywhere' }))
+    expect(unknown.lines.map(line => line.start)).toEqual([0, 1, 2])
+    expect(unknown.lines.map(line => line.geometry.width)).toEqual([572, 572, 572])
+    expect(unknown.lines.map(line => line.gaps.some(g => g.gap === 'in-word-prefix'))).toEqual([true, true, true])
+    const pattern = (positions: string[][]) => ({ positions, exact: true, spaced: false, everyContext: true, acrossMark: null })
+    const listed = (patterns: ReturnType<typeof pattern>[], languageSystems: string[] = []): FontDecl => ({ ...courier, facts: { ...facts, fonts: [{
+      family: '"Courier New"', realizes: true, coverage: [0x20, 0x7e], ligatures: { patterns, complete: true, languageSystems }, scriptLookups: [],
+    }] } })
+    const broken = (font: FontDecl, lang = 'en') => layout(paragraph([run('fff', 'span', { font, lang })], 2, { overflowWrap: 'anywhere', font, lang }))
+    const pairs = broken(listed([pattern([['f'], ['f', 'i']])]))
+    expect(pairs.lines.map(line => line.geometry.width)).toEqual([570, 570, 576])
+    expect(allGaps(pairs).map(g => g.gap)).not.toContain('in-word-prefix')
+    // A listed ligature of three takes the row whole.
+    const three = broken(listed([pattern([['f'], ['f', 'i']]), pattern([['f'], ['f'], ['f']])]))
+    expect(three.lines.map(line => line.geometry.width)).toEqual([572, 572, 572])
+    expect(allGaps(three).map(g => g.gap)).not.toContain('in-word-prefix')
+    // A language system the fact left untried: settled under English only.
+    expect(allGaps(broken(listed([pattern([['f'], ['f', 'i']])], ['GSUB/latn/TRK ']))).map(g => g.gap)).not.toContain('in-word-prefix')
+    expect(allGaps(broken(listed([pattern([['f'], ['f', 'i']])], ['GSUB/latn/TRK ']), 'tr')).map(g => g.gap)).toContain('in-word-prefix')
   })
 
   test('the pair kerning fact describes Latin lookups: a pair in a Hebrew script run stays a stand-in (hb-ot-shape.cc:134, :173-184)', () => {
@@ -752,6 +767,16 @@ describe('ceiling round 2', () => {
     expect(hebrew.lines.slice(0, 2).map(line => line.gaps.some(g => g.gap === 'in-word-prefix'))).toEqual([true, true])
     const english = layout(paragraph([run('77 —', 'span', { font: split })], 11, { overflowWrap: 'anywhere', font: split }))
     expect(english.lines.slice(0, 2).map(line => line.geometry.width)).toEqual([556, 556])
+  })
+
+  test('a span that starts inside a ligature group: a mark ending the group takes the letter spacing (gfxTextRun.cpp:306-320)', () => {
+    // Lam and alef madda are one group of 1001 au in the stub. The span starts at the alef: its part of the group reaches the
+    // group's end, and the spacing after it is asked for the group's last character alone, the kasra, which isn't cursive.
+    const split = (text: string) => layout(paragraph([run('ل', 'text', { letterSpacing: 4 }), run(text, 'span', { letterSpacing: 4 })], 500, { letterSpacing: 4 })).lines[0]!.geometry.width
+    const whole = (text: string) => layout(paragraph([run('ل' + text, 'text', { letterSpacing: 4 })], 500, { letterSpacing: 4 })).lines[0]!.geometry.width
+    expect(split('آِ') - whole('آِ')).toBe(240)
+    // Without the mark the group ends in the alef, a cursive letter.
+    expect(split('آ') - whole('آ')).toBe(0)
   })
 
   test('paragraph gaps name the source range they concern', () => {
