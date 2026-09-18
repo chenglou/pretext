@@ -205,7 +205,7 @@ Moving them reorders calls. Keeping them leaves gap-only calls on the default pa
 
 ## 6. Offline runs made for this review
 
-Scratch: `/private/tmp/claude-501/-Users-chenglou-github-pretext/7e07dee5-fc27-4046-b679-3f61a43f7436/scratchpad/arch-plan/critique/`
+Scratch: `<scratch>/arch-plan/critique/`
 
 | File | What it found |
 |---|---|

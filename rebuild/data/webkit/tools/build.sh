@@ -8,7 +8,7 @@
 set -e
 HERE=$(cd "$(dirname "$0")" && pwd)
 DATA=$(cd "$HERE/.." && pwd)
-BUILD=${BUILD:-/private/tmp/claude-501/-Users-chenglou-github-pretext/7e07dee5-fc27-4046-b679-3f61a43f7436/scratchpad/webkit-data-build}
+BUILD=${BUILD:-${TMPDIR:-/tmp}/pretext-webkit-data-build}
 WEBKIT=${WEBKIT:-$HOME/github/browser-engines/webkit-7625.1.29.11.27}
 GROUNDWORK_WEBKIT=${GROUNDWORK_WEBKIT:-$HOME/github/browser-engines/pretext-emulation-20260915/research/webkit-safari}
 mkdir -p "$BUILD"

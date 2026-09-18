@@ -1,6 +1,6 @@
 # Target architecture: three ports, one small shared layer
 
-Paths are under `~/github/pretext-rebuild/rebuild/` unless absolute. "Unit" means a UTF-16 code unit. Offline numbers come from bun with a stand-in Canvas, so they show JS cost and call counts only. My scratch files are in `/private/tmp/claude-501/-Users-chenglou-github-pretext/7e07dee5-fc27-4046-b679-3f61a43f7436/scratchpad/arch-plan/target/`.
+Paths are under `~/github/pretext-rebuild/rebuild/` unless absolute. "Unit" means a UTF-16 code unit. Offline numbers come from bun with a stand-in Canvas, so they show JS cost and call counts only. My scratch files are in `<scratch>/arch-plan/target/`.
 
 ## 0. The design in short
 

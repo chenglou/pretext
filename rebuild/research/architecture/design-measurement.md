@@ -2,7 +2,7 @@
 
 Paths are under `~/github/pretext-rebuild/rebuild/` unless absolute. "Unit" means a UTF-16 code unit.
 
-Offline numbers come from bun prototypes with a stand-in Canvas. The prototypes are in `/private/tmp/claude-501/-Users-chenglou-github-pretext/7e07dee5-fc27-4046-b679-3f61a43f7436/scratchpad/arch-plan/measure-first/`. The stand-in reproduces Chrome's real call count on the Latin corpus within 1.5%: 12,869 offline against 12,677 in the saved bench. Nothing under the repo was touched and no browser ran.
+Offline numbers come from bun prototypes with a stand-in Canvas. The prototypes are in `<scratch>/arch-plan/measure-first/`. The stand-in reproduces Chrome's real call count on the Latin corpus within 1.5%: 12,869 offline against 12,677 in the saved bench. Nothing under the repo was touched and no browser ran.
 
 ## 0. The design in one page
 
