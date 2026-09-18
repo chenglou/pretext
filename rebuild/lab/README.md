@@ -230,7 +230,7 @@ and `facts` (the lab's font facts, the optional input; `predictor.ts`).
 | Tier | Command | What a change shows as | Measured |
 |---|---|---|---|
 | 0 | `bun test rebuild` | a failing unit test | 11 to 12 s (727 tests); 20 s at load average 25 |
-| 1 | `bun rebuild/tests/replay.ts check --browser=all --config=all` | every case whose full prediction changed, with the first differing field; cases that need the browser | 42 s for the six frozen references (388,886 cases) on a quiet machine, 4 to 9 s a reference; 77 s at load average 25 |
+| 1 | `bun rebuild/tests/replay.ts check --browser=all --config=all` | every case whose full prediction changed, with the first differing field; every case whose Canvas questions changed, by kind (repeats only, dropped only, other); cases that need the browser | 42 s for the six frozen references (388,886 cases) on a quiet machine, 4 to 9 s a reference; 77 s at load average 25 |
 | 2 | `bun rebuild/tests/browser-sets.ts --browser=<browser> --out=<dir>` | status transitions against the reference ledger, of the four metrics and of the exact-value status, and lost pairs against the build-keyed seed | forward order, one browser at a time: Chrome 88 s, Firefox 108 s, webkit-host 128 s; the three at once against the frozen line: 92 to 195 s a browser and configuration; both orders with recording, the three browsers at once: 3 to 5.5 minutes each |
 | 3 | the round's evaluation (`fresh.ts`, sealed sets, giants, installed Safari) | new classes on cases nobody saw | see REPORT.md |
 
@@ -347,10 +347,45 @@ bun rebuild/tests/replay.ts check --browser=chrome            # or --browser=all
 ```
 
 - `check` reports per case: the same; *prediction changed*, with the first differing field, grouped by field and family and
-  by the case's statuses in the ledger; *questions changed* (the same prediction from other questions, fewer or in another
-  order); *new question* (the library asked Canvas or a segmenter something the record doesn't hold: a changed measuring
-  recipe). It writes the report and `<report>.needs-browser.ids`. Exit 0 when every case is the same, 1 when a prediction
-  changed, 3 when none did but cases need the browser.
+  by the case's statuses in the ledger; *questions changed* (the same prediction from other questions); *new question* (the
+  library asked Canvas or a segmenter something the record doesn't hold: a changed measuring recipe). It writes the report
+  and `<report>.needs-browser.ids`.
+- *Questions changed, by kind* (research/ARCHITECTURE-PLAN-2.md §7; a question is a context and a string). *Repeats only*:
+  the same questions, first asked in the reference's order, so only how often one is asked again moved. That is provable
+  offline: measuring the same text again on a context returns the same bits in all three engines, and a repeat can't reorder
+  two different strings. *Dropped only*: a subset of the reference's questions, first asked in the reference's order, and no
+  more contexts; a step accepts it only where it names what it drops. *Other questions*: a question first asked after one
+  the reference asked later, a recorded question the reference didn't ask, or another number of contexts; no step accepts
+  it, as none accepts a new question. The order is the whole phase's, across contexts, which is stricter than the plan's
+  "per context" and costs a pure repeat nothing: WebKit and Gecko keep measured words per font, not per canvas, so two
+  contexts taking turns in another order is a reordering of two different strings.
+- *Exits*: 0 when every case is the same; 1 when a prediction changed; 3 when none did and every changed case is repeats
+  only or dropped only (or the string storage rule below sends cases to tier 2); 4 when none did but a case asks other
+  questions or a new one. `--browser=all` exits with the worst, in the order 1, 4, 3, 0.
+- *Asked and distinct.* Every report counts, over the cases that replayed, the Canvas questions asked and the distinct
+  ones per phase; asked over distinct is the *ask ratio*, the number the re-architecture's X2 watches. At the correctness
+  line the library's memo keeps it at 1.00 in Chrome and webkit-host and 1.07 in Firefox (ink-box questions aren't
+  memoized): Chrome asks 6.67 M questions for its 66,685 headline cases (100 a paragraph; 6.13 M with the lab's facts),
+  Firefox 4.73 M (74), webkit-host 2.04 M (32; 1.23 M with facts), and webkit-host's observation port another 4.77 M,
+  2.15 M of them distinct. Planted 2026-09-18, the memo switched off: every changed case is repeats only, no prediction
+  moves, exit 3, and the ratios are 10.61 in Chrome (70.5 M asked), 1.72 in Firefox and 3.14 in webkit-host.
+- `check --sites` adds asks and repeats by library call site: the innermost three library frames of the stack at every
+  measureText call, read inside the replay's context (`lab/measurements.ts` `SiteTally`), so nothing in `rebuild/src` counts
+  anything; `src/measure/canvas.ts` is left out of a site, since every call passes through it. The report's `sites.under`
+  counts a call once for every library function on its stack ("how much sits under `lineGaps`"). JavaScriptCore drops the
+  frame of a function that returns a call directly, so a site can lack such a caller. With the memo off the top sites are
+  `raw16Of < measure16 < pairAdjust16` in Blink (42.3 M of 63.9 M repeats), `w < inWordAdvance` in Gecko and
+  `spacedGlyphCount < mergedGlyphs < itemGaps` in WebKit. It takes about half as long again (Chrome's headline reference: 7.5 s, 11.5 s with `--sites`).
+- *The contexts are the replay's own count* of the contexts the prediction made; the library's call log isn't read. It
+  equals the library's count in every frozen case, so the references frozen in format 1 still compare; their memo hits are
+  ignored. `freeze` writes format 2, without them.
+- *Nothing is written into the replay folder by `check`*: the shards' results and, by default, the report go to
+  `rebuild/tests/.check/<browser>-<config>` in the working tree (untracked), so owners in several worktrees who share one
+  `.artifacts` can check one reference at the same time.
+- *Freezing the questions again.* After a step that changed only questions (exit 3) has passed its browser runs:
+  `bun rebuild/tests/replay.ts freeze --browser=<b> --config=<c> --force --questions-only --reason=<why>`. It refuses unless
+  every case's prediction is byte for byte the replaced reference's and no case asks a new question, so predictions are
+  never frozen again; the manifest's `predictionsFrom` names the commit whose predictions the reference still holds.
 - *By rule, to tier 2* (`browser-sets.ts --ids-file=<report>.needs-browser.ids`): cases with a new question (nothing offline
   can answer it); cases whose questions changed (Canvas answers can depend on what a context measured before: Blink caches
   shaped words per canvas); *unfaithful* cases, where `pack` found the replay of the recorded library giving another
@@ -464,6 +499,79 @@ or rect counts than before; tier 2 exits the same. A ledger of the older format 
 | The lab predicts after native layout, an application before | `--measure-first` with `compare-sets.ts` ("Measure first") | 2026-09-18: Chrome and webkit-host move nothing; Firefox moves 121 emoji cases, 116 of them known history-dependent |
 | A class left open on purpose moves | the known tail names it on the transition ("The known tail") | `rebuild/tests/known-tail.test.ts` |
 | A predicted value goes wrong where every metric still passes | the ledger's exact-value status, in both configurations | `rebuild/tests/ledger.test.ts`; the critic's planted runs read again: 61 and 5 blocking cases with facts |
+
+### Checks for the re-architecture
+
+Step 0 of research/ARCHITECTURE-PLAN-2.md (§7, §8) adds what the tiers can't say of a rewrite that must not move a
+prediction. One command each; every one was run against a planted violation and against the clean tree on 2026-09-18
+(what was planted is beside each). Reports and scratch go to `rebuild/tests/.check`, never into the shared replay folders.
+
+| Check | Command | Fails when |
+|---|---|---|
+| Changed questions, by kind (the plan's exit 3 rule) | `bun rebuild/tests/replay.ts check --browser=all --config=all` | exit 4: a case asks a new question or other questions; exit 3 is read against what the step may accept ("Tier 1: offline replay") |
+| 1. Plain equals inspected | `bun rebuild/tests/function-set.ts plain --browser=all --config=all` | a plain paragraph's fill results or pieces differ from the inspected one's, its questions aren't the lab path's or fewer, it makes more contexts, or `inspectLine` answers on it |
+| 2. Purity | `bun rebuild/tests/function-set.ts pure --browser=all --config=all` | `linePieces` or `inspectLine` gives another result the second time, or when the other ran first |
+| 3. Width sweep on a stand-in Canvas | `bun rebuild/tests/function-set.ts sweep --browser=all --config=no-facts` | one prepared paragraph filled at other widths first differs from a paragraph prepared for that width alone |
+| 4. Ask ratio and sites | `bun rebuild/tests/replay.ts check --browser=all --config=all --sites` | never by itself: it reports asked, distinct, the ask ratio, and asks and repeats by call site |
+| 5. Coverage map | `bun rebuild/tests/coverage-map.ts` | never: it lists the lines of `rebuild/src` no replay runs, per engine |
+| 8. Independence | `bun test rebuild/tests/independence.test.ts` (in tier 0) | a shared file names an engine outside the listed exceptions, an engine imports another, the lab imports library logic outside its adapter |
+| Line ranges against layouts | `bun rebuild/tests/compare-sets.ts <plain predictor's run> <usual run> --prediction=line-ranges` | exit 1: a line range differs or a row is missing; exit 3: only native observations differ |
+
+Checks 6, 7 and 9 (the citation ledger, the painter differential, the twin family) are the tools owner's, under
+`rebuild/tools`.
+
+- **Checks 1 to 3 wait for the function set** (`prepare(paragraph, env, inspect)`, `firstLine`, `fillLine(prepared, start,
+  { width, left, right })`, `linePieces`, `inspectLine`; the plan's §5.6), which step 1's S3 exports from
+  `rebuild/src/index.ts`. Until then each says which names are missing and exits 5, never 0; `--library=<module>` names
+  another module that exports the set. They read the replay folders' inputs, shard by shard like tier 1. Each lays a case
+  out once through the lab's predictor and takes the paragraph and the environment from that prediction, the width and
+  the slots' insets from the case. Results are kept as JSON at the call, since a result can share its arrays with the
+  decided line. *Plain* replays the record and reports the plain path's asked and distinct questions and their ratio.
+  *Pure* reads each line's pieces, inspection, pieces and inspection, then a second paragraph inspection first. *Sweep*
+  can't replay (another width asks questions no record holds), so it runs on `rebuild/tests/stand-in-canvas.ts`, a
+  deterministic Canvas: advances from the font string and the code point, kerned pairs (a string isn't the sum of its
+  parts), U+200D changing its neighbours' widths, letter spacing per character (1/64 px exact; Gecko's 0.001px adds
+  nothing, as its Canvas rounds to app units), word spacing, an ink box; it fills at half, three quarters and one and a half
+  times the case's width and then at the case's own, plain and inspected. The three ports lay the hand-written smoke
+  cases out on it in tier 0 (`stand-in-canvas.test.ts`). *Proved* with a toy function set recorded and replayed in tier 0
+  (`function-set.test.ts`: 9 planted sets, each caught by name, the clean one silent), and end to end over today's
+  library through a scratch module that makes the set from `prepareParagraph` and `layoutLine`: the three checks pass on
+  the 80,403 headline cases of the smoke and development sets in the three browsers' inputs (the sweep asks the stand-in
+  123 M questions), and five plants (other `align` on plain, `inspectLine` answering on plain, `linePieces` writing into a
+  fragment, `inspectLine` flipping `indented`, a prepared paragraph kept from the first width) fail every case they touch.
+- **Changed questions.** Planted in a scratch clone: the memo off gives 66,079 Chrome, 54,659 Firefox and 61,068
+  webkit-host headline cases repeats only, exit 3; WebKit's history worlds without their discarded gap work give 214
+  dropped only and 18 other questions (a question the world asked first is now first asked later), exit 4; the font checks'
+  old context gives new questions in every case, exit 4; `canFitOnLine` without its LayoutUnit gives 127 changed
+  predictions, 69 other questions and 1,444 new questions, exit 1; the same test written another way, exit 0.
+- **Coverage map.** Per browser it replays every shard of both configurations under `bun test --coverage`
+  (`coverage-map.shard.ts`) and merges the lcov records: a line ran when any shard ran it. `rebuild/tests/coverage-map/
+  <engine>.txt` holds the correctness line's maps: the port's own folder and the shared files, as ranges with the function
+  each starts in. Blink: 39 of 3,873 measured lines of the port never ran; Gecko 122 of 3,238; WebKit 148 of 3,623; of the
+  shared files 30%, 47% and 37%, most of it the painter, which needs a DOM, other engines' data, and in Firefox the font
+  checks, which learn nothing there. About a minute for the
+  three. Lines, not branches: a line ran when any part of it did. Lines that hold no code are left out, because bun lists
+  them unevenly (`coverage-map.ts` `addLcov`). A planted branch and a planted function that nothing calls are listed.
+- **Independence** is a tier 0 test. The shared layer's rule (no import of `engines/`, no `'blink'`, `'webkit'` or `'gecko'`
+  string, no identifier holding such a name; comments never count, the TypeScript parser drops them) holds outside
+  `SHARED_FILES_THAT_NAME_ENGINES`, which lists today's ten files with their counts of mentions; a count may only fall, an
+  entry that no longer matches fails too, S2 leaves `paint.ts` and step 3 empties the list. `src/index.ts` and `src/env.ts`
+  are the two shared files that may name engines, and test files are left out. Planted: a string and an identifier in
+  `content.ts`, an import of Blink's shaper into WebKit's style, an import of `src/index.ts` into `lab/rows.ts`; each named.
+- **Line ranges against layouts** is for X1's gate: `browser-sets.ts --predictor=rebuild/lab/baselines/plain-predictor.ts
+  --groups=development --out=<dir>` runs the sets with another predictor (scored, with no ledger, transitions or gate), and
+  `compare-sets.ts --prediction=line-ranges` compares its rows with a usual run's: a `LinesPrediction`'s lines against the
+  layout's lines that have a line box, which are the lines `score.ts` counts a `LinesPrediction`'s against, so the plain
+  predictor lists those; start and end must agree; widths and painted lines aren't compared; native observations are, and
+  a difference there alone exits 3, to be read as a history effect of the smaller question set. Run end to end in
+  webkit-host on `smoke-hand` and `ws` with a scratch predictor that returns today's layout as line ranges: 1,044 rows,
+  nothing differs, exit 0; with the first break moved by one unit: 756 rows differ, exit 1.
+- **Baselines for the tripwire** (X2: tier 2's wall time and the giants stay within 2× these), in
+  `rebuild/tests/baselines/times-correctness-line.json`, headline configuration, 2026-09-18, from `rebuild/src` as at the
+  correctness line. The giants under the exclusive lock, forward, one case a round trip: Chrome 119 s (the library's
+  predictions 49.8 s of it, the observation port 40.8 s), Firefox 15 s (4.2 s), webkit-host 325 s (2.7 s; the port 114 s and
+  native layout with its observation 172 s). Tier 2 forward, one browser at a time: Chrome 77 s, Firefox 67 s, webkit-host
+  102 s, each with 0 status transitions and the gate passing. Runs: `.artifacts/tests/runs/ra0-baselines`.
 
 ### The known tail
 

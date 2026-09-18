@@ -3,7 +3,7 @@
 //   bun rebuild/tests/browser-sets.ts --browser=chrome|firefox|webkit-host --out=<dir> [--config=no-facts|facts]
 //     [--sets=<name>[,...]] [--groups=smoke,development,families,heldout] [--both-orders] [--record] [--measure-first]
 //     [--ids-file=<file>] [--reference=<ledger dir>] [--allow=<difference>[,...]] [--baseline=<gate file>]
-//     [--seed --staging=<dir>] [--rerun-failed]
+//     [--seed --staging=<dir>] [--rerun-failed] [--predictor=<file>]
 //
 // Don't wrap it in the browser lock: every browser job takes the lock itself. What it does, in order:
 // 1. Reads the build of the app it will launch (the pinned copy of Chrome or Firefox, the system WebKit for webkit-host)
@@ -33,6 +33,12 @@
 // ledger's sets, so the transitions against the reference are printed knowingly across protocols, and the gate, whose seeds
 // describe the usual protocol, isn't run. compare-sets.ts compares its rows with a usual run's, case by case.
 //
+// --predictor=<file> runs the jobs with another predictor than the configuration's (the re-architecture's plain predictor,
+// which returns line ranges alone, or one that fills other widths first): the same sets, parts and protocol, scored, and
+// nothing more. Its rows aren't the reference's kind of prediction, so no ledger is built, no transition is read and the
+// gate doesn't run: compare-sets.ts compares the run with a usual one, case by case (--prediction=line-ranges for line
+// ranges against layouts).
+//
 // --ids-file runs only the listed cases (tier 1 routes cases here): each part's subset keeps the part's order, but not
 // its history, so the run's sets are marked `subset`, its ledger isn't checked for missing cases, and the gate isn't run.
 import { execFileSync, spawn } from 'node:child_process'
@@ -61,7 +67,7 @@ for (const raw of process.argv.slice(2)) {
   if (match === null) fail(`Unknown argument ${raw}`)
   const name = match[1]!
   if (['both-orders', 'record', 'seed', 'rerun-failed', 'measure-first'].includes(name) && match[2] === undefined) flags.add(name)
-  else if (['browser', 'out', 'config', 'sets', 'groups', 'ids-file', 'reference', 'allow', 'baseline', 'staging'].includes(name) && match[2] !== undefined) options.set(name, match[2])
+  else if (['browser', 'out', 'config', 'sets', 'groups', 'ids-file', 'reference', 'allow', 'baseline', 'staging', 'predictor'].includes(name) && match[2] !== undefined) options.set(name, match[2])
   else fail(`Unknown argument ${raw}`)
 }
 const browser = options.get('browser') as TierBrowser | undefined
@@ -73,6 +79,11 @@ const bothOrders = flags.has('both-orders')
 const measureFirst = flags.has('measure-first')
 if (measureFirst && (flags.has('record') || flags.has('seed'))) fail('--measure-first goes with neither --record (a record is per case, in one pass) nor --seed (seeds describe the usual protocol)')
 const moreRunArgs = measureFirst ? ['--measure-first'] : []
+// Repo-relative, as PREDICTORS names the configurations' own.
+const predictor = options.get('predictor') === undefined ? PREDICTORS[config] : relative(REPO, resolve(options.get('predictor')!))
+const ownPredictor = predictor === PREDICTORS[config]
+if (!ownPredictor && flags.has('seed')) fail('--predictor goes without --seed: seeds describe the configuration\'s own predictor')
+if (!ownPredictor && !existsSync(join(REPO, predictor))) fail(`${predictor}: no such predictor`)
 let sets: TestSet[]
 try {
   sets = selectSets(browser, options.get('sets'), options.get('groups'))
@@ -106,7 +117,7 @@ const library = {
   commit: execFileSync('git', ['rev-parse', 'HEAD'], { cwd: REPO, encoding: 'utf8' }).trim(),
   dirty: execFileSync('git', ['status', '--porcelain', '--', 'rebuild/src', 'rebuild/lab'], { cwd: REPO, encoding: 'utf8' }).split('\n').filter(line => line.length > 3).map(line => line.slice(3)),
 }
-const runRecord: SetsRun = { browser, config, predictor: PREDICTORS[config], build, orders: bothOrders ? 'both' : 'forward', library, sets: [] }
+const runRecord: SetsRun = { browser, config, predictor, build, orders: bothOrders ? 'both' : 'forward', library, sets: [] }
 mkdirSync(outDir, { recursive: true })
 for (const set of sets) {
   const files = partFiles(set, browser)
@@ -146,7 +157,7 @@ function jobState(job: Job): JobState {
 function runJob(job: Job): Promise<number> {
   mkdirSync(job.dir, { recursive: true })
   const args = [LOCK, `sets-${browser}-${config}-${job.name}`, '--max-wait-min=240', '--', 'bun', 'rebuild/lab/run.ts', `--browser=${browser}`, `--cases=${job.cases}`, `--out=${job.dir}`,
-    `--order=${job.order === 'forward' ? 'file' : 'reverse'}`, `--predictor=${join(REPO, PREDICTORS[config])}`, ...job.set.runArgs, ...moreRunArgs]
+    `--order=${job.order === 'forward' ? 'file' : 'reverse'}`, `--predictor=${join(REPO, predictor)}`, ...job.set.runArgs, ...moreRunArgs]
   if (flags.has('record') && job.order === 'forward') args.push('--record-measurements')
   const out = createWriteStream(join(job.dir, 'run.log'))
   const from = Date.now()
@@ -222,6 +233,12 @@ await pool(jobs, 4, async job => {
 })
 const scoreMs = Date.now() - scoreFrom
 if (unscored.length > 0) fail(`score.ts failed on ${unscored.map(job => job.name).join(', ')}; see score.log in each job's folder`)
+
+if (!ownPredictor) {
+  writeFileSync(join(outDir, 'timing.json'), `${JSON.stringify({ browser, config, predictor, orders: runRecord.orders, jobs: jobs.length, jobsRun: toRun.length, runMs, scoreMs, totalMs: Date.now() - started, jobMs }, null, 2)}\n`)
+  log(`done with ${predictor}: browser jobs ${Math.round(runMs / 1000)} s, scoring ${Math.round(scoreMs / 1000)} s. No ledger, transitions or gate for another predictor's rows: compare them with a usual run (bun rebuild/tests/compare-sets.ts ${relative(REPO, outDir)} <usual run>${' [--prediction=line-ranges]'})`)
+  process.exit(0)
+}
 
 // ---- 4 and 5. The ledger and its transitions ----
 

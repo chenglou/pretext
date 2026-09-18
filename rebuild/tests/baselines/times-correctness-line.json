@@ -1,0 +1,83 @@
+{
+  "what": "Times at the correctness line (rebuild/src as at af50a11), for the re-architecture's tripwire (research/ARCHITECTURE-PLAN-2.md \u00a78, X2): tier 2's forward wall time and the giants stay within 2x these. One Mac (18 cores, 36 GB), pinned browsers, headline configuration (no supplied font facts), 2026-09-18.",
+  "giants": {
+    "how": "python3 .artifacts/session/with-browser-lock.py <job> --exclusive -- bun rebuild/lab/run.ts --browser=<b> --cases=.artifacts/lab/cases/giants.ndjson --out=<dir> --chunk=1 --stall-ms=1800000 --predictor=rebuild/lab/baselines/no-facts-predictor.ts; 9 cases, forward, nothing else running. durationMs is run.json's; predictMs, observeMs and nativeMs are the rows' timings summed: the library's prediction, the observation port, and the browser's own layout with its observation.",
+    "runs": ".artifacts/tests/runs/ra0-baselines/giants-no-facts/<browser>",
+    "chrome": {
+      "durationMs": 118826,
+      "predictMs": 49821,
+      "observeMs": 40756,
+      "nativeMs": 16463,
+      "predictMsPerCase": [
+        4029,
+        4492,
+        3368,
+        3453,
+        9630,
+        3604,
+        11026,
+        3438,
+        6781
+      ]
+    },
+    "firefox": {
+      "durationMs": 14566,
+      "predictMs": 4233,
+      "observeMs": 211,
+      "nativeMs": 1142,
+      "predictMsPerCase": [
+        477,
+        344,
+        344,
+        333,
+        850,
+        339,
+        743,
+        330,
+        473
+      ]
+    },
+    "webkit-host": {
+      "durationMs": 325325,
+      "predictMs": 2724,
+      "observeMs": 113900,
+      "nativeMs": 172041,
+      "predictMsPerCase": [
+        237,
+        262,
+        134,
+        138,
+        628,
+        155,
+        836,
+        162,
+        172
+      ]
+    }
+  },
+  "tier2Forward": {
+    "how": "bun rebuild/tests/browser-sets.ts --browser=<b> --config=no-facts --out=<dir>, one browser at a time, three jobs at once; timing.json. Every run: exit 0, 0 status transitions against the frozen ledger, the gate passes.",
+    "runs": ".artifacts/tests/runs/ra0-baselines/t2-forward/<browser>-no-facts",
+    "chrome": {
+      "cases": 66685,
+      "jobs": 18,
+      "browserJobsMs": 74660,
+      "scoringMs": 2265,
+      "totalMs": 77291
+    },
+    "firefox": {
+      "cases": 63771,
+      "jobs": 17,
+      "browserJobsMs": 64029,
+      "scoringMs": 2159,
+      "totalMs": 66562
+    },
+    "webkit-host": {
+      "cases": 63987,
+      "jobs": 17,
+      "browserJobsMs": 99077,
+      "scoringMs": 2093,
+      "totalMs": 101548
+    }
+  }
+}

@@ -5,11 +5,20 @@
 // Environments and timings aren't compared. Rows pair by case id, so the two runs may differ in order.
 //
 //   bun rebuild/lab/compare-rows.ts <rows.ndjson> <other rows.ndjson> [--ids=<id>[,<id>...]] [--report=<file.json>]
+//     [--prediction=line-ranges]
 //
 // It streams the first file and reads the second by byte offset; either may be compressed (rows.ts). --report writes every
 // differing case: for a native observation what the scorer compares (score.ts nativeDifference: line count, every rect's x,
 // width and native line), or that only values outside it differ (y, height, font status); for a prediction and for painted
 // lines the first differing field. Exit 1 when a row is missing or anything differs.
+//
+// --prediction=line-ranges compares the predictions as line ranges alone, for a run of a predictor that returns a
+// LinesPrediction (the re-architecture's plain predictor) against a run whose predictions are engine layouts: a
+// LinesPrediction's lines, and of a layout the lines that have a line box, which are the lines score.ts counts a
+// LinesPrediction's against; every range's start and end must agree, a line's width isn't compared (CSS px on one side,
+// engine units on the other), and neither are painted lines, which a LinesPrediction has none of. The native observations
+// are compared as always: a run that asks Canvas less can leave the page another history. Exit 1 when a row is missing
+// or line ranges differ, 3 when only native observations do.
 import { closeSync, openSync, writeFileSync } from 'node:fs'
 import { plainRows, readLines } from './rows.ts'
 import { indexRows, nativeDifference, nativeView, readRowAt } from './score.ts'
@@ -51,7 +60,22 @@ function firstDifference(before: unknown, after: unknown, path: string): string 
   return null
 }
 
-export async function compareRowFiles(rowsPath: string, otherPath: string, wanted: ReadonlySet<string> | null): Promise<RowComparison> {
+export type PredictionView = 'whole' | 'line-ranges'
+
+// A prediction as line ranges (the file comment), or its error.
+export function lineRanges(prediction: LabRow['prediction']): Array<[number, number]> | { error: string } {
+  if ('error' in prediction) return { error: prediction.error }
+  const out: Array<[number, number]> = []
+  if ('layout' in prediction) {
+    const lines = prediction.layout.lines
+    for (let l = 0; l < lines.length; l++) if (lines[l]!.hasLineBox) out.push([lines[l]!.start, lines[l]!.end])
+  } else {
+    for (let l = 0; l < prediction.lines.length; l++) out.push([prediction.lines[l]!.start, prediction.lines[l]!.end])
+  }
+  return out
+}
+
+export async function compareRowFiles(rowsPath: string, otherPath: string, wanted: ReadonlySet<string> | null, view: PredictionView = 'whole'): Promise<RowComparison> {
   const other = plainRows(otherPath)
   const index = await indexRows(other.path)
   const fd = openSync(other.path, 'r')
@@ -70,9 +94,13 @@ export async function compareRowFiles(rowsPath: string, otherPath: string, wante
       const difference: RowDifference = { id: row.id, family: row.family }
       for (let i = 0; i < PARTS.length; i++) {
         const part = PARTS[i]!
-        if (JSON.stringify(row[part]) === JSON.stringify(otherRow[part])) continue
+        if (view === 'line-ranges' && part === 'painter') continue
+        const ranges = view === 'line-ranges' && part === 'prediction'
+        const mine: unknown = ranges ? lineRanges(row.prediction) : row[part]
+        const theirs: unknown = ranges ? lineRanges(otherRow.prediction) : otherRow[part]
+        if (JSON.stringify(mine) === JSON.stringify(theirs)) continue
         result[part]++
-        const first = firstDifference(row[part], otherRow[part], part) ?? `${part}: key order`
+        const first = firstDifference(mine, theirs, ranges ? 'line ranges' : part) ?? `${part}: key order`
         if (part === 'native') {
           const scorerView = nativeDifference(nativeView(row), nativeView(otherRow))
           if (scorerView !== null) result.nativeScorerView++
@@ -90,6 +118,14 @@ export async function compareRowFiles(rowsPath: string, otherPath: string, wante
   return result
 }
 
+// 0 when nothing differs. Whole predictions: 1 otherwise. Line ranges: 1 when a row is missing or ranges differ, 3 when
+// only native observations do, which are read as history effects of another set of Canvas questions.
+export function comparisonExit(result: { missing: number | string[]; native: number; prediction: number; painter: number }, view: PredictionView): number {
+  const missing = typeof result.missing === 'number' ? result.missing : result.missing.length
+  if (view === 'whole') return missing + result.native + result.prediction + result.painter === 0 ? 0 : 1
+  return missing + result.prediction > 0 ? 1 : result.native > 0 ? 3 : 0
+}
+
 export function comparisonLine(result: RowComparison): string {
   const examples = result.differences.slice(0, 10).map(difference => `${difference.id} ${PARTS.filter(part => difference[part] !== undefined).join('+')}`)
   return `${result.rows} rows: ${result.missing.length} missing in the other file; differing native observations ${result.native} (${result.nativeScorerView} in what the scorer compares), predictions ${result.prediction}, painted lines ${result.painter}${examples.length === 0 ? '' : `; ${examples.join(', ')}`}`
@@ -99,9 +135,10 @@ if (import.meta.main) {
   const paths = process.argv.slice(2).filter(arg => !arg.startsWith('--'))
   const idsArg = process.argv.slice(2).find(arg => arg.startsWith('--ids='))
   const reportArg = process.argv.slice(2).find(arg => arg.startsWith('--report='))
-  if (paths.length !== 2) throw new Error('Usage: bun rebuild/lab/compare-rows.ts <rows.ndjson> <other rows.ndjson> [--ids=<id>[,<id>...]] [--report=<file.json>]')
-  const result = await compareRowFiles(paths[0]!, paths[1]!, idsArg === undefined ? null : new Set(idsArg.slice('--ids='.length).split(',')))
+  const ranges = process.argv.slice(2).includes('--prediction=line-ranges')
+  if (paths.length !== 2) throw new Error('Usage: bun rebuild/lab/compare-rows.ts <rows.ndjson> <other rows.ndjson> [--ids=<id>[,<id>...]] [--report=<file.json>] [--prediction=line-ranges]')
+  const result = await compareRowFiles(paths[0]!, paths[1]!, idsArg === undefined ? null : new Set(idsArg.slice('--ids='.length).split(',')), ranges ? 'line-ranges' : 'whole')
   if (reportArg !== undefined) writeFileSync(reportArg.slice('--report='.length), `${JSON.stringify(result, null, 2)}\n`)
   console.log(comparisonLine(result))
-  process.exit(result.missing.length + result.native + result.prediction + result.painter === 0 ? 0 : 1)
+  process.exit(comparisonExit(result, ranges ? 'line-ranges' : 'whole'))
 }

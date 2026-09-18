@@ -46,13 +46,93 @@ function assignedKey(assigned: RecordedContext['assigned'], names: readonly Sett
 }
 
 // `answeredBy`: per question asked, in order, the index in `record.calls` of the recorded call that answered it. A library
-// that measures as the recorded one did asks the phase's calls in order.
-export type Replay = { asked: number; fromAnotherContext: number; answeredBy: number[]; restore: () => void }
+// that measures as the recorded one did asks the phase's calls in order. `distinct` counts the questions a context wasn't
+// asked before in the phase, so `asked - distinct` are repeats and `asked / distinct` is the ask ratio. `contexts` counts
+// the contexts the phase made, asked or not: the replay's own count, which needs no call log from the library.
+export type Replay = { asked: number; distinct: number; contexts: number; fromAnotherContext: number; answeredBy: number[]; restore: () => void }
+
+// Asks and repeats by library call site (rebuild/tests/replay.ts check --sites). A site is the innermost three library
+// frames of the stack at a measureText call, innermost first, as `function@file:line < ...` with the file relative to
+// rebuild/src; src/measure/canvas.ts is left out, since every call passes through it. `under` counts a call once for every
+// library function on its stack, so "how much sits under lineGaps" is one lookup. JavaScriptCore drops the frame of a
+// function that returns a call directly (a tail call), so a site can lack such a caller.
+export type SiteCount = { asks: number; repeats: number; repeatChars: number }
+// `stacks`: stacks repeat, so each is read once.
+export type SiteTally = { sites: Map<string, SiteCount>; under: Map<string, SiteCount>; stacks: Map<string, { site: string; under: string[] }> }
+
+export const newSiteTally = (): SiteTally => ({ sites: new Map(), under: new Map(), stacks: new Map() })
+
+const LIBRARY = '/rebuild/src/'
+const PASS_THROUGH = '/rebuild/src/measure/canvas.ts'
+const SITE_FRAMES = 3
+
+// A stack's site and the library functions on it. bun prints V8's form: `at name (file:line:column)`, or `at file:line:column`
+// for a function without a name.
+export function siteOf(stack: string): { site: string; under: string[] } {
+  const frames: string[] = []
+  const under: string[] = []
+  const lines = stack.split('\n')
+  for (let i = 1; i < lines.length; i++) {
+    const match = /^\s*at (?:(.*?) \()?(.*?):(\d+):\d+\)?$/.exec(lines[i]!)
+    if (match === null) continue
+    const at = match[2]!.indexOf(LIBRARY)
+    if (at === -1 || match[2]!.endsWith(PASS_THROUGH)) continue
+    const file = match[2]!.slice(at + LIBRARY.length)
+    const name = match[1] ?? '(anonymous)'
+    if (frames.length < SITE_FRAMES) frames.push(`${name}@${file}:${match[3]!}`)
+    const owner = `${name}@${file}`
+    if (!under.includes(owner)) under.push(owner)
+  }
+  return { site: frames.length === 0 ? '(outside rebuild/src)' : frames.join(' < '), under }
+}
+
+function count(counts: Map<string, SiteCount>, key: string, repeat: boolean, chars: number): void {
+  let entry = counts.get(key)
+  if (entry === undefined) {
+    entry = { asks: 0, repeats: 0, repeatChars: 0 }
+    counts.set(key, entry)
+  }
+  entry.asks++
+  if (repeat) {
+    entry.repeats++
+    entry.repeatChars += chars
+  }
+}
+
+export type PageFacts = { userAgent: string; devicePixelRatio: number; pageLang: string }
+
+// The page a layout reads, as globals: the page facts, and `Canvas` as OffscreenCanvas and as a detached <canvas>
+// (src/measure/canvas.ts makes its contexts from either). Returns what puts the old globals back. The replay below and the
+// stand-in Canvas of rebuild/tests/stand-in-canvas.ts are the two pages there are.
+export function installPage(env: PageFacts, Canvas: new () => { getContext(): object }): () => void {
+  const globals = globalThis as Record<string, unknown>
+  const names = ['OffscreenCanvas', 'navigator', 'window', 'document']
+  const before = names.map(name => Object.getOwnPropertyDescriptor(globals, name))
+  const define = (name: string, value: unknown): void => { Object.defineProperty(globals, name, { value, configurable: true, writable: true }) }
+  define('OffscreenCanvas', Canvas)
+  define('navigator', { userAgent: env.userAgent })
+  define('window', { devicePixelRatio: env.devicePixelRatio })
+  define('document', {
+    documentElement: { lang: env.pageLang },
+    createElement(name: string): unknown {
+      if (name !== 'canvas') throw new Error(`This page has no <${name}> element`)
+      return new Canvas()
+    },
+  })
+  return () => {
+    for (let i = 0; i < names.length; i++) {
+      const descriptor = before[i]
+      if (descriptor === undefined) delete globals[names[i]!]
+      else Object.defineProperty(globals, names[i]!, descriptor)
+    }
+  }
+}
 
 // Installs one phase of the record (the predict phase, or the observe phase, where the WebKit observation port measures) as
-// the browser globals a layout reads. restore() puts the old globals back.
-export function installReplay(record: CaseMeasurements, env: { userAgent: string; devicePixelRatio: number; pageLang: string }, phase: 'predict' | 'observe' = 'predict'): Replay {
-  const replay: Replay = { asked: 0, fromAnotherContext: 0, answeredBy: [], restore: () => {} }
+// the browser globals a layout reads. restore() puts the old globals back. With `tally`, every question is counted under its
+// call site.
+export function installReplay(record: CaseMeasurements, env: PageFacts, phase: 'predict' | 'observe' = 'predict', tally: SiteTally | null = null): Replay {
+  const replay: Replay = { asked: 0, distinct: 0, contexts: 0, fromAnotherContext: 0, answeredBy: [], restore: () => {} }
   // Per recorded context: string -> the answers in call order, as indices into record.calls.
   const answers: Array<Map<string, number[]>> = record.contexts.map(() => new Map())
   for (let i = record.phases[phase][0]; i < record.phases[phase][1]; i++) {
@@ -93,6 +173,17 @@ export function installReplay(record: CaseMeasurements, env: { userAgent: string
       const list = answers[from]!.get(text)!
       const nth = this.served.get(text) ?? 0
       this.served.set(text, nth + 1)
+      if (nth === 0) replay.distinct++
+      if (tally !== null) {
+        const stack = new Error().stack ?? ''
+        let read = tally.stacks.get(stack)
+        if (read === undefined) {
+          read = siteOf(stack)
+          tally.stacks.set(stack, read)
+        }
+        count(tally.sites, read.site, nth > 0, text.length)
+        for (let i = 0; i < read.under.length; i++) count(tally.under, read.under[i]!, nth > 0, text.length)
+      }
       const index = list[Math.min(nth, list.length - 1)]!
       replay.answeredBy.push(index)
       const call: RecordedCall = record.calls[index]!
@@ -113,23 +204,14 @@ export function installReplay(record: CaseMeasurements, env: { userAgent: string
     if (found === undefined) throw new NewQuestion(`${api} over ${JSON.stringify(text)} is not in the record`)
     return found
   }
-  const globals = globalThis as Record<string, unknown>
   const intl = Intl as unknown as Record<string, unknown>
-  const before = { OffscreenCanvas: Object.getOwnPropertyDescriptor(globals, 'OffscreenCanvas'), navigator: Object.getOwnPropertyDescriptor(globals, 'navigator'), window: Object.getOwnPropertyDescriptor(globals, 'window'), document: Object.getOwnPropertyDescriptor(globals, 'document') }
   const segment = Intl.Segmenter.prototype.segment
   const v8 = Object.getOwnPropertyDescriptor(intl, 'v8BreakIterator')
-  const define = (name: string, value: unknown): void => { Object.defineProperty(globals, name, { value, configurable: true, writable: true }) }
-  // A layout makes its contexts from OffscreenCanvas or from a detached <canvas> (src/measure/canvas.ts).
-  const Canvas = class { getContext(): ReplayContext { return new ReplayContext() } }
-  define('OffscreenCanvas', Canvas)
-  define('navigator', { userAgent: env.userAgent })
-  define('window', { devicePixelRatio: env.devicePixelRatio })
-  define('document', {
-    documentElement: { lang: env.pageLang },
-    createElement(name: string): unknown {
-      if (name !== 'canvas') throw new Error(`The replay has no <${name}> element`)
-      return new Canvas()
-    },
+  const restorePage = installPage(env, class {
+    getContext(): ReplayContext {
+      replay.contexts++
+      return new ReplayContext()
+    }
   })
   Intl.Segmenter.prototype.segment = function (this: Intl.Segmenter, text: string): Intl.Segments {
     const found = segmentation('segmenter', text) as Extract<RecordedSegmentation, { api: 'segmenter' }>
@@ -151,10 +233,7 @@ export function installReplay(record: CaseMeasurements, env: { userAgent: string
     delete intl['v8BreakIterator']
   }
   replay.restore = () => {
-    for (const [name, descriptor] of Object.entries(before)) {
-      if (descriptor === undefined) delete globals[name]
-      else Object.defineProperty(globals, name, descriptor)
-    }
+    restorePage()
     Intl.Segmenter.prototype.segment = segment
     if (v8 === undefined) delete intl['v8BreakIterator']
     else Object.defineProperty(intl, 'v8BreakIterator', v8)
