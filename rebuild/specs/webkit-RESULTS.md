@@ -184,8 +184,10 @@ whose two orders agree, each alone in a fresh process (`runs/isolate-<set>`, 400
 | held-out 09-16 | 144 | 68 | 212 / 212 / 210 (2 unobserved) | 129 / 129 | 0 |
 | families | 6 | 76 | 82 / 82 / 50 (32 fail, `rule/controls` steps) | 82 / 82 | 0 |
 
-- The history-free prediction is the native layout of every case alone, outside the control-width steps. 94 of the 170
-  cases whose orders agree still differ from the case alone in both orders: two orders can't see history both share.
+- The history-free prediction is the native layout of every case alone, outside the control-width steps. 116 of the 170
+  cases whose orders agree differ from the case alone in both orders (15, 57 and 44): two orders can't see history both
+  share. Alone, every history-dependent development and held-out case equals exactly one of its two orders (the forward
+  one differs for 42 of 80 and 72 of 144).
 - **One condition bug found and fixed.** Before the fix 9 development rows of `suite/original-vs-reshaped-admission` failed
   uncovered in reverse order and held-out `c-d7754587b964dea1` forward. A line that starts with a carried width was laid
   out in a world with the own carried width whenever the world's item started where the own item does; the carried width is
