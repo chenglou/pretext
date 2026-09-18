@@ -266,19 +266,28 @@ const UNKNOWN_FONT_FACTS: FontFacts   // every fact null, no `fonts`
 
 Engines read facts about the fonts a declaration realizes: which family is primary, whether it maps U+2010, whether it
 has the monospace trait or an opsz axis, whether the font drawing Arabic shapes through OpenType tables or `morx`.
-Canvas shows none of these. A heuristic that guesses them from family names is a rule nobody can cite, and a constant
-chosen by lab counts fits the lab's font mix. So each fact is an input on the font declaration. When a fact is null,
-the engine uses a default that plain Canvas measurement gives, and reports the named gap wherever the fact decides a
-result. A given fact never produces a gap of its own.
+No measured width of the paragraph's text shows these. A heuristic that guesses them from family names is a rule nobody
+can cite, and a constant chosen by lab counts fits the lab's font mix. So each fact is an optional input on the font
+declaration, and the headline configuration gives none (CHARTER.md, decisions of 2026-09-18).
 
-| Fact | Read by | Rule | Default when null | Gap when null |
-|---|---|---|---|---|
-| `primaryFamily`: the family the browser realizes first; a generic keyword stands for itself | Blink and Gecko for their system-font keywords; WebKit for Courier New | Blink's primary font is the first listed family that exists (`PrimaryFont` with `should_contain_glyph` false, `font_fallback_list.h:141-145`); WebKit's index-0 family (`FontCascadeFonts.cpp:200-218`); Courier New gets no width shortcut by family name (`FontCoreText.cpp:776-782`) | the first family in the list | none; the facts that depend on it report theirs |
-| `mapsHyphen`: the primary font maps U+2010 | Blink, WebKit | a chosen soft hyphen is U+2010 when the primary font maps it, else U+002D (`computed_style.cc:1804-1820`; `StyleComputedStyle.cpp:419-435`) | U+2010, measured in the run's context | `hyphen-glyph` at a chosen soft hyphen where Canvas gives `‐` and `-` different widths in that context |
-| `monospace`: the primary font has `kCTFontMonoSpaceTrait` or `kCTFontFixedAdvanceAttribute` | WebKit | `Font::determinePitch` (`FontCoreText.cpp:753-785`); fixed pitch enables the width shortcut and the breakWord shortcut (specs/webkit-gaps.md §2.3) | variable pitch: real advances | `fixed-pitch-path` where a text item of a box that allows simplified measuring doesn't measure `f32(length × W(' '))` (webkit-gaps §2.5, test T1) |
-| `opticalSizeAxis`: the fonts drawing the declaration have an opsz axis | Blink at layout zoom ≠ 1; Gecko | Blink's DOM shapes at the zoomed size with opsz at the CSS size (`font_platform_data_mac.mm:170-176`); Gecko's OffscreenCanvas uses the axis default (specs/gecko-canvas.md §1.2 C1a) | true when `primaryFamily` is the engine's system-font keyword (Blink: `system-ui`, `BlinkMacSystemFont`; Gecko: `system-ui`, `-apple-system`), else false | `optical-size`: Blink wherever layout zoom ≠ 1; Gecko for every run |
-| `joining`: how the font drawing joining-script text shapes | Blink | HarfBuzz's Arabic shaper reads the shaping call's context for OpenType fonts; `morx` fonts never read it (`hb-ot-shape.cc:60-66, 100-101`) | each shaping call's text measured alone, which is what an AAT font gives | `joining-technology` at a shaping-call edge between joining letters |
-| `pairKerning`: where HarfBuzz puts a pair adjustment between two glyphs of the primary font's Latin text | Blink | GPOS PairPos with ValueFormat1 XAdvance and no ValueFormat2 adds it to the first glyph's advance (`PairSet.hh:126-127`); the kern and kerx pair machine adds `kern >> 1` to the first glyph and the rest to the second (`hb-kern.hh:102-106`); which one applies follows the font's GPOS, kern and kerx tables (`hb-ot-shape.cc:150-185`, harfbuzz dfdc088c) | all of it on the first glyph | `unsafe-to-break` at a line edge taken from the paragraph's positions where the adjustment isn't 0 |
+Four of them a dedicated Canvas check can answer, and the library asks before the engines run (`measure/font-checks.ts`,
+which cites each rule and says what it can't see; `prepareParagraph` in `index.ts` is the one call site, and the engines
+read `FontFacts` as before): the primary family and U+2010 coverage by the two-fallback test (a string measured under
+`F, monospace` and under `F, serif`), in Blink joining (U+0628 next to U+07FA, shaped in a call of its own with context)
+and `opticalSizeAxis: false` (advances scale between the CSS and the zoomed size), in WebKit `monospace` as a registered
+heuristic. A check runs only where the engine reads the fact and the paragraph's text can need it; a supplied fact is
+never checked; Gecko is asked nothing, since nothing it loses without facts is learnable. When a fact is still null, the
+engine uses a default that plain Canvas measurement gives, and reports the named gap wherever the fact decides a result.
+A given fact never produces a gap of its own.
+
+| Fact | Read by | Rule | Asked of Canvas | Default when null | Gap when null |
+|---|---|---|---|---|---|
+| `primaryFamily`: the family the browser realizes first; a generic keyword stands for itself | Blink and Gecko for their system-font keywords; WebKit for Courier New | Blink's primary font is the first listed family that exists (`PrimaryFont` with `should_contain_glyph` false, `font_fallback_list.h:141-145`); WebKit's index-0 family (`FontCascadeFonts.cpp:200-218`); Courier New gets no width shortcut by family name (`FontCoreText.cpp:776-782`) | WebKit, and Blink where another check needs it: the first listed family that draws U+0020 | the first family in the list | none; the facts that depend on it report theirs |
+| `mapsHyphen`: the primary font maps U+2010 | Blink, WebKit | a chosen soft hyphen is U+2010 when the primary font maps it, else U+002D (`computed_style.cc:1804-1820`; `StyleComputedStyle.cpp:419-435`) | Blink, WebKit, where the paragraph holds U+00AD: the two-fallback test on U+2010 | U+2010, measured in the run's context | `hyphen-glyph` at a chosen soft hyphen where Canvas gives `‐` and `-` different widths in that context |
+| `monospace`: the primary font has `kCTFontMonoSpaceTrait` or `kCTFontFixedAdvanceAttribute` | WebKit | `Font::determinePitch` (`FontCoreText.cpp:753-785`); fixed pitch enables the width shortcut and the breakWord shortcut (specs/webkit-gaps.md §2.3) | WebKit: `i`, `M`, `.` and the space have one advance (a registered heuristic) | variable pitch: real advances | `fixed-pitch-path` where a text item of a box that allows simplified measuring doesn't measure `f32(length × W(' '))` (webkit-gaps §2.5, test T1) |
+| `opticalSizeAxis`: the fonts drawing the declaration have an opsz axis | Blink at layout zoom ≠ 1; Gecko | Blink's DOM shapes at the zoomed size with opsz at the CSS size (`font_platform_data_mac.mm:170-176`); Gecko's OffscreenCanvas uses the axis default (specs/gecko-canvas.md §1.2 C1a) | Blink at zoom ≠ 1, only ever `false`; never for the system font keywords; Gecko's OffscreenCanvas shows nothing | true when `primaryFamily` is the engine's system-font keyword (Blink: `system-ui`, `BlinkMacSystemFont`; Gecko: `system-ui`, `-apple-system`), else false | `optical-size`: Blink wherever layout zoom ≠ 1; Gecko for every run |
+| `joining`: how the font drawing joining-script text shapes | Blink | HarfBuzz's Arabic shaper reads the shaping call's context for OpenType fonts; `morx` fonts never read it (`hb-ot-shape.cc:60-66, 100-101`) | Blink, where the text holds a joining-script letter; null for fonts whose joined forms are as wide as isolated ones | each shaping call's text measured alone, which is what an AAT font gives | `joining-technology` at a shaping-call edge between joining letters |
+| `pairKerning`: where HarfBuzz puts a pair adjustment between two glyphs of the primary font's Latin text | Blink; Gecko for in-word positions between kerned glyphs (`in-word-prefix` when null); WebKit for the space a text item is measured with (`simplified-measuring` when null) | GPOS PairPos with ValueFormat1 XAdvance and no ValueFormat2 adds it to the first glyph's advance (`PairSet.hh:126-127`); the kern and kerx pair machine adds `kern >> 1` to the first glyph and the rest to the second (`hb-kern.hh:102-106`); which one applies follows the font's GPOS, kern and kerx tables (`hb-ot-shape.cc:150-185`, harfbuzz dfdc088c) | no: Canvas totals don't show which glyph carries it | all of it on the first glyph | `unsafe-to-break` at a line edge taken from the paragraph's positions where the adjustment isn't 0 |
 
 What a given fact does:
 
@@ -366,9 +375,9 @@ says when.
 | webkit/output/pre-wrap-trailing-marked-hanging, fragment-levels-rederived | heuristic | removed: fragments come from the closed `Line::Run` list |
 | gecko/output/width-copies-lab-extent, positive-advance-rect-rule | by score | removed: frames (§2.5); the rect rule belongs to the observation port (§9) |
 | gecko/output/tab-marked-hanging | heuristic | removed: hanging content from Gecko's own `CharIsSpace` flags (`gfxTextRun.cpp:1152-1159`) |
-| webkit/gap/canvas-language | by score | the condition from source without narrowing by counts: generic families resolved per locale, `system-ui` and `ui-*`, and Han, kana or Hangul fallback (`FontGenericFamilies.cpp:50-66`, `FontCacheCoreText.cpp:585-598, 822`); later from Core Text cascades dumped per language |
+| webkit/gap/canvas-language | by score | generic families are measured, not reported: WebKit asks Core Text for a per-language family (`CTFontDescriptorCreateForCSSFamily`, `SystemFontDatabaseCoreText.cpp:320-365`) and looks it up by name, so the port names that family in the Canvas list, from macOS 27.0's answers dumped per language (`data/webkit/coretext-macos27/css-families.tsv`, `engines/webkit/fonts.ts`; engine data, CHARTER.md decision 4), and `-webkit-standard` from the settings' standard family per script (`SettingsBaseCocoa.mm:44-50`); `FontFacts` is unchanged. A named family settles its own characters under every locale (probes webkit-round4 R7, R12). Still reported: system design families, an emoji-presentation character only a generic could draw, and system fallback by language, whose character table is a registered heuristic (`FontCacheCoreText.cpp:775-790` is closed in Core Text) |
 | webkit/gap/simplified-measuring | by score | reported for every simplified-path box outside the width shortcut until a probe settles the float32 summing order (probes-safari correction 5) |
-| shared/env/engine-from-user-agent | heuristic | the user agent gives the engine only; the build and the browser process's languages are given facts (§1.4) |
+| shared/env/engine-from-user-agent | heuristic | the user agent gives the engine only; the build and the browser process's languages are given facts, and what the engine's recipes assume of Canvas is asked of the running browser (§1.4) |
 | blink/measure/ignorables-left-out-if-8bit | heuristic | a probe of the unexplained RLM case before keeping a storage-based rule (blink audit D2); `soft-hyphen-shaping` meanwhile |
 | blink/measure/v8-short-slice-storage, force-16bit-string | heuristic | V8's substring and concat rules cited at Chrome 153's V8 pin, or probed per length (blink audit E3) |
 | blink/shape/wide-group-halved | heuristic | the cut keeps its source trigger, 256 zoomed px; the cut location reports `unsafe-to-break` where the safe test can't vouch for it (blink audit E4) |
@@ -410,15 +419,43 @@ type Environment = BlinkEnvironment | WebKitEnvironment | GeckoEnvironment
 const PINNED_BUILDS = { blink: '153.0.8010.48', webkit: '22625.1.29.11.27', gecko: '156.0' }
 ```
 
-The library reads only page facts (CHARTER.md, "Boundaries"). `detectEngine()` reads the engine from the user agent.
-`detectEnvironment(given)` checks that engine against the given facts, then reads `devicePixelRatio`,
-`document.documentElement.lang` and which segmenters `Intl` has. Everything else is `GivenFacts`, a union with the
-build, `contentLanguage` and that engine's process languages. Tests, and predictions for another runtime, build an
-Environment directly.
+The library reads only page facts (CHARTER.md, "Boundaries"), in two steps by what can change while the page lives:
+
+- `detectEngine()`, once per page: the engine from the user agent, and whether this browser's Canvas has what that
+  engine's measuring recipes assume (below). A page calls it first anyway, to know which engine's facts to give.
+- `detectEnvironment(given)`, again whenever zoom or `<html lang>` changes: it checks the user agent's engine against the
+  given facts, then reads `devicePixelRatio`, `document.documentElement.lang` and which segmenters `Intl` has. It asks
+  Canvas nothing. Everything else is `GivenFacts`, a union with the build, `contentLanguage` and that engine's process
+  languages.
+
+Both answer `supported`, or `unsupported` with the user agent and a reason. Tests, and predictions for another runtime,
+build an Environment directly.
+
+**Canvas checks** (`measure/canvas-checks.ts`). The build number can't tell whether a browser's Canvas is one the recipes
+can read: builds near the pinned ones predict as well as the pinned ones under `engine-build`, while on Firefox 140 ESR,
+whose native layout is 98.3% the same as 156's, line counts fell from 99.8% to 89.2% because its context has no `lang` and
+keeps the Gecko port's 0.001px letter spacing as a fraction (research/VERSION-DRIFT.md). A missing context attribute
+doesn't fail: assigning it makes an ordinary property, and the recipe reads a width measured some other way. So each
+port's list is read from its recipes, naming only what a recipe sets to something other than the attribute's default, and
+checked in the running browser with two contexts and two `measureText` calls, with no browser or version names:
+
+| Port | Context attributes | Ink box (`actualBoundingBoxLeft`, `Right`) | Ligature-free letter spacing |
+|---|---|---|---|
+| Blink | `lang`, `letterSpacing`, `textRendering`, `direction` | HanKerning's glyph types | `0.015625px` adds exactly 1/64 px to each character |
+| WebKit | `letterSpacing`, `wordSpacing` (its context has no `lang`, `fontKerning` or `textRendering`, and the port assigns those their defaults only) | not read | none: WebKit's Canvas keeps optional ligatures under letter spacing |
+| Gecko | `lang`, `letterSpacing`, `direction` | the ligature test and the emoji font test | `0.001px` adds nothing to a character's width and leaves the ink box where it was |
+
+The letter spacing is measured over one letter 16 times in `16px serif`: a Canvas that adds the spacing as a fraction and
+rounds the total shows nothing on a letter or two. A browser that lacks something is unsupported, and the reason names
+each lack; no prediction is sound without them, so none becomes a gap. Probe `probes/canvas-checks.ts` runs the library's
+own `detectEngine()` in a browser: the pinned Chrome 153.0.8010.50, Firefox 156.0 and webkit-host, and Chrome 152 and 155
+and Firefox 153.3esr and 157.0b2, are supported; Firefox 140.16.0esr is refused for the missing `lang`, the spacing
+(0.00104px a character) and the ink box it moves. The lab's predictor derives the engine from the browser it launched and
+doesn't call `detectEngine()`, so neither the recorded Canvas answers nor the offline replay hold the checks' calls.
 
 | Field | Source | What reads it |
 |---|---|---|
-| `engine` | `navigator.userAgent`: `Firefox/`, `Chrome/` (not `Edg/` or `OPR/`), `Version/… Safari/` | the one switch (§3) |
+| `engine` | `navigator.userAgent`: `Firefox/`, `Chrome/` (not `Edg/` or `OPR/`), `Version/… Safari/`; `detectEngine()` also checks the running Canvas (above) | the one switch (§3) |
 | `build` | given: the app bundle version (Chrome's and Firefox's `CFBundleShortVersionString`, WebKit.framework's `CFBundleVersion`). Chrome's reduced user agent shows only the major version | `layoutParagraph` reports `engine-build` when it isn't `PINNED_BUILDS[engine]`, null included, and the layout records the environment it ran under |
 | `devicePixelRatio` | `window.devicePixelRatio` | Blink: the layout zoom, device scale factor times browser zoom (specs/blink-lines.md §2.1; an emulated DPR lays out at zoom 1). Gecko: app units per device pixel = max(1, round(60 / dpr)) (specs/gecko-lines.md §2.1). WebKit: nothing on the line-breaking path (specs/webkit-lines.md §1.6) |
 | `pageZoom` (WebKit) | given | Safari's page zoom multiplies lengths and font sizes, and no page API shows it. null: laid out at 1 with `page-zoom`. Blink and Gecko include browser zoom in the DPR |
@@ -458,8 +495,8 @@ makes such content report `ui-language`:
 The lab sets or reads these when it launches a browser and records them per run (`lab/types.ts` `ProcessLanguages`,
 §8.3 stage 0): the application locale Chrome is launched with; the override languages webkit-host's UI process can send,
 or the system preferred languages installed Safari's WebContent takes, and launchd's `LANG` and `LC_*`; the OS system
-locales Firefox reads. `contentLanguage` and `regionalPrefsLocale` were given facts no engine read (research/CHARTER-CRITIC.md
-items 10 and 11); stage 5 has the owners read them where the source does.
+locales Firefox reads. Gecko reads `regionalPrefsLocale` since ceiling round 2; `contentLanguage` is read by Blink alone
+(research/CHARTER-CRITIC.md item 10).
 
 **Predicting one engine from another runtime.** Canvas totals come from the running browser: Core Text advances in
 Safari, Gecko's per-glyph app-unit rounding, Blink's HarfBuzz advances. An environment built for another engine gets
@@ -606,14 +643,16 @@ type BlinkLineGeometry = {
 }
 type BlinkMappingUnit = { run: number; start: number; end: number; textStart: number; textEnd: number; collapsed: boolean }
 type BlinkItem =
-  | { kind: 'text'; run: number; textStart: number; textEnd: number; level: number; x: number; inlineSize: number; clusters: BlinkGlyphCluster[] }
+  | { kind: 'text'; run: number; textStart: number; textEnd: number; level: number; x: number; inlineSize: number; clusters: BlinkGlyphCluster[];
+      runs: BlinkShapeRun[]; partsKnown: boolean; sizeLimit?: GapName }
   | { kind: 'tab'; run: number; textStart: number; textEnd: number; level: number; x: number; inlineSize: number; clusters: BlinkGlyphCluster[] }
   | { kind: 'forced-break'; run: number; textStart: number; textEnd: number; level: number; x: number; inlineSize: number }
   | { kind: 'hyphen'; run: number; level: number; x: number; inlineSize: number }
   | { kind: 'inline-box'; element: number; x: number; inlineSize: number; hasStartEdge: boolean; hasEndEdge: boolean }
   | { kind: 'atomic'; element: number; level: number; x: number; inlineSize: number; marginStart: number; marginEnd: number }
   | { kind: 'br'; element: number; level: number; x: number; inlineSize: number }
-type BlinkGlyphCluster = { textStart: number; textEnd: number; graphemeStarts: number[]; advance: number }   // advance in 16.16
+type BlinkGlyphCluster = { textStart: number; textEnd: number; graphemeStarts: number[]; graphemesLimit?: GapName; advance: number; startLimit?: GapName }   // advance in 16.16
+type BlinkShapeRun = { textStart: number; textEnd: number; reshaped: { textStart: number; textEnd: number } | null; fontsKnown: boolean }
 ```
 
 - **Items** are the line's fragment items (`logical_line_builder.cc:200-464`): a text item per non-empty item result,
@@ -636,6 +675,22 @@ type BlinkGlyphCluster = { textStart: number; textEnd: number; graphemeStarts: n
   `graphemeStarts` lets `CaretPositionForOffset` split a cluster's advance equally among its graphemes
   (`shape_result.cc:310-329`). Advances come from Canvas prefix widths at cluster boundaries, which is where the
   `in-word-prefix`, `unsafe-to-break` and `glyph-clusters` gaps apply.
+- **Stand-ins are marked** (ceiling rounds 3 and 4; `model.ts` has each condition). A cluster's `startLimit` names the
+  gap under which the advance sum before it is a Canvas stand-in (between letters HarfBuzz joins, inside a possible
+  ligature, at a pair adjustment no fact places), and a text item's `sizeLimit` the same for its end, which moves the x of
+  the items after it. The observation port reports a value as predicted only where the layout knows the item's x and
+  the position inside it.
+- **Runs** are the runs of the item's shape result, which `PositionForOffset` walks by their character counts and whose
+  widths it adds as floats (`shape_result.cc:696-733`), so past 256 zoomed px a caret depends on where the runs are.
+  `reshaped` is the text a run's glyphs were shaped from alone, where `ShapeLine` reshaped a line start or end
+  (`shaping_line_breaker.cc:309-324`, `:497-553`) or `TruncateLineEndResult` the text before a removed space; null for
+  glyphs of the paragraph's shape result. It is what a painter needs to know about a line laid out alone (§7).
+  `fontsKnown` says whether the coverage facts name the font of every cluster; otherwise the run may be several.
+  `partsKnown` is false where Blink's view may have other parts than the port's: the port's safe offsets pass its own
+  width tests, which HarfBuzz's unsafe-to-break flags needn't, so it is false on most wrapped lines, and values within a
+  float step of a LayoutUnit edge are then limited past 256 px unless the advances' granularity keeps sums exact. In an
+  RTL item whose view may be numbered otherwise, a cluster of several code points carries `graphemesLimit`: Blink lists a
+  run's graphemes by the view's part numbers (`shape_result.cc:186-214`).
 - **The mapping** is Blink's `OffsetMapping` over the line's source units while it is one-to-one (no `text-transform`):
   a collapsed unit maps to an empty text_content range, and a unit Blink generated, such as U+200B after leading
   preserved spaces, the U+200B of a `<wbr>` or the U+FFFC of an atomic inline, has an empty source range. Trimmed spaces,
@@ -968,22 +1023,20 @@ with spaces and starts a paragraph after each preserved newline (gecko-text §4.
 
 ### 4.1 Which Canvas
 
-Blink and WebKit measure with a main-thread `OffscreenCanvas`, and Gecko with a detached `<canvas>` element where the page
-can create one:
+Every engine measures with a main-thread `OffscreenCanvas`:
 
 - Blink: a connected `<canvas>` keeps the element's CSS letter and word spacing, feature settings and optical sizing in
   its font description (specs/blink-canvas.md §1.2), and a worker canvas uses the UI language.
 - WebKit: a connected `<canvas>` copies the element's font description (specs/webkit-canvas.md §1.3). It would supply a
   locale, but it needs style updates, and the rest of the description leaks in.
-- Gecko: a `<canvas>` element quantizes `size / DPR`, measures on a 1/apd grid and sets opsz and `trak` at `size / DPR`
-  (specs/gecko-canvas.md §1.10). At the DOM's device font size, size × 60 / apd, that is the DOM's own arithmetic: its
-  font comes from the pres context's font cache at the DOM's size, and its text runs have the page's apd
-  (CanvasRenderingContext2D.cpp:4256-4269, :4353, :7132-7155), so width × apd is the DOM's advance, per glyph rounding,
-  bitmap emoji sizes, synthetic bold and optical sizing included (probes gecko-port F13, F14: 369 of 369 units and rows
-  equal). The element is never connected, so nothing is styled or laid out for it. Without a document
-  (`GeckoEnvironment.canvasElement` absent) the port falls back to an OffscreenCanvas at the CSS size, which shapes at
-  another scale with apd 60 and its own font group, and reports the gaps that leaves (ceiling round 3,
-  specs/gecko-RESULTS.md).
+- Gecko: a `<canvas>` element at the DOM's device font size holds the DOM's own advances (probes gecko-port F13, F14),
+  and was ceiling round 3's measuring path. It needs `document` and shares the DOM's font groups, and the maintainer
+  decided on 2026-09-18 that Gecko measures on an OffscreenCanvas always (CHARTER.md, decision 2). That canvas shapes at
+  the CSS size at 60 au per px with a font group of its own (CanvasRenderingContext2D.cpp:4423-4492, :7135-7140) and
+  never applies optical sizing. What it leaves: `optical-size`, `bitmap-emoji-size`, `font-size-quantization` and two
+  residual classes (specs/gecko-RESULTS.md "Ceiling round 4").
+
+What the recipes below assume of the Canvas API is checked once per page (§1.4, "Canvas checks").
 
 ### 4.2 Context settings
 
@@ -992,7 +1045,7 @@ one OffscreenCanvas per distinct settings. Identity matters because Chrome cache
 
 | Setting | Blink | WebKit | Gecko |
 |---|---|---|---|
-| `font` | size `f32(size × layoutZoom)`, or the CSS size for fonts with `opticalSizeAxis` (§4.3) | size × `pageZoom` | the device size, size × 60 / apd, behind the quantization gate, on a canvas element (`element: true`); on the OffscreenCanvas fallback the CSS size, and Apple Color Emoji at size × DPR |
+| `font` | size `f32(size × layoutZoom)`, or the CSS size for fonts with `opticalSizeAxis` (§4.3) | size × `pageZoom`; a generic keyword is named as the family the locale resolves it to (§1.3) | the CSS size behind the quantization gate; Apple Color Emoji also at size × DPR, and under a bold font at weight 400 (synthetic bold's steps, gecko-RESULTS round 4) |
 | `lang` | the run's locale, explicit | `''`: OffscreenCanvas has no locale | the run's language, explicit, so Gecko's `explicitLang` is true |
 | `letterSpacing` | the run's px: Canvas truncates to 16.16 and turns off liga, clig and calt like the DOM (blink-text H27) | the run's px: the same `WidthIterator` rule | `'0.001px'` when the resolved spacing isn't 0 au (ligatures off, no spacing added), else `'0px'`; spacing added in JS |
 | `wordSpacing` | `'0px'`; JS adds `trunc(ws × 65536)` per space except text_content index 0 (blink-text §2.E) | the box's word spacing, which setWordSpacing gives the context's FontCascade (CanvasRenderingContext2DBase.cpp:3299-3324), so WidthIterator adds it in the DOM's float32 order within one item's TextRun; strings split at TABs add it in JS, and the offsets between items follow specs/webkit-lines.md §6.2 (ceiling round 2) | `'0px'`; JS adds au after U+0020 and NBSP (gecko-text §12.2) |
@@ -1020,10 +1073,11 @@ decimal that parses back to the same double, so a float32 size reaches the CSS p
 - **Gecko**: the DOM size is `NSToIntRound(f32(q10(px)) × 60) / 60`, with Servo's 10-bit size quantization, and Canvas
   quantizes to 7 significant bits (specs/PROBES.md, gecko-canvas H3 correction). An engine measures only when the two
   agree: integers, halves and quarters below 32px agree; 13.33px becomes 13.375px in Canvas, so it reports
-  `font-size-quantization`. A canvas element takes its font size over the CSS-to-device scale before it quantizes, so at
-  the device size the same gate holds and `au = round(W × apd)`. On the OffscreenCanvas fallback, for Apple Color Emoji
-  at DPR d the DOM asks Core Text at the device size: measure at that size and scale, `au = round(W × 60) × apd / 60`
-  (specs/gecko-canvas.md §2 A12). 12px at DPR 2: Canvas at 24px gives 25px, so the DOM width is 12.5px.
+  `font-size-quantization`. For Apple Color Emoji at DPR d the DOM asks Core Text at the device size: measure at that
+  size and scale, `au = round(W × 60) × apd / 60` (specs/gecko-canvas.md §2 A12). 12px at DPR 2: Canvas at 24px gives
+  25px, so the DOM width is 12.5px. `measureText` returns `float(au) / 60` as a float
+  (CanvasRenderingContext2D.cpp:5277), so `au = round(W × 60)` is exact only below 2^18 px; the space-in-shaping test runs
+  in windows under that, and a wider unit reports `float32-precision`.
 
 ### 4.4 Recipes
 
@@ -1097,6 +1151,12 @@ Measuring the same text in the same context again returns the same bits in all t
 node for the whole string; WebKit and Gecko shape the same way), so the memo can't change a result. It lives as long as
 the `Measurer`, which `prepareParagraph()` creates per paragraph and every `layoutLine` from it shares.
 
+The runtime font checks (§1.2) measure through the same measurer, so their calls are in the log; their contexts carry
+`partition: 'font-checks'`, so no engine measurement shares a Blink word cache with them, and their answers are kept per
+check, declaration and language for the measurer's life. While a measurer lives one paragraph they cost about 14 calls a
+paragraph in Chrome and webkit-host; a measurer that outlives a paragraph pays them once per declaration. The Canvas
+checks of engine detection (§1.4) go through no measurer and are in no log.
+
 ## 5. Gaps
 
 "Handled" means the recipe gives the DOM's value. A named gap is reported in `layout.gaps` or `line.gaps` (§2.8) under
@@ -1108,28 +1168,28 @@ the stated condition. A given fact never reports a gap; its null default does.
 | Soft hyphen shaping (`soft-hyphen-shaping`) | Blink | Blink's Canvas turns SHY into ZWSP, which splits a 16-bit Canvas word; the DOM shapes SHY inside the item as a hidden glyph. WebKit's Canvas and DOM both keep SHY during shaping. Gecko's DOM discards SHY before shaping. | Blink: measure the word without the SHY. WebKit: keep it. Gecko: strip it. | Blink: a kerning or ligature pair across a soft hyphen. |
 | Hyphen glyph (`hyphen-glyph`) | Blink, WebKit | The hyphen is U+2010 if the primary font maps it, else `-`. Canvas can't show whether the primary font maps U+2010, because fallback supplies it. | Fact `mapsHyphen` (§1.2). Gecko's Canvas substitutes as its DOM does. | `mapsHyphen` null and `W('‐') ≠ W('-')` in the run's context at a chosen soft hyphen. |
 | Letter spacing and ligatures (`letter-spacing-ligatures`) | WebKit | The DOM turns off liga, clig, dlig and hlig when letter spacing isn't 0; OffscreenCanvas keeps them (webkit-canvas §1.3, H3). Blink's Canvas and DOM agree (H27). Gecko's DOM decides on the rounded au value, Canvas on the float. | Blink: `ctx.letterSpacing`. Gecko: `'0.001px'` plus JS spacing. WebKit: none. | WebKit: a line measuring two adjacent characters that aren't white space or controls, in a box with letter spacing (a ligature replaces at least two glyphs; Canvas can't show which pairs a font ligates). |
-| Canvas language (`canvas-language`) | WebKit | Blink's OffscreenCanvas resolves `<html lang>` when the font string is set and keeps it until the string changes (blink-canvas H13); Gecko's resolves per call; WebKit's has no locale. The DOM uses the element's language for generic families, CJK fallback and `locl`. | Blink and Gecko: an explicit `ctx.lang` per context. WebKit: none. | WebKit: a line measuring text of a box with a locale whose fonts depend on it: any of its text under generic families resolved per script, `system-ui` and `ui-*`; its Han, kana or Hangul code points under fallback (§1.3). |
-| Optical size (`optical-size`) | Blink at zoom ≠ 1, Gecko | Blink's DOM shapes at the zoomed Core Text size with opsz and ptem at the CSS size (blink-canvas §1.8). Gecko's OffscreenCanvas never sets auto optical sizing (gecko-canvas §1.2 C1a). WebKit shares the DOM path. | Fact `opticalSizeAxis` (§1.2): Blink measures at the CSS size and scales. | Blink: `opticalSizeAxis` null at layout zoom ≠ 1. Gecko: `opticalSizeAxis` true or null. |
+| Canvas language (`canvas-language`) | WebKit | Blink's OffscreenCanvas resolves `<html lang>` when the font string is set and keeps it until the string changes (blink-canvas H13); Gecko's resolves per call; WebKit's has no locale. The DOM uses the element's language for generic families, CJK fallback and `locl`. | Blink and Gecko: an explicit `ctx.lang` per context. WebKit: a generic keyword is measured as the family the locale resolves it to, named in the Canvas list (§1.3); a named family settles its own characters under every locale. | WebKit: a line measuring text under the system design families (`system-ui`, `ui-*`); a character with default emoji presentation that only a named generic could draw; characters no list family draws whose system fallback a language moves (the registered table of §1.3: Han, kana, Hangul and their punctuation and symbol blocks under Han, kana and Hangul locales, Arabic under ur and ks). |
+| Optical size (`optical-size`) | Blink at zoom ≠ 1, Gecko | Blink's DOM shapes at the zoomed Core Text size with opsz and ptem at the CSS size (blink-canvas §1.8). Gecko's OffscreenCanvas never sets auto optical sizing (gecko-canvas §1.2 C1a). WebKit shares the DOM path. | Fact `opticalSizeAxis` (§1.2): Blink measures at the CSS size and scales, and asks Canvas whether the primary family scales linearly where the fact isn't given. Gecko: none; every width of such a run is a stand-in. | Blink: `opticalSizeAxis` still null at layout zoom ≠ 1 (the system font keywords, a primary family without Latin letters, a font that doesn't scale linearly). Gecko: `opticalSizeAxis` true or null, which without supplied facts is nearly every run (CHARTER.md, decision 2). |
 | Gecko size quantization (`font-size-quantization`) | Gecko | Canvas keeps 7 significant bits; the DOM uses Servo's 10-bit size on a 1/60 px grid. | The gate in §4.3. | Sizes such as 13.33px, 16.8px or odd eighths. |
-| Bitmap emoji (`bitmap-emoji-size`) | Blink, Gecko at DPR ≠ 1 | The DOM asks Core Text for the sbix advance at the device size. | Measure at size × DPR and divide. | Gecko: fractional apd (one device pixel off at apd 27, probe cross-cutting 1). Blink: until H17 is verified. |
+| Bitmap emoji (`bitmap-emoji-size`) | Blink, Gecko at DPR ≠ 1 | The DOM asks Core Text for the sbix advance at the device size. | Measure at size × DPR and divide. Gecko under a bold font: the weight 400 advance at the page's apd plus synthetic bold's DOM steps (probe gecko-port F24). | Gecko: a device size off Canvas's 7-bit grid (one device pixel off at apd 27, probe cross-cutting 1). Blink: until H17 is verified. |
 | Chrome's per-canvas shape cache | Blink | The first shaping of a word per canvas wins: script context, word spacing at offset 0 (blink-canvas §1.7). | Handled: partitions, JS word spacing, a fresh measurer per prepared paragraph. | — |
 | Unsafe-to-break offsets (`unsafe-to-break`) | Blink | Line-start and line-end reshapes happen at HarfBuzz's unsafe-to-break offsets, which Canvas doesn't expose (CRITIC.md §5 item 6). | An offset is safe when the pair total shows no adjustment, the grapheme boundary holds and nothing joins: necessary, not sufficient (blink audit B7). Which glyph carries a pair adjustment: fact `pairKerning` (§1.2). | At a chosen line edge where the test can't vouch for the offset: contextual forms across it, a line edge taken from positions where the pair adjustment isn't 0 and `pairKerning` is null, a shaping group of 256 px with no safe cut. |
 | Joining technology (`joining-technology`) | Blink | Letters joined across a shaping call's edge keep joined forms in OpenType fonts, which read the call's context, and lose them in `morx` fonts (hb-ot-shape.cc:60-66, 100-101). | Fact `joining` (§1.2). | `joining` null at a group edge or chosen line edge between joining letters (Geeza Pro is AAT; Amiri and Noto Naskh Arabic are OpenType). |
 | Script context (`script-context`) | Blink | The DOM shapes an 8-bit paragraph as one Latin segment and merges Common punctuation into the surrounding script in 16-bit paragraphs; Canvas segments each word alone (blink-canvas §1.4). | Measure a range the paragraph shapes as Latin as an 8-bit string, one Latin segment; slice other ranges into 16-bit strings. | A grapheme without a strong character that some Canvas string the port measures (the grapheme alone, or in the pair window with its neighbour) resolves to another script than the paragraph: the brackets and digits of Arabic or Hebrew text, a curly quote or emoji beside a space in a Latin paragraph; its width can differ in fonts whose lookups depend on the script (Amiri, Noto Naskh Arabic). Reported with the grapheme's range. |
 | Spaces in shaping (`space-in-shaping`) | Blink, Gecko | The DOM kerns across spaces when the font's lookups involve the space glyph. Blink's word-by-word check ignores legacy `kern`, `kerx` and `morx`; Gecko shapes whole ranges when `SpaceMayParticipateInShaping` (gecko-text §7.2). | Blink: `optimizeLegibility` contexts. Gecko: measure the whole range when `au(a + ' ' + b) ≠ au(a) + au(' ') + au(b)`, a hypothesis to probe. | Blink: cross-space legacy kerning. Gecko: until the detection is verified. |
-| In-word prefixes (`in-word-prefix`) | all | Gecko's DOM uses per-glyph advances from one shaping of the unit, with integer shares of ligatures; Blink uses `ceil64` of prefix positions; WebKit's selection shapes a box once (`ComplexTextController`). Canvas measures a prefix alone. | Gecko: `W(unit) − W(suffix)` where the suffix doesn't depend on what precedes it (gecko-lines §9); the gap is reported at a consulted offset where the prefix and suffix don't add up to the unit, letters join across it, or the clusters on both sides measure differently in width or ink box with ligatures off (probe gecko-port F9). Blink: prefix sums and pair adjustments at cluster boundaries. | Breaks inside words (overflow-wrap, break-all, CJK, soft hyphens) in fonts with kerning, ligatures or contextual forms; and code point edges inside an item, box or frame in §9. Blink, at a chosen line edge inside a word where the pair window shows no adjustment: where the line's decision is within 2 LayoutUnits of going the other way (a width-neutral unsafe offset makes Blink reshape, which moves only LayoutUnit rounding), or at a wrapped start where a window of two clusters on each side adjusts. |
+| In-word prefixes (`in-word-prefix`) | all | Gecko's DOM uses per-glyph advances from one shaping of the unit, with integer shares of ligatures; Blink uses `ceil64` of prefix positions; WebKit's selection shapes a box once (`ComplexTextController`). Canvas measures a prefix alone. | Gecko: both sides of an offset measured as the unit shapes them, joined letters with U+200D, kern splits by `pairKerning`, ligature groups by shares; the position is predicted where the two sides add up to the unit (probe gecko-port F15). Blink: prefix sums and pair adjustments at cluster boundaries, with the stand-ins marked (§2.3). | Breaks inside words (overflow-wrap, break-all, CJK, soft hyphens) in fonts with kerning, ligatures or contextual forms; and code point edges inside an item, box or frame in §9. Gecko's stand-ins: a position inside a cluster, before a mark that starts a cluster, a tab after a stand-in (`CalcTabWidths`), and ligature rows the facts don't settle; the reading also holds `ComputeLigatureData`'s unbounded frame between two marks of one cluster, a Firefox bug Canvas can't show. Blink, at a chosen line edge inside a word: a line-end fit test that another last safe offset would turn around (the ceiling of that offset's position, or an uncertain first safe offset of a wrapped line start, each under or at one LayoutUnit; shaping_line_breaker.cc:309-324, :543-553); a wrapped line start whose clamped correction rests on a stand-in position, where the other outcome gives another line; the cut of an RTL view after a start reshape whose extent rests on the port's width tests alone (shape_result_view.cc:215-308). |
 | Glyph clusters (`glyph-clusters`) | all | Which code points one glyph covers: a font's ligatures merge HarfBuzz clusters, Core Text can give a code point no glyph of its own. Canvas shows totals only. | Clusters from Unicode data (marks, joiners, modifiers, regional indicators). | Ligatures across graphemes; zero-advance code points without their own glyph, in §9's code point rects. Blink: a position inside a grapheme at a unit HarfBuzz may start a cluster at; a chosen edge between joining letters; a chosen edge where the pair adjustment measured with liga, clig and calt off (a letter spacing, font_features.cc:54-86) differs from the one with them on. |
 | WebKit measuring paths (`simplified-measuring`, `fixed-pitch-path`) | WebKit | The DOM's simplified path doesn't restore space advances and sums in another float32 order; the fixed-pitch path returns `length × spaceWidth` for eligible fonts. | The full-path recipe; fact `monospace` for the fixed-pitch path (§1.2). | `simplified-measuring`: a line measuring a string of a simplified-path box outside the width shortcut that holds U+0020 (WidthIterator restores a space's unshaped advance, the simplified path keeps the shaped one, WidthIterator.cpp:84-120 and :473-474 against FontCascade.cpp:381-412) or whose Canvas total isn't the float32 sum of its code points' advances in order (shaping moved advances, which the two paths sum in other orders). `fixed-pitch-path`: a line measuring an item of such a box that fails T1 while `monospace` is null, or while `primaryFamily` is null and the font is fixed pitch (whether the realized family is Courier New decides the shortcut). |
 | RTL shaping across inline boxes (`rtl-shaping-across-inline-boxes`) | WebKit | `LineBuilder` reshapes complex RTL text joined across decoration-free boxes as one run (webkit-lines §9.3). | none | RTL complex-script text split over same-font spans without box edges. |
 | Page zoom (`page-zoom`) | WebKit | No page API shows Safari's page zoom. | `env.pageZoom`, given. | `pageZoom` null. |
-| Font fallback (`font-fallback`) | all | Which font draws a cluster; hexbox and `.notdef` widths; Gecko's synthesized widths for Unicode spaces no font covers, rounded to device pixels. | Canvas totals include fallback. | Text no listed family covers, where Canvas and DOM fall back differently (Blink falls back per cluster over the whole item; Gecko's fallback can arrive later). |
-| Float32 precision (`float32-precision`) | Blink | 16.16 values are exact in float32 only below 256 px. | Measure per Canvas word. | One Canvas item of 256 zoomed px or more. |
+| Font fallback (`font-fallback`) | all | Which font draws a cluster; hexbox and `.notdef` widths; Gecko's synthesized widths for Unicode spaces no font covers, rounded to device pixels. | Canvas totals include fallback. | Text no listed family covers, where Canvas and DOM fall back differently (Blink falls back per cluster over the whole item; Gecko's fallback can arrive later). Blink: a line edge beside U+3000 with an adjustment, where no coverage fact names the neighbour's font (Blink sends a U+3000 the font lacks to a fallback font and the neighbour keeps its half of the kern, harfbuzz_shaper.cc:598-606). |
+| Float32 precision (`float32-precision`) | Blink, Gecko | Blink: 16.16 values are exact in float32 only below 256 px. Gecko: `measureText` returns `float(au) / 60`, exact only below 2^18 px. | Blink: measure per Canvas word; a float32 holds 24 bits, so sums of multiples of 2^g units are exact below 2^(24 + g) units, a run that ends below 256 px can't round, and fonts of 2048 units per em at whole zoomed sizes are always exact. Gecko: the space-in-shaping test runs in windows under 2^18 px. | Blink: a Canvas item of 256 zoomed px or more whose advances' granularity doesn't keep the sums exact. Gecko: a shaping unit 2^18 px or wider; in the observation port, edges beyond 2^20 / apd device px. |
 | String storage (`string-storage`) | all | Blink's single Latin segment, WebKit's keep-all punctuation breaks and 1-unit emergency breaks, and Gecko's white-space-only frames depend on whether a text node is stored 8-bit (CRITIC.md §5 item 14). The page can't see storage. | Treat text whose code units are all ≤ U+00FF as 8-bit, what JS-created nodes get. | Parser-created or edited nodes stored 16-bit. WebKit: a line measuring keep-all punctuation in Latin-1 text, or taking an emergency break in Latin-1 text whose second unit can't start a line. |
 | Dictionary breaks (`dictionary-breaks-unavailable`, `dictionary-breaks-stand-in`) | all | Thai, Lao, Khmer and Myanmar need dictionary or LSTM data (§6.3). | The running browser's own segmenter. | `unavailable`: SA runs get no interior opportunities. WebKit stand-in: a dictionary range that starts with a combining mark (27 of 282,337 positions). |
 | HanKerning (`han-kerning`) | Blink | Blink trims fullwidth punctuation with `halt` using characters outside the shaped range and at line ends (han_kerning.cc, shaping_line_breaker.cc:344-378). | The trims from Canvas facts (blink audit B6). | Fonts whose `halt` detection isn't probed; neighbours on another line. |
-| Tab stops (`tab-stops`) | Blink | Blink counts stops from the platform space advance without `trak` (simple_font_data.cc:225-240). | Canvas space advance. | Fonts with `trak` tracking, such as Helvetica Neue (probe blink-followups F4). |
+| Tab stops (`tab-stops`) | Blink | Blink counts stops from the platform space advance without `trak` (simple_font_data.cc:225-240). | Canvas space advance. | Fonts with `trak` tracking. The one probed example doesn't show it: 16px Helvetica Neue's stops, 35.5859375px apart, are 8 × Canvas's space advance of 4.447998px rounded up to 1/128px (rebuild/platform-bugs/LEDGER.md, "Looked at and not reported"), so the condition is due a re-reading. |
 | UI language (`ui-language`) | all | §1.4 | The engine's given process languages. | The fact is null and content has no `lang`, `lang=""`, a Han `lang` (WebKit), or a locale ICU has no data for (WebKit quotes). |
-| Page history (`page-history`) | all | Layout state earlier content leaves in the document or process: WebKit's `TextBreakingPositionCache`, Gecko's document-wide bidi flag and pinned emoji fallback, Blink's platform font created at another size (TEST-ARCHITECTURE.md §6.5). | none: the library predicts a fresh document | A paragraph with the conditions of those effects. WebKit: a line measuring an item that another box of the same text and wrapping styles could end elsewhere, where the parts would measure otherwise or the item is content whose fit ended the line (or the builder reverted): a level boundary the text gets under either paragraph direction or one or two characters of context (UAX #9 classes), or preserved white space of two units, which break-spaces and word spacing split and pre-wrap keeps whole (TextBreakingPositionContext.h:30-80). |
+| Page history (`page-history`) | all | Layout state earlier content leaves in the document or process: WebKit's `TextBreakingPositionCache`, Gecko's document-wide bidi flag and the process's font fallback state, Blink's platform font created at another size (TEST-ARCHITECTURE.md §6.5). | none: the library predicts a fresh document | A paragraph with the conditions of those effects. Gecko: every U+FFFD outside the listed fonts (the process's cached fallback family); an emoji that asks for a color glyph and measures as another font; U+FE0E on an emoji-default character, whose text glyph only the system-wide search finds among the families whose character maps are loaded by then (gfxPlatformFontList.cpp:1474-1486). WebKit: a line measuring an item that another box of the same text and wrapping styles could end elsewhere, where the parts would measure otherwise or the item is content whose fit ended the line (or the builder reverted): a level boundary the text gets under either paragraph direction or one or two characters of context (UAX #9 classes), or preserved white space of two units, which break-spaces and word spacing split and pre-wrap keeps whole (TextBreakingPositionContext.h:30-80). |
 | Engine build (`engine-build`) | all | The ports follow one build each. | `env.build`, given. | `build` null or not `PINNED_BUILDS[engine]`. |
 
 Inline structure adds no gap: box edges, atomic sizes, indents and slot insets are lengths the engine converts exactly,
@@ -1487,8 +1547,9 @@ opens and closes, the nodes the painter makes), which need no document, and `pai
 `painterLimits` names, per line, why the painted line can differ from the paragraph's although the prediction is
 right. A limit is a condition on the layout read from the engine's source; it says the painted line can differ, not
 that it does. `PainterLimitName` in `src/paint.ts` has each condition with its citations. specs/PAINTER-RESULTS.md has,
-per limit, the failing lines it sits on and the share of passing lines it fires on; the lab doesn't read limits yet, so
-those counts come from `.artifacts/lab/painter-r3/tools/limits.ts` over the rows.
+per limit, the failing lines it sits on and the share of passing lines it fires on (counted by
+`.artifacts/lab/painter-r3/tools/limits.ts` over round 3's rows). Since scorer 6 the lab records the limits per painted
+line (`EnginePrediction.painterLimits`), and a limit explains a painter failure (lab/README.md, "Painter limits").
 
 - `carried-width` (WebKit): the line starts inside an item (`next.offset` above 0) and its first text keeps the width
   the overflow breaker carried, the item's width less the part left on the line before
@@ -1566,7 +1627,11 @@ position: `ShapeLine` reshapes a part whole when no offset before its end is saf
 break_opportunity.offset`, `shaping_line_breaker.cc:500-507`), as after a space that kerns with the line's first letter
 (`A ` after `aaaa ` in Arial: 10.67 px natively, 9.79 px painted with the box, `c-0f0589498b1c5837`). The layout doesn't
 say which parts a line's shape came from, so the painter can't choose the form; `hangingForm` reads the same fact from
-the line's widths and styles instead. A Blink geometry field for it would replace both.
+the line's widths and styles instead. Since round 4 the geometry says it: a text item's `runs[].reshaped` (§2.3) is the
+text each run was shaped from alone, which replaces `hangingForm`'s reading of widths and `needsAccurateEndPosition` for
+"was the text before the space reshaped". The painter doesn't read it yet, and needs one more limit: a wrapped line whose
+first run isn't reshaped and whose first cluster kept an adjustment with the previous line's last cluster (U+3000 in a
+font without it, `c-0ee8c36920378f9f`) paints without it and fails without a covered explanation.
 
 The lab appends the elements to a host of the paragraph's width (lab/README.md, "Page protocol" step 5). Under the
 observation contract (§9) the painter metric compares each painted line's code point and node rects with the expected
