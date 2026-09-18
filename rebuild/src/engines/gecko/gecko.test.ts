@@ -43,6 +43,8 @@ function stubAu(font: string, text: string, lang: string): number {
     }
     if (c === '😀' || c === '👩' || c === '🚀') {
       au += !emojiFont && (cps[i + 1] === '︎' || (stub.pinned && c === '😀')) ? 1020 : emoji
+      // Synthetic bold: NS_round(offset × 60) at weight 700, offset = 0.25 + 0.75 × size / 48 (gfxFont.h:1899-1904).
+      if (/ 700 /.test(font)) au += Math.floor((0.25 + 0.75 * size / 48) * 60 + 0.5)
       continue
     }
     if (c === '(') {
@@ -473,6 +475,15 @@ describe('gecko Canvas recipes (specs/gecko-AUDIT.md B1-B4)', () => {
     expect(frame.characters.map(c => c.clusterStart)).toEqual([true, true, true, true])
     expect(frame.characters.map(c => c.standInBefore)).toEqual([false, true, true, false])
     expect(frame.characters.map(c => c.advance)).toEqual([576, 576, 576, 576])
+  })
+
+  test('B1c: a bitmap emoji under a bold font takes the DOM\'s synthetic bold step (gfxFont.cpp:3551-3562, probe gecko-port F24)', () => {
+    // 20px: the device size is 40px, where the stub's emoji is 2400 au and Canvas's step NS_round(0.875 × 60) = 53; the DOM
+    // has 1200 au and NS_round(0.875 × 30) = 26, where 2453 au × 30 / 60 rounds to 1227.
+    const bold = { ...arial(20), weight: 700 }
+    const l = layout(paragraph([run('😀', 'span', { font: bold })], 500, { font: bold }))
+    expect(l.lines[0]!.geometry.width).toBe(1226)
+    expect(allGaps(l).map(g => g.gap)).not.toContain('bitmap-emoji-size')
   })
 
   test('B1b: a soft hyphen inside a grapheme cluster puts the whole cluster before the break', () => {

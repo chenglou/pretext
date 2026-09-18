@@ -101,16 +101,22 @@ function inWordAdvance(p: GeckoPrepared, m: Measurer, run: GeckoTextRun, unit: {
     // has, and what each advances, no Canvas string shows: a mark measured at a string's start has no base (fresh
     // c-7421ac03d17f9f11: 14px Geeza Pro gives seen 448 au and the sukun after it, in the next span, 171 au, where the
     // cluster is 619 au and the sukun alone measures nothing).
-    // That division is where a native frame becomes unbounded (probes gecko-port F18, F20). Between two marks of one cluster,
-    // a font that ligates them gives the ligature's glyph to the first mark, a ligature group start that isn't a cluster
-    // start, and a range edge between the marks cuts that group. Under kerx or a kern state machine marks keep their
+    // That division is where a native frame becomes unbounded (probes gecko-port F18, F20). Two marks of one cluster share a
+    // HarfBuzz cluster where the font ligates them, or where HarfBuzz reorders them by modified combining class, which merges
+    // the clusters it moves across (hb-ot-shape-normalize.cc:394, hb_buffer_t::sort, hb-buffer.cc:2167-2185). Gecko gives
+    // their glyphs to the first mark, a ligature group start that isn't a cluster start (gfxHarfBuzzShaper.cpp:1705-1786),
+    // and a range edge between the marks cuts that group. Under kerx or a kern state machine marks keep their
     // advances, often negative ones (hb-ot-shape.cc:189-191), and ComputeLigatureData divides the group's signed advance by
     // an unsigned cluster count: `partClusterCount * (ligatureWidth / totalClusterCount)` with `int32_t ligatureWidth` and
     // `uint32_t totalClusterCount` (gfxTextRun.cpp:249-284). A negative advance W becomes 2^32 + W au for the part before the
     // cut and W − (2^32 + W) for the last part (:286-289), so the first frame takes nscoord_MAX and the second 0
     // (NSToCoordCeilClamped over max(0, advance), nsTextFrame.cpp:11272-11273). 20px "Geeza Pro", reh fatha | shadda: the
     // frame holding reh and fatha is 17,895,698px wide, nscoord_MAX through float32, and the word moves to a line of its own.
-    // Canvas shows neither the ligature nor its advance's sign, so the port keeps the ordinary division and says so here.
+    // F20: of 30 ordered pairs of marks after reh, the 18 that are cut unbounded are the 15 HarfBuzz reorders and shadda
+    // before fatha, damma or kasra, which "Geeza Pro" ligates; every pair's glyphs advance by −1 to −109 au, which the base
+    // takes back, so Canvas totals show nothing; in Arial, positioned through GPOS, marks have no advance and the cut is
+    // bounded. Canvas shows neither the shared cluster nor the advance's sign, so the port keeps the ordinary division and
+    // says so here.
     let end = t + 1
     while (end < unit.tEnd && p.clusterStart[end] === 0) end++
     const inner = advanceBefore(p, m, run, end)
@@ -250,7 +256,8 @@ function inWordAdvance(p: GeckoPrepared, m: Measurer, run: GeckoTextRun, unit: {
 //   larger font size: at size × 2^k every advance and adjustment is 2^k times as large before it is rounded, so a cluster
 //   measured there gives its advance to within half a step, 0.5 / 2^k au, and a pair less its two clusters the pair's
 //   adjustment to within four half steps, so half of it to within 1 / 2^k au. Both terms are then computed, and count only
-//   where each rounding is further from a tie than its inputs' reach and the terms add up to R. Probe gecko-port F16
+//   where each rounding is further from a tie than its inputs' reach and the terms add up to R; at a small k the reach is
+//   so wide that nothing counts, so k needs no floor of its own. Probe gecko-port F16
 //   (.artifacts/probes/gecko/round3-f16): 92 of 92 even adjustments divide in halves in Verdana, Times New Roman, Helvetica
 //   and Helvetica Neue; of 37 odd ones the recipe gives the DOM's first advance in 36 and meets a tie in one (Verdana 16px
 //   `xe`: 562.5 au).
@@ -280,7 +287,6 @@ function pairKernedShare(p: GeckoPrepared, m: Measurer, run: GeckoTextRun, unit:
   if (size === null || !(Number(size[1]) > 0)) return null
   let k = 0
   while (Number(size[1]) * 2 ** (k + 1) <= 2000) k++
-  if (k < 3) return null
   const scale = 2 ** k
   const large = { ...run, context: measureContext(m, { ...settings, font: settings.font.replace(size[0], `${String(Number(size[1]) * scale)}px`) }) }
   const w = (from: number, to: number): number => rangeAu(m, large, p.tUnits, from, to) / scale

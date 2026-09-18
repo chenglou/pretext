@@ -30,6 +30,9 @@ const f32 = Math.fround
 const SHY = 0x00ad
 // A Canvas total is its text runs' au over the context's 60 app units per px (CanvasRenderingContext2D.cpp:5277, :7135-7140).
 export const CANVAS_AU_PER_PX = 60
+// measureText's width is `float(au) / 60`, a float (:5277). Below 2^18 px a float32 step is at most 1/64 px, so the value is
+// within 1/128 px, 0.47 au, of au / 60 and rounds back to it; from 2^18 px on a step is 1/32 px and the app units are lost.
+const CANVAS_EXACT_AU = 2 ** 18 * CANVAS_AU_PER_PX
 
 // NS_lroundf (nsMathUtils.h:31-33) on a float32 value.
 export function lroundf(x: number): number {
@@ -511,9 +514,12 @@ export function rangeAu(m: Measurer, run: Pick<GeckoTextRun, 'context' | 'script
   // level is mirrored there and not in Canvas (fresh c-a76a521c12628bd7: `(` alone at level 1 in 16px Shantell Sans is 392
   // au natively, the advance of `)`, and 420 au in a right-to-left context). U+200C after it makes the string two characters,
   // which takes Canvas's bidi path, where a neutral gets the context's direction; it is a join control, drawn with no
-  // advance by the font before it (gfxTextRun.cpp:3309-3332). Only a mirrored character needs it, and a lone mark shapes
-  // otherwise with U+200C after it (held-out c-0b2ac06557b89cf6: U+0301 alone at level 1 in 16px Georgia is 480 au natively
-  // and alone in Canvas, and nothing with U+200C after it).
+  // advance by the font before it (gfxTextRun.cpp:3309-3332). Only a mirrored character gets it: direction reaches a lone
+  // character's glyph through hb_ot_rotate_chars, which in a backward direction swaps a character for its Bidi_Mirroring
+  // partner where the font has it and else asks for the font's `rtlm` form (hb-ot-shape.cc:650-670); the other way in is a
+  // font's `rtla` lookups (:339-340), which the port doesn't predict. Elsewhere the second character isn't free: a lone
+  // mark shapes otherwise with U+200C after it (held-out c-0b2ac06557b89cf6: U+0301 alone at level 1 in 16px Georgia is
+  // 480 au natively and alone in Canvas, and nothing with U+200C after it).
   if (m.log.contexts[run.context]!.direction === 'rtl' && (piece.length === 1 || (piece.length === 2 && isSurrogatePair(piece.charCodeAt(0), piece.charCodeAt(1))))) {
     const cp = piece.codePointAt(0)!
     const bidiClass = bidiClassOf(bidiDataFor('gecko'), cp)
@@ -590,6 +596,9 @@ function synthesizedSpaceDivisor(cp: number): number {
     default: return 0
   }
 }
+
+// gfxFont::GetSyntheticBoldOffset (gfxFont.h:1899-1904), in device px of the font's size.
+const syntheticBoldOffset = (size: number): number => size < 48 ? 0.25 + 0.75 * size / 48 : size / 48
 
 // nsUnicodeProperties.h:127-165 GetEmojiPresentation.
 type EmojiPresentation = 'text-only' | 'text-default' | 'emoji-default'
@@ -1268,21 +1277,34 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, measur
     // script run limit.
     const scriptLimits = new Set<number>()
     for (let k = 0; k < run.scriptRuns.length; k++) scriptLimits.add(run.scriptRuns[k]!.limit)
+    // Whether a space takes part in shaping (gfxFont::SpaceMayParticipateInShaping: the DOM then shapes the text without
+    // the word cache, across its spaces, gfxFont.cpp:3779-3800) shows where words and spaces measured together differ from
+    // the sum of their units. A window of units is tested whole. measureText returns float(au) / 60 as a float
+    // (CanvasRenderingContext2D.cpp:5277), which gives the app units back only below 2^18 px: from there a float32 step is
+    // 1/32 px or more, up to 0.94 au of rounding. So a window ends before its sum reaches that, and the next one starts at
+    // the word before, so every space is tested between its two words.
     let stretchStart = b.tStart
     let stretchWords = 0
     let stretchSpaces = 0
     let stretchSum = 0
-    const endStretch = (end: number): void => {
-      if (stretchWords >= 2 && stretchSpaces >= 1) {
+    let lastWordStart = b.tStart
+    let lastWordSum = 0
+    let spacesSinceWord = 0
+    const testStretch = (end: number): void => {
+      if (stretchWords >= 2 && stretchSpaces >= 1 && stretchSum < CANVAS_EXACT_AU) {
         let s = ''
         for (let t = stretchStart; t < end; t++) s += String.fromCharCode(tUnits[t]!)
         if (au(s) !== stretchSum) {
           gaps.push({ gap: 'space-in-shaping', run: firstRun, detail: `the whole range measures ${au(s)} au, its units ${stretchSum} au`, at: { start: tSource[stretchStart]!, end: tSource[end - 1]! + 1 } })
         }
       }
+    }
+    const endStretch = (end: number): void => {
+      testStretch(end)
       stretchWords = 0
       stretchSpaces = 0
       stretchSum = 0
+      lastWordSum = 0
     }
     for (let t = b.tStart; t < b.tEnd;) {
       const ch = tUnits[t]!
@@ -1304,6 +1326,8 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, measur
         unit = { kind: ch === 0x20 ? 'space' : 'nbsp', tStart: t, tEnd: t + 1, canvasAu: w, au: w, startAdvance: advance }
         stretchSpaces++
         stretchSum += w
+        lastWordSum += w
+        spacesSinceWord++
       } else if (invalid) {
         endStretch(t)
         stretchStart = t + 1
@@ -1421,11 +1445,25 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, measur
             // The DOM stores floor(apd × device advance + 0.5) (gfxHarfBuzzShaper.cpp:1559); a lone regional indicator's
             // advance isn't a whole pixel (28.683px at 28px), so round once from the Canvas au at the device size.
             const deviceAu60 = auIn(deviceContext, cluster)
-            const dom = Math.floor(deviceAu60 * apd / 60 + 0.5)
+            let dom = Math.floor(deviceAu60 * apd / 60 + 0.5)
             if ((deviceAu60 * apd) % 60 !== 0) {
-              // Canvas's au at the device size rounds once at apd 60; the DOM rounds at the page's apd, and adds synthetic
-              // bold after rounding (gfxFont.cpp:3551-3562), so the DOM value isn't determined (+1 au per bold flag, runs-r4).
-              gaps.push({ gap: 'bitmap-emoji-size', run: firstRun, detail: `device-size advance ${deviceAu60} au at apd 60 doesn't give an exact au at apd ${apd}`, at: clusterAt })
+              // Canvas's au at the device size rounds once at apd 60, and the DOM rounds at the page's apd. Under a bold font
+              // the advance holds synthetic bold's step: Apple Color Emoji has no bold face, and PostShapingFixup adds
+              // NS_round(offset × apd) to each character that holds glyphs, after the glyphs were rounded, with offset =
+              // 0.25 + 0.75 × size / 48 device px below 48px and size / 48 from there (gfxFont.cpp:3551-3562, :901-939;
+              // gfxFont.h:1899-1904). Canvas shows it: the cluster at the run's weight less the cluster at weight 400, both
+              // at the device size, is a whole number of Canvas's own steps, NS_round(offset × 60). The DOM's advance is then
+              // the weight 400 advance at the page's apd plus as many of the DOM's steps. Probe gecko-port F24: U+1F600 in
+              // bold 20px Arial is 1226 au natively, 2400 au × 30 / 60 and NS_round(0.875 × 30) = 26, where the bold
+              // Canvas advance of 2453 au gives 1227.
+              const regularAu60 = auIn(measureContext(measurer, { ...settings, font: canvasFont({ ...font, weight: 400 }, devSize) }), cluster)
+              const canvasStep = Math.floor(syntheticBoldOffset(quantize7(devSize)) * 60 + 0.5)
+              const steps = (deviceAu60 - regularAu60) / canvasStep
+              if (font.weight !== 400 && Number.isInteger(steps) && steps >= 1 && (regularAu60 * apd) % 60 === 0) {
+                dom = regularAu60 * apd / 60 + steps * Math.floor(syntheticBoldOffset(devSize) * apd + 0.5)
+              } else {
+                gaps.push({ gap: 'bitmap-emoji-size', run: firstRun, detail: `device-size advance ${deviceAu60} au at apd 60 doesn't give an exact au at apd ${apd}`, at: clusterAt })
+              }
             }
             const delta = dom - atCssSize
             correction[t + boundaries[c]!] = delta
@@ -1433,8 +1471,21 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, measur
           }
         }
         unit = { kind: 'word', tStart: t, tEnd: e, canvasAu: w, au: total, startAdvance: advance }
+        if (w >= CANVAS_EXACT_AU) {
+          gaps.push({ gap: 'float32-precision', run: firstRun, detail: `a shaping unit ${w} au wide: measureText's float width gives app units back only below 2^18 px (CanvasRenderingContext2D.cpp:5277)`, at: { start: tSource[t]!, end: tSource[e - 1]! + 1 } })
+        }
+        if (stretchSum + w >= CANVAS_EXACT_AU && stretchWords >= 1) {
+          testStretch(t)
+          stretchStart = lastWordStart
+          stretchWords = 1
+          stretchSpaces = spacesSinceWord
+          stretchSum = lastWordSum
+        }
         stretchWords++
         stretchSum += w
+        lastWordStart = t
+        lastWordSum = w
+        spacesSinceWord = 0
       }
       for (let k = unit.tStart; k < unit.tEnd; k++) unitOf[k] = units.length
       units.push(unit)

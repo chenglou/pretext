@@ -184,5 +184,13 @@ describe('Range rects over Gecko frames', () => {
     const gaps = (r: ExpectedRect) => [r.x, r.width].map(v => v.state === 'limited' ? v.gap : v.state)
     expect(gaps(o.codePoints[0]!.rects[0]!)).toEqual(['predicted', 'float32-precision'])
     expect(gaps(o.codePoints[1]!.rects[0]!)).toEqual(['float32-precision', 'float32-precision'])
+    // At 60 au per device px the bound is 2^15 device px: a float32 step is worth twice the app units.
+    const at60 = (x: number): GeckoLayout => {
+      const l60 = layout([line([frame(0, 0, 2, x, 1152, [a, a])], 0, 2)])
+      l60.lines[0]!.geometry.appUnitsPerDevPixel = 60
+      return l60
+    }
+    expect(gaps(observeGecko(paragraph(['ab']), at60(32768 * 60 - 576), noMeasure).codePoints[1]!.rects[0]!)).toEqual(['float32-precision', 'float32-precision'])
+    expect(gaps(observeGecko(paragraph(['ab']), at60(32768 * 60 - 1152), noMeasure).codePoints[1]!.rects[0]!)).toEqual(['predicted', 'float32-precision'])
   })
 })
