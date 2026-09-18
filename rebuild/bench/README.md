@@ -28,11 +28,14 @@ Without `--foreground`, sessions stay in the background like the lab's (`rebuild
 the report says the numbers are harness validation only. `--smoke` shrinks the settings (3 samples, 1 warm-up round, 2 ms
 minimum sample, 1.5 s budget per row, 200 messages) and marks the report as a smoke run.
 
-- `--browser=chrome`: installed Chrome in a throwaway profile under `.artifacts/profiles`, with
-  `--enable-precise-memory-info`. Foreground opens a normal window, which activates Chrome; background opens an inactive
-  window through the DevTools protocol.
-- `--browser=firefox`: installed Firefox in a throwaway profile, started with `open -n [-g] -a Firefox --args
-  --new-instance`, with `dom.max_script_run_time` 0 so the slow-script warning can't interrupt long rounds.
+- `--browser=chrome`: the lab's pinned copy of Chrome (`rebuild/lab/browser-build.ts` `LAB_APPS`; lab README, "Pinned
+  browsers") in a throwaway profile under `.artifacts/profiles`, with `--enable-precise-memory-info` and the lab's
+  `--disable-updater-scheduler`. Foreground opens a normal window, which activates Chrome; background opens an inactive
+  window through the DevTools protocol. Until 2026-09-18 the bench launched the installed Chrome while it read the build
+  from the pinned copy, so a report could name another build than it ran; reports now record `app`, the bundle launched.
+- `--browser=firefox`: the lab's pinned copy of Firefox in a throwaway profile, started with `open -n [-g] -a <copy> --args
+  --new-instance`, with `dom.max_script_run_time` 0 so the slow-script warning can't interrupt long rounds, and the lab's
+  prefs that keep the copy from updating itself.
 - `--browser=safari`: foreground only. A new window in the user's Safari, activated through AppleScript.
 - `--browser=webkit-host`: background only. The system WebKit.framework in `.artifacts/webkit-host/webkit-host`, which never
   takes focus.

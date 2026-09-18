@@ -1,12 +1,14 @@
 import { expect, test } from 'bun:test'
 import { mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 import { font, paragraph, text } from './build.ts'
 import { makeCase } from './case.ts'
 import { familyWidthCases } from './family-widths.ts'
 import { appliesTo, contiguousParts, GIANT_UNITS, isGiant, readCaseLines } from './parts.ts'
-import { caseIdsOf } from './used-ids.ts'
+import { caseIdsOf, inThisRepository } from './used-ids.ts'
+
+const REPO_ROOT = resolve(import.meta.dir, '../../..')
 
 function sample(value: string, width: number, browsers?: ['chrome'] | ['safari']): ReturnType<typeof makeCase> {
   return makeCase({ family: 'test/parts', origin: 'test', pageLang: 'en', paragraph: { ...paragraph({ font: font('Arial', 16), lang: 'en' }, [text(value)]), width }, browsers })
@@ -70,4 +72,15 @@ test('family widths are seeded, new, near or between the derived brackets, and k
   // A used id is never produced again.
   const used = new Set(first.cases.map(value => value.id))
   for (const value of familyWidthCases('seed-a', [dir], 6, used).cases) expect(used.has(value.id)).toBe(false)
+})
+
+test('a case file named by a worktree that is gone is found in this repository', () => {
+  const here = (path: string): boolean => path.startsWith(`${REPO_ROOT}/`)
+  // Another worktree's path to the shared artifacts, and to a file of the repository.
+  expect(inThisRepository('/Users/x/github/pretext-rebuild-wt/tests/.artifacts/lab/cases/runs.ndjson', here)).toBe(`${REPO_ROOT}/.artifacts/lab/cases/runs.ndjson`)
+  expect(inThisRepository('/Users/x/github/pretext-rebuild-charter/rebuild/lab/smoke-cases.ndjson', here)).toBe(`${REPO_ROOT}/rebuild/lab/smoke-cases.ndjson`)
+  // A file that exists is taken as named, and one that is nowhere stays as named, so the registry can report it missing.
+  expect(inThisRepository(`${REPO_ROOT}/.artifacts/lab/cases/ws.ndjson`, here)).toBe(`${REPO_ROOT}/.artifacts/lab/cases/ws.ndjson`)
+  expect(inThisRepository('/tmp/elsewhere/cases.ndjson', here)).toBe('/tmp/elsewhere/cases.ndjson')
+  expect(inThisRepository('/Users/x/other/.artifacts/gone.ndjson', () => false)).toBe('/Users/x/other/.artifacts/gone.ndjson')
 })

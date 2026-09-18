@@ -9,6 +9,7 @@ import { parseFontFamilyList } from './cases/font.ts'
 import { observeBlink } from './observe/blink.ts'
 import { observeGecko } from './observe/gecko.ts'
 import { observeWebKit } from './observe/webkit.ts'
+import { createPortMeasure } from './port-measure.ts'
 import * as predictorModule from './predictor.ts'
 import { beginCase, beginPhase, endCase, installRecorder, type CaseMeasurements } from './record.ts'
 import type {
@@ -362,28 +363,9 @@ async function observeNative(c: Case, range: Range): Promise<NativeObservation> 
   }
 }
 
-// The Canvas the observation ports measure with, live: one OffscreenCanvas per distinct settings, set up in the order the
-// library's measure/canvas.ts uses (lang before font). Only the WebKit port measures (research/observe-webkit.md §7).
-type ContextWithLang = OffscreenCanvasRenderingContext2D & { lang: string }
-const portContexts = new Map<string, ContextWithLang>()
-const measureLive: CanvasMeasure = (settings, text) => {
-  const key = JSON.stringify(settings)
-  let ctx = portContexts.get(key)
-  if (ctx === undefined) {
-    const created = new OffscreenCanvas(1, 1).getContext('2d') as ContextWithLang | null
-    if (created === null) throw new Error('OffscreenCanvas has no 2d context')
-    created.lang = settings.lang
-    created.font = settings.font
-    created.letterSpacing = settings.letterSpacing
-    created.wordSpacing = settings.wordSpacing
-    created.fontKerning = settings.fontKerning
-    created.textRendering = settings.textRendering
-    created.direction = settings.direction
-    portContexts.set(key, created)
-    ctx = created
-  }
-  return ctx.measureText(text).width
-}
+// The Canvas the observation ports measure with, live (port-measure.ts, which the offline replay shares): its contexts live
+// as long as the document. Only the WebKit port measures (research/observe-webkit.md §7).
+const measureLive: CanvasMeasure = createPortMeasure()
 
 // What the browser will report for the layout, by the engine's own geometry code (DESIGN.md §9).
 function observeLayout(prediction: LayoutPrediction): ExpectedObservation {

@@ -9,7 +9,7 @@
 // of 25 cases a round trip, and every ledger records the protocol it was observed under (ledger.ts `protocol`). Two results
 // compare like with like only when their protocols are equal.
 import { createHash } from 'node:crypto'
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, readFileSync, realpathSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import type { BrowserKind } from '../lab/types.ts'
 
@@ -59,8 +59,14 @@ export const SETS: readonly TestSet[] = [
   { name: 'heldout-suite-sample', group: 'heldout', parts: [0, 1].map(k => `${A}/lab/final-20260916/cases/heldout-suite-sample-part${k}.ndjson`), runArgs: [], browsers: ALL },
 ]
 
+// A set's case files as run.ts gets them: real paths. A worktree reaches the shared `.artifacts` through a symbolic link,
+// and a run record names its case file (run.json `casesFile`, which lab/cases/used-ids.ts reads for the registry of used
+// ids), so the record names the shared file itself, which outlives the worktree.
 export function partFiles(set: TestSet, browser: TierBrowser): string[] {
-  return set.parts.map(part => join(REPO, part.replaceAll('{browser}', browser)))
+  return set.parts.map(part => {
+    const path = join(REPO, part.replaceAll('{browser}', browser))
+    return existsSync(path) ? realpathSync(path) : path
+  })
 }
 
 // The sets a command's --sets and --groups select for a browser, in SETS order: a set named by either. Both absent selects

@@ -58,7 +58,12 @@ const config = (options.get('config') ?? 'no-facts') as Config
 if (!CONFIGS.includes(config)) fail('--config must be no-facts or facts')
 const outDir = resolve(options.get('out') ?? fail('--out is required'))
 const bothOrders = flags.has('both-orders')
-const sets = selectSets(browser, options.get('sets'), options.get('groups'))
+let sets: TestSet[]
+try {
+  sets = selectSets(browser, options.get('sets'), options.get('groups'))
+} catch (error) {
+  fail(error instanceof Error ? error.message : String(error))
+}
 if (sets.length === 0) fail('No set selected')
 const wantedIds = options.get('ids-file') === undefined ? null : new Set(readFileSync(resolve(options.get('ids-file')!), 'utf8').split(/[\s,]+/).filter(id => id !== ''))
 const started = Date.now()

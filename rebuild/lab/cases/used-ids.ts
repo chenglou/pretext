@@ -47,6 +47,18 @@ function* walk(dir: string, skip: string | null): Generator<string> {
   }
 }
 
+// A run made in another worktree of this repository names its case files by that worktree's paths (the charter branch's
+// ~/github/pretext-rebuild-charter, ceiling round 4's ~/github/pretext-rebuild-wt/<owner>), and worktrees go away. Every
+// worktree shares one `.artifacts`, and `rebuild/` is the repository's, so a named file that is gone is looked up by its path
+// from `.artifacts` or `rebuild` on, in this repository. A file that exists is taken as named.
+export function inThisRepository(file: string, exists: (path: string) => boolean = existsSync): string {
+  if (exists(file)) return file
+  const match = /\/(\.artifacts|rebuild)\/.*$/.exec(file)
+  if (match === null) return file
+  const here = join(REPO, match[0])
+  return exists(here) ? here : file
+}
+
 // Case ids of an NDJSON case file. Lines split on LF only (JSON strings can hold U+2028), and the id sits in a line's first
 // 4 KB, so giant paragraphs cost nothing.
 export function caseIdsOf(path: string): string[] {
@@ -85,7 +97,7 @@ export function collectUsedIds(options: { skip?: string | null; failOnMissing: b
         continue
       }
       if (typeof casesFile !== 'string') continue
-      const file = resolve(casesFile.replace('/pretext-rebuild-charter/', '/pretext-rebuild/'))
+      const file = inThisRepository(resolve(casesFile))
       if (options.skip != null && file.startsWith(`${options.skip}/`)) continue
       if (file.includes(CENSUS_CHUNKS)) notExcluded.add(file)
       else sources.add(file)

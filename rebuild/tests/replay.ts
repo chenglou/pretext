@@ -271,14 +271,16 @@ function browserCase(row: LabRow): ReferenceCase {
 
 // ---- Arguments ----
 
-const [command, ...rest] = process.argv.slice(2)
+// Filled from the command line when this file is run; importing it (the tests do) parses nothing.
 const options = new Map<string, string>()
 const flags = new Set<string>()
-for (const raw of rest) {
-  const match = /^--([a-z-]+)(?:=(.*))?$/s.exec(raw)
-  if (match === null) fail(`Unknown argument ${raw}`)
-  if (match[2] === undefined) flags.add(match[1]!)
-  else options.set(match[1]!, match[2])
+function parseArguments(rest: readonly string[]): void {
+  for (const raw of rest) {
+    const match = /^--([a-z-]+)(?:=(.*))?$/s.exec(raw)
+    if (match === null) fail(`Unknown argument ${raw}`)
+    if (match[2] === undefined) flags.add(match[1]!)
+    else options.set(match[1]!, match[2])
+  }
 }
 
 function replayDir(): { browser: TierBrowser; config: Config; dir: string } {
@@ -697,6 +699,8 @@ async function check(): Promise<number> {
 }
 
 if (import.meta.main) {
+  const [command, ...rest] = process.argv.slice(2)
+  parseArguments(rest)
   try {
     switch (command) {
       case 'pack': process.exit(await pack())
