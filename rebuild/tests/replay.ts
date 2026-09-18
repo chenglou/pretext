@@ -92,7 +92,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { cpus } from 'node:os'
 import { dirname, join, relative, resolve } from 'node:path'
 import type { ExpectedObservation, ParagraphLayout } from '../src/model.ts'
-import { installReplay, newSiteTally, NewQuestion, readMeasurements, type SiteCount, type SiteTally } from '../lab/measurements.ts'
+import { installReplay, newSiteTally, NewQuestion, readMeasurements, type PageFacts, type SiteCount, type SiteTally } from '../lab/measurements.ts'
 import { observeBlink } from '../lab/observe/blink.ts'
 import { observeGecko } from '../lab/observe/gecko.ts'
 import { observeWebKit } from '../lab/observe/webkit.ts'
@@ -114,7 +114,6 @@ const CASE_WEIGHT = 40
 
 // ---- Shapes ----
 
-type PageFacts = { userAgent: string; devicePixelRatio: number; pageLang: string }
 export type InputCase = { id: string; family: string; case: Case; browser: BrowserKind; env: PageFacts; build: BrowserBuild; languages: ProcessLanguages['given'] | null; record: CaseMeasurements }
 export type FullPrediction =
   | { layout: RecordedLayout; observation: ExpectedObservation | { error: string }; painterLimits: PainterLimits | { error: string } | null }
@@ -264,7 +263,7 @@ const fieldOf = (path: string): string => path.replace(/\[\d+\]/g, '[]')
 
 // ---- One case ----
 
-type Predictor = {
+export type Predictor = {
   predict: (c: Case, env: { browser: BrowserKind; build: string; languages: ProcessLanguages['given'] | null }) => LayoutPrediction | LinesPrediction | { error: string }
   limits?: (prediction: LayoutPrediction) => PainterLimits
 }
@@ -286,7 +285,7 @@ function observe(prediction: LayoutPrediction): ExpectedObservation {
 
 const message = (error: unknown): string => (error instanceof Error ? error.message : String(error))
 
-function askedOf(answeredBy: readonly number[], phase: [number, number]): Asked {
+export function askedOf(answeredBy: readonly number[], phase: [number, number]): Asked {
   const out: number[] = []
   let all = answeredBy.length === phase[1] - phase[0]
   for (let i = 0; i < answeredBy.length; i++) {

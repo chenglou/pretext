@@ -1,8 +1,8 @@
-// Tier 1's loop with no browser at all: a fake Canvas stands in for one, lab/record.ts records what the library asks it,
+// Tier 1's loop with no browser at all: a fake Canvas stands in for one (fake-browser.ts), lab/record.ts records what the library asks it,
 // and the replay must give the recorded prediction back, name a changed one by its first field, and refuse to guess an
 // answer the record doesn't hold.
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
-import { beginCase, beginPhase, endCase, installRecorder } from '../lab/record.ts'
+import { beginCase, beginPhase, endCase } from '../lab/record.ts'
 import { makeCase } from '../lab/cases/case.ts'
 import { font, paragraph, text } from '../lab/cases/build.ts'
 import * as predictor from '../lab/baselines/no-facts-predictor.ts'
@@ -10,63 +10,13 @@ import { newSiteTally, siteOf } from '../lab/measurements.ts'
 import type { PredictEnv } from '../lab/predictor-core.ts'
 import type { CaseMeasurements, RecordedCall } from '../lab/record.ts'
 import type { Case, LayoutPrediction } from '../lab/types.ts'
+import { BUILD, USER_AGENT, installFakeBrowser } from './fake-browser.ts'
 import { classifyAsked, classifyQuestions, firstDifference, replayCase, type InputCase, type ReferenceCase } from './replay.ts'
 
-const USER_AGENT = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36'
-const BUILD = { app: 'Google Chrome', appVersion: '153.0.8010.50', engine: '153.0.8010.50', os: '26A428' }
-const SETTINGS = ['font', 'lang', 'letterSpacing', 'wordSpacing', 'fontKerning', 'textRendering', 'direction', 'fontStretch', 'fontVariantCaps', 'textAlign', 'textBaseline']
-
-// A Canvas whose widths are a fixed function of the font size and the code points, in multiples of 1/64 px.
-function fakeContextClass(): new () => object {
-  class Context {
-    values = new Map<string, string>()
-    measureText(value: string): unknown {
-      const size = Number(/(\d+(?:\.\d+)?)px/.exec(this.values.get('font') ?? '10px')?.[1] ?? 10)
-      const spacing = Number.parseFloat(this.values.get('letterSpacing') ?? '0') || 0
-      let width = 0
-      for (const ch of value) width += Math.round(size * (24 + (ch.codePointAt(0)! % 13)) + spacing * 64) / 64
-      return { width, actualBoundingBoxLeft: 0, actualBoundingBoxRight: width, actualBoundingBoxAscent: size * 0.75, actualBoundingBoxDescent: size * 0.25, fontBoundingBoxAscent: size * 0.9, fontBoundingBoxDescent: size * 0.2 }
-    }
-  }
-  for (const name of SETTINGS) {
-    Object.defineProperty(Context.prototype, name, {
-      configurable: true,
-      get(this: Context): string { return this.values.get(name) ?? '' },
-      set(this: Context, value: unknown): void { this.values.set(name, String(value)) },
-    })
-  }
-  return Context
-}
-
 const globals = globalThis as Record<string, unknown>
-const intl = Intl as unknown as Record<string, unknown>
-const NAMES = ['OffscreenCanvasRenderingContext2D', 'CanvasRenderingContext2D', 'OffscreenCanvas', 'navigator', 'window', 'document']
-const before = new Map<string, PropertyDescriptor | undefined>()
-const v8Before = Object.getOwnPropertyDescriptor(intl, 'v8BreakIterator')
-
-beforeAll(() => {
-  for (const name of NAMES) before.set(name, Object.getOwnPropertyDescriptor(globals, name))
-  const Offscreen = fakeContextClass()
-  const define = (name: string, value: unknown): void => { Object.defineProperty(globals, name, { value, configurable: true, writable: true }) }
-  define('OffscreenCanvasRenderingContext2D', Offscreen)
-  define('CanvasRenderingContext2D', fakeContextClass())
-  define('OffscreenCanvas', class { getContext(): object { return new Offscreen() } })
-  define('navigator', { userAgent: USER_AGENT })
-  define('window', { devicePixelRatio: 2 })
-  define('document', { documentElement: { lang: 'en' } })
-  // Chrome has Intl.v8BreakIterator, and the library's environment says whether it exists.
-  intl['v8BreakIterator'] = class { adoptText(): void {} first(): number { return 0 } next(): number { return -1 } current(): number { return 0 } breakType(): string { return 'none' } resolvedOptions(): unknown { return {} } }
-  installRecorder()
-})
-
-afterAll(() => {
-  for (const [name, descriptor] of before) {
-    if (descriptor === undefined) delete globals[name]
-    else Object.defineProperty(globals, name, descriptor)
-  }
-  if (v8Before === undefined) delete intl['v8BreakIterator']
-  else Object.defineProperty(intl, 'v8BreakIterator', v8Before)
-})
+let restore = (): void => {}
+beforeAll(() => { restore = installFakeBrowser() })
+afterAll(() => restore())
 
 const ENV: PredictEnv = { browser: 'chrome', build: BUILD.engine, languages: { engine: 'blink', uiLanguage: 'en-US' } }
 

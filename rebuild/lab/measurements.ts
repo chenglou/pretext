@@ -99,10 +99,39 @@ function count(counts: Map<string, SiteCount>, key: string, repeat: boolean, cha
   }
 }
 
+export type PageFacts = { userAgent: string; devicePixelRatio: number; pageLang: string }
+
+// The page a layout reads, as globals: the page facts, and `Canvas` as OffscreenCanvas and as a detached <canvas>
+// (src/measure/canvas.ts makes its contexts from either). Returns what puts the old globals back. The replay below and the
+// stand-in Canvas of rebuild/tests/stand-in-canvas.ts are the two pages there are.
+export function installPage(env: PageFacts, Canvas: new () => { getContext(): object }): () => void {
+  const globals = globalThis as Record<string, unknown>
+  const names = ['OffscreenCanvas', 'navigator', 'window', 'document']
+  const before = names.map(name => Object.getOwnPropertyDescriptor(globals, name))
+  const define = (name: string, value: unknown): void => { Object.defineProperty(globals, name, { value, configurable: true, writable: true }) }
+  define('OffscreenCanvas', Canvas)
+  define('navigator', { userAgent: env.userAgent })
+  define('window', { devicePixelRatio: env.devicePixelRatio })
+  define('document', {
+    documentElement: { lang: env.pageLang },
+    createElement(name: string): unknown {
+      if (name !== 'canvas') throw new Error(`This page has no <${name}> element`)
+      return new Canvas()
+    },
+  })
+  return () => {
+    for (let i = 0; i < names.length; i++) {
+      const descriptor = before[i]
+      if (descriptor === undefined) delete globals[names[i]!]
+      else Object.defineProperty(globals, names[i]!, descriptor)
+    }
+  }
+}
+
 // Installs one phase of the record (the predict phase, or the observe phase, where the WebKit observation port measures) as
 // the browser globals a layout reads. restore() puts the old globals back. With `tally`, every question is counted under its
 // call site.
-export function installReplay(record: CaseMeasurements, env: { userAgent: string; devicePixelRatio: number; pageLang: string }, phase: 'predict' | 'observe' = 'predict', tally: SiteTally | null = null): Replay {
+export function installReplay(record: CaseMeasurements, env: PageFacts, phase: 'predict' | 'observe' = 'predict', tally: SiteTally | null = null): Replay {
   const replay: Replay = { asked: 0, distinct: 0, contexts: 0, fromAnotherContext: 0, answeredBy: [], restore: () => {} }
   // Per recorded context: string -> the answers in call order, as indices into record.calls.
   const answers: Array<Map<string, number[]>> = record.contexts.map(() => new Map())
@@ -175,28 +204,14 @@ export function installReplay(record: CaseMeasurements, env: { userAgent: string
     if (found === undefined) throw new NewQuestion(`${api} over ${JSON.stringify(text)} is not in the record`)
     return found
   }
-  const globals = globalThis as Record<string, unknown>
   const intl = Intl as unknown as Record<string, unknown>
-  const before = { OffscreenCanvas: Object.getOwnPropertyDescriptor(globals, 'OffscreenCanvas'), navigator: Object.getOwnPropertyDescriptor(globals, 'navigator'), window: Object.getOwnPropertyDescriptor(globals, 'window'), document: Object.getOwnPropertyDescriptor(globals, 'document') }
   const segment = Intl.Segmenter.prototype.segment
   const v8 = Object.getOwnPropertyDescriptor(intl, 'v8BreakIterator')
-  const define = (name: string, value: unknown): void => { Object.defineProperty(globals, name, { value, configurable: true, writable: true }) }
-  // A layout makes its contexts from OffscreenCanvas or from a detached <canvas> (src/measure/canvas.ts).
-  const Canvas = class {
+  const restorePage = installPage(env, class {
     getContext(): ReplayContext {
       replay.contexts++
       return new ReplayContext()
     }
-  }
-  define('OffscreenCanvas', Canvas)
-  define('navigator', { userAgent: env.userAgent })
-  define('window', { devicePixelRatio: env.devicePixelRatio })
-  define('document', {
-    documentElement: { lang: env.pageLang },
-    createElement(name: string): unknown {
-      if (name !== 'canvas') throw new Error(`The replay has no <${name}> element`)
-      return new Canvas()
-    },
   })
   Intl.Segmenter.prototype.segment = function (this: Intl.Segmenter, text: string): Intl.Segments {
     const found = segmentation('segmenter', text) as Extract<RecordedSegmentation, { api: 'segmenter' }>
@@ -218,10 +233,7 @@ export function installReplay(record: CaseMeasurements, env: { userAgent: string
     delete intl['v8BreakIterator']
   }
   replay.restore = () => {
-    for (const [name, descriptor] of Object.entries(before)) {
-      if (descriptor === undefined) delete globals[name]
-      else Object.defineProperty(globals, name, descriptor)
-    }
+    restorePage()
     Intl.Segmenter.prototype.segment = segment
     if (v8 === undefined) delete intl['v8BreakIterator']
     else Object.defineProperty(intl, 'v8BreakIterator', v8)
