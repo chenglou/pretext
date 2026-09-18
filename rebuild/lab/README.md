@@ -1267,8 +1267,8 @@ comparison found one.
 writes seeds, to a staging folder, and they are adopted only after the critic has checked them).
 
 ```sh
-bun rebuild/lab/gate.ts --seed --staging=rebuild/lab/baselines/staged-round3 --engine=gecko --engine-version=<label> \
-  --baseline=rebuild/lab/baselines/gate-firefox-<build>.json --runs=<forward per-case>,<reverse per-case> [--note=<text>]
+bun rebuild/lab/gate.ts --seed --staging=rebuild/lab/baselines/staged-<round>-<config> --engine=gecko --engine-version=<label> \
+  --baseline=rebuild/lab/baselines/<config>/gate-firefox-<build>.json --runs=<forward per-case>,<reverse per-case> [--note=<text>]
 ```
 
 - `--baseline` is the adopted seed, which stays as it is. The new seed goes to `<staging>/<the baseline's file name>` and
