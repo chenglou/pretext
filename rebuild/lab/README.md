@@ -319,10 +319,11 @@ reference ledger; and checks the runs against the build-keyed seed through `gate
   a regression. A case that is history-dependent and unknown to the reference can: run both orders, or the isolation
   protocol (`sharded.ts --isolate --ids=...`, "Sharded runs and isolation"), before calling it one.
 - *Seeds*: `--both-orders --seed --staging=<dir>` stages `<browser>-<engine build>-<config>.json` with its seed record, never
-  over the adopted file (`rebuild/tests/baselines/sets/`, empty until seeds are adopted). Staged on 2026-09-18:
-  `rebuild/tests/baselines/staged-round4-sets/`, six seeds under scorer 6; a forward-only run of each browser against its
-  staged seed loses nothing, and against the reference ledger has 0 transitions. The gate keys on case ids alone, so an id
-  two sets share counts as passing only where every set passes it; the ledger keeps them apart.
+  over the adopted file. The adopted seeds are in `rebuild/tests/baselines/sets/`, six files under scorer 7 with their seed
+  records, seeded from the recordings the references are frozen from ("Seeds go to a staging folder", "Adopted at the
+  correctness line"); without `--baseline` a run is checked against the one of its browser build and configuration. The
+  gate keys on case ids alone, so an id two sets share counts as passing only where every set passes it; the ledger keeps
+  them apart.
 - A failed job is never run again: the command stops and names its log, and `--rerun-failed` runs the failed jobs once
   after the cause is fixed. Jobs that finished are kept, so the command resumes.
 - `--measure-first` runs every job under `run.ts --measure-first` ("Measure first"). The protocol is part of the ledger, so
@@ -1211,6 +1212,37 @@ bun rebuild/lab/gate.ts --seed --staging=rebuild/lab/baselines/staged-round3 --e
 - `rebuild/tests/gate.ts seed` stages too since ceiling round 4: `--staging=<dir>` is required, the seed goes to
   `<staging>/<the baseline's file name>` with a seed record over its family pairs, and the baseline it names stays byte for
   byte (`rebuild/tests/gate.test.ts`). `rebuild/tests/browser-sets.ts --seed` stages the tier 2 seeds the same way.
+
+**Adopted at the correctness line (2026-09-18).** After research/ROUND4-CRITIC.md's verdict the round 4 seeds were made
+again with the same commands from the recordings the references are frozen from (`.artifacts/tests/runs/line-20260918`,
+both orders, and the giants in `.artifacts/ceiling-20260917/freeze-line/giants`; library feb3937, which differs from the
+evaluated one by the font checks' contexts alone), staged, checked and moved into place. The baseline names carry no
+configuration, so the lab gate's and the tests gate's adopted seeds sit in a folder per configuration, and tier 2's names
+carry it:
+
+| Gate | Adopted seeds | Seeded from |
+|---|---|---|
+| lab gate (`lab/gate.ts`) | `rebuild/lab/baselines/{no-facts,facts}/gate-<browser>-<build>.json` | smoke, the development sets with `rich-prewrap`, the 09-16 held-out sets and the giants |
+| tests gate (`rebuild/tests/gate.ts`) | `rebuild/tests/baselines/{no-facts,facts}/<browser>[-features]-<build>.json`, with each configuration's `coverage.json`; `rebuild/tests/coverage.json` is the headline configuration's | round 3's family derivations as tier 2 ran them |
+| tier 2 (`browser-sets.ts`) | `rebuild/tests/baselines/sets/<browser>-<build>-<config>.json` | every tier set |
+
+- Each seed's record is beside it (`<name>.seed-record.json`), with `adopted` added. Every seed equals the one the round 4
+  evaluation staged in passes, history-dependent cases, unstable pairs, protocol rows and environments, so every record lists
+  the pairs the evaluation's listed, 2,251 lost pairs in 26 records, and each carries the evaluation's attribution for the
+  same case and metric (`attributionsFrom`; `.artifacts/ceiling-20260917/freeze-line/tools/carry-attributions.py` refuses a
+  pair the evaluation's record doesn't hold with the same status). Tier 2's records compare with round 4a's staged seeds, as
+  the evaluation's did; against the evaluation's own staged seeds the new ones lose and gain nothing
+  (`freeze-line/seeds-vs-evaluation`).
+- Every adopted seed passes a check against its own runs from where it sits, with the environment check on
+  (`freeze-line/tools/check-adopted.sh`: 6 lab and 14 tests checks; tier 2 checks its own when it runs).
+- What they replaced is in the history before this adoption: round 2's scorer 4 seeds (`rebuild/lab/baselines/gate-<browser>-
+  <build>.json`, `rebuild/tests/baselines/<browser>[-features]-<build>.json`), which refused every run since scorer 5 and
+  which the records' `against` names, and the staging folders of rounds 3 and 4 (`staged-round3`, `staged-round4-{no-facts,
+  facts}`, `staged-round4-sets`, `staged-round4c-sets`). Chrome's .48 seeds and the G0 files stay: they describe other
+  environments.
+- With no supplied facts the lab and tests records lose pairs against seeds that were recorded with the lab's facts (Chrome
+  79, 208 and 276; Firefox 100 and 167); the like-for-like facts records lose what round 3's staged seeds lost (rebuild/
+  TESTS.md §9).
 
 ## Page-history dependence
 

@@ -56,12 +56,12 @@ Terms:
 | `rebuild/tests/fit.ts` | Each browser's fit arithmetic, from recorded probe verdicts |
 | `rebuild/tests/derive.ts`, `noop-predictor.ts`, `observe-families.sh` | Width derivation and the observation loop |
 | `rebuild/tests/facts.ts`, `seed-facts-20260916.sh`, `rerun-probes.sh`; `rebuild/facts/<engine>/<engine build>.ndjson` | Versioned probe facts |
-| `rebuild/tests/coverage.ts` → `rebuild/tests/coverage.json` | The coverage matrix |
-| `rebuild/tests/gate.ts` → `rebuild/tests/baselines/<browser>-<engine build>.json` | The layered gate |
+| `rebuild/tests/coverage.ts` → `rebuild/tests/coverage.json` | The coverage matrix (the headline configuration's; each configuration's is beside its seeds) |
+| `rebuild/tests/gate.ts` → `rebuild/tests/baselines/{no-facts,facts}/<browser>[-features]-<engine build>.json` | The layered gate, a seed per configuration with its seed record (§9) |
 | `rebuild/tests/independence.test.ts` | No expected value from `rebuild/src` |
 | `rebuild/tests/sets.ts` | The tiers' sets and run protocol |
 | `rebuild/tests/replay.ts`, `rebuild/tests/reference/` | Tier 1: offline replay against a frozen reference, pinned by hash in the manifests |
-| `rebuild/tests/browser-sets.ts`, `rebuild/tests/baselines/sets/`, `staged-round4c-sets/` (round 4's library; `staged-round4-sets/` describes round 3's) | Tier 2 and its seeds |
+| `rebuild/tests/browser-sets.ts`, `rebuild/tests/baselines/sets/` | Tier 2 and its adopted seeds, `<browser>-<engine build>-<config>.json` with seed records |
 | `rebuild/tests/known-tail.json`, `known-tail.ts`, `known-tail.test.ts` | The known tail: the classes left open at the frozen line, with case ids and rules over a tier 2 ledger (59 items) |
 | `rebuild/tests/compare-sets.ts`, `rebuild/lab/compare-rows.ts` | Two tier 2 runs, or two row files, case by case (measure first, installed Safari against webkit-host) |
 | `rebuild/tests/ledger.ts` | The known-status ledger: the four metrics' statuses and the exact-value status per case, transitions and conditions |
@@ -515,7 +515,20 @@ other configuration and in the round 4a reference ledger.
   round 3's no-facts library, and Firefox's measured cost of the OffscreenCanvas decision.
 - A sealed-4 record is in `rebuild/lab/baselines/sealed-4-20260918.json`.
 
-**Scorer 6 (2026-09-18)** makes every scorer 5 staged seed above refuse. Tier 2's seeds for the same sets are staged in `rebuild/tests/baselines/staged-round4-sets/` (six files, both configurations); forward-only runs of each browser lose nothing against them. They describe the round 3 library, and are made again after round 4's merges.
+**Adopted at the correctness line, 2026-09-18.** After the critic's verdict (research/ROUND4-CRITIC.md: adopt) the seeds of
+the table above were made again by the same commands from the recordings the references are frozen from
+(`.artifacts/tests/runs/line-20260918` and the giants beside them; library feb3937, the evaluated library with the font
+checks' contexts changed; tools in `.artifacts/ceiling-20260917/freeze-line/tools`: `tier2.sh`, `giants.sh`, `gates.sh`,
+`carry-attributions.py`, `adopt.py`, `check-adopted.sh`). Every new seed equals the evaluation's staged one in passes,
+history-dependent cases, unstable pairs, protocol rows and environments, so the table's counts stand, every record lists the
+same lost pairs, and each pair carries the evaluation's attribution (2,251 pairs in 26 records, none without one). Where they
+sit: `rebuild/tests/baselines/{no-facts,facts}/` with each configuration's `coverage.json` (`rebuild/tests/coverage.json` is
+the headline configuration's), `rebuild/lab/baselines/{no-facts,facts}/`, and `rebuild/tests/baselines/sets/` for tier 2,
+each with its seed record. All 20 lab and tests checks of an adopted seed against its own runs pass with the environment
+check on. The round 2 seeds in the first table, the round 3 staging folders and the round 4 ones are in the history before
+the adoption; Chrome's .48 seeds stay.
+
+**Scorer 6 (2026-09-18)** made every scorer 5 staged seed above refuse. Tier 2's seeds for the same sets are staged in `rebuild/tests/baselines/staged-round4-sets/` (six files, both configurations); forward-only runs of each browser lose nothing against them. They describe the round 3 library, and are made again after round 4's merges.
 
 - Chrome's three files are new, for build 153.0.8010.50, which replaced .48 on 2026-09-17; the .48 seeds stay in their own files. Their family cases were derived under .48 (the `build` field), the runs are .50's, whose native views equal .48's on every family case in both orders (`evaluate-r2/native-rounds-chrome.json`), and their facts file is .48's. §12's procedure (probes, derivation) hasn't run for .50.
 - The feature seeds still hold round 1's cases, with their protocol rows listed apart (Firefox 15, webkit-host 7). Round 1's seeds were pruned of those rows by rule in ceiling round 2 (`lab/gate.ts --prune-protocol`, reports in `.artifacts/lab/round2-scorer4/prune/`). Ceiling round 3 derived the families again with `derive.ts` `minimumUnits` (§6, "Round 3 derivations"); the next seeds take `.artifacts/tests/derive-r3-20260917/<browser>/{families,features}`, whose Chrome cases were derived under .50 with .50's facts file beside them.

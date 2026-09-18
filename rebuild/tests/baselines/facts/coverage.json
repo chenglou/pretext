@@ -1,6 +1,6 @@
 {
  "format": "pretext-coverage/1",
- "generatedAt": "2026-09-18T20:19:20.053Z",
+ "generatedAt": "2026-09-18T20:19:22.126Z",
  "inputs": {
   "facts": [
    "/Users/chenglou/github/pretext-rebuild/rebuild/facts/blink/153.0.8010.50.ndjson",
@@ -8,13 +8,13 @@
    "/Users/chenglou/github/pretext-rebuild/rebuild/facts/gecko/156.0.ndjson"
   ],
   "derived": [
-   "/Users/chenglou/github/pretext-rebuild/.artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families",
-   "/Users/chenglou/github/pretext-rebuild/.artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/features",
-   "/Users/chenglou/github/pretext-rebuild/.artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/features-en-US",
-   "/Users/chenglou/github/pretext-rebuild/.artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/firefox/families",
-   "/Users/chenglou/github/pretext-rebuild/.artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/firefox/features",
-   "/Users/chenglou/github/pretext-rebuild/.artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/webkit-host/families",
-   "/Users/chenglou/github/pretext-rebuild/.artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/webkit-host/features"
+   "/Users/chenglou/github/pretext-rebuild/.artifacts/ceiling-20260917/freeze-line/gates/derived/facts/chrome/families",
+   "/Users/chenglou/github/pretext-rebuild/.artifacts/ceiling-20260917/freeze-line/gates/derived/facts/chrome/features",
+   "/Users/chenglou/github/pretext-rebuild/.artifacts/ceiling-20260917/freeze-line/gates/derived/facts/chrome/features-en-US",
+   "/Users/chenglou/github/pretext-rebuild/.artifacts/ceiling-20260917/freeze-line/gates/derived/facts/firefox/families",
+   "/Users/chenglou/github/pretext-rebuild/.artifacts/ceiling-20260917/freeze-line/gates/derived/facts/firefox/features",
+   "/Users/chenglou/github/pretext-rebuild/.artifacts/ceiling-20260917/freeze-line/gates/derived/facts/webkit-host/families",
+   "/Users/chenglou/github/pretext-rebuild/.artifacts/ceiling-20260917/freeze-line/gates/derived/facts/webkit-host/features"
   ]
  },
  "counts": {
@@ -980,10 +980,10 @@
      "targets": 144,
      "cases": 288,
      "passes": {
-      "lineCount": 272,
-      "breaks": 272,
-      "widths": 236,
-      "painter": 224
+      "lineCount": 288,
+      "breaks": 288,
+      "widths": 288,
+      "painter": 264
      },
      "scored": 288
     },
@@ -2069,10 +2069,10 @@
      "targets": 144,
      "cases": 288,
      "passes": {
-      "lineCount": 272,
-      "breaks": 272,
-      "widths": 236,
-      "painter": 224
+      "lineCount": 288,
+      "breaks": 288,
+      "widths": 288,
+      "painter": 264
      },
      "scored": 288
     }
@@ -2312,10 +2312,10 @@
      "targets": 336,
      "cases": 600,
      "passes": {
-      "lineCount": 584,
-      "breaks": 558,
-      "widths": 550,
-      "painter": 560
+      "lineCount": 600,
+      "breaks": 600,
+      "widths": 600,
+      "painter": 568
      },
      "scored": 600
     }
@@ -2724,10 +2724,10 @@
      "targets": 288,
      "cases": 560,
      "passes": {
-      "lineCount": 556,
-      "breaks": 552,
-      "widths": 532,
-      "painter": 532
+      "lineCount": 560,
+      "breaks": 560,
+      "widths": 560,
+      "painter": 536
      },
      "scored": 560
     }
@@ -3708,10 +3708,10 @@
      "targets": 336,
      "cases": 600,
      "passes": {
-      "lineCount": 584,
-      "breaks": 558,
-      "widths": 550,
-      "painter": 560
+      "lineCount": 600,
+      "breaks": 600,
+      "widths": 600,
+      "painter": 568
      },
      "scored": 600
     }
@@ -4212,10 +4212,10 @@
      "targets": 288,
      "cases": 560,
      "passes": {
-      "lineCount": 556,
-      "breaks": 552,
-      "widths": 532,
-      "painter": 532
+      "lineCount": 560,
+      "breaks": 560,
+      "widths": 560,
+      "painter": 536
      },
      "scored": 560
     }
@@ -4325,10 +4325,10 @@
      "targets": 336,
      "cases": 600,
      "passes": {
-      "lineCount": 584,
-      "breaks": 558,
-      "widths": 550,
-      "painter": 560
+      "lineCount": 600,
+      "breaks": 600,
+      "widths": 600,
+      "painter": 568
      },
      "scored": 600
     }
@@ -4481,10 +4481,10 @@
      "targets": 144,
      "cases": 288,
      "passes": {
-      "lineCount": 272,
-      "breaks": 272,
-      "widths": 236,
-      "painter": 224
+      "lineCount": 288,
+      "breaks": 288,
+      "widths": 288,
+      "painter": 264
      },
      "scored": 288
     },
@@ -4496,10 +4496,10 @@
      "targets": 640,
      "cases": 1232,
      "passes": {
-      "lineCount": 1216,
-      "breaks": 1216,
-      "widths": 948,
-      "painter": 956
+      "lineCount": 1232,
+      "breaks": 1232,
+      "widths": 1128,
+      "painter": 982
      },
      "scored": 1232
     }
@@ -4562,10 +4562,10 @@
      "targets": 336,
      "cases": 600,
      "passes": {
-      "lineCount": 584,
-      "breaks": 558,
-      "widths": 550,
-      "painter": 560
+      "lineCount": 600,
+      "breaks": 600,
+      "widths": 600,
+      "painter": 568
      },
      "scored": 600
     },
@@ -4577,10 +4577,10 @@
      "targets": 640,
      "cases": 1232,
      "passes": {
-      "lineCount": 1216,
-      "breaks": 1216,
-      "widths": 948,
-      "painter": 956
+      "lineCount": 1232,
+      "breaks": 1232,
+      "widths": 1128,
+      "painter": 982
      },
      "scored": 1232
     }
@@ -4619,10 +4619,10 @@
      "targets": 336,
      "cases": 600,
      "passes": {
-      "lineCount": 584,
-      "breaks": 558,
-      "widths": 550,
-      "painter": 560
+      "lineCount": 600,
+      "breaks": 600,
+      "widths": 600,
+      "painter": 568
      },
      "scored": 600
     }
@@ -5096,10 +5096,10 @@
      "targets": 336,
      "cases": 600,
      "passes": {
-      "lineCount": 584,
-      "breaks": 558,
-      "widths": 550,
-      "painter": 560
+      "lineCount": 600,
+      "breaks": 600,
+      "widths": 600,
+      "painter": 568
      },
      "scored": 600
     }
@@ -5183,10 +5183,10 @@
      "targets": 336,
      "cases": 600,
      "passes": {
-      "lineCount": 584,
-      "breaks": 558,
-      "widths": 550,
-      "painter": 560
+      "lineCount": 600,
+      "breaks": 600,
+      "widths": 600,
+      "painter": 568
      },
      "scored": 600
     },
@@ -5344,10 +5344,10 @@
      "targets": 144,
      "cases": 288,
      "passes": {
-      "lineCount": 272,
-      "breaks": 272,
-      "widths": 236,
-      "painter": 224
+      "lineCount": 288,
+      "breaks": 288,
+      "widths": 288,
+      "painter": 264
      },
      "scored": 288
     },
@@ -5402,10 +5402,10 @@
      "targets": 144,
      "cases": 288,
      "passes": {
-      "lineCount": 272,
-      "breaks": 272,
-      "widths": 236,
-      "painter": 224
+      "lineCount": 288,
+      "breaks": 288,
+      "widths": 288,
+      "painter": 264
      },
      "scored": 288
     }
@@ -5588,10 +5588,10 @@
      "targets": 288,
      "cases": 560,
      "passes": {
-      "lineCount": 556,
-      "breaks": 552,
-      "widths": 532,
-      "painter": 532
+      "lineCount": 560,
+      "breaks": 560,
+      "widths": 560,
+      "painter": 536
      },
      "scored": 560
     }
@@ -5885,10 +5885,10 @@
      "targets": 336,
      "cases": 600,
      "passes": {
-      "lineCount": 584,
-      "breaks": 558,
-      "widths": 550,
-      "painter": 560
+      "lineCount": 600,
+      "breaks": 600,
+      "widths": 600,
+      "painter": 568
      },
      "scored": 600
     }
@@ -5927,10 +5927,10 @@
      "targets": 336,
      "cases": 600,
      "passes": {
-      "lineCount": 584,
-      "breaks": 558,
-      "widths": 550,
-      "painter": 560
+      "lineCount": 600,
+      "breaks": 600,
+      "widths": 600,
+      "painter": 568
      },
      "scored": 600
     }
@@ -5969,10 +5969,10 @@
      "targets": 288,
      "cases": 560,
      "passes": {
-      "lineCount": 556,
-      "breaks": 552,
-      "widths": 532,
-      "painter": 532
+      "lineCount": 560,
+      "breaks": 560,
+      "widths": 560,
+      "painter": 536
      },
      "scored": 560
     }
@@ -10617,9 +10617,9 @@
      "targets": 336,
      "cases": 602,
      "passes": {
-      "lineCount": 599,
-      "breaks": 568,
-      "widths": 474,
+      "lineCount": 602,
+      "breaks": 588,
+      "widths": 546,
       "painter": 395
      },
      "scored": 602
@@ -10991,9 +10991,9 @@
      "targets": 288,
      "cases": 544,
      "passes": {
-      "lineCount": 536,
-      "breaks": 528,
-      "widths": 496,
+      "lineCount": 544,
+      "breaks": 544,
+      "widths": 544,
       "painter": 496
      },
      "scored": 544
@@ -11543,9 +11543,9 @@
      "targets": 312,
      "cases": 756,
      "passes": {
-      "lineCount": 744,
-      "breaks": 736,
-      "widths": 736,
+      "lineCount": 756,
+      "breaks": 756,
+      "widths": 756,
       "painter": 730
      },
      "scored": 756
@@ -11890,9 +11890,9 @@
      "targets": 312,
      "cases": 756,
      "passes": {
-      "lineCount": 744,
-      "breaks": 736,
-      "widths": 736,
+      "lineCount": 756,
+      "breaks": 756,
+      "widths": 756,
       "painter": 730
      },
      "scored": 756
@@ -12151,9 +12151,9 @@
      "targets": 312,
      "cases": 756,
      "passes": {
-      "lineCount": 744,
-      "breaks": 736,
-      "widths": 736,
+      "lineCount": 756,
+      "breaks": 756,
+      "widths": 756,
       "painter": 730
      },
      "scored": 756
@@ -12166,9 +12166,9 @@
      "targets": 336,
      "cases": 602,
      "passes": {
-      "lineCount": 599,
-      "breaks": 568,
-      "widths": 474,
+      "lineCount": 602,
+      "breaks": 588,
+      "widths": 546,
       "painter": 395
      },
      "scored": 602
@@ -12216,9 +12216,9 @@
      "targets": 312,
      "cases": 756,
      "passes": {
-      "lineCount": 744,
-      "breaks": 736,
-      "widths": 736,
+      "lineCount": 756,
+      "breaks": 756,
+      "widths": 756,
       "painter": 730
      },
      "scored": 756
@@ -12669,9 +12669,9 @@
      "targets": 336,
      "cases": 602,
      "passes": {
-      "lineCount": 599,
-      "breaks": 568,
-      "widths": 474,
+      "lineCount": 602,
+      "breaks": 588,
+      "widths": 546,
       "painter": 395
      },
      "scored": 602
@@ -13115,9 +13115,9 @@
      "targets": 288,
      "cases": 544,
      "passes": {
-      "lineCount": 536,
-      "breaks": 528,
-      "widths": 496,
+      "lineCount": 544,
+      "breaks": 544,
+      "widths": 544,
       "painter": 496
      },
      "scored": 544
@@ -13303,9 +13303,9 @@
      "targets": 336,
      "cases": 602,
      "passes": {
-      "lineCount": 599,
-      "breaks": 568,
-      "widths": 474,
+      "lineCount": 602,
+      "breaks": 588,
+      "widths": 546,
       "painter": 395
      },
      "scored": 602
@@ -13417,9 +13417,9 @@
      "targets": 288,
      "cases": 544,
      "passes": {
-      "lineCount": 536,
-      "breaks": 528,
-      "widths": 496,
+      "lineCount": 544,
+      "breaks": 544,
+      "widths": 544,
       "painter": 496
      },
      "scored": 544
@@ -13486,9 +13486,9 @@
      "targets": 336,
      "cases": 602,
      "passes": {
-      "lineCount": 599,
-      "breaks": 568,
-      "widths": 474,
+      "lineCount": 602,
+      "breaks": 588,
+      "widths": 546,
       "painter": 395
      },
      "scored": 602
@@ -13949,9 +13949,9 @@
      "targets": 288,
      "cases": 544,
      "passes": {
-      "lineCount": 536,
-      "breaks": 528,
-      "widths": 496,
+      "lineCount": 544,
+      "breaks": 544,
+      "widths": 544,
       "painter": 496
      },
      "scored": 544
@@ -14019,9 +14019,9 @@
      "targets": 288,
      "cases": 544,
      "passes": {
-      "lineCount": 536,
-      "breaks": 528,
-      "widths": 496,
+      "lineCount": 544,
+      "breaks": 544,
+      "widths": 544,
       "painter": 496
      },
      "scored": 544
@@ -14384,9 +14384,9 @@
      "targets": 336,
      "cases": 602,
      "passes": {
-      "lineCount": 599,
-      "breaks": 568,
-      "widths": 474,
+      "lineCount": 602,
+      "breaks": 588,
+      "widths": 546,
       "painter": 395
      },
      "scored": 602
@@ -15484,10 +15484,10 @@
      "targets": 288,
      "cases": 560,
      "passes": {
-      "lineCount": 556,
-      "breaks": 552,
-      "widths": 532,
-      "painter": 532
+      "lineCount": 560,
+      "breaks": 560,
+      "widths": 560,
+      "painter": 536
      },
      "scored": 560
     }
@@ -15569,10 +15569,10 @@
      "targets": 288,
      "cases": 560,
      "passes": {
-      "lineCount": 556,
-      "breaks": 552,
-      "widths": 532,
-      "painter": 532
+      "lineCount": 560,
+      "breaks": 560,
+      "widths": 560,
+      "painter": 536
      },
      "scored": 560
     }
@@ -15656,10 +15656,10 @@
      "targets": 336,
      "cases": 600,
      "passes": {
-      "lineCount": 584,
-      "breaks": 558,
-      "widths": 550,
-      "painter": 560
+      "lineCount": 600,
+      "breaks": 600,
+      "widths": 600,
+      "painter": 568
      },
      "scored": 600
     }
@@ -17192,10 +17192,10 @@
      "targets": 640,
      "cases": 1232,
      "passes": {
-      "lineCount": 1216,
-      "breaks": 1216,
-      "widths": 948,
-      "painter": 956
+      "lineCount": 1232,
+      "breaks": 1232,
+      "widths": 1128,
+      "painter": 982
      },
      "scored": 1232
     },
@@ -17323,10 +17323,10 @@
      "targets": 640,
      "cases": 1232,
      "passes": {
-      "lineCount": 1216,
-      "breaks": 1216,
-      "widths": 948,
-      "painter": 956
+      "lineCount": 1232,
+      "breaks": 1232,
+      "widths": 1128,
+      "painter": 982
      },
      "scored": 1232
     }
@@ -19197,10 +19197,10 @@
      "targets": 336,
      "cases": 600,
      "passes": {
-      "lineCount": 584,
-      "breaks": 558,
-      "widths": 550,
-      "painter": 560
+      "lineCount": 600,
+      "breaks": 600,
+      "widths": 600,
+      "painter": 568
      },
      "scored": 600
     }
@@ -19284,10 +19284,10 @@
      "targets": 640,
      "cases": 1232,
      "passes": {
-      "lineCount": 1216,
-      "breaks": 1216,
-      "widths": 948,
-      "painter": 956
+      "lineCount": 1232,
+      "breaks": 1232,
+      "widths": 1128,
+      "painter": 982
      },
      "scored": 1232
     }
@@ -19418,9 +19418,9 @@
      "targets": 336,
      "cases": 602,
      "passes": {
-      "lineCount": 599,
-      "breaks": 568,
-      "widths": 474,
+      "lineCount": 602,
+      "breaks": 588,
+      "widths": 546,
       "painter": 395
      },
      "scored": 602

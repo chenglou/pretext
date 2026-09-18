@@ -1,0 +1,5135 @@
+{
+  "staged": "rebuild/lab/baselines/staged-line-facts/gate-webkit-22625.1.29.11.27.json",
+  "against": "rebuild/lab/baselines/gate-webkit-22625.1.29.11.27.json",
+  "counts": {
+    "cases": 41719,
+    "passPairs": {
+      "lineCount": 41407,
+      "breaks": 41385,
+      "widths": 40743,
+      "painter": 37601
+    },
+    "historyDependentCases": 273,
+    "withoutPassesCases": 21,
+    "unstablePairs": 2,
+    "protocolCases": 0
+  },
+  "lost": [
+    {
+      "id": "c-0ad060cd384930bf",
+      "family": "runs/bidi-runs",
+      "metric": "widths",
+      "status": "fail",
+      "reason": "width differs under a named gap",
+      "detail": "engine line 0: width 139.87704467773438; native node rects span [32.12297058105469, 172]; limited by rtl-shaping-across-inline-boxes",
+      "run": ".artifacts/tests/runs/line-20260918/webkit-host-facts/runs/runs/forward/part0/webkit-host-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "rtl-shaping-across-inline-boxes"
+      ],
+      "residual": null,
+      "attribution": "Lost against the adopted seed in round 3 already; round 3's attribution still holds: Covered by rtl-shaping-across-inline-boxes. Round 3's joining-context recipe makes both boxes exact (23.924049377441406px and 55.62748718261719px; round 2 had 32.80px and 46.75px), and the line's float32 sum of the shaped runs is one step off: the float32 order of shaped run sums stays a stand-in under the gap (specs/webkit-RESULTS.md, \"Ceiling round 3\")."
+    },
+    {
+      "id": "c-0ad060cd384930bf",
+      "family": "runs/bidi-runs",
+      "metric": "painter",
+      "status": "fail",
+      "reason": "painted extent differs",
+      "detail": "engine line 0: width 139.87704467773438; painted node rects span [32.12297058105469, 172]",
+      "run": ".artifacts/tests/runs/line-20260918/webkit-host-facts/runs/runs/forward/part0/webkit-host-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "rtl-shaping-across-inline-boxes"
+      ],
+      "residual": null,
+      "attribution": "Lost against the adopted seed in round 3 already; round 3's attribution still holds: Covered by rtl-shaping-across-inline-boxes. Round 3's joining-context recipe makes both boxes exact (23.924049377441406px and 55.62748718261719px; round 2 had 32.80px and 46.75px), and the line's float32 sum of the shaped runs is one step off: the float32 order of shaped run sums stays a stand-in under the gap (specs/webkit-RESULTS.md, \"Ceiling round 3\"). The painter pair follows the width."
+    },
+    {
+      "id": "c-197d41fbde4d0b3e",
+      "family": "ws/text-nodes",
+      "metric": "painter",
+      "status": "fail",
+      "reason": "painted extent differs",
+      "detail": "engine line 15: width 42.62400436401367; painted node rects span [0, 42.624000549316406]",
+      "run": ".artifacts/tests/runs/line-20260918/webkit-host-facts/runs/heldout-ws/forward/part0/webkit-host-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "page-history",
+        "tab-stops"
+      ],
+      "residual": null,
+      "attribution": "Lost against the adopted seed in round 3 already; round 3's attribution still holds: Painter form, not prediction. The prediction changed in round 3 (widths fail to pass). Round 2's painted extent agreed with a wrong predicted width; round 3 predicts the native width (the TAB's float32 order, or the control character's width as Core Text shapes it: specs/webkit-RESULTS.md, \"Ceiling round 3\"), and the painted line still draws the old one. Covered by canvas-language, page-history, tab-stops under the painter's scorer 4 rule."
+    },
+    {
+      "id": "c-790a15d5d04b7c3a",
+      "family": "suite/following-space-context",
+      "metric": "painter",
+      "status": "fail",
+      "reason": "painted extent differs",
+      "detail": "engine line 1: width 11.1171875; painted node rects span [0, 12]",
+      "run": ".artifacts/tests/runs/line-20260918/webkit-host-facts/runs/suite-sample/forward/part0/webkit-host-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "control-character-width"
+      ],
+      "residual": null,
+      "attribution": "Lost against the adopted seed in round 3 already; round 3's attribution still holds: Painter form, not prediction. The prediction changed in round 3 (widths fail to pass). Round 2's painted extent agreed with a wrong predicted width; round 3 predicts the native width (the TAB's float32 order, or the control character's width as Core Text shapes it: specs/webkit-RESULTS.md, \"Ceiling round 3\"), and the painted line still draws the old one. Covered by control-character-width under the painter's scorer 4 rule."
+    }
+  ],
+  "leftThroughHistory": [
+    {
+      "id": "c-0ac8b8b5ead9aff6",
+      "family": "suite/cjk-bracket",
+      "metric": "lineCount",
+      "difference": "code point 6: [x, width, line] [32,4.4375,1] vs [0,5,2]",
+      "passesNow": true
+    },
+    {
+      "id": "c-0ac8b8b5ead9aff6",
+      "family": "suite/cjk-bracket",
+      "metric": "breaks",
+      "difference": "code point 6: [x, width, line] [32,4.4375,1] vs [0,5,2]",
+      "passesNow": false
+    },
+    {
+      "id": "c-0ac8b8b5ead9aff6",
+      "family": "suite/cjk-bracket",
+      "metric": "widths",
+      "difference": "code point 6: [x, width, line] [32,4.4375,1] vs [0,5,2]",
+      "passesNow": false
+    },
+    {
+      "id": "c-0ac8b8b5ead9aff6",
+      "family": "suite/cjk-bracket",
+      "metric": "painter",
+      "difference": "code point 6: [x, width, line] [32,4.4375,1] vs [0,5,2]",
+      "passesNow": true
+    },
+    {
+      "id": "c-0e8d7148faafaac3",
+      "family": "suite/bracket",
+      "metric": "lineCount",
+      "difference": "code point 3: [x, width, line] [13,4.78125,0] vs [13,5,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-0e8d7148faafaac3",
+      "family": "suite/bracket",
+      "metric": "breaks",
+      "difference": "code point 3: [x, width, line] [13,4.78125,0] vs [13,5,0]",
+      "passesNow": false
+    },
+    {
+      "id": "c-0e8d7148faafaac3",
+      "family": "suite/bracket",
+      "metric": "widths",
+      "difference": "code point 3: [x, width, line] [13,4.78125,0] vs [13,5,0]",
+      "passesNow": false
+    },
+    {
+      "id": "c-0e8d7148faafaac3",
+      "family": "suite/bracket",
+      "metric": "painter",
+      "difference": "code point 3: [x, width, line] [13,4.78125,0] vs [13,5,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-0f4617a6496e2501",
+      "family": "suite/curly-double-open",
+      "metric": "lineCount",
+      "difference": "code point 11: [x, width, line] [8,10,3] vs [8,9.796875,3]",
+      "passesNow": true
+    },
+    {
+      "id": "c-0f4617a6496e2501",
+      "family": "suite/curly-double-open",
+      "metric": "breaks",
+      "difference": "code point 11: [x, width, line] [8,10,3] vs [8,9.796875,3]",
+      "passesNow": false
+    },
+    {
+      "id": "c-0f4617a6496e2501",
+      "family": "suite/curly-double-open",
+      "metric": "widths",
+      "difference": "code point 11: [x, width, line] [8,10,3] vs [8,9.796875,3]",
+      "passesNow": false
+    },
+    {
+      "id": "c-0f4617a6496e2501",
+      "family": "suite/curly-double-open",
+      "metric": "painter",
+      "difference": "code point 11: [x, width, line] [8,10,3] vs [8,9.796875,3]",
+      "passesNow": true
+    },
+    {
+      "id": "c-1681c3fa578cf9e6",
+      "family": "suite/angle",
+      "metric": "lineCount",
+      "difference": "code point 3: [x, width, line] [12,4.625,0] vs [12,5,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-1681c3fa578cf9e6",
+      "family": "suite/angle",
+      "metric": "breaks",
+      "difference": "code point 3: [x, width, line] [12,4.625,0] vs [12,5,0]",
+      "passesNow": false
+    },
+    {
+      "id": "c-1681c3fa578cf9e6",
+      "family": "suite/angle",
+      "metric": "widths",
+      "difference": "code point 3: [x, width, line] [12,4.625,0] vs [12,5,0]",
+      "passesNow": false
+    },
+    {
+      "id": "c-1681c3fa578cf9e6",
+      "family": "suite/angle",
+      "metric": "painter",
+      "difference": "code point 3: [x, width, line] [12,4.625,0] vs [12,5,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-218b7b4eb6b925b8",
+      "family": "suite/cjk-bracket",
+      "metric": "lineCount",
+      "difference": "code point 6: [x, width, line] [32,5,1] vs [0,5,2]",
+      "passesNow": true
+    },
+    {
+      "id": "c-218b7b4eb6b925b8",
+      "family": "suite/cjk-bracket",
+      "metric": "breaks",
+      "difference": "code point 6: [x, width, line] [32,5,1] vs [0,5,2]",
+      "passesNow": false
+    },
+    {
+      "id": "c-218b7b4eb6b925b8",
+      "family": "suite/cjk-bracket",
+      "metric": "widths",
+      "difference": "code point 6: [x, width, line] [32,5,1] vs [0,5,2]",
+      "passesNow": false
+    },
+    {
+      "id": "c-218b7b4eb6b925b8",
+      "family": "suite/cjk-bracket",
+      "metric": "painter",
+      "difference": "code point 6: [x, width, line] [32,5,1] vs [0,5,2]",
+      "passesNow": true
+    },
+    {
+      "id": "c-245a545c9942138d",
+      "family": "suite/curly-single-open",
+      "metric": "lineCount",
+      "difference": "code point 5: [x, width, line] [12,4,1] vs [12,3.71875,1]",
+      "passesNow": true
+    },
+    {
+      "id": "c-245a545c9942138d",
+      "family": "suite/curly-single-open",
+      "metric": "breaks",
+      "difference": "code point 5: [x, width, line] [12,4,1] vs [12,3.71875,1]",
+      "passesNow": false
+    },
+    {
+      "id": "c-245a545c9942138d",
+      "family": "suite/curly-single-open",
+      "metric": "widths",
+      "difference": "code point 5: [x, width, line] [12,4,1] vs [12,3.71875,1]",
+      "passesNow": false
+    },
+    {
+      "id": "c-245a545c9942138d",
+      "family": "suite/curly-single-open",
+      "metric": "painter",
+      "difference": "code point 5: [x, width, line] [12,4,1] vs [12,3.71875,1]",
+      "passesNow": true
+    },
+    {
+      "id": "c-294918996fdeb111",
+      "family": "suite/angle",
+      "metric": "lineCount",
+      "difference": "code point 1: [x, width, line] [4,5,0] vs [4,4.890625,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-294918996fdeb111",
+      "family": "suite/angle",
+      "metric": "breaks",
+      "difference": "code point 1: [x, width, line] [4,5,0] vs [4,4.890625,0]",
+      "passesNow": false
+    },
+    {
+      "id": "c-294918996fdeb111",
+      "family": "suite/angle",
+      "metric": "widths",
+      "difference": "code point 1: [x, width, line] [4,5,0] vs [4,4.890625,0]",
+      "passesNow": false
+    },
+    {
+      "id": "c-294918996fdeb111",
+      "family": "suite/angle",
+      "metric": "painter",
+      "difference": "code point 1: [x, width, line] [4,5,0] vs [4,4.890625,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-32d9c6604f6ed9d8",
+      "family": "suite/fullwidth-paren",
+      "metric": "lineCount",
+      "difference": "code point 6: [x, width, line] [32,5,1] vs [0,5,2]",
+      "passesNow": true
+    },
+    {
+      "id": "c-32d9c6604f6ed9d8",
+      "family": "suite/fullwidth-paren",
+      "metric": "breaks",
+      "difference": "code point 6: [x, width, line] [32,5,1] vs [0,5,2]",
+      "passesNow": false
+    },
+    {
+      "id": "c-32d9c6604f6ed9d8",
+      "family": "suite/fullwidth-paren",
+      "metric": "widths",
+      "difference": "code point 6: [x, width, line] [32,5,1] vs [0,5,2]",
+      "passesNow": false
+    },
+    {
+      "id": "c-32d9c6604f6ed9d8",
+      "family": "suite/fullwidth-paren",
+      "metric": "painter",
+      "difference": "code point 6: [x, width, line] [32,5,1] vs [0,5,2]",
+      "passesNow": true
+    },
+    {
+      "id": "c-355af1c36261505b",
+      "family": "suite/bracket",
+      "metric": "lineCount",
+      "difference": "code point 5: [x, width, line] [4,5,1] vs [4,4.890625,1]",
+      "passesNow": true
+    },
+    {
+      "id": "c-355af1c36261505b",
+      "family": "suite/bracket",
+      "metric": "breaks",
+      "difference": "code point 5: [x, width, line] [4,5,1] vs [4,4.890625,1]",
+      "passesNow": false
+    },
+    {
+      "id": "c-355af1c36261505b",
+      "family": "suite/bracket",
+      "metric": "widths",
+      "difference": "code point 5: [x, width, line] [4,5,1] vs [4,4.890625,1]",
+      "passesNow": false
+    },
+    {
+      "id": "c-355af1c36261505b",
+      "family": "suite/bracket",
+      "metric": "painter",
+      "difference": "code point 5: [x, width, line] [4,5,1] vs [4,4.890625,1]",
+      "passesNow": true
+    },
+    {
+      "id": "c-390a93596d227fad",
+      "family": "suite/curly-double-open",
+      "metric": "lineCount",
+      "difference": "code point 3: [x, width, line] [0,8.8984375,1] vs [0,9,1]",
+      "passesNow": true
+    },
+    {
+      "id": "c-390a93596d227fad",
+      "family": "suite/curly-double-open",
+      "metric": "breaks",
+      "difference": "code point 3: [x, width, line] [0,8.8984375,1] vs [0,9,1]",
+      "passesNow": false
+    },
+    {
+      "id": "c-390a93596d227fad",
+      "family": "suite/curly-double-open",
+      "metric": "widths",
+      "difference": "code point 3: [x, width, line] [0,8.8984375,1] vs [0,9,1]",
+      "passesNow": false
+    },
+    {
+      "id": "c-390a93596d227fad",
+      "family": "suite/curly-double-open",
+      "metric": "painter",
+      "difference": "code point 3: [x, width, line] [0,8.8984375,1] vs [0,9,1]",
+      "passesNow": true
+    },
+    {
+      "id": "c-3a002ab514057ee7",
+      "family": "suite/cjk-bracket",
+      "metric": "lineCount",
+      "difference": "code point 3: [x, width, line] [13,4.78125,0] vs [13,5,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-3a002ab514057ee7",
+      "family": "suite/cjk-bracket",
+      "metric": "breaks",
+      "difference": "code point 3: [x, width, line] [13,4.78125,0] vs [13,5,0]",
+      "passesNow": false
+    },
+    {
+      "id": "c-3a002ab514057ee7",
+      "family": "suite/cjk-bracket",
+      "metric": "widths",
+      "difference": "code point 3: [x, width, line] [13,4.78125,0] vs [13,5,0]",
+      "passesNow": false
+    },
+    {
+      "id": "c-3a002ab514057ee7",
+      "family": "suite/cjk-bracket",
+      "metric": "painter",
+      "difference": "code point 3: [x, width, line] [13,4.78125,0] vs [13,5,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-48afe29c1b55eadf",
+      "family": "suite/bracket",
+      "metric": "lineCount",
+      "difference": "code point 3: [x, width, line] [13,4.78125,0] vs [13,5,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-48afe29c1b55eadf",
+      "family": "suite/bracket",
+      "metric": "breaks",
+      "difference": "code point 3: [x, width, line] [13,4.78125,0] vs [13,5,0]",
+      "passesNow": false
+    },
+    {
+      "id": "c-48afe29c1b55eadf",
+      "family": "suite/bracket",
+      "metric": "widths",
+      "difference": "code point 3: [x, width, line] [13,4.78125,0] vs [13,5,0]",
+      "passesNow": false
+    },
+    {
+      "id": "c-48afe29c1b55eadf",
+      "family": "suite/bracket",
+      "metric": "painter",
+      "difference": "code point 3: [x, width, line] [13,4.78125,0] vs [13,5,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-4e57d2ed60c2721a",
+      "family": "suite/curly-single-open",
+      "metric": "lineCount",
+      "difference": "5 native lines vs 4",
+      "passesNow": false
+    },
+    {
+      "id": "c-4e57d2ed60c2721a",
+      "family": "suite/curly-single-open",
+      "metric": "breaks",
+      "difference": "5 native lines vs 4",
+      "passesNow": false
+    },
+    {
+      "id": "c-4e57d2ed60c2721a",
+      "family": "suite/curly-single-open",
+      "metric": "widths",
+      "difference": "5 native lines vs 4",
+      "passesNow": false
+    },
+    {
+      "id": "c-4e57d2ed60c2721a",
+      "family": "suite/curly-single-open",
+      "metric": "painter",
+      "difference": "5 native lines vs 4",
+      "passesNow": true
+    },
+    {
+      "id": "c-4ee2a715f5575ee1",
+      "family": "suite/angle",
+      "metric": "lineCount",
+      "difference": "code point 5: [x, width, line] [18,10,1] vs [18,9.578125,1]",
+      "passesNow": true
+    },
+    {
+      "id": "c-4ee2a715f5575ee1",
+      "family": "suite/angle",
+      "metric": "breaks",
+      "difference": "code point 5: [x, width, line] [18,10,1] vs [18,9.578125,1]",
+      "passesNow": false
+    },
+    {
+      "id": "c-4ee2a715f5575ee1",
+      "family": "suite/angle",
+      "metric": "widths",
+      "difference": "code point 5: [x, width, line] [18,10,1] vs [18,9.578125,1]",
+      "passesNow": false
+    },
+    {
+      "id": "c-4ee2a715f5575ee1",
+      "family": "suite/angle",
+      "metric": "painter",
+      "difference": "code point 5: [x, width, line] [18,10,1] vs [18,9.578125,1]",
+      "passesNow": true
+    },
+    {
+      "id": "c-57477f58b7dc9868",
+      "family": "suite/angle",
+      "metric": "lineCount",
+      "difference": "code point 5: [x, width, line] [18,10,1] vs [18,9.578125,1]",
+      "passesNow": true
+    },
+    {
+      "id": "c-57477f58b7dc9868",
+      "family": "suite/angle",
+      "metric": "breaks",
+      "difference": "code point 5: [x, width, line] [18,10,1] vs [18,9.578125,1]",
+      "passesNow": false
+    },
+    {
+      "id": "c-57477f58b7dc9868",
+      "family": "suite/angle",
+      "metric": "widths",
+      "difference": "code point 5: [x, width, line] [18,10,1] vs [18,9.578125,1]",
+      "passesNow": false
+    },
+    {
+      "id": "c-57477f58b7dc9868",
+      "family": "suite/angle",
+      "metric": "painter",
+      "difference": "code point 5: [x, width, line] [18,10,1] vs [18,9.578125,1]",
+      "passesNow": true
+    },
+    {
+      "id": "c-5d932e3f2a7633b6",
+      "family": "suite/fullwidth-paren",
+      "metric": "lineCount",
+      "difference": "code point 6: [x, width, line] [32,5,1] vs [0,5,2]",
+      "passesNow": true
+    },
+    {
+      "id": "c-5d932e3f2a7633b6",
+      "family": "suite/fullwidth-paren",
+      "metric": "breaks",
+      "difference": "code point 6: [x, width, line] [32,5,1] vs [0,5,2]",
+      "passesNow": false
+    },
+    {
+      "id": "c-5d932e3f2a7633b6",
+      "family": "suite/fullwidth-paren",
+      "metric": "widths",
+      "difference": "code point 6: [x, width, line] [32,5,1] vs [0,5,2]",
+      "passesNow": false
+    },
+    {
+      "id": "c-5d932e3f2a7633b6",
+      "family": "suite/fullwidth-paren",
+      "metric": "painter",
+      "difference": "code point 6: [x, width, line] [32,5,1] vs [0,5,2]",
+      "passesNow": true
+    },
+    {
+      "id": "c-6048ae26126831b4",
+      "family": "suite/bracket",
+      "metric": "lineCount",
+      "difference": "code point 3: [x, width, line] [13,4.78125,0] vs [13,5,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-6048ae26126831b4",
+      "family": "suite/bracket",
+      "metric": "breaks",
+      "difference": "code point 3: [x, width, line] [13,4.78125,0] vs [13,5,0]",
+      "passesNow": false
+    },
+    {
+      "id": "c-6048ae26126831b4",
+      "family": "suite/bracket",
+      "metric": "widths",
+      "difference": "code point 3: [x, width, line] [13,4.78125,0] vs [13,5,0]",
+      "passesNow": false
+    },
+    {
+      "id": "c-6048ae26126831b4",
+      "family": "suite/bracket",
+      "metric": "painter",
+      "difference": "code point 3: [x, width, line] [13,4.78125,0] vs [13,5,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-6a7189e2e11cd059",
+      "family": "suite/fullwidth-paren",
+      "metric": "lineCount",
+      "difference": "code point 6: [x, width, line] [32,4.4375,1] vs [0,5,2]",
+      "passesNow": true
+    },
+    {
+      "id": "c-6a7189e2e11cd059",
+      "family": "suite/fullwidth-paren",
+      "metric": "breaks",
+      "difference": "code point 6: [x, width, line] [32,4.4375,1] vs [0,5,2]",
+      "passesNow": false
+    },
+    {
+      "id": "c-6a7189e2e11cd059",
+      "family": "suite/fullwidth-paren",
+      "metric": "widths",
+      "difference": "code point 6: [x, width, line] [32,4.4375,1] vs [0,5,2]",
+      "passesNow": false
+    },
+    {
+      "id": "c-6a7189e2e11cd059",
+      "family": "suite/fullwidth-paren",
+      "metric": "painter",
+      "difference": "code point 6: [x, width, line] [32,4.4375,1] vs [0,5,2]",
+      "passesNow": true
+    },
+    {
+      "id": "c-6a7b5f6e844d5cce",
+      "family": "suite/bracket",
+      "metric": "lineCount",
+      "difference": "3 native lines vs 2",
+      "passesNow": false
+    },
+    {
+      "id": "c-6a7b5f6e844d5cce",
+      "family": "suite/bracket",
+      "metric": "breaks",
+      "difference": "3 native lines vs 2",
+      "passesNow": false
+    },
+    {
+      "id": "c-6a7b5f6e844d5cce",
+      "family": "suite/bracket",
+      "metric": "widths",
+      "difference": "3 native lines vs 2",
+      "passesNow": false
+    },
+    {
+      "id": "c-6a7b5f6e844d5cce",
+      "family": "suite/bracket",
+      "metric": "painter",
+      "difference": "3 native lines vs 2",
+      "passesNow": true
+    },
+    {
+      "id": "c-6ad460a091b1621d",
+      "family": "suite/fullwidth-paren",
+      "metric": "lineCount",
+      "difference": "code point 6: [x, width, line] [32,5,1] vs [0,5,2]",
+      "passesNow": true
+    },
+    {
+      "id": "c-6ad460a091b1621d",
+      "family": "suite/fullwidth-paren",
+      "metric": "breaks",
+      "difference": "code point 6: [x, width, line] [32,5,1] vs [0,5,2]",
+      "passesNow": false
+    },
+    {
+      "id": "c-6ad460a091b1621d",
+      "family": "suite/fullwidth-paren",
+      "metric": "widths",
+      "difference": "code point 6: [x, width, line] [32,5,1] vs [0,5,2]",
+      "passesNow": false
+    },
+    {
+      "id": "c-6ad460a091b1621d",
+      "family": "suite/fullwidth-paren",
+      "metric": "painter",
+      "difference": "code point 6: [x, width, line] [32,5,1] vs [0,5,2]",
+      "passesNow": true
+    },
+    {
+      "id": "c-74a6e9985e748bf5",
+      "family": "suite/fullwidth-paren",
+      "metric": "lineCount",
+      "difference": "code point 6: [x, width, line] [32,4.4375,1] vs [0,5,2]",
+      "passesNow": true
+    },
+    {
+      "id": "c-74a6e9985e748bf5",
+      "family": "suite/fullwidth-paren",
+      "metric": "breaks",
+      "difference": "code point 6: [x, width, line] [32,4.4375,1] vs [0,5,2]",
+      "passesNow": false
+    },
+    {
+      "id": "c-74a6e9985e748bf5",
+      "family": "suite/fullwidth-paren",
+      "metric": "widths",
+      "difference": "code point 6: [x, width, line] [32,4.4375,1] vs [0,5,2]",
+      "passesNow": false
+    },
+    {
+      "id": "c-74a6e9985e748bf5",
+      "family": "suite/fullwidth-paren",
+      "metric": "painter",
+      "difference": "code point 6: [x, width, line] [32,4.4375,1] vs [0,5,2]",
+      "passesNow": true
+    },
+    {
+      "id": "c-7e0fb274b7f32054",
+      "family": "suite/brace",
+      "metric": "lineCount",
+      "difference": "code point 5: [x, width, line] [5,6,1] vs [5,5.6875,1]",
+      "passesNow": true
+    },
+    {
+      "id": "c-7e0fb274b7f32054",
+      "family": "suite/brace",
+      "metric": "breaks",
+      "difference": "code point 5: [x, width, line] [5,6,1] vs [5,5.6875,1]",
+      "passesNow": false
+    },
+    {
+      "id": "c-7e0fb274b7f32054",
+      "family": "suite/brace",
+      "metric": "widths",
+      "difference": "code point 5: [x, width, line] [5,6,1] vs [5,5.6875,1]",
+      "passesNow": false
+    },
+    {
+      "id": "c-7e0fb274b7f32054",
+      "family": "suite/brace",
+      "metric": "painter",
+      "difference": "code point 5: [x, width, line] [5,6,1] vs [5,5.6875,1]",
+      "passesNow": true
+    },
+    {
+      "id": "c-7fb20ba6fe97d838",
+      "family": "suite/brace",
+      "metric": "lineCount",
+      "difference": "code point 3: [x, width, line] [13,4.78125,0] vs [13,5,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-7fb20ba6fe97d838",
+      "family": "suite/brace",
+      "metric": "breaks",
+      "difference": "code point 3: [x, width, line] [13,4.78125,0] vs [13,5,0]",
+      "passesNow": false
+    },
+    {
+      "id": "c-7fb20ba6fe97d838",
+      "family": "suite/brace",
+      "metric": "widths",
+      "difference": "code point 3: [x, width, line] [13,4.78125,0] vs [13,5,0]",
+      "passesNow": false
+    },
+    {
+      "id": "c-7fb20ba6fe97d838",
+      "family": "suite/brace",
+      "metric": "painter",
+      "difference": "code point 3: [x, width, line] [13,4.78125,0] vs [13,5,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-8abdee09bf25975e",
+      "family": "suite/guillemet",
+      "metric": "lineCount",
+      "difference": "code point 0: [x, width, line] [0,4.15625,0] vs [0,5,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-8abdee09bf25975e",
+      "family": "suite/guillemet",
+      "metric": "breaks",
+      "difference": "code point 0: [x, width, line] [0,4.15625,0] vs [0,5,0]",
+      "passesNow": false
+    },
+    {
+      "id": "c-8abdee09bf25975e",
+      "family": "suite/guillemet",
+      "metric": "widths",
+      "difference": "code point 0: [x, width, line] [0,4.15625,0] vs [0,5,0]",
+      "passesNow": false
+    },
+    {
+      "id": "c-8abdee09bf25975e",
+      "family": "suite/guillemet",
+      "metric": "painter",
+      "difference": "code point 0: [x, width, line] [0,4.15625,0] vs [0,5,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-8af44b1c4a366a9d",
+      "family": "suite/cjk-bracket",
+      "metric": "lineCount",
+      "difference": "code point 6: [x, width, line] [32,4.4375,1] vs [0,5,2]",
+      "passesNow": true
+    },
+    {
+      "id": "c-8af44b1c4a366a9d",
+      "family": "suite/cjk-bracket",
+      "metric": "breaks",
+      "difference": "code point 6: [x, width, line] [32,4.4375,1] vs [0,5,2]",
+      "passesNow": false
+    },
+    {
+      "id": "c-8af44b1c4a366a9d",
+      "family": "suite/cjk-bracket",
+      "metric": "widths",
+      "difference": "code point 6: [x, width, line] [32,4.4375,1] vs [0,5,2]",
+      "passesNow": false
+    },
+    {
+      "id": "c-8af44b1c4a366a9d",
+      "family": "suite/cjk-bracket",
+      "metric": "painter",
+      "difference": "code point 6: [x, width, line] [32,4.4375,1] vs [0,5,2]",
+      "passesNow": true
+    },
+    {
+      "id": "c-918ddebbddc4d61e",
+      "family": "suite/guillemet",
+      "metric": "lineCount",
+      "difference": "code point 5: [x, width, line] [18,10,1] vs [18,9.140625,1]",
+      "passesNow": true
+    },
+    {
+      "id": "c-918ddebbddc4d61e",
+      "family": "suite/guillemet",
+      "metric": "breaks",
+      "difference": "code point 5: [x, width, line] [18,10,1] vs [18,9.140625,1]",
+      "passesNow": false
+    },
+    {
+      "id": "c-918ddebbddc4d61e",
+      "family": "suite/guillemet",
+      "metric": "widths",
+      "difference": "code point 5: [x, width, line] [18,10,1] vs [18,9.140625,1]",
+      "passesNow": false
+    },
+    {
+      "id": "c-918ddebbddc4d61e",
+      "family": "suite/guillemet",
+      "metric": "painter",
+      "difference": "code point 5: [x, width, line] [18,10,1] vs [18,9.140625,1]",
+      "passesNow": true
+    },
+    {
+      "id": "c-979108ac3449169b",
+      "family": "suite/cjk-bracket",
+      "metric": "lineCount",
+      "difference": "code point 6: [x, width, line] [32,4.4375,1] vs [0,5,2]",
+      "passesNow": true
+    },
+    {
+      "id": "c-979108ac3449169b",
+      "family": "suite/cjk-bracket",
+      "metric": "breaks",
+      "difference": "code point 6: [x, width, line] [32,4.4375,1] vs [0,5,2]",
+      "passesNow": false
+    },
+    {
+      "id": "c-979108ac3449169b",
+      "family": "suite/cjk-bracket",
+      "metric": "widths",
+      "difference": "code point 6: [x, width, line] [32,4.4375,1] vs [0,5,2]",
+      "passesNow": false
+    },
+    {
+      "id": "c-979108ac3449169b",
+      "family": "suite/cjk-bracket",
+      "metric": "painter",
+      "difference": "code point 6: [x, width, line] [32,4.4375,1] vs [0,5,2]",
+      "passesNow": true
+    },
+    {
+      "id": "c-9c27de649eee8a66",
+      "family": "suite/curly-double-open",
+      "metric": "lineCount",
+      "difference": "code point 5: [x, width, line] [5,6,1] vs [5,5.65625,1]",
+      "passesNow": true
+    },
+    {
+      "id": "c-9c27de649eee8a66",
+      "family": "suite/curly-double-open",
+      "metric": "breaks",
+      "difference": "code point 5: [x, width, line] [5,6,1] vs [5,5.65625,1]",
+      "passesNow": false
+    },
+    {
+      "id": "c-9c27de649eee8a66",
+      "family": "suite/curly-double-open",
+      "metric": "widths",
+      "difference": "code point 5: [x, width, line] [5,6,1] vs [5,5.65625,1]",
+      "passesNow": false
+    },
+    {
+      "id": "c-9c27de649eee8a66",
+      "family": "suite/curly-double-open",
+      "metric": "painter",
+      "difference": "code point 5: [x, width, line] [5,6,1] vs [5,5.65625,1]",
+      "passesNow": true
+    },
+    {
+      "id": "c-9cc1cd87ed4850e0",
+      "family": "suite/ascii-matrix",
+      "metric": "lineCount",
+      "difference": "code point 5: [x, width, line] [5,6,1] vs [5,5.6875,1]",
+      "passesNow": true
+    },
+    {
+      "id": "c-9cc1cd87ed4850e0",
+      "family": "suite/ascii-matrix",
+      "metric": "breaks",
+      "difference": "code point 5: [x, width, line] [5,6,1] vs [5,5.6875,1]",
+      "passesNow": false
+    },
+    {
+      "id": "c-9cc1cd87ed4850e0",
+      "family": "suite/ascii-matrix",
+      "metric": "widths",
+      "difference": "code point 5: [x, width, line] [5,6,1] vs [5,5.6875,1]",
+      "passesNow": false
+    },
+    {
+      "id": "c-9cc1cd87ed4850e0",
+      "family": "suite/ascii-matrix",
+      "metric": "painter",
+      "difference": "code point 5: [x, width, line] [5,6,1] vs [5,5.6875,1]",
+      "passesNow": true
+    },
+    {
+      "id": "c-abfb4cb270811537",
+      "family": "suite/angle",
+      "metric": "lineCount",
+      "difference": "code point 5: [x, width, line] [18,11,1] vs [18,10.03125,1]",
+      "passesNow": true
+    },
+    {
+      "id": "c-abfb4cb270811537",
+      "family": "suite/angle",
+      "metric": "breaks",
+      "difference": "code point 5: [x, width, line] [18,11,1] vs [18,10.03125,1]",
+      "passesNow": false
+    },
+    {
+      "id": "c-abfb4cb270811537",
+      "family": "suite/angle",
+      "metric": "widths",
+      "difference": "code point 5: [x, width, line] [18,11,1] vs [18,10.03125,1]",
+      "passesNow": false
+    },
+    {
+      "id": "c-abfb4cb270811537",
+      "family": "suite/angle",
+      "metric": "painter",
+      "difference": "code point 5: [x, width, line] [18,11,1] vs [18,10.03125,1]",
+      "passesNow": true
+    },
+    {
+      "id": "c-b60dc481ccda26aa",
+      "family": "suite/curly-single-open",
+      "metric": "lineCount",
+      "difference": "3 native lines vs 2",
+      "passesNow": false
+    },
+    {
+      "id": "c-b60dc481ccda26aa",
+      "family": "suite/curly-single-open",
+      "metric": "breaks",
+      "difference": "3 native lines vs 2",
+      "passesNow": false
+    },
+    {
+      "id": "c-b60dc481ccda26aa",
+      "family": "suite/curly-single-open",
+      "metric": "widths",
+      "difference": "3 native lines vs 2",
+      "passesNow": false
+    },
+    {
+      "id": "c-b60dc481ccda26aa",
+      "family": "suite/curly-single-open",
+      "metric": "painter",
+      "difference": "3 native lines vs 2",
+      "passesNow": true
+    },
+    {
+      "id": "c-b745a8603bcb1e4c",
+      "family": "suite/bracket",
+      "metric": "lineCount",
+      "difference": "code point 5: [x, width, line] [4,5,1] vs [4,4.890625,1]",
+      "passesNow": true
+    },
+    {
+      "id": "c-b745a8603bcb1e4c",
+      "family": "suite/bracket",
+      "metric": "breaks",
+      "difference": "code point 5: [x, width, line] [4,5,1] vs [4,4.890625,1]",
+      "passesNow": false
+    },
+    {
+      "id": "c-b745a8603bcb1e4c",
+      "family": "suite/bracket",
+      "metric": "widths",
+      "difference": "code point 5: [x, width, line] [4,5,1] vs [4,4.890625,1]",
+      "passesNow": false
+    },
+    {
+      "id": "c-b745a8603bcb1e4c",
+      "family": "suite/bracket",
+      "metric": "painter",
+      "difference": "code point 5: [x, width, line] [4,5,1] vs [4,4.890625,1]",
+      "passesNow": true
+    },
+    {
+      "id": "c-bc284285222b649d",
+      "family": "suite/guillemet",
+      "metric": "lineCount",
+      "difference": "code point 5: [x, width, line] [17,10,1] vs [17,9.6875,1]",
+      "passesNow": true
+    },
+    {
+      "id": "c-bc284285222b649d",
+      "family": "suite/guillemet",
+      "metric": "breaks",
+      "difference": "code point 5: [x, width, line] [17,10,1] vs [17,9.6875,1]",
+      "passesNow": false
+    },
+    {
+      "id": "c-bc284285222b649d",
+      "family": "suite/guillemet",
+      "metric": "widths",
+      "difference": "code point 5: [x, width, line] [17,10,1] vs [17,9.6875,1]",
+      "passesNow": false
+    },
+    {
+      "id": "c-bc284285222b649d",
+      "family": "suite/guillemet",
+      "metric": "painter",
+      "difference": "code point 5: [x, width, line] [17,10,1] vs [17,9.6875,1]",
+      "passesNow": true
+    },
+    {
+      "id": "c-c1d5d82cecc27f32",
+      "family": "suite/brace",
+      "metric": "lineCount",
+      "difference": "code point 0: [x, width, line] [0,4.15625,0] vs [0,5,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-c1d5d82cecc27f32",
+      "family": "suite/brace",
+      "metric": "breaks",
+      "difference": "code point 0: [x, width, line] [0,4.15625,0] vs [0,5,0]",
+      "passesNow": false
+    },
+    {
+      "id": "c-c1d5d82cecc27f32",
+      "family": "suite/brace",
+      "metric": "widths",
+      "difference": "code point 0: [x, width, line] [0,4.15625,0] vs [0,5,0]",
+      "passesNow": false
+    },
+    {
+      "id": "c-c1d5d82cecc27f32",
+      "family": "suite/brace",
+      "metric": "painter",
+      "difference": "code point 0: [x, width, line] [0,4.15625,0] vs [0,5,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-ca2c674d13cc727e",
+      "family": "suite/bracket",
+      "metric": "lineCount",
+      "difference": "3 native lines vs 2",
+      "passesNow": false
+    },
+    {
+      "id": "c-ca2c674d13cc727e",
+      "family": "suite/bracket",
+      "metric": "breaks",
+      "difference": "3 native lines vs 2",
+      "passesNow": false
+    },
+    {
+      "id": "c-ca2c674d13cc727e",
+      "family": "suite/bracket",
+      "metric": "widths",
+      "difference": "3 native lines vs 2",
+      "passesNow": false
+    },
+    {
+      "id": "c-ca2c674d13cc727e",
+      "family": "suite/bracket",
+      "metric": "painter",
+      "difference": "3 native lines vs 2",
+      "passesNow": true
+    },
+    {
+      "id": "c-dc7920f6711168f2",
+      "family": "suite/brace",
+      "metric": "lineCount",
+      "difference": "code point 5: [x, width, line] [5,6,1] vs [5,5.6875,1]",
+      "passesNow": true
+    },
+    {
+      "id": "c-dc7920f6711168f2",
+      "family": "suite/brace",
+      "metric": "breaks",
+      "difference": "code point 5: [x, width, line] [5,6,1] vs [5,5.6875,1]",
+      "passesNow": false
+    },
+    {
+      "id": "c-dc7920f6711168f2",
+      "family": "suite/brace",
+      "metric": "widths",
+      "difference": "code point 5: [x, width, line] [5,6,1] vs [5,5.6875,1]",
+      "passesNow": false
+    },
+    {
+      "id": "c-dc7920f6711168f2",
+      "family": "suite/brace",
+      "metric": "painter",
+      "difference": "code point 5: [x, width, line] [5,6,1] vs [5,5.6875,1]",
+      "passesNow": true
+    },
+    {
+      "id": "c-dde270978c0355b8",
+      "family": "suite/curly-double-open",
+      "metric": "lineCount",
+      "difference": "code point 5: [x, width, line] [5,6,1] vs [5,5.65625,1]",
+      "passesNow": true
+    },
+    {
+      "id": "c-dde270978c0355b8",
+      "family": "suite/curly-double-open",
+      "metric": "breaks",
+      "difference": "code point 5: [x, width, line] [5,6,1] vs [5,5.65625,1]",
+      "passesNow": false
+    },
+    {
+      "id": "c-dde270978c0355b8",
+      "family": "suite/curly-double-open",
+      "metric": "widths",
+      "difference": "code point 5: [x, width, line] [5,6,1] vs [5,5.65625,1]",
+      "passesNow": false
+    },
+    {
+      "id": "c-dde270978c0355b8",
+      "family": "suite/curly-double-open",
+      "metric": "painter",
+      "difference": "code point 5: [x, width, line] [5,6,1] vs [5,5.65625,1]",
+      "passesNow": true
+    },
+    {
+      "id": "c-de483ff6c4aa30a1",
+      "family": "suite/curly-single-close",
+      "metric": "lineCount",
+      "difference": "code point 3: [x, width, line] [26,10,0] vs [26,9.59375,0]",
+      "passesNow": true
+    },
+    {
+      "id": "c-de483ff6c4aa30a1",
+      "family": "suite/curly-single-close",
+      "metric": "breaks",
+      "difference": "code point 3: [x, width, line] [26,10,0] vs [26,9.59375,0]",
+      "passesNow": false
+    },
+    {
+      "id": "c-de483ff6c4aa30a1",
+      "family": "suite/curly-single-close",
+      "metric": "widths",
+      "difference": "code point 3: [x, width, line] [26,10,0] vs [26,9.59375,0]",
+      "passesNow": false
+    },
+    {
+      "id": "c-e132c6f76a2cb82d",
+      "family": "suite/fullwidth-paren",
+      "metric": "lineCount",
+      "difference": "code point 6: [x, width, line] [32,4.4375,1] vs [0,5,2]",
+      "passesNow": true
+    },
+    {
+      "id": "c-e132c6f76a2cb82d",
+      "family": "suite/fullwidth-paren",
+      "metric": "breaks",
+      "difference": "code point 6: [x, width, line] [32,4.4375,1] vs [0,5,2]",
+      "passesNow": false
+    },
+    {
+      "id": "c-e132c6f76a2cb82d",
+      "family": "suite/fullwidth-paren",
+      "metric": "widths",
+      "difference": "code point 6: [x, width, line] [32,4.4375,1] vs [0,5,2]",
+      "passesNow": false
+    },
+    {
+      "id": "c-e132c6f76a2cb82d",
+      "family": "suite/fullwidth-paren",
+      "metric": "painter",
+      "difference": "code point 6: [x, width, line] [32,4.4375,1] vs [0,5,2]",
+      "passesNow": true
+    },
+    {
+      "id": "c-e4f6c65d1bfbe3c8",
+      "family": "suite/angle",
+      "metric": "lineCount",
+      "difference": "2 native lines vs 3",
+      "passesNow": false
+    },
+    {
+      "id": "c-e4f6c65d1bfbe3c8",
+      "family": "suite/angle",
+      "metric": "breaks",
+      "difference": "2 native lines vs 3",
+      "passesNow": false
+    },
+    {
+      "id": "c-e4f6c65d1bfbe3c8",
+      "family": "suite/angle",
+      "metric": "widths",
+      "difference": "2 native lines vs 3",
+      "passesNow": false
+    },
+    {
+      "id": "c-e4f6c65d1bfbe3c8",
+      "family": "suite/angle",
+      "metric": "painter",
+      "difference": "2 native lines vs 3",
+      "passesNow": true
+    },
+    {
+      "id": "c-eb3360cb92e17348",
+      "family": "suite/guillemet",
+      "metric": "lineCount",
+      "difference": "code point 5: [x, width, line] [17,10,1] vs [17,9.6875,1]",
+      "passesNow": true
+    },
+    {
+      "id": "c-eb3360cb92e17348",
+      "family": "suite/guillemet",
+      "metric": "breaks",
+      "difference": "code point 5: [x, width, line] [17,10,1] vs [17,9.6875,1]",
+      "passesNow": false
+    },
+    {
+      "id": "c-eb3360cb92e17348",
+      "family": "suite/guillemet",
+      "metric": "widths",
+      "difference": "code point 5: [x, width, line] [17,10,1] vs [17,9.6875,1]",
+      "passesNow": false
+    },
+    {
+      "id": "c-eb3360cb92e17348",
+      "family": "suite/guillemet",
+      "metric": "painter",
+      "difference": "code point 5: [x, width, line] [17,10,1] vs [17,9.6875,1]",
+      "passesNow": true
+    },
+    {
+      "id": "c-ed7074afcee67746",
+      "family": "suite/guillemet",
+      "metric": "lineCount",
+      "difference": "7 native lines vs 6",
+      "passesNow": false
+    },
+    {
+      "id": "c-ed7074afcee67746",
+      "family": "suite/guillemet",
+      "metric": "breaks",
+      "difference": "7 native lines vs 6",
+      "passesNow": false
+    },
+    {
+      "id": "c-ed7074afcee67746",
+      "family": "suite/guillemet",
+      "metric": "widths",
+      "difference": "7 native lines vs 6",
+      "passesNow": false
+    },
+    {
+      "id": "c-ed7074afcee67746",
+      "family": "suite/guillemet",
+      "metric": "painter",
+      "difference": "7 native lines vs 6",
+      "passesNow": true
+    },
+    {
+      "id": "c-f5a7e76e8c5e9c66",
+      "family": "suite/brace",
+      "metric": "lineCount",
+      "difference": "code point 3: [x, width, line] [0,8.8984375,1] vs [0,9,1]",
+      "passesNow": true
+    },
+    {
+      "id": "c-f5a7e76e8c5e9c66",
+      "family": "suite/brace",
+      "metric": "breaks",
+      "difference": "code point 3: [x, width, line] [0,8.8984375,1] vs [0,9,1]",
+      "passesNow": false
+    },
+    {
+      "id": "c-f5a7e76e8c5e9c66",
+      "family": "suite/brace",
+      "metric": "widths",
+      "difference": "code point 3: [x, width, line] [0,8.8984375,1] vs [0,9,1]",
+      "passesNow": false
+    },
+    {
+      "id": "c-f5a7e76e8c5e9c66",
+      "family": "suite/brace",
+      "metric": "painter",
+      "difference": "code point 3: [x, width, line] [0,8.8984375,1] vs [0,9,1]",
+      "passesNow": true
+    },
+    {
+      "id": "c-fec7b9f88a397c82",
+      "family": "suite/guillemet",
+      "metric": "lineCount",
+      "difference": "code point 5: [x, width, line] [17,10,1] vs [17,9.6875,1]",
+      "passesNow": true
+    },
+    {
+      "id": "c-fec7b9f88a397c82",
+      "family": "suite/guillemet",
+      "metric": "breaks",
+      "difference": "code point 5: [x, width, line] [17,10,1] vs [17,9.6875,1]",
+      "passesNow": false
+    },
+    {
+      "id": "c-fec7b9f88a397c82",
+      "family": "suite/guillemet",
+      "metric": "widths",
+      "difference": "code point 5: [x, width, line] [17,10,1] vs [17,9.6875,1]",
+      "passesNow": false
+    },
+    {
+      "id": "c-fec7b9f88a397c82",
+      "family": "suite/guillemet",
+      "metric": "painter",
+      "difference": "code point 5: [x, width, line] [17,10,1] vs [17,9.6875,1]",
+      "passesNow": true
+    }
+  ],
+  "leftThroughProtocol": [],
+  "leftWithTheirCase": [],
+  "gained": [
+    [
+      "c-0006a608de2d7725",
+      "breaks"
+    ],
+    [
+      "c-0006a608de2d7725",
+      "widths"
+    ],
+    [
+      "c-0006a608de2d7725",
+      "painter"
+    ],
+    [
+      "c-0011f728d9b3053c",
+      "painter"
+    ],
+    [
+      "c-0017b63d0883732a",
+      "widths"
+    ],
+    [
+      "c-0017b63d0883732a",
+      "painter"
+    ],
+    [
+      "c-00c22a2f83f30caa",
+      "breaks"
+    ],
+    [
+      "c-00c22a2f83f30caa",
+      "widths"
+    ],
+    [
+      "c-00c22a2f83f30caa",
+      "painter"
+    ],
+    [
+      "c-01446f232043cd18",
+      "lineCount"
+    ],
+    [
+      "c-01446f232043cd18",
+      "breaks"
+    ],
+    [
+      "c-01446f232043cd18",
+      "widths"
+    ],
+    [
+      "c-01446f232043cd18",
+      "painter"
+    ],
+    [
+      "c-01b92a1a3e82b521",
+      "painter"
+    ],
+    [
+      "c-024909ef9234f390",
+      "widths"
+    ],
+    [
+      "c-024909ef9234f390",
+      "painter"
+    ],
+    [
+      "c-037e207e749e60a6",
+      "widths"
+    ],
+    [
+      "c-037e207e749e60a6",
+      "painter"
+    ],
+    [
+      "c-038df081cc403c4f",
+      "painter"
+    ],
+    [
+      "c-03a59bf31213047c",
+      "lineCount"
+    ],
+    [
+      "c-03a59bf31213047c",
+      "breaks"
+    ],
+    [
+      "c-03b5f9f726714e51",
+      "breaks"
+    ],
+    [
+      "c-03b5f9f726714e51",
+      "widths"
+    ],
+    [
+      "c-03b5f9f726714e51",
+      "painter"
+    ],
+    [
+      "c-0424f061dad70077",
+      "widths"
+    ],
+    [
+      "c-0424f061dad70077",
+      "painter"
+    ],
+    [
+      "c-043784177114514b",
+      "widths"
+    ],
+    [
+      "c-043784177114514b",
+      "painter"
+    ],
+    [
+      "c-046c8e49140717e2",
+      "widths"
+    ],
+    [
+      "c-046c8e49140717e2",
+      "painter"
+    ],
+    [
+      "c-04d319922ea71e28",
+      "widths"
+    ],
+    [
+      "c-04d319922ea71e28",
+      "painter"
+    ],
+    [
+      "c-05b8fb90ec4d0d21",
+      "painter"
+    ],
+    [
+      "c-063e0d68d34a9fff",
+      "painter"
+    ],
+    [
+      "c-06637e2576710bf2",
+      "breaks"
+    ],
+    [
+      "c-06637e2576710bf2",
+      "widths"
+    ],
+    [
+      "c-06637e2576710bf2",
+      "painter"
+    ],
+    [
+      "c-06a3fe19e943cb86",
+      "widths"
+    ],
+    [
+      "c-06a3fe19e943cb86",
+      "painter"
+    ],
+    [
+      "c-06bfd96a6e301c04",
+      "painter"
+    ],
+    [
+      "c-06db217ffe41dc4c",
+      "widths"
+    ],
+    [
+      "c-06db217ffe41dc4c",
+      "painter"
+    ],
+    [
+      "c-07e7376e52f162b6",
+      "widths"
+    ],
+    [
+      "c-08eb74f173d28d59",
+      "widths"
+    ],
+    [
+      "c-08eb74f173d28d59",
+      "painter"
+    ],
+    [
+      "c-08f4d9fc1a9c67b9",
+      "widths"
+    ],
+    [
+      "c-08f4d9fc1a9c67b9",
+      "painter"
+    ],
+    [
+      "c-0932e9bac7d37e34",
+      "breaks"
+    ],
+    [
+      "c-0932e9bac7d37e34",
+      "widths"
+    ],
+    [
+      "c-0932e9bac7d37e34",
+      "painter"
+    ],
+    [
+      "c-09e02febb32ef0c7",
+      "lineCount"
+    ],
+    [
+      "c-09e02febb32ef0c7",
+      "breaks"
+    ],
+    [
+      "c-09e02febb32ef0c7",
+      "widths"
+    ],
+    [
+      "c-09e02febb32ef0c7",
+      "painter"
+    ],
+    [
+      "c-0a6479ee049fd05f",
+      "widths"
+    ],
+    [
+      "c-0a6479ee049fd05f",
+      "painter"
+    ],
+    [
+      "c-0bf8af28145474db",
+      "painter"
+    ],
+    [
+      "c-0d0cf09fbd2358b5",
+      "painter"
+    ],
+    [
+      "c-0da61e56106f1f0b",
+      "painter"
+    ],
+    [
+      "c-0ddb2ebd0b973143",
+      "breaks"
+    ],
+    [
+      "c-0ddb2ebd0b973143",
+      "widths"
+    ],
+    [
+      "c-0ddb2ebd0b973143",
+      "painter"
+    ],
+    [
+      "c-0e26e74e5fd4fd3b",
+      "painter"
+    ],
+    [
+      "c-0f0f4b0c08d7e2de",
+      "painter"
+    ],
+    [
+      "c-0f5744a91d0c3480",
+      "painter"
+    ],
+    [
+      "c-0fe3c6577738f641",
+      "lineCount"
+    ],
+    [
+      "c-0fe3c6577738f641",
+      "breaks"
+    ],
+    [
+      "c-10233e2ee0436966",
+      "painter"
+    ],
+    [
+      "c-116c69249ee17845",
+      "widths"
+    ],
+    [
+      "c-116c69249ee17845",
+      "painter"
+    ],
+    [
+      "c-123184e83ece4626",
+      "painter"
+    ],
+    [
+      "c-1272b95c63f8f03c",
+      "widths"
+    ],
+    [
+      "c-1272b95c63f8f03c",
+      "painter"
+    ],
+    [
+      "c-12acbb21f1792d4a",
+      "widths"
+    ],
+    [
+      "c-12acbb21f1792d4a",
+      "painter"
+    ],
+    [
+      "c-12daa9042de20c51",
+      "painter"
+    ],
+    [
+      "c-13a3cb15d42ba9f0",
+      "painter"
+    ],
+    [
+      "c-13d4a589cc6b187c",
+      "painter"
+    ],
+    [
+      "c-142318ab2676108c",
+      "widths"
+    ],
+    [
+      "c-142318ab2676108c",
+      "painter"
+    ],
+    [
+      "c-143d6a85cbd9270e",
+      "widths"
+    ],
+    [
+      "c-143d6a85cbd9270e",
+      "painter"
+    ],
+    [
+      "c-1464853a36020115",
+      "widths"
+    ],
+    [
+      "c-1464853a36020115",
+      "painter"
+    ],
+    [
+      "c-168e9db901a852e4",
+      "painter"
+    ],
+    [
+      "c-16d7a09a1880b078",
+      "widths"
+    ],
+    [
+      "c-16d7a09a1880b078",
+      "painter"
+    ],
+    [
+      "c-175466e8592977be",
+      "widths"
+    ],
+    [
+      "c-175466e8592977be",
+      "painter"
+    ],
+    [
+      "c-179265f6be06bd18",
+      "widths"
+    ],
+    [
+      "c-179265f6be06bd18",
+      "painter"
+    ],
+    [
+      "c-17d105aa7cd13fbd",
+      "painter"
+    ],
+    [
+      "c-1851d8f5682b9118",
+      "widths"
+    ],
+    [
+      "c-1851d8f5682b9118",
+      "painter"
+    ],
+    [
+      "c-1860209252b6fe02",
+      "breaks"
+    ],
+    [
+      "c-1860209252b6fe02",
+      "widths"
+    ],
+    [
+      "c-1860209252b6fe02",
+      "painter"
+    ],
+    [
+      "c-18713b0ef921cff1",
+      "painter"
+    ],
+    [
+      "c-18f83148f2a14065",
+      "painter"
+    ],
+    [
+      "c-19133e979b9cabe6",
+      "widths"
+    ],
+    [
+      "c-19133e979b9cabe6",
+      "painter"
+    ],
+    [
+      "c-197d41fbde4d0b3e",
+      "widths"
+    ],
+    [
+      "c-19feb14ce5372689",
+      "painter"
+    ],
+    [
+      "c-1c0750f1e9032cd9",
+      "painter"
+    ],
+    [
+      "c-1d081493df678fac",
+      "lineCount"
+    ],
+    [
+      "c-1d081493df678fac",
+      "breaks"
+    ],
+    [
+      "c-1d081493df678fac",
+      "widths"
+    ],
+    [
+      "c-1d081493df678fac",
+      "painter"
+    ],
+    [
+      "c-1d081b8c50f3a535",
+      "painter"
+    ],
+    [
+      "c-1d851c28c180b61e",
+      "widths"
+    ],
+    [
+      "c-1d851c28c180b61e",
+      "painter"
+    ],
+    [
+      "c-1ebf6f7af734eab3",
+      "painter"
+    ],
+    [
+      "c-1f9a6b96e6fc6b4b",
+      "widths"
+    ],
+    [
+      "c-1fed4b81825d5525",
+      "breaks"
+    ],
+    [
+      "c-1fed4b81825d5525",
+      "widths"
+    ],
+    [
+      "c-1fed4b81825d5525",
+      "painter"
+    ],
+    [
+      "c-200d69d06b9b362f",
+      "painter"
+    ],
+    [
+      "c-21e46391f071bb8f",
+      "painter"
+    ],
+    [
+      "c-225dafb97696948e",
+      "painter"
+    ],
+    [
+      "c-22b153ae19e2a152",
+      "breaks"
+    ],
+    [
+      "c-22b153ae19e2a152",
+      "widths"
+    ],
+    [
+      "c-22b153ae19e2a152",
+      "painter"
+    ],
+    [
+      "c-22c3ca78eec67052",
+      "widths"
+    ],
+    [
+      "c-22c3ca78eec67052",
+      "painter"
+    ],
+    [
+      "c-22dabd72b49ad60e",
+      "painter"
+    ],
+    [
+      "c-23439daea0f4b210",
+      "painter"
+    ],
+    [
+      "c-23b7a7074d032988",
+      "widths"
+    ],
+    [
+      "c-23b7a7074d032988",
+      "painter"
+    ],
+    [
+      "c-23c2337d65036a0a",
+      "painter"
+    ],
+    [
+      "c-24460b08f3a5819e",
+      "widths"
+    ],
+    [
+      "c-24460b08f3a5819e",
+      "painter"
+    ],
+    [
+      "c-2469c250ada1f382",
+      "breaks"
+    ],
+    [
+      "c-2469c250ada1f382",
+      "widths"
+    ],
+    [
+      "c-2469c250ada1f382",
+      "painter"
+    ],
+    [
+      "c-24900e4171b853f4",
+      "lineCount"
+    ],
+    [
+      "c-24900e4171b853f4",
+      "breaks"
+    ],
+    [
+      "c-24dd5b056f4dd2ad",
+      "painter"
+    ],
+    [
+      "c-266e55f5544d7b1c",
+      "painter"
+    ],
+    [
+      "c-276d17758cc802a2",
+      "widths"
+    ],
+    [
+      "c-276d17758cc802a2",
+      "painter"
+    ],
+    [
+      "c-2814ba9f8f1d231e",
+      "widths"
+    ],
+    [
+      "c-2814ba9f8f1d231e",
+      "painter"
+    ],
+    [
+      "c-292a1e100afe1e20",
+      "lineCount"
+    ],
+    [
+      "c-292a1e100afe1e20",
+      "breaks"
+    ],
+    [
+      "c-292a1e100afe1e20",
+      "widths"
+    ],
+    [
+      "c-292a1e100afe1e20",
+      "painter"
+    ],
+    [
+      "c-295b6c791fc3f4e9",
+      "widths"
+    ],
+    [
+      "c-29f32be166cb700c",
+      "breaks"
+    ],
+    [
+      "c-29f32be166cb700c",
+      "widths"
+    ],
+    [
+      "c-29f32be166cb700c",
+      "painter"
+    ],
+    [
+      "c-29fd359d466b4cbe",
+      "widths"
+    ],
+    [
+      "c-29fd359d466b4cbe",
+      "painter"
+    ],
+    [
+      "c-2a1058c5cfa2cf1f",
+      "painter"
+    ],
+    [
+      "c-2aadf5b1c28f635c",
+      "widths"
+    ],
+    [
+      "c-2aadf5b1c28f635c",
+      "painter"
+    ],
+    [
+      "c-2b051758415a77c7",
+      "breaks"
+    ],
+    [
+      "c-2b051758415a77c7",
+      "widths"
+    ],
+    [
+      "c-2b051758415a77c7",
+      "painter"
+    ],
+    [
+      "c-2b30bc87b3a703ac",
+      "widths"
+    ],
+    [
+      "c-2b30bc87b3a703ac",
+      "painter"
+    ],
+    [
+      "c-2b7a0b98a01c4902",
+      "widths"
+    ],
+    [
+      "c-2b7a0b98a01c4902",
+      "painter"
+    ],
+    [
+      "c-2b876235722d186c",
+      "breaks"
+    ],
+    [
+      "c-2b876235722d186c",
+      "widths"
+    ],
+    [
+      "c-2b876235722d186c",
+      "painter"
+    ],
+    [
+      "c-2b8cb76ecb6b0940",
+      "painter"
+    ],
+    [
+      "c-2ba43440b08df50f",
+      "widths"
+    ],
+    [
+      "c-2ba43440b08df50f",
+      "painter"
+    ],
+    [
+      "c-2c3482639bfa07a1",
+      "widths"
+    ],
+    [
+      "c-2c3482639bfa07a1",
+      "painter"
+    ],
+    [
+      "c-2c89944ed8390240",
+      "painter"
+    ],
+    [
+      "c-2c95630d743b2931",
+      "breaks"
+    ],
+    [
+      "c-2c95630d743b2931",
+      "widths"
+    ],
+    [
+      "c-2c95630d743b2931",
+      "painter"
+    ],
+    [
+      "c-2cb39ca74e47329c",
+      "widths"
+    ],
+    [
+      "c-2cb39ca74e47329c",
+      "painter"
+    ],
+    [
+      "c-2ce3baa27d3aa92a",
+      "widths"
+    ],
+    [
+      "c-2ce3baa27d3aa92a",
+      "painter"
+    ],
+    [
+      "c-2d05e0d9142ba240",
+      "widths"
+    ],
+    [
+      "c-2d05e0d9142ba240",
+      "painter"
+    ],
+    [
+      "c-2ee8f72ade5b7bea",
+      "widths"
+    ],
+    [
+      "c-2ee8f72ade5b7bea",
+      "painter"
+    ],
+    [
+      "c-2fac45e8cdc2a8ae",
+      "painter"
+    ],
+    [
+      "c-2fb217d962864f20",
+      "painter"
+    ],
+    [
+      "c-2ff2999cb65ac982",
+      "breaks"
+    ],
+    [
+      "c-2ff2999cb65ac982",
+      "widths"
+    ],
+    [
+      "c-2ff2999cb65ac982",
+      "painter"
+    ],
+    [
+      "c-301eaab9b98b3f84",
+      "widths"
+    ],
+    [
+      "c-30840ef95478a1ee",
+      "widths"
+    ],
+    [
+      "c-30840ef95478a1ee",
+      "painter"
+    ],
+    [
+      "c-30e255b9eddbc8cd",
+      "painter"
+    ],
+    [
+      "c-31811329e8e563cc",
+      "painter"
+    ],
+    [
+      "c-31cd42f60963dc92",
+      "widths"
+    ],
+    [
+      "c-31cd42f60963dc92",
+      "painter"
+    ],
+    [
+      "c-31f95f73767e1d88",
+      "painter"
+    ],
+    [
+      "c-32cfbb9612019b37",
+      "breaks"
+    ],
+    [
+      "c-32cfbb9612019b37",
+      "widths"
+    ],
+    [
+      "c-32cfbb9612019b37",
+      "painter"
+    ],
+    [
+      "c-32d72f96e0fa486a",
+      "painter"
+    ],
+    [
+      "c-331271d26294eaca",
+      "painter"
+    ],
+    [
+      "c-332738aa3aae0f56",
+      "painter"
+    ],
+    [
+      "c-334d212830923ac4",
+      "painter"
+    ],
+    [
+      "c-337da82c892eebc7",
+      "painter"
+    ],
+    [
+      "c-33b2242f20303076",
+      "widths"
+    ],
+    [
+      "c-33b2242f20303076",
+      "painter"
+    ],
+    [
+      "c-34b81db2fff47037",
+      "widths"
+    ],
+    [
+      "c-34b81db2fff47037",
+      "painter"
+    ],
+    [
+      "c-34ca4478bc0e3fe3",
+      "lineCount"
+    ],
+    [
+      "c-34ca4478bc0e3fe3",
+      "breaks"
+    ],
+    [
+      "c-34ca4478bc0e3fe3",
+      "widths"
+    ],
+    [
+      "c-34ca4478bc0e3fe3",
+      "painter"
+    ],
+    [
+      "c-34d52f6e3f06282e",
+      "lineCount"
+    ],
+    [
+      "c-34d52f6e3f06282e",
+      "breaks"
+    ],
+    [
+      "c-34d52f6e3f06282e",
+      "widths"
+    ],
+    [
+      "c-34d52f6e3f06282e",
+      "painter"
+    ],
+    [
+      "c-3584ecbfabe228a2",
+      "widths"
+    ],
+    [
+      "c-3584ecbfabe228a2",
+      "painter"
+    ],
+    [
+      "c-370b2252e77df1ad",
+      "widths"
+    ],
+    [
+      "c-370b2252e77df1ad",
+      "painter"
+    ],
+    [
+      "c-37b72a8d136fe375",
+      "painter"
+    ],
+    [
+      "c-37bcbc6d3dc766de",
+      "lineCount"
+    ],
+    [
+      "c-37bcbc6d3dc766de",
+      "breaks"
+    ],
+    [
+      "c-37bcbc6d3dc766de",
+      "widths"
+    ],
+    [
+      "c-37bcbc6d3dc766de",
+      "painter"
+    ],
+    [
+      "c-37ebe8d3cd478fae",
+      "widths"
+    ],
+    [
+      "c-37ebe8d3cd478fae",
+      "painter"
+    ],
+    [
+      "c-3ad0a4cfbef1974c",
+      "painter"
+    ],
+    [
+      "c-3b99a85b28fe3050",
+      "painter"
+    ],
+    [
+      "c-3bbc59186893fd30",
+      "widths"
+    ],
+    [
+      "c-3bbc59186893fd30",
+      "painter"
+    ],
+    [
+      "c-3bf59d0d7cede844",
+      "widths"
+    ],
+    [
+      "c-3bf59d0d7cede844",
+      "painter"
+    ],
+    [
+      "c-3c22a5e3c933da4d",
+      "painter"
+    ],
+    [
+      "c-3caa65c1ab64d0f0",
+      "breaks"
+    ],
+    [
+      "c-3caa65c1ab64d0f0",
+      "widths"
+    ],
+    [
+      "c-3caa65c1ab64d0f0",
+      "painter"
+    ],
+    [
+      "c-3d38fa4863c184bd",
+      "widths"
+    ],
+    [
+      "c-3d38fa4863c184bd",
+      "painter"
+    ],
+    [
+      "c-3d6f874a65817711",
+      "widths"
+    ],
+    [
+      "c-3d6f874a65817711",
+      "painter"
+    ],
+    [
+      "c-3ddb363b8c0ee883",
+      "breaks"
+    ],
+    [
+      "c-3ddb363b8c0ee883",
+      "widths"
+    ],
+    [
+      "c-3ddb363b8c0ee883",
+      "painter"
+    ],
+    [
+      "c-40ecb4f7950b571e",
+      "painter"
+    ],
+    [
+      "c-4166e82c68160090",
+      "painter"
+    ],
+    [
+      "c-4179aedb779ef683",
+      "widths"
+    ],
+    [
+      "c-4179aedb779ef683",
+      "painter"
+    ],
+    [
+      "c-4181afb0df9c7f43",
+      "widths"
+    ],
+    [
+      "c-4181afb0df9c7f43",
+      "painter"
+    ],
+    [
+      "c-42d8065ace902105",
+      "widths"
+    ],
+    [
+      "c-42d8065ace902105",
+      "painter"
+    ],
+    [
+      "c-42ee6ea12b9b5994",
+      "breaks"
+    ],
+    [
+      "c-42ee6ea12b9b5994",
+      "widths"
+    ],
+    [
+      "c-42ee6ea12b9b5994",
+      "painter"
+    ],
+    [
+      "c-455f34ad14647e9f",
+      "widths"
+    ],
+    [
+      "c-455f34ad14647e9f",
+      "painter"
+    ],
+    [
+      "c-4574b1f90e9c5b3c",
+      "breaks"
+    ],
+    [
+      "c-4574b1f90e9c5b3c",
+      "widths"
+    ],
+    [
+      "c-4574b1f90e9c5b3c",
+      "painter"
+    ],
+    [
+      "c-45975eecbf42d6e0",
+      "painter"
+    ],
+    [
+      "c-45edd34ce39fb069",
+      "widths"
+    ],
+    [
+      "c-45edd34ce39fb069",
+      "painter"
+    ],
+    [
+      "c-47bd802c028ce495",
+      "breaks"
+    ],
+    [
+      "c-47bd802c028ce495",
+      "widths"
+    ],
+    [
+      "c-47bd802c028ce495",
+      "painter"
+    ],
+    [
+      "c-47e3008050958abe",
+      "painter"
+    ],
+    [
+      "c-4891ea1856ab4dd2",
+      "painter"
+    ],
+    [
+      "c-4921878ec4d64171",
+      "widths"
+    ],
+    [
+      "c-4921878ec4d64171",
+      "painter"
+    ],
+    [
+      "c-496248e036248674",
+      "painter"
+    ],
+    [
+      "c-49859e63d521294e",
+      "painter"
+    ],
+    [
+      "c-498c35eb6139174c",
+      "painter"
+    ],
+    [
+      "c-49ea574224d1bc11",
+      "breaks"
+    ],
+    [
+      "c-49ea574224d1bc11",
+      "widths"
+    ],
+    [
+      "c-49ea574224d1bc11",
+      "painter"
+    ],
+    [
+      "c-4a28721cf11c44d3",
+      "painter"
+    ],
+    [
+      "c-4b49e45494410160",
+      "widths"
+    ],
+    [
+      "c-4b49e45494410160",
+      "painter"
+    ],
+    [
+      "c-4d2899583585976f",
+      "widths"
+    ],
+    [
+      "c-4d3f9d4d67778cdd",
+      "breaks"
+    ],
+    [
+      "c-4d3f9d4d67778cdd",
+      "widths"
+    ],
+    [
+      "c-4d3f9d4d67778cdd",
+      "painter"
+    ],
+    [
+      "c-4d783a3859c45968",
+      "breaks"
+    ],
+    [
+      "c-4d783a3859c45968",
+      "widths"
+    ],
+    [
+      "c-4d783a3859c45968",
+      "painter"
+    ],
+    [
+      "c-4d941a35d4a21406",
+      "widths"
+    ],
+    [
+      "c-4d941a35d4a21406",
+      "painter"
+    ],
+    [
+      "c-4d9d9b1daa0aa495",
+      "widths"
+    ],
+    [
+      "c-4d9d9b1daa0aa495",
+      "painter"
+    ],
+    [
+      "c-4dba1ca253cd765a",
+      "painter"
+    ],
+    [
+      "c-4e8fe93ffafc204a",
+      "widths"
+    ],
+    [
+      "c-4e8fe93ffafc204a",
+      "painter"
+    ],
+    [
+      "c-4fc93a7986ce4c8a",
+      "breaks"
+    ],
+    [
+      "c-4fc93a7986ce4c8a",
+      "widths"
+    ],
+    [
+      "c-4fc93a7986ce4c8a",
+      "painter"
+    ],
+    [
+      "c-500ba615f3b44d44",
+      "lineCount"
+    ],
+    [
+      "c-500ba615f3b44d44",
+      "breaks"
+    ],
+    [
+      "c-54bc357fecea56f3",
+      "breaks"
+    ],
+    [
+      "c-54bc357fecea56f3",
+      "widths"
+    ],
+    [
+      "c-54bc357fecea56f3",
+      "painter"
+    ],
+    [
+      "c-55387819cdda96cc",
+      "widths"
+    ],
+    [
+      "c-55387819cdda96cc",
+      "painter"
+    ],
+    [
+      "c-553cdcd6fa046321",
+      "painter"
+    ],
+    [
+      "c-554966266a21ca68",
+      "lineCount"
+    ],
+    [
+      "c-554966266a21ca68",
+      "breaks"
+    ],
+    [
+      "c-554966266a21ca68",
+      "widths"
+    ],
+    [
+      "c-554966266a21ca68",
+      "painter"
+    ],
+    [
+      "c-556ff19b8d86853e",
+      "painter"
+    ],
+    [
+      "c-558e0b6f3e30ed35",
+      "widths"
+    ],
+    [
+      "c-558e0b6f3e30ed35",
+      "painter"
+    ],
+    [
+      "c-593347bdf342d2af",
+      "lineCount"
+    ],
+    [
+      "c-593347bdf342d2af",
+      "breaks"
+    ],
+    [
+      "c-593347bdf342d2af",
+      "widths"
+    ],
+    [
+      "c-595badc20178836f",
+      "painter"
+    ],
+    [
+      "c-5962e034b7151a55",
+      "widths"
+    ],
+    [
+      "c-5962e034b7151a55",
+      "painter"
+    ],
+    [
+      "c-5ab9789148fbb143",
+      "breaks"
+    ],
+    [
+      "c-5ab9789148fbb143",
+      "widths"
+    ],
+    [
+      "c-5ab9789148fbb143",
+      "painter"
+    ],
+    [
+      "c-5b909057f01f8205",
+      "widths"
+    ],
+    [
+      "c-5b909057f01f8205",
+      "painter"
+    ],
+    [
+      "c-5bb44578b1e4f691",
+      "widths"
+    ],
+    [
+      "c-5bb44578b1e4f691",
+      "painter"
+    ],
+    [
+      "c-5c263825c1ea5d82",
+      "painter"
+    ],
+    [
+      "c-5c31aadc092d76de",
+      "widths"
+    ],
+    [
+      "c-5c31aadc092d76de",
+      "painter"
+    ],
+    [
+      "c-5ce4b83286e96d45",
+      "painter"
+    ],
+    [
+      "c-5cfc02d2af4ebfc6",
+      "widths"
+    ],
+    [
+      "c-5cfc02d2af4ebfc6",
+      "painter"
+    ],
+    [
+      "c-5d871363af263a1c",
+      "breaks"
+    ],
+    [
+      "c-5d871363af263a1c",
+      "widths"
+    ],
+    [
+      "c-5d871363af263a1c",
+      "painter"
+    ],
+    [
+      "c-5d90d6c633eb6bf9",
+      "painter"
+    ],
+    [
+      "c-5dfe259bc5c2f463",
+      "widths"
+    ],
+    [
+      "c-5dfe259bc5c2f463",
+      "painter"
+    ],
+    [
+      "c-5ec3dd0211bc94c4",
+      "widths"
+    ],
+    [
+      "c-5ec3dd0211bc94c4",
+      "painter"
+    ],
+    [
+      "c-5ecf5c4e3a1e68a2",
+      "painter"
+    ],
+    [
+      "c-5ed1f592cc3b6f5a",
+      "painter"
+    ],
+    [
+      "c-5f4f3845270916a8",
+      "painter"
+    ],
+    [
+      "c-5f694b805c61e985",
+      "widths"
+    ],
+    [
+      "c-5f694b805c61e985",
+      "painter"
+    ],
+    [
+      "c-5f7ef91121e107bf",
+      "breaks"
+    ],
+    [
+      "c-5f7ef91121e107bf",
+      "widths"
+    ],
+    [
+      "c-5f7ef91121e107bf",
+      "painter"
+    ],
+    [
+      "c-602a2b7ff02ef0ff",
+      "widths"
+    ],
+    [
+      "c-602a2b7ff02ef0ff",
+      "painter"
+    ],
+    [
+      "c-60e117c18a7a93ae",
+      "painter"
+    ],
+    [
+      "c-61628c20fec66808",
+      "widths"
+    ],
+    [
+      "c-61628c20fec66808",
+      "painter"
+    ],
+    [
+      "c-6198b42c04821f11",
+      "widths"
+    ],
+    [
+      "c-6198b42c04821f11",
+      "painter"
+    ],
+    [
+      "c-631a57b40f4937e5",
+      "widths"
+    ],
+    [
+      "c-631a57b40f4937e5",
+      "painter"
+    ],
+    [
+      "c-6360d9f205142131",
+      "widths"
+    ],
+    [
+      "c-6360d9f205142131",
+      "painter"
+    ],
+    [
+      "c-644457c68ad4f9ae",
+      "widths"
+    ],
+    [
+      "c-644457c68ad4f9ae",
+      "painter"
+    ],
+    [
+      "c-6494387e47c01d8b",
+      "painter"
+    ],
+    [
+      "c-6530b04ec4527669",
+      "widths"
+    ],
+    [
+      "c-6530b04ec4527669",
+      "painter"
+    ],
+    [
+      "c-655a1bbbfb714aa6",
+      "breaks"
+    ],
+    [
+      "c-655a1bbbfb714aa6",
+      "widths"
+    ],
+    [
+      "c-655a1bbbfb714aa6",
+      "painter"
+    ],
+    [
+      "c-657bdc1ad5591016",
+      "widths"
+    ],
+    [
+      "c-657bdc1ad5591016",
+      "painter"
+    ],
+    [
+      "c-6620d53429d7aa8d",
+      "painter"
+    ],
+    [
+      "c-6693e521d1c38fb3",
+      "painter"
+    ],
+    [
+      "c-66f5d7416d25a450",
+      "widths"
+    ],
+    [
+      "c-66f5d7416d25a450",
+      "painter"
+    ],
+    [
+      "c-6704d9a31cfdc2f0",
+      "painter"
+    ],
+    [
+      "c-670fe66fa762681a",
+      "widths"
+    ],
+    [
+      "c-670fe66fa762681a",
+      "painter"
+    ],
+    [
+      "c-6876b713700c60a7",
+      "breaks"
+    ],
+    [
+      "c-6876b713700c60a7",
+      "widths"
+    ],
+    [
+      "c-6876b713700c60a7",
+      "painter"
+    ],
+    [
+      "c-6914a6491ac13797",
+      "widths"
+    ],
+    [
+      "c-6914a6491ac13797",
+      "painter"
+    ],
+    [
+      "c-6b91cd28307f5ed5",
+      "painter"
+    ],
+    [
+      "c-6b9adddc7db9b89f",
+      "painter"
+    ],
+    [
+      "c-6c9917fbc6041129",
+      "widths"
+    ],
+    [
+      "c-6c9917fbc6041129",
+      "painter"
+    ],
+    [
+      "c-6dc689c8cd91e36a",
+      "widths"
+    ],
+    [
+      "c-6dc689c8cd91e36a",
+      "painter"
+    ],
+    [
+      "c-6df0a5695c9eaf9c",
+      "painter"
+    ],
+    [
+      "c-6e972e83098c9f8f",
+      "painter"
+    ],
+    [
+      "c-6edb59f5ee5d826f",
+      "widths"
+    ],
+    [
+      "c-6edb59f5ee5d826f",
+      "painter"
+    ],
+    [
+      "c-6ee9344ab995ebb3",
+      "painter"
+    ],
+    [
+      "c-70241ed3d26b1eee",
+      "breaks"
+    ],
+    [
+      "c-70241ed3d26b1eee",
+      "widths"
+    ],
+    [
+      "c-70241ed3d26b1eee",
+      "painter"
+    ],
+    [
+      "c-72067e0b972e7c1d",
+      "widths"
+    ],
+    [
+      "c-72067e0b972e7c1d",
+      "painter"
+    ],
+    [
+      "c-7264532538fdb4cc",
+      "lineCount"
+    ],
+    [
+      "c-7264532538fdb4cc",
+      "breaks"
+    ],
+    [
+      "c-7264532538fdb4cc",
+      "widths"
+    ],
+    [
+      "c-7264532538fdb4cc",
+      "painter"
+    ],
+    [
+      "c-72e685896c80be8f",
+      "painter"
+    ],
+    [
+      "c-73409c3310ad9c5c",
+      "widths"
+    ],
+    [
+      "c-73409c3310ad9c5c",
+      "painter"
+    ],
+    [
+      "c-74090c1266c35bc0",
+      "breaks"
+    ],
+    [
+      "c-759e0dad82398393",
+      "lineCount"
+    ],
+    [
+      "c-759e0dad82398393",
+      "breaks"
+    ],
+    [
+      "c-759e0dad82398393",
+      "widths"
+    ],
+    [
+      "c-768d072e88f5abd6",
+      "widths"
+    ],
+    [
+      "c-768d072e88f5abd6",
+      "painter"
+    ],
+    [
+      "c-76f2ea21836f7585",
+      "widths"
+    ],
+    [
+      "c-76f2ea21836f7585",
+      "painter"
+    ],
+    [
+      "c-76fa7939f2c02dbf",
+      "breaks"
+    ],
+    [
+      "c-76fa7939f2c02dbf",
+      "widths"
+    ],
+    [
+      "c-76fa7939f2c02dbf",
+      "painter"
+    ],
+    [
+      "c-76fe3b920a9f524f",
+      "painter"
+    ],
+    [
+      "c-7763ad910cf7e096",
+      "breaks"
+    ],
+    [
+      "c-7763ad910cf7e096",
+      "widths"
+    ],
+    [
+      "c-7763ad910cf7e096",
+      "painter"
+    ],
+    [
+      "c-77707dc7fe169f37",
+      "painter"
+    ],
+    [
+      "c-77b189605a3d8a1e",
+      "painter"
+    ],
+    [
+      "c-77dff10919f3743c",
+      "painter"
+    ],
+    [
+      "c-78bc1ee694b82b49",
+      "widths"
+    ],
+    [
+      "c-78bc1ee694b82b49",
+      "painter"
+    ],
+    [
+      "c-790a15d5d04b7c3a",
+      "widths"
+    ],
+    [
+      "c-79115ad692e65fb9",
+      "painter"
+    ],
+    [
+      "c-7a2ac95c3bec225d",
+      "widths"
+    ],
+    [
+      "c-7a2ac95c3bec225d",
+      "painter"
+    ],
+    [
+      "c-7b4acfc725884079",
+      "widths"
+    ],
+    [
+      "c-7b608a5a8bcf5ba9",
+      "widths"
+    ],
+    [
+      "c-7b608a5a8bcf5ba9",
+      "painter"
+    ],
+    [
+      "c-7b7ff3385214c78c",
+      "painter"
+    ],
+    [
+      "c-7bc5fc110e051e9c",
+      "widths"
+    ],
+    [
+      "c-7bc5fc110e051e9c",
+      "painter"
+    ],
+    [
+      "c-7bf6f548fb4db591",
+      "painter"
+    ],
+    [
+      "c-7c0804b485910f3b",
+      "widths"
+    ],
+    [
+      "c-7c0804b485910f3b",
+      "painter"
+    ],
+    [
+      "c-7c343c6f0d831f19",
+      "widths"
+    ],
+    [
+      "c-7c343c6f0d831f19",
+      "painter"
+    ],
+    [
+      "c-7c3f3741c40fa60e",
+      "painter"
+    ],
+    [
+      "c-7cc603452b1963e6",
+      "painter"
+    ],
+    [
+      "c-7d1618c6e8bb03b6",
+      "painter"
+    ],
+    [
+      "c-7d4f8abd9660ea44",
+      "widths"
+    ],
+    [
+      "c-7d4f8abd9660ea44",
+      "painter"
+    ],
+    [
+      "c-7e71400b2545d312",
+      "widths"
+    ],
+    [
+      "c-7e71400b2545d312",
+      "painter"
+    ],
+    [
+      "c-7eba250168f06ed3",
+      "painter"
+    ],
+    [
+      "c-7ee076a531ec5800",
+      "painter"
+    ],
+    [
+      "c-7f0da16eeaa33287",
+      "widths"
+    ],
+    [
+      "c-7f0da16eeaa33287",
+      "painter"
+    ],
+    [
+      "c-800c97379773547c",
+      "painter"
+    ],
+    [
+      "c-8149daffd60d058e",
+      "widths"
+    ],
+    [
+      "c-8149daffd60d058e",
+      "painter"
+    ],
+    [
+      "c-814ec68a2eea47c8",
+      "widths"
+    ],
+    [
+      "c-81dd9fe77021af77",
+      "painter"
+    ],
+    [
+      "c-825559336d0a2293",
+      "lineCount"
+    ],
+    [
+      "c-825559336d0a2293",
+      "breaks"
+    ],
+    [
+      "c-827356b580a44c28",
+      "painter"
+    ],
+    [
+      "c-82b16b7027f8ecae",
+      "widths"
+    ],
+    [
+      "c-82b16b7027f8ecae",
+      "painter"
+    ],
+    [
+      "c-82d8dd9bbae612c8",
+      "widths"
+    ],
+    [
+      "c-82d8dd9bbae612c8",
+      "painter"
+    ],
+    [
+      "c-8364ffc7ba3f4ecc",
+      "widths"
+    ],
+    [
+      "c-8364ffc7ba3f4ecc",
+      "painter"
+    ],
+    [
+      "c-8379bac96db0859f",
+      "painter"
+    ],
+    [
+      "c-838566f319996a5a",
+      "painter"
+    ],
+    [
+      "c-8396e4d87dff10ff",
+      "painter"
+    ],
+    [
+      "c-83b9c4e7a72a5114",
+      "widths"
+    ],
+    [
+      "c-83b9c4e7a72a5114",
+      "painter"
+    ],
+    [
+      "c-846ea31aec509d2c",
+      "widths"
+    ],
+    [
+      "c-846ea31aec509d2c",
+      "painter"
+    ],
+    [
+      "c-84aece14c44c3205",
+      "painter"
+    ],
+    [
+      "c-84b8b99095d48878",
+      "widths"
+    ],
+    [
+      "c-84b8b99095d48878",
+      "painter"
+    ],
+    [
+      "c-84feec1647d58a0e",
+      "breaks"
+    ],
+    [
+      "c-84feec1647d58a0e",
+      "widths"
+    ],
+    [
+      "c-84feec1647d58a0e",
+      "painter"
+    ],
+    [
+      "c-852b46f2070aaed2",
+      "breaks"
+    ],
+    [
+      "c-852b46f2070aaed2",
+      "widths"
+    ],
+    [
+      "c-852b46f2070aaed2",
+      "painter"
+    ],
+    [
+      "c-85ef7cb7380a7cab",
+      "lineCount"
+    ],
+    [
+      "c-85ef7cb7380a7cab",
+      "breaks"
+    ],
+    [
+      "c-85ef7cb7380a7cab",
+      "widths"
+    ],
+    [
+      "c-87b16982a4c34e01",
+      "widths"
+    ],
+    [
+      "c-87b16982a4c34e01",
+      "painter"
+    ],
+    [
+      "c-88490e28683b51f7",
+      "painter"
+    ],
+    [
+      "c-8855d5d01b70cd47",
+      "painter"
+    ],
+    [
+      "c-887a18cc5a0fecae",
+      "painter"
+    ],
+    [
+      "c-887ad50ab7514b5d",
+      "widths"
+    ],
+    [
+      "c-887ad50ab7514b5d",
+      "painter"
+    ],
+    [
+      "c-8912bf25aaecf902",
+      "breaks"
+    ],
+    [
+      "c-8912bf25aaecf902",
+      "widths"
+    ],
+    [
+      "c-8912bf25aaecf902",
+      "painter"
+    ],
+    [
+      "c-8932c03bc508e678",
+      "painter"
+    ],
+    [
+      "c-8a58c960695a33a3",
+      "breaks"
+    ],
+    [
+      "c-8a58c960695a33a3",
+      "widths"
+    ],
+    [
+      "c-8ace8a6e4f62b04f",
+      "painter"
+    ],
+    [
+      "c-8b7a5b1a23931aee",
+      "painter"
+    ],
+    [
+      "c-8b7af31d5761d122",
+      "lineCount"
+    ],
+    [
+      "c-8b7af31d5761d122",
+      "breaks"
+    ],
+    [
+      "c-8b9c2d9bc9c01e7e",
+      "painter"
+    ],
+    [
+      "c-8bc772f516eccbc5",
+      "painter"
+    ],
+    [
+      "c-8bd223d0bfc25582",
+      "widths"
+    ],
+    [
+      "c-8bd223d0bfc25582",
+      "painter"
+    ],
+    [
+      "c-8c69ab920461339c",
+      "widths"
+    ],
+    [
+      "c-8c69ab920461339c",
+      "painter"
+    ],
+    [
+      "c-8dc7492de536aace",
+      "breaks"
+    ],
+    [
+      "c-8dc7492de536aace",
+      "widths"
+    ],
+    [
+      "c-8dc7492de536aace",
+      "painter"
+    ],
+    [
+      "c-8e3a380ffa3722f6",
+      "breaks"
+    ],
+    [
+      "c-8e3a380ffa3722f6",
+      "widths"
+    ],
+    [
+      "c-8e3a380ffa3722f6",
+      "painter"
+    ],
+    [
+      "c-9182e7c00ae3ee6b",
+      "widths"
+    ],
+    [
+      "c-9182e7c00ae3ee6b",
+      "painter"
+    ],
+    [
+      "c-91a526a74cf39350",
+      "widths"
+    ],
+    [
+      "c-91a526a74cf39350",
+      "painter"
+    ],
+    [
+      "c-91d0653be77824d0",
+      "widths"
+    ],
+    [
+      "c-91d0653be77824d0",
+      "painter"
+    ],
+    [
+      "c-92ac00c157f2e749",
+      "widths"
+    ],
+    [
+      "c-92ac00c157f2e749",
+      "painter"
+    ],
+    [
+      "c-92fae84eaea5db69",
+      "breaks"
+    ],
+    [
+      "c-92fae84eaea5db69",
+      "widths"
+    ],
+    [
+      "c-92fae84eaea5db69",
+      "painter"
+    ],
+    [
+      "c-9394de2776d07b34",
+      "breaks"
+    ],
+    [
+      "c-9394de2776d07b34",
+      "widths"
+    ],
+    [
+      "c-9394de2776d07b34",
+      "painter"
+    ],
+    [
+      "c-93ca776726519608",
+      "painter"
+    ],
+    [
+      "c-94fa84af78f864cd",
+      "widths"
+    ],
+    [
+      "c-94fa84af78f864cd",
+      "painter"
+    ],
+    [
+      "c-95146c1467c36e04",
+      "widths"
+    ],
+    [
+      "c-95146c1467c36e04",
+      "painter"
+    ],
+    [
+      "c-959ba5c8d55d9b3e",
+      "widths"
+    ],
+    [
+      "c-959ba5c8d55d9b3e",
+      "painter"
+    ],
+    [
+      "c-95c5df2f3a84d218",
+      "lineCount"
+    ],
+    [
+      "c-95c5df2f3a84d218",
+      "breaks"
+    ],
+    [
+      "c-95c5df2f3a84d218",
+      "widths"
+    ],
+    [
+      "c-95c5df2f3a84d218",
+      "painter"
+    ],
+    [
+      "c-96304235db52d9e3",
+      "painter"
+    ],
+    [
+      "c-972ebb50be36ed36",
+      "breaks"
+    ],
+    [
+      "c-972ebb50be36ed36",
+      "widths"
+    ],
+    [
+      "c-972ebb50be36ed36",
+      "painter"
+    ],
+    [
+      "c-97d818e42222256b",
+      "widths"
+    ],
+    [
+      "c-97d818e42222256b",
+      "painter"
+    ],
+    [
+      "c-983cac38f4a73415",
+      "painter"
+    ],
+    [
+      "c-989520689c3d949a",
+      "widths"
+    ],
+    [
+      "c-99073ce34ae874f8",
+      "widths"
+    ],
+    [
+      "c-99073ce34ae874f8",
+      "painter"
+    ],
+    [
+      "c-9a57449b9972dc33",
+      "painter"
+    ],
+    [
+      "c-9a83dd176d9a3c9c",
+      "breaks"
+    ],
+    [
+      "c-9a83dd176d9a3c9c",
+      "widths"
+    ],
+    [
+      "c-9a83dd176d9a3c9c",
+      "painter"
+    ],
+    [
+      "c-9a9624d83fd23ccd",
+      "widths"
+    ],
+    [
+      "c-9a9624d83fd23ccd",
+      "painter"
+    ],
+    [
+      "c-9abf118b203bb7e2",
+      "widths"
+    ],
+    [
+      "c-9abf118b203bb7e2",
+      "painter"
+    ],
+    [
+      "c-9ac250eccb9ccc3f",
+      "breaks"
+    ],
+    [
+      "c-9ac250eccb9ccc3f",
+      "widths"
+    ],
+    [
+      "c-9ac250eccb9ccc3f",
+      "painter"
+    ],
+    [
+      "c-9b07e166ed5b326f",
+      "painter"
+    ],
+    [
+      "c-9b20575be7a101c9",
+      "widths"
+    ],
+    [
+      "c-9b20575be7a101c9",
+      "painter"
+    ],
+    [
+      "c-9c40513652a2ca27",
+      "painter"
+    ],
+    [
+      "c-9d3bc22b7d60497c",
+      "widths"
+    ],
+    [
+      "c-9d9502061c7fd61e",
+      "painter"
+    ],
+    [
+      "c-9db0afec452ed778",
+      "widths"
+    ],
+    [
+      "c-9db0afec452ed778",
+      "painter"
+    ],
+    [
+      "c-9e982ca350ac1ca3",
+      "painter"
+    ],
+    [
+      "c-9efae4b7c3bfea7e",
+      "widths"
+    ],
+    [
+      "c-9efae4b7c3bfea7e",
+      "painter"
+    ],
+    [
+      "c-9f197b64e75d7187",
+      "painter"
+    ],
+    [
+      "c-9f47466645b505fc",
+      "painter"
+    ],
+    [
+      "c-a0e39e79f182e627",
+      "widths"
+    ],
+    [
+      "c-a0e39e79f182e627",
+      "painter"
+    ],
+    [
+      "c-a10c93ea7a62e077",
+      "breaks"
+    ],
+    [
+      "c-a10c93ea7a62e077",
+      "widths"
+    ],
+    [
+      "c-a10c93ea7a62e077",
+      "painter"
+    ],
+    [
+      "c-a24fbcedc682f77a",
+      "painter"
+    ],
+    [
+      "c-a277b22c505d166c",
+      "painter"
+    ],
+    [
+      "c-a29f6858e2ffac0d",
+      "breaks"
+    ],
+    [
+      "c-a29f6858e2ffac0d",
+      "widths"
+    ],
+    [
+      "c-a29f6858e2ffac0d",
+      "painter"
+    ],
+    [
+      "c-a362c9082d2dc5d0",
+      "widths"
+    ],
+    [
+      "c-a362c9082d2dc5d0",
+      "painter"
+    ],
+    [
+      "c-a3e10495990ba7ac",
+      "widths"
+    ],
+    [
+      "c-a3e10495990ba7ac",
+      "painter"
+    ],
+    [
+      "c-a4405cfd8956e061",
+      "painter"
+    ],
+    [
+      "c-a44442a0e667da53",
+      "widths"
+    ],
+    [
+      "c-a44442a0e667da53",
+      "painter"
+    ],
+    [
+      "c-a46c85ea4100c5fa",
+      "breaks"
+    ],
+    [
+      "c-a46c85ea4100c5fa",
+      "widths"
+    ],
+    [
+      "c-a46c85ea4100c5fa",
+      "painter"
+    ],
+    [
+      "c-a49c6c1ef0ac0f5b",
+      "lineCount"
+    ],
+    [
+      "c-a49c6c1ef0ac0f5b",
+      "breaks"
+    ],
+    [
+      "c-a49c6c1ef0ac0f5b",
+      "widths"
+    ],
+    [
+      "c-a49c6c1ef0ac0f5b",
+      "painter"
+    ],
+    [
+      "c-a49f14d5c759e3dc",
+      "widths"
+    ],
+    [
+      "c-a49f14d5c759e3dc",
+      "painter"
+    ],
+    [
+      "c-a4fd168fa04b1921",
+      "widths"
+    ],
+    [
+      "c-a4fd168fa04b1921",
+      "painter"
+    ],
+    [
+      "c-a5030d3f280eb91c",
+      "painter"
+    ],
+    [
+      "c-a5c7b50e5a8c7109",
+      "widths"
+    ],
+    [
+      "c-a5c7b50e5a8c7109",
+      "painter"
+    ],
+    [
+      "c-a5ff3ff4098e9bc1",
+      "widths"
+    ],
+    [
+      "c-a5ff3ff4098e9bc1",
+      "painter"
+    ],
+    [
+      "c-a6a4f4fe21b0d431",
+      "widths"
+    ],
+    [
+      "c-a6a4f4fe21b0d431",
+      "painter"
+    ],
+    [
+      "c-a6b4561d307bf4a9",
+      "painter"
+    ],
+    [
+      "c-a75e1135f0a21fd2",
+      "lineCount"
+    ],
+    [
+      "c-a75e1135f0a21fd2",
+      "breaks"
+    ],
+    [
+      "c-a827afe31e35d947",
+      "painter"
+    ],
+    [
+      "c-a8577943ef8a5419",
+      "widths"
+    ],
+    [
+      "c-a8577943ef8a5419",
+      "painter"
+    ],
+    [
+      "c-a8b09561530e35fd",
+      "widths"
+    ],
+    [
+      "c-a8b09561530e35fd",
+      "painter"
+    ],
+    [
+      "c-a90b1cfc5f155360",
+      "breaks"
+    ],
+    [
+      "c-a90b1cfc5f155360",
+      "widths"
+    ],
+    [
+      "c-a90b1cfc5f155360",
+      "painter"
+    ],
+    [
+      "c-a998cbb6c88513aa",
+      "widths"
+    ],
+    [
+      "c-a998cbb6c88513aa",
+      "painter"
+    ],
+    [
+      "c-a9a7e88a04c14f00",
+      "widths"
+    ],
+    [
+      "c-a9a7e88a04c14f00",
+      "painter"
+    ],
+    [
+      "c-a9eb275c2f73299a",
+      "widths"
+    ],
+    [
+      "c-a9eb275c2f73299a",
+      "painter"
+    ],
+    [
+      "c-aaf767c9f7492f4d",
+      "painter"
+    ],
+    [
+      "c-ab4c4b1de1f5dbe8",
+      "widths"
+    ],
+    [
+      "c-ab4c4b1de1f5dbe8",
+      "painter"
+    ],
+    [
+      "c-abc10d0d7518f31b",
+      "breaks"
+    ],
+    [
+      "c-abc10d0d7518f31b",
+      "widths"
+    ],
+    [
+      "c-abc10d0d7518f31b",
+      "painter"
+    ],
+    [
+      "c-abfc3938b03a5219",
+      "breaks"
+    ],
+    [
+      "c-abfc3938b03a5219",
+      "widths"
+    ],
+    [
+      "c-abfc3938b03a5219",
+      "painter"
+    ],
+    [
+      "c-ac47409eecb1cf77",
+      "widths"
+    ],
+    [
+      "c-ac47409eecb1cf77",
+      "painter"
+    ],
+    [
+      "c-accaa5a60eb82121",
+      "widths"
+    ],
+    [
+      "c-acea4ab8ab95d6d3",
+      "widths"
+    ],
+    [
+      "c-acea4ab8ab95d6d3",
+      "painter"
+    ],
+    [
+      "c-ad17fc316382706b",
+      "widths"
+    ],
+    [
+      "c-ad17fc316382706b",
+      "painter"
+    ],
+    [
+      "c-ada2c824b7f1e876",
+      "lineCount"
+    ],
+    [
+      "c-ada2c824b7f1e876",
+      "breaks"
+    ],
+    [
+      "c-ae2302c0b43fbb19",
+      "breaks"
+    ],
+    [
+      "c-ae2302c0b43fbb19",
+      "widths"
+    ],
+    [
+      "c-ae2302c0b43fbb19",
+      "painter"
+    ],
+    [
+      "c-af6f3516685a67a4",
+      "widths"
+    ],
+    [
+      "c-af6f3516685a67a4",
+      "painter"
+    ],
+    [
+      "c-afeab3fcb153cce3",
+      "painter"
+    ],
+    [
+      "c-b01a07f177cc8ef5",
+      "painter"
+    ],
+    [
+      "c-b06032f79f73fffa",
+      "painter"
+    ],
+    [
+      "c-b07a857e324677de",
+      "painter"
+    ],
+    [
+      "c-b0937b0886b5676e",
+      "widths"
+    ],
+    [
+      "c-b0937b0886b5676e",
+      "painter"
+    ],
+    [
+      "c-b2d5ed25dbe05675",
+      "widths"
+    ],
+    [
+      "c-b2d5ed25dbe05675",
+      "painter"
+    ],
+    [
+      "c-b3105d288e5ec8be",
+      "widths"
+    ],
+    [
+      "c-b3105d288e5ec8be",
+      "painter"
+    ],
+    [
+      "c-b31c42275ab66356",
+      "breaks"
+    ],
+    [
+      "c-b31c42275ab66356",
+      "widths"
+    ],
+    [
+      "c-b31c42275ab66356",
+      "painter"
+    ],
+    [
+      "c-b3ace88a69193008",
+      "painter"
+    ],
+    [
+      "c-b3fd0dc9cb96f5e0",
+      "widths"
+    ],
+    [
+      "c-b3fd0dc9cb96f5e0",
+      "painter"
+    ],
+    [
+      "c-b4035570fd6c5201",
+      "lineCount"
+    ],
+    [
+      "c-b4035570fd6c5201",
+      "breaks"
+    ],
+    [
+      "c-b4035570fd6c5201",
+      "widths"
+    ],
+    [
+      "c-b4035570fd6c5201",
+      "painter"
+    ],
+    [
+      "c-b40f99bdb55f50bd",
+      "painter"
+    ],
+    [
+      "c-b45224b0331761e8",
+      "widths"
+    ],
+    [
+      "c-b45224b0331761e8",
+      "painter"
+    ],
+    [
+      "c-b55f201bbfb30121",
+      "widths"
+    ],
+    [
+      "c-b55f201bbfb30121",
+      "painter"
+    ],
+    [
+      "c-b5c1c15e295cde0c",
+      "widths"
+    ],
+    [
+      "c-b5c1c15e295cde0c",
+      "painter"
+    ],
+    [
+      "c-b629952f699e4702",
+      "breaks"
+    ],
+    [
+      "c-b629952f699e4702",
+      "widths"
+    ],
+    [
+      "c-b629952f699e4702",
+      "painter"
+    ],
+    [
+      "c-b91d6f098670301b",
+      "painter"
+    ],
+    [
+      "c-b935be7fe33e9085",
+      "widths"
+    ],
+    [
+      "c-b935be7fe33e9085",
+      "painter"
+    ],
+    [
+      "c-b9d3bf2cae8773df",
+      "breaks"
+    ],
+    [
+      "c-b9d3bf2cae8773df",
+      "widths"
+    ],
+    [
+      "c-b9d3bf2cae8773df",
+      "painter"
+    ],
+    [
+      "c-ba0be9a8639c10f5",
+      "widths"
+    ],
+    [
+      "c-ba0be9a8639c10f5",
+      "painter"
+    ],
+    [
+      "c-ba65ae119659529c",
+      "widths"
+    ],
+    [
+      "c-ba65ae119659529c",
+      "painter"
+    ],
+    [
+      "c-baad640ddb06cc3e",
+      "widths"
+    ],
+    [
+      "c-baad640ddb06cc3e",
+      "painter"
+    ],
+    [
+      "c-bb4d32738996b0fc",
+      "widths"
+    ],
+    [
+      "c-bb4d32738996b0fc",
+      "painter"
+    ],
+    [
+      "c-bb52f4a4ae5056d6",
+      "lineCount"
+    ],
+    [
+      "c-bb52f4a4ae5056d6",
+      "breaks"
+    ],
+    [
+      "c-bb52f4a4ae5056d6",
+      "widths"
+    ],
+    [
+      "c-bb52f4a4ae5056d6",
+      "painter"
+    ],
+    [
+      "c-bc720a4e23d3000c",
+      "breaks"
+    ],
+    [
+      "c-bc720a4e23d3000c",
+      "widths"
+    ],
+    [
+      "c-bc720a4e23d3000c",
+      "painter"
+    ],
+    [
+      "c-bcb46f8032cae869",
+      "widths"
+    ],
+    [
+      "c-bcb46f8032cae869",
+      "painter"
+    ],
+    [
+      "c-bd0a609e0aec120b",
+      "widths"
+    ],
+    [
+      "c-bde2a207193fbe91",
+      "breaks"
+    ],
+    [
+      "c-bde2a207193fbe91",
+      "widths"
+    ],
+    [
+      "c-bde2a207193fbe91",
+      "painter"
+    ],
+    [
+      "c-bdf76b9209ea6f5f",
+      "painter"
+    ],
+    [
+      "c-be2cd02f7834e97f",
+      "widths"
+    ],
+    [
+      "c-be2cd02f7834e97f",
+      "painter"
+    ],
+    [
+      "c-be62f51ff50ad049",
+      "painter"
+    ],
+    [
+      "c-be993ac07701af85",
+      "widths"
+    ],
+    [
+      "c-be993ac07701af85",
+      "painter"
+    ],
+    [
+      "c-beb7eefef61d6692",
+      "painter"
+    ],
+    [
+      "c-bf630bd20b034202",
+      "breaks"
+    ],
+    [
+      "c-bf630bd20b034202",
+      "widths"
+    ],
+    [
+      "c-bf630bd20b034202",
+      "painter"
+    ],
+    [
+      "c-bf761c813bc69f45",
+      "painter"
+    ],
+    [
+      "c-c08304fc87460036",
+      "widths"
+    ],
+    [
+      "c-c08304fc87460036",
+      "painter"
+    ],
+    [
+      "c-c11c64d333d30506",
+      "widths"
+    ],
+    [
+      "c-c15b2ff5c40ab457",
+      "widths"
+    ],
+    [
+      "c-c15b2ff5c40ab457",
+      "painter"
+    ],
+    [
+      "c-c226f8a40fee0733",
+      "widths"
+    ],
+    [
+      "c-c226f8a40fee0733",
+      "painter"
+    ],
+    [
+      "c-c2841f74403f38ec",
+      "widths"
+    ],
+    [
+      "c-c2841f74403f38ec",
+      "painter"
+    ],
+    [
+      "c-c2c50e840d96667f",
+      "painter"
+    ],
+    [
+      "c-c3a65e2113124814",
+      "painter"
+    ],
+    [
+      "c-c3d3f48dd9399a02",
+      "widths"
+    ],
+    [
+      "c-c3d3f48dd9399a02",
+      "painter"
+    ],
+    [
+      "c-c402777f63413e30",
+      "widths"
+    ],
+    [
+      "c-c402777f63413e30",
+      "painter"
+    ],
+    [
+      "c-c4a4ff19fcecc862",
+      "painter"
+    ],
+    [
+      "c-c4bfe3b3dd8fc579",
+      "painter"
+    ],
+    [
+      "c-c5014b371eccfd5e",
+      "lineCount"
+    ],
+    [
+      "c-c5014b371eccfd5e",
+      "breaks"
+    ],
+    [
+      "c-c5014b371eccfd5e",
+      "widths"
+    ],
+    [
+      "c-c5014b371eccfd5e",
+      "painter"
+    ],
+    [
+      "c-c63614c0ae195f5d",
+      "widths"
+    ],
+    [
+      "c-c641c518b7616e84",
+      "breaks"
+    ],
+    [
+      "c-c641c518b7616e84",
+      "widths"
+    ],
+    [
+      "c-c641c518b7616e84",
+      "painter"
+    ],
+    [
+      "c-c67d75e12b3ebd3e",
+      "painter"
+    ],
+    [
+      "c-c699c1fcf10f4535",
+      "painter"
+    ],
+    [
+      "c-c6b4b81c521e3052",
+      "painter"
+    ],
+    [
+      "c-c734cbc059a3b620",
+      "widths"
+    ],
+    [
+      "c-c734cbc059a3b620",
+      "painter"
+    ],
+    [
+      "c-c7a3672a38e1a493",
+      "widths"
+    ],
+    [
+      "c-c7a3672a38e1a493",
+      "painter"
+    ],
+    [
+      "c-c8515e84726ea6e9",
+      "painter"
+    ],
+    [
+      "c-c8bc4da421c5747d",
+      "widths"
+    ],
+    [
+      "c-c8bc4da421c5747d",
+      "painter"
+    ],
+    [
+      "c-c9106f3a07084ba1",
+      "lineCount"
+    ],
+    [
+      "c-c9106f3a07084ba1",
+      "breaks"
+    ],
+    [
+      "c-c9106f3a07084ba1",
+      "widths"
+    ],
+    [
+      "c-c9106f3a07084ba1",
+      "painter"
+    ],
+    [
+      "c-c9bf3cb7fc2a81b9",
+      "widths"
+    ],
+    [
+      "c-c9bf3cb7fc2a81b9",
+      "painter"
+    ],
+    [
+      "c-ca696f1038ccf9d3",
+      "painter"
+    ],
+    [
+      "c-ca78178ed3a94c81",
+      "breaks"
+    ],
+    [
+      "c-ca78178ed3a94c81",
+      "widths"
+    ],
+    [
+      "c-ca78178ed3a94c81",
+      "painter"
+    ],
+    [
+      "c-ca87680f6fbdf56f",
+      "widths"
+    ],
+    [
+      "c-ca87680f6fbdf56f",
+      "painter"
+    ],
+    [
+      "c-ca878876ff794e41",
+      "widths"
+    ],
+    [
+      "c-ca878876ff794e41",
+      "painter"
+    ],
+    [
+      "c-cb18be068fa772fa",
+      "widths"
+    ],
+    [
+      "c-cb18be068fa772fa",
+      "painter"
+    ],
+    [
+      "c-cb250a34b5a18ecf",
+      "widths"
+    ],
+    [
+      "c-cb250a34b5a18ecf",
+      "painter"
+    ],
+    [
+      "c-cb8217e31f6cb939",
+      "breaks"
+    ],
+    [
+      "c-cb8217e31f6cb939",
+      "widths"
+    ],
+    [
+      "c-cb8217e31f6cb939",
+      "painter"
+    ],
+    [
+      "c-cb9a019ce563be35",
+      "widths"
+    ],
+    [
+      "c-cb9a019ce563be35",
+      "painter"
+    ],
+    [
+      "c-cc04d96308c292a8",
+      "widths"
+    ],
+    [
+      "c-cc04d96308c292a8",
+      "painter"
+    ],
+    [
+      "c-cc62f1e57826fc65",
+      "painter"
+    ],
+    [
+      "c-ccdcb1b66e127906",
+      "widths"
+    ],
+    [
+      "c-ccdcb1b66e127906",
+      "painter"
+    ],
+    [
+      "c-cd0eec55ceff9647",
+      "widths"
+    ],
+    [
+      "c-cd0eec55ceff9647",
+      "painter"
+    ],
+    [
+      "c-cdc7149872e2f1f4",
+      "widths"
+    ],
+    [
+      "c-cdc7149872e2f1f4",
+      "painter"
+    ],
+    [
+      "c-ce3ba86b55bb46b4",
+      "lineCount"
+    ],
+    [
+      "c-ce3ba86b55bb46b4",
+      "breaks"
+    ],
+    [
+      "c-ce3ba86b55bb46b4",
+      "widths"
+    ],
+    [
+      "c-ce3ba86b55bb46b4",
+      "painter"
+    ],
+    [
+      "c-ceedc52e9bc74849",
+      "widths"
+    ],
+    [
+      "c-ceedc52e9bc74849",
+      "painter"
+    ],
+    [
+      "c-cf3214fbeb6b33df",
+      "widths"
+    ],
+    [
+      "c-cf3214fbeb6b33df",
+      "painter"
+    ],
+    [
+      "c-cf4c1023034cb2d0",
+      "breaks"
+    ],
+    [
+      "c-cf4c1023034cb2d0",
+      "widths"
+    ],
+    [
+      "c-cf4c1023034cb2d0",
+      "painter"
+    ],
+    [
+      "c-cf7229d337bb61b2",
+      "painter"
+    ],
+    [
+      "c-cfe01a4f43164152",
+      "widths"
+    ],
+    [
+      "c-cfe01a4f43164152",
+      "painter"
+    ],
+    [
+      "c-d0f5a157031154c3",
+      "painter"
+    ],
+    [
+      "c-d182998a56d5c5f5",
+      "widths"
+    ],
+    [
+      "c-d182998a56d5c5f5",
+      "painter"
+    ],
+    [
+      "c-d256b489ff03e6e1",
+      "widths"
+    ],
+    [
+      "c-d256b489ff03e6e1",
+      "painter"
+    ],
+    [
+      "c-d2724e6e8d45ad65",
+      "widths"
+    ],
+    [
+      "c-d2724e6e8d45ad65",
+      "painter"
+    ],
+    [
+      "c-d2952115fb0192bb",
+      "breaks"
+    ],
+    [
+      "c-d2952115fb0192bb",
+      "widths"
+    ],
+    [
+      "c-d2952115fb0192bb",
+      "painter"
+    ],
+    [
+      "c-d33c62eb7ddbe9e8",
+      "widths"
+    ],
+    [
+      "c-d33c62eb7ddbe9e8",
+      "painter"
+    ],
+    [
+      "c-d36d8120b7d35206",
+      "breaks"
+    ],
+    [
+      "c-d36d8120b7d35206",
+      "widths"
+    ],
+    [
+      "c-d36d8120b7d35206",
+      "painter"
+    ],
+    [
+      "c-d5b747585c1c1c19",
+      "breaks"
+    ],
+    [
+      "c-d5b747585c1c1c19",
+      "widths"
+    ],
+    [
+      "c-d5b747585c1c1c19",
+      "painter"
+    ],
+    [
+      "c-d5cdce910159b140",
+      "widths"
+    ],
+    [
+      "c-d5cdce910159b140",
+      "painter"
+    ],
+    [
+      "c-d673e6c9cb969f57",
+      "widths"
+    ],
+    [
+      "c-d673e6c9cb969f57",
+      "painter"
+    ],
+    [
+      "c-d75c7fa838a82bc2",
+      "widths"
+    ],
+    [
+      "c-d75c7fa838a82bc2",
+      "painter"
+    ],
+    [
+      "c-d794c47a3aee6045",
+      "widths"
+    ],
+    [
+      "c-d794c47a3aee6045",
+      "painter"
+    ],
+    [
+      "c-d7c5825664cdb980",
+      "painter"
+    ],
+    [
+      "c-d85c772748ebce07",
+      "widths"
+    ],
+    [
+      "c-d85c772748ebce07",
+      "painter"
+    ],
+    [
+      "c-d8aa29bff95fe587",
+      "painter"
+    ],
+    [
+      "c-d9169caf6e227ec8",
+      "widths"
+    ],
+    [
+      "c-d9169caf6e227ec8",
+      "painter"
+    ],
+    [
+      "c-dafe46633c07f7c2",
+      "painter"
+    ],
+    [
+      "c-db0b18a28009f1bd",
+      "widths"
+    ],
+    [
+      "c-db0b18a28009f1bd",
+      "painter"
+    ],
+    [
+      "c-dd3a9d23b64c2750",
+      "widths"
+    ],
+    [
+      "c-dd3a9d23b64c2750",
+      "painter"
+    ],
+    [
+      "c-dd9a1f0e87b504ea",
+      "widths"
+    ],
+    [
+      "c-dd9a1f0e87b504ea",
+      "painter"
+    ],
+    [
+      "c-ddaddd4e6ad0a0da",
+      "painter"
+    ],
+    [
+      "c-de1e44cd8a3b6f0f",
+      "breaks"
+    ],
+    [
+      "c-de1e44cd8a3b6f0f",
+      "widths"
+    ],
+    [
+      "c-de1e44cd8a3b6f0f",
+      "painter"
+    ],
+    [
+      "c-dfa5a082c19b5785",
+      "widths"
+    ],
+    [
+      "c-e017aed4f014ba8a",
+      "painter"
+    ],
+    [
+      "c-e030b18ad43b9e38",
+      "lineCount"
+    ],
+    [
+      "c-e030b18ad43b9e38",
+      "breaks"
+    ],
+    [
+      "c-e030b18ad43b9e38",
+      "widths"
+    ],
+    [
+      "c-e030b18ad43b9e38",
+      "painter"
+    ],
+    [
+      "c-e0af46ac1f712d96",
+      "painter"
+    ],
+    [
+      "c-e14a960ccc4b5c32",
+      "widths"
+    ],
+    [
+      "c-e14a960ccc4b5c32",
+      "painter"
+    ],
+    [
+      "c-e160fa9fd7861c24",
+      "painter"
+    ],
+    [
+      "c-e16190461158acd6",
+      "widths"
+    ],
+    [
+      "c-e16190461158acd6",
+      "painter"
+    ],
+    [
+      "c-e20f6ccf89ecb4ea",
+      "breaks"
+    ],
+    [
+      "c-e20f6ccf89ecb4ea",
+      "widths"
+    ],
+    [
+      "c-e20f6ccf89ecb4ea",
+      "painter"
+    ],
+    [
+      "c-e239ec8e63afded0",
+      "widths"
+    ],
+    [
+      "c-e2f23cdfd602d90e",
+      "painter"
+    ],
+    [
+      "c-e3339b390a834607",
+      "widths"
+    ],
+    [
+      "c-e3339b390a834607",
+      "painter"
+    ],
+    [
+      "c-e43842745f5059ce",
+      "painter"
+    ],
+    [
+      "c-e43927f232bab448",
+      "widths"
+    ],
+    [
+      "c-e43927f232bab448",
+      "painter"
+    ],
+    [
+      "c-e52c72c6b7fac99f",
+      "widths"
+    ],
+    [
+      "c-e52c72c6b7fac99f",
+      "painter"
+    ],
+    [
+      "c-e718f2c05d97f11e",
+      "widths"
+    ],
+    [
+      "c-e718f2c05d97f11e",
+      "painter"
+    ],
+    [
+      "c-e7571300d95c8531",
+      "painter"
+    ],
+    [
+      "c-e75d3dd0400a5191",
+      "widths"
+    ],
+    [
+      "c-e75d3dd0400a5191",
+      "painter"
+    ],
+    [
+      "c-e8119241c085c352",
+      "lineCount"
+    ],
+    [
+      "c-e8119241c085c352",
+      "breaks"
+    ],
+    [
+      "c-e8119241c085c352",
+      "widths"
+    ],
+    [
+      "c-e8119241c085c352",
+      "painter"
+    ],
+    [
+      "c-e818c23eeeb5f1b7",
+      "widths"
+    ],
+    [
+      "c-e818c23eeeb5f1b7",
+      "painter"
+    ],
+    [
+      "c-e863468a479b1850",
+      "painter"
+    ],
+    [
+      "c-e8cb6691cb580c49",
+      "painter"
+    ],
+    [
+      "c-e911d94c51fb11e8",
+      "breaks"
+    ],
+    [
+      "c-e911d94c51fb11e8",
+      "widths"
+    ],
+    [
+      "c-e911d94c51fb11e8",
+      "painter"
+    ],
+    [
+      "c-e9a283b55eaeb04a",
+      "painter"
+    ],
+    [
+      "c-ea613641869798b5",
+      "widths"
+    ],
+    [
+      "c-ea613641869798b5",
+      "painter"
+    ],
+    [
+      "c-eae1ca19f30e25fa",
+      "widths"
+    ],
+    [
+      "c-eae1ca19f30e25fa",
+      "painter"
+    ],
+    [
+      "c-eafab9de4bb5ed88",
+      "painter"
+    ],
+    [
+      "c-eb7b45006aefa1ee",
+      "painter"
+    ],
+    [
+      "c-ec3129333618b701",
+      "painter"
+    ],
+    [
+      "c-ec6335362abbb01e",
+      "widths"
+    ],
+    [
+      "c-ec6335362abbb01e",
+      "painter"
+    ],
+    [
+      "c-ecdc275149b9aae6",
+      "widths"
+    ],
+    [
+      "c-ecdc275149b9aae6",
+      "painter"
+    ],
+    [
+      "c-ed6d4eb354e00eaa",
+      "widths"
+    ],
+    [
+      "c-ed6d4eb354e00eaa",
+      "painter"
+    ],
+    [
+      "c-ed81d2ba1f733ac8",
+      "widths"
+    ],
+    [
+      "c-ed81d2ba1f733ac8",
+      "painter"
+    ],
+    [
+      "c-eda53d1e0e820e4a",
+      "widths"
+    ],
+    [
+      "c-eda53d1e0e820e4a",
+      "painter"
+    ],
+    [
+      "c-eda7d8e86f2b5357",
+      "breaks"
+    ],
+    [
+      "c-eda7d8e86f2b5357",
+      "widths"
+    ],
+    [
+      "c-eda7d8e86f2b5357",
+      "painter"
+    ],
+    [
+      "c-edc3859b63c5e788",
+      "widths"
+    ],
+    [
+      "c-edc3859b63c5e788",
+      "painter"
+    ],
+    [
+      "c-ede93b4ce64f1921",
+      "painter"
+    ],
+    [
+      "c-ee94a56ce89e9a02",
+      "widths"
+    ],
+    [
+      "c-ee94a56ce89e9a02",
+      "painter"
+    ],
+    [
+      "c-ef28a70f1d9c8412",
+      "painter"
+    ],
+    [
+      "c-efa45a17551a60a9",
+      "painter"
+    ],
+    [
+      "c-f00edc79fcd198ab",
+      "painter"
+    ],
+    [
+      "c-f03dbaf566b195a2",
+      "widths"
+    ],
+    [
+      "c-f1532eaf8979b876",
+      "breaks"
+    ],
+    [
+      "c-f1532eaf8979b876",
+      "widths"
+    ],
+    [
+      "c-f1532eaf8979b876",
+      "painter"
+    ],
+    [
+      "c-f16d148548a2d3af",
+      "painter"
+    ],
+    [
+      "c-f1828d1fa6e4b89b",
+      "widths"
+    ],
+    [
+      "c-f1828d1fa6e4b89b",
+      "painter"
+    ],
+    [
+      "c-f20634065376f3be",
+      "painter"
+    ],
+    [
+      "c-f214cf111ec3aa1f",
+      "breaks"
+    ],
+    [
+      "c-f214cf111ec3aa1f",
+      "widths"
+    ],
+    [
+      "c-f214cf111ec3aa1f",
+      "painter"
+    ],
+    [
+      "c-f21d307d8a4204cd",
+      "painter"
+    ],
+    [
+      "c-f25934f1931db634",
+      "painter"
+    ],
+    [
+      "c-f31d39742cde9fc4",
+      "breaks"
+    ],
+    [
+      "c-f31d39742cde9fc4",
+      "widths"
+    ],
+    [
+      "c-f31d39742cde9fc4",
+      "painter"
+    ],
+    [
+      "c-f3855a8e52d7379e",
+      "painter"
+    ],
+    [
+      "c-f54de4986bf45771",
+      "widths"
+    ],
+    [
+      "c-f54de4986bf45771",
+      "painter"
+    ],
+    [
+      "c-f65a69a5cd08fd81",
+      "widths"
+    ],
+    [
+      "c-f65a69a5cd08fd81",
+      "painter"
+    ],
+    [
+      "c-f6e7cbf6887cac36",
+      "painter"
+    ],
+    [
+      "c-f772ddc8c6907b74",
+      "widths"
+    ],
+    [
+      "c-f772ddc8c6907b74",
+      "painter"
+    ],
+    [
+      "c-f7e69152e947039e",
+      "painter"
+    ],
+    [
+      "c-f7eec6156058e0a5",
+      "widths"
+    ],
+    [
+      "c-f7eec6156058e0a5",
+      "painter"
+    ],
+    [
+      "c-f7fe1334ab29ad5f",
+      "painter"
+    ],
+    [
+      "c-f998a9fce4c0279e",
+      "widths"
+    ],
+    [
+      "c-f998a9fce4c0279e",
+      "painter"
+    ],
+    [
+      "c-fa38f168882fad49",
+      "widths"
+    ],
+    [
+      "c-fa38f168882fad49",
+      "painter"
+    ],
+    [
+      "c-fa52817e486bdf22",
+      "painter"
+    ],
+    [
+      "c-fa56aec4112da6db",
+      "widths"
+    ],
+    [
+      "c-fa56aec4112da6db",
+      "painter"
+    ],
+    [
+      "c-fa75684761a8b07b",
+      "widths"
+    ],
+    [
+      "c-fa75684761a8b07b",
+      "painter"
+    ],
+    [
+      "c-fb54186c7bd4b5a8",
+      "painter"
+    ],
+    [
+      "c-fbd4d31eac8189ef",
+      "widths"
+    ],
+    [
+      "c-fbd4d31eac8189ef",
+      "painter"
+    ],
+    [
+      "c-fc6ae024aecb89c2",
+      "widths"
+    ],
+    [
+      "c-fc6ae024aecb89c2",
+      "painter"
+    ],
+    [
+      "c-fce7748337cc75d4",
+      "breaks"
+    ],
+    [
+      "c-fce7748337cc75d4",
+      "widths"
+    ],
+    [
+      "c-fce7748337cc75d4",
+      "painter"
+    ],
+    [
+      "c-fd4a8cd9a1717d87",
+      "painter"
+    ],
+    [
+      "c-fed691d501d93cf7",
+      "painter"
+    ],
+    [
+      "c-ff40ad51e5f56d98",
+      "breaks"
+    ],
+    [
+      "c-ff40ad51e5f56d98",
+      "widths"
+    ],
+    [
+      "c-ff40ad51e5f56d98",
+      "painter"
+    ],
+    [
+      "c-ff636c3d2978274b",
+      "painter"
+    ]
+  ],
+  "casesOnlyBefore": 0,
+  "casesOnlyAfter": 1334,
+  "attributionsFrom": "rebuild/lab/baselines/staged-round4-facts/gate-webkit-22625.1.29.11.27.seed-record.json as the round 4 evaluation staged it (2fd9f15), pair by pair: the same (case id, metric) lost there with the same status; .artifacts/ceiling-20260917/evaluate-r4/tools/attribute-records.py wrote them by rule",
+  "adopted": "rebuild/lab/baselines/facts/gate-webkit-22625.1.29.11.27.json, 2026-09-18 at the correctness line, after research/ROUND4-CRITIC.md's verdict; `staged` is where the seed command wrote it"
+}

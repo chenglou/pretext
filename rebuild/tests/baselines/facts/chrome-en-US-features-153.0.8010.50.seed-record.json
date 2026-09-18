@@ -1,0 +1,27 @@
+{
+  "staged": "rebuild/tests/baselines/staged-line-facts/chrome-en-US-features-153.0.8010.50.json",
+  "against": "rebuild/tests/baselines/chrome-en-US-features-153.0.8010.50.json",
+  "counts": {
+    "cases": 468,
+    "passPairs": {
+      "lineCount": 468,
+      "breaks": 468,
+      "widths": 468,
+      "painter": 468
+    },
+    "historyDependentCases": 0,
+    "withoutPassesCases": 0,
+    "unstablePairs": 0,
+    "protocolCases": 0
+  },
+  "lost": [],
+  "leftThroughHistory": [],
+  "leftThroughProtocol": [],
+  "leftWithTheirCase": [],
+  "gained": [],
+  "casesOnlyBefore": 0,
+  "casesOnlyAfter": 0,
+  "casesChanged": false,
+  "attributionsFrom": "rebuild/tests/baselines/staged-round4-facts/chrome-en-US-features-153.0.8010.50.seed-record.json as the round 4 evaluation staged it (2fd9f15), pair by pair: the same (case id, metric) lost there with the same status; .artifacts/ceiling-20260917/evaluate-r4/tools/attribute-records.py wrote them by rule",
+  "adopted": "rebuild/tests/baselines/facts/chrome-en-US-features-153.0.8010.50.json, 2026-09-18 at the correctness line, after research/ROUND4-CRITIC.md's verdict; `staged` is where the seed command wrote it"
+}

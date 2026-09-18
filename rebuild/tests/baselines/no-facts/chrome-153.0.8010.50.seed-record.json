@@ -1,0 +1,4180 @@
+{
+  "staged": "rebuild/tests/baselines/staged-line-no-facts/chrome-153.0.8010.50.json",
+  "against": "rebuild/tests/baselines/chrome-153.0.8010.50.json",
+  "counts": {
+    "cases": 11154,
+    "passPairs": {
+      "lineCount": 10970,
+      "breaks": 10910,
+      "widths": 10596,
+      "painter": 10520
+    },
+    "historyDependentCases": 0,
+    "withoutPassesCases": 165,
+    "unstablePairs": 0,
+    "protocolCases": 0
+  },
+  "lost": [
+    {
+      "id": "c-057ee119ace4b110",
+      "family": "rule/hyphen-glyph",
+      "metric": "widths",
+      "status": "fail",
+      "reason": "width differs under a named gap",
+      "detail": "engine line 1: width 7840; native node rects span [2725, 10583]; limited by glyph-clusters",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "glyph-clusters",
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Passes with the lab's font facts in this evaluation's facts runs; the seed it is compared with was recorded with them. With no supplied facts `ligatures` and `coverage` and `pairKerning` (which glyph of a kerned pair carries the adjustment) isn't known and no Canvas check gives it (research/FACTS-FREE.md; CHARTER.md \"Facts no check answers\"); the failing line reports glyph-clusters+unsafe-to-break."
+    },
+    {
+      "id": "c-05bd16ecf8949f4c",
+      "family": "rule/following-space",
+      "metric": "widths",
+      "status": "fail",
+      "reason": "width differs under a named gap",
+      "detail": "engine line 0: width 3571; native node rects span [0, 3642]; limited by glyph-clusters",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Passes with the lab's font facts in this evaluation's facts runs; the seed it is compared with was recorded with them. With no supplied facts `pairKerning` (which glyph of a kerned pair carries the adjustment) isn't known and no Canvas check gives it (research/FACTS-FREE.md; CHARTER.md \"Facts no check answers\"); the failing line reports unsafe-to-break."
+    },
+    {
+      "id": "c-07ec68fbcca0b6a5",
+      "family": "rule/hyphen-glyph",
+      "metric": "widths",
+      "status": "fail",
+      "reason": "width differs under a named gap",
+      "detail": "engine line 1: width 5920; native node rects span [0, 5938]; limited by glyph-clusters",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "glyph-clusters",
+        "soft-hyphen-shaping",
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Passes with the lab's font facts in this evaluation's facts runs; the seed it is compared with was recorded with them. With no supplied facts `ligatures` and `coverage` and `pairKerning` (which glyph of a kerned pair carries the adjustment) isn't known and no Canvas check gives it (research/FACTS-FREE.md; CHARTER.md \"Facts no check answers\"); the failing line reports glyph-clusters+soft-hyphen-shaping+unsafe-to-break."
+    },
+    {
+      "id": "c-089c70541f596002",
+      "family": "rule/following-space",
+      "metric": "lineCount",
+      "status": "fail",
+      "reason": "line count differs",
+      "detail": "native 3, predicted 2",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Passes with the lab's font facts in this evaluation's facts runs; the seed it is compared with was recorded with them. With no supplied facts `pairKerning` (which glyph of a kerned pair carries the adjustment) isn't known and no Canvas check gives it (research/FACTS-FREE.md; CHARTER.md \"Facts no check answers\"); the failing line reports unsafe-to-break."
+    },
+    {
+      "id": "c-089c70541f596002",
+      "family": "rule/following-space",
+      "metric": "breaks",
+      "status": "fail",
+      "reason": "line count differs",
+      "detail": "native 3, predicted 2",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Passes with the lab's font facts in this evaluation's facts runs; the seed it is compared with was recorded with them. With no supplied facts `pairKerning` (which glyph of a kerned pair carries the adjustment) isn't known and no Canvas check gives it (research/FACTS-FREE.md; CHARTER.md \"Facts no check answers\"); the failing line reports unsafe-to-break."
+    },
+    {
+      "id": "c-089c70541f596002",
+      "family": "rule/following-space",
+      "metric": "widths",
+      "status": "not-applicable",
+      "reason": "breaks differ",
+      "detail": null,
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": false,
+      "coveringGaps": [],
+      "residual": null,
+      "attribution": "widths isn't scored where breaks fail: the case's breaks pair is lost in this record, with its own attribution."
+    },
+    {
+      "id": "c-0ce8b2a94ee3f68a",
+      "family": "rule/in-word-breaks",
+      "metric": "breaks",
+      "status": "fail",
+      "reason": "code point on other lines",
+      "detail": "code point 8 \"A\": native lines 2; expected 1",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "glyph-clusters",
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Passes with the lab's font facts in this evaluation's facts runs; the seed it is compared with was recorded with them. With no supplied facts `ligatures` and `coverage` and `pairKerning` (which glyph of a kerned pair carries the adjustment) isn't known and no Canvas check gives it (research/FACTS-FREE.md; CHARTER.md \"Facts no check answers\"); the failing line reports glyph-clusters+unsafe-to-break."
+    },
+    {
+      "id": "c-0ce8b2a94ee3f68a",
+      "family": "rule/in-word-breaks",
+      "metric": "widths",
+      "status": "not-applicable",
+      "reason": "breaks differ",
+      "detail": null,
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": false,
+      "coveringGaps": [],
+      "residual": null,
+      "attribution": "widths isn't scored where breaks fail: the case's breaks pair is lost in this record, with its own attribution."
+    },
+    {
+      "id": "c-0f3f0c86a42b8f3a",
+      "family": "rule/following-space",
+      "metric": "widths",
+      "status": "fail",
+      "reason": "width differs under a named gap",
+      "detail": "engine line 0: width 9440; native node rects span [0, 9488]; limited by glyph-clusters",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Passes with the lab's font facts in this evaluation's facts runs; the seed it is compared with was recorded with them. With no supplied facts `pairKerning` (which glyph of a kerned pair carries the adjustment) isn't known and no Canvas check gives it (research/FACTS-FREE.md; CHARTER.md \"Facts no check answers\"); the failing line reports unsafe-to-break."
+    },
+    {
+      "id": "c-0f3f0c86a42b8f3a",
+      "family": "rule/following-space",
+      "metric": "painter",
+      "status": "fail",
+      "reason": "painted extent differs",
+      "detail": "engine line 0: width 9440; painted node rects span [0, 9488]",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Follows the prediction pair lost on the same case."
+    },
+    {
+      "id": "c-1044b43c80c413db",
+      "family": "rule/following-space",
+      "metric": "lineCount",
+      "status": "fail",
+      "reason": "line count differs",
+      "detail": "native 3, predicted 2",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Passes with the lab's font facts in this evaluation's facts runs; the seed it is compared with was recorded with them. With no supplied facts `pairKerning` (which glyph of a kerned pair carries the adjustment) isn't known and no Canvas check gives it (research/FACTS-FREE.md; CHARTER.md \"Facts no check answers\"); the failing line reports unsafe-to-break."
+    },
+    {
+      "id": "c-1044b43c80c413db",
+      "family": "rule/following-space",
+      "metric": "breaks",
+      "status": "fail",
+      "reason": "line count differs",
+      "detail": "native 3, predicted 2",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Passes with the lab's font facts in this evaluation's facts runs; the seed it is compared with was recorded with them. With no supplied facts `pairKerning` (which glyph of a kerned pair carries the adjustment) isn't known and no Canvas check gives it (research/FACTS-FREE.md; CHARTER.md \"Facts no check answers\"); the failing line reports unsafe-to-break."
+    },
+    {
+      "id": "c-1044b43c80c413db",
+      "family": "rule/following-space",
+      "metric": "widths",
+      "status": "not-applicable",
+      "reason": "breaks differ",
+      "detail": null,
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": false,
+      "coveringGaps": [],
+      "residual": null,
+      "attribution": "widths isn't scored where breaks fail: the case's breaks pair is lost in this record, with its own attribution."
+    },
+    {
+      "id": "c-10aace35dab5b08d",
+      "family": "rule/following-space",
+      "metric": "lineCount",
+      "status": "fail",
+      "reason": "line count differs",
+      "detail": "native 3, predicted 2",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Passes with the lab's font facts in this evaluation's facts runs; the seed it is compared with was recorded with them. With no supplied facts `pairKerning` (which glyph of a kerned pair carries the adjustment) isn't known and no Canvas check gives it (research/FACTS-FREE.md; CHARTER.md \"Facts no check answers\"); the failing line reports unsafe-to-break."
+    },
+    {
+      "id": "c-10aace35dab5b08d",
+      "family": "rule/following-space",
+      "metric": "breaks",
+      "status": "fail",
+      "reason": "line count differs",
+      "detail": "native 3, predicted 2",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Passes with the lab's font facts in this evaluation's facts runs; the seed it is compared with was recorded with them. With no supplied facts `pairKerning` (which glyph of a kerned pair carries the adjustment) isn't known and no Canvas check gives it (research/FACTS-FREE.md; CHARTER.md \"Facts no check answers\"); the failing line reports unsafe-to-break."
+    },
+    {
+      "id": "c-10aace35dab5b08d",
+      "family": "rule/following-space",
+      "metric": "widths",
+      "status": "not-applicable",
+      "reason": "breaks differ",
+      "detail": null,
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": false,
+      "coveringGaps": [],
+      "residual": null,
+      "attribution": "widths isn't scored where breaks fail: the case's breaks pair is lost in this record, with its own attribution."
+    },
+    {
+      "id": "c-13623d451d158d6c",
+      "family": "rule/hyphen-glyph",
+      "metric": "widths",
+      "status": "fail",
+      "reason": "width differs under a named gap",
+      "detail": "engine line 1: width 7840; native node rects span [2724, 10582]; limited by glyph-clusters",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "glyph-clusters",
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Passes with the lab's font facts in this evaluation's facts runs; the seed it is compared with was recorded with them. With no supplied facts `ligatures` and `coverage` and `pairKerning` (which glyph of a kerned pair carries the adjustment) isn't known and no Canvas check gives it (research/FACTS-FREE.md; CHARTER.md \"Facts no check answers\"); the failing line reports glyph-clusters+unsafe-to-break."
+    },
+    {
+      "id": "c-192a179a871de3dc",
+      "family": "rule/hyphen-glyph",
+      "metric": "breaks",
+      "status": "fail",
+      "reason": "code point on other lines",
+      "detail": "code point 9 \"c\": native lines 1; expected 0",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "glyph-clusters",
+        "in-word-prefix",
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Passes with the lab's font facts in this evaluation's facts runs; the seed it is compared with was recorded with them. With no supplied facts `ligatures` and `coverage` and `pairKerning` and `pairKerning` (which glyph of a kerned pair carries the adjustment) isn't known and no Canvas check gives it (research/FACTS-FREE.md; CHARTER.md \"Facts no check answers\"); the failing line reports glyph-clusters+in-word-prefix+unsafe-to-break."
+    },
+    {
+      "id": "c-192a179a871de3dc",
+      "family": "rule/hyphen-glyph",
+      "metric": "widths",
+      "status": "not-applicable",
+      "reason": "breaks differ",
+      "detail": null,
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": false,
+      "coveringGaps": [],
+      "residual": null,
+      "attribution": "widths isn't scored where breaks fail: the case's breaks pair is lost in this record, with its own attribution."
+    },
+    {
+      "id": "c-1ca3e530513f8248",
+      "family": "rule/following-space",
+      "metric": "lineCount",
+      "status": "fail",
+      "reason": "line count differs",
+      "detail": "native 3, predicted 2",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Passes with the lab's font facts in this evaluation's facts runs; the seed it is compared with was recorded with them. With no supplied facts `pairKerning` (which glyph of a kerned pair carries the adjustment) isn't known and no Canvas check gives it (research/FACTS-FREE.md; CHARTER.md \"Facts no check answers\"); the failing line reports unsafe-to-break."
+    },
+    {
+      "id": "c-1ca3e530513f8248",
+      "family": "rule/following-space",
+      "metric": "breaks",
+      "status": "fail",
+      "reason": "line count differs",
+      "detail": "native 3, predicted 2",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Passes with the lab's font facts in this evaluation's facts runs; the seed it is compared with was recorded with them. With no supplied facts `pairKerning` (which glyph of a kerned pair carries the adjustment) isn't known and no Canvas check gives it (research/FACTS-FREE.md; CHARTER.md \"Facts no check answers\"); the failing line reports unsafe-to-break."
+    },
+    {
+      "id": "c-1ca3e530513f8248",
+      "family": "rule/following-space",
+      "metric": "widths",
+      "status": "not-applicable",
+      "reason": "breaks differ",
+      "detail": null,
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": false,
+      "coveringGaps": [],
+      "residual": null,
+      "attribution": "widths isn't scored where breaks fail: the case's breaks pair is lost in this record, with its own attribution."
+    },
+    {
+      "id": "c-1ca3e530513f8248",
+      "family": "rule/following-space",
+      "metric": "painter",
+      "status": "fail",
+      "reason": "painted line wraps",
+      "detail": "engine line 0 painted on 2 lines",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Follows the prediction pair lost on the same case."
+    },
+    {
+      "id": "c-1cd1251ed73cd98e",
+      "family": "rule/in-word-breaks",
+      "metric": "breaks",
+      "status": "fail",
+      "reason": "code point on other lines",
+      "detail": "code point 15 \"V\": native lines 2; expected 1",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "glyph-clusters",
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Passes with the lab's font facts in this evaluation's facts runs; the seed it is compared with was recorded with them. With no supplied facts `ligatures` and `coverage` and `pairKerning` (which glyph of a kerned pair carries the adjustment) isn't known and no Canvas check gives it (research/FACTS-FREE.md; CHARTER.md \"Facts no check answers\"); the failing line reports glyph-clusters+unsafe-to-break."
+    },
+    {
+      "id": "c-1cd1251ed73cd98e",
+      "family": "rule/in-word-breaks",
+      "metric": "widths",
+      "status": "not-applicable",
+      "reason": "breaks differ",
+      "detail": null,
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": false,
+      "coveringGaps": [],
+      "residual": null,
+      "attribution": "widths isn't scored where breaks fail: the case's breaks pair is lost in this record, with its own attribution."
+    },
+    {
+      "id": "c-1d95436d5e62e0de",
+      "family": "rule/following-space",
+      "metric": "widths",
+      "status": "fail",
+      "reason": "width differs under a named gap",
+      "detail": "engine line 0: width 10313; native node rects span [0, 10384]; limited by glyph-clusters",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Passes with the lab's font facts in this evaluation's facts runs; the seed it is compared with was recorded with them. With no supplied facts `pairKerning` (which glyph of a kerned pair carries the adjustment) isn't known and no Canvas check gives it (research/FACTS-FREE.md; CHARTER.md \"Facts no check answers\"); the failing line reports unsafe-to-break."
+    },
+    {
+      "id": "c-1d95436d5e62e0de",
+      "family": "rule/following-space",
+      "metric": "painter",
+      "status": "fail",
+      "reason": "painted extent differs",
+      "detail": "engine line 0: width 10313; painted node rects span [0, 10384]",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Follows the prediction pair lost on the same case."
+    },
+    {
+      "id": "c-1edfebc0622291ee",
+      "family": "rule/following-space",
+      "metric": "lineCount",
+      "status": "fail",
+      "reason": "line count differs",
+      "detail": "native 3, predicted 2",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Passes with the lab's font facts in this evaluation's facts runs; the seed it is compared with was recorded with them. With no supplied facts `pairKerning` (which glyph of a kerned pair carries the adjustment) isn't known and no Canvas check gives it (research/FACTS-FREE.md; CHARTER.md \"Facts no check answers\"); the failing line reports unsafe-to-break."
+    },
+    {
+      "id": "c-1edfebc0622291ee",
+      "family": "rule/following-space",
+      "metric": "breaks",
+      "status": "fail",
+      "reason": "line count differs",
+      "detail": "native 3, predicted 2",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Passes with the lab's font facts in this evaluation's facts runs; the seed it is compared with was recorded with them. With no supplied facts `pairKerning` (which glyph of a kerned pair carries the adjustment) isn't known and no Canvas check gives it (research/FACTS-FREE.md; CHARTER.md \"Facts no check answers\"); the failing line reports unsafe-to-break."
+    },
+    {
+      "id": "c-1edfebc0622291ee",
+      "family": "rule/following-space",
+      "metric": "widths",
+      "status": "not-applicable",
+      "reason": "breaks differ",
+      "detail": null,
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": false,
+      "coveringGaps": [],
+      "residual": null,
+      "attribution": "widths isn't scored where breaks fail: the case's breaks pair is lost in this record, with its own attribution."
+    },
+    {
+      "id": "c-2090cc554551321e",
+      "family": "rule/following-space",
+      "metric": "widths",
+      "status": "fail",
+      "reason": "width differs under a named gap",
+      "detail": "engine line 0: width 11977; native node rects span [0, 11978]; limited by glyph-clusters",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Passes with the lab's font facts in this evaluation's facts runs; the seed it is compared with was recorded with them. With no supplied facts `pairKerning` (which glyph of a kerned pair carries the adjustment) isn't known and no Canvas check gives it (research/FACTS-FREE.md; CHARTER.md \"Facts no check answers\"); the failing line reports unsafe-to-break."
+    },
+    {
+      "id": "c-2090cc554551321e",
+      "family": "rule/following-space",
+      "metric": "painter",
+      "status": "fail",
+      "reason": "painted extent differs",
+      "detail": "engine line 0: width 11977; painted node rects span [0, 11978]",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Follows the prediction pair lost on the same case."
+    },
+    {
+      "id": "c-2165c16b681d658f",
+      "family": "rule/following-space",
+      "metric": "lineCount",
+      "status": "fail",
+      "reason": "line count differs",
+      "detail": "native 3, predicted 2",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Passes with the lab's font facts in this evaluation's facts runs; the seed it is compared with was recorded with them. With no supplied facts `pairKerning` (which glyph of a kerned pair carries the adjustment) isn't known and no Canvas check gives it (research/FACTS-FREE.md; CHARTER.md \"Facts no check answers\"); the failing line reports unsafe-to-break."
+    },
+    {
+      "id": "c-2165c16b681d658f",
+      "family": "rule/following-space",
+      "metric": "breaks",
+      "status": "fail",
+      "reason": "line count differs",
+      "detail": "native 3, predicted 2",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Passes with the lab's font facts in this evaluation's facts runs; the seed it is compared with was recorded with them. With no supplied facts `pairKerning` (which glyph of a kerned pair carries the adjustment) isn't known and no Canvas check gives it (research/FACTS-FREE.md; CHARTER.md \"Facts no check answers\"); the failing line reports unsafe-to-break."
+    },
+    {
+      "id": "c-2165c16b681d658f",
+      "family": "rule/following-space",
+      "metric": "widths",
+      "status": "not-applicable",
+      "reason": "breaks differ",
+      "detail": null,
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": false,
+      "coveringGaps": [],
+      "residual": null,
+      "attribution": "widths isn't scored where breaks fail: the case's breaks pair is lost in this record, with its own attribution."
+    },
+    {
+      "id": "c-2165c16b681d658f",
+      "family": "rule/following-space",
+      "metric": "painter",
+      "status": "fail",
+      "reason": "painted line wraps",
+      "detail": "engine line 0 painted on 2 lines",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Follows the prediction pair lost on the same case."
+    },
+    {
+      "id": "c-221292d7b03d9b88",
+      "family": "rule/in-word-breaks",
+      "metric": "widths",
+      "status": "fail",
+      "reason": "width differs under a named gap",
+      "detail": "engine line 0: width 28380; native node rects span [0, 28399]; limited by glyph-clusters",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Passes with the lab's font facts in this evaluation's facts runs; the seed it is compared with was recorded with them. With no supplied facts `pairKerning` (which glyph of a kerned pair carries the adjustment) isn't known and no Canvas check gives it (research/FACTS-FREE.md; CHARTER.md \"Facts no check answers\"); the failing line reports unsafe-to-break."
+    },
+    {
+      "id": "c-221292d7b03d9b88",
+      "family": "rule/in-word-breaks",
+      "metric": "painter",
+      "status": "fail",
+      "reason": "painted extent differs",
+      "detail": "engine line 0: width 28380; painted node rects span [0, 28399]",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Follows the prediction pair lost on the same case."
+    },
+    {
+      "id": "c-2292d210f877fb78",
+      "family": "rule/hyphen-glyph",
+      "metric": "widths",
+      "status": "fail",
+      "reason": "width differs under a named gap",
+      "detail": "engine line 1: width 7840; native node rects span [-7730, 128]; limited by glyph-clusters",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "glyph-clusters",
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Passes with the lab's font facts in this evaluation's facts runs; the seed it is compared with was recorded with them. With no supplied facts `ligatures` and `coverage` and `pairKerning` (which glyph of a kerned pair carries the adjustment) isn't known and no Canvas check gives it (research/FACTS-FREE.md; CHARTER.md \"Facts no check answers\"); the failing line reports glyph-clusters+unsafe-to-break."
+    },
+    {
+      "id": "c-231d973cd7f9e930",
+      "family": "rule/following-space",
+      "metric": "lineCount",
+      "status": "fail",
+      "reason": "line count differs",
+      "detail": "native 3, predicted 2",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Passes with the lab's font facts in this evaluation's facts runs; the seed it is compared with was recorded with them. With no supplied facts `pairKerning` (which glyph of a kerned pair carries the adjustment) isn't known and no Canvas check gives it (research/FACTS-FREE.md; CHARTER.md \"Facts no check answers\"); the failing line reports unsafe-to-break."
+    },
+    {
+      "id": "c-231d973cd7f9e930",
+      "family": "rule/following-space",
+      "metric": "breaks",
+      "status": "fail",
+      "reason": "line count differs",
+      "detail": "native 3, predicted 2",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Passes with the lab's font facts in this evaluation's facts runs; the seed it is compared with was recorded with them. With no supplied facts `pairKerning` (which glyph of a kerned pair carries the adjustment) isn't known and no Canvas check gives it (research/FACTS-FREE.md; CHARTER.md \"Facts no check answers\"); the failing line reports unsafe-to-break."
+    },
+    {
+      "id": "c-231d973cd7f9e930",
+      "family": "rule/following-space",
+      "metric": "widths",
+      "status": "not-applicable",
+      "reason": "breaks differ",
+      "detail": null,
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": false,
+      "coveringGaps": [],
+      "residual": null,
+      "attribution": "widths isn't scored where breaks fail: the case's breaks pair is lost in this record, with its own attribution."
+    },
+    {
+      "id": "c-2623aba80dd59769",
+      "family": "rule/hyphen-glyph",
+      "metric": "widths",
+      "status": "fail",
+      "reason": "width differs under a named gap",
+      "detail": "engine line 0: width 8688; native node rects span [0, 8707]; limited by glyph-clusters",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "glyph-clusters",
+        "soft-hyphen-shaping",
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Passes with the lab's font facts in this evaluation's facts runs; the seed it is compared with was recorded with them. With no supplied facts `ligatures` and `coverage` and `pairKerning` (which glyph of a kerned pair carries the adjustment) isn't known and no Canvas check gives it (research/FACTS-FREE.md; CHARTER.md \"Facts no check answers\"); the failing line reports glyph-clusters+soft-hyphen-shaping+unsafe-to-break."
+    },
+    {
+      "id": "c-267ed3fdf2e7e6d2",
+      "family": "rule/following-space",
+      "metric": "lineCount",
+      "status": "fail",
+      "reason": "line count differs",
+      "detail": "native 3, predicted 2",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Passes with the lab's font facts in this evaluation's facts runs; the seed it is compared with was recorded with them. With no supplied facts `pairKerning` (which glyph of a kerned pair carries the adjustment) isn't known and no Canvas check gives it (research/FACTS-FREE.md; CHARTER.md \"Facts no check answers\"); the failing line reports unsafe-to-break."
+    },
+    {
+      "id": "c-267ed3fdf2e7e6d2",
+      "family": "rule/following-space",
+      "metric": "breaks",
+      "status": "fail",
+      "reason": "line count differs",
+      "detail": "native 3, predicted 2",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Passes with the lab's font facts in this evaluation's facts runs; the seed it is compared with was recorded with them. With no supplied facts `pairKerning` (which glyph of a kerned pair carries the adjustment) isn't known and no Canvas check gives it (research/FACTS-FREE.md; CHARTER.md \"Facts no check answers\"); the failing line reports unsafe-to-break."
+    },
+    {
+      "id": "c-267ed3fdf2e7e6d2",
+      "family": "rule/following-space",
+      "metric": "widths",
+      "status": "not-applicable",
+      "reason": "breaks differ",
+      "detail": null,
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": false,
+      "coveringGaps": [],
+      "residual": null,
+      "attribution": "widths isn't scored where breaks fail: the case's breaks pair is lost in this record, with its own attribution."
+    },
+    {
+      "id": "c-267ed3fdf2e7e6d2",
+      "family": "rule/following-space",
+      "metric": "painter",
+      "status": "fail",
+      "reason": "painted line wraps",
+      "detail": "engine line 0 painted on 2 lines",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Follows the prediction pair lost on the same case."
+    },
+    {
+      "id": "c-2a36bda027895709",
+      "family": "rule/following-space",
+      "metric": "lineCount",
+      "status": "fail",
+      "reason": "line count differs",
+      "detail": "native 3, predicted 2",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Passes with the lab's font facts in this evaluation's facts runs; the seed it is compared with was recorded with them. With no supplied facts `pairKerning` (which glyph of a kerned pair carries the adjustment) isn't known and no Canvas check gives it (research/FACTS-FREE.md; CHARTER.md \"Facts no check answers\"); the failing line reports unsafe-to-break."
+    },
+    {
+      "id": "c-2a36bda027895709",
+      "family": "rule/following-space",
+      "metric": "breaks",
+      "status": "fail",
+      "reason": "line count differs",
+      "detail": "native 3, predicted 2",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Passes with the lab's font facts in this evaluation's facts runs; the seed it is compared with was recorded with them. With no supplied facts `pairKerning` (which glyph of a kerned pair carries the adjustment) isn't known and no Canvas check gives it (research/FACTS-FREE.md; CHARTER.md \"Facts no check answers\"); the failing line reports unsafe-to-break."
+    },
+    {
+      "id": "c-2a36bda027895709",
+      "family": "rule/following-space",
+      "metric": "widths",
+      "status": "not-applicable",
+      "reason": "breaks differ",
+      "detail": null,
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": false,
+      "coveringGaps": [],
+      "residual": null,
+      "attribution": "widths isn't scored where breaks fail: the case's breaks pair is lost in this record, with its own attribution."
+    },
+    {
+      "id": "c-2a36bda027895709",
+      "family": "rule/following-space",
+      "metric": "painter",
+      "status": "fail",
+      "reason": "painted line wraps",
+      "detail": "engine line 0 painted on 2 lines",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Follows the prediction pair lost on the same case."
+    },
+    {
+      "id": "c-2cb7377b6db6675e",
+      "family": "rule/in-word-breaks",
+      "metric": "lineCount",
+      "status": "fail",
+      "reason": "line count differs",
+      "detail": "native 3, predicted 2",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Passes with the lab's font facts in this evaluation's facts runs; the seed it is compared with was recorded with them. With no supplied facts `pairKerning` (which glyph of a kerned pair carries the adjustment) isn't known and no Canvas check gives it (research/FACTS-FREE.md; CHARTER.md \"Facts no check answers\"); the failing line reports unsafe-to-break."
+    },
+    {
+      "id": "c-2cb7377b6db6675e",
+      "family": "rule/in-word-breaks",
+      "metric": "breaks",
+      "status": "fail",
+      "reason": "line count differs",
+      "detail": "native 3, predicted 2",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Passes with the lab's font facts in this evaluation's facts runs; the seed it is compared with was recorded with them. With no supplied facts `pairKerning` (which glyph of a kerned pair carries the adjustment) isn't known and no Canvas check gives it (research/FACTS-FREE.md; CHARTER.md \"Facts no check answers\"); the failing line reports unsafe-to-break."
+    },
+    {
+      "id": "c-2cb7377b6db6675e",
+      "family": "rule/in-word-breaks",
+      "metric": "widths",
+      "status": "not-applicable",
+      "reason": "breaks differ",
+      "detail": null,
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": false,
+      "coveringGaps": [],
+      "residual": null,
+      "attribution": "widths isn't scored where breaks fail: the case's breaks pair is lost in this record, with its own attribution."
+    },
+    {
+      "id": "c-33dcfee9cce43214",
+      "family": "rule/hyphen-glyph",
+      "metric": "widths",
+      "status": "fail",
+      "reason": "width differs under a named gap",
+      "detail": "engine line 1: width 5920; native node rects span [1188, 7126]; limited by glyph-clusters",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "glyph-clusters",
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Passes with the lab's font facts in this evaluation's facts runs; the seed it is compared with was recorded with them. With no supplied facts `ligatures` and `coverage` and `pairKerning` (which glyph of a kerned pair carries the adjustment) isn't known and no Canvas check gives it (research/FACTS-FREE.md; CHARTER.md \"Facts no check answers\"); the failing line reports glyph-clusters+unsafe-to-break."
+    },
+    {
+      "id": "c-37acbebebbc4294b",
+      "family": "rule/following-space",
+      "metric": "widths",
+      "status": "fail",
+      "reason": "width differs under a named gap",
+      "detail": "engine line 0: width 3059; native node rects span [7821, 10951]; limited by glyph-clusters",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Passes with the lab's font facts in this evaluation's facts runs; the seed it is compared with was recorded with them. With no supplied facts `pairKerning` (which glyph of a kerned pair carries the adjustment) isn't known and no Canvas check gives it (research/FACTS-FREE.md; CHARTER.md \"Facts no check answers\"); the failing line reports unsafe-to-break."
+    },
+    {
+      "id": "c-3e8fa046df7b799f",
+      "family": "rule/following-space",
+      "metric": "widths",
+      "status": "fail",
+      "reason": "width differs under a named gap",
+      "detail": "engine line 0: width 10825; native node rects span [-1, 10895]; limited by glyph-clusters",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Passes with the lab's font facts in this evaluation's facts runs; the seed it is compared with was recorded with them. With no supplied facts `pairKerning` (which glyph of a kerned pair carries the adjustment) isn't known and no Canvas check gives it (research/FACTS-FREE.md; CHARTER.md \"Facts no check answers\"); the failing line reports unsafe-to-break."
+    },
+    {
+      "id": "c-3e8fa046df7b799f",
+      "family": "rule/following-space",
+      "metric": "painter",
+      "status": "fail",
+      "reason": "painted extent differs",
+      "detail": "engine line 0: width 10825; painted node rects span [-1, 10895]",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Follows the prediction pair lost on the same case."
+    },
+    {
+      "id": "c-40b62b718c49e524",
+      "family": "rule/in-word-breaks",
+      "metric": "widths",
+      "status": "fail",
+      "reason": "width differs under a named gap",
+      "detail": "engine line 0: width 28380; native node rects span [0, 28399]; limited by glyph-clusters",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Passes with the lab's font facts in this evaluation's facts runs; the seed it is compared with was recorded with them. With no supplied facts `pairKerning` (which glyph of a kerned pair carries the adjustment) isn't known and no Canvas check gives it (research/FACTS-FREE.md; CHARTER.md \"Facts no check answers\"); the failing line reports unsafe-to-break."
+    },
+    {
+      "id": "c-40b62b718c49e524",
+      "family": "rule/in-word-breaks",
+      "metric": "painter",
+      "status": "fail",
+      "reason": "painted extent differs",
+      "detail": "engine line 0: width 28380; painted node rects span [0, 28399]",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Follows the prediction pair lost on the same case."
+    },
+    {
+      "id": "c-4147b28c0a6a4dba",
+      "family": "rule/following-space",
+      "metric": "widths",
+      "status": "fail",
+      "reason": "width differs under a named gap",
+      "detail": "engine line 1: width 6240; native node rects span [0, 6288]; limited by glyph-clusters",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Passes with the lab's font facts in this evaluation's facts runs; the seed it is compared with was recorded with them. With no supplied facts `pairKerning` (which glyph of a kerned pair carries the adjustment) isn't known and no Canvas check gives it (research/FACTS-FREE.md; CHARTER.md \"Facts no check answers\"); the failing line reports unsafe-to-break."
+    },
+    {
+      "id": "c-4147b28c0a6a4dba",
+      "family": "rule/following-space",
+      "metric": "painter",
+      "status": "fail",
+      "reason": "painted extent differs",
+      "detail": "engine line 1: width 6240; painted node rects span [0, 6288]",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Follows the prediction pair lost on the same case."
+    },
+    {
+      "id": "c-41603f1a61f29643",
+      "family": "rule/hyphen-glyph",
+      "metric": "widths",
+      "status": "fail",
+      "reason": "width differs under a named gap",
+      "detail": "engine line 1: width 5920; native node rects span [0, 5938]; limited by glyph-clusters",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "glyph-clusters",
+        "soft-hyphen-shaping",
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Passes with the lab's font facts in this evaluation's facts runs; the seed it is compared with was recorded with them. With no supplied facts `ligatures` and `coverage` and `pairKerning` (which glyph of a kerned pair carries the adjustment) isn't known and no Canvas check gives it (research/FACTS-FREE.md; CHARTER.md \"Facts no check answers\"); the failing line reports glyph-clusters+soft-hyphen-shaping+unsafe-to-break."
+    },
+    {
+      "id": "c-4c18662486edf8dc",
+      "family": "rule/following-space",
+      "metric": "widths",
+      "status": "fail",
+      "reason": "width differs under a named gap",
+      "detail": "engine line 1: width 7254; native node rects span [0, 7325]; limited by glyph-clusters",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Passes with the lab's font facts in this evaluation's facts runs; the seed it is compared with was recorded with them. With no supplied facts `pairKerning` (which glyph of a kerned pair carries the adjustment) isn't known and no Canvas check gives it (research/FACTS-FREE.md; CHARTER.md \"Facts no check answers\"); the failing line reports unsafe-to-break."
+    },
+    {
+      "id": "c-4c18662486edf8dc",
+      "family": "rule/following-space",
+      "metric": "painter",
+      "status": "fail",
+      "reason": "painted extent differs",
+      "detail": "engine line 1: width 7254; painted node rects span [0, 7325]",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Follows the prediction pair lost on the same case."
+    },
+    {
+      "id": "c-4ffcfe3344801c13",
+      "family": "rule/following-space",
+      "metric": "widths",
+      "status": "fail",
+      "reason": "width differs under a named gap",
+      "detail": "engine line 0: width 9440; native node rects span [0, 9488]; limited by glyph-clusters",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Passes with the lab's font facts in this evaluation's facts runs; the seed it is compared with was recorded with them. With no supplied facts `pairKerning` (which glyph of a kerned pair carries the adjustment) isn't known and no Canvas check gives it (research/FACTS-FREE.md; CHARTER.md \"Facts no check answers\"); the failing line reports unsafe-to-break."
+    },
+    {
+      "id": "c-4ffcfe3344801c13",
+      "family": "rule/following-space",
+      "metric": "painter",
+      "status": "fail",
+      "reason": "painted extent differs",
+      "detail": "engine line 0: width 9440; painted node rects span [0, 9488]",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Follows the prediction pair lost on the same case."
+    },
+    {
+      "id": "c-509ff59a4cf78997",
+      "family": "rule/following-space",
+      "metric": "widths",
+      "status": "fail",
+      "reason": "width differs under a named gap",
+      "detail": "engine line 0: width 10825; native node rects span [-1, 10895]; limited by glyph-clusters",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Passes with the lab's font facts in this evaluation's facts runs; the seed it is compared with was recorded with them. With no supplied facts `pairKerning` (which glyph of a kerned pair carries the adjustment) isn't known and no Canvas check gives it (research/FACTS-FREE.md; CHARTER.md \"Facts no check answers\"); the failing line reports unsafe-to-break."
+    },
+    {
+      "id": "c-509ff59a4cf78997",
+      "family": "rule/following-space",
+      "metric": "painter",
+      "status": "fail",
+      "reason": "painted extent differs",
+      "detail": "engine line 0: width 10825; painted node rects span [-1, 10895]",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Follows the prediction pair lost on the same case."
+    },
+    {
+      "id": "c-51f820bf57d50a6f",
+      "family": "rule/following-space",
+      "metric": "widths",
+      "status": "fail",
+      "reason": "width differs under a named gap",
+      "detail": "engine line 1: width 8160; native node rects span [-8033, 128]; limited by glyph-clusters",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Passes with the lab's font facts in this evaluation's facts runs; the seed it is compared with was recorded with them. With no supplied facts `pairKerning` (which glyph of a kerned pair carries the adjustment) isn't known and no Canvas check gives it (research/FACTS-FREE.md; CHARTER.md \"Facts no check answers\"); the failing line reports unsafe-to-break."
+    },
+    {
+      "id": "c-561620ec700b86ff",
+      "family": "rule/following-space",
+      "metric": "widths",
+      "status": "fail",
+      "reason": "width differs under a named gap",
+      "detail": "engine line 1: width 6240; native node rects span [-6160, 128]; limited by glyph-clusters",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Passes with the lab's font facts in this evaluation's facts runs; the seed it is compared with was recorded with them. With no supplied facts `pairKerning` (which glyph of a kerned pair carries the adjustment) isn't known and no Canvas check gives it (research/FACTS-FREE.md; CHARTER.md \"Facts no check answers\"); the failing line reports unsafe-to-break."
+    },
+    {
+      "id": "c-561620ec700b86ff",
+      "family": "rule/following-space",
+      "metric": "painter",
+      "status": "fail",
+      "reason": "painted extent differs",
+      "detail": "engine line 1: width 6240; painted node rects span [-6160, 128]",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Follows the prediction pair lost on the same case."
+    },
+    {
+      "id": "c-59b82e1598e84e23",
+      "family": "rule/hyphen-glyph",
+      "metric": "lineCount",
+      "status": "fail",
+      "reason": "line count differs",
+      "detail": "native 4, predicted 3",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "glyph-clusters",
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Passes with the lab's font facts in this evaluation's facts runs; the seed it is compared with was recorded with them. With no supplied facts `ligatures` and `coverage` and `pairKerning` (which glyph of a kerned pair carries the adjustment) isn't known and no Canvas check gives it (research/FACTS-FREE.md; CHARTER.md \"Facts no check answers\"); the failing line reports glyph-clusters+unsafe-to-break."
+    },
+    {
+      "id": "c-59b82e1598e84e23",
+      "family": "rule/hyphen-glyph",
+      "metric": "breaks",
+      "status": "fail",
+      "reason": "line count differs",
+      "detail": "native 4, predicted 3",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "glyph-clusters",
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Passes with the lab's font facts in this evaluation's facts runs; the seed it is compared with was recorded with them. With no supplied facts `ligatures` and `coverage` and `pairKerning` (which glyph of a kerned pair carries the adjustment) isn't known and no Canvas check gives it (research/FACTS-FREE.md; CHARTER.md \"Facts no check answers\"); the failing line reports glyph-clusters+unsafe-to-break."
+    },
+    {
+      "id": "c-59b82e1598e84e23",
+      "family": "rule/hyphen-glyph",
+      "metric": "widths",
+      "status": "not-applicable",
+      "reason": "breaks differ",
+      "detail": null,
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": false,
+      "coveringGaps": [],
+      "residual": null,
+      "attribution": "widths isn't scored where breaks fail: the case's breaks pair is lost in this record, with its own attribution."
+    },
+    {
+      "id": "c-5a360ff5626dfa41",
+      "family": "rule/following-space",
+      "metric": "lineCount",
+      "status": "fail",
+      "reason": "line count differs",
+      "detail": "native 3, predicted 2",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Passes with the lab's font facts in this evaluation's facts runs; the seed it is compared with was recorded with them. With no supplied facts `pairKerning` (which glyph of a kerned pair carries the adjustment) isn't known and no Canvas check gives it (research/FACTS-FREE.md; CHARTER.md \"Facts no check answers\"); the failing line reports unsafe-to-break."
+    },
+    {
+      "id": "c-5a360ff5626dfa41",
+      "family": "rule/following-space",
+      "metric": "breaks",
+      "status": "fail",
+      "reason": "line count differs",
+      "detail": "native 3, predicted 2",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Passes with the lab's font facts in this evaluation's facts runs; the seed it is compared with was recorded with them. With no supplied facts `pairKerning` (which glyph of a kerned pair carries the adjustment) isn't known and no Canvas check gives it (research/FACTS-FREE.md; CHARTER.md \"Facts no check answers\"); the failing line reports unsafe-to-break."
+    },
+    {
+      "id": "c-5a360ff5626dfa41",
+      "family": "rule/following-space",
+      "metric": "widths",
+      "status": "not-applicable",
+      "reason": "breaks differ",
+      "detail": null,
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": false,
+      "coveringGaps": [],
+      "residual": null,
+      "attribution": "widths isn't scored where breaks fail: the case's breaks pair is lost in this record, with its own attribution."
+    },
+    {
+      "id": "c-5a360ff5626dfa41",
+      "family": "rule/following-space",
+      "metric": "painter",
+      "status": "fail",
+      "reason": "painted line wraps",
+      "detail": "engine line 0 painted on 2 lines",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Follows the prediction pair lost on the same case."
+    },
+    {
+      "id": "c-5b4a26810039b907",
+      "family": "rule/following-space",
+      "metric": "widths",
+      "status": "fail",
+      "reason": "width differs under a named gap",
+      "detail": "engine line 1: width 6240; native node rects span [0, 6288]; limited by glyph-clusters",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Passes with the lab's font facts in this evaluation's facts runs; the seed it is compared with was recorded with them. With no supplied facts `pairKerning` (which glyph of a kerned pair carries the adjustment) isn't known and no Canvas check gives it (research/FACTS-FREE.md; CHARTER.md \"Facts no check answers\"); the failing line reports unsafe-to-break."
+    },
+    {
+      "id": "c-5b4a26810039b907",
+      "family": "rule/following-space",
+      "metric": "painter",
+      "status": "fail",
+      "reason": "painted extent differs",
+      "detail": "engine line 1: width 6240; painted node rects span [0, 6288]",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Follows the prediction pair lost on the same case."
+    },
+    {
+      "id": "c-5c81afdb9181be44",
+      "family": "rule/following-space",
+      "metric": "widths",
+      "status": "fail",
+      "reason": "width differs under a named gap",
+      "detail": "engine line 1: width 7254; native node rects span [0, 7325]; limited by glyph-clusters",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Passes with the lab's font facts in this evaluation's facts runs; the seed it is compared with was recorded with them. With no supplied facts `pairKerning` (which glyph of a kerned pair carries the adjustment) isn't known and no Canvas check gives it (research/FACTS-FREE.md; CHARTER.md \"Facts no check answers\"); the failing line reports unsafe-to-break."
+    },
+    {
+      "id": "c-5c81afdb9181be44",
+      "family": "rule/following-space",
+      "metric": "painter",
+      "status": "fail",
+      "reason": "painted extent differs",
+      "detail": "engine line 1: width 7254; painted node rects span [0, 7325]",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Follows the prediction pair lost on the same case."
+    },
+    {
+      "id": "c-5dbd797459ddb035",
+      "family": "rule/following-space",
+      "metric": "widths",
+      "status": "fail",
+      "reason": "width differs under a named gap",
+      "detail": "engine line 1: width 7392; native node rects span [0, 7393]; limited by glyph-clusters",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Passes with the lab's font facts in this evaluation's facts runs; the seed it is compared with was recorded with them. With no supplied facts `pairKerning` (which glyph of a kerned pair carries the adjustment) isn't known and no Canvas check gives it (research/FACTS-FREE.md; CHARTER.md \"Facts no check answers\"); the failing line reports unsafe-to-break."
+    },
+    {
+      "id": "c-5dbd797459ddb035",
+      "family": "rule/following-space",
+      "metric": "painter",
+      "status": "fail",
+      "reason": "painted extent differs",
+      "detail": "engine line 1: width 7392; painted node rects span [0, 7393]",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Follows the prediction pair lost on the same case."
+    },
+    {
+      "id": "c-6042a3eaa6cbfd58",
+      "family": "rule/hyphen-glyph",
+      "metric": "lineCount",
+      "status": "fail",
+      "reason": "line count differs",
+      "detail": "native 4, predicted 3",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "glyph-clusters",
+        "soft-hyphen-shaping",
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Passes with the lab's font facts in this evaluation's facts runs; the seed it is compared with was recorded with them. With no supplied facts `ligatures` and `coverage` and `pairKerning` (which glyph of a kerned pair carries the adjustment) isn't known and no Canvas check gives it (research/FACTS-FREE.md; CHARTER.md \"Facts no check answers\"); the failing line reports glyph-clusters+soft-hyphen-shaping+unsafe-to-break."
+    },
+    {
+      "id": "c-6042a3eaa6cbfd58",
+      "family": "rule/hyphen-glyph",
+      "metric": "breaks",
+      "status": "fail",
+      "reason": "line count differs",
+      "detail": "native 4, predicted 3",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "glyph-clusters",
+        "soft-hyphen-shaping",
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Passes with the lab's font facts in this evaluation's facts runs; the seed it is compared with was recorded with them. With no supplied facts `ligatures` and `coverage` and `pairKerning` (which glyph of a kerned pair carries the adjustment) isn't known and no Canvas check gives it (research/FACTS-FREE.md; CHARTER.md \"Facts no check answers\"); the failing line reports glyph-clusters+soft-hyphen-shaping+unsafe-to-break."
+    },
+    {
+      "id": "c-6042a3eaa6cbfd58",
+      "family": "rule/hyphen-glyph",
+      "metric": "widths",
+      "status": "not-applicable",
+      "reason": "breaks differ",
+      "detail": null,
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": false,
+      "coveringGaps": [],
+      "residual": null,
+      "attribution": "widths isn't scored where breaks fail: the case's breaks pair is lost in this record, with its own attribution."
+    },
+    {
+      "id": "c-6160a5860b2090e3",
+      "family": "rule/following-space",
+      "metric": "lineCount",
+      "status": "fail",
+      "reason": "line count differs",
+      "detail": "native 3, predicted 2",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Passes with the lab's font facts in this evaluation's facts runs; the seed it is compared with was recorded with them. With no supplied facts `pairKerning` (which glyph of a kerned pair carries the adjustment) isn't known and no Canvas check gives it (research/FACTS-FREE.md; CHARTER.md \"Facts no check answers\"); the failing line reports unsafe-to-break."
+    },
+    {
+      "id": "c-6160a5860b2090e3",
+      "family": "rule/following-space",
+      "metric": "breaks",
+      "status": "fail",
+      "reason": "line count differs",
+      "detail": "native 3, predicted 2",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Passes with the lab's font facts in this evaluation's facts runs; the seed it is compared with was recorded with them. With no supplied facts `pairKerning` (which glyph of a kerned pair carries the adjustment) isn't known and no Canvas check gives it (research/FACTS-FREE.md; CHARTER.md \"Facts no check answers\"); the failing line reports unsafe-to-break."
+    },
+    {
+      "id": "c-6160a5860b2090e3",
+      "family": "rule/following-space",
+      "metric": "widths",
+      "status": "not-applicable",
+      "reason": "breaks differ",
+      "detail": null,
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": false,
+      "coveringGaps": [],
+      "residual": null,
+      "attribution": "widths isn't scored where breaks fail: the case's breaks pair is lost in this record, with its own attribution."
+    },
+    {
+      "id": "c-6160a5860b2090e3",
+      "family": "rule/following-space",
+      "metric": "painter",
+      "status": "fail",
+      "reason": "painted line wraps",
+      "detail": "engine line 0 painted on 2 lines",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Follows the prediction pair lost on the same case."
+    },
+    {
+      "id": "c-63aa7548036970e9",
+      "family": "rule/in-word-breaks",
+      "metric": "widths",
+      "status": "fail",
+      "reason": "width differs under a named gap",
+      "detail": "engine line 0: width 45642; native node rects span [0, 45670]; limited by glyph-clusters",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Passes with the lab's font facts in this evaluation's facts runs; the seed it is compared with was recorded with them. With no supplied facts `pairKerning` (which glyph of a kerned pair carries the adjustment) isn't known and no Canvas check gives it (research/FACTS-FREE.md; CHARTER.md \"Facts no check answers\"); the failing line reports unsafe-to-break."
+    },
+    {
+      "id": "c-63aa7548036970e9",
+      "family": "rule/in-word-breaks",
+      "metric": "painter",
+      "status": "fail",
+      "reason": "painted extent differs",
+      "detail": "engine line 0: width 45642; painted node rects span [0, 45670]",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Follows the prediction pair lost on the same case."
+    },
+    {
+      "id": "c-649a546afd68d4a9",
+      "family": "rule/hyphen-glyph",
+      "metric": "widths",
+      "status": "fail",
+      "reason": "width differs under a named gap",
+      "detail": "engine line 0: width 16405; native node rects span [-1, 16405]; limited by glyph-clusters",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "glyph-clusters",
+        "in-word-prefix",
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Passes with the lab's font facts in this evaluation's facts runs; the seed it is compared with was recorded with them. With no supplied facts `ligatures` and `coverage` and `pairKerning` and `pairKerning` (which glyph of a kerned pair carries the adjustment) isn't known and no Canvas check gives it (research/FACTS-FREE.md; CHARTER.md \"Facts no check answers\"); the failing line reports glyph-clusters+in-word-prefix+unsafe-to-break."
+    },
+    {
+      "id": "c-65074ff8aaea45b6",
+      "family": "rule/following-space",
+      "metric": "widths",
+      "status": "fail",
+      "reason": "width differs under a named gap",
+      "detail": "engine line 1: width 7254; native node rects span [-7197, 128]; limited by glyph-clusters",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Passes with the lab's font facts in this evaluation's facts runs; the seed it is compared with was recorded with them. With no supplied facts `pairKerning` (which glyph of a kerned pair carries the adjustment) isn't known and no Canvas check gives it (research/FACTS-FREE.md; CHARTER.md \"Facts no check answers\"); the failing line reports unsafe-to-break."
+    },
+    {
+      "id": "c-65074ff8aaea45b6",
+      "family": "rule/following-space",
+      "metric": "painter",
+      "status": "fail",
+      "reason": "painted extent differs",
+      "detail": "engine line 1: width 7254; painted node rects span [-7197, 128]",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Follows the prediction pair lost on the same case."
+    },
+    {
+      "id": "c-65e22311d729efb7",
+      "family": "rule/following-space",
+      "metric": "widths",
+      "status": "fail",
+      "reason": "width differs under a named gap",
+      "detail": "engine line 0: width 11360; native node rects span [-1874, 9487]; limited by glyph-clusters",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Passes with the lab's font facts in this evaluation's facts runs; the seed it is compared with was recorded with them. With no supplied facts `pairKerning` (which glyph of a kerned pair carries the adjustment) isn't known and no Canvas check gives it (research/FACTS-FREE.md; CHARTER.md \"Facts no check answers\"); the failing line reports unsafe-to-break."
+    },
+    {
+      "id": "c-6ca4168aa2dcf75e",
+      "family": "rule/following-space",
+      "metric": "widths",
+      "status": "fail",
+      "reason": "width differs under a named gap",
+      "detail": "engine line 0: width 9952; native node rects span [-1, 9999]; limited by glyph-clusters",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Passes with the lab's font facts in this evaluation's facts runs; the seed it is compared with was recorded with them. With no supplied facts `pairKerning` (which glyph of a kerned pair carries the adjustment) isn't known and no Canvas check gives it (research/FACTS-FREE.md; CHARTER.md \"Facts no check answers\"); the failing line reports unsafe-to-break."
+    },
+    {
+      "id": "c-6ca4168aa2dcf75e",
+      "family": "rule/following-space",
+      "metric": "painter",
+      "status": "fail",
+      "reason": "painted extent differs",
+      "detail": "engine line 0: width 9952; painted node rects span [-1, 9999]",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Follows the prediction pair lost on the same case."
+    },
+    {
+      "id": "c-6d58b57660f0b9d6",
+      "family": "rule/hyphen-glyph",
+      "metric": "widths",
+      "status": "fail",
+      "reason": "width differs under a named gap",
+      "detail": "engine line 0: width 11797; native node rects span [-1, 11797]; limited by glyph-clusters",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "glyph-clusters",
+        "in-word-prefix",
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Passes with the lab's font facts in this evaluation's facts runs; the seed it is compared with was recorded with them. With no supplied facts `ligatures` and `coverage` and `pairKerning` and `pairKerning` (which glyph of a kerned pair carries the adjustment) isn't known and no Canvas check gives it (research/FACTS-FREE.md; CHARTER.md \"Facts no check answers\"); the failing line reports glyph-clusters+in-word-prefix+unsafe-to-break."
+    },
+    {
+      "id": "c-6fefceef8c8d52d3",
+      "family": "rule/following-space",
+      "metric": "widths",
+      "status": "fail",
+      "reason": "width differs under a named gap",
+      "detail": "engine line 1: width 6880; native node rects span [-6753, 128]; limited by glyph-clusters",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Passes with the lab's font facts in this evaluation's facts runs; the seed it is compared with was recorded with them. With no supplied facts `pairKerning` (which glyph of a kerned pair carries the adjustment) isn't known and no Canvas check gives it (research/FACTS-FREE.md; CHARTER.md \"Facts no check answers\"); the failing line reports unsafe-to-break."
+    },
+    {
+      "id": "c-70e693ba0356db97",
+      "family": "rule/following-space",
+      "metric": "widths",
+      "status": "fail",
+      "reason": "width differs under a named gap",
+      "detail": "engine line 0: width 3059; native node rects span [-3002, 128]; limited by glyph-clusters",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Passes with the lab's font facts in this evaluation's facts runs; the seed it is compared with was recorded with them. With no supplied facts `pairKerning` (which glyph of a kerned pair carries the adjustment) isn't known and no Canvas check gives it (research/FACTS-FREE.md; CHARTER.md \"Facts no check answers\"); the failing line reports unsafe-to-break."
+    },
+    {
+      "id": "c-71ad21a18a8a0713",
+      "family": "rule/following-space",
+      "metric": "widths",
+      "status": "fail",
+      "reason": "width differs under a named gap",
+      "detail": "engine line 0: width 10953; native node rects span [-571, 10383]; limited by glyph-clusters",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Passes with the lab's font facts in this evaluation's facts runs; the seed it is compared with was recorded with them. With no supplied facts `pairKerning` (which glyph of a kerned pair carries the adjustment) isn't known and no Canvas check gives it (research/FACTS-FREE.md; CHARTER.md \"Facts no check answers\"); the failing line reports unsafe-to-break."
+    },
+    {
+      "id": "c-7385dd516ea5eee8",
+      "family": "rule/following-space",
+      "metric": "widths",
+      "status": "fail",
+      "reason": "width differs under a named gap",
+      "detail": "engine line 1: width 9696; native node rects span [0, 9697]; limited by glyph-clusters",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Passes with the lab's font facts in this evaluation's facts runs; the seed it is compared with was recorded with them. With no supplied facts `pairKerning` (which glyph of a kerned pair carries the adjustment) isn't known and no Canvas check gives it (research/FACTS-FREE.md; CHARTER.md \"Facts no check answers\"); the failing line reports unsafe-to-break."
+    },
+    {
+      "id": "c-7385dd516ea5eee8",
+      "family": "rule/following-space",
+      "metric": "painter",
+      "status": "fail",
+      "reason": "painted extent differs",
+      "detail": "engine line 1: width 9696; painted node rects span [0, 9697]",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Follows the prediction pair lost on the same case."
+    },
+    {
+      "id": "c-75f80a5b2c89eb3c",
+      "family": "rule/hyphen-glyph",
+      "metric": "lineCount",
+      "status": "fail",
+      "reason": "line count differs",
+      "detail": "native 4, predicted 3",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "glyph-clusters",
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Passes with the lab's font facts in this evaluation's facts runs; the seed it is compared with was recorded with them. With no supplied facts `ligatures` and `coverage` and `pairKerning` (which glyph of a kerned pair carries the adjustment) isn't known and no Canvas check gives it (research/FACTS-FREE.md; CHARTER.md \"Facts no check answers\"); the failing line reports glyph-clusters+unsafe-to-break."
+    },
+    {
+      "id": "c-75f80a5b2c89eb3c",
+      "family": "rule/hyphen-glyph",
+      "metric": "breaks",
+      "status": "fail",
+      "reason": "line count differs",
+      "detail": "native 4, predicted 3",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "glyph-clusters",
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Passes with the lab's font facts in this evaluation's facts runs; the seed it is compared with was recorded with them. With no supplied facts `ligatures` and `coverage` and `pairKerning` (which glyph of a kerned pair carries the adjustment) isn't known and no Canvas check gives it (research/FACTS-FREE.md; CHARTER.md \"Facts no check answers\"); the failing line reports glyph-clusters+unsafe-to-break."
+    },
+    {
+      "id": "c-75f80a5b2c89eb3c",
+      "family": "rule/hyphen-glyph",
+      "metric": "widths",
+      "status": "not-applicable",
+      "reason": "breaks differ",
+      "detail": null,
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": false,
+      "coveringGaps": [],
+      "residual": null,
+      "attribution": "widths isn't scored where breaks fail: the case's breaks pair is lost in this record, with its own attribution."
+    },
+    {
+      "id": "c-7604721d453c7832",
+      "family": "rule/in-word-breaks",
+      "metric": "lineCount",
+      "status": "fail",
+      "reason": "line count differs",
+      "detail": "native 3, predicted 2",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Passes with the lab's font facts in this evaluation's facts runs; the seed it is compared with was recorded with them. With no supplied facts `pairKerning` (which glyph of a kerned pair carries the adjustment) isn't known and no Canvas check gives it (research/FACTS-FREE.md; CHARTER.md \"Facts no check answers\"); the failing line reports unsafe-to-break."
+    },
+    {
+      "id": "c-7604721d453c7832",
+      "family": "rule/in-word-breaks",
+      "metric": "breaks",
+      "status": "fail",
+      "reason": "line count differs",
+      "detail": "native 3, predicted 2",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Passes with the lab's font facts in this evaluation's facts runs; the seed it is compared with was recorded with them. With no supplied facts `pairKerning` (which glyph of a kerned pair carries the adjustment) isn't known and no Canvas check gives it (research/FACTS-FREE.md; CHARTER.md \"Facts no check answers\"); the failing line reports unsafe-to-break."
+    },
+    {
+      "id": "c-7604721d453c7832",
+      "family": "rule/in-word-breaks",
+      "metric": "widths",
+      "status": "not-applicable",
+      "reason": "breaks differ",
+      "detail": null,
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": false,
+      "coveringGaps": [],
+      "residual": null,
+      "attribution": "widths isn't scored where breaks fail: the case's breaks pair is lost in this record, with its own attribution."
+    },
+    {
+      "id": "c-7c0de722d76d00fa",
+      "family": "rule/hyphen-glyph",
+      "metric": "widths",
+      "status": "fail",
+      "reason": "width differs under a named gap",
+      "detail": "engine line 1: width 7840; native node rects span [0, 7858]; limited by glyph-clusters",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "glyph-clusters",
+        "soft-hyphen-shaping",
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Passes with the lab's font facts in this evaluation's facts runs; the seed it is compared with was recorded with them. With no supplied facts `ligatures` and `coverage` and `pairKerning` (which glyph of a kerned pair carries the adjustment) isn't known and no Canvas check gives it (research/FACTS-FREE.md; CHARTER.md \"Facts no check answers\"); the failing line reports glyph-clusters+soft-hyphen-shaping+unsafe-to-break."
+    },
+    {
+      "id": "c-7e8bbce0f5440c41",
+      "family": "rule/in-word-breaks",
+      "metric": "breaks",
+      "status": "fail",
+      "reason": "code point on other lines",
+      "detail": "code point 15 \"V\": native lines 2; expected 1",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "glyph-clusters",
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Passes with the lab's font facts in this evaluation's facts runs; the seed it is compared with was recorded with them. With no supplied facts `ligatures` and `coverage` and `pairKerning` (which glyph of a kerned pair carries the adjustment) isn't known and no Canvas check gives it (research/FACTS-FREE.md; CHARTER.md \"Facts no check answers\"); the failing line reports glyph-clusters+unsafe-to-break."
+    },
+    {
+      "id": "c-7e8bbce0f5440c41",
+      "family": "rule/in-word-breaks",
+      "metric": "widths",
+      "status": "not-applicable",
+      "reason": "breaks differ",
+      "detail": null,
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": false,
+      "coveringGaps": [],
+      "residual": null,
+      "attribution": "widths isn't scored where breaks fail: the case's breaks pair is lost in this record, with its own attribution."
+    },
+    {
+      "id": "c-805b10f562cdd9db",
+      "family": "rule/hyphen-glyph",
+      "metric": "lineCount",
+      "status": "fail",
+      "reason": "line count differs",
+      "detail": "native 4, predicted 3",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "glyph-clusters",
+        "soft-hyphen-shaping",
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Passes with the lab's font facts in this evaluation's facts runs; the seed it is compared with was recorded with them. With no supplied facts `ligatures` and `coverage` and `pairKerning` (which glyph of a kerned pair carries the adjustment) isn't known and no Canvas check gives it (research/FACTS-FREE.md; CHARTER.md \"Facts no check answers\"); the failing line reports glyph-clusters+soft-hyphen-shaping+unsafe-to-break."
+    },
+    {
+      "id": "c-805b10f562cdd9db",
+      "family": "rule/hyphen-glyph",
+      "metric": "breaks",
+      "status": "fail",
+      "reason": "line count differs",
+      "detail": "native 4, predicted 3",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "glyph-clusters",
+        "soft-hyphen-shaping",
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Passes with the lab's font facts in this evaluation's facts runs; the seed it is compared with was recorded with them. With no supplied facts `ligatures` and `coverage` and `pairKerning` (which glyph of a kerned pair carries the adjustment) isn't known and no Canvas check gives it (research/FACTS-FREE.md; CHARTER.md \"Facts no check answers\"); the failing line reports glyph-clusters+soft-hyphen-shaping+unsafe-to-break."
+    },
+    {
+      "id": "c-805b10f562cdd9db",
+      "family": "rule/hyphen-glyph",
+      "metric": "widths",
+      "status": "not-applicable",
+      "reason": "breaks differ",
+      "detail": null,
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": false,
+      "coveringGaps": [],
+      "residual": null,
+      "attribution": "widths isn't scored where breaks fail: the case's breaks pair is lost in this record, with its own attribution."
+    },
+    {
+      "id": "c-820ab70fd97a9fa3",
+      "family": "rule/following-space",
+      "metric": "widths",
+      "status": "fail",
+      "reason": "width differs under a named gap",
+      "detail": "engine line 0: width 3059; native node rects span [-3002, 128]; limited by glyph-clusters",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Passes with the lab's font facts in this evaluation's facts runs; the seed it is compared with was recorded with them. With no supplied facts `pairKerning` (which glyph of a kerned pair carries the adjustment) isn't known and no Canvas check gives it (research/FACTS-FREE.md; CHARTER.md \"Facts no check answers\"); the failing line reports unsafe-to-break."
+    },
+    {
+      "id": "c-82c3b78ac7c24eec",
+      "family": "rule/following-space",
+      "metric": "widths",
+      "status": "fail",
+      "reason": "width differs under a named gap",
+      "detail": "engine line 0: width 14281; native node rects span [0, 14282]; limited by glyph-clusters",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Passes with the lab's font facts in this evaluation's facts runs; the seed it is compared with was recorded with them. With no supplied facts `pairKerning` (which glyph of a kerned pair carries the adjustment) isn't known and no Canvas check gives it (research/FACTS-FREE.md; CHARTER.md \"Facts no check answers\"); the failing line reports unsafe-to-break."
+    },
+    {
+      "id": "c-82c3b78ac7c24eec",
+      "family": "rule/following-space",
+      "metric": "painter",
+      "status": "fail",
+      "reason": "painted extent differs",
+      "detail": "engine line 0: width 14281; painted node rects span [0, 14282]",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Follows the prediction pair lost on the same case."
+    },
+    {
+      "id": "c-843f4e5f3aaa381d",
+      "family": "rule/hyphen-glyph",
+      "metric": "widths",
+      "status": "fail",
+      "reason": "width differs under a named gap",
+      "detail": "engine line 1: width 7840; native node rects span [0, 7858]; limited by glyph-clusters",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "glyph-clusters",
+        "soft-hyphen-shaping",
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Passes with the lab's font facts in this evaluation's facts runs; the seed it is compared with was recorded with them. With no supplied facts `ligatures` and `coverage` and `pairKerning` (which glyph of a kerned pair carries the adjustment) isn't known and no Canvas check gives it (research/FACTS-FREE.md; CHARTER.md \"Facts no check answers\"); the failing line reports glyph-clusters+soft-hyphen-shaping+unsafe-to-break."
+    },
+    {
+      "id": "c-844411d8168274f3",
+      "family": "rule/in-word-breaks",
+      "metric": "breaks",
+      "status": "fail",
+      "reason": "code point on other lines",
+      "detail": "code point 8 \"A\": native lines 2; expected 1",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "glyph-clusters",
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Passes with the lab's font facts in this evaluation's facts runs; the seed it is compared with was recorded with them. With no supplied facts `ligatures` and `coverage` and `pairKerning` (which glyph of a kerned pair carries the adjustment) isn't known and no Canvas check gives it (research/FACTS-FREE.md; CHARTER.md \"Facts no check answers\"); the failing line reports glyph-clusters+unsafe-to-break."
+    },
+    {
+      "id": "c-844411d8168274f3",
+      "family": "rule/in-word-breaks",
+      "metric": "widths",
+      "status": "not-applicable",
+      "reason": "breaks differ",
+      "detail": null,
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": false,
+      "coveringGaps": [],
+      "residual": null,
+      "attribution": "widths isn't scored where breaks fail: the case's breaks pair is lost in this record, with its own attribution."
+    },
+    {
+      "id": "c-85758a1849b51ac2",
+      "family": "rule/following-space",
+      "metric": "lineCount",
+      "status": "fail",
+      "reason": "line count differs",
+      "detail": "native 3, predicted 2",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Passes with the lab's font facts in this evaluation's facts runs; the seed it is compared with was recorded with them. With no supplied facts `pairKerning` (which glyph of a kerned pair carries the adjustment) isn't known and no Canvas check gives it (research/FACTS-FREE.md; CHARTER.md \"Facts no check answers\"); the failing line reports unsafe-to-break."
+    },
+    {
+      "id": "c-85758a1849b51ac2",
+      "family": "rule/following-space",
+      "metric": "breaks",
+      "status": "fail",
+      "reason": "line count differs",
+      "detail": "native 3, predicted 2",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Passes with the lab's font facts in this evaluation's facts runs; the seed it is compared with was recorded with them. With no supplied facts `pairKerning` (which glyph of a kerned pair carries the adjustment) isn't known and no Canvas check gives it (research/FACTS-FREE.md; CHARTER.md \"Facts no check answers\"); the failing line reports unsafe-to-break."
+    },
+    {
+      "id": "c-85758a1849b51ac2",
+      "family": "rule/following-space",
+      "metric": "widths",
+      "status": "not-applicable",
+      "reason": "breaks differ",
+      "detail": null,
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": false,
+      "coveringGaps": [],
+      "residual": null,
+      "attribution": "widths isn't scored where breaks fail: the case's breaks pair is lost in this record, with its own attribution."
+    },
+    {
+      "id": "c-8c90eb487b92aa73",
+      "family": "rule/following-space",
+      "metric": "widths",
+      "status": "fail",
+      "reason": "width differs under a named gap",
+      "detail": "engine line 0: width 12233; native node rects span [-1851, 10383]; limited by glyph-clusters",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Passes with the lab's font facts in this evaluation's facts runs; the seed it is compared with was recorded with them. With no supplied facts `pairKerning` (which glyph of a kerned pair carries the adjustment) isn't known and no Canvas check gives it (research/FACTS-FREE.md; CHARTER.md \"Facts no check answers\"); the failing line reports unsafe-to-break."
+    },
+    {
+      "id": "c-914c4ecdd410d413",
+      "family": "rule/following-space",
+      "metric": "lineCount",
+      "status": "fail",
+      "reason": "line count differs",
+      "detail": "native 3, predicted 2",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Passes with the lab's font facts in this evaluation's facts runs; the seed it is compared with was recorded with them. With no supplied facts `pairKerning` (which glyph of a kerned pair carries the adjustment) isn't known and no Canvas check gives it (research/FACTS-FREE.md; CHARTER.md \"Facts no check answers\"); the failing line reports unsafe-to-break."
+    },
+    {
+      "id": "c-914c4ecdd410d413",
+      "family": "rule/following-space",
+      "metric": "breaks",
+      "status": "fail",
+      "reason": "line count differs",
+      "detail": "native 3, predicted 2",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Passes with the lab's font facts in this evaluation's facts runs; the seed it is compared with was recorded with them. With no supplied facts `pairKerning` (which glyph of a kerned pair carries the adjustment) isn't known and no Canvas check gives it (research/FACTS-FREE.md; CHARTER.md \"Facts no check answers\"); the failing line reports unsafe-to-break."
+    },
+    {
+      "id": "c-914c4ecdd410d413",
+      "family": "rule/following-space",
+      "metric": "widths",
+      "status": "not-applicable",
+      "reason": "breaks differ",
+      "detail": null,
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": false,
+      "coveringGaps": [],
+      "residual": null,
+      "attribution": "widths isn't scored where breaks fail: the case's breaks pair is lost in this record, with its own attribution."
+    },
+    {
+      "id": "c-914c4ecdd410d413",
+      "family": "rule/following-space",
+      "metric": "painter",
+      "status": "fail",
+      "reason": "painted line wraps",
+      "detail": "engine line 0 painted on 2 lines",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Follows the prediction pair lost on the same case."
+    },
+    {
+      "id": "c-952d9ebfce60e230",
+      "family": "rule/in-word-breaks",
+      "metric": "lineCount",
+      "status": "fail",
+      "reason": "line count differs",
+      "detail": "native 24, predicted 14",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "glyph-clusters",
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Passes with the lab's font facts in this evaluation's facts runs; the seed it is compared with was recorded with them. With no supplied facts `ligatures` and `coverage` and `pairKerning` (which glyph of a kerned pair carries the adjustment) isn't known and no Canvas check gives it (research/FACTS-FREE.md; CHARTER.md \"Facts no check answers\"); the failing line reports glyph-clusters+unsafe-to-break."
+    },
+    {
+      "id": "c-952d9ebfce60e230",
+      "family": "rule/in-word-breaks",
+      "metric": "breaks",
+      "status": "fail",
+      "reason": "line count differs",
+      "detail": "native 24, predicted 14",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "glyph-clusters",
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Passes with the lab's font facts in this evaluation's facts runs; the seed it is compared with was recorded with them. With no supplied facts `ligatures` and `coverage` and `pairKerning` (which glyph of a kerned pair carries the adjustment) isn't known and no Canvas check gives it (research/FACTS-FREE.md; CHARTER.md \"Facts no check answers\"); the failing line reports glyph-clusters+unsafe-to-break."
+    },
+    {
+      "id": "c-952d9ebfce60e230",
+      "family": "rule/in-word-breaks",
+      "metric": "widths",
+      "status": "not-applicable",
+      "reason": "breaks differ",
+      "detail": null,
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": false,
+      "coveringGaps": [],
+      "residual": null,
+      "attribution": "widths isn't scored where breaks fail: the case's breaks pair is lost in this record, with its own attribution."
+    },
+    {
+      "id": "c-954ea4de6fc3a3d0",
+      "family": "rule/hyphen-glyph",
+      "metric": "widths",
+      "status": "fail",
+      "reason": "width differs under a named gap",
+      "detail": "engine line 0: width 11797; native node rects span [0, 11798]; limited by glyph-clusters",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "glyph-clusters",
+        "soft-hyphen-shaping",
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Passes with the lab's font facts in this evaluation's facts runs; the seed it is compared with was recorded with them. With no supplied facts `ligatures` and `coverage` and `pairKerning` (which glyph of a kerned pair carries the adjustment) isn't known and no Canvas check gives it (research/FACTS-FREE.md; CHARTER.md \"Facts no check answers\"); the failing line reports glyph-clusters+soft-hyphen-shaping+unsafe-to-break."
+    },
+    {
+      "id": "c-954ea4de6fc3a3d0",
+      "family": "rule/hyphen-glyph",
+      "metric": "painter",
+      "status": "fail",
+      "reason": "painted extent differs",
+      "detail": "engine line 0: width 11797; painted node rects span [0, 11798]",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "glyph-clusters",
+        "in-word-prefix",
+        "soft-hyphen-shaping",
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Follows the prediction pair lost on the same case."
+    },
+    {
+      "id": "c-9805005e784327cb",
+      "family": "rule/following-space",
+      "metric": "widths",
+      "status": "fail",
+      "reason": "width differs under a named gap",
+      "detail": "engine line 0: width 3571; native node rects span [0, 3642]; limited by glyph-clusters",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Passes with the lab's font facts in this evaluation's facts runs; the seed it is compared with was recorded with them. With no supplied facts `pairKerning` (which glyph of a kerned pair carries the adjustment) isn't known and no Canvas check gives it (research/FACTS-FREE.md; CHARTER.md \"Facts no check answers\"); the failing line reports unsafe-to-break."
+    },
+    {
+      "id": "c-99b9256001448f47",
+      "family": "rule/hyphen-glyph",
+      "metric": "breaks",
+      "status": "fail",
+      "reason": "code point on other lines",
+      "detail": "code point 9 \"c\": native lines 1; expected 0",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "glyph-clusters",
+        "in-word-prefix",
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Passes with the lab's font facts in this evaluation's facts runs; the seed it is compared with was recorded with them. With no supplied facts `ligatures` and `coverage` and `pairKerning` and `pairKerning` (which glyph of a kerned pair carries the adjustment) isn't known and no Canvas check gives it (research/FACTS-FREE.md; CHARTER.md \"Facts no check answers\"); the failing line reports glyph-clusters+in-word-prefix+unsafe-to-break."
+    },
+    {
+      "id": "c-99b9256001448f47",
+      "family": "rule/hyphen-glyph",
+      "metric": "widths",
+      "status": "not-applicable",
+      "reason": "breaks differ",
+      "detail": null,
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": false,
+      "coveringGaps": [],
+      "residual": null,
+      "attribution": "widths isn't scored where breaks fail: the case's breaks pair is lost in this record, with its own attribution."
+    },
+    {
+      "id": "c-99e834b09f5b3388",
+      "family": "rule/following-space",
+      "metric": "widths",
+      "status": "fail",
+      "reason": "width differs under a named gap",
+      "detail": "engine line 0: width 13408; native node rects span [0, 13409]; limited by glyph-clusters",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Passes with the lab's font facts in this evaluation's facts runs; the seed it is compared with was recorded with them. With no supplied facts `pairKerning` (which glyph of a kerned pair carries the adjustment) isn't known and no Canvas check gives it (research/FACTS-FREE.md; CHARTER.md \"Facts no check answers\"); the failing line reports unsafe-to-break."
+    },
+    {
+      "id": "c-99e834b09f5b3388",
+      "family": "rule/following-space",
+      "metric": "painter",
+      "status": "fail",
+      "reason": "painted extent differs",
+      "detail": "engine line 0: width 13408; painted node rects span [0, 13409]",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Follows the prediction pair lost on the same case."
+    },
+    {
+      "id": "c-9caa2f77d3381e7c",
+      "family": "rule/following-space",
+      "metric": "widths",
+      "status": "fail",
+      "reason": "width differs under a named gap",
+      "detail": "engine line 0: width 3571; native node rects span [0, 3642]; limited by glyph-clusters",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Passes with the lab's font facts in this evaluation's facts runs; the seed it is compared with was recorded with them. With no supplied facts `pairKerning` (which glyph of a kerned pair carries the adjustment) isn't known and no Canvas check gives it (research/FACTS-FREE.md; CHARTER.md \"Facts no check answers\"); the failing line reports unsafe-to-break."
+    },
+    {
+      "id": "c-9fff38c828d7e27f",
+      "family": "rule/joining",
+      "metric": "painter",
+      "status": "fail",
+      "reason": "painted extent differs",
+      "detail": "engine line 1: width 5758; painted node rects span [0, 4702]",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "glyph-clusters",
+        "optical-size"
+      ],
+      "residual": null,
+      "attribution": "Lost against the adopted seed in round 3 already; round 3's attribution still holds: Painter form, prediction unchanged: a line ends one span of joined Arabic and starts the next, in AAT Geeza Pro under break-all. Blink reshaped each cut part alone; the painted line shapes both parts as one group, where round 2's override controls happened to sit between the spans. Painter limit edge-inside-shaped-text (specs/PAINTER-RESULTS.md \"Round 3\")."
+    },
+    {
+      "id": "c-a00545a3dd9dfe7f",
+      "family": "rule/following-space",
+      "metric": "widths",
+      "status": "fail",
+      "reason": "width differs under a named gap",
+      "detail": "engine line 0: width 3571; native node rects span [0, 3642]; limited by glyph-clusters",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Passes with the lab's font facts in this evaluation's facts runs; the seed it is compared with was recorded with them. With no supplied facts `pairKerning` (which glyph of a kerned pair carries the adjustment) isn't known and no Canvas check gives it (research/FACTS-FREE.md; CHARTER.md \"Facts no check answers\"); the failing line reports unsafe-to-break."
+    },
+    {
+      "id": "c-a401ce75b3449efa",
+      "family": "rule/in-word-breaks",
+      "metric": "breaks",
+      "status": "fail",
+      "reason": "code point on other lines",
+      "detail": "code point 15 \"V\": native lines 2; expected 1",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "glyph-clusters",
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Passes with the lab's font facts in this evaluation's facts runs; the seed it is compared with was recorded with them. With no supplied facts `ligatures` and `coverage` and `pairKerning` (which glyph of a kerned pair carries the adjustment) isn't known and no Canvas check gives it (research/FACTS-FREE.md; CHARTER.md \"Facts no check answers\"); the failing line reports glyph-clusters+unsafe-to-break."
+    },
+    {
+      "id": "c-a401ce75b3449efa",
+      "family": "rule/in-word-breaks",
+      "metric": "widths",
+      "status": "not-applicable",
+      "reason": "breaks differ",
+      "detail": null,
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": false,
+      "coveringGaps": [],
+      "residual": null,
+      "attribution": "widths isn't scored where breaks fail: the case's breaks pair is lost in this record, with its own attribution."
+    },
+    {
+      "id": "c-a4464a349862019e",
+      "family": "rule/hyphen-glyph",
+      "metric": "widths",
+      "status": "fail",
+      "reason": "width differs under a named gap",
+      "detail": "engine line 1: width 7840; native node rects span [0, 7858]; limited by glyph-clusters",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "glyph-clusters",
+        "soft-hyphen-shaping",
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Passes with the lab's font facts in this evaluation's facts runs; the seed it is compared with was recorded with them. With no supplied facts `ligatures` and `coverage` and `pairKerning` (which glyph of a kerned pair carries the adjustment) isn't known and no Canvas check gives it (research/FACTS-FREE.md; CHARTER.md \"Facts no check answers\"); the failing line reports glyph-clusters+soft-hyphen-shaping+unsafe-to-break."
+    },
+    {
+      "id": "c-a53032922da963ba",
+      "family": "rule/in-word-breaks",
+      "metric": "breaks",
+      "status": "fail",
+      "reason": "code point on other lines",
+      "detail": "code point 8 \"A\": native lines 2; expected 1",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "glyph-clusters",
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Passes with the lab's font facts in this evaluation's facts runs; the seed it is compared with was recorded with them. With no supplied facts `ligatures` and `coverage` and `pairKerning` (which glyph of a kerned pair carries the adjustment) isn't known and no Canvas check gives it (research/FACTS-FREE.md; CHARTER.md \"Facts no check answers\"); the failing line reports glyph-clusters+unsafe-to-break."
+    },
+    {
+      "id": "c-a53032922da963ba",
+      "family": "rule/in-word-breaks",
+      "metric": "widths",
+      "status": "not-applicable",
+      "reason": "breaks differ",
+      "detail": null,
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": false,
+      "coveringGaps": [],
+      "residual": null,
+      "attribution": "widths isn't scored where breaks fail: the case's breaks pair is lost in this record, with its own attribution."
+    },
+    {
+      "id": "c-a814e49b70071e54",
+      "family": "rule/hyphen-glyph",
+      "metric": "widths",
+      "status": "fail",
+      "reason": "width differs under a named gap",
+      "detail": "engine line 0: width 11760; native node rects span [0, 11779]; limited by glyph-clusters",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "glyph-clusters",
+        "soft-hyphen-shaping",
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Passes with the lab's font facts in this evaluation's facts runs; the seed it is compared with was recorded with them. With no supplied facts `ligatures` and `coverage` and `pairKerning` (which glyph of a kerned pair carries the adjustment) isn't known and no Canvas check gives it (research/FACTS-FREE.md; CHARTER.md \"Facts no check answers\"); the failing line reports glyph-clusters+soft-hyphen-shaping+unsafe-to-break."
+    },
+    {
+      "id": "c-a9f58e043e5b00e7",
+      "family": "rule/in-word-breaks",
+      "metric": "lineCount",
+      "status": "fail",
+      "reason": "line count differs",
+      "detail": "native 24, predicted 14",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "glyph-clusters",
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Passes with the lab's font facts in this evaluation's facts runs; the seed it is compared with was recorded with them. With no supplied facts `ligatures` and `coverage` and `pairKerning` (which glyph of a kerned pair carries the adjustment) isn't known and no Canvas check gives it (research/FACTS-FREE.md; CHARTER.md \"Facts no check answers\"); the failing line reports glyph-clusters+unsafe-to-break."
+    },
+    {
+      "id": "c-a9f58e043e5b00e7",
+      "family": "rule/in-word-breaks",
+      "metric": "breaks",
+      "status": "fail",
+      "reason": "line count differs",
+      "detail": "native 24, predicted 14",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "glyph-clusters",
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Passes with the lab's font facts in this evaluation's facts runs; the seed it is compared with was recorded with them. With no supplied facts `ligatures` and `coverage` and `pairKerning` (which glyph of a kerned pair carries the adjustment) isn't known and no Canvas check gives it (research/FACTS-FREE.md; CHARTER.md \"Facts no check answers\"); the failing line reports glyph-clusters+unsafe-to-break."
+    },
+    {
+      "id": "c-a9f58e043e5b00e7",
+      "family": "rule/in-word-breaks",
+      "metric": "widths",
+      "status": "not-applicable",
+      "reason": "breaks differ",
+      "detail": null,
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": false,
+      "coveringGaps": [],
+      "residual": null,
+      "attribution": "widths isn't scored where breaks fail: the case's breaks pair is lost in this record, with its own attribution."
+    },
+    {
+      "id": "c-ad31c755e73d4e3f",
+      "family": "rule/following-space",
+      "metric": "widths",
+      "status": "fail",
+      "reason": "width differs under a named gap",
+      "detail": "engine line 0: width 10313; native node rects span [0, 10384]; limited by glyph-clusters",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Passes with the lab's font facts in this evaluation's facts runs; the seed it is compared with was recorded with them. With no supplied facts `pairKerning` (which glyph of a kerned pair carries the adjustment) isn't known and no Canvas check gives it (research/FACTS-FREE.md; CHARTER.md \"Facts no check answers\"); the failing line reports unsafe-to-break."
+    },
+    {
+      "id": "c-ad31c755e73d4e3f",
+      "family": "rule/following-space",
+      "metric": "painter",
+      "status": "fail",
+      "reason": "painted extent differs",
+      "detail": "engine line 0: width 10313; painted node rects span [0, 10384]",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Follows the prediction pair lost on the same case."
+    },
+    {
+      "id": "c-ae8410db7891bc4b",
+      "family": "rule/in-word-breaks",
+      "metric": "breaks",
+      "status": "fail",
+      "reason": "code point on other lines",
+      "detail": "code point 15 \"V\": native lines 2; expected 1",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "glyph-clusters",
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Passes with the lab's font facts in this evaluation's facts runs; the seed it is compared with was recorded with them. With no supplied facts `ligatures` and `coverage` and `pairKerning` (which glyph of a kerned pair carries the adjustment) isn't known and no Canvas check gives it (research/FACTS-FREE.md; CHARTER.md \"Facts no check answers\"); the failing line reports glyph-clusters+unsafe-to-break."
+    },
+    {
+      "id": "c-ae8410db7891bc4b",
+      "family": "rule/in-word-breaks",
+      "metric": "widths",
+      "status": "not-applicable",
+      "reason": "breaks differ",
+      "detail": null,
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": false,
+      "coveringGaps": [],
+      "residual": null,
+      "attribution": "widths isn't scored where breaks fail: the case's breaks pair is lost in this record, with its own attribution."
+    },
+    {
+      "id": "c-b410202d047a571e",
+      "family": "rule/following-space",
+      "metric": "lineCount",
+      "status": "fail",
+      "reason": "line count differs",
+      "detail": "native 3, predicted 2",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Passes with the lab's font facts in this evaluation's facts runs; the seed it is compared with was recorded with them. With no supplied facts `pairKerning` (which glyph of a kerned pair carries the adjustment) isn't known and no Canvas check gives it (research/FACTS-FREE.md; CHARTER.md \"Facts no check answers\"); the failing line reports unsafe-to-break."
+    },
+    {
+      "id": "c-b410202d047a571e",
+      "family": "rule/following-space",
+      "metric": "breaks",
+      "status": "fail",
+      "reason": "line count differs",
+      "detail": "native 3, predicted 2",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Passes with the lab's font facts in this evaluation's facts runs; the seed it is compared with was recorded with them. With no supplied facts `pairKerning` (which glyph of a kerned pair carries the adjustment) isn't known and no Canvas check gives it (research/FACTS-FREE.md; CHARTER.md \"Facts no check answers\"); the failing line reports unsafe-to-break."
+    },
+    {
+      "id": "c-b410202d047a571e",
+      "family": "rule/following-space",
+      "metric": "widths",
+      "status": "not-applicable",
+      "reason": "breaks differ",
+      "detail": null,
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": false,
+      "coveringGaps": [],
+      "residual": null,
+      "attribution": "widths isn't scored where breaks fail: the case's breaks pair is lost in this record, with its own attribution."
+    },
+    {
+      "id": "c-b410202d047a571e",
+      "family": "rule/following-space",
+      "metric": "painter",
+      "status": "fail",
+      "reason": "painted line wraps",
+      "detail": "engine line 0 painted on 2 lines",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Follows the prediction pair lost on the same case."
+    },
+    {
+      "id": "c-bb9f9828a55b5137",
+      "family": "rule/hyphen-glyph",
+      "metric": "widths",
+      "status": "fail",
+      "reason": "width differs under a named gap",
+      "detail": "engine line 0: width 11760; native node rects span [-1, 11778]; limited by glyph-clusters",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "glyph-clusters",
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Passes with the lab's font facts in this evaluation's facts runs; the seed it is compared with was recorded with them. With no supplied facts `ligatures` and `coverage` and `pairKerning` (which glyph of a kerned pair carries the adjustment) isn't known and no Canvas check gives it (research/FACTS-FREE.md; CHARTER.md \"Facts no check answers\"); the failing line reports glyph-clusters+unsafe-to-break."
+    },
+    {
+      "id": "c-c37ea54cbdfde5d2",
+      "family": "rule/in-word-breaks",
+      "metric": "breaks",
+      "status": "fail",
+      "reason": "code point on other lines",
+      "detail": "code point 15 \"V\": native lines 2; expected 1",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "glyph-clusters",
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Passes with the lab's font facts in this evaluation's facts runs; the seed it is compared with was recorded with them. With no supplied facts `ligatures` and `coverage` and `pairKerning` (which glyph of a kerned pair carries the adjustment) isn't known and no Canvas check gives it (research/FACTS-FREE.md; CHARTER.md \"Facts no check answers\"); the failing line reports glyph-clusters+unsafe-to-break."
+    },
+    {
+      "id": "c-c37ea54cbdfde5d2",
+      "family": "rule/in-word-breaks",
+      "metric": "widths",
+      "status": "not-applicable",
+      "reason": "breaks differ",
+      "detail": null,
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": false,
+      "coveringGaps": [],
+      "residual": null,
+      "attribution": "widths isn't scored where breaks fail: the case's breaks pair is lost in this record, with its own attribution."
+    },
+    {
+      "id": "c-c41987ef5ceaaca0",
+      "family": "rule/following-space",
+      "metric": "widths",
+      "status": "fail",
+      "reason": "width differs under a named gap",
+      "detail": "engine line 0: width 11104; native node rects span [0, 11105]; limited by glyph-clusters",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Passes with the lab's font facts in this evaluation's facts runs; the seed it is compared with was recorded with them. With no supplied facts `pairKerning` (which glyph of a kerned pair carries the adjustment) isn't known and no Canvas check gives it (research/FACTS-FREE.md; CHARTER.md \"Facts no check answers\"); the failing line reports unsafe-to-break."
+    },
+    {
+      "id": "c-c41987ef5ceaaca0",
+      "family": "rule/following-space",
+      "metric": "painter",
+      "status": "fail",
+      "reason": "painted extent differs",
+      "detail": "engine line 0: width 11104; painted node rects span [0, 11105]",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Follows the prediction pair lost on the same case."
+    },
+    {
+      "id": "c-c8d6a34f23af05d0",
+      "family": "rule/following-space",
+      "metric": "widths",
+      "status": "fail",
+      "reason": "width differs under a named gap",
+      "detail": "engine line 0: width 10080; native node rects span [-594, 9487]; limited by glyph-clusters",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Passes with the lab's font facts in this evaluation's facts runs; the seed it is compared with was recorded with them. With no supplied facts `pairKerning` (which glyph of a kerned pair carries the adjustment) isn't known and no Canvas check gives it (research/FACTS-FREE.md; CHARTER.md \"Facts no check answers\"); the failing line reports unsafe-to-break."
+    },
+    {
+      "id": "c-c9d2ecb0d232359d",
+      "family": "rule/following-space",
+      "metric": "widths",
+      "status": "fail",
+      "reason": "width differs under a named gap",
+      "detail": "engine line 0: width 3059; native node rects span [-3002, 128]; limited by glyph-clusters",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Passes with the lab's font facts in this evaluation's facts runs; the seed it is compared with was recorded with them. With no supplied facts `pairKerning` (which glyph of a kerned pair carries the adjustment) isn't known and no Canvas check gives it (research/FACTS-FREE.md; CHARTER.md \"Facts no check answers\"); the failing line reports unsafe-to-break."
+    },
+    {
+      "id": "c-cd4077e5c67c5e14",
+      "family": "rule/following-space",
+      "metric": "widths",
+      "status": "fail",
+      "reason": "width differs under a named gap",
+      "detail": "engine line 1: width 7254; native node rects span [-7197, 128]; limited by glyph-clusters",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Passes with the lab's font facts in this evaluation's facts runs; the seed it is compared with was recorded with them. With no supplied facts `pairKerning` (which glyph of a kerned pair carries the adjustment) isn't known and no Canvas check gives it (research/FACTS-FREE.md; CHARTER.md \"Facts no check answers\"); the failing line reports unsafe-to-break."
+    },
+    {
+      "id": "c-cd4077e5c67c5e14",
+      "family": "rule/following-space",
+      "metric": "painter",
+      "status": "fail",
+      "reason": "painted extent differs",
+      "detail": "engine line 1: width 7254; painted node rects span [-7197, 128]",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Follows the prediction pair lost on the same case."
+    },
+    {
+      "id": "c-ce2fafbcb2bf85b3",
+      "family": "rule/joining",
+      "metric": "painter",
+      "status": "fail",
+      "reason": "painted extent differs",
+      "detail": "engine line 1: width 4447; painted node rects span [0, 3742]",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "glyph-clusters",
+        "optical-size"
+      ],
+      "residual": null,
+      "attribution": "Lost against the adopted seed in round 3 already; round 3's attribution still holds: Painter form, prediction unchanged: a line ends one span of joined Arabic and starts the next, in AAT Geeza Pro under break-all. Blink reshaped each cut part alone; the painted line shapes both parts as one group, where round 2's override controls happened to sit between the spans. Painter limit edge-inside-shaped-text (specs/PAINTER-RESULTS.md \"Round 3\")."
+    },
+    {
+      "id": "c-ce82f0389a0fc9c6",
+      "family": "rule/in-word-breaks",
+      "metric": "lineCount",
+      "status": "fail",
+      "reason": "line count differs",
+      "detail": "native 3, predicted 2",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Passes with the lab's font facts in this evaluation's facts runs; the seed it is compared with was recorded with them. With no supplied facts `pairKerning` (which glyph of a kerned pair carries the adjustment) isn't known and no Canvas check gives it (research/FACTS-FREE.md; CHARTER.md \"Facts no check answers\"); the failing line reports unsafe-to-break."
+    },
+    {
+      "id": "c-ce82f0389a0fc9c6",
+      "family": "rule/in-word-breaks",
+      "metric": "breaks",
+      "status": "fail",
+      "reason": "line count differs",
+      "detail": "native 3, predicted 2",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Passes with the lab's font facts in this evaluation's facts runs; the seed it is compared with was recorded with them. With no supplied facts `pairKerning` (which glyph of a kerned pair carries the adjustment) isn't known and no Canvas check gives it (research/FACTS-FREE.md; CHARTER.md \"Facts no check answers\"); the failing line reports unsafe-to-break."
+    },
+    {
+      "id": "c-ce82f0389a0fc9c6",
+      "family": "rule/in-word-breaks",
+      "metric": "widths",
+      "status": "not-applicable",
+      "reason": "breaks differ",
+      "detail": null,
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": false,
+      "coveringGaps": [],
+      "residual": null,
+      "attribution": "widths isn't scored where breaks fail: the case's breaks pair is lost in this record, with its own attribution."
+    },
+    {
+      "id": "c-d5d2808e238b8518",
+      "family": "rule/in-word-breaks",
+      "metric": "widths",
+      "status": "fail",
+      "reason": "width differs under a named gap",
+      "detail": "engine line 0: width 45642; native node rects span [0, 45670]; limited by glyph-clusters",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Passes with the lab's font facts in this evaluation's facts runs; the seed it is compared with was recorded with them. With no supplied facts `pairKerning` (which glyph of a kerned pair carries the adjustment) isn't known and no Canvas check gives it (research/FACTS-FREE.md; CHARTER.md \"Facts no check answers\"); the failing line reports unsafe-to-break."
+    },
+    {
+      "id": "c-d5d2808e238b8518",
+      "family": "rule/in-word-breaks",
+      "metric": "painter",
+      "status": "fail",
+      "reason": "painted extent differs",
+      "detail": "engine line 0: width 45642; painted node rects span [0, 45670]",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Follows the prediction pair lost on the same case."
+    },
+    {
+      "id": "c-da53db5a8c9198a0",
+      "family": "rule/hyphen-glyph",
+      "metric": "widths",
+      "status": "fail",
+      "reason": "width differs under a named gap",
+      "detail": "engine line 0: width 16405; native node rects span [0, 16406]; limited by glyph-clusters",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "glyph-clusters",
+        "soft-hyphen-shaping",
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Passes with the lab's font facts in this evaluation's facts runs; the seed it is compared with was recorded with them. With no supplied facts `ligatures` and `coverage` and `pairKerning` (which glyph of a kerned pair carries the adjustment) isn't known and no Canvas check gives it (research/FACTS-FREE.md; CHARTER.md \"Facts no check answers\"); the failing line reports glyph-clusters+soft-hyphen-shaping+unsafe-to-break."
+    },
+    {
+      "id": "c-da53db5a8c9198a0",
+      "family": "rule/hyphen-glyph",
+      "metric": "painter",
+      "status": "fail",
+      "reason": "painted extent differs",
+      "detail": "engine line 0: width 16405; painted node rects span [0, 16406]",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "glyph-clusters",
+        "in-word-prefix",
+        "soft-hyphen-shaping",
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Follows the prediction pair lost on the same case."
+    },
+    {
+      "id": "c-dbb3e593912807e4",
+      "family": "rule/in-word-breaks",
+      "metric": "breaks",
+      "status": "fail",
+      "reason": "code point on other lines",
+      "detail": "code point 15 \"V\": native lines 2; expected 1",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "glyph-clusters",
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Passes with the lab's font facts in this evaluation's facts runs; the seed it is compared with was recorded with them. With no supplied facts `ligatures` and `coverage` and `pairKerning` (which glyph of a kerned pair carries the adjustment) isn't known and no Canvas check gives it (research/FACTS-FREE.md; CHARTER.md \"Facts no check answers\"); the failing line reports glyph-clusters+unsafe-to-break."
+    },
+    {
+      "id": "c-dbb3e593912807e4",
+      "family": "rule/in-word-breaks",
+      "metric": "widths",
+      "status": "not-applicable",
+      "reason": "breaks differ",
+      "detail": null,
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": false,
+      "coveringGaps": [],
+      "residual": null,
+      "attribution": "widths isn't scored where breaks fail: the case's breaks pair is lost in this record, with its own attribution."
+    },
+    {
+      "id": "c-e042c1d374fc68d4",
+      "family": "rule/hyphen-glyph",
+      "metric": "widths",
+      "status": "fail",
+      "reason": "width differs under a named gap",
+      "detail": "engine line 1: width 5920; native node rects span [1189, 7127]; limited by glyph-clusters",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "glyph-clusters",
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Passes with the lab's font facts in this evaluation's facts runs; the seed it is compared with was recorded with them. With no supplied facts `ligatures` and `coverage` and `pairKerning` (which glyph of a kerned pair carries the adjustment) isn't known and no Canvas check gives it (research/FACTS-FREE.md; CHARTER.md \"Facts no check answers\"); the failing line reports glyph-clusters+unsafe-to-break."
+    },
+    {
+      "id": "c-e0c3c11f20a336a2",
+      "family": "rule/in-word-breaks",
+      "metric": "breaks",
+      "status": "fail",
+      "reason": "code point on other lines",
+      "detail": "code point 8 \"A\": native lines 2; expected 1",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "glyph-clusters",
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Passes with the lab's font facts in this evaluation's facts runs; the seed it is compared with was recorded with them. With no supplied facts `ligatures` and `coverage` and `pairKerning` (which glyph of a kerned pair carries the adjustment) isn't known and no Canvas check gives it (research/FACTS-FREE.md; CHARTER.md \"Facts no check answers\"); the failing line reports glyph-clusters+unsafe-to-break."
+    },
+    {
+      "id": "c-e0c3c11f20a336a2",
+      "family": "rule/in-word-breaks",
+      "metric": "widths",
+      "status": "not-applicable",
+      "reason": "breaks differ",
+      "detail": null,
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": false,
+      "coveringGaps": [],
+      "residual": null,
+      "attribution": "widths isn't scored where breaks fail: the case's breaks pair is lost in this record, with its own attribution."
+    },
+    {
+      "id": "c-e289d97d4651f2ab",
+      "family": "rule/hyphen-glyph",
+      "metric": "breaks",
+      "status": "fail",
+      "reason": "code point on other lines",
+      "detail": "code point 9 \"c\": native lines 1; expected 0",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "glyph-clusters",
+        "in-word-prefix",
+        "soft-hyphen-shaping",
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Passes with the lab's font facts in this evaluation's facts runs; the seed it is compared with was recorded with them. With no supplied facts `ligatures` and `coverage` and `pairKerning` and `pairKerning` (which glyph of a kerned pair carries the adjustment) isn't known and no Canvas check gives it (research/FACTS-FREE.md; CHARTER.md \"Facts no check answers\"); the failing line reports glyph-clusters+in-word-prefix+soft-hyphen-shaping+unsafe-to-break."
+    },
+    {
+      "id": "c-e289d97d4651f2ab",
+      "family": "rule/hyphen-glyph",
+      "metric": "widths",
+      "status": "not-applicable",
+      "reason": "breaks differ",
+      "detail": null,
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": false,
+      "coveringGaps": [],
+      "residual": null,
+      "attribution": "widths isn't scored where breaks fail: the case's breaks pair is lost in this record, with its own attribution."
+    },
+    {
+      "id": "c-e68bb1d664536e95",
+      "family": "rule/following-space",
+      "metric": "widths",
+      "status": "fail",
+      "reason": "width differs under a named gap",
+      "detail": "engine line 1: width 6240; native node rects span [-6160, 128]; limited by glyph-clusters",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Passes with the lab's font facts in this evaluation's facts runs; the seed it is compared with was recorded with them. With no supplied facts `pairKerning` (which glyph of a kerned pair carries the adjustment) isn't known and no Canvas check gives it (research/FACTS-FREE.md; CHARTER.md \"Facts no check answers\"); the failing line reports unsafe-to-break."
+    },
+    {
+      "id": "c-e68bb1d664536e95",
+      "family": "rule/following-space",
+      "metric": "painter",
+      "status": "fail",
+      "reason": "painted extent differs",
+      "detail": "engine line 1: width 6240; painted node rects span [-6160, 128]",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Follows the prediction pair lost on the same case."
+    },
+    {
+      "id": "c-ec7d1808d4d2e518",
+      "family": "rule/hyphen-glyph",
+      "metric": "widths",
+      "status": "fail",
+      "reason": "width differs under a named gap",
+      "detail": "engine line 1: width 5920; native node rects span [0, 5938]; limited by glyph-clusters",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "glyph-clusters",
+        "soft-hyphen-shaping",
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Passes with the lab's font facts in this evaluation's facts runs; the seed it is compared with was recorded with them. With no supplied facts `ligatures` and `coverage` and `pairKerning` (which glyph of a kerned pair carries the adjustment) isn't known and no Canvas check gives it (research/FACTS-FREE.md; CHARTER.md \"Facts no check answers\"); the failing line reports glyph-clusters+soft-hyphen-shaping+unsafe-to-break."
+    },
+    {
+      "id": "c-efd858f4e4f73f59",
+      "family": "rule/hyphen-glyph",
+      "metric": "breaks",
+      "status": "fail",
+      "reason": "code point on other lines",
+      "detail": "code point 9 \"c\": native lines 1; expected 0",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "glyph-clusters",
+        "in-word-prefix",
+        "soft-hyphen-shaping",
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Passes with the lab's font facts in this evaluation's facts runs; the seed it is compared with was recorded with them. With no supplied facts `ligatures` and `coverage` and `pairKerning` and `pairKerning` (which glyph of a kerned pair carries the adjustment) isn't known and no Canvas check gives it (research/FACTS-FREE.md; CHARTER.md \"Facts no check answers\"); the failing line reports glyph-clusters+in-word-prefix+soft-hyphen-shaping+unsafe-to-break."
+    },
+    {
+      "id": "c-efd858f4e4f73f59",
+      "family": "rule/hyphen-glyph",
+      "metric": "widths",
+      "status": "not-applicable",
+      "reason": "breaks differ",
+      "detail": null,
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": false,
+      "coveringGaps": [],
+      "residual": null,
+      "attribution": "widths isn't scored where breaks fail: the case's breaks pair is lost in this record, with its own attribution."
+    },
+    {
+      "id": "c-efd90aa17d2b558d",
+      "family": "rule/in-word-breaks",
+      "metric": "breaks",
+      "status": "fail",
+      "reason": "code point on other lines",
+      "detail": "code point 3 \"V\": native lines 2; expected 1",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "glyph-clusters",
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Passes with the lab's font facts in this evaluation's facts runs; the seed it is compared with was recorded with them. With no supplied facts `ligatures` and `coverage` and `pairKerning` (which glyph of a kerned pair carries the adjustment) isn't known and no Canvas check gives it (research/FACTS-FREE.md; CHARTER.md \"Facts no check answers\"); the failing line reports glyph-clusters+unsafe-to-break."
+    },
+    {
+      "id": "c-efd90aa17d2b558d",
+      "family": "rule/in-word-breaks",
+      "metric": "widths",
+      "status": "not-applicable",
+      "reason": "breaks differ",
+      "detail": null,
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": false,
+      "coveringGaps": [],
+      "residual": null,
+      "attribution": "widths isn't scored where breaks fail: the case's breaks pair is lost in this record, with its own attribution."
+    },
+    {
+      "id": "c-f4da36bea5f448b9",
+      "family": "rule/following-space",
+      "metric": "lineCount",
+      "status": "fail",
+      "reason": "line count differs",
+      "detail": "native 3, predicted 2",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Passes with the lab's font facts in this evaluation's facts runs; the seed it is compared with was recorded with them. With no supplied facts `pairKerning` (which glyph of a kerned pair carries the adjustment) isn't known and no Canvas check gives it (research/FACTS-FREE.md; CHARTER.md \"Facts no check answers\"); the failing line reports unsafe-to-break."
+    },
+    {
+      "id": "c-f4da36bea5f448b9",
+      "family": "rule/following-space",
+      "metric": "breaks",
+      "status": "fail",
+      "reason": "line count differs",
+      "detail": "native 3, predicted 2",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Passes with the lab's font facts in this evaluation's facts runs; the seed it is compared with was recorded with them. With no supplied facts `pairKerning` (which glyph of a kerned pair carries the adjustment) isn't known and no Canvas check gives it (research/FACTS-FREE.md; CHARTER.md \"Facts no check answers\"); the failing line reports unsafe-to-break."
+    },
+    {
+      "id": "c-f4da36bea5f448b9",
+      "family": "rule/following-space",
+      "metric": "widths",
+      "status": "not-applicable",
+      "reason": "breaks differ",
+      "detail": null,
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": false,
+      "coveringGaps": [],
+      "residual": null,
+      "attribution": "widths isn't scored where breaks fail: the case's breaks pair is lost in this record, with its own attribution."
+    },
+    {
+      "id": "c-f4da36bea5f448b9",
+      "family": "rule/following-space",
+      "metric": "painter",
+      "status": "fail",
+      "reason": "painted line wraps",
+      "detail": "engine line 0 painted on 2 lines",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Follows the prediction pair lost on the same case."
+    },
+    {
+      "id": "c-f5c6c0348194a32f",
+      "family": "rule/hyphen-glyph",
+      "metric": "widths",
+      "status": "fail",
+      "reason": "width differs under a named gap",
+      "detail": "engine line 1: width 5920; native node rects span [-5810, 128]; limited by glyph-clusters",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "glyph-clusters",
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Passes with the lab's font facts in this evaluation's facts runs; the seed it is compared with was recorded with them. With no supplied facts `ligatures` and `coverage` and `pairKerning` (which glyph of a kerned pair carries the adjustment) isn't known and no Canvas check gives it (research/FACTS-FREE.md; CHARTER.md \"Facts no check answers\"); the failing line reports glyph-clusters+unsafe-to-break."
+    },
+    {
+      "id": "c-fbc740bf9f42e569",
+      "family": "rule/following-space",
+      "metric": "lineCount",
+      "status": "fail",
+      "reason": "line count differs",
+      "detail": "native 3, predicted 2",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Passes with the lab's font facts in this evaluation's facts runs; the seed it is compared with was recorded with them. With no supplied facts `pairKerning` (which glyph of a kerned pair carries the adjustment) isn't known and no Canvas check gives it (research/FACTS-FREE.md; CHARTER.md \"Facts no check answers\"); the failing line reports unsafe-to-break."
+    },
+    {
+      "id": "c-fbc740bf9f42e569",
+      "family": "rule/following-space",
+      "metric": "breaks",
+      "status": "fail",
+      "reason": "line count differs",
+      "detail": "native 3, predicted 2",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Passes with the lab's font facts in this evaluation's facts runs; the seed it is compared with was recorded with them. With no supplied facts `pairKerning` (which glyph of a kerned pair carries the adjustment) isn't known and no Canvas check gives it (research/FACTS-FREE.md; CHARTER.md \"Facts no check answers\"); the failing line reports unsafe-to-break."
+    },
+    {
+      "id": "c-fbc740bf9f42e569",
+      "family": "rule/following-space",
+      "metric": "widths",
+      "status": "not-applicable",
+      "reason": "breaks differ",
+      "detail": null,
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": false,
+      "coveringGaps": [],
+      "residual": null,
+      "attribution": "widths isn't scored where breaks fail: the case's breaks pair is lost in this record, with its own attribution."
+    },
+    {
+      "id": "c-fbc740bf9f42e569",
+      "family": "rule/following-space",
+      "metric": "painter",
+      "status": "fail",
+      "reason": "painted line wraps",
+      "detail": "engine line 0 painted on 2 lines",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Follows the prediction pair lost on the same case."
+    },
+    {
+      "id": "c-fe2ea78477faaa6c",
+      "family": "rule/in-word-breaks",
+      "metric": "lineCount",
+      "status": "fail",
+      "reason": "line count differs",
+      "detail": "native 3, predicted 2",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Passes with the lab's font facts in this evaluation's facts runs; the seed it is compared with was recorded with them. With no supplied facts `pairKerning` (which glyph of a kerned pair carries the adjustment) isn't known and no Canvas check gives it (research/FACTS-FREE.md; CHARTER.md \"Facts no check answers\"); the failing line reports unsafe-to-break."
+    },
+    {
+      "id": "c-fe2ea78477faaa6c",
+      "family": "rule/in-word-breaks",
+      "metric": "breaks",
+      "status": "fail",
+      "reason": "line count differs",
+      "detail": "native 3, predicted 2",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Passes with the lab's font facts in this evaluation's facts runs; the seed it is compared with was recorded with them. With no supplied facts `pairKerning` (which glyph of a kerned pair carries the adjustment) isn't known and no Canvas check gives it (research/FACTS-FREE.md; CHARTER.md \"Facts no check answers\"); the failing line reports unsafe-to-break."
+    },
+    {
+      "id": "c-fe2ea78477faaa6c",
+      "family": "rule/in-word-breaks",
+      "metric": "widths",
+      "status": "not-applicable",
+      "reason": "breaks differ",
+      "detail": null,
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": false,
+      "coveringGaps": [],
+      "residual": null,
+      "attribution": "widths isn't scored where breaks fail: the case's breaks pair is lost in this record, with its own attribution."
+    },
+    {
+      "id": "c-fea151d62c844838",
+      "family": "rule/hyphen-glyph",
+      "metric": "widths",
+      "status": "fail",
+      "reason": "width differs under a named gap",
+      "detail": "engine line 0: width 8688; native node rects span [-1, 8706]; limited by glyph-clusters",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "glyph-clusters",
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Passes with the lab's font facts in this evaluation's facts runs; the seed it is compared with was recorded with them. With no supplied facts `ligatures` and `coverage` and `pairKerning` (which glyph of a kerned pair carries the adjustment) isn't known and no Canvas check gives it (research/FACTS-FREE.md; CHARTER.md \"Facts no check answers\"); the failing line reports glyph-clusters+unsafe-to-break."
+    },
+    {
+      "id": "c-ff2bbc659d2182f8",
+      "family": "rule/following-space",
+      "metric": "widths",
+      "status": "fail",
+      "reason": "width differs under a named gap",
+      "detail": "engine line 0: width 9952; native node rects span [-1, 9999]; limited by glyph-clusters",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Passes with the lab's font facts in this evaluation's facts runs; the seed it is compared with was recorded with them. With no supplied facts `pairKerning` (which glyph of a kerned pair carries the adjustment) isn't known and no Canvas check gives it (research/FACTS-FREE.md; CHARTER.md \"Facts no check answers\"); the failing line reports unsafe-to-break."
+    },
+    {
+      "id": "c-ff2bbc659d2182f8",
+      "family": "rule/following-space",
+      "metric": "painter",
+      "status": "fail",
+      "reason": "painted extent differs",
+      "detail": "engine line 0: width 9952; painted node rects span [-1, 9999]",
+      "run": ".artifacts/ceiling-20260917/freeze-line/gates/derived/no-facts/chrome/families/final/file/chrome-per-case.ndjson",
+      "covered": true,
+      "coveringGaps": [
+        "unsafe-to-break"
+      ],
+      "residual": null,
+      "attribution": "Follows the prediction pair lost on the same case."
+    }
+  ],
+  "leftThroughHistory": [],
+  "leftThroughProtocol": [],
+  "leftWithTheirCase": [],
+  "gained": [
+    [
+      "c-00150d79de9c1927",
+      "widths"
+    ],
+    [
+      "c-00150d79de9c1927",
+      "painter"
+    ],
+    [
+      "c-0306e405706818cd",
+      "painter"
+    ],
+    [
+      "c-034df58ecbe6bbcd",
+      "painter"
+    ],
+    [
+      "c-08078bb658684605",
+      "widths"
+    ],
+    [
+      "c-08078bb658684605",
+      "painter"
+    ],
+    [
+      "c-0b3e4f58ee2acdcd",
+      "painter"
+    ],
+    [
+      "c-0c565437ddc97aaa",
+      "painter"
+    ],
+    [
+      "c-0d7c015fc836df9f",
+      "lineCount"
+    ],
+    [
+      "c-0d7c015fc836df9f",
+      "breaks"
+    ],
+    [
+      "c-0d7c015fc836df9f",
+      "widths"
+    ],
+    [
+      "c-0d7c015fc836df9f",
+      "painter"
+    ],
+    [
+      "c-0df05aba12249d8f",
+      "widths"
+    ],
+    [
+      "c-0df05aba12249d8f",
+      "painter"
+    ],
+    [
+      "c-0e479ae8e24d56a8",
+      "painter"
+    ],
+    [
+      "c-0f2dad79c013acc1",
+      "widths"
+    ],
+    [
+      "c-0f2dad79c013acc1",
+      "painter"
+    ],
+    [
+      "c-1101f80c194696ce",
+      "widths"
+    ],
+    [
+      "c-1101f80c194696ce",
+      "painter"
+    ],
+    [
+      "c-12cc67605b615fde",
+      "widths"
+    ],
+    [
+      "c-12cc67605b615fde",
+      "painter"
+    ],
+    [
+      "c-148184eacca3b855",
+      "widths"
+    ],
+    [
+      "c-148184eacca3b855",
+      "painter"
+    ],
+    [
+      "c-14cadd4ee355ce86",
+      "breaks"
+    ],
+    [
+      "c-14cadd4ee355ce86",
+      "widths"
+    ],
+    [
+      "c-14cadd4ee355ce86",
+      "painter"
+    ],
+    [
+      "c-1592dbfa3002b7f7",
+      "widths"
+    ],
+    [
+      "c-1592dbfa3002b7f7",
+      "painter"
+    ],
+    [
+      "c-18f3ea78a0508f44",
+      "lineCount"
+    ],
+    [
+      "c-18f3ea78a0508f44",
+      "breaks"
+    ],
+    [
+      "c-18f3ea78a0508f44",
+      "widths"
+    ],
+    [
+      "c-18f3ea78a0508f44",
+      "painter"
+    ],
+    [
+      "c-1a2b12157c02db6c",
+      "painter"
+    ],
+    [
+      "c-1a70e27e523a7c56",
+      "painter"
+    ],
+    [
+      "c-1af3f1bacebc954a",
+      "widths"
+    ],
+    [
+      "c-1af3f1bacebc954a",
+      "painter"
+    ],
+    [
+      "c-1f1dda88115b6f3e",
+      "painter"
+    ],
+    [
+      "c-20400897488d22f6",
+      "painter"
+    ],
+    [
+      "c-22d750d6a8b3a85f",
+      "painter"
+    ],
+    [
+      "c-2306259bf821f3c7",
+      "painter"
+    ],
+    [
+      "c-2359e47a1fcf306e",
+      "painter"
+    ],
+    [
+      "c-237b8021dc662248",
+      "breaks"
+    ],
+    [
+      "c-237b8021dc662248",
+      "widths"
+    ],
+    [
+      "c-237b8021dc662248",
+      "painter"
+    ],
+    [
+      "c-2462ea3a0937436b",
+      "painter"
+    ],
+    [
+      "c-25352945eed245ef",
+      "painter"
+    ],
+    [
+      "c-25d4223274105a92",
+      "painter"
+    ],
+    [
+      "c-28270409563c11c7",
+      "widths"
+    ],
+    [
+      "c-28270409563c11c7",
+      "painter"
+    ],
+    [
+      "c-28d778f7926ba5ae",
+      "painter"
+    ],
+    [
+      "c-2ae682785714e4f1",
+      "painter"
+    ],
+    [
+      "c-2cd1688080aa20f7",
+      "widths"
+    ],
+    [
+      "c-2cd1688080aa20f7",
+      "painter"
+    ],
+    [
+      "c-33fcb349248d219b",
+      "painter"
+    ],
+    [
+      "c-3570777062a0647b",
+      "painter"
+    ],
+    [
+      "c-360a23ce00178112",
+      "lineCount"
+    ],
+    [
+      "c-360a23ce00178112",
+      "breaks"
+    ],
+    [
+      "c-360a23ce00178112",
+      "widths"
+    ],
+    [
+      "c-360a23ce00178112",
+      "painter"
+    ],
+    [
+      "c-3839151afc30acdc",
+      "painter"
+    ],
+    [
+      "c-3a7880ee3a94fdbb",
+      "painter"
+    ],
+    [
+      "c-3bd7205be3b0c9a5",
+      "painter"
+    ],
+    [
+      "c-3d6b03480a0d4abf",
+      "painter"
+    ],
+    [
+      "c-3e413f7ca38006f1",
+      "widths"
+    ],
+    [
+      "c-3e413f7ca38006f1",
+      "painter"
+    ],
+    [
+      "c-3ee6b27cf4436970",
+      "widths"
+    ],
+    [
+      "c-3ee6b27cf4436970",
+      "painter"
+    ],
+    [
+      "c-40fe4f8b44bc13ab",
+      "widths"
+    ],
+    [
+      "c-40fe4f8b44bc13ab",
+      "painter"
+    ],
+    [
+      "c-41d7e3c9795e1e5e",
+      "breaks"
+    ],
+    [
+      "c-41d7e3c9795e1e5e",
+      "widths"
+    ],
+    [
+      "c-41d7e3c9795e1e5e",
+      "painter"
+    ],
+    [
+      "c-42c325488cce1e7a",
+      "painter"
+    ],
+    [
+      "c-439fa478b8458aee",
+      "lineCount"
+    ],
+    [
+      "c-439fa478b8458aee",
+      "breaks"
+    ],
+    [
+      "c-439fa478b8458aee",
+      "widths"
+    ],
+    [
+      "c-439fa478b8458aee",
+      "painter"
+    ],
+    [
+      "c-48a4274fa192238d",
+      "breaks"
+    ],
+    [
+      "c-48a4274fa192238d",
+      "widths"
+    ],
+    [
+      "c-48a4274fa192238d",
+      "painter"
+    ],
+    [
+      "c-48fbcd265d1e0711",
+      "painter"
+    ],
+    [
+      "c-49766a3b30a55d40",
+      "widths"
+    ],
+    [
+      "c-49766a3b30a55d40",
+      "painter"
+    ],
+    [
+      "c-4a3a540de37c03e2",
+      "painter"
+    ],
+    [
+      "c-4ab1d8fd660bea8a",
+      "breaks"
+    ],
+    [
+      "c-4ab1d8fd660bea8a",
+      "widths"
+    ],
+    [
+      "c-4ab1d8fd660bea8a",
+      "painter"
+    ],
+    [
+      "c-4b51df480e20bc33",
+      "painter"
+    ],
+    [
+      "c-4c288633cdc3e714",
+      "breaks"
+    ],
+    [
+      "c-4c288633cdc3e714",
+      "widths"
+    ],
+    [
+      "c-4c288633cdc3e714",
+      "painter"
+    ],
+    [
+      "c-4ca6684fd55f0c8a",
+      "widths"
+    ],
+    [
+      "c-4ca6684fd55f0c8a",
+      "painter"
+    ],
+    [
+      "c-4ffb817a800f7a05",
+      "widths"
+    ],
+    [
+      "c-4ffb817a800f7a05",
+      "painter"
+    ],
+    [
+      "c-53a92b8644cfa5db",
+      "breaks"
+    ],
+    [
+      "c-53a92b8644cfa5db",
+      "widths"
+    ],
+    [
+      "c-53a92b8644cfa5db",
+      "painter"
+    ],
+    [
+      "c-53aa3a50bc70b73d",
+      "painter"
+    ],
+    [
+      "c-5439104d2c0d5557",
+      "widths"
+    ],
+    [
+      "c-5439104d2c0d5557",
+      "painter"
+    ],
+    [
+      "c-54671d4737276d47",
+      "painter"
+    ],
+    [
+      "c-559f558bbb18ce97",
+      "widths"
+    ],
+    [
+      "c-559f558bbb18ce97",
+      "painter"
+    ],
+    [
+      "c-56fee67ce0bc7816",
+      "breaks"
+    ],
+    [
+      "c-56fee67ce0bc7816",
+      "widths"
+    ],
+    [
+      "c-56fee67ce0bc7816",
+      "painter"
+    ],
+    [
+      "c-573993525cb3a918",
+      "painter"
+    ],
+    [
+      "c-57a0b3d86e59cae4",
+      "painter"
+    ],
+    [
+      "c-584207d4887398f1",
+      "painter"
+    ],
+    [
+      "c-5c8c46eddee94ed4",
+      "painter"
+    ],
+    [
+      "c-5e68fe39bba24f07",
+      "widths"
+    ],
+    [
+      "c-5e68fe39bba24f07",
+      "painter"
+    ],
+    [
+      "c-60fac44f7f97ccd6",
+      "painter"
+    ],
+    [
+      "c-616b52e863f50596",
+      "widths"
+    ],
+    [
+      "c-616b52e863f50596",
+      "painter"
+    ],
+    [
+      "c-6229ff4e0cb3c282",
+      "widths"
+    ],
+    [
+      "c-6229ff4e0cb3c282",
+      "painter"
+    ],
+    [
+      "c-62396fec23fb9715",
+      "widths"
+    ],
+    [
+      "c-62396fec23fb9715",
+      "painter"
+    ],
+    [
+      "c-625ab27ebd50e713",
+      "painter"
+    ],
+    [
+      "c-62fc0fd0b00c139a",
+      "painter"
+    ],
+    [
+      "c-63b99fcde18bc696",
+      "lineCount"
+    ],
+    [
+      "c-63b99fcde18bc696",
+      "breaks"
+    ],
+    [
+      "c-63b99fcde18bc696",
+      "widths"
+    ],
+    [
+      "c-63b99fcde18bc696",
+      "painter"
+    ],
+    [
+      "c-67a47ca6853b71b7",
+      "painter"
+    ],
+    [
+      "c-67e7c46ce91cd607",
+      "painter"
+    ],
+    [
+      "c-680f663f8cde36c1",
+      "painter"
+    ],
+    [
+      "c-68c791ab75687099",
+      "painter"
+    ],
+    [
+      "c-695af9f8ee0d4fa6",
+      "painter"
+    ],
+    [
+      "c-6d6e59456d5187b9",
+      "painter"
+    ],
+    [
+      "c-6df08019d2b89b35",
+      "breaks"
+    ],
+    [
+      "c-6df08019d2b89b35",
+      "widths"
+    ],
+    [
+      "c-6df08019d2b89b35",
+      "painter"
+    ],
+    [
+      "c-6eed8b9c9e264f05",
+      "painter"
+    ],
+    [
+      "c-704e45c5234a7493",
+      "widths"
+    ],
+    [
+      "c-704e45c5234a7493",
+      "painter"
+    ],
+    [
+      "c-73c5221d7dd03a98",
+      "painter"
+    ],
+    [
+      "c-75d19087355b86af",
+      "painter"
+    ],
+    [
+      "c-775eca32b64598f9",
+      "painter"
+    ],
+    [
+      "c-777ead843442dd45",
+      "painter"
+    ],
+    [
+      "c-78f39e510884246d",
+      "lineCount"
+    ],
+    [
+      "c-78f39e510884246d",
+      "breaks"
+    ],
+    [
+      "c-78f39e510884246d",
+      "widths"
+    ],
+    [
+      "c-78f39e510884246d",
+      "painter"
+    ],
+    [
+      "c-7a918477479f1c3a",
+      "painter"
+    ],
+    [
+      "c-7ae50b637838e0e8",
+      "breaks"
+    ],
+    [
+      "c-7ae50b637838e0e8",
+      "widths"
+    ],
+    [
+      "c-7ae50b637838e0e8",
+      "painter"
+    ],
+    [
+      "c-7b848a8963f93320",
+      "painter"
+    ],
+    [
+      "c-7ba20e4f6e595e9b",
+      "painter"
+    ],
+    [
+      "c-8126a42d9617b9d6",
+      "widths"
+    ],
+    [
+      "c-8126a42d9617b9d6",
+      "painter"
+    ],
+    [
+      "c-831d0ca91826da1a",
+      "painter"
+    ],
+    [
+      "c-83588136911301c9",
+      "painter"
+    ],
+    [
+      "c-835b63956e628b98",
+      "breaks"
+    ],
+    [
+      "c-835b63956e628b98",
+      "widths"
+    ],
+    [
+      "c-835b63956e628b98",
+      "painter"
+    ],
+    [
+      "c-8387fe7646376402",
+      "lineCount"
+    ],
+    [
+      "c-8387fe7646376402",
+      "breaks"
+    ],
+    [
+      "c-8387fe7646376402",
+      "widths"
+    ],
+    [
+      "c-8387fe7646376402",
+      "painter"
+    ],
+    [
+      "c-83a6577b8d65ab4d",
+      "widths"
+    ],
+    [
+      "c-83a6577b8d65ab4d",
+      "painter"
+    ],
+    [
+      "c-8410ff70a37dbb56",
+      "widths"
+    ],
+    [
+      "c-8410ff70a37dbb56",
+      "painter"
+    ],
+    [
+      "c-8587c8131b82d868",
+      "painter"
+    ],
+    [
+      "c-87eceb99cf4b1ef8",
+      "painter"
+    ],
+    [
+      "c-880248711946651e",
+      "breaks"
+    ],
+    [
+      "c-880248711946651e",
+      "widths"
+    ],
+    [
+      "c-880248711946651e",
+      "painter"
+    ],
+    [
+      "c-89d05327ca6d6cb2",
+      "painter"
+    ],
+    [
+      "c-8bfaff376da8a25b",
+      "painter"
+    ],
+    [
+      "c-8c1e58c9bfc580b4",
+      "painter"
+    ],
+    [
+      "c-8d49d65640d9f4d1",
+      "painter"
+    ],
+    [
+      "c-901bac1ff114ed50",
+      "widths"
+    ],
+    [
+      "c-901bac1ff114ed50",
+      "painter"
+    ],
+    [
+      "c-910e7e330d06a468",
+      "breaks"
+    ],
+    [
+      "c-910e7e330d06a468",
+      "widths"
+    ],
+    [
+      "c-910e7e330d06a468",
+      "painter"
+    ],
+    [
+      "c-915dce30e2e8b9f1",
+      "widths"
+    ],
+    [
+      "c-915dce30e2e8b9f1",
+      "painter"
+    ],
+    [
+      "c-9174e864f6a06ed3",
+      "painter"
+    ],
+    [
+      "c-92358aea6b894b58",
+      "painter"
+    ],
+    [
+      "c-933dc4cfa5fd537c",
+      "painter"
+    ],
+    [
+      "c-951ad43ed7cf5e5a",
+      "painter"
+    ],
+    [
+      "c-997a1608f5dcfb87",
+      "painter"
+    ],
+    [
+      "c-99b892a7737df82b",
+      "painter"
+    ],
+    [
+      "c-9f69d48f6e6b7a9b",
+      "breaks"
+    ],
+    [
+      "c-9f69d48f6e6b7a9b",
+      "widths"
+    ],
+    [
+      "c-9f69d48f6e6b7a9b",
+      "painter"
+    ],
+    [
+      "c-a0fd5b260bcf513e",
+      "painter"
+    ],
+    [
+      "c-a430441cf53a5a7d",
+      "widths"
+    ],
+    [
+      "c-a430441cf53a5a7d",
+      "painter"
+    ],
+    [
+      "c-a6e1772bfa53e6ab",
+      "painter"
+    ],
+    [
+      "c-aabc7ff327b3b3d3",
+      "widths"
+    ],
+    [
+      "c-aabc7ff327b3b3d3",
+      "painter"
+    ],
+    [
+      "c-ad2eda69ebcebccf",
+      "painter"
+    ],
+    [
+      "c-b14b523585f44b7d",
+      "painter"
+    ],
+    [
+      "c-b21532b5a90446c0",
+      "painter"
+    ],
+    [
+      "c-b4e30571a78bcff2",
+      "painter"
+    ],
+    [
+      "c-b4e8b45c9237cb14",
+      "painter"
+    ],
+    [
+      "c-b80fd164c6590699",
+      "painter"
+    ],
+    [
+      "c-bb1332ec152fe5dc",
+      "painter"
+    ],
+    [
+      "c-bbbc32cbbe4464c4",
+      "painter"
+    ],
+    [
+      "c-bbefb3f51e9c8917",
+      "widths"
+    ],
+    [
+      "c-bbefb3f51e9c8917",
+      "painter"
+    ],
+    [
+      "c-bcc0678f2058b0f6",
+      "painter"
+    ],
+    [
+      "c-bd208a364fb7692d",
+      "painter"
+    ],
+    [
+      "c-bdfdee901309a92b",
+      "breaks"
+    ],
+    [
+      "c-bdfdee901309a92b",
+      "widths"
+    ],
+    [
+      "c-bdfdee901309a92b",
+      "painter"
+    ],
+    [
+      "c-c31f9386f4898d5b",
+      "painter"
+    ],
+    [
+      "c-c37ea54cbdfde5d2",
+      "painter"
+    ],
+    [
+      "c-c547cbff0d6c0851",
+      "widths"
+    ],
+    [
+      "c-c547cbff0d6c0851",
+      "painter"
+    ],
+    [
+      "c-cae0d0b35b8434ae",
+      "painter"
+    ],
+    [
+      "c-ce406acd5ddebfcc",
+      "widths"
+    ],
+    [
+      "c-ce406acd5ddebfcc",
+      "painter"
+    ],
+    [
+      "c-cfcd099f0a941957",
+      "painter"
+    ],
+    [
+      "c-d04583c156b78f2a",
+      "painter"
+    ],
+    [
+      "c-d316ce3cf48f1b5b",
+      "widths"
+    ],
+    [
+      "c-d316ce3cf48f1b5b",
+      "painter"
+    ],
+    [
+      "c-d3a55593af33aef7",
+      "widths"
+    ],
+    [
+      "c-d3a55593af33aef7",
+      "painter"
+    ],
+    [
+      "c-db9275eb10c449b0",
+      "lineCount"
+    ],
+    [
+      "c-db9275eb10c449b0",
+      "breaks"
+    ],
+    [
+      "c-db9275eb10c449b0",
+      "widths"
+    ],
+    [
+      "c-db9275eb10c449b0",
+      "painter"
+    ],
+    [
+      "c-dc5ace3f0039e100",
+      "painter"
+    ],
+    [
+      "c-deb1a2222ce778fa",
+      "painter"
+    ],
+    [
+      "c-df2f276c22d2a570",
+      "painter"
+    ],
+    [
+      "c-e17209d141030b93",
+      "breaks"
+    ],
+    [
+      "c-e17209d141030b93",
+      "widths"
+    ],
+    [
+      "c-e17209d141030b93",
+      "painter"
+    ],
+    [
+      "c-e56df00bf3514cb5",
+      "painter"
+    ],
+    [
+      "c-e6a2bae2569f9fac",
+      "painter"
+    ],
+    [
+      "c-e6bf0550f0d7ff88",
+      "painter"
+    ],
+    [
+      "c-e8acba35ec6d5795",
+      "painter"
+    ],
+    [
+      "c-eb00bb6480d06c57",
+      "painter"
+    ],
+    [
+      "c-eb0e3483ead27f43",
+      "painter"
+    ],
+    [
+      "c-eed753a88cb4c3d1",
+      "painter"
+    ],
+    [
+      "c-eeed6152201cc35d",
+      "painter"
+    ],
+    [
+      "c-effdf246ee46f8dd",
+      "widths"
+    ],
+    [
+      "c-effdf246ee46f8dd",
+      "painter"
+    ],
+    [
+      "c-f0151bc3401d8684",
+      "painter"
+    ],
+    [
+      "c-f1911464e78c8ced",
+      "painter"
+    ],
+    [
+      "c-f3b30fb17f719011",
+      "painter"
+    ],
+    [
+      "c-f6aa5e4f74502fb2",
+      "painter"
+    ],
+    [
+      "c-f89c317859b56901",
+      "widths"
+    ],
+    [
+      "c-f89c317859b56901",
+      "painter"
+    ],
+    [
+      "c-fa340f611a4f11f0",
+      "painter"
+    ],
+    [
+      "c-fa5e30af319660fb",
+      "painter"
+    ],
+    [
+      "c-faa2df3061a0e266",
+      "widths"
+    ],
+    [
+      "c-faa2df3061a0e266",
+      "painter"
+    ],
+    [
+      "c-fd33490321b1aa1a",
+      "painter"
+    ],
+    [
+      "c-fdd9f3b79100f9b3",
+      "widths"
+    ],
+    [
+      "c-fdd9f3b79100f9b3",
+      "painter"
+    ]
+  ],
+  "casesOnlyBefore": 0,
+  "casesOnlyAfter": 178,
+  "casesChanged": true,
+  "attributionsFrom": "rebuild/tests/baselines/staged-round4-no-facts/chrome-153.0.8010.50.seed-record.json as the round 4 evaluation staged it (2fd9f15), pair by pair: the same (case id, metric) lost there with the same status; .artifacts/ceiling-20260917/evaluate-r4/tools/attribute-records.py wrote them by rule",
+  "adopted": "rebuild/tests/baselines/no-facts/chrome-153.0.8010.50.json, 2026-09-18 at the correctness line, after research/ROUND4-CRITIC.md's verdict; `staged` is where the seed command wrote it"
+}
