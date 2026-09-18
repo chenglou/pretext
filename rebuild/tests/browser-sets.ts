@@ -17,13 +17,16 @@
 // 3. Scores every part with lab/score.ts, the forward order against the reverse one under --both-orders.
 // 4. Builds the run's ledger (ledger.ts) in <out>/ledger. A forward-only run takes the reference's history-dependent cases.
 // 5. With a reference ledger (default .artifacts/tests/reference/<browser>-<config>/ledger when it exists): prints the
-//    status transitions, grouped by family and condition, and the ones on known-tail items (known-tail.ts). A reference of
+//    status transitions of the four metrics and of the exact-value status, grouped by family and condition, and the ones on
+//    known-tail items (known-tail.ts). A reference of
 //    another scorer, configuration, languages or protocol is refused by name; --allow=scorer (or another name, as
 //    ledger.ts transitions takes them) reads the transitions across that difference knowingly.
 // 6. With a baseline (default rebuild/tests/baselines/sets/<browser>-<engine build>-<config>.json when it exists): checks
 //    the runs against it through lab/gate.ts. --seed --staging=<dir> stages a new seed with its seed record instead; like
 //    every seed it is never written over the baseline it replaces (lab README, "Seeds go to a staging folder").
-// Exit 1 when the gate loses a pair or a pass became a failure; exit 2 when a job failed or results aren't comparable.
+// Exit 1 when the gate loses a pair, a pass became a failure, or a case went from exact to not exact or holds more differing
+// predicted values than in the reference (ledger.ts, the exact-value status); exit 2 when a job failed or results aren't
+// comparable.
 //
 // --measure-first runs every job under run.ts --measure-first (lab README "Measure first"): per document every case is
 // predicted before the document's first native layout, as an application measures. It is another protocol, recorded in the
@@ -40,7 +43,7 @@ import { appliesTo, readCaseLines, writeCaseLines } from '../lab/cases/parts.ts'
 import { checkRuns, formatBaseline, parseBaseline, readRun, runProblems, seedBaseline, seedRecord, stagedPath, type Engine } from '../lab/gate.ts'
 import { existingRows } from '../lab/rows.ts'
 import { readKnownTail } from './known-tail.ts'
-import { buildLedger, printTransitions, readLedger, transitionsBetween, writeLedger, METRIC_NAMES, type SetsRun } from './ledger.ts'
+import { buildLedger, printCounts, printTransitions, readLedger, transitionsBetween, writeLedger, type SetsRun } from './ledger.ts'
 import { CONFIGS, PREDICTORS, REPO, TIER_BROWSERS, partFiles, selectSets, setProtocol, type Config, type TestSet, type TierBrowser } from './sets.ts'
 
 const LOCK = join(REPO, '.artifacts/session/with-browser-lock.py')
@@ -227,7 +230,7 @@ const ledgerDir = join(outDir, 'ledger')
 const ledger = buildLedger(outDir, reference === null ? null : referenceDir)
 writeLedger(ledgerDir, ledger)
 log(`ledger ${relative(REPO, ledgerDir)}: ${ledger.entries.length} cases, scorer ${ledger.header.scorer}, ${ledger.header.bundles.length} library bundle${ledger.header.bundles.length === 1 ? '' : 's'}`)
-for (const metric of METRIC_NAMES) console.log(`  ${metric.padEnd(9)} ${Object.entries(ledger.header.counts[metric]).sort((a, b) => (a[0] < b[0] ? -1 : 1)).map(([kind, n]) => `${kind} ${n}`).join(', ')}`)
+printCounts(ledger.header)
 let exit = 0
 if (ledger.header.bundles.length > 1) {
   console.error('[browser-sets] the jobs ran more than one library bundle: the library changed during the run, so its rows describe no single library')
@@ -240,7 +243,7 @@ if (reference !== null) {
   writeFileSync(join(outDir, 'transitions.json'), `${JSON.stringify(report, null, 2)}\n`)
   printTransitions(report)
   if (report.comparable.length > 0) exit = 2
-  else if (report.blocking > 0) exit = Math.max(exit, 1)
+  else if (report.blocking > 0 || report.exactBlocking > 0) exit = Math.max(exit, 1)
 }
 
 // ---- 6. The gate ----

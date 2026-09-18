@@ -2208,21 +2208,21 @@
       "id": "blink/font-check-contexts-share-the-dom-font",
       "engine": "blink",
       "kind": "open rows",
-      "title": "The font checks' contexts (text-rendering auto) share a platform font with DOM text of the same zoomed size, so check 4 depends on who came first",
+      "title": "The font checks' contexts measured at text-rendering auto and shared a platform font with DOM text of the same zoomed size: closed at the correctness line, they measure at optimizeLegibility like the engine's contexts",
       "conditions": [],
       "cases": [],
-      "source": "rebuild/probes/measure-first.ts M1 (font_description.cc:308-331: the cache key holds the effective size and text-rendering, not the specified size; font_platform_data_mac.mm:170-178); src/measure/font-checks.ts check 4",
-      "note": "For a named font with an opsz axis at a zoom other than 1: after the DOM, the zoomed-size context gets the DOM's font, the advances look linear, the fact comes out false and the engine measures at the zoomed size with another optical size, without a gap; before the DOM, the check leaves the fact unknown and the DOM text then takes the check's font. No lab font but the system font has the axis, so no lab case shows it; the checks never measure the system font at the zoomed size. A context at text-rendering optimizeLegibility, as the engine measures, would share nothing with default-rendered DOM text."
+      "source": "rebuild/probes/measure-first.ts M1 (font_description.cc:308-331: the cache key holds the effective size and text-rendering, not the specified size; font_platform_data_mac.mm:170-178); src/measure/font-checks.ts, its header's last section and checkTextRendering; research/ROUND4-CRITIC.md \"Fix first\" 1",
+      "note": "Closed on 2026-09-18. For a named font with an opsz axis at a zoom other than 1, a check 4 context at text-rendering auto had the key of the page's own text: after the DOM it got the DOM's font, the advances looked linear, the fact came out false and the engine measured at the zoomed size with another optical size, without a gap; before the DOM, the page's text took the check's font. The checks now measure in the engine's own kind of context, so they share a key only with the engine's contexts and with page text that sets text-rendering: optimizeLegibility (blink/pages-with-text-rendering-legibility). Probes M1 font-check and font-check-word (pinned Chrome 153.0.8010.50, DPR 2, each alone in a fresh process): DOM system-ui text at 8px to 16px keeps the clean rule's width after the checks' contexts measured at the zoomed sizes; font-check-auto and font-check-auto-word keep the old behaviour on record (16px: 71.2421875px for 81.125px). No lab font but the system font has the axis, so no lab case showed it, and the fix moved no status, prediction or painted line on the tier sets."
     },
     {
       "id": "blink/pages-with-text-rendering-legibility",
       "engine": "blink",
       "kind": "open rows",
-      "title": "The library measures at text-rendering optimizeLegibility, so on a page whose text sets that value Canvas and DOM share platform fonts",
+      "title": "The library measures at text-rendering optimizeLegibility, the runtime font checks included, so on a page whose text sets that value Canvas and DOM share platform fonts",
       "conditions": [],
       "cases": [],
       "source": "rebuild/probes/measure-first.ts M1 (library-page-legibility: DOM system-ui text 10px to 16px changes width after the library's context measured at its zoomed size)",
-      "note": "Platform bug ledger item A reaches the library there. The lab lays every case out at text-rendering auto."
+      "note": "Platform bug ledger item A reaches the library there. The lab lays every case out at text-rendering auto. Since the correctness line the font checks measure this way too (16px contexts, and check 4's at the zoomed size for a named family), so on such a page check 4 has the defect it had on every page before: learned false after the DOM made the font, or the page's text taking the check's font."
     },
     {
       "id": "lab/rtl-hyphen-rect-native-side",

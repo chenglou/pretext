@@ -573,12 +573,12 @@ type CheckReport = {
   library: { commit: string; dirty: string[] }
   sets: string[]
   counts: { cases: number; same: number; predictionChanged: number; questionsChanged: number; newQuestion: number; unfaithful: number }
-  predictionChanged: Array<ChangedCase & { first: { path: string; before: string; after: string }; ledger: LedgerEntry['status'] | null; unfaithful: boolean }>
+  predictionChanged: Array<ChangedCase & { first: { path: string; before: string; after: string }; ledger: (LedgerEntry['status'] & { exact: LedgerEntry['exact'] }) | null; unfaithful: boolean }>
   questionsChanged: Array<ChangedCase & { detail: string }>
   newQuestions: Array<ChangedCase & { phase: string; question: string }>
   // Per first differing field: the changed cases by family.
   byField: Record<string, { cases: number; families: Record<string, number> }>
-  // Changed predictions by what the ledger says of the case's lineCount, breaks and widths.
+  // Changed predictions by what the ledger says of the case's lineCount, breaks and widths, and of its exact values.
   byLedgerStatus: Record<string, number> | null
   // Set when files that build Canvas strings differ from the reference's commit: Chrome's storage-sensitive cases are in
   // `needsBrowser` by rule.
@@ -660,12 +660,12 @@ async function compare(dir: string, inputs: InputsManifest, against: 'reference'
       switch (outcome.kind) {
         case 'prediction': {
           const entry = ledger?.get(`${job.set}/${outcome.id}`) ?? null
-          report.predictionChanged.push({ ...where, first: outcome.first, ledger: entry?.status ?? null, unfaithful: `${job.set}/${outcome.id}` in unfaithful })
+          report.predictionChanged.push({ ...where, first: outcome.first, ledger: entry === null ? null : { ...entry.status, exact: entry.exact }, unfaithful: `${job.set}/${outcome.id}` in unfaithful })
           const field = (report.byField[fieldOf(outcome.first.path)] ??= { cases: 0, families: {} })
           field.cases++
           field.families[outcome.family] = (field.families[outcome.family] ?? 0) + 1
           if (report.byLedgerStatus !== null) {
-            const key = entry === null ? 'not in the ledger' : `lineCount ${entry.status.lineCount} | breaks ${entry.status.breaks} | widths ${entry.status.widths}`
+            const key = entry === null ? 'not in the ledger' : `lineCount ${entry.status.lineCount} | breaks ${entry.status.breaks} | widths ${entry.status.widths} | ${entry.exact}`
             report.byLedgerStatus[key] = (report.byLedgerStatus[key] ?? 0) + 1
           }
           break

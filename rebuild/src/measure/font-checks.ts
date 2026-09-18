@@ -72,10 +72,26 @@
 // are shared between sizes, and Blink's totals are exact 16.16 values below 256 px (specs/blink-canvas.md §1.5). Their
 // contexts are their own (`partition`), so no engine measurement shares a Blink word cache with them.
 //
-// A cost the library can't avoid: in Blink a platform font Canvas creates at size X is the one the DOM then uses for text
-// of that family at X px after zoom, whatever its specified size (the font cache key holds the effective size alone,
-// specs/blink-canvas.md §1.8), which changes DOM widths for fonts with an opsz axis. Check 4 therefore never measures the
-// system UI font at the zoomed size, where the engine doesn't measure it either.
+// The checks measure in the engine's own kind of context (checkTextRendering): in Blink `textRendering =
+// 'optimizeLegibility'`, as engines/blink/shape.ts styleContexts does. Blink's font cache keys a platform font by the
+// family, the effective (zoomed) size floored to 1/100 px and FontDescription's options, among them text-rendering, and not
+// by the specified size (FontDescription::CacheKey, font_description.cc:308-331), while opsz is set from the specified size
+// of whichever text made the font, for any font with the axis ("Do not use font size here, but specified size in order to
+// account for zoom", font_platform_data_mac.mm:170-178). A context at text-rendering auto and S × zoom px has the key of the
+// page's own text of that family at S px. After the DOM, check 4 would measure the DOM's font there, find it linear and
+// answer `false` for a font with the axis, and the engine would measure at the zoomed size with another optical size,
+// without a gap; before the DOM, the page's text would take the check's font (probes/measure-first.ts M1 "font-check-word":
+// 16px system UI text 71.24px instead of 81.125px). Under optimizeLegibility a check shares a key with the engine's contexts,
+// which are Canvas fonts like its own (specified size = computed size, so whoever makes the font makes the same one), and
+// with the text of a page that sets text-rendering: optimizeLegibility itself, where the engine's contexts share it too (M1
+// "library": no DOM width moves at text-rendering auto; "library-page-legibility": it does). Check 4 therefore still never
+// measures the system UI font at the zoomed size, where the engine doesn't measure it either.
+//
+// WebKit needs no such care: its key holds the computed size, the text rendering mode and optical sizing
+// (FontDescriptionKey, FontCascadeCache.h:113-154), a font is made at that size (FontCacheCoreText.cpp:716) and opsz is set
+// from the font's own size (UnrealizedCoreTextFont.cpp:303-315), so the font a check makes is the font the page makes under
+// that key; a width its glyph geometry cache keeps is the computed value (FontCascade.cpp:319-352). Its Canvas has no
+// textRendering attribute, and the checks assign the default as the port's recipes do. Gecko is asked nothing.
 import type { EngineName, Environment } from '../env.js'
 import type { FontDecl, FontFacts, InlineNode, Paragraph } from '../model.js'
 import { measureContext, measureText, type Measurer } from './canvas.js'
@@ -142,12 +158,18 @@ function cssFamily(name: string): string {
   return GENERIC_KEYWORDS.includes(name.toLowerCase()) ? name : JSON.stringify(name)
 }
 
-type Probe = { m: Measurer; font: FontDecl; lang: string }
+type Probe = { m: Measurer; engine: EngineName; font: FontDecl; lang: string }
+
+// The text rendering of the engine's own measuring contexts (engines/blink/shape.ts styleContexts; WebKit's and Gecko's
+// recipes assign the default). In Blink it is part of the font cache key, which the header's last section reads.
+function checkTextRendering(engine: EngineName): CanvasTextRendering {
+  return engine === 'blink' ? 'optimizeLegibility' : 'auto'
+}
 
 function width(p: Probe, family: string, size: number, text: string): number {
   const context = measureContext(p.m, {
     font: canvasFont({ ...p.font, family }, size), lang: p.lang, letterSpacing: '0px', wordSpacing: '0px', fontKerning: 'auto',
-    textRendering: 'auto', direction: 'ltr', partition: 'font-checks',
+    textRendering: checkTextRendering(p.engine), direction: 'ltr', partition: 'font-checks',
   })
   return measureText(p.m, context, text)
 }
@@ -249,7 +271,7 @@ function addTextNeeds(nodes: readonly InlineNode[], needs: TextNeeds): void {
 function learnedFacts(m: Measurer, engine: EngineName, zoom: number, font: FontDecl, lang: string, needs: TextNeeds): FontFacts {
   const given = font.facts
   if (engine === 'gecko') return given
-  const p: Probe = { m, font, lang }
+  const p: Probe = { m, engine, font, lang }
   const key = (check: string, ...more: number[]): string => JSON.stringify([check, font.family, font.weight, font.style, lang, ...more])
   const asksHyphen = given.mapsHyphen === null && needs.hyphen
   const asksPitch = given.monospace === null && engine === 'webkit'

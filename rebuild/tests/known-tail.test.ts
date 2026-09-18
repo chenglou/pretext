@@ -1,11 +1,11 @@
 // The known-tail file and the rules that read it (known-tail.ts).
 import { describe, expect, test } from 'bun:test'
 import { itemsOf, knownTailProblems, readKnownTail, statusParts, KNOWN_TAIL_FORMAT, type KnownTail, type KnownTailItem } from './known-tail.ts'
-import { transitionsBetween, type Ledger, type LedgerEntry, type LedgerHeader, type LedgerStatus } from './ledger.ts'
+import { transitionsBetween, LEDGER_FORMAT, type Ledger, type LedgerEntry, type LedgerHeader, type LedgerStatus } from './ledger.ts'
 import type { SetProtocol } from './sets.ts'
 
 const item = (over: Partial<KnownTailItem>): KnownTailItem => ({ id: 'gecko/test-class', engine: 'gecko', kind: 'open rows', title: 'a class', conditions: [], cases: [], source: 'a report', note: 'a note', ...over })
-const entry = (id: string, widths: LedgerStatus, family = 'rule/joining'): LedgerEntry => ({ set: 'families', id, family, status: { lineCount: 'pass', breaks: 'pass', widths, painter: 'pass' } })
+const entry = (id: string, widths: LedgerStatus, family = 'rule/joining', exact: LedgerStatus = 'exact'): LedgerEntry => ({ set: 'families', id, family, status: { lineCount: 'pass', breaks: 'pass', widths, painter: 'pass' }, exact })
 
 describe('the known tail', () => {
   test('the repository\'s file is valid, and its ids are unique', () => {
@@ -49,12 +49,36 @@ describe('the known tail', () => {
     expect(itemsOf(tail, 'firefox', 'facts', entry('c-2', 'pass'), 'painter', 'fail covered by in-word-prefix')).toEqual(['painter/limits'])
   })
 
+  test('a rule over not exact cases reads the exact-value status alone, and a named case is a member where it isn\'t exact', () => {
+    const tail = [
+      item({ id: 'lab/rect-counts', engine: 'shared', kind: 'lab', match: { browsers: ['chrome'], status: 'not exact', families: ['rule/wbr-elements'] } }),
+      item({ id: 'gecko/history', kind: 'history dependence', match: { browsers: ['chrome'], status: 'history-dependent' } }),
+      item({ id: 'blink/named', engine: 'blink', cases: [{ id: 'c-9', browser: 'chrome', where: 'families' }] }),
+    ]
+    const wbr = entry('c-1', 'pass', 'rule/wbr-elements', 'not exact (values 0, rect counts 1)')
+    expect(itemsOf(tail, 'chrome', 'facts', wbr, 'exact', wbr.exact)).toEqual(['lab/rect-counts'])
+    expect(itemsOf(tail, 'chrome', 'facts', wbr, 'widths', 'pass')).toEqual([])
+    expect(itemsOf(tail, 'chrome', 'facts', entry('c-2', 'pass', 'rule/joining', 'not exact (values 1, rect counts 0)'), 'exact', 'not exact (values 1, rect counts 0)')).toEqual([])
+    expect(itemsOf(tail, 'chrome', 'facts', entry('c-1', 'pass', 'rule/wbr-elements'), 'exact', 'exact')).toEqual([])
+    // A rule over a metric's kind never reads the exact-value status, which has the kind too.
+    expect(itemsOf(tail, 'chrome', 'facts', wbr, 'exact', 'history-dependent')).toEqual([])
+    expect(itemsOf(tail, 'chrome', 'facts', wbr, 'widths', 'history-dependent')).toEqual(['gecko/history'])
+    expect(itemsOf(tail, 'chrome', 'facts', entry('c-9', 'pass'), 'exact', 'not exact (values 2, rect counts 0)')).toEqual(['blink/named'])
+    expect(itemsOf(tail, 'chrome', 'facts', entry('c-9', 'pass'), 'exact', 'exact')).toEqual([])
+    const problems = knownTailProblems({ format: KNOWN_TAIL_FORMAT, note: '', items: [
+      item({ id: 'lab/no-families', match: { browsers: ['chrome'], status: 'not exact' } }),
+      item({ id: 'lab/with-metrics', match: { browsers: ['chrome'], status: 'not exact', families: ['rule/'], metrics: ['widths'] } }),
+    ] })
+    expect(problems.some(problem => problem.includes('needs families'))).toBe(true)
+    expect(problems.some(problem => problem.includes('has no metrics or conditions'))).toBe(true)
+  })
+
   test('a transition names the items its case belongs to before or after', () => {
     const protocol: SetProtocol = { set: 'families', parts: [], casesPerRoundTrip: 25, freshProcessPerPart: true, runArgs: [] }
     const header: LedgerHeader = {
-      format: 'pretext-ledger/1', browser: 'firefox', config: 'facts', predictor: 'p', build: { app: 'Firefox', appVersion: '156.0', engine: '156.0', os: '26A428' },
-      environments: [], scorer: 7, bundles: [], library: null, orders: 'both', historyCarriedFrom: null, sets: { families: { protocol, subset: false, cases: 2, environments: [], evidence: [] } }, counts: { lineCount: {}, breaks: {}, widths: {}, painter: {} },
-    } as LedgerHeader
+      format: LEDGER_FORMAT, browser: 'firefox', config: 'facts', predictor: 'p', build: { app: 'Firefox', appVersion: '156.0', engine: '156.0', os: '26A428' },
+      environments: [], scorer: 7, bundles: [], library: null, orders: 'both', historyCarriedFrom: null, sets: { families: { protocol, subset: false, cases: 2, environments: [], evidence: [] } }, counts: { lineCount: {}, breaks: {}, widths: {}, painter: {} }, exact: { counts: {}, rectCounts: 0, rectCountsDiffering: 0, predictedValues: 0, predictedValuesDiffering: 0, passingWithDifferingValues: 0, passingWithDifferingRectCounts: 0 },
+    }
     const ledger = (entries: LedgerEntry[]): Ledger => ({ header, entries })
     const tail = [item({ id: 'gecko/in-word', match: { browsers: ['firefox'], status: 'covered', conditions: ['in-word-prefix'] } })]
     const report = transitionsBetween(
@@ -62,6 +86,9 @@ describe('the known tail', () => {
       ledger([entry('c-1', 'pass'), entry('c-2', 'fail covered by in-word-prefix'), entry('c-3', 'fail open')]), [], tail)
     expect(report.knownTail).toEqual({ 'gecko/in-word': { 'widths: fail covered by in-word-prefix -> pass': ['c-1'], 'widths: pass -> fail covered by in-word-prefix': ['c-2'] } })
     expect(report.transitions.map(value => [value.id, value.knownTail ?? null])).toEqual([['c-1', ['gecko/in-word']], ['c-2', ['gecko/in-word']], ['c-3', null]])
+    // A case that leaves exactness shows under the item that names it.
+    const values = transitionsBetween(ledger([entry('c-4', 'pass')]), ledger([entry('c-4', 'pass', 'rule/joining', 'not exact (values 2, rect counts 0)')]), [], [item({ id: 'gecko/named', cases: [{ id: 'c-4', browser: 'firefox', where: 'families' }] })])
+    expect(values.knownTail).toEqual({ 'gecko/named': { 'exact: exact -> not exact (values 2, rect counts 0)': ['c-4'] } })
     // Without the file's items a report names none.
     expect(transitionsBetween(ledger([entry('c-1', 'fail open')]), ledger([entry('c-1', 'pass')]), []).knownTail).toEqual({})
   })

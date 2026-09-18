@@ -22,6 +22,23 @@
 // - `protocol row`: the page doesn't describe the case's declared input (score.ts slotProtocol). Never a pass or a fail.
 // - `unobserved`: the scorer's unobserved and not-applicable, which are never passes.
 //
+// Beside the four metrics, and part of none, every case has an exact-value status (LedgerEntry.exact): whether every value
+// the observation port reports as predicted equals the browser's. The values are the scorer's per-case `facts`: the rect
+// count of every code point, node and element, predicted by definition, and the x and width of every rect in the predicted
+// state (lab README, "Scoring"); limited values are stand-ins and never count. A metric can pass while a predicted value is
+// wrong (a width inside a line whose sum holds, an x that moves no break), so without this status a change that makes
+// predicted values wrong moves nothing in a ledger. Its closed set:
+// - `exact`: every rect count and every predicted value compared equals the browser's, none included.
+// - `not exact (values <n>, rect counts <m>)`: n predicted x or width values and m rect counts differ; `differing` holds
+//   the two numbers.
+// - `history-dependent`, `protocol row`: as for the metrics; the two orders disagreeing on exactness over equal native
+//   layouts is history dependence too.
+// - `unobserved`: the scorer compared no value (no prediction, or no native observation).
+// Limited values are no part of it, but an entry keeps how many of them differ (`limitedDiffering`), and `transitions`
+// prints the sum before and after with the cases where it rose, without blocking: with no supplied facts most values are
+// limited (Firefox reports `optical-size` on nearly every line), so a change that makes values wrong shows there only as
+// stand-ins that stopped agreeing, and in the facts configuration as predicted values that differ. Tier 2 runs both.
+//
 // History dependence needs both orders. A ledger built from the forward order alone takes the history-dependent cases of
 // another ledger (--carry-history-from, the reference): their statuses there replace the forward run's, marked
 // `historyCarried`, so a forward-only iteration never reports a known history-dependent case as a regression. A case that
@@ -30,7 +47,8 @@
 //
 // `transitions` compares like with like. It refuses (exit 2) two ledgers of different browsers, browser builds, process
 // languages, scorers, configurations or set protocols, each by name; --allow=<name> accepts one difference knowingly
-// (build, languages, scorer, config, protocol). Exit 1 when a pass became anything but history-dependent or a protocol row.
+// (build, languages, scorer, config, protocol). Exit 1 when a pass became anything but history-dependent or a protocol row,
+// and when an exact case became anything but those two or a case that wasn't exact holds more differing values.
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join, relative, resolve } from 'node:path'
 import type { MetricAttribution, MetricName, ResidualMembership, GapFiring } from '../lab/score.ts'
@@ -38,8 +56,12 @@ import type { BrowserBuild } from '../lab/types.ts'
 import { itemsOf, readKnownTail, type KnownTailItem } from './known-tail.ts'
 import { REPO, SETS, type Config, type SetProtocol, type TierBrowser } from './sets.ts'
 
-export const LEDGER_FORMAT = 'pretext-ledger/1'
+// Format 2 added the exact-value status. An older ledger is built again from its runs, whose per-case files hold the facts.
+export const LEDGER_FORMAT = 'pretext-ledger/2'
 export const METRIC_NAMES: readonly MetricName[] = ['lineCount', 'breaks', 'widths', 'painter']
+// What a transition is on: a metric, or the exact-value status.
+export type LedgerKey = MetricName | 'exact'
+export const LEDGER_KEYS: readonly LedgerKey[] = [...METRIC_NAMES, 'exact']
 const PREDICTION_METRICS: readonly MetricName[] = ['lineCount', 'breaks', 'widths']
 
 export type LedgerStatus = string
@@ -48,11 +70,19 @@ export type LedgerEntry = {
   id: string
   family: string
   status: Record<MetricName, LedgerStatus>
+  // The exact-value status, beside the metrics, and the differing values of a case that isn't exact.
+  exact: LedgerStatus
+  differing?: Differing
+  // Limited x and width values that differ from the browser's, when any: stand-ins, reported and never gated on.
+  limitedDiffering?: number
   // The scorer's reason category per metric that isn't a pass.
   reason?: Partial<Record<MetricName, string>>
   // The entry's history-dependent statuses come from another ledger (a forward-only run).
   historyCarried?: true
 }
+
+// Predicted x and width values, and rect counts, that differ from the browser's.
+export type Differing = { values: number; rectCounts: number }
 
 // One order of one part: the run's record and what score.ts wrote for it, as repo-relative paths.
 export type EvidenceRun = { part: number; order: 'forward' | 'reverse'; run: string; perCase: string; summary: string; runId: string | null; bundleSha256: string | null; startedAt: string | null }
@@ -76,6 +106,11 @@ export type LedgerHeader = {
   historyCarriedFrom: string | null
   sets: Record<string, LedgerSet>
   counts: Record<MetricName, Record<string, number>>
+  // The exact-value statuses by kind, and over the exact and not exact cases the values behind them: the rect counts and
+  // predicted values the scorer compared, and how many of each differ. `passingWithDifferingValues` and
+  // `passingWithDifferingRectCounts`: the not exact cases none of whose lineCount, breaks and widths fails, which no metric
+  // shows (REPORT.md's "passing cases with a wrong predicted value", and the same for rect counts).
+  exact: { counts: Record<string, number>; rectCounts: number; rectCountsDiffering: number; predictedValues: number; predictedValuesDiffering: number; passingWithDifferingValues: number; passingWithDifferingRectCounts: number }
 }
 
 export type PerCase = {
@@ -85,6 +120,8 @@ export type PerCase = {
   breaks: { status: string; reason?: string }
   widths: { status: string; reason?: string }
   painter: { status: string; reason?: string }
+  // score.ts compactFacts, [equal, differ] pairs: rect counts, and the x and width of rects in the predicted state.
+  facts?: { counts: [number, number]; predicted: [number, number]; limited?: Record<string, [number, number]> }
   lineGaps?: Partial<Record<MetricName, MetricAttribution>>
   residual?: ResidualMembership
   firing?: GapFiring
@@ -118,6 +155,15 @@ export function statusOf(per: PerCase, metric: MetricName): LedgerStatus {
   }
 }
 
+export function exactOf(per: PerCase): { exact: LedgerStatus; differing?: Differing } {
+  if (per.historyDependent !== undefined) return { exact: 'history-dependent' }
+  if (per.protocol !== undefined) return { exact: 'protocol row' }
+  if (per.facts === undefined) return { exact: 'unobserved' }
+  const differing = { values: per.facts.predicted[1], rectCounts: per.facts.counts[1] }
+  if (differing.values === 0 && differing.rectCounts === 0) return { exact: 'exact' }
+  return { exact: `not exact (values ${differing.values}, rect counts ${differing.rectCounts})`, differing }
+}
+
 // One case's entry from its forward row and, when both orders ran, its reverse row.
 export function entryOf(set: string, forward: PerCase, reverse: PerCase | null): LedgerEntry {
   const status = {} as Record<MetricName, LedgerStatus>
@@ -130,7 +176,12 @@ export function entryOf(set: string, forward: PerCase, reverse: PerCase | null):
     status[metric] = value
     if (value !== 'pass' && forward[metric].reason !== undefined) reason[metric] = forward[metric].reason
   }
-  return { set, id: forward.id, family: forward.family, status, ...(Object.keys(reason).length === 0 ? {} : { reason }) }
+  // The same rule for the exact-value status; two orders that both aren't exact keep the forward order's numbers.
+  let exact = exactOf(forward)
+  if (reverse !== null && exact.exact !== 'history-dependent' && statusKind(exactOf(reverse).exact) !== statusKind(exact.exact)) exact = { exact: 'history-dependent' }
+  let limitedDiffering = 0
+  if (exact.exact === 'exact' || exact.differing !== undefined) for (const tally of Object.values(forward.facts?.limited ?? {})) limitedDiffering += tally[1]
+  return { set, id: forward.id, family: forward.family, status, ...exact, ...(limitedDiffering === 0 ? {} : { limitedDiffering }), ...(Object.keys(reason).length === 0 ? {} : { reason }) }
 }
 
 export function readPerCase(path: string): PerCase[] {
@@ -145,7 +196,7 @@ export function readLedger(dir: string): Ledger {
   const headerPath = join(dir, 'ledger.json')
   if (!existsSync(headerPath)) throw new Error(`${dir}: no ledger.json`)
   const header = JSON.parse(readFileSync(headerPath, 'utf8')) as LedgerHeader
-  if (header.format !== LEDGER_FORMAT) throw new Error(`${headerPath}: format ${JSON.stringify(header.format)}, expected ${LEDGER_FORMAT}`)
+  if (header.format !== LEDGER_FORMAT) throw new Error(`${headerPath}: format ${JSON.stringify(header.format)}, expected ${LEDGER_FORMAT}; build it again from its runs (ledger.ts build --runs=<the run's folder>), whose per-case files hold what the format added`)
   const entries: LedgerEntry[] = []
   for (const line of readFileSync(join(dir, 'entries.ndjson'), 'utf8').split('\n')) if (line.trim() !== '') entries.push(JSON.parse(line) as LedgerEntry)
   return { header, entries }
@@ -166,22 +217,49 @@ export function countStatuses(entries: readonly LedgerEntry[]): LedgerHeader['co
   return counts
 }
 
-// A status without its conditions or class: the closed set's member.
+// A status without its conditions, class or numbers: the closed set's member.
 export function statusKind(status: LedgerStatus): string {
   if (status.startsWith('fail covered by ')) return 'fail covered'
   if (status.startsWith('residual ')) return 'residual'
+  if (status.startsWith('not exact ')) return 'not exact'
   return status
+}
+
+// Exact-value statuses by kind; `perCases` are the forward rows of the entries, for the values behind them.
+export function countExact(entries: readonly LedgerEntry[], perCases: ReadonlyMap<string, PerCase>): LedgerHeader['exact'] {
+  const out: LedgerHeader['exact'] = { counts: {}, rectCounts: 0, rectCountsDiffering: 0, predictedValues: 0, predictedValuesDiffering: 0, passingWithDifferingValues: 0, passingWithDifferingRectCounts: 0 }
+  const fails = (status: LedgerStatus): boolean => ['fail covered', 'fail open', 'residual'].includes(statusKind(status))
+  for (const entry of entries) {
+    const kind = statusKind(entry.exact)
+    out.counts[kind] = (out.counts[kind] ?? 0) + 1
+    if (entry.differing !== undefined && !PREDICTION_METRICS.some(metric => fails(entry.status[metric]))) {
+      if (entry.differing.values > 0) out.passingWithDifferingValues++
+      if (entry.differing.rectCounts > 0) out.passingWithDifferingRectCounts++
+    }
+    const facts = perCases.get(`${entry.set}\n${entry.id}`)?.facts
+    if (facts === undefined || (kind !== 'exact' && kind !== 'not exact')) continue
+    out.rectCounts += facts.counts[0] + facts.counts[1]
+    out.rectCountsDiffering += facts.counts[1]
+    out.predictedValues += facts.predicted[0] + facts.predicted[1]
+    out.predictedValuesDiffering += facts.predicted[1]
+  }
+  return out
 }
 
 // The history-dependent entries of `from` replace the same cases' entries in a ledger built from one order.
 export function carryHistory(entries: LedgerEntry[], from: readonly LedgerEntry[]): number {
   const known = new Map<string, LedgerEntry>()
-  for (const entry of from) if (METRIC_NAMES.some(metric => entry.status[metric] === 'history-dependent')) known.set(`${entry.set}\n${entry.id}`, entry)
+  for (const entry of from) if (entry.exact === 'history-dependent' || METRIC_NAMES.some(metric => entry.status[metric] === 'history-dependent')) known.set(`${entry.set}\n${entry.id}`, entry)
   let carried = 0
   for (const entry of entries) {
     const before = known.get(`${entry.set}\n${entry.id}`)
     if (before === undefined) continue
     for (const metric of METRIC_NAMES) if (before.status[metric] === 'history-dependent') entry.status[metric] = 'history-dependent'
+    if (before.exact === 'history-dependent') {
+      entry.exact = 'history-dependent'
+      delete entry.differing
+      delete entry.limitedDiffering
+    }
     entry.historyCarried = true
     carried++
   }
@@ -191,7 +269,8 @@ export function carryHistory(entries: LedgerEntry[], from: readonly LedgerEntry[
 // ---- Transitions ----
 
 // knownTail: the known-tail items (known-tail.ts) the case belongs to by its status before or after, when any.
-export type Transition = { set: string; id: string; family: string; metric: MetricName; before: LedgerStatus; after: LedgerStatus; knownTail?: string[] }
+// `metric` is a metric, or `exact` for the exact-value status.
+export type Transition = { set: string; id: string; family: string; metric: LedgerKey; before: LedgerStatus; after: LedgerStatus; knownTail?: string[] }
 export type TransitionReport = {
   comparable: string[]
   allowed: string[]
@@ -200,9 +279,18 @@ export type TransitionReport = {
   onlyAfter: number
   // Pass to anything but history-dependent or a protocol row: what a regression gate blocks on.
   blocking: number
+  // The same gate on the exact-value status: exact to anything but history-dependent or a protocol row, and a case that
+  // wasn't exact holding more differing values or rect counts than before. `differingBefore` and `differingAfter` sum the
+  // differing predicted values and rect counts of the cases compared.
+  exactBlocking: number
+  differingBefore: Differing
+  differingAfter: Differing
+  // Limited values that differ, summed over the cases compared, and the cases (`<set>/<id>`) that hold more than before.
+  // Stand-ins: reported, never blocking.
+  limitedDiffering: { before: number; after: number; rose: string[] }
   transitions: Transition[]
-  // Per metric, per `before -> after`, per family: the case ids.
-  grouped: Record<MetricName, Record<string, Record<string, string[]>>>
+  // Per metric and for `exact`, per `before -> after`, per family: the case ids.
+  grouped: Record<LedgerKey, Record<string, Record<string, string[]>>>
   // Per known-tail item, per `metric: before -> after`: the case ids. A change that moves a class left open on purpose shows
   // here by the item's name, whether it left the class, entered it or moved inside it.
   knownTail: Record<string, Record<string, string[]>>
@@ -228,12 +316,22 @@ export function incomparable(before: LedgerHeader, after: LedgerHeader): Array<{
   return out
 }
 
+export function statusAt(entry: LedgerEntry, key: LedgerKey): LedgerStatus {
+  return key === 'exact' ? entry.exact : entry.status[key]
+}
+
+// Both weren't exact, and the newer holds more differing values or more differing rect counts.
+function moreDiffers(was: Differing | undefined, now: Differing | undefined): boolean {
+  return was !== undefined && now !== undefined && (now.values > was.values || now.rectCounts > was.rectCounts)
+}
+
 export function transitionsBetween(before: Ledger, after: Ledger, allowed: readonly string[], tail: readonly KnownTailItem[] = []): TransitionReport {
   const problems = incomparable(before.header, after.header)
   const report: TransitionReport = {
     comparable: problems.filter(problem => !allowed.includes(problem.name)).map(problem => `${problem.name}: ${problem.detail}`),
     allowed: problems.filter(problem => allowed.includes(problem.name)).map(problem => `${problem.name}: ${problem.detail}`),
-    compared: 0, onlyBefore: 0, onlyAfter: 0, blocking: 0, transitions: [], grouped: { lineCount: {}, breaks: {}, widths: {}, painter: {} }, knownTail: {},
+    compared: 0, onlyBefore: 0, onlyAfter: 0, blocking: 0, exactBlocking: 0, differingBefore: { values: 0, rectCounts: 0 }, differingAfter: { values: 0, rectCounts: 0 },
+    limitedDiffering: { before: 0, after: 0, rose: [] }, transitions: [], grouped: { lineCount: {}, breaks: {}, widths: {}, painter: {}, exact: {} }, knownTail: {},
   }
   if (report.comparable.length > 0) return report
   const old = new Map<string, LedgerEntry>()
@@ -248,16 +346,26 @@ export function transitionsBetween(before: Ledger, after: Ledger, allowed: reado
       continue
     }
     report.compared++
-    for (const metric of METRIC_NAMES) {
-      if (was.status[metric] === entry.status[metric]) continue
-      const transition: Transition = { set: entry.set, id: entry.id, family: entry.family, metric, before: was.status[metric], after: entry.status[metric] }
+    report.differingBefore.values += was.differing?.values ?? 0
+    report.differingBefore.rectCounts += was.differing?.rectCounts ?? 0
+    report.differingAfter.values += entry.differing?.values ?? 0
+    report.differingAfter.rectCounts += entry.differing?.rectCounts ?? 0
+    report.limitedDiffering.before += was.limitedDiffering ?? 0
+    report.limitedDiffering.after += entry.limitedDiffering ?? 0
+    if ((entry.limitedDiffering ?? 0) > (was.limitedDiffering ?? 0) && statusKind(was.exact) === statusKind(entry.exact)) report.limitedDiffering.rose.push(`${entry.set}/${entry.id}`)
+    for (const metric of LEDGER_KEYS) {
+      const transition: Transition = { set: entry.set, id: entry.id, family: entry.family, metric, before: statusAt(was, metric), after: statusAt(entry, metric) }
+      if (transition.before === transition.after) continue
       if (tail.length > 0) {
-        const items = [...new Set([...itemsOf(tail, before.header.browser, before.header.config, was, metric, was.status[metric]), ...itemsOf(tail, after.header.browser, after.header.config, entry, metric, entry.status[metric])])]
+        const items = [...new Set([...itemsOf(tail, before.header.browser, before.header.config, was, metric, transition.before), ...itemsOf(tail, after.header.browser, after.header.config, entry, metric, transition.after)])]
         if (items.length > 0) transition.knownTail = items
         for (const item of items) ((report.knownTail[item] ??= {})[`${metric}: ${transition.before} -> ${transition.after}`] ??= []).push(entry.id)
       }
       report.transitions.push(transition)
-      if (transition.before === 'pass' && transition.after !== 'history-dependent' && transition.after !== 'protocol row') report.blocking++
+      if (transition.after !== 'history-dependent' && transition.after !== 'protocol row') {
+        if (transition.before === 'pass') report.blocking++
+        else if (metric === 'exact' && (transition.before === 'exact' || moreDiffers(was.differing, entry.differing))) report.exactBlocking++
+      }
       const families = (report.grouped[metric][`${transition.before} -> ${transition.after}`] ??= {})
       ;(families[entry.family] ??= []).push(entry.id)
     }
@@ -277,7 +385,9 @@ export function printTransitions(report: TransitionReport, limit = 12): void {
     return
   }
   console.log(`${report.compared} cases compared; ${report.onlyBefore} only in the older ledger, ${report.onlyAfter} only in the newer; ${report.transitions.length} status transitions, ${report.blocking} of them from pass to a failure or unobserved`)
-  for (const metric of METRIC_NAMES) {
+  console.log(`exact values: ${report.exactBlocking} cases went from exact to not exact or unobserved, or hold more differing values than before; differing predicted values ${report.differingBefore.values} -> ${report.differingAfter.values}, differing rect counts ${report.differingBefore.rectCounts} -> ${report.differingAfter.rectCounts}`)
+  console.log(`limited values (stand-ins, never blocking): differing ${report.limitedDiffering.before} -> ${report.limitedDiffering.after}; ${report.limitedDiffering.rose.length} cases hold more than before${report.limitedDiffering.rose.length === 0 ? '' : `: ${report.limitedDiffering.rose.slice(0, 6).join(' ')}${report.limitedDiffering.rose.length > 6 ? ' …' : ''}`}`)
+  for (const metric of LEDGER_KEYS) {
     const kinds = Object.entries(report.grouped[metric]).sort((a, b) => (a[0] < b[0] ? -1 : 1))
     for (const [kind, families] of kinds) {
       const total = Object.values(families).reduce((sum, ids) => sum + ids.length, 0)
@@ -387,6 +497,7 @@ export function buildLedger(runDir: string, carryFrom: string | null): Ledger {
   const bundles = new Set<string>()
   const scorers = new Set<number>()
   const sets: Record<string, LedgerSet> = {}
+  const forwardRows = new Map<string, PerCase>()
   for (const set of run.sets) {
     const evidence: EvidenceRun[] = []
     const setEnvironments = new Set<string>()
@@ -411,6 +522,7 @@ export function buildLedger(runDir: string, carryFrom: string | null): Ledger {
         const other = reverse === null ? null : reverse.get(per.id) ?? null
         if (reverse !== null && other === null) throw new Error(`${part.reverse}: no row for ${per.id}, which ${part.forward} observed`)
         entries.push(entryOf(set.name, per, other))
+        forwardRows.set(`${set.name}\n${per.id}`, per)
         cases++
       }
     }
@@ -424,9 +536,16 @@ export function buildLedger(runDir: string, carryFrom: string | null): Ledger {
   }
   const header: LedgerHeader = {
     format: LEDGER_FORMAT, browser: run.browser, config: run.config, predictor: run.predictor, build: run.build, environments: [...environments].sort(), scorer: [...scorers][0]!,
-    bundles: [...bundles].sort(), library: run.library ?? null, orders: run.orders, historyCarriedFrom: carried, sets, counts: countStatuses(entries),
+    bundles: [...bundles].sort(), library: run.library ?? null, orders: run.orders, historyCarriedFrom: carried, sets, counts: countStatuses(entries), exact: countExact(entries, forwardRows),
   }
   return { header, entries }
+}
+
+// A ledger's statuses by kind, the four metrics and then the exact-value status with the values behind it.
+export function printCounts(header: LedgerHeader): void {
+  const kinds = (counts: Record<string, number>): string => Object.entries(counts).sort((a, b) => (a[0] < b[0] ? -1 : 1)).map(([kind, n]) => `${kind} ${n}`).join(', ')
+  for (const metric of METRIC_NAMES) console.log(`  ${metric.padEnd(9)} ${kinds(header.counts[metric])}`)
+  console.log(`  ${'exact'.padEnd(9)} ${kinds(header.exact.counts)}; ${header.exact.predictedValuesDiffering} of ${header.exact.predictedValues} predicted values and ${header.exact.rectCountsDiffering} of ${header.exact.rectCounts} rect counts differ; cases without a failing lineCount, breaks or widths that hold a differing predicted value ${header.exact.passingWithDifferingValues}, a differing rect count ${header.exact.passingWithDifferingRectCounts}`)
 }
 
 function main(): number {
@@ -446,7 +565,7 @@ function main(): number {
       const ledger = buildLedger(resolve(runs), options.get('carry-history-from') === undefined ? null : resolve(options.get('carry-history-from')!))
       writeLedger(resolve(out), ledger)
       console.log(`ledger ${relative(REPO, resolve(out))}: ${ledger.entries.length} cases in ${Object.keys(ledger.header.sets).length} sets, ${ledger.header.orders} orders, scorer ${ledger.header.scorer}`)
-      for (const metric of METRIC_NAMES) console.log(`  ${metric.padEnd(9)} ${Object.entries(ledger.header.counts[metric]).sort((a, b) => (a[0] < b[0] ? -1 : 1)).map(([kind, n]) => `${kind} ${n}`).join(', ')}`)
+      printCounts(ledger.header)
       return 0
     }
     case 'transitions': {
@@ -454,7 +573,7 @@ function main(): number {
       const report = transitionsBetween(readLedger(resolve(positional[0]!)), readLedger(resolve(positional[1]!)), (options.get('allow') ?? '').split(',').filter(name => name !== ''), readKnownTail().items)
       if (options.get('out') !== undefined) writeFileSync(resolve(options.get('out')!), `${JSON.stringify(report, null, 2)}\n`)
       printTransitions(report)
-      return report.comparable.length > 0 ? 2 : report.blocking > 0 ? 1 : 0
+      return report.comparable.length > 0 ? 2 : report.blocking > 0 || report.exactBlocking > 0 ? 1 : 0
     }
     case 'conditions': {
       if (positional.length !== 1) throw new Error('Usage: bun rebuild/tests/ledger.ts conditions <ledger dir> [--groups=development,...] [--out=<report.json>]')

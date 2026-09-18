@@ -11,11 +11,12 @@
 // item's members are its named `cases`, in whatever set they were found (a fresh set's cases are in no ledger and only
 // document the class), and, in a tier 2 ledger, the entries its `match` rule describes: a browser, a status kind, the
 // conditions a covered failure lists (every one named must be among them), family prefixes and metrics (without `metrics` a
-// rule reads lineCount, breaks and widths, never the painter). Rules keep a class of thousands of rows to one item; write one
-// only where the condition and family say what the class is.
+// rule reads lineCount, breaks and widths, never the painter). A rule over `not exact` reads the ledger's exact-value status
+// instead of a metric: cases that hold a differing predicted value or rect count, whatever their metrics say. Rules keep a
+// class of thousands of rows to one item; write one only where the condition and family say what the class is.
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
-import { METRIC_NAMES, readLedger, type LedgerEntry, type LedgerStatus } from './ledger.ts'
+import { LEDGER_KEYS, METRIC_NAMES, readLedger, statusAt, type LedgerEntry, type LedgerKey, type LedgerStatus } from './ledger.ts'
 import { REPO, TIER_BROWSERS, type TierBrowser } from './sets.ts'
 import type { MetricName } from '../lab/score.ts'
 
@@ -45,7 +46,8 @@ export const KNOWN_TAIL_KINDS = [
   'decision',
 ] as const
 export type KnownTailKind = typeof KNOWN_TAIL_KINDS[number]
-export type StatusKind = 'covered' | 'open' | 'residual' | 'history-dependent' | 'unobserved'
+export type StatusKind = 'covered' | 'open' | 'residual' | 'history-dependent' | 'unobserved' | 'not exact'
+const STATUS_KINDS: readonly StatusKind[] = ['covered', 'open', 'residual', 'history-dependent', 'unobserved', 'not exact']
 
 export type KnownTailItem = {
   // '<engine or area>/<short name>', unique.
@@ -86,7 +88,9 @@ export function knownTailProblems(tail: KnownTail): string[] {
     }
     if (item.match !== undefined) {
       if (!Array.isArray(item.match.browsers) || item.match.browsers.length === 0 || item.match.browsers.some(browser => !TIER_BROWSERS.includes(browser))) problems.push(`${where}: match.browsers must name tier browsers`)
-      if (!['covered', 'open', 'residual', 'history-dependent', 'unobserved'].includes(item.match.status)) problems.push(`${where}: match.status must be covered, open, residual, history-dependent or unobserved`)
+      if (!STATUS_KINDS.includes(item.match.status)) problems.push(`${where}: match.status must be one of ${STATUS_KINDS.join(', ')}`)
+      if (item.match.status === 'not exact' && (item.match.metrics !== undefined || (item.match.conditions ?? []).length > 0)) problems.push(`${where}: a rule over not exact cases reads the exact-value status, which has no metrics or conditions`)
+      if (item.match.status === 'not exact' && (item.match.families ?? []).length === 0) problems.push(`${where}: a rule over not exact cases needs families`)
       if ((item.match.status === 'covered' || item.match.status === 'residual') && (item.match.conditions ?? []).length === 0 && (item.match.families ?? []).length === 0 && (item.match.metrics ?? []).length === 0) problems.push(`${where}: a rule over ${item.match.status} rows needs conditions, families or metrics`)
       for (const metric of item.match.metrics ?? []) if (!METRIC_NAMES.includes(metric)) problems.push(`${where}: unknown metric ${metric}`)
     }
@@ -107,12 +111,15 @@ export function statusParts(status: LedgerStatus): { kind: StatusKind | 'pass' |
   if (status.startsWith('fail covered by ')) return { kind: 'covered', names: status.slice('fail covered by '.length).split('+') }
   if (status.startsWith('residual ')) return { kind: 'residual', names: [status.slice('residual '.length).replace(/ \((probed|signature)\)$/, '')] }
   if (status === 'fail open') return { kind: 'open', names: [] }
+  if (status.startsWith('not exact ')) return { kind: 'not exact', names: [] }
+  // An exact case is to the exact-value status what a pass is to a metric.
+  if (status === 'exact') return { kind: 'pass', names: [] }
   if (status === 'history-dependent' || status === 'unobserved' || status === 'pass' || status === 'protocol row') return { kind: status, names: [] }
   return { kind: 'open', names: [] }
 }
 
-// The items a ledger entry's status under one metric belongs to: by name, or by rule.
-export function itemsOf(tail: readonly KnownTailItem[], browser: TierBrowser, config: 'facts' | 'no-facts', entry: Pick<LedgerEntry, 'id' | 'family'>, metric: MetricName, status: LedgerStatus): string[] {
+// The items a ledger entry's status under one metric, or its exact-value status, belongs to: by name, or by rule.
+export function itemsOf(tail: readonly KnownTailItem[], browser: TierBrowser, config: 'facts' | 'no-facts', entry: Pick<LedgerEntry, 'id' | 'family'>, metric: LedgerKey, status: LedgerStatus): string[] {
   const out: string[] = []
   const parts = statusParts(status)
   for (let i = 0; i < tail.length; i++) {
@@ -121,7 +128,7 @@ export function itemsOf(tail: readonly KnownTailItem[], browser: TierBrowser, co
     const rule = item.match
     if (!member && rule !== undefined && rule.browsers.includes(browser) && rule.status === parts.kind) {
       member = (rule.configs === undefined || rule.configs.includes(config))
-        && (rule.metrics === undefined ? metric !== 'painter' : rule.metrics.includes(metric))
+        && (metric === 'exact' ? rule.status === 'not exact' : rule.metrics === undefined ? metric !== 'painter' : rule.metrics.includes(metric))
         && (rule.conditions ?? []).every(name => parts.names.includes(name))
         && (rule.families === undefined || rule.families.some(prefix => entry.family.startsWith(prefix)))
     }
@@ -159,11 +166,11 @@ if (import.meta.main) {
       const browser = ledger.header.browser
       const counts = new Map<string, Map<string, string[]>>()
       for (const entry of ledger.entries) {
-        for (const metric of METRIC_NAMES) {
-          const ids = itemsOf(tail, browser, ledger.header.config, entry, metric, entry.status[metric])
+        for (const metric of LEDGER_KEYS) {
+          const ids = itemsOf(tail, browser, ledger.header.config, entry, metric, statusAt(entry, metric))
           for (const id of ids) {
             const byStatus = counts.get(id) ?? new Map<string, string[]>()
-            const key = `${metric}: ${entry.status[metric]}`
+            const key = `${metric}: ${statusAt(entry, metric)}`
             byStatus.set(key, [...(byStatus.get(key) ?? []), entry.id])
             counts.set(id, byStatus)
           }
@@ -180,7 +187,7 @@ if (import.meta.main) {
         const shown = rest.includes('--all') ? rows.length : 6
         for (const [key, ids] of rows.slice(0, shown)) console.log(`    ${String(ids.length).padStart(5)}  ${key}  ${ids.slice(0, 3).join(' ')}${ids.length > 3 ? ' …' : ''}`)
         if (rows.length > shown) console.log(`           … ${rows.length - shown} more statuses (--all)`)
-        if (passing.length > 0) console.log(`    named cases that pass every metric here: ${passing.map(value => value.id).join(' ')}`)
+        if (passing.length > 0) console.log(`    named cases that pass every metric and are exact here: ${passing.map(value => value.id).join(' ')}`)
         const outside = named.filter(value => !ledger.entries.some(entry => entry.id === value.id))
         if (outside.length > 0) console.log(`    named cases in no set of this ledger: ${outside.length} (${[...new Set(outside.map(value => value.where))].join(', ')})`)
       }

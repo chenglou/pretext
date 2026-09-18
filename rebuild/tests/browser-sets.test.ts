@@ -4,7 +4,7 @@ import { existsSync, mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { LAB_APPS } from '../lab/browser-build.ts'
-import { writeLedger, type LedgerHeader } from './ledger.ts'
+import { writeLedger, LEDGER_FORMAT, type LedgerHeader } from './ledger.ts'
 
 const run = (args: string[]): { exitCode: number; stderr: string } => {
   const result = Bun.spawnSync(['bun', join(import.meta.dir, 'browser-sets.ts'), ...args])
@@ -16,8 +16,8 @@ describe('browser-sets refuses before running', () => {
   test.skipIf(!existsSync(LAB_APPS.chrome))('a reference ledger of another browser build: nothing runs', () => {
     const dir = mkdtempSync(join(tmpdir(), 'browser-sets-'))
     const header: LedgerHeader = {
-      format: 'pretext-ledger/1', browser: 'chrome', config: 'no-facts', predictor: 'p.ts', build: { app: 'Google Chrome', appVersion: '1.0.0.0', engine: '1.0.0.0', os: '00A000' },
-      environments: [], scorer: 6, bundles: [], library: null, orders: 'both', historyCarriedFrom: null, sets: {}, counts: { lineCount: {}, breaks: {}, widths: {}, painter: {} },
+      format: LEDGER_FORMAT, browser: 'chrome', config: 'no-facts', predictor: 'p.ts', build: { app: 'Google Chrome', appVersion: '1.0.0.0', engine: '1.0.0.0', os: '00A000' },
+      environments: [], scorer: 6, bundles: [], library: null, orders: 'both', historyCarriedFrom: null, sets: {}, counts: { lineCount: {}, breaks: {}, widths: {}, painter: {} }, exact: { counts: {}, rectCounts: 0, rectCountsDiffering: 0, predictedValues: 0, predictedValuesDiffering: 0, passingWithDifferingValues: 0, passingWithDifferingRectCounts: 0 },
     }
     writeLedger(join(dir, 'reference'), { header, entries: [] })
     const result = run(['--browser=chrome', '--sets=smoke-hand', `--out=${join(dir, 'out')}`, `--reference=${join(dir, 'reference')}`])

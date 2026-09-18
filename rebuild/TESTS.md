@@ -15,9 +15,9 @@ can't see). Every tier runs two configurations: `no-facts`, the headline, and `f
 
 | Tier | Command | Shows | Measured on 2026-09-18, other jobs running beside |
 |---|---|---|---|
-| 0 | `bun test rebuild` | a failing unit test | 11 to 15 s (716 tests) |
+| 0 | `bun test rebuild` | a failing unit test | 11 to 15 s (727 tests) |
 | 1 | `bun rebuild/tests/replay.ts check --browser=all --config=all` | every case whose full prediction changed against a frozen reference, from recorded Canvas answers with no browser; the cases that need one | 77 s for six references, 380,882 cases |
-| 2 | `bun rebuild/tests/browser-sets.ts --browser=<browser> --out=<dir>` | status transitions against the reference ledger, lost pairs against the build-keyed seed | forward order, one browser: Chrome 88 s, Firefox 108 s, webkit-host 128 s |
+| 2 | `bun rebuild/tests/browser-sets.ts --browser=<browser> --out=<dir>` | status transitions against the reference ledger, of the four metrics and of the exact-value status (a case whose predicted values stop equalling the browser's while every metric passes), lost pairs against the build-keyed seed | forward order, one browser: Chrome 88 s, Firefox 108 s, webkit-host 128 s |
 | 3 | the round's evaluation (fresh sets, sealed sets, giants, installed Safari) | new classes on cases nobody saw | REPORT.md |
 
 **State after the round 4 evaluation.** The six official references under `.artifacts/tests/reference` still describe the
@@ -64,16 +64,16 @@ Terms:
 | `rebuild/tests/browser-sets.ts`, `rebuild/tests/baselines/sets/`, `staged-round4c-sets/` (round 4's library; `staged-round4-sets/` describes round 3's) | Tier 2 and its seeds |
 | `rebuild/tests/known-tail.json`, `known-tail.ts`, `known-tail.test.ts` | The known tail: the classes left open at the frozen line, with case ids and rules over a tier 2 ledger (59 items) |
 | `rebuild/tests/compare-sets.ts`, `rebuild/lab/compare-rows.ts` | Two tier 2 runs, or two row files, case by case (measure first, installed Safari against webkit-host) |
-| `rebuild/tests/ledger.ts` | The known-status ledger: transitions and conditions |
+| `rebuild/tests/ledger.ts` | The known-status ledger: the four metrics' statuses and the exact-value status per case, transitions and conditions |
 | `rebuild/lab/rows.ts`, `predictor-core.ts`, `port-measure.ts` | Rows read plain or `.zst`; the one prediction adapter; the observation ports' live measuring |
-| `rebuild/src/measure/font-checks.test.ts`, `rebuild/probes/font-checks.ts` | The runtime font checks against a stand-in Canvas (18 tests; one ties the joining-script test to the Blink port's joining types), and in the browsers over the lab's font declarations, beside the font table and the DOM (`.artifacts/lab/font-checks/tools/verdict.ts`): a check per release |
+| `rebuild/src/measure/font-checks.test.ts`, `rebuild/probes/font-checks.ts` | The runtime font checks against a stand-in Canvas (20 tests; one ties the joining-script test to the Blink port's joining types, two hold the checks' contexts to the engine's own text rendering), and in the browsers over the lab's font declarations, beside the font table and the DOM (`.artifacts/lab/font-checks/tools/verdict.ts`): a check per release |
 | `rebuild/src/measure/canvas-checks.test.ts`, `rebuild/probes/canvas-checks.ts` | `detectEngine()`'s Canvas checks against stand-in contexts, and the library's own `detectEngine()` in a browser: a pinned browser must answer supported (`LAB_CHROME_APP`, `LAB_FIREFOX_APP` for another build) |
 | `rebuild/knip.config.ts` | `bunx knip --config rebuild/knip.config.ts`: unused files and exports under `rebuild/`, tests ignored |
 | `rebuild/lab/browser-build.ts`, `rebuild/lab/pin-browser.sh` | The apps `lab/run.ts` and `probes/runner.ts` launch (pinned copies of Chrome and Firefox), and the build read from their bundles |
 | `rebuild/lab/sharded.ts` | One case file as several jobs at once; derivation observes through it |
 
 - `bunx tsc --noEmit -p rebuild/tests/tsconfig.json`
-- `bun test rebuild/tests`: 70 tests in 13 files.
+- `bun test rebuild/tests`: 85 tests in 14 files.
 
 Derived case files, rows and derivation records live under `.artifacts/charter-20260916/tests/families-20260916/<browser>/`. A baseline names its case file with a sha256.
 

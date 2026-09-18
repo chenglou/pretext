@@ -172,9 +172,10 @@ be learned in Gecko at all; `joining` stays unknown for fonts whose joined forms
 Menlo, Monaco). Without them the defaults stand under their gaps: Blink `script-context` fires on about a third of passing
 lines, and the ligature facts don't settle ligatures that form in some contexts only (Geeza Pro lam-meem and lam-lam-heh,
 Courier New `لله` and `ريال`), whose positions stay stand-ins under `glyph-clusters`. The re-queued U+3000 rule and
-font-run edges in Blink read the coverage fact; without it those edges report `font-fallback`. A cost the checks can't
-avoid: a platform font Canvas creates at 16px is the one Blink's DOM then uses for that family at 16px after zoom, which
-matters for opsz fonts; no native observation moved on 256,381 lab cases, and the lab has no system UI text at that size.
+font-run edges in Blink read the coverage fact; without it those edges report `font-fallback`. The checks measure in
+the engine's own kind of context (Blink: text-rendering `optimizeLegibility`, part of the font cache key,
+font_description.cc:308-331), so a platform font they make is shared only with the engine's contexts and with a page whose
+text sets `text-rendering: optimizeLegibility`, where the engine's contexts share it too (platform bug A).
 
 **Failing classes the ports can't settle from Canvas.** Blink: 4 ProbeShantell exact-fit rows depend on which offsets
 HarfBuzz left safe, and 3 `suite/space` Amiri rows on a contextual form's share of a joined pair; both report

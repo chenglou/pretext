@@ -218,11 +218,13 @@ and `facts` (the lab's font facts, the optional input; `predictor.ts`).
 |---|---|---|---|
 | 0 | `bun test rebuild` | a failing unit test | 11 to 12 s (644 tests); 20 s at load average 25 |
 | 1 | `bun rebuild/tests/replay.ts check --browser=all --config=all` | every case whose full prediction changed, with the first differing field; cases that need the browser | 77 s for the six references (380,882 cases) at load average 25; one reference (62,437 to 65,351 cases) 9 to 14 s on a quieter machine, 20 to 37 s at load average 38 |
-| 2 | `bun rebuild/tests/browser-sets.ts --browser=<browser> --out=<dir>` | status transitions against the reference ledger, and lost pairs against the build-keyed seed | forward order, one browser at a time: Chrome 88 s, Firefox 108 s, webkit-host 128 s; both orders with recording, the three browsers at once: 3 to 5.5 minutes each |
+| 2 | `bun rebuild/tests/browser-sets.ts --browser=<browser> --out=<dir>` | status transitions against the reference ledger, of the four metrics and of the exact-value status, and lost pairs against the build-keyed seed | forward order, one browser at a time: Chrome 88 s, Firefox 108 s, webkit-host 128 s; both orders with recording, the three browsers at once: 3 to 5.5 minutes each |
 | 3 | the round's evaluation (`fresh.ts`, sealed sets, giants, installed Safari) | new classes on cases nobody saw | see REPORT.md |
 
 Times are from this Mac (18 cores, 36 GB) on 2026-09-18 while other owners' browser jobs ran beside them, so they are
 upper bounds. `--config=facts` selects the other configuration in tier 2; tier 1 checks every frozen reference there is.
+Run tier 2 in both: with no supplied facts most values are limited, so a change that makes values wrong blocks in the
+facts configuration, where they are predicted ("The ledger", the exact-value status).
 
 **The sets** (`rebuild/tests/sets.ts`): `smoke-hand` (the 25 cases of `smoke-cases.ndjson`) and `smoke`; the development
 sets `runs`, `ws`, `policy`, `rich-prewrap` and `suite-sample`; the rule and feature families derived in round 3 (`families`,
@@ -338,6 +340,22 @@ records the browser and its build, the configuration, the scorer, the evidence r
 jobs ran (one, or the command says the library changed mid-run), whether both orders ran, and per set its protocol and the
 runs that are its evidence (run ids, `run.json`, per-case files).
 
+**The exact-value status** (format `pretext-ledger/2`) sits beside the four metrics and is part of none: whether every value
+the observation port reports as predicted equals the browser's. The values are the scorer's per-case facts: the rect count
+of every code point, node and element, predicted by definition, and the x and width of every rect in the predicted state;
+limited values are stand-ins and never count. Its closed set is `exact`, `not exact (values <n>, rect counts <m>)` with the
+two numbers in the entry's `differing`, `history-dependent` (as for the metrics; two orders that disagree on exactness over
+equal native layouts count), `protocol row`, and `unobserved` where the scorer compared nothing. A metric can pass over a
+wrong predicted value (a width inside a line whose sum holds, an x that moves no break), which is why the status exists:
+research/ROUND4-CRITIC.md planted one regression per engine that tier 1 caught and tier 2 didn't, 0 lost passes in Chrome
+and Firefox while passing cases with a wrong predicted value went from 0 to 57 and from 0 to 5 with the lab's facts. Read
+through this status, the same runs give 61 and 5 blocking cases with facts, 10 and 0 without. Firefox's 0 is what the
+other configuration is for: without facts `optical-size` limits nearly every Firefox line, and the change shows only as
+limited values that stopped agreeing, which an entry keeps as `limitedDiffering` and `transitions` prints as a sum with the
+cases where it rose (0 to 89 there), never blocking. No metric's meaning changed. The header counts the statuses, the
+compared and differing rect counts and predicted values, and the not exact cases none of whose lineCount, breaks and widths
+fails (REPORT.md's "passing cases with a wrong predicted value", and the same for rect counts).
+
 ```sh
 bun rebuild/tests/ledger.ts transitions <before ledger dir> <after ledger dir>    # grouped by metric, transition and family
 bun rebuild/tests/ledger.ts conditions <ledger dir> --groups=development           # firing, lift, weak coverage
@@ -345,7 +363,10 @@ bun rebuild/tests/ledger.ts conditions <ledger dir> --groups=development        
 
 `transitions` lists every change of status, so a failure that was never in scope is visible when it moves (`fail covered by
 in-word-prefix -> fail open`, `fail open -> pass`), and exits 1 when a pass became anything but history-dependent or a
-protocol row. It refuses, by name, ledgers of another browser, build, process languages, scorer, configuration or protocol;
+protocol row. The exact-value status moves the same way under `exact:` (`exact -> not exact (values 11, rect counts 0)`),
+and exits 1 when an exact case became anything but those two, or when a case that wasn't exact holds more differing values
+or rect counts than before; tier 2 exits the same. A ledger of the older format is refused: build it again from its runs
+(`ledger.ts build --runs=<dir>`), whose per-case files hold the facts. It refuses, by name, ledgers of another browser, build, process languages, scorer, configuration or protocol;
 `--allow=<name>` accepts one knowingly. The reference ledgers sit beside the references (`.artifacts/tests/reference/
 <browser>-<config>/ledger`), copied by `pack` from the recording and pinned by hash in the repository's manifest.
 
@@ -364,6 +385,7 @@ protocol row. It refuses, by name, ledgers of another browser, build, process la
 | Host differences between bun and a browser (tier 1) | `pack`'s fidelity check; unfaithful cases always go to tier 2 | the six recordings: none |
 | The lab predicts after native layout, an application before | `--measure-first` with `compare-sets.ts` ("Measure first") | 2026-09-18: Chrome and webkit-host move nothing; Firefox moves 121 emoji cases, 116 of them known history-dependent |
 | A class left open on purpose moves | the known tail names it on the transition ("The known tail") | `rebuild/tests/known-tail.test.ts` |
+| A predicted value goes wrong where every metric still passes | the ledger's exact-value status, in both configurations | `rebuild/tests/ledger.test.ts`; the critic's planted runs read again: 61 and 5 blocking cases with facts |
 
 ### The known tail
 
@@ -374,8 +396,9 @@ history dependence, heuristics, painter exactness, browser bugs, rare scripts an
 with where each was found (a tier set, a fresh seed, `triage`), a source (documents, probes, source lines) and a note on what
 would convert or reopen it. An item can also have a `match` rule over a tier 2 ledger: browsers, a status kind (`covered`,
 `open`, `residual`, `history-dependent`, `unobserved`), the conditions a covered failure lists, family prefixes, metrics
-(without them a rule reads lineCount, breaks and widths, never the painter) and configurations. A rule keeps a class of a
-thousand rows to one item.
+(without them a rule reads lineCount, breaks and widths, never the painter) and configurations. A rule over `not exact`
+reads the exact-value status instead of a metric and needs family prefixes (the rect counts of `rule/wbr-elements`). A rule
+keeps a class of a thousand rows to one item.
 
 ```sh
 bun rebuild/tests/known-tail.ts status <ledger dir> [--item=<id>] [--all]   # where every item's cases stand in a ledger
@@ -1287,20 +1310,23 @@ in any browser or configuration, and a second measure-first run in Firefox equal
   `rebuild/probes/measure-first.ts`, each alone in a fresh process at DPR 2, DOM `system-ui` text at 8px to 16px after a
   context measured at the zoomed size: a context with default settings changes the DOM's widths (16px: 71.24px for 81.125px);
   the library's measuring context, which sets text-rendering `optimizeLegibility`, doesn't; the same context does where the
-  page's text sets `text-rendering: optimizeLegibility`; and the font checks' contexts (text-rendering auto, asked about a
-  space and U+2010 only) do. The checks measure at 16px, which is the zoomed size of 8px text, where the system font's
-  optical size is the same, and never measure the system font at the zoomed size, so nothing shows on the lab's fonts. For a
-  named font with an opsz axis check 4's zoomed-size context shares the DOM text's key: after the DOM it gets the DOM's
-  font, the advances look linear and the fact comes out false; before the DOM the fact stays unknown and the DOM text takes
-  the check's font. No lab font has the axis, so this is read from the probes and the source, not observed
-  (`rebuild/tests/known-tail.json`, `blink/font-check-contexts-share-the-dom-font`).
+  page's text sets `text-rendering: optimizeLegibility`; and a font check's context at text-rendering auto does (probes
+  `font-check-auto` and `font-check-auto-word`), which is how the checks measured until the correctness line. For a named
+  font with an opsz axis check 4's zoomed-size context then shared the DOM text's key: after the DOM it got the DOM's
+  font, the advances looked linear and the fact came out false, with no gap; before the DOM the DOM text took the check's
+  font. No lab font has the axis, so that was read from the probes and the source (research/ROUND4-CRITIC.md "Fix first" 1),
+  not observed. The checks now measure as the engine's contexts do (`src/measure/font-checks.ts` `checkTextRendering`, with
+  the source reading in the header): probes `font-check` and `font-check-word` leave every DOM width on the clean rule, and
+  the change moved no status, prediction or painted line on the tier sets (`rebuild/tests/known-tail.json`,
+  `blink/font-check-contexts-share-the-dom-font`, closed). WebKit's key holds the size opsz is set from, and Gecko is asked
+  nothing, so neither had the defect.
 - **webkit-host: nothing moves.** The break cache is the DOM's alone, and both protocols lay the cases out and paint them in
   one order; Canvas has no part in it.
 
 **What an application should be told.** In Chrome and WebKit, nothing: measuring first gives the lines that measuring after
-gives, on every case here. Two Chrome notes belong to platform bug A rather than to an order: a page whose text sets
-`text-rendering: optimizeLegibility` shares platform fonts with the library's contexts, and the font checks' contexts share
-them with default text, which matters only for fonts with an optical size axis at a zoom other than 1. In Firefox, the width of
+gives, on every case here. One Chrome note belongs to platform bug A rather than to an order: a page whose text sets
+`text-rendering: optimizeLegibility` shares platform fonts with the library's contexts, the font checks' among them, which
+matters only for fonts with an optical size axis at a zoom other than 1. In Firefox, the width of
 an emoji depends on whether the process has looked up an emoji's text presentation (U+FE0E) before: a prediction holds for
 the state it was measured in, so text measured before such a lookup and laid out after it can be 1px per emoji off (at 16px),
 and the library reports `page-history` on the text that makes the lookup, not on the emoji measured earlier.

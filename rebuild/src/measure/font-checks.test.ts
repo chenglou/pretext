@@ -6,6 +6,7 @@ import { PINNED_BUILDS, type BlinkEnvironment, type Environment, type GeckoEnvir
 import { UNKNOWN_FONT_FACTS, type FontDecl, type FontFacts, type Paragraph } from '../model.ts'
 import { createMeasurer, type Measurer } from './canvas.ts'
 import { withLearnedFontFacts } from './font-checks.ts'
+import { prepareParagraph } from '../index.ts'
 
 const BEH = '\u0628'
 const LAJANYALAN = '\u07fa'
@@ -199,6 +200,37 @@ describe('joining (Blink)', () => {
     fonts['Naskh'] = contextual(arabicWidths(0.75), -0.25, -0.25)
     fonts['NKo'] = { advance: ch => (ch === LAJANYALAN ? 0.5 : undefined), adjust: text => (text === LAJANYALAN + LAJANYALAN ? 0.125 : 0) }
     expect(learn('NKo, Naskh', BEH, blink(1)).joining).toBe(null)
+  })
+})
+
+describe('the checks\' contexts', () => {
+  // Every check at once: a soft hyphen, a joining letter, and in Blink a zoom other than 1.
+  const everyCheck = `a\u00adb${BEH}`
+
+  test('Blink: text-rendering optimizeLegibility, which keeps them off the font cache key of the page\'s own text', () => {
+    const m = createMeasurer()
+    const facts = learn('Prop', everyCheck, blink(2), undefined, m)
+    expect(facts.primaryFamily).toBe('Prop')
+    expect(facts.opticalSizeAxis).toBe(false)
+    expect(m.log.contexts.length).toBeGreaterThan(0)
+    expect(m.log.contexts.filter(c => c.textRendering !== 'optimizeLegibility')).toEqual([])
+    // Check 4's two sizes are among them: the zoomed size is where a context at text-rendering auto would share the key.
+    expect(m.log.contexts.some(c => / 32px /.test(c.font))).toBe(true)
+  })
+
+  test('the text rendering of the engine\'s own contexts, in every engine', () => {
+    const envs: Environment[] = [blink(2), webkit, gecko]
+    for (let e = 0; e < envs.length; e++) {
+      const prepared = prepareParagraph(paragraph('Prop', everyCheck), envs[e]!)
+      const contexts = prepared.measurer.log.contexts
+      const own = contexts.filter(c => c.partition !== 'font-checks')
+      const checks = contexts.filter(c => c.partition === 'font-checks')
+      expect(own.length).toBeGreaterThan(0)
+      expect(checks.length > 0).toBe(envs[e]!.engine !== 'gecko')
+      const renderings = new Set(own.map(c => c.textRendering))
+      expect(renderings.size).toBe(1)
+      expect(checks.filter(c => !renderings.has(c.textRendering))).toEqual([])
+    }
   })
 })
 
