@@ -142,5 +142,6 @@ const PORT_PROBES: Probe[] = [['Amiri', '((((((((((((('], ['Amiri', '\u00ab\u00a
   note: 'The two-byte slice on a context set up as the port\'s, attribute by attribute, and after a Map lookup.',
 }))
 
-export const probes: Probe[] = [...SAMPLES.map(probe), ...PORT_PROBES]
-export default probes
+export default function twinProbes(): Probe[] {
+  return [...SAMPLES.map(probe), ...PORT_PROBES]
+}
