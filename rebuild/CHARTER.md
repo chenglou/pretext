@@ -107,7 +107,10 @@ evaluation of 2026-09-17 (REPORT.md §2-§7):
   1,069, 745 and 736), but `cases/obligations.ts` doesn't read them yet (TEST-ARCHITECTURE §7.1). The lab gate baselines
   (`rebuild/lab/baselines/gate-<browser>-<build>.json`, seeded again by the ceiling round 2 evaluation for scorer 4 with
   every lost pair listed in `reseed-round2-lost-pairs.json`) block on the main-derived suite samples and the burned
-  2026-09-16 held-out sets (CHARTER-CRITIC item 17); G0 is still keyed on user agents and scorer 1.
+  2026-09-16 held-out sets (CHARTER-CRITIC item 17); G0 is still keyed on user agents and scorer 1. The ceiling round 3
+  evaluation staged scorer 5 seeds in `rebuild/lab/baselines/staged-round3` and `rebuild/tests/baselines/staged-round3`, each
+  with a record of its lost pairs, their covering gaps and attributions, and the pairs that leave through history
+  dependence; the adopted seeds refuse round 3's runs by scorer until those are adopted after the critic.
 - Found in the charter evaluation, with their status now:
   - Removed: the browser-process languages are recorded per row and given to the library (Chrome `uiLanguage`, Firefox
     `regionalPrefsLocale`, webkit-host `preferredLanguages` and ICU default locale). Since ceiling round 2 Gecko measures
@@ -115,7 +118,8 @@ evaluation of 2026-09-17 (REPORT.md §2-§7):
     nsFontCache.cpp:61-63). Left: `contentLanguage` is read only by Blink, Chrome's accept languages have no input, and
     WebKit's full preferred-language list isn't settled (tentpole 6).
   - Still: a line whose WebKit `contentWidth` isn't the union of its boxes is marked unobserved by a scorer rule, not by a
-    ported engine rule: 243 development, 261 held-out 09-16 and 244 sealed-2 cases in ceiling round 2 (tentpole 2).
+    ported engine rule: 243 development, 261 held-out 09-16 and 244 sealed-2 cases in ceiling round 2, and 243, 257 and 279
+    sealed-3 cases in round 3, with 8 of the 9 held-out giants (tentpole 2).
   - Still: native lines across nodes come from vertical-centre grouping, a named observer assumption (scorer 3 places a
     code point rect by its own node's box), and `y` and `height` are outside the observation contract (tentpole 2).
   - Still: the painter is scored by extents and wraps only, because `paint` doesn't report painted source offsets
@@ -129,7 +133,8 @@ evaluation of 2026-09-17 (REPORT.md §2-§7):
   - Removed: the sealed held-out set `sealed-20260917` exists and was run once, in the ceiling evaluation, scored counts
     only (tentpole 4). Two of its generator sources (`lab/cases/case.ts`, `build.ts`) gained tree cases after sealing;
     the case files' hashes are unchanged and flat cases keep their ids. The second set, `sealed-2-20260917`, ran once in
-    the ceiling round 2 evaluation, counts only.
+    the ceiling round 2 evaluation, counts only, and the third, `sealed-3-20260917`, once in the round 3 evaluation, counts
+    only (all 11 hashes verified first; no sealed-4 exists yet).
 - Found in ceiling round 1:
   - Removed in ceiling round 2: the slot-rows observer assumption wasn't checked. Scorer 4 marks a row whose slot floats
     sit outside their rows as a protocol row, never a pass or a fail (lab `score.ts` `slotProtocol`): Firefox 15 and
@@ -169,11 +174,20 @@ evaluation of 2026-09-17 (REPORT.md §2-§7):
     1 au signature. Not probed (tentpole 3). Removed in ceiling round 3: it is synthetic bold, whose offset isn't linear in
     the device size (gfxFont.h:1899-1904, probe F14), and the canvas element at the device size adds the DOM's.
   - WebKit's `page-history` condition misses a line that page history moves: `c-66ae4ab7d56cb0ae` passes alone in a fresh
-    process and fails in both orders of its set, so the two-order protocol can't see it either (tentpoles 2, 3).
+    process and fails in both orders of its set, so the two-order protocol can't see it either (tentpoles 2, 3). Status in
+    ceiling round 3: the condition is computed from history worlds (every other item list the break cache can hand a box,
+    one box at a time, a declared approximation; specs/webkit-RESULTS.md "Ceiling round 3"). In the evaluation it reports
+    every history-dependent webkit-host case (development 82, held-out 180, fresh 46, 66 and 54), no history-dependent case
+    fails without a covered explanation in both orders, and it still fires on 2,148 of 25,098 other development cases.
   - Line-local gaps that fire on a large share of passing cases: Blink `script-context` on 76% of the development cases,
     WebKit `canvas-language` on 45%. They are read from source, and nearly every webkit-host prediction failure is covered
     only by gaps with a lift below 2 (development 201 of 210, held-out 261 of 261). Narrowing them needs inputs Canvas
-    doesn't give (tentpole 3).
+    doesn't give (tentpole 3). Status in ceiling round 3: `script-context` fires on 38% of the development cases (31% of
+    passing lines) and `canvas-language` on 17% (15%), narrowed from source readings and font facts. Whether webkit-host's
+    coverage is weak now depends on the lift: over cases failing any metric, which its painter failures dominate, 187 of 205
+    development prediction failures are still covered only by conditions under 2; over prediction failures alone, 2 are
+    (`tab-stops`). `canvas-language` still covers 474 of webkit-host's 686 prediction failures on the evaluation's fresh
+    sets.
   - The painter regressed on sets its owner didn't run: Blink's hanging spaces painted in their own text node move the
     letter before them by its pair adjustment with the space, 58 Chrome pairs with the prediction unchanged, not traced to
     source (tentpole 7). Removed in ceiling round 3: traced to `ShapeLine` (a node of its own ends the text's item, whose
@@ -194,6 +208,40 @@ evaluation of 2026-09-17 (REPORT.md §2-§7):
     combined files didn't finish in installed Safari; the development and family files did, equal to webkit-host case by
     case. The cause is read from WebKit's background CPU limit and process throttler, not verified from Safari's logs
     (REPORT §2.7).
+- Found in the ceiling round 3 evaluation (REPORT.md §2, 2026-09-18; library at the tag `round3-work-done`, one bundle in
+  every run):
+  - **The ceiling isn't reached in Chrome.** On three fresh sets nobody had seen (34,115 cases) every set has a failure
+    without a covered explanation, 6 rows in three new classes: an exact-fit break in ProbeShantell under letter spacing on a
+    first line with no gap at all (the font of `c-8c84627af834611f`, whose `in-word-prefix` condition fires at wrapped line
+    starts only), U+3000 kerned with the next line's first letter in Times New Roman, and an emergency break after a marked
+    waw in Geeza Pro whose gaps start after the decision text. Firefox and webkit-host each have two unseen sets in a row
+    without a new class, and one open row each in a class their owners had named (tentpoles 3, 4).
+  - Gecko's cursive letter spacing reading names the wrong cluster on `c-f3e8314c35b33990`: natively the first Phags-pa
+    letter takes the spacing, and the `font-fallback` range sits on the marked cluster. The three held-out rows of the
+    unbounded frame (probe F18) are covered by `in-word-prefix` by position only (tentpole 3).
+  - Registered from the WebKit owner's round 3 report, constants and a decision rule without a source reading: the 64px
+    letter spacing that counts a string's spacing-bearing glyphs, the sanity bound of 0.75 to 1.5 times the unshaped sum on
+    the Sterbenz reading, and the "nearer of two sums" test for whether two shaped runs join (a decision between two
+    source-backed hypotheses, not a choice by counts). History worlds vary one box at a time, a declared approximation
+    (tentpole 3).
+  - Registered from the scorer owner's report, scorer 5's coverage heuristics (lab `score.ts`, "Covered failures"): a unit
+    is the grapheme cluster of a differing code point with its widthless and default-ignorable neighbours (in WebKit the
+    differing node); runs of units whose widths net to zero need no gap (Gecko by the sum in app units, Blink within the
+    one-LayoutUnit rounding of floored and ceiled carets); evidence comes from the failing line only; a point gap on a
+    neighbouring line never covers; the painter keeps scorer 4's rule. The scorer checks where a range is, not what the
+    source reading says: the unbounded-frame rows above count as covered. Two observation consequences have no rule and
+    count as open rows: WebKit's rect width `f32(f32(x + w) − x)` at a moved x (`c-9a66d090891a825d`, `c-653ac96abf5487ff`)
+    and Blink's `suite/U+FFFC/start` rows, where a soft hyphen's copied rect moves the attributed line (tentpole 2).
+  - "Weak coverage" had no fixed definition: round 2's lift counts painter-only failures as failing cases. The evaluation
+    reports both lifts; one should be fixed (REPORT §7 item 8).
+  - The Gecko port's OffscreenCanvas fallback (no `document`) has no lab run, so its gaps and the 1 au and synthetic-bold
+    classes are uncounted there (tentpoles 3, 6).
+  - `painterLimits` isn't exported or recorded, so painter failures without a covered explanation rose where conditions
+    narrowed (development: Firefox 189 to 451, webkit-host 622 to 960; Chrome 72 to 14) (tentpole 7).
+  - Two tests fail at the evaluated tree, neither in engine code: `tests/independence.test.ts` on
+    `lab/baselines/no-facts-predictor.ts`, which imports library logic, and `tests/families/families.test.ts` on the retired
+    rule id `webkit/measure/word-spacing-in-js`, which the families `following-space` and `tabs` still name; the staged
+    coverage matrix loses that rule's last observed family, and its replacement has none (tentpole 4).
 - Blink, ceiling round 3 (specs/blink-RESULTS.md "Ceiling round 3"):
   - Removed: Chrome 153.0.8010.50 no longer reports `engine-build`. `env.ts` `SOURCE_IDENTICAL_BUILDS` accepts it with its
     evidence (`git diff --name-only 153.0.8010.48 153.0.8010.50` lists chrome/VERSION alone, DEPS unchanged).
@@ -241,7 +289,12 @@ evaluation of 2026-09-17 (REPORT.md §2-§7):
     run's context and in "Apple Color Emoji" alone (font matching's state, gfxTextRun.cpp:4003-4005, :3559-3569). It fires
     on 0.26% of passing development lines with a lift of 0.85 there (round 2: 0.01%), and no both-orders run backs it yet.
     The observation port doesn't limit values under it or under the cursive letter spacing `font-fallback`: fresh sets 2,
-    11 and 15 hold 121, 94 and 132 passing cases with a wrong predicted value (tentpoles 2, 3).
+    11 and 15 hold 121, 94 and 132 passing cases with a wrong predicted value (tentpoles 2, 3). Status in the round 3
+    evaluation, which ran both orders: `page-history` reports all 227 history-dependent development and held-out cases
+    (round 2: none) and 56 of 25,012 others; on the fresh sets it reports 8 of 104, 14 of 116 and 95 of 95 history-dependent
+    cases, yet 527 of all 542 pass lineCount, breaks and widths in both orders with exact predicted values, because the
+    canvas element follows the DOM's font state. The owner's passing cases with a wrong predicted value aren't
+    reproduced: the evaluation's fresh sets hold 0, 0 and 1, and their history-dependent cases hold none in either order.
   - Still, new: assumptions and constants without a source reading. The suffix-side in-word recipe for clusters without
     joining forms came in for cost after a stalled job, and rests on such a cluster shaping alone as it does after its
     neighbour; U+200C is appended to a lone mirrored neutral only, after a held-out row showed a lone mark shaping

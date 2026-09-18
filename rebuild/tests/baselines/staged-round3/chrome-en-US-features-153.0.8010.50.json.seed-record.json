@@ -1,0 +1,23 @@
+{
+  "staged": "rebuild/tests/baselines/staged-round3/chrome-en-US-features-153.0.8010.50.json",
+  "against": "rebuild/tests/baselines/chrome-en-US-features-153.0.8010.50.json",
+  "counts": {
+    "cases": 468,
+    "passPairs": {
+      "lineCount": 468,
+      "breaks": 468,
+      "widths": 468,
+      "painter": 468
+    },
+    "historyDependentCases": 0,
+    "withoutPassesCases": 0,
+    "unstablePairs": 0,
+    "protocolCases": 0
+  },
+  "lost": [],
+  "leftThroughHistory": [],
+  "leftThroughProtocol": [],
+  "gained": [],
+  "casesOnlyBefore": 0,
+  "casesOnlyAfter": 0
+}
