@@ -1,8 +1,11 @@
 // The known-status ledger's rules (ledger.ts): the closed set of statuses, history dependence, like with like, and lift
 // over prediction failures alone.
 import { describe, expect, test } from 'bun:test'
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import type { GapFiring, MetricAttribution } from '../lab/score.ts'
-import { carryHistory, conditionsOf, entryOf, incomparable, statusOf, transitionsBetween, type Ledger, type LedgerEntry, type LedgerHeader, type PerCase } from './ledger.ts'
+import { buildLedger, carryHistory, conditionsOf, entryOf, incomparable, statusOf, transitionsBetween, type Ledger, type LedgerEntry, type LedgerHeader, type PerCase, type SetsRun } from './ledger.ts'
 import type { SetProtocol } from './sets.ts'
 
 const pass = { status: 'pass' }
@@ -41,6 +44,9 @@ describe('one status from a closed set', () => {
   test('a metric the two orders score differently on equal native layouts depends on history too', () => {
     const entry = entryOf('runs', per('c-1'), per('c-1', { widths: fail, lineGaps: { widths: attribution(false, []) } }))
     expect(entry.status).toEqual({ lineCount: 'pass', breaks: 'pass', widths: 'history-dependent', painter: 'pass' })
+    // A failure both orders have, under other conditions, keeps the forward order's conditions.
+    const covered = (gaps: string[]): PerCase => per('c-1', { widths: fail, lineGaps: { widths: attribution(true, gaps) } })
+    expect(entryOf('runs', covered(['in-word-prefix']), covered(['in-word-prefix', 'page-history'])).status.widths).toBe('fail covered by in-word-prefix')
   })
 
   test('a failure keeps the scorer\'s reason', () => {
@@ -134,5 +140,40 @@ describe('conditions', () => {
     // broad: half of the failing lines over two thirds of the passing lines; narrow: half over a thirtieth.
     expect([broad.lift, broad.painterOnlyFailingLines, narrow.lift]).toEqual([0.75, 1, 15])
     expect([report.coveredPredictionFailures, report.weaklyCoveredPredictionFailures, broad.weaklyCoveredOnly, narrow.weaklyCoveredOnly]).toEqual([2, 1, 1, 0])
+  })
+})
+
+describe('a ledger from a browser-sets run', () => {
+  // One set of two parts, both orders, as browser-sets.ts leaves them; `bundles` are the parts' library bundles.
+  function runFolder(bundles: [string, string]): string {
+    const dir = mkdtempSync(join(tmpdir(), 'ledger-run-'))
+    const environment = header().environments[0]!
+    const parts: SetsRun['sets'][number]['parts'] = []
+    for (let k = 0; k < 2; k++) {
+      for (const order of ['forward', 'reverse']) {
+        const folder = join(dir, 'runs/runs', order, `part${k}`)
+        mkdirSync(folder, { recursive: true })
+        writeFileSync(join(folder, 'chrome-run.json'), JSON.stringify({ status: 'ok', runId: `${order}-${k}`, bundleSha256: bundles[k], startedAt: '2026-09-18T00:00:00.000Z' }))
+        writeFileSync(join(folder, 'chrome-summary.json'), JSON.stringify({ scorer: 6, browsers: { chrome: { environments: { [environment]: 1 } } } }))
+        // Part 1's case fails widths in the reverse order only, on the same native layout.
+        const widths = k === 1 && order === 'reverse' ? fail : pass
+        writeFileSync(join(folder, 'chrome-per-case.ndjson'), `${JSON.stringify(per(`c-${k}`, { widths }))}\n`)
+      }
+      parts.push({ part: k, forward: join(dir, 'runs/runs/forward', `part${k}`), reverse: join(dir, 'runs/runs/reverse', `part${k}`) })
+    }
+    const run: SetsRun = { browser: 'chrome', config: 'no-facts', predictor: 'p.ts', build: header().build, orders: 'both', sets: [{ name: 'runs', protocol, subset: false, parts }] }
+    writeFileSync(join(dir, 'sets-run.json'), JSON.stringify(run))
+    return dir
+  }
+
+  test('every case gets its statuses, and every part\'s runs are the evidence', () => {
+    const built = buildLedger(runFolder(['b1', 'b1']), null)
+    expect(built.entries.map(value => [value.id, value.status.widths])).toEqual([['c-0', 'pass'], ['c-1', 'history-dependent']])
+    expect(built.header).toMatchObject({ scorer: 6, orders: 'both', bundles: ['b1'], counts: { widths: { pass: 1, 'history-dependent': 1 } } })
+    expect(built.header.sets['runs']!.evidence.map(value => [value.part, value.order, value.runId])).toEqual([[0, 'forward', 'forward-0'], [0, 'reverse', 'reverse-0'], [1, 'forward', 'forward-1'], [1, 'reverse', 'reverse-1']])
+  })
+
+  test('jobs that ran two library bundles show in the header: the rows describe no single library', () => {
+    expect(buildLedger(runFolder(['b1', 'b2']), null).header.bundles).toEqual(['b1', 'b2'])
   })
 })

@@ -16,8 +16,9 @@
 // - `fail open`: a failure without a covered explanation. For lineCount, breaks and widths these are the open model bugs.
 // - `residual <class>`: a lineCount, breaks or widths failure without a covered explanation on a row the scorer matched to
 //   a residual class (score.ts RESIDUAL_CLASSES), with `(probed)` or `(signature)`.
-// - `history-dependent`: the two orders observed other native layouts for the case (every metric), or scored this metric
-//   differently on equal native layouts (the prediction's Canvas answers depended on page history). Never a pass or a fail.
+// - `history-dependent`: the two orders observed other native layouts for the case (every metric), or gave this metric
+//   another kind of status on equal native layouts (the prediction's Canvas answers depended on page history). Never a pass
+//   or a fail.
 // - `protocol row`: the page doesn't describe the case's declared input (score.ts slotProtocol). Never a pass or a fail.
 // - `unobserved`: the scorer's unobserved and not-applicable, which are never passes.
 //
@@ -118,8 +119,9 @@ export function entryOf(set: string, forward: PerCase, reverse: PerCase | null):
   const reason: Partial<Record<MetricName, string>> = {}
   for (const metric of METRIC_NAMES) {
     let value = statusOf(forward, metric)
-    // Equal native layouts scored differently: the prediction depended on the order.
-    if (reverse !== null && value !== 'history-dependent' && statusOf(reverse, metric) !== value) value = 'history-dependent'
+    // Equal native layouts scored differently: the prediction depended on the order. Other conditions on a failure that
+    // both orders have keep the forward order's, which is what a forward-only run sees.
+    if (reverse !== null && value !== 'history-dependent' && statusKind(statusOf(reverse, metric)) !== statusKind(value)) value = 'history-dependent'
     status[metric] = value
     if (value !== 'pass' && forward[metric].reason !== undefined) reason[metric] = forward[metric].reason
   }
@@ -365,7 +367,7 @@ export function buildLedger(runDir: string, carryFrom: string | null): Ledger {
     let cases = 0
     for (const part of set.parts) {
       const read = (dir: string, order: 'forward' | 'reverse'): PerCase[] => {
-        const folder = join(REPO, dir)
+        const folder = resolve(REPO, dir)
         const record = JSON.parse(readFileSync(join(folder, `${run.browser}-run.json`), 'utf8')) as { runId?: string; bundleSha256?: string | null; startedAt?: string }
         const summary = JSON.parse(readFileSync(join(folder, `${run.browser}-summary.json`), 'utf8')) as { scorer: number; browsers: Record<string, { environments: Record<string, number> }> }
         scorers.add(summary.scorer)
@@ -431,7 +433,7 @@ function main(): number {
       const groups = options.get('groups') === undefined ? null : new Set(options.get('groups')!.split(','))
       const names = Object.keys(ledger.header.sets).filter(name => groups === null || groups.has(SETS.find(set => set.name === name)?.group ?? ''))
       const perCases: PerCase[] = []
-      for (const name of names) for (const evidence of ledger.header.sets[name]!.evidence) if (evidence.order === 'forward') perCases.push(...readPerCase(join(REPO, evidence.perCase)))
+      for (const name of names) for (const evidence of ledger.header.sets[name]!.evidence) if (evidence.order === 'forward') perCases.push(...readPerCase(resolve(REPO, evidence.perCase)))
       const report = conditionsOf(perCases, names)
       if (options.get('out') !== undefined) writeFileSync(resolve(options.get('out')!), `${JSON.stringify(report, null, 2)}\n`)
       console.log(`${names.join(', ')}: ${report.passingLines} passing lines in ${report.passingCases} cases, ${report.failingLines} failing lines in ${report.predictionFailures} prediction failures (${report.coveredPredictionFailures} covered, ${report.weaklyCoveredPredictionFailures} of them only by conditions with a lift below 2); ${report.painterOnlyFailures} painter-only failures (${report.painterOnlyFailingLines} lines), counted apart`)

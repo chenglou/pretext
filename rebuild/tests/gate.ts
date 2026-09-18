@@ -5,7 +5,8 @@
 // - rule families, blocking: the pairs (case id, metric) of the derived family cases that passed in both seeding runs,
 //   forward and reverse (lab/gate.ts seed and check rules, --complete);
 // - facts, blocking: the build's facts file against the one the baseline recorded; a verdict flip or a missing fact fails;
-// - coverage, blocking: a rule that had an observed family at seeding and has none now fails;
+// - coverage, blocking: a rule that had an observed family at seeding and has none now fails, unless it was removed and
+//   its replacements have one (coverage.ts lostObservedFamilies);
 // - measurement corpus, report only: main-derived runs (suite/, obligations/) against a lab G0 baseline. Their losses are
 //   listed and never fail the gate, until each obligation is triaged (CHARTER.md tentpole 5).
 //
@@ -27,7 +28,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join, relative, resolve } from 'node:path'
 import { checkRuns, parseBaseline, readRun, runPaths, runProblems, seedBaseline, seedRecord, stagedPath, type Baseline, type GateReport } from '../lab/gate.ts'
 import type { BrowserBuild, BrowserKind } from '../lab/types.ts'
-import type { Coverage } from './coverage.ts'
+import { lostObservedFamilies, type Coverage } from './coverage.ts'
 import { engineOfBrowser, readNdjson, type FamilyStats } from './derive.ts'
 import { diffFacts, type FactRecord, type FactsDiff } from './facts.ts'
 
@@ -147,7 +148,7 @@ function main(): number {
         if (!existsSync(before)) throw new Error(`${baseline.facts.file}: the baseline's facts file is gone`)
         facts = diffFacts(readNdjson<FactRecord>(before), readNdjson<FactRecord>(factsPath), null)
       }
-      const coverageLayer = baseline.coverage === null || coverage === null ? null : { lost: baseline.coverage.rulesWithObservedFamily.filter(id => !coverage.rulesWithObservedFamily.includes(id)) }
+      const coverageLayer = baseline.coverage === null || coverage === null ? null : { lost: lostObservedFamilies(baseline.coverage.rulesWithObservedFamily, coverage) }
       let corpus: TestsReport['corpus'] = null
       if (values.get('corpus-baseline') !== undefined && corpusRuns.length > 0) {
         const corpusBaseline = parseBaseline(readFileSync(need('corpus-baseline'), 'utf8'), need('corpus-baseline'))

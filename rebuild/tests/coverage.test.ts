@@ -1,6 +1,6 @@
 // What counts as coverage (rebuild/tests/coverage.ts) on a hand-made registry.
 import { describe, expect, test } from 'bun:test'
-import { buildCoverage, testPresent, type Coverage, type FamilyEvidence } from './coverage.ts'
+import { buildCoverage, lostObservedFamilies, testPresent, type Coverage, type FamilyEvidence } from './coverage.ts'
 import type { FactRecord } from './facts.ts'
 import type { RuleRecord } from './registry.ts'
 
@@ -55,6 +55,16 @@ describe('coverage', () => {
   test('annotations and lost families are reported', () => {
     expect(coverage.annotations).toEqual({ annotated: 1, missing: 4, unknown: ['blink/unknown/rule'] })
     expect(coverage.lostFamilies).toEqual(['blink/tabs/tab-stops'])
+  })
+
+  test('a removed rule whose replacements are observed doesn\'t lose its family; one without an observed replacement does', () => {
+    const now = { rulesWithObservedFamily: ['webkit/measure/word-spacing-in-context', 'blink/lines/kept'], removed: [
+      { id: 'webkit/measure/word-spacing-in-js', replacedBy: ['webkit/measure/word-spacing-in-context'] },
+      { id: 'webkit/measure/half-replaced', replacedBy: ['webkit/measure/word-spacing-in-context', 'webkit/measure/unobserved'] },
+      { id: 'webkit/measure/dropped', replacedBy: [] },
+    ] }
+    expect(lostObservedFamilies(['webkit/measure/word-spacing-in-js', 'blink/lines/kept'], now)).toEqual([])
+    expect(lostObservedFamilies(['webkit/measure/half-replaced', 'webkit/measure/dropped', 'blink/lines/gone'], now)).toEqual(['webkit/measure/half-replaced', 'webkit/measure/dropped', 'blink/lines/gone'])
   })
 
   test('a derived family without scored runs is listed and does not cover', () => {

@@ -394,7 +394,7 @@ async function pack(): Promise<number> {
   type Part = { set: string; part: number; rows: string; measurements: string; record: { bundleSha256: string | null } }
   const parts: Part[] = []
   for (const set of run.sets) for (const part of set.parts) {
-    const folder = join(REPO, part.forward)
+    const folder = resolve(REPO, part.forward)
     const measurements = join(folder, `${browser}-measurements.ndjson.zst`)
     if (!existsSync(measurements)) fail(`${part.forward} holds no measurement record: run browser-sets.ts with --record`)
     parts.push({ set: set.name, part: part.part, rows: join(folder, `${browser}-rows.ndjson`), measurements, record: JSON.parse(readFileSync(join(folder, `${browser}-run.json`), 'utf8')) as { bundleSha256: string | null } })
