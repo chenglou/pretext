@@ -49,7 +49,9 @@ doesn't depend on the old library in `src/`.
   classes apart from the per-case `residual` the scorer writes (`score.ts` `RESIDUAL_CLASSES`, the one registry).
 - `cases/used-ids.ts`: every case id used so far and the generation lock, shared by `seal.ts` and `fresh.ts`. A run made in
   another worktree of the repository names its case files by that worktree's paths; one that is gone is looked up from
-  `.artifacts` or `rebuild` on in this repository (`inThisRepository`), since every worktree shares one `.artifacts`;
+  `.artifacts` or `rebuild` on in this repository (`inThisRepository`), since every worktree shares one `.artifacts`, and a
+  named file that is a symbolic link into such a worktree is followed to its target the same way (the charter evaluation
+  linked its derived family files, and the links dangled once that worktree was removed, which made `seal.ts` refuse);
   `cases/parts.ts`: contiguous parts of a case file for parallel jobs and the giants rule, with a command line that splits a
   file and prints counts only; `cases/giants.ts`: the giants set (see "Giants"); `cases/family-widths.ts`: the rule and
   feature family paragraphs at seeded widths; `cases/parts.test.ts` their rules.
@@ -194,6 +196,16 @@ doesn't depend on the old library in `src/`.
 - **Probe releases**: `rebuild/tests/rerun-probes.sh` runs Gecko's follow-up sets (F7 to F27, 83 facts) and WebKit's round 4
   set, whose probes return raw values alone: each gives one undecided fact that holds its record's hash (`rebuild/tests/facts.ts`),
   so a release reports when the browser's answers changed. The ten records of 2026-09-18 equal the WebKit owner's earlier runs.
+
+## Landed in the round 4 evaluation
+
+- **`fresh.ts` takes the rich pre-wrap kind and `--config`** ("Fresh rounds"): the evaluation's fresh sets ran in both
+  configurations on the same cases and parts. Every suite case has been used, so the `suite` kind draws nothing until the
+  suite gets a new source, and sealed-4 holds no suite sample ("Sealed held-out sets").
+- **`cases/used-ids.ts` follows a dangling link into a removed worktree**, which had made `seal.ts` refuse.
+- The evaluation's tools (aggregates by ledger status, both configurations crossed, seed record attributions, counts-only
+  sealed scoring, the native hang set aside without opening a sealed case) are in
+  `.artifacts/ceiling-20260917/evaluate-r4/tools`; REPORT.md "Round 4 evaluation" has the numbers.
 
 ## Test tiers
 
@@ -1351,8 +1363,12 @@ browser and seed resumes: nothing that exists is generated, run or scored again.
    a generation lock so two rounds started together can't draw the same case. Kinds (`--kinds=`, default all):
    - `runs`, `ws`, `policy`: the generators of `cases/` under the seed, about 5,200 cases; `--repeat=N` adds the seeds
      `<seed>#2` to `<seed>#N`.
+   - `rich-prewrap` (since the round 4 evaluation): `cases/rich-prewrap.ts` under the seed, about 1,330 cases a seed, the
+     only kind with `white-space: pre-wrap` in inline structure; `--repeat` applies to it too.
    - `suite`: `--suite-sample=N` (default 3,000) unused suite cases by one quota per family, as sealed sets draw them.
-     144,156 of the suite's 238,524 cases were unused on 2026-09-17; each round uses what it draws.
+     144,156 of the suite's 238,524 cases were unused on 2026-09-17; each round uses what it draws, and on 2026-09-18 none
+     was left (1,406,595 used ids from 2,561 files), so the kind draws 0 cases until the suite gets a new source. The round 4
+     evaluation's sets made up for it with `--repeat=3 --widths-per-paragraph=2`: about 25,000 cases a set.
    - `family-widths`: the rule and feature family paragraphs at seeded widths (`cases/family-widths.ts`). The family
      builders in `rebuild/tests/families` never draw from their seeded stream, so every seed gives the same 3,276 paragraphs
      at the same derived widths and a new derivation would make no new case. This kind takes the browser's derived family
@@ -1366,7 +1382,10 @@ browser and seed resumes: nothing that exists is generated, run or scored again.
 2. **Split** this browser's cases into `--parts=N` contiguous parts in file order, balanced by text length (default 3, the
    browser's slots; installed Safari 1, where `--run-args=--allow-safari-frontmost` is needed and a part must stay under 8
    minutes).
-3. **Run** every part at the same time, one job per part and order under the lock. A failed job is never run again: the
+3. **Run** every part at the same time, one job per part and order under the lock. `--config=no-facts|facts` runs the set
+   under one of the tiers' two configurations ("Test tiers") and names its runs, report and round record after it
+   (`runs-<config>/`, `report-<config>.json`, `round-<config>.json`), so one seed's cases and parts serve both; without it
+   the predictor is `--predictor`'s or `run.ts`'s default and the names are `runs/`, `report.json` and `round.json`. A failed job is never run again: the
    round reports it with the log's tail and exits 2, and `--rerun-failed` runs it once more after the cause is fixed (the
    failed folder is renamed, not removed). A job that was interrupted counts as failed.
 4. **Score** every finished part with `score.ts` (`--native-compare` between the orders under `--both-orders`). A part is
@@ -1426,10 +1445,15 @@ case file a `run.json` under `.artifacts` names, every file under `.artifacts/la
 `.artifacts/lab/final-20260916/cases`, every case file of an earlier sealed set (a folder with a `SEAL.json`), every fresh
 round's set, and `smoke-cases.ndjson` (`cases/used-ids.ts`, under the generation lock that fresh rounds also take). Since
 sealed-3, giants leave the generated files for `<out-dir>/giants.ndjson` before hashing, by length alone. The suite import
-reads the suite's row files through `zstd` now that `compress-rows.sh` compressed them. Three sets exist: `sealed-3-20260917`
+reads the suite's row files through `zstd` now that `compress-rows.sh` compressed them. Four sets exist: `sealed-4-20260918`
+in `.artifacts/lab/sealed-4`, generated in the round 4 evaluation without any of 1,406,595 used ids from 2,561 files: runs
+2,579, ws 1,011 and policy 1,492 cases, no giant, and an empty suite sample, because no suite case was left unused ("Fresh
+rounds"); run once there, counts only (in Chrome without the one policy case of the native hang's signature, set aside
+without being opened: `.artifacts/ceiling-20260917/evaluate-r4/tools/sealed4-hang.py`); `sealed-3-20260917`
 in `.artifacts/lab/sealed-3`, generated in ceiling round 3 without any of 714,404 used ids from 359 files, both earlier
 sealed sets and the first fresh sets included: runs 2,580, ws 1,011, policy 1,594, suite sample 9,996 and 4 giants, with 0
-ids shared with any other set (checked by id only), unopened; and two spent ones: `sealed-20260917` in
+ids shared with any other set (checked by id only), run once in the ceiling round 3 evaluation, counts only; and two
+spent ones: `sealed-20260917` in
 `.artifacts/lab/sealed` (run once in the ceiling round 1 evaluation) and `sealed-2-20260917` in `.artifacts/lab/sealed-2`,
 generated in ceiling round 2 without any of 669,645 used ids from 270 files, the first sealed set's included: runs 2,579,
 ws 1,014, policy 1,597 and suite sample 10,000 cases, with 0 ids shared with the first set (checked by id only). The census's full-suite chunks aren't excluded, since they

@@ -115,7 +115,8 @@ The maintainer's, after ceiling round 3's evaluation and critic (research/ROUND3
 What still stands against the tentpoles, then what was removed, one line each. The detail of a removed item is in
 REPORT.md, specs/*-RESULTS.md and this file's history. Sources: research/{blink,webkit,gecko}-shortcut-audit.md
 (2026-09-16), the charter evaluation and ceiling rounds 1 to 3 (REPORT.md, research/ROUND*-EVALUATION.md and -CRITIC.md),
-and the round 4a owners' reports (2026-09-18).
+the round 4a to 4c owners' reports and the round 4 evaluation (2026-09-18; REPORT.md "Round 4 evaluation"). What the frozen
+line leaves open is listed with case ids in `rebuild/tests/known-tail.json`.
 
 ### Standing
 
@@ -186,15 +187,19 @@ the two residual classes of the OffscreenCanvas decision; the unbounded frame of
 Core Text glyph runs) and ligatures or pair adjustments across a box edge are stand-ins under
 `rtl-shaping-across-inline-boxes`; `<wbr>` rects are untraced.
 
-**Reported as predicted, or covered, where it shouldn't be (round 4b's engine items; definitions of REPORT §2.8).**
+**Reported as predicted, or covered, where it shouldn't be (the round 4 evaluation; definitions of REPORT §2.8).**
 
-- Blink's `page-history` on runs measured at the CSS size (`system-ui`, `BlinkMacSystemFont`) covers failures page
-  history doesn't cause: 28 isolated rows fail the same way alone in a fresh process, and measuring order doesn't move
-  the DOM (ROUND3-CRITIC item 1). With `pairKerning` unknown, Blink reports positions between kerned glyphs inside a line
-  as predicted with no gap on the line (43 rows behind the table in the no-facts configuration, one class: `xx LYAY bbbb
-  cc dddd` in 20px Times New Roman, e.g. `c-0f3ea3e4202d62d0`), which `optical-size` masked while it fired on every line.
-- WebKit's observation port reports values as predicted under the layout's own ranged gaps, and the x of nodes after a
-  limited node (ROUND3-CRITIC item 3: 1,092 of 123,460 predicted node widths on one fresh set).
+- With no supplied facts some conditions fire widely enough to cover failures they don't cause, because the scorer checks
+  where a range is, not what its reading says: Gecko's `optical-size` on 99.7% of passing lines at a lift of 1.00 (Firefox's
+  Canvas can't show an opsz axis, so the fact is never learned; 212 tier failures and 224 fresh rows are covered by it
+  alone, 48 of the fresh ones open or residual with the lab's facts), Blink's `script-context` on 31.9% (lift 1.64) and
+  `glyph-clusters` on 11.0% (1.60): 30 of the 31 fresh Chrome rows that are open with the lab's facts read covered without
+  them. The headline configuration's open counts are read beside the facts configuration's (REPORT.md "The correctness
+  line"). Blink's scaled recipe for the system UI font reports `optical-size` over the whole run, which also covers by
+  position (4 of 2,860 values at 13.33px are one LayoutUnit off).
+- The WebKit observation port reports an element rect's width as predicted where WebKit reports `f32(f32(x + w) − x)` at an
+  x moved by centring, an RTL block or a box edge: 13 fresh rich pre-wrap cases pass every metric and hold one such value
+  (1 of them with no supplied facts); no tier set holds one. Scorer 6 has the rule for node rects only.
 
 **Observation (tentpole 2).**
 
@@ -206,9 +211,14 @@ Core Text glyph runs) and ligatures or pair adjustments across a box edge are st
 - Firefox's history-dependent emoji cases aren't a stable set between identical runs (190 and 104 on the held-out suite
   sample with the same files, parts and orders: the asynchronous character map loading,
   gfxPlatformFontList.cpp:1474-1486), so the ledger can't compare them as a fixed set.
-- 75 passing webkit-host family cases hold one wrong predicted value each (a code point or element rect; untraced), and
-  the WebKit observation port measures its in-box stand-ins with the declared family list where the engine names the
-  generic's family; those values are limited, never predicted. Both are round 4b items.
+- Two observation classes of rich pre-wrap content stay open rows: a span whose only text is a trimmed space reports an
+  element rect in Chrome where the Blink port expects none (`c-a37545c096e939be` on the tier sets, 26 of 11,892 fresh rich
+  pre-wrap cases; every code point is on the right line), and a letter after preserved trailing spaces across a box end
+  reports rects on two lines in WebKit (2 fresh cases, untraced). Element rects of spans without a box fragment (a `<wbr>`
+  inside one, the font height stand-in) differ in rect counts only (12 tier cases).
+- Chrome's `Range.getClientRects()` hang (rebuild/platform-bugs entry 13) stalls a lab job, and the lab has no rule that
+  sets such cases aside before a run: round 4b set 7 fresh cases aside by signature, and the evaluation one sealed-4 case
+  without opening it.
 
 **Environment (tentpole 6).**
 
@@ -232,12 +242,16 @@ Core Text glyph runs) and ligatures or pair adjustments across a box edge are st
   inputs until each obligation is triaged under tentpole 5. research/MAIN-TRIAGE.md and `rebuild/lab/triage/` hold the
   records, but `cases/obligations.ts` doesn't read them (TEST-ARCHITECTURE §7.1). The adopted lab gate baselines block
   on the main-derived suite samples and the burned 2026-09-16 held-out sets (CHARTER-CRITIC item 17) and are scorer 4's;
-  G0 is still keyed on user agents and scorer 1. Round 3's staged seeds (scorer 5) refuse scorer 6's runs; tier 2's
-  seeds are staged in `rebuild/tests/baselines/staged-round4-sets` and describe the round 3 library until they are made
-  again after round 4's merges.
+  G0 is still keyed on user agents and scorer 1. The round 4 evaluation staged scorer 7 seeds for both configurations
+  (tier 2 in `rebuild/tests/baselines/staged-round4c-sets`, the lab gate and the tests gate in `staged-round4-no-facts` and
+  `staged-round4-facts`), with every lost pair attributed; they and the recorded references wait for the critic. The adopted
+  lab and tests seeds were recorded with the lab's facts, so the no-facts seeds lose the pairs that need a supplied fact.
 - `lab/gate.ts` keys on case ids alone; 714 ids sit in two tier sets (the smoke sample, `features-en-US`), where the gate
   is coarser than the ledger, which keys on set and id.
-- Sealed sets 1 to 3 each ran once, counts only; no sealed-4 exists yet.
+- Sealed sets 1 to 4 each ran once, counts only. Every one of main's 238,524 suite cases has been used, so sealed-4 holds
+  runs, ws and policy cases only and fresh sets draw no suite case: unseen suite-like cases need a new source.
+- No derived-width rule family exists for round 4c's three fixes (tab-size on a span, justify beside a preserved newline or
+  beside preserved spaces across a box end); the generated `rich-prewrap` set, at estimated widths, stands in.
 - CHARTER-CRITIC items still open: 2, 3 (`measure/font.ts`: WebKit's page zoom recipe is unverified), 4 (`breaks/rbbi.ts`,
   element.cc and locale_settings_mac.grd cite Chromium 152; Blink's V8 and HarfBuzz citations were read again at Chrome
   153's pins 6b96683d and dfdc088c), 10 in part (`contentLanguage`), 13 to 16.
@@ -246,8 +260,10 @@ Core Text glyph runs) and ligatures or pair adjustments across a box edge are st
 Painter limits are recorded per painted line and explain painter failures since scorer 6. 24 Blink pairs from round 2's
 hanging-space regression still fail: the geometry now says which runs ShapeLine reshaped (`runs[].reshaped`), and the
 painter doesn't read it yet. A wrapped line whose first cluster kept an adjustment with the previous line's last cluster
-(U+3000 in a font without it, `c-0ee8c36920378f9f`) paints without it and has no limit. `rebuild/bench/page.ts` fails at
-its first row against the inline-tree model (tentpole 8's record).
+(U+3000 in a font without it, `c-0ee8c36920378f9f`) paints without it and has no limit. Painting a line as its own block
+makes it a last line, which is most of the rich pre-wrap painter failures without an explanation (23 of Chrome's 28 on
+three fresh sets with no facts). `rebuild/bench/page.ts` fails at its first row against the inline-tree model (tentpole 8's
+record).
 
 ### Removed
 
@@ -299,7 +315,21 @@ its first row against the inline-tree model (tentpole 8's record).
     three registered items of round 3 (the 64px letter-spacing probe has a derived float32 bound checked per string, the
     0.75 to 1.5 bound is the Sterbenz interval, the nearer-of-two-sums test is Unicode Joining_Type); a `page-history` world
     laid out with the own carried width where the world's item differs.
-- Round 4b: the build number as the only guard against a browser whose Canvas differs. `detectEngine()` checks what each
+- Round 4b, engines and lab (checked by the round 4 evaluation): Blink's `page-history` covering system UI failures it
+  doesn't cause (the platform font sizes are the computed sizes floored to 1/100 px in float32, font_description.cc:271-282,
+  so 16.8px is a 16.79px font in Canvas and a 33.59px one in the DOM; all 64 rule-family rows pass and `page-history` fires on
+  no line); no-facts rows open because a pair adjustment inside a line had no gap (`unsafe-to-break` over the two clusters,
+  hb-kern.hh:102-106; the 72 rows are covered and still fail); WebKit's observation port reporting values as predicted under
+  the layout's own gaps (a line that reports a gap is limited as a whole, and the lines after it up to a forced break: 0
+  differing predicted values on the tier sets in both configurations and orders; values predicted 10.6% and 14.5%); the 75
+  passing webkit-host family cases with a wrong predicted value (98 traced: 42 an engine defect in a span's first and last
+  display box, fixed; 28 page history; 28 beside runs shaped across inline boxes); the port's stand-ins measured with the
+  declared family list (`WebKitTextBox.canvasFamily`); no measure-first check (Chrome and webkit-host move nothing; Firefox
+  moves 121 emoji cases through the process's font fallback state, and a prediction holds for the state it was measured in);
+  the synthetic bold rows counted as open (a registered residual class); the scorer's attribution leftovers (scorer 7).
+- Round 4c: Gecko's tab-size read from the block instead of the text frame, a preserved newline that didn't set
+  `lineEndsInBR`, Blink's justify end offset stopping at a close tag.
+- Round 4b, shared: the build number as the only guard against a browser whose Canvas differs. `detectEngine()` checks what each
   port's recipes assume (context attributes, the ink box, what the ligature-free letter spacing adds) in two contexts and
   two `measureText` calls, and answers unsupported by name; Firefox 140.16.0esr, where predictions collapsed under an
   `engine-build` gap alone, is refused for its missing `lang`, the 0.001px spacing kept as a fraction and the ink box it

@@ -12,9 +12,9 @@
 //
 // generationLock serializes generators that exclude used ids, so two sets generated at the same time can't pick the same
 // unused suite case: a set's files are complete before the next generator reads the used ids.
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmdirSync, statSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readdirSync, readFileSync, readlinkSync, rmdirSync, statSync, writeFileSync } from 'node:fs'
 import { spawnSync } from 'node:child_process'
-import { join, relative, resolve } from 'node:path'
+import { dirname, join, relative, resolve } from 'node:path'
 
 const REPO = resolve(import.meta.dir, '../../..')
 const ARTIFACTS = join(REPO, '.artifacts')
@@ -50,9 +50,24 @@ function* walk(dir: string, skip: string | null): Generator<string> {
 // A run made in another worktree of this repository names its case files by that worktree's paths (the charter branch's
 // ~/github/pretext-rebuild-charter, ceiling round 4's ~/github/pretext-rebuild-wt/<owner>), and worktrees go away. Every
 // worktree shares one `.artifacts`, and `rebuild/` is the repository's, so a named file that is gone is looked up by its path
-// from `.artifacts` or `rebuild` on, in this repository. A file that exists is taken as named.
-export function inThisRepository(file: string, exists: (path: string) => boolean = existsSync): string {
+// from `.artifacts` or `rebuild` on, in this repository. A file that exists is taken as named. A named file can also be a
+// symbolic link into such a worktree (the charter evaluation linked its derived family files), which dangles once the
+// worktree is gone: the link's target is then looked up the same way.
+function readLink(path: string): string | null {
+  try {
+    return readlinkSync(path)
+  } catch {
+    return null
+  }
+}
+
+export function inThisRepository(file: string, exists: (path: string) => boolean = existsSync, linkTarget: (path: string) => string | null = readLink, depth = 0): string {
   if (exists(file)) return file
+  const target = depth < 8 ? linkTarget(file) : null
+  if (target !== null) {
+    const found = inThisRepository(resolve(dirname(file), target), exists, linkTarget, depth + 1)
+    if (exists(found)) return found
+  }
   const match = /\/(\.artifacts|rebuild)\/.*$/.exec(file)
   if (match === null) return file
   const here = join(REPO, match[0])

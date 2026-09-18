@@ -83,4 +83,16 @@ test('a case file named by a worktree that is gone is found in this repository',
   expect(inThisRepository(`${REPO_ROOT}/.artifacts/lab/cases/ws.ndjson`, here)).toBe(`${REPO_ROOT}/.artifacts/lab/cases/ws.ndjson`)
   expect(inThisRepository('/tmp/elsewhere/cases.ndjson', here)).toBe('/tmp/elsewhere/cases.ndjson')
   expect(inThisRepository('/Users/x/other/.artifacts/gone.ndjson', () => false)).toBe('/Users/x/other/.artifacts/gone.ndjson')
+  // A named file that is a link into a worktree that is gone: the link's target is found in this repository, a relative
+  // target from the link's folder, and a link to nowhere stays as named.
+  const links: Record<string, string> = {
+    [`${REPO_ROOT}/.artifacts/evaluate/final/family-cases.ndjson`]: '/Users/x/github/pretext-rebuild-charter/.artifacts/tests/final/family-cases.ndjson',
+    [`${REPO_ROOT}/.artifacts/evaluate/final/relative.ndjson`]: '../../tests/final/family-cases.ndjson',
+    [`${REPO_ROOT}/.artifacts/evaluate/final/nowhere.ndjson`]: '/tmp/elsewhere/cases.ndjson',
+  }
+  const notLinks = (path: string): boolean => here(path) && links[path] === undefined
+  const target = (path: string): string | null => links[path] ?? null
+  expect(inThisRepository(`${REPO_ROOT}/.artifacts/evaluate/final/family-cases.ndjson`, notLinks, target)).toBe(`${REPO_ROOT}/.artifacts/tests/final/family-cases.ndjson`)
+  expect(inThisRepository(`${REPO_ROOT}/.artifacts/evaluate/final/relative.ndjson`, notLinks, target)).toBe(`${REPO_ROOT}/.artifacts/tests/final/family-cases.ndjson`)
+  expect(inThisRepository(`${REPO_ROOT}/.artifacts/evaluate/final/nowhere.ndjson`, notLinks, target)).toBe(`${REPO_ROOT}/.artifacts/evaluate/final/nowhere.ndjson`)
 })

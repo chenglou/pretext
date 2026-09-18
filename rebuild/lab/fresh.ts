@@ -3,19 +3,21 @@
 // on sets this tool makes (lab/README.md, "Fresh rounds").
 //
 //   bun rebuild/lab/fresh.ts --browser=chrome|firefox|webkit-host|safari --seed=<name> [--both-orders]
-//     [--kinds=runs,ws,policy,suite,family-widths] [--repeat=N] [--suite-sample=N] [--widths-per-paragraph=N]
+//     [--kinds=runs,ws,policy,rich-prewrap,suite,family-widths] [--repeat=N] [--suite-sample=N] [--widths-per-paragraph=N]
 //     [--family-dirs=<dir>[,<dir>...]] [--parts=N] [--giants=skip|run] [--chunk=N] [--stall-ms=N] [--predictor=<file>]
+//     [--config=no-facts|facts]
 //     [--run-args="<more run.ts arguments>"] [--max-wait-min=N] [--examples=N] [--max-groups=N]
 //     [--generate-only] [--report-only] [--rescore] [--rerun-failed]
 //   bun rebuild/lab/fresh.ts report --browser=<browser> --runs=<scored run dir>[,<dir>...] [--out=<report.json>] [--examples=N]
 //
 // It doesn't take the browser lock itself: every browser job it starts runs under .artifacts/session/with-browser-lock.py,
 // so start it without the lock. Steps, each skipped when its output exists (a second call resumes):
-// 1. Generate, under the generation lock (cases/used-ids.ts), without any case id used so far: styled runs, white space and
-//    policy from the seed (--repeat=N adds the seeds <seed>#2..N), a suite sample of unused suite cases by one quota per
-//    family, and the rule and feature family paragraphs at seeded widths (cases/family-widths.ts). A seed names one set of
-//    flat cases: a second browser asking for the same seed copies the first one's runs, ws, policy and suite files, so
-//    browsers compare on the same cases; family widths are per browser. Giants (cases/parts.ts) go to cases/giants.ndjson.
+// 1. Generate, under the generation lock (cases/used-ids.ts), without any case id used so far: styled runs, white space,
+//    policy and rich pre-wrap (cases/rich-prewrap.ts) from the seed (--repeat=N adds the seeds <seed>#2..N), a suite sample
+//    of unused suite cases by one quota per family (none is left since 2026-09-18), and the rule and feature family
+//    paragraphs at seeded widths (cases/family-widths.ts). A seed names one set of flat cases: a second browser asking for
+//    the same seed copies the first one's runs, ws, policy, rich-prewrap and suite files, so browsers compare on the same
+//    cases; family widths are per browser. Giants (cases/parts.ts) go to cases/giants.ndjson.
 // 2. Split this browser's cases into --parts contiguous parts in file order (default 3, installed Safari 1).
 // 3. Run every part at the same time, each as its own job under the lock, in file order, and with --both-orders also
 //    reversed. A failed job is never run again: its folder keeps the log, the round reports it, and --rerun-failed runs
@@ -27,6 +29,11 @@
 //    residual classes (score.ts RESIDUAL_CLASSES, read from the per-case files' `residual`) counted apart with probed members
 //    apart from signature-only ones, and gap firing rates on passing lines. Written to <out>/report.json and printed.
 //
+// --config runs the set under one of the tiers' two configurations (lab/README.md "Test tiers"): `no-facts`, the headline
+// (baselines/no-facts-predictor.ts), or `facts` (predictor.ts). Its runs, report and round record get the configuration's
+// name (runs-<config>/, report-<config>.json, round-<config>.json), so one seed's cases and parts serve both. Without it
+// the predictor is --predictor's or run.ts's default, and the names are as before.
+//
 // Output: .artifacts/lab/fresh/<browser>/<seed>/ with cases/, parts/, runs/part-NN-<order>/, report.json and round.json.
 import { spawn } from 'node:child_process'
 import { createHash } from 'node:crypto'
@@ -37,6 +44,7 @@ import { mergeCases, sortByCaseOrder, sortCases } from './cases/case.ts'
 import { defaultFamilyDirs, familyWidthCases } from './cases/family-widths.ts'
 import { appliesTo, contiguousParts, isGiant, readCaseLines, writeCaseLines, type CaseLine } from './cases/parts.ts'
 import { POLICY_GENERATORS } from './cases/policy.ts'
+import { generateRichPreWrap } from './cases/rich-prewrap.ts'
 import { RUN_GENERATORS } from './cases/runs.ts'
 import { stratifiedSample } from './cases/sample.ts'
 import { streamRowInputs, SuiteImport, suiteRowFiles } from './cases/suite.ts'
@@ -51,7 +59,8 @@ const ARTIFACTS = join(REPO, '.artifacts')
 const LOCK_TOOL = join(ARTIFACTS, 'session/with-browser-lock.py')
 const FRESH = join(ARTIFACTS, 'lab/fresh')
 const BROWSERS: readonly BrowserKind[] = ['chrome', 'firefox', 'webkit-host', 'safari']
-const FLAT_KINDS = ['runs', 'ws', 'policy', 'suite'] as const
+const FLAT_KINDS = ['runs', 'ws', 'policy', 'rich-prewrap', 'suite'] as const
+const CONFIG_PREDICTORS: Record<string, string> = { 'no-facts': 'rebuild/lab/baselines/no-facts-predictor.ts', facts: 'rebuild/lab/predictor.ts' }
 const KINDS = [...FLAT_KINDS, 'family-widths'] as const
 type Kind = (typeof KINDS)[number]
 const PREDICTION: readonly MetricName[] = ['lineCount', 'breaks', 'widths']
@@ -68,7 +77,7 @@ function log(text: string): void {
 // ---- Arguments ----
 
 const FLAGS = new Set(['both-orders', 'generate-only', 'report-only', 'rescore', 'rerun-failed'])
-const OPTIONS = new Set(['browser', 'seed', 'kinds', 'repeat', 'suite-sample', 'widths-per-paragraph', 'family-dirs', 'parts', 'giants', 'chunk', 'stall-ms', 'predictor', 'run-args', 'max-wait-min', 'examples', 'max-groups', 'runs', 'out'])
+const OPTIONS = new Set(['browser', 'seed', 'kinds', 'repeat', 'suite-sample', 'widths-per-paragraph', 'family-dirs', 'parts', 'giants', 'chunk', 'stall-ms', 'predictor', 'config', 'run-args', 'max-wait-min', 'examples', 'max-groups', 'runs', 'out'])
 const argv = process.argv.slice(2)
 const reportMode = argv[0] === 'report'
 const options = new Map<string, string>()
@@ -236,7 +245,8 @@ async function generate(outDir: string, seed: string, kinds: readonly Kind[]): P
         const result = familyWidthCases(seed, dirs, positive('widths-per-paragraph', 1), used)
         cases = result.cases
         detail = { paragraphs: result.paragraphs, sources: result.sources.map(source => ({ ...source, file: relative(REPO, source.file) })) }
-      } else cases = generatedKind(kind === 'runs' ? RUN_GENERATORS : kind === 'ws' ? WS_GENERATORS : POLICY_GENERATORS, seed, repeat)
+      } else if (kind === 'rich-prewrap') cases = generatedKind([{ family: 'rich-prewrap', generate: generateRichPreWrap }], seed, repeat)
+      else cases = generatedKind(kind === 'runs' ? RUN_GENERATORS : kind === 'ws' ? WS_GENERATORS : POLICY_GENERATORS, seed, repeat)
       const kept = cases.filter(value => !used.has(value.id))
       for (let i = 0; i < kept.length; i++) used.add(kept[i]!.id)
       writeCases(file, kept)
@@ -324,12 +334,13 @@ function jobState(job: Job): JobState {
 
 function runJob(job: Job, seed: string): Promise<number> {
   mkdirSync(job.dir, { recursive: true })
-  const lockArgs = [LOCK_TOOL, `fresh-${browser}-${seed}-${job.name}`, `--max-wait-min=${positive('max-wait-min', 240)}`]
+  const lockArgs = [LOCK_TOOL, `fresh-${browser}-${seed}-${options.has('config') ? `${options.get('config')}-` : ''}${job.name}`, `--max-wait-min=${positive('max-wait-min', 240)}`]
   // No browser named to the lock means every slot: nothing runs beside a giants job.
   if (job.giants) lockArgs.push('--browser=all')
   const runArgs = ['bun', 'rebuild/lab/run.ts', `--browser=${browser}`, `--cases=${job.cases}`, `--out=${job.dir}`, `--order=${job.order === 'forward' ? 'file' : 'reverse'}`,
     `--chunk=${job.giants ? 1 : positive('chunk', 25)}`, `--stall-ms=${job.giants ? positive('stall-ms', 1800000) : positive('stall-ms', 120000)}`]
-  if (options.has('predictor')) runArgs.push(`--predictor=${resolve(options.get('predictor')!)}`)
+  const predictor = options.has('config') ? join(REPO, CONFIG_PREDICTORS[options.get('config')!]!) : options.has('predictor') ? resolve(options.get('predictor')!) : null
+  if (predictor !== null) runArgs.push(`--predictor=${predictor}`)
   const extra = (options.get('run-args') ?? '').split(/\s+/).filter(value => value !== '')
   const out = createWriteStream(join(job.dir, 'run.log'))
   return new Promise(done => {
@@ -864,6 +875,10 @@ async function main(): Promise<void> {
   for (const kind of kinds) if (!KINDS.includes(kind)) fail(`Unknown kind ${kind}; expected ${KINDS.join(', ')}`)
   const giantsMode = options.get('giants') ?? 'skip'
   if (giantsMode !== 'skip' && giantsMode !== 'run') fail('--giants must be skip or run')
+  const config = options.get('config')
+  if (config !== undefined && CONFIG_PREDICTORS[config] === undefined) fail(`--config must be one of ${Object.keys(CONFIG_PREDICTORS).join(', ')}`)
+  if (config !== undefined && options.has('predictor')) fail('--config names the predictor; leave --predictor out')
+  const named = (name: string): string => (config === undefined ? name : name.replace(/^(runs|report|round)/, `$1-${config}`))
   const outDir = join(FRESH, browser!, seed)
   mkdirSync(outDir, { recursive: true })
 
@@ -874,9 +889,9 @@ async function main(): Promise<void> {
 
   const orders: Order[] = flags.has('both-orders') ? ['forward', 'reverse'] : ['forward']
   const jobs: Job[] = []
-  for (const part of parts.parts) for (const order of orders) jobs.push({ name: `${part.name}-${order}`, part: part.name, order, cases: join(REPO, part.file), dir: join(outDir, 'runs', `${part.name}-${order}`), giants: false })
+  for (const part of parts.parts) for (const order of orders) jobs.push({ name: `${part.name}-${order}`, part: part.name, order, cases: join(REPO, part.file), dir: join(outDir, named('runs'), `${part.name}-${order}`), giants: false })
   const giantJobs: Job[] = []
-  if (parts.giants !== null && giantsMode === 'run') for (const order of orders) giantJobs.push({ name: `giants-${order}`, part: 'giants', order, cases: join(REPO, parts.giants.file), dir: join(outDir, 'runs', `giants-${order}`), giants: true })
+  if (parts.giants !== null && giantsMode === 'run') for (const order of orders) giantJobs.push({ name: `giants-${order}`, part: 'giants', order, cases: join(REPO, parts.giants.file), dir: join(outDir, named('runs'), `giants-${order}`), giants: true })
 
   const failed: Array<{ job: string; code: number | null; log: string }> = []
   if (!flags.has('report-only')) {
@@ -921,13 +936,13 @@ async function main(): Promise<void> {
   const scored = (order: Order): ScoredRun[] => finished.filter(job => job.order === order && !scoreFailures.includes(job.name) && existsSync(join(job.dir, `${browser}-per-case.ndjson`)))
     .map(job => ({ name: job.name, rows: existingRows(job.dir, browser!) ?? join(job.dir, `${browser}-rows.ndjson`), perCase: join(job.dir, `${browser}-per-case.ndjson`) }))
   const round = {
-    format: 'pretext-lab-fresh-round/1', browser, seed, updatedAt: new Date().toISOString(), orders, cases: relative(REPO, join(outDir, 'cases')),
+    format: 'pretext-lab-fresh-round/1', browser, seed, ...(config === undefined ? {} : { config }), updatedAt: new Date().toISOString(), orders, cases: relative(REPO, join(outDir, 'cases')),
     jobs: [...jobs, ...giantJobs].map(job => ({ name: job.name, state: jobState(job), scored: !scoreFailures.includes(job.name) && existsSync(join(job.dir, `${browser}-summary.json`)) })),
     failedJobs: failed, scoreFailures,
   }
-  writeJson(join(outDir, 'round.json'), round)
+  writeJson(join(outDir, named('round.json')), round)
   if (scored('forward').length === 0) fail('no scored forward part to report on')
-  await report(scored('forward'), scored('reverse'), join(outDir, 'report.json'), { browser, seed, parts: scored('forward').map(run => run.name), missingParts: jobs.filter(job => job.order === 'forward' && !scored('forward').some(run => run.name === job.name)).map(job => job.name) })
+  await report(scored('forward'), scored('reverse'), join(outDir, named('report.json')), { browser, seed, ...(config === undefined ? {} : { config }), parts: scored('forward').map(run => run.name), missingParts: jobs.filter(job => job.order === 'forward' && !scored('forward').some(run => run.name === job.name)).map(job => job.name) })
   if (failed.length > 0 || scoreFailures.length > 0) process.exit(2)
 }
 

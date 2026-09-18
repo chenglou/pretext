@@ -1,6 +1,6 @@
 # Tests for the rebuild
 
-Status, 2026-09-18, branch `rebuild-20260916` after round 4a (the sections below keep the date of what they describe). This replaces the 2026-09-16 test strategy (research/TESTS.md). That strategy made main's accuracy grid, oracles and filed reports first-class obligations. Here main's suite and obligations are a measurement corpus (CHARTER.md tentpole 5). The blocking layers are the rebuild's own:
+Status, 2026-09-18, branch `rebuild-20260916` after the round 4 evaluation (the sections below keep the date of what they describe). This replaces the 2026-09-16 test strategy (research/TESTS.md). That strategy made main's accuracy grid, oracles and filed reports first-class obligations. Here main's suite and obligations are a measurement corpus (CHARTER.md tentpole 5). The blocking layers are the rebuild's own:
 
 - rule-targeted families, at widths derived from the browsers' observations;
 - versioned probe facts;
@@ -15,10 +15,22 @@ can't see). Every tier runs two configurations: `no-facts`, the headline, and `f
 
 | Tier | Command | Shows | Measured on 2026-09-18, other jobs running beside |
 |---|---|---|---|
-| 0 | `bun test rebuild` | a failing unit test | 11 to 15 s (689 tests) |
+| 0 | `bun test rebuild` | a failing unit test | 11 to 15 s (716 tests) |
 | 1 | `bun rebuild/tests/replay.ts check --browser=all --config=all` | every case whose full prediction changed against a frozen reference, from recorded Canvas answers with no browser; the cases that need one | 77 s for six references, 380,882 cases |
 | 2 | `bun rebuild/tests/browser-sets.ts --browser=<browser> --out=<dir>` | status transitions against the reference ledger, lost pairs against the build-keyed seed | forward order, one browser: Chrome 88 s, Firefox 108 s, webkit-host 128 s |
 | 3 | the round's evaluation (fresh sets, sealed sets, giants, installed Safari) | new classes on cases nobody saw | REPORT.md |
+
+**State after the round 4 evaluation.** The six official references under `.artifacts/tests/reference` still describe the
+round 3 library: against them every no-facts Chrome and webkit-host case asks a question the record lacks (the font
+checks), 64,392 Chrome and 55,381 webkit-host predictions differ with facts (`runs[].reshaped`, `canvasFamily`), and 61,819
+Firefox cases ask new questions (OffscreenCanvas only). The evaluation recorded tier 2 again for round 4's library (3c17016)
+in both configurations and both orders, with the `rich-prewrap` set: `.artifacts/ceiling-20260917/evaluate-r4/tier2/
+<browser>-<config>` (Chrome 66,685 cases, Firefox 63,771, webkit-host 63,987; 169 s, 168 s and 247 s a configuration with
+the three browsers at once). Packed into a private folder (`evaluate-r4/replay/<browser>-<config>`, `replay.ts pack
+--dir`), all 388,886 cases replay the browser's own prediction exactly, the question sequences included: 0 unfaithful.
+`replay.ts pack --runs=<that folder> --force` and `freeze --force --reason=<text>` make them the
+references; that is the orchestrator's step after the critic, as is adopting the staged seeds (§9). Transitions against the
+old reference ledgers need `--allow=scorer`; REPORT.md "What rounds 4a to 4c changed" has them.
 
 Tier 1 is a change detector, not an oracle: its expected values are the library's own at a commit. Its inputs are recorded
 per library, so a library that asks Canvas new questions needs a new recording (`browser-sets.ts --record`, `replay.ts
@@ -49,7 +61,9 @@ Terms:
 | `rebuild/tests/independence.test.ts` | No expected value from `rebuild/src` |
 | `rebuild/tests/sets.ts` | The tiers' sets and run protocol |
 | `rebuild/tests/replay.ts`, `rebuild/tests/reference/` | Tier 1: offline replay against a frozen reference, pinned by hash in the manifests |
-| `rebuild/tests/browser-sets.ts`, `rebuild/tests/baselines/sets/`, `staged-round4-sets/` | Tier 2 and its seeds |
+| `rebuild/tests/browser-sets.ts`, `rebuild/tests/baselines/sets/`, `staged-round4c-sets/` (round 4's library; `staged-round4-sets/` describes round 3's) | Tier 2 and its seeds |
+| `rebuild/tests/known-tail.json`, `known-tail.ts`, `known-tail.test.ts` | The known tail: the classes left open at the frozen line, with case ids and rules over a tier 2 ledger (59 items) |
+| `rebuild/tests/compare-sets.ts`, `rebuild/lab/compare-rows.ts` | Two tier 2 runs, or two row files, case by case (measure first, installed Safari against webkit-host) |
 | `rebuild/tests/ledger.ts` | The known-status ledger: transitions and conditions |
 | `rebuild/lab/rows.ts`, `predictor-core.ts`, `port-measure.ts` | Rows read plain or `.zst`; the one prediction adapter; the observation ports' live measuring |
 | `rebuild/src/measure/font-checks.test.ts`, `rebuild/probes/font-checks.ts` | The runtime font checks against a stand-in Canvas (18 tests; one ties the joining-script test to the Blink port's joining types), and in the browsers over the lab's font declarations, beside the font table and the DOM (`.artifacts/lab/font-checks/tools/verdict.ts`): a check per release |
@@ -459,6 +473,47 @@ Seeded by the ceiling round 2 evaluation (REPORT.md §2.6; `.artifacts/ceiling-2
 | `webkit-host-features-22625.1.29.11.27.json` | 12,268 | 12,248 / 12,236 / 11,021 / 8,817 | 0 | 0 | 0 | 10 |
 
 The cases only the adopted feature seeds hold are the `rule/line-slots` cases under the new width floor, the 22 protocol rows among them. With these seeds Chrome's tests baselines hold one build throughout (cases derived under .50, .50's facts, .50's runs).
+
+**Staged by the round 4 evaluation, 2026-09-18** (scorer 7, round 4's library at 3c17016, not adopted; tools in
+`.artifacts/ceiling-20260917/evaluate-r4/tools`: `gates.sh`, `attribute-records.py`, `seed-records.py`). One staging folder
+per configuration, because the baseline names carry none: `rebuild/tests/baselines/staged-round4-no-facts/` (the headline)
+and `staged-round4-facts/`, seeded from round 3's derivations as tier 2 ran them, each with a regenerated `coverage.json`
+(exit 0: Blink 155 of 195 rules covered, WebKit 114 of 156, Gecko 128 of 152, shared 22 of 36); the lab gate's seeds are in
+`rebuild/lab/baselines/staged-round4-{no-facts,facts}/` (smoke, the development sets with `rich-prewrap`, the held-out sets
+and the giants); tier 2's are in `rebuild/tests/baselines/staged-round4c-sets/`, compared with round 4a's staged seeds.
+Every staged seed passes a check against its own runs with the environment check on, and every lost pair carries an
+attribution in its seed record: round 3's where the pair was already lost then, else by rule from the pair's status in the
+other configuration and in the round 4a reference ledger.
+
+| Staged seed | Pass pairs (lineCount / breaks / widths / painter), no facts | Lost against the adopted seed, no facts | With facts | Left with a case the runs don't hold |
+|---|---|---|---|---:|
+| `chrome-153.0.8010.50.json` | 10,970 / 10,910 / 10,596 / 10,520 | 208 (26 lineCount, 41 breaks, 101 widths, 40 painter) | 2 painter | 0 |
+| `chrome-features-153.0.8010.50.json` | 12,994 / 12,994 / 11,564 / 9,225 | 276 (16 / 16 / 180 / 64) | 0 | 0 |
+| `chrome-en-US-features-153.0.8010.50.json` | 468 / 468 / 468 / 468 | 0 | 0 | 0 |
+| `firefox-156.0.json` | 9,674 / 9,488 / 8,892 / 8,475 | 167 (10 / 34 / 111 / 12) | 12 painter | 0 |
+| `firefox-features-156.0.json` | 12,050 / 12,050 / 10,866 / 8,421 | 0 | 0 | 18 pairs |
+| `webkit-host-22625.1.29.11.27.json` | 9,697 / 9,674 / 9,126 / 8,617 (6 history-dependent) | 16 painter | 16 painter | 6 pairs |
+| `webkit-host-features-22625.1.29.11.27.json` | 12,248 / 12,236 / 11,063 / 8,817 | 0 | 0 | 12 pairs |
+| lab gate, Chrome | | 79 (1 / 1 / 59 / 18) | 0 | 0 |
+| lab gate, Firefox | | 100 (4 / 7 / 84 / 5); 28 pairs left through history dependence, all passing now | 5 | 0 |
+| lab gate, webkit-host | | 4 (1 width, 3 painter); 175 pairs left through history dependence, 81 passing now | 4 | 0 |
+| tier 2, Chrome (against round 4a's staged seed) | 65,520 / 65,449 / 61,990 / 59,299 | 270 (14 / 6 / 0 / 250) | 0 | 0 |
+| tier 2, Firefox | 63,060 / 62,864 / 60,066 / 55,604 (313 history-dependent) | 546 (32 / 96 / 209 / 209) | 546 | 0 |
+| tier 2, webkit-host | 63,368 / 63,311 / 60,956 / 55,059 (279 history-dependent) | 0 | 0 | 0 |
+
+- With the lab's facts the lab and tests seeds lose exactly what round 3's staged seeds lost, under round 3's attributions
+  (Chrome's 2 `rule/joining` painter pairs, Firefox's 12 painter pairs and 5 lab pairs, webkit-host's 16 `rule/joining`
+  painter pairs and 4 lab pairs). The line counts and breaks round 3's seeds lost pass again: Firefox's 13.33px system font
+  rows by accident, as under round 2's OffscreenCanvas (Gecko owner), and webkit-host's `rule/joining` rows since round 4a.
+  The adopted seeds are round 2's, recorded on an OffscreenCanvas, so they don't show what Firefox lost against round 3's
+  canvas element; tier 2's record does.
+- With no supplied facts the adopted seeds, recorded with the lab's facts, are the wrong yardstick: every lost prediction
+  pair passes in this evaluation's facts runs and fails under the gap of the fact that is missing (`pairKerning` under
+  Blink's `unsafe-to-break` and Gecko's `in-word-prefix`, `ligatures` and `coverage` under `glyph-clusters`), its widths pair
+  is not applicable where breaks fail, and its painter pair follows.
+- Tier 2's losses are the ledger transitions of REPORT.md "What rounds 4a to 4c changed": Chrome's accidental passes of
+  round 3's no-facts library, and Firefox's measured cost of the OffscreenCanvas decision.
+- A sealed-4 record is in `rebuild/lab/baselines/sealed-4-20260918.json`.
 
 **Scorer 6 (2026-09-18)** makes every scorer 5 staged seed above refuse. Tier 2's seeds for the same sets are staged in `rebuild/tests/baselines/staged-round4-sets/` (six files, both configurations); forward-only runs of each browser lose nothing against them. They describe the round 3 library, and are made again after round 4's merges.
 

@@ -1,6 +1,6 @@
 {
   "format": "pretext-known-tail/1",
-  "note": "The classes deliberately left open when the correctness line is frozen (ceiling round 4). rebuild/tests/known-tail.ts has the format and the commands; rebuild/lab/README.md \"The known tail\" says how to read and append it. Counts and statuses in notes are of 2026-09-18.",
+  "note": "The classes deliberately left open when the correctness line is frozen (ceiling round 4). rebuild/tests/known-tail.ts has the format and the commands; rebuild/lab/README.md \"The known tail\" says how to read and append it. Counts and statuses in notes are of 2026-09-18; \"round 4 evaluation\" marks what the evaluation of that day added (.artifacts/ceiling-20260917/evaluate-r4).",
   "items": [
     {
       "id": "blink/cluster-split-across-spans",
@@ -150,9 +150,11 @@
     {
       "id": "blink/kerned-positions-without-pair-kerning-fact",
       "engine": "blink",
-      "kind": "open rows",
-      "title": "With pairKerning unknown, positions between kerned glyphs inside a line are reported without a gap on the line",
-      "conditions": [],
+      "kind": "convertible class",
+      "title": "With pairKerning unknown, positions between kerned glyphs inside a line fail under unsafe-to-break: Canvas totals don't show which glyph carries the adjustment",
+      "conditions": [
+        "unsafe-to-break"
+      ],
       "cases": [
         {
           "id": "c-71ad21a18a8a0713",
@@ -199,13 +201,29 @@
         "browsers": [
           "chrome"
         ],
-        "status": "open",
+        "status": "covered",
+        "conditions": [
+          "unsafe-to-break"
+        ],
+        "families": [
+          "rule/text-align",
+          "rule/in-word-breaks",
+          "rule/following-space",
+          "runs/split-word",
+          "suite/negative-space",
+          "suite/spacing-tail",
+          "suite/space-context",
+          "suite/following-space-context",
+          "runs/letter-spacing-spans",
+          "runs/span-at-space",
+          "ws/text-nodes"
+        ],
         "configs": [
           "no-facts"
         ]
       },
       "source": "round 4a font-checks report (43 rows of one class once optical-size stopped covering every line); ceiling round 4b gives this to the Blink owner",
-      "note": "rule/text-align `xx LYAY bbbb cc dddd` in 20px Times New Roman and runs/split-word: the kern moves between the space and the letter, and the line's sum is one LayoutUnit off. Open in the no-facts configuration only."
+      "note": "rule/text-align `xx LYAY bbbb cc dddd` in 20px Times New Roman and runs/split-word: the kern moves between the space and the letter, and the line's sum is one LayoutUnit off. Open in the no-facts configuration only. Round 4b: the line reports unsafe-to-break over the two clusters around such a boundary (hb-kern.hh:102-106), so the 72 rows are covered and still fail; the condition fires on 10.0% of passing no-facts lines (lift 5.0). `c-0f3ea3e4202d62d0`, `c-2ed8c1519b0bff81`, `c-221292d7b03d9b88`, `c-40b62b718c49e524`, `c-63aa7548036970e9`, `c-d5d2808e238b8518` are more of them. It could be narrowed to pairs whose halves land in other LayoutUnits, and a supplied `pairKerning` fact settles it."
     },
     {
       "id": "blink/exact-fit-under-letter-spacing",
@@ -305,6 +323,16 @@
           "id": "c-328ba3307635942f",
           "browser": "chrome",
           "where": "held-out, doubtful cover"
+        },
+        {
+          "id": "c-2ed43b0ea3b0d67a",
+          "browser": "chrome",
+          "where": "eval-r4-2: lam-alef after a space at an emergency break, 24px block; open with facts, covered by optical-size by position without"
+        },
+        {
+          "id": "c-dbc017ac8f974bb2",
+          "browser": "chrome",
+          "where": "eval-r4-1: the same ligature in a 36px RTL block, runs/split-word"
         }
       ],
       "match": {
@@ -379,10 +407,45 @@
           "id": "c-1fda71ce84fd9989",
           "browser": "chrome",
           "where": "reduced to a page"
+        },
+        {
+          "id": "c-a3f33be07d5b57aa",
+          "browser": "chrome",
+          "where": "r4b-blink-1: set aside by signature, unverified one by one"
+        },
+        {
+          "id": "c-8957ae80bbdcdfdf",
+          "browser": "chrome",
+          "where": "r4b-blink-1: set aside by signature, unverified one by one"
+        },
+        {
+          "id": "c-dba6b75cf18717f9",
+          "browser": "chrome",
+          "where": "r4b-blink-1: set aside by signature, unverified one by one"
+        },
+        {
+          "id": "c-0009dd3739b3ce85",
+          "browser": "chrome",
+          "where": "r4b-blink-1: set aside by signature, unverified one by one"
+        },
+        {
+          "id": "c-0c83aa4c797f9e6e",
+          "browser": "chrome",
+          "where": "r4b-blink-1: set aside by signature, unverified one by one"
+        },
+        {
+          "id": "c-6893cc4de0825d6c",
+          "browser": "chrome",
+          "where": "r4b-blink-2: set aside by signature before its run"
+        },
+        {
+          "id": "c-3229d7904410f2ae",
+          "browser": "chrome",
+          "where": "r4b-blink-2: set aside by signature before its run"
         }
       ],
       "source": "round 4a Blink report \"Bug report\" (shaping_line_breaker.cc:344-363, not traced further); rebuild/platform-bugs",
-      "note": "`。』` in an 8px block with overflow-wrap: break-word. The lab can't observe such a case."
+      "note": "`。』` in an 8px block with overflow-wrap: break-word. The lab can't observe such a case. The second hanging text of round 4b has no pair of closing marks, so the reduction names less than the bug. Round 4 evaluation: sealed-4's policy file stalled Chrome in both orders and both configurations (4 jobs, one cause); one case of the signature (policy/zh-lang, overflow-wrap: break-word, white-space normal, a block between half an em and one em wide) sat in both stalled round trips and was set aside without being opened (evaluate-r4/sealed4/chrome-policy-set-aside.ids). The fresh sets eval-r4-1 to -3 drew no such case. The lab still has no rule that sets such cases aside before a run."
     },
     {
       "id": "gecko/in-word-prefix-sides-dont-add-up",
@@ -506,6 +569,231 @@
           "id": "c-4c685cf01d01f006",
           "browser": "firefox",
           "where": "r4-gecko-1: the painter drew the line with its trimmed space, so the signature fails"
+        },
+        {
+          "id": "c-375cc85fc7286468",
+          "browser": "firefox",
+          "where": "eval-r4-2: two units 1 au off on one line, so the one-unit signature fails and the row is open with facts"
+        },
+        {
+          "id": "c-8f4918e24c9ce889",
+          "browser": "firefox",
+          "where": "eval-r4-2: two units 1 au off on one line, so the one-unit signature fails and the row is open with facts"
+        },
+        {
+          "id": "c-a0585277e809b588",
+          "browser": "firefox",
+          "where": "eval-r4-2: two units 1 au off on one line, so the one-unit signature fails and the row is open with facts"
+        },
+        {
+          "id": "c-82a84ab0dbe330b0",
+          "browser": "firefox",
+          "where": "eval-r4-3: two units 1 au off on one line, so the one-unit signature fails and the row is open with facts"
+        },
+        {
+          "id": "c-91d3b53be9b144f8",
+          "browser": "firefox",
+          "where": "eval-r4-3: two units 1 au off on one line, so the one-unit signature fails and the row is open with facts"
+        },
+        {
+          "id": "c-94022fa447cc1542",
+          "browser": "firefox",
+          "where": "eval-r4-3: two units 1 au off on one line, so the one-unit signature fails and the row is open with facts"
+        },
+        {
+          "id": "c-81e763186fe324b1",
+          "browser": "firefox",
+          "where": "eval-r4-1: residual member (probed), facts configuration"
+        },
+        {
+          "id": "c-a28ec5946493938d",
+          "browser": "firefox",
+          "where": "eval-r4-1: residual member (probed), facts configuration"
+        },
+        {
+          "id": "c-ad6f25bfb24b865d",
+          "browser": "firefox",
+          "where": "eval-r4-1: residual member (probed), facts configuration"
+        },
+        {
+          "id": "c-150f49d795a0574b",
+          "browser": "firefox",
+          "where": "eval-r4-3: residual member (probed), facts configuration"
+        },
+        {
+          "id": "c-6b3adcae11207b2c",
+          "browser": "firefox",
+          "where": "eval-r4-3: residual member (probed), facts configuration"
+        },
+        {
+          "id": "c-ca5edf07cf22043a",
+          "browser": "firefox",
+          "where": "eval-r4-3: residual member (probed), facts configuration"
+        },
+        {
+          "id": "c-0d9c66bc3173a215",
+          "browser": "firefox",
+          "where": "eval-r4-1: residual member (signature), facts configuration"
+        },
+        {
+          "id": "c-20366dc9e34c49a1",
+          "browser": "firefox",
+          "where": "eval-r4-1: residual member (signature), facts configuration"
+        },
+        {
+          "id": "c-4d79976f6a3a7d82",
+          "browser": "firefox",
+          "where": "eval-r4-1: residual member (signature), facts configuration"
+        },
+        {
+          "id": "c-5bfd01446eeb9794",
+          "browser": "firefox",
+          "where": "eval-r4-1: residual member (signature), facts configuration"
+        },
+        {
+          "id": "c-6ec001824a3f2dcc",
+          "browser": "firefox",
+          "where": "eval-r4-1: residual member (signature), facts configuration"
+        },
+        {
+          "id": "c-8072ebeff5f34473",
+          "browser": "firefox",
+          "where": "eval-r4-1: residual member (signature), facts configuration"
+        },
+        {
+          "id": "c-8c77a5533e79f3c8",
+          "browser": "firefox",
+          "where": "eval-r4-1: residual member (signature), facts configuration"
+        },
+        {
+          "id": "c-94dd4d7220e14394",
+          "browser": "firefox",
+          "where": "eval-r4-1: residual member (signature), facts configuration"
+        },
+        {
+          "id": "c-a266a0efdfbfe8cd",
+          "browser": "firefox",
+          "where": "eval-r4-1: residual member (signature), facts configuration"
+        },
+        {
+          "id": "c-a44be2bc6c20a0c5",
+          "browser": "firefox",
+          "where": "eval-r4-1: residual member (signature), facts configuration"
+        },
+        {
+          "id": "c-b02927e1f9c5de76",
+          "browser": "firefox",
+          "where": "eval-r4-1: residual member (signature), facts configuration"
+        },
+        {
+          "id": "c-b22bab46371a4432",
+          "browser": "firefox",
+          "where": "eval-r4-1: residual member (signature), facts configuration"
+        },
+        {
+          "id": "c-e59c9ccc46f0bf75",
+          "browser": "firefox",
+          "where": "eval-r4-1: residual member (signature), facts configuration"
+        },
+        {
+          "id": "c-e72c685882e8e29c",
+          "browser": "firefox",
+          "where": "eval-r4-1: residual member (signature), facts configuration"
+        },
+        {
+          "id": "c-fb26127e0301bc36",
+          "browser": "firefox",
+          "where": "eval-r4-1: residual member (signature), facts configuration"
+        },
+        {
+          "id": "c-11cb6e8a329a2a24",
+          "browser": "firefox",
+          "where": "eval-r4-2: residual member (signature), facts configuration"
+        },
+        {
+          "id": "c-2e6f83a081d9d35f",
+          "browser": "firefox",
+          "where": "eval-r4-2: residual member (signature), facts configuration"
+        },
+        {
+          "id": "c-6039633531f14f7c",
+          "browser": "firefox",
+          "where": "eval-r4-2: residual member (signature), facts configuration"
+        },
+        {
+          "id": "c-0cb1f66d5bd1a0f4",
+          "browser": "firefox",
+          "where": "eval-r4-2: residual member (signature), facts configuration"
+        },
+        {
+          "id": "c-1ac0e25c23920d4c",
+          "browser": "firefox",
+          "where": "eval-r4-2: residual member (signature), facts configuration"
+        },
+        {
+          "id": "c-64a473c04d367cbd",
+          "browser": "firefox",
+          "where": "eval-r4-2: residual member (signature), facts configuration"
+        },
+        {
+          "id": "c-78d5e36ac51a1c20",
+          "browser": "firefox",
+          "where": "eval-r4-2: residual member (signature), facts configuration"
+        },
+        {
+          "id": "c-b6f72e40f6b4b000",
+          "browser": "firefox",
+          "where": "eval-r4-2: residual member (signature), facts configuration"
+        },
+        {
+          "id": "c-c2d6d57df18bf231",
+          "browser": "firefox",
+          "where": "eval-r4-2: residual member (signature), facts configuration"
+        },
+        {
+          "id": "c-052ca7cbe1d1fc22",
+          "browser": "firefox",
+          "where": "eval-r4-3: residual member (signature), facts configuration"
+        },
+        {
+          "id": "c-0a1ecb53ea716063",
+          "browser": "firefox",
+          "where": "eval-r4-3: residual member (signature), facts configuration"
+        },
+        {
+          "id": "c-2a4c9416001dd5c3",
+          "browser": "firefox",
+          "where": "eval-r4-3: residual member (signature), facts configuration"
+        },
+        {
+          "id": "c-2cdaf1f9dd4187f7",
+          "browser": "firefox",
+          "where": "eval-r4-3: residual member (signature), facts configuration"
+        },
+        {
+          "id": "c-38a1bad05bf510aa",
+          "browser": "firefox",
+          "where": "eval-r4-3: residual member (signature), facts configuration"
+        },
+        {
+          "id": "c-395697d71ff6e13a",
+          "browser": "firefox",
+          "where": "eval-r4-3: residual member (signature), facts configuration"
+        },
+        {
+          "id": "c-444d3d335d0077f7",
+          "browser": "firefox",
+          "where": "eval-r4-3: residual member (signature), facts configuration"
+        },
+        {
+          "id": "c-8cdce8fe4993bd7f",
+          "browser": "firefox",
+          "where": "eval-r4-3: residual member (signature), facts configuration"
+        },
+        {
+          "id": "c-ba27482b1773b264",
+          "browser": "firefox",
+          "where": "eval-r4-3: residual member (signature), facts configuration"
         }
       ],
       "match": {
@@ -518,7 +806,7 @@
         ]
       },
       "source": "lab/score.ts RESIDUAL_CLASSES; probes F7, F13, F27; round 4a Gecko report §1 (17 rows on the defined sets, 11, 0 and 12 on three fresh sets)",
-      "note": "Every member is 10px or 15px Helvetica Neue, 10px Geeza Pro or 32px Thonburi, shaped through kern, kerx and morx. `c-4c685cf01d01f006` is `:` of F27's probed `LT:` alone on a line and counts as open."
+      "note": "Every member is 10px or 15px Helvetica Neue, 10px Geeza Pro or 32px Thonburi, shaped through kern, kerx and morx. `c-4c685cf01d01f006` is `:` of F27's probed `LT:` alone on a line and counts as open. Round 4 evaluation: 19 rows on the tier sets (16 probed, 3 by signature; 17 distinct cases, two also in the smoke sample) and 39 on three fresh sets of 74,200 cases (6 probed, 33 by signature), all with the lab's facts; 6 more fresh rows hold two such units on one line (2 au) and count as open. With no supplied facts every one of them reads covered by optical-size, which fires on 99.7% of passing lines at a lift of 1.00."
     },
     {
       "id": "gecko/synthetic-bold-class",
@@ -573,6 +861,21 @@
           "id": "c-640f1283e35ed6c6",
           "browser": "firefox",
           "where": "r4-gecko-3"
+        },
+        {
+          "id": "c-2a347f303f724329",
+          "browser": "firefox",
+          "where": "eval-r4-2"
+        },
+        {
+          "id": "c-31041374a25c754e",
+          "browser": "firefox",
+          "where": "eval-r4-2"
+        },
+        {
+          "id": "c-ce3bdf9e4d432fc0",
+          "browser": "firefox",
+          "where": "eval-r4-2"
         }
       ],
       "match": {
@@ -702,6 +1005,51 @@
           "id": "c-a749f1e7bd879df8",
           "browser": "webkit-host",
           "where": "runs: covered under scorer 6"
+        },
+        {
+          "id": "c-0560e2fd253c8ca1",
+          "browser": "webkit-host",
+          "where": "round 4b WebKit report: passes every metric and differs in box structure from the case alone"
+        },
+        {
+          "id": "c-0584f659aa240683",
+          "browser": "webkit-host",
+          "where": "round 4b WebKit report: passes every metric and differs in box structure from the case alone"
+        },
+        {
+          "id": "c-2831e2b52af7ff89",
+          "browser": "webkit-host",
+          "where": "round 4b WebKit report: passes every metric and differs in box structure from the case alone"
+        },
+        {
+          "id": "c-21ecede4442ac69d",
+          "browser": "webkit-host",
+          "where": "round 4b WebKit report: passes every metric and differs in box structure from the case alone"
+        },
+        {
+          "id": "c-357e4ce08f51853c",
+          "browser": "webkit-host",
+          "where": "round 4b WebKit report: passes every metric and differs in box structure from the case alone"
+        },
+        {
+          "id": "c-222b897d174bb6b7",
+          "browser": "webkit-host",
+          "where": "r4b-webkit-1: suite/maintained/kinsoku-units under page-history alone"
+        },
+        {
+          "id": "c-2ced3e7672c3fc7d",
+          "browser": "webkit-host",
+          "where": "r4b-webkit-1: suite/maintained/kinsoku-units under page-history alone"
+        },
+        {
+          "id": "c-37d85f3be46b8591",
+          "browser": "webkit-host",
+          "where": "r4b-webkit-1: suite/maintained/kinsoku-units under page-history alone"
+        },
+        {
+          "id": "c-3cbdacac26c35e1e",
+          "browser": "webkit-host",
+          "where": "r4b-webkit-1: suite/maintained/kinsoku-units under page-history alone"
         }
       ],
       "match": {
@@ -861,11 +1209,11 @@
       "id": "webkit/wrong-values-in-passing-family-cases",
       "engine": "webkit",
       "kind": "open rows",
-      "title": "75 passing family cases hold one wrong predicted value each",
+      "title": "Passing family cases that held one wrong predicted value each: 0 since round 4b on the tier sets",
       "conditions": [],
       "cases": [],
       "source": "round 4a WebKit report problems (rule/nested-box-edges 24, br-elements 12, joining 11, hanging-white-space 10, nowrap-spans 10, box-edges 8); 4b gives observation honesty to the WebKit owner",
-      "note": "Node rects are equal, so it is a code point or element rect. Not traced. `<wbr>` rects are untraced too."
+      "note": "Node rects are equal, so it is a code point or element rect. Not traced. `<wbr>` rects are untraced too. Round 4b traced all 98 (42 an engine defect in the first and last display box, fixed; 28 page history; 28 beside runs shaped across inline boxes) and limits whole lines that report a gap: 0 differing predicted values on the tier sets in both configurations and orders (round 4 evaluation). The class the evaluation found on fresh rich pre-wrap cases is lab/webkit-element-rect-width-float-step."
     },
     {
       "id": "webkit/ethiopic-under-a-locale",
@@ -920,7 +1268,928 @@
       "kind": "painter",
       "title": "Painter failures without a gap or a limit",
       "conditions": [],
-      "cases": [],
+      "cases": [
+        {
+          "id": "c-3f78ed9cb3ea9fef",
+          "browser": "chrome",
+          "where": "rich-prewrap (no-facts)"
+        },
+        {
+          "id": "c-a8c35abaa8a6f148",
+          "browser": "chrome",
+          "where": "heldout-ws (no-facts)"
+        },
+        {
+          "id": "c-333dbe214aac1431",
+          "browser": "chrome",
+          "where": "heldout-suite-sample (no-facts)"
+        },
+        {
+          "id": "c-fa9b31d5a0b9eaf0",
+          "browser": "chrome",
+          "where": "heldout-suite-sample (no-facts)"
+        },
+        {
+          "id": "c-f98e572a561533c6",
+          "browser": "chrome",
+          "where": "runs (facts)"
+        },
+        {
+          "id": "c-40c6005b0635eba1",
+          "browser": "chrome",
+          "where": "rich-prewrap (facts)"
+        },
+        {
+          "id": "c-4abc54b66b6c2867",
+          "browser": "chrome",
+          "where": "rich-prewrap (facts)"
+        },
+        {
+          "id": "c-35d522f87eafad25",
+          "browser": "chrome",
+          "where": "rich-prewrap (facts)"
+        },
+        {
+          "id": "c-4e1e2354d870bc34",
+          "browser": "chrome",
+          "where": "rich-prewrap (facts)"
+        },
+        {
+          "id": "c-8a054eb23d6b5e16",
+          "browser": "chrome",
+          "where": "heldout-suite-sample (facts)"
+        },
+        {
+          "id": "c-7daab5c0c3dce63e",
+          "browser": "chrome",
+          "where": "eval-r4-1 (no-facts)"
+        },
+        {
+          "id": "c-6190c200ed34165b",
+          "browser": "chrome",
+          "where": "eval-r4-2 (no-facts)"
+        },
+        {
+          "id": "c-d762b4366429111f",
+          "browser": "chrome",
+          "where": "eval-r4-2 (no-facts)"
+        },
+        {
+          "id": "c-fbb60c17301a30f0",
+          "browser": "chrome",
+          "where": "eval-r4-2 (no-facts)"
+        },
+        {
+          "id": "c-a484109e5cb6fbbb",
+          "browser": "chrome",
+          "where": "eval-r4-3 (no-facts)"
+        },
+        {
+          "id": "c-4ab8bcb02e541a43",
+          "browser": "chrome",
+          "where": "eval-r4-1 (no-facts)"
+        },
+        {
+          "id": "c-0df98821f6a4f715",
+          "browser": "chrome",
+          "where": "eval-r4-1 (no-facts)"
+        },
+        {
+          "id": "c-1a530d95cb1b558a",
+          "browser": "chrome",
+          "where": "eval-r4-1 (no-facts)"
+        },
+        {
+          "id": "c-66cfd010ba6d73e2",
+          "browser": "chrome",
+          "where": "eval-r4-1 (no-facts)"
+        },
+        {
+          "id": "c-f0bbf84a6e33619b",
+          "browser": "chrome",
+          "where": "eval-r4-1 (no-facts)"
+        },
+        {
+          "id": "c-e64e4c0fc60d6b20",
+          "browser": "chrome",
+          "where": "eval-r4-1 (no-facts)"
+        },
+        {
+          "id": "c-25696e84a0c9e3f6",
+          "browser": "chrome",
+          "where": "eval-r4-1 (no-facts)"
+        },
+        {
+          "id": "c-92f5f140433ff0e1",
+          "browser": "chrome",
+          "where": "eval-r4-1 (no-facts)"
+        },
+        {
+          "id": "c-a1f59f61605c31d7",
+          "browser": "chrome",
+          "where": "eval-r4-2 (no-facts)"
+        },
+        {
+          "id": "c-8219ebe3e82388b2",
+          "browser": "chrome",
+          "where": "eval-r4-2 (no-facts)"
+        },
+        {
+          "id": "c-df86b07196a572be",
+          "browser": "chrome",
+          "where": "eval-r4-2 (no-facts)"
+        },
+        {
+          "id": "c-6aac2b2c673f8926",
+          "browser": "chrome",
+          "where": "eval-r4-2 (no-facts)"
+        },
+        {
+          "id": "c-75755d45ceb6e264",
+          "browser": "chrome",
+          "where": "eval-r4-2 (no-facts)"
+        },
+        {
+          "id": "c-561e22388f4ea872",
+          "browser": "chrome",
+          "where": "eval-r4-2 (no-facts)"
+        },
+        {
+          "id": "c-b8d4ae617046558d",
+          "browser": "chrome",
+          "where": "eval-r4-3 (no-facts)"
+        },
+        {
+          "id": "c-fafd78580d012ac1",
+          "browser": "chrome",
+          "where": "eval-r4-3 (no-facts)"
+        },
+        {
+          "id": "c-efcd4ae29911c7b2",
+          "browser": "chrome",
+          "where": "eval-r4-3 (no-facts)"
+        },
+        {
+          "id": "c-6e2e0b6c7ed47da1",
+          "browser": "chrome",
+          "where": "eval-r4-3 (no-facts)"
+        },
+        {
+          "id": "c-5b6f2281ffb5eebf",
+          "browser": "chrome",
+          "where": "eval-r4-3 (no-facts)"
+        },
+        {
+          "id": "c-8408cc9d97ad3a0c",
+          "browser": "chrome",
+          "where": "eval-r4-3 (no-facts)"
+        },
+        {
+          "id": "c-91449b2da03bf53c",
+          "browser": "chrome",
+          "where": "eval-r4-3 (no-facts)"
+        },
+        {
+          "id": "c-a1e914e3db4a1c0c",
+          "browser": "chrome",
+          "where": "eval-r4-3 (no-facts)"
+        },
+        {
+          "id": "c-0ff47cb8a4b55c52",
+          "browser": "chrome",
+          "where": "eval-r4-3 (no-facts)"
+        },
+        {
+          "id": "c-c48d025175e74ad0",
+          "browser": "chrome",
+          "where": "eval-r4-1 (facts)"
+        },
+        {
+          "id": "c-72226e36d46a7c74",
+          "browser": "chrome",
+          "where": "eval-r4-2 (facts)"
+        },
+        {
+          "id": "c-79d66dee7f4f4b21",
+          "browser": "chrome",
+          "where": "eval-r4-1 (facts)"
+        },
+        {
+          "id": "c-8964c067d50f50d7",
+          "browser": "chrome",
+          "where": "eval-r4-2 (facts)"
+        },
+        {
+          "id": "c-7c6a309a562ffc14",
+          "browser": "chrome",
+          "where": "eval-r4-3 (facts)"
+        },
+        {
+          "id": "c-4dede9e6253fa83a",
+          "browser": "chrome",
+          "where": "eval-r4-1 (facts)"
+        },
+        {
+          "id": "c-a651e0e1a987dc3f",
+          "browser": "chrome",
+          "where": "eval-r4-1 (facts)"
+        },
+        {
+          "id": "c-348ae1427574cf93",
+          "browser": "chrome",
+          "where": "eval-r4-2 (facts)"
+        },
+        {
+          "id": "c-90d696963b12597d",
+          "browser": "chrome",
+          "where": "eval-r4-2 (facts)"
+        },
+        {
+          "id": "c-96c1106a8a3e2815",
+          "browser": "chrome",
+          "where": "eval-r4-2 (facts)"
+        },
+        {
+          "id": "c-d575b3363d4db831",
+          "browser": "chrome",
+          "where": "eval-r4-2 (facts)"
+        },
+        {
+          "id": "c-5d07eee11c9dfc49",
+          "browser": "chrome",
+          "where": "eval-r4-2 (facts)"
+        },
+        {
+          "id": "c-4c48711a828dfd68",
+          "browser": "chrome",
+          "where": "eval-r4-2 (facts)"
+        },
+        {
+          "id": "c-2262dff47be9e4e0",
+          "browser": "chrome",
+          "where": "eval-r4-2 (facts)"
+        },
+        {
+          "id": "c-c56eed71f9c763f7",
+          "browser": "chrome",
+          "where": "eval-r4-2 (facts)"
+        },
+        {
+          "id": "c-2d10978d41ac4836",
+          "browser": "chrome",
+          "where": "eval-r4-3 (facts)"
+        },
+        {
+          "id": "c-50809be92d48ce3f",
+          "browser": "chrome",
+          "where": "eval-r4-3 (facts)"
+        },
+        {
+          "id": "c-5ee98dbf0f34eb54",
+          "browser": "chrome",
+          "where": "eval-r4-3 (facts)"
+        },
+        {
+          "id": "c-735ba98322004049",
+          "browser": "chrome",
+          "where": "eval-r4-3 (facts)"
+        },
+        {
+          "id": "c-8121b6c1e4bb84d3",
+          "browser": "chrome",
+          "where": "eval-r4-3 (facts)"
+        },
+        {
+          "id": "c-f8261aded69a0583",
+          "browser": "chrome",
+          "where": "eval-r4-3 (facts)"
+        },
+        {
+          "id": "c-fc859865590db286",
+          "browser": "chrome",
+          "where": "eval-r4-3 (facts)"
+        },
+        {
+          "id": "c-d5ad7b4047705e9e",
+          "browser": "chrome",
+          "where": "eval-r4-3 (facts)"
+        },
+        {
+          "id": "c-4684233090f4fb71",
+          "browser": "chrome",
+          "where": "eval-r4-3 (facts)"
+        },
+        {
+          "id": "c-be7b75f3a36a968a",
+          "browser": "chrome",
+          "where": "eval-r4-3 (facts)"
+        },
+        {
+          "id": "c-c9de46848422c748",
+          "browser": "chrome",
+          "where": "eval-r4-3 (facts)"
+        },
+        {
+          "id": "c-11ae8c1d402774df",
+          "browser": "firefox",
+          "where": "ws (facts)"
+        },
+        {
+          "id": "c-395961e91013e61e",
+          "browser": "firefox",
+          "where": "ws (facts)"
+        },
+        {
+          "id": "c-1abd593d5cb096b8",
+          "browser": "firefox",
+          "where": "rich-prewrap (facts)"
+        },
+        {
+          "id": "c-cd571ad7128e196d",
+          "browser": "firefox",
+          "where": "rich-prewrap (facts)"
+        },
+        {
+          "id": "c-caa3b4a2484d7751",
+          "browser": "firefox",
+          "where": "rich-prewrap (facts)"
+        },
+        {
+          "id": "c-00cfdcf19006c4a9",
+          "browser": "firefox",
+          "where": "rich-prewrap (facts)"
+        },
+        {
+          "id": "c-25f8720aa3586781",
+          "browser": "firefox",
+          "where": "rich-prewrap (facts)"
+        },
+        {
+          "id": "c-2cf365cf1806d3d0",
+          "browser": "firefox",
+          "where": "suite-sample (facts)"
+        },
+        {
+          "id": "c-299746de504b353c",
+          "browser": "firefox",
+          "where": "suite-sample (facts)"
+        },
+        {
+          "id": "c-053aa46418959f75",
+          "browser": "firefox",
+          "where": "suite-sample (facts)"
+        },
+        {
+          "id": "c-5eaf94f218fbc6a7",
+          "browser": "firefox",
+          "where": "suite-sample (facts)"
+        },
+        {
+          "id": "c-c46a368aa1fd6d30",
+          "browser": "firefox",
+          "where": "features (facts)"
+        },
+        {
+          "id": "c-94a482341bdc653a",
+          "browser": "firefox",
+          "where": "heldout-ws (facts)"
+        },
+        {
+          "id": "c-f676e5d9da6a7b9b",
+          "browser": "firefox",
+          "where": "heldout-ws (facts)"
+        },
+        {
+          "id": "c-5e4183c980cf8c9a",
+          "browser": "firefox",
+          "where": "heldout-suite-sample (facts)"
+        },
+        {
+          "id": "c-796272b16bb860c0",
+          "browser": "firefox",
+          "where": "heldout-suite-sample (facts)"
+        },
+        {
+          "id": "c-7d54089bfb2c1e82",
+          "browser": "firefox",
+          "where": "heldout-suite-sample (facts)"
+        },
+        {
+          "id": "c-818ea8f14e729db3",
+          "browser": "firefox",
+          "where": "heldout-suite-sample (facts)"
+        },
+        {
+          "id": "c-84982b0c09c9b06f",
+          "browser": "firefox",
+          "where": "heldout-suite-sample (facts)"
+        },
+        {
+          "id": "c-b093b9b3be2f05b9",
+          "browser": "firefox",
+          "where": "heldout-suite-sample (facts)"
+        },
+        {
+          "id": "c-612d2527cdfc3e46",
+          "browser": "firefox",
+          "where": "eval-r4-1 (facts)"
+        },
+        {
+          "id": "c-8849fb22f885fb25",
+          "browser": "firefox",
+          "where": "eval-r4-1 (facts)"
+        },
+        {
+          "id": "c-c0ca2aad721b8239",
+          "browser": "firefox",
+          "where": "eval-r4-1 (facts)"
+        },
+        {
+          "id": "c-941970d3226e6d3a",
+          "browser": "firefox",
+          "where": "eval-r4-3 (facts)"
+        },
+        {
+          "id": "c-d9d416a959fb341d",
+          "browser": "firefox",
+          "where": "eval-r4-3 (facts)"
+        },
+        {
+          "id": "c-03a882641f3a57f5",
+          "browser": "firefox",
+          "where": "eval-r4-1 (facts)"
+        },
+        {
+          "id": "c-4146f0204655b7c4",
+          "browser": "firefox",
+          "where": "eval-r4-1 (facts)"
+        },
+        {
+          "id": "c-9c8de33c73981ec4",
+          "browser": "firefox",
+          "where": "eval-r4-1 (facts)"
+        },
+        {
+          "id": "c-67c44bdb77203551",
+          "browser": "firefox",
+          "where": "eval-r4-1 (facts)"
+        },
+        {
+          "id": "c-7ddeb2f0049ee9b3",
+          "browser": "firefox",
+          "where": "eval-r4-1 (facts)"
+        },
+        {
+          "id": "c-186d5c9a8ce27531",
+          "browser": "firefox",
+          "where": "eval-r4-2 (facts)"
+        },
+        {
+          "id": "c-849a4d6981a18898",
+          "browser": "firefox",
+          "where": "eval-r4-2 (facts)"
+        },
+        {
+          "id": "c-9a052ae74fc3b41a",
+          "browser": "firefox",
+          "where": "eval-r4-2 (facts)"
+        },
+        {
+          "id": "c-49dd80836db1922a",
+          "browser": "firefox",
+          "where": "eval-r4-3 (facts)"
+        },
+        {
+          "id": "c-67e932a9274a1048",
+          "browser": "firefox",
+          "where": "eval-r4-1 (facts)"
+        },
+        {
+          "id": "c-83f1ec1d3d8ba3c7",
+          "browser": "firefox",
+          "where": "eval-r4-1 (facts)"
+        },
+        {
+          "id": "c-816e30c74aaaca34",
+          "browser": "firefox",
+          "where": "eval-r4-1 (facts)"
+        },
+        {
+          "id": "c-d4941665abe50a5a",
+          "browser": "firefox",
+          "where": "eval-r4-1 (facts)"
+        },
+        {
+          "id": "c-e392136d6f4594f4",
+          "browser": "firefox",
+          "where": "eval-r4-1 (facts)"
+        },
+        {
+          "id": "c-ed3d7b854f57e724",
+          "browser": "firefox",
+          "where": "eval-r4-1 (facts)"
+        },
+        {
+          "id": "c-3837a41b00a03854",
+          "browser": "firefox",
+          "where": "eval-r4-1 (facts)"
+        },
+        {
+          "id": "c-7caaca4332b59a31",
+          "browser": "firefox",
+          "where": "eval-r4-1 (facts)"
+        },
+        {
+          "id": "c-cc9eb5b46f62490a",
+          "browser": "firefox",
+          "where": "eval-r4-1 (facts)"
+        },
+        {
+          "id": "c-8825816f2ed17fc6",
+          "browser": "firefox",
+          "where": "eval-r4-2 (facts)"
+        },
+        {
+          "id": "c-f5b1396df5add0f8",
+          "browser": "firefox",
+          "where": "eval-r4-2 (facts)"
+        },
+        {
+          "id": "c-7e2ab48fbc8c74de",
+          "browser": "firefox",
+          "where": "eval-r4-2 (facts)"
+        },
+        {
+          "id": "c-b396be5bf8e62280",
+          "browser": "firefox",
+          "where": "eval-r4-2 (facts)"
+        },
+        {
+          "id": "c-606d4afccf6ef5d8",
+          "browser": "firefox",
+          "where": "eval-r4-2 (facts)"
+        },
+        {
+          "id": "c-9b41632ffac3948b",
+          "browser": "firefox",
+          "where": "eval-r4-2 (facts)"
+        },
+        {
+          "id": "c-486af341a86e9a75",
+          "browser": "firefox",
+          "where": "eval-r4-2 (facts)"
+        },
+        {
+          "id": "c-b0be8d4a35cec74b",
+          "browser": "firefox",
+          "where": "eval-r4-2 (facts)"
+        },
+        {
+          "id": "c-68f7aa68a68da233",
+          "browser": "firefox",
+          "where": "eval-r4-2 (facts)"
+        },
+        {
+          "id": "c-72757c6d7797f2ec",
+          "browser": "firefox",
+          "where": "eval-r4-2 (facts)"
+        },
+        {
+          "id": "c-6d83393baf6ab492",
+          "browser": "firefox",
+          "where": "eval-r4-3 (facts)"
+        },
+        {
+          "id": "c-85b6c21b1281887d",
+          "browser": "firefox",
+          "where": "eval-r4-3 (facts)"
+        },
+        {
+          "id": "c-22092a36ba06fca5",
+          "browser": "firefox",
+          "where": "eval-r4-3 (facts)"
+        },
+        {
+          "id": "c-abbf33c0c269730d",
+          "browser": "firefox",
+          "where": "eval-r4-3 (facts)"
+        },
+        {
+          "id": "c-b49a89e634881c8a",
+          "browser": "firefox",
+          "where": "eval-r4-3 (facts)"
+        },
+        {
+          "id": "c-5a5bef69b3ebc253",
+          "browser": "firefox",
+          "where": "eval-r4-1 (facts)"
+        },
+        {
+          "id": "c-369b09e71720afdb",
+          "browser": "firefox",
+          "where": "eval-r4-3 (facts)"
+        },
+        {
+          "id": "c-9b6e3748c1e2d1cc",
+          "browser": "webkit-host",
+          "where": "smoke (no-facts)"
+        },
+        {
+          "id": "c-683168eee25201e7",
+          "browser": "webkit-host",
+          "where": "runs (no-facts)"
+        },
+        {
+          "id": "c-7d843503694feea3",
+          "browser": "webkit-host",
+          "where": "policy (no-facts)"
+        },
+        {
+          "id": "c-82145bfc63b85ccf",
+          "browser": "webkit-host",
+          "where": "policy (no-facts)"
+        },
+        {
+          "id": "c-5c8589365ff00a45",
+          "browser": "webkit-host",
+          "where": "families (no-facts)"
+        },
+        {
+          "id": "c-6efc744fb58d6472",
+          "browser": "webkit-host",
+          "where": "families (no-facts)"
+        },
+        {
+          "id": "c-7999b1cf5bce7631",
+          "browser": "webkit-host",
+          "where": "families (no-facts)"
+        },
+        {
+          "id": "c-cf5554f5f2a64be3",
+          "browser": "webkit-host",
+          "where": "families (no-facts)"
+        },
+        {
+          "id": "c-ba2b262c71945cf1",
+          "browser": "webkit-host",
+          "where": "families (no-facts)"
+        },
+        {
+          "id": "c-dc2dc93ee6559a19",
+          "browser": "webkit-host",
+          "where": "families (no-facts)"
+        },
+        {
+          "id": "c-de0b79e1c4b0cd3d",
+          "browser": "webkit-host",
+          "where": "families (no-facts)"
+        },
+        {
+          "id": "c-98c7b914b917a252",
+          "browser": "webkit-host",
+          "where": "heldout-runs (no-facts)"
+        },
+        {
+          "id": "c-d582e37f91b1e071",
+          "browser": "webkit-host",
+          "where": "heldout-policy (no-facts)"
+        },
+        {
+          "id": "c-ea0267b6d60c9923",
+          "browser": "webkit-host",
+          "where": "heldout-policy (no-facts)"
+        },
+        {
+          "id": "c-fb01b092b145805c",
+          "browser": "webkit-host",
+          "where": "heldout-policy (no-facts)"
+        },
+        {
+          "id": "c-35c6025935676ece",
+          "browser": "webkit-host",
+          "where": "heldout-policy (no-facts)"
+        },
+        {
+          "id": "c-60dd78406beee6ea",
+          "browser": "webkit-host",
+          "where": "heldout-suite-sample (no-facts)"
+        },
+        {
+          "id": "c-2e5f0c81c52f22f1",
+          "browser": "webkit-host",
+          "where": "heldout-suite-sample (no-facts)"
+        },
+        {
+          "id": "c-3e5ddf2a4e24ed15",
+          "browser": "webkit-host",
+          "where": "heldout-suite-sample (no-facts)"
+        },
+        {
+          "id": "c-32aefe46d2734906",
+          "browser": "webkit-host",
+          "where": "heldout-suite-sample (no-facts)"
+        },
+        {
+          "id": "c-c50b48f4b641cc74",
+          "browser": "webkit-host",
+          "where": "heldout-suite-sample (no-facts)"
+        },
+        {
+          "id": "c-f522aaa675c193ec",
+          "browser": "webkit-host",
+          "where": "heldout-suite-sample (no-facts)"
+        },
+        {
+          "id": "c-ac5730bad5e37dde",
+          "browser": "webkit-host",
+          "where": "heldout-suite-sample (no-facts)"
+        },
+        {
+          "id": "c-5fd8fe42a1ebea96",
+          "browser": "webkit-host",
+          "where": "heldout-runs (facts)"
+        },
+        {
+          "id": "c-536afc8f1db09de6",
+          "browser": "webkit-host",
+          "where": "eval-r4-1 (no-facts)"
+        },
+        {
+          "id": "c-f4841bde3f8eccf2",
+          "browser": "webkit-host",
+          "where": "eval-r4-1 (no-facts)"
+        },
+        {
+          "id": "c-e0b4580a198a268e",
+          "browser": "webkit-host",
+          "where": "eval-r4-1 (no-facts)"
+        },
+        {
+          "id": "c-dde7746855f6e830",
+          "browser": "webkit-host",
+          "where": "eval-r4-2 (no-facts)"
+        },
+        {
+          "id": "c-f4b27748d63a4401",
+          "browser": "webkit-host",
+          "where": "eval-r4-2 (no-facts)"
+        },
+        {
+          "id": "c-40ae8b444467c755",
+          "browser": "webkit-host",
+          "where": "eval-r4-2 (no-facts)"
+        },
+        {
+          "id": "c-8214e6c71452d8aa",
+          "browser": "webkit-host",
+          "where": "eval-r4-2 (no-facts)"
+        },
+        {
+          "id": "c-334225402d1119ee",
+          "browser": "webkit-host",
+          "where": "eval-r4-2 (no-facts)"
+        },
+        {
+          "id": "c-41f634caa94f9457",
+          "browser": "webkit-host",
+          "where": "eval-r4-2 (no-facts)"
+        },
+        {
+          "id": "c-0230e4099f2a90f2",
+          "browser": "webkit-host",
+          "where": "eval-r4-3 (no-facts)"
+        },
+        {
+          "id": "c-12e951f662755821",
+          "browser": "webkit-host",
+          "where": "eval-r4-3 (no-facts)"
+        },
+        {
+          "id": "c-eef81edc30e202f4",
+          "browser": "webkit-host",
+          "where": "eval-r4-3 (no-facts)"
+        },
+        {
+          "id": "c-6d1fd93694f9ce92",
+          "browser": "webkit-host",
+          "where": "eval-r4-3 (no-facts)"
+        },
+        {
+          "id": "c-d131dc37ff864bc1",
+          "browser": "webkit-host",
+          "where": "eval-r4-1 (no-facts)"
+        },
+        {
+          "id": "c-072eea45c5af6ffe",
+          "browser": "webkit-host",
+          "where": "eval-r4-1 (no-facts)"
+        },
+        {
+          "id": "c-50668858271dc8ac",
+          "browser": "webkit-host",
+          "where": "eval-r4-1 (no-facts)"
+        },
+        {
+          "id": "c-9d64a7674cc86ebb",
+          "browser": "webkit-host",
+          "where": "eval-r4-1 (no-facts)"
+        },
+        {
+          "id": "c-396dc19ada677667",
+          "browser": "webkit-host",
+          "where": "eval-r4-1 (no-facts)"
+        },
+        {
+          "id": "c-cdeb33933afc2681",
+          "browser": "webkit-host",
+          "where": "eval-r4-1 (no-facts)"
+        },
+        {
+          "id": "c-c1a81844feb8160e",
+          "browser": "webkit-host",
+          "where": "eval-r4-2 (no-facts)"
+        },
+        {
+          "id": "c-e18270fb4c941991",
+          "browser": "webkit-host",
+          "where": "eval-r4-2 (no-facts)"
+        },
+        {
+          "id": "c-92391b84c0978a94",
+          "browser": "webkit-host",
+          "where": "eval-r4-2 (no-facts)"
+        },
+        {
+          "id": "c-0f36e4ea777541a0",
+          "browser": "webkit-host",
+          "where": "eval-r4-2 (no-facts)"
+        },
+        {
+          "id": "c-16cadfa0035142e5",
+          "browser": "webkit-host",
+          "where": "eval-r4-2 (no-facts)"
+        },
+        {
+          "id": "c-49a301752e5e894c",
+          "browser": "webkit-host",
+          "where": "eval-r4-3 (no-facts)"
+        },
+        {
+          "id": "c-e73ccb5308176d7d",
+          "browser": "webkit-host",
+          "where": "eval-r4-3 (no-facts)"
+        },
+        {
+          "id": "c-288bbab489e54625",
+          "browser": "webkit-host",
+          "where": "eval-r4-3 (no-facts)"
+        },
+        {
+          "id": "c-9ae9209ada31c13b",
+          "browser": "webkit-host",
+          "where": "eval-r4-3 (no-facts)"
+        },
+        {
+          "id": "c-9c55e26dba1c6022",
+          "browser": "webkit-host",
+          "where": "eval-r4-3 (no-facts)"
+        },
+        {
+          "id": "c-be8778de48c6374f",
+          "browser": "webkit-host",
+          "where": "eval-r4-3 (no-facts)"
+        },
+        {
+          "id": "c-d3ec18c839a34bba",
+          "browser": "webkit-host",
+          "where": "eval-r4-3 (no-facts)"
+        },
+        {
+          "id": "c-78e08464396ed804",
+          "browser": "webkit-host",
+          "where": "eval-r4-1 (facts)"
+        },
+        {
+          "id": "c-4cf7a83047702a9b",
+          "browser": "webkit-host",
+          "where": "eval-r4-1 (facts)"
+        },
+        {
+          "id": "c-c86f36043f234d8a",
+          "browser": "webkit-host",
+          "where": "eval-r4-2 (facts)"
+        },
+        {
+          "id": "c-601336a3ac9b6279",
+          "browser": "webkit-host",
+          "where": "eval-r4-3 (facts)"
+        },
+        {
+          "id": "c-7ac03ed877357990",
+          "browser": "webkit-host",
+          "where": "eval-r4-3 (facts)"
+        }
+      ],
       "match": {
         "browsers": [
           "chrome",
@@ -933,7 +2202,7 @@
         ]
       },
       "source": "lab README \"Painter limits\" (no-facts recordings of 2026-09-18: Chrome 0 of 1,430, Firefox 15 of 3,543, webkit-host 23 of 4,459)",
-      "note": "The painter is scored by extents and wraps only: `paint` doesn't report painted source offsets."
+      "note": "The painter is scored by extents and wraps only: `paint` doesn't report painted source offsets. Round 4 evaluation, painter-only failures without a gap or a limit: tier sets, no facts / facts: Chrome 4 / 10, Firefox 0 / 20, webkit-host 24 / 25; three fresh sets: Chrome 28 / 54 (23 and 44 of them rich pre-wrap: painting a line as its own block makes it a last line), Firefox 0 / 40, webkit-host 31 / 36. Firefox's 0 without facts is optical-size covering every line. webkit-host's tier rows are mostly Thonburi Thai under 0.01 unit (policy/thai, 8), rule/hyphen-glyph (4) and rule/zwnj (3)."
     },
     {
       "id": "blink/font-check-contexts-share-the-dom-font",
@@ -1016,10 +2285,140 @@
           "id": "c-a37545c096e939be",
           "browser": "chrome",
           "where": "rich-prewrap"
+        },
+        {
+          "id": "c-0df13485b3a02fe6",
+          "browser": "chrome",
+          "where": "eval-r4-1"
+        },
+        {
+          "id": "c-1e9e9355c90bc06f",
+          "browser": "chrome",
+          "where": "eval-r4-1"
+        },
+        {
+          "id": "c-382e54c603972772",
+          "browser": "chrome",
+          "where": "eval-r4-1"
+        },
+        {
+          "id": "c-8b91fe180c399005",
+          "browser": "chrome",
+          "where": "eval-r4-1"
+        },
+        {
+          "id": "c-de944e30c951da16",
+          "browser": "chrome",
+          "where": "eval-r4-1"
+        },
+        {
+          "id": "c-fa3a3325f1104d15",
+          "browser": "chrome",
+          "where": "eval-r4-1"
+        },
+        {
+          "id": "c-42527d91d65d32d8",
+          "browser": "chrome",
+          "where": "eval-r4-2"
+        },
+        {
+          "id": "c-4b48ed2b5796d0b2",
+          "browser": "chrome",
+          "where": "eval-r4-2"
+        },
+        {
+          "id": "c-79e993637593f69a",
+          "browser": "chrome",
+          "where": "eval-r4-2"
+        },
+        {
+          "id": "c-8e453621afc9d1a9",
+          "browser": "chrome",
+          "where": "eval-r4-2"
+        },
+        {
+          "id": "c-95b03803066c1248",
+          "browser": "chrome",
+          "where": "eval-r4-2"
+        },
+        {
+          "id": "c-a195eb8e6c64a17d",
+          "browser": "chrome",
+          "where": "eval-r4-2"
+        },
+        {
+          "id": "c-cdb798eb56bd8847",
+          "browser": "chrome",
+          "where": "eval-r4-2"
+        },
+        {
+          "id": "c-ce62a274bc8b06a2",
+          "browser": "chrome",
+          "where": "eval-r4-2"
+        },
+        {
+          "id": "c-d0fc7b5ddd8fd804",
+          "browser": "chrome",
+          "where": "eval-r4-2"
+        },
+        {
+          "id": "c-d5790e9f98c4b882",
+          "browser": "chrome",
+          "where": "eval-r4-2"
+        },
+        {
+          "id": "c-2c687125c2b149dd",
+          "browser": "chrome",
+          "where": "eval-r4-3"
+        },
+        {
+          "id": "c-5a50f90dd5db6963",
+          "browser": "chrome",
+          "where": "eval-r4-3"
+        },
+        {
+          "id": "c-5ecec4040af75883",
+          "browser": "chrome",
+          "where": "eval-r4-3"
+        },
+        {
+          "id": "c-7a11676d178ac1ec",
+          "browser": "chrome",
+          "where": "eval-r4-3"
+        },
+        {
+          "id": "c-7bd390945c42de18",
+          "browser": "chrome",
+          "where": "eval-r4-3"
+        },
+        {
+          "id": "c-7daefe44ed573dd6",
+          "browser": "chrome",
+          "where": "eval-r4-3"
+        },
+        {
+          "id": "c-8089b1e09b0b8afd",
+          "browser": "chrome",
+          "where": "eval-r4-3"
+        },
+        {
+          "id": "c-b01cacc2c5c99eb6",
+          "browser": "chrome",
+          "where": "eval-r4-3"
+        },
+        {
+          "id": "c-b2c030b8c1089435",
+          "browser": "chrome",
+          "where": "eval-r4-3"
+        },
+        {
+          "id": "c-d2d84e93f46fc221",
+          "browser": "chrome",
+          "where": "eval-r4-3"
         }
       ],
       "source": "research/PREWRAP-RICH.md §3 C; specs/blink-RESULTS.md \"Round 4c\"; the rich-prewrap set's one open prediction row (breaks) in both configurations on 2026-09-18",
-      "note": "Every code point is on the right line; only Element.getClientRects() of the span differs (native lines 2, expected none). It is the observation port's rule for a span without laid-out text (lab/observe/blink.ts), not the engine."
+      "note": "Every code point is on the right line; only Element.getClientRects() of the span differs (native lines 2, expected none). It is the observation port's rule for a span without laid-out text (lab/observe/blink.ts), not the engine. Round 4 evaluation: 26 of 11,892 fresh rich pre-wrap cases (seeds eval-r4-1 to -3) show it, every one with lineCount, widths and painter passing. With the lab's facts they are open rows (breaks: \"element 0: native lines 0; expected none\"); with no supplied facts the scorer reads 25 of them covered by glyph-clusters and 1 by glyph-clusters+unsafe-to-break, which fire on the line for other reasons: a cover by position."
     },
     {
       "id": "lab/blink-element-rects-of-spans-without-a-box-fragment",
@@ -1187,6 +2586,506 @@
       ],
       "source": "specs/webkit-RESULTS.md \"round 4c\"; research/PREWRAP-RICH.md §3 A W1 (\"3 cases remain one float32 step off\"); isolation and installed Safari runs of 2026-09-18 under .artifacts/tests/runs/r4c-ports",
       "note": "Both fail widths the same way alone in a fresh process and in installed Safari 27.0, with equal native layouts, so page history is not the cause: the engine line width is 109.06256103515625 where the native rects span 109.06256866455078 (the display boxes accumulate in visual order). page-history fires on the line for its preserved spaces and the port limits the whole line, so no value is reported as predicted; the cover is by position."
+    },
+    {
+      "id": "blink/han-kerning-full-stop-before-closing-bracket",
+      "engine": "blink",
+      "kind": "open rows",
+      "title": "An ideographic full stop before a closing corner bracket is set at half width natively and predicted at full width",
+      "conditions": [],
+      "cases": [
+        {
+          "id": "c-26737b4c93d3c46b",
+          "browser": "chrome",
+          "where": "eval-r4-2: open with facts; with no facts covered by script-context by position"
+        },
+        {
+          "id": "c-571b183504971c3f",
+          "browser": "chrome",
+          "where": "eval-r4-2: open with facts; with no facts covered by script-context by position"
+        },
+        {
+          "id": "c-76b22c0d56a08b5c",
+          "browser": "chrome",
+          "where": "eval-r4-2: open with facts; with no facts covered by script-context by position"
+        }
+      ],
+      "source": "round 4 evaluation, fresh set eval-r4-2 (runs/mixed-fonts-sizes shape 76, `「おのれ、どこへ行く。」` in a span after Thai and Hangul runs, at 1px, 172px and 376px): code point 35 `。` is 6.5px natively and 13px expected, a predicted value; the line's han-kerning gap sits on the next line",
+      "note": "Not traced. Chrome 153 trims fullwidth punctuation pairs (VERSION-DRIFT.md class 1 is the same area; the known getClientRects hang is `。』`). Wrong widths without a touching gap: the one new engine class of the evaluation in Chrome."
+    },
+    {
+      "id": "blink/soft-hyphen-line-one-unit-off-without-facts",
+      "engine": "blink",
+      "kind": "open rows",
+      "title": "With no supplied facts a line beside a soft hyphen is one LayoutUnit off and its glyph-clusters range misses one of the two differing runs",
+      "conditions": [
+        "glyph-clusters",
+        "unsafe-to-break"
+      ],
+      "cases": [
+        {
+          "id": "c-6fe680146b646fa8",
+          "browser": "chrome",
+          "where": "eval-r4-2"
+        },
+        {
+          "id": "c-db8e5d8f353e4dfb",
+          "browser": "chrome",
+          "where": "eval-r4-3"
+        }
+      ],
+      "source": "round 4 evaluation, fresh sets eval-r4-2 and -3 (rule/hyphen-glyph paragraphs at new widths): engine line 0 width 11797, native 11798; the values are limited by glyph-clusters and the scorer finds 2 differing runs with 1 touched",
+      "note": "Both pass every metric with the lab's facts. The only open rows of the headline configuration in Chrome on 75,132 fresh cases. On the tier sets the same paragraphs at their derived widths fail covered (32 rows of rule/hyphen-glyph under glyph-clusters with unsafe-to-break, soft-hyphen-shaping or in-word-prefix), which the rule names.",
+      "match": {
+        "browsers": [
+          "chrome"
+        ],
+        "status": "covered",
+        "conditions": [
+          "glyph-clusters"
+        ],
+        "families": [
+          "rule/hyphen-glyph"
+        ],
+        "configs": [
+          "no-facts"
+        ]
+      }
+    },
+    {
+      "id": "blink/no-facts-conditions-cover-by-position",
+      "engine": "blink",
+      "kind": "diagnosing condition",
+      "title": "With no supplied facts glyph-clusters, script-context and optical-size fire widely enough to cover failures they don't cause",
+      "conditions": [
+        "glyph-clusters",
+        "script-context",
+        "optical-size"
+      ],
+      "cases": [
+        {
+          "id": "c-26737b4c93d3c46b",
+          "browser": "chrome",
+          "where": "eval-r4-2"
+        },
+        {
+          "id": "c-571b183504971c3f",
+          "browser": "chrome",
+          "where": "eval-r4-2"
+        },
+        {
+          "id": "c-76b22c0d56a08b5c",
+          "browser": "chrome",
+          "where": "eval-r4-2"
+        },
+        {
+          "id": "c-2ed43b0ea3b0d67a",
+          "browser": "chrome",
+          "where": "eval-r4-2"
+        },
+        {
+          "id": "c-dbc017ac8f974bb2",
+          "browser": "chrome",
+          "where": "eval-r4-1"
+        },
+        {
+          "id": "c-0df13485b3a02fe6",
+          "browser": "chrome",
+          "where": "eval-r4-1"
+        },
+        {
+          "id": "c-1e9e9355c90bc06f",
+          "browser": "chrome",
+          "where": "eval-r4-1"
+        },
+        {
+          "id": "c-382e54c603972772",
+          "browser": "chrome",
+          "where": "eval-r4-1"
+        },
+        {
+          "id": "c-8b91fe180c399005",
+          "browser": "chrome",
+          "where": "eval-r4-1"
+        },
+        {
+          "id": "c-de944e30c951da16",
+          "browser": "chrome",
+          "where": "eval-r4-1"
+        },
+        {
+          "id": "c-fa3a3325f1104d15",
+          "browser": "chrome",
+          "where": "eval-r4-1"
+        }
+      ],
+      "source": "round 4 evaluation (evaluate-r4/aggregate/cross-config-fresh-chrome.txt): of 31 fresh rows that are open with the lab's facts, 30 read covered with no facts, only by conditions whose lift on the tier sets is below 2 (script-context 1.64 on 31.9% of passing lines, glyph-clusters 1.60 on 11.0%, optical-size 0.11 on 3.4%); tier sets: 15 failures covered only by such conditions",
+      "note": "The scorer checks where a range is, not what the reading says. Read the headline configuration's open count beside the facts configuration's: 2 rows against 31 on 75,132 fresh cases."
+    },
+    {
+      "id": "blink/giants-widths-without-facts",
+      "engine": "blink",
+      "kind": "diagnosing condition",
+      "title": "With no supplied facts 6 of the 9 held-out giants have 1 to 3 lines of about a thousand one LayoutUnit off, covered by float32-precision and optical-size",
+      "conditions": [
+        "float32-precision",
+        "optical-size"
+      ],
+      "cases": [
+        {
+          "id": "c-66bc1953a23b79d3",
+          "browser": "chrome",
+          "where": "giants (no-facts)"
+        },
+        {
+          "id": "c-98ab54a5eeff7b16",
+          "browser": "chrome",
+          "where": "giants (no-facts)"
+        },
+        {
+          "id": "c-c8110fb16910a3a7",
+          "browser": "chrome",
+          "where": "giants (no-facts)"
+        },
+        {
+          "id": "c-def592b648d927eb",
+          "browser": "chrome",
+          "where": "giants (no-facts)"
+        },
+        {
+          "id": "c-ed7fc24c9ab52c94",
+          "browser": "chrome",
+          "where": "giants (no-facts)"
+        },
+        {
+          "id": "c-f4d60d8ee5be0ec0",
+          "browser": "chrome",
+          "where": "giants (no-facts)"
+        }
+      ],
+      "source": "round 4 evaluation, evaluate-r4/giants/no-facts/chrome (both orders): lineCount and breaks pass on all 9; e.g. engine line 833 width 96776, native 96775; about 7,000 limited glyph-clusters values differ per paragraph",
+      "note": "All 9 pass every metric with the lab's facts. The first giants run in the headline configuration; nobody had looked."
+    },
+    {
+      "id": "blink/scaled-system-font-recipe",
+      "engine": "blink",
+      "kind": "diagnosing condition",
+      "title": "The CSS-size recipe for the system UI font is a stand-in reported as optical-size over the whole run",
+      "conditions": [
+        "optical-size"
+      ],
+      "cases": [
+        {
+          "id": "c-3ec3cd2536bf85bf",
+          "browser": "chrome",
+          "where": "families: one LayoutUnit off at 13.33px in a passing case"
+        },
+        {
+          "id": "c-6f9d2063f8bcb5c8",
+          "browser": "chrome",
+          "where": "families: one LayoutUnit off at 13.33px in a passing case"
+        },
+        {
+          "id": "c-c20059999b74e9ca",
+          "browser": "chrome",
+          "where": "families: one LayoutUnit off at 13.33px in a passing case"
+        },
+        {
+          "id": "c-dd72cd90c56b7d64",
+          "browser": "chrome",
+          "where": "families: one LayoutUnit off at 13.33px in a passing case"
+        },
+        {
+          "id": "c-56d1c38e222bf938",
+          "browser": "chrome",
+          "where": "families: optical-size with the fact unknown covers by position"
+        },
+        {
+          "id": "c-906c6bc491c83c9d",
+          "browser": "chrome",
+          "where": "families: optical-size with the fact unknown covers by position"
+        },
+        {
+          "id": "c-a52d0bfda6f53a43",
+          "browser": "chrome",
+          "where": "families: optical-size with the fact unknown covers by position"
+        },
+        {
+          "id": "c-f1877e45ed22478e",
+          "browser": "chrome",
+          "where": "families: optical-size with the fact unknown covers by position"
+        }
+      ],
+      "source": "round 4b Blink report, item 1 and \"Known tail\" (skia_text_metrics.cc:207-211: each glyph's advance is truncated to 1/65536 px at its own size; 4 of 2,860 values at 13.33px)",
+      "note": "The range could be the values within the truncation bound of a LayoutUnit edge. Letter spacing under the recipe can be up to the ratio in units per character off; no lab row has it at a size whose ratio isn't the zoom. Related: measuring the system UI font at S makes the platform font that DOM text of S ÷ zoom px then takes, and the lab has no pair of such sizes in one process."
+    },
+    {
+      "id": "gecko/optical-size-without-facts",
+      "engine": "gecko",
+      "kind": "diagnosing condition",
+      "title": "With no supplied facts optical-size fires on 99.7% of passing Firefox lines (lift 1.00), so every failure reads covered and no value of such a run is predicted",
+      "conditions": [
+        "optical-size"
+      ],
+      "cases": [
+        {
+          "id": "c-375cc85fc7286468",
+          "browser": "firefox",
+          "where": "eval-r4-2: open with facts, covered by optical-size without"
+        },
+        {
+          "id": "c-8f4918e24c9ce889",
+          "browser": "firefox",
+          "where": "eval-r4-2: open with facts, covered by optical-size without"
+        },
+        {
+          "id": "c-a0585277e809b588",
+          "browser": "firefox",
+          "where": "eval-r4-2: open with facts, covered by optical-size without"
+        },
+        {
+          "id": "c-82a84ab0dbe330b0",
+          "browser": "firefox",
+          "where": "eval-r4-3: open with facts, covered by optical-size without"
+        },
+        {
+          "id": "c-91d3b53be9b144f8",
+          "browser": "firefox",
+          "where": "eval-r4-3: open with facts, covered by optical-size without"
+        },
+        {
+          "id": "c-94022fa447cc1542",
+          "browser": "firefox",
+          "where": "eval-r4-3: open with facts, covered by optical-size without"
+        }
+      ],
+      "match": {
+        "browsers": [
+          "firefox"
+        ],
+        "status": "covered",
+        "conditions": [
+          "optical-size"
+        ],
+        "configs": [
+          "no-facts"
+        ]
+      },
+      "source": "round 4 evaluation: tier sets 212 prediction failures covered only by it (evaluate-r4/conditions/firefox-no-facts-all.txt); fresh sets: 224 failing rows covered only by it, of which 176 are covered with the lab's facts too (the system font rows among them), 42 are residual members and 6 are open (evaluate-r4/aggregate/cross-config-fresh-firefox.txt); values predicted 7.2% against 95.1%",
+      "note": "Firefox's Canvas can't show an opsz axis, so the fact is never learned. The unmerged alternative r4-gecko-alt-opsz-default takes the documented default (true for the system font keywords, false for a named family): optical-size in 0 development cases, 95.4% of values predicted, and a named variable font with an opsz axis would then measure wrong without a gap. The maintainer's call (CHARTER.md decision 2). Until then read Firefox's headline open count beside the facts configuration's."
+    },
+    {
+      "id": "lab/webkit-element-rect-width-float-step",
+      "engine": "webkit",
+      "kind": "lab",
+      "title": "The WebKit observation port reports an element rect's width as predicted where the native one is f32(f32(x+w)−x) at an x moved by centring, an RTL block or a box edge",
+      "conditions": [],
+      "cases": [
+        {
+          "id": "c-cb91481c4f72e2ef",
+          "browser": "webkit-host",
+          "where": "eval-r4-1 (facts)"
+        },
+        {
+          "id": "c-e13d8aa9e28342ab",
+          "browser": "webkit-host",
+          "where": "eval-r4-1 (facts)"
+        },
+        {
+          "id": "c-1a389cabaa8cd733",
+          "browser": "webkit-host",
+          "where": "eval-r4-2 (facts)"
+        },
+        {
+          "id": "c-92db96d401d33726",
+          "browser": "webkit-host",
+          "where": "eval-r4-2 (facts)"
+        },
+        {
+          "id": "c-d3350805aba6e8be",
+          "browser": "webkit-host",
+          "where": "eval-r4-1 (facts)"
+        },
+        {
+          "id": "c-900a17b368e9f70c",
+          "browser": "webkit-host",
+          "where": "eval-r4-3 (facts)"
+        },
+        {
+          "id": "c-a48922607cc10d8e",
+          "browser": "webkit-host",
+          "where": "eval-r4-3 (facts)"
+        },
+        {
+          "id": "c-04923fec3fbcfd0e",
+          "browser": "webkit-host",
+          "where": "eval-r4-1 (facts)"
+        },
+        {
+          "id": "c-f61c804bfe74414f",
+          "browser": "webkit-host",
+          "where": "eval-r4-1 (facts)"
+        },
+        {
+          "id": "c-48c81e6d8f5d8d7d",
+          "browser": "webkit-host",
+          "where": "eval-r4-3 (facts)"
+        },
+        {
+          "id": "c-aa174afdba2470ad",
+          "browser": "webkit-host",
+          "where": "eval-r4-3 (facts)"
+        },
+        {
+          "id": "c-c4c385420cb7f558",
+          "browser": "webkit-host",
+          "where": "eval-r4-3 (facts)"
+        }
+      ],
+      "source": "round 4 evaluation, fresh sets eval-r4-1 to -3: 12 cases with the lab's facts and 1 of them (`c-48c81e6d8f5d8d7d`) with none pass lineCount, breaks and widths and hold exactly one differing predicted value, each `element 0 rect k width` one or two float32 steps off (41.159996032714844 natively, 41.15999984741211 expected), on lines under text-align: center, in an RTL block or beside a negative margin",
+      "note": "Scorer 6 has the rule for node rects (FloatQuad::boundingBox, FloatQuad.cpp:90-99); the port's element rects don't apply it. The tier sets hold none (0 of 1,334 rich pre-wrap cases at their widths), so it depends on the width. The only passing cases with a wrong predicted value of the evaluation outside Gecko's 6 registered Nastaliq cases; fix in lab/observe/webkit.ts, then a new recording."
+    },
+    {
+      "id": "lab/webkit-code-point-rects-on-two-lines",
+      "engine": "webkit",
+      "kind": "lab",
+      "title": "A letter after preserved trailing spaces across a box end reports rects on two lines natively; the port expects one",
+      "conditions": [],
+      "cases": [
+        {
+          "id": "c-2871f9976509f924",
+          "browser": "webkit-host",
+          "where": "eval-r4-2"
+        },
+        {
+          "id": "c-e8517dd4816952ce",
+          "browser": "webkit-host",
+          "where": "eval-r4-3"
+        }
+      ],
+      "source": "round 4 evaluation, fresh sets eval-r4-2 and -3, both configurations: breaks fails with `code point 19 \"d\": native lines 1,2; expected 2` and 3 differing rect counts; lineCount and painter pass",
+      "note": "Not traced: an observation consequence (a caret rect at the end of the line above) or a wrong line for the letter. webkit-host's only open rows on 72,542 fresh cases."
+    },
+    {
+      "id": "lab/suite-pool-used-up",
+      "engine": "shared",
+      "kind": "lab",
+      "title": "Every one of main's 238,524 suite cases has been used: sealed-4 holds no suite sample and fresh sets draw none",
+      "conditions": [],
+      "cases": [],
+      "source": "round 4 evaluation: evaluate-r4/tools/suite-pool.ts (1,406,595 used ids from 2,561 files; 0 unused suite cases in 387 families); seal.ts wrote suite-sample.ndjson with 0 cases; round 4b's second fresh sets drew 0",
+      "note": "The evaluation made its fresh sets from the generated kinds at larger counts (--repeat=3, two widths per family paragraph, and the rich pre-wrap kind fresh.ts now takes). Suite-like unseen cases need a new source: main's generators under new seeds, or new corpus text."
+    },
+    {
+      "id": "webkit/whole-line-limits",
+      "engine": "webkit",
+      "kind": "diagnosing condition",
+      "title": "The WebKit observation port limits a whole line once it reports a gap, and the lines after it up to a forced break",
+      "conditions": [
+        "simplified-measuring"
+      ],
+      "cases": [],
+      "source": "round 4b WebKit report, problem 2 and \"What the port reports as predicted now\"; round 4 evaluation: values predicted 10.6% with no facts and 14.5% with facts on the tier sets, 0 differing",
+      "note": "The ranged rule (boxes a gap meets and what is placed after them) was built and measured: it left 109 wrong values in 64 cases failing breaks, and closing them needs a claim about the line's last box that no source gives. With no facts simplified-measuring alone fires on 20.7% of passing lines at a lift of 0.51; a Canvas-learnable reading of `pairKerning`, or a value for \"no pair kerning\", would clear most of it (ROUND3-CRITIC item 5)."
+    },
+    {
+      "id": "shared/canvas-checks-presence-only",
+      "engine": "shared",
+      "kind": "heuristic",
+      "title": "detectEngine()'s Canvas checks test that `lang`, letter spacing and word spacing exist, not that they are honoured; the lab page never calls detectEngine()",
+      "conditions": [],
+      "cases": [],
+      "source": "round 4b shared report, problems 1 and 3; CHARTER.md known deviations \"Environment\"",
+      "note": "A lab run in a browser whose Canvas lacks an assumption still predicts (Firefox 140 ESR did, at 89% line counts). Left for the tests owner: call detectEngine() once per page load, outside recorded phases, and fail the run on unsupported."
+    },
+    {
+      "id": "shared/registry-and-coverage-after-round-4",
+      "engine": "shared",
+      "kind": "lab",
+      "title": "Round 3's Blink rules aren't in the rule registry, three catalogue-era gap statements weren't restated, and 523 of 539 rules carry no annotation in source",
+      "conditions": [],
+      "cases": [],
+      "source": "round 4b shared report \"Known tail\" (`blink/gap/in-word-prefix`, `blink/gap/page-history`, `gecko/gap/in-word-prefix`; `blink/gap/tab-stops`: its one probed example, blink-followups F4, is explained by Canvas's own space advance, so the gap's premise is due a re-reading); round 4 evaluation: coverage regenerated over round 4's rules into the staging folders (uncovered: Blink 40 of 195, WebKit 42 of 156, Gecko 24 of 152, shared 14 of 36), exit 0",
+      "note": "No derived-width rule family exists for round 4c's three fixes (tab-size on a span, justify beside a preserved newline, preserved spaces across a box end under justify); the generated rich-prewrap set stands in."
+    },
+    {
+      "id": "blink/stand-ins-tail-in-suite-families",
+      "engine": "blink",
+      "kind": "open rows",
+      "title": "Scattered rows under glyph-clusters with unsafe-to-break or soft-hyphen-shaping, outside the named classes, and four rows under other conditions alone",
+      "conditions": [
+        "glyph-clusters"
+      ],
+      "cases": [
+        {
+          "id": "c-87e013cf240ecbdc",
+          "browser": "chrome",
+          "where": "ws: widths under tab-stops alone, both configurations"
+        },
+        {
+          "id": "c-9f72ec9d12c60092",
+          "browser": "chrome",
+          "where": "suite-sample: breaks under script-context+unsafe-to-break, both configurations"
+        },
+        {
+          "id": "c-9af51f5066fb4970",
+          "browser": "chrome",
+          "where": "heldout-suite-sample: widths under unsafe-to-break alone (no-facts)"
+        },
+        {
+          "id": "c-5bba1ce400ecad74",
+          "browser": "chrome",
+          "where": "heldout-suite-sample: breaks under unsafe-to-break alone (facts)"
+        }
+      ],
+      "match": {
+        "browsers": [
+          "chrome"
+        ],
+        "status": "covered",
+        "conditions": [
+          "glyph-clusters"
+        ]
+      },
+      "source": "round 4 evaluation, evaluate-r4/aggregate/tail-coverage.json: with the lab's facts 28 failing rows of the tier sets sit in no other item (suite/U+FFFC 4, suite/barrier 4, suite/latin 8, suite/U+FFFF 2, suite/accepted-r 2, suite/joined 2, suite/U+2029 2 and four single rows); with none, about 140",
+      "note": "Not read row by row. The rule names every covered row that lists glyph-clusters, so it overlaps the named classes; the rows in no other item are the tail. Stand-in positions inside shaping groups at a line edge."
+    },
+    {
+      "id": "webkit/dictionary-breaks-stand-in",
+      "engine": "webkit",
+      "kind": "open rows",
+      "title": "Thai breaks from the running browser's segmenter stand in for WebKit's own dictionary breaks",
+      "conditions": [
+        "dictionary-breaks-stand-in"
+      ],
+      "cases": [
+        {
+          "id": "c-865597c8631ac2ca",
+          "browser": "webkit-host",
+          "where": "r4b-webkit fresh sets"
+        },
+        {
+          "id": "c-e2636af0c0d4c0ed",
+          "browser": "webkit-host",
+          "where": "r4b-webkit fresh sets"
+        },
+        {
+          "id": "c-fecc7f07676530b7",
+          "browser": "webkit-host",
+          "where": "r4b-webkit fresh sets"
+        }
+      ],
+      "match": {
+        "browsers": [
+          "webkit-host"
+        ],
+        "status": "covered",
+        "conditions": [
+          "dictionary-breaks-stand-in"
+        ]
+      },
+      "source": "round 4b WebKit report \"Known tail\" (3 a fresh set); round 4 evaluation: 4 tier rows (policy/thai 2, runs/letter-spacing-spans 2), the condition fires on 0.05% of passing lines at a lift of 12.7",
+      "note": "A rare-script tail item: the break data isn't WebKit's own."
     }
   ]
 }
