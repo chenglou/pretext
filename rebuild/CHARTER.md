@@ -83,8 +83,8 @@ The maintainer's, after ceiling round 3's evaluation and critic (research/ROUND3
    (specs/gecko-RESULTS.md "Ceiling round 4"):
    - outside the system font no line count or break moves;
    - widths lose 17 rows of the 1 au class on about 40,000 development and held-out cases, and 23 more on 48,290 fresh
-     cases; synthetic bold costs 0 rows on the defined sets and 9 on the fresh ones (U+2764 alone in a bold span, 7 or 8 au).
-     Both stay named residual classes with probe evidence (`gecko/one-shaping-unit-one-app-unit`, probes F7, F13, F27;
+     cases; synthetic bold costs 0 rows on the defined sets and 9 on the fresh ones (U+2764 alone in a bold span, 7 or
+     8 au). Both stay named residual classes with probe evidence (`gecko/one-shaping-unit-one-app-unit`, probes F7, F13, F27;
      `gecko/synthetic-bold-offset`, probes F14, F24);
    - an OffscreenCanvas never applies optical sizing, so `system-ui` and `-apple-system` widths are stand-ins: 192 widths,
      96 breaks and 32 line counts lost in `rule/system-fonts-and-sizes`, all covered by `optical-size`;
@@ -272,8 +272,8 @@ its first row against the inline-tree model (tentpole 8's record).
 - Round 4a (2026-09-18):
   - Runtime font checks (`src/measure/font-checks.ts`, probe `probes/font-checks.ts`): tentpole 3's list of facts Canvas
     can't tell no longer holds for the primary family, U+2010 coverage, and in Blink joining and the absence of an opsz
-    effect (WebKit's fixed pitch is answered by the registered heuristic above). With no supplied facts Chrome's line counts go from 98.28% to 99.50% (table 99.60%), and
-    webkit-host equals the table.
+    effect (WebKit's fixed pitch is answered by the registered heuristic above). With no supplied facts Chrome's line
+    counts go from 98.28% to 99.50% (table 99.60%), and webkit-host equals the table.
   - Tests and lab: no recorded set was kept and nothing replayed as a test (`rebuild/tests/replay.ts` compares every case's
     full prediction with a frozen reference from recorded Canvas answers; on the six recordings of 2026-09-18 all 380,882
     cases replay the browser's own prediction exactly; it is a change detector whose expected values are the library's
