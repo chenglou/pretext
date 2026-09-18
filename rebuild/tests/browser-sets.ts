@@ -1,7 +1,7 @@
 // Tier 2: the tiers' sets in one pinned browser (rebuild/lab/README.md, "Test tiers").
 //
 //   bun rebuild/tests/browser-sets.ts --browser=chrome|firefox|webkit-host --out=<dir> [--config=no-facts|facts]
-//     [--sets=<name>[,...]] [--groups=smoke,development,families,heldout] [--both-orders] [--record]
+//     [--sets=<name>[,...]] [--groups=smoke,development,families,heldout] [--both-orders] [--record] [--measure-first]
 //     [--ids-file=<file>] [--reference=<ledger dir>] [--baseline=<gate file>] [--seed --staging=<dir>] [--rerun-failed]
 //
 // Don't wrap it in the browser lock: every browser job takes the lock itself. What it does, in order:
@@ -21,6 +21,11 @@
 //    the runs against it through lab/gate.ts. --seed --staging=<dir> stages a new seed with its seed record instead; like
 //    every seed it is never written over the baseline it replaces (lab README, "Seeds go to a staging folder").
 // Exit 1 when the gate loses a pair or a pass became a failure; exit 2 when a job failed or results aren't comparable.
+//
+// --measure-first runs every job under run.ts --measure-first (lab README "Measure first"): per document every case is
+// predicted before the document's first native layout, as an application measures. It is another protocol, recorded in the
+// ledger's sets, so the transitions against the reference are printed knowingly across protocols, and the gate, whose seeds
+// describe the usual protocol, isn't run. compare-sets.ts compares its rows with a usual run's, case by case.
 //
 // --ids-file runs only the listed cases (tier 1 routes cases here): each part's subset keeps the part's order, but not
 // its history, so the run's sets are marked `subset`, its ledger isn't checked for missing cases, and the gate isn't run.
@@ -48,7 +53,7 @@ for (const raw of process.argv.slice(2)) {
   const match = /^--([a-z-]+)(?:=(.*))?$/s.exec(raw)
   if (match === null) fail(`Unknown argument ${raw}`)
   const name = match[1]!
-  if (['both-orders', 'record', 'seed', 'rerun-failed'].includes(name) && match[2] === undefined) flags.add(name)
+  if (['both-orders', 'record', 'seed', 'rerun-failed', 'measure-first'].includes(name) && match[2] === undefined) flags.add(name)
   else if (['browser', 'out', 'config', 'sets', 'groups', 'ids-file', 'reference', 'baseline', 'staging'].includes(name) && match[2] !== undefined) options.set(name, match[2])
   else fail(`Unknown argument ${raw}`)
 }
@@ -58,6 +63,9 @@ const config = (options.get('config') ?? 'no-facts') as Config
 if (!CONFIGS.includes(config)) fail('--config must be no-facts or facts')
 const outDir = resolve(options.get('out') ?? fail('--out is required'))
 const bothOrders = flags.has('both-orders')
+const measureFirst = flags.has('measure-first')
+if (measureFirst && (flags.has('record') || flags.has('seed'))) fail('--measure-first goes with neither --record (a record is per case, in one pass) nor --seed (seeds describe the usual protocol)')
+const moreRunArgs = measureFirst ? ['--measure-first'] : []
 let sets: TestSet[]
 try {
   sets = selectSets(browser, options.get('sets'), options.get('groups'))
@@ -110,7 +118,7 @@ for (const set of sets) {
     if (bothOrders) jobs.push({ set, part: k, order: 'reverse', cases, dir: dirOf('reverse'), name: `${set.name}-${k}-reverse` })
     parts.push({ part: k, forward: relative(REPO, dirOf('forward')), reverse: bothOrders ? relative(REPO, dirOf('reverse')) : null })
   }
-  if (parts.length > 0) runRecord.sets.push({ name: set.name, protocol: setProtocol(set, browser), subset: wantedIds !== null, parts })
+  if (parts.length > 0) runRecord.sets.push({ name: set.name, protocol: setProtocol(set, browser, moreRunArgs), subset: wantedIds !== null, parts })
 }
 if (jobs.length === 0) fail('No case selected')
 
@@ -131,7 +139,7 @@ function jobState(job: Job): JobState {
 function runJob(job: Job): Promise<number> {
   mkdirSync(job.dir, { recursive: true })
   const args = [LOCK, `sets-${browser}-${config}-${job.name}`, '--max-wait-min=240', '--', 'bun', 'rebuild/lab/run.ts', `--browser=${browser}`, `--cases=${job.cases}`, `--out=${job.dir}`,
-    `--order=${job.order === 'forward' ? 'file' : 'reverse'}`, `--predictor=${join(REPO, PREDICTORS[config])}`, ...job.set.runArgs]
+    `--order=${job.order === 'forward' ? 'file' : 'reverse'}`, `--predictor=${join(REPO, PREDICTORS[config])}`, ...job.set.runArgs, ...moreRunArgs]
   if (flags.has('record') && job.order === 'forward') args.push('--record-measurements')
   const out = createWriteStream(join(job.dir, 'run.log'))
   const from = Date.now()
@@ -222,8 +230,8 @@ if (ledger.header.bundles.length > 1) {
   exit = 2
 }
 if (reference !== null) {
-  console.log(`transitions against ${relative(REPO, referenceDir)}:`)
-  const report = transitionsBetween(reference, ledger, [])
+  console.log(`transitions against ${relative(REPO, referenceDir)}${measureFirst ? ' (the usual protocol; this run measured first)' : ''}:`)
+  const report = transitionsBetween(reference, ledger, measureFirst ? ['protocol'] : [])
   writeFileSync(join(outDir, 'transitions.json'), `${JSON.stringify(report, null, 2)}\n`)
   printTransitions(report)
   if (report.comparable.length > 0) exit = 2
@@ -233,7 +241,9 @@ if (reference !== null) {
 // ---- 6. The gate ----
 
 const perCaseFiles = jobs.map(job => join(job.dir, `${browser}-per-case.ndjson`))
-if (wantedIds === null && (flags.has('seed') || existsSync(baselinePath))) {
+if (measureFirst) {
+  log('measure first: the gate, whose seeds describe the usual protocol, did not run')
+} else if (wantedIds === null && (flags.has('seed') || existsSync(baselinePath))) {
   const runs = perCaseFiles.map(readRun)
   const engine = ENGINES[browser]
   if (flags.has('seed')) {

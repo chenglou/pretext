@@ -27,7 +27,7 @@ function message(error: unknown): string {
 // ---- Arguments ----
 
 const KNOWN = ['browser', 'cases', 'out', 'limit', 'family', 'chunk', 'predictor', 'stall-ms', 'order', 'chrome-apple-languages', 'chrome-accept-languages', 'part-ms', 'part-cases', 'parts-from']
-const USAGE = 'Usage: bun rebuild/lab/run.ts --browser=chrome|safari|firefox|webkit-host --cases=<cases.ndjson> --out=<dir> [--limit=N] [--family=substr] [--chunk=N] [--predictor=<file>] [--stall-ms=N] [--order=file|reverse|shuffle:<seed>] [--part-ms=N] [--part-cases=N] [--parts-from=<run.json>] [--record-measurements] [--allow-safari-frontmost] [--predict-only] [--chrome-apple-languages=<tag>[,<tag>...] --chrome-accept-languages=<list>]'
+const USAGE = 'Usage: bun rebuild/lab/run.ts --browser=chrome|safari|firefox|webkit-host --cases=<cases.ndjson> --out=<dir> [--limit=N] [--family=substr] [--chunk=N] [--predictor=<file>] [--stall-ms=N] [--order=file|reverse|shuffle:<seed>] [--part-ms=N] [--part-cases=N] [--parts-from=<run.json>] [--record-measurements] [--measure-first] [--allow-safari-frontmost] [--predict-only] [--chrome-apple-languages=<tag>[,<tag>...] --chrome-accept-languages=<list>]'
 const args = new Map<string, string>()
 // Opens the Safari lab window without waiting for Safari to leave the front (see launchSafari).
 let allowSafariFrontmost = false
@@ -37,6 +37,10 @@ let predictOnly = false
 // Stores every Canvas measureText call and dictionary segmentation of every case beside the rows (record.ts), for offline
 // checks of another library build against the same browser answers (measurements.ts).
 let recordMeasurements = false
+// Measure first (lab README "Measure first"): per document, every case is predicted before the document's first native
+// layout, then the cases are observed in the same order. An application measures before any DOM text exists; the usual
+// protocol lays a case out natively and then predicts it.
+let measureFirst = false
 for (const raw of process.argv.slice(2)) {
   if (raw === '--allow-safari-frontmost') {
     allowSafariFrontmost = true
@@ -50,6 +54,10 @@ for (const raw of process.argv.slice(2)) {
     recordMeasurements = true
     continue
   }
+  if (raw === '--measure-first') {
+    measureFirst = true
+    continue
+  }
   const match = /^--([a-z-]+)=(.*)$/s.exec(raw)
   if (match === null || !KNOWN.includes(match[1]!)) fail(`Unknown argument ${raw}. ${USAGE}`)
   args.set(match[1]!, match[2]!)
@@ -58,6 +66,9 @@ const browserArg = args.get('browser')
 if (browserArg !== 'chrome' && browserArg !== 'safari' && browserArg !== 'firefox' && browserArg !== 'webkit-host') fail('--browser must be chrome, safari, firefox or webkit-host')
 const browser: BrowserKind = browserArg
 if (allowSafariFrontmost && browser !== 'safari') fail('--allow-safari-frontmost applies only to --browser=safari')
+// A record's phases are per case, and a measure-first case predicts and observes in two passes; without native layout there
+// is nothing to measure before.
+if (measureFirst && (recordMeasurements || predictOnly)) fail('--measure-first goes with neither --record-measurements nor --predict-only')
 // webkit-host runs installed Safari's engine, so it takes Safari's cases.
 const caseBrowser: BrowserKind = browser === 'webkit-host' ? 'safari' : browser
 const casesPath = args.get('cases') ?? fail('--cases is required')
@@ -532,7 +543,9 @@ function portInUse(port: number): boolean {
 }
 
 type PageRow = Omit<LabRow, 'family' | 'browser' | 'build' | 'languages' | 'case'>
-type Pending = { seq: number; start: number; end: number; sends: number; sentAt: number }
+// phase: under --measure-first a document's cases go out twice, to be predicted and then to be observed; rows come back
+// from 'observe' chunks only, which is the one phase of the usual protocol.
+type Pending = { seq: number; start: number; end: number; sends: number; sentAt: number; phase: 'predict' | 'observe' }
 // One part of the run: the rows one browser process observed.
 type Part = { index: number; reason: 'start' | 'cases' | 'time' | 'given'; firstRow: number; rows: number; startedAt: string; ms: number }
 
@@ -552,6 +565,10 @@ let firstEnv: PageRow['env'] | null = null
 let next = 0
 let seqCounter = 0
 let pending: Pending | null = null
+// --measure-first: the document being served, rows [start, end) of one page context inside one part. Its cases are predicted
+// in chunks up to `predicted` before any of them is observed; `next` then runs through them. null between documents.
+let documentRange: { start: number; end: number; predicted: number } | null = null
+const measureFirstTotals = { documents: [] as Array<{ firstRow: number; rows: number }>, predictChunks: 0 }
 let navigationsWithoutProgress = 0
 let lastActivity = Date.now()
 // When the page first asked for work, so launch time and case throughput can be told apart.
@@ -608,7 +625,7 @@ function writeRows(rows: PageRow[], start: number): void {
 }
 
 async function step(request: Request): Promise<Response> {
-  const body = await request.json() as { runId: string; pageLang: string; fonts: string[]; navigatorLanguages?: string[]; seq: number | null; rows: PageRow[]; measurements?: CaseMeasurements[] }
+  const body = await request.json() as { runId: string; pageLang: string; fonts: string[]; navigatorLanguages?: string[]; seq: number | null; rows: PageRow[]; measurements?: CaseMeasurements[]; predicted?: number }
   if (body.runId !== runId) return new Response('Inactive run', { status: 409 })
   // The first step of every part checks the browser process's languages; the run's first step records them.
   if (part.firstStep) {
@@ -631,7 +648,15 @@ async function step(request: Request): Promise<Response> {
       if (first) languages.derivation.push(`checked: navigator.languages ${JSON.stringify(shown)} shows the first given entry`)
     }
   }
-  if (body.seq !== null) {
+  // A measure-first document holds its predictions in the page, so a page that starts again inside one can't go on.
+  if (measureFirst && body.seq === null && documentRange !== null) throw new Error(`The page started again inside the measure-first document of rows ${documentRange.start} to ${documentRange.end}; its held predictions are gone`)
+  if (body.seq !== null && pending !== null && body.seq === pending.seq && pending.phase === 'predict') {
+    if (body.predicted !== pending.end - pending.start || !Array.isArray(body.rows) || body.rows.length !== 0) throw new Error(`Predict chunk ${pending.seq} reported ${body.predicted} predictions and ${body.rows?.length} rows; expected ${pending.end - pending.start} and none`)
+    documentRange!.predicted = pending.end
+    longestChunkMs = Math.max(longestChunkMs, Date.now() - pending.sentAt)
+    measureFirstTotals.predictChunks++
+    pending = null
+  } else if (body.seq !== null) {
     if (pending === null || body.seq !== pending.seq) throw new Error(`Page acknowledged chunk ${body.seq}; pending is ${pending?.seq ?? 'none'}`)
     if (!Array.isArray(body.rows) || body.rows.length !== pending.end - pending.start) throw new Error(`Chunk ${pending.seq} returned ${body.rows?.length} rows; expected ${pending.end - pending.start}`)
     if (recordMeasurements && (!Array.isArray(body.measurements) || body.measurements.length !== body.rows.length)) throw new Error(`Chunk ${pending.seq} returned ${body.measurements?.length} measurement records for ${body.rows.length} rows`)
@@ -642,6 +667,10 @@ async function step(request: Request): Promise<Response> {
     next = pending.end
     pending = null
     navigationsWithoutProgress = 0
+    if (documentRange !== null && next >= documentRange.end) {
+      measureFirstTotals.documents.push({ firstRow: documentRange.start, rows: documentRange.end - documentRange.start })
+      documentRange = null
+    }
     if (cases.length <= 1000 || Math.floor(next / 1000) !== Math.floor((next - body.rows.length) / 1000) || next === cases.length) {
       console.log(`[lab] ${browser}: ${next}/${cases.length} rows`)
     }
@@ -654,8 +683,9 @@ async function step(request: Request): Promise<Response> {
     settle?.resolve()
     return Response.json({ kind: 'done' })
   }
-  // A part ends only on an acknowledged chunk, so every part makes progress.
-  if (body.seq !== null && pending === null) {
+  // A part ends only on an acknowledged chunk, so every part makes progress; under --measure-first only where a document
+  // ends, since a document's predictions live in its page (a timed part waits for that).
+  if (body.seq !== null && pending === null && documentRange === null) {
     const reason = givenPartStarts.includes(next) ? 'given' : next - part.firstRow >= partCases ? 'cases' : Date.now() - part.startedAt + longestChunkMs > partMs ? 'time' : null
     if (reason !== null) {
       session?.expectExit?.()
@@ -663,7 +693,7 @@ async function step(request: Request): Promise<Response> {
       return Response.json({ kind: 'retire' })
     }
   }
-  const start = pending?.start ?? next
+  const start = pending?.start ?? (documentRange !== null && documentRange.predicted < documentRange.end ? documentRange.predicted : next)
   const lang = cases[start]!.pageLang
   const fonts = fixtureFamilies(cases[start]!)
   const key = contextKey(lang, fonts)
@@ -673,14 +703,20 @@ async function step(request: Request): Promise<Response> {
     return Response.json({ kind: 'navigate', lang, fonts })
   }
   if (pending === null) {
+    // A chunk never runs past its part's --part-cases or the next --parts-from start, and the same bounds end a document.
+    const bound = Math.min(cases.length, part.firstRow + partCases, ...givenPartStarts.filter(row => row > start))
+    if (measureFirst && documentRange === null) {
+      let documentEnd = start
+      while (documentEnd < bound && contextKey(cases[documentEnd]!.pageLang, fixtureFamilies(cases[documentEnd]!)) === key) documentEnd++
+      documentRange = { start, end: documentEnd, predicted: start }
+    }
     let end = start
-    // A chunk never runs past its part's --part-cases or the next --parts-from start.
-    const size = Math.min(chunkSize, part.firstRow + partCases - start, ...givenPartStarts.filter(row => row > start).map(row => row - start))
+    const size = Math.min(chunkSize, (documentRange?.end ?? bound) - start)
     while (end < cases.length && end - start < size && contextKey(cases[end]!.pageLang, fixtureFamilies(cases[end]!)) === key) end++
-    pending = { seq: seqCounter++, start, end, sends: 0, sentAt: Date.now() }
+    pending = { seq: seqCounter++, start, end, sends: 0, sentAt: Date.now(), phase: documentRange !== null && documentRange.predicted < documentRange.end ? 'predict' : 'observe' }
   }
   pending.sends++
-  return asciiJsonResponse({ kind: 'chunk', seq: pending.seq, browser, build: build.engine, languages: languages.given, ...(predictOnly ? { predictOnly: true } : {}), ...(recordMeasurements ? { recordMeasurements: true } : {}), cases: cases.slice(pending.start, pending.end) })
+  return asciiJsonResponse({ kind: 'chunk', seq: pending.seq, browser, build: build.engine, languages: languages.given, ...(predictOnly ? { predictOnly: true } : {}), ...(recordMeasurements ? { recordMeasurements: true } : {}), ...(measureFirst ? { measureFirst: pending.phase } : {}), cases: cases.slice(pending.start, pending.end) })
 }
 
 // ---- Measurements ----
@@ -883,7 +919,7 @@ try {
   }
   if (server === null) throw new Error('No free port in 3002-3099')
   baseUrl = `http://127.0.0.1:${server.port}`
-  console.log(`[lab] ${browser}: ${cases.length} cases, ${casesByContext.size} page contexts${predictOnly ? ', predictions only' : ''}${recordMeasurements ? ', recording measurements' : ''}; serving ${baseUrl}`)
+  console.log(`[lab] ${browser}: ${cases.length} cases, ${casesByContext.size} page contexts${predictOnly ? ', predictions only' : ''}${recordMeasurements ? ', recording measurements' : ''}${measureFirst ? ', measure first' : ''}; serving ${baseUrl}`)
   part = { reason: 'start', firstRow: 0, startedAt: Date.now(), firstStep: true }
   session = await launch(labUrl(cases[0]!))
   lastActivity = Date.now()
@@ -926,6 +962,8 @@ try {
     browser, app, build, languages, runId, casesFile: resolve(casesPath), rowsFile: rowsPath, predictor: predictorPath,
     family: familyFilter ?? null, limit: limit === Number.MAX_SAFE_INTEGER ? null : limit, order, chunkSize, bundleSha256, bundleBytes, allowSafariFrontmost,
     predictOnly,
+    // --measure-first: the documents, each predicted whole before its first native layout; null under the usual protocol.
+    measureFirst: measureFirst ? measureFirstTotals : null,
     // Parts: the fresh browser processes the run went through, and what ends one (null: nothing but the run's end).
     partCases: partCases === Number.MAX_SAFE_INTEGER ? null : partCases, partMs: partMs === Number.MAX_SAFE_INTEGER ? null : partMs, partsFrom: partsFrom === undefined ? null : resolve(partsFrom), parts,
     // run.ts --record-measurements. libraryLogDisagrees: cases whose recorded predict-phase calls differ from the library's own

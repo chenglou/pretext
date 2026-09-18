@@ -90,7 +90,9 @@ export const CASES_PER_ROUND_TRIP = 25
 export type PartProtocol = { casesFile: string; casesSha256: string }
 export type SetProtocol = { set: string; parts: PartProtocol[]; casesPerRoundTrip: number; freshProcessPerPart: true; runArgs: string[] }
 
-export function setProtocol(set: TestSet, browser: TierBrowser): SetProtocol {
+// `moreRunArgs`: run.ts arguments a command adds to every job, which change what a row was observed after
+// (browser-sets.ts --measure-first). They are part of the protocol, so such a ledger meets the usual one only knowingly.
+export function setProtocol(set: TestSet, browser: TierBrowser, moreRunArgs: readonly string[] = []): SetProtocol {
   const parts: PartProtocol[] = []
   for (const part of set.parts) {
     const relative = part.replaceAll('{browser}', browser)
@@ -98,5 +100,5 @@ export function setProtocol(set: TestSet, browser: TierBrowser): SetProtocol {
     if (!existsSync(path)) throw new Error(`${relative}: the case file of set ${set.name} is missing`)
     parts.push({ casesFile: relative, casesSha256: sha256File(path) })
   }
-  return { set: set.name, parts, casesPerRoundTrip: CASES_PER_ROUND_TRIP, freshProcessPerPart: true, runArgs: [...set.runArgs] }
+  return { set: set.name, parts, casesPerRoundTrip: CASES_PER_ROUND_TRIP, freshProcessPerPart: true, runArgs: [...set.runArgs, ...moreRunArgs] }
 }

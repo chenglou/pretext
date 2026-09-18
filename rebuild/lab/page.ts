@@ -29,7 +29,10 @@ type StepReply =
   // browser process's languages the driver gave (ProcessLanguages.given). predictOnly: run.ts --predict-only; the page
   // skips native observation. recordMeasurements: run.ts --record-measurements; the page posts each case's Canvas calls
   // beside its row (record.ts).
-  | { kind: 'chunk'; seq: number; browser: BrowserKind; build: string; languages: ProcessLanguages['given']; predictOnly?: true; recordMeasurements?: true; cases: Case[] }
+  // measureFirst: run.ts --measure-first (lab README "Measure first"). The driver sends a document's cases twice: first as
+  // 'predict' chunks, which the page predicts and holds without any native layout, then as 'observe' chunks, which it lays
+  // out natively and paints from the held predictions.
+  | { kind: 'chunk'; seq: number; browser: BrowserKind; build: string; languages: ProcessLanguages['given']; predictOnly?: true; recordMeasurements?: true; measureFirst?: 'predict' | 'observe'; cases: Case[] }
   | { kind: 'navigate'; lang: string; fonts: string[] }
   // The driver starts the run's next part in a fresh browser process (run.ts, "Parts"); this page is finished.
   | { kind: 'retire' }
@@ -41,6 +44,10 @@ let fontFixtures: string[] = []
 // cases, so a case can lay out differently after another one (lab README "Page-history dependence").
 let casesObserved = 0
 let previousCaseId: string | null = null
+// run.ts --measure-first: what this document predicted before its first native layout, by case id, until the case is observed.
+type Predicted = { hook: LayoutPrediction | LinesPrediction | { error: string }; prediction: PageRow['prediction']; timings: { predictMs: number; observeMs: number; limitsMs: number } }
+const held = new Map<string, { predicted: Predicted; index: number }>()
+let documentPredictions = 0
 
 // A named family resolves when a probe string measures differently from at least one of two generic fallbacks. This
 // catches fonts that aren't installed, that Safari hides from web content, and fixtures that didn't load; it can't tell
@@ -468,22 +475,12 @@ async function observeCase(c: Case, reply: Extract<StepReply, { kind: 'chunk' }>
   }
 }
 
-async function observeRow(c: Case, reply: Extract<StepReply, { kind: 'chunk' }>, range: Range, recording: boolean, libraryLog: (log: ParagraphLayout['measure']) => void): Promise<PageRow> {
-  const timings = { nativeMs: 0, predictMs: 0, observeMs: 0, limitsMs: 0, paintMs: 0, painterObserveMs: 0 }
-  const env = readEnv()
+// The prediction of a case and what the page records of it: the library's layout, what the observation port expects the
+// browser to report for it, and the painter limits. Nothing here touches the DOM, so under run.ts --measure-first a document
+// runs it for every case before its first native layout.
+function predictCase(c: Case, reply: Extract<StepReply, { kind: 'chunk' }>, recording: boolean, libraryLog: (log: ParagraphLayout['measure']) => void): Predicted {
+  const timings = { predictMs: 0, observeMs: 0, limitsMs: 0 }
   let start = performance.now()
-  let native: PageRow['native']
-  if (reply.predictOnly === true) {
-    native = { skipped: 'predict-only' }
-  } else {
-    try {
-      native = await observeNative(c, range)
-    } catch (error) {
-      native = { error: message(error) }
-    }
-    timings.nativeMs = performance.now() - start
-  }
-  start = performance.now()
   if (recording) beginPhase('predict')
   // A predictor swapped in with run.ts --predictor may predict line ranges alone (baselines/main-predictor.ts).
   let hook: LayoutPrediction | LinesPrediction | { error: string }
@@ -493,9 +490,7 @@ async function observeRow(c: Case, reply: Extract<StepReply, { kind: 'chunk' }>,
     hook = { error: message(error) }
   }
   timings.predictMs = performance.now() - start
-  casesObserved++
-  previousCaseId = c.id
-  if (!('layout' in hook)) return { id: c.id, env, native, prediction: hook, painter: null, timings }
+  if (!('layout' in hook)) return { hook, prediction: hook, timings }
   libraryLog(hook.layout.measure)
   start = performance.now()
   if (recording) beginPhase('observe')
@@ -523,6 +518,40 @@ async function observeRow(c: Case, reply: Extract<StepReply, { kind: 'chunk' }>,
     layout: recordedLayout(hook.layout), measure: { contexts: log.contexts.length, calls: log.calls.length, memoHits: log.memoHits }, observation,
     ...(painterLimits === undefined ? {} : { painterLimits }),
   }
+  return { hook, prediction, timings }
+}
+
+// One case's row. Under the usual protocol: native layout, then the prediction, then the painted lines. Under run.ts
+// --measure-first the prediction was made before the document's first native layout (`held`), and this lays the case out
+// natively and paints the held prediction.
+async function observeRow(c: Case, reply: Extract<StepReply, { kind: 'chunk' }>, range: Range, recording: boolean, libraryLog: (log: ParagraphLayout['measure']) => void): Promise<PageRow> {
+  const env = readEnv()
+  let before: { predicted: Predicted; index: number } | null = null
+  if (reply.measureFirst === 'observe') {
+    before = held.get(c.id) ?? null
+    if (before === null) throw new Error(`Case ${c.id}: measure-first observes a case this document didn't predict`)
+    held.delete(c.id)
+    env.measureFirst = { predictionIndex: before.index, documentPredictions }
+  }
+  let nativeMs = 0
+  const start = performance.now()
+  let native: PageRow['native']
+  if (reply.predictOnly === true) {
+    native = { skipped: 'predict-only' }
+  } else {
+    try {
+      native = await observeNative(c, range)
+    } catch (error) {
+      native = { error: message(error) }
+    }
+    nativeMs = performance.now() - start
+  }
+  const predicted = before === null ? predictCase(c, reply, recording, libraryLog) : before.predicted
+  casesObserved++
+  previousCaseId = c.id
+  const timings = { nativeMs, ...predicted.timings, paintMs: 0, painterObserveMs: 0 }
+  const hook = predicted.hook
+  if (!('layout' in hook)) return { id: c.id, env, native, prediction: predicted.prediction, painter: null, timings }
   let painter: PageRow['painter']
   if (recording) beginPhase('paint')
   try {
@@ -530,7 +559,7 @@ async function observeRow(c: Case, reply: Extract<StepReply, { kind: 'chunk' }>,
   } catch (error) {
     painter = { error: message(error) }
   }
-  return { id: c.id, env, native, prediction, painter, timings }
+  return { id: c.id, env, native, prediction: predicted.prediction, painter, timings }
 }
 
 // Installed Safari only: the markup holds a hidden image that keeps this document loading, so WebKit keeps the hidden
@@ -567,6 +596,17 @@ async function main(): Promise<void> {
       case 'chunk': {
         const rows: PageRow[] = []
         const measurements: CaseMeasurements[] = []
+        if (reply.measureFirst === 'predict') {
+          // Nothing of this document has been laid out natively yet, and nothing is while it predicts.
+          if (casesObserved > 0) throw new Error('measure-first: a predict chunk arrived after the document laid a case out natively')
+          for (let i = 0; i < reply.cases.length; i++) {
+            const c = reply.cases[i]!
+            if (c.pageLang !== pageLang) throw new Error(`Case ${c.id} needs <html lang="${c.pageLang}">; page has "${pageLang}"`)
+            held.set(c.id, { predicted: predictCase(c, reply, false, () => {}), index: documentPredictions++ })
+          }
+          reply = await post<StepReply>('/api/step', { runId, pageLang, fonts: fontFixtures, seq: reply.seq, rows: [], predicted: reply.cases.length })
+          break
+        }
         for (let i = 0; i < reply.cases.length; i++) {
           const c = reply.cases[i]!
           if (c.pageLang !== pageLang) throw new Error(`Case ${c.id} needs <html lang="${c.pageLang}">; page has "${pageLang}"`)

@@ -126,6 +126,10 @@ export type PageEnv = {
   // in rows from before these fields.
   navigatorLanguages?: string[]
   intlLocale?: string
+  // run.ts --measure-first only (lab README "Measure first"): the document predicted `documentPredictions` cases before its
+  // first native layout, this one as number `predictionIndex`, and observed them afterwards. Absent under the usual
+  // protocol, where a case is laid out natively and then predicted.
+  measureFirst?: { predictionIndex: number; documentPredictions: number }
 }
 
 // The languages a browser process uses for content without a usable lang (DESIGN.md §1.4, CHARTER.md "Boundaries"): what
