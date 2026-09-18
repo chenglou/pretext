@@ -102,17 +102,19 @@ evaluation of 2026-09-17 (REPORT.md §2-§7):
   `unsafe-to-break` (tentpole 3).
 - The lab's `obligations` family and G0 baselines are derived from main's tests and the final runs; they are measurement
   inputs until each obligation is triaged under tentpole 5. research/MAIN-TRIAGE.md re-observed main's regressions and
-  required cases with the charter library, and `rebuild/lab/triage/` holds its records (Chrome 1,069, Firefox 745,
-  webkit-host 736), but `cases/obligations.ts` doesn't read them yet (TEST-ARCHITECTURE §7.1). The lab gate baselines
-  (`rebuild/lab/baselines/gate-<browser>-<build>.json`, re-seeded by this evaluation) block on the main-derived suite
-  samples and the burned 2026-09-16 held-out sets (CHARTER-CRITIC item 17); G0 is still keyed on user agents and scorer 1.
+  required cases with the charter library, and `rebuild/lab/triage/` holds its records, refreshed by the ceiling round 2
+  evaluation from the round 2 library's rows in both orders (Chrome 420, Firefox 587, webkit-host 736; charter library
+  1,069, 745 and 736), but `cases/obligations.ts` doesn't read them yet (TEST-ARCHITECTURE §7.1). The lab gate baselines
+  (`rebuild/lab/baselines/gate-<browser>-<build>.json`, seeded again by the ceiling round 2 evaluation for scorer 4 with
+  every lost pair listed in `reseed-round2-lost-pairs.json`) block on the main-derived suite samples and the burned
+  2026-09-16 held-out sets (CHARTER-CRITIC item 17); G0 is still keyed on user agents and scorer 1.
 - Found in the charter evaluation, with their status now:
   - Removed: the browser-process languages are recorded per row and given to the library (Chrome `uiLanguage`, Firefox
     `regionalPrefsLocale`, webkit-host `preferredLanguages` and ICU default locale). Left: Gecko reports `ui-language` for
     every `lang=""` run even when `regionalPrefsLocale` is given, `contentLanguage` is read only by Blink, Chrome's accept
     languages have no input, and WebKit's full preferred-language list isn't settled (tentpole 6).
   - Still: a line whose WebKit `contentWidth` isn't the union of its boxes is marked unobserved by a scorer rule, not by a
-    ported engine rule: 244 development, 259 held-out and 243 sealed cases (tentpole 2).
+    ported engine rule: 243 development, 261 held-out 09-16 and 244 sealed-2 cases in ceiling round 2 (tentpole 2).
   - Still: native lines across nodes come from vertical-centre grouping, a named observer assumption (scorer 3 places a
     code point rect by its own node's box), and `y` and `height` are outside the observation contract (tentpole 2).
   - Still: the painter is scored by extents and wraps only, because `paint` doesn't report painted source offsets
@@ -122,7 +124,8 @@ evaluation of 2026-09-17 (REPORT.md §2-§7):
     55 stage 5 ids (tentpole 4).
   - Removed: the sealed held-out set `sealed-20260917` exists and was run once, in the ceiling evaluation, scored counts
     only (tentpole 4). Two of its generator sources (`lab/cases/case.ts`, `build.ts`) gained tree cases after sealing;
-    the case files' hashes are unchanged and flat cases keep their ids.
+    the case files' hashes are unchanged and flat cases keep their ids. The second set, `sealed-2-20260917`, ran once in
+    the ceiling round 2 evaluation, counts only.
 - Found in ceiling round 1:
   - Removed in ceiling round 2: the slot-rows observer assumption wasn't checked. Scorer 4 marks a row whose slot floats
     sit outside their rows as a protocol row, never a pass or a fail (lab `score.ts` `slotProtocol`): Firefox 15 and
@@ -141,8 +144,36 @@ evaluation of 2026-09-17 (REPORT.md §2-§7):
     (tentpole 3). Status in ceiling round 2 (specs/gecko-RESULTS.md): the 69 au rows were a port bug, an 8-bit text run's
     script (fixed from gfxTextRun.cpp:2744-2747, probe F8); the ligature is `f` taking half of `fi` at an emergency break,
     now reported as `in-word-prefix` where the clusters around the break measure differently with ligatures off (probe
-    F9); the 1 au class is verified (probe F7) and has no Canvas-observable condition, so it stays a failure without a gap.
+    F9); the 1 au class is verified (probe F7) and has no Canvas-observable condition, so it stays a failure without a gap,
+    reported as a residual class since the round 2 evaluation (below).
   - CHARTER-CRITIC items since resolved: 1 (WebKit's coverage recipe reports `font-fallback`), 8 and 9 (quoted family
     names), 12 (process languages given). Still open: 2, 3, 4 (library citations at Chromium 152; in ceiling round 2 Blink's
     V8 and HarfBuzz citations were read again at Chrome 153's pins 6b96683d and dfdc088c, and element.cc and
     locale_settings_mac.grd stay at 152), 10, 11, 13 to 16.
+- Found in the ceiling round 2 evaluation (REPORT.md §2, 2026-09-17):
+  - Gecko's 1 au class is a residual class, not a gap and not an open model bug: each of its 14 development and held-out
+    rows has one node rect exactly 1 au off in one of probe F7's three strings, and the DOM paints the predicted line at
+    the native width (REPORT §2.8). It stays without a Canvas-observable condition (tentpole 3).
+  - Blink reports positions inside joined and ligated words as exact where Canvas prefix widths can't give them. Round 2
+    narrowed `in-word-prefix` to break decisions, and the observation port's limited state went with it: 2,030 development
+    cases that pass lineCount, breaks and widths hold a predicted code point x or width that differs from the browser
+    (tentpoles 1 to 3).
+  - Gecko: a heart after a keycap mark, split across spans (`⃣❤` in bold 14px Helvetica Neue), is 7 au narrower natively
+    with no gap on the line, found on fresh development sets after three sealed-2 rows showed widths 8 au off outside the
+    1 au signature. Not probed (tentpole 3).
+  - WebKit's `page-history` condition misses a line that page history moves: `c-66ae4ab7d56cb0ae` passes alone in a fresh
+    process and fails in both orders of its set, so the two-order protocol can't see it either (tentpoles 2, 3).
+  - Line-local gaps that fire on a large share of passing cases: Blink `script-context` on 76% of the development cases,
+    WebKit `canvas-language` on 45%. They are read from source, and nearly every webkit-host prediction failure is covered
+    only by gaps with a lift below 2 (development 201 of 210, held-out 261 of 261). Narrowing them needs inputs Canvas
+    doesn't give (tentpole 3).
+  - The painter regressed on sets its owner didn't run: Blink's hanging spaces painted in their own text node move the
+    letter before them by its pair adjustment with the space, 58 Chrome pairs with the prediction unchanged, not traced to
+    source (tentpole 7).
+  - Installed Chrome is 153.0.8010.50 since 2026-09-17 and the library pins .48: every Chrome row reports `engine-build`,
+    native views are equal on every case both rounds ran, and TESTS.md §12 hasn't run for .50. Chrome's round 2 gate seeds
+    are new files that say their family cases were derived under .48 (tentpole 6).
+  - A hidden installed Safari page stopped in the one job that ran longer than 8 minutes, so the held-out and sealed-2
+    combined files didn't finish in installed Safari; the development and family files did, equal to webkit-host case by
+    case. The cause is read from WebKit's background CPU limit and process throttler, not verified from Safari's logs
+    (REPORT §2.7).

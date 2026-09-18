@@ -60,7 +60,7 @@ Derived case files, rows and derivation records live under `.artifacts/charter-2
   - `provisional`, for 19 WebKit and Gecko replacements that the owner reports gave only as table rows;
   - `provisional (stage 5, feature families 2026-09-17)`, for the 55 stage 5 rules. They come from DESIGN.md §1.1, §2.9 and §8.3 stage 5 with the architect's citations; the engine owners confirm or rename them when they annotate the source.
 - The stage 5 rules are 17 Blink, 17 WebKit and 16 Gecko rules for box edges, per-element styles, atomic inlines, `<br>`, `<wbr>`, text-indent, text-align and line slots; 3 observation rules for `Element.getClientRects()`; and 2 observer assumptions (kind `observer assumption`): `shared/lab/vertical-centre-grouping` and `shared/lab/slot-rows`.
-- A rule's source annotation is `// rule <id>` in `rebuild/src`. `coverage.ts` lists rules without one (all 470 today) and annotations the registry doesn't know. Once owners annotate, the registry is regenerated from the annotations.
+- A rule's source annotation is `// rule <id>` in `rebuild/src`. `coverage.ts` lists rules without one (all 476 today) and annotations the registry doesn't know. Once owners annotate, the registry is regenerated from the annotations.
 
 ## 4. Rule-targeted families
 
@@ -325,25 +325,27 @@ With `--previous`, a rule that loses its last observed family exits 1.
 
 Also listed: rules with a derived family, whose family has resolved brackets in the engine's browser but no scored prediction run yet (`derivedFamilies`, counted as `derivedOnly`). They don't count as covered.
 
-Regenerated 2026-09-17 by the ceiling round 1 evaluation, from `rebuild/facts/*` and derivation directories whose `file` and `reverse` runs are that evaluation's predicted runs: `.artifacts/ceiling-20260917/evaluate/<browser>/{families-derived,features-derived}` (plus `chrome/features-en-US-derived`), against the previous matrix: no rule lost its last observed family.
+Regenerated 2026-09-17 by the ceiling round 2 evaluation, from `rebuild/facts/*` and derivation directories whose `file` and `reverse` runs are that evaluation's predicted runs under scorer 4: `.artifacts/ceiling-20260917/evaluate-r2/<browser>/{families-derived,features-derived}` (plus `chrome/features-en-US-derived`), against the round 1 matrix: no rule lost its last observed family. The family cases are round 1's, and Chrome's runs are 153.0.8010.50's over cases derived under .48 (REPORT.md §2.6).
 
 | Engine | Current rules | Covered | By tests | By facts | By families | Uncovered | Uncovered with a derived family | Probe labels without a holding fact |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|
-| Blink | 175 | 140 | 39 | 57 | 109 | 35 | 0 | 8 |
+| Blink | 179 | 140 | 39 | 57 | 109 | 39 | 0 | 8 |
 | WebKit | 144 | 103 | 23 | 47 | 91 | 41 | 0 | 10 |
-| Gecko | 122 | 101 | 51 | 55 | 77 | 21 | 0 | 2 |
+| Gecko | 124 | 101 | 51 | 55 | 77 | 23 | 0 | 6 |
 | Shared | 29 | 12 | 6 | 6 | 0 | 17 | 0 | 0 |
+
+Round 2 added six rules, and none has a test, fact or family yet: `blink/justify/cjk-ideograph-or-symbol`, `blink/measure/pair-kerning-from-fact`, `blink/shape/cluster-unit-grapheme`, `blink/shape/pair-window-whole-clusters`, `gecko/lines/in-word-advance-split-kerning` and `gecko/measure/lang-empty-locale-language`. Four more Gecko rules carry probe labels without a holding fact, since the round 2 probes (F7 to F12) aren't in the facts files: `gecko/gap/in-word-prefix`, `gecko/lines/in-word-advance-split-kerning`, `gecko/measure/range-in-script-context` and `gecko/script/latin-fast-path`.
 
 What stays uncovered:
 
-- of the stage 5 rules, the three `Element.getClientRects()` observation rules and the two observer assumptions (`shared/lab/vertical-centre-grouping`, `shared/lab/slot-rows`). All 50 stage 5 engine rules now have an observed family;
-- by kind: Blink 25 ported rules, 5 named gaps, 2 recipes and 2 heuristics; WebKit 36 ported rules, 3 named gaps and 1 recipe; Gecko 16 ported rules and 4 named gaps; shared 9 recipes, 3 ported rules, 2 heuristics and 1 choice by score;
+- of the stage 5 rules, the three `Element.getClientRects()` observation rules and the two observer assumptions (`shared/lab/vertical-centre-grouping`, `shared/lab/slot-rows`). Scorer 4 compares element rects on every feature row and checks slot rows by rule, but the registry lists no test or family for them. All 50 stage 5 engine rules have an observed family;
+- by kind: Blink 28 ported rules, 5 named gaps, 2 recipes, 2 heuristics and 1 fact; WebKit 36 ported rules, 3 named gaps and 1 recipe; Gecko 18 ported rules and 4 named gaps; shared 9 recipes, 3 ported rules, 2 heuristics and 1 choice by score;
 - the new output geometry rules. Their evidence is the observation ports' tests and scorer v2's comparisons, which the registry doesn't list yet;
 - builder scaffolding: `webkit/builder/*`, `webkit/ilb/*`, `gecko/script/*`;
 - gaps no family triggers: dictionary breaks unavailable, page zoom, page history, float32 precision, bitmap emoji size;
 - the painter's 12 rules, since painter probes haven't run.
 
-Six current rules are still heuristics or choices by score: `blink/measure/ignorables-left-out-if-8bit`, `blink/shape/wide-group-halved`, `shared/env/engine-from-user-agent` and three painter rules.
+Six current rules are still heuristics or choices by score: `blink/shape/wide-group-halved`, `blink/shape/cluster-unit-grapheme` (registered in round 2), `shared/env/engine-from-user-agent` and three painter rules. `blink/measure/ignorables-left-out-if-8bit` became a ported rule in round 2.
 
 ## 9. The gate
 
@@ -358,19 +360,20 @@ Six current rules are still heuristics or choices by score: `blink/measure/ignor
 
 | Baseline | Environment | Family cases | Pass pairs (lineCount / breaks / widths / painter) | History-dependent | Protocol rows | Unstable pairs |
 |---|---|---:|---|---:|---:|---:|
-| `chrome-153.0.8010.48.json` | Google Chrome 153.0.8010.48, macOS 26A428, DPR 2, `uiLanguage` zh-CN, scorer 3 | 10,976 | 41,695 (10,772 / 10,690 / 10,258 / 9,975) | 0 | – | 0 |
-| `chrome-features-153.0.8010.48.json` | the same | 12,882 | 38,205 (12,135 / 12,135 / 6,943 / 6,992) | 0 | 0 | 0 |
-| `chrome-en-US-features-153.0.8010.48.json` | the same with `uiLanguage` en-US | 468 | 1,872 (468 / 468 / 468 / 468) | 0 | 0 | 0 |
-| `webkit-host-22625.1.29.11.27.json` | webkit-host 27.0 on WebKit 22625.1.29.11.27, `preferredLanguages` zh-CN, `icuDefaultLocale` en_US_POSIX | 9,584 | 36,038 (9,458 / 9,376 / 8,822 / 8,382) | 6 | – | 0 |
-| `webkit-host-features-22625.1.29.11.27.json` | the same | 12,150 | 39,826 (11,422 / 11,414 / 8,545 / 8,445) | 0 | 7 | 0 |
-| `firefox-156.0.json` | Firefox 156.0, `regionalPrefsLocale` zh-hans-us | 9,584 | 35,117 (9,422 / 9,166 / 8,481 / 8,048) | 0 | – | 0 |
-| `firefox-features-156.0.json` | the same | 11,946 | 35,021 (11,261 / 11,261 / 6,254 / 6,245) | 0 | 15 | 0 |
+| `chrome-153.0.8010.50.json` | Google Chrome 153.0.8010.50, macOS 26A428, DPR 2, `uiLanguage` zh-CN, scorer 4 | 10,976 | 42,233 (10,810 / 10,749 / 10,455 / 10,219) | 0 | 0 | 0 |
+| `chrome-features-153.0.8010.50.json` | the same | 12,882 | 42,595 (12,882 / 12,882 / 9,733 / 7,098) | 0 | 0 | 0 |
+| `chrome-en-US-features-153.0.8010.50.json` | the same with `uiLanguage` en-US | 468 | 1,872 (468 / 468 / 468 / 468) | 0 | 0 | 0 |
+| `webkit-host-22625.1.29.11.27.json` | webkit-host 27.0 on WebKit 22625.1.29.11.27, `preferredLanguages` zh-CN,zh-Hans, `icuDefaultLocale` en_US_POSIX, scorer 4 | 9,584 | 36,038 (9,458 / 9,376 / 8,822 / 8,382) | 6 | 0 | 0 |
+| `webkit-host-features-22625.1.29.11.27.json` | the same | 12,150 | 43,800 (12,123 / 12,111 / 10,923 / 8,643) | 0 | 7 | 0 |
+| `firefox-156.0.json` | Firefox 156.0, `regionalPrefsLocale` zh-hans-us, scorer 4 | 9,584 | 35,272 (9,432 / 9,200 / 8,592 / 8,048) | 0 | 0 | 0 |
+| `firefox-features-156.0.json` | the same | 11,946 | 39,149 (11,931 / 11,931 / 8,862 / 6,425) | 0 | 15 | 0 |
 
-Seeded by the ceiling round 1 evaluation (REPORT.md §2.6) with the facts files and the regenerated coverage matrix, through derivation directories that link the evaluation's forward and reverse runs (`.artifacts/ceiling-20260917/evaluate/tools/derived-dirs.sh`). Each baseline checked against its own runs: 0 lost pairs, pass.
+Seeded by the ceiling round 2 evaluation (REPORT.md §2.6; `.artifacts/ceiling-20260917/evaluate-r2/tools/reseed.sh`) with `gate.ts seed`, the facts files and the regenerated coverage matrix, through derivation directories that link the evaluation's forward and reverse runs (`evaluate-r2/tools/derived-dirs.sh`). Each baseline checked against its own runs with the environment check on: 0 lost pairs, pass. The round 1 seeds refuse the round 2 runs by environment (scorer 4; Chrome's new build; webkit-host's `preferredLanguages`), and nothing was checked without that check. What each new seed loses against the round 1 seed and against the pre-round-1 seed is listed pair by pair, with its category, line-local gaps and attribution, in `rebuild/lab/baselines/reseed-round2-lost-pairs.json`: Chrome's rule families 24 painter pairs and feature families 33, webkit-host's feature families 17 widths that scorer 4 alone leaves unobserved and 8 painter pairs, Firefox none.
 
-Pruned by rule in ceiling round 2 (`lab/gate.ts --prune-protocol`, reports in `.artifacts/lab/round2-scorer4/prune/`, the previous files beside them as `*.before.json`): Firefox's feature baseline lost 15 pairs in its 15 protocol rows (9 line counts, 6 breaks), webkit-host's 12 pairs in 7 rows (4 line counts, 2 breaks, 2 widths, 4 painter), Chrome's none. These baselines still key on scorer 3 and, for webkit-host, on the `preferredLanguages` round 1 took from the page, so round 2 runs (scorer 4, `preferredLanguages` zh-CN,zh-Hans from `webkit-host --print-languages`) need new seeds under the baseline rule: every lost pair attributed, protocol rows excluded.
+- Chrome's three files are new, for build 153.0.8010.50, which replaced .48 on 2026-09-17; the .48 seeds stay in their own files. Their family cases were derived under .48 (the `build` field), the runs are .50's, whose native views equal .48's on every family case in both orders (`evaluate-r2/native-rounds-chrome.json`), and their facts file is .48's. §12's procedure (probes, derivation) hasn't run for .50.
+- The feature seeds still hold round 1's cases, with their protocol rows listed apart (Firefox 15, webkit-host 7). Round 1's seeds were pruned of those rows by rule in ceiling round 2 (`lab/gate.ts --prune-protocol`, reports in `.artifacts/lab/round2-scorer4/prune/`). The families should be derived again with `derive.ts` `minimumUnits` before the next seed (§13).
 
-The previous rule-family baselines were keyed on scorer 2 without process languages, so `gate.ts check` refuses the new runs by design (exit 2). Checked by the same rules without the environment check, Chrome's rule families lost 44 painter pairs (`rule/joining`, the Blink owner's fix-r12), webkit-host's 22 line counts, 22 breaks and 6 painter pairs (`rule/joining` under `rtl-shaping-across-inline-boxes`), and Firefox's none.
+Round 1 history: the pre-round-1 rule-family baselines were keyed on scorer 2 without process languages, so `gate.ts check` refused round 1's runs by design (exit 2). Round 1's evaluation compared them by the same rules without the environment check, which its critic rejected (research/ROUND1-CRITIC.md item 2) and round 2 doesn't do: Chrome's rule families lost 44 painter pairs (`rule/joining`, the Blink owner's fix-r12), webkit-host's 22 line counts, 22 breaks and 6 painter pairs (`rule/joining` under `rtl-shaping-across-inline-boxes`), and Firefox's none.
 
 ## 10. Main's tests
 
@@ -401,7 +404,7 @@ A macOS update moves all three keys.
 - Triage records for the census's main-only rows (§7).
 - Lock files and oracle answers under `rebuild/data`, with skipped oracle tests turned into failures (§5).
 - Environment reruns for rules that read DPR or app units: forced DPR 1 in Chrome, other apd in Firefox. `run.ts` takes no browser switches.
-- Family runs in installed Safari; webkit-host stands in. The ceiling evaluation's combined families file never reached installed Safari, because its first job stopped (REPORT.md §2.7).
+- Family baselines for installed Safari; webkit-host stands in. The ceiling round 2 evaluation ran the combined rule and feature families file (21,734 cases) in installed Safari in both orders: every native view, prediction and score equals webkit-host's (REPORT.md §2.7). Its held-out and sealed-2 combined files didn't finish there, because a hidden Safari page stops in a job longer than about 8 minutes.
 - In-probe fact declarations with value-free check names (§4.1); painter probes.
 - Page-history preludes and per-case isolation protocols (§6.5).
 - For structured cases: line keys that place atomic inlines, and a check that no line box is taller than the line height in slot cases. Scorer 4 compares `elements` and marks slot protocol rows (lab README "Elements", "Protocol rows"); round 1's feature families had 22 such rows (Firefox 15, webkit-host 7), and `derive.ts` `minimumUnits` now keeps derived widths at or above each engine's bound. A re-derivation of `line-slots` with it produced no protocol row in Firefox or webkit-host (lab README "Protocol rows"); the feature-family baselines and `.artifacts/tests/features-20260917` still hold round 1's cases until the families are derived again.

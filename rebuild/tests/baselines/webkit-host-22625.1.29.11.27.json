@@ -7,9 +7,9 @@
     "engine": "22625.1.29.11.27",
     "os": "26A428"
   },
-  "note": "ceiling round 1 evaluation 2026-09-17, process languages given, scorer 3",
+  "note": "ceiling round 2 evaluation 2026-09-17, scorer 4, forward and reverse runs of evaluate-r2; lost pairs against the previous seeds are listed with attribution in rebuild/lab/baselines/reseed-round2-lost-pairs.json; preferredLanguages zh-CN,zh-Hans",
   "families": {
-    "casesFile": ".artifacts/ceiling-20260917/evaluate/webkit-host/families-derived/final/family-cases.ndjson",
+    "casesFile": ".artifacts/ceiling-20260917/evaluate-r2/webkit-host/families-derived/final/family-cases.ndjson",
     "casesSha256": "a315174d08cdb08fd454275cb00e7269e6e57a9fce20d6744a06bd43608651e2",
     "cases": 9584,
     "totals": {
@@ -27,17 +27,17 @@
       "engineVersion": "22625.1.29.11.27",
       "note": "rule families, webkit-host 27.0, macOS 26A428",
       "environments": [
-        "webkit-host: webkit-host 27.0, engine build 22625.1.29.11.27, macOS 26A428; DPR 2, scale 1; preferredLanguages zh-CN, icuDefaultLocale en_US_POSIX; scorer 3"
+        "webkit-host: webkit-host 27.0, engine build 22625.1.29.11.27, macOS 26A428; DPR 2, scale 1; preferredLanguages zh-CN,zh-Hans, icuDefaultLocale en_US_POSIX; scorer 4"
       ],
       "seededFrom": [
         {
-          "perCase": ".artifacts/ceiling-20260917/evaluate/webkit-host/families-derived/final/file/webkit-host-per-case.ndjson",
+          "perCase": ".artifacts/ceiling-20260917/evaluate-r2/webkit-host/families-derived/final/file/webkit-host-per-case.ndjson",
           "casesFile": ".artifacts/charter-20260916/tests/families-20260916/webkit-host/final/family-cases.ndjson",
           "cases": 9584,
           "historyDependent": 6
         },
         {
-          "perCase": ".artifacts/ceiling-20260917/evaluate/webkit-host/families-derived/final/reverse/webkit-host-per-case.ndjson",
+          "perCase": ".artifacts/ceiling-20260917/evaluate-r2/webkit-host/families-derived/final/reverse/webkit-host-per-case.ndjson",
           "casesFile": ".artifacts/charter-20260916/tests/families-20260916/webkit-host/final/family-cases.ndjson",
           "cases": 9584,
           "historyDependent": 6
@@ -53,7 +53,8 @@
         },
         "historyDependentCases": 6,
         "withoutPassesCases": 100,
-        "unstablePairs": 0
+        "unstablePairs": 0,
+        "protocolCases": 0
       },
       "historyDependent": [
         "c-18616818ab4082eb",
@@ -9657,7 +9658,8 @@
           "c-f1e8a15b747871f2",
           "c-f4e8a557c2c9bddf"
         ]
-      }
+      },
+      "protocol": {}
     }
   },
   "facts": {

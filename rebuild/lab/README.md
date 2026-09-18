@@ -95,7 +95,16 @@ Sessions stay in the background and never activate a window.
   hidden image open (`/api/hold`, the server with `idleTimeout: 0`); the page asks `/api/hold-ready`, which answers 6 s after
   the document was served, changes its title, and releases the image (`/api/hold-release`). The load has to end before
   measuring, since `document.fonts.ready` waits for the load event (FontFaceSet.cpp:269-280). Nothing is activated or
-  brought to the front. The first 4,000 `dev-all` cases ran to the end with every row hidden (WEBKIT-HOST.md).
+  brought to the front. The first 4,000 `dev-all` cases ran to the end with every row hidden (WEBKIT-HOST.md). The hold
+  covers jobs of a few minutes: in the ceiling round 2 evaluation the combined development and family files finished hidden
+  (105 s to 304 s a job), and the held-out file, which runs one case per round trip and starts with corpus paragraphs that
+  take about 5 minutes each in a hidden page, stopped three times and failed at 7,863 of 15,205 rows. Read from source, not
+  from Safari's logs: a WebContent process without a visible page has its CPU use averaged over 8 minutes against the
+  client's limit (WebProcessCocoa.mm:220, :1180-1205), and past it the UI process drops every activity and suspends it
+  (`WebProcessProxy::didExceedCPULimit`, WebProcessProxy.cpp:2360-2395); the page keeps its invalid title activity until
+  the next commit (WebPageProxy.cpp:9266-9268), so from then on it is suspended like any hidden page, about 20 s plus 4
+  minutes after it is covered (ProcessThrottler.cpp:49-50). Not fixed: keep an installed Safari job, or its WebContent
+  process, under that window, or keep the lab window visible (REPORT.md §2.7).
 - webkit-host: the system WebKit.framework, which installed Safari runs, in a small WKWebView app
   (`rebuild/tools/webkit-host/main.swift`, built by `build.sh` into `.artifacts/webkit-host/webkit-host`). The driver
   spawns it with the page URL; it doesn't touch the user's Safari. The host never activates (accessory app, no Dock

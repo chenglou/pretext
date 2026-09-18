@@ -2,137 +2,139 @@
   "format": "pretext-lab-gate/1",
   "engine": "webkit",
   "engineVersion": "22625.1.29.11.27",
-  "note": "ceiling round 1 evaluation 2026-09-17 (webkit-host): development and 2026-09-16 held-out sets, forward and reverse, preferredLanguages zh-CN and icuDefaultLocale en_US_POSIX given, scorer 3",
+  "note": "ceiling round 2 evaluation 2026-09-17, scorer 4, forward and reverse runs of evaluate-r2; lost pairs against the previous seeds are listed with attribution in rebuild/lab/baselines/reseed-round2-lost-pairs.json; preferredLanguages zh-CN,zh-Hans from webkit-host --print-languages",
   "environments": [
-    "webkit-host: webkit-host 27.0, engine build 22625.1.29.11.27, macOS 26A428; DPR 2, scale 1; preferredLanguages zh-CN, icuDefaultLocale en_US_POSIX; scorer 3"
+    "webkit-host: webkit-host 27.0, engine build 22625.1.29.11.27, macOS 26A428; DPR 2, scale 1; preferredLanguages zh-CN,zh-Hans, icuDefaultLocale en_US_POSIX; scorer 4"
   ],
   "seededFrom": [
     {
-      "perCase": ".artifacts/ceiling-20260917/evaluate/webkit-host/smoke-forward/webkit-host-per-case.ndjson",
+      "perCase": ".artifacts/ceiling-20260917/evaluate-r2/webkit-host/smoke-forward/webkit-host-per-case.ndjson",
       "casesFile": ".artifacts/lab/cases/smoke.ndjson",
       "cases": 300,
       "historyDependent": 0
     },
     {
-      "perCase": ".artifacts/ceiling-20260917/evaluate/webkit-host/smoke-reverse/webkit-host-per-case.ndjson",
+      "perCase": ".artifacts/ceiling-20260917/evaluate-r2/webkit-host/smoke-reverse/webkit-host-per-case.ndjson",
       "casesFile": ".artifacts/lab/cases/smoke.ndjson",
       "cases": 300,
       "historyDependent": 0
     },
     {
-      "perCase": ".artifacts/ceiling-20260917/evaluate/webkit-host/runs-forward/webkit-host-per-case.ndjson",
+      "perCase": ".artifacts/ceiling-20260917/evaluate-r2/webkit-host/runs-forward/webkit-host-per-case.ndjson",
       "casesFile": ".artifacts/lab/cases/runs.ndjson",
       "cases": 2580,
       "historyDependent": 6
     },
     {
-      "perCase": ".artifacts/ceiling-20260917/evaluate/webkit-host/runs-reverse/webkit-host-per-case.ndjson",
+      "perCase": ".artifacts/ceiling-20260917/evaluate-r2/webkit-host/runs-reverse/webkit-host-per-case.ndjson",
       "casesFile": ".artifacts/lab/cases/runs.ndjson",
       "cases": 2580,
       "historyDependent": 6
     },
     {
-      "perCase": ".artifacts/ceiling-20260917/evaluate/webkit-host/ws-forward/webkit-host-per-case.ndjson",
+      "perCase": ".artifacts/ceiling-20260917/evaluate-r2/webkit-host/ws-forward/webkit-host-per-case.ndjson",
       "casesFile": ".artifacts/lab/cases/ws.ndjson",
       "cases": 1019,
       "historyDependent": 1
     },
     {
-      "perCase": ".artifacts/ceiling-20260917/evaluate/webkit-host/ws-reverse/webkit-host-per-case.ndjson",
+      "perCase": ".artifacts/ceiling-20260917/evaluate-r2/webkit-host/ws-reverse/webkit-host-per-case.ndjson",
       "casesFile": ".artifacts/lab/cases/ws.ndjson",
       "cases": 1019,
       "historyDependent": 1
     },
     {
-      "perCase": ".artifacts/ceiling-20260917/evaluate/webkit-host/policy-forward/webkit-host-per-case.ndjson",
+      "perCase": ".artifacts/ceiling-20260917/evaluate-r2/webkit-host/policy-forward/webkit-host-per-case.ndjson",
       "casesFile": ".artifacts/lab/cases/policy.ndjson",
       "cases": 1606,
       "historyDependent": 0
     },
     {
-      "perCase": ".artifacts/ceiling-20260917/evaluate/webkit-host/policy-reverse/webkit-host-per-case.ndjson",
+      "perCase": ".artifacts/ceiling-20260917/evaluate-r2/webkit-host/policy-reverse/webkit-host-per-case.ndjson",
       "casesFile": ".artifacts/lab/cases/policy.ndjson",
       "cases": 1606,
       "historyDependent": 0
     },
     {
-      "perCase": ".artifacts/ceiling-20260917/evaluate/webkit-host/suite-sample-forward/webkit-host-per-case.ndjson",
+      "perCase": ".artifacts/ceiling-20260917/evaluate-r2/webkit-host/suite-sample-forward/webkit-host-per-case.ndjson",
       "casesFile": ".artifacts/lab/cases/suite-sample.ndjson",
       "cases": 19933,
       "historyDependent": 75
     },
     {
-      "perCase": ".artifacts/ceiling-20260917/evaluate/webkit-host/suite-sample-reverse/webkit-host-per-case.ndjson",
+      "perCase": ".artifacts/ceiling-20260917/evaluate-r2/webkit-host/suite-sample-reverse/webkit-host-per-case.ndjson",
       "casesFile": ".artifacts/lab/cases/suite-sample.ndjson",
       "cases": 19933,
       "historyDependent": 75
     },
     {
-      "perCase": ".artifacts/ceiling-20260917/evaluate/webkit-host/heldout-runs-forward/webkit-host-per-case.ndjson",
+      "perCase": ".artifacts/ceiling-20260917/evaluate-r2/webkit-host/heldout-runs-forward/webkit-host-per-case.ndjson",
       "casesFile": ".artifacts/lab/cases/heldout-runs.ndjson",
       "cases": 2579,
       "historyDependent": 1
     },
     {
-      "perCase": ".artifacts/ceiling-20260917/evaluate/webkit-host/heldout-runs-reverse/webkit-host-per-case.ndjson",
+      "perCase": ".artifacts/ceiling-20260917/evaluate-r2/webkit-host/heldout-runs-reverse/webkit-host-per-case.ndjson",
       "casesFile": ".artifacts/lab/cases/heldout-runs.ndjson",
       "cases": 2579,
       "historyDependent": 1
     },
     {
-      "perCase": ".artifacts/ceiling-20260917/evaluate/webkit-host/heldout-ws-forward/webkit-host-per-case.ndjson",
+      "perCase": ".artifacts/ceiling-20260917/evaluate-r2/webkit-host/heldout-ws-forward/webkit-host-per-case.ndjson",
       "casesFile": ".artifacts/lab/cases/heldout-ws.ndjson",
       "cases": 1022,
       "historyDependent": 0
     },
     {
-      "perCase": ".artifacts/ceiling-20260917/evaluate/webkit-host/heldout-ws-reverse/webkit-host-per-case.ndjson",
+      "perCase": ".artifacts/ceiling-20260917/evaluate-r2/webkit-host/heldout-ws-reverse/webkit-host-per-case.ndjson",
       "casesFile": ".artifacts/lab/cases/heldout-ws.ndjson",
       "cases": 1022,
       "historyDependent": 0
     },
     {
-      "perCase": ".artifacts/ceiling-20260917/evaluate/webkit-host/heldout-policy-forward/webkit-host-per-case.ndjson",
+      "perCase": ".artifacts/ceiling-20260917/evaluate-r2/webkit-host/heldout-policy-forward/webkit-host-per-case.ndjson",
       "casesFile": ".artifacts/lab/cases/heldout-policy.ndjson",
       "cases": 1604,
       "historyDependent": 0
     },
     {
-      "perCase": ".artifacts/ceiling-20260917/evaluate/webkit-host/heldout-policy-reverse/webkit-host-per-case.ndjson",
+      "perCase": ".artifacts/ceiling-20260917/evaluate-r2/webkit-host/heldout-policy-reverse/webkit-host-per-case.ndjson",
       "casesFile": ".artifacts/lab/cases/heldout-policy.ndjson",
       "cases": 1604,
       "historyDependent": 0
     },
     {
-      "perCase": ".artifacts/ceiling-20260917/evaluate/webkit-host/heldout-suite-sample-forward/webkit-host-per-case.ndjson",
+      "perCase": ".artifacts/ceiling-20260917/evaluate-r2/webkit-host/heldout-suite-sample-forward/webkit-host-per-case.ndjson",
       "casesFile": ".artifacts/lab/cases/heldout-suite-sample.ndjson",
       "cases": 10000,
-      "historyDependent": 133
+      "historyDependent": 135
     },
     {
-      "perCase": ".artifacts/ceiling-20260917/evaluate/webkit-host/heldout-suite-sample-reverse/webkit-host-per-case.ndjson",
+      "perCase": ".artifacts/ceiling-20260917/evaluate-r2/webkit-host/heldout-suite-sample-reverse/webkit-host-per-case.ndjson",
       "casesFile": ".artifacts/lab/cases/heldout-suite-sample.ndjson",
       "cases": 10000,
-      "historyDependent": 133
+      "historyDependent": 135
     }
   ],
   "counts": {
     "cases": 40385,
     "passPairs": {
-      "lineCount": 40102,
+      "lineCount": 40100,
       "breaks": 40008,
-      "widths": 39202,
-      "painter": 36053
+      "widths": 39205,
+      "painter": 36054
     },
-    "historyDependentCases": 216,
+    "historyDependentCases": 218,
     "withoutPassesCases": 51,
-    "unstablePairs": 3
+    "unstablePairs": 2,
+    "protocolCases": 0
   },
   "historyDependent": [
     "c-009242d722495e90",
     "c-012f58bab9cad28a",
     "c-02f7f353b2b9be90",
     "c-03a1ba516a645bd7",
+    "c-053cfbfd2afe0232",
     "c-07fe5e9322b50a33",
     "c-083464238991ffde",
     "c-09a7775ba6eea10d",
@@ -151,6 +153,7 @@
     "c-19ccdb6bbbc8089c",
     "c-1a5adb9a9c3f768f",
     "c-1eec362693e6d0da",
+    "c-1f409a158d1d9922",
     "c-1fae7ab53d594493",
     "c-21d7034740b52074",
     "c-26b67e0a044e561f",
@@ -163,6 +166,7 @@
     "c-3443598f0f77ff0b",
     "c-3716eb28befe916d",
     "c-37862fe7f12d1b3c",
+    "c-37b73d0429e9c8c8",
     "c-38c6f39166bffa7e",
     "c-38f55125173cbcd6",
     "c-3a93acc59dd867b4",
@@ -314,7 +318,6 @@
     "c-dc01d77ad162f769",
     "c-dc070f9692f0460f",
     "c-dce4fad99b42b154",
-    "c-e3478017361a15eb",
     "c-e40f40e946a7aa5e",
     "c-e42165bf112cb2c8",
     "c-e59b6469b3cec721",
@@ -401,8 +404,7 @@
   ],
   "unstable": {
     "c-2abe3876793e1120": "p",
-    "c-b06032f79f73fffa": "p",
-    "c-c2d1c62d0c2618c7": "p"
+    "c-b06032f79f73fffa": "p"
   },
   "passes": {
     "l": [
@@ -557,6 +559,7 @@
       "c-154381d90b312217",
       "c-154f8b3ddd90dec5",
       "c-15ca4406597a1ab1",
+      "c-15e5cf10e9fde403",
       "c-15f01dbadb49c48f",
       "c-162b76182e6d39ee",
       "c-163508a4533a6397",
@@ -579,7 +582,6 @@
       "c-1e55a5a967917ca8",
       "c-1e6984651b343b43",
       "c-1ea325469c182ff0",
-      "c-1ebf6d0a74b30e83",
       "c-1f05384ab3ba08d9",
       "c-1f4d164e7df46485",
       "c-1f9a6b96e6fc6b4b",
@@ -671,7 +673,6 @@
       "c-428330b7e3150c6b",
       "c-42c8f3f317fcfcc4",
       "c-42d8065ace902105",
-      "c-4303efdc328a680d",
       "c-437ea859ae27b44c",
       "c-43a01a5a64a4cac9",
       "c-44da7d0a5dfe3aec",
@@ -795,6 +796,7 @@
       "c-67d3fed8ae01474d",
       "c-67db90040d06ae76",
       "c-68af1c291269ecb0",
+      "c-68fb9a06cea1272f",
       "c-6914a6491ac13797",
       "c-693346f5d1fbdf1a",
       "c-695472190a0a87fc",
@@ -993,7 +995,6 @@
       "c-a68b89b55402375c",
       "c-a6a4f4fe21b0d431",
       "c-a797255b5810e1a9",
-      "c-a797931f634f8091",
       "c-a827ac92d4f81891",
       "c-a8577943ef8a5419",
       "c-a8b09561530e35fd",
@@ -1031,7 +1032,6 @@
       "c-b178d5d519151ab5",
       "c-b17dfe3335456774",
       "c-b1fd3baa4352f420",
-      "c-b28b9927172ff9c1",
       "c-b2d5ed25dbe05675",
       "c-b3105d288e5ec8be",
       "c-b3449eea36150e48",
@@ -1150,7 +1150,6 @@
       "c-d62f9cd81318d103",
       "c-d673e6c9cb969f57",
       "c-d6e9f6c63f78dbad",
-      "c-d6f5ad1dde30cfa1",
       "c-d70092af27722a4a",
       "c-d70bdc5adedd234f",
       "c-d759a45b8d269bc5",
@@ -2768,6 +2767,7 @@
       "c-778861a1825de84c",
       "c-778dec71b1ccbc43",
       "c-779ce7213b37ee97",
+      "c-77a026e622496098",
       "c-77b189605a3d8a1e",
       "c-77d616a446825b77",
       "c-77dca532a9817066",
@@ -3729,7 +3729,6 @@
       "c-c23d1267873a03d5",
       "c-c258529222819bcd",
       "c-c2c50e840d96667f",
-      "c-c2d1c62d0c2618c7",
       "c-c2ea4d7e1050765d",
       "c-c31fff04a8829eaf",
       "c-c33a3ebeaf71779b",
@@ -5272,7 +5271,6 @@
       "c-053a98ff301eba58",
       "c-053aa46418959f75",
       "c-053c6a2d6ddfe9b5",
-      "c-053cfbfd2afe0232",
       "c-053f10218e3716a1",
       "c-054160c0fcbb15e7",
       "c-054252ed4b33ec73",
@@ -7574,7 +7572,6 @@
       "c-15df6ca21559ff1f",
       "c-15e3a36df80b5095",
       "c-15e448108c6e1e69",
-      "c-15e5cf10e9fde403",
       "c-15e7979a80d9f826",
       "c-15e9f78450572ca0",
       "c-15eb7110ec54f2ed",
@@ -8813,6 +8810,7 @@
       "c-1ebcf1b56f906d44",
       "c-1ebdf8d964dd261e",
       "c-1ebf0edc6ec17283",
+      "c-1ebf6d0a74b30e83",
       "c-1ec17de4ba722f0a",
       "c-1ec2f3aae14aa241",
       "c-1ec333add469f892",
@@ -13883,6 +13881,7 @@
       "c-42f953f23dbcfe96",
       "c-43002d38a209e222",
       "c-43031a2a2d554ae2",
+      "c-4303efdc328a680d",
       "c-43059e1b39f3be26",
       "c-430cdd20d0510d35",
       "c-430d2e1703b9cb4b",
@@ -19260,7 +19259,6 @@
       "c-68fb7bfdbab1b133",
       "c-68fb7ebfa572de87",
       "c-68fb7f7a8cb8a969",
-      "c-68fb9a06cea1272f",
       "c-68fcbf71dfc01f85",
       "c-68fd4306dcb69d2e",
       "c-68fe892e1f6e7095",
@@ -21338,7 +21336,6 @@
       "c-779d54b30ff7b46e",
       "c-779d8e336a937278",
       "c-779f1927a7ebe3e7",
-      "c-77a026e622496098",
       "c-77a1356720608368",
       "c-77a2a4928cf28bac",
       "c-77a379edebd3808f",
@@ -27970,6 +27967,7 @@
       "c-a78ecd4939a3aa89",
       "c-a79575e9ec2fd3b1",
       "c-a7975f5426a085a1",
+      "c-a797931f634f8091",
       "c-a7987da84093cf79",
       "c-a799f2efba91635e",
       "c-a79cf68a1eda13c4",
@@ -29506,6 +29504,7 @@
       "c-b289a5b8d1cdd140",
       "c-b289fb0a220a39cb",
       "c-b28b4af0f1567e66",
+      "c-b28b9927172ff9c1",
       "c-b28dc00b0e2e1284",
       "c-b292795723d1ec25",
       "c-b293ddd7ffd2ac9f",
@@ -31833,6 +31832,7 @@
       "c-c2ccd7779ee8fc35",
       "c-c2cec2443a91d98f",
       "c-c2cff91eb312f9a3",
+      "c-c2d1c62d0c2618c7",
       "c-c2d1e100569135ae",
       "c-c2d33d25b770e22f",
       "c-c2d4b8ac74e69278",
@@ -34597,6 +34597,7 @@
       "c-d6ed42f46541d5aa",
       "c-d6efe23c7cc24eb4",
       "c-d6f21fe260d91b18",
+      "c-d6f5ad1dde30cfa1",
       "c-d6f6c8f195370b4a",
       "c-d6f8629601e5bc29",
       "c-d6f990ceea893104",
@@ -36341,6 +36342,7 @@
       "c-e34148a5442daa19",
       "c-e3436f09e762b8b7",
       "c-e345f1de7ad7a551",
+      "c-e3478017361a15eb",
       "c-e34bff30059a40fb",
       "c-e3522e4774032e70",
       "c-e353ed95bd0971e1",
@@ -40502,9 +40504,7 @@
     ],
     "lp": [
       "c-149a0dfe22db3617",
-      "c-1f409a158d1d9922",
       "c-2a1fef66065962b0",
-      "c-37b73d0429e9c8c8",
       "c-3cb78d0a72864242",
       "c-6322358e1489e531",
       "c-67cd9bd538cb3e95",
@@ -40537,5 +40537,6 @@
       "c-eafeef3df0d5bc40",
       "c-f7cb6d185a21d5b9"
     ]
-  }
+  },
+  "protocol": {}
 }

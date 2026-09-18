@@ -1,6 +1,6 @@
 {
  "format": "pretext-coverage/1",
- "generatedAt": "2026-09-17T18:03:20.675Z",
+ "generatedAt": "2026-09-17T23:53:06.931Z",
  "inputs": {
   "facts": [
    "/Users/chenglou/github/pretext-rebuild/rebuild/facts/blink/153.0.8010.48.ndjson",
@@ -8,23 +8,23 @@
    "/Users/chenglou/github/pretext-rebuild/rebuild/facts/gecko/156.0.ndjson"
   ],
   "derived": [
-   "/Users/chenglou/github/pretext-rebuild/.artifacts/ceiling-20260917/evaluate/chrome/families-derived",
-   "/Users/chenglou/github/pretext-rebuild/.artifacts/ceiling-20260917/evaluate/chrome/features-derived",
-   "/Users/chenglou/github/pretext-rebuild/.artifacts/ceiling-20260917/evaluate/chrome/features-en-US-derived",
-   "/Users/chenglou/github/pretext-rebuild/.artifacts/ceiling-20260917/evaluate/firefox/families-derived",
-   "/Users/chenglou/github/pretext-rebuild/.artifacts/ceiling-20260917/evaluate/firefox/features-derived",
-   "/Users/chenglou/github/pretext-rebuild/.artifacts/ceiling-20260917/evaluate/webkit-host/families-derived",
-   "/Users/chenglou/github/pretext-rebuild/.artifacts/ceiling-20260917/evaluate/webkit-host/features-derived"
+   "/Users/chenglou/github/pretext-rebuild/.artifacts/ceiling-20260917/evaluate-r2/chrome/families-derived",
+   "/Users/chenglou/github/pretext-rebuild/.artifacts/ceiling-20260917/evaluate-r2/chrome/features-derived",
+   "/Users/chenglou/github/pretext-rebuild/.artifacts/ceiling-20260917/evaluate-r2/chrome/features-en-US-derived",
+   "/Users/chenglou/github/pretext-rebuild/.artifacts/ceiling-20260917/evaluate-r2/firefox/families-derived",
+   "/Users/chenglou/github/pretext-rebuild/.artifacts/ceiling-20260917/evaluate-r2/firefox/features-derived",
+   "/Users/chenglou/github/pretext-rebuild/.artifacts/ceiling-20260917/evaluate-r2/webkit-host/families-derived",
+   "/Users/chenglou/github/pretext-rebuild/.artifacts/ceiling-20260917/evaluate-r2/webkit-host/features-derived"
   ]
  },
  "counts": {
   "blink": {
-   "current": 175,
+   "current": 179,
    "covered": 140,
    "byTest": 39,
    "byFact": 57,
    "byFamily": 109,
-   "uncovered": 35,
+   "uncovered": 39,
    "derivedOnly": 0,
    "withProbeButNoHoldingFact": 8,
    "deviations": 2
@@ -41,14 +41,14 @@
    "deviations": 0
   },
   "gecko": {
-   "current": 122,
+   "current": 124,
    "covered": 101,
    "byTest": 51,
    "byFact": 55,
    "byFamily": 77,
-   "uncovered": 21,
+   "uncovered": 23,
    "derivedOnly": 0,
-   "withProbeButNoHoldingFact": 2,
+   "withProbeButNoHoldingFact": 6,
    "deviations": 0
   },
   "shared": {
@@ -456,7 +456,13 @@
   "lab/observe/webkit/inline-absolute-quads",
   "lab/observe/gecko/all-in-flow-rects",
   "shared/lab/vertical-centre-grouping",
-  "shared/lab/slot-rows"
+  "shared/lab/slot-rows",
+  "gecko/measure/lang-empty-locale-language",
+  "blink/measure/pair-kerning-from-fact",
+  "blink/shape/pair-window-whole-clusters",
+  "blink/justify/cjk-ideograph-or-symbol",
+  "blink/shape/cluster-unit-grapheme",
+  "gecko/lines/in-word-advance-split-kerning"
  ],
  "withProbeButNoHoldingFact": [
   "blink/measure/space-as-u2028",
@@ -476,21 +482,25 @@
   "webkit/gap/simplified-measuring",
   "webkit/gap/ui-language",
   "webkit/gap/string-storage",
+  "gecko/script/latin-fast-path",
+  "gecko/measure/range-in-script-context",
+  "gecko/gap/in-word-prefix",
   "gecko/gap/font-fallback-pinned-emoji",
   "gecko/gap/bitmap-emoji-size",
-  "blink/measure/joining-from-fact"
+  "blink/measure/joining-from-fact",
+  "gecko/lines/in-word-advance-split-kerning"
  ],
  "deviations": [
-  "blink/measure/ignorables-left-out-if-8bit",
   "blink/shape/wide-group-halved",
   "shared/env/engine-from-user-agent",
   "shared/painter/nowrap-hyphenated-or-joined",
   "shared/painter/leading-ascii-space-slice-in-span",
-  "shared/painter/zwj-at-joined-line-edges"
+  "shared/painter/zwj-at-joined-line-edges",
+  "blink/shape/cluster-unit-grapheme"
  ],
  "annotations": {
   "annotated": 0,
-  "missing": 470,
+  "missing": 476,
   "unknown": []
  },
  "removed": [
@@ -819,7 +829,7 @@
       "lineCount": 344,
       "breaks": 344,
       "widths": 344,
-      "painter": 281
+      "painter": 318
      },
      "scored": 344
     }
@@ -940,10 +950,10 @@
      "targets": 144,
      "cases": 288,
      "passes": {
-      "lineCount": 272,
-      "breaks": 272,
-      "widths": 236,
-      "painter": 190
+      "lineCount": 288,
+      "breaks": 288,
+      "widths": 288,
+      "painter": 248
      },
      "scored": 288
     },
@@ -985,9 +995,9 @@
      "targets": 268,
      "cases": 856,
      "passes": {
-      "lineCount": 448,
-      "breaks": 448,
-      "widths": 224,
+      "lineCount": 856,
+      "breaks": 856,
+      "widths": 856,
       "painter": 428
      },
      "scored": 856
@@ -1039,7 +1049,7 @@
       "lineCount": 344,
       "breaks": 344,
       "widths": 344,
-      "painter": 281
+      "painter": 318
      },
      "scored": 344
     }
@@ -1091,7 +1101,7 @@
       "lineCount": 344,
       "breaks": 344,
       "widths": 344,
-      "painter": 281
+      "painter": 318
      },
      "scored": 344
     }
@@ -1357,10 +1367,10 @@
      "targets": 288,
      "cases": 796,
      "passes": {
-      "lineCount": 784,
-      "breaks": 778,
-      "widths": 700,
-      "painter": 658
+      "lineCount": 796,
+      "breaks": 796,
+      "widths": 796,
+      "painter": 796
      },
      "scored": 796
     }
@@ -1454,7 +1464,7 @@
       "lineCount": 344,
       "breaks": 344,
       "widths": 344,
-      "painter": 281
+      "painter": 318
      },
      "scored": 344
     }
@@ -1683,7 +1693,7 @@
       "lineCount": 360,
       "breaks": 360,
       "widths": 360,
-      "painter": 348
+      "painter": 360
      },
      "scored": 360
     },
@@ -1914,7 +1924,7 @@
       "lineCount": 344,
       "breaks": 344,
       "widths": 344,
-      "painter": 281
+      "painter": 318
      },
      "scored": 344
     }
@@ -1974,8 +1984,8 @@
   {
    "id": "blink/measure/ignorables-left-out-if-8bit",
    "engine": "blink",
-   "kind": "heuristic",
-   "declaredBy": "catalogue 2026-09-16",
+   "kind": "ported rule",
+   "declaredBy": "blink owner (round 2, 2026-09-17)",
    "tests": {
     "present": [],
     "stale": []
@@ -2028,10 +2038,10 @@
      "targets": 144,
      "cases": 288,
      "passes": {
-      "lineCount": 272,
-      "breaks": 272,
-      "widths": 236,
-      "painter": 190
+      "lineCount": 288,
+      "breaks": 288,
+      "widths": 288,
+      "painter": 248
      },
      "scored": 288
     }
@@ -2179,7 +2189,7 @@
    "id": "blink/shape/pair-adjustment-on-glyph-before",
    "engine": "blink",
    "kind": "recipe",
-   "declaredBy": "catalogue 2026-09-16",
+   "declaredBy": "blink owner (round 2, 2026-09-17)",
    "tests": {
     "present": [],
     "stale": []
@@ -2271,10 +2281,10 @@
      "targets": 336,
      "cases": 600,
      "passes": {
-      "lineCount": 584,
-      "breaks": 558,
-      "widths": 550,
-      "painter": 524
+      "lineCount": 590,
+      "breaks": 575,
+      "widths": 571,
+      "painter": 521
      },
      "scored": 600
     }
@@ -2370,7 +2380,7 @@
       "lineCount": 360,
       "breaks": 360,
       "widths": 360,
-      "painter": 348
+      "painter": 360
      },
      "scored": 360
     }
@@ -2421,7 +2431,7 @@
       "lineCount": 360,
       "breaks": 360,
       "widths": 360,
-      "painter": 348
+      "painter": 360
      },
      "scored": 360
     },
@@ -2489,7 +2499,7 @@
       "lineCount": 360,
       "breaks": 360,
       "widths": 360,
-      "painter": 348
+      "painter": 360
      },
      "scored": 360
     }
@@ -2536,10 +2546,10 @@
      "targets": 288,
      "cases": 796,
      "passes": {
-      "lineCount": 784,
-      "breaks": 778,
-      "widths": 700,
-      "painter": 658
+      "lineCount": 796,
+      "breaks": 796,
+      "widths": 796,
+      "painter": 796
      },
      "scored": 796
     },
@@ -2596,10 +2606,10 @@
      "targets": 288,
      "cases": 796,
      "passes": {
-      "lineCount": 784,
-      "breaks": 778,
-      "widths": 700,
-      "painter": 658
+      "lineCount": 796,
+      "breaks": 796,
+      "widths": 796,
+      "painter": 796
      },
      "scored": 796
     }
@@ -2615,7 +2625,7 @@
    "id": "blink/tabs/tab-size-zero",
    "engine": "blink",
    "kind": "ported rule",
-   "declaredBy": "catalogue 2026-09-16",
+   "declaredBy": "blink owner (round 2, 2026-09-17)",
    "tests": {
     "present": [],
     "stale": []
@@ -2639,10 +2649,10 @@
      "targets": 288,
      "cases": 796,
      "passes": {
-      "lineCount": 784,
-      "breaks": 778,
-      "widths": 700,
-      "painter": 658
+      "lineCount": 796,
+      "breaks": 796,
+      "widths": 796,
+      "painter": 796
      },
      "scored": 796
     }
@@ -2683,10 +2693,10 @@
      "targets": 288,
      "cases": 560,
      "passes": {
-      "lineCount": 556,
-      "breaks": 552,
-      "widths": 532,
-      "painter": 530
+      "lineCount": 560,
+      "breaks": 560,
+      "widths": 560,
+      "painter": 532
      },
      "scored": 560
     }
@@ -3667,10 +3677,10 @@
      "targets": 336,
      "cases": 600,
      "passes": {
-      "lineCount": 584,
-      "breaks": 558,
-      "widths": 550,
-      "painter": 524
+      "lineCount": 590,
+      "breaks": 575,
+      "widths": 571,
+      "painter": 521
      },
      "scored": 600
     }
@@ -3794,7 +3804,7 @@
       "lineCount": 1352,
       "breaks": 1352,
       "widths": 1352,
-      "painter": 1332
+      "painter": 1352
      },
      "scored": 1352
     }
@@ -4127,7 +4137,7 @@
      "passes": {
       "lineCount": 544,
       "breaks": 544,
-      "widths": 356,
+      "widths": 543,
       "painter": 356
      },
      "scored": 544
@@ -4171,10 +4181,10 @@
      "targets": 288,
      "cases": 560,
      "passes": {
-      "lineCount": 556,
-      "breaks": 552,
-      "widths": 532,
-      "painter": 530
+      "lineCount": 560,
+      "breaks": 560,
+      "widths": 560,
+      "painter": 532
      },
      "scored": 560
     }
@@ -4284,10 +4294,10 @@
      "targets": 336,
      "cases": 600,
      "passes": {
-      "lineCount": 584,
-      "breaks": 558,
-      "widths": 550,
-      "painter": 524
+      "lineCount": 590,
+      "breaks": 575,
+      "widths": 571,
+      "painter": 521
      },
      "scored": 600
     }
@@ -4375,7 +4385,7 @@
       "lineCount": 360,
       "breaks": 360,
       "widths": 360,
-      "painter": 348
+      "painter": 360
      },
      "scored": 360
     }
@@ -4440,10 +4450,10 @@
      "targets": 144,
      "cases": 288,
      "passes": {
-      "lineCount": 272,
-      "breaks": 272,
-      "widths": 236,
-      "painter": 190
+      "lineCount": 288,
+      "breaks": 288,
+      "widths": 288,
+      "painter": 248
      },
      "scored": 288
     },
@@ -4455,10 +4465,10 @@
      "targets": 576,
      "cases": 1104,
      "passes": {
-      "lineCount": 1076,
-      "breaks": 1076,
-      "widths": 800,
-      "painter": 749
+      "lineCount": 1104,
+      "breaks": 1104,
+      "widths": 1040,
+      "painter": 835
      },
      "scored": 1104
     }
@@ -4521,10 +4531,10 @@
      "targets": 336,
      "cases": 600,
      "passes": {
-      "lineCount": 584,
-      "breaks": 558,
-      "widths": 550,
-      "painter": 524
+      "lineCount": 590,
+      "breaks": 575,
+      "widths": 571,
+      "painter": 521
      },
      "scored": 600
     },
@@ -4536,10 +4546,10 @@
      "targets": 576,
      "cases": 1104,
      "passes": {
-      "lineCount": 1076,
-      "breaks": 1076,
-      "widths": 800,
-      "painter": 749
+      "lineCount": 1104,
+      "breaks": 1104,
+      "widths": 1040,
+      "painter": 835
      },
      "scored": 1104
     }
@@ -4578,10 +4588,10 @@
      "targets": 336,
      "cases": 600,
      "passes": {
-      "lineCount": 584,
-      "breaks": 558,
-      "widths": 550,
-      "painter": 524
+      "lineCount": 590,
+      "breaks": 575,
+      "widths": 571,
+      "painter": 521
      },
      "scored": 600
     }
@@ -4779,10 +4789,10 @@
      "targets": 288,
      "cases": 796,
      "passes": {
-      "lineCount": 784,
-      "breaks": 778,
-      "widths": 700,
-      "painter": 658
+      "lineCount": 796,
+      "breaks": 796,
+      "widths": 796,
+      "painter": 796
      },
      "scored": 796
     }
@@ -4850,7 +4860,7 @@
       "lineCount": 344,
       "breaks": 344,
       "widths": 344,
-      "painter": 281
+      "painter": 318
      },
      "scored": 344
     }
@@ -4908,9 +4918,9 @@
      "targets": 268,
      "cases": 856,
      "passes": {
-      "lineCount": 448,
-      "breaks": 448,
-      "widths": 224,
+      "lineCount": 856,
+      "breaks": 856,
+      "widths": 856,
       "painter": 428
      },
      "scored": 856
@@ -5013,7 +5023,7 @@
      "passes": {
       "lineCount": 2880,
       "breaks": 2880,
-      "widths": 1426,
+      "widths": 2154,
       "painter": 1354
      },
      "scored": 2880
@@ -5054,10 +5064,10 @@
      "targets": 336,
      "cases": 600,
      "passes": {
-      "lineCount": 584,
-      "breaks": 558,
-      "widths": 550,
-      "painter": 524
+      "lineCount": 590,
+      "breaks": 575,
+      "widths": 571,
+      "painter": 521
      },
      "scored": 600
     }
@@ -5141,10 +5151,10 @@
      "targets": 336,
      "cases": 600,
      "passes": {
-      "lineCount": 584,
-      "breaks": 558,
-      "widths": 550,
-      "painter": 524
+      "lineCount": 590,
+      "breaks": 575,
+      "widths": 571,
+      "painter": 521
      },
      "scored": 600
     },
@@ -5259,7 +5269,7 @@
      "passes": {
       "lineCount": 2880,
       "breaks": 2880,
-      "widths": 1426,
+      "widths": 2154,
       "painter": 1354
      },
      "scored": 2880
@@ -5302,10 +5312,10 @@
      "targets": 144,
      "cases": 288,
      "passes": {
-      "lineCount": 272,
-      "breaks": 272,
-      "widths": 236,
-      "painter": 190
+      "lineCount": 288,
+      "breaks": 288,
+      "widths": 288,
+      "painter": 248
      },
      "scored": 288
     },
@@ -5317,9 +5327,9 @@
      "targets": 268,
      "cases": 856,
      "passes": {
-      "lineCount": 448,
-      "breaks": 448,
-      "widths": 224,
+      "lineCount": 856,
+      "breaks": 856,
+      "widths": 856,
       "painter": 428
      },
      "scored": 856
@@ -5360,10 +5370,10 @@
      "targets": 144,
      "cases": 288,
      "passes": {
-      "lineCount": 272,
-      "breaks": 272,
-      "widths": 236,
-      "painter": 190
+      "lineCount": 288,
+      "breaks": 288,
+      "widths": 288,
+      "painter": 248
      },
      "scored": 288
     }
@@ -5426,7 +5436,7 @@
      "passes": {
       "lineCount": 720,
       "breaks": 720,
-      "widths": 309,
+      "widths": 633,
       "painter": 297
      },
      "scored": 720
@@ -5544,10 +5554,10 @@
      "targets": 288,
      "cases": 560,
      "passes": {
-      "lineCount": 556,
-      "breaks": 552,
-      "widths": 532,
-      "painter": 530
+      "lineCount": 560,
+      "breaks": 560,
+      "widths": 560,
+      "painter": 532
      },
      "scored": 560
     }
@@ -5618,7 +5628,7 @@
       "lineCount": 344,
       "breaks": 344,
       "widths": 344,
-      "painter": 281
+      "painter": 318
      },
      "scored": 344
     }
@@ -5841,10 +5851,10 @@
      "targets": 336,
      "cases": 600,
      "passes": {
-      "lineCount": 584,
-      "breaks": 558,
-      "widths": 550,
-      "painter": 524
+      "lineCount": 590,
+      "breaks": 575,
+      "widths": 571,
+      "painter": 521
      },
      "scored": 600
     }
@@ -5883,10 +5893,10 @@
      "targets": 336,
      "cases": 600,
      "passes": {
-      "lineCount": 584,
-      "breaks": 558,
-      "widths": 550,
-      "painter": 524
+      "lineCount": 590,
+      "breaks": 575,
+      "widths": 571,
+      "painter": 521
      },
      "scored": 600
     }
@@ -5925,10 +5935,10 @@
      "targets": 288,
      "cases": 560,
      "passes": {
-      "lineCount": 556,
-      "breaks": 552,
-      "widths": 532,
-      "painter": 530
+      "lineCount": 560,
+      "breaks": 560,
+      "widths": 560,
+      "painter": 532
      },
      "scored": 560
     }
@@ -5943,7 +5953,7 @@
    "id": "blink/gap/script-context",
    "engine": "blink",
    "kind": "named gap",
-   "declaredBy": "catalogue 2026-09-16",
+   "declaredBy": "blink owner (round 2, 2026-09-17)",
    "tests": {
     "present": [],
     "stale": []
@@ -6037,10 +6047,10 @@
      "targets": 288,
      "cases": 796,
      "passes": {
-      "lineCount": 784,
-      "breaks": 778,
-      "widths": 700,
-      "painter": 658
+      "lineCount": 796,
+      "breaks": 796,
+      "widths": 796,
+      "painter": 796
      },
      "scored": 796
     }
@@ -7345,7 +7355,7 @@
       "lineCount": 1104,
       "breaks": 1104,
       "widths": 1098,
-      "painter": 1018
+      "painter": 1054
      },
      "scored": 1104
     }
@@ -8589,9 +8599,9 @@
      "targets": 264,
      "cases": 848,
      "passes": {
-      "lineCount": 432,
-      "breaks": 424,
-      "widths": 204,
+      "lineCount": 828,
+      "breaks": 816,
+      "widths": 816,
       "painter": 416
      },
      "scored": 848
@@ -8606,7 +8616,7 @@
      "passes": {
       "lineCount": 720,
       "breaks": 720,
-      "widths": 327,
+      "widths": 616,
       "painter": 327
      },
      "scored": 720
@@ -8751,9 +8761,9 @@
      "targets": 264,
      "cases": 848,
      "passes": {
-      "lineCount": 432,
-      "breaks": 424,
-      "widths": 204,
+      "lineCount": 828,
+      "breaks": 816,
+      "widths": 816,
       "painter": 416
      },
      "scored": 848
@@ -10573,9 +10583,9 @@
      "targets": 336,
      "cases": 602,
      "passes": {
-      "lineCount": 595,
-      "breaks": 560,
-      "widths": 463,
+      "lineCount": 597,
+      "breaks": 578,
+      "widths": 526,
       "painter": 388
      },
      "scored": 602
@@ -10947,9 +10957,9 @@
      "targets": 288,
      "cases": 544,
      "passes": {
-      "lineCount": 536,
-      "breaks": 528,
-      "widths": 496,
+      "lineCount": 544,
+      "breaks": 544,
+      "widths": 544,
       "painter": 496
      },
      "scored": 544
@@ -11695,14 +11705,20 @@
    "declaredBy": "catalogue 2026-09-16",
    "tests": {
     "present": [],
-    "stale": []
+    "stale": [
+     "src/engines/gecko/gecko.test.ts :: ceiling round 2 > an 8-bit text run without letters shapes as Latin: digits kern under lang=\"ko\" (probe gecko-port F8)"
+    ]
    },
    "facts": {
-    "specs": [],
+    "specs": [
+     "gecko-port F8"
+    ],
     "holds": 0,
     "fails": 0,
     "other": 0,
-    "specsWithoutFacts": []
+    "specsWithoutFacts": [
+     "gecko-port F8"
+    ]
    },
    "declaredFamilies": [],
    "observedFamilies": [],
@@ -11719,14 +11735,20 @@
     "present": [
      "src/engines/gecko/gecko.test.ts :: B3: a suffix is measured in the script the paragraph gives it"
     ],
-    "stale": []
+    "stale": [
+     "src/engines/gecko/gecko.test.ts :: ceiling round 2 > an 8-bit text run without letters shapes as Latin: digits kern under lang=\"ko\" (probe gecko-port F8)"
+    ]
    },
    "facts": {
-    "specs": [],
+    "specs": [
+     "gecko-port F8"
+    ],
     "holds": 0,
     "fails": 0,
     "other": 0,
-    "specsWithoutFacts": []
+    "specsWithoutFacts": [
+     "gecko-port F8"
+    ]
    },
    "declaredFamilies": [],
    "observedFamilies": [],
@@ -12111,9 +12133,9 @@
      "targets": 336,
      "cases": 602,
      "passes": {
-      "lineCount": 595,
-      "breaks": 560,
-      "widths": 463,
+      "lineCount": 597,
+      "breaks": 578,
+      "widths": 526,
       "painter": 388
      },
      "scored": 602
@@ -12194,7 +12216,7 @@
       "lineCount": 1188,
       "breaks": 1188,
       "widths": 1188,
-      "painter": 1176
+      "painter": 1188
      },
      "scored": 1188
     }
@@ -12494,8 +12516,8 @@
      "passes": {
       "lineCount": 480,
       "breaks": 480,
-      "widths": 319,
-      "painter": 314
+      "widths": 480,
+      "painter": 318
      },
      "scored": 480
     }
@@ -12615,9 +12637,9 @@
      "targets": 336,
      "cases": 602,
      "passes": {
-      "lineCount": 595,
-      "breaks": 560,
-      "widths": 463,
+      "lineCount": 597,
+      "breaks": 578,
+      "widths": 526,
       "painter": 388
      },
      "scored": 602
@@ -12907,13 +12929,15 @@
      "gecko-port F3",
      "gecko-canvas H5",
      "gecko-canvas H6",
-     "cross-cutting 1"
+     "cross-cutting 1",
+     "gecko-port F11"
     ],
     "holds": 10,
     "fails": 0,
     "other": 2,
     "specsWithoutFacts": [
-     "gecko-port F3"
+     "gecko-port F3",
+     "gecko-port F11"
     ]
    },
    "declaredFamilies": [],
@@ -13059,9 +13083,9 @@
      "targets": 288,
      "cases": 544,
      "passes": {
-      "lineCount": 536,
-      "breaks": 528,
-      "widths": 496,
+      "lineCount": 544,
+      "breaks": 544,
+      "widths": 544,
       "painter": 496
      },
      "scored": 544
@@ -13247,9 +13271,9 @@
      "targets": 336,
      "cases": 602,
      "passes": {
-      "lineCount": 595,
-      "breaks": 560,
-      "widths": 463,
+      "lineCount": 597,
+      "breaks": 578,
+      "widths": 526,
       "painter": 388
      },
      "scored": 602
@@ -13361,9 +13385,9 @@
      "targets": 288,
      "cases": 544,
      "passes": {
-      "lineCount": 536,
-      "breaks": 528,
-      "widths": 496,
+      "lineCount": 544,
+      "breaks": 544,
+      "widths": 544,
       "painter": 496
      },
      "scored": 544
@@ -13430,9 +13454,9 @@
      "targets": 336,
      "cases": 602,
      "passes": {
-      "lineCount": 595,
-      "breaks": 560,
-      "widths": 463,
+      "lineCount": 597,
+      "breaks": 578,
+      "widths": 526,
       "painter": 388
      },
      "scored": 602
@@ -13781,9 +13805,9 @@
      "targets": 268,
      "cases": 856,
      "passes": {
-      "lineCount": 448,
-      "breaks": 448,
-      "widths": 224,
+      "lineCount": 856,
+      "breaks": 856,
+      "widths": 856,
       "painter": 428
      },
      "scored": 856
@@ -13799,7 +13823,7 @@
       "lineCount": 1104,
       "breaks": 1104,
       "widths": 1104,
-      "painter": 1004
+      "painter": 1072
      },
      "scored": 1104
     }
@@ -13892,9 +13916,9 @@
      "targets": 288,
      "cases": 544,
      "passes": {
-      "lineCount": 536,
-      "breaks": 528,
-      "widths": 496,
+      "lineCount": 544,
+      "breaks": 544,
+      "widths": 544,
       "painter": 496
      },
      "scored": 544
@@ -13962,9 +13986,9 @@
      "targets": 288,
      "cases": 544,
      "passes": {
-      "lineCount": 536,
-      "breaks": 528,
-      "widths": 496,
+      "lineCount": 544,
+      "breaks": 544,
+      "widths": 544,
       "painter": 496
      },
      "scored": 544
@@ -14300,15 +14324,20 @@
    "tests": {
     "present": [],
     "stale": [
-     "src/engines/gecko/gecko.test.ts :: B2: in-word-prefix only where a prefix and suffix shaped alone differ from the unit"
+     "src/engines/gecko/gecko.test.ts :: B2: in-word-prefix only where a prefix and suffix shaped alone differ from the unit",
+     "src/engines/gecko/gecko.test.ts :: ceiling round 2 > an in-word break inside a ligature as wide as its parts reports in-word-prefix at the offset (probe gecko-port F9)"
     ]
    },
    "facts": {
-    "specs": [],
+    "specs": [
+     "gecko-port F9"
+    ],
     "holds": 0,
     "fails": 0,
     "other": 0,
-    "specsWithoutFacts": []
+    "specsWithoutFacts": [
+     "gecko-port F9"
+    ]
    },
    "declaredFamilies": [
     "in-word-breaks",
@@ -14323,9 +14352,9 @@
      "targets": 336,
      "cases": 602,
      "passes": {
-      "lineCount": 595,
-      "breaks": 560,
-      "widths": 463,
+      "lineCount": 597,
+      "breaks": 578,
+      "widths": 526,
       "painter": 388
      },
      "scored": 602
@@ -14504,7 +14533,9 @@
    "declaredBy": "catalogue 2026-09-16",
    "tests": {
     "present": [],
-    "stale": []
+    "stale": [
+     "src/engines/gecko/gecko.test.ts :: ceiling round 2 > lang=\"\" measures under the given regional-prefs locale and reports ui-language only without it (nsFontCache.cpp:61-63)"
+    ]
    },
    "facts": {
     "specs": [
@@ -15415,10 +15446,10 @@
      "targets": 288,
      "cases": 560,
      "passes": {
-      "lineCount": 556,
-      "breaks": 552,
-      "widths": 532,
-      "painter": 530
+      "lineCount": 560,
+      "breaks": 560,
+      "widths": 560,
+      "painter": 532
      },
      "scored": 560
     }
@@ -15500,10 +15531,10 @@
      "targets": 288,
      "cases": 560,
      "passes": {
-      "lineCount": 556,
-      "breaks": 552,
-      "widths": 532,
-      "painter": 530
+      "lineCount": 560,
+      "breaks": 560,
+      "widths": 560,
+      "painter": 532
      },
      "scored": 560
     }
@@ -15587,10 +15618,10 @@
      "targets": 336,
      "cases": 600,
      "passes": {
-      "lineCount": 584,
-      "breaks": 558,
-      "widths": 550,
-      "painter": 524
+      "lineCount": 590,
+      "breaks": 575,
+      "widths": 571,
+      "painter": 521
      },
      "scored": 600
     }
@@ -15815,7 +15846,7 @@
       "lineCount": 344,
       "breaks": 344,
       "widths": 344,
-      "painter": 281
+      "painter": 318
      },
      "scored": 344
     }
@@ -15831,7 +15862,7 @@
    "id": "blink/measure/v8-slice-storage",
    "engine": "blink",
    "kind": "ported rule",
-   "declaredBy": "blink owner",
+   "declaredBy": "blink owner (round 2, 2026-09-17)",
    "tests": {
     "present": [],
     "stale": []
@@ -16670,9 +16701,9 @@
      "targets": 1004,
      "cases": 2026,
      "passes": {
-      "lineCount": 1715,
-      "breaks": 1715,
-      "widths": 1008,
+      "lineCount": 2026,
+      "breaks": 2026,
+      "widths": 1687,
       "painter": 1008
      },
      "scored": 2026
@@ -16712,9 +16743,9 @@
      "targets": 268,
      "cases": 856,
      "passes": {
-      "lineCount": 448,
-      "breaks": 448,
-      "widths": 224,
+      "lineCount": 856,
+      "breaks": 856,
+      "widths": 856,
       "painter": 428
      },
      "scored": 856
@@ -16757,7 +16788,7 @@
       "lineCount": 1352,
       "breaks": 1352,
       "widths": 1352,
-      "painter": 1332
+      "painter": 1352
      },
      "scored": 1352
     }
@@ -16796,9 +16827,9 @@
      "targets": 1004,
      "cases": 2026,
      "passes": {
-      "lineCount": 1715,
-      "breaks": 1715,
-      "widths": 1008,
+      "lineCount": 2026,
+      "breaks": 2026,
+      "widths": 1687,
       "painter": 1008
      },
      "scored": 2026
@@ -16841,7 +16872,7 @@
      "passes": {
       "lineCount": 2880,
       "breaks": 2880,
-      "widths": 1426,
+      "widths": 2154,
       "painter": 1354
      },
      "scored": 2880
@@ -16856,7 +16887,7 @@
      "passes": {
       "lineCount": 720,
       "breaks": 720,
-      "widths": 309,
+      "widths": 633,
       "painter": 297
      },
      "scored": 720
@@ -16899,7 +16930,7 @@
      "passes": {
       "lineCount": 2880,
       "breaks": 2880,
-      "widths": 1426,
+      "widths": 2154,
       "painter": 1354
      },
      "scored": 2880
@@ -16914,7 +16945,7 @@
      "passes": {
       "lineCount": 720,
       "breaks": 720,
-      "widths": 309,
+      "widths": 633,
       "painter": 297
      },
      "scored": 720
@@ -17041,7 +17072,7 @@
      "passes": {
       "lineCount": 544,
       "breaks": 544,
-      "widths": 356,
+      "widths": 543,
       "painter": 356
      },
      "scored": 544
@@ -17057,7 +17088,7 @@
       "lineCount": 1352,
       "breaks": 1352,
       "widths": 1352,
-      "painter": 1332
+      "painter": 1352
      },
      "scored": 1352
     }
@@ -17140,7 +17171,7 @@
      "passes": {
       "lineCount": 544,
       "breaks": 544,
-      "widths": 356,
+      "widths": 543,
       "painter": 356
      },
      "scored": 544
@@ -17181,10 +17212,10 @@
      "targets": 576,
      "cases": 1104,
      "passes": {
-      "lineCount": 1076,
-      "breaks": 1076,
-      "widths": 800,
-      "painter": 749
+      "lineCount": 1104,
+      "breaks": 1104,
+      "widths": 1040,
+      "painter": 835
      },
      "scored": 1104
     },
@@ -17240,9 +17271,9 @@
      "targets": 1004,
      "cases": 2026,
      "passes": {
-      "lineCount": 1715,
-      "breaks": 1715,
-      "widths": 1008,
+      "lineCount": 2026,
+      "breaks": 2026,
+      "widths": 1687,
       "painter": 1008
      },
      "scored": 2026
@@ -17257,7 +17288,7 @@
      "passes": {
       "lineCount": 2880,
       "breaks": 2880,
-      "widths": 1426,
+      "widths": 2154,
       "painter": 1354
      },
      "scored": 2880
@@ -17272,7 +17303,7 @@
      "passes": {
       "lineCount": 720,
       "breaks": 720,
-      "widths": 309,
+      "widths": 633,
       "painter": 297
      },
      "scored": 720
@@ -17288,7 +17319,7 @@
    "id": "blink/shapeline/needs-accurate-end-position",
    "engine": "blink",
    "kind": "ported rule",
-   "declaredBy": "provisional (stage 5, feature families 2026-09-17)",
+   "declaredBy": "blink owner (round 2, 2026-09-17)",
    "tests": {
     "present": [],
     "stale": []
@@ -17312,10 +17343,10 @@
      "targets": 576,
      "cases": 1104,
      "passes": {
-      "lineCount": 1076,
-      "breaks": 1076,
-      "widths": 800,
-      "painter": 749
+      "lineCount": 1104,
+      "breaks": 1104,
+      "widths": 1040,
+      "painter": 835
      },
      "scored": 1104
     }
@@ -17356,7 +17387,7 @@
      "passes": {
       "lineCount": 2880,
       "breaks": 2880,
-      "widths": 1426,
+      "widths": 2154,
       "painter": 1354
      },
      "scored": 2880
@@ -17398,7 +17429,7 @@
      "passes": {
       "lineCount": 2880,
       "breaks": 2880,
-      "widths": 1426,
+      "widths": 2154,
       "painter": 1354
      },
      "scored": 2880
@@ -17480,10 +17511,10 @@
      "targets": 1003,
      "cases": 2028,
      "passes": {
-      "lineCount": 1723,
-      "breaks": 1723,
-      "widths": 988,
-      "painter": 964
+      "lineCount": 2028,
+      "breaks": 2028,
+      "widths": 1594,
+      "painter": 956
      },
      "scored": 2028
     }
@@ -17524,7 +17555,7 @@
      "passes": {
       "lineCount": 496,
       "breaks": 496,
-      "widths": 329,
+      "widths": 484,
       "painter": 329
      },
      "scored": 496
@@ -17567,7 +17598,7 @@
      "passes": {
       "lineCount": 496,
       "breaks": 496,
-      "widths": 329,
+      "widths": 484,
       "painter": 329
      },
      "scored": 496
@@ -17583,7 +17614,7 @@
       "lineCount": 1104,
       "breaks": 1104,
       "widths": 1098,
-      "painter": 1018
+      "painter": 1054
      },
      "scored": 1104
     }
@@ -17622,9 +17653,9 @@
      "targets": 264,
      "cases": 848,
      "passes": {
-      "lineCount": 432,
-      "breaks": 424,
-      "widths": 204,
+      "lineCount": 828,
+      "breaks": 816,
+      "widths": 816,
       "painter": 416
      },
      "scored": 848
@@ -17706,10 +17737,10 @@
      "targets": 1003,
      "cases": 2028,
      "passes": {
-      "lineCount": 1723,
-      "breaks": 1723,
-      "widths": 988,
-      "painter": 964
+      "lineCount": 2028,
+      "breaks": 2028,
+      "widths": 1594,
+      "painter": 956
      },
      "scored": 2028
     }
@@ -17748,10 +17779,10 @@
      "targets": 1297,
      "cases": 1918,
      "passes": {
-      "lineCount": 1915,
-      "breaks": 1913,
-      "widths": 1913,
-      "painter": 1745
+      "lineCount": 1911,
+      "breaks": 1911,
+      "widths": 1911,
+      "painter": 1911
      },
      "scored": 1918
     }
@@ -17792,7 +17823,7 @@
      "passes": {
       "lineCount": 2880,
       "breaks": 2880,
-      "widths": 1536,
+      "widths": 2252,
       "painter": 1536
      },
      "scored": 2880
@@ -17832,10 +17863,10 @@
      "targets": 1297,
      "cases": 1918,
      "passes": {
-      "lineCount": 1915,
-      "breaks": 1913,
-      "widths": 1913,
-      "painter": 1745
+      "lineCount": 1911,
+      "breaks": 1911,
+      "widths": 1911,
+      "painter": 1911
      },
      "scored": 1918
     }
@@ -17877,7 +17908,7 @@
      "passes": {
       "lineCount": 2880,
       "breaks": 2880,
-      "widths": 1536,
+      "widths": 2252,
       "painter": 1536
      },
      "scored": 2880
@@ -17892,7 +17923,7 @@
      "passes": {
       "lineCount": 720,
       "breaks": 720,
-      "widths": 327,
+      "widths": 616,
       "painter": 327
      },
      "scored": 720
@@ -17935,7 +17966,7 @@
      "passes": {
       "lineCount": 2880,
       "breaks": 2880,
-      "widths": 1536,
+      "widths": 2252,
       "painter": 1536
      },
      "scored": 2880
@@ -17950,7 +17981,7 @@
      "passes": {
       "lineCount": 720,
       "breaks": 720,
-      "widths": 327,
+      "widths": 616,
       "painter": 327
      },
      "scored": 720
@@ -18035,7 +18066,7 @@
       "lineCount": 1104,
       "breaks": 1104,
       "widths": 1098,
-      "painter": 1018
+      "painter": 1054
      },
      "scored": 1104
     }
@@ -18077,7 +18108,7 @@
       "lineCount": 1104,
       "breaks": 1104,
       "widths": 1098,
-      "painter": 1018
+      "painter": 1054
      },
      "scored": 1104
     }
@@ -18118,7 +18149,7 @@
      "passes": {
       "lineCount": 2880,
       "breaks": 2880,
-      "widths": 1536,
+      "widths": 2252,
       "painter": 1536
      },
      "scored": 2880
@@ -18161,7 +18192,7 @@
      "passes": {
       "lineCount": 496,
       "breaks": 496,
-      "widths": 329,
+      "widths": 484,
       "painter": 329
      },
      "scored": 496
@@ -18217,10 +18248,10 @@
      "targets": 1297,
      "cases": 1918,
      "passes": {
-      "lineCount": 1915,
-      "breaks": 1913,
-      "widths": 1913,
-      "painter": 1745
+      "lineCount": 1911,
+      "breaks": 1911,
+      "widths": 1911,
+      "painter": 1911
      },
      "scored": 1918
     },
@@ -18278,8 +18309,8 @@
      "passes": {
       "lineCount": 2880,
       "breaks": 2880,
-      "widths": 1356,
-      "painter": 1289
+      "widths": 2128,
+      "painter": 1356
      },
      "scored": 2880
     },
@@ -18293,8 +18324,8 @@
      "passes": {
       "lineCount": 720,
       "breaks": 720,
-      "widths": 213,
-      "painter": 200
+      "widths": 611,
+      "painter": 213
      },
      "scored": 720
     },
@@ -18308,8 +18339,8 @@
      "passes": {
       "lineCount": 480,
       "breaks": 480,
-      "widths": 319,
-      "painter": 314
+      "widths": 480,
+      "painter": 318
      },
      "scored": 480
     }
@@ -18348,9 +18379,9 @@
      "targets": 268,
      "cases": 856,
      "passes": {
-      "lineCount": 448,
-      "breaks": 448,
-      "widths": 224,
+      "lineCount": 856,
+      "breaks": 856,
+      "widths": 856,
       "painter": 428
      },
      "scored": 856
@@ -18390,10 +18421,10 @@
      "targets": 920,
      "cases": 1912,
      "passes": {
-      "lineCount": 1650,
-      "breaks": 1650,
-      "widths": 944,
-      "painter": 928
+      "lineCount": 1912,
+      "breaks": 1912,
+      "widths": 1589,
+      "painter": 944
      },
      "scored": 1912
     }
@@ -18435,8 +18466,8 @@
      "passes": {
       "lineCount": 2880,
       "breaks": 2880,
-      "widths": 1356,
-      "painter": 1289
+      "widths": 2128,
+      "painter": 1356
      },
      "scored": 2880
     },
@@ -18450,8 +18481,8 @@
      "passes": {
       "lineCount": 720,
       "breaks": 720,
-      "widths": 213,
-      "painter": 200
+      "widths": 611,
+      "painter": 213
      },
      "scored": 720
     }
@@ -18493,8 +18524,8 @@
      "passes": {
       "lineCount": 2880,
       "breaks": 2880,
-      "widths": 1356,
-      "painter": 1289
+      "widths": 2128,
+      "painter": 1356
      },
      "scored": 2880
     },
@@ -18508,8 +18539,8 @@
      "passes": {
       "lineCount": 720,
       "breaks": 720,
-      "widths": 213,
-      "painter": 200
+      "widths": 611,
+      "painter": 213
      },
      "scored": 720
     }
@@ -18548,8 +18579,8 @@
      "targets": 1319,
      "cases": 1814,
      "passes": {
-      "lineCount": 1808,
-      "breaks": 1805,
+      "lineCount": 1799,
+      "breaks": 1799,
       "widths": 866,
       "painter": 866
      },
@@ -18590,8 +18621,8 @@
      "targets": 1319,
      "cases": 1814,
      "passes": {
-      "lineCount": 1808,
-      "breaks": 1805,
+      "lineCount": 1799,
+      "breaks": 1799,
       "widths": 866,
       "painter": 866
      },
@@ -18634,10 +18665,10 @@
      "targets": 920,
      "cases": 1912,
      "passes": {
-      "lineCount": 1650,
-      "breaks": 1650,
-      "widths": 944,
-      "painter": 928
+      "lineCount": 1912,
+      "breaks": 1912,
+      "widths": 1589,
+      "painter": 944
      },
      "scored": 1912
     },
@@ -18651,8 +18682,8 @@
      "passes": {
       "lineCount": 480,
       "breaks": 480,
-      "widths": 319,
-      "painter": 314
+      "widths": 480,
+      "painter": 318
      },
      "scored": 480
     },
@@ -18667,7 +18698,7 @@
       "lineCount": 1188,
       "breaks": 1188,
       "widths": 1188,
-      "painter": 1176
+      "painter": 1188
      },
      "scored": 1188
     }
@@ -18706,8 +18737,8 @@
      "targets": 1319,
      "cases": 1814,
      "passes": {
-      "lineCount": 1808,
-      "breaks": 1805,
+      "lineCount": 1799,
+      "breaks": 1799,
       "widths": 866,
       "painter": 866
      },
@@ -18791,9 +18822,9 @@
      "targets": 268,
      "cases": 856,
      "passes": {
-      "lineCount": 448,
-      "breaks": 448,
-      "widths": 224,
+      "lineCount": 856,
+      "breaks": 856,
+      "widths": 856,
       "painter": 428
      },
      "scored": 856
@@ -18808,8 +18839,8 @@
      "passes": {
       "lineCount": 720,
       "breaks": 720,
-      "widths": 213,
-      "painter": 200
+      "widths": 611,
+      "painter": 213
      },
      "scored": 720
     }
@@ -18851,7 +18882,7 @@
       "lineCount": 1188,
       "breaks": 1188,
       "widths": 1188,
-      "painter": 1176
+      "painter": 1188
      },
      "scored": 1188
     }
@@ -18893,7 +18924,7 @@
       "lineCount": 1104,
       "breaks": 1104,
       "widths": 1104,
-      "painter": 1004
+      "painter": 1072
      },
      "scored": 1104
     }
@@ -18934,8 +18965,8 @@
      "passes": {
       "lineCount": 2880,
       "breaks": 2880,
-      "widths": 1356,
-      "painter": 1289
+      "widths": 2128,
+      "painter": 1356
      },
      "scored": 2880
     }
@@ -18975,8 +19006,8 @@
      "targets": 1319,
      "cases": 1814,
      "passes": {
-      "lineCount": 1808,
-      "breaks": 1805,
+      "lineCount": 1799,
+      "breaks": 1799,
       "widths": 866,
       "painter": 866
      },
@@ -19034,8 +19065,8 @@
      "passes": {
       "lineCount": 2880,
       "breaks": 2880,
-      "widths": 1356,
-      "painter": 1289
+      "widths": 2128,
+      "painter": 1356
      },
      "scored": 2880
     }
@@ -19149,6 +19180,150 @@
     "fails": 0,
     "other": 0,
     "specsWithoutFacts": []
+   },
+   "declaredFamilies": [],
+   "observedFamilies": [],
+   "derivedFamilies": [],
+   "coveredBy": [],
+   "annotated": false
+  },
+  {
+   "id": "gecko/measure/lang-empty-locale-language",
+   "engine": "gecko",
+   "kind": "ported rule",
+   "declaredBy": "gecko owner (ceiling round 2)",
+   "tests": {
+    "present": [],
+    "stale": [
+     "src/engines/gecko/gecko.test.ts :: ceiling round 2 > lang=\"\" measures under the given regional-prefs locale and reports ui-language only without it (nsFontCache.cpp:61-63)"
+    ]
+   },
+   "facts": {
+    "specs": [],
+    "holds": 0,
+    "fails": 0,
+    "other": 0,
+    "specsWithoutFacts": []
+   },
+   "declaredFamilies": [],
+   "observedFamilies": [],
+   "derivedFamilies": [],
+   "coveredBy": [],
+   "annotated": false
+  },
+  {
+   "id": "blink/measure/pair-kerning-from-fact",
+   "engine": "blink",
+   "kind": "fact",
+   "declaredBy": "blink owner (round 2, 2026-09-17)",
+   "tests": {
+    "present": [],
+    "stale": [
+     "src/engines/blink/lines.test.ts :: blink round 2 > a pair adjustment sits on the first glyph, or kern >> 1 on it under the pair machine (hb-kern.hh:102-106)"
+    ]
+   },
+   "facts": {
+    "specs": [],
+    "holds": 0,
+    "fails": 0,
+    "other": 0,
+    "specsWithoutFacts": []
+   },
+   "declaredFamilies": [],
+   "observedFamilies": [],
+   "derivedFamilies": [],
+   "coveredBy": [],
+   "annotated": false
+  },
+  {
+   "id": "blink/shape/pair-window-whole-clusters",
+   "engine": "blink",
+   "kind": "ported rule",
+   "declaredBy": "blink owner (round 2, 2026-09-17)",
+   "tests": {
+    "present": [],
+    "stale": []
+   },
+   "facts": {
+    "specs": [],
+    "holds": 0,
+    "fails": 0,
+    "other": 0,
+    "specsWithoutFacts": []
+   },
+   "declaredFamilies": [],
+   "observedFamilies": [],
+   "derivedFamilies": [],
+   "coveredBy": [],
+   "annotated": false
+  },
+  {
+   "id": "blink/justify/cjk-ideograph-or-symbol",
+   "engine": "blink",
+   "kind": "ported rule",
+   "declaredBy": "blink owner (round 2, 2026-09-17)",
+   "tests": {
+    "present": [],
+    "stale": [
+     "src/engines/blink/lines.test.ts :: blink round 2 > justify expands before and after CJK ideographs in 16-bit text (justification_opportunity.cc:105-120)"
+    ]
+   },
+   "facts": {
+    "specs": [],
+    "holds": 0,
+    "fails": 0,
+    "other": 0,
+    "specsWithoutFacts": []
+   },
+   "declaredFamilies": [],
+   "observedFamilies": [],
+   "derivedFamilies": [],
+   "coveredBy": [],
+   "annotated": false
+  },
+  {
+   "id": "blink/shape/cluster-unit-grapheme",
+   "engine": "blink",
+   "kind": "heuristic",
+   "declaredBy": "blink owner (round 2, 2026-09-17)",
+   "tests": {
+    "present": [],
+    "stale": []
+   },
+   "facts": {
+    "specs": [],
+    "holds": 0,
+    "fails": 0,
+    "other": 0,
+    "specsWithoutFacts": []
+   },
+   "declaredFamilies": [],
+   "observedFamilies": [],
+   "derivedFamilies": [],
+   "coveredBy": [],
+   "annotated": false
+  },
+  {
+   "id": "gecko/lines/in-word-advance-split-kerning",
+   "engine": "gecko",
+   "kind": "ported rule",
+   "declaredBy": "gecko owner (ceiling round 2)",
+   "tests": {
+    "present": [],
+    "stale": [
+     "src/engines/gecko/gecko.test.ts :: ceiling round 2 > a split pair kerning fact gives the glyph before an in-word offset half the adjustment (hb-kern.hh:102-106, probe gecko-port F12)"
+    ]
+   },
+   "facts": {
+    "specs": [
+     "gecko-port F12"
+    ],
+    "holds": 0,
+    "fails": 0,
+    "other": 0,
+    "specsWithoutFacts": [
+     "gecko-port F12"
+    ]
    },
    "declaredFamilies": [],
    "observedFamilies": [],
