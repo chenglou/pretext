@@ -80,7 +80,8 @@ describe('likely subtags against ICU 78.3', () => {
     console.log(JSON.stringify({ compared, chineseOrJapanese: cj }))
     expect(failures).toEqual([])
     expect(compared).toBe(inputs.length)
-  })
+    // Builds the ICU oracle and compares 551,696 inputs: about 3 s alone, more than bun's 5 s default on a loaded machine.
+  }, 120_000)
 })
 
 describe('nsLineBreaker language test', () => {
