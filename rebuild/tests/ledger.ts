@@ -55,7 +55,9 @@ export type LedgerEntry = {
 
 // One order of one part: the run's record and what score.ts wrote for it, as repo-relative paths.
 export type EvidenceRun = { part: number; order: 'forward' | 'reverse'; run: string; perCase: string; summary: string; runId: string | null; bundleSha256: string | null; startedAt: string | null }
-export type LedgerSet = { protocol: SetProtocol; subset: boolean; cases: number; evidence: EvidenceRun[] }
+// `environments`: score.ts environment keys of the set's evidence runs (a set can run under launch arguments of its own, as
+// Chrome's `features-en-US` does under its second locale).
+export type LedgerSet = { protocol: SetProtocol; subset: boolean; cases: number; environments: string[]; evidence: EvidenceRun[] }
 export type LedgerHeader = {
   format: typeof LEDGER_FORMAT
   browser: TierBrowser
@@ -67,6 +69,8 @@ export type LedgerHeader = {
   scorer: number
   // The library bundles the evidence runs ran (run.json bundleSha256): one, unless the library changed between jobs.
   bundles: string[]
+  // The commit the runs were started at, and the files under rebuild/src and rebuild/lab that differed from it then.
+  library: { commit: string; dirty: string[] } | null
   orders: 'both' | 'forward'
   historyCarriedFrom: string | null
   sets: Record<string, LedgerSet>
@@ -206,13 +210,14 @@ export function incomparable(before: LedgerHeader, after: LedgerHeader): Array<{
   if (JSON.stringify(before.build) !== JSON.stringify(after.build)) out.push({ name: 'build', detail: `${JSON.stringify(before.build)} against ${JSON.stringify(after.build)}: a browser or OS build moved; pin it and seed a reference for the new build (rebuild/TESTS.md §12)` })
   if (before.scorer !== after.scorer) out.push({ name: 'scorer', detail: `scorer ${before.scorer} against ${after.scorer}: re-score the older runs` })
   if (before.config !== after.config) out.push({ name: 'config', detail: `${before.config} against ${after.config}` })
-  const languages = (header: LedgerHeader): string => [...new Set(header.environments.map(key => key.split('; ').slice(2, -1).join('; ')))].sort().join(' | ')
-  if (before.scorer === after.scorer && before.browser === after.browser && JSON.stringify(before.build) === JSON.stringify(after.build) && languages(before) !== languages(after)) {
-    out.push({ name: 'languages', detail: `process languages ${languages(before)} against ${languages(after)}` })
-  }
+  // Per set, since a set can run under process languages of its own: the given languages of its environment keys.
+  const languages = (set: LedgerSet): string => [...new Set(set.environments.map(key => key.split('; ').slice(2, -1).join('; ')))].sort().join(' | ')
   for (const [name, set] of Object.entries(after.sets)) {
     const other = before.sets[name]
-    if (other === undefined || set.subset || other.subset) continue
+    if (other === undefined) continue
+    if (languages(other) !== languages(set)) out.push({ name: 'languages', detail: `set ${name}: process languages ${languages(other)} against ${languages(set)}` })
+    // A run of some cases (--ids-file) keeps the parts' order but not their history, which its `subset` mark says.
+    if (set.subset || other.subset) continue
     if (JSON.stringify(other.protocol) !== JSON.stringify(set.protocol)) out.push({ name: 'protocol', detail: `set ${name} ran under another protocol (parts, case files, cases per round trip or run arguments): its history-dependent cases can differ` })
   }
   return out
@@ -352,6 +357,7 @@ export type SetsRun = {
   predictor: string
   build: BrowserBuild
   orders: 'both' | 'forward'
+  library?: { commit: string; dirty: string[] }
   sets: Array<{ name: string; protocol: SetProtocol; subset: boolean; parts: Array<{ part: number; forward: string; reverse: string | null }> }>
 }
 
@@ -364,6 +370,7 @@ export function buildLedger(runDir: string, carryFrom: string | null): Ledger {
   const sets: Record<string, LedgerSet> = {}
   for (const set of run.sets) {
     const evidence: EvidenceRun[] = []
+    const setEnvironments = new Set<string>()
     let cases = 0
     for (const part of set.parts) {
       const read = (dir: string, order: 'forward' | 'reverse'): PerCase[] => {
@@ -371,7 +378,10 @@ export function buildLedger(runDir: string, carryFrom: string | null): Ledger {
         const record = JSON.parse(readFileSync(join(folder, `${run.browser}-run.json`), 'utf8')) as { runId?: string; bundleSha256?: string | null; startedAt?: string }
         const summary = JSON.parse(readFileSync(join(folder, `${run.browser}-summary.json`), 'utf8')) as { scorer: number; browsers: Record<string, { environments: Record<string, number> }> }
         scorers.add(summary.scorer)
-        for (const browser of Object.values(summary.browsers)) for (const key of Object.keys(browser.environments)) environments.add(key)
+        for (const browser of Object.values(summary.browsers)) for (const key of Object.keys(browser.environments)) {
+          environments.add(key)
+          setEnvironments.add(key)
+        }
         if (typeof record.bundleSha256 === 'string') bundles.add(record.bundleSha256)
         evidence.push({ part: part.part, order, run: join(dir, `${run.browser}-run.json`), perCase: join(dir, `${run.browser}-per-case.ndjson`), summary: join(dir, `${run.browser}-summary.json`), runId: record.runId ?? null, bundleSha256: record.bundleSha256 ?? null, startedAt: record.startedAt ?? null })
         return readPerCase(join(folder, `${run.browser}-per-case.ndjson`))
@@ -385,7 +395,7 @@ export function buildLedger(runDir: string, carryFrom: string | null): Ledger {
         cases++
       }
     }
-    sets[set.name] = { protocol: set.protocol, subset: set.subset, cases, evidence }
+    sets[set.name] = { protocol: set.protocol, subset: set.subset, cases, environments: [...setEnvironments].sort(), evidence }
   }
   if (scorers.size !== 1) throw new Error(`The runs were scored by ${scorers.size} scorers (${[...scorers].join(', ')}): score them with one`)
   let carried: string | null = null
@@ -395,7 +405,7 @@ export function buildLedger(runDir: string, carryFrom: string | null): Ledger {
   }
   const header: LedgerHeader = {
     format: LEDGER_FORMAT, browser: run.browser, config: run.config, predictor: run.predictor, build: run.build, environments: [...environments].sort(), scorer: [...scorers][0]!,
-    bundles: [...bundles].sort(), orders: run.orders, historyCarriedFrom: carried, sets, counts: countStatuses(entries),
+    bundles: [...bundles].sort(), library: run.library ?? null, orders: run.orders, historyCarriedFrom: carried, sets, counts: countStatuses(entries),
   }
   return { header, entries }
 }

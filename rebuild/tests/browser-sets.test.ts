@@ -17,7 +17,7 @@ describe('browser-sets refuses before running', () => {
     const dir = mkdtempSync(join(tmpdir(), 'browser-sets-'))
     const header: LedgerHeader = {
       format: 'pretext-ledger/1', browser: 'chrome', config: 'no-facts', predictor: 'p.ts', build: { app: 'Google Chrome', appVersion: '1.0.0.0', engine: '1.0.0.0', os: '00A000' },
-      environments: [], scorer: 6, bundles: [], orders: 'both', historyCarriedFrom: null, sets: {}, counts: { lineCount: {}, breaks: {}, widths: {}, painter: {} },
+      environments: [], scorer: 6, bundles: [], library: null, orders: 'both', historyCarriedFrom: null, sets: {}, counts: { lineCount: {}, breaks: {}, widths: {}, painter: {} },
     }
     writeLedger(join(dir, 'reference'), { header, entries: [] })
     const result = run(['--browser=chrome', '--sets=smoke-hand', `--out=${join(dir, 'out')}`, `--reference=${join(dir, 'reference')}`])

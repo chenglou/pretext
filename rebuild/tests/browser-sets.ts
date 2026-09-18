@@ -24,7 +24,7 @@
 //
 // --ids-file runs only the listed cases (tier 1 routes cases here): each part's subset keeps the part's order, but not
 // its history, so the run's sets are marked `subset`, its ledger isn't checked for missing cases, and the gate isn't run.
-import { spawn } from 'node:child_process'
+import { execFileSync, spawn } from 'node:child_process'
 import { createWriteStream, existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { join, relative, resolve } from 'node:path'
 import { readBuild } from '../lab/browser-build.ts'
@@ -85,7 +85,10 @@ const baselinePath = options.get('baseline') !== undefined ? resolve(options.get
 type Order = 'forward' | 'reverse'
 type Job = { set: TestSet; part: number; order: Order; cases: string; dir: string; name: string }
 const jobs: Job[] = []
-const runRecord: SetsRun = { browser, config, predictor: PREDICTORS[config], build, orders: bothOrders ? 'both' : 'forward', sets: [] }
+// The commit the run starts at, and what differs from it under the library and the lab: what the rows describe.
+const git = (...args: string[]): string => execFileSync('git', args, { cwd: REPO, encoding: 'utf8' }).trim()
+const library = { commit: git('rev-parse', 'HEAD'), dirty: git('status', '--porcelain', '--', 'rebuild/src', 'rebuild/lab').split('\n').filter(line => line !== '').map(line => line.slice(3)) }
+const runRecord: SetsRun = { browser, config, predictor: PREDICTORS[config], build, orders: bothOrders ? 'both' : 'forward', library, sets: [] }
 mkdirSync(outDir, { recursive: true })
 for (const set of sets) {
   const files = partFiles(set, browser)

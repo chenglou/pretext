@@ -55,10 +55,11 @@ describe('one status from a closed set', () => {
 })
 
 const protocol: SetProtocol = { set: 'runs', parts: [{ casesFile: 'runs.ndjson', casesSha256: 'abc' }], casesPerRoundTrip: 25, freshProcessPerPart: true, runArgs: [] }
+const ENVIRONMENT = 'chrome: Google Chrome 153.0.8010.50, engine build 153.0.8010.50, macOS 26A428; DPR 2, scale 1; uiLanguage zh-CN; scorer 6'
 const header = (over: Partial<LedgerHeader> = {}): LedgerHeader => ({
   format: 'pretext-ledger/1', browser: 'chrome', config: 'no-facts', predictor: 'p.ts', build: { app: 'Google Chrome', appVersion: '153.0.8010.50', engine: '153.0.8010.50', os: '26A428' },
-  environments: ['chrome: Google Chrome 153.0.8010.50, engine build 153.0.8010.50, macOS 26A428; DPR 2, scale 1; uiLanguage zh-CN; scorer 6'], scorer: 6, bundles: ['b1'], orders: 'both',
-  historyCarriedFrom: null, sets: { runs: { protocol, subset: false, cases: 2, evidence: [] } }, counts: { lineCount: {}, breaks: {}, widths: {}, painter: {} }, ...over,
+  environments: [ENVIRONMENT], scorer: 6, bundles: ['b1'], library: null, orders: 'both',
+  historyCarriedFrom: null, sets: { runs: { protocol, subset: false, cases: 2, environments: [ENVIRONMENT], evidence: [] } }, counts: { lineCount: {}, breaks: {}, widths: {}, painter: {} }, ...over,
 })
 const entry = (id: string, widths: string, family = 'test/family'): LedgerEntry => ({ set: 'runs', id, family, status: { lineCount: 'pass', breaks: 'pass', widths, painter: 'pass' } })
 const ledger = (entries: LedgerEntry[], over: Partial<LedgerHeader> = {}): Ledger => ({ header: header(over), entries })
@@ -88,10 +89,13 @@ describe('transitions', () => {
     expect(incomparable(header(), header({ build: other })).map(problem => problem.name)).toEqual(['build'])
     expect(incomparable(header(), header({ scorer: 7 })).map(problem => problem.name)).toEqual(['scorer'])
     expect(incomparable(header(), header({ config: 'facts' })).map(problem => problem.name)).toEqual(['config'])
-    const otherLanguages = header({ environments: [header().environments[0]!.replace('zh-CN', 'en-US')] })
+    // Process languages compare set by set: a set can run under a locale of its own, and a run of other sets says nothing of it.
+    const otherLanguages = header({ sets: { runs: { protocol, subset: false, cases: 2, environments: [ENVIRONMENT.replace('zh-CN', 'en-US')], evidence: [] } } })
     expect(incomparable(header(), otherLanguages).map(problem => problem.name)).toEqual(['languages'])
+    const moreSets = header({ sets: { ...header().sets, 'features-en-US': { protocol, subset: false, cases: 1, environments: [ENVIRONMENT.replace('zh-CN', 'en-US')], evidence: [] } } })
+    expect(incomparable(moreSets, header())).toEqual([])
     // The run protocol: another cut into parts, other case files or cases per round trip move history-dependent cases.
-    const recut = header({ sets: { runs: { protocol: { ...protocol, casesPerRoundTrip: 1 }, subset: false, cases: 2, evidence: [] } } })
+    const recut = header({ sets: { runs: { protocol: { ...protocol, casesPerRoundTrip: 1 }, subset: false, cases: 2, environments: [ENVIRONMENT], evidence: [] } } })
     expect(incomparable(header(), recut).map(problem => problem.name)).toEqual(['protocol'])
     const refused = transitionsBetween(ledger([entry('c-1', 'pass')]), ledger([entry('c-1', 'fail open')], { build: other }), [])
     expect([refused.comparable.length, refused.transitions.length]).toEqual([1, 0])
@@ -99,7 +103,7 @@ describe('transitions', () => {
   })
 
   test('a run of some cases isn\'t missing the others', () => {
-    const subset = header({ sets: { runs: { protocol, subset: true, cases: 1, evidence: [] } } })
+    const subset = header({ sets: { runs: { protocol, subset: true, cases: 1, environments: [ENVIRONMENT], evidence: [] } } })
     const report = transitionsBetween(ledger([entry('c-1', 'pass'), entry('c-2', 'pass')]), { header: subset, entries: [entry('c-1', 'pass')] }, [])
     expect([report.comparable, report.onlyBefore]).toEqual([[], 0])
     expect(transitionsBetween(ledger([entry('c-1', 'pass'), entry('c-2', 'pass')]), ledger([entry('c-1', 'pass')]), []).onlyBefore).toBe(1)

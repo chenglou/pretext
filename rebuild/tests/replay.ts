@@ -622,10 +622,16 @@ async function compare(dir: string, inputs: InputsManifest, against: 'reference'
     if (code !== 0) failures.push(`${job.set} shard ${job.index}`)
   })
   if (failures.length > 0) fail(`the replay failed on ${failures.sort().join(', ')}`)
+  // The ledger beside the reference says what each changed case's statuses were. Against a frozen reference it must be
+  // the ledger the reference pinned: another one describes another recording.
   let ledger: Map<string, LedgerEntry> | null = null
   if (existsSync(join(dir, 'ledger/ledger.json'))) {
-    ledger = new Map()
-    for (const entry of readLedger(join(dir, 'ledger')).entries) ledger.set(`${entry.set}/${entry.id}`, entry)
+    if (reference !== null && reference.kind === 'replay' && JSON.stringify(reference.ledger) !== JSON.stringify(ledgerHashes(dir))) {
+      console.error(`[replay] ${relative(REPO, join(dir, 'ledger'))} isn't the ledger the reference pinned (its hashes differ): changed cases are listed without their statuses. Pack and freeze again to pin it`)
+    } else {
+      ledger = new Map()
+      for (const entry of readLedger(join(dir, 'ledger')).entries) ledger.set(`${entry.set}/${entry.id}`, entry)
+    }
   }
   const unfaithfulPath = join(dir, 'inputs/unfaithful.json')
   const unfaithful = against === 'browser' || !existsSync(unfaithfulPath) ? {} : (JSON.parse(readFileSync(unfaithfulPath, 'utf8')) as Unfaithful).cases
