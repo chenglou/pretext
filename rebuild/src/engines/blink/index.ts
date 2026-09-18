@@ -123,6 +123,8 @@ const UNTESTED_END_DETAIL = 'a later break opportunity whose line-end reshape fa
 
 const REQUEUED_SPACE_DETAIL = 'a line edge beside U+3000 where Canvas totals show an adjustment, in a font the declaration gives no coverage fact for: a font without U+3000 shapes its neighbours beside the space glyph HarfBuzz puts there, and Blink sends U+3000 itself to a fallback font (harfbuzz_shaper.cc:598-606), so the neighbour keeps its part of the kern, U+3000 none, and the offset is a run edge that is never reshaped; a font with U+3000 kerns it like any glyph'
 
+const CLAMPED_START_DETAIL = 'a wrapped line start inside shaped text whose reshape alone takes the space left: ShapeLine adds the paragraph\'s width of the reshaped text to the space, less the reshape, and clamps the result at 0 (shaping_line_breaker.cc:309-324), where nothing fits and the line overflows at its first break; the paragraph\'s width there starts at a position the port takes from a Canvas stand-in'
+
 const END_TEST_DETAIL = 'a break opportunity whose line-end reshape passed or failed the fit test by less than the rounding of the last safe offset\'s position: Blink reshapes from the last offset HarfBuzz left safe and tests the width after that position\'s ceiling (shaping_line_breaker.cc:543-553), HarfBuzz can flag offsets the port\'s width tests call safe (contextual lookups that change no width), and from an earlier safe offset the same glyphs pass or fail by another ceiling'
 
 const SOFT_HYPHEN_DETAIL = 'a default-ignorable character left out of an 8-bit Canvas string, whose glyph a `morx` substitution across it still sees in the DOM (hb-aat-layout-common.hh:1226-1241)'
@@ -373,6 +375,12 @@ function lineEdgeGaps(sh: Shaper, info: LineInfo, start: BlinkLineStart): void {
   for (let i = 0; i < info.untestedEnds.length; i++) {
     const end = info.untestedEnds[i]!
     if (end > contentEnd) addGap(sh.gaps, 'in-word-prefix', runAt(p, contentEnd), UNTESTED_END_DETAIL, sourceRange(p, contentEnd, end))
+  }
+  // A wrapped line start whose reshape takes the whole space: whether ShapeLine clamps the corrected space rests on the
+  // start's position, a stand-in (LineInfo.clampedStarts), and with it everything the line holds.
+  for (let i = 0; i < info.clampedStarts.length; i++) {
+    const clamped = info.clampedStarts[i]!
+    if (clamped.start === start.textOffset) addGap(sh.gaps, clamped.limit, runAt(p, clamped.start), CLAMPED_START_DETAIL, sourceRange(p, clamped.start, Math.max(contentEnd, clamped.start + 1)))
   }
   // A line-end fit test that another last safe offset could turn around (line-breaker.ts EndTest): an opportunity past the
   // line's end that the port gave up, or the one the line ends at.

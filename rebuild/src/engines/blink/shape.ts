@@ -1122,6 +1122,11 @@ function floatWidthOfParts(sh: Shaper, parts: Part[], rtl: boolean): number {
   let slack16 = 0
   let first = -1
   let last = -1
+  // Every advance the sum could add alone, or'ed: a float32 holds 24 bits, so sums of multiples of 2^g units are exact below
+  // 2^(24 + g) units wherever the runs are (a 2048-unit font at a whole zoomed size of 32 px has advances in multiples of 1024
+  // units, exact below 2^18 px). Filled only where the sum can be off (unknownRuns).
+  const unknownRuns: { prefix: (k: number) => number; from: number; to: number }[] = []
+  let bits = 0
   for (let n = 0; n < parts.length; n++) {
     const part = parts[rtl ? parts.length - 1 - n : n]!
     if (part.kind === 'range' && part.sr.kind !== 'group') { width = f32(width + widthOf16(partWidth16(sh, part))); continue }
@@ -1145,14 +1150,27 @@ function floatWidthOfParts(sh: Shaper, parts: Part[], rtl: boolean): number {
       const run16 = prefix(edges[e + 1]!) - prefix(edges[e]!)
       width = f32(width + widthOf16(run16))
       exact16 += run16
+      bits |= run16
       if (exact16 < EXACT16) continue
       let unknownClusters = 0
       for (let k = edges[e]!; k < edges[e + 1]!; k++) if (p.fontRun[k]! < 0 && isClusterBoundary(p, k)) unknownClusters++
+      if (unknownClusters > 0) unknownRuns.push({ prefix, from: edges[e]!, to: edges[e + 1]! })
       slack16 += unknownClusters * 2 ** Math.max(0, Math.floor(Math.log2(exact16)) - 23) / 2
     }
   }
-  if (slack16 > 0 && first >= 0) {
-    if (Math.ceil((total16 - slack16) / 1024) !== Math.ceil((total16 + slack16) / 1024)) {
+  if (slack16 > 0 && first >= 0 && Math.ceil((total16 - slack16) / 1024) !== Math.ceil((total16 + slack16) / 1024)) {
+    for (let u = 0; u < unknownRuns.length; u++) {
+      const run = unknownRuns[u]!
+      let before = run.prefix(run.from)
+      for (let k = run.from + 1; k <= run.to; k++) {
+        if (k < run.to && !isClusterBoundary(p, k)) continue
+        const at = run.prefix(k)
+        bits |= at - before
+        before = at
+      }
+    }
+    const granularity = bits === 0 ? 2 ** 31 : bits & -bits
+    if (total16 >= EXACT16 * granularity) {
       const source = p.sourceOffsets[first]!
       addGap(sh.gaps, 'float32-precision', source >= 0 ? p.sourceRuns[source]! : null, FLOAT_DETAIL, sourceRange(p, first, last))
     }

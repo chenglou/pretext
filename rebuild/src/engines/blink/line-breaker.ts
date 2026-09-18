@@ -1,14 +1,14 @@
 // LineBreaker::NextLine for one line (line_breaker.cc at Chrome 153; specs/blink-lines.md §4-§14 and the handlers of
 // specs/blink-gaps.md §4), with ShapingLineBreaker::ShapeLine (shaping_line_breaker.cc:256-612). Positions and widths
 // are LayoutUnits: integers counting 1/64 of a zoomed px.
-import type { LineSlot } from '../../model.js'
+import type { GapName, LineSlot } from '../../model.js'
 import { WS, bidiClassOf, bidiDataFor } from '../../unicode/bidi.js'
 import { LineBreakIterator } from './breaks.js'
 import { collapsesWhiteSpace, hasBorder, lengthLU, mayHaveMargin, mayHavePadding, wrapsLines } from './content.js'
 import { maybeHanKerningClose } from './hankerning.js'
 import { addGap, sourceRange } from './gaps.js'
 import {
-  isClusterBoundary, isFontRunEdge, isSegmentEdge, isStartSafeToBreak, itemShapeResult, luCeil, nextSafeToBreak, offsetForPosition, positionBounds, positionForOffset,
+  isClusterBoundary, isFontRunEdge, isSegmentEdge, isStartSafeToBreak, itemShapeResult, luCeil, nextSafeToBreak, offsetForPosition, positionBounds, positionForOffset, positionLimit,
   prefix16, previousSafeToBreak, reshape, reshapeHanKerningEnd, shapeHyphen, snappedWidth, tabShapeResult, truncateView, viewOf, widthOf16,
   viewFromSegments, WHOLE, type ReshapePart, type Segment, type ShapeResult, type Shaper, type View,
 } from './shape.js'
@@ -84,6 +84,10 @@ export type LineInfo = {
   // offset before the opportunity, reshapes the whole range and takes it without a fit test
   // (shaping_line_breaker.cc:497-506).
   untestedEnds: number[]
+  // Not Blink's: wrapped line starts whose reshape takes the whole space, so that ShapeLine's clamp of the corrected space
+  // at 0 (shaping_line_breaker.cc:309-324) rests on the start's paragraph position, where that is a stand-in, with the
+  // condition it is one under.
+  clampedStarts: { start: number; limit: GapName }[]
   // Not Blink's: the line-end fit tests whose outcome rests on which offset is the last safe one (EndTest).
   endTests: EndTest[]
   // Not Blink's: whether the line's breaks could fall between any two grapheme clusters: the iterator ended the line under
@@ -168,6 +172,7 @@ export class LineBreaker {
   readonly previousLineHadForcedBreak: boolean
   readonly shapeResults = new Map<number, ShapeResult>()
   untestedEnds: number[] = []
+  clampedStarts: { start: number; limit: GapName }[] = []
   endTests: EndTest[] = []
   truncatedStarts: number[] = []
 
@@ -372,6 +377,7 @@ export class LineBreaker {
     return {
       decisionEnd,
       untestedEnds: this.untestedEnds,
+      clampedStarts: this.clampedStarts,
       endTests: this.endTests,
       truncatedStarts: this.truncatedStarts,
       breaksInsideWords: breakType === 'break-character' || breakType === 'break-all',
@@ -612,7 +618,19 @@ export class LineBreaker {
       const firstSafePosition = positionForOffset(sh, sr, firstSafe)
       lineStartResult = reshape(sh, item.group, start, firstSafe, true)
       const oldWidth = flip(firstSafePosition - startPosition)
-      const diff = oldWidth - luCeil(widthOf16(lineStartResult.call.width16))
+      const reshaped = luCeil(widthOf16(lineStartResult.call.width16))
+      const diff = oldWidth - reshaped
+      // The end position is the first safe offset's position plus the space less the reshape, whatever the start's position
+      // is, unless the corrected space is clamped at 0: then it is the start's position itself and nothing fits. The start
+      // of a wrapped line inside a joined word is a stand-in (positionLimit), so whether the clamp applies rests on it where
+      // the reshape alone takes the space: natively `ب` before SHY, kasra and `ب` in Amiri is 117 units wider in the
+      // paragraph than the form U+200D gives, the last `ب` 228 narrower than reshaped, the space of 129 is clamped and the
+      // line overflows at SHY, where the port's 111 left 18 units (c-909a7a77bad03225).
+      if (sr.kind === 'group' && (availableSpace - reshaped <= 0 || availableSpace + diff <= 0)) {
+        const group = sh.p.groups[sr.group]!
+        const limit = positionLimit(sh, sr.group, start, group.start, group.end)
+        if (limit !== null && !this.clampedStarts.some(c => c.start === start)) this.clampedStarts.push({ start, limit })
+      }
       if (diff !== 0) availableSpace = Math.max(availableSpace + diff, 0)
     }
     const endPosition = startPosition + flip(availableSpace)

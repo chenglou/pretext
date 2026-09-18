@@ -150,8 +150,20 @@ function runsOf(item: TextItem): Run[] {
 // font the facts don't name may draw any cluster in a run of its own; Blink's view may have other parts,
 // BlinkGlyphCluster.graphemesLimit), each run edge it can't place moves the sum by at most half a float32 step at that
 // size, and a value whose LayoutUnit edges that can change is limited.
-function floatLimit(value: number, unknownEdges: number): Limit {
+//
+// A float32 holds 24 bits, so sums of multiples of 2^g units of 16.16 are exact below 2^(24 + g) units, wherever the runs
+// are: a 2048-unit font at a whole zoomed size of 32 px has advances in multiples of 1024 units, exact below 2^18 px.
+function floatLimit(item: TextItem, value: number, unknownEdges: number): Limit {
   if (unknownEdges === 0 || value < 256) return null
+  let bits = 0
+  for (let c = 0; c < item.clusters.length; c++) {
+    const cluster = item.clusters[c]!
+    bits |= cluster.advance
+    // A caret inside a cluster adds shares of its advance.
+    if (cluster.graphemeStarts.length > 1) bits |= Math.trunc(cluster.advance / cluster.graphemeStarts.length)
+  }
+  const granularity = bits === 0 ? 2 ** 31 : bits & -bits
+  if (value * 65536 < 2 ** 24 * granularity) return null
   const slack = unknownEdges * 2 ** (Math.floor(Math.log2(value)) - 23) / 2
   const low = (value - slack) * 64
   const high = (value + slack) * 64
@@ -175,7 +187,7 @@ function caret(item: TextItem, limits: ItemLimits, offset: number, adjust: 'star
       width = f32(width + f32(runs[r]!.width16 / 65536))
       if (!runs[r]!.fontsKnown) unknown += runs[r]!.last - runs[r]!.first
     }
-    return { value: width, limit: limits.size ?? floatLimit(width, unknown) }
+    return { value: width, limit: limits.size ?? floatLimit(item, width, unknown) }
   }
   // The runs visually before the one that counts the character as its own.
   let x = 0
@@ -220,7 +232,7 @@ function caret(item: TextItem, limits: ItemLimits, offset: number, adjust: 'star
   const counted = cluster.graphemesLimit !== undefined && (rtl || offset > cluster.textStart) ? cluster.graphemesLimit : null
   const limit = (shares === 0 ? left : graphemes === 1 ? right : left ?? right) ?? counted
   const value = f32(f32(accumulated / 65536) + x)
-  return { value, limit: limit ?? floatLimit(value, unknown) }
+  return { value, limit: limit ?? floatLimit(item, value, unknown) }
 }
 
 // FragmentItem::LocalRect with LineLeftAndRightForOffsets (fragment_item.cc:1201-1235, 1132-1199), relative to the item.
