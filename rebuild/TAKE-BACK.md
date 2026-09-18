@@ -173,9 +173,10 @@ context, at the CSS size and at the device size, shows whether the color glyph i
     H34).
   - Main's generated data already has HH.
   - **Action:** add to "Breaks And Source Positions" if main ever breaks after a line-initial hyphen.
-- **Chrome tab stops use the platform space advance without `trak` tracking.** 16px Helvetica Neue stops at multiples
-  of 35.5859375px, not 8 × Canvas's 4.453125px (`simple_font_data.cc:225-240`; blink follow-up F4). This affects fonts
-  with `trak` (Helvetica Neue, SF). **Action:** a RESEARCH note.
+- **Chrome tab stops are 8 × Canvas's space advance, rounded up to 1/128px at DPR 2.** 16px Helvetica Neue stops at
+  multiples of 35.5859375px, which is 8 × 4.447998px, Canvas's space advance. The 4.453125px an earlier version of this
+  note compared it with was the DOM's rounded space, not Canvas's, so there is no `trak` difference to model
+  (rebuild/platform-bugs/LEDGER.md, "Looked at and not reported"). **Action:** none.
 - **Kerning across spaces in Chrome without turning on features.** Blink maps U+2028 to the space glyph and doesn't
   end a Canvas word at it (`plain_text_node.cc:49-60, 89-90`; `harfbuzz_face.cc:110-113`). So a Canvas string with
   U+2028 in place of each U+0020 gives the one-call HarfBuzz total, legacy `kern` fonts included (blink-gaps §3.3).
@@ -217,7 +218,7 @@ context, at the CSS size and at the device size, shows whether the color glyph i
 | PLATFORM_BUGS, keep-all punctuation (WebKit #312099) | Shipped in Safari 27.0 for 16-bit strings only; 8-bit strings keep the old rule (`R/BreakablePositions.h:292-299`). | section 1; probes-safari webkit-text H15, webkit-canvas H14; verified in installed Safari | Update the row; see 5.2. |
 | PLATFORM_BUGS, 1/64px Safari line-fit allowance | Explained by source (2.4). | specs/webkit-lines.md §1.4; webkit-lines H1, H2, verified in installed Safari | Move to "Investigated, but not platform bugs". |
 | PLATFORM_BUGS, "Investigated" bullet on Firefox OffscreenCanvas language | A page OffscreenCanvas follows `<html lang>` at its next measurement. A worker's OffscreenCanvas follows the macOS locale (zh-Hans here), not `navigator.languages` (en-US) or the page. | probes-firefox gecko-canvas H9, H10 | Refine the bullet. |
-| PLATFORM_BUGS, new rows | WebKit page history and string storage (5.1, 5.2); Firefox's text-presentation emoji state (5.5). | section 5 | Add as `Unfiled` until reported. |
+| PLATFORM_BUGS, new rows | WebKit page history and string storage (5.1, 5.2); Firefox's text-presentation emoji state (5.5). WebKit #230339 (tab stops use the font of the inline box that holds the tab, open since 2021) as an existing report. | section 5; rebuild/platform-bugs/LEDGER.md facet F | Add as `Unfiled` until reported; #230339 with its number. |
 | RESEARCH | Section 2.6 items. | above | Add where named. |
 | README | No change needed now. The `system-ui`, fractional-size and page-language caveats hold. If 2.1 lands, no control-character caveat is needed. | — | none |
 
@@ -262,7 +263,9 @@ context, at the CSS size and at the device size, shows whether the color glyph i
 
 ## 5. Candidate platform bug reports
 
-Search each tracker first; none of these was searched tonight.
+rebuild/platform-bugs/LEDGER.md (2026-09-18) reduces these to standalone pages, checked in the three lab browsers, ranks
+them, adds what was found since, and says which are facets of tracked bugs. Nothing has been filed. WebKit's and Mozilla's
+trackers were searched there by summary keywords; issues.chromium.org wasn't. Search again before filing.
 
 | # | Browser | Behaviour | Minimal repro | Evidence |
 |---|---|---|---|---|
@@ -270,17 +273,18 @@ Search each tracker first; none of these was searched tonight.
 | 5.2 | WebKit | Line breaking depends on whether a text node is stored 8-bit, which follows where the string came from. Keep-all breaks after punctuation, and the first-unit emergency break, happen only in 16-bit text. | `abcd,efghé`, keep-all, 16px Menlo, 50px: 1 line when the text comes from a JS literal, 2 lines when it comes from `fetch(…).json()` of a body that also holds `中`. | probes-safari cross-check item 2 (`.artifacts/probes/webkit-crosscheck-storage/`, `-payload/`); `.artifacts/lab/verify-8bit/`; `R/BreakablePositions.h:292-299`, `L/InlineContentBreaker.cpp:143`. Verified in installed Safari |
 | 5.3 | Chrome | `system-ui` DOM widths depend on which text created the platform font first. Comment on Chromium #489579956. | Fresh browser: Canvas 20px `system-ui`, then DOM 10px (52.6796875px); fresh browser in the other order: 54.140625px. | probes-chrome cross X5 "cache order" |
 | 5.4 | WebKit | OffscreenCanvas `letterSpacing` keeps optional ligatures that DOM text turns off at any non-zero spacing. | 32px Hoefler Text `ffi fl` at 0.001px: Canvas 54.403px, DOM 57.414px. | probes-safari webkit-canvas H3, H4, CRITIC C13, cross-cutting 3; verified in installed Safari |
-| 5.5 | Firefox | After text shows U+1F600 U+FE0E, later U+1F600 in Arial draws the text glyph in DOM text and in new OffscreenCanvas contexts. An explicit `"Apple Color Emoji"` context isn't affected. The cause wasn't traced; asynchronous fallback was ruled out (F1). | Measure `😀︎` in an OffscreenCanvas, then measure `😀` in a new context at 32px Arial, and lay out `😀` in 16px Arial. | gecko probes F1-F3 (`.artifacts/probes/gecko/followups/`, `followups-f2/`, `emoji-font/`); `.artifacts/lab/gecko/audit/debug-fe0e/` |
+| 5.5 | Firefox | After U+1F600 U+FE0E is shaped once in a new content process, plain U+1F600 in Arial is a missing-glyph box (17px at 32px, no colour), not a text glyph, in DOM text and in new OffscreenCanvas contexts, until the asynchronous character-map loader finishes; 3 seconds later both are the 32px colour emoji again and the DOM has reflowed. A Canvas width taken in between stays wrong. An explicit `"Apple Color Emoji"` context isn't affected. Cause read in source, not confirmed with a debugger: the failed search for a text-style font records the code point as having no font (`gfxPlatformFontList.cpp:1321-1323`, `:1479-1486`), and `FindFontForChar` returns early for it (`gfxTextRun.cpp:3524-3531`). | `rebuild/platform-bugs/pages/firefox-emoji-missing-after-text-presentation.html` in a newly started browser. | LEDGER entry 10 (7 of 7 fresh processes); gecko probes F1-F3 (`.artifacts/probes/gecko/followups/`, `followups-f2/`, `emoji-font/`); `.artifacts/lab/gecko/audit/debug-fe0e/` |
 | 5.6 | Firefox | OffscreenCanvas `wordSpacing` spaces U+3000 and not NBSP; DOM `word-spacing` spaces NBSP and not U+3000 (`gfxFont.cpp:749-750`). | 16px Georgia with 10px spacing: `a b` against `a　b`, in Canvas and DOM. | probes-firefox gecko-canvas H16, gecko-lines H7 |
 | 5.7 | Firefox | OffscreenCanvas draws hexboxes for C0 controls that DOM text and a connected canvas hide, and splits a word at bidi controls that the DOM removes. An OffscreenCanvas has no pres context (`nsBidiPresUtils.cpp:2249-2252`). | 18px Arial: `A` LRM `V` measures A + V (24px) against DOM `AV` (22.6667px); `a` U+0001 `b` measures 30.03px against 17.03px. | probes-firefox gecko-canvas H12, H13 |
 | 5.8 | Firefox | OffscreenCanvas never applies automatic optical sizing. Comment on Mozilla #2020917. | 14px `-apple-system` pangram: Canvas 251.7167px, DOM 289.15px, DOM with `font-optical-sizing: none` 251.7167px. | probes-firefox gecko-canvas H8 |
 | 5.9 | Firefox | Canvas `letterSpacing` adds spacing after cursive-script bases, where the DOM adds none, and turns ligatures off at spacing the DOM rounds to 0 app units. Check the Canvas spec wording before filing. | 24px Geeza Pro `بيت`: Canvas at 2px is 6px wider than at 0.001px; DOM at 2px equals DOM at 0. | probes-firefox gecko-canvas H14, H15 |
 | 5.10 | Chrome, Firefox | Comment with the device-size formulas of 2.3 on Chromium #489494015 and Mozilla #2020894. | as in 2.3 | probes-chrome X1; probes-firefox cross-cutting 1 |
 | 5.11 | WebKit | OffscreenCanvas has no locale (existing WebKit #285993). Add the probe: under `ko`, 32px `sans-serif` `永骨` is 64px in Canvas and 55.36px in DOM text. A connected `<canvas>` without its own `lang` equals the DOM. | as stated | probes-safari cross-cutting 4, webkit-canvas H7; verified in installed Safari |
-| 5.12 | Chrome | Tab stops use the untracked platform space advance. Possibly by design; weak candidate. | 16px Helvetica Neue `pre`: stops at 35.5859375px against 8 × Canvas's space advance of 4.453125px. | blink follow-up F4 |
 
 Not bug reports:
 
+- Chrome's tab stops (5.12 in an earlier version of this list): withdrawn. The interval is 8 × Canvas's space advance
+  (2.6).
 - Servo's 10-bit font-size quantization is intentional.
 - Canvas replacing U+0009-U+000D with spaces follows the HTML canvas text preparation steps, except that VT isn't ASCII
   white space.
