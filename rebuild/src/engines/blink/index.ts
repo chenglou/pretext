@@ -7,7 +7,7 @@ import { indexContent } from '../../content.js'
 import type { BlinkEnvironment } from '../../env.js'
 import type { Measurer } from '../../measure/canvas.js'
 import type {
-  BlinkGlyphCluster, BlinkItem, BlinkLine, BlinkLineGeometry, BlinkLineResult, BlinkMappingUnit, Fragment, Gap, LineSlot, Paragraph, TextAlign,
+  BlinkGlyphCluster, BlinkItem, BlinkLine, BlinkLineGeometry, BlinkLineResult, BlinkMappingUnit, BlinkShapeRun, Fragment, Gap, LineSlot, Paragraph, TextAlign,
 } from '../../model.js'
 import { graphemeBoundaries, graphemeRulesFor } from '../../unicode/grapheme.js'
 import type { EngineImplementation } from '../engine.js'
@@ -22,7 +22,7 @@ import { USCRIPT_LATIN, isCjkIdeographOrSymbol, isDefaultIgnorable, isExtendedPi
 import { scriptsPerUnit } from './script.js'
 import {
   adjust16, ceilFrom16, isSegmentEdge, positionAdjust16, graphemeSourceRange, groupPrefix16, isClusterBoundary, joinsAcross, luCeil, startsClusterInsideGrapheme, GRAPHEME_CLUSTERS_DETAIL, luTrunc, measureGroups,
-  pairAdjust16, pairAdjustNoLigatures16, positionLimit, styleContexts, viewPositionLimit, viewPrefix16, widthOf16, type Shaper, type View,
+  isFontRunEdge, pairAdjust16, pairAdjustNoLigatures16, partGraphemeStarts, partPrefix16, partWidth16, positionLimit, requeuedSpaceAt, styleContexts, viewPositionLimit, viewPrefix16, widthOf16, type Shaper, type View,
 } from './shape.js'
 import type { BlinkGroup, BlinkLineStart, BlinkPrepared } from './types.js'
 
@@ -120,6 +120,10 @@ const UNCERTAIN_LIGATURE_DETAIL = 'a ligature the font declaration lists as form
 const TRUNCATED_START_DETAIL = 'a wrapped line start inside an RTL shaping run that the port\'s width tests call safe, in an item result the line cuts again at its trailing spaces: where HarfBuzz flags the start unsafe (contextual lookups and ligatures before it that change no width), Blink reshapes it, joins the reshape and the rest in one view whose parts it numbers in visual order, and the cut gives the first cluster\'s glyph to the part after it (shape_result_view.cc:215-308)'
 
 const UNTESTED_END_DETAIL = 'a later break opportunity whose line-end reshape failed the fit test: every safe offset the port found between the line start and it is safe by the pair test alone, and where HarfBuzz flags them all (contextual lookups that change no width, as Shantell Sans\'s alternates do) Blink reshapes the whole range and takes the opportunity without a fit test (shaping_line_breaker.cc:497-506)'
+
+const REQUEUED_SPACE_DETAIL = 'a line edge beside U+3000 where Canvas totals show an adjustment, in a font the declaration gives no coverage fact for: a font without U+3000 shapes its neighbours beside the space glyph HarfBuzz puts there, and Blink sends U+3000 itself to a fallback font (harfbuzz_shaper.cc:598-606), so the neighbour keeps its part of the kern, U+3000 none, and the offset is a run edge that is never reshaped; a font with U+3000 kerns it like any glyph'
+
+const END_TEST_DETAIL = 'a break opportunity whose line-end reshape passed or failed the fit test by less than the rounding of the last safe offset\'s position: Blink reshapes from the last offset HarfBuzz left safe and tests the width after that position\'s ceiling (shaping_line_breaker.cc:543-553), HarfBuzz can flag offsets the port\'s width tests call safe (contextual lookups that change no width), and from an earlier safe offset the same glyphs pass or fail by another ceiling'
 
 const SOFT_HYPHEN_DETAIL = 'a default-ignorable character left out of an 8-bit Canvas string, whose glyph a `morx` substitution across it still sees in the DOM (hb-aat-layout-common.hh:1226-1241)'
 
@@ -226,6 +230,23 @@ function edgeGap(sh: Shaper, k: number, fromPosition: boolean, margin: number): 
   const wide = adjust16(sh, g, k, group.start, group.end)
   const pair = pairAdjust16(sh, g, k, group.start, group.end)
   const at = sourceOffsetAt(p, k)
+  // Beside U+3000 in a font that lacks it, k is a run edge, safe to break, and the cluster on its other side carries the
+  // adjustment (shape.ts requeuedSpaceAt). Where the facts don't name that cluster's font, an adjustment there is placed by
+  // the pairKerning rule, which is wrong if U+3000 went to a fallback font.
+  switch (requeuedSpaceAt(p, k, group.start, group.end)) {
+    case 'start': case 'end': return
+    case 'unknown':
+      if (pair !== 0) {
+        let a = k - 1
+        while (a > group.start && !isClusterBoundary(p, a)) a--
+        let b = k + 1
+        while (b < group.end && !isClusterBoundary(p, b)) b++
+        addGap(sh.gaps, 'font-fallback', run, REQUEUED_SPACE_DETAIL, sourceRange(p, a, b))
+        return
+      }
+      break
+    case null: break
+  }
   // The shaping adjusted glyphs across the chosen edge: a ligature may merge the clusters on both sides into one glyph,
   // which Blink never breaks inside (OffsetToFit with BreakGlyphsOption(false), shape_result.cc:684-694; lam-alef in Apple
   // fonts, research/SUPERSET-blink.md §2.2 F), and Canvas totals can't tell a ligature from a kern (DESIGN.md §5
@@ -353,6 +374,21 @@ function lineEdgeGaps(sh: Shaper, info: LineInfo, start: BlinkLineStart): void {
     const end = info.untestedEnds[i]!
     if (end > contentEnd) addGap(sh.gaps, 'in-word-prefix', runAt(p, contentEnd), UNTESTED_END_DETAIL, sourceRange(p, contentEnd, end))
   }
+  // A line-end fit test that another last safe offset could turn around (line-breaker.ts EndTest): an opportunity past the
+  // line's end that the port gave up, or the one the line ends at.
+  let lineEnd = -1
+  for (let i = info.results.length - 1; i >= 0 && lineEnd < 0; i--) {
+    const r = info.results[i]!
+    if (p.items[r.itemIndex]!.type === 'text' && r.shape !== null && !r.hasOnlyPreWrapTrailingSpaces) lineEnd = r.trimmedEnd >= 0 ? r.trimmedEnd : r.end
+  }
+  for (let i = 0; i < info.endTests.length; i++) {
+    const test = info.endTests[i]!
+    if (!test.fits && test.offset > contentEnd) addGap(sh.gaps, 'in-word-prefix', runAt(p, contentEnd), END_TEST_DETAIL, sourceRange(p, contentEnd, test.offset))
+    // A rewind can drop the item a test was in: only the test of the end the line kept counts.
+    if (test.fits && test.offset === lineEnd && test.from >= start.textOffset && test.from < test.offset) {
+      addGap(sh.gaps, 'in-word-prefix', runAt(p, test.from), END_TEST_DETAIL, sourceRange(p, test.from, test.offset))
+    }
+  }
   // A wrapped line start inside an RTL shaping run that the port's tests call safe, in an item result the line cut again:
   // where HarfBuzz flags the start, Blink's view joins the reshaped start and the rest, numbers its parts in visual order,
   // and the later cut gives the first letter's glyph to the part after it (shape_result_view.cc:215-308, class 3 of
@@ -385,7 +421,7 @@ function lineEdgeGaps(sh: Shaper, info: LineInfo, start: BlinkLineStart): void {
     // A line end before a space isn't reshaped (dont_reshape_end_if_at_space, line_breaker.cc:255-268) unless the line
     // needs an accurate end position.
     edgeGap(sh, k, isSpaceLB(p.text.charCodeAt(k)) && !info.needsAccurateEndPosition, margin)
-    if (k < spacesEnd && isSpaceLB(p.text.charCodeAt(spacesEnd - 1))) edgeGap(sh, spacesEnd, true, margin)
+    if (k < spacesEnd && (isSpaceLB(p.text.charCodeAt(spacesEnd - 1)) || p.text.charCodeAt(spacesEnd - 1) === 0x3000)) edgeGap(sh, spacesEnd, true, margin)
     return
   }
 }
@@ -630,30 +666,78 @@ function indicesInVisualOrder(levels: number[]): number[] {
   return map
 }
 
-// The glyph clusters of text_content[a, b) in a result's view, logical order: a cluster starts at every unit HarfBuzz
-// doesn't mark as a continuation, and the item's edges cut clusters (ShapeResultView slices at character indices).
-// Advances are the view's prefix differences, Canvas stand-ins for HarfBuzz's glyph advances.
-function clustersOf(sh: Shaper, view: View, a: number, b: number, justification: { start: number; add16: number }[] = []): BlinkGlyphCluster[] {
+// A text or tab item's shape as Blink's caret code reads it (FragmentItem::LineLeftAndRightForOffsets,
+// fragment_item.cc:1132-1199): the glyph clusters and the runs of the ShapeResult it copies from the result's view, in
+// logical order. A cluster starts at every unit HarfBuzz doesn't mark a continuation, and a view's part holds the clusters
+// that start in its range (ShapeResultView slices at character indices). Advances are prefix differences inside the part's
+// own shaping call, Canvas stand-ins for HarfBuzz's glyph advances.
+//
+// The caret code finds a character by counting the runs' characters (ShapeResult::PositionForOffset,
+// shape_result.cc:696-733), so a part's characters sit where the parts before it end, whatever text its glyphs came from.
+// That is the glyphs' own text except in an RTL view cut again after ShapeResultView::Create numbered its parts in visual
+// order (viewFromSegments): `نِ` and a trimmed space at a wrapped line start in Geeza Pro keep the space's glyph in the cut
+// view, natively the letter reports the letter's and its mark's glyphs, 1640 units, and the mark the space's 959
+// (c-8768b30f8733ee4c).
+function shapeOf(sh: Shaper, view: View, a: number, b: number, partsKnown: boolean, rtl: boolean, justification: { start: number; add16: number }[] = []): { clusters: BlinkGlyphCluster[]; runs: BlinkShapeRun[] } {
   const p = sh.p
   const clusters: BlinkGlyphCluster[] = []
+  const runs: BlinkShapeRun[] = []
   const extra = new Map<number, number>()
   for (let i = 0; i < justification.length; i++) extra.set(justification[i]!.start, justification[i]!.add16)
-  let start = a
-  let before = viewPrefix16(sh, view, a)
-  for (let k = a + 1; k <= b; k++) {
-    if (k < b && (p.continuations[k] === 1 || p.ligature[k] === LIGATURE_MERGED)) continue
-    if (k < b && startsClusterInsideGrapheme(p, k)) addGap(sh.gaps, 'glyph-clusters', runAt(p, k), GRAPHEME_CLUSTERS_DETAIL, graphemeSourceRange(p, k))
-    const graphemeStarts = [start]
-    for (let x = start + 1; x < k; x++) if (p.graphemeStarts[x] === 1) graphemeStarts.push(x)
-    const after = viewPrefix16(sh, view, k)
-    const cluster: BlinkGlyphCluster = { textStart: start, textEnd: k, graphemeStarts, advance: after - before + (extra.get(start) ?? 0) }
-    const limit = start > a ? viewPositionLimit(sh, view, start) : null
-    if (limit !== null) cluster.startLimit = limit
-    clusters.push(cluster)
-    before = after
-    start = k
+  // PositionForOffset counts the characters from the item's visual start, the logical end in RTL: where the parts count
+  // fewer characters than the item has, the ones left over are the first in RTL and the last in LTR, and no run holds them.
+  let counted = 0
+  for (let n = 0; n < view.parts.length; n++) counted += Math.max(0, view.parts[n]!.length)
+  let position = rtl && counted < b - a ? b - counted : a
+  let pending = 0
+  for (let n = 0; n < view.parts.length; n++) {
+    const part = view.parts[n]!
+    const characters = Math.min(part.length, b - position)
+    if (characters <= 0) {
+      // A part without characters of its own keeps its glyphs: they widen the cluster next to it.
+      if (clusters.length > 0) clusters[clusters.length - 1]!.advance += partWidth16(sh, part)
+      else pending += partWidth16(sh, part)
+      continue
+    }
+    const listed = partGraphemeStarts(sh, view, part, position)
+    const shift = position - part.start
+    const group = part.kind === 'reshape' ? part.call.group : part.sr.kind === 'group' ? part.sr.group : -1
+    const reshaped = part.kind === 'reshape' ? { textStart: part.call.start, textEnd: part.call.end } : null
+    const limit = part.start + characters
+    let runStart = part.start
+    let fontsKnown = true
+    const endRun = (end: number): void => {
+      runs.push({ textStart: runStart + shift, textEnd: end + shift, reshaped, fontsKnown })
+      runStart = end
+      fontsKnown = true
+    }
+    let start = part.start
+    for (let k = part.start + 1; k <= limit; k++) {
+      if (k < limit && k < part.end && (p.continuations[k] === 1 || p.ligature[k] === LIGATURE_MERGED)) continue
+      if (k < limit && k >= part.end) continue
+      if (k < limit && startsClusterInsideGrapheme(p, k)) addGap(sh.gaps, 'glyph-clusters', runAt(p, k), GRAPHEME_CLUSTERS_DETAIL, graphemeSourceRange(p, k))
+      const graphemeStarts = [start + shift]
+      for (let x = start + 1; x < k; x++) if (listed === null ? p.graphemeStarts[x] === 1 : listed[x - part.start] === 1) graphemeStarts.push(x + shift)
+      // The part's last cluster takes every glyph the part still holds (a cluster cut by the part's end goes to the part
+      // holding its start).
+      const advance = (k >= limit ? partWidth16(sh, part) : partPrefix16(sh, part, k)) - partPrefix16(sh, part, start) + (extra.get(start) ?? 0) + pending
+      pending = 0
+      const cluster: BlinkGlyphCluster = { textStart: start + shift, textEnd: k + shift, graphemeStarts, advance }
+      const startLimit = shift === 0 && start > a ? viewPositionLimit(sh, view, start) : null
+      if (startLimit !== null) cluster.startLimit = startLimit
+      let codePoints = 0
+      for (let x = start; x < k; x++) if ((p.text.charCodeAt(x) & 0xfc00) !== 0xdc00) codePoints++
+      if (rtl && !partsKnown && codePoints > 1) cluster.graphemesLimit = 'in-word-prefix'
+      clusters.push(cluster)
+      if (group >= 0 && p.fontRun[start]! < 0) fontsKnown = false
+      // Another HarfBuzz run starts at k: a script segment, or a stretch another font draws.
+      if (k < limit && group >= 0 && (isSegmentEdge(p, k) || isFontRunEdge(p, k, p.groups[group]!.start, p.groups[group]!.end))) endRun(k)
+      start = k
+    }
+    endRun(limit)
+    position += characters
   }
-  return clusters
+  return { clusters, runs }
 }
 
 // LineOffsetForTextAlign (length_utils.cc:1607-1655).
@@ -910,9 +994,11 @@ function itemsOf(sh: Shaper, info: LineInfo, hangWidth: number, alignOffset: num
         // Empty or fully collapsed text makes no fragment item (:215-223).
         if (r.end === r.start) break
         const hyphen = r.isHyphenated ? r.hyphen!.inlineSize : 0
-        const textItem: BlinkItem = { kind: 'text', run: item.run, textStart: r.start, textEnd: r.end, level: item.bidiLevel, x: 0, inlineSize: r.inlineSize - hyphen, clusters: clustersOf(sh, r.shape!, r.start, r.end, r.justification) }
+        const shape = shapeOf(sh, r.shape!, r.start, r.end, r.partsKnown, (item.bidiLevel & 1) === 1, r.justification)
         const sizeLimit = viewPositionLimit(sh, r.shape!, r.end)
-        if (sizeLimit !== null) textItem.sizeLimit = sizeLimit
+        const textItem: BlinkItem = sizeLimit === null
+          ? { kind: 'text', run: item.run, textStart: r.start, textEnd: r.end, level: item.bidiLevel, x: 0, inlineSize: r.inlineSize - hyphen, clusters: shape.clusters, runs: shape.runs, partsKnown: r.partsKnown }
+          : { kind: 'text', run: item.run, textStart: r.start, textEnd: r.end, level: item.bidiLevel, x: 0, inlineSize: r.inlineSize - hyphen, clusters: shape.clusters, runs: shape.runs, partsKnown: r.partsKnown, sizeLimit }
         leaf(textItem, level, 0, r.inlineSize - hyphen)
         if (r.isHyphenated) leaf({ kind: 'hyphen', run: item.run, level: item.bidiLevel, x: 0, inlineSize: hyphen }, item.bidiLevel, 0, hyphen)
         break
@@ -922,7 +1008,7 @@ function itemsOf(sh: Shaper, info: LineInfo, hangWidth: number, alignOffset: num
         switch (item.control) {
           case 'tab':
             if (r.end === r.start) break
-            leaf({ kind: 'tab', run: item.run, textStart: r.start, textEnd: r.end, level: item.bidiLevel, x: 0, inlineSize: r.inlineSize, clusters: clustersOf(sh, r.shape!, r.start, r.end, r.justification) }, level, 0, r.inlineSize)
+            leaf({ kind: 'tab', run: item.run, textStart: r.start, textEnd: r.end, level: item.bidiLevel, x: 0, inlineSize: r.inlineSize, clusters: shapeOf(sh, r.shape!, r.start, r.end, true, (item.bidiLevel & 1) === 1, r.justification).clusters }, level, 0, r.inlineSize)
             break
           case 'forced-break':
             if (r.end === r.start) break

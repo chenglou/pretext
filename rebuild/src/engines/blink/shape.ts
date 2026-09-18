@@ -31,7 +31,8 @@ import {
   HAN_CLOSE, HAN_OPEN, USCRIPT_COMMON, USCRIPT_INHERITED, USCRIPT_LATIN, isCjkIdeographOrSymbol, isCjkIdeographOrSymbolBase, isCursiveScript,
   isDefaultIgnorable, isEmojiComponent, isExtendedPictographic, isMarkOrModifier, isWhiteSpace, joiningType, scriptExtensionsOf, scriptOf,
 } from './props.js'
-import { LIGATURE_MERGED, LIGATURE_NONE } from './ligatures.js'
+import { LIGATURE_MERGED, LIGATURE_NONE, listedFontCovers } from './ligatures.js'
+import { graphemeBoundaries, graphemeRulesFor } from '../../unicode/grapheme.js'
 import { scriptsPerUnit } from './script.js'
 import type { BlinkPrepared, BlinkStyle, StyleContexts } from './types.js'
 
@@ -526,6 +527,45 @@ export function isSegmentEdge(p: BlinkPrepared, k: number): boolean {
   return p.scripts[k] !== p.scripts[k - 1] || p.priorities[k] !== p.priorities[k - 1]
 }
 
+// A font that lacks U+3000 gets it from HarfBuzz as the font's space glyph (the normalizer's space fallback,
+// hb-ot-shape-normalize.cc:174-186 at harfbuzz dfdc088c), and Blink counts that glyph as missing unless the font is the last
+// one to try: "HarfBuzz synthesizes U+3000 IDEOGRAPHIC SPACE using the space glyph. This is not desired for run-splitting"
+// (HarfBuzzShaper::ExtractShapeResults, harfbuzz_shaper.cc:598-606). So the character goes to a fallback font, whose glyph
+// has its own advance, while the clusters next to it keep what that pass gave them beside a space glyph: in Times New Roman
+// `T` after U+3000 keeps the second glyph's part of the (space, T) kern, 18.5 units at 32 px, and U+3000 is one em
+// (c-0ee8c36920378f9f). Canvas shapes the same way, so its totals hold the same advances.
+//
+// For offset k inside a shaping call, where U+3000 starts or ends: whether the pass that shaped the cluster on the other side
+// of k drew U+3000 with its space glyph, by the coverage fact of the listed family that draws that cluster. 'start': U+3000
+// starts at k and the cluster before k keeps the whole adjustment across k; 'end': U+3000 ends at k and the cluster after k
+// keeps it. 'unknown' where the facts don't name that cluster's font; null where k isn't such an offset or the font maps
+// U+3000 itself.
+export function requeuedSpaceAt(p: BlinkPrepared, k: number, lo: number, hi: number): 'start' | 'end' | 'unknown' | null {
+  if (k <= lo || k >= hi) return null
+  const startsHere = p.text.charCodeAt(k) === 0x3000
+  const endsHere = p.text.charCodeAt(k - 1) === 0x3000
+  if (startsHere === endsHere) return null
+  const neighbour = startsHere ? clusterStartAtOrBefore(p, k - 1, lo) : k
+  const g = p.groupOfUnit[neighbour]!
+  if (g < 0) return null
+  const covered = listedFontCovers(p.styles[p.groups[g]!.style]!.font.facts.fonts, p.fontRun[neighbour]!, 0x3000)
+  if (covered === null) return 'unknown'
+  if (covered) return null
+  return startsHere ? 'start' : 'end'
+}
+
+// Whether a HarfBuzz run starts at offset k by the declaration's coverage facts: every stretch one font draws is a run of its
+// own (CommitGlyphs per slice, harfbuzz_shaper.cc:560-700), and a run's first glyph is safe to break before whatever
+// HarfBuzz flagged (SafeToBreakBefore, shape_result.cc:1361-1369).
+export function isFontRunEdge(p: BlinkPrepared, k: number, lo: number, hi: number): boolean {
+  if (k <= lo || k >= hi || !isClusterBoundary(p, k)) return false
+  const state = requeuedSpaceAt(p, k, lo, hi)
+  if (state === 'start' || state === 'end') return true
+  const before = p.fontRun[clusterStartAtOrBefore(p, k - 1, lo)]!
+  const after = p.fontRun[k]!
+  return before >= 0 && after >= 0 && before !== after
+}
+
 // A HarfBuzz glyph cluster starts at a unit that isn't a continuation (hb_form_clusters, hb-ot-shape.cc:578-586). Blink gives
 // every character that isn't a cluster base the cluster's position and never marks it safe to break before
 // (ShapeResult::ComputePositionData, shape_result.cc:2113-2200; CachedOffsetForPosition, :2261-2323). HarfBuzz marks a mark
@@ -726,13 +766,49 @@ export function measureGroups(sh: Shaper): void {
   }
 }
 
+// hb_script_get_horizontal_direction (hb-common.cc:520-612 at harfbuzz dfdc088c) over UScriptCode numbers
+// (unicode/uscript.h): the scripts HarfBuzz shapes right to left, and the ones it gives no direction (Old Hungarian, Old
+// Italic, Runic, Tifinagh). Every other script is left to right.
+const RTL_SCRIPTS = new Set([2, 19, 34, 37, 47, 57, 84, 86, 87, 88, 91, 108, 116, 117, 121, 122, 123, 125, 126, 133, 140, 141, 142, 143, 144, 162, 167, 182, 183, 184, 185, 189, 192, 194, 201, 209])
+const NO_DIRECTION_SCRIPTS = new Set([30, 32, 60, 76])
+
+// Whether HarfBuzz shapes the call holding offset k of group g over the reversed text. A buffer whose direction isn't its
+// script's own is reversed by graphemes and shaped in the script's direction (hb_ensure_native_direction,
+// hb-ot-shape.cc:588-644): quotes or Latin letters in an RTL run are shaped left to right in visual order, so the first
+// glyph of a pair is the logically later one. An LTR run under an RTL script stays as it is when it holds a decimal digit or
+// a regional indicator and no letter (:593-630). Blink gives HarfBuzz the segment's script and the item's direction
+// (harfbuzz_shaper.cc:341-342). General categories are the running JavaScript engine's.
+function shapedReversed(p: BlinkPrepared, g: number, k: number): boolean {
+  const group = p.groups[g]!
+  const script = p.scripts[Math.min(k, group.end - 1)]!
+  if (NO_DIRECTION_SCRIPTS.has(script)) return false
+  let scriptRtl = RTL_SCRIPTS.has(script)
+  if (scriptRtl && !group.rtl) {
+    let a = k
+    while (a > group.start && !isSegmentEdge(p, a)) a--
+    let b = k + 1
+    while (b < group.end && !isSegmentEdge(p, b)) b++
+    const text = p.text.slice(a, b)
+    if (!/\p{L}/u.test(text) && /[\p{Nd}\u{1F1E6}-\u{1F1FF}]/u.test(text)) scriptRtl = false
+  }
+  return group.rtl !== scriptRtl
+}
+
 // The part of pair adjustment d between the clusters on both sides of an offset that the glyph before it carries
 // (FontFacts.pairKerning): all of it on the first glyph's advance, or kern >> 1 where the kern and kerx pair machine applies
 // it (hb-kern.hh:102-106). Where the fact isn't given, the first glyph's.
-export function pairBefore16(sh: Shaper, g: number, d: number): number {
+// Beside a U+3000 that went to a fallback font (requeuedSpaceAt) the cluster on the other side of k carries all of it.
+export function pairBefore16(sh: Shaper, g: number, d: number, k: number, lo: number, hi: number): number {
+  switch (requeuedSpaceAt(sh.p, k, lo, hi)) {
+    case 'start': return d
+    case 'end': return 0
+    case 'unknown': case null: break
+  }
+  // Where HarfBuzz shaped the reversed text, its first glyph is the cluster after k.
+  const reversed = shapedReversed(sh.p, g, k)
   switch (sh.p.styles[sh.p.groups[g]!.style]!.pairKerning) {
-    case 'split': return d >> 1
-    case 'first-advance': case null: return d
+    case 'split': return reversed ? d - (d >> 1) : d >> 1
+    case 'first-advance': case null: return reversed ? 0 : d
   }
 }
 
@@ -752,7 +828,7 @@ export function groupPrefix16(sh: Shaper, g: number, k: number): number {
     else hi = mid - 1
   }
   const d = positionAdjust16(sh, g, k, group.start, group.end)
-  const pair = pairBefore16(sh, g, d)
+  const pair = pairBefore16(sh, g, d, k, group.start, group.end)
   // prefixAtCut holds the whole adjustment at its cut, which belongs to both glyphs around it.
   let base = cuts[lo] === k ? group.prefixAtCut[lo]! - d + pair : group.prefixAtCut[lo]! + measure16(sh, g, cuts[lo]!, k, group.start, group.end) + pair
   // An open mark halted after the character before it carries the adjustment itself (ShouldKern), so it isn't before k.
@@ -840,7 +916,7 @@ export function positionBounds(sh: Shaper, sr: ShapeResult, k: number): [number,
   if (positionLimit(sh, sr.group, k, group.start, group.end) === null) return null
   const d = positionAdjust16(sh, sr.group, clusterStartAtOrBefore(sh.p, k, group.start), group.start, group.end)
   if (d === 0) return null
-  const before = prefix16(sh, sr, k) - pairBefore16(sh, sr.group, d)
+  const before = prefix16(sh, sr, k) - pairBefore16(sh, sr.group, d, clusterStartAtOrBefore(sh.p, k, group.start), group.start, group.end)
   const a = !sr.rtl ? ceilFrom16(before) : ceilFrom16(sr.width16 - before)
   const b = !sr.rtl ? ceilFrom16(before + d) : ceilFrom16(sr.width16 - before - d)
   return [Math.min(a, b), Math.max(a, b)]
@@ -860,6 +936,7 @@ export function safeToBreak(sh: Shaper, sr: ShapeResult, k: number): boolean {
       const group = sh.p.groups[sr.group]!
       if (k <= group.start) return group.startTrim16 === 0
       if (k >= group.end) return true
+      if (isFontRunEdge(sh.p, k, group.start, group.end)) return true
       return isClusterBoundary(sh.p, k) && !joinsAcross(sh.p, k, group.start, group.end) && adjust16(sh, sr.group, k, group.start, group.end) === 0 &&
         pairAdjust16(sh, sr.group, k, group.start, group.end) === 0
     }
@@ -899,22 +976,26 @@ export function positionForOffset(sh: Shaper, sr: ShapeResult, k: number): numbe
   return ceilFrom16(sr.width16 - prefix16(sh, sr, k))
 }
 
-// CachedOffsetForPosition (shape_result.cc:2261-2323), returning an absolute text_content offset.
-export function offsetForPosition(sh: Shaper, sr: ShapeResult, x: number): number {
+// CachedOffsetForPosition (shape_result.cc:2261-2323), returning an absolute text_content offset. `before` keeps the search
+// below that offset, for a caller that knows an exact position there lies past x (ShapeLine's out-of-order stand-ins).
+export function offsetForPosition(sh: Shaper, sr: ShapeResult, x: number, before: number = sr.end + 1): number {
   const length = sr.end - sr.start
   if (x <= 0) return sr.start + (!sr.rtl ? 0 : length)
-  if (f32(x / 64) >= widthOf16(sr.width16)) return sr.start + (!sr.rtl ? length : 0)
+  if (before > sr.end && f32(x / 64) >= widthOf16(sr.width16)) return sr.start + (!sr.rtl ? length : 0)
   // x_position[v] for visual index v: LTR the position of offset v, RTL the advance of the logical last v characters.
   // In RTL every character of a cluster takes the cluster's left edge: the advance after the cluster's end
   // (ComputePositionData, shape_result.cc:2113-2200).
   const xPosition = (v: number): number => !sr.rtl ? ceilFrom16(prefix16(sh, sr, sr.start + v))
     : ceilFrom16(sr.width16 - prefix16(sh, sr, v === 0 ? sr.end : sr.kind === 'group' ? clusterEndAfter(sh.p, sr.start + length - v - 1, sr.end) : sr.start + length - v))
-  let low = 0
-  let high = length - 1
+  // Visual indices of the offsets below `before`: the first ones in LTR, the last ones in RTL.
+  const bounded = before <= sr.end
+  let low = bounded && sr.rtl ? length - (before - sr.start) : 0
+  let high = bounded && !sr.rtl ? before - sr.start - 1 : length - 1
+  const last = high
   while (low <= high) {
     const mid = low + ((high - low) >> 1)
     const position = xPosition(mid)
-    if (position <= x && (mid + 1 === length || xPosition(mid + 1) > x)) {
+    if (position <= x && (mid + 1 === length || (bounded && !sr.rtl && mid === last) || xPosition(mid + 1) > x)) {
       if (!sr.rtl) return sr.start + mid
       return sr.start + (position === x ? length - mid : length - mid - 1)
     }
@@ -959,7 +1040,7 @@ export function callPrefix16(sh: Shaper, call: ReshapeCall, k: number): number {
   const p = sh.p
   k = clusterStartAtOrBefore(p, k, call.start)
   if (k <= call.start) return 0
-  const pair = pairBefore16(sh, call.group, positionAdjust16(sh, call.group, k, call.start, call.end))
+  const pair = pairBefore16(sh, call.group, positionAdjust16(sh, call.group, k, call.start, call.end), k, call.start, call.end)
   let base = measure16(sh, call.group, call.start, k, call.start, call.end) + pair
   if (kernsAfter(sh, call.group, k, call.start, call.end)) base -= pair
   return base - call.startTrim16
@@ -1034,7 +1115,11 @@ function floatWidthOfParts(sh: Shaper, parts: Part[], rtl: boolean): number {
     return width
   }
   let width = 0
-  let unknownClusters = 0
+  // The exact sum so far, and how far the float sum can be from it: a sum below 256 px is exact, so only a run that ends
+  // past it can round, by half a float32 step at its size, and a run of a font the facts don't name may be one run per
+  // cluster.
+  let exact16 = 0
+  let slack16 = 0
   let first = -1
   let last = -1
   for (let n = 0; n < parts.length; n++) {
@@ -1055,16 +1140,18 @@ function floatWidthOfParts(sh: Shaper, parts: Part[], rtl: boolean): number {
       if (isSegmentEdge(p, k) || p.fontRun[k] !== p.fontRun[k - 1]) edges.push(k)
     }
     edges.push(b)
-    for (let k = a; k < b; k++) if (p.fontRun[k]! < 0 && isClusterBoundary(p, k)) unknownClusters++
     for (let r = 0; r + 1 < edges.length; r++) {
       const e = rtl ? edges.length - 2 - r : r
-      width = f32(width + widthOf16(prefix(edges[e + 1]!) - prefix(edges[e]!)))
+      const run16 = prefix(edges[e + 1]!) - prefix(edges[e]!)
+      width = f32(width + widthOf16(run16))
+      exact16 += run16
+      if (exact16 < EXACT16) continue
+      let unknownClusters = 0
+      for (let k = edges[e]!; k < edges[e + 1]!; k++) if (p.fontRun[k]! < 0 && isClusterBoundary(p, k)) unknownClusters++
+      slack16 += unknownClusters * 2 ** Math.max(0, Math.floor(Math.log2(exact16)) - 23) / 2
     }
   }
-  if (unknownClusters > 0 && first >= 0) {
-    // Each run edge the facts can't place moves the sum by at most half a float32 step at this size.
-    const step16 = 2 ** Math.max(0, Math.floor(Math.log2(total16)) - 23)
-    const slack16 = unknownClusters * step16 / 2
+  if (slack16 > 0 && first >= 0) {
     if (Math.ceil((total16 - slack16) / 1024) !== Math.ceil((total16 + slack16) / 1024)) {
       const source = p.sourceOffsets[first]!
       addGap(sh.gaps, 'float32-precision', source >= 0 ? p.sourceRuns[source]! : null, FLOAT_DETAIL, sourceRange(p, first, last))
@@ -1178,6 +1265,40 @@ export function viewPrefix16(sh: Shaper, view: View, k: number): number {
   return sum
 }
 
+// The advance sum of a part's glyphs before text_content offset k of the text they were shaped from.
+export function partPrefix16(sh: Shaper, part: Part, k: number): number {
+  switch (part.kind) {
+    case 'range': return rangeSlicePrefix16(sh, part.sr, k) - rangeSlicePrefix16(sh, part.sr, part.start)
+    case 'reshape': return callSlicePrefix16(sh, part.call, k) - callSlicePrefix16(sh, part.call, part.start)
+  }
+}
+
+// Where Blink's caret code starts graphemes among the characters of a view's part: flags per character of the part, or
+// null where the part's list comes from its own text and the paragraph's boundaries apply. `position` is where the part's
+// characters sit in the item as the caret code counts them (index.ts shapeOf). FragmentItem::LineLeftAndRightForOffsets
+// copies the view into a ShapeResult whose runs keep the parts' numbers (CreateShapeResult, shape_result_view.cc:182-212),
+// and ShapeResult::EnsureGraphemes lists each run's graphemes over the item text at the run's start_index_ less the
+// result's (shape_result.cc:186-214). An RTL view of several segments numbers its parts in visual order
+// (viewFromSegments), so a reshaped line end `بِ` after a NUL of the same item is numbered where the NUL is, its list is
+// made from NUL and beh, two graphemes, and the cluster's advance is shared between the letter and its mark
+// (c-66aa475c77b20230: natively beh and kasra report halves of 293 and 292 units).
+export function partGraphemeStarts(sh: Shaper, view: View, part: Part, position: number): Uint8Array | null {
+  const p = sh.p
+  const first = view.startIndex + view.charIndexOffset
+  const windowStart = first + part.index - view.startIndex
+  if (part.length <= 0 || windowStart === position || windowStart < 0 || windowStart + part.length > p.text.length) return null
+  const window = p.text.slice(windowStart, windowStart + part.length)
+  const starts = new Uint8Array(part.length)
+  if (p.is8Bit) {
+    for (let j = 0; j < part.length; j++) if (!(j > 0 && window.charCodeAt(j - 1) === 0x0d && window.charCodeAt(j) === 0x0a)) starts[j] = 1
+  } else {
+    const boundaries = graphemeBoundaries(window, graphemeRulesFor('blink'))
+    for (let j = 0; j < boundaries.length; j++) if (boundaries[j]! < part.length) starts[boundaries[j]!] = 1
+  }
+  starts[0] = 1
+  return starts
+}
+
 // Whether the port knows where offset k sits inside a shaping call over [lo, hi) of group g, and the condition it rests on
 // when it doesn't. The port takes a position from the prefix [lo, k) measured alone plus the pair adjustment, which is
 // Blink's value exactly where shaping the two sides apart gives the glyphs the call has: HarfBuzz's own meaning of
@@ -1203,6 +1324,13 @@ export function positionLimit(sh: Shaper, g: number, k: number, lo: number, hi: 
   k = clusterStartAtOrBefore(p, k, lo)
   if (k <= lo) return null
   if (isSegmentEdge(p, k)) return null
+  // Beside U+3000 the adjustment sits on the other cluster where its font lacks U+3000 (requeuedSpaceAt); where the facts
+  // don't say which font draws that cluster, an adjustment there rests on a font the port doesn't know.
+  switch (requeuedSpaceAt(p, k, lo, hi)) {
+    case 'start': case 'end': return null
+    case 'unknown': if (pairAdjust16(sh, g, k, lo, hi) !== 0) return 'font-fallback'; break
+    case null: break
+  }
   if (p.ligature[k] !== LIGATURE_NONE) return 'glyph-clusters'
   if (joinsAcross(p, k, lo, hi)) return 'in-word-prefix'
   const style = p.styles[p.groups[g]!.style]!

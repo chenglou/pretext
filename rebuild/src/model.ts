@@ -352,13 +352,22 @@ export type BlinkMappingUnit = { run: number; start: number; end: number; textSt
 // A HarfBuzz cluster of a shape result: consecutive glyphs sharing one character index, at
 // HB_BUFFER_CLUSTER_LEVEL_MONOTONE_GRAPHEMES (hb-ot-shape.cc:466-522, 578-586).
 export type BlinkGlyphCluster = {
-  // [textStart, textEnd) in text_content.
+  // [textStart, textEnd) in text_content: the item's characters the caret code counts as the cluster's
+  // (ShapeResult::PositionForOffset walks the runs by their character counts, shape_result.cc:696-733). They are the
+  // characters the glyphs were shaped from except in an RTL view cut again after its parts were numbered in visual order,
+  // where a trimmed space's glyph stands for the item's last character (specs/blink-RESULTS.md, round 1 class 3).
   textStart: number
   textEnd: number
   // Where graphemes start inside the cluster, textStart included (CharacterBreakIterator: ICU char.brk for 16-bit text,
   // one grapheme per code unit except CR LF for 8-bit, character_break_iterator.cc:76-87, 180-198). ShapeResult splits a
-  // cluster's advance equally among its graphemes (shape_result.cc:310-329).
+  // cluster's advance equally among its graphemes (shape_result.cc:310-329). ShapeResult::EnsureGraphemes lists a run's
+  // graphemes over the item text at the run's start_index_ (shape_result.cc:186-214), which in an RTL view of several
+  // parts is another stretch of the item than the run's own, so these are the starts Blink counts, not always Unicode's.
   graphemeStarts: number[]
+  // Set on a cluster of several code points where those starts rest on which parts Blink's view has, which the port
+  // doesn't know: an RTL item whose line edge inside a shaping call is safe to break, or reshaped from a safe offset, by
+  // the port's width tests alone (HarfBuzz may flag it, and another reshape numbers the parts otherwise).
+  graphemesLimit?: GapName
   // The cluster's advance in 16.16 fixed point of zoomed px (TextRunLayoutUnit), justification spacing included.
   advance: number
   // Set where the cluster's start, the advance sum before it in its item, is a Canvas stand-in Blink's own value can
@@ -370,6 +379,23 @@ export type BlinkGlyphCluster = {
   startLimit?: GapName
 }
 
+// A run of the ShapeResult that FragmentItem::LineLeftAndRightForOffsets copies from a text item's ShapeResultView
+// (CreateShapeResult, shape_result_view.cc:182-212), in logical order: a part of the view, cut further wherever another
+// HarfBuzz run starts inside it (a script segment, a stretch another font draws). PositionForOffset adds the widths of the
+// runs before a caret as floats (shape_result.cc:696-733), so past 256 zoomed px a caret depends on where the runs are.
+export type BlinkShapeRun = {
+  // [textStart, textEnd) in text_content, as the clusters count characters.
+  textStart: number
+  textEnd: number
+  // The text shaped alone that the run's glyphs came from, where ShapeLine reshaped a line start or end
+  // (shaping_line_breaker.cc:309-324, :497-553) or TruncateLineEndResult the text before a removed space
+  // (line_breaker.cc:2371-2405); null for glyphs of the paragraph's shape result, which were shaped with the text around
+  // them. A painter that lays the line out alone shapes every run with its painted neighbours.
+  reshaped: { textStart: number; textEnd: number } | null
+  // Whether the declaration's coverage facts name the font of every cluster: otherwise the run may be several.
+  fontsKnown: boolean
+}
+
 // A FragmentItem of a line (logical_line_builder.cc:200-464), positioned by ComputeInlinePositions and ApplyTextAlign
 // (inline_box_state.cc:845-856, inline_layout_algorithm.cc:303-311, 361-389, 943-970). x and inlineSize are raw
 // LayoutUnits from the content box's left edge; level is the item's bidi level, whose parity is its direction.
@@ -378,7 +404,9 @@ export type BlinkItem =
   // sizeLimit is set where the item's end position is such a stand-in too (BlinkGlyphCluster.startLimit): an item edge
   // inside a shaping call, where a glyph cluster over the edge goes to the item holding its first character
   // (glyph_data_range.cc:56-90). The item's size, and with it the x of the items after it on the line, can then differ.
-  | { kind: 'text'; run: number; textStart: number; textEnd: number; level: number; x: number; inlineSize: number; clusters: BlinkGlyphCluster[]; sizeLimit?: GapName }
+  // runs are the shape's runs (BlinkShapeRun); partsKnown is false where Blink's view may have other parts than the
+  // port's (BlinkGlyphCluster.graphemesLimit has the condition), which moves float sums past 256 zoomed px.
+  | { kind: 'text'; run: number; textStart: number; textEnd: number; level: number; x: number; inlineSize: number; clusters: BlinkGlyphCluster[]; runs: BlinkShapeRun[]; partsKnown: boolean; sizeLimit?: GapName }
   // A tab run: flow control with a shape result of one space glyph per tab carrying its tab-stop advance
   // (shape_result.cc:1898-1938).
   | { kind: 'tab'; run: number; textStart: number; textEnd: number; level: number; x: number; inlineSize: number; clusters: BlinkGlyphCluster[] }

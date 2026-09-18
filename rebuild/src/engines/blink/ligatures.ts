@@ -63,6 +63,12 @@ function covers(coverage: readonly number[], cp: number): boolean {
   return false
 }
 
+// Whether listed family f of a style's font declaration maps code point cp, by its coverage fact; null when the fact isn't given.
+export function listedFontCovers(fonts: readonly ListedFontFacts[] | undefined, f: number, cp: number): boolean | null {
+  if (fonts === undefined || f < 0 || f >= fonts.length || fonts[f]!.coverage === null) return null
+  return covers(fonts[f]!.coverage!, cp)
+}
+
 // Default-ignorable characters and joiners take no glyph of their own that decides the font (HarfBuzzShaper keeps a cluster
 // in the font that draws its visible characters; hb-unicode.hh:170-197).
 function decidesFont(cp: number): boolean {
