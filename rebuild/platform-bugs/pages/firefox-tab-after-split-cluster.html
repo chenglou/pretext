@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="hi">
+<head>
+<meta charset="utf-8">
+<title>running</title>
+<style>
+  body { font: 14px/1.5 Helvetica, Arial, sans-serif; margin: 16px; max-width: 900px }
+  pre { font: 12px/1.5 Menlo, monospace; background: #f4f4f4; padding: 8px; white-space: pre-wrap }
+  .t { font: 20px/36px "Kohinoor Devanagari"; white-space: pre; tab-size: 8; outline: 1px solid #ccc; margin: 4px 0; width: 300px }
+  .t .x { background: #fbb }
+</style>
+</head>
+<body>
+<h1>A tab misses its tab stop when its span starts inside a grapheme cluster</h1>
+<p>Both lines hold U+0926 DEVANAGARI LETTER DA, U+094B VOWEL SIGN O, a tab and <code>x</code>, in 20px Kohinoor
+Devanagari with <code>white-space: pre; tab-size: 8</code>. In the second line a <code>&lt;span&gt;</code> without any
+style starts between the letter and its vowel sign. The <code>x</code> should start at the first tab stop, 8 space
+widths from the line's start, in both lines.</p>
+<div class="t" id="whole"><span>&#x926;&#x94b;&#9;</span><span class="x">x</span></div>
+<div class="t" id="split"><span>&#x926;</span><span>&#x94b;&#9;</span><span class="x">x</span></div>
+<pre id="log"></pre>
+<script>
+const out = []
+function log(s) { out.push(s); document.getElementById('log').textContent = out.join('\n') }
+function xStart(id) {
+  const line = document.getElementById(id)
+  return line.querySelector('.x').getBoundingClientRect().left - line.getBoundingClientRect().left
+}
+const ctx = new OffscreenCanvas(1, 1).getContext('2d')
+ctx.font = '20px "Kohinoor Devanagari"'
+const stop = 8 * ctx.measureText(' ').width
+const whole = xStart('whole'), split = xStart('split')
+log('first tab stop, 8 x the space advance:        ' + stop.toFixed(3) + 'px')
+log('x starts at, one span:                        ' + whole.toFixed(3) + 'px')
+log('x starts at, span boundary inside the cluster: ' + split.toFixed(3) + 'px')
+log('')
+log('expected: both ' + stop.toFixed(3))
+log('')
+log(navigator.userAgent)
+const bug = Math.abs(split - whole) > 0.1
+document.title = bug ? 'BUG: the tab ends ' + (split - whole).toFixed(3) + 'px past the tab stop when the span starts inside the cluster' : 'NO BUG: x starts at ' + whole.toFixed(3) + 'px in both lines'
+</script>
+</body>
+</html>

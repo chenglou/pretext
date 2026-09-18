@@ -1,0 +1,23 @@
+{
+  "page": "chrome-system-ui-font-cache-order.html",
+  "browser": "firefox",
+  "build": {
+    "app": "Firefox",
+    "appVersion": "156.0",
+    "engine": "156.0",
+    "os": "26A428"
+  },
+  "started": "2026-09-18T11:52:31.816Z",
+  "error": null,
+  "report": {
+    "title": "BUG (another one, or the renderer was not fresh): both spans differ from canvas",
+    "log": "devicePixelRatio 2\n13px, DOM laid out first:                    DOM 67.86666870117188   canvas at 13px 59.83333206176758   difference 8.0333\n15px, canvas measured 30px system-ui first:   DOM 76.96665954589844   canvas at 15px 67.69999694824219   difference 9.2667\n(canvas at 30px measured 144.01666259765625, half of it 72.00833129882812)\n\nexpected: both differences under 0.02px\nactual:   8.0333 and 9.2667\n\nMozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:156.0) Gecko/20100101 Firefox/156.0",
+    "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:156.0) Gecko/20100101 Firefox/156.0",
+    "devicePixelRatio": 2,
+    "visibility": "visible",
+    "languages": [
+      "en-US",
+      "en"
+    ]
+  }
+}

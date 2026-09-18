@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>running</title>
+<style>
+  body { font: 14px/1.5 Helvetica, Arial, sans-serif; margin: 16px; max-width: 900px }
+  pre { font: 12px/1.5 Menlo, monospace; background: #f4f4f4; padding: 8px; white-space: pre-wrap }
+</style>
+</head>
+<body>
+<h1>measureText() under wordSpacing depends on what the context measured before</h1>
+<p>Two new OffscreenCanvas contexts, both with <code>font = '16px Arial'</code> and <code>wordSpacing = '10px'</code>.
+Context A measures <code>" x"</code> (a leading space) and then <code>"x y"</code>. Context B measures
+<code>"x y"</code> and then <code>" x"</code>. The same string in the same state should measure the same in both.</p>
+<pre id="log"></pre>
+<script>
+const out = []
+function log(s) { out.push(s); document.getElementById('log').textContent = out.join('\n') }
+function context(wordSpacing) {
+  const ctx = new OffscreenCanvas(1, 1).getContext('2d')
+  ctx.font = '16px Arial'
+  ctx.wordSpacing = wordSpacing
+  return ctx
+}
+const zero = context('0px')
+const plainXY = zero.measureText('x y').width, plainX = zero.measureText(' x').width
+const a = context('10px')
+const aX = a.measureText(' x').width
+const aXY = a.measureText('x y').width
+const b = context('10px')
+const bXY = b.measureText('x y').width
+const bX = b.measureText(' x').width
+log('wordSpacing 0px:                 "x y" ' + plainXY + '    " x" ' + plainX)
+log('context A (" x" first):          "x y" ' + aXY + '    " x" ' + aX)
+log('context B ("x y" first):         "x y" ' + bXY + '    " x" ' + bX)
+log('')
+log('expected: "x y" = ' + (plainXY + 10) + ' in A and B (one word space, +10px), and " x" equal in A and B')
+log('actual:   "x y" A ' + aXY + ', B ' + bXY + '; " x" A ' + aX + ', B ' + bX)
+log('')
+log(navigator.userAgent)
+const bug = aXY !== bXY || aX !== bX
+document.title = bug ? 'BUG: the same string measures ' + aXY + ' or ' + bXY + ' depending on measurement order' : 'NO BUG: order does not matter'
+</script>
+</body>
+</html>

@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>running</title>
+<style>
+  body { font: 14px/1.5 Helvetica, Arial, sans-serif; margin: 16px; max-width: 900px }
+  pre { font: 12px/1.5 Menlo, monospace; background: #f4f4f4; padding: 8px; white-space: pre-wrap }
+  #stage span { font: 16px/24px Georgia; white-space: pre; outline: 1px solid #c00 }
+</style>
+</head>
+<body>
+<h1>Canvas wordSpacing spaces U+3000 and skips U+00A0; CSS word-spacing does the opposite</h1>
+<p><code>a b</code> with three different spaces, 16px Georgia, 10px of word spacing. CSS Text names U+0020 and U+00A0 as
+word separators and says fixed-width spaces such as U+3000 aren't. The canvas text preparation algorithm applies
+<code>wordSpacing</code> as the CSS property, so a canvas should add what the DOM adds: 10px for U+0020 and U+00A0,
+nothing for U+3000.</p>
+<div id="stage"></div>
+<pre id="log"></pre>
+<script>
+const out = []
+function log(s) { out.push(s); document.getElementById('log').textContent = out.join('\n') }
+const FONT = '16px Georgia'
+function domWidth(text, spacing) {
+  const line = document.createElement('div'), span = document.createElement('span')
+  span.style.wordSpacing = spacing
+  span.textContent = text
+  line.append(span)
+  document.getElementById('stage').append(line)
+  return span.getBoundingClientRect().width
+}
+function canvasWidth(ctx, text, spacing) {
+  ctx.font = FONT
+  ctx.wordSpacing = spacing
+  return ctx.measureText(text).width
+}
+const element = document.createElement('canvas').getContext('2d')
+const offscreen = new OffscreenCanvas(1, 1).getContext('2d')
+const CASES = [['U+0020 SPACE', 'a b', 10], ['U+00A0 NO-BREAK SPACE', 'a\u00a0b', 10], ['U+3000 IDEOGRAPHIC SPACE', 'a\u3000b', 0]]
+let failures = 0
+log('added by 10px of word spacing'.padEnd(34) + 'expected   DOM      canvas element   OffscreenCanvas')
+for (const [name, text, expected] of CASES) {
+  const dom = domWidth(text, '10px') - domWidth(text, '0px')
+  const el = canvasWidth(element, text, '10px') - canvasWidth(element, text, '0px')
+  const off = canvasWidth(offscreen, text, '10px') - canvasWidth(offscreen, text, '0px')
+  const ok = Math.abs(el - expected) < 0.01 && Math.abs(off - expected) < 0.01
+  if (!ok) failures++
+  log(name.padEnd(34) + String(expected).padEnd(11) + dom.toFixed(2).padEnd(9) + el.toFixed(2).padEnd(17) + off.toFixed(2) + (ok ? '' : '   <-- canvas differs'))
+}
+log('')
+log('ctx.wordSpacing supported: ' + ('wordSpacing' in element))
+log(navigator.userAgent)
+document.title = failures > 0 ? 'BUG: canvas wordSpacing treats ' + failures + ' of 3 spaces differently from CSS word-spacing' : 'NO BUG: canvas and CSS agree'
+</script>
+</body>
+</html>

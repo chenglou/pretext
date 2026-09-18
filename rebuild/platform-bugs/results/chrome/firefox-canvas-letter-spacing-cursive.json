@@ -1,0 +1,23 @@
+{
+  "page": "firefox-canvas-letter-spacing-cursive.html",
+  "browser": "chrome",
+  "build": {
+    "app": "Google Chrome",
+    "appVersion": "153.0.8010.50",
+    "engine": "153.0.8010.50",
+    "os": "26A428"
+  },
+  "started": "2026-09-18T11:52:29.169Z",
+  "error": null,
+  "report": {
+    "title": "NO BUG: canvas and DOM add the same spacing",
+    "log": "added by 8px of letter spacing:\n  DOM span          0.000   (49.352 -> 49.352)\n  canvas element    0.000   (49.349 -> 49.349)\n  OffscreenCanvas   0.000   (49.349 -> 49.349)\n\nexpected: the canvases add what the DOM adds (0.000)\n\nMozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36",
+    "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36",
+    "devicePixelRatio": 2,
+    "visibility": "visible",
+    "languages": [
+      "zh-CN",
+      "zh"
+    ]
+  }
+}

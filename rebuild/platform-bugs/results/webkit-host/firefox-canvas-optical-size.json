@@ -1,0 +1,22 @@
+{
+  "page": "firefox-canvas-optical-size.html",
+  "browser": "webkit-host",
+  "build": {
+    "app": "webkit-host",
+    "appVersion": "27.0",
+    "engine": "22625.1.29.11.27",
+    "os": "26A428"
+  },
+  "started": "2026-09-18T11:52:25.900Z",
+  "error": null,
+  "report": {
+    "title": "NO BUG: canvas and DOM agree",
+    "log": "size   DOM auto    DOM none    OffscreenCanvas   canvas element\n13px   270.118     246.283     270.118           270.118\n14px   287.957     265.228     287.957           287.957\n16px   323.047     303.117     323.047           323.047\n20px   388.653     378.896     388.653           388.653\n\nexpected: both canvas columns = DOM auto, within rounding\ndevicePixelRatio 2\nMozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/27.0 Safari/605.1.15 webkit-host/22625.1.29.11.27",
+    "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/27.0 Safari/605.1.15 webkit-host/22625.1.29.11.27",
+    "devicePixelRatio": 2,
+    "visibility": "visible",
+    "languages": [
+      "zh-CN"
+    ]
+  }
+}

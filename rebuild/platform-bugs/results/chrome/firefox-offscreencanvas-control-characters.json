@@ -1,0 +1,23 @@
+{
+  "page": "firefox-offscreencanvas-control-characters.html",
+  "browser": "chrome",
+  "build": {
+    "app": "Google Chrome",
+    "appVersion": "153.0.8010.50",
+    "engine": "153.0.8010.50",
+    "os": "26A428"
+  },
+  "started": "2026-09-18T11:52:31.199Z",
+  "error": null,
+  "report": {
+    "title": "NO BUG: the three kinds of canvas agree",
+    "log": "              DOM        canvas in document   canvas not in document   OffscreenCanvas\nAV            22.680     22.676               22.676                   22.676\nA U+200E V    22.680     24.012               24.012                   24.012\nab            20.023     20.021               20.021                   20.021\na U+0001 b    26.016     26.015               26.015                   26.015\n\nexpected: the three canvas columns agree on every row\ndevicePixelRatio 2\nMozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36",
+    "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36",
+    "devicePixelRatio": 2,
+    "visibility": "visible",
+    "languages": [
+      "zh-CN",
+      "zh"
+    ]
+  }
+}

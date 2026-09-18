@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>running</title>
+<style>
+  body { font: 14px/1.5 Helvetica, Arial, sans-serif; margin: 16px; max-width: 900px }
+  pre { font: 12px/1.5 Menlo, monospace; background: #f4f4f4; padding: 8px; white-space: pre-wrap }
+  .t { font: 16px/20px Menlo, monospace; width: 100px; outline: 1px solid #c00; margin: 8px 0 12px 8px; word-break: keep-all }
+</style>
+</head>
+<body>
+<h1>Two equal strings wrap differently under word-break: keep-all</h1>
+<p>Both red boxes are 100px wide, 16px Menlo, <code>word-break: keep-all</code>, and hold the ASCII text
+<code>abcdefgh,ijklmnopqr</code>. The first string is a plain literal. The second is <code>.slice(1)</code> of a
+literal that starts with a Chinese character, so the engine keeps it in UTF-16 storage. JavaScript can't tell them apart
+(<code>a === b</code>). They should lay out the same: one overflowing line, because UAX #14 has no break after a comma
+before a letter (LB29).</p>
+<div id="stage"></div>
+<pre id="log"></pre>
+<script>
+const out = []
+function log(s) { out.push(s); document.getElementById('log').textContent = out.join('\n') }
+function lineCount(text) {
+  const el = document.createElement('div')
+  el.className = 't'
+  el.append(document.createTextNode(text))
+  document.getElementById('stage').append(el)
+  return Math.round(el.getBoundingClientRect().height / 20)
+}
+const a = 'abcdefgh,ijklmnopqr'
+const b = '\u4e2dabcdefgh,ijklmnopqr'.slice(1)
+const c = JSON.parse('["abcdefgh,ijklmnopqr","\u4e2d"]')[0]
+const la = lineCount(a), lb = lineCount(b), lc = lineCount(c)
+log('a = literal                                  ' + la + ' line(s)')
+log('b = slice(1) of a literal starting with U+4E2D  ' + lb + ' line(s)   a === b: ' + (a === b))
+log('c = JSON.parse of a text that also holds U+4E2D ' + lc + ' line(s)   a === c: ' + (a === c))
+log('')
+log('expected: 1, 1, 1')
+log('actual:   ' + [la, lb, lc].join(', '))
+log('')
+log(navigator.userAgent)
+const bug = la !== lb || la !== lc
+document.title = bug ? 'BUG: equal strings wrap differently (' + [la, lb, lc].join(', ') + ' lines)' : 'NO BUG: ' + la + ' line(s) each'
+</script>
+</body>
+</html>

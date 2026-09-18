@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>running</title>
+<style>
+  body { font: 14px/1.5 Helvetica, Arial, sans-serif; margin: 16px; max-width: 900px }
+  pre { font: 12px/1.5 Menlo, monospace; background: #f4f4f4; padding: 8px; white-space: pre-wrap }
+  #stage span { font: 40px/64px "Geeza Pro"; white-space: pre; outline: 1px solid #c00; margin-right: 24px }
+  canvas { outline: 1px solid #ccc; display: block }
+</style>
+</head>
+<body>
+<h1>Canvas letterSpacing pulls joined Arabic letters apart; CSS letter-spacing leaves them joined</h1>
+<p>The word &#x628;&#x64a;&#x62a; in 40px Geeza Pro, at 0 and at 8px of letter spacing: DOM spans first, then a
+canvas. CSS letter-spacing adds nothing between the letters of a cursive script here (CSS Text 3, "Cursive Scripts"),
+and the canvas text preparation algorithm applies <code>letterSpacing</code> as the CSS property. So the canvas should
+widen the word by as much as the DOM does.</p>
+<div id="stage"><span id="dom0">&#x628;&#x64a;&#x62a;</span><span id="dom8" style="letter-spacing: 8px">&#x628;&#x64a;&#x62a;</span> DOM, 0 and 8px</div>
+<canvas id="canvas" width="420" height="72"></canvas> canvas, 0px and 8px
+<pre id="log"></pre>
+<script>
+const out = []
+function log(s) { out.push(s); document.getElementById('log').textContent = out.join('\n') }
+const TEXT = '\u0628\u064a\u062a', FONT = '40px "Geeza Pro"'
+const ctx = document.getElementById('canvas').getContext('2d')
+ctx.font = FONT
+ctx.letterSpacing = '0px'
+const canvas0 = ctx.measureText(TEXT).width
+ctx.fillText(TEXT, 16, 50)
+ctx.letterSpacing = '8px'
+const canvas8 = ctx.measureText(TEXT).width
+ctx.fillText(TEXT, 160, 50)
+const off = new OffscreenCanvas(1, 1).getContext('2d')
+off.font = FONT
+off.letterSpacing = '0px'
+const off0 = off.measureText(TEXT).width
+off.letterSpacing = '8px'
+const off8 = off.measureText(TEXT).width
+const dom0 = document.getElementById('dom0').getBoundingClientRect().width
+const dom8 = document.getElementById('dom8').getBoundingClientRect().width
+log('added by 8px of letter spacing:')
+log('  DOM span          ' + (dom8 - dom0).toFixed(3) + '   (' + dom0.toFixed(3) + ' -> ' + dom8.toFixed(3) + ')')
+log('  canvas element    ' + (canvas8 - canvas0).toFixed(3) + '   (' + canvas0.toFixed(3) + ' -> ' + canvas8.toFixed(3) + ')')
+log('  OffscreenCanvas   ' + (off8 - off0).toFixed(3) + '   (' + off0.toFixed(3) + ' -> ' + off8.toFixed(3) + ')')
+log('')
+log('expected: the canvases add what the DOM adds (' + (dom8 - dom0).toFixed(3) + ')')
+log('')
+log(navigator.userAgent)
+const bug = Math.abs((canvas8 - canvas0) - (dom8 - dom0)) > 0.1 || Math.abs((off8 - off0) - (dom8 - dom0)) > 0.1
+document.title = bug ? 'BUG: canvas adds ' + (canvas8 - canvas0).toFixed(1) + 'px to a joined Arabic word, the DOM adds ' + (dom8 - dom0).toFixed(1) + 'px' : 'NO BUG: canvas and DOM add the same spacing'
+</script>
+</body>
+</html>

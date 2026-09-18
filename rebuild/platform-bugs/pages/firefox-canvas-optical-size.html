@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>running</title>
+<style>
+  body { font: 14px/1.5 Helvetica, Arial, sans-serif; margin: 16px; max-width: 900px }
+  pre { font: 12px/1.5 Menlo, monospace; background: #f4f4f4; padding: 8px; white-space: pre-wrap }
+  #stage span { font-family: system-ui; white-space: pre; outline: 1px solid #c00 }
+</style>
+</head>
+<body>
+<h1>Canvas text in system-ui ignores automatic optical sizing, and a canvas element and an OffscreenCanvas differ</h1>
+<p>A pangram in <code>system-ui</code> (SF Pro, which has an <code>opsz</code> axis) at four sizes: a DOM span, the same
+span with <code>font-optical-sizing: none</code>, an OffscreenCanvas and a <code>&lt;canvas&gt;</code> element.
+<code>font-optical-sizing</code> is <code>auto</code> by default and the canvas <code>font</code> shorthand resets it to
+that, so both canvases should measure what the first DOM column measures.</p>
+<div id="stage"></div>
+<pre id="log"></pre>
+<script>
+const out = []
+function log(s) { out.push(s); document.getElementById('log').textContent = out.join('\n') }
+const TEXT = 'The quick brown fox jumps over the lazy dog'
+function domWidth(px, opticalSizing) {
+  const line = document.createElement('div'), span = document.createElement('span')
+  span.style.fontSize = px + 'px'
+  span.style.fontOpticalSizing = opticalSizing
+  span.textContent = TEXT
+  line.append(span)
+  document.getElementById('stage').append(line)
+  return span.getBoundingClientRect().width
+}
+const element = document.createElement('canvas').getContext('2d')
+const offscreen = new OffscreenCanvas(1, 1).getContext('2d')
+let failures = 0
+log('size   DOM auto    DOM none    OffscreenCanvas   canvas element')
+for (const px of [13, 14, 16, 20]) {
+  element.font = offscreen.font = px + 'px system-ui'
+  const auto = domWidth(px, 'auto'), none = domWidth(px, 'none')
+  const off = offscreen.measureText(TEXT).width, el = element.measureText(TEXT).width
+  const ok = Math.abs(off - auto) < 0.5 && Math.abs(el - auto) < 0.5
+  if (!ok) failures++
+  log((px + 'px').padEnd(7) + auto.toFixed(3).padEnd(12) + none.toFixed(3).padEnd(12) + off.toFixed(3).padEnd(18) + el.toFixed(3) + (ok ? '' : '   <-- canvas differs from DOM auto'))
+}
+log('')
+log('expected: both canvas columns = DOM auto, within rounding')
+log('devicePixelRatio ' + devicePixelRatio)
+log(navigator.userAgent)
+document.title = failures > 0 ? 'BUG: canvas system-ui widths differ from DOM text at ' + failures + ' of 4 sizes' : 'NO BUG: canvas and DOM agree'
+</script>
+</body>
+</html>

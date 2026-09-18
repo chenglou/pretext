@@ -1,0 +1,23 @@
+{
+  "page": "webkit-keep-all-breaks-after-punctuation.html",
+  "browser": "chrome",
+  "build": {
+    "app": "Google Chrome",
+    "appVersion": "153.0.8010.50",
+    "engine": "153.0.8010.50",
+    "os": "26A428"
+  },
+  "started": "2026-09-18T11:52:15.740Z",
+  "error": null,
+  "report": {
+    "title": "NO BUG: breaks at spaces only",
+    "log": "\"가격 1,000,000원\"\n  expected [\"가격 \",\"1,000,000원\"]\n  actual   [\"가격 \",\"1,000,000원\"]\n\"원주율 3.14159265\"\n  expected [\"원주율 \",\"3.14159265\"]\n  actual   [\"원주율 \",\"3.14159265\"]\n\"미국 U.S.A.U.S.A.\"\n  expected [\"미국 \",\"U.S.A.U.S.A.\"]\n  actual   [\"미국 \",\"U.S.A.U.S.A.\"]\n\"시간 12:30:45:00\"\n  expected [\"시간 \",\"12:30:45:00\"]\n  actual   [\"시간 \",\"12:30:45:00\"]\n\"서울 (대한민국)\"\n  expected [\"서울 \",\"(대한민국)\"]\n  actual   [\"서울 \",\"(대한민국)\"]\n\nMozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36",
+    "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36",
+    "devicePixelRatio": 2,
+    "visibility": "visible",
+    "languages": [
+      "zh-CN",
+      "zh"
+    ]
+  }
+}

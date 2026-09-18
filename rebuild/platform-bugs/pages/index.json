@@ -1,0 +1,18 @@
+[
+  {"page": "webkit-keep-all-breaks-after-punctuation.html", "browsers": ["chrome", "firefox", "webkit-host"]},
+  {"page": "webkit-break-spaces-after-pre-wrap.html", "browsers": ["chrome", "firefox", "webkit-host"]},
+  {"page": "webkit-keep-all-depends-on-string-storage.html", "browsers": ["chrome", "firefox", "webkit-host"]},
+  {"page": "webkit-canvas-letter-spacing-keeps-ligatures.html", "browsers": ["chrome", "firefox", "webkit-host"]},
+  {"page": "chrome-canvas-inherits-css-letter-spacing.html", "browsers": ["chrome", "firefox", "webkit-host"]},
+  {"page": "chrome-canvas-word-spacing-order.html", "browsers": ["chrome", "firefox", "webkit-host"]},
+  {"page": "chrome-system-ui-font-cache-order.html", "browsers": ["chrome", "firefox", "webkit-host"]},
+  {"page": "firefox-canvas-word-spacing-separators.html", "browsers": ["chrome", "firefox", "webkit-host"]},
+  {"page": "firefox-canvas-letter-spacing-cursive.html", "browsers": ["chrome", "firefox", "webkit-host"]},
+  {"page": "firefox-offscreencanvas-control-characters.html", "browsers": ["chrome", "firefox", "webkit-host"]},
+  {"page": "firefox-emoji-missing-after-text-presentation.html", "browsers": ["chrome", "firefox", "webkit-host"], "queries": ["", "?via=dom"]},
+  {"page": "firefox-tab-after-split-cluster.html", "browsers": ["chrome", "firefox", "webkit-host"]},
+  {"page": "firefox-letter-spacing-cursive-fallback-mark.html", "browsers": ["chrome", "firefox", "webkit-host"]},
+  {"page": "firefox-canvas-synthetic-bold.html", "browsers": ["chrome", "firefox", "webkit-host"]},
+  {"page": "firefox-canvas-optical-size.html", "browsers": ["chrome", "firefox", "webkit-host"]},
+  {"page": "webkit-tab-size-uses-inline-font.html", "browsers": ["chrome", "firefox", "webkit-host"]}
+]

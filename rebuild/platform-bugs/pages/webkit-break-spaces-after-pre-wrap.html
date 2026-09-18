@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>running</title>
+<style>
+  body { font: 14px/1.5 Helvetica, Arial, sans-serif; margin: 16px; max-width: 900px }
+  pre { font: 12px/1.5 Menlo, monospace; background: #f4f4f4; padding: 8px; white-space: pre-wrap }
+  .box { font: 16px/20px Arial; width: 28px; outline: 1px solid #c00; margin: 8px 0 12px 8px }
+  .box span { background: #cde }
+</style>
+</head>
+<body>
+<h1>white-space: break-spaces lays out like pre-wrap after the same text was laid out under pre-wrap</h1>
+<p>Three boxes hold the same text, <code>abc</code>, six spaces, <code>def</code>, in 16px Arial, 28px wide. Box 1 is
+<code>break-spaces</code>. Box 2 is <code>pre-wrap</code> and is removed after one layout. Box 3 is <code>break-spaces</code>
+again, made after box 2 is gone. Boxes 1 and 3 have the same text and the same style, so they must have the same lines:
+<code>abc</code> with one space, five spaces, <code>def</code> (3 lines; spaces don't hang under break-spaces).</p>
+<div id="stage"></div>
+<pre id="log"></pre>
+<script>
+const out = []
+function log(s) { out.push(s); document.getElementById('log').textContent = out.join('\n') }
+const TEXT = 'abc      def'
+function box(whiteSpace) {
+  const el = document.createElement('div')
+  el.className = 'box'
+  el.style.whiteSpace = whiteSpace
+  const span = document.createElement('span')
+  span.textContent = TEXT
+  el.append(span)
+  document.getElementById('stage').append(el)
+  return el
+}
+function lineCount(el) { return Math.round(el.getBoundingClientRect().height / 20) }
+
+const first = box('break-spaces')
+const firstLines = lineCount(first)
+const preWrap = box('pre-wrap')
+const preWrapLines = lineCount(preWrap)
+preWrap.remove()
+document.body.getBoundingClientRect() // a layout without box 2, so its line layout is destroyed
+const second = box('break-spaces')
+const secondLines = lineCount(second)
+
+log('box 1, break-spaces, first layout of this text:      ' + firstLines + ' lines')
+log('box 2, pre-wrap, laid out once and removed:          ' + preWrapLines + ' lines')
+log('box 3, break-spaces, same text and style as box 1:   ' + secondLines + ' lines')
+log('')
+log('expected: box 1 = box 3 = 3 lines, box 2 = 2 lines (its spaces hang)')
+const bug = firstLines !== secondLines
+log('actual:   box 1 ' + firstLines + ', box 3 ' + secondLines + (bug ? '  <-- differ' : ''))
+log('')
+log(navigator.userAgent)
+document.title = bug ? 'BUG: break-spaces text lays out like pre-wrap after a pre-wrap layout of the same text' : 'NO BUG: both break-spaces boxes have ' + firstLines + ' lines'
+</script>
+</body>
+</html>

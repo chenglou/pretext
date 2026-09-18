@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>running</title>
+<style>
+  body { font: 14px/1.5 Helvetica, Arial, sans-serif; margin: 16px; max-width: 900px }
+  pre { font: 12px/1.5 Menlo, monospace; background: #f4f4f4; padding: 8px; white-space: pre-wrap }
+  #stage div { margin: 4px 0 }
+  #stage span { font: 40px/72px "Geeza Pro"; white-space: pre; outline: 1px solid #c00; margin-right: 24px }
+</style>
+</head>
+<body>
+<h1>letter-spacing opens a gap inside a joined Arabic word after a mark that a fallback font draws</h1>
+<p>Two joined Arabic words in 40px Geeza Pro, each at 0 and at 8px of letter spacing. The first word's mark is U+064E
+ARABIC FATHA, which Geeza Pro has. The second word's mark is U+0301 COMBINING ACUTE ACCENT, which Geeza Pro lacks, so
+another font draws it. Letter spacing isn't applied between the letters of a cursive script, so neither word should
+grow. Which font draws a mark shouldn't matter.</p>
+<div id="stage"></div>
+<pre id="log"></pre>
+<script>
+const out = []
+function log(s) { out.push(s); document.getElementById('log').textContent = out.join('\n') }
+function widths(text) {
+  const line = document.createElement('div')
+  const result = []
+  for (const spacing of ['0px', '8px']) {
+    const span = document.createElement('span')
+    span.style.letterSpacing = spacing
+    span.textContent = text
+    line.append(span)
+    result.push(span)
+  }
+  document.getElementById('stage').append(line)
+  return result.map(span => span.getBoundingClientRect().width)
+}
+const own = widths('\u0628\u064e\u0628\u0628'), fallback = widths('\u0628\u0301\u0628\u0628')
+log('beh U+064E beh beh (mark in Geeza Pro):      0px ' + own[0].toFixed(3) + '   8px ' + own[1].toFixed(3) + '   added ' + (own[1] - own[0]).toFixed(3))
+log('beh U+0301 beh beh (mark from a fallback):   0px ' + fallback[0].toFixed(3) + '   8px ' + fallback[1].toFixed(3) + '   added ' + (fallback[1] - fallback[0]).toFixed(3))
+log('')
+log('expected: both rows add the same')
+log('')
+log(navigator.userAgent)
+const bug = Math.abs((own[1] - own[0]) - (fallback[1] - fallback[0])) > 0.1
+document.title = bug ? 'BUG: the word with the fallback mark grows by ' + (fallback[1] - fallback[0]).toFixed(1) + 'px, the other by ' + (own[1] - own[0]).toFixed(1) + 'px' : 'NO BUG: both words grow by ' + (own[1] - own[0]).toFixed(1) + 'px'
+</script>
+</body>
+</html>

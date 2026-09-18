@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>running</title>
+<style>
+  body { font: 14px/1.5 Helvetica, Arial, sans-serif; margin: 16px; max-width: 900px }
+  pre { font: 12px/1.5 Menlo, monospace; background: #f4f4f4; padding: 8px; white-space: pre-wrap }
+  canvas { outline: 1px solid #ccc; display: block; margin: 4px 0 }
+  .spaced { letter-spacing: 5px; word-spacing: 7px }
+</style>
+</head>
+<body>
+<h1>A 2D canvas takes letter-spacing and word-spacing from the canvas element's CSS</h1>
+<p>Both canvases set <code>ctx.font = '40px Arial'</code> and nothing else, and <code>ctx.letterSpacing</code> reads
+<code>0px</code> on both. The second canvas sits inside a <code>&lt;div&gt;</code> with <code>letter-spacing: 5px;
+word-spacing: 7px</code>. The canvas text preparation algorithm takes letter and word spacing from the context
+attributes, so both canvases should measure and draw <code>ab cd</code> the same.</p>
+<canvas id="plain" width="420" height="56"></canvas>
+<div class="spaced"><canvas id="inherits" width="420" height="56"></canvas></div>
+<pre id="log"></pre>
+<script>
+const out = []
+function log(s) { out.push(s); document.getElementById('log').textContent = out.join('\n') }
+const TEXT = 'ab cd'
+function context(id) {
+  const ctx = document.getElementById(id).getContext('2d')
+  ctx.font = '40px Arial'
+  ctx.fillText(TEXT, 8, 42)
+  return ctx
+}
+const plain = context('plain'), inherits = context('inherits')
+const w0 = plain.measureText(TEXT).width
+const w1 = inherits.measureText(TEXT).width
+log('devicePixelRatio ' + devicePixelRatio)
+log('plain canvas:                         letterSpacing ' + JSON.stringify(plain.letterSpacing) + ', wordSpacing ' + JSON.stringify(plain.wordSpacing) + ', width ' + w0)
+log('canvas inside the spaced div:         letterSpacing ' + JSON.stringify(inherits.letterSpacing) + ', wordSpacing ' + JSON.stringify(inherits.wordSpacing) + ', width ' + w1 + '  (+' + (w1 - w0) + ')')
+inherits.letterSpacing = '0px'
+inherits.wordSpacing = '0px'
+const w2 = inherits.measureText(TEXT).width
+log("after letterSpacing = wordSpacing = '0px':  width " + w2 + '  (+' + (w2 - w0) + ')')
+inherits.font = '40px Arial'
+const w3 = inherits.measureText(TEXT).width
+log("after setting the same font again:    width " + w3 + '  (+' + (w3 - w0) + ')')
+inherits.letterSpacing = '1px'
+inherits.wordSpacing = '1px'
+inherits.letterSpacing = '0px'
+inherits.wordSpacing = '0px'
+const w4 = inherits.measureText(TEXT).width
+log("after '1px' and then '0px' on both:   width " + w4 + '  (+' + (w4 - w0) + ')')
+log('')
+log('expected: every width = ' + w0)
+log('actual:   ' + [w1, w2, w3, w4].join(', '))
+log('')
+log(navigator.userAgent)
+const bug = w1 !== w0 || w2 !== w0
+document.title = bug ? 'BUG: CSS spacing on the canvas element adds ' + (w1 - w0) + 'px to measureText' : 'NO BUG: both canvases measure ' + w0
+</script>
+</body>
+</html>

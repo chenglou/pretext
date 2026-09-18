@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>running</title>
+<style>
+  body { font: 14px/1.5 Helvetica, Arial, sans-serif; margin: 16px; max-width: 900px }
+  pre { font: 12px/1.5 Menlo, monospace; background: #f4f4f4; padding: 8px; white-space: pre-wrap }
+  .t { font: 16px/28px "Times New Roman"; white-space: pre; tab-size: 8; outline: 1px solid #ccc; margin: 4px 0; width: 300px }
+  .t .mono { font-family: Menlo }
+  .t .x { background: #fbb }
+</style>
+</head>
+<body>
+<h1>Tab stops are measured with the font of the inline box that holds the tab, not the block's font</h1>
+<p>Both lines are 16px Times New Roman blocks with <code>white-space: pre; tab-size: 8</code>, holding a tab and
+<code>x</code>. In the second line the tab is inside a <code>&lt;span&gt;</code> in 16px Menlo. CSS Text defines a
+numeric <code>tab-size</code> as a multiple of the space advance of the tab's nearest block container ancestor, so the
+<code>x</code> should start at 8 Times New Roman spaces (32px) in both lines.</p>
+<div class="t" id="plain"><span>&#9;</span><span class="x">x</span></div>
+<div class="t" id="inline"><span class="mono">&#9;</span><span class="x">x</span></div>
+<pre id="log"></pre>
+<script>
+const out = []
+function log(s) { out.push(s); document.getElementById('log').textContent = out.join('\n') }
+function xStart(id) {
+  const line = document.getElementById(id)
+  return line.querySelector('.x').getBoundingClientRect().left - line.getBoundingClientRect().left
+}
+function space(font) {
+  const ctx = new OffscreenCanvas(1, 1).getContext('2d')
+  ctx.font = font
+  return ctx.measureText(' ').width
+}
+const block = 8 * space('16px "Times New Roman"'), inline = 8 * space('16px Menlo')
+const plain = xStart('plain'), inSpan = xStart('inline')
+log('8 x space of the block font (Times New Roman): ' + block.toFixed(3) + 'px')
+log('8 x space of the span font (Menlo):            ' + inline.toFixed(3) + 'px')
+log('x starts at, tab in a plain span:              ' + plain.toFixed(3) + 'px')
+log('x starts at, tab in the Menlo span:            ' + inSpan.toFixed(3) + 'px')
+log('')
+log('expected: both ' + block.toFixed(3))
+log('')
+log(navigator.userAgent)
+const bug = Math.abs(inSpan - plain) > 0.5
+document.title = bug ? 'BUG: the tab in the Menlo span ends at ' + inSpan.toFixed(1) + 'px, not at the block font\'s stop ' + plain.toFixed(1) + 'px' : 'NO BUG: both tabs end at ' + plain.toFixed(1) + 'px'
+</script>
+</body>
+</html>

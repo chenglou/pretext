@@ -1,0 +1,22 @@
+{
+  "page": "chrome-system-ui-font-cache-order.html",
+  "browser": "webkit-host",
+  "build": {
+    "app": "webkit-host",
+    "appVersion": "27.0",
+    "engine": "22625.1.29.11.27",
+    "os": "26A428"
+  },
+  "started": "2026-09-18T11:52:17.474Z",
+  "error": null,
+  "report": {
+    "title": "NO BUG: both spans match canvas",
+    "log": "devicePixelRatio 2\n13px, DOM laid out first:                    DOM 67.869140625   canvas at 13px 67.869140625   difference 0.0000\n15px, canvas measured 30px system-ui first:   DOM 76.69921875   canvas at 15px 76.69921875   difference 0.0000\n(canvas at 30px measured 144.375, half of it 72.1875)\n\nexpected: both differences under 0.02px\nactual:   0.0000 and 0.0000\n\nMozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/27.0 Safari/605.1.15 webkit-host/22625.1.29.11.27",
+    "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/27.0 Safari/605.1.15 webkit-host/22625.1.29.11.27",
+    "devicePixelRatio": 2,
+    "visibility": "visible",
+    "languages": [
+      "zh-CN"
+    ]
+  }
+}

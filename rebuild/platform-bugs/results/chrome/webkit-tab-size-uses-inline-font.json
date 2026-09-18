@@ -1,0 +1,23 @@
+{
+  "page": "webkit-tab-size-uses-inline-font.html",
+  "browser": "chrome",
+  "build": {
+    "app": "Google Chrome",
+    "appVersion": "153.0.8010.50",
+    "engine": "153.0.8010.50",
+    "os": "26A428"
+  },
+  "started": "2026-09-18T11:52:49.801Z",
+  "error": null,
+  "report": {
+    "title": "NO BUG: both tabs end at 32.0px",
+    "log": "8 x space of the block font (Times New Roman): 32.000px\n8 x space of the span font (Menlo):            77.063px\nx starts at, tab in a plain span:              32.000px\nx starts at, tab in the Menlo span:            32.000px\n\nexpected: both 32.000\n\nMozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36",
+    "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36",
+    "devicePixelRatio": 2,
+    "visibility": "visible",
+    "languages": [
+      "zh-CN",
+      "zh"
+    ]
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "page": "chrome-canvas-word-spacing-order.html",
+  "browser": "webkit-host",
+  "build": {
+    "app": "webkit-host",
+    "appVersion": "27.0",
+    "engine": "22625.1.29.11.27",
+    "os": "26A428"
+  },
+  "started": "2026-09-18T11:52:17.231Z",
+  "error": null,
+  "report": {
+    "title": "NO BUG: order does not matter",
+    "log": "wordSpacing 0px:                 \"x y\" 20.4453125    \" x\" 12.4453125\ncontext A (\" x\" first):          \"x y\" 30.4453125    \" x\" 12.4453125\ncontext B (\"x y\" first):         \"x y\" 30.4453125    \" x\" 12.4453125\n\nexpected: \"x y\" = 30.4453125 in A and B (one word space, +10px), and \" x\" equal in A and B\nactual:   \"x y\" A 30.4453125, B 30.4453125; \" x\" A 12.4453125, B 12.4453125\n\nMozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/27.0 Safari/605.1.15 webkit-host/22625.1.29.11.27",
+    "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/27.0 Safari/605.1.15 webkit-host/22625.1.29.11.27",
+    "devicePixelRatio": 2,
+    "visibility": "visible",
+    "languages": [
+      "zh-CN"
+    ]
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "page": "firefox-letter-spacing-cursive-fallback-mark.html",
+  "browser": "chrome",
+  "build": {
+    "app": "Google Chrome",
+    "appVersion": "153.0.8010.50",
+    "engine": "153.0.8010.50",
+    "os": "26A428"
+  },
+  "started": "2026-09-18T11:52:44.488Z",
+  "error": null,
+  "report": {
+    "title": "NO BUG: both words grow by 0.0px",
+    "log": "beh U+064E beh beh (mark in Geeza Pro):      0px 49.352   8px 49.352   added 0.000\nbeh U+0301 beh beh (mark from a fallback):   0px 81.016   8px 81.016   added 0.000\n\nexpected: both rows add the same\n\nMozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36",
+    "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36",
+    "devicePixelRatio": 2,
+    "visibility": "visible",
+    "languages": [
+      "zh-CN",
+      "zh"
+    ]
+  }
+}
