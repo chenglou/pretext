@@ -1,4 +1,4 @@
-// Gecko port round 4 probes F20 to F24 (pinned Firefox 156, DPR 2). Measurement only: Range rects of text nodes in au
+// Gecko port round 4 probes F20 to F26 (pinned Firefox 156, DPR 2). Measurement only: Range rects of text nodes in au
 // (px × 60) and measureText widths from a main-thread OffscreenCanvas. Every probe returns `checks` (name, measured,
 // expected, ok) and `pre` (what a claim depends on), so each gives facts (rebuild/tests/facts.ts).
 // - F20, the unbounded frame of F18, traced: gfxTextRun::ComputeLigatureData divides a ligature group's signed advance by an
@@ -207,6 +207,69 @@ check('supplementary: the device-size recipe over the bold Canvas advance, again
 return { apd, rows, emoji, heart: heart.points, checks, pre };
 `
 
+// - F25, which cluster of a cursive run with a marked cluster takes letter spacing (eval-r3-2 c-f3e8314c35b33990: three
+//   Phags-pa letters and U+0301 in 16px "Courier New" under 1px; natively 699, 685 and 676 au where the port's in-word
+//   stand-ins are 631, 685 and 684).
+const F25 = String.raw`
+const courier = '400 16px "Courier New"';
+const text = 'ꡀꡁꡂ́';
+const at = ls => dom('white-space: pre; letter-spacing: ' + ls + 'px; font: ' + courier, 'en', [text])[0].points.map(widthOf);
+const plain = at(0), one = at(1), four = at(4);
+need('without letter spacing the DOM node equals the Canvas unit', plain.reduce((a, b) => a + b, 0), oc(courier, 'en', 'ltr', text));
+check('under 1px of letter spacing only the cluster holding U+0301 grows, by 60 au', one.map((w, i) => w - plain[i]), [0, 0, 0, 60]);
+check('under 4px it grows by 240 au', four.map((w, i) => w - plain[i]), [0, 0, 0, 240]);
+check('the letters alone take none: Phags-pa is a cursive script', dom('white-space: pre; letter-spacing: 4px; font: ' + courier, 'en', ['ꡀꡁꡂ'])[0].points.map(widthOf), dom('white-space: pre; font: ' + courier, 'en', ['ꡀꡁꡂ'])[0].points.map(widthOf));
+return { apd, plain, one, four, checks, pre };
+`
+
+// - F26, the suffix-side in-word recipe (lines.ts inWordAdvance): where the cluster before an offset has no joining forms and
+//   W(cluster and suffix) − W(suffix) − W(cluster) = 0, the advance before the offset is W(unit) − W(suffix). Per word and
+//   cluster boundary, in scripts without cursive joining: the DOM's position against the recipe, leaving out offsets where
+//   the ink box shows a ligature (letterSpacing 0.001px turns optional ligatures off, probe F9).
+const F26 = String.raw`
+const seg = new Intl.Segmenter('en', { granularity: 'grapheme' });
+const boxOf = (font, lang, text, ls) => { const c = new OffscreenCanvas(1, 1).getContext('2d'); c.lang = lang; c.font = font; c.letterSpacing = ls; const m = c.measureText(text); return [Math.round(m.width * 60), m.actualBoundingBoxLeft, m.actualBoundingBoxRight]; };
+const words = {
+  en: ['firstname', 'office', 'AVATAR', 'Wave', 'Typography', "city's", 'fjord', 'Yo-yo', 'W.A.V.E', 'r,a.T', 'different', 'waffle'],
+  ru: ['Привет', 'Уголок', 'ГАТЧИНА'],
+  el: ['Αυτοκίνητο', 'Υγεία'],
+  he: ['שלום', 'ירושלים'],
+  th: ['ทำให้', 'ผู้คน', 'กุสมาวดี'],
+  hi: ['नमस्ते', 'क्षत्रिय', 'हिन्दी'],
+  ja: ['日本語の', 'タイポグラフィ'],
+  ko: ['한국어', '타이포'],
+};
+const fonts = { en: ['400 16px Arial', '400 14px "Helvetica Neue"', '400 18px "Times New Roman"', '400 16px Verdana', '400 13px Georgia', '700 15px Helvetica', '400 16px "Courier New"', '400 16px Menlo'], ru: ['400 16px Arial', '400 18px "Times New Roman"', '400 16px Verdana'], el: ['400 16px Arial', '400 18px "Times New Roman"'], he: ['400 16px Arial', '400 18px "Times New Roman"'], th: ['400 20px Thonburi', '400 16px Arial'], hi: ['400 16px "Kohinoor Devanagari"', '400 16px Arial'], ja: ['400 18px "Hiragino Sans"'], ko: ['400 18px "Apple SD Gothic Neo"'] };
+const rows = [];
+let cuts = 0;
+for (const lang of Object.keys(words)) for (const font of fonts[lang]) for (const text of words[lang]) {
+  const direction = lang === 'he' ? 'rtl' : 'ltr';
+  const node = dom('white-space: pre; direction: ' + direction + '; font: ' + font, lang, [text])[0];
+  const unit = oc(font, lang, direction, text);
+  if (widthOf(node.whole) !== unit) { rows.push({ font, text, skipped: 'the DOM node is not the Canvas unit (the 1 au class, or another font)' }); continue; }
+  const clusters = [...seg.segment(text)].map(g => g.index);
+  // Per code point widths, by UTF-16 offset.
+  const widthAt = []; let o = 0;
+  for (const p of node.points) { widthAt.push([o, widthOf(p)]); o += text.codePointAt(o) > 0xffff ? 2 : 1; }
+  for (let k = 1; k < clusters.length; k++) {
+    const t = clusters[k], a = clusters[k - 1];
+    const cluster = text.slice(a, t), suffix = text.slice(t);
+    const across = oc(font, lang, direction, cluster + suffix) - oc(font, lang, direction, suffix) - oc(font, lang, direction, cluster);
+    if (across !== 0) continue;
+    const pair = text.slice(a, clusters[k + 1] === undefined ? text.length : clusters[k + 1]);
+    const on = boxOf(font, lang, pair, '0px'), off = boxOf(font, lang, pair, '0.001px');
+    if (on[0] !== off[0] || on[1] !== off[1] || on[2] !== off[2]) continue;
+    cuts++;
+    const domBefore = widthAt.filter(w => w[0] < t).reduce((x, w) => x + w[1], 0);
+    const recipe = unit - oc(font, lang, direction, suffix);
+    if (domBefore !== recipe) rows.push({ font, text, t, domBefore, recipe });
+  }
+}
+need('the recipe applies at many offsets', cuts > 300, true);
+check('where nothing crosses an offset by the three-string test and the ink box shows no ligature, W(unit) − W(suffix) is the DOM advance before it', rows.filter(r => r.skipped === undefined), []);
+return { apd, cuts, rows, checks, pre };
+`
+
 export default function probes(): Probe[] {
   const probe = (id: string, spec: string, source: string, fontFixtures?: string[]): Probe => ({
     id,
@@ -223,5 +286,7 @@ export default function probes(): Probe[] {
     probe('gecko-port F22', 'gecko-port F22: an in-word position 1 au off where the sides add up', F22, ['Noto Nastaliq Urdu']),
     probe('gecko-port F23', 'gecko-port F23: a spacing mark that starts a cluster shapes alone as a broken syllable', F23),
     probe('gecko-port F24', 'gecko-port F24: synthetic bold on an OffscreenCanvas', F24),
+    probe('gecko-port F25', 'gecko-port F25: letter spacing on a cursive run whose last cluster holds a mark of another font', F25),
+    probe('gecko-port F26', 'gecko-port F26: the suffix-side in-word recipe against the DOM', F26),
   ]
 }
