@@ -406,6 +406,7 @@ function isTextBox(box: WebKitDisplayBox): box is WebKitTextBox {
   return box.kind === 'text' || box.kind === 'soft-line-break'
 }
 
+// rule lab/observe/webkit/limited-lines
 // Per line, the gap that limits every value on it, or null (the rules are in the file's header).
 function lineLimits(layout: WebKitLayout): Limit[] {
   let everywhere: Limit = null

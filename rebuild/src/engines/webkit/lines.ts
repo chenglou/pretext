@@ -2171,6 +2171,7 @@ function bidiDisplayBoxes(L: Layout, line: Line, lineLeft: number, alignmentOffs
     }
   }
   if (hasInlineBox) {
+    // rule webkit/output/first-and-last-display-box
     // computeIsFirstIsLastBox (:1036-1060): a span whose content isn't contiguous in visual order has several display boxes
     // on the line, and of those only the first in box order is its first box and only the last its last box (rule/box-edges
     // c-20592b0063422319: the hanging space of a span at the line's left and its word at the right, in an RTL block; the
