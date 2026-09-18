@@ -65,17 +65,39 @@ export function widthOf16(raw16: number): number {
   return f32(raw16 / 65536)
 }
 
+// FontDescription::EffectiveFontSize (font_description.cc:271-282): the size a platform font is made at and cached under,
+// the computed size floored to 1/100 px in float32.
+function effectiveFontSize(computed: number): number {
+  return f32(Math.floor(f32(computed * 100)) / 100)
+}
+
+// The factor from the advances of a font made for the CSS size to the DOM's at the zoomed size: the ratio of the two
+// platform font sizes. It is the zoom only where the two floors agree: 16.8px is a 16.79px font in Canvas and a 33.59px
+// one in the DOM at zoom 2, 13.33px is 13.33px and 26.66px. Both sides set opsz and HarfBuzz's ptem from the specified size,
+// so nothing else differs. The 64 rule/system-fonts-and-sizes rows at 16.8px failed under the zoom and pass under the ratio
+// (`Hello world again and more` is 204.742188px in the DOM, ceil64 of Canvas's 204.680374px × 33.59 / 16.79, where × 2 / 2
+// gives 204.6875px; specs/blink-RESULTS.md "Round 4b").
+// Kept as a float32, so its products with Canvas's 16.16 totals are exact doubles and differences of measured totals stay
+// exact, as the pair and safe tests need.
+function cssSizeScale(size: number, zoom: number): number {
+  const css = effectiveFontSize(f32(size))
+  return css === 0 ? zoom : f32(effectiveFontSize(f32(f32(size) * f32(zoom))) / css)
+}
+
 // A style whose fonts have an opsz axis is measured at the CSS size and scaled: Blink's DOM shapes at the zoomed size
-// with opsz and HarfBuzz ptem at the specified size (font_platform_data_mac.mm:170-178, harfbuzz_face.cc:648), which
-// equals the CSS-size advances scaled in a clean renderer (probes-chrome correction 7: DOM(S) = ceil64(W(S) × DPR) at
-// 10-28px). Other fonts are measured at the zoomed size (specs/blink-lines.md §2.3).
+// with opsz and HarfBuzz ptem at the specified size (font_platform_data_mac.mm:170-178, harfbuzz_face.cc:639-648), so its
+// glyphs are the CSS-size font's at another size (probes-chrome correction 7: DOM(S) = ceil64(W(S) × DPR) at 10-28px in a
+// clean renderer). The scaled advances are stand-ins: Blink truncates each glyph's advance to 1/65536 px at its own size
+// (skia_text_metrics.cc:207-211), which the layout reports as optical-size (index.ts prepareGaps). Other fonts are measured
+// at the zoomed size (specs/blink-lines.md §2.3).
 export function styleContexts(m: Measurer, style: BlinkStyle, zoom: number, partition: string): StyleContexts {
   const cssSize = style.measuresAtCssSize
-  const scale = cssSize ? zoom : 1
-  // Computed font size f32(specified × zoom); DOM and Canvas both floor it to 1/100 (specs/blink-lines.md §2.3).
+  const scale = cssSize ? cssSizeScale(style.font.size, zoom) : 1
+  // Computed font size f32(specified × zoom); DOM and Canvas both floor it to 1/100 (effectiveFontSize).
   const font = canvasFont(style.font, cssSize ? f32(style.font.size) : f32(f32(style.font.size) * f32(zoom)))
   const lang = style.locale ?? ''
-  const letterSpacing = `${cssSize ? f32(style.letterSpacing) : f32(style.letterSpacing * zoom)}px`
+  // The DOM's letter spacing is the CSS value times the zoom, whatever the font sizes' ratio is.
+  const letterSpacing = `${f32(style.letterSpacing * zoom / scale)}px`
   // optimizeLegibility sets kKerning | kLigatures, so Canvas shapes a whole bidi run in one call when the primary font's
   // GPOS or GSUB coverage holds the space glyph (font_fallback_list.cc:264-286; blink-canvas H6 confirmed). It adds no
   // HarfBuzz feature (font_features.cc:32-240). Other fonts still split before CJK bases (plain_text_node.cc:115-153).
@@ -102,9 +124,11 @@ export type Shaper = {
   gaps: Gap[]
 }
 
-// Math.round(W × 65536) of a Canvas string, in 16.16 units of the zoomed px.
+// W × 65536 of a Canvas string, a whole number of 16.16 units (a Canvas total is the float32 of one, blink-canvas §1.5),
+// times the style's scale: 16.16 units of the zoomed px. Whole where the scale is 1 or 2; under another scale the
+// fractions are exact, so sums and differences of measured totals are too.
 export function raw16Of(sh: Shaper, contexts: StyleContexts, context: number, s: string): number {
-  return Math.round(measureText(sh.m, context, s) * contexts.scale * 65536)
+  return Math.round(measureText(sh.m, context, s) * 65536) * contexts.scale
 }
 
 const NO_LIGATURES_SPACING_PX = 0.015625
@@ -794,16 +818,10 @@ function shapedReversed(p: BlinkPrepared, g: number, k: number): boolean {
   return group.rtl !== scriptRtl
 }
 
-// The part of pair adjustment d between the clusters on both sides of an offset that the glyph before it carries
+// The part of pair adjustment d between the clusters on both sides of offset k that the glyph before it carries
 // (FontFacts.pairKerning): all of it on the first glyph's advance, or kern >> 1 where the kern and kerx pair machine applies
 // it (hb-kern.hh:102-106). Where the fact isn't given, the first glyph's.
-// Beside a U+3000 that went to a fallback font (requeuedSpaceAt) the cluster on the other side of k carries all of it.
-function pairBefore16(sh: Shaper, g: number, d: number, k: number, lo: number, hi: number): number {
-  switch (requeuedSpaceAt(sh.p, k, lo, hi)) {
-    case 'start': return d
-    case 'end': return 0
-    case 'unknown': case null: break
-  }
+function pairBefore16(sh: Shaper, g: number, d: number, k: number): number {
   // Where HarfBuzz shaped the reversed text, its first glyph is the cluster after k.
   const reversed = shapedReversed(sh.p, g, k)
   switch (sh.p.styles[sh.p.groups[g]!.style]!.pairKerning) {
@@ -835,23 +853,37 @@ export function groupPrefix16(sh: Shaper, g: number, k: number): number {
   return base - group.startTrim16
 }
 
-// The part of adjustment d across offset k that the glyphs before k carry. Where HanKerning halts one of the two characters
-// around k, that character carries it whole: the close mark before k (ShouldKernLast), else the open mark after it
-// (ShouldKern). HanKerning picks the character from text_content in logical order (han_kerning.cc:235-300), whatever order
-// HarfBuzz shapes the run in: in an RTL paragraph `」。` is an RTL run and natively `」` is the half-width one
-// (c-306178822a6c08a1). Everything else is a pair adjustment (pairBefore16).
-function adjustBefore16(sh: Shaper, g: number, d: number, k: number, lo: number, hi: number): number {
+// Which side of offset k carries the adjustment across it, or 'pair' where that is the font's pair kerning. Where HanKerning
+// halts one of the two characters around k, that character carries it whole: the close mark before k (ShouldKernLast), else
+// the open mark after it (ShouldKern). HanKerning picks the character from text_content in logical order
+// (han_kerning.cc:235-300), whatever order HarfBuzz shapes the run in: in an RTL paragraph `」。` is an RTL run and natively
+// `」` is the half-width one (c-306178822a6c08a1). Beside a U+3000 that went to a fallback font (requeuedSpaceAt) the
+// cluster on the other side of k carries all of it. Everything else is a pair adjustment (pairBefore16).
+function adjustmentSide(sh: Shaper, g: number, k: number, lo: number, hi: number): 'before' | 'after' | 'pair' {
   const p = sh.p
   if (!p.is8Bit && k > lo && k < hi && hanKerningMayApply(p.hanKerningCandidates, lo, hi)) {
     const data = hanKerningFontData(p, p.groups[g]!.style)
     if (data.hasHalt) {
       const type = resolvedCharType(data, p.text.charCodeAt(k))
       const last = resolvedCharType(data, p.text.charCodeAt(k - 1))
-      if (shouldKernLast(type, last)) return d
-      if (shouldKern(type, last)) return 0
+      if (shouldKernLast(type, last)) return 'before'
+      if (shouldKern(type, last)) return 'after'
     }
   }
-  return pairBefore16(sh, g, d, k, lo, hi)
+  switch (requeuedSpaceAt(p, k, lo, hi)) {
+    case 'start': return 'before'
+    case 'end': return 'after'
+    case 'unknown': case null: return 'pair'
+  }
+}
+
+// The part of adjustment d across offset k that the glyphs before k carry.
+function adjustBefore16(sh: Shaper, g: number, d: number, k: number, lo: number, hi: number): number {
+  switch (adjustmentSide(sh, g, k, lo, hi)) {
+    case 'before': return d
+    case 'after': return 0
+    case 'pair': return pairBefore16(sh, g, d, k)
+  }
 }
 
 const HAN_KERNING_DETAIL = 'a HanKerning trim added from Canvas facts: `halt` through the 「「 pair trim and character types from ink bounds (han_kerning.cc:417-535)'
@@ -1365,6 +1397,19 @@ export function positionLimit(sh: Shaper, g: number, k: number, lo: number, hi: 
   if (style.pairKerning === null || pair !== wide) return 'unsafe-to-break'
   if (style.letterSpacing === 0 && pairAdjustNoLigatures16(sh, g, k, lo, hi) !== pair) return 'unsafe-to-break'
   return null
+}
+
+// Whether the advances of the glyph clusters on both sides of offset k inside a shaping call over [lo, hi) rest on a pair
+// kerning fact the declaration doesn't give: GPOS pair values sit on the first glyph's advance, the kern and kerx machine
+// gives the first glyph kern >> 1 and the second the rest (hb-kern.hh:102-106), and Canvas totals show the sum. The port
+// then puts the adjustment the position takes (positionAdjust16) on the first glyph (pairBefore16), so inside a line both
+// clusters are stand-ins, half the kern off in a font of the other kind, and the line reports it over them (index.ts
+// shapeOf). Joined letters are in-word-prefix's.
+export function pairPlacementUnknown(sh: Shaper, g: number, k: number, lo: number, hi: number): boolean {
+  const p = sh.p
+  if (p.styles[p.groups[g]!.style]!.pairKerning !== null) return false
+  if (k <= lo || k >= hi || !isClusterBoundary(p, k) || isSegmentEdge(p, k) || joinsAcross(p, k, lo, hi)) return false
+  return adjustmentSide(sh, g, k, lo, hi) === 'pair' && positionAdjust16(sh, g, k, lo, hi) !== 0
 }
 
 // positionLimit for the advance sum of a view's glyphs before offset k (viewPrefix16): the widths of the parts before k

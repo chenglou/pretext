@@ -226,6 +226,27 @@ describe('blink observation port', () => {
     expect(plain.codePoints[0]!.rects.map(r => [r.x.state, r.width.state])).toEqual([['predicted', 'predicted']])
   })
 
+  test('c-2ec759abbbbdacb4: an item of negative size reports a rect without width at its origin (size_f.h:30-31)', () => {
+    // A hanging space under -6px letter spacing: the item is 199 units narrow of nothing, and gfx::RectF clamps the width.
+    const p = paragraph(['A '])
+    const space: BlinkItem = { kind: 'text', run: 0, textStart: 1, textEnd: 2, level: 0, x: 485, inlineSize: -199, runs: oneRun(1, 2), partsKnown: true, clusters: [{ textStart: 1, textEnd: 2, graphemeStarts: [1], advance: -199 * 1024 }] }
+    const o = observeBlink(p, layout([line([text(0, 0, 0, [485]), space], [identity(0, 0, 2)])]), unused)
+    expect(raw(o.codePoints[1]!.rects)).toEqual([[0, 485, 0, true]])
+  })
+
+  test('c-82fdb6df09ca942f: the left edge of a rect without width in an RTL item is its end caret', () => {
+    // `لا` in an RTL item: the port gives ل no advance, and the boundary between the letters is a stand-in. Natively ل is
+    // half the ligature wide and its left edge is that boundary's caret, so the x of the zero-width rect rests on it too.
+    const p = paragraph(['لا'])
+    const item: BlinkItem = {
+      kind: 'text', run: 0, textStart: 0, textEnd: 2, level: 1, x: 0, inlineSize: 1229, runs: oneRun(0, 2), partsKnown: true,
+      clusters: [{ textStart: 0, textEnd: 1, graphemeStarts: [0], advance: 0 }, { textStart: 1, textEnd: 2, graphemeStarts: [1], advance: 1229 * 1024, startLimit: 'glyph-clusters' }],
+    }
+    const o = observeBlink(p, layout([line([item], [identity(0, 0, 2)])]), unused)
+    expect(o.codePoints[0]!.rects.map(r => [r.x.state, r.width.state])).toEqual([['limited', 'limited']])
+    expect(o.codePoints[1]!.rects.map(r => [r.x.state, r.width.state])).toEqual([['predicted', 'limited']])
+  })
+
   test('§4.2: an RTL item\'s code point rects run from its right edge', () => {
     const p = paragraph(['אב'], 'rtl')
     const o = observeBlink(p, layout([line([text(0, 0, 11520, [640, 640], 1)], [identity(0, 0, 2)])]), unused)

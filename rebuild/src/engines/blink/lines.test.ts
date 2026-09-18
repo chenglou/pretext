@@ -456,3 +456,73 @@ describe('blink round 4', () => {
     }
   })
 })
+
+describe('blink round 4b', () => {
+  test('a box that reordering splits on a line keeps its line-left edge on the first fragment and moves the line-right one to the last (inline_box_state.h:328-332)', () => {
+    // An RTL block of LTR text: the pre-wrap span's hanging space takes the block's level and goes to the line's left, so the
+    // span has two box fragments on line 0. Each has one 4px padding; c-7d2264227b2141ba natively.
+    const pad: BoxEdge = { margin: 0, border: 0, padding: 4 }
+    const p = tree([{ kind: 'text', text: 'xx aaaa ' }, span([{ kind: 'text', text: 'bbbb cccc ' }], { start: pad, end: pad, whiteSpace: 'pre-wrap' }), { kind: 'text', text: 'dddd eeee' }], 190, { direction: 'rtl', whiteSpace: 'nowrap' })
+    const items = blink(p).lines[0]!.geometry.items
+    const boxes = items.filter(i => i.kind === 'inline-box')
+    expect(boxes.map(b => b.inlineSize).sort((a, b) => a - b)).toEqual([640 + 256, 9 * 640 + 256])
+    // The text fragment has no padding on its left: the letters start at the box's left edge.
+    const letters = items.find(i => i.kind === 'text' && i.textStart === 8)!
+    expect(boxes.some(b => b.x === letters.x && b.inlineSize === 9 * 640 + 256)).toBe(true)
+  })
+
+  test('a font measured at the CSS size scales by the ratio of the two platform font sizes (font_description.cc:271-282)', () => {
+    // A stand-in Canvas whose advances follow the platform font size as Blink floors it: 16.8px is a 16.79px font.
+    const saved = (globalThis as { OffscreenCanvas?: unknown }).OffscreenCanvas
+    class Floored {
+      font = '16px x'; lang = ''; letterSpacing = '0px'; wordSpacing = '0px'; fontKerning = 'auto'; textRendering = 'auto'; direction = 'ltr'
+      measureText(text: string): { width: number; actualBoundingBoxLeft: number; actualBoundingBoxRight: number } {
+        const size = Math.fround(parseFloat(/([\d.]+)px/.exec(this.font)![1]!))
+        const effective = Math.fround(Math.floor(Math.fround(size * 100)) / 100)
+        return { width: Math.round([...text].length * effective * 0.625 * 65536) / 65536, actualBoundingBoxLeft: 0, actualBoundingBoxRight: 0 }
+      }
+    }
+    ;(globalThis as { OffscreenCanvas?: unknown }).OffscreenCanvas = class { getContext(): Floored { return new Floored() } }
+    try {
+      const at = (size: number): { size: number; gaps: Gap[] } => {
+        const base = paragraph([['abcd', 'text']], 400, { facts: { ...UNKNOWN_FONT_FACTS, opticalSizeAxis: true } })
+        const font = { ...base.font, size }
+        const layout = blink({ ...base, font }, { ...env, devicePixelRatio: 2 })
+        const item = layout.lines[0]!.geometry.items[0]!
+        return { size: item.inlineSize, gaps: layout.gaps }
+      }
+      // The DOM's font is 33.59px: four letters of 0.625 em are 83.975px, 5375 units. Twice the 16.79px font's width is 5373.
+      expect(at(16.8).size).toBe(5375)
+      // 13.33px is 13.33px and 26.66px, and 16px is 16px and 32px: the ratio is the zoom.
+      expect(at(13.33).size).toBe(Math.ceil(4 * 0.625 * 26.66 * 64))
+      expect(at(16).size).toBe(5120)
+      // The scaled advances are stand-ins over the text; the renderer's font cache concerns no text range.
+      const gaps = at(16.8).gaps
+      expect(gaps.map(g => [g.gap, g.at])).toEqual([['optical-size', { start: 0, end: 4 }], ['page-history', undefined]])
+    } finally {
+      ;(globalThis as { OffscreenCanvas?: unknown }).OffscreenCanvas = saved
+    }
+  })
+
+  test('a pair adjustment inside a line whose side no fact gives is reported over its two clusters (hb-kern.hh:102-106)', () => {
+    const saved = (globalThis as { OffscreenCanvas?: unknown }).OffscreenCanvas
+    class Kerned {
+      font = '16px x'; lang = ''; letterSpacing = '0px'; wordSpacing = '0px'; fontKerning = 'auto'; textRendering = 'auto'; direction = 'ltr'
+      measureText(text: string): { width: number; actualBoundingBoxLeft: number; actualBoundingBoxRight: number } {
+        let width = 0
+        for (const c of text) if (c !== '‍' && c !== '​' && c !== '⁠') width += 10
+        return { width: width - (text.split('AV').length - 1) * 2, actualBoundingBoxLeft: 0, actualBoundingBoxRight: 0 }
+      }
+    }
+    ;(globalThis as { OffscreenCanvas?: unknown }).OffscreenCanvas = class { getContext(): Kerned { return new Kerned() } }
+    try {
+      const gapsWith = (pairKerning: FontFacts['pairKerning']): (Gap['at'])[] =>
+        blink(paragraph([['xAVx', 'text']], 400, { facts: { ...UNKNOWN_FONT_FACTS, pairKerning } })).lines[0]!.gaps.filter(g => g.gap === 'unsafe-to-break').map(g => g.at)
+      expect(gapsWith(null)).toEqual([{ start: 1, end: 3 }])
+      expect(gapsWith('split')).toEqual([])
+      expect(gapsWith('first-advance')).toEqual([])
+    } finally {
+      ;(globalThis as { OffscreenCanvas?: unknown }).OffscreenCanvas = saved
+    }
+  })
+})
