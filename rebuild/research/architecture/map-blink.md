@@ -2,7 +2,7 @@
 
 Paths are relative to ~/github/pretext-rebuild/rebuild unless absolute.
 
-Offline timings use a stand-in Canvas in bun, so they show JS overhead only. Real Canvas shaping cost comes on top. The scratch scripts are `blink-rows.ts`, `blink-attrib.ts`, `blink-ablate/blink-time.ts`, `blink-ablate/blink-count*.ts` and `blink-ablate/blink-prep.ts`, under `/private/tmp/claude-501/-Users-chenglou-github-pretext/7e07dee5-fc27-4046-b679-3f61a43f7436/scratchpad/arch-plan/`.
+Offline timings use a stand-in Canvas in bun, so they show JS overhead only. Real Canvas shaping cost comes on top. The scratch scripts are `blink-rows.ts`, `blink-attrib.ts`, `blink-ablate/blink-time.ts`, `blink-ablate/blink-count*.ts` and `blink-ablate/blink-prep.ts`, under `<scratch>/arch-plan/`.
 
 ## 0. Numbers first
 

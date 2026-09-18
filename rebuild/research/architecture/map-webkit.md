@@ -7,7 +7,7 @@
   - the shared files they call: `src/index.ts`, `engines/engine.ts`, `measure/canvas.ts`, `content.ts`, `breaks/rbbi.ts`, `breaks/tables.ts`;
   - `specs/webkit-lines.md`, `specs/webkit-text.md` §0-§13 and `specs/webkit-RESULTS.md`.
 - **Skimmed:** `webkit-AUDIT.md` (header and §7-8) and `webkit-gaps.md` §2.5 and §9. For `webkit-canvas.md` I saw nothing: a heading listing came back empty and I did not open the file.
-- **No browser job, no lock, no edits** under `pretext-rebuild`. Offline Bun prototypes and scratch copies of the port are in `/private/tmp/claude-501/-Users-chenglou-github-pretext/7e07dee5-fc27-4046-b679-3f61a43f7436/scratchpad/arch-plan/webkit/` (`rowstats.ts`, `sites.ts`, `phases.ts`, `prof-prepare.ts`, `prof-bidi.ts`, `prepare-ablate.ts`, `port-copy/`, `prof/*.md`).
+- **No browser job, no lock, no edits** under `pretext-rebuild`. Offline Bun prototypes and scratch copies of the port are in `<scratch>/arch-plan/webkit/` (`rowstats.ts`, `sites.ts`, `phases.ts`, `prof-prepare.ts`, `prof-bidi.ts`, `prepare-ablate.ts`, `port-copy/`, `prof/*.md`).
 - Bun timings use a stand-in Canvas, so they show JS cost only.
 - **Labels:** n = code units, I = items (about n/3), B = text boxes (rendered leaves), L = lines, r = length of the rest of a word split across lines.
 

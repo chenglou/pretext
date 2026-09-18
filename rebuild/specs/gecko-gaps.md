@@ -23,7 +23,7 @@ No browser was launched. §10 lists probes to run in installed Firefox.
   - **[I]**: inferred from code that was read, without running it.
   - **[P]**: computed offline from the macOS 27 font files with the Gecko formulas.
     - Scripts (stdlib Python, scratch):
-      `/private/tmp/claude-501/-Users-chenglou-github-pretext/7e07dee5-fc27-4046-b679-3f61a43f7436/scratchpad/{fontfacts,spacepairs,kernAA,trak,units}.py`.
+      `<scratch>/{fontfacts,spacepairs,kernAA,trak,units}.py`.
 - Terms:
   - **au**: app unit, 1/60 CSS px.
   - **apd**: app units per device pixel: 60 at DPR 1, 30 at DPR 2.

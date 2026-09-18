@@ -149,7 +149,7 @@ Everything the freeze report claims that I checked reproduces, and nothing in it
 
 I changed nothing in the repository. The main tree and the scratch clone are both at `af50a11` with `git status` empty, and the frozen folders are untouched. Tier 1 ran through links into `.artifacts/tests/reference`.
 
-- Scratch clone: `/private/tmp/claude-501/-Users-chenglou-github-pretext/7e07dee5-fc27-4046-b679-3f61a43f7436/scratchpad/freeze-verify`
+- Scratch clone: `<scratch>/freeze-verify`
 - Tools, logs, plants and results: `/Users/chenglou/github/pretext-rebuild/.artifacts/ceiling-20260917/freeze-verify` (`tools/`, `logs/`, `plants/`, `tier1/`, `tier2/`, `seeds/`, `ledgers/`, `probes/`)
 
 ## Needs you

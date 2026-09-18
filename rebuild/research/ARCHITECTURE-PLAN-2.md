@@ -88,7 +88,7 @@ Yes, a few things. None touches `src`, `lab` or `tests` on any branch, and none 
   - **Gecko:** 41.5% of asks are repeats.
     - `w()` and `rangeAu` under `inWordAdvance` 88%.
     - Prepare's second stretch measure (`auIn`, gap-only) 8.9%.
-- Patch, reports and tallies are in `/private/tmp/claude-501/-Users-chenglou-github-pretext/7e07dee5-fc27-4046-b679-3f61a43f7436/scratchpad/memo-off/`.
+- Patch, reports and tallies are in `<scratch>/memo-off/`.
 
 **1. The citation and prose ledger.**
 - A new file under `rebuild/tools/`, in a worktree of its own.
