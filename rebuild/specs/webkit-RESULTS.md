@@ -182,7 +182,7 @@ whose two orders agree, each alone in a fresh process (`runs/isolate-<set>`, 400
 |---|---:|---:|---|---|---:|
 | development | 80 | 26 | 106 / 106 / 104 (1 fail, 1 unobserved) | 57 / 53 | 1 |
 | held-out 09-16 | 144 | 68 | 212 / 212 / 210 (2 unobserved) | 129 / 129 | 0 |
-| families | 6 | 76 | 82 / 82 / 50 (32 fail, `rule/controls` steps) | 82 / 82 | 0 |
+| families | 6 | 76 | 82 / 82 / 50 (32 fail, `rule/controls` steps) | 50 / 48 | 0 |
 
 - The history-free prediction is the native layout of every case alone, outside the control-width steps. 116 of the 170
   cases whose orders agree differ from the case alone in both orders (15, 57 and 44): two orders can't see history both
