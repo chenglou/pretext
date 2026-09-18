@@ -14,7 +14,8 @@ Scorer 5 throughout. Every library change ran predict-only against the round 3 e
 `webkit-round2/heldout-all-*-r1`), in three shards (`webkit-round4/runs/<set>-<p>/`, tools in `webkit-round4/tools/`), then on
 three fresh sets. The baseline `b0` is the evaluated bundle (sha256 `80b6b4b8…`) over the same rows. Probes are in
 `rebuild/probes/webkit-round4.ts` (webkit-host; outputs under `.artifacts/probes/webkit/round4*`); Core Text research tools
-are in `rebuild/data/webkit/tools/` and the run folder's scratch (`ctshape.m`, `ctruns.m`, `ctfile.m`).
+are `rebuild/data/webkit/tools/ct-css-families.m` and `webkit-round4/tools/ctshape.m`, `ctruns.m` and `ctfile.m`. Row files
+are compressed (`zstd -dc`).
 
 ### Sets
 
