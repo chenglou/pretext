@@ -1,6 +1,6 @@
 {
   "format": "pretext-known-tail/1",
-  "note": "The classes deliberately left open when the correctness line is frozen (ceiling round 4). rebuild/tests/known-tail.ts has the format and the commands; rebuild/lab/README.md \"The known tail\" says how to read and append it. Counts and statuses in notes are of 2026-09-18; \"round 4 evaluation\" marks what the evaluation of that day added (.artifacts/ceiling-20260917/evaluate-r4).",
+  "note": "The classes deliberately left open when the correctness line is frozen (ceiling round 4). rebuild/tests/known-tail.ts has the format and the commands; rebuild/lab/README.md \"The known tail\" says how to read and append it. Counts and statuses in notes are of 2026-09-18; \"round 4 evaluation\" marks what the evaluation of that day added (.artifacts/ceiling-20260917/evaluate-r4). The items and members of research/ROUND4-CRITIC.md (\"understated\", its fresh set critic-r4-1) were added when the references were frozen, from the frozen recordings' ledgers (.artifacts/tests/runs/line-20260918).",
   "items": [
     {
       "id": "blink/cluster-split-across-spans",
@@ -81,6 +81,16 @@
           "id": "c-ea58319c5aaa09ba",
           "browser": "chrome",
           "where": "heldout-runs"
+        },
+        {
+          "id": "c-9255bce06885eb91",
+          "browser": "chrome",
+          "where": "critic-r4-1"
+        },
+        {
+          "id": "c-d15651d1ef6b547b",
+          "browser": "chrome",
+          "where": "critic-r4-1"
         }
       ],
       "source": "research/ROUND3-CRITIC.md item 6 (22 of the evaluation's 181 fresh Chrome failures, 28 of the critic's 86); every Chrome prediction failure of runs and heldout-runs on 2026-09-18 is this class",
@@ -333,6 +343,11 @@
           "id": "c-dbc017ac8f974bb2",
           "browser": "chrome",
           "where": "eval-r4-1: the same ligature in a 36px RTL block, runs/split-word"
+        },
+        {
+          "id": "c-2e34aec7382cef8f",
+          "browser": "chrome",
+          "where": "critic-r4-1: open with facts (lam-alef at an emergency break, 4307 units predicted, 4138 native); with no facts covered by position"
         }
       ],
       "match": {
@@ -442,10 +457,20 @@
           "id": "c-3229d7904410f2ae",
           "browser": "chrome",
           "where": "r4b-blink-2: set aside by signature before its run"
+        },
+        {
+          "id": "c-a3d4baab0945f957",
+          "browser": "chrome",
+          "where": "critic-r4-1: a candidate in the stalled round trip; 2.5 em, keep-all with break-word, `？」` at the end"
+        },
+        {
+          "id": "c-a3deda1d0803dca9",
+          "browser": "chrome",
+          "where": "critic-r4-1: a candidate in the stalled round trip; 2px"
         }
       ],
-      "source": "round 4a Blink report \"Bug report\" (shaping_line_breaker.cc:344-363, not traced further); rebuild/platform-bugs",
-      "note": "`。』` in an 8px block with overflow-wrap: break-word. The lab can't observe such a case. The second hanging text of round 4b has no pair of closing marks, so the reduction names less than the bug. Round 4 evaluation: sealed-4's policy file stalled Chrome in both orders and both configurations (4 jobs, one cause); one case of the signature (policy/zh-lang, overflow-wrap: break-word, white-space normal, a block between half an em and one em wide) sat in both stalled round trips and was set aside without being opened (evaluate-r4/sealed4/chrome-policy-set-aside.ids). The fresh sets eval-r4-1 to -3 drew no such case. The lab still has no rule that sets such cases aside before a run."
+      "source": "round 4a Blink report \"Bug report\" (shaping_line_breaker.cc:344-363, not traced further); rebuild/platform-bugs; research/ROUND4-CRITIC.md \"Known tail\" 6 (.artifacts/ceiling-20260917/critic-r4/fresh/chrome-part-02-set-aside.ids)",
+      "note": "`。』` in an 8px block with overflow-wrap: break-word. The lab can't observe such a case. The second hanging text of round 4b has no pair of closing marks, so the reduction names less than the bug. Round 4 evaluation: sealed-4's policy file stalled Chrome in both orders and both configurations (4 jobs, one cause); one case of the signature (policy/zh-lang, overflow-wrap: break-word, white-space normal, a block between half an em and one em wide) sat in both stalled round trips and was set aside without being opened (evaluate-r4/sealed4/chrome-policy-set-aside.ids). The fresh sets eval-r4-1 to -3 drew no such case. The lab still has no rule that sets such cases aside before a run. The signature is wider than the one recorded here: the round 4 critic's reverse job stalled in a round trip that held no case between half an em and one em wide; it set 32 cases aside and named two candidates. The tier sets hold no such case: the six frozen recordings of 2026-09-18 ran without a stall."
     },
     {
       "id": "gecko/in-word-prefix-sides-dont-add-up",
@@ -794,6 +819,81 @@
           "id": "c-ba27482b1773b264",
           "browser": "firefox",
           "where": "eval-r4-3: residual member (signature), facts configuration"
+        },
+        {
+          "id": "c-0ac1d02d25a64836",
+          "browser": "firefox",
+          "where": "critic-r4-1: residual by signature with facts; with no facts covered by optical-size by position"
+        },
+        {
+          "id": "c-1a02722e1a804e91",
+          "browser": "firefox",
+          "where": "critic-r4-1: residual by signature with facts; with no facts covered by optical-size by position"
+        },
+        {
+          "id": "c-23c126c5056c6545",
+          "browser": "firefox",
+          "where": "critic-r4-1: residual by signature with facts; with no facts covered by optical-size by position"
+        },
+        {
+          "id": "c-516764cc99e8e3d9",
+          "browser": "firefox",
+          "where": "critic-r4-1: residual by signature with facts; with no facts covered by optical-size by position"
+        },
+        {
+          "id": "c-ad2ac99b25213556",
+          "browser": "firefox",
+          "where": "critic-r4-1: residual by signature with facts; with no facts covered by optical-size by position"
+        },
+        {
+          "id": "c-dcc0ee4415760dd8",
+          "browser": "firefox",
+          "where": "critic-r4-1: residual by signature with facts; with no facts covered by optical-size by position"
+        },
+        {
+          "id": "c-0a1ad9a674ef7566",
+          "browser": "firefox",
+          "where": "critic-r4-1: residual by signature with facts; with no facts covered by optical-size by position"
+        },
+        {
+          "id": "c-18ef08732311c4d8",
+          "browser": "firefox",
+          "where": "critic-r4-1: residual by signature with facts; with no facts covered by optical-size by position"
+        },
+        {
+          "id": "c-1c362a246a6b12fa",
+          "browser": "firefox",
+          "where": "critic-r4-1: residual by signature with facts; with no facts covered by optical-size by position"
+        },
+        {
+          "id": "c-42d9bb45fb59bbed",
+          "browser": "firefox",
+          "where": "critic-r4-1: residual by signature with facts; with no facts covered by optical-size by position"
+        },
+        {
+          "id": "c-7238c39f65d4221c",
+          "browser": "firefox",
+          "where": "critic-r4-1: residual by signature with facts; with no facts covered by optical-size by position"
+        },
+        {
+          "id": "c-b61b1c94b8f9af0a",
+          "browser": "firefox",
+          "where": "critic-r4-1: residual by signature with facts; with no facts covered by optical-size by position"
+        },
+        {
+          "id": "c-e2e99ecad639a6b9",
+          "browser": "firefox",
+          "where": "critic-r4-1: residual by signature with facts; with no facts covered by optical-size by position"
+        },
+        {
+          "id": "c-f21780caade0b69d",
+          "browser": "firefox",
+          "where": "critic-r4-1: residual by signature with facts; with no facts covered by optical-size by position"
+        },
+        {
+          "id": "c-fd19a74a194892f4",
+          "browser": "firefox",
+          "where": "critic-r4-1: residual by signature with facts; with no facts covered by optical-size by position"
         }
       ],
       "match": {
@@ -938,6 +1038,26 @@
           "id": "c-bd4a89130a560c90",
           "browser": "firefox",
           "where": "suite-sample: moved by measure first, not history-dependent in the reference"
+        },
+        {
+          "id": "c-33f612e85fae1f04",
+          "browser": "firefox",
+          "where": "critic-r4-1: history-dependent, fails a prediction metric in file order"
+        },
+        {
+          "id": "c-42e7ed5ef76742ff",
+          "browser": "firefox",
+          "where": "critic-r4-1: history-dependent, fails a prediction metric in file order"
+        },
+        {
+          "id": "c-52224305a9d1969d",
+          "browser": "firefox",
+          "where": "critic-r4-1: history-dependent, fails a prediction metric in file order"
+        },
+        {
+          "id": "c-5749b85240285a04",
+          "browser": "firefox",
+          "where": "critic-r4-1: history-dependent, fails a prediction metric in file order"
         }
       ],
       "match": {
@@ -946,8 +1066,8 @@
         ],
         "status": "history-dependent"
       },
-      "source": "round 4a Gecko report §3.4 (gfxPlatformFontList.cpp:1474-1486, gfxPlatformMac.cpp:147-262; 190 against 104 history-dependent held-out cases in identical runs); lab README \"Measure first\" (121 of 25,415 cases move, all holding U+1F600)",
-      "note": "A prediction holds for the state it was measured in. Text measured before another paragraph's U+FE0E request and laid out after it is 1px per emoji off, with no condition on it when the facts are supplied."
+      "source": "round 4a Gecko report §3.4 (gfxPlatformFontList.cpp:1474-1486, gfxPlatformMac.cpp:147-262; 190 against 104 history-dependent held-out cases in identical runs); lab README \"Measure first\" (121 of 25,415 cases move, all holding U+1F600); research/ROUND4-CRITIC.md \"Known tail\" 4 (fresh set critic-r4-1)",
+      "note": "A prediction holds for the state it was measured in. Text measured before another paragraph's U+FE0E request and laid out after it is 1px per emoji off, with no condition on it when the facts are supplied. The round 4 critic's fresh set held 209 history-dependent Firefox cases (runs/split-word 87, word-spacing-spans 57, span-at-space 33, letter-spacing-spans 32) against 0 on each of the evaluator's three sets from the same generators; in file order 199 of them fail a prediction metric, in reverse 6, and counted, forward widths would be 98.21% instead of 98.97%. The Firefox line is for runs where this state didn't occur. On the tier sets the set was stable on 2026-09-18: the frozen recordings and the evaluation's, hours apart, mark the same 313 cases (314 on widths) in both configurations."
     },
     {
       "id": "gecko/unbounded-frame",
@@ -1050,6 +1170,416 @@
           "id": "c-3cbdacac26c35e1e",
           "browser": "webkit-host",
           "where": "r4b-webkit-1: suite/maintained/kinsoku-units under page-history alone"
+        },
+        {
+          "id": "c-68d063f2265a1ae1",
+          "browser": "webkit-host",
+          "where": "critic-r4-1: fails in both orders under page-history, passes every metric alone in a fresh process"
+        },
+        {
+          "id": "c-42437b88f8dafff7",
+          "browser": "webkit-host",
+          "where": "critic-r4-1: fails in both orders under page-history, passes every metric alone in a fresh process"
+        },
+        {
+          "id": "c-4dd83a406fe00180",
+          "browser": "webkit-host",
+          "where": "critic-r4-1: fails in both orders under page-history, passes every metric alone in a fresh process"
+        },
+        {
+          "id": "c-6cb97e72141d0fd2",
+          "browser": "webkit-host",
+          "where": "critic-r4-1: fails in both orders under page-history, passes every metric alone in a fresh process"
+        },
+        {
+          "id": "c-48c8af5185cff8be",
+          "browser": "webkit-host",
+          "where": "critic-r4-1: fails in both orders under page-history, passes every metric alone in a fresh process"
+        },
+        {
+          "id": "c-92d03532cdf76721",
+          "browser": "webkit-host",
+          "where": "critic-r4-1: fails in both orders under page-history, passes every metric alone in a fresh process"
+        },
+        {
+          "id": "c-9b56991693cc3484",
+          "browser": "webkit-host",
+          "where": "critic-r4-1: fails in both orders under page-history, passes every metric alone in a fresh process"
+        },
+        {
+          "id": "c-a89a4f324a664ce0",
+          "browser": "webkit-host",
+          "where": "critic-r4-1: fails in both orders under page-history, passes every metric alone in a fresh process"
+        },
+        {
+          "id": "c-ac32686ea704f58d",
+          "browser": "webkit-host",
+          "where": "critic-r4-1: fails in both orders under page-history, passes every metric alone in a fresh process"
+        },
+        {
+          "id": "c-d3ec286e60edd5de",
+          "browser": "webkit-host",
+          "where": "critic-r4-1: fails in both orders under page-history, passes every metric alone in a fresh process"
+        },
+        {
+          "id": "c-ea637af45dbb500c",
+          "browser": "webkit-host",
+          "where": "critic-r4-1: fails in both orders under page-history, passes every metric alone in a fresh process"
+        },
+        {
+          "id": "c-f33f5f87eb4f2536",
+          "browser": "webkit-host",
+          "where": "critic-r4-1: fails in both orders under page-history, passes every metric alone in a fresh process"
+        },
+        {
+          "id": "c-4ee54f5fa572ba8d",
+          "browser": "webkit-host",
+          "where": "critic-r4-1: fails in both orders under page-history, passes every metric alone in a fresh process"
+        },
+        {
+          "id": "c-7fe5c55f18fffdb8",
+          "browser": "webkit-host",
+          "where": "critic-r4-1: fails in both orders under page-history, passes every metric alone in a fresh process"
+        },
+        {
+          "id": "c-802f48f41018f497",
+          "browser": "webkit-host",
+          "where": "critic-r4-1: fails in both orders under page-history, passes every metric alone in a fresh process"
+        },
+        {
+          "id": "c-8aab40ed6c3eb303",
+          "browser": "webkit-host",
+          "where": "critic-r4-1: fails in both orders under page-history, passes every metric alone in a fresh process"
+        },
+        {
+          "id": "c-952ce9bcfa178550",
+          "browser": "webkit-host",
+          "where": "critic-r4-1: fails in both orders under page-history, passes every metric alone in a fresh process"
+        },
+        {
+          "id": "c-eaf299b2906c60d4",
+          "browser": "webkit-host",
+          "where": "critic-r4-1: fails in both orders under page-history, passes every metric alone in a fresh process"
+        },
+        {
+          "id": "c-1827ad21d0273865",
+          "browser": "webkit-host",
+          "where": "critic-r4-1: fails in both orders under page-history, passes every metric alone in a fresh process"
+        },
+        {
+          "id": "c-6d7b1399a902a3cc",
+          "browser": "webkit-host",
+          "where": "critic-r4-1: fails in both orders under page-history, passes every metric alone in a fresh process"
+        },
+        {
+          "id": "c-772c8a0d30687e9e",
+          "browser": "webkit-host",
+          "where": "critic-r4-1: fails in both orders under page-history, passes every metric alone in a fresh process"
+        },
+        {
+          "id": "c-a7ffb9b947624286",
+          "browser": "webkit-host",
+          "where": "critic-r4-1: fails in both orders under page-history, passes every metric alone in a fresh process"
+        },
+        {
+          "id": "c-b0b3afe1ab3d0e91",
+          "browser": "webkit-host",
+          "where": "critic-r4-1: fails in both orders under page-history, passes every metric alone in a fresh process"
+        },
+        {
+          "id": "c-abc848d671bc6115",
+          "browser": "webkit-host",
+          "where": "critic-r4-1: fails in both orders under page-history, passes every metric alone in a fresh process"
+        },
+        {
+          "id": "c-34e5aa524012bcd8",
+          "browser": "webkit-host",
+          "where": "critic-r4-1: fails in both orders under page-history, passes every metric alone in a fresh process"
+        },
+        {
+          "id": "c-87bb61327bf36810",
+          "browser": "webkit-host",
+          "where": "critic-r4-1: fails in both orders under page-history, passes every metric alone in a fresh process"
+        },
+        {
+          "id": "c-ae7959cf00144138",
+          "browser": "webkit-host",
+          "where": "critic-r4-1: fails in both orders under page-history, passes every metric alone in a fresh process"
+        },
+        {
+          "id": "c-0c9499242d8c5bd2",
+          "browser": "webkit-host",
+          "where": "critic-r4-1: fails in both orders under page-history, passes every metric alone in a fresh process"
+        },
+        {
+          "id": "c-12bfa45970cbc4f0",
+          "browser": "webkit-host",
+          "where": "critic-r4-1: fails in both orders under page-history, passes every metric alone in a fresh process"
+        },
+        {
+          "id": "c-3112441d281dafa7",
+          "browser": "webkit-host",
+          "where": "critic-r4-1: fails in both orders under page-history, passes every metric alone in a fresh process"
+        },
+        {
+          "id": "c-349c9f6b4d856de3",
+          "browser": "webkit-host",
+          "where": "critic-r4-1: fails in both orders under page-history, passes every metric alone in a fresh process"
+        },
+        {
+          "id": "c-34a5e83301478e92",
+          "browser": "webkit-host",
+          "where": "critic-r4-1: fails in both orders under page-history, passes every metric alone in a fresh process"
+        },
+        {
+          "id": "c-36027d58e94fddb5",
+          "browser": "webkit-host",
+          "where": "critic-r4-1: fails in both orders under page-history, passes every metric alone in a fresh process"
+        },
+        {
+          "id": "c-3e2d30b00012dc2e",
+          "browser": "webkit-host",
+          "where": "critic-r4-1: fails in both orders under page-history, passes every metric alone in a fresh process"
+        },
+        {
+          "id": "c-47760d1750cb287a",
+          "browser": "webkit-host",
+          "where": "critic-r4-1: fails in both orders under page-history, passes every metric alone in a fresh process"
+        },
+        {
+          "id": "c-4b53dfb97267c1cc",
+          "browser": "webkit-host",
+          "where": "critic-r4-1: fails in both orders under page-history, passes every metric alone in a fresh process"
+        },
+        {
+          "id": "c-4e07d0be473a7f71",
+          "browser": "webkit-host",
+          "where": "critic-r4-1: fails in both orders under page-history, passes every metric alone in a fresh process"
+        },
+        {
+          "id": "c-55613d16f6e50922",
+          "browser": "webkit-host",
+          "where": "critic-r4-1: fails in both orders under page-history, passes every metric alone in a fresh process"
+        },
+        {
+          "id": "c-5ccc2c729eac61d4",
+          "browser": "webkit-host",
+          "where": "critic-r4-1: fails in both orders under page-history, passes every metric alone in a fresh process"
+        },
+        {
+          "id": "c-5dd29b32092e9b50",
+          "browser": "webkit-host",
+          "where": "critic-r4-1: fails in both orders under page-history, passes every metric alone in a fresh process"
+        },
+        {
+          "id": "c-5eb0b15409d85582",
+          "browser": "webkit-host",
+          "where": "critic-r4-1: fails in both orders under page-history, passes every metric alone in a fresh process"
+        },
+        {
+          "id": "c-634794adcd1c1972",
+          "browser": "webkit-host",
+          "where": "critic-r4-1: fails in both orders under page-history, passes every metric alone in a fresh process"
+        },
+        {
+          "id": "c-63a1ddc7dc68838e",
+          "browser": "webkit-host",
+          "where": "critic-r4-1: fails in both orders under page-history, passes every metric alone in a fresh process"
+        },
+        {
+          "id": "c-683290fb5a7beb13",
+          "browser": "webkit-host",
+          "where": "critic-r4-1: fails in both orders under page-history, passes every metric alone in a fresh process"
+        },
+        {
+          "id": "c-6a204371c412ddcc",
+          "browser": "webkit-host",
+          "where": "critic-r4-1: fails in both orders under page-history, passes every metric alone in a fresh process"
+        },
+        {
+          "id": "c-713e40a4bdeb00c7",
+          "browser": "webkit-host",
+          "where": "critic-r4-1: fails in both orders under page-history, passes every metric alone in a fresh process"
+        },
+        {
+          "id": "c-7670d48d13a60d99",
+          "browser": "webkit-host",
+          "where": "critic-r4-1: fails in both orders under page-history, passes every metric alone in a fresh process"
+        },
+        {
+          "id": "c-77fcf04eb315fecd",
+          "browser": "webkit-host",
+          "where": "critic-r4-1: fails in both orders under page-history, passes every metric alone in a fresh process"
+        },
+        {
+          "id": "c-79d14c6140f24fdb",
+          "browser": "webkit-host",
+          "where": "critic-r4-1: fails in both orders under page-history, passes every metric alone in a fresh process"
+        },
+        {
+          "id": "c-8128bd0385c2c336",
+          "browser": "webkit-host",
+          "where": "critic-r4-1: fails in both orders under page-history, passes every metric alone in a fresh process"
+        },
+        {
+          "id": "c-8974fbb49cc064b2",
+          "browser": "webkit-host",
+          "where": "critic-r4-1: fails in both orders under page-history, passes every metric alone in a fresh process"
+        },
+        {
+          "id": "c-95158d9352c88024",
+          "browser": "webkit-host",
+          "where": "critic-r4-1: fails in both orders under page-history, passes every metric alone in a fresh process"
+        },
+        {
+          "id": "c-95dd309229001baa",
+          "browser": "webkit-host",
+          "where": "critic-r4-1: fails in both orders under page-history, passes every metric alone in a fresh process"
+        },
+        {
+          "id": "c-966680b232c3da41",
+          "browser": "webkit-host",
+          "where": "critic-r4-1: fails in both orders under page-history, passes every metric alone in a fresh process"
+        },
+        {
+          "id": "c-999ed86ca153d539",
+          "browser": "webkit-host",
+          "where": "critic-r4-1: fails in both orders under page-history, passes every metric alone in a fresh process"
+        },
+        {
+          "id": "c-9a1a6aa5d8e3579f",
+          "browser": "webkit-host",
+          "where": "critic-r4-1: fails in both orders under page-history, passes every metric alone in a fresh process"
+        },
+        {
+          "id": "c-9e5544311336935a",
+          "browser": "webkit-host",
+          "where": "critic-r4-1: fails in both orders under page-history, passes every metric alone in a fresh process"
+        },
+        {
+          "id": "c-a0db96e5f8383169",
+          "browser": "webkit-host",
+          "where": "critic-r4-1: fails in both orders under page-history, passes every metric alone in a fresh process"
+        },
+        {
+          "id": "c-a46bf4717f3d0be5",
+          "browser": "webkit-host",
+          "where": "critic-r4-1: fails in both orders under page-history, passes every metric alone in a fresh process"
+        },
+        {
+          "id": "c-ac0de18fb3f5794f",
+          "browser": "webkit-host",
+          "where": "critic-r4-1: fails in both orders under page-history, passes every metric alone in a fresh process"
+        },
+        {
+          "id": "c-adaed3f49d6fbd50",
+          "browser": "webkit-host",
+          "where": "critic-r4-1: fails in both orders under page-history, passes every metric alone in a fresh process"
+        },
+        {
+          "id": "c-b652d2bea6497f5c",
+          "browser": "webkit-host",
+          "where": "critic-r4-1: fails in both orders under page-history, passes every metric alone in a fresh process"
+        },
+        {
+          "id": "c-ba658ec394940f34",
+          "browser": "webkit-host",
+          "where": "critic-r4-1: fails in both orders under page-history, passes every metric alone in a fresh process"
+        },
+        {
+          "id": "c-c14c92532f493ed4",
+          "browser": "webkit-host",
+          "where": "critic-r4-1: fails in both orders under page-history, passes every metric alone in a fresh process"
+        },
+        {
+          "id": "c-c292519ae3f316b4",
+          "browser": "webkit-host",
+          "where": "critic-r4-1: fails in both orders under page-history, passes every metric alone in a fresh process"
+        },
+        {
+          "id": "c-ca7e5ef2a9b66eb0",
+          "browser": "webkit-host",
+          "where": "critic-r4-1: fails in both orders under page-history, passes every metric alone in a fresh process"
+        },
+        {
+          "id": "c-cc212708232f172e",
+          "browser": "webkit-host",
+          "where": "critic-r4-1: fails in both orders under page-history, passes every metric alone in a fresh process"
+        },
+        {
+          "id": "c-cd4bbc10eda6b703",
+          "browser": "webkit-host",
+          "where": "critic-r4-1: fails in both orders under page-history, passes every metric alone in a fresh process"
+        },
+        {
+          "id": "c-d71f3bd16c3e2e69",
+          "browser": "webkit-host",
+          "where": "critic-r4-1: fails in both orders under page-history, passes every metric alone in a fresh process"
+        },
+        {
+          "id": "c-d7ebc22418011562",
+          "browser": "webkit-host",
+          "where": "critic-r4-1: fails in both orders under page-history, passes every metric alone in a fresh process"
+        },
+        {
+          "id": "c-da5497c41f9800da",
+          "browser": "webkit-host",
+          "where": "critic-r4-1: fails in both orders under page-history, passes every metric alone in a fresh process"
+        },
+        {
+          "id": "c-dbc5a9770fd0311f",
+          "browser": "webkit-host",
+          "where": "critic-r4-1: fails in both orders under page-history, passes every metric alone in a fresh process"
+        },
+        {
+          "id": "c-dc1b947498043b1b",
+          "browser": "webkit-host",
+          "where": "critic-r4-1: fails in both orders under page-history, passes every metric alone in a fresh process"
+        },
+        {
+          "id": "c-e01f9b05a48e647e",
+          "browser": "webkit-host",
+          "where": "critic-r4-1: fails in both orders under page-history, passes every metric alone in a fresh process"
+        },
+        {
+          "id": "c-e693f00a7453d039",
+          "browser": "webkit-host",
+          "where": "critic-r4-1: fails in both orders under page-history, passes every metric alone in a fresh process"
+        },
+        {
+          "id": "c-1a06eb74f30c7ff4",
+          "browser": "webkit-host",
+          "where": "critic-r4-1: fails in both orders under page-history, passes every metric alone in a fresh process"
+        },
+        {
+          "id": "c-211810cad51baffb",
+          "browser": "webkit-host",
+          "where": "critic-r4-1: fails in both orders under page-history, passes every metric alone in a fresh process"
+        },
+        {
+          "id": "c-3a2fc48ba0bfc769",
+          "browser": "webkit-host",
+          "where": "critic-r4-1: fails in both orders under page-history, passes every metric alone in a fresh process"
+        },
+        {
+          "id": "c-6499836b8319c31c",
+          "browser": "webkit-host",
+          "where": "critic-r4-1: fails in both orders under page-history, passes every metric alone in a fresh process"
+        },
+        {
+          "id": "c-7653b8921ff97aa9",
+          "browser": "webkit-host",
+          "where": "critic-r4-1: fails in both orders under page-history, passes every metric alone in a fresh process"
+        },
+        {
+          "id": "c-a94686be1b48ef52",
+          "browser": "webkit-host",
+          "where": "critic-r4-1: fails in both orders under page-history, passes every metric alone in a fresh process"
+        },
+        {
+          "id": "c-d4d086222e0c0d69",
+          "browser": "webkit-host",
+          "where": "critic-r4-1: fails in both orders under page-history, passes every metric alone in a fresh process"
         }
       ],
       "match": {
@@ -1061,8 +1591,8 @@
           "page-history"
         ]
       },
-      "source": "specs/webkit-RESULTS.md; round 4a WebKit report items 1 and 4 (400 cases isolated, all pass lineCount and breaks alone; 250 of 374 fresh failures)",
-      "note": "History worlds vary one box at a time, a declared approximation that isolation didn't contradict; products of worlds aren't laid out. A one-order fresh set overstates WebKit failures threefold. rule/br-elements fails 20 line counts and 32 breaks under it."
+      "source": "specs/webkit-RESULTS.md; round 4a WebKit report items 1 and 4 (400 cases isolated, all pass lineCount and breaks alone; 250 of 374 fresh failures); research/ROUND4-CRITIC.md §2 and \"Known tail\" 5 (.artifacts/ceiling-20260917/critic-r4/isolate)",
+      "note": "History worlds vary one box at a time, a declared approximation that isolation didn't contradict; products of worlds aren't laid out. A one-order fresh set overstates WebKit failures threefold. rule/br-elements fails 20 line counts and 32 breaks under it. The round 4 critic isolated all 90 fresh cases whose failure page-history touches: 82 pass every metric alone in a fresh process and fail the same way in both orders, so the two-order rule doesn't mark them, which is why webkit-host's line counts and breaks move about 0.1 point between fresh sets; the other 8 (rule/controls, `c-1143d3b9677ac5c7`) fail widths alone and also sit under control-character-width, their cause. rich-prewrap/trailing-spaces holds 48 of the 82."
     },
     {
       "id": "webkit/history-dependent-cases",
@@ -2258,11 +2788,11 @@
       "id": "lab/replay-blind-spots",
       "engine": "shared",
       "kind": "lab",
-      "title": "Tier 1 can't see V8 string storage, and the gate keys on case ids alone",
+      "title": "Tier 1 can't see V8 string storage or the painter, and the gate keys on case ids alone",
       "conditions": [],
       "cases": [],
-      "source": "lab README \"Test tiers\"",
-      "note": "Chrome's 4,528 storage-sensitive cases go to tier 2 by a path rule; 714 ids sit in two tier sets, where the gate is coarser than the ledger. rebuild/bench/page.ts fails at its first row against the inline-tree model."
+      "source": "lab README \"Test tiers\"; research/ROUND4-CRITIC.md §5 and \"Known tail\" 7",
+      "note": "Chrome's 4,528 storage-sensitive cases go to tier 2 by a path rule; 714 ids sit in two tier sets, where the gate is coarser than the ledger. rebuild/bench/page.ts fails at its first row against the inline-tree model. A semantic change in src/paint.ts (letter spacing + 1px on every painted span) replays 66,685 of 66,685 Chrome cases the same and exits 0: the README says the painter is outside tier 1, and no path rule routes a paint.ts change to tier 2 the way STORAGE_PATHS routes string building. A change under src/paint.ts needs tier 2 by hand. The string storage rule applies only against a frozen reference, not with --against=browser."
     },
     {
       "id": "lab/sealed-3-open-rows",
@@ -2415,6 +2945,51 @@
           "id": "c-d2d84e93f46fc221",
           "browser": "chrome",
           "where": "eval-r4-3"
+        },
+        {
+          "id": "c-37d8aba59cf4bf1e",
+          "browser": "chrome",
+          "where": "critic-r4-1: open with facts; with no facts covered by glyph-clusters by position"
+        },
+        {
+          "id": "c-46ea681d8c17a24d",
+          "browser": "chrome",
+          "where": "critic-r4-1: open with facts; with no facts covered by glyph-clusters by position"
+        },
+        {
+          "id": "c-4dbf81710e0ad9f5",
+          "browser": "chrome",
+          "where": "critic-r4-1: open with facts; with no facts covered by glyph-clusters by position"
+        },
+        {
+          "id": "c-6768e607d4bf9c20",
+          "browser": "chrome",
+          "where": "critic-r4-1: open with facts; with no facts covered by glyph-clusters by position"
+        },
+        {
+          "id": "c-788fd90444342f50",
+          "browser": "chrome",
+          "where": "critic-r4-1: open with facts; with no facts covered by glyph-clusters by position"
+        },
+        {
+          "id": "c-8576d3231bda9d2f",
+          "browser": "chrome",
+          "where": "critic-r4-1: open with facts; with no facts covered by glyph-clusters by position"
+        },
+        {
+          "id": "c-bd483e5bb3744d5c",
+          "browser": "chrome",
+          "where": "critic-r4-1: open with facts; with no facts covered by glyph-clusters by position"
+        },
+        {
+          "id": "c-ce5569a93392074d",
+          "browser": "chrome",
+          "where": "critic-r4-1: open with facts; with no facts covered by glyph-clusters by position"
+        },
+        {
+          "id": "c-e3b12a26d8f93c2a",
+          "browser": "chrome",
+          "where": "critic-r4-1: open with facts; with no facts covered by glyph-clusters by position"
         }
       ],
       "source": "research/PREWRAP-RICH.md §3 C; specs/blink-RESULTS.md \"Round 4c\"; the rich-prewrap set's one open prediction row (breaks) in both configurations on 2026-09-18",
@@ -2424,7 +2999,7 @@
       "id": "lab/blink-element-rects-of-spans-without-a-box-fragment",
       "engine": "blink",
       "kind": "lab",
-      "title": "Element rects of spans that create no box fragment: a <wbr> inside one, and a span the port takes for another font height",
+      "title": "Element rects of spans that create no box fragment: a <wbr> inside one (392 rule/wbr-elements cases), and a span the port takes for another font height",
       "conditions": [],
       "cases": [
         {
@@ -2488,8 +3063,17 @@
           "where": "rich-prewrap"
         }
       ],
-      "source": "research/PREWRAP-RICH.md §3 C; lab/observe/blink.ts (wbr \"unsettled\"); engines/blink/index.ts (the font height stand-in); 12 differing rect counts on the rich-prewrap set, 2026-09-18",
-      "note": "Only rect counts differ and no metric reads them. 9 hold a <wbr> inside a span without box edges, which natively reports a zero-width rect at the wbr (c-1cef17b63706b01e); 3 come from the stand-in that takes any other font declaration for another font height, where Verdana regular around Verdana bold italic creates no box fragment natively (c-43b2450047abf23f)."
+      "source": "research/PREWRAP-RICH.md §3 C; lab/observe/blink.ts (wbr \"unsettled\"); engines/blink/index.ts (the font height stand-in); 12 differing rect counts on the rich-prewrap set, 2026-09-18; research/ROUND4-CRITIC.md §1 and \"Known tail\" 1 (404 passing Chrome tier cases in each configuration, the same 392 in round 3; 117 to 124 per fresh set)",
+      "note": "Only rect counts differ and no metric reads them. 9 hold a <wbr> inside a span without box edges, which natively reports a zero-width rect at the wbr (c-1cef17b63706b01e); 3 come from the stand-in that takes any other font declaration for another font height, where Verdana regular around Verdana bold italic creates no box fragment natively (c-43b2450047abf23f). The round 4 critic counted what the evaluation and CHARTER.md gave as \"12 tier cases\": rect counts differ in 404 Chrome tier cases that pass every prediction metric, in both configurations, 392 of the 1,352 `rule/wbr-elements` cases (`c-001fcd8457f501c5`: element 0 has 3 native rects and 2 expected) and the 12 `rich-prewrap/nested` cases named here. Since the ledger's format 2 they are `not exact (values 0, rect counts n)` in the exact-value status, and the rule names the `rule/wbr-elements` ones by family.",
+      "match": {
+        "browsers": [
+          "chrome"
+        ],
+        "status": "not exact",
+        "families": [
+          "rule/wbr-elements"
+        ]
+      }
     },
     {
       "id": "blink/rtl-tab-run-partial-advance",
@@ -2610,8 +3194,8 @@
           "where": "eval-r4-2: open with facts; with no facts covered by script-context by position"
         }
       ],
-      "source": "round 4 evaluation, fresh set eval-r4-2 (runs/mixed-fonts-sizes shape 76, `「おのれ、どこへ行く。」` in a span after Thai and Hangul runs, at 1px, 172px and 376px): code point 35 `。` is 6.5px natively and 13px expected, a predicted value; the line's han-kerning gap sits on the next line",
-      "note": "Not traced. Chrome 153 trims fullwidth punctuation pairs (VERSION-DRIFT.md class 1 is the same area; the known getClientRects hang is `。』`). Wrong widths without a touching gap: the one new engine class of the evaluation in Chrome."
+      "source": "round 4 evaluation, fresh set eval-r4-2 (runs/mixed-fonts-sizes shape 76, `「おのれ、どこへ行く。」` in a span after Thai and Hangul runs, at 1px, 172px and 376px): code point 35 `。` is 6.5px natively and 13px expected, a predicted value; the line's han-kerning gap sits on the next line; research/ROUND4-CRITIC.md §2 and §7 (han_kerning.cc:417-535 read for a trace)",
+      "note": "Not traced. Chrome 153 trims fullwidth punctuation pairs (VERSION-DRIFT.md class 1 is the same area; the known getClientRects hang is `。』`). Wrong widths without a touching gap: the one new engine class of the evaluation in Chrome. The round 4 critic traced `c-26737b4c93d3c46b` and `c-571b183504971c3f`: `。` before `」` is 6.5px natively in 13px Hiragino Sans under lang=en and 13px predicted, on its own line and beside the bracket (the line is 39px predicted and 32.5px native). The cause isn't found: the port's glyph-type grouping, the dot group of four, matches han_kerning.cc. Without facts the rows read covered by script-context; HanKerning doesn't read script lookups, so that cover is by position."
     },
     {
       "id": "blink/soft-hyphen-line-one-unit-off-without-facts",
@@ -2877,8 +3461,8 @@
     {
       "id": "lab/webkit-element-rect-width-float-step",
       "engine": "webkit",
-      "kind": "lab",
-      "title": "The WebKit observation port reports an element rect's width as predicted where the native one is f32(f32(x+w)−x) at an x moved by centring, an RTL block or a box edge",
+      "kind": "open rows",
+      "title": "An inline box's width on a line WebKit places in visual order is InlineRect::setRight's float32 result, not the sum of its children; the library's display box and the element rect it gives are a float32 step or two off",
       "conditions": [],
       "cases": [
         {
@@ -2942,8 +3526,8 @@
           "where": "eval-r4-3 (facts)"
         }
       ],
-      "source": "round 4 evaluation, fresh sets eval-r4-1 to -3: 12 cases with the lab's facts and 1 of them (`c-48c81e6d8f5d8d7d`) with none pass lineCount, breaks and widths and hold exactly one differing predicted value, each `element 0 rect k width` one or two float32 steps off (41.159996032714844 natively, 41.15999984741211 expected), on lines under text-align: center, in an RTL block or beside a negative margin",
-      "note": "Scorer 6 has the rule for node rects (FloatQuad::boundingBox, FloatQuad.cpp:90-99); the port's element rects don't apply it. The tier sets hold none (0 of 1,334 rich pre-wrap cases at their widths), so it depends on the width. The only passing cases with a wrong predicted value of the evaluation outside Gecko's 6 registered Nastaliq cases; fix in lab/observe/webkit.ts, then a new recording."
+      "source": "round 4 evaluation, fresh sets eval-r4-1 to -3: 12 cases with the lab's facts and 1 of them (`c-48c81e6d8f5d8d7d`) with none pass lineCount, breaks and widths and hold exactly one differing predicted value, each `element 0 rect k width` one or two float32 steps off (41.159996032714844 natively, 41.15999984741211 expected), on lines under text-align: center, in an RTL block or beside a negative margin; traced at the correctness line, 2026-09-18 (InlineDisplayContentBuilder.cpp:728-822, InlineRect.h:237-244, FloatRect.h:139-143, InlineLineBox.cpp:128-135)",
+      "note": "Not an observation rule: the port already applies FloatQuad::boundingBox to element rects (lab/observe/webkit.ts boxRect), and the differing value is the width of the library's own `inline-box` display box. On a bidi line adjustVisualGeometryForDisplayBox starts from the line box's logical rect of the inline box (logicalBorderBoxForInlineBox, whose width leaves out a hanging trailing space), sets its left to the running edge L and its right to the running edge R after the children, and setRight is FloatRect::shiftMaxXEdgeTo: width = max(0, w0 + (R − (L + w0))), every step in float32. `c-cb91481c4f72e2ef` and `c-e13d8aa9e28342ab` to the bit: w0 33.33092498779297 (the Arabic word without the hanging space), L 94.92437744140625, R 133.87013244628906 give 38.94574737548828, which reports as f32(f32(L + w) − L) = 38.94573974609375, the native width; the library has R − L = 38.94575500488281. The members on lines without bidi content (`c-48c81e6d8f5d8d7d`: 41.15999984741211 expected, 41.159996032714844 native, the text box's own width on a centred line with a hanging space) go through processNonBidiContent and aren't traced to the bit. The fix is in rebuild/src/engines/webkit's display boxes (the inline box width on both paths, with the line box's width as the starting value), several lines with a new engine value, so it stays in the tail; the tier sets hold no such case (0 of 1,334 rich pre-wrap cases at their widths; 0 differing predicted values in webkit-host's frozen ledgers), the fresh sets 12 with the lab's facts and 1 without. It was kind `lab` until this trace."
     },
     {
       "id": "lab/webkit-code-point-rects-on-two-lines",
@@ -3086,6 +3670,275 @@
       },
       "source": "round 4b WebKit report \"Known tail\" (3 a fresh set); round 4 evaluation: 4 tier rows (policy/thai 2, runs/letter-spacing-spans 2), the condition fires on 0.05% of passing lines at a lift of 12.7",
       "note": "A rare-script tail item: the break data isn't WebKit's own."
+    },
+    {
+      "id": "lab/webkit-rect-counts-in-passing-cases",
+      "engine": "webkit",
+      "kind": "lab",
+      "title": "Rect counts differ in webkit-host cases whose lineCount, breaks and widths all pass",
+      "conditions": [],
+      "cases": [
+        {
+          "id": "c-3e8e93f0f697ea88",
+          "browser": "webkit-host",
+          "where": "rich-prewrap (rich-prewrap/nested)"
+        },
+        {
+          "id": "c-0584f659aa240683",
+          "browser": "webkit-host",
+          "where": "families (rule/hanging-white-space)"
+        },
+        {
+          "id": "c-2831e2b52af7ff89",
+          "browser": "webkit-host",
+          "where": "families (rule/hanging-white-space)"
+        },
+        {
+          "id": "c-2b999885af759a10",
+          "browser": "webkit-host",
+          "where": "families (rule/hanging-white-space)"
+        },
+        {
+          "id": "c-31d72325f060b913",
+          "browser": "webkit-host",
+          "where": "families (rule/hanging-white-space)"
+        },
+        {
+          "id": "c-5c52f36e7e3d3301",
+          "browser": "webkit-host",
+          "where": "families (rule/hanging-white-space)"
+        },
+        {
+          "id": "c-7895a22aa0577d22",
+          "browser": "webkit-host",
+          "where": "families (rule/hanging-white-space)"
+        },
+        {
+          "id": "c-7b17f34387a925d3",
+          "browser": "webkit-host",
+          "where": "families (rule/hanging-white-space)"
+        },
+        {
+          "id": "c-9467ea2b33892123",
+          "browser": "webkit-host",
+          "where": "families (rule/hanging-white-space)"
+        },
+        {
+          "id": "c-9b9c4869108fc199",
+          "browser": "webkit-host",
+          "where": "families (rule/hanging-white-space)"
+        },
+        {
+          "id": "c-a10afc114ea73ba5",
+          "browser": "webkit-host",
+          "where": "families (rule/hanging-white-space)"
+        },
+        {
+          "id": "c-ab4fa4495bdccea0",
+          "browser": "webkit-host",
+          "where": "families (rule/hanging-white-space)"
+        },
+        {
+          "id": "c-ea4b3c62a601e9b7",
+          "browser": "webkit-host",
+          "where": "families (rule/hanging-white-space)"
+        },
+        {
+          "id": "c-0560e2fd253c8ca1",
+          "browser": "webkit-host",
+          "where": "features (rule/br-elements)"
+        },
+        {
+          "id": "c-3f77e30e911927c9",
+          "browser": "webkit-host",
+          "where": "features (rule/br-elements)"
+        },
+        {
+          "id": "c-50467bf4d1ddd235",
+          "browser": "webkit-host",
+          "where": "features (rule/br-elements)"
+        },
+        {
+          "id": "c-6e176492ef1aded2",
+          "browser": "webkit-host",
+          "where": "features (rule/br-elements)"
+        },
+        {
+          "id": "c-72ca31d79d7d570d",
+          "browser": "webkit-host",
+          "where": "features (rule/br-elements)"
+        },
+        {
+          "id": "c-b919447f45b00de0",
+          "browser": "webkit-host",
+          "where": "features (rule/br-elements)"
+        },
+        {
+          "id": "c-b9ef3c959cc69a77",
+          "browser": "webkit-host",
+          "where": "features (rule/br-elements)"
+        },
+        {
+          "id": "c-de1e3a9cf572686f",
+          "browser": "webkit-host",
+          "where": "features (rule/br-elements)"
+        },
+        {
+          "id": "c-e1e8b8a352af0f67",
+          "browser": "webkit-host",
+          "where": "features (rule/br-elements)"
+        },
+        {
+          "id": "c-ebc9d85df7737faa",
+          "browser": "webkit-host",
+          "where": "features (rule/br-elements)"
+        },
+        {
+          "id": "c-ee2f41591fcabbf8",
+          "browser": "webkit-host",
+          "where": "features (rule/br-elements)"
+        },
+        {
+          "id": "c-fad350652de5e739",
+          "browser": "webkit-host",
+          "where": "features (rule/br-elements)"
+        },
+        {
+          "id": "c-cf243d4800837d06",
+          "browser": "webkit-host",
+          "where": "heldout-suite-sample (suite/tail)"
+        },
+        {
+          "id": "c-4c58dcad97d2cfb6",
+          "browser": "webkit-host",
+          "where": "heldout-suite-sample (suite/mixed)"
+        },
+        {
+          "id": "c-345b180e95de2ea4",
+          "browser": "webkit-host",
+          "where": "heldout-suite-sample (suite/tail)"
+        },
+        {
+          "id": "c-6ea09a3b7b36b763",
+          "browser": "webkit-host",
+          "where": "heldout-suite-sample (suite/tail)"
+        },
+        {
+          "id": "c-010ff6a8a170e57c",
+          "browser": "webkit-host",
+          "where": "heldout-suite-sample (suite/tail)"
+        },
+        {
+          "id": "c-208a0aa61f43cbca",
+          "browser": "webkit-host",
+          "where": "critic-r4-1"
+        },
+        {
+          "id": "c-222122a503c72e94",
+          "browser": "webkit-host",
+          "where": "critic-r4-1"
+        },
+        {
+          "id": "c-bdaefddc177645af",
+          "browser": "webkit-host",
+          "where": "critic-r4-1"
+        }
+      ],
+      "source": "research/ROUND4-CRITIC.md §1 and \"Known tail\" 2; the frozen ledgers of 2026-09-18, both configurations: rule/hanging-white-space 12, rule/br-elements 12, suite/tail 4, suite/mixed 1, rich-prewrap/nested 1; 19 to 35 per fresh set",
+      "note": "The scorer calls a rect count predicted by definition and no metric reads it, so the round 4 evaluation's zeros of \"passing cases with a wrong predicted value\" left these out. `c-208a0aa61f43cbca`: a node with preserved spaces under word spacing reports 9 native rects where the port expects 2. Not traced. Since the ledger's format 2 each is `not exact (values 0, rect counts n)` in the exact-value status, so one that gains a differing count blocks; none holds a differing predicted x or width."
+    },
+    {
+      "id": "lab/blink-x-after-a-fallback-cluster-reported-as-predicted",
+      "engine": "blink",
+      "kind": "lab",
+      "title": "The Blink observation port reports the x after a fallback-font cluster (U+FFFC) as predicted",
+      "conditions": [
+        "font-fallback"
+      ],
+      "cases": [
+        {
+          "id": "c-ad141fe451916fa9",
+          "browser": "chrome",
+          "where": "suite-sample (suite/U+FFFC/start)"
+        },
+        {
+          "id": "c-79da2baaa3be78f7",
+          "browser": "chrome",
+          "where": "suite-sample (suite/U+FFFC/start)"
+        },
+        {
+          "id": "c-264ab6fc341a05d2",
+          "browser": "chrome",
+          "where": "families (rule/object-replacement)"
+        },
+        {
+          "id": "c-312094430e8c9ea9",
+          "browser": "chrome",
+          "where": "families (rule/object-replacement)"
+        },
+        {
+          "id": "c-50254c8304b2658d",
+          "browser": "chrome",
+          "where": "families (rule/object-replacement)"
+        },
+        {
+          "id": "c-52ff67f9a1c9a6f6",
+          "browser": "chrome",
+          "where": "families (rule/object-replacement)"
+        },
+        {
+          "id": "c-69adee858283edb8",
+          "browser": "chrome",
+          "where": "families (rule/object-replacement)"
+        },
+        {
+          "id": "c-8f910ae0c82a38c8",
+          "browser": "chrome",
+          "where": "families (rule/object-replacement)"
+        },
+        {
+          "id": "c-963335b67a6b31f0",
+          "browser": "chrome",
+          "where": "families (rule/object-replacement)"
+        },
+        {
+          "id": "c-965ee7f67bd6f7a3",
+          "browser": "chrome",
+          "where": "families (rule/object-replacement)"
+        },
+        {
+          "id": "c-97e32973b5b91fad",
+          "browser": "chrome",
+          "where": "families (rule/object-replacement)"
+        },
+        {
+          "id": "c-a16a73c9ad2e9201",
+          "browser": "chrome",
+          "where": "families (rule/object-replacement)"
+        },
+        {
+          "id": "c-24142053a8647b70",
+          "browser": "chrome",
+          "where": "heldout-suite-sample (suite/U+FFFC/start)"
+        },
+        {
+          "id": "c-49e1db5b0d8dfb1f",
+          "browser": "chrome",
+          "where": "heldout-suite-sample (suite/U+FFFC/start)"
+        }
+      ],
+      "source": "research/ROUND4-CRITIC.md §1 and \"Known tail\" 3; the frozen ledgers of 2026-09-18, both configurations: rule/object-replacement 10, suite/U+FFFC/start 4, each `not exact (values 2, rect counts 0)`",
+      "note": "The 14 cases pass lineCount and breaks, fail widths under font-fallback and hold 2 wrong predicted values each. `c-264ab6fc341a05d2`: U+FFFC is 16px natively and measured as U+200B, and the space after it is expected at x 0 and is at 16 natively. The font-fallback range covers U+FFFC, not what is placed after it on the line; WebKit closed this shape in round 4b by limiting the whole line. Converting blink/object-replacement-fallback-font would close it; until then the port should limit what follows the cluster on its line."
+    },
+    {
+      "id": "shared/one-device-pixel-ratio-one-os",
+      "engine": "shared",
+      "kind": "lab",
+      "title": "The frozen line is one Mac at a device pixel ratio of 2: the OS is no part of the environment, and no case runs at another ratio",
+      "conditions": [],
+      "cases": [],
+      "source": "research/ROUND4-CRITIC.md §4, §5 and \"Known tail\" 8; rebuild/lab/run.ts (no option for another ratio); src/env.ts detectEngine()",
+      "note": "`detectEngine()` answers supported for Chrome or Firefox on any OS, while every pinned rule and table is macOS's (Core Text's family table, the libicucore break tables, the font facts). At a ratio of 1 Blink's font check 4 and its size ratio never run, and Gecko's app units per device pixel differ; the probes ran some ratios (Chrome 1, 2 and 3.5; Firefox 30, 60, 40, 23 and 27 app units per px) and no lab set does. Giants are in no tier. A reference for another ratio or OS is a new recording under a new environment key, never a comparison with this one."
     }
   ]
 }

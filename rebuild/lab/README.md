@@ -476,7 +476,12 @@ class left open on purpose shows by the item's name, whether cases left it, ente
 run `check`; case ids from fresh sets are in no ledger and only document the class. Round 4c added 4 items for the
 `rich-prewrap` set's open row, its lab limits and two WebKit rows `page-history` covers by position. The first 41 items came from
 research/ROUND3-CRITIC.md's convertible classes and unneeded conditions, the round 4a reports' open items and this round's
-measure-first check.
+measure-first check. At the freeze the file took what research/ROUND4-CRITIC.md found understated, from the frozen ledgers
+and the critic's fresh set (62 items, 589 named cases, 24 rules): rect counts that differ in cases whose prediction metrics
+pass (Chrome's 404 by a `not exact` rule over `rule/wbr-elements` and 12 named cases, webkit-host's 30 by name), the x after a
+U+FFFC cluster reported as predicted (14 cases), Firefox's 209 history-dependent fresh cases against 0, the 82 fresh WebKit
+cases that fail in both orders and pass alone, the wider signature of Chrome's hang, `src/paint.ts` outside tier 1, one Mac
+at DPR 2, and the traces of the half-width ideographic full stop and of WebKit's inline box width a float32 step off.
 
 ## Running
 

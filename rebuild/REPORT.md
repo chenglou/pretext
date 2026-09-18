@@ -21,7 +21,7 @@ Canvas what it can):
   in Firefox and 0.28 in webkit-host (2 rows) by the scorer. Read beside the facts configuration, whose conditions fire less
   widely, they are 4.1 in Chrome (31 rows: 26 of one lab class, 5 engine rows), 0.8 in Firefox (6 rows) with 5.7 more in its
   two registered residual classes, and 0.28 in webkit-host. Every class is in the known tail with case ids
-  (`rebuild/tests/known-tail.json`, 59 items).
+  (`rebuild/tests/known-tail.json`, 59 items at the evaluation, 62 since the freeze).
 - **Nothing was lost without an explanation.** Against the round 3 library on the same 190,441 tier cases, Chrome with facts
   and webkit-host lose no pass in either configuration; Chrome without facts loses 14 line counts and 6 breaks that were
   accidental passes beside another failing metric; Firefox loses the measured cost of measuring on an OffscreenCanvas only
