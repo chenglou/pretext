@@ -129,21 +129,86 @@ function numGraphemes(item: TextItem, start: number, end: number): number {
 // say which boundaries and whether the item's size are stand-ins.
 type ItemLimits = { boundaries: Limit[]; size: Limit }
 
-// ShapeResult::CaretPositionForOffset (shape_result.cc:735-741, 696-733, 228-349) for an item's shape result as one run:
-// float32 zoomed px from the item's left edge, and the limit of the boundaries it rests on.
+// The runs of an item's shape in visual order, each with the exact 16.16 sum of its clusters' advances. A tab item's shape
+// is one run.
+type Run = { textStart: number; textEnd: number; fontsKnown: boolean; first: number; last: number; width16: number }
+
+function runsOf(item: TextItem): Run[] {
+  const given = item.kind === 'text' ? item.runs : [{ textStart: item.textStart, textEnd: item.textEnd, fontsKnown: true }]
+  const runs: Run[] = []
+  let c = 0
+  for (let r = 0; r < given.length; r++) {
+    const run: Run = { textStart: given[r]!.textStart, textEnd: given[r]!.textEnd, fontsKnown: given[r]!.fontsKnown, first: c, last: c, width16: 0 }
+    while (c < item.clusters.length && item.clusters[c]!.textStart < run.textEnd) run.width16 += item.clusters[c++]!.advance
+    run.last = c
+    runs.push(run)
+  }
+  return (item.level & 1) === 1 ? runs.reverse() : runs
+}
+
+// A float32 sum past 256 px rounds at every addition, by where the runs are. Where the layout doesn't know the runs (a
+// font the facts don't name may draw any cluster in a run of its own; Blink's view may have other parts,
+// BlinkGlyphCluster.graphemesLimit), each run edge it can't place moves the sum by at most half a float32 step at that
+// size, and a value whose LayoutUnit edges that can change is limited.
+//
+// A float32 holds 24 bits, so sums of multiples of 2^g units of 16.16 are exact below 2^(24 + g) units, wherever the runs
+// are: a 2048-unit font at a whole zoomed size of 32 px has advances in multiples of 1024 units, exact below 2^18 px.
+function floatLimit(item: TextItem, value: number, unknownEdges: number): Limit {
+  if (unknownEdges === 0 || value < 256) return null
+  let bits = 0
+  for (let c = 0; c < item.clusters.length; c++) {
+    const cluster = item.clusters[c]!
+    bits |= cluster.advance
+    // A caret inside a cluster adds shares of its advance.
+    if (cluster.graphemeStarts.length > 1) bits |= Math.trunc(cluster.advance / cluster.graphemeStarts.length)
+  }
+  const granularity = bits === 0 ? 2 ** 31 : bits & -bits
+  if (value * 65536 < 2 ** 24 * granularity) return null
+  const slack = unknownEdges * 2 ** (Math.floor(Math.log2(value)) - 23) / 2
+  const low = (value - slack) * 64
+  const high = (value + slack) * 64
+  return Math.floor(low) !== Math.floor(high) || Math.ceil(low) !== Math.ceil(high) ? 'float32-precision' : null
+}
+
+// ShapeResult::CaretPositionForOffset (shape_result.cc:735-741) for the ShapeResult the item's view is copied into:
+// PositionForOffset (:696-733) adds the widths of the runs visually before the caret's run as floats, each the float of the
+// run's exact sum, and XPositionForOffset (:228-349) the position inside the run, exact until it is returned as a float.
+// Float32 zoomed px from the item's left edge, and the limit of the boundaries it rests on.
 function caret(item: TextItem, limits: ItemLimits, offset: number, adjust: 'start' | 'end'): { value: number; limit: Limit } {
   const rtl = (item.level & 1) === 1
   const clusters = item.clusters
-  let total = 0
-  for (let c = 0; c < clusters.length; c++) total += clusters[c]!.advance
-  if (offset === item.textEnd) return rtl ? { value: 0, limit: null } : { value: f32(total / 65536), limit: limits.size }
-  let index = 0
+  const runs = runsOf(item)
+  const partEdges = item.kind === 'text' && !item.partsKnown ? 2 : 0
+  if (offset === item.textEnd) {
+    if (rtl) return { value: 0, limit: null }
+    let width = 0
+    let unknown = partEdges
+    for (let r = 0; r < runs.length; r++) {
+      width = f32(width + f32(runs[r]!.width16 / 65536))
+      if (!runs[r]!.fontsKnown) unknown += runs[r]!.last - runs[r]!.first
+    }
+    return { value: width, limit: limits.size ?? floatLimit(item, width, unknown) }
+  }
+  // The runs visually before the one that counts the character as its own.
+  let x = 0
+  let unknown = partEdges
+  let at = 0
+  while (at < runs.length && !(runs[at]!.textStart <= offset && offset < runs[at]!.textEnd)) {
+    x = f32(x + f32(runs[at]!.width16 / 65536))
+    if (!runs[at]!.fontsKnown) unknown += runs[at]!.last - runs[at]!.first
+    at++
+  }
+  // A character no run counts as its own: PositionForOffset walks past every run and returns 0 (:726-732).
+  if (at === runs.length) return { value: 0, limit: null }
+  const run = runs[at]!
+  if (!run.fontsKnown) unknown += run.last - run.first
+  let index = run.first
   while (!(clusters[index]!.textStart <= offset && offset < clusters[index]!.textEnd)) index++
   const cluster: BlinkGlyphCluster = clusters[index]!
-  // The advances of the glyph clusters to its left in visual order.
+  // The advances of the run's glyph clusters to its left in visual order.
   let accumulated = 0
-  if (rtl) for (let c = index + 1; c < clusters.length; c++) accumulated += clusters[c]!.advance
-  else for (let c = 0; c < index; c++) accumulated += clusters[c]!.advance
+  if (rtl) for (let c = index + 1; c < run.last; c++) accumulated += clusters[c]!.advance
+  else for (let c = run.first; c < index; c++) accumulated += clusters[c]!.advance
   let advance = cluster.advance
   let atStart = offset === cluster.textStart
   const graphemes = cluster.graphemeStarts.length
@@ -153,7 +218,7 @@ function caret(item: TextItem, limits: ItemLimits, offset: number, adjust: 'star
   if (graphemes > 1) {
     const next = offset + 1
     const toOffset = numGraphemes(item, cluster.textStart, next) - 1
-    if (offset > item.textStart) atStart = numGraphemes(item, offset - 1, next) !== 1
+    if (offset > run.textStart) atStart = numGraphemes(item, offset - 1, next) !== 1
     advance = Math.trunc(advance / graphemes)
     shares = rtl ? graphemes - toOffset - 1 : toOffset
   }
@@ -161,11 +226,13 @@ function caret(item: TextItem, limits: ItemLimits, offset: number, adjust: 'star
   if (rtl) shares += 1
   accumulated += advance * shares
   // Without a share the value rests on the cluster's left boundary alone; with the whole advance of a one-grapheme
-  // cluster on its right boundary alone; otherwise on both.
+  // cluster on its right boundary alone; otherwise on both. A share also rests on how many graphemes Blink counts.
   const left = limits.boundaries[rtl ? index + 1 : index]!
   const right = limits.boundaries[rtl ? index : index + 1]!
-  const limit = shares === 0 ? left : graphemes === 1 ? right : left ?? right
-  return { value: f32(accumulated / 65536), limit }
+  const counted = cluster.graphemesLimit !== undefined && (rtl || offset > cluster.textStart) ? cluster.graphemesLimit : null
+  const limit = (shares === 0 ? left : graphemes === 1 ? right : left ?? right) ?? counted
+  const value = f32(f32(accumulated / 65536) + x)
+  return { value, limit: limit ?? floatLimit(item, value, unknown) }
 }
 
 // FragmentItem::LocalRect with LineLeftAndRightForOffsets (fragment_item.cc:1201-1235, 1132-1199), relative to the item.

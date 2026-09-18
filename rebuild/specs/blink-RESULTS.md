@@ -16,6 +16,206 @@ Baselines for transitions:
 - the triage population (research/MAIN-TRIAGE.md §2.1, Chrome small file, 8,933 cases): the charter triage rows
   (`.artifacts/charter-20260916/triage/runs/chrome/charter-file/small`), scored again with scorer 3.
 
+## Round 4
+
+Pinned Chrome 153.0.8010.50, scorer 5, forward order, 2026-09-18, from the worktree branch `r4-blink`. Every job ran a frozen
+copy of the library and the lab (`scratchpad/r4-blink/builds/<build>`); rows are under `.artifacts/lab/blink/r4/<build>/<set>/`
+(b8 plain, older builds compressed), fresh sets under `.artifacts/lab/fresh/chrome/r4-blink-<n>/`. The sets are round 3's
+(`dev-flat`, `dev-suite`, `families`, `features`, `heldout-small`, `heldout-suite`, `triage-small`), and the baseline for
+transitions is round 3's last build, w18, whose Blink engine and lab equal the evaluated tree's.
+
+| Build | What changed |
+|---|---|
+| b1 | Line-end fit tests that another last safe offset turns around (item 1); U+3000 in a font without it (item 2); stand-in positions out of order (item 3) |
+| b2 | Pair adjustments in a run HarfBuzz shapes reversed (item 4); the caret code's grapheme lists per view part (item 5) |
+| b3-b4 | The item's shape as the caret code reads it: characters by count, runs, float sums per run (items 5, 6); `runs` and `partsKnown` in the geometry |
+| b5 | Float sums exact by the advances' granularity (item 7); the clamped start correction (item 8) |
+| b6 | The clamped start reported only where the other outcome makes another line |
+| b7 | HanKerning's halt on the character Blink picks; parts unknown where only the joining rule makes an offset unsafe; listed ligatures across combining marks (items 9, 10) |
+| b8 | The cut of an RTL view whose start reshape may be longer natively (item 11) |
+
+### Against round 3
+
+b8 against w18, outside history dependence (no Chrome case is history-dependent). No line count, break or width that passed
+in w18 fails on any set. `triage-small`: breaks fail→pass 24 and widths not-applicable→pass 24, all `suite/joined` (item 10);
+painter fail→pass 11 (paint.ts changed after w18). Every other prediction status is equal on all 73,260 cases.
+
+Passing cases that hold a wrong predicted value, w18 → b8: dev-flat 2 → 0, dev-suite 16 → 0, heldout-small 5 → 0,
+heldout-suite 28 → 0, triage-small 7 → 0, families and features 0. Differing predicted values in all (the rest sit on
+failing lines): dev-flat 35 → 30, dev-suite 83 → 28, heldout-small 20 → 6, heldout-suite 109 → 30, triage-small 243 → 186,
+families 495 and features 11 unchanged. Predicted share: dev-flat 69.8% → 70.3%, dev-suite 59.2% → 59.7%, heldout-suite
+45.2% → 45.0%. Canvas calls per row are unchanged (dev-flat mean 132.6, dev-suite part 0 110.2, heldout-suite part 0 117.9).
+
+### Items
+
+1. **An exact-fit break in ProbeShantell under letter spacing** (the evaluation's class a, 4 rows). Natively `offic` is one
+   reshape from the line's start, 33.98398 px in 33.984375, because HarfBuzz flags every offset of this font unsafe (round 3
+   item 4). The port's width tests call offset 4 safe, so it reshapes `c` alone after that offset's ceiled position, 1602,
+   and 573.44 units don't fit 573. Blink's test is `line_end_result->Width() <= end_position - safe_position`
+   (shaping_line_breaker.cc:543-553): with equal glyphs another last safe offset changes it only by the ceiling of that
+   offset's position, less than a LayoutUnit, and an uncertain first safe offset of a wrapped line start moves the end
+   position by a LayoutUnit the same way (:309-324). `recordEndTest` computes both bounds in 16.16 units for every fit test
+   and keeps the ones that could go the other way; the line reports `in-word-prefix` over the text the test decides (from
+   the line's end to the opportunity given up, or the last opportunity to the line's end). The port can't learn the flags,
+   so the rows stay failures, covered. Round 3's margin rule in `edgeGap` missed them because it measured the margin to the
+   next opportunity under the style's own break type and from paragraph positions, where the test that failed was a
+   reshape's under break-character.
+2. **U+3000 kerned with the next line's first letter** (class b). Times New Roman has no U+3000: HarfBuzz's normalizer puts
+   the font's space glyph there (hb-ot-shape-normalize.cc:174-186), the kern machine kerns it with `T`, and Blink counts
+   that glyph as missing, "HarfBuzz synthesizes U+3000 IDEOGRAPHIC SPACE using the space glyph. This is not desired for
+   run-splitting" (HarfBuzzShaper::ExtractShapeResults, harfbuzz_shaper.cc:598-606). U+3000 goes to a fallback font at one
+   em, `T` keeps its half of the kern, and `T` is a run's first glyph, safe to break before whatever HarfBuzz flagged
+   (SafeToBreakBefore, shape_result.cc:1361-1369), so the wrapped line start isn't reshaped. Canvas shapes the same way, so
+   the adjustment its totals show beside U+3000 is what the neighbour kept. `requeuedSpaceAt` reads the coverage fact of the
+   listed family that draws the neighbour: the adjustment sits on the neighbour, the offset is a run edge, the position is
+   exact. Without the fact a line edge there reports `font-fallback` over U+3000 and the neighbour. `isFontRunEdge` makes
+   every run start the coverage facts show safe to break. The row passes lineCount, breaks and widths; the painter, which
+   lays the line out alone, paints `T` without the kern (PAINTER note below).
+3. **An emergency break after a marked waw in Geeza Pro** (class c). The port's position of offset 18, inside lam-meem, is
+   a Canvas stand-in 118 units right of offset 16's exact position. Blink finds the candidate by binary search over sorted
+   positions (CachedOffsetForPosition, shape_result.cc:2300-2318); over the port's unsorted ones the search landed on 18
+   although offset 16 already lay past the end position. A safe offset at or before the candidate never lies past the end
+   position natively (`end_position - safe_position` is a width), so where the port's does, the search runs again below
+   it, and what the first search reported is dropped. The row passes every metric.
+4. **Pair adjustments in an RTL run of a left-to-right script** (`suite/signed-spacing/ascii-matrix`, 17 passing cases with
+   a wrong predicted value). HarfBuzz reverses a buffer whose direction isn't its script's and shapes it in the script's
+   direction (hb_ensure_native_direction, hb-ot-shape.cc:588-644), so between two quotes in an RTL paragraph the first
+   glyph of the pair is the logically later one: natively the second `‘` is the narrow one. `shapedReversed` has the rule
+   with HarfBuzz's script list (hb-common.cc:520-612) and the digits exception, and `pairBefore16` places GPOS values and
+   the kern machine's halves by it.
+5. **Blink's grapheme lists come from the view's part numbers** (`suite/raw-context` 8, `runs/bidi-runs`). The caret code
+   copies the view into a ShapeResult whose runs keep the parts' numbers (CreateShapeResult, shape_result_view.cc:182-212)
+   and lists each run's graphemes over the item text at the run's start_index_ (EnsureGraphemes, shape_result.cc:186-214).
+   An RTL view of several segments numbers its parts in visual order, so a reshaped line end `بِ` after a NUL is listed from
+   NUL and beh, two graphemes, and the letter and its mark report halves. PositionForOffset finds a character by counting
+   the runs' characters (:696-733), so after a second cut a glyph can stand for another character: `نِ` and a trimmed space
+   at a wrapped line start in Geeza Pro report the letter's glyphs for the letter and the space's glyph for the mark. `shapeOf`
+   (index.ts) builds clusters per part with counted characters and `partGraphemeStarts`; a character no run counts reports
+   position 0.
+6. **Carets add run widths as floats** (`policy/word-break`, `runs/word-spacing-spans`). PositionForOffset adds the widths
+   of the runs before the caret's run as floats, so past 256 zoomed px a caret depends on where the runs are: 19 Katakana
+   clusters from the paragraph plus a reshaped `ウェ` give a caret one float step under 792 px, natively 50687 and 2561 where
+   one exact sum gave 50688 and 2560. The geometry has the runs (`BlinkShapeRun`: a view's part cut at script segments and
+   font runs, with the reshaped text it came from), and the observation port sums per run. Where the runs aren't known
+   (`partsKnown` false, a font the facts don't name) a value within the possible rounding of a LayoutUnit edge is limited
+   by `float32-precision`. `reshaped` is also what the painter asked for: whether ShapeLine reshaped a part whole
+   (`first_safe.offset >= break_opportunity.offset`) shows as one run reshaped over the line's text.
+7. **`float32-precision` narrowed from arithmetic.** A float32 holds 24 bits, so sums of multiples of 2^g units are exact
+   below 2^(24 + g) units wherever the runs are, and a run that ends below 256 px can't round at all. Arial, Times New
+   Roman, Georgia, Verdana and Courier New have 2048 units per em: at a zoomed 32 px every advance is a multiple of 1024
+   units and sums are exact below 2^18 px. The gap fires on 0.25% of passing development lines (w18: 5.69%) and 0.03% to
+   0.07% of fresh ones, still on no failing line.
+8. **The 3 `suite/space` triage rows** (Amiri `a` TAB `ب` SHY kasra `ب`, 1px). Traced: the start of the line at SHY is
+   reshaped to the text's end, and ShapeLine adds the paragraph's width of that text to the space, less the reshape, clamped
+   at 0 (shaping_line_breaker.cc:309-324). hb-shape on the fixture font gives the first `ب` 247 units in the paragraph and
+   the last 772, where U+200D gives the port 190 and 829: natively the correction is 129 − 228, clamped, nothing fits, the
+   normal pass overflows and the break-character pass ends the line after SHY with its hyphen. The port's 129 − 111 leaves
+   18 units. The end position doesn't depend on the start's position unless the clamp applies, so the condition is narrow:
+   a start whose reshape alone takes the space, at a stand-in position, and only where laying the line out the other way
+   gives another line (`clampedStarts`). The line reports `in-word-prefix` over its text, which holds the decision text.
+   The rows still count as open: the soft hyphen's copied rect makes the scorer attribute line 0, as with
+   `suite/U+FFFC/start`.
+9. **HanKerning's halt** goes to the character Blink picks from text_content in logical order (han_kerning.cc:235-300),
+   before pair placement: in an RTL paragraph `」。` is an RTL run and `」` is the half-width one.
+10. **Listed ligatures across combining marks.** The facts list lam-alef as whole strings, which the matcher compared
+    without skipping marks; lam, kasra, alef is one glyph natively. 24 `suite/joined` breaks pass.
+11. **The cut of an RTL view after a start reshape** (fresh set 2's open row, `c-a3b5719bcaf20813`). `حين. ` at a wrapped
+    line start in Geeza Pro: the port reshapes `حين` up to its first safe offset, the view numbers the rest before the
+    reshape, and cutting the trimmed space off takes `ن` with it (2533 units), exactly as shape_result_view.cc:215-308 does
+    for those parts. Natively the width is the whole reshape's and the full stop's, 3762: HarfBuzz left no offset safe up
+    to the item's end (a `morx` font's flags follow its state machine), so the reshape was one part. The line reports
+    `in-word-prefix` over the item result where such a reshape ends at an offset that is safe by the port's tests alone.
+    Round 3's class 4 is the same cut where the port reshaped nothing.
+
+### Fresh sets
+
+| Set | Seed | Build | Cases | lineCount / breaks / widths fail | Prediction failures | Covered | Open | Passing cases with a wrong predicted value |
+|---|---|---|---:|---|---:|---:|---:|---:|
+| r3-blink-4, run again | | b7 | 11,377 | 26 / 39 / 26 | 65 | 65 | 0 | 0 |
+| 1 | r4-blink-1 | b7 | 11,242 | 21 / 26 / 33 | 59 | 59 | 0 | 0 |
+| 2 | r4-blink-2 | b7 | 11,238 | 20 / 26 / 34 | 60 | 59 | 1 | 0 |
+| 3 | r4-blink-3 | b8 | 11,199 | 18 / 24 / 36 | 60 | 60 | 0 | 0 |
+
+Set 2's open row is item 11; it is covered under b8. The round's cap of three sets is used. Predicted values agree on
+99.987%, 99.983% and 99.983%, every differing value on a failing case, and 72.6%, 73.8% and 72.5% of all values are
+predicted. Round 3's last two sets held 24 and 9 passing cases with a wrong predicted value and the evaluation's three
+11, 11 and 10; all 65 are exact under b4 and later.
+
+**Without supplied font facts** (`lab/baselines/no-facts-predictor.ts`, b8, dev-flat and heldout-small, 10,484 cases): no
+error, no passing case with a wrong predicted value, lineCount failures 5 and 2 (with facts 3 and 1), widths 16 and 17 (8
+and 4), 9% of values predicted. U+3000's and the font runs' rules need the coverage fact; without it the edges beside
+U+3000 report `font-fallback`.
+
+**Giants.** The 9 held-out giants and the 5 of fresh sets r3-blink-2 and r3-blink-3, `--chunk=1`, b7: all 14 pass lineCount,
+breaks, widths and painter, and no predicted value differs.
+
+### Gap firing on the development sets
+
+Passing lines of dev-flat and dev-suite (87,694) that report each gap, w18 → b8:
+
+| Gap | Passing lines | Passing cases | Lift |
+|---|---|---|---|
+| `script-context` | 30.72% → 30.82% | 38.04% → 38.04% | 1.21 → 1.21 |
+| `glyph-clusters` | 8.82% → 8.83% | 12.83% → 12.85% | 4.29 → 4.28 |
+| `unsafe-to-break` | 4.97% → 4.90% | 7.11% → 6.85% | 7.90 → 8.20 |
+| `in-word-prefix` | 1.58% → 1.61% | 2.97% → 3.04% | 0.76 → 0.74 |
+| `font-fallback` | 1.26% → 1.27% | 2.54% → 2.57% | 22.99 → 22.74 |
+| `float32-precision` | 5.69% → 0.25% | 11.06% → 0.83% | no failing case |
+
+The new conditions by themselves, on passing development lines: the clamped start 28 lines (0.032%; 196 before it was
+limited to starts where the other outcome makes another line), the line-end fit test 1 line (0.001%), `font-fallback`
+beside U+3000 without a coverage fact 14 lines (0.016%), the cut after a start reshape none. On the fresh sets
+`in-word-prefix` fires on 1.47% to 1.53% of passing lines (round 3's last sets: 1.5%).
+
+### `positionAdjust16`, looked at again
+
+No source reading places an adjustment that Canvas shows only as a sum over a window wider than the two clusters. A pair
+value is placed by the font's tables (`pairKerning`, and now the buffer's order). Anything beyond it comes from
+contextual lookups, which change the glyphs of a rule's input sequence and leave its backtrack and lookahead alone
+(chain_context_apply_lookup, hb-ot-layout-gsubgpos.hh), and which glyphs are input is the font's. The rule the port
+applies is one assumption used on both sides of a space: a space glyph keeps its advance, so what a wider context changes
+beside a space changes the letters (before a space the letter before it, probe blink-round3 R1; after a space the text
+after it, `ريال`). It stays a registered heuristic; such positions are marked stand-ins, and a line edge taken from one
+reports `unsafe-to-break`.
+
+### Chrome never returns from `Range.getClientRects()`
+
+Reduced from `c-1fda71ce84fd9989` (probe `scratchpad/r4-blink/hang/probe.ts`, outputs
+`.artifacts/probes/blink/round4-range-hang-*`): two fullwidth closing marks in a block between half an em and one em wide
+that may break anywhere.
+
+```html
+<!doctype html>
+<html lang="en">
+<div id="t" style="font: 16px 'PingFang SC'; width: 8px; overflow-wrap: break-word">。』</div>
+<script>
+  const node = document.getElementById('t').firstChild
+  const range = document.createRange()
+  range.setStart(node, 0)
+  range.setEnd(node, 1)
+  range.getClientRects() // never returns; the tab has to be killed
+</script>
+```
+
+Chrome 153.0.8010.50, macOS 27.0 (26A428), arm64, device pixel ratio 2. Layout itself ends (the block is 64px tall, two
+lines), and the hang is in the Range call over `。`. It also hangs at 10px and in Hiragino Sans. It returns with
+`text-spacing-trim: space-all`, at 1px, under `word-break: break-all` without `overflow-wrap`, for `我。』` over `我`, and
+over `』`, whose rect is then 32px wide, twice the glyph. So it takes the line-end trim of `。`, ShapeLine's
+`han_kerning_end` reshape that lets the half-width `。` fit (shaping_line_breaker.cc:344-363), in a line that then holds
+it alone. Not traced further. The lab sets such a case aside in its part's `excluded-native-hang.ndjson`.
+
+### Open after round 4
+
+- The 4 ProbeShantell rows (item 1) and the 3 `suite/space` rows (item 8) fail under conditions the port can't settle:
+  which offsets HarfBuzz flags, and a contextual form's share of a joined pair. The `suite/space` and `suite/U+FFFC/start`
+  rows need the scorer's attribution fixed to count as covered.
+- `partsKnown` is false on most wrapped lines, because a start after a space isn't a run's first glyph. It costs nothing
+  below 256 px or with 2048-unit fonts at whole sizes; elsewhere values within a float step of a LayoutUnit edge are limited.
+- The painter lays a line out alone, so a first letter that kept a kern with a U+3000 on the line before it paints 18
+  units wider (`c-0ee8c36920378f9f`, painter fails without a covered explanation). `BlinkShapeRun.reshaped` says the start
+  wasn't reshaped; the painter has no limit for it yet.
+- No unit test covers items 3, 5 and 11 (they need a stand-in Canvas with joined forms); the lab cases named above do.
+
 ## Ceiling round 3
 
 Installed Chrome 153.0.8010.50 (source-identical to the pinned .48: `git diff --name-only 153.0.8010.48 153.0.8010.50` lists

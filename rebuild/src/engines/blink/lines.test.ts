@@ -378,3 +378,81 @@ describe('blink round 2', () => {
     expect(gaps.filter(g => g.gap === 'control-character-width').map(g => g.at)).toEqual([{ start: 1, end: 2 }])
   })
 })
+
+describe('blink round 4', () => {
+  // A stand-in Canvas: 10px per code point at any size, less `kern` px for every occurrence of each listed pair.
+  const withPairs = (pairs: Record<string, number>, run: () => void): void => {
+    const saved = (globalThis as { OffscreenCanvas?: unknown }).OffscreenCanvas
+    class Kerned {
+      font = '16px x'; lang = ''; letterSpacing = '0px'; wordSpacing = '0px'; fontKerning = 'auto'; textRendering = 'auto'; direction = 'ltr'
+      measureText(text: string): { width: number; actualBoundingBoxLeft: number; actualBoundingBoxRight: number } {
+        let width = 0
+        for (const c of text) if (c !== '\u200d' && c !== '\u200b' && c !== '\u2060') width += 10
+        for (const pair of Object.keys(pairs)) width -= (text.split(pair).length - 1) * pairs[pair]!
+        return { width, actualBoundingBoxLeft: 0, actualBoundingBoxRight: 0 }
+      }
+    }
+    ;(globalThis as { OffscreenCanvas?: unknown }).OffscreenCanvas = class { getContext(): Kerned { return new Kerned() } }
+    try { run() } finally { (globalThis as { OffscreenCanvas?: unknown }).OffscreenCanvas = saved }
+  }
+  const listed = (coverage: number[]): FontFacts => ({
+    ...UNKNOWN_FONT_FACTS, pairKerning: 'split',
+    fonts: [{ family: 'Mono', realizes: true, coverage, ligatures: null, spacingInputs: null, scriptLookups: null }],
+  })
+  const textItems = (line: BlinkLine): Extract<BlinkLine['geometry']['items'][number], { kind: 'text' }>[] =>
+    line.geometry.items.filter((i): i is Extract<BlinkLine['geometry']['items'][number], { kind: 'text' }> => i.kind === 'text')
+
+  test('U+3000 in a font without it goes to a fallback font: the letter after it keeps the whole adjustment and starts a run (harfbuzz_shaper.cc:598-606)', () => {
+    withPairs({ '\u3000T': 2 }, () => {
+      // The font maps ASCII only. U+3000 is one em and hangs; `T` keeps both px of what Canvas shows beside it, and the
+      // wrapped line starts at a run's first glyph, so it isn't reshaped.
+      const lines = blink(paragraph([['ab\u3000Tc', 'text']], 25, { facts: listed([0x20, 0x7e]) })).lines
+      expect(lines.map(l => [l.start, l.end])).toEqual([[0, 3], [3, 5]])
+      expect(textItems(lines[0]!).map(i => i.inlineSize)).toEqual([1280, 640])
+      const second = textItems(lines[1]!)[0]!
+      expect(second.clusters.map(c => c.advance)).toEqual([655360 - 131072, 655360])
+      expect(second.runs).toEqual([{ textStart: 3, textEnd: 5, reshaped: null, fontsKnown: true }])
+      expect(lines[1]!.gaps.map(g => g.gap)).toEqual([])
+      // A font that maps U+3000 kerns it like any glyph: the pair machine leaves half on U+3000, and the start is reshaped.
+      const own = blink(paragraph([['ab\u3000Tc', 'text']], 25, { facts: listed([0x20, 0x7e, 0x3000, 0x3000]) })).lines
+      expect(textItems(own[0]!).map(i => i.inlineSize)).toEqual([1280, 640 - 64])
+      expect(textItems(own[1]!)[0]!.runs[0]!.reshaped).toEqual({ textStart: 3, textEnd: 4 })
+      // Without a coverage fact the line edges beside U+3000 report font-fallback.
+      const unknown = blink(paragraph([['ab\u3000Tc', 'text']], 25, { facts: { ...UNKNOWN_FONT_FACTS, pairKerning: 'split' } })).lines
+      expect(unknown[1]!.gaps.map(g => g.gap)).toContain('font-fallback')
+    })
+  })
+
+  test('a pair adjustment in an RTL run of a left-to-right script sits on the logically later cluster (hb-ot-shape.cc:588-644)', () => {
+    withPairs({ '\u2018\u2018': 2 }, () => {
+      // Quotes in an RTL paragraph are an RTL run of Common text: HarfBuzz reverses the buffer and shapes it left to right.
+      const advances = (direction: Paragraph['direction']): number[] =>
+        textItems(blink(paragraph([['\u2018\u2018', 'text']], 400, { direction, facts: { ...UNKNOWN_FONT_FACTS, pairKerning: 'first-advance' } })).lines[0]!)[0]!.clusters.map(c => c.advance)
+      expect(advances('ltr')).toEqual([655360 - 131072, 655360])
+      expect(advances('rtl')).toEqual([655360, 655360 - 131072])
+    })
+  })
+
+  test('a line-end fit test that another last safe offset turns around reports in-word-prefix over the text it decides (shaping_line_breaker.cc:543-553)', () => {
+    // Letters of 665.3 LayoutUnits and a kern between `c` and `d`. The line has 1996 units. The candidate is offset 3, which
+    // the kern makes unsafe, so the port reshapes `c` after offset 2's ceiled position, 1331: 665.3 units in 665 don't fit, and
+    // the line ends at 2. If HarfBuzz flags offset 2 as well, Blink reshapes `abc` from the line's start, 1995.9 units, which
+    // fit.
+    const saved = (globalThis as { OffscreenCanvas?: unknown }).OffscreenCanvas
+    class Fine {
+      font = '16px x'; lang = ''; letterSpacing = '0px'; wordSpacing = '0px'; fontKerning = 'auto'; textRendering = 'auto'; direction = 'ltr'
+      measureText(text: string): { width: number; actualBoundingBoxLeft: number; actualBoundingBoxRight: number } {
+        return { width: ([...text].length * 681267 - (text.split('cd').length - 1) * 65536) / 65536, actualBoundingBoxLeft: 0, actualBoundingBoxRight: 0 }
+      }
+    }
+    ;(globalThis as { OffscreenCanvas?: unknown }).OffscreenCanvas = class { getContext(): Fine { return new Fine() } }
+    try {
+      const base = paragraph([['abcdef', 'text']], 31.171875, { facts: { ...UNKNOWN_FONT_FACTS, pairKerning: 'first-advance' } })
+      const lines = blink({ ...base, overflowWrap: 'break-word' }).lines
+      expect([lines[0]!.start, lines[0]!.end]).toEqual([0, 2])
+      expect(lines[0]!.gaps.filter(g => g.gap === 'in-word-prefix').map(g => g.at)).toEqual([{ start: 2, end: 3 }])
+    } finally {
+      ;(globalThis as { OffscreenCanvas?: unknown }).OffscreenCanvas = saved
+    }
+  })
+})

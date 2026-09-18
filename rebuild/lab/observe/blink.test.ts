@@ -2,7 +2,7 @@
 // geometry, so every expected value comes from the observation model and the recorded rows it cites, not from the
 // library.
 import { describe, expect, test } from 'bun:test'
-import type { BlinkItem, BlinkLayout, BlinkLine, BlinkMappingUnit, CssFont, ExpectedRect, Paragraph } from '../../src/model.ts'
+import type { BlinkItem, BlinkLayout, BlinkLine, BlinkMappingUnit, BlinkShapeRun, CssFont, ExpectedRect, Paragraph } from '../../src/model.ts'
 import { observeBlink } from './blink.ts'
 
 const font = { family: 'Arial', size: 16, weight: 400, style: 'normal' as const }
@@ -33,6 +33,11 @@ function layout(lines: BlinkLine[]): BlinkLayout {
   }
 }
 
+// An item's shape as one run of the paragraph's shape result.
+function oneRun(textStart: number, textEnd: number): BlinkShapeRun[] {
+  return [{ textStart, textEnd, reshaped: null, fontsKnown: true }]
+}
+
 // One cluster per code unit with the given raw LayoutUnit advances (16.16 = raw × 1024).
 function text(run: number, textStart: number, x: number, advances: number[], level: number = 0, inlineSize: number | null = null): BlinkItem {
   let sum = 0
@@ -40,7 +45,7 @@ function text(run: number, textStart: number, x: number, advances: number[], lev
     sum += a
     return { textStart: textStart + i, textEnd: textStart + i + 1, graphemeStarts: [textStart + i], advance: Math.round(a * 1024) }
   })
-  return { kind: 'text', run, textStart, textEnd: textStart + advances.length, level, x, inlineSize: inlineSize ?? Math.ceil(sum), clusters }
+  return { kind: 'text', run, textStart, textEnd: textStart + advances.length, level, x, inlineSize: inlineSize ?? Math.ceil(sum), clusters, runs: oneRun(textStart, textStart + advances.length), partsKnown: true }
 }
 
 function identity(run: number, start: number, end: number): BlinkMappingUnit {
@@ -140,7 +145,7 @@ describe('blink observation port', () => {
     // Thai `ย` ZWSP `ั`: the mark merges into the ZWSP's cluster, and ICU puts a grapheme break after the ZWSP.
     const p = paragraph(['ย​ั'])
     const item: BlinkItem = {
-      kind: 'text', run: 0, textStart: 0, textEnd: 3, level: 0, x: 0, inlineSize: 37245,
+      kind: 'text', run: 0, textStart: 0, textEnd: 3, level: 0, x: 0, inlineSize: 37245, runs: oneRun(0, 3), partsKnown: true,
       clusters: [{ textStart: 0, textEnd: 1, graphemeStarts: [0], advance: 35945 * 1024 }, { textStart: 1, textEnd: 3, graphemeStarts: [1, 2], advance: 1300 * 1024 }],
     }
     const o = observeBlink(p, layout([line([item], [identity(0, 0, 3)])]), unused)
@@ -158,10 +163,10 @@ describe('blink observation port', () => {
     // A position the layout marks as a Canvas stand-in limits the edges resting on it, not the ones past it; a limited size
     // limits the x of the items after it on the line.
     const marked: BlinkItem = {
-      kind: 'text', run: 0, textStart: 0, textEnd: 3, level: 0, x: 0, inlineSize: 1600, sizeLimit: 'glyph-clusters',
+      kind: 'text', run: 0, textStart: 0, textEnd: 3, level: 0, x: 0, inlineSize: 1600, sizeLimit: 'glyph-clusters', runs: oneRun(0, 3), partsKnown: true,
       clusters: [{ textStart: 0, textEnd: 1, graphemeStarts: [0], advance: 640 * 1024 }, { textStart: 1, textEnd: 2, graphemeStarts: [1], advance: 320 * 1024, startLimit: 'in-word-prefix' }, { textStart: 2, textEnd: 3, graphemeStarts: [2], advance: 640 * 1024 }],
     }
-    const after: BlinkItem = { kind: 'text', run: 1, textStart: 3, textEnd: 4, level: 0, x: 1600, inlineSize: 640, clusters: [{ textStart: 3, textEnd: 4, graphemeStarts: [3], advance: 640 * 1024 }] }
+    const after: BlinkItem = { kind: 'text', run: 1, textStart: 3, textEnd: 4, level: 0, x: 1600, inlineSize: 640, runs: oneRun(3, 4), partsKnown: true, clusters: [{ textStart: 3, textEnd: 4, graphemeStarts: [3], advance: 640 * 1024 }] }
     const m = observeBlink(paragraph(['abc', 'd']), layout([line([marked, after], [identity(0, 0, 3), identity(1, 3, 4)])]), unused)
     expect(m.codePoints[0]!.rects[0]!.width).toEqual({ state: 'limited', gap: 'in-word-prefix', value: 5 })
     expect(m.codePoints[1]!.rects[0]!.x).toEqual({ state: 'limited', gap: 'in-word-prefix', value: 5 })
@@ -180,11 +185,33 @@ describe('blink observation port', () => {
     expect(raw(o.codePoints[5]!.rects)).toEqual([[0, 3200, 0, true], [0, 3200, 682, true]])
   })
 
+  test('c-29aa7f0e45d7c913: a caret past 256 px adds the runs before it as floats', () => {
+    // Hiragino Mincho 40 px: 19 clusters from the paragraph's shape result, 49361714 units of 16.16, then a reshaped line end
+    // `ウェ`. The caret before `ェ` is float(49361714) + float(2542797) rounded to a float again, a step below 792 px, where
+    // the exact sum 51904511 rounds up to 792 px: natively the rect starts at 50687 and the one before it ends at 50688.
+    const advances = [2621440, 2621440, 2621440, 2516582, 2621440, 2621440, 2621440, 2621440, 2621440, 2490368, 2621440, 2516582, 2621440, 2621440, 2516582, 2621440, 2621440, 2621440, 2621440, 2542797, 2621440]
+    const clusters = advances.map((advance, i) => ({ textStart: i, textEnd: i + 1, graphemeStarts: [i], advance }))
+    const p = paragraph(['コンピューター、インターネット、ソフトウェ'])
+    const reshapedEnd: BlinkItem = {
+      kind: 'text', run: 0, textStart: 0, textEnd: 21, level: 0, x: 0, inlineSize: 53248, clusters, partsKnown: true,
+      runs: [{ textStart: 0, textEnd: 19, reshaped: null, fontsKnown: true }, { textStart: 19, textEnd: 21, reshaped: { textStart: 19, textEnd: 21 }, fontsKnown: true }],
+    }
+    const o = observeBlink(p, layout([line([reshapedEnd], [identity(0, 0, 21)])]), unused)
+    expect(raw(o.codePoints[20]!.rects)).toEqual([[0, 50687, 2561, true]])
+    expect(raw(o.codePoints[19]!.rects)).toEqual([[0, 48204, 2484, true]])
+    const oneCall = observeBlink(p, layout([line([{ ...reshapedEnd, runs: oneRun(0, 21) }], [identity(0, 0, 21)])]), unused)
+    expect(raw(oneCall.codePoints[20]!.rects)).toEqual([[0, 50688, 2560, true]])
+    // Where the view's parts aren't known the value is limited, since it sits within a float step of a LayoutUnit edge.
+    const unknown = observeBlink(p, layout([line([{ ...reshapedEnd, partsKnown: false }], [identity(0, 0, 21)])]), unused)
+    expect(unknown.codePoints[20]!.rects[0]!.x.state).toBe('limited')
+    expect(unknown.codePoints[1]!.rects[0]!.x.state).toBe('predicted')
+  })
+
   test('c-0f4d71d14a32dd6c: a floored caret at an RTL item\'s start is limited where the layout reports a gap there', () => {
     // `لا` in an RTL item whose Canvas advances put nothing on ل (Courier New's lam-alef ligature splits it in Chrome).
     const p = paragraph(['لا'])
     const item: BlinkItem = {
-      kind: 'text', run: 0, textStart: 0, textEnd: 2, level: 1, x: 0, inlineSize: 1538,
+      kind: 'text', run: 0, textStart: 0, textEnd: 2, level: 1, x: 0, inlineSize: 1538, runs: oneRun(0, 2), partsKnown: true,
       clusters: [{ textStart: 0, textEnd: 1, graphemeStarts: [0], advance: 0 }, { textStart: 1, textEnd: 2, graphemeStarts: [1], advance: Math.round(1537.5 * 1024) }],
     }
     const gapped = line([item], [identity(0, 0, 2)])

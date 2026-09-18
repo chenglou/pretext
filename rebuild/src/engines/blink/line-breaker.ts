@@ -1,15 +1,15 @@
 // LineBreaker::NextLine for one line (line_breaker.cc at Chrome 153; specs/blink-lines.md §4-§14 and the handlers of
 // specs/blink-gaps.md §4), with ShapingLineBreaker::ShapeLine (shaping_line_breaker.cc:256-612). Positions and widths
 // are LayoutUnits: integers counting 1/64 of a zoomed px.
-import type { LineSlot } from '../../model.js'
+import type { GapName, LineSlot } from '../../model.js'
 import { WS, bidiClassOf, bidiDataFor } from '../../unicode/bidi.js'
 import { LineBreakIterator } from './breaks.js'
 import { collapsesWhiteSpace, hasBorder, lengthLU, mayHaveMargin, mayHavePadding, wrapsLines } from './content.js'
 import { maybeHanKerningClose } from './hankerning.js'
 import { addGap, sourceRange } from './gaps.js'
 import {
-  isClusterBoundary, isSegmentEdge, isStartSafeToBreak, itemShapeResult, luCeil, nextSafeToBreak, offsetForPosition, positionBounds, positionForOffset,
-  previousSafeToBreak, reshape, reshapeHanKerningEnd, shapeHyphen, snappedWidth, tabShapeResult, truncateView, viewOf, widthOf16,
+  isClusterBoundary, isFontRunEdge, isSegmentEdge, isStartSafeToBreak, itemShapeResult, joinsAcross, luCeil, nextSafeToBreak, offsetForPosition, positionBounds, positionForOffset, positionLimit,
+  prefix16, previousSafeToBreak, reshape, reshapeHanKerningEnd, shapeHyphen, snappedWidth, tabShapeResult, truncateView, viewOf, widthOf16,
   viewFromSegments, WHOLE, type ReshapePart, type Segment, type ShapeResult, type Shaper, type View,
 } from './shape.js'
 import type { BlinkLineStart, BlinkStyle, InlineItem } from './types.js'
@@ -43,6 +43,12 @@ export type ItemResult = {
   marginEnd: number
   // What JustifyResults added to glyph clusters, by cluster start, 16.16 (justification_utils.cc:115-178); absent otherwise.
   justification?: { start: number; add16: number }[]
+  // Not Blink's: whether the shape's parts are Blink's for sure. ShapeLine reshapes from the offsets HarfBuzz left safe to
+  // break; the port's safe offsets pass its width tests, which HarfBuzz's flags needn't, so a line edge inside a shaping
+  // call that isn't a run's first glyph may be reshaped natively where the port keeps the paragraph's glyphs, or reshaped
+  // from another offset. The glyphs are the same; what the view's parts are decides how an RTL view numbers them
+  // (shape.ts viewGraphemeStarts) and where float sums round past 256 zoomed px.
+  partsKnown: boolean
 }
 
 export type LineInfo = {
@@ -78,6 +84,12 @@ export type LineInfo = {
   // offset before the opportunity, reshapes the whole range and takes it without a fit test
   // (shaping_line_breaker.cc:497-506).
   untestedEnds: number[]
+  // Not Blink's: wrapped line starts whose reshape takes the whole space, so that ShapeLine's clamp of the corrected space
+  // at 0 (shaping_line_breaker.cc:309-324) rests on the start's paragraph position, where that is a stand-in, with the
+  // condition it is one under.
+  clampedStarts: { start: number; limit: GapName }[]
+  // Not Blink's: the line-end fit tests whose outcome rests on which offset is the last safe one (EndTest).
+  endTests: EndTest[]
   // Not Blink's: whether the line's breaks could fall between any two grapheme clusters: the iterator ended the line under
   // break-all or break-character (line-break: anywhere, or the overflow retry, line_breaker.cc:4557-4643).
   breaksInsideWords: boolean
@@ -85,6 +97,18 @@ export type LineInfo = {
   // trailing space, the bidi split of preserved trailing spaces).
   truncatedStarts: number[]
 }
+
+// A line-end fit test of ShapeLine (shaping_line_breaker.cc:543-553) that could go the other way natively. Blink reshapes
+// from the last offset HarfBuzz left safe to break and compares the reshape's width with the space after that offset's
+// position, a ceiled LayoutUnit: `line_end_result->Width() <= end_position - safe_position`. The port's safe offsets pass
+// its width tests, which HarfBuzz's flags needn't (contextual lookups that change no width, as Shantell Sans's alternates
+// do), so natively the last safe offset can be an earlier one. With equal glyphs the reshape from there is wider by exactly
+// the advances between the two, and the test differs only by the two positions' ceilings, less than one LayoutUnit: natively
+// `offic` in ProbeShantell is reshaped whole and fits 2175 units exactly, where the port's `c` after the ceiled position
+// of offset 4 is 0.44 units too wide (c-0342c2bb3e2138fd). A wrapped line start whose own first safe offset isn't a run
+// edge moves the end position by a LayoutUnit the same way (:309-324). `from` is where the text the test decides starts:
+// the line's end for a test that failed, the break opportunity before `offset` for one that passed.
+export type EndTest = { offset: number; from: number; fits: boolean }
 
 // line_breaker.cc:186-188
 function isSpaceLB(c: number): boolean {
@@ -113,7 +137,7 @@ function itemNeedsAccurateEndPosition(style: BlinkStyle): boolean {
 }
 
 type BreakOpportunity = { offset: number; nonHangableRunEnd: number | null }
-type ShapeLineResult = { breakOffset: number; isOverflow: boolean; isHyphenated: boolean; hasTrailingSpaces: boolean }
+type ShapeLineResult = { breakOffset: number; isOverflow: boolean; isHyphenated: boolean; hasTrailingSpaces: boolean; partsKnown: boolean }
 
 export class LineBreaker {
   readonly sh: Shaper
@@ -148,6 +172,10 @@ export class LineBreaker {
   readonly previousLineHadForcedBreak: boolean
   readonly shapeResults = new Map<number, ShapeResult>()
   untestedEnds: number[] = []
+  clampedStarts: { start: number; limit: GapName }[] = []
+  // Set by shapeLineWith where the clamp of a start's corrected space rests on a stand-in, with whether the port clamped.
+  clampRests: { limit: GapName; clamped: boolean } | null = null
+  endTests: EndTest[] = []
   truncatedStarts: number[] = []
 
   constructor(sh: Shaper, token: BlinkLineStart, slot: LineSlot) {
@@ -249,7 +277,7 @@ export class LineBreaker {
       itemIndex: this.current.itemIndex, start: this.current.textOffset, end: endOffset, inlineSize: 0, shape: null,
       canBreakAfter: false, mayBreakInside: false, hasOnlyPreWrapTrailingSpaces: false, hasOnlyBidiTrailingSpaces: false,
       breakAnywhereIfOverflow: this.breakAnywhereIfOverflow, shouldCreateLineBox: last !== null && last.shouldCreateLineBox,
-      hyphen: null, isHyphenated: false, trimmedEnd: -1, marginStart: 0, marginEnd: 0,
+      hyphen: null, isHyphenated: false, trimmedEnd: -1, marginStart: 0, marginEnd: 0, partsKnown: true,
     }
     this.results.push(r)
     return r
@@ -351,6 +379,8 @@ export class LineBreaker {
     return {
       decisionEnd,
       untestedEnds: this.untestedEnds,
+      clampedStarts: this.clampedStarts,
+      endTests: this.endTests,
       truncatedStarts: this.truncatedStarts,
       breaksInsideWords: breakType === 'break-character' || breakType === 'break-all',
       results: this.results,
@@ -484,7 +514,7 @@ export class LineBreaker {
     let inlineSize: number
     let out: ShapeLineResult
     for (;;) {
-      out = { breakOffset: 0, isOverflow: false, isHyphenated: false, hasTrailingSpaces: false }
+      out = { breakOffset: 0, isOverflow: false, isHyphenated: false, hasTrailingSpaces: false, partsKnown: true }
       const view = this.shapeLine(item, sr, r.start, Math.max(0, availableWidth), noResultIfOverflow, dontReshapeEndIfAtSpace, out)
       if (view === null) {
         r.inlineSize = availableWidthWithHyphens + 1
@@ -509,6 +539,7 @@ export class LineBreaker {
       r.hasOnlyPreWrapTrailingSpaces = out.hasTrailingSpaces
       r.hasOnlyBidiTrailingSpaces = out.hasTrailingSpaces
       r.shape = view
+      r.partsKnown = out.partsKnown
       break
     }
     if (r.end < item.end) {
@@ -564,8 +595,35 @@ export class LineBreaker {
   // ShapingLineBreaker::ShapeLine (shaping_line_breaker.cc:256-612), without hyphenation dictionaries (hyphens: manual),
   // auto-spacing (text-autospace: no-autospace) and HanKerning at wrapped line starts, which text-spacing-trim: normal
   // doesn't trim (text_spacing_trim.h:31-34). The HanKerning line-end reshape (:344-363) is taken.
+  //
+  // Where the clamp of a wrapped line start's corrected space rests on a stand-in position (shapeLineWith), the port lays
+  // the line out the other way too, and records the start only when that gives another line.
   shapeLine(item: InlineItem, sr: ShapeResult, start: number, availableSpace: number, noResultIfOverflow: boolean, dontReshapeEndIfAtSpace: boolean, out: ShapeLineResult): View | null {
+    this.clampRests = null
+    const view = this.shapeLineWith(item, sr, start, availableSpace, noResultIfOverflow, dontReshapeEndIfAtSpace, out, sr.end + 1, false)
+    const rests = this.clampRests as { limit: GapName; clamped: boolean } | null
+    if (rests === null || this.clampedStarts.some(c => c.start === start)) return view
+    let differs = rests.clamped
+    if (!differs) {
+      // The port didn't clamp: the line Blink makes if it does.
+      const kept = { gaps: this.sh.gaps.length, untestedEnds: this.untestedEnds.length, endTests: this.endTests.length }
+      const other: ShapeLineResult = { breakOffset: 0, isOverflow: false, isHyphenated: false, hasTrailingSpaces: false, partsKnown: true }
+      const otherView = this.shapeLineWith(item, sr, start, availableSpace, noResultIfOverflow, dontReshapeEndIfAtSpace, other, sr.end + 1, true)
+      this.sh.gaps.length = kept.gaps
+      this.untestedEnds.length = kept.untestedEnds
+      this.endTests.length = kept.endTests
+      differs = (view === null) !== (otherView === null) || other.breakOffset !== out.breakOffset || other.isOverflow !== out.isOverflow ||
+        other.hasTrailingSpaces !== out.hasTrailingSpaces || (view !== null && otherView !== null && view.width !== otherView.width)
+    }
+    if (differs) this.clampedStarts.push({ start, limit: rests.limit })
+    return view
+  }
+
+  // `candidateBefore` is the port's: the candidate search stays below that offset (see the out-of-order check in the loop).
+  // `forceClamp` is the port's: the corrected space of a wrapped line start is taken as clamped at 0.
+  shapeLineWith(item: InlineItem, sr: ShapeResult, start: number, availableSpace: number, noResultIfOverflow: boolean, dontReshapeEndIfAtSpace: boolean, out: ShapeLineResult, candidateBefore: number, forceClamp: boolean): View | null {
     const sh = this.sh
+    const given = { availableSpace, gaps: sh.gaps.length, untestedEnds: this.untestedEnds.length, endTests: this.endTests.length }
     const rangeStart = sr.start
     const rangeEnd = sr.end
     const rtl = sr.rtl
@@ -579,16 +637,33 @@ export class LineBreaker {
     const startPosition = positionForOffset(sh, sr, start)
     let lineStartResult: ReshapePart | null = null
     const firstSafe = isStartOfWrappedLine ? nextSafeToBreak(sh, sr, start) : start
+    // Blink's first safe offset is the port's for sure where the start is a run's first glyph (ItemResult.partsKnown).
+    const startKnown = !isStartOfWrappedLine || this.hasRunEdge(item, start, start + 1)
+    out.partsKnown = startKnown && !(isStartOfWrappedLine && this.joinMayBeSafe(item, start, firstSafe))
     if (firstSafe !== start) {
       const firstSafePosition = positionForOffset(sh, sr, firstSafe)
       lineStartResult = reshape(sh, item.group, start, firstSafe, true)
       const oldWidth = flip(firstSafePosition - startPosition)
-      const diff = oldWidth - luCeil(widthOf16(lineStartResult.call.width16))
+      const reshaped = luCeil(widthOf16(lineStartResult.call.width16))
+      const diff = oldWidth - reshaped
+      // The end position is the first safe offset's position plus the space less the reshape, whatever the start's position
+      // is, unless the corrected space is clamped at 0: then it is the start's position itself and nothing fits. The start
+      // of a wrapped line inside a joined word is a stand-in (positionLimit), so whether the clamp applies rests on it where
+      // the reshape alone takes the space: natively `ب` before SHY, kasra and `ب` in Amiri is 117 units wider in the
+      // paragraph than the form U+200D gives, the last `ب` 228 narrower than reshaped, the space of 129 is clamped and the
+      // line overflows at SHY, where the port's 111 left 18 units (c-909a7a77bad03225).
+      if (sr.kind === 'group' && (availableSpace - reshaped <= 0 || availableSpace + diff <= 0)) {
+        const group = sh.p.groups[sr.group]!
+        const limit = positionLimit(sh, sr.group, start, group.start, group.end)
+        if (limit !== null) this.clampRests = { limit, clamped: diff !== 0 && availableSpace + diff <= 0 }
+      }
       if (diff !== 0) availableSpace = Math.max(availableSpace + diff, 0)
+      if (forceClamp) availableSpace = 0
     }
     const endPosition = startPosition + flip(availableSpace)
-    let candidate = offsetForPosition(sh, sr, endPosition)
+    let candidate = offsetForPosition(sh, sr, endPosition, candidateBefore)
     this.reportUncertainCandidate(sr, endPosition, candidate, start)
+    const searched = candidate
     // ShapeToEnd (shaping_line_breaker.cc:640-670).
     const shapeToEnd = (): View => {
       if (lineStartResult === null) return start === rangeStart ? viewOf(sh, sr) : viewOf(sh, sr, start, rangeEnd)
@@ -643,6 +718,7 @@ export class LineBreaker {
         out.hasTrailingSpaces = true
         out.breakOffset = Math.min(rangeEnd, bo.offset)
         out.isHyphenated = false
+        out.partsKnown = true
         return viewOf(sh, sr, start, out.breakOffset)
       }
     }
@@ -667,6 +743,26 @@ export class LineBreaker {
       for (;;) {
         if (!afterEverySpace && bo.nonHangableRunEnd !== null) bo.offset = Math.max(start + 1, bo.nonHangableRunEnd)
         lastSafe = previousSafeToBreak(sh, sr, bo.offset)
+        // Blink finds the candidate by a binary search over sorted positions (CachedOffsetForPosition,
+        // shape_result.cc:2300-2318), so a safe offset at or before the candidate never lies past the end position, and
+        // `end_position - safe_position` below is a width. The port's positions inside joined words and ligatures are Canvas
+        // stand-ins that can run backwards (Geeza Pro's lam before meem, c-2dce271cf373d098: the search landed past an offset
+        // whose exact position was already beyond the space). An exact position past the end says the candidate lies
+        // before it, so the search runs again below that offset, and what the first search reported is dropped.
+        if (!out.isOverflow && lastSafe > start && lastSafe <= searched && flip(endPosition - positionForOffset(sh, sr, lastSafe)) < 0) {
+          sh.gaps.length = given.gaps
+          this.untestedEnds.length = given.untestedEnds
+          this.endTests.length = given.endTests
+          out.isOverflow = false
+          out.isHyphenated = false
+          out.hasTrailingSpaces = false
+          out.partsKnown = true
+          return this.shapeLineWith(item, sr, start, given.availableSpace, noResultIfOverflow, dontReshapeEndIfAtSpace, out, lastSafe, forceClamp)
+        }
+        // Blink's last safe offset is the port's for sure where that is a run's first glyph, or the line's start, and no
+        // offset after it is unsafe by the joining rule alone in a font that may shape through morx.
+        if (lastSafe > start && !this.hasRunEdge(item, lastSafe, lastSafe + 1)) out.partsKnown = false
+        if (this.joinMayBeSafe(item, Math.max(lastSafe, start) + 1, bo.offset + 1)) out.partsKnown = false
         if (lastSafe === bo.offset) break
         if (lastSafe < firstSafe) {
           lastSafe = start
@@ -678,7 +774,9 @@ export class LineBreaker {
         }
         const safePosition = positionForOffset(sh, sr, lastSafe)
         lineEndResult = reshape(sh, item.group, lastSafe, bo.offset)
-        if (widthOf16(lineEndResult.call.width16) <= Math.fround(flip(endPosition - safePosition) / 64)) break
+        const fits = widthOf16(lineEndResult.call.width16) <= Math.fround(flip(endPosition - safePosition) / 64)
+        this.recordEndTest(item, sr, start, isStartOfWrappedLine, lastSafe, bo.offset, flip(endPosition - safePosition) * 1024 - lineEndResult.call.width16, fits)
+        if (fits) break
         lineEndResult = null
         // Blink looks for its first safe offset from any wrapped line start (FirstSafeOffset), whether or not the port's
         // pair test calls the start itself safe (fresh set r3-blink-4, c-03316764a11a9d04: natively `({` overflows its line).
@@ -699,6 +797,30 @@ export class LineBreaker {
     if (lineEndResult === null) lastSafe = bo.offset
     this.setBreakOffset(out, bo.offset)
     return concat(lastSafe, lineEndResult)
+  }
+
+  // Records a line-end fit test that another last safe offset, or another first safe offset of a wrapped line start, could
+  // turn around (EndTest). `margin16` is the space left less the reshape's width, in 16.16 units.
+  recordEndTest(item: InlineItem, sr: ShapeResult, start: number, isStartOfWrappedLine: boolean, lastSafe: number, offset: number, margin16: number, fits: boolean): void {
+    const sh = this.sh
+    // An offset Blink finds safe whatever HarfBuzz flagged: the line's start (FirstSafeOffset gives nothing before it) or a
+    // run's first glyph.
+    const endKnown = lastSafe <= start || this.hasRunEdge(item, lastSafe, lastSafe + 1)
+    const startKnown = !isStartOfWrappedLine || this.hasRunEdge(item, start, start + 1)
+    if (endKnown && startKnown) return
+    // How far the ceiling of the last safe offset's position is above the position, 0 to 1023: an earlier safe offset has
+    // another. Positions run down in RTL, where a higher ceiling leaves more space, not less.
+    const position16 = prefix16(sh, sr, lastSafe)
+    const exact16 = !sr.rtl ? position16 : sr.width16 - position16
+    const slack16 = positionForOffset(sh, sr, lastSafe) * 1024 - exact16
+    const shift16 = startKnown ? 0 : 1024
+    let low16 = margin16 - shift16
+    let high16 = margin16 + shift16
+    if (!endKnown) {
+      if (!sr.rtl) { low16 += slack16 - 1023; high16 += slack16 } else { low16 -= slack16; high16 += 1023 - slack16 }
+    }
+    if (fits ? low16 >= 0 : high16 < 0) return
+    this.endTests.push({ offset, from: fits ? Math.max(start, this.iterator.previousBreakOpportunity(offset - 1, start)) : -1, fits })
   }
 
   // The candidate rests on the positions of the offsets around it. Where one of them is a stand-in whose adjustment the port
@@ -728,13 +850,30 @@ export class LineBreaker {
     }
   }
 
-  // Whether a shaping run starts in [from, to): the item's shaping group, or a script segment inside it, which HarfBuzzShaper
-  // shapes in its own call (harfbuzz_shaper.cc:1080-1101). A run's first glyph is safe to break before in every font.
+  // Whether an offset in [from, to) is unsafe to break by the port's joining rule where HarfBuzz may leave it safe. The
+  // Arabic shaper flags every offset between joined letters (hb-ot-shaper-arabic.cc:332, 366), but a font with morx takes
+  // the default shaper (hb-ot-shape.cc:60-66, 100-101) and its flags follow the state machine's transitions
+  // (hb-aat-layout-common.hh:1341-1370), which can be back at the start state between two letters that join across a soft
+  // hyphen: natively a line `ب` SHY `ب` ZWJ in a fallback font has two parts where the port reshapes it whole
+  // (c-7062e717841f11f5). Known only where the joining fact says OpenType.
+  joinMayBeSafe(item: InlineItem, from: number, to: number): boolean {
+    const p = this.sh.p
+    if (item.group < 0) return false
+    const group = p.groups[item.group]!
+    if (p.styles[group.style]!.joining === 'opentype') return false
+    for (let k = Math.max(from, group.start + 1); k < Math.min(to, group.end); k++) if (isClusterBoundary(p, k) && joinsAcross(p, k, group.start, group.end)) return true
+    return false
+  }
+
+  // Whether a shaping run starts in [from, to): the item's shaping group, a script segment inside it, which HarfBuzzShaper
+  // shapes in its own call (harfbuzz_shaper.cc:1080-1101), or a stretch another font draws by the coverage facts (shape.ts
+  // isFontRunEdge). A run's first glyph is safe to break before in every font.
   hasRunEdge(item: InlineItem, from: number, to: number): boolean {
     const p = this.sh.p
     if (item.group < 0) return true
-    if (p.groups[item.group]!.start >= from && p.groups[item.group]!.start < to) return true
-    for (let k = Math.max(from, 1); k < to; k++) if (isSegmentEdge(p, k)) return true
+    const group = p.groups[item.group]!
+    if (group.start >= from && group.start < to) return true
+    for (let k = Math.max(from, 1); k < to; k++) if (isSegmentEdge(p, k) || isFontRunEdge(p, k, group.start, group.end)) return true
     return false
   }
 
@@ -1137,6 +1276,7 @@ export class LineBreaker {
     if (!this.needsAccurateEndPosition(item)) return truncateView(this.sh, view, r.start, endOffset)
     const sr = this.shapeResultOf(r.itemIndex)
     const lastSafe = previousSafeToBreak(this.sh, sr, endOffset)
+    if (lastSafe > r.start && !this.hasRunEdge(item, lastSafe, lastSafe + 1)) r.partsKnown = false
     if (lastSafe === endOffset || lastSafe <= r.start) return truncateView(this.sh, view, r.start, endOffset)
     const endResult = reshape(this.sh, item.group, Math.max(lastSafe, r.start), endOffset)
     return viewFromSegments(this.sh, view.rtl, [{ kind: 'view', view, start: r.start, end: lastSafe }, { kind: 'reshape', call: endResult.call, start: 0, end: endOffset }])
