@@ -109,14 +109,24 @@ export type WebKitBox = {
   // FontFacts.pairKerning was null: whether the font's tables put a pair adjustment on the pair's second glyph isn't given,
   // which decides the shaped advance of the U+0020 a text item is measured with (gap simplified-measuring).
   pairKerningUnknown: boolean
-  // How the box's locale, which OffscreenCanvas doesn't have, chooses fonts (gap canvas-language; content.ts collectBoxFacts).
-  // `families`: the font list holds a family the locale resolves (a CSS generic, -webkit-standard, a system design); a
-  // character is concerned unless a named family before it draws it (namedFamilyDraws: `namedContext`, those families
-  // followed by LastResort, against `lastResortContext`, LastResort alone). `fallback`: the locale's script is Han, kana or
-  // Hangul, where Core Text picks fonts for Han, kana, Hangul, CJK punctuation and fullwidth forms by language, whatever
-  // the list names. null: neither.
-  localeChoosesFonts: { families: boolean; fallback: boolean } | null
+  // The font-family list Canvas is given: the declared list with each generic keyword the locale resolves to a family of its
+  // own named (fonts.ts), and the script's standard family appended where no listed family resolves. `firstNamedGeneric` is
+  // the index of the first family named that way, or -1.
+  canvasFamily: string
+  firstNamedGeneric: number
+  // How the box's locale, which OffscreenCanvas doesn't have, chooses fonts beyond that (gap canvas-language; content.ts
+  // collectBoxFacts). A character is concerned unless a family of `namedContext` draws it (namedFamilyDraws: the families
+  // before the first one below, followed by LastResort, against `lastResortContext`, LastResort alone):
+  // - `unknownFamily`: the list holds a family the locale resolves in a way Canvas can't be given (a system design, or
+  //   -webkit-standard under USCRIPT_HAN without the preferred languages);
+  // - `namedGeneric`: the list holds a generic named for Canvas, which concerns a character with default emoji presentation,
+  //   since the DOM skips a generic family's outline glyph for it.
+  // `fallback`: the box holds a character whose system fallback font Core Text picks by the locale's language (content.ts
+  // hasLanguageDependentFallback); such a character is concerned unless a family of the whole list draws it (`listContext`,
+  // the Canvas list followed by LastResort). null: none of these.
+  localeChoosesFonts: { unknownFamily: boolean; namedGeneric: boolean; fallback: boolean } | null
   namedContext: number
+  listContext: number
   lastResortContext: number
   // The box's Han locale takes the preferred languages, which aren't given; or its quote overrides take the ICU default
   // locale, which isn't given (gap ui-language).

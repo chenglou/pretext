@@ -10,8 +10,10 @@ import type { Measurer } from '../../measure/canvas.js'
 import type { Fragment, Gap, GapName, LineResultOf, LineSlot, TextAlign, WebKitDisplayBox, WebKitLineGeometry } from '../../model.js'
 import { canBreakBefore, findNextBreakablePosition, hasDictionaryCharacter, inBetweenRangeStartingWithMark, makeFactory, mayBreakInBetween } from './breaks.js'
 import { applyTextAlignJustify, type ExpandableRun, type ExpansionBehavior } from './expansion.js'
-import { DEFAULT_BIDI_LEVEL, hasLanguageDependentFallback, namedFamilyDraws } from './content.js'
-import { isDelimiterQuote, isPunctuation, lineRules } from './data.js'
+import { DEFAULT_BIDI_LEVEL, familyDraws, hasLanguageDependentFallback } from './content.js'
+import { isDelimiterQuote, isPunctuation, lineRules, localeScript } from './data.js'
+import { hasEmojiPresentation } from './fonts.js'
+import { joinsAcross } from './joining.js'
 import { measureText } from '../../measure/canvas.js'
 import { boxWidth, breakWord, canvasString, controlsMeasureExactly, firstUserPerceivedCharacterLength, fixedPitchShortcutWidth, forwardOneCodePoint, hyphenGlyphsDiffer, hyphenWidth, itemWidth, measuredEnd, mergedGlyphs } from './measure.js'
 import { collapsesWhiteSpace, endEdgeWidth, layoutUnit, preservesSpacesAndTabs, startEdgeWidth, tabsAllowed, trailingWhitespaceHangs } from './style.js'
@@ -1506,12 +1508,20 @@ function collectShapeRanges(L: Layout, c: Content): Array<[number, number]> {
 // LineBuilder::applyShapingOnRunRange (ILB:920-967): the range's text shaped as one RTL run, each text run taking the
 // CoreText base advances of its own characters, summed per character in logical order, negative ones as 0
 // (ComplexTextController::glyphAdvancesForTextRun, ComplexTextController.cpp:186-205, without letter spacing), and the
-// candidate's logical width set to their sum. Canvas shows totals only. A run's letters take the forms the joined text gives
-// them, so the run is measured in its joining context: with U+200D, which joins and has no advance, on each side where the
-// neighbouring run's text joins it. Whether two runs join is read from Canvas: the two texts measured as one string are
-// nearer to the sum of the two with U+200D between them than to the sum of the two alone (where the sums are equal the forms
-// have equal advances and it doesn't matter to a width). What this leaves out: a ligature or pair adjustment across the
-// edge, and the float32 order of the per-character sum. The line reports the gap.
+// candidate's logical width set to their sum. So the runs' shares add up to the advances of the joined text, which Canvas
+// totals (probe webkit-round4 R10: the DOM's boxes add up to the Canvas total of the joined text in 35 of 36 run lists in 9
+// fonts and all 36 in Courier New, and carry no letter spacing). The other one isn't shaped at all: Core Text returns several glyph runs for a font's
+// stretch that holds a shadda with a vowel sign, glyphAdvancesForTextRun counts the stretch's characters once per glyph run
+// (ComplexTextController.cpp:190-203, stringLength() is the whole stretch, ComplexTextController.h:112), and the size check
+// returns before any width changes (ILB:943-946), so the boxes keep their own widths. Which mark pairs a font composes isn't
+// Canvas-observable; the gap covers it (suite c-d03f94e8fb53e7e2). Canvas shows totals only, so a run's share is
+// a stand-in: the total of the joined text from the run on, less the total of the text after the run, each with U+200D before
+// it where the letters at its first edge join (joining.ts). The differences add up to the joined text's total. What this
+// leaves out is whatever the text before a letter does to it beyond joining, which lands on the run before the edge: a pair
+// adjustment (R10: in Geeza Pro the DOM has it on the run after the edge), a contextual form, or a ligature across the edge
+// (the DOM gives the run that holds its first letter the whole advance); and the float32 order of the per-character sum. The
+// line reports the gap. Chosen over the run alone in its joining context (round 3) and over prefix differences by R10's
+// counts, 509, 492 and 474 of 770 runs equal to the DOM's: a registered heuristic (CHARTER known deviations).
 function applyShapingOnRunRange(L: Layout, c: Content, range: [number, number]): void {
   const runs = c.runs
   const [first, second] = range
@@ -1527,23 +1537,29 @@ function applyShapingOnRunRange(L: Layout, c: Content, range: [number, number]):
     texts.push(L.p.boxes[item.box]!.text.slice(item.start, item.end))
     indices.push(index)
   }
-  const ZWJ = '\u200d'
-  const measure = (text: string): number => measureText(L.m, firstBox.plainContext, canvasString(text))
-  const joins = (a: string, b: string): boolean => {
-    const joined = f32(measure(a + ZWJ) + measure(ZWJ + b))
-    const apart = f32(measure(a) + measure(b))
-    if (joined === apart) return false
-    const whole = measure(a + b)
-    return Math.abs(whole - joined) < Math.abs(whole - apart)
+  let suffix = ''
+  let following = 0
+  let followingJoins = false
+  for (let k = texts.length - 1; k >= 0; k--) {
+    const text = texts[k]!
+    const joins = k > 0 && joinsAcross(texts[k - 1]!, text)
+    const total = measureText(L.m, firstBox.plainContext, canvasString((joins ? '\u200d' : '') + text + suffix))
+    let share = f32(total - following)
+    if (suffix !== '') {
+      // The difference of two float32 totals isn't the float32 sum of the run's own advances, which the run alone in its
+      // joining context is where nothing but joining crosses its edges. The two agree within the rounding of the three totals,
+      // half a unit in the last place of the largest for every addition, where that holds: then the run alone stands.
+      const alone = measureText(L.m, firstBox.plainContext, canvasString((joins ? '\u200d' : '') + text + (followingJoins ? '\u200d' : '')))
+      const additions = 2 * (text.length + suffix.length) + 5
+      if (Math.abs(alone - share) <= additions * 2 ** (Math.floor(Math.log2(total)) - 24)) share = alone
+    }
+    runs[indices[k]!]!.contentWidth = Math.max(0, share)
+    suffix = text + suffix
+    following = total
+    followingJoins = joins
   }
   let shapedContentWidth = 0
-  for (let k = 0; k < texts.length; k++) {
-    const before = k > 0 && joins(texts[k - 1]!, texts[k]!)
-    const after = k + 1 < texts.length && joins(texts[k]!, texts[k + 1]!)
-    const runWidth = Math.max(0, measure((before ? ZWJ : '') + texts[k]! + (after ? ZWJ : '')))
-    runs[indices[k]!]!.contentWidth = runWidth
-    shapedContentWidth = f32(shapedContentWidth + runWidth)
-  }
+  for (let k = 0; k < indices.length; k++) shapedContentWidth = f32(shapedContentWidth + runs[indices[k]!]!.contentWidth)
   c.logicalWidth = shapedContentWidth
   c.hasShapedContent = true
   const firstItem = runs[indices[0]!]!.item as WebKitTextItem
@@ -1551,7 +1567,7 @@ function applyShapingOnRunRange(L: Layout, c: Content, range: [number, number]):
   const at = { start: L.p.boxes[firstItem.box]!.sourceStart + firstItem.start, end: L.p.boxes[lastItem.box]!.sourceStart + lastItem.end }
   const known = L.gaps.find(g => g.gap === 'rtl-shaping-across-inline-boxes' && g.at !== undefined && g.at.start <= at.end && g.at.end >= at.start)
   if (known !== undefined) known.at = { start: Math.min(known.at!.start, at.start), end: Math.max(known.at!.end, at.end) }
-  else L.gaps.push({ gap: 'rtl-shaping-across-inline-boxes', run: firstBox.run, detail: 'RTL text shaped across inline boxes as one run: each run is a Canvas total of its text in its joining context, where WebKit sums CoreText base advances per character of the joined text', at })
+  else L.gaps.push({ gap: 'rtl-shaping-across-inline-boxes', run: firstBox.run, detail: 'RTL text shaped across inline boxes as one run: each run is a difference of Canvas totals of the joined text, where WebKit sums CoreText base advances per character', at })
 }
 
 // LineBuilder::applyShapingIfNeeded (ILB:969-979); TextShapingAcrossInlineBoxes is on by default
@@ -2461,7 +2477,7 @@ function lineGaps(L: Layout, start: WebKitLineStart): void {
     // c-790a15d5d04b7c3a: FF after `A` is 11.1171875px, the whole with `A` kerned as before a space, less `A` alone).
     if (index === start.itemIndex && start.offset > 0 && start.previousLine !== null && start.previousLine.carriedWidth !== null) {
       itemGaps(item, item.start, item.end, (gap, box, _from, _to, detail) => add(gap, box, lineFrom, item.end, `${detail}; in the whole item, which the carried width of the rest comes from`))
-      if (start.previousLine.carriedFromShaping) add('rtl-shaping-across-inline-boxes', p.boxes[item.box]!, lineFrom, item.end, 'the carried width of the rest comes from a run shaped across inline boxes, a Canvas total of its text in its joining context')
+      if (start.previousLine.carriedFromShaping) add('rtl-shaping-across-inline-boxes', p.boxes[item.box]!, lineFrom, item.end, 'the carried width of the rest comes from a run shaped across inline boxes, a difference of Canvas totals of the joined text')
     }
   }
 
@@ -2502,19 +2518,26 @@ function lineGaps(L: Layout, start: WebKitLineStart): void {
       if (merge.separated !== null) {
         for (let k = 0; k < merge.pairs.length; k++) add('letter-spacing-ligatures', box, from + merge.pairs[k]![0], Math.min(to, from + merge.pairs[k]![1]), 'Canvas merges this pair under liga, clig, dlig or hlig, which the DOM turns off under letter-spacing; measured with U+200C between the two, which leaves out a pair adjustment between them')
       } else if (merge.merged) {
-        add('letter-spacing-ligatures', box, from, to, 'Canvas shows fewer spacing-bearing glyphs than characters here, and the DOM turns off liga, clig, dlig and hlig under letter-spacing; OffscreenCanvas keeps them')
+        add('letter-spacing-ligatures', box, from, to, merge.counted
+          ? 'Canvas shows fewer spacing-bearing glyphs than characters here, and the DOM turns off liga, clig, dlig and hlig under letter-spacing; OffscreenCanvas keeps them'
+          : "the string is too long to count its spacing-bearing glyphs exactly from two float32 totals, so Canvas can't show whether liga, clig, dlig or hlig, which the DOM turns off under letter-spacing, merged glyphs in it")
       }
     }
-    // OffscreenCanvas has a null locale (specs/webkit-canvas.md §1.3): collectBoxFacts in content.ts. A control is measured
-    // as another character (canvasString) and draws no font's glyph of its own.
-    if (box.localeChoosesFonts !== null) {
+    // OffscreenCanvas has a null locale (specs/webkit-canvas.md §1.3): collectBoxFacts in content.ts. A control is measured as
+    // another character (canvasString) and draws no font's glyph of its own.
+    const localeChooses = box.localeChoosesFonts
+    if (localeChooses !== null) {
       for (let i = from; i < to; i++) {
         const cp = text.codePointAt(i)!
         const length = cp > 0xffff ? 2 : 1
-        if (box.localeChoosesFonts.fallback && hasLanguageDependentFallback(cp)) {
-          add('canvas-language', box, i, i + length, `locale ${box.locale} chooses the font for Han, kana or Hangul; OffscreenCanvas has no locale`)
-        } else if (box.localeChoosesFonts.families && cp > 0x1f && !(cp >= 0x7f && cp <= 0x9f) && !namedFamilyDraws(L.m, box, cp)) {
-          add('canvas-language', box, i, i + length, `no named family before the one locale ${box.locale} resolves draws this character; OffscreenCanvas has no locale`)
+        if (cp > 0x1f && !(cp >= 0x7f && cp <= 0x9f)) {
+          if ((localeChooses.unknownFamily || (localeChooses.namedGeneric && hasEmojiPresentation(cp))) && !familyDraws(L.m, box, box.namedContext, cp)) {
+            add('canvas-language', box, i, i + length, localeChooses.unknownFamily
+              ? `no named family before the one locale ${box.locale} resolves draws this character; OffscreenCanvas has no locale`
+              : `a character with default emoji presentation that no family before the generic one draws: the DOM skips the generic family's outline glyph, and Canvas measures the family locale ${box.locale} resolves it to by name`)
+          } else if (localeChooses.fallback && hasLanguageDependentFallback(cp, box.locale, localeScript(box.locale)) && !familyDraws(L.m, box, box.listContext, cp)) {
+            add('canvas-language', box, i, i + length, `no family of the list draws this character, and locale ${box.locale} chooses its system fallback font; OffscreenCanvas has no locale`)
+          }
         }
         i += length - 1
       }
@@ -2547,10 +2570,12 @@ function lineGaps(L: Layout, start: WebKitLineStart): void {
     // The DOM's simplified path sums the shaped advances of the primary font's glyphs in one float32 loop
     // (FontCascade::widthForSimpleTextSlow, FontCascade.cpp:381-412). Canvas runs WidthIterator: the unshaped sum U, plus the
     // shaped sum S less U, after it puts every character treated as a space back to its unshaped advance
-    // (applyFontTransforms, WidthIterator.cpp:84-120). Where U and S are within a factor of two of each other, S - U is exact
-    // in float32 (Sterbenz), so the WidthIterator total is S: the two paths agree to the bit unless shaping changed a space's
-    // own advance, which Canvas can't show (probe webkit-round3 R1: 162 of 162 strings without a space, kerned and ligated
-    // ones included, measure the same in the DOM and in Canvas).
+    // (applyFontTransforms, WidthIterator.cpp:84-120): the total is f32(U + f32(S - U)). Where U / 2 <= S <= 2 * U, S - U is
+    // exact in float32 (Sterbenz) and the total is S. Rounding is monotonic and U / 2 and 2 * U are float32 numbers, so an S
+    // below U / 2 gives a total of at most U / 2 and an S above 2 * U one of at least 2 * U: a total strictly between them
+    // says S is in range, and the two paths agree to the bit unless shaping changed a space's own advance, which Canvas can't
+    // show (probe webkit-round3 R1: 162 of 162 strings without a space, kerned and ligated ones included, measure the same in
+    // the DOM and in Canvas).
     // - A U+0020 before the string's last unit is the first glyph of a pair, where CoreText puts a pair adjustment: a
     //   preserved run of spaces.
     // - The U+0020 a text item is measured with is the string's last glyph, a pair's second glyph. CoreText puts the pair
@@ -2568,7 +2593,7 @@ function lineGaps(L: Layout, start: WebKitLineStart): void {
           if (cp > 0xffff) i++
         }
         const total = measureText(L.m, box.context, canvasString(measured))
-        moved = total !== unshaped && !(total >= 0.75 * unshaped && total <= 1.5 * unshaped)
+        moved = total !== unshaped && !(total > unshaped / 2 && total < 2 * unshaped)
       }
       if (moved) add('simplified-measuring', box, from, to, "the DOM keeps a space's shaped advance on the simplified path, where Canvas puts it back to the unshaped one")
     }
@@ -2621,9 +2646,9 @@ function lineDifference(p: WebKitPrepared, own: WebKitLineResult, world: WebKitL
 
 // The line start in a history world that stands where `start` stands, or null where the world can't be at that start: the
 // line begins inside an item with a width carried from the lines before it (overflowWidthAsLeadingForNextLine, ALB:54-98;
-// InlineTextItem::right, InlineTextItem.cpp:65-71), and the world ends an item between that item's start and the line start,
-// so its rest started from another whole (triage c-66ae4ab7d56cb0ae: line 6 keeps `ببب` at 16.27px, the rest of `بببب` alone,
-// where the rest of `((بببب` is 26.02px); or the world has no item boundary at a line start between two of the own items.
+// InlineTextItem::right, InlineTextItem.cpp:65-71), and the world's item there isn't the own one, so its rest started from
+// another whole (triage c-66ae4ab7d56cb0ae: line 6 keeps `ببب` at 16.27px, the rest of `بببب` alone, where the rest of
+// `((بببب` is 26.02px); or the world has no item boundary at a line start between two of the own items.
 function worldLineStart(p: WebKitPrepared, world: WebKitHistoryWorld, start: WebKitLineStart): WebKitLineStart | null {
   if (start.itemIndex >= p.items.length) return { ...start, itemIndex: world.prepared.items.length }
   const own = p.items[start.itemIndex]!
@@ -2640,8 +2665,11 @@ function worldLineStart(p: WebKitPrepared, world: WebKitHistoryWorld, start: Web
     index++
   }
   if (start.offset === 0) return first.start === position ? { ...start, itemIndex: index } : null
+  // A carried width is the whole item's less what the lines before took, so it stands in the world only where the world's
+  // item is the own one (suite c-19ccdb6bbbc8089c: `ببب((` broken after its first letter carries 32.4px for `بب((`, where a
+  // world that ends an item before `((` carries 10.416px for `بب`, which fits with nothing after it).
+  if (start.previousLine !== null && start.previousLine.carriedWidth !== null) return first.start === own.start && first.end === own.end ? { ...start, itemIndex: index } : null
   if (first.start === own.start) return { ...start, itemIndex: index }
-  if (start.previousLine !== null && start.previousLine.carriedWidth !== null) return null
   return { ...start, itemIndex: index, offset: position - first.start }
 }
 

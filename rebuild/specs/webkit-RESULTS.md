@@ -2,9 +2,251 @@
 
 Lab runs of `rebuild/src/engines/webkit` in `webkit-host`, the system WebKit.framework that installed Safari 27.0 runs
 (CFBundleVersion 22625.1.29.11.27, macOS 27, libicucore 78.1), on this Mac (Retina, `devicePixelRatio` 2). Rows,
-summaries and per-case files are under `.artifacts/lab/webkit-round3/` and `.artifacts/lab/fresh/webkit-host/` for ceiling
-round 3, `.artifacts/lab/webkit-round2/<run>/` for round 2 and `.artifacts/lab/webkit-stage5/<run>/` before it. Installed
-Safari ran once in round 3, as a spot check.
+summaries and per-case files are under `.artifacts/lab/webkit-round4/` and `.artifacts/lab/fresh/webkit-host/r4-webkit-*` for
+round 4, `.artifacts/lab/webkit-round3/` and `.artifacts/lab/fresh/webkit-host/` for ceiling round 3,
+`.artifacts/lab/webkit-round2/<run>/` for round 2 and `.artifacts/lab/webkit-stage5/<run>/` before it. Installed Safari ran
+once in round 3, as a spot check.
+
+## 2026-09-18: round 4 (generic families by locale, shaped runs, registered constants, isolation)
+
+Scorer 5 throughout. Every library change ran predict-only against the round 3 evaluation's native rows in both orders
+(`dev-all` and `families-all` from `.artifacts/ceiling-20260917/evaluate-r3/webkit-host/`, `heldout-all` from round 2's
+`webkit-round2/heldout-all-*-r1`), in three shards (`webkit-round4/runs/<set>-<p>/`, tools in `webkit-round4/tools/`), then on
+three fresh sets. The baseline `b0` is the evaluated bundle (sha256 `80b6b4b8…`) over the same rows. Probes are in
+`rebuild/probes/webkit-round4.ts` (webkit-host; outputs under `.artifacts/probes/webkit/round4*`); Core Text research tools
+are `rebuild/data/webkit/tools/ct-css-families.m` and `webkit-round4/tools/ctshape.m`, `ctruns.m` and `ctfile.m`. Row files
+are compressed (`zstd -dc`).
+
+### Sets
+
+| Set | Cases | lineCount fail | breaks fail | widths fail | painter fail | Prediction failures | Without a covered explanation |
+|---|---:|---|---|---|---|---|---|
+| development combined file | 25,180 | 20 to 9 | 71 to 18 | 130 to 26 | 1,260 to 1,114 | 201 to 44 | 0 to 0 |
+| held-out 09-16 combined file | 15,196 | 40 to 31 | 84 to 43 | 162 to 46 | 2,231 to 2,078 | 246 to 89 | 0 to 0 |
+| rule and feature families | 21,734 | 51 to 43 | 86 to 78 | 177 to 177 | 910 to 910 | 263 to 255 | 0 to 0 |
+
+- No pair lost on any metric of any set (`tools/compare.py`). Predicted values agree on 99.963% of the development file's
+  (99.732%), 99.917% of the held-out file's (99.636%) and 99.777% of the families' (99.775%).
+- With no supplied font facts (`lab/baselines/no-facts-predictor.ts`, `<set>-nofacts-p5`): development 10 / 19 / 34, held-out
+  32 / 46 / 55, families 43 / 78 / 177, none without a covered explanation. What facts buy is `monospace` (`ws/controls`,
+  `ws/text-nodes`), as research/FACTS-FREE.md found. Without facts `fixed-pitch-path` fires on 21%, 17% and 45% of passing
+  lines and `simplified-measuring` on 18%, 9% and 44%: the `monospace` and `pairKerning` facts. The first is
+  Canvas-learnable (FACTS-FREE); the second isn't, and it decides only whether a pair adjustment sits on the U+0020 a text
+  item is measured with.
+- What is left under `canvas-language`: development 9, held-out 11, families 130 cases, all system fallback by language (Han
+  and Hangul in Arial under ko, kana in `"PingFang SC"` under ko, simplified Han in `"Hiragino Sans"` under ja).
+- Giants (`giants-p5`, the 9 held-out giants, predict-only against the evaluation's native rows, `--chunk=1`): lineCount 9 of
+  9, breaks 9 of 9, widths 1 pass and 8 unobserved, as in the evaluation. The job took 204 s: prediction 0.15 to 1.46 s a
+  giant (106,857 to 269,747 units, 9,874 to 20,279 Canvas calls), the lab's observation port 4 to 47 s.
+
+Fresh sets (`bun rebuild/lab/fresh.ts --browser=webkit-host --seed=<seed>`, file order, final library from `r4-webkit-2` on;
+`r4-webkit-1` ran before the `page-history` correction below, which moves no prediction):
+
+| Seed | Cases | lineCount / breaks / widths fail | Prediction failures | Open | Under `page-history` | `canvas-language` | Other |
+|---|---:|---|---:|---:|---:|---:|---:|
+| `r4-webkit-1` | 10,953 | 35 / 66 / 67 | 133 | 0 | 82 | 29 | 22 |
+| `r4-webkit-2` | 10,846 | 54 / 99 / 56 | 155 | 0 | 118 | 23 | 14 |
+| `r4-webkit-3` | 10,812 | 12 / 38 / 48 | 86 | 0 | 50 | 24 | 12 |
+
+- 374 prediction failures in 32,611 cases, 115 per 10,000 (round 3's evaluation: 207), no new class on any set, which is the
+  round's cap of three sets. The changes made after a set (USCRIPT_HAN's standard family after `r4-webkit-3`, the fallback
+  table's additions) move no prediction or cover on the defined sets (`<set>-p6` equals `<set>-p5` case by case). Other: `control-character-width` 22, `letter-spacing-ligatures` 14,
+  `rtl-shaping-across-inline-boxes` 7, `dictionary-breaks-stand-in` 5.
+- The 250 cases under `page-history`, each alone in a fresh process (`isolate-fresh<n>-part-*`): lineCount 250 of 250,
+  breaks 250 of 250, widths 219 pass, 12 unobserved, 19 fail, those also under `control-character-width`,
+  `letter-spacing-ligatures` or `tab-stops`. Outside page history the fresh sets hold 124 prediction failures, 38 per 10,000.
+- Painter-only failures without a covered explanation: 701, 641 and 442 (painter owner; `painterLimits` isn't recorded).
+
+### canvas-language: which family draws
+
+The round 3 condition fired on every Han, kana and Hangul character under a Han, kana or Hangul locale and on every
+character no named family draws before a generic family. Three source readings and four probes replace it.
+
+- **A named family settles its own characters under every locale.** A family named by a string is looked up by name
+  (fontWithFamily, FontCacheCoreText.cpp:624-643; only fontDescriptorWithFamilySpecialCase's system names read the locale),
+  its glyph page is CTFontGetGlyphsForCharacters of that font, which takes no language (GlyphPageCoreText.cpp:51-73), and a
+  list draws a character with its first family that has a glyph (FontCascadeFonts::glyphDataForVariant,
+  FontCascadeFonts.cpp:426-470). Probe R7 (33 named families, 46 characters, 7 languages): the 663 characters Canvas says a
+  named family draws (the family followed by LastResort doesn't give LastResort's box) measure the same in the DOM as in
+  Canvas under no language, en, ja, ko, zh-Hans, zh-Hant and zh-HK, 4,641 of 4,641; of the 855 no named family draws, 468
+  differ under ko, 51 under ja, 48 under each zh, none under en or none. R12 (15 named families, 18 strings, 10 languages):
+  whole strings differ only in such characters, so the locale doesn't reach a named family's shaping on these fonts.
+- **Round 3's `"PingFang SC"` reading was a missing glyph.** Under ko the family drew kana at Apple SD Gothic Neo's advance
+  because it has no kana here: the WebContent process resolves the name to the system's reserved
+  `/System/Library/PrivateFrameworks/FontServices.framework/Resources/Reserved/PingFangUI.ttc` (Han and no kana or U+2027),
+  where an unsandboxed process finds the downloaded `PingFang.ttc` asset, which has both (`ctfile.m`, `ctshape.m`). Canvas
+  says so too: `"PingFang SC", LastResort` gives kana LastResort's box. The lab's `coverage` facts read the asset, which is
+  why they claimed U+2027 (font facts owner). STHeiti, Kaiti SC, LiHei Pro, LiSong Pro, BIZ UDGothic and Osaka don't resolve
+  in the process at all.
+- **Generic families are measured, not reported.** serif, sans-serif, cursive, fantasy and monospace resolve through
+  `CTFontDescriptorCreateForCSSFamily(keyword, locale)` whenever the locale's script isn't Common
+  (SystemFontDatabaseCoreText.cpp:320-365, FontDescriptionCocoa.cpp:77-118), and WebKit looks the returned family up by name
+  (CSSFontSelector.cpp:431-492), rejecting reserved names (a leading `.`) for the settings' family and turning Monaco into
+  Courier. Core Text is closed, so its answers are data: `rebuild/data/webkit/coretext-macos27/css-families.tsv`, 1,079
+  languages (every system locale identifier) dumped by `data/webkit/tools/ct-css-families.m` on macOS 27.0 26A428, 32
+  distinct answers, generated into `engines/webkit/generated/fonts.ts` as the default and the 60 languages whose answer
+  differs from their parent's (`tools/gen-webkit-fonts.ts`). The port names that family in the list Canvas gets (`engines/webkit/fonts.ts`,
+  `content.ts` makeBox). Probe R11 (36 language values, the five keywords and -webkit-standard, 14 strings;
+  `tools/r11-verdict3.ts` with the port's own lookup): of 216 pairs 125 name a family, and the DOM's boxes equal Canvas
+  totals under the list the port builds on 200, 152 to the bit and 48 within a float32 step on strings with break
+  opportunities inside (a probe artefact: the DOM sums items). The other 16 are the port's other rules: Kaiti SC and Kaiti TC,
+  which the WebContent process doesn't have (12: the standard family then draws, below), -webkit-standard under zh (2, the
+  preferred languages), Han after Menlo under ko and Arabic under ur (system fallback by language). Under en, `monospace`
+  is Menlo and `fantasy` Zapfino, where Canvas resolves the keywords to Courier and Papyrus; under he, sans-serif is Lucida
+  Grande and monospace Courier New; under ru and tr, cursive and fantasy are Snell Roundhand. `yue`, `mul` and unknown
+  languages have a Common script and resolve as Canvas does, as the source says.
+- **-webkit-standard from source.** The settings' standard family per script is in WebKit
+  (SettingsBase::initializeDefaultFontFamilies, SettingsBaseCocoa.mm:44-50: Songti TC, Songti SC, Hiragino Mincho ProN,
+  AppleMyungjo), and it also stands behind a list none of whose families resolves (FontCascadeFonts.cpp:210-217): named at
+  the end of the Canvas list where the list followed by LastResort measures a space as LastResort alone does (R7: `a` in
+  `STHeiti` is 7.99px under en and 9.81px under ja at 18px). USCRIPT_HAN follows a system preference and stays reported.
+- **What still reports**, per character: no named family draws it and the list holds a system design family, or
+  -webkit-standard under USCRIPT_HAN without the preferred languages (userPrefersSimplifiedChinese, Language.cpp:129-138,
+  chooses Songti SC or TC by them); it has default emoji presentation and only a generic named for Canvas could draw it
+  (the DOM skips a generic family's outline glyph for it, FontCascadeFonts.cpp:440-447, FontCascadeCoreText.cpp:473-523, and
+  Canvas doesn't know the named family for a generic one); or no family of the list draws it and the language moves its
+  system fallback.
+- **Closed in Core Text: system fallback.** `CTFontCreateForCharactersWithLanguageAndOption` (lookupFallbackFont,
+  FontCacheCoreText.cpp:775-790) picks the fallback font from the original font, the characters and the language, for
+  every character no family of the list draws. As the source reads, that is every such character under any locale: the
+  condition then fires on 29% of passing development lines at a lift of 0.8 (`dev-all-x1`), because the lab's Latin lists meet
+  Arabic, Hebrew, Thai, Han and emoji everywhere. So which characters a language moves stays a table of probe verdicts,
+  `content.ts` hasLanguageDependentFallback, now registered as a heuristic. Round 3's table was Han, kana, Hangul, CJK
+  punctuation and fullwidth blocks under Han, kana and Hangul scripts. R13 (3 Latin fonts, 45 languages, 28 strings of 25
+  scripts) and R14 (Helvetica, Times and Geeza Pro, 70 languages, three sample characters of each of 321 blocks) add Arabic
+  under Urdu and Kashmiri (Noto Nastaliq Urdu for Geeza Pro) and enclosed alphanumerics, box drawing, geometric shapes and
+  vertical forms under ko, and find no other pair. The probes see a font change only where advances differ, and three
+  samples don't stand for a block. The font also follows the original font's class: Han under ko falls back to AppleMyungjo
+  from Times and Georgia and to Apple SD Gothic Neo from Helvetica, Arial and Menlo (R12), so predicting it would need a
+  font fact Canvas can't show.
+- **Not traced:** an Ethiopic word (`አማርኛ`) after Georgia, Helvetica and Menlo differs from Canvas under every language
+  but am and none (R13), while single Ethiopic characters don't (R14): the locale reaches shaping there
+  (Font::applyTransforms and the complex text controller hand Core Text the computed locale, FontCoreText.cpp:646-700,
+  ComplexTextControllerCoreText.mm:199-203). No condition reports it, and no lab case holds Ethiopic.
+- Firing on passing lines, `b0` to final: development 15.41% to 1.11% (lift 5.6 to 18.3), held-out 13.86% to 0.92% (5.4 to
+  15.5), families 6.91% to 3.52% (8.2 to 16.5); fresh sets 2.4%, 2.6% and 3.1% (round 3's: 15.9%). No failing line lost its
+  cover on any set.
+
+### Text shaped across inline boxes
+
+- **The 8 `rule/joining` rows, traced.** `بب <span>ببب</span><span>ببب</span> بب`, 24px Amiri, 1px letter spacing, 11.42px
+  wide, `overflow-wrap: anywhere`. The native 34.672px is no run's share: it is 23.224px, the first letter measured alone
+  with its spacing, plus 11.448px, the share of the rest `بب` after the next candidate shaped it again with `ببب`
+  (`بب` + `ببب` as one run; the partial leading item takes part in shaping with its partial text, InlineLineBuilder.cpp
+  candidateContentForLine and :920-967). 11.448px is over the 11.4375px available, so the rest breaks again and carries
+  11.448 - 23.224 = -11.776px. The port's flow was the source's; its stand-in wasn't: `بب` followed by U+200D is 9.96px in
+  Canvas, because Amiri's forms follow the letters after them, not joining alone, and 9.96px fits. Canvas does give
+  11.448px as the joined text less the text after the run: 44.352 - 32.904.
+- **Shares are suffix differences now.** A run's share is the Canvas total of the joined text from the run on, less the
+  total of the text after the run, each after U+200D where the letters at its first edge join; where that agrees with the
+  run alone in its joining context within the float32 rounding of the three totals, the run alone stands, since a
+  difference of totals isn't the float32 sum of the run's advances (33 family widths were one step off without this).
+  The shares add up to the joined text's total, which the source says (shapedContentWidth is the sum of the run widths) and
+  probe R10 confirms (35 of 36 run lists in 9 fonts and all 36 in Courier New; the DOM's shaped boxes carry no letter
+  spacing). Chosen over
+  the run alone and over prefix differences by R10's counts, 509, 492 and 474 of 770 runs equal to the DOM's: a registered
+  heuristic. No recipe is right throughout: Amiri's `ب|ب` is 5.928 and 18.528px natively and no Canvas total splits 24.456
+  that way. Families: lineCount +8, breaks +8, nothing lost; `rtl-shaping-across-inline-boxes` covers 17 failing family
+  lines (25).
+- **Joining is the Unicode Standard's.** Whether two runs join is Joining_Type at the edge, transparent characters skipped
+  (`engines/webkit/joining.ts`, `generated/joining.ts` from ICU 78.2's ppucd.txt), in place of round 3's nearer-of-two-sums
+  test: R10 gives the two decisions the same counts on 8 of 10 fonts (Joining_Type ahead on 16px Amiri, the sums test on Al
+  Nile), and the sums test cost up to five Canvas calls an edge.
+- **Found, not predicted: ranges WebKit doesn't shape.** Core Text returns several glyph runs for one font's stretch that
+  holds a shadda with a vowel sign (`ctruns.m`: `ببَّب` is three runs in 8 fonts; which pairs compose is per font),
+  glyphAdvancesForTextRun counts the stretch's characters once per glyph run (ComplexTextController.cpp:190-203;
+  stringLength() is the whole stretch, ComplexTextController.h:112), the size check fails and
+  applyShapingOnRunRange returns before any width changes (InlineLineBuilder.cpp:943-946). The boxes keep their own widths,
+  letter spacing included (R10: `الرَّحِي|مِ` in all 10 fonts; suite `c-d03f94e8fb53e7e2`, which round 3 couldn't explain).
+  Not Canvas-observable; the gap covers it. Both this and letter spacing missing from shaped boxes look like WebKit bugs.
+
+### Registered constants and the decision rule
+
+- **64px letter-spacing probe.** Any spacing works whose count the two totals' float32 rounding can't move by half; a power
+  of two keeps the product exact. Both totals are float32 sums of at most three additions a glyph, so the difference is
+  within 3 × glyphs × ulp(total) of glyphs × 64. `measure.ts` checks that bound per string (about 900 letters at 16px) and
+  reports `letter-spacing-ligatures` on a longer one instead of counting it. Probe R8: the quotient is within 0.002 of the
+  glyph count at 50,000 letters in 5 fonts, so the bound is far from tight.
+- **0.75 to 1.5 sanity bound.** Replaced by the Sterbenz interval itself: Canvas totals f32(U + f32(S - U)), rounding is
+  monotonic and U / 2 and 2 × U are float32 numbers, so a total strictly between them says S is in range and the total is S.
+  On the development file the check ran on 77,265 strings: 68,781 equal their unshaped sum, 8,484 lie inside (ratios 0.82
+  to 1.013), none outside. No firing change.
+- **Nearer-of-two-sums.** Replaced by Joining_Type, above.
+
+### page-history against the isolation protocol
+
+`tools/history-check.ts`: every history-dependent case of the defined sets and every case failing under `page-history`
+whose two orders agree, each alone in a fresh process (`runs/isolate-<set>`, 400 cases), against both orders.
+
+| Set | History-dependent | Failing under `page-history`, orders equal | Alone: lineCount / breaks / widths pass | Differ from alone, forward / reverse | Fail uncovered in an order |
+|---|---:|---:|---|---|---:|
+| development | 80 | 26 | 106 / 106 / 104 (1 fail, 1 unobserved) | 57 / 53 | 1 |
+| held-out 09-16 | 144 | 68 | 212 / 212 / 210 (2 unobserved) | 129 / 129 | 0 |
+| families | 6 | 76 | 82 / 82 / 50 (32 fail, `rule/controls` steps) | 50 / 48 | 0 |
+
+- The history-free prediction is the native layout of every case alone, outside the control-width steps. 116 of the 170
+  cases whose orders agree differ from the case alone in both orders (15, 57 and 44): two orders can't see history both
+  share. Alone, every history-dependent development and held-out case equals exactly one of its two orders (the forward
+  one differs for 42 of 80 and 72 of 144).
+- **One condition bug found and fixed.** Before the fix 9 development rows of `suite/original-vs-reshaped-admission` failed
+  uncovered in reverse order and held-out `c-d7754587b964dea1` forward. A line that starts with a carried width was laid
+  out in a world with the own carried width whenever the world's item started where the own item does; the carried width is
+  the whole item's less what earlier lines took, so it stands only where the world's item is the own one
+  (`c-19ccdb6bbbc8089c`: `ببب((` carries 32.4px for `بب((`, where a world that ends an item before `((` carries 10.416px for
+  `بب`, which fits). Such a line now reports. `page-history` on passing lines: development 3.42% to 3.68%, held-out 4.43%
+  to 4.82%, families 1.28% unchanged.
+- The row left, `c-a749f1e7bd879df8` forward: `page-history` sits on the decision text, and a node it doesn't touch reports
+  f32(f32(x + w) - x) one step off at the moved x, the observation consequence scorer 5 has no rule for (tests owner).
+- **One box at a time, not contradicted.** Natively lines move in more than one text node in 2 development, 1 held-out and
+  20 family cases (`rule/br-elements`), every one covered in both orders, and later nodes move with any earlier break, so the
+  count can't tell two cached boxes from one. No case needed two boxes' worlds at once for its first differing line. What
+  wasn't done: laying whole paragraphs out in products of worlds and matching them to the native lines; the library lays
+  out each line in each world from the own line start.
+
+### Costs
+
+measureText calls per paragraph on the development combined file, mean / median / p90 / p95 / max: round 3 final 37.2 / 12 /
+102 / 120 / 2,273; now 22.7 / 12 / 49 / 78 / 3,818 (the maximum is a Han paragraph under a Han locale: two calls a distinct
+character). By the engine code that asks first (`tools/calls-by-asker.ts`, an offline replay of `dev-all-rec` that reads the
+call stack; a string a condition asks first and layout asks later counts for the condition):
+
+| Asks | Share | Per paragraph | Decides lines? |
+|---|---:|---:|---|
+| `boxWidth`: item widths, line filling, breakWord probes | 45.4% | 10.33 | yes |
+| makeBox: fixed-pitch coverage, the list followed by LastResort and the plain list per distinct character | 10.4% | 2.38 | yes (the width shortcut) |
+| makeBox: the same character under LastResort alone, for `font-fallback` | 5.2% | 1.19 | no |
+| `simplified-measuring`: every code point of a measured string alone, for the unshaped sum, and the total | 14.5% | 3.29 | no |
+| `canvas-language`: a character under the named list or the whole list, and under LastResort | 10.1% | 2.30 | no |
+| `page-history`: widths of the split parts of a world's items | 3.9% | 0.89 | no |
+| letter-spaced strings: glyph counts at 64px and plain (clusters, pairs, the whole, the separated string) | 4.4% | 1.02 | yes (the measured string) and the gap |
+| item widths at item building (bidi content) | 3.8% | 0.86 | yes |
+| hyphen width | 1.0% | 0.24 | yes |
+| the standard family test (a space under the list followed by LastResort) | 0.7% | 0.15 | yes |
+| controls, tab stops, shaped runs, world lines | 0.4% | 0.08 | mixed |
+
+About a third of the calls are diagnostic. The unshaped sums of `simplified-measuring` never decided anything on this file
+(above), and LastResort's advance was the same for all 1,518 probed characters (R7), so both could be asked far less.
+
+### Open
+
+- System fallback by language (Core Text, above): 150 of the 388 prediction failures left on the defined sets, 76 of 374 on
+  the fresh sets. Its table of characters is a heuristic from probes, and shaping under a locale (the Ethiopic word) has no
+  condition.
+- The generic family table is macOS 27.0's Core Text. An unknown language takes its parent's answer (the identifier less
+  its last subtag), which the dump confirms for the 1,079 identifiers it holds and nothing confirms beyond them. Core Text
+  reads `ZH-Hant` (upper-case language) as Simplified; the port lower-cases first. Whether the table belongs in the library
+  or behind an environment input is the maintainer's call.
+- Ranges WebKit doesn't shape (shadda with a vowel sign), ligatures and pair adjustments across a box edge, and letter
+  spacing under `liga`-less shaping stay stand-ins under `rtl-shaping-across-inline-boxes`.
+- Without font facts, `simplified-measuring` fires on every simplified-path item measured with its following space
+  (`pairKerning` unknown): 18% of passing development lines for a font construction R2 never met.
+- 75 passing family cases hold one wrong predicted value each, as before this round (`rule/nested-box-edges` 24,
+  `rule/br-elements` 12, `rule/joining` 11, `rule/hanging-white-space` 10, `rule/nowrap-spans` 10, `rule/box-edges` 8): node
+  rects are equal, so it is a code point or element rect; not traced.
+- The observation port still measures its in-box stand-ins with the declared family list, not the list with generics
+  named. Those values are limited, never predicted, so no metric reads them.
+- Registry: `webkit/measure/generic-family-by-locale` is new; `webkit/lines/shaped-run-in-joining-context` and
+  `webkit/gap/canvas-language-scope` keep their ids with new statements (rules.json belongs to the tests owner).
 
 ## 2026-09-17: ceiling round 3 (covered failures, fresh sets)
 

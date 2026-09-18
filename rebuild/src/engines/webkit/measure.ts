@@ -37,10 +37,22 @@ export function canvasString(text: string): string {
 // letters alone count one each (probe webkit-round3 R1: every string whose count equals its letters' counts measures the
 // same in Canvas as in the letter-spaced DOM, 247 of 247 strings without a space in 15 fonts, and 26 of the 237 that count
 // fewer do).
+// The probe spacing is a power of two, so a count times it is exact; any value would do that the two totals' rounding can't
+// reach half of. Both totals are float32 sums of at most three additions a glyph (the advance, the spacing, what shaping
+// moved), each off by at most half a unit in the last place of the larger total, so their difference is within
+// 3 * glyphs * ulp(total) of glyphs * spacing, and the count is exact while that stays under half the spacing: about 900
+// letters at 16px (probe webkit-round4 R8: off by less than 0.002 of a glyph at 50,000 letters in 5 fonts). Past that the
+// string isn't counted and reports the gap. U+200C between merged pairs adds code units and no glyph to a string, so the
+// bound takes twice the string's length.
 const LETTER_SPACING_PROBE = 64
 
 function spacedGlyphCount(m: Measurer, box: WebKitBox, s: string): number {
   return Math.round((measureText(m, box.countContext, s) - measureText(m, box.plainContext, s)) / LETTER_SPACING_PROBE)
+}
+
+function glyphCountIsExact(m: Measurer, box: WebKitBox, s: string): boolean {
+  const total = measureText(m, box.countContext, s)
+  return !(total > 0) || 3 * 2 * s.length * 2 ** (Math.floor(Math.log2(total)) - 23) < LETTER_SPACING_PROBE / 2
 }
 
 // What Canvas shows of merged glyphs in a string a letter-spaced box measures. The features the DOM turns off join separate
@@ -48,7 +60,8 @@ function spacedGlyphCount(m: Measurer, box: WebKitBox, s: string): number {
 // clusters are counted, not code points. `merged`: the string counts fewer spacing-bearing glyphs than its grapheme clusters
 // do alone. `pairs`: the offsets of adjacent cluster pairs that merge when measured as a pair, [first, end of second).
 // `separated`: on the simple font code path, the string with U+200C between the clusters of each such pair, when that
-// leaves nothing merged; else null. WidthIterator commits the font range before a default-ignorable without a glyph and
+// leaves nothing merged; else null. `counted`: false where the string is too long for an exact count (above), which reports
+// as merged. WidthIterator commits the font range before a default-ignorable without a glyph and
 // adds it as a deleted glyph of width 0 (commitIgnorable, WidthIterator.cpp:318-323), and a U+200C glyph sits between the
 // two letters otherwise, so no lookup matches across it, and it gets no letter spacing (calculateAdditionalWidth's baseWidth
 // test). The separated string is the DOM's glyphs less what shaping does across each separated pair with those features
@@ -58,8 +71,8 @@ function spacedGlyphCount(m: Measurer, box: WebKitBox, s: string): number {
 // Where the listed families' facts say which font draws every character of the string and none of them is an input of a
 // liga, clig, dlig or hlig lookup there (ListedFontFacts.spacingInputs), letter-spacing changes nothing in the string:
 // whatever merges, merges in the DOM too (Geeza Pro's lam-alef and Allah ligatures are morx ligatures the DOM keeps).
-export type MergedGlyphs = { merged: boolean; pairs: Array<[number, number]>; separated: string | null }
-const NOTHING_MERGED: MergedGlyphs = { merged: false, pairs: [], separated: null }
+export type MergedGlyphs = { merged: boolean; pairs: Array<[number, number]>; separated: string | null; counted: boolean }
+const NOTHING_MERGED: MergedGlyphs = { merged: false, pairs: [], separated: null, counted: true }
 
 // Whether letter-spacing can change the string's shaping by the listed families' facts: false where every character is
 // drawn by a listed family that gives coverage and spacing inputs and none is an input; null where the facts don't say.
@@ -96,6 +109,7 @@ export function mergedGlyphs(m: Measurer, box: WebKitBox, text: string): MergedG
   if (box.letterSpacing === 0 || text.length < 2) return NOTHING_MERGED
   if (spacingCanChangeShaping(box, text) === false) return NOTHING_MERGED
   const s = canvasString(text)
+  if (!glyphCountIsExact(m, box, s)) return { merged: true, pairs: [], separated: null, counted: false }
   const starts = graphemeBoundaries(s, graphemeRulesFor('webkit'))
   const counts: number[] = []
   let alone = 0
@@ -113,8 +127,8 @@ export function mergedGlyphs(m: Measurer, box: WebKitBox, text: string): MergedG
     separated += s.slice(starts[k]!, starts[k + 1]!) + (isMerged ? '\u200c' : '')
   }
   separated += s.slice(starts[counts.length - 1]!)
-  if (!box.simpleFontCodePath || pairs.length === 0 || spacedGlyphCount(m, box, separated) < alone) return { merged: true, pairs, separated: null }
-  return { merged: true, pairs, separated }
+  if (!box.simpleFontCodePath || pairs.length === 0 || spacedGlyphCount(m, box, separated) < alone) return { merged: true, pairs, separated: null, counted: true }
+  return { merged: true, pairs, separated, counted: true }
 }
 
 // ---- VT, FF and CR ----

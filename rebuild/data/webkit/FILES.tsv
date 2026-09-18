@@ -36,3 +36,4 @@
 ./icu-macos27-libicucore/sections.tsv	1405	a8065fd6f03dd8850286d149b07192aed1d6017d00193cad9170e1e105b0bba3
 ./icu-macos27-libicucore/table-equivalence-vs-upstream78.3.txt	681	2fe7fcd8e0020b2ffbd58f39ad65c95d5dbca369d51c098fa20cdfad021a1465
 ./icu-macos27-libicucore/unicode-properties-vs-upstream78.3.diff	1061	3d423eef43fb9bf3128020d4c698e27e24340f212b31c10c03a2dddfce944a54
+./coretext-macos27/css-families.tsv	66023	0b3bf6ae0d7bee43e1866d2ae78cbc71701275c4e83e19fab359141712e1b238

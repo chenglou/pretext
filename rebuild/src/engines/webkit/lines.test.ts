@@ -18,6 +18,9 @@ let pairAdjust = (_s: string): number => 0
 let ligatures: Record<string, number> = {}
 // A letter's advance in its string, for fonts whose joining forms differ in width; null takes `advance`.
 let contextual = (_s: string, _i: number): number | null => null
+// The code units the named families draw. In a list that ends with LastResort the others get LastResort's box, 16 wide, the
+// space too; in any other list they get a fallback glyph of the usual advance. A list of LastResort alone draws nothing else.
+let namedDraws = (c: number): boolean => c < 0x80
 class StandInContext {
   font = ''
   lang = ''
@@ -32,7 +35,8 @@ class StandInContext {
     const spacing = parseFloat(this.letterSpacing)
     let w = 0
     for (let i = 0; i < s.length; i++) {
-      let glyph = s.charCodeAt(i) === 0x200c || s.charCodeAt(i) === 0x200d ? 0 : contextual(s, i) ?? advance(s.charCodeAt(i))
+      const lastResortBox = this.font.includes('LastResort') && (!this.font.includes(',') || !namedDraws(s.charCodeAt(i)))
+      let glyph = s.charCodeAt(i) === 0x200c || s.charCodeAt(i) === 0x200d ? 0 : lastResortBox ? 16 : contextual(s, i) ?? advance(s.charCodeAt(i))
       for (const sequence in ligatures) {
         if (!s.startsWith(sequence, i)) continue
         glyph = ligatures[sequence]!
@@ -64,7 +68,7 @@ function paragraph(runs: Array<[string, FlatNode]>, overrides: Partial<Paragraph
   return flatParagraph(runs, fontWith(facts), overrides)
 }
 
-function layout(p: Paragraph, slots: LineSlot[] = [], environment: WebKitEnvironment = env): { lines: WebKitLine[]; gaps: string[]; belowFloats: number[] } {
+function layout(p: Paragraph, slots: LineSlot[] = [], environment: WebKitEnvironment = env): { lines: WebKitLine[]; gaps: string[]; belowFloats: number[]; fonts: string[] } {
   const m = createMeasurer()
   const prepared = webkitEngine.prepare(p, environment, m)
   const lines: WebKitLine[] = []
@@ -85,7 +89,7 @@ function layout(p: Paragraph, slots: LineSlot[] = [], environment: WebKitEnviron
     start = result.line.next
   }
   // The paragraph's gaps, then every line's and refused slot's: content conditions are reported on the lines that measure them.
-  return { lines, gaps, belowFloats }
+  return { lines, gaps, belowFloats, fonts: m.log.contexts.map(context => context.font) }
 }
 
 function textBoxes(boxes: WebKitDisplayBox[]): WebKitTextBox[] {
@@ -277,11 +281,17 @@ describe('line-local gaps (DESIGN.md §2.8)', () => {
     expect(layout(paragraph([['aaa b,bb ccc', 'text']], { width: 60 })).gaps).not.toContain('page-history')
   })
 
-  test('canvas-language: a generic family under a locale whose script isn\'t Common concerns Latin text too (FontDescriptionCocoa.cpp:77-118)', () => {
-    const generic = { ...paragraph([['foo bar', 'text']], { lang: 'ja', width: 1000 }), font: { ...fontWith(), family: 'serif' } }
-    expect(layout(generic).lines[0]!.gaps.map(g => g.gap)).toContain('canvas-language')
-    const named = { ...paragraph([['foo bar', 'text']], { lang: 'ja', width: 1000 }), font: { ...fontWith(), family: 'Arial' } }
-    expect(layout(named).gaps).not.toContain('canvas-language')
+  test('a generic family under a locale is measured as the family the locale resolves it to (fonts.ts), and reports nothing', () => {
+    const generic = { ...paragraph([['foo bar', 'text']], { lang: 'ja', width: 1000 }), font: { ...fontWith(), family: 'Arial, serif' } }
+    const underJa = layout(generic)
+    expect(underJa.gaps).not.toContain('canvas-language')
+    expect(underJa.fonts).toContain('normal 400 16px Arial, "Hiragino Mincho ProN"')
+    // serif under en is the settings' Times, as in Canvas: the keyword stands; monospace is Menlo, where Canvas has Courier.
+    expect(layout({ ...generic, lang: 'en' }).fonts[0]).toBe('normal 400 16px Arial, serif')
+    expect(layout({ ...generic, lang: 'en', font: { ...fontWith(), family: 'monospace' } }).fonts[0]).toBe('normal 400 16px "Menlo"')
+    expect(layout({ ...generic, lang: 'en', font: { ...fontWith(), family: '"monospace"' } }).fonts[0]).toBe('normal 400 16px "monospace"')
+    expect(layout({ ...generic, lang: '', font: { ...fontWith(), family: 'monospace' } }).fonts[0]).toBe('normal 400 16px monospace')
+    expect(layout({ ...generic, lang: 'zh-Hant-HK', font: { ...fontWith(), family: 'sans-serif, -webkit-standard' } }).fonts).toContain('normal 400 16px "PingFang HK", "Songti TC"')
   })
 
   test('page-history: an end inside the placed part of the candidate that ended the line reports on that line', () => {
@@ -356,10 +366,42 @@ describe('letter spacing and ligatures (measure.ts mergedGlyphs; probe webkit-ro
   })
 })
 
-describe('canvas-language (probes webkit-round3 R3, R3b, R3c)', () => {
-  test('under a Han, kana or Hangul locale every Han, kana and Hangul character is concerned, whatever the list names', () => {
+describe('canvas-language (probes webkit-round3 R3, R3b, R3c, webkit-round4 R7)', () => {
+  test('under a Han, kana or Hangul locale a Han, kana or Hangul character no named family draws is concerned', () => {
     const { lines } = layout(paragraph([['ab 中 cd', 'text']], { lang: 'ko' }))
     expect(lines[0]!.gaps.filter(g => g.gap === 'canvas-language').map(g => g.at)).toEqual([{ start: 3, end: 4 }])
+  })
+
+  test('a character a named family draws does not depend on the locale', () => {
+    namedDraws = () => true
+    const { gaps } = layout(paragraph([['ab 中 cd', 'text']], { lang: 'ko' }))
+    namedDraws = c => c < 0x80
+    expect(gaps).not.toContain('canvas-language')
+  })
+
+  test('a list none of whose families resolves draws with the standard family, which is named after it under a Han, kana or Hangul locale', () => {
+    namedDraws = () => false
+    const underKo = layout(paragraph([['ab cd', 'text']], { lang: 'ko' }))
+    const underEn = layout(paragraph([['ab cd', 'text']], { lang: 'en' }))
+    namedDraws = c => c < 0x80
+    expect(underKo.fonts).toContain('normal 400 16px Arial, "AppleMyungjo"')
+    expect(underKo.gaps).not.toContain('canvas-language')
+    expect(underEn.fonts[0]).toBe('normal 400 16px Arial')
+    expect(underEn.gaps).not.toContain('canvas-language')
+  })
+
+  test('a character with default emoji presentation that only a generic family named for Canvas could draw is concerned', () => {
+    const p = { ...paragraph([['ab ⚡ cd', 'text']], { lang: 'ja' }), font: { ...fontWith(), family: 'Arial, sans-serif' } }
+    expect(layout(p).lines[0]!.gaps.filter(g => g.gap === 'canvas-language').map(g => g.at)).toEqual([{ start: 3, end: 4 }])
+  })
+
+  test('Arabic falls back by language under Urdu and Kashmiri, enclosed alphanumerics under Korean (probes webkit-round4 R13, R14)', () => {
+    const at = (text: string, lang: string) => layout(paragraph([[text, 'text']], { lang })).lines[0]!.gaps.filter(g => g.gap === 'canvas-language').map(g => g.at)
+    expect(at('ab سلام', 'ur')).toEqual([{ start: 3, end: 7 }])
+    expect(at('ab سلام', 'ks-Arab')).toEqual([{ start: 3, end: 7 }])
+    expect(at('ab سلام', 'ar')).toEqual([])
+    expect(at('ab ① cd', 'ko')).toEqual([{ start: 3, end: 4 }])
+    expect(at('ab ① cd', 'en')).toEqual([])
   })
 
   test('a locale of another script leaves system fallback to the preferred languages, as Canvas does', () => {
@@ -367,27 +409,9 @@ describe('canvas-language (probes webkit-round3 R3, R3b, R3c)', () => {
     expect(layout(paragraph([['ab 中 cd', 'text']], { lang: 'th' })).gaps).not.toContain('canvas-language')
   })
 
-  test('a generic family after a named one concerns only what the named one does not draw', () => {
-    // The stand-in Canvas draws ASCII from Arial (8 wide, LastResort 16) and nothing else.
-    const previous = (globalThis as { OffscreenCanvas?: unknown }).OffscreenCanvas
-    ;(globalThis as { OffscreenCanvas?: unknown }).OffscreenCanvas = class {
-      getContext() {
-        const context = new StandInContext()
-        const measure = context.measureText.bind(context)
-        context.measureText = (s: string) => {
-          const lastResortOnly = / LastResort$/.test(context.font) && !context.font.includes(',')
-          const named = context.font.includes('Arial')
-          let w = 0
-          for (let i = 0; i < s.length; i++) w += lastResortOnly || (!(named && s.charCodeAt(i) < 0x80) && context.font.includes('LastResort')) ? 16 : measure(s[i]!).width
-          return { width: w }
-        }
-        return context
-      }
-    }
-    const p = { ...paragraph([['ab é', 'text']], { lang: 'th' }), font: { ...fontWith(), family: 'Arial, sans-serif' } }
-    const { lines } = layout(p)
-    ;(globalThis as { OffscreenCanvas?: unknown }).OffscreenCanvas = previous
-    expect(lines[0]!.gaps.filter(g => g.gap === 'canvas-language').map(g => g.at)).toEqual([{ start: 3, end: 4 }])
+  test('a system design family after a named one concerns only what the named one does not draw', () => {
+    const p = { ...paragraph([['ab é', 'text']], { lang: 'th' }), font: { ...fontWith(), family: 'Arial, system-ui' } }
+    expect(layout(p).lines[0]!.gaps.filter(g => g.gap === 'canvas-language').map(g => g.at)).toEqual([{ start: 3, end: 4 }])
   })
 })
 
@@ -526,7 +550,7 @@ describe('bidi lines with inline structure (InlineDisplayContentBuilder.cpp:728-
 })
 
 describe('text shaping across inline boxes (InlineLineBuilder.cpp:780-1028)', () => {
-  test('a run is measured in its joining context: U+200D on the sides where the neighbouring run joins it', () => {
+  test('a run takes the joined text from the run on less the text after it, each after U+200D where the edge joins', () => {
     // A beh followed by a joiner or a letter is 5 wide (initial or medial form); a last one is 7 after one (final), else 8.
     contextual = (s, i) => s.charCodeAt(i) !== 0x628 ? null : i + 1 < s.length ? 5 : i > 0 ? 7 : null
     const block = treeParagraph([], fontWith(), { direction: 'rtl', width: 500 })
@@ -535,6 +559,38 @@ describe('text shaping across inline boxes (InlineLineBuilder.cpp:780-1028)', ()
     contextual = () => null
     // The first run's last letter joins the span's first: 5 + 5, where the run alone is 5 + 7.
     expect(textBoxes(lines[0]!.geometry.boxes).map(b => [b.run, b.width])).toEqual([[1, 12], [0, 10]])
+  })
+
+  test('a letter whose form follows the letters after it is measured with them, and the shares add up to the joined text', () => {
+    // A beh with two or more behs after it is 6 wide, with one 5, a last one after a letter or a joiner 7.
+    contextual = (s, i) => {
+      if (s.charCodeAt(i) !== 0x628) return null
+      let after = 0
+      for (let k = i + 1; k < s.length; k++) if (s.charCodeAt(k) === 0x628) after++
+      return after >= 2 ? 6 : after === 1 || i + 1 < s.length ? 5 : i > 0 ? 7 : null
+    }
+    const block = treeParagraph([], fontWith(), { direction: 'rtl', width: 500 })
+    const p = treeParagraph([{ kind: 'text', text: 'بب' }, span(block, [{ kind: 'text', text: 'ببب' }])], fontWith(), { direction: 'rtl', width: 500 })
+    const { lines } = layout(p)
+    contextual = () => null
+    // The joined text is 6 + 6 + 6 + 5 + 7; the span's run after a joiner 6 + 5 + 7; the first run alone before a joiner 5 + 5.
+    expect(textBoxes(lines[0]!.geometry.boxes).map(b => [b.run, b.width])).toEqual([[1, 18], [0, 12]])
+    expect(lines[0]!.geometry.contentWidth).toBe(30)
+  })
+
+  test('letters that do not join across the edge get no joiner (Joining_Type)', () => {
+    // A beh or reh before a joiner or after one takes a joined form, 5 wide; else 8.
+    contextual = (s, i) => (s.charCodeAt(i) === 0x628 || s.charCodeAt(i) === 0x631) && (s.charCodeAt(i + 1) === 0x200d || s.charCodeAt(i - 1) === 0x200d) ? 5 : null
+    const block = treeParagraph([], fontWith(), { direction: 'rtl', width: 500 })
+    const widths = (first: string, second: string) => textBoxes(layout(treeParagraph([{ kind: 'text', text: first }, span(block, [{ kind: 'text', text: second }])], fontWith(), { direction: 'rtl', width: 500 })).lines[0]!.geometry.boxes).map(b => b.width)
+    const joined = widths('ب', 'ب')
+    const afterReh = widths('ر', 'ب')
+    const afterMark = widths('بِ', 'ب')
+    const afterNonJoiner = widths('ب\u200c', 'ب')
+    contextual = () => null
+    // The span's run is measured after U+200D only where the letter before the edge joins forward: reh is Right_Joining,
+    // a mark is Transparent, U+200C is Non_Joining.
+    expect([joined[0], afterReh[0], afterMark[0], afterNonJoiner[0]]).toEqual([5, 8, 5, 8])
   })
 
   test('RTL complex text joined over an undecorated span edge is one shaping range: one run per box, the line gap', () => {
