@@ -129,6 +129,10 @@ const CLAMPED_START_DETAIL = 'a wrapped line start inside shaped text whose resh
 
 const END_TEST_DETAIL = 'a break opportunity whose line-end reshape passed or failed the fit test by less than the rounding of the last safe offset\'s position: Blink reshapes from the last offset HarfBuzz left safe and tests the width after that position\'s ceiling (shaping_line_breaker.cc:543-553), HarfBuzz can flag offsets the port\'s width tests call safe (contextual lookups that change no width), and from an earlier safe offset the same glyphs pass or fail by another ceiling'
 
+const SCALED_DETAIL = 'advances measured in a font made for the CSS size and scaled to the DOM\'s font size: Blink truncates each glyph\'s advance to 1/65536 px at its own size (skia_text_metrics.cc:207-211), so a sum of scaled advances can be a few units off the DOM\'s, which moves a width or a fit test that lies that close to a LayoutUnit'
+
+const PLATFORM_FONT_DETAIL = 'a font with an opsz axis: the DOM sets the axis from the specified size (font_platform_data_mac.mm:170-178) and takes the platform font from a cache of the renderer process whose key holds the zoomed size alone (font_cache_key.h:53-68, font_description.cc:308-331), so text or a canvas that asked for this family at the same zoomed size under another specified size first decides the optical size of both (Chromium #489579956)'
+
 const SOFT_HYPHEN_DETAIL = 'a default-ignorable character left out of an 8-bit Canvas string, whose glyph a `morx` substitution across it still sees in the DOM (hb-aat-layout-common.hh:1226-1241)'
 
 // The source ranges of the text items under a style.
@@ -181,12 +185,14 @@ function prepareGaps(sh: Shaper): void {
       for (const at of ranges()) addGap(p.gaps, 'ui-language', style.run, 'content without a locale, or ko with line-break: strict, follows Chrome\'s application locale, which isn\'t given: break tables, generic families and the HarfBuzz language (specs/blink-canvas.md §2.3)', at)
     }
     if (p.layoutZoom !== 1) {
-      if (style.font.facts.opticalSizeAxis === null) {
-        for (const at of ranges()) addGap(p.gaps, 'optical-size', style.run, `whether the fonts have an opsz axis isn't given; measured ${style.measuresAtCssSize ? 'at the CSS size and scaled, as for the system UI font' : 'at the zoomed size'} (font_platform_data_mac.mm:170-176, probes-chrome correction 7)`, at)
+      const unknown = style.font.facts.opticalSizeAxis === null
+      if (unknown || style.measuresAtCssSize) {
+        const detail = `${unknown ? 'whether the fonts have an opsz axis isn\'t given; ' : ''}${style.measuresAtCssSize ? SCALED_DETAIL : 'measured at the zoomed size'} (font_platform_data_mac.mm:170-178, probes-chrome correction 7)`
+        for (const at of ranges()) addGap(p.gaps, 'optical-size', style.run, detail, at)
       }
-      if (style.measuresAtCssSize) {
-        for (const at of ranges()) addGap(p.gaps, 'page-history', style.run, 'a font with an opsz axis measured at the CSS size and scaled: a platform font that earlier text or another canvas created at the zoomed size changes the DOM widths (probes-chrome correction 7)', at)
-      }
+      // The renderer's font cache, not this text: the gap has no range, so it explains no line by where it is (probe
+      // critic-r3 blink-order: alone in a fresh process the DOM's widths are the same whether Canvas or the DOM asked first).
+      if (style.measuresAtCssSize) addGap(p.gaps, 'page-history', style.run, PLATFORM_FONT_DETAIL)
     }
   }
   for (let g = 0; g < p.groups.length; g++) {
