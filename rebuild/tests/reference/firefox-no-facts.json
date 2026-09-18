@@ -4,11 +4,18 @@
   "browser": "firefox",
   "config": "no-facts",
   "inputsSha256": "dac755b73435e9b1b4e31610936df79806cbfb941795c79bf0e45a997952df19",
-  "commit": "a2cfb9094e289e7076db28d5ef8de80ea1a10a6f",
+  "commit": "c272e292d8c81c45df3f823e43c8e5568f6b4385",
   "dirty": [],
-  "createdAt": "2026-09-18T12:05:25.788Z",
-  "reason": "first reference",
-  "replaced": [],
+  "createdAt": "2026-09-18T12:36:21.881Z",
+  "reason": "the ledger's format gained each set's environments and the library commit; the inputs and the predictions are the same",
+  "replaced": [
+    {
+      "commit": "a2cfb9094e289e7076db28d5ef8de80ea1a10a6f",
+      "createdAt": "2026-09-18T12:05:25.788Z",
+      "reason": "first reference",
+      "cases": 62437
+    }
+  ],
   "sets": {
     "smoke-hand": [
       {
@@ -377,7 +384,7 @@
   },
   "cases": 62437,
   "ledger": {
-    "headerSha256": "51bf52d7901421d9523f1677134a438caede947f007e45f53cf690a199e301e4",
+    "headerSha256": "4a5e6249d5b9bfe2eceab7df1d9f5fc56417f867e25453a0bda0dd0f53bfe0d8",
     "entriesSha256": "d1a9224043da05c467ce401af9ad4c5a772fea4302908548f45ca601af6fef00"
   }
 }
