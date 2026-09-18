@@ -513,15 +513,15 @@ function computeItemWidths(p: WebKitPrepared, m: Measurer): void {
 }
 
 // Whether a named family of the box's list draws the code point before the list reaches a family the locale resolves: in
-// Canvas the named families followed by LastResort give the box's own advance and not LastResort's box (the recipe of
-// makeBox's coverage test; a glyph as wide as LastResort's box can't be told from it and counts as not drawn).
+// Canvas the named families followed by LastResort don't give LastResort's box (the recipe of makeBox's coverage test; a
+// glyph as wide as LastResort's box can't be told from it and counts as not drawn). The list draws a character with its first
+// family that has a glyph, so what the named families draw here they draw in the box's own list.
 export function namedFamilyDraws(m: Measurer, box: WebKitBox, cp: number): boolean {
   // FontCascade::treatAsZeroWidthSpace (FontCascadeInlines.h:160-176): drawn as a zero-width space whatever font has it,
   // so no font choice shows in a width. Controls below U+0020 and U+007F-U+009F never reach here.
   if (cp === 0xad || cp === 0x200b || cp === 0x200c || cp === 0x200d || cp === 0x200e || cp === 0x200f || (cp >= 0x202a && cp <= 0x202e) || cp === 0xfeff || cp === 0xfffc) return true
   const s = String.fromCodePoint(cp)
-  const named = measureText(m, box.namedContext, s)
-  return named === measureText(m, box.plainContext, s) && named !== measureText(m, box.lastResortContext, s)
+  return measureText(m, box.namedContext, s) !== measureText(m, box.lastResortContext, s)
 }
 
 // Code points whose system fallback CoreText picks by language: Hangul, CJK symbols and punctuation, kana, Bopomofo, Han
@@ -559,19 +559,24 @@ function collectBoxFacts(p: WebKitPrepared, m: Measurer, leaves: LeafInput[]): v
     //   script isn't Common (FontDescription::platformResolveGenericFamily, FontDescriptionCocoa.cpp:77-118, called first by
     //   CSSFontSelector::resolveGenericFamily, CSSFontSelector.cpp:334-353);
     // - -webkit-standard per script (FontGenericFamilies.cpp:50-66; SettingsBaseCocoa.mm:44-50 sets it for Han, kana and
-    //   Hangul);
+    //   Hangul), which also stands behind a list none of whose families resolves (FontCascadeFonts::realizeFallbackRangesAt,
+    //   FontCascadeFonts.cpp:210-217);
     // - system-ui and the ui-* designs (FontCacheCoreText.cpp:585-598, SystemFontDatabaseCoreText.cpp:236);
     // - system fallback after the list (FontCacheCoreText.cpp:822), which Core Text picks by language for Han, kana, Hangul,
     //   CJK punctuation and fullwidth forms (DESIGN.md §1.3). Probe webkit-round3 R3: under 18 languages of other scripts, and
     //   under no language, the DOM's fallback glyphs have Canvas's advances (117 of 117 strings each); under ko, 36 of 117.
-    // A font list draws a character with its first family that has a glyph (FontCascadeFonts::glyphDataForVariant,
-    // FontCascadeFonts.cpp:426-470), so under a locale of another script a character a named family draws before the list
-    // reaches a locale-resolved family doesn't depend on the locale (probe R3c: U+2027 through `"Hiragino Sans", "PingFang
-    // SC", "Apple SD Gothic Neo", Arial, sans-serif` is no named family's glyph, and differs under hi, zh-Hant and ko). Under a
-    // Han, kana or Hangul locale a named family doesn't settle it for those characters: `"PingFang SC"` draws kana 18px wide
-    // under en, hi and zh-Hant and 15.57px wide under ko, Apple SD Gothic Neo's advance, though Canvas finds the family's own
-    // kana glyph (probe R3b, R3c). Core Text is closed; the listed families' coverage facts say PingFang SC maps U+2027, which
-    // WebKit doesn't draw from it (R3c), so Canvas decides what a named family draws. Only unquoted names are the keywords.
+    // Nothing else reads it: a family named by a string is looked up by name (fontWithFamily, FontCacheCoreText.cpp:624-643;
+    // only fontDescriptorWithFamilySpecialCase's system names take the locale), its glyphs are CTFontGetGlyphsForCharacters
+    // of that font (GlyphPageCoreText.cpp:51-73), and a list draws a character with its first family that has a glyph
+    // (FontCascadeFonts::glyphDataForVariant, FontCascadeFonts.cpp:426-470). So a character a named family draws before the
+    // list reaches a locale-resolved family doesn't depend on the locale, under any locale (probe webkit-round4 R7: 663
+    // characters of 33 named families that Canvas says a named family draws measure the same in the DOM under no language,
+    // en, ja, ko, zh-Hans, zh-Hant and zh-HK as in Canvas, 4,641 of 4,641; of the 855 no named family draws, 468 differ under
+    // ko, 51 under ja, 48 under each zh, none under en or none). Round 3 read `"PingFang SC"` drawing kana at Apple SD Gothic
+    // Neo's advance under ko as a named family that doesn't settle its own characters. It has no kana glyph here: the WebContent
+    // process resolves the name to the system's reserved PingFangUI.ttc, which holds Han and no kana or U+2027, and the kana
+    // comes from system fallback (R7; an unsandboxed process finds the downloaded PingFang.ttc asset, which the lab's coverage
+    // facts read, so Canvas decides what a named family draws). Only unquoted names are the keywords.
     const families = familyNames(leaf.textStyle.font.family)
     const script = localeScript(box.locale)
     const cjkLocale = ['HAN', 'SIMPLIFIED_HAN', 'TRADITIONAL_HAN', 'KATAKANA_OR_HIRAGANA', 'HANGUL'].includes(script)
@@ -582,15 +587,19 @@ function collectBoxFacts(p: WebKitPrepared, m: Measurer, leaves: LeafInput[]): v
       const resolvedByLocale = (family.name === '-webkit-standard' && cjkLocale) || SYSTEM_DESIGN_FAMILIES.includes(family.name) || (CORE_TEXT_LOCALE_FAMILIES.includes(family.name) && script !== 'COMMON')
       if (resolvedByLocale) firstLocaleFamily = i
     }
-    if (box.locale !== '' && (firstLocaleFamily < families.length || (cjkLocale && languageFallback))) {
-      box.localeChoosesFonts = { families: firstLocaleFamily < families.length, fallback: cjkLocale }
-      if (firstLocaleFamily < families.length) {
-        const font = leaf.textStyle.font
-        const size = f32(f32(font.size) * f32(p.zoom))
-        const named = leaf.textStyle.font.family.split(',').slice(0, firstLocaleFamily).map(part => part.trim())
-        const settings = { lang: '', letterSpacing: '0px', wordSpacing: '0px', fontKerning: 'auto' as const, textRendering: 'auto' as const, direction: 'ltr' as const, partition: '' }
-        box.namedContext = measureContext(m, { ...settings, font: canvasFont({ ...font, family: named.concat(['LastResort']).join(', ') }, size) })
-        box.lastResortContext = measureContext(m, { ...settings, font: canvasFont({ ...font, family: 'LastResort' }, size) })
+    if (box.locale !== '' && (firstLocaleFamily < families.length || cjkLocale)) {
+      const font = leaf.textStyle.font
+      const size = f32(f32(font.size) * f32(p.zoom))
+      const named = leaf.textStyle.font.family.split(',').slice(0, firstLocaleFamily).map(part => part.trim())
+      const settings = { lang: '', letterSpacing: '0px', wordSpacing: '0px', fontKerning: 'auto' as const, textRendering: 'auto' as const, direction: 'ltr' as const, partition: '' }
+      box.lastResortContext = measureContext(m, { ...settings, font: canvasFont({ ...font, family: 'LastResort' }, size) })
+      box.namedContext = named.length === 0 ? box.lastResortContext : measureContext(m, { ...settings, font: canvasFont({ ...font, family: named.concat(['LastResort']).join(', ') }, size) })
+      // No family of a list without a locale-resolved one resolves where the named families followed by LastResort measure a
+      // space as LastResort alone does: the standard family draws (R7: `a` in `STHeiti`, which this process doesn't have, is
+      // 7.99px under en and 9.81px under ja at 18px).
+      const standardFamilyDraws = firstLocaleFamily === families.length && measureText(m, box.namedContext, ' ') === measureText(m, box.lastResortContext, ' ')
+      if (firstLocaleFamily < families.length || standardFamilyDraws || languageFallback) {
+        box.localeChoosesFonts = { families: firstLocaleFamily < families.length || standardFamilyDraws, fallback: cjkLocale }
       }
     }
     box.hanLocaleUnknown = env.preferredLanguages === null && leaf.lang !== '' && isHanLocale(leaf.lang)
