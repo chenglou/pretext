@@ -816,16 +816,10 @@ function shapedReversed(p: BlinkPrepared, g: number, k: number): boolean {
   return group.rtl !== scriptRtl
 }
 
-// The part of pair adjustment d between the clusters on both sides of an offset that the glyph before it carries
+// The part of pair adjustment d between the clusters on both sides of offset k that the glyph before it carries
 // (FontFacts.pairKerning): all of it on the first glyph's advance, or kern >> 1 where the kern and kerx pair machine applies
 // it (hb-kern.hh:102-106). Where the fact isn't given, the first glyph's.
-// Beside a U+3000 that went to a fallback font (requeuedSpaceAt) the cluster on the other side of k carries all of it.
-function pairBefore16(sh: Shaper, g: number, d: number, k: number, lo: number, hi: number): number {
-  switch (requeuedSpaceAt(sh.p, k, lo, hi)) {
-    case 'start': return d
-    case 'end': return 0
-    case 'unknown': case null: break
-  }
+function pairBefore16(sh: Shaper, g: number, d: number, k: number): number {
   // Where HarfBuzz shaped the reversed text, its first glyph is the cluster after k.
   const reversed = shapedReversed(sh.p, g, k)
   switch (sh.p.styles[sh.p.groups[g]!.style]!.pairKerning) {
@@ -857,23 +851,37 @@ export function groupPrefix16(sh: Shaper, g: number, k: number): number {
   return base - group.startTrim16
 }
 
-// The part of adjustment d across offset k that the glyphs before k carry. Where HanKerning halts one of the two characters
-// around k, that character carries it whole: the close mark before k (ShouldKernLast), else the open mark after it
-// (ShouldKern). HanKerning picks the character from text_content in logical order (han_kerning.cc:235-300), whatever order
-// HarfBuzz shapes the run in: in an RTL paragraph `」。` is an RTL run and natively `」` is the half-width one
-// (c-306178822a6c08a1). Everything else is a pair adjustment (pairBefore16).
-function adjustBefore16(sh: Shaper, g: number, d: number, k: number, lo: number, hi: number): number {
+// Which side of offset k carries the adjustment across it, or 'pair' where that is the font's pair kerning. Where HanKerning
+// halts one of the two characters around k, that character carries it whole: the close mark before k (ShouldKernLast), else
+// the open mark after it (ShouldKern). HanKerning picks the character from text_content in logical order
+// (han_kerning.cc:235-300), whatever order HarfBuzz shapes the run in: in an RTL paragraph `」。` is an RTL run and natively
+// `」` is the half-width one (c-306178822a6c08a1). Beside a U+3000 that went to a fallback font (requeuedSpaceAt) the
+// cluster on the other side of k carries all of it. Everything else is a pair adjustment (pairBefore16).
+function adjustmentSide(sh: Shaper, g: number, k: number, lo: number, hi: number): 'before' | 'after' | 'pair' {
   const p = sh.p
   if (!p.is8Bit && k > lo && k < hi && hanKerningMayApply(p.hanKerningCandidates, lo, hi)) {
     const data = hanKerningFontData(p, p.groups[g]!.style)
     if (data.hasHalt) {
       const type = resolvedCharType(data, p.text.charCodeAt(k))
       const last = resolvedCharType(data, p.text.charCodeAt(k - 1))
-      if (shouldKernLast(type, last)) return d
-      if (shouldKern(type, last)) return 0
+      if (shouldKernLast(type, last)) return 'before'
+      if (shouldKern(type, last)) return 'after'
     }
   }
-  return pairBefore16(sh, g, d, k, lo, hi)
+  switch (requeuedSpaceAt(p, k, lo, hi)) {
+    case 'start': return 'before'
+    case 'end': return 'after'
+    case 'unknown': case null: return 'pair'
+  }
+}
+
+// The part of adjustment d across offset k that the glyphs before k carry.
+function adjustBefore16(sh: Shaper, g: number, d: number, k: number, lo: number, hi: number): number {
+  switch (adjustmentSide(sh, g, k, lo, hi)) {
+    case 'before': return d
+    case 'after': return 0
+    case 'pair': return pairBefore16(sh, g, d, k)
+  }
 }
 
 const HAN_KERNING_DETAIL = 'a HanKerning trim added from Canvas facts: `halt` through the 「「 pair trim and character types from ink bounds (han_kerning.cc:417-535)'
@@ -1387,6 +1395,19 @@ export function positionLimit(sh: Shaper, g: number, k: number, lo: number, hi: 
   if (style.pairKerning === null || pair !== wide) return 'unsafe-to-break'
   if (style.letterSpacing === 0 && pairAdjustNoLigatures16(sh, g, k, lo, hi) !== pair) return 'unsafe-to-break'
   return null
+}
+
+// Whether the advances of the glyph clusters on both sides of offset k inside a shaping call over [lo, hi) rest on a pair
+// kerning fact the declaration doesn't give: GPOS pair values sit on the first glyph's advance, the kern and kerx machine
+// gives the first glyph kern >> 1 and the second the rest (hb-kern.hh:102-106), and Canvas totals show the sum. The port
+// then puts the adjustment the position takes (positionAdjust16) on the first glyph (pairBefore16), so inside a line both
+// clusters are stand-ins, half the kern off in a font of the other kind, and the line reports it over them (index.ts
+// shapeOf). Joined letters are in-word-prefix's.
+export function pairPlacementUnknown(sh: Shaper, g: number, k: number, lo: number, hi: number): boolean {
+  const p = sh.p
+  if (p.styles[p.groups[g]!.style]!.pairKerning !== null) return false
+  if (k <= lo || k >= hi || !isClusterBoundary(p, k) || isSegmentEdge(p, k) || joinsAcross(p, k, lo, hi)) return false
+  return adjustmentSide(sh, g, k, lo, hi) === 'pair' && positionAdjust16(sh, g, k, lo, hi) !== 0
 }
 
 // positionLimit for the advance sum of a view's glyphs before offset k (viewPrefix16): the widths of the parts before k

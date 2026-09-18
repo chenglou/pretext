@@ -22,7 +22,7 @@ import { USCRIPT_LATIN, isCjkIdeographOrSymbol, isDefaultIgnorable, isExtendedPi
 import { scriptsPerUnit } from './script.js'
 import {
   adjust16, ceilFrom16, isSegmentEdge, positionAdjust16, graphemeSourceRange, groupPrefix16, isClusterBoundary, joinsAcross, luCeil, startsClusterInsideGrapheme, GRAPHEME_CLUSTERS_DETAIL, luTrunc, measureGroups,
-  isFontRunEdge, pairAdjust16, pairAdjustNoLigatures16, partGraphemeStarts, partPrefix16, partWidth16, positionLimit, requeuedSpaceAt, styleContexts, viewPositionLimit, viewPrefix16, widthOf16, type Shaper, type View,
+  isFontRunEdge, pairAdjust16, pairAdjustNoLigatures16, pairPlacementUnknown, partGraphemeStarts, partPrefix16, partWidth16, positionLimit, requeuedSpaceAt, styleContexts, viewPositionLimit, viewPrefix16, widthOf16, type Shaper, type View,
 } from './shape.js'
 import type { BlinkGroup, BlinkLineStart, BlinkPrepared } from './types.js'
 
@@ -129,6 +129,8 @@ const CLAMPED_START_DETAIL = 'a wrapped line start inside shaped text whose resh
 
 const END_TEST_DETAIL = 'a break opportunity whose line-end reshape passed or failed the fit test by less than the rounding of the last safe offset\'s position: Blink reshapes from the last offset HarfBuzz left safe and tests the width after that position\'s ceiling (shaping_line_breaker.cc:543-553), HarfBuzz can flag offsets the port\'s width tests call safe (contextual lookups that change no width), and from an earlier safe offset the same glyphs pass or fail by another ceiling'
 
+const PAIR_PLACEMENT_DETAIL = 'glyph clusters inside a line with a pair adjustment between them, in a font the declaration gives no pairKerning fact for: GPOS pair values sit on the first glyph\'s advance and the kern and kerx machine gives each glyph half (hb-kern.hh:102-106), Canvas totals show the sum, and the port puts all of it on the first glyph, so the two advances and every position between them can be half the adjustment off'
+
 const SCALED_DETAIL = 'advances measured in a font made for the CSS size and scaled to the DOM\'s font size: Blink truncates each glyph\'s advance to 1/65536 px at its own size (skia_text_metrics.cc:207-211), so a sum of scaled advances can be a few units off the DOM\'s, which moves a width or a fit test that lies that close to a LayoutUnit'
 
 const PLATFORM_FONT_DETAIL = 'a font with an opsz axis: the DOM sets the axis from the specified size (font_platform_data_mac.mm:170-178) and takes the platform font from a cache of the renderer process whose key holds the zoomed size alone (font_cache_key.h:53-68, font_description.cc:308-331), so text or a canvas that asked for this family at the same zoomed size under another specified size first decides the optical size of both (Chromium #489579956)'
@@ -224,6 +226,15 @@ function runAt(p: BlinkPrepared, k: number): number | null {
 // line_breaker.cc:186-188.
 function isSpaceLB(c: number): boolean {
   return c === 0x20 || c === 0x09
+}
+
+// The source range of the glyph clusters on both sides of offset k inside a shaping call over [lo, hi).
+function clustersAround(p: BlinkPrepared, k: number, lo: number, hi: number): { start: number; end: number } {
+  let a = k - 1
+  while (a > lo && !isClusterBoundary(p, a)) a--
+  let b = k + 1
+  while (b < hi && !isClusterBoundary(p, b)) b++
+  return sourceRange(p, a, b)
 }
 
 // Gaps at a line edge k inside a shaping group. `fromPosition`: the width there comes from the paragraph's position without
@@ -732,6 +743,9 @@ function shapeOf(sh: Shaper, view: View, a: number, b: number, partsKnown: boole
     const shift = position - part.start
     const group = part.kind === 'reshape' ? part.call.group : part.sr.kind === 'group' ? part.sr.group : -1
     const reshaped = part.kind === 'reshape' ? { textStart: part.call.start, textEnd: part.call.end } : null
+    // The shaping call the part's glyphs come from: the reshape, or the paragraph's group.
+    const callStart = part.kind === 'reshape' ? part.call.start : group >= 0 ? p.groups[group]!.start : part.start
+    const callEnd = part.kind === 'reshape' ? part.call.end : group >= 0 ? p.groups[group]!.end : part.end
     const limit = part.start + characters
     let runStart = part.start
     let fontsKnown = true
@@ -754,6 +768,11 @@ function shapeOf(sh: Shaper, view: View, a: number, b: number, partsKnown: boole
       const cluster: BlinkGlyphCluster = { textStart: start + shift, textEnd: k + shift, graphemeStarts, advance }
       const startLimit = shift === 0 && start > a ? viewPositionLimit(sh, view, start) : null
       if (startLimit !== null) cluster.startLimit = startLimit
+      // A pair adjustment at either end of the cluster whose side isn't known: the clusters around it are stand-ins.
+      if (group >= 0 && shift === 0) {
+        if (pairPlacementUnknown(sh, group, start, callStart, callEnd)) addGap(sh.gaps, 'unsafe-to-break', runAt(p, start), PAIR_PLACEMENT_DETAIL, clustersAround(p, start, callStart, callEnd))
+        if (k >= limit && pairPlacementUnknown(sh, group, k, callStart, callEnd)) addGap(sh.gaps, 'unsafe-to-break', runAt(p, k), PAIR_PLACEMENT_DETAIL, clustersAround(p, k, callStart, callEnd))
+      }
       let codePoints = 0
       for (let x = start; x < k; x++) if ((p.text.charCodeAt(x) & 0xfc00) !== 0xdc00) codePoints++
       if (rtl && !partsKnown && codePoints > 1) cluster.graphemesLimit = 'in-word-prefix'
