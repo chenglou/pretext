@@ -18,6 +18,11 @@
 // page sets document.title to a verdict ("BUG ...", "NO BUG ...", "ERROR ...") the reporter posts the title, the text of
 // #log, the user agent and devicePixelRatio. A page contract, so that a hidden window can't stall a page: pages finish from
 // promises and script order, never from timers or animation frames.
+//
+// A page whose bug is a call that never returns can't report it. Such a page sets its title to "STEP ..." before the call
+// (the reporter posts that too, as progress) and waits a moment, and pages/index.json lists the browsers it hangs in under
+// `hangs`. There, no verdict within HANG_TIMEOUT_MS after a posted step is the reproduction, recorded as `hung`; anywhere
+// else a missing verdict stays an error.
 import { execFileSync } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
@@ -28,11 +33,12 @@ import { CHROME_PIN_ARGS, FIREFOX_PIN_PREFS, labApp, readBuild } from '../lab/br
 
 type Browser = 'chrome' | 'firefox' | 'webkit-host'
 type Report = { title: string; log: string; userAgent: string; devicePixelRatio: number; visibility: string; languages: string[] }
-type PageIndex = Array<{ page: string; browsers: Browser[]; queries?: string[] }>
+type PageIndex = Array<{ page: string; browsers: Browser[]; queries?: string[]; hangs?: Browser[] }>
 
 const HERE = import.meta.dir
 const WEBKIT_HOST = join(homedir(), 'github/pretext-rebuild/.artifacts/webkit-host/webkit-host')
 const PAGE_TIMEOUT_MS = 90_000
+const HANG_TIMEOUT_MS = 30_000
 
 function fail(text: string): never {
   console.error(`[bugs] ${text}`)
@@ -76,14 +82,19 @@ const REPORTER = `
 // Appended by rebuild/platform-bugs/verify.ts while serving; not part of the repro page.
 (() => {
   let sent = false
-  const send = () => {
-    if (sent || !/^(BUG|NO BUG|ERROR)/.test(document.title)) return
-    sent = true
+  const post = path => {
     const log = document.getElementById('log')
-    fetch('/report' + location.search, { method: 'POST', body: JSON.stringify({
+    return fetch(path + location.search, { method: 'POST', body: JSON.stringify({
       title: document.title, log: log === null ? '' : log.textContent, userAgent: navigator.userAgent,
       devicePixelRatio: window.devicePixelRatio, visibility: document.visibilityState, languages: [...navigator.languages],
-    }) }).then(() => { document.title = 'bugs page reported' })
+    }) })
+  }
+  const send = () => {
+    if (sent) return
+    if (/^STEP/.test(document.title)) return void post('/progress')
+    if (!/^(BUG|NO BUG|ERROR)/.test(document.title)) return
+    sent = true
+    post('/report').then(() => { document.title = 'bugs page reported' })
   }
   new MutationObserver(send).observe(document.head, { subtree: true, childList: true, characterData: true })
   addEventListener('error', event => { if (!sent) document.title = 'ERROR ' + event.message })
@@ -94,6 +105,9 @@ const REPORTER = `
 `
 
 let waiting: { resolve: (report: Report) => void } | null = null
+// The last "STEP ..." report of the page being run. Read through a function: the server writes it between awaits.
+let progress: Report | null = null
+const lastProgress = (): Report | null => progress
 const server = Bun.serve({
   hostname: '127.0.0.1',
   port: 0,
@@ -102,6 +116,10 @@ const server = Bun.serve({
     if (url.pathname === '/report' && request.method === 'POST') {
       const report = await request.json() as Report
       waiting?.resolve(report)
+      return new Response('ok')
+    }
+    if (url.pathname === '/progress' && request.method === 'POST') {
+      progress = await request.json() as Report
       return new Response('ok')
     }
     const name = decodeURIComponent(url.pathname.slice(1))
@@ -336,11 +354,16 @@ for (let i = 0; i < targets.length; i++) {
   const reported = new Promise<Report>(done => { waiting = { resolve: done } })
   let session: Session | null = null
   let report: Report | null = null
+  let hung: Report | null = null
   let error: string | null = null
+  progress = null
+  const hangs = index.find(entry => entry.page === target.split('?')[0])?.hangs?.includes(browser) === true
+  const timeout = hangs ? HANG_TIMEOUT_MS : PAGE_TIMEOUT_MS
   try {
     session = browser === 'chrome' ? await launchChrome(url, runId) : browser === 'firefox' ? await launchFirefox(url, runId) : await launchWebKitHost(url)
-    report = await Promise.race([reported, Bun.sleep(PAGE_TIMEOUT_MS).then(() => null)])
-    if (report === null) error = `No report within ${PAGE_TIMEOUT_MS} ms`
+    report = await Promise.race([reported, Bun.sleep(timeout).then(() => null)])
+    if (report === null && hangs) hung = lastProgress()
+    if (report === null && hung === null) error = `No report within ${timeout} ms`
   } catch (caught) {
     error = caught instanceof Error ? caught.message : String(caught)
   }
@@ -351,10 +374,11 @@ for (let i = 0; i < targets.length; i++) {
     error = `${error === null ? '' : `${error}; `}${caught instanceof Error ? caught.message : String(caught)}`
   }
   const name = target.replace(/\.html/, '').replace(/[?&=]/g, '_')
-  writeFileSync(join(outDir, browser, `${name}.json`), `${JSON.stringify({ page: target, browser, build, started, error, report }, null, 2)}\n`)
+  writeFileSync(join(outDir, browser, `${name}.json`), `${JSON.stringify({ page: target, browser, build, started, error, report, ...(hung === null ? {} : { hung }) }, null, 2)}\n`)
   if (error !== null) failures++
-  console.log(`[bugs] ${browser} ${target}: ${error ?? report!.title}`)
-  if (report !== null) console.log(report.log.split('\n').map(line => `    ${line}`).join('\n'))
+  console.log(`[bugs] ${browser} ${target}: ${error ?? (hung === null ? report!.title : `HUNG for ${timeout} ms after "${hung.title}"`)}`)
+  const printed = report ?? hung
+  if (printed !== null) console.log(printed.log.split('\n').map(line => `    ${line}`).join('\n'))
 }
-server.stop(true)
+void server.stop(true)
 process.exit(failures === 0 ? 0 : 1)

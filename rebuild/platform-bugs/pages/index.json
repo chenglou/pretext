@@ -14,5 +14,7 @@
   {"page": "firefox-letter-spacing-cursive-fallback-mark.html", "browsers": ["chrome", "firefox", "webkit-host"]},
   {"page": "firefox-canvas-synthetic-bold.html", "browsers": ["chrome", "firefox", "webkit-host"]},
   {"page": "firefox-canvas-optical-size.html", "browsers": ["chrome", "firefox", "webkit-host"]},
-  {"page": "webkit-tab-size-uses-inline-font.html", "browsers": ["chrome", "firefox", "webkit-host"]}
+  {"page": "webkit-tab-size-uses-inline-font.html", "browsers": ["chrome", "firefox", "webkit-host"]},
+  {"page": "chrome-range-client-rects-never-returns.html", "browsers": ["chrome", "firefox", "webkit-host"], "hangs": ["chrome"]},
+  {"page": "firefox-frame-width-between-combining-marks.html", "browsers": ["chrome", "firefox", "webkit-host"]}
 ]

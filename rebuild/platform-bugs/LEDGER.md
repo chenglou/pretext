@@ -19,6 +19,9 @@ Candidates for browser bug reports found while rebuilding Pretext, reduced to st
   appends a small reporter script while serving, and launches browsers the way `rebuild/probes/runner.ts` does.
 - Every page reproduces in its target browser, and none reproduces in the other two. The one exception is the Chrome
   `system-ui` page, where Firefox shows its own tracked `system-ui` bug.
+- A page whose bug is a call that never returns can't print a result. Entry 13's page sets its title to `STEP …` before
+  the call, and `verify.ts` records the run as `hung` when the browser `pages/index.json` names never gets past that step
+  within 30 seconds.
 - Source paths are under `~/github/browser-engines/`: `chromium-153.0.8010.48/third_party/blink/renderer/` (B/),
   `webkit-7625.1.29.11.27/Source/` (W/) and `firefox-156.0/` (F/). Chrome .50 differs from the .48 source only in
   `chrome/VERSION`.
@@ -31,11 +34,14 @@ Candidates for browser bug reports found while rebuilding Pretext, reduced to st
 
 Most likely to be accepted first. Every entry is behaviour against a spec or against the browser's own other path
 (Canvas and DOM, or two kinds of canvas, disagreeing about the same text). The cause was read in source for all but
-entries 10 and 12, where it is inferred.
+entries 10, 12 and 13, where it is inferred. Entries 13 and 14 came later, from the engine owners' reductions in round 4;
+they keep their numbers, and their rows sit where they rank.
 
 | # | Browser | Bug | Page |
 |---|---|---|---|
 | 1 | WebKit | `word-break: keep-all` breaks after commas, full stops and colons inside numbers and abbreviations, and after an opening parenthesis (new in Safari 27.0) | `webkit-keep-all-breaks-after-punctuation.html` |
+| 13 | Chrome | `Range.getClientRects()` never returns over a full stop in an 8px wide block with `overflow-wrap: break-word`; the tab has to be killed | `chrome-range-client-rects-never-returns.html` |
+| 14 | Firefox | A text frame becomes about 17.9 million px wide when a span starts between two combining marks that share a glyph cluster | `firefox-frame-width-between-combining-marks.html` |
 | 2 | Chrome | A 2D canvas takes `letter-spacing` and `word-spacing` from the canvas element's CSS, scaled by the device pixel ratio, and `'0px'` doesn't clear it | `chrome-canvas-inherits-css-letter-spacing.html` |
 | 3 | WebKit | `white-space: break-spaces` text lays out like `pre-wrap` after the same text was laid out under `pre-wrap` | `webkit-break-spaces-after-pre-wrap.html` |
 | 4 | Firefox | Canvas `wordSpacing` spaces U+3000 and skips U+00A0; CSS `word-spacing` does the opposite | `firefox-canvas-word-spacing-separators.html` |
@@ -300,6 +306,55 @@ New facets of bugs that are already tracked, for a comment on the existing repor
 - **Pretext:** main isn't concerned in a useful way (it has no cursive rule at all, entry 7). The rebuild predicts it
   where its font facts say which font draws the mark, and reports `font-fallback` otherwise.
 
+## 13. Chrome: `Range.getClientRects()` never returns
+
+- **Browser:** Chrome 153.0.8010.50. macOS 27.0 (26A428), arm64, DPR 2.
+- **Steps:** open `pages/chrome-range-client-rects-never-returns.html`. An 8px wide block in 16px PingFang SC with
+  `overflow-wrap: break-word` holds U+3002 IDEOGRAPHIC FULL STOP and U+300F RIGHT WHITE CORNER BRACKET. After layout the
+  page asks for the client rects of a range over the first character.
+- **Expected:** the call returns. Firefox 156 and WebKit return one rect, 16px wide.
+- **Actual:** layout finishes (the block is 45px tall, two lines) and the call never returns. The tab stays busy until
+  it is killed; `verify.ts` recorded no result 30 seconds after the page's last step.
+- **Also hangs** (Blink owner's reduction, `.artifacts/probes/blink/round4-range-hang-*`): at 10px wide, and in Hiragino
+  Sans. **Returns:** with `text-spacing-trim: space-all`; at 1px wide; under `word-break: break-all` without
+  `overflow-wrap`; for U+6211 before the two characters, over U+6211; over the bracket, whose rect is then 32px wide,
+  twice the glyph.
+- **Source, a reading that wasn't traced further:** what the hanging cases share is the line-end trim of the full stop,
+  `ShapeLine`'s `han_kerning_end` reshape that lets the half-width full stop fit
+  (`B/platform/fonts/shaping/shaping_line_breaker.cc:342-363`), on a line that then holds it alone.
+- **How sure:** high on the behaviour (every run of the lab case and of each reduction). The cause is a reading.
+- **Tracker:** not searched.
+- **Pretext:** found by the rebuild's lab, whose native step asks for every code point's rects: fresh case
+  `c-1fda71ce84fd9989` (PingFang SC, 8px wide, `keep-all`, `break-word`, `line-break: strict`) stalled the page whatever the
+  predictor.
+
+## 14. Firefox: a text frame about 17.9 million px wide between two combining marks
+
+- **Browser:** Firefox 156.0. macOS 27.0, DPR 2.
+- **Steps:** open `pages/firefox-frame-width-between-combining-marks.html`. Two lines hold the Arabic word reh, fatha,
+  shadda, hah, yeh, meem in 20px Geeza Pro, in two `<span>`s without style. In the first line the second span starts
+  between the fatha and the shadda, in the second line before both marks.
+- **Expected:** both lines lay out alike. Chrome and WebKit: the same widths in both (6.336px and 26.359px; 8.156px and
+  26.356px).
+- **Actual:** in the first line the first span is 17895698px wide (`nscoord_MAX`, 2^30 − 1 app units) and the second 0px;
+  in a paragraph that wraps, the word leaves its line. The second line is normal, 6.350px and 26.333px.
+- **Source:** in `gfxTextRun::ComputeLigatureData` (`F/gfx/thebes/gfxTextRun.cpp:260-284`) `ligatureWidth` is `int32_t`
+  and `totalClusterCount` is `uint32_t`, so `partClusterCount * (ligatureWidth / totalClusterCount)` divides unsigned. A
+  ligature group with a negative advance W gives the part that holds the group's start 2^32 + W app units, and the last
+  part `ligatureWidth - allParts` (`:286-289`); `nsTextFrame::ReflowText` clamps them to `nscoord_MAX` and 0. HarfBuzz
+  merges two marks' clusters when it reorders them by modified combining class (fatha before shadda,
+  `hb-ot-shape-normalize.cc:394`) or when the font ligates them; Gecko then makes the first mark a ligature group start
+  that isn't a cluster start, so a frame edge between the marks cuts the group. The group's advance is negative under
+  `kerx`, where HarfBuzz doesn't zero mark advances (`hb-ot-shape.cc:189-191`).
+- **How sure:** high. Of 30 ordered pairs of fatha, damma, kasra, shadda, sukun and fathatan after reh, the 18 that
+  HarfBuzz reorders or Geeza Pro ligates reproduce it, and Arial (GPOS, mark advances zeroed) doesn't (the rebuild's
+  probe gecko-port F20).
+- **Suggested fix:** divide in signed or floating arithmetic, for example `gfxFloat(ligatureWidth) / totalClusterCount`.
+- **Tracker:** not searched.
+- **Pretext:** main has no inline boxes inside a cluster. The rebuild can't see the shared cluster or the advance's sign
+  from Canvas, so it doesn't predict it: the rows stay failures under its `in-word-prefix` gap, whose reading names this
+  function (3 held-out lab rows in `runs/word-spacing-spans` and 6 fresh ones).
+
 ---
 
 ## Facets of tracked bugs
@@ -370,9 +425,6 @@ New facets of bugs that are already tracked, for a comment on the existing repor
 | A Firefox worker's OffscreenCanvas follows the macOS locale | Already under "Investigated" in PLATFORM_BUGS (Mozilla #1869001). |
 | `document.fonts.check()` is true for a missing family in Firefox | The CSS Font Loading spec allows it. |
 | Range rect oddities (WebKit's zero-width rect after `</span>`, Safari's per-character rects on whole pixels, Firefox putting a cluster's advance on the variation selector) | Observation only. WebKit #296765 is already tracked as related. |
-
-Left out on purpose, because round 4's engine owners are reducing them: Chrome never returning from
-`Range.getClientRects()` on a PingFang SC `keep-all` case, and Firefox's frame 2^30 + 56 app units wide.
 
 Not reduced, because the source documents have no trace and the effect is tiny or needs a web font: Chrome's pair
 adjustment between U+3000 and the next line's first letter in Times New Roman (0.07px), the exact-fit break in
