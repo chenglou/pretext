@@ -20,6 +20,7 @@ const OUTPUT = output([
   { id: 'gecko-lines H1', spec: 'gecko-lines H1', value: { checks: [{ name: 'width 86.4px', ok: true, expected: 1, measured: 1 }], pre: [{ name: 'OC au', ok: false, expected: 5184, measured: 5183 }] } },
   { id: 'webkit-text H13', spec: 'webkit-text H13', value: { ok: null, lines: [0, 2] } },
   { id: 'broken', spec: 'x H1', value: null, errors: ['timeout'] },
+  { id: 'webkit-round4 R7', spec: 'webkit-canvas §1.3 locale; round 4 R7', value: [{ family: 'Arial', widths: [8.898, 10] }] },
 ])
 
 describe('facts', () => {
@@ -41,6 +42,16 @@ describe('facts', () => {
     expect(facts.find(fact => fact.spec === 'webkit-text H13')!.verdict).toBe('undecided')
     expect(facts.find(fact => fact.spec === 'x H1')!.verdict).toBe('errored')
     expect(facts.every(fact => fact.env.buildSource === 'given' && fact.scope['dpr'] === 2 && fact.scope['probeSet'] === 'test')).toBe(true)
+  })
+
+  test('raw values alone become one undecided fact that holds the record\'s hash', () => {
+    const raw = facts.filter(fact => fact.fact.startsWith('webkit-round4 R7'))
+    expect(raw.map(fact => [fact.fact, fact.verdict, fact.holdsIn])).toEqual([['webkit-round4 R7 :: raw values', 'undecided', []]])
+    expect(Object.keys(raw[0]!.decisive as object)).toEqual(['rawSha256', 'bytes'])
+    // Another answer from the browser is a changed decisive value in a release diff, never a flip.
+    const changed = extractFacts(output([{ id: 'webkit-round4 R7', spec: 'webkit-canvas §1.3 locale; round 4 R7', value: [{ family: 'Arial', widths: [8.9, 10] }] }]), 'run.json', 'blink', '153.0.8010.48', { probeSet: 'test' })
+    const diff = diffFacts(raw, changed, null)
+    expect([diff.flips.length, diff.decisiveChanged.length, diff.missing.length]).toEqual([0, 1, 0])
   })
 
   test('merge refuses one fact twice in one scope', () => {
