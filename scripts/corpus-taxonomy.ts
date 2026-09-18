@@ -184,6 +184,8 @@ const font = parseStringFlag('font')
 const lineHeight = parseOptionalNumberFlag('lineHeight')
 const id = parseStringFlag('id')
 
+if (step <= 0) throw new Error('--step must be > 0')
+
 const sources = await loadSources()
 if (id === null) {
   throw new Error(`Missing --id. Available corpora: ${sources.map(source => source.id).join(', ')}`)
