@@ -39,7 +39,7 @@ I read the engineering guide, `CHARTER.md` and `DESIGN.md` in full. I then check
 
 **Prototype**
 
-Files: `/private/tmp/claude-501/-Users-chenglou-github-pretext/7e07dee5-fc27-4046-b679-3f61a43f7436/scratchpad/arch-plan/indep/` holds `blink-table.ts`, `debug1-4.ts`, `prep.ts`, and the copies `src-base` and `src-t`.
+Files: `<scratch>/arch-plan/indep/` holds `blink-table.ts`, `debug1-4.ts`, `prep.ts`, and the copies `src-base` and `src-t`.
 
 I patched a scratch copy of the Blink port with:
 

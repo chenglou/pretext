@@ -15,7 +15,7 @@ It also answers the extra questions in the assignment:
 
 It settles CRITIC W5 and C10 and narrows C11. It ends with numbered browser probes.
 
-No browser was launched. Local programs were run on this Mac (macOS 27.0) against the system `libicucore` and CoreText. Their source is in this session's scratchpad `/private/tmp/claude-501/-Users-chenglou-github-pretext/7e07dee5-fc27-4046-b679-3f61a43f7436/scratchpad/`, which is temporary:
+No browser was launched. Local programs were run on this Mac (macOS 27.0) against the system `libicucore` and CoreText. Their source is in this session's scratchpad `<scratch>/`, which is temporary:
 - `icuprobe2/resprobe.c` reads the `brkitr/root` tables, tries to open the LSTM model resources, and prints `uloc_getDefault()`.
 - `icuprobe2/sa.c` prints line and word boundaries for Thai, Lao, Khmer and Myanmar samples.
 - `ctprobe/mono.m`, `mono2.m`, `wide.m`, `ctrl.m` and `exact.m` print CoreText traits and glyph advances.
