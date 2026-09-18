@@ -1245,10 +1245,12 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, measur
     // rounding of a half app unit comes out 1 au apart (probe gecko-port F7, F13: `modern` in 15px "Helvetica Neue" is 3118
     // au in the DOM and 3119 in Canvas, where `n` after the kern split is 508.4999 au at the DOM's scale and 508.5004 at
     // Canvas's), and synthetic bold, whose offset isn't linear in the device size (gfxFont.h:1899-1904; probe F14: `⃣❤` in
-    // bold 14px "Helvetica Neue" is 786 au in the DOM and 793 in Canvas). Neither shows in any OffscreenCanvas measurement,
-    // so neither has a gap: they are the residual classes `gecko/one-shaping-unit-one-app-unit` and
-    // `gecko/synthetic-bold-offset` (specs/gecko-RESULTS.md "Ceiling round 4"). A detached `<canvas>` element at the device
-    // size reproduces both (F13, F14) and was round 3's measuring path; it needs `document` and shares the DOM's font groups.
+    // bold 14px "Helvetica Neue" is 786 au in the DOM and 793 in Canvas). The first shows in no OffscreenCanvas measurement.
+    // The second does, as weight 700 less weight 400 (probe F24), which the port reads for bitmap emoji only (below); for
+    // text glyphs it stays unpredicted by the same decision. Neither has a gap: they are the residual classes
+    // `gecko/one-shaping-unit-one-app-unit` and `gecko/synthetic-bold-offset` (specs/gecko-RESULTS.md "Ceiling round 4"). A
+    // detached `<canvas>` element at the device size reproduces both (F13, F14) and was round 3's measuring path; it needs
+    // `document` and shares the DOM's font groups.
     const devSize = domAu / apd
     // The size Canvas takes to the font cache, in au: 7 bits of the CSS size (:4207-4217).
     const canvasAuSize = quantize7(font.size) * 60

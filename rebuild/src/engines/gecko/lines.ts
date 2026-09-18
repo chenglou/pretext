@@ -726,7 +726,8 @@ function placedStandIn(p: GeckoPrepared, m: Measurer, psd: SpanData): StandIn | 
     if (pf.kind !== 'text' || pf.r.prov === null) continue
     const prov = pf.r.prov
     if (prov.run.advancesStandIn !== null) return { gap: prov.run.advancesStandIn, detail: `an earlier text frame of the line measures under ${prov.run.advancesStandIn}` }
-    for (const reason of prov.tabStandIn.values()) return reason
+    const tab = prov.tabStandIn.values().next()
+    if (tab.done !== true) return tab.value
     const reason = advanceBefore(p, m, prov.run, prov.startT).standIn ?? advanceBefore(p, m, prov.run, pf.r.tEnd).standIn
     if (reason !== null) return { gap: 'in-word-prefix', detail: reason }
   }
