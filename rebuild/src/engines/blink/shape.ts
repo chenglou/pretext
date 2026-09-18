@@ -73,8 +73,10 @@ function effectiveFontSize(computed: number): number {
 
 // The factor from the advances of a font made for the CSS size to the DOM's at the zoomed size: the ratio of the two
 // platform font sizes. It is the zoom only where the two floors agree: 16.8px is a 16.79px font in Canvas and a 33.59px
-// one in the DOM at zoom 2, 13.33px is 13.33px and 26.66px (probe critic-r3 blink-order: the DOM's 16.8px system-ui text is
-// ceil64(W × 33.59 / 16.79), 204.742188px, where W × 2 gives 204.6875px; at 13.33, 16 and 17.3px the same rule holds).
+// one in the DOM at zoom 2, 13.33px is 13.33px and 26.66px. Both sides set opsz and HarfBuzz's ptem from the specified size,
+// so nothing else differs. The 64 rule/system-fonts-and-sizes rows at 16.8px failed under the zoom and pass under the ratio
+// (`Hello world again and more` is 204.742188px in the DOM, ceil64 of Canvas's 204.680374px × 33.59 / 16.79, where × 2 / 2
+// gives 204.6875px; specs/blink-RESULTS.md "Round 4b").
 // Kept as a float32, so its products with Canvas's 16.16 totals are exact doubles and differences of measured totals stay
 // exact, as the pair and safe tests need.
 function cssSizeScale(size: number, zoom: number): number {

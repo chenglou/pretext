@@ -100,7 +100,8 @@ function gapConcerning(layout: BlinkLayout, index: GapIndex, line: number, s: nu
 // DOMRect::FromRectF(quad.BoundingBox()): x is the left edge, width the float difference of the edges. An item of negative
 // size (a hanging space under negative spacing: HandleTrailingSpaces doesn't clamp it, line_breaker.cc:2409-2416) reports
 // its whole rect from its origin with no width: LocalRectToAbsoluteQuad makes a gfx::RectF of it (layout_text.cc:634-637,
-// physical_rect.h:173-175), whose size clamps a negative width to 0 (ui/gfx/geometry/size_f.h:30-31, :108).
+// physical_rect.h:173-175), whose size clamps a negative width to 0 (ui/gfx/geometry/size_f.h:30-31, :108, read in the
+// chromium-152 checkout: ui/gfx isn't in the 153 one).
 function rectOf(q: Quad, zoom: number): ExpectedRect {
   const left = css(q.left, zoom)
   const width = q.right < q.left ? 0 : f32(css(q.right, zoom) - left)

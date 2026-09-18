@@ -192,8 +192,8 @@ function prepareGaps(sh: Shaper): void {
         const detail = `${unknown ? 'whether the fonts have an opsz axis isn\'t given; ' : ''}${style.measuresAtCssSize ? SCALED_DETAIL : 'measured at the zoomed size'} (font_platform_data_mac.mm:170-178, probes-chrome correction 7)`
         for (const at of ranges()) addGap(p.gaps, 'optical-size', style.run, detail, at)
       }
-      // The renderer's font cache, not this text: the gap has no range, so it explains no line by where it is (probe
-      // critic-r3 blink-order: alone in a fresh process the DOM's widths are the same whether Canvas or the DOM asked first).
+      // The renderer's font cache, not this text: the gap has no range, so it explains no line by where it is. Alone in a
+      // fresh process the DOM's widths are the same whether Canvas or the DOM asked first (research/ROUND3-CRITIC.md item 1).
       if (style.measuresAtCssSize) addGap(p.gaps, 'page-history', style.run, PLATFORM_FONT_DETAIL)
     }
   }

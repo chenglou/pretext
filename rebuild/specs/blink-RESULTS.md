@@ -16,6 +16,189 @@ Baselines for transitions:
 - the triage population (research/MAIN-TRIAGE.md §2.1, Chrome small file, 8,933 cases): the charter triage rows
   (`.artifacts/charter-20260916/triage/runs/chrome/charter-file/small`), scored again with scorer 3.
 
+## Round 4b
+
+Pinned Chrome 153.0.8010.50, scorer 6, 2026-09-18, from the worktree branch `r4b-blink` on the merged round 4a tree
+(584e359). A trimmed round: defects that give wrong lines or wrong exact values without warning, and the headline
+configuration, which has no supplied font facts (`baselines/no-facts-predictor.ts`; the library asks Canvas what
+`src/measure/font-checks.ts` can answer). The checks are lab/README.md's tiers: `bun test rebuild`, the offline replay, and
+`rebuild/tests/browser-sets.ts` over the 13 sets (65,351 cases). Runs are under `.artifacts/lab/blink/r4b/`: `tier2/<name>`,
+`tier1/` (replay reports), `reference/` (private replay folders, below) and `tools/`.
+
+The frozen references describe round 3's library, and the no-facts one can't replay at all since the font checks ask
+questions it doesn't hold (65,351 of 65,351 cases). So the offline replay ran against private copies: the facts reference
+frozen again at 584e359, and a no-facts recording of this branch (`tier2/i1-no-facts`, both orders) packed and frozen into
+`reference/chrome-no-facts-r4b`, where all 65,351 cases replay exactly. A change then shows as the cases it moved.
+
+### Items
+
+1. **System UI text that failed under `page-history` without page history** (ROUND3-CRITIC item 1: 28 of 28 rows fail the same
+   alone in a fresh process; all are 16.8px). The cause is the platform font's size. `FontDescription::EffectiveFontSize`
+   floors the computed size to 1/100 px in float32 (`font_description.cc:271-282`), and it is the size the platform font is
+   made at and cached under (`font_cache_mac.mm`, `font_cache_key.h:53-68`). Canvas has no zoom, so the port's CSS-size font
+   is `floor(f32(S) × 100) / 100` and the DOM's is `floor(f32(S × zoom) × 100) / 100`: 16.8px is 16.79px and 33.59px, a
+   ratio of 2.0006, where 13.33px is 13.33px and 26.66px (in float32, `13.33f × 100` rounds to 1333 and `16.8f × 100` to
+   1679.9999). The optical size is the same on both sides: both set `opsz` from the specified size
+   (`font_platform_data_mac.mm:170-178`; `VariableAxisChangeEffective` compares clamped values, so Canvas's 16.79px font,
+   which Core Text made at the clamped 17, isn't cloned and the DOM's is), HarfBuzz's `ptem` is the specified size
+   (`harfbuzz_face.cc:639-648`), and Skia takes the `trak` table out of its advances (`SkCTFontCreateExactCopy.cpp:33-39`,
+   `:74`, read in the chromium-152 checkout; Skia isn't in the 153 one). So the DOM's advances are the CSS-size font's times
+   the ratio of the two platform font sizes, and `styleContexts` scales by that instead of the zoom. The critic's probe values
+   follow: Canvas gives `Hello world again and more` 204.680374px at 16.8px, whose 16.16 total times 33.59 / 16.79 is 26,207
+   LayoutUnits after the ceiling, 204.742188px, the DOM's width (times 2: 26,200 units, 204.6875px); 17.3px gives the DOM's
+   210.078125px the same way, and at 13.33px and 16px the ratio is 2. The ratio is kept as a float32, so its products with
+   Canvas's 16.16 totals are exact doubles and the pair and safe tests, which compare differences of measured totals with 0,
+   stay exact; `raw16Of` no longer rounds the product. Letter spacing in such a context is the CSS value times the zoom over
+   the ratio, so that the scaled total holds the DOM's spacing.
+   All 64 `rule/system-fonts-and-sizes` rows at 16.8px pass the four metrics in both configurations (lineCount 8, breaks 24,
+   widths 40 and painter 64 statuses moved to pass), and so do the critic's 28 rows run alone (`item1/critic-28-facts`).
+   - *What `page-history` says now.* The effect is real (the font cache key lacks the specified size the `opsz` axis is set
+     from, Chromium #489579956, rebuild/platform-bugs/LEDGER.md facet A), but it is a state of the renderer process, not of
+     this text. It is a paragraph gap without a range (src/model.ts: such a gap "concerns the environment or a font as a
+     whole"), so it covers no line by where it is, and the lab's both-orders and isolation protocols stay the check of whether
+     a row is history-dependent. It covers no row on any set now (round 3: 72 statuses).
+   - *What the scaled recipe is.* A stand-in: Blink truncates each glyph's advance to 1/65536 px at its own size
+     (`skia_text_metrics.cc:207-211`), so a sum of scaled advances can be a few units off the DOM's. It shows at sizes where
+     advances have a fraction of a unit: of 2,860 values under it at 13.33px, 4 are one LayoutUnit off in passing cases
+     (`c-3ec3cd2536bf85bf`: `o` is 1110 units natively and 1109 scaled), none at 13, 16.8, 17 and 20.5px. The layout reports
+     it as `optical-size` over the run, with the fact given too, so those values are limited, not predicted.
+2. **Pair adjustments whose side isn't known** (the font-checks owner's 43 rows; 72 on the tiers' sets: `rule/text-align`
+   64, `rule/in-word-breaks` 4, `rule/following-space` 2, `runs/split-word` 2). With no `pairKerning` fact the port puts a
+   pair adjustment on the first glyph, where the kern and kerx machine gives each glyph half (`hb-kern.hh:102-106`). The values
+   were limited already (`positionLimit`), but a line reported the condition only at its edges, so a width that differs
+   inside the line had no gap that touches it: the hanging space after a reshaped `LYAY` keeps its half of the kern with
+   `Y` (593 units natively, 640 predicted), and in `x AVAV…` every pair moves a share to its neighbour. `shapeOf` now reports
+   `unsafe-to-break` over the two clusters around every cluster boundary of a line whose position takes an adjustment
+   (`positionAdjust16`) that falls to the pair kerning rule (`adjustmentSide`: not HanKerning's, not beside a re-queued
+   U+3000) in a font without the fact. All 72 rows are covered; they still fail, because no Canvas measurement shows the side
+   (FACTS-FREE.md). It asks Canvas nothing new (0 new questions in the replay; memo hits rise by about 13%), and it costs
+   signal: `unsafe-to-break` fires on 10.15% of passing lines with no facts (4.93% before), lift 4.99 (8.89).
+3. **The headline configuration end to end** (no supplied facts, both orders, `tier2/i4-no-facts`, commit 0f64b3a):
+
+   | Metric | Pass | Fail, covered | Fail, open | Unobserved |
+   |---|---:|---:|---:|---:|
+   | lineCount | 65,007 (99.47%) | 344 | 0 | 0 |
+   | breaks | 64,937 (99.37%) | 414 | 0 | 0 |
+   | widths | 61,590 (99.02%) | 607 | 0 | 3,154 |
+   | painter | 59,055 (98.05%) | 1,169 | 3 | 5,124 |
+
+   No case is history-dependent. Passing cases that hold a wrong predicted value: 0 in both orders (2 before: Courier New's
+   lam before alef in an RTL item, below). 10.5% of values are predicted and 99.954% of them agree; the 265 that differ sit
+   in cases whose lines fail. With the lab's facts (forward, `tier2/i4-facts`): lineCount 65,071, breaks 65,034, widths 61,976
+   pass, no open prediction row, 5 open painter rows, and passing cases with a wrong predicted value 11 → 0 (below).
+
+Found on the way, each a wrong exact value without warning:
+
+- **A rect whose carets meet, in an RTL item** (`c-82fdb6df09ca942f`, `c-ba72f46bea4d347c`, no facts). The observation port
+  gave the left edge of a rect without width the start caret's limit. In an RTL item the left edge is the end caret: the port
+  gives Courier New's lam before alef no advance, natively the lam is half the ligature wide, and its x is the stand-in
+  caret between the letters. `localRect` now takes the left edge from the item's direction where the carets meet.
+- **A rect of negative width** (10 passing cases with facts: `suite/negative-space`, `suite/spacing-tail`,
+  `suite/space-context-emoji`, `runs/word-spacing-spans`). A hanging space under negative letter or word spacing is an item
+  of negative size (`UpdateShapeResult` doesn't clamp it, `line_breaker.cc:2409-2416`), and its whole rect goes through
+  `gfx::RectF`, whose size clamps a negative width to 0 (`ui/gfx/geometry/size_f.h:30-31`, `:108`; `layout_text.cc:634-637`).
+  The port reported −199 units where Chrome reports 0 at the same x.
+- **A box fragment made by reordering** (`c-7d2264227b2141ba`, `rule/nowrap-spans`). A span split in two on one line (its
+  hanging space goes to the line's left in an RTL block) gave the text fragment both paddings: the port copied the box's
+  edges into the fragment, where Blink copies the item and rect alone (`BoxData(other, start, end)`,
+  `inline_box_state.h:328-332`) and then moves the line-right edge to the last fragment. 9 code point x values and an
+  element rect were 512 units off.
+
+### Runs
+
+| Run | Configuration | Library | Against | Transitions from pass | Notes |
+|---|---|---|---|---:|---|
+| `tier2/i1-no-facts` | no facts, both orders, recorded | 72da3b4 (item 1) | round 3's reference ledger | 0 | 72 open widths, 4 open painter rows |
+| `tier2/i3-no-facts` | no facts, both orders, recorded | fba0805 (items 1, 2) | `i1-no-facts` | 0 | 72 open → covered; 149 transitions, all coverage |
+| `tier2/i3-facts` | facts, forward | fba0805 | round 3's reference ledger | 0 | system UI rows to pass; 11 passing cases with a wrong predicted value |
+| `tier2/i4-facts` | facts, forward | 0f64b3a | `i3-facts` | 0 | 1 transition (unobserved → pass); wrong predicted values in passing cases 0 |
+| `tier2/i4-no-facts` | no facts, both orders, recorded | 0f64b3a | `i3-no-facts` | 0 | 1 transition (unobserved → pass) |
+
+Offline replay of the final tree: with facts 2,373 cases differ from 584e359 (gaps 1,311, observation states 1,017, the 32
+system UI geometries, the 11 rect widths and the one box), no case asks a new question beyond the 362 the round 3 recording
+lacks. `bun test rebuild`: 689 pass.
+
+### Fresh sets
+
+The cap of 2 is used. Both orders, every generator kind.
+
+| Set | Configuration | Cases | Prediction failures | Covered | Open | History-dependent | Passing cases with a wrong predicted value | Values agreeing | Values predicted |
+|---|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| `r4b-blink-1` | no supplied facts | 11,153 | 135 | 135 | 0 | 0 | 0 | 99.983% | 13.4% |
+| `r4b-blink-2` | the lab's facts | 8,150 | 59 | 59 | 0 | 0 | 0 | 99.979% | 73.0% |
+
+No new class. Set 1's 40 system font rows at new widths pass every prediction metric, the 8 at 16.8px among them. One
+painter-only failure without a covered explanation in set 1 (`c-a478ac522795712e`, Courier New, one unit), none in set 2.
+`unsafe-to-break` fires on 9.93% of set 1's passing lines (lift 6.19) and 3.77% of set 2's.
+
+**Chrome's `Range.getClientRects()` hang came back** (round 4's bug report above). Set 1's part 2 stalled in both orders, in
+the round trips that hold `c-a3f33be07d5b57aa` (forward; `…我說不清。」`, 20px sans-serif, 12px wide, `overflow-wrap:
+break-word`) and `c-8957ae80bbdcdfdf` (reverse; `“引号”在…各不相同。`, 20px PingFang SC, 12px wide): `policy/zh-lang` cases
+in a block between half an em and one em wide, like round 3's `c-1fda71ce84fd9989`. Neither order reached the cases between
+them, so the five `policy/zh-lang` cases of that kind in the part went to `parts/excluded-native-hang.ndjson` (those two,
+`c-dba6b75cf18717f9`, `c-0009dd3739b3ce85`, `c-0c83aa4c797f9e6e`), unverified one by one, and the two changed jobs ran once
+and finished. Set 2's two such cases (`c-6893cc4de0825d6c`, `c-3229d7904410f2ae`) were set aside before its run. The
+second hanging text has no pair of closing marks, so round 4's reduction names less than the bug: 79 other cases of the two
+sets with a fullwidth mark in a block that narrow ran without a stall, `suite/maintained/kinsoku-units` with `」。」` in
+16px Hiragino Sans among them.
+
+### Known tail
+
+Not worked on in this round; for the ledger's backlog.
+
+- **`pairKerning` has no Canvas check.** The 72 rows above stay failures under `unsafe-to-break` with no facts:
+  `rule/text-align` 64 (`c-0f3ea3e4202d62d0`, `c-2ed8c1519b0bff81`, `c-07edc35c22f24f4d`, …), `rule/in-word-breaks`
+  `c-221292d7b03d9b88`, `c-40b62b718c49e524`, `c-63aa7548036970e9`, `c-d5d2808e238b8518`, `rule/following-space`
+  `c-71ad21a18a8a0713`, `c-8c90eb487b92aa73`, `runs/split-word` `c-638e24bb090f9fb0`, `c-c4af3814fc390dbd`. They pass with
+  the fact. The new in-line condition could be narrowed to pairs whose halves land in other LayoutUnits.
+- **Stand-ins inside a line under a known `pairKerning`** (the pair window differs from the wide one, or liga, clig and
+  calt change it) and beside a U+3000 without a coverage fact limit their values but report no gap inside the line, as the
+  unknown fact did before this round. No failing row is known.
+- **The scaled recipe's `optical-size` range is the whole run.** It could be the values within the truncation bound of a
+  LayoutUnit edge (one unit and the ratio per glyph). Rows that show the class: `c-3ec3cd2536bf85bf`, `c-6f9d2063f8bcb5c8`,
+  `c-c20059999b74e9ca`, `c-dd72cd90c56b7d64` (13.33px, one LayoutUnit, passing). Letter spacing under the recipe is Canvas's
+  at the CSS size scaled, up to the ratio in units per character off; no lab row has it at a size whose ratio isn't the zoom.
+- **`optical-size` with the fact unknown** still covers by position in fonts the font checks can't settle (a primary family
+  without Latin letters, the system UI font): `c-56d1c38e222bf938` (`runs/split-word`, breaks), `c-906c6bc491c83c9d`,
+  `c-a52d0bfda6f53a43`, `c-f1877e45ed22478e` (`runs/bidi-runs`, widths), each with `glyph-clusters`.
+- **The library's own Canvas fonts and the platform font cache.** Measuring the system UI font at CSS size S makes the
+  platform font that DOM text of S ÷ zoom px then takes (Chromium #489579956), and DOM text made first decides what Canvas
+  measures at S. The lab has no pair of system UI sizes S and S × zoom in one process; the font-checks owner's note on the
+  16px check font is the same hazard.
+- **Weak coverage, no facts:** 15 failures are covered only by conditions with a lift below 2 (`glyph-clusters` 14,
+  `tab-stops` 1); `script-context` fires on 32% of passing lines and `glyph-clusters` on 11%, both waiting for facts Canvas
+  doesn't give (`scriptLookups`, ligatures).
+- **Painter rows without a covered explanation** (no owner this round): no facts `c-a8c35abaa8a6f148` (`ws/text-nodes`),
+  `c-333dbe214aac1431` (`suite/hanging-MEDIUM`), `c-fa9b31d5a0b9eaf0` (`suite/missing-THIN`); with facts those and
+  `c-f98e572a561533c6` (`runs/span-at-space`), `c-8a054eb23d6b5e16` (`suite/rejected-control`); fresh `c-a478ac522795712e`.
+- **Chrome's hang** isn't characterized: the lab needs a rule that sets such cases aside before a run, or a native
+  observation that survives it.
+- **Citations outside the 153 sparse checkout:** `ui/gfx/geometry/size_f.h` and Skia's `SkCTFontCreateExactCopy.cpp` were
+  read in the chromium-152 checkout.
+- From round 4, unchanged: `positionAdjust16` stays a registered heuristic; the 4 ProbeShantell and 3 `suite/space` rows
+  fail under `in-word-prefix`; U+FFFC and clusters split across spans stay under `font-fallback`.
+
+### Gap firing on passing lines, no supplied facts (all 13 sets, 225,771 passing lines)
+
+| Condition | Passing lines | Failing lines | Lift | Covers |
+|---|---:|---:|---:|---:|
+| `script-context` | 32.39% | 52.48% | 1.62 | 548 |
+| `glyph-clusters` | 10.96% | 16.56% | 1.51 | 171 |
+| `unsafe-to-break` | 10.15% | 50.61% | 4.99 | 478 |
+| `in-word-prefix` | 3.66% | 4.58% | 1.25 | 38 |
+| `optical-size` | 3.45% | 0.37% | 0.11 | 4 |
+| `soft-hyphen-shaping` | 1.38% | 4.58% | 3.33 | 20 |
+| `tab-stops` | 1.37% | 0.09% | 0.07 | 1 |
+| `float32-precision` | 1.32% | 0 | 0 | 0 |
+| `font-fallback` | 0.71% | 51.36% | 72.42 | 541 |
+| `control-character-width` | 0.40% | 0.09% | 0.24 | 0 |
+| `han-kerning` | 0.35% | 0 | 0 | 0 |
+| `joining-technology` | 0.05% | 0.19% | 3.64 | 2 |
+
+1,021 prediction failures, all covered, 15 of them only by conditions with a lift below 2 (`glyph-clusters` 14, `tab-stops`
+1). `page-history` fires on no line: it has no range. On the development sets alone `unsafe-to-break` is 12.56% and
+`script-context` 45.36% (`bun rebuild/tests/ledger.ts conditions <ledger> --groups=development`).
+
 ## Round 4
 
 Pinned Chrome 153.0.8010.50, scorer 5, forward order, 2026-09-18, from the worktree branch `r4-blink`. Every job ran a frozen
