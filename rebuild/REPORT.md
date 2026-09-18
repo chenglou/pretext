@@ -553,6 +553,14 @@ held-out cases, traced node by node against the observation port's predicted nod
 - Sealed-2, counts only (`sealed-residual.ts`): 5 of the 8 rows have this signature (widths only, one node rect, exactly
   1 au, painted at the native width). The fresh runs sets add 5 rows with it, in two strings F7 didn't probe
   (`LT: kerning pairs` in bold 10px Helvetica Neue, −1; an Arabic run in 10px Geeza Pro at weight 500, +1).
+- Status in ceiling round 3's fix phase (specs/gecko-RESULTS.md "Ceiling round 3", the owner's forward runs, not evaluated
+  yet): the class is reproduced. A detached `<canvas>` element whose font size is the DOM's device size has the page's app
+  units per device pixel and the DOM's font cache (CanvasRenderingContext2D.cpp:4256-4269, :7132-7155), and its width
+  × apd equals the DOM's node width on 243 of 243 probed units, among them all 14 where the OffscreenCanvas is 1 au off,
+  the `LT:` and weight 500 strings included (probe F13). F7's `<canvas>` element was at the CSS size. The Gecko port
+  measures there now, and the class has 0 members on the development, held-out and family sets and on 15 fresh sets
+  (245,231 cases). The mechanism is verified by simulation for `modern` (the `n` after the kern split is 508.4999 au at
+  the DOM's scale and 508.5004 au at Canvas's); the Geeza Pro and Thonburi members are reproduced by measurement only.
 
 **Open, Gecko: a heart after a keycap mark, split across spans, 7 au narrower natively.** The other 3 sealed-2 rows fail
 widths only, with two node rects each 8 au narrower natively than predicted and the line painted at the native width: not
@@ -564,6 +572,11 @@ in bold 14px Helvetica Neue: 786 au natively, 793 predicted, no gap on the line,
 can't be confirmed without opening them. Not probed: whether Canvas can see the difference decides between a port bug and
 a gap condition that is too narrow. Open for the Gecko owner. On the four fresh sets Firefox has 160
 prediction-failing cases of 10,319 and 7 without a line-local gap: these 2 and the 5 with the 1 au signature.
+Status in ceiling round 3's fix phase: it is synthetic bold. The heart comes from a fallback font without a bold face, and
+`GetSyntheticBoldOffset` is 0.25 + 0.75 × size / 48 device px below 48px (gfxFont.h:1899-1904), rounded per glyph at the
+apd: 21 au at the DOM's 28 device px, 28 au at Canvas's 14px. Probe F14: DOM 786 au, OffscreenCanvas 793, the canvas
+element at the device size 786, and equal on 126 of 126 rows. Predicted since the port measures on that element; whether
+the sealed-2 rows are this class stays unknown.
 
 **Open, Blink: six fresh runs rows, two classes.** Chrome has no failure without a line-local gap on the development,
 held-out and sealed-2 runs sets (7,738 cases), and 6 of 48 failing on the fresh ones (10,319 cases;
@@ -752,6 +765,14 @@ Gecko (development 25,267 cases, held-out 09-16 14,988, sealed-2 15,068; predict
   `font-fallback` alone covers 20 `rule/hyphen-classes` failures there (lift 1.7).
 - `in-word-prefix` covers 989 of the 1,013 development prediction failures, 974 of them alone: nearly every Firefox width
   failure is a break inside a joined or kerned word.
+- Status in ceiling round 3's fix phase (the owner's forward runs under scorer 5, specs/gecko-RESULTS.md; this table is
+  round 2's): firing on passing development lines went from 12.00% to 4.24% for `in-word-prefix` (failing lines 98.79% →
+  99.78%), 9.90% to 0.01% for `glyph-clusters` and 0.06% to 0.01% for `font-fallback`; `bitmap-emoji-size` and
+  `optical-size` aren't reported on the canvas element; `page-history` was widened to every U+FFFD and to the emoji
+  font-matching state and went from 0.01% to 0.26%, with a lift of 0.85 on the development sets. Development prediction
+  failures fell from 1,013 to 457, all covered; 394 of the 450 failing suite-sample cases are the invisible-character
+  families' joined beh letters in 16px Amiri around a soft hyphen, whose two sides measured with U+200D don't add up to the
+  unit.
 
 WebKit, webkit-host (development 25,356 cases, held-out 09-16 15,069, sealed-2 15,067; prediction-failing 210 / 261 / 195):
 
@@ -808,7 +829,8 @@ From source or inference only:
 - page zoom in all browsers, a physical DPR 1 display, and forced DPR 1 or other app-unit families;
 - the observation ports' rules, checked only through native rects: the rows reproduce 93.4% to 99.95% of predicted values
   (§2.2);
-- whether Canvas can see Gecko's heart-after-keycap difference (§2.8), and the Blink triage case `c-8c84627af834611f`;
+- whether Canvas can see Gecko's heart-after-keycap difference (§2.8; answered in ceiling round 3: a canvas element at the
+  device size does, probe F14), and the Blink triage case `c-8c84627af834611f`;
 - Chrome 153's element.cc and locale_settings_mac.grd citations, still read at 152.
 
 ## 6. Known remaining failure classes
@@ -842,6 +864,15 @@ Gecko:
   680 line counts and 284 widths; `joining` 56 of 736 and `fit-bound` 19 of 360.
 - **Device-size emoji** (`bitmap-emoji-size`), and the heart after a keycap mark that it doesn't reach (§2.8, open).
 - **Residual: one shaping unit 1 au off** (§2.8).
+- Status in ceiling round 3's fix phase, not evaluated yet (specs/gecko-RESULTS.md "Ceiling round 3"): the two classes
+  above and `optical-size` are predicted through the canvas element at the device size; `font-size-quantization` stays
+  (the element keeps 7 significant bits too) and costs 24 `system-fonts-and-sizes` cases that passed by accident. Left
+  under `in-word-prefix`: joined letters whose sides don't add up (Amiri, Noto Nastaliq Urdu), odd kern ties, marked
+  ligature groups in fonts that aren't OpenType-shaped. New: a cluster split between its marks across spans in Geeza Pro
+  gives an unbounded frame natively (probe F18, untraced; 3 held-out and 6 fresh rows, counted covered by
+  `in-word-prefix`); fresh set 15's open class, a tab after a frame that starts inside a cluster; 30 passing suite cases
+  with a wrong predicted value (Myanmar U+1038, a Noto Nastaliq in-word position), and on some fresh sets about 100 more
+  under the emoji `page-history` range, which the port doesn't limit.
 - **Painter:** development suite 1,646 painter failures, most on lines that fail widths; `text-align` justify with a trimmed
   space 32 (DESIGN §7).
 - **History dependence:** development 123, held-out 09-16 217, sealed-2 122 cases, all in the suite samples.
@@ -872,7 +903,10 @@ WebKit:
    minutes per WebContent process, or a visible window) and rerun the two unfinished files after that and after any Safari
    or macOS update.
 2. **Gecko in-word recipe** (gecko-shortcut-audit D1). Unchanged: removed, under `in-word-prefix`. **Recommendation:** keep it
-   removed with the gap named.
+   removed with the gap named. Ceiling round 3's fix phase brought U+200D back from source, not from scores: U+200D is
+   Join_Causing, both sides of an offset between joined letters are measured with it, and the position is exact only where
+   the two sides add up to the unit (probe F15: 1,013 of 1,015 such cuts, the other two a ligature the ink test sees);
+   elsewhere it stays a stand-in under `in-word-prefix`.
 3. **Browser-process languages.** Recorded and given in all three browsers; Gecko now measures `lang=""` runs under the
    given `regionalPrefsLocale`, and webkit-host's list comes from WebKit's own steps. Left: Chrome's accept languages have
    no input, and only Chrome ran under a second locale. **Recommendation:** unchanged.
@@ -904,7 +938,10 @@ WebKit:
     **Recommendation:** the architect decides between a gap range for cluster geometry, separate from the break-decision
     gap, and leaving those positions out of the engine-true output.
 12. **Gecko's 1 au class.** Verified as a residual class (§2.8). **Recommendation:** keep it without a gap, reported as a
-    class with its signature, and let the scorer count the signature apart so it never hides another width bug.
+    class with its signature, and let the scorer count the signature apart so it never hides another width bug. Ceiling
+    round 3's fix phase reproduces it on a detached `<canvas>` element at the device font size (§2.8). **Open decision:**
+    whether the library may measure there. It needs `document`, so a worker falls back to the OffscreenCanvas and the
+    class; it shares the DOM's font groups, and no round 3 run checked history dependence in both orders.
 13. **Costs.** Record only, as tentpole 8 says. Calls rose in all three engines in round 2 (§3).
 14. **API.** Open (tentpole 8).
 15. **UI and system language facts** can't be read from page APIs. **Recommendation:** keep them explicit inputs that report

@@ -110,9 +110,10 @@ evaluation of 2026-09-17 (REPORT.md §2-§7):
   2026-09-16 held-out sets (CHARTER-CRITIC item 17); G0 is still keyed on user agents and scorer 1.
 - Found in the charter evaluation, with their status now:
   - Removed: the browser-process languages are recorded per row and given to the library (Chrome `uiLanguage`, Firefox
-    `regionalPrefsLocale`, webkit-host `preferredLanguages` and ICU default locale). Left: Gecko reports `ui-language` for
-    every `lang=""` run even when `regionalPrefsLocale` is given, `contentLanguage` is read only by Blink, Chrome's accept
-    languages have no input, and WebKit's full preferred-language list isn't settled (tentpole 6).
+    `regionalPrefsLocale`, webkit-host `preferredLanguages` and ICU default locale). Since ceiling round 2 Gecko measures
+    `lang=""` runs under `regionalPrefsLocale` and reports `ui-language` only where it isn't given (prepare.ts;
+    nsFontCache.cpp:61-63). Left: `contentLanguage` is read only by Blink, Chrome's accept languages have no input, and
+    WebKit's full preferred-language list isn't settled (tentpole 6).
   - Still: a line whose WebKit `contentWidth` isn't the union of its boxes is marked unobserved by a scorer rule, not by a
     ported engine rule: 243 development, 261 held-out 09-16 and 244 sealed-2 cases in ceiling round 2 (tentpole 2).
   - Still: native lines across nodes come from vertical-centre grouping, a named observer assumption (scorer 3 places a
@@ -148,7 +149,8 @@ evaluation of 2026-09-17 (REPORT.md §2-§7):
     script (fixed from gfxTextRun.cpp:2744-2747, probe F8); the ligature is `f` taking half of `fi` at an emergency break,
     now reported as `in-word-prefix` where the clusters around the break measure differently with ligatures off (probe
     F9); the 1 au class is verified (probe F7) and has no Canvas-observable condition, so it stays a failure without a gap,
-    reported as a residual class since the round 2 evaluation (below).
+    reported as a residual class since the round 2 evaluation (below). Removed in ceiling round 3: a canvas element at the
+    device font size reproduces the 1 au class, and the ligature is predicted by shares ("Gecko, ceiling round 3" below).
   - CHARTER-CRITIC items since resolved: 1 (WebKit's coverage recipe reports `font-fallback`), 8 and 9 (quoted family
     names), 12 (process languages given). Still open: 2, 3, 4 (library citations at Chromium 152; in ceiling round 2 Blink's
     V8 and HarfBuzz citations were read again at Chrome 153's pins 6b96683d and dfdc088c, and element.cc and
@@ -156,14 +158,16 @@ evaluation of 2026-09-17 (REPORT.md §2-§7):
 - Found in the ceiling round 2 evaluation (REPORT.md §2, 2026-09-17):
   - Gecko's 1 au class is a residual class, not a gap and not an open model bug: each of its 14 development and held-out
     rows has one node rect exactly 1 au off in one of probe F7's three strings, and the DOM paints the predicted line at
-    the native width (REPORT §2.8). It stays without a Canvas-observable condition (tentpole 3).
+    the native width (REPORT §2.8). It stays without a Canvas-observable condition (tentpole 3). Removed in ceiling round
+    3 where the page can create a `<canvas>` element; it stays a class of the OffscreenCanvas fallback (below).
   - Blink reports positions inside joined and ligated words as exact where Canvas prefix widths can't give them. Round 2
     narrowed `in-word-prefix` to break decisions, and the observation port's limited state went with it: 2,030 development
     cases that pass lineCount, breaks and widths hold a predicted code point x or width that differs from the browser
     (tentpoles 1 to 3).
   - Gecko: a heart after a keycap mark, split across spans (`⃣❤` in bold 14px Helvetica Neue), is 7 au narrower natively
     with no gap on the line, found on fresh development sets after three sealed-2 rows showed widths 8 au off outside the
-    1 au signature. Not probed (tentpole 3).
+    1 au signature. Not probed (tentpole 3). Removed in ceiling round 3: it is synthetic bold, whose offset isn't linear in
+    the device size (gfxFont.h:1899-1904, probe F14), and the canvas element at the device size adds the DOM's.
   - WebKit's `page-history` condition misses a line that page history moves: `c-66ae4ab7d56cb0ae` passes alone in a fresh
     process and fails in both orders of its set, so the two-order protocol can't see it either (tentpoles 2, 3).
   - Line-local gaps that fire on a large share of passing cases: Blink `script-context` on 76% of the development cases,
@@ -210,3 +214,40 @@ evaluation of 2026-09-17 (REPORT.md §2-§7):
     position is marked as a stand-in and a line edge taken from it reports `unsafe-to-break`.
   - Still: the ligature facts don't settle ligatures that form in some contexts only (Geeza Pro lam-meem and lam-lam-heh,
     Courier New `لله` and `ريال`); their positions stay stand-ins and their lines report `glyph-clusters`.
+- Gecko, ceiling round 3 (specs/gecko-RESULTS.md "Ceiling round 3"; the owner was stopped after fresh set 15, and its
+  write-up was done afterwards):
+  - Removed: the 1 au residual class and the heart after a keycap mark. Where the page can create a `<canvas>` element, the
+    port measures on a detached one at the DOM's device font size, whose text runs have the page's app units per device
+    pixel and whose fonts come from the DOM's font cache (CanvasRenderingContext2D.cpp:4256-4269, :4353, :7132-7155). It
+    equals the DOM on 243 of 243 probed units and 126 of 126 synthetic bold rows (probes F13, F14), and the emoji
+    device-size recipe, `bitmap-emoji-size`, `optical-size` and the U+2007 and U+2008 gap go with it. **A decision for the
+    maintainer** (tentpoles 3, 6): the measurement needs `document`, so a worker falls back to the OffscreenCanvas with
+    round 2's gaps and the two classes unnamed, a path the lab doesn't run; the element shares the DOM's font groups, and
+    no run of round 3 checked history dependence in both orders; the element quantizes 13.33px to 13.3833px where the
+    OffscreenCanvas had 13.375px, and 24 `rule/system-fonts-and-sizes` cases fail under `font-size-quantization` that
+    passed by accident before.
+  - Removed: `in-word-prefix` reported wherever letters join or a pair kerns. Positions between joined letters (both sides
+    measured with U+200D), even and odd kern splits, ligature group shares and the letter spacing rules around clusters
+    and ligature groups are predictions from source, and the observation port limits only what the layout marks as a
+    stand-in: predicted values went from 29% to 46% of all values to 91% to 99.8%, at 99.88% to 100% agreement on the
+    defined sets. `in-word-prefix` fires on 4.24% of passing development lines (round 2: 12.00%), `glyph-clusters` on
+    0.01% (9.90%), the emergency-break `font-fallback` on none with the coverage fact.
+  - Still, new: **a probe verdict without a source trace.** A grapheme cluster split between its two marks across spans in
+    Geeza Pro gives a frame 2^30 + 56 au wide natively and moves the word to its own line (probe F18): 3 held-out and 6
+    fresh rows. They count as covered by `in-word-prefix` at the frame edge inside the cluster, whose source reading
+    doesn't say that. A Firefox bug candidate (tentpoles 3, 4).
+  - Still, new: `page-history` was widened to every U+FFFD (the process's cached fallback family,
+    gfxPlatformFontList.cpp:1244-1268, :1328-1330) and to every emoji-capable cluster that measures differently in the
+    run's context and in "Apple Color Emoji" alone (font matching's state, gfxTextRun.cpp:4003-4005, :3559-3569). It fires
+    on 0.26% of passing development lines with a lift of 0.85 there (round 2: 0.01%), and no both-orders run backs it yet.
+    The observation port doesn't limit values under it or under the cursive letter spacing `font-fallback`: fresh sets 2,
+    11 and 15 hold 121, 94 and 132 passing cases with a wrong predicted value (tentpoles 2, 3).
+  - Still, new: assumptions and constants without a source reading. The suffix-side in-word recipe for clusters without
+    joining forms came in for cost after a stalled job, and rests on such a cluster shaping alone as it does after its
+    neighbour; U+200C is appended to a lone mirrored neutral only, after a held-out row showed a lone mark shaping
+    otherwise with it; the odd-kerning recipe needs a context at 8 times the size or more; the port's `float32-precision`
+    bound of 2^16 device px is derived for 30 app units per device pixel (tentpole 3).
+  - Still: passing cases with a wrong predicted value on the defined sets, 24 Myanmar corpus cases (U+1038 is a cluster
+    start natively) and 6 Noto Nastaliq Urdu ones (one in-word position 1 au off where the sides add up); fresh set 15's
+    open class (a tab after a frame that starts inside a cluster, `CalcTabWidths`, nsTextFrame.cpp:4349-4357, read and not
+    ported); round 3's Gecko rules aren't in the rule registry, and probes F7 to F19 give no facts (tentpoles 2, 4).

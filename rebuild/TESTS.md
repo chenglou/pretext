@@ -327,7 +327,7 @@ Per release, `bash rebuild/tests/rerun-probes.sh <browser> <previous facts file>
 - extracts facts under the build the runner records, and refuses sets that ran different builds;
 - `facts.ts release` writes `rebuild/facts/<engine>/<new build>.ndjson` with `holdsIn` carried forward.
 
-A fact's `spec` is the probe's label up to a colon, as a rule's probe entry is read, so probes labelled `gecko-port F12: how pair kerning divides` join rules citing `gecko-port F12`. The round 2 Gecko probes (F7 to F12) and round 3's still return raw values without checks, so they give no facts yet.
+A fact's `spec` is the probe's label up to a colon, as a rule's probe entry is read, so probes labelled `gecko-port F12: how pair kerning divides` join rules citing `gecko-port F12`. The round 2 Gecko probes (F7 to F12) and round 3's (F13 to F19, `rebuild/probes/gecko-round3.ts`) still return raw values without checks, so they give no facts yet; their verdicts, computed from the output files, are in specs/gecko-RESULTS.md ("Ceiling round 3", "Probes"), and F18 and F19 were each run more than once into one output folder, which holds the last run.
 
 A flip or a missing fact exits 1. Either the browser changed (read the new source, update specs and port), or the claim depends on process history (narrow its scope to fresh processes).
 

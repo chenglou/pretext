@@ -8,7 +8,381 @@ background. Rows, summaries and per-case scores are under `.artifacts/lab/gecko/
 (`.artifacts/lab/rescore-v3-20260917/firefox/`, and `.artifacts/lab/gecko/rescore-families-v3/` for the rule families), are
 the baseline every transition below is counted against.
 
-Earlier rounds (1-11, 2026-09-16) and their failure classes are in this file's git history.
+Earlier rounds (1-11, 2026-09-16) and their failure classes are in this file's git history. Each ceiling round below names
+its own scorer, baseline and run folders.
+
+## Ceiling round 3, 2026-09-17 to 09-18
+
+Round 3's definition (the orchestrator's brief, research/ROUND2-CRITIC.md): a gap covers a failing line only where its range
+touches a unit whose predicted geometry differs from the native one, or, for a pure break decision, the text between the
+predicted and the native break. Scores come from `rebuild/lab/score.ts` version 5. The baseline is round 2's Firefox rows
+re-scored with it (`.artifacts/lab/gecko/r3-base`, forward against reverse). Every run of this round is forward only, in
+the lab's pinned copy of Firefox 156.0 from 20:45 on (probes F13 to F16 ran in `/Applications/Firefox.app`, the same
+build), in parallel parts under the lock's slots. Regression runs over the 11 defined sets are
+`.artifacts/lab/gecko/r3-<n>/<set>/part<k>` (`r3-18` is a run whose bundle failed, below); fresh sets are
+`.artifacts/lab/fresh/firefox/r3-gecko-<n>`.
+
+The owner was stopped by the orchestrator at 00:42 on 09-18, past the 8-set cap, while reading source for fresh set 15's
+open class. Its last source edit (07:34 UTC) was followed by the regression run `r3-24` and by fresh sets 14 and 15, all
+three with one library bundle (sha256 `80b6b4b8004c…`), and nothing was edited afterwards. This section was written after
+the stop from the owner's transcript, run folders and diff; the re-counts and the re-observation marked "afterwards" are the
+writer's, with the same bundle.
+
+### Probes
+
+`rebuild/probes/gecko-round3.ts`, Firefox 156.0 at DPR 2, measurement only, one job each under the lock. They return raw
+values without checks, so they give no facts yet (TESTS.md §7).
+
+- **F13, a canvas element at the device font size** (`.artifacts/probes/gecko/round3`). Per unit: the DOM box, an
+  OffscreenCanvas and a detached `<canvas>` element at the CSS size, and both at the device size.
+  - The element at the device size, width × apd, equals the DOM's node width on 243 of 243 units (15 font lists, among them
+    `system-ui`, `-apple-system`, Apple Color Emoji clusters and fallback text).
+  - The OffscreenCanvas at the CSS size is 1 au off on 14 of them, all reproduced by the element: `ووفقك`, `وأعانك` and
+    `وما` in 10px Geeza Pro at weights 300, 400 and 500, three Thai strings in 500 32px Thonburi, `modern` in 15px
+    Helvetica Neue and `LT:` in bold 10px Helvetica Neue. It is 240 to 300 au off on bitmap emoji and 88 to 600 au off on
+    the system font's optical sizes.
+- **F14, synthetic bold** (same folder). `⃣❤` and `❤` in bold 14px Helvetica Neue: DOM 786 au, OffscreenCanvas 793, the
+  element at the device size 786; at 16px 897, 904 and 897. Equal on 126 of 126 rows (9 sizes, 5 families).
+  `GetSyntheticBoldOffset` is 0.25 + 0.75 × size / 48 device px below 48px (gfxFont.h:1899-1904), added per glyph as
+  `NS_round(offset × apd)` (gfxFont.cpp:3551-3562, :901-939): 21 au at the DOM's 28 device px and 28 au at Canvas's 14px.
+- **F15, in-word advances** (`round3-f15`). 300 words in 11 fonts, every cluster boundary: the DOM's advance before the cut
+  against W(prefix), W(unit) − W(suffix) and the same two with U+200D at the cut. At the 1,015 cuts whose two sides add up
+  to the unit (475 between joined letters, measured with U+200D) the prefix equals the DOM's advance at 1,013; the other
+  two are Helvetica Neue's `fi`, as wide as its parts (F9).
+- **F16, how an odd pair adjustment divides** (`round3-f16`). Verdana, Times New Roman, Helvetica and Helvetica Neue: 92 of
+  92 even adjustments divide in halves. Of 37 odd ones, the unrounded advances read at size × 2^k give the DOM's first
+  advance in 36; one is a tie (16px Verdana `xe`, 562.5 au).
+- **F17, ligature groups through Canvas letter spacing** (`round3-f17`). (W at 2px − W at 0.001px) over 2px counts a
+  unit's ligature groups. Fewer groups than clusters exactly in the 25 of 150 words whose DOM code point rects show equal
+  shares under required shaping: lam-alef in Geeza Pro, Arial, Times New Roman and Courier New, Geeza Pro's lam-meem and
+  lam lam heh, U+0E24 U+0E32 in Thonburi.
+- **F18, a grapheme cluster split across two spans of one text run** (`round3-f18`, run twice into one folder). Reh with
+  fatha in one span and its shadda in the next, 20px Geeza Pro: natively the continuation holding the base is
+  1,073,741,880 au wide (2^30 + 56) and the word goes to a line of its own though it fits. It needs the cut between the
+  cluster's two marks in Geeza Pro (the probe's `Amiri` row loaded no web font, so it is Geeza Pro too); a cut before both
+  marks, Arial, Times New Roman, Latin, Thai, Devanagari and an emoji ZWJ sequence don't show it. Word spacing,
+  `white-space`, direction and the text before the word don't matter. **Not traced to source.** A Firefox bug candidate.
+- **F19, letter spacing on a cursive cluster with a mark** (`round3-f19`, run three times into one folder). Under 4px of
+  letter spacing beh with U+0301 stays 576 au in Courier New and 685 au in Times New Roman, which have both characters,
+  and grows from 934 to 1174 au in Geeza Pro, which lacks U+0301. Syriac, N'Ko, Mongolian and Hanifi Rohingya letters,
+  all drawn by fallback fonts, grow with U+0301 after them and not with a mark of their own script (U+0730, U+07EB).
+
+### The brief's items
+
+1. **The 1 au class: reproduced, so it is predicted and no longer residual.**
+   - Source: the DOM's text run shapes at the device font size and rounds each glyph at the page's apd
+     (gfxHarfBuzzShaper.cpp:1559, :1699-1702). An OffscreenCanvas shapes at the CSS size at apd 60 with a font group of its
+     own (CanvasRenderingContext2D.cpp:4423-4492, :7135-7140). A `<canvas>` element, detached or not, takes its font from
+     the pres context's font cache at the canvas size over the CSS-to-device scale (:4256-4269, :4353), and its text run
+     has the page's apd (:7132-7155), so at the DOM's device size it runs the DOM's own arithmetic.
+     `gfx.font_rendering.coretext.enabled` is false (StaticPrefList.yaml:7849-7851), so HarfBuzz shapes Geeza Pro,
+     Thonburi and Helvetica Neue through morx, kerx and kern.
+   - Mechanism, verified for one member by simulation from the font's units (scratch `sim1.ts`): in `modern` the `n` after
+     the kern split is 508.4999 au at the DOM's scale and 508.5004 au at Canvas's, so the sums are 3118 and 3119, as F7
+     measured. The kern's 16.16 rounding differs at the two scales (hb-font.hh `em_mult`; hb-kern.hh:102-106). The Geeza
+     Pro and Thonburi members weren't simulated; F13 reproduces them by measurement.
+   - Tried and refuted before: an OffscreenCanvas at the device size (the round 2 critic's probe), and canvases at the CSS
+     size (F7).
+   - Counts: the residual class has 0 members on the 11 defined sets and on all 15 fresh sets. `lab/residual-classes.json`
+     still registers it with the mechanism as inferred (the lab owner's file). It stays a class of the OffscreenCanvas
+     fallback (below).
+2. **The keycap-heart class: synthetic bold, predicted** (F14). `c-a2661c5b12f20aec` and `c-e69a2cc0039e247a`'s node is a
+   fallback font's heart under a bold font with no bold face for it. The element canvas at the device size adds the DOM's
+   offset. Whether sealed-2's three rows are this class stays unknown; the set stays sealed.
+3. **`in-word-prefix` sub-classes turned into predictions**, each from source (next section): letters joined across the
+   offset, pair kerning (even, odd, and GPOS's first-advance), ligature groups by shares, the whole-group scan, letter
+   spacing at a frame's start inside a cluster and at a ligature group's end, the space after U+200D, a lone mirrored
+   neutral.
+   - Firefox suite widths, forward, pass ÷ (pass + fail): development 95.51% → 97.87% (19,438 of 19,862), held-out 09-16
+     92.37% → 95.99% (9,575 of 9,975), rule families 93.39% → 96.01%. Sealed sets weren't run.
+   - `in-word-prefix` on passing development lines: 12.00% → 4.24%, and on failing lines 98.79% → 99.78% (lift 8.24 →
+     23.54). On the way it was 6.96% (`r3-6`), 3.07% (`r3-11`) and 2.65% (`r3-16`); `r3-17` widened it to 4.23% (marked
+     ligature groups in fonts that aren't OpenType-shaped, and units that start inside a cluster, below).
+   - What is left under it on the development suite sample, 449 of 450 failing cases: 394 are the `suite/U+<character>`
+     families' joined beh letters in 16px Amiri around a soft hyphen, where the two sides measured with U+200D don't add
+     up to the unit (W(prefix U+200D) + W(U+200D suffix) = 1030 au, W(unit) = 978 au in `c-064d075bb42710bc`). The critic
+     traced that class, and source backs the gap there.
+   - The observation port limits what the layout marks: `GeckoCharacter.standInBefore`, `GeckoTextFrame.standInAtEnd` and
+     `advancesStandIn` (model.ts). A point is limited where an end of its advance sum is a stand-in, a rect's width where
+     its frame's place on the line is one, and element rects likewise. Predicted values are now 91% to 99.8% of all values
+     (round 2: 29% to 46%), "Observation agreement" below.
+4. **A history condition for Firefox: two are named, neither checked in both orders.**
+   - `page-history` on every U+FFFD: outside the listed fonts it takes the family the process cached the first time system
+     fallback placed one (`mReplacementCharFallbackFamily`, gfxPlatformFontList.cpp:1244-1268, :1328-1330). Which fonts
+     cover U+FFFD isn't a Canvas fact, so every U+FFFD reports it: 37 development cases, 33 of them passing.
+   - `page-history` on a cluster with the Emoji property (first code point U+0100 or above, not text-only) that measures
+     differently, in width or ink box, in the run's context and in `"Apple Color Emoji"` alone: which of two fonts draws it
+     follows font matching's state (the preferred-font cache, gfxTextRun.cpp:4003-4005, :4038-4040, :4083-4086; the
+     previous character's font before system fallback, :3559-3569; a color font kept as the candidate, :3385-3390). It
+     replaces round 2's pinned-emoji `font-fallback` and, on the element canvas, `bitmap-emoji-size`: 131 development
+     cases, 130 of them passing.
+   - Found on the way: measuring a string with U+FE0E pins text fonts for the document's later text (held-out
+     `c-6403c221b98778d6` lost in `r3-8`, back in `r3-9`), so the port never adds U+FE0E.
+   - `page-history` fires on 0.26% of passing development lines (round 2: 0.01%) and 2 failing ones, a lift of 0.85. On
+     fresh set 15 it is 0.26% of passing and 3.76% of failing lines (lift 14.55); on sets 12 to 14, 0.00% to 0.01%.
+   - Not done: no run of this round checked history dependence (one order only), and the element canvas shares the DOM's
+     font groups, which the OffscreenCanvas didn't. Round 2's 123 development and 217 held-out history-dependent suite
+     cases are scored as ordinary cases in every table here.
+5. **Emergency-break `font-fallback`: settled by the coverage fact.** `listedFontOf` (fonts.ts) says which listed family
+   draws the letter before the hyphen, the hyphen and the letter after it (gfxFont.cpp:741-753, gfxTextRun.cpp:2930-3000).
+   One family keeps the break, two families or a listed one beside the engine's fallback remove it, and only where the
+   facts don't say, or all three fall back, the line reports `font-fallback`.
+   - `rule/hyphen-classes`: 12 line counts and 20 breaks converted (756 of 756 pass both; 68 cases reported the gap in
+     round 2, 0 now). `font-fallback` on passing development lines: 0.06% → 0.01%, and those 6 lines are the new cursive
+     letter spacing condition (below).
+6. **The kerning split's odd case: settled** (F16, hb-kern.hh:102-106). kern1 = kern >> 1 goes on the first glyph and the
+   rest on the second, in 16.16 device px, and each glyph is then rounded to app units, so which glyph takes the odd unit
+   follows the fractions of the two advances. Canvas shows them at size × 2^k (up to gfxFont's 2000px clamp,
+   gfxFont.cpp:4956-4960). `pairKernedShare` computes both terms and counts them only where each rounding is further from
+   a tie than its inputs' reach and the terms add up. `c-3ae0e772055c21ec`, round 2's odd case, still fails by 1 au under
+   `in-word-prefix`, with `c-7b860fefbc696fbd`, `c-8cdd63d7dd3c0ac8` and `c-477a595152c1d734`.
+
+### Fixes and conditions, with their sources
+
+Measurement:
+
+- **The element canvas** (`measure/canvas.ts` `element`, `env.ts` `GeckoEnvironment.canvasElement`, prepare.ts step 7).
+  Where the page can create a `<canvas>` element, every Gecko width comes from a detached one at the DOM's device size,
+  au = round(W × apd). No corrections are left in that mode: not the emoji device-size recipe, not the U+2007 and U+2008
+  gap, not `optical-size`.
+  - `font-size-quantization` follows the element's own rule: 7 significant bits of the size after the division by the
+    CSS-to-device scale (CanvasRenderingContext2D.cpp:4263-4269). 13.33px is 13.3833px there, where the DOM has 13.3333px.
+    Every width of such a run is a stand-in (`advancesStandIn`), and the port limits its values under that gap.
+  - Without `canvasElement` (a worker, the unit tests' stub) the port keeps the OffscreenCanvas at the CSS size with round
+    2's corrections and gaps, the 1 au class and synthetic bold unnamed. The lab never runs that path.
+- **A lone mirrored neutral** at an odd level: Canvas gives a string of one character a direction of its own, left to right
+  unless its bidi class is R or AL (nsBidiPresUtils.cpp:2180-2190, :2395-2414), so `(` alone isn't mirrored there. U+200C
+  after it takes Canvas's bidi path. Only for `isBidiMirrored` characters: the first version also changed a lone mark
+  (held-out `c-0b2ac06557b89cf6`, U+0301 in 16px Georgia), which the observed row shows and no source reading yet.
+- **A boundary space after a word ending in U+200D** is the word's last font's space (FindFontForChar,
+  gfxTextRun.cpp:3319-3325; the space glyph of its font run, :1590-1622): the word with the space, less the word.
+
+In-word advances (lines.ts `inWordAdvance`), each value with a reason where Canvas can't confirm it:
+
+- **Joined sides.** U+200D is Join_Causing, so the prefix is measured with U+200D after it and the suffix with U+200D
+  before it; exact where the sides add up (F15). For a cluster without joining forms the suffix side alone is asked:
+  W(cluster and suffix) − W(suffix) − W(cluster). That recipe came in for cost, after fresh set 4's part 3 stalled on
+  paragraphs that are one 9,428-character Han unit, and was unsound for joining letters (fresh set 5,
+  `c-b44094d264947ac3`: a final alef is 220 au, an isolated one 217), so a cluster whose last letter has joining type R, D,
+  L or C takes the two-sided recipe. It rests on a cluster without joining forms shaping alone as it does after its
+  neighbour, which no source reading or probe establishes for contextual alternates.
+- **Pair kerning** (`pairKernedShare`, `pairKerningAt`). First-advance: exact where the pair alone shows the adjustment.
+  Split: halves of an even adjustment; an odd one from the context at size × 2^k (item 6).
+  - Only printable ASCII clusters, the next one included: font matching gives other characters a neighbour's font
+    (gfxTextRun.cpp:3319-3325, :3533-3552, :3559-3569; held-out `a U+3000 U+200D b` in 16px Arial).
+  - Only where the script run selects the lookups the `pairKerning` fact describes: Latin; Common and Inherited resolved
+    through the language's likely script (ResolveScriptForLang, gfxTextRun.cpp:2581-2640, :2755-2756, :2799-2806); Greek
+    and Cyrillic where the `scriptLookups` fact groups them with Latin (hb-ot-shape.cc:134, :173-184;
+    hb-ot-shaper-hebrew.cc:204). Fresh `c-1cee0563b3bac8bd`: `11` between Hebrew words under `lang="he"` in 24px Arial is
+    747 and 747 au, the kern table's halves, where Arial's Latin pairs go to the first glyph through GPOS.
+  - Constants: the pair alone must show an adjustment within 2 au of the one in the unit (the three rounded terms allow
+    it), and the large context needs k ≥ 3, a guard the tie test makes redundant and no source gives.
+- **Ligature groups.** The DOM gives a range edge inside a group the group's advance in equal shares per started cluster
+  (ComputeLigatureData, gfxTextRun.cpp:238-322).
+  - Found by `ligatureAcross` (F9, the ink box with ligatures off) and `groupAcross` (F17, group counts).
+  - A group holding a mark is confirmed only where the `joining` fact says 'opentype': HarfBuzz doesn't zero mark advances
+    under kerx or a kern state machine (hb-ot-shape.cc:189-191, :1051-1070). 20px Geeza Pro's lam sukun meem damma breaks
+    into 245 and 203 au natively, halves of a 490 au group and −42 au on the damma, where Canvas measures 448 au with the
+    marks and without them.
+  - Candidates in a row: a ligature lookup walks the glyphs once from the start (apply_forward, hb-ot-layout.cc:1917-1945;
+    morx likewise, hb-aat-layout-morx-table.hh:447-600), so `fff` in Helvetica Neue is `ff` and `f` (fresh
+    `c-545b8fb978408502`: 277, 277 and 284 au). The `ligatures` fact divides the row (`listedParts`: complete, exact,
+    every context, one listed font, English or a font without language systems); without it the row stands in as one
+    unconfirmed group.
+  - A unit that starts inside a cluster (a mark or an emoji modifier after an invalid character) skips group counting:
+    Canvas counts its first characters as a group alone and as part of the space before them in a script context. `r3-16`
+    lost 96 `suite/skin-modifier/zwsp` widths to this before `r3-17`.
+- **Every position inside a grapheme cluster is a stand-in**: the DOM divides the cluster by glyph records and ligature
+  groups (gfxHarfBuzzShaper.cpp:1233-1234, :1705-1786), and a mark measured at a string's start has no base.
+- **BreakAndMeasureText's scan** counts a ligature group whole on its first character only where the group lies within the
+  scanned range; a group that reaches past an end goes by shares (gfxTextRun.cpp:989-1000, :1139-1159). Policy
+  `c-5ba3b0da55cb63ad`; fresh `c-ca72eae85de1aead`, a span holding lam alone, 280 au of lam-alef.
+
+Spacing (prepare.ts step 6, lines.ts `spacingIn`):
+
+- **The cluster base search stops at the frame's own start** (FindClusterStart from the provider's run of kept characters,
+  nsTextFrame.cpp:3549-3560, :4203-4213). Fresh `c-7421ac03d17f9f11`: U+0652 starting a span after its seen takes the
+  span's letter spacing, where the seen's cluster takes none.
+- **A cursive cluster takes letter spacing where another font draws one of its marks** than the character before it.
+  MeasureText asks for spacing one glyph run at a time (gfxTextRun.cpp:809-829, :752-765, :372-392), the base search goes
+  no further back than the range asked for, and a mark of script Inherited isn't cursive. The coverage facts answer it for
+  the listed families. Where they don't say, or a fallback font draws the character before the mark, the cluster keeps the
+  cursive rule and reports `font-fallback`.
+  - The break scan asks for spacing over its own buffer of up to 100 characters from the range's start, whatever the glyph
+    runs, so it fits lines without this spacing (`scanSpacingPrefix`). prepare.ts cites gfxTextRun.cpp:946-958 for the
+    buffer; it is :935-942 in the pinned file (`kMeasurementBufferSize`), and :1009-1019 for the refill.
+  - First recorded from F19 as a fact about supplementary-plane bases, which fresh set 10 refuted (Syriac), then as the
+    other-font rule from the extended probe, and traced to source in the last edit. No probe targets the scan half.
+- **A range that starts inside a ligature group** asks the spacing after the group's last character for that character
+  alone (ComputeLigatureData, gfxTextRun.cpp:306-320), so a mark that ends the group is its own base and the group takes
+  the letter spacing its cursive letter wouldn't. Fresh `c-66f10943bae83d88`: the kasra's part is its 223 au share and 300
+  au under 5px.
+
+Gap conditions, firing on passing lines before → after (round 2's library under scorer 5 → `r3-24`; development 81,051
+→ 83,557 passing lines, held-out 83,695 → 61,654 since the 9 giants left the held-out suite file, rule families 29,734
+→ 32,133):
+
+| Gap | Development | Held-out 09-16 | Rule families | Change |
+|---|---|---|---|---|
+| `in-word-prefix` | 12.00% → 4.24% | 28.60% → 4.42% | 9.29% → 1.99% | narrowed to stand-in positions; reported at every one a line rests on: its two ends, the first one consulted past its end, positions in the part of a unit the line cuts, text frame edges, and in-cluster positions a skipped character exposes |
+| `glyph-clusters` | 9.90% → 0.01% | 9.67% → 0.03% | 23.02% → 0 | narrowed: a letter-spaced unit whose Canvas group count differs from its cluster count (nsTextFrame.cpp:3860-3873; CanvasRenderingContext2D.cpp:4759-4790; F17) |
+| `font-fallback` | 0.06% → 0.01% | 0.15% → 0.01% | 0.30% → 0 | emergency break narrowed by the coverage fact; new: the cursive letter spacing condition where the facts don't say |
+| `page-history` | 0.01% → 0.26% | 0.03% → 0.30% | 0 → 0 | widened: every U+FFFD, and the emoji font-matching state (item 4) |
+| `bitmap-emoji-size`, `optical-size` | 0.03% → gone; – | 0.04% → gone; – | –; 6.65% → gone | not reported on the element canvas |
+| `font-size-quantization` | 0 → 0 | 0 → 0 | 0 → 0 passing; 806 → 814 failing lines | the element canvas's quantization rule |
+
+`float32-precision` is new in the observation port only, as a limited state: an edge 2^16 device px or more from the
+origin can come back 1 au off after TransformFrameRectToAncestor's float32 round trip (nsLayoutUtils.cpp:2517-2537; probe
+F6). The bound is derived for 30 au per device pixel (eight half steps of 1/256 device px are 0.47 au); at 60 it would be
+2^15.
+
+### Fresh sets
+
+`bun rebuild/lab/fresh.ts --browser=firefox --seed=r3-gecko-<n> --repeat=2`, forward, three parts at once. Open is failures
+without a covered explanation under scorer 5; the residual class has 0 members in every set. 26 giants (sets 1 to 6) were
+skipped and never run.
+
+| Set | Cases | Prediction failures | Open | What the open rows were | Outcome |
+|---|---:|---:|---:|---|---|
+| 1 | 16,446 | 206 | 0 | | |
+| 2 | 16,435 | 209 | 1 | `c-a2ed29d78da443cd`: U+1F3F3 at a text run's end is 960 au natively and 1020 au in Canvas afterwards | the emoji `page-history` condition: a gap, not a prediction |
+| 3 | 16,402 | 172 | 4 | `c-7421ac03d17f9f11`, `c-a9317a4e713e9d26`, `c-fbeb37c26b215b04`: a mark starting a span takes letter spacing. `c-c408f28194762a1e`: Hanifi Rohingya letters with U+0301 under letter spacing | base search bounded by the frame, predicted; the cursive letter spacing rule (F19), which for fallback fonts is the `font-fallback` gap |
+| 4 | 16,376 | 198 | 0 | part 3 stalled (below) | |
+| 5 | 16,351 | 201 | 1 | `c-b44094d264947ac3`: the owner's own suffix-only recipe on a joining letter | two-sided recipe for joining types R, D, L, C |
+| 6 | 16,351 | 187 | 3 | `c-df939d6130e41b1b`, `c-9d8986212ef18179`: the space after U+200D. `c-a76a521c12628bd7`: `(` alone at level 1 | both predicted |
+| 7 | 16,358 | 224 | 0 | | |
+| 8 | 16,397 | 223 | 0 | two sets in a row without an open row, and the 8-set cap | the stop rule was met here |
+| 9 | 16,340 | 169 | 0 | after the font facts landed: group shares, the whole-group scan, the coverage fact | |
+| 10 | 16,299 | 181 | 2 | `c-453f35adc95f369c`: Syriac with U+0301, set 3's class again. `c-ca72eae85de1aead`: a span holding lam alone | the other-font rule replaces the supplementary-plane one; the scan takes a group whole only inside its range |
+| 11 | 16,314 | 227 | 3 | `c-545b8fb978408502`, `c-2c3f5990d6a9eddb`: `fff` in Helvetica Neue. `c-1cee0563b3bac8bd`: `11` in a Hebrew-language Common run | ligature rows by the `ligatures` fact, predicted; pair kerning bound to the script run, a stand-in there |
+| 12 | 16,332 | 184 | 0 | | |
+| 13 | 16,294 | 178 | 3 | `c-66f10943bae83d88`, `c-b97c94c6e606a261`, `c-ec999da70a7ad78b`: a span starting inside lam lam-shadda-fatha heh-kasra under 5px letter spacing, 300 au | letter spacing at the group's end, predicted |
+| 14 | 16,277 | 193 | 0 | the final library | |
+| 15 | 16,259 | 192 | 2 | `c-552fa9e3eb8a2096`, `c-e43b2d097cd7153b`: a tab after a span that starts inside a Devanagari cluster, 328 au | **open**, below |
+
+- So the final library has one set without an open row (14) and one with a new class (15): not two in a row. Sets 9 to 15
+  ran after the stop rule was met, each change after set 8 prompted by the font facts landing or by an open row. Over all
+  15 sets: 19 open rows in 245,231 fresh cases, in 11 classes, about one new class per 22,000 cases.
+- **The 19 open rows re-observed afterwards**, once, in one small document, with the final bundle
+  (`.artifacts/lab/gecko/r3-report-open-rows`): 12 pass every prediction metric (sets 3's first three, 6, 10's lam, 11's
+  two `fff` rows, 13); 5 fail under a covering gap (`c-c408f28194762a1e` and `c-453f35adc95f369c` under `font-fallback`,
+  `c-b44094d264947ac3` and `c-1cee0563b3bac8bd` under `in-word-prefix`, `c-a2ed29d78da443cd` under `in-word-prefix` and
+  `page-history`); set 15's 2 stay open. The owner hadn't re-observed fixed rows, only the unit tests and the regression
+  runs.
+- Painter-only failures without a covered explanation rose from 219 (set 1) to about 500 a set, and on the development
+  sets from 191 to 455, while painter passes rose: lines whose widths now pass and whose painted form can't reproduce them
+  (202 Noto Naskh Arabic rows whose painted joined line edge differs by 33 to 64 au). For the painter owner.
+
+### Scores
+
+`r3-24`, the final library, forward, pass / fail / unobserved, widths adding not-applicable; round 2's rows under scorer 5
+in parentheses where they differ. Open is 0 in every cell of `r3-24` (baseline: smoke 0, 0, 1; runs 0, 1, 2; policy 0, 0,
+2; suite sample 0, 0, 7; held-out runs 2, 3, 6; held-out policy 0, 0, 3; rule families 12, 20, 16; all 75 pass now).
+
+| Set (cases) | lineCount | breaks | widths | painter |
+|---|---|---|---|---|
+| smoke (297) | 297/0/0 | 297/0/0 | 296/1/0/0 (292/5) | 286/11/0 (283/14) |
+| runs (2,580) | 2580/0/0 | 2580/0/0 (2576/4) | 2577/3/0/0 (2541/35/0/4) | 2513/67/0 (2486/94) |
+| ws (1,019) | 1019/0/0 | 1019/0/0 | 1019/0/0/0 | 1002/17/0 |
+| policy (1,606) | 1606/0/0 | 1606/0/0 (1605/1) | 1603/3/0/0 (1598/7/0/1) | 1584/22/0 (1583/23) |
+| suite sample (19,888) | 19864/24/0 (19702/63, 123 history-dependent) | 19862/26/0 (19688/77) | 19438/424/0/26 (18804/884/0/77) | 18700/1188/0 (18119/1646) |
+| held-out 09-16 runs (2,579) | 2576/3/0 (2571/8) | 2576/3/0 (2568/11) | 2575/1/0/3 (2525/43/0/11) | 2506/73/0 (2479/100) |
+| held-out 09-16 ws (1,022) | 1022/0/0 | 1022/0/0 | 1022/0/0/0 (1021/1) | 1008/14/0 |
+| held-out 09-16 policy (1,604) | 1604/0/0 | 1604/0/0 (1602/2) | 1601/3/0/0 (1594/8/0/2) | 1577/27/0 (1573/31) |
+| held-out 09-16 suite sample (9,991; 10,000 with the giants) | 9979/12/0 (9735/48, 217 history-dependent) | 9975/16/0 (9712/71) | 9575/400/0/16 (8971/741/0/71) | 9002/989/0 (8497/1286) |
+| rule families (9,584) | 9529/55/0 (9432/152) | 9432/152/0 (9200/384) | 9056/376/0/152 (8592/608/0/384) | 8539/1045/0 (8048/1536) |
+| feature families (11,946, 15 protocol rows) | 11931/0/0 | 11931/0/0 | 10747/0/1184/0 | 8310/41/3580 |
+
+- **Pairs that became a pass**, lineCount / breaks / widths, outside the cases round 2 marked history-dependent:
+  development 40 / 56 / 557, held-out 42 / 66 / 468, rule families 105 / 256 / 464 (widths include lines that were
+  not-applicable while their breaks failed).
+- **Lost prediction pairs**, all under a covering gap:
+  - `c-2ad5b0126a288f11` (`suite/original-vs-reshaped-admission`, lineCount) and held-out `c-fc9b382c418b3022`
+    (`suite/space`, lineCount and breaks), under `in-word-prefix`.
+  - 24 `rule/system-fonts-and-sizes` cases, 8 line counts and 24 breaks, under `font-size-quantization`: `system-ui` and
+    `-apple-system` at 13.33px at their derived thresholds. Round 2 measured them at 13.375px without optical sizing, 482
+    au short on the first line (3686 au for the native 4168), and the breaks agreed by accident; the element canvas has
+    the optical size and 13.3833px, 0.375% wide, which moves a break at the threshold.
+- The held-out runs' 3 line count and break failures (`c-4bbfaaafb6f3d47f`, `c-710f180e5314942f`, `c-9c05c70ce585fb82`)
+  are F18's class, and so are fresh sets 5's and 14's `c-048560abd15275ba`, `c-a59db220a7967529`, `c-fd5c582fa80effa9`,
+  `c-b0836d3779e2b6a5`, `c-c2fa4362daf68bd5`, `c-f083249a9892033f` (every row whose native rects hold a 17,895,698px
+  frame). Scorer 5 counts all 9 covered, by `in-word-prefix` at the frame edge inside the cluster, in round 2's library
+  too. That gap's source reading (the DOM divides a cluster by its glyph records) doesn't say a frame becomes unbounded:
+  covered by the letter, not by the reading.
+- The rule families ran round 1's derived cases and the feature families round 1's
+  (`.artifacts/tests/features-20260917`), not round 3's derivations. The 9 held-out giants and the giants set never ran
+  with this library.
+
+### Observation agreement
+
+Per-case facts of the same rows (`facts.predicted` and `facts.limited`, equal and differing), outside protocol rows:
+
+| Set | Predicted values, round 2 → `r3-24` | Agreement | Cases holding a differing predicted value (without a failing metric) |
+|---|---|---|---|
+| smoke, runs, ws, policy | 187,352 → 547,909 | 99.50% → 100% | 57 (5) → 0 |
+| suite sample | 536,540 → 1,704,823 | 98.757% → 99.881% | 961 (1) → 33 (23) |
+| held-out runs, ws, policy | 174,289 → 519,015 | 99.44% → 100% | 82 (17) → 0 |
+| held-out suite sample | 1,204,694 → 1,172,446 | 99.548% → 99.970% | 812 (0) → 20 (7) |
+| rule families | 184,207 → 364,636 | 93.420% → 99.957% | 1,099 (108) → 115 (0) |
+| feature families | 281,999 → 620,520 | 99.876% → 100% | 222 (222) → 0 |
+
+- Limited values fell from 54% to 71% of all values to 0.2% to 9.2% (`in-word-prefix`; in the families also
+  `font-size-quantization` 17,994 and `float32-precision` 7,428, and in the feature families `float32-precision` 36,704).
+- **Passing cases that still hold a wrong predicted value**, 30 on the development and held-out suite samples:
+  - 24 Myanmar corpus cases (`suite/my-cunning-heron-teacher` 12, `suite/my-bad-deeds-return-to-you-teacher` 8,
+    `suite/maintained/corpus` 4): U+1038 in 20px Myanmar MN has a rect of its own natively, 649 au after its cluster's
+    start and 333 au wide, where the port gives it the cluster's rect (58 or 34 code points a case).
+  - 6 Noto Nastaliq Urdu corpus cases (`c-d5c9e88814700c97`, `c-ed0b61e7b236ada0`, `c-2fb217d962864f20`,
+    `c-ab4d9cce91910eac`, `c-d012f0979b369eb1`, `c-f48a606b152aa5e4`): one U+0635 is 1 au further left and 1 au wider
+    natively; the unit's total agrees.
+- **On the fresh sets** agreement is 99.951% to 99.999%. Sets 2, 11 and 15 hold 121, 94 and 132 passing cases with a wrong
+  predicted value, the others 0 to 35. All 132 of set 15 lie inside a range the emoji `page-history` gap names
+  (`c-0362d08ff529aeeb`: natively U+1F3F3 is a text font's 1020 au and the rest of the flag sequence 861 au, predicted one
+  cluster of 1881 au). The port doesn't limit values under a ranged paragraph gap: not `page-history`, and not the cursive
+  `font-fallback` (`c-c408f28194762a1e` and `c-453f35adc95f369c` hold 1 and 2 wrong predicted values).
+
+### Costs
+
+The rows' `measure.calls` per paragraph, `r3-24`, with round 2's measureText calls in parentheses: smoke 100.2 (72.9),
+runs 152.8 (97.7), ws 87.7 (57.9), policy 108.6 (84.5), held-out runs 151.6 (95.1), ws 89.6 (58.9), policy 109.0 (85.6),
+rule families 34.4 (20.0), feature families 41.3 (21.8); suite sample mean 92.3, median 19, p90 245, max 27,723.
+Prediction time summed: suite sample 10.8 s, held-out suite sample 24.1 s. The two-sided recipe, the group counts at 2px
+and 0.001px, the large-size contexts for odd kerning and the emoji comparison add them.
+
+### Open
+
+- **Fresh set 15, `c-552fa9e3eb8a2096` and `c-e43b2d097cd7153b`** (`runs/word-spacing-spans`, 20px Kohinoor Devanagari,
+  `pre-wrap`, 2px word spacing): a span starts at U+094B, inside the cluster of U+0926, and a tab follows in that span.
+  Natively the tab is 1016 au, predicted 688: 328 au, the mark's part of the cluster (628 and 328 au natively, 956 and 0
+  predicted, limited). Read after the stop, not fixed: `CalcTabWidths` adds a character's advance to the tab position only
+  where it starts a cluster (nsTextFrame.cpp:4349-4357), so the frame's leading mark isn't counted, and the row's numbers
+  agree (the tab ends at 7456 au of tracked position, twice the 3728 au tab width, which is 7784 au on the line). The
+  port's `computeTabs` counts every advance from the frame's start. The mark's share is an in-cluster stand-in, so a fix
+  predicts the rule and reports `in-word-prefix` on the tab.
+- **F18's unbounded frame**: untraced, 9 rows counted covered (Scores). Needs a source trace or a bug report, and a
+  decision on how the scorer counts it.
+- **Wrong predicted values in passing cases** (Observation agreement): U+1038's cluster start, the Noto Nastaliq 1 au
+  position, and values under ranged paragraph gaps.
+- **History dependence** with the element canvas was never checked in both orders (item 4).
+- **The OffscreenCanvas fallback** isn't run by the lab; the in-word logic it shares changed.
+- **Giants**: the 9 held-out ones and the fresh sets' 26 never ran with this library. The cost of the two-sided recipe on
+  long units is what stalled fresh set 4.
+- **Registry and docs**: round 3's rules aren't in `rebuild/tests/rules.json`; DESIGN.md §5's gap table still describes
+  round 2's Gecko conditions (§4 is synced); `lab/residual-classes.json` still lists the 1 au class as inferred.
+- **Not tried**: a Canvas recipe for the Amiri joined-letter cross term, the dominant class left.
+
+### Process
+
+- **Fresh set 4, part 3** failed once ("No page activity for 120000ms", 4,768 of 4,793 rows): ten one-unit Han paragraphs in
+  a chunk under the two-sided recipe. Diagnosed from the log, fixed (the suffix-side recipe), timed on two of the cases
+  (5.1 s and 1.5 s), and run once more with `--rerun-failed`. The set's parts 1 and 2 ran the library before that fix.
+- **`r3-18`**: all 31 jobs ended at "Bundle failed" before a browser launched, and the owner's script went on through all
+  11 sets. The bundle built 30 s later with no change of the owner's; the cause wasn't established (another owner's
+  edit in progress is the owner's guess). The script now stops at the first failure, and the same library ran as `r3-19`.
+- **The stop rule** (two sets without a new class, or 8 sets) was met at set 8 and the owner went on, after a context
+  compaction, until the orchestrator stopped it.
+- Tests: `bun test rebuild/src/engines/gecko rebuild/lab/observe/gecko.test.ts`, 88 pass (engine 75, port 13); both
+  `tsc` projects are clean. The unit tests run the OffscreenCanvas path on a stub; only the lab runs the element canvas.
 
 ## Ceiling round 2, 2026-09-17
 
@@ -497,6 +871,10 @@ round 5: 0 prediction errors, lineCount 134 pass / 0 fail / 5 unobserved, breaks
 - **Failures without a gap:** 6 line counts and 9 breaks in `rule/line-slots` (below).
 
 ## Failures without a named gap (open model bugs)
+
+Status in ceiling round 3: every row of this table passes lineCount, breaks and widths in `r3-24`, without a gap: the 1 au
+rows through the canvas element at the device size, and `c-daf9c7047097f77b` through ligature group shares (its painted
+line no longer reproduces the width). The open rows now are in "Ceiling round 3", "Open".
 
 | Case | Set | What differs | Status |
 |---|---|---|---|
