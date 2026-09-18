@@ -48,7 +48,8 @@ Fresh sets (`bun rebuild/lab/fresh.ts --browser=webkit-host --seed=<seed>`, file
 | `r4-webkit-3` | 10,812 | 12 / 38 / 48 | 86 | 0 | 50 | 24 | 12 |
 
 - 374 prediction failures in 32,611 cases, 115 per 10,000 (round 3's evaluation: 207), no new class on any set, which is the
-  round's cap of three sets. Other: `control-character-width` 22, `letter-spacing-ligatures` 14,
+  round's cap of three sets. The changes made after a set (USCRIPT_HAN's standard family after `r4-webkit-3`, the fallback
+  table's additions) move no prediction or cover on the defined sets (`<set>-p6` equals `<set>-p5` case by case). Other: `control-character-width` 22, `letter-spacing-ligatures` 14,
   `rtl-shaping-across-inline-boxes` 7, `dictionary-breaks-stand-in` 5.
 - The 250 cases under `page-history`, each alone in a fresh process (`isolate-fresh<n>-part-*`): lineCount 250 of 250,
   breaks 250 of 250, widths 219 pass, 12 unobserved, 19 fail, those also under `control-character-width`,
@@ -82,11 +83,14 @@ character no named family draws before a generic family. Three source readings a
   (CSSFontSelector.cpp:431-492), rejecting reserved names (a leading `.`) for the settings' family and turning Monaco into
   Courier. Core Text is closed, so its answers are data: `rebuild/data/webkit/coretext-macos27/css-families.tsv`, 1,079
   languages (every system locale identifier) dumped by `data/webkit/tools/ct-css-families.m` on macOS 27.0 26A428, 32
-  distinct answers, generated into `engines/webkit/generated/fonts.ts` as the 60 languages whose answer differs from their
-  parent's (`tools/gen-webkit-fonts.ts`). The port names that family in the list Canvas gets (`engines/webkit/fonts.ts`,
-  `content.ts` makeBox). Probe R11 (36 language values, the five keywords and -webkit-standard, 14 strings): the DOM's boxes
-  equal Canvas totals under the named family wherever the table names one and the family resolves, text by text apart
-  from float32 steps on strings with break opportunities inside (a probe artefact: the DOM sums items). Under en, `monospace`
+  distinct answers, generated into `engines/webkit/generated/fonts.ts` as the default and the 60 languages whose answer
+  differs from their parent's (`tools/gen-webkit-fonts.ts`). The port names that family in the list Canvas gets (`engines/webkit/fonts.ts`,
+  `content.ts` makeBox). Probe R11 (36 language values, the five keywords and -webkit-standard, 14 strings;
+  `tools/r11-verdict3.ts` with the port's own lookup): of 216 pairs 125 name a family, and the DOM's boxes equal Canvas
+  totals under the list the port builds on 200, 152 to the bit and 48 within a float32 step on strings with break
+  opportunities inside (a probe artefact: the DOM sums items). The other 16 are the port's other rules: Kaiti SC and Kaiti TC,
+  which the WebContent process doesn't have (12: the standard family then draws, below), -webkit-standard under zh (2, the
+  preferred languages), Han after Menlo under ko and Arabic under ur (system fallback by language). Under en, `monospace`
   is Menlo and `fantasy` Zapfino, where Canvas resolves the keywords to Courier and Papyrus; under he, sans-serif is Lucida
   Grande and monospace Courier New; under ru and tr, cursive and fantasy are Snell Roundhand. `yue`, `mul` and unknown
   languages have a Common script and resolve as Canvas does, as the source says.
@@ -95,15 +99,29 @@ character no named family draws before a generic family. Three source readings a
   AppleMyungjo), and it also stands behind a list none of whose families resolves (FontCascadeFonts.cpp:210-217): named at
   the end of the Canvas list where the list followed by LastResort measures a space as LastResort alone does (R7: `a` in
   `STHeiti` is 7.99px under en and 9.81px under ja at 18px). USCRIPT_HAN follows a system preference and stays reported.
-- **What still reports**, per character: no named family draws it and the list holds a system design family or
-  -webkit-standard under USCRIPT_HAN; it has default emoji presentation and only a generic named for Canvas could draw it
+- **What still reports**, per character: no named family draws it and the list holds a system design family, or
+  -webkit-standard under USCRIPT_HAN without the preferred languages (userPrefersSimplifiedChinese, Language.cpp:129-138,
+  chooses Songti SC or TC by them); it has default emoji presentation and only a generic named for Canvas could draw it
   (the DOM skips a generic family's outline glyph for it, FontCascadeFonts.cpp:440-447, FontCascadeCoreText.cpp:473-523, and
-  Canvas doesn't know the named family for a generic one); or no family of the list draws it and the locale is Han, kana or
-  Hangul (system fallback by language).
-- **Closed in Core Text:** `CTFontCreateForCharactersWithLanguageAndOption` (lookupFallbackFont,
-  FontCacheCoreText.cpp:775-790), which picks the system fallback font from the original font, the characters and the
-  language. It follows the original font's class: Han under ko falls back to AppleMyungjo from Times and Georgia and to Apple
-  SD Gothic Neo from Helvetica, Arial and Menlo (R12). Canvas can't show a font's class, so a table would need a font fact.
+  Canvas doesn't know the named family for a generic one); or no family of the list draws it and the language moves its
+  system fallback.
+- **Closed in Core Text: system fallback.** `CTFontCreateForCharactersWithLanguageAndOption` (lookupFallbackFont,
+  FontCacheCoreText.cpp:775-790) picks the fallback font from the original font, the characters and the language, for
+  every character no family of the list draws. As the source reads, that is every such character under any locale: the
+  condition then fires on 29% of passing development lines at a lift of 0.8 (`dev-all-x1`), because the lab's Latin lists meet
+  Arabic, Hebrew, Thai, Han and emoji everywhere. So which characters a language moves stays a table of probe verdicts,
+  `content.ts` hasLanguageDependentFallback, now registered as a heuristic. Round 3's table was Han, kana, Hangul, CJK
+  punctuation and fullwidth blocks under Han, kana and Hangul scripts. R13 (3 Latin fonts, 45 languages, 28 strings of 25
+  scripts) and R14 (Helvetica, Times and Geeza Pro, 70 languages, three sample characters of each of 321 blocks) add Arabic
+  under Urdu and Kashmiri (Noto Nastaliq Urdu for Geeza Pro) and enclosed alphanumerics, box drawing, geometric shapes and
+  vertical forms under ko, and find no other pair. The probes see a font change only where advances differ, and three
+  samples don't stand for a block. The font also follows the original font's class: Han under ko falls back to AppleMyungjo
+  from Times and Georgia and to Apple SD Gothic Neo from Helvetica, Arial and Menlo (R12), so predicting it would need a
+  font fact Canvas can't show.
+- **Not traced:** an Ethiopic word (`አማርኛ`) after Georgia, Helvetica and Menlo differs from Canvas under every language
+  but am and none (R13), while single Ethiopic characters don't (R14): the locale reaches shaping there
+  (Font::applyTransforms and the complex text controller hand Core Text the computed locale, FontCoreText.cpp:646-700,
+  ComplexTextControllerCoreText.mm:199-203). No condition reports it, and no lab case holds Ethiopic.
 - Firing on passing lines, `b0` to final: development 15.41% to 1.11% (lift 5.6 to 18.3), held-out 13.86% to 0.92% (5.4 to
   15.5), families 6.91% to 3.52% (8.2 to 16.5); fresh sets 2.4%, 2.6% and 3.1% (round 3's: 15.9%). No failing line lost its
   cover on any set.
@@ -123,7 +141,8 @@ character no named family draws before a generic family. Three source readings a
   run alone in its joining context within the float32 rounding of the three totals, the run alone stands, since a
   difference of totals isn't the float32 sum of the run's advances (33 family widths were one step off without this).
   The shares add up to the joined text's total, which the source says (shapedContentWidth is the sum of the run widths) and
-  probe R10 confirms (35 of 36 run lists in each of 10 fonts; the DOM's shaped boxes carry no letter spacing). Chosen over
+  probe R10 confirms (35 of 36 run lists in 9 fonts and all 36 in Courier New; the DOM's shaped boxes carry no letter
+  spacing). Chosen over
   the run alone and over prefix differences by R10's counts, 509, 492 and 474 of 770 runs equal to the DOM's: a registered
   heuristic. No recipe is right throughout: Amiri's `ب|ب` is 5.928 and 18.528px natively and no Canvas total splits 24.456
   that way. Families: lineCount +8, breaks +8, nothing lost; `rtl-shaping-across-inline-boxes` covers 17 failing family
@@ -208,7 +227,8 @@ About a third of the calls are diagnostic. The unshaped sums of `simplified-meas
 ### Open
 
 - System fallback by language (Core Text, above): 150 of the 388 prediction failures left on the defined sets, 76 of 374 on
-  the fresh sets.
+  the fresh sets. Its table of characters is a heuristic from probes, and shaping under a locale (the Ethiopic word) has no
+  condition.
 - The generic family table is macOS 27.0's Core Text. An unknown language takes its parent's answer (the identifier less
   its last subtag), which the dump confirms for the 1,079 identifiers it holds and nothing confirms beyond them. Core Text
   reads `ZH-Hant` (upper-case language) as Simplified; the port lower-cases first. Whether the table belongs in the library

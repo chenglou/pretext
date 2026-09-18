@@ -1509,8 +1509,8 @@ function collectShapeRanges(L: Layout, c: Content): Array<[number, number]> {
 // CoreText base advances of its own characters, summed per character in logical order, negative ones as 0
 // (ComplexTextController::glyphAdvancesForTextRun, ComplexTextController.cpp:186-205, without letter spacing), and the
 // candidate's logical width set to their sum. So the runs' shares add up to the advances of the joined text, which Canvas
-// totals (probe webkit-round4 R10: the DOM's boxes add up to the Canvas total of the joined text in 35 of 36 run lists in each
-// of 10 fonts, and carry no letter spacing). The 36th isn't shaped at all: Core Text returns several glyph runs for a font's
+// totals (probe webkit-round4 R10: the DOM's boxes add up to the Canvas total of the joined text in 35 of 36 run lists in 9
+// fonts and all 36 in Courier New, and carry no letter spacing). The other one isn't shaped at all: Core Text returns several glyph runs for a font's
 // stretch that holds a shadda with a vowel sign, glyphAdvancesForTextRun counts the stretch's characters once per glyph run
 // (ComplexTextController.cpp:190-203, stringLength() is the whole stretch, ComplexTextController.h:112), and the size check
 // returns before any width changes (ILB:943-946), so the boxes keep their own widths. Which mark pairs a font composes isn't

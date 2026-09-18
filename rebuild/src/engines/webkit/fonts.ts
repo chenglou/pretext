@@ -6,9 +6,10 @@
 //   language's family (FontDescription::platformResolveGenericFamily, FontDescriptionCocoa.cpp:77-118, called first by
 //   CSSFontSelector::resolveGenericFamily, CSSFontSelector.cpp:334-353; SystemFontDatabaseCoreText.cpp:320-365) and looks that
 //   family up by name (CSSFontSelector::fontRangesForFamily, CSSFontSelector.cpp:431-492). Core Text is closed, so its
-//   answers are data: generated/fonts.ts holds them for every locale identifier of macOS 27.0 (probe webkit-round4 R11: under
-//   36 languages the DOM's boxes of the five keywords equal Canvas totals under the named family in every pair where the
-//   table names one, `monospace` under en as Menlo among them, where Canvas resolves the keyword to Courier).
+//   answers are data: generated/fonts.ts holds them for every locale identifier of macOS 27.0 (probe webkit-round4 R11: of
+//   216 language and keyword pairs the DOM's boxes of 14 strings equal Canvas totals under the list the port builds on 200,
+//   `monospace` under en as Menlo among them, where Canvas resolves the keyword to Courier; the other 16 fall under the
+//   port's other rules: a family the process doesn't have, the preferred languages, system fallback by language).
 // - -webkit-standard: the settings' standard family of the locale's script (FontGenericFamilies.cpp:50-66), which WebKit sets
 //   for Han, kana and Hangul (SettingsBase::initializeDefaultFontFamilies, SettingsBaseCocoa.mm:44-50). USCRIPT_HAN takes the
 //   Simplified or the Traditional one by the preferred languages: the first of zh-tw and zh-cn among them decides, Simplified
