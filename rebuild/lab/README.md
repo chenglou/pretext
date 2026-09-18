@@ -6,7 +6,12 @@ doesn't depend on the old library in `src/`.
 - `types.ts`: shared shapes. Cases (`Case`, `Paragraph`, `TextRun`, `FontDecl`) and lab rows (`LabRow` and its parts).
 - `page.ts`: the browser page. It builds the native paragraph, records Range geometry, runs the prediction hook and the
   observation port over its layout, and records the painted lines.
-- `predictor.ts`: the prediction hook, the only library-facing import in the page.
+- `predictor.ts`: the prediction hook, the only library-facing import in the page. It and `baselines/no-facts-predictor.ts`
+  (no supplied font facts) are made from `predictor-core.ts`, the one lab file that imports library logic
+  (`rebuild/tests/independence.test.ts`).
+- `port-measure.ts`: how an observation port measures live, shared by the page and the offline replay.
+- `rows.ts`: reading row files, plain or compressed (`<name>-rows.ndjson` or `.zst`); every tool that reads rows goes through
+  it, and `rows.test.ts` checks that none reads them its own way.
 - `font-facts.ts`: the font facts the predictor declares for a case's fonts, per engine, from `font-facts.json`, a table
   built offline from the font files (see "Font facts"); `font-facts.test.ts` known fonts' facts.
 - `observe/`: the observation ports, one per engine (DESIGN.md §9). Each derives, from a layout, the Range rects its
@@ -37,9 +42,11 @@ doesn't depend on the old library in `src/`.
   pair (rebuild/TESTS.md §9). Since ceiling round 3 a seed is never written over the baseline it replaces (see "Seeds go
   to a staging folder").
 - `cases/seal.ts`: seals a held-out case set (see "Sealed held-out sets").
-- `fresh.ts`: a fresh round, from new cases to a report of failures by signature (see "Fresh rounds"), with
-  `residual-classes.json`, the registry of residual classes it counts apart.
-- `cases/used-ids.ts`: every case id used so far and the generation lock, shared by `seal.ts` and `fresh.ts`;
+- `fresh.ts`: a fresh round, from new cases to a report of failures by signature (see "Fresh rounds"). It counts residual
+  classes apart from the per-case `residual` the scorer writes (`score.ts` `RESIDUAL_CLASSES`, the one registry).
+- `cases/used-ids.ts`: every case id used so far and the generation lock, shared by `seal.ts` and `fresh.ts`. A run made in
+  another worktree of the repository names its case files by that worktree's paths; one that is gone is looked up from
+  `.artifacts` or `rebuild` on in this repository (`inThisRepository`), since every worktree shares one `.artifacts`;
   `cases/parts.ts`: contiguous parts of a case file for parallel jobs and the giants rule, with a command line that splits a
   file and prints counts only; `cases/giants.ts`: the giants set (see "Giants"); `cases/family-widths.ts`: the rule and
   feature family paragraphs at seeded widths; `cases/parts.test.ts` their rules.

@@ -1,0 +1,23 @@
+{
+  "staged": "rebuild/tests/baselines/staged-round4-sets/firefox-156.0-facts.json",
+  "against": null,
+  "counts": {
+    "cases": 62182,
+    "passPairs": {
+      "lineCount": 61775,
+      "breaks": 61664,
+      "widths": 59267,
+      "painter": 54755
+    },
+    "historyDependentCases": 313,
+    "withoutPassesCases": 94,
+    "unstablePairs": 1,
+    "protocolCases": 0
+  },
+  "lost": [],
+  "leftThroughHistory": [],
+  "leftThroughProtocol": [],
+  "gained": [],
+  "casesOnlyBefore": 0,
+  "casesOnlyAfter": 0
+}

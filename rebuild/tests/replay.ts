@@ -4,8 +4,11 @@
 //
 //   bun rebuild/tests/replay.ts pack   --browser=<b> [--config=no-facts|facts] --runs=<browser-sets out dir> [--dir=<replay dir>]
 //   bun rebuild/tests/replay.ts freeze --browser=<b> [--config=...] [--dir=...] [--force --reason=<text>] [--allow-dirty]
-//   bun rebuild/tests/replay.ts check  --browser=<b> [--config=...] [--dir=...] [--against=reference|browser] [--sets=a,b]
+//   bun rebuild/tests/replay.ts check  --browser=<b>|all [--config=...|all] [--dir=...] [--against=reference|browser] [--sets=a,b]
 //     [--groups=...] [--out=<report.json>] [--jobs=N]
+//
+// `check --browser=all --config=all` is the whole tier: every frozen reference there is, one after another (each check uses
+// every core), with the worst exit code.
 //
 // The replay folder, by default .artifacts/tests/reference/<browser>-<config>:
 // - inputs/: what a replay reads. Per case its Case, the page facts the library reads (user agent, DPR, <html lang>), the
@@ -720,7 +723,27 @@ if (import.meta.main) {
       case 'pack': process.exit(await pack())
       case 'pack-part': await packPart(); process.exit(0)
       case 'freeze': process.exit(await freeze())
-      case 'check': process.exit(await check())
+      case 'check': {
+        // Every browser and configuration asked for that has a frozen reference; one named outright must have one.
+        const browsers = options.get('browser') === 'all' ? [...TIER_BROWSERS] : [options.get('browser')]
+        const configs = options.get('config') === 'all' ? [...CONFIGS] : [options.get('config')]
+        const several = browsers.length > 1 || configs.length > 1
+        if (several && (options.has('dir') || options.has('out'))) fail('--dir and --out name one reference; leave them out with --browser=all or --config=all')
+        let worst = 0
+        let checked = 0
+        for (const browser of browsers) for (const config of configs) {
+          if (browser === undefined) options.delete('browser')
+          else options.set('browser', browser)
+          if (config === undefined) options.delete('config')
+          else options.set('config', config)
+          if (several && !existsSync(join(replayDir().dir, 'reference/manifest.json'))) continue
+          const code = await check()
+          checked++
+          worst = code === 0 ? worst : worst === 1 || code === 1 ? 1 : Math.max(worst, code)
+        }
+        if (checked === 0) fail('No frozen reference to check against')
+        process.exit(worst)
+      }
       case 'work': await work(); process.exit(0)
       default: fail('Usage: bun rebuild/tests/replay.ts pack|freeze|check --browser=<browser> [--config=no-facts|facts] ...')
     }
