@@ -2646,9 +2646,9 @@ function lineDifference(p: WebKitPrepared, own: WebKitLineResult, world: WebKitL
 
 // The line start in a history world that stands where `start` stands, or null where the world can't be at that start: the
 // line begins inside an item with a width carried from the lines before it (overflowWidthAsLeadingForNextLine, ALB:54-98;
-// InlineTextItem::right, InlineTextItem.cpp:65-71), and the world ends an item between that item's start and the line start,
-// so its rest started from another whole (triage c-66ae4ab7d56cb0ae: line 6 keeps `ببب` at 16.27px, the rest of `بببب` alone,
-// where the rest of `((بببب` is 26.02px); or the world has no item boundary at a line start between two of the own items.
+// InlineTextItem::right, InlineTextItem.cpp:65-71), and the world's item there isn't the own one, so its rest started from
+// another whole (triage c-66ae4ab7d56cb0ae: line 6 keeps `ببب` at 16.27px, the rest of `بببب` alone, where the rest of
+// `((بببب` is 26.02px); or the world has no item boundary at a line start between two of the own items.
 function worldLineStart(p: WebKitPrepared, world: WebKitHistoryWorld, start: WebKitLineStart): WebKitLineStart | null {
   if (start.itemIndex >= p.items.length) return { ...start, itemIndex: world.prepared.items.length }
   const own = p.items[start.itemIndex]!
@@ -2665,8 +2665,11 @@ function worldLineStart(p: WebKitPrepared, world: WebKitHistoryWorld, start: Web
     index++
   }
   if (start.offset === 0) return first.start === position ? { ...start, itemIndex: index } : null
+  // A carried width is the whole item's less what the lines before took, so it stands in the world only where the world's
+  // item is the own one (suite c-19ccdb6bbbc8089c: `ببب((` broken after its first letter carries 22.4px for `بب((`, where a
+  // world that ends an item before `((` carries 10.416px for `بب`, which fits with nothing after it).
+  if (start.previousLine !== null && start.previousLine.carriedWidth !== null) return first.start === own.start && first.end === own.end ? { ...start, itemIndex: index } : null
   if (first.start === own.start) return { ...start, itemIndex: index }
-  if (start.previousLine !== null && start.previousLine.carriedWidth !== null) return null
   return { ...start, itemIndex: index, offset: position - first.start }
 }
 
