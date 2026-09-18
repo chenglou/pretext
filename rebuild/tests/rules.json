@@ -8977,6 +8977,42 @@
    "audit": null,
    "status": "current",
    "replacedBy": []
+  },
+  {
+   "id": "blink/shape/position-adjust-window",
+   "engine": "blink",
+   "area": "shape",
+   "kind": "heuristic",
+   "statement": "positionAdjust16 decides which side of an offset an adjustment sits on that Canvas totals show only as a sum: the wide window's before white space (a space glyph keeps its advance; probe blink-round3 R1, Noto Nastaliq Urdu's word-final forms), the pair window's elsewhere. No source reading places a contextual adjustment: a chaining rule's input glyphs are the font's. Where the two windows differ and the offset isn't before white space the position is a stand-in, and a line edge taken from it reports unsafe-to-break",
+   "source": "engines/blink/shape.ts positionAdjust16; hb-ot-layout-gsubgpos.hh chain_context_apply_lookup; specs/blink-RESULTS.md \"Ceiling round 3\", \"Round 4\"",
+   "probes": [
+    "blink-round3 R1"
+   ],
+   "tests": [],
+   "declaredBy": "CHARTER.md known deviations (blink owner, ceiling round 3 and round 4); id provisional",
+   "audit": null,
+   "status": "current",
+   "replacedBy": []
+  },
+  {
+   "id": "webkit/gap/language-dependent-fallback-table",
+   "engine": "webkit",
+   "area": "gap",
+   "kind": "heuristic",
+   "statement": "hasLanguageDependentFallback, the characters whose system fallback a language moves (Han, kana, Hangul, CJK punctuation, fullwidth forms, enclosed alphanumerics, box drawing, geometric shapes and vertical forms under Han, kana and Hangul locales; Arabic under ur and ks), is a table of probe verdicts, which see a font change only where advances differ and sample three characters a block. The source reading (every character no list family draws, under any locale) fires on 29% of passing lines at a lift of 0.8, and Core Text's fallback by language is closed",
+   "source": "FontCacheCoreText.cpp:775-790",
+   "probes": [
+    "webkit-round3 R3",
+    "webkit-round4 R13",
+    "webkit-round4 R14"
+   ],
+   "tests": [
+    "src/engines/webkit/lines.test.ts :: under a Han, kana or Hangul locale a Han, kana or Hangul character no named family draws is concerned"
+   ],
+   "declaredBy": "webkit owner (round 4); id provisional",
+   "audit": null,
+   "status": "current",
+   "replacedBy": []
   }
  ],
  "generated": {
@@ -9541,6 +9577,8 @@
   "webkit/measure/generic-family-by-locale": "9e9f189bf9718e6b",
   "shared/lab/report-only-rects": "b4287f3649689d19",
   "shared/lab/webkit-moved-x-width": "88ae42b6912a61e2",
-  "shared/lab/webkit-sum-addends": "1b2df15307b463f9"
+  "shared/lab/webkit-sum-addends": "1b2df15307b463f9",
+  "blink/shape/position-adjust-window": "f7d6193a25c06158",
+  "webkit/gap/language-dependent-fallback-table": "46607a9ed3cd6741"
  }
 }
