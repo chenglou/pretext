@@ -1425,6 +1425,23 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, measur
                 gaps.push({ gap: 'page-history', run: firstRun, detail: `U+${first.toString(16).toUpperCase()} U+FE0E asks for a glyph without color, which only the system-wide font search finds, among the families whose character maps the process has loaded by then (gfxPlatformFontList.cpp:1474-1486)`, at: clusterAt })
               }
             }
+            if (!inEmojiFont && apd !== 60 && font.weight !== 400) {
+              // Alternative (round 4, not merged): synthetic bold on a text font's glyph. A font without a bold face gets
+              // NS_round(offset × apd) added per character that holds glyphs (gfxFont.cpp:3551-3562, :901-939), and the offset
+              // isn't linear in the size (gfxFont.h:1899-1904), so Canvas at the CSS size adds another amount than the DOM
+              // (probe gecko-port F24: U+2764 in bold 16px Arial is 897 au natively and 904 in Canvas). Canvas shows it: the
+              // cluster at the run's weight less the cluster at weight 400 is a whole number of Canvas's own steps, at the CSS
+              // size and at the device size, which a real bold face's difference, linear in the size, can't be at both.
+              const regular = (size: number) => auIn(measureContext(measurer, { ...settings, font: canvasFont({ ...font, weight: 400 }, size) }), cluster)
+              const step = (size: number) => Math.floor(syntheticBoldOffset(quantize7(size)) * 60 + 0.5)
+              const atCss = (atCssSize - regular(font.size)) / step(font.size)
+              const atDevice = (auIn(deviceContext, cluster) - regular(devSize)) / step(devSize)
+              if (Number.isInteger(atCss) && atCss >= 1 && atCss === atDevice) {
+                const delta = atCss * (Math.floor(syntheticBoldOffset(devSize) * apd + 0.5) - step(font.size))
+                correction[t + boundaries[c]!] = delta
+                total += delta
+              }
+            }
             if (!inEmojiFont) {
               if (prefersColorGlyph(presentation, first, next)) {
                 gaps.push({ gap: 'page-history', run: firstRun, detail: `U+${first.toString(16).toUpperCase()} asks for a color glyph, but Canvas draws it with another font than Apple Color Emoji (${atCssSize} au): the document's font fallback has pinned it, and the DOM follows the state at its own layout time (probes gecko-port F2, F3)`, at: clusterAt })
