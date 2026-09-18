@@ -119,6 +119,8 @@ const UNCERTAIN_LIGATURE_DETAIL = 'a ligature the font declaration lists as form
 
 const TRUNCATED_START_DETAIL = 'a wrapped line start inside an RTL shaping run that the port\'s width tests call safe, in an item result the line cuts again at its trailing spaces: where HarfBuzz flags the start unsafe (contextual lookups and ligatures before it that change no width), Blink reshapes it, joins the reshape and the rest in one view whose parts it numbers in visual order, and the cut gives the first cluster\'s glyph to the part after it (shape_result_view.cc:215-308)'
 
+const TRUNCATED_RESHAPE_DETAIL = 'a wrapped line start reshaped inside an RTL shaping run, in an item result the line cuts again at its trailing spaces: Blink reshapes up to the first offset HarfBuzz left safe, which can lie past the one the port\'s width tests find, numbers the view\'s parts in visual order, and the cut then keeps other glyphs than the port\'s view does (shape_result_view.cc:215-308, shaping_line_breaker.cc:309-324)'
+
 const UNTESTED_END_DETAIL = 'a later break opportunity whose line-end reshape failed the fit test: every safe offset the port found between the line start and it is safe by the pair test alone, and where HarfBuzz flags them all (contextual lookups that change no width, as Shantell Sans\'s alternates do) Blink reshapes the whole range and takes the opportunity without a fit test (shaping_line_breaker.cc:497-506)'
 
 const REQUEUED_SPACE_DETAIL = 'a line edge beside U+3000 where Canvas totals show an adjustment, in a font the declaration gives no coverage fact for: a font without U+3000 shapes its neighbours beside the space glyph HarfBuzz puts there, and Blink sends U+3000 itself to a fallback font (harfbuzz_shaper.cc:598-606), so the neighbour keeps its part of the kern, U+3000 none, and the offset is a run edge that is never reshaped; a font with U+3000 kerns it like any glyph'
@@ -410,6 +412,19 @@ function lineEdgeGaps(sh: Shaper, info: LineInfo, start: BlinkLineStart): void {
       let b = k + 1
       while (b < p.groups[g]!.end && !isClusterBoundary(p, b)) b++
       addGap(sh.gaps, 'in-word-prefix', runAt(p, k), TRUNCATED_START_DETAIL, sourceRange(p, k, b))
+    }
+    // The same cut where the port reshaped the start: the reshape ends at the port's first safe offset, which HarfBuzz may
+    // flag. A longer reshape numbers the parts otherwise, and the cut keeps other glyphs: natively `حين. ` in Geeza Pro is
+    // reshaped to the item's end and keeps `ن`, where the port's reshape of `حين` alone loses it with the space
+    // (c-a3b5719bcaf20813: 3762 units natively, 2533 predicted). Known only where the reshape ends at a run's first glyph
+    // or at the item's end.
+    const head = first === undefined || first.shape!.parts.length === 0 ? null : first.shape!.parts[0]!
+    if (g >= 0 && p.groups[g]!.rtl && first !== undefined && head !== null && head.kind === 'reshape' && first.shape!.parts.length > 1) {
+      const end = head.call.end
+      const itemEnd = p.items[first.itemIndex]!.end
+      if (end < itemEnd && !isSegmentEdge(p, end) && !isFontRunEdge(p, end, p.groups[g]!.start, p.groups[g]!.end)) {
+        addGap(sh.gaps, 'in-word-prefix', runAt(p, k), TRUNCATED_RESHAPE_DETAIL, sourceRange(p, k, first.trimmedEnd >= 0 ? first.trimmedEnd : first.end))
+      }
     }
   }
   // A wrapped line start: ShapeLine reshapes [start, first safe) and corrects the available width by the paragraph's
