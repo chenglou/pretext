@@ -260,14 +260,15 @@ function makeBox(p: WebKitPrepared, m: Measurer, leaf: LeafInput, sourceStart: n
   // No family of the list resolves where the list followed by LastResort measures a space as LastResort alone does. The
   // settings' standard family then draws (FontCascadeFonts::realizeFallbackRangesAt, FontCascadeFonts.cpp:210-217), which the
   // locale's script chooses (fonts.ts standardFamilyOf; probe webkit-round4 R7: `a` in `STHeiti`, which the WebContent process
-  // doesn't have, is 7.99px under en and 9.81px under ja at 18px): it is named at the end of the list.
+  // doesn't have, is 7.99px under en and 9.81px under ja at 18px; R11: `cursive` under zh names Kaiti SC, which it doesn't
+  // have either): it is named at the end of the list.
   const standardFamily = locale === '' ? null : standardFamilyOf(localeScript(locale))
-  if (standardFamily !== null && firstNamedGeneric < 0) {
+  if (standardFamily !== null) {
     const plain = { lang: '', letterSpacing: '0px', wordSpacing: '0px', fontKerning: 'auto' as const, textRendering: 'auto' as const, direction: 'ltr' as const, partition: '' }
     const listThenLastResort = measureContext(m, { ...plain, font: canvasFont({ ...font, family: `${font.family}, LastResort` }, size) })
     const lastResort = measureContext(m, { ...plain, font: canvasFont({ ...font, family: 'LastResort' }, size) })
     if (measureText(m, listThenLastResort, ' ') === measureText(m, lastResort, ' ')) {
-      firstNamedGeneric = listed.length
+      if (firstNamedGeneric < 0) firstNamedGeneric = listed.length
       font = { ...font, family: `${font.family}, ${JSON.stringify(standardFamily)}` }
     }
   }

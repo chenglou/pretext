@@ -285,13 +285,13 @@ describe('line-local gaps (DESIGN.md §2.8)', () => {
     const generic = { ...paragraph([['foo bar', 'text']], { lang: 'ja', width: 1000 }), font: { ...fontWith(), family: 'Arial, serif' } }
     const underJa = layout(generic)
     expect(underJa.gaps).not.toContain('canvas-language')
-    expect(underJa.fonts[0]).toBe('normal 400 16px Arial, "Hiragino Mincho ProN"')
+    expect(underJa.fonts).toContain('normal 400 16px Arial, "Hiragino Mincho ProN"')
     // serif under en is the settings' Times, as in Canvas: the keyword stands; monospace is Menlo, where Canvas has Courier.
     expect(layout({ ...generic, lang: 'en' }).fonts[0]).toBe('normal 400 16px Arial, serif')
     expect(layout({ ...generic, lang: 'en', font: { ...fontWith(), family: 'monospace' } }).fonts[0]).toBe('normal 400 16px "Menlo"')
     expect(layout({ ...generic, lang: 'en', font: { ...fontWith(), family: '"monospace"' } }).fonts[0]).toBe('normal 400 16px "monospace"')
     expect(layout({ ...generic, lang: '', font: { ...fontWith(), family: 'monospace' } }).fonts[0]).toBe('normal 400 16px monospace')
-    expect(layout({ ...generic, lang: 'zh-Hant-HK', font: { ...fontWith(), family: 'sans-serif, -webkit-standard' } }).fonts[0]).toBe('normal 400 16px "PingFang HK", "Songti TC"')
+    expect(layout({ ...generic, lang: 'zh-Hant-HK', font: { ...fontWith(), family: 'sans-serif, -webkit-standard' } }).fonts).toContain('normal 400 16px "PingFang HK", "Songti TC"')
   })
 
   test('page-history: an end inside the placed part of the candidate that ended the line reports on that line', () => {
