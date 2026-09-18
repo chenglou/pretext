@@ -118,7 +118,7 @@ export type WebKitBox = {
   // collectBoxFacts). A character is concerned unless a family of `namedContext` draws it (namedFamilyDraws: the families
   // before the first one below, followed by LastResort, against `lastResortContext`, LastResort alone):
   // - `unknownFamily`: the list holds a family the locale resolves in a way Canvas can't be given (a system design, or
-  //   -webkit-standard under USCRIPT_HAN);
+  //   -webkit-standard under USCRIPT_HAN without the preferred languages);
   // - `namedGeneric`: the list holds a generic named for Canvas, which concerns a character with default emoji presentation,
   //   since the DOM skips a generic family's outline glyph for it.
   // `fallback`: the locale's script is Han, kana or Hangul, where Core Text picks system fallback fonts for Han, kana, Hangul,

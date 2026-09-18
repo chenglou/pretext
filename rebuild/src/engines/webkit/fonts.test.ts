@@ -5,30 +5,34 @@ import { genericFamilyUnder, hasEmojiPresentation, standardFamilyOf } from './fo
 
 describe('the family a generic keyword stands for under a locale', () => {
   test('a language takes its own entry, else its parent\'s, else the default; case and separators don\'t matter', () => {
-    expect(genericFamilyUnder('serif', 'ja', 'KATAKANA_OR_HIRAGANA')).toBe('Hiragino Mincho ProN')
-    expect(genericFamilyUnder('sans-serif', 'ja-JP-u-ca-japanese', 'KATAKANA_OR_HIRAGANA')).toBe('Hiragino Sans')
-    expect(genericFamilyUnder('sans-serif', 'zh-Hant-HK', 'TRADITIONAL_HAN')).toBe('PingFang HK')
-    expect(genericFamilyUnder('sans-serif', 'zh_TW', 'TRADITIONAL_HAN')).toBe('PingFang TC')
-    expect(genericFamilyUnder('sans-serif', 'ZH-hans', 'SIMPLIFIED_HAN')).toBe('PingFang SC')
-    expect(genericFamilyUnder('serif', 'pa-Arab', 'ARABIC')).toBe('Geeza Pro')
-    expect(genericFamilyUnder('cursive', 'ru', 'CYRILLIC')).toBe('Snell Roundhand')
+    expect(genericFamilyUnder('serif', 'ja', 'KATAKANA_OR_HIRAGANA', null)).toBe('Hiragino Mincho ProN')
+    expect(genericFamilyUnder('sans-serif', 'ja-JP-u-ca-japanese', 'KATAKANA_OR_HIRAGANA', null)).toBe('Hiragino Sans')
+    expect(genericFamilyUnder('sans-serif', 'zh-Hant-HK', 'TRADITIONAL_HAN', null)).toBe('PingFang HK')
+    expect(genericFamilyUnder('sans-serif', 'zh_TW', 'TRADITIONAL_HAN', null)).toBe('PingFang TC')
+    expect(genericFamilyUnder('sans-serif', 'ZH-hans', 'SIMPLIFIED_HAN', null)).toBe('PingFang SC')
+    expect(genericFamilyUnder('serif', 'pa-Arab', 'ARABIC', null)).toBe('Geeza Pro')
+    expect(genericFamilyUnder('cursive', 'ru', 'CYRILLIC', null)).toBe('Snell Roundhand')
   })
 
   test('null where the keyword resolves as it does without a locale: the settings\' family, a reserved name, a Common script', () => {
-    expect(genericFamilyUnder('serif', 'en', 'LATIN')).toBe(null)
-    expect(genericFamilyUnder('sans-serif', 'en-US', 'LATIN')).toBe(null)
-    expect(genericFamilyUnder('cursive', 'he', 'HEBREW')).toBe(null)
-    expect(genericFamilyUnder('monospace', 'en', 'LATIN')).toBe('Menlo')
-    expect(genericFamilyUnder('monospace', 'he', 'HEBREW')).toBe('Courier New')
-    expect(genericFamilyUnder('monospace', 'yue', 'COMMON')).toBe(null)
-    expect(genericFamilyUnder('system-ui', 'ja', 'KATAKANA_OR_HIRAGANA')).toBe(null)
+    expect(genericFamilyUnder('serif', 'en', 'LATIN', null)).toBe(null)
+    expect(genericFamilyUnder('sans-serif', 'en-US', 'LATIN', null)).toBe(null)
+    expect(genericFamilyUnder('cursive', 'he', 'HEBREW', null)).toBe(null)
+    expect(genericFamilyUnder('monospace', 'en', 'LATIN', null)).toBe('Menlo')
+    expect(genericFamilyUnder('monospace', 'he', 'HEBREW', null)).toBe('Courier New')
+    expect(genericFamilyUnder('monospace', 'yue', 'COMMON', null)).toBe(null)
+    expect(genericFamilyUnder('system-ui', 'ja', 'KATAKANA_OR_HIRAGANA', null)).toBe(null)
   })
 
   test('-webkit-standard is the settings\' family of the script (SettingsBaseCocoa.mm:44-50)', () => {
-    expect(genericFamilyUnder('-webkit-standard', 'ko', 'HANGUL')).toBe('AppleMyungjo')
-    expect(genericFamilyUnder('-webkit-standard', 'zh', 'HAN')).toBe(null)
-    expect(genericFamilyUnder('-webkit-standard', 'th', 'THAI')).toBe(null)
-    expect(standardFamilyOf('SIMPLIFIED_HAN')).toBe('Songti SC')
+    expect(genericFamilyUnder('-webkit-standard', 'ko', 'HANGUL', null)).toBe('AppleMyungjo')
+    expect(genericFamilyUnder('-webkit-standard', 'zh', 'HAN', null)).toBe(null)
+    // USCRIPT_HAN: the first of zh-tw and zh-cn among the preferred languages, Simplified without either (Language.cpp:129-138).
+    expect(genericFamilyUnder('-webkit-standard', 'zh', 'HAN', ['en-US'])).toBe('Songti SC')
+    expect(genericFamilyUnder('-webkit-standard', 'zh', 'HAN', ['zh-CN', 'zh-TW'])).toBe('Songti SC')
+    expect(genericFamilyUnder('-webkit-standard', 'zh', 'HAN', ['en', 'zh-TW', 'zh-CN'])).toBe('Songti TC')
+    expect(genericFamilyUnder('-webkit-standard', 'th', 'THAI', null)).toBe(null)
+    expect(standardFamilyOf('SIMPLIFIED_HAN', null)).toBe('Songti SC')
   })
 })
 

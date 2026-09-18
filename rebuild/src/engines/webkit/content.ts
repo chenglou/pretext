@@ -232,7 +232,7 @@ function makeBox(p: WebKitPrepared, m: Measurer, leaf: LeafInput, sourceStart: n
   const canvasFamilies = leaf.textStyle.font.family.split(',').map(part => part.trim())
   let firstNamedGeneric = -1
   for (let i = 0; i < listed.length; i++) {
-    const named = listed[i]!.quoted || locale === '' ? null : genericFamilyUnder(listed[i]!.name, locale, localeScript(locale))
+    const named = listed[i]!.quoted || locale === '' ? null : genericFamilyUnder(listed[i]!.name, locale, localeScript(locale), p.env.preferredLanguages)
     if (named === null) continue
     canvasFamilies[i] = JSON.stringify(named)
     if (firstNamedGeneric < 0) firstNamedGeneric = i
@@ -262,7 +262,7 @@ function makeBox(p: WebKitPrepared, m: Measurer, leaf: LeafInput, sourceStart: n
   // locale's script chooses (fonts.ts standardFamilyOf; probe webkit-round4 R7: `a` in `STHeiti`, which the WebContent process
   // doesn't have, is 7.99px under en and 9.81px under ja at 18px; R11: `cursive` under zh names Kaiti SC, which it doesn't
   // have either): it is named at the end of the list.
-  const standardFamily = locale === '' ? null : standardFamilyOf(localeScript(locale))
+  const standardFamily = locale === '' ? null : standardFamilyOf(localeScript(locale), p.env.preferredLanguages)
   if (standardFamily !== null) {
     const plain = { lang: '', letterSpacing: '0px', wordSpacing: '0px', fontKerning: 'auto' as const, textRendering: 'auto' as const, direction: 'ltr' as const, partition: '' }
     const listThenLastResort = measureContext(m, { ...plain, font: canvasFont({ ...font, family: `${font.family}, LastResort` }, size) })
@@ -583,7 +583,8 @@ function collectBoxFacts(p: WebKitPrepared, m: Measurer, leaves: LeafInput[]): v
     // - serif, sans-serif, cursive, fantasy, monospace and -webkit-standard: the family the locale resolves them to is named
     //   in the list Canvas gets (makeBox, fonts.ts), which leaves characters with default emoji presentation: the DOM skips
     //   a generic family's outline glyph for them, and Canvas doesn't know the named family for a generic one;
-    // - -webkit-standard under USCRIPT_HAN, which follows a system preference (FontGenericFamilies.cpp:56-60);
+    // - -webkit-standard under USCRIPT_HAN where the preferred languages that choose it aren't given
+    //   (FontGenericFamilies.cpp:56-60);
     // - system-ui and the ui-* designs (FontCacheCoreText.cpp:585-598, SystemFontDatabaseCoreText.cpp:236);
     // - system fallback after the list (FontCacheCoreText.cpp:822), which Core Text picks by language for Han, kana, Hangul,
     //   CJK punctuation and fullwidth forms (DESIGN.md §1.3). Probe webkit-round3 R3: under 18 languages of other scripts, and

@@ -10,8 +10,10 @@
 //   36 languages the DOM's boxes of the five keywords equal Canvas totals under the named family in every pair where the
 //   table names one, `monospace` under en as Menlo among them, where Canvas resolves the keyword to Courier).
 // - -webkit-standard: the settings' standard family of the locale's script (FontGenericFamilies.cpp:50-66), which WebKit sets
-//   for Han, kana and Hangul (SettingsBase::initializeDefaultFontFamilies, SettingsBaseCocoa.mm:44-50). USCRIPT_HAN follows a
-//   system preference (userPrefersSimplifiedChinese) and isn't named here.
+//   for Han, kana and Hangul (SettingsBase::initializeDefaultFontFamilies, SettingsBaseCocoa.mm:44-50). USCRIPT_HAN takes the
+//   Simplified or the Traditional one by the preferred languages: the first of zh-tw and zh-cn among them decides, Simplified
+//   without either (userPrefersSimplifiedChinese, WTF/wtf/Language.cpp:129-138). Preferred languages that aren't given leave
+//   it unnamed.
 // A family named this way isn't a generic family to Canvas, and the DOM skips a generic family's outline glyph for a character
 // with default emoji presentation (FontCascadeFonts::glyphDataForVariant, FontCascadeFonts.cpp:440-447;
 // FontCascade::resolveEmojiPolicy, FontCascadeCoreText.cpp:473-523), so such a character still reports canvas-language
@@ -23,15 +25,23 @@ const STANDARD_FAMILY_BY_SCRIPT: Readonly<Record<string, string>> = {
   TRADITIONAL_HAN: 'Songti TC', SIMPLIFIED_HAN: 'Songti SC', KATAKANA_OR_HIRAGANA: 'Hiragino Mincho ProN', HANGUL: 'AppleMyungjo',
 }
 
-// The settings' standard family of a script, or null where the source doesn't name one apart from the Common script's.
-export function standardFamilyOf(script: string): string | null {
-  return STANDARD_FAMILY_BY_SCRIPT[script] ?? null
+// The settings' standard family of a script, or null where the source doesn't name one apart from the Common script's, or
+// the preferred languages that choose it aren't given.
+export function standardFamilyOf(script: string, preferredLanguages: readonly string[] | null): string | null {
+  if (script !== 'HAN') return STANDARD_FAMILY_BY_SCRIPT[script] ?? null
+  if (preferredLanguages === null) return null
+  for (let i = 0; i < preferredLanguages.length; i++) {
+    const language = preferredLanguages[i]!.toLowerCase()
+    if (language === 'zh-tw') return STANDARD_FAMILY_BY_SCRIPT['TRADITIONAL_HAN']!
+    if (language === 'zh-cn') break
+  }
+  return STANDARD_FAMILY_BY_SCRIPT['SIMPLIFIED_HAN']!
 }
 
 // The family a generic keyword stands for under the locale, or null where it resolves as it does without one. `script` is
-// localeToScriptCode of the locale (data.ts localeScript).
-export function genericFamilyUnder(keyword: string, locale: string, script: string): string | null {
-  if (keyword === '-webkit-standard') return standardFamilyOf(script)
+// localeToScriptCode of the locale (data.ts localeScript); `preferredLanguages` are the environment's.
+export function genericFamilyUnder(keyword: string, locale: string, script: string, preferredLanguages: readonly string[] | null): string | null {
+  if (keyword === '-webkit-standard') return standardFamilyOf(script, preferredLanguages)
   const index = CORE_TEXT_GENERICS.indexOf(keyword)
   if (index < 0 || script === 'COMMON') return null
   let language = locale.toLowerCase().replaceAll('_', '-')
