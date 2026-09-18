@@ -173,6 +173,8 @@ export class LineBreaker {
   readonly shapeResults = new Map<number, ShapeResult>()
   untestedEnds: number[] = []
   clampedStarts: { start: number; limit: GapName }[] = []
+  // Set by shapeLineWith where the clamp of a start's corrected space rests on a stand-in, with whether the port clamped.
+  clampRests: { limit: GapName; clamped: boolean } | null = null
   endTests: EndTest[] = []
   truncatedStarts: number[] = []
 
@@ -594,8 +596,32 @@ export class LineBreaker {
   // auto-spacing (text-autospace: no-autospace) and HanKerning at wrapped line starts, which text-spacing-trim: normal
   // doesn't trim (text_spacing_trim.h:31-34). The HanKerning line-end reshape (:344-363) is taken.
   //
+  // Where the clamp of a wrapped line start's corrected space rests on a stand-in position (shapeLineWith), the port lays
+  // the line out the other way too, and records the start only when that gives another line.
+  shapeLine(item: InlineItem, sr: ShapeResult, start: number, availableSpace: number, noResultIfOverflow: boolean, dontReshapeEndIfAtSpace: boolean, out: ShapeLineResult): View | null {
+    this.clampRests = null
+    const view = this.shapeLineWith(item, sr, start, availableSpace, noResultIfOverflow, dontReshapeEndIfAtSpace, out, sr.end + 1, false)
+    const rests = this.clampRests as { limit: GapName; clamped: boolean } | null
+    if (rests === null || this.clampedStarts.some(c => c.start === start)) return view
+    let differs = rests.clamped
+    if (!differs) {
+      // The port didn't clamp: the line Blink makes if it does.
+      const kept = { gaps: this.sh.gaps.length, untestedEnds: this.untestedEnds.length, endTests: this.endTests.length }
+      const other: ShapeLineResult = { breakOffset: 0, isOverflow: false, isHyphenated: false, hasTrailingSpaces: false, partsKnown: true }
+      const otherView = this.shapeLineWith(item, sr, start, availableSpace, noResultIfOverflow, dontReshapeEndIfAtSpace, other, sr.end + 1, true)
+      this.sh.gaps.length = kept.gaps
+      this.untestedEnds.length = kept.untestedEnds
+      this.endTests.length = kept.endTests
+      differs = (view === null) !== (otherView === null) || other.breakOffset !== out.breakOffset || other.isOverflow !== out.isOverflow ||
+        other.hasTrailingSpaces !== out.hasTrailingSpaces || (view !== null && otherView !== null && view.width !== otherView.width)
+    }
+    if (differs) this.clampedStarts.push({ start, limit: rests.limit })
+    return view
+  }
+
   // `candidateBefore` is the port's: the candidate search stays below that offset (see the out-of-order check in the loop).
-  shapeLine(item: InlineItem, sr: ShapeResult, start: number, availableSpace: number, noResultIfOverflow: boolean, dontReshapeEndIfAtSpace: boolean, out: ShapeLineResult, candidateBefore: number = sr.end + 1): View | null {
+  // `forceClamp` is the port's: the corrected space of a wrapped line start is taken as clamped at 0.
+  shapeLineWith(item: InlineItem, sr: ShapeResult, start: number, availableSpace: number, noResultIfOverflow: boolean, dontReshapeEndIfAtSpace: boolean, out: ShapeLineResult, candidateBefore: number, forceClamp: boolean): View | null {
     const sh = this.sh
     const given = { availableSpace, gaps: sh.gaps.length, untestedEnds: this.untestedEnds.length, endTests: this.endTests.length }
     const rangeStart = sr.start
@@ -629,9 +655,10 @@ export class LineBreaker {
       if (sr.kind === 'group' && (availableSpace - reshaped <= 0 || availableSpace + diff <= 0)) {
         const group = sh.p.groups[sr.group]!
         const limit = positionLimit(sh, sr.group, start, group.start, group.end)
-        if (limit !== null && !this.clampedStarts.some(c => c.start === start)) this.clampedStarts.push({ start, limit })
+        if (limit !== null) this.clampRests = { limit, clamped: diff !== 0 && availableSpace + diff <= 0 }
       }
       if (diff !== 0) availableSpace = Math.max(availableSpace + diff, 0)
+      if (forceClamp) availableSpace = 0
     }
     const endPosition = startPosition + flip(availableSpace)
     let candidate = offsetForPosition(sh, sr, endPosition, candidateBefore)
@@ -730,7 +757,7 @@ export class LineBreaker {
           out.isHyphenated = false
           out.hasTrailingSpaces = false
           out.partsKnown = true
-          return this.shapeLine(item, sr, start, given.availableSpace, noResultIfOverflow, dontReshapeEndIfAtSpace, out, lastSafe)
+          return this.shapeLineWith(item, sr, start, given.availableSpace, noResultIfOverflow, dontReshapeEndIfAtSpace, out, lastSafe, forceClamp)
         }
         // Blink's last safe offset is the port's for sure where that is a run's first glyph, or the line's start.
         if (lastSafe > start && !this.hasRunEdge(item, lastSafe, lastSafe + 1)) out.partsKnown = false

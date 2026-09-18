@@ -397,7 +397,7 @@ describe('blink round 4', () => {
   }
   const listed = (coverage: number[]): FontFacts => ({
     ...UNKNOWN_FONT_FACTS, pairKerning: 'split',
-    fonts: [{ realizes: true, coverage, ligatures: null, spacingInputs: null, scriptLookups: null }],
+    fonts: [{ family: 'Mono', realizes: true, coverage, ligatures: null, spacingInputs: null, scriptLookups: null }],
   })
   const textItems = (line: BlinkLine): Extract<BlinkLine['geometry']['items'][number], { kind: 'text' }>[] =>
     line.geometry.items.filter((i): i is Extract<BlinkLine['geometry']['items'][number], { kind: 'text' }> => i.kind === 'text')
