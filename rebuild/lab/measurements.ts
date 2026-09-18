@@ -45,18 +45,21 @@ function assignedKey(assigned: RecordedContext['assigned'], names: readonly Sett
   return JSON.stringify(names.map(name => assigned[name] ?? null))
 }
 
-export type Replay = { asked: number; fromAnotherContext: number; restore: () => void }
+// `answeredBy`: per question asked, in order, the index in `record.calls` of the recorded call that answered it. A library
+// that measures as the recorded one did asks the phase's calls in order.
+export type Replay = { asked: number; fromAnotherContext: number; answeredBy: number[]; restore: () => void }
 
-// Installs the record's predict phase as the browser globals a layout reads. restore() puts the old globals back.
-export function installReplay(record: CaseMeasurements, env: { userAgent: string; devicePixelRatio: number; pageLang: string }): Replay {
-  const replay: Replay = { asked: 0, fromAnotherContext: 0, restore: () => {} }
-  // Per recorded context: string -> the answers in call order.
-  const answers: Array<Map<string, RecordedCall[]>> = record.contexts.map(() => new Map())
-  for (let i = record.phases.predict[0]; i < record.phases.predict[1]; i++) {
+// Installs one phase of the record (the predict phase, or the observe phase, where the WebKit observation port measures) as
+// the browser globals a layout reads. restore() puts the old globals back.
+export function installReplay(record: CaseMeasurements, env: { userAgent: string; devicePixelRatio: number; pageLang: string }, phase: 'predict' | 'observe' = 'predict'): Replay {
+  const replay: Replay = { asked: 0, fromAnotherContext: 0, answeredBy: [], restore: () => {} }
+  // Per recorded context: string -> the answers in call order, as indices into record.calls.
+  const answers: Array<Map<string, number[]>> = record.contexts.map(() => new Map())
+  for (let i = record.phases[phase][0]; i < record.phases[phase][1]; i++) {
     const call = record.calls[i]!
     const list = answers[call[0]]!.get(call[1])
-    if (list === undefined) answers[call[0]]!.set(call[1], [call])
-    else list.push(call)
+    if (list === undefined) answers[call[0]]!.set(call[1], [i])
+    else list.push(i)
   }
   // A setting the recorded browser's contexts don't have (WebKit: lang, textRendering) is an ordinary property there, which
   // the recorder can't see assigned, so the replay ignores it too.
@@ -90,7 +93,9 @@ export function installReplay(record: CaseMeasurements, env: { userAgent: string
       const list = answers[from]!.get(text)!
       const nth = this.served.get(text) ?? 0
       this.served.set(text, nth + 1)
-      const call = list[Math.min(nth, list.length - 1)]!
+      const index = list[Math.min(nth, list.length - 1)]!
+      replay.answeredBy.push(index)
+      const call: RecordedCall = record.calls[index]!
       const fontBox = record.contexts[from]!.fontBox
       return { width: call[2], actualBoundingBoxLeft: call[3], actualBoundingBoxRight: call[4], actualBoundingBoxAscent: call[5], actualBoundingBoxDescent: call[6], fontBoundingBoxAscent: fontBox[0], fontBoundingBoxDescent: fontBox[1] }
     }
