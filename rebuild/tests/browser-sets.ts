@@ -256,7 +256,7 @@ if (measureFirst) {
     mkdirSync(resolve(staged, '..'), { recursive: true })
     writeFileSync(staged, formatBaseline(seed))
     writeFileSync(`${staged.replace(/\.json$/, '')}.seed-record.json`, `${JSON.stringify(record, null, 2)}\n`)
-    log(`staged ${relative(REPO, staged)} (not adopted): ${seed.counts.cases} cases, pass pairs ${JSON.stringify(seed.counts.passPairs)}, ${seed.counts.historyDependentCases} history-dependent, ${seed.counts.unstablePairs} unstable pairs${before === null ? '' : `; against the adopted seed ${record.lost.length} pairs lost, ${record.gained.length} gained, ${record.leftThroughHistory.length} left through history dependence`}`)
+    log(`staged ${relative(REPO, staged)} (not adopted): ${seed.counts.cases} cases, pass pairs ${JSON.stringify(seed.counts.passPairs)}, ${seed.counts.historyDependentCases} history-dependent, ${seed.counts.unstablePairs} unstable pairs${before === null ? '' : `; against the adopted seed ${record.lost.length} pairs lost, ${record.gained.length} gained, ${record.leftThroughHistory.length} left through history dependence, ${record.leftWithTheirCase?.length ?? 0} left with a case the runs don't hold`}`)
   } else {
     const baseline = parseBaseline(readFileSync(baselinePath, 'utf8'), baselinePath)
     const problems = runProblems(engine, runs, { allowUncompared: !bothOrders, environments: baseline.environments })

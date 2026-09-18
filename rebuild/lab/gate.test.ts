@@ -217,6 +217,22 @@ describe('files', () => {
     expect(diff.leftThroughProtocol).toEqual([['c-5', 'lineCount'], ['c-5', 'breaks'], ['c-5', 'widths'], ['c-5', 'painter']])
   })
 
+  test('the passes of a case the new seed doesn\'t observe leave by id, in the diff and in the seed record', () => {
+    // c-2 and c-3 left the case files: nothing is lost, and their five passes no longer gate (research/ROUND3-CRITIC.md item 9).
+    const before = seed([run('a', [result('c-1', 'PPPP'), result('c-2', 'PPFP'), result('c-3', 'PPNN'), result('c-4', 'FFNN')])])
+    const runs = [run('b', [result('c-1', 'PPPP'), result('c-5', 'PPPP')])]
+    const after = seed(runs)
+    const diff = diffBaselines(before, after)
+    expect(diff.lost).toEqual([])
+    expect(diff.leftWithTheirCase).toEqual([['c-2', 'lineCount'], ['c-2', 'breaks'], ['c-2', 'painter'], ['c-3', 'lineCount'], ['c-3', 'breaks']])
+    // c-4 passed nothing, so it leaves no pair; it still counts as a case only the older seed observed.
+    expect([diff.casesOnlyBefore, diff.casesOnlyAfter]).toEqual([3, 1])
+    const record = seedRecord(before, after, runs, { staged: 'staged/gate.json', against: 'baselines/gate.json' })
+    expect(record.leftWithTheirCase).toEqual(diff.leftWithTheirCase)
+    expect(record.lost).toEqual([])
+    expect(seedRecord(null, after, runs, { staged: 'staged/gate.json', against: null }).leftWithTheirCase).toEqual([])
+  })
+
   test('the seed record lists every lost pair with its covering gaps, and the pairs that leave through new history dependence', () => {
     const before = seed([run('a', [result('c-1', 'PPPP'), result('c-2', 'PPPP'), result('c-3', 'PPPP'), result('c-4', 'PPFP', { historyDependent: 'was already' })])])
     const runs = [

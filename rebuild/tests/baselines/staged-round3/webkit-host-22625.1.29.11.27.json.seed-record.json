@@ -498,6 +498,32 @@
   ],
   "leftThroughHistory": [],
   "leftThroughProtocol": [],
+  "leftWithTheirCase": [
+    [
+      "c-5c1eb698d47a5aa8",
+      "lineCount"
+    ],
+    [
+      "c-5c1eb698d47a5aa8",
+      "breaks"
+    ],
+    [
+      "c-5c1eb698d47a5aa8",
+      "widths"
+    ],
+    [
+      "c-fd12d58e36540fea",
+      "lineCount"
+    ],
+    [
+      "c-fd12d58e36540fea",
+      "breaks"
+    ],
+    [
+      "c-fd12d58e36540fea",
+      "widths"
+    ]
+  ],
   "gained": [
     [
       "c-02ef4e9983c49240",
