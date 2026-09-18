@@ -4,7 +4,7 @@
 // TextAlignLine and nsBidiPresUtils::ReorderFrames. specs/gecko-lines.md §4-§6; widths are integer app units throughout
 // (§2.8). A line returns the frames Gecko placed on it (DESIGN.md §2.5), and fragments classified by the frames' own flags.
 import { measureContext, measureText, measureTextBounds, type Measurer } from '../../measure/canvas.js'
-import type { Fragment, Gap, GeckoCharacter, GeckoFrameGeometry, GeckoLine, GeckoLineResult, LineSlot, TextAlign } from '../../model.js'
+import type { Fragment, Gap, GapName, GeckoCharacter, GeckoFrameGeometry, GeckoLine, GeckoLineResult, LineSlot, TextAlign } from '../../model.js'
 import { listedFontOf } from './fonts.js'
 import { addLikelySubtags, tryParseLocale } from './likely.js'
 import { BREAK_EMERGENCY_WRAP, BREAK_NORMAL } from './linebreak.js'
@@ -101,10 +101,36 @@ function inWordAdvance(p: GeckoPrepared, m: Measurer, run: GeckoTextRun, unit: {
     // has, and what each advances, no Canvas string shows: a mark measured at a string's start has no base (fresh
     // c-7421ac03d17f9f11: 14px Geeza Pro gives seen 448 au and the sukun after it, in the next span, 171 au, where the
     // cluster is 619 au and the sukun alone measures nothing).
+    // That division is where a native frame becomes unbounded (probes gecko-port F18, F20). Between two marks of one cluster,
+    // a font that ligates them gives the ligature's glyph to the first mark, a ligature group start that isn't a cluster
+    // start, and a range edge between the marks cuts that group. Under kerx or a kern state machine marks keep their
+    // advances, often negative ones (hb-ot-shape.cc:189-191), and ComputeLigatureData divides the group's signed advance by
+    // an unsigned cluster count: `partClusterCount * (ligatureWidth / totalClusterCount)` with `int32_t ligatureWidth` and
+    // `uint32_t totalClusterCount` (gfxTextRun.cpp:249-284). A negative advance W becomes 2^32 + W au for the part before the
+    // cut and W − (2^32 + W) for the last part (:286-289), so the first frame takes nscoord_MAX and the second 0
+    // (NSToCoordCeilClamped over max(0, advance), nsTextFrame.cpp:11272-11273). 20px "Geeza Pro", reh fatha | shadda: the
+    // frame holding reh and fatha is 17,895,698px wide, nscoord_MAX through float32, and the word moves to a line of its own.
+    // Canvas shows neither the ligature nor its advance's sign, so the port keeps the ordinary division and says so here.
     let end = t + 1
     while (end < unit.tEnd && p.clusterStart[end] === 0) end++
     const inner = advanceBefore(p, m, run, end)
-    return { au: inner.au, standIn: `offset ${p.tSource[t]} inside a grapheme cluster: the DOM divides the cluster's advance by its glyph records and ligature groups, which Canvas can't show (gfxHarfBuzzShaper.cpp:1705-1786, gfxTextRun.cpp:238-322)` }
+    const previous = (p.tUnits[t - 1]! & 0xfc00) === 0xdc00 && t - 2 >= unit.tStart ? t - 2 : t - 1
+    const betweenMarks = previous >= unit.tStart && p.clusterStart[previous] === 0 && run.joining !== 'opentype'
+    return {
+      au: inner.au,
+      standIn: `offset ${p.tSource[t]} inside a grapheme cluster: the DOM divides the cluster's advance by its glyph records and ligature groups, which Canvas can't show (gfxHarfBuzzShaper.cpp:1705-1786, gfxTextRun.cpp:238-322)` +
+        (betweenMarks ? '; between two marks, a ligature of them with a negative advance makes the part before the cut 2^32 au wider and its frame nscoord_MAX (unsigned division, gfxTextRun.cpp:249-289; probes gecko-port F18, F20)' : ''),
+    }
+  }
+  // A mark that starts a cluster: Unicode leaves some spacing marks out of Grapheme_Cluster_Break=SpacingMark (U+102B, U+102C
+  // and U+1038 in Myanmar among them), so Gecko starts a cluster there, but to HarfBuzz's syllabic shapers the mark belongs to
+  // the syllable before it, and a string that starts with it is a broken syllable, which gets a dotted circle
+  // (hb_syllabic_insert_dotted_circles, hb-ot-shaper-syllabic.cc:32-99): the suffix measured alone doesn't shape as it does
+  // in the unit. 20px "Myanmar MN": U+1038 alone is 982 au, a 649 au dotted circle and the 333 au the DOM gives it after
+  // U+1004 U+102B (probe gecko-port F23). The value is the prefix's width, which ends before the mark, and a stand-in.
+  if (generalCategory(codePointAtT(p, t))[0] === 'M') {
+    const prefixAu = rangeAu(m, run, p.tUnits, unit.tStart, t)
+    return { au: unit.startAdvance + prefixAu + p.correctionPrefix[t]! - p.correctionPrefix[unit.tStart]!, standIn: `offset ${p.tSource[t]} before a mark that starts a cluster: alone it shapes as a broken syllable with a dotted circle, not as in the unit (hb-ot-shaper-syllabic.cc:32-99)` }
   }
   const joiner = joinsAcross(p, unit, t) ? ZWJ : ''
   // A unit that starts inside a cluster (a mark or an emoji modifier after an invalid character): Canvas counts its first
@@ -569,6 +595,8 @@ type Provider = {
   startOfLine: boolean
   letterSpacingAu: number
   tabs: Map<number, number>
+  // The tabs whose width is a stand-in, by transformed index (computeTabs).
+  tabStandIn: Map<number, StandIn>
 }
 
 // The letter and word spacing of [a, b) as the frame's measured ranges get it: the paragraph's spacing (prepare.ts step 6),
@@ -639,22 +667,64 @@ function advanceWidth(p: GeckoPrepared, m: Measurer, prov: Provider, a: number, 
   return rangeAdvance(p, m, prov, a, b, gaps)
 }
 
-// CalcTabWidths and AdvanceToNextTab (nsTextFrame.cpp:4298-4378): tab stops from the block's content edge.
-function computeTabs(p: GeckoPrepared, m: Measurer, prov: Provider, end: number, xForTabs: number, gaps: LineGaps): void {
+// CalcTabWidths and AdvanceToNextTab (nsTextFrame.cpp:4298-4378): tab stops from the block's content edge. The position
+// it tracks isn't the frame's measured advance:
+// - A character adds its cluster's glyph advance only where it starts a cluster (:4349-4357), so the characters a frame
+//   starts with inside a cluster (a span that starts at a mark, a mark after a tab) add nothing, though the frame's width
+//   holds their part. Fresh c-552fa9e3eb8a2096: a span starts at U+094B inside the cluster of U+0926 in 20px "Kohinoor
+//   Devanagari" and holds a tab; natively the mark's part is 328 au, the tab ends at 7456 au of tracked position, twice the
+//   3728 au tab width, and at 7784 au on the line.
+// - Spacing is asked for one character at a time (:4345-4347), so the base a cluster's letter spacing goes by is the
+//   character itself (p.tabSpacingPrefix, prepare.ts step 6).
+// A tab's width is the next stop less that position, so it is a stand-in where the position is one: where an earlier text
+// frame of the line has a stand-in width, or the first cluster the scan counts starts at a stand-in. `prov.tabStandIn`
+// holds those tabs with the condition and the reason. A later tab counts from the stop before it; it stays a stand-in,
+// since a stand-in that crosses a stop moves every stop after it.
+function computeTabs(p: GeckoPrepared, m: Measurer, ll: LineLayout, prov: Provider, end: number, xForTabs: number, gaps: LineGaps): void {
   // GetSpacing calls CalcTabWidths only for a positive tab width (nsTextFrame.cpp:4306-4309): tab-size 0, or letter
   // spacing below minus the space width, leaves tabs at 0.
   if (!prov.run.hasTab || p.tabWidth <= 0) return
+  const tabSpacing = p.tabSpacingPrefix!
   let x = xForTabs
+  let standIn = placedStandIn(p, m, ll.root)
   let from = prov.startT
   for (let t = prov.startT; t < end; t++) {
     if (p.kind[t] !== KIND_TAB) continue
-    x += glyphBefore(p, m, prov.run, t, gaps) - glyphBefore(p, m, prov.run, from, gaps) + spacingIn(p, m, prov, from, t)
+    let first = from
+    while (first < t && p.clusterStart[first] === 0) first++
+    if (standIn === null) {
+      const reason = advanceBefore(p, m, prov.run, first).standIn
+      if (reason !== null) standIn = { gap: 'in-word-prefix', detail: reason }
+    }
+    x += glyphBefore(p, m, prov.run, t, gaps) - glyphBefore(p, m, prov.run, first, gaps) + tabSpacing[t]! - tabSpacing[from]!
     const nextTab = Math.ceil((x + prov.run.minTabAdvance) / p.tabWidth) * p.tabWidth
     const w = Math.trunc(nextTab - x + (nextTab - x >= 0 ? 0.5 : -0.5)) // NSToIntRound
     prov.tabs.set(t, w)
-    x = nextTab + p.spacingPrefix[t + 1]! - p.spacingPrefix[t]!
+    if (standIn !== null) prov.tabStandIn.set(t, standIn)
+    x = nextTab + tabSpacing[t + 1]! - tabSpacing[t]!
     from = t + 1
   }
+}
+
+// The condition under which the inline position after the line's placed frames is a stand-in, or null: a text frame whose
+// Canvas widths all are (GeckoTextRun.advancesStandIn), whose measured start or end is an in-word stand-in, or that holds a
+// stand-in tab.
+type StandIn = { gap: GapName; detail: string }
+function placedStandIn(p: GeckoPrepared, m: Measurer, psd: SpanData): StandIn | null {
+  for (let k = 0; k < psd.frames.length; k++) {
+    const pf = psd.frames[k]!
+    if (pf.kind === 'span') {
+      const inner = placedStandIn(p, m, pf.span)
+      if (inner !== null) return inner
+    }
+    if (pf.kind !== 'text' || pf.r.prov === null) continue
+    const prov = pf.r.prov
+    if (prov.run.advancesStandIn !== null) return { gap: prov.run.advancesStandIn, detail: `an earlier text frame of the line measures under ${prov.run.advancesStandIn}` }
+    for (const reason of prov.tabStandIn.values()) return reason
+    const reason = advanceBefore(p, m, prov.run, prov.startT).standIn ?? advanceBefore(p, m, prov.run, pf.r.tEnd).standIn
+    if (reason !== null) return { gap: 'in-word-prefix', detail: reason }
+  }
+  return null
 }
 
 // GetHyphenationBreaks (nsTextFrame.cpp:4409-4457): a soft opportunity before the first kept character after skipped
@@ -984,13 +1054,13 @@ function reflowText(p: GeckoPrepared, m: Measurer, ll: LineLayout, psd: SpanData
   const canTrim = !style.whiteSpaceIsSignificant
   const prov: Provider = {
     run, frame: fi, start: offset, length, startT: tOffset, startOfLine: atStartOfLine, letterSpacingAu: p.letterSpacingAu[f.run]!,
-    tabs: new Map(),
+    tabs: new Map(), tabStandIn: new Map(),
   }
   // GetCurrentFrameInlineDistanceFromBlock less the block's padding, 0 here (nsTextFrame.cpp:11063-11067,
   // nsLineLayout.cpp:1154-1160): the sum of the span chain's inline coordinates.
   let xForTabs = 0
   for (let s: SpanData | null = psd; s !== null; s = s.parent) xForTabs += s.iCoord
-  computeTabs(p, m, prov, tOffset + tLength, xForTabs, gaps)
+  computeTabs(p, m, ll, prov, tOffset + tLength, xForTabs, gaps)
   // LineIsBreakable: a placed frame or a band impacted by floats (nsLineLayout.h:151-155; nsTextFrame.cpp:11133-11135).
   const lineIsBreakable = ll.totalPlaced > 0 || ll.impactedByFloats
   const r = breakAndMeasureText(p, m, prov, tOffset, tLength, availWidth, lineIsBreakable ? 'none' : 'initial',
@@ -1354,6 +1424,8 @@ export function nextGeckoLine(p: GeckoPrepared, start: GeckoLineStart, slot: Lin
 function characters(p: GeckoPrepared, m: Measurer, r: FrameResult, prov: Provider, justification: Map<number, number> | null): { characters: GeckoCharacter[]; standInAtEnd: boolean } {
   const out: GeckoCharacter[] = []
   let before = advanceBefore(p, m, prov.run, prov.startT)
+  // Every position after a stand-in tab sums its width (computeTabs).
+  let afterStandInTab = false
   for (let s = r.offset; s < r.contentStart + r.contentLength; s++) {
     const t = p.sourceT[s]!
     if (t === -1) {
@@ -1364,11 +1436,12 @@ function characters(p: GeckoPrepared, m: Measurer, r: FrameResult, prov: Provide
     out.push({
       skipped: false, clusterStart: p.clusterStart[t] === 1, unitStart: p.units[p.unitOf[t]!]!.tStart === t,
       advance: after.au - before.au + spacingIn(p, m, prov, t, t + 1) + (prov.tabs.get(t) ?? 0) + (justification?.get(t) ?? 0),
-      standInBefore: before.standIn !== null,
+      standInBefore: before.standIn !== null || afterStandInTab,
     })
     before = after
+    if (prov.tabStandIn.has(t)) afterStandInTab = true
   }
-  return { characters: out, standInAtEnd: before.standIn !== null }
+  return { characters: out, standInAtEnd: before.standIn !== null || afterStandInTab }
 }
 
 // The frames' visual order: UAX #9 L2 over their levels, as nsBidiPresUtils::ReorderFrames orders a line
@@ -1959,6 +2032,16 @@ function lineOutput(p: GeckoPrepared, m: Measurer, start: GeckoLineStart, lineEn
     for (let k = 0; k < offsets.length; k++) {
       const s = offsets[k]!
       gaps.list.push({ gap: 'in-word-prefix', run: p.frames[frameOfSource(p.frames, s)]!.run, detail: report.get(s)!, at: { start: s, end: s } })
+    }
+  }
+  // The line's tabs whose width is a stand-in (computeTabs), each under the condition its position rests on.
+  for (let k = 0; k < placedText.length; k++) {
+    const r = placedText[k]!.r
+    if (r.prov === null) continue
+    for (const [t, reason] of r.prov.tabStandIn) {
+      if (t >= r.tEnd) continue
+      const s = p.tSource[t]!
+      gaps.list.push({ gap: reason.gap, run: p.frames[r.frame]!.run, detail: `the tab at offset ${s} is the next stop less the position before it, which counts from the block's origin (CalcTabWidths, nsTextFrame.cpp:4306-4378) over a stand-in: ${reason.detail}`, at: { start: s, end: s + 1 } })
     }
   }
   return {

@@ -92,6 +92,29 @@ export const observeGecko: ObservationPort<GeckoLayout> = (paragraph, layout) =>
   }
   for (let r = 0; r < framesOfRun.length; r++) framesOfRun[r]!.sort((a, b) => a.frame.contentStart - b.frame.contentStart)
 
+  // A paragraph gap with a range names text whose advances are Canvas stand-ins under its condition (DESIGN.md §2.8): a
+  // cluster whose font follows the process's history, a cursive cluster whose letter spacing the font facts don't settle, a
+  // bitmap emoji at a size Canvas can't set. A sum of advances over such text is a stand-in too. `dictionary-breaks-
+  // unavailable` names breaks, not advances. rangeGap(a, b): the condition of a ranged gap meeting source [a, b), or null.
+  const ranged = layout.gaps.filter(g => g.at !== undefined && g.at.end > g.at.start && g.gap !== 'dictionary-breaks-unavailable')
+    .map(g => ({ start: g.at!.start, end: g.at!.end, gap: g.gap })).sort((a, b) => a.start - b.start)
+  // furthest[i]: the gap among the first i + 1 that reaches furthest.
+  const furthest: number[] = []
+  for (let i = 0; i < ranged.length; i++) furthest.push(i > 0 && ranged[furthest[i - 1]!]!.end >= ranged[i]!.end ? furthest[i - 1]! : i)
+  const rangeGap = (a: number, b: number): GapName | null => {
+    if (b <= a || ranged.length === 0) return null
+    let lo = 0
+    let hi = ranged.length
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1
+      if (ranged[mid]!.start < b) lo = mid + 1
+      else hi = mid
+    }
+    if (lo === 0) return null
+    const reach = ranged[furthest[lo - 1]!]!
+    return reach.end > a ? reach.gap : null
+  }
+
   // The condition under which the position before source offset s in frame f is a stand-in, or null. Every advance of a
   // frame whose Canvas widths are stand-ins is one (GeckoTextFrame.advancesStandIn). Otherwise the layout says so per unit,
   // where the position lies inside a shaping unit and Canvas couldn't confirm it (GeckoCharacter.standInBefore,
@@ -107,7 +130,7 @@ export const observeGecko: ObservationPort<GeckoLayout> = (paragraph, layout) =>
   }
   // A frame's box is the advance between its two ends (nsTextFrame.cpp:11268-11273): a stand-in where either end is one.
   const widthLimited = (f: GeckoTextFrame): GapName | null =>
-    f.advancesStandIn ?? standIn(f, f.measuredStart) ?? (f.standInAtEnd ? 'in-word-prefix' : null)
+    f.advancesStandIn ?? standIn(f, f.measuredStart) ?? (f.standInAtEnd ? 'in-word-prefix' : null) ?? rangeGap(f.measuredStart, f.contentEnd)
 
   // A frame's place on its line. TextAlignLine and ReorderFrames put frames one after another from the line's start edge,
   // after an offset that start alignment takes from the hang alone and every other alignment from the line's remaining
@@ -160,7 +183,8 @@ export const observeGecko: ObservationPort<GeckoLayout> = (paragraph, layout) =>
   // start (GetTrimmedOffsets without trimming the end, :3287-3330), snap back to the cluster start (FindClusterStart,
   // :3549-3558), sum the advances from the trimmed start, and count from the box's right edge in an RTL text run. The sum
   // is a stand-in where either end of it is one: the frame's start and the offset, or in an RTL text run, where the point is
-  // the box's width less the sum, the offset and the frame's end.
+  // the box's width less the sum, the offset and the frame's end. It is one too where it sums text a ranged paragraph gap
+  // names (rangeGap); in an RTL text run the box's width stands for that.
   const point = (pf: PlacedFrame, offset: number): Edge => {
     const f = pf.frame
     let o = Math.max(f.contentStart, Math.min(f.contentEnd, offset))
@@ -176,7 +200,7 @@ export const observeGecko: ObservationPort<GeckoLayout> = (paragraph, layout) =>
     let keptFrom = false
     for (let c = o - f.measuredStart; c < f.characters.length && !keptFrom; c++) keptFrom = !f.characters[c]!.skipped
     if (pf.rtl) return { au: f.width - iSize, limited: keptFrom ? standIn(f, o) ?? widthLimited(f) : null }
-    return { au: iSize, limited: keptBefore ? standIn(f, f.measuredStart) ?? standIn(f, o) : null }
+    return { au: iSize, limited: keptBefore ? standIn(f, f.measuredStart) ?? standIn(f, o) ?? rangeGap(f.measuredStart, o) : null }
   }
   // nsRect::ClampPoint into the rect as already cut (gfx/2d/BaseRect.h:701-705).
   const clamp = (p: Edge, lo: Edge, hi: Edge): Edge => {

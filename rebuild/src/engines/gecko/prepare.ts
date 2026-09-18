@@ -1120,6 +1120,13 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, measur
   }
   const spacingPrefix = new Int32Array(T + 1)
   const scanSpacingPrefix = new Int32Array(T + 1)
+  // CalcTabWidths asks GetSpacingInternal for one character at a time (nsTextFrame.cpp:4345-4347), and the base search goes
+  // no further back than the range asked for (:4203-4213), so there the base is the character itself: a mark after a cursive
+  // letter, script Inherited, takes the letter spacing its cluster doesn't, and so does the low surrogate of a cursive letter
+  // (ScalarValueAt gives 0 there, CharacterDataBuffer.h:295-311). Only tab positions read it (lines.ts computeTabs).
+  let anyTab = false
+  for (let r = 0; r < builds.length; r++) anyTab ||= builds[r]!.hasTab
+  const tabSpacingPrefix = anyTab ? new Int32Array(T + 1) : null
   for (let r = 0; r < builds.length; r++) {
     const b = builds[r]!
     for (let t = b.tStart; t < b.tEnd; t++) {
@@ -1127,6 +1134,7 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, measur
       const style = runStyles[run]!
       let spacing = 0
       let scanSpacing = 0
+      let tabSpacing = 0
       const ls = letterSpacingAu[run]!
       if (ls !== 0) {
         // CanAddSpacingAfter (nsTextFrame.cpp:3860-3873).
@@ -1181,6 +1189,11 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, measur
           }
           if (!isCursiveScript(cp)) scanSpacing += ls
           if (!isCursiveScript(found)) spacing += ls
+          if (tabSpacingPrefix !== null) {
+            const own = text.charCodeAt(tSource[t]!)
+            const scalar = (own & 0xf800) !== 0xd800 ? own : text.codePointAt(tSource[t]!)! > 0xffff ? text.codePointAt(tSource[t]!)! : 0
+            if (!isCursiveScript(scalar)) tabSpacing += ls
+          }
         }
       }
       const ws = wordSpacingAu[run]!
@@ -1193,10 +1206,12 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, measur
           ((ch === 0x0d || ch === 0x09) && !style.whiteSpaceIsSignificant) || (ch === 0x0a && !style.newlineIsSignificant)) {
           spacing += ws
           scanSpacing += ws
+          tabSpacing += ws
         }
       }
       spacingPrefix[t + 1] = spacingPrefix[t]! + spacing
       scanSpacingPrefix[t + 1] = scanSpacingPrefix[t]! + scanSpacing
+      if (tabSpacingPrefix !== null) tabSpacingPrefix[t + 1] = tabSpacingPrefix[t]! + tabSpacing
     }
   }
 
@@ -1324,7 +1339,7 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, measur
           }
         }
         let total = w
-        if (apd !== 60 && !b.is8bit) {
+        if (!b.is8bit) {
           // Apple Color Emoji is an sbix font: the DOM takes its advances from Core Text at the device size, Canvas at the
           // CSS size (gfxMacFont.cpp:437-463; specs/gecko-canvas.md §1.9, §2 A12). Which font draws a cluster is font
           // matching's decision (gfxFontGroup::FindFontForChar, gfxTextRun.cpp:3178-3600), and the document's fallback
@@ -1370,8 +1385,23 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, measur
               auIn(deviceContext, cluster) === auIn(emojiFontContext(devSize), cluster) &&
               sameBox(measureTextBounds(measurer, context, cluster), measureTextBounds(measurer, emojiFontContext(font.size), cluster))
             const clusterAt = { start: tSource[t + boundaries[c]!]!, end: tSource[t + boundaries[c + 1]! - 1]! + 1 }
+            const next = cluster.codePointAt(first >= 0x10000 ? 2 : 1) ?? 0
+            // An emoji-default character with U+FE0E asks for a glyph without color (TextExplicit, gfxTextRun.cpp:3268-3273).
+            // The preferred fonts and the common fallback list of its script hold none for it (gfxPlatformMac.cpp:147-262
+            // puts "Apple Color Emoji" first only for a color request), so the font comes from the system-wide search, which
+            // in a content process looks only at the families whose character maps are loaded by then and starts loading the
+            // others (GlobalFontFallback, gfxPlatformFontList.cpp:1474-1486), and a color font found on the way stays the
+            // candidate where the search finds nothing (:1290-1300; gfxTextRun.cpp:3385-3390). So which font draws it follows
+            // the process's history, unless a listed family draws it. Both orders of the development and held-out suite
+            // samples (round 4, `.artifacts/lab/gecko/r4-1`): `❤️😀︎❤️` gives U+1F600 U+FE0E 20.7px natively after one
+            // history and 33.5px after the other, in 5 of the 5 history-dependent cases round 2's condition didn't name.
+            if (next === 0xfe0e && presentation === 'emoji-default') {
+              const listed = listedFontOf(font, first)
+              if (listed === null || listed < 0) {
+                gaps.push({ gap: 'page-history', run: firstRun, detail: `U+${first.toString(16).toUpperCase()} U+FE0E asks for a glyph without color, which only the system-wide font search finds, among the families whose character maps the process has loaded by then (gfxPlatformFontList.cpp:1474-1486)`, at: clusterAt })
+              }
+            }
             if (!inEmojiFont) {
-              const next = cluster.codePointAt(first >= 0x10000 ? 2 : 1) ?? 0
               if (prefersColorGlyph(presentation, first, next)) {
                 gaps.push({ gap: 'page-history', run: firstRun, detail: `U+${first.toString(16).toUpperCase()} asks for a color glyph, but Canvas draws it with another font than Apple Color Emoji (${atCssSize} au): the document's font fallback has pinned it, and the DOM follows the state at its own layout time (probes gecko-port F2, F3)`, at: clusterAt })
               }
@@ -1385,7 +1415,7 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, measur
               !prefersColorGlyph(presentation, first, cluster.codePointAt(first >= 0x10000 ? 2 : 1) ?? 0)) {
               gaps.push({ gap: 'font-fallback', run: firstRun, detail: `U+${first.toString(16).toUpperCase()} asks for text presentation in Apple Color Emoji's own font list: which font the DOM draws it with depends on text fonts' coverage, which the Canvas test can't show there (gfxTextRun.cpp:3268-3308)`, at: clusterAt })
             }
-            if (quantize7(devSize) !== devSize) {
+            if (apd !== 60 && quantize7(devSize) !== devSize) {
               gaps.push({ gap: 'bitmap-emoji-size', run: firstRun, detail: `device size ${devSize}px is not on Canvas's 7-bit size grid`, at: clusterAt })
             }
             // The DOM stores floor(apd × device advance + 0.5) (gfxHarfBuzzShaper.cpp:1559); a lone regional indicator's
@@ -1457,12 +1487,15 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, measur
   // this run's style and neighbours would choose (gfxPlatformFontList::SystemFindFontForChar,
   // gfxPlatformFontList.cpp:1244-1268, :1328-1330): its width follows the process's history. Canvas reads the same cache, so
   // the prediction follows the state at measuring time. Which fonts cover U+FFFD isn't a Canvas fact, so every U+FFFD reports
-  // it (the round 2 held-out suite's 104 history-dependent suite/U+FFFD rows: 16px natively after one history, 13.133px
-  // after another).
+  // it unless the coverage facts name a listed family for it (the round 2 held-out suite's 104 history-dependent
+  // suite/U+FFFD rows: 16px natively after one history, 13.133px after another).
   for (let s = 0; s < n; s++) {
     if (text.charCodeAt(s) !== 0xfffd) continue
     let run = 0
     while (runStarts[run + 1]! <= s) run++
+    // A listed family that the coverage facts say draws U+FFFD keeps it out of system fallback (fonts.ts listedFontOf).
+    const listed = listedFontOf(runTextStyles[run]!.font, 0xfffd)
+    if (listed !== null && listed >= 0) continue
     gaps.push({ gap: 'page-history', run, detail: 'U+FFFD outside the listed fonts takes the family the process first fell back to for U+FFFD (gfxPlatformFontList.cpp:1244-1268, :1328-1330)', at: { start: s, end: s + 1 } })
   }
 
@@ -1482,7 +1515,7 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, measur
   return {
     paragraph, env, appUnitsPerDevPixel: apd, blockStyle, text, runStarts, runStyles, runParents, runLangs: langs, letterSpacingAu, frames, items,
     elements, textRuns, tUnits, tSource, breakFlags: g.breakFlags, clusterStart: g.clusterStart, isSpace: g.isSpace, kind: g.kind,
-    spacingPrefix, scanSpacingPrefix, correctionPrefix, unitOf, units, sourceT, nextT, tabWidth, emergencyUnconfirmed, textIndentAu: pxToAu(paragraph.textIndent), bidi: resolveBidi, gaps,
+    spacingPrefix, scanSpacingPrefix, tabSpacingPrefix, correctionPrefix, unitOf, units, sourceT, nextT, tabWidth, emergencyUnconfirmed, textIndentAu: pxToAu(paragraph.textIndent), bidi: resolveBidi, gaps,
   }
 }
 
