@@ -152,7 +152,7 @@ for (let k = 1; k <= 6; k++) {
 need('the DOM unit equals the Canvas unit', widthOf(node.whole), unit);
 need('the two sides measured with U+200D add up to the unit', prefix + suffix, unit);
 check('supplementary: sad in the DOM against W(sad U+200D), in au', domSad - prefix, 1);
-check('supplementary: the prefix before rounding, read at 64 times the size, lies within 1/64 au of a half app unit', Math.abs(scaled[5] - Math.floor(scaled[5]) - 0.5) <= 1 / 64 + 1e-9, true);
+check('supplementary: the prefix before rounding, read at 64 times the size, is not within 1/64 au of a half app unit, so the difference is no rounding tie', Math.abs(scaled[5] - Math.floor(scaled[5]) - 0.5) <= 1 / 64 + 1e-9, false);
 return { apd, domPoints: node.points, domSad, unit, prefix, suffix, scaled, checks, pre };
 `
 
@@ -203,7 +203,7 @@ for (const size of [16, 18, 20, 24]) {
   emoji.push({ size, domBold, domRegular, deviceBold, deviceRegular, recipe: Math.floor(deviceBold * apd / 60 + 0.5), bySteps: Math.floor(deviceRegular * apd / 60 + 0.5) + nsRound(offset(size * dpr) * apd) });
 }
 check('a bold bitmap emoji in the DOM: the regular device advance at the page\'s apd plus NS_round(offset(device size) × apd)', emoji.map(r => [r.size, r.domBold]), emoji.map(r => [r.size, r.bySteps]));
-check('supplementary: the device-size recipe over the bold Canvas advance, against the DOM, in au', emoji.map(r => [r.size, r.recipe - r.domBold]), emoji.map(r => [r.size, 0]));
+check('supplementary: rounding the bold Canvas advance at the device size once is 1 au over the DOM at 18px and 20px', emoji.map(r => [r.size, r.recipe - r.domBold]), [[16, 0], [18, 1], [20, 1], [24, 0]]);
 return { apd, rows, emoji, heart: heart.points, checks, pre };
 `
 
