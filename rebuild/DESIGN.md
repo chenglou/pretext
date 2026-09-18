@@ -1,14 +1,14 @@
 # Pretext rebuild: design
 
-Status, 2026-09-17, branch `rebuild-20260916`: the data model follows rebuild/CHARTER.md. Layout returns each engine's
-own line geometry in that engine's units (§2). Font facts, the browser build and the browser process's languages are
-explicit inputs (§1.2, §1.4). The contract the lab's observation ports implement is defined (§9). The input is a tree of
-inline content: spans with their own wrapping styles and box edges, atomic inlines, `<br>` and `<wbr>`, with the block's
-text-indent and text-align (§1.1). Lines are laid out one slot at a time, so each line can have its own available width,
-and the lab verifies that natively with floats (§2.9). The input and environment types, the content index, the
-measurement layer, the painter and the shared Unicode and break-data pieces exist and are tested. The three engine ports
-and the observation ports still read the flat model of runs; they convert in stage 5 of §8.3, which says what each owner
-changes. Until then `tsc` fails under `src/engines` and `lab/observe`.
+Status, 2026-09-18, branch `rebuild-20260916` after round 4a: the data model follows rebuild/CHARTER.md. Layout returns
+each engine's own line geometry in that engine's units (§2). The browser build and the browser process's languages are
+explicit inputs (§1.4); font facts are optional inputs, and the library asks Canvas itself for the ones a dedicated check
+can answer (§1.2). What the measuring recipes assume of the Canvas API is checked in the running browser (§1.4). The
+contract the lab's observation ports implement is defined (§9). The input is a tree of inline content: spans with their
+own wrapping styles and box edges, atomic inlines, `<br>` and `<wbr>`, with the block's text-indent and text-align
+(§1.1). Lines are laid out one slot at a time, so each line can have its own available width, and the lab verifies that
+natively with floats (§2.9). The three engine ports and the observation ports lay out that tree since stage 5 of §8.3;
+`tsc` is clean over `rebuild`, `rebuild/lab`, `rebuild/tests` and `rebuild/probes`, and `bun test rebuild` passes.
 
 The library takes a styled paragraph, a tree of inline content with facts about its fonts, and the environment it will
 be drawn in. It computes the lines the installed browser's own layout produces, one line slot at a time, the way that
@@ -47,8 +47,8 @@ Terms used throughout:
   built from 16.16 glyph advances and float32 shape widths. WebKit: float32 CSS px. Gecko: app units, integers counting
   1/60 CSS px.
 - **Geometry**: what an engine places on a line: Blink's fragment items, WebKit's display boxes, Gecko's frames.
-- **Font fact**: something about a realized font that an engine reads and Canvas can't show, such as the monospace
-  trait (§1.2).
+- **Font fact**: something about a realized font that an engine reads and no measured width of the paragraph's text
+  shows, such as the monospace trait (§1.2).
 - **Given fact**: something about the browser or the document that no page API shows, such as the build or Chrome's
   application locale (§1.4).
 - **Gap**: a known case where Canvas or a missing fact can't give what the DOM uses, so a prediction may be wrong (§5).
@@ -1691,7 +1691,7 @@ comes from the library (TEST-ARCHITECTURE.md §0 rule 1). The ports walk the tre
 
 ### 8.2 Tests
 
-`bun test rebuild/src` ran 170 tests in 14 files before stage 5. `src/content.test.ts` checks the document-order index:
+`bun test rebuild` runs 689 tests in 49 files (2026-09-18; TESTS.md has the tiers above unit tests). `src/content.test.ts` checks the document-order index:
 leaf offsets and parents, preorder element numbering with their events, style and language lookup, and empty leaves.
 The bidi tests build `tools/icu-bidi-oracle.c` with clang against Homebrew `icu4c@78` and the system libicucore:
 
@@ -1716,9 +1716,6 @@ The bidi tests build `tools/icu-bidi-oracle.c` with clang against Homebrew `icu4
   probe verdicts over Courier New and `icu_properties` equality. The shortcut audits rate their strength (blink §6,
   webkit §4, gecko §7).
 
-Until stage 5 lands, the engine test files that build paragraphs from `runs` or call `nextLine` with a width fail to
-typecheck, and the ones that run them fail.
-
 Engine ports add bun tests in their directory against recorded outputs, streamed line by line (`tools/lines.ts`):
 
 - Blink scan: `runtime-parity/blink-webkit/work/blink-requests.jsonl` and `blink-answers.jsonl`, 13,108 requests
@@ -1732,8 +1729,8 @@ Engine ports add bun tests in their directory against recorded outputs, streamed
 - Blink's own `line_breaker_test.cc` has Ahem cases with inline boxes, floats and text-indent, which a stand-in Canvas
   reproduces (blink audit §6); they are the first tests for stage 5's Blink rules.
 
-Lines are tested in the installed browsers with the lab, one browser at a time under the shared lock (lab/README.md):
-smoke cases first, then the suite sample. TEST-ARCHITECTURE.md lays out the test layers the rebuild grows into: parity
+Lines are tested in the lab's pinned browsers under the shared lock's slots (lab/README.md, "Test tiers"): unit tests, the
+offline replay of recorded Canvas answers, then the tiers' sets in a browser. TEST-ARCHITECTURE.md lays out the test layers the rebuild grows into: parity
 with engine libraries, browser facts per build, offline replay, rule-targeted families at thresholds taken from
 observations, sealed held-out sets, and the gate.
 
