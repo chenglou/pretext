@@ -30,7 +30,7 @@ function line(boxes: WebKitDisplayBox[], lineBoxWidth = 100): WebKitLine {
 }
 
 function box(run: number, start: number, end: number, x: number, width: number, overrides: Partial<WebKitTextBox> = {}): WebKitDisplayBox {
-  return { kind: 'text', run, start, end, level: 0, isWordSeparator: false, x, width, hyphen: null, expansion: 0, expansionBehavior: { left: 'allow', right: 'allow' }, shapedAcrossBoxes: false, ...overrides }
+  return { kind: 'text', run, start, end, level: 0, isWordSeparator: false, x, width, hyphen: null, expansion: 0, expansionBehavior: { left: 'allow', right: 'allow' }, shapedAcrossBoxes: false, canvasFamily: 'Arial', ...overrides }
 }
 
 function layoutOf(lines: WebKitLine[]): WebKitLayout {
@@ -170,5 +170,74 @@ describe('element rects (DESIGN.md §9, stage 5)', () => {
     expect(observed.elements.map(plain)).toEqual([[[0, 0, 23]], [[0, 23, 20]], [[0, 43, 0]], []])
     expect(plain(observed.nodes[0]!)).toEqual([[0, 7, 16]])
     expect(plain(observed.nodes[1]!)).toEqual([[1, 0, 8]])
+  })
+})
+
+describe('states: what a reported gap can move (the file header of webkit.ts)', () => {
+  const states = (rects: ExpectedRect[]): string[] => rects.map(r => `${r.x.state === 'limited' ? r.x.gap : 'predicted'}/${r.width.state === 'limited' ? r.width.gap : 'predicted'}`)
+  const lineOf = (boxes: WebKitDisplayBox[], start: number, end: number, overrides: Partial<WebKitLine> = {}): WebKitLine => ({ ...line(boxes), start, end, ...overrides })
+
+  test('a gap limits its whole line and the lines after it, up to a forced break', () => {
+    const p = paragraph(['aa bb cc dd\nee'], { whiteSpace: 'pre-line' })
+    const layout = layoutOf([
+      lineOf([box(0, 0, 2, 0, 16)], 0, 3),
+      // The gap names `bb` alone; the break after it rests on it, and so does where `cc dd` starts.
+      lineOf([box(0, 3, 5, 0, 16)], 3, 6, { gaps: [{ gap: 'canvas-language', run: 0, detail: '', at: { start: 3, end: 5 } }] }),
+      lineOf([box(0, 6, 11, 0, 40), box(0, 11, 12, 40, 0, { kind: 'soft-line-break' })], 6, 12, { fragments: [{ kind: 'forced-break', run: 0, start: 11, end: 12 }] }),
+      lineOf([box(0, 12, 14, 0, 16)], 12, 14),
+    ])
+    const observed = observeWebKit(p, layout, advances(new Array<number>(14).fill(8)))
+    expect(states(observed.nodes[0]!)).toEqual(['predicted/predicted', 'canvas-language/canvas-language', 'canvas-language/canvas-language', 'canvas-language/predicted', 'predicted/predicted'])
+    // A code point on a box edge sits where its box does.
+    expect(observed.codePoints[0]!.rects[0]!.x.state).toBe('predicted')
+    expect(observed.codePoints[3]!.rects[0]!.x).toEqual({ state: 'limited', gap: 'canvas-language', value: 0 })
+    expect(observed.codePoints[6]!.rects[0]!.x).toEqual({ state: 'limited', gap: 'canvas-language', value: 0 })
+    expect(observed.codePoints[12]!.rects[0]!.x.state).toBe('predicted')
+  })
+
+  test('with line slots a forced break starts nothing over: the rows shift with the line count', () => {
+    const p = paragraph(['aa\nbb'], { whiteSpace: 'pre-line' })
+    const slot = { left: 10, right: 0 }
+    const layout = layoutOf([
+      lineOf([box(0, 0, 2, 10, 16), box(0, 2, 3, 26, 0, { kind: 'soft-line-break' })], 0, 3, { slot, gaps: [{ gap: 'tab-stops', run: 0, detail: '', at: { start: 0, end: 1 } }], fragments: [{ kind: 'forced-break', run: 0, start: 2, end: 3 }] }),
+      lineOf([box(0, 3, 5, 0, 16)], 3, 5),
+    ])
+    const observed = observeWebKit(p, layout, advances([8, 8, 0, 8, 8]))
+    expect(states(observed.nodes[0]!)).toEqual(['tab-stops/tab-stops', 'tab-stops/predicted', 'tab-stops/tab-stops'])
+  })
+
+  test('a slot refused on a gap limits the lines after it; a paragraph gap limits the lines its range meets', () => {
+    const p = paragraph(['aa bb'])
+    const refused = layoutOf([lineOf([box(0, 0, 2, 0, 16)], 0, 3), lineOf([box(0, 3, 5, 0, 16)], 3, 5)])
+    refused.belowFloats = [{ row: 1, gaps: [{ gap: 'simplified-measuring', run: 0, detail: '' }] }]
+    expect(states(observeWebKit(p, refused, advances([8, 8, 8, 8, 8])).nodes[0]!)).toEqual(['predicted/predicted', 'simplified-measuring/simplified-measuring'])
+    const ranged = layoutOf([lineOf([box(0, 0, 2, 0, 16)], 0, 3), lineOf([box(0, 3, 5, 0, 16)], 3, 5)])
+    ranged.gaps = [{ gap: 'string-storage', run: 0, detail: '', at: { start: 4, end: 5 } }]
+    expect(states(observeWebKit(p, ranged, advances([8, 8, 8, 8, 8])).nodes[0]!)).toEqual(['predicted/predicted', 'string-storage/string-storage'])
+  })
+
+  test('element rects follow their line, and a text box that measures 0 under a gap is limited', () => {
+    const spanNode: InlineNode = {
+      kind: 'span', font, letterSpacing: 0, wordSpacing: 0, whiteSpace: 'normal', wordBreak: 'normal', overflowWrap: 'normal', lineBreak: 'auto', tabSize: 8,
+      lang: null, inlineStart: NO_BOX_EDGE, inlineEnd: NO_BOX_EDGE, verticalAlign: 'baseline', children: [{ kind: 'text', text: 'ab' }],
+    }
+    const p = treeParagraph([spanNode, { kind: 'br' }])
+    const layout = layoutOf([lineOf([{ kind: 'inline-box', element: 0, x: 0, width: 0, hasStartEdge: true, hasEndEdge: true }, box(0, 0, 2, 0, 0), { kind: 'line-break', element: 1, x: 0, width: 0 }], 0, 2, { gaps: [{ gap: 'rtl-shaping-across-inline-boxes', run: 0, detail: '', at: { start: 0, end: 2 } }] })])
+    const observed = observeWebKit(p, layout, advances([0, 0]))
+    expect(observed.elements.map(states)).toEqual([['rtl-shaping-across-inline-boxes/rtl-shaping-across-inline-boxes'], ['rtl-shaping-across-inline-boxes/predicted']])
+    expect(states(observed.nodes[0]!)).toEqual(['rtl-shaping-across-inline-boxes/rtl-shaping-across-inline-boxes'])
+  })
+})
+
+describe('the Canvas family (WebKitTextBox.canvasFamily)', () => {
+  test('in-box stand-ins are measured with the list the layout measured the box with', () => {
+    const p = paragraph(['ab'], { font: { ...font, family: 'monospace' } })
+    const fonts = new Set<string>()
+    const measure: CanvasMeasure = (settings, text) => {
+      fonts.add(settings.font)
+      return 8 * text.length
+    }
+    observeWebKit(p, layoutOf([line([box(0, 0, 2, 0, 16, { canvasFamily: '"Menlo"' })])]), measure)
+    expect([...fonts]).toEqual(['normal 400 16px "Menlo"'])
   })
 })
