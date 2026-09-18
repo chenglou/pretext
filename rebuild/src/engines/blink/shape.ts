@@ -124,6 +124,21 @@ export type Shaper = {
   gaps: Gap[]
 }
 
+// The contexts a string of a style is measured on, by the string's storage. Chrome keeps the strings and the words a
+// canvas shaped under their characters and direction, whatever their storage (frame_shape_cache.cc:45-65, 135-149;
+// plain_text_node.cc:400-412), so a canvas answers a one-byte and a two-byte string of the same characters with whichever
+// it shaped first, in either order (probe blink-storage S3). A segmented paragraph asks both kinds (canvasString), and a
+// word Canvas cuts from a two-byte string before a CJK character can be Latin-1-only too, so there the one-byte strings
+// have contexts of their own, made when the first one is asked: no canvas holds both kinds, and the order of the
+// questions can't change an answer. An unsegmented paragraph needs one set: its strings are two-byte by their characters
+// alone, and Canvas cuts no words from them (they hold no U+0020, TAB, U+FFFC or CJK character: text_content is Latin-1
+// but for atomic inlines, where a shaping group ends), so every two-byte string and word holds a unit above U+00FF.
+export function contextsOf(sh: Shaper, style: number, twoByte: boolean): StyleContexts {
+  const p = sh.p
+  if (twoByte || !p.segmented) return p.contexts[style]!
+  return p.oneByteContexts[style] ??= styleContexts(sh.m, p.styles[style]!, p.layoutZoom, '8bit')
+}
+
 // W × 65536 of a Canvas string, a whole number of 16.16 units (a Canvas total is the float32 of one, blink-canvas §1.5),
 // times the style's scale: 16.16 units of the zoomed px. Whole where the scale is 1 or 2; under another scale the
 // fractions are exact, so sums and differences of measured totals are too.
@@ -416,8 +431,8 @@ export function measure16(sh: Shaper, g: number, from: number, to: number, callS
     }
   }
   const group = p.groups[g]!
-  const contexts = p.contexts[group.style]!
   const cs = canvasString(p, from, to, joinedAtEdge(sh, g, from, callStart, callEnd), joinedAtEdge(sh, g, to, callStart, callEnd), p.scripts[from]!)
+  const contexts = contextsOf(sh, group.style, cs.twoByte)
   const context = noLigatures ? (group.rtl ? contexts.rtlNoLigatures : contexts.ltrNoLigatures) : (group.rtl ? contexts.rtl : contexts.ltr)
   const w = cs.s.length === 0 ? 0 : raw16Of(sh, contexts, context, cs.s)
   const st = p.styles[group.style]!
@@ -1498,11 +1513,13 @@ export function hyphenText(style: BlinkStyle): string {
 // width decides whether the break fits. Where mapsHyphen isn't given and U+002D measures differently in the run's
 // context, that decision rests on the default, so the line being filled reports hyphen-glyph.
 export function shapeHyphen(sh: Shaper, style: number): { text: string; inlineSize: number } {
-  const contexts = sh.p.contexts[style]!
   const st = sh.p.styles[style]!
   const text = hyphenText(st)
+  // U+2010 is a two-byte string and U+002D a one-byte one, as the paragraph's own hyphen strings are.
+  const contexts = contextsOf(sh, style, text !== '-')
+  const oneByte = contextsOf(sh, style, false)
   const raw16 = raw16Of(sh, contexts, contexts.hyphen, text)
-  if (st.font.facts.mapsHyphen === null && raw16 !== raw16Of(sh, contexts, contexts.hyphen, '-')) {
+  if (st.font.facts.mapsHyphen === null && raw16 !== raw16Of(sh, oneByte, oneByte.hyphen, '-')) {
     addGap(sh.gaps, 'hyphen-glyph', st.run, 'a soft hyphen break the line breaker tried in a font the declaration gives no mapsHyphen fact for: Blink draws U+2010 when the primary font maps it and U+002D otherwise, and the two measure differently here (computed_style.cc:1804-1820)')
   }
   return { text, inlineSize: Math.max(0, luCeil(widthOf16(raw16))) }
@@ -1518,7 +1535,7 @@ export function tabShapeResult(sh: Shaper, start: number, end: number, rtl: bool
   // The item's tab-size (style.GetTabSize(), line_breaker.cc:2968) with the block's font and spacing (FontForTab under
   // TabSizeAncestor, inline_node.cc:2130-2140).
   const block = p.styles[0]!
-  const contexts = p.contexts[0]!
+  const contexts = contextsOf(sh, 0, false)
   const space = widthOf16(raw16Of(sh, contexts, contexts.hyphen, ' '))
   const ls = f32(block.letterSpacing * p.layoutZoom)
   const ws = f32(block.wordSpacing * p.layoutZoom)

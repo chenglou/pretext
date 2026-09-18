@@ -545,3 +545,47 @@ describe('blink round 4c', () => {
     expect(texts).toEqual([[0, 0, 124 * 64], [6, 124 * 64, 50 * 64], [11, 180 * 64, 10 * 64], [12, 190 * 64, 20 * 64]])
   })
 })
+
+describe('blink string storage', () => {
+  // Every string asked, with the partition of its context.
+  function asks(p: Paragraph): { partition: string; text: string }[] {
+    const measurer = createMeasurer()
+    const prepared = blinkEngine.prepare(p, env, measurer)
+    for (let start = blinkEngine.firstLine(prepared); start !== null;) {
+      const result = blinkEngine.nextLine(prepared, start, FULL_WIDTH, measurer)
+      if (result.kind === 'below-floats') throw new Error('no floats here')
+      start = result.line.next
+    }
+    return measurer.log.calls.map(call => ({ partition: measurer.log.contexts[call.context]!.partition, text: call.text }))
+  }
+  const latin1 = (text: string): boolean => /^[ -ÿ]*$/.test(text)
+  const RUN = '((((((((((((('
+  const ARABIC = 'عربي'
+
+  test('a segmented paragraph asks its one-byte and its two-byte strings on contexts of their own', () => {
+    // The brackets after the Arabic word are shaped under Arabic and asked as a two-byte slice; the same characters after
+    // `abc` are shaped under Latin and asked as a one-byte string (canvasString).
+    for (const width of [2000, 140]) {
+      const all = asks(paragraph([[`${ARABIC}${RUN}abc${RUN}def`, 'text']], width))
+      const oneByte = all.filter(a => a.partition === '8bit')
+      const twoByte = all.filter(a => a.partition === '16bit')
+      expect(oneByte.length + twoByte.length).toBe(all.length)
+      expect(oneByte.some(a => a.text === RUN)).toBe(true)
+      expect(twoByte.some(a => a.text === RUN)).toBe(true)
+      // One-byte contexts hold Latin-1 alone; a Latin-1-only string on a two-byte context is a slice of 13 units or more.
+      expect(oneByte.every(a => latin1(a.text))).toBe(true)
+      expect(twoByte.every(a => !latin1(a.text) || a.text.length >= 13)).toBe(true)
+    }
+  })
+
+  test('an unsegmented paragraph keeps one set of contexts', () => {
+    const all = asks(paragraph([[`abc ${RUN} def ${RUN}`, 'text']], 2000))
+    expect(new Set(all.map(a => a.partition))).toEqual(new Set(['8bit']))
+  })
+
+  test('a text node that holds U+FFFC is 16-bit content, an atomic inline isn\'t (inline_items_builder.cc:725, 1258)', () => {
+    const measurer = createMeasurer()
+    expect(blinkEngine.prepare(paragraph([['abc', 'text'], ['￼', 'span']], 2000), env, measurer).segmented).toBe(true)
+    expect(blinkEngine.prepare(paragraph([['abc', 'text']], 2000), env, measurer).segmented).toBe(false)
+  })
+})

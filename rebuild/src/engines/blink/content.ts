@@ -450,8 +450,14 @@ class Builder {
     }
   }
 
-  // AppendText's dispatch (inline_items_builder.cc:637-679) for a leaf's text under its style.
+  // AppendText's dispatch (inline_items_builder.cc:637-679) for a leaf's text under its style. A text whose string is
+  // stored in 16 bits counts as 16-bit content whatever its characters (AppendTransformedString, :725), and the leaf's
+  // text node is stored in 16 bits when it holds a unit above U+00FF, U+FFFC included: the HTML parser and V8 store a
+  // string in 8 bits when its units fit (CHARTER.md known deviations has the strings V8 doesn't). Probe blink-storage S4:
+  // 13 brackets in Amiri are shaped as one Latin segment beside an inline-block and segmented beside a text node that
+  // holds U+FFFC alone.
   appendText(s: string, base: number, run: number, style: number): void {
+    for (let i = 0; i < s.length && !this.hasNonOrc16Bit; i++) if (s.charCodeAt(i) >= 0x100) this.hasNonOrc16Bit = true
     this.restoreTrailingCollapsibleSpaceIfRemoved()
     const ws = this.styles[style]!.whiteSpace
     if (!collapsesWhiteSpace(ws) && ws !== 'pre-line') this.appendPreserveWhitespace(s, base, run, -1, style)
