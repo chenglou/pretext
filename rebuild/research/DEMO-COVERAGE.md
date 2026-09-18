@@ -95,4 +95,4 @@ Thin layers on top: a (the ports read the width only at line time), c, f, h, i, 
 | markdown-chat | gap | gap | gap | - | ok | - | - | gap | gap |
 | variable-typographic-ascii | - | - | gap | - | - | - | - | - | - |
 
-Scratch draft: `/private/tmp/claude-501/-Users-chenglou-github-pretext/7e07dee5-fc27-4046-b679-3f61a43f7436/scratchpad/demo-coverage/report.txt`
+Scratch draft: `<scratch>/demo-coverage/report.txt`

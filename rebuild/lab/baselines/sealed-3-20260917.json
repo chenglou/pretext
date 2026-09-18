@@ -1384,139 +1384,139 @@
         "ids": 0
       },
       {
-        "path": "../../../../private/tmp/claude-501/-Users-chenglou-github-pretext/7e07dee5-fc27-4046-b679-3f61a43f7436/scratchpad/blink-r2/capture-1.ndjson",
+        "path": "<scratch>/blink-r2/capture-1.ndjson",
         "ids": 12
       },
       {
-        "path": "../../../../private/tmp/claude-501/-Users-chenglou-github-pretext/7e07dee5-fc27-4046-b679-3f61a43f7436/scratchpad/blink-r2/capture-2.ndjson",
+        "path": "<scratch>/blink-r2/capture-2.ndjson",
         "ids": 5
       },
       {
-        "path": "../../../../private/tmp/claude-501/-Users-chenglou-github-pretext/7e07dee5-fc27-4046-b679-3f61a43f7436/scratchpad/blink-r2/capture-3.ndjson",
+        "path": "<scratch>/blink-r2/capture-3.ndjson",
         "ids": 2
       },
       {
-        "path": "../../../../private/tmp/claude-501/-Users-chenglou-github-pretext/7e07dee5-fc27-4046-b679-3f61a43f7436/scratchpad/blink-r2/capture-4.ndjson",
+        "path": "<scratch>/blink-r2/capture-4.ndjson",
         "ids": 13
       },
       {
-        "path": "../../../../private/tmp/claude-501/-Users-chenglou-github-pretext/7e07dee5-fc27-4046-b679-3f61a43f7436/scratchpad/blink-r3/cases/dev-flat-p0.ndjson",
+        "path": "<scratch>/blink-r3/cases/dev-flat-p0.ndjson",
         "ids": 5280
       },
       {
-        "path": "../../../../private/tmp/claude-501/-Users-chenglou-github-pretext/7e07dee5-fc27-4046-b679-3f61a43f7436/scratchpad/blink-r3/cases/dev-suite-p0.ndjson",
+        "path": "<scratch>/blink-r3/cases/dev-suite-p0.ndjson",
         "ids": 6667
       },
       {
-        "path": "../../../../private/tmp/claude-501/-Users-chenglou-github-pretext/7e07dee5-fc27-4046-b679-3f61a43f7436/scratchpad/blink-r3/cases/dev-suite-p1.ndjson",
+        "path": "<scratch>/blink-r3/cases/dev-suite-p1.ndjson",
         "ids": 6667
       },
       {
-        "path": "../../../../private/tmp/claude-501/-Users-chenglou-github-pretext/7e07dee5-fc27-4046-b679-3f61a43f7436/scratchpad/blink-r3/cases/dev-suite-p2.ndjson",
+        "path": "<scratch>/blink-r3/cases/dev-suite-p2.ndjson",
         "ids": 6666
       },
       {
-        "path": "../../../../private/tmp/claude-501/-Users-chenglou-github-pretext/7e07dee5-fc27-4046-b679-3f61a43f7436/scratchpad/blink-r3/cases/families-p0.ndjson",
+        "path": "<scratch>/blink-r3/cases/families-p0.ndjson",
         "ids": 5488
       },
       {
-        "path": "../../../../private/tmp/claude-501/-Users-chenglou-github-pretext/7e07dee5-fc27-4046-b679-3f61a43f7436/scratchpad/blink-r3/cases/families-p1.ndjson",
+        "path": "<scratch>/blink-r3/cases/families-p1.ndjson",
         "ids": 5488
       },
       {
-        "path": "../../../../private/tmp/claude-501/-Users-chenglou-github-pretext/7e07dee5-fc27-4046-b679-3f61a43f7436/scratchpad/blink-r3/cases/features-p0.ndjson",
+        "path": "<scratch>/blink-r3/cases/features-p0.ndjson",
         "ids": 6441
       },
       {
-        "path": "../../../../private/tmp/claude-501/-Users-chenglou-github-pretext/7e07dee5-fc27-4046-b679-3f61a43f7436/scratchpad/blink-r3/cases/features-p1.ndjson",
+        "path": "<scratch>/blink-r3/cases/features-p1.ndjson",
         "ids": 6441
       },
       {
-        "path": "../../../../private/tmp/claude-501/-Users-chenglou-github-pretext/7e07dee5-fc27-4046-b679-3f61a43f7436/scratchpad/blink-r3/cases/heldout-small-p0.ndjson",
+        "path": "<scratch>/blink-r3/cases/heldout-small-p0.ndjson",
         "ids": 5205
       },
       {
-        "path": "../../../../private/tmp/claude-501/-Users-chenglou-github-pretext/7e07dee5-fc27-4046-b679-3f61a43f7436/scratchpad/blink-r3/cases/heldout-suite-giants.ndjson",
+        "path": "<scratch>/blink-r3/cases/heldout-suite-giants.ndjson",
         "ids": 9
       },
       {
-        "path": "../../../../private/tmp/claude-501/-Users-chenglou-github-pretext/7e07dee5-fc27-4046-b679-3f61a43f7436/scratchpad/blink-r3/cases/heldout-suite-p0.ndjson",
+        "path": "<scratch>/blink-r3/cases/heldout-suite-p0.ndjson",
         "ids": 4996
       },
       {
-        "path": "../../../../private/tmp/claude-501/-Users-chenglou-github-pretext/7e07dee5-fc27-4046-b679-3f61a43f7436/scratchpad/blink-r3/cases/heldout-suite-p1.ndjson",
+        "path": "<scratch>/blink-r3/cases/heldout-suite-p1.ndjson",
         "ids": 4995
       },
       {
-        "path": "../../../../private/tmp/claude-501/-Users-chenglou-github-pretext/7e07dee5-fc27-4046-b679-3f61a43f7436/scratchpad/blink-r3/cases/triage-small-p0.ndjson",
+        "path": "<scratch>/blink-r3/cases/triage-small-p0.ndjson",
         "ids": 4467
       },
       {
-        "path": "../../../../private/tmp/claude-501/-Users-chenglou-github-pretext/7e07dee5-fc27-4046-b679-3f61a43f7436/scratchpad/blink-r3/cases/triage-small-p1.ndjson",
+        "path": "<scratch>/blink-r3/cases/triage-small-p1.ndjson",
         "ids": 4466
       },
       {
-        "path": "../../../../private/tmp/claude-501/-Users-chenglou-github-pretext/7e07dee5-fc27-4046-b679-3f61a43f7436/scratchpad/blink-r3/open-cases.ndjson",
+        "path": "<scratch>/blink-r3/open-cases.ndjson",
         "ids": 13
       },
       {
-        "path": "../../../../private/tmp/claude-501/-Users-chenglou-github-pretext/7e07dee5-fc27-4046-b679-3f61a43f7436/scratchpad/blink/debug-cases-2.ndjson",
+        "path": "<scratch>/blink/debug-cases-2.ndjson",
         "ids": 3
       },
       {
-        "path": "../../../../private/tmp/claude-501/-Users-chenglou-github-pretext/7e07dee5-fc27-4046-b679-3f61a43f7436/scratchpad/blink/debug-cases-3.ndjson",
+        "path": "<scratch>/blink/debug-cases-3.ndjson",
         "ids": 3
       },
       {
-        "path": "../../../../private/tmp/claude-501/-Users-chenglou-github-pretext/7e07dee5-fc27-4046-b679-3f61a43f7436/scratchpad/blink/debug-cases-4.ndjson",
+        "path": "<scratch>/blink/debug-cases-4.ndjson",
         "ids": 3
       },
       {
-        "path": "../../../../private/tmp/claude-501/-Users-chenglou-github-pretext/7e07dee5-fc27-4046-b679-3f61a43f7436/scratchpad/blink/debug-cases-5.ndjson",
+        "path": "<scratch>/blink/debug-cases-5.ndjson",
         "ids": 2
       },
       {
-        "path": "../../../../private/tmp/claude-501/-Users-chenglou-github-pretext/7e07dee5-fc27-4046-b679-3f61a43f7436/scratchpad/blink/debug-cases.ndjson",
+        "path": "<scratch>/blink/debug-cases.ndjson",
         "ids": 8
       },
       {
-        "path": "../../../../private/tmp/claude-501/-Users-chenglou-github-pretext/7e07dee5-fc27-4046-b679-3f61a43f7436/scratchpad/debug-cases-2.ndjson",
+        "path": "<scratch>/debug-cases-2.ndjson",
         "ids": 6
       },
       {
-        "path": "../../../../private/tmp/claude-501/-Users-chenglou-github-pretext/7e07dee5-fc27-4046-b679-3f61a43f7436/scratchpad/debug-cases.ndjson",
+        "path": "<scratch>/debug-cases.ndjson",
         "ids": 14
       },
       {
-        "path": "../../../../private/tmp/claude-501/-Users-chenglou-github-pretext/7e07dee5-fc27-4046-b679-3f61a43f7436/scratchpad/gecko-r2/triage-provisional-cases.ndjson",
+        "path": "<scratch>/gecko-r2/triage-provisional-cases.ndjson",
         "ids": 36
       },
       {
-        "path": "../../../../private/tmp/claude-501/-Users-chenglou-github-pretext/7e07dee5-fc27-4046-b679-3f61a43f7436/scratchpad/gecko/changed-cases.ndjson",
+        "path": "<scratch>/gecko/changed-cases.ndjson",
         "ids": 121
       },
       {
-        "path": "../../../../private/tmp/claude-501/-Users-chenglou-github-pretext/7e07dee5-fc27-4046-b679-3f61a43f7436/scratchpad/gecko/families-objects-cases.ndjson",
+        "path": "<scratch>/gecko/families-objects-cases.ndjson",
         "ids": 4948
       },
       {
-        "path": "../../../../private/tmp/claude-501/-Users-chenglou-github-pretext/7e07dee5-fc27-4046-b679-3f61a43f7436/scratchpad/gecko/feature-cases.ndjson",
+        "path": "<scratch>/gecko/feature-cases.ndjson",
         "ids": 139
       },
       {
-        "path": "../../../../private/tmp/claude-501/-Users-chenglou-github-pretext/7e07dee5-fc27-4046-b679-3f61a43f7436/scratchpad/gecko/superset-cases.ndjson",
+        "path": "<scratch>/gecko/superset-cases.ndjson",
         "ids": 5816
       },
       {
-        "path": "../../../../private/tmp/claude-501/-Users-chenglou-github-pretext/7e07dee5-fc27-4046-b679-3f61a43f7436/scratchpad/probe-zw.ndjson",
+        "path": "<scratch>/probe-zw.ndjson",
         "ids": 96
       },
       {
-        "path": "../../../../private/tmp/claude-501/-Users-chenglou-github-pretext/7e07dee5-fc27-4046-b679-3f61a43f7436/scratchpad/probe-zw2.ndjson",
+        "path": "<scratch>/probe-zw2.ndjson",
         "ids": 80
       },
       {
-        "path": "../../../../private/tmp/claude-501/-Users-chenglou-github-pretext/7e07dee5-fc27-4046-b679-3f61a43f7436/scratchpad/probe-zw3.ndjson",
+        "path": "<scratch>/probe-zw3.ndjson",
         "ids": 48
       }
     ],

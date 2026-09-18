@@ -1,7 +1,7 @@
 {
  "description": "Groundwork Rust break oracle (oracle/gecko, icu_segmenter =2.1.2) rebuilt with [patch.crates-io] icu_segmenter_data pointed at firefox-156.0/intl/icu_segmenter_data; cargo build --release --offline, no source change",
  "buildLogTail": [
-  "   Compiling gecko-breaks v0.1.0 (/private/tmp/claude-501/-Users-chenglou-github-pretext/7e07dee5-fc27-4046-b679-3f61a43f7436/scratchpad/oracle156)",
+  "   Compiling gecko-breaks v0.1.0 (<scratch>/oracle156)",
   "    Finished `release` profile [optimized] target(s) in 5.47s",
   "exit=0"
  ],
