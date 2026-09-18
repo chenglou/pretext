@@ -1235,7 +1235,7 @@ every shard or part is then a document of its own, as under the usual protocol.
 **What ran on 2026-09-18** (pinned Chrome 153.0.8010.50 and Firefox 156.0, webkit-host; forward order; both configurations;
 `.artifacts/tests/runs/r4b-mf`, reports under `compare/`): smoke and the development sets, usual, measure first and usual
 again as the control, and the family sets, usual and measure first. The control differs from the first usual run on no case
-in any browser or configuration.
+in any browser or configuration, and a second measure-first run in Firefox equals the first on every case.
 
 | Browser | Cases (development / families) | Native observations that differ | Predictions | Painted lines |
 |---|---|---|---|---|
