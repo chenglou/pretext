@@ -798,7 +798,7 @@ function shapedReversed(p: BlinkPrepared, g: number, k: number): boolean {
 // (FontFacts.pairKerning): all of it on the first glyph's advance, or kern >> 1 where the kern and kerx pair machine applies
 // it (hb-kern.hh:102-106). Where the fact isn't given, the first glyph's.
 // Beside a U+3000 that went to a fallback font (requeuedSpaceAt) the cluster on the other side of k carries all of it.
-export function pairBefore16(sh: Shaper, g: number, d: number, k: number, lo: number, hi: number): number {
+function pairBefore16(sh: Shaper, g: number, d: number, k: number, lo: number, hi: number): number {
   switch (requeuedSpaceAt(sh.p, k, lo, hi)) {
     case 'start': return d
     case 'end': return 0
@@ -828,23 +828,30 @@ export function groupPrefix16(sh: Shaper, g: number, k: number): number {
     else hi = mid - 1
   }
   const d = positionAdjust16(sh, g, k, group.start, group.end)
-  const pair = pairBefore16(sh, g, d, k, group.start, group.end)
+  const pair = adjustBefore16(sh, g, d, k, group.start, group.end)
   // prefixAtCut holds the whole adjustment at its cut, which belongs to both glyphs around it.
-  let base = cuts[lo] === k ? group.prefixAtCut[lo]! - d + pair : group.prefixAtCut[lo]! + measure16(sh, g, cuts[lo]!, k, group.start, group.end) + pair
-  // An open mark halted after the character before it carries the adjustment itself (ShouldKern), so it isn't before k.
-  if (kernsAfter(sh, g, k, group.start, group.end)) base -= pair
+  const base = cuts[lo] === k ? group.prefixAtCut[lo]! - d + pair : group.prefixAtCut[lo]! + measure16(sh, g, cuts[lo]!, k, group.start, group.end) + pair
   // HanKerning halted the group's first character (han_kerning.cc:235-262), which every later position includes.
   return base - group.startTrim16
 }
 
-function kernsAfter(sh: Shaper, g: number, k: number, lo: number, hi: number): boolean {
+// The part of adjustment d across offset k that the glyphs before k carry. Where HanKerning halts one of the two characters
+// around k, that character carries it whole: the close mark before k (ShouldKernLast), else the open mark after it
+// (ShouldKern). HanKerning picks the character from text_content in logical order (han_kerning.cc:235-300), whatever order
+// HarfBuzz shapes the run in: in an RTL paragraph `」。` is an RTL run and natively `」` is the half-width one
+// (c-306178822a6c08a1). Everything else is a pair adjustment (pairBefore16).
+function adjustBefore16(sh: Shaper, g: number, d: number, k: number, lo: number, hi: number): number {
   const p = sh.p
-  if (p.is8Bit || k <= lo || k >= hi || !hanKerningMayApply(p.hanKerningCandidates, lo, hi)) return false
-  const data = hanKerningFontData(p, p.groups[g]!.style)
-  if (!data.hasHalt) return false
-  const type = resolvedCharType(data, p.text.charCodeAt(k))
-  const last = resolvedCharType(data, p.text.charCodeAt(k - 1))
-  return shouldKern(type, last) && !shouldKernLast(type, last)
+  if (!p.is8Bit && k > lo && k < hi && hanKerningMayApply(p.hanKerningCandidates, lo, hi)) {
+    const data = hanKerningFontData(p, p.groups[g]!.style)
+    if (data.hasHalt) {
+      const type = resolvedCharType(data, p.text.charCodeAt(k))
+      const last = resolvedCharType(data, p.text.charCodeAt(k - 1))
+      if (shouldKernLast(type, last)) return d
+      if (shouldKern(type, last)) return 0
+    }
+  }
+  return pairBefore16(sh, g, d, k, lo, hi)
 }
 
 const HAN_KERNING_DETAIL = 'a HanKerning trim added from Canvas facts: `halt` through the 「「 pair trim and character types from ink bounds (han_kerning.cc:417-535)'
@@ -916,7 +923,7 @@ export function positionBounds(sh: Shaper, sr: ShapeResult, k: number): [number,
   if (positionLimit(sh, sr.group, k, group.start, group.end) === null) return null
   const d = positionAdjust16(sh, sr.group, clusterStartAtOrBefore(sh.p, k, group.start), group.start, group.end)
   if (d === 0) return null
-  const before = prefix16(sh, sr, k) - pairBefore16(sh, sr.group, d, clusterStartAtOrBefore(sh.p, k, group.start), group.start, group.end)
+  const before = prefix16(sh, sr, k) - adjustBefore16(sh, sr.group, d, clusterStartAtOrBefore(sh.p, k, group.start), group.start, group.end)
   const a = !sr.rtl ? ceilFrom16(before) : ceilFrom16(sr.width16 - before)
   const b = !sr.rtl ? ceilFrom16(before + d) : ceilFrom16(sr.width16 - before - d)
   return [Math.min(a, b), Math.max(a, b)]
@@ -1040,10 +1047,8 @@ export function callPrefix16(sh: Shaper, call: ReshapeCall, k: number): number {
   const p = sh.p
   k = clusterStartAtOrBefore(p, k, call.start)
   if (k <= call.start) return 0
-  const pair = pairBefore16(sh, call.group, positionAdjust16(sh, call.group, k, call.start, call.end), k, call.start, call.end)
-  let base = measure16(sh, call.group, call.start, k, call.start, call.end) + pair
-  if (kernsAfter(sh, call.group, k, call.start, call.end)) base -= pair
-  return base - call.startTrim16
+  const pair = adjustBefore16(sh, call.group, positionAdjust16(sh, call.group, k, call.start, call.end), k, call.start, call.end)
+  return measure16(sh, call.group, call.start, k, call.start, call.end) + pair - call.startTrim16
 }
 
 // A view takes the glyphs whose character index, their cluster's first character, lies in its range

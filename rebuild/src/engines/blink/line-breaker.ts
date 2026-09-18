@@ -8,7 +8,7 @@ import { collapsesWhiteSpace, hasBorder, lengthLU, mayHaveMargin, mayHavePadding
 import { maybeHanKerningClose } from './hankerning.js'
 import { addGap, sourceRange } from './gaps.js'
 import {
-  isClusterBoundary, isFontRunEdge, isSegmentEdge, isStartSafeToBreak, itemShapeResult, luCeil, nextSafeToBreak, offsetForPosition, positionBounds, positionForOffset, positionLimit,
+  isClusterBoundary, isFontRunEdge, isSegmentEdge, isStartSafeToBreak, itemShapeResult, joinsAcross, luCeil, nextSafeToBreak, offsetForPosition, positionBounds, positionForOffset, positionLimit,
   prefix16, previousSafeToBreak, reshape, reshapeHanKerningEnd, shapeHyphen, snappedWidth, tabShapeResult, truncateView, viewOf, widthOf16,
   viewFromSegments, WHOLE, type ReshapePart, type Segment, type ShapeResult, type Shaper, type View,
 } from './shape.js'
@@ -639,7 +639,7 @@ export class LineBreaker {
     const firstSafe = isStartOfWrappedLine ? nextSafeToBreak(sh, sr, start) : start
     // Blink's first safe offset is the port's for sure where the start is a run's first glyph (ItemResult.partsKnown).
     const startKnown = !isStartOfWrappedLine || this.hasRunEdge(item, start, start + 1)
-    out.partsKnown = startKnown
+    out.partsKnown = startKnown && !(isStartOfWrappedLine && this.joinMayBeSafe(item, start, firstSafe))
     if (firstSafe !== start) {
       const firstSafePosition = positionForOffset(sh, sr, firstSafe)
       lineStartResult = reshape(sh, item.group, start, firstSafe, true)
@@ -759,8 +759,10 @@ export class LineBreaker {
           out.partsKnown = true
           return this.shapeLineWith(item, sr, start, given.availableSpace, noResultIfOverflow, dontReshapeEndIfAtSpace, out, lastSafe, forceClamp)
         }
-        // Blink's last safe offset is the port's for sure where that is a run's first glyph, or the line's start.
+        // Blink's last safe offset is the port's for sure where that is a run's first glyph, or the line's start, and no
+        // offset after it is unsafe by the joining rule alone in a font that may shape through morx.
         if (lastSafe > start && !this.hasRunEdge(item, lastSafe, lastSafe + 1)) out.partsKnown = false
+        if (this.joinMayBeSafe(item, Math.max(lastSafe, start) + 1, bo.offset + 1)) out.partsKnown = false
         if (lastSafe === bo.offset) break
         if (lastSafe < firstSafe) {
           lastSafe = start
@@ -846,6 +848,21 @@ export class LineBreaker {
       const source = p.sourceOffsets[k]!
       addGap(this.sh.gaps, 'unsafe-to-break', source >= 0 ? p.sourceRuns[source]! : null, CANDIDATE_DETAIL, sourceRange(p, a, b))
     }
+  }
+
+  // Whether an offset in [from, to) is unsafe to break by the port's joining rule where HarfBuzz may leave it safe. The
+  // Arabic shaper flags every offset between joined letters (hb-ot-shaper-arabic.cc:332, 366), but a font with morx takes
+  // the default shaper (hb-ot-shape.cc:60-66, 100-101) and its flags follow the state machine's transitions
+  // (hb-aat-layout-common.hh:1341-1370), which can be back at the start state between two letters that join across a soft
+  // hyphen: natively a line `ب` SHY `ب` ZWJ in a fallback font has two parts where the port reshapes it whole
+  // (c-7062e717841f11f5). Known only where the joining fact says OpenType.
+  joinMayBeSafe(item: InlineItem, from: number, to: number): boolean {
+    const p = this.sh.p
+    if (item.group < 0) return false
+    const group = p.groups[item.group]!
+    if (p.styles[group.style]!.joining === 'opentype') return false
+    for (let k = Math.max(from, group.start + 1); k < Math.min(to, group.end); k++) if (isClusterBoundary(p, k) && joinsAcross(p, k, group.start, group.end)) return true
+    return false
   }
 
   // Whether a shaping run starts in [from, to): the item's shaping group, a script segment inside it, which HarfBuzzShaper

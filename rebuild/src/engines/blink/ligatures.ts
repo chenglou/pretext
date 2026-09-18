@@ -119,10 +119,47 @@ function matchPattern(p: BlinkPrepared, pattern: LigaturePattern, i: number, lim
       const alternative = alternatives[a]!
       if (alternative.length > 0 && alternative.length > matched && at + alternative.length <= limit && text.startsWith(alternative, at)) matched = alternative.length
     }
-    if (matched < 0) return null
+    if (matched < 0) {
+      // An alternative of several characters is a listed string shaped whole: combining marks between its characters are
+      // skipped as between positions (lam, kasra, alef is Courier New's lam-alef ligature natively, c-ba72f46bea4d347c).
+      let end = -1
+      for (let a = 0; a < alternatives.length && end < 0; a++) {
+        const across = matchAcrossMarks(text, at, limit, alternatives[a]!)
+        if (across === null || (across.afterFirst && pattern.acrossMark === false)) continue
+        end = across.end
+        if (across.later || pattern.acrossMark === null) certain = false
+      }
+      if (end < 0) return null
+      at = end
+      continue
+    }
     at += matched
   }
   return { end: at, certain }
+}
+
+// A listed string at text offset `at` with combining marks of the text skipped before each of its characters but the
+// first (never before a mark the string itself holds): where it ends, and whether marks were skipped after its first
+// character and after later ones. Null when the string isn't there or no mark was skipped.
+function matchAcrossMarks(text: string, at: number, limit: number, listed: string): { end: number; afterFirst: boolean; later: boolean } | null {
+  let i = at
+  let afterFirst = false
+  let later = false
+  for (let a = 0, component = 0; a < listed.length; component++) {
+    const cp = listed.codePointAt(a)!
+    if (component > 0 && !isMark(cp)) {
+      while (i < limit && isMark(text.codePointAt(i)!)) {
+        i += text.codePointAt(i)! > 0xffff ? 2 : 1
+        if (component === 1) afterFirst = true
+        else later = true
+      }
+    }
+    if (i >= limit || text.codePointAt(i) !== cp) return null
+    const size = cp > 0xffff ? 2 : 1
+    i += size
+    a += size
+  }
+  return afterFirst || later ? { end: i, afterFirst, later } : null
 }
 
 // Per text_content offset, what the ligature facts say about the boundary before it (the constants above), and per unit of
