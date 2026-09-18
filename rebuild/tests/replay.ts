@@ -38,13 +38,14 @@
 // - questions changed: the same prediction from other questions. Canvas answers can depend on what a context measured
 //   before (Blink caches shaped words per canvas), so such a case is verified offline only up to that assumption, and goes
 //   to tier 2. A question is a context and a string, and each changed case is one of (research/ARCHITECTURE-PLAN-2.md §7):
-//   - repeats only: the same set of questions, each context's first occurrences in the reference's order, so only the
-//     number of times a question is asked again moved. Measuring the same text again on a context returns the same bits
-//     in all three engines, and a repeat can't reorder two different strings;
-//   - dropped only: a subset of the reference's questions, the first occurrences that remain in the reference's order,
-//     and no more contexts. A step accepts it only where it names what it drops;
-//   - other questions: first occurrences in another order within a context, a recorded question the reference didn't ask,
-//     or another number of contexts. No step accepts it;
+//   - repeats only: the same questions, first asked in the reference's order, so only how often a question is asked
+//     again moved. Measuring the same text again on a context returns the same bits in all three engines, and a repeat
+//     can't reorder two different strings. The order is the whole phase's, across contexts, which is what repeats alone
+//     leave untouched: WebKit and Gecko keep measured words per font, not per canvas;
+//   - dropped only: a subset of the reference's questions, first asked in the reference's order, and no more contexts.
+//     A step accepts it only where it names what it drops;
+//   - other questions: a question first asked after one the reference asked later, a recorded question the reference
+//     didn't ask, or another number of contexts. No step accepts it;
 // - new question: the library asked Canvas, or a dictionary segmenter, something the record doesn't hold: a changed
 //   measuring recipe. Nothing offline can answer it, the case isn't compared, and it goes to tier 2. No step accepts it.
 // `check` writes <out>.needs-browser.ids beside the report: new questions, questions changed and unfaithful cases, for
@@ -574,25 +575,17 @@ export function classifyAsked(calls: readonly RecordedCall[], phase: [number, nu
   }
   const was = firsts(before)
   const is = firsts(after)
-  // The reference's order within each context, as a rank per question.
+  // The reference's order, as a rank per question.
   const rank = new Map<number, number>()
   for (let k = 0; k < was.length; k++) rank.set(was[k]!, k)
-  const lastRank = new Map<number, number>()
-  let lastOfAll = -1
+  let last = -1
   let added = 0
   let reordered = 0
-  let turnsMoved = false
   for (let k = 0; k < is.length; k++) {
     const r = rank.get(is[k]!)
-    if (r === undefined) {
-      added++
-      continue
-    }
-    const context = calls[phase[0] + is[k]!]![0]
-    if (r < (lastRank.get(context) ?? -1)) reordered++
-    else lastRank.set(context, r)
-    if (r < lastOfAll) turnsMoved = true
-    else lastOfAll = r
+    if (r === undefined) added++
+    else if (r < last) reordered++
+    else last = r
   }
   const dropped = was.length - (is.length - added)
   const lengthOf = (asked: Asked): number => (asked === 'all' ? recorded : asked.length)
@@ -600,8 +593,7 @@ export function classifyAsked(calls: readonly RecordedCall[], phase: [number, nu
   const parts = [`${lengthOf(before)} -> ${lengthOf(after)} asked, ${was.length} -> ${is.length} distinct`]
   if (dropped > 0) parts.push(`${dropped} dropped`)
   if (added > 0) parts.push(`${added} recorded questions the reference didn't ask`)
-  if (reordered > 0) parts.push(`${reordered} first asked before an earlier question of their context`)
-  if (change !== 'other questions' && turnsMoved) parts.push('contexts take turns in another order')
+  if (reordered > 0) parts.push(`${reordered} first asked after a question that the reference asked later`)
   return { change, detail: parts.join(', ') }
 }
 

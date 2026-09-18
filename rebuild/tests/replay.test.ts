@@ -230,10 +230,6 @@ describe('how questions changed', () => {
     expect(change('all', [0, 0, 1, 1, 2, 3, 3, 4, 4])).toBe('repeats only')
     // The recorded repeat of b no longer asked: fewer repeats.
     expect(change('all', [0, 1, 2, 3])).toBe('repeats only')
-    // The contexts take turns in another order; each context keeps its own.
-    const turns = classifyAsked(calls, phase, 'all', [2, 0, 1, 3, 4])
-    expect(turns.change).toBe('repeats only')
-    expect(turns.detail).toContain('contexts take turns in another order')
   })
 
   test('a subset in the reference\'s order is dropped only', () => {
@@ -242,9 +238,12 @@ describe('how questions changed', () => {
     expect(change('all', [])).toBe('dropped only')
   })
 
-  test('another order within a context, or a recorded question the reference didn\'t ask, is accepted by no step', () => {
+  test('another order of first asks, or a recorded question the reference didn\'t ask, is accepted by no step', () => {
     expect(change('all', [1, 0, 2, 3, 4])).toBe('other questions')
     expect(change('all', [3, 0, 1, 2])).toBe('other questions')
+    // Two contexts that take turns in another order, each keeping its own: still another order of two different strings.
+    expect(change('all', [2, 0, 1, 3, 4])).toBe('other questions')
+    expect(classifyAsked(calls, phase, 'all', [2, 0, 1, 3, 4]).detail).toContain('2 first asked after a question that the reference asked later')
     // A reference frozen after b was dropped, and a library that asks it again.
     expect(change([0, 2, 3], 'all')).toBe('other questions')
     expect(classifyAsked(calls, phase, [0, 2, 3], 'all').detail).toContain('1 recorded questions the reference didn\'t ask')
