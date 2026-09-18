@@ -1,0 +1,127 @@
+The gecko port and the shared files: measured lines that the replay of the recorded sets never ran.
+bun rebuild/tests/coverage-map.ts --browser=firefox; firefox no-facts and facts, 127542 replayed cases in 13 sets; library 48be30e1a1a4.
+1491 of 6164 measured lines in 89 ranges over 31 files. A line ran when any part of it did; lines without code aren't measured.
+Tier 1 says nothing of these lines: in a rewrite they move verbatim, or get a browser run. Columns: lines, the function the range starts in, its first line.
+
+rebuild/src/breaks/icu4x.ts: 12 of 99 measured lines
+  82-85       icu4xProperty                } else {
+  140-142     icu4xRuleBoundaries          front = markFront; pos = markPos; cp = markCp
+  152-154     icu4xRuleBoundaries          front = markFront; pos = markPos; cp = markCp
+  158-159     icu4xRuleBoundaries          index = next - INTERMEDIATE
+
+rebuild/src/breaks/rbbi.ts: 193 of 194 measured lines
+  22-285                                   export const DONE = -1
+
+rebuild/src/breaks/tables.ts: 6 of 26 measured lines
+  20          blinkBreakRules              export function blinkBreakRules(table: BlinkBreakTable): BreakRules {
+  25          webkitBreakRules             export function webkitBreakRules(table: WebKitBreakTable): BreakRules {
+  30          blinkLinePairs               export function blinkLinePairs(): Uint8Array {
+  35          webkitLinePairs              export function webkitLinePairs(): Uint8Array {
+  39-40       pairCanBreak                 export function pairCanBreak(pairs: Uint8Array, before: number, after: number): boolean {
+
+rebuild/src/engines/engine.ts: 4 of 6 measured lines
+  29-32       constructor                  constructor(engine: EngineName, feature: string, detail: string) {
+
+rebuild/src/engines/gecko/fonts.ts: 20 of 118 measured lines
+  17-18       genericFamily                case 'cursive': return 'cursive'
+  26-33       escape                       function escape(text: string, i: number): { value: string; next: number } {
+  52-54       parseFamilyList              const e = escape(list, i)
+  70-72       parseFamilyList              const e = escape(list, i)
+  125-127     primaryFamilyOf              export function primaryFamilyOf(font: FontDecl): string {
+  179         extenderFontOf               return listedFontOf(font, cp)
+
+rebuild/src/engines/gecko/likely.ts: 62 of 352 measured lines
+  53-54       isUnicodeExtensionPart       const isUnicodeExtensionPart = (ts: Parser, t: Token) =>
+  81-107      tryParseLocale               const singleton = singletonKey(ts, tok)
+  110-113     tryParseLocale               tok = nextToken(ts)
+  145-147     readValue                    if (leadByte < FOUR_BYTE_VALUE_LEAD) return ((leadByte - MIN_THREE_BYTE_VALUE_LEAD) << 16) | (trie[p
+  159-163     jumpByDelta                  } else if (delta === FOUR_BYTE_DELTA_LEAD) {
+  222-229     branchNext                   } else if (node < FOUR_BYTE_VALUE_LEAD) {
+  261-264     nextImpl                     if ((node & 1) !== 0) break
+  381         maximize                     Object.assign(iter, undZzzzState)
+  396-397     maximize                     retainRegion = true
+  402         maximize                     value = defaultLsrIndex
+  408-417     maximize                     retainLanguage = language !== ''
+
+rebuild/src/engines/gecko/lines.ts: 25 of 1305 measured lines
+  484-486     rowContinues                 k += cp > 0xffff ? 2 : 1
+  590         textRunAt                    return null
+  634         groupEndSpacing              extra = { at: group.end - 1, au: prov.letterSpacingAu }
+  837-841     breakAndMeasureText          lastBreak = candBreak
+  969-975     isJustifiableCharacter       if ((ch >= 0x2150 && ch <= 0x22ff) || (ch >= 0x2460 && ch <= 0x24ff) || (ch >= 0x2580 && ch <= 0x27b
+  1254        reflowChildren               case 'close':
+  1432        nextGeckoLine                throw new Error(`gecko: no progress at item ${start.frame}, offset ${start.contentOffset}`)
+  1555-1557   trimFrom                     if (pf.kind !== 'br') return { advance: 0, count: 0 }
+  1677-1679   applyFrameJustification      deltaICoord += consume(state, pf.assign.start)
+  1954-1956   lineOutput                   pushCollapsed(fragments, runOf, cursor, to)
+
+rebuild/src/engines/gecko/prepare.ts: 15 of 1002 measured lines
+  401-404     scriptRunLimits              if (fixupCount > 0) fixupCount--
+  839-841     prepareGecko                 chunk.push({ kind: 'object', element: event.element })
+  955         continuesAcross              const swap = ((prevFrame.level & 1) === 1) === !rtlBlock
+  1468        prepareGecko                 gaps.push({ gap: 'bitmap-emoji-size', run: firstRun, detail: `device-size advance ${deviceAu60} au a
+  1531-1537   prepareGecko                 if (complexLanguage(text.charCodeAt(s)) === '') { s++; continue }
+
+rebuild/src/env.ts: 22 of 45 measured lines
+  119-121     engineFromUserAgent          if (/\bEdg\//.test(ua) || /\bOPR\//.test(ua)) return { kind: 'unsupported', userAgent: ua, reason: '
+  128-132     detectEngine                 export function detectEngine(): DetectedEngine {
+  146-161     detectEnvironment            case 'blink':
+
+rebuild/src/index.ts: 25 of 77 measured lines
+  47          prepareParagraph             case 'blink': return { engine: 'blink', env, paragraph, state: blinkEngine.prepare(paragraph, env, m
+  54-62       firstLineStart               export function firstLineStart(prepared: PreparedParagraph): LineStart | null {
+  68-77       layoutLine                   export function layoutLine(prepared: PreparedParagraph, start: LineStart, slot: LineSlot): LineResul
+  85          paragraphGaps                case 'blink': return buildGaps(prepared.env).concat(blinkEngine.gaps(prepared.state))
+  98-104      layoutParagraph              case 'blink': {
+  117-118     buildGaps                    const detail = env.build === null ? `the build isn't given; the port follows ${pinned}` : `build ${e
+
+rebuild/src/measure/canvas-checks.ts: 26 of 29 measured lines
+  35-38       canvasNeeds                  function canvasNeeds(engine: EngineName): CanvasNeeds {
+  57-81       missingCanvasSupport         export function missingCanvasSupport(engine: EngineName): string[] {
+
+rebuild/src/measure/font-checks.ts: 82 of 125 measured lines
+  117-202     kept                         function kept<T extends Answer>(m: Measurer, key: string, compute: () => T): T {
+  209-242     effectiveSize                function effectiveSize(size: number): number {
+  274-292     learnedFacts                 const p: Probe = { m, engine, font, lang }
+
+rebuild/src/paint.ts: 434 of 744 measured lines
+  101         overflow                     case 'blink': { const g = layout.lines[l]!.geometry; return g.width - g.hangWidth - g.availableWidth
+  107-110     setFont                      function setFont(style: CSSStyleDeclaration, font: CssFont): void {
+  120-205     styledSpan                   function styledSpan(doc: Document, style: TextStyle, parent: TextStyle, lang: string | null): HTMLSp
+  221-224     textNode                     function textNode(doc: Document, engine: EngineName, text: string, wideLeaf: boolean): Text {
+  349         blinkScriptsOf               function blinkScriptsOf(text: string): Uint8Array {
+  368-379     contextOf                    let text = ''
+  422         shapesAcross                 function shapesAcross(c: Context, run: number, around: string): boolean {
+  490-499     planLine                     let lastPiece = -1
+  665-670     planLine                     const fragment = line.fragments[f]!
+  675         planLine                     case 'blink': softWrap &&= resetAboveBase || lastContent === 'hanging' || (lastContent === 'trimmed'
+  696-701     hangingForm                  const hangingForm = (run: number): 'own-node' | 'same-node' | 'own-group' => {
+  768-788     planLine                     const from = c.blinkScripts.lineStarts[l]!
+  875-896     planLine                     case 'webkit': {
+  917-929     planLine                     if (endInLeaf && softEnd && (last.kind === 'hanging' || (last.kind === 'text' && /\s$/u.test(last.pa
+  957-1236    lineTokens                   function lineTokens(c: Context, l: number, plan: LinePlan, joinsPreviousLine: boolean): { tokens: To
+  1251        painterLimits                limits.push({ limit: 'controls-between-pieces', detail: "two pieces of one direction sit in differen
+  1259-1392   paintLines                   export function paintLines(paragraph: Paragraph, layout: PaintableLayout, doc: Document): HTMLDivEle
+
+rebuild/src/unicode/bidi.ts: 5 of 38 measured lines
+  55-59       bidiDataFor                  case 'blink':
+
+rebuild/src/unicode/grapheme.ts: 6 of 17 measured lines
+  19          graphemeRulesFor             case 'blink': return { kind: 'icu-rbbi', rules: blinkBreakRules('char') }
+  28-32       graphemeBoundaries           case 'icu-rbbi': {
+
+rebuild/src/unicode/ubidi.ts: 526 of 604 measured lines
+  85-88       paraLevelAt                  function paraLevelAt(u: Ubidi, index: number): number {
+  99-202      getDirProps                  function getDirProps(u: Ubidi): void {
+  220-586     bracketInit                  function bracketInit(u: Ubidi): BracketData {
+  652-841     setLevelsOutsideIsolates     function setLevelsOutsideIsolates(u: Ubidi, start: number, limit: number, level: number): void {
+
+rebuild/src/unicode/unicode-bidi.ts: 28 of 378 measured lines
+  51-52       walkForwards                 const run = seq.runs[r]!
+  61-79       walkBackwards                const run = seq.runs[r]!
+  154-157     resolveUnicodeBidi           } else if (isIsolate) {
+  162         resolveUnicodeBidi           overflowIsolate--
+  179         resolveUnicodeBidi           overflowEmbedding--
+  289-290     applyL1                      resetTo = i + len
+  300-302     applyL1                      for (let k = resetFrom; k < resetTo; k++) levels[k] = paraLevel
+  355         resolveWeak                  } else {

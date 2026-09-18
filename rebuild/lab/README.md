@@ -548,7 +548,8 @@ Checks 6, 7 and 9 (the citation ledger, the painter differential, the twin famil
   (`coverage-map.shard.ts`) and merges the lcov records: a line ran when any shard ran it. `rebuild/tests/coverage-map/
   <engine>.txt` holds the correctness line's maps: the port's own folder and the shared files, as ranges with the function
   each starts in. Blink: 39 of 3,873 measured lines of the port never ran; Gecko 122 of 3,238; WebKit 148 of 3,623; of the
-  shared files about a third, most of it the painter, which needs a DOM, and other engines' data. About a minute for the
+  shared files 30%, 47% and 37%, most of it the painter, which needs a DOM, other engines' data, and in Firefox the font
+  checks, which learn nothing there. About a minute for the
   three. Lines, not branches: a line ran when any part of it did. Lines that hold no code are left out, because bun lists
   them unevenly (`coverage-map.ts` `addLcov`). A planted branch and a planted function that nothing calls are listed.
 - **Independence** is a tier 0 test. The shared layer's rule (no import of `engines/`, no `'blink'`, `'webkit'` or `'gecko'`
