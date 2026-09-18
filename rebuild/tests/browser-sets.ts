@@ -2,7 +2,8 @@
 //
 //   bun rebuild/tests/browser-sets.ts --browser=chrome|firefox|webkit-host --out=<dir> [--config=no-facts|facts]
 //     [--sets=<name>[,...]] [--groups=smoke,development,families,heldout] [--both-orders] [--record] [--measure-first]
-//     [--ids-file=<file>] [--reference=<ledger dir>] [--baseline=<gate file>] [--seed --staging=<dir>] [--rerun-failed]
+//     [--ids-file=<file>] [--reference=<ledger dir>] [--allow=<difference>[,...]] [--baseline=<gate file>]
+//     [--seed --staging=<dir>] [--rerun-failed]
 //
 // Don't wrap it in the browser lock: every browser job takes the lock itself. What it does, in order:
 // 1. Reads the build of the app it will launch (the pinned copy of Chrome or Firefox, the system WebKit for webkit-host)
@@ -16,7 +17,9 @@
 // 3. Scores every part with lab/score.ts, the forward order against the reverse one under --both-orders.
 // 4. Builds the run's ledger (ledger.ts) in <out>/ledger. A forward-only run takes the reference's history-dependent cases.
 // 5. With a reference ledger (default .artifacts/tests/reference/<browser>-<config>/ledger when it exists): prints the
-//    status transitions, grouped by family and condition.
+//    status transitions, grouped by family and condition, and the ones on known-tail items (known-tail.ts). A reference of
+//    another scorer, configuration, languages or protocol is refused by name; --allow=scorer (or another name, as
+//    ledger.ts transitions takes them) reads the transitions across that difference knowingly.
 // 6. With a baseline (default rebuild/tests/baselines/sets/<browser>-<engine build>-<config>.json when it exists): checks
 //    the runs against it through lab/gate.ts. --seed --staging=<dir> stages a new seed with its seed record instead; like
 //    every seed it is never written over the baseline it replaces (lab README, "Seeds go to a staging folder").
@@ -55,7 +58,7 @@ for (const raw of process.argv.slice(2)) {
   if (match === null) fail(`Unknown argument ${raw}`)
   const name = match[1]!
   if (['both-orders', 'record', 'seed', 'rerun-failed', 'measure-first'].includes(name) && match[2] === undefined) flags.add(name)
-  else if (['browser', 'out', 'config', 'sets', 'groups', 'ids-file', 'reference', 'baseline', 'staging'].includes(name) && match[2] !== undefined) options.set(name, match[2])
+  else if (['browser', 'out', 'config', 'sets', 'groups', 'ids-file', 'reference', 'allow', 'baseline', 'staging'].includes(name) && match[2] !== undefined) options.set(name, match[2])
   else fail(`Unknown argument ${raw}`)
 }
 const browser = options.get('browser') as TierBrowser | undefined
@@ -232,7 +235,8 @@ if (ledger.header.bundles.length > 1) {
 }
 if (reference !== null) {
   console.log(`transitions against ${relative(REPO, referenceDir)}${measureFirst ? ' (the usual protocol; this run measured first)' : ''}:`)
-  const report = transitionsBetween(reference, ledger, measureFirst ? ['protocol'] : [], readKnownTail().items)
+  const allowed = [...(measureFirst ? ['protocol'] : []), ...(options.get('allow') ?? '').split(',').filter(name => name !== '')]
+  const report = transitionsBetween(reference, ledger, allowed, readKnownTail().items)
   writeFileSync(join(outDir, 'transitions.json'), `${JSON.stringify(report, null, 2)}\n`)
   printTransitions(report)
   if (report.comparable.length > 0) exit = 2

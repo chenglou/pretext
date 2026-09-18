@@ -1229,7 +1229,8 @@ python3 .artifacts/session/with-browser-lock.py mf -- bun rebuild/lab/run.ts --b
 ```
 
 A ledger records the protocol in each set's `runArgs`, so a measure-first ledger meets a usual one only with
-`--allow=protocol`.
+`--allow=protocol`. `sharded.ts` and `fresh.ts` pass the option through (`-- --measure-first`, `--run-args=--measure-first`);
+every shard or part is then a document of its own, as under the usual protocol.
 
 **What ran on 2026-09-18** (pinned Chrome 153.0.8010.50 and Firefox 156.0, webkit-host; forward order; both configurations;
 `.artifacts/tests/runs/r4b-mf`, reports under `compare/`): smoke and the development sets, usual, measure first and usual
