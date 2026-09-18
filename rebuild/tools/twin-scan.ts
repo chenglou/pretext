@@ -32,7 +32,9 @@ const USER_AGENT = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/
 const ENV: PredictEnv = { browser: 'chrome', build: '153.0.8010.50', languages: { engine: 'blink', uiLanguage: 'zh-CN' } }
 
 type Twin = { context: number; text: string; first: 'one-byte' | 'two-byte'; asks: number }
-type Report = { format: 'pretext-twin-scan/1'; tree: string; cases: number; withTwoByteSlice: number; withTwin: number; twins: Array<{ id: string; family: string; twins: Twin[] }> }
+// `slices`: the cases that ask a Latin-1-only string as a two-byte slice at all, with those strings: what Chrome is asked
+// changes for them when the slice starts or stops reaching Canvas as two-byte.
+type Report = { format: 'pretext-twin-scan/1'; tree: string; cases: number; withTwoByteSlice: number; withTwin: number; slices: Array<{ id: string; family: string; strings: string[] }>; twins: Array<{ id: string; family: string; twins: Twin[] }> }
 
 const options = new Map<string, string>()
 for (const raw of process.argv.slice(2)) {
@@ -62,7 +64,7 @@ writeFileSync(join(scratch, SHAPE), shape.replace(ANCHOR, `${ANCHOR}\n${TAP}`))
 const predictor = await import(join(scratch, PREDICTORS['no-facts'])) as { predict: (c: Case, env: PredictEnv) => unknown }
 const asked: Array<[number, string, boolean]> = []
 ;(globalThis as { twinScan?: typeof asked }).twinScan = asked
-const report: Report = { format: 'pretext-twin-scan/1', tree, cases: 0, withTwoByteSlice: 0, withTwin: 0, twins: [] }
+const report: Report = { format: 'pretext-twin-scan/1', tree, cases: 0, withTwoByteSlice: 0, withTwin: 0, slices: [], twins: [] }
 const limit = Number(options.get('limit') ?? Infinity)
 for (const file of files) {
   for (const line of readFileSync(resolve(file), 'utf8').split('\n')) {
@@ -78,18 +80,21 @@ for (const file of files) {
     }
     // Per context and string: the storages asked, in order.
     const byQuestion = new Map<string, { context: number; text: string; storages: boolean[] }>()
-    let sliced = false
+    const sliced = new Set<string>()
     for (let i = 0; i < asked.length; i++) {
       const [context, text, twoByte] = asked[i]!
       // Only a Latin-1-only string has a one-byte spelling.
       if (!/^[\x00-\xff]*$/.test(text)) continue
-      if (twoByte) sliced = true
+      if (twoByte) sliced.add(text)
       const key = `${context}\n${text}`
       const entry = byQuestion.get(key)
       if (entry === undefined) byQuestion.set(key, { context, text, storages: [twoByte] })
       else entry.storages.push(twoByte)
     }
-    if (sliced) report.withTwoByteSlice++
+    if (sliced.size > 0) {
+      report.withTwoByteSlice++
+      report.slices.push({ id: c.id, family: c.family, strings: [...sliced] })
+    }
     const twins: Twin[] = []
     for (const entry of byQuestion.values()) {
       if (entry.storages.includes(true) && entry.storages.includes(false)) twins.push({ context: entry.context, text: entry.text, first: entry.storages[0]! ? 'two-byte' : 'one-byte', asks: entry.storages.length })
