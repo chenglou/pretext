@@ -9,6 +9,7 @@ import { webkitEngine } from './engines/webkit/index.js'
 import type { WebKitPrepared } from './engines/webkit/types.js'
 import { PINNED_BUILDS, SOURCE_IDENTICAL_BUILDS, type BlinkEnvironment, type Environment, type GeckoEnvironment, type WebKitEnvironment } from './env.js'
 import { createMeasurer, type Measurer } from './measure/canvas.js'
+import { withLearnedFontFacts } from './measure/font-checks.js'
 import { FULL_WIDTH, type BelowFloats, type Gap, type LineOf, type LineResult, type LineSlot, type LineStart, type Paragraph, type ParagraphLayout } from './model.js'
 
 export type {
@@ -30,14 +31,18 @@ export { UnportedFeature } from './engines/engine.js'
 export { paintLines, type PaintableLayout, type PaintedLine } from './paint.js'
 
 // A paragraph prepared for one engine, from which lines are laid out one slot at a time (DESIGN.md §2.9). The measurer
-// holds the Canvas contexts, the memo and the call log of preparation and of every line laid out from it.
+// holds the Canvas contexts, the memo and the call log of preparation and of every line laid out from it. `paragraph` is
+// the one the engine laid out: the caller's, with the font facts Canvas answered (below).
 export type PreparedParagraph =
   | { engine: 'blink'; env: BlinkEnvironment; paragraph: Paragraph; state: BlinkPrepared; measurer: Measurer }
   | { engine: 'webkit'; env: WebKitEnvironment; paragraph: Paragraph; state: WebKitPrepared; measurer: Measurer }
   | { engine: 'gecko'; env: GeckoEnvironment; paragraph: Paragraph; state: GeckoPrepared; measurer: Measurer }
 
-export function prepareParagraph(paragraph: Paragraph, env: Environment): PreparedParagraph {
+// The one place a paragraph's fonts reach the engines. A font fact the caller left null is asked of Canvas first, where a
+// check is sound for the engine (measure/font-checks.ts); the engines read FontFacts as the caller had given them.
+export function prepareParagraph(given: Paragraph, env: Environment): PreparedParagraph {
   const measurer = createMeasurer()
+  const paragraph = withLearnedFontFacts(given, env, measurer)
   switch (env.engine) {
     case 'blink': return { engine: 'blink', env, paragraph, state: blinkEngine.prepare(paragraph, env, measurer), measurer }
     case 'webkit': return { engine: 'webkit', env, paragraph, state: webkitEngine.prepare(paragraph, env, measurer), measurer }
