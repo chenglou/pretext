@@ -192,7 +192,7 @@ whose two orders agree, each alone in a fresh process (`runs/isolate-<set>`, 400
   uncovered in reverse order and held-out `c-d7754587b964dea1` forward. A line that starts with a carried width was laid
   out in a world with the own carried width whenever the world's item started where the own item does; the carried width is
   the whole item's less what earlier lines took, so it stands only where the world's item is the own one
-  (`c-19ccdb6bbbc8089c`: `ببب((` carries 22.4px for `بب((`, where a world that ends an item before `((` carries 10.416px for
+  (`c-19ccdb6bbbc8089c`: `ببب((` carries 32.4px for `بب((`, where a world that ends an item before `((` carries 10.416px for
   `بب`, which fits). Such a line now reports. `page-history` on passing lines: development 3.42% to 3.68%, held-out 4.43%
   to 4.82%, families 1.28% unchanged.
 - The row left, `c-a749f1e7bd879df8` forward: `page-history` sits on the decision text, and a node it doesn't touch reports

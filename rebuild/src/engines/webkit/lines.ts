@@ -2666,7 +2666,7 @@ function worldLineStart(p: WebKitPrepared, world: WebKitHistoryWorld, start: Web
   }
   if (start.offset === 0) return first.start === position ? { ...start, itemIndex: index } : null
   // A carried width is the whole item's less what the lines before took, so it stands in the world only where the world's
-  // item is the own one (suite c-19ccdb6bbbc8089c: `ببب((` broken after its first letter carries 22.4px for `بب((`, where a
+  // item is the own one (suite c-19ccdb6bbbc8089c: `ببب((` broken after its first letter carries 32.4px for `بب((`, where a
   // world that ends an item before `((` carries 10.416px for `بب`, which fits with nothing after it).
   if (start.previousLine !== null && start.previousLine.carriedWidth !== null) return first.start === own.start && first.end === own.end ? { ...start, itemIndex: index } : null
   if (first.start === own.start) return { ...start, itemIndex: index }
