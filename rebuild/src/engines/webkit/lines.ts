@@ -1538,11 +1538,24 @@ function applyShapingOnRunRange(L: Layout, c: Content, range: [number, number]):
   }
   let suffix = ''
   let following = 0
+  let followingJoins = false
   for (let k = texts.length - 1; k >= 0; k--) {
-    suffix = texts[k]! + suffix
-    const total = measureText(L.m, firstBox.plainContext, canvasString((k > 0 && joinsAcross(texts[k - 1]!, texts[k]!) ? '\u200d' : '') + suffix))
-    runs[indices[k]!]!.contentWidth = Math.max(0, f32(total - following))
+    const text = texts[k]!
+    const joins = k > 0 && joinsAcross(texts[k - 1]!, text)
+    const total = measureText(L.m, firstBox.plainContext, canvasString((joins ? '\u200d' : '') + text + suffix))
+    let share = f32(total - following)
+    if (suffix !== '') {
+      // The difference of two float32 totals isn't the float32 sum of the run's own advances, which the run alone in its
+      // joining context is where nothing but joining crosses its edges. The two agree within the rounding of the three totals,
+      // half a unit in the last place of the largest for every addition, where that holds: then the run alone stands.
+      const alone = measureText(L.m, firstBox.plainContext, canvasString((joins ? '\u200d' : '') + text + (followingJoins ? '\u200d' : '')))
+      const additions = 2 * (text.length + suffix.length) + 5
+      if (Math.abs(alone - share) <= additions * 2 ** (Math.floor(Math.log2(total)) - 24)) share = alone
+    }
+    runs[indices[k]!]!.contentWidth = Math.max(0, share)
+    suffix = text + suffix
     following = total
+    followingJoins = joins
   }
   let shapedContentWidth = 0
   for (let k = 0; k < indices.length; k++) shapedContentWidth = f32(shapedContentWidth + runs[indices[k]!]!.contentWidth)
