@@ -207,6 +207,19 @@ doesn't depend on the old library in `src/`.
   sealed scoring, the native hang set aside without opening a sealed case) are in
   `.artifacts/ceiling-20260917/evaluate-r4/tools`; REPORT.md "Round 4 evaluation" has the numbers.
 
+## Landed at the correctness line (2026-09-18)
+
+- **The runtime font checks measure in the engine's own kind of context** (`src/measure/font-checks.ts`
+  `checkTextRendering`; "Measure first" has the probes): in Blink text-rendering `optimizeLegibility`, which keeps them off
+  the font cache key of the page's own text. Every no-facts Chrome and webkit-host record before it asks another question.
+- **The ledger's format 2 carries an exact-value status per case** beside the four metrics, and `transitions` and tier 2
+  exit 1 when a case stops being exact ("The ledger"). A format 1 ledger is built again from its runs. Known-tail rules can
+  read the status (`not exact`, by family).
+- **The seeds are adopted** ("Seeds go to a staging folder", "Adopted at the correctness line") and **six references are
+  frozen** at 6b21b68 ("The correctness line"), from one set of recordings, `.artifacts/tests/runs/line-20260918`. Tools and
+  logs: `.artifacts/ceiling-20260917/freeze-line` (`tools/tier2.sh`, `giants.sh`, `gates.sh`, `carry-attributions.py`,
+  `adopt.py`, `check-adopted.sh`, `pack.sh`, `tier2-check.sh`, `headline.py`, `known-tail-additions.py`).
+
 ## Test tiers
 
 Four tiers by time, one command each. The first three give a signal in seconds to minutes; the fourth is the round's
@@ -218,7 +231,7 @@ and `facts` (the lab's font facts, the optional input; `predictor.ts`).
 |---|---|---|---|
 | 0 | `bun test rebuild` | a failing unit test | 11 to 12 s (727 tests); 20 s at load average 25 |
 | 1 | `bun rebuild/tests/replay.ts check --browser=all --config=all` | every case whose full prediction changed, with the first differing field; cases that need the browser | 42 s for the six frozen references (388,886 cases) on a quiet machine, 4 to 9 s a reference; 77 s at load average 25 |
-| 2 | `bun rebuild/tests/browser-sets.ts --browser=<browser> --out=<dir>` | status transitions against the reference ledger, of the four metrics and of the exact-value status, and lost pairs against the build-keyed seed | forward order, one browser at a time: Chrome 88 s, Firefox 108 s, webkit-host 128 s; both orders with recording, the three browsers at once: 3 to 5.5 minutes each |
+| 2 | `bun rebuild/tests/browser-sets.ts --browser=<browser> --out=<dir>` | status transitions against the reference ledger, of the four metrics and of the exact-value status, and lost pairs against the build-keyed seed | forward order, one browser at a time: Chrome 88 s, Firefox 108 s, webkit-host 128 s; the three at once against the frozen line: 92 to 195 s a browser and configuration; both orders with recording, the three browsers at once: 3 to 5.5 minutes each |
 | 3 | the round's evaluation (`fresh.ts`, sealed sets, giants, installed Safari) | new classes on cases nobody saw | see REPORT.md |
 
 Times are from this Mac (18 cores, 36 GB) on 2026-09-18 while other owners' browser jobs ran beside them, so they are
@@ -276,7 +289,9 @@ to move a prediction records again, packs and freezes with `--force --reason=<wh
   webkit-host on WebKit 22625.1.29.11.27, macOS 26A428, DPR 2, scorer 7, ledger format 2. Chrome 66,685 cases, Firefox 63,771,
   webkit-host 63,987; the three browsers at once took 3 to 4 minutes a configuration.
 - **Fidelity.** `pack` replayed all 388,886 cases to the browser's own prediction, the question sequences included: 0
-  unfaithful. Tier 1 against the frozen references: every case the same, exit 0. Planted afterwards, the font checks' old
+  unfaithful. Tier 1 against the frozen references: every case the same, exit 0. A fresh forward-only tier 2 from the
+  commit after the freeze, with the defaults above, in the three browsers and both configurations: exit 0 six times, 0
+  transitions of any status, no pair lost (`.artifacts/tests/runs/line-20260918-check`). Planted afterwards, the font checks' old
   context (text-rendering auto) makes all 66,685 no-facts Chrome cases ask a question the record lacks, exit 3.
 - **Against the round 4 evaluation's recordings** (3c17016, before the font checks' fix), whose ledgers were built again in
   format 2 from their own per-case files (`.artifacts/ceiling-20260917/freeze-line/r4-ledgers`): 0 status transitions on the
@@ -1410,12 +1425,13 @@ in any browser or configuration, and a second measure-first run in Firefox equal
   context measured at the zoomed size: a context with default settings changes the DOM's widths (16px: 71.24px for 81.125px);
   the library's measuring context, which sets text-rendering `optimizeLegibility`, doesn't; the same context does where the
   page's text sets `text-rendering: optimizeLegibility`; and a font check's context at text-rendering auto does (probes
-  `font-check-auto` and `font-check-auto-word`), which is how the checks measured until the correctness line. For a named
+  `font-check` and `font-check-word`), which is how the checks measured until the correctness line. For a named
   font with an opsz axis check 4's zoomed-size context then shared the DOM text's key: after the DOM it got the DOM's
   font, the advances looked linear and the fact came out false, with no gap; before the DOM the DOM text took the check's
   font. No lab font has the axis, so that was read from the probes and the source (research/ROUND4-CRITIC.md "Fix first" 1),
   not observed. The checks now measure as the engine's contexts do (`src/measure/font-checks.ts` `checkTextRendering`, with
-  the source reading in the header): probes `font-check` and `font-check-word` leave every DOM width on the clean rule, and
+  the source reading in the header): probes `font-check-legibility` and `font-check-legibility-word` leave every DOM width on
+  the clean rule, and
   the change moved no status, prediction or painted line on the tier sets (`rebuild/tests/known-tail.json`,
   `blink/font-check-contexts-share-the-dom-font`, closed). WebKit's key holds the size opsz is set from, and Gecko is asked
   nothing, so neither had the defect.

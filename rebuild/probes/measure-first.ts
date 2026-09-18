@@ -10,7 +10,7 @@
 // text of the probe has (specs/blink-lines.md §2.5). Every probe is meaningful only as the first system UI text of a fresh
 // browser process, so each runs alone:
 //
-//   for id in bare library library-page-legibility font-check font-check-word font-check-auto font-check-auto-word dom-first; do
+//   for id in bare library library-page-legibility font-check font-check-word font-check-legibility font-check-legibility-word dom-first; do
 //     python3 .artifacts/session/with-browser-lock.py probes-measure-first-$id -- bun rebuild/probes/runner.ts --browser=chrome \
 //       --probes=rebuild/probes/measure-first.ts --only="measure-first M1 ($id)" --out=.artifacts/probes/measure-first/$id
 //   done
@@ -72,14 +72,14 @@ const FIRSTS: Record<string, First> = {
   library: { label: "the library's measuring context", font: 'normal 400 SIZEpx system-ui', props: { ...LIBRARY, textRendering: 'optimizeLegibility' }, texts: ['Hello world'], domStyle: '', expectShared: false },
   // The same context against a page that sets text-rendering: optimizeLegibility on its text.
   'library-page-legibility': { label: "the library's measuring context, DOM text at text-rendering: optimizeLegibility", font: 'normal 400 SIZEpx system-ui', props: { ...LIBRARY, textRendering: 'optimizeLegibility' }, texts: ['Hello world'], domStyle: 'text-rendering:optimizeLegibility;', expectShared: true },
-  // The runtime font checks' contexts (src/measure/font-checks.ts) measure as the library's other contexts do, at
-  // text-rendering optimizeLegibility, with the family before a generic: asked about a space and U+2010, and about a word.
-  'font-check': { label: "the font checks' context", font: 'normal 400 SIZEpx system-ui, monospace', props: { ...LIBRARY, textRendering: 'optimizeLegibility' }, texts: [' ', '‐'], domStyle: '', expectShared: false },
-  'font-check-word': { label: "the font checks' context, asked about a word", font: 'normal 400 SIZEpx system-ui, monospace', props: { ...LIBRARY, textRendering: 'optimizeLegibility' }, texts: ['Hello world'], domStyle: '', expectShared: false },
-  // The same contexts at text-rendering auto, as the checks measured until the correctness line: the key of the page's own
-  // text, which is why they don't.
-  'font-check-auto': { label: "a font check's context at text-rendering auto", font: 'normal 400 SIZEpx system-ui, monospace', props: { ...LIBRARY, textRendering: 'auto' }, texts: [' ', '‐'], domStyle: '', expectShared: true },
-  'font-check-auto-word': { label: "a font check's context at text-rendering auto, asked about a word", font: 'normal 400 SIZEpx system-ui, monospace', props: { ...LIBRARY, textRendering: 'auto' }, texts: ['Hello world'], domStyle: '', expectShared: true },
+  // A font check's context as the checks measured until the correctness line: text-rendering auto, the family before a
+  // generic, asked about a space and U+2010, and about a word. The key of the page's own text, which is why they don't now.
+  'font-check': { label: "a font check's context at text-rendering auto", font: 'normal 400 SIZEpx system-ui, monospace', props: { ...LIBRARY, textRendering: 'auto' }, texts: [' ', '‐'], domStyle: '', expectShared: true },
+  'font-check-word': { label: "a font check's context at text-rendering auto, asked about a word", font: 'normal 400 SIZEpx system-ui, monospace', props: { ...LIBRARY, textRendering: 'auto' }, texts: ['Hello world'], domStyle: '', expectShared: true },
+  // The runtime font checks' contexts (src/measure/font-checks.ts checkTextRendering): text-rendering optimizeLegibility, as
+  // the library's other contexts.
+  'font-check-legibility': { label: "the font checks' context", font: 'normal 400 SIZEpx system-ui, monospace', props: { ...LIBRARY, textRendering: 'optimizeLegibility' }, texts: [' ', '‐'], domStyle: '', expectShared: false },
+  'font-check-legibility-word': { label: "the font checks' context, asked about a word", font: 'normal 400 SIZEpx system-ui, monospace', props: { ...LIBRARY, textRendering: 'optimizeLegibility' }, texts: ['Hello world'], domStyle: '', expectShared: false },
   // No context first: the DOM makes its own fonts.
   'dom-first': { label: 'no context', font: null, props: {}, texts: [], domStyle: '', expectShared: false },
 }

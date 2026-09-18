@@ -70,13 +70,13 @@ fixes, with everything else in the known tail. What was done, on the main tree (
   measure in the engine's own kind of context (Blink `optimizeLegibility`, as `styleContexts`; WebKit and Gecko assign the
   default as their recipes do), with the reading in the file's header and two unit tests, one of which holds every check
   context to the text rendering of the engine's own contexts through `prepareParagraph`. Probes `measure-first M1`
-  (`font-check`, `font-check-word`), each alone in a fresh pinned Chrome at DPR 2: DOM system UI text at 8px to 16px keeps
-  the clean rule's width after the checks' contexts measured at the zoomed sizes; at text-rendering auto (`font-check-auto`)
-  16px text is 71.2421875px for 81.125px. The other engines: WebKit's key holds the computed size, the text rendering mode
-  and optical sizing (FontCascadeCache.h:113-154), and opsz is set from the font's own size (UnrealizedCoreTextFont.cpp:303-
-  315), so a font a check makes is the font the page makes; its glyph geometry cache keeps computed values
-  (FontCascade.cpp:319-352); Gecko is asked nothing. No lab font but the system font has the axis, so no case could show the
-  defect, and none moved.
+  (`font-check-legibility`, `font-check-legibility-word`), each alone in a fresh pinned Chrome at DPR 2: DOM system UI text
+  at 8px to 16px keeps the clean rule's width after the checks' contexts measured at the zoomed sizes; at text-rendering
+  auto (`font-check`, `font-check-word`) 16px text is 71.2421875px for 81.125px. The other engines: WebKit's key holds the
+  computed size, the text rendering mode and optical sizing (FontCascadeCache.h:113-154), and opsz is set from the font's
+  own size (UnrealizedCoreTextFont.cpp:303-315), so a font a check makes is the font the page makes; its glyph geometry
+  cache keeps computed values (FontCascade.cpp:319-352); Gecko is asked nothing. No lab font but the system font has the
+  axis, so no case could show the defect, and none moved.
 - **Fix 2, exact values in the ledger** (feb3937). Ledger format 2 gives every case an exact-value status beside the four
   metrics: `exact`, `not exact (values n, rect counts m)`, `history-dependent`, `protocol row`, `unobserved`, from the
   scorer's per-case facts (rect counts, and the x and width of rects in the predicted state). `ledger.ts transitions` and
