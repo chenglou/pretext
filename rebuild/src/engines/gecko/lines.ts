@@ -8,7 +8,7 @@ import type { Fragment, Gap, GapName, GeckoCharacter, GeckoFrameGeometry, GeckoL
 import { listedFontOf } from './fonts.js'
 import { addLikelySubtags, tryParseLocale } from './likely.js'
 import { BREAK_EMERGENCY_WRAP, BREAK_NORMAL } from './linebreak.js'
-import { CANVAS_AU_PER_PX, frameOfSource, isTrimmableChar, pxToAu, rangeAu } from './prepare.js'
+import { frameOfSource, isTrimmableChar, pxToAu, rangeAu } from './prepare.js'
 import { generalCategory, isBidiControl, isClusterExtenderExcludingJoiners, isCursiveScript, joiningType } from './props.js'
 import { KIND_NEWLINE, KIND_TAB, type GeckoElement, type GeckoLineStart, type GeckoPrepared, type GeckoTextRun } from './types.js'
 
@@ -502,7 +502,7 @@ function groupAcross(p: GeckoPrepared, m: Measurer, run: GeckoTextRun, unit: { t
   const spaced = { ...run, context: measureContext(m, { ...settings, letterSpacing: '2px' }) }
   const off = { ...run, context: measureContext(m, { ...settings, letterSpacing: '0.001px' }) }
   const groups = (tStart: number, tEnd: number, before: string, after: string): number =>
-    (rangeAu(m, spaced, p.tUnits, tStart, tEnd, before, after) - rangeAu(m, off, p.tUnits, tStart, tEnd, before, after)) / (2 * CANVAS_AU_PER_PX)
+    (rangeAu(m, spaced, p.tUnits, tStart, tEnd, before, after) - rangeAu(m, off, p.tUnits, tStart, tEnd, before, after)) / (2 * run.auPerPx)
   let memo = groupMemo.get(p)
   if (memo === undefined) groupMemo.set(p, memo = new Map())
   let counts = memo.get(unit.tStart)
@@ -514,7 +514,7 @@ function groupAcross(p: GeckoPrepared, m: Measurer, run: GeckoTextRun, unit: { t
   const inUnit = counts.groups
   if (inUnit === counts.clusters) return false
   // U+200D before the suffix is a cluster of its own, which the joiner measured alone counts too.
-  const joinerGroups = joiner === '' ? 0 : (Math.round(measureText(m, spaced.context, joiner) * CANVAS_AU_PER_PX) - Math.round(measureText(m, off.context, joiner) * CANVAS_AU_PER_PX)) / (2 * CANVAS_AU_PER_PX)
+  const joinerGroups = joiner === '' ? 0 : (Math.round(measureText(m, spaced.context, joiner) * run.auPerPx) - Math.round(measureText(m, off.context, joiner) * run.auPerPx)) / (2 * run.auPerPx)
   return groups(unit.tStart, t, '', joiner) + groups(t, unit.tEnd, joiner, '') - joinerGroups !== inUnit
 }
 const groupMemo = new WeakMap<GeckoPrepared, Map<number, { groups: number; clusters: number }>>()

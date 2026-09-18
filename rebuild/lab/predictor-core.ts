@@ -50,11 +50,21 @@ function givenFacts(engine: EngineName, build: string, languages: ProcessLanguag
   }
 }
 
-function environment(browser: BrowserKind, build: string, languages: ProcessLanguages['given'] | null): Environment | { error: string } {
+// x-sysui experiment: `geckoCanvasElement` selects Gecko's measuring path for the whole engine. Absent, the environment
+// decides as round 3 did (a detached `<canvas>` element wherever the page can create one); false keeps the correctness
+// line's OffscreenCanvas-only path.
+export type PredictorOptions = { geckoCanvasElement?: boolean }
+
+function environment(browser: BrowserKind, build: string, languages: ProcessLanguages['given'] | null, options: PredictorOptions): Environment | { error: string } {
   const engine = engineOf(browser)
   if (languages !== null && languages.engine !== engine) return { error: `The driver gave ${languages.engine} process languages for ${browser}` }
   const detected = detectEnvironment(givenFacts(engine, build, languages))
   if (detected.kind === 'unsupported') return { error: `Unsupported browser: ${detected.reason} (${detected.userAgent})` }
+  if (detected.env.engine === 'gecko' && options.geckoCanvasElement !== undefined) {
+    // Off is the field absent, as the correctness line's environment has it, so its predictions compare byte for byte.
+    const { canvasElement: _detected, ...env } = detected.env
+    return options.geckoCanvasElement ? { ...env, canvasElement: true } : env
+  }
   return detected.env
 }
 
@@ -113,10 +123,10 @@ function layoutInput(c: Case, engine: EngineName, factsFor: FactsFor): LayoutPar
   }
 }
 
-export function makePredictor(factsFor: FactsFor): Predictor {
+export function makePredictor(factsFor: FactsFor, options: PredictorOptions = {}): Predictor {
   return {
     predict(c, env) {
-      const e = environment(env.browser, env.build, env.languages)
+      const e = environment(env.browser, env.build, env.languages, options)
       if ('error' in e) return e
       if (c.pageLang !== e.pageLang) return { error: `Case ${c.id} needs <html lang="${c.pageLang}">; page has "${e.pageLang}"` }
       const paragraph = layoutInput(c, e.engine, factsFor)

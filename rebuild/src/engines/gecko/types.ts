@@ -114,6 +114,9 @@ export type GeckoTextRun = {
   joining: 'opentype' | 'aat' | null
   // The condition under which every Canvas width of the run is a stand-in, or null (GeckoTextFrame.advancesStandIn).
   advancesStandIn: 'font-size-quantization' | 'optical-size' | null
+  // App units per px of the context's measureText widths: the page's app units per device pixel on a canvas element at the
+  // device font size, 60 on an OffscreenCanvas at the CSS size (CanvasRenderingContext2D.cpp:5277, :7132-7155).
+  auPerPx: number
 }
 
 // A shaping unit (gfxFont::SplitAndInitTextRun, gfxFont.cpp:3708-3900): a word between boundary spaces and invalid
