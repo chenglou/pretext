@@ -169,6 +169,13 @@ function git(...args: string[]): string {
   return execFileSync('git', args, { cwd: REPO, encoding: 'utf8' }).trim()
 }
 
+// The files under the given paths that differ from HEAD or aren't tracked. `git status --porcelain` lines are two status
+// columns, a space and the path; the first column can be a space, so the output isn't trimmed.
+export function dirtyFiles(paths: readonly string[]): string[] {
+  const out = execFileSync('git', ['status', '--porcelain', '--', ...paths], { cwd: REPO, encoding: 'utf8' })
+  return out.split('\n').filter(line => line.length > 3).map(line => line.slice(3))
+}
+
 // The files that build the strings Canvas measures and hand them to Canvas. A change there can change a string's V8
 // storage without changing its characters, which only Chrome shows (the file comment, "string storage").
 const STORAGE_PATHS = ['rebuild/src/measure', 'rebuild/src/engines/blink/shape.ts']
@@ -190,7 +197,7 @@ function storageFilesChangedSince(commit: string): string[] {
 // What a prediction depends on in the working tree: the library, the predictors with their font facts, and the ports.
 const LIBRARY_PATHS = ['rebuild/src', 'rebuild/lab/predictor.ts', 'rebuild/lab/predictor-core.ts', 'rebuild/lab/baselines/no-facts-predictor.ts', 'rebuild/lab/font-facts.ts', 'rebuild/lab/font-facts.json', 'rebuild/lab/observe', 'rebuild/lab/port-measure.ts']
 function dirtyLibraryFiles(): string[] {
-  return git('status', '--porcelain', '--', ...LIBRARY_PATHS).split('\n').filter(line => line !== '').map(line => line.slice(3))
+  return dirtyFiles(LIBRARY_PATHS)
 }
 
 // The first field that differs between two JSON values, in key order, with both values cut short.

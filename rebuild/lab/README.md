@@ -179,8 +179,8 @@ and `facts` (the lab's font facts, the optional input; `predictor.ts`).
 
 | Tier | Command | What a change shows as | Measured |
 |---|---|---|---|
-| 0 | `bun test rebuild` | a failing unit test | 12 s (648 tests) |
-| 1 | `bun rebuild/tests/replay.ts check --browser=all --config=all` | every case whose full prediction changed, with the first differing field; cases that need the browser | 9 to 14 s a reference (62,437 to 65,351 cases), so about 70 s for the six; 20 to 37 s a reference on a machine at load average 38 |
+| 0 | `bun test rebuild` | a failing unit test | 11 to 12 s (644 tests); 20 s at load average 25 |
+| 1 | `bun rebuild/tests/replay.ts check --browser=all --config=all` | every case whose full prediction changed, with the first differing field; cases that need the browser | 77 s for the six references (380,882 cases) at load average 25; one reference (62,437 to 65,351 cases) 9 to 14 s on a quieter machine, 20 to 37 s at load average 38 |
 | 2 | `bun rebuild/tests/browser-sets.ts --browser=<browser> --out=<dir>` | status transitions against the reference ledger, and lost pairs against the build-keyed seed | forward order, one browser at a time: Chrome 88 s, Firefox 108 s, webkit-host 128 s; both orders with recording, the three browsers at once: 3 to 5.5 minutes each |
 | 3 | the round's evaluation (`fresh.ts`, sealed sets, giants, installed Safari) | new classes on cases nobody saw | see REPORT.md |
 
@@ -210,7 +210,8 @@ measurements"). `replay.ts` runs the working tree's library in bun against them,
 and compares each case's full prediction with a frozen reference: the layout (lines, engine geometry, fragments, gaps,
 limits, the slots below floats, the environment), the observation port's expected rects with their predicted and limited
 values (the WebKit port's live measurements replay from the record's observe phase), and the painter's limits per line;
-beside it, which recorded calls answered the library's questions, in order.
+beside it, which recorded calls answered the library's questions, in order. The report is byte for byte the same with 3
+jobs as with 16, on a changed tree too.
 
 ```sh
 # a recording: tier 2 with --record, both orders (the ledger needs them), in its own folder
@@ -229,18 +230,24 @@ bun rebuild/tests/replay.ts check --browser=chrome            # or --browser=all
   recipe). It writes the report and `<report>.needs-browser.ids`. Exit 0 when every case is the same, 1 when a prediction
   changed, 3 when none did but cases need the browser.
 - *By rule, to tier 2* (`browser-sets.ts --ids-file=<report>.needs-browser.ids`): cases with a new question (nothing offline
-  can answer it), cases whose questions changed (Canvas answers can depend on what a context measured before: Blink caches
-  shaped words per canvas, and its answers depend on a string's 8 or 16 bit storage, which no record shows), and
-  *unfaithful* cases, where `pack` found the replay of the recorded library giving another prediction than the browser's
-  own run did (`inputs/unfaithful.json`). On the six recordings of 2026-09-18 no case is unfaithful: all 380,882 replay
+  can answer it); cases whose questions changed (Canvas answers can depend on what a context measured before: Blink caches
+  shaped words per canvas); *unfaithful* cases, where `pack` found the replay of the recorded library giving another
+  prediction than the browser's own run did (`inputs/unfaithful.json`); and, in Chrome, the *storage-sensitive* cases
+  whenever a file that builds the strings Canvas measures (`rebuild/src/measure`, `engines/blink/shape.ts`) differs from the
+  reference's commit. Blink's Canvas shapes an 8-bit string as one Latin segment and segments a 16-bit one, and keys that on
+  V8's storage, which follows how a string was built (`canvasString` makes a Latin-1-only string of 13 units or more 16-bit
+  by slicing it out of a 16-bit string); no record shows storage and bun has none, so a replay can't differ there. `pack`
+  lists the cases that ask a Latin-1-only string of 13 units or more (`inputs/storage-sensitive.ids`: 4,528 of Chrome's
+  65,351). Planted on 2026-09-18: without the slice, all 65,351 cases replay the same, `check` exits 3 with the 4,528 cases
+  for tier 2 (where this change moved no status). On the six recordings of 2026-09-18 no case is unfaithful: all 380,882 replay
   exactly, the question sequences included, so nothing the library reads from its host outside Canvas and the segmenters
   (Unicode property escapes in `src/paint.ts`, case mapping, `Intl`) shows a difference between bun and the browsers on
   these sets.
 - *Deterministic by construction*: a shard is a process of its own and runs its cases in recorded order, so nothing
   depends on the core count or on what ran before; the report lists cases in the sets' order and holds no time. The same
   tree gives the same report.
-- *What it can't cover*: the painter and everything native (tier 2); questions the record lacks and answers that depend on
-  the order of questions (by the rule above); a library that kept Canvas answers across paragraphs would ask less in a
+- *What it can't cover*: the painter and everything native (tier 2); questions the record lacks, answers that depend on
+  the order of questions, and string storage (by the rules above); a library that kept Canvas answers across paragraphs would ask less in a
   browser document than in a replayed case, and would show as new questions (today every measurer is per paragraph);
   dictionary-segmenter scripts replay as long as the library segments the same strings; giants.
 - *A reference is never overwritten silently.* `freeze` refuses an existing reference without `--force` and

@@ -86,8 +86,11 @@ type Order = 'forward' | 'reverse'
 type Job = { set: TestSet; part: number; order: Order; cases: string; dir: string; name: string }
 const jobs: Job[] = []
 // The commit the run starts at, and what differs from it under the library and the lab: what the rows describe.
-const git = (...args: string[]): string => execFileSync('git', args, { cwd: REPO, encoding: 'utf8' }).trim()
-const library = { commit: git('rev-parse', 'HEAD'), dirty: git('status', '--porcelain', '--', 'rebuild/src', 'rebuild/lab').split('\n').filter(line => line !== '').map(line => line.slice(3)) }
+// `git status --porcelain` lines are two status columns, a space and the path.
+const library = {
+  commit: execFileSync('git', ['rev-parse', 'HEAD'], { cwd: REPO, encoding: 'utf8' }).trim(),
+  dirty: execFileSync('git', ['status', '--porcelain', '--', 'rebuild/src', 'rebuild/lab'], { cwd: REPO, encoding: 'utf8' }).split('\n').filter(line => line.length > 3).map(line => line.slice(3)),
+}
 const runRecord: SetsRun = { browser, config, predictor: PREDICTORS[config], build, orders: bothOrders ? 'both' : 'forward', library, sets: [] }
 mkdirSync(outDir, { recursive: true })
 for (const set of sets) {
@@ -170,7 +173,13 @@ if (failed.length > 0) {
   for (const job of failed) console.error(`[browser-sets] job ${job.name} failed; log: ${relative(REPO, join(job.dir, 'run.log'))}\n${readFileSync(join(job.dir, 'run.log'), 'utf8').trimEnd().split('\n').slice(-6).map(line => `    ${line}`).join('\n')}`)
   fail(`${failed.length} of ${toRun.length} jobs failed. Nothing runs again: fix the cause, then pass --rerun-failed`)
 }
-writeFileSync(join(outDir, 'sets-run.json'), `${JSON.stringify(runRecord, null, 2)}\n`)
+// A call that only resumes (every job was done) keeps the library the jobs ran under, which the first call recorded.
+const recordPath = join(outDir, 'sets-run.json')
+if (toRun.length === 0 && existsSync(recordPath)) {
+  const earlier = (JSON.parse(readFileSync(recordPath, 'utf8')) as SetsRun).library
+  if (earlier !== undefined) runRecord.library = earlier
+}
+writeFileSync(recordPath, `${JSON.stringify(runRecord, null, 2)}\n`)
 
 // ---- 3. Scoring ----
 
