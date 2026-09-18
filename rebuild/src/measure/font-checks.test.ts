@@ -84,20 +84,20 @@ function learn(family: string, text: string, env: Environment, facts?: FontFacts
 
 describe('primaryFamily', () => {
   test('the first listed family that draws the space, named as the list names it', () => {
-    expect(learn('Missing, "Prop", serif', 'ab', gecko).primaryFamily).toBe('Prop')
-    expect(learn('sans-serif', 'ab', gecko).primaryFamily).toBe(null)
-    expect(learn('serif', 'ab', gecko).primaryFamily).toBe('serif')
+    expect(learn('Missing, "Prop", serif', 'ab', webkit).primaryFamily).toBe('Prop')
+    expect(learn('sans-serif', 'ab', webkit).primaryFamily).toBe(null)
+    expect(learn('serif', 'ab', webkit).primaryFamily).toBe('serif')
   })
 
   test('null where the two generics give the space one width', () => {
     fonts['monospace'] = proportional
-    expect(learn('Prop', 'ab', gecko).primaryFamily).toBe(null)
+    expect(learn('Prop', 'ab', webkit).primaryFamily).toBe(null)
   })
 
   test('a quoted family named like a generic keyword can\'t be named', () => {
     fonts['system-ui'] = proportional
-    expect(learn('"system-ui"', 'ab', gecko).primaryFamily).toBe(null)
-    expect(learn('system-ui', 'ab', gecko).primaryFamily).toBe('system-ui')
+    expect(learn('"system-ui"', 'ab', webkit).primaryFamily).toBe(null)
+    expect(learn('system-ui', 'ab', webkit).primaryFamily).toBe('system-ui')
   })
 })
 
@@ -110,9 +110,11 @@ describe('supplied facts', () => {
   })
 
   test('a fact the engine doesn\'t read isn\'t asked', () => {
-    const facts = learn('Mono', `a\u00adb${BEH}`, gecko)
-    expect(facts).toEqual({ ...UNKNOWN_FONT_FACTS, primaryFamily: 'Mono' })
-    expect(calls).toBe(4)
+    expect(learn('Mono', `a\u00adb${BEH}`, gecko)).toEqual(UNKNOWN_FONT_FACTS)
+    // Blink at zoom 1 reads the primary family for nothing a Latin paragraph without a soft hyphen needs.
+    expect(learn('Mono', 'ab', blink(1))).toEqual(UNKNOWN_FONT_FACTS)
+    expect(calls).toBe(0)
+    expect(learn('Mono', 'ab', blink(2))).toEqual({ ...UNKNOWN_FONT_FACTS, primaryFamily: 'Mono', opticalSizeAxis: false })
   })
 })
 
@@ -203,7 +205,7 @@ describe('the store', () => {
     const p = paragraph('Prop', 'ab')
     const span = { ...p, kind: 'span' as const, font: { ...p.font, family: 'Mono' }, lang: 'ja', inlineStart: { margin: 0, border: 0, padding: 0 }, inlineEnd: { margin: 0, border: 0, padding: 0 }, verticalAlign: 'baseline' as const, children: [{ kind: 'text' as const, text: 'cd' }] }
     const m = createMeasurer()
-    const out = withLearnedFontFacts({ ...p, content: [span] }, gecko, m)
+    const out = withLearnedFontFacts({ ...p, content: [span] }, blink(2), m)
     const learned = out.content[0]!
     expect(learned.kind === 'span' && learned.font.facts.primaryFamily).toBe('Mono')
     expect(m.log.contexts.some(c => c.lang === 'ja' && c.font.includes('Mono'))).toBe(true)

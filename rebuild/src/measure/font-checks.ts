@@ -6,8 +6,8 @@
 // Every check is a rule read from pinned source, with the cases it can't see. An answer is given only where the rule
 // holds; a check that can't tell answers null. The checks, and the engines that read each fact:
 //
-// 1. primaryFamily (all engines): the first listed family that draws U+0020, by the two-fallback test below. The engines
-//    define their primary font by the space: Gecko's GetFirstValidFont(0x20) takes the first font of the group that has
+// 1. primaryFamily (WebKit, and Blink where check 2 or 4 runs; see learnedFacts): the first listed family that draws
+//    U+0020, by the two-fallback test below. The engines define their primary font by the space: Gecko's GetFirstValidFont(0x20) takes the first font of the group that has
 //    the character (gfxTextRun.cpp:2277-2345); WebKit's primaryFont is the font of the index-0 ranges' glyph for space
 //    (FontCascadeFonts.h:225-254), and index 0 is the first family that gives a font (realizeNextFallback,
 //    FontCascadeFonts.cpp:165-188); Blink takes the first font data of the list that isn't loading
@@ -152,11 +152,11 @@ function width(p: Probe, family: string, size: number, text: string): number {
   return measureText(p.m, context, text)
 }
 
-// The two-fallback test: true when `family` draws all of `text`, false when it doesn't, null when the two generics alone
-// give `text` one width, so the test can't tell.
+// The two-fallback test: false when the two lists give `text` different widths, so a generic drew some of it; true when
+// they agree and the two generics alone don't; null when the generics alone agree too, so the test can't tell.
 function draws(p: Probe, family: string, text: string): boolean | null {
-  if (width(p, 'monospace', PROBE_SIZE, text) === width(p, 'serif', PROBE_SIZE, text)) return null
-  return width(p, `${family}, monospace`, PROBE_SIZE, text) === width(p, `${family}, serif`, PROBE_SIZE, text)
+  if (width(p, `${family}, monospace`, PROBE_SIZE, text) !== width(p, `${family}, serif`, PROBE_SIZE, text)) return false
+  return width(p, 'monospace', PROBE_SIZE, text) === width(p, 'serif', PROBE_SIZE, text) ? null : true
 }
 
 // Check 1. The name is the list's own; null where no listed family draws the space, where the test can't tell for a
@@ -241,20 +241,28 @@ function addTextNeeds(nodes: readonly InlineNode[], needs: TextNeeds): void {
 }
 
 // The facts of one declaration as the engine gets them: each supplied fact, else the check's answer where this engine
-// reads the fact and the paragraph's text can ask for it.
+// reads the fact and the paragraph's text can ask for it. Gecko is asked nothing: of the facts with a check it reads
+// primaryFamily alone, and only to word a gap's detail (engines/gecko/fonts.ts). Blink reads primaryFamily for the
+// opticalSizeAxis default, so it is asked there only with that check or for the hyphen.
 function learnedFacts(m: Measurer, engine: EngineName, zoom: number, font: FontDecl, lang: string, needs: TextNeeds): FontFacts {
   const given = font.facts
+  if (engine === 'gecko') return given
   const p: Probe = { m, font, lang }
   const key = (check: string, ...more: number[]): string => JSON.stringify([check, font.family, font.weight, font.style, lang, ...more])
-  const primary = given.primaryFamily ?? kept(m, key('primaryFamily'), () => primaryFamily(p))
+  const asksHyphen = given.mapsHyphen === null && needs.hyphen
+  const asksPitch = given.monospace === null && engine === 'webkit'
+  const asksScaling = given.opticalSizeAxis === null && engine === 'blink' && zoom !== 1
+  let primary = given.primaryFamily
+  if (primary === null && (engine === 'webkit' || asksHyphen || asksScaling)) primary = kept(m, key('primaryFamily'), () => primaryFamily(p))
   let mapsHyphen = given.mapsHyphen
   let monospace = given.monospace
   let opticalSizeAxis = given.opticalSizeAxis
   let joiningFact = given.joining
   if (primary !== null) {
-    if (mapsHyphen === null && needs.hyphen && engine !== 'gecko') mapsHyphen = kept(m, key('mapsHyphen'), () => draws(p, cssFamily(primary), HYPHEN))
-    if (monospace === null && engine === 'webkit') monospace = kept(m, key('monospace'), () => fixedPitch(p, cssFamily(primary)))
-    if (opticalSizeAxis === null && engine === 'blink' && zoom !== 1) opticalSizeAxis = kept(m, key('opticalSizeAxis', font.size, zoom), () => scalesLinearly(p, primary, zoom))
+    const family = primary
+    if (asksHyphen) mapsHyphen = kept(m, key('mapsHyphen'), () => draws(p, cssFamily(family), HYPHEN))
+    if (asksPitch) monospace = kept(m, key('monospace'), () => fixedPitch(p, cssFamily(family)))
+    if (asksScaling) opticalSizeAxis = kept(m, key('opticalSizeAxis', font.size, zoom), () => scalesLinearly(p, family, zoom))
   }
   if (joiningFact === null && needs.joining && engine === 'blink') joiningFact = kept(m, key('joining'), () => joining(p))
   return { ...given, primaryFamily: primary, mapsHyphen, monospace, opticalSizeAxis, joining: joiningFact }
@@ -274,8 +282,8 @@ function withLearnedFactsIn(nodes: readonly InlineNode[], lang: string, learn: (
   return out
 }
 
-// The paragraph with every font declaration's null facts asked of Canvas. Blink and Gecko resolve a Canvas font under the
-// context's language, the element's here as in their engines' own contexts; WebKit's context has none.
+// The paragraph with every font declaration's null facts asked of Canvas. Blink resolves a Canvas font under the context's
+// language, the element's here as in the engine's own contexts; WebKit's context has none.
 export function withLearnedFontFacts(paragraph: Paragraph, env: Environment, m: Measurer): Paragraph {
   const needs: TextNeeds = { hyphen: false, joining: false }
   addTextNeeds(paragraph.content, needs)
