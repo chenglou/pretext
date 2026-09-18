@@ -1504,7 +1504,7 @@ function collectShapeRanges(L: Layout, c: Content): Array<[number, number]> {
   return ranges
 }
 
-// rule webkit/lines/shaped-run-shares
+// rule webkit/lines/shaped-run-in-joining-context
 // LineBuilder::applyShapingOnRunRange (ILB:920-967): the range's text shaped as one RTL run, each text run taking the
 // CoreText base advances of its own characters, summed per character in logical order, negative ones as 0
 // (ComplexTextController::glyphAdvancesForTextRun, ComplexTextController.cpp:186-205, without letter spacing), and the
