@@ -141,6 +141,11 @@ Set 2's open row is item 11; it is covered under b8. The round's cap of three se
 predicted. Round 3's last two sets held 24 and 9 passing cases with a wrong predicted value and the evaluation's three
 11, 11 and 10; all 65 are exact under b4 and later.
 
+**Without supplied font facts** (`lab/baselines/no-facts-predictor.ts`, b8, dev-flat and heldout-small, 10,484 cases): no
+error, no passing case with a wrong predicted value, lineCount failures 5 and 2 (with facts 3 and 1), widths 16 and 17 (8
+and 4), 9% of values predicted. U+3000's and the font runs' rules need the coverage fact; without it the edges beside
+U+3000 report `font-fallback`.
+
 **Giants.** The 9 held-out giants and the 5 of fresh sets r3-blink-2 and r3-blink-3, `--chunk=1`, b7: all 14 pass lineCount,
 breaks, widths and painter, and no predicted value differs.
 
