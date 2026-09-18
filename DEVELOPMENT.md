@@ -76,6 +76,8 @@ When a probe finds a first-break mismatch, the report includes a short trace. `s
 - `bun run corpus-font-matrix --id=<corpus-id>` — same corpus under alternate fonts; also `--browser=safari`
 - `bun run corpus-taxonomy --id=ja-rashomon 330 450` — group corpus mismatches by likely cause
 
+`corpus-taxonomy` requires a positive `--step` (default: 10).
+
 The corpus, probe, font-matrix and taxonomy tools remain detailed investigation
 tools, including source slices and alternate extractors. They do not run as a
 second maintained acceptance suite.
