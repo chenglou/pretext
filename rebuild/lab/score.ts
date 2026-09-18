@@ -649,7 +649,8 @@ export type LineAttribution = {
   // alone can differ. A limit explains a painter failure the way a gap explains a prediction failure. Absent without one,
   // and in rows that recorded no limits.
   limits?: string[]
-  // The gaps that fire on the attributed engine line (gapFiring), whether or not they cover it. Absent without an engine line.
+  // The gaps that fire on the attributed engine line (gapFiring) whether or not they cover it, and the gaps that cover it
+  // from a neighbouring line. Absent without an engine line.
   fires?: GapName[]
 }
 export type MetricAttribution = {
@@ -888,7 +889,8 @@ export function lineLocalGaps(layout: RecordedLayout, boxes: readonly number[], 
 function attribution(layout: RecordedLayout, boxes: readonly number[], failing: readonly number[], text: string, evidence: ((k: number) => FailingLineEvidence) | null): MetricAttribution {
   const lines = failing.map(k => lineLocalGaps(layout, boxes, k, evidence === null ? null : evidence(k)))
   for (let i = 0; i < lines.length; i++) {
-    if (lines[i]!.engineLine !== null) lines[i]!.fires = firesOn(layout, lines[i]!.engineLine!)
+    // A gap that covers the line from a neighbouring line fires for it too.
+    if (lines[i]!.engineLine !== null) lines[i]!.fires = [...new Set([...firesOn(layout, lines[i]!.engineLine!), ...lines[i]!.gaps.map(gap => gap.gap)])].sort()
     const value = lines[i]!.evidence
     if (value === undefined) continue
     if (value.first !== null) value.firstText = text.slice(value.first.start, Math.min(value.first.end, value.first.start + 40))
