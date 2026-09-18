@@ -9,7 +9,233 @@ background. Rows, summaries and per-case scores are under `.artifacts/lab/gecko/
 the baseline every transition below is counted against.
 
 Earlier rounds (1-11, 2026-09-16) and their failure classes are in this file's git history. Each ceiling round below names
-its own scorer, baseline and run folders.
+its own scorer, baseline and run folders. Since ceiling round 4 the port measures on an OffscreenCanvas always; round 3's
+section describes the detached canvas element it measured on then.
+
+## Ceiling round 4, 2026-09-18
+
+The maintainer decided on 2026-09-18 that Firefox measures on an OffscreenCanvas always: one measuring path, no `document`.
+This round removed round 3's detached `<canvas>` element, measured what that costs, and worked through round 3's open list.
+Scores come from `rebuild/lab/score.ts` version 5. Runs are in the lab's pinned Firefox 156.0 at DPR 2 with the evaluation's
+job cuts (same case files, parts and chunk size as `.artifacts/ceiling-20260917/evaluate-r3`, so rows compare case by case
+after the same document history): `.artifacts/lab/gecko/r4-<n>/<set>-<order>`, tools in `.artifacts/lab/gecko/r4-tools`. The
+rule and feature families are round 3's derivations (`.artifacts/tests/derive-r3-20260917`). `r4-1` is the round 3 library
+with only the element path removed, in both orders; `r4-3` is the final library in both orders, with the giants; fresh sets
+are `.artifacts/lab/fresh/firefox/r4-gecko-<n>`. No browser job failed.
+
+### One measuring path, and what it costs
+
+`prepare.ts` measures every width on an OffscreenCanvas at the CSS size, `au = round(W × 60)`
+(`CANVAS_AU_PER_PX`). `CanvasSettings.element`, `GeckoEnvironment.canvasElement` and `GeckoTextRun.auPerPx` are gone, and
+`measure/canvas.ts` is round 2's file again. What moved against the element path (`evaluate-r3` rows against `r4-1`, same
+cases, same order; both orders agree):
+
+| Sets | lineCount lost / gained | breaks | widths | What |
+|---|---|---|---|---|
+| development (25,390 cases) | 0 / 0 | 0 / 0 | 26 / 3 | 11 rows of the 1 au class, 15 bold bitmap emoji under `bitmap-emoji-size` |
+| held-out 09-16 (15,196) | 0 / 0 | 0 / 0 | 25 / 0 | 6 rows of the 1 au class, 18 bold bitmap emoji, 1 U+1F600 U+FE0E row (history) |
+| rule families (9,776) | 32 / 8 | 96 / 24 | 192 / 0 | all `rule/system-fonts-and-sizes`, under `optical-size`; the 8 and 24 gained are the 13.33px rows, which pass by accident again as in round 2 (round 3 lost them under `font-size-quantization`) |
+| feature families (12,050) | 0 / 0 | 0 / 0 | 0 / 0 | |
+
+- **Nothing else rode on the element path.** No line count or break moves outside the system font family. In-word
+  predictions, tabs, spacing and the observation port's states are the same code on both paths; `in-word-prefix` fires on
+  4.23% of passing development lines (element path 4.24%).
+- **The 1 au class is back**: 17 rows on the defined sets (runs 3, suite sample 8, held-out runs 6; 14 probed, 3 by
+  signature), widths only, one node rect 1 au off, and 11, 0 and 12 rows on the three fresh sets. Every member is "Helvetica
+  Neue" (10px, 15px), "Geeza Pro" (10px) or Thonburi (32px), fonts HarfBuzz shapes through kern, kerx and morx. Probe F27
+  measured the strings the round met beyond F7's and F13's.
+- **Synthetic bold is back as a class**: no row on the defined sets, 0, 3 and 6 rows on the fresh sets, all U+2764 alone in a
+  bold span, 7 or 8 au narrower natively. Probe F24 gives the arithmetic: the DOM adds NS_round(offset(device size) × apd)
+  per character that holds glyphs and Canvas NS_round(offset(CSS size) × 60), with offset(s) = 0.25 + 0.75 s / 48 below
+  48px (gfxFont.h:1899-1904; gfxFont.cpp:901-939, :3551-3562). The difference equals the two steps' difference on 24 of 24
+  rows (12px to 32px, three font lists; −7 au at 16px, −8 at 24px).
+- **Bitmap emoji under a bold font came back under `bitmap-emoji-size`** (33 rows) and are predicted now (below), so they
+  aren't a cost of the final library.
+- **Optical sizing is the large cost.** An OffscreenCanvas never applies `font-optical-sizing: auto`
+  (SetFontInternalDisconnected builds its font style from the shorthand alone, CanvasRenderingContext2D.cpp:4423-4492), so
+  `system-ui` and `-apple-system` measure at the font's default optical size: 16px `workers` is 3430 au natively and 3038 in
+  Canvas (F13). Every width of such a run is a stand-in under `optical-size`. With the lab's font facts the gap is reported
+  on those runs only (500 of 9,776 rule-family cases, no development or held-out case).
+- **With no supplied font facts the gap is everywhere.** Whether a family has an opsz axis can't be read from Firefox's
+  Canvas (research/FACTS-FREE.md), and the port reports `optical-size` wherever the fact isn't given: 24,488 of 25,013
+  development cases, and the share of values reported as predicted falls from 96.3% to 6.5%. The metrics barely move
+  (development lineCount 99.91% → 99.90%, breaks 99.90% → 99.88%, widths 98.26% → 98.06%; held-out widths 97.35% →
+  97.07%; rule families lineCount 99.19% → 98.96%, widths 94.64% → 93.72%), and the lost cases are the `pairKerning` and
+  `coverage` ones FACTS-FREE names. A decision for the maintainer, with an alternative built and measured (below).
+- **Canvas calls** per paragraph are the same within 2% (runs 152.8 → 154.5, suite sample 92.3 → 93.7, rule families 34.2 →
+  34.3); contexts per paragraph rise by about one (the emoji device-size contexts). Summed prediction time fell (suite
+  sample 18.2 s → 12.3 s, held-out suite sample 38.1 s → 24.3 s), measured in runs under different machine load.
+- **Giants**: all 9 pass lineCount, breaks, widths and the painter with the final library, in 15 s
+  (`r4-3/giants-forward`). The fresh sets drew none.
+
+### Round 3's open items
+
+1. **A tab after a frame that starts inside a cluster: ported** (`computeTabs`, lines.ts; CalcTabWidths,
+   nsTextFrame.cpp:4306-4378). The position a tab counts from isn't the frame's measured advance:
+   - a character adds its cluster's advance only where it starts a cluster (:4349-4357), so the characters a frame starts
+     with inside a cluster add nothing;
+   - spacing is asked for one character at a time (:4345-4347), and the base search goes no further back than the range
+     asked for (:4203-4213), so each character is its own base: a mark after a cursive letter takes letter spacing there
+     that its cluster doesn't (`tabSpacingPrefix`, prepare.ts step 6; ScalarValueAt gives 0 at a low surrogate,
+     CharacterDataBuffer.h:295-311).
+   - Probe F21: a span that starts at U+094B holds a tab that ends 328 au past a stop, the mark's part of the cluster; beh
+     fatha and a tab under 1px of letter spacing end 60 au short of the stop, bet patah at the stop.
+   - A tab is the next stop less that position, so it is a stand-in where the position is one: where an earlier text frame
+     of the line has a stand-in width, or the first cluster the scan counts starts at a stand-in. The line reports the
+     condition with the tab as its range, the characters after the tab are marked (`standInBefore`), and the observation port
+     limits them. Set 15's rows fail as before (the in-cluster division is a stand-in) and are covered now. The gap fires on
+     no passing development line.
+2. **Probe F18's unbounded frame: traced** (probe F20). `gfxTextRun::ComputeLigatureData` computes
+   `partClusterCount * (ligatureWidth / totalClusterCount)` with `int32_t ligatureWidth` and `uint32_t totalClusterCount`
+   (gfxTextRun.cpp:249-284), so the division is unsigned, and a ligature group with a negative advance W gives the part that
+   holds its start 2^32 + W au and the last part W − (2^32 + W) (:286-289). ReflowText clamps the first frame to nscoord_MAX,
+   2^30 − 1 au, and the second to 0 (NSToCoordCeilClamped over max(0, advance), nsTextFrame.cpp:11272-11273); 17,895,697.05px
+   reads back as 17,895,698px through float32, the "2^30 + 56 au" of F18.
+   - Two marks of one cluster share a HarfBuzz cluster where the font ligates them or where HarfBuzz reorders them by
+     modified combining class, which merges the clusters it moves across (hb-ot-shape-normalize.cc:394, hb-buffer.cc:2167-2185).
+     Gecko gives their glyphs to the first mark, a ligature group start that isn't a cluster start
+     (gfxHarfBuzzShaper.cpp:1705-1786), and a frame edge between the marks cuts the group. Under kerx marks keep their
+     advances (hb-ot-shape.cc:189-191).
+   - F20, 30 ordered pairs of marks after reh in 20px "Geeza Pro": the 18 cut unbounded are the 15 pairs HarfBuzz reorders
+     and shadda before fatha, damma or kasra, which the font ligates. Every pair's glyphs advance by −1 to −109 au, which the
+     base takes back, so Canvas totals show nothing. In Arial (GPOS, marks zeroed) the cut is bounded, and so is a cut before
+     both marks.
+   - Canvas shows neither the shared cluster nor the advance's sign, so it isn't predicted. The rows stay failures under
+     `in-word-prefix` at the in-cluster frame edge, whose reading (the DOM divides a cluster by its glyph records and
+     ligature groups, ComputeLigatureData) is the function at fault, and the gap's detail now says so between two marks in a
+     font not known to be OpenType-positioned. A Firefox bug: the minimal page is in the round's report.
+3. **Wrong values reported as predicted in passing cases**: development and held-out suite samples 30 → 6.
+   - *Myanmar, 24 cases*: U+102B, U+102C and U+1038 are spacing marks outside Grapheme_Cluster_Break=SpacingMark, so Gecko
+     starts a cluster there, but a string that starts with one is a broken syllable to HarfBuzz's syllabic shapers and gets a
+     dotted circle (hb-ot-shaper-syllabic.cc:32-99). Probe F23: U+1038 alone is 982 au, 649 of dotted circle and the 333 au
+     it has after U+1004 U+102B. A position before a mark that starts a cluster is a stand-in now, valued by the prefix.
+   - *Values under ranged paragraph gaps* (`page-history`, the cursive `font-fallback`, `bitmap-emoji-size`,
+     `glyph-clusters`, `space-in-shaping`, `ui-language`): the observation port limits every value that sums text such a gap
+     names (`rangeGap`, lab/observe/gecko.ts). No history-dependent case holds a wrong predicted value in either order.
+   - *Noto Nastaliq Urdu, 6 cases, still wrong*: sad in `صنم` is 912 au natively and 911 au as W(sad U+200D), where the two
+     sides add up to the unit. Probe F22 reads the prefix at 64 times the size: 910.80 au before rounding, no rounding tie,
+     so the letter's advance in the word differs from its advance before U+200D by under 1 au and the other side makes up
+     for it. "The two sides add up" can't see what is smaller than the rounding. It stays a probe-backed rule (F15: 1,013 of
+     1,015 cuts; the exceptions are a ligature as wide as its parts) and is registered as a known deviation. Testing the
+     sum at 64 times the size would see it, at three more Canvas calls per joined position.
+4. **`page-history` in both orders** (`r4-3`). History-dependent suite cases: development 123, held-out 190; the condition
+   reports 123 of 123 and 190 of 190 (round 3's condition: 122 and 186). It fires on 38 of 19,765 other development cases
+   and 44 of 9,801 held-out ones, U+FFFD and U+1F600 U+FE0E cases whose native layout didn't differ between these two
+   orders. 121 of 123 and 177 of 190 pass lineCount, breaks and widths in both orders (the 13 held-out ones that don't are
+   U+FFFD cases failing under `in-word-prefix` in both orders): the OffscreenCanvas follows the process's font state as the
+   element did.
+   - New from source: U+FE0E on an emoji-default character asks for a glyph without color, which only the system-wide
+     search finds, and in a content process that search looks only at the families whose character maps are loaded by then
+     and starts loading the rest (GlobalFontFallback, gfxPlatformFontList.cpp:1474-1486; the common fallback list puts
+     "Apple Color Emoji" first only for a color request, gfxPlatformMac.cpp:147-262). The 5 history-dependent cases round 3's
+     condition missed are all `❤️😀︎❤️`.
+   - U+FFFD isn't reported where the coverage facts name a listed family for it.
+   - **The history-dependent set isn't stable between identical runs.** The held-out suite sample had 190
+     history-dependent cases in `r4-1` and `r4-3`, and 104 in `r4-2` and in the round 3 evaluation, with the same case files,
+     parts, chunk size and orders; the 86 that come and go are emoji cases. The asynchronous character map loading above
+     makes native emoji fallback depend on timing, not only on order.
+5. **Constants without a source reading.**
+   - *The suffix-side in-word recipe*: no source reading exists; it has a probe verdict now. F26: where the cluster before an
+     offset has no joining forms, the three-string test shows nothing crossing and the ink box shows no ligature, W(unit) −
+     W(suffix) is the DOM's advance before the offset at 567 of 567 offsets (8 scripts, 21 font and language pairs).
+   - *U+200C only after a mirrored character*: direction reaches a lone character's glyph through `hb_ot_rotate_chars`, which
+     in a backward direction swaps a character for its mirror where the font has it and else asks for the font's `rtlm` form
+     (hb-ot-shape.cc:650-670). The other way in is a font's `rtla` lookups (:339-340), which the port doesn't predict.
+   - *The odd-kern guard k ≥ 3*: removed. The tie test's reach is so wide at a small k that nothing counts there.
+   - *The `float32-precision` bound*: derived for any app-unit ratio. Eight float32 roundings stay under half an app unit
+     below the first power of two at or above 2^20 / apd device px: 2^16 at apd 30, 2^15 at apd 60.
+6. **Probes F7 to F19 give facts.** Each script keeps its raw values and returns `checks` and `pre` over them; F20 to F27 are
+   new (`rebuild/probes/gecko-round4.ts`). All four sets ran in the pinned Firefox
+   (`.artifacts/probes/gecko/r4-checks-round2`, `-round2b`, `-round3`, `-round4`): 83 facts, all holding, merged into
+   `rebuild/facts/gecko/156.0.ndjson` (404 facts). Two hypotheses the first run refuted are stated as the facts they turned
+   out to be (F22's rounding tie, F24's single rounding of the bold Canvas advance).
+
+Also fixed on the way:
+
+- **Bitmap emoji under a bold font** (33 rows under `bitmap-emoji-size` on the defined sets, all passing now). Apple Color
+  Emoji has no bold face, so the advance holds synthetic bold's step. Where rounding the bold Canvas advance at the device
+  size once isn't exact, the port measures the cluster at weight 400 too: the difference is a whole number of Canvas's own
+  steps, and the DOM's advance is the weight 400 advance at the page's apd plus as many of the DOM's steps (F24: U+1F600 in
+  bold 20px Arial is 1226 au natively, 1200 + 26, where 2453 au × 30 / 60 rounds to 1227).
+- **`space-in-shaping` read Canvas past its precision.** measureText returns `float(au) / 60` as a float
+  (CanvasRenderingContext2D.cpp:5277), which gives the app units back only below 2^18 px. Three held-out corpus paragraphs,
+  one stretch of 17.3 million au each, reported the gap over a 1 au misreading. The test runs in windows under 2^18 px that
+  overlap by a word, and a shaping unit that wide reports `float32-precision`.
+- **The emoji conditions don't depend on the app-unit ratio any more**: they were inside the `apd !== 60` block, so at DPR 1
+  no `page-history` was reported for a pinned emoji.
+
+### The evaluation's open Firefox row
+
+`c-f3e8314c35b33990` (three Phags-pa letters and U+0301 in 16px "Courier New" under 1px of letter spacing): the reading isn't
+wrong. Probe F25: the letters are 699, 685 and 616 au without letter spacing, and under 1px only the cluster holding U+0301
+grows, by 60 au (under 4px by 240), as F19 found for five other scripts. The `font-fallback` range [2, 4) names that cluster.
+The first letter differs by 68 au because the port's in-word stand-ins are 631, 685 and 684 au. The row counts as uncovered
+because the second letter happens to be equal, which splits the unit's differing code points into two runs, +68 and −8, and
+only the second is touched. For the scorer's owner: a shaping unit whose in-word values are limited and whose differing
+code points net to the gap's amount is one piece of evidence.
+
+### Fresh sets
+
+`bun rebuild/lab/fresh.ts --browser=firefox --seed=r4-gecko-<n> --repeat=2 --giants=run`, forward, three parts, the final
+library. The cap was three.
+
+| Set | Cases | Prediction failures | Covered | 1 au class | Open | The open rows |
+|---|---:|---:|---:|---:|---:|---|
+| 1 | 16,147 | 236 | 225 | 11 | 0 | |
+| 2 | 16,073 | 219 | 216 | 0 | 3 | U+2764 alone in a bold 24px Arial span, 8 au a glyph: synthetic bold |
+| 3 | 16,070 | 255 | 237 | 12 | 6 | U+2764 alone in a bold 16px Arial or Georgia span, 7 au: synthetic bold |
+
+No new class in 48,290 cases. The 9 open rows are the synthetic bold class, which the scorer's registry doesn't hold yet.
+`in-word-prefix` fires on 0.77% to 1.00% of passing lines, `page-history` on 0.07% to 0.10%, `optical-size` on 0.06%.
+
+### Scores
+
+`r4-3`, forward (scored against the reverse run), pass / fail / unobserved, widths adding not-applicable; the element path's
+round 3 evaluation rows in parentheses.
+
+| Set (cases; history-dependent) | lineCount | breaks | widths | painter |
+|---|---|---|---|---|
+| smoke (297) | 297/0/0 | 297/0/0 | 294/3/0 (296/1) | 284/13/0 (286/11) |
+| runs (2,580) | 2580/0/0 | 2580/0/0 | 2575/5/0 (2577/3) | 2510/70/0 (2513/67) |
+| ws (1,019) | 1019/0/0 | 1019/0/0 | 1019/0/0 | 1002/17/0 |
+| policy (1,606) | 1606/0/0 | 1606/0/0 | 1604/2/0 (1603/3) | 1584/22/0 |
+| suite sample (19,888; 123) | 19741/24/0 | 19739/26/0 | 19309/430/0/26 (19316/423) | 18570/1195/0 (18578/1187) |
+| held-out runs (2,579) | 2576/3/0 | 2576/3/0 | 2569/7/0/3 (2575/1) | 2500/79/0 (2506/73) |
+| held-out ws (1,022) | 1022/0/0 | 1022/0/0 | 1022/0/0 | 1008/14/0 |
+| held-out policy (1,604) | 1604/0/0 | 1604/0/0 | 1601/3/0 | 1577/27/0 |
+| held-out suite sample (9,991; 190, was 104) | 9789/12/0 (9875/12) | 9785/16/0 (9871/16) | 9398/387/0/16 (9485/386) | 8837/964/0 (8923/964) |
+| rule families, round 3's derivation (9,776) | 9697/79/0 (9721/55) | 9544/232/0 (9616/160) | 9032/512/0/232 (9224/392/0/160) | 8475/1301/0 (8667/1109) |
+| feature families, round 3's derivation (12,050) | 12050/0/0 | 12050/0/0 | 10866/0/1184 | 8421/49/3580 |
+| giants (9) | 9/0/0 | 9/0/0 | 9/0/0 | 9/0/0 |
+
+Failures without a covered explanation: the 17 rows of the 1 au class, nothing else, in both orders. Passing cases with a
+wrong predicted value: the 6 Noto Nastaliq Urdu cases. Tests: `bun test rebuild/src/engines/gecko
+rebuild/lab/observe/gecko.test.ts`, 94 pass (engine 80, port 14); both `tsc` projects are clean.
+
+### Alternatives built and not merged
+
+- **`r4-gecko-alt-synthetic-bold`**: synthetic bold on a text font's glyph, for clusters with the Emoji property that a
+  text font draws in a run that isn't weight 400. Canvas confirms it at two sizes: the cluster at the run's weight less the
+  cluster at weight 400 is the same whole number of Canvas's steps at the CSS size and at the device size, which a real bold
+  face's difference, linear in the size, can't be at both. All 9 open fresh rows pass, nothing moves on runs, held-out runs
+  and the two fresh parts (15,386 cases), at 0.1 more calls per paragraph. It doesn't reach symbols without the Emoji
+  property, so the class stays. Not merged: the maintainer decided synthetic bold stays a named class.
+- **`r4-gecko-alt-opsz-default`**: where `opticalSizeAxis` isn't given, its documented default decides (true for the system
+  font keywords, false for a named family). With no supplied facts `optical-size` is reported in 0 development cases
+  (24,488 without it) and 320 rule-family cases, 95.4% of development values are reported as predicted (6.5%), and no failure
+  on the defined sets loses its covered explanation. A named variable font with an opsz axis would then measure wrong
+  without a gap. Two unit tests assert today's behaviour and fail there. Not merged: the charter removed Gecko's name-keyed
+  optical sizing.
+
+### Open
+
+- The 1 au class and synthetic bold, residual classes of the OffscreenCanvas by the maintainer's decision.
+- `optical-size` with no supplied facts (above).
+- The Amiri joined-letter cross term under `in-word-prefix`, still most of what fails (394 development suite cases).
+- The 6 Noto Nastaliq Urdu values.
+- `rtla` lookups on a lone character at an odd level aren't predicted or named.
+- Round 3's and round 4's Gecko rules aren't in `rebuild/tests/rules.json` (the registry is the tests owner's file; the
+  entries are in the round's report).
 
 ## Ceiling round 3, 2026-09-17 to 09-18
 
