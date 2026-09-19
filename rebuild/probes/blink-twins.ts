@@ -91,9 +91,9 @@ const SAMPLES: Sample[] = [
   { id: 'times digits 13', family: '"Times New Roman"', text: '1234567890123' },
 ]
 
-// T4: the two-byte slice as the Blink port builds and asks it (engines/blink/shape.ts canvasString, measure/canvas.ts
-// measureContext and measureText): the string from String.fromCharCode, the context's attributes assigned in the port's
-// order with its values, and a Map lookup on the string before the call.
+// T4: the two-byte slice as the Blink port built and asked it at the correctness line (engines/blink/shape.ts
+// canvasString, and measure/canvas.ts's memo of then, which is gone): the string from String.fromCharCode, the context's
+// attributes assigned in the port's order with its values, and a Map lookup on the string before the call.
 function portSource(family: string, text: string): string {
   return `
     const codes = ${JSON.stringify([...text].map(ch => ch.charCodeAt(0)))}

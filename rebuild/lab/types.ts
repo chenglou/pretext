@@ -253,7 +253,7 @@ export type BlinkLine = LineOf<BlinkLineStart, BlinkLineGeometry>
 export type WebKitLine = LineOf<WebKitLineStart, WebKitLineGeometry>
 export type GeckoLine = LineOf<GeckoLineStart, GeckoLineGeometry>
 
-// A slot the engine refused because it moved the line below the slot's floats (src/model.ts LineResultOf), with
+// A slot the engine refused because it moved the line below the slot's floats (src/model.ts FillResultOf), with
 // the row of the slot list it was, and the gaps the decision rests on.
 export type BelowFloats = { row: number; gaps: Gap[] }
 

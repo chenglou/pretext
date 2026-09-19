@@ -209,8 +209,6 @@ describe('how questions changed', () => {
     expect(classifyQuestions(record, questions('all', 2), questions([0, 1, 3, 4], 1)).change).toBe('dropped only')
     expect(classifyQuestions(record, questions('all', 2), questions('all', 1)).change).toBe('other questions')
     expect(classifyQuestions(record, questions('all', 2), questions([0, 1, 3, 4], 3)).change).toBe('other questions')
-    // A format 1 reference also holds the library's memo hits, which nothing compares.
-    expect(classifyQuestions(record, { ...questions('all', 2), memoHits: 7 } as ReturnType<typeof questions>, questions('all', 2)).change).toBe('same')
   })
 })
 

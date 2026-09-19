@@ -6,14 +6,10 @@
 // shaping of a word wins (specs/blink-canvas.md §1.7), so engines keep texts that could shape differently apart with
 // `partition`, and a context is never reused across settings.
 //
-// Two ways to ask, over the same contexts. `contextFor`, `width` and `bounds` hold a context by reference and always ask
-// Canvas. The index API (`measureContext`, `measureText`, `measureTextBounds`) names a context by its index in a Measurer,
-// which also keeps a memo and a call log; the ports use it until they hold their contexts themselves.
-//
-// The memo is an acceleration structure for one layout: key (context index, text), value the measureText width. Within a
-// context, measuring the same text again returns the same bits in all three engines (Blink returns the cached node for
-// the whole text; WebKit and Gecko run the same shaping), so the memo can't change results. It lives as long as the
-// Measurer, which an engine's prepare creates per paragraph.
+// A prepared paragraph keeps the list of its contexts, and the records that measure hold theirs by reference. `width` and
+// `bounds` always ask Canvas: nothing here stores an answer, counts a call or logs one. Within a context, measuring the
+// same text again returns the same bits in all three engines (Blink returns the cached node for the whole text; WebKit and
+// Gecko run the same shaping), so asking again can't change a result, only cost a call.
 //
 // The string an engine hands to measureText reaches Canvas as the engine built it: nothing here uses it as a key.
 // V8 internalizes a string used as a Map, Set or property key, stores an internalized string in one byte whenever its
@@ -21,11 +17,9 @@
 // string-table.cc:398-427, factory.cc:1239-1257 and 1293-1300, string.cc:164-166 at Chrome 153's V8 6b96683d). Blink
 // takes a one-byte string as an 8-bit one (to_blink_string.cc:216-227) and Canvas shapes an 8-bit string as one Latin
 // segment, so a lookup of the text itself turned the two-byte string the Blink port slices (engines/blink/shape.ts
-// canvasString) into a one-byte one before Canvas saw it. The memo's key is a concatenation, which is another string
-// object; only the object looked up changes (probe blink-storage S1: Amiri's 13 brackets at 48px measure 285.79px as the
-// two-byte slice, 159.12px after any keyed use of it, and 285.79px after lookups of other strings that hold its
-// characters; S5 asks through this file).
-import type { MeasureLog } from './log.js'
+// canvasString) into a one-byte one before Canvas saw it (probe blink-storage S1: Amiri's 13 brackets at 48px measure
+// 285.79px as the two-byte slice, 159.12px after any keyed use of it, and 285.79px after lookups of other strings that
+// hold its characters; S5 asks through this file).
 
 export type CanvasSettings = {
   // ctx.font, a CSS font shorthand from measure/font.ts.
@@ -51,10 +45,10 @@ function sameSettings(a: CanvasSettings, b: CanvasSettings): boolean {
     a.fontKerning === b.fontKerning && a.textRendering === b.textRendering && a.direction === b.direction && a.partition === b.partition
 }
 
-// Where the context of `settings` is in `contexts`, made at the end when none has them. A paragraph has a few contexts, so
-// this compares them one by one.
-function indexFor(contexts: Context[], settings: CanvasSettings): number {
-  for (let i = 0; i < contexts.length; i++) if (sameSettings(contexts[i]!.settings, settings)) return i
+// The context of `settings` in `contexts`, made at the end when none has them. A paragraph has a few contexts, so this
+// compares them one by one.
+export function contextFor(contexts: Context[], settings: CanvasSettings): Context {
+  for (let i = 0; i < contexts.length; i++) if (sameSettings(contexts[i]!.settings, settings)) return contexts[i]!
   const ctx = new OffscreenCanvas(1, 1).getContext('2d') as ContextWithLang | null
   if (ctx === null) throw new Error('OffscreenCanvas has no 2d context')
   // lang first: Blink resolves the font under the context's language when the font string is set (base_rendering_context_2d.cc:1201-1215).
@@ -65,14 +59,12 @@ function indexFor(contexts: Context[], settings: CanvasSettings): number {
   ctx.fontKerning = settings.fontKerning
   ctx.textRendering = settings.textRendering
   ctx.direction = settings.direction
-  contexts.push({ settings, ctx })
-  return contexts.length - 1
+  const context = { settings, ctx }
+  contexts.push(context)
+  return context
 }
 
-export function contextFor(contexts: Context[], settings: CanvasSettings): Context {
-  return contexts[indexFor(contexts, settings)]!
-}
-
+// rule blink/measure/string-reaches-canvas-as-built
 export function width(context: Context, text: string): number {
   return context.ctx.measureText(text).width
 }
@@ -82,52 +74,4 @@ export function width(context: Context, text: string): number {
 export function bounds(context: Context, text: string): { width: number; left: number; right: number } {
   const metrics = context.ctx.measureText(text)
   return { width: metrics.width, left: metrics.actualBoundingBoxLeft, right: metrics.actualBoundingBoxRight }
-}
-
-// ---- The index API ----
-
-// `memo` and `log.contexts` run beside `contexts`, index by index.
-export type Measurer = {
-  log: MeasureLog
-  contexts: Context[]
-  memo: Map<string, number>[]
-}
-
-export function createMeasurer(): Measurer {
-  return { log: { contexts: [], calls: [], memoHits: 0 }, contexts: [], memo: [] }
-}
-
-export function measureContext(m: Measurer, settings: CanvasSettings): number {
-  const index = indexFor(m.contexts, settings)
-  // Every context made since the last call, by contextFor on this list too, gets its memo and its log entry.
-  for (let i = m.memo.length; i < m.contexts.length; i++) {
-    m.memo.push(new Map())
-    m.log.contexts.push(m.contexts[i]!.settings)
-  }
-  return index
-}
-
-// Logged like measureText; not memoized, since the memo holds widths.
-export function measureTextBounds(m: Measurer, context: number, text: string): { width: number; left: number; right: number } {
-  const measured = bounds(m.contexts[context]!, text)
-  m.log.calls.push({ context, text, width: measured.width })
-  return measured
-}
-
-// rule blink/measure/string-reaches-canvas-as-built
-// Any non-empty string: it makes the memo's key another string object than the measured text.
-const MEMO_KEY = '|'
-
-export function measureText(m: Measurer, context: number, text: string): number {
-  const memo = m.memo[context]!
-  const key = MEMO_KEY + text
-  const known = memo.get(key)
-  if (known !== undefined) {
-    m.log.memoHits++
-    return known
-  }
-  const measured = width(m.contexts[context]!, text)
-  memo.set(key, measured)
-  m.log.calls.push({ context, text, width: measured })
-  return measured
 }

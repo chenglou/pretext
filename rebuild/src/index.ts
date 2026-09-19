@@ -24,7 +24,7 @@ export type {
 export { PINNED_BUILDS, detectEngine, detectEnvironment } from './env.js'
 export type {
   AtomicInline, BoxEdge, CssFont, Direction, FillResultOf, FontDecl, FontFacts, Fragment, Gap, GapName, InlineElement, InlineElementOf, InlineNode,
-  InlineNodeOf, LineBreak, LineBreakElement, LineInspectionOf, LineOf, LinePieces, LineResultOf, LineSlot, OverflowWrap, Paragraph, ParagraphOf, TextAlign,
+  InlineNodeOf, LineBreak, LineBreakElement, LineInspectionOf, LinePieces, LineSlot, OverflowWrap, Paragraph, ParagraphOf, TextAlign,
   TextLeaf, TextStyle, TextStyleOf, VerticalAlign, WhiteSpace, WordBreak, WordBreakElement,
 } from './model.js'
 export { NO_BOX_EDGE, UNKNOWN_FONT_FACTS } from './model.js'
@@ -43,8 +43,9 @@ export { webkitPaintRules } from './engines/webkit/paint-rules.js'
 
 // A paragraph prepared for one engine, which never changes: lines are filled from it one slot at a time, at any width
 // (DESIGN.md §2.9). `state` is the engine's own: content building from the inline tree, itemization, bidi, break
-// opportunities, the widths the engine knows before it fills lines, its Canvas contexts, the environment, and the paragraph
-// it laid out, which is the caller's with the font facts Canvas answered (below).
+// opportunities, the widths the engine knows before it fills lines, its Canvas contexts and the environment. What a port
+// reads of the paragraph later it keeps where it reads it: Blink and Gecko the paragraph itself, which is the caller's with
+// the font facts Canvas answered (below), WebKit the block's style and its boxes' own.
 export type Prepared =
   | { engine: 'blink'; state: BlinkPrepared }
   | { engine: 'webkit'; state: WebKitPrepared }

@@ -104,9 +104,7 @@ import { readLedger, type LedgerEntry, type SetsRun } from './ledger.ts'
 import { CONFIGS, PREDICTORS, REPO, TIER_BROWSERS, selectSets, type Config, type SetProtocol, type TierBrowser } from './sets.ts'
 
 const INPUTS_FORMAT = 'pretext-replay-inputs/1'
-// Format 1 references also hold the library's memo hits per case, which nothing reads any more; `freeze` writes format 2.
 const REFERENCE_FORMAT = 'pretext-replay-reference/2'
-const REFERENCE_FORMATS: readonly string[] = ['pretext-replay-reference/1', REFERENCE_FORMAT]
 // A shard ends once it holds this many recorded calls (a case weighs its calls plus a constant), so shards take about
 // equal time and the longest is a few seconds.
 const SHARD_CALLS = 120_000
@@ -143,7 +141,7 @@ export type InputsManifest = {
 // library differs from the browser's own prediction.
 type Unfaithful = { checkedAt: string; commit: string; dirty: string[]; cases: Record<string, string> }
 type ReferenceManifest = {
-  format: string
+  format: typeof REFERENCE_FORMAT
   kind: 'browser' | 'replay'
   browser: TierBrowser
   config: Config
@@ -744,7 +742,7 @@ function readReference(dir: string, against: 'reference' | 'browser', inputsSha2
   const path = join(dir, against, 'manifest.json')
   if (!existsSync(path)) fail(`${relative(REPO, join(dir, against))} holds no reference${against === 'reference' ? '; freeze one' : ''}`)
   const manifest = JSON.parse(readFileSync(path, 'utf8')) as ReferenceManifest
-  if (!REFERENCE_FORMATS.includes(manifest.format)) fail(`${path}: format ${JSON.stringify(manifest.format)}`)
+  if (manifest.format !== REFERENCE_FORMAT) fail(`${path}: format ${JSON.stringify(manifest.format)}`)
   if (against === 'reference' && manifest.inputsSha256 !== inputsSha256) fail(`${relative(REPO, path)} was frozen from other inputs than ${relative(REPO, dir)}/inputs holds now: freeze again (--force --reason=...)`)
   return manifest
 }
