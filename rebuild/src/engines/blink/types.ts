@@ -2,8 +2,7 @@
 import type { ContentIndex } from '../../content.js'
 import type { BlinkEnvironment } from '../../env.js'
 import type { Measurer } from '../../measure/canvas.js'
-import type { FontDecl, FontFacts, Gap, LineBreak, LineOf, LineResultOf, OverflowWrap, Paragraph, TextAlign, VerticalAlign, WhiteSpace, WordBreak } from '../../model.js'
-import type { BlinkLineGeometry, BlinkLineStart } from './geometry.js'
+import type { FontDecl, FontFacts, Gap, LineBreak, OverflowWrap, Paragraph, TextAlign, VerticalAlign, WhiteSpace, WordBreak } from '../../model.js'
 import type { HanKerningFontData } from './hankerning.js'
 
 // InlineItem types this model produces (specs/blink-text.md §1; inline_item.h): text, control items, the open and close
@@ -118,7 +117,12 @@ export type IteratorSettings = {
   breakSpace: 'after-space-run' | 'after-every-space'
 }
 
-// Everything prepare computes. nextLine only reads it.
+// What prepare keeps for inspection alone (index.ts inspectLine, paragraphGaps): the paragraph's gaps, its content's, its
+// fonts' and the environment's, with the ones preparation's measuring raised first.
+export type BlinkInspect = { gaps: Gap[] }
+
+// Everything prepare computes. Filling a line only reads it, but for the two per-style answers Canvas gives when they are
+// first needed (oneByteContexts, canvasSplitsWords).
 export type BlinkPrepared = {
   paragraph: Paragraph
   env: BlinkEnvironment
@@ -141,11 +145,6 @@ export type BlinkPrepared = {
   sourceOffsets: Int32Array
   // Per source unit, its text_content unit, or -1 when white-space processing removed it.
   contentOffsets: Int32Array
-  // Per source unit removed by white-space processing, the text_content offset its collapsed OffsetMapping unit maps to:
-  // the length of text_content when it was collapsed (offset_mapping_builder.cc:95-117).
-  collapsedAt: Int32Array
-  // Per source unit, its run.
-  sourceRuns: Int32Array
   sourceLength: number
   items: InlineItem[]
   styles: BlinkStyle[]
@@ -184,15 +183,10 @@ export type BlinkPrepared = {
   // The block's used text-align (text-align-last is auto) and NeedsAccurateEndPosition from it (line_info.cc:127-175).
   textAlign: TextAlign
   needsAccurateEndPosition: boolean
-  // The paragraph's gaps: its content, fonts and environment.
-  gaps: Gap[]
   // The paragraph's Canvas contexts, with the memo and the call log of preparation and of every line filled from it
   // (measure/canvas.ts).
   measurer: Measurer
-  // Whether inspectLine and paragraphGaps answer on this paragraph (index.ts prepare).
-  inspect: boolean
+  // Null on a paragraph prepared plain: it gives lines and their pieces, computes no gap, no limit, no glyph cluster and no
+  // offset mapping, and asks Canvas nothing that only those read; inspectLine and paragraphGaps throw on it.
+  inspect: BlinkInspect | null
 }
-
-// The line nextLine fills, and what it returns for a slot.
-export type BlinkLine = LineOf<BlinkLineStart, BlinkLineGeometry>
-export type BlinkLineResult = LineResultOf<BlinkLineStart, BlinkLineGeometry>
