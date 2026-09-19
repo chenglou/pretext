@@ -3,10 +3,12 @@
 // one (engines/blink/shape.ts canvasString slices a Latin-1-only string of 13 units or more out of a two-byte string where
 // the paragraph shapes the range under another script). Chrome shapes the two differently and keeps the first shaping per
 // canvas (probes/blink-twins.ts: Amiri's 13 brackets are 159.12px one-byte and 285.79px two-byte at 48px, whichever is
-// asked first answers both, in both orders, through 20,000 other words), so once the slice reaches Canvas as two-byte
-// (the probe's T4: not while measure/canvas.ts looks it up in the string memo first), which one is asked first decides
-// both widths. No record shows a string's storage and bun has none, so tier 1 can't see a twin change hands; this scan
-// says which cases hold one, so they are in the sets tier 2 runs, and which storage the tree asks first.
+// asked first answers both, in both orders, through 20,000 other words), so on one context the first asked would decide
+// both widths. Since the string storage fix (research/BLINK-STRING-STORAGE.md) a segmented paragraph measures its
+// one-byte strings on contexts of their own, and the scan is a tripwire: 0 cases ask one context both storages on every
+// set (166 of the 380 `twins` cases did at the correctness line). No record shows a string's storage and bun has none,
+// so tier 1 can't see a twin change hands; this scan says which cases ask a two-byte slice, so they are in the sets tier
+// 2 runs, and whether any context is asked both.
 //
 //   bun rebuild/tools/twin-scan.ts --cases=<cases.ndjson>[,<more>] [--tree=<checkout or commit>] [--limit=N] [--out=<report.json>]
 //

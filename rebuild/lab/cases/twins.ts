@@ -1,13 +1,15 @@
 // Twin-string families (prefix 'twins/'; research/ARCHITECTURE-PLAN-2.md §7 check 9). In one style of a paragraph that
 // Blink segments by script, the same run of 13 or more brackets stands once after Latin text and once after Arabic. The
 // paragraph shapes the first under Latin and the second under Arabic, so the Blink port asks Canvas for the first as a
-// one-byte string and for the second as a two-byte slice of the same characters, on the one canvas of that style
-// (engines/blink/shape.ts canvasString). Chrome shapes the two differently in Amiri and keeps the first shaping per canvas
-// (probes/blink-twins.ts). At the correctness line the slice reaches Canvas as one-byte all the same, because
-// measure/canvas.ts looks it up in the string memo first (the probe's T4), so nothing differs yet; once the memo goes the
-// slice is two-byte, these predictions move in Chrome, and which of the two is asked first decides both widths. No other
-// tier set holds such a pair in one paragraph (tools/twin-scan.ts: 0 of 66,224 Chrome cases), and no offline tier sees a
-// string's storage, so these cases are where that shows, in tier 2 alone. Never launches a browser.
+// one-byte string and for the second as a two-byte slice of the same characters (engines/blink/shape.ts canvasString).
+// Chrome shapes the two differently in Amiri and keeps the first shaping per canvas (probes/blink-twins.ts,
+// probes/blink-storage.ts S3). At the correctness line the slice reached Canvas as one-byte all the same, because
+// measure/canvas.ts looked it up in the string memo first and V8 hands Blink a one-byte string after a keyed use. Since
+// the string storage fix (research/BLINK-STRING-STORAGE.md) the slice reaches Canvas as built and a segmented paragraph
+// measures its one-byte strings on contexts of their own, so no canvas is asked both. Few other tier cases ask such a
+// slice at all (tools/twin-scan.ts: 96 of 66,692 Chrome case lines outside this set, none of them a pair on one context),
+// and no offline tier sees a string's storage, so these cases are where a change of storage or of canvas shows, in tier 2
+// alone. Never launches a browser.
 //
 //   bun rebuild/lab/cases/twins.ts [--out=FILE]
 //
