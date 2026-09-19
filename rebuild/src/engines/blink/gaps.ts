@@ -247,7 +247,7 @@ export function measuredRange(sink: GapSink, p: BlinkPrepared, g: number, from: 
   if (canvasScripts !== null) scriptContext(sink, p, cs, canvasScripts)
 }
 
-// ---- The cuts of a group of 256 zoomed px or more (shape.ts addCuts) ----
+// ---- The cuts of a group of 256 zoomed px or more (shape.ts addPieces) ----
 
 export function uncutCluster(sink: GapSink, p: BlinkPrepared, g: number, a: number, b: number): void {
   if (sink === null) return

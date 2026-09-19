@@ -65,7 +65,8 @@ export type ComputedStyle = {
 export type StyleContexts = { ltr: Context; rtl: Context; ltrNoLigatures: Context; rtlNoLigatures: Context; hyphen: Context; scale: number }
 
 // A style with what measuring keeps beside it. The two answers Canvas gives when they are first needed are the only
-// prepared data written after prepare; each is a fact of the style's fonts that no layout changes.
+// prepared data written after prepare (the first adds its contexts to BlinkPrepared.canvases); each is a fact of the
+// style's fonts that no layout changes.
 export type BlinkStyle = ComputedStyle & {
   // The contexts the style's strings are measured on: references into BlinkPrepared.canvases.
   contexts: StyleContexts

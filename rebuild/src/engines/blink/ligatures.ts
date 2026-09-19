@@ -5,7 +5,7 @@
 // shape_result.cc:2113-2200; :228-349), never breaks inside one (OffsetToFit with BreakGlyphsOption(false), :684-694), and
 // gives a cluster over an item edge to the item holding its first character (glyph_data_range.cc:56-90). Canvas totals show
 // none of it: Geeza Pro's lam-lam-heh ligature has the advance of its parts. Without the facts a position between two
-// characters of one shaping call is a stand-in (shape.ts positionLimit).
+// characters of one shaping call is a stand-in (limits.ts positionLimit).
 import { blinkOtLanguageTags } from './generated/break-tables.js'
 import type { LigatureFacts, LigaturePattern, ListedFontFacts } from '../../model.js'
 import { isMark } from './props.js'
