@@ -1019,7 +1019,8 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, inspec
     // U+0020 for it, gfxTextRun.cpp:3226-3229). Canvas shapes it the same way, so it is asked as itself, at the run's first
     // one. Probe gecko-mainfacts M4: in 43 of 249 styles the two differ (16px "Hoefler Text" 754 au against 240, Charter 534
     // against 267, Thonburi 640 against 319), and W(U+00A0) is the DOM's advance in 228 of the 249, where W(U+0020) is in
-    // 197; the other 21 are off for the space too (synthetic bold, system-ui, "Apple Color Emoji" as the first family).
+    // 197; of the other 21, 18 are off for the space by the same amount (synthetic bold, system-ui) and 3 are "Apple Color
+    // Emoji" as the first family, where the DOM takes the glyph's device-size advance.
     let spaceAu: number | null = null
     let nbspAu: number | null = null
     // Whether a space takes part in shaping shows in the units measured together, which only a gap reads (gaps.ts).
