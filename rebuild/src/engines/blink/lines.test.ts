@@ -717,7 +717,7 @@ describe('blink boxes of spans that hold no text', () => {
     expect(boxes([{ kind: 'text', text: 'aa ' }, span([{ kind: 'text', text: ' ' }]), { kind: 'text', text: 'bb' }], 400)).toEqual([[[0, 1920, 0]]])
   })
 
-  test('a span with a letter, a tab or a <wbr> in it stays culled', () => {
+  test('a span with a letter, a <wbr> or a preserved space in it stays culled', () => {
     expect(boxes([{ kind: 'text', text: 'aa' }, span([{ kind: 'text', text: ' b' }]), { kind: 'text', text: 'bb' }], 400)).toEqual([[]])
     expect(boxes([{ kind: 'text', text: 'aa' }, span([{ kind: 'wbr' }]), { kind: 'text', text: 'bb' }], 400)).toEqual([[]])
     expect(boxes([{ kind: 'text', text: 'aa' }, span([{ kind: 'text', text: ' ' }], { whiteSpace: 'pre-wrap' }), { kind: 'text', text: 'bb' }], 400)).toEqual([[]])
