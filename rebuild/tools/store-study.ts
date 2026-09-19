@@ -517,12 +517,16 @@ if (part === 'tier') {
   const byShape = new Map<string, Tally>()
   let cases = 0
   let leftOut = 0
+  let lastLine = 0
   onCall = call => {
     const read = readStack(call.stack)
     // The phase is the statement of lab/predictor-core.ts plainLines the call was made under (JavaScriptCore drops the
     // frames of the library's tail calls, so fillLine itself can be missing from the stack).
     const at = /plainLines \(.*predictor-core\.ts:(\d+):/.exec(call.stack)
-    const line = at === null ? 0 : Number(at[1])
+    // A stack deeper than the host keeps (Blink's measure16 recurses once per script edge) has lost the frame: such a
+    // call belongs to the statement the call before it was under.
+    const line = at === null ? lastLine : Number(at[1])
+    lastLine = line
     let inChecks = false
     for (let i = 0; i < read.under.length; i++) if (read.under[i]!.endsWith('@measure/font-checks.ts')) inChecks = true
     const callPhase: Phase = inChecks ? 'checks' : line === PLAIN_LINES_PREPARE ? 'prepare' : 'fill'
