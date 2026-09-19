@@ -25,10 +25,17 @@ import { WORD_WRAP_BREAK, holderOfSource, type GeckoInspect, type GeckoLeaf, typ
 // Where gaps go: a list in raise order, or null on a plain paragraph.
 export type GapSink = Gap[] | null
 
-// The gaps of the paragraph's content, fonts and environment, whatever the slot (DESIGN.md §5).
+// The gaps of the paragraph's content, fonts and environment, whatever the slot (DESIGN.md §5), as copies: a caller that
+// writes into what it was handed doesn't reach the prepared paragraph, whose gaps can share an `at` (prepare.ts step 7).
 export function paragraphGaps(p: GeckoPrepared): Gap[] {
   if (p.inspect === null) throw new Error('paragraphGaps reads an inspected paragraph, and this one was prepared plain')
-  return p.inspect.gaps
+  const gaps = p.inspect.gaps
+  const out: Gap[] = []
+  for (let k = 0; k < gaps.length; k++) {
+    const gap = gaps[k]!
+    out.push(gap.at === undefined ? { ...gap } : { ...gap, at: { ...gap.at } })
+  }
+  return out
 }
 
 // ---- Preparation ----

@@ -958,6 +958,20 @@ describe('plain and inspected paragraphs (research/ARCHITECTURE-PLAN-2.md §5.2)
     expect(() => geckoParagraphGaps(prepared)).toThrow('prepared plain')
   })
 
+  test('paragraphGaps hands out copies: writing into them doesn\'t reach the prepared paragraph', () => {
+    // A size off Canvas's grid in a font whose opsz axis isn't known: two gaps made with one `at` (prepare.ts step 7).
+    const system = { ...courier, size: 16.8, facts: { ...facts, opticalSizeAxis: null } }
+    const prepared = prepareGecko(paragraph([run('aa '), run('bb', 'span', { font: system })], 500), env, true)
+    const first = geckoParagraphGaps(prepared)
+    expect(first.map(g => g.gap)).toEqual(['font-size-quantization', 'optical-size'])
+    const kept = JSON.stringify(first)
+    first[0]!.at!.start = 99
+    first[1]!.detail = 'written over'
+    first.pop()
+    expect(JSON.stringify(geckoParagraphGaps(prepared))).toBe(kept)
+    expect(JSON.stringify(prepared.inspect!.gaps)).toBe(kept)
+  })
+
   test('linePieces and inspectLine don\'t write the decided line: justified, trimmed and read twice in either order', () => {
     const p = paragraph([run('aa bb cc dd ee ff')], 60, { textAlign: 'justify' })
     const prepared = prepareGecko(p, env, true)
