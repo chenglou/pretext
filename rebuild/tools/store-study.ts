@@ -192,6 +192,8 @@ function purposeOf(engineName: EngineName, call: Call, under: readonly string[])
       if (has(under, 'shapeHyphen') || has(under, 'tabShapeResult')) return 'hyphen or tab space'
       const pair = has(under, 'pairAdjust16')
       if (has(under, 'passesSafeTest')) return pair ? 'cut of a group over 256px: pair window' : 'cut of a group over 256px: wide window'
+      // The cut search's own totals; its safe tests are the rule above, and measureGroups is on both stacks.
+      if (has(under, 'addPieces')) return 'total of a group or of a piece'
       if (has(under, 'safeToBreak')) return pair ? 'safe-to-break test: pair window' : 'safe-to-break test: wide window'
       if (has(under, 'groupPrefix16') || has(under, 'callPrefix16') || has(under, 'measureGroups')) {
         if (pair) return 'position: pair window'
@@ -199,7 +201,6 @@ function purposeOf(engineName: EngineName, call: Call, under: readonly string[])
         return 'position: prefix from the last cut'
       }
       if (has(under, 'reshape') || has(under, 'reshapeHanKerningEnd')) return 'line-edge reshape'
-      if (has(under, 'addPieces')) return 'total of a group or of a piece'
       return 'other'
     }
     case 'webkit':
