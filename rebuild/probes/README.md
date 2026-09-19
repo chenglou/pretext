@@ -47,6 +47,11 @@ may read the DOM freely; this is research, not the library.
   on the page and in a module worker, both on OffscreenCanvas, and compares everything it returns. The second measures an element canvas in every kind of document a
   page can make, finds what tells a document without a presentation shell, which operations flush a pending style change,
   and what the test costs. Each header has its results; the runs are under `.artifacts/probes/ff-element-20260919/workers/`.
+  `ff-element-attacks.ts` (X1 to X7) is the second look at the same question: contexts whose font is set once while the
+  document's presentation shell goes and comes back, a hidden tab and a new tab, a shared worker and a transferred
+  OffscreenCanvas, a pending stylesheet change, SVG and XHTML documents, a document asking from its own early scripts, and
+  the test's cost over many contexts. X2 and X7 open a tab with `window.open`, in the runner's background window. Its header
+  has the results, with the first set's reruns; the runs are under `.artifacts/probes/ff-element-20260919/workers-check/`.
 
 - `measure-first.ts`: six Chrome probes of which Canvas contexts share a platform font with DOM text of the same zoomed
   size (a context with default settings, the library's measuring context, the font checks' contexts, a page at
