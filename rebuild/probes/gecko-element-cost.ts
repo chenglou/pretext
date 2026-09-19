@@ -439,7 +439,8 @@ const KIND = ${JSON.stringify(kind)}, BUFFERS = ${String(buffers)};
 const marks = [];
 const mark = name => marks.push({ name, at: Date.now() });
 const live = [];
-const grow = to => { while (live.length < to) { const ctx = make(KIND); assign(ctx, sizeOf(KIND, 16) + 'px ' + FAMILY, 'en', '0px', 'ltr'); ctx.measureText('the'); live.push(ctx); } };
+// The kind 'none' keeps 10,000 plain objects: what the garbage rounds alone leave in the resident size.
+const grow = to => { while (live.length < to) { if (KIND === 'none') { live.push({ i: live.length }); continue; } const ctx = make(KIND); assign(ctx, sizeOf(KIND, 16) + 'px ' + FAMILY, 'en', '0px', 'ltr'); ctx.measureText('the'); live.push(ctx); } };
 await sleep(4000);
 mark('before');
 grow(1000);
@@ -496,6 +497,7 @@ export default function probes(): Probe[] {
     probe('gecko-element-cost M rss offscreen', 'gecko-element-cost M: marks around 1,000 and 10,000 live contexts, OffscreenCanvas', RSS('offscreen', false)),
     probe('gecko-element-cost M rss element-default', 'gecko-element-cost M: marks around 1,000 and 10,000 live contexts, a canvas element at 300 x 150', RSS('element', false)),
     probe('gecko-element-cost M rss element-1x1', 'gecko-element-cost M: marks around 1,000 and 10,000 live contexts, a canvas element at 1 x 1', RSS('element1', false)),
+    probe('gecko-element-cost M2 rss-buffers none', 'gecko-element-cost M2: the same garbage and waits with no canvas made, the control', RSS('none', true)),
     probe('gecko-element-cost M2 rss-buffers offscreen', 'gecko-element-cost M2: the same with 32 MiB buffers in the garbage and a longer wait, OffscreenCanvas', RSS('offscreen', true)),
     probe('gecko-element-cost M2 rss-buffers element-default', 'gecko-element-cost M2: the same with 32 MiB buffers in the garbage and a longer wait, a canvas element at 300 x 150', RSS('element', true)),
     probe('gecko-element-cost M2 rss-buffers element-1x1', 'gecko-element-cost M2: the same with 32 MiB buffers in the garbage and a longer wait, a canvas element at 1 x 1', RSS('element1', true)),
