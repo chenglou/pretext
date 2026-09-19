@@ -169,8 +169,18 @@ function firstFamily(list: string): { name: string; quoted: boolean } {
 // The families Blink resolves to the macOS system UI font: the generic system-ui (FontCache::GetFontPlatformData,
 // font_cache_mac.mm:408) and the family name BlinkMacSystemFont (LegacySystemFontFamily, :289-292). The system UI font
 // has an opsz axis (probes-chrome correction 7), which is the documented default of FontFacts.opticalSizeAxis.
+// The names are compared as Blink compares them. Unquoted, system-ui is a CSS value keyword, looked up in ASCII lowercase
+// (ConsumeGenericFamily, css_parsing_utils.cc:6420-6422; CssValueKeywordID, css_property_parser.cc:387-406), and the style
+// builder names it system-ui (style_builder_converter.cc:476-477). A family name, quoted or not, stays as written:
+// BlinkMacSystemFont becomes system-ui only when it equals LegacySystemFontFamily exactly (:544-547), and the font cache
+// gives the system UI font to the name system-ui whether it came from the keyword or from a quoted name
+// (font_fallback_list.cc:168-174, then font_cache_mac.mm:408). Probe blink-sysui-spellings at DPR 2: System-UI, SYSTEM-UI,
+// "system-ui" and "BlinkMacSystemFont" lay out as system-ui does; blinkmacsystemfont and BLINKMACSYSTEMFONT name nothing
+// and fall to the standard font. So does a quoted "System-UI" in a clean renderer, which is the answer here; once
+// system-ui exists at its size it gets the system UI font, because the platform font cache's key compares names without
+// case (font_face_creation_params.h:115-124).
 function isSystemFontKeyword(name: string, quoted: boolean): boolean {
-  return (name === 'system-ui' && !quoted) || name === 'BlinkMacSystemFont'
+  return (quoted ? name : name.toLowerCase()) === 'system-ui' || name === 'BlinkMacSystemFont'
 }
 
 // ComputedStyle predicates over a span's box edges as the lab sets them (only non-zero lengths are written): MayHaveMargin,
