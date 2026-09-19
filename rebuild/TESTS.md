@@ -36,7 +36,13 @@ exits 3 with repeats only in all six: 0 predictions changed, 0 dropped only, 0 o
 owners' branches the cases with repeats only were 65,900 without facts and 65,898 with them in Chrome, 52,444 and 52,498
 in Firefox, 58,144 and 56,498 in webkit-host. Each engine owner ran tier 2 in both orders and both configurations in its
 browser, and the painter step ran it forward in the three browsers: 0 transitions every time. The references were
-recorded again at the X2 merge.
+recorded again at the X2 merge (0163d4c; `.artifacts/tests/runs/x2-merge-20260919`): the three browsers, both
+configurations, both orders: six exits 0, 0 status transitions and 0 exact-value changes against the previous ledgers,
+every gate lost 0. The plain predictor's run at the same commit differs from the usual run in 0 of Chrome's 67,065
+cases; in 3 native observations and 0 line ranges of webkit-host's 63,987; and in 200 native observations of Firefox's
+63,771, in two browser processes (`suite-sample` part 2 and `heldout-suite-sample` part 0), with 21 line ranges moving
+with them: all 203 are history-dependent in the reference ledgers. Every case of the six recordings replays exactly
+(0 unfaithful); the six references are frozen at that commit, and tier 1 exits 0 again.
 
 Tier 1 is a change detector, not an oracle: its expected values are the library's own at a commit. Its inputs are recorded
 per library, so a library that asks Canvas new questions needs a new recording (`browser-sets.ts --record`, `replay.ts
