@@ -8,7 +8,6 @@ import { canvasFont } from '../../measure/font.js'
 import type { BoxEdge, FontDecl, Paragraph, TextStyle } from '../../model.js'
 import { geckoBidiData, geckoGraphemeRules } from './data.js'
 import { COLOR_EMOJI_FAMILY, extenderFontOf, firstFontScriptLookups, listedFontOf, quantize10, sameFontForTextRun } from './fonts.js'
-import type { InWordEntry } from './advance.js'
 import * as gaps from './gaps.js'
 import { canonicalLanguageTag } from './likely.js'
 import { CANVAS_AU_PER_PX, combine, isInvalidChar16, isInvalidChar8, isSurrogatePair, quantize7, rangeAu, scriptRunLimits, textRunScripts } from './measure.js'
@@ -1194,7 +1193,7 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, inspec
   return {
     paragraph, env, appUnitsPerDevPixel: apd, blockStyle, text, runStarts, runStyles, runParents, runLangs: langs, letterSpacingAu, frames, items,
     elements, textRuns, tUnits, tSource, breakFlags: g.breakFlags, clusterStart: g.clusterStart, isSpace: g.isSpace, kind: g.kind,
-    spacingPrefix, scanSpacingPrefix, tabSpacingPrefix, correctionPrefix, unitOf, units, sourceT, nextT, tabUnit, textIndentAu: pxToAu(paragraph.textIndent), bidi: resolveBidi, contexts, inWord: new Array<InWordEntry | null>(T + 1).fill(null), inspect: inspected,
+    spacingPrefix, scanSpacingPrefix, tabSpacingPrefix, correctionPrefix, unitOf, units, sourceT, nextT, tabUnit, textIndentAu: pxToAu(paragraph.textIndent), bidi: resolveBidi, contexts, inWord: new Array<null>(T + 1).fill(null), inspect: inspected,
   }
 }
 

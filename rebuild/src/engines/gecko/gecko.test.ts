@@ -957,3 +957,42 @@ describe('plain and inspected paragraphs (research/ARCHITECTURE-PLAN-2.md §5.2)
     expect(l.lines[0]!.gaps.filter(g => g.gap === 'in-word-prefix').map(g => g.at)).toEqual([{ start: 4, end: 4 }])
   })
 })
+
+describe('what measuring found is kept per offset, and nothing by string (research/ARCHITECTURE-PLAN-2.md §5.3)', () => {
+  // Every line of a paragraph at a width, as an application fills them.
+  function fillAll(prepared: ReturnType<typeof prepareGecko>, width: number): number[] {
+    const ends: number[] = []
+    for (let start = firstLine(prepared); start !== null;) {
+      const filled = fillLine(prepared, start, { width, left: 0, right: 0 })
+      if (filled.kind !== 'line') throw new Error('a slot without insets refused its line')
+      linePieces(prepared, filled.line)
+      ends.push(filled.end)
+      start = filled.next
+    }
+    return ends
+  }
+
+  test('an offset inside a unit is measured once: filling the paragraph again asks Canvas nothing', () => {
+    const p = paragraph([run('abcdefgh ijklmnop')], 40, { overflowWrap: 'anywhere' })
+    const measure: StubLog = asked = { contexts: [], calls: [] }
+    const prepared = prepareGecko(p, env, false)
+    const first = fillAll(prepared, 40)
+    const calls = measure.calls.length
+    expect(calls).toBeGreaterThan(0)
+    expect(fillAll(prepared, 40)).toEqual(first)
+    expect(measure.calls.length).toBe(calls)
+    // Another width consults the offsets its own breaks need: at 80px a word is a line, and the scan that finds so reads
+    // offsets the narrow lines asked.
+    expect(fillAll(prepared, 80).length).toBe(2)
+    expect(measure.calls.length).toBe(calls)
+  })
+
+  test('the suffix an offset measured is the next offset\'s, read and not asked again', () => {
+    // Offset 2 of `abcdefgh` measures W(`cdefgh`), and offset 3 measures its cluster `c` in front of its own suffix: the same
+    // string, which the offset's record hands over.
+    const l = layout(paragraph([run('abcdefgh')], 20, { overflowWrap: 'anywhere' }))
+    expect(l.lines.length).toBe(4)
+    expect(l.measure.calls.filter(c => c.text === 'cdefgh').length).toBe(1)
+    expect(l.measure.calls.filter(c => c.text === 'efgh').length).toBe(1)
+  })
+})
