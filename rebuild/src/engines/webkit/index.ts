@@ -9,14 +9,14 @@
 import type { LineInspectionOf } from '../../model.js'
 import { lineGaps } from './gaps.js'
 import type { WebKitLineGeometry, WebKitLineStart } from './geometry.js'
-import type { WebKitFilledLine, WebKitRefusedSlot } from './lines.js'
 import { lineGeometry } from './output.js'
-import type { WebKitPrepared } from './types.js'
+import type { WebKitFilledLine, WebKitPrepared, WebKitRefusedSlot } from './types.js'
 
 export { prepareWebKit as prepare } from './content.js'
 export { paragraphGaps } from './gaps.js'
-export { fillLine, type WebKitFillResult, type WebKitFilledLine, type WebKitRefusedSlot } from './lines.js'
+export { fillLine } from './lines.js'
 export { linePieces, type WebKitPaintFacts } from './output.js'
+export type { WebKitFillResult, WebKitFilledLine, WebKitRefusedSlot } from './types.js'
 
 // InlineFormattingContext lays out lines whenever the block has inline items, contentful or not; a block whose text
 // nodes all lack renderers has none (RenderTreeUpdater.cpp:536-595).

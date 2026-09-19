@@ -342,7 +342,7 @@ export function itemWidth(p: WebKitPrepared, item: WebKitTextItem, from: number,
 }
 
 // U16_SET_CP_START
-function codePointStart(text: string, start: number, index: number): number {
+export function codePointStart(text: string, start: number, index: number): number {
   if (index > start && (text.charCodeAt(index) & 0xfc00) === 0xdc00 && (text.charCodeAt(index - 1) & 0xfc00) === 0xd800) return index - 1
   return index
 }

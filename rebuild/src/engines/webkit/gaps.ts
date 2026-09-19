@@ -18,11 +18,11 @@ import { bidiBoxContent, familyNames, whitespaceRun, type LeafInput } from './co
 import { hasDelimiterData, isDelimiterQuote, isHanLocale, isPunctuation, lineRules, localeScript, webkitBidiData } from './data.js'
 import { hasEmojiPresentation } from './fonts.js'
 import type { WebKitLineGeometry, WebKitLineStart } from './geometry.js'
-import { fillLine, lineHasVisuallyNonEmptyContent, sourceOffset, type WebKitFilledLine, type WebKitRefusedSlot } from './lines.js'
+import { fillLine, lineHasVisuallyNonEmptyContent, sourceOffset } from './lines.js'
 import { boxWidth, canvasString, controlIsAdjusted, fixedPitchWidth, isPiecedControl, itemWidth, measuredEnd, mergedGlyphs, singleSpaceWidth } from './measure.js'
 import { lineGeometry } from './output.js'
 import { preservesNewline, preservesSpacesAndTabs, tabsAllowed } from './style.js'
-import type { WebKitBox, WebKitHistoryWorld, WebKitInspect, WebKitItem, WebKitPrepared, WebKitTextItem } from './types.js'
+import type { WebKitBox, WebKitFilledLine, WebKitHistoryWorld, WebKitInspect, WebKitItem, WebKitPrepared, WebKitRefusedSlot, WebKitTextItem } from './types.js'
 
 const f32 = Math.fround
 

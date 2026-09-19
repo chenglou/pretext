@@ -15,14 +15,9 @@ import { computedLocale, localeScript, webkitBidiData } from './data.js'
 import { boxMade, coveredLikeLastResort, inspectParagraph, unverifiedCoverage, type UnverifiedCoverage } from './gaps.js'
 import { boxWidth, itemWidth, singleSpaceWidth } from './measure.js'
 import { boxEdges, layoutUnit, preservesNewline, preservesSpacesAndTabs, webkitStyle } from './style.js'
-import type { WebKitBox, WebKitPrepared, WebKitStyle, WebKitTextItem } from './types.js'
+import { DEFAULT_BIDI_LEVEL, OPAQUE_BIDI_LEVEL, type WebKitBox, type WebKitPrepared, type WebKitStyle, type WebKitTextItem } from './types.js'
 
 const f32 = Math.fround
-
-// UBIDI_DEFAULT_LTR, the level of items built without bidi (IIB:907, 977, 987, 1031).
-export const DEFAULT_BIDI_LEVEL = 254
-// InlineItem::opaqueBidiLevel (InlineItem.h:54).
-export const OPAQUE_BIDI_LEVEL = 255
 
 // uprv_getDefaultLocaleID without LANG, LC_ALL or LC_MESSAGES (AppleICU76 putil.cpp:1727-1874; specs/webkit-gaps.md §8.2).
 const ICU_DEFAULT_LOCALE_WITHOUT_ENVIRONMENT = 'en_US_POSIX'
@@ -544,8 +539,8 @@ export function prepareWebKit(paragraph: Paragraph, env: WebKitEnvironment, insp
   const style = webkitStyle(paragraph, paragraph, zoom)
   const index = indexContent(paragraph)
   const p: WebKitPrepared = {
-    paragraph, env, zoom, icuDefaultLocale: env.icuDefaultLocale ?? ICU_DEFAULT_LOCALE_WITHOUT_ENVIRONMENT, style, elements: [],
-    builder: 'line-builder', boxes: [], runStarts: [], runTexts: [], items: [], contexts: [], inspect: inspect ? { gaps: [], boxes: [], worlds: [] } : null,
+    env, zoom, icuDefaultLocale: env.icuDefaultLocale ?? ICU_DEFAULT_LOCALE_WITHOUT_ENVIRONMENT, style, elements: [],
+    builder: 'line-builder', boxes: [], runStarts: [], items: [], contexts: [], inspect: inspect ? { gaps: [], boxes: [], worlds: [] } : null,
   }
   const styleOf = (parent: number): WebKitStyle => {
     if (parent < 0) return style
@@ -627,7 +622,6 @@ export function prepareWebKit(paragraph: Paragraph, env: WebKitEnvironment, insp
   const boxOfRun: number[] = []
   for (let r = 0; r < leaves.length; r++) {
     p.runStarts.push(index.leaves[r]!.start)
-    p.runTexts.push(leaves[r]!.text)
     boxOfRun.push(-1)
     if (!rendered[r]) continue
     const box = makeBox(p, leaves[r]!, index.leaves[r]!.start, webkitBidiData)
@@ -636,15 +630,22 @@ export function prepareWebKit(paragraph: Paragraph, env: WebKitEnvironment, insp
     p.boxes.push(box)
   }
   p.runStarts.push(index.text.length)
+  // Where each element's item sits among the source units: at the next text box after its event.
+  const offsetAfter = new Array<number>(index.events.length)
+  for (let ev = index.events.length - 1, next = index.text.length; ev >= 0; ev--) {
+    const event = index.events[ev]!
+    if (event.kind === 'text' && boxOfRun[event.run]! >= 0) next = index.leaves[event.run]!.start
+    offsetAfter[ev] = next
+  }
   // collectInlineItems: the tree walk (IIB:320-370, 1053-1078).
   for (let ev = 0; ev < index.events.length; ev++) {
     const event = index.events[ev]!
     switch (event.kind) {
-      case 'open': p.items.push({ kind: 'inline-box-start', element: event.element, level: DEFAULT_BIDI_LEVEL }); break
-      case 'close': p.items.push({ kind: 'inline-box-end', element: event.element, level: DEFAULT_BIDI_LEVEL }); break
-      case 'atomic': p.items.push({ kind: 'atomic', element: event.element, level: DEFAULT_BIDI_LEVEL }); break
-      case 'br': p.items.push({ kind: 'hard-line-break', element: event.element, level: DEFAULT_BIDI_LEVEL }); break
-      case 'wbr': p.items.push({ kind: 'word-break-opportunity', element: event.element, level: DEFAULT_BIDI_LEVEL }); break
+      case 'open': p.items.push({ kind: 'inline-box-start', element: event.element, level: DEFAULT_BIDI_LEVEL, sourceOffset: offsetAfter[ev]! }); break
+      case 'close': p.items.push({ kind: 'inline-box-end', element: event.element, level: DEFAULT_BIDI_LEVEL, sourceOffset: offsetAfter[ev]! }); break
+      case 'atomic': p.items.push({ kind: 'atomic', element: event.element, level: DEFAULT_BIDI_LEVEL, sourceOffset: offsetAfter[ev]! }); break
+      case 'br': p.items.push({ kind: 'hard-line-break', element: event.element, level: DEFAULT_BIDI_LEVEL, sourceOffset: offsetAfter[ev]! }); break
+      case 'wbr': p.items.push({ kind: 'word-break-opportunity', element: event.element, level: DEFAULT_BIDI_LEVEL, sourceOffset: offsetAfter[ev]! }); break
       case 'text':
         if (boxOfRun[event.run]! >= 0) handleTextContent(p, boxOfRun[event.run]!, reordering)
         break
@@ -655,23 +656,24 @@ export function prepareWebKit(paragraph: Paragraph, env: WebKitEnvironment, insp
   const items = p.items
   if (items.length > 0 && textAndLineBreakOnly && inlineBoxes === 0 && !reordering && isEligibleForSimplifiedInlineLayoutByStyle(style)) {
     p.builder = 'text-only-simple'
-  } else if (isEligibleForRangeInlineLayout(p, inlineBoxes, textAndLineBreakOnly, reordering)) {
-    p.builder = 'range-based'
+  } else {
+    p.builder = rangeInlineLayout(p, inlineBoxes, textAndLineBreakOnly, reordering) ?? 'line-builder'
   }
   inspectParagraph(p, leaves)
   return p
 }
 
 // RangeBasedLineBuilder::isEligibleForRangeInlineLayout (RangeBasedLineBuilder.cpp:36-39, :131-184) without floats: every
-// item is an inline box start or end, or one span without box edges around content the simple builder takes.
-function isEligibleForRangeInlineLayout(p: WebKitPrepared, inlineBoxes: number, textAndLineBreakOnly: boolean, reordering: boolean): boolean {
+// item is an inline box start or end, or one span without box edges around content the simple builder takes. Returns which of
+// the two the content is, or null where it isn't eligible.
+function rangeInlineLayout(p: WebKitPrepared, inlineBoxes: number, textAndLineBreakOnly: boolean, reordering: boolean): 'inline-boxes-only' | 'range-based' | null {
   const items = p.items
-  if (items.length === 0) return false
+  if (items.length === 0) return null
   const isEmptyContent = items.length % 2 === 0 && inlineBoxes === items.length / 2
   const first = items[0]!
   const last = items[items.length - 1]!
   const isFullyNestedContent = inlineBoxes === 1 && first.kind === 'inline-box-start' && last.kind === 'inline-box-end' && items.length > 2
-  if (!isEmptyContent && !isFullyNestedContent) return false
+  if (!isEmptyContent && !isFullyNestedContent) return null
   // hasDecorationOrBreak (:147-160): the leading inline box starts' margin, border and padding.
   for (let i = 0; i < items.length; i++) {
     const item = items[i]!
@@ -679,12 +681,12 @@ function isEligibleForRangeInlineLayout(p: WebKitPrepared, inlineBoxes: number, 
     const element = p.elements[item.element]!
     if (element.kind !== 'span') break
     const e = element.edges
-    if (e.marginStart + e.borderStart + e.paddingStart + e.marginEnd + e.borderEnd + e.paddingEnd !== 0 || e.marginStart < 0 || e.marginEnd < 0) return false
+    if (e.marginStart + e.borderStart + e.paddingStart + e.marginEnd + e.borderEnd + e.paddingEnd !== 0 || e.marginStart < 0 || e.marginEnd < 0) return null
   }
-  if (isEmptyContent) return true
-  if (!textAndLineBreakOnly || reordering) return false
+  if (isEmptyContent) return 'inline-boxes-only'
+  if (!textAndLineBreakOnly || reordering) return null
   const span = p.elements[(first as { element: number }).element]!
-  if (span.kind !== 'span') return false
-  if (span.style.textAlign !== p.style.textAlign) return false
-  return isEligibleForSimplifiedInlineLayoutByStyle(p.style) && isEligibleForSimplifiedInlineLayoutByStyle(span.style)
+  if (span.kind !== 'span') return null
+  if (span.style.textAlign !== p.style.textAlign) return null
+  return isEligibleForSimplifiedInlineLayoutByStyle(p.style) && isEligibleForSimplifiedInlineLayoutByStyle(span.style) ? 'range-based' : null
 }

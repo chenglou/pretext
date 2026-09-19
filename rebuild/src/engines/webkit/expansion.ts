@@ -2,13 +2,12 @@
 // (platform/graphics/FontCascade.cpp:974-1303, FontCascadeInlines.h:140-143, cocoa/FontCascadeCocoaInlines.h:34-37;
 // layout/formattingContexts/inline/InlineContentAligner.cpp:150-267).
 
+import type { ExpansionBehavior, LineRun, WebKitBox } from './types.js'
+
 const f32 = Math.fround
 
-export type ExpansionSide = 'allow' | 'forbid'
-export type ExpansionBehavior = { left: ExpansionSide; right: ExpansionSide }
-
 // FontCascade::treatAsSpace (FontCascadeInlines.h:140-143).
-export function treatAsSpace(c: number): boolean {
+function treatAsSpace(c: number): boolean {
   return c === 0x20 || c === 0x09 || c === 0x0a || c === 0xa0
 }
 
@@ -33,7 +32,7 @@ const CJK_SYMBOLS = new Set([
 ])
 
 // FontCascade::isCJKIdeographOrSymbol (FontCascade.cpp:1039-1196), in the source's order.
-export function isCJKIdeographOrSymbol(c: number): boolean {
+function isCJKIdeographOrSymbol(c: number): boolean {
   if (CJK_SYMBOLS.has(c)) return true
   if ((c >= 0x2156 && c <= 0x215a) || (c >= 0x2160 && c <= 0x216b) || (c >= 0x2170 && c <= 0x217b) || (c >= 0x23c0 && c <= 0x23cc)) return true
   if ((c >= 0x2460 && c <= 0x2492) || (c >= 0x249c && c <= 0x24ff) || (c >= 0x25ce && c <= 0x25d3) || (c >= 0x25e2 && c <= 0x25e6)) return true
@@ -51,7 +50,7 @@ export function isCJKIdeographOrSymbol(c: number): boolean {
 // FontCascade::expansionOpportunityCountInternal (FontCascade.cpp:1198-1292) with canExpandAroundIdeographsInComplexText
 // true on Cocoa (cocoa/FontCascadeCocoaInlines.h:34-37). 8-bit text holds no ideograph, so one loop over code points covers
 // both overloads. Returns the count and whether the text ends after an expansion.
-export function expansionOpportunityCount(text: string, rtl: boolean, behavior: ExpansionBehavior): { count: number; isAfterExpansion: boolean } {
+function expansionOpportunityCount(text: string, rtl: boolean, behavior: ExpansionBehavior): { count: number; isAfterExpansion: boolean } {
   let count = 0
   let isAfterExpansion = behavior.left === 'forbid'
   const codePoints: number[] = []
@@ -83,22 +82,13 @@ export function expansionOpportunityCount(text: string, rtl: boolean, behavior: 
   return { count, isAfterExpansion }
 }
 
-// The run shape the aligner reads.
-export type ExpandableRun = {
-  kind: string
-  text: string
-  rtl: boolean
-  left: number
-  width: number
-  expansion: number
-  expansionBehavior: ExpansionBehavior
-}
-
 // InlineContentAligner::applyTextAlignJustify with computedExpansions and applyExpansionOnRange
-// (InlineContentAligner.cpp:150-267), without ruby: returns the width the content grew by. `text` of the last text run
-// already leaves out hanging trailing white space, which counts no opportunity.
-export function applyTextAlignJustify(runs: ExpandableRun[], spaceToDistribute: number): number {
+// (InlineContentAligner.cpp:150-267), without ruby, over the line's runs: returns the width the content grew by. The last
+// text run's hanging trailing white space, `hangingLength` units, counts no opportunity.
+export function applyTextAlignJustify(boxes: readonly WebKitBox[], runs: LineRun[], hangingLength: number, spaceToDistribute: number): number {
   if (runs.length === 0 || spaceToDistribute <= 0) return 0
+  let lastTextRun = -1
+  for (let i = 0; i < runs.length; i++) if (runs[i]!.kind === 'text') lastTextRun = i
   const opportunities: number[] = []
   let opportunityCount = 0
   let lastExpansionIndexWithContent: number | null = null
@@ -106,27 +96,41 @@ export function applyTextAlignJustify(runs: ExpandableRun[], spaceToDistribute: 
   let runIsAfterExpansion = true
   for (let index = 0; index < runs.length; index++) {
     const run = runs[index]!
-    let behavior: ExpansionBehavior = { left: 'allow', right: 'allow' }
     let inRun = 0
-    if (run.kind === 'text') {
-      behavior = { left: runIsAfterExpansion ? 'forbid' : 'allow', right: 'allow' }
-      const counted = expansionOpportunityCount(run.text, run.rtl, behavior)
-      inRun = counted.count
-      runIsAfterExpansion = counted.isAfterExpansion
-    } else if (run.kind === 'atomic') {
-      runIsAfterExpansion = false
+    switch (run.kind) {
+      case 'text': {
+        const length = index === lastTextRun ? Math.max(0, run.textLength - hangingLength) : run.textLength
+        run.expansionBehavior = { left: runIsAfterExpansion ? 'forbid' : 'allow', right: 'allow' }
+        const counted = expansionOpportunityCount(boxes[run.box]!.text.slice(run.textStart, run.textStart + length), run.level % 2 === 1 && run.level <= 125, run.expansionBehavior)
+        inRun = counted.count
+        runIsAfterExpansion = counted.isAfterExpansion
+        lastExpansionIndexWithContent = index
+        break
+      }
+      case 'atomic':
+        runIsAfterExpansion = false
+        lastExpansionIndexWithContent = index
+        break
+      case 'soft-line-break':
+      case 'hard-line-break':
+      case 'word-break-opportunity':
+      case 'inline-box-start':
+      case 'inline-box-end':
+      case 'spanning-inline-box-start':
+        break
     }
-    run.expansionBehavior = behavior
     opportunities.push(inRun)
     opportunityCount += inRun
-    if (run.kind === 'text' || run.kind === 'atomic') lastExpansionIndexWithContent = index
   }
   // Forbid right expansion in the last run to prevent trailing expansion at the end of the line.
-  if (lastExpansionIndexWithContent !== null && opportunities[lastExpansionIndexWithContent]! > 0) {
-    runs[lastExpansionIndexWithContent]!.expansionBehavior.right = 'forbid'
-    if (runIsAfterExpansion) {
-      opportunityCount--
-      opportunities[lastExpansionIndexWithContent]!--
+  if (lastExpansionIndexWithContent !== null) {
+    const last = runs[lastExpansionIndexWithContent]!
+    if (last.kind === 'text' && opportunities[lastExpansionIndexWithContent]! > 0) {
+      last.expansionBehavior.right = 'forbid'
+      if (runIsAfterExpansion) {
+        opportunityCount--
+        opportunities[lastExpansionIndexWithContent]!--
+      }
     }
   }
   if (opportunityCount === 0) return 0
@@ -136,55 +140,9 @@ export function applyTextAlignJustify(runs: ExpandableRun[], spaceToDistribute: 
     const run = runs[index]!
     run.left = f32(run.left + accumulatedExpansion)
     const computedExpansion = f32(expansionToDistribute * opportunities[index]!)
-    run.expansion = computedExpansion
+    if (run.kind === 'text') run.expansion = computedExpansion
     run.width = f32(run.width + computedExpansion)
     accumulatedExpansion = f32(accumulatedExpansion + computedExpansion)
   }
   return accumulatedExpansion
-}
-
-// How ComplexTextController::adjustGlyphsAndAdvances hands a run's expansion to its glyphs (ComplexTextController.cpp:698-845
-// with expansionLocation :673-696), assuming one glyph per code point in string order: per UTF-16 offset of `text`, how many
-// expansion opportunities that code point's advance holds. Glyphs are visited in visual order; an expansion on the left
-// grows the glyph visited before, and the run's first glyph grows its own advance.
-export function expansionShares(text: string, rtl: boolean, behavior: ExpansionBehavior): number[] {
-  const shares: number[] = new Array<number>(text.length).fill(0)
-  const starts: number[] = []
-  for (let i = 0; i < text.length; i++) {
-    starts.push(i)
-    if (text.codePointAt(i)! > 0xffff) i++
-  }
-  const order = rtl ? [...starts].reverse() : starts
-  let afterExpansion = behavior.left === 'forbid'
-  let previous: number | null = null
-  for (let k = 0; k < order.length; k++) {
-    const i = order[k]!
-    const c = text.codePointAt(i)!
-    const isFirstCharacter = i === 0
-    const isLastCharacter = i + (c > 0xffff ? 2 : 1) === text.length
-    const forbidLeft = behavior.left === 'forbid' && (rtl ? isLastCharacter : isFirstCharacter)
-    const forbidRight = behavior.right === 'forbid' && (rtl ? isFirstCharacter : isLastCharacter)
-    const space = treatAsSpace(c)
-    const ideograph = isCJKIdeographOrSymbol(c)
-    if (space || ideograph) {
-      let expandLeft = ideograph
-      let expandRight = ideograph
-      if (space) {
-        if (rtl) expandLeft = true
-        else expandRight = true
-      }
-      if (afterExpansion) expandLeft = false
-      if (forbidLeft) expandLeft = false
-      if (forbidRight) expandRight = false
-      if (expandLeft) shares[previous ?? i]!++
-      if (expandRight) {
-        shares[i]!++
-        afterExpansion = true
-      }
-    } else {
-      afterExpansion = false
-    }
-    previous = i
-  }
-  return shares
 }
