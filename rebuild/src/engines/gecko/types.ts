@@ -1,4 +1,4 @@
-// Gecko's prepared paragraph and line state (Firefox 156.0). The Gecko port owns this file.
+// Gecko's prepared paragraph (Firefox 156.0). The Gecko port owns this file. What a fill leaves of a line is in lines.ts.
 import type { GeckoEnvironment } from '../../env.js'
 import type { Measurer } from '../../measure/canvas.js'
 import type { FontDecl, Gap, Paragraph, TextStyle } from '../../model.js'
@@ -101,9 +101,9 @@ export type GeckoTextRun = {
   level: number
   // Measure context: the first flow's font and language, ligatures off when its letter spacing isn't 0 au.
   context: number
-  // The first flow's font declaration, for its facts about the listed families (lines.ts, ligature rows).
+  // The first flow's font declaration, for its facts about the listed families (advance.ts, ligature rows).
   font: FontDecl
-  // The run's script runs, which decide the script context a measured piece of a unit needs (rangeAu in prepare.ts).
+  // The run's script runs, which decide the script context a measured piece of a unit needs (measure.ts rangeAu).
   scriptRuns: ScriptRun[]
   // TEXT_ENABLE_HYPHEN_BREAKS from a removed soft hyphen (nsTextFrame.cpp:2584-2586).
   hasShy: boolean
@@ -120,10 +120,10 @@ export type GeckoTextRun = {
   // FontFacts.pairKerning of the run's font: which glyph of a pair carries HarfBuzz's pair adjustment.
   pairKerning: 'first-advance' | 'split' | null
   // ListedFontFacts.scriptLookups of the first listed family that gives a font, or null where it isn't known: the scripts
-  // that select other lookups than Latin text, which pairKerning describes (lines.ts, pairKerningAt).
+  // that select other lookups than Latin text, which pairKerning describes (advance.ts, pairKerningAt).
   scriptLookups: readonly (readonly string[])[] | null
   // FontFacts.joining of the run's font: whether HarfBuzz shapes it through GSUB and GPOS or through morx, kerx and kern
-  // state machines, where marks keep their advances (lines.ts, ligature groups).
+  // state machines, where marks keep their advances (advance.ts, ligature groups).
   joining: 'opentype' | 'aat' | null
   // The condition under which every Canvas width of the run is a stand-in, or null (GeckoTextFrame.advancesStandIn).
   advancesStandIn: 'font-size-quantization' | 'optical-size' | null

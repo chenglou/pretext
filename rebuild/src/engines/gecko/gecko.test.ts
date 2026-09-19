@@ -890,3 +890,60 @@ describe('round 4c', () => {
     expect(wrapped.lines.map(line => [line.start, line.geometry.width, line.geometry.hang, line.geometry.alignOffset])).toEqual([[0, 3456, 576, 576], [9, 1152, 0, 2304]])
   })
 })
+
+describe('plain and inspected paragraphs (research/ARCHITECTURE-PLAN-2.md §5.2)', () => {
+  // Every line of a paragraph as an application reads it: the fill result and the pieces.
+  function plainWalk(p: Sized, inspect: boolean): { lines: unknown[]; calls: number } {
+    const prepared = prepareGecko(p, env, inspect)
+    const lines: unknown[] = []
+    for (let start = firstLine(prepared); start !== null;) {
+      const filled = fillLine(prepared, start, { width: p.width, left: 0, right: 0 })
+      if (filled.kind !== 'line') throw new Error('a slot without insets refused its line')
+      lines.push({ start: filled.start, end: filled.end, next: filled.next, hasLineBox: filled.hasLineBox, pieces: linePieces(prepared, filled.line) })
+      start = filled.next
+    }
+    return { lines, calls: prepared.measurer.log.calls.length }
+  }
+
+  test('a plain paragraph gives the inspected one\'s lines and pieces, and asks Canvas less', () => {
+    // Breaks inside words (in-word positions), a letter-spaced span (the ligature group count) and several words (the
+    // space-in-shaping window): what only gaps and the characters ask goes.
+    const p = paragraph([run('AVAVAV aaaa bbbb '), run('cccc dddd', 'span', { letterSpacing: 1 })], 40, { overflowWrap: 'anywhere' })
+    const plain = plainWalk(p, false)
+    const inspected = plainWalk(p, true)
+    expect(plain.lines).toEqual(inspected.lines)
+    expect(plain.lines.length).toBeGreaterThan(3)
+    expect(plain.calls).toBeLessThan(inspected.calls)
+  })
+
+  test('inspectLine and paragraphGaps throw on a plain paragraph', () => {
+    const prepared = prepareGecko(paragraph([run('aaaa bbbb')], 40), env, false)
+    const filled = fillLine(prepared, firstLine(prepared)!, { width: 40, left: 0, right: 0 })
+    expect(prepared.inspect).toBeNull()
+    expect(() => inspectLine(prepared, filled.line)).toThrow('prepared plain')
+    expect(() => geckoParagraphGaps(prepared)).toThrow('prepared plain')
+  })
+
+  test('linePieces and inspectLine don\'t write the decided line: justified, trimmed and read twice in either order', () => {
+    const p = paragraph([run('aa bb cc dd ee ff')], 60, { textAlign: 'justify' })
+    const prepared = prepareGecko(p, env, true)
+    const filled = fillLine(prepared, firstLine(prepared)!, { width: p.width, left: 0, right: 0 })
+    if (filled.kind !== 'line') throw new Error('a slot without insets refused its line')
+    const before = JSON.stringify(filled.line.root, (key, value: unknown) => key === 'parent' || key === 'run' ? undefined : value)
+    const pieces = linePieces(prepared, filled.line)
+    const inspection = inspectLine(prepared, filled.line)
+    expect(linePieces(prepared, filled.line)).toEqual(pieces)
+    expect(inspectLine(prepared, filled.line)).toEqual(inspection)
+    expect(inspection.geometry!.width).toBe(3600)
+    expect(JSON.stringify(filled.line.root, (key, value: unknown) => key === 'parent' || key === 'run' ? undefined : value)).toBe(before)
+  })
+
+  test('a redo\'s dropped pass still tells the line what it consulted past its end', () => {
+    // `aa A` and a span `VAVAV` at 50px: the first pass places `aa A`, whose end is a stand-in (`AV` kerns across offset 4),
+    // then the span overflows without a break inside, and the redo forces the break after the space. Only the dropped pass
+    // consulted offset 4, the first stand-in past the line's end.
+    const l = layout(paragraph([run('aa A'), run('VAVAV', 'span')], 50))
+    expect(l.lines.map(line => [line.start, line.end])).toEqual([[0, 3], [3, 9]])
+    expect(l.lines[0]!.gaps.filter(g => g.gap === 'in-word-prefix').map(g => g.at)).toEqual([{ start: 4, end: 4 }])
+  })
+})

@@ -3,7 +3,7 @@
 import type { CanvasNeeds } from '../../measure/canvas-checks.js'
 import type { FontChecks } from '../../measure/font-checks.js'
 
-// Read from the recipes (engines/gecko/prepare.ts contexts, lines.ts ligatureAcross and the letter spacing recipes): `lang`,
+// Read from the recipes (engines/gecko/prepare.ts contexts, advance.ts ligatureAcross and the letter spacing recipes): `lang`,
 // `letterSpacing`, `direction = 'rtl'`, the ink box, and a letter spacing of 0.001px that turns optional ligatures off,
 // adds no app unit and leaves the ink box where it was, which ligatureAcross compares (specs/gecko-canvas.md §1.7 and
 // §2 A6; CanvasRenderingContext2D.cpp:4771-4774 rounds the spacing to app units per character).

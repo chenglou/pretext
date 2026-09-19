@@ -8,9 +8,9 @@ import type { LineInspectionOf } from '../../model.js'
 import { advanceBefore } from './advance.js'
 import { lineGaps } from './gaps.js'
 import type { GeckoCharacter, GeckoFrameGeometry, GeckoLineGeometry } from './geometry.js'
-import { computeJustification, rangeAdvance, spacingIn, type FrameResult, type GeckoFilledLine, type GeckoRefusedSlot, type Placed, type PlacedSpan, type PlacedText, type Provider, type SpanData } from './lines.js'
+import { computeJustification, rangeAdvance, spacingIn, type Band, type FrameResult, type GeckoFilledLine, type GeckoRefusedSlot, type Placed, type PlacedSpan, type PlacedText, type Provider, type SpanData } from './lines.js'
 import { lineEndT } from './pieces.js'
-import { consume, placeLine, textFramesOf, type ApplicationState } from './placement.js'
+import { consume, placeLine, textFramesOf, type ApplicationState, type PlacedLine } from './placement.js'
 import { isTrimmableChar } from './prepare.js'
 import type { GeckoElement, GeckoPrepared } from './types.js'
 
@@ -94,22 +94,11 @@ function justificationSpacing(p: GeckoPrepared, m: Measurer, pf: PlacedText): Ma
   return out
 }
 
-// The line as Gecko places it: TrimTrailingWhiteSpaceIn and TextAlignLine (placement.ts), then ReorderFrames, give the
-// frames' boxes and positions. A refused slot has the gaps its passes raised and no geometry.
-export function inspectLine(p: GeckoPrepared, decided: GeckoFilledLine | GeckoRefusedSlot): LineInspectionOf<GeckoLineGeometry> {
-  const plain = (): Error => new Error('inspectLine reads an inspected paragraph, and this one was prepared plain')
-  if (decided.kind === 'below-floats') {
-    if (decided.gaps === null) throw plain()
-    return { geometry: null, gaps: decided.gaps }
-  }
-  const line = decided
-  if (line.inspect === null) throw plain()
-  const m = p.measurer
-  const band = line.band
-  const placed = placeLine(p, line)
+// The placed line's frames in logical order, an inline frame before the frames of its children, with their boxes, and a text
+// frame's characters.
+function frameGeometry(p: GeckoPrepared, m: Measurer, band: Band, placed: PlacedLine): GeckoFrameGeometry[] {
   const { root, indented, dx } = placed
   const rtl = p.paragraph.direction === 'rtl'
-
   // Positions. Without bidi, frames keep their logical places plus dx (:3654-3668). With bidi, ReorderFrames repositions the
   // line's frames from psd->mIStart + mTextIndent + dx (:3646-3652; nsBidiPresUtils.cpp:1494-1533). x is the physical left edge
   // from the content box.
@@ -239,14 +228,31 @@ export function inspectLine(p: GeckoPrepared, decided: GeckoFilledLine | GeckoRe
     }
     settle(root, 0)
   }
+  return frames
+}
 
-  // The characters are measured above, before the in-word report reads them and asks for the positions it needs.
-  const texts = textFramesOf(root)
-  return {
-    geometry: {
-      appUnitsPerDevPixel: p.appUnitsPerDevPixel, lineLeft: band.left, availableWidth: band.iSize, impactedByFloats: band.impactedByFloats,
-      textIndent: indented ? p.textIndentAu : 0, width: placed.lineISize + placed.expansion, hang: placed.hang, alignOffset: dx, frames,
-    },
-    gaps: lineGaps(p, m, line.start, line.inspect, frames, texts, lineEndT(p, texts)),
+// The line as Gecko places it: TrimTrailingWhiteSpaceIn and TextAlignLine (placement.ts), then ReorderFrames, give the
+// frames' boxes and positions. The characters are measured before the in-word report, which reads them and asks for the
+// positions it needs. A refused slot has the gaps its passes raised and no geometry.
+export function inspectLine(p: GeckoPrepared, decided: GeckoFilledLine | GeckoRefusedSlot): LineInspectionOf<GeckoLineGeometry> {
+  const plain = (): Error => new Error('inspectLine reads an inspected paragraph, and this one was prepared plain')
+  switch (decided.kind) {
+    case 'below-floats':
+      if (decided.gaps === null) throw plain()
+      return { geometry: null, gaps: decided.gaps }
+    case 'line': {
+      if (decided.inspect === null) throw plain()
+      const band = decided.band
+      const placed = placeLine(p, decided)
+      const frames = frameGeometry(p, p.measurer, band, placed)
+      const texts = textFramesOf(placed.root)
+      return {
+        geometry: {
+          appUnitsPerDevPixel: p.appUnitsPerDevPixel, lineLeft: band.left, availableWidth: band.iSize, impactedByFloats: band.impactedByFloats,
+          textIndent: placed.indented ? p.textIndentAu : 0, width: placed.lineISize + placed.expansion, hang: placed.hang, alignOffset: placed.dx, frames,
+        },
+        gaps: lineGaps(p, p.measurer, decided.start, decided.inspect, frames, texts, lineEndT(p, texts)),
+      }
+    }
   }
 }

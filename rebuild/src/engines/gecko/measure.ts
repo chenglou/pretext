@@ -185,7 +185,7 @@ function scriptContextFor(units: Uint16Array, runs: ScriptRun[], runStart: numbe
 // `context + ' ' + piece` less `context + ' '` (or the mirror) where scriptContextFor names a context. U+0020 is a shaping
 // word boundary that nothing kerns across (gfxFont.cpp:3781-3866), and in the Canvas text run the space and the piece's
 // Common characters join the context's script run. Units, suffixes and prefixes all go through this one recipe.
-// `before` and `after` are put around the piece: U+200D where the piece is cut between joined letters (lines.ts).
+// `before` and `after` are put around the piece: U+200D where the piece is cut between joined letters (advance.ts).
 export function rangeAu(m: Measurer, run: Pick<GeckoTextRun, 'context' | 'scriptRuns' | 'tStart'>, units: Uint16Array,
   tStart: number, tEnd: number, before = '', after = ''): number {
   let piece = before

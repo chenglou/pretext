@@ -4,7 +4,7 @@
 // paragraph computes no gap and asks Canvas nothing for one. Nothing else builds a Gap.
 // - Preparation raises the paragraph's gaps (GeckoPrepared.inspect.gaps; paragraphGaps).
 // - A fill raises the gaps its passes run into, into the decided line's list, and notes the raw facts a later report needs:
-//   the in-word offsets its break scans consulted (lines.ts consultBefore) and the tabs whose width is a stand-in.
+//   the in-word offsets its break scans consulted (lines.ts glyphBefore) and the tabs whose width is a stand-in.
 // - lineGaps reports a decided line's gaps from those and from its geometry.
 // Gecko's lists aren't merged: a condition that shows twice is listed twice, as when both passes of a redo meet the same
 // emergency break. Only the in-word report is sorted.
