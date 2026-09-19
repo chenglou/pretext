@@ -21,7 +21,7 @@ Baselines for transitions:
 Pinned Chrome 153.0.8010.50, scorer 7, 2026-09-18, after the correctness line, from the worktree branch `rx-blink-storage`
 on 32e2a1e (the line's library). A correctness change on the line's architecture, made before the re-architecture takes the
 string memo out (research/ARCHITECTURE-PLAN-2.md X2), so that taking it out moves nothing. Probe `blink-storage` (S1 to S5,
-`rebuild/probes/blink-storage.ts`, `.artifacts/probes/blink/storage`; 81 facts in `rebuild/facts/blink/153.0.8010.50.ndjson`,
+`rebuild/probes/blink-storage.ts`, `.artifacts/probes/blink/storage`; 83 facts in `rebuild/facts/blink/153.0.8010.50.ndjson`,
 rerun per release by `rebuild/tests/rerun-probes.sh`). Runs: `.artifacts/tests/runs/rx-blink-storage/`. V8 is read at
 `~/github/browser-engines/v8-153` (6b96683d, Chrome 153's); files the sparse 153 checkout lacks (`platform/bindings`,
 `core/html/parser`) are read from the pinned commit's objects (`git show 153.0.8010.48:<path>`).
@@ -52,7 +52,7 @@ of a two-byte string (`canvasString`). At the line that slice never reached Canv
 - **Which strings V8 holds in two bytes though their units fit one** (S2): a `slice`, `substring`, `split` part or regular
   expression match of 13 units or more out of a two-byte string (SlicedString::kMinLength; 12 units are copied into one
   byte), a slice of such a slice, and what concatenation, a template, `join`, `normalize`, `toLowerCase`, `replace` or
-  `padEnd` make of one. One-byte: literals, `String.fromCharCode`, concatenations of one-byte strings and of short slices,
+  `padEnd` make of one; a cons string of two such slices, which flattening leaves two-byte (string-inl.h:884-896). One-byte: literals, `String.fromCharCode`, concatenations of one-byte strings and of short slices,
   a `join` of single characters, `JSON.parse` of a one-byte, a two-byte or an escaped source, `TextDecoder` of ASCII. The
   text read back from a text node measures as one byte even when the node keeps 16 bits (`data`, `nodeValue`,
   `textContent`, `substringData`); v8_value_cache.cc makes an external two-byte string there, so this one isn't explained
