@@ -59,7 +59,8 @@ export type FontFacts = {
   // hb-kern.hh:102-106), which one HarfBuzz applies following the font's GPOS, kern and kerx tables (hb-ot-shape.cc:150-185).
   // Canvas totals show the adjustment, not which glyph carries it. Blink reads it at a position between the two glyphs: a
   // line edge taken from the paragraph's positions, and caret edges inside an item. Default: the first glyph's advance. Gap
-  // unsafe-to-break at such a line edge where the adjustment isn't 0. No Canvas check answers it.
+  // unsafe-to-break at such a line edge where the adjustment isn't 0. No Canvas check answers it for a declaration; where it
+  // isn't given, Gecko's port asks Canvas per offset between two kerned glyphs (engines/gecko/advance.ts `pairKernedShare`).
   pairKerning: 'first-advance' | 'split' | null
   // Optional: facts about each family of the list, in list order, one entry per family. Left out when the caller doesn't
   // know them, and then every engine keeps the gap condition it has without them. DESIGN.md §1.2 says which gap conditions

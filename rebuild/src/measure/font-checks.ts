@@ -63,8 +63,9 @@
 // generics hold the glyphs themselves; Blink's system fallback after the list starts from the primary font
 // (font_fallback_iterator.cc:258-281).
 //
-// pairKerning, coverage, ligatures, spacingInputs and scriptLookups aren't asked: Canvas totals don't show which glyph
-// carries a pair adjustment, and the others are whole sets where a check answers one string at a time
+// pairKerning, coverage, ligatures, spacingInputs and scriptLookups aren't asked here: no Canvas total shows which glyph
+// carries a pair adjustment for a whole declaration (Gecko's port asks per offset instead, where app-unit rounding tells:
+// engines/gecko/advance.ts `pairKernedShare`), and the others are whole sets where a check answers one string at a time
 // (research/FACTS-FREE.md).
 //
 // One call resolves one paragraph, and everything it keeps is local to the call (Resolution below): each distinct
