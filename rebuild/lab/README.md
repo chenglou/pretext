@@ -282,7 +282,7 @@ doesn't depend on the old library in `src/`.
   `script-at-line-start` and no painted DOM (§7); an inspected paragraph makes no unused one-byte hyphen contexts
   (§4.6). At the merge tier 1 exits 1 for Chrome, as accounted (926 rows without facts and 756 with them differ byte
   for byte: 473 and 303 by gap lists, 461 by painter limits, 8 by both), and 0 for Firefox and webkit-host. Chrome's
-  references were recorded again and frozen at the X3 merge.
+  references were recorded again and frozen at the X3 merge (c7f3c3d; `.artifacts/tests/runs/x3-merge-20260919`; both orders, both configurations: exits 0; exactly 8 painter status transitions per configuration, all naming `limit:script-at-line-start`: 2 from `fail open` to `fail covered`, 6 already covered rows that name the limit too; 0 from a pass; exact values unchanged; gates lost 0 and no pass pair changed, so the seeds stay; the plain predictor's run equals the usual run on all 67,065 cases; every case of both recordings replays exactly, and tier 1 exits 0 for all six references again).
 - **The proof behind the gap lists is a script under `.artifacts`, not a checked-in gate**:
   `.artifacts/tests/runs/ra-x3-blink/tools/canonical-proof.ts`, with its reports beside it (`canonical-proof-*.json`,
   `proof-after-b-*.json` with every case whose painter limits moved, `proof-after-c-*.json`). It defines canonical on

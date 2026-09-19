@@ -63,7 +63,7 @@ and an inspected paragraph no longer makes one-byte hyphen contexts it doesn't u
   byte: 473 and 303 by gap lists, 461 by painter limits, 8 by both. The context count falls in 3,745 cases of each
   configuration, which tier 1 classes as other questions, and every other changed case is repeats only. Tier 2 in
   Chrome shows 8 painter transitions per configuration, all the limit `script-at-line-start`, 0 from pass to a failure,
-  and the gate lost 0. Chrome's references were recorded again and frozen at the X3 merge.
+  and the gate lost 0. Chrome's references were recorded again and frozen at the X3 merge (c7f3c3d; `.artifacts/tests/runs/x3-merge-20260919`; both orders, both configurations: exits 0; exactly 8 painter status transitions per configuration, all naming `limit:script-at-line-start`: 2 from `fail open` to `fail covered`, 6 already covered rows that name the limit too; 0 from a pass; exact values unchanged; gates lost 0 and no pass pair changed, so the seeds stay; the plain predictor's run equals the usual run on all 67,065 cases; every case of both recordings replays exactly, and tier 1 exits 0 for all six references again).
 - *The proof that canonical lists change grouping alone is not a checked-in gate.* It is a script under `.artifacts`:
   `.artifacts/tests/runs/ra-x3-blink/tools/canonical-proof.ts` (`check --tree=<worktree> --browser=chrome
   --config=no-facts|facts`, with `--without-limits=true` to leave the painter's limits out of the comparison). It
