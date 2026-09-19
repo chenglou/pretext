@@ -184,7 +184,8 @@ export type BlinkPrepared = {
   textAlign: TextAlign
   needsAccurateEndPosition: boolean
   // The paragraph's Canvas contexts, one per settings (measure/canvas.ts contextFor): the styles' contexts above are
-  // references into it, and styles with equal settings share a context.
+  // references into it, styles with equal settings share a context, and it grows when a segmented paragraph first asks
+  // a one-byte string.
   canvases: Context[]
   // Null on a paragraph prepared plain: it gives lines and their pieces, computes no gap, no limit, no glyph cluster and no
   // offset mapping, and asks Canvas nothing that only those read; inspectLine and paragraphGaps throw on it.

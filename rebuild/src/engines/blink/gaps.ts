@@ -27,7 +27,13 @@ import type { BlinkInspect, BlinkPrepared } from './types.js'
 // Where gaps go while a paragraph is prepared or a line is filled and inspected; null on a paragraph prepared plain.
 export type GapSink = Gap[] | null
 
-// One entry per gap name, run, detail and range; ranges of one gap, run and detail that meet merge.
+// One entry per gap name, run, detail and range; ranges of one gap, run and detail that meet merge, into the first entry
+// they meet. A list's grouping therefore follows the raises, the repeated ones too: a range raised again can meet an
+// earlier entry that grew in between and widen it, where the entry holding the range stays as it is when nothing raises it
+// again. What the entries cover together doesn't depend on it. Every measurement raises its range's gaps (shape.ts
+// measure16), so on an inspected paragraph a measurement made again is part of the lists the rows hold: a value handed on
+// in its place can regroup ranges (clusters' prefixes carried through inspect.ts shapeOf did in 3 of 67,065 recorded
+// cases, positions kept through one binary search in 1; research/ARCHITECTURE-PLAN-2.md X2).
 function addGap(gaps: Gap[], gap: GapName, run: number | null, detail: string, at?: { start: number; end: number }): void {
   for (let i = 0; i < gaps.length; i++) {
     const g = gaps[i]!

@@ -11,9 +11,10 @@
 // - S2: which ways of building a Latin-1-only string give two bytes.
 // - S3: one canvas answers a string and a word by whichever storage it shaped first; two canvases don't mix.
 // - S4: the storage of a text node by how it was made, read from the paragraph's shaping.
-// - S5: the library's own bundled module on a paragraph that holds 13 brackets under Arabic and under Latin: the memo is
-//   looked up under a key of its own (src/measure/canvas.ts), so Canvas gets the two-byte slice the port built, and each
-//   storage has its contexts (engines/blink/shape.ts contextsOf), so neither order of the two changes an answer.
+// - S5: the library's own bundled module on a paragraph that holds 13 brackets under Arabic and under Latin: nothing
+//   looks the measured string up on its way to measureText (src/measure/canvas.ts width; the Blink port keeps no memo), so
+//   Canvas gets the two-byte slice the port built, and each storage has its contexts (engines/blink/shape.ts contextsOf),
+//   so neither order of the two changes an answer, the first time or asked again.
 // - S6: a Latin range of script-neutral characters with a space, in a font Canvas shapes whole: the 8-bit string with
 //   U+0020 is the DOM's width, the 16-bit one with U+2028 isn't (engines/blink/shape.ts spacesStay).
 // Every probe returns raw values and `checks`.
@@ -265,8 +266,10 @@ const S4 = `
 `
 
 // The library's own module lays out a paragraph whose 13 brackets stand after an Arabic word and after a Latin one in one
-// Amiri style, in both orders. Its call log holds what Canvas answered: the brackets as a two-byte slice and as a
-// one-byte string, each on a context of its storage, whichever was asked first.
+// Amiri style, in both orders. The page notes what Canvas answered (the library keeps no log; the string passes through
+// untouched): the brackets as a two-byte slice and as a one-byte string, each on a context of its storage, whichever was
+// asked first, and every time either is asked again. A context's partition is the library's name for it, which the
+// prepared paragraph's list of contexts keeps.
 const S5 = `
   const lib = await import('data:text/javascript;base64,' + LIBRARY)
   const checks = []
@@ -281,15 +284,33 @@ const S5 = `
   for (const [order, words] of [['two-byte first', [arabic, 'abc']], ['one-byte first', ['abc', arabic]]]) {
     const content = [other(words[0]), { kind: 'text', text: run }, other(words[1]), { kind: 'text', text: run }]
     const paragraph = { ...style, content, lineHeight: 60, direction: 'ltr', lang: 'en', textIndent: 0, textAlign: 'start' }
-    const prepared = lib.prepare(paragraph, env, true)
+    const proto = OffscreenCanvasRenderingContext2D.prototype
+    const measureText = proto.measureText
+    const calls = []
+    proto.measureText = function (text) {
+      const metrics = measureText.call(this, text)
+      calls.push({ ctx: this, text, width: metrics.width })
+      return metrics
+    }
+    let prepared
     let lines = 0
-    for (let start = lib.firstLine(prepared); start !== null; lines++) start = lib.fillLine(prepared, start, { width: 4000, left: 0, right: 0 }).next
-    const log = prepared.state.measurer.log
-    const asks = log.calls.filter(call => call.text === run).map(call => ({ partition: log.contexts[call.context].partition, letterSpacing: log.contexts[call.context].letterSpacing, width: call.width }))
-    out[order] = { asks, contexts: log.contexts.length, lines }
+    try {
+      prepared = lib.prepare(paragraph, env, true)
+      for (let start = lib.firstLine(prepared); start !== null; lines++) start = lib.fillLine(prepared, start, { width: 4000, left: 0, right: 0 }).next
+    } finally {
+      proto.measureText = measureText
+    }
+    const settingsOf = ctx => prepared.state.canvases.find(context => context.ctx === ctx).settings
+    const asks = calls.filter(call => call.text === run).map(call => ({ partition: settingsOf(call.ctx).partition, letterSpacing: settingsOf(call.ctx).letterSpacing, width: call.width }))
+    out[order] = { asks, contexts: prepared.state.canvases.length, lines }
     const plain = asks.filter(ask => ask.letterSpacing === '0px')
-    expect(order + ': the brackets are asked in both storages, in this order', plain.map(ask => ask.partition).join(), order === 'two-byte first' ? '16bit,8bit' : '8bit,16bit')
-    for (const ask of plain) expect(order + ': the ' + ask.partition + ' context answers', ask.width, ask.partition === '8bit' ? ${LATIN} : ${COMMON})
+    const partitions = [...new Set(plain.map(ask => ask.partition))]
+    expect(order + ': the brackets are first asked in both storages, in this order', partitions.join(), order === 'two-byte first' ? '16bit,8bit' : '8bit,16bit')
+    // Asked again, a context answers as it did the first time.
+    for (const partition of partitions) {
+      const widths = [...new Set(plain.filter(ask => ask.partition === partition).map(ask => ask.width))]
+      expect(order + ': the ' + partition + ' context answers, every time', widths.length === 1 ? widths[0] : widths.join(), partition === '8bit' ? ${LATIN} : ${COMMON})
+    }
   }
   return { ...out, checks }
 `
