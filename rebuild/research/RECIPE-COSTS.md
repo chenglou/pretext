@@ -1,5 +1,7 @@
 # What each exactness recipe costs in Canvas calls and buys in cases
 
+> The cases this offline table couldn't judge were run in the pinned browsers the same evening: `RECIPE-COSTS-BROWSER.md` has the verdicts and the completed ranking.
+
 Frozen line (tag `correctness-line`), offline replay only, 2026-09-18. Worktree `~/github/pretext-rebuild-wt/recipes` (branch `x-recipe-costs`), clean, nothing committed. Output: `.artifacts/session/recipe-costs-20260918/`.
 
 This report gives numbers and a ranking. It does not say where the line should be.
