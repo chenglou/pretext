@@ -320,6 +320,53 @@ doesn't depend on the old library in `src/`.
   the facts come from `rerun-probes.sh` (rebuild/TESTS.md §7).
 - **The coverage maps are regenerated** at this tree ("Checks for the re-architecture", "Coverage map").
 
+## Landed in correctness round 5 (2026-09-19)
+
+One owner per engine landed the fixes that close the gap with main's true passes where Canvas can settle them without
+supplied font facts, and a critic then read the three branches, merged them in a scratch clone and ran a held-out probe
+(research/CORRECTNESS-ROUND-5.md has the outcome, the cost table and the four reports; DESIGN.md §4.4 the recipes).
+
+- **Gecko** (`.artifacts/tests/runs/cr5-gecko`, `.artifacts/session/cr5-gecko-20260919`): where the `pairKerning` fact
+  isn't given, Canvas tells which glyph of a kerned pair carries the adjustment, from the app-unit rounding of each
+  glyph; a joined suffix that a fallback font draws is measured behind its own first letter; a boundary U+00A0 is
+  measured as itself; `paragraphGaps` hands out copies. A plain paragraph's break scan leaves the first two recipes'
+  questions out until a fit test or an edge needs them (DESIGN.md §4.6, "Gecko's lazy plain scan"). The critic found a
+  hole in that scan and fixed it with 9 lines and `engines/gecko/lazy-scan.test.ts`, merged as its own commit.
+- **WebKit** (`.artifacts/tests/runs/cr5-webkit`, `.artifacts/session/cr5-webkit`): the font code path of a width is
+  the measured string's, for the letter-spaced ligature recipe and for `control-character-width`; a box's space is
+  measured once as the box is made.
+- **Blink** (`.artifacts/tests/runs/cr5-blink`, `.artifacts/session/cr5-blink`): the pair window reaches past a cluster
+  of an ignorable character and a mark. A negative result stands for main's two big Chrome groups (probe
+  `blink-cr5` K and L; DESIGN.md §5).
+- **Tier 1 exits 1 or 4 at this merge, as accounted, until the references are recorded again.**
+  - Chrome exits 1: 66,328 of 67,065 the same per configuration, 569 and 416 cases ask a new question, 39 and 56 other
+    questions, 129 and 265 predictions changed in gap lists (329 `script-context` entries fewer and 2 `unsafe-to-break`
+    more, without facts) and in 2 cases' cluster advances, 0 line ranges. Expected ledger after recording: lineCount
+    fail covered 343 and 279, breaks fail covered 413 and 316 with 1 open.
+  - webkit-host exits 1: 154 cases change in their gaps alone. 22,450 without facts and 22,426 with them ask in
+    another order. 7,020 and 7,044 ask a space the record lacks. A questions-only freeze won't do, because 154 gap
+    lists changed: it needs a full recording, pack and freeze with a reason, and the painter differential's frozen side
+    bundled again.
+  - Firefox exits 4: 9,344 new-question cases without facts, and 4,560 new plus 1,444 repeats only with facts. 0
+    predictions changed.
+  - `function-set plain` and `pure` skip the cases that can't replay, and the painter differential exits 3 with 0
+    paintings differing. Tier 2 in both orders and both configurations, in each owner's browser, covers them: 0
+    transitions from a pass, exact values not worse, gates lost 0 (rebuild/TESTS.md, "Tiers", has the transitions).
+- **The plain predictor's browser runs**, `compare-sets --prediction=line-ranges` against the usual run. Chrome: 0 line
+  ranges and 0 native observations differ. webkit-host: 0 line ranges, and the same 3 history cases differ natively
+  (`c-1ca0bab9ded7a4c6`, `c-53283654e67b8035`, `c-7cc5e3e26ff7c30d`); a scratch plain predictor with facts gave the
+  same. Firefox: 0 line ranges in 63,771 cases in the owner's run. The plain predictor's run in Firefox is not stable
+  in `heldout-suite-sample` part 0: 7 native observations and 0 line ranges in one run, 74 and 7 in another, every one
+  history-dependent in the ledger.
+- **Counts since the round** ("Asked and distinct" and "The plain check since X1" below keep the numbers of before).
+  webkit-host's plain path asks 36.51 and 18.83 questions a paragraph (2,336,048 and 1,205,040 asked), and its lab path
+  85.90 and 56.98 (5,496,506 and 3,646,278). Firefox's plain path asks 55.07 without facts (54.56 before), and its lab
+  path 120.23 and 117.03 (114.54 and 115.70). Chrome's plain path asks 234.31, as before. Distinct counts over the
+  whole corpus wait for the new recording. The seeds don't change.
+- **The known tail** took the round's findings ("The known tail" below).
+
+All six references were recorded again and frozen at the correctness round 5 merge.
+
 ## Test tiers
 
 Four tiers by time, one command each. The first three give a signal in seconds to minutes; the fourth is the round's
@@ -850,7 +897,17 @@ item is closed: Blink's painting rule segments a painted line by script when its
 `fail covered by limit:script-at-line-start` in both configurations. A closed item stays in the file: its title says it
 is closed and at what, its note starts with "Closed on" and the date and says what would reopen it, and its conditions
 say what its rows sit under now. The 5 Firefox cases went into `gecko/process-font-fallback-state`, which already named
-them as moved by measure first, so one item carries both findings (63 items, 594 named cases).
+them as moved by measure first, so one item carries both findings (63 items, 594 named cases). Correctness round 5
+added 4 Gecko items and 189 named cases (67 items, 783 named cases). `gecko/contextual-joined-forms` names the 72 true
+passes of main that Canvas can't settle and the 14 cases lost since round 2 (78 cases), `gecko/pair-same-face-refused`
+the 4 cases the same-face test refuses, `gecko/pair-placement-one-way-per-face` the one inference the pair recipe
+keeps, and `gecko/nbsp-first-family-apple-color-emoji` a boundary U+00A0 under an emoji-first list.
+`webkit/page-history` names 20 more of the 21 main-only list cases that fail in the list's long document and pass alone.
+`gecko/process-font-fallback-state` names the 87 `heldout-suite-sample` cases that both-orders runs of the round read
+as going from history-dependent to pass (74 without facts, all among the 87 with them): that browser process has two
+states, a plain predictor run an hour later landed in the other one on exactly those 74, and a pass in one recording
+isn't stable. They are named because a ledger that marks them as passes drops them from the item's rule; a named case
+that later leaves a pass still shows as a transition on the item.
 
 ## Running
 

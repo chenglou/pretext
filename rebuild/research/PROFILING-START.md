@@ -4,7 +4,8 @@ The re-architecture is done: the library is simple on purpose, and it is not fas
 the profiling and optimization phase starts from, in the order I would take the items, each with what it is expected to
 buy from the numbers we have and what could make it unsafe. It collects research/BENCH-NIGHT.md ("The real pass"),
 DESIGN.md §4.7, research/RECIPE-COSTS.md and RECIPE-COSTS-BROWSER.md, research/ARCHITECTURE-PLAN-2.md §10 and
-research/CAPABILITY-CHECK.md. Nothing here is built. Expected gains are arithmetic over one benchmark run, not results.
+research/CAPABILITY-CHECK.md. Nothing here is built, but for item 4's main part, which landed in correctness round 5
+(2026-09-19); that round also added item 8. Expected gains are arithmetic over one benchmark run, not results.
 
 ## The bar, and the rule for what may come back
 
@@ -57,6 +58,21 @@ Read from it:
 On the recorded tier sets (DESIGN.md §4.7): the plain path asks 234 questions a paragraph in Blink for 61 distinct ones
 (ratio 3.84), 39 for 26 in WebKit (1.50), 55 for 39 in Gecko (1.41). Distinct questions never rose in the
 re-architecture; what rose is the same question asked again.
+
+**Moved by correctness round 5** (2026-09-19, after the benchmark run above; research/CORRECTNESS-ROUND-5.md has the
+cost of each fix). Counts, not times; nobody has timed the benchmark since.
+
+- WebKit's plain path asks 36.51 questions a paragraph on the tier sets, from 39.32 (18.83 from 21.65 with the lab's
+  facts): every box measures its space once as it is made, which was item 4. The nine giants ask 295,170 calls on the
+  plain path where they asked 707,622; each of the eight reordered ones asks about one question a word where it asked
+  three. In the bench's chat smoke of 200 messages the mix goes from 38.15 to 36.79 calls a message and the Arabic
+  messages from 45.75 to 23.08; the Latin set stays at 31.39.
+- Gecko's plain path asks 55.07, from 54.56: pair placement asked of Canvas, a joined suffix measured behind its own
+  first letter and a boundary U+00A0 measured as itself. The chat smoke's mix stays at 110.67 calls a message and plain
+  Latin at 82.15, and a first layout at a new width at 28.2 and 31.86, because a plain paragraph's break scan leaves
+  the new questions out until a fit test or an edge needs them (item 8).
+- Blink's plain path asks 234.31, as before: its fix asks other strings, not more.
+- Distinct questions weren't counted again, so the ratios above are of before the round.
 
 ## How a change is held
 
@@ -173,17 +189,25 @@ where a font kerns or substitutes across them, which is the reason the recipe me
 in-word probe's method again (gecko-port F15) on windowed strings, a new recording, and tier 2 in both configurations
 (with facts Gecko's positions are predicted values, so the exact-value status blocks a wrong one).
 
-### 4. WebKit: the space of a box measured as the box is made, and box constants
+### 4. WebKit: the space of a box measured as the box is made (done), and box constants
 
-*What.* A box keeps the space its white-space items were measured with, except where its white space is deferred (a TAB
-anywhere in the node, or reordered text), because measuring it as the box is made would move a first ask. Those boxes ask
-about three questions a word. Hyphen widths and the plain context's space are the same kind of per-box constant.
+*Done in correctness round 5* (2026-09-19, `WebKitBox.spaceWidth`; DESIGN.md §4.4, §4.7). A box whose white space is
+deferred (a TAB anywhere in the node, or reordered text) asked its space at every read, about three questions a word;
+every box now measures it once as it is made. It moved a first ask, so it took a browser run: tier 2 in both orders
+and both configurations moved no status, and the plain predictor's line ranges equal the usual run's on all 63,987
+cases. It bought what was expected: 9,174 tier cases ask fewer questions, 187,772 in all and up to 7,611 in one
+paragraph; the plain path went from 39.32 to 36.51 questions a paragraph, the nine giants from 707,622 calls to
+295,170, and the chat smoke's Arabic messages from 45.75 to 23.08 calls.
 
-*Expected.* 228 thousand of the plain path's 844 thousand repeats on the tier sets are this space, so up to a quarter of
-WebKit's repeats; on the benchmark's mix it touches the Arabic messages. Small beside item 1, and cheap.
+*What is left, small.*
+- A deferred box that never reads its space now asks one question it didn't: 7,119 tier cases ask one more. A field
+  filled on first read would avoid it.
+- `tabbedWidth` and `fixedPitchWidth` ask `W(' ')` in the plain context per call, about 23 thousand asks on the tier
+  corpus. Where a box has no letter spacing the plain context is the box's context, so the field answers it. Hyphen
+  widths are the same kind of per-box constant.
 
-*What could make it unsafe.* It moves a first ask, which the replay can't judge and WebKit's per-font caches shouldn't
-mind: a new recording and tier 2 in both orders. It was parked for the correctness round or this phase.
+*What could make them unsafe.* Each moves or drops a first ask, which the replay can't judge and WebKit's per-font
+caches shouldn't mind: a new recording and tier 2 in both orders.
 
 ### 5. Units of equal text in one prepared paragraph share one record of what measuring found
 
@@ -228,7 +252,31 @@ and a per-engine entry so a page loads one port (the plan's §9 left a loader ou
 first: 3 ms once may not be worth a branch. Dropping the reverse tables and rule source `rbbi.ts` never reads is bundle
 size, not time.
 
-### 8. Later, with numbers only
+### 8. Gecko's lazy plain scan: complexity against about 31 questions a chat message
+
+*What.* Not a speed-up to build: a trade correctness round 5 made, which this phase may take back. Gecko asks Canvas
+which glyph of a kerned pair carries the adjustment (DESIGN.md §4.4). `overflow-wrap: break-word` makes every cluster
+of each line's first word a break candidate, so the first build asked those questions on ordinary text: the chat mix
+went from 110.67 to 141.49 questions a message (+30.8) and plain Latin from 82.15 to 116.79. The lazy plain scan brought
+both back to where they were: a plain paragraph's break scan reads a candidate inside a word without the questions
+that only place what crosses it, and asks them where the bound reaches a fit test or at an edge (DESIGN.md §4.6,
+"Gecko's lazy plain scan").
+
+*The trade.* It is the most intricate part of the Gecko port. It made a record's value depend on who asked first, and
+the round's critic found a real hole in it (fixed, with a unit test built from a constructed paragraph). That a plain
+paragraph's lines equal the inspected one's rests on a bound argument plus the plain check, the sweep and the plain
+predictor's browser runs. The simpler form reads every candidate whole and costs about 31 questions a chat message in
+Firefox, which already meets the bar on plain ASCII and whose cost on the mix is the CJK and Arabic fill (item 3). The
+maintainer may prefer the simpler form.
+
+*What would settle it.* Time, not counts: the benchmark with and without the lazy scan on a quiet machine. And item 1:
+the probe pairs and the same-face answers depend on the font declaration and the language alone, so a home that
+outlives a paragraph pays them once per declaration, not once per paragraph (24 to 30 questions a context today, by
+the two probes' medians). With that home the simple form's cost is the 3 to 8 questions of each kerned candidate, and
+the comparison should be run again. Note that the cost depends on the width: a paragraph that asks nothing at one
+width can ask the probe pairs at another, and the chat smoke measures one width a message.
+
+### 9. Later, with numbers only
 
 From the plan's §10, not started and not ranked here: a bounded store for strings that recur across paragraphs (the API
 phase's invisible store), filling measured values in `prepare` or a "words" variant, a relayout loop over flat arrays

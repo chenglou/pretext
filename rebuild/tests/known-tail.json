@@ -298,8 +298,8 @@
           "where": "triage"
         }
       ],
-      "source": "round 4a Blink report leftovers item 1 (shaping_line_breaker.cc:309-324); attributed to the line that holds the condition since scorer 7",
-      "note": "The clamp of ShapeLine's start correction rests on a stand-in position: a contextual form's share of a joined pair, 247 and 772 units natively where U+200D gives 190 and 829."
+      "source": "round 4a Blink report leftovers item 1 (shaping_line_breaker.cc:309-324); attributed to the line that holds the condition since scorer 7; correctness round 5 Blink report (specs/blink-RESULTS.md, \"Correctness round 5\")",
+      "note": "The clamp of ShapeLine's start correction rests on a stand-in position: a contextual form's share of a joined pair, 247 and 772 units natively where U+200D gives 190 and 829. Since correctness round 5 the pair window reaches past SHY and the kasra, so the port places the pair's adjustment on the first beh as it does without SHY; Amiri's contextual forms (the first beh wider, the last narrower) still fit neither placement, and the three cases fail as before (native 5 lines, predicted 4)."
     },
     {
       "id": "blink/rtl-view-cut-after-start-reshape",
@@ -544,8 +544,8 @@
           "in-word-prefix"
         ]
       },
-      "source": "research/ROUND3-EVALUATION.md (397 of 576 fresh failures; Amiri beh around a soft hyphen dominates); research/ROUND3-CRITIC.md items 5 and 6 (Amiri cross term 231, Noto Nastaliq Urdu 156, odd kern splits 1 au off at the break 59, untried)",
-      "note": "The condition sits on every failing development line and names real things. 1,034 of Firefox's 1,640 prediction failures on the tier sets on 2026-09-18."
+      "source": "research/ROUND3-EVALUATION.md (397 of 576 fresh failures; Amiri beh around a soft hyphen dominates); research/ROUND3-CRITIC.md items 5 and 6 (Amiri cross term 231, Noto Nastaliq Urdu 156, odd kern splits 1 au off at the break 59, untried); research/CORRECTNESS-ROUND-5.md, Gecko fixes 1 and 2",
+      "note": "The condition sits on every failing development line and names real things. 1,034 of Firefox's 1,640 prediction failures on the tier sets on 2026-09-18. Correctness round 5 (2026-09-19) converted two parts of it without supplied facts. Which glyph of a kerned pair carries the adjustment is asked of Canvas, from the app-unit rounding of each glyph, so the odd kern splits no longer need the `pairKerning` fact (`gecko/pair-placement-one-way-per-face` holds the assumption left, `gecko/pair-same-face-refused` the pairs it refuses). A joined suffix that a fallback font draws is measured behind its own first letter, and the prefix's side stands in. Tier 2 in both orders, no facts: line count 14, breaks 42 and widths 142 go from a covered failure to pass, 0 from a pass; with the lab's facts 2, 2 and 13. What stays is `gecko/contextual-joined-forms`. The count above is of 2026-09-18 and waits for the new recording."
     },
     {
       "id": "gecko/hoefler-text-tied-faces",
@@ -1081,6 +1081,441 @@
           "id": "c-5749b85240285a04",
           "browser": "firefox",
           "where": "critic-r4-1: history-dependent, fails a prediction metric in file order"
+        },
+        {
+          "id": "c-0565a1e6b3058e9c",
+          "browser": "firefox",
+          "where": "heldout-suite-sample part 0: history-dependent in the ledger frozen before correctness round 5; read as a pass on every metric in the round's both-orders runs, no facts and facts; native observations differ in the critic's plain predictor run an hour later; not a stable pass"
+        },
+        {
+          "id": "c-06b0d6eb26b5a287",
+          "browser": "firefox",
+          "where": "heldout-suite-sample part 0: history-dependent in the ledger frozen before correctness round 5; read as a pass on every metric in the round's both-orders runs, no facts and facts; native observations differ in the critic's plain predictor run an hour later; not a stable pass"
+        },
+        {
+          "id": "c-083464238991ffde",
+          "browser": "firefox",
+          "where": "heldout-suite-sample part 0: history-dependent in the ledger frozen before correctness round 5; read as a pass on every metric in the round's both-orders runs, no facts and facts; native observations differ in the critic's plain predictor run an hour later; not a stable pass"
+        },
+        {
+          "id": "c-0eec16b3dd37b874",
+          "browser": "firefox",
+          "where": "heldout-suite-sample part 0: history-dependent in the ledger frozen before correctness round 5; read as a pass on every metric in the round's both-orders runs, no facts and facts; native observations differ in the critic's plain predictor run an hour later; not a stable pass"
+        },
+        {
+          "id": "c-0f834af806680b5d",
+          "browser": "firefox",
+          "where": "heldout-suite-sample part 0: history-dependent in the ledger frozen before correctness round 5; read as a pass on every metric in the round's both-orders runs, no facts and facts; native observations differ in the critic's plain predictor run an hour later; not a stable pass"
+        },
+        {
+          "id": "c-11b7b1625a193015",
+          "browser": "firefox",
+          "where": "heldout-suite-sample part 0: history-dependent in the ledger frozen before correctness round 5; read as a pass on every metric in the round's both-orders runs, no facts and facts; native observations differ in the critic's plain predictor run an hour later; not a stable pass"
+        },
+        {
+          "id": "c-12716a8b633ca712",
+          "browser": "firefox",
+          "where": "heldout-suite-sample part 0: history-dependent in the ledger frozen before correctness round 5; read as a pass on every metric in the round's both-orders runs, no facts and facts; native observations differ in the critic's plain predictor run an hour later; not a stable pass"
+        },
+        {
+          "id": "c-181da052f3766b9f",
+          "browser": "firefox",
+          "where": "heldout-suite-sample part 0: history-dependent in the ledger frozen before correctness round 5; read as a pass on every metric in the round's both-orders runs, no facts and facts; native observations differ in the critic's plain predictor run an hour later; not a stable pass"
+        },
+        {
+          "id": "c-1eec362693e6d0da",
+          "browser": "firefox",
+          "where": "heldout-suite-sample part 0: history-dependent in the ledger frozen before correctness round 5; read as a pass on every metric in the round's both-orders runs, no facts and facts; native observations differ in the critic's plain predictor run an hour later; not a stable pass"
+        },
+        {
+          "id": "c-21cae382ae0c7e81",
+          "browser": "firefox",
+          "where": "heldout-suite-sample part 0: history-dependent in the ledger frozen before correctness round 5; read as a pass on every metric in the round's both-orders runs, no facts and facts; native observations differ in the critic's plain predictor run an hour later; not a stable pass"
+        },
+        {
+          "id": "c-25ed1daa11cd055d",
+          "browser": "firefox",
+          "where": "heldout-suite-sample part 0: history-dependent in the ledger frozen before correctness round 5; read as a pass on every metric in the round's both-orders runs, no facts and facts; native observations differ in the critic's plain predictor run an hour later; not a stable pass"
+        },
+        {
+          "id": "c-284b25c8624cc2bd",
+          "browser": "firefox",
+          "where": "heldout-suite-sample part 0: history-dependent in the ledger frozen before correctness round 5; read as a pass on every metric in the round's both-orders runs, no facts and facts; native observations differ in the critic's plain predictor run an hour later; not a stable pass"
+        },
+        {
+          "id": "c-29df5f40a53fd88b",
+          "browser": "firefox",
+          "where": "heldout-suite-sample part 0: history-dependent in the ledger frozen before correctness round 5; read as a pass on every metric in the round's both-orders runs, no facts and facts; native observations differ in the critic's plain predictor run an hour later; not a stable pass"
+        },
+        {
+          "id": "c-2f6194a4b423236e",
+          "browser": "firefox",
+          "where": "heldout-suite-sample part 0: history-dependent in the ledger frozen before correctness round 5; read as a pass on every metric in the round's both-orders runs, no facts and facts; native observations differ in the critic's plain predictor run an hour later; not a stable pass"
+        },
+        {
+          "id": "c-398ea2101313fa17",
+          "browser": "firefox",
+          "where": "heldout-suite-sample part 0: history-dependent in the ledger frozen before correctness round 5; read as a pass on every metric in the round's both-orders runs, no facts and facts; native observations differ in the critic's plain predictor run an hour later; not a stable pass"
+        },
+        {
+          "id": "c-3a0ed7770c306025",
+          "browser": "firefox",
+          "where": "heldout-suite-sample part 0: history-dependent in the ledger frozen before correctness round 5; read as a pass on every metric in the round's both-orders runs, no facts and facts; native observations differ in the critic's plain predictor run an hour later; not a stable pass"
+        },
+        {
+          "id": "c-3bb9c5db75974989",
+          "browser": "firefox",
+          "where": "heldout-suite-sample part 0: history-dependent in the ledger frozen before correctness round 5; read as a pass on every metric in the round's both-orders runs, no facts and facts; native observations differ in the critic's plain predictor run an hour later; not a stable pass"
+        },
+        {
+          "id": "c-3ec6eda4e6e558a4",
+          "browser": "firefox",
+          "where": "heldout-suite-sample part 0: history-dependent in the ledger frozen before correctness round 5; read as a pass on every metric in the round's both-orders runs, no facts and facts; native observations differ in the critic's plain predictor run an hour later; not a stable pass"
+        },
+        {
+          "id": "c-3f9563075da5c369",
+          "browser": "firefox",
+          "where": "heldout-suite-sample part 0: history-dependent in the ledger frozen before correctness round 5; read as a pass on every metric in the round's both-orders runs, no facts and facts; native observations differ in the critic's plain predictor run an hour later; not a stable pass"
+        },
+        {
+          "id": "c-402c2ab717c89e57",
+          "browser": "firefox",
+          "where": "heldout-suite-sample part 0: history-dependent in the ledger frozen before correctness round 5; read as a pass on every metric in the round's both-orders runs, no facts and facts; native observations differ in the critic's plain predictor run an hour later; not a stable pass"
+        },
+        {
+          "id": "c-407d7af0b0a9b04f",
+          "browser": "firefox",
+          "where": "heldout-suite-sample part 0: history-dependent in the ledger frozen before correctness round 5; read as a pass on every metric in the round's both-orders runs, no facts and facts; native observations differ in the critic's plain predictor run an hour later; not a stable pass"
+        },
+        {
+          "id": "c-4160ac40b0e44924",
+          "browser": "firefox",
+          "where": "heldout-suite-sample part 0: history-dependent in the ledger frozen before correctness round 5; read as a pass on every metric in the round's both-orders runs, no facts and facts; native observations differ in the critic's plain predictor run an hour later; not a stable pass"
+        },
+        {
+          "id": "c-43e8c83611999897",
+          "browser": "firefox",
+          "where": "heldout-suite-sample part 0: history-dependent in the ledger frozen before correctness round 5; read as a pass on every metric in the round's both-orders runs, no facts and facts; native observations differ in the critic's plain predictor run an hour later; not a stable pass"
+        },
+        {
+          "id": "c-4902a90e21083f23",
+          "browser": "firefox",
+          "where": "heldout-suite-sample part 0: history-dependent in the ledger frozen before correctness round 5; read as a pass on every metric in the round's both-orders runs, no facts and facts; native observations differ in the critic's plain predictor run an hour later; not a stable pass"
+        },
+        {
+          "id": "c-4cbbca3f2acd7ed9",
+          "browser": "firefox",
+          "where": "heldout-suite-sample part 0: history-dependent in the ledger frozen before correctness round 5; read as a pass on every metric in the round's both-orders runs, no facts and facts; native observations differ in the critic's plain predictor run an hour later; not a stable pass"
+        },
+        {
+          "id": "c-52de6a12a7f0351a",
+          "browser": "firefox",
+          "where": "heldout-suite-sample part 0: history-dependent in the ledger frozen before correctness round 5; read as a pass on every metric in the round's both-orders runs, no facts and facts; native observations differ in the critic's plain predictor run an hour later; not a stable pass"
+        },
+        {
+          "id": "c-53466ad53d788acf",
+          "browser": "firefox",
+          "where": "heldout-suite-sample part 0: history-dependent in the ledger frozen before correctness round 5; read as a pass on every metric in the round's both-orders runs, no facts and facts; native observations differ in the critic's plain predictor run an hour later; not a stable pass"
+        },
+        {
+          "id": "c-56ed933dcd7e36b9",
+          "browser": "firefox",
+          "where": "heldout-suite-sample part 0: history-dependent in the ledger frozen before correctness round 5; read as a pass on every metric in the round's both-orders runs, no facts and facts; native observations differ in the critic's plain predictor run an hour later; not a stable pass"
+        },
+        {
+          "id": "c-585dbd1ab03478c3",
+          "browser": "firefox",
+          "where": "heldout-suite-sample part 0: history-dependent in the ledger frozen before correctness round 5; read as a pass on every metric in the round's both-orders runs, no facts and facts; native observations differ in the critic's plain predictor run an hour later; not a stable pass"
+        },
+        {
+          "id": "c-58a58cda2bf65529",
+          "browser": "firefox",
+          "where": "heldout-suite-sample part 0: history-dependent in the ledger frozen before correctness round 5; read as a pass on every metric in the round's both-orders runs, no facts and facts; native observations differ in the critic's plain predictor run an hour later; not a stable pass"
+        },
+        {
+          "id": "c-61b781000e55bacd",
+          "browser": "firefox",
+          "where": "heldout-suite-sample part 0: history-dependent in the ledger frozen before correctness round 5; read as a pass on every metric in the round's both-orders runs, no facts and facts; native observations differ in the critic's plain predictor run an hour later; not a stable pass"
+        },
+        {
+          "id": "c-6403c221b98778d6",
+          "browser": "firefox",
+          "where": "heldout-suite-sample: history-dependent on widths in the ledger frozen before correctness round 5; read as a pass on widths in the round's both-orders run with the lab's facts only; not a stable pass"
+        },
+        {
+          "id": "c-64a851115ecf6da7",
+          "browser": "firefox",
+          "where": "heldout-suite-sample part 0: history-dependent in the ledger frozen before correctness round 5; read as a pass on every metric in the round's both-orders runs, no facts and facts; native observations differ in the critic's plain predictor run an hour later; not a stable pass"
+        },
+        {
+          "id": "c-6547baf3ad8daecb",
+          "browser": "firefox",
+          "where": "heldout-suite-sample part 0: history-dependent in the ledger frozen before correctness round 5; read as a pass on every metric in the round's both-orders runs, no facts and facts; native observations differ in the critic's plain predictor run an hour later; not a stable pass"
+        },
+        {
+          "id": "c-6c365b9be9b36d8e",
+          "browser": "firefox",
+          "where": "heldout-suite-sample part 0: history-dependent in the ledger frozen before correctness round 5; read as a pass on every metric in the round's both-orders runs, no facts and facts; native observations differ in the critic's plain predictor run an hour later; not a stable pass"
+        },
+        {
+          "id": "c-735246af06a55466",
+          "browser": "firefox",
+          "where": "heldout-suite-sample: history-dependent in the ledger frozen before correctness round 5; read as a pass on every metric in the round's both-orders run with the lab's facts only; not a stable pass"
+        },
+        {
+          "id": "c-749405d5a5aecc80",
+          "browser": "firefox",
+          "where": "heldout-suite-sample part 0: history-dependent in the ledger frozen before correctness round 5; read as a pass on every metric in the round's both-orders runs, no facts and facts; native observations differ in the critic's plain predictor run an hour later; not a stable pass"
+        },
+        {
+          "id": "c-77ca17027a1431e5",
+          "browser": "firefox",
+          "where": "heldout-suite-sample part 0: history-dependent in the ledger frozen before correctness round 5; read as a pass on every metric in the round's both-orders runs, no facts and facts; native observations differ in the critic's plain predictor run an hour later; not a stable pass"
+        },
+        {
+          "id": "c-78b0e1be2d2cc3b9",
+          "browser": "firefox",
+          "where": "heldout-suite-sample part 0: history-dependent in the ledger frozen before correctness round 5; read as a pass on every metric in the round's both-orders runs, no facts and facts; native observations differ in the critic's plain predictor run an hour later; not a stable pass"
+        },
+        {
+          "id": "c-7bdf6356f1fea83f",
+          "browser": "firefox",
+          "where": "heldout-suite-sample part 0: history-dependent in the ledger frozen before correctness round 5; read as a pass on every metric in the round's both-orders runs, no facts and facts; native observations differ in the critic's plain predictor run an hour later; not a stable pass"
+        },
+        {
+          "id": "c-7c7afcd56e7d2ff9",
+          "browser": "firefox",
+          "where": "heldout-suite-sample: history-dependent in the ledger frozen before correctness round 5; read as a pass on every metric in the round's both-orders run with the lab's facts only; not a stable pass"
+        },
+        {
+          "id": "c-80c3016e27e7a0b6",
+          "browser": "firefox",
+          "where": "heldout-suite-sample: history-dependent in the ledger frozen before correctness round 5; read as a pass on every metric in the round's both-orders run with the lab's facts only; not a stable pass"
+        },
+        {
+          "id": "c-88eac1ee67678b96",
+          "browser": "firefox",
+          "where": "heldout-suite-sample: history-dependent in the ledger frozen before correctness round 5; read as a pass on every metric in the round's both-orders run with the lab's facts only; not a stable pass"
+        },
+        {
+          "id": "c-900d933ae0605e60",
+          "browser": "firefox",
+          "where": "heldout-suite-sample part 0: history-dependent in the ledger frozen before correctness round 5; read as a pass on every metric in the round's both-orders runs, no facts and facts; native observations differ in the critic's plain predictor run an hour later; not a stable pass"
+        },
+        {
+          "id": "c-907236747a7c1f7c",
+          "browser": "firefox",
+          "where": "heldout-suite-sample part 0: history-dependent in the ledger frozen before correctness round 5; read as a pass on every metric in the round's both-orders runs, no facts and facts; native observations differ in the critic's plain predictor run an hour later; not a stable pass"
+        },
+        {
+          "id": "c-90b934a03132d34a",
+          "browser": "firefox",
+          "where": "heldout-suite-sample part 0: history-dependent in the ledger frozen before correctness round 5; read as a pass on every metric in the round's both-orders runs, no facts and facts; native observations differ in the critic's plain predictor run an hour later; not a stable pass"
+        },
+        {
+          "id": "c-915a96e676b39a9a",
+          "browser": "firefox",
+          "where": "heldout-suite-sample part 0: history-dependent in the ledger frozen before correctness round 5; read as a pass on every metric in the round's both-orders runs, no facts and facts; native observations differ in the critic's plain predictor run an hour later; not a stable pass"
+        },
+        {
+          "id": "c-917fffe2f204f89c",
+          "browser": "firefox",
+          "where": "heldout-suite-sample part 0: history-dependent in the ledger frozen before correctness round 5; read as a pass on every metric in the round's both-orders runs, no facts and facts; native observations differ in the critic's plain predictor run an hour later; not a stable pass"
+        },
+        {
+          "id": "c-96caef526f53b7f1",
+          "browser": "firefox",
+          "where": "heldout-suite-sample part 0: history-dependent in the ledger frozen before correctness round 5; read as a pass on every metric in the round's both-orders runs, no facts and facts; native observations differ in the critic's plain predictor run an hour later; not a stable pass"
+        },
+        {
+          "id": "c-983ef0ab7d210e48",
+          "browser": "firefox",
+          "where": "heldout-suite-sample part 0: history-dependent in the ledger frozen before correctness round 5; read as a pass on every metric in the round's both-orders runs, no facts and facts; native observations differ in the critic's plain predictor run an hour later; not a stable pass"
+        },
+        {
+          "id": "c-994154419653ff35",
+          "browser": "firefox",
+          "where": "heldout-suite-sample part 0: history-dependent in the ledger frozen before correctness round 5; read as a pass on every metric in the round's both-orders runs, no facts and facts; native observations differ in the critic's plain predictor run an hour later; not a stable pass"
+        },
+        {
+          "id": "c-99874a20cdefe6f8",
+          "browser": "firefox",
+          "where": "heldout-suite-sample part 0: history-dependent in the ledger frozen before correctness round 5; read as a pass on every metric in the round's both-orders runs, no facts and facts; native observations differ in the critic's plain predictor run an hour later; not a stable pass"
+        },
+        {
+          "id": "c-a1420ef5c7433178",
+          "browser": "firefox",
+          "where": "heldout-suite-sample: history-dependent in the ledger frozen before correctness round 5; read as a pass on every metric in the round's both-orders run with the lab's facts only; not a stable pass"
+        },
+        {
+          "id": "c-a38308e5147ae0cc",
+          "browser": "firefox",
+          "where": "heldout-suite-sample part 0: history-dependent in the ledger frozen before correctness round 5; read as a pass on every metric in the round's both-orders runs, no facts and facts; native observations differ in the critic's plain predictor run an hour later; not a stable pass"
+        },
+        {
+          "id": "c-a3efdf85e7b40710",
+          "browser": "firefox",
+          "where": "heldout-suite-sample part 0: history-dependent in the ledger frozen before correctness round 5; read as a pass on every metric in the round's both-orders runs, no facts and facts; native observations differ in the critic's plain predictor run an hour later; not a stable pass"
+        },
+        {
+          "id": "c-a57466c5bbbbc3a6",
+          "browser": "firefox",
+          "where": "heldout-suite-sample part 0: history-dependent in the ledger frozen before correctness round 5; read as a pass on every metric in the round's both-orders runs, no facts and facts; native observations differ in the critic's plain predictor run an hour later; not a stable pass"
+        },
+        {
+          "id": "c-a5be32780c5c0f3a",
+          "browser": "firefox",
+          "where": "heldout-suite-sample part 0: history-dependent in the ledger frozen before correctness round 5; read as a pass on every metric in the round's both-orders runs, no facts and facts; native observations differ in the critic's plain predictor run an hour later; not a stable pass"
+        },
+        {
+          "id": "c-a602805571f7e6bc",
+          "browser": "firefox",
+          "where": "heldout-suite-sample part 0: history-dependent in the ledger frozen before correctness round 5; read as a pass on every metric in the round's both-orders runs, no facts and facts; native observations differ in the critic's plain predictor run an hour later; not a stable pass"
+        },
+        {
+          "id": "c-a706682ef3ae04e2",
+          "browser": "firefox",
+          "where": "heldout-suite-sample part 0: history-dependent in the ledger frozen before correctness round 5; read as a pass on every metric in the round's both-orders runs, no facts and facts; native observations differ in the critic's plain predictor run an hour later; not a stable pass"
+        },
+        {
+          "id": "c-ac9a86310cdd269b",
+          "browser": "firefox",
+          "where": "heldout-suite-sample part 0: history-dependent in the ledger frozen before correctness round 5; read as a pass on every metric in the round's both-orders runs, no facts and facts; native observations differ in the critic's plain predictor run an hour later; not a stable pass"
+        },
+        {
+          "id": "c-ade2cb500ccd1d01",
+          "browser": "firefox",
+          "where": "heldout-suite-sample part 0: history-dependent in the ledger frozen before correctness round 5; read as a pass on every metric in the round's both-orders runs, no facts and facts; native observations differ in the critic's plain predictor run an hour later; not a stable pass"
+        },
+        {
+          "id": "c-aedf0fcbbecbac22",
+          "browser": "firefox",
+          "where": "heldout-suite-sample part 0: history-dependent in the ledger frozen before correctness round 5; read as a pass on every metric in the round's both-orders runs, no facts and facts; native observations differ in the critic's plain predictor run an hour later; not a stable pass"
+        },
+        {
+          "id": "c-b43fc6559abdc5b2",
+          "browser": "firefox",
+          "where": "heldout-suite-sample part 0: history-dependent in the ledger frozen before correctness round 5; read as a pass on every metric in the round's both-orders runs, no facts and facts; native observations differ in the critic's plain predictor run an hour later; not a stable pass"
+        },
+        {
+          "id": "c-b757602cc611f82b",
+          "browser": "firefox",
+          "where": "heldout-suite-sample part 0: history-dependent in the ledger frozen before correctness round 5; read as a pass on every metric in the round's both-orders runs, no facts and facts; native observations differ in the critic's plain predictor run an hour later; not a stable pass"
+        },
+        {
+          "id": "c-ba74a59f4a0cb054",
+          "browser": "firefox",
+          "where": "heldout-suite-sample part 0: history-dependent in the ledger frozen before correctness round 5; read as a pass on every metric in the round's both-orders runs, no facts and facts; native observations differ in the critic's plain predictor run an hour later; not a stable pass"
+        },
+        {
+          "id": "c-bc65f414a34bd4c2",
+          "browser": "firefox",
+          "where": "heldout-suite-sample part 0: history-dependent in the ledger frozen before correctness round 5; read as a pass on every metric in the round's both-orders runs, no facts and facts; native observations differ in the critic's plain predictor run an hour later; not a stable pass"
+        },
+        {
+          "id": "c-bf982af6684229fb",
+          "browser": "firefox",
+          "where": "heldout-suite-sample: history-dependent in the ledger frozen before correctness round 5; read as a pass on every metric in the round's both-orders run with the lab's facts only; not a stable pass"
+        },
+        {
+          "id": "c-c1fb9c7a7b183bb5",
+          "browser": "firefox",
+          "where": "heldout-suite-sample: history-dependent in the ledger frozen before correctness round 5; read as a pass on every metric in the round's both-orders run with the lab's facts only; not a stable pass"
+        },
+        {
+          "id": "c-c3a86992de531502",
+          "browser": "firefox",
+          "where": "heldout-suite-sample part 0: history-dependent in the ledger frozen before correctness round 5; read as a pass on every metric in the round's both-orders runs, no facts and facts; native observations differ in the critic's plain predictor run an hour later; not a stable pass"
+        },
+        {
+          "id": "c-c6488bc34b362fb8",
+          "browser": "firefox",
+          "where": "heldout-suite-sample part 0: history-dependent in the ledger frozen before correctness round 5; read as a pass on every metric in the round's both-orders runs, no facts and facts; native observations differ in the critic's plain predictor run an hour later; not a stable pass"
+        },
+        {
+          "id": "c-c947a84e3264bc6e",
+          "browser": "firefox",
+          "where": "heldout-suite-sample part 0: history-dependent in the ledger frozen before correctness round 5; read as a pass on every metric in the round's both-orders runs, no facts and facts; native observations differ in the critic's plain predictor run an hour later; not a stable pass"
+        },
+        {
+          "id": "c-cd15db2e09d31292",
+          "browser": "firefox",
+          "where": "heldout-suite-sample: history-dependent in the ledger frozen before correctness round 5; read as a pass on every metric in the round's both-orders run with the lab's facts only; not a stable pass"
+        },
+        {
+          "id": "c-d6478523d5e6ca11",
+          "browser": "firefox",
+          "where": "heldout-suite-sample part 0: history-dependent in the ledger frozen before correctness round 5; read as a pass on every metric in the round's both-orders runs, no facts and facts; native observations differ in the critic's plain predictor run an hour later; not a stable pass"
+        },
+        {
+          "id": "c-d9fd91da83b8636e",
+          "browser": "firefox",
+          "where": "heldout-suite-sample: history-dependent in the ledger frozen before correctness round 5; read as a pass on every metric in the round's both-orders run with the lab's facts only; not a stable pass"
+        },
+        {
+          "id": "c-db01d6df72ae7444",
+          "browser": "firefox",
+          "where": "heldout-suite-sample part 0: history-dependent in the ledger frozen before correctness round 5; read as a pass on every metric in the round's both-orders runs, no facts and facts; native observations differ in the critic's plain predictor run an hour later; not a stable pass"
+        },
+        {
+          "id": "c-dbdf119c038a0fab",
+          "browser": "firefox",
+          "where": "heldout-suite-sample: history-dependent in the ledger frozen before correctness round 5; read as a pass on every metric in the round's both-orders run with the lab's facts only; not a stable pass"
+        },
+        {
+          "id": "c-dd50a9d48952cbf0",
+          "browser": "firefox",
+          "where": "heldout-suite-sample part 0: history-dependent in the ledger frozen before correctness round 5; read as a pass on every metric in the round's both-orders runs, no facts and facts; native observations differ in the critic's plain predictor run an hour later; not a stable pass"
+        },
+        {
+          "id": "c-e00634c324f8c986",
+          "browser": "firefox",
+          "where": "heldout-suite-sample: history-dependent in the ledger frozen before correctness round 5; read as a pass on every metric in the round's both-orders run with the lab's facts only; not a stable pass"
+        },
+        {
+          "id": "c-e05fcb4ea9b42cb7",
+          "browser": "firefox",
+          "where": "heldout-suite-sample part 0: history-dependent in the ledger frozen before correctness round 5; read as a pass on every metric in the round's both-orders runs, no facts and facts; native observations differ in the critic's plain predictor run an hour later; not a stable pass"
+        },
+        {
+          "id": "c-e4a7abb2f8d6b76c",
+          "browser": "firefox",
+          "where": "heldout-suite-sample: history-dependent in the ledger frozen before correctness round 5; read as a pass on every metric in the round's both-orders run with the lab's facts only; not a stable pass"
+        },
+        {
+          "id": "c-ed65fb74c71a52d9",
+          "browser": "firefox",
+          "where": "heldout-suite-sample part 0: history-dependent in the ledger frozen before correctness round 5; read as a pass on every metric in the round's both-orders runs, no facts and facts; native observations differ in the critic's plain predictor run an hour later; not a stable pass"
+        },
+        {
+          "id": "c-f267189a519a0996",
+          "browser": "firefox",
+          "where": "heldout-suite-sample part 0: history-dependent in the ledger frozen before correctness round 5; read as a pass on every metric in the round's both-orders runs, no facts and facts; native observations differ in the critic's plain predictor run an hour later; not a stable pass"
+        },
+        {
+          "id": "c-f2716018bfc06c37",
+          "browser": "firefox",
+          "where": "heldout-suite-sample part 0: history-dependent in the ledger frozen before correctness round 5; read as a pass on every metric in the round's both-orders runs, no facts and facts; native observations differ in the critic's plain predictor run an hour later; not a stable pass"
+        },
+        {
+          "id": "c-f287fd591e24f062",
+          "browser": "firefox",
+          "where": "heldout-suite-sample part 0: history-dependent in the ledger frozen before correctness round 5; read as a pass on every metric in the round's both-orders runs, no facts and facts; native observations differ in the critic's plain predictor run an hour later; not a stable pass"
+        },
+        {
+          "id": "c-fcd84f69dc83cef6",
+          "browser": "firefox",
+          "where": "heldout-suite-sample part 0: history-dependent in the ledger frozen before correctness round 5; read as a pass on every metric in the round's both-orders runs, no facts and facts; native observations differ in the critic's plain predictor run an hour later; not a stable pass"
+        },
+        {
+          "id": "c-fd2df0ae18c51ddc",
+          "browser": "firefox",
+          "where": "heldout-suite-sample part 0: history-dependent in the ledger frozen before correctness round 5; read as a pass on every metric in the round's both-orders runs, no facts and facts; native observations differ in the critic's plain predictor run an hour later; not a stable pass"
+        },
+        {
+          "id": "c-fd5234ef9654fd31",
+          "browser": "firefox",
+          "where": "heldout-suite-sample part 0: history-dependent in the ledger frozen before correctness round 5; read as a pass on every metric in the round's both-orders runs, no facts and facts; native observations differ in the critic's plain predictor run an hour later; not a stable pass"
         }
       ],
       "match": {
@@ -1089,8 +1524,8 @@
         ],
         "status": "history-dependent"
       },
-      "source": "round 4a Gecko report §3.4 (gfxPlatformFontList.cpp:1474-1486, gfxPlatformMac.cpp:147-262; 190 against 104 history-dependent held-out cases in identical runs); lab README \"Measure first\" (121 of 25,415 cases move, all holding U+1F600); research/ROUND4-CRITIC.md \"Known tail\" 4 (fresh set critic-r4-1); for the plain predictor's five cases: the Gecko owner's X2 report (re-architecture step 2, 2026-09-19) and specs/gecko-RESULTS.md \"Re-architecture X2\"; `.artifacts/tests/runs/ra-x2-gecko/plain-vs-usual.json` with the two control comparisons beside it (`compare-sets.ts --prediction=line-ranges`); lab README \"Measure first\" and the item `gecko/process-font-fallback-state`, which names the same five as moved by measure first; the Gecko owner's X3 report (2026-09-19) and `.artifacts/tests/runs/ra-x3-gecko/plain-vs-usual.json`",
-      "note": "A prediction holds for the state it was measured in. Text measured before another paragraph's U+FE0E request and laid out after it is 1px per emoji off, with no condition on it when the facts are supplied. The round 4 critic's fresh set held 209 history-dependent Firefox cases (runs/split-word 87, word-spacing-spans 57, span-at-space 33, letter-spacing-spans 32) against 0 on each of the evaluator's three sets from the same generators; in file order 199 of them fail a prediction metric, in reverse 6, and counted, forward widths would be 98.21% instead of 98.97%. The Firefox line is for runs where this state didn't occur. On the tier sets the set was stable on 2026-09-18: the frozen recordings and the evaluation's, hours apart, mark the same 313 cases (314 on widths) in both configurations. The plain predictor's five cases (folded in on 2026-09-19 from the item `gecko/plain-predictor-fallback-state`, which named five of the cases above). In runs of the plain predictor (a paragraph prepared plain, the path an application runs) these five cases' NATIVE widths differ from the usual run's: fallback-font widths in another state, for example 33.5px against 18.5px for one code point of `c-56afde0f3d04b557`. Line ranges are equal, and the reference ledger doesn't mark the five history-dependent, because both orders of the usual run saw one state. They sit together in suite-sample part 2 (cases 1,078 to 1,083 of 5,000), where U+1F600 first meets U+FE0E, the text-presentation request that moves the process's fallback state. 120 cases of that part differ in all; the other 115 are history-dependent in the ledger already (`gecko/process-font-fallback-state`), and they hold all 14 whose line ranges moved with the native lines. The measure-first check moved the same five (with the lab's facts their widths went to `fail covered by page-history`). That browser process has two states: the usual predictor's five runs across X1 and X2 were never in the odd one, the plain predictor's were 3 times out of 5 (the set run again with it gave 0 differences once and the same 120 once). The Gecko owner's reading, which nobody tested: a predictor that asks Canvas less and sooner races Firefox's background character-map loading. A probe of that loading would settle it. Until then a native difference on these five under another predictor is this class. Under the usual predictor they pass every metric and are exact in both configurations. At X3 the plain predictor's Firefox run differed from the usual one in the same 120 cases as at X2, case for case, with the same five unmarked."
+      "source": "round 4a Gecko report §3.4 (gfxPlatformFontList.cpp:1474-1486, gfxPlatformMac.cpp:147-262; 190 against 104 history-dependent held-out cases in identical runs); lab README \"Measure first\" (121 of 25,415 cases move, all holding U+1F600); research/ROUND4-CRITIC.md \"Known tail\" 4 (fresh set critic-r4-1); for the plain predictor's five cases: the Gecko owner's X2 report (re-architecture step 2, 2026-09-19) and specs/gecko-RESULTS.md \"Re-architecture X2\"; `.artifacts/tests/runs/ra-x2-gecko/plain-vs-usual.json` with the two control comparisons beside it (`compare-sets.ts --prediction=line-ranges`); lab README \"Measure first\" and the item `gecko/process-font-fallback-state`, which names the same five as moved by measure first; the Gecko owner's X3 report (2026-09-19) and `.artifacts/tests/runs/ra-x3-gecko/plain-vs-usual.json`; correctness round 5 (2026-09-19): research/CORRECTNESS-ROUND-5.md, the critic's section 3 and the Gecko owner's exit gate; `.artifacts/tests/runs/cr5-gecko/firefox-no-facts-5bf1104/transitions.json` and `firefox-facts-5bf1104/transitions.json` (the cases that go from history-dependent to pass), `.artifacts/tests/runs/cr5-critic/firefox-no-facts-merged/transitions.json` (the same 74) and `.artifacts/session/cr5-critic/logs/compare-plain-fix.log`",
+      "note": "A prediction holds for the state it was measured in. Text measured before another paragraph's U+FE0E request and laid out after it is 1px per emoji off, with no condition on it when the facts are supplied. The round 4 critic's fresh set held 209 history-dependent Firefox cases (runs/split-word 87, word-spacing-spans 57, span-at-space 33, letter-spacing-spans 32) against 0 on each of the evaluator's three sets from the same generators; in file order 199 of them fail a prediction metric, in reverse 6, and counted, forward widths would be 98.21% instead of 98.97%. The Firefox line is for runs where this state didn't occur. On the tier sets the set was stable on 2026-09-18: the frozen recordings and the evaluation's, hours apart, mark the same 313 cases (314 on widths) in both configurations. The plain predictor's five cases (folded in on 2026-09-19 from the item `gecko/plain-predictor-fallback-state`, which named five of the cases above). In runs of the plain predictor (a paragraph prepared plain, the path an application runs) these five cases' NATIVE widths differ from the usual run's: fallback-font widths in another state, for example 33.5px against 18.5px for one code point of `c-56afde0f3d04b557`. Line ranges are equal, and the reference ledger doesn't mark the five history-dependent, because both orders of the usual run saw one state. They sit together in suite-sample part 2 (cases 1,078 to 1,083 of 5,000), where U+1F600 first meets U+FE0E, the text-presentation request that moves the process's fallback state. 120 cases of that part differ in all; the other 115 are history-dependent in the ledger already (`gecko/process-font-fallback-state`), and they hold all 14 whose line ranges moved with the native lines. The measure-first check moved the same five (with the lab's facts their widths went to `fail covered by page-history`). That browser process has two states: the usual predictor's five runs across X1 and X2 were never in the odd one, the plain predictor's were 3 times out of 5 (the set run again with it gave 0 differences once and the same 120 once). The Gecko owner's reading, which nobody tested: a predictor that asks Canvas less and sooner races Firefox's background character-map loading. A probe of that loading would settle it. Until then a native difference on these five under another predictor is this class. Under the usual predictor they pass every metric and are exact in both configurations. At X3 the plain predictor's Firefox run differed from the usual one in the same 120 cases as at X2, case for case, with the same five unmarked. Correctness round 5 (2026-09-19): two both-orders runs of the round's library, the Gecko owner's and the critic's, agreed natively on 74 cases of `heldout-suite-sample` part 0 without facts, and the owner's run with the lab's facts on 87 (the 74, 12 more on every metric, and `c-6403c221b98778d6` on widths alone: 86 on line count, breaks, the painter and exact values, 87 on widths). Those cases so read as going from history-dependent to pass. A plain predictor run an hour later landed in the other state: 74 native observations and 7 line ranges differ from the usual run in that part, the 74 are exactly the 74 above, and all are history-dependent in the frozen ledger. The critic didn't find what put that browser process in the other state. A pass in one recording isn't stable: the 87 are named here, and they stay this class whatever a recording shows them as. A new reference ledger that marks them as passes loses them from this item's rule, not from its names."
     },
     {
       "id": "gecko/unbounded-frame",
@@ -1129,6 +1564,463 @@
       "cases": [],
       "source": "round 4a Gecko report §3.3 (probe F22; F15 1,013 of 1,015); 6 passing Noto Nastaliq Urdu cases hold a position 1 au off",
       "note": "Testing the sum at 64 times the size would see it, at three more Canvas calls per joined position. Also registered: the suffix-side recipe (F26, 567 of 567, no source reading) and a font's rtla lookups on a lone character at an odd level, neither predicted nor named."
+    },
+    {
+      "id": "gecko/contextual-joined-forms",
+      "engine": "gecko",
+      "kind": "open rows",
+      "title": "Breaks between joined letters in fonts that swap both glyphs when two letters meet: no Canvas string holds the first glyph in the form the word gives it",
+      "conditions": [
+        "in-word-prefix"
+      ],
+      "cases": [
+        {
+          "id": "c-0157134b8bc06975",
+          "browser": "firefox",
+          "where": "main-only list 2026-09-19: a true pass of main that still fails after correctness round 5, no facts and facts"
+        },
+        {
+          "id": "c-0821a95c98d092c4",
+          "browser": "firefox",
+          "where": "main-only list 2026-09-19: a true pass of main that still fails after correctness round 5, no facts and facts; passed at round 2 and lost since"
+        },
+        {
+          "id": "c-088d9c97b85cf39f",
+          "browser": "firefox",
+          "where": "main-only list 2026-09-19: a true pass of main that still fails after correctness round 5, no facts and facts"
+        },
+        {
+          "id": "c-09e179497f2bc9ee",
+          "browser": "firefox",
+          "where": "main-only list 2026-09-19: a true pass of main that still fails after correctness round 5, no facts and facts"
+        },
+        {
+          "id": "c-0d1637d9451ebad4",
+          "browser": "firefox",
+          "where": "main-only list 2026-09-19: a true pass of main that still fails after correctness round 5, no facts and facts"
+        },
+        {
+          "id": "c-19ea0e31766a4fa3",
+          "browser": "firefox",
+          "where": "main-only list 2026-09-19: a true pass of main that still fails after correctness round 5, no facts and facts"
+        },
+        {
+          "id": "c-1e9cfda60bb88001",
+          "browser": "firefox",
+          "where": "main-only list 2026-09-19: a true pass of main that still fails after correctness round 5, no facts and facts"
+        },
+        {
+          "id": "c-1f7ad2b5a1d03817",
+          "browser": "firefox",
+          "where": "main-only list 2026-09-19: a true pass of main that still fails after correctness round 5, no facts and facts; passed at round 2 and lost since"
+        },
+        {
+          "id": "c-20390ef8578f703f",
+          "browser": "firefox",
+          "where": "main-only list 2026-09-19: a true pass of main that still fails after correctness round 5, no facts and facts"
+        },
+        {
+          "id": "c-21f1f9b4e2fa92c5",
+          "browser": "firefox",
+          "where": "main-only list 2026-09-19: a true pass of main that still fails after correctness round 5, no facts and facts"
+        },
+        {
+          "id": "c-22231f80546d959c",
+          "browser": "firefox",
+          "where": "main-only list 2026-09-19: a true pass of main that still fails after correctness round 5, no facts and facts"
+        },
+        {
+          "id": "c-24c5272a1466d83d",
+          "browser": "firefox",
+          "where": "main-only list 2026-09-19: a true pass of main that still fails after correctness round 5, no facts and facts"
+        },
+        {
+          "id": "c-3047f645916b0588",
+          "browser": "firefox",
+          "where": "main-only list 2026-09-19: a true pass of main that still fails after correctness round 5, no facts and facts; passed at round 2 and lost since"
+        },
+        {
+          "id": "c-3237b2e8fc56bdb5",
+          "browser": "firefox",
+          "where": "main-only list 2026-09-19: a true pass of main that still fails after correctness round 5, no facts and facts"
+        },
+        {
+          "id": "c-3384bc9cec4d87f1",
+          "browser": "firefox",
+          "where": "main-only list 2026-09-19: a true pass of main that still fails after correctness round 5, no facts and facts"
+        },
+        {
+          "id": "c-3967f126a1fd94e4",
+          "browser": "firefox",
+          "where": "main-only list 2026-09-19: a true pass of main that still fails after correctness round 5, no facts and facts"
+        },
+        {
+          "id": "c-3a692d5f65bf9d61",
+          "browser": "firefox",
+          "where": "main-only list 2026-09-19: a true pass of main that still fails after correctness round 5, no facts and facts; passed at round 2 and lost since"
+        },
+        {
+          "id": "c-3bb536a8dbd2847a",
+          "browser": "firefox",
+          "where": "main-only list 2026-09-19: a true pass of main that still fails after correctness round 5, no facts and facts"
+        },
+        {
+          "id": "c-3f10bd5d2ab81aa7",
+          "browser": "firefox",
+          "where": "main-only list 2026-09-19: a true pass of main that still fails after correctness round 5, no facts and facts"
+        },
+        {
+          "id": "c-41ce093fd0e368bc",
+          "browser": "firefox",
+          "where": "main-only list 2026-09-19: a true pass of main that still fails after correctness round 5, no facts and facts"
+        },
+        {
+          "id": "c-43b9152e0e34a4b7",
+          "browser": "firefox",
+          "where": "main-only list 2026-09-19: a true pass of main that still fails after correctness round 5, no facts and facts"
+        },
+        {
+          "id": "c-4a58de1dd36b4ece",
+          "browser": "firefox",
+          "where": "main-only list 2026-09-19: a true pass of main that still fails after correctness round 5, no facts and facts; passed at round 2 and lost since"
+        },
+        {
+          "id": "c-4e2eb3330e0edd98",
+          "browser": "firefox",
+          "where": "main-only list 2026-09-19: a true pass of main that still fails after correctness round 5, no facts and facts"
+        },
+        {
+          "id": "c-4fbed4a28f5ba468",
+          "browser": "firefox",
+          "where": "main-only list 2026-09-19: a true pass of main that still fails after correctness round 5, no facts and facts; passed at round 2 and lost since"
+        },
+        {
+          "id": "c-523518798d33d7b6",
+          "browser": "firefox",
+          "where": "main-only list 2026-09-19: a true pass of main that still fails after correctness round 5, no facts and facts"
+        },
+        {
+          "id": "c-55ce42e7fcda99b6",
+          "browser": "firefox",
+          "where": "main-only list 2026-09-19: a true pass of main that still fails after correctness round 5, no facts and facts"
+        },
+        {
+          "id": "c-59d83fd0c4329827",
+          "browser": "firefox",
+          "where": "main-only list 2026-09-19: a true pass of main that still fails after correctness round 5, no facts and facts"
+        },
+        {
+          "id": "c-5c5dfe9a8fff0cb0",
+          "browser": "firefox",
+          "where": "main-only list 2026-09-19: a true pass of main that still fails after correctness round 5, no facts and facts"
+        },
+        {
+          "id": "c-5e8de2a385c39120",
+          "browser": "firefox",
+          "where": "main-only list 2026-09-19: a true pass of main that still fails after correctness round 5, no facts and facts"
+        },
+        {
+          "id": "c-5efc67d0f0fd6a30",
+          "browser": "firefox",
+          "where": "main-only list 2026-09-19: a true pass of main that still fails after correctness round 5, no facts and facts"
+        },
+        {
+          "id": "c-5f5104a9e9f5827e",
+          "browser": "firefox",
+          "where": "main-only list 2026-09-19: a true pass of main that still fails after correctness round 5, no facts and facts"
+        },
+        {
+          "id": "c-62fb7e39b4f5f47b",
+          "browser": "firefox",
+          "where": "main-only list 2026-09-19: a true pass of main that still fails after correctness round 5, no facts and facts; passed at round 2 and lost since"
+        },
+        {
+          "id": "c-6419d02325a4cf78",
+          "browser": "firefox",
+          "where": "main-only list 2026-09-19: a true pass of main that still fails after correctness round 5, no facts and facts"
+        },
+        {
+          "id": "c-664167f7d0a710c5",
+          "browser": "firefox",
+          "where": "main-only list 2026-09-19: a true pass of main that still fails after correctness round 5, no facts and facts; passed at round 2 and lost since"
+        },
+        {
+          "id": "c-6706fe80d1b920b1",
+          "browser": "firefox",
+          "where": "main-only list 2026-09-19: a true pass of main that still fails after correctness round 5, no facts and facts"
+        },
+        {
+          "id": "c-6ca89dfda0642c46",
+          "browser": "firefox",
+          "where": "main-only list 2026-09-19: a true pass of main that still fails after correctness round 5, no facts and facts"
+        },
+        {
+          "id": "c-6f8a71c8f0804502",
+          "browser": "firefox",
+          "where": "main-only list 2026-09-19: a true pass of main that still fails after correctness round 5, no facts and facts"
+        },
+        {
+          "id": "c-71e3f74b0fd5ee0d",
+          "browser": "firefox",
+          "where": "main-only list 2026-09-19: a true pass of main that still fails after correctness round 5, no facts and facts"
+        },
+        {
+          "id": "c-7b3f8537e0fea1e0",
+          "browser": "firefox",
+          "where": "main-only list 2026-09-19: a true pass of main that still fails after correctness round 5, no facts and facts"
+        },
+        {
+          "id": "c-7cb7a34a59aff0f4",
+          "browser": "firefox",
+          "where": "main-only list 2026-09-19: a true pass of main that still fails after correctness round 5, no facts and facts"
+        },
+        {
+          "id": "c-7f28ec1eb441ac7e",
+          "browser": "firefox",
+          "where": "main-only list 2026-09-19: a true pass of main that still fails after correctness round 5, no facts and facts"
+        },
+        {
+          "id": "c-847f80f095b19440",
+          "browser": "firefox",
+          "where": "main-only list 2026-09-19: a true pass of main that still fails after correctness round 5, no facts and facts"
+        },
+        {
+          "id": "c-8c9966441fa4e72b",
+          "browser": "firefox",
+          "where": "main-only list 2026-09-19: a true pass of main that still fails after correctness round 5, no facts and facts"
+        },
+        {
+          "id": "c-8daed6214d922fe7",
+          "browser": "firefox",
+          "where": "main-only list 2026-09-19: a true pass of main that still fails after correctness round 5, no facts and facts"
+        },
+        {
+          "id": "c-8ed7c0ed93b9e9c2",
+          "browser": "firefox",
+          "where": "main-only list 2026-09-19: a true pass of main that still fails after correctness round 5, no facts and facts"
+        },
+        {
+          "id": "c-901e9fc103892499",
+          "browser": "firefox",
+          "where": "main-only list 2026-09-19: a true pass of main that still fails after correctness round 5, no facts and facts"
+        },
+        {
+          "id": "c-922db4e75368a2d1",
+          "browser": "firefox",
+          "where": "main-only list 2026-09-19: a true pass of main that still fails after correctness round 5, no facts and facts"
+        },
+        {
+          "id": "c-9aedd3bca74966a5",
+          "browser": "firefox",
+          "where": "main-only list 2026-09-19: a true pass of main that still fails after correctness round 5, no facts and facts"
+        },
+        {
+          "id": "c-a16839416ec7862e",
+          "browser": "firefox",
+          "where": "main-only list 2026-09-19: a true pass of main that still fails after correctness round 5, no facts and facts"
+        },
+        {
+          "id": "c-a320c95a0e0edb45",
+          "browser": "firefox",
+          "where": "main-only list 2026-09-19: a true pass of main that still fails after correctness round 5, no facts and facts"
+        },
+        {
+          "id": "c-ab16dae3c657e37c",
+          "browser": "firefox",
+          "where": "main-only list 2026-09-19: a true pass of main that still fails after correctness round 5, no facts and facts"
+        },
+        {
+          "id": "c-aba55288cac9a91d",
+          "browser": "firefox",
+          "where": "main-only list 2026-09-19: a true pass of main that still fails after correctness round 5, no facts and facts"
+        },
+        {
+          "id": "c-b0d45f7319745a62",
+          "browser": "firefox",
+          "where": "main-only list 2026-09-19: a true pass of main that still fails after correctness round 5, no facts and facts"
+        },
+        {
+          "id": "c-b77290c1e1587e7f",
+          "browser": "firefox",
+          "where": "main-only list 2026-09-19: a true pass of main that still fails after correctness round 5, no facts and facts"
+        },
+        {
+          "id": "c-bb5368db1d71eca2",
+          "browser": "firefox",
+          "where": "main-only list 2026-09-19: a true pass of main that still fails after correctness round 5, no facts and facts"
+        },
+        {
+          "id": "c-bc6e489b86b601fb",
+          "browser": "firefox",
+          "where": "main-only list 2026-09-19: a true pass of main that still fails after correctness round 5, no facts and facts"
+        },
+        {
+          "id": "c-bfe0c71903ae2d01",
+          "browser": "firefox",
+          "where": "main-only list 2026-09-19: a true pass of main that still fails after correctness round 5, no facts and facts"
+        },
+        {
+          "id": "c-c2ba2a05b119e346",
+          "browser": "firefox",
+          "where": "main-only list 2026-09-19: a true pass of main that still fails after correctness round 5, no facts and facts"
+        },
+        {
+          "id": "c-c5299a466db0bdd4",
+          "browser": "firefox",
+          "where": "main-only list 2026-09-19: a true pass of main that still fails after correctness round 5, no facts and facts"
+        },
+        {
+          "id": "c-c883b4a69fc224c2",
+          "browser": "firefox",
+          "where": "main-only list 2026-09-19: a true pass of main that still fails after correctness round 5, no facts and facts"
+        },
+        {
+          "id": "c-c91570852c5566c8",
+          "browser": "firefox",
+          "where": "main-only list 2026-09-19: a true pass of main that still fails after correctness round 5, no facts and facts"
+        },
+        {
+          "id": "c-d21fcd285745db5a",
+          "browser": "firefox",
+          "where": "main-only list 2026-09-19: a true pass of main that still fails after correctness round 5, no facts and facts"
+        },
+        {
+          "id": "c-d40daf64707981af",
+          "browser": "firefox",
+          "where": "main-only list 2026-09-19: a true pass of main that still fails after correctness round 5, no facts and facts"
+        },
+        {
+          "id": "c-e0928e2dafa79721",
+          "browser": "firefox",
+          "where": "main-only list 2026-09-19: a true pass of main that still fails after correctness round 5, no facts and facts"
+        },
+        {
+          "id": "c-e25a8ef149763205",
+          "browser": "firefox",
+          "where": "main-only list 2026-09-19: a true pass of main that still fails after correctness round 5, no facts and facts"
+        },
+        {
+          "id": "c-e5f58c3bad426cbc",
+          "browser": "firefox",
+          "where": "main-only list 2026-09-19: a true pass of main that still fails after correctness round 5, no facts and facts"
+        },
+        {
+          "id": "c-e998e30962038e86",
+          "browser": "firefox",
+          "where": "main-only list 2026-09-19: a true pass of main that still fails after correctness round 5, no facts and facts"
+        },
+        {
+          "id": "c-e9e93d4745670bf0",
+          "browser": "firefox",
+          "where": "main-only list 2026-09-19: a true pass of main that still fails after correctness round 5, no facts and facts"
+        },
+        {
+          "id": "c-ecce9c218d3a8fee",
+          "browser": "firefox",
+          "where": "main-only list 2026-09-19: a true pass of main that still fails after correctness round 5, no facts and facts"
+        },
+        {
+          "id": "c-f22bebf8a53b2c7a",
+          "browser": "firefox",
+          "where": "main-only list 2026-09-19: a true pass of main that still fails after correctness round 5, no facts and facts"
+        },
+        {
+          "id": "c-f3775193bad90e6f",
+          "browser": "firefox",
+          "where": "main-only list 2026-09-19: a true pass of main that still fails after correctness round 5, no facts and facts"
+        },
+        {
+          "id": "c-f961bebcbf4ba0ad",
+          "browser": "firefox",
+          "where": "main-only list 2026-09-19: a true pass of main that still fails after correctness round 5, no facts and facts"
+        },
+        {
+          "id": "c-37b142b65e538e15",
+          "browser": "firefox",
+          "where": "main-only list 2026-09-19: passed at round 2 and lost since (186d45e); an accidental pass of main; fails after correctness round 5, no facts and facts"
+        },
+        {
+          "id": "c-56b5382ab1dded5e",
+          "browser": "firefox",
+          "where": "main-only list 2026-09-19: passed at round 2 and lost since (186d45e); an accidental pass of main; fails after correctness round 5, no facts and facts"
+        },
+        {
+          "id": "c-b88db063d9fdf4a0",
+          "browser": "firefox",
+          "where": "main-only list 2026-09-19: passed at round 2 and lost since (186d45e); an accidental pass of main; fails after correctness round 5, no facts and facts"
+        },
+        {
+          "id": "c-d1e2e85729a4a54e",
+          "browser": "firefox",
+          "where": "main-only list 2026-09-19: passed at round 2 and lost since (186d45e); an accidental pass of main; fails after correctness round 5, no facts and facts"
+        },
+        {
+          "id": "c-e1d4719f3eb2b6cb",
+          "browser": "firefox",
+          "where": "main-only list 2026-09-19: passed at round 2 and lost since (186d45e); an accidental pass of main; fails after correctness round 5, no facts and facts"
+        },
+        {
+          "id": "c-e2d6bdc61a0257f5",
+          "browser": "firefox",
+          "where": "main-only list 2026-09-19: passed at round 2 and lost since (186d45e); an accidental pass of main; fails after correctness round 5, no facts and facts"
+        }
+      ],
+      "source": "research/CORRECTNESS-ROUND-5.md, Gecko; specs/gecko-RESULTS.md, correctness round 5; research/MAIN-FACTS-ANALYSIS.md (Firefox, the Amiri rows and \"The 14 lost cases\"); `.artifacts/session/cr5-gecko-20260919/list-5bf1104` (the list's runs at the round's library) with `.artifacts/session/main-check-20260919/facts-firefox/firefox-main-check.json` (main's true passes) and `since-round2-facts.json` (the 14)",
+      "note": "Amiri, Noto Nastaliq Urdu and Noto Naskh Arabic swap both glyphs when two letters meet (two beh in 16px Amiri are 237 + 741 au, and 182 + 848 with U+200D between), and Canvas gives totals only, so every such advance is a stand-in under `in-word-prefix`. Named: the 72 true passes of main on Firefox's main-only list that still fail with the lab's facts after correctness round 5 (59 Amiri, 5 Arial, 4 Noto Nastaliq Urdu, 4 Courier New), and the 14 cases lost since round 2, of which 8 are among the 72 (78 cases). Main's and round 2's passes on them were coincidences of width: round 2's per-letter advances were about 100 au off and only each lam-alef pair's 616 au sum was right, so 186d45e isn't reverted. Of all 115 list cases that still fail with the lab's facts, 91 are Amiri, 9 Arial, 7 Noto Nastaliq Urdu, 4 Noto Naskh Arabic and 4 Courier New. Reopens with per-glyph advances from Canvas."
+    },
+    {
+      "id": "gecko/pair-placement-one-way-per-face",
+      "engine": "gecko",
+      "kind": "heuristic",
+      "title": "Pair placement asked of Canvas rests on one assumption about fonts: a face places all its Latin pairs one way",
+      "conditions": [],
+      "cases": [],
+      "source": "research/CORRECTNESS-ROUND-5.md, Gecko; specs/gecko-RESULTS.md, correctness round 5; the critic's sections 5 and 6; hb-ot-shape.cc:131-187; engines/gecko/advance.ts askedPlacement; registry rule `gecko/measure/probe-pairs-per-context`",
+      "note": "What a probe pair shows is taken to hold for the face's other Latin pairs. The source guarantees it between GPOS and the kern machine, which HarfBuzz chooses once per face, script and language. It doesn't for a kerx table that holds pair and state machine subtables, nor for a GPOS second value record. A wrong verdict there carries no gap. No failing case: none of 1,008 installed faces does otherwise (the main-facts critic's offline study), and the round's critic's held-out probe has 1,781 of 1,782 told lines equal to the DOM, the other in the registered 1 au class. One Mac, DPR 2, pinned Firefox 156.0; DPR 1, another OS and the pref `gfx.font_rendering.coretext.enabled` are unchecked. Reopens on a face with kerx pair and state machine subtables for Latin pairs, or with a GPOS second value record."
+    },
+    {
+      "id": "gecko/pair-same-face-refused",
+      "engine": "gecko",
+      "kind": "convertible class",
+      "title": "Kerned pairs that nothing proves the probe letters' face draws keep their stand-in: digits and `f` in Times New Roman",
+      "conditions": [
+        "in-word-prefix",
+        "optical-size"
+      ],
+      "cases": [
+        {
+          "id": "c-4755c34b21a20b6c",
+          "browser": "firefox",
+          "where": "main-only list 2026-09-19: a true pass of main; fails without facts after correctness round 5 under in-word-prefix+optical-size, passes with the lab's facts"
+        },
+        {
+          "id": "c-6a7f8a3ce93d8a35",
+          "browser": "firefox",
+          "where": "main-only list 2026-09-19: a true pass of main; fails without facts after correctness round 5 under in-word-prefix+optical-size, passes with the lab's facts"
+        },
+        {
+          "id": "c-cb1f1b7d6a0fbb2c",
+          "browser": "firefox",
+          "where": "main-only list 2026-09-19: a true pass of main; fails without facts after correctness round 5 under in-word-prefix+optical-size, passes with the lab's facts"
+        },
+        {
+          "id": "c-97e97f7ed7c46bc7",
+          "browser": "firefox",
+          "where": "main-only list 2026-09-19: a true pass of main; fails without facts after correctness round 5 under in-word-prefix+optical-size, passes with the lab's facts"
+        }
+      ],
+      "source": "research/CORRECTNESS-ROUND-5.md, Gecko; specs/gecko-RESULTS.md, correctness round 5; probe gecko-mainfacts M5; engines/gecko/advance.ts sameFace; `.artifacts/session/cr5-gecko-20260919/list-5bf1104`",
+      "note": "`1111({tail`, and `waffles` under letter spacing three times, all in Times New Roman. Digits and `f` kern with none of the probe letters, so nothing shows that the face the probe pairs told about draws them, and the pair keeps the default placement and its gap. This is the price of the guard: probe M5 has two faces under one declaration placing their pairs two ways. Converts with a longer same-face proof (a bridge through more letters, or more probe letters), which costs questions on every refused cluster."
+    },
+    {
+      "id": "gecko/nbsp-first-family-apple-color-emoji",
+      "engine": "gecko",
+      "kind": "open rows",
+      "title": "A boundary U+00A0 under a font list whose first family is Apple Color Emoji: the DOM takes the glyph's device-size advance",
+      "conditions": [],
+      "cases": [],
+      "source": "research/CORRECTNESS-ROUND-5.md, Gecko; specs/gecko-RESULTS.md, correctness round 5; probe gecko-mainfacts M4 (3 of 249 styles); engines/gecko/prepare.ts",
+      "note": "The DOM's U+00A0 is 960 au at 16px there and Canvas's 1260. Until correctness round 5 the port measured U+0020 in its place, which was right there by accident; since the round it measures U+00A0 itself, which is right in 228 of 249 probed styles and not there. No tier case has it: 0 of the 1,574 cases with U+00A0. Handling it would add a context and two questions to every text run with a boundary U+00A0."
     },
     {
       "id": "webkit/page-history",
@@ -1603,6 +2495,106 @@
           "id": "c-d4d086222e0c0d69",
           "browser": "webkit-host",
           "where": "critic-r4-1: fails in both orders under page-history, passes every metric alone in a fresh process"
+        },
+        {
+          "id": "c-18d8eb5618d3e354",
+          "browser": "webkit-host",
+          "where": "main-only list 2026-09-19: fails in the list's long document, passes alone"
+        },
+        {
+          "id": "c-48a66a2462f6f748",
+          "browser": "webkit-host",
+          "where": "main-only list 2026-09-19: fails in the list's long document, passes alone"
+        },
+        {
+          "id": "c-49feb03a06bd4b90",
+          "browser": "webkit-host",
+          "where": "main-only list 2026-09-19: fails in the list's long document, passes alone"
+        },
+        {
+          "id": "c-4bb3746469073e4d",
+          "browser": "webkit-host",
+          "where": "main-only list 2026-09-19: fails in the list's long document, passes alone"
+        },
+        {
+          "id": "c-4e3711b398474ca8",
+          "browser": "webkit-host",
+          "where": "main-only list 2026-09-19: fails in the list's long document, passes alone"
+        },
+        {
+          "id": "c-79a3f3d4cd1d6e51",
+          "browser": "webkit-host",
+          "where": "main-only list 2026-09-19: fails in the list's long document, passes alone"
+        },
+        {
+          "id": "c-7fcab2c1e2e0c85a",
+          "browser": "webkit-host",
+          "where": "main-only list 2026-09-19: fails in the list's long document, passes alone; history-dependent in heldout-suite-sample"
+        },
+        {
+          "id": "c-819d869118158055",
+          "browser": "webkit-host",
+          "where": "main-only list 2026-09-19: fails in the list's long document, passes alone"
+        },
+        {
+          "id": "c-90c2ca856ed4ab91",
+          "browser": "webkit-host",
+          "where": "main-only list 2026-09-19: fails in the list's long document, passes alone"
+        },
+        {
+          "id": "c-98a9a84d655a4004",
+          "browser": "webkit-host",
+          "where": "main-only list 2026-09-19: fails in the list's long document, passes alone"
+        },
+        {
+          "id": "c-c6860b6a536bcf2e",
+          "browser": "webkit-host",
+          "where": "main-only list 2026-09-19: fails in the list's long document, passes alone"
+        },
+        {
+          "id": "c-cbe822191931c1e8",
+          "browser": "webkit-host",
+          "where": "main-only list 2026-09-19: fails in the list's long document, passes alone"
+        },
+        {
+          "id": "c-d5ba2f35608f3625",
+          "browser": "webkit-host",
+          "where": "main-only list 2026-09-19: fails in the list's long document, passes alone"
+        },
+        {
+          "id": "c-da5b8181a781b719",
+          "browser": "webkit-host",
+          "where": "main-only list 2026-09-19: fails in the list's long document, passes alone"
+        },
+        {
+          "id": "c-dde68f266727e5a1",
+          "browser": "webkit-host",
+          "where": "main-only list 2026-09-19: fails in the list's long document, passes alone"
+        },
+        {
+          "id": "c-ea243dabb9a70fe7",
+          "browser": "webkit-host",
+          "where": "main-only list 2026-09-19: fails in the list's long document, passes alone"
+        },
+        {
+          "id": "c-fea179ce2e53f51c",
+          "browser": "webkit-host",
+          "where": "main-only list 2026-09-19: fails in the list's long document, passes alone"
+        },
+        {
+          "id": "c-488164097fe13598",
+          "browser": "webkit-host",
+          "where": "main-only list 2026-09-19: fails in the list's long document, passes alone"
+        },
+        {
+          "id": "c-d9c7e404099e811a",
+          "browser": "webkit-host",
+          "where": "main-only list 2026-09-19: fails in the list's long document, passes alone"
+        },
+        {
+          "id": "c-8e77080979efd918",
+          "browser": "webkit-host",
+          "where": "main-only list 2026-09-19: fails in the list's long document, passes alone"
         }
       ],
       "match": {
@@ -1614,8 +2606,8 @@
           "page-history"
         ]
       },
-      "source": "specs/webkit-RESULTS.md; round 4a WebKit report items 1 and 4 (400 cases isolated, all pass lineCount and breaks alone; 250 of 374 fresh failures); research/ROUND4-CRITIC.md §2 and \"Known tail\" 5 (.artifacts/ceiling-20260917/critic-r4/isolate)",
-      "note": "History worlds vary one box at a time, a declared approximation that isolation didn't contradict; products of worlds aren't laid out. A one-order fresh set overstates WebKit failures threefold. rule/br-elements fails 20 line counts and 32 breaks under it. The round 4 critic isolated all 90 fresh cases whose failure page-history touches: 82 pass every metric alone in a fresh process and fail the same way in both orders, so the two-order rule doesn't mark them, which is why webkit-host's line counts and breaks move about 0.1 point between fresh sets; the other 8 (rule/controls, `c-1143d3b9677ac5c7`) fail widths alone and also sit under control-character-width, their cause. rich-prewrap/trailing-spaces holds 48 of the 82."
+      "source": "specs/webkit-RESULTS.md; round 4a WebKit report items 1 and 4 (400 cases isolated, all pass lineCount and breaks alone; 250 of 374 fresh failures); research/ROUND4-CRITIC.md §2 and \"Known tail\" 5 (.artifacts/ceiling-20260917/critic-r4/isolate); research/MAIN-FACTS-ANALYSIS.md, WebKit groups 2 and 3; research/MAIN-PASSES-REFRESH.md, \"After correctness round 5\"; `.artifacts/session/main-facts-20260919/webkit/group2.ids` and `group2-alone`, `.artifacts/session/cr5-webkit/group2-alone-head`",
+      "note": "History worlds vary one box at a time, a declared approximation that isolation didn't contradict; products of worlds aren't laid out. A one-order fresh set overstates WebKit failures threefold. rule/br-elements fails 20 line counts and 32 breaks under it. The round 4 critic isolated all 90 fresh cases whose failure page-history touches: 82 pass every metric alone in a fresh process and fail the same way in both orders, so the two-order rule doesn't mark them, which is why webkit-host's line counts and breaks move about 0.1 point between fresh sets; the other 8 (rule/controls, `c-1143d3b9677ac5c7`) fail widths alone and also sit under control-character-width, their cause. rich-prewrap/trailing-spaces holds 48 of the 82. The main-passes study (research/MAIN-FACTS-ANALYSIS.md, 2026-09-19) found 21 cases of webkit-host's main-only list in this class: the same text under the other direction comes earlier in the list's run of 2,056 cases, and the break cache's key has no direction and no font (TextBreakingPositionCache.h:37-52, TextBreakingPositionContext.h:61-80). Run together in one fresh process, 21 of 21 pass line count, breaks and widths, at the study's library and again at correctness round 5's. 12 of them are true passes of main and 9 accidental ones; 20 are named here since the round, and `c-66ae4ab7d56cb0ae` was named already."
     },
     {
       "id": "webkit/history-dependent-cases",
@@ -1674,8 +2666,8 @@
           "letter-spacing-ligatures"
         ]
       },
-      "source": "research/ROUND3-EVALUATION.md (84 fresh failures)",
-      "note": "Not traced further in round 4."
+      "source": "research/ROUND3-EVALUATION.md (84 fresh failures); research/MAIN-FACTS-ANALYSIS.md; research/CORRECTNESS-ROUND-5.md, WebKit",
+      "note": "Not traced further in round 4. Traced on 2026-09-19 (research/MAIN-FACTS-ANALYSIS.md; DESIGN.md §5): what the recipe leaves is the pair kerning between two letters with liga, clig, dlig and hlig off, which no Canvas string gives, because Canvas `letterSpacing` keeps the ligatures CSS turns off (rebuild/platform-bugs entry 6). 233 of main's true passes fail for that alone. A features-off family the application declares would make them exact; it is not built. Correctness round 5 made the measured string's own code path decide where pairs are separated (21 list cases pass, 11 of them true passes of main); a second prototype that separates Latin pairs inside complex-path strings (7 more) stays unmerged, 1.9px off in a probe."
     },
     {
       "id": "webkit/control-character-float-steps",
