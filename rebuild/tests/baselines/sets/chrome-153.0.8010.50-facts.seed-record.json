@@ -1,12 +1,12 @@
 {
-  "staged": ".artifacts/tests/staged-seeds-storage-20260918/facts/chrome-153.0.8010.50-facts.json",
+  "staged": ".artifacts/tests/staged-seeds-cr5-20260919/chrome-facts/chrome-153.0.8010.50-facts.json",
   "against": "rebuild/tests/baselines/sets/chrome-153.0.8010.50-facts.json",
   "counts": {
     "cases": 66244,
     "passPairs": {
-      "lineCount": 65964,
-      "breaks": 65926,
-      "widths": 62756,
+      "lineCount": 65965,
+      "breaks": 65927,
+      "widths": 62757,
       "painter": 59788
     },
     "historyDependentCases": 0,
@@ -18,7 +18,20 @@
   "leftThroughHistory": [],
   "leftThroughProtocol": [],
   "leftWithTheirCase": [],
-  "gained": [],
+  "gained": [
+    [
+      "c-bff5270008f33766",
+      "lineCount"
+    ],
+    [
+      "c-bff5270008f33766",
+      "breaks"
+    ],
+    [
+      "c-bff5270008f33766",
+      "widths"
+    ]
+  ],
   "casesOnlyBefore": 0,
-  "casesOnlyAfter": 380
+  "casesOnlyAfter": 0
 }
