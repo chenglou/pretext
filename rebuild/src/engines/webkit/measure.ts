@@ -1,7 +1,7 @@
 // WebKit widths from Canvas totals: TextUtil::width with the following-space rule, singleSpaceWidth, the hyphen, tab
 // stops, word spacing, the fixed-pitch shortcut, breakWord's probe sequence and firstUserPerceivedCharacterLength
 // (specs/webkit-lines.md §3.3, §8.1; specs/webkit-canvas.md §(e); specs/webkit-gaps.md §2, §5). Every width is float32.
-import { measureText, type Measurer } from '../../measure/canvas.js'
+import { width as canvasWidth, type Context } from '../../measure/canvas.js'
 import { graphemeBoundaries } from '../../unicode/grapheme.js'
 import { webkitGraphemeRules } from './data.js'
 import { collapsesWhiteSpace, preservesSpacesAndTabs, tabsAllowed } from './style.js'
@@ -47,12 +47,12 @@ export function canvasString(text: string): string {
 // bound takes twice the string's length.
 const LETTER_SPACING_PROBE = 64
 
-function spacedGlyphCount(m: Measurer, box: WebKitBox, s: string): number {
-  return Math.round((measureText(m, box.countContext, s) - measureText(m, box.plainContext, s)) / LETTER_SPACING_PROBE)
+function spacedGlyphCount(box: WebKitBox, s: string): number {
+  return Math.round((canvasWidth(box.countContext, s) - canvasWidth(box.plainContext, s)) / LETTER_SPACING_PROBE)
 }
 
-function glyphCountIsExact(m: Measurer, box: WebKitBox, s: string): boolean {
-  const total = measureText(m, box.countContext, s)
+function glyphCountIsExact(box: WebKitBox, s: string): boolean {
+  const total = canvasWidth(box.countContext, s)
   return !(total > 0) || 3 * 2 * s.length * 2 ** (Math.floor(Math.log2(total)) - 23) < LETTER_SPACING_PROBE / 2
 }
 
@@ -106,29 +106,29 @@ function inRanges(ranges: readonly number[], cp: number): boolean {
   return false
 }
 
-export function mergedGlyphs(m: Measurer, box: WebKitBox, text: string): MergedGlyphs {
+export function mergedGlyphs(box: WebKitBox, text: string): MergedGlyphs {
   if (box.letterSpacing === 0 || text.length < 2) return NOTHING_MERGED
   if (spacingCanChangeShaping(box, text) === false) return NOTHING_MERGED
   const s = canvasString(text)
-  if (!glyphCountIsExact(m, box, s)) return { merged: true, pairs: [], separated: null, counted: false }
+  if (!glyphCountIsExact(box, s)) return { merged: true, pairs: [], separated: null, counted: false }
   const starts = graphemeBoundaries(s, webkitGraphemeRules)
   const counts: number[] = []
   let alone = 0
   for (let k = 0; k + 1 < starts.length; k++) {
-    const count = spacedGlyphCount(m, box, s.slice(starts[k]!, starts[k + 1]!))
+    const count = spacedGlyphCount(box, s.slice(starts[k]!, starts[k + 1]!))
     counts.push(count)
     alone += count
   }
-  if (spacedGlyphCount(m, box, s) >= alone) return NOTHING_MERGED
+  if (spacedGlyphCount(box, s) >= alone) return NOTHING_MERGED
   const pairs: Array<[number, number]> = []
   let separated = ''
   for (let k = 0; k + 1 < counts.length; k++) {
-    const isMerged = spacedGlyphCount(m, box, s.slice(starts[k]!, starts[k + 2]!)) < counts[k]! + counts[k + 1]!
+    const isMerged = spacedGlyphCount(box, s.slice(starts[k]!, starts[k + 2]!)) < counts[k]! + counts[k + 1]!
     if (isMerged) pairs.push([starts[k]!, starts[k + 2]!])
     separated += s.slice(starts[k]!, starts[k + 1]!) + (isMerged ? '\u200c' : '')
   }
   separated += s.slice(starts[counts.length - 1]!)
-  if (!box.simpleFontCodePath || pairs.length === 0 || spacedGlyphCount(m, box, separated) < alone) return { merged: true, pairs, separated: null, counted: true }
+  if (!box.simpleFontCodePath || pairs.length === 0 || spacedGlyphCount(box, separated) < alone) return { merged: true, pairs, separated: null, counted: true }
   return { merged: true, pairs, separated, counted: true }
 }
 
@@ -157,42 +157,42 @@ export function isPiecedControl(c: number): boolean {
 }
 
 // Whether Canvas shows a pair adjustment around the control at `index` of `text`.
-export function controlIsAdjusted(m: Measurer, context: number, text: string, index: number): boolean {
+export function controlIsAdjusted(context: Context, text: string, index: number): boolean {
   const before = index > 0 && !isPiecedControl(text.charCodeAt(index - 1)) ? text[index - 1]! : ''
   const after = index + 1 < text.length && !isPiecedControl(text.charCodeAt(index + 1)) ? text[index + 1]! : ''
   const standIn = text.charCodeAt(index) === 0x0d ? String.fromCharCode(0) : String.fromCharCode(1)
-  const space = measureText(m, context, ' ')
-  if (before !== '' && measureText(m, context, `${before} `) !== f32(measureText(m, context, before) + space)) return true
-  if (before !== '' && after !== '' && measureText(m, context, before + standIn + after) !== f32(f32(measureText(m, context, before) + measureText(m, context, standIn)) + measureText(m, context, after))) return true
+  const space = canvasWidth(context, ' ')
+  if (before !== '' && canvasWidth(context, `${before} `) !== f32(canvasWidth(context, before) + space)) return true
+  if (before !== '' && after !== '' && canvasWidth(context, before + standIn + after) !== f32(f32(canvasWidth(context, before) + canvasWidth(context, standIn)) + canvasWidth(context, after))) return true
   return false
 }
 
 // The Canvas width of a range the DOM measures: in a letter-spaced box the separated string where Canvas shows merged pairs,
 // and VT, FF and CR by the stand-in or the pieces above.
-function measureDomString(m: Measurer, box: WebKitBox, context: number, text: string): number {
-  const separated = mergedGlyphs(m, box, text).separated
+function measureDomString(box: WebKitBox, context: Context, text: string): number {
+  const separated = mergedGlyphs(box, text).separated
   const s = separated === null ? text : separated
   let pieced = false
-  for (let i = 0; i < s.length && !pieced; i++) pieced = isPiecedControl(s.charCodeAt(i)) && controlIsAdjusted(m, context, s, i)
-  if (!pieced) return measureText(m, context, canvasString(s))
-  const space = measureText(m, context, ' ')
+  for (let i = 0; i < s.length && !pieced; i++) pieced = isPiecedControl(s.charCodeAt(i)) && controlIsAdjusted(context, s, i)
+  if (!pieced) return canvasWidth(context, canvasString(s))
+  const space = canvasWidth(context, ' ')
   let width = 0
   let segmentStart = 0
   for (let i = 0; i <= s.length; i++) {
     if (i < s.length && !isPiecedControl(s.charCodeAt(i))) continue
     const segment = canvasString(s.slice(segmentStart, i))
     if (i === s.length) {
-      if (segment !== '') width = f32(width + measureText(m, context, segment))
+      if (segment !== '') width = f32(width + canvasWidth(context, segment))
       break
     }
     // The text before the control, shaped before a space: its own total where Canvas shows no adjustment between its last
     // letter and a space (exact), else the total with the space less the space.
     if (segment !== '') {
       const last = segment[segment.length - 1]!
-      const adjusted = measureText(m, context, `${last} `) !== f32(measureText(m, context, last) + space)
-      width = f32(width + (adjusted ? f32(measureText(m, context, `${segment} `) - space) : measureText(m, context, segment)))
+      const adjusted = canvasWidth(context, `${last} `) !== f32(canvasWidth(context, last) + space)
+      width = f32(width + (adjusted ? f32(canvasWidth(context, `${segment} `) - space) : canvasWidth(context, segment)))
     }
-    if (s.charCodeAt(i) !== 0x0d) width = f32(width + measureText(m, context, String.fromCharCode(1)))
+    if (s.charCodeAt(i) !== 0x0d) width = f32(width + canvasWidth(context, String.fromCharCode(1)))
     segmentStart = i + 1
   }
   return width
@@ -200,13 +200,13 @@ function measureDomString(m: Measurer, box: WebKitBox, context: number, text: st
 
 // TextUtil::singleSpaceWidth (TextUtil.cpp:54-60): widthOfSpaceString, a TextRun of one space, which gets letter spacing
 // and no word spacing (index 0), or the primary font's space advance on the simplified path, which has no spacing.
-export function singleSpaceWidth(m: Measurer, box: WebKitBox): number {
-  return measureText(m, box.context, ' ')
+export function singleSpaceWidth(box: WebKitBox): number {
+  return canvasWidth(box.context, ' ')
 }
 
 // TextUtil::hyphenWidth (TextUtil.cpp:621-624): the hyphen string measured through the cascade.
-export function hyphenWidth(m: Measurer, box: WebKitBox): number {
-  return Math.max(0, measureText(m, box.context, box.hyphen))
+export function hyphenWidth(box: WebKitBox): number {
+  return Math.max(0, canvasWidth(box.context, box.hyphen))
 }
 
 // FontCascade::tabWidth (FontCascadeInlines.h:76-94) with a tab-size of spaces (TabSize.h:52-55): the stop counts from
@@ -247,16 +247,16 @@ function addWordSpacing(box: WebKitBox, from: number, to: number, width: number)
 // WidthIterator's own float32 order; with spacing the additions interleave with the spacing's, and the text between TABs is
 // summed piece by piece. The pen position before a TAB is a Canvas prefix total, where WidthIterator adds advances per
 // character from xPos (gap tab-stops).
-function tabbedWidth(_p: WebKitPrepared, m: Measurer, box: WebKitBox, from: number, to: number, left: number): number {
+function tabbedWidth(box: WebKitBox, from: number, to: number, left: number): number {
   const text = box.text
-  const spaceWidth = measureText(m, box.plainContext, ' ')
+  const spaceWidth = canvasWidth(box.plainContext, ' ')
   const tabAddition = (position: number): number => f32(tabWidth(box, spaceWidth, position) - spaceWidth)
   if (box.letterSpacing === 0 && box.wordSpacing === 0) {
-    let width = measureDomString(m, box, box.context, text.slice(from, to))
+    let width = measureDomString(box, box.context, text.slice(from, to))
     let added = 0
     for (let i = from; i < to; i++) {
       if (text.charCodeAt(i) !== 0x09) continue
-      const before = i > from ? measureDomString(m, box, box.context, text.slice(from, i)) : 0
+      const before = i > from ? measureDomString(box, box.context, text.slice(from, i)) : 0
       const addition = tabAddition(f32(left + f32(before + added)))
       added = f32(added + addition)
       width = f32(width + addition)
@@ -267,7 +267,7 @@ function tabbedWidth(_p: WebKitPrepared, m: Measurer, box: WebKitBox, from: numb
   let segmentStart = from
   for (let i = from; i <= to; i++) {
     if (i < to && text.charCodeAt(i) !== 0x09) continue
-    if (i > segmentStart) width = f32(width + measureDomString(m, box, box.context, text.slice(segmentStart, i)))
+    if (i > segmentStart) width = f32(width + measureDomString(box, box.context, text.slice(segmentStart, i)))
     if (i < to) {
       let addition = tabAddition(f32(left + width))
       if (box.letterSpacing !== 0) addition = f32(addition + box.letterSpacing)
@@ -279,8 +279,8 @@ function tabbedWidth(_p: WebKitPrepared, m: Measurer, box: WebKitBox, from: numb
 }
 
 // FontCascade::widthForSimpleTextWithFixedPitch (FontCascade.cpp:414-442).
-export function fixedPitchWidth(_p: WebKitPrepared, m: Measurer, box: WebKitBox, from: number, to: number): number {
-  const spaceWidth = measureText(m, box.plainContext, ' ')
+export function fixedPitchWidth(box: WebKitBox, from: number, to: number): number {
+  const spaceWidth = canvasWidth(box.plainContext, ' ')
   if (collapsesWhiteSpace(box.style)) return f32((to - from) * spaceWidth)
   let width = 0
   for (let i = from; i < to; i++) {
@@ -305,34 +305,34 @@ export function measuredEnd(box: WebKitBox, to: number, trailingSpace: boolean):
 
 // TextUtil::width over a box range (TextUtil.cpp:62-104). With `trailingSpace` a range followed by U+0020 in the same box is
 // measured with that space, then the space and word spacing are subtracted.
-export function boxWidth(p: WebKitPrepared, m: Measurer, box: WebKitBox, from: number, to: number, left: number, trailingSpace: boolean, fixedPitchShortcut = true): number {
+export function boxWidth(box: WebKitBox, from: number, to: number, left: number, trailingSpace: boolean, fixedPitchShortcut = true): number {
   if (from === to) return 0
   const end = measuredEnd(box, to, trailingSpace)
   let width: number
   if (fixedPitchShortcut && box.simplifiedMeasuring && box.fixedPitchFastMeasuring) {
-    width = fixedPitchWidth(p, m, box, from, end)
+    width = fixedPitchWidth(box, from, end)
   } else if (tabsAllowed(box.style) && containsTab(box.text, from, end)) {
     // Canvas strings split at TABs start past the TextRun's index 0, where WidthIterator gives a space word spacing, so the
     // tab path adds word spacing itself.
-    width = addWordSpacing(box, from, end, tabbedWidth(p, m, box, from, end, left))
+    width = addWordSpacing(box, from, end, tabbedWidth(box, from, end, left))
   } else {
     // rule webkit/measure/word-spacing-in-context
     // The spaced context adds word spacing where WidthIterator does, in its float32 order: after SPACE, LF and NBSP past index
     // 0 of the TextRun, which starts at `from` in both (TextUtil.cpp:84-89; WidthIterator.cpp calculateAdditionalWidth).
-    width = measureDomString(m, box, box.spacedContext, box.text.slice(from, end))
+    width = measureDomString(box, box.spacedContext, box.text.slice(from, end))
   }
-  if (end > to) width = f32(width - f32(singleSpaceWidth(m, box) + box.wordSpacing))
+  if (end > to) width = f32(width - f32(singleSpaceWidth(box) + box.wordSpacing))
   return Number.isNaN(width) ? 0 : Math.max(0, width)
 }
 
 // TextUtil::width over an InlineTextItem range (TextUtil.cpp:111-122): collapsible white space and a single preserved
 // space are one space wide.
-export function itemWidth(p: WebKitPrepared, m: Measurer, item: WebKitTextItem, from: number, to: number, left: number): number {
+export function itemWidth(p: WebKitPrepared, item: WebKitTextItem, from: number, to: number, left: number): number {
   const box = p.boxes[item.box]!
   if (item.isWhitespace && (!preservesSpacesAndTabs(box.style) || (to - from === 1 && box.text.charCodeAt(from) === 0x20))) {
-    return Math.max(0, singleSpaceWidth(m, box))
+    return Math.max(0, singleSpaceWidth(box))
   }
-  return boxWidth(p, m, box, from, to, left, true)
+  return boxWidth(box, from, to, left, true)
 }
 
 // U16_SET_CP_START
@@ -353,18 +353,18 @@ export type WordBreakLeft = { length: number; logicalWidth: number }
 
 // TextUtil::breakWord (TextUtil.cpp:242-365): the output of this exact probe sequence, not "the longest prefix that
 // fits". Every probe measures from the item start.
-export function breakWord(p: WebKitPrepared, m: Measurer, item: WebKitTextItem, textWidth: number, availableWidth: number, left: number): WordBreakLeft {
+export function breakWord(p: WebKitPrepared, item: WebKitTextItem, textWidth: number, availableWidth: number, left: number): WordBreakLeft {
   const box = p.boxes[item.box]!
   const text = box.text
   const start = item.start
   const length = item.end - item.start
   if (textWidth === 0) return { length: 0, logicalWidth: 0 }
-  const widthTo = (end: number) => boxWidth(p, m, box, start, end, left, true)
+  const widthTo = (end: number) => boxWidth(box, start, end, left, true)
   if (box.simpleFontCodePath) {
     const aligned = (index: number) => box.is8Bit ? index : codePointStart(text, start, index)
     // :265-280, the fixed-pitch shortcut.
     if (box.fixedPitch && box.simplifiedMeasuring) {
-      const characterWidth = measureText(m, box.context, ' ')
+      const characterWidth = canvasWidth(box.context, ' ')
       const estimatedCount = Math.floor(f32(availableWidth / characterWidth))
       const end = aligned(Math.min(start + estimatedCount, start + length - 1))
       const underflow = widthTo(end)

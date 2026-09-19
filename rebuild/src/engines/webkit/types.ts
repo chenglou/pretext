@@ -1,6 +1,6 @@
 // WebKit's prepared paragraph and line state (Safari 27.0, WebKit 7625.1.29.11.27). The WebKit port owns this file.
 import type { WebKitEnvironment } from '../../env.js'
-import type { Measurer } from '../../measure/canvas.js'
+import type { Context } from '../../measure/canvas.js'
 import type { AtomicInline, Gap, Paragraph, TextAlign } from '../../model.js'
 
 // Which line builder InlineFormattingContext::layout picks (specs/webkit-lines.md §2, InlineFormattingContext.cpp:170-184).
@@ -78,16 +78,16 @@ export type WebKitBox = {
   locale: string
   // Canvas contexts: the run's font with its letter spacing and no word spacing (JS adds word spacing as WidthIterator
   // does), and the same font with no spacing (the primary font's space advance for tab stops and the fixed-pitch shortcut).
-  context: number
-  plainContext: number
+  context: Context
+  plainContext: Context
   // The run's font with its letter spacing and word spacing: CanvasRenderingContext2DBase::setWordSpacing gives the context's
   // FontCascade the spacing (CanvasRenderingContext2DBase.cpp:3299-3324), so Canvas adds it per character inside the same
   // float32 loop as the DOM (WidthIterator::calculateAdditionalWidth, ComplexTextController.cpp:790-845). `context` when the
   // box has no word spacing.
-  spacedContext: number
+  spacedContext: Context
   // The run's font with 64px of letter spacing and no word spacing, which counts a string's spacing-bearing glyphs against
   // `plainContext` (measure.ts mergedGlyphs). `plainContext` when the box has no letter spacing.
-  countContext: number
+  countContext: Context
   // float32 px after page zoom.
   letterSpacing: number
   wordSpacing: number
@@ -153,9 +153,9 @@ export type WebKitPrepared = {
   // The text of every leaf, by run.
   runTexts: string[]
   items: WebKitItem[]
-  // The paragraph's Canvas contexts, with the memo and the call log of preparation and of every line filled from it
-  // (measure/canvas.ts). A world shares its paragraph's.
-  measurer: Measurer
+  // The paragraph's Canvas contexts, one per distinct settings (measure/canvas.ts), all made while it is prepared; the boxes
+  // and the box facts hold the ones they measure in. A world shares its paragraph's.
+  contexts: Context[]
   // What the paragraph keeps only for inspectLine and paragraphGaps; null on a paragraph prepared plain, which computes no
   // gap, asks Canvas nothing that only a gap reads, and answers neither (index.ts, gaps.ts). Nothing else says which of the
   // two a paragraph is.
@@ -196,7 +196,7 @@ export type WebKitBoxInspect = {
   // `fallback`: the box holds a character whose system fallback font Core Text picks by the locale's language (gaps.ts
   // hasLanguageDependentFallback); such a character is concerned unless a family of the whole list draws it (`listContext`,
   // the Canvas list followed by LastResort). null: none of these.
-  localeChoosesFonts: { unknownFamily: boolean; namedGeneric: boolean; fallback: boolean; namedContext: number; listContext: number; lastResortContext: number } | null
+  localeChoosesFonts: { unknownFamily: boolean; namedGeneric: boolean; fallback: boolean; namedContext: Context; listContext: Context; lastResortContext: Context } | null
   // The box's Han locale takes the preferred languages, which aren't given; or its quote overrides take the ICU default
   // locale, which isn't given (gap ui-language).
   hanLocaleUnknown: boolean

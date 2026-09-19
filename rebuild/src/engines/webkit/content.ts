@@ -3,7 +3,7 @@
 // builder choice (specs/webkit-text.md §2-§6, specs/webkit-lines.md §2-§3); on an inspected paragraph, what gaps.ts keeps of
 // it. Cited at WebKit-7625.1.29.11.27 under Source/WebCore/: IIB = layout/formattingContexts/inline/InlineItemsBuilder.cpp.
 import type { WebKitEnvironment } from '../../env.js'
-import { createMeasurer, measureContext, measureText, type Measurer } from '../../measure/canvas.js'
+import { contextFor, width as canvasWidth } from '../../measure/canvas.js'
 import { canvasFont } from '../../measure/font.js'
 import { genericFamilyUnder, standardFamilyOf } from './fonts.js'
 import { indexContent, langUnder, styleUnder } from '../../content.js'
@@ -217,7 +217,7 @@ function hasStrongDirectionality(text: string, is8Bit: boolean, bidi: BidiData):
 // The facts of one text leaf's box: its computed style, font, spacing and language as the tree gives them.
 export type LeafInput = { run: number; parent: number; text: string; textStyle: TextStyle; style: WebKitStyle; lang: string }
 
-function makeBox(p: WebKitPrepared, m: Measurer, leaf: LeafInput, sourceStart: number, bidi: BidiData): WebKitBox {
+function makeBox(p: WebKitPrepared, leaf: LeafInput, sourceStart: number, bidi: BidiData): WebKitBox {
   const facts = leaf.textStyle.font.facts
   const locale = computedLocale(leaf.lang, p.env.preferredLanguages)
   // The list Canvas measures with (fonts.ts): each unquoted generic keyword the locale resolves to a family of its own is
@@ -259,18 +259,18 @@ function makeBox(p: WebKitPrepared, m: Measurer, leaf: LeafInput, sourceStart: n
   const standardFamily = locale === '' ? null : standardFamilyOf(localeScript(locale), p.env.preferredLanguages)
   if (standardFamily !== null) {
     const plain = { lang: '', letterSpacing: '0px', wordSpacing: '0px', fontKerning: 'auto' as const, textRendering: 'auto' as const, direction: 'ltr' as const, partition: '' }
-    const listThenLastResort = measureContext(m, { ...plain, font: canvasFont({ ...font, family: `${font.family}, LastResort` }, size) })
-    const lastResort = measureContext(m, { ...plain, font: canvasFont({ ...font, family: 'LastResort' }, size) })
-    if (measureText(m, listThenLastResort, ' ') === measureText(m, lastResort, ' ')) {
+    const listThenLastResort = contextFor(p.contexts, { ...plain, font: canvasFont({ ...font, family: `${font.family}, LastResort` }, size) })
+    const lastResort = contextFor(p.contexts, { ...plain, font: canvasFont({ ...font, family: 'LastResort' }, size) })
+    if (canvasWidth(listThenLastResort, ' ') === canvasWidth(lastResort, ' ')) {
       if (firstNamedGeneric < 0) firstNamedGeneric = listed.length
       font = { ...font, family: `${font.family}, ${JSON.stringify(standardFamily)}` }
     }
   }
   const settings = { font: canvasFont(font, size), lang: '', letterSpacing: `${letterSpacing}px`, wordSpacing: '0px', fontKerning: 'auto' as const, textRendering: 'auto' as const, direction: 'ltr' as const, partition: '' }
-  const context = measureContext(m, settings)
-  const plainContext = measureContext(m, { ...settings, letterSpacing: '0px' })
-  const spacedContext = wordSpacing === 0 ? context : measureContext(m, { ...settings, wordSpacing: `${wordSpacing}px` })
-  const countContext = letterSpacing === 0 ? plainContext : measureContext(m, { ...settings, letterSpacing: '64px' })
+  const context = contextFor(p.contexts, settings)
+  const plainContext = contextFor(p.contexts, { ...settings, letterSpacing: '0px' })
+  const spacedContext = wordSpacing === 0 ? context : contextFor(p.contexts, { ...settings, wordSpacing: `${wordSpacing}px` })
+  const countContext = letterSpacing === 0 ? plainContext : contextFor(p.contexts, { ...settings, letterSpacing: '64px' })
   // Simplified measuring also needs a glyph from the primary font for every character
   // (FontCascade::canUseSimplifiedTextMeasuring, FontCascade.cpp:486-510). Fallback follows the family list before
   // system fallback (FontCascadeFonts.cpp:426-439, specs/webkit-gaps.md §3.3), so a family after the primary one that
@@ -281,16 +281,16 @@ function makeBox(p: WebKitPrepared, m: Measurer, leaf: LeafInput, sourceStart: n
   // goes to gaps.ts (unverifiedCoverage).
   let unverified: UnverifiedCoverage | null = null
   if (simplifiedMeasuring && fixedPitch) {
-    const coverageContext = measureContext(m, { ...settings, font: canvasFont({ ...font, family: `${primaryFamilyCss}, LastResort` }, size), letterSpacing: '0px' })
-    unverified = unverifiedCoverage(p.inspect, m, { ...settings, font: canvasFont({ ...font, family: 'LastResort' }, size), letterSpacing: '0px' })
+    const coverageContext = contextFor(p.contexts, { ...settings, font: canvasFont({ ...font, family: `${primaryFamilyCss}, LastResort` }, size), letterSpacing: '0px' })
+    unverified = unverifiedCoverage(p, { ...settings, font: canvasFont({ ...font, family: 'LastResort' }, size), letterSpacing: '0px' })
     for (let i = 0; simplifiedMeasuring && i < text.length; i++) {
       const cp = text.codePointAt(i)!
       if (cp > 0xffff) i++
       if (cp < 0x20) continue
       const s = String.fromCodePoint(cp)
-      const covered = measureText(m, coverageContext, s)
-      simplifiedMeasuring = covered === measureText(m, plainContext, s)
-      if (simplifiedMeasuring) coveredLikeLastResort(unverified, m, cp, s, covered)
+      const covered = canvasWidth(coverageContext, s)
+      simplifiedMeasuring = covered === canvasWidth(plainContext, s)
+      if (simplifiedMeasuring) coveredLikeLastResort(unverified, cp, s, covered)
     }
   }
   let spacingFacts: Array<{ coverage: readonly number[]; inputs: readonly number[] }> | null = null
@@ -336,7 +336,7 @@ export function whitespaceRun(text: string, start: number, preserveNewline: bool
 // InlineItemsBuilder::handleTextContent (IIB:924-1051) with hyphens: manual and -webkit-nbsp-mode: normal, over the text
 // box's own style. `defer` is shouldDeferTextMeasurement's content part: the paragraph needs visual reordering
 // (IIB:1150-1154).
-function handleTextContent(p: WebKitPrepared, m: Measurer, boxIndex: number, defer: boolean): void {
+function handleTextContent(p: WebKitPrepared, boxIndex: number, defer: boolean): void {
   const box = p.boxes[boxIndex]!
   const style = box.style
   const text = box.text
@@ -345,7 +345,7 @@ function handleTextContent(p: WebKitPrepared, m: Measurer, boxIndex: number, def
   const factory = makeFactory(text, box.is8Bit, box.locale, style.lineBreakMode, p.icuDefaultLocale, p.env.dictionaryBreaks)
   // canCacheWidthOnInlineTextItem (IIB:777-787): preserved white space in a box with a TAB depends on position.
   const deferWhitespace = defer || (preserveSpaces && text.includes('\t'))
-  const spaceWidth = deferWhitespace ? null : Math.max(0, singleSpaceWidth(m, box))
+  const spaceWidth = deferWhitespace ? null : Math.max(0, singleSpaceWidth(box))
   let position = 0
   while (position < text.length) {
     const c = text.charCodeAt(position)
@@ -362,7 +362,7 @@ function handleTextContent(p: WebKitPrepared, m: Measurer, boxIndex: number, def
           p.items.push({ kind: 'text', box: boxIndex, start: position + k, end: position + k + 1, level: DEFAULT_BIDI_LEVEL, isWhitespace: true, isWordSeparator: ws.isWordSeparator, hasTrailingSoftHyphen: false, width: spaceWidth })
         }
       } else {
-        const width = spaceWidth === null ? null : !preserveSpaces || ws.length === 1 ? spaceWidth : boxWidth(p, m, box, position, position + ws.length, 0, false)
+        const width = spaceWidth === null ? null : !preserveSpaces || ws.length === 1 ? spaceWidth : boxWidth(box, position, position + ws.length, 0, false)
         p.items.push({ kind: 'text', box: boxIndex, start: position, end: position + ws.length, level: DEFAULT_BIDI_LEVEL, isWhitespace: true, isWordSeparator: ws.isWordSeparator, hasTrailingSoftHyphen: false, width })
       }
       position += ws.length
@@ -371,7 +371,7 @@ function handleTextContent(p: WebKitPrepared, m: Measurer, boxIndex: number, def
     const end = position + moveToNextBreakablePosition(position, factory, style)
     p.items.push({
       kind: 'text', box: boxIndex, start: position, end, level: DEFAULT_BIDI_LEVEL, isWhitespace: false, isWordSeparator: false,
-      hasTrailingSoftHyphen: text.charCodeAt(end - 1) === 0xad, width: defer ? null : boxWidth(p, m, box, position, end, 0, true),
+      hasTrailingSoftHyphen: text.charCodeAt(end - 1) === 0xad, width: defer ? null : boxWidth(box, position, end, 0, true),
     })
     position = end
   }
@@ -513,7 +513,7 @@ function computeBidiLevels(p: WebKitPrepared): void {
 
 // computeInlineTextItemWidthsAndTextSpacing (IIB:804-856): after the splits, every non-empty item that isn't a lone ZWSP
 // and whose width doesn't depend on position.
-function computeItemWidths(p: WebKitPrepared, m: Measurer): void {
+function computeItemWidths(p: WebKitPrepared): void {
   for (let i = 0; i < p.items.length; i++) {
     const item = p.items[i]!
     if (item.kind !== 'text') continue
@@ -521,7 +521,7 @@ function computeItemWidths(p: WebKitPrepared, m: Measurer): void {
     const length = item.end - item.start
     if (length === 0 || (length === 1 && box.text.charCodeAt(item.start) === 0x200b)) continue
     if (item.isWhitespace && preservesSpacesAndTabs(box.style) && box.text.includes('\t')) continue
-    item.width = itemWidth(p, m, item, item.start, item.end, 0)
+    item.width = itemWidth(p, item, item.start, item.end, 0)
   }
 }
 
@@ -535,13 +535,12 @@ function isEligibleForSimplifiedInlineLayoutByStyle(s: WebKitStyle): boolean {
 // `inspect` says whether inspectLine and paragraphGaps answer on this paragraph (index.ts): an inspected paragraph keeps what
 // gaps.ts reads, and a plain one measures what deciding its lines takes and nothing else.
 export function prepareWebKit(paragraph: Paragraph, env: WebKitEnvironment, inspect: boolean): WebKitPrepared {
-  const m = createMeasurer()
   const zoom = env.pageZoom ?? 1
   const style = webkitStyle(paragraph, paragraph, zoom)
   const index = indexContent(paragraph)
   const p: WebKitPrepared = {
     paragraph, env, zoom, icuDefaultLocale: env.icuDefaultLocale ?? ICU_DEFAULT_LOCALE_WITHOUT_ENVIRONMENT, style, elements: [],
-    builder: 'line-builder', boxes: [], runStarts: [], runTexts: [], items: [], measurer: m, inspect: inspect ? { gaps: [], boxes: [], worlds: [] } : null,
+    builder: 'line-builder', boxes: [], runStarts: [], runTexts: [], items: [], contexts: [], inspect: inspect ? { gaps: [], boxes: [], worlds: [] } : null,
   }
   const styleOf = (parent: number): WebKitStyle => {
     if (parent < 0) return style
@@ -626,7 +625,7 @@ export function prepareWebKit(paragraph: Paragraph, env: WebKitEnvironment, insp
     p.runTexts.push(leaves[r]!.text)
     boxOfRun.push(-1)
     if (!rendered[r]) continue
-    const box = makeBox(p, m, leaves[r]!, index.leaves[r]!.start, webkitBidiData)
+    const box = makeBox(p, leaves[r]!, index.leaves[r]!.start, webkitBidiData)
     reordering ||= box.hasStrongDirectionality
     boxOfRun[r] = p.boxes.length
     p.boxes.push(box)
@@ -642,12 +641,12 @@ export function prepareWebKit(paragraph: Paragraph, env: WebKitEnvironment, insp
       case 'br': p.items.push({ kind: 'hard-line-break', element: event.element, level: DEFAULT_BIDI_LEVEL }); break
       case 'wbr': p.items.push({ kind: 'word-break-opportunity', element: event.element, level: DEFAULT_BIDI_LEVEL }); break
       case 'text':
-        if (boxOfRun[event.run]! >= 0) handleTextContent(p, m, boxOfRun[event.run]!, reordering)
+        if (boxOfRun[event.run]! >= 0) handleTextContent(p, boxOfRun[event.run]!, reordering)
         break
     }
   }
   if (style.rtl || reordering) computeBidiLevels(p)
-  if (reordering) computeItemWidths(p, m)
+  if (reordering) computeItemWidths(p)
   const items = p.items
   if (items.length > 0 && textAndLineBreakOnly && inlineBoxes === 0 && !reordering && isEligibleForSimplifiedInlineLayoutByStyle(style)) {
     p.builder = 'text-only-simple'
