@@ -129,7 +129,7 @@ function treatAsZeroWidthSpace(c: number): boolean {
 
 // Whether [from, to) holds no glyph that every lookup stops at: only default-ignorable characters, which every lookup
 // skips (may_skip, hb-ot-layout-gsubgpos.hh:558-571 at harfbuzz dfdc088c), and marks, which a lookup skips where its flag
-// says IgnoreMarks (check_glyph_property, :554-555) and the kern and kerx pair machine always does (hb-kern.hh:58).
+// says IgnoreMarks (check_glyph_property, :561-562) and the kern and kerx pair machine always does (hb-kern.hh:58).
 function holdsNoBase(p: BlinkPrepared, from: number, to: number): boolean {
   for (let i = from; i < to;) {
     const cp = p.text.codePointAt(i)!
@@ -517,11 +517,12 @@ function clusterEndAfter(p: BlinkPrepared, k: number, max: number): number {
 // broken cluster the paragraph never has (c-01763358db8471a3: a kasra after SHY gave its neighbour a -2 px adjustment).
 // HarfBuzz's lookups skip default-ignorable glyphs (hb-ot-layout-gsubgpos.hh:558-571), so a side that holds only
 // default-ignorable characters (U+200B between two letters) reaches to the next cluster. So does a side that holds only
-// such characters and marks (holdsNoBase): SHY and a kasra between two beh are one cluster of no advance, and natively the
-// letters adjust each other across it as they do across the kasra alone. In Noto Nastaliq Urdu the first beh is 170
-// LayoutUnits narrower before the second, which a window that ends at the kasra measured as 0, so the whole difference
-// fell on the last letter, the space of a wrapped line start at SHY was clamped at 0 and the kasra got a line of its own
-// (c-3b9588a5730c17d8; probe blink-cr5 Z). Canvas says what the two sides change; which glyph carries it is pairBefore16's.
+// such characters and marks (holdsNoBase): SHY and a kasra between two beh are one cluster of no advance, and the letters
+// adjust each other across it as they do across the kasra alone (16px Noto Nastaliq Urdu at DPR 2: both strings measure
+// 2,810,183 units, 174,063 less than the two beh measured apart). A window that ended at the kasra measured 0 there, so
+// the whole difference fell on the last letter, the space of a wrapped line start at SHY was clamped at 0, and the kasra
+// got a line of its own where natively it shares SHY's (c-3b9588a5730c17d8; probe blink-cr5 Z). Canvas says what the two
+// sides change; which glyph carries it is pairBefore16's.
 // `noLigatures` measures it through the no-ligature contexts: the adjustment without liga, clig and calt.
 export function pairAdjust16(sh: Shaper, g: number, k: number, lo: number, hi: number, noLigatures: boolean = false): number {
   const p = sh.p
