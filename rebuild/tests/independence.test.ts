@@ -15,7 +15,8 @@
 //    src/measure/ is shared like the rest. Test files are left out: a shared algorithm is tested with an engine's data.
 //    SHARED_FILES_THAT_NAME_ENGINES lists the files that don't hold yet, with their count of such mentions: a count may
 //    only fall, the list may only shrink, and an entry that no longer matches its file fails too, so the list is what is
-//    left to do. Step 1's S2 left paint.ts alone, which step 3 takes off the list.
+//    left to do. It is empty since step 3 took paint.ts off it: each engine's painting rules are its own
+//    (src/engines/<engine>/paint-rules.ts).
 // 3. An engine imports no other engine.
 import { describe, expect, test } from 'bun:test'
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
@@ -97,12 +98,8 @@ describe('independence from rebuild/src', () => {
   })
 })
 
-// Mentions after step 1's S2. At the correctness line (af50a11) ten files held 175; paint.ts held 53 of them, and now also
-// picks each engine's bidi data and grapheme rules itself and imports the geometry types from the engines. Lower a count as
-// mentions go; drop an entry when its file holds none.
-const SHARED_FILES_THAT_NAME_ENGINES: Record<string, number> = {
-  'paint.ts': 74,
-}
+// At the correctness line (af50a11) ten files held 175 mentions, and after step 1's S2 paint.ts alone held 74; none is left.
+const SHARED_FILES_THAT_NAME_ENGINES: Record<string, number> = {}
 const ENGINE_NAME = /blink|webkit|gecko/i
 
 // What rule 2 forbids in a source text, each with its line; comments never count, since the parser drops them.
