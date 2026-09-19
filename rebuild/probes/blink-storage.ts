@@ -280,10 +280,13 @@ const S5 = `
   const out = {}
   for (const [order, words] of [['two-byte first', [arabic, 'abc']], ['one-byte first', ['abc', arabic]]]) {
     const content = [other(words[0]), { kind: 'text', text: run }, other(words[1]), { kind: 'text', text: run }]
-    const paragraph = { ...style, content, width: 4000, lineHeight: 60, direction: 'ltr', lang: 'en', textIndent: 0, textAlign: 'start' }
-    const layout = lib.layoutParagraph(paragraph, env)
-    const asks = layout.measure.calls.filter(call => call.text === run).map(call => ({ partition: layout.measure.contexts[call.context].partition, letterSpacing: layout.measure.contexts[call.context].letterSpacing, width: call.width }))
-    out[order] = { asks, contexts: layout.measure.contexts.length, lines: layout.lines.length }
+    const paragraph = { ...style, content, lineHeight: 60, direction: 'ltr', lang: 'en', textIndent: 0, textAlign: 'start' }
+    const prepared = lib.prepare(paragraph, env, true)
+    let lines = 0
+    for (let start = lib.firstLine(prepared); start !== null; lines++) start = lib.fillLine(prepared, start, { width: 4000, left: 0, right: 0 }).next
+    const log = prepared.state.measurer.log
+    const asks = log.calls.filter(call => call.text === run).map(call => ({ partition: log.contexts[call.context].partition, letterSpacing: log.contexts[call.context].letterSpacing, width: call.width }))
+    out[order] = { asks, contexts: log.contexts.length, lines }
     const plain = asks.filter(ask => ask.letterSpacing === '0px')
     expect(order + ': the brackets are asked in both storages, in this order', plain.map(ask => ask.partition).join(), order === 'two-byte first' ? '16bit,8bit' : '8bit,16bit')
     for (const ask of plain) expect(order + ': the ' + ask.partition + ' context answers', ask.width, ask.partition === '8bit' ? ${LATIN} : ${COMMON})
@@ -329,6 +332,6 @@ export default async function storageProbes(): Promise<Probe[]> {
     probe('S3 one canvas keeps the first shaping', S3, 'A string answers by the storage shaped first on a canvas; canvases share nothing.'),
     probe('S4 text node storage', S4, 'The script the DOM shapes 13 brackets under, by how their text node and its siblings were made.'),
     probe('S6 spaces stay in a Latin range of script-neutral characters', S6, 'The DOM width of brackets, a space and brackets in Amiri beside the 8-bit Canvas string with U+0020 and the 16-bit one with U+2028.'),
-    probe('S5 the library asks the storage it built', `const LIBRARY = ${JSON.stringify(library)};\n${S5}`, 'layoutParagraph over a paragraph that holds 13 brackets under Arabic and under Latin, in both orders: the call log\'s widths.'),
+    probe('S5 the library asks the storage it built', `const LIBRARY = ${JSON.stringify(library)};\n${S5}`, 'The library\'s prepare and fillLine over a paragraph that holds 13 brackets under Arabic and under Latin, in both orders: the call log\'s widths.'),
   ]
 }

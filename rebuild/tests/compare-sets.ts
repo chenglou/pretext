@@ -4,7 +4,7 @@
 // native layout), and two usual runs of one library as the control that says how much two runs differ by themselves.
 //
 //   bun rebuild/tests/compare-sets.ts <tier 2 out dir> <other out dir> [--out=<report.json>] [--orders=forward[,reverse]]
-//     [--prediction=line-ranges]
+//     [--prediction=line-ranges|without-measure]
 //
 // Both folders are browser-sets.ts --out folders of the same browser and configuration. The report lists, per set and part,
 // the counts and every differing case; the printed table has the counts and, per set, the families of the cases whose
@@ -15,6 +15,10 @@
 // second a usual run, and the predictions are compared as line ranges (lab/compare-rows.ts says how). Exit 1 when a row is
 // missing or ranges differ, 3 when only native observations do: those are read one by one, as history effects of the
 // plain path's smaller set of Canvas questions, and go to the ledger as such.
+//
+// --prediction=without-measure is the fourth (X2's and step 4's gate in Chrome): the first folder is a run of
+// --predictor=rebuild/lab/baselines/other-widths-first-predictor.ts, whose layouts must equal the usual run's while its
+// counts of Canvas work can't. Same exits.
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { compareRowFiles, comparisonExit, type PredictionView, type RowComparison } from '../lab/compare-rows.ts'
@@ -25,7 +29,7 @@ import { REPO } from './sets.ts'
 const positional = process.argv.slice(2).filter(arg => !arg.startsWith('--'))
 const option = (name: string): string | undefined => process.argv.slice(2).find(arg => arg.startsWith(`--${name}=`))?.slice(name.length + 3)
 if (positional.length !== 2) {
-  console.error('Usage: bun rebuild/tests/compare-sets.ts <tier 2 out dir> <other out dir> [--out=<report.json>] [--orders=forward[,reverse]] [--prediction=line-ranges]')
+  console.error('Usage: bun rebuild/tests/compare-sets.ts <tier 2 out dir> <other out dir> [--out=<report.json>] [--orders=forward[,reverse]] [--prediction=line-ranges|without-measure]')
   process.exit(2)
 }
 const dirs = positional.map(dir => resolve(dir))
@@ -42,7 +46,7 @@ if (first.browser !== second.browser || first.config !== second.config) {
   console.error(`[compare-sets] ${first.browser} ${first.config} against ${second.browser} ${second.config}: compare runs of one browser and configuration`)
   process.exit(2)
 }
-const view: PredictionView = option('prediction') === 'line-ranges' ? 'line-ranges' : 'whole'
+const view: PredictionView = (['line-ranges', 'without-measure'] as const).find(name => name === option('prediction')) ?? 'whole'
 const orders = (option('orders') ?? 'forward').split(',').filter(order => order === 'forward' || order === 'reverse') as Array<'forward' | 'reverse'>
 
 type PartReport = { set: string; part: number; order: 'forward' | 'reverse'; comparison: RowComparison }

@@ -77,8 +77,12 @@ export function firstLine(prepared: Prepared): LineStart | null {
   }
 }
 
-function mismatch(engine: string, what: string): Error {
-  return new Error(`${what} can't continue a ${engine} paragraph`)
+function startMismatch(engine: string, start: string): Error {
+  return new Error(`a ${start} line start can't continue a ${engine} paragraph`)
+}
+
+function lineMismatch(engine: string, line: string): Error {
+  return new Error(`a ${line} line isn't a ${engine} paragraph's`)
 }
 
 // Fills one line from `start` in `slot`: the slot's width less its insets, as the engine turns float intrusion into a
@@ -89,13 +93,13 @@ function mismatch(engine: string, what: string): Error {
 export function fillLine(prepared: Prepared, start: LineStart, slot: LineSlot): FillResult {
   switch (prepared.engine) {
     case 'blink':
-      if (start.engine !== 'blink') throw mismatch(prepared.engine, `a ${start.engine} line start`)
+      if (start.engine !== 'blink') throw startMismatch(prepared.engine, start.engine)
       return blink.fillLine(prepared.state, start, slot)
     case 'webkit':
-      if (start.engine !== 'webkit') throw mismatch(prepared.engine, `a ${start.engine} line start`)
+      if (start.engine !== 'webkit') throw startMismatch(prepared.engine, start.engine)
       return webkit.fillLine(prepared.state, start, slot)
     case 'gecko':
-      if (start.engine !== 'gecko') throw mismatch(prepared.engine, `a ${start.engine} line start`)
+      if (start.engine !== 'gecko') throw startMismatch(prepared.engine, start.engine)
       return gecko.fillLine(prepared.state, start, slot)
   }
 }
@@ -104,13 +108,13 @@ export function fillLine(prepared: Prepared, start: LineStart, slot: LineSlot): 
 export function linePieces(prepared: Prepared, line: FilledLine): Pieces {
   switch (prepared.engine) {
     case 'blink':
-      if (line.engine !== 'blink') throw mismatch(prepared.engine, `a ${line.engine} line`)
+      if (line.engine !== 'blink') throw lineMismatch(prepared.engine, line.engine)
       return blink.linePieces(prepared.state, line)
     case 'webkit':
-      if (line.engine !== 'webkit') throw mismatch(prepared.engine, `a ${line.engine} line`)
+      if (line.engine !== 'webkit') throw lineMismatch(prepared.engine, line.engine)
       return webkit.linePieces(prepared.state, line)
     case 'gecko':
-      if (line.engine !== 'gecko') throw mismatch(prepared.engine, `a ${line.engine} line`)
+      if (line.engine !== 'gecko') throw lineMismatch(prepared.engine, line.engine)
       return gecko.linePieces(prepared.state, line)
   }
 }
@@ -120,13 +124,13 @@ export function linePieces(prepared: Prepared, line: FilledLine): Pieces {
 export function inspectLine(prepared: Prepared, line: FilledLine | RefusedSlot): LineInspection {
   switch (prepared.engine) {
     case 'blink':
-      if (line.engine !== 'blink') throw mismatch(prepared.engine, `a ${line.engine} line`)
+      if (line.engine !== 'blink') throw lineMismatch(prepared.engine, line.engine)
       return blink.inspectLine(prepared.state, line)
     case 'webkit':
-      if (line.engine !== 'webkit') throw mismatch(prepared.engine, `a ${line.engine} line`)
+      if (line.engine !== 'webkit') throw lineMismatch(prepared.engine, line.engine)
       return webkit.inspectLine(prepared.state, line)
     case 'gecko':
-      if (line.engine !== 'gecko') throw mismatch(prepared.engine, `a ${line.engine} line`)
+      if (line.engine !== 'gecko') throw lineMismatch(prepared.engine, line.engine)
       return gecko.inspectLine(prepared.state, line)
   }
 }

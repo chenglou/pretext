@@ -29,7 +29,7 @@ import {
 } from '../src/model.ts'
 import { paintLines } from '../src/paint.ts'
 import type {
-  BelowFloats, BrowserKind, Case, FontDecl as CaseFont, InlineNode as CaseInlineNode, LayoutPrediction, LineOf, LineSlot, PainterLimits,
+  BelowFloats, BrowserKind, Case, FontDecl as CaseFont, InlineNode as CaseInlineNode, LayoutPrediction, LineOf, LineSlot, LinesPrediction, PainterLimits,
   ParagraphLayout, PredictionLine, ProcessLanguages,
 } from './types.ts'
 
@@ -159,6 +159,8 @@ function countCanvasWork(): void {
   }
 }
 
+const FULL_WIDTH: LineSlot = { left: 0, right: 0 }
+
 // One engine's function set over a prepared paragraph, with its own types, so a row's lines keep the engine's.
 type Engine<Start, Line, Refused, Geometry> = {
   first: Start | null
@@ -171,8 +173,8 @@ type Engine<Start, Line, Refused, Geometry> = {
 // is what a block with floats of one line height stacked at its start gives each line (DESIGN.md §2.9). A slot the engine
 // refuses because the line moves below its floats takes no line: the next slot starts where the engine says, and the
 // layout records the refusal. A line without a line box takes no block size, so the next line uses the same slot. Per line
-// the calls are fillLine, inspectLine, then linePieces, which is the order the engines ask Canvas in; a refused slot is
-// inspected alone.
+// the calls are fillLine, inspectLine, then linePieces, the order in which the engines have asked Canvas since the rows
+// were first recorded; a refused slot is inspected alone.
 function fillLines<Start, Line, Refused, Geometry>(engine: Engine<Start, Line, Refused, Geometry>, width: number, insets: readonly LineSlot[]): { lines: LineOf<Start, Geometry>[]; belowFloats: BelowFloats[] } {
   const lines: LineOf<Start, Geometry>[] = []
   const belowFloats: BelowFloats[] = []
@@ -203,12 +205,10 @@ function fillLines<Start, Line, Refused, Geometry>(engine: Engine<Start, Line, R
   return { lines, belowFloats }
 }
 
-const FULL_WIDTH: LineSlot = { left: 0, right: 0 }
-
 // The layout a row keeps, from an inspected paragraph. `otherWidthsFirst` fills the paragraph at those widths before, with
 // the same calls, and keeps nothing of them: what an application does that lays one prepared paragraph out at several
 // widths, which Chrome's per-canvas cache of shaped words could show (specs/blink-canvas.md §1.7).
-export function layoutParagraph(paragraph: LayoutParagraph, env: Environment, width: number, insets: readonly LineSlot[] = [], otherWidthsFirst: readonly number[] = []): ParagraphLayout {
+function layoutParagraph(paragraph: LayoutParagraph, env: Environment, width: number, insets: readonly LineSlot[] = [], otherWidthsFirst: readonly number[] = []): ParagraphLayout {
   countCanvasWork()
   const before = { ...canvasWork }
   const prepared = prepare(paragraph, env, true)
@@ -243,8 +243,10 @@ export function layoutParagraph(paragraph: LayoutParagraph, env: Environment, wi
 }
 
 // The line ranges of a plain paragraph: the lines with a line box, which are the lines a LinesPrediction lists (types.ts).
-// Nothing is inspected, so this is the path an application runs.
-export function plainLines(paragraph: LayoutParagraph, env: Environment, width: number, insets: readonly LineSlot[] = []): PredictionLine[] {
+// Nothing is inspected, so this is the path an application runs, with the Canvas questions of that path alone.
+function plainLines(paragraph: LayoutParagraph, env: Environment, width: number, insets: readonly LineSlot[] = []): LinesPrediction {
+  countCanvasWork()
+  const callsBefore = canvasWork.calls
   const prepared = prepare(paragraph, env, false)
   const lines: PredictionLine[] = []
   let row = 0
@@ -266,7 +268,7 @@ export function plainLines(paragraph: LayoutParagraph, env: Environment, width: 
     }
     start = filled.next
   }
-  return lines
+  return { lines, measureLog: canvasWork.calls - callsBefore }
 }
 
 // A row's layout as the painter takes it: the painter reads a line's slot with its width (src/model.ts LineSlot), and a row
@@ -300,5 +302,24 @@ export function makePredictor(factsFor: FactsFor, otherWidthFactors: readonly nu
     limits(prediction) {
       return painterLimits(prediction.paragraph, paintable(prediction))
     },
+  }
+}
+
+// The predictor of line ranges from a plain paragraph (plainLines). It paints nothing: a row of it holds the native
+// observation and the ranges, which compare-rows.ts --prediction=line-ranges holds against a run of makePredictor's.
+type PlainPredictor = {
+  predict: (c: Case, env: PredictEnv) => LinesPrediction | { error: string }
+  paint: (c: Case, prediction: LinesPrediction, host: HTMLElement) => null
+}
+
+export function makePlainPredictor(factsFor: FactsFor): PlainPredictor {
+  return {
+    predict(c, env) {
+      const e = environment(env.browser, env.build, env.languages)
+      if ('error' in e) return e
+      if (c.pageLang !== e.pageLang) return { error: `Case ${c.id} needs <html lang="${c.pageLang}">; page has "${e.pageLang}"` }
+      return plainLines(layoutInput(c, e.engine, factsFor), e, c.paragraph.width, c.inline?.lineSlots ?? [])
+    },
+    paint: () => null,
   }
 }
