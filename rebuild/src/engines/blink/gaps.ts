@@ -10,8 +10,10 @@
 // prepared plain, where every function returns at once: what a function measures to decide its condition is asked of
 // Canvas on an inspected paragraph alone.
 import type { Gap, GapName } from '../../model.js'
-import { hasDictionaryCharacters, lineTable } from './breaks.js'
-import { collapsesWhiteSpace } from './content.js'
+import { hasDictionaryCharacters, languageOf, lineTable } from './breaks.js'
+import { collapsesWhiteSpace, isSpaceLB } from './content.js'
+import { raw16Of } from './contexts.js'
+import { isSegmentEdge } from './emoji.js'
 import type { BlinkLineStart } from './geometry.js'
 import { LIGATURE_NONE, LIGATURE_UNCERTAIN } from './ligatures.js'
 import { pairPlacementUnknown, positionBounds, positionLimit } from './limits.js'
@@ -19,7 +21,7 @@ import type { LineInfo } from './line-breaker.js'
 import { USCRIPT_COMMON, USCRIPT_INHERITED, isWhiteSpace, scriptExtensionsOf, scriptOf } from './props.js'
 import {
   EXACT16, adjust16, canvasScriptsPerUnit, ceilFrom16, contextsOf, groupPrefix16, isClusterBoundary, isDefaultIgnorableHarfBuzz, isFontRunEdge,
-  isSegmentEdge, joinsAcross, pairAdjust16, pairAdjustNoLigatures16, positionAdjust16, positionForOffset, prefix16, raw16Of, requeuedSpaceAt,
+  joinsAcross, pairAdjust16, positionAdjust16, positionForOffset, prefix16, requeuedSpaceAt,
   startsClusterInsideGrapheme, type CanvasString, type Part, type ShapeResult, type Shaper,
 } from './shape.js'
 import type { BlinkInspect, BlinkPrepared } from './types.js'
@@ -28,12 +30,12 @@ import type { BlinkInspect, BlinkPrepared } from './types.js'
 export type GapSink = Gap[] | null
 
 // One entry per gap name, run, detail and range; ranges of one gap, run and detail that meet merge, into the first entry
-// they meet. A list's grouping therefore follows the raises, the repeated ones too: a range raised again can meet an
-// earlier entry that grew in between and widen it, where the entry holding the range stays as it is when nothing raises it
-// again. What the entries cover together doesn't depend on it. Every measurement raises its range's gaps (shape.ts
-// measure16), so on an inspected paragraph a measurement made again is part of the lists the rows hold: a value handed on
-// in its place can regroup ranges (clusters' prefixes carried through inspect.ts shapeOf did in 3 of 67,065 recorded
-// cases, positions kept through one binary search in 1; research/ARCHITECTURE-PLAN-2.md X2).
+// they meet. While a list is built its grouping therefore follows the raises, the repeated ones too: a range raised again
+// can meet an earlier entry that grew in between and widen it, where the entry holding the range stays as it is when
+// nothing raises it again. What the entries cover together doesn't depend on it. Every measurement raises its range's gaps
+// (shape.ts measure16), so a measurement made again regroups a list being built (clusters' prefixes carried through
+// inspect.ts shapeOf did in 3 of 67,065 recorded cases, positions kept through one binary search in 1;
+// research/ARCHITECTURE-PLAN-2.md X2). A list is handed out canonical (canonicalGaps), where grouping follows nothing.
 function addGap(gaps: Gap[], gap: GapName, run: number | null, detail: string, at?: { start: number; end: number }): void {
   for (let i = 0; i < gaps.length; i++) {
     const g = gaps[i]!
@@ -73,7 +75,7 @@ function sourceRange(p: BlinkPrepared, from: number, to: number): { start: numbe
     end = s + 1
   }
   if (start >= 0) return { start, end }
-  let at = p.sourceLength
+  let at = p.index.text.length
   for (let t = to; t < p.text.length; t++) if (p.sourceOffsets[t]! >= 0) { at = p.sourceOffsets[t]!; break }
   return { start: at, end: at }
 }
@@ -81,7 +83,7 @@ function sourceRange(p: BlinkPrepared, from: number, to: number): { start: numbe
 // The source break offset at text_content offset k: the source offset of the first unit at or after k.
 function sourceOffsetAt(p: BlinkPrepared, k: number): { start: number; end: number } {
   for (let t = k; t < p.text.length; t++) if (p.sourceOffsets[t]! >= 0) return { start: p.sourceOffsets[t]!, end: p.sourceOffsets[t]! }
-  return { start: p.sourceLength, end: p.sourceLength }
+  return { start: p.index.text.length, end: p.index.text.length }
 }
 
 // The source range of the grapheme around text_content offset k (k inside it or at its start).
@@ -113,11 +115,6 @@ function runAt(p: BlinkPrepared, k: number): number | null {
   return source >= 0 ? runOfSource(p, source) : null
 }
 
-// line_breaker.cc:186-188.
-function isSpaceLB(c: number): boolean {
-  return c === 0x20 || c === 0x09
-}
-
 // The source range of the glyph clusters on both sides of offset k inside a shaping call over [lo, hi).
 function clustersAround(p: BlinkPrepared, k: number, lo: number, hi: number): { start: number; end: number } {
   let a = k - 1
@@ -140,7 +137,7 @@ const CONTEXT_DETAIL = 'a shaping call edge between joining letters in an OpenTy
 function callEdge(gaps: Gap[], p: BlinkPrepared, g: number, k: number, callStart: number, callEnd: number): void {
   if (k > callStart && k < callEnd) return
   const style = p.styles[p.groups[g]!.style]!
-  switch (style.joining) {
+  switch (style.font.facts.joining) {
     case 'opentype':
       if (joinsAcross(p, k, callStart, callEnd)) addGap(gaps, 'unsafe-to-break', style.run, CONTEXT_DETAIL, sourceOffsetAt(p, k))
       return
@@ -166,10 +163,23 @@ function hasScriptNeutral(p: BlinkPrepared, from: number, to: number): boolean {
   return false
 }
 
-// Scripts HarfBuzz shapes with its default shaper (hb_ot_shaper_categorize, hb-ot-shaper.hh: none of them is in its
-// switch), as UScriptCode numbers with their ISO 15924 codes: Common, Inherited, Bopomofo, Cyrillic, Greek, Han, Hiragana,
-// Katakana, Latin.
-const DEFAULT_SHAPER_SCRIPTS = new Map<number, string>([[0, 'Zyyy'], [1, 'Zinh'], [5, 'Bopo'], [8, 'Cyrl'], [14, 'Grek'], [17, 'Hani'], [20, 'Hira'], [22, 'Kana'], [25, 'Latn']])
+// The ISO 15924 code of a script HarfBuzz shapes with its default shaper (hb_ot_shaper_categorize, hb-ot-shaper.hh: none
+// of them is in its switch), by UScriptCode number: Common, Inherited, Bopomofo, Cyrillic, Greek, Han, Hiragana, Katakana,
+// Latin. Null for every other script.
+function defaultShaperScript(script: number): string | null {
+  switch (script) {
+    case 0: return 'Zyyy'
+    case 1: return 'Zinh'
+    case 5: return 'Bopo'
+    case 8: return 'Cyrl'
+    case 14: return 'Grek'
+    case 17: return 'Hani'
+    case 20: return 'Hira'
+    case 22: return 'Kana'
+    case 25: return 'Latn'
+    default: return null
+  }
+}
 
 // Whether HarfBuzz shapes the character at text_content unit t alike under the two scripts: the font that draws it, by the
 // declaration's coverage facts, selects the same GSUB and GPOS lookups for both (ListedFontFacts.scriptLookups: scripts of
@@ -179,9 +189,9 @@ const DEFAULT_SHAPER_SCRIPTS = new Map<number, string>([[0, 'Zyyy'], [1, 'Zinh']
 // than the paragraph changes no glyph and no advance. Without the facts, or under a script with a shaper of its own
 // (Arabic, Hebrew, Thai, Hangul, the Indic and USE scripts), the difference stays a condition.
 function shapesAlike(p: BlinkPrepared, t: number, canvasScript: number, domScript: number): boolean {
-  const a = DEFAULT_SHAPER_SCRIPTS.get(canvasScript)
-  const b = DEFAULT_SHAPER_SCRIPTS.get(domScript)
-  if (a === undefined || b === undefined) return false
+  const a = defaultShaperScript(canvasScript)
+  const b = defaultShaperScript(domScript)
+  if (a === null || b === null) return false
   const f = p.fontRun[t]!
   if (f < 0) return false
   const g = p.groupOfUnit[t]!
@@ -237,7 +247,7 @@ export function measuredRange(sink: GapSink, p: BlinkPrepared, g: number, from: 
   if (canvasScripts !== null) scriptContext(sink, p, cs, canvasScripts)
 }
 
-// ---- The cuts of a group of 256 zoomed px or more (shape.ts addCuts) ----
+// ---- The cuts of a group of 256 zoomed px or more (shape.ts addPieces) ----
 
 export function uncutCluster(sink: GapSink, p: BlinkPrepared, g: number, a: number, b: number): void {
   if (sink === null) return
@@ -317,12 +327,11 @@ export function floatSum(sink: GapSink, p: BlinkPrepared, total16: number, slack
 // context, that decision rests on the default, so the line being filled reports hyphen-glyph. `raw16` is the hyphen's
 // measured width.
 export function hyphenGlyph(sink: GapSink, p: BlinkPrepared, style: number, raw16: number): void {
-  if (sink === null) return
   const st = p.styles[style]!
-  // U+002D is a one-byte string. Its contexts are made whatever the fact says, as they have been since one-byte strings got
-  // contexts of their own: the recorded questions of an inspected paragraph count its contexts (tests/replay.ts).
+  if (sink === null || st.font.facts.mapsHyphen !== null) return
+  // U+002D is a one-byte string, measured on the style's one-byte contexts.
   const oneByte = contextsOf(p, style, false)
-  if (st.font.facts.mapsHyphen === null && raw16 !== raw16Of(oneByte, oneByte.hyphen, '-')) {
+  if (raw16 !== raw16Of(oneByte, oneByte.hyphen, '-')) {
     addGap(sink, 'hyphen-glyph', st.run, 'a soft hyphen break the line breaker tried in a font the declaration gives no mapsHyphen fact for: Blink draws U+2010 when the primary font maps it and U+002D otherwise, and the two measure differently here (computed_style.cc:1804-1820)')
   }
 }
@@ -354,11 +363,7 @@ export function breakCandidate(sink: GapSink, sh: Shaper, sr: ShapeResult, endPo
     const bounds = positionBounds(sh, sr, k)
     if (bounds === null || endPosition < bounds[0] || endPosition > bounds[1]) continue
     // The condition concerns the glyph clusters on both sides of k, whose shares of the adjustment aren't known.
-    let a = k - 1
-    while (a > sr.start && !isClusterBoundary(p, a)) a--
-    let b = k + 1
-    while (b < sr.end && !isClusterBoundary(p, b)) b++
-    addGap(sink, 'unsafe-to-break', runAt(p, k), CANDIDATE_DETAIL, sourceRange(p, a, b))
+    addGap(sink, 'unsafe-to-break', runAt(p, k), CANDIDATE_DETAIL, clustersAround(p, k, sr.start, sr.end))
   }
 }
 
@@ -415,10 +420,6 @@ const PLATFORM_FONT_DETAIL = 'a font with an opsz axis: the DOM sets the axis fr
 
 const SOFT_HYPHEN_DETAIL = 'a default-ignorable character left out of an 8-bit Canvas string, whose glyph a `morx` substitution across it still sees in the DOM (hb-aat-layout-common.hh:1226-1241)'
 
-function languageOf(tag: string): string {
-  return tag.split(/[-_@]/)[0]!.toLowerCase()
-}
-
 // The source ranges of the text items under a style.
 function styleRanges(p: BlinkPrepared, style: number): { start: number; end: number }[] {
   const ranges: { start: number; end: number }[] = []
@@ -451,21 +452,23 @@ function contentGaps(gaps: Gap[], p: BlinkPrepared): void {
       }
     }
     if (p.env.dictionaryBreaks.kind === 'unavailable' &&
-      hasDictionaryCharacters(p.text, item.start, item.end, lineTable(p.styles[item.style]!.locale, p.settings[item.style]!.strictness, p.env.uiLanguage))) {
+      hasDictionaryCharacters(p.text, item.start, item.end, lineTable(p.styles[item.style]!.locale, p.styles[item.style]!.iterator.strictness, p.env.uiLanguage))) {
       addGap(gaps, 'dictionary-breaks-unavailable', item.run, 'Thai, Lao, Khmer or Myanmar text without the running browser\'s Intl.v8BreakIterator: no break opportunities inside such runs (DESIGN.md §6.3)', sourceRange(p, item.start, item.end))
     }
   }
 }
 
 // The gaps of the prepared content, its fonts' facts and the environment (DESIGN.md §2.8), after the ones preparation's
-// measuring raised.
-export function preparedContent(sink: GapSink, p: BlinkPrepared): void {
-  if (sink === null) return
+// measuring raised. They end the paragraph's list, which the prepared paragraph keeps canonical from here on: a line's
+// gaps take in the ones whose ranges meet what its decision measured (lineEdgeGaps).
+export function preparedContent(p: BlinkPrepared): void {
+  if (p.inspect === null) return
+  const sink = p.inspect.gaps
   contentGaps(sink, p)
   for (let s = 0; s < p.styles.length; s++) {
     const style = p.styles[s]!
     const ranges = (): { start: number; end: number }[] => styleRanges(p, s)
-    if (p.env.uiLanguage === null && (style.locale === null || (languageOf(style.locale) === 'ko' && p.settings[s]!.strictness === 'strict'))) {
+    if (p.env.uiLanguage === null && (style.locale === null || (languageOf(style.locale) === 'ko' && style.iterator.strictness === 'strict'))) {
       for (const at of ranges()) addGap(sink, 'ui-language', style.run, 'content without a locale, or ko with line-break: strict, follows Chrome\'s application locale, which isn\'t given: break tables, generic families and the HarfBuzz language (specs/blink-canvas.md §2.3)', at)
     }
     if (p.layoutZoom !== 1) {
@@ -487,6 +490,7 @@ export function preparedContent(sink: GapSink, p: BlinkPrepared): void {
       addGap(sink, 'font-fallback', p.styles[group.style]!.run, 'a shaping-group edge inside a grapheme cluster', graphemeSourceRange(p, group.start))
     }
   }
+  p.inspect.gaps = canonicalGaps(sink)
 }
 
 // What inspectLine and paragraphGaps read of a prepared paragraph; they throw on one prepared plain.
@@ -495,9 +499,46 @@ function inspected(p: BlinkPrepared, what: string): BlinkInspect {
   return p.inspect
 }
 
+// A list as it is handed out: for every gap, run and detail, the ranges its entries cover together as ranges that don't
+// meet, each at the place of the first entry it took in, which is where that range was first raised. So a list says what
+// was raised and in what order it first was, and not how often or in what order ranges were raised again. The entries are
+// copies: nothing handed out is the prepared paragraph's own, or a list still being built.
+export function canonicalGaps(gaps: readonly Gap[]): Gap[] {
+  const out: Gap[] = []
+  for (let i = 0; i < gaps.length; i++) {
+    const gap = copyOf(gaps[i]!)
+    if (gap.at === undefined) {
+      out.push(gap)
+      continue
+    }
+    // The entries of `out` for one gap, run and detail never meet each other, so the ones this range meets are the ones
+    // its union with the first of them meets, and all go into that first one.
+    const at = gap.at
+    let range: { start: number; end: number } | null = null
+    for (let o = 0; o < out.length; o++) {
+      const entry = out[o]!
+      if (entry.at === undefined || entry.gap !== gap.gap || entry.run !== gap.run || entry.detail !== gap.detail || at.start > entry.at.end || at.end < entry.at.start) continue
+      if (range === null) {
+        range = { start: Math.min(entry.at.start, at.start), end: Math.max(entry.at.end, at.end) }
+        entry.at = range
+      } else {
+        range.start = Math.min(range.start, entry.at.start)
+        range.end = Math.max(range.end, entry.at.end)
+        out.splice(o--, 1)
+      }
+    }
+    if (range === null) out.push(gap)
+  }
+  return out
+}
+
 // The gaps of the paragraph's content, fonts and environment, whatever the slot (DESIGN.md §5).
 export function paragraphGaps(p: BlinkPrepared): Gap[] {
-  return inspected(p, 'paragraphGaps').gaps
+  return inspected(p, 'paragraphGaps').gaps.map(copyOf)
+}
+
+function copyOf(gap: Gap): Gap {
+  return gap.at === undefined ? { ...gap } : { ...gap, at: { ...gap.at } }
 }
 
 // ---- A decided line's gaps ----
@@ -521,10 +562,10 @@ const CLAMPED_START_DETAIL = 'a wrapped line start inside shaped text whose resh
 
 const END_TEST_DETAIL = 'a break opportunity whose line-end reshape passed or failed the fit test by less than the rounding of the last safe offset\'s position: Blink reshapes from the last offset HarfBuzz left safe and tests the width after that position\'s ceiling (shaping_line_breaker.cc:543-553), HarfBuzz can flag offsets the port\'s width tests call safe (contextual lookups that change no width), and from an earlier safe offset the same glyphs pass or fail by another ceiling'
 
-// The group whose text holds offset k strictly inside, or -1.
+// The group whose text holds offset k strictly inside, or -1: the group of unit k, unless it starts there.
 function groupAround(p: BlinkPrepared, k: number): number {
-  for (let g = 0; g < p.groups.length; g++) if (p.groups[g]!.start < k && k < p.groups[g]!.end) return g
-  return -1
+  const g = k < p.text.length ? p.groupOfUnit[k]! : -1
+  return g >= 0 && p.groups[g]!.start < k ? g : -1
 }
 
 // Gaps at a line edge k inside a shaping group. `fromPosition`: the width there comes from the paragraph's position without
@@ -548,11 +589,7 @@ function edgeGap(gaps: Gap[], sh: Shaper, k: number, fromPosition: boolean, marg
     case 'start': case 'end': return
     case 'unknown':
       if (pair !== 0) {
-        let a = k - 1
-        while (a > group.start && !isClusterBoundary(p, a)) a--
-        let b = k + 1
-        while (b < group.end && !isClusterBoundary(p, b)) b++
-        addGap(gaps, 'font-fallback', run, REQUEUED_SPACE_DETAIL, sourceRange(p, a, b))
+        addGap(gaps, 'font-fallback', run, REQUEUED_SPACE_DETAIL, clustersAround(p, k, group.start, group.end))
         return
       }
       break
@@ -567,7 +604,7 @@ function edgeGap(gaps: Gap[], sh: Shaper, k: number, fromPosition: boolean, marg
   // Where the declaration's ligature facts say no ligature covers k (ligatures.ts), what liga, clig and calt change there is
   // a contextual form, which no fact places.
   const ligatureFree = p.ligature[k] === LIGATURE_NONE
-  const contextual = pair !== 0 && isClusterBoundary(p, k) && style.letterSpacing === 0 && pairAdjustNoLigatures16(sh, g, k, group.start, group.end) !== pair
+  const contextual = pair !== 0 && isClusterBoundary(p, k) && style.letterSpacing === 0 && pairAdjust16(sh, g, k, group.start, group.end, true) !== pair
   if (contextual && !ligatureFree) addGap(gaps, 'glyph-clusters', run, LIGATURE_DETAIL, at)
   // A joining edge is reshaped; the reshape's measurement reports joining-technology or unsafe-to-break. Joining letters
   // are where fonts form ligatures over several graphemes (lam-alef, the three-letter Allah ligature in Geeza Pro,
@@ -579,7 +616,7 @@ function edgeGap(gaps: Gap[], sh: Shaper, k: number, fromPosition: boolean, marg
   if (d !== 0 || wide !== 0) {
     // Which glyph carries the adjustment decides the position; FontFacts.pairKerning gives it for a kern between the two
     // clusters next to k, and nothing does for an adjustment that reads a longer context (positionAdjust16).
-    if (fromPosition && (style.pairKerning === null || pair !== wide || contextual)) addGap(gaps, 'unsafe-to-break', run, ATTRIBUTION_DETAIL, at)
+    if (fromPosition && (style.font.facts.pairKerning === null || pair !== wide || contextual)) addGap(gaps, 'unsafe-to-break', run, ATTRIBUTION_DETAIL, at)
     return
   }
   if (p.graphemeStarts[k] !== 1 || isSpaceLB(p.text.charCodeAt(k - 1)) || isSpaceLB(p.text.charCodeAt(k))) return
@@ -607,15 +644,11 @@ function itemEdgeGaps(gaps: Gap[], sh: Shaper, info: LineInfo): void {
     const r = info.results[i]!
     const item = p.items[r.itemIndex]!
     if (item.type !== 'text' || r.end === r.start || r.start !== item.start) continue
-    const group = p.groups[item.group]!
+    const g = p.groupOfUnit[r.start]!
+    const group = p.groups[g]!
     if (r.start <= group.start) continue
-    const limit = positionLimit(sh, item.group, r.start, group.start, group.end)
-    if (limit === null) continue
-    let a = r.start - 1
-    while (a > group.start && !isClusterBoundary(p, a)) a--
-    let b = r.start + 1
-    while (b < group.end && !isClusterBoundary(p, b)) b++
-    addGap(gaps, limit, runAt(p, r.start), ITEM_EDGE_DETAIL, sourceRange(p, a, b))
+    const limit = positionLimit(sh, g, r.start, group.start, group.end)
+    if (limit !== null) addGap(gaps, limit, runAt(p, r.start), ITEM_EDGE_DETAIL, clustersAround(p, r.start, group.start, group.end))
   }
 }
 
@@ -657,7 +690,7 @@ function lineEdgeGaps(gaps: Gap[], sh: Shaper, paragraph: readonly Gap[], info: 
         // A boundary the ligature facts settle is predicted: a ligature's cluster takes one position, and none forms elsewhere.
         if (!isClusterBoundary(p, k) || p.ligature[k] === LIGATURE_NONE) continue
         const d = pairAdjust16(sh, g, k, group.start, group.end)
-        if (pairAdjustNoLigatures16(sh, g, k, group.start, group.end) !== d) {
+        if (pairAdjust16(sh, g, k, group.start, group.end, true) !== d) {
           addGap(gaps, 'glyph-clusters', runAt(p, k), LIGATURE_DETAIL, sourceOffsetAt(p, k))
           break
         }
@@ -670,12 +703,7 @@ function lineEdgeGaps(gaps: Gap[], sh: Shaper, paragraph: readonly Gap[], info: 
   // c-06218d32a4b76797 keeps `له` together where natively every letter, reshaped alone, takes a line).
   if (info.breaksInsideWords) {
     for (let k = start.textOffset + 1; k < info.decisionEnd; k++) {
-      if (p.ligature[k] !== LIGATURE_UNCERTAIN) continue
-      let a = k - 1
-      while (a > 0 && !isClusterBoundary(p, a)) a--
-      let b = k + 1
-      while (b < p.text.length && !isClusterBoundary(p, b)) b++
-      addGap(gaps, 'glyph-clusters', runAt(p, k), UNCERTAIN_LIGATURE_DETAIL, sourceRange(p, a, b))
+      if (p.ligature[k] === LIGATURE_UNCERTAIN) addGap(gaps, 'glyph-clusters', runAt(p, k), UNCERTAIN_LIGATURE_DETAIL, clustersAround(p, k, 0, p.text.length))
     }
   }
   // An opportunity the port gave up after its end reshape failed the fit test, which Blink takes untested where HarfBuzz
@@ -696,7 +724,7 @@ function lineEdgeGaps(gaps: Gap[], sh: Shaper, paragraph: readonly Gap[], info: 
   let lineEnd = -1
   for (let i = info.results.length - 1; i >= 0 && lineEnd < 0; i--) {
     const r = info.results[i]!
-    if (p.items[r.itemIndex]!.type === 'text' && r.shape !== null && !r.hasOnlyPreWrapTrailingSpaces) lineEnd = r.trimmedEnd >= 0 ? r.trimmedEnd : r.end
+    if (p.items[r.itemIndex]!.type === 'text' && r.shape !== null && !r.hasOnlyPreWrapTrailingSpaces) lineEnd = r.trimmedEnd ?? r.end
   }
   for (let i = 0; i < info.endTests.length; i++) {
     const test = info.endTests[i]!
@@ -730,7 +758,7 @@ function lineEdgeGaps(gaps: Gap[], sh: Shaper, paragraph: readonly Gap[], info: 
       const end = head.call.end
       const itemEnd = p.items[first.itemIndex]!.end
       if (end < itemEnd && !isSegmentEdge(p, end) && !isFontRunEdge(p, end, p.groups[g]!.start, p.groups[g]!.end)) {
-        addGap(gaps, 'in-word-prefix', runAt(p, k), TRUNCATED_RESHAPE_DETAIL, sourceRange(p, k, first.trimmedEnd >= 0 ? first.trimmedEnd : first.end))
+        addGap(gaps, 'in-word-prefix', runAt(p, k), TRUNCATED_RESHAPE_DETAIL, sourceRange(p, k, first.trimmedEnd ?? first.end))
       }
     }
   }
@@ -762,8 +790,7 @@ function lineEdgeGaps(gaps: Gap[], sh: Shaper, paragraph: readonly Gap[], info: 
 export function lineGaps(p: BlinkPrepared, line: { info: LineInfo; start: BlinkLineStart; gaps: Gap[] | null }): Gap[] {
   const paragraph = inspected(p, 'inspectLine').gaps
   if (line.gaps === null) throw new Error('inspectLine reads a line filled from an inspected paragraph, and this one was filled plain')
-  const gaps: Gap[] = []
-  for (let i = 0; i < line.gaps.length; i++) gaps.push({ ...line.gaps[i]! })
+  const gaps = line.gaps.map(copyOf)
   const sh: Shaper = { p, gaps }
   lineEdgeGaps(gaps, sh, paragraph, line.info, line.start)
   itemEdgeGaps(gaps, sh, line.info)

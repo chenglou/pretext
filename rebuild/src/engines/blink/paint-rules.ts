@@ -113,10 +113,13 @@ export const blinkPaintRules: PaintRules<BlinkPaintFacts> = {
   hangingForm: (line, before, hanging, style) => before.kind === 'text' && before.run === hanging.run ? hangingFormAfterText(line, style) : 'own-node',
   spacingAfterRunEnd: false,
   // The port's ScriptRunIterator (script.ts) over a text laid out alone: an 8-bit text is one Latin segment
-  // (harfbuzz_shaper.cc:1072-1077). Blink resolves levels with ICU.
+  // (harfbuzz_shaper.cc:1072-1077), unless its block is RTL. An RTL block enables bidi (is_bidi_enabled_,
+  // inline_items_builder.cc:1744-1746), and SegmentScriptRuns then runs over 8-bit text too (inline_node.cc:1256-1290;
+  // index.ts prepare's `segmented`), so a painted line of brackets that were Latin after Latin letters in the paragraph is
+  // Common there (c-0aaf6ad5c7daf6da: 13 brackets in Amiri wrap after 8 when painted alone). Blink resolves levels with ICU.
   lineStartScript: {
     form: 'arabic-letter-mark',
-    scriptsOf: (text, sixteenBit) => sixteenBit || WIDE.test(text) ? scriptsPerUnit(text) : new Uint8Array(text.length).fill(USCRIPT_LATIN),
+    scriptsOf: (text, sixteenBit, direction) => sixteenBit || direction === 'rtl' || WIDE.test(text) ? scriptsPerUnit(text) : new Uint8Array(text.length).fill(USCRIPT_LATIN),
     levelsOf: (text, direction) => resolveIcuBidi(text, direction, blinkBidiData).levels,
   },
   // ShapeLine trims a character HanKerning may trim only while it breaks lines (shaping_line_breaker.cc:344-376).

@@ -1,50 +1,63 @@
 // What a painter takes of a decided Blink line (model.ts LinePieces): the fragments in logical order (DESIGN.md §2.2), from
 // the line's item results, with the hanging width that says whether the line overflows its band. Nothing here reads or
 // makes gaps, limits, glyph clusters or the offset mapping: those are inspection's (inspect.ts).
+import type { ContentEvent } from '../../content.js'
 import type { Fragment, LinePieces, TextAlign } from '../../model.js'
-import { positionInsideGrapheme } from './gaps.js'
+import { positionInsideGrapheme, runOfSource } from './gaps.js'
 import type { BlinkLineStart } from './geometry.js'
 import type { LineInfo } from './line-breaker.js'
 import { joinsAcross, luTrunc, viewPrefix16, widthOf16, type Shaper } from './shape.js'
-import type { BlinkPrepared } from './types.js'
+import type { BlinkPrepared, InlineItem } from './types.js'
 
 // What Blink's painting rules read beside the pieces.
 export type BlinkPaintFacts = { needsAccurateEndPosition: boolean }
 
 function sourceStartOf(p: BlinkPrepared, textOffset: number): number {
   for (let t = textOffset; t < p.text.length; t++) if (p.sourceOffsets[t]! >= 0) return p.sourceOffsets[t]!
-  return p.sourceLength
+  return p.index.text.length
 }
 
 // The source units a line consumed, from where it started and where the next one starts (null after the last line):
 // consecutive lines tile the text. Known when the line is filled, before any fragment is.
 export function lineSourceRange(p: BlinkPrepared, start: BlinkLineStart, next: BlinkLineStart | null): { start: number; end: number } {
   const isFirst = start.itemIndex === 0 && start.textOffset === 0
-  return { start: isFirst ? 0 : sourceStartOf(p, start.textOffset), end: next === null ? p.sourceLength : sourceStartOf(p, next.textOffset) }
+  return { start: isFirst ? 0 : sourceStartOf(p, start.textOffset), end: next === null ? p.index.text.length : sourceStartOf(p, next.textOffset) }
 }
 
 type UnitKind = 'text' | 'hanging' | 'trimmed' | 'collapsed' | 'forced-break'
 
-// Which element fragments the line's item results hold (DESIGN.md §2.2): a span's start and end edges where its open and
-// close tag results sit, an atomic inline, a <br> that ended the line, a <wbr> consumed on it.
-type ElementsOnLine = { open: Set<number>; close: Set<number>; atomic: Map<number, number>; br: Set<number>; wbr: Set<number> }
-
-function elementsOn(p: BlinkPrepared, info: LineInfo): ElementsOnLine {
-  const on: ElementsOnLine = { open: new Set(), close: new Set(), atomic: new Map(), br: new Set(), wbr: new Set() }
-  for (let i = 0; i < info.results.length; i++) {
-    const item = p.items[info.results[i]!.itemIndex]!
-    switch (item.type) {
-      case 'open-tag': on.open.add(item.element); break
-      case 'close-tag': on.close.add(item.element); break
-      case 'atomic': on.atomic.set(item.element, item.bidiLevel); break
-      case 'control':
-        if (item.element >= 0 && item.control === 'forced-break') on.br.add(item.element)
-        if (item.control === 'wbr') on.wbr.add(item.element)
-        break
-      case 'text': break
-    }
+// Whether an item is an element's (a span's tags, an atomic inline, <br>, <wbr>) and not a text leaf's.
+function isElementItem(item: InlineItem): boolean {
+  switch (item.type) {
+    case 'text': return false
+    case 'control': return item.control === 'br' || item.control === 'wbr'
+    case 'open-tag': case 'close-tag': case 'atomic': return true
   }
-  return on
+}
+
+// The content event an item was made from (content.ts ContentEvent).
+function eventOf(p: BlinkPrepared, item: InlineItem): number {
+  switch (item.type) {
+    case 'text': return p.index.leaves[item.run]!.event
+    case 'control':
+      switch (item.control) {
+        case 'forced-break': case 'tab': case 'generated-zwsp': case 'cr-ff': return p.index.leaves[item.run]!.event
+        case 'br': case 'wbr': return p.index.elements[item.element]!.open
+      }
+    case 'open-tag': case 'atomic': return p.index.elements[item.element]!.open
+    case 'close-tag': return p.index.elements[item.element]!.close
+  }
+}
+
+// The element fragment an element's item result makes at its item's own event (DESIGN.md §2.2): a span's start and end
+// edges where its open and close tag results sit, an atomic inline, a <br> that ended the line, a <wbr> consumed on it.
+function elementFragment(item: InlineItem, event: Exclude<ContentEvent, { kind: 'text' }>): Fragment | null {
+  switch (event.kind) {
+    case 'open': return item.type === 'open-tag' && item.element === event.element ? { kind: 'box-start', element: event.element } : null
+    case 'close': return item.type === 'close-tag' && item.element === event.element ? { kind: 'box-end', element: event.element } : null
+    case 'atomic': return item.type === 'atomic' && item.element === event.element ? { kind: 'atomic', element: event.element, level: item.bidiLevel } : null
+    case 'br': case 'wbr': return item.type === 'control' && item.control === event.kind && item.element === event.element ? { kind: event.kind, element: event.element } : null
+  }
 }
 
 // The line's fragments in logical order (DESIGN.md §2.2), from its item results, in document order over the content events.
@@ -57,12 +70,13 @@ function fragmentsOf(p: BlinkPrepared, info: LineInfo, contentStart: number, con
   for (let i = 0; i < info.results.length; i++) {
     const r = info.results[i]!
     const item = p.items[r.itemIndex]!
-    if (item.type === 'open-tag' || item.type === 'close-tag' || item.type === 'atomic' || item.element >= 0) continue
+    // An element's item makes an element fragment (the walk below) and takes no unit of a text leaf.
+    if (isElementItem(item)) continue
     const level = r.hasOnlyBidiTrailingSpaces && p.bidiEnabled ? p.baseLevel : item.bidiLevel
     // CR and FF in preserve modes are control items in text_content without a fragment item (HandleControlItem →
     // HandleEmptyText, line_breaker.cc:2988-2994, 2034-2042): content the engine keeps without placing, painted as text so
     // the painted line splits its shaping group there too.
-    if (item.control === 'cr-ff') {
+    if (item.type === 'control' && item.control === 'cr-ff') {
       for (let t = item.start; t < item.end; t++) {
         const u = t - contentStart
         if (u < 0 || u >= n) continue
@@ -73,7 +87,7 @@ function fragmentsOf(p: BlinkPrepared, info: LineInfo, contentStart: number, con
       }
       continue
     }
-    const isText = item.type === 'text' || item.control === 'tab'
+    const isText = item.type === 'text' || (item.type === 'control' && item.control === 'tab')
     // Preserved trailing spaces hang except under pre and break-spaces (line_info.cc:357-395).
     const ws = p.styles[item.style]!.whiteSpace
     const isHanging = isText && r.hasOnlyPreWrapTrailingSpaces && ws !== 'pre' && ws !== 'break-spaces'
@@ -82,11 +96,11 @@ function fragmentsOf(p: BlinkPrepared, info: LineInfo, contentStart: number, con
       if (u < 0 || u >= n) continue
       resultOf[u] = i
       levels[u] = level
-      if (item.control === 'forced-break') kinds[u] = 'forced-break'
+      if (item.type === 'control' && item.control === 'forced-break') kinds[u] = 'forced-break'
       else if (isText) kinds[u] = isHanging ? 'hanging' : 'text'
       if (kinds[u] === 'text') lastTextUnit = Math.max(lastTextUnit, u)
     }
-    for (let t = r.end; t < r.trimmedEnd; t++) {
+    for (let t = r.end; t < (r.trimmedEnd ?? r.end); t++) {
       const u = t - contentStart
       if (u >= 0 && u < n) { kinds[u] = 'trimmed'; levels[u] = p.baseLevel }
     }
@@ -99,7 +113,6 @@ function fragmentsOf(p: BlinkPrepared, info: LineInfo, contentStart: number, con
       levels[u] = p.baseLevel
     }
   }
-  const on = elementsOn(p, info)
   const fragments: Fragment[] = []
   let open: { kind: UnitKind; run: number; level: number; start: number; end: number; painted: string; result: number } | null = null
   const close = (): void => {
@@ -121,46 +134,49 @@ function fragmentsOf(p: BlinkPrepared, info: LineInfo, contentStart: number, con
       }
     }
   }
+  // The events the line touches: from the first to the last of the ones its item results were made from and the ones of
+  // the leaves that hold its source units. Item results and events are both in document order, so an element's result is
+  // the next one of its kind when its event comes by.
   const events = p.index.events
-  for (let v = 0; v < events.length; v++) {
+  let first = events.length
+  let last = -1
+  if (info.results.length > 0) {
+    first = eventOf(p, p.items[info.results[0]!.itemIndex]!)
+    last = eventOf(p, p.items[info.results[info.results.length - 1]!.itemIndex]!)
+  }
+  if (sourceStart < sourceEnd) {
+    first = Math.min(first, p.index.leaves[runOfSource(p, sourceStart)]!.event)
+    last = Math.max(last, p.index.leaves[runOfSource(p, sourceEnd - 1)]!.event)
+  }
+  let nextResult = 0
+  for (let v = first; v <= last; v++) {
     const event = events[v]!
-    switch (event.kind) {
-      case 'text': {
-        const leaf = p.index.leaves[event.run]!
-        const from = Math.max(sourceStart, leaf.start)
-        const to = Math.min(sourceEnd, leaf.start + leaf.text.length)
-        for (let s = from; s < to; s++) {
-          const t = p.contentOffsets[s]!
-          const u = t - contentStart
-          const inLine = t >= 0 && u >= 0 && u < n
-          const kind: UnitKind = inLine ? kinds[u]! : 'collapsed'
-          const level = inLine ? levels[u]! : p.baseLevel
-          const result = inLine ? resultOf[u]! : -1
-          if (open !== null && open.kind === kind && open.run === event.run && open.level === level && open.end === s && open.result === result) {
-            open.end = s + 1
-            if (inLine) open.painted += p.text.charAt(t)
-            continue
-          }
-          close()
-          open = { kind, run: event.run, level, start: s, end: s + 1, painted: inLine ? p.text.charAt(t) : '', result }
-        }
-        break
+    if (event.kind !== 'text') {
+      while (nextResult < info.results.length && !isElementItem(p.items[info.results[nextResult]!.itemIndex]!)) nextResult++
+      const fragment = nextResult < info.results.length ? elementFragment(p.items[info.results[nextResult]!.itemIndex]!, event) : null
+      if (fragment === null) continue
+      close()
+      fragments.push(fragment)
+      nextResult++
+      continue
+    }
+    const leaf = p.index.leaves[event.run]!
+    const from = Math.max(sourceStart, leaf.start)
+    const to = Math.min(sourceEnd, leaf.start + leaf.text.length)
+    for (let s = from; s < to; s++) {
+      const t = p.contentOffsets[s]!
+      const u = t - contentStart
+      const inLine = t >= 0 && u >= 0 && u < n
+      const kind: UnitKind = inLine ? kinds[u]! : 'collapsed'
+      const level = inLine ? levels[u]! : p.baseLevel
+      const result = inLine ? resultOf[u]! : -1
+      if (open !== null && open.kind === kind && open.run === event.run && open.level === level && open.end === s && open.result === result) {
+        open.end = s + 1
+        if (inLine) open.painted += p.text.charAt(t)
+        continue
       }
-      case 'open':
-        if (on.open.has(event.element)) { close(); fragments.push({ kind: 'box-start', element: event.element }) }
-        break
-      case 'close':
-        if (on.close.has(event.element)) { close(); fragments.push({ kind: 'box-end', element: event.element }) }
-        break
-      case 'atomic':
-        if (on.atomic.has(event.element)) { close(); fragments.push({ kind: 'atomic', element: event.element, level: on.atomic.get(event.element)! }) }
-        break
-      case 'br':
-        if (on.br.has(event.element)) { close(); fragments.push({ kind: 'br', element: event.element }) }
-        break
-      case 'wbr':
-        if (on.wbr.has(event.element)) { close(); fragments.push({ kind: 'wbr', element: event.element }) }
-        break
+      close()
+      open = { kind, run: event.run, level, start: s, end: s + 1, painted: inLine ? p.text.charAt(t) : '', result }
     }
   }
   close()
@@ -257,17 +273,16 @@ export function usedTextAlign(align: TextAlign, info: LineInfo): TextAlign {
 // the joined forms only in a font that reads HarfBuzz's context (FontFacts.joining 'opentype').
 function joinsNextLine(p: BlinkPrepared, next: BlinkLineStart | null): boolean {
   if (next === null) return false
+  // The group whose text ends at k or holds it inside: the one of the unit before k.
   const k = next.textOffset
-  for (let g = 0; g < p.groups.length; g++) {
-    const group = p.groups[g]!
-    if (!(group.start < k && k <= group.end)) continue
-    switch (p.styles[group.style]!.joining) {
-      case 'opentype': return joinsAcross(p, k, group.start, group.end)
-      case 'aat': return false
-      case null: return false
-    }
+  const g = k > 0 ? p.groupOfUnit[k - 1]! : -1
+  if (g < 0) return false
+  const group = p.groups[g]!
+  switch (p.styles[group.style]!.font.facts.joining) {
+    case 'opentype': return joinsAcross(p, k, group.start, group.end)
+    case 'aat': return false
+    case null: return false
   }
-  return false
 }
 
 // The pieces of the line `info` filled from `start`. It measures what the hanging width needs and raises nothing.

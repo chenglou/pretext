@@ -2,9 +2,10 @@
 // Canvas totals can't place it, and how far off it can be. Inspection reads them, for the limits of the geometry
 // (inspect.ts) and for gaps (gaps.ts); filling a line never does.
 import type { GapName } from '../../model.js'
+import { isSegmentEdge } from './emoji.js'
 import { LIGATURE_NONE } from './ligatures.js'
 import {
-  adjust16, adjustBefore16, adjustmentSide, ceilFrom16, clusterStartAtOrBefore, isClusterBoundary, isSegmentEdge, joinsAcross, pairAdjust16, pairAdjustNoLigatures16,
+  adjust16, adjustBefore16, adjustmentSide, ceilFrom16, clusterStartAtOrBefore, isClusterBoundary, joinsAcross, pairAdjust16,
   positionAdjust16, prefix16, requeuedSpaceAt, sliceEdge, startsClusterInsideGrapheme, type ShapeResult, type Shaper, type View,
 } from './shape.js'
 
@@ -48,8 +49,8 @@ export function positionLimit(sh: Shaper, g: number, k: number, lo: number, hi: 
   if (wide === 0 && pair === 0) return null
   // A kern between the two clusters next to k, the same with liga, clig and calt off, sits where the pairKerning fact says;
   // any other adjustment (a longer context, a contextual form) sits on glyphs no fact names (positionAdjust16).
-  if (style.pairKerning === null || pair !== wide) return 'unsafe-to-break'
-  if (style.letterSpacing === 0 && pairAdjustNoLigatures16(sh, g, k, lo, hi) !== pair) return 'unsafe-to-break'
+  if (style.font.facts.pairKerning === null || pair !== wide) return 'unsafe-to-break'
+  if (style.letterSpacing === 0 && pairAdjust16(sh, g, k, lo, hi, true) !== pair) return 'unsafe-to-break'
   return null
 }
 
@@ -61,7 +62,7 @@ export function positionLimit(sh: Shaper, g: number, k: number, lo: number, hi: 
 // shapeOf). Joined letters are in-word-prefix's.
 export function pairPlacementUnknown(sh: Shaper, g: number, k: number, lo: number, hi: number): boolean {
   const p = sh.p
-  if (p.styles[p.groups[g]!.style]!.pairKerning !== null) return false
+  if (p.styles[p.groups[g]!.style]!.font.facts.pairKerning !== null) return false
   if (k <= lo || k >= hi || !isClusterBoundary(p, k) || isSegmentEdge(p, k) || joinsAcross(p, k, lo, hi)) return false
   return adjustmentSide(sh, g, k, lo, hi) === 'pair' && positionAdjust16(sh, g, k, lo, hi) !== 0
 }

@@ -3,6 +3,7 @@ import { describe, expect, test } from 'bun:test'
 import { indexContent } from '../../content.js'
 import { NO_BOX_EDGE, UNKNOWN_FONT_FACTS, type InlineNode, type Paragraph } from '../../model.js'
 import { buildContent, segmentBidiRuns, stylesOf, type Content } from './content.js'
+import type { InlineItem } from './types.js'
 
 const font = { family: 'Arial', size: 16, weight: 400, style: 'normal' as const, facts: UNKNOWN_FONT_FACTS }
 
@@ -14,10 +15,15 @@ function paragraph(runs: [string, 'span' | 'text'][], whiteSpace: Paragraph['whi
   return { ...style, content, lineHeight: 20, direction, lang: 'en', textIndent: 0, textAlign: 'start' }
 }
 
+// An item's type, with a control item's kind.
+function kindOf(item: InlineItem): string {
+  return item.type === 'control' ? `control:${item.control}` : item.type
+}
+
 function content(p: Paragraph): Content {
   const index = indexContent(p)
   const s = stylesOf(p, index, 1)
-  return buildContent(index, s.styles, s.styleOfLeaf, s.styleOfElement, () => false)
+  return buildContent(index, s.styles, s.styleOfLeaf, s.styleOfElement)
 }
 
 describe('blink content', () => {
@@ -46,9 +52,7 @@ describe('blink content', () => {
   test('pre-wrap: leading spaces get a generated break opportunity; controls split items', () => {
     const c = content(paragraph([['  a\tb\nc\rd', 'text']], 'pre-wrap'))
     expect(c.text).toBe('  ​a\tb\nc\rd')
-    expect(c.items.map(i => `${i.type}:${i.control}`)).toEqual([
-      'text:none', 'control:generated-zwsp', 'text:none', 'control:tab', 'text:none', 'control:forced-break', 'text:none', 'control:cr-ff', 'text:none',
-    ])
+    expect(c.items.map(kindOf)).toEqual(['text', 'control:generated-zwsp', 'text', 'control:tab', 'text', 'control:forced-break', 'text', 'control:cr-ff', 'text'])
   })
 
   test('pre-line removes the space before a newline', () => {
@@ -63,9 +67,7 @@ describe('blink content', () => {
     first.whiteSpace = 'nowrap'
     const c = content(p)
     expect(c.text).toBe('a ​b')
-    expect(c.items.map(i => `${i.type}:${i.control}`)).toEqual([
-      'open-tag:none', 'text:none', 'close-tag:none', 'open-tag:none', 'control:generated-zwsp', 'text:none', 'close-tag:none',
-    ])
+    expect(c.items.map(kindOf)).toEqual(['open-tag', 'text', 'close-tag', 'open-tag', 'control:generated-zwsp', 'text', 'close-tag'])
   })
 
   test('atomic inlines, <br> and <wbr> add U+FFFC, LF and U+200B without source units', () => {
@@ -75,9 +77,7 @@ describe('blink content', () => {
     // The space after "a" is restored before the atomic inline; the leading space after <br> collapses.
     expect(c.text).toBe('a \u{FFFC}\nb​c')
     expect(Array.from(c.sourceOffsets)).toEqual([0, 1, -1, -1, 3, -1, 4])
-    expect(c.items.map(i => `${i.type}:${i.control}:${i.element}`)).toEqual([
-      'text:none:-1', 'atomic:none:0', 'control:forced-break:1', 'text:none:-1', 'control:wbr:2', 'text:none:-1',
-    ])
+    expect(c.items.map(i => 'element' in i ? `${kindOf(i)}:${i.element}` : kindOf(i))).toEqual(['text', 'atomic:0', 'control:br:1', 'text', 'control:wbr:2', 'text'])
   })
 
   test('D5: text that ICU calls LTR and not mixed turns bidi off (specs/bidi.md §7.5)', () => {

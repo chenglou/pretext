@@ -16,6 +16,142 @@ Baselines for transitions:
 - the triage population (research/MAIN-TRIAGE.md §2.1, Chrome small file, 8,933 cases): the charter triage rows
   (`.artifacts/charter-20260916/triage/runs/chrome/charter-file/small`), scored again with scorer 3.
 
+## Re-architecture X3: the model clean-up, canonical gap lists, the painter's script check
+
+Pinned Chrome 153.0.8010.50, scorer 7, 2026-09-19, branch `ra-x3-blink` on the X2 merge (f474123), step X3 of
+research/ARCHITECTURE-PLAN-2.md, then three jobs that change recorded rows, each a commit of its own. The clean-up changed
+no rule, recipe, gap condition, prose or probe order. Runs: `.artifacts/tests/runs/ra-x3-blink/`; probe
+`.artifacts/probes/blink/storage-ra-x3`.
+
+**The clean-up** (through eda605d, and the comments of 5cd437f).
+
+- *One style record.* A style (`types.ts` `BlinkStyle`) holds its iterator settings, its Canvas contexts, the two answers
+  Canvas gives when first needed (its one-byte contexts, whether Canvas splits its words), its HanKerning font data and its
+  span's `ShouldCreateBoxFragment`, which Blink keeps on the LayoutInline. The prepared paragraph's five per-style arrays
+  go, with its dead and derived fields (`textAlign`, `needsAccurateEndPosition`, `sourceLength`, `wordSpacingAnywhere`) and
+  the style's copies of font facts (`joining`, `pairKerning`, `fontKey`, `primaryFamily`). Equal fonts are compared by
+  field (`content.ts` `sameFont`).
+- *Items are a tagged union.* Text, control (a text leaf's forced break, tab, generated U+200B, CR or FF; an element's
+  `br` or `wbr`), tags and atomic inlines, each with the fields it has. No `'none'` control, no -1 run or element, no
+  `group` on an item (`groupOfUnit` at its start has it), no builder state on items (`removedSpaceSource` is the
+  builder's, `isEmptyItem` is read from the style's edges). The line breaker reshapes through the item's shape result,
+  and keeps an item's result by its index from the line's first item where it had a Map.
+- *A line's output reads the paragraph around the line.* `fragmentsOf` walks the events from the first to the last the
+  line touches (the events its item results were made from, and the ones of the leaves that hold its source units) and
+  meets the element results in turn, without the per-line Sets and Map of elements. The box states at a line start are
+  the first item's chain of styles, not a scan from item 0. The mapping finds a generated unit's item from the line's
+  first item as the units go by. `groupAround` is `groupOfUnit[k]` unless that group starts at `k`, and `joinsNextLine`
+  reads the group of the unit before the offset.
+- *The break iterator pulls boundaries.* Every line start restarts ICU's text, and the iterator scanned it to the
+  paragraph's end into two text-length arrays per line. It keeps the rule iterator and the boundaries given so far and
+  pulls the next when a question reaches past them; 8-bit grapheme boundaries are read from the text. The running
+  browser's dictionary boundaries are still asked over the whole text from the line start (the recorder keeps what
+  `next()` returned, so a partial pull would record a partial segmentation), but only once a dictionary segment comes by.
+- *Maps and Sets.* OpenType language tags are generated as records sorted by code and searched; a group's usable
+  ligature facts are found once per listed family, not once per cluster. HanKerning types are searched in their generated
+  pairs, a paired bracket is read from the bidi triples, the character tables are decoded when the module loads like the
+  break tables. Script directions and the default shaper's scripts are switches. Justification hands its additions by
+  unit of the item result. `UpdateFragmentedBoxDataEdges` is ported by Blink's own indices (`fragmented_box_data_index`).
+  None is left in the port.
+- *Imports.* The port's one import cycle was shape, gaps, limits, hankerning and ligatures. A style's contexts and a
+  measured total moved to `contexts.ts` and the segment edge test went beside RunSegmenter's priorities in `emoji.ts`, so
+  what is left is `shape.ts`, `limits.ts` and `gaps.ts`: a measurement raises its range's gaps, and a line's gap tests
+  measure. No split removes that one while one file owns every gap condition.
+- What is handed out aliases no prepared data: the paragraph's gaps are copies, as a line's were.
+
+**Canonical gap lists** (3aced8f). While a list is built a range still merges into the first entry it meets, so its
+grouping follows how often and in what order ranges are raised again (X2's finding below). A list handed out, a line's
+or the paragraph's, holds for every gap, run and detail the ranges its entries cover together as ranges that don't
+meet, each where it was first raised (`gaps.ts` `canonicalGaps`); the prepared paragraph keeps its own list that way once
+prepare ends, so what a line takes from it doesn't follow raises either. Proof
+(`.artifacts/tests/runs/ra-x3-blink/tools/canonical-proof.ts`, which defines canonical on its own and replays every case
+of both frozen Chrome references): 473 of 67,065 rows without facts and 303 with them differ byte-wise from the
+reference, in gap lists alone (465 and 296 cases; a line's list in 456 and 303 rows, the paragraph's in 22 rows without
+facts); every case of both
+configurations equals its reference after both are made canonical; every new list is a fixed point; no question changes.
+
+**The two flows X2 took back** (834a9f4). `shapeOf` carries the advance sum before the cluster being made, so every
+cluster edge of a part is measured once instead of four times, and `offsetForPosition` keeps what its binary search
+read at the two ends of what is left, the only two indices it comes back to. Against the references: every case of both
+configurations equal after canonicalizing, the same 473 and 303 rows differing byte-wise; questions repeats only in
+65,768 cases of each configuration and the same in the other 1,297; no other or new question.
+
+**A line painted in an RTL block** (48e058b; known tail `blink/painter-brackets-shaped-otherwise-than-the-paragraph`). An
+RTL block enables bidi (`is_bidi_enabled_`, inline_items_builder.cc:1744-1746), so `SegmentScriptRuns` runs over 8-bit
+text too (inline_node.cc:1256-1290), and a painted line of brackets that were Latin after Latin letters in the paragraph
+is Common. The painter's rule took every 8-bit line for one Latin segment; it now reads the block's direction, which the
+painter core passes (`paint.ts` `lineStartScript.scriptsOf`'s third parameter). No painted line changes: the painter
+differential of this change alone on the clean-up commit is byte-equal on all 67,065 cases of both configurations.
+Recorded painter limits move in 461 rows of each configuration (460 cases): `script-at-line-start` is named on 470 more
+lines (8-bit lines without a letter whose characters continued a Latin run in an RTL block) and on 31 fewer (such lines
+that are Common in the paragraph too). In tier 2 the two open rows `c-0aaf6ad5c7daf6da` and `c-48abe81f791883d3` go from
+`fail open` to `fail covered by limit:script-at-line-start`, and six rows that gaps already covered name the limit too
+(`c-2c3919e3066dac30`, `c-63105f8280e183a3`, `c-3ed24bee6c75ffc0`, `c-2b9ac66959add3b4` in `twins/rtl-block`;
+`c-2d63e4cce5180b83`, `c-5b41281666ef0402` in `suite/unprovided-direction`); no row loses its cover.
+
+**The hyphen's one-byte contexts** (8b80968). An inspected paragraph made a style's one-byte contexts whenever a hyphen
+was shaped, used or not, because the recorded questions count a paragraph's contexts. It now makes them only where
+`hyphen-glyph`'s test measures U+002D (no `mapsHyphen` fact). The context count falls in 3,745 cases of each
+configuration (by 4 in 3,651, by 5 in 94) with no other change to their questions and no change to a prediction; the
+plain path never made them. The browser's usual run makes 15.75 contexts a paragraph for 15.98.
+
+**Gates** (the clean-up at eda605d, then everything at 5cd437f).
+
+| Gate | The clean-up | With the three jobs |
+|---|---|---|
+| tier 0 | `tsc` clean for the six projects; 811 tests pass | the same |
+| tier 1, all six references | every one of 389,646 cases the same, 0 questions changed; exit 3 by Chrome's string storage rule alone (`shape.ts` changed) | Chrome exit 1: 926 rows without facts and 756 with them differ byte-wise (473 and 303 by gap lists, 461 by painter limits, 8 by both), all equal after canonicalizing with the limits left out; the rest repeats only but for the 3,745 cases whose context count fell. Firefox and webkit-host: every case the same |
+| `function-set.ts` plain, pure, sweep | 67,065 of 67,065 in both configurations (sweep: no facts) | the same; 26,035 and 21,826 cases first ask in another order than the lab's path, as before |
+| citations | 0 lost; three losses accepted by name (the `'none'` control's throw, the generated file's hash, `isSpaceLB` written once) | the same |
+| painter differential | 67,065 of 67,065 byte-equal in both configurations | 0 differ; the 473 and 303 rows whose layout differs byte-wise aren't painted offline (tier 2 paints them) |
+| twin scan (`twins`, `runs`, `ws`, `policy`, `rich-prewrap`: 6,919 cases) | | 333 ask a two-byte slice, 0 ask one context both storages |
+| probe `blink-storage` | | 6 of 6 probes, 85 of 85 checks, every value as in X2's run; S5: 285.79 on the 16bit context and 159.12 on the 8bit one, in both orders |
+| tier 2, both orders, no facts and facts | 0 status transitions, 0 exact-value changes (266 and 552 differing predicted values, 992 and 869 rect counts, 149,318 and 108,919 limited values, as the references); gate lost 0; row for row against the references' recording (134,130 rows a configuration): 0 native observations, predictions or painted lines differ | 8 transitions in each configuration, all the painter's and all the limit's (above), 0 from pass to a failure; exact and limited values as the references; gate lost 0; against the references' recording 0 native observations and 0 painted lines differ, and predictions differ in the 926 and 756 rows of tier 1, in both orders |
+| plain predictor, forward, all 67,065 no-facts cases | | line ranges equal the usual run's in every case; 0 native observations differ |
+
+**Canvas questions a paragraph** (the 67,065 recorded cases under replay; the browser's usual run counts 736.22 for
+1,016.78):
+
+| | asked at X2 | asked now | distinct | ask ratio now |
+|---|---:|---:|---:|---:|
+| lab path, no supplied facts | 1,016.8 | 736.2 | 99.74 | 7.38 |
+| lab path, with the lab's facts | 1,055.7 | 775.6 | 91.68 | 8.46 |
+| plain path, no supplied facts | 250.7 | 234.3 | 61.02 | 3.84 |
+| plain path, with the lab's facts | 240.8 | 224.3 | 48.33 | 4.64 |
+
+**Where the repeats are now** (tier 1 `--sites`, no supplied facts; 42.7 M repeats for X2's 61.5 M). By what is measured:
+the pair window's three strings 69.1%, a position's prefix 10.7%, the wide window 9.2%, the script split inside
+`measure16` 6.5%, a piece's or call's total for the wide window 4.1%. By who asks: `inspectLine` 51.7% (`shapeOf` 33.9%,
+`lineEdgeGaps` 17.8%; `floatSum` 15.2% and `pairPlacement` 14.9% sit under them), `fillLine` 43.5% (`offsetForPosition`
+11.5%), `prepare` the rest. With the lab's facts `inspectLine` holds 66.8% (`viewPositionLimit` 34.4%). What is left is
+the same string met again elsewhere: the pair windows of an offset asked by several steps of one fill and again by the
+inspection. The two stores that would take them stay possible and unbuilt (the plan's decision 4): per-fill positions and
+safe flags on the item's shape result, which a line still makes once per item and keeps for the fill (`shapeResults`), and
+one record per unit of equal text.
+
+**Times.** Two other owners' jobs loaded the machine (load average 50 and more) for most of the stage, so the pairs below
+ran back to back and the browser's own native time says how loaded each run was (16.5 s for the giants on a quiet
+machine). The giants under the exclusive lock, 9 cases, the start commit then this step: 253.0 s with 113.6 s of
+prediction (native 33.2 s) against 237.6 s with 78.4 s (native 34.8 s); the clean-up commit alone under the same load
+209.1 s with 77.5 s (native 33.1 s): the per-line scans to the paragraph's end were what it cost. Again as the load fell:
+180.3 s with 90.1 s (native 24.6 s) against 108.7 s with 37.9 s (native 17.1 s), where X2 measured 122.0 s with 55.3 s
+on a quiet machine for the library this step starts from. The giants ask 22.8 M questions for 38.3 M. The clean-up's
+giants rows equal the start's, X2's and the correctness line's byte for byte (layout, observation, painter limits); the
+final ones equal them after canonicalizing, 8 of 9 byte for byte. Tier 2 forward without facts at a load average of 7:
+89 s with 80.5 s of prediction over the rows for the start commit, 88 s with 73.8 s for this step.
+
+**What a prepared paragraph reads across a forced break or over the whole text** (what streaming text could not reuse
+as it is): whether bidi is on, whether the text is 8-bit and whether it is segmented, each decided over the whole text,
+and with them the contexts' partition and how every range is spelled for Canvas; the script runs, which cross a forced
+break (a Common or Inherited character after it takes the run before it, and bracket pairs reach across); a span's
+`shouldCreateBoxFragment` and first text leaf, which read the span's whole content; `hanKerningCandidates`, prefix counts
+over the whole text that appended text leaves as they are; the paragraph's gaps, whose per-style conditions range over
+every item of a style. Word spacing reads text_content index 0, the paragraph's first unit and not a line's. Shaping
+groups, grapheme boundaries, HarfBuzz continuations, ligature and font-run facts, emoji priorities and bidi levels stop at
+a forced break (a control item ends a group, LF is a paragraph separator and a Control). When a line is filled, ICU's
+boundaries restart at the line start and read nothing before it, and the dictionary segmentation is asked over the text
+from the line start to the paragraph's end.
+
 ## Re-architecture X2: the memo goes
 
 Pinned Chrome 153.0.8010.50, scorer 7, 2026-09-19, branch `ra-x2-blink` on the X1 merge (bd0fefe), step X2 of

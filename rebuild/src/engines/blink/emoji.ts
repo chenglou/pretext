@@ -6,6 +6,7 @@
 // only merges into a cluster of its own buffer (hb_form_clusters, hb-ot-shape.cc:578-586). `👩` ZWJ SHY is an emoji token,
 // then text: natively the ZWJ is a zero-width cluster of its own after the emoji (suite/woman-after-zwj).
 import { isEmoji, isEmojiModifierBase, isEmojiPresentation, isExtendedPictographic, isUnassigned } from './props.js'
+import type { BlinkPrepared } from './types.js'
 
 // FontFallbackPriority values the iterator gives (font_fallback_priority.h).
 export const PRIORITY_TEXT = 0
@@ -117,4 +118,11 @@ export function emojiPriorities(text: string): Uint8Array {
     i += t.length
   }
   return out
+}
+
+// Whether a RunSegmenter segment starts at text_content offset k: the script or the font fallback priority changes
+// (run_segmenter.cc:46-72). HarfBuzzShaper shapes every segment in its own call (harfbuzz_shaper.cc:1080-1101).
+export function isSegmentEdge(p: BlinkPrepared, k: number): boolean {
+  if (!p.segmented || k <= 0 || k >= p.text.length || (p.text.charCodeAt(k) & 0xfc00) === 0xdc00) return false
+  return p.scripts[k] !== p.scripts[k - 1] || p.priorities[k] !== p.priorities[k - 1]
 }

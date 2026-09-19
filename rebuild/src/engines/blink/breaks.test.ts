@@ -37,7 +37,7 @@ export function opportunities(r: Request): number[] {
   }
   const index = indexContent(paragraph)
   const { styles: st, styleOfLeaf, styleOfElement } = stylesOf(paragraph, index, 1)
-  const content = buildContent(index, st, styleOfLeaf, styleOfElement, () => false)
+  const content = buildContent(index, st, styleOfLeaf, styleOfElement)
   let is8Bit = true
   for (let i = 0; i < content.text.length; i++) if (content.text.charCodeAt(i) > 0xff) { is8Bit = false; break }
   const it = new LineBreakIterator(content.text, is8Bit, {

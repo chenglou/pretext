@@ -15,10 +15,11 @@ export const LB_ID = 14
 export const LB_NU = 19
 export const LB_SA = 24
 
-let runs: Uint32Array | null = null
+// Decoded when the module loads and kept for the life of the page, like the break tables (data.ts).
+const runs = new Uint32Array(decodeBase64(blinkCharPropsBase64).slice().buffer)
+const scriptRuns = new Uint32Array(decodeBase64(blinkScriptPropsBase64).slice().buffer)
 
 function propsOf(cp: number): number {
-  runs ??= new Uint32Array(decodeBase64(blinkCharPropsBase64).slice().buffer)
   let lo = 0
   let hi = runs.length - 1
   while (lo < hi) {
@@ -54,24 +55,25 @@ export function joiningType(cp: number): number {
 export const HAN_OTHER = 0, HAN_OPEN = 1, HAN_CLOSE = 2, HAN_MIDDLE = 3, HAN_OPEN_NARROW = 4, HAN_CLOSE_NARROW = 5, HAN_DOT = 6,
   HAN_COLON = 7, HAN_SEMICOLON = 8, HAN_OPEN_QUOTE = 9, HAN_CLOSE_QUOTE = 10
 
-let hanKerningTypes: Map<number, number> | null = null
-
+// From the generated [code point, type] pairs, ascending, of every code point that isn't kOther.
 export function hanKerningCharType(cp: number): number {
-  if (hanKerningTypes === null) {
-    hanKerningTypes = new Map()
-    for (let i = 0; i < blinkHanKerningTypes.length; i += 2) hanKerningTypes.set(blinkHanKerningTypes[i]!, blinkHanKerningTypes[i + 1]!)
+  const pairs = blinkHanKerningTypes
+  let lo = 0
+  let hi = pairs.length / 2 - 1
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1
+    if (pairs[2 * mid] === cp) return pairs[2 * mid + 1]!
+    if (pairs[2 * mid]! < cp) lo = mid + 1
+    else hi = mid - 1
   }
-  return hanKerningTypes.get(cp) ?? HAN_OTHER
+  return HAN_OTHER
 }
 
 // UScriptCode numbers used by name (unicode/uscript.h:63-539).
 export const USCRIPT_INVALID_CODE = -1, USCRIPT_COMMON = 0, USCRIPT_INHERITED = 1, USCRIPT_BOPOMOFO = 5, USCRIPT_HAN = 17,
   USCRIPT_HIRAGANA = 20, USCRIPT_KATAKANA = 22, USCRIPT_LATIN = 25, USCRIPT_KATAKANA_OR_HIRAGANA = 54
 
-let scriptRuns: Uint32Array | null = null
-
 function scriptPropsOf(cp: number): number {
-  scriptRuns ??= new Uint32Array(decodeBase64(blinkScriptPropsBase64).slice().buffer)
   let lo = 0
   let hi = scriptRuns.length / 2 - 1
   while (lo < hi) {
