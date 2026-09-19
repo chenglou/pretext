@@ -5,7 +5,7 @@
 // (GeckoFilledLine); placing them, the line's pieces and its inspection are read from that record (placement.ts, pieces.ts,
 // inspect.ts), and nothing writes it after the fill.
 import type { FillResultOf, Gap, LineSlot } from '../../model.js'
-import { advanceBefore, codePointAtT, groupAround } from './advance.js'
+import { advanceBefore, advanceSlack, codePointAtT, groupAround, roughAdvanceBefore } from './advance.js'
 import * as gaps from './gaps.js'
 import type { GeckoLineStart } from './geometry.js'
 import { BREAK_EMERGENCY_WRAP, BREAK_NORMAL } from './linebreak.js'
@@ -95,19 +95,29 @@ export function rangeAdvance(p: GeckoPrepared, prov: Provider, a: number, b: num
 // (the ligature range, gfxTextRun.cpp:989-1000, :1139-1159). So a position inside a group that lies within the range
 // counts the whole group (policy c-5ba3b0da55cb63ad: after alef, 16px Geeza Pro's lam lam heh scans as 669 au at once and
 // goes to the next line; fresh c-ca72eae85de1aead: a span holding lam alone scans it as its 280 au share of lam-alef).
-function scanAdvance(p: GeckoPrepared, prov: Provider, from: number, to: number, a: number, b: number, consulted: number[] | null): number {
-  const position = (t: number): number => {
-    if (t < prov.run.tEnd && p.clusterStart[t] === 1) {
-      const unit = p.units[p.unitOf[t]!]!
-      if (t > unit.tStart) {
-        const group = groupAround(p, prov.run, unit, t)
-        if (group !== null && group.start >= from && group.end <= to) return glyphBefore(p, prov.run, group.end, consulted)
-      }
-    }
-    return glyphBefore(p, prov.run, t, consulted)
-  }
+function scanAdvance(p: GeckoPrepared, prov: Provider, from: number, to: number, a: number, b: number, consulted: number[] | null, rough = false): number {
   if (b <= a) return 0
-  return position(b) - position(a) + spacingIn(p, prov, a, b, true) + tabsIn(prov, a, b)
+  // On a plain paragraph the scan's own candidates are read without the questions only a chosen edge needs (`rough`;
+  // advance.ts roughAdvanceBefore), and an earlier candidate is read as the scan read it then, so the running width's terms
+  // cancel; the scan's start is a line's or a frame's edge and whole. An inspected paragraph reads everything whole.
+  const tb = scanOffset(p, prov, from, to, b)
+  const end = consulted === null && rough ? roughAdvanceBefore(p, prov.run, tb) : glyphBefore(p, prov.run, tb, consulted)
+  const ta = scanOffset(p, prov, from, to, a)
+  const start = consulted === null && a !== from ? roughAdvanceBefore(p, prov.run, ta) : glyphBefore(p, prov.run, ta, consulted)
+  return end - start + spacingIn(p, prov, a, b, true) + tabsIn(prov, a, b)
+}
+
+// The offset whose advance stands for position t in a scan of [from, to): the end of a ligature group that lies within the
+// range and spans t, else t.
+function scanOffset(p: GeckoPrepared, prov: Provider, from: number, to: number, t: number): number {
+  if (t < prov.run.tEnd && p.clusterStart[t] === 1) {
+    const unit = p.units[p.unitOf[t]!]!
+    if (t > unit.tStart) {
+      const group = groupAround(p, prov.run, unit, t)
+      if (group !== null && group.start >= from && group.end <= to) return group.end
+    }
+  }
+  return t
 }
 
 // CalcTabWidths and AdvanceToNextTab (nsTextFrame.cpp:4298-4378): tab stops from the block's content edge. The position
@@ -209,8 +219,16 @@ function breakAndMeasureText(p: GeckoPrepared, prov: Provider, aStart: number, a
       const whitespaceWrapping = i > aStart && isBreakSpaces &&
         (p.isSpace[i - 1] === 1 || p.kind[i - 1] === KIND_TAB || p.kind[i - 1] === KIND_NEWLINE)
       if (atBreak || wordWrapping || whitespaceWrapping) {
-        const pendingAdvance = scanAdvance(p, prov, aStart, end, pending, i, consulted)
-        const trimmableAdvance = trimmableChars > 0 ? scanAdvance(p, prov, aStart, end, trimStart, i, consulted) : 0
+        let pendingAdvance = scanAdvance(p, prov, aStart, end, pending, i, consulted, true)
+        const trimmableAdvance = trimmableChars > 0 ? scanAdvance(p, prov, aStart, end, trimStart, i, consulted, true) : 0
+        // A candidate read without the questions that place what crosses it (advance.ts roughAdvanceBefore) is within
+        // advanceSlack of its whole advance. Where that reaches either fit test below, the whole advance is asked for.
+        const slack = consulted === null ? advanceSlack(p, run, scanOffset(p, prov, aStart, end, i)) : 0
+        if (slack > 0 && (Math.abs(width + pendingAdvance - trimmableAdvance - aWidth) <= slack ||
+          (atHyphenationBreak && Math.abs(width + pendingAdvance + hyphenWidth - trimmableAdvance - aWidth) <= slack))) {
+          advanceBefore(p, run, scanOffset(p, prov, aStart, end, i))
+          pendingAdvance = scanAdvance(p, prov, aStart, end, pending, i, consulted, true)
+        }
         const hyphenatedAdvance = pendingAdvance + (atHyphenationBreak ? hyphenWidth : 0)
         if (lastBreak < 0 || width + hyphenatedAdvance - trimmableAdvance <= aWidth) {
           lastBreak = i

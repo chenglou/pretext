@@ -199,6 +199,23 @@ export type InWordEntry = {
   advance: InWordAdvance | null
   // W(suffix): the unit from this offset on, measured with nothing put before it (suffixAlone).
   suffixAu: number | null
+  // The offset's two sides, kept while `advance` lacks what only a chosen edge asks (advance.ts roughAdvanceBefore): a
+  // break scan on a plain paragraph took it so. null once the advance is whole, and where nothing was left out.
+  unrefined: InWordSides | null
+}
+
+// The two sides of an offset inside a unit as inWordAdvance measured them: `a` the start of the cluster before it (of its
+// ligature where it ends one), `across` what the unit's shaping moves across the offset, `joined` whether letters join
+// across it and U+200D stood at the cut.
+export type InWordSides = {
+  a: number
+  across: number
+  prefixAu: number
+  suffixAu: number
+  sides: Extract<InWordReason, { kind: 'sides' }>['sides']
+  joined: boolean
+  reversed: boolean
+  leftOver: boolean
 }
 
 // A row of ligature candidates: `edges` are the ends of its ligature groups, the row's own two included (advance.ts rowAround).
@@ -220,8 +237,22 @@ export type InWordReason =
   | { kind: 'between-ligatures'; at: number }
   | { kind: 'group-ends'; at: number; end: InWordReason }
   // The two sides don't add up to the unit. `sides` is how they were measured (inWordAdvance), `au` their sum, or what the
-  // cluster before the offset and the suffix gain from each other.
-  | { kind: 'sides'; at: number; sides: 'joined' | 'apart' | 'cluster'; au: number; unitAu: number }
+  // cluster before the offset and the suffix gain from each other. 'joined-prefix': the sides add up once the suffix is
+  // measured behind its own first letter, and the prefix's side is the value.
+  | { kind: 'sides'; at: number; sides: 'joined' | 'joined-prefix' | 'apart' | 'cluster'; au: number; unitAu: number }
+
+// Which glyph of a kerned pair carries the adjustment in the font of one Canvas context, as Canvas told it where the
+// pairKerning fact isn't given (advance.ts askedPlacement): null where the probe pairs didn't tell. `tellers` are the
+// letters of the probe pairs that counted, one face's, with their widths alone; `sameFace` and `otherFace` the clusters
+// Canvas showed to be drawn by the tellers' face, and not shown to be (advance.ts sameFace).
+export type PairPlacement = {
+  context: Context
+  placement: 'first-advance' | 'split' | null
+  tellers: string[]
+  tellerAu: number[]
+  sameFace: string[]
+  otherFace: string[]
+}
 
 // gfxBreakPriority (gfxTypes.h:48).
 export const NO_BREAK = 0
@@ -283,6 +314,10 @@ export type GeckoPrepared = {
   // The paragraph's Canvas contexts, one per distinct settings (measure/canvas.ts contextFor): the text runs' own, and
   // those the recipes make from them.
   contexts: Context[]
+  // What Canvas told of each context's pair placement, one record per context that an offset at a kerned pair asked for
+  // (advance.ts askedPlacement): empty until then. Like a unit's inWord it is written after preparation, holds facts of the
+  // context's font that no width and no line changes, and goes with the paragraph.
+  pairPlacements: PairPlacement[]
   // What an inspected paragraph keeps for inspectLine and paragraphGaps; null on a plain one, which computes no gap and asks
   // Canvas nothing that only a gap or an inspected value needs (gaps.ts). Nothing else says which of the two a paragraph is.
   inspect: GeckoInspect | null

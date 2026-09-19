@@ -65,11 +65,49 @@ function stubAu(font: string, text: string, lang: string): number {
       i++
       continue
     }
+    // Under Verdana, Tahoma and Optima, kerned pairs whose placement the totals tell (advance.ts toldBy), each glyph
+    // rounded on its own (gfxHarfBuzzShaper.cpp:1699-1702); elsewhere these letters are 576 au like any other.
+    // - `Ka`, and the probe pair `AV` under Verdana and Tahoma: a kern table. 576.0 and 576.2 au at 16px, −44.8 au in
+    //   halves: 554 + 554, −44 in all, where all of it on either glyph gives −45.
+    // - `Ly`: GPOS. 576.0 and 576.3 au, −44.7 au on `L`: 531 + 576, −45, where halves or all of it on `y` give −44.
+    // - `Je`: a kerx state machine. 576.3 and 576.0 au, −44.7 au on `e`: 576 + 531, −45, where the other two give −44.
+    // - `oV` under Verdana kerns by −10 au, which shows that `o` and `V` are one face's.
+    if (font.includes('Verdana') || font.includes('Tahoma') || font.includes('Optima') || font.includes('Futura')) {
+      const inPair = (first: string, second: string): number => c === first && cps[i + 1] === second ? 1 : c === second && cps[i - 1] === first ? 2 : 0
+      const scaled = (w: number): number => Math.floor(w * size / 16 + 0.5)
+      const halves = inPair('K', 'a') || (font.includes('Optima') || font.includes('Futura') ? 0 : inPair('A', 'V'))
+      if (halves !== 0) { au += scaled((halves === 1 ? 576.0 : 576.2) - 22.4); continue }
+      if (inPair('L', 'y') !== 0) { au += scaled(c === 'L' ? 576.0 - 44.7 : 576.3); continue }
+      if (inPair('J', 'e') !== 0) { au += scaled(c === 'J' ? 576.3 : 576.0 - 44.7); continue }
+      if (font.includes('Verdana') && inPair('o', 'V') === 1) { au += scaled(576.8) - 10; continue }
+      // Under Futura two probe pairs tell together, both a kern table's halves of letters 576.0 and 576.2 au wide: `AV` by
+      // −45.6 au is −46 in halves and on `A` alone, −45 on `V`; `AT` by −44.6 au is −44 in halves and on `T`, −45 on `A`.
+      if (font.includes('Futura') && (inPair('A', 'V') !== 0 || inPair('A', 'T') !== 0)) {
+        au += scaled((c === 'A' ? 576.0 : 576.2) - (inPair('A', 'V') !== 0 ? 22.8 : 22.3))
+        continue
+      }
+      if (font.includes('Futura') && c === 'T') { au += scaled(576.2); continue }
+      const alone: Record<string, number> = { K: 576.0, a: 576.2, A: 576.0, V: 576.2, L: 576.0, y: 576.3, J: 576.3, e: 576.0 }
+      if (alone[c] !== undefined) { au += scaled(alone[c]!); continue }
+    }
     // `To` under a kern table: T is 576.4 au and o 576.8 au at 16px, the pair adjustment −45 au, half on each glyph, and each
     // glyph's advance is rounded on its own (hb-kern.hh:102-106, gfxHarfBuzzShaper.cpp:1699-1702): 554 + 554 at 16px.
     if (c === 'T' || c === 'o') {
       const kerned = (c === 'T' && cps[i + 1] === 'o') || (c === 'o' && cps[i - 1] === 'T')
       au += Math.floor(((c === 'T' ? 576.4 : 576.8) - (kerned ? 22.5 : 0)) * size / 16 + 0.5)
+      continue
+    }
+    // Mongolian letters, which a fallback font draws: 40 au narrower on each side they join, next to another of them or
+    // to U+200D. U+200D at the start of the string is in the first font and joins nothing (gfxTextRun.cpp:3609-3613,
+    // :3320-3325; probe gecko-mainfacts M2).
+    if (c >= '\u1820' && c <= '\u1842') {
+      const mongolian = (x: string | undefined) => x !== undefined && x >= '\u1820' && x <= '\u1842'
+      au += Math.round(576 * size / 16) - (mongolian(cps[i - 1]) || (cps[i - 1] === '\u200d' && i > 1) ? 40 : 0) - (mongolian(cps[i + 1]) || cps[i + 1] === '\u200d' ? 40 : 0)
+      continue
+    }
+    // Charter's glyph for U+00A0 is twice as wide as its space (probe gecko-mainfacts M4: 534 au against 267 at 16px).
+    if (c === '\u00a0' && font.includes('Charter')) {
+      au += Math.round(1152 * size / 16)
       continue
     }
     // Lam with alef madda is one glyph of 1001 au: the alef adds 425 au after a lam.
@@ -805,6 +843,78 @@ describe('ceiling round 2', () => {
     expect(l.measure.contexts.some(c => c.font.includes(' 1024px '))).toBe(true)
   })
 
+  test('sides that add up only with the suffix measured behind its own first letter: the prefix side stands in (gfxTextRun.cpp:3609-3613, :3320-3325; probe gecko-mainfacts M2)', () => {
+    // Two joined Mongolian letters are 536 au each. W(letter U+200D) is 536, and W(U+200D letter) the unjoined 576 of the
+    // letter alone, so the old stand-in gave 496 and 576.
+    const l = layout(paragraph([run('\u1820\u1821')], 2, { overflowWrap: 'anywhere' }))
+    expect(l.lines.map(line => line.geometry.width)).toEqual([536, 536])
+    expect(l.lines[0]!.gaps.filter(g => g.gap === 'in-word-prefix').map(g => g.detail.includes("the prefix's side stands in"))).toEqual([true])
+    expect(l.measure.calls.map(c => c.text)).toContain('\u1821\u200c\u200d\u1821')
+    // Beh before hah takes a contextual form no U+200D gives: the sides don't add up either way, and the stand-in stays.
+    const beh = layout(paragraph([run('\u0628\u062d')], 2, { overflowWrap: 'anywhere' }))
+    expect(beh.lines[0]!.gaps.filter(g => g.gap === 'in-word-prefix').map(g => g.detail.includes("the prefix's side stands in"))).toEqual([false])
+    // Two behs join with forms U+200D gives: the sides add up, nothing more is asked and nothing stands in.
+    const added = layout(paragraph([run('\u0628\u0628')], 2, { overflowWrap: 'anywhere' }))
+    expect(added.measure.calls.some(c => c.text.includes('\u200c'))).toBe(false)
+    expect(allGaps(added).map(g => g.gap)).not.toContain('in-word-prefix')
+  })
+
+  test('without the fact, a pair whose total only one placement explains takes that placement (probe gecko-mainfacts M1)', () => {
+    const optima = { ...courier, family: 'Optima' }
+    const lay = (text: string, font: FontDecl) => layout(paragraph([run(text, 'span', { font })], 2, { overflowWrap: 'anywhere', font }))
+    // `Ka`: halves give 554 + 554, the whole adjustment on either glyph 1107 au in all. Canvas measures 1108: halves.
+    const halves = lay('Ka', optima)
+    expect(halves.lines.map(line => line.geometry.width)).toEqual([554, 554])
+    expect(allGaps(halves).map(g => g.gap)).not.toContain('in-word-prefix')
+    expect(halves.measure.contexts.some(c => c.font.includes(' 1024px '))).toBe(true)
+    // `Ly`: 1107 au, which only the whole adjustment on `L` gives.
+    const whole = lay('Ly', optima)
+    expect(whole.lines.map(line => line.geometry.width)).toEqual([531, 576])
+    expect(allGaps(whole).map(g => g.gap)).not.toContain('in-word-prefix')
+    // `Je`: only the whole adjustment on `e` gives its 1107 au, a placement the port has no value for. It stays the
+    // stand-in it was, all of it on `J`, and says so (hb-aat-layout-kerx-table.hh:296-333).
+    const onSecond = lay('Je', optima)
+    expect(onSecond.lines.map(line => line.geometry.width)).toEqual([531, 576])
+    expect(onSecond.lines[0]!.gaps.some(g => g.gap === 'in-word-prefix')).toBe(true)
+    // `To`: every placement gives −45, and no probe pair tells in this font, so it stays a stand-in too. The probe pairs
+    // were asked once: three questions a pair that doesn't kern, six for `To`.
+    const either = lay('To', optima)
+    expect(either.lines.map(line => line.geometry.width)).toEqual([531, 577])
+    expect(either.lines[0]!.gaps.some(g => g.gap === 'in-word-prefix')).toBe(true)
+    expect(either.measure.calls.filter(c => c.text === 'AV').length).toBe(1)
+    expect(either.measure.calls.filter(c => c.text === 'WA').length).toBe(1)
+  })
+
+  test('a probe pair tells for the pairs of the face that draws it, and for no other (hb-ot-shape.cc:131-187; probes gecko-mainfacts M1, M5)', () => {
+    const lay = (text: string, family: string) => {
+      const font = { ...courier, family }
+      return layout(paragraph([run(text, 'span', { font })], 2, { overflowWrap: 'anywhere', font }))
+    }
+    // Under Verdana the probe pair `AV` tells halves, and `oV` measures 10 au under its letters apart, so `o` is that
+    // face's and `To` takes halves: 554 + 554 where the stand-in gave 531 + 577.
+    const told = lay('To', 'Verdana')
+    expect(told.lines.map(line => line.geometry.width)).toEqual([554, 554])
+    expect(allGaps(told).map(g => g.gap)).not.toContain('in-word-prefix')
+    // The probe stopped at the pair that told, and each letter was tried against both tellers until one showed.
+    expect(told.measure.calls.some(c => c.text === 'LT')).toBe(false)
+    expect(told.measure.calls.filter(c => c.text.length === 2 && c.text !== 'To' && c.text !== 'AV').map(c => c.text)).toEqual(['TA', 'AT', 'TV', 'VT', 'oA', 'Ao', 'oV'])
+    // A word with the pair twice asks none of that again.
+    const twice = lay('ToTo', 'Verdana')
+    expect(twice.measure.calls.filter(c => c.text === 'AV').length).toBe(2)
+    expect(twice.measure.calls.filter(c => c.text === 'oV').length).toBe(1)
+    // Under Futura no probe pair tells alone: `AV` leaves halves and the first glyph, and `AT`, which shares its `A`,
+    // halves and the second. Together they leave halves, which `AV` takes: 553 + 553.
+    const together = lay('AV', 'Futura')
+    expect(together.lines.map(line => line.geometry.width)).toEqual([553, 553])
+    expect(allGaps(together).map(g => g.gap)).not.toContain('in-word-prefix')
+    expect(together.measure.calls.some(c => c.text === 'TA')).toBe(false)
+    // Under Tahoma nothing shows that the face that draws `AV` draws `T` or `o` (a font list whose first font lacks some
+    // letters), so `To` stays the stand-in it was and says so.
+    const other = lay('To', 'Tahoma')
+    expect(other.lines.map(line => line.geometry.width)).toEqual([531, 577])
+    expect(other.lines[0]!.gaps.some(g => g.gap === 'in-word-prefix')).toBe(true)
+  })
+
   test('ligature candidates in a row: the ligatures fact divides them, and without it the row stands in as one group (hb-ot-layout.cc:1917-1945)', () => {
     // `ff` alone tests as a ligature at both boundaries of `fff`; the unit takes the first pair and leaves the third `f`.
     const unknown = layout(paragraph([run('fff')], 2, { overflowWrap: 'anywhere' }))
@@ -926,12 +1036,60 @@ describe('plain and inspected paragraphs (research/ARCHITECTURE-PLAN-2.md §5.2)
     expect(plain.calls).toBeLessThan(inspected.calls)
   })
 
+  test('a plain scan asks where a kerned pair\'s adjustment goes only where the fit test or a line\'s edge needs it', () => {
+    const optima = { ...courier, family: 'Optima' }
+    const large = () => asked.contexts.filter(c => c.font.includes(' 1024px ')).length
+    // `KaKa` is 554 + 554 + 576 + 576 au with the adjustment in halves, which only the pair recipe tells. At 100px the first
+    // word's every cluster is a wrap candidate, none within the adjustment of the width, and every line ends at a space.
+    const wide = paragraph([run('KaKaKa KaKa KaKaKaKa', 'span', { font: optima })], 100, { overflowWrap: 'anywhere', font: optima })
+    const plainWide = plainWalk(wide, false)
+    expect(large()).toBe(0)
+    const inspectedWide = plainWalk(wide, true)
+    expect(large()).toBe(1)
+    expect(plainWide.lines).toEqual(inspectedWide.lines)
+    // At 2px every line is cut inside the word, and the plain paragraph asks as the inspected one does.
+    const narrow = paragraph([run('KaKa', 'span', { font: optima })], 2, { overflowWrap: 'anywhere', font: optima })
+    const plainNarrow = plainWalk(narrow, false)
+    expect(large()).toBe(1)
+    expect(plainNarrow.lines).toEqual(plainWalk(narrow, true).lines)
+    // A width one au under the first pair's whole advance: whether `K` and `a` share the first line rests on the halves.
+    // 554 + 554 = 1108 au is 18.4667px; the stand-in gives `a` 577 au (1108 − 531), so rough and whole disagree at 18.47px.
+    for (const width of [18.45, 18.47, 18.49]) {
+      const edge = paragraph([run('KaKa', 'span', { font: optima })], width, { overflowWrap: 'anywhere', font: optima })
+      expect(plainWalk(edge, false).lines).toEqual(plainWalk(edge, true).lines)
+    }
+  })
+
   test('inspectLine and paragraphGaps throw on a plain paragraph', () => {
     const prepared = prepareGecko(paragraph([run('aaaa bbbb')], 40), env, false)
     const filled = fillLine(prepared, firstLine(prepared)!, { width: 40, left: 0, right: 0 })
     expect(prepared.inspect).toBeNull()
     expect(() => inspectLine(prepared, filled.line)).toThrow('prepared plain')
     expect(() => geckoParagraphGaps(prepared)).toThrow('prepared plain')
+  })
+
+  test('a boundary U+00A0 is measured as itself, once a text run (gfxFont.cpp:3834-3861; probe gecko-mainfacts M4)', () => {
+    const charter = { ...courier, family: 'Charter' }
+    const l = layout(paragraph([run('aa\u00a0bb\u00a0cc dd', 'span', { font: charter })], 500, { font: charter }))
+    expect(l.lines.map(line => line.geometry.width)).toEqual([8 * 576 + 2 * 1152 + 576])
+    expect(l.measure.calls.filter(c => c.text === '\u00a0').length).toBe(1)
+    expect(l.measure.calls.filter(c => c.text === ' ').length).toBe(1)
+    // Where the font's U+00A0 is its space, nothing moves.
+    expect(layout(paragraph([run('aa\u00a0bb')], 500)).lines.map(line => line.geometry.width)).toEqual([5 * 576])
+  })
+
+  test('paragraphGaps hands out copies: writing into them doesn\'t reach the prepared paragraph', () => {
+    // A size off Canvas's grid in a font whose opsz axis isn't known: two gaps made with one `at` (prepare.ts step 7).
+    const system = { ...courier, size: 16.8, facts: { ...facts, opticalSizeAxis: null } }
+    const prepared = prepareGecko(paragraph([run('aa '), run('bb', 'span', { font: system })], 500), env, true)
+    const first = geckoParagraphGaps(prepared)
+    expect(first.map(g => g.gap)).toEqual(['font-size-quantization', 'optical-size'])
+    const kept = JSON.stringify(first)
+    first[0]!.at!.start = 99
+    first[1]!.detail = 'written over'
+    first.pop()
+    expect(JSON.stringify(geckoParagraphGaps(prepared))).toBe(kept)
+    expect(JSON.stringify(prepared.inspect!.gaps)).toBe(kept)
   })
 
   test('linePieces and inspectLine don\'t write the decided line: justified, trimmed and read twice in either order', () => {
