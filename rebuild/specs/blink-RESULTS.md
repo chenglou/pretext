@@ -129,6 +129,17 @@ inspection. The two stores that would take them stay possible and unbuilt (the p
 safe flags on the item's shape result, which a line still makes once per item and keeps for the fill (`shapeResults`), and
 one record per unit of equal text.
 
+**Times.** Two other owners' jobs loaded the machine (load average 50 and more) for most of the stage, so the pairs below
+ran back to back and the browser's own native time says how loaded each run was (16.5 s for the giants on a quiet
+machine). The giants under the exclusive lock, 9 cases, the start commit then this step: 253.0 s with 113.6 s of
+prediction (native 33.2 s) against 237.6 s with 78.4 s (native 34.8 s); the clean-up commit alone under the same load
+209.1 s with 77.5 s (native 33.1 s): the per-line scans to the paragraph's end were what it cost. Again as the load fell:
+180.3 s with 90.1 s (native 24.6 s) against 108.7 s with 37.9 s (native 17.1 s), where X2 measured 122.0 s with 55.3 s
+on a quiet machine for the library this step starts from. The giants ask 22.8 M questions for 38.3 M. The clean-up's
+giants rows equal the start's, X2's and the correctness line's byte for byte (layout, observation, painter limits); the
+final ones equal them after canonicalizing, 8 of 9 byte for byte. Tier 2 forward without facts at a load average of 7:
+89 s with 80.5 s of prediction over the rows for the start commit, 88 s with 73.8 s for this step.
+
 **What a prepared paragraph reads across a forced break or over the whole text** (what streaming text could not reuse
 as it is): whether bidi is on, whether the text is 8-bit and whether it is segmented, each decided over the whole text,
 and with them the contexts' partition and how every range is spelled for Canvas; the script runs, which cross a forced
