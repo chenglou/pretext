@@ -186,7 +186,7 @@ export class LineBreaker {
   isLastLine = false
   hasOverflow = false
   readonly previousLineHadForcedBreak: boolean
-  // LineInfo::NeedsAccurateEndPosition, which PrepareNextLine sets from the block's text-align.
+  // LineInfo::NeedsAccurateEndPosition (line_info.cc:127-175), which PrepareNextLine sets from the block's text-align.
   readonly lineNeedsAccurateEndPosition: boolean
   // The shape results of the line's text items, by item index from the line's first item. One is made when the line first
   // reaches its item and serves until the line is decided, so a rewind comes back to it.

@@ -191,7 +191,8 @@ export function breaksShapingAfter(style: ComputedStyle): boolean {
   return style.end.padding !== 0 || style.end.margin !== 0 || style.end.border !== 0 || style.verticalAlign !== 'baseline'
 }
 
-// IsInlineBoxStartEmpty and IsInlineBoxEndEmpty of a span's open and close tag (inline_item.cc:32-67), no quirks mode.
+// IsInlineBoxStartEmpty (inline_item.cc:32-46) and IsInlineBoxEndEmpty (:53-67) of a span's open and close tag, no quirks
+// mode (inline_item.cc:32-67).
 export function boxStartEmpty(style: ComputedStyle): boolean {
   return style.start.border === 0 && style.start.padding === 0 && style.start.margin === 0
 }
@@ -217,7 +218,7 @@ class Builder {
   items: InlineItem[] = []
   hasNonOrc16Bit = false
   readonly styles: ComputedStyle[]
-  // The styles of the spans that are open (BoxInfo, inline_items_builder.h).
+  // The styles of the spans that are open (BoxInfo, inline_items_builder.cc:236-266).
   readonly boxes: number[] = []
   // The source offset of the collapsible space RemoveTrailingCollapsibleSpace erased last, for a restore: the item restored
   // is the last one to collapse with, which is the one a space was last removed from.
