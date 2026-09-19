@@ -6,7 +6,7 @@
 //   inserted that matches nothing, a rule inserted that matches every block, a style element appended), which is what a
 //   CSS-in-JS library does while an app renders. Any such change marks the document's font set dirty
 //   (Document::ApplicableStylesChanged, Document.cpp:8072-8080), and Document::FlushUserFontSet then brings the style sheet
-//   data up to date (ServoStyleSet::AppendFontFaceRules calls UpdateStylistIfNeeded, ServoStyleSet.cpp:1336-1341;
+//   data up to date (ServoStyleSet::AppendFontFaceRules calls UpdateStylistIfNeeded, ServoStyleSet.cpp:1335-1340;
 //   Document.cpp:18877-18890). An element's context calls it in ctx.font and in every measureText
 //   (CanvasRenderingContext2D.cpp:4343, :5161-5164); an OffscreenCanvas's only in ctx.font (:4446-4448), since its measureText
 //   has no pres shell. Timed: the first canvas call after the change, the next one, and the offsetWidth read after, beside
@@ -15,7 +15,7 @@
 //   1,000 or 30,000 blocks with style sheets of 0, 3,000 or 20,000 rules: what the forced update grows with.
 // - K2 declarations: D distinct font declarations taking turns (families x weights x styles x sizes), D = 1 to 1,024. Fresh
 //   contexts as the port makes them today, per context: made, assigned, one measureText. The element takes its font group
-//   from the page's font cache, 128 entries searched one by one (nsFontCache.cpp:59-112, nsFontCache.h:53); the
+//   from the page's font cache, 128 entries searched one by one (nsFontCache.cpp:58-114, nsFontCache.h:53); the
 //   OffscreenCanvas builds one per context (CanvasRenderingContext2D.cpp:4589). Then D kept contexts measured in turn.
 // - K3 live: 36,000 live contexts of one kind (10,000 kept chat messages at 3.6 contexts each). First what a frame costs:
 //   a canvas element's context joins its document's refresh driver as a post-refresh observer when the document has a pres
