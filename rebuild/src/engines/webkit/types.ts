@@ -83,9 +83,9 @@ export type WebKitBox = {
   // does), and the same font with no spacing (the primary font's space advance for tab stops and the fixed-pitch shortcut).
   context: Context
   plainContext: Context
-  // TextUtil::singleSpaceWidth, W(' ') in `context`, measured once as the box is made (content.ts makeBox). Every read of a
-  // box asks for it: handleTextContent for the box's white space, a text item measured with the space after it, the
-  // fixed-pitch estimate of breakWord (research/ARCHITECTURE-PLAN-2.md §10).
+  // TextUtil::singleSpaceWidth, W(' ') in `context`, measured once as the box is made (content.ts makeBox; the parked item of
+  // research/ARCHITECTURE-PLAN-2.md §10). What reads it: handleTextContent for the box's white space, a text item measured
+  // with the space after it, and the fixed-pitch estimate of breakWord.
   spaceWidth: number
   // The run's font with its letter spacing and word spacing: CanvasRenderingContext2DBase::setWordSpacing gives the context's
   // FontCascade the spacing (CanvasRenderingContext2DBase.cpp:3299-3324), so Canvas adds it per character inside the same
