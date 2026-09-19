@@ -1462,7 +1462,11 @@ size, which the primary family check and the fixed-pitch check both read, and wh
 share). No engine needs that list of questions for correctness, since a question asked again gets the same answer; it
 is kept because deleting it only adds Canvas calls (without it 4,692 Chrome and 27,014 webkit-host cases without facts
 repeat a font-check question; Gecko's checks ask nothing). The Canvas checks of engine detection (§1.4) make their own
-contexts.
+contexts. The checks run before the engine and don't know whether the paragraph is plain or inspected, so one of them
+asks Canvas on a plain paragraph for what only a gap reads: Blink's linear-size check answers `false` or nothing, `false`
+is also the default a named family gets (`engines/blink/content.ts` `measuresAtCssSize`), so its answer decides whether
+`optical-size` is reported and never how the port measures. The primary family check beside it does decide measuring,
+where a list's first family doesn't exist and the realized one is the system font (research/PROFILING-START.md, item 1).
 
 **The measurer's lifetime is the first item of the profiling phase, not a thing of this design.** Contexts and
 font-check answers are made per prepared paragraph today, which is what makes every paragraph's measuring independent of
