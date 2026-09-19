@@ -3,7 +3,7 @@
 //   bun rebuild/tests/browser-sets.ts --browser=chrome|firefox|webkit-host --out=<dir> [--config=no-facts|facts]
 //     [--sets=<name>[,...]] [--groups=smoke,development,families,heldout] [--both-orders] [--record] [--measure-first]
 //     [--ids-file=<file>] [--reference=<ledger dir>] [--allow=<difference>[,...]] [--baseline=<gate file>]
-//     [--seed --staging=<dir>] [--rerun-failed] [--predictor=<file>]
+//     [--seed --staging=<dir>] [--rerun-failed] [--predictor=<file> [--shuffle=<seed>]]
 //
 // Don't wrap it in the browser lock: every browser job takes the lock itself. What it does, in order:
 // 1. Reads the build of the app it will launch (the pinned copy of Chrome or Firefox, the system WebKit for webkit-host)
@@ -37,7 +37,9 @@
 // which returns line ranges alone, or one that fills other widths first): the same sets, parts and protocol, scored, and
 // nothing more. Its rows aren't the reference's kind of prediction, so no ledger is built, no transition is read and the
 // gate doesn't run: compare-sets.ts compares the run with a usual one, case by case (--prediction=line-ranges for line
-// ranges against layouts).
+// ranges against layouts). --shuffle=<seed> runs its forward jobs in run.ts's seeded shuffled order: a third order for a
+// predictor whose answers could follow what a document's cases asked before (baselines/page-measurer-predictor.ts);
+// compare-sets.ts pairs rows by case id.
 //
 // --ids-file runs only the listed cases (tier 1 routes cases here): each part's subset keeps the part's order, but not
 // its history, so the run's sets are marked `subset`, its ledger isn't checked for missing cases, and the gate isn't run.
@@ -67,7 +69,7 @@ for (const raw of process.argv.slice(2)) {
   if (match === null) fail(`Unknown argument ${raw}`)
   const name = match[1]!
   if (['both-orders', 'record', 'seed', 'rerun-failed', 'measure-first'].includes(name) && match[2] === undefined) flags.add(name)
-  else if (['browser', 'out', 'config', 'sets', 'groups', 'ids-file', 'reference', 'allow', 'baseline', 'staging', 'predictor'].includes(name) && match[2] !== undefined) options.set(name, match[2])
+  else if (['browser', 'out', 'config', 'sets', 'groups', 'ids-file', 'reference', 'allow', 'baseline', 'staging', 'predictor', 'shuffle'].includes(name) && match[2] !== undefined) options.set(name, match[2])
   else fail(`Unknown argument ${raw}`)
 }
 const browser = options.get('browser') as TierBrowser | undefined
@@ -84,6 +86,8 @@ const predictor = options.get('predictor') === undefined ? PREDICTORS[config] : 
 const ownPredictor = predictor === PREDICTORS[config]
 if (!ownPredictor && flags.has('seed')) fail('--predictor goes without --seed: seeds describe the configuration\'s own predictor')
 if (!ownPredictor && !existsSync(join(REPO, predictor))) fail(`${predictor}: no such predictor`)
+const shuffle = options.get('shuffle')
+if (shuffle !== undefined && (ownPredictor || bothOrders)) fail('--shuffle goes with --predictor and without --both-orders: the ledger and the gate describe file order and its reverse')
 let sets: TestSet[]
 try {
   sets = selectSets(browser, options.get('sets'), options.get('groups'))
@@ -157,7 +161,7 @@ function jobState(job: Job): JobState {
 function runJob(job: Job): Promise<number> {
   mkdirSync(job.dir, { recursive: true })
   const args = [LOCK, `sets-${browser}-${config}-${job.name}`, '--max-wait-min=240', '--', 'bun', 'rebuild/lab/run.ts', `--browser=${browser}`, `--cases=${job.cases}`, `--out=${job.dir}`,
-    `--order=${job.order === 'forward' ? 'file' : 'reverse'}`, `--predictor=${join(REPO, predictor)}`, ...job.set.runArgs, ...moreRunArgs]
+    `--order=${job.order === 'reverse' ? 'reverse' : shuffle === undefined ? 'file' : `shuffle:${shuffle}`}`, `--predictor=${join(REPO, predictor)}`, ...job.set.runArgs, ...moreRunArgs]
   if (flags.has('record') && job.order === 'forward') args.push('--record-measurements')
   const out = createWriteStream(join(job.dir, 'run.log'))
   const from = Date.now()
