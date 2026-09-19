@@ -196,7 +196,18 @@ The fixes ask Canvas new questions and change gap lists, so tier 1 couldn't pass
 - *The rule registry* took the round's rules through `rule-changes.json` (§3), and `coverage.ts` lists no unknown
   annotation. *The known tail* has 67 items and 783 named cases (lab README, "The known tail").
 
-All six references were recorded again and frozen at the correctness round 5 merge.
+All six references were recorded again at 3d0a5b3 and frozen at f072dc4 (tag `cr5-merged`). The recording, both orders
+and both configurations: six exits 0, 0 transitions from a pass to a failure, exact values not worse, gates lost 0.
+Chrome: 4 transitions a configuration, all on `c-bff5270008f33766`, to a pass. webkit-host: 3 painter rows lose
+`control-character-width` from their cover. Firefox: 598 transitions without facts and 22 with them, none blocking: 241
+and 19 go to a pass, 5 cases without facts go from a pass to history-dependent (named under
+`gecko/process-font-fallback-state`), and no case leaves history-dependent; differing predicted values without facts 301
+to 239. Every case replays exactly from the packed recordings. Seeds were staged for all six with 0 lost; Chrome's
+gained 3 and 3 pass pairs, Firefox's 241 and 19 (20 pairs left through history), webkit-host's none, and Chrome's and
+Firefox's were adopted. The plain predictor's run against the usual run: Chrome 0 of 67,065 cases differ, webkit-host
+the 3 known, Firefox 120 in the known process (14 of them in line ranges), all history-dependent in the ledger. On the
+frozen tree tier 1 exits 0 for all six, the plain and pure checks exit 0, the painter differential holds 6 of 6 and
+citations lose 0.
 
 Tier 1 is a change detector, not an oracle: its expected values are the library's own at a commit. Its inputs are recorded
 per library, so a library that asks Canvas new questions needs a new recording (`browser-sets.ts --record`, `replay.ts

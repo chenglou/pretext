@@ -365,7 +365,18 @@ supplied font facts, and a critic then read the three branches, merged them in a
   whole corpus wait for the new recording. The seeds don't change.
 - **The known tail** took the round's findings ("The known tail" below).
 
-All six references were recorded again and frozen at the correctness round 5 merge.
+All six references were recorded again at 3d0a5b3 and frozen at f072dc4 (tag `cr5-merged`). The recording, both orders
+and both configurations: six exits 0, 0 transitions from a pass to a failure, exact values not worse, gates lost 0.
+Chrome: 4 transitions a configuration, all on `c-bff5270008f33766`, to a pass. webkit-host: 3 painter rows lose
+`control-character-width` from their cover. Firefox: 598 transitions without facts and 22 with them, none blocking: 241
+and 19 go to a pass, 5 cases without facts go from a pass to history-dependent (named under
+`gecko/process-font-fallback-state`), and no case leaves history-dependent; differing predicted values without facts 301
+to 239. Every case replays exactly from the packed recordings. Seeds were staged for all six with 0 lost; Chrome's
+gained 3 and 3 pass pairs, Firefox's 241 and 19 (20 pairs left through history), webkit-host's none, and Chrome's and
+Firefox's were adopted. The plain predictor's run against the usual run: Chrome 0 of 67,065 cases differ, webkit-host
+the 3 known, Firefox 120 in the known process (14 of them in line ranges), all history-dependent in the ledger. On the
+frozen tree tier 1 exits 0 for all six, the plain and pure checks exit 0, the painter differential holds 6 of 6 and
+citations lose 0.
 
 ## Test tiers
 
@@ -631,6 +642,12 @@ reference ledger; and checks the runs against the build-keyed seed through `gate
   history-dependent cases (`historyCarried`), and the gate takes the seed's, so a known history-dependent case never shows as
   a regression. A case that is history-dependent and unknown to the reference can: run both orders, or the isolation
   protocol (`sharded.ts --isolate --ids=...`, "Sharded runs and isolation"), before calling it one.
+- *A both-orders ledger takes them too* (since 2026-09-19, f072dc4). `browser-sets.ts` always hands the reference ledger
+  to `ledger.ts --carry-history-from`, and a both-orders ledger adds the reference's history-dependent cases to its own
+  finding. One Firefox process has two fallback-font states, and a single both-orders run can land in one state in both
+  orders: the recording after correctness round 5 read 74 known history-dependent cases as passes with facts, and would
+  have frozen them as passes. What is known to depend on history stays known until a ledger is built without the option;
+  the run's own finding is kept beside it as `ledger-own-orders-only`.
 - *Seeds*: `--both-orders --seed --staging=<dir>` stages `<browser>-<engine build>-<config>.json` with its seed record, never
   over the adopted file. The adopted seeds are in `rebuild/tests/baselines/sets/`, six files under scorer 7 with their seed
   records, seeded from the recordings the references are frozen from ("Seeds go to a staging folder", "Adopted at the
