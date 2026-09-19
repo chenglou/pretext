@@ -13,9 +13,10 @@ it runs under among the wrapper's slots; until S3 it looked for the single lock 
 
 **The chat rows** ("Chat" below) ask what the rebuild costs an app with many short rich messages: from scratch, at a
 resize, beside main, and where the time goes. They were added on 2026-09-19, after X2, and ran as 200-message background
-smokes in pinned Chrome, pinned Firefox and webkit-host on a busy machine (`.artifacts/bench/night-20260919/smoke`): every
-part posted, main and the rebuild gave the same number of lines at the first width in all three, and the counts are in
-"Chat". No real run has been made with them either.
+smokes in pinned Chrome, pinned Firefox and webkit-host on a busy machine (`.artifacts/bench/night-20260919/smoke`), and
+once more through `chat-night.sh` with smoke settings under the exclusive lock (`smoke-night` beside it): every part
+posted, the counts were the same in every run, main and the rebuild gave the same number of lines at the first width in
+all three browsers, and the counts are in "Chat". No real run has been made with them either.
 
 - `run.ts`: the driver. It reads the browser build from the app bundle, bundles `page.ts` with both libraries, serves it
   cross-origin isolated, opens one browser session, collects rows and writes `<out>/<browser>-bench.json` and
@@ -57,7 +58,8 @@ minimum sample, 1.5 s budget per row, 200 messages) and marks the report as a sm
 
 Commands for the real runs, one at a time, from the repo root, on an idle Mac on power. From the 2026-09-17 Chrome smoke's
 medians, a full Chrome run at the default settings takes about 15 minutes, most of it in the corpus rows (the rebuild's
-20-width sweep of a 15,000-unit paragraph is seconds per repetition). `--sizes` without `corpus` shortens it.
+20-width sweep of a 15,000-unit paragraph is seconds per repetition). `--sizes` without `corpus` shortens it. Since
+2026-09-19 the default scenarios also hold the chat rows, without their headline pass ("Chat"), a few minutes more.
 
 ```sh
 python3 .artifacts/session/with-browser-lock.py bench-chrome -- bun rebuild/bench/run.ts --browser=chrome --foreground --out=.artifacts/bench/real-YYYYMMDD
@@ -90,15 +92,15 @@ python3 .artifacts/session/with-browser-lock.py bench-chat-webkit-host --browser
 bun rebuild/bench/report.ts .artifacts/bench/night-YYYYMMDD/{chrome,firefox,webkit-host}-bench.json > .artifacts/bench/night-YYYYMMDD/summary.md
 ```
 
-The exclusive lock keeps other browser jobs away, not other work: on 2026-09-19 the load average was over 80 while another
-job held it. `--quiet-load=8` makes a run wait, with the lock held and before it launches its browser, until the 1-minute
-load average is under 8, for at most `--quiet-wait-min` minutes (15), and then run whatever the load is; the report says
-how long it waited, whether the load got there, and the load average at both ends. From the smokes' times on a busy
-machine, a run is about 8 minutes in Chrome, 3 in Firefox and 1 in webkit-host, most of it the inspect variant and the
-10,000-message passes. A background page was never visible or focused, so the OS may run it
-slower than a foreground page: compare variants within a report, and hold the report's fixed arithmetic (`spinMs`, "Method")
-against a foreground run's before comparing absolute times. The same commands with `--foreground` (and `--browser=safari`
-for WebKit) give the foreground numbers, with someone at the Mac. A chat smoke in one browser's slot, which also runs a
+The exclusive lock keeps other browser jobs away, not other work: on 2026-09-19 the load average was over 80 while
+another job held it. `--quiet-load=8` makes a run wait, with the lock held and before it launches its browser, until the
+1-minute load average is under 8, for at most `--quiet-wait-min` minutes (15), and then run whatever the load is; the
+report says how long it waited, whether the load got there, and the load average at both ends. From the smokes' times on
+a busy machine, a run is about 8 minutes in Chrome, 3 in Firefox and 1 in webkit-host, most of it the inspect variant
+and the 10,000-message passes. A background page was never visible or focused, so the OS may run it slower than a
+foreground page: compare variants within a report, and hold the report's fixed arithmetic (`spinMs`, "Method") against a
+foreground run's before comparing absolute times. The same commands with `--foreground` (and `--browser=safari` for
+WebKit) give the foreground numbers, with someone at the Mac. A chat smoke in one browser's slot, which also runs a
 short headline pass so every part of the page runs:
 
 ```sh
