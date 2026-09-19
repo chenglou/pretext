@@ -29,7 +29,8 @@ dsf3.5|chrome|blink-probes-zoom|probeSet=blink-probes-zoom,forcedDpr=3.5||--chro
 emulated|chrome|blink-probes-zoom|probeSet=blink-probes-zoom,emulatedDpr=2||--chrome-args=--force-device-scale-factor=1 --chrome-emulate-dsf=2
 sysui-dpr2|chrome|blink-probes-sysui|probeSet=blink-probes-sysui,process=fresh||
 sysui-dpr1|chrome|blink-probes-sysui|probeSet=blink-probes-sysui,process=fresh,forcedDpr=1||--chrome-args=--force-device-scale-factor=1
-sysui-domfirst-dpr2|chrome|blink-probes-sysui-domfirst|probeSet=blink-probes-sysui-domfirst,process=fresh||" ;;
+sysui-domfirst-dpr2|chrome|blink-probes-sysui-domfirst|probeSet=blink-probes-sysui-domfirst,process=fresh||
+storage|chrome|blink-storage|probeSet=blink-storage||--probe-timeout-ms=120000" ;;
   webkit-host)
     engine=webkit
     # round4: the WebKit owner's round 4 probes (R7, R8, R10 to R14) return raw values alone, so each gives one undecided fact

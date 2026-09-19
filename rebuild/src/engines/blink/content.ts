@@ -452,10 +452,11 @@ class Builder {
 
   // AppendText's dispatch (inline_items_builder.cc:637-679) for a leaf's text under its style. A text whose string is
   // stored in 16 bits counts as 16-bit content whatever its characters (AppendTransformedString, :725), and the leaf's
-  // text node is stored in 16 bits when it holds a unit above U+00FF, U+FFFC included: the HTML parser and V8 store a
-  // string in 8 bits when its units fit (CHARTER.md known deviations has the strings V8 doesn't). Probe blink-storage S4:
-  // 13 brackets in Amiri are shaped as one Latin segment beside an inline-block and segmented beside a text node that
-  // holds U+FFFC alone.
+  // text node is stored in 16 bits when it holds a unit above U+00FF, U+FFFC included: the HTML parser stores a text in
+  // 8 bits when its units fit (literal_buffer.h:306-321), and so does V8 but for slices of 13 units or more out of a
+  // two-byte string and what is built from them (to_blink_string.cc:216-227; specs/blink-RESULTS.md "String storage"),
+  // which no script can tell apart. Probe blink-storage S4: 13 brackets in Amiri are shaped as one Latin segment beside
+  // an inline-block and segmented beside a text node that holds U+FFFC alone.
   // rule blink/script/single-latin-segment
   appendText(s: string, base: number, run: number, style: number): void {
     for (let i = 0; i < s.length && !this.hasNonOrc16Bit; i++) if (s.charCodeAt(i) >= 0x100) this.hasNonOrc16Bit = true
