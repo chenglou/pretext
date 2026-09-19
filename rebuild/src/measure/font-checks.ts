@@ -94,6 +94,7 @@
 // from the font's own size (UnrealizedCoreTextFont.cpp:303-315), so the font a check makes is the font the page makes under
 // that key; a width its glyph geometry cache keeps is the computed value (FontCascade.cpp:319-352). Its Canvas has no
 // textRendering attribute, and the checks assign the default as the port's recipes do. Gecko is asked nothing.
+import { listedFamilies } from '../font-family.js'
 import type { FontDecl, FontFacts, InlineNode, Paragraph } from '../model.js'
 import { contextFor, width as canvasWidth, type Context } from './canvas.js'
 import { canvasFont } from './font.js'
@@ -116,31 +117,6 @@ type Resolution = {
   contexts: Context[]
   asked: { context: Context; text: string; width: number }[]
   resolved: { font: FontDecl; lang: string; learned: FontDecl }[]
-}
-
-type Family = { css: string; name: string; quoted: boolean }
-
-// The families of a CSS font-family list: split at commas outside quotes, names without their quotes and escapes.
-function familiesOf(list: string): Family[] {
-  const out: Family[] = []
-  let start = 0
-  let quote = ''
-  for (let i = 0; i <= list.length; i++) {
-    const ch = i < list.length ? list[i]! : ','
-    if (quote !== '') {
-      if (ch === '\\') i++
-      else if (ch === quote) quote = ''
-      continue
-    }
-    if (ch === '"' || ch === "'") quote = ch
-    if (ch !== ',') continue
-    const css = list.slice(start, i).trim()
-    start = i + 1
-    if (css === '') continue
-    const quoted = css[0] === '"' || css[0] === "'"
-    out.push({ css, name: quoted ? css.slice(1, -1).replace(/\\(.)/g, '$1') : css.split(/\s+/).join(' '), quoted })
-  }
-  return out
 }
 
 // A family name as CSS writes it; a generic keyword stands for itself, as in FontFacts.primaryFamily.
@@ -194,7 +170,7 @@ function draws(p: Probe, family: string, text: string): boolean | null {
 // Check 1. The name is the list's own; null where no listed family draws the space, where the test can't tell for a
 // family before the first that does, or where a quoted name reads as a generic keyword, which primaryFamily can't say.
 function primaryFamily(p: Probe): string | null {
-  const families = familiesOf(p.font.family)
+  const families = listedFamilies(p.font.family)
   for (let i = 0; i < families.length; i++) {
     const family = families[i]!
     const drawsSpace = draws(p, family.css, SPACE)
