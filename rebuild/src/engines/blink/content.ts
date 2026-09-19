@@ -17,7 +17,7 @@ const ZWNJ = 0x200c
 const ORC = 0xfffc
 
 // character.h:150-153
-export function isCollapsibleSpace(c: number): boolean {
+function isCollapsibleSpace(c: number): boolean {
   return c === SPACE || c === LF || c === TAB || c === CR
 }
 
@@ -42,7 +42,7 @@ export function collapsesWhiteSpace(ws: WhiteSpace): boolean {
   return ws === 'normal' || ws === 'nowrap' || ws === 'pre-line'
 }
 
-export function preservesBreaks(ws: WhiteSpace): boolean {
+function preservesBreaks(ws: WhiteSpace): boolean {
   return ws !== 'normal' && ws !== 'nowrap'
 }
 

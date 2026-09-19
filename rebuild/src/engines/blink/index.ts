@@ -155,9 +155,7 @@ export function prepare(paragraph: Paragraph, env: BlinkEnvironment, inspect: bo
   const sh: Shaper = { p, gaps }
   shapingGroups(p)
   markContinuations(p)
-  const fontFacts = fontFactsOfText(p)
-  p.ligature = fontFacts.ligature
-  p.fontRun = fontFacts.fontRun
+  fontFactsOfText(p)
   for (let g = 0; g < p.groups.length; g++) {
     const group = p.groups[g]!
     if (hanKerningMayApply(p.hanKerningCandidates, group.start, group.end)) measureHanKerningFontData(p, group.style)

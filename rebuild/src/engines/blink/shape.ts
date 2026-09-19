@@ -839,7 +839,7 @@ export function prefix16(sh: Shaper, sr: ShapeResult, k: number): number {
 // marks unsafe_to_break in every font (safe_to_insert_tatweel without the tatweel flag, hb-buffer.hh:517-527,
 // hb-ot-shaper-arabic.cc:332, 366; AAT transitions, hb-aat-layout-common.hh:1341-1370), and not where the pair total shows
 // an adjustment (necessary, not sufficient: gap in-word-prefix).
-export function safeToBreak(sh: Shaper, sr: ShapeResult, k: number): boolean {
+function safeToBreak(sh: Shaper, sr: ShapeResult, k: number): boolean {
   switch (sr.kind) {
     case 'tabs':
       return true
@@ -945,7 +945,7 @@ export const WHOLE = 0xffffffff
 
 // The 16.16 advance sum of a reshape's glyphs before offset k, as groupPrefix16 gives it for a group without cuts: the
 // prefix measured inside the call, the pair adjustment on the glyph before k, less what HanKerning halted at the start.
-export function callPrefix16(sh: Shaper, call: ReshapeCall, k: number): number {
+function callPrefix16(sh: Shaper, call: ReshapeCall, k: number): number {
   if (k <= call.start) return 0
   if (k >= call.end) return call.width16
   const p = sh.p
@@ -1248,7 +1248,7 @@ export function truncateView(sh: Shaper, view: View, start: number, end: number)
 // HyphenResult (hyphen_result.cc:12-16): U+2010 when the primary font maps it, else U+002D (computed_style.cc:1804-1820).
 // Canvas can't show which, because fallback supplies U+2010: the font declaration says (FontFacts.mapsHyphen), and when
 // it doesn't the hyphen is U+2010 (lines report hyphen-glyph where that decides a width).
-export function hyphenText(style: ComputedStyle): string {
+function hyphenText(style: ComputedStyle): string {
   switch (style.font.facts.mapsHyphen) {
     case true: return '‐'
     case false: return '-'

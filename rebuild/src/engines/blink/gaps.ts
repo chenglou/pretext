@@ -497,9 +497,14 @@ function inspected(p: BlinkPrepared, what: string): BlinkInspect {
   return p.inspect
 }
 
-// The gaps of the paragraph's content, fonts and environment, whatever the slot (DESIGN.md §5).
+// The gaps of the paragraph's content, fonts and environment, whatever the slot (DESIGN.md §5): copies, so nothing handed
+// out is the prepared paragraph's own.
 export function paragraphGaps(p: BlinkPrepared): Gap[] {
-  return inspected(p, 'paragraphGaps').gaps
+  return inspected(p, 'paragraphGaps').gaps.map(copyOf)
+}
+
+function copyOf(gap: Gap): Gap {
+  return gap.at === undefined ? { ...gap } : { ...gap, at: { ...gap.at } }
 }
 
 // ---- A decided line's gaps ----
@@ -751,8 +756,7 @@ function lineEdgeGaps(gaps: Gap[], sh: Shaper, paragraph: readonly Gap[], info: 
 export function lineGaps(p: BlinkPrepared, line: { info: LineInfo; start: BlinkLineStart; gaps: Gap[] | null }): Gap[] {
   const paragraph = inspected(p, 'inspectLine').gaps
   if (line.gaps === null) throw new Error('inspectLine reads a line filled from an inspected paragraph, and this one was filled plain')
-  const gaps: Gap[] = []
-  for (let i = 0; i < line.gaps.length; i++) gaps.push({ ...line.gaps[i]! })
+  const gaps = line.gaps.map(copyOf)
   const sh: Shaper = { p, gaps }
   lineEdgeGaps(gaps, sh, paragraph, line.info, line.start)
   itemEdgeGaps(gaps, sh, line.info)

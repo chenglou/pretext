@@ -160,11 +160,12 @@ function matchAcrossMarks(text: string, at: number, limit: number, listed: strin
   return afterFirst || later ? { end: i, afterFirst, later } : null
 }
 
-// Per text_content offset, what the ligature facts say about the boundary before it (the constants above), and per unit of
-// a shaping group the listed family that draws its glyph cluster (-1: a font the facts don't name).
-export function fontFactsOfText(p: BlinkPrepared): { ligature: Uint8Array; fontRun: Int16Array } {
-  const out = new Uint8Array(p.text.length + 1)
-  const fontRun = new Int16Array(p.text.length).fill(-1)
+// Fills the prepared paragraph's `ligature`, per text_content offset what the ligature facts say about the boundary before
+// it (the constants above), and its `fontRun`, per unit of a shaping group the listed family that draws its glyph cluster
+// (-1: a font the facts don't name).
+export function fontFactsOfText(p: BlinkPrepared): void {
+  const out = p.ligature
+  const fontRun = p.fontRun
   for (let g = 0; g < p.groups.length; g++) {
     const group = p.groups[g]!
     const style = p.styles[group.style]!
@@ -239,5 +240,4 @@ export function fontFactsOfText(p: BlinkPrepared): { ligature: Uint8Array; fontR
       c = next
     }
   }
-  return { ligature: out, fontRun }
 }

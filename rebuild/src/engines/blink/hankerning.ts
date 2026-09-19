@@ -21,7 +21,7 @@ export type HanKerningFontData = {
 }
 
 // Character::MaybeHanKerningOpenOrCloseFast (character.h:138-141).
-export function maybeHanKerningFast(c: number): boolean {
+function maybeHanKerningFast(c: number): boolean {
   return (c >= 0x2018 && c <= 0x301f) || (c >= 0xff08 && c <= 0xff60)
 }
 
