@@ -25,6 +25,8 @@
 //   the waits of 10 ms or more are the main thread's pauses while the dead canvases are freed. A context and its canvas hold
 //   each other, so only the cycle collector frees them, and a canvas element with a 2D context also leaves the observer
 //   service (HTMLCanvasElement.cpp:459-462, :476-479). The row `none` drops 10,000 plain objects.
+// - C9 freeing-buffers: C8 saw no pause in any row and, by the M2 runs, no freeing either. C9 puts 32 MiB buffers in the
+//   garbage and keeps the timer chain running across it.
 // - M rss: one kind per browser run: 1,000 live contexts, then 10,000, then dropped, with Date.now() marks that
 //   gecko-element-cost-rss.ts reads beside its ps samples of the content process. M2 is the same with 32 MiB buffers in
 //   the garbage after the drop and a wait of 40 s: the 1 x 1 element and the OffscreenCanvas gave nothing back within M's 15 s.
@@ -434,6 +436,40 @@ out.arithmeticAfter = arithmetic();
 return out;
 `
 
+const C9 = String.raw`
+const out = { dpr, timerStep: timerStep(), arithmeticBefore: arithmetic(), contexts: 10000, rows: [] };
+// C8 watched after its garbage and saw no pause in any row, the control included; the M2 runs then showed that the dead
+// contexts go during garbage that holds 32 MiB buffers, not after it. So here the 5 ms timer chain runs across the garbage
+// rounds too, and each round is one short task: a wait of 10 ms or more between two ticks is a pause, less the round's own
+// time, which the row 'none' (10,000 plain objects, the same garbage) gives.
+const kinds = ['none', 'offscreen', 'element', 'element1'];
+for (let round = 0; round < 2; round++) for (let k0 = 0; k0 < kinds.length; k0++) {
+  const kind = kinds[(k0 + round) % kinds.length];
+  let live = [];
+  for (let i = 0; i < out.contexts; i++) {
+    if (kind === 'none') { live.push({ i }); continue; }
+    const ctx = make(kind); assign(ctx, sizeOf(kind, 16) + 'px ' + FAMILY, 'en', '0px', 'ltr'); ctx.measureText('the'); live.push(ctx);
+  }
+  live = null;
+  const pauses = [];
+  let last = performance.now(), ticks = 0, watching = true;
+  const tick = () => { const t = performance.now(); ticks++; if (t - last >= 10) pauses.push(+(t - last - 5).toFixed(2)); last = t; if (watching) setTimeout(tick, 5); };
+  setTimeout(tick, 5);
+  for (let r = 0; r < 40; r++) {
+    const junk = [];
+    for (let i = 0; i < 20000; i++) junk.push([i, String(i)]);
+    junk.push(new ArrayBuffer(32 * 1024 * 1024));
+    await sleep(100);
+  }
+  await sleep(12000);
+  watching = false;
+  pauses.sort((a, b) => b - a);
+  out.rows.push({ round, kind, ticks, pauses: pauses.length, pausedMs: +pauses.reduce((a, b) => a + b, 0).toFixed(1), longest: pauses.slice(0, 5) });
+}
+out.arithmeticAfter = arithmetic();
+return out;
+`
+
 const RSS = (kind: string, buffers: boolean): string => String.raw`
 const KIND = ${JSON.stringify(kind)}, BUFFERS = ${String(buffers)};
 const marks = [];
@@ -494,6 +530,7 @@ export default function probes(): Probe[] {
     probe('gecko-element-cost C6 fonts', 'gecko-element-cost C6: a FontFace that isn\'t loaded, and faces added after a context was made', C6),
     probe('gecko-element-cost C7 page', 'gecko-element-cost C7: DOM widths beside each kind in app units, and a document without a pres shell', C7),
     probe('gecko-element-cost C8 freeing', 'gecko-element-cost C8: main-thread pauses while 10,000 dropped contexts are freed', C8),
+    probe('gecko-element-cost C9 freeing-buffers', 'gecko-element-cost C9: main-thread pauses across garbage that brings the collection on, 10,000 dropped contexts', C9),
     probe('gecko-element-cost M rss offscreen', 'gecko-element-cost M: marks around 1,000 and 10,000 live contexts, OffscreenCanvas', RSS('offscreen', false)),
     probe('gecko-element-cost M rss element-default', 'gecko-element-cost M: marks around 1,000 and 10,000 live contexts, a canvas element at 300 x 150', RSS('element', false)),
     probe('gecko-element-cost M rss element-1x1', 'gecko-element-cost M: marks around 1,000 and 10,000 live contexts, a canvas element at 1 x 1', RSS('element1', false)),
