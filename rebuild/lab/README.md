@@ -419,7 +419,7 @@ from a pass; differing predicted values 266 to 265 without facts and 552 to 551 
 plain predictor's run equals the usual run on all 67,065 cases. Every case replays exactly from the packed recordings.
 The references were frozen with `--force` and a reason, Chrome's tier 2 seeds were adopted (0 lost; breaks and widths
 gain one pass pair in each configuration), and the painter differential's frozen side was bundled again.
-GATES-AFTER-FREEZE-PLACEHOLDER
+After the freeze the full offline gates exit 0 on the frozen tree (39 gates, no case left for tier 2).
 
 ## Test tiers
 
@@ -981,7 +981,7 @@ breaks and widths in pinned Chrome in both configurations (`.artifacts/lab/fu-bl
 `c-a37545c096e939be`, went from `fail open` to pass in the recording at the merge. The painter still fails the
 review's fresh case `c-d600d9b01c0ae9d7` without an explanation (a collapsible space of a `white-space: normal` span
 hangs at a line end in a pre-wrap block, and the line painted as its own block loses it), so
-`painter/without-explanation` names it (67 items, 784 named cases).
+`painter/without-explanation` names it (67 items, 784 named cases). The final evaluation's one hanging Chrome case, `c-a948c5abca7d9a92`, is named under `blink/range-rects-hang` (research/FINAL-EVALUATION.md), which makes 785.
 
 ## Running
 

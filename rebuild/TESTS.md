@@ -254,7 +254,8 @@ collapsible space (DESIGN.md §1.1, §1.2, §4.6).
 - *The rule registry* took one new Blink rule and one restatement through `rule-changes.json` (§3). *The known tail*
   has 67 items and 784 named cases: `lab/blink-rect-of-a-span-holding-only-a-trimmed-space` is closed, since it was the
   engine port and not the observation port, and `painter/without-explanation` names the review's fresh case, which the
-  painter still fails (lab README, "The known tail"). *The coverage maps* weren't regenerated; they go stale with every
+  painter still fails (lab README, "The known tail"); with the final evaluation's one hanging Chrome case under
+  `blink/range-rects-hang` it names 785. *The coverage maps* weren't regenerated; they go stale with every
   change to a port (`gecko.txt` names lines of `familiesOf` and `escape` that have moved).
 
 Chrome's two references were recorded again and frozen at d7df936 (`.artifacts/tests/runs/fu-merge-20260919`). The
@@ -265,7 +266,7 @@ from a pass; differing predicted values 266 to 265 without facts and 552 to 551 
 plain predictor's run equals the usual run on all 67,065 cases. Every case replays exactly from the packed recordings.
 The references were frozen with `--force` and a reason, Chrome's tier 2 seeds were adopted (0 lost; breaks and widths
 gain one pass pair in each configuration), and the painter differential's frozen side was bundled again.
-GATES-AFTER-FREEZE-PLACEHOLDER
+After the freeze the full offline gates exit 0 on the frozen tree (39 gates, no case left for tier 2).
 
 Tier 1 is a change detector, not an oracle: its expected values are the library's own at a commit. Its inputs are recorded
 per library, so a library that asks Canvas new questions needs a new recording (`browser-sets.ts --record`, `replay.ts
