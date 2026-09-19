@@ -470,9 +470,8 @@ painter-only failure without a covered explanation in set 1 (`c-a478ac522795712e
 `unsafe-to-break` fires on 9.93% of set 1's passing lines (lift 6.19) and 3.77% of set 2's.
 
 **Chrome's `Range.getClientRects()` hang came back** (round 4's bug report above). Set 1's part 2 stalled in both orders, in
-the round trips that hold `c-a3f33be07d5b57aa` (forward; `…我說不清。」`, 20px sans-serif, 12px wide, `overflow-wrap:
-break-word`) and `c-8957ae80bbdcdfdf` (reverse; `“引号”在…各不相同。`, 20px PingFang SC, 12px wide): `policy/zh-lang` cases
-in a block between half an em and one em wide, like round 3's `c-1fda71ce84fd9989`. Neither order reached the cases between
+the round trips that hold `c-a3f33be07d5b57aa` (forward) and `c-8957ae80bbdcdfdf` (reverse): `policy/zh-lang` cases of the
+same kind as round 3's `c-1fda71ce84fd9989` (what the kind is: withheld, see platform-bugs entry 13). Neither order reached the cases between
 them, so the five `policy/zh-lang` cases of that kind in the part went to `parts/excluded-native-hang.ndjson` (those two,
 `c-dba6b75cf18717f9`, `c-0009dd3739b3ce85`, `c-0c83aa4c797f9e6e`), unverified one by one, and the two changed jobs ran once
 and finished. Set 2's two such cases (`c-6893cc4de0825d6c`, `c-3229d7904410f2ae`) were set aside before its run. The
@@ -701,29 +700,10 @@ reports `unsafe-to-break`.
 
 ### Chrome never returns from `Range.getClientRects()`
 
-Reduced from `c-1fda71ce84fd9989` (probe `scratchpad/r4-blink/hang/probe.ts`, outputs
-`.artifacts/probes/blink/round4-range-hang-*`): two fullwidth closing marks in a block between half an em and one em wide
-that may break anywhere.
-
-```html
-<!doctype html>
-<html lang="en">
-<div id="t" style="font: 16px 'PingFang SC'; width: 8px; overflow-wrap: break-word">。』</div>
-<script>
-  const node = document.getElementById('t').firstChild
-  const range = document.createRange()
-  range.setStart(node, 0)
-  range.setEnd(node, 1)
-  range.getClientRects() // never returns; the tab has to be killed
-</script>
-```
-
-Chrome 153.0.8010.50, macOS 27.0 (26A428), arm64, device pixel ratio 2. Layout itself ends (the block is 64px tall, two
-lines), and the hang is in the Range call over `。`. It also hangs at 10px and in Hiragino Sans. It returns with
-`text-spacing-trim: space-all`, at 1px, under `word-break: break-all` without `overflow-wrap`, for `我。』` over `我`, and
-over `』`, whose rect is then 32px wide, twice the glyph. So it takes the line-end trim of `。`, ShapeLine's
-`han_kerning_end` reshape that lets the half-width `。` fit (shaping_line_breaker.cc:344-363), in a line that then holds
-it alone. Not traced further. The lab sets such a case aside in its part's `excluded-native-hang.ndjson`.
+Reduced from `c-1fda71ce84fd9989` to a page of a few lines (probe outputs `.artifacts/probes/blink/round4-range-hang-*`).
+Chrome 153.0.8010.50, macOS 27.0 (26A428), arm64, device pixel ratio 2. Layout itself ends, and the hang is in the Range
+call. The reduction, the variants that hang and return, and the reading of the source are reported to Chromium privately on 2026-09-19;  withheld from this branch until they have looked at it (the maintainer's notes hold them).
+The lab sets such a case aside in its part's `excluded-native-hang.ndjson`.
 
 ### Open after round 4
 
@@ -898,9 +878,9 @@ and 5 others under `glyph-clusters`, `unsafe-to-break` and `tab-stops`. None is 
 values agree on 99.975% and 99.981%, and 73% of all values are predicted. The giants of sets 2 and 3 (3 and 2 paragraphs)
 weren't run.
 
-**Chrome never returns from `Range.getClientRects()`** over code point 50 or 51 of set 2's `c-1fda71ce84fd9989` (PingFang SC
-16px, `『阿呀呀，…我。』`, width 8px, keep-all, break-word, line-break strict): a probe page outside the lab stalls the same way
-(limit 50 returns, 52 doesn't; `.artifacts/probes/blink/round3-native-hang-*`), a null predictor stalls the lab page, and
+**Chrome never returns from `Range.getClientRects()`** over one code point of set 2's `c-1fda71ce84fd9989` (what the case is:
+withheld, see platform-bugs entry 13): a probe page outside the lab stalls the same way
+(`.artifacts/probes/blink/round3-native-hang-*`), a null predictor stalls the lab page, and
 the prediction alone takes 34 ms. The case is set aside in the set's `parts/excluded-native-hang.ndjson` with its reason in
 `parts.json`; part 2 then ran once.
 

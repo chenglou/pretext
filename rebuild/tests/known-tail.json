@@ -436,7 +436,7 @@
       "id": "blink/range-rects-hang",
       "engine": "blink",
       "kind": "browser bug",
-      "title": "Range.getClientRects() never returns over a line-end trimmed CJK full stop",
+      "title": "Range.getClientRects() never returns in one narrow-block case (details withheld: platform-bugs entry 13)",
       "conditions": [],
       "cases": [
         {
@@ -490,8 +490,8 @@
           "where": "critic-r4-1: a candidate in the stalled round trip; 2px"
         }
       ],
-      "source": "round 4a Blink report \"Bug report\" (shaping_line_breaker.cc:344-363, not traced further); rebuild/platform-bugs; research/ROUND4-CRITIC.md \"Known tail\" 6 (.artifacts/ceiling-20260917/critic-r4/fresh/chrome-part-02-set-aside.ids)",
-      "note": "`。』` in an 8px block with overflow-wrap: break-word. The lab can't observe such a case. The second hanging text of round 4b has no pair of closing marks, so the reduction names less than the bug. Round 4 evaluation: sealed-4's policy file stalled Chrome in both orders and both configurations (4 jobs, one cause); one case of the signature (policy/zh-lang, overflow-wrap: break-word, white-space normal, a block between half an em and one em wide) sat in both stalled round trips and was set aside without being opened (evaluate-r4/sealed4/chrome-policy-set-aside.ids). The fresh sets eval-r4-1 to -3 drew no such case. The lab still has no rule that sets such cases aside before a run. The signature is wider than the one recorded here: the round 4 critic's reverse job stalled in a round trip that held no case between half an em and one em wide; it set 32 cases aside and named two candidates. The tier sets hold no such case: the six frozen recordings of 2026-09-18 ran without a stall."
+      "source": "round 4a Blink report \"Bug report\"; rebuild/platform-bugs; research/ROUND4-CRITIC.md \"Known tail\" 6 (.artifacts/ceiling-20260917/critic-r4/fresh/chrome-part-02-set-aside.ids)",
+      "note": "What triggers it is withheld while the report to Chromium of 2026-09-19 is open (platform-bugs entry 13). The lab can't observe such a case; it sets it aside in a part's excluded-native-hang.ndjson. Round 4's second hanging text differs from the first, so the reduction names less than the bug."
     },
     {
       "id": "gecko/in-word-prefix-sides-dont-add-up",
