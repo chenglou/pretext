@@ -73,7 +73,10 @@ describe('a font-family list as CSS syntax', () => {
   // Old: the font checks found no family at all; Blink and WebKit took `"Courier New` for an unquoted name; Gecko read the
   // string. CSS ends an unclosed string at the end of the input.
   test('an unclosed string runs to the end, and an escaped newline or a last backslash adds nothing to a string', () => {
-    expect(listedFamilies('"Courier New')).toEqual([{ quoted: true, name: 'Courier New', css: '"Courier New' }])
+    expect(listedFamilies('"Courier New')).toEqual([{ quoted: true, name: 'Courier New', css: '"Courier New"' }])
+    expect(listedFamilies('Arial, "Courier New\\')[1]!.css).toBe('"Courier New"')
+    expect(listedFamilies('Arial\\')[0]!.css).toBe('"Arial\ufffd"')
+    expect(listedFamilies('"Courier New"')[0]!.css).toBe('"Courier New"')
     expect(names('"Courier \\\nNew"')).toEqual([['Courier New', true]])
     expect(names('"Courier New\\')).toEqual([['Courier New', true]])
   })

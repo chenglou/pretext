@@ -14,7 +14,9 @@
 // a list with an empty family or with anything but a comma after a string, which CSS rejects whole, and doesn't check that
 // an unquoted name is made of identifiers. It doesn't read comments, and CR LF counts as two white space characters.
 
-// One family of the list. `css` is the family as the list writes it, for a list Canvas is given again.
+// One family of the list. `css` is the family as the list writes it, for a list Canvas is given again; a family the list
+// leaves open at its end, in an unclosed string or after a last backslash, is its name as a closed string there, since
+// whatever a caller writes after the open form would join the name (the font checks add `, monospace`).
 export type ListedFamily =
   // A string: the name is its value. It names a family of that name, never a keyword (CSS Fonts 4 §4.2).
   | { quoted: true; name: string; css: string }
@@ -88,6 +90,8 @@ export function listedFamilies(list: string): ListedFamily[] {
       family = { quoted: false, name: identifiers.join(' '), css: list.slice(start, end), identifiers }
     }
     if (family.css === '' || (i < list.length && list[i] !== ',')) throw new Error(`font-family ${JSON.stringify(list)} isn't a list of family names`)
+    // Only an unclosed string and a last backslash read past the list's end.
+    if (i > list.length) family.css = JSON.stringify(family.name)
     out.push(family)
     if (i >= list.length) return out
     i++ // ','
