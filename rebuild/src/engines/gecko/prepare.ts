@@ -1026,6 +1026,15 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, inspec
     // Emoji" as the first family, where the DOM takes the glyph's device-size advance.
     let spaceAu: number | null = null
     let nbspAu: number | null = null
+    // The contexts only this step reads, for the emoji and synthesized spaces of a 16-bit run: the run's font at the device
+    // size, "Apple Color Emoji" alone at the CSS size and at the device size, and the run's font at weight 400 and the
+    // device size. Each is found in the paragraph's list or made at its end where the run's first word or cluster asks, and
+    // the run's later ones read it here.
+    let deviceContext: Context | null = null
+    let emojiContext: Context | null = null
+    let emojiDeviceContext: Context | null = null
+    let regularDeviceContext: Context | null = null
+    const emojiFont = { ...font, family: COLOR_EMOJI_FAMILY }
     // Whether a space takes part in shaping shows in the units measured together, which only a gap reads (gaps.ts).
     const spaces = gaps.spaceTest(sink, context, firstRun, tUnits, tSource, b.tStart)
     for (let u = 0; u < b.units.length; u++) {
@@ -1064,8 +1073,7 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, inspec
             // gecko-port F2, F3). Canvas shows which: Apple Color Emoji draws the cluster when it measures the same in the
             // run's font list as in "Apple Color Emoji" alone, at the CSS size and at the device size (F3, 16px Arial:
             // fresh 1260 and 1920 au in both; pinned 1020 au in Arial and 1260 au in Apple Color Emoji, DOM 1020 au).
-            const deviceContext = contextFor(contexts, { ...settings, font: canvasFont(font, devSize) })
-            const emojiFontContext = (size: number) => contextFor(contexts, { ...settings, font: canvasFont({ ...font, family: COLOR_EMOJI_FAMILY }, size) })
+            deviceContext ??= contextFor(contexts, { ...settings, font: canvasFont(font, devSize) })
             let word = ''
             for (let k = t; k < e; k++) word += String.fromCharCode(tUnits[k]!)
             const boundaries = graphemeBoundaries(word, geckoGraphemeRules)
@@ -1094,7 +1102,8 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, inspec
               if (presentation === 'text-only') continue
               // One measureText gives the cluster's width and its ink box, in the run's font list and in "Apple Color Emoji" alone.
               const own = bounds(context, cluster)
-              const inEmoji = bounds(emojiFontContext(font.size), cluster)
+              emojiContext ??= contextFor(contexts, { ...settings, font: canvasFont(emojiFont, font.size) })
+              const inEmoji = bounds(emojiContext, cluster)
               const atCssSize = Math.round(own.width * CANVAS_AU_PER_PX)
               // The cluster's Canvas au at the device size where Apple Color Emoji draws it, null where another font does.
               // The ink box too: a text font whose widths happen to equal Apple Color Emoji's at both sizes still draws another
@@ -1104,7 +1113,8 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, inspec
               let deviceAu60: number | null = null
               if (atCssSize === Math.round(inEmoji.width * CANVAS_AU_PER_PX)) {
                 const atDeviceSize = auIn(deviceContext, cluster)
-                if (atDeviceSize === auIn(emojiFontContext(devSize), cluster) && own.left === inEmoji.left && own.right === inEmoji.right) deviceAu60 = atDeviceSize
+                emojiDeviceContext ??= contextFor(contexts, { ...settings, font: canvasFont(emojiFont, devSize) })
+                if (atDeviceSize === auIn(emojiDeviceContext, cluster) && own.left === inEmoji.left && own.right === inEmoji.right) deviceAu60 = atDeviceSize
               }
               const clusterAt = { start: tSource[t + boundaries[c]!]!, end: tSource[t + boundaries[c + 1]! - 1]! + 1 }
               const next = cluster.codePointAt(first >= 0x10000 ? 2 : 1) ?? 0
@@ -1128,7 +1138,8 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, inspec
                 // the weight 400 advance at the page's apd plus as many of the DOM's steps. Probe gecko-port F24: U+1F600 in
                 // bold 20px Arial is 1226 au natively, 2400 au × 30 / 60 and NS_round(0.875 × 30) = 26, where the bold
                 // Canvas advance of 2453 au gives 1227.
-                const regularAu60 = auIn(contextFor(contexts, { ...settings, font: canvasFont({ ...font, weight: 400 }, devSize) }), cluster)
+                regularDeviceContext ??= contextFor(contexts, { ...settings, font: canvasFont({ ...font, weight: 400 }, devSize) })
+                const regularAu60 = auIn(regularDeviceContext, cluster)
                 const canvasStep = Math.floor(syntheticBoldOffset(quantize7(devSize)) * 60 + 0.5)
                 const steps = (deviceAu60 - regularAu60) / canvasStep
                 if (font.weight !== 400 && Number.isInteger(steps) && steps >= 1 && (regularAu60 * apd) % 60 === 0) {
