@@ -166,6 +166,8 @@ export async function generationLock<T>(job: string, work: () => Promise<T> | T)
   mkdirSync(resolve(LOCK, '..'), { recursive: true })
   const owner = `${LOCK}.owner`
   const started = Date.now()
+  // When this waiter first met the lock without an owner file, for as long as it has stayed without one.
+  let ownerlessSince: number | null = null
   for (;;) {
     try {
       mkdirSync(LOCK)
@@ -178,8 +180,12 @@ export async function generationLock<T>(job: string, work: () => Promise<T> | T)
       } catch {
         pid = null
       }
-      // An owner file appears right after the directory; a lock without one for 10 s belongs to nobody.
-      const stale = pid === null ? Date.now() - started > 10000 : !alive(pid)
+      if (pid !== null) ownerlessSince = null
+      else if (ownerlessSince === null) ownerlessSince = Date.now()
+      // An owner file appears right after the directory and goes right before it; a lock that has been without one for
+      // 10 s belongs to nobody. The time is the lock's without an owner, not this waiter's: a release is without one for
+      // as long as `trash` takes, and a waiter of more than 10 s took a live lock over there (research/FINAL-EVALUATION.md).
+      const stale = ownerlessSince !== null ? Date.now() - ownerlessSince > 10000 : !alive(pid!)
       if (stale) {
         console.error(`[generate-lock] taking over from ${pid === null ? 'an owner that never wrote its file' : `dead owner pid ${pid}`}`)
         break

@@ -244,7 +244,7 @@ async function generate(outDir: string, seed: string, kinds: readonly Kind[]): P
         const dirs = options.get('family-dirs')?.split(',').map(dir => resolve(dir)) ?? defaultFamilyDirs(browser!)
         const result = familyWidthCases(seed, dirs, positive('widths-per-paragraph', 1), used)
         cases = result.cases
-        detail = { paragraphs: result.paragraphs, sources: result.sources.map(source => ({ ...source, file: relative(REPO, source.file) })) }
+        detail = { paragraphs: result.paragraphs, usedDraws: result.usedDraws, givenUp: result.givenUp, sources: result.sources.map(source => ({ ...source, file: relative(REPO, source.file) })) }
       } else if (kind === 'rich-prewrap') cases = generatedKind([{ family: 'rich-prewrap', generate: generateRichPreWrap }], seed, repeat)
       else cases = generatedKind(kind === 'runs' ? RUN_GENERATORS : kind === 'ws' ? WS_GENERATORS : POLICY_GENERATORS, seed, repeat)
       const kept = cases.filter(value => !used.has(value.id))
@@ -259,7 +259,9 @@ async function generate(outDir: string, seed: string, kinds: readonly Kind[]): P
       }
       const routine = kept.filter(value => !big.some(line => line.id === value.id))
       manifest.kinds[kind] = { file: relative(REPO, file), cases: routine.length, families: familyCounts(routine), removedUsed: cases.length - kept.length, ...(detail === undefined ? {} : { detail }) }
-      log(`${kind}: ${routine.length} cases in ${Object.keys(familyCounts(routine)).length} families (${cases.length - kept.length} used ids left out${big.length === 0 ? '' : `, ${big.length} giants apart`})`)
+      // family-widths leaves used ids out as it draws (a used draw is drawn again), so its count is the generator's.
+      const drawn = kind === 'family-widths' ? detail as { usedDraws: number; givenUp: number } : null
+      log(`${kind}: ${routine.length} cases in ${Object.keys(familyCounts(routine)).length} families (${drawn === null ? `${cases.length - kept.length} used ids left out` : `${drawn.usedDraws} draws met a used id and were drawn again, ${drawn.givenUp} widths given up`}${big.length === 0 ? '' : `, ${big.length} giants apart`})`)
     }
     for (const path of giantFiles) if (existsSync(path)) for (const line of readCaseLines(path)) if (!giants.some(value => value.id === line.id)) giants.push(line)
     if (giants.length > 0) {

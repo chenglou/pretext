@@ -2009,7 +2009,10 @@ browser and seed resumes: nothing that exists is generated, run or scored again.
 
 1. **Generate**, without any case id used so far (`cases/used-ids.ts`: every case file a `run.json` under `.artifacts`
    names, `.artifacts/lab/cases`, `final-20260916/cases`, every sealed set, every earlier fresh set, the smoke cases), under
-   a generation lock so two rounds started together can't draw the same case. Kinds (`--kinds=`, default all):
+   a generation lock so two rounds started together can't draw the same case (a lock without an owner file is taken over
+   once the LOCK has been without one for 10 s; until 2026-09-19 the 10 s were the waiter's own, so a waiter of more than
+   10 s could take a live lock over during its release, and two of the final evaluation's sets were generated at once).
+   Kinds (`--kinds=`, default all):
    - `runs`, `ws`, `policy`: the generators of `cases/` under the seed, about 5,200 cases; `--repeat=N` adds the seeds
      `<seed>#2` to `<seed>#N`.
    - `rich-prewrap` (since the round 4 evaluation): `cases/rich-prewrap.ts` under the seed, about 1,330 cases a seed, the
@@ -2024,7 +2027,10 @@ browser and seed resumes: nothing that exists is generated, run or scored again.
      cases (`--family-dirs=`, default the 09-16 rule and 09-17 feature derivations) and lays each paragraph out at
      `--widths-per-paragraph=N` (default 1) new widths: 70% within ±2 to ±128 units of 1/64 px of a derived bracket, 30%
      between the paragraph's narrowest and widest brackets. A paragraph with line slots stays at or above its narrowest
-     derived width, so the slot protocol holds.
+     derived width, so the slot protocol holds. A draw that meets a used id is drawn again, up to 8 times, and the kind's
+     log line and manifest say how many draws met one and how many widths were given up (since 2026-09-19: before, the
+     line read "0 used ids left out" whatever the loop had skipped; the kind had shrunk 8 to 12% between the correctness
+     line and the final evaluation, research/FINAL-EVALUATION.md).
    A seed names one set of flat cases: a second browser asking for the same seed copies the first one's `runs`, `ws`,
    `policy` and `suite` files, so browsers compare on the same cases. `family-widths` is per browser. Giants (below) go to
    `cases/giants.ndjson` and run only with `--giants=run`, exclusively, after the parts.
