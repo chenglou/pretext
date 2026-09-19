@@ -3,7 +3,7 @@
 // 100000px block, and their code point x values after the first space are 1 au above the frame's own advances
 // (c-7d0d96b1e722680f: "Hello world again", Georgia 13px). Measurement only: per-code-point rects of one text node in au
 // (px × 60, unrounded) and each rect's x relative to the first code point's.
-import type { Probe } from '/Users/chenglou/github/pretext-rebuild/rebuild/probes/types.ts'
+import type { Probe } from './types.ts'
 
 const SOURCE = String.raw`
 const text = 'Hello world again';

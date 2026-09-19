@@ -1,5 +1,6 @@
 // Font declarations as Gecko reads them (Firefox 156.0): the parsed family list, the equality text runs continue on, and
 // the facts about realized fonts the port reads (DESIGN.md §1.2).
+import { listedFamilies } from '../../font-family.js'
 import type { FontDecl } from '../../model.js'
 
 export type FontFamilyEntry =
@@ -22,68 +23,27 @@ function genericFamily(ident: string): Extract<FontFamilyEntry, { kind: 'generic
   }
 }
 
-// One CSS escape at text[i] === '\\' (CSS Syntax §4.3.7): the code point and where parsing continues.
-function escape(text: string, i: number): { value: string; next: number } {
-  let hex = ''
-  let k = i + 1
-  while (k < text.length && hex.length < 6 && /[0-9a-fA-F]/.test(text[k]!)) hex += text[k++]
-  if (hex.length > 0) {
-    if (k < text.length && /\s/.test(text[k]!)) k++
-    const cp = parseInt(hex, 16)
-    return { value: cp === 0 || cp > 0x10ffff || (cp >= 0xd800 && cp <= 0xdfff) ? '�' : String.fromCodePoint(cp), next: k }
-  }
-  return { value: k < text.length ? text[k]! : '�', next: k + 1 }
-}
-
-// FontFamilyList as parsed by SingleFontFamily::parse (font.rs:707-768): a quoted string is a quoted family name; an
-// identifier that is a generic keyword is that generic; other identifiers join with single spaces into one name, quoted
-// syntax only when an escaped identifier holds a space.
+// FontFamilyList as parsed by SingleFontFamily::parse (font.rs:707-768), over the families the list names, whose syntax
+// is read once for every engine (font-family.ts): a quoted string is a quoted family name; an identifier that is a generic
+// keyword is that generic; other identifiers join with single spaces into one name, quoted syntax only when an escaped
+// identifier holds a space.
 export function parseFamilyList(list: string): FontFamilyEntry[] {
+  const listed = listedFamilies(list)
   const out: FontFamilyEntry[] = []
-  let i = 0
-  while (i <= list.length) {
-    while (i < list.length && /\s/.test(list[i]!)) i++
-    const quote = list[i]
-    if (quote === '"' || quote === "'") {
-      let name = ''
-      i++
-      while (i < list.length && list[i] !== quote) {
-        if (list[i] === '\\') {
-          const e = escape(list, i)
-          name += e.value
-          i = e.next
-        } else {
-          name += list[i++]
-        }
-      }
-      out.push({ kind: 'named', name, syntax: 'quoted' })
-      i++
-    } else {
-      const idents: string[] = []
-      let spaced = false
-      for (;;) {
-        while (i < list.length && /\s/.test(list[i]!)) i++
-        if (i >= list.length || list[i] === ',') break
-        let ident = ''
-        while (i < list.length && !/\s/.test(list[i]!) && list[i] !== ',') {
-          if (list[i] === '\\') {
-            const e = escape(list, i)
-            ident += e.value
-            i = e.next
-          } else {
-            ident += list[i++]
-          }
-        }
-        spaced ||= ident.includes(' ')
-        idents.push(ident)
-      }
-      const generic = idents.length === 1 ? genericFamily(idents[0]!) : null
-      if (generic !== null) out.push({ kind: 'generic', name: generic })
-      else out.push({ kind: 'named', name: idents.join(' '), syntax: spaced ? 'quoted' : 'identifiers' })
+  for (let i = 0; i < listed.length; i++) {
+    const family = listed[i]!
+    if (family.quoted) {
+      out.push({ kind: 'named', name: family.name, syntax: 'quoted' })
+      continue
     }
-    while (i < list.length && /\s/.test(list[i]!)) i++
-    if (i >= list.length) break
-    i++ // ','
+    const generic = family.identifiers.length === 1 ? genericFamily(family.identifiers[0]!) : null
+    if (generic !== null) {
+      out.push({ kind: 'generic', name: generic })
+      continue
+    }
+    let spaced = false
+    for (let k = 0; k < family.identifiers.length; k++) spaced ||= family.identifiers[k]!.includes(' ')
+    out.push({ kind: 'named', name: family.name, syntax: spaced ? 'quoted' : 'identifiers' })
   }
   return out
 }

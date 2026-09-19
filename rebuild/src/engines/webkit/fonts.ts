@@ -19,6 +19,7 @@
 // with default emoji presentation (FontCascadeFonts::glyphDataForVariant, FontCascadeFonts.cpp:440-447;
 // FontCascade::resolveEmojiPolicy, FontCascadeCoreText.cpp:473-523), so such a character still reports canvas-language
 // (lines.ts).
+import { listedFamilies } from '../../font-family.js'
 import { inRanges } from './data.js'
 import { webkitEmojiPresentationRanges, webkitGenericFamilies, webkitGenericFamilyNames } from './generated/fonts.js'
 
@@ -56,16 +57,15 @@ export function genericFamilyUnder(keyword: string, locale: string, script: stri
 }
 
 // A font-family list as names, each marked quoted or not: a quoted keyword names a family of that name, not the generic family
-// (CSS Fonts 4 §4.2, research/CHARTER-CRITIC.md item 9). `css` is the name as the list writes it.
+// (CSS Fonts 4 §4.2, research/CHARTER-CRITIC.md item 9). `css` is the name as the list writes it. The list's syntax is read
+// once for every engine (font-family.ts); the names are lowercased here, as this port compares them, and the list is this
+// port's own because makeBox names generic families in it (content.ts).
 export type FamilyName = { css: string; name: string; quoted: boolean }
 
 export function familyNames(family: string): FamilyName[] {
+  const listed = listedFamilies(family)
   const out: FamilyName[] = []
-  const parts = family.split(',')
-  for (let i = 0; i < parts.length; i++) {
-    const css = parts[i]!.trim()
-    out.push({ css, name: css.replace(/^["']|["']$/g, '').toLowerCase(), quoted: /^["'].*["']$/.test(css) })
-  }
+  for (let i = 0; i < listed.length; i++) out.push({ css: listed[i]!.css, name: listed[i]!.name.toLowerCase(), quoted: listed[i]!.quoted })
   return out
 }
 

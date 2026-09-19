@@ -1,5 +1,5 @@
 // The three checks of function-set.ts, each silent on a function set that keeps its rules and loud on one that breaks
-// them. The library's own function set arrives with step 1's S3, so the set here is a toy: a greedy line breaker over
+// them. The checks must find a broken rule whatever the library does, so the set here is a toy: a greedy line breaker over
 // words that measures with Canvas, whose inspected paragraph asks one question more (what a gap-only measurement is) and
 // keeps gaps on its lines. Its lab path is recorded with the fake browser (fake-browser.ts) and replayed, as the library's is.
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'

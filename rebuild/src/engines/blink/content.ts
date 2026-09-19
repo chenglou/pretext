@@ -2,6 +2,7 @@
 // white-space processing (§2.C) over the inline tree in document order, with open and close tags, atomic inlines, <br>
 // and <wbr> (inline_items_builder.cc), bidi item splitting (§2.D) and the styles items are handled under.
 import type { ContentIndex } from '../../content.js'
+import { listedFamilies } from '../../font-family.js'
 import type { FontDecl, Paragraph, TextStyle, WhiteSpace } from '../../model.js'
 import { resolveIcuBidi } from '../../unicode/ubidi.js'
 import { blinkBidiData } from './data.js'
@@ -135,7 +136,7 @@ export function stylesOf(paragraph: Paragraph, index: ContentIndex<FontDecl>, zo
 // The primary family is FontFacts.primaryFamily, or the first family of the list (DESIGN.md §1.2).
 function styleOf(element: number, parent: number, style: TextStyle, locale: string | null, start: BlinkBoxEdge, end: BlinkBoxEdge, verticalAlign: ComputedStyle['verticalAlign']): ComputedStyle {
   const font = style.font
-  const first = firstFamily(font.family)
+  const first = listedFamilies(font.family)[0]!
   const keyword = font.facts.primaryFamily !== null ? isSystemFontKeyword(font.facts.primaryFamily, false) : isSystemFontKeyword(first.name, first.quoted)
   return {
     element, parent, run: null, font, letterSpacing: style.letterSpacing, wordSpacing: style.wordSpacing, whiteSpace: style.whiteSpace,
@@ -156,14 +157,6 @@ export function sameFont(a: ComputedStyle, b: ComputedStyle): boolean {
 // box edges creates a box fragment for its element rects, never where lines break.
 function fontHeightsDiffer(a: ComputedStyle, b: ComputedStyle): boolean {
   return a.font.family !== b.font.family || a.font.size !== b.font.size || a.font.weight !== b.font.weight || a.font.style !== b.font.style
-}
-
-// The first family of a CSS font-family list, without its quotes.
-function firstFamily(list: string): { name: string; quoted: boolean } {
-  const comma = list.indexOf(',')
-  const first = (comma < 0 ? list : list.slice(0, comma)).trim()
-  const quoted = first.length >= 2 && (first[0] === '"' || first[0] === "'") && first[first.length - 1] === first[0]
-  return { name: quoted ? first.slice(1, -1) : first, quoted }
 }
 
 // The families Blink resolves to the macOS system UI font: the generic system-ui (FontCache::GetFontPlatformData,
