@@ -19,6 +19,7 @@
 // with default emoji presentation (FontCascadeFonts::glyphDataForVariant, FontCascadeFonts.cpp:440-447;
 // FontCascade::resolveEmojiPolicy, FontCascadeCoreText.cpp:473-523), so such a character still reports canvas-language
 // (lines.ts).
+import { inRanges } from './data.js'
 import { webkitEmojiPresentationRanges, webkitGenericFamilies, webkitGenericFamilyNames } from './generated/fonts.js'
 
 const CORE_TEXT_GENERICS = ['serif', 'sans-serif', 'cursive', 'fantasy', 'monospace']
@@ -54,15 +55,25 @@ export function genericFamilyUnder(keyword: string, locale: string, script: stri
   return name === '' ? null : name
 }
 
-export function hasEmojiPresentation(cp: number): boolean {
-  const ranges = webkitEmojiPresentationRanges
-  let low = 0
-  let high = ranges.length / 2 - 1
-  while (low <= high) {
-    const middle = (low + high) >> 1
-    if (cp < ranges[2 * middle]!) high = middle - 1
-    else if (cp > ranges[2 * middle + 1]!) low = middle + 1
-    else return true
+// A font-family list as names, each marked quoted or not: a quoted keyword names a family of that name, not the generic family
+// (CSS Fonts 4 §4.2, research/CHARTER-CRITIC.md item 9). `css` is the name as the list writes it.
+export type FamilyName = { css: string; name: string; quoted: boolean }
+
+export function familyNames(family: string): FamilyName[] {
+  const out: FamilyName[] = []
+  const parts = family.split(',')
+  for (let i = 0; i < parts.length; i++) {
+    const css = parts[i]!.trim()
+    out.push({ css, name: css.replace(/^["']|["']$/g, '').toLowerCase(), quoted: /^["'].*["']$/.test(css) })
   }
-  return false
+  return out
+}
+
+// A family Canvas is given by name.
+export function namedFamily(name: string): FamilyName {
+  return { css: JSON.stringify(name), name: name.toLowerCase(), quoted: true }
+}
+
+export function hasEmojiPresentation(cp: number): boolean {
+  return inRanges(webkitEmojiPresentationRanges, cp)
 }

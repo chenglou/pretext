@@ -3,11 +3,10 @@
 // (InlineDisplayContentBuilder) from the closed Line::Run list. Pure functions of the prepared paragraph and the line; none
 // asks Canvas. Cited as in lines.ts.
 import type { Fragment, LinePieces, TextAlign } from '../../model.js'
-import { DEFAULT_BIDI_LEVEL, OPAQUE_BIDI_LEVEL } from './content.js'
-import type { WebKitDisplayBox, WebKitLineGeometry } from './geometry.js'
-import { elementSourceOffset, lastRunLogicalRight, lineHasVisuallyNonEmptyContent, spanEdges, textIndent, type Line, type LineRun, type WebKitFilledLine } from './lines.js'
+import type { WebKitDisplayBox, WebKitLineGeometry, WebKitTextBox } from './geometry.js'
+import { atomicElement, lastRunLogicalRight, lineHasVisuallyNonEmptyContent, spanEdges, textIndent } from './lines.js'
 import { collapsesWhiteSpace, layoutUnit } from './style.js'
-import type { WebKitBox, WebKitPrepared, WebKitStyle } from './types.js'
+import { DEFAULT_BIDI_LEVEL, OPAQUE_BIDI_LEVEL, type Line, type LineRun, type WebKitBox, type WebKitFilledLine, type WebKitPrepared, type WebKitStyle } from './types.js'
 
 const f32 = Math.fround
 
@@ -21,7 +20,7 @@ export function linePieces(p: WebKitPrepared, filled: WebKitFilledLine): LinePie
   let shapedAcrossBoxes = false
   for (let i = 0; i < line.runs.length; i++) {
     const run = line.runs[i]!
-    if ((run.kind === 'text' || run.kind === 'soft-line-break') && run.shapingBoundary !== null) shapedAcrossBoxes = true
+    if (run.kind === 'text' && run.shapingBoundary !== null) shapedAcrossBoxes = true
   }
   const hangingWidth = line.hanging === null ? 0 : line.hanging.width
   return {
@@ -42,16 +41,16 @@ export function lineGeometry(p: WebKitPrepared, filled: WebKitFilledLine): WebKi
   const alignmentOffset = line.runs.length > 0 ? horizontalAlignmentOffset(p.style, contentLogicalRight, rect.width, hangingWidth, filled.isLastLineOrLineEndsWithForcedLineBreak) : 0
   // The display line's left edge (IDLB:124-129): the line rect's left, mirrored across the container in an RTL block.
   const containerWidth = f32(layoutUnit(f32(f32(filled.slot.width) * f32(p.zoom))))
-  const lineLeft = p.style.rtl ? f32(containerWidth - f32(rect.left + rect.width)) : rect.left
+  const displayLineLeft = p.style.rtl ? f32(containerWidth - f32(rect.left + rect.width)) : rect.left
   return {
-    lineLeft: p.style.rtl ? f32(containerWidth - f32(rect.left + rect.width)) : f32(rect.left - textIndent(p, filled.from)),
+    lineLeft: p.style.rtl ? displayLineLeft : f32(rect.left - textIndent(p, filled.from)),
     contentEdgeOffset: rect.contentEdgeOffset,
     lineBoxWidth: rect.width,
     contentWidth: line.contentLogicalWidth,
     hangingWidth,
     contentLogicalRight,
     alignmentOffset,
-    boxes: displayBoxes(p, filled, lineLeft, alignmentOffset, lineHasVisuallyNonEmptyContent(p, line)),
+    boxes: displayBoxes(p, filled, displayLineLeft, alignmentOffset, lineHasVisuallyNonEmptyContent(p, line)),
   }
 }
 
@@ -85,10 +84,16 @@ function horizontalAlignmentOffset(s: WebKitStyle, contentLogicalRightIn: number
 
 // ---- Display boxes and fragments from the closed Line::Run list ----
 
+// The text leaf a source offset is in: the last one that starts at or before it.
 function runAt(p: WebKitPrepared, offset: number): number {
-  let run = 0
-  while (run + 1 < p.runTexts.length && p.runStarts[run + 1]! <= offset) run++
-  return run
+  let low = 0
+  let high = p.runStarts.length - 2
+  while (low < high) {
+    const middle = (low + high + 1) >> 1
+    if (p.runStarts[middle]! <= offset) low = middle
+    else high = middle - 1
+  }
+  return low
 }
 
 // ubidi_reorderVisual (ICU 78.2 ubidiln.cpp:709-744, 812-867): L2 over one level per run; indexMap[visual] = logical.
@@ -142,14 +147,22 @@ function visualOrder(runs: LineRun[]): number[] {
   return order
 }
 
-function textDisplayBox(p: WebKitPrepared, run: LineRun, x: number): WebKitDisplayBox {
+// A soft line break's box holds its one unit and nothing a text run gets from its content: a line that ends with one isn't
+// justified (lines.ts applyRunBasedAlignmentIfApplicable).
+function textDisplayBox(p: WebKitPrepared, run: Extract<LineRun, { kind: 'text' | 'soft-line-break' }>, x: number): WebKitTextBox {
   const box = p.boxes[run.box]!
-  return {
-    kind: run.kind === 'soft-line-break' ? 'soft-line-break' : 'text', run: box.run, start: run.textStart, end: run.textStart + run.textLength,
-    level: run.level, isWordSeparator: run.isWordSeparator, x, width: run.kind === 'soft-line-break' ? 0 : run.width,
-    hyphen: run.needsHyphen ? box.hyphen : null, expansion: run.expansion,
-    expansionBehavior: { left: run.expansionBehavior.left, right: run.expansionBehavior.right }, shapedAcrossBoxes: run.shapingBoundary !== null,
-    canvasFamily: box.canvasFamily,
+  switch (run.kind) {
+    case 'text':
+      return {
+        kind: 'text', run: box.run, start: run.textStart, end: run.textStart + run.textLength, level: run.level, isWordSeparator: run.isWordSeparator, x, width: run.width,
+        hyphen: run.needsHyphen ? box.hyphen : null, expansion: run.expansion, expansionBehavior: { left: run.expansionBehavior.left, right: run.expansionBehavior.right },
+        shapedAcrossBoxes: run.shapingBoundary !== null, canvasFamily: box.canvasFamily,
+      }
+    case 'soft-line-break':
+      return {
+        kind: 'soft-line-break', run: box.run, start: run.textStart, end: run.textStart + 1, level: run.level, isWordSeparator: false, x, width: 0,
+        hyphen: null, expansion: 0, expansionBehavior: { left: 'allow', right: 'allow' }, shapedAcrossBoxes: false, canvasFamily: box.canvasFamily,
+      }
   }
 }
 
@@ -184,7 +197,8 @@ function nonBidiDisplayBoxes(p: WebKitPrepared, filled: WebKitFilledLine, lineLe
   // which the initial width of an inline box adds back (LBB:488-495).
   const contentLogicalWidth = p.style.rtl ? line.contentLogicalWidth : f32(line.contentLogicalWidth - hanging)
   const rootRight = f32(alignmentOffset + contentLogicalWidth)
-  const openBoxes = new Map<number, number>()
+  // The display boxes of the inline boxes open at a run, innermost last, as indices into `out`; null where a box got none.
+  const open: (number | null)[] = []
   for (let i = 0; i < runs.length; i++) {
     const run = runs[i]!
     switch (run.kind) {
@@ -196,8 +210,7 @@ function nonBidiDisplayBoxes(p: WebKitPrepared, filled: WebKitFilledLine, lineLe
         out.push({ kind: 'line-break', element: run.element, x: f32(lineLeft + f32(alignmentOffset + run.left)), width: 0 })
         break
       case 'atomic': {
-        const e = p.elements[run.element]!
-        if (e.kind !== 'atomic') throw new Error(`element ${run.element} isn't atomic`)
+        const e = atomicElement(p, run.element)
         const left = f32(f32(alignmentOffset + run.left) + Math.max(0, e.marginStart))
         out.push({ kind: 'atomic', element: run.element, level: run.level === DEFAULT_BIDI_LEVEL || run.level === OPAQUE_BIDI_LEVEL ? (p.style.rtl ? 1 : 0) : run.level, x: f32(lineLeft + left), width: e.borderBoxWidth })
         break
@@ -205,20 +218,24 @@ function nonBidiDisplayBoxes(p: WebKitPrepared, filled: WebKitFilledLine, lineLe
       case 'inline-box-start':
       case 'spanning-inline-box-start': {
         // Line-spanning boxes on a line whose content floats pushed away get no display box (IDCB:603-609).
-        if (run.kind === 'spanning-inline-box-start' && !hasContentfulInFlowContent && filled.rect.constrainedByFloat) break
+        if (run.kind === 'spanning-inline-box-start' && !hasContentfulInFlowContent && filled.rect.constrainedByFloat) {
+          open.push(null)
+          break
+        }
         const marginStart = run.kind === 'inline-box-start' ? spanEdges(p, run.element).marginStart : 0
         // Inline box runs are margin boxes: the border box starts past a positive margin, while a negative margin start
         // already moved the run left (IL:300-305) and stays in the box (LBB:482-487).
         const left = f32(f32(alignmentOffset + run.left) + Math.max(0, marginStart))
         let width = Math.max(0, f32(rootRight - left))
         if (!p.style.rtl) width = Math.max(0, f32(f32(rootRight + hanging) - left))
-        openBoxes.set(run.element, out.length)
+        open.push(out.length)
         out.push({ kind: 'inline-box', element: run.element, x: f32(lineLeft + left), width, hasStartEdge: run.kind === 'inline-box-start', hasEndEdge: false })
         break
       }
       case 'inline-box-end': {
-        const index = openBoxes.get(run.element)
-        if (index === undefined) break
+        // Every inline box that ends on the line starts on it, as itself or as a line-spanning start (lines.ts newLine).
+        const index = open.pop()!
+        if (index === null) break
         const boxOut = out[index]! as Extract<WebKitDisplayBox, { kind: 'inline-box' }>
         const marginEnd = spanEdges(p, run.element).marginEnd
         const right = f32(f32(alignmentOffset + run.left) + f32(run.width - marginEnd))
@@ -264,28 +281,33 @@ function bidiDisplayBoxes(p: WebKitPrepared, filled: WebKitFilledLine, lineLeft:
     else if (run.kind === 'inline-box-start') firstBox.add(run.element)
     else if (run.kind === 'inline-box-end') lastBox.add(run.element)
   }
-  type Node = { box: number; element: number; children: number[] }
+  // The display box tree: an inline box's node holds its children, and a leaf the word spacing before its box. The boxes are
+  // the ones in `out`.
+  type InlineBox = Extract<WebKitDisplayBox, { kind: 'inline-box' }>
+  type Node = { kind: 'inline-box'; box: InlineBox; children: Node[] } | { kind: 'leaf'; box: Exclude<WebKitDisplayBox, InlineBox>; margin: number }
   const out: WebKitDisplayBox[] = []
-  const nodes: Node[] = [{ box: -1, element: -1, children: [] }]
-  // The ancestor stack: display box tree nodes of the containers from the root inward.
-  const stack: { element: number; node: number }[] = [{ element: -1, node: 0 }]
-  const ensureContainer = (element: number): number => {
+  const rootChildren: Node[] = []
+  // The ancestor stack: the containers from the root (the block, -1) inward, each with its node's children.
+  const stack: { element: number; children: Node[] }[] = [{ element: -1, children: rootChildren }]
+  const addContainer = (parent: Node[], element: number): Node[] => {
+    const box: InlineBox = { kind: 'inline-box', element, x: 0, width: 0, hasStartEdge: firstBox.has(element), hasEndEdge: lastBox.has(element) }
+    const children: Node[] = []
+    out.push(box)
+    parent.push({ kind: 'inline-box', box, children })
+    stack.push({ element, children })
+    return children
+  }
+  const ensureContainer = (element: number): Node[] => {
     for (let k = stack.length - 1; k >= 0; k--) {
       if (stack[k]!.element !== element) continue
       stack.length = k + 1
-      return stack[k]!.node
+      return stack[k]!.children
     }
-    const parentNode = ensureContainer(p.elements[element]!.parent)
-    out.push({ kind: 'inline-box', element, x: 0, width: 0, hasStartEdge: firstBox.has(element), hasEndEdge: lastBox.has(element) })
-    nodes.push({ box: out.length - 1, element, children: [] })
-    nodes[parentNode]!.children.push(nodes.length - 1)
-    stack.push({ element, node: nodes.length - 1 })
-    return nodes.length - 1
+    return addContainer(ensureContainer(p.elements[element]!.parent), element)
   }
-  const addLeaf = (parentNode: number, box: WebKitDisplayBox) => {
+  const addLeaf = (parent: Node[], box: Exclude<WebKitDisplayBox, InlineBox>, margin: number) => {
     out.push(box)
-    nodes.push({ box: out.length - 1, element: -1, children: [] })
-    nodes[parentNode]!.children.push(nodes.length - 1)
+    parent.push({ kind: 'leaf', box, margin })
   }
   let edge = contentLineLeftEdge
   let hasInlineBox = false
@@ -293,40 +315,32 @@ function bidiDisplayBoxes(p: WebKitPrepared, filled: WebKitFilledLine, lineLeft:
   for (let k = 0; k < order.length; k++) {
     const run = runs[order[k]!]!
     if (run.kind === 'word-break-opportunity' || run.kind === 'inline-box-end') continue
-    const parent = run.kind === 'text' || run.kind === 'soft-line-break' ? p.boxes[run.box]!.parent
-      : run.kind === 'inline-box-start' || run.kind === 'spanning-inline-box-start' ? p.elements[run.element]!.parent : p.elements[run.element]!.parent
-    const parentNode = ensureContainer(parent)
-    hasInlineBox ||= parentNode !== 0 || run.kind === 'inline-box-start' || run.kind === 'spanning-inline-box-start'
+    const parent = ensureContainer(run.kind === 'text' || run.kind === 'soft-line-break' ? p.boxes[run.box]!.parent : p.elements[run.element]!.parent)
+    hasInlineBox ||= parent !== rootChildren || run.kind === 'inline-box-start' || run.kind === 'spanning-inline-box-start'
     switch (run.kind) {
       case 'text': {
-        const margin = run.isWordSeparator ? p.boxes[run.box]!.wordSpacing : 0
-        addLeaf(parentNode, textDisplayBox(p, run, f32(lineLeft + f32(edge + margin))))
+        const margin = run.isWordSeparator ? p.boxes[run.box]!.style.wordSpacing : 0
+        addLeaf(parent, textDisplayBox(p, run, f32(lineLeft + f32(edge + margin))), margin)
         edge = f32(edge + f32(run.width + margin))
         break
       }
       case 'soft-line-break':
-        addLeaf(parentNode, textDisplayBox(p, run, f32(lineLeft + edge)))
+        addLeaf(parent, textDisplayBox(p, run, f32(lineLeft + edge)), 0)
         break
       case 'hard-line-break':
-        addLeaf(parentNode, { kind: 'line-break', element: run.element, x: f32(lineLeft + edge), width: 0 })
+        addLeaf(parent, { kind: 'line-break', element: run.element, x: f32(lineLeft + edge), width: 0 }, 0)
         break
       case 'atomic': {
-        const e = p.elements[run.element]!
-        if (e.kind !== 'atomic') throw new Error(`element ${run.element} isn't atomic`)
+        const e = atomicElement(p, run.element)
         const marginLeft = rtlBlock ? e.marginEnd : e.marginStart
         const marginRight = rtlBlock ? e.marginStart : e.marginEnd
-        addLeaf(parentNode, { kind: 'atomic', element: run.element, level: run.level, x: f32(lineLeft + f32(edge + marginLeft)), width: e.borderBoxWidth })
+        addLeaf(parent, { kind: 'atomic', element: run.element, level: run.level, x: f32(lineLeft + f32(edge + marginLeft)), width: e.borderBoxWidth }, 0)
         edge = f32(f32(f32(edge + marginLeft) + e.borderBoxWidth) + marginRight)
         break
       }
       case 'inline-box-start':
       case 'spanning-inline-box-start':
-        if (!hasContentOnLine.has(run.element)) {
-          out.push({ kind: 'inline-box', element: run.element, x: 0, width: 0, hasStartEdge: firstBox.has(run.element), hasEndEdge: lastBox.has(run.element) })
-          nodes.push({ box: out.length - 1, element: run.element, children: [] })
-          nodes[parentNode]!.children.push(nodes.length - 1)
-          stack.push({ element: run.element, node: nodes.length - 1 })
-        }
+        if (!hasContentOnLine.has(run.element)) addContainer(parent, run.element)
         break
     }
   }
@@ -352,25 +366,22 @@ function bidiDisplayBoxes(p: WebKitPrepared, filled: WebKitFilledLine, lineLeft:
     }
     // adjustVisualGeometryForDisplayBox (:728-824).
     let right = contentLineLeftEdge
-    const adjust = (index: number) => {
-      const node = nodes[index]!
-      const box = out[node.box]!
-      if (box.kind !== 'inline-box') {
+    const adjust = (node: Node) => {
+      if (node.kind === 'leaf') {
+        const box = node.box
         if (box.kind === 'atomic') {
-          const e = p.elements[box.element]!
-          if (e.kind !== 'atomic') throw new Error(`element ${box.element} isn't atomic`)
+          const e = atomicElement(p, box.element)
           const marginLeft = rtlBlock ? e.marginEnd : e.marginStart
           box.x = f32(f32(lineLeft + right) + marginLeft)
           right = f32(right + e.marginBoxWidth)
           return
         }
-        const margin = box.kind === 'text' && box.isWordSeparator ? p.boxes[boxOfRun(p, box.run)]!.wordSpacing : 0
-        const width = box.width
-        box.x = f32(lineLeft + f32(right + margin))
-        right = f32(right + f32(width + margin))
+        box.x = f32(lineLeft + f32(right + node.margin))
+        right = f32(right + f32(box.width + node.margin))
         return
       }
-      const e = spanEdges(p, node.element)
+      const box = node.box
+      const e = spanEdges(p, box.element)
       const ltr = !rtlBlock
       const isFirst = box.hasStartEdge
       const isLast = box.hasEndEdge
@@ -389,7 +400,7 @@ function bidiDisplayBoxes(p: WebKitPrepared, filled: WebKitFilledLine, lineLeft:
       box.width = f32(right - left)
       if (applyRight) right = f32(right + marginRight)
     }
-    for (let c = 0; c < nodes[0]!.children.length; c++) adjust(nodes[0]!.children[c]!)
+    for (let c = 0; c < rootChildren.length; c++) adjust(rootChildren[c]!)
   }
   // closeInlineBoxes (:1073-1087).
   for (let i = runs.length - 1; i >= 0; i--) {
@@ -399,11 +410,6 @@ function bidiDisplayBoxes(p: WebKitPrepared, filled: WebKitFilledLine, lineLeft:
     out.push({ kind: 'inline-box', element: run.element, x: f32(lineLeft + lineWidth), width: 0, hasStartEdge: firstBox.has(run.element), hasEndEdge: lastBox.has(run.element) })
   }
   return out
-}
-
-function boxOfRun(p: WebKitPrepared, run: number): number {
-  for (let b = 0; b < p.boxes.length; b++) if (p.boxes[b]!.run === run) return b
-  throw new Error(`run ${run} has no text box`)
 }
 
 // The line's fragments in logical order, from the closed run list. Units inside a text run are laid out: `hanging` for
@@ -428,9 +434,10 @@ function lineFragments(p: WebKitPrepared, line: Line, start: number, end: number
     return out
   }
   const runs = line.runs
-  let lastTextRun = -1
+  let lastTextRun: number | null = null
   for (let i = 0; i < runs.length; i++) if (runs[i]!.kind === 'text') lastTextRun = i
-  // Each piece with the source offset it sits at; elements sit before the text that follows them.
+  // Each piece with the source offset it sits at. An element's run sits where its item does, the start of the first text box
+  // at or after it in document order (types.ts WebKitItem), clamped to the line's cursor so fragments stay in logical order.
   const pieces: { at: number; fragment: Fragment }[] = []
   let cursor = start
   for (let i = 0; i < runs.length; i++) {
@@ -455,19 +462,19 @@ function lineFragments(p: WebKitPrepared, line: Line, start: number, end: number
         break
       }
       case 'inline-box-start':
-        pieces.push({ at: elementOffsetOnLine(p, run.element, 'open', cursor), fragment: { kind: 'box-start', element: run.element } })
+        pieces.push({ at: Math.max(cursor, run.sourceOffset), fragment: { kind: 'box-start', element: run.element } })
         break
       case 'inline-box-end':
-        pieces.push({ at: elementOffsetOnLine(p, run.element, 'close', cursor), fragment: { kind: 'box-end', element: run.element } })
+        pieces.push({ at: Math.max(cursor, run.sourceOffset), fragment: { kind: 'box-end', element: run.element } })
         break
       case 'atomic':
-        pieces.push({ at: elementOffsetOnLine(p, run.element, 'open', cursor), fragment: { kind: 'atomic', element: run.element, level: levelOf(run.level) } })
+        pieces.push({ at: Math.max(cursor, run.sourceOffset), fragment: { kind: 'atomic', element: run.element, level: levelOf(run.level) } })
         break
       case 'hard-line-break':
-        pieces.push({ at: elementOffsetOnLine(p, run.element, 'open', cursor), fragment: { kind: 'br', element: run.element } })
+        pieces.push({ at: Math.max(cursor, run.sourceOffset), fragment: { kind: 'br', element: run.element } })
         break
       case 'word-break-opportunity':
-        pieces.push({ at: elementOffsetOnLine(p, run.element, 'open', cursor), fragment: { kind: 'wbr', element: run.element } })
+        pieces.push({ at: Math.max(cursor, run.sourceOffset), fragment: { kind: 'wbr', element: run.element } })
         break
       case 'spanning-inline-box-start':
         break
@@ -519,18 +526,4 @@ function lineFragments(p: WebKitPrepared, line: Line, start: number, end: number
   }
   collapse(end)
   return fragments
-}
-
-// Where an element event sits in source offsets: the leaf start of the first text leaf at or after the event in document
-// order, clamped to the line's cursor so fragments stay in logical order.
-function elementOffsetOnLine(p: WebKitPrepared, element: number, event: 'open' | 'close', cursor: number): number {
-  let index = -1
-  for (let i = 0; i < p.items.length; i++) {
-    const item = p.items[i]!
-    if ('element' in item && item.element === element && (event === 'open' ? item.kind !== 'inline-box-end' : item.kind === 'inline-box-end')) {
-      index = i
-      break
-    }
-  }
-  return Math.max(cursor, index < 0 ? cursor : elementSourceOffset(p, index))
 }

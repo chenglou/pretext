@@ -125,14 +125,9 @@ function addDictionaryBoundaries(source: DictionaryBreaks, rules: BreakRules, te
   }
 }
 
-// Whether an engine range long enough for breaks starts with a combining mark, where the line engine resynchronizes from
-// its dictionary (ThaiBreakEngine::divideUpDictionaryRange's "Look for a plausible word boundary") and the word segmenter
-// starts its range after the mark. The text is taken as one rule segment.
-export function dictionaryRangeStartsWithMark(rules: BreakRules, text: string): boolean {
-  return dictionaryRangesStartingWithMark(rules, text).length > 0
-}
-
-// The engine ranges of dictionaryRangeStartsWithMark, [start, end) in text offsets.
+// The engine ranges long enough for breaks that start with a combining mark, where the line engine resynchronizes from its
+// dictionary (ThaiBreakEngine::divideUpDictionaryRange's "Look for a plausible word boundary") and the word segmenter starts
+// its range after the mark, as [start, end) in text offsets. The text is taken as one rule segment.
 export function dictionaryRangesStartingWithMark(rules: BreakRules, text: string): Array<[number, number]> {
   const ranges: Array<[number, number]> = []
   forEachDictionaryRange(rules, text, 0, text.length, (engine, rangeStart, rangeEnd) => {
@@ -400,7 +395,7 @@ export function mayBreakInBetween(previousText: string, previousIs8Bit: boolean,
 
 // mayBreakInBetween's iterator text is the previous box's last two code units and the next box's text (TBI:99-147), so a
 // box edge inside a Thai, Lao, Khmer or Myanmar word starts a dictionary range mid-word. Where that range starts with a
-// combining mark the word segmenter stands in badly (dictionaryRangeStartsWithMark). Returns the range's end as an offset
+// combining mark the word segmenter stands in badly (dictionaryRangesStartingWithMark). Returns the range's end as an offset
 // into the next box's text, or null (held-out c-964d495e90c81b81: U+0E49 U+0E27 before the next node's `ยกั`, where WebKit
 // breaks between the nodes and the stand-in doesn't).
 export function inBetweenRangeStartingWithMark(previousText: string, nextText: string, nextLocale: string, mode: LineBreakMode, icuDefaultLocale: string): number | null {

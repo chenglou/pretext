@@ -42,7 +42,8 @@ export function pairTableBreaks(before: number, after: number): boolean {
   return pairCanBreak(webkitLinePairs, before, after)
 }
 
-function inRanges(r: readonly number[], c: number): boolean {
+// Whether `c` is in one of the ranges of a sorted flat list of [first, last] pairs.
+export function inRanges(r: readonly number[], c: number): boolean {
   let lo = 0
   let hi = r.length / 2 - 1
   while (lo <= hi) {
@@ -140,11 +141,20 @@ export function hasDelimiterData(locale: string): boolean {
 
 // Every code point any CLDR delimiter row names as a quotation mark with Line_Break QU: the characters an override can
 // touch under some default locale.
-export function isDelimiterQuote(cp: number): boolean {
-  for (const row of Object.values(webkitDelimiters)) {
-    for (let k = 0; k < 8; k += 2) if (row[k] === cp && row[k + 1] === 1) return true
+const DELIMITER_QUOTES: readonly number[] = delimiterQuotes()
+
+function delimiterQuotes(): number[] {
+  const quotes: number[] = []
+  const rows = Object.values(webkitDelimiters)
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i]!
+    for (let k = 0; k < 8; k += 2) if (row[k + 1] === 1 && !quotes.includes(row[k]!)) quotes.push(row[k]!)
   }
-  return false
+  return quotes
+}
+
+export function isDelimiterQuote(cp: number): boolean {
+  return DELIMITER_QUOTES.includes(cp)
 }
 
 // Apple ICU setCategoryOverrides (AppleICU76 rbbi.cpp:397-486; specs/webkit-canvas.md §2.6): a one-unit delimiter with

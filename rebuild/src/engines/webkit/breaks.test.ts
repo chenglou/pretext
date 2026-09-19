@@ -13,7 +13,7 @@ import { forEachLine } from '../../../tools/lines.ts'
 import { PINNED_BUILDS, type WebKitEnvironment } from '../../env.js'
 import { UNKNOWN_FONT_FACTS, type Paragraph } from '../../model.js'
 import { getCategory } from '../../breaks/rbbi.js'
-import { canBreakBefore, classify, computeFollowing, dictionaryRangeStartsWithMark, findNextBreakablePosition, makeFactory, mayBreakInBetween } from './breaks.js'
+import { canBreakBefore, classify, computeFollowing, dictionaryRangesStartingWithMark, findNextBreakablePosition, makeFactory, mayBreakInBetween } from './breaks.js'
 import { lineRules, pairTableBreaks } from './data.js'
 import { prepareWebKit } from './content.js'
 import { flatParagraph, type FlatNode } from './test-paragraph.js'
@@ -233,7 +233,7 @@ describe.skipIf(process.platform !== 'darwin' || !existsSync(resolve(SA, 'result
         while (start > 0 && dictionary(text.codePointAt(start - 1)!)) start--
         let end = q
         while (end < text.length && dictionary(text.codePointAt(end)!)) end++
-        if (dictionaryRangeStartsWithMark(rules, text.slice(start, end))) markStart++
+        if (dictionaryRangesStartingWithMark(rules, text.slice(start, end)).length > 0) markStart++
         else failures.push(`${row.i}@${q}: ${JSON.stringify(text.slice(Math.max(0, q - 8), q))}|${JSON.stringify(text.slice(q, q + 8))}`)
       }
     })
