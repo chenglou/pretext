@@ -117,50 +117,42 @@ function frameGeometry(p: GeckoPrepared, band: Band, placed: PlacedLine): GeckoF
     for (let k = 0; k < psd.frames.length; k++) {
       const pf = psd.frames[k]!
       const logical = origin + pf.iStart
+      let geometry: GeckoFrameGeometry
       switch (pf.kind) {
         case 'text': {
           const r = pf.r
           const f = p.frames[r.frame]!
-          const geometry: GeckoFrameGeometry = {
+          geometry = {
             kind: 'text', run: f.run, contentStart: r.contentStart, contentEnd: r.contentStart + r.contentLength, measuredStart: r.offset,
             level: f.level, x: logical, width: pf.iSize, hasHeight: r.nonEmpty, usedHyphen: r.usedHyphenation,
             ...(r.prov === null ? { characters: [], standInAtEnd: false } : characters(p, r, r.prov, justificationSpacing(p, pf))),
             advancesStandIn: r.prov === null ? null : r.prov.run.advancesStandIn,
           }
-          frames.push(geometry)
-          boxes.push({ kind: 'leaf', placed: pf, geometry, relative: 0 })
           break
         }
         case 'span': {
-          const geometry: Extract<GeckoFrameGeometry, { kind: 'inline' }> = { kind: 'inline', element: pf.element, x: logical, width: pf.iSize, hasStartEdge: pf.hasStartEdge, hasEndEdge: pf.hasEndEdge }
-          frames.push(geometry)
+          const inline: Extract<GeckoFrameGeometry, { kind: 'inline' }> = { kind: 'inline', element: pf.element, x: logical, width: pf.iSize, hasStartEdge: pf.hasStartEdge, hasEndEdge: pf.hasEndEdge }
+          frames.push(inline)
           const chain = chains.get(pf.element)
           if (chain === undefined) chains.set(pf.element, { spans: [pf], unplaced: 1 })
           else { chain.spans.push(pf); chain.unplaced++ }
-          boxes.push({ kind: 'span', placed: pf, geometry, children: collect(pf.span, logical), relative: 0 })
-          break
+          boxes.push({ kind: 'span', placed: pf, geometry: inline, children: collect(pf.span, logical), relative: 0 })
+          continue
         }
-        case 'atomic': {
-          const geometry: GeckoFrameGeometry = { kind: 'atomic', element: pf.element, level: objectAt(p.elements, pf.element).level, x: logical, width: pf.iSize }
-          frames.push(geometry)
-          boxes.push({ kind: 'leaf', placed: pf, geometry, relative: 0 })
+        case 'atomic':
+          geometry = { kind: 'atomic', element: pf.element, level: objectAt(p.elements, pf.element).level, x: logical, width: pf.iSize }
           break
-        }
-        case 'br': {
-          const geometry: GeckoFrameGeometry = { kind: 'br', element: pf.element, x: logical, width: 0 }
-          frames.push(geometry)
-          boxes.push({ kind: 'leaf', placed: pf, geometry, relative: 0 })
+        case 'br':
+          geometry = { kind: 'br', element: pf.element, x: logical, width: 0 }
           break
-        }
-        case 'wbr': {
+        case 'wbr':
           // A WBRFrame is 0 × 0 where it was placed; Firefox reports that box through getClientRects (feature family rows,
           // round 1: `c-00370d538345f01b` reports x 3558 au, width 0, height 0 after a 3558 au frame).
-          const geometry: GeckoFrameGeometry = { kind: 'wbr', element: pf.element, level: objectAt(p.elements, pf.element).level, x: logical, width: 0 }
-          frames.push(geometry)
-          boxes.push({ kind: 'leaf', placed: pf, geometry, relative: 0 })
+          geometry = { kind: 'wbr', element: pf.element, level: objectAt(p.elements, pf.element).level, x: logical, width: 0 }
           break
-        }
       }
+      frames.push(geometry)
+      boxes.push({ kind: 'leaf', placed: pf, geometry, relative: 0 })
     }
     return boxes
   }

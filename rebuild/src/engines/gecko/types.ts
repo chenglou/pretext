@@ -272,9 +272,6 @@ export type GeckoPrepared = {
   // The same as the break scan gets it: without the letter spacing a cursive cluster takes only where spacing is asked for
   // one glyph run at a time (prepare.ts step 6; gfxTextRun.cpp:946-958, :1011-1018).
   scanSpacingPrefix: Int32Array
-  // The same as CalcTabWidths gets it, one character at a time, so each character is its own base (prepare.ts step 6;
-  // nsTextFrame.cpp:4345-4347). Null in a paragraph without a tab.
-  tabSpacingPrefix: Int32Array | null
   // correctionPrefix[t]: color emoji and synthesized space corrections of the clusters before t, in au.
   correctionPrefix: Int32Array
   unitOf: Int32Array
@@ -283,9 +280,12 @@ export type GeckoPrepared = {
   sourceT: Int32Array
   // Per source offset (length + 1): the first transformed index at or after it (gfxSkipCharsIterator).
   nextT: Int32Array
-  // What ComputeTabWidthAppUnits (nsTextFrame.cpp:3875-3906) multiplies a text frame's tab-size by: the containing
-  // block's space plus its letter and word spacing, au. 0 when nothing measured it.
-  tabUnit: number
+  // What tab widths read, null in a paragraph without a tab.
+  // - `unit`: what ComputeTabWidthAppUnits (nsTextFrame.cpp:3875-3906) multiplies a text frame's tab-size by: the containing
+  //   block's space plus its letter and word spacing, au.
+  // - `spacingPrefix`: spacingPrefix as CalcTabWidths gets it, one character at a time, so each character is its own base
+  //   (prepare.ts step 6; nsTextFrame.cpp:4345-4347).
+  tabs: { unit: number; spacingPrefix: Int32Array } | null
   // pxToAu of the block's text-indent (nsLineLayout.cpp:178-201).
   textIndentAu: number
   // The paragraph resolved bidi, so lines are reordered by frame levels (nsLineLayout.cpp:3646-3652): the port's stand-in

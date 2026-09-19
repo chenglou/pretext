@@ -118,7 +118,7 @@ function scanAdvance(p: GeckoPrepared, prov: Provider, from: number, to: number,
 //   Devanagari" and holds a tab; natively the mark's part is 328 au, the tab ends at 7456 au of tracked position, twice the
 //   3728 au tab width, and at 7784 au on the line.
 // - Spacing is asked for one character at a time (:4345-4347), so the base a cluster's letter spacing goes by is the
-//   character itself (p.tabSpacingPrefix, prepare.ts step 6).
+//   character itself (p.tabs.spacingPrefix, prepare.ts step 6).
 // A tab's width is the next stop less that position, so it is a stand-in where the position is one: where an earlier text
 // frame of the line has a stand-in width, or the first cluster the scan counts starts at a stand-in. Those tabs hold the
 // reason (gaps.ts placedStandIn, tabCountsFrom). A later tab counts from the stop before it; it stays a stand-in, since a
@@ -129,12 +129,13 @@ function computeTabs(p: GeckoPrepared, ll: LineLayout, run: GeckoTextRun, frame:
   // ComputeTabWidthAppUnits (nsTextFrame.cpp:3875-3906): tab-size is the text frame's own (aFrame->StyleText()->mTabSize);
   // the space, the letter spacing and the word spacing are the containing block's (rich-prewrap/tabs c-07ac640c4ed9f71f:
   // a span with tab-size 12 in a block with tab-size 3).
-  const tabWidth = p.leaves[p.frames[frame]!.run]!.style.tabSize * p.tabUnit
+  if (p.tabs === null || !run.hasTab) return NO_TABS
+  const tabWidth = p.leaves[p.frames[frame]!.run]!.style.tabSize * p.tabs.unit
   // GetSpacing calls CalcTabWidths only for a positive tab width (nsTextFrame.cpp:4306-4309): tab-size 0, or letter
   // spacing below minus the space width, leaves tabs at 0.
-  if (!run.hasTab || tabWidth <= 0) return NO_TABS
+  if (tabWidth <= 0) return NO_TABS
   const tabs: Tab[] = []
-  const tabSpacing = p.tabSpacingPrefix!
+  const tabSpacing = p.tabs.spacingPrefix
   let x = xForTabs
   let standIn = gaps.placedStandIn(ll.gaps, p, ll.root)
   let from = startT

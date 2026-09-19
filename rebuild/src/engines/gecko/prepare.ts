@@ -1156,17 +1156,15 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, inspec
 
   // ComputeTabWidthAppUnits (nsTextFrame.cpp:3875-3906) reads the space, the letter spacing and the word spacing from the
   // containing block, and tab-size from the text frame (lines.ts computeTabs).
-  let tabUnit = 0
-  for (let r = 0; r < textRuns.length; r++) {
-    if (!textRuns[r]!.hasTab) continue
+  let tabs: GeckoPrepared['tabs'] = null
+  if (tabSpacingPrefix !== null) {
     const context = contextFor(contexts, {
       font: canvasFont(paragraph.font, paragraph.font.size), lang: paragraph.lang,
       letterSpacing: pxToAu(paragraph.letterSpacing) !== 0 ? '0.001px' : '0px', wordSpacing: '0px', fontKerning: 'auto',
       textRendering: 'auto', direction: 'ltr', partition: '',
     })
     const space = Math.round(width(context, ' ') * CANVAS_AU_PER_PX)
-    tabUnit = space + pxToAu(paragraph.letterSpacing) + pxToAu(paragraph.wordSpacing)
-    break
+    tabs = { unit: space + pxToAu(paragraph.letterSpacing) + pxToAu(paragraph.wordSpacing), spacingPrefix: tabSpacingPrefix }
   }
 
   // What the text itself can't tell Canvas: dictionary breaks, U+FFFD and the figure spaces (gaps.ts).
@@ -1177,7 +1175,7 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, inspec
   return {
     paragraph, env, appUnitsPerDevPixel: apd, blockStyle, text, leaves, frames, items,
     elements, textRuns, tUnits, tSource, breakFlags: g.breakFlags, clusterStart: g.clusterStart, isSpace: g.isSpace, kind: g.kind,
-    spacingPrefix, scanSpacingPrefix, tabSpacingPrefix, correctionPrefix, unitOf, units, sourceT, nextT, tabUnit, textIndentAu: pxToAu(paragraph.textIndent), bidi: resolveBidi, contexts, inspect: inspected,
+    spacingPrefix, scanSpacingPrefix, correctionPrefix, unitOf, units, sourceT, nextT, tabs, textIndentAu: pxToAu(paragraph.textIndent), bidi: resolveBidi, contexts, inspect: inspected,
   }
 }
 

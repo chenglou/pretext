@@ -30,6 +30,12 @@ export function isInvalidChar16(ch: number): boolean {
 }
 export const isInvalidChar8 = (ch: number) => (ch & 0x7f) < 0x20 || ch === 0x7f
 
+// A script that merges into the run around it: Common, Inherited, Unknown.
+const isCommonScript = (s: string) => s === 'Zyyy' || s === 'Zinh' || s === 'Zzzz'
+// Latin below U+02EA (gfxScriptItemizer.h:96-107).
+const fastLatin = (ch: number) => ((ch & ~0x20) >= 0x41 && (ch & ~0x20) <= 0x5a) || (ch >= 0xc0 && ch <= 0xd6) ||
+  (ch >= 0xd8 && ch <= 0xf6) || (ch >= 0xf8 && ch <= 0x2b8) || (ch & ~0x10) === 0xaa || (ch >= 0x2e0 && ch <= 0x2e4)
+
 // gfxScriptItemizer (gfxScriptItemizer.cpp:60-243), run boundaries only.
 const PAREN_STACK_DEPTH = 32
 export function scriptRunLimits(units: Uint16Array, start: number, end: number): ScriptRun[] {
@@ -40,7 +46,6 @@ export function scriptRunLimits(units: Uint16Array, start: number, end: number):
   let pushCount = 0
   let fixupCount = 0
   let scriptLimit = start
-  const canMerge = (s: string) => s === 'Zyyy' || s === 'Zinh' || s === 'Zzzz'
   while (scriptLimit < end) {
     fixupCount = 0
     let scriptCode = 'Zyyy'
@@ -48,10 +53,8 @@ export function scriptRunLimits(units: Uint16Array, start: number, end: number):
       const startOfChar = scriptLimit
       let ch = units[scriptLimit]!
       let sc: string
-      if (ch < 0x02ea) { // gfxScriptItemizer.h:96-107
-        const latin = ((ch & ~0x20) >= 0x41 && (ch & ~0x20) <= 0x5a) || (ch >= 0xc0 && ch <= 0xd6) ||
-          (ch >= 0xd8 && ch <= 0xf6) || (ch >= 0xf8 && ch <= 0x2b8) || (ch & ~0x10) === 0xaa || (ch >= 0x2e0 && ch <= 0x2e4)
-        sc = latin ? 'Latn' : 'Zyyy'
+      if (ch < 0x02ea) {
+        sc = fastLatin(ch) ? 'Latn' : 'Zyyy'
       } else {
         if (scriptLimit < end - 1 && isSurrogatePair(ch, units[scriptLimit + 1]!)) {
           scriptLimit++
@@ -89,9 +92,9 @@ export function scriptRunLimits(units: Uint16Array, start: number, end: number):
         }
       }
       if (sc === 'Hira') sc = 'Kana'
-      const same = canMerge(scriptCode) || canMerge(sc) || sc === scriptCode || isClusterExtender(ch) || hasScript(ch, scriptCode)
+      const same = isCommonScript(scriptCode) || isCommonScript(sc) || sc === scriptCode || isClusterExtender(ch) || hasScript(ch, scriptCode)
       if (same) {
-        if (scriptCode === 'Zyyy' && !canMerge(sc)) {
+        if (scriptCode === 'Zyyy' && !isCommonScript(sc)) {
           scriptCode = sc
           let fixupSp = (parenSp + PAREN_STACK_DEPTH - fixupCount) % PAREN_STACK_DEPTH
           for (; fixupCount > 0; fixupCount--) {
@@ -116,10 +119,6 @@ export function scriptRunLimits(units: Uint16Array, start: number, end: number):
   }
   return limits
 }
-
-const isCommonScript = (s: string) => s === 'Zyyy' || s === 'Zinh' || s === 'Zzzz'
-const fastLatin = (ch: number) => ((ch & ~0x20) >= 0x41 && (ch & ~0x20) <= 0x5a) || (ch >= 0xc0 && ch <= 0xd6) ||
-  (ch >= 0xd8 && ch <= 0xf6) || (ch >= 0xf8 && ch <= 0x2b8) || (ch & ~0x10) === 0xaa || (ch >= 0x2e0 && ch <= 0x2e4)
 
 // The script runs gfxFontGroup::InitTextRun shapes [start, end) with (gfxTextRun.cpp:2729-2757): text with every code
 // unit below U+02EA is one run, Latin when it has a Latin letter, else Common resolved from the language; other text goes
