@@ -191,3 +191,8 @@ function covers(ranges: readonly number[], cp: number): boolean {
   }
   return false
 }
+
+// The color emoji font Core Text draws emoji with on macOS 27, a recorded browser fact of the pinned build (probe
+// gecko-port F3, rebuild/probes/gecko-emoji-font.ts; data/gecko/apple-color-emoji-advances-macos27.tsv). Its advances come
+// from Core Text at the device size (gfxMacFont.cpp:437-463).
+export const COLOR_EMOJI_FAMILY = '"Apple Color Emoji"'

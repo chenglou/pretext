@@ -1,8 +1,7 @@
 // Gecko's prepared paragraph and line state (Firefox 156.0). The Gecko port owns this file.
 import type { GeckoEnvironment } from '../../env.js'
 import type { Measurer } from '../../measure/canvas.js'
-import type { FontDecl, Gap, LineOf, LineResultOf, Paragraph, TextStyle } from '../../model.js'
-import type { GeckoLineGeometry, GeckoLineStart } from './geometry.js'
+import type { FontDecl, Gap, Paragraph, TextStyle } from '../../model.js'
 
 // white-space as its two longhands and the predicates Gecko derives from them (nsStyleStruct.h:1303-1367,
 // specs/gecko-text.md §2.1), plus the other inherited text properties a frame reads from its own style.
@@ -37,6 +36,18 @@ export type GeckoFrame = {
   is8bit: boolean
   // Index of this frame's item in GeckoPrepared.items.
   item: number
+}
+
+// The frame holding source offset s: the last one that starts at or before it.
+export function frameOfSource(frames: GeckoFrame[], s: number): number {
+  let lo = 0
+  let hi = frames.length - 1
+  while (lo < hi) {
+    const mid = (lo + hi + 1) >> 1
+    if (frames[mid]!.start <= s) lo = mid
+    else hi = mid - 1
+  }
+  return lo
 }
 
 // A span's inline box edges in au as Gecko computes them: margins and padding through StyleCSSPixelLength::ToAppUnits
@@ -133,6 +144,11 @@ export type GeckoUnit = {
   startAdvance: number
 }
 
+// gfxBreakPriority (gfxTypes.h:48).
+export const NO_BREAK = 0
+export const WORD_WRAP_BREAK = 1
+export const NORMAL_BREAK = 2
+
 // Character kinds a text run records (gfxFont.cpp:3872-3897).
 export const KIND_GLYPH = 0
 export const KIND_TAB = 1
@@ -187,24 +203,24 @@ export type GeckoPrepared = {
   // What ComputeTabWidthAppUnits (nsTextFrame.cpp:3875-3906) multiplies a text frame's tab-size by: the containing
   // block's space plus its letter and word spacing, au. 0 when nothing measured it.
   tabUnit: number
-  // Transformed indices of the emergency breaks after a hyphen that the coverage facts couldn't confirm: whether the
-  // letters around the hyphen are one font's isn't known (prepare.ts step 4).
-  emergencyUnconfirmed: Set<number>
   // pxToAu of the block's text-indent (nsLineLayout.cpp:178-201).
   textIndentAu: number
   // The paragraph resolved bidi, so lines are reordered by frame levels (nsLineLayout.cpp:3646-3652): the port's stand-in
   // for the document's BidiEnabled flag (gecko audit F3).
   bidi: boolean
-  // The gaps of the paragraph's content, fonts and environment. Line filling never writes here; gaps its breaks decide go
-  // on the line (DESIGN.md §2.8).
-  gaps: Gap[]
   // The paragraph's Canvas contexts, with the memo and the call log of preparation and of every line filled from it
   // (measure/canvas.ts).
   measurer: Measurer
-  // Whether inspectLine and paragraphGaps answer on this paragraph (index.ts prepare).
-  inspect: boolean
+  // What an inspected paragraph keeps for inspectLine and paragraphGaps; null on a plain one, which computes no gap and asks
+  // Canvas nothing that only a gap or an inspected value needs (gaps.ts). Nothing else says which of the two a paragraph is.
+  inspect: GeckoInspect | null
 }
 
-// The line nextLine fills, and what it returns for a slot.
-export type GeckoLine = LineOf<GeckoLineStart, GeckoLineGeometry>
-export type GeckoLineResult = LineResultOf<GeckoLineStart, GeckoLineGeometry>
+export type GeckoInspect = {
+  // The gaps of the paragraph's content, fonts and environment. Line filling never writes here; gaps its breaks decide go
+  // on the line (DESIGN.md §2.8).
+  gaps: Gap[]
+  // Transformed indices of the emergency breaks after a hyphen that the coverage facts couldn't confirm: whether the
+  // letters around the hyphen are one font's isn't known (prepare.ts step 4). Only the line's font-fallback gap reads it.
+  emergencyUnconfirmed: Set<number>
+}

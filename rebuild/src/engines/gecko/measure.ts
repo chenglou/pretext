@@ -10,6 +10,14 @@ import type { GeckoTextRun, ScriptRun } from './types.js'
 // A Canvas total is its text runs' au over the context's 60 app units per px (CanvasRenderingContext2D.cpp:5277, :7135-7140).
 export const CANVAS_AU_PER_PX = 60
 
+// CanvasRenderingContext2D QuantizeFontSize, 7 significant bits (CanvasRenderingContext2D.cpp:4207-4217).
+export function quantize7(size: number): number {
+  const f32 = Math.fround
+  const d = f32(size * 131073)
+  const t = f32(d - size)
+  return f32(d - t)
+}
+
 export const isSurrogatePair = (a: number, b: number) => (a & 0xfc00) === 0xd800 && (b & 0xfc00) === 0xdc00
 export const combine = (a: number, b: number) => 0x10000 + ((a - 0xd800) << 10) + (b - 0xdc00)
 

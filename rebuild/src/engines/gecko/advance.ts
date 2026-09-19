@@ -61,7 +61,23 @@ const ligatureMemo = new WeakMap<Measurer, Map<string, boolean>>()
 //   ligatures around t, and groupAcross the groups that required shaping forms (Geeza Pro's lam lam heh is lam and a lam-heh
 //   ligature in one group of three shares, 223 au each, where U+200D after the first lam gives the same 136 au glyph).
 // - Where the sides don't add up, the value is the stand-in the font's pair kerning asks for, and the reason names it.
-export type InWordAdvance = { au: number; standIn: string | null }
+export type InWordAdvance = { au: number; standIn: InWordReason | null }
+
+// Why Canvas can't confirm the advance before an in-word offset, with the numbers the gap's prose prints (gaps.ts
+// inWordDetail). `at` is the source offset.
+export type InWordReason =
+  | { kind: 'inside-cluster'; at: number; betweenMarks: boolean }
+  | { kind: 'mark-starts-cluster'; at: number }
+  | { kind: 'unit-starts-inside-cluster'; at: number }
+  | { kind: 'group-mark-advances'; at: number }
+  // Several ligature candidates in a row, which the facts don't settle (rowAround): the offset is inside the row, which
+  // stands in as one group, or it ends a part of one.
+  | { kind: 'inside-ligature-row'; at: number }
+  | { kind: 'between-ligatures'; at: number }
+  | { kind: 'group-ends'; at: number; end: InWordReason }
+  // The two sides don't add up to the unit. `sides` is how they were measured (inWordAdvance), `au` their sum, or what the
+  // cluster before the offset and the suffix gain from each other.
+  | { kind: 'sides'; at: number; sides: 'joined' | 'apart' | 'cluster'; au: number; unitAu: number }
 const inWordMemo = new WeakMap<GeckoPrepared, Map<number, InWordAdvance>>()
 const ZWJ = '\u200d'
 
@@ -108,11 +124,7 @@ function inWordAdvance(p: GeckoPrepared, m: Measurer, run: GeckoTextRun, unit: {
     const inner = advanceBefore(p, m, run, end)
     const previous = (p.tUnits[t - 1]! & 0xfc00) === 0xdc00 && t - 2 >= unit.tStart ? t - 2 : t - 1
     const betweenMarks = previous >= unit.tStart && p.clusterStart[previous] === 0 && run.joining !== 'opentype'
-    return {
-      au: inner.au,
-      standIn: `offset ${p.tSource[t]} inside a grapheme cluster: the DOM divides the cluster's advance by its glyph records and ligature groups, which Canvas can't show (gfxHarfBuzzShaper.cpp:1705-1786, gfxTextRun.cpp:238-322)` +
-        (betweenMarks ? '; between two marks, a ligature of them with a negative advance makes the part before the cut 2^32 au wider and its frame nscoord_MAX (unsigned division, gfxTextRun.cpp:249-289; probes gecko-port F18, F20)' : ''),
-    }
+    return { au: inner.au, standIn: { kind: 'inside-cluster', at: p.tSource[t]!, betweenMarks } }
   }
   // A mark that starts a cluster: Unicode leaves some spacing marks out of Grapheme_Cluster_Break=SpacingMark (U+102B, U+102C
   // and U+1038 in Myanmar among them), so Gecko starts a cluster there, but to HarfBuzz's syllabic shapers the mark belongs to
@@ -122,7 +134,7 @@ function inWordAdvance(p: GeckoPrepared, m: Measurer, run: GeckoTextRun, unit: {
   // U+1004 U+102B (probe gecko-port F23). The value is the prefix's width, which ends before the mark, and a stand-in.
   if (generalCategory(codePointAtT(p, t))[0] === 'M') {
     const prefixAu = rangeAu(m, run, p.tUnits, unit.tStart, t)
-    return { au: unit.startAdvance + prefixAu + p.correctionPrefix[t]! - p.correctionPrefix[unit.tStart]!, standIn: `offset ${p.tSource[t]} before a mark that starts a cluster: alone it shapes as a broken syllable with a dotted circle, not as in the unit (hb-ot-shaper-syllabic.cc:32-99)` }
+    return { au: unit.startAdvance + prefixAu + p.correctionPrefix[t]! - p.correctionPrefix[unit.tStart]!, standIn: { kind: 'mark-starts-cluster', at: p.tSource[t]! } }
   }
   const joiner = joinsAcross(p, unit, t) ? ZWJ : ''
   // A unit that starts inside a cluster (a mark or an emoji modifier after an invalid character): Canvas counts its first
@@ -130,7 +142,7 @@ function inWordAdvance(p: GeckoPrepared, m: Measurer, run: GeckoTextRun, unit: {
   // context stands in front (rangeAu), so its ligature groups can't be counted, and its positions stay stand-ins.
   if (p.clusterStart[unit.tStart] === 0) {
     const inner = rangeAu(m, run, p.tUnits, t, unit.tEnd, joiner, '')
-    return { au: unit.startAdvance + unit.canvasAu - inner + p.correctionPrefix[t]! - p.correctionPrefix[unit.tStart]!, standIn: `offset ${p.tSource[t]}: the unit starts inside a cluster, where Canvas can't count its ligature groups (gfxTextRun.cpp:238-322)` }
+    return { au: unit.startAdvance + unit.canvasAu - inner + p.correctionPrefix[t]! - p.correctionPrefix[unit.tStart]!, standIn: { kind: 'unit-starts-inside-cluster', at: p.tSource[t]! } }
   }
   // A ligature group over t: the DOM gives a range edge inside it the group's advance in equal shares per started cluster,
   // the rounding left to the last part (ComputeLigatureData, gfxTextRun.cpp:238-322). The group reaches as far as Canvas
@@ -161,9 +173,9 @@ function inWordAdvance(p: GeckoPrepared, m: Measurer, run: GeckoTextRun, unit: {
     const edges = from.standIn ?? to.standIn
     return {
       au: from.au + before * Math.floor((to.au - from.au) / clusters),
-      standIn: markAdvance ? `offset ${p.tSource[t]} inside a ligature group whose marks have advances of their own, which go to the part holding them (gfxTextRun.cpp:238-322)`
-        : group.unconfirmed ? `offset ${p.tSource[t]} inside one of several ligatures in a row, which Canvas tests pair by pair and the unit's shaping takes from its start (hb-ot-layout.cc:1917-1945)`
-        : edges === null ? null : `offset ${p.tSource[t]} inside a ligature group whose ends Canvas can't confirm: ${edges}`,
+      standIn: markAdvance ? { kind: 'group-mark-advances', at: p.tSource[t]! }
+        : group.unconfirmed ? { kind: 'inside-ligature-row', at: p.tSource[t]! }
+        : edges === null ? null : { kind: 'group-ends', at: p.tSource[t]!, end: edges },
     }
   }
   // A ligature candidate that ends a part of a row of them (rowAround), and the facts don't say so.
@@ -175,7 +187,7 @@ function inWordAdvance(p: GeckoPrepared, m: Measurer, run: GeckoTextRun, unit: {
   // What the unit's shaping moves across t, and the prefix's advance if nothing does.
   let across: number
   let prefixAu: number
-  let sides: string
+  let sides: Extract<InWordReason, { kind: 'sides' }>['sides']
   let a = t - 1
   while (a > unit.tStart && p.clusterStart[a] === 0) a--
   const before = joiningType(codePointAtT(p, a))
@@ -188,7 +200,7 @@ function inWordAdvance(p: GeckoPrepared, m: Measurer, run: GeckoTextRun, unit: {
     // The two sides as the unit shapes them: with U+200D at the cut between joined letters.
     prefixAu = rangeAu(m, run, p.tUnits, unit.tStart, t, '', joiner)
     across = unit.canvasAu - prefixAu - suffixAu
-    sides = joiner !== '' ? `letters join across it, and W(prefix U+200D) + W(U+200D suffix) = ${prefixAu + suffixAu} au` : `W(prefix) + W(suffix) = ${prefixAu + suffixAu} au`
+    sides = joiner !== '' ? 'joined' : 'apart'
   } else {
     // Where the cluster before t has no joining forms, it shapes alone as it does after its own neighbour, and put in front
     // of the suffix it shows the same thing: what the two gain from each other is W(cluster and suffix) − W(suffix) −
@@ -199,7 +211,7 @@ function inWordAdvance(p: GeckoPrepared, m: Measurer, run: GeckoTextRun, unit: {
     const withCluster = a === unit.tStart ? unit.canvasAu : rangeAu(m, run, p.tUnits, a, unit.tEnd)
     across = withCluster - suffixAu - rangeAu(m, run, p.tUnits, a, t)
     prefixAu = unit.canvasAu - suffixAu - across
-    sides = `W(cluster before it and suffix) − W(suffix) − W(cluster) = ${across} au`
+    sides = 'cluster'
   }
   if (across !== 0 && joiner === '' && !reversed && !leftOver) {
     // The sides don't add up, and the font's pair kerning says where an adjustment across t goes: the advance is exact where
@@ -209,8 +221,8 @@ function inWordAdvance(p: GeckoPrepared, m: Measurer, run: GeckoTextRun, unit: {
       return { au: unit.startAdvance + unit.canvasAu - suffixAu - after + corrections, standIn: null }
     }
   }
-  const standIn = leftOver ? `offset ${p.tSource[t]} between ligatures in a row, which Canvas tests pair by pair and the unit's shaping takes from its start (hb-ot-layout.cc:1917-1945)`
-    : across !== 0 ? `offset ${p.tSource[t]}: ${sides}, W(unit) = ${unit.canvasAu} au` : null
+  const standIn: InWordReason | null = leftOver ? { kind: 'between-ligatures', at: p.tSource[t]! }
+    : across !== 0 ? { kind: 'sides', at: p.tSource[t]!, sides, au: sides === 'cluster' ? across : prefixAu + suffixAu, unitAu: unit.canvasAu } : null
   // The value, exact where nothing crosses t and a stand-in otherwise, takes what crosses t as a pair adjustment:
   // - A shaping buffer against its script's native direction is shaped reversed (hb_ensure_native_direction,
   //   hb-ot-shape.cc:588-645, in Chromium 152's HarfBuzz copy), so the adjustment lands on the logically later glyph, and

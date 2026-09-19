@@ -5,31 +5,29 @@ import { indexContent, langUnder, styleUnder, type ContentIndex } from '../../co
 import type { GeckoEnvironment } from '../../env.js'
 import { createMeasurer, measureContext, measureText, measureTextBounds } from '../../measure/canvas.js'
 import { canvasFont } from '../../measure/font.js'
-import type { BoxEdge, FontDecl, Gap, Paragraph, TextStyle } from '../../model.js'
+import type { BoxEdge, FontDecl, Paragraph, TextStyle } from '../../model.js'
 import { geckoBidiData, geckoGraphemeRules } from './data.js'
-import { extenderFontOf, firstFontScriptLookups, listedFontOf, opticalSizeAxisOf, quantize10, sameFontForTextRun } from './fonts.js'
+import { COLOR_EMOJI_FAMILY, extenderFontOf, firstFontScriptLookups, listedFontOf, quantize10, sameFontForTextRun } from './fonts.js'
+import * as gaps from './gaps.js'
 import { canonicalLanguageTag } from './likely.js'
-import { CANVAS_AU_PER_PX, combine, isInvalidChar16, isInvalidChar8, isSurrogatePair, rangeAu, scriptRunLimits, textRunScripts } from './measure.js'
+import { CANVAS_AU_PER_PX, combine, isInvalidChar16, isInvalidChar8, isSurrogatePair, quantize7, rangeAu, scriptRunLimits, textRunScripts } from './measure.js'
 import { graphemeBoundaries } from '../../unicode/grapheme.js'
 import { resolveUnicodeBidi } from '../../unicode/unicode-bidi.js'
 import {
-  BREAK_EMERGENCY_WRAP, BREAK_NONE, BREAK_NORMAL, BREAK_SKIP_SETTING_NO_BREAKS, BREAK_SUPPRESS_INITIAL, BREAK_SUPPRESS_INSIDE,
-  LineBreakerState, complexLanguage, type BreakSink,
+  BREAK_EMERGENCY_WRAP, BREAK_NONE, BREAK_SKIP_SETTING_NO_BREAKS, BREAK_SUPPRESS_INITIAL, BREAK_SUPPRESS_INSIDE,
+  LineBreakerState, type BreakSink,
 } from './linebreak.js'
 import {
   isAlphanumeric, isBidiControl, isClusterExtender, isClusterExtenderExcludingJoiners, isCursiveScript, isDefaultIgnorable,
   isEastAsianPunctuation, isEmoji, isEmojiPresentation, isFormatCategory, isSegmentBreakSkipChar, isUtf16CodeUnitBidi,
 } from './props.js'
 import {
-  KIND_FORMAT, KIND_GLYPH, KIND_INVISIBLE, KIND_NEWLINE, KIND_TAB, type GeckoElement, type GeckoFrame, type GeckoItem,
-  type GeckoPrepared, type GeckoSpanEdges, type GeckoStyle, type GeckoTextRun, type GeckoUnit,
+  KIND_FORMAT, KIND_GLYPH, KIND_INVISIBLE, KIND_NEWLINE, KIND_TAB, frameOfSource, type GeckoElement, type GeckoFrame, type GeckoItem,
+  type GeckoInspect, type GeckoPrepared, type GeckoSpanEdges, type GeckoStyle, type GeckoTextRun, type GeckoUnit,
 } from './types.js'
 
 const f32 = Math.fround
 const SHY = 0x00ad
-// measureText's width is `float(au) / 60`, a float (:5277). Below 2^18 px a float32 step is at most 1/64 px, so the value is
-// within 1/128 px, 0.47 au, of au / 60 and rounds back to it; from 2^18 px on a step is 1/32 px and the app units are lost.
-const CANVAS_EXACT_AU = 2 ** 18 * CANVAS_AU_PER_PX
 
 // NS_lroundf (nsMathUtils.h:31-33) on a float32 value.
 export function lroundf(x: number): number {
@@ -39,12 +37,6 @@ export function lroundf(x: number): number {
 // StyleCSSPixelLength::ToAppUnits: NSToIntRound(float(px) × 60f) (ServoStyleConstsInlines.h:584-595).
 export const pxToAu = (px: number): number => lroundf(f32(f32(px) * 60))
 
-// CanvasRenderingContext2D QuantizeFontSize, 7 significant bits (CanvasRenderingContext2D.cpp:4207-4217).
-function quantize7(size: number): number {
-  const d = f32(size * 131073)
-  const t = f32(d - size)
-  return f32(d - t)
-}
 export function geckoStyle(s: TextStyle): GeckoStyle {
   let collapse: GeckoStyle['collapse']
   let wrap: boolean
@@ -364,11 +356,6 @@ function replaceSeparators(text: string): string {
   return out
 }
 
-// The color emoji font Core Text draws emoji with on macOS 27, a recorded browser fact of the pinned build (probe
-// gecko-port F3, rebuild/probes/gecko-emoji-font.ts; data/gecko/apple-color-emoji-advances-macos27.tsv). Its advances come
-// from Core Text at the device size (gfxMacFont.cpp:437-463).
-const COLOR_EMOJI_FAMILY = '"Apple Color Emoji"'
-
 // gfxFont::SynthesizeSpaceWidth (gfxFont.cpp:4792-4826): the em divisor of a Unicode space Gecko synthesizes from the
 // font size, or 0. U+2007 and U+2008 take the font's digit and space widths instead, which the port doesn't correct.
 function synthesizedSpaceDivisor(cp: number): number {
@@ -388,20 +375,13 @@ function synthesizedSpaceDivisor(cp: number): number {
 const syntheticBoldOffset = (size: number): number => size < 48 ? 0.25 + 0.75 * size / 48 : size / 48
 
 // nsUnicodeProperties.h:127-165 GetEmojiPresentation.
-type EmojiPresentation = 'text-only' | 'text-default' | 'emoji-default'
+export type EmojiPresentation = 'text-only' | 'text-default' | 'emoji-default'
 function emojiPresentation(cp: number): EmojiPresentation {
   if (cp === 0x23 || cp === 0x2a || (cp >= 0x30 && cp <= 0x39) || cp === 0xa9 || cp === 0xae) return 'text-default'
   if (cp < 0x2000 || !isEmoji(cp)) return 'text-only'
   return isEmojiPresentation(cp) ? 'emoji-default' : 'text-default'
 }
 
-// gfxFontGroup::FindFontForChar asks for a color glyph when the next character is VS16 or a skin tone modifier, for a
-// black flag with tag letters, or for an emoji-default character not followed by VS15 (gfxTextRun.cpp:3268-3308,
-// font-variant-emoji normal).
-function prefersColorGlyph(presentation: EmojiPresentation, ch: number, next: number): boolean {
-  if (next === 0xfe0f || (next >= 0x1f3fb && next <= 0x1f3ff) || (ch === 0x1f3f4 && next >= 0xe0061 && next <= 0xe007a)) return true
-  return presentation === 'emoji-default' && next !== 0xfe0e
-}
 // The DOM children of the block in order, for the white-space-only text node rule: a leaf with empty text makes no node.
 function blockChildNodes(index: ContentIndex<FontDecl>): Array<{ kind: 'leaf'; run: number } | { kind: 'element'; element: number }> {
   const out: Array<{ kind: 'leaf'; run: number } | { kind: 'element'; element: number }> = []
@@ -424,8 +404,8 @@ function borderAu(px: number, apd: number): number {
   return au === 0 ? 0 : Math.max(apd, Math.trunc(au / apd) * apd)
 }
 
-// `inspect` says whether inspectLine and paragraphGaps answer on this paragraph (index.ts). Until the port computes its gaps
-// and the characters on request, it computes them for every paragraph.
+// `inspect` prepares the paragraph for inspectLine and paragraphGaps: its gaps go to `sink`, with the measuring only they
+// need (gaps.ts). A plain paragraph has no sink.
 export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, inspect: boolean): GeckoPrepared {
   const measurer = createMeasurer()
   const blockStyle = geckoStyle(paragraph)
@@ -437,7 +417,8 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, inspec
   const runStarts: number[] = []
   for (let i = 0; i < leaves.length; i++) runStarts.push(leaves[i]!.start)
   runStarts.push(n)
-  const gaps: Gap[] = []
+  const inspected: GeckoInspect | null = inspect ? { gaps: [], emergencyUnconfirmed: new Set() } : null
+  const sink: gaps.GapSink = inspected === null ? null : inspected.gaps
   const letterSpacingAu: number[] = []
   const wordSpacingAu: number[] = []
   const langs: string[] = []
@@ -462,7 +443,7 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, inspec
     // such text the locale language, the first regional-prefs locale lowercased (nsFontCache.cpp:34, :61-63;
     // nsLanguageAtomService.cpp:107-138), for font matching and shaping. Line breaking and TransformText still see the empty
     // tag. The measure contexts take that locale when the caller gives it; otherwise it can't be known.
-    if (langs[i] === '' && env.regionalPrefsLocale === null) gaps.push({ gap: 'ui-language', run: i, detail: 'lang="": font lists and generic families follow the OS regional-prefs locale, which pages cannot read (nsFontCache.cpp:61-63)', at: { start: leaf.start, end: leaf.start + leaf.text.length } })
+    gaps.emptyLanguage(sink, env, langs[i]!, i, leaf.start, leaf.start + leaf.text.length)
   }
 
   // Elements: span box edges in au and the shaping boundary tests; atomic sizes (DESIGN.md §1.1, "Box edges").
@@ -534,23 +515,7 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, inspec
     if (runIs8bit[p.run]) continue
     for (let s = p.start; s < p.end; s++) if (isUtf16CodeUnitBidi(text.charCodeAt(s))) { resolveBidi = true; break }
   }
-  // The document resolves bidi once any text node holds a bidi code unit (CharacterData.cpp:298-302; nsBlockFrame.cpp:863-864),
-  // whatever this paragraph holds. An LTR paragraph with left-to-right embedding, override or isolate controls and no
-  // right-to-left character then splits frames at the level changes those controls make, and frames at different levels
-  // don't share a text run (nsTextFrame.cpp:2139-2148). The port predicts a fresh document (gecko audit F3).
-  if (!resolveBidi) {
-    for (let k = 0; k < pieces.length; k++) {
-      const p = pieces[k]!
-      let found = false
-      for (let s = p.start; s < p.end && !found; s++) {
-        const u = text.charCodeAt(s)
-        found = u === 0x202a || u === 0x202d || u === 0x2066 || u === 0x2068
-      }
-      if (found) {
-        gaps.push({ gap: 'page-history', run: p.run, detail: "left-to-right bidi controls split frames only once the document has seen right-to-left text (CharacterData.cpp:298-302, nsTextFrame.cpp:2139-2148); the port predicts a fresh document", at: { start: p.start, end: p.end } })
-      }
-    }
-  }
+  if (!resolveBidi) for (let k = 0; k < pieces.length; k++) gaps.leftToRightControls(sink, text, pieces[k]!.run, pieces[k]!.start, pieces[k]!.end)
   let paraCount = 0
   const elementPara = new Map<number, number>()
   if (resolveBidi) {
@@ -854,7 +819,6 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, inspec
   // hyphen, the hyphen and the letter after it are one font's. The coverage facts say which listed family draws each
   // (fonts.ts listedFontOf). One family for all three keeps the flag, two families or a listed one next to the engine's
   // fallback take it away, and where the facts don't say, or all three fall back, the line it decides reports font-fallback.
-  const emergencyUnconfirmed = new Set<number>()
   for (let r = 0; r < builds.length; r++) {
     const b = builds[r]!
     if (b.flows.length === 0) continue
@@ -864,7 +828,7 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, inspec
       const before = listedFontOf(font, tUnits[t - 2]!)
       const hyphen = listedFontOf(font, tUnits[t - 1]!)
       const after = listedFontOf(font, tUnits[t]!)
-      if (before === null || hyphen === null || after === null || (before === -1 && hyphen === -1 && after === -1)) emergencyUnconfirmed.add(t)
+      if (before === null || hyphen === null || after === null || (before === -1 && hyphen === -1 && after === -1)) gaps.emergencyBreakUnconfirmed(inspected, t)
       else if (before !== hyphen || hyphen !== after) g.breakFlags[t] = BREAK_NONE
     }
   }
@@ -982,7 +946,7 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, inspec
             }
             if (unknown) {
               found = cp
-              gaps.push({ gap: 'font-fallback', run, detail: `a cursive cluster takes letter spacing where another font draws one of its marks than the character before it (gfxTextRun.cpp:809-829), and the font facts don't say which fonts draw U+${cp.toString(16).toUpperCase()} and its marks`, at: { start: tSource[base]!, end: tSource[t]! + 1 } })
+              gaps.cursiveClusterFonts(sink, run, cp, tSource[base]!, tSource[t]! + 1)
             }
           }
           if (!isCursiveScript(cp)) scanSpacing += ls
@@ -1043,14 +1007,8 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, inspec
     const devSize = domAu / apd
     // The size Canvas takes to the font cache, in au: 7 bits of the CSS size (:4207-4217).
     const canvasAuSize = quantize7(font.size) * 60
-    if (canvasAuSize !== domAu) {
-      gaps.push({ gap: 'font-size-quantization', run: firstRun, detail: `DOM size ${domAu / 60}px, Canvas size ${canvasAuSize / 60}px`, at })
-    }
-    // No OffscreenCanvas setting gives the DOM's auto optical sizing (specs/gecko-canvas.md §1.2 C1a), so a font with an
-    // opsz axis, or one whose axis isn't known, may measure differently (DESIGN.md §1.2).
-    if (font.facts.opticalSizeAxis !== false) {
-      gaps.push({ gap: 'optical-size', run: firstRun, detail: font.facts.opticalSizeAxis === true ? `${font.family} has an opsz axis` : `whether ${font.family} has an opsz axis isn't given (default ${opticalSizeAxisOf(font)})`, at })
-    }
+    gaps.canvasFontSize(sink, firstRun, domAu, canvasAuSize, at)
+    gaps.opticalSize(sink, firstRun, font, at)
     // An explicit ctx.lang: OffscreenCanvas would otherwise take the root element's lang (CanvasRenderingContext2D.cpp:5446-5465).
     // Content with lang="" matches fonts under the locale language (nsFontCache.cpp:61-63).
     const canvasLang = lang === '' && env.regionalPrefsLocale !== null ? env.regionalPrefsLocale : lang
@@ -1068,35 +1026,8 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, inspec
     // script run limit.
     const scriptLimits = new Set<number>()
     for (let k = 0; k < run.scriptRuns.length; k++) scriptLimits.add(run.scriptRuns[k]!.limit)
-    // Whether a space takes part in shaping (gfxFont::SpaceMayParticipateInShaping: the DOM then shapes the text without
-    // the word cache, across its spaces, gfxFont.cpp:3779-3800) shows where words and spaces measured together differ from
-    // the sum of their units. A window of units is tested whole. measureText returns float(au) / 60 as a float
-    // (CanvasRenderingContext2D.cpp:5277), which gives the app units back only below 2^18 px: from there a float32 step is
-    // 1/32 px or more, up to 0.94 au of rounding. So a window ends before its sum reaches that, and the next one starts at
-    // the word before, so every space is tested between its two words.
-    let stretchStart = b.tStart
-    let stretchWords = 0
-    let stretchSpaces = 0
-    let stretchSum = 0
-    let lastWordStart = b.tStart
-    let lastWordSum = 0
-    let spacesSinceWord = 0
-    const testStretch = (end: number): void => {
-      if (stretchWords >= 2 && stretchSpaces >= 1 && stretchSum < CANVAS_EXACT_AU) {
-        let s = ''
-        for (let t = stretchStart; t < end; t++) s += String.fromCharCode(tUnits[t]!)
-        if (au(s) !== stretchSum) {
-          gaps.push({ gap: 'space-in-shaping', run: firstRun, detail: `the whole range measures ${au(s)} au, its units ${stretchSum} au`, at: { start: tSource[stretchStart]!, end: tSource[end - 1]! + 1 } })
-        }
-      }
-    }
-    const endStretch = (end: number): void => {
-      testStretch(end)
-      stretchWords = 0
-      stretchSpaces = 0
-      stretchSum = 0
-      lastWordSum = 0
-    }
+    // Whether a space takes part in shaping shows in the units measured together, which only a gap reads (gaps.ts).
+    const spaces = gaps.spaceTest(sink, measurer, context, firstRun, tUnits, tSource, b.tStart)
     for (let t = b.tStart; t < b.tEnd;) {
       const ch = tUnits[t]!
       const next = t + 1 < b.tEnd ? tUnits[t + 1]! : 0x0a
@@ -1115,13 +1046,9 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, inspec
           w = rangeAu(measurer, run, tUnits, last.tStart, t + 1) - last.canvasAu
         }
         unit = { kind: ch === 0x20 ? 'space' : 'nbsp', tStart: t, tEnd: t + 1, canvasAu: w, au: w, startAdvance: advance }
-        stretchSpaces++
-        stretchSum += w
-        lastWordSum += w
-        spacesSinceWord++
+        gaps.spaceMeasured(spaces, w)
       } else if (invalid) {
-        endStretch(t)
-        stretchStart = t + 1
+        gaps.invalidMet(spaces, t)
         unit = { kind: 'invalid', tStart: t, tEnd: t + 1, canvasAu: 0, au: 0, startAdvance: advance }
       } else {
         let e = t + 1
@@ -1132,27 +1059,7 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, inspec
           if (((c === 0x20 || c === 0xa0) && (b.is8bit || !isClusterExtender(nx))) || (b.is8bit ? isInvalidChar8(c) : isInvalidChar16(c))) break
         }
         const w = rangeAu(measurer, run, tUnits, t, e)
-        if (letterSpacingAu[firstRun] !== 0) {
-          // CanAddSpacingAfter adds letter spacing only before a character that starts a cluster and a ligature group
-          // (nsTextFrame.cpp:3860-3873), and the spacing above counts clusters. Letter spacing turns optional ligatures off;
-          // the groups required shaping still forms show in Canvas's own letter spacing, which goes by the same two flags
-          // (CanvasRenderingContext2D.cpp:4759-4790): W at 2px less W at 0.001px, over 2px, counts the unit's groups (probe
-          // gecko-port F17). A unit with as many groups as clusters is spaced as the DOM spaces it. With fewer, Canvas
-          // doesn't say which cluster lost its spacing, unless the unit's script is cursive and takes none (:4107-4133).
-          let clusters = 0
-          let spaced = false
-          for (let k = t; k < e; k++) {
-            clusters += g.clusterStart[k]!
-            if (spacingPrefix[k + 1] !== spacingPrefix[k]) spaced = true
-          }
-          if (spaced) {
-            const wide = rangeAu(measurer, { ...run, context: measureContext(measurer, { ...settings, letterSpacing: '2px' }) }, tUnits, t, e)
-            const groups = (wide - w) / (2 * CANVAS_AU_PER_PX)
-            if (groups !== clusters) {
-              gaps.push({ gap: 'glyph-clusters', run: firstRun, detail: `Canvas letter spacing counts ${groups} ligature groups in a unit of ${clusters} clusters, and the DOM spaces by ligature group starts (nsTextFrame.cpp:3860-3873)`, at: { start: tSource[t]!, end: tSource[e - 1]! + 1 } })
-            }
-          }
-        }
+        gaps.letterSpacedGroups(sink, measurer, run, settings, firstRun, letterSpacingAu[firstRun]!, tUnits, tSource, g.clusterStart, spacingPrefix, t, e, w)
         let total = w
         if (!b.is8bit) {
           // Apple Color Emoji is an sbix font: the DOM takes its advances from Core Text at the device size, Canvas at the
@@ -1201,38 +1108,13 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, inspec
               sameBox(measureTextBounds(measurer, context, cluster), measureTextBounds(measurer, emojiFontContext(font.size), cluster))
             const clusterAt = { start: tSource[t + boundaries[c]!]!, end: tSource[t + boundaries[c + 1]! - 1]! + 1 }
             const next = cluster.codePointAt(first >= 0x10000 ? 2 : 1) ?? 0
-            // An emoji-default character with U+FE0E asks for a glyph without color (TextExplicit, gfxTextRun.cpp:3268-3273).
-            // The preferred fonts and the common fallback list of its script hold none for it (gfxPlatformMac.cpp:147-262
-            // puts "Apple Color Emoji" first only for a color request), so the font comes from the system-wide search, which
-            // in a content process looks only at the families whose character maps are loaded by then and starts loading the
-            // others (GlobalFontFallback, gfxPlatformFontList.cpp:1474-1486), and a color font found on the way stays the
-            // candidate where the search finds nothing (:1290-1300; gfxTextRun.cpp:3385-3390). So which font draws it follows
-            // the process's history, unless a listed family draws it. Both orders of the development and held-out suite
-            // samples (round 4, `.artifacts/lab/gecko/r4-1`): `❤️😀︎❤️` gives U+1F600 U+FE0E 20.7px natively after one
-            // history and 33.5px after the other, in 5 of the 5 history-dependent cases round 2's condition didn't name.
-            if (next === 0xfe0e && presentation === 'emoji-default') {
-              const listed = listedFontOf(font, first)
-              if (listed === null || listed < 0) {
-                gaps.push({ gap: 'page-history', run: firstRun, detail: `U+${first.toString(16).toUpperCase()} U+FE0E asks for a glyph without color, which only the system-wide font search finds, among the families whose character maps the process has loaded by then (gfxPlatformFontList.cpp:1474-1486)`, at: clusterAt })
-              }
-            }
+            gaps.textPresentationSearch(sink, firstRun, font, first, presentation, next, clusterAt)
             if (!inEmojiFont) {
-              if (prefersColorGlyph(presentation, first, next)) {
-                gaps.push({ gap: 'page-history', run: firstRun, detail: `U+${first.toString(16).toUpperCase()} asks for a color glyph, but Canvas draws it with another font than Apple Color Emoji (${atCssSize} au): the document's font fallback has pinned it, and the DOM follows the state at its own layout time (probes gecko-port F2, F3)`, at: clusterAt })
-              }
+              gaps.pinnedEmojiFont(sink, firstRun, first, presentation, next, atCssSize, clusterAt)
               continue
             }
-            // A cluster that doesn't ask for a color glyph makes FindFontForChar look for a font without one first
-            // (gfxTextRun.cpp:3268-3308). Canvas runs the same matching in both contexts, except where the run's font string is
-            // Apple Color Emoji's own: then the two contexts are one and the test above can't fail. Probe gecko-port F4: `©︎`
-            // in 16px "Apple Color Emoji" draws with a text font at 729 au in Canvas and the DOM.
-            if (settings.font === canvasFont({ ...font, family: COLOR_EMOJI_FAMILY }, font.size) &&
-              !prefersColorGlyph(presentation, first, cluster.codePointAt(first >= 0x10000 ? 2 : 1) ?? 0)) {
-              gaps.push({ gap: 'font-fallback', run: firstRun, detail: `U+${first.toString(16).toUpperCase()} asks for text presentation in Apple Color Emoji's own font list: which font the DOM draws it with depends on text fonts' coverage, which the Canvas test can't show there (gfxTextRun.cpp:3268-3308)`, at: clusterAt })
-            }
-            if (apd !== 60 && quantize7(devSize) !== devSize) {
-              gaps.push({ gap: 'bitmap-emoji-size', run: firstRun, detail: `device size ${devSize}px is not on Canvas's 7-bit size grid`, at: clusterAt })
-            }
+            gaps.emojiFontOwnList(sink, firstRun, font, settings.font, first, presentation, next, clusterAt)
+            gaps.deviceSizeOffGrid(sink, firstRun, apd, devSize, clusterAt)
             // The DOM stores floor(apd × device advance + 0.5) (gfxHarfBuzzShaper.cpp:1559); a lone regional indicator's
             // advance isn't a whole pixel (28.683px at 28px), so round once from the Canvas au at the device size.
             const deviceAu60 = auIn(deviceContext, cluster)
@@ -1253,7 +1135,7 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, inspec
               if (font.weight !== 400 && Number.isInteger(steps) && steps >= 1 && (regularAu60 * apd) % 60 === 0) {
                 dom = regularAu60 * apd / 60 + steps * Math.floor(syntheticBoldOffset(devSize) * apd + 0.5)
               } else {
-                gaps.push({ gap: 'bitmap-emoji-size', run: firstRun, detail: `device-size advance ${deviceAu60} au at apd 60 doesn't give an exact au at apd ${apd}`, at: clusterAt })
+                gaps.inexactDeviceAdvance(sink, firstRun, deviceAu60, apd, clusterAt)
               }
             }
             const delta = dom - atCssSize
@@ -1262,28 +1144,15 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, inspec
           }
         }
         unit = { kind: 'word', tStart: t, tEnd: e, canvasAu: w, au: total, startAdvance: advance }
-        if (w >= CANVAS_EXACT_AU) {
-          gaps.push({ gap: 'float32-precision', run: firstRun, detail: `a shaping unit ${w} au wide: measureText's float width gives app units back only below 2^18 px (CanvasRenderingContext2D.cpp:5277)`, at: { start: tSource[t]!, end: tSource[e - 1]! + 1 } })
-        }
-        if (stretchSum + w >= CANVAS_EXACT_AU && stretchWords >= 1) {
-          testStretch(t)
-          stretchStart = lastWordStart
-          stretchWords = 1
-          stretchSpaces = spacesSinceWord
-          stretchSum = lastWordSum
-        }
-        stretchWords++
-        stretchSum += w
-        lastWordStart = t
-        lastWordSum = w
-        spacesSinceWord = 0
+        gaps.wideUnit(sink, firstRun, w, tSource[t]!, tSource[e - 1]! + 1)
+        gaps.wordMeasured(spaces, t, w)
       }
       for (let k = unit.tStart; k < unit.tEnd; k++) unitOf[k] = units.length
       units.push(unit)
       advance += unit.au
       t = unit.tEnd
     }
-    endStretch(b.tEnd)
+    gaps.runEnded(spaces, b.tEnd)
     textRuns.push({
       tStart: b.tStart, tEnd: b.tEnd, is8bit: b.is8bit, level: b.level, context, font, scriptRuns: run.scriptRuns, hasShy: b.hasShy,
       trailingBreak: b.trailingBreak, minTabAdvance: b.hasTab ? 0.5 * au('0') : 0,
@@ -1309,67 +1178,15 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, inspec
     break
   }
 
-  // Text of a language ICU4X breaks with its LSTM models (complex/language.rs:17-45, linebreak.ts segmentComplex).
-  switch (env.dictionaryBreaks.kind) {
-    case 'intl-segmenter-word':
-      break
-    case 'unavailable': {
-      // Each stretch of such text: the break opportunities inside it are unknown.
-      for (let s = 0; s < n;) {
-        if (complexLanguage(text.charCodeAt(s)) === '') { s++; continue }
-        let e = s + 1
-        while (e < n && complexLanguage(text.charCodeAt(e)) !== '') e++
-        gaps.push({ gap: 'dictionary-breaks-unavailable', run: null, detail: 'Thai, Lao, Khmer or Myanmar text', at: { start: s, end: e } })
-        s = e
-      }
-      break
-    }
-  }
-  // U+FFFD outside the listed fonts takes the family the process cached the first time system fallback placed one, whatever
-  // this run's style and neighbours would choose (gfxPlatformFontList::SystemFindFontForChar,
-  // gfxPlatformFontList.cpp:1244-1268, :1328-1330): its width follows the process's history. Canvas reads the same cache, so
-  // the prediction follows the state at measuring time. Which fonts cover U+FFFD isn't a Canvas fact, so every U+FFFD reports
-  // it unless the coverage facts name a listed family for it (the round 2 held-out suite's 104 history-dependent
-  // suite/U+FFFD rows: 16px natively after one history, 13.133px after another).
-  for (let s = 0; s < n; s++) {
-    if (text.charCodeAt(s) !== 0xfffd) continue
-    let run = 0
-    while (runStarts[run + 1]! <= s) run++
-    // A listed family that the coverage facts say draws U+FFFD keeps it out of system fallback (fonts.ts listedFontOf).
-    const listed = listedFontOf(runTextStyles[run]!.font, 0xfffd)
-    if (listed !== null && listed >= 0) continue
-    gaps.push({ gap: 'page-history', run, detail: 'U+FFFD outside the listed fonts takes the family the process first fell back to for U+FFFD (gfxPlatformFontList.cpp:1244-1268, :1328-1330)', at: { start: s, end: s + 1 } })
-  }
-
-  // gfxFont::SynthesizeSpaceWidth gives a U+2007 or U+2008 that no font in the list covers the font's figure or space width,
-  // rounded to whole device pixels (gfxTextRun.cpp:3032-3043, gfxFont.cpp:4809-4814). Canvas rounds at apd 60 and shows
-  // neither whether a font covers it nor the unrounded width.
-  if (apd !== 60) {
-    for (let s = 0; s < n; s++) {
-      const u = text.charCodeAt(s)
-      if (u !== 0x2007 && u !== 0x2008) continue
-      let run = 0
-      while (runStarts[run + 1]! <= s) run++
-      gaps.push({ gap: 'font-fallback', run, detail: `U+${u.toString(16).toUpperCase()} takes a synthesized width rounded to device pixels where no font covers it`, at: { start: s, end: s + 1 } })
-    }
-  }
+  // What the text itself can't tell Canvas: dictionary breaks, U+FFFD and the figure spaces (gaps.ts).
+  gaps.dictionaryBreaks(sink, env, text)
+  gaps.replacementCharacters(sink, text, runStarts, runTextStyles)
+  gaps.figureSpaces(sink, apd, text, runStarts)
 
   return {
     paragraph, env, appUnitsPerDevPixel: apd, blockStyle, text, runStarts, runStyles, runParents, runLangs: langs, letterSpacingAu, frames, items,
     elements, textRuns, tUnits, tSource, breakFlags: g.breakFlags, clusterStart: g.clusterStart, isSpace: g.isSpace, kind: g.kind,
-    spacingPrefix, scanSpacingPrefix, tabSpacingPrefix, correctionPrefix, unitOf, units, sourceT, nextT, tabUnit, emergencyUnconfirmed, textIndentAu: pxToAu(paragraph.textIndent), bidi: resolveBidi, gaps, measurer, inspect,
+    spacingPrefix, scanSpacingPrefix, tabSpacingPrefix, correctionPrefix, unitOf, units, sourceT, nextT, tabUnit, textIndentAu: pxToAu(paragraph.textIndent), bidi: resolveBidi, measurer, inspect: inspected,
   }
 }
 
-export function frameOfSource(frames: GeckoFrame[], s: number): number {
-  let lo = 0
-  let hi = frames.length - 1
-  while (lo < hi) {
-    const mid = (lo + hi + 1) >> 1
-    if (frames[mid]!.start <= s) lo = mid
-    else hi = mid - 1
-  }
-  return lo
-}
-
-export { BREAK_NORMAL }

@@ -7,14 +7,16 @@ import { beforeAll, describe, expect, test } from 'bun:test'
 import { PINNED_BUILDS, type GeckoEnvironment } from '../../env.js'
 import { paragraphGaps, prepare } from '../../index.js'
 import type { Measurer } from '../../measure/canvas.js'
-import { NO_BOX_EDGE, UNKNOWN_FONT_FACTS, type FontDecl, type Gap, type InlineNode, type Paragraph } from '../../model.js'
+import { NO_BOX_EDGE, UNKNOWN_FONT_FACTS, type FontDecl, type Gap, type InlineNode, type LineOf, type Paragraph } from '../../model.js'
 import { everyLine, type Insets, type Sized } from '../../test-lines.js'
 import { parseFamilyList, sameFontForTextRun } from './fonts.js'
-import type { GeckoTextFrame } from './geometry.js'
-import { fillLine, firstLine, inspectLine, linePieces } from './index.js'
+import type { GeckoLineGeometry, GeckoLineStart, GeckoTextFrame } from './geometry.js'
+import { fillLine, firstLine, inspectLine, linePieces, paragraphGaps as geckoParagraphGaps } from './index.js'
 import { BREAK_EMERGENCY_WRAP, BREAK_NORMAL } from './linebreak.js'
 import { prepareGecko } from './prepare.js'
-import type { GeckoLine } from './types.js'
+
+// A line as the tests read it: what everyLine gathers of a decided line (test-lines.ts).
+type GeckoLine = LineOf<GeckoLineStart, GeckoLineGeometry>
 
 // The stand-in's widths in au at apd 60. Any code point is 576 au at 16px, scaled with the size, with these exceptions,
 // each modelled on an installed-Firefox measurement:
@@ -379,14 +381,14 @@ describe('gecko engine output', () => {
   test('in-word-prefix goes on the line whose breaks consult the offset; the prepared paragraph never changes', () => {
     const p = paragraph([run('AVAV')], 20, { overflowWrap: 'anywhere' })
     const prepared = prepareGecko(p, env, true)
-    const before = prepared.gaps.length
+    const before = geckoParagraphGaps(prepared).length
     const slot = { width: p.width, left: 0, right: 0 }
     const first = inspectLine(prepared, fillLine(prepared, firstLine(prepared)!, slot).line).gaps
     const again = inspectLine(prepared, fillLine(prepared, firstLine(prepared)!, slot).line).gaps
     expect(first.map(g => g.gap)).toContain('in-word-prefix')
     expect(again).not.toBe(first)
     expect(again.map(g => g.gap)).toEqual(first.map(g => g.gap))
-    expect(prepared.gaps.length).toBe(before)
+    expect(geckoParagraphGaps(prepared).length).toBe(before)
     expect(allGaps(layout(paragraph([run('aaaa')], 20, { overflowWrap: 'anywhere' }))).map(g => g.gap)).not.toContain('in-word-prefix')
   })
   test('letters joined across an in-word offset: both sides are measured with U+200D, and the prefix is exact where they add up', () => {
@@ -500,7 +502,7 @@ describe('gecko Canvas recipes (specs/gecko-AUDIT.md B1-B4)', () => {
     // as 15,783,551 au. The test runs in windows under 2^18 px, which read back exactly, so nothing is reported.
     const long = prepareGecko(paragraph([run('aa '.repeat(9134))], 500), env, true)
     expect(Math.round(Math.fround(15783552 / 60) * 60)).toBe(15783551)
-    expect(long.gaps.map(g => g.gap)).toEqual([])
+    expect(geckoParagraphGaps(long).map(g => g.gap)).toEqual([])
   })
 
   test('B1b: a soft hyphen inside a grapheme cluster puts the whole cluster before the break', () => {
