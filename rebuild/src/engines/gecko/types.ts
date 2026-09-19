@@ -224,6 +224,19 @@ export type InWordReason =
   // measured behind its own first letter, and the prefix's side is the value.
   | { kind: 'sides'; at: number; sides: 'joined' | 'joined-prefix' | 'apart' | 'cluster'; au: number; unitAu: number }
 
+// Which glyph of a kerned pair carries the adjustment in the font of one Canvas context, as Canvas told it where the
+// pairKerning fact isn't given (advance.ts askedPlacement): null where the probe pairs didn't tell. `tellers` are the
+// letters of the probe pairs that counted, one face's, with their widths alone; `sameFace` and `otherFace` the clusters
+// Canvas showed to be drawn by the tellers' face, and not shown to be (advance.ts sameFace).
+export type PairPlacement = {
+  context: Context
+  placement: 'first-advance' | 'split' | null
+  tellers: string[]
+  tellerAu: number[]
+  sameFace: string[]
+  otherFace: string[]
+}
+
 // gfxBreakPriority (gfxTypes.h:48).
 export const NO_BREAK = 0
 export const WORD_WRAP_BREAK = 1
@@ -284,6 +297,10 @@ export type GeckoPrepared = {
   // The paragraph's Canvas contexts, one per distinct settings (measure/canvas.ts contextFor): the text runs' own, and
   // those the recipes make from them.
   contexts: Context[]
+  // What Canvas told of each context's pair placement, one record per context that an offset at a kerned pair asked for
+  // (advance.ts askedPlacement): empty until then. Like a unit's inWord it is written after preparation, holds facts of the
+  // context's font that no width and no line changes, and goes with the paragraph.
+  pairPlacements: PairPlacement[]
   // What an inspected paragraph keeps for inspectLine and paragraphGaps; null on a plain one, which computes no gap and asks
   // Canvas nothing that only a gap or an inspected value needs (gaps.ts). Nothing else says which of the two a paragraph is.
   inspect: GeckoInspect | null

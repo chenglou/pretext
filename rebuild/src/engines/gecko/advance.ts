@@ -2,12 +2,12 @@
 // start it is the units' running sum, and inside a unit it is measured from the two sides of the offset, with the ligature
 // groups, pair adjustments and joining forms Canvas can show, and the reason where Canvas can't confirm it
 // (gfxTextRun::GetAdvanceWidth, gfxTextRun.cpp:1214-1256; ComputeLigatureData :238-322). specs/gecko-canvas.md §3.
-import { bounds, contextFor, width } from '../../measure/canvas.js'
+import { bounds, contextFor, width, type Context } from '../../measure/canvas.js'
 import { firstFontScriptLookups, listedFontOf } from './fonts.js'
 import { addLikelySubtags, tryParseLocale } from './likely.js'
 import { CANVAS_AU_PER_PX, rangeAu } from './measure.js'
 import { generalCategory, joiningType } from './props.js'
-import type { GeckoPrepared, GeckoTextRun, GeckoUnit, InWord, InWordAdvance, InWordEntry, InWordReason, LigatureRow } from './types.js'
+import type { GeckoPrepared, GeckoTextRun, GeckoUnit, InWord, InWordAdvance, InWordEntry, InWordReason, LigatureRow, PairPlacement } from './types.js'
 
 // A ligature across offset t inside a shaping unit: the grapheme clusters on both sides of t measure differently, in width or
 // ink box, with ligatures off. letterSpacing 0.001px turns liga, clig, dlig and hlig off in Gecko's Canvas and adds no app
@@ -208,13 +208,16 @@ function inWordAdvance(p: GeckoPrepared, run: GeckoTextRun, unit: GeckoUnit, t: 
     prefixAu = unit.canvasAu - suffixAu - across
     sides = 'cluster'
   }
+  // Which glyph of a pair carries its adjustment: the fact, or where it isn't given what Canvas told of the pair at t.
+  let placement = pairKerningAt(run, t)
   if (across !== 0 && joiner === '' && !reversed && !leftOver) {
     // The sides don't add up, and the font's pair kerning says where an adjustment across t goes: the advance is exact where
     // Canvas shows the difference is that pair's adjustment and no ligature group spans t.
-    const after = pairKernedShare(p, run, unit, a, t, across)
-    if (after !== null) {
-      return { au: unit.startAdvance + unit.canvasAu - suffixAu - after + corrections, standIn: null }
+    const share = pairKernedShare(p, run, unit, a, t, across)
+    if (share.after !== null) {
+      return { au: unit.startAdvance + unit.canvasAu - suffixAu - share.after + corrections, standIn: null }
     }
+    placement = share.placement
   }
   // U+200D at the start of a Canvas string takes the font group's first valid font: ComputeRanges starts from it as the
   // previous font, and a join control keeps the previous font (gfxTextRun.cpp:3609-3613, :3311-3318). The letter after a
@@ -245,10 +248,12 @@ function inWordAdvance(p: GeckoPrepared, run: GeckoTextRun, unit: GeckoUnit, t: 
   //   `kern >> 1` of it and the rest to the glyph after it (hb-kern.hh:102-106 in Firefox's HarfBuzz 14.3.1;
   //   hb-ot-shape.cc:130-187 chooses it where GPOS has no kern feature; probe gecko-port F12: Times New Roman `AV`
   //   710 + 710 against 780 + 780 and 1420).
-  // - GPOS puts all of it on the first glyph, W(unit) − W(suffix), and so does the default where the fact isn't given.
+  // - GPOS puts all of it on the first glyph, W(unit) − W(suffix), and so does the default where neither the fact nor
+  //   Canvas says. A stand-in takes what Canvas told of the font's placement too (pairKernedShare): beside an offset that
+  //   was told, the default would give the cluster between them both pairs' adjustments or neither.
   let au: number
   if (reversed || sides === 'joined-prefix') au = prefixAu
-  else if (pairKerningAt(run, t) === 'split' && joiner === '') au = prefixAu + (across >> 1)
+  else if (placement === 'split' && joiner === '') au = prefixAu + (across >> 1)
   else au = unit.canvasAu - suffixAu
   return { au: unit.startAdvance + au + corrections, standIn }
 }
@@ -280,41 +285,185 @@ function inWordAdvance(p: GeckoPrepared, run: GeckoTextRun, unit: GeckoUnit, t: 
 // `b` is 563 au after the fallback font's U+3000 and 534 au alone). So both clusters, and the one after them, whose
 // adjustment with the second enters z, must be printable ASCII, which the preferred fonts of every language group cover
 // before the previous font is tried (:3533-3552).
-function pairKernedShare(p: GeckoPrepared, run: GeckoTextRun, unit: GeckoUnit, a: number, t: number, R: number): number | null {
-  const pairKerning = pairKerningAt(run, t)
-  if (pairKerning === null) return null
+function pairKernedShare(p: GeckoPrepared, run: GeckoTextRun, unit: GeckoUnit, a: number, t: number, R: number): { after: number | null; placement: 'first-advance' | 'split' | null } {
+  if (!pairFactDescribes(run, t)) return { after: null, placement: null }
+  const fact = run.font.facts.pairKerning
   let b = t + 1
   while (b < unit.tEnd && p.clusterStart[b] === 0) b++
   let b1 = b
   if (b < unit.tEnd) { b1 = b + 1; while (b1 < unit.tEnd && p.clusterStart[b1] === 0) b1++ }
-  for (let k = a; k < b1; k++) if (p.tUnits[k]! < 0x21 || p.tUnits[k]! > 0x7e) return null
-  const alone = rangeAu(run.context, run, p.tUnits, a, b) - rangeAu(run.context, run, p.tUnits, a, t) - rangeAu(run.context, run, p.tUnits, t, b)
-  if (pairKerning === 'first-advance') return alone === R ? 0 : null
-  if (Math.abs(alone - R) > 2) return null
-  if (R % 2 === 0) return R / 2
-  // An odd adjustment: the fractions, from the run's context at 2^k times its font size. gfxFont clamps a font's size at
-  // 2000px (gfxFont.cpp:4956-4960).
+  for (let k = a; k < b1; k++) if (p.tUnits[k]! < 0x21 || p.tUnits[k]! > 0x7e) return { after: null, placement: fact }
+  const pairAu = rangeAu(run.context, run, p.tUnits, a, b)
+  const firstAu = rangeAu(run.context, run, p.tUnits, a, t)
+  const secondAu = rangeAu(run.context, run, p.tUnits, t, b)
+  const alone = pairAu - firstAu - secondAu
+  if (fact === 'first-advance') return { after: alone === R ? 0 : null, placement: fact }
+  if (Math.abs(alone - R) > 2) return { after: null, placement: fact }
+  if (fact === 'split' && R % 2 === 0) return { after: R / 2, placement: fact }
+  // The fractions, from the run's context at 2^k times its font size.
+  const large = largeContext(p, run)
+  if (large === null) return { after: null, placement: fact }
+  const w = (from: number, to: number): number => rangeAu(large.context, run, p.tUnits, from, to) / large.scale
+  const pair = w(a, b)
+  const first = w(a, t)
+  const second = w(t, b)
+  // The glyph after t kerns with the one after it too, and measured in the suffix it holds its half of that adjustment.
+  const next = b1 > b ? (w(t, b1) - second - w(b, b1)) / 2 : 0
+  const placed = placedTotals(first, second, (pair - first - second) / 2, next, b1 > b ? 1 : 0, large.scale)
+  if (fact === 'split') return { after: placed.halves !== null && placed.halves.total === R ? placed.halves.after : null, placement: fact }
+  // No fact. Where exactly one placement gives the R Canvas measured, that one placed this pair (toldBy).
+  const own = placed.firstAlone === firstAu && placed.secondAlone === secondAu ? toldBy(placed, R) : null
+  if (own === 'split') return { after: placed.halves!.after, placement: own }
+  if (own === 'first-advance' && alone === R) return { after: 0, placement: own }
+  // This pair doesn't tell, and a probe pair measured in the run's context may (askedPlacement). What it tells is about
+  // the face that draws it, so it counts for this pair only where Canvas shows that face draws this pair too (sameFace).
+  if (own !== null || alone === 0) return { after: null, placement: null }
+  const asked = askedPlacement(p, run)
+  if (asked.placement === null || !(sameFace(run, asked, textOf(p, a, t), firstAu) || sameFace(run, asked, textOf(p, t, b), secondAu))) return { after: null, placement: null }
+  // The told placement must give this pair's R where the fractions let it be computed.
+  if (asked.placement === 'first-advance') return { after: alone === R && (placed.first === null || placed.first === R) ? 0 : null, placement: asked.placement }
+  if (placed.halves !== null) return { after: placed.halves.total === R ? placed.halves.after : null, placement: asked.placement }
+  return { after: R % 2 === 0 ? R / 2 : null, placement: asked.placement }
+}
+
+function textOf(p: GeckoPrepared, from: number, to: number): string {
+  let s = ''
+  for (let k = from; k < to; k++) s += String.fromCharCode(p.tUnits[k]!)
+  return s
+}
+
+// floor(x + 0.5), or null where x is within `reach` au of a tie.
+const rounded = (x: number, reach: number): number | null => Math.abs(x - Math.floor(x) - 0.5) <= reach ? null : Math.floor(x + 0.5)
+
+// What a pair's adjustment comes to once Gecko has rounded each glyph's advance to app units (gfxHarfBuzzShaper.cpp:1699-1702),
+// under each way HarfBuzz places it, from unrounded values: `first` and `second` the two clusters alone, `half` half the
+// pair's adjustment, `next` the half of the following pair's adjustment that the second glyph holds in a suffix, all in au
+// at the run's size, measured at `scale` times the size, so a cluster is known to within 0.5 / scale au and a half
+// adjustment to within 1 / scale au (`nextReach` more half steps where `next` is measured). A rounding nearer to a tie
+// than its inputs' reach gives null.
+// - `halves`: the kern and kerx pair machine, half on each glyph (hb-kern.hh:102-106); `after` is the second glyph's term.
+// - `first`: GPOS, all of it on the first glyph (PairSet.hh:126-127).
+// - `onSecond`: a kerx or kern state machine, all of it on the glyph it pops, the second of a pair
+//   (hb-aat-layout-kerx-table.hh:296-333). The port has no value for it; it is here so that it can't pass for another.
+// `firstAlone` and `secondAlone` are the clusters alone, rounded: where they aren't the advances the run's size measures,
+// the font's advances aren't linear in the size (Hoefler Text, probe gecko-mainfacts M1) and nothing here counts.
+function placedTotals(first: number, second: number, half: number, next: number, nextReach: number, scale: number):
+  { halves: { total: number; after: number } | null; first: number | null; onSecond: number | null; firstAlone: number | null; secondAlone: number | null } {
+  const reach = 0.5 / scale
+  const reachZ = (0.5 + nextReach) / scale
+  const firstAlone = rounded(first, reach)
+  const secondAlone = rounded(second, reach)
+  const firstHalf = rounded(first + half, reach + 1 / scale)
+  const zHalf = rounded(second + next + half, reachZ + 1 / scale)
+  const zAlone = rounded(second + next, reachZ)
+  const firstWhole = rounded(first + 2 * half, reach + 2 / scale)
+  const secondWhole = rounded(second + 2 * half, reach + 2 / scale)
+  return {
+    halves: firstHalf === null || firstAlone === null || zHalf === null || zAlone === null ? null : { total: firstHalf - firstAlone + zHalf - zAlone, after: zHalf - zAlone },
+    first: firstWhole === null || firstAlone === null ? null : firstWhole - firstAlone,
+    onSecond: secondWhole === null || secondAlone === null ? null : secondWhole - secondAlone,
+    firstAlone, secondAlone,
+  }
+}
+
+// The placement that gave a pair the adjustment R Canvas measured, where the three can be computed and exactly one of them
+// is R; null where several are, as they often are, or where only the third is. Over the rows of probes gecko-mainfacts M1
+// and the critic's G1 (research/MAIN-FACTS-ANALYSIS.md) a pair's own total tells 100 of 881 kerned cuts in 30 faces and
+// 543 of 5,114 in 106 held-out styles, each the DOM's advance but one that is 1 au off.
+function toldBy(placed: ReturnType<typeof placedTotals>, R: number): 'first-advance' | 'split' | null {
+  if (placed.halves === null || placed.first === null || placed.onSecond === null || placed.onSecond === R) return null
+  if (placed.halves.total === R) return placed.first === R ? null : 'split'
+  return placed.first === R ? 'first-advance' : null
+}
+
+// The run's context at 2^k times its font size, the largest under gfxFont's clamp of 2000px (gfxFont.cpp:4956-4960).
+function largeContext(p: GeckoPrepared, run: GeckoTextRun): { context: Context; scale: number } | null {
   const settings = run.context.settings
   const size = /(\d+(?:\.\d+)?)px/.exec(settings.font)
   if (size === null || !(Number(size[1]) > 0)) return null
   let k = 0
   while (Number(size[1]) * 2 ** (k + 1) <= 2000) k++
   const scale = 2 ** k
-  const large = contextFor(p.contexts, { ...settings, font: settings.font.replace(size[0], `${String(Number(size[1]) * scale)}px`) })
-  const w = (from: number, to: number): number => rangeAu(large, run, p.tUnits, from, to) / scale
-  const kern = (from: number, mid: number, to: number): number => w(from, to) - w(from, mid) - w(mid, to)
-  const half = kern(a, t, b) / 2
-  const y = w(a, t)
-  const z = w(t, b) + (b1 > b ? kern(t, b, b1) / 2 : 0)
-  // floor(x + 0.5), or null where x is within `reach` au of a tie.
-  const rounded = (x: number, reach: number): number | null => Math.abs(x - Math.floor(x) - 0.5) <= reach ? null : Math.floor(x + 0.5)
-  const reachY = 0.5 / scale
-  const reachZ = (0.5 + (b1 > b ? 1 : 0)) / scale
-  const first = [rounded(y + half, reachY + 1 / scale), rounded(y, reachY)]
-  const second = [rounded(z + half, reachZ + 1 / scale), rounded(z, reachZ)]
-  if (first[0] === null || first[1] === null || second[0] === null || second[1] === null) return null
-  if (first[0]! - first[1]! + second[0]! - second[1]! !== R) return null
-  return second[0]! - second[1]!
+  return { context: contextFor(p.contexts, { ...settings, font: settings.font.replace(size[0], `${String(Number(size[1]) * scale)}px`) }), scale }
+}
+
+// Pairs of printable ASCII that many Latin fonts kern and none ligates, in a fixed order: each shares a letter with one
+// before it, or with `AV`.
+const PROBE_PAIRS = ['AV', 'VA', 'AT', 'TA', 'AW', 'WA', 'To', 'Ty', 'T.', 'LT', 'Vo', 'Yo', 'Wa', 'y,', 'r,', 'P,']
+
+// Which placement the font of the run's context gives a pair adjustment, asked of Canvas where the fact isn't given, from
+// probe pairs measured alone in the run's context. HarfBuzz chooses between GPOS and the kern or kerx machine once per
+// face, script and language (hb-ot-shape.cc:131-187), so what one pair shows holds for the face's other Latin pairs. That
+// rests on the font: a kerx table can hold a state machine subtable beside a pair subtable, and a GPOS pair can adjust
+// its second glyph; none of 1,008 installed faces places a Latin pair another way than its others
+// (research/MAIN-FACTS-ANALYSIS.md, the critic's offline study). A pair whose total a placement doesn't give strikes that
+// placement out (placedTotals), and the probe ends when one is left, or none. One pair seldom does it alone, so the pairs
+// work together, which they may only as one face's: a kerned pair is one face's (sameFace), so the first pair that kerns
+// names the face, a later pair counts only where it shares a letter with those that counted, and their letters are the
+// `tellers`. A pair whose letters alone don't measure as the larger size predicts ends the probe: the font's advances
+// aren't linear in the size (system-ui's optical sizes, Hoefler Text), which is the face's property. The answer depends on
+// the context alone, so it is asked once per context of a prepared paragraph, by whichever offset needs it first, and
+// kept with the paragraph (GeckoPrepared.pairPlacements). Three questions a pair that doesn't kern, six a pair that does,
+// none for a pair that shares no letter. Over the rows of probes gecko-mainfacts M1 and the critic's G1
+// (research/MAIN-FACTS-ANALYSIS.md), this recipe run offline: 25 of 30 and 88 of 106 styles told, a median of 30 and 24
+// questions; with it 759 of 764 told cuts of 881 are the DOM's advance in M1 and 4,231 of 4,245 of 5,114 in G1. The 19
+// others: 13 are 1 au off in words whose DOM total is 1 au off Canvas's, and 6 sit in a ligature the rows' words hold
+// (`ff`, `ffl`, Zapfino's `st`), which the ligature tests take before this recipe.
+function askedPlacement(p: GeckoPrepared, run: GeckoTextRun): PairPlacement {
+  for (let i = 0; i < p.pairPlacements.length; i++) if (p.pairPlacements[i]!.context === run.context) return p.pairPlacements[i]!
+  const asked: PairPlacement = { context: run.context, placement: null, tellers: [], tellerAu: [], sameFace: [], otherFace: [] }
+  p.pairPlacements.push(asked)
+  const large = largeContext(p, run)
+  if (large === null) return asked
+  const au = (context: Context, text: string): number => Math.round(width(context, text) * CANVAS_AU_PER_PX)
+  let halves = true
+  let first = true
+  let onSecond = true
+  for (let i = 0; i < PROBE_PAIRS.length; i++) {
+    const pair = PROBE_PAIRS[i]!
+    if (asked.tellers.length > 0 && !asked.tellers.includes(pair[0]!) && !asked.tellers.includes(pair[1]!)) continue
+    const firstAu = au(run.context, pair[0]!)
+    const secondAu = au(run.context, pair[1]!)
+    const R = au(run.context, pair) - firstAu - secondAu
+    if (R === 0) continue
+    const y = au(large.context, pair[0]!) / large.scale
+    const z = au(large.context, pair[1]!) / large.scale
+    const placed = placedTotals(y, z, (au(large.context, pair) / large.scale - y - z) / 2, 0, 0, large.scale)
+    if ((placed.firstAlone !== null && placed.firstAlone !== firstAu) || (placed.secondAlone !== null && placed.secondAlone !== secondAu)) break
+    for (let k = 0; k < 2; k++) if (!asked.tellers.includes(pair[k]!)) { asked.tellers.push(pair[k]!); asked.tellerAu.push(k === 0 ? firstAu : secondAu) }
+    if (placed.firstAlone === null || placed.secondAlone === null) continue
+    if (placed.halves !== null && placed.halves.total !== R) halves = false
+    if (placed.first !== null && placed.first !== R) first = false
+    if (placed.onSecond !== null && placed.onSecond !== R) onSecond = false
+    const left = (halves ? 1 : 0) + (first ? 1 : 0) + (onSecond ? 1 : 0)
+    if (left === 1 && !onSecond) asked.placement = halves ? 'split' : 'first-advance'
+    if (left <= 1) break
+  }
+  return asked
+}
+
+// Whether the face that draws the probe pairs that told draws `cluster` too, `clusterAu` wide alone. Font matching gives
+// each character its own font (gfxFontGroup::FindFontForChar, gfxTextRun.cpp:3178-3600), a font list's first font can lack
+// some printable ASCII (a digits font, a unicode-range subset), and a text run is shaped one font range at a time
+// (gfxTextRun.cpp:2930-3000), so nothing crosses two faces: probe gecko-mainfacts M5, a first font that draws only the
+// digits before Arial, has Times New Roman's `11` in halves (462 + 462 au) and Arial's `AV` on the first glyph (569 + 640)
+// under one declaration, and 0 au across each of 30 pairs of a digit and a letter, in Canvas and in the DOM. So a cluster
+// is the tellers' face's where it is a teller, or where it and one of the first four tellers measure together other than
+// apart, in either order. Up to eight questions a cluster, asked once: the answer depends on the context and the cluster
+// alone.
+function sameFace(run: GeckoTextRun, asked: PairPlacement, cluster: string, clusterAu: number): boolean {
+  if (asked.tellers.includes(cluster) || asked.sameFace.includes(cluster)) return true
+  if (asked.otherFace.includes(cluster)) return false
+  const au = (text: string): number => Math.round(width(run.context, text) * CANVAS_AU_PER_PX)
+  for (let i = 0; i < asked.tellers.length && i < 4; i++) {
+    const apart = clusterAu + asked.tellerAu[i]!
+    if (au(cluster + asked.tellers[i]!) !== apart || au(asked.tellers[i]! + cluster) !== apart) {
+      asked.sameFace.push(cluster)
+      return true
+    }
+  }
+  asked.otherFace.push(cluster)
+  return false
 }
 
 // FontFacts.pairKerning at offset t, or null where it doesn't describe the script run there. The fact is about Latin text,
@@ -328,6 +477,11 @@ function pairKernedShare(p: GeckoPrepared, run: GeckoTextRun, unit: GeckoUnit, a
 // in a Latin run, and in a Greek or Cyrillic run, which the default shaper shapes as it does Latin (hb_ot_shaper_categorize,
 // hb-ot-shaper.hh), where the scriptLookups fact says the script selects Latin's lookups.
 function pairKerningAt(run: GeckoTextRun, t: number): 'first-advance' | 'split' | null {
+  return pairFactDescribes(run, t) ? run.font.facts.pairKerning : null
+}
+
+// Whether FontFacts.pairKerning, given or asked of Canvas, describes the script run at offset t (the comment above).
+function pairFactDescribes(run: GeckoTextRun, t: number): boolean {
   let k = 0
   while (run.scriptRuns[k]!.limit <= t) k++
   let script = run.scriptRuns[k]!.script
@@ -336,17 +490,17 @@ function pairKerningAt(run: GeckoTextRun, t: number): 'first-advance' | 'split' 
     const likely = locale === null ? '' : addLikelySubtags(locale.language, locale.script, locale.region).script
     script = likely === '' ? 'Latn' : likely
   }
-  if (script === 'Latn') return run.font.facts.pairKerning
+  if (script === 'Latn') return true
   // The scripts that select other lookups than Latin text, which pairKerning describes.
   const scriptLookups = firstFontScriptLookups(run.font)
-  if (scriptLookups === null || (script !== 'Grek' && script !== 'Cyrl')) return null
+  if (scriptLookups === null || (script !== 'Grek' && script !== 'Cyrl')) return false
   let own = -1
   let latin = -1
   for (let g = 0; g < scriptLookups.length; g++) {
     if (scriptLookups[g]!.includes(script)) own = g
     if (scriptLookups[g]!.includes('Latn')) latin = g
   }
-  return own === latin ? run.font.facts.pairKerning : null
+  return own === latin
 }
 
 // Whether Canvas shows a ligature group over cluster boundary t: an optional ligature (ligatureAcross) or a group required

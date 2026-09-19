@@ -65,6 +65,31 @@ function stubAu(font: string, text: string, lang: string): number {
       i++
       continue
     }
+    // Under Verdana, Tahoma and Optima, kerned pairs whose placement the totals tell (advance.ts toldBy), each glyph
+    // rounded on its own (gfxHarfBuzzShaper.cpp:1699-1702); elsewhere these letters are 576 au like any other.
+    // - `Ka`, and the probe pair `AV` under Verdana and Tahoma: a kern table. 576.0 and 576.2 au at 16px, −44.8 au in
+    //   halves: 554 + 554, −44 in all, where all of it on either glyph gives −45.
+    // - `Ly`: GPOS. 576.0 and 576.3 au, −44.7 au on `L`: 531 + 576, −45, where halves or all of it on `y` give −44.
+    // - `Je`: a kerx state machine. 576.3 and 576.0 au, −44.7 au on `e`: 576 + 531, −45, where the other two give −44.
+    // - `oV` under Verdana kerns by −10 au, which shows that `o` and `V` are one face's.
+    if (font.includes('Verdana') || font.includes('Tahoma') || font.includes('Optima') || font.includes('Futura')) {
+      const inPair = (first: string, second: string): number => c === first && cps[i + 1] === second ? 1 : c === second && cps[i - 1] === first ? 2 : 0
+      const scaled = (w: number): number => Math.floor(w * size / 16 + 0.5)
+      const halves = inPair('K', 'a') || (font.includes('Optima') || font.includes('Futura') ? 0 : inPair('A', 'V'))
+      if (halves !== 0) { au += scaled((halves === 1 ? 576.0 : 576.2) - 22.4); continue }
+      if (inPair('L', 'y') !== 0) { au += scaled(c === 'L' ? 576.0 - 44.7 : 576.3); continue }
+      if (inPair('J', 'e') !== 0) { au += scaled(c === 'J' ? 576.3 : 576.0 - 44.7); continue }
+      if (font.includes('Verdana') && inPair('o', 'V') === 1) { au += scaled(576.8) - 10; continue }
+      // Under Futura two probe pairs tell together, both a kern table's halves of letters 576.0 and 576.2 au wide: `AV` by
+      // −45.6 au is −46 in halves and on `A` alone, −45 on `V`; `AT` by −44.6 au is −44 in halves and on `T`, −45 on `A`.
+      if (font.includes('Futura') && (inPair('A', 'V') !== 0 || inPair('A', 'T') !== 0)) {
+        au += scaled((c === 'A' ? 576.0 : 576.2) - (inPair('A', 'V') !== 0 ? 22.8 : 22.3))
+        continue
+      }
+      if (font.includes('Futura') && c === 'T') { au += scaled(576.2); continue }
+      const alone: Record<string, number> = { K: 576.0, a: 576.2, A: 576.0, V: 576.2, L: 576.0, y: 576.3, J: 576.3, e: 576.0 }
+      if (alone[c] !== undefined) { au += scaled(alone[c]!); continue }
+    }
     // `To` under a kern table: T is 576.4 au and o 576.8 au at 16px, the pair adjustment −45 au, half on each glyph, and each
     // glyph's advance is rounded on its own (hb-kern.hh:102-106, gfxHarfBuzzShaper.cpp:1699-1702): 554 + 554 at 16px.
     if (c === 'T' || c === 'o') {
@@ -832,6 +857,62 @@ describe('ceiling round 2', () => {
     const added = layout(paragraph([run('\u0628\u0628')], 2, { overflowWrap: 'anywhere' }))
     expect(added.measure.calls.some(c => c.text.includes('\u200c'))).toBe(false)
     expect(allGaps(added).map(g => g.gap)).not.toContain('in-word-prefix')
+  })
+
+  test('without the fact, a pair whose total only one placement explains takes that placement (probe gecko-mainfacts M1)', () => {
+    const optima = { ...courier, family: 'Optima' }
+    const lay = (text: string, font: FontDecl) => layout(paragraph([run(text, 'span', { font })], 2, { overflowWrap: 'anywhere', font }))
+    // `Ka`: halves give 554 + 554, the whole adjustment on either glyph 1107 au in all. Canvas measures 1108: halves.
+    const halves = lay('Ka', optima)
+    expect(halves.lines.map(line => line.geometry.width)).toEqual([554, 554])
+    expect(allGaps(halves).map(g => g.gap)).not.toContain('in-word-prefix')
+    expect(halves.measure.contexts.some(c => c.font.includes(' 1024px '))).toBe(true)
+    // `Ly`: 1107 au, which only the whole adjustment on `L` gives.
+    const whole = lay('Ly', optima)
+    expect(whole.lines.map(line => line.geometry.width)).toEqual([531, 576])
+    expect(allGaps(whole).map(g => g.gap)).not.toContain('in-word-prefix')
+    // `Je`: only the whole adjustment on `e` gives its 1107 au, a placement the port has no value for. It stays the
+    // stand-in it was, all of it on `J`, and says so (hb-aat-layout-kerx-table.hh:296-333).
+    const onSecond = lay('Je', optima)
+    expect(onSecond.lines.map(line => line.geometry.width)).toEqual([531, 576])
+    expect(onSecond.lines[0]!.gaps.some(g => g.gap === 'in-word-prefix')).toBe(true)
+    // `To`: every placement gives −45, and no probe pair tells in this font, so it stays a stand-in too. The probe pairs
+    // were asked once: three questions a pair that doesn't kern, six for `To`.
+    const either = lay('To', optima)
+    expect(either.lines.map(line => line.geometry.width)).toEqual([531, 577])
+    expect(either.lines[0]!.gaps.some(g => g.gap === 'in-word-prefix')).toBe(true)
+    expect(either.measure.calls.filter(c => c.text === 'AV').length).toBe(1)
+    expect(either.measure.calls.filter(c => c.text === 'WA').length).toBe(1)
+  })
+
+  test('a probe pair tells for the pairs of the face that draws it, and for no other (hb-ot-shape.cc:131-187; probes gecko-mainfacts M1, M5)', () => {
+    const lay = (text: string, family: string) => {
+      const font = { ...courier, family }
+      return layout(paragraph([run(text, 'span', { font })], 2, { overflowWrap: 'anywhere', font }))
+    }
+    // Under Verdana the probe pair `AV` tells halves, and `oV` measures 10 au under its letters apart, so `o` is that
+    // face's and `To` takes halves: 554 + 554 where the stand-in gave 531 + 577.
+    const told = lay('To', 'Verdana')
+    expect(told.lines.map(line => line.geometry.width)).toEqual([554, 554])
+    expect(allGaps(told).map(g => g.gap)).not.toContain('in-word-prefix')
+    // The probe stopped at the pair that told, and each letter was tried against both tellers until one showed.
+    expect(told.measure.calls.some(c => c.text === 'LT')).toBe(false)
+    expect(told.measure.calls.filter(c => c.text.length === 2 && c.text !== 'To' && c.text !== 'AV').map(c => c.text)).toEqual(['TA', 'AT', 'TV', 'VT', 'oA', 'Ao', 'oV'])
+    // A word with the pair twice asks none of that again.
+    const twice = lay('ToTo', 'Verdana')
+    expect(twice.measure.calls.filter(c => c.text === 'AV').length).toBe(2)
+    expect(twice.measure.calls.filter(c => c.text === 'oV').length).toBe(1)
+    // Under Futura no probe pair tells alone: `AV` leaves halves and the first glyph, and `AT`, which shares its `A`,
+    // halves and the second. Together they leave halves, which `AV` takes: 553 + 553.
+    const together = lay('AV', 'Futura')
+    expect(together.lines.map(line => line.geometry.width)).toEqual([553, 553])
+    expect(allGaps(together).map(g => g.gap)).not.toContain('in-word-prefix')
+    expect(together.measure.calls.some(c => c.text === 'TA')).toBe(false)
+    // Under Tahoma nothing shows that the face that draws `AV` draws `T` or `o` (a font list whose first font lacks some
+    // letters), so `To` stays the stand-in it was and says so.
+    const other = lay('To', 'Tahoma')
+    expect(other.lines.map(line => line.geometry.width)).toEqual([531, 577])
+    expect(other.lines[0]!.gaps.some(g => g.gap === 'in-word-prefix')).toBe(true)
   })
 
   test('ligature candidates in a row: the ligatures fact divides them, and without it the row stands in as one group (hb-ot-layout.cc:1917-1945)', () => {
