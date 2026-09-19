@@ -549,6 +549,7 @@ After a step with exit 3 passes its browser runs, the orchestrator freezes the q
    - Per case under replay, `fillLine` and `linePieces` from a plain paragraph equal the inspected ones.
    - The plain path's questions are dropped only.
    - The check reports the plain path's ask ratio.
+   - Note, 2026-09-18, after X1: the check as built also wanted the plain path's first asks in the lab path's order, as tier 1 wants of dropped questions. All three ports failed that rule and nothing else. No path that asks less can keep the order: the lab's path asks inspection's questions between two fills, so a later fill's repeat of one is a memo hit there and a first ask on the plain path. The check now fails on a question the lab's path didn't ask and on more contexts, and counts the cases whose first asks come in another order. The plain predictor's browser run covers order, at every milestone that changes the plain path's questions. The header of `rebuild/tests/function-set.ts` has the rule.
 2. **Purity.** `linePieces` and `inspectLine` give the same result twice and in either order.
 3. **Width sweep on the stand-in Canvas.** One prepared paragraph filled at several widths equals fresh prepares. Under replay another width asks new questions, so this can't run there.
 4. **Ask ratio and sites.** `check --sites` tallies asks and repeats by library call site, from the stack inside the replay's context. Nothing goes in `src`.

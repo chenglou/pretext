@@ -9129,7 +9129,7 @@
    "engine": "blink",
    "area": "measure",
    "kind": "recipe",
-   "statement": "a range the paragraph shapes as Latin that holds a space, a character beside white space and no character with a script of its own is measured as an 8-bit string with U+0020 itself, in a font Canvas shapes whole: U+2028 would make the string 16-bit and RunSegmenter would resolve its characters as Common over the string alone, where the 8-bit string is one item shaped as one Latin segment, as the paragraph shapes it; a font shaped word by word keeps U+2028 and script-context",
+   "statement": "a range the paragraph shapes as Latin that holds a space, a character other than white space, no soft hyphen and no character with a script of its own is measured as an 8-bit string with U+0020 itself, in a font Canvas shapes whole: U+2028 would make the string 16-bit and RunSegmenter would resolve its characters as Common over the string alone, where the 8-bit string is one item shaped as one Latin segment, as the paragraph shapes it; a font shaped word by word keeps U+2028 and script-context",
    "source": "plain_text_node.cc:377-400; harfbuzz_shaper.cc:1072-1101; font_fallback_list.cc:264-286; script_run_iterator.cc",
    "probes": [
     "blink-storage S6: confirmed"
@@ -9714,6 +9714,6 @@
   "webkit/output/first-and-last-display-box": "f48c4f0b11cc5689",
   "blink/measure/string-reaches-canvas-as-built": "3bf60df5bff3afea",
   "blink/measure/contexts-per-storage": "2ee9fa98354d304c",
-  "blink/measure/spaces-stay-in-neutral-latin-range": "259bc897a7a25b38"
+  "blink/measure/spaces-stay-in-neutral-latin-range": "926ef39f88f66cae"
  }
 }

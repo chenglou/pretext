@@ -104,9 +104,10 @@ The rebuild runs in three modes, from the least a caller reads of a line to the 
 - `inspect`: a paragraph prepared for inspection, and per line `fillLine`, `inspectLine`, then `linePieces`, then the
   paragraph's gaps: the lab's path (`rebuild/lab/predictor-core.ts`).
 
-Until a port computes its gaps and the geometry only the lab reads on request, it computes them while it fills every
-line, so the three modes cost about the same today; the difference between them is what the re-architecture's later
-steps are measured by. The counting pass checks that the three modes give the same line ranges for every paragraph and
+Until the re-architecture's X1 a port computed its gaps and the geometry only the lab reads while it filled every line, so
+the three modes cost about the same. Since X1 every port computes them on request (DESIGN.md §2.8), and the modes differ
+by that work; no real run has been made since. The difference between them is what the re-architecture's later steps are
+measured by. The counting pass checks that the three modes give the same line ranges for every paragraph and
 width of a row, and the report flags a row where they don't.
 
 **cold**, one paragraph at 320 px, fresh measurement state:

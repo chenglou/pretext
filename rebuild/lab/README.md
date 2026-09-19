@@ -543,7 +543,7 @@ prediction. One command each; every one was run against a planted violation and 
 | Check | Command | Fails when |
 |---|---|---|
 | Changed questions, by kind (the plan's exit 3 rule) | `bun rebuild/tests/replay.ts check --browser=all --config=all` | exit 4: a case asks a new question or other questions; exit 3 is read against what the step may accept ("Tier 1: offline replay") |
-| 1. Plain equals inspected | `bun rebuild/tests/function-set.ts plain --browser=all --config=all` | a plain paragraph's fill results or pieces differ from the inspected one's, its questions aren't the lab path's or fewer, it makes more contexts, or `inspectLine` answers on it |
+| 1. Plain equals inspected | `bun rebuild/tests/function-set.ts plain --browser=all --config=all` | a plain paragraph's fill results or pieces differ from the inspected one's, it asks a question the lab's path didn't, it makes more contexts, or `inspectLine` answers on it; a case whose first asks come in another order than the lab's passes and is counted |
 | 2. Purity | `bun rebuild/tests/function-set.ts pure --browser=all --config=all` | `linePieces` or `inspectLine` gives another result the second time, or when the other ran first |
 | 3. Width sweep on a stand-in Canvas | `bun rebuild/tests/function-set.ts sweep --browser=all --config=no-facts` | one prepared paragraph filled at other widths first differs from a paragraph prepared for that width alone |
 | 4. Ask ratio and sites | `bun rebuild/tests/replay.ts check --browser=all --config=all --sites` | never by itself: it reports asked, distinct, the ask ratio, and asks and repeats by call site |
@@ -564,7 +564,8 @@ such a pair).
   another module that exports the set. They read the replay folders' inputs, shard by shard like tier 1. Each lays a case
   out once through the lab's predictor and takes the paragraph and the environment from that prediction, the width and
   the slots' insets from the case. Results are kept as JSON at the call, since a result can share its arrays with the
-  decided line. *Plain* replays the record and reports the plain path's asked and distinct questions and their ratio.
+  decided line. *Plain* replays the record and reports the plain path's asked and distinct questions, their ratio, and
+  the cases whose first asks come in another order than the lab's.
   *Pure* reads each line's pieces, inspection, pieces and inspection, then a second paragraph inspection first. *Sweep*
   can't replay (another width asks questions no record holds), so it runs on `rebuild/tests/stand-in-canvas.ts`, a
   deterministic Canvas: advances from the font string and the code point, kerned pairs (a string isn't the sum of its
@@ -578,8 +579,18 @@ such a pair).
   123 M questions), and five plants (other `align` on plain, `inspectLine` answering on plain, `linePieces` writing into a
   fragment, `inspectLine` flipping `indented`, a prepared paragraph kept from the first width) fail every case they touch.
   Since the re-architecture's S3 `rebuild/src/index.ts` exports the set, and the three checks pass on every case of the six
-  references (389,646 cases in all; the sweep asks the stand-in 263 M questions). The plain path asks what the lab's
-  path asks until a port computes its gaps on request.
+  references (389,646 cases in all; the sweep asks the stand-in 263 M questions).
+- **The plain check since X1** (2026-09-18; the header of `rebuild/tests/function-set.ts`). All three ports compute their
+  gaps on request, so the plain path asks less than the lab's: Chrome 61.18 questions a paragraph against 99.97 without
+  facts and 48.49 against 91.91 with them, webkit-host 26.14 against 31.81 and 12.38 against 19.18, Firefox 40.7 against
+  74.2 and 40.8 against 74.5. The check fails on results that differ, on a question the lab's path didn't ask and on more
+  contexts. It no longer fails on order, as tier 1 does: a case whose first asks come in another order than the lab's
+  passes and is counted (at the X1 merge Chrome 26,035 without facts and 21,826 with, Firefox 11,418 and 11,422,
+  webkit-host 1,174 and 1,218). No path that asks less can keep the lab path's order: the lab's path asks inspection's
+  questions between two fills, so a later fill's repeat of one is a memo hit there and a first ask on the plain path,
+  after questions the lab's path asked later. What a canvas makes of the plain path's order no offline check can say. The
+  plain predictor's browser run covers it ("Line ranges against layouts" below), as part of every milestone that changes
+  the plain path's questions.
 - **Changed questions.** Planted in a scratch clone: the memo off gives 66,079 Chrome, 54,659 Firefox and 61,068
   webkit-host headline cases repeats only, exit 3; WebKit's history worlds without their discarded gap work give 214
   dropped only and 18 other questions (a question the world asked first is now first asked later), exit 4; the font checks'
@@ -600,14 +611,22 @@ such a pair).
   geometry types); a count may only fall, an entry that no longer matches fails too, and step 3 empties the list.
   `src/index.ts` and `src/env.ts` are the two shared files that may name engines, and test files are left out. Planted: a string and an identifier in
   `content.ts`, an import of Blink's shaper into WebKit's style, an import of `src/index.ts` into `lab/rows.ts`; each named.
-- **Line ranges against layouts** is for X1's gate: `browser-sets.ts --predictor=rebuild/lab/baselines/plain-predictor.ts
+- **Line ranges against layouts** is for X1's gate and for every later milestone that changes the plain path's questions,
+  since it is what covers their order: `browser-sets.ts --predictor=rebuild/lab/baselines/plain-predictor.ts
   --groups=development --out=<dir>` runs the sets with another predictor (scored, with no ledger, transitions or gate), and
   `compare-sets.ts --prediction=line-ranges` compares its rows with a usual run's: a `LinesPrediction`'s lines against the
   layout's lines that have a line box, which are the lines `score.ts` counts a `LinesPrediction`'s against, so the plain
   predictor lists those; start and end must agree; widths and painted lines aren't compared; native observations are, and
   a difference there alone exits 3, to be read as a history effect of the smaller question set. Run end to end in
   webkit-host on `smoke-hand` and `ws` with a scratch predictor that returns today's layout as line ranges: 1,044 rows,
-  nothing differs, exit 0; with the first break moved by one unit: 756 rows differ, exit 1.
+  nothing differs, exit 0; with the first break moved by one unit: 756 rows differ, exit 1. At X1, against each port's
+  usual run (the runs are under `.artifacts/tests/runs/ra-x1-blink`, `ra-x1-gecko` and `ra-x1-webkit`):
+  - Chrome, all 67,065 no-facts cases: line ranges equal and 0 native differences, exit 0.
+  - Firefox, 63,771 cases: 63,657 equal in line ranges and native observations. The other 114 are in one browser process
+    (`suite-sample` part 2) and all already history-dependent in the ledger (`gecko/process-font-fallback-state`); that set
+    run again with both predictors gave 0 differences on 19,888 cases.
+  - webkit-host, the development sets, 26,472 rows: 0 line ranges differ; 2 native observations differ, exit 3, both
+    already history-dependent in the ledger. The held-out sets are being run now.
 - **Baselines for the tripwire** (X2: tier 2's wall time and the giants stay within 2× these), in
   `rebuild/tests/baselines/times-correctness-line.json`, headline configuration, 2026-09-18, from `rebuild/src` as at the
   correctness line. The giants under the exclusive lock, forward, one case a round trip: Chrome 119 s (the library's
