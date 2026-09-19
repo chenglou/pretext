@@ -17,7 +17,7 @@ import { COLOR_EMOJI_FAMILY, listedFontOf, opticalSizeAxisOf } from './fonts.js'
 import type { GeckoFrameGeometry, GeckoLineStart } from './geometry.js'
 import { BREAK_EMERGENCY_WRAP, complexLanguage } from './linebreak.js'
 import type { GeckoLineInspect, Measured, SpanData } from './lines.js'
-import { CANVAS_AU_PER_PX, letterSpacedContext, quantize7, rangeAu } from './measure.js'
+import { CANVAS_AU_PER_PX, letterSpacedContext, rangeAu } from './measure.js'
 import type { PlacedText } from './placement.js'
 import type { EmojiPresentation } from './props.js'
 import { WORD_WRAP_BREAK, holderOfSource, type GeckoInspect, type GeckoLeaf, type GeckoPrepared, type GeckoTextRun, type InWordReason } from './types.js'
@@ -253,10 +253,11 @@ export function emojiFontOwnList(sink: GapSink, run: number, font: FontDecl, run
   }
 }
 
-// A bitmap emoji's advance comes from the device size (prepare.ts step 7), which Canvas takes on its 7-bit grid.
-export function deviceSizeOffGrid(sink: GapSink, run: number, apd: number, devSize: number, at: { start: number; end: number }): void {
+// A bitmap emoji's advance comes from the device size (prepare.ts step 7), which Canvas takes on its 7-bit grid, as
+// `canvasDevSize`.
+export function deviceSizeOffGrid(sink: GapSink, run: number, apd: number, devSize: number, canvasDevSize: number, at: { start: number; end: number }): void {
   if (sink === null) return
-  if (apd !== 60 && quantize7(devSize) !== devSize) {
+  if (apd !== 60 && canvasDevSize !== devSize) {
     sink.push({ gap: 'bitmap-emoji-size', run, detail: `device size ${devSize}px is not on Canvas's 7-bit size grid`, at })
   }
 }

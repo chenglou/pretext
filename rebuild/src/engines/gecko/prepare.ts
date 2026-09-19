@@ -998,8 +998,11 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, inspec
     // detached `<canvas>` element at the device size reproduces both (F13, F14) and was round 3's measuring path; it needs
     // `document` and shares the DOM's font groups.
     const devSize = domAu / apd
-    // The size Canvas takes to the font cache, in au: 7 bits of the CSS size (:4207-4217).
-    const canvasAuSize = quantize7(font.size) * 60
+    // The sizes Canvas takes to the font cache, 7 bits of what it is given (:4207-4217): of the CSS size, and of the device
+    // size. Facts of the declaration and the page's apd, so the run computes them here, once.
+    const canvasSize = quantize7(font.size)
+    const canvasDevSize = quantize7(devSize)
+    const canvasAuSize = canvasSize * 60
     gaps.canvasFontSize(sink, firstRun, domAu, canvasAuSize, at)
     gaps.opticalSize(sink, firstRun, font, at)
     // An explicit ctx.lang: OffscreenCanvas would otherwise take the root element's lang (CanvasRenderingContext2D.cpp:5446-5465).
@@ -1087,9 +1090,9 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, inspec
                 // gfxFont.cpp:4792-4826). Canvas rounds at apd 60 from its 7-bit size, so 18px U+2009 is 240 au in Canvas and
                 // 210 au in the DOM at apd 30. Canvas shows a synthesized space: it measures that value at the CSS size and at
                 // the device size, where a font's own glyph scales with the size.
-                const synthesized = (size: number) => 60 * Math.floor(quantize7(size) / spaceDivisor + 0.5)
+                const synthesized = (quantized: number) => 60 * Math.floor(quantized / spaceDivisor + 0.5)
                 const atCssSize = au(cluster)
-                if (atCssSize === synthesized(font.size) && auIn(deviceContext, cluster) === synthesized(devSize)) {
+                if (atCssSize === synthesized(canvasSize) && auIn(deviceContext, cluster) === synthesized(canvasDevSize)) {
                   const delta = apd * Math.floor(devSize / spaceDivisor + 0.5) - atCssSize
                   correction[t + boundaries[c]!] = delta
                   total += delta
@@ -1124,7 +1127,7 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, inspec
                 continue
               }
               gaps.emojiFontOwnList(sink, firstRun, font, settings.font, first, presentation, next, clusterAt)
-              gaps.deviceSizeOffGrid(sink, firstRun, apd, devSize, clusterAt)
+              gaps.deviceSizeOffGrid(sink, firstRun, apd, devSize, canvasDevSize, clusterAt)
               // The DOM stores floor(apd × device advance + 0.5) (gfxHarfBuzzShaper.cpp:1559); a lone regional indicator's
               // advance isn't a whole pixel (28.683px at 28px), so round once from the Canvas au at the device size.
               let dom = Math.floor(deviceAu60 * apd / 60 + 0.5)
@@ -1140,7 +1143,7 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, inspec
                 // Canvas advance of 2453 au gives 1227.
                 regularDeviceContext ??= contextFor(contexts, { ...settings, font: canvasFont({ ...font, weight: 400 }, devSize) })
                 const regularAu60 = auIn(regularDeviceContext, cluster)
-                const canvasStep = Math.floor(syntheticBoldOffset(quantize7(devSize)) * 60 + 0.5)
+                const canvasStep = Math.floor(syntheticBoldOffset(canvasDevSize) * 60 + 0.5)
                 const steps = (deviceAu60 - regularAu60) / canvasStep
                 if (font.weight !== 400 && Number.isInteger(steps) && steps >= 1 && (regularAu60 * apd) % 60 === 0) {
                   dom = regularAu60 * apd / 60 + steps * Math.floor(syntheticBoldOffset(devSize) * apd + 0.5)
