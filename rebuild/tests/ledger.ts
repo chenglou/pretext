@@ -41,7 +41,9 @@
 //
 // History dependence needs both orders. A ledger built from the forward order alone takes the history-dependent cases of
 // another ledger (--carry-history-from, the reference): their statuses there replace the forward run's, marked
-// `historyCarried`, so a forward-only iteration never reports a known history-dependent case as a regression. A case that
+// `historyCarried`, so a forward-only iteration never reports a known history-dependent case as a regression. A ledger built
+// from both orders keeps its own finding unless --carry-history-from is given, which then adds the other ledger's
+// history-dependent cases to its own (what is known to depend on history stays known until a ledger is built without it). A case that
 // is history-dependent and unknown to the reference can still show as a transition in a forward-only run: run both orders,
 // or the isolation protocol (lab README, "Sharded runs and isolation"), before calling it a regression.
 //
@@ -246,7 +248,11 @@ export function countExact(entries: readonly LedgerEntry[], perCases: ReadonlyMa
   return out
 }
 
-// The history-dependent entries of `from` replace the same cases' entries in a ledger built from one order.
+// The history-dependent entries of `from` replace the same cases' entries. A ledger built from one order needs it, since
+// one order can't see history dependence. A ledger built from both orders takes it only when asked (build
+// --carry-history-from): a browser process with two states (Firefox's fallback-font state, known tail
+// gecko/process-font-fallback-state) can land both orders in one state, so a case known to depend on history would read
+// as a stable pass in that recording and as a regression in the next (correctness round 5's critic, 2026-09-19).
 export function carryHistory(entries: LedgerEntry[], from: readonly LedgerEntry[]): number {
   const known = new Map<string, LedgerEntry>()
   for (const entry of from) if (entry.exact === 'history-dependent' || METRIC_NAMES.some(metric => entry.status[metric] === 'history-dependent')) known.set(`${entry.set}\n${entry.id}`, entry)
@@ -530,7 +536,7 @@ export function buildLedger(runDir: string, carryFrom: string | null): Ledger {
   }
   if (scorers.size !== 1) throw new Error(`The runs were scored by ${scorers.size} scorers (${[...scorers].join(', ')}): score them with one`)
   let carried: string | null = null
-  if (carryFrom !== null && run.orders === 'forward') {
+  if (carryFrom !== null) {
     carryHistory(entries, readLedger(carryFrom).entries)
     carried = relative(REPO, resolve(carryFrom))
   }
