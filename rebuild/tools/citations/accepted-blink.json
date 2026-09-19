@@ -1,0 +1,5 @@
+[
+{"kind":"gap-name","token":"han-kerning","where":"code","count":2,"reason":"X1: the three sites that halted a character with a trim measured from Canvas (the start context, the end context, the line-end reshape of an open or close mark) raise through one function, gaps.ts hanKerningTrim; the line-end halt Canvas can't show keeps its own, hanKerningEndUnknown"},
+{"kind":"gap-name","token":"glyph-clusters","where":"code","count":1,"reason":"X1: a position asked inside a grapheme raised the same gap from the hang width's walk and from the glyph clusters of an item; both call gaps.ts positionInsideGrapheme"},
+{"kind":"gap-name","token":"unsafe-to-break","where":"code","count":1,"reason":"X1: a glyph cluster's two edges raised the pair placement gap from two lines of shapeOf; both call gaps.ts pairPlacement, which also holds the test (limits.ts pairPlacementUnknown)"}
+]

@@ -5,8 +5,11 @@ import { beforeAll, describe, expect, test } from 'bun:test'
 import { PINNED_BUILDS, type BlinkEnvironment } from '../../env.js'
 import { NO_BOX_EDGE, UNKNOWN_FONT_FACTS, type BoxEdge, type FontFacts, type Gap, type InlineNode, type Paragraph } from '../../model.js'
 import { everyLine, type Insets, type Sized } from '../../test-lines.js'
-import { fillLine, firstLine, inspectLine, linePieces, paragraphGaps, prepare } from './index.js'
-import type { BlinkLine } from './types.js'
+import type { BlinkLineGeometry, BlinkLineStart } from './geometry.js'
+import { fillLine, firstLine, inspectLine, linePieces, paragraphGaps, prepare, type BlinkFilledLine, type BlinkRefusedSlot } from './index.js'
+
+// A line as the tests read it: what the function set gives of it, put together (test-lines.ts).
+type BlinkLine = ReturnType<typeof everyLine<BlinkLineStart, BlinkFilledLine, BlinkRefusedSlot, BlinkLineGeometry>>['lines'][number]
 
 beforeAll(() => {
   class Context {
@@ -530,6 +533,75 @@ describe('blink round 4c', () => {
     const texts = g.items.filter(i => i.kind === 'text').map(i => [i.textStart, i.x, i.inlineSize])
     // The spaces after the span are two items: a break opportunity is generated after a leading preserved space.
     expect(texts).toEqual([[0, 0, 124 * 64], [6, 124 * 64, 50 * 64], [11, 180 * 64, 10 * 64], [12, 190 * 64, 20 * 64]])
+  })
+})
+
+describe('blink plain and inspected paragraphs', () => {
+  // Every line of a paragraph through fillLine and linePieces alone, as an application reads them, with the Canvas
+  // questions of the whole layout.
+  function filled(p: Sized, inspect: boolean): { lines: unknown[]; asked: { letterSpacing: string; text: string }[] } {
+    const prepared = prepare(p, env, inspect)
+    const lines: unknown[] = []
+    for (let start = firstLine(prepared); start !== null;) {
+      const result = fillLine(prepared, start, { width: p.width, left: 0, right: 0 })
+      if (result.kind === 'line') lines.push({ start: result.start, end: result.end, next: result.next, hasLineBox: result.hasLineBox, pieces: linePieces(prepared, result.line) })
+      start = result.next
+    }
+    const log = prepared.measurer.log
+    return { lines, asked: log.calls.map(call => ({ letterSpacing: log.contexts[call.context]!.letterSpacing, text: call.text })) }
+  }
+
+  test('a plain paragraph gives the inspected one\'s lines and pieces, and asks Canvas less', () => {
+    for (const p of [paragraph([['The quick brown fox jumps over the lazy dog', 'text']], 120), paragraph([['aa  bb   ', 'span'], ['cc dd', 'text']], 50, { whiteSpace: 'pre-wrap', textAlign: 'justify' })]) {
+      const plain = filled(p, false)
+      const inspected = filled(p, true)
+      expect(plain.lines).toEqual(inspected.lines)
+      // Every question of the plain path is one the inspected path asks too.
+      const inspectedAsks = new Set(inspected.asked.map(a => `${a.letterSpacing} ${a.text}`))
+      expect(plain.asked.every(a => inspectedAsks.has(`${a.letterSpacing} ${a.text}`))).toBe(true)
+      expect(plain.asked.length).toBeLessThan(inspected.asked.length)
+    }
+  })
+
+  test('only an inspected paragraph measures without ligatures, which no line\'s breaks read', () => {
+    // The word that didn't fit is measured again at 1/64 px of letter spacing, which turns liga, clig and calt off, for the
+    // gap that tells a ligature from a kern there (gaps.ts lineEdgeGaps).
+    const p = paragraph([['xxxxxx xxxxxx', 'text']], 35)
+    const noLigatures = (asked: { letterSpacing: string }[]): number => asked.filter(a => a.letterSpacing === '0.015625px').length
+    expect(noLigatures(filled(p, false).asked)).toBe(0)
+    const prepared = prepare(p, env, true)
+    for (let start = firstLine(prepared); start !== null;) {
+      const result = fillLine(prepared, start, { width: p.width, left: 0, right: 0 })
+      inspectLine(prepared, result.line)
+      start = result.next
+    }
+    const log = prepared.measurer.log
+    expect(noLigatures(log.calls.map(call => ({ letterSpacing: log.contexts[call.context]!.letterSpacing })))).toBeGreaterThan(0)
+  })
+
+  test('inspectLine and paragraphGaps throw on a plain paragraph', () => {
+    const p = paragraph([['ab cd', 'text']], 400)
+    const prepared = prepare(p, env, false)
+    const result = fillLine(prepared, firstLine(prepared)!, { width: p.width, left: 0, right: 0 })
+    expect(() => inspectLine(prepared, result.line)).toThrow('prepared plain')
+    expect(() => paragraphGaps(prepared)).toThrow('prepared plain')
+  })
+
+  test('reading a decided line writes nothing to it, justification included', () => {
+    const p = paragraph([['aa bb cc dd ee ff', 'text']], 85, { textAlign: 'justify' })
+    const prepared = prepare(p, env, true)
+    const result = fillLine(prepared, firstLine(prepared)!, { width: p.width, left: 0, right: 0 })
+    const before = JSON.stringify(result.line)
+    const first = inspectLine(prepared, result.line)
+    expect(result.kind).toBe('line')
+    if (result.kind !== 'line') return
+    const pieces = linePieces(prepared, result.line)
+    // The line is justified: its text item is wider than the item result the line breaker sized.
+    expect(first.geometry!.items.filter(i => i.kind === 'text').map(i => i.inlineSize)).toEqual([85 * 64])
+    expect(result.line.info.results.filter(r => r.shape !== null).map(r => r.inlineSize)).toEqual([80 * 64])
+    expect(JSON.stringify(result.line)).toBe(before)
+    expect(inspectLine(prepared, result.line)).toEqual(first)
+    expect(linePieces(prepared, result.line)).toEqual(pieces)
   })
 })
 

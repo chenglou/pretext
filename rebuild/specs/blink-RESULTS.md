@@ -16,6 +16,73 @@ Baselines for transitions:
 - the triage population (research/MAIN-TRIAGE.md §2.1, Chrome small file, 8,933 cases): the charter triage rows
   (`.artifacts/charter-20260916/triage/runs/chrome/charter-file/small`), scored again with scorer 3.
 
+## Re-architecture X1: gaps' home, plain and inspected
+
+Pinned Chrome 153.0.8010.50, scorer 7, 2026-09-18, branch `ra-x1-blink` on the S3 merge (6f499ca), step X1 of
+research/ARCHITECTURE-PLAN-2.md. No rule, recipe, gap condition, prose or probe order changed; what changed is where they
+live and what a paragraph prepared plain computes. Runs: `.artifacts/tests/runs/ra-x1-blink/`; probe
+`.artifacts/probes/blink/storage-ra-x1`.
+
+**What is where now.**
+
+- `gaps.ts` owns every gap: its test, its prose, the merge rule and the order. The rest of the port calls it where a
+  condition can hold, one kind of call per kind of fact (a measured range, the cuts, a HanKerning trim, a view's edges and
+  its float sum, the hyphen, tabs, a break candidate, a clamped line start, a line-end fit test, a position inside a
+  grapheme, a pair adjustment inside a line), with where the gaps go as the first argument. That is null on a paragraph
+  prepared plain, where each call returns at once, so what a call measures only to decide its condition is asked on an
+  inspected paragraph alone: the scripts Canvas shapes a string under when there is no letter spacing, `positionBounds`
+  around a break candidate, the clamp's `positionLimit` with the second layout it starts, a fit test's rounding slack, the
+  hyphen's U+002D, the float sum's per-cluster advances. `joinedAtEdge` is a pure "is U+200D added here".
+- `fillLine` keeps LineBreaker::NextLine's item results as the decided line (`LineInfo`, the start, and on an inspected
+  paragraph the gaps the filling raised) and gives the line's source range from the two line starts, with no fragment or
+  item made. `linePieces` (`pieces.ts`) and `inspectLine` (`inspect.ts`, with `gaps.ts` `lineGaps` first) read it and write
+  nothing: justification's expansions and sizes go from `justificationOf` to `itemsOf` instead of into the item results.
+- `limits.ts` holds what says a position is a stand-in (`positionLimit`, `viewPositionLimit`, `positionBounds`,
+  `pairPlacementUnknown`), which only inspection calls.
+- The prepared paragraph lost `gaps`, `collapsedAt` and `sourceRuns`: `inspect` is `{ gaps }` or null, the offset mapping
+  derives the collapsed offsets and the runs it reads, and a gap's run is found from the leaves.
+
+**Gates.**
+
+| Gate | Result |
+|---|---|
+| tier 0 | `tsc` clean for the six projects; 797 tests pass (4 new: plain gives the inspected lines and pieces with fewer questions, no no-ligature measure on a plain paragraph, `inspectLine` and `paragraphGaps` throw on one, reading a decided line writes nothing) |
+| tier 1, Chrome, both configurations | 67,065 of 67,065 the same: 0 predictions changed, 0 cases with other, fewer or repeated questions, 0 new questions. Exit 3 by the string storage rule alone (`shape.ts` differs from the reference's commit) |
+| tier 2, both orders, no facts and facts | 0 status transitions and 0 exact-value changes in both (differing predicted values 266 and 552, rect counts 992 and 869, limited values 149,318 and 108,919, all as the references); gate lost 0 |
+| plain predictor, forward, all 67,065 no-facts cases | line ranges equal the inspected run's in every case; 0 native observations differ; 61.18 Canvas calls a paragraph (100.0 before) |
+| `function-set.ts pure` | 67,065 of 67,065 in both configurations |
+| `function-set.ts plain` | the plain paragraph's fill results and pieces equal the inspected one's in all 67,065 cases of both configurations, no plain path asks a question the lab's path didn't, and none makes more contexts (7,223 cases make fewer). The command still exits 1: it also wants the plain path's first asks in the lab path's order, which no plain path can give (below) |
+| citations | 0 lost; three gap-name counts accepted by name (sites that became one function) |
+| twin scan (`twins`, `runs`, `ws`, `policy`, `rich-prewrap`: 6,919 cases) | 333 ask a two-byte slice, 0 ask one context both storages |
+| probe `blink-storage` | 6 of 6 probes, 85 of 85 checks, every value as in S3's run |
+
+**Canvas questions a paragraph** (the 67,065 recorded cases, under replay; the browser's plain run counts the same):
+
+| | lab path (inspected) | plain path before | plain path now |
+|---|---:|---:|---:|
+| no supplied facts | 99.97 | 99.97 | 61.18 (−38.8%) |
+| with the lab's facts | 91.91 | 91.91 | 48.49 (−47.2%) |
+
+`The quick brown fox jumps over the lazy dog near the riverbank at dawn.` in Arial 16px at 200px (`smoke/latin-normal`):
+208 questions inspected and 75 plain without facts; 220 and 65 with them. On the development sets the plain path's questions are the
+groups' cuts and their safe tests in `prepare` (37%), the runtime font checks (25%), and the line breaker's positions,
+safe tests and reshapes; no gap function is on any stack.
+
+**The order rule of the plain check.** `function-set.ts plain` classifies the plain path's questions with tier 1's rule
+for a step that drops questions: a subset, first asked in the reference's order. The lab's path asks inspection's
+questions between two fills (the pair windows of the word that didn't fit, the clusters' prefixes), and the next fill
+asks some of them again, where the memo answers. A plain path first asks them when that fill needs them, after questions
+the lab's path asked later: 26,035 cases without facts and 21,826 with them differ in that order alone (`smoke/latin-normal`:
+eleven pair windows and prefixes inside `lazy dog near the riverbank`, which the first line's inspection asks first in the
+lab's path and the second line's fill in the plain one). Asking them where the lab's path does would be asking gap-only questions on the plain
+path, and the lab's order is frozen, so the rule can't hold for any plain path that drops inspection's questions; what
+the order could change in Chrome is answered by the browser run above.
+
+**Kept on purpose.** `shapeHyphen` has made a segmented paragraph's one-byte contexts whenever a hyphen is shaped, used or
+not, since one-byte strings got contexts of their own. 3,745 recorded cases of each configuration count those contexts
+and nothing else makes them, so an inspected paragraph still makes them there (`gaps.ts` `hyphenGlyph`); a plain one
+doesn't. A step that freezes the questions again can drop it.
+
 ## String storage
 
 Pinned Chrome 153.0.8010.50, scorer 7, 2026-09-18, after the correctness line, from the worktree branch `rx-blink-storage`
@@ -152,13 +219,13 @@ a range that condition reports.
 Branch `rx-blink-storage-latin-space`, stacked on the fix (`blink/measure/spaces-stay-in-neutral-latin-range`;
 `shape.ts` `spacesStay`). The class the fix leaves is a recipe's, not a storage's: U+2028 stands for every space so that
 Canvas keeps a string in one piece, and it makes the string 16-bit. For a range the paragraph shapes as Latin that holds a
-space, a character beside white space and no character with a script of its own, RunSegmenter then resolves everything as
-Common over the string alone. In a font Canvas shapes whole (`canvasSplitsWords` false: the font's kerning or ligature
-lookups hold the space glyph, font_fallback_list.cc:264-286) the 8-bit string with U+0020 itself is one item shaped as one
-Latin segment (plain_text_node.cc:381-385, harfbuzz_shaper.cc:1072-1077), which is the paragraph's own shaping: its
-characters, script, font and direction. A font shaped word by word keeps U+2028, since U+0020 would cut the string there
-(:387-399), and keeps `script-context`. A range with a letter resolves to Latin either way, and white space alone is no
-script's, as `hasScriptNeutral` already takes it. Probe S6: brackets, a space and brackets in Amiri at 48px are
+space, a character other than white space, no soft hyphen and no character with a script of its own, RunSegmenter then
+resolves everything as Common over the string alone. In a font Canvas shapes whole (`canvasSplitsWords` false: the font's
+kerning or ligature lookups hold the space glyph, font_fallback_list.cc:264-286) the 8-bit string with U+0020 itself is one
+item shaped as one Latin segment (plain_text_node.cc:381-385, harfbuzz_shaper.cc:1072-1077), which is the paragraph's own
+shaping: its characters, script, font and direction. A font shaped word by word keeps U+2028, since U+0020 would cut the
+string there (:387-399), and keeps `script-context`. A range with a letter resolves to Latin either way, and white space
+alone is no script's, as `hasScriptNeutral` already takes it. Probe S6: brackets, a space and brackets in Amiri at 48px are
 136.421875px in the DOM, 136.41599 as the 8-bit string with U+0020 at the zoomed size, and 233.86 with U+2028.
 
 | Check, against the fix | Result |
@@ -171,7 +238,7 @@ script's, as `hasScriptNeutral` already takes it. Probe S6: brackets, a space an
 The 36 cases that lose a pass under the fix all pass here. The 2 open painter rows (`c-0aaf6ad5c7daf6da`,
 `c-48abe81f791883d3`, RTL block) are lines whose prediction now passes and whose painted line wraps without a painter
 limit: the painted line shapes its brackets otherwise than the paragraph did, which the failing prediction's conditions
-covered before. Without the word-split narrowing to ranges with a character beside white space, 34,087 cases ask a new
+covered before. Without the word-split narrowing to ranges with a character other than white space, 34,087 cases ask a new
 question (every lone space asks the probe), with the same statuses. Runs: `.artifacts/tests/runs/rx-blink-storage/
 alt-latin-space-narrow` (and `alt-latin-space`, the wider first version).
 
