@@ -55,7 +55,8 @@ path and on the plain path. Runs and scratch tools are under `.artifacts/tests/r
   `runTexts`, `WebKitBox.hasStrongDirectionality` (a local of prepare), `firstNamedGeneric` (gaps alone read it) and
   `wordSpacing` (the box's style holds the same number), `expansionShares` (no caller; the observation port has its own) and
   `dictionaryRangeStartsWithMark`.
-- **Imports run one way**: types, data and breaks, measure, gaps, then content with items and lines, output, history, index.
+- **Imports run one way**: types, data and breaks, measure, gaps, then items and lines, output, history, content, index
+  (content prepares the history worlds, so it imports `history.ts`; corrected 2026-09-19, this line had content before them).
   `gaps.ts` keeps every condition, its prose and its merge rule and imports neither the fill nor the content stage; the item
   builder is `items.ts`; the break position cache's history worlds, and a decided line laid out in them, are `history.ts`,
   which raises `page-history` through `gaps.ts`; `index.ts` composes `inspectLine` from the two. The plan's §6 put the worlds
