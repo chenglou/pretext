@@ -25,6 +25,18 @@ one fix a commit; the prototypes it names (branch `x-mainfacts-webkit`) were mad
   Tier 1: 2 of 63,987 cases ask a question the record lacks in each configuration (`c-1d3594196ff8bfae`,
   `c-65b6a6b017410209`, both `heldout-suite-sample`), every other case is the same, 0 predictions changed.
 
+- **A box's space is a number measured as the box is made** (`WebKitBox.spaceWidth`, content.ts makeBox; X2's open item).
+  It was set where handleTextContent measures it and null for boxes whose white space is deferred (a reordered paragraph,
+  or preserved white space with a TAB), which then asked Canvas at every read: the space a text item is measured with,
+  and every white-space item, about three questions a word. Now every box asks `W(' ')` in its context once, after
+  makeBox's own questions, and nothing asks it again. A box that isn't deferred asks what it asked (handleTextContent
+  measured the space whether or not the box holds one); a deferred box that never read its space asks one question it
+  didn't. No width changes: the same string in the same context. The first ask moves, so tier 1 can't call it: without
+  facts 34,363 cases are the same, 22,604 ask the same or fewer questions in another order with the same prediction
+  (9,174 repeats only, 13,430 other questions), 7,020 ask a space the record lacks, 0 predictions changed (with facts
+  34,363, 22,580 and 7,044). On the 56,967 headline cases that replay, the plain path asks 2,117,070 questions where it
+  asked 2,295,968 (37.16 a paragraph for 40.30).
+
 ## 2026-09-19: re-architecture X3 (the model clean-up)
 
 research/ARCHITECTURE-PLAN-2.md §8 step 2, X3. No rule, citation, gap condition, merge rule, probe order or measured string

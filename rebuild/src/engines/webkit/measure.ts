@@ -1,7 +1,8 @@
 // WebKit widths from Canvas totals: TextUtil::width with the following-space rule, singleSpaceWidth, tab stops, word
 // spacing, the fixed-pitch shortcut, breakWord's probe sequence and firstUserPerceivedCharacterLength
 // (specs/webkit-lines.md §3.3, §8.1; specs/webkit-canvas.md §(e); specs/webkit-gaps.md §2, §5). Every width is float32.
-// Every read asks Canvas, in a context its box holds (types.ts WebKitBox), and nothing here keeps an answer.
+// Every read asks Canvas, in a context its box holds (types.ts WebKitBox), and nothing here keeps an answer; the one width a
+// box keeps is its single space, measured as the box is made (WebKitBox.spaceWidth).
 import { width as canvasWidth, type Context } from '../../measure/canvas.js'
 import { graphemeBoundaries } from '../../unicode/grapheme.js'
 import { inRanges, webkitGraphemeRules } from './data.js'
@@ -316,9 +317,9 @@ function measureDomString(box: WebKitBox, context: Context, text: string): numbe
 
 // TextUtil::singleSpaceWidth (TextUtil.cpp:54-60): widthOfSpaceString, a TextRun of one space, which gets letter spacing
 // and no word spacing (index 0), or the primary font's space advance on the simplified path, which has no spacing. The box
-// keeps it where its items were built with it (WebKitBox.spaceWidth).
+// keeps it (WebKitBox.spaceWidth).
 export function singleSpaceWidth(box: WebKitBox): number {
-  return box.spaceWidth ?? canvasWidth(box.context, ' ')
+  return box.spaceWidth
 }
 
 // FontCascade::tabWidth (FontCascadeInlines.h:76-94) with a tab-size of spaces (TabSize.h:52-55): the stop counts from

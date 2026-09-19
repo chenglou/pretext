@@ -195,7 +195,7 @@ function makeBox(p: WebKitPrepared, leaf: LeafInput, sourceStart: number): WebKi
     primaryFamily,
     hyphen: facts.mapsHyphen === false ? '-' : '‐',
     locale, canvasFamily: font.family,
-    context, plainContext, spaceWidth: null, spacedContext, countContext, letterSpacing, cssLetterSpacing: leaf.textStyle.letterSpacing,
+    context, plainContext, spaceWidth: canvasWidth(context, ' '), spacedContext, countContext, letterSpacing, cssLetterSpacing: leaf.textStyle.letterSpacing,
     spacingFacts,
   }
   boxMade(p, box, declared, size, leaf.lang, families, firstNamedGeneric, unverified)
