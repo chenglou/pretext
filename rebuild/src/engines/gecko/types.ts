@@ -126,12 +126,13 @@ export type GeckoItem = { kind: 'text'; frame: number; at: number } | GeckoEdgeI
 // index. 'Zyyy' stands for Common resolved from the language.
 export type ScriptRun = { limit: number; script: string }
 
-// The Canvas contexts of text runs that measure alike: one record per distinct `own` context of the paragraph, so per font
-// declaration, language, direction and ligature state (prepare.ts step 7, measure.ts runContextsFor). Such text runs hold
-// the one record by reference, and a recipe reads its context from it. The contexts beside `own` are `own`'s settings with
-// one changed. Each is made where a recipe first asks in it (measure.ts, advance.ts largeContext) and is null until then:
-// made in `prepare`, they would be contexts that most paragraphs never ask. Like a unit's inWord they are written after
-// preparation, hold facts of the declaration that no width and no line changes, and go with the paragraph.
+// The Canvas contexts of text runs that measure alike, and what Canvas told of their font: one record per distinct `own`
+// context of the paragraph, so per font declaration, language, direction and ligature state (prepare.ts step 7, measure.ts
+// runContextsFor). Such text runs hold the one record by reference, and a recipe reads its context from it. The contexts
+// beside `own` are `own`'s settings with one changed. Each is made where a recipe first asks in it (measure.ts, advance.ts
+// largeContext) and is null until then: made in `prepare`, they would be contexts that most paragraphs never ask. Like a
+// unit's inWord, all but `own` is written after preparation, holds facts of the declaration that no width and no line
+// changes, and goes with the paragraph.
 export type RunContexts = {
   // The first flow's font and language, ligatures off when its letter spacing isn't 0 au.
   own: Context
@@ -142,6 +143,9 @@ export type RunContexts = {
   letterSpaced: Context | null
   // The font at `scale` times its size, 2^k with the largest k under gfxFont's clamp of 2000px (advance.ts largeContext).
   large: { context: Context; scale: number } | null
+  // What Canvas told in `own` of where the font places a pair's adjustment, null until an offset at a kerned pair asks
+  // (advance.ts askedPlacement).
+  pairPlacement: PairPlacement | null
 }
 
 // A gfxTextRun: the transformed characters of consecutive frames that ContinueTextRunAcrossFrames joins
@@ -263,7 +267,6 @@ export type InWordReason =
 // letters of the probe pairs that counted, one face's, with their widths alone; `sameFace` and `otherFace` the clusters
 // Canvas showed to be drawn by the tellers' face, and not shown to be (advance.ts sameFace).
 export type PairPlacement = {
-  context: Context
   placement: 'first-advance' | 'split' | null
   tellers: string[]
   tellerAu: number[]
@@ -332,10 +335,6 @@ export type GeckoPrepared = {
   // those the recipes make from them. Only the making of a context reads the list; whoever measures holds its context by
   // reference (RunContexts).
   contexts: Context[]
-  // What Canvas told of each context's pair placement, one record per context that an offset at a kerned pair asked for
-  // (advance.ts askedPlacement): empty until then. Like a unit's inWord it is written after preparation, holds facts of the
-  // context's font that no width and no line changes, and goes with the paragraph.
-  pairPlacements: PairPlacement[]
   // What an inspected paragraph keeps for inspectLine and paragraphGaps; null on a plain one, which computes no gap and asks
   // Canvas nothing that only a gap or an inspected value needs (gaps.ts). Nothing else says which of the two a paragraph is.
   inspect: GeckoInspect | null

@@ -23,7 +23,7 @@ export function quantize7(size: number): number {
 export function runContextsFor(records: RunContexts[], contexts: Context[], settings: CanvasSettings): RunContexts {
   const own = contextFor(contexts, settings)
   for (let i = 0; i < records.length; i++) if (records[i]!.own === own) return records[i]!
-  const made: RunContexts = { own, noLigatures: null, letterSpaced: null, large: null }
+  const made: RunContexts = { own, noLigatures: null, letterSpaced: null, large: null, pairPlacement: null }
   records.push(made)
   return made
 }

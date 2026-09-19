@@ -1184,7 +1184,7 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, inspec
   return {
     paragraph, env, appUnitsPerDevPixel: apd, blockStyle, text, leaves, frames, items,
     elements, textRuns, tUnits, tSource, breakFlags: g.breakFlags, clusterStart: g.clusterStart, isSpace: g.isSpace, kind: g.kind,
-    spacingPrefix, scanSpacingPrefix, correctionPrefix, unitOf, units, sourceT, nextT, tabs, textIndentAu: pxToAu(paragraph.textIndent), bidi: resolveBidi, contexts, pairPlacements: [], inspect: inspected,
+    spacingPrefix, scanSpacingPrefix, correctionPrefix, unitOf, units, sourceT, nextT, tabs, textIndentAu: pxToAu(paragraph.textIndent), bidi: resolveBidi, contexts, inspect: inspected,
   }
 }
 

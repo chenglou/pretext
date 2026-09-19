@@ -442,16 +442,16 @@ const PROBE_PAIRS = ['AV', 'VA', 'AT', 'TA', 'AW', 'WA', 'To', 'Ty', 'T.', 'LT',
 // `tellers`. A pair whose letters alone don't measure as the larger size predicts ends the probe: the font's advances
 // aren't linear in the size (system-ui's optical sizes, Hoefler Text), which is the face's property. The answer depends on
 // the context alone, so it is asked once per context of a prepared paragraph, by whichever offset needs it first, and
-// kept with the paragraph (GeckoPrepared.pairPlacements). Three questions a pair that doesn't kern, six a pair that does,
+// kept on the context's record (RunContexts.pairPlacement). Three questions a pair that doesn't kern, six a pair that does,
 // none for a pair that shares no letter. Over the rows of probes gecko-mainfacts M1 and the critic's G1
 // (research/MAIN-FACTS-ANALYSIS.md), this recipe run offline: 25 of 30 and 88 of 106 styles told, a median of 30 and 24
 // questions; with it 759 of 764 told cuts of 881 are the DOM's advance in M1 and 4,231 of 4,245 of 5,114 in G1. The 19
 // others: 13 are 1 au off in words whose DOM total is 1 au off Canvas's, and 6 sit in a ligature the rows' words hold
 // (`ff`, `ffl`, Zapfino's `st`), which the ligature tests take before this recipe.
 function askedPlacement(p: GeckoPrepared, run: GeckoTextRun): PairPlacement {
-  for (let i = 0; i < p.pairPlacements.length; i++) if (p.pairPlacements[i]!.context === run.contexts.own) return p.pairPlacements[i]!
-  const asked: PairPlacement = { context: run.contexts.own, placement: null, tellers: [], tellerAu: [], sameFace: [], otherFace: [] }
-  p.pairPlacements.push(asked)
+  if (run.contexts.pairPlacement !== null) return run.contexts.pairPlacement
+  const asked: PairPlacement = { placement: null, tellers: [], tellerAu: [], sameFace: [], otherFace: [] }
+  run.contexts.pairPlacement = asked
   const large = largeContext(p, run)
   if (large === null) return asked
   const au = (context: Context, text: string): number => Math.round(width(context, text) * CANVAS_AU_PER_PX)
