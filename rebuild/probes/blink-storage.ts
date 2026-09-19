@@ -146,6 +146,15 @@ const S2 = `
     out[name] = storage(W(s))
     if (expected !== null) expect(name, out[name], expected)
   }
+  // A concatenation of two two-byte slices is a two-byte cons string, and flattening keeps its storage (String::Flatten
+  // allocates by the cons string's own representation, string-inl.h:884-896): measured as built, and after charCodeAt
+  // flattened it. 26 brackets, so the widths are their own.
+  const cons = () => two() + two()
+  const flattened = cons()
+  flattened.charCodeAt(25)
+  out.cons = { oneByte: W(text + text), asBuilt: W(cons()), flattened: W(flattened) }
+  expect('a cons string of two two-byte slices is two-byte', out.cons.asBuilt !== out.cons.oneByte, true)
+  expect('flattening a two-byte cons string keeps its storage', out.cons.flattened, out.cons.asBuilt)
   // The slice rule's threshold: 12 units are copied into one byte, 13 stay a slice of the two-byte string.
   const bracket = n => '('.repeat(n)
   out.threshold = {}
