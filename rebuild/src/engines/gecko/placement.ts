@@ -91,8 +91,9 @@ function trimTrailingWhiteSpaceIn(p: GeckoPrepared, psd: PlacedSpanData): { hand
   return { handled: false, delta: 0 }
 }
 
-// The frame nsLineLayout::GetTrimFrom and GetHangFrom read (nsLineLayout.cpp:3452-3478, :3416-3450): the line's last frame,
-// inside the span the line ends with, frames skipped when trimming (<br>) passed over; null where that isn't a text frame.
+// The frame nsLineLayout::GetTrimFrom and nsLineLayout::GetHangFrom read (nsLineLayout.cpp:3452-3478, :3416-3450): the
+// line's last frame, inside the span the line ends with, frames skipped when trimming (<br>) passed over; null where that
+// isn't a text frame.
 function lastTextFrame(psd: PlacedSpanData): PlacedText | null {
   for (let k = psd.frames.length - 1; k >= 0; k--) {
     const pf = psd.frames[k]!
