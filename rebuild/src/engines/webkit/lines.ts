@@ -1440,7 +1440,7 @@ function collectShapeRanges(L: Layout, c: Content): Array<[number, number]> {
   while (contentList.length > 0 && contentList[contentList.length - 1]!.type !== 'content') contentList.pop()
   if (contentList.length === 0) return []
   const ranges: Array<[number, number]> = []
-  // lastFontCascade (ILB:828): the root style's until a content run gives its own, and nothing compares it before one does.
+  // lastFontCascade (ILB:862): the root style's until a content run gives its own, and nothing compares it before one does.
   let lastFontBox: WebKitBox | null = null
   let leading: number | null = null
   let trailing: number | null = null

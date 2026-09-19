@@ -81,8 +81,8 @@ export type WebKitBox = {
   context: Context
   plainContext: Context
   // TextUtil::singleSpaceWidth, W(' ') in `context`, kept from where handleTextContent measures it for the box's white space
-  // (content.ts). null where it defers the white space and nothing has asked for the space yet: measure.ts singleSpaceWidth
-  // then asks Canvas at every read, since a space measured for every box would be asked earlier than the recorded rows ask it
+  // (content.ts). null where it defers the white space: measure.ts singleSpaceWidth then asks Canvas at every read. Measuring
+  // the space for every box as the box is made would ask Canvas earlier than the recorded rows do, which takes a browser run
   // (research/ARCHITECTURE-PLAN-2.md §10).
   spaceWidth: number | null
   // The run's font with its letter spacing and word spacing: CanvasRenderingContext2DBase::setWordSpacing gives the context's

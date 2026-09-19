@@ -7,6 +7,97 @@ for round 4b, `.artifacts/lab/webkit-round4/` and `.artifacts/lab/fresh/webkit-h
 `.artifacts/lab/webkit-round2/<run>/` for round 2 and `.artifacts/lab/webkit-stage5/<run>/` before it. Installed Safari ran
 once in round 3, as a spot check.
 
+## 2026-09-19: re-architecture X2 (the memo goes)
+
+research/ARCHITECTURE-PLAN-2.md §8 step 2, X2. No rule, citation, gap condition, merge rule, probe order or measured string
+moved: every case asks the questions it asked, first in the order it asked them, and some of them again. Runs are under
+`.artifacts/tests/runs/ra-x2-webkit/`.
+
+- **Every read asks Canvas.** The port no longer imports the memoized API, context indices or the call log. A box holds the
+  four contexts it measures in (`context`, `plainContext`, `spacedContext`, `countContext`), the box facts of an inspected
+  paragraph hold theirs (`localeChoosesFonts`, the coverage test's LastResort), and the prepared paragraph keeps the list
+  they were found in (`contexts`, which a world shares). No function takes a measurer; `measure.ts` lost the unused prepared
+  paragraph of `boxWidth`, `tabbedWidth` and `fixedPitchWidth` with it. `collectShapeRanges` compares FontCascades by
+  context and word spacing, where it multiplied a context index.
+- **A value needed twice in one scope is a local**: a letter-spaced string's total in the count context, which says whether
+  the string can be counted and then counts it (`mergedGlyphs`); the letter before a control (`controlIsAdjusted`); the
+  hyphen's total, which `lineHyphenWidth` measures once and hands to `hyphen-glyph`'s test, so `hyphenGlyphsDiffer` and
+  `measure.ts` hyphenWidth are gone; and makeBox's coverage test asks each code point of the text once, where it first
+  stands (a `Set` of code points local to the test; `coveredLikeLastResort` lost its own duplicate test).
+- **A value prepare already measures is a field set there**: `WebKitBox.spaceWidth`, the space handleTextContent measures
+  for the box's white-space items, which `singleSpaceWidth` reads. It is null where the box's white space is deferred (the
+  paragraph is reordered, or preserved white space holds a TAB) and the space is first asked later: those boxes ask at
+  every read, because measuring the space as the box is made would ask it earlier than the rows do (plan §10).
+- **Nothing of the fill's is handed to `lineGaps`**, against the plan's §6. Of the 2.44 M questions a line's own inspection
+  asks again without facts, 1.69 M were first asked by prepare (stored item widths and their glyph counts), 0.74 M by
+  inspection itself (single code points, for `canvas-language` and `simplified-measuring`) and 15 thousand by the fill
+  (`tools/lab-stages.ts` under the runs folder reads the stage of every first ask from the call stack). What inspection
+  re-derives is what prepare derived while it measured a stored width, and handing that over means text items that carry
+  their measured range and merged-glyph record: X3's item model, or the per-cluster tables of plan §10.
+
+Gates, webkit-host, 63,987 cases a configuration:
+
+- Tier 0: tsc clean for six projects; `bun test rebuild` 809 pass (805 at the start of the step; 4 new, of the questions a
+  paragraph asks).
+- Tier 1: exit 3. Every changed case is repeats only (58,144 without facts, 56,498 with), 0 dropped only, 0 other
+  questions, 0 new questions, 0 predictions changed. Chrome's and Firefox's four references: exit 0.
+- `function-set.ts plain`, `pure`, `sweep`: exit 0 in both configurations; the plain path's first asks come in another
+  order than the lab's in 1,174 and 1,218 cases, the counts X1 left. Citations: 0 lost. Painter differential: 63,987 of
+  63,987 byte-equal in both configurations. No string-keyed Map in the port; two `Set<string>` stay in
+  `collectHistoryWorlds` (item-end lists as keys, local to the call; nothing measured), which are X3's.
+- Tier 2, both orders, both configurations: exit 0 twice, 0 status transitions, 0 cases less exact, differing predicted
+  values 0 -> 0, rect counts 197 -> 197, gate lost 0, one library bundle a run.
+- The plain predictor over every set (63,987 rows, forward) against the usual run's forward rows: 0 line ranges differ; 3
+  native observations differ, `rich-prewrap/trailing-spaces` `c-1ca0bab9ded7a4c6` and `c-53283654e67b8035` as in X1, and
+  `suite/rejected-control` `c-7cc5e3e26ff7c30d` of the held-out sample, all three history-dependent in every metric in the
+  reference ledger.
+- The tripwire (plan §8: tier 2's wall time and the giants within 2x step 0's), measured beside other owners' jobs, so
+  upper bounds. Tier 2: 263 s and 302 s of browser jobs for both orders (step 0: 99 s forward, alone; X1: 141 s forward,
+  beside others); the rows' prediction time of the forward order sums to 18.9 s without facts and 16.6 s with (step 0 10.4 s;
+  X1 14.1 s and 12.0 s), while the same rows' native time went 49.9 s, 69.0 s and 70.7 s. Giants, without the exclusive
+  lock: 472 s against 325 s, the library's prediction 4.29 s against 2.72 s (native 231 s against 172 s) from 731,516
+  Canvas calls against 111,489: a repeated call costs about 2.5 µs here.
+
+Canvas questions a paragraph, asked (distinct), and the ask ratio:
+
+| | with the memo | the memo switched off, nothing else | X2 |
+|---|---:|---:|---:|
+| the lab's path, without facts | 31.81 (31.81) 1.00 | 98.90 (31.81) 3.11 | 88.79 (31.81) 2.79 |
+| the lab's path, with the lab's facts | 19.18 (19.18) 1.00 | 68.76 (19.18) 3.59 | 59.86 (19.18) 3.12 |
+| the plain path, without facts | 26.14 (26.14) 1.00 | 46.33 (26.14) 1.77 | 39.32 (26.14) 1.50 |
+| the plain path, with the lab's facts | 12.38 (12.38) 1.00 | 28.20 (12.38) 2.28 | 21.65 (12.38) 1.75 |
+
+Without facts the font checks ask 11.7 of those a paragraph, none of them twice (their own list of asked questions, which
+WebKit doesn't need: a question asked again gives the same bits).
+
+What is still asked again, in thousands of questions over the 63,987 cases, without facts / with them. Each repeated
+question is in one row, by its call stack and text under replay (`tools/classes.ts` under the runs folder; the totals are
+`replay.ts check`'s and `function-set.ts plain`'s, 3,646 / 2,603 on the lab's path and 844 / 593 on the plain path):
+
+| Asked again by | the lab's path | the plain path | What would end it |
+|---|---:|---:|---|
+| `mergedGlyphs` under `itemGaps`: a letter-spaced item's glyph counts, which prepare counted | 1,505 / 160 | none | items that keep their merged-glyph record; per-cluster tables (plan §10) |
+| single code points for `simplified-measuring`, per occurrence | 445 / 911 | none | a table per box and code point (plan §10) |
+| `familyDraws`, a character under two font lists, per occurrence (`canvas-language`) | 427 / 427 | none | the same |
+| a history world's line: its fill and its discarded gap work (`pageHistoryGaps`) | 306 / 336 | none | dropping the discarded work (plan §10) |
+| `mergedGlyphs` while measuring: a cluster's count at every occurrence of the letter, in prepare and in `breakWord`'s prefixes | 288 / 37 | 287 / 37 | per-cluster tables (plan §10) |
+| the space of the box's context: boxes whose white space is deferred, and boxes that share a context | 228 / 228 | 228 / 228 | the space measured as the box is made, which moves its first ask (plan §10) |
+| the same word measured again by prepare; the same prefix or character again by the fill | 207 + 64 / 207 + 65 | 207 + 60 / 207 + 60 | a bounded store of strings (plan §10) |
+| `simplified-measuring`'s total of an item, which prepare measured | 58 / 137 | none | items that keep their raw total |
+| the item widths of the history worlds | 41 / 21 | none | — |
+| makeBox: a code point or the space again in another box of the same font | 27 / 27 | 20 / 20 | — |
+| the space of the plain context (fixed pitch, tab stops) and the hyphen per soft hyphen read | 23 + 18 / 23 + 18 | 23 + 18 / 23 + 18 | box constants (plan §10) |
+| controls, test T1 | 10 / 8 | 1 / 1 | — |
+
+### Open
+
+- `WebKitBox.spaceWidth` is null for deferred boxes only because no step of this phase may move a first ask. Eight of the
+  nine giants are reordered Arabic, so deferred: they ask about three questions a word (the word with the space after it,
+  that space, and the white-space item's space), where the memo left one per distinct word.
+- A relayout at another width asks Canvas for nothing a stored width answers, as before. What it asks each time: the
+  hyphen per soft hyphen it reads, `breakWord`'s prefixes, preserved white space with a TAB, and runs shaped across boxes.
+- `gaps.ts`, `lines.ts` and `content.ts` still import each other's functions (X1).
+
 ## 2026-09-18: re-architecture X1 (gaps get their home; plain and inspected paragraphs)
 
 research/ARCHITECTURE-PLAN-2.md §8 step 2, X1. No rule, citation, gap condition, merge rule or probe order moved; what
