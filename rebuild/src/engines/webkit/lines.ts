@@ -1,11 +1,11 @@
 // WebKit line filling (Safari 27.0): Line bookkeeping, InlineContentBreaker with breakWord and the carried remainder, the
 // line builders, TextOnlySimpleLineBuilder (also run inside RangeBasedLineBuilder) and LineBuilder
-// (specs/webkit-lines.md §1, §4-§9), the line rect from floats and text-indent, run-based alignment, and the decided line:
-// the closed Line::Run list with what it was filled from, which output.ts and gaps.ts read. Cited at WebKit-7625.1.29.11.27
-// under Source/WebCore/layout/formattingContexts/inline/: IL = InlineLine.cpp, ICB = InlineContentBreaker.cpp,
-// TOS = TextOnlySimpleLineBuilder.cpp, ILB = InlineLineBuilder.cpp, IFU = InlineFormattingUtils.cpp,
-// ALB = AbstractLineBuilder.cpp, IDCB = display/InlineDisplayContentBuilder.cpp, IDLB = display/InlineDisplayLineBuilder.cpp,
-// LBB = InlineLineBoxBuilder.cpp.
+// (specs/webkit-lines.md §1, §4-§9), the line rect from floats and text-indent, run-based alignment, and the decided line
+// (types.ts): the closed Line::Run list with what it was filled from, which output.ts, gaps.ts and history.ts read. Cited at
+// WebKit-7625.1.29.11.27 under Source/WebCore/layout/formattingContexts/inline/: IL = InlineLine.cpp,
+// ICB = InlineContentBreaker.cpp, TOS = TextOnlySimpleLineBuilder.cpp, ILB = InlineLineBuilder.cpp,
+// IFU = InlineFormattingUtils.cpp, ALB = AbstractLineBuilder.cpp, IDCB = display/InlineDisplayContentBuilder.cpp,
+// IDLB = display/InlineDisplayLineBuilder.cpp, LBB = InlineLineBoxBuilder.cpp.
 import { width as canvasWidth } from '../../measure/canvas.js'
 import type { LineSlot } from '../../model.js'
 import { canBreakBefore, findNextBreakablePosition, makeFactory, mayBreakInBetween } from './breaks.js'

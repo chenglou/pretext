@@ -84,7 +84,7 @@ export type WebKitBox = {
   context: Context
   plainContext: Context
   // TextUtil::singleSpaceWidth, W(' ') in `context`, kept from where handleTextContent measures it for the box's white space
-  // (content.ts). null where it defers the white space: measure.ts singleSpaceWidth then asks Canvas at every read. Measuring
+  // (items.ts). null where it defers the white space: measure.ts singleSpaceWidth then asks Canvas at every read. Measuring
   // the space for every box as the box is made would ask Canvas earlier than the recorded rows do, which takes a browser run
   // (research/ARCHITECTURE-PLAN-2.md §10).
   spaceWidth: number | null
@@ -283,7 +283,7 @@ export type LineLogicalRect = { left: number; width: number; contentEdgeOffset: 
 // What filling one slot decides, which linePieces and lineGeometry (output.ts) and lineGaps (gaps.ts) read and nothing
 // writes: the closed Line with the start and the slot it was filled from and in, the builder that filled it, its rect, and
 // its source range. `isLastLineOrLineEndsWithForcedLineBreak` is what the alignment reads (IFU:198-276). `measuredEnd` and
-// `gaps` are the filling's (lines.ts Fill): the gaps it raised, in order, or null on a paragraph prepared plain.
+// `gaps` are the filling's (lines.ts Builder and Layout): the gaps it raised, in order, or null on a paragraph prepared plain.
 export type WebKitFilledLine = {
   engine: 'webkit'
   kind: 'line'

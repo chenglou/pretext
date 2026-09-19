@@ -7,6 +7,135 @@ for round 4b, `.artifacts/lab/webkit-round4/` and `.artifacts/lab/fresh/webkit-h
 `.artifacts/lab/webkit-round2/<run>/` for round 2 and `.artifacts/lab/webkit-stage5/<run>/` before it. Installed Safari ran
 once in round 3, as a spot check.
 
+## 2026-09-19: re-architecture X3 (the model clean-up)
+
+research/ARCHITECTURE-PLAN-2.md §8 step 2, X3. No rule, citation, gap condition, merge rule, probe order or measured string
+moved, and no Canvas question: every case of both configurations asks what it asked, in the order it asked it, on the lab's
+path and on the plain path. Runs and scratch tools are under `.artifacts/tests/runs/ra-x3-webkit/`.
+
+- **A line's runs are a tagged union** (`types.ts` `LineRun`): a text run, a soft line break, an element's run with the
+  source offset of its item, and a line-spanning inline box start. The `box: -1` and `element: -1` sentinels and the text
+  fields every run carried are gone. A run's trailing white space is a record or null (WebKit's own
+  `Line::Run::TrailingWhitespace`), and so is a line's trimmable content, where four fields ran in parallel; the two copies
+  of `Line::Run::detachTrailingWhitespace` are one function. The aligner works on the runs (`expansion.ts`), where it copied
+  them into a stringly typed shape and back.
+- **The content breaker's result is a union on its action**: only `break` carries partial trailing content. The three
+  `hyphenWidth` fields that were always null (they come with `hyphens: auto`) and their four dead branches are gone, with
+  `Content.isTextOnlyContent` and `hasTrailingSoftHyphen`, `Builder.isFirstFormattedLine`, `WebKitPrepared.paragraph` and
+  `runTexts`, `WebKitBox.hasStrongDirectionality` (a local of prepare), `firstNamedGeneric` (gaps alone read it) and
+  `wordSpacing` (the box's style holds the same number), `expansionShares` (no caller; the observation port has its own) and
+  `dictionaryRangeStartsWithMark`.
+- **Imports run one way**: types, data and breaks, measure, gaps, then content with items and lines, output, history, index.
+  `gaps.ts` keeps every condition, its prose and its merge rule and imports neither the fill nor the content stage; the item
+  builder is `items.ts`; the break position cache's history worlds, and a decided line laid out in them, are `history.ts`,
+  which raises `page-history` through `gaps.ts`; `index.ts` composes `inspectLine` from the two. The plan's §6 put the worlds
+  in `gaps.ts`, which is what made `lines.ts` and `gaps.ts` import each other.
+- **A box's inspection record is made in one step**, from makeBox's own parsed family list (`fonts.ts` `familyNames`, parsed
+  once per box, where the list was split and parsed again at seven sites). Its three Canvas contexts are made as the box is made, before the
+  paragraph's items are measured; a context asks nothing when it is made, and tier 2 in both orders says the order doesn't
+  show.
+- **Structural fixes with identical results** (plan §3, §6): the last-line scan stops at the first contentful item;
+  `isDelimiterQuote` reads a list derived once when the module loads; an element's item carries its source offset, so a
+  line's start and end and an element's fragment no longer scan the item list (`elementOffsetOnLine` scanned every item for
+  every element run of every line, on the plain path too); a fragment's text leaf is found by binary search; the builder
+  choice names `inline-boxes-only`, which `fillLine` tested with a scan of every item on every line; a display box's word
+  spacing travels with its tree node, where `boxOfRun` searched the boxes.
+- **`measure.ts` lost its gap-only switch**: `boxWidth`'s `fixedPitchShortcut` parameter existed for test T1 alone;
+  `gaps.ts` now holds the advances against the shortcut's total itself (`advancesWidth`, `lessMeasuredSpace`).
+- **Map and Set**: the two `Set<string>` of `collectHistoryWorlds` are comparisons of number lists, its set of item ends an
+  array by offset, `nearestCommonAncestor` a walk, the open inline boxes of a line's display boxes a stack. What stays: the
+  code points makeBox's coverage test has asked (unbounded), `CJK_SYMBOLS` (fixed data), and the membership sets of the
+  bidi display box tree, which are local to one line's inspection.
+- **Nothing handed out is the prepared paragraph's**: `paragraphGaps` returns copies. A line start was already plain data.
+
+Not built, on purpose: a text item that keeps what measuring found beside its width (the merged-glyph record, the raw
+total), which would end 1.5 M of the lab path's repeats without facts. `measure.ts` knows nothing of inspection today, and
+the hand-over would put an inspected-only branch into every measuring call for a gain the lab alone sees. Where it would
+go is narrow: stored widths are written at two sites (`items.ts` `handleTextContent` and `computeItemWidths`) and read at
+one (`lines.ts` `measuredItemWidth`), so a record per item, or one shared by items of equal text in a box's context, hangs
+there without touching `measure.ts`.
+
+WebKit's merge rules and the order of raises (the Blink owner's X2 finding): two of the six rules, overlap with extension
+(`rtl-shaping-across-inline-boxes`, and `lineGaps`' own), merge a new range into the first entry it overlaps and never two
+entries with each other, so how ranges are grouped could follow the order of raises while what they cover together
+couldn't. A line's raises come in one order here (its items in line order, each item's conditions in a fixed sequence, the
+fill's before them), this step moved none, and tier 1 compares the lists byte for byte. Nothing changed.
+
+Prepared facts that read across a forced break or over the whole text (research/INCREMENTAL-API-READING.md §4):
+
+- the builder choice: the whole tree and item list (any span, atomic inline or `<wbr>`; the block's style; reordering);
+- `reordering` (any 16-bit box with a strong RTL character, any RTL span): it turns bidi on, defers every stored width to
+  after the splits and leaves every box's `spaceWidth` null;
+- bidi levels and the item splits they cause: `ubidi_setPara` runs over the whole paragraph text, and its direction flags
+  are the whole text's, so a forced-break paragraph without RTL characters resolves otherwise once another one holds one
+  (held-out `c-7cc5e3e26ff7c30d`); inline box items take their levels from neighbouring content, across a `<br>` too;
+- per text node, which a preserved newline doesn't end: `is8Bit`, `simpleFontCodePath`, `simplifiedMeasuring` with its
+  coverage test, whether white-space widths are deferred (a TAB anywhere in the node) and `spaceWidth` with it;
+- break opportunities inside a node: BreakablePositions reads the two code units before a scan's start, which after a
+  preserved newline are the newline and the unit before it;
+- whether a white-space-only text node gets a renderer: the previous sibling's renderer, a `<br>` among them;
+- source offsets (`runStarts`, an element item's `sourceOffset`), sums over the text before;
+- the paragraph's Canvas contexts, one per distinct settings over all boxes;
+- inspected only: a box's history worlds (its whole text and items) and its box facts (any character of the node).
+
+Gates, webkit-host, 63,987 cases a configuration:
+
+- Tier 0: tsc clean for six projects; `bun test rebuild` 811 pass.
+- Tier 1: exit 0, read directly: all six references the same, 0 predictions changed, 0 questions changed. A differential
+  of the function set against the start commit's (`tools/diff-set.ts`: every fill, pieces with `overflows` and the paint
+  facts, inspection, paragraph gaps, contexts made and the question sequence, on an inspected and on a plain paragraph):
+  0 of 63,987 differ in either configuration, after every move.
+- `function-set.ts plain`, `pure`, `sweep`: exit 0 in both configurations; the plain path asks 2,516,180 questions for
+  1,672,597 distinct without facts and 1,385,178 for 792,164 with, and first asks in another order in 1,174 and 1,218
+  cases, all as X2 left them. Citations: 0 lost, 2 accepted by name (`boxOfRun`'s throw; four copies of the atomic
+  narrowing throw, now `atomicElement`). Painter differential: 63,987 of 63,987 byte-equal in both configurations. knip:
+  nothing in the port but the test paragraphs. No import cycle in the folder, types included.
+- Tier 2, both orders, both configurations: exit 0 twice, 0 status transitions, 0 cases less exact, differing predicted
+  values 0 -> 0, rect counts 197 -> 197, gate lost 0, one library bundle a run (`a8aa415c604c…` without facts,
+  `8c7fae70e8eb…` with; the comment edits after the runs leave both hashes as they were).
+- The plain predictor over every set (63,987 rows, forward) against the usual run's forward rows: 0 line ranges differ; 3
+  native observations differ, `c-1ca0bab9ded7a4c6`, `c-53283654e67b8035` and `c-7cc5e3e26ff7c30d`, the three of X2, all
+  history-dependent in every metric in the reference ledger.
+- Giants under the exclusive lock: 9 of 9 predictions, native observations and painted lines equal to step 0's frozen rows
+  (`compare-rows.ts --prediction=without-measure`); 731,516 Canvas calls, as in X2.
+- Time. Other owners' jobs held the machine at a load average of 40 to 68 throughout, so wall times say little and the rows'
+  own timings are what compares. Giants under the exclusive lock, the start commit and this one back to back: the library's
+  prediction 3.41 s and 2.22 s (X2's run 4.29 s; step 0, with the memo, 2.72 s), native observation 252 s and 347 s, wall
+  487 s and 659 s: the native side, which this step doesn't touch, went the other way and carries the wall time. A forward
+  tier 2 of each, back to back: the rows' prediction time 32.2 s and 21.4 s, native 107.9 s and 100.7 s; browser jobs 356 s
+  and 504 s, the difference being the first three jobs' wait for a slot. Offline, the library's JavaScript alone over the
+  recorded cases under replay, the two trees interleaved case by case (`tools/time-set.ts`): the plain path takes 95% of
+  the start commit's time without facts and 97% with, the lab's path 81% and 77%.
+
+Canvas questions a paragraph didn't move: the lab's path 88.79 asked for 31.81 distinct without facts and 59.86 for 19.18
+with; the plain path 39.32 for 26.14 and 21.65 for 12.38.
+
+Lines, non-test and non-generated: 6,132 to 6,074.
+
+| File | Start | X3 |
+|---|---:|---:|
+| lines.ts | 2,109 | 1,982 |
+| gaps.ts | 844 | 430 |
+| history.ts | | 414 |
+| content.ts | 690 | 451 |
+| items.ts | | 253 |
+| output.ts | 536 | 529 |
+| measure.ts | 447 | 441 |
+| types.ts | 218 | 303 |
+| expansion.ts | 190 | 150 |
+| breaks.ts, data.ts, fonts.ts, index.ts | 422, 226, 68, 36 | 417, 236, 79, 43 |
+| style.ts, joining.ts, geometry.ts, paint-rules.ts, checks.ts, test-paragraph.ts | 92, 51, 91, 56, 15, 41 | unchanged |
+
+### Open
+
+- `firstUserPerceivedCharacterLength` takes the grapheme boundaries of the whole box for one emergency break on the complex
+  path, and `endsWithSoftWrapOpportunity` and `mayBreakInBetween` make a break factory per call, whose first ICU query walks
+  the whole box. Both are per line and O(box); a structure that outlives the call would end them, which waits for
+  profiling (plan §10).
+- `nbspBreaks` is a constant false through four functions of `breaks.ts` (`-webkit-nbsp-mode: space` isn't in the model);
+  it stays with the verbatim port of BreakablePositions.
+- `WebKitBox.spaceWidth` is still null for deferred boxes (X2, "Open").
+
 ## 2026-09-19: re-architecture X2 (the memo goes)
 
 research/ARCHITECTURE-PLAN-2.md §8 step 2, X2. No rule, citation, gap condition, merge rule, probe order or measured string
