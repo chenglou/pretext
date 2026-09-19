@@ -326,7 +326,8 @@ export function emergencyBreakUnconfirmed(inspect: GeckoInspect | null, t: numbe
 // A text frame's break scan, `r`, over tLength characters from tOffset. An emergency break after a hyphen exists where
 // SetupClusterBoundaries saw an alphanumeric, the hyphen and the next alphanumeric in one shaped word (gfxFont.cpp:741-753),
 // and InitScriptRun shapes words per font range (gfxTextRun.cpp:2930-3000), so fallback between them removes it. Canvas totals
-// don't show font ranges; the coverage facts do, and only a break they couldn't settle is reported (prepare.ts step 4).
+// don't show font ranges; the coverage facts do, and only a break they couldn't settle is reported (prepare.ts step 4). A
+// fill has a sink exactly when its paragraph is inspected.
 export function emergencyHyphenBreak(sink: GapSink, p: GeckoPrepared, run: number, wordCanWrap: boolean, r: Measured, tOffset: number, tLength: number): void {
   if (sink === null) return
   if (r.charsFit < tLength && r.breakPriority === WORD_WRAP_BREAK && !wordCanWrap && p.breakFlags[tOffset + r.charsFit] === BREAK_EMERGENCY_WRAP &&
