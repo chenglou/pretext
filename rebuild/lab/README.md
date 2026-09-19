@@ -299,8 +299,26 @@ that engine's browser in both configurations. Without it the sweep, the painter 
 (for Blink) the twin scan run too. It exits 0 only when every gate is fine for a step that means to change no prediction
 and no Canvas question; otherwise the worst result, in the order 1, 2, 5, 4, 3 (the file's header). Tier 1's exit 3 is
 fine there when no case dropped a question (repeats only, or Chrome's string storage rule alone), and the row still
-sends the listed cases to tier 2. Logs and the rows as JSON are in `rebuild/tests/.check/gates`. Tier 2 stays its own
-command.
+sends the listed cases to tier 2; a function-set check that skipped cases isn't fine although it exits 0. Logs and the
+rows as JSON are in `rebuild/tests/.check/gates`. Tier 2 stays its own command. Every gate starts at once, and they
+share the cores one child process at a time (`rebuild/tests/cores.ts`): the table's order decides who gets a core, and a
+quarter of the cores go to groups of long paragraphs first, which bound the run's end. Measured on 2026-09-19 with the
+X3 merge's library, other owners' jobs beside it (load averages of 10 to 40): `--quick` 27 s for WebKit, 49 s for Gecko
+and 112 s for Blink (1,800 CPU-seconds on 16 cores: Chrome's cases ask the most questions); the full form for the three
+engines 13 minutes (10,300 CPU-seconds, 12 GB at the peak; tier 1's six rows after 74 s), against 62 minutes and 18,000
+CPU-seconds for the same gates one after another earlier that night, at load averages of 40 to 75. At load averages of
+45 to 60 the same forms took 32 s, 103 s, about 3 minutes and 20 minutes.
+
+**A process replays a group of shards** since 2026-09-19 (`replay.ts` `shardGroups`; tier 1, the function set's plain
+and pure checks, the painter differential): a set's shards eight to a process in order, and a shard of fewer than 50
+cases, which holds long paragraphs, alone. A process a shard spent most of its CPU time warming up: Chrome's 482 no-facts
+shards replay in 122 s in one warm process and took about 450 s in 482. The groups follow from the manifest alone, so
+the reports don't depend on the number of cores or on the sets chosen, and they are the same bytes as before on all
+389,646 cases (`.artifacts/session/iteration-speed-20260919`). Back to back, three times each, on the three no-facts
+references: tier 1 682 to 451 CPU-seconds, plain 821 to 541, pure 1,105 to 789; the painter differential on Firefox's
+and webkit-host's 151 to 96. The replay's context keeps the key of its assigned settings (tier 1 440 to 398), the
+function set's stand-in Canvas reads a font from its shorthand once (the sweep 326 to 245 on webkit-host's no-facts
+cases), and the twin scan scans its case files in parallel (nine minutes to two and a half).
 
 **The sets** (`rebuild/tests/sets.ts`): `smoke-hand` (the 25 cases of `smoke-cases.ndjson`) and `smoke`; the development
 sets `runs`, `ws`, `policy`, `rich-prewrap`, `twins` (Chrome alone) and `suite-sample`; the rule and feature families
@@ -398,12 +416,12 @@ Safari wasn't run again (webkit-host stands in; the evaluation's spot check equa
 ### Tier 1: offline replay
 
 `run.ts --record-measurements` stores every Canvas answer and dictionary segmentation of every case ("Recorded
-measurements"). `replay.ts` runs the working tree's library in bun against them, one process per shard across the cores,
-and compares each case's full prediction with a frozen reference: the layout (lines, engine geometry, fragments, gaps,
-limits, the slots below floats, the environment), the observation port's expected rects with their predicted and limited
-values (the WebKit port's live measurements replay from the record's observe phase), and the painter's limits per line;
-beside it, which recorded calls answered the library's questions, in order. The report is byte for byte the same with 3
-jobs as with 16, on a changed tree too.
+measurements"). `replay.ts` runs the working tree's library in bun against them, a process per group of shards across
+the cores, and compares each case's full prediction with a frozen reference: the layout (lines, engine geometry,
+fragments, gaps, limits, the slots below floats, the environment), the observation port's expected rects with their
+predicted and limited values (the WebKit port's live measurements replay from the record's observe phase), and the
+painter's limits per line; beside it, which recorded calls answered the library's questions, in order. The report is
+byte for byte the same with 3 jobs as with 16, on a changed tree too.
 
 ```sh
 # a recording: tier 2 with --record, both orders (the ledger needs them), in its own folder
@@ -483,9 +501,9 @@ bun rebuild/tests/replay.ts check --browser=chrome            # or --browser=all
   exactly, the question sequences included, so nothing the library reads from its host outside Canvas and the segmenters
   (Unicode property escapes in `src/paint.ts`, case mapping, `Intl`) shows a difference between bun and the browsers on
   these sets.
-- *Deterministic by construction*: a shard is a process of its own and runs its cases in recorded order, so nothing
-  depends on the core count or on what ran before; the report lists cases in the sets' order and holds no time. The same
-  tree gives the same report.
+- *Deterministic by construction*: a process replays one group of a set's shards, cut from the manifest alone ("Test
+  tiers"), and runs its cases in recorded order, so nothing depends on the core count, on the sets chosen or on what ran
+  before; the report lists cases in the sets' order and holds no time. The same tree gives the same report.
 - *What it can't cover*: the painter and everything native (tier 2); questions the record lacks, answers that depend on
   the order of questions, and string storage (by the rules above); a library that kept Canvas answers across paragraphs would ask less in a
   browser document than in a replayed case, and would show as new questions (today no Canvas answer outlives a prepared paragraph);

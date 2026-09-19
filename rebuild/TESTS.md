@@ -25,7 +25,9 @@ can't see). Every tier runs two configurations: `no-facts`, the headline, and `f
 every small edit), and without `--quick` also the sweep, the painter differential, the citation ledger and the twin
 scan. It reads every exit code from the child process, prints one table (exit code, what it means and which kind of
 step accepts it, the report's counts, wall time), and exits 0 only when every gate is fine for a pure refactoring (lab
-README "Test tiers"; the file's header has the exit codes).
+README "Test tiers"; the file's header has the exit codes). Since the same day tier 1, the plain and pure checks and the
+painter differential replay a group of shards a process, which took a third off their CPU time with the same reports
+byte for byte; the lab README has the numbers.
 
 **State at the correctness line, 2026-09-18.** The six references under `.artifacts/tests/reference` are frozen at 6b21b68
 and pinned in `rebuild/tests/reference/`, packed from `.artifacts/tests/runs/line-20260918/<browser>-<config>` (every tier
