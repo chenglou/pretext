@@ -1,7 +1,7 @@
 // The bench's inputs stay in their size classes and deterministic, and the statistics are the documented ones.
 //   bun test rebuild/bench
 import { describe, expect, test } from 'bun:test'
-import { buildContexts, buildInput, buildMessages, SCENARIOS, SCRIPTS, SIZE_RANGES, SIZES, SWEEP_WIDTHS } from './cases.ts'
+import { buildChat, buildContexts, buildInput, buildMessages, CHAT_KIND_SHARES, CHAT_LENGTH_CLASSES, CHAT_SETS, chatText, describeChat, SCENARIOS, SCRIPTS, SIZE_RANGES, SIZES, SWEEP_WIDTHS } from './cases.ts'
 import { median, quantile, summarize } from './stats.ts'
 
 describe('cases', () => {
@@ -28,11 +28,52 @@ describe('cases', () => {
     }
   })
 
-  test('contexts hold one row per size per scenario, and one many row', () => {
-    const contexts = buildContexts({ scripts: SCRIPTS, sizes: SIZES, scenarios: SCENARIOS, messages: 10 })
-    expect(contexts.length).toBe(SCRIPTS.length)
-    for (let c = 0; c < contexts.length; c++) expect(contexts[c]!.rows.length).toBe(2 * SIZES.length + 1)
+  test('contexts hold one row per size per scenario and one many row, then the chat context', () => {
+    const contexts = buildContexts({ scripts: SCRIPTS, sizes: SIZES, scenarios: SCENARIOS, messages: 10, chat: { timed: 10, headline: 25, headlinePasses: 1, phasePasses: 1 } })
+    expect(contexts.length).toBe(SCRIPTS.length + 1)
+    for (let c = 0; c < SCRIPTS.length; c++) expect(contexts[c]!.rows.length).toBe(2 * SIZES.length + 1)
     expect(SWEEP_WIDTHS.length).toBe(20)
+    const chat = contexts[SCRIPTS.length]!
+    expect(chat.rows.map(row => row.id)).toEqual(['chat/mix', 'chat/latin'])
+    expect(chat.chat!.sets.map(set => set.messages.length)).toEqual([25, 25])
+  })
+})
+
+describe('chat', () => {
+  test('a longer set starts with the shorter one, and no message is empty or holds a newline', () => {
+    for (let s = 0; s < CHAT_SETS.length; s++) {
+      const long = buildChat(CHAT_SETS[s]!, 3000)
+      expect(buildChat(CHAT_SETS[s]!, 500)).toEqual(long.slice(0, 500))
+      for (let i = 0; i < long.length; i++) {
+        const text = chatText(long[i]!)
+        expect(text.trim().length).toBeGreaterThan(0)
+        expect(text.includes('\n')).toBe(false)
+      }
+    }
+  })
+
+  test('the mix holds every kind near its share, mostly short and medium messages and a few very long ones', () => {
+    const mix = describeChat(buildChat('mix', 10000))
+    for (let k = 0; k < CHAT_KIND_SHARES.length; k++) {
+      const [kind, share] = CHAT_KIND_SHARES[k]!
+      const found = mix.byKind.find(entry => entry.kind === kind)!.messages / mix.messages
+      expect(Math.abs(found - share)).toBeLessThan(0.02)
+    }
+    expect(CHAT_KIND_SHARES.reduce((sum, entry) => sum + entry[1], 0)).toBeCloseTo(1)
+    expect(CHAT_LENGTH_CLASSES.reduce((sum, entry) => sum + entry.share, 0)).toBeCloseTo(1)
+    expect((mix.byLength[0]!.messages + mix.byLength[1]!.messages) / mix.messages).toBeGreaterThan(0.65)
+    expect(mix.byLength[3]!.messages).toBeGreaterThan(0)
+    expect(mix.withCodeSpan).toBe(mix.byKind.find(entry => entry.kind === 'latin-code')!.messages)
+    expect(mix.withEmoji).toBeGreaterThan(0)
+    expect(mix.withUrl).toBeGreaterThan(0)
+  })
+
+  test('the latin set is printable ASCII in one part', () => {
+    const latin = buildChat('latin', 2000)
+    for (let i = 0; i < latin.length; i++) {
+      expect(latin[i]!.parts.length).toBe(1)
+      expect(/^[ -~]+$/.test(chatText(latin[i]!))).toBe(true)
+    }
   })
 })
 
