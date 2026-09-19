@@ -565,7 +565,7 @@ function itemsOf(sh: Shaper, info: LineInfo, justified: readonly (Justified | nu
 // units kept in text_content map one to one, removed ones to an empty range where they collapsed, and a unit Blink
 // generated for a text node (U+200B after leading preserved spaces) has an empty source range before the unit that follows
 // it. Elements' units (a <wbr>'s U+200B, a <br>'s LF, an atomic inline's U+FFFC) belong to no text node.
-function mappingOf(p: BlinkPrepared, sourceStart: number, sourceEnd: number, contentStart: number, contentEnd: number): BlinkMappingUnit[] {
+function mappingOf(p: BlinkPrepared, sourceStart: number, sourceEnd: number, start: BlinkLineStart, contentEnd: number): BlinkMappingUnit[] {
   const units: BlinkMappingUnit[] = []
   const push = (unit: BlinkMappingUnit): void => {
     const last = units.length > 0 ? units[units.length - 1]! : null
@@ -577,14 +577,13 @@ function mappingOf(p: BlinkPrepared, sourceStart: number, sourceEnd: number, con
     }
     units.push(unit)
   }
+  // The item that holds a unit without a source offset, found from the line's first item as the units go by: a text
+  // leaf's generated U+200B is mapped, an element's unit isn't.
+  let holder = start.itemIndex
   const generated = (t: number, s: number): void => {
-    for (let i = 0; i < p.items.length; i++) {
-      const item = p.items[i]!
-      if (item.type === 'control' && item.control === 'generated-zwsp' && item.start === t) {
-        push({ run: item.run, start: s, end: s, textStart: t, textEnd: t + 1, collapsed: false })
-        return
-      }
-    }
+    while (p.items[holder]!.end <= t) holder++
+    const item = p.items[holder]!
+    if (item.type === 'control' && item.control === 'generated-zwsp') push({ run: item.run, start: s, end: s, textStart: t, textEnd: t + 1, collapsed: false })
   }
   const leaves = p.index.leaves
   let run = sourceStart < sourceEnd ? runOfSource(p, sourceStart) : 0
@@ -592,7 +591,7 @@ function mappingOf(p: BlinkPrepared, sourceStart: number, sourceEnd: number, con
   // (offset_mapping_builder.cc:95-117), the end of the last unit kept before it.
   let collapsedAt = 0
   for (let s = sourceStart - 1; s >= 0; s--) if (p.contentOffsets[s]! >= 0) { collapsedAt = p.contentOffsets[s]! + 1; break }
-  let t = contentStart
+  let t = start.textOffset
   for (let s = sourceStart; s < sourceEnd; s++) {
     while (run + 1 < leaves.length && leaves[run + 1]!.start <= s) run++
     const c = p.contentOffsets[s]!
@@ -635,7 +634,7 @@ export function geometryOf(sh: Shaper, info: LineInfo, start: BlinkLineStart): B
     width: info.width,
     hangWidth,
     alignOffset,
-    mapping: mappingOf(p, range.start, range.end, start.textOffset, next === null ? p.text.length : next.textOffset),
+    mapping: mappingOf(p, range.start, range.end, start, next === null ? p.text.length : next.textOffset),
     items: itemsOf(sh, info, justified, hangWidth, alignOffset),
   }
 }

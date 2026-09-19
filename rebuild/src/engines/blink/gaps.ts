@@ -521,10 +521,10 @@ const CLAMPED_START_DETAIL = 'a wrapped line start inside shaped text whose resh
 
 const END_TEST_DETAIL = 'a break opportunity whose line-end reshape passed or failed the fit test by less than the rounding of the last safe offset\'s position: Blink reshapes from the last offset HarfBuzz left safe and tests the width after that position\'s ceiling (shaping_line_breaker.cc:543-553), HarfBuzz can flag offsets the port\'s width tests call safe (contextual lookups that change no width), and from an earlier safe offset the same glyphs pass or fail by another ceiling'
 
-// The group whose text holds offset k strictly inside, or -1.
+// The group whose text holds offset k strictly inside, or -1: the group of unit k, unless it starts there.
 function groupAround(p: BlinkPrepared, k: number): number {
-  for (let g = 0; g < p.groups.length; g++) if (p.groups[g]!.start < k && k < p.groups[g]!.end) return g
-  return -1
+  const g = k < p.text.length ? p.groupOfUnit[k]! : -1
+  return g >= 0 && p.groups[g]!.start < k ? g : -1
 }
 
 // Gaps at a line edge k inside a shaping group. `fromPosition`: the width there comes from the paragraph's position without
