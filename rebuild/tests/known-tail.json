@@ -3733,6 +3733,11 @@
           "id": "c-7ac03ed877357990",
           "browser": "webkit-host",
           "where": "eval-r4-3 (facts)"
+        },
+        {
+          "id": "c-d600d9b01c0ae9d7",
+          "browser": "chrome",
+          "where": "critic-final-1 (no-facts and facts): a collapsible space of a `white-space: normal` span hangs at a line end in a pre-wrap block (engine line 12791 units); painted as its own block the line ends at the text (11318)"
         }
       ],
       "match": {
@@ -3823,13 +3828,13 @@
       "id": "lab/blink-rect-of-a-span-holding-only-a-trimmed-space",
       "engine": "blink",
       "kind": "lab",
-      "title": "A pre-line span whose only text is a trimmed trailing space reports a zero-width rect at the line end natively; the Blink observation port expects none",
+      "title": "A pre-line span whose only text is a trimmed trailing space reports a zero-width rect at the line end natively, and the prediction expected none: closed at the fresh-eyes follow-up, the Blink port creates the span's box fragment as InlineItemsBuilder::ExitInline does",
       "conditions": [],
       "cases": [
         {
           "id": "c-a37545c096e939be",
           "browser": "chrome",
-          "where": "rich-prewrap"
+          "where": "rich-prewrap: breaks `fail open`, widths `unobserved` and `not exact` until the fresh-eyes follow-up, pass and exact since, in both configurations"
         },
         {
           "id": "c-0df13485b3a02fe6",
@@ -4007,8 +4012,8 @@
           "where": "critic-r4-1: open with facts; with no facts covered by glyph-clusters by position"
         }
       ],
-      "source": "research/PREWRAP-RICH.md §3 C; specs/blink-RESULTS.md \"Round 4c\"; the rich-prewrap set's one open prediction row (breaks) in both configurations on 2026-09-18",
-      "note": "Every code point is on the right line; only Element.getClientRects() of the span differs (native lines 2, expected none). It is the observation port's rule for a span without laid-out text (lab/observe/blink.ts), not the engine. Round 4 evaluation: 26 of 11,892 fresh rich pre-wrap cases (seeds eval-r4-1 to -3) show it, every one with lineCount, widths and painter passing. With the lab's facts they are open rows (breaks: \"element 0: native lines 0; expected none\"); with no supplied facts the scorer reads 25 of them covered by glyph-clusters and 1 by glyph-clusters+unsafe-to-break, which fire on the line for other reasons: a cover by position."
+      "source": "research/PREWRAP-RICH.md §3 C; specs/blink-RESULTS.md \"Round 4c\"; the rich-prewrap set's one open prediction row (breaks) in both configurations on 2026-09-18; the Blink owner's report of the fresh-eyes follow-up (2026-09-19), section 3; `.artifacts/lab/fu-blink` (the class's 37 cases in pinned Chrome, both configurations); `.artifacts/tests/runs/fu-merge-20260919` (the recording at the merge)",
+      "note": "Closed on 2026-09-19 (the fresh-eyes follow-up, dc24b3b). It was the engine port, not the observation port. Blink gives a box fragment to an inline box that holds nothing but empty items and text items that are one collapsible space (InlineItemsBuilder::ExitInline, inline_items_builder.cc:1660-1691), so the span has a rect on its line even when the line end removes the space; the port culled such a span, and `engines/blink/content.ts` `exitInline` ports the rule now. All 36 named cases and `c-d600d9b01c0ae9d7` (fresh seed critic-final-1, open without facts because no condition fired on its line) pass lineCount, breaks and widths in pinned Chrome in both configurations. The rule adds an `inline-box` geometry item to 494 recorded Chrome cases per configuration. The recording at the merge shows 3 transitions per configuration, all on the class's one tier case `c-a37545c096e939be`: breaks `fail open` to pass, widths `unobserved` to pass, `not exact` to exact; Chrome's references are frozen at d7df936. The painter still fails 4 of the 37 in both configurations, where a collapsible space of a `white-space: normal` span hangs at a line end in the pre-wrap block and the line painted as its own block loses it: `c-d600d9b01c0ae9d7` without an explanation (named under `painter/without-explanation`), and `c-46ea681d8c17a24d`, `c-382e54c603972772` and `c-8089b1e09b0b8afd` covered by the limit `space-shaped-with-next-line` by position. What would reopen the item: a named case failing breaks again on a span's rect. What it was: Every code point is on the right line; only Element.getClientRects() of the span differs (native lines 2, expected none). It is the observation port's rule for a span without laid-out text (lab/observe/blink.ts), not the engine. Round 4 evaluation: 26 of 11,892 fresh rich pre-wrap cases (seeds eval-r4-1 to -3) show it, every one with lineCount, widths and painter passing. With the lab's facts they are open rows (breaks: \"element 0: native lines 0; expected none\"); with no supplied facts the scorer reads 25 of them covered by glyph-clusters and 1 by glyph-clusters+unsafe-to-break, which fire on the line for other reasons: a cover by position."
     },
     {
       "id": "lab/blink-element-rects-of-spans-without-a-box-fragment",
