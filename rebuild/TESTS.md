@@ -41,7 +41,7 @@ DESIGN.md §2.9; lab README "Test tiers"): `bun rebuild/tests/function-set.ts pl
 holds the library to itself over every recorded case. *Plain*: a paragraph prepared plain gives the inspected one's fill
 results and pieces and asks Canvas nothing else. *Pure*: `linePieces` and `inspectLine` give the same result twice and in
 either order. *Sweep*: one prepared paragraph filled at four widths on a stand-in Canvas equals a paragraph prepared for
-each width alone. All three pass on the six references (389,646 cases each), in about 1.5, 2 and 10 minutes.
+each width alone. All three pass on the six references (389,646 cases in all), in about 1.5, 2 and 10 minutes.
 
 Terms:
 

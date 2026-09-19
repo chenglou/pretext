@@ -578,7 +578,7 @@ such a pair).
   123 M questions), and five plants (other `align` on plain, `inspectLine` answering on plain, `linePieces` writing into a
   fragment, `inspectLine` flipping `indented`, a prepared paragraph kept from the first width) fail every case they touch.
   Since the re-architecture's S3 `rebuild/src/index.ts` exports the set, and the three checks pass on every case of the six
-  references (389,646 cases each; the sweep asks the stand-in 263 M questions in all). The plain path asks what the lab's
+  references (389,646 cases in all; the sweep asks the stand-in 263 M questions). The plain path asks what the lab's
   path asks until a port computes its gaps on request.
 - **Changed questions.** Planted in a scratch clone: the memo off gives 66,079 Chrome, 54,659 Firefox and 61,068
   webkit-host headline cases repeats only, exit 3; WebKit's history worlds without their discarded gap work give 214
