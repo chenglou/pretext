@@ -273,7 +273,7 @@ doesn't depend on the old library in `src/`.
 
 ## Landed in the re-architecture's X3 (2026-09-19)
 
-- **The ports' model clean-up moves no row** (DESIGN.md §3, "Each port's data since the re-architecture's X3"). On each
+- **The ports' model clean-up moves no row** (DESIGN.md §3, "Each port's data"). On each
   owner's branch tier 1 is the same on all six references with 0 questions changed, tier 2 in both orders and both
   configurations shows 0 transitions in the owner's browser, and the giants' predictions equal the frozen rows'
   (`.artifacts/tests/runs/ra-x3-blink`, `ra-x3-webkit`, `ra-x3-gecko`). The row's format didn't move.
@@ -295,6 +295,31 @@ doesn't depend on the old library in `src/`.
 - **The known tail**: the painter item for the two open `twins` rows is closed, and the plain predictor's five Firefox
   cases went into `gecko/process-font-fallback-state` ("The known tail").
 
+## Landed in the re-architecture's last step (2026-09-19)
+
+- **The library has no index API, memo or log left** (`src/measure/canvas.ts` is `contextFor`, `width` and `bounds`;
+  `src/measure/log.ts` is gone), and `src/model.ts` no longer holds `LineOf` and `LineResultOf`: a row's line type is the
+  lab's alone (`types.ts` `LineOf`). Nothing in the lab read any of it since S3. `measure` stays the adapter's count and
+  `memoHits` stays 0, since the row's format is frozen.
+- **`replay.ts` reads reference format 2 alone.** Format 1 held the library's memo hits per case; all six frozen
+  references are format 2, and a format 1 reference is refused by name.
+- **Nothing moved**: tier 1 the same on all 389,646 cases with 0 questions changed; it exits 3 for Chrome by the string
+  storage rule alone (files under `rebuild/src/measure` differ from the references' commit), and Chrome's tier 2 forward in
+  both configurations shows 0 transitions, exact values unchanged and the gate lost 0
+  (`.artifacts/tests/runs/ra-final-shared`); the plain and pure checks, the citation ledger and the painter differential
+  (389,646 of 389,646 against the painter of bee0202) are clean. Tier 1 exits 0 for Chrome again once its two references
+  are frozen at a commit that holds these files (`freeze --force --questions-only --reason=<why>`, the orchestrator's).
+- **Chrome's lab gate seeds hold `twins`** in both configurations ("Seeds go to a staging folder", "Adopted at the
+  correctness line").
+- **Knip** (`bunx knip --config rebuild/knip.config.ts`): `cases/font.ts` `formatFontShorthand` and `font-facts.ts`
+  `parseFamilyList`, which only their tests read, and `types.ts` `InlineElement` are gone (the tests hold the same
+  behaviour through `parseFontShorthand` and `fontFactsFor`); the entry list names `compare-sets.ts`, `coverage-map.ts`
+  with its shard, `function-set.ts` and `known-tail.ts`. What it still lists is the four test helpers its header names.
+- **`rebuild/tests/seed-facts-20260916.sh` is removed**: a one-off that seeded `rebuild/facts` from the first day's probe
+  outputs and would now write over facts files that later rounds merged into (Gecko's 83 follow-up facts). Per release
+  the facts come from `rerun-probes.sh` (rebuild/TESTS.md §7).
+- **The coverage maps are regenerated** at this tree ("Checks for the re-architecture", "Coverage map").
+
 ## Test tiers
 
 Four tiers by time, one command each. The first three give a signal in seconds to minutes; the fourth is the round's
@@ -304,8 +329,8 @@ and `facts` (the lab's font facts, the optional input; `predictor.ts`).
 
 | Tier | Command | What a change shows as | Measured |
 |---|---|---|---|
-| 0 | `bun test rebuild` | a failing unit test | 11 to 12 s (727 tests); 20 s at load average 25 |
-| 1 | `bun rebuild/tests/replay.ts check --browser=all --config=all` | every case whose full prediction changed, with the first differing field; every case whose Canvas questions changed, by kind (repeats only, dropped only, other); cases that need the browser | 42 s for the six frozen references (388,886 cases) on a quiet machine, 4 to 9 s a reference; 77 s at load average 25 |
+| 0 | `bun test rebuild` | a failing unit test | 11 to 12 s (727 tests then; 819 in 59 files on 2026-09-19); 20 to 30 s at load average 25 |
+| 1 | `bun rebuild/tests/replay.ts check --browser=all --config=all` | every case whose full prediction changed, with the first differing field; every case whose Canvas questions changed, by kind (repeats only, dropped only, other); cases that need the browser | 42 s for the six frozen references (388,886 cases then, 389,646 with `twins`) on a quiet machine with the library's memo, 4 to 9 s a reference; 77 s at load average 25; two to three minutes since the memo went, beside other owners' jobs |
 | 2 | `bun rebuild/tests/browser-sets.ts --browser=<browser> --out=<dir>` | status transitions against the reference ledger, of the four metrics and of the exact-value status, and lost pairs against the build-keyed seed | forward order, one browser at a time: Chrome 88 s, Firefox 108 s, webkit-host 128 s; the three at once against the frozen line: 92 to 195 s a browser and configuration; both orders with recording, the three browsers at once: 3 to 5.5 minutes each |
 | 3 | the round's evaluation (`fresh.ts`, sealed sets, giants, installed Safari) | new classes on cases nobody saw | see REPORT.md |
 
@@ -475,9 +500,9 @@ bun rebuild/tests/replay.ts check --browser=chrome            # or --browser=all
   every site. Since Blink's X3 its top site is `raw16Of < measure16 < pairAdjust16` still, with 29.5 M of 42.7 M
   repeats (`raw16Of` is in `engines/blink/contexts.ts` now); `inspectLine` holds 51.7% of the repeats and `fillLine`
   43.5%.
-- *The contexts are the replay's own count* of the contexts the prediction made; the library's call log isn't read. It
-  equals the library's count in every frozen case, so the references frozen in format 1 still compare; their memo hits are
-  ignored. `freeze` writes format 2, without them.
+- *The contexts are the replay's own count* of the contexts the prediction made; the library has no log to read. A
+  reference is format 2; format 1, which also held the library's memo hits per case, is refused since the
+  re-architecture's last step (no frozen reference is format 1).
 - *Nothing is written into the replay folder by `check`*: the shards' results and, by default, the report go to
   `rebuild/tests/.check/<browser>-<config>` in the working tree (untracked), so owners in several worktrees who share one
   `.artifacts` can check one reference at the same time.
@@ -674,10 +699,12 @@ is byte-equal on all 67,065 Chrome cases of both configurations.
   predictions, 69 other questions and 1,444 new questions, exit 1; the same test written another way, exit 0.
 - **Coverage map.** Per browser it replays every shard of both configurations under `bun test --coverage`
   (`coverage-map.shard.ts`) and merges the lcov records: a line ran when any shard ran it. `rebuild/tests/coverage-map/
-  <engine>.txt` holds the correctness line's maps: the port's own folder and the shared files, as ranges with the function
-  each starts in. Blink: 39 of 3,873 measured lines of the port never ran; Gecko 122 of 3,238; WebKit 148 of 3,623; of the
-  shared files 30%, 47% and 37%, most of it the painter, which needs a DOM, other engines' data, and in Firefox the font
-  checks, which learn nothing there. About a minute for the
+  <engine>.txt` holds the maps of the re-architecture's last step (a059ef2; the correctness line's are in the history):
+  the port's own folder and the shared files, as ranges with the function each starts in. Blink: 47 of 4,088 measured
+  lines of the port never ran; Gecko 123 of 3,399; WebKit 111 of 4,062 (at the line 39 of 3,873, 122 of 3,238 and 148 of
+  3,623); of the shared files 36%, 55% and 46%, most of it the painter, which needs a DOM, the algorithms another
+  engine's browser runs, and in Firefox the font checks, which learn nothing there. A tracked map goes stale with every
+  change to a port; the command makes it again. About a minute for the
   three. Lines, not branches: a line ran when any part of it did. Lines that hold no code are left out, because bun lists
   them unevenly (`coverage-map.ts` `addLcov`). A planted branch and a planted function that nothing calls are listed.
 - **Independence** is a tier 0 test. The shared layer's rule (no import of `engines/`, no `'blink'`, `'webkit'` or `'gecko'`
@@ -1632,6 +1659,16 @@ carry it:
   which the records' `against` names, and the staging folders of rounds 3 and 4 (`staged-round3`, `staged-round4-{no-facts,
   facts}`, `staged-round4-sets`, `staged-round4c-sets`). Chrome's .48 seeds and the G0 files stay: they describe other
   environments.
+- **Chrome's lab gate seeds since the re-architecture's last step (2026-09-19)** hold the `twins` set, which joined the
+  development sets after the line: `rebuild/lab/baselines/{no-facts,facts}/gate-chrome-153.0.8010.50.json`, staged by the
+  same command from the X3 merge's recording (`.artifacts/tests/runs/x3-merge-20260919/chrome-<config>`, both orders: the
+  adopted seed's ten sets and `twins`) and the line's giants. Against the seed of the line: 0 pairs lost, 0 left through
+  history dependence, protocol rows or a missing case, 0 gained, 380 cases only now; 42,160 cases, and `twins` adds 380
+  line counts, breaks and widths and 353 painter passes in each configuration. Each staged seed passed a check against
+  its own runs with the environment check on, and again from where it sits. Its record keeps the record of the seed it
+  replaced under `replaced`, so the line's attributions (79 lost pairs without facts, 0 with them) stay beside the seed.
+  The tests gate's seeds didn't change: they are per derived family, and `twins` is a development set; tier 2's seeds
+  have held it since the string storage fix.
 - With no supplied facts the lab and tests records lose pairs against seeds that were recorded with the lab's facts (Chrome
   79, 208 and 276; Firefox 100 and 167); the like-for-like facts records lose what round 3's staged seeds lost (rebuild/
   TESTS.md §9).
