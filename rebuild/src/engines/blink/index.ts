@@ -13,7 +13,7 @@ import { breaksShapingAfter, breaksShapingBefore, buildContent, lengthLU, sameFo
 import { blinkGraphemeRules } from './data.js'
 import { styleContexts } from './contexts.js'
 import { emojiPriorities, isSegmentEdge } from './emoji.js'
-import { lineGaps, preparedContent, type GapSink } from './gaps.js'
+import { canonicalGaps, lineGaps, preparedContent, type GapSink } from './gaps.js'
 import type { BlinkLineGeometry, BlinkLineStart } from './geometry.js'
 import { hanKerningCandidates, hanKerningMayApply, measureHanKerningFontData } from './hankerning.js'
 import { geometryOf } from './inspect.js'
@@ -161,7 +161,7 @@ export function prepare(paragraph: Paragraph, env: BlinkEnvironment, inspect: bo
     if (hanKerningMayApply(p.hanKerningCandidates, group.start, group.end)) measureHanKerningFontData(p, group.style)
   }
   measureGroups(sh)
-  preparedContent(gaps, p)
+  preparedContent(p)
   return p
 }
 
@@ -204,7 +204,10 @@ export function linePieces(p: BlinkPrepared, line: BlinkFilledLine): LinePieces<
 export function inspectLine(p: BlinkPrepared, line: BlinkFilledLine | BlinkRefusedSlot): LineInspectionOf<BlinkLineGeometry> {
   const gaps = lineGaps(p, line)
   switch (line.kind) {
-    case 'line': return { geometry: geometryOf({ p, gaps }, line.info, line.start), gaps }
-    case 'below-floats': return { geometry: null, gaps }
+    case 'line': {
+      const geometry = geometryOf({ p, gaps }, line.info, line.start)
+      return { geometry, gaps: canonicalGaps(gaps) }
+    }
+    case 'below-floats': return { geometry: null, gaps: canonicalGaps(gaps) }
   }
 }

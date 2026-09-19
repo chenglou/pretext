@@ -125,7 +125,8 @@ export type BlinkGroup = {
 }
 
 // What prepare keeps for inspection alone (index.ts inspectLine, paragraphGaps): the paragraph's gaps, its content's, its
-// fonts' and the environment's, with the ones preparation's measuring raised first.
+// fonts' and the environment's, with the ones preparation's measuring raised first; canonical once prepare ends (gaps.ts
+// canonicalGaps).
 export type BlinkInspect = { gaps: Gap[] }
 
 // Everything prepare computes. Filling a line only reads it, but for the two answers a style gets from Canvas when they

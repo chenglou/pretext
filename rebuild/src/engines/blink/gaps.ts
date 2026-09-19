@@ -30,12 +30,12 @@ import type { BlinkInspect, BlinkPrepared } from './types.js'
 export type GapSink = Gap[] | null
 
 // One entry per gap name, run, detail and range; ranges of one gap, run and detail that meet merge, into the first entry
-// they meet. A list's grouping therefore follows the raises, the repeated ones too: a range raised again can meet an
-// earlier entry that grew in between and widen it, where the entry holding the range stays as it is when nothing raises it
-// again. What the entries cover together doesn't depend on it. Every measurement raises its range's gaps (shape.ts
-// measure16), so on an inspected paragraph a measurement made again is part of the lists the rows hold: a value handed on
-// in its place can regroup ranges (clusters' prefixes carried through inspect.ts shapeOf did in 3 of 67,065 recorded
-// cases, positions kept through one binary search in 1; research/ARCHITECTURE-PLAN-2.md X2).
+// they meet. While a list is built its grouping therefore follows the raises, the repeated ones too: a range raised again
+// can meet an earlier entry that grew in between and widen it, where the entry holding the range stays as it is when
+// nothing raises it again. What the entries cover together doesn't depend on it. Every measurement raises its range's gaps
+// (shape.ts measure16), so a measurement made again regroups a list being built (clusters' prefixes carried through
+// inspect.ts shapeOf did in 3 of 67,065 recorded cases, positions kept through one binary search in 1;
+// research/ARCHITECTURE-PLAN-2.md X2). A list is handed out canonical (canonicalGaps), where grouping follows nothing.
 function addGap(gaps: Gap[], gap: GapName, run: number | null, detail: string, at?: { start: number; end: number }): void {
   for (let i = 0; i < gaps.length; i++) {
     const g = gaps[i]!
@@ -460,9 +460,11 @@ function contentGaps(gaps: Gap[], p: BlinkPrepared): void {
 }
 
 // The gaps of the prepared content, its fonts' facts and the environment (DESIGN.md §2.8), after the ones preparation's
-// measuring raised.
-export function preparedContent(sink: GapSink, p: BlinkPrepared): void {
-  if (sink === null) return
+// measuring raised. They end the paragraph's list, which the prepared paragraph keeps canonical from here on: a line's
+// gaps take in the ones whose ranges meet what its decision measured (lineEdgeGaps).
+export function preparedContent(p: BlinkPrepared): void {
+  if (p.inspect === null) return
+  const sink = p.inspect.gaps
   contentGaps(sink, p)
   for (let s = 0; s < p.styles.length; s++) {
     const style = p.styles[s]!
@@ -489,6 +491,7 @@ export function preparedContent(sink: GapSink, p: BlinkPrepared): void {
       addGap(sink, 'font-fallback', p.styles[group.style]!.run, 'a shaping-group edge inside a grapheme cluster', graphemeSourceRange(p, group.start))
     }
   }
+  p.inspect.gaps = canonicalGaps(sink)
 }
 
 // What inspectLine and paragraphGaps read of a prepared paragraph; they throw on one prepared plain.
@@ -497,8 +500,40 @@ function inspected(p: BlinkPrepared, what: string): BlinkInspect {
   return p.inspect
 }
 
-// The gaps of the paragraph's content, fonts and environment, whatever the slot (DESIGN.md §5): copies, so nothing handed
-// out is the prepared paragraph's own.
+// A list as it is handed out: for every gap, run and detail, the ranges its entries cover together as ranges that don't
+// meet, each at the place of the first entry it took in, which is where that range was first raised. So a list says what
+// was raised and in what order it first was, and not how often or in what order ranges were raised again. The entries are
+// copies: nothing handed out is the prepared paragraph's own, or a list still being built.
+export function canonicalGaps(gaps: readonly Gap[]): Gap[] {
+  const out: Gap[] = []
+  for (let i = 0; i < gaps.length; i++) {
+    const gap = copyOf(gaps[i]!)
+    if (gap.at === undefined) {
+      out.push(gap)
+      continue
+    }
+    // The entries of `out` for one gap, run and detail never meet each other, so the ones this range meets are the ones
+    // its union with the first of them meets, and all go into that first one.
+    const at = gap.at
+    let range: { start: number; end: number } | null = null
+    for (let o = 0; o < out.length; o++) {
+      const entry = out[o]!
+      if (entry.at === undefined || entry.gap !== gap.gap || entry.run !== gap.run || entry.detail !== gap.detail || at.start > entry.at.end || at.end < entry.at.start) continue
+      if (range === null) {
+        range = { start: Math.min(entry.at.start, at.start), end: Math.max(entry.at.end, at.end) }
+        entry.at = range
+      } else {
+        range.start = Math.min(range.start, entry.at.start)
+        range.end = Math.max(range.end, entry.at.end)
+        out.splice(o--, 1)
+      }
+    }
+    if (range === null) out.push(gap)
+  }
+  return out
+}
+
+// The gaps of the paragraph's content, fonts and environment, whatever the slot (DESIGN.md §5).
 export function paragraphGaps(p: BlinkPrepared): Gap[] {
   return inspected(p, 'paragraphGaps').gaps.map(copyOf)
 }
