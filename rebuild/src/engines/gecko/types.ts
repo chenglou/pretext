@@ -1,7 +1,8 @@
 // Gecko's prepared paragraph (Firefox 156.0). The Gecko port owns this file. What a fill leaves of a line is in lines.ts.
 import type { GeckoEnvironment } from '../../env.js'
-import type { Measurer } from '../../measure/canvas.js'
+import type { Context } from '../../measure/canvas.js'
 import type { FontDecl, Gap, Paragraph, TextStyle } from '../../model.js'
+import type { InWordEntry } from './advance.js'
 
 // white-space as its two longhands and the predicates Gecko derives from them (nsStyleStruct.h:1303-1367,
 // specs/gecko-text.md §2.1), plus the other inherited text properties a frame reads from its own style.
@@ -99,8 +100,9 @@ export type GeckoTextRun = {
   tEnd: number
   is8bit: boolean
   level: number
-  // Measure context: the first flow's font and language, ligatures off when its letter spacing isn't 0 au.
-  context: number
+  // Measure context: the first flow's font and language, ligatures off when its letter spacing isn't 0 au. The contexts a
+  // recipe needs beside it are made from its settings (advance.ts, gaps.ts).
+  context: Context
   // The first flow's font declaration, for its facts about the listed families (advance.ts, ligature rows).
   font: FontDecl
   // The run's script runs, which decide the script context a measured piece of a unit needs (measure.ts rangeAu).
@@ -142,6 +144,9 @@ export type GeckoUnit = {
   au: number
   // Glyph advance of the text run before this unit.
   startAdvance: number
+  // The ligature groups Canvas counts in the unit, beside its clusters (advance.ts groupAcross); null until an offset inside
+  // the unit asks.
+  groups: { counted: number; clusters: number } | null
 }
 
 // gfxBreakPriority (gfxTypes.h:48).
@@ -208,9 +213,13 @@ export type GeckoPrepared = {
   // The paragraph resolved bidi, so lines are reordered by frame levels (nsLineLayout.cpp:3646-3652): the port's stand-in
   // for the document's BidiEnabled flag (gecko audit F3).
   bidi: boolean
-  // The paragraph's Canvas contexts, with the memo and the call log of preparation and of every line filled from it
-  // (measure/canvas.ts).
-  measurer: Measurer
+  // The paragraph's Canvas contexts, one per distinct settings (measure/canvas.ts contextFor): the text runs' own, and
+  // those the recipes make from them.
+  contexts: Context[]
+  // Per transformed offset (length + 1): what measuring found about an offset inside a shaping unit (advance.ts), null until
+  // something asks. Beside GeckoUnit.groups the one part of a prepared paragraph that is written after preparation: a fill,
+  // a line's placement or its inspection fills it where it reads, at whatever width, so an offset is measured once.
+  inWord: (InWordEntry | null)[]
   // What an inspected paragraph keeps for inspectLine and paragraphGaps; null on a plain one, which computes no gap and asks
   // Canvas nothing that only a gap or an inspected value needs (gaps.ts). Nothing else says which of the two a paragraph is.
   inspect: GeckoInspect | null
