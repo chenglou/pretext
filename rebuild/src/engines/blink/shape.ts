@@ -419,24 +419,27 @@ export function canvasScriptsPerUnit(sh: Shaper, style: number, s: string): Uint
 }
 
 // Whether a range is measured with its spaces as U+0020 in an 8-bit string instead of U+2028 in a 16-bit one: a range the
-// paragraph shapes as Latin that holds a space and no character with a script of its own, in a font Canvas shapes whole.
-// U+2028 makes the string 16-bit, RunSegmenter then resolves every character of such a range as Common over the string
-// alone (script_run_iterator.cc), and a font with other lookups for Common and Latin shapes it otherwise than the
-// paragraph's Latin segment does (script-context). Where Canvas doesn't cut the font's text into words, the 8-bit string
-// with its spaces is one item shaped as one Latin segment (plain_text_node.cc:381-385, harfbuzz_shaper.cc:1072-1077): the
-// paragraph's own characters, script, font and direction. A font shaped word by word keeps U+2028, since U+0020 would
-// cut the string there (plain_text_node.cc:387-399). With a letter in the range RunSegmenter gives Latin either way.
+// paragraph shapes as Latin that holds a space, a character beside white space, and no character with a script of its
+// own, in a font Canvas shapes whole. U+2028 makes the string 16-bit, RunSegmenter then resolves every character of such
+// a range as Common over the string alone (script_run_iterator.cc), and a font with other lookups for Common and Latin
+// shapes it otherwise than the paragraph's Latin segment does (script-context). Where Canvas doesn't cut the font's text
+// into words, the 8-bit string with its spaces is one item shaped as one Latin segment (plain_text_node.cc:381-385,
+// harfbuzz_shaper.cc:1072-1077): the paragraph's own characters, script, font and direction. A font shaped word by word
+// keeps U+2028, since U+0020 would cut the string there (plain_text_node.cc:387-399), and script-context with it. With a
+// letter in the range RunSegmenter gives Latin either way, and white space alone is no script's (hasScriptNeutral).
 function spacesStay(sh: Shaper, style: number, from: number, to: number): boolean {
   const p = sh.p
   if (p.scripts[from] !== USCRIPT_LATIN) return false
   let space = false
+  let other = false
   for (let i = from; i < to; i++) {
     const c = p.text.charCodeAt(i)
     if (c > 0xff || c === 0xad) return false
     if (c === 0x20) space = true
     else if (!isCommonOrInheritedScript(c)) return false
+    else if (!isWhiteSpace(c)) other = true
   }
-  return space && !canvasSplitsWords(sh, style)
+  return space && other && !canvasSplitsWords(sh, style)
 }
 
 // Math.round(W × 65536) of text_content[from, to) of group g, measured as part of a shaping call over [callStart,

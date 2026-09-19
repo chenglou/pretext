@@ -14,6 +14,8 @@
 // - S5: the library's own bundled module on a paragraph that holds 13 brackets under Arabic and under Latin: the memo is
 //   looked up under a key of its own (src/measure/canvas.ts), so Canvas gets the two-byte slice the port built, and each
 //   storage has its contexts (engines/blink/shape.ts contextsOf), so neither order of the two changes an answer.
+// - S6: a Latin range of script-neutral characters with a space, in a font Canvas shapes whole: the 8-bit string with
+//   U+0020 is the DOM's width, the 16-bit one with U+2028 isn't (engines/blink/shape.ts spacesStay).
 // Every probe returns raw values and `checks`.
 //
 // Run under the browser lock (from the worktree):
@@ -280,6 +282,30 @@ const S5 = `
   return { ...out, checks }
 `
 
+// A Latin range of script-neutral characters with a space, as engines/blink/shape.ts spacesStay measures it: brackets,
+// a space and brackets in Amiri, which Canvas shapes whole. The DOM shapes the text node's 8-bit text as one Latin
+// segment; the 8-bit Canvas string with U+0020 gives that width at the zoomed size, the 16-bit one with U+2028 for the
+// space is shaped as Common.
+const S6 = `
+  ${PRELUDE}
+  host.innerHTML = ''
+  const block = document.createElement('div')
+  block.style.cssText = 'font: normal 400 48px Amiri; white-space: nowrap; width: max-content; text-rendering: optimizeLegibility'
+  block.lang = 'en'
+  const span = document.createElement('span')
+  span.append(document.createTextNode('((((( ((((('))
+  block.append(span)
+  host.append(block)
+  const dom = span.getBoundingClientRect().width
+  block.remove()
+  const zoom = devicePixelRatio
+  const at = text => { const c = fresh(); c.font = 'normal 400 ' + 48 * zoom + 'px Amiri'; return c.measureText(text).width / zoom }
+  const out = { dom, zoom, oneByteWithSpace: at('((((( ((((('), twoByteWithLineSeparator: at('(((((\\u2028((((('), oneByteNoSpace: at('((((((((((') }
+  expect('the 8-bit string with U+0020 is the DOM width to a LayoutUnit', Math.abs(out.oneByteWithSpace - dom) <= 1 / 64, true)
+  expect('the 16-bit string with U+2028 is shaped as Common, another width', Math.abs(out.twoByteWithLineSeparator - dom) > 10, true)
+  return { ...out, checks }
+`
+
 function probe(id: string, source: string, note: string): Probe {
   return { id: `blink-storage ${id}`, spec: `blink-storage ${id.slice(0, 2)}`, pageLang: 'en', browsers: ['chrome'], fontFixtures: ['Amiri', 'Noto Naskh Arabic'], html: '<div id="t"></div>', observe: [{ kind: 'script', source }], note }
 }
@@ -293,6 +319,7 @@ export default async function storageProbes(): Promise<Probe[]> {
     probe('S2 which ways of building give two bytes', S2, 'The storage Blink sees for 13 brackets built in each way.'),
     probe('S3 one canvas keeps the first shaping', S3, 'A string answers by the storage shaped first on a canvas; canvases share nothing.'),
     probe('S4 text node storage', S4, 'The script the DOM shapes 13 brackets under, by how their text node and its siblings were made.'),
+    probe('S6 spaces stay in a Latin range of script-neutral characters', S6, 'The DOM width of brackets, a space and brackets in Amiri beside the 8-bit Canvas string with U+0020 and the 16-bit one with U+2028.'),
     probe('S5 the library asks the storage it built', `const LIBRARY = ${JSON.stringify(library)};\n${S5}`, 'layoutParagraph over a paragraph that holds 13 brackets under Arabic and under Latin, in both orders: the call log\'s widths.'),
   ]
 }

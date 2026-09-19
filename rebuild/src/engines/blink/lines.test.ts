@@ -583,6 +583,18 @@ describe('blink string storage', () => {
     expect(new Set(all.map(a => a.partition))).toEqual(new Set(['8bit']))
   })
 
+  test('a Latin range of script-neutral characters keeps its spaces as U+0020 in a font shaped whole', () => {
+    // The stand-in gives the word split probe one width on both contexts, which reads as a font Canvas shapes whole.
+    const all = asks(paragraph([['abc ((( def', 'text']], 50))
+    const neutral = all.filter(a => a.text.includes('(') && !/[a-z]/.test(a.text))
+    expect(neutral.some(a => a.text.includes(' '))).toBe(true)
+    expect(neutral.some(a => a.text.includes('\u2028'))).toBe(false)
+    // A range with a letter keeps U+2028: RunSegmenter gives its characters Latin either way.
+    const lettered = all.filter(a => /[a-z]/.test(a.text))
+    expect(lettered.some(a => a.text.includes('\u2028'))).toBe(true)
+    expect(lettered.some(a => a.text.includes(' '))).toBe(false)
+  })
+
   test('a text node that holds U+FFFC is 16-bit content and an atomic inline is not (inline_items_builder.cc:725, 1258)', () => {
     const measurer = createMeasurer()
     const atomic: InlineNode = { kind: 'atomic', width: 10, height: 10, marginInlineStart: 0, marginInlineEnd: 0 }
