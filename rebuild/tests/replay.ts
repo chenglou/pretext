@@ -63,9 +63,10 @@
 // question, so predictions are never frozen again and the latest reference still holds the first one's predictions
 // (the manifest's `predictionsFrom`).
 //
-// Deterministic by construction: every shard runs in a process of its own, cases in recorded order, so no result depends
-// on the number of cores or on what ran before; the report lists cases in the sets' order and holds no time. What a
-// replay can't cover, and where it goes instead:
+// Deterministic by construction: a process replays one group of shards of one set (shardGroups), cases in recorded order.
+// The groups are cut from the manifest alone, so no result depends on the number of cores, on which sets were chosen or on
+// what ran before; the report lists cases in the sets' order and holds no time. What a replay can't cover, and where it
+// goes instead:
 // - the painter (the DOM paints and measures it) and everything native: tier 2;
 // - questions the record doesn't hold, and answers that depend on the order of questions: by the rule above, tier 2;
 // - what the library reads from its host outside Canvas and the segmenters: regular expressions with Unicode properties
@@ -395,9 +396,9 @@ async function bun(args: readonly string[], env: Record<string, string> = {}): P
 // Runs this file as a child with a hidden command; resolves with its exit code.
 const child = (args: string[]): Promise<number> => bun([import.meta.path, ...args])
 
-// One shard of a replay folder as a child process's job: its inputs, the reference's shard of the same cases when the
-// command compares with one, and the file the child writes its result to. The other checks that run over the recorded
-// cases (function-set.ts, coverage-map.ts) cut their work the same way.
+// One shard of a replay folder as a job: its inputs, the reference's shard of the same cases when the command compares
+// with one, and the file the child process writes its result to. The other checks that run over the recorded cases
+// (function-set.ts, coverage-map.ts, tools/painter-diff.ts) cut their work the same way.
 export type ShardJob = { set: string; index: number; shard: Shard; inputs: string; reference: string | null; result: string }
 
 // The chosen sets' shards in the sets' order, every file checked against the hash its manifest names.
@@ -425,7 +426,7 @@ export function shardJobs(dir: string, inputs: InputsManifest, against: 'referen
 }
 
 // One bun child per job, `width` at a time, the largest shard first so the last to finish are small. `command` gives a
-// job's arguments to bun and the environment it adds.
+// job's arguments to bun and the environment it adds. coverage-map.ts runs its shards this way; the checks run groups.
 export async function runShardJobs(jobs: readonly ShardJob[], width: number, command: (job: ShardJob) => { args: string[]; env?: Record<string, string> }): Promise<void> {
   const order = jobs.map((_, i) => i).sort((a, b) => jobs[b]!.shard.calls - jobs[a]!.shard.calls)
   const failures: string[] = []
@@ -436,6 +437,53 @@ export async function runShardJobs(jobs: readonly ShardJob[], width: number, com
   })
   if (failures.length > 0) fail(`the replay failed on ${failures.sort().join(', ')}`)
 }
+
+// A child process replays a group of shards. A process starts cold, and bun compiles the library's hot functions as they
+// run: a shard of a few hundred short cases takes 0.1 to 0.4 s of CPU time in a warm process and 0.5 to 0.9 s more in a
+// cold one, so a process a shard spent most of a check's CPU time warming up (2026-09-19: Chrome's 482 no-facts shards
+// take 122 s in one warm process and about 450 s in 482). So the shards of a set go `size` to a process, in order; tier 1
+// takes GROUP_SHARDS. A shard of fewer than LONG_CASES cases holds long paragraphs (the packer cuts shards by recorded
+// calls), takes up to 9 s and gains little from a warm process, so it keeps a process of its own, and the longest shard
+// bounds a check's wall time as before. The groups follow from the manifest alone: the same whatever the number of
+// cores, and a set's groups are the same whichever sets a command chose.
+export const GROUP_SHARDS = 8
+const LONG_CASES = 50
+export function shardGroups<T extends { set: string; shard: { cases: number } }>(jobs: readonly T[], size: number): T[][] {
+  const groups: T[][] = []
+  let open: T[] | null = null
+  for (let i = 0; i < jobs.length; i++) {
+    const job = jobs[i]!
+    if (job.shard.cases < LONG_CASES) {
+      groups.push([job])
+      continue
+    }
+    if (open === null || open.length === size || open[0]!.set !== job.set) {
+      open = []
+      groups.push(open)
+    }
+    open.push(job)
+  }
+  return groups
+}
+
+// One bun child per group, `width` at a time. The groups with the most recorded calls a case go first: the long
+// paragraphs, so the last groups to finish are small. `command` gives bun's arguments for a group, which the child reads
+// from the file it is given (readShardGroup).
+export const callsPerCase = (group: ReadonlyArray<{ shard: { cases: number; calls: number } }>): number => group.reduce((sum, job) => sum + job.shard.calls, 0) / group.reduce((sum, job) => sum + job.shard.cases, 0)
+export async function runShardGroups(jobs: readonly ShardJob[], size: number, width: number, command: (groupFile: string) => string[]): Promise<void> {
+  const groups = shardGroups(jobs, size)
+  const order = groups.map((_, i) => i).sort((a, b) => callsPerCase(groups[b]!) - callsPerCase(groups[a]!))
+  const failures: string[] = []
+  await pool(order, width, async i => {
+    const group = groups[i]!
+    const file = join(dirname(group[0]!.result), `group-${i}.json`)
+    writeFileSync(file, JSON.stringify(group))
+    if (await bun(command(file)) !== 0) failures.push(`${group[0]!.set} shards ${group.map(job => job.index).join(', ')}`)
+  })
+  if (failures.length > 0) fail(`the replay failed on ${failures.sort().join(', ')}`)
+}
+
+export const readShardGroup = (path: string): ShardJob[] => JSON.parse(readFileSync(path, 'utf8')) as ShardJob[]
 
 // ---- pack ----
 
@@ -661,17 +709,22 @@ export function classifyQuestions(record: CaseMeasurements, before: Questions, a
 
 const rowsOf = (counts: Map<string, SiteCount>): SiteRow[] => [...counts].map(([site, value]) => ({ site, ...value }))
 
-// Hidden command `work`: replays one shard, and either writes its reference shard or compares with one.
+// Hidden command `work`: replays a group of shards, one after another.
 async function work(): Promise<void> {
-  const inputs = readShard<InputCase>(options.get('inputs')!)
   const predictor = await import(resolve(REPO, options.get('predictor')!)) as Predictor
-  const reference = options.get('reference') === undefined ? null : readShard<ReferenceCase>(options.get('reference')!)
-  if (reference !== null && reference.length !== inputs.length) throw new Error(`${options.get('reference')} holds ${reference.length} cases for ${inputs.length} inputs`)
-  const tally = flags.has('sites') ? newSiteTally() : null
   // The stack of a question under the line breaker is deeper than the default ten frames.
-  if (tally !== null) Error.stackTraceLimit = 200
+  if (flags.has('sites')) Error.stackTraceLimit = 200
+  const group = readShardGroup(options.get('group')!)
+  for (let i = 0; i < group.length; i++) workShard(group[i]!, predictor, options.get('emit-to') === undefined ? undefined : join(options.get('emit-to')!, group[i]!.shard.file))
+}
+
+// Replays one shard, and either writes its reference shard or compares with one.
+function workShard(job: ShardJob, predictor: Predictor, emit: string | undefined): void {
+  const inputs = readShard<InputCase>(job.inputs)
+  const reference = job.reference === null ? null : readShard<ReferenceCase>(job.reference)
+  if (reference !== null && reference.length !== inputs.length) throw new Error(`${job.reference} holds ${reference.length} cases for ${inputs.length} inputs`)
+  const tally = flags.has('sites') ? newSiteTally() : null
   const result: ShardResult = { cases: inputs.length, same: 0, counts: { predict: { asked: 0, distinct: 0 }, observe: { asked: 0, distinct: 0 } }, sites: null, outcomes: [], emitted: null }
-  const emit = options.get('emit')
   const lines: string[] = []
   for (let i = 0; i < inputs.length; i++) {
     const input = inputs[i]!
@@ -689,7 +742,7 @@ async function work(): Promise<void> {
     if (emit !== undefined) lines.push(JSON.stringify(replayed.value))
     if (reference === null) continue
     const expected = reference[i]!
-    if (expected.id !== input.id) throw new Error(`${options.get('reference')}: case ${i} is ${expected.id}, the inputs hold ${input.id}`)
+    if (expected.id !== input.id) throw new Error(`${job.reference}: case ${i} is ${expected.id}, the inputs hold ${input.id}`)
     const first = JSON.stringify(expected.prediction) === JSON.stringify(replayed.value.prediction) ? null : firstDifference(expected.prediction, replayed.value.prediction, '')
     if (first !== null) {
       result.outcomes.push({ id: input.id, family: input.family, kind: 'prediction', first })
@@ -711,7 +764,7 @@ async function work(): Promise<void> {
   }
   if (tally !== null) result.sites = { sites: rowsOf(tally.sites), under: rowsOf(tally.under) }
   if (emit !== undefined) result.emitted = { cases: lines.length, ...writeShard(emit, lines) }
-  writeFileSync(options.get('result')!, JSON.stringify(result))
+  writeFileSync(job.result, JSON.stringify(result))
 }
 
 type ChangedCase = { set: string; id: string; family: string }
@@ -754,12 +807,7 @@ async function compare(dir: string, inputs: InputsManifest, against: 'reference'
   const reference = against === null ? null : readReference(dir, against, sha256(readFileSync(join(dir, 'inputs/manifest.json'))))
   const scratch = join(checkDir(inputs.browser, inputs.config), `work-${process.pid}`)
   const jobs = shardJobs(dir, inputs, against, sets, scratch)
-  await runShardJobs(jobs, jobsWidth(), job => ({
-    args: [
-      import.meta.path, 'work', `--inputs=${job.inputs}`, `--predictor=${inputs.predictor}`, `--result=${job.result}`, ...(job.reference === null ? [] : [`--reference=${job.reference}`]),
-      ...(emitTo === null ? [] : [`--emit=${join(emitTo, job.shard.file)}`]), ...(flags.has('sites') ? ['--sites'] : []),
-    ],
-  }))
+  await runShardGroups(jobs, GROUP_SHARDS, jobsWidth(), groupFile => [import.meta.path, 'work', `--group=${groupFile}`, `--predictor=${inputs.predictor}`, ...(emitTo === null ? [] : [`--emit-to=${emitTo}`]), ...(flags.has('sites') ? ['--sites'] : [])])
   // The ledger beside the reference says what each changed case's statuses were. Against a frozen reference it must be
   // the ledger the reference pinned: another one describes another recording.
   let ledger: Map<string, LedgerEntry> | null = null

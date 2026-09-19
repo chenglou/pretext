@@ -39,7 +39,7 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join, relative, resolve } from 'node:path'
 import { installReplay, NewQuestion, type PageFacts } from '../lab/measurements.ts'
 import type { LayoutPrediction } from '../lab/types.ts'
-import { askedOf, checkDir, classifyAsked, defaultJobs, firstDifference, readInputs, readShard, referenceDir, runShardJobs, shardJobs, type InputCase, type Predictor } from './replay.ts'
+import { GROUP_SHARDS, askedOf, checkDir, classifyAsked, defaultJobs, firstDifference, readInputs, readShard, readShardGroup, referenceDir, runShardGroups, shardJobs, type InputCase, type Predictor } from './replay.ts'
 import { CONFIGS, REPO, TIER_BROWSERS, selectSets, type Config, type TierBrowser } from './sets.ts'
 import { installStandIn } from './stand-in-canvas.ts'
 
@@ -283,18 +283,22 @@ async function work(options: Map<string, string>): Promise<void> {
   const lib = functionSetOf(await import(resolve(REPO, options.get('library')!)) as Record<string, unknown>)
   if ('missing' in lib) throw new Error(`${options.get('library')} lacks ${lib.missing.join(', ')}`)
   const predictor = await import(resolve(REPO, options.get('predictor')!)) as Predictor
-  const inputs = readShard<InputCase>(options.get('inputs')!)
-  const result: ShardResult = { cases: inputs.length, passed: 0, asked: 0, distinct: 0, otherOrder: 0, failures: [] }
-  for (let i = 0; i < inputs.length; i++) {
-    const input = inputs[i]!
-    const outcome = runCheck(check, lib, input, predictor)
-    result.asked += outcome.asked
-    result.distinct += outcome.distinct
-    if (outcome.otherOrder === true) result.otherOrder++
-    if (outcome.problem === null) result.passed++
-    else result.failures.push({ id: input.id, family: input.family, kind: outcome.problem.kind, detail: outcome.problem.detail })
+  // A group of shards a process, as replay.ts runs them (shardGroups).
+  const group = readShardGroup(options.get('group')!)
+  for (let k = 0; k < group.length; k++) {
+    const inputs = readShard<InputCase>(group[k]!.inputs)
+    const result: ShardResult = { cases: inputs.length, passed: 0, asked: 0, distinct: 0, otherOrder: 0, failures: [] }
+    for (let i = 0; i < inputs.length; i++) {
+      const input = inputs[i]!
+      const outcome = runCheck(check, lib, input, predictor)
+      result.asked += outcome.asked
+      result.distinct += outcome.distinct
+      if (outcome.otherOrder === true) result.otherOrder++
+      if (outcome.problem === null) result.passed++
+      else result.failures.push({ id: input.id, family: input.family, kind: outcome.problem.kind, detail: outcome.problem.detail })
+    }
+    writeFileSync(group[k]!.result, JSON.stringify(result))
   }
-  writeFileSync(options.get('result')!, JSON.stringify(result))
 }
 
 async function run(check: Check, browser: TierBrowser, config: Config, options: Map<string, string>): Promise<number> {
@@ -305,9 +309,8 @@ async function run(check: Check, browser: TierBrowser, config: Config, options: 
   const started = Date.now()
   const scratch = join(checkDir(browser, config), `${check}-work-${process.pid}`)
   const jobs = shardJobs(dir, inputs, null, sets, scratch)
-  await runShardJobs(jobs, Math.max(1, Number(options.get('jobs') ?? defaultJobs())), job => ({
-    args: [import.meta.path, 'work', `--check=${check}`, `--library=${library}`, `--predictor=${inputs.predictor}`, `--inputs=${job.inputs}`, `--result=${job.result}`],
-  }))
+  // The sweep lays a case out eighteen times, so a shard takes 4 to 20 s and a process a shard loses little.
+  await runShardGroups(jobs, check === 'sweep' ? 1 : GROUP_SHARDS, Math.max(1, Number(options.get('jobs') ?? defaultJobs())), groupFile => [import.meta.path, 'work', `--check=${check}`, `--library=${library}`, `--predictor=${inputs.predictor}`, `--group=${groupFile}`])
   const report: Report = {
     format: 'pretext-function-set-check/1', check, browser, config, library, sets: sets.filter(name => inputs.sets[name] !== undefined),
     counts: { cases: 0, passed: 0, problems: 0, skipped: 0 }, asked: { asked: 0, distinct: 0 }, otherOrder: 0, problems: [], skipped: [],
