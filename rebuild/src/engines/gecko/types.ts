@@ -216,9 +216,9 @@ export type GeckoPrepared = {
   // The paragraph's Canvas contexts, one per distinct settings (measure/canvas.ts contextFor): the text runs' own, and
   // those the recipes make from them.
   contexts: Context[]
-  // Per transformed offset (length + 1): what measuring found about an offset inside a shaping unit (advance.ts), null until
-  // something asks. Beside GeckoUnit.groups the one part of a prepared paragraph that is written after preparation: a fill,
-  // a line's placement or its inspection fills it where it reads, at whatever width, so an offset is measured once.
+  // Per transformed code unit: what measuring found about the offset before it, inside a shaping unit (advance.ts), null
+  // until something asks. Beside GeckoUnit.groups the one part of a prepared paragraph that is written after preparation: a
+  // fill, a line's placement or its inspection fills it where it reads, at whatever width, so an offset is measured once.
   inWord: (InWordEntry | null)[]
   // What an inspected paragraph keeps for inspectLine and paragraphGaps; null on a plain one, which computes no gap and asks
   // Canvas nothing that only a gap or an inspected value needs (gaps.ts). Nothing else says which of the two a paragraph is.

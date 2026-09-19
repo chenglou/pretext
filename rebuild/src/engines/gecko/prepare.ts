@@ -1193,7 +1193,7 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, inspec
   return {
     paragraph, env, appUnitsPerDevPixel: apd, blockStyle, text, runStarts, runStyles, runParents, runLangs: langs, letterSpacingAu, frames, items,
     elements, textRuns, tUnits, tSource, breakFlags: g.breakFlags, clusterStart: g.clusterStart, isSpace: g.isSpace, kind: g.kind,
-    spacingPrefix, scanSpacingPrefix, tabSpacingPrefix, correctionPrefix, unitOf, units, sourceT, nextT, tabUnit, textIndentAu: pxToAu(paragraph.textIndent), bidi: resolveBidi, contexts, inWord: new Array<null>(T + 1).fill(null), inspect: inspected,
+    spacingPrefix, scanSpacingPrefix, tabSpacingPrefix, correctionPrefix, unitOf, units, sourceT, nextT, tabUnit, textIndentAu: pxToAu(paragraph.textIndent), bidi: resolveBidi, contexts, inWord: new Array<null>(T).fill(null), inspect: inspected,
   }
 }
 
