@@ -96,13 +96,10 @@ export type WebKitBox = {
   // The run's font with 64px of letter spacing and no word spacing, which counts a string's spacing-bearing glyphs against
   // `plainContext` (measure.ts mergedGlyphs). `plainContext` when the box has no letter spacing.
   countContext: Context
-  // float32 px after page zoom.
+  // float32 px after page zoom. The box's word spacing is its style's.
   letterSpacing: number
-  wordSpacing: number
   // The CSS letter spacing as declared, which the hyphen fragment carries.
   cssLetterSpacing: number
-  // InlineTextBox::hasStrongDirectionalityContent (TextUtil.cpp:486-576).
-  hasStrongDirectionality: boolean
   // The listed families that realize, in list order, each with the code points it draws and the ones its liga, clig, dlig
   // and hlig lookups can act on (ListedFontFacts.coverage and spacingInputs); null where the declaration's facts don't give
   // both for every family that may realize (measure.ts mergedGlyphs).

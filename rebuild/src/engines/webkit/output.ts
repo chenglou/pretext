@@ -4,7 +4,7 @@
 // asks Canvas. Cited as in lines.ts.
 import type { Fragment, LinePieces, TextAlign } from '../../model.js'
 import type { WebKitDisplayBox, WebKitLineGeometry, WebKitTextBox } from './geometry.js'
-import { lastRunLogicalRight, lineHasVisuallyNonEmptyContent, spanEdges, textIndent } from './lines.js'
+import { atomicElement, lastRunLogicalRight, lineHasVisuallyNonEmptyContent, spanEdges, textIndent } from './lines.js'
 import { collapsesWhiteSpace, layoutUnit } from './style.js'
 import { DEFAULT_BIDI_LEVEL, OPAQUE_BIDI_LEVEL, type Line, type LineRun, type WebKitBox, type WebKitFilledLine, type WebKitPrepared, type WebKitStyle } from './types.js'
 
@@ -41,16 +41,16 @@ export function lineGeometry(p: WebKitPrepared, filled: WebKitFilledLine): WebKi
   const alignmentOffset = line.runs.length > 0 ? horizontalAlignmentOffset(p.style, contentLogicalRight, rect.width, hangingWidth, filled.isLastLineOrLineEndsWithForcedLineBreak) : 0
   // The display line's left edge (IDLB:124-129): the line rect's left, mirrored across the container in an RTL block.
   const containerWidth = f32(layoutUnit(f32(f32(filled.slot.width) * f32(p.zoom))))
-  const lineLeft = p.style.rtl ? f32(containerWidth - f32(rect.left + rect.width)) : rect.left
+  const displayLineLeft = p.style.rtl ? f32(containerWidth - f32(rect.left + rect.width)) : rect.left
   return {
-    lineLeft: p.style.rtl ? f32(containerWidth - f32(rect.left + rect.width)) : f32(rect.left - textIndent(p, filled.from)),
+    lineLeft: p.style.rtl ? displayLineLeft : f32(rect.left - textIndent(p, filled.from)),
     contentEdgeOffset: rect.contentEdgeOffset,
     lineBoxWidth: rect.width,
     contentWidth: line.contentLogicalWidth,
     hangingWidth,
     contentLogicalRight,
     alignmentOffset,
-    boxes: displayBoxes(p, filled, lineLeft, alignmentOffset, lineHasVisuallyNonEmptyContent(p, line)),
+    boxes: displayBoxes(p, filled, displayLineLeft, alignmentOffset, lineHasVisuallyNonEmptyContent(p, line)),
   }
 }
 
@@ -210,8 +210,7 @@ function nonBidiDisplayBoxes(p: WebKitPrepared, filled: WebKitFilledLine, lineLe
         out.push({ kind: 'line-break', element: run.element, x: f32(lineLeft + f32(alignmentOffset + run.left)), width: 0 })
         break
       case 'atomic': {
-        const e = p.elements[run.element]!
-        if (e.kind !== 'atomic') throw new Error(`element ${run.element} isn't atomic`)
+        const e = atomicElement(p, run.element)
         const left = f32(f32(alignmentOffset + run.left) + Math.max(0, e.marginStart))
         out.push({ kind: 'atomic', element: run.element, level: run.level === DEFAULT_BIDI_LEVEL || run.level === OPAQUE_BIDI_LEVEL ? (p.style.rtl ? 1 : 0) : run.level, x: f32(lineLeft + left), width: e.borderBoxWidth })
         break
@@ -320,7 +319,7 @@ function bidiDisplayBoxes(p: WebKitPrepared, filled: WebKitFilledLine, lineLeft:
     hasInlineBox ||= parent !== rootChildren || run.kind === 'inline-box-start' || run.kind === 'spanning-inline-box-start'
     switch (run.kind) {
       case 'text': {
-        const margin = run.isWordSeparator ? p.boxes[run.box]!.wordSpacing : 0
+        const margin = run.isWordSeparator ? p.boxes[run.box]!.style.wordSpacing : 0
         addLeaf(parent, textDisplayBox(p, run, f32(lineLeft + f32(edge + margin))), margin)
         edge = f32(edge + f32(run.width + margin))
         break
@@ -332,8 +331,7 @@ function bidiDisplayBoxes(p: WebKitPrepared, filled: WebKitFilledLine, lineLeft:
         addLeaf(parent, { kind: 'line-break', element: run.element, x: f32(lineLeft + edge), width: 0 }, 0)
         break
       case 'atomic': {
-        const e = p.elements[run.element]!
-        if (e.kind !== 'atomic') throw new Error(`element ${run.element} isn't atomic`)
+        const e = atomicElement(p, run.element)
         const marginLeft = rtlBlock ? e.marginEnd : e.marginStart
         const marginRight = rtlBlock ? e.marginStart : e.marginEnd
         addLeaf(parent, { kind: 'atomic', element: run.element, level: run.level, x: f32(lineLeft + f32(edge + marginLeft)), width: e.borderBoxWidth }, 0)
@@ -372,8 +370,7 @@ function bidiDisplayBoxes(p: WebKitPrepared, filled: WebKitFilledLine, lineLeft:
       if (node.kind === 'leaf') {
         const box = node.box
         if (box.kind === 'atomic') {
-          const e = p.elements[box.element]!
-          if (e.kind !== 'atomic') throw new Error(`element ${box.element} isn't atomic`)
+          const e = atomicElement(p, box.element)
           const marginLeft = rtlBlock ? e.marginEnd : e.marginStart
           box.x = f32(f32(lineLeft + right) + marginLeft)
           right = f32(right + e.marginBoxWidth)

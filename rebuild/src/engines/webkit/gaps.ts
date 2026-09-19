@@ -15,7 +15,7 @@ import type { FontDecl, Gap, GapName } from '../../model.js'
 import { canBreakBefore, dictionaryRangesStartingWithMark, hasDictionaryCharacter, inBetweenRangeStartingWithMark } from './breaks.js'
 import { hasDelimiterData, isDelimiterQuote, isHanLocale, isPunctuation, lineRules, localeScript } from './data.js'
 import { hasEmojiPresentation, type FamilyName } from './fonts.js'
-import { boxWidth, canvasString, controlIsAdjusted, fixedPitchWidth, isPiecedControl, measuredEnd, mergedGlyphs, singleSpaceWidth } from './measure.js'
+import { advancesWidth, canvasString, controlIsAdjusted, fixedPitchWidth, isPiecedControl, lessMeasuredSpace, measuredEnd, mergedGlyphs } from './measure.js'
 import { preservesSpacesAndTabs, tabsAllowed } from './style.js'
 import type { WebKitBox, WebKitBoxInspect, WebKitFilledLine, WebKitInspect, WebKitPrepared, WebKitRefusedSlot, WebKitTextItem } from './types.js'
 
@@ -348,10 +348,11 @@ export function lineGaps(p: WebKitPrepared, decided: WebKitFilledLine | WebKitRe
       }
     }
     // Test T1 of specs/webkit-gaps.md §2.5: where the width shortcut of a fixed-pitch primary font gives another width than
-    // the advances, the monospace trait decides it, and so does whether the realized family is Courier New
-    // (FontCoreText.cpp:776-782), which the first listed family stands in for.
+    // the advances, the monospace trait decides it (FontFacts.monospace), and so does whether the realized family is Courier
+    // New (FontCoreText.cpp:776-782), which the first listed family stands in for.
     if (box.simplifiedMeasuring && !singleSpace && (facts.monospaceUnknown || (box.fixedPitch && facts.primaryFamilyUnknown))) {
-      if (boxWidth(box, from, to, 0, !item.isWhitespace, false) !== fixedPitchShortcutWidth(box, from, to, !item.isWhitespace)) {
+      const end = measuredEnd(box, to, !item.isWhitespace)
+      if (lessMeasuredSpace(box, to, end, advancesWidth(box, from, end, 0)) !== lessMeasuredSpace(box, to, end, fixedPitchWidth(box, from, end))) {
         add('fixed-pitch-path', box, from, to, facts.monospaceUnknown
           ? `whether ${box.primaryFamily} has the monospace trait isn't given, and the width shortcut of a fixed-pitch font gives this item another width (test T1)`
           : "the primary family isn't given, and whether it is Courier New decides the width shortcut, which gives this item another width (test T1)")
@@ -410,15 +411,6 @@ function controlsMeasureExactly(context: Context, text: string): boolean {
 }
 
 
-// The width shortcut's answer for the same range, which a fixed-pitch primary font would give (test T1 of
-// specs/webkit-gaps.md §2.5): where it differs from boxWidth, FontFacts.monospace decides the width.
-function fixedPitchShortcutWidth(box: WebKitBox, from: number, to: number, trailingSpace: boolean): number {
-  if (from === to) return 0
-  const end = measuredEnd(box, to, trailingSpace)
-  let width = fixedPitchWidth(box, from, end)
-  if (end > to) width = f32(width - f32(singleSpaceWidth(box) + box.wordSpacing))
-  return Number.isNaN(width) ? 0 : Math.max(0, width)
-}
 
 
 // ---- A decided line in a history world (history.ts) ----

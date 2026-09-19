@@ -180,7 +180,8 @@ function cssFamilyName(name: string): string {
   return GENERIC_FAMILY_KEYWORDS.includes(name.toLowerCase()) ? name : JSON.stringify(name)
 }
 
-// TextUtil::isStrongDirectionalityCharacter (TextUtil.cpp:486-515), over the code points of 16-bit content.
+// InlineTextBox::hasStrongDirectionalityContent (TextUtil.cpp:486-576): TextUtil::isStrongDirectionalityCharacter
+// (TextUtil.cpp:486-515) over the code points of 16-bit content.
 function hasStrongDirectionality(text: string, is8Bit: boolean): boolean {
   if (is8Bit) return false
   for (let i = 0; i < text.length; i++) {
@@ -208,10 +209,11 @@ function makeBox(p: WebKitPrepared, leaf: LeafInput, sourceStart: number): WebKi
   // The list Canvas measures with (fonts.ts): each unquoted generic keyword the locale resolves to a family of its own is
   // named, and the script's standard family appended where no listed family resolves (below). Only unquoted names are
   // keywords. `firstNamedGeneric` is the index of the first family named either way, which gaps.ts reads.
+  const script = localeScript(locale)
   const families = familyNames(declared.family)
   let firstNamedGeneric: number | null = null
   for (let i = 0; i < families.length; i++) {
-    const named = families[i]!.quoted || locale === '' ? null : genericFamilyUnder(families[i]!.name, locale, localeScript(locale), p.env.preferredLanguages)
+    const named = families[i]!.quoted || locale === '' ? null : genericFamilyUnder(families[i]!.name, locale, script, p.env.preferredLanguages)
     if (named === null) continue
     families[i] = namedFamily(named)
     firstNamedGeneric ??= i
@@ -219,7 +221,7 @@ function makeBox(p: WebKitPrepared, leaf: LeafInput, sourceStart: number): WebKi
   const zoom = f32(p.zoom)
   const size = f32(f32(declared.size) * zoom)
   const letterSpacing = f32(f32(leaf.textStyle.letterSpacing) * zoom)
-  const wordSpacing = f32(f32(leaf.textStyle.wordSpacing) * zoom)
+  const wordSpacing = leaf.style.wordSpacing
   const text = leaf.text
   let is8Bit = true
   for (let i = 0; i < text.length; i++) if (text.charCodeAt(i) > 0xff) { is8Bit = false; break }
@@ -240,7 +242,7 @@ function makeBox(p: WebKitPrepared, leaf: LeafInput, sourceStart: number): WebKi
   // locale's script chooses (fonts.ts standardFamilyOf; probe webkit-round4 R7: `a` in `STHeiti`, which the WebContent process
   // doesn't have, is 7.99px under en and 9.81px under ja at 18px; R11: `cursive` under zh names Kaiti SC, which it doesn't
   // have either): it is named at the end of the list.
-  const standardFamily = locale === '' ? null : standardFamilyOf(localeScript(locale), p.env.preferredLanguages)
+  const standardFamily = locale === '' ? null : standardFamilyOf(script, p.env.preferredLanguages)
   if (standardFamily !== null) {
     const plain = { lang: '', letterSpacing: '0px', wordSpacing: '0px', fontKerning: 'auto' as const, textRendering: 'auto' as const, direction: 'ltr' as const, partition: '' }
     const listThenLastResort = contextFor(p.contexts, { ...plain, font: canvasFont({ ...declared, family: `${familyList(families)}, LastResort` }, size) })
@@ -297,8 +299,7 @@ function makeBox(p: WebKitPrepared, leaf: LeafInput, sourceStart: number): WebKi
     primaryFamily,
     hyphen: facts.mapsHyphen === false ? '-' : '‐',
     locale, canvasFamily: font.family,
-    context, plainContext, spaceWidth: null, spacedContext, countContext, letterSpacing, wordSpacing, cssLetterSpacing: leaf.textStyle.letterSpacing,
-    hasStrongDirectionality: hasStrongDirectionality(text, is8Bit),
+    context, plainContext, spaceWidth: null, spacedContext, countContext, letterSpacing, cssLetterSpacing: leaf.textStyle.letterSpacing,
     spacingFacts,
   }
   boxMade(p, box, declared, size, leaf.lang, families, firstNamedGeneric, unverified)
@@ -406,7 +407,7 @@ export function prepareWebKit(paragraph: Paragraph, env: WebKitEnvironment, insp
       continue
     }
     const box = makeBox(p, leaves[r]!, index.leaves[r]!.start)
-    reordering ||= box.hasStrongDirectionality
+    reordering ||= hasStrongDirectionality(box.text, box.is8Bit)
     boxOfRun.push(p.boxes.length)
     p.boxes.push(box)
   }

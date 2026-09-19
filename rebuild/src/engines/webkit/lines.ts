@@ -17,7 +17,7 @@ import { boxWidth, breakWord, canvasString, codePointStart, firstUserPerceivedCh
 import { endEdgeWidth, layoutUnit, preservesSpacesAndTabs, startEdgeWidth, trailingWhitespaceHangs } from './style.js'
 import {
   DEFAULT_BIDI_LEVEL, OPAQUE_BIDI_LEVEL, type Line, type LineLogicalRect, type LineRun, type ShapingBoundary, type TextRun, type TrailingWhitespace, type WebKitBox,
-  type WebKitBoxEdges, type WebKitFillResult, type WebKitItem, type WebKitPrepared, type WebKitStyle, type WebKitTextItem,
+  type WebKitBoxEdges, type WebKitElement, type WebKitFillResult, type WebKitItem, type WebKitPrepared, type WebKitStyle, type WebKitTextItem,
 } from './types.js'
 
 const f32 = Math.fround
@@ -43,6 +43,13 @@ export function spanEdges(p: WebKitPrepared, element: number): WebKitBoxEdges {
   const e = p.elements[element]!
   if (e.kind !== 'span') throw new Error(`element ${element} is ${e.kind}, not an inline box`)
   return e.edges
+}
+
+// The atomic inline an item or a run stands for.
+export function atomicElement(p: WebKitPrepared, element: number): Extract<WebKitElement, { kind: 'atomic' }> {
+  const e = p.elements[element]!
+  if (e.kind !== 'atomic') throw new Error(`element ${element} isn't atomic`)
+  return e
 }
 
 function styleOfElement(p: WebKitPrepared, element: number): WebKitStyle {
@@ -243,14 +250,14 @@ function appendText(L: Layout, line: Line, item: WebKitTextItem, width: number, 
   // The run the item expands, or null where it needs a run of its own.
   const expanded = last === undefined || last.kind !== 'text' || last.box !== item.box || last.level !== item.level
     || hasCollapsedTrailingWhitespace(last)
-    || (box.wordSpacing !== 0 && (item.isWordSeparator || (last.isWordSeparator && last.level !== DEFAULT_BIDI_LEVEL)))
+    || (box.style.wordSpacing !== 0 && (item.isWordSeparator || (last.isWordSeparator && last.level !== DEFAULT_BIDI_LEVEL)))
     || isZeroWidthSpaceSeparator(p, item)
     || (box.style.rtl && preserve && item.isWhitespace !== (last.trailingWhitespace !== null && last.trailingWhitespace.length === last.textLength))
     || shapingBoundary !== null || last.shapingBoundary !== null ? null : last
   const oldContentLogicalWidth = line.contentLogicalWidth
   let contentLogicalRight: number
   if (expanded === null) {
-    const left = f32(lastRunLogicalRight(line) + (item.isWordSeparator ? box.wordSpacing : 0))
+    const left = f32(lastRunLogicalRight(line) + (item.isWordSeparator ? box.style.wordSpacing : 0))
     line.runs.push(textRun(p, item, left, width, shapingBoundary))
     contentLogicalRight = f32(left + width)
   } else if (box.letterSpacing >= 0) {
@@ -258,7 +265,7 @@ function appendText(L: Layout, line: Line, item: WebKitTextItem, width: number, 
     contentLogicalRight = f32(expanded.left + expanded.width)
   } else {
     let withoutLastTextRun: number
-    if (box.wordSpacing >= 0) {
+    if (box.style.wordSpacing >= 0) {
       withoutLastTextRun = f32(line.contentLogicalWidth - Math.max(0, expanded.width))
     } else {
       let rightMost = 0
@@ -336,8 +343,7 @@ function inlineBoxLetterSpacing(p: WebKitPrepared, element: number): number {
 function appendAtomicInlineBox(p: WebKitPrepared, line: Line, item: AtomicItem, marginBoxWidth: number): void {
   resetTrailingContent(line)
   line.contentLogicalWidth = Math.max(line.contentLogicalWidth, f32(lastRunLogicalRight(line) + marginBoxWidth))
-  const e = p.elements[item.element]!
-  if (e.kind !== 'atomic') throw new Error(`element ${item.element} isn't atomic`)
+  const e = atomicElement(p, item.element)
   if (e.marginStart >= 0) {
     line.runs.push(elementRun(item, lastRunLogicalRight(line), marginBoxWidth))
     return
@@ -457,10 +463,8 @@ type Content = {
   trailingTrimmableWidth: number
   hangingContentWidth: number | null
   hasTextContent: boolean
-  isTextOnlyContent: boolean
   isFullyTrimmable: boolean
   hasTrailingWordSeparator: boolean
-  hasTrailingSoftHyphen: boolean
   hasShapedContent: boolean
   // LineCandidate::InlineContent's shaping candidacy (ILB:256-288): text next to an inline box start or end.
   lastTextRunIndex: number | null
@@ -470,8 +474,8 @@ type Content = {
 
 function newContent(): Content {
   return {
-    runs: [], logicalWidth: 0, leadingTrimmableWidth: 0, trailingTrimmableWidth: 0, hangingContentWidth: null, hasTextContent: false, isTextOnlyContent: true,
-    isFullyTrimmable: false, hasTrailingWordSeparator: false, hasTrailingSoftHyphen: false, hasShapedContent: false, lastTextRunIndex: null, lastInlineBoxIndex: null,
+    runs: [], logicalWidth: 0, leadingTrimmableWidth: 0, trailingTrimmableWidth: 0, hangingContentWidth: null, hasTextContent: false,
+    isFullyTrimmable: false, hasTrailingWordSeparator: false, hasShapedContent: false, lastTextRunIndex: null, lastInlineBoxIndex: null,
     hasTextContentSpanningBoxes: false,
   }
 }
@@ -498,7 +502,6 @@ function appendBoxContent(c: Content, item: InlineBoxItem | AtomicItem, width: n
     c.hasTextContentSpanningBoxes ||= c.lastTextRunIndex !== null && c.lastTextRunIndex === numberOfRuns - 1
     c.lastInlineBoxIndex = numberOfRuns
   }
-  c.isTextOnlyContent = false
   c.hasTrailingWordSeparator = c.hasTrailingWordSeparator && item.kind !== 'atomic'
   appendToRunList(c, item, 0, width)
   if (item.kind === 'atomic') resetTrailingTrimmableContent(c)
@@ -515,7 +518,7 @@ function appendTextContent(L: Layout, c: Content, item: WebKitTextItem, width: n
   const box = L.p.boxes[item.box]!
   const hangs = item.isWhitespace && trailingWhitespaceHangs(box.style)
   if (hangs) c.hangingContentWidth = width
-  const wordSpacing = box.wordSpacing
+  const wordSpacing = box.style.wordSpacing
   // isFullyTrimmable, or isQuirkNonBreakingSpace, which needs -webkit-nbsp-mode: space.
   const trimmable = !hangs && item.isWhitespace && !preservesSpacesAndTabs(box.style)
   if (!trimmable) {
@@ -1288,13 +1291,10 @@ function hasTrailingSoftWrapOpportunity(b: Builder, softWrapOpportunityIndex: nu
 
 // InlineFormattingUtils::inlineItemWidth (IFU:300-334) for inline box starts and ends and atomic inlines.
 function boxItemWidth(p: WebKitPrepared, item: InlineBoxItem | AtomicItem): number {
-  const e = p.elements[item.element]!
   switch (item.kind) {
     case 'inline-box-start': return startEdgeWidth(spanEdges(p, item.element))
     case 'inline-box-end': return endEdgeWidth(spanEdges(p, item.element))
-    case 'atomic':
-      if (e.kind !== 'atomic') throw new Error(`element ${item.element} isn't atomic`)
-      return e.marginBoxWidth
+    case 'atomic': return atomicElement(p, item.element).marginBoxWidth
   }
 }
 
@@ -1320,7 +1320,7 @@ function candidateContentForLine(b: Builder, startIndex: number, endIndex: numbe
       case 'text': {
         const w = measuredItemWidth(L, item, f32(L.contentEdgeOffset + right))
         appendTextContent(L, candidate.content, item, w)
-        right = f32(right + f32(w + (item.isWordSeparator ? L.p.boxes[item.box]!.wordSpacing : 0)))
+        right = f32(right + f32(w + (item.isWordSeparator ? L.p.boxes[item.box]!.style.wordSpacing : 0)))
         trailingSoftHyphenIndex = item.hasTrailingSoftHyphen ? index : null
         break
       }
@@ -1348,7 +1348,6 @@ function candidateContentForLine(b: Builder, startIndex: number, endIndex: numbe
     if (onlyText) {
       const shy = items[trailingSoftHyphenIndex] as WebKitTextItem
       candidate.content.logicalWidth = f32(candidate.content.logicalWidth + lineHyphenWidth(L, shy.box))
-      candidate.content.hasTrailingSoftHyphen = true
     }
   }
   candidate.hasTrailingSoftWrapOpportunity = hasTrailingSoftWrapOpportunity(b, endIndex)
@@ -1412,7 +1411,7 @@ function collectShapeRanges(L: Layout, c: Content): Array<[number, number]> {
         } else if (hasBoundaryBetween) {
           // FontCascade equality: the box's Canvas settings (font, letter spacing), which one context stands for, and word
           // spacing and locale.
-          const sameFont = lastFontBox !== null && box.context === lastFontBox.context && box.wordSpacing === lastFontBox.wordSpacing
+          const sameFont = lastFontBox !== null && box.context === lastFontBox.context && box.style.wordSpacing === lastFontBox.style.wordSpacing
           if (isEligibleText && sameFont && p.boxes[(runs[leading]!.item as WebKitTextItem).box]!.locale === box.locale) trailing = entry.index
           else reset()
         } else if (!isEligibleText) {

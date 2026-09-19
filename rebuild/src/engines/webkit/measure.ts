@@ -220,13 +220,13 @@ function tabWidth(box: WebKitBox, spaceWidth: number, position: number): number 
 // tabs aren't allowed (FontCascade::treatAsSpace, FontCascadeInlines.h:140-143), except at the TextRun's index 0 unless
 // the character is NBSP. The Canvas context has no word spacing, so it is added here.
 function addWordSpacing(box: WebKitBox, from: number, to: number, width: number): number {
-  if (box.wordSpacing === 0) return width
+  if (box.style.wordSpacing === 0) return width
   const allowTabs = tabsAllowed(box.style)
   let w = width
   for (let i = from; i < to; i++) {
     const c = box.text.charCodeAt(i)
     const treatAsSpace = c === 0x20 || c === 0x0a || c === 0xa0 || (c === 0x09 && !allowTabs)
-    if (treatAsSpace && (i > from || c === 0xa0)) w = f32(w + box.wordSpacing)
+    if (treatAsSpace && (i > from || c === 0xa0)) w = f32(w + box.style.wordSpacing)
   }
   return w
 }
@@ -245,7 +245,7 @@ function tabbedWidth(box: WebKitBox, from: number, to: number, left: number): nu
   const text = box.text
   const spaceWidth = canvasWidth(box.plainContext, ' ')
   const tabAddition = (position: number): number => f32(tabWidth(box, spaceWidth, position) - spaceWidth)
-  if (box.letterSpacing === 0 && box.wordSpacing === 0) {
+  if (box.letterSpacing === 0 && box.style.wordSpacing === 0) {
     let width = measureDomString(box, box.context, text.slice(from, to))
     let added = 0
     for (let i = from; i < to; i++) {
@@ -281,7 +281,7 @@ export function fixedPitchWidth(box: WebKitBox, from: number, to: number): numbe
     const c = box.text.charCodeAt(i)
     if (c === 0x0a || c === 0x2028 || c === 0x2029) continue
     if (c >= 0x20) width = f32(width + spaceWidth)
-    if (i > from && c === 0x20) width = f32(width + box.wordSpacing)
+    if (i > from && c === 0x20) width = f32(width + box.style.wordSpacing)
   }
   return width
 }
@@ -298,24 +298,30 @@ export function measuredEnd(box: WebKitBox, to: number, trailingSpace: boolean):
 }
 
 // TextUtil::width over a box range (TextUtil.cpp:62-104). With `trailingSpace` a range followed by U+0020 in the same box is
-// measured with that space, then the space and word spacing are subtracted.
-export function boxWidth(box: WebKitBox, from: number, to: number, left: number, trailingSpace: boolean, fixedPitchShortcut = true): number {
+// measured with that space, then the space and word spacing are subtracted. The total is the width shortcut's where the box
+// takes it, else the advances.
+export function boxWidth(box: WebKitBox, from: number, to: number, left: number, trailingSpace: boolean): number {
   if (from === to) return 0
   const end = measuredEnd(box, to, trailingSpace)
-  let width: number
-  if (fixedPitchShortcut && box.simplifiedMeasuring && box.fixedPitchFastMeasuring) {
-    width = fixedPitchWidth(box, from, end)
-  } else if (tabsAllowed(box.style) && containsTab(box.text, from, end)) {
-    // Canvas strings split at TABs start past the TextRun's index 0, where WidthIterator gives a space word spacing, so the
-    // tab path adds word spacing itself.
-    width = addWordSpacing(box, from, end, tabbedWidth(box, from, end, left))
-  } else {
-    // rule webkit/measure/word-spacing-in-context
-    // The spaced context adds word spacing where WidthIterator does, in its float32 order: after SPACE, LF and NBSP past index
-    // 0 of the TextRun, which starts at `from` in both (TextUtil.cpp:84-89; WidthIterator.cpp calculateAdditionalWidth).
-    width = measureDomString(box, box.spacedContext, box.text.slice(from, end))
-  }
-  if (end > to) width = f32(width - f32(singleSpaceWidth(box) + box.wordSpacing))
+  return lessMeasuredSpace(box, to, end, box.simplifiedMeasuring && box.fixedPitchFastMeasuring ? fixedPitchWidth(box, from, end) : advancesWidth(box, from, end, left))
+}
+
+// The advances of [from, end), as WidthIterator or the complex text controller sums them. Where the font facts don't say
+// whether the box takes the width shortcut, gaps.ts holds this total against the shortcut's (test T1 of
+// specs/webkit-gaps.md §2.5).
+export function advancesWidth(box: WebKitBox, from: number, end: number, left: number): number {
+  // Canvas strings split at TABs start past the TextRun's index 0, where WidthIterator gives a space word spacing, so the
+  // tab path adds word spacing itself.
+  if (tabsAllowed(box.style) && containsTab(box.text, from, end)) return addWordSpacing(box, from, end, tabbedWidth(box, from, end, left))
+  // rule webkit/measure/word-spacing-in-context
+  // The spaced context adds word spacing where WidthIterator does, in its float32 order: after SPACE, LF and NBSP past index
+  // 0 of the TextRun, which starts at `from` in both (TextUtil.cpp:84-89; WidthIterator.cpp calculateAdditionalWidth).
+  return measureDomString(box, box.spacedContext, box.text.slice(from, end))
+}
+
+// The width of a range that ends at `to` from the total measured to `end` (measuredEnd).
+export function lessMeasuredSpace(box: WebKitBox, to: number, end: number, total: number): number {
+  const width = end > to ? f32(total - f32(singleSpaceWidth(box) + box.style.wordSpacing)) : total
   return Number.isNaN(width) ? 0 : Math.max(0, width)
 }
 

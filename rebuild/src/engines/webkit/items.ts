@@ -82,7 +82,7 @@ function handleTextContent(p: WebKitPrepared, boxIndex: number, defer: boolean):
       position++
       continue
     }
-    const ws = whitespaceRun(text, position, preserveNewline, preserveSpaces, preserveSpaces && box.wordSpacing !== 0)
+    const ws = whitespaceRun(text, position, preserveNewline, preserveSpaces, preserveSpaces && style.wordSpacing !== 0)
     if (ws !== null) {
       if (style.collapse === 'break-spaces') {
         for (let k = 0; k < ws.length; k++) {
