@@ -72,10 +72,11 @@
 //   canvas at the "device size" is wrong on 5 of 5 (system-ui 8282 au for the DOM's 8917) while the test says 1vw, and the
 //   OffscreenCanvas is right on 4 of 5. With privacy.fingerprintingProtection instead, devicePixelRatio says 1 and all is as
 //   at DPR 1.
-// - X6, under the exclusive lock but at a load average of 81 (other work outside the lock; the first set's quiet numbers are
-//   about 2.2 times lower), 5 rounds, medians: the test on one kept context 0.75 us (0.70 to 0.80); over 200 kept contexts
-//   of distinct fonts 0.80 us (0.75 to 0.85); without a pres shell 0.20 us; with a restyle of 30,000 spans pending 0.75 us,
-//   and the restyle stays pending (13 to 18 ms after); a new canvas, context and font 9 us, with the test 10 us.
+// - X6, twice under the exclusive lock, but at load averages of 81 and 49 (work outside the lock kept the machine busy; the
+//   first set's quiet numbers are about 2.2 times lower), 5 rounds each, medians of the two runs: the test on one kept
+//   context 0.75 and 0.75 us; over 200 kept contexts of distinct fonts 0.80 and 0.80 us; without a pres shell 0.20 and
+//   0.25 us; with a restyle of 30,000 spans pending 0.75 and 0.80 us, and the restyle stays pending (12 to 18 ms after); a
+//   new canvas, context and font 9 and 8.5 us, with the test 10 and 10 us.
 //
 // Run: python3 .artifacts/session/with-browser-lock.py ff-el-attacks -- \
 //   bun rebuild/probes/runner.ts --browser=firefox --probes=rebuild/probes/ff-element-attacks.ts --probe-timeout-ms=240000 --stall-ms=300000 --out=<out>
