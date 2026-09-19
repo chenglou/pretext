@@ -42,6 +42,12 @@ may read the DOM freely; this is research, not the library.
   with U+0020 and its 16-bit one with U+2028 (S6). Every probe returns `checks`; `rebuild/tests/rerun-probes.sh` reruns it
   per Chrome release. Beside it `blink-twins.ts`, the first look at the same thing (raw widths).
 
+- `ff-element-workers.ts` (W1 to W5) and `ff-element-documents.ts` (D1 to D5): what measuring on a detached `<canvas>`
+  element in Firefox again would rest on (2026-09-19). The first runs the library's own bundled module over 435 lab cases
+  on the page and in a module worker, both on OffscreenCanvas, and compares everything it returns. The second measures an element canvas in every kind of document a
+  page can make, finds what tells a document without a presentation shell, which operations flush a pending style change,
+  and what the test costs. Each header has its results; the runs are under `.artifacts/probes/ff-element-20260919/workers/`.
+
 - `measure-first.ts`: six Chrome probes of which Canvas contexts share a platform font with DOM text of the same zoomed
   size (a context with default settings, the library's measuring context, the font checks' contexts, a page at
   `text-rendering: optimizeLegibility`, and no context first). Each returns checks and is meaningful only alone in a fresh
