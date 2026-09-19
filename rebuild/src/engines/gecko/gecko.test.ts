@@ -1007,14 +1007,6 @@ describe('the model clean-up (research/ARCHITECTURE-PLAN-2.md §8, X3)', () => {
     ])
   })
 
-  test('the paragraph\'s gaps are handed out as a copy: writing the list leaves the paragraph as it was', () => {
-    const prepared = prepareGecko(paragraph([run('a\ufffdb')], 500), env, true)
-    const first = geckoParagraphGaps(prepared)
-    expect(first.length).toBeGreaterThan(0)
-    first.length = 0
-    expect(geckoParagraphGaps(prepared).length).toBeGreaterThan(0)
-  })
-
   test('a unit holds nothing of its inside until a line asks, and a line start is plain data', () => {
     const prepared = prepareGecko(paragraph([run('abcdefgh ijkl')], 40, { overflowWrap: 'anywhere' }), env, false)
     expect(prepared.units.map(u => u.inWord)).toEqual([null, null, null])

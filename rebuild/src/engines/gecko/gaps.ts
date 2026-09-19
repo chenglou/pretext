@@ -28,7 +28,7 @@ export type GapSink = Gap[] | null
 // The gaps of the paragraph's content, fonts and environment, whatever the slot (DESIGN.md §5).
 export function paragraphGaps(p: GeckoPrepared): Gap[] {
   if (p.inspect === null) throw new Error('paragraphGaps reads an inspected paragraph, and this one was prepared plain')
-  return p.inspect.gaps.slice()
+  return p.inspect.gaps
 }
 
 // ---- Preparation ----
