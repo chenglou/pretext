@@ -28,6 +28,8 @@ export function canvasString(text: string): string {
 }
 
 // ---- The font code path ----
+// rule webkit/measure/code-path-per-measured-string
+//
 // FontCascade::width chooses the simple or the complex path from the TextRun it is handed (codePath(run),
 // FontCascade.cpp:304-309; :708-730 scans the run's own characters), and TextUtil::width hands it the measured range alone
 // (TextUtil.cpp:84-89). Canvas measures through the same function, so a string of a box's text takes the same path in both.
