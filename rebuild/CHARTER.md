@@ -30,9 +30,9 @@ configuration declares none (decisions of 2026-09-18, below).
 
 ## Tentpoles
 
-1. **Engine-true output.** Layout returns what the engine computes: line boxes, fragments, advances and positions in the
-   engine's own units, with trimmed, collapsed and hanging content marked. The library never shapes its output to what a
-   test observer can see.
+1. **Engine-true output.** Layout gives what the engine computes: line boxes and fragments, with trimmed, collapsed and
+   hanging content marked, and on request, from a paragraph prepared for inspection, advances and positions in the
+   engine's own units. The library never shapes its output to what a test observer can see.
 
 2. **Observation is ported too.** What a browser reports through DOM geometry (Range client rects, selection rects, box
    extents) comes from each engine's geometry code at the pinned version. The lab derives expected observations from
@@ -44,8 +44,8 @@ configuration declares none (decisions of 2026-09-18, below).
    paragraph's text tells something the engine depends on (font technology such as AAT vs OpenType joining, glyph coverage
    such as U+2010, the monospace trait, optical sizing, which glyph of a kerned pair carries the adjustment), the fact is
    an optional input on the font declaration. A fact that isn't given is asked of Canvas by a dedicated check where one is
-   sound for the engine (`src/measure/font-checks.ts`); otherwise its documented default stands, and the prediction
-   reports the named gap it falls under.
+   sound for the engine (`src/measure/font-checks.ts`); otherwise its documented default stands, and the named gap it
+   falls under is reported on request, by a paragraph prepared for inspection.
 
 4. **Tests designed for this rebuild.** Layers:
    - engine data parity against oracles (break scans, bidi, graphemes, ICU4X replay);
@@ -109,6 +109,26 @@ The maintainer's, after ceiling round 3's evaluation and critic (research/ROUND3
    (`data/webkit/coretext-macos27/css-families.tsv`, `engines/webkit/generated/fonts.ts`), so the no-facts headline
    includes it. The orchestrator's call, flagged for the maintainer; the alternative is an environment input.
 5. **No parity work against current Pretext (main)** (tentpole 5 stands as written).
+
+## Decisions of the re-architecture (2026-09-18 and 19)
+
+The clean-up of decision 3 ran by research/ARCHITECTURE-PLAN-2.md, whose four decisions were taken as recommended
+(DESIGN.md has the result, REPORT.md "The re-architecture" what it measured):
+
+1. **Gaps and engine geometry are output on request.** A paragraph is prepared plain, which is what an application runs
+   (lines and their pieces, no gap, no limit, none of the lab's geometry, no Canvas question that only those read), or
+   inspected, which is what the lab runs. Tentpoles 1 and 3 read "on request" since; nothing about what is computed or
+   reported for the lab changed, and a plain paragraph gives the inspected one's lines on every recorded case.
+2. **The width belongs to the line slot**, not the paragraph: one prepared paragraph serves any width.
+3. **The painter names no engine**: each engine gives its painting rules as data.
+4. **No structure stores a measured value by its string.** The string memo was the ports' data flow and went; what a
+   port needs twice it keeps as a local, a handed-on value or a field. The maintainer's line on caching: acceleration that
+   is invisible, can't go stale and doesn't leak is fine, and a structure local to one layout call is data flow, not a
+   cache; what outlives a call waits for profiling, apart from fixed data with a page's lifetime (parsed engine tables, a
+   Canvas context per font, the runtime font checks' answers per font). The order of work stays: simplicity from data
+   structures and data flow, then profiling and optimization, which may add complexity back, then the API
+   (research/PROFILING-START.md has where profiling starts; the bar is 10,000 chat messages laid out from scratch in about
+   2 s after the performance work, or the stateless ideal is dropped).
 
 ## Known deviations to remove
 
@@ -257,8 +277,8 @@ Core Text glyph runs) and ligatures or pair adjustments across a box edge are st
 
 **Tests (tentpoles 4, 5).**
 
-- No library rule carries a `// rule <id>` annotation in source, and ids an owner's report gave only as a row stay
-  provisional in the registry (`declaredBy` says which).
+- 21 of 542 current library rules carry a `// rule <id>` annotation in source, and ids an owner's report gave only as a
+  row stay provisional in the registry (`declaredBy` says which).
 - The lab's `obligations` family and G0 baselines are derived from main's tests and the final runs; they are measurement
   inputs until each obligation is triaged under tentpole 5. research/MAIN-TRIAGE.md and `rebuild/lab/triage/` hold the
   records, but `cases/obligations.ts` doesn't read them (TEST-ARCHITECTURE §7.1). The adopted lab gate baselines block
@@ -283,8 +303,13 @@ hanging-space regression still fail: the geometry now says which runs ShapeLine 
 painter doesn't read it yet. A wrapped line whose first cluster kept an adjustment with the previous line's last cluster
 (U+3000 in a font without it, `c-0ee8c36920378f9f`) paints without it and has no limit. Painting a line as its own block
 makes it a last line, which is most of the rich pre-wrap painter failures without an explanation (23 of Chrome's 28 on
-three fresh sets with no facts). `rebuild/bench/page.ts` fails at its first row against the inline-tree model (tentpole 8's
-record).
+three fresh sets with no facts).
+
+**Performance (tentpole 8).** Recorded, not worked on yet: over 10,000 chat messages the library costs an application 3
+to 21 times main's cold prepare from scratch, and 8 to 490 times main's layout at a new width on kept paragraphs
+(research/BENCH-NIGHT.md, "The real pass"; one run, Chrome's under load). Most of it is Canvas contexts and runtime font
+checks made per paragraph, and in Blink positions asked again at every fill (DESIGN.md §4.7).
+research/PROFILING-START.md has the order of work.
 
 ### Removed
 
@@ -365,3 +390,9 @@ record).
   inline's, and, in fonts Canvas shapes whole, a Latin range of script-neutral characters with a space measured as a
   two-byte string and shaped as Common (`shape.ts` `spacesStay`; fonts shaped word by word keep U+2028 and
   `script-context`). research/BLINK-STRING-STORAGE.md.
+- The re-architecture (2026-09-18 and 19): gap building threaded through measuring, the string memo as the ports' data
+  flow with the call log and Gecko's module-level memos, lab-only output computed on every line, shared code that named
+  engines (the painter's 74 mentions last), the width on the paragraph, Blink's justification written into the item
+  results it then read, a Blink gap list's grouping following how often a range was raised, the painter taking every
+  8-bit line for one Latin segment in an RTL block, and `rebuild/bench/page.ts`, which didn't compile against the
+  inline-tree model and has run the chat benchmark since.
