@@ -9,7 +9,7 @@ import {
   HAN_CLOSE, HAN_CLOSE_NARROW, HAN_CLOSE_QUOTE, HAN_COLON, HAN_DOT, HAN_MIDDLE, HAN_OPEN, HAN_OPEN_NARROW, HAN_OPEN_QUOTE, HAN_OTHER,
   HAN_SEMICOLON, hanKerningCharType,
 } from './props.js'
-import { raw16Of } from './shape.js'
+import { raw16Of } from './contexts.js'
 import type { BlinkPrepared } from './types.js'
 
 export type HanKerningFontData = {

@@ -9,7 +9,7 @@
 import { blinkOtLanguageTags } from './generated/break-tables.js'
 import type { LigatureFacts, LigaturePattern, ListedFontFacts } from '../../model.js'
 import { isMark } from './props.js'
-import { isSegmentEdge } from './shape.js'
+import { isSegmentEdge } from './emoji.js'
 import type { BlinkPrepared } from './types.js'
 
 // What the facts say about the boundary before a text_content unit: nothing (0); no glyph cluster covers it; a ligature's

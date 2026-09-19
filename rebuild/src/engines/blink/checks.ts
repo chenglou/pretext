@@ -4,7 +4,7 @@ import type { BlinkEnvironment } from '../../env.js'
 import type { CanvasNeeds } from '../../measure/canvas-checks.js'
 import type { FontChecks } from '../../measure/font-checks.js'
 
-// Read from the recipes (engines/blink/shape.ts styleContexts, hankerning.ts): `lang` per style, `letterSpacing`,
+// Read from the recipes (engines/blink/contexts.ts styleContexts, hankerning.ts): `lang` per style, `letterSpacing`,
 // `textRendering = 'optimizeLegibility'`, `direction = 'rtl'`, the ink box of HanKerning's glyph types, and a letter spacing
 // of 1/64 px that turns optional ligatures off and adds exactly 1/64 px to each character (NO_LIGATURES_SPACING_PX;
 // edgeGap's differences cancel it in 16.16 units).
@@ -19,7 +19,7 @@ const SYSTEM_FONT_FAMILIES = ['system-ui', 'blinkmacsystemfont']
 
 // Blink reads primaryFamily for the opticalSizeAxis default, so it is asked there only with that check or for the hyphen.
 // opticalSizeAxis is asked at the layout zoom, which Canvas never applies. Blink resolves a Canvas font under the context's
-// language, and its contexts are at text-rendering optimizeLegibility (shape.ts styleContexts).
+// language, and its contexts are at text-rendering optimizeLegibility (contexts.ts styleContexts).
 export function blinkFontChecks(env: BlinkEnvironment): FontChecks {
   return {
     primaryFamily: false, mapsHyphen: true, monospace: false, opticalSizeAxis: { zoom: env.devicePixelRatio, cssSizeFamilies: SYSTEM_FONT_FAMILIES },

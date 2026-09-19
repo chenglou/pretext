@@ -12,6 +12,8 @@
 import type { Gap, GapName } from '../../model.js'
 import { hasDictionaryCharacters, lineTable } from './breaks.js'
 import { collapsesWhiteSpace } from './content.js'
+import { raw16Of } from './contexts.js'
+import { isSegmentEdge } from './emoji.js'
 import type { BlinkLineStart } from './geometry.js'
 import { LIGATURE_NONE, LIGATURE_UNCERTAIN } from './ligatures.js'
 import { pairPlacementUnknown, positionBounds, positionLimit } from './limits.js'
@@ -19,7 +21,7 @@ import type { LineInfo } from './line-breaker.js'
 import { USCRIPT_COMMON, USCRIPT_INHERITED, isWhiteSpace, scriptExtensionsOf, scriptOf } from './props.js'
 import {
   EXACT16, adjust16, canvasScriptsPerUnit, ceilFrom16, contextsOf, groupPrefix16, isClusterBoundary, isDefaultIgnorableHarfBuzz, isFontRunEdge,
-  isSegmentEdge, joinsAcross, pairAdjust16, pairAdjustNoLigatures16, positionAdjust16, positionForOffset, prefix16, raw16Of, requeuedSpaceAt,
+  joinsAcross, pairAdjust16, pairAdjustNoLigatures16, positionAdjust16, positionForOffset, prefix16, requeuedSpaceAt,
   startsClusterInsideGrapheme, type CanvasString, type Part, type ShapeResult, type Shaper,
 } from './shape.js'
 import type { BlinkInspect, BlinkPrepared } from './types.js'

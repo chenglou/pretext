@@ -6,11 +6,12 @@ import { WS, bidiClassOf } from '../../unicode/bidi.js'
 import { LineBreakIterator } from './breaks.js'
 import { boxEndEmpty, boxStartEmpty, collapsesWhiteSpace, hasBorder, lengthLU, mayHaveMargin, mayHavePadding, wrapsLines } from './content.js'
 import { blinkBidiData } from './data.js'
+import { isSegmentEdge } from './emoji.js'
 import type { BlinkLineStart } from './geometry.js'
 import { breakCandidate, clampedStartLimit, dropGapsFrom, endTestCouldTurn, gapCount } from './gaps.js'
 import { maybeHanKerningClose } from './hankerning.js'
 import {
-  isClusterBoundary, isFontRunEdge, isSegmentEdge, isStartSafeToBreak, itemShapeResult, joinsAcross, luCeil, nextSafeToBreak, offsetForPosition, positionForOffset,
+  isClusterBoundary, isFontRunEdge, isStartSafeToBreak, itemShapeResult, joinsAcross, luCeil, nextSafeToBreak, offsetForPosition, positionForOffset,
   previousSafeToBreak, reshape, reshapeHanKerningEnd, shapeHyphen, snappedWidth, tabShapeResult, truncateView, viewOf, widthOf16,
   viewFromSegments, WHOLE, type ReshapePart, type Segment, type ShapeResult, type Shaper, type View,
 } from './shape.js'

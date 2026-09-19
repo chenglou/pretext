@@ -5,13 +5,14 @@
 import type { TextAlign } from '../../model.js'
 import { pairPlacement, positionInsideGrapheme, runOfSource } from './gaps.js'
 import { boxStartEmpty } from './content.js'
+import { isSegmentEdge } from './emoji.js'
 import type { BlinkGlyphCluster, BlinkItem, BlinkLineGeometry, BlinkLineStart, BlinkMappingUnit, BlinkShapeRun } from './geometry.js'
 import { LIGATURE_MERGED } from './ligatures.js'
 import { viewPositionLimit } from './limits.js'
 import type { LineInfo } from './line-breaker.js'
 import { lineSourceRange, trailingSpacesOf, usedTextAlign } from './pieces.js'
 import { isCjkIdeographOrSymbol, isDefaultIgnorable } from './props.js'
-import { isFontRunEdge, isSegmentEdge, luCeil, partGraphemeStarts, partPrefix16, partWidth16, viewPrefix16, widthOf16, type Shaper, type View } from './shape.js'
+import { isFontRunEdge, luCeil, partGraphemeStarts, partPrefix16, partWidth16, viewPrefix16, widthOf16, type Shaper, type View } from './shape.js'
 import type { BlinkPrepared } from './types.js'
 
 // BidiParagraph::IndicesInVisualOrder, ubidi_reorderVisual (ubidi.cpp): runs at or above each level from the highest down

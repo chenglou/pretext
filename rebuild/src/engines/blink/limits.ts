@@ -2,9 +2,10 @@
 // Canvas totals can't place it, and how far off it can be. Inspection reads them, for the limits of the geometry
 // (inspect.ts) and for gaps (gaps.ts); filling a line never does.
 import type { GapName } from '../../model.js'
+import { isSegmentEdge } from './emoji.js'
 import { LIGATURE_NONE } from './ligatures.js'
 import {
-  adjust16, adjustBefore16, adjustmentSide, ceilFrom16, clusterStartAtOrBefore, isClusterBoundary, isSegmentEdge, joinsAcross, pairAdjust16, pairAdjustNoLigatures16,
+  adjust16, adjustBefore16, adjustmentSide, ceilFrom16, clusterStartAtOrBefore, isClusterBoundary, joinsAcross, pairAdjust16, pairAdjustNoLigatures16,
   positionAdjust16, prefix16, requeuedSpaceAt, sliceEdge, startsClusterInsideGrapheme, type ShapeResult, type Shaper, type View,
 } from './shape.js'
 
