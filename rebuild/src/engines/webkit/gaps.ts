@@ -30,7 +30,7 @@ const f32 = Math.fround
 export type GapSink = Gap[] | null
 
 // What the paragraph keeps for inspection, which a paragraph prepared plain doesn't have.
-export function inspectOf(p: WebKitPrepared, what: string): WebKitInspect {
+function inspectOf(p: WebKitPrepared, what: string): WebKitInspect {
   if (p.inspect === null) throw new Error(`${what} reads an inspected paragraph, and this one was prepared plain`)
   return p.inspect
 }

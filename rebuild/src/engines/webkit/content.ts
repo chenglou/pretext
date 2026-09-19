@@ -12,7 +12,7 @@ import { AL, LRE, LRO, PDF, R, RLE, RLO, bidiClassOf, type BidiData } from '../.
 import { resolveIcuBidi } from '../../unicode/ubidi.js'
 import { makeFactory, moveToNextBreakablePosition } from './breaks.js'
 import { computedLocale, localeScript, webkitBidiData } from './data.js'
-import { boxMade, coveredLikeLastResort, inspectParagraph, unverifiedCoverage } from './gaps.js'
+import { boxMade, coveredLikeLastResort, inspectParagraph, unverifiedCoverage, type UnverifiedCoverage } from './gaps.js'
 import { boxWidth, itemWidth, singleSpaceWidth } from './measure.js'
 import { boxEdges, layoutUnit, preservesNewline, preservesSpacesAndTabs, webkitStyle } from './style.js'
 import type { WebKitBox, WebKitPrepared, WebKitStyle, WebKitTextItem } from './types.js'
@@ -22,7 +22,7 @@ const f32 = Math.fround
 // UBIDI_DEFAULT_LTR, the level of items built without bidi (IIB:907, 977, 987, 1031).
 export const DEFAULT_BIDI_LEVEL = 254
 // InlineItem::opaqueBidiLevel (InlineItem.h:54).
-const OPAQUE_BIDI_LEVEL = 255
+export const OPAQUE_BIDI_LEVEL = 255
 
 // uprv_getDefaultLocaleID without LANG, LC_ALL or LC_MESSAGES (AppleICU76 putil.cpp:1727-1874; specs/webkit-gaps.md §8.2).
 const ICU_DEFAULT_LOCALE_WITHOUT_ENVIRONMENT = 'en_US_POSIX'
@@ -279,7 +279,7 @@ function makeBox(p: WebKitPrepared, m: Measurer, leaf: LeafInput, sourceStart: n
   // B5: Courier maps Ω, Menlo doesn't map U+3000). Only fixed-pitch boxes read the result, in the width and breakWord
   // shortcuts; the 17.6015625px advance matching a fallback glyph's is the recipe's loss. What the recipe can't vouch for
   // goes to gaps.ts (unverifiedCoverage).
-  let unverified = null
+  let unverified: UnverifiedCoverage | null = null
   if (simplifiedMeasuring && fixedPitch) {
     const coverageContext = measureContext(m, { ...settings, font: canvasFont({ ...font, family: `${primaryFamilyCss}, LastResort` }, size), letterSpacing: '0px' })
     unverified = unverifiedCoverage(p.inspect, m, { ...settings, font: canvasFont({ ...font, family: 'LastResort' }, size), letterSpacing: '0px' })

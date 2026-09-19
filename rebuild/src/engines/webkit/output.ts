@@ -3,9 +3,9 @@
 // (InlineDisplayContentBuilder) from the closed Line::Run list. Pure functions of the prepared paragraph and the line; none
 // asks Canvas. Cited as in lines.ts.
 import type { Fragment, LinePieces, TextAlign } from '../../model.js'
-import { DEFAULT_BIDI_LEVEL } from './content.js'
+import { DEFAULT_BIDI_LEVEL, OPAQUE_BIDI_LEVEL } from './content.js'
 import type { WebKitDisplayBox, WebKitLineGeometry } from './geometry.js'
-import { OPAQUE_BIDI_LEVEL, elementSourceOffset, lastRunLogicalRight, lineHasVisuallyNonEmptyContent, spanEdges, textIndent, type Line, type LineRun, type WebKitFilledLine } from './lines.js'
+import { elementSourceOffset, lastRunLogicalRight, lineHasVisuallyNonEmptyContent, spanEdges, textIndent, type Line, type LineRun, type WebKitFilledLine } from './lines.js'
 import { collapsesWhiteSpace, layoutUnit } from './style.js'
 import type { WebKitBox, WebKitPrepared, WebKitStyle } from './types.js'
 

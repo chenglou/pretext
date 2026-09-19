@@ -9,7 +9,7 @@
 import { measureText, type Measurer } from '../../measure/canvas.js'
 import type { FillResultOf, Gap, LineSlot } from '../../model.js'
 import { canBreakBefore, findNextBreakablePosition, makeFactory, mayBreakInBetween } from './breaks.js'
-import { DEFAULT_BIDI_LEVEL } from './content.js'
+import { DEFAULT_BIDI_LEVEL, OPAQUE_BIDI_LEVEL } from './content.js'
 import { applyTextAlignJustify, type ExpandableRun, type ExpansionBehavior } from './expansion.js'
 import { breakTestBetweenBoxes, emergencyBreakIn8BitText, hyphenWidthRead, shapedAcrossInlineBoxes, type GapSink } from './gaps.js'
 import type { WebKitLineStart } from './geometry.js'
@@ -20,12 +20,11 @@ import type { WebKitBox, WebKitBoxEdges, WebKitItem, WebKitLineBuilder, WebKitPr
 
 const f32 = Math.fround
 const F32_MAX = 3.4028234663852886e38
-export const OPAQUE_BIDI_LEVEL = 255
 
 // What filling one line reads and keeps. `lineWidth` is m_lineLogicalRect.width(); `gaps` collects the gaps this line's
-// filling decides, on an inspected paragraph (gaps.ts). `measuredEnd` is the item index past the last item the builder read a width or a break opportunity of: the
-// line's content and the candidate content that ended the line. `shapedCarry` says the width carried to the next line comes
-// from a candidate shaped across inline boxes.
+// filling decides, on an inspected paragraph (gaps.ts GapSink). `measuredEnd` is the item index past the last item the builder
+// read a width or a break opportunity of: the line's content and the candidate content that ended the line. `shapedCarry` says
+// the width carried to the next line comes from a candidate shaped across inline boxes.
 type Layout = { p: WebKitPrepared; m: Measurer; lineWidth: number; contentEdgeOffset: number; constrainedByFloat: boolean; gaps: GapSink; measuredEnd: number; shapedCarry: boolean }
 type SoftLineBreakItem = Extract<WebKitItem, { kind: 'soft-line-break' }>
 type HardLineBreakItem = Extract<WebKitItem, { kind: 'hard-line-break' }>
