@@ -129,7 +129,9 @@ const GENERIC_KEYWORDS = ['serif', 'sans-serif', 'monospace', 'cursive', 'fantas
 // settings that don't repeat (an animated letter spacing, a size per paragraph) would grow the lists without end, and
 // every search with them, so a call that finds more contexts than that starts the measurer over. Prepared paragraphs hold
 // their contexts by reference and keep theirs. Such a page gains nothing from a measurer and loses little: at the bound
-// a search costs about a tenth of a Blink prepare on the stand-in Canvas.
+// a search costs about a tenth of a Blink prepare on the stand-in Canvas. What a kept canvas holds inside the browser is
+// the browser's to bound: Chrome keeps at most 32,768 strings and 32,768 words per canvas and drops the least recently
+// used half when either fills (frame_shape_cache.cc:12-16, :93-104), WebKit and Gecko keep measured words per font.
 export type Measurer = {
   contexts: Context[]
   asked: { context: Context; text: string; width: number }[]

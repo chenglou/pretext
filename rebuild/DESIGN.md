@@ -1659,7 +1659,11 @@ asks (a soft hyphen, joining letters) and on the layout zoom, and an answer depe
   a case makes 15.75, 4.62 and 7.77) and a dozen probe strings per checks' context. Settings that never repeat (an
   animated letter spacing, a size per paragraph) would grow the lists, and every search with them: on the stand-in
   Canvas 10,000 distinct declarations made a Blink `prepare` five times as slow as with a measurer a call. So a call
-  that finds more than 1,024 contexts starts the measurer over; prepared paragraphs keep theirs by reference.
+  that finds more than 1,024 contexts starts the measurer over; prepared paragraphs keep theirs by reference. What a
+  kept canvas holds inside the browser is the browser's to bound: Chrome keeps at most 32,768 strings and 32,768 words
+  per canvas and drops the least recently used half when either fills (frame_shape_cache.cc:12-16, :93-104, whose
+  comment puts 320,000 nodes at about 700 MB), so a page's busiest canvas can hold tens of megabytes where main's one
+  canvas, which is asked words that repeat, fills slowly; fewer distinct questions (items 2 and 6) shrink it.
 - *Chrome's history.* Chrome keeps shaped words per canvas and the first shaping wins (§4.2), so with a page's list a
   canvas has shaped what the page's earlier paragraphs asked. No answer changes, because a context's settings hold
   everything Chrome's shaping reads but the string's storage, and `partition` already names the storage for every
