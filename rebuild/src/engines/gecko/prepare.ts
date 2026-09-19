@@ -18,8 +18,8 @@ import {
   LineBreakerState, type BreakSink,
 } from './linebreak.js'
 import {
-  isAlphanumeric, isBidiControl, isClusterExtender, isClusterExtenderExcludingJoiners, isCursiveScript, isDefaultIgnorable,
-  isEastAsianPunctuation, isEmoji, isEmojiPresentation, isFormatCategory, isSegmentBreakSkipChar, isUtf16CodeUnitBidi,
+  emojiPresentation, isAlphanumeric, isBidiControl, isClusterExtender, isClusterExtenderExcludingJoiners, isCursiveScript,
+  isDefaultIgnorable, isEastAsianPunctuation, isFormatCategory, isSegmentBreakSkipChar, isUtf16CodeUnitBidi,
 } from './props.js'
 import {
   KIND_FORMAT, KIND_GLYPH, KIND_INVISIBLE, KIND_NEWLINE, KIND_TAB, frameOfSource, objectAt, spanAt, type GeckoElement, type GeckoFrame,
@@ -373,14 +373,6 @@ function synthesizedSpaceDivisor(cp: number): number {
 
 // gfxFont::GetSyntheticBoldOffset (gfxFont.h:1899-1904), in device px of the font's size.
 const syntheticBoldOffset = (size: number): number => size < 48 ? 0.25 + 0.75 * size / 48 : size / 48
-
-// nsUnicodeProperties.h:127-165 GetEmojiPresentation.
-export type EmojiPresentation = 'text-only' | 'text-default' | 'emoji-default'
-function emojiPresentation(cp: number): EmojiPresentation {
-  if (cp === 0x23 || cp === 0x2a || (cp >= 0x30 && cp <= 0x39) || cp === 0xa9 || cp === 0xae) return 'text-default'
-  if (cp < 0x2000 || !isEmoji(cp)) return 'text-only'
-  return isEmojiPresentation(cp) ? 'emoji-default' : 'text-default'
-}
 
 // The first and the last of the block's DOM children, for the white-space-only text node rule: the leaf, or null where the
 // child is an element or the block has none. A leaf with empty text makes no node.
@@ -1042,11 +1034,11 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, inspec
         if (last !== null && last.kind === 'word' && last.tEnd === t && tUnits[t - 1] === 0x200d) {
           w = rangeAu(context, run, tUnits, last.tStart, t + 1) - last.canvasAu
         }
-        unit = { kind: ch === 0x20 ? 'space' : 'nbsp', tStart: t, tEnd: t + 1, canvasAu: w, au: w, startAdvance: advance, groups: null }
+        unit = { kind: ch === 0x20 ? 'space' : 'nbsp', tStart: t, tEnd: t + 1, canvasAu: w, au: w, startAdvance: advance, inWord: null }
         gaps.spaceMeasured(spaces, w)
       } else if (invalid) {
         gaps.invalidMet(spaces, t)
-        unit = { kind: 'invalid', tStart: t, tEnd: t + 1, canvasAu: 0, au: 0, startAdvance: advance, groups: null }
+        unit = { kind: 'invalid', tStart: t, tEnd: t + 1, canvasAu: 0, au: 0, startAdvance: advance, inWord: null }
       } else {
         let e = t + 1
         for (; e < run.scriptRuns[scriptRun]!.limit; e++) {
@@ -1143,7 +1135,7 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, inspec
             total += delta
           }
         }
-        unit = { kind: 'word', tStart: t, tEnd: e, canvasAu: w, au: total, startAdvance: advance, groups: null }
+        unit = { kind: 'word', tStart: t, tEnd: e, canvasAu: w, au: total, startAdvance: advance, inWord: null }
         gaps.wideUnit(sink, firstRun, w, tSource[t]!, tSource[e - 1]! + 1)
         gaps.wordMeasured(spaces, t, w)
       }
@@ -1186,7 +1178,7 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, inspec
   return {
     paragraph, env, appUnitsPerDevPixel: apd, blockStyle, text, leaves, frames, items,
     elements, textRuns, tUnits, tSource, breakFlags: g.breakFlags, clusterStart: g.clusterStart, isSpace: g.isSpace, kind: g.kind,
-    spacingPrefix, scanSpacingPrefix, tabSpacingPrefix, correctionPrefix, unitOf, units, sourceT, nextT, tabUnit, textIndentAu: pxToAu(paragraph.textIndent), bidi: resolveBidi, contexts, inWord: new Array<null>(T).fill(null), inspect: inspected,
+    spacingPrefix, scanSpacingPrefix, tabSpacingPrefix, correctionPrefix, unitOf, units, sourceT, nextT, tabUnit, textIndentAu: pxToAu(paragraph.textIndent), bidi: resolveBidi, contexts, inspect: inspected,
   }
 }
 

@@ -7,7 +7,7 @@ import { firstFontScriptLookups, listedFontOf } from './fonts.js'
 import { addLikelySubtags, tryParseLocale } from './likely.js'
 import { CANVAS_AU_PER_PX, rangeAu } from './measure.js'
 import { generalCategory, joiningType } from './props.js'
-import type { GeckoPrepared, GeckoTextRun, GeckoUnit } from './types.js'
+import type { GeckoPrepared, GeckoTextRun, GeckoUnit, InWord, InWordAdvance, InWordEntry, InWordReason, LigatureRow } from './types.js'
 
 // A ligature across offset t inside a shaping unit: the grapheme clusters on both sides of t measure differently, in width or
 // ink box, with ligatures off. letterSpacing 0.001px turns liga, clig, dlig and hlig off in Gecko's Canvas and adds no app
@@ -51,64 +51,37 @@ function ligatureAcross(p: GeckoPrepared, run: GeckoTextRun, unit: GeckoUnit, t:
 //   ligatures around t, and groupAcross the groups that required shaping forms (Geeza Pro's lam lam heh is lam and a lam-heh
 //   ligature in one group of three shares, 223 au each, where U+200D after the first lam gives the same 136 au glyph).
 // - Where the sides don't add up, the value is the stand-in the font's pair kerning asks for, and the reason names it.
-export type InWordAdvance = { au: number; standIn: InWordReason | null }
-
-// Why Canvas can't confirm the advance before an in-word offset, with the numbers the gap's prose prints (gaps.ts
-// inWordDetail). `at` is the source offset.
-export type InWordReason =
-  | { kind: 'inside-cluster'; at: number; betweenMarks: boolean }
-  | { kind: 'mark-starts-cluster'; at: number }
-  | { kind: 'unit-starts-inside-cluster'; at: number }
-  | { kind: 'group-mark-advances'; at: number }
-  // Several ligature candidates in a row, which the facts don't settle (rowAround): the offset is inside the row, which
-  // stands in as one group, or it ends a part of one.
-  | { kind: 'inside-ligature-row'; at: number }
-  | { kind: 'between-ligatures'; at: number }
-  | { kind: 'group-ends'; at: number; end: InWordReason }
-  // The two sides don't add up to the unit. `sides` is how they were measured (inWordAdvance), `au` their sum, or what the
-  // cluster before the offset and the suffix gain from each other.
-  | { kind: 'sides'; at: number; sides: 'joined' | 'apart' | 'cluster'; au: number; unitAu: number }
-
-// What measuring found about one transformed offset of a shaping unit (GeckoPrepared.inWord), each part null until something
-// asks for it. A line consults an offset several times (the scan, the measured edges, the redo, its placement and its
-// inspection), and the next line and another width consult it again: it is measured once, and kept here.
-export type InWordEntry = {
-  // Whether Canvas shows an optional ligature over this cluster boundary (ligatureAcross), and whether it shows a group that
-  // required shaping forms (groupAcross), which a boundary under an optional ligature is asked only by its row (rowAround).
-  ligature: boolean | null
-  group: boolean | null
-  // The row of ligature candidates that starts here (rowAround).
-  row: Row | null
-  // The advance before the offset (advanceBefore).
-  advance: InWordAdvance | null
-  // W(suffix): the unit from this offset on, measured with nothing put before it (suffixAlone).
-  suffixAu: number | null
+export function advanceBefore(p: GeckoPrepared, run: GeckoTextRun, t: number): InWordAdvance {
+  if (t >= run.tEnd) return { au: run.totalAdvance, standIn: null }
+  const unit = p.units[p.unitOf[t]!]!
+  if (t === unit.tStart) return { au: unit.startAdvance, standIn: null }
+  const entry = entryAt(unit, t)
+  if (entry.advance === null) entry.advance = inWordAdvance(p, run, unit, t)
+  return entry.advance
 }
 
-function entryAt(p: GeckoPrepared, t: number): InWordEntry {
-  const known = p.inWord[t] ?? null
+// What measuring found inside a unit (GeckoUnit.inWord), made when its first offset asks.
+function inWordOf(unit: GeckoUnit): InWord {
+  if (unit.inWord === null) unit.inWord = { groups: null, offsets: new Array<InWordEntry | null>(unit.tEnd - unit.tStart).fill(null) }
+  return unit.inWord
+}
+
+function entryAt(unit: GeckoUnit, t: number): InWordEntry {
+  const offsets = inWordOf(unit).offsets
+  const known = offsets[t - unit.tStart] ?? null
   if (known !== null) return known
   const entry: InWordEntry = { ligature: null, group: null, row: null, advance: null, suffixAu: null }
-  p.inWord[t] = entry
+  offsets[t - unit.tStart] = entry
   return entry
 }
 
 const ZWJ = '\u200d'
 
-export function advanceBefore(p: GeckoPrepared, run: GeckoTextRun, t: number): InWordAdvance {
-  if (t >= run.tEnd) return { au: run.totalAdvance, standIn: null }
-  const unit = p.units[p.unitOf[t]!]!
-  if (t === unit.tStart) return { au: unit.startAdvance, standIn: null }
-  const entry = entryAt(p, t)
-  if (entry.advance === null) entry.advance = inWordAdvance(p, run, unit, t)
-  return entry.advance
-}
-
 // W(suffix) of the unit from cluster start t, with nothing put before it. Two advances measure it: the one before t, where no
 // letters join across t, and the one before the next cluster, which measures it with its own cluster in front (inWordAdvance,
 // `withCluster`). Whichever comes first asks Canvas, and the other reads it here.
 function suffixAlone(p: GeckoPrepared, run: GeckoTextRun, unit: GeckoUnit, t: number): number {
-  const entry = entryAt(p, t)
+  const entry = entryAt(unit, t)
   if (entry.suffixAu === null) entry.suffixAu = rangeAu(run.context, run, p.tUnits, t, unit.tEnd)
   return entry.suffixAu
 }
@@ -361,14 +334,14 @@ function pairKerningAt(run: GeckoTextRun, t: number): 'first-advance' | 'split' 
 function groupSpans(p: GeckoPrepared, run: GeckoTextRun, unit: GeckoUnit, t: number): boolean {
   // Not in a unit that starts inside a cluster, whose groups Canvas can't count (inWordAdvance).
   if (p.clusterStart[unit.tStart] === 0) return false
-  const entry = entryAt(p, t)
+  const entry = entryAt(unit, t)
   if (entry.ligature === null) entry.ligature = ligatureAcross(p, run, unit, t)
   return entry.ligature || groupAcrossAt(p, run, unit, t)
 }
 
 // groupAcross at cluster boundary t, with U+200D at the cut where letters join across it.
 function groupAcrossAt(p: GeckoPrepared, run: GeckoTextRun, unit: GeckoUnit, t: number): boolean {
-  const entry = entryAt(p, t)
+  const entry = entryAt(unit, t)
   if (entry.group === null) entry.group = groupAcross(p, run, unit, t, joinsAcross(p, unit, t) ? ZWJ : '')
   return entry.group
 }
@@ -383,8 +356,7 @@ function groupAcrossAt(p: GeckoPrepared, run: GeckoTextRun, unit: GeckoUnit, t: 
 // before it: `fff` in 16px "Helvetica Neue" is an `ff` ligature of 277 au shares and an `f` of 284 au (fresh
 // c-545b8fb978408502), where `ff` alone tests as a ligature at both boundaries, and its `ffi` is one ligature of three.
 // The ligatures fact settles it (listedParts). Without it the row stands in as one group, unconfirmed.
-type Row = { edges: number[]; unconfirmed: boolean }
-function rowAround(p: GeckoPrepared, run: GeckoTextRun, unit: GeckoUnit, t: number): Row | null {
+function rowAround(p: GeckoPrepared, run: GeckoTextRun, unit: GeckoUnit, t: number): LigatureRow | null {
   if (!groupSpans(p, run, unit, t)) return null
   let start = t
   do {
@@ -396,7 +368,7 @@ function rowAround(p: GeckoPrepared, run: GeckoTextRun, unit: GeckoUnit, t: numb
     end++
     while (end < unit.tEnd && p.clusterStart[end] === 0) end++
   } while (end < unit.tEnd && groupSpans(p, run, unit, end))
-  const first = entryAt(p, start)
+  const first = entryAt(unit, start)
   if (first.row !== null) return first.row
   let boundaries = 0
   let optional = false
@@ -522,13 +494,14 @@ function groupAcross(p: GeckoPrepared, run: GeckoTextRun, unit: GeckoUnit, t: nu
   const groups = (tStart: number, tEnd: number, before: string, after: string): number =>
     (rangeAu(spaced, run, p.tUnits, tStart, tEnd, before, after) - rangeAu(off, run, p.tUnits, tStart, tEnd, before, after)) / (2 * CANVAS_AU_PER_PX)
   // The unit's own count is the same at every offset, so the unit keeps it.
-  if (unit.groups === null) {
+  const inWord = inWordOf(unit)
+  if (inWord.groups === null) {
     let clusters = 0
     for (let k = unit.tStart; k < unit.tEnd; k++) clusters += p.clusterStart[k]!
-    unit.groups = { counted: groups(unit.tStart, unit.tEnd, '', ''), clusters }
+    inWord.groups = { counted: groups(unit.tStart, unit.tEnd, '', ''), clusters }
   }
-  const inUnit = unit.groups.counted
-  if (inUnit === unit.groups.clusters) return false
+  const inUnit = inWord.groups.counted
+  if (inUnit === inWord.groups.clusters) return false
   // U+200D before the suffix is a cluster of its own, which the joiner measured alone counts too.
   const joinerGroups = joiner === '' ? 0 : (Math.round(width(spaced, joiner) * CANVAS_AU_PER_PX) - Math.round(width(off, joiner) * CANVAS_AU_PER_PX)) / (2 * CANVAS_AU_PER_PX)
   return groups(unit.tStart, t, '', joiner) + groups(t, unit.tEnd, joiner, '') - joinerGroups !== inUnit

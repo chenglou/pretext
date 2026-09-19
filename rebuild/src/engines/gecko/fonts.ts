@@ -121,13 +121,6 @@ export function sameFontForTextRun(a: FontDecl, b: FontDecl): boolean {
     quantize10(a.size) === quantize10(b.size) && sameFamilies(parseFamilyList(a.family), parseFamilyList(b.family))
 }
 
-// FontFacts.primaryFamily, defaulting to the first family in the list; a generic keyword stands for itself.
-export function primaryFamilyOf(font: FontDecl): string {
-  if (font.facts.primaryFamily !== null) return font.facts.primaryFamily
-  const first = parseFamilyList(font.family)[0]!
-  return first.name
-}
-
 // FontFacts.opticalSizeAxis with its documented default: true for Gecko's system-font keywords, which resolve to the
 // macOS system font, whose opsz axis is a recorded browser fact (probes cross-cutting 5, specs/gecko-canvas.md §1.2 C1a).
 // Only the unquoted keyword is the generic: a quoted "system-ui" parses as a named family (SingleFontFamily::parse,

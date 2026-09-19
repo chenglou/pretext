@@ -48,10 +48,17 @@ export const isEmoji = (cp: number): boolean => (packedProps(cp) & (1 << 11)) !=
 export const isEmojiPresentation = (cp: number): boolean => (packedProps(cp) & (1 << 12)) !== 0
 export const isDefaultIgnorable = (cp: number): boolean => (packedProps(cp) & (1 << 14)) !== 0
 export const isBidiMirrored = (cp: number): boolean => (packedProps(cp) & (1 << 15)) !== 0
-export const isEmojiModifier = (cp: number): boolean => (packedProps(cp) & (1 << 16)) !== 0
 export const scriptOf = (cp: number): string => scriptNames[packedProps(cp) >>> 17]!
 
 export const isFormatCategory = (cp: number): boolean => gc(cp) === GC_CF
+
+// nsUnicodeProperties.h:127-165 GetEmojiPresentation.
+export type EmojiPresentation = 'text-only' | 'text-default' | 'emoji-default'
+export function emojiPresentation(cp: number): EmojiPresentation {
+  if (cp === 0x23 || cp === 0x2a || (cp >= 0x30 && cp <= 0x39) || cp === 0xa9 || cp === 0xae) return 'text-default'
+  if (cp < 0x2000 || !isEmoji(cp)) return 'text-only'
+  return isEmojiPresentation(cp) ? 'emoji-default' : 'text-default'
+}
 
 // nsContentUtils::IsAlphanumeric: general category letter or number.
 export function isAlphanumeric(cp: number): boolean {

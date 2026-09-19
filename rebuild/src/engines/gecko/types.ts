@@ -2,7 +2,6 @@
 import type { GeckoEnvironment } from '../../env.js'
 import type { Context } from '../../measure/canvas.js'
 import type { FontDecl, Gap, Paragraph, TextStyle } from '../../model.js'
-import type { InWordEntry } from './advance.js'
 
 // white-space as its two longhands and the predicates Gecko derives from them (nsStyleStruct.h:1303-1367,
 // specs/gecko-text.md §2.1), plus the other inherited text properties a frame reads from its own style.
@@ -172,10 +171,57 @@ export type GeckoUnit = {
   au: number
   // Glyph advance of the text run before this unit.
   startAdvance: number
-  // The ligature groups Canvas counts in the unit, beside its clusters (advance.ts groupAcross); null until an offset inside
-  // the unit asks.
-  groups: { counted: number; clusters: number } | null
+  // What measuring found inside the unit (advance.ts): null until an offset inside it asks, so for ever in a unit of one
+  // character. The one part of a prepared paragraph that is written after preparation: a fill, a line's placement or its
+  // inspection fills it where it reads, at whatever width, so an offset is measured once. It holds facts of the unit's text in
+  // its text run, which no width and no line changes, and it goes with the paragraph.
+  inWord: InWord | null
 }
+
+export type InWord = {
+  // The ligature groups Canvas counts in the unit, beside its clusters (advance.ts groupAcross); null until an offset asks.
+  groups: { counted: number; clusters: number } | null
+  // Per code unit of the unit: what measuring found about the offset before it, null until something asks. A line consults
+  // an offset several times (the scan, the measured edges, the redo, its placement and its inspection), and the next line
+  // and another width consult it again.
+  offsets: (InWordEntry | null)[]
+}
+
+// What measuring found about one offset inside a shaping unit, each part null until something asks for it.
+export type InWordEntry = {
+  // Whether Canvas shows an optional ligature over this cluster boundary (ligatureAcross), and whether it shows a group that
+  // required shaping forms (groupAcross), which a boundary under an optional ligature is asked only by its row (rowAround).
+  ligature: boolean | null
+  group: boolean | null
+  // The row of ligature candidates that starts here (rowAround).
+  row: LigatureRow | null
+  // The advance before the offset (advanceBefore).
+  advance: InWordAdvance | null
+  // W(suffix): the unit from this offset on, measured with nothing put before it (suffixAlone).
+  suffixAu: number | null
+}
+
+// A row of ligature candidates: `edges` are the ends of its ligature groups, the row's own two included (advance.ts rowAround).
+export type LigatureRow = { edges: number[]; unconfirmed: boolean }
+
+// The glyph advance before an offset, and why it is a stand-in where Canvas can't confirm it (advance.ts advanceBefore).
+export type InWordAdvance = { au: number; standIn: InWordReason | null }
+
+// Why Canvas can't confirm the advance before an in-word offset, with the numbers the gap's prose prints (gaps.ts
+// inWordDetail). `at` is the source offset.
+export type InWordReason =
+  | { kind: 'inside-cluster'; at: number; betweenMarks: boolean }
+  | { kind: 'mark-starts-cluster'; at: number }
+  | { kind: 'unit-starts-inside-cluster'; at: number }
+  | { kind: 'group-mark-advances'; at: number }
+  // Several ligature candidates in a row, which the facts don't settle (rowAround): the offset is inside the row, which
+  // stands in as one group, or it ends a part of one.
+  | { kind: 'inside-ligature-row'; at: number }
+  | { kind: 'between-ligatures'; at: number }
+  | { kind: 'group-ends'; at: number; end: InWordReason }
+  // The two sides don't add up to the unit. `sides` is how they were measured (inWordAdvance), `au` their sum, or what the
+  // cluster before the offset and the suffix gain from each other.
+  | { kind: 'sides'; at: number; sides: 'joined' | 'apart' | 'cluster'; au: number; unitAu: number }
 
 // gfxBreakPriority (gfxTypes.h:48).
 export const NO_BREAK = 0
@@ -237,10 +283,6 @@ export type GeckoPrepared = {
   // The paragraph's Canvas contexts, one per distinct settings (measure/canvas.ts contextFor): the text runs' own, and
   // those the recipes make from them.
   contexts: Context[]
-  // Per transformed code unit: what measuring found about the offset before it, inside a shaping unit (advance.ts), null
-  // until something asks. Beside GeckoUnit.groups the one part of a prepared paragraph that is written after preparation: a
-  // fill, a line's placement or its inspection fills it where it reads, at whatever width, so an offset is measured once.
-  inWord: (InWordEntry | null)[]
   // What an inspected paragraph keeps for inspectLine and paragraphGaps; null on a plain one, which computes no gap and asks
   // Canvas nothing that only a gap or an inspected value needs (gaps.ts). Nothing else says which of the two a paragraph is.
   inspect: GeckoInspect | null

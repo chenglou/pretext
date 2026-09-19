@@ -12,14 +12,14 @@ import type { GeckoEnvironment } from '../../env.js'
 import { contextFor, width, type Context } from '../../measure/canvas.js'
 import { canvasFont } from '../../measure/font.js'
 import type { FontDecl, Gap, GapName } from '../../model.js'
-import { advanceBefore, type InWordReason } from './advance.js'
+import { advanceBefore } from './advance.js'
 import { COLOR_EMOJI_FAMILY, listedFontOf, opticalSizeAxisOf } from './fonts.js'
 import type { GeckoFrameGeometry, GeckoLineStart } from './geometry.js'
 import { BREAK_EMERGENCY_WRAP, complexLanguage } from './linebreak.js'
 import type { GeckoLineInspect, Measured, PlacedText, SpanData } from './lines.js'
 import { CANVAS_AU_PER_PX, quantize7, rangeAu } from './measure.js'
-import type { EmojiPresentation } from './prepare.js'
-import { WORD_WRAP_BREAK, frameOfSource, type GeckoInspect, type GeckoLeaf, type GeckoPrepared, type GeckoTextRun } from './types.js'
+import type { EmojiPresentation } from './props.js'
+import { WORD_WRAP_BREAK, frameOfSource, type GeckoInspect, type GeckoLeaf, type GeckoPrepared, type GeckoTextRun, type InWordReason } from './types.js'
 
 // Where gaps go: a list in raise order, or null on a plain paragraph.
 export type GapSink = Gap[] | null
