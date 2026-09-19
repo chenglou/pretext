@@ -154,11 +154,15 @@ export function installReplay(record: CaseMeasurements, env: PageFacts, phase: '
 
   class ReplayContext {
     assigned: RecordedContext['assigned'] = {}
+    // The key of `assigned`, made when a question needs it and dropped when a setting is assigned: a paragraph asks a
+    // context hundreds of questions between two assignments.
+    key: string | null = null
     bound: number | null = null
     served = new Map<string, number>()
     measureText(text: string): Partial<TextMetrics> {
       replay.asked++
-      const candidates = byAssigned.get(assignedKey(this.assigned, names)) ?? []
+      if (this.key === null) this.key = assignedKey(this.assigned, names)
+      const candidates = byAssigned.get(this.key) ?? []
       if (this.bound === null || !answers[this.bound]!.has(text)) {
         const holding = candidates.filter(index => answers[index]!.has(text))
         if (holding.length === 0) throw new NewQuestion(`measureText(${JSON.stringify(text)}) under ${JSON.stringify(this.assigned)} is not in the record`)
@@ -195,7 +199,10 @@ export function installReplay(record: CaseMeasurements, env: PageFacts, phase: '
     const name = SETTINGS[i]!
     Object.defineProperty(ReplayContext.prototype, name, {
       get(this: ReplayContext): string { return this.assigned[name] ?? '' },
-      set(this: ReplayContext, value: unknown): void { this.assigned[name] = String(value) },
+      set(this: ReplayContext, value: unknown): void {
+        this.assigned[name] = String(value)
+        this.key = null
+      },
     })
   }
 
