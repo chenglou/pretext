@@ -1,15 +1,15 @@
 {
   "format": "pretext-painter-frozen/1",
-  "commit": "81fd07d559b7c6b86d31e5b46d7c26efd9e0fb6f",
+  "commit": "5c951bf4f6d9e896bf0f355bb63180507f399643",
   "bun": "1.4.0",
   "bundles": {
     "no-facts": {
-      "sha256": "c8b8467ffa77d770a4b942eadc15598a2496d352009d7c9f6d03ddf7d23b613d",
-      "bytes": 2220942
+      "sha256": "e74879fc58a7d0705bc580892f4c4a1142db99cd73546a9af956d8a1758278c9",
+      "bytes": 2239075
     },
     "facts": {
-      "sha256": "131bc332e0ab554e49240d86843f92ac463dca5be148370ab84f57ee536beaa9",
-      "bytes": 3352347
+      "sha256": "f68c9e7ba2d5872ff87abbcc6b15dd5c9f6951c171a278e5cc0c21c2e8e11ba1",
+      "bytes": 3370480
     }
   }
 }
