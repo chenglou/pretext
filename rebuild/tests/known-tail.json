@@ -415,22 +415,24 @@
       "id": "blink/painter-brackets-shaped-otherwise-than-the-paragraph",
       "engine": "blink",
       "kind": "painter",
-      "title": "The painter lays a line out alone, so a line of brackets is shaped otherwise than in the paragraph and wraps, with no painter limit",
-      "conditions": [],
+      "title": "The painter laid a line out alone, so a line of brackets in an RTL block was shaped otherwise than in the paragraph and wrapped, with no painter limit: closed at the re-architecture's X3, the lines take the limit script-at-line-start",
+      "conditions": [
+        "limit:script-at-line-start"
+      ],
       "cases": [
         {
           "id": "c-0aaf6ad5c7daf6da",
           "browser": "chrome",
-          "where": "twins (twins/rtl-block)"
+          "where": "twins (twins/rtl-block): painter `fail open` until X3, `fail covered by limit:script-at-line-start` since, in both configurations"
         },
         {
           "id": "c-48abe81f791883d3",
           "browser": "chrome",
-          "where": "twins (twins/rtl-block)"
+          "where": "twins (twins/rtl-block): painter `fail open` until X3, `fail covered by limit:script-at-line-start` since, in both configurations"
         }
       ],
-      "source": "specs/blink-RESULTS.md \"String storage\" (the alternative); research/BLINK-STRING-STORAGE.md; the ledgers of the merge's run, both configurations: painter `fail open`, reason `painted line wraps`; the painter owner's report of re-architecture step 3 (2026-09-19), \"The two open painter rows\"",
-      "note": "Runs of 13 brackets after Arabic and after Latin in an RTL block, Amiri at 24px, 90px wide. The prediction passes lineCount, breaks and widths and is exact in both configurations since the rule for a neutral Latin range with a space (`shape.ts` `spacesStay`); before it the failing prediction's conditions covered the painter too. The painted line shapes its brackets otherwise than the paragraph did and wraps, and the painter reports no limit for it. Cause, found offline in the re-architecture's painter step (2026-09-19): in an RTL block Blink enables bidi (`inline_items_builder.cc:1744-1746`), so SegmentScriptRuns runs over a painted line of Latin-1 characters too (`inline_node.cc:1256-1290`), and the brackets take script Common where the paragraph gave them Latin. The painter's check assumes an 8-bit line is one Latin segment and sees no difference. The fix is in Blink's painting rules, `engines/blink/paint-rules.ts` `lineStartScript.scriptsOf` (segmented also when the block's direction is rtl), plus `paint.ts` passing the paragraph's direction beside `reorders`; these lines then take the limit `script-at-line-start` and the rows become covered. No painted form gives Latin back, since no zero-width character has script Latin. The fix changes recorded painter limits for Blink's RTL-block lines of Latin-1 Common characters, so Chrome's references are frozen again with it. Planned for X3."
+      "source": "specs/blink-RESULTS.md \"String storage\" (the alternative); research/BLINK-STRING-STORAGE.md; the ledgers of the merge's run, both configurations: painter `fail open`, reason `painted line wraps`; the painter owner's report of re-architecture step 3 (2026-09-19), \"The two open painter rows\"; the Blink owner's X3 report (2026-09-19) and specs/blink-RESULTS.md \"Re-architecture X3\", \"A line painted in an RTL block\" (48e058b); `.artifacts/tests/runs/ra-x3-blink/proof-after-b-no-facts.json` and `proof-after-b-facts.json`, whose `limitsDiffer` lists every case whose painter limits moved",
+      "note": "Closed on 2026-09-19 (the re-architecture's X3, 48e058b). `engines/blink/paint-rules.ts` `lineStartScript.scriptsOf` takes the painted block's direction, which `paint.ts` passes at its three calls, and segments a painted line by script when its block is RTL. The two rows' painter status went from `fail open` to `fail covered by limit:script-at-line-start` in both configurations, so by rule they belong to `painter/named-limits` now. Tier 2 showed 8 painter transitions per configuration, all this limit: these two rows, and six rows that gaps already covered and that name the limit too (`c-2c3919e3066dac30`, `c-63105f8280e183a3`, `c-3ed24bee6c75ffc0`, `c-2b9ac66959add3b4`, `c-2d63e4cce5180b83`, `c-5b41281666ef0402`). No painted DOM changed. The limit moved in 461 recorded rows of each configuration (460 cases): named on 470 more lines and on 31 fewer. Chrome's references were recorded again and frozen at the X3 merge. The painted lines still wrap: no painted form gives Latin back, since no zero-width character has script Latin. What would reopen the item: one of the rows turning `fail open` again. What it was: Runs of 13 brackets after Arabic and after Latin in an RTL block, Amiri at 24px, 90px wide. The prediction passes lineCount, breaks and widths and is exact in both configurations since the rule for a neutral Latin range with a space (`shape.ts` `spacesStay`); before it the failing prediction's conditions covered the painter too. The painted line shapes its brackets otherwise than the paragraph did and wraps, and the painter reported no limit for it. Cause, found offline in the re-architecture's painter step (2026-09-19): in an RTL block Blink enables bidi (`inline_items_builder.cc:1744-1746`), so SegmentScriptRuns runs over a painted line of Latin-1 characters too (`inline_node.cc:1256-1290`), and the brackets take script Common where the paragraph gave them Latin. The painter's check assumed an 8-bit line is one Latin segment and saw no difference."
     },
     {
       "id": "blink/range-rects-hang",
@@ -1015,7 +1017,7 @@
       "id": "gecko/process-font-fallback-state",
       "engine": "gecko",
       "kind": "history dependence",
-      "title": "Which font draws an emoji depends on what the process looked up before (U+FE0E requests, U+FFFD), and the set isn't stable between identical runs",
+      "title": "Which font draws an emoji depends on what the process looked up before (U+FE0E requests, U+FFFD), and the set isn't stable between identical runs; under the plain predictor five cases' native widths differ from the usual run's without being marked history-dependent",
       "conditions": [
         "page-history"
       ],
@@ -1033,27 +1035,27 @@
         {
           "id": "c-2aa210f8d63d5a8b",
           "browser": "firefox",
-          "where": "suite-sample: moved by measure first, not history-dependent in the reference"
+          "where": "suite-sample part 2 (suite/measurement): moved by measure first; native widths differ between the plain predictor's run and the usual run at X2 and at X3, line ranges equal; not history-dependent in the reference"
         },
         {
           "id": "c-56afde0f3d04b557",
           "browser": "firefox",
-          "where": "suite-sample: moved by measure first, not history-dependent in the reference"
+          "where": "suite-sample part 2 (suite/measurement): moved by measure first; native widths differ between the plain predictor's run and the usual run at X2 and at X3, line ranges equal; not history-dependent in the reference"
         },
         {
           "id": "c-611182808d3e8130",
           "browser": "firefox",
-          "where": "suite-sample: moved by measure first, not history-dependent in the reference"
+          "where": "suite-sample part 2 (suite/measurement): moved by measure first; native widths differ between the plain predictor's run and the usual run at X2 and at X3, line ranges equal; not history-dependent in the reference"
         },
         {
           "id": "c-6b2b36f2a34baeee",
           "browser": "firefox",
-          "where": "suite-sample: moved by measure first, not history-dependent in the reference"
+          "where": "suite-sample part 2 (suite/measurement): moved by measure first; native widths differ between the plain predictor's run and the usual run at X2 and at X3, line ranges equal; not history-dependent in the reference"
         },
         {
           "id": "c-8048bdb9cbcba7a2",
           "browser": "firefox",
-          "where": "suite-sample: moved by measure first, not history-dependent in the reference"
+          "where": "suite-sample part 2 (suite/measurement): moved by measure first; native widths differ between the plain predictor's run and the usual run at X2 and at X3, line ranges equal; not history-dependent in the reference"
         },
         {
           "id": "c-bd4a89130a560c90",
@@ -1087,8 +1089,8 @@
         ],
         "status": "history-dependent"
       },
-      "source": "round 4a Gecko report §3.4 (gfxPlatformFontList.cpp:1474-1486, gfxPlatformMac.cpp:147-262; 190 against 104 history-dependent held-out cases in identical runs); lab README \"Measure first\" (121 of 25,415 cases move, all holding U+1F600); research/ROUND4-CRITIC.md \"Known tail\" 4 (fresh set critic-r4-1)",
-      "note": "A prediction holds for the state it was measured in. Text measured before another paragraph's U+FE0E request and laid out after it is 1px per emoji off, with no condition on it when the facts are supplied. The round 4 critic's fresh set held 209 history-dependent Firefox cases (runs/split-word 87, word-spacing-spans 57, span-at-space 33, letter-spacing-spans 32) against 0 on each of the evaluator's three sets from the same generators; in file order 199 of them fail a prediction metric, in reverse 6, and counted, forward widths would be 98.21% instead of 98.97%. The Firefox line is for runs where this state didn't occur. On the tier sets the set was stable on 2026-09-18: the frozen recordings and the evaluation's, hours apart, mark the same 313 cases (314 on widths) in both configurations."
+      "source": "round 4a Gecko report §3.4 (gfxPlatformFontList.cpp:1474-1486, gfxPlatformMac.cpp:147-262; 190 against 104 history-dependent held-out cases in identical runs); lab README \"Measure first\" (121 of 25,415 cases move, all holding U+1F600); research/ROUND4-CRITIC.md \"Known tail\" 4 (fresh set critic-r4-1); for the plain predictor's five cases: the Gecko owner's X2 report (re-architecture step 2, 2026-09-19) and specs/gecko-RESULTS.md \"Re-architecture X2\"; `.artifacts/tests/runs/ra-x2-gecko/plain-vs-usual.json` with the two control comparisons beside it (`compare-sets.ts --prediction=line-ranges`); lab README \"Measure first\" and the item `gecko/process-font-fallback-state`, which names the same five as moved by measure first; the Gecko owner's X3 report (2026-09-19) and `.artifacts/tests/runs/ra-x3-gecko/plain-vs-usual.json`",
+      "note": "A prediction holds for the state it was measured in. Text measured before another paragraph's U+FE0E request and laid out after it is 1px per emoji off, with no condition on it when the facts are supplied. The round 4 critic's fresh set held 209 history-dependent Firefox cases (runs/split-word 87, word-spacing-spans 57, span-at-space 33, letter-spacing-spans 32) against 0 on each of the evaluator's three sets from the same generators; in file order 199 of them fail a prediction metric, in reverse 6, and counted, forward widths would be 98.21% instead of 98.97%. The Firefox line is for runs where this state didn't occur. On the tier sets the set was stable on 2026-09-18: the frozen recordings and the evaluation's, hours apart, mark the same 313 cases (314 on widths) in both configurations. The plain predictor's five cases (folded in on 2026-09-19 from the item `gecko/plain-predictor-fallback-state`, which named five of the cases above). In runs of the plain predictor (a paragraph prepared plain, the path an application runs) these five cases' NATIVE widths differ from the usual run's: fallback-font widths in another state, for example 33.5px against 18.5px for one code point of `c-56afde0f3d04b557`. Line ranges are equal, and the reference ledger doesn't mark the five history-dependent, because both orders of the usual run saw one state. They sit together in suite-sample part 2 (cases 1,078 to 1,083 of 5,000), where U+1F600 first meets U+FE0E, the text-presentation request that moves the process's fallback state. 120 cases of that part differ in all; the other 115 are history-dependent in the ledger already (`gecko/process-font-fallback-state`), and they hold all 14 whose line ranges moved with the native lines. The measure-first check moved the same five (with the lab's facts their widths went to `fail covered by page-history`). That browser process has two states: the usual predictor's five runs across X1 and X2 were never in the odd one, the plain predictor's were 3 times out of 5 (the set run again with it gave 0 differences once and the same 120 once). The Gecko owner's reading, which nobody tested: a predictor that asks Canvas less and sooner races Firefox's background character-map loading. A probe of that loading would settle it. Until then a native difference on these five under another predictor is this class. Under the usual predictor they pass every metric and are exact in both configurations. At X3 the plain predictor's Firefox run differed from the usual one in the same 120 cases as at X2, case for case, with the same five unmarked."
     },
     {
       "id": "gecko/unbounded-frame",
@@ -3975,44 +3977,6 @@
       "cases": [],
       "source": "research/ROUND4-CRITIC.md §4, §5 and \"Known tail\" 8; rebuild/lab/run.ts (no option for another ratio); src/env.ts detectEngine()",
       "note": "`detectEngine()` answers supported for Chrome or Firefox on any OS, while every pinned rule and table is macOS's (Core Text's family table, the libicucore break tables, the font facts). At a ratio of 1 Blink's font check 4 and its size ratio never run, and Gecko's app units per device pixel differ; the probes ran some ratios (Chrome 1, 2 and 3.5; Firefox 30, 60, 40, 23 and 27 app units per px) and no lab set does. Giants are in no tier. A reference for another ratio or OS is a new recording under a new environment key, never a comparison with this one."
-    },
-    {
-      "id": "gecko/plain-predictor-fallback-state",
-      "engine": "gecko",
-      "kind": "history dependence",
-      "title": "Under the plain predictor a Firefox process is often in its other fallback-font state, and five cases' native widths differ from the usual run's without being marked history-dependent",
-      "conditions": [
-        "page-history"
-      ],
-      "cases": [
-        {
-          "id": "c-2aa210f8d63d5a8b",
-          "browser": "firefox",
-          "where": "suite-sample part 2 (suite/measurement): native widths differ between the plain predictor's run and the usual run at X2; line ranges equal; not history-dependent in the reference"
-        },
-        {
-          "id": "c-56afde0f3d04b557",
-          "browser": "firefox",
-          "where": "suite-sample part 2 (suite/measurement): native widths differ between the plain predictor's run and the usual run at X2; line ranges equal; not history-dependent in the reference"
-        },
-        {
-          "id": "c-611182808d3e8130",
-          "browser": "firefox",
-          "where": "suite-sample part 2 (suite/measurement): native widths differ between the plain predictor's run and the usual run at X2; line ranges equal; not history-dependent in the reference"
-        },
-        {
-          "id": "c-6b2b36f2a34baeee",
-          "browser": "firefox",
-          "where": "suite-sample part 2 (suite/measurement): native widths differ between the plain predictor's run and the usual run at X2; line ranges equal; not history-dependent in the reference"
-        },
-        {
-          "id": "c-8048bdb9cbcba7a2",
-          "browser": "firefox",
-          "where": "suite-sample part 2 (suite/measurement): native widths differ between the plain predictor's run and the usual run at X2; line ranges equal; not history-dependent in the reference"
-        }
-      ],
-      "source": "the Gecko owner's X2 report (re-architecture step 2, 2026-09-19) and specs/gecko-RESULTS.md \"Re-architecture X2\"; `.artifacts/tests/runs/ra-x2-gecko/plain-vs-usual.json` with the two control comparisons beside it (`compare-sets.ts --prediction=line-ranges`); lab README \"Measure first\" and the item `gecko/process-font-fallback-state`, which names the same five as moved by measure first",
-      "note": "In runs of the plain predictor (a paragraph prepared plain, the path an application runs) these five cases' NATIVE widths differ from the usual run's: fallback-font widths in another state, for example 33.5px against 18.5px for one code point of `c-56afde0f3d04b557`. Line ranges are equal, and the reference ledger doesn't mark the five history-dependent, because both orders of the usual run saw one state. They sit together in suite-sample part 2 (cases 1,078 to 1,083 of 5,000), where U+1F600 first meets U+FE0E, the text-presentation request that moves the process's fallback state. 120 cases of that part differ in all; the other 115 are history-dependent in the ledger already (`gecko/process-font-fallback-state`), and they hold all 14 whose line ranges moved with the native lines. The measure-first check moved the same five (with the lab's facts their widths went to `fail covered by page-history`). That browser process has two states: the usual predictor's five runs across X1 and X2 were never in the odd one, the plain predictor's were 3 times out of 5 (the set run again with it gave 0 differences once and the same 120 once). The Gecko owner's reading, which nobody tested: a predictor that asks Canvas less and sooner races Firefox's background character-map loading. A probe of that loading would settle it. Until then a native difference on these five under another predictor is this class. Under the usual predictor they pass every metric and are exact in both configurations."
     }
   ]
 }

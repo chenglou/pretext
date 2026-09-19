@@ -8281,7 +8281,7 @@
    "area": "env",
    "kind": "recipe",
    "statement": "detectEngine answers unsupported, naming each lack, where the running Canvas lacks what the engine's measuring recipes assume: the context attributes a recipe sets to something other than the default (Blink lang, letterSpacing, textRendering, direction; Gecko lang, letterSpacing, direction; WebKit letterSpacing, wordSpacing), the ink box (Blink, Gecko), and the ligature-free letter spacing adding exactly 1/64 px a character in Blink, and nothing to the width or the ink box in Gecko, over one letter 16 times in 16px serif; two contexts and two measureText calls, no browser or version names; detectEnvironment asks Canvas nothing",
-   "source": "src/measure/canvas-checks.ts; engines/blink/shape.ts styleContexts; engines/gecko/prepare.ts, lines.ts ligatureAcross; engines/webkit/content.ts; CanvasRenderingContext2D.cpp:4771-4774; research/VERSION-DRIFT.md",
+   "source": "src/measure/canvas-checks.ts; engines/blink/contexts.ts styleContexts; engines/gecko/prepare.ts, lines.ts ligatureAcross; engines/webkit/content.ts; CanvasRenderingContext2D.cpp:4771-4774; research/VERSION-DRIFT.md",
    "probes": [
     "canvas-checks/detect-engine"
    ],
@@ -9663,7 +9663,7 @@
   "webkit/measure/font-check-fixed-pitch": "80b7e6b4e68eb0a3",
   "blink/measure/font-check-linear-sizes": "7fa36fddb2d5495d",
   "blink/measure/font-check-joining-context": "0c7ec8d1d139aa06",
-  "shared/env/canvas-checks": "dcc116001a54c95c",
+  "shared/env/canvas-checks": "2d8d97f9c8cd7a0c",
   "blink/shape/requeued-ideographic-space": "8dd8e137e90f2bfb",
   "blink/shape/font-run-edge-safe": "7adda574d8541988",
   "blink/shape/reversed-buffer-pair-order": "b3894f4eea04a15a",

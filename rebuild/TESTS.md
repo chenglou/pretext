@@ -44,6 +44,49 @@ cases; in 3 native observations and 0 line ranges of webkit-host's 63,987; and i
 with them: all 203 are history-dependent in the reference ledgers. Every case of the six recordings replays exactly
 (0 unfaithful); the six references are frozen at that commit, and tier 1 exits 0 again.
 
+**Since the re-architecture's X3, 2026-09-19.** X3 is the ports' model clean-up (DESIGN.md §3, "Each port's data since
+the re-architecture's X3"). It merged with three Blink jobs that change recorded rows: gap lists are handed out
+canonical, which let X2's two flows back in (DESIGN.md §5); a painted line in an RTL block is segmented by script (§7);
+and an inspected paragraph no longer makes one-byte hyphen contexts it doesn't use (§4.6).
+
+- *The clean-ups move nothing.* On each owner's branch tier 1 is the same on all six references, 0 questions changed
+  (Blink's exits 3 by the string storage rule alone, because `shape.ts` changed); the function set's plain, pure and
+  sweep checks exit 0; citations lose nothing that isn't accepted by name (2 in WebKit, 3 in Blink, 0 in Gecko); the
+  painter differential is byte-equal. Tier 2 in both orders and both configurations shows 0 transitions in each owner's
+  browser, and the giants' predictions equal the frozen rows' and are no slower (`.artifacts/tests/runs/ra-x3-blink`,
+  `ra-x3-webkit`, `ra-x3-gecko`; lab README, "Baselines for the tripwire"). Two owners added a differential of their
+  own against the start commit: WebKit's whole function set, question sequences included, differs in 0 of 63,987 cases
+  in either configuration, and Gecko's layouts at four other widths on a stand-in Canvas are equal on 270,960 layouts,
+  with the same number of questions.
+- *Blink's three jobs change rows, as accounted.* At the merge tier 1 exits 1 for Chrome and 0 for Firefox and
+  webkit-host. Against the references frozen at X2, 926 Chrome rows without facts and 756 with them differ byte for
+  byte: 473 and 303 by gap lists, 461 by painter limits, 8 by both. The context count falls in 3,745 cases of each
+  configuration, which tier 1 classes as other questions, and every other changed case is repeats only. Tier 2 in
+  Chrome shows 8 painter transitions per configuration, all the limit `script-at-line-start`, 0 from pass to a failure,
+  and the gate lost 0. Chrome's references were recorded again and frozen at the X3 merge.
+- *The proof that canonical lists change grouping alone is not a checked-in gate.* It is a script under `.artifacts`:
+  `.artifacts/tests/runs/ra-x3-blink/tools/canonical-proof.ts` (`check --tree=<worktree> --browser=chrome
+  --config=no-facts|facts`, with `--without-limits=true` to leave the painter's limits out of the comparison). It
+  defines canonical on its own, without importing the library, replays every case of a frozen Chrome reference with
+  the tree's library, and reports the rows that differ byte for byte, the cases that are equal once both sides' gap
+  lists are canonical, whether every new list is already canonical, and the question changes by kind. It proves that
+  the 473 and 303 rows differ in how ranges are grouped and in nothing else: 67,065 of 67,065 cases are equal after
+  canonicalizing both, in each configuration. The orchestrator ran it again on the merged tree, the painter's limits
+  left out, with the same result. It compares with the references frozen at X2, so it is the record behind the X3
+  freeze and says nothing about a later tree. What holds the form from now on is `engines/blink/gaps.test.ts` and tier 1.
+- *New unit tests* (`bun test rebuild`: 822 tests in 59 files at the merge). `engines/blink/gaps.test.ts`: ranges that
+  meet become one where the first was, touching counts as meeting, another run or detail stays apart, the same ranges
+  raised again in any order give the same list, the entries are copies; and the painter's rule takes an 8-bit line
+  for one Latin segment in an LTR block and segments it by script in an RTL one. Two in `engines/gecko/gecko.test.ts`:
+  text nodes without frames are collapsed fragments of their own leaves, and a unit holds nothing of its inside until
+  a line asks while a line start survives a round trip through JSON.
+- *Tier 1's string storage rule* also watches `rebuild/src/engines/blink/contexts.ts` (`replay.ts` `STORAGE_PATHS`),
+  where `styleContexts` and `raw16Of` moved; `check --sites` names the site `raw16Of@engines/blink/contexts.ts`.
+- *The plain predictor's browser runs at X3* are X2's: Chrome 0 differences on 67,065 cases; webkit-host 0 line ranges
+  and the same 3 native observations; Firefox the same 120 cases of `suite-sample` part 2, case for case, with the
+  same five unmarked (known-tail item `gecko/process-font-fallback-state`, which took the item
+  `gecko/plain-predictor-fallback-state` in).
+
 Tier 1 is a change detector, not an oracle: its expected values are the library's own at a commit. Its inputs are recorded
 per library, so a library that asks Canvas new questions needs a new recording (`browser-sets.ts --record`, `replay.ts
 pack`, `freeze --force --reason`). `replay.ts check` only reads the reference folder and keeps its scratch files and report
@@ -83,6 +126,8 @@ Chrome 250.7 and 240.8 (61.02 and 48.33 distinct, as before), webkit-host 39.32 
 lab's path 1,016.8 and 1,055.7, 88.79 and 59.86, 114.5 and 115.7 (DESIGN.md §4.7 has the table and what it cost). The
 counts of cases whose first asks come in another order are the X1 merge's. Every repeated question recorded in pinned
 Chrome was answered as the first time: 2.17 M questions asked again in 26,913 cases, 0 with another width or ink box.
+Since Blink's X3 Chrome's plain path asks 234.3 questions a paragraph without facts (61.0 distinct, ratio 3.84) and 224.3
+with them (48.3, 4.64), and the lab's path 736.2 and 775.6; webkit-host's and Firefox's counts didn't move at X3.
 The plain predictor's browser runs at X2:
 
 - Chrome, all 67,065 no-facts cases: line ranges equal, 0 native differences. The other-widths-first predictor's 67,065
@@ -91,7 +136,8 @@ The plain predictor's browser runs at X2:
 - Firefox, 63,771 cases: 63,651 equal. The other 120 are in one browser process (`suite-sample` part 2), with
   fallback-font widths in another state; line ranges move with the native lines in 14. 115 of them, the 14 among them,
   are history-dependent in the ledger already. The other 5 differ in native widths alone and aren't marked there; they
-  are in the known tail (`gecko/plain-predictor-fallback-state`).
+  are in the known tail (`gecko/process-font-fallback-state`, which took the item
+  `gecko/plain-predictor-fallback-state` in at X3).
 
 The ports' tests count what their stand-in Canvas is asked, and probe `blink-storage` S5 what the page's Canvas is
 asked: no port keeps a log they could read. The painter differential (`rebuild/tools/painter-diff.ts`, check 7) is
@@ -122,7 +168,7 @@ Terms:
 | `rebuild/tests/sets.ts` | The tiers' sets and run protocol |
 | `rebuild/tests/replay.ts`, `rebuild/tests/reference/` | Tier 1: offline replay against a frozen reference, pinned by hash in the manifests |
 | `rebuild/tests/browser-sets.ts`, `rebuild/tests/baselines/sets/` | Tier 2 and its adopted seeds, `<browser>-<engine build>-<config>.json` with seed records |
-| `rebuild/tests/known-tail.json`, `known-tail.ts`, `known-tail.test.ts` | The known tail: the classes left open at the frozen line, with case ids and rules over a tier 2 ledger, its exact-value status included (64 items) |
+| `rebuild/tests/known-tail.json`, `known-tail.ts`, `known-tail.test.ts` | The known tail: the classes left open at the frozen line, with case ids and rules over a tier 2 ledger, its exact-value status included (63 items) |
 | `rebuild/tests/compare-sets.ts`, `rebuild/lab/compare-rows.ts` | Two tier 2 runs, or two row files, case by case (measure first, installed Safari against webkit-host) |
 | `rebuild/tests/ledger.ts` | The known-status ledger: the four metrics' statuses and the exact-value status per case, transitions and conditions |
 | `rebuild/lab/rows.ts`, `predictor-core.ts`, `port-measure.ts` | Rows read plain or `.zst`; the one prediction adapter; the observation ports' live measuring |

@@ -265,6 +265,7 @@ Rules:
 - An expression that exists only to decide a gap is evaluated inside `gaps.ts`. Examples are `canvasScriptsPerUnit` at letter spacing 0, `positionBounds` and the no-ligature pair windows.
 - Because the raise points stay where they are, order and merging stay the same, and byte identity follows by construction.
   - Note, 2026-09-19, after X2: this doesn't cover §5.3's flows in Blink. A raise rides on every `measure16` call, and `addGap` merges a range into the first entry it meets, so how ranges are grouped follows the number and order of raises; a value handed on in place of a repeated measurement regrouped 3 and 1 of 67,065 rows, and those two flows were taken back. X3 gives gap lists a canonical form (DESIGN.md §5; the comment beside `addGap` in `engines/blink/gaps.ts`).
+  - Note, 2026-09-19, after X3: Blink's gap lists are canonical where they are handed out (`inspectLine`'s result, and the prepared paragraph's own list once `prepare` ends, which `paragraphGaps` copies), not where they are built: the line breaker's rewind cuts a list being built by length, so entries can't be merged away while it is built. 473 recorded Chrome rows without facts and 303 with them changed byte for byte, and all 67,065 cases of each configuration are equal after canonicalizing both sides. The two flows are back in. WebKit and Gecko got no canonical form: WebKit's raises come in one fixed order, and Gecko merges nothing (DESIGN.md §5).
 
 **Merge rules are ported one by one, with no shared helper:**
 - Blink merges by gap, run, detail and touching ranges (`blink/gaps.ts:9-24`).
@@ -418,6 +419,7 @@ type LinePieces<Facts> = {
 - `decisionEnd`, `untestedEnds`, `breaksInsideWords` and `truncatedStarts`, as now.
 - Reshape records hold their own measured positions for the line's life.
   - Note, 2026-09-19: not built in X2. A reshape's own positions (`callPrefix16`) are 0.1% of Blink's repeats.
+  - Note, 2026-09-19, after X3: still not built. It is a store of measured values, which decision 4 keeps for after profiling, and it would answer 0.1% of the repeats.
 
 **`gaps.ts` takes:**
 - `joinedAtEdge`'s conditions. The function becomes a pure "is U+200D added here".
@@ -444,6 +446,12 @@ type LinePieces<Facts> = {
   - `generated()` (`:1105-1113`).
   - `groupAround` (`:200-203`) becomes `g = groupOfUnit[k]; return g >= 0 && groups[g].start < k ? g : -1`, which stays strict on both sides.
 - `scriptsPerUnit` isn't run where its result is discarded.
+- Notes, 2026-09-19, after X3:
+  - `groupAround` also needs `k < text.length`, since the content end can be `text.length`.
+  - "The line-break iterator stops being built per line" came to mean its eager scan and its arrays. ICU restarts at every line start with no prior context, so an iterator object per line stays, as in Blink.
+  - The browser's dictionary segmentation isn't pulled lazily: `lab/record.ts` stores what `next()` returned, so a partial pull would record a partial segmentation. It is asked once a dictionary segment is reached.
+  - The per-line `shapeResults` Map became an array by item index and didn't go: dropping it would ask an item's result again after a rewind.
+  - The import cycle went from five files to `shape.ts`, `limits.ts` and `gaps.ts`. No split removes it while one `gaps.ts` owns every condition (§5.2).
 
 ### WebKit
 
@@ -460,6 +468,7 @@ type LinePieces<Facts> = {
 - `{ measuredEnd, reverted, decisionStart, overflowStart, shapedCarry }`.
 - The widths the fill measured, for `lineGaps`.
   - Note, 2026-09-19: not built in X2. In WebKit the fill measures almost nothing that `lineGaps` asks again: of the 2.44 M questions a line's own inspection repeats without facts, 1.69 M were first asked by prepare, 0.74 M by inspection itself and 15 thousand by the fill. Handing prepare's derivations over needs X3's item model.
+  - Note, 2026-09-19, after X3: X3 didn't build that hand-over either. `measure.ts` knows nothing of inspection, so the record would come back from every measuring call or sit behind an inspected-only branch inside measuring, for a gain only the lab sees (about 1.5 M of the lab path's 3.6 M repeats without facts). Stored widths are written at two sites and read at one, so it fits there later.
 - On an inspected paragraph, the fill-time gaps in order. `lineGaps` is seeded with them, and its dedupe reads them.
 
 **`gaps.ts` takes:**
@@ -467,6 +476,7 @@ type LinePieces<Facts> = {
 - `lineGaps`, `pageHistoryGaps`, `collectBoxFacts` and `collectHistoryWorlds`.
 - The LastResort comparison for `unverifiedCoverage` (`content.ts:275`). The coverage measure that decides `simplifiedMeasuring` stays in prepare.
 - `hyphenGlyphsDiffer`.
+- Note, 2026-09-19, after X3: the history worlds and `pageHistoryGaps` are `engines/webkit/history.ts`, not `gaps.ts`. A file that takes the fill's raises and also fills lines in worlds imports `lines.ts` both ways, which was the cycle. `gaps.ts` keeps `page-history`'s prose and merge rule as a raise function, and imports neither the fill nor the content stage. `collectBoxFacts` is gone: a box's inspection record is made with the box.
 
 **History worlds:**
 - `inspectLine` is built from two internal functions, `displayBoxes(prepared, line)` and `lineGaps(prepared, line)`.
@@ -500,6 +510,7 @@ type LinePieces<Facts> = {
 - `emergencyUnconfirmed` becomes flags per offset.
 - `Provider.tabs` becomes a sorted array.
 - `scriptLimits` becomes a moving index.
+  - Note, 2026-09-19, after X3: `emergencyUnconfirmed` became a list in text order, not flags per offset. It holds few entries, one membership test runs per line such a break decides, and flags would cost a byte per unit of text on every inspected paragraph. `scriptLimits` went with the second unit scan: the real redundancy was that units were cut twice, and they are now cut once, in the port of SplitAndInitTextRun.
 - The item, style and frame lists of all three engines keep today's order and length, because the row's `next` names their indices.
 
 **Decided line:**
@@ -711,6 +722,11 @@ Files for each owner: all of `engines/<engine>/` and its generator. The `geometr
   - T1 exit 0, or exit 3 with repeats only or fewer repeats.
   - T2 in both orders.
   - The giants set in the browser under the exclusive lock, with predictions byte-equal to the frozen giants rows and the time not worse.
+- Note, 2026-09-19: X3 is merged for the three engines. The clean-ups moved no row and no question. Three Blink jobs merged with it change recorded Chrome rows: canonical gap lists with X2's two flows back (§5.2), the painter's script rule in an RTL block, and no unused one-byte hyphen contexts. Chrome's references are frozen again at this merge.
+  - Not built, with each owner's reason. WebKit's item hand-over: it needs a record returned from every measuring call or an inspected-only branch inside measuring, for a gain only the lab sees (§6). Blink's reshape records that hold their own positions: a store of measured values, worth 0.1% of the repeats (§6). Gecko's flags per offset for `emergencyUnconfirmed`: a short list in text order does it, where flags would cost a byte per unit of text on every inspected paragraph (§6).
+  - Line counts did not come down (non-test lines: Blink 7,118 to 7,195, WebKit 6,132 to 6,074, Gecko 5,848 to 5,850). X3 removed state and reads that cut across stages; the ports are mostly ported logic with citations (DESIGN.md §3).
+  - "Dead fields and what knip finds": knip sees exports, not record fields. The owners found dead fields by looking for readers.
+  - The tripwire's single timed run isn't enough on a shared machine: in Firefox the lab's own native and observation steps, which no tree changed, took 1.6 and 2.1 times as long in one of two back-to-back exclusive runs. Alternating pairs settled it (lab README, "Baselines for the tripwire").
 
 Docs per engine: DESIGN §3, §4.4, §4.5 and §5 for that engine, and its `specs/*-RESULTS.md`.
 

@@ -916,20 +916,25 @@ where it may be wrong.
   path first asks it later (`tests/function-set.ts plain`; TESTS.md, "The function set's checks"). Questions a paragraph,
   plain against inspected, since the ports' memo went (X2; §4.7): Blink 250.7 against 1,016.8 without facts and 240.8
   against 1,055.7 with the lab's facts; WebKit 39.32 against 88.79 and 21.65 against 59.86; Gecko 54.5 against 114.5 and
-  55.1 against 115.7. With the memo, at X1: Blink 61.18 against 99.97 and 48.49 against 91.91; WebKit 26.14 against 31.81
-  and 12.38 against 19.18; Gecko 40.7 against 74.2 and 40.8 against 74.5 (the X1 and X2 sections of specs/blink-RESULTS.md,
-  specs/webkit-RESULTS.md and specs/gecko-RESULTS.md).
+  55.1 against 115.7. Since X3, which changed no count in WebKit and Gecko, Blink asks 234.3 against 736.2 and 224.3
+  against 775.6 (§4.7). With the memo, at X1: Blink 61.18 against 99.97 and 48.49 against 91.91; WebKit 26.14 against 31.81
+  and 12.38 against 19.18; Gecko 40.7 against 74.2 and 40.8 against 74.5 (the X1, X2 and X3 sections of
+  specs/blink-RESULTS.md, specs/webkit-RESULTS.md and specs/gecko-RESULTS.md).
 - Each port keeps every gap condition in one file, `engines/<engine>/gaps.ts`. A function that raises a gap takes a sink
   first (`GapSink`: `Gap[]`, null on a plain paragraph) and returns at once on null, and the measuring only a gap needs is
   done inside it. What a line's filling raises stays on the decided line in raise order, across every pass of the fill, and
-  `inspectLine` starts from a copy of it. What else only gaps read is in `prepared.inspect`, null on a plain paragraph;
-  nothing else says which of the two a paragraph is.
+  `inspectLine` starts from a copy of it. Blink hands a list out in a canonical form, which doesn't follow how often a
+  range was raised (§5). What else only gaps read is in `prepared.inspect`, null on a plain paragraph; nothing else says
+  which of the two a paragraph is.
 - WebKit reports every condition of the content and fonts on the lines whose filling measured the characters it concerns,
   the content that ended the line included, with `at` naming them; its paragraph keeps only `page-zoom` (added in ceiling
   round 2). The filling itself raises the four conditions a break decision shows (`hyphen-glyph`, the 8-bit emergency
   break's `string-storage`, `dictionary-breaks-stand-in` between boxes, `rtl-shaping-across-inline-boxes`); `lineGaps`
-  (`engines/webkit/gaps.ts`) adds the conditions of every character the filling measured, then `page-history` from the
-  line as each history world fills it. The box facts only gaps read and the history worlds are in `prepared.inspect`.
+  (`engines/webkit/gaps.ts`) adds the conditions of every character the filling measured; `pageHistoryGaps`
+  (`engines/webkit/history.ts`, since X3) then fills the line in each history world that changes what it read, and
+  raises `page-history` through `gaps.ts` (`lineDiffersInHistoryWorld`, which keeps the prose and the merge rule) where
+  the world's line differs. The box facts only gaps read, made with each box, and the history worlds are in
+  `prepared.inspect`.
 - Blink reports the conditions of the content in `layout.gaps` with `at`, computed in `prepare` from the content alone
   (control characters Canvas replaces, U+FFFC, graphemes whose Canvas strings shape under another script, default
   ignorables left out of 8-bit strings, shaping-group edges inside graphemes, joining edges at group edges), and adds each
@@ -981,15 +986,18 @@ trim or align Gecko's line. `linePieces` and `inspectLine` read the decided line
 - Blink's decided line is `LineBreaker::NextLine`'s `LineInfo` with the line start and, inspected, the gaps its filling
   raised; a refused slot keeps the same record, its gaps read from the line that overflowed. `fillLine` (`index.ts`) gives
   the source range from the two line starts. `linePieces` is `pieces.ts`; `inspectLine` is `gaps.ts` `lineGaps`, then
-  `inspect.ts`. Justification's sizes are data handed from `justificationOf` to `itemsOf`; before X1 they were written
-  into the item results.
+  `inspect.ts`, and it hands the list out canonical (`gaps.ts` `canonicalGaps`, §5). Justification's sizes are data handed
+  from `justificationOf` to `itemsOf`; before X1 they were written into the item results.
 - WebKit's decided line is the closed `Line` with the start and the slot it was filled from and in, the builder, the line
-  rect, the source range and, inspected, the gaps its filling raised. `fillLine` is in `lines.ts`, `linePieces` and
-  `lineGeometry` in `output.ts`, and `inspectLine` is `gaps.ts` `lineGaps`, then `lineGeometry`.
+  rect, the source range and, inspected, the gaps its filling raised. Its types are in `types.ts` (`WebKitFilledLine`,
+  `Line`, and `LineRun`, a tagged union of text, soft line break, element and line-spanning runs). `fillLine` is in
+  `lines.ts`, `linePieces` and `lineGeometry` in `output.ts`, and `inspectLine` (`index.ts`) is `gaps.ts` `lineGaps`, then
+  `history.ts` `pageHistoryGaps`, then `lineGeometry`.
 - Gecko's decided line is the start, the band, the last pass's spans as reflow left them, the next position and, inspected,
   the gaps the passes raised with the in-word stand-in offsets they consulted. `fillLine` (`lines.ts`) runs the passes
-  alone. `placement.ts` trims, aligns and justifies on its own copy of the spans; `pieces.ts` and `inspect.ts` read the
-  placed copy, and `inspect.ts` alone measures the characters and then calls `gaps.ts` `lineGaps`.
+  alone. `placement.ts` makes its own placed records from the line's reflowed spans (`lines.ts` `Reflowed`,
+  `placement.ts` `Placed`), and trims, aligns and justifies those; `pieces.ts` and `inspect.ts` read them, and
+  `inspect.ts` alone measures the characters and then calls `gaps.ts` `lineGaps`.
 
 The insets are the margin-box widths of the floats beside the line, and each engine turns them into its own line offsets
 with its own arithmetic, which is why a slot isn't one available width: Blink truncates the content width and each float's
@@ -1072,6 +1080,62 @@ linePieces(prepared: Prepared, line: FilledLine): LinePieces<PaintFacts>
 inspectLine(prepared: Prepared, line: FilledLine | RefusedSlot): LineInspectionOf<Geometry>
 paragraphGaps(prepared: Prepared): Gap[]
 ```
+
+**Each port's data since the re-architecture's X3** (2026-09-19; the X3 sections of specs/blink-RESULTS.md,
+specs/webkit-RESULTS.md and specs/gecko-RESULTS.md). X3, the model clean-up, changed how the ports hold what they know
+and moved no prediction and no Canvas question. Three further Blink jobs merged with it change recorded rows (§5, §7,
+§4.7).
+
+- Blink (`types.ts`). A style is one record, `BlinkStyle`: the computed style with its iterator settings and the span's
+  `shouldCreateBoxFragment`, its Canvas contexts, and what measuring keeps beside them (`oneByteContexts` and
+  `canvasSplitsWords`, null until first needed, and `hanKerning`). It replaces five arrays by style on the prepared
+  paragraph. Those two lazy answers are the only prepared data written after `prepare`: facts of the style's fonts that no
+  layout changes, asked late because asking earlier would change question order and the context count. Items are a tagged
+  union (`TextItem`; `ControlItem`, a text leaf's or an element's; `TagItem`; `AtomicItem`), so no item holds `-1` for a
+  leaf or an element it doesn't have, and a text item's shaping group is `groupOfUnit` at its start. The port holds no
+  Map and no Set: a line's item results are an array by item index from the line's first item
+  (`LineBreaker.shapeResults`; a rewind comes back to the same result, so an item is still asked once per fill), and
+  tables are generated records searched by binary search, or switches. A line's output reads the paragraph around the
+  line and no longer scans it whole (`pieces.ts` `fragmentsOf` walks the events from the line's first result, or the
+  leaf holding its source start, to its last result, or the leaf holding its source end). The break iterator (`breaks.ts` `LineBreakIterator`) keeps the boundaries its rule iterator has given so far,
+  pulls the next one when a question reaches past them, and answers by binary search. ICU still restarts at every line
+  start, as in Blink, and the browser's dictionary segmentation is still asked from the line start to the paragraph's end,
+  once a dictionary segment is reached: the lab's recorder stores what `next()` returned, so a partial pull would record
+  a partial segmentation. `contexts.ts` holds a style's contexts and a measured total (`styleContexts`, `raw16Of`). One
+  cycle of function imports is left, between `shape.ts`, `limits.ts` and `gaps.ts` (five files before): a measurement
+  raises its range's gaps, and a line's gap tests measure, so it stays while one `gaps.ts` owns every condition (§2.8).
+- WebKit (`types.ts`). A line's runs are a tagged union (`LineRun`: a text run, a soft line break, an element's run with
+  its item's `sourceOffset`, a line-spanning inline box start), so no run holds `-1` for a box or an element it doesn't
+  have, or text fields without text. A run's trailing white space and a line's trimmable content are a record or null,
+  and the breaker's result is a union on its action. A box's inspection record is made in one step, with the box
+  (`gaps.ts` `boxMade`, from a family list parsed once, `fonts.ts` `familyNames`). The item builder is `items.ts`; the
+  history worlds and a decided line laid out in them are `history.ts`. No import cycle is left, type imports included:
+  `gaps.ts` imports neither the fill nor the content stage, `history.ts` imports the fill, the output and `gaps.ts`, and
+  `content.ts` (which collects the worlds when it prepares an inspected paragraph) and `index.ts` import `history.ts`.
+- Gecko (`types.ts`). A text leaf is one record (`GeckoLeaf`: its source range, parent, style, font, language, 8-bit
+  storage, and letter and word spacing in au), where the prepared paragraph had five parallel arrays and `prepare.ts`
+  seven more. A text run is cut into shaping units once, where the port of `gfxFont::SplitAndInitTextRun` sets the glyph
+  flags (`prepare.ts` `splitAndInitTextRun`), and the measuring step reads those units; before, the boundary test was
+  written again for measuring and the script runs were itemized twice. What measuring found inside a unit is on the unit
+  (`GeckoUnit.inWord`, §4.6). A frame's tabs are one ordered list with each tab's stand-in reason (`lines.ts` `Tab`), one
+  shared empty list where a run has no tab. Reflow's frame records and placement's are separate types (§2.9). 17 of 18
+  Maps and Sets became indexes, fields or lists; the one left, in `inspect.ts`, mirrors Gecko's own
+  `nsContinuationStates`. Cycles of type imports remain between `gaps.ts`, `lines.ts`, `placement.ts` and `prepare.ts`,
+  and no cycle of function imports.
+
+**X3 did not bring the line counts down.** Non-test lines: Blink 7,118 to 7,195 (7,140 after the clean-up alone; the
+three row-changing jobs added the rest), WebKit 6,132 to 6,074, Gecko 5,848 to 5,850. What it removed was state, and
+reads that cut across stages:
+
+- Blink: five arrays by style, six item fields, every Map and Set, three module tables filled lazily, the Sets of
+  elements made per line, and the scans of the whole paragraph per line.
+- WebKit: the import cycles, the `-1` sentinels and text fields every run carried, fields that ran in parallel, the
+  always-null `hyphenWidth` fields with seven other dead fields, and a gap-only parameter in measuring.
+- Gecko: twelve parallel arrays, 17 Maps and Sets, the second scan that cut units, 18 casts, ten dead fields and three
+  fields that copied another.
+
+The ports are mostly ported logic with its citations, and typed records with their comments cost about what the removed
+structures saved. No owner found a larger cut that keeps every rule, citation and gap.
 
 Shared, working and tested (§8.2):
 
@@ -1272,7 +1336,10 @@ the list of its contexts, which lives as long as it does and serves every line f
 that measure hold their contexts by reference:
 
 - Blink: a style holds its contexts (`types.ts` `StyleContexts`: shaping LTR and RTL, the same two without ligatures, and
-  the hyphen's; `BlinkPrepared.contexts`, and `oneByteContexts` in a segmented paragraph, §4.2). The list is
+  the hyphen's; since X3 on the style's one record, `BlinkStyle.contexts`, and `BlinkStyle.oneByteContexts` in a segmented
+  paragraph, §4.2, made by `contexts.ts` `styleContexts`). Since X3 an inspected paragraph makes the one-byte contexts for
+  the hyphen only where `mapsHyphen` is null and it measures U+002D (`gaps.ts` `hyphenGlyph`); it made them unused
+  before, and the context count fell by 4 or 5 in 3,745 recorded cases of each configuration. The list is
   `BlinkPrepared.canvases`, and styles with equal settings share a context. `Shaper` is `{ p, gaps }`: whatever reaches
   `measure16` takes it, because every measurement raises its range's gaps (§5), and a helper that measures without
   raising a gap takes the prepared paragraph alone.
@@ -1286,24 +1353,30 @@ that measure hold their contexts by reference:
 
 What a port needs twice it keeps as a value in a plain place (research/ARCHITECTURE-PLAN-2.md §5.3): a local, a value
 handed from the step that measured it to the step that uses it, a field set where `prepare` already measures, and in
-Gecko one record per offset, where the port had memos before. No first ask moved.
+Gecko one record per offset, on the offset's shaping unit, where the port had memos before. No first ask moved.
 
 - Blink: a piece's measured total goes from the cut search to the group's prefixes, which are sums of those totals
   (`shape.ts` `addPieces`); `windowAdjust16` takes its window's total from its caller; `floatWidthOfParts` measures a
-  view's part and run edges once each.
+  view's part and run edges once each. Since X3, with gap lists handed out canonical (§5), the two flows X2 took back
+  are in: `inspect.ts` `shapeOf` carries the advance sum before the cluster it is making, so a cluster edge is measured
+  once instead of four times, and `shape.ts` `offsetForPosition` keeps the positions at `low` and past `high` in two
+  locals, the only indices its binary search comes back to.
 - WebKit: `mergedGlyphs` totals a string once in the count context; `controlIsAdjusted` asks the letter before a control
   once; `lineHyphenWidth` measures the hyphen once and hands the total to the `hyphen-glyph` test
   (`gaps.ts` `hyphenWidthRead`); the coverage test of `makeBox` asks each code point once; and a box keeps the space its
   white-space items were measured with (`WebKitBox.spaceWidth`, §4.5).
-- Gecko: what measuring found about an offset inside a shaping unit is kept per offset on the prepared paragraph
-  (`GeckoPrepared.inWord`, `advance.ts` `InWordEntry`: the advance with its reason, the optional-ligature and
-  required-group facts, the row of ligature candidates, the suffix width), and a unit keeps its ligature group count
-  (`GeckoUnit.groups`). They replace the port's six module-level memos, one of them keyed by string, and they are the
-  only parts of Gecko's prepared paragraph written after preparation (`lines.ts` `groupEndSpacing` reads the records on
-  every call instead of keeping a memo of its own). A fill, a placement, an inspection and a layout at another width
-  measure an offset once; the advance before the next cluster reads the suffix width its neighbour measured
-  (`suffixAlone`); a text run asks for its space once; an emoji cluster's width and ink box come from one `measureText`
-  per context.
+- Gecko: what measuring found inside a shaping unit is kept by the unit (`GeckoUnit.inWord`, `types.ts` `InWord` and
+  `InWordEntry`: the unit's ligature group count, and per offset the advance with its reason, the optional-ligature and
+  required-group facts, the row of ligature candidates and the suffix width), made when an offset inside the unit first
+  asks. At X2 the records were a text-long array on the prepared paragraph, allocated for every paragraph, with the
+  group count beside it on the unit; X3 moved both onto the unit. It replaces the port's six module-level memos, one of
+  them keyed by string, and it is the only part of Gecko's prepared paragraph written after preparation: facts of the
+  unit's text in its text run, which no width and no line changes, and which go with the paragraph. They are filled on
+  first read only because filling them in `prepare` would ask Canvas questions no line needs and would move first asks
+  (`lines.ts` `groupEndSpacing` reads the records on every call instead of keeping a memo of its own). A fill, a
+  placement, an inspection and a layout at another width measure an offset once; the advance before the next cluster
+  reads the suffix width its neighbour measured (`suffixAlone`); a text run asks for its space once; an emoji cluster's
+  width and ink box come from one `measureText` per context.
 
 No measured value is found by its string, so a string that recurs in a paragraph is measured at each occurrence (§4.7).
 
@@ -1353,14 +1426,28 @@ call: the start's position, the binary search, the safe tests and the view's edg
 expected the application's path to barely move. It didn't hold: the plain path asks 1.4 to 1.75 times its distinct
 questions in Gecko and WebKit, and 4.1 to 5 times in Blink.
 
+The table's numbers belong to the X2 merge (0163d4c). **Blink since the X3 merge** (2026-09-19): with gap lists handed
+out canonical (§5) the two flows X2 took back are in (§4.6), and the lab path asks 736.2 questions a paragraph without
+facts and 775.6 with them, the plain path 234.3 and 224.3. The distinct questions didn't move (99.74 and 91.68 on the lab
+path, 61.02 and 48.33 on the plain path), so the ratio of asked to distinct questions went from 10.19 to 7.38 and from
+11.52 to 8.46 on the lab path, and from 4.11 to 3.84 and from 4.98 to 4.64 on the plain path. Every question change of
+the two flows is repeats only (65,768 cases of each configuration; the other 1,297 ask the same). The clean-up alone
+changed no count, and WebKit's and Gecko's X3 changed none: their rows of the table still hold. Of Blink's 42.7 M
+remaining repeats without facts, the pair window is 69.1%, a position's prefix 10.7%, the wide window 9.2%, the script
+split 6.5% and `adjust16`'s totals 4.1%; `inspectLine` asks 51.7% of them and `fillLine` 43.5% (specs/blink-RESULTS.md,
+"Re-architecture X3").
+
 With two exceptions in WebKit, every remaining repeat is the same string met again: a letter, a ligature pair, a word,
 or in Blink the same offsets asked by several steps of one fill (the X2 sections of specs/blink-RESULTS.md,
 specs/webkit-RESULTS.md and specs/gecko-RESULTS.md list them by call site). No value flows from one occurrence to the
 next except by its string or its offset, so only a store found by string or by offset can answer it, and the plan's
 decision 4 keeps such a store for after profiling. WebKit's two exceptions wait for other steps: what `prepare` derived
 for an item and a line's inspection asks again (`mergedGlyphs` under `itemGaps`, 1.5 M of the lab path's 3.6 M repeats
-without facts), which X3's item model can hand over; and the space of a box whose white space is deferred, which a field
-would ask earlier than the recorded rows do, so it needs a browser run. Two candidates for a store are written down with
+without facts); and the space of a box whose white space is deferred, which a field would ask earlier than the recorded
+rows do, so it needs a browser run. X3 didn't build the first hand-over: `measure.ts` knows nothing of inspection, so it
+needs either a record returned from every measuring call or an inspected-only branch inside measuring, for a gain only
+the lab sees. It stays easy to add, since stored widths are written at two sites (`items.ts` `handleTextContent` and
+`computeItemWidths`) and read at one (`lines.ts` `measuredItemWidth`). Two candidates for a store are written down with
 numbers (research/ARCHITECTURE-PLAN-2.md §10):
 
 - **Units of equal text in one prepared paragraph share one record of what measuring found** (the Gecko owner's X2
@@ -1372,7 +1459,9 @@ numbers (research/ARCHITECTURE-PLAN-2.md §10):
   positions (the Blink owner's X2 report; specs/blink-RESULTS.md, "Re-architecture X2", has the idea). They are read
   back on a plain paragraph only, since on an inspected one a measurement left out regroups gap ranges (§5). It is built
   unmerged on branch `ra-x2-blink-alt-positions`: the plain path's ratio of asked to distinct questions goes from 4.11 to
-  2.95 without facts, and tier 1 and checks 1 and 2 pass.
+  2.95 without facts, and tier 1 and checks 1 and 2 pass. The branch and its numbers are of X2. Since X3 the plain
+  path starts from 3.84, and a handed-out gap list no longer regroups when a measurement is left out (§5), so that
+  reason for reading the positions back on plain paragraphs only is gone; nobody has tried it on an inspected one.
 
 Wall time barely moved in Chrome, because Chrome's per-canvas cache answers a repeat: the giants' prediction took 55.3 s
 against 49.5 s, and tier 2 forward 82.8 s against 79.3 s, back to back on a quiet machine. In pinned Chrome 0 of 2.17
@@ -1389,15 +1478,48 @@ the stated condition. A given fact never reports a gap; its null default does.
 
 In each port every condition with its test, its prose and its order, Blink's and WebKit's merge rules (Gecko merges
 nothing), and the measuring only a gap needs are in `engines/<engine>/gaps.ts`, and nothing else in the port builds a gap
-(§2.8). Gecko's stand-in reasons are tagged unions (`advance.ts` `InWordReason`, `gaps.ts` `TabReason`) that carry the
+(§2.8). Gecko's stand-in reasons are tagged unions (`types.ts` `InWordReason`, `gaps.ts` `TabReason`) that carry the
 numbers the prose prints, and `gaps.ts` prints them.
 
-In Blink, how ranges are grouped in an inspected paragraph's gap lists follows the number and order of raises. Every
-`measure16` raises its range's gaps, and `addGap` merges a range into the first entry it meets, which can be an earlier
-one that grew in between; what the entries cover together never changes. So a value handed on in place of a repeated
-measurement can regroup ranges in a row, and two data-flow fixes of X2 were taken back because 3 and 1 of 67,065 rows
-regrouped. A canonical form for gap lists, which doesn't follow raises, is planned for X3. The finding is written beside
-the merge rule in `engines/blink/gaps.ts` and in specs/blink-RESULTS.md, "Re-architecture X2".
+**Blink's gap lists are canonical where they are handed out** (since X3, 2026-09-19). Blink builds a list by merging a
+raised range into the first entry of its gap, run and detail that it meets (`gaps.ts` `addGap`), which can be an earlier
+one that grew in between. Every `measure16` raises its range's gaps, so while a list is built its grouping follows how
+often and in what order ranges are raised again; what the entries cover together never changes. At X2 a value handed on
+in place of a repeated measurement therefore regrouped ranges in a row, and two data-flow fixes were taken back because
+3 and 1 of 67,065 rows regrouped (specs/blink-RESULTS.md, "Re-architecture X2").
+
+- *Canonical* (`gaps.ts` `canonicalGaps`) means: per gap, run and detail, the ranges the entries cover together, as
+  ranges that don't meet, each at the place of the first entry it took in, which is where that range was first raised.
+  A canonical list says what was raised and in what order it first was, and not how often or in what order ranges were
+  raised again. Its entries are copies.
+- *Where.* A list is made canonical where it is handed out: `inspectLine`'s result, and the prepared paragraph's own
+  list once `prepare` ends, which `paragraphGaps` copies. Because the prepared list is canonical, what a line takes from
+  it doesn't follow raises either.
+- *Why not where a list is built.* The line breaker's rewind cuts a list being built back by length (`gaps.ts`
+  `dropGapsFrom`), so entries can't be merged away while it is built. A list still being built, the fill's `line.gaps`
+  or a sink, keeps its raw grouping; the decided line is the engine's own record, and `inspectLine` is what hands a
+  line's gaps out.
+- *The proof* is a script of its own, outside the repository's gates
+  (`.artifacts/tests/runs/ra-x3-blink/tools/canonical-proof.ts`; TESTS.md, "Tiers"). It defines canonical without
+  importing the library, replays every case of both frozen Chrome references, and compares the reference's prediction
+  with the new one after making both sides' gap lists canonical. 473 rows without facts (465 cases) and 303 with them
+  (296 cases) differ byte for byte from the references, in gap lists alone: a line's list in 456 rows and the
+  paragraph's in 22 without facts, a line's list in all 303 with them. After canonicalizing both, 67,065 of 67,065 cases
+  are equal in each configuration, every new list is already canonical, and the step changed no question. The
+  orchestrator ran it again on the merged tree, where the comparison leaves the painter's limits out, since §7's change
+  moves them in 460 cases: 67,065 of 67,065 again, in each configuration.
+- *What it allowed.* A value handed on in place of a repeated measurement can't regroup a row any more, so X2's two
+  flows are in (§4.6), and the same 473 and 303 rows differ byte for byte with them. §4.7 has what they save.
+
+On an input nobody recorded, a line can now take a wider range of the paragraph's list than the library before X3 would
+have given it; what the ranges cover together is the same.
+
+WebKit and Gecko got no canonical form, by their owners' readings at X3. Two of WebKit's six merge rules
+(`rtl-shaping-across-inline-boxes`, and `lineGaps`' own) merge a new range into the first entry it overlaps and never two
+entries with each other, so grouping could follow the order of raises while what is covered could not; WebKit's raises
+come in one fixed order, and no step has moved one. Gecko merges nothing: its fill-time gaps come one per reflowed text
+frame per pass, the consulted offsets are read as a set, and the in-word report is sorted and deduplicated by offset, so
+neither the count nor the order of measuring calls shows in a row.
 
 | Gap | Engines | What differs | Handling | Predictions can be wrong when |
 |---|---|---|---|---|
@@ -1532,7 +1654,7 @@ each rule exists.
 | `lineEndWrapping` | the box holding the line's last character | the block | the block |
 | `hangingForm` | one of three forms | the text's node | the text's node |
 | `spacingAfterRunEnd` | no | no | yes |
-| `lineStartScript` | `arabic-letter-mark`, with the port's `ScriptRunIterator` and ICU levels | `none` | `limit-only` |
+| `lineStartScript` | `arabic-letter-mark`, with the port's `ScriptRunIterator` (`scriptsOf(text, sixteenBit, direction)`: a painted line is segmented by script when it is 16-bit or its block is RTL) and ICU levels | `none` | `limit-only` |
 | `trimsAtLineEnd` | a character HanKerning may trim | none | none |
 | `controlsBetweenPieces` | the limit `controls-between-pieces` | none | none |
 | `limits` | `edge-inside-shaped-text`, `script-at-line-start`, `space-shaped-with-next-line`, `han-kerning-at-edge`, `hanging-space-kern-share` | `carried-width`, `edge-inside-shaped-text`, `word-measured-with-next-space` | `edge-inside-shaped-text`, `script-at-line-start`, `spacing-at-run-end`, `frame-ended-at-break` |
@@ -1740,12 +1862,17 @@ each rule exists.
   run's script where it applies letter spacing, which a cursive script's run doesn't take
   (`IsCursiveScript(run->script_)`, `shape_result.cc:977-1024`), and where it picks fonts and shapes. The painter runs
   the Blink port's `ScriptRunIterator` (`engines/blink/script.ts`) three times: over the text of all the lines' pieces,
-  over the line's text alone (one Latin segment when the painted text is 8-bit, `harfbuzz_shaper.cc:1072-1077`; a line
-  under override spans holds their controls and is 16-bit), and over the line's text after U+061C ARABIC LETTER MARK,
-  which has no width and script Arabic. Where the line alone gets other scripts than it had in the paragraph and gets
-  the paragraph's after the mark, the painted line starts with the mark, in the first piece's text node (probe
-  `.artifacts/lab/painter-r3/probes/forms-l7.json`, Chrome 153: a guillemet after Arabic under −1px letter spacing is
-  17.797 px in the paragraph and with the mark, 16.797 px without; `<tai` under 1.5px is 30.742 px against 32.242 px).
+  over the line's text alone (one Latin segment when the painted text is 8-bit in an LTR block,
+  `harfbuzz_shaper.cc:1072-1077`; a line under override spans holds their controls and is 16-bit), and over the line's
+  text after U+061C ARABIC LETTER MARK, which has no width and script Arabic. The rule's `scriptsOf(text, sixteenBit,
+  direction)` takes the paragraph's direction, which the painter passes at its three calls, because a painted line in an
+  RTL block is segmented by script whatever its storage: an RTL block enables bidi in Blink
+  (`inline_items_builder.cc:1744-1746`), and `SegmentScriptRuns` then runs over 8-bit text too
+  (`inline_node.cc:1256-1290`; the port's `segmented`). Where the line alone gets other scripts than it had in the
+  paragraph and gets the paragraph's after the mark, the painted line starts with the mark, in the first piece's text
+  node (probe `.artifacts/lab/painter-r3/probes/forms-l7.json`, Chrome 153: a guillemet after Arabic under −1px letter
+  spacing is 17.797 px in the paragraph and with the mark, 16.797 px without; `<tai` under 1.5px is 30.742 px against
+  32.242 px).
   The iterator also follows a closing bracket to its opening bracket's script (`CloseBracket`,
   `script_run_iterator.cc:443-470`): `)` after Arabic whose `(` stood after Latin is Latin and takes no mark
   (`c-ca3da1d5e7083f35`, found on the fresh set). The mark is a strong character of bidi class AL, which would turn the
@@ -1757,6 +1884,16 @@ each rule exists.
   reaches past its band doesn't wrap when it takes the mark. Unicode has no such character for the other scripts, and
   every line whose scripts the painted form doesn't reproduce has the limit `script-at-line-start`. In Firefox the mark
   changes no width: Gecko's cursive exemption reads each character's own script (`nsTextFrame.cpp:4209-4213`).
+  - Until X3 (2026-09-19) `scriptsOf` had no direction, and the painter took every 8-bit line for one Latin segment. A
+    line of brackets that were Latin after Latin letters in the paragraph is Common when painted alone in an RTL block
+    (`c-0aaf6ad5c7daf6da`: 13 brackets in Amiri wrap after 8). No zero-width character has script Latin, so no painted
+    form gives the paragraph's scripts back, and the painter saw no difference and named no limit. The change moved no
+    painted DOM: the painter differential of this change alone is byte-equal on all 67,065 Chrome cases of both
+    configurations. It moved the limit `script-at-line-start` and no other, in 461 recorded rows of each configuration
+    (460 cases): named on 470 more lines, 8-bit lines without a letter that continued a Latin run in an RTL block, and
+    on 31 fewer, such lines that are Common in the paragraph too. In tier 2 it shows as 8 painter transitions per
+    configuration, all this limit: the two open `twins` rows became `fail covered by limit:script-at-line-start`, and
+    six rows that gaps already covered name the limit too. No row lost its cover.
 - **Bidi.** A line with a piece at a level other than the base level gets `unicode-bidi: bidi-override` on the line
   block, and one nested `bidi-override` span per level step, alternating direction, so every code unit sits inside
   exactly as many overrides as its level is above the base, and the browser reorders the line with the paragraph's levels
@@ -1863,10 +2000,11 @@ line (`EnginePrediction.painterLimits`), and a limit explains a painter failure 
   wrapped line, where `ShapeLine` trims an opening bracket (`FirstSafeOffset`, `shaping_line_breaker.cc:92-108`; `。` is
   8px natively and 16px painted, `c-b408d44e962b357e`).
 - `script-at-line-start` (Blink, Gecko): characters of the line had another script in the paragraph than the line
-  painted alone gives them. In Blink the port's `ScriptRunIterator` says so, and the limit holds where U+061C doesn't
-  give the paragraph's scripts back or can't be painted. In Gecko the line starts with characters of script Common or
-  Inherited, other than white space, that continued a run of another script than the line's own first script; there
-  the painter tells 30 scripts apart and counts every other script as one kind.
+  painted alone gives them. In Blink the port's `ScriptRunIterator` says so, over an 8-bit line too when its block is RTL
+  (since X3), and the limit holds where U+061C doesn't give the paragraph's scripts back or can't be painted. In Gecko
+  the line starts with characters of script Common or Inherited, other than white space, that continued a run of another
+  script than the line's own first script; there the painter tells 30 scripts apart and counts every other script as one
+  kind.
 - `controls-between-pieces` (Blink): two consecutive text pieces of one direction sit in different override spans,
   whose bidi controls end the shaping group between them (L9): pieces of one level that an element with pieces of
   another level separates (`النعاج` and `جيد` across two spans, 54 units, `c-17554815da2915b5`), and pieces two levels
@@ -1955,17 +2093,23 @@ rebuild/
     unicode/        bidi.ts, ubidi.ts, unicode-bidi.ts, grapheme.ts, tests, generated/                                architect
     breaks/         rbbi.ts, icu4x.ts, pair-table.ts, rbbi.test.ts                                                    architect
     engines/
-      blink/        index.ts (prepare, the decided line and the function set), types.ts (the prepared paragraph with its
-                    Canvas contexts), line-breaker.ts (what fills a line), shape.ts (widths from Canvas), pieces.ts
-                    (linePieces), inspect.ts and limits.ts (what inspectLine computes), gaps.ts (every gap condition);
-                    the port's other files and tests                                                                  Blink owner
-      webkit/       index.ts, types.ts (boxes with their Canvas contexts), content.ts (prepare), breaks.ts, measure.ts,
-                    lines.ts (filling and the decided line), output.ts (pieces and geometry from a decided line),
-                    gaps.ts (every gap; the box facts and history worlds of an inspected paragraph); the port's other
-                    files and tests                                                                                   WebKit owner
-      gecko/        index.ts, types.ts (text runs with their Canvas contexts), prepare.ts, measure.ts, advance.ts (what
-                    measuring found per offset inside a shaping unit), lines.ts (a fill and the decided line),
-                    placement.ts, pieces.ts, inspect.ts, gaps.ts; the port's other files and tests                    Gecko owner
+      blink/        index.ts (prepare, the decided line and the function set), types.ts (the prepared paragraph: one
+                    record per style with its Canvas contexts, items as a tagged union), content.ts (computed styles
+                    and items), contexts.ts (a style's Canvas contexts and a measured total), line-breaker.ts (what
+                    fills a line), breaks.ts (boundaries pulled as a line asks), shape.ts (widths from Canvas),
+                    pieces.ts (linePieces), inspect.ts and limits.ts (what inspectLine computes), gaps.ts (every gap
+                    condition; canonical lists), emoji.ts (RunSegmenter's priorities and segment edges); the port's
+                    other files and tests                                                                             Blink owner
+      webkit/       index.ts (the function set; composes inspectLine), types.ts (the prepared paragraph, boxes with
+                    their Canvas contexts, and a decided line with its runs), content.ts (boxes and the builder
+                    choice), items.ts (the item builder), breaks.ts, measure.ts, lines.ts (filling), output.ts (pieces
+                    and geometry from a decided line), gaps.ts (every gap's condition, prose and merge rule; the box
+                    facts of an inspected paragraph), history.ts (its history worlds, and a line laid out in them);
+                    the port's other files and tests                                                                  WebKit owner
+      gecko/        index.ts, types.ts (leaves, frames, items, elements, text runs with their Canvas contexts, shaping
+                    units with what measuring found inside them), prepare.ts, measure.ts, advance.ts (the advance
+                    before an offset inside a shaping unit), lines.ts (a fill and the decided line), placement.ts,
+                    pieces.ts, inspect.ts, gaps.ts; the port's other files and tests                                  Gecko owner
                     and in each: index.ts exports the function set; geometry.ts (the line geometry and line start the
                     rows keep: types only, the one engine file the lab imports), data.ts (its break rules, grapheme
                     rules and BidiData), checks.ts (what it asks of measure/canvas-checks.ts and

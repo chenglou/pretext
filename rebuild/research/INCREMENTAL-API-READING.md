@@ -70,7 +70,7 @@ One reversal: main's open question "may results change in place?" goes away. Nob
 - Which line is unchanged isn't knowable without the new text's break data. A growing URL or dictionary segmentation (one Thai edit moved boundaries 11 segments back) can move the previous line's end. WebKit's own partial layout restarts one line early for this reason (`InlineInvalidation.cpp:388-389`), and Blink reuses shape results around an edit behind safe-to-reuse checks (`inline_node.cc:1001`). Neither shows in output, so nothing to port.
 - Prefix reuse in prepare, if profiling ever asks for it, fits behind the idempotent call with no API. It belongs in the plan's section 10.
 
-Two properties to keep true, both already implied by the plan: `Start` stays plain data that doesn't depend on the prepared object, and nothing handed to the app aliases prepared data. One cheap ask for X3 owners: list the prepared facts that read across a forced break or the whole text.
+Two properties to keep true, both already implied by the plan: `Start` stays plain data that doesn't depend on the prepared object, and nothing handed to the app aliases prepared data. One cheap ask for X3 owners: list the prepared facts that read across a forced break or the whole text. (Answered on 2026-09-19; the appendix has the list.)
 
 ## Limits of this reading
 
@@ -81,3 +81,65 @@ Two properties to keep true, both already implied by the plan: `Start` stays pla
 - That 'split at forced breaks equals the whole' holds in the three rebuild ports follows from browser semantics. It was not tested here.
 - All five incremental branches conflict with current main, per #313. I only read them with git diff, git show and git log; nothing was checked out. I wrote only intermediate files under <scratch>/incr (the saved issue text and the draft used for word counting). `gh issue view 313 --comments` printed nothing in plain mode, so I fetched the issue with --json instead.
 - Word count is 1,499 by `wc -w`, which counts table pipes and markdown markers as words; about 1,425 without them.
+
+## Appendix, 2026-09-19: the prepared facts that read across a forced break or over the whole text
+
+Section 4 asked the X3 owners for this list. It is theirs, from their X3 reports (the X3 sections of
+specs/blink-RESULTS.md, specs/webkit-RESULTS.md and specs/gecko-RESULTS.md), reconciled into one table; the names were
+checked against the tree at the X3 merge. It is a reading of the ports, not a test: "split at forced breaks equals the
+whole" is still untested in the rebuild. A forced break here is a preserved newline or a `<br>`. "Whole text" means the
+fact is decided once over the paragraph, so content anywhere changes it; "across" means the fact is local but its
+reading reaches over a forced break.
+
+| Fact | Engine | Reads | Why |
+|---|---|---|---|
+| `bidiEnabled` | Blink | whole text | Any RTL character anywhere, or an RTL block, turns bidi on for the paragraph. |
+| `is8Bit` | Blink | whole text | The paragraph's text is 8-bit only while every unit is. |
+| `segmented` | Blink | whole text | It follows `is8Bit` and `bidiEnabled`. With the three go the partition of the paragraph's Canvas contexts and how `canvasString` spells every range. |
+| `scripts` | Blink | across | `ScriptRunIterator`'s runs cross a forced break: a Common or Inherited character after the break takes the run before it, and bracket pairs reach across. Checked: digits after LF following Hebrew take Hebrew; alone they are Common. |
+| A span's `shouldCreateBoxFragment` and `run` | Blink | across | They read the span's whole content. |
+| `hanKerningCandidates` | Blink | whole text, as prefix counts | Appended text leaves earlier entries as they are. |
+| Word spacing at text_content index 0 | Blink | whole text | The exception for a separator at index 0 counts the index in the whole text, not from the last forced break. |
+| `inspect.gaps` (inspected only) | Blink | whole text | The conditions per style range over every item of a style. |
+| The browser's dictionary segmentation, at fill time | Blink | across | It is asked over the text from the line start to the paragraph's end. ICU boundaries restart at the line start and read nothing before it. |
+| The builder choice (`WebKitPrepared.builder`) | WebKit | whole text | It reads the whole tree and item list, the block's style and whether the paragraph reorders. |
+| Whether the paragraph reorders (`content.ts`, prepare's `reordering`) | WebKit | whole text | Any 16-bit box with a strong RTL character, or any RTL span, sets it. It turns bidi on, defers every stored width until after the bidi splits, and leaves every `spaceWidth` null. |
+| Bidi levels and the item splits they cause | WebKit | whole text | `ubidi_setPara` runs over the whole paragraph text, and its direction flags are the whole text's. A paragraph between forced breaks without RTL characters resolves otherwise once another one holds an RTL character (held-out `c-7cc5e3e26ff7c30d`). Inline box items take their levels from neighbouring content, across `<br>` too. |
+| A box's `is8Bit`, `simpleFontCodePath`, `simplifiedMeasuring` with its coverage test, deferred white-space widths (a TAB anywhere in the node) and `spaceWidth` | WebKit | across | They are per text node, and a preserved newline doesn't end a node. |
+| `BreakablePositions`' prior context | WebKit | across | A scan reads the two code units before its start. After a preserved newline these are the newline and the unit before it. |
+| Whether a white-space-only node gets a renderer | WebKit | across | It depends on the previous sibling's renderer, a `<br>` among them. |
+| Source offsets (`runStarts`, an element item's `sourceOffset`) | WebKit | whole text, as prefix sums | Appended content changes no earlier entry. |
+| The paragraph's contexts | WebKit | whole text | One context per distinct settings over all boxes. |
+| A box's history worlds and its box facts (inspected only) | WebKit | across | They are per box, so per text node. |
+| `GeckoLeaf.is8bit` | Gecko | across | It reads the whole node, preserved newlines included. It decides the 8-bit `IsTrimmableSpace` path, whether `TransformText` discards bidi controls, `IsBoundarySpace`'s cluster-extender test and the text run's 8-bit flag. |
+| The white-space-only boundary node rule | Gecko | whole text | It reads the whole node, and whether the node is the block's first or last child. Appended content changes which node is last. |
+| `GeckoPrepared.bidi` (prepare's `resolveBidi`) | Gecko | whole text | True where the block is RTL or any 16-bit node anywhere holds an RTL code unit. One character turns on level resolution, frame splits and line reordering for the whole paragraph, and turns off the `page-history` gap for left-to-right controls. The levels themselves stop at forced breaks: each preserved line and each `<br>` is its own bidi paragraph, and span continuations split only inside one. |
+| A text run's facts: `context`, the `is8bit` AND, `scriptRuns`, `hasShy`, `hasTab`, `hyphenAu`, `minTabAdvance`, `BREAK_SKIP_SETTING_NO_BREAKS`, `trailingBreak` | Gecko | across | A text run continues across a preserved newline inside one node; only a frame that ends in a newline, a `<br>`, an atomic inline, a `<wbr>` or a style difference ends a run. `context` reads the first flow's font, language and letter-spacing flag; the itemizer merges Common characters and pairs brackets across a newline, and an 8-bit run's `hasLetter` is over the whole run; the rest are whole-run guards and flags, and `trailingBreak` is a fact of the run's end. |
+| `rangeAu`'s script context character and font-matching prefix | Gecko | across | The script context comes from `scriptRuns`, so it can come from the other side of a forced break. The font-matching prefix is the script run's text before a piece that starts with a cluster extender or U+202F right after an invalid character. A newline is an invalid character, so that text can be the line before it. |
+| Prefix sums: `unit.startAdvance`, `run.totalAdvance`, `spacingPrefix`, `scanSpacingPrefix`, `tabs.spacingPrefix`, `correctionPrefix` | Gecko | whole text, as prefix sums | The first two run from the text run's start, the others over the whole transformed text. Only differences are read, and appending never changes earlier entries. |
+| `nsLineBreaker`'s current word | Gecko | across | It runs across spans and text runs until a `<br>`, an atomic inline, a `<wbr>` or the block's end. In an 8-bit node it also runs across a preserved newline, because only 16-bit text ends a word at LF. The break iterator is then handed text from both sides; UAX #14 restarts at the LF, so no opportunity moves. |
+| `tabs.unit`; `contexts` | Gecko | whole text | The block's space, measured only when any text run anywhere has a tab; one list of contexts for the paragraph. |
+| `dictionaryBreaks`, `replacementCharacters`, `figureSpaces` (inspected only) | Gecko | whole text, for local facts | Each scans the whole text and reports per place. The space-in-shaping windows run over the units of a run and end at invalid characters, so at newlines. |
+| `isFirstLine` (text-indent), at line time | Gecko | across | It is not prepared: it lives in the plain line start. |
+
+What the owners found to stop at a forced break:
+
+- Blink: shaping groups and everything measured per group; `graphemeStarts`, `continuations`, `ligature`, `fontRun` and
+  `priorities`; bidi levels (checked on samples: the levels after LF equal the tail laid out alone, in both directions).
+- WebKit: nothing beyond the rows above was listed as checked.
+- Gecko: units (a newline or a tab is an invalid unit); `unit.inWord`, except through the script context and the
+  font-matching prefix above; glyph flags; the emergency break after a hyphen; the white-space collapsing carry, which a preserved LF and a `<br>` reset;
+  the spacing rules, whose base search stops at the frame's start; the boundary space after a word ending in U+200D,
+  which reads the adjacent unit.
+
+The two properties section 4 asked to keep, as the owners left them at X3:
+
+- *A line start is plain data* in all three ports, independent of the prepared object. Gecko's is
+  `{ engine, frame, contentOffset, isFirstLine }`, and one made from a source offset `s` names the item of the frame
+  holding `s` (`types.ts` `holderOfSource`; `GeckoFrame.item` is kept for this and has no other reader). WebKit's can
+  be made from a source offset too, but a start at a non-zero offset still needs its `previousLine` record, as before.
+- *Nothing handed to the application aliases prepared data*, with one exception found while these documents were
+  written. Pieces, geometry and a line's gaps are made per call in all three ports, and Blink's and WebKit's
+  `paragraphGaps` hand out copies of the entries since X3. Gecko's returns the prepared list, and `src/index.ts` puts
+  the build gap in front of it with `concat`: the list is fresh, and its entries are still the prepared paragraph's
+  objects. A decided line is the engine's own record and is only valid with its prepared paragraph.
