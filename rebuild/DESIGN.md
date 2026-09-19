@@ -28,7 +28,7 @@ Range and element geometry from the same output, by porting each engine's geomet
 The rules come from each engine's source and data at those versions (`specs/*.md`), or from recorded probe verdicts,
 never from UAX #14 defaults, float tolerances or lab counts. Where Canvas can't supply what the DOM uses, the design
 handles it with a recipe, takes the missing fact as an input, or reports a named gap (§5). Correctness comes first;
-performance is recovered later, and every layout records what it measured (§4.6).
+performance is recovered later, and the lab counts and can record what every layout measured (§4.6).
 
 Terms used throughout:
 
@@ -557,7 +557,7 @@ A filled line says where it breaks without its pieces: `start`, `end`, `next` an
 so counting lines or finding a height reads nothing else. `overflows` says the line's content reaches past its band by the
 engine's own widths, hanging white space left out. `facts` is what the engine's painting rules read of its own line beside
 the pieces: Blink's `needsAccurateEndPosition`, WebKit's width carried into the line's first text and whether the line
-holds an RTL run shaped across inline boxes; Gecko's are empty. The painter still reads them from a row's geometry (§7).
+holds an RTL run shaped across inline boxes; Gecko's are empty. The painter takes them with the pieces (§7).
 
 What is shared and what isn't follows from who reads it. The painter and the lab's line ranges need the engine's
 classification of content per line, in source offsets: what it laid out, trimmed, collapsed or hung, and which line holds
@@ -914,9 +914,11 @@ where it may be wrong.
   value reads. It gives the inspected paragraph's fill results and pieces on every recorded case, from fewer Canvas
   questions, each one the lab's path asks too; where a later fill needs a question that inspection asked first, the plain
   path first asks it later (`tests/function-set.ts plain`; TESTS.md, "The function set's checks"). Questions a paragraph,
-  plain against inspected: Blink 61.18 against 99.97 without facts and 48.49 against 91.91 with the lab's facts; WebKit
-  26.14 against 31.81 and 12.38 against 19.18; Gecko 40.7 against 74.2 and 40.8 against 74.5 (the X1 sections of
-  specs/blink-RESULTS.md, specs/webkit-RESULTS.md and specs/gecko-RESULTS.md).
+  plain against inspected, since the ports' memo went (X2; §4.7): Blink 250.7 against 1,016.8 without facts and 240.8
+  against 1,055.7 with the lab's facts; WebKit 39.32 against 88.79 and 21.65 against 59.86; Gecko 54.5 against 114.5 and
+  55.1 against 115.7. With the memo, at X1: Blink 61.18 against 99.97 and 48.49 against 91.91; WebKit 26.14 against 31.81
+  and 12.38 against 19.18; Gecko 40.7 against 74.2 and 40.8 against 74.5 (the X1 and X2 sections of specs/blink-RESULTS.md,
+  specs/webkit-RESULTS.md and specs/gecko-RESULTS.md).
 - Each port keeps every gap condition in one file, `engines/<engine>/gaps.ts`. A function that raises a gap takes a sink
   first (`GapSink`: `Gap[]`, null on a plain paragraph) and returns at once on null, and the measuring only a gap needs is
   done inside it. What a line's filling raises stays on the decided line in raise order, across every pass of the fill, and
@@ -1050,11 +1052,12 @@ every later row. The painter paints each line with floats of its slot (§7).
 
 Every row differs, so there is no shared content model and no shared line loop. Each engine module owns its whole
 pipeline from `Paragraph` to lines. **The engine choice is one switch**, in `src/index.ts`, over `env.engine`. No other
-shared file names an engine, outside comments: `src/env.ts`, whose shape is per engine, and `src/paint.ts` until its split
-are the exceptions (`tests/independence.test.ts`). Where the engines differ only in data, the shared module takes the
-data as a parameter and each engine gives its own: its `BidiData`, grapheme rules, break rules and pair table
-(`engines/<engine>/data.ts`, parsed when the module loads), and what it asks of the runtime checks
-(`engines/<engine>/checks.ts`: the Canvas its recipes assume, §1.4, and the font facts it reads, §1.2). Where their browsers
+shared file names an engine, outside comments: `src/env.ts`, whose shape is per engine, is the exception
+(`tests/independence.test.ts`, whose list of shared files that still name an engine is empty). Where the engines differ
+only in data, the shared module takes the data as a parameter and each engine gives its own: its `BidiData`, grapheme
+rules, break rules and pair table (`engines/<engine>/data.ts`, parsed when the module loads); what it asks of the runtime
+checks (`engines/<engine>/checks.ts`: the Canvas its recipes assume, §1.4, and the font facts it reads, §1.2); and its
+painting rules (`engines/<engine>/paint-rules.ts`, a `PaintRules` value the painter takes, §7). Where their browsers
 run different algorithms, each algorithm is its own shared module, and each engine imports the one its browser runs:
 `breaks/rbbi.ts` or `breaks/icu4x.ts`, `unicode/ubidi.ts` or `unicode/unicode-bidi.ts`.
 
@@ -1092,8 +1095,9 @@ Shared, working and tested (§8.2):
   lookup. An engine pairs a class table with a bracket table as its `BidiData`.
 - `src/unicode/grapheme.ts`: extended grapheme clusters over an engine's rules: Chrome's `char.brk`, libicucore's
   `char.brk` or Firefox's ICU4X data.
-- `src/measure/`: contexts, font strings, the call log (§4).
-- `src/paint.ts` (§7).
+- `src/measure/`: contexts, font strings and the runtime checks (§4); the memo and the call log no port uses since X2
+  (§4.6).
+- `src/paint.ts` (§7): the painter's forms and limits over an engine's `PaintRules`; it names no engine.
 
 The bidi data is almost the same for all three: the Unicode 17 bracket table and the crate's Unicode 15 table hold the
 same 64 pairs, and Firefox's `icu_properties` Bidi_Class equals ICU 78.2's. macOS 27's libicucore gives the private-use
@@ -1129,8 +1133,9 @@ What the recipes below assume of the Canvas API is checked once per page (§1.4,
 
 ### 4.2 Context settings
 
-A context is identified by its settings (`CanvasSettings` in `src/measure/canvas.ts`), and `measureContext()` creates
-one OffscreenCanvas per distinct settings. Identity matters because Chrome caches shaped words per canvas.
+A context is identified by its settings (`CanvasSettings` in `src/measure/canvas.ts`), and `contextFor()` makes one
+OffscreenCanvas per distinct settings in a prepared paragraph's list (§4.6). Identity matters because Chrome caches shaped
+words per canvas.
 
 | Setting | Blink | WebKit | Gecko |
 |---|---|---|---|
@@ -1148,7 +1153,7 @@ whichever a canvas shaped first answers both (specs/blink-canvas.md §1.7; probe
 the only kind that asks both storages of the same characters, measures its one-byte strings on contexts of their own
 (`8bit`), made when the first is asked, and its two-byte ones on `16bit`; an unsegmented paragraph keeps one set, since
 its two-byte strings are two-byte by their characters alone and Canvas cuts no words from them (`shape.ts` `contextsOf`).
-The measurer never uses a measured string as a key, since V8 would hand Blink a one-byte string afterwards
+Nothing on the way to Canvas uses a measured string as a key, since V8 would hand Blink a one-byte string afterwards
 (`measure/canvas.ts`). Setting word spacing in JS avoids the other order effect, where a cached `" "` keeps its first
 offset-0 decision.
 
@@ -1235,13 +1240,14 @@ never measures wastes calls. Engine-true output adds one kind of measurement: th
 | | before filling (`prepare`) | while filling (`fillLine`) | for the geometry of a placed line |
 |---|---|---|---|
 | Blink | every shaping group's words | [start, first safe) at a wrapped line start; [last safe, break) at a line end that isn't at a space, or at any line end where `NeedsAccurateEndPosition` holds; tab widths at their position; the hyphen, once per result | prefix widths at the cluster boundaries of the line's text and tab items |
-| WebKit | stored widths of word pieces and single spaces | `breakWord` prefixes from the item start (a bisection over O(log n) prefixes); widths deferred by bidi splits; preserved white space containing TAB; the hyphen string | nothing: boxes are sums of item widths |
+| WebKit | stored widths of word pieces and single spaces; per box the space its white-space items were measured with (`WebKitBox.spaceWidth`, null where the box's white space is deferred) | `breakWord` prefixes from the item start (a bisection over O(log n) prefixes); widths deferred by bidi splits; preserved white space containing TAB; the hyphen string | nothing: boxes are sums of item widths |
 | Gecko | every shaping unit's advance; the space | tab stops from the containing block's space width; the hyphen run | per-character advances inside the line's frames, `W(unit) − W(suffix)` at cluster starts, and the justification spacing |
 
-The third column is what the charter's tentpole 8 asks to record: its calls are in the log and cost a Canvas call per
-cluster boundary of placed text in Blink and Gecko. It belongs to the inspected path: `inspectLine` alone asks it, on an
-inspected paragraph. `linePieces` asks little: in Blink the prefix before hanging spaces inside an item, for `overflows`;
-in Gecko the trimmed white space's advance where it lies inside a shaping unit (U+1680); in WebKit nothing.
+The third column is what the charter's tentpole 8 asks to record: it costs a Canvas call per cluster boundary of placed
+text in Blink and Gecko, which the lab counts and records like every other call (§4.6). It belongs to the inspected
+path: `inspectLine` alone asks it, on an inspected paragraph. `linePieces` asks little: in Blink the prefix before
+hanging spaces inside an item, for `overflows`; in Gecko the trimmed white space's advance where it lies inside a
+shaping unit (U+1680); in WebKit nothing.
 
 An inspected paragraph also measures for gaps alone, in every column, and a plain one asks none of it (§2.8 has the
 counts). Blink: the script work at letter spacing 0, the position bounds around a break candidate, the limit a wrapped
@@ -1251,33 +1257,130 @@ widths of the history worlds, per line the conditions' own tests, and every line
 an item it read. Gecko: the space-in-shaping windows, a letter-spaced unit's group count at 2px, the positions a stand-in
 tab rests on and the in-word report's positions.
 
-### 4.6 Contexts, the memo and the call log
+### 4.6 Contexts, and values kept instead of asked again
 
-`measure/canvas.ts` asks Canvas in two ways, over the same contexts. `contextFor(contexts, settings)` finds a context in
-a paragraph's few by comparing its settings, and `width(context, text)` and `bounds(context, text)` always ask Canvas:
-what is measured twice is asked twice, so a value needed twice is kept by the code that needs it. The index API
-(`measureContext`, `measureText`, `measureTextBounds`) names a context by its index in a `Measurer`, which also keeps the
-memo and the call log below; the ports measure through it until they hold their contexts themselves. Either way the string
-a port built reaches Canvas as the object it is, never as a key (research/BLINK-STRING-STORAGE.md).
+A port asks Canvas through three functions of `measure/canvas.ts`. `contextFor(contexts, settings)` finds a context in a
+paragraph's few by comparing its settings, and makes it when none has them. `width(context, text)` and
+`bounds(context, text)` always ask Canvas: what is measured twice is asked twice, so a value needed twice is kept by the
+code that needs it. The string a port built reaches Canvas as the object it is, never as a key
+(research/BLINK-STRING-STORAGE.md). Measuring the same text in the same context again returns the same bits in all three
+engines (Blink returns its cached node for the whole string; WebKit and Gecko shape the same way), so asking again can't
+change a result, only cost a call (§4.7).
 
-`MeasureLog = { contexts, calls, memoHits }`: every context's settings, every `measureText` call (context, text,
-width) in order, and how many lookups the memo answered. It holds what went through the index API, which the ports' tests
-and probe `blink-storage` S5 read from the prepared paragraph. The lab doesn't read it: its adapter counts the contexts a
-layout makes and its `measureText` calls on the page's Canvas classes (`lab/predictor-core.ts`, `CanvasWork`), and
-`run.ts --record-measurements` records every call with its answer, so a row can be laid out again offline.
+Since the re-architecture's X2 every port measures this way, and no function takes a measurer. A prepared paragraph keeps
+the list of its contexts, which lives as long as it does and serves every line filled from it, at any width. The records
+that measure hold their contexts by reference:
 
-The memo is an acceleration structure for one prepared paragraph. Key: (context index, text); value: the width.
-Measuring the same text in the same context again returns the same bits in all three engines (Blink returns its cached
-node for the whole string; WebKit and Gecko shape the same way), so the memo can't change a result. It lives as long as
-the `Measurer`, which a port's `prepare` creates per paragraph and every line filled from it shares, at any width.
+- Blink: a style holds its contexts (`types.ts` `StyleContexts`: shaping LTR and RTL, the same two without ligatures, and
+  the hyphen's; `BlinkPrepared.contexts`, and `oneByteContexts` in a segmented paragraph, §4.2). The list is
+  `BlinkPrepared.canvases`, and styles with equal settings share a context. `Shaper` is `{ p, gaps }`: whatever reaches
+  `measure16` takes it, because every measurement raises its range's gaps (§5), and a helper that measures without
+  raising a gap takes the prepared paragraph alone.
+- WebKit: a box holds the four contexts it measures in (`WebKitBox.context`, `plainContext`, `spacedContext`,
+  `countContext`), an inspected paragraph's box facts hold theirs (`WebKitBoxInspect.localeChoosesFonts`), and the list
+  is `WebKitPrepared.contexts`, which a history world shares. Every read is `width`.
+- Gecko: a text run holds its context (`GeckoTextRun.context`), and the list is `GeckoPrepared.contexts`. The contexts a
+  recipe needs beside a run's (ligatures off, 2px of letter spacing, the size times a power of two, the device size,
+  "Apple Color Emoji" alone, weight 400, the block's context for tabs) are made from the run's settings where the recipe
+  asks, so the number of contexts a paragraph makes didn't move.
+
+What a port needs twice it keeps as a value in a plain place (research/ARCHITECTURE-PLAN-2.md §5.3): a local, a value
+handed from the step that measured it to the step that uses it, a field set where `prepare` already measures, and in
+Gecko one record per offset, where the port had memos before. No first ask moved.
+
+- Blink: a piece's measured total goes from the cut search to the group's prefixes, which are sums of those totals
+  (`shape.ts` `addPieces`); `windowAdjust16` takes its window's total from its caller; `floatWidthOfParts` measures a
+  view's part and run edges once each.
+- WebKit: `mergedGlyphs` totals a string once in the count context; `controlIsAdjusted` asks the letter before a control
+  once; `lineHyphenWidth` measures the hyphen once and hands the total to the `hyphen-glyph` test
+  (`gaps.ts` `hyphenWidthRead`); the coverage test of `makeBox` asks each code point once; and a box keeps the space its
+  white-space items were measured with (`WebKitBox.spaceWidth`, §4.5).
+- Gecko: what measuring found about an offset inside a shaping unit is kept per offset on the prepared paragraph
+  (`GeckoPrepared.inWord`, `advance.ts` `InWordEntry`: the advance with its reason, the optional-ligature and
+  required-group facts, the row of ligature candidates, the suffix width), and a unit keeps its ligature group count
+  (`GeckoUnit.groups`). They replace the port's six module-level memos, one of them keyed by string, and they are the
+  only parts of Gecko's prepared paragraph written after preparation (`lines.ts` `groupEndSpacing` reads the records on
+  every call instead of keeping a memo of its own). A fill, a placement, an inspection and a layout at another width
+  measure an offset once; the advance before the next cluster reads the suffix width its neighbour measured
+  (`suffixAlone`); a text run asks for its space once; an emoji cluster's width and ink box come from one `measureText`
+  per context.
+
+No measured value is found by its string, so a string that recurs in a paragraph is measured at each occurrence (§4.7).
+
+Nothing in the library counts or logs calls for the ports. The lab's adapter counts the contexts a layout makes and its
+`measureText` calls on the page's Canvas classes (`lab/predictor-core.ts`, `CanvasWork`), and
+`run.ts --record-measurements` records every call with its answer, so a row can be laid out again offline. The ports'
+tests count what their stand-in Canvas is asked, and probe `blink-storage` S5 notes what the page's
+`OffscreenCanvasRenderingContext2D` is asked, with the string passed through untouched, and finds a context's partition
+through the prepared paragraph's `canvases`.
+
+Until X2 the ports measured through the index API (`measureContext`, `measureText`, `measureTextBounds`), which names a
+context by its index in a `Measurer` and keeps a memo per context (key: the text behind a fixed prefix, so the key is
+another string object than the measured text; value: the width) and a call log (`measure/log.ts` `MeasureLog`). Nothing
+but its own test uses it now. It stays in `measure/canvas.ts` until the re-architecture's last step deletes it
+(research/ARCHITECTURE-PLAN-2.md §8, step 4).
 
 The runtime font checks (§1.2) run once per `prepare`, before the engine, through `contextFor` and `width`. What a call
 keeps is local to it: its contexts, which carry `partition: 'font-checks'`, so no engine measurement shares a Blink word
 cache with them; the declarations it resolved, each once under its language, compared field by field; and the questions
-it asked with Canvas's answers, because checks share questions (the two generics alone, a family's list at the probe size,
-which the primary family check and the fixed-pitch check both read, and which declarations of several sizes share). They
-cost about 14 calls a paragraph in Chrome and webkit-host; a resolver that outlives a paragraph would pay them once per
-declaration, which waits for profiling. The Canvas checks of engine detection (§1.4) make their own contexts.
+it asked with Canvas's answers, because checks share questions (the two generics alone, a family's list at the probe
+size, which the primary family check and the fixed-pitch check both read, and which declarations of several sizes
+share). No engine needs that list of questions for correctness, since a question asked again gets the same answer. It
+was kept at X2 because deleting it only adds Canvas calls: without it 4,692 Chrome and 27,014 webkit-host cases without
+facts repeat a font-check question, and Gecko's checks ask nothing. The checks cost about 14 calls a paragraph in Chrome
+and webkit-host; a resolver that outlives a paragraph would pay them once per declaration, which waits for profiling.
+The Canvas checks of engine detection (§1.4) make their own contexts.
+
+### 4.7 What removing the memo cost
+
+Until X2 a memo per context answered every width a paragraph asked for twice. The re-architecture took it out on purpose
+(research/ARCHITECTURE-PLAN-2.md, decision 4): it was the ports' data flow, since a value one step measured reached the
+next through a lookup by string, and the simple version keeps no structure that stores measured values. Without it a
+question asked twice is asked of Canvas twice. Canvas questions a paragraph, before → after, over each browser's
+recorded cases (Chrome 67,065, webkit-host 63,987, Firefox 63,771). The lab path is a paragraph prepared for inspection
+with every line inspected, as the lab's adapter runs it; the plain path is what an application runs (§2.8).
+
+| | Lab path, without facts | Lab path, with the lab's facts | Plain path, without facts | Plain path, with the lab's facts |
+|---|---|---|---|---|
+| Blink | 99.97 → 1,016.8 | 91.91 → 1,055.7 | 61.18 → 250.7 | 48.49 → 240.8 |
+| WebKit | 31.81 → 88.79 | 19.18 → 59.86 | 26.14 → 39.32 | 12.38 → 21.65 |
+| Gecko | 74.2 → 114.5 | 74.5 → 115.7 | 40.7 → 54.5 | 40.8 → 55.1 |
+
+The values kept in §4.6 are in these numbers: with the memo off and nothing else changed, the lab path without facts
+asked 1,055.8 in Blink, 98.90 in WebKit and 134.9 in Gecko. Blink's distinct questions on the plain path are unchanged
+at 61.02 and 48.33, so everything added is a repeat, and 70% of the plain path's repeats fall inside one `fillLine`
+call: the start's position, the binary search, the safe tests and the view's edges ask about the same offsets. The plan
+expected the application's path to barely move. It didn't hold: the plain path asks 1.4 to 1.75 times its distinct
+questions in Gecko and WebKit, and 4.1 to 5 times in Blink.
+
+With two exceptions in WebKit, every remaining repeat is the same string met again: a letter, a ligature pair, a word,
+or in Blink the same offsets asked by several steps of one fill (the X2 sections of specs/blink-RESULTS.md,
+specs/webkit-RESULTS.md and specs/gecko-RESULTS.md list them by call site). No value flows from one occurrence to the
+next except by its string or its offset, so only a store found by string or by offset can answer it, and the plan's
+decision 4 keeps such a store for after profiling. WebKit's two exceptions wait for other steps: what `prepare` derived
+for an item and a line's inspection asks again (`mergedGlyphs` under `itemGaps`, 1.5 M of the lab path's 3.6 M repeats
+without facts), which X3's item model can hand over; and the space of a box whose white space is deferred, which a field
+would ask earlier than the recorded rows do, so it needs a browser run. Two candidates for a store are written down with
+numbers (research/ARCHITECTURE-PLAN-2.md §10):
+
+- **Units of equal text in one prepared paragraph share one record of what measuring found** (the Gecko owner's X2
+  report; specs/gecko-RESULTS.md, "Re-architecture X2"). The engine's own structure there is the shaped-word cache
+  (gfxFont.cpp:3569-3577). The record has the prepared paragraph's lifetime, so it can't go stale or leak. It must not
+  share where a recipe reads text outside the unit: a script context's character from elsewhere in the run
+  (`measure.ts` `scriptContextFor`), or the font-matching prefix, which depends on the text before the unit.
+- **Per-fill positions and safe flags kept on the item's shape result**, as Blink's own `ShapeResult` keeps character
+  positions (the Blink owner's X2 report; specs/blink-RESULTS.md, "Re-architecture X2", has the idea). They are read
+  back on a plain paragraph only, since on an inspected one a measurement left out regroups gap ranges (§5). It is built
+  unmerged on branch `ra-x2-blink-alt-positions`: the plain path's ratio of asked to distinct questions goes from 4.11 to
+  2.95 without facts, and tier 1 and checks 1 and 2 pass.
+
+Wall time barely moved in Chrome, because Chrome's per-canvas cache answers a repeat: the giants' prediction took 55.3 s
+against 49.5 s, and tier 2 forward 82.8 s against 79.3 s, back to back on a quiet machine. In pinned Chrome 0 of 2.17
+million questions asked again were answered differently. The plan's tripwire (tier 2's wall time and the giants within
+2× step 0's baselines) tripped once: Firefox's giants on the inspected path, 15.3 s of prediction against 4.2 s (3.6×),
+because `inspectLine` reads every offset of 18,000 to 47,000 words and the memo answered a word's later occurrences.
+Their plain path is 1.28×, and the layouts are equal on all 9. The orchestrator accepted it, because the tripped path is
+the inspected one, which the lab and inspection use and an application doesn't lay text out with.
 
 ## 5. Gaps
 
@@ -1289,6 +1392,13 @@ nothing), and the measuring only a gap needs are in `engines/<engine>/gaps.ts`, 
 (§2.8). Gecko's stand-in reasons are tagged unions (`advance.ts` `InWordReason`, `gaps.ts` `TabReason`) that carry the
 numbers the prose prints, and `gaps.ts` prints them.
 
+In Blink, how ranges are grouped in an inspected paragraph's gap lists follows the number and order of raises. Every
+`measure16` raises its range's gaps, and `addGap` merges a range into the first entry it meets, which can be an earlier
+one that grew in between; what the entries cover together never changes. So a value handed on in place of a repeated
+measurement can regroup ranges in a row, and two data-flow fixes of X2 were taken back because 3 and 1 of 67,065 rows
+regrouped. A canonical form for gap lists, which doesn't follow raises, is planned for X3. The finding is written beside
+the merge rule in `engines/blink/gaps.ts` and in specs/blink-RESULTS.md, "Re-architecture X2".
+
 | Gap | Engines | What differs | Handling | Predictions can be wrong when |
 |---|---|---|---|---|
 | CR, FF, VT and other controls (`control-character-width`) | all | Every Canvas turns U+0009-U+000D into spaces; Gecko's also turns U+001C-U+001F, U+0085 and U+2029 into spaces (CRITIC.md C12). DOM: Blink collapses CR as a space in collapse modes and keeps FF and VT as characters of unknown width; in preserve modes CR and FF are zero-width control items that end a shaping group (blink-text §2.C.9, H5, H6). WebKit keeps U+000D's glyph advance on the simple path and 0 on the complex path; FF, VT and other Cc take the `.notdef` advance (webkit-text §5.3). Gecko: CR, FF, VT and hidden C0/C1 controls are zero width. | Never pass them to Canvas. Blink: CR in collapse modes is a space in text_content; CR and FF in preserve modes measure 0 and split the group. WebKit: measure FF, VT and other Cc as U+0001 in the same string, which also takes `.notdef` (webkit-canvas H10). Gecko: strip them. | Blink: VT in any mode, or FF in `normal`, `nowrap` or `pre-line`, which Canvas turns into a space where the port measures U+0001; other controls reach Canvas and the DOM as they are (plain_text_node.cc:47-58). WebKit: CR on the simple path; a control whose `.notdef` comes from another font. |
@@ -1299,7 +1409,7 @@ numbers the prose prints, and `gaps.ts` prints them.
 | Optical size (`optical-size`) | Blink at zoom ≠ 1, Gecko | Blink's DOM shapes at the zoomed Core Text size with opsz and ptem at the CSS size (blink-canvas §1.8). Gecko's OffscreenCanvas never sets auto optical sizing (gecko-canvas §1.2 C1a). WebKit shares the DOM path. | Fact `opticalSizeAxis` (§1.2): Blink measures at the CSS size and scales, and asks Canvas whether the primary family scales linearly where the fact isn't given. Gecko: none; every width of such a run is a stand-in. | Blink: `opticalSizeAxis` still null at layout zoom ≠ 1 (the system font keywords, a primary family without Latin letters, a font that doesn't scale linearly). Gecko: `opticalSizeAxis` true or null, which without supplied facts is nearly every run (CHARTER.md, decision 2). |
 | Gecko size quantization (`font-size-quantization`) | Gecko | Canvas keeps 7 significant bits; the DOM uses Servo's 10-bit size on a 1/60 px grid. | The gate in §4.3. | Sizes such as 13.33px, 16.8px or odd eighths. |
 | Bitmap emoji (`bitmap-emoji-size`) | Blink, Gecko at DPR ≠ 1 | The DOM asks Core Text for the sbix advance at the device size. | Measure at size × DPR and divide. Gecko under a bold font: the weight 400 advance at the page's apd plus synthetic bold's DOM steps (probe gecko-port F24). | Gecko: a device size off Canvas's 7-bit grid (one device pixel off at apd 27, probe cross-cutting 1). Blink: until H17 is verified. |
-| Chrome's per-canvas shape cache | Blink | The first shaping of a word per canvas wins: script context, word spacing at offset 0 (blink-canvas §1.7). | Handled: partitions, JS word spacing, a fresh measurer per prepared paragraph. | — |
+| Chrome's per-canvas shape cache | Blink | The first shaping of a word per canvas wins: script context, word spacing at offset 0 (blink-canvas §1.7). | Handled: partitions, JS word spacing, fresh contexts per prepared paragraph. | — |
 | Unsafe-to-break offsets (`unsafe-to-break`) | Blink | Line-start and line-end reshapes happen at HarfBuzz's unsafe-to-break offsets, which Canvas doesn't expose (CRITIC.md §5 item 6). | An offset is safe when the pair total shows no adjustment, the grapheme boundary holds and nothing joins: necessary, not sufficient (blink audit B7). Which glyph carries a pair adjustment: fact `pairKerning` (§1.2). | At a chosen line edge where the test can't vouch for the offset: contextual forms across it, a line edge taken from positions where the pair adjustment isn't 0 and `pairKerning` is null, a shaping group of 256 px with no safe cut. |
 | Joining technology (`joining-technology`) | Blink | Letters joined across a shaping call's edge keep joined forms in OpenType fonts, which read the call's context, and lose them in `morx` fonts (hb-ot-shape.cc:60-66, 100-101). | Fact `joining` (§1.2). | `joining` null at a group edge or chosen line edge between joining letters (Geeza Pro is AAT; Amiri and Noto Naskh Arabic are OpenType). |
 | Script context (`script-context`) | Blink | The DOM shapes an 8-bit paragraph as one Latin segment and merges Common punctuation into the surrounding script in 16-bit paragraphs; Canvas segments each word alone (blink-canvas §1.4). | Measure a range the paragraph shapes as Latin as an 8-bit string, one Latin segment; slice other ranges into 16-bit strings. | A grapheme without a strong character that some Canvas string the port measures (the grapheme alone, or in the pair window with its neighbour) resolves to another script than the paragraph: the brackets and digits of Arabic or Hebrew text, a curly quote or emoji beside a space in a Latin paragraph; its width can differ in fonts whose lookups depend on the script (Amiri, Noto Naskh Arabic). Reported with the grapheme's range. |
@@ -1837,29 +1947,34 @@ rebuild/
                     LineResultOf, which no port returns since X1; names no engine                                     architect
     env.ts          Environment, process languages, GivenFacts, PINNED_BUILDS, detectEngine(), detectEnvironment()   architect
     content.ts      indexContent, styleUnder, langUnder, and its test                                               architect
-    paint.ts        paintLines()                                                                                      architect
-    measure/        canvas.ts (contexts, width and bounds; the index API with its memo and log, §4.6), font.ts (font
-                    strings), log.ts, font-checks.ts (font facts asked of Canvas, §1.2), canvas-checks.ts (what the
-                    recipes assume of Canvas, §1.4)                                                                   architect
+    paint.ts        paintLines(), painterLimits(), PaintRules and PaintLine: the painter, which names no engine (§7)  architect
+    measure/        canvas.ts (contexts, width and bounds, §4.6; the index API with its memo and log, which nothing but
+                    its test uses since X2), font.ts (font strings), log.ts, font-checks.ts (font facts asked of Canvas,
+                    §1.2), canvas-checks.ts (what the recipes assume of Canvas, §1.4)                                 architect
     test-lines.ts   test support: every line of a paragraph through one engine's function set                        architect
     unicode/        bidi.ts, ubidi.ts, unicode-bidi.ts, grapheme.ts, tests, generated/                                architect
     breaks/         rbbi.ts, icu4x.ts, pair-table.ts, rbbi.test.ts                                                    architect
     engines/
-      blink/        index.ts (prepare, the decided line and the function set), types.ts, line-breaker.ts (what fills a
-                    line), shape.ts (widths from Canvas), pieces.ts (linePieces), inspect.ts and limits.ts (what
-                    inspectLine computes), gaps.ts (every gap condition); the port's other files and tests            Blink owner
-      webkit/       index.ts, types.ts, content.ts (prepare), breaks.ts, measure.ts, lines.ts (filling and the decided
-                    line), output.ts (pieces and geometry from a decided line), gaps.ts (every gap; the box facts and
-                    history worlds of an inspected paragraph); the port's other files and tests                       WebKit owner
-      gecko/        index.ts, types.ts, prepare.ts, measure.ts, advance.ts, lines.ts (a fill and the decided line),
+      blink/        index.ts (prepare, the decided line and the function set), types.ts (the prepared paragraph with its
+                    Canvas contexts), line-breaker.ts (what fills a line), shape.ts (widths from Canvas), pieces.ts
+                    (linePieces), inspect.ts and limits.ts (what inspectLine computes), gaps.ts (every gap condition);
+                    the port's other files and tests                                                                  Blink owner
+      webkit/       index.ts, types.ts (boxes with their Canvas contexts), content.ts (prepare), breaks.ts, measure.ts,
+                    lines.ts (filling and the decided line), output.ts (pieces and geometry from a decided line),
+                    gaps.ts (every gap; the box facts and history worlds of an inspected paragraph); the port's other
+                    files and tests                                                                                   WebKit owner
+      gecko/        index.ts, types.ts (text runs with their Canvas contexts), prepare.ts, measure.ts, advance.ts (what
+                    measuring found per offset inside a shaping unit), lines.ts (a fill and the decided line),
                     placement.ts, pieces.ts, inspect.ts, gaps.ts; the port's other files and tests                    Gecko owner
-                    and in each: index.ts exports the function set; geometry.ts (the line geometry and line start the rows keep: types only, the one
-                    engine file the lab imports), data.ts (its break rules, grapheme rules and BidiData), checks.ts
-                    (what it asks of measure/canvas-checks.ts and measure/font-checks.ts), generated/
+                    and in each: index.ts exports the function set; geometry.ts (the line geometry and line start the
+                    rows keep: types only, the one engine file the lab imports), data.ts (its break rules, grapheme
+                    rules and BidiData), checks.ts (what it asks of measure/canvas-checks.ts and
+                    measure/font-checks.ts), paint-rules.ts (what a painted line needs in this engine, and its limits),
+                    generated/
 ```
 
-Outside comments, no file of `src` but `index.ts`, `env.ts` and the engines' own names an engine; `paint.ts` is the
-one exception left, until its split (`tests/independence.test.ts`).
+Outside comments, no file of `src` but `index.ts`, `env.ts` and the engines' own names an engine
+(`tests/independence.test.ts`).
 
 An engine owner edits only their engine directory, their generator and its generated module. A change a port needs in
 a shared file (a model field, a new gap name, a shared helper fix) goes in the owner's report, and the architect makes
