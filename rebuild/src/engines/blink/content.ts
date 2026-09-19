@@ -5,7 +5,7 @@ import type { ContentIndex } from '../../content.js'
 import type { FontDecl, Paragraph, TextStyle, WhiteSpace } from '../../model.js'
 import { resolveIcuBidi } from '../../unicode/ubidi.js'
 import { blinkBidiData } from './data.js'
-import type { BlinkBoxEdge, BlinkStyle, EndCollapseType, InlineItem, IteratorSettings } from './types.js'
+import type { BlinkBoxEdge, ComputedStyle, EndCollapseType, InlineItem, IteratorSettings } from './types.js'
 
 const SPACE = 0x20
 const TAB = 0x09
@@ -101,11 +101,9 @@ function edgeLU(edge: { margin: number; border: number; padding: number }, zoom:
 // the source says otherwise. A span without lang inherits its parent's locale. The root element starts from
 // Content-Language (style_resolver.cc:2405-2406), but in this model the block always has a lang attribute (lang="" when
 // the case says ''), which replaces it, so BlinkEnvironment.contentLanguage never reaches a locale here.
-export function stylesOf(paragraph: Paragraph, index: ContentIndex<FontDecl>, zoom: number): {
-  styles: BlinkStyle[]; settings: IteratorSettings[]; styleOfLeaf: number[]; styleOfElement: number[]
-} {
+export function stylesOf(paragraph: Paragraph, index: ContentIndex<FontDecl>, zoom: number): { styles: ComputedStyle[]; styleOfLeaf: number[]; styleOfElement: number[] } {
   const blockLocale = paragraph.lang !== '' ? paragraph.lang : null
-  const styles: BlinkStyle[] = [styleOf(-1, 0, paragraph, blockLocale, NO_EDGE, NO_EDGE, 'baseline')]
+  const styles: ComputedStyle[] = [styleOf(-1, 0, paragraph, blockLocale, NO_EDGE, NO_EDGE, 'baseline')]
   const styleOfElement: number[] = []
   for (let e = 0; e < index.elements.length; e++) {
     const element = index.elements[e]!
@@ -126,26 +124,33 @@ export function stylesOf(paragraph: Paragraph, index: ContentIndex<FontDecl>, zo
     styleOfLeaf.push(style)
     if (styles[style]!.run === null) styles[style]!.run = r
   }
-  return { styles, settings: styles.map(iteratorSettings), styleOfLeaf, styleOfElement }
+  return { styles, styleOfLeaf, styleOfElement }
 }
 
-function styleOf(element: number, parent: number, style: TextStyle, locale: string | null, start: BlinkBoxEdge, end: BlinkBoxEdge, verticalAlign: BlinkStyle['verticalAlign']): BlinkStyle {
+// The primary family is FontFacts.primaryFamily, or the first family of the list (DESIGN.md §1.2).
+function styleOf(element: number, parent: number, style: TextStyle, locale: string | null, start: BlinkBoxEdge, end: BlinkBoxEdge, verticalAlign: ComputedStyle['verticalAlign']): ComputedStyle {
   const font = style.font
   const first = firstFamily(font.family)
-  const primaryFamily = font.facts.primaryFamily ?? first.name
-  const keyword = font.facts.primaryFamily !== null ? isSystemFontKeyword(primaryFamily, false) : isSystemFontKeyword(first.name, first.quoted)
+  const keyword = font.facts.primaryFamily !== null ? isSystemFontKeyword(font.facts.primaryFamily, false) : isSystemFontKeyword(first.name, first.quoted)
   return {
     element, parent, run: null, font, letterSpacing: style.letterSpacing, wordSpacing: style.wordSpacing, whiteSpace: style.whiteSpace,
     wordBreak: style.wordBreak, overflowWrap: style.overflowWrap, lineBreak: style.lineBreak, tabSize: style.tabSize, locale,
-    // JSON keeps the fields apart and a null locale apart from the locale 'null' (the fields were joined with a bare U+0001
-    // before, which reads as join('') in most editors).
-    fontKey: JSON.stringify([font.family, font.size, font.weight, font.style, locale, style.letterSpacing, style.wordSpacing]),
-    primaryFamily,
     measuresAtCssSize: font.facts.opticalSizeAxis ?? keyword,
-    joining: font.facts.joining,
-    pairKerning: font.facts.pairKerning,
-    start, end, verticalAlign,
+    start, end, verticalAlign, iterator: iteratorSettings(style), shouldCreateBoxFragment: false,
   }
+}
+
+// Equal Font (font_description.cc:136-157): family, size, weight, style, locale and spacing.
+export function sameFont(a: ComputedStyle, b: ComputedStyle): boolean {
+  return a.font.family === b.font.family && a.font.size === b.font.size && a.font.weight === b.font.weight && a.font.style === b.font.style &&
+    a.locale === b.locale && a.letterSpacing === b.letterSpacing && a.wordSpacing === b.wordSpacing
+}
+
+// BoxInfo::text_metrics compares FontHeight of the primary fonts (inline_items_builder.cc:236-266); equal font
+// declarations have equal metrics. Different declarations are taken to differ, which only decides whether a span without
+// box edges creates a box fragment for its element rects, never where lines break.
+function fontHeightsDiffer(a: ComputedStyle, b: ComputedStyle): boolean {
+  return a.font.family !== b.font.family || a.font.size !== b.font.size || a.font.weight !== b.font.weight || a.font.style !== b.font.style
 }
 
 // The first family of a CSS font-family list, without its quotes.
@@ -165,25 +170,34 @@ function isSystemFontKeyword(name: string, quoted: boolean): boolean {
 
 // ComputedStyle predicates over a span's box edges as the lab sets them (only non-zero lengths are written): MayHaveMargin,
 // MayHavePadding, HasBorder, and HasBoxDecorationBackground, which a border makes true (computed_style.h).
-export function mayHaveMargin(style: BlinkStyle): boolean {
+export function mayHaveMargin(style: ComputedStyle): boolean {
   return style.start.margin !== 0 || style.end.margin !== 0
 }
 
-export function mayHavePadding(style: BlinkStyle): boolean {
+export function mayHavePadding(style: ComputedStyle): boolean {
   return style.start.padding !== 0 || style.end.padding !== 0
 }
 
-export function hasBorder(style: BlinkStyle): boolean {
+export function hasBorder(style: ComputedStyle): boolean {
   return style.start.border !== 0 || style.end.border !== 0
 }
 
 // ShouldBreakShapingBeforeBox and ShouldBreakShapingAfterBox (inline_node.cc:494-527).
-export function breaksShapingBefore(style: BlinkStyle): boolean {
+export function breaksShapingBefore(style: ComputedStyle): boolean {
   return style.start.padding !== 0 || style.start.margin !== 0 || style.start.border !== 0 || style.verticalAlign !== 'baseline'
 }
 
-export function breaksShapingAfter(style: BlinkStyle): boolean {
+export function breaksShapingAfter(style: ComputedStyle): boolean {
   return style.end.padding !== 0 || style.end.margin !== 0 || style.end.border !== 0 || style.verticalAlign !== 'baseline'
+}
+
+// IsInlineBoxStartEmpty and IsInlineBoxEndEmpty of a span's open and close tag (inline_item.cc:32-67), no quirks mode.
+export function boxStartEmpty(style: ComputedStyle): boolean {
+  return style.start.border === 0 && style.start.padding === 0 && style.start.margin === 0
+}
+
+export function boxEndEmpty(style: ComputedStyle): boolean {
+  return style.end.border === 0 && style.end.padding === 0 && style.end.margin === 0
 }
 
 export type Content = {
@@ -192,11 +206,6 @@ export type Content = {
   items: InlineItem[]
   hasNonOrc16Bit: boolean
 }
-
-// Whether two styles' primary fonts have different FontHeight (BoxInfo text_metrics, inline_items_builder.cc:236-266).
-export type FontHeightsDiffer = (a: number, b: number) => boolean
-
-type BoxInfo = { style: number; item: InlineItem }
 
 // What the previous in-flow layout object among a node's siblings was, for Text::TextLayoutObjectIsNeeded
 // (text.cc:319-364): none, a LayoutText (with whether its text ends with white space), an inline, or a <br>.
@@ -207,13 +216,15 @@ class Builder {
   src: number[] = []
   items: InlineItem[] = []
   hasNonOrc16Bit = false
-  readonly styles: BlinkStyle[]
-  readonly boxes: BoxInfo[] = []
-  readonly fontHeightsDiffer: FontHeightsDiffer
+  readonly styles: ComputedStyle[]
+  // The styles of the spans that are open (BoxInfo, inline_items_builder.h).
+  readonly boxes: number[] = []
+  // The source offset of the collapsible space RemoveTrailingCollapsibleSpace erased last, for a restore: the item restored
+  // is the last one to collapse with, which is the one a space was last removed from.
+  removedSpaceSource = 0
 
-  constructor(styles: BlinkStyle[], fontHeightsDiffer: FontHeightsDiffer) {
+  constructor(styles: ComputedStyle[]) {
     this.styles = styles
-    this.fontHeightsDiffer = fontHeightsDiffer
   }
 
   push(c: number, source: number): void {
@@ -223,13 +234,9 @@ class Builder {
     if (c >= 0x100 && c !== ORC) this.hasNonOrc16Bit = true
   }
 
-  item(type: InlineItem['type'], control: InlineItem['control'], start: number, run: number, element: number, style: number, endCollapseType: EndCollapseType): InlineItem {
-    const item: InlineItem = {
-      type, control, start, end: this.units.length, run, element, style, bidiLevel: 0, endCollapseType, isEndCollapsibleNewline: false,
-      removedSpaceSource: -1, group: -1, shouldCreateBoxFragment: false, isEmptyItem: false,
-    }
-    this.items.push(item)
-    return item
+  // What an item over the units appended since `start` holds, whatever its type.
+  span(start: number, style: number, endCollapseType: EndCollapseType): { start: number; end: number; style: number; bidiLevel: number; endCollapseType: EndCollapseType } {
+    return { start, end: this.units.length, style, bidiLevel: 0, endCollapseType }
   }
 
   // LastItemToCollapseWith (inline_items_builder.cc:207-214).
@@ -257,7 +264,7 @@ class Builder {
   removeTrailingCollapsibleSpace(item: InlineItem): void {
     if (item.type !== 'text') return
     const offset = item.end - 1
-    item.removedSpaceSource = this.src[offset]!
+    this.removedSpaceSource = this.src[offset]!
     this.units.splice(offset, 1)
     this.src.splice(offset, 1)
     item.end--
@@ -275,18 +282,18 @@ class Builder {
     const item = this.lastItemToCollapseWith()
     if (item === null || item.endCollapseType !== 'collapsed') return
     this.units.splice(item.end, 0, SPACE)
-    this.src.splice(item.end, 0, item.removedSpaceSource)
+    this.src.splice(item.end, 0, this.removedSpaceSource)
     item.end++
     item.endCollapseType = 'collapsible'
-    item.removedSpaceSource = -1
     this.shift(item, 1)
   }
 
-  // AppendBreakOpportunity (inline_items_builder.cc:1209-1218): an opaque U+200B flow-control item of the element.
-  appendBreakOpportunity(control: 'wbr' | 'generated-zwsp', run: number, element: number, style: number): void {
+  // AppendBreakOpportunity (inline_items_builder.cc:1209-1218): an opaque U+200B flow-control item, a <wbr>'s or one
+  // generated for a text leaf.
+  appendBreakOpportunity(of: { control: 'wbr'; element: number } | { control: 'generated-zwsp'; run: number }, style: number): void {
     const start = this.units.length
     this.push(ZWSP, -1)
-    this.item('control', control, start, run, element, style, 'opaque-to-collapsing')
+    this.items.push({ ...this.span(start, style, 'opaque-to-collapsing'), type: 'control', ...of })
   }
 
   // AppendCollapseWhitespace (inline_items_builder.cc:784-985). `base` is S's source offset.
@@ -314,13 +321,13 @@ class Builder {
         insertSpace = true
       } else {
         insertSpace = false
-        if ((runHasNewline || last.isEndCollapsibleNewline) && last.type === 'text' && this.shouldRemoveNewline(last.end - 1, s.slice(i))) {
+        if (last.type === 'text' && (runHasNewline || last.isEndCollapsibleNewline) && this.shouldRemoveNewline(last.end - 1, s.slice(i))) {
           this.removeTrailingCollapsibleSpace(last)
           runHasNewline = false
         } else if (!wrapsLines(this.styles[last.style]!.whiteSpace) && wrapsLines(this.styles[style]!.whiteSpace)) {
           // A nowrap space run collapsing a following wrapping one keeps its soft wrap opportunity through a generated
           // break opportunity, except right after a forced break (847-866; AppendGeneratedBreakOpportunity, 317-326).
-          if (last.type !== 'control' || this.units[last.start] !== LF) this.appendBreakOpportunity('generated-zwsp', run, -1, style)
+          if (last.type !== 'control' || this.units[last.start] !== LF) this.appendBreakOpportunity({ control: 'generated-zwsp', run }, style)
         }
       }
       if (runHasNewline && this.shouldRemoveNewline(this.units.length, s.slice(i))) {
@@ -332,7 +339,7 @@ class Builder {
       if (i === n) endCollapse = 'collapsible'
     } else {
       const last = this.lastItemToCollapseWith()
-      if (last !== null && last.endCollapseType === 'collapsible' && last.isEndCollapsibleNewline && this.shouldRemoveNewline(last.end - 1, s)) {
+      if (last !== null && last.type === 'text' && last.endCollapseType === 'collapsible' && last.isEndCollapsibleNewline && this.shouldRemoveNewline(last.end - 1, s)) {
         this.removeTrailingCollapsibleSpace(last)
       }
       start = this.units.length
@@ -354,19 +361,16 @@ class Builder {
         endCollapse = 'collapsible'
       }
     }
-    if (this.units.length === start) {
-      this.item('text', 'none', start, run, -1, style, 'opaque-to-collapsing') // AppendEmptyTextItem (302-312)
-      return
-    }
-    const item = this.item('text', 'none', start, run, -1, style, endCollapse)
-    item.isEndCollapsibleNewline = runHasNewline
+    // AppendEmptyTextItem (302-312) when nothing was appended.
+    if (this.units.length === start) this.items.push({ ...this.span(start, style, 'opaque-to-collapsing'), type: 'text', run, isEndCollapsibleNewline: false })
+    else this.items.push({ ...this.span(start, style, endCollapse), type: 'text', run, isEndCollapsibleNewline: runHasNewline })
   }
 
   // AppendForcedBreak (1162-1199): no bidi contexts in this model. `source` is -1 for a <br>'s LF.
-  appendForcedBreak(source: number, run: number, element: number, style: number): void {
+  appendForcedBreak(source: number, of: { control: 'forced-break'; run: number } | { control: 'br'; element: number }, style: number): void {
     const start = this.units.length
     this.push(LF, source)
-    this.item('control', 'forced-break', start, run, element, style, 'collapsible')
+    this.items.push({ ...this.span(start, style, 'collapsible'), type: 'control', ...of })
   }
 
   // AppendPreserveNewline (1138-1160).
@@ -374,7 +378,7 @@ class Builder {
     for (let start = 0; start < s.length;) {
       if (s.charCodeAt(start) === LF) {
         this.removeTrailingCollapsibleSpaceIfExists() // AppendForcedBreakCollapseWhitespace (1201-1208)
-        this.appendForcedBreak(base + start, run, -1, style)
+        this.appendForcedBreak(base + start, { control: 'forced-break', run }, style)
         start++
         continue
       }
@@ -395,19 +399,19 @@ class Builder {
     do end++; while (end < s.length && s.charCodeAt(end) === SPACE)
     const itemStart = this.units.length
     for (let k = start; k < end; k++) this.push(SPACE, base + k)
-    this.item('text', 'none', itemStart, run, -1, style, 'not-collapsible')
-    this.appendBreakOpportunity('generated-zwsp', run, -1, style)
+    this.items.push({ ...this.span(itemStart, style, 'not-collapsible'), type: 'text', run, isEndCollapsibleNewline: false })
+    this.appendBreakOpportunity({ control: 'generated-zwsp', run }, style)
     return end
   }
 
   appendTextItem(s: string, base: number, from: number, to: number, run: number, style: number): void {
     const start = this.units.length
     for (let k = from; k < to; k++) this.push(s.charCodeAt(k), base + k)
-    this.item('text', 'none', start, run, -1, style, 'not-collapsible')
+    this.items.push({ ...this.span(start, style, 'not-collapsible'), type: 'text', run, isEndCollapsibleNewline: false })
   }
 
-  // AppendPreserveWhitespace (1040-1136). `run` -1 and `element` set: a <br>'s LF.
-  appendPreserveWhitespace(s: string, base: number, run: number, element: number, style: number): void {
+  // AppendPreserveWhitespace (1040-1136).
+  appendPreserveWhitespace(s: string, base: number, run: number, style: number): void {
     const n = s.length
     let start = this.insertBreakAfterLeadingPreservedSpaces(s, base, run, style, 0)
     if (start >= n) return
@@ -425,7 +429,7 @@ class Builder {
       }
       const c = s.charCodeAt(start)
       if (c === LF) {
-        this.appendForcedBreak(base < 0 ? -1 : base + start, run, element, style)
+        this.appendForcedBreak(base + start, { control: 'forced-break', run }, style)
         start++
         start = this.insertBreakAfterLeadingPreservedSpaces(s, base, run, style, start)
       } else if (c === TAB) {
@@ -433,7 +437,7 @@ class Builder {
         while (end < n && s.charCodeAt(end) === TAB) end++
         const itemStart = this.units.length
         for (let k = start; k < end; k++) this.push(TAB, base + k)
-        this.item('control', 'tab', itemStart, run, -1, style, 'not-collapsible')
+        this.items.push({ ...this.span(itemStart, style, 'not-collapsible'), type: 'control', control: 'tab', run })
         start = end
       } else if (c === ZWNJ) {
         // ZWNJ splits the item but stays text (1112-1118).
@@ -442,7 +446,7 @@ class Builder {
       } else {
         const itemStart = this.units.length
         this.push(c, base + start)
-        this.item('control', 'cr-ff', itemStart, run, -1, style, 'not-collapsible')
+        this.items.push({ ...this.span(itemStart, style, 'not-collapsible'), type: 'control', control: 'cr-ff', run })
         start++
       }
       if (start >= n) break
@@ -462,48 +466,37 @@ class Builder {
     for (let i = 0; i < s.length && !this.hasNonOrc16Bit; i++) if (s.charCodeAt(i) >= 0x100) this.hasNonOrc16Bit = true
     this.restoreTrailingCollapsibleSpaceIfRemoved()
     const ws = this.styles[style]!.whiteSpace
-    if (!collapsesWhiteSpace(ws) && ws !== 'pre-line') this.appendPreserveWhitespace(s, base, run, -1, style)
+    if (!collapsesWhiteSpace(ws) && ws !== 'pre-line') this.appendPreserveWhitespace(s, base, run, style)
     else if (ws === 'pre-line') this.appendPreserveNewline(s, base, run, style)
     else this.appendCollapseWhitespace(s, base, run, style)
   }
 
   // A <br>: LayoutBR's text "\n" under its parent's style through AppendText. In collapse modes the lone newline is a
-  // forced break (AppendForcedBreakCollapseWhitespace, 814-826); preserve modes append it as a newline.
+  // forced break after the trailing collapsible space goes (AppendForcedBreakCollapseWhitespace, 814-826); preserve modes
+  // append it as a newline (AppendPreserveWhitespace, 1040-1136), which for a lone LF is the forced break alone.
   appendLineBreak(element: number, style: number): void {
     this.restoreTrailingCollapsibleSpaceIfRemoved()
-    const ws = this.styles[style]!.whiteSpace
-    if (collapsesWhiteSpace(ws)) {
-      this.removeTrailingCollapsibleSpaceIfExists()
-      this.appendForcedBreak(-1, -1, element, style)
-    } else {
-      this.appendPreserveWhitespace('\n', -1, -1, element, style)
-    }
+    if (collapsesWhiteSpace(this.styles[style]!.whiteSpace)) this.removeTrailingCollapsibleSpaceIfExists()
+    this.appendForcedBreak(-1, { control: 'br', element }, style)
   }
 
   // EnterInline (1530-1620): the open tag, and the parent box's ShouldCreateBoxFragment when this child needs it.
   enterInline(element: number, style: number): void {
     const st = this.styles[style]!
-    const item = this.item('open-tag', 'none', this.units.length, -1, element, style, 'opaque-to-collapsing')
+    this.items.push({ ...this.span(this.units.length, style, 'opaque-to-collapsing'), type: 'open-tag', element })
     // LayoutInline::ComputeInitialShouldCreateBoxFragment (layout_inline.cc:183-213): decoration background, padding or
     // margin.
-    item.shouldCreateBoxFragment = hasBorder(st) || mayHavePadding(st) || mayHaveMargin(st)
-    // IsInlineBoxStartEmpty (inline_item.cc:32-46), standards mode.
-    item.isEmptyItem = st.start.border === 0 && st.start.padding === 0 && st.start.margin === 0
-    const box: BoxInfo = { style, item }
+    st.shouldCreateBoxFragment = hasBorder(st) || mayHavePadding(st) || mayHaveMargin(st)
     if (this.boxes.length > 0) {
-      const parent = this.boxes[this.boxes.length - 1]!
+      const parent = this.styles[this.boxes[this.boxes.length - 1]!]!
       // ShouldCreateBoxFragmentForChild (inline_items_builder.cc:244-266).
-      if (!parent.item.shouldCreateBoxFragment && (mayHaveMargin(st) || st.verticalAlign !== 'baseline' || this.fontHeightsDiffer(parent.style, style))) {
-        parent.item.shouldCreateBoxFragment = true
-      }
+      if (!parent.shouldCreateBoxFragment && (mayHaveMargin(st) || st.verticalAlign !== 'baseline' || fontHeightsDiffer(parent, st))) parent.shouldCreateBoxFragment = true
     }
-    this.boxes.push(box)
+    this.boxes.push(style)
   }
 
   exitInline(element: number, style: number): void {
-    const st = this.styles[style]!
-    const item = this.item('close-tag', 'none', this.units.length, -1, element, style, 'opaque-to-collapsing')
-    item.isEmptyItem = st.end.border === 0 && st.end.padding === 0 && st.end.margin === 0 // IsInlineBoxEndEmpty (:53-67)
+    this.items.push({ ...this.span(this.units.length, style, 'opaque-to-collapsing'), type: 'close-tag', element })
     this.boxes.pop()
   }
 
@@ -512,13 +505,13 @@ class Builder {
     this.restoreTrailingCollapsibleSpaceIfRemoved()
     const start = this.units.length
     this.push(ORC, -1)
-    this.item('atomic', 'none', start, -1, element, style, 'not-collapsible')
-    if (this.boxes.length > 0) this.boxes[this.boxes.length - 1]!.item.shouldCreateBoxFragment = true
+    this.items.push({ ...this.span(start, style, 'not-collapsible'), type: 'atomic', element })
+    if (this.boxes.length > 0) this.styles[this.boxes[this.boxes.length - 1]!]!.shouldCreateBoxFragment = true
   }
 }
 
 // Text::TextLayoutObjectIsNeeded (text.cc:319-364) for a leaf under a block or inline parent.
-function layoutTextNeeded(text: string, style: BlinkStyle, parentIsInline: boolean, previous: PreviousInFlow): boolean {
+function layoutTextNeeded(text: string, style: ComputedStyle, parentIsInline: boolean, previous: PreviousInFlow): boolean {
   if (text.length === 0) return false
   let whitespaceOnly = true
   for (let i = 0; i < text.length; i++) {
@@ -534,8 +527,9 @@ function layoutTextNeeded(text: string, style: BlinkStyle, parentIsInline: boole
   }
 }
 
-export function buildContent(index: ContentIndex<FontDecl>, styles: BlinkStyle[], styleOfLeaf: number[], styleOfElement: number[], fontHeightsDiffer: FontHeightsDiffer): Content {
-  const b = new Builder(styles, fontHeightsDiffer)
+// Builds the items, and sets each span's shouldCreateBoxFragment on its style.
+export function buildContent(index: ContentIndex<FontDecl>, styles: ComputedStyle[], styleOfLeaf: number[], styleOfElement: number[]): Content {
+  const b = new Builder(styles)
   // The previous in-flow sibling per parent: index e + 1, 0 for the block. Children of an element start with none
   // (Element::AttachLayoutTree, element.cc:4774, 4792), and an element becomes its parent's previous in-flow object once
   // attached (:4817, :4852).
@@ -571,7 +565,7 @@ export function buildContent(index: ContentIndex<FontDecl>, styles: BlinkStyle[]
         break
       case 'wbr':
         // LayoutWordBreak is a LayoutText with empty text (layout_word_break.cc:35; inline_items_builder.cc:597-607).
-        b.appendBreakOpportunity('wbr', -1, event.element, styleOfElement[event.element]!)
+        b.appendBreakOpportunity({ control: 'wbr', element: event.element }, styleOfElement[event.element]!)
         previous[index.elements[event.element]!.parent + 1] = { kind: 'text', endsWithSpace: false }
         break
     }
@@ -610,7 +604,9 @@ export function segmentBidiRuns(paragraph: Paragraph, content: Content): { items
     let start = item.start
     for (let k = item.start + 1; k <= item.end; k++) {
       if (k === item.end || levels[k] !== levels[start]) {
-        out.push({ ...item, start, end: k, bidiLevel: levels[start]!, endCollapseType: k === item.end ? item.endCollapseType : 'not-collapsible', isEndCollapsibleNewline: k === item.end && item.isEndCollapsibleNewline })
+        const part = { start, end: k, bidiLevel: levels[start]!, endCollapseType: k === item.end ? item.endCollapseType : 'not-collapsible' as const }
+        if (item.type === 'text') out.push({ ...item, ...part, isEndCollapsibleNewline: k === item.end && item.isEndCollapsibleNewline })
+        else out.push({ ...item, ...part })
         start = k
       }
     }

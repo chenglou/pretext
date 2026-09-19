@@ -73,7 +73,7 @@ function sourceRange(p: BlinkPrepared, from: number, to: number): { start: numbe
     end = s + 1
   }
   if (start >= 0) return { start, end }
-  let at = p.sourceLength
+  let at = p.index.text.length
   for (let t = to; t < p.text.length; t++) if (p.sourceOffsets[t]! >= 0) { at = p.sourceOffsets[t]!; break }
   return { start: at, end: at }
 }
@@ -81,7 +81,7 @@ function sourceRange(p: BlinkPrepared, from: number, to: number): { start: numbe
 // The source break offset at text_content offset k: the source offset of the first unit at or after k.
 function sourceOffsetAt(p: BlinkPrepared, k: number): { start: number; end: number } {
   for (let t = k; t < p.text.length; t++) if (p.sourceOffsets[t]! >= 0) return { start: p.sourceOffsets[t]!, end: p.sourceOffsets[t]! }
-  return { start: p.sourceLength, end: p.sourceLength }
+  return { start: p.index.text.length, end: p.index.text.length }
 }
 
 // The source range of the grapheme around text_content offset k (k inside it or at its start).
@@ -140,7 +140,7 @@ const CONTEXT_DETAIL = 'a shaping call edge between joining letters in an OpenTy
 function callEdge(gaps: Gap[], p: BlinkPrepared, g: number, k: number, callStart: number, callEnd: number): void {
   if (k > callStart && k < callEnd) return
   const style = p.styles[p.groups[g]!.style]!
-  switch (style.joining) {
+  switch (style.font.facts.joining) {
     case 'opentype':
       if (joinsAcross(p, k, callStart, callEnd)) addGap(gaps, 'unsafe-to-break', style.run, CONTEXT_DETAIL, sourceOffsetAt(p, k))
       return
@@ -451,7 +451,7 @@ function contentGaps(gaps: Gap[], p: BlinkPrepared): void {
       }
     }
     if (p.env.dictionaryBreaks.kind === 'unavailable' &&
-      hasDictionaryCharacters(p.text, item.start, item.end, lineTable(p.styles[item.style]!.locale, p.settings[item.style]!.strictness, p.env.uiLanguage))) {
+      hasDictionaryCharacters(p.text, item.start, item.end, lineTable(p.styles[item.style]!.locale, p.styles[item.style]!.iterator.strictness, p.env.uiLanguage))) {
       addGap(gaps, 'dictionary-breaks-unavailable', item.run, 'Thai, Lao, Khmer or Myanmar text without the running browser\'s Intl.v8BreakIterator: no break opportunities inside such runs (DESIGN.md §6.3)', sourceRange(p, item.start, item.end))
     }
   }
@@ -465,7 +465,7 @@ export function preparedContent(sink: GapSink, p: BlinkPrepared): void {
   for (let s = 0; s < p.styles.length; s++) {
     const style = p.styles[s]!
     const ranges = (): { start: number; end: number }[] => styleRanges(p, s)
-    if (p.env.uiLanguage === null && (style.locale === null || (languageOf(style.locale) === 'ko' && p.settings[s]!.strictness === 'strict'))) {
+    if (p.env.uiLanguage === null && (style.locale === null || (languageOf(style.locale) === 'ko' && style.iterator.strictness === 'strict'))) {
       for (const at of ranges()) addGap(sink, 'ui-language', style.run, 'content without a locale, or ko with line-break: strict, follows Chrome\'s application locale, which isn\'t given: break tables, generic families and the HarfBuzz language (specs/blink-canvas.md §2.3)', at)
     }
     if (p.layoutZoom !== 1) {
@@ -579,7 +579,7 @@ function edgeGap(gaps: Gap[], sh: Shaper, k: number, fromPosition: boolean, marg
   if (d !== 0 || wide !== 0) {
     // Which glyph carries the adjustment decides the position; FontFacts.pairKerning gives it for a kern between the two
     // clusters next to k, and nothing does for an adjustment that reads a longer context (positionAdjust16).
-    if (fromPosition && (style.pairKerning === null || pair !== wide || contextual)) addGap(gaps, 'unsafe-to-break', run, ATTRIBUTION_DETAIL, at)
+    if (fromPosition && (style.font.facts.pairKerning === null || pair !== wide || contextual)) addGap(gaps, 'unsafe-to-break', run, ATTRIBUTION_DETAIL, at)
     return
   }
   if (p.graphemeStarts[k] !== 1 || isSpaceLB(p.text.charCodeAt(k - 1)) || isSpaceLB(p.text.charCodeAt(k))) return
@@ -607,9 +607,10 @@ function itemEdgeGaps(gaps: Gap[], sh: Shaper, info: LineInfo): void {
     const r = info.results[i]!
     const item = p.items[r.itemIndex]!
     if (item.type !== 'text' || r.end === r.start || r.start !== item.start) continue
-    const group = p.groups[item.group]!
+    const g = p.groupOfUnit[r.start]!
+    const group = p.groups[g]!
     if (r.start <= group.start) continue
-    const limit = positionLimit(sh, item.group, r.start, group.start, group.end)
+    const limit = positionLimit(sh, g, r.start, group.start, group.end)
     if (limit === null) continue
     let a = r.start - 1
     while (a > group.start && !isClusterBoundary(p, a)) a--
@@ -696,7 +697,7 @@ function lineEdgeGaps(gaps: Gap[], sh: Shaper, paragraph: readonly Gap[], info: 
   let lineEnd = -1
   for (let i = info.results.length - 1; i >= 0 && lineEnd < 0; i--) {
     const r = info.results[i]!
-    if (p.items[r.itemIndex]!.type === 'text' && r.shape !== null && !r.hasOnlyPreWrapTrailingSpaces) lineEnd = r.trimmedEnd >= 0 ? r.trimmedEnd : r.end
+    if (p.items[r.itemIndex]!.type === 'text' && r.shape !== null && !r.hasOnlyPreWrapTrailingSpaces) lineEnd = r.trimmedEnd ?? r.end
   }
   for (let i = 0; i < info.endTests.length; i++) {
     const test = info.endTests[i]!
@@ -730,7 +731,7 @@ function lineEdgeGaps(gaps: Gap[], sh: Shaper, paragraph: readonly Gap[], info: 
       const end = head.call.end
       const itemEnd = p.items[first.itemIndex]!.end
       if (end < itemEnd && !isSegmentEdge(p, end) && !isFontRunEdge(p, end, p.groups[g]!.start, p.groups[g]!.end)) {
-        addGap(gaps, 'in-word-prefix', runAt(p, k), TRUNCATED_RESHAPE_DETAIL, sourceRange(p, k, first.trimmedEnd >= 0 ? first.trimmedEnd : first.end))
+        addGap(gaps, 'in-word-prefix', runAt(p, k), TRUNCATED_RESHAPE_DETAIL, sourceRange(p, k, first.trimmedEnd ?? first.end))
       }
     }
   }

@@ -56,8 +56,9 @@ function typeFromBounds(halfEm: number, left: number, right: number): number {
 // HanKerning::FontData (han_kerning.cc:417-535) from Canvas: `halt` through the pair trim of 「「, glyph bounds from
 // measureText's ink box. Measured in prepare for every style with a shaping group HanKerning may apply to.
 export function measureHanKerningFontData(p: BlinkPrepared, style: number): void {
-  if (p.hanKerning[style] !== null) return
-  const context = p.contexts[style]!.hyphen
+  const st = p.styles[style]!
+  if (st.hanKerning !== null) return
+  const context = st.contexts.hyphen
   const data: HanKerningFontData = { hasHalt: trim16(p, style, 0x300c) > 0, typeForDot: HAN_OTHER, typeForColon: HAN_OTHER, typeForSemicolon: HAN_OTHER, quoteFullwidth: false }
   if (data.hasHalt) {
     const chars = [0x3001, 0x3002, 0xff0c, 0xff0e, 0xff1a, 0xff1b, 0x201c, 0x2018, 0x201d, 0x2019]
@@ -77,12 +78,12 @@ export function measureHanKerningFontData(p: BlinkPrepared, style: number): void
     data.typeForSemicolon = glyphs[5]!.type
     data.quoteFullwidth = group(6, 8) === HAN_OPEN && group(8, 10) === HAN_CLOSE
   }
-  p.hanKerning[style] = data
+  st.hanKerning = data
 }
 
 // The measured font data of a style whose text HanKerning may apply to.
 export function hanKerningFontData(p: BlinkPrepared, style: number): HanKerningFontData {
-  return p.hanKerning[style]!
+  return p.styles[style]!.hanKerning!
 }
 
 // HanKerning::GetCharType (han_kerning.cc:116-140).
@@ -109,7 +110,7 @@ export function shouldKernLast(type: number, lastType: number): boolean {
 
 // The 16.16 amount `halt` removes from character c in this style's font.
 export function trim16(p: BlinkPrepared, style: number, c: number): number {
-  const contexts = p.contexts[style]!
+  const contexts = p.styles[style]!.contexts
   const one = String.fromCharCode(c)
   return 2 * raw16Of(contexts, contexts.hyphen, one) - raw16Of(contexts, contexts.hyphen, one + one)
 }

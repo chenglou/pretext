@@ -34,7 +34,8 @@ import { LIGATURE_MERGED, listedFontCovers } from './ligatures.js'
 import { graphemeBoundaries } from '../../unicode/grapheme.js'
 import { blinkGraphemeRules } from './data.js'
 import { scriptsPerUnit } from './script.js'
-import type { BlinkPrepared, BlinkStyle, StyleContexts } from './types.js'
+import { collapsesWhiteSpace } from './content.js'
+import type { BlinkPrepared, ComputedStyle, InlineItem, StyleContexts } from './types.js'
 
 const f32 = Math.fround
 // Float32 holds every 16.16 integer below 2^24, 256 px.
@@ -90,7 +91,7 @@ function cssSizeScale(size: number, zoom: number): number {
 // clean renderer). The scaled advances are stand-ins: Blink truncates each glyph's advance to 1/65536 px at its own size
 // (skia_text_metrics.cc:207-211), which the layout reports as optical-size (gaps.ts preparedContent). Other fonts are measured
 // at the zoomed size (specs/blink-lines.md §2.3).
-export function styleContexts(canvases: Context[], style: BlinkStyle, zoom: number, partition: string): StyleContexts {
+export function styleContexts(canvases: Context[], style: ComputedStyle, zoom: number, partition: string): StyleContexts {
   const cssSize = style.measuresAtCssSize
   const scale = cssSize ? cssSizeScale(style.font.size, zoom) : 1
   // Computed font size f32(specified × zoom); DOM and Canvas both floor it to 1/100 (effectiveFontSize).
@@ -134,8 +135,9 @@ export type Shaper = {
 // but for atomic inlines, where a shaping group ends), so every two-byte string and word holds a unit above U+00FF.
 // rule blink/measure/contexts-per-storage
 export function contextsOf(p: BlinkPrepared, style: number, twoByte: boolean): StyleContexts {
-  if (twoByte || !p.segmented) return p.contexts[style]!
-  return p.oneByteContexts[style] ??= styleContexts(p.canvases, p.styles[style]!, p.layoutZoom, '8bit')
+  const st = p.styles[style]!
+  if (twoByte || !p.segmented) return st.contexts
+  return st.oneByteContexts ??= styleContexts(p.canvases, st, p.layoutZoom, '8bit')
 }
 
 // W × 65536 of a Canvas string, a whole number of 16.16 units (a Canvas total is the float32 of one, blink-canvas §1.5),
@@ -199,7 +201,7 @@ function allDefaultIgnorable(p: BlinkPrepared, from: number, to: number): boolea
 // the measurement reports it (gaps.ts measuredRange).
 function joinedAtEdge(p: BlinkPrepared, g: number, k: number, callStart: number, callEnd: number): boolean {
   if (k > callStart && k < callEnd) return joinsAcross(p, k, callStart, callEnd)
-  switch (p.styles[p.groups[g]!.style]!.joining) {
+  switch (p.styles[p.groups[g]!.style]!.font.facts.joining) {
     case 'opentype': return joinsAcross(p, k, callStart, callEnd)
     case 'aat': case null: return false
   }
@@ -372,13 +374,9 @@ function canvasWordEnd(s: string, start: number): number {
 // contexts differ by 1/64 px of letter spacing, so the widths differ by that or by nothing. The direction is the contexts'
 // LTR; the three characters are one RTL bidi run in either (U+3000 is WS between two AL).
 function canvasSplitsWords(p: BlinkPrepared, style: number): boolean {
-  const known = p.canvasSplitsWords[style]
-  if (known !== undefined) return known
-  const contexts = p.contexts[style]!
+  const st = p.styles[style]!
   const probe = '\u0628\u3000\u0628'
-  const splits = canvasWidth(contexts.ltrNoLigatures, probe) - canvasWidth(contexts.hyphen, probe) > NO_LIGATURES_SPACING_PX / 2
-  p.canvasSplitsWords[style] = splits
-  return splits
+  return st.canvasSplitsWords ??= canvasWidth(st.contexts.ltrNoLigatures, probe) - canvasWidth(st.contexts.hyphen, probe) > NO_LIGATURES_SPACING_PX / 2
 }
 
 // The script Canvas shapes every code unit of a 16-bit Canvas string under: RunSegmenter runs over each PlainTextItem alone
@@ -488,10 +486,12 @@ function wordSpacing16(p: BlinkPrepared, style: number, from: number, to: number
   const ws = p.styles[style]!.wordSpacing
   if (ws === 0) return 0
   const raw = raw16Trunc(f32(ws * p.layoutZoom))
+  // Word spacing at text_content index 0 (WordSpacingWhiteSpacePre, inline_node.cc:1561-1565).
+  const anywhere = !collapsesWhiteSpace(p.paragraph.whiteSpace)
   let n = 0
   for (let i = from; i < to; i++) {
     const c = p.text.charCodeAt(i)
-    if ((c === 0x20 || c === 0x09 || c === 0x0a || c === 0xa0) && (i !== 0 || c === 0xa0 || p.wordSpacingAnywhere)) n++
+    if ((c === 0x20 || c === 0x09 || c === 0x0a || c === 0xa0) && (i !== 0 || c === 0xa0 || anywhere)) n++
   }
   return n * raw
 }
@@ -782,7 +782,7 @@ function shapedReversed(p: BlinkPrepared, g: number, k: number): boolean {
 function pairBefore16(sh: Shaper, g: number, d: number, k: number): number {
   // Where HarfBuzz shaped the reversed text, its first glyph is the cluster after k.
   const reversed = shapedReversed(sh.p, g, k)
-  switch (sh.p.styles[sh.p.groups[g]!.style]!.pairKerning) {
+  switch (sh.p.styles[sh.p.groups[g]!.style]!.font.facts.pairKerning) {
     case 'split': return reversed ? d - (d >> 1) : d >> 1
     case 'first-advance': case null: return reversed ? 0 : d
   }
@@ -878,14 +878,14 @@ export type ShapeResult =
 
 // An item's result is the group's glyphs whose cluster starts in the item's range (CopyRange through FindGlyphDataRange), so
 // an item edge inside a glyph cluster counts as the next cluster boundary.
-export function itemShapeResult(sh: Shaper, itemIndex: number): ShapeResult {
+export function itemShapeResult(sh: Shaper, item: InlineItem): ShapeResult {
   const p = sh.p
-  const item = p.items[itemIndex]!
-  const group = p.groups[item.group]!
-  const base16 = groupPrefix16(sh, item.group, sliceEdge(p, item.start, group.start, group.end))
+  const g = p.groupOfUnit[item.start]!
+  const group = p.groups[g]!
+  const base16 = groupPrefix16(sh, g, sliceEdge(p, item.start, group.start, group.end))
   return {
-    kind: 'group', group: item.group, start: item.start, end: item.end, rtl: (item.bidiLevel & 1) === 1,
-    width16: groupPrefix16(sh, item.group, sliceEdge(p, item.end, group.start, group.end)) - base16, base16,
+    kind: 'group', group: g, start: item.start, end: item.end, rtl: (item.bidiLevel & 1) === 1,
+    width16: groupPrefix16(sh, g, sliceEdge(p, item.end, group.start, group.end)) - base16, base16,
   }
 }
 
@@ -1258,8 +1258,19 @@ export function partGraphemeStarts(sh: Shaper, view: View, part: Part, position:
   return starts
 }
 
-// LineBreaker::ShapeText (line_breaker.cc:2044-2064): [start, end) shaped alone with the current style's spacing.
-export function reshape(sh: Shaper, g: number, start: number, end: number, isLineStart: boolean = false): ReshapePart {
+// The shaping group a line edge inside an item's result is shaped again in. A tab run's offsets are all safe to break
+// (safeToBreak), so ShapeLine never shapes one again.
+function reshapedGroup(sr: ShapeResult): number {
+  switch (sr.kind) {
+    case 'group': return sr.group
+    case 'tabs': throw new Error('a line edge inside a tab run is never shaped again')
+  }
+}
+
+// LineBreaker::ShapeText (line_breaker.cc:2044-2064): [start, end) of an item's result shaped alone with the current
+// style's spacing.
+export function reshape(sh: Shaper, sr: ShapeResult, start: number, end: number, isLineStart: boolean = false): ReshapePart {
+  const g = reshapedGroup(sr)
   const startTrim16 = hanKerningStartTrim16(sh, g, start, end, isLineStart)
   const endTrim16 = hanKerningEndTrim16(sh, g, start, end)
   const width16 = measure16(sh, g, start, end, start, end) - startTrim16 - endTrim16
@@ -1268,8 +1279,9 @@ export function reshape(sh: Shaper, g: number, start: number, end: number, isLin
 
 // A line-end reshape with `han_kerning_end` (shaping_line_breaker.cc:344-363; harfbuzz_shaper.cc:1018-1030): HanKerning
 // halts the last character whatever follows (apply_end), with the start context as usual.
-export function reshapeHanKerningEnd(sh: Shaper, g: number, start: number, end: number): ReshapePart {
+export function reshapeHanKerningEnd(sh: Shaper, sr: ShapeResult, start: number, end: number): ReshapePart {
   const p = sh.p
+  const g = reshapedGroup(sr)
   const startTrim16 = hanKerningStartTrim16(sh, g, start, end, false)
   let endTrim16 = 0
   if (hanKerningMayApply(p.hanKerningCandidates, start, end)) {
@@ -1302,7 +1314,7 @@ export function truncateView(sh: Shaper, view: View, start: number, end: number)
 // HyphenResult (hyphen_result.cc:12-16): U+2010 when the primary font maps it, else U+002D (computed_style.cc:1804-1820).
 // Canvas can't show which, because fallback supplies U+2010: the font declaration says (FontFacts.mapsHyphen), and when
 // it doesn't the hyphen is U+2010 (lines report hyphen-glyph where that decides a width).
-export function hyphenText(style: BlinkStyle): string {
+export function hyphenText(style: ComputedStyle): string {
   switch (style.font.facts.mapsHyphen) {
     case true: return '‐'
     case false: return '-'

@@ -7,9 +7,9 @@
 import { indexContent } from '../../content.js'
 import type { BlinkEnvironment } from '../../env.js'
 import type { Context } from '../../measure/canvas.js'
-import type { FillResultOf, Gap, LineInspectionOf, LinePieces, LineSlot, Paragraph, TextAlign } from '../../model.js'
+import type { FillResultOf, Gap, LineInspectionOf, LinePieces, LineSlot, Paragraph } from '../../model.js'
 import { graphemeBoundaries } from '../../unicode/grapheme.js'
-import { breaksShapingAfter, breaksShapingBefore, buildContent, collapsesWhiteSpace, lengthLU, segmentBidiRuns, stylesOf, wrapsLines } from './content.js'
+import { breaksShapingAfter, breaksShapingBefore, buildContent, lengthLU, sameFont, segmentBidiRuns, stylesOf, wrapsLines } from './content.js'
 import { blinkGraphemeRules } from './data.js'
 import { emojiPriorities } from './emoji.js'
 import { lineGaps, preparedContent, type GapSink } from './gaps.js'
@@ -22,7 +22,7 @@ import { lineSourceRange, piecesOf, type BlinkPaintFacts } from './pieces.js'
 import { USCRIPT_LATIN, isExtendedPictographic, isMark } from './props.js'
 import { scriptsPerUnit } from './script.js'
 import { isSegmentEdge, measureGroups, styleContexts, type Shaper } from './shape.js'
-import type { BlinkGroup, BlinkPrepared } from './types.js'
+import type { BlinkGroup, BlinkPrepared, BlinkStyle } from './types.js'
 
 export { paragraphGaps } from './gaps.js'
 export type { BlinkPaintFacts } from './pieces.js'
@@ -38,10 +38,10 @@ function shapingGroups(p: BlinkPrepared): void {
   for (let index = 0; index < items.length; index++) {
     const s = items[index]!
     if (s.type !== 'text' || s.start === s.end) continue
-    const members = [index]
     let end = s.end
-    let j = index + 1
-    for (; j < items.length; j++) {
+    // The group's last text item.
+    let last = index
+    for (let j = index + 1; j < items.length; j++) {
       const it = items[j]!
       if (it.type === 'control' || it.type === 'atomic') break
       if (it.type === 'open-tag') {
@@ -53,16 +53,16 @@ function shapingGroups(p: BlinkPrepared): void {
         continue
       }
       if (it.start === it.end) continue
-      if (p.styles[it.style]!.fontKey !== p.styles[s.style]!.fontKey) break
+      if (!sameFont(p.styles[it.style]!, p.styles[s.style]!)) break
       if ((it.bidiLevel & 1) !== (s.bidiLevel & 1)) break
       if (p.text.charCodeAt(it.start) === 0x200c) break
-      members.push(j)
       end = it.end
+      last = j
     }
     const group: BlinkGroup = { start: s.start, end, style: s.style, rtl: (s.bidiLevel & 1) === 1, cuts: [], prefixAtCut: [], startTrim16: 0, endTrim16: 0 }
-    for (let k = 0; k < members.length; k++) items[members[k]!]!.group = p.groups.length
+    p.groupOfUnit.fill(p.groups.length, group.start, group.end)
     p.groups.push(group)
-    index = members[members.length - 1]!
+    index = last
   }
 }
 
@@ -107,33 +107,14 @@ function markContinuations(p: BlinkPrepared): void {
   }
 }
 
-// NeedsAccurateEndPosition from text-align with text-align-last: auto (LineInfo::ComputeNeedsAccurateEndPosition,
-// line_info.cc:127-175). It reads BaseDirection() for left and right, but LineBreaker::PrepareNextLine computes it in
-// SetLineStyle (line_breaker.cc:842) after Reset set the base direction to LTR (line_info.cc:48-75) and before
-// SetBaseDirection (line_breaker.cc:870-871), so left never needs it and right always does, in either direction.
-function needsAccurateEndPosition(align: TextAlign): boolean {
-  switch (align) {
-    case 'start': case 'left': return false
-    case 'end': case 'center': case 'justify': case 'right': return true
-  }
-}
-
 // `inspect` prepares the paragraph for inspectLine and paragraphGaps; a plain paragraph gives lines and pieces alone
 // (types.ts BlinkPrepared.inspect).
 export function prepare(paragraph: Paragraph, env: BlinkEnvironment, inspect: boolean): BlinkPrepared {
   const canvases: Context[] = []
   const zoom = env.devicePixelRatio
   const index = indexContent(paragraph)
-  const { styles, settings, styleOfLeaf, styleOfElement } = stylesOf(paragraph, index, zoom)
-  // BoxInfo::text_metrics compares FontHeight of the primary fonts (inline_items_builder.cc:236-266); equal font
-  // declarations have equal metrics. Different declarations are taken to differ, which only decides whether a span
-  // without box edges creates a box fragment for its element rects, never where lines break.
-  const fontHeightsDiffer = (a: number, b: number): boolean => {
-    const fa = styles[a]!.font
-    const fb = styles[b]!.font
-    return fa.family !== fb.family || fa.size !== fb.size || fa.weight !== fb.weight || fa.style !== fb.style
-  }
-  const content = buildContent(index, styles, styleOfLeaf, styleOfElement, fontHeightsDiffer)
+  const computed = stylesOf(paragraph, index, zoom)
+  const content = buildContent(index, computed.styles, computed.styleOfLeaf, computed.styleOfElement)
   const bidi = segmentBidiRuns(paragraph, content)
   const text = content.text
   let is8Bit = true
@@ -143,8 +124,7 @@ export function prepare(paragraph: Paragraph, env: BlinkEnvironment, inspect: bo
   const segmented = !((is8Bit || !content.hasNonOrc16Bit) && !bidi.enabled)
   const scripts = segmented ? scriptsPerUnit(text) : new Uint8Array(text.length).fill(USCRIPT_LATIN)
   const priorities = segmented ? emojiPriorities(text) : new Uint8Array(text.length)
-  const sourceLength = index.text.length
-  const contentOffsets = new Int32Array(sourceLength).fill(-1)
+  const contentOffsets = new Int32Array(index.text.length).fill(-1)
   for (let t = 0; t < text.length; t++) if (content.sourceOffsets[t]! >= 0) contentOffsets[content.sourceOffsets[t]!] = t
   const graphemeStarts = new Uint8Array(text.length + 1)
   if (is8Bit) {
@@ -153,30 +133,27 @@ export function prepare(paragraph: Paragraph, env: BlinkEnvironment, inspect: bo
     const boundaries = graphemeBoundaries(text, blinkGraphemeRules)
     for (let i = 0; i < boundaries.length; i++) graphemeStarts[boundaries[i]!] = 1
   }
-  const contexts = []
-  for (let s = 0; s < styles.length; s++) contexts.push(styleContexts(canvases, styles[s]!, zoom, segmented ? '16bit' : '8bit'))
+  const styles: BlinkStyle[] = []
+  for (let s = 0; s < computed.styles.length; s++) {
+    const style = computed.styles[s]!
+    styles.push({ ...style, contexts: styleContexts(canvases, style, zoom, segmented ? '16bit' : '8bit'), oneByteContexts: null, canvasSplitsWords: null, hanKerning: null })
+  }
   const rtl = paragraph.direction === 'rtl'
   // Where the gaps of preparation go: the ones its measuring raises, then the content's (gaps.ts).
   const gaps: GapSink = inspect ? [] : null
   const p: BlinkPrepared = {
     paragraph, env, index, layoutZoom: zoom, text, is8Bit, segmented, scripts, priorities, sourceOffsets: content.sourceOffsets, contentOffsets,
-    sourceLength, items: bidi.items, styles, settings, groups: [], contexts, bidiEnabled: bidi.enabled,
+    items: bidi.items, styles, groups: [], bidiEnabled: bidi.enabled,
     baseLevel: rtl ? 1 : 0, graphemeStarts, hanKerningCandidates: hanKerningCandidates(text),
     continuations: new Uint8Array(text.length),
     ligature: new Uint8Array(text.length + 1),
     fontRun: new Int16Array(text.length).fill(-1),
     groupOfUnit: new Int32Array(text.length).fill(-1),
-    wordSpacingAnywhere: !collapsesWhiteSpace(paragraph.whiteSpace),
-    oneByteContexts: styles.map(() => undefined),
-    canvasSplitsWords: styles.map(() => undefined),
-    hanKerning: styles.map(() => null),
-    textAlign: paragraph.textAlign, needsAccurateEndPosition: needsAccurateEndPosition(paragraph.textAlign),
     canvases, inspect: gaps === null ? null : { gaps },
   }
   const sh: Shaper = { p, gaps }
   shapingGroups(p)
   markContinuations(p)
-  for (let g = 0; g < p.groups.length; g++) p.groupOfUnit.fill(g, p.groups[g]!.start, p.groups[g]!.end)
   const fontFacts = fontFactsOfText(p)
   p.ligature = fontFacts.ligature
   p.fontRun = fontFacts.fontRun

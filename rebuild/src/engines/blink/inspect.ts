@@ -4,6 +4,7 @@
 // filling does, into the list the inspection returns.
 import type { TextAlign } from '../../model.js'
 import { pairPlacement, positionInsideGrapheme, runOfSource } from './gaps.js'
+import { boxStartEmpty } from './content.js'
 import type { BlinkGlyphCluster, BlinkItem, BlinkLineGeometry, BlinkLineStart, BlinkMappingUnit, BlinkShapeRun } from './geometry.js'
 import { LIGATURE_MERGED } from './ligatures.js'
 import { viewPositionLimit } from './limits.js'
@@ -319,19 +320,17 @@ function itemsOf(sh: Shaper, info: LineInfo, justified: readonly (Justified | nu
     return children.length - 1
   }
   // RebuildBoxStates (logical_line_builder.cc:790-813): boxes open at the line start get placeholders and no start edge.
+  // They are the spans around the line's first item, outermost first: its style's chain of parents, without the span an
+  // open tag opens itself.
   if (info.results.length > 0) {
+    const first = p.items[info.results[0]!.itemIndex]!
     const open: number[] = []
-    const first = info.results[0]!.itemIndex
-    for (let i = 0; i < first; i++) {
-      const item = p.items[i]!
-      if (item.type === 'open-tag') open.push(i)
-      else if (item.type === 'close-tag') open.pop()
-    }
-    for (let o = 0; o < open.length; o++) {
-      const item = p.items[open[o]!]!
+    for (let s = first.type === 'open-tag' ? p.styles[first.style]!.parent : first.style; s !== 0; s = p.styles[s]!.parent) open.push(s)
+    for (let o = open.length - 1; o >= 0; o--) {
+      const style = p.styles[open[o]!]!
       const start = children.length
-      if (item.shouldCreateBoxFragment) placeholder()
-      stack.push({ element: item.element, style: item.style, needsBoxFragment: item.shouldCreateBoxFragment, hasStartEdge: false, start, startEdge: { margin: 0, mbp: 0 } })
+      if (style.shouldCreateBoxFragment) placeholder()
+      stack.push({ element: style.element, style: open[o]!, needsBoxFragment: style.shouldCreateBoxFragment, hasStartEdge: false, start, startEdge: { margin: 0, mbp: 0 } })
     }
   }
   // AddBoxData (inline_box_state.cc:548-630).
@@ -391,12 +390,15 @@ function itemsOf(sh: Shaper, info: LineInfo, justified: readonly (Justified | nu
             if (r.end === r.start) break
             leaf({ kind: 'tab', run: item.run, textStart: r.start, textEnd: r.end, level: item.bidiLevel, x: 0, inlineSize, clusters: shapeOf(sh, r.shape!, r.start, r.end, true, (item.bidiLevel & 1) === 1, expansions).clusters }, level, 0, inlineSize)
             break
+          case 'br':
+            if (r.end === r.start) break
+            leaf({ kind: 'br', element: item.element, level: item.bidiLevel, x: 0, inlineSize }, level, 0, inlineSize)
+            break
           case 'forced-break':
             if (r.end === r.start) break
-            if (item.element >= 0) leaf({ kind: 'br', element: item.element, level: item.bidiLevel, x: 0, inlineSize }, level, 0, inlineSize)
-            else leaf({ kind: 'forced-break', run: item.run, textStart: r.start, textEnd: r.end, level: item.bidiLevel, x: 0, inlineSize }, level, 0, inlineSize)
+            leaf({ kind: 'forced-break', run: item.run, textStart: r.start, textEnd: r.end, level: item.bidiLevel, x: 0, inlineSize }, level, 0, inlineSize)
             break
-          case 'generated-zwsp': case 'wbr': case 'cr-ff': case 'none':
+          case 'generated-zwsp': case 'wbr': case 'cr-ff':
             break
         }
         break
@@ -406,11 +408,11 @@ function itemsOf(sh: Shaper, info: LineInfo, justified: readonly (Justified | nu
         break
       case 'open-tag': {
         const start = children.length
-        if (item.shouldCreateBoxFragment) placeholder()
         const style = p.styles[item.style]!
-        const sized = inlineSize !== 0 || (item.shouldCreateBoxFragment && (style.start.margin !== 0 || style.start.border !== 0 || style.start.padding !== 0))
+        if (style.shouldCreateBoxFragment) placeholder()
+        const sized = inlineSize !== 0 || (style.shouldCreateBoxFragment && !boxStartEmpty(style))
         stack.push({
-          element: item.element, style: item.style, needsBoxFragment: item.shouldCreateBoxFragment, hasStartEdge: true, start,
+          element: item.element, style: item.style, needsBoxFragment: style.shouldCreateBoxFragment, hasStartEdge: true, start,
           startEdge: sized ? { margin: style.start.margin, mbp: style.start.margin + style.start.border + style.start.padding } : { margin: 0, mbp: 0 },
         })
         break
@@ -578,7 +580,7 @@ function mappingOf(p: BlinkPrepared, sourceStart: number, sourceEnd: number, con
   const generated = (t: number, s: number): void => {
     for (let i = 0; i < p.items.length; i++) {
       const item = p.items[i]!
-      if (item.control === 'generated-zwsp' && item.start === t && item.run >= 0) {
+      if (item.type === 'control' && item.control === 'generated-zwsp' && item.start === t) {
         push({ run: item.run, start: s, end: s, textStart: t, textEnd: t + 1, collapsed: false })
         return
       }

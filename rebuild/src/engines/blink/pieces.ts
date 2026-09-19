@@ -13,14 +13,14 @@ export type BlinkPaintFacts = { needsAccurateEndPosition: boolean }
 
 function sourceStartOf(p: BlinkPrepared, textOffset: number): number {
   for (let t = textOffset; t < p.text.length; t++) if (p.sourceOffsets[t]! >= 0) return p.sourceOffsets[t]!
-  return p.sourceLength
+  return p.index.text.length
 }
 
 // The source units a line consumed, from where it started and where the next one starts (null after the last line):
 // consecutive lines tile the text. Known when the line is filled, before any fragment is.
 export function lineSourceRange(p: BlinkPrepared, start: BlinkLineStart, next: BlinkLineStart | null): { start: number; end: number } {
   const isFirst = start.itemIndex === 0 && start.textOffset === 0
-  return { start: isFirst ? 0 : sourceStartOf(p, start.textOffset), end: next === null ? p.sourceLength : sourceStartOf(p, next.textOffset) }
+  return { start: isFirst ? 0 : sourceStartOf(p, start.textOffset), end: next === null ? p.index.text.length : sourceStartOf(p, next.textOffset) }
 }
 
 type UnitKind = 'text' | 'hanging' | 'trimmed' | 'collapsed' | 'forced-break'
@@ -38,8 +38,11 @@ function elementsOn(p: BlinkPrepared, info: LineInfo): ElementsOnLine {
       case 'close-tag': on.close.add(item.element); break
       case 'atomic': on.atomic.set(item.element, item.bidiLevel); break
       case 'control':
-        if (item.element >= 0 && item.control === 'forced-break') on.br.add(item.element)
-        if (item.control === 'wbr') on.wbr.add(item.element)
+        switch (item.control) {
+          case 'br': on.br.add(item.element); break
+          case 'wbr': on.wbr.add(item.element); break
+          case 'forced-break': case 'tab': case 'generated-zwsp': case 'cr-ff': break
+        }
         break
       case 'text': break
     }
@@ -57,12 +60,13 @@ function fragmentsOf(p: BlinkPrepared, info: LineInfo, contentStart: number, con
   for (let i = 0; i < info.results.length; i++) {
     const r = info.results[i]!
     const item = p.items[r.itemIndex]!
-    if (item.type === 'open-tag' || item.type === 'close-tag' || item.type === 'atomic' || item.element >= 0) continue
+    // An element's item is an element fragment (the walk below), and takes no unit of a text leaf.
+    if (item.type !== 'text' && (item.type !== 'control' || item.control === 'br' || item.control === 'wbr')) continue
     const level = r.hasOnlyBidiTrailingSpaces && p.bidiEnabled ? p.baseLevel : item.bidiLevel
     // CR and FF in preserve modes are control items in text_content without a fragment item (HandleControlItem →
     // HandleEmptyText, line_breaker.cc:2988-2994, 2034-2042): content the engine keeps without placing, painted as text so
     // the painted line splits its shaping group there too.
-    if (item.control === 'cr-ff') {
+    if (item.type === 'control' && item.control === 'cr-ff') {
       for (let t = item.start; t < item.end; t++) {
         const u = t - contentStart
         if (u < 0 || u >= n) continue
@@ -82,11 +86,11 @@ function fragmentsOf(p: BlinkPrepared, info: LineInfo, contentStart: number, con
       if (u < 0 || u >= n) continue
       resultOf[u] = i
       levels[u] = level
-      if (item.control === 'forced-break') kinds[u] = 'forced-break'
+      if (item.type === 'control' && item.control === 'forced-break') kinds[u] = 'forced-break'
       else if (isText) kinds[u] = isHanging ? 'hanging' : 'text'
       if (kinds[u] === 'text') lastTextUnit = Math.max(lastTextUnit, u)
     }
-    for (let t = r.end; t < r.trimmedEnd; t++) {
+    for (let t = r.end; t < (r.trimmedEnd ?? r.end); t++) {
       const u = t - contentStart
       if (u >= 0 && u < n) { kinds[u] = 'trimmed'; levels[u] = p.baseLevel }
     }
@@ -261,7 +265,7 @@ function joinsNextLine(p: BlinkPrepared, next: BlinkLineStart | null): boolean {
   for (let g = 0; g < p.groups.length; g++) {
     const group = p.groups[g]!
     if (!(group.start < k && k <= group.end)) continue
-    switch (p.styles[group.style]!.joining) {
+    switch (p.styles[group.style]!.font.facts.joining) {
       case 'opentype': return joinsAcross(p, k, group.start, group.end)
       case 'aat': return false
       case null: return false
