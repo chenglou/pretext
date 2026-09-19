@@ -91,36 +91,16 @@ function trimTrailingWhiteSpaceIn(p: GeckoPrepared, psd: PlacedSpanData): { hand
   return { handled: false, delta: 0 }
 }
 
-// nsLineLayout::GetTrimFrom (nsLineLayout.cpp:3452-3478): the last text frame's TrimmableWS, its advance negated when its
-// text run's direction is against the line's.
-function trimFrom(p: GeckoPrepared, psd: PlacedSpanData, lineIsRtl: boolean): { advance: number; count: number } {
+// The frame nsLineLayout::GetTrimFrom and GetHangFrom read (nsLineLayout.cpp:3452-3478, :3416-3450): the line's last frame,
+// inside the span the line ends with, frames skipped when trimming (<br>) passed over; null where that isn't a text frame.
+function lastTextFrame(psd: PlacedSpanData): PlacedText | null {
   for (let k = psd.frames.length - 1; k >= 0; k--) {
     const pf = psd.frames[k]!
-    if (pf.kind === 'span') return trimFrom(p, pf.span, lineIsRtl)
-    if (pf.kind === 'text') {
-      const ws = pf.r.trimmableWS
-      if (ws === null) return { advance: 0, count: 0 }
-      return { advance: ((p.frames[pf.r.frame]!.level & 1) === 1) !== lineIsRtl ? -ws.advance : ws.advance, count: ws.count }
-    }
-    if (pf.kind !== 'br') return { advance: 0, count: 0 }
+    if (pf.kind === 'span') return lastTextFrame(pf.span)
+    if (pf.kind === 'text') return pf
+    if (pf.kind !== 'br') return null
   }
-  return { advance: 0, count: 0 }
-}
-
-// nsLineLayout::GetHangFrom (nsLineLayout.cpp:3416-3450): the hangable white space of the line's last text frame, negated
-// when its text run's direction is against the line's; frames skipped when trimming (<br>) are passed over.
-function hangFrom(p: GeckoPrepared, psd: PlacedSpanData, lineIsRtl: boolean): number {
-  for (let k = psd.frames.length - 1; k >= 0; k--) {
-    const pf = psd.frames[k]!
-    if (pf.kind === 'span') return hangFrom(p, pf.span, lineIsRtl)
-    if (pf.kind === 'text') {
-      const result = pf.r.hangableISize
-      if (result === 0) return 0
-      return ((p.frames[pf.r.frame]!.level & 1) === 1) !== lineIsRtl ? -result : result
-    }
-    if (pf.kind !== 'br') return 0
-  }
-  return 0
+  return null
 }
 
 // nsLineLayout::PerFrameData::ParticipatesInJustification (nsLineLayout.cpp:2993-3004): not empty, not skipped when trimming
@@ -274,15 +254,21 @@ export function placeLine(p: GeckoPrepared, line: GeckoFilledLine): PlacedLine {
   // (:3505-3516).
   const isLastLine = line.next.item >= p.items.length
   const align: TextAlign = p.paragraph.textAlign === 'justify' && (line.lineEndsInBR || isLastLine) ? 'start' : p.paragraph.textAlign
+  // GetTrimFrom gives that frame's TrimmableWS and GetHangFrom its hangable white space, negated when its text run's direction
+  // is against the line's.
   let hang = 0
   let trimCount = 0
-  if (line.lineWrapped) {
+  const last = line.lineWrapped ? lastTextFrame(root) : null
+  if (last !== null) {
+    const against = ((p.frames[last.r.frame]!.level & 1) === 1) !== rtl
     if (align === 'justify') {
-      const trim = trimFrom(p, root, rtl)
-      hang = trim.advance
-      trimCount = trim.count
-    } else {
-      hang = hangFrom(p, root, rtl)
+      const ws = last.r.trimmableWS
+      if (ws !== null) {
+        hang = against ? -ws.advance : ws.advance
+        trimCount = ws.count
+      }
+    } else if (last.r.hangableISize !== 0) {
+      hang = against ? -last.r.hangableISize : last.r.hangableISize
     }
   }
   let dx = 0
