@@ -625,8 +625,11 @@ such a pair).
   - Firefox, 63,771 cases: 63,657 equal in line ranges and native observations. The other 114 are in one browser process
     (`suite-sample` part 2) and all already history-dependent in the ledger (`gecko/process-font-fallback-state`); that set
     run again with both predictors gave 0 differences on 19,888 cases.
-  - webkit-host, the development sets, 26,472 rows: 0 line ranges differ; 2 native observations differ, exit 3, both
-    already history-dependent in the ledger. The held-out sets are being run now.
+  - webkit-host, all 63,987 no-facts cases at the X1 merge (`.artifacts/tests/runs/verify-x1-20260918`, beside a tier 2
+    run in both orders and both configurations with 0 transitions): 0 line ranges differ; 3 native observations differ,
+    exit 3 (`c-1ca0bab9ded7a4c6` and `c-53283654e67b8035` in `rich-prewrap`, `c-7cc5e3e26ff7c30d` in
+    `heldout-suite-sample`), all already history-dependent in the ledger. The owner's own run covered the development
+    sets, 26,472 rows, with the same result.
 - **Baselines for the tripwire** (X2: tier 2's wall time and the giants stay within 2× these), in
   `rebuild/tests/baselines/times-correctness-line.json`, headline configuration, 2026-09-18, from `rebuild/src` as at the
   correctness line. The giants under the exclusive lock, forward, one case a round trip: Chrome 119 s (the library's
