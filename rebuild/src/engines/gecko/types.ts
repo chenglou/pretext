@@ -39,18 +39,6 @@ export type GeckoLeaf = {
   wordSpacingAu: number
 }
 
-// The leaf holding source offset s: the last one that starts at or before it, which an empty leaf never is for a character.
-export function leafOfSource(leaves: GeckoLeaf[], s: number): number {
-  let lo = 0
-  let hi = leaves.length - 1
-  while (lo < hi) {
-    const mid = (lo + hi + 1) >> 1
-    if (leaves[mid]!.start <= s) lo = mid
-    else hi = mid - 1
-  }
-  return lo
-}
-
 // A text frame: one text node, or the piece of it bidi resolution split off as a non-fluid continuation
 // (nsBidiPresUtils.cpp:1039-1057). Line breaking later makes fluid continuations, which are line state, not frames.
 export type GeckoFrame = {
@@ -63,17 +51,18 @@ export type GeckoFrame = {
   // The frame's transformed range [tStart, tEnd).
   tStart: number
   tEnd: number
-  // Index of this frame's item in GeckoPrepared.items: with frameOfSource, what makes a line start from a source offset.
+  // Index of this frame's item in GeckoPrepared.items: with holderOfSource, what makes a line start from a source offset.
   item: number
 }
 
-// The frame holding source offset s: the last one that starts at or before it.
-export function frameOfSource(frames: GeckoFrame[], s: number): number {
+// The frame, or the leaf, holding source offset s, by index: the last one that starts at or before it, which an empty leaf
+// never is for a character.
+export function holderOfSource(list: readonly { start: number }[], s: number): number {
   let lo = 0
-  let hi = frames.length - 1
+  let hi = list.length - 1
   while (lo < hi) {
     const mid = (lo + hi + 1) >> 1
-    if (frames[mid]!.start <= s) lo = mid
+    if (list[mid]!.start <= s) lo = mid
     else hi = mid - 1
   }
   return lo

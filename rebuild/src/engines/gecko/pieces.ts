@@ -5,7 +5,7 @@ import type { Fragment, LinePieces } from '../../model.js'
 import { joinsAcross } from './advance.js'
 import { itemAt, type GeckoFilledLine } from './lines.js'
 import { placeLine, textFramesOf, type PlacedText } from './placement.js'
-import { leafOfSource, objectAt, type GeckoLeaf, type GeckoPrepared } from './types.js'
+import { holderOfSource, objectAt, type GeckoLeaf, type GeckoPrepared } from './types.js'
 
 // Gecko's painting rules read nothing beside the pieces.
 export type GeckoPaintFacts = Record<never, never>
@@ -137,7 +137,7 @@ export function linePieces(p: GeckoPrepared, line: GeckoFilledLine): LinePieces<
 // Source [start, end) as collapsed text, a fragment a leaf.
 function pushCollapsed(fragments: Fragment[], leaves: GeckoLeaf[], start: number, end: number): void {
   if (start >= end) return
-  let run = leafOfSource(leaves, start)
+  let run = holderOfSource(leaves, start)
   for (let s = start; s < end;) {
     while (leaves[run]!.end <= s) run++
     const e = Math.min(leaves[run]!.end, end)

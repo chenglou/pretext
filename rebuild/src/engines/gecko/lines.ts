@@ -125,11 +125,11 @@ function scanAdvance(p: GeckoPrepared, prov: Provider, from: number, to: number,
 // stand-in that crosses a stop moves every stop after it. The tabs of text run `run` in [startT, end), the measured content
 // of frame `frame`.
 function computeTabs(p: GeckoPrepared, ll: LineLayout, run: GeckoTextRun, frame: number, startT: number, end: number, xForTabs: number): readonly Tab[] {
+  if (p.tabs === null || !run.hasTab) return NO_TABS
   // rule gecko/measure/tab-width-containing-block
   // ComputeTabWidthAppUnits (nsTextFrame.cpp:3875-3906): tab-size is the text frame's own (aFrame->StyleText()->mTabSize);
   // the space, the letter spacing and the word spacing are the containing block's (rich-prewrap/tabs c-07ac640c4ed9f71f:
   // a span with tab-size 12 in a block with tab-size 3).
-  if (p.tabs === null || !run.hasTab) return NO_TABS
   const tabWidth = p.leaves[p.frames[frame]!.run]!.style.tabSize * p.tabs.unit
   // GetSpacing calls CalcTabWidths only for a positive tab width (nsTextFrame.cpp:4306-4309): tab-size 0, or letter
   // spacing below minus the space width, leaves tabs at 0.

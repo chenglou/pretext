@@ -20,7 +20,7 @@ import type { GeckoLineInspect, Measured, SpanData } from './lines.js'
 import { CANVAS_AU_PER_PX, quantize7, rangeAu } from './measure.js'
 import type { PlacedText } from './placement.js'
 import type { EmojiPresentation } from './props.js'
-import { WORD_WRAP_BREAK, frameOfSource, type GeckoInspect, type GeckoLeaf, type GeckoPrepared, type GeckoTextRun, type InWordReason } from './types.js'
+import { WORD_WRAP_BREAK, holderOfSource, type GeckoInspect, type GeckoLeaf, type GeckoPrepared, type GeckoTextRun, type InWordReason } from './types.js'
 
 // Where gaps go: a list in raise order, or null on a plain paragraph.
 export type GapSink = Gap[] | null
@@ -407,7 +407,7 @@ function tabGapOf(r: TabReason): { gap: GapName; detail: string } {
 }
 
 // The text run holding transformed index t: its frame's.
-const textRunAt = (p: GeckoPrepared, t: number): GeckoTextRun => p.textRuns[p.frames[frameOfSource(p.frames, p.tSource[t]!)]!.textRun]!
+const textRunAt = (p: GeckoPrepared, t: number): GeckoTextRun => p.textRuns[p.frames[holderOfSource(p.frames, p.tSource[t]!)]!.textRun]!
 
 // The gaps of a decided line: those its fill raised, then the in-word report, then its stand-in tabs. `frames` is the
 // line's geometry (inspect.ts), `texts` its placed text frames in logical order, and `lastT` the transformed index after
@@ -472,7 +472,7 @@ export function lineGaps(p: GeckoPrepared, start: GeckoLineStart, raised: GeckoL
     for (let k = 0; k < report.length; k++) {
       const reason = report[k]!
       if (k > 0 && report[k - 1]!.at === reason.at) continue
-      gaps.push({ gap: 'in-word-prefix', run: p.frames[frameOfSource(p.frames, reason.at)]!.run, detail: inWordDetail(reason), at: { start: reason.at, end: reason.at } })
+      gaps.push({ gap: 'in-word-prefix', run: holderOfSource(p.leaves, reason.at), detail: inWordDetail(reason), at: { start: reason.at, end: reason.at } })
     }
   }
   // The line's tabs whose width is a stand-in (computeTabs), each under the condition its position rests on.

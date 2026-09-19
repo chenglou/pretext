@@ -22,7 +22,7 @@ import {
   isDefaultIgnorable, isEastAsianPunctuation, isFormatCategory, isSegmentBreakSkipChar, isUtf16CodeUnitBidi,
 } from './props.js'
 import {
-  KIND_FORMAT, KIND_GLYPH, KIND_INVISIBLE, KIND_NEWLINE, KIND_TAB, frameOfSource, objectAt, spanAt, type GeckoElement, type GeckoFrame,
+  KIND_FORMAT, KIND_GLYPH, KIND_INVISIBLE, KIND_NEWLINE, KIND_TAB, holderOfSource, objectAt, spanAt, type GeckoElement, type GeckoFrame,
   type GeckoItem, type GeckoInspect, type GeckoLeaf, type GeckoPrepared, type GeckoSpanEdges, type GeckoStyle, type GeckoTextRun, type GeckoUnit,
   type ScriptRun,
 } from './types.js'
@@ -508,7 +508,7 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, inspec
     // U+2028 and ends the bidi paragraph (:1381-1384); an atomic inline is U+FFFC and a <wbr> U+200B (:1385-1400). An
     // inline-block is inline-outside, so it doesn't end the paragraph. A span without children would be a leaf as U+200B,
     // a boundary-neutral character that only gives the span its own level; the model gives empty spans no leaf.
-    type Entry = { kind: 'piece'; piece: Piece } | { kind: 'object'; element: number }
+    type Entry = { kind: 'text'; run: number; start: number; end: number } | { kind: 'object'; element: number }
     let chunk: Entry[] = []
     let chunkText = ''
     const flush = (): void => {
@@ -524,16 +524,15 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, inspec
           offset++
           continue
         }
-        const p = entry.piece
-        let s = p.start
-        for (let k = p.start + 1; k < p.end; k++) {
-          if (levels[offset + k - p.start] !== levels[offset + k - 1 - p.start]) {
-            split.push({ run: p.run, start: s, end: k, level: levels[offset + s - p.start]!, para, splitBefore: false })
+        let s = entry.start
+        for (let k = entry.start + 1; k < entry.end; k++) {
+          if (levels[offset + k - entry.start] !== levels[offset + k - 1 - entry.start]) {
+            split.push({ run: entry.run, start: s, end: k, level: levels[offset + s - entry.start]!, para, splitBefore: false })
             s = k
           }
         }
-        split.push({ run: p.run, start: s, end: p.end, level: levels[offset + s - p.start]!, para, splitBefore: false })
-        offset += p.end - p.start
+        split.push({ run: entry.run, start: s, end: entry.end, level: levels[offset + s - entry.start]!, para, splitBefore: false })
+        offset += entry.end - entry.start
       }
       chunk = []
       chunkText = ''
@@ -550,14 +549,14 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, inspec
           if (leaves[p.run]!.style.newlineIsSignificant) {
             for (let i = p.start; i < p.end; i++) {
               if (text.charCodeAt(i) !== 0x0a) continue
-              chunk.push({ kind: 'piece', piece: { run: p.run, start: s, end: i + 1, level: 0, para: 0, splitBefore: false } })
+              chunk.push({ kind: 'text', run: p.run, start: s, end: i + 1 })
               chunkText += text.slice(s, i + 1)
               flush()
               s = i + 1
             }
           }
           if (s < p.end) {
-            chunk.push({ kind: 'piece', piece: { run: p.run, start: s, end: p.end, level: 0, para: 0, splitBefore: false } })
+            chunk.push({ kind: 'text', run: p.run, start: s, end: p.end })
             chunkText += text.slice(s, p.end)
           }
           break
@@ -954,7 +953,7 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, inspec
         // IsCSSWordSpacingSpace on the original character (nsTextFrame.cpp:880-898).
         const s = tSource[t]!
         const ch = text.charCodeAt(s)
-        const f = frames[frameOfSource(frames, s)]!
+        const f = frames[holderOfSource(frames, s)]!
         if (((ch === 0x20 || ch === 0xa0) && !isSpaceCombiningSequenceTail(text, s + 1, f.end)) ||
           ((ch === 0x0d || ch === 0x09) && !style.whiteSpaceIsSignificant) || (ch === 0x0a && !style.newlineIsSignificant)) {
           spacing += ws
