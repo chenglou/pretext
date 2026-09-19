@@ -70,7 +70,7 @@ export function spacingIn(p: GeckoPrepared, prov: Provider, a: number, b: number
 }
 
 // Where the frame's measured ranges take that spacing, and how much: read each time from the group at the frame's start,
-// which the paragraph keeps once Canvas has shown it (advance.ts InWordEntry).
+// which its unit keeps once Canvas has shown it (types.ts InWordEntry).
 function groupEndSpacing(p: GeckoPrepared, prov: Provider): { at: number; au: number } | null {
   const from = prov.startT
   if (prov.letterSpacingAu === 0 || from >= prov.run.tEnd || p.clusterStart[from] === 0) return null
