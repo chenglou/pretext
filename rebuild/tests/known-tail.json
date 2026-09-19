@@ -412,6 +412,27 @@
       "note": "The prediction passes lineCount, breaks and widths with the coverage fact; the painter fails without a covered explanation."
     },
     {
+      "id": "blink/painter-brackets-shaped-otherwise-than-the-paragraph",
+      "engine": "blink",
+      "kind": "painter",
+      "title": "The painter lays a line out alone, so a line of brackets is shaped otherwise than in the paragraph and wraps, with no painter limit",
+      "conditions": [],
+      "cases": [
+        {
+          "id": "c-0aaf6ad5c7daf6da",
+          "browser": "chrome",
+          "where": "twins (twins/rtl-block)"
+        },
+        {
+          "id": "c-48abe81f791883d3",
+          "browser": "chrome",
+          "where": "twins (twins/rtl-block)"
+        }
+      ],
+      "source": "specs/blink-RESULTS.md \"String storage\" (the alternative); research/BLINK-STRING-STORAGE.md; the ledgers of the merge's run, both configurations: painter `fail open`, reason `painted line wraps`",
+      "note": "Runs of 13 brackets after Arabic and after Latin in an RTL block, Amiri at 24px, 90px wide. The prediction passes lineCount, breaks and widths and is exact in both configurations since the rule for a neutral Latin range with a space (`shape.ts` `spacesStay`); before it the failing prediction's conditions covered the painter too. The painted line shapes its brackets otherwise than the paragraph did and wraps, and the painter reports no limit for it. This is `paint.ts`'s to fix, not the Blink port's: a limit for such a line, or a painted form that gives the paragraph's scripts back."
+    },
+    {
       "id": "blink/range-rects-hang",
       "engine": "blink",
       "kind": "browser bug",
@@ -3925,10 +3946,25 @@
           "id": "c-49e1db5b0d8dfb1f",
           "browser": "chrome",
           "where": "heldout-suite-sample (suite/U+FFFC/start)"
+        },
+        {
+          "id": "c-5deba5ed817d3b59",
+          "browser": "chrome",
+          "where": "heldout-suite-sample (suite/U+FFFC/end; facts)"
+        },
+        {
+          "id": "c-6f6776f10f18af33",
+          "browser": "chrome",
+          "where": "heldout-suite-sample (suite/U+FFFC/end; facts)"
+        },
+        {
+          "id": "c-8aeaebe3fe97e39d",
+          "browser": "chrome",
+          "where": "heldout-suite-sample (suite/U+FFFC/middle; facts)"
         }
       ],
-      "source": "research/ROUND4-CRITIC.md §1 and \"Known tail\" 3; the frozen ledgers of 2026-09-18, both configurations: rule/object-replacement 10, suite/U+FFFC/start 4, each `not exact (values 2, rect counts 0)`",
-      "note": "The 14 cases pass lineCount and breaks, fail widths under font-fallback and hold 2 wrong predicted values each. `c-264ab6fc341a05d2`: U+FFFC is 16px natively and measured as U+200B, and the space after it is expected at x 0 and is at 16 natively. The font-fallback range covers U+FFFC, not what is placed after it on the line; WebKit closed this shape in round 4b by limiting the whole line. Converting blink/object-replacement-fallback-font would close it; until then the port should limit what follows the cluster on its line."
+      "source": "research/ROUND4-CRITIC.md §1 and \"Known tail\" 3; the frozen ledgers of 2026-09-18, both configurations: rule/object-replacement 10, suite/U+FFFC/start 4, each `not exact (values 2, rect counts 0)`; since the Blink string storage fix 3 more of suite/U+FFFC/end and /middle in the facts configuration, each `not exact (values 1, rect counts 1)`: specs/blink-RESULTS.md \"String storage\", research/BLINK-STRING-STORAGE.md",
+      "note": "The 14 cases pass lineCount and breaks, fail widths under font-fallback and hold 2 wrong predicted values each. `c-264ab6fc341a05d2`: U+FFFC is 16px natively and measured as U+200B, and the space after it is expected at x 0 and is at 16 natively. The font-fallback range covers U+FFFC, not what is placed after it on the line; WebKit closed this shape in round 4b by limiting the whole line. Converting blink/object-replacement-fallback-font would close it; until then the port should limit what follows the cluster on its line. The 3 cases the string storage fix added (`c-5deba5ed817d3b59`, `c-6f6776f10f18af33`, `c-8aeaebe3fe97e39d`: `a` SHY `b` U+FFFC in Arial, the last with a `b` after it) are another shape of the class: the x of U+FFFC itself, reported as predicted since its paragraph is segmented and `soft-hyphen-shaping` no longer limits it (17.80 on line 0 in `c-5deba5ed817d3b59`, where the browser wraps it to x 0). Their lineCount and breaks already failed under font-fallback, and each went from `not exact (values 0, rect counts 1)` to `(values 1, rect counts 1)` with the lab's facts; without them the value stays limited. Chrome's references were frozen again over them with `--force --reason`."
     },
     {
       "id": "shared/one-device-pixel-ratio-one-os",

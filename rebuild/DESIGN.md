@@ -1064,10 +1064,22 @@ one OffscreenCanvas per distinct settings. Identity matters because Chrome cache
 | `direction` | the item's direction | `'ltr'`: DOM items measure LTR unless `unicode-bidi` overrides | the bidi run's direction |
 | `partition` | `'8bit'` or `'16bit'` | `''` | `''` |
 
-Blink's partition: a word cut from an 8-bit string is shaped as Latin, and the same word from a 16-bit string goes
-through `RunSegmenter`. Both share Chrome's per-canvas cache key (word, direction), so whichever is measured first wins
-(specs/blink-canvas.md §1.7). Separate canvases keep each storage class's own result. Setting word spacing in JS avoids
-the other order effect, where a cached `" "` keeps its first offset-0 decision.
+Blink's partition: a string or Canvas word from an 8-bit string is shaped as Latin, and the same characters from a 16-bit
+string go through `RunSegmenter`. Both share Chrome's per-canvas cache keys (string and direction, word and direction), so
+whichever a canvas shaped first answers both (specs/blink-canvas.md §1.7; probe blink-storage S3). A segmented paragraph,
+the only kind that asks both storages of the same characters, measures its one-byte strings on contexts of their own
+(`8bit`), made when the first is asked, and its two-byte ones on `16bit`; an unsegmented paragraph keeps one set, since
+its two-byte strings are two-byte by their characters alone and Canvas cuts no words from them (`shape.ts` `contextsOf`).
+The measurer never uses a measured string as a key, since V8 would hand Blink a one-byte string afterwards
+(`measure/canvas.ts`). Setting word spacing in JS avoids the other order effect, where a cached `" "` keeps its first
+offset-0 decision.
+
+The port writes a space as U+2028, which keeps a Canvas string in one piece and makes it 16-bit. One kind of range keeps
+U+0020 (`shape.ts` `spacesStay`): in a font Canvas shapes whole, a Latin-1-only range the paragraph shapes as Latin that
+holds a space, a character other than white space, no soft hyphen and no character with a script of its own is measured
+as an 8-bit string with U+0020 itself. That string is one item shaped as one Latin segment, which is the paragraph's own
+shaping (plain_text_node.cc:381-385, harfbuzz_shaper.cc:1072-1077), where `RunSegmenter` resolves the 16-bit string as
+Common. Fonts shaped word by word keep U+2028 and the `script-context` condition, since U+0020 would cut the string there.
 
 ### 4.3 Font strings and sizes
 
@@ -1195,7 +1207,7 @@ the stated condition. A given fact never reports a gap; its null default does.
 | Page zoom (`page-zoom`) | WebKit | No page API shows Safari's page zoom. | `env.pageZoom`, given. | `pageZoom` null. |
 | Font fallback (`font-fallback`) | all | Which font draws a cluster; hexbox and `.notdef` widths; Gecko's synthesized widths for Unicode spaces no font covers, rounded to device pixels. | Canvas totals include fallback. | Text no listed family covers, where Canvas and DOM fall back differently (Blink falls back per cluster over the whole item; Gecko's fallback can arrive later). Blink: a line edge beside U+3000 with an adjustment, where no coverage fact names the neighbour's font (Blink sends a U+3000 the font lacks to a fallback font and the neighbour keeps its half of the kern, harfbuzz_shaper.cc:598-606). |
 | Float32 precision (`float32-precision`) | Blink, Gecko | Blink: 16.16 values are exact in float32 only below 256 px. Gecko: `measureText` returns `float(au) / 60`, exact only below 2^18 px. | Blink: measure per Canvas word; a float32 holds 24 bits, so sums of multiples of 2^g units are exact below 2^(24 + g) units, a run that ends below 256 px can't round, and fonts of 2048 units per em at whole zoomed sizes are always exact. Gecko: the space-in-shaping test runs in windows under 2^18 px. | Blink: a Canvas item of 256 zoomed px or more whose advances' granularity doesn't keep the sums exact. Gecko: a shaping unit 2^18 px or wider; in the observation port, edges beyond 2^20 / apd device px. |
-| String storage (`string-storage`) | all | Blink's single Latin segment, WebKit's keep-all punctuation breaks and 1-unit emergency breaks, and Gecko's white-space-only frames depend on whether a text node is stored 8-bit (CRITIC.md §5 item 14). The page can't see storage. | Treat text whose code units are all ≤ U+00FF as 8-bit, what JS-created nodes get. | Parser-created or edited nodes stored 16-bit. WebKit: a line measuring keep-all punctuation in Latin-1 text, or taking an emergency break in Latin-1 text whose second unit can't start a line. |
+| String storage (`string-storage`) | all | Blink's single Latin segment, WebKit's keep-all punctuation breaks and 1-unit emergency breaks, and Gecko's white-space-only frames depend on whether a text node is stored 8-bit (CRITIC.md §5 item 14). The page can't see storage. | Treat text whose code units are all ≤ U+00FF as 8-bit, what JS-created nodes get. Blink: that is the HTML parser's rule, and V8's but for slices of 13 units or more out of a two-byte string and what is built from them. | Parser-created or edited nodes stored 16-bit. Blink: nodes made from such strings, with no condition. WebKit: a line measuring keep-all punctuation in Latin-1 text, or taking an emergency break in Latin-1 text whose second unit can't start a line. |
 | Dictionary breaks (`dictionary-breaks-unavailable`, `dictionary-breaks-stand-in`) | all | Thai, Lao, Khmer and Myanmar need dictionary or LSTM data (§6.3). | The running browser's own segmenter. | `unavailable`: SA runs get no interior opportunities. WebKit stand-in: a dictionary range that starts with a combining mark (27 of 282,337 positions). |
 | HanKerning (`han-kerning`) | Blink | Blink trims fullwidth punctuation with `halt` using characters outside the shaped range and at line ends (han_kerning.cc, shaping_line_breaker.cc:344-378). | The trims from Canvas facts (blink audit B6). | Fonts whose `halt` detection isn't probed; neighbours on another line. |
 | Tab stops (`tab-stops`) | Blink | Blink counts stops from the platform space advance without `trak` (simple_font_data.cc:225-240). | Canvas space advance. | Fonts with `trak` tracking. The one probed example doesn't show it: 16px Helvetica Neue's stops, 35.5859375px apart, are 8 × Canvas's space advance of 4.447998px rounded up to 1/128px (rebuild/platform-bugs/LEDGER.md, "Looked at and not reported"), so the condition is due a re-reading. |

@@ -35,11 +35,12 @@ may read the DOM freely; this is research, not the library.
   `getTextClusters` or `advances` (`.artifacts/probes/textmetrics-api/`). Worth a rerun per release: per-glyph positions
   from Canvas would answer the font facts no check can (`pairKerning`, ligature positions).
 
-- `blink-storage.ts` (S1 to S5, specs/blink-RESULTS.md "String storage"): which string storage reaches Blink from script
+- `blink-storage.ts` (S1 to S6, specs/blink-RESULTS.md "String storage"): which string storage reaches Blink from script
   (a keyed use turns a two-byte string into one byte, which ways of building give two bytes), one canvas keeping the first
-  shaping, a text node's storage by how it was made, and the library's own bundled module asking Canvas the storage it
-  built, in both orders. Every probe returns `checks`; `rebuild/tests/rerun-probes.sh` reruns it per Chrome release. Beside
-  it `blink-twins.ts`, the first look at the same thing (raw widths).
+  shaping, a text node's storage by how it was made, the library's own bundled module asking Canvas the storage it
+  built, in both orders, and a Latin range of script-neutral characters with a space in the DOM beside its 8-bit string
+  with U+0020 and its 16-bit one with U+2028 (S6). Every probe returns `checks`; `rebuild/tests/rerun-probes.sh` reruns it
+  per Chrome release. Beside it `blink-twins.ts`, the first look at the same thing (raw widths).
 
 - `measure-first.ts`: six Chrome probes of which Canvas contexts share a platform font with DOM text of the same zoomed
   size (a context with default settings, the library's measuring context, the font checks' contexts, a page at

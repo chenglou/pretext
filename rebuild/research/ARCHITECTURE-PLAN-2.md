@@ -774,7 +774,7 @@ All numbers are ungated ballparks, except the first row's counts.
 | The width-interval skip | A resize drag over 200 messages ran at 0.08 times main. It was sound over 100,200 checked layouts. |
 | Gecko windows inside long units | 44.6M characters sent to Canvas became 0.34M on 9,000 Chinese units. It changes the recipe. |
 | Blink cuts beside every safe space | Corpus calls went from 5,112 to 2,520. It moved gaps in 4 of 80 outputs. |
-| Blink canvases by each string's own storage class | It removes the twin hazard by construction, but changes which canvas measures what. |
+| Blink canvases by each string's own storage class | It removes the twin hazard by construction, but changes which canvas measures what. Done for segmented paragraphs, the only kind that asks both storages of the same characters, by the string storage fix after the line (`shape.ts` `contextsOf`; research/BLINK-STRING-STORAGE.md). |
 | Bounding WebKit's `simplified-measuring` check | 28.5M characters for one 30,000-character word, on the inspected path only. |
 
 ## 11. Risks to correctness, and the check that catches each
@@ -782,9 +782,9 @@ All numbers are ungated ballparks, except the first row's counts.
 | Risk | Check |
 |---|---|
 | **String storage class in Blink.** The replay compares characters only. | `canvasString` moves verbatim and stays the only constructor. No tables are built from sliced strings in this phase. The twin family (check 9). A Chrome T2 run after any edit near it. |
-| **A repeated ask answered differently.** In Chrome this needs a twin plus a cache eviction. | T2 in both orders at X2's exit. None of 25,505 development cases holds a twin. |
+| **A repeated ask answered differently.** In Chrome this needs a twin plus a cache eviction. | T2 in both orders at X2's exit. None of 25,505 development cases holds a twin. Since the string storage fix no canvas holds a twin, and memo off is neutral in Chrome: on all 67,065 cases in both configurations for the fix alone (the independent check), and on the 380 `twins` with the rule for a neutral Latin range with a space on top (research/BLINK-STRING-STORAGE.md). |
 | **float32 summation order in WebKit.** | T1 compares geometry to the bit where a path runs. Check 5 lists paths it never runs, the TAB path among them, and those move verbatim. |
-| **Chrome's per-canvas shape cache and question order.** | Repeats only keeps first occurrences per context in order. One set of contexts per paragraph stays. The plain path and other widths get their own Chrome runs (X1, X2, step 4). |
+| **Chrome's per-canvas shape cache and question order.** | Repeats only keeps first occurrences per context in order. One set of contexts per paragraph stays (one per storage in a segmented Blink paragraph since the string storage fix). The plain path and other widths get their own Chrome runs (X1, X2, step 4). |
 | **Page history.** WebKit's worlds must use the same fill and inspection functions. The library's Canvas questions are part of a Firefox process's history. | The inspected path asks today's distinct questions. The plain run's native differences go to the ledger as history effects. T2 runs under the fixed protocol of `tests/sets.ts`. |
 | **Gap order and merging.** | T1 compares gap lists byte for byte. Raise points and merge rules don't move. |
 | **A pure function that mutates the line.** | Check 2. |
