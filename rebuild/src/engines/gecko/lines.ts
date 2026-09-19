@@ -11,7 +11,10 @@ import type { GeckoLineStart } from './geometry.js'
 import { BREAK_EMERGENCY_WRAP, BREAK_NORMAL } from './linebreak.js'
 import { isTrimmableChar, pxToAu } from './prepare.js'
 import { isBidiControl, isClusterExtenderExcludingJoiners, isCursiveScript } from './props.js'
-import { KIND_NEWLINE, KIND_TAB, NORMAL_BREAK, NO_BREAK, WORD_WRAP_BREAK, type GeckoElement, type GeckoPrepared, type GeckoTextRun } from './types.js'
+import {
+  KIND_NEWLINE, KIND_TAB, NORMAL_BREAK, NO_BREAK, WORD_WRAP_BREAK, objectAt, spanAt, type GeckoEdgeItem, type GeckoObjectItem, type GeckoPrepared,
+  type GeckoTextRun,
+} from './types.js'
 
 const SHY = 0x00ad
 // The offset NotifyOptionalBreakPosition takes for "after the content" of a frame that isn't text (nsLineLayout.cpp:1057-1066).
@@ -36,9 +39,19 @@ export type Provider = {
   startT: number
   startOfLine: boolean
   letterSpacingAu: number
-  tabs: Map<number, number>
-  // The tabs whose width is a stand-in, by transformed index (computeTabs); empty on a plain paragraph.
-  tabStandIn: Map<number, gaps.TabReason>
+  // The tabs of the measured content in text order (computeTabs); none in a text run without a tab.
+  tabs: readonly Tab[]
+}
+
+// A tab's transformed index and width, and why the width is a stand-in where it is one; never on a plain paragraph.
+export type Tab = { t: number; width: number; standIn: gaps.TabReason | null }
+const NO_TABS: readonly Tab[] = []
+
+// The widths of the frame's tabs in [a, b).
+function tabsIn(prov: Provider, a: number, b: number): number {
+  let w = 0
+  for (let k = 0; k < prov.tabs.length; k++) if (prov.tabs[k]!.t >= a && prov.tabs[k]!.t < b) w += prov.tabs[k]!.width
+  return w
 }
 
 // The letter and word spacing of [a, b) as the frame's measured ranges get it: the paragraph's spacing (prepare.ts step 6),
@@ -74,9 +87,7 @@ function groupEndSpacing(p: GeckoPrepared, prov: Provider): { at: number; au: nu
 // GetAdvanceWidth and MeasureText: partial ligature shares at the range ends (gfxTextRun.cpp:238-329, :1195, :1214-1256).
 export function rangeAdvance(p: GeckoPrepared, prov: Provider, a: number, b: number, consulted: number[] | null): number {
   if (b <= a) return 0
-  let w = glyphBefore(p, prov.run, b, consulted) - glyphBefore(p, prov.run, a, consulted) + spacingIn(p, prov, a, b)
-  if (prov.run.hasTab) for (const [t, tab] of prov.tabs) if (t >= a && t < b) w += tab
-  return w
+  return glyphBefore(p, prov.run, b, consulted) - glyphBefore(p, prov.run, a, consulted) + spacingIn(p, prov, a, b) + tabsIn(prov, a, b)
 }
 
 // BreakAndMeasureText's running width: GetAdvanceForGlyph per character, a ligature group's whole advance on its first
@@ -96,9 +107,7 @@ function scanAdvance(p: GeckoPrepared, prov: Provider, from: number, to: number,
     return glyphBefore(p, prov.run, t, consulted)
   }
   if (b <= a) return 0
-  let w = position(b) - position(a) + spacingIn(p, prov, a, b, true)
-  if (prov.run.hasTab) for (const [t, tab] of prov.tabs) if (t >= a && t < b) w += tab
-  return w
+  return position(b) - position(a) + spacingIn(p, prov, a, b, true) + tabsIn(prov, a, b)
 }
 
 // CalcTabWidths and AdvanceToNextTab (nsTextFrame.cpp:4298-4378): tab stops from the block's content edge. The position
@@ -111,35 +120,37 @@ function scanAdvance(p: GeckoPrepared, prov: Provider, from: number, to: number,
 // - Spacing is asked for one character at a time (:4345-4347), so the base a cluster's letter spacing goes by is the
 //   character itself (p.tabSpacingPrefix, prepare.ts step 6).
 // A tab's width is the next stop less that position, so it is a stand-in where the position is one: where an earlier text
-// frame of the line has a stand-in width, or the first cluster the scan counts starts at a stand-in. `prov.tabStandIn`
-// holds those tabs with the reason (gaps.ts placedStandIn, tabCountsFrom). A later tab counts from the stop before it; it
-// stays a stand-in, since a stand-in that crosses a stop moves every stop after it.
-function computeTabs(p: GeckoPrepared, ll: LineLayout, prov: Provider, end: number, xForTabs: number): void {
+// frame of the line has a stand-in width, or the first cluster the scan counts starts at a stand-in. Those tabs hold the
+// reason (gaps.ts placedStandIn, tabCountsFrom). A later tab counts from the stop before it; it stays a stand-in, since a
+// stand-in that crosses a stop moves every stop after it. The tabs of text run `run` in [startT, end), the measured content
+// of frame `frame`.
+function computeTabs(p: GeckoPrepared, ll: LineLayout, run: GeckoTextRun, frame: number, startT: number, end: number, xForTabs: number): readonly Tab[] {
   // rule gecko/measure/tab-width-containing-block
   // ComputeTabWidthAppUnits (nsTextFrame.cpp:3875-3906): tab-size is the text frame's own (aFrame->StyleText()->mTabSize);
   // the space, the letter spacing and the word spacing are the containing block's (rich-prewrap/tabs c-07ac640c4ed9f71f:
   // a span with tab-size 12 in a block with tab-size 3).
-  const tabWidth = p.leaves[p.frames[prov.frame]!.run]!.style.tabSize * p.tabUnit
+  const tabWidth = p.leaves[p.frames[frame]!.run]!.style.tabSize * p.tabUnit
   // GetSpacing calls CalcTabWidths only for a positive tab width (nsTextFrame.cpp:4306-4309): tab-size 0, or letter
   // spacing below minus the space width, leaves tabs at 0.
-  if (!prov.run.hasTab || tabWidth <= 0) return
+  if (!run.hasTab || tabWidth <= 0) return NO_TABS
+  const tabs: Tab[] = []
   const tabSpacing = p.tabSpacingPrefix!
   let x = xForTabs
   let standIn = gaps.placedStandIn(ll.gaps, p, ll.root)
-  let from = prov.startT
-  for (let t = prov.startT; t < end; t++) {
+  let from = startT
+  for (let t = startT; t < end; t++) {
     if (p.kind[t] !== KIND_TAB) continue
     let first = from
     while (first < t && p.clusterStart[first] === 0) first++
-    standIn = gaps.tabCountsFrom(ll.gaps, standIn, p, prov.run, first)
-    x += glyphBefore(p, prov.run, t, ll.consulted) - glyphBefore(p, prov.run, first, ll.consulted) + tabSpacing[t]! - tabSpacing[from]!
-    const nextTab = Math.ceil((x + prov.run.minTabAdvance) / tabWidth) * tabWidth
+    standIn = gaps.tabCountsFrom(ll.gaps, standIn, p, run, first)
+    x += glyphBefore(p, run, t, ll.consulted) - glyphBefore(p, run, first, ll.consulted) + tabSpacing[t]! - tabSpacing[from]!
+    const nextTab = Math.ceil((x + run.minTabAdvance) / tabWidth) * tabWidth
     const w = Math.trunc(nextTab - x + (nextTab - x >= 0 ? 0.5 : -0.5)) // NSToIntRound
-    prov.tabs.set(t, w)
-    if (standIn !== null) prov.tabStandIn.set(t, standIn)
+    tabs.push({ t, width: w, standIn })
     x = nextTab + tabSpacing[t + 1]! - tabSpacing[t]!
     from = t + 1
   }
+  return tabs
 }
 
 // GetHyphenationBreaks (nsTextFrame.cpp:4409-4457): a soft opportunity before the first kept character after skipped
@@ -158,7 +169,8 @@ export type Measured = {
   trimmableChars: number
   trimmableAdvance: number
   usedHyphenation: boolean
-  lastBreak: number // -1 for UINT32_MAX, -2 when not everything fit
+  // aLastBreak, from aStart: given only where everything fit and a break was seen (UINT32_MAX otherwise).
+  lastBreak: number | null
   breakPriority: number
 }
 
@@ -252,7 +264,7 @@ function breakAndMeasureText(p: GeckoPrepared, prov: Provider, aStart: number, a
   }
   return {
     charsFit, advance: rangeAdvance(p, prov, aStart, aStart + charsFit, consulted), trimmableChars, trimmableAdvance, usedHyphenation,
-    lastBreak: charsFit === aMaxLength ? (lastBreak < 0 ? -1 : lastBreak - aStart) : -2, breakPriority,
+    lastBreak: charsFit === aMaxLength && lastBreak >= 0 ? lastBreak - aStart : null, breakPriority,
   }
 }
 
@@ -267,32 +279,20 @@ export type SpanData = {
   iStart: number
   iCoord: number
   iEnd: number
-  inset: number
   noWrap: boolean
-  frames: Placed[]
+  frames: Reflowed[]
   hasNonemptyContent: boolean
   parent: SpanData | null
 }
 
-// nsLineLayout::PerFrameData for each placed frame: its inline start in its span's coordinates after the start margin, and
-// its inline size. Reflow leaves a text frame untrimmed and every frame without justification gaps; line placement writes
-// those on its own copy of the line's spans (placement.ts).
-export type PlacedText = {
-  kind: 'text'; item: number; r: FrameResult; iStart: number; iSize: number
-  // Where the frame's content ends once TrimTrailingWhiteSpace took its trailing white space.
-  trimmedEnd: number
-  // TEXT_END_OF_LINE: TrimTrailingWhiteSpace ran on the frame (nsTextFrame.cpp:11549); the justification info after
-  // CancelOpportunityForTrimmedSpace (nsLineLayout.cpp:2943); the gaps the line assigned to its sides.
-  endOfLine: boolean; justification: Justification; assign: Assignment
-}
-export type PlacedSpan = {
-  kind: 'span'; item: number; element: number; span: SpanData; iStart: number; iSize: number; startMargin: number; endMargin: number
-  hasStartEdge: boolean; hasEndEdge: boolean
-  // Whether the frame has a previous continuation (from an earlier line or a bidi split) and a next one.
-  hasPrevContinuation: boolean; hasNextContinuation: boolean
-}
-export type PlacedLeaf = { kind: 'atomic' | 'br' | 'wbr'; item: number; element: number; iStart: number; iSize: number; startMargin: number; endMargin: number; assign: Assignment }
-export type Placed = PlacedText | PlacedSpan | PlacedLeaf
+// nsLineLayout::PerFrameData for each frame a pass placed: its inline start in its span's coordinates after the start
+// margin, and its inline size. Reflow leaves a text frame untrimmed and every frame without justification gaps; placing a
+// decided line makes records of its own for what it writes (placement.ts).
+export type ReflowedText = { kind: 'text'; item: number; r: FrameResult; iStart: number; iSize: number }
+// `hasStartEdge`: the frame has no previous continuation, from an earlier line or a bidi split; `hasEndEdge`: no next one.
+export type ReflowedSpan = { kind: 'span'; element: number; span: SpanData; iStart: number; iSize: number; hasStartEdge: boolean; hasEndEdge: boolean }
+export type ReflowedLeaf = { kind: 'atomic' | 'br' | 'wbr'; element: number; iStart: number; iSize: number; startMargin: number; endMargin: number }
+export type Reflowed = ReflowedText | ReflowedSpan | ReflowedLeaf
 
 // nsLineLayout's state over one pass.
 type LineLayout = {
@@ -325,19 +325,16 @@ function notifyOptionalBreak(ll: LineLayout, at: BreakPosition, fits: boolean, p
 
 export type FrameResult = {
   frame: number
-  item: number
+  // The content the frame takes, [contentStart, contentStart + contentLength), measured from `offset` after the line-start
+  // skip of trimmable white space.
   contentStart: number
   offset: number
-  length: number
-  charsFit: number
   contentLength: number
   // The transformed index where the frame's content ends.
   tEnd: number
-  advance: number
   width: number
   nonEmpty: boolean
   usedHyphenation: boolean
-  brokeText: boolean
   trimmedTrailingWhitespace: boolean
   trimmableChars: number
   // The HangableWhitespaceProperty ReflowText records under pre-wrap (nsTextFrame.cpp:11214-11229), 0 when cleared.
@@ -389,7 +386,7 @@ function isJustifiableCharacter(p: GeckoPrepared, s: number, frameEnd: number, i
 // nsTextFrame::PropertyProvider::ComputeJustification over source [rangeStart, rangeEnd) of a frame
 // (nsTextFrame.cpp:3726-3830), with text-justify auto and no preserved tabs: per justifiable cluster, a gap pair on each
 // side, shared with a justifiable neighbour. `assignments` index transformed characters from nextT[rangeStart].
-export function computeJustification(p: GeckoPrepared, frame: number, rangeStart: number, rangeEnd: number): { info: Justification; assignments: Assignment[]; arrayStart: number } {
+export function computeJustification(p: GeckoPrepared, frame: number, rangeStart: number, rangeEnd: number): { info: Justification; assignments: Assignment[] } {
   const f = p.frames[frame]!
   const leaf = p.leaves[f.run]!
   const style = leaf.style
@@ -428,21 +425,19 @@ export function computeJustification(p: GeckoPrepared, frame: number, rangeStart
     info.inner--
     info.endJustifiable = true
   }
-  return { info, assignments, arrayStart }
+  return { info, assignments }
 }
 
 // nsTextFrame::ReflowText (nsTextFrame.cpp:10847-11532) into the current span.
-function reflowText(p: GeckoPrepared, ll: LineLayout, psd: SpanData, item: number, contentStart: number): FrameResult {
-  const fi = (p.items[item] as { frame: number }).frame
+function reflowText(p: GeckoPrepared, ll: LineLayout, psd: SpanData, item: number, fi: number, contentStart: number): FrameResult {
   const f = p.frames[fi]!
   const run = p.textRuns[f.textRun]!
   const leaf = p.leaves[f.run]!
   const style = leaf.style
   const maxContentLength = f.end - contentStart
   const empty = (offset: number): FrameResult => ({
-    frame: fi, item, contentStart, offset, length: 0, charsFit: 0, contentLength: maxContentLength,
-    tEnd: Math.min(p.nextT[contentStart + maxContentLength]!, f.tEnd), advance: 0, width: 0, nonEmpty: false,
-    usedHyphenation: false, brokeText: false, trimmedTrailingWhitespace: false, trimmableChars: 0, hangableISize: 0,
+    frame: fi, contentStart, offset, contentLength: maxContentLength, tEnd: Math.min(p.nextT[contentStart + maxContentLength]!, f.tEnd),
+    width: 0, nonEmpty: false, usedHyphenation: false, trimmedTrailingWhitespace: false, trimmableChars: 0, hangableISize: 0,
     status: 'complete', incomplete: false, endsInNewline: false, prov: null, justification: NO_JUSTIFICATION, trimmableWS: null,
   })
   if (maxContentLength === 0) return empty(contentStart)
@@ -474,18 +469,17 @@ function reflowText(p: GeckoPrepared, ll: LineLayout, psd: SpanData, item: numbe
   }
   const limitLength = forceBreak >= 0 ? forceBreak : length
   const tLength = Math.min(p.nextT[offset + limitLength]!, f.tEnd) - tOffset
-  // availableSpaceOnLine (nsLineLayout.cpp:798).
-  const availWidth = psd.iEnd - psd.iCoord - psd.inset
+  // availableSpaceOnLine (nsLineLayout.cpp:798), whose mInset is text-wrap: balance's, which the model doesn't have.
+  const availWidth = psd.iEnd - psd.iCoord
   const canTrim = !style.whiteSpaceIsSignificant
-  const prov: Provider = {
-    run, frame: fi, start: offset, length, startT: tOffset, startOfLine: atStartOfLine, letterSpacingAu: leaf.letterSpacingAu,
-    tabs: new Map(), tabStandIn: new Map(),
-  }
   // GetCurrentFrameInlineDistanceFromBlock less the block's padding, 0 here (nsTextFrame.cpp:11063-11067,
   // nsLineLayout.cpp:1154-1160): the sum of the span chain's inline coordinates.
   let xForTabs = 0
   for (let s: SpanData | null = psd; s !== null; s = s.parent) xForTabs += s.iCoord
-  computeTabs(p, ll, prov, tOffset + tLength, xForTabs)
+  const prov: Provider = {
+    run, frame: fi, start: offset, length, startT: tOffset, startOfLine: atStartOfLine, letterSpacingAu: leaf.letterSpacingAu,
+    tabs: computeTabs(p, ll, run, fi, tOffset, tOffset + tLength, xForTabs),
+  }
   // LineIsBreakable: a placed frame or a band impacted by floats (nsLineLayout.h:151-155; nsTextFrame.cpp:11133-11135).
   const lineIsBreakable = ll.totalPlaced > 0 || ll.impactedByFloats
   const r = breakAndMeasureText(p, prov, tOffset, tLength, availWidth, lineIsBreakable ? 'none' : 'initial',
@@ -494,11 +488,11 @@ function reflowText(p: GeckoPrepared, ll: LineLayout, psd: SpanData, item: numbe
   const originalOffset = (t: number): number => t < p.tSource.length ? p.tSource[t]! : p.text.length
   let charsFit = originalOffset(tOffset + r.charsFit) - offset
   if (offset + charsFit === newLineOffset) charsFit++
-  let lastBreak = -1
+  let lastBreak: number | null = null
   let usedHyphenation = r.usedHyphenation
   if (charsFit >= limitLength) {
     charsFit = limitLength
-    if (r.lastBreak >= 0) lastBreak = originalOffset(tOffset + r.lastBreak)
+    if (r.lastBreak !== null) lastBreak = originalOffset(tOffset + r.lastBreak)
     if ((forceBreak >= 0 || forceBreakAfter) && hasSoftHyphenBefore(p, offset, offset + charsFit)) usedHyphenation = true
   }
   let adv = r.advance
@@ -523,7 +517,7 @@ function reflowText(p: GeckoPrepared, ll: LineLayout, psd: SpanData, item: numbe
       trimmable = 0
     }
   }
-  if (!brokeText && lastBreak >= 0) notifyOptionalBreak(ll, { item, contentStart, offset: lastBreak - offset }, true, r.breakPriority)
+  if (!brokeText && lastBreak !== null) notifyOptionalBreak(ll, { item, contentStart, offset: lastBreak - offset }, true, r.breakPriority)
   const contentLength = offset + charsFit - contentStart
   const width = Math.ceil(Math.max(0, adv))
   let nonEmpty = usedHyphenation
@@ -555,9 +549,9 @@ function reflowText(p: GeckoPrepared, ll: LineLayout, psd: SpanData, item: numbe
   // Justification opportunities over [offset, offset + charsFit) when the block justifies (nsTextFrame.cpp:11513-11521).
   const justification = p.paragraph.textAlign === 'justify' ? computeJustification(p, fi, offset, offset + charsFit).info : NO_JUSTIFICATION
   return {
-    frame: fi, item, contentStart, offset, length, charsFit, contentLength, tEnd: Math.min(p.nextT[contentStart + contentLength]!, f.tEnd),
-    advance: adv, width, nonEmpty, usedHyphenation, brokeText, trimmedTrailingWhitespace, trimmableChars: r.trimmableChars,
-    hangableISize, status, incomplete: contentLength !== maxContentLength, endsInNewline, prov, justification, trimmableWS,
+    frame: fi, contentStart, offset, contentLength, tEnd: Math.min(p.nextT[contentStart + contentLength]!, f.tEnd), width, nonEmpty,
+    usedHyphenation, trimmedTrailingWhitespace, trimmableChars: r.trimmableChars, hangableISize, status,
+    incomplete: contentLength !== maxContentLength, endsInNewline, prov, justification, trimmableWS,
   }
 }
 
@@ -599,7 +593,7 @@ function bandOf(p: GeckoPrepared, slot: LineSlot): Band {
 function reflowPass(p: GeckoPrepared, start: GeckoLineStart, band: Band, force: BreakPosition | null, inspect: GeckoLineInspect | null): Pass {
   const root: SpanData = {
     element: -1, iStart: band.iStart, iCoord: band.iStart + (start.isFirstLine ? p.textIndentAu : 0), iEnd: band.iStart + band.iSize,
-    inset: 0, noWrap: !p.blockStyle.wrap, frames: [], hasNonemptyContent: false, parent: null,
+    noWrap: !p.blockStyle.wrap, frames: [], hasNonemptyContent: false, parent: null,
   }
   const ll: LineLayout = {
     gaps: inspect === null ? null : inspect.gaps, consulted: inspect === null ? null : inspect.consulted, root, lineIsEmpty: true, lineAtStart: true, totalPlaced: 0, trimmableISize: 0, needBackup: false, lastOpt: null,
@@ -640,22 +634,22 @@ function reflowChildren(p: GeckoPrepared, ll: LineLayout, psd: SpanData, from: n
   while (k < end) {
     let s: Status
     if (first && depth < chain.length) {
-      s = reflowSpan(p, ll, psd, chain[depth]!, true, from, chain, depth + 1, start)
+      s = reflowSpan(p, ll, psd, chain[depth]!, null, from, chain, depth + 1, start)
     } else {
       const item = p.items[k]!
       switch (item.kind) {
         case 'text': {
           const f = p.frames[item.frame]!
-          s = reflowTextFrame(p, ll, psd, k, k === start.frame ? Math.max(start.contentOffset, f.start) : f.start)
+          s = reflowTextFrame(p, ll, psd, k, item.frame, k === start.frame ? Math.max(start.contentOffset, f.start) : f.start)
           break
         }
         case 'open':
-          s = reflowSpan(p, ll, psd, item.element, false, k + 1, chain, chain.length, start)
+          s = reflowSpan(p, ll, psd, item.element, item, k + 1, chain, chain.length, start)
           break
         case 'atomic':
         case 'br':
         case 'wbr':
-          s = reflowLeaf(p, ll, psd, k)
+          s = reflowLeaf(p, ll, psd, k, item)
           break
         case 'close':
           throw new Error(`gecko: close event ${k} outside its span`)
@@ -689,10 +683,10 @@ function reflowChildren(p: GeckoPrepared, ll: LineLayout, psd: SpanData, from: n
 }
 
 // nsLineLayout::ReflowFrame for a text frame (nsLineLayout.cpp:733-1092) and its CanPlaceFrame branch (:1189-1342).
-function reflowTextFrame(p: GeckoPrepared, ll: LineLayout, psd: SpanData, k: number, contentStart: number): Status {
+function reflowTextFrame(p: GeckoPrepared, ll: LineLayout, psd: SpanData, k: number, frame: number, contentStart: number): Status {
   const notSafeToBreak = ll.lineIsEmpty && !ll.impactedByFloats // :785
   const iStart = psd.iCoord
-  const r = reflowText(p, ll, psd, k, contentStart)
+  const r = reflowText(p, ll, psd, k, frame, contentStart)
   if (r.status === 'break-before') return { breakBefore: true, breakAfter: false, incomplete: false, next: { item: k, offset: contentStart } }
   // A text frame can continue a text run, so it is always placed, and an overflow requests backup (:1323-1335).
   if (!psd.noWrap && iStart + r.width - ll.trimmableISize > psd.iEnd && r.width !== 0 && !notSafeToBreak) ll.needBackup = true
@@ -701,10 +695,7 @@ function reflowTextFrame(p: GeckoPrepared, ll: LineLayout, psd: SpanData, k: num
     ll.lineIsEmpty = false
     ll.lineAtStart = false
   }
-  psd.frames.push({
-    kind: 'text', item: k, r, iStart, iSize: r.width, trimmedEnd: r.contentStart + r.contentLength, endOfLine: false,
-    justification: { ...r.justification }, assign: { start: 0, end: 0 },
-  })
+  psd.frames.push({ kind: 'text', item: k, r, iStart, iSize: r.width })
   psd.iCoord = iStart + r.width
   ll.totalPlaced++
   const next = r.incomplete ? { item: k, offset: r.contentStart + r.contentLength } : { item: k + 1, offset: itemAt(p, k + 1) }
@@ -713,35 +704,35 @@ function reflowTextFrame(p: GeckoPrepared, ll: LineLayout, psd: SpanData, k: num
 
 // An inline element: nsLineLayout::ReflowFrame (nsLineLayout.cpp:733-1092) into nsInlineFrame::ReflowFrames
 // (nsInlineFrame.cpp:489-688) with BeginSpan and EndSpan (nsLineLayout.cpp:378-436), then CanPlaceFrame and PlaceFrame for the
-// span frame. `continuation`: the span's frame on this line continues one from an earlier line.
-function reflowSpan(p: GeckoPrepared, ll: LineLayout, parent: SpanData, element: number, continuation: boolean,
+// span frame. `open`: the frame's open item, the one before `childFrom`; null where the span's frame on this line continues
+// one from an earlier line.
+function reflowSpan(p: GeckoPrepared, ll: LineLayout, parent: SpanData, element: number, open: GeckoEdgeItem | null,
   childFrom: number, chain: number[], depth: number, start: GeckoLineStart): Status {
-  const el = p.elements[element] as Extract<GeckoElement, { kind: 'span' }>
+  const el = spanAt(p.elements, element)
   const notSafeToBreak = ll.lineIsEmpty && !ll.impactedByFloats
   const iStart = parent.iCoord
-  const availableSpaceOnLine = parent.iEnd - parent.iCoord - parent.inset
-  // The frame's open item, and whether it begins a bidi continuation (GetPrevContinuation is then set).
-  const openItem = continuation ? -1 : childFrom - 1
-  const split = !continuation && (p.items[openItem] as Extract<GeckoPrepared['items'][number], { kind: 'open' | 'close' }>).split
+  const availableSpaceOnLine = parent.iEnd - parent.iCoord
+  // GetPrevContinuation is set: the frame continues one from an earlier line, or its open item begins a bidi continuation.
+  const hasPrev = open === null || open.split
   // Its children end at this continuation's close item; only the element's own close ends the last continuation.
   let end = el.close
   for (let c = 0; c < el.closes.length; c++) if (el.closes[c]! >= childFrom) { end = el.closes[c]!; break }
   const finalClose = end === el.close
   // AllowForStartMargin: only the first continuation keeps its start margin (nsLineLayout.cpp:1110-1134).
-  const startMargin = continuation || split ? 0 : el.edges.startMargin
+  const startMargin = hasPrev ? 0 : el.edges.startMargin
   // The start border and padding only without a previous continuation; the end border and padding off every line
   // (nsInlineFrame.cpp:500-521).
-  const startEdge = continuation || split ? 0 : el.edges.startBorderPadding
+  const startEdge = hasPrev ? 0 : el.edges.startBorderPadding
   const availableISize = availableSpaceOnLine - startMargin - startEdge - el.edges.endBorderPadding
   const span: SpanData = {
-    element, iStart: startEdge, iCoord: startEdge, iEnd: startEdge + availableISize, inset: 0, noWrap: !el.style.wrap, frames: [],
+    element, iStart: startEdge, iCoord: startEdge, iEnd: startEdge + availableISize, noWrap: !el.style.wrap, frames: [],
     hasNonemptyContent: false, parent,
   }
   const s = reflowChildren(p, ll, span, childFrom, end, chain, depth, start)
   if (s === 'redo-next-band') throw new Error('gecko: redo-next-band inside a span')
   if (s.breakBefore) {
     // The span frame itself is pushed (nsLineLayout.cpp:1081-1084, nsInlineFrame.cpp:717-731).
-    return { ...s, next: continuation ? s.next : { item: openItem, offset: itemAt(p, openItem) } }
+    return { ...s, next: open === null ? s.next : { item: childFrom - 1, offset: open.at } }
   }
   const complete = !s.incomplete
   // The end edge and margin only when complete without a bidi continuation after (nsInlineFrame.cpp:670-674,
@@ -761,11 +752,7 @@ function reflowSpan(p: GeckoPrepared, ll: LineLayout, parent: SpanData, element:
     parent.hasNonemptyContent = true
     ll.lineIsEmpty = false
   }
-  parent.frames.push({
-    kind: 'span', item: continuation ? childFrom : openItem, element, span, iStart: placedStart, iSize, startMargin, endMargin,
-    hasStartEdge: !(continuation || split), hasEndEdge: last, hasPrevContinuation: continuation || split,
-    hasNextContinuation: !last,
-  })
+  parent.frames.push({ kind: 'span', element, span, iStart: placedStart, iSize, hasStartEdge: !hasPrev, hasEndEdge: last })
   parent.iCoord = placedStart + iSize + endMargin
   ll.totalPlaced++
   return complete ? { ...s, next: { item: end + 1, offset: itemAt(p, end + 1) } } : s
@@ -775,9 +762,8 @@ function reflowSpan(p: GeckoPrepared, ll: LineLayout, parent: SpanData, element:
 // after itself (BRFrame.cpp:98-166); a WBRFrame reflows to 0 × 0 and isn't empty (nsIFrame::IsEmpty, nsIFrame.cpp:9380-9382).
 // None continues a text run, so each clears the trimmable width (except the BR, skipped when trimming, :1015-1020), may be
 // pushed when it overflows (CanPlaceFrame :1189-1342), and records a break after itself (:1057-1071).
-function reflowLeaf(p: GeckoPrepared, ll: LineLayout, psd: SpanData, k: number): Status {
-  const item = p.items[k] as Extract<GeckoPrepared['items'][number], { kind: 'atomic' | 'br' | 'wbr' }>
-  const el = p.elements[item.element]!
+function reflowLeaf(p: GeckoPrepared, ll: LineLayout, psd: SpanData, k: number, item: GeckoObjectItem): Status {
+  const el = objectAt(p.elements, item.element)
   const notSafeToBreak = ll.lineIsEmpty && !ll.impactedByFloats
   const iStart = psd.iCoord
   const iSize = el.kind === 'atomic' ? el.iSize : 0
@@ -807,7 +793,7 @@ function reflowLeaf(p: GeckoPrepared, ll: LineLayout, psd: SpanData, k: number):
   psd.hasNonemptyContent = true
   ll.lineIsEmpty = false
   ll.lineAtStart = false
-  psd.frames.push({ kind: item.kind, item: k, element: item.element, iStart: iStart + startMargin, iSize, startMargin, endMargin, assign: { start: 0, end: 0 } })
+  psd.frames.push({ kind: item.kind, element: item.element, iStart: iStart + startMargin, iSize, startMargin, endMargin })
   psd.iCoord = iStart + startMargin + iSize + endMargin
   ll.totalPlaced++
   if (!psd.noWrap && !ll.lineIsEmpty) {

@@ -39,6 +39,18 @@ export type GeckoLeaf = {
   wordSpacingAu: number
 }
 
+// The leaf holding source offset s: the last one that starts at or before it, which an empty leaf never is for a character.
+export function leafOfSource(leaves: GeckoLeaf[], s: number): number {
+  let lo = 0
+  let hi = leaves.length - 1
+  while (lo < hi) {
+    const mid = (lo + hi + 1) >> 1
+    if (leaves[mid]!.start <= s) lo = mid
+    else hi = mid - 1
+  }
+  return lo
+}
+
 // A text frame: one text node, or the piece of it bidi resolution split off as a non-fluid continuation
 // (nsBidiPresUtils.cpp:1039-1057). Line breaking later makes fluid continuations, which are line state, not frames.
 export type GeckoFrame = {
@@ -115,12 +127,11 @@ export function objectAt(elements: GeckoElement[], e: number): GeckoObject {
 
 // The frames and element events of the paragraph in document order: what nsBlockFrame and nsInlineFrame reflow. `at` is the
 // source offset where the item sits: a text frame's start, the offset of the content after an element event.
-export type GeckoItem =
-  | { kind: 'text'; frame: number; at: number }
-  // `split`: where bidi resolution splits the span into another continuation at a level change (SplitInlineAncestors,
-  // nsBidiPresUtils.cpp:612-660), not the element's own start or end.
-  | { kind: 'open' | 'close'; element: number; at: number; split: boolean }
-  | { kind: 'atomic' | 'br' | 'wbr'; element: number; at: number }
+// `split`: where bidi resolution splits the span into another continuation at a level change (SplitInlineAncestors,
+// nsBidiPresUtils.cpp:612-660), not the element's own start or end.
+export type GeckoEdgeItem = { kind: 'open' | 'close'; element: number; at: number; split: boolean }
+export type GeckoObjectItem = { kind: 'atomic' | 'br' | 'wbr'; element: number; at: number }
+export type GeckoItem = { kind: 'text'; frame: number; at: number } | GeckoEdgeItem | GeckoObjectItem
 
 // A script run gfxFontGroup::InitTextRun shapes (gfxScriptItemizer.cpp:60-243): it ends before `limit`, a transformed
 // index. 'Zyyy' stands for Common resolved from the language.

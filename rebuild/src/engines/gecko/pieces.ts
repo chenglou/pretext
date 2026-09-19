@@ -3,16 +3,16 @@
 // of the prepared paragraph and the decided line.
 import type { Fragment, LinePieces } from '../../model.js'
 import { joinsAcross } from './advance.js'
-import { itemAt, type GeckoFilledLine, type PlacedText } from './lines.js'
-import { placeLine, textFramesOf } from './placement.js'
-import type { GeckoElement, GeckoPrepared } from './types.js'
+import { itemAt, type GeckoFilledLine } from './lines.js'
+import { placeLine, textFramesOf, type PlacedText } from './placement.js'
+import { leafOfSource, objectAt, type GeckoLeaf, type GeckoPrepared } from './types.js'
 
 // Gecko's painting rules read nothing beside the pieces.
 export type GeckoPaintFacts = Record<never, never>
 
-// The transformed index after the line's last kept character, a preserved newline that ends its frame left out; -1 on a
+// The transformed index after the line's last kept character, a preserved newline that ends its frame left out; null on a
 // line that keeps none. `texts` are the line's text frames in logical order.
-export function lineEndT(p: GeckoPrepared, texts: PlacedText[]): number {
+export function lineEndT(p: GeckoPrepared, texts: PlacedText[]): number | null {
   for (let k = texts.length - 1; k >= 0; k--) {
     const r = texts[k]!.r
     const contentEnd = r.contentStart + r.contentLength
@@ -22,7 +22,7 @@ export function lineEndT(p: GeckoPrepared, texts: PlacedText[]): number {
       return t + 1
     }
   }
-  return -1
+  return null
 }
 
 export function linePieces(p: GeckoPrepared, line: GeckoFilledLine): LinePieces<GeckoPaintFacts> {
@@ -37,64 +37,58 @@ export function linePieces(p: GeckoPrepared, line: GeckoFilledLine): LinePieces<
   // The white space the line end removed or hangs, by the frames' flags: trailing CharIsSpace characters trimmed at the
   // break (TEXT_TRIMMED_TRAILING_WHITESPACE, nsTextFrame.cpp:11203-11213; CharIsSpace is U+0020 and U+3000,
   // gfxFont.cpp:749-750), the IsTrimmableSpace characters TrimTrailingWhiteSpace removed, and under pre-wrap the trailing
-  // CharIsSpace characters of the line's last frames with content (:11214-11229).
-  const trimmed = new Set<number>()
-  const hanging = new Set<number>()
-  const placedByItem = new Map<number, PlacedText>()
-  for (let k = 0; k < texts.length; k++) {
-    const pf = texts[k]!
-    const r = pf.r
-    placedByItem.set(pf.item, pf)
-    if (r.trimmedTrailingWhitespace) for (let t = r.tEnd - r.trimmableChars; t < r.tEnd; t++) trimmed.add(p.tSource[t]!)
-    for (let s = pf.trimmedEnd; s < r.contentStart + r.contentLength; s++) if (p.sourceT[s] !== -1) trimmed.add(s)
-  }
+  // CharIsSpace characters of the line's last frames with content (:11214-11229): the frames from `hangingFrom` on, back
+  // from the line's end as far as a frame is white space alone.
+  let hangingFrom = texts.length
   for (let k = texts.length - 1; k >= 0; k--) {
     const r = texts[k]!.r
     const style = p.leaves[p.frames[r.frame]!.run]!.style
     if (!(style.whitespaceCanHang && style.whiteSpaceIsSignificant)) break
-    if (r.prov === null) continue
-    for (let t = r.tEnd - r.trimmableChars; t < r.tEnd; t++) hanging.add(p.tSource[t]!)
-    if (r.trimmableChars < r.tEnd - r.prov.startT) break
+    hangingFrom = k
+    if (r.prov !== null && r.trimmableChars < r.tEnd - r.prov.startT) break
   }
-  const kindOf = (s: number): 'text' | 'trimmed' | 'hanging' => trimmed.has(s) ? 'trimmed' : hanging.has(s) ? 'hanging' : 'text'
+  // A kept character s of text frame k.
+  const kindOf = (k: number, s: number): 'text' | 'trimmed' | 'hanging' => {
+    const pf = texts[k]!
+    const trailing = p.sourceT[s]! >= pf.r.tEnd - pf.r.trimmableChars
+    if ((pf.r.trimmedTrailingWhitespace && trailing) || s >= pf.trimmedEnd) return 'trimmed'
+    return k >= hangingFrom && trailing ? 'hanging' : 'text'
+  }
 
   // Fragments in document order over the items the line consumed: collapsed text before and between them (text nodes
   // without frames), each placed text frame's content by its flags, element edges and objects.
   const fragments: Fragment[] = []
-  const runOf = (s: number): number => {
-    let r = 0
-    while (p.leaves[r]!.end <= s) r++
-    return r
-  }
+  // The line's next text frame: they come in item order.
+  let nextText = 0
   let cursor = start.contentOffset
   const lastItem = isLastLine ? p.items.length : next.offset > itemAt(p, next.item) ? next.item + 1 : next.item
   for (let k = start.frame; k < lastItem; k++) {
     const item = p.items[k]!
     if (item.kind !== 'text') {
-      pushCollapsed(fragments, runOf, cursor, item.at)
+      pushCollapsed(fragments, p.leaves, cursor, item.at)
       cursor = Math.max(cursor, item.at)
       switch (item.kind) {
         case 'open': if (!item.split) fragments.push({ kind: 'box-start', element: item.element }); break
         case 'close': if (!item.split) fragments.push({ kind: 'box-end', element: item.element }); break
-        case 'atomic': fragments.push({ kind: 'atomic', element: item.element, level: (p.elements[item.element] as Extract<GeckoElement, { kind: 'atomic' }>).level }); break
+        case 'atomic': fragments.push({ kind: 'atomic', element: item.element, level: objectAt(p.elements, item.element).level }); break
         case 'br': fragments.push({ kind: 'br', element: item.element }); break
         case 'wbr': fragments.push({ kind: 'wbr', element: item.element }); break
       }
       continue
     }
-    const pf = placedByItem.get(k)
     const f = p.frames[item.frame]!
     const to = Math.min(f.end, lineEnd)
-    if (pf === undefined) {
-      pushCollapsed(fragments, runOf, cursor, to)
+    if (nextText === texts.length || texts[nextText]!.item !== k) {
+      pushCollapsed(fragments, p.leaves, cursor, to)
       cursor = Math.max(cursor, to)
       continue
     }
-    const r = pf.r
+    const placedText = nextText++
+    const r = texts[placedText]!.r
     const contentEnd = r.contentStart + r.contentLength
     for (let s = cursor; s < contentEnd;) {
       if (s < r.offset) {
-        pushCollapsed(fragments, runOf, s, r.offset)
+        pushCollapsed(fragments, p.leaves, s, r.offset)
         s = r.offset
         continue
       }
@@ -102,7 +96,7 @@ export function linePieces(p: GeckoPrepared, line: GeckoFilledLine): LinePieces<
       if (t === -1) {
         let e = s + 1
         while (e < contentEnd && p.sourceT[e] === -1) e++
-        pushCollapsed(fragments, runOf, s, e)
+        pushCollapsed(fragments, p.leaves, s, e)
         s = e
         continue
       }
@@ -111,9 +105,9 @@ export function linePieces(p: GeckoPrepared, line: GeckoFilledLine): LinePieces<
         s++
         continue
       }
-      const kind = kindOf(s)
+      const kind = kindOf(placedText, s)
       let e = s + 1
-      while (e < contentEnd && p.sourceT[e] !== -1 && kindOf(e) === kind &&
+      while (e < contentEnd && p.sourceT[e] !== -1 && kindOf(placedText, e) === kind &&
         !(r.endsInNewline && e === contentEnd - 1 && p.tUnits[p.sourceT[e]!] === 0x0a)) e++
       const tEnd = p.sourceT[e - 1]! + 1
       let painted = ''
@@ -126,12 +120,12 @@ export function linePieces(p: GeckoPrepared, line: GeckoFilledLine): LinePieces<
     // spacing (AddHyphenToMetrics, nsTextFrame.cpp:6829-6845).
     if (r.usedHyphenation) fragments.push({ kind: 'hyphen', run: f.run, at: contentEnd, painted: '‐', letterSpacing: 0, level: f.level })
   }
-  pushCollapsed(fragments, runOf, cursor, lineEnd)
+  pushCollapsed(fragments, p.leaves, cursor, lineEnd)
 
   const lastT = lineEndT(p, texts)
   // The paragraph shaped letters on both sides of this break inside one word: the painter keeps their joining forms.
   let joinsNextLine = false
-  if (!isLastLine && lastT > 0 && lastT < p.tUnits.length && p.unitOf[lastT - 1] === p.unitOf[lastT] &&
+  if (!isLastLine && lastT !== null && lastT < p.tUnits.length && p.unitOf[lastT - 1] === p.unitOf[lastT] &&
     p.units[p.unitOf[lastT]!]!.kind === 'word') {
     joinsNextLine = joinsAcross(p, p.units[p.unitOf[lastT]!]!, lastT)
   }
@@ -140,11 +134,13 @@ export function linePieces(p: GeckoPrepared, line: GeckoFilledLine): LinePieces<
   return { fragments, joinsNextLine, indented: placed.indented, align: placed.align, overflows, facts: {} }
 }
 
-function pushCollapsed(fragments: Fragment[], runOf: (s: number) => number, start: number, end: number): void {
+// Source [start, end) as collapsed text, a fragment a leaf.
+function pushCollapsed(fragments: Fragment[], leaves: GeckoLeaf[], start: number, end: number): void {
+  if (start >= end) return
+  let run = leafOfSource(leaves, start)
   for (let s = start; s < end;) {
-    const run = runOf(s)
-    let e = s + 1
-    while (e < end && runOf(e) === run) e++
+    while (leaves[run]!.end <= s) run++
+    const e = Math.min(leaves[run]!.end, end)
     fragments.push({ kind: 'collapsed', run, start: s, end: e })
     s = e
   }

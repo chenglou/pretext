@@ -16,8 +16,9 @@ import { advanceBefore } from './advance.js'
 import { COLOR_EMOJI_FAMILY, listedFontOf, opticalSizeAxisOf } from './fonts.js'
 import type { GeckoFrameGeometry, GeckoLineStart } from './geometry.js'
 import { BREAK_EMERGENCY_WRAP, complexLanguage } from './linebreak.js'
-import type { GeckoLineInspect, Measured, PlacedText, SpanData } from './lines.js'
+import type { GeckoLineInspect, Measured, SpanData } from './lines.js'
 import { CANVAS_AU_PER_PX, quantize7, rangeAu } from './measure.js'
+import type { PlacedText } from './placement.js'
 import type { EmojiPresentation } from './props.js'
 import { WORD_WRAP_BREAK, frameOfSource, type GeckoInspect, type GeckoLeaf, type GeckoPrepared, type GeckoTextRun, type InWordReason } from './types.js'
 
@@ -355,8 +356,10 @@ export function placedStandIn(sink: GapSink, p: GeckoPrepared, psd: SpanData): T
     if (pf.kind !== 'text' || pf.r.prov === null) continue
     const prov = pf.r.prov
     if (prov.run.advancesStandIn !== null) return { kind: 'earlier-frame', under: prov.run.advancesStandIn }
-    const tab = prov.tabStandIn.values().next()
-    if (tab.done !== true) return tab.value
+    for (let t = 0; t < prov.tabs.length; t++) {
+      const standIn = prov.tabs[t]!.standIn
+      if (standIn !== null) return standIn
+    }
     const reason = advanceBefore(p, prov.run, prov.startT).standIn ?? advanceBefore(p, prov.run, pf.r.tEnd).standIn
     if (reason !== null) return { kind: 'in-word', reason }
   }
@@ -403,19 +406,13 @@ function tabGapOf(r: TabReason): { gap: GapName; detail: string } {
   }
 }
 
-// The text run holding transformed index t.
-function textRunAt(p: GeckoPrepared, t: number): GeckoTextRun | null {
-  for (let r = 0; r < p.textRuns.length; r++) {
-    const run = p.textRuns[r]!
-    if (t >= run.tStart && t < run.tEnd) return run
-  }
-  return null
-}
+// The text run holding transformed index t: its frame's.
+const textRunAt = (p: GeckoPrepared, t: number): GeckoTextRun => p.textRuns[p.frames[frameOfSource(p.frames, p.tSource[t]!)]!.textRun]!
 
 // The gaps of a decided line: those its fill raised, then the in-word report, then its stand-in tabs. `frames` is the
 // line's geometry (inspect.ts), `texts` its placed text frames in logical order, and `lastT` the transformed index after
-// its last kept character (pieces.ts lineEndT).
-export function lineGaps(p: GeckoPrepared, start: GeckoLineStart, raised: GeckoLineInspect, frames: GeckoFrameGeometry[], texts: PlacedText[], lastT: number): Gap[] {
+// its last kept character, null on a line that keeps none (pieces.ts lineEndT).
+export function lineGaps(p: GeckoPrepared, start: GeckoLineStart, raised: GeckoLineInspect, frames: GeckoFrameGeometry[], texts: PlacedText[], lastT: number | null): Gap[] {
   const gaps = raised.gaps.slice()
   // in-word-prefix: the stand-in positions this line rests on. Its width is the advance between its two edges, and its break
   // is the last candidate that fit, which the first one that didn't ended (BreakAndMeasureText, gfxTextRun.cpp:1100-1180):
@@ -424,21 +421,21 @@ export function lineGaps(p: GeckoPrepared, start: GeckoLineStart, raised: GeckoL
   // line holds whole takes its width from its own total, unless a text frame of the line starts or ends inside it: every
   // frame measures its own range (nsTextFrame::ReflowText), so those positions count as well.
   {
-    const startT = start.contentOffset < p.nextT.length ? p.nextT[start.contentOffset]! : -1
-    const report = new Map<number, InWordReason>()
+    const startT = p.nextT[start.contentOffset]!
+    // The reasons found, each under its source offset (InWordReason.at); an offset can be found twice.
+    const report: InWordReason[] = []
     const partOf = (from: number, to: number): void => {
       // Stand-in positions in [from, to], both inside one unit.
-      const run = textRunAt(p, Math.min(from, p.tUnits.length - 1))
-      if (run === null) return
+      const run = textRunAt(p, from)
       for (let t = from; t <= to && t < p.tUnits.length; t++) {
         // A position inside a cluster counts only where it is asked for by itself: a frame's edge, or one a skipped
         // character exposes. Elsewhere points snap to the cluster's start.
         if (p.clusterStart[t] === 0 && from !== to) continue
         const standIn = advanceBefore(p, run, t).standIn
-        if (standIn !== null) report.set(p.tSource[t]!, standIn)
+        if (standIn !== null) report.push(standIn)
       }
     }
-    if (startT >= 0 && startT < p.tUnits.length && lastT > startT) {
+    if (lastT !== null && startT < p.tUnits.length && lastT > startT) {
       const first = p.units[p.unitOf[startT]!]!
       if (first.kind === 'word' && first.tStart < startT) partOf(startT, Math.min(first.tEnd, lastT) - (first.tEnd <= lastT ? 1 : 0))
       const last = lastT < p.tUnits.length ? p.units[p.unitOf[lastT]!]! : null
@@ -462,27 +459,31 @@ export function lineGaps(p: GeckoPrepared, start: GeckoLineStart, raised: GeckoL
       }
     }
     // The first offset past the line's end among those the fill's passes consulted, the dropped pass of a redo included.
-    const endS = lastT >= 0 && lastT < p.tUnits.length ? p.tSource[lastT]! : -1
-    let pastT = -1
-    for (let k = 0; k < raised.consulted.length; k++) {
-      const t = raised.consulted[k]!
-      if (p.tSource[t]! > endS && endS >= 0 && (pastT === -1 || t < pastT)) pastT = t
+    if (lastT !== null && lastT < p.tUnits.length) {
+      const endS = p.tSource[lastT]!
+      let pastT: number | null = null
+      for (let k = 0; k < raised.consulted.length; k++) {
+        const t = raised.consulted[k]!
+        if (p.tSource[t]! > endS && (pastT === null || t < pastT)) pastT = t
+      }
+      if (pastT !== null) report.push(advanceBefore(p, textRunAt(p, pastT), pastT).standIn!)
     }
-    if (pastT !== -1) report.set(p.tSource[pastT]!, advanceBefore(p, textRunAt(p, pastT)!, pastT).standIn!)
-    const offsets = [...report.keys()].sort((a, b) => a - b)
-    for (let k = 0; k < offsets.length; k++) {
-      const s = offsets[k]!
-      gaps.push({ gap: 'in-word-prefix', run: p.frames[frameOfSource(p.frames, s)]!.run, detail: inWordDetail(report.get(s)!), at: { start: s, end: s } })
+    report.sort((a, b) => a.at - b.at)
+    for (let k = 0; k < report.length; k++) {
+      const reason = report[k]!
+      if (k > 0 && report[k - 1]!.at === reason.at) continue
+      gaps.push({ gap: 'in-word-prefix', run: p.frames[frameOfSource(p.frames, reason.at)]!.run, detail: inWordDetail(reason), at: { start: reason.at, end: reason.at } })
     }
   }
   // The line's tabs whose width is a stand-in (computeTabs), each under the condition its position rests on.
   for (let k = 0; k < texts.length; k++) {
     const r = texts[k]!.r
     if (r.prov === null) continue
-    for (const [t, reason] of r.prov.tabStandIn) {
-      if (t >= r.tEnd) continue
-      const s = p.tSource[t]!
-      const under = tabGapOf(reason)
+    for (let i = 0; i < r.prov.tabs.length; i++) {
+      const tab = r.prov.tabs[i]!
+      if (tab.standIn === null || tab.t >= r.tEnd) continue
+      const s = p.tSource[tab.t]!
+      const under = tabGapOf(tab.standIn)
       gaps.push({ gap: under.gap, run: p.frames[r.frame]!.run, detail: `the tab at offset ${s} is the next stop less the position before it, which counts from the block's origin (CalcTabWidths, nsTextFrame.cpp:4306-4378) over a stand-in: ${under.detail}`, at: { start: s, end: s + 1 } })
     }
   }
