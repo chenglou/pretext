@@ -15,9 +15,9 @@
 // under the other two engines' folders, and the full form always runs them all.
 //
 // The table has a row per gate: its exit code, what the code means in words and which kind of step accepts it, the key
-// counts of its report, and the time from the start of the run to the gate's result. A gate's output goes to rebuild/tests/.check/gates/<gate>.log, and the rows go
-// to rebuild/tests/.check/gates/gates.json. A report is read only when the gate wrote it during this run, so a gate that
-// fails before its report never shows an earlier run's counts.
+// counts of its report, and the time from the start of the run to the gate's result. A gate's output goes to
+// rebuild/tests/.check/gates/<gate>.log, and the rows go to rebuild/tests/.check/gates/gates.json. A report is read only
+// when the gate wrote it during this run, so a gate that fails before its report never shows an earlier run's counts.
 //
 // Exit 0 only when every gate is fine for a pure refactoring: a step that means to change no prediction and no Canvas
 // question. Otherwise the worst of the gates' results, in this order:
@@ -34,8 +34,10 @@
 //
 // Cores: every gate starts at once, and the gates share --cores (default: all but two) one child process at a time
 // (cores.ts): a process of tier 0 takes a core, and a gate that replays shards asks for one before each child it starts.
-// A group of long paragraphs gets the next free core, whichever gate asks; after those the gates go in the table's
-// order. So the longest groups start first, the first rows' results come first, and no core waits while a gate has work.
+// The cores go to the gates in the table's order, so the first rows' results come first and a gate's last children run
+// beside the next gate's first. A quarter of the cores go to groups of long paragraphs first, whichever gate asks: they
+// take up to two minutes each in the sweep and bound the run's end, so they start at once, and the other three quarters
+// keep the order. (With every core open to them the sweep's long groups held tier 1's result back for seven minutes.)
 //
 // The type check is incremental: tsc keeps each project's state in node_modules/.cache/pretext-gates (untracked), keyed
 // by the hash of every file's text, the compiler options and the compiler's version, and checks in full when the state is
@@ -233,13 +235,15 @@ function gatesOf(engines: readonly EngineName[], quick: boolean): Gate[] {
 
 // ---- Running them ----
 
-// Who waits for a core: a group of long paragraphs (0) before the rest (1), then the gates in the table's order, then
-// first come, first served.
-export type Waiter = { long: number; holder: number; grant: () => void }
-export function nextWaiter(waiting: readonly Waiter[]): number {
+// Who gets the next core: the gates in the table's order, then first come, first served; while `longFirst`, a group of
+// long paragraphs before any other.
+export type Waiter = { long: boolean; holder: number; grant: () => void }
+export function nextWaiter(waiting: readonly Waiter[], longFirst: boolean): number {
   let best = 0
   for (let i = 1; i < waiting.length; i++) {
-    if (waiting[i]!.long < waiting[best]!.long || (waiting[i]!.long === waiting[best]!.long && waiting[i]!.holder < waiting[best]!.holder)) best = i
+    const a = waiting[i]!
+    const b = waiting[best]!
+    if (longFirst && a.long !== b.long ? a.long : a.holder < b.holder) best = i
   }
   return best
 }
@@ -249,10 +253,14 @@ export function nextWaiter(waiting: readonly Waiter[]): number {
 async function runAll(gates: readonly Gate[], cores: number): Promise<Row[]> {
   const waiting: Waiter[] = []
   let free = cores
+  // The cores that groups of long paragraphs hold.
+  let long = 0
   const grant = (): void => {
     while (free > 0 && waiting.length > 0) {
       free--
-      waiting.splice(nextWaiter(waiting), 1)[0]!.grant()
+      const next = waiting.splice(nextWaiter(waiting, long < Math.ceil(cores / 4)), 1)[0]!
+      if (next.long) long++
+      next.grant()
     }
   }
   const socketPath = join(tmpdir(), `pretext-gates-${process.pid}.sock`)
@@ -261,14 +269,17 @@ async function runAll(gates: readonly Gate[], cores: number): Promise<Row[]> {
     socket: {
       open(socket) { socket.data = { waiter: null, granted: false } },
       data(socket, bytes) {
-        const [long, holder] = bytes.toString().trim().split(' ').map(Number)
-        socket.data.waiter = { long: long!, holder: holder!, grant: () => { socket.data.granted = true; socket.write('1') } }
+        const [kind, holder] = bytes.toString().trim().split(' ')
+        socket.data.waiter = { long: kind === 'long', holder: Number(holder), grant: () => { socket.data.granted = true; socket.write('1') } }
         waiting.push(socket.data.waiter)
         grant()
       },
       close(socket) {
-        if (socket.data.granted) free++
-        else if (socket.data.waiter !== null) waiting.splice(waiting.indexOf(socket.data.waiter), 1)
+        const waiter = socket.data.waiter
+        if (socket.data.granted) {
+          free++
+          if (waiter!.long) long--
+        } else if (waiter !== null) waiting.splice(waiting.indexOf(waiter), 1)
         grant()
       },
     },
@@ -281,7 +292,7 @@ async function runAll(gates: readonly Gate[], cores: number): Promise<Row[]> {
     const codes = await Promise.all(gate.parts.map(async part => {
       if (gate.sharded) return await Bun.spawn(['bun', ...part, `--jobs=${Math.min(cores, gate.atMost ?? cores)}`], { cwd: REPO, env, stdin: 'ignore', stdout: fd, stderr: fd }).exited
       await new Promise<void>(granted => {
-        waiting.push({ long: 0, holder: g, grant: granted })
+        waiting.push({ long: false, holder: g, grant: granted })
         grant()
       })
       const code = await Bun.spawn(['bun', ...part], { cwd: REPO, stdin: 'ignore', stdout: fd, stderr: fd }).exited

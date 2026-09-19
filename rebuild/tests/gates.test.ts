@@ -71,11 +71,12 @@ describe('the other gates', () => {
   })
 })
 
-test('the next core goes to a group of long paragraphs, then by the table\'s order, then first come, first served', () => {
-  const waiter = (long: number, holder: number) => ({ long, holder, grant: () => {} })
-  expect(nextWaiter([waiter(1, 7), waiter(1, 8), waiter(1, 7)])).toBe(0)
-  expect(nextWaiter([waiter(1, 8), waiter(1, 7), waiter(1, 7)])).toBe(1)
-  expect(nextWaiter([waiter(1, 7), waiter(0, 12), waiter(0, 9)])).toBe(2)
+test('the next core goes by the table\'s order, then first come, first served; a group of long paragraphs first while their share lasts', () => {
+  const waiter = (long: boolean, holder: number) => ({ long, holder, grant: () => {} })
+  expect(nextWaiter([waiter(false, 7), waiter(false, 8), waiter(false, 7)], true)).toBe(0)
+  expect(nextWaiter([waiter(false, 8), waiter(false, 7), waiter(false, 7)], true)).toBe(1)
+  expect(nextWaiter([waiter(false, 7), waiter(true, 12), waiter(true, 9)], true)).toBe(2)
+  expect(nextWaiter([waiter(false, 7), waiter(true, 12), waiter(true, 9)], false)).toBe(0)
 })
 
 test('gates.ts refuses an unknown engine or argument before it runs anything', () => {
