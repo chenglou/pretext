@@ -29,8 +29,8 @@
 // out once through the predictor (the lab's path) and reads them from its prediction; the width and the slots' insets come
 // from the case. A refused slot has no pieces, only an inspection.
 //
-// The functions are read from rebuild/src/index.ts by name. Until step 1's S3 exports them the checks can't run: the
-// command says which names are missing and exits 5, never 0. --library names another module that exports the set.
+// The functions are read from rebuild/src/index.ts by name, or from the module --library names. Where a module doesn't
+// export them all the checks can't run: the command says which names are missing and exits 5, never 0.
 // Exit 0 when every case passes, 1 when a case fails, 2 on a failure of the tool, 5 when the function set isn't there.
 //
 // It reads the replay folders' inputs and nothing else of them, and keeps its shards' results and its report in
@@ -43,8 +43,8 @@ import { GROUP_SHARDS, askedOf, checkDir, classifyAsked, defaultJobs, firstDiffe
 import { CONFIGS, REPO, TIER_BROWSERS, selectSets, type Config, type TierBrowser } from './sets.ts'
 import { installStandIn } from './stand-in-canvas.ts'
 
-// The function set, as far as these checks read it. The library's own types aren't there yet, and the checks compare
-// results as JSON, so everything the library owns is opaque here.
+// The function set, as far as these checks read it. The test tooling takes no type from the library but the shared
+// contract (independence.test.ts), and the checks compare results as JSON, so everything the library owns is opaque here.
 type FillResult = { kind: 'line'; line: unknown; next: unknown; hasLineBox: boolean } | { kind: 'below-floats'; line: unknown; next: unknown }
 export type FunctionSet = {
   prepare: (paragraph: unknown, env: unknown, inspect: boolean) => unknown
@@ -358,7 +358,7 @@ if (import.meta.main) {
     const library = options.get('library') ?? LIBRARY
     const lib = functionSetOf(await import(resolve(REPO, library)) as Record<string, unknown>)
     if ('missing' in lib) {
-      console.log(`[function-set] ${check} skipped, nothing checked: ${library} doesn't export ${lib.missing.join(', ')}. The re-architecture's function set (research/ARCHITECTURE-PLAN-2.md §5.6: prepare, firstLine, fillLine, linePieces, inspectLine) arrives with step 1's S3; until then this check can't run. Exit 5`)
+      console.log(`[function-set] ${check} skipped, nothing checked: ${library} doesn't export ${lib.missing.join(', ')}. These checks need the whole function set (research/ARCHITECTURE-PLAN-2.md §5.6: prepare, firstLine, fillLine, linePieces, inspectLine). Exit 5`)
       process.exit(5)
     }
     const browsers = options.get('browser') === 'all' ? [...TIER_BROWSERS] : TIER_BROWSERS.filter(name => name === options.get('browser'))
