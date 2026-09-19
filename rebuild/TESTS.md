@@ -30,6 +30,14 @@ line. The ledger is format 2: beside the four metrics every case has an exact-va
 stops being exact (lab README "The ledger"). The seeds are adopted (§9). The lab README's "The correctness line" has the
 commands, the numbers and what the line doesn't hold; the references they replaced described the round 3 library.
 
+**Since the re-architecture's X2 and its painter step, 2026-09-19.** No port keeps a memo any more (DESIGN.md §4.6,
+§4.7), so a question a paragraph asks twice is asked of Canvas twice. Against the references frozen before it, tier 1
+exits 3 with repeats only in all six: 0 predictions changed, 0 dropped only, 0 other questions, 0 new questions. On the
+owners' branches the cases with repeats only were 65,900 without facts and 65,898 with them in Chrome, 52,444 and 52,498
+in Firefox, 58,144 and 56,498 in webkit-host. Each engine owner ran tier 2 in both orders and both configurations in its
+browser, and the painter step ran it forward in the three browsers: 0 transitions every time. The references were
+recorded again at the X2 merge.
+
 Tier 1 is a change detector, not an oracle: its expected values are the library's own at a commit. Its inputs are recorded
 per library, so a library that asks Canvas new questions needs a new recording (`browser-sets.ts --record`, `replay.ts
 pack`, `freeze --force --reason`). `replay.ts check` only reads the reference folder and keeps its scratch files and report
@@ -51,8 +59,8 @@ header of `rebuild/tests/function-set.ts`). It fails on results that differ, on 
 on more contexts. It no longer fails on order: a case whose first asks come in another order than the lab's passes and is
 counted (at the X1 merge Chrome 26,035 without facts and 21,826 with, Firefox 11,418 and 11,422, webkit-host 1,174 and
 1,218). No path that asks less can keep the lab path's order. The lab's path asks inspection's questions between two
-fills, so a later fill's repeat of one is a memo hit there and a first ask on the plain path, after questions the lab's
-path asked later.
+fills, so a later fill's repeat of one is a repeat there (a memo hit until X2) and a first ask on the plain path, after
+questions the lab's path asked later.
 
 What covers question order is the plain predictor's browser run (`browser-sets.ts
 --predictor=rebuild/lab/baselines/plain-predictor.ts`, compared with `compare-sets.ts --prediction=line-ranges`). It is
@@ -63,6 +71,26 @@ part of every milestone that changes the plain path's questions. At X1:
   ledger; a rerun of that set gave 0 differences on 19,888 cases.
 - webkit-host, all 63,987 no-facts cases at the X1 merge: 0 line ranges differ; 3 native observations differ, all already
   history-dependent in the ledger. (The owner's own run covered the development sets, 26,472 rows, with the same result.)
+
+Since X2 (2026-09-19) the plain path asks more, and nothing new. Questions a paragraph, without facts and with them:
+Chrome 250.7 and 240.8 (61.02 and 48.33 distinct, as before), webkit-host 39.32 and 21.65, Firefox 54.5 and 55.1; the
+lab's path 1,016.8 and 1,055.7, 88.79 and 59.86, 114.5 and 115.7 (DESIGN.md §4.7 has the table and what it cost). The
+counts of cases whose first asks come in another order are the X1 merge's. Every repeated question recorded in pinned
+Chrome was answered as the first time: 2.17 M questions asked again in 26,913 cases, 0 with another width or ink box.
+The plain predictor's browser runs at X2:
+
+- Chrome, all 67,065 no-facts cases: line ranges equal, 0 native differences. The other-widths-first predictor's 67,065
+  rows equal the usual run's and the references' recording.
+- webkit-host, all 63,987 no-facts cases: 0 line ranges differ; the same 3 native observations differ as at X1.
+- Firefox, 63,771 cases: 63,651 equal. The other 120 are in one browser process (`suite-sample` part 2), with
+  fallback-font widths in another state; line ranges move with the native lines in 14. 115 of them, the 14 among them,
+  are history-dependent in the ledger already. The other 5 differ in native widths alone and aren't marked there; they
+  are in the known tail (`gecko/plain-predictor-fallback-state`).
+
+The ports' tests count what their stand-in Canvas is asked, and probe `blink-storage` S5 what the page's Canvas is
+asked: no port keeps a log they could read. The painter differential (`rebuild/tools/painter-diff.ts`, check 7) is
+byte-equal on 389,646 of 389,646 cases against the painter of 81fd07d, and it caught a planted flip of `overflows` in
+the adapter (exit 1). It is the offline check that reads `overflows` and the engines' paint facts, which tier 1 can't see.
 
 Terms:
 
@@ -88,13 +116,13 @@ Terms:
 | `rebuild/tests/sets.ts` | The tiers' sets and run protocol |
 | `rebuild/tests/replay.ts`, `rebuild/tests/reference/` | Tier 1: offline replay against a frozen reference, pinned by hash in the manifests |
 | `rebuild/tests/browser-sets.ts`, `rebuild/tests/baselines/sets/` | Tier 2 and its adopted seeds, `<browser>-<engine build>-<config>.json` with seed records |
-| `rebuild/tests/known-tail.json`, `known-tail.ts`, `known-tail.test.ts` | The known tail: the classes left open at the frozen line, with case ids and rules over a tier 2 ledger, its exact-value status included (63 items) |
+| `rebuild/tests/known-tail.json`, `known-tail.ts`, `known-tail.test.ts` | The known tail: the classes left open at the frozen line, with case ids and rules over a tier 2 ledger, its exact-value status included (64 items) |
 | `rebuild/tests/compare-sets.ts`, `rebuild/lab/compare-rows.ts` | Two tier 2 runs, or two row files, case by case (measure first, installed Safari against webkit-host) |
 | `rebuild/tests/ledger.ts` | The known-status ledger: the four metrics' statuses and the exact-value status per case, transitions and conditions |
 | `rebuild/lab/rows.ts`, `predictor-core.ts`, `port-measure.ts` | Rows read plain or `.zst`; the one prediction adapter; the observation ports' live measuring |
 | `rebuild/src/measure/font-checks.test.ts`, `rebuild/probes/font-checks.ts` | The runtime font checks against a stand-in Canvas (20 tests; one ties the joining-script test to the Blink port's joining types, two hold the checks' contexts to the engine's own text rendering), and in the browsers over the lab's font declarations, beside the font table and the DOM (`.artifacts/lab/font-checks/tools/verdict.ts`): a check per release |
 | `rebuild/src/measure/canvas-checks.test.ts`, `rebuild/probes/canvas-checks.ts` | `detectEngine()`'s Canvas checks against stand-in contexts, and the library's own `detectEngine()` in a browser: a pinned browser must answer supported (`LAB_CHROME_APP`, `LAB_FIREFOX_APP` for another build) |
-| `rebuild/src/measure/canvas.test.ts`, `rebuild/probes/blink-storage.ts` | The string an engine hands to `measureText` reaches Canvas as built: no `Map` or `Set` key holds the measured string's characters alone while `measureText` runs (V8 would hand Blink a one-byte string afterwards), and in pinned Chrome the library's own bundled module answers a run of brackets on its `8bit` and `16bit` contexts as each storage shapes (S5; `rerun-probes.sh` reruns the probe per Chrome release) |
+| `rebuild/src/measure/canvas.test.ts`, `rebuild/probes/blink-storage.ts` | The string an engine hands to `measureText` reaches Canvas as built: no `Map` or `Set` key holds the measured string's characters alone while `measureText` runs (V8 would hand Blink a one-byte string afterwards), and in pinned Chrome the library's own bundled module answers a run of brackets on its `8bit` and `16bit` contexts as each storage shapes (S5, which since X2 notes Canvas's answers on the page's `OffscreenCanvasRenderingContext2D` itself, the string passed through untouched, and finds a context's partition through the prepared paragraph's `canvases`; `rerun-probes.sh` reruns the probe per Chrome release) |
 | `rebuild/knip.config.ts` | `bunx knip --config rebuild/knip.config.ts`: unused files and exports under `rebuild/`, tests ignored |
 | `rebuild/lab/browser-build.ts`, `rebuild/lab/pin-browser.sh` | The apps `lab/run.ts` and `probes/runner.ts` launch (pinned copies of Chrome and Firefox), and the build read from their bundles |
 | `rebuild/lab/sharded.ts` | One case file as several jobs at once; derivation observes through it |
@@ -578,7 +606,7 @@ Main-derived families are a measurement corpus. In this gate they are the report
 
 Engine or library logic fails the test. It passes since round 4. The layout a row keeps and the observation contract are the lab's own types (`lab/types.ts`, `lab/observe/contract.ts`) since the re-architecture's S1, so the lab takes from `src/model.ts` the input tree, fragments and gaps, from the three `geometry.ts` the engines' geometry and line starts (S2), and nothing about rows. Two probes bundle library modules into their page to run them in a browser (`probes/font-checks.ts`, which also bundles each port's `checks.ts`, and `probes/canvas-checks.ts`); they import nothing from them, and their expected values aren't the library's.
 
-The same test holds the library's own rule (research/ARCHITECTURE-PLAN-2.md §5.4): outside comments, a file of `rebuild/src` that isn't under `engines/` and isn't `index.ts` (the one dispatch) or `env.ts` (whose shape is per engine) imports nothing from `engines/` and holds no engine's name as a string or in an identifier. Since S2 every shared file holds but `paint.ts`, listed with its 74 mentions until the painter's split; and an engine imports no other engine. What differs by engine reaches shared code as data the engine gives: its `BidiData`, grapheme rules and break rules (`engines/<engine>/data.ts`), and what it asks of the Canvas checks and the font checks (`engines/<engine>/checks.ts`).
+The same test holds the library's own rule (research/ARCHITECTURE-PLAN-2.md §5.4): outside comments, a file of `rebuild/src` that isn't under `engines/` and isn't `index.ts` (the one dispatch) or `env.ts` (whose shape is per engine) imports nothing from `engines/` and holds no engine's name as a string or in an identifier. Since step 3 every shared file holds: `paint.ts` takes each engine's painting rules as a `PaintRules` value (`engines/<engine>/paint-rules.ts`), and the list of exceptions is empty; and an engine imports no other engine. What differs by engine reaches shared code as data the engine gives: its `BidiData`, grapheme rules and break rules (`engines/<engine>/data.ts`), what it asks of the Canvas checks and the font checks (`engines/<engine>/checks.ts`), and its painting rules (`engines/<engine>/paint-rules.ts`).
 
 ## 12. Per browser release
 

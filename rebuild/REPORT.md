@@ -433,8 +433,8 @@ What's shared:
 - `unicode/ubidi.ts`: an exact port of ICU 78.2 `ubidi`, for Blink and WebKit. It differs from icu4c 78.3 and libicucore on 0 of 770,241 BidiTest runs, 183,379 BidiCharacterTest lines and 405,000 fuzz strings. The crate resolver disagreed with ICU on 130,661 of 300,000 fuzz strings;
 - `unicode/unicode-bidi.ts`: the crate port, for Gecko;
 - grapheme clusters with each engine's data;
-- `measure/`: OffscreenCanvas contexts identified by their settings, a memo per layout, and the call log; the runtime font checks, which answer a font fact the caller left null where a Canvas check is sound (`font-checks.ts`); and the Canvas checks of engine detection (`canvas-checks.ts`);
-- `paint.ts`, with one engine switch, for the hyphen span;
+- `measure/`: OffscreenCanvas contexts identified by their settings, which a prepared paragraph holds (the ports keep no memo and no call log since the re-architecture's X2; DESIGN.md §4.6, §4.7); the runtime font checks, which answer a font fact the caller left null where a Canvas check is sound (`font-checks.ts`); and the Canvas checks of engine detection (`canvas-checks.ts`);
+- `paint.ts`, which names no engine: each engine's painting rules are a `PaintRules` value in `engines/<engine>/paint-rules.ts`;
 - the generators, which check sha256 hashes of pinned engine data.
 
 Thai, Lao, Khmer and Myanmar breaks come from the running browser's own segmenter.
@@ -450,7 +450,7 @@ detectEngine(): { kind: 'supported'; engine } | { kind: 'unsupported'; userAgent
 detectEnvironment(given: GivenFacts): { kind: 'supported'; env } | { kind: 'unsupported'; … }  // DPR, <html lang>, segmenters; again when they change
 layoutParagraph(paragraph, env, slots?): { engine; env; lines; belowFloats; measure: MeasureLog; gaps: Gap[] }
 prepareParagraph(paragraph, env) → firstLineStart(prepared) → layoutLine(prepared, start, slot)   // one line slot at a time
-paintLines(paragraph, layout, document): HTMLElement[]        painterLimits(paragraph, layout): PainterLimit[][]
+paintLines(paragraph, lines, refusedRows, rules, document): HTMLElement[]        painterLimits(paragraph, lines, rules): PainterLimit[][]      // lines: { pieces: linePieces' result; slot; hasLineBox }[]; rules: the engine's PaintRules
 Line = { start; end; fragments; hasLineBox; joinsNextLine; slot; indented; align; gaps; next: LineStart | null;
          geometry: the engine's own (Blink items in LayoutUnits, WebKit display boxes in float32 px, Gecko frames in app units) }
 Gap = { gap: GapName; run: number | null; detail: string; at?: { start; end } }   // on the paragraph and on each line
@@ -459,6 +459,11 @@ Gap = { gap: GapName; run: number | null; detail: string; at?: { start; end } } 
 Each engine implements `prepare`, `firstLine`, `nextLine(prepared, start, slot, measurer)` and `gaps`. A `LineStart` is valid
 only for the slot that produced it. There is no prepare-once, lay-out-at-many-widths API, and nothing is kept across
 paragraphs: a measurer lives one paragraph. API shape is an open question for after the freeze (CHARTER.md, decision 3).
+
+Note, 2026-09-19: but for the painter's line, this section describes the library at the correctness line. Since the
+re-architecture `src/index.ts` exports a function set instead (`prepare`, `firstLine`, `fillLine`, `linePieces`,
+`inspectLine`, `paragraphGaps`; DESIGN.md §2.9, §3): one prepared paragraph serves any width, `layoutParagraph` is the
+lab's, and a prepared paragraph holds its own Canvas contexts, with no measurer, memo or call log.
 
 ## 2. Numbers
 

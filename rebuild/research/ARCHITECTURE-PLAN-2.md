@@ -52,6 +52,7 @@ I checked every critique against the code, and §12 lists the ones I rejected. N
   - At least 81% of WebKit's repeats come from lab-only gap code. The app path barely moves. The lab path pays until that code takes the values the fill measured.
   - 88% of Gecko's repeats are totals asked again for every offset of one unit, which a field fixes.
   - Nobody has timed memo-off in a browser yet. X2 carries a tripwire.
+  - Note, 2026-09-19, after X2: two of these didn't hold. The app path moved: the plain path asks 1.4 to 1.75 times its distinct questions in Gecko and WebKit and 4.1 to 5 times in Blink, where 70% of its repeats fall inside one `fillLine` call. And Gecko's unit total was already a field: its large repeat was the neighbour's suffix width, now kept per offset, and no field fixes the rest, which are strings that recur. Blink's wall time did hold (giants 55.3 s against 49.5 s). DESIGN.md §4.7, "What removing the memo cost", has the numbers and the two candidates that now lead §10.
 - If no: the draft's per-offset tables filled on first read come into X2 now, with the critique's two corrections:
   - On an inspected paragraph a table never short-circuits, so gaps are raised as today.
   - Entries are `Entry | null` records, not typed arrays with masks.
@@ -263,6 +264,7 @@ Rules:
 - Each function returns at once when its sink is null.
 - An expression that exists only to decide a gap is evaluated inside `gaps.ts`. Examples are `canvasScriptsPerUnit` at letter spacing 0, `positionBounds` and the no-ligature pair windows.
 - Because the raise points stay where they are, order and merging stay the same, and byte identity follows by construction.
+  - Note, 2026-09-19, after X2: this doesn't cover §5.3's flows in Blink. A raise rides on every `measure16` call, and `addGap` merges a range into the first entry it meets, so how ranges are grouped follows the number and order of raises; a value handed on in place of a repeated measurement regrouped 3 and 1 of 67,065 rows, and those two flows were taken back. X3 gives gap lists a canonical form (DESIGN.md §5; the comment beside `addGap` in `engines/blink/gaps.ts`).
 
 **Merge rules are ported one by one, with no shared helper:**
 - Blink merges by gap, run, detail and touching ranges (`blink/gaps.ts:9-24`).
@@ -415,6 +417,7 @@ type LinePieces<Facts> = {
 - `LineInfo` with its results and views, the start and the slot.
 - `decisionEnd`, `untestedEnds`, `breaksInsideWords` and `truncatedStarts`, as now.
 - Reshape records hold their own measured positions for the line's life.
+  - Note, 2026-09-19: not built in X2. A reshape's own positions (`callPrefix16`) are 0.1% of Blink's repeats.
 
 **`gaps.ts` takes:**
 - `joinedAtEdge`'s conditions. The function becomes a pure "is U+200D added here".
@@ -456,6 +459,7 @@ type LinePieces<Facts> = {
 - The closed `Line`, its rect, the last-line flag and the carried width.
 - `{ measuredEnd, reverted, decisionStart, overflowStart, shapedCarry }`.
 - The widths the fill measured, for `lineGaps`.
+  - Note, 2026-09-19: not built in X2. In WebKit the fill measures almost nothing that `lineGaps` asks again: of the 2.44 M questions a line's own inspection repeats without facts, 1.69 M were first asked by prepare, 0.74 M by inspection itself and 15 thousand by the fill. Handing prepare's derivations over needs X3's item model.
 - On an inspected paragraph, the fill-time gaps in order. `lineGaps` is seeded with them, and its dedupe reads them.
 
 **`gaps.ts` takes:**
@@ -491,6 +495,7 @@ type LinePieces<Facts> = {
 - The per-offset records of §5.3.
   - They replace five of the WeakMaps.
   - `groupEndMemo` becomes a field of the frame's provider.
+    - Note, 2026-09-19: it has no successor. A field set when the provider is made would move first asks, and one set on first use could be written after the fill, so `groupEndSpacing` reads the per-offset records on every call.
   - `ligatureMemo`'s answer becomes a field of the offset's record. The same pair at another offset is then asked again, which is a repeat and not a new question.
 - `emergencyUnconfirmed` becomes flags per offset.
 - `Provider.tabs` becomes a sorted array.
@@ -692,6 +697,7 @@ Files for each owner: all of `engines/<engine>/` and its generator. The `geometr
   - If it trips, fix flow at the top site.
   - If flow can't fix it, the site goes to the orchestrator with its count, as the candidate for §10's first item.
 - The questions are then frozen again.
+- Note, 2026-09-19: X2 and step 3 are merged. DESIGN.md §4.7 has the ask ratios of both paths, the one trip of the tripwire and the decision on it; §10's first two rows are the candidates X2 sent on.
 
 **X3. Model clean-up.**
 - Contents:
@@ -760,10 +766,12 @@ Owner: shared.
 
 ## 10. After profiling, not before
 
-All numbers are ungated ballparks, except the first row's counts.
+All numbers are ungated ballparks, except the counts of the first three rows. The first two rows were added on 2026-09-19, from X2's reports, with gated numbers (DESIGN.md §4.7).
 
 | Candidate | Evidence |
 |---|---|
+| Units of equal text in one prepared paragraph share one record of what measuring found (2026-09-19; Gecko's X2 report) | With the memo gone a string that recurs is measured at each occurrence. Firefox's giants take 15.3 s of prediction on the inspected path against 4.2 s (3.6×, the one trip of X2's tripwire; their plain path 1.28×): a giant is 18,000 to 47,000 words, a fifth to a half of them distinct, and the English one asks 843,386 questions for 54,673 distinct ones. Over the tier sets Gecko's ask ratio is 1.66 on the lab path and 1.41 on the plain path, 2.9 M repeats, every one a string that recurs. The engine's own structure there is the shaped-word cache (gfxFont.cpp:3569-3577). The record has the prepared paragraph's lifetime, so it can't go stale or leak. It must not share where a recipe reads text outside the unit: `scriptContextFor`'s character from elsewhere in the script run, and the font-matching prefix path. The same idea covers WebKit's repeated words (267 thousand of the plain path's 844 thousand repeats). |
+| Per-fill positions and safe flags kept on the item's shape result, in Blink (2026-09-19; built unmerged on `ra-x2-blink-alt-positions`, d63c427) | 70% of the plain path's repeats fall inside one `fillLine` call: the start's position, the binary search, the safe tests and the view's edges ask about the same offsets. With the positions kept, the plain path's ask ratio goes from 4.11 to 2.95 without facts and from 4.98 to 3.50 with them, fill asks fall 42% on a sample, tier 1 stays repeats only, and checks 1 and 2 pass on 67,065 cases in both configurations. It is read back on plain paragraphs only: on an inspected one a measurement left out regroups gap ranges until gap lists have a canonical form (X3). Chrome's wall time barely moves either way, since its per-canvas cache answers a repeat. |
 | Per-offset tables filled on first read: Blink positions and pair, wide and no-ligature adjustments; WebKit's per-cluster facts in letter-spaced boxes | Memo off, 60.5% of Blink's repeated asks are `pairAdjust16` at an offset already computed. The perf look got 4 to 5 times faster relayout. On an inspected paragraph the table must never short-circuit, or must replay gaps. Blink's adjustments depend on the shaping call's range as well as the offset. |
 | Constants hoisted into prepare-time fields (WebKit's `' '`, hyphen widths) | They add questions, so they need browser proof. |
 | Dropping a history world's discarded gap work | It speeds up only the lab. It is a "dropped only" step with one browser run. |
@@ -794,7 +802,7 @@ All numbers are ungated ballparks, except the first row's counts.
 | **A rule, citation or gap site lost in a rewrite.** | Check 6. |
 | **Font checks moving relative to engine measuring.** | T1 in the no-facts config. They stay called before the engine. |
 | **The painter, which only browsers can judge.** | Check 7 offline, then T2 painter observations. |
-| **Lab time growing once the memo goes.** | X2's tripwire and ask ratio. |
+| **Lab time growing once the memo goes.** | X2's tripwire and ask ratio. Note, 2026-09-19: it tripped once, on Firefox's giants along the inspected path (15.3 s of prediction against 4.2 s, 3.6×; their plain path 1.28×, layouts equal on all 9). The orchestrator accepted it, because the tripped path is the inspected one and what would answer it is a store found by string (§10's first row). |
 
 ## 12. What changed from the draft, and the critiques rejected
 

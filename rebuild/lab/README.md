@@ -13,7 +13,10 @@ doesn't depend on the old library in `src/`.
   library's function set, one slot at a time: per line `fillLine`, `inspectLine`, then `linePieces` on a paragraph prepared
   for inspection, every slot at the case paragraph's width (DESIGN.md §2.9). It writes what the library doesn't carry: a
   line's slot as its two insets, and `measure`, its own count of the contexts a layout makes and its `measureText` calls,
-  taken on the page's Canvas classes with every argument passed through untouched. Two more predictors come from it
+  taken on the page's Canvas classes with every argument passed through untouched. It also keeps, per line, what the
+  library's painter takes (the pieces, the slot with its width, the line box flag), and pairs them with the engine's
+  painting rules where it dispatches: the hook's `painter` (`types.ts` `LayoutPrediction`), which `paint()` and `limits()`
+  call and no row holds. Two more predictors come from it
   (`baselines/`): `plain-predictor.ts` returns line ranges from a paragraph prepared plain, the path an application runs,
   and `other-widths-first-predictor.ts` fills every prepared paragraph at half and at one and a half times the case's width
   before the case's own ("Prediction hook").
@@ -247,6 +250,27 @@ doesn't depend on the old library in `src/`.
 - **`compare-rows.ts --prediction=without-measure`** and the two predictors it and `line-ranges` serve
   (`baselines/plain-predictor.ts`, `baselines/other-widths-first-predictor.ts`).
 
+## Landed in the re-architecture's X2 and painter step (2026-09-19)
+
+- **No port keeps a memo or a log** (DESIGN.md §4.6): a question a paragraph asks twice is asked of Canvas twice, and
+  nothing in the library counts calls for the ports. Against the references frozen before it, tier 1 exits 3 with
+  repeats only in all six: 0 predictions changed, 0 dropped only, 0 other questions, 0 new questions (on the owners'
+  branches 65,900 Chrome cases without facts and 65,898 with them, 52,444 and 52,498 Firefox cases, 58,144 and 56,498
+  webkit-host cases). Tier 2 in both orders and both configurations showed 0 transitions in each owner's browser
+  (`.artifacts/tests/runs/ra-x2-blink`, `ra-x2-webkit`, `ra-x2-gecko`). The references were recorded again at the X2
+  merge. "Asked and distinct" below has the counts, and DESIGN.md §4.7 what the memo's removal cost.
+- **Who counts Canvas questions now.** The adapter, as before (`measure`). The ports' tests count what their stand-in
+  Canvas is asked. Probe `blink-storage` S5 read the library's log; it now notes Canvas's answers on the page's
+  `OffscreenCanvasRenderingContext2D`, with the string passed through untouched, finds a context's partition through
+  the prepared paragraph's `canvases`, and checks that a context asked again answers the same. `tools/twin-scan.ts`
+  names a context by its place in `p.canvases`.
+- **The painter takes what `linePieces` gives.** `src/paint.ts` names no engine and reads no row: the adapter keeps each
+  line's pieces, slot and line box flag, pairs them with the engine's `PaintRules`, and `LayoutPrediction.painter` is what
+  the hook's `paint()` and `limits()` call. `paintable()` is gone, and the row is untouched. The painter differential is
+  byte-equal on 389,646 of 389,646 cases, tier 2 forward showed 0 transitions in the three browsers and both
+  configurations (`.artifacts/tests/runs/ra-x2-painter`), and check 8's list of exceptions is empty.
+- **The tripwire tripped once**, on Firefox's giants along the inspected path ("Baselines for the tripwire" below).
+
 ## Test tiers
 
 Four tiers by time, one command each. The first three give a signal in seconds to minutes; the fourth is the round's
@@ -403,6 +427,12 @@ bun rebuild/tests/replay.ts check --browser=chrome            # or --browser=all
   Firefox 4.73 M (74), webkit-host 2.04 M (32; 1.23 M with facts), and webkit-host's observation port another 4.77 M,
   2.15 M of them distinct. Planted 2026-09-18, the memo switched off: every changed case is repeats only, no prediction
   moves, exit 3, and the ratios are 10.61 in Chrome (70.5 M asked), 1.72 in Firefox and 3.14 in webkit-host.
+  Since the re-architecture's X2 (2026-09-19) no port has a memo, and the values the ports keep instead bring the
+  ratios to these (DESIGN.md §4.6, §4.7). Chrome's headline reference asks 68.2 M questions for 6.69 M distinct ones
+  (10.19; 11.52 with the lab's facts), and the plain path 250.7 a paragraph for 61.0 distinct (4.11; 240.8 for 48.3,
+  4.98). webkit-host asks 5.68 M for 2.04 M (2.79) without facts and 3.83 M for 1.23 M with them (3.12); the plain path
+  2.52 M for 1.67 M (1.50) and 1.39 M for 0.79 M (1.75). Firefox asks 7.30 M without facts and 7.38 M with them (1.66
+  and 1.67), and the plain path 3.48 M and 3.51 M (1.41 and 1.42).
 - `check --sites` adds asks and repeats by library call site: the innermost three library frames of the stack at every
   measureText call, read inside the replay's context (`lab/measurements.ts` `SiteTally`), so nothing in `rebuild/src` counts
   anything; `src/measure/canvas.ts` is left out of a site, since every call passes through it. The report's `sites.under`
@@ -410,6 +440,12 @@ bun rebuild/tests/replay.ts check --browser=chrome            # or --browser=all
   frame of a function that returns a call directly, so a site can lack such a caller. With the memo off the top sites are
   `raw16Of < measure16 < pairAdjust16` in Blink (42.3 M of 63.9 M repeats), `w < inWordAdvance` in Gecko and
   `spacedGlyphCount < mergedGlyphs < itemGaps` in WebKit. It takes about half as long again (Chrome's headline reference: 7.5 s, 11.5 s with `--sites`).
+  Since X2, with no memo in the ports: Blink's top site is still `raw16Of < measure16 < pairAdjust16`, with 41.5 M of
+  61.5 M repeats, and `inspectLine` holds 64.6% of the repeats and `fillLine` 32.1%; Gecko's are the ligature pair in
+  its two contexts (`ligatureAcross`, 1.24 M of 2.90 M repeats) and the cluster before an offset alone
+  (`inWordAdvance`, 0.81 M), 62% under `inspectLine`; WebKit's is `mergedGlyphs` under `itemGaps` (1.5 M of 3.6 M
+  without facts). The X2 sections of specs/blink-RESULTS.md, specs/webkit-RESULTS.md and specs/gecko-RESULTS.md list
+  every site.
 - *The contexts are the replay's own count* of the contexts the prediction made; the library's call log isn't read. It
   equals the library's count in every frozen case, so the references frozen in format 1 still compare; their memo hits are
   ignored. `freeze` writes format 2, without them.
@@ -440,7 +476,7 @@ bun rebuild/tests/replay.ts check --browser=chrome            # or --browser=all
   tree gives the same report.
 - *What it can't cover*: the painter and everything native (tier 2); questions the record lacks, answers that depend on
   the order of questions, and string storage (by the rules above); a library that kept Canvas answers across paragraphs would ask less in a
-  browser document than in a replayed case, and would show as new questions (today every measurer is per paragraph);
+  browser document than in a replayed case, and would show as new questions (today no Canvas answer outlives a prepared paragraph);
   dictionary-segmenter scripts replay as long as the library segments the same strings; giants.
 - *A reference is never overwritten silently.* `freeze` refuses an existing reference without `--force` and
   `--reason=<text>`, refuses files that differ from HEAD under `rebuild/src`, the predictors, the font facts and the
@@ -548,7 +584,7 @@ prediction. One command each; every one was run against a planted violation and 
 | 3. Width sweep on a stand-in Canvas | `bun rebuild/tests/function-set.ts sweep --browser=all --config=no-facts` | one prepared paragraph filled at other widths first differs from a paragraph prepared for that width alone |
 | 4. Ask ratio and sites | `bun rebuild/tests/replay.ts check --browser=all --config=all --sites` | never by itself: it reports asked, distinct, the ask ratio, and asks and repeats by call site |
 | 5. Coverage map | `bun rebuild/tests/coverage-map.ts` | never: it lists the lines of `rebuild/src` no replay runs, per engine |
-| 8. Independence | `bun test rebuild/tests/independence.test.ts` (in tier 0) | a shared file names an engine outside the listed exceptions, an engine imports another, the lab imports library logic outside its adapter |
+| 8. Independence | `bun test rebuild/tests/independence.test.ts` (in tier 0) | a shared file names an engine outside the listed exceptions (none since step 3), an engine imports another, the lab imports library logic outside its adapter |
 | Line ranges against layouts | `bun rebuild/tests/compare-sets.ts <plain predictor's run> <usual run> --prediction=line-ranges` | exit 1: a line range differs or a row is missing; exit 3: only native observations differ |
 
 Checks 6, 7 and 9 (the citation ledger, the painter differential, the twin family) are the tools owner's, under
@@ -556,7 +592,12 @@ Checks 6, 7 and 9 (the citation ledger, the painter differential, the twin famil
 Canvas) counts the cases where the Blink port asks one context the same characters as a one-byte and as a two-byte
 string; since the string storage fix it is a tripwire: 0 on every set (at the merge 0 of the 67,072 case lines of Chrome's
 set files, 377 of which ask a two-byte slice at all, 281 of them in `twins`; at the line 166 of the 380 `twins` cases held
-such a pair).
+such a pair). Since Blink's X2 the scan names a context by its place in the prepared paragraph's `canvases`, where it
+used the measurer's index; with `contextsOf` planted to give one set of contexts it finds 166 of the 380 again. Check
+7, the painter differential (`bun rebuild/tools/painter-diff.ts check --browser=all --config=all`), is the offline check
+that reads `overflows` and the engines' paint facts, which tier 1 can't see: at the painter step it was byte-equal on
+389,646 of 389,646 cases against the painter of 81fd07d, and a planted flip of `overflows` in the adapter exits 1 with
+the differing cases.
 
 - **Checks 1 to 3 wait for the function set** (`prepare(paragraph, env, inspect)`, `firstLine`, `fillLine(prepared, start,
   { width, left, right })`, `linePieces`, `inspectLine`; the plan's §5.6), which step 1's S3 exports from
@@ -587,10 +628,12 @@ such a pair).
   contexts. It no longer fails on order, as tier 1 does: a case whose first asks come in another order than the lab's
   passes and is counted (at the X1 merge Chrome 26,035 without facts and 21,826 with, Firefox 11,418 and 11,422,
   webkit-host 1,174 and 1,218). No path that asks less can keep the lab path's order: the lab's path asks inspection's
-  questions between two fills, so a later fill's repeat of one is a memo hit there and a first ask on the plain path,
-  after questions the lab's path asked later. What a canvas makes of the plain path's order no offline check can say. The
-  plain predictor's browser run covers it ("Line ranges against layouts" below), as part of every milestone that changes
-  the plain path's questions.
+  questions between two fills, so a later fill's repeat of one is a repeat there (a memo hit until X2) and a first ask
+  on the plain path, after questions the lab's path asked later. What a canvas makes of the plain path's order no
+  offline check can say. The plain predictor's browser run covers it ("Line ranges against layouts" below), as part of
+  every milestone that changes the plain path's questions. Since X2 the plain path asks 250.7 questions a paragraph
+  without facts in Chrome and 240.8 with them, 39.32 and 21.65 in webkit-host, 54.5 and 55.1 in Firefox: what rose is
+  repeats, questions asked again where the memo used to answer.
 - **Changed questions.** Planted in a scratch clone: the memo off gives 66,079 Chrome, 54,659 Firefox and 61,068
   webkit-host headline cases repeats only, exit 3; WebKit's history worlds without their discarded gap work give 214
   dropped only and 18 other questions (a question the world asked first is now first asked later), exit 4; the font checks'
@@ -606,9 +649,9 @@ such a pair).
   them unevenly (`coverage-map.ts` `addLcov`). A planted branch and a planted function that nothing calls are listed.
 - **Independence** is a tier 0 test. The shared layer's rule (no import of `engines/`, no `'blink'`, `'webkit'` or `'gecko'`
   string, no identifier holding such a name; comments never count, the TypeScript parser drops them) holds outside
-  `SHARED_FILES_THAT_NAME_ENGINES`, which listed ten files with 175 mentions at the correctness line and lists `paint.ts`
-  alone since step 1's S2 (74 mentions: it took over the two data selections made for it, and imports the engines'
-  geometry types); a count may only fall, an entry that no longer matches fails too, and step 3 empties the list.
+  `SHARED_FILES_THAT_NAME_ENGINES`, which listed ten files with 175 mentions at the correctness line, listed `paint.ts`
+  alone after step 1's S2 (74 mentions), and is empty since step 3, when the painter took each engine's rules as data; a
+  count may only fall and an entry that no longer matches fails too, so a new exception has to be written down.
   `src/index.ts` and `src/env.ts` are the two shared files that may name engines, and test files are left out. Planted: a string and an identifier in
   `content.ts`, an import of Blink's shaper into WebKit's style, an import of `src/index.ts` into `lab/rows.ts`; each named.
 - **Line ranges against layouts** is for X1's gate and for every later milestone that changes the plain path's questions,
@@ -630,12 +673,34 @@ such a pair).
     exit 3 (`c-1ca0bab9ded7a4c6` and `c-53283654e67b8035` in `rich-prewrap`, `c-7cc5e3e26ff7c30d` in
     `heldout-suite-sample`), all already history-dependent in the ledger. The owner's own run covered the development
     sets, 26,472 rows, with the same result.
+
+  At X2, where the plain path's questions changed by repeats alone (the runs are under `.artifacts/tests/runs/ra-x2-blink`,
+  `ra-x2-webkit` and `ra-x2-gecko`):
+  - Chrome, all 67,065 no-facts cases: line ranges equal and 0 native differences, exit 0. The other-widths-first
+    predictor's 67,065 rows equal the usual run's and the recording the references' predictions come from.
+  - webkit-host, all 63,987 no-facts cases: 0 line ranges differ; the same 3 native observations differ, exit 3.
+  - Firefox, 63,771 cases: 63,651 equal in line ranges and native observations. The other 120 are in one browser process
+    (`suite-sample` part 2), with fallback-font widths in another state, and line ranges moved with the native lines in
+    14 of them. 115, the 14 among them, are already history-dependent in the ledger
+    (`gecko/process-font-fallback-state`). The other 5 differ in native widths alone and aren't marked there: known-tail
+    item `gecko/plain-predictor-fallback-state`. That set run again with the plain predictor gave 0 differences once and
+    the same 120 once; across X1 and X2 the usual predictor's five runs were never in the odd state, and the plain
+    predictor's were 3 times out of 5.
 - **Baselines for the tripwire** (X2: tier 2's wall time and the giants stay within 2× these), in
   `rebuild/tests/baselines/times-correctness-line.json`, headline configuration, 2026-09-18, from `rebuild/src` as at the
   correctness line. The giants under the exclusive lock, forward, one case a round trip: Chrome 119 s (the library's
   predictions 49.8 s of it, the observation port 40.8 s), Firefox 15 s (4.2 s), webkit-host 325 s (2.7 s; the port 114 s and
   native layout with its observation 172 s). Tier 2 forward, one browser at a time: Chrome 77 s, Firefox 67 s, webkit-host
   102 s, each with 0 status transitions and the gate passing. Runs: `.artifacts/tests/runs/ra0-baselines`.
+  At X2 (2026-09-19) the owners shared the machine, so only back-to-back and exclusive-lock readings count. Chrome,
+  this step and its start commit back to back on a quiet machine: the giants' prediction 55.3 s against 49.5 s, tier 2
+  forward 82.8 s against 79.3 s; Chrome's per-canvas cache answers a repeat. webkit-host, beside other jobs, so upper
+  bounds: tier 2 about 131 s an order, the giants 472 s against 325 s with 4.29 s of prediction against 2.72 s. Firefox:
+  tier 2 forward 98 s under load, the rows' prediction time 58.2 s against X1's 55.6 s. **Firefox's giants tripped it on
+  the inspected path**: 15.3 s of prediction against 4.2 s (3.6×), because `inspectLine` reads every offset of 18,000 to
+  47,000 words and the memo answered a word's later occurrences. Their plain path is 1.28× (4.0 s against 3.2 s), and
+  the layouts are equal on all 9. The orchestrator accepted it: the tripped path is the inspected one, and what would
+  answer it is a store found by string, which the plan keeps for after profiling (DESIGN.md §4.7).
 
 ### The known tail
 
@@ -670,7 +735,10 @@ U+FFFC cluster reported as predicted (14 cases), Firefox's 209 history-dependent
 cases that fail in both orders and pass alone, the wider signature of Chrome's hang, `src/paint.ts` outside tier 1, one Mac
 at DPR 2, and the traces of the half-width ideographic full stop and of WebKit's inline box width a float32 step off.
 After the line the Blink string storage fix added 3 named cases to the U+FFFC item (the x of U+FFFC itself, in the facts
-configuration) and one painter item for the 2 open painter rows of `twins` (63 items, 594 named cases).
+configuration) and one painter item for the 2 open painter rows of `twins` (63 items, 594 named cases). At the X2 merge
+that painter item's note took its root cause (an RTL block enables bidi in Blink, so the painted line's brackets take
+script Common), and one history item was added for 5 Firefox `suite/measurement` cases whose native widths differ under
+the plain predictor without being marked history-dependent (64 items, 599 named cases).
 
 ## Running
 
@@ -995,7 +1063,9 @@ predictor gives and the process languages the driver gave, and the `ParagraphLay
 `GivenFacts.build`, beside the width every slot got. The page records an `EnginePrediction`: the layout, `measure` with
 the adapter's counts of contexts and calls (`memoHits` was the library's count of the lookups its memo answered, which the
 lab no longer sees: the field keeps the row's shape and is 0), and `observation`, the rects the observation port expects,
-or the error it threw. `paint` paints the same layout, with the width back in every line's slot.
+or the error it threw. A `LayoutPrediction` also carries `painter`, no part of a row: the library's painter over what
+`linePieces` gave of each line, the slot with its width and the line box flag, with the engine's painting rules. `paint`
+and `limits` call it, so they paint and name the limits of the same filled lines.
 
 A predictor swapped in with `--predictor` may return line ranges alone, `{ lines: [{ start, end, width? }], measureLog? }`
 (`baselines/main-predictor.ts` does, and `baselines/plain-predictor.ts`, whose lines have no width). The page records those
