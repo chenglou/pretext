@@ -8,9 +8,15 @@
 // - L3: what a context made after the load measures, which is what a new measurer's contexts measure.
 // One script observation; raw widths only, and the verdicts are written by hand.
 //
-// Verdicts, 2026-09-19 (.artifacts/probes/measurer/font-load): see the probe's output and research notes of the
-// profiling phase's item 1; the library's contract doesn't depend on them (a caller makes a new measurer where it
-// prepares its paragraphs again after its fonts change).
+// Verdicts, 2026-09-19, pinned Chrome 153.0.8010.50, pinned Firefox 156.0 and webkit-host 22625.1.29.11.27
+// (.artifacts/probes/measurer/font-load), `Hamburgefonstiv` at 48px, 433.48px in monospace and 327.79px in Amiri:
+// - L1, L2: Chrome and Firefox measure with the loaded family on the old context, the string it had measured before
+//   included (327.79 where it answered 433.48 before the load; Firefox 327.80 and 433.5). webkit-host's old context keeps
+//   the fallback for both strings (432.07 before and after, 604.90 for the unseen string), and still does after the same
+//   font string is assigned again; assigning another font string and then the first one again makes it 327.79.
+// - L3: a context made after the load measures with the family in all three.
+// So in WebKit a kept context is stale after a font loads, and in every engine a font check's kept answer and a prepared
+// paragraph's widths are: the caller makes a new measurer where it prepares its paragraphs again after its fonts change.
 //
 // Run under the browser lock (from the worktree):
 //   python3 .artifacts/session/with-browser-lock.py measurer-font-load -- bun rebuild/probes/runner.ts --browser=chrome \
