@@ -3,11 +3,11 @@
   "kind": "replay",
   "browser": "chrome",
   "config": "facts",
-  "inputsSha256": "c93f4dc2fce785f8636d8dc3a61444328ad29959e4fab998d6e040b09559c6ac",
-  "commit": "f072dc4d1982530e4eb0f0513f634e5661106c92",
+  "inputsSha256": "5ae59c20c5067dd9971660ce39ff5cb04044a6c23eb81262e2c5591a555fb050",
+  "commit": "d7df936d816728b328ae21d5dad73959e9b161e3",
   "dirty": [],
-  "createdAt": "2026-09-19T18:19:40.958Z",
-  "reason": "Correctness round 5 (research/CORRECTNESS-ROUND-5.md): fixes for cases main Pretext passes and the rebuild failed. Gecko: which glyph of a kerned pair carries the adjustment, learned from Canvas through app-unit rounding, with a lazy scan on plain paragraphs and the critic's fix to it; U+200D at the start of a Canvas string takes the first font; a boundary U+00A0 measured as itself; paragraphGaps returns copies. WebKit: the code path is the measured string's, also in the control-character-width gap condition; a box's space width measured as the box is made. Blink: the pair window reaches past a cluster of only default-ignorables and marks. Recorded again at 3d0a5b3 in both orders and both configurations in the three browsers: 0 transitions from a pass to a failure, exact values not worse, gates lost 0; Chrome 4 transitions on one case, webkit-host 3 painter rows that lose one covering gap, Firefox 598 and 22 transitions (new passes and covered failures); the plain predictor's runs differ from the usual ones only in cases the ledgers mark history-dependent. The run ledgers carry the previous references' history-dependent cases (Firefox's fallback-font process has two states, so a recording can land both orders in one).",
+  "createdAt": "2026-09-19T21:22:41.642Z",
+  "reason": "the fresh-eyes follow-up merge (d7df936): Blink creates a box fragment for a span of empty items and a collapsible space, which moves painter rows in 494 cases, and system-ui is matched as a CSS keyword; recorded again at the merge",
   "replaced": [
     {
       "commit": "a2cfb9094e289e7076db28d5ef8de80ea1a10a6f",
@@ -62,6 +62,12 @@
       "createdAt": "2026-09-19T16:28:43.022Z",
       "reason": "The re-architecture's last deletions (the memoized measuring API and the log left rebuild/src/measure): every prediction and every question is the same in tier 1; files under src/measure changed, so the string storage rule sent Chrome's cases to tier 2, where Chrome ran forward in both configurations with 0 transitions, exact values unchanged and the gates lost 0. The reference moves to the merge commit so that tier 1 exits 0 again.",
       "cases": 67065
+    },
+    {
+      "commit": "f072dc4d1982530e4eb0f0513f634e5661106c92",
+      "createdAt": "2026-09-19T18:19:40.958Z",
+      "reason": "Correctness round 5 (research/CORRECTNESS-ROUND-5.md): fixes for cases main Pretext passes and the rebuild failed. Gecko: which glyph of a kerned pair carries the adjustment, learned from Canvas through app-unit rounding, with a lazy scan on plain paragraphs and the critic's fix to it; U+200D at the start of a Canvas string takes the first font; a boundary U+00A0 measured as itself; paragraphGaps returns copies. WebKit: the code path is the measured string's, also in the control-character-width gap condition; a box's space width measured as the box is made. Blink: the pair window reaches past a cluster of only default-ignorables and marks. Recorded again at 3d0a5b3 in both orders and both configurations in the three browsers: 0 transitions from a pass to a failure, exact values not worse, gates lost 0; Chrome 4 transitions on one case, webkit-host 3 painter rows that lose one covering gap, Firefox 598 and 22 transitions (new passes and covered failures); the plain predictor's runs differ from the usual ones only in cases the ledgers mark history-dependent. The run ledgers carry the previous references' history-dependent cases (Firefox's fallback-font process has two states, so a recording can land both orders in one).",
+      "cases": 67065
     }
   ],
   "sets": {
@@ -81,12 +87,12 @@
       {
         "file": "smoke/part0-001.ndjson.zst",
         "cases": 130,
-        "sha256": "2a8bcf397b83c9c13dff6635de2008e837b7a5d2686d434b6edb84d593774aeb"
+        "sha256": "4494a677f193bcebf600fbf6c04edc9dac2e37ab212ad214c602f4939c83135f"
       },
       {
         "file": "smoke/part0-002.ndjson.zst",
         "cases": 58,
-        "sha256": "5226d985f33c9b7e0fbc48e25e16a1c8d825370fbc2cb27cdeec210ce525daf9"
+        "sha256": "6f3f372469f40949f62a0ca4079a1653c162eaac085200be1629a8c39b25aa63"
       }
     ],
     "runs": [
@@ -118,22 +124,22 @@
       {
         "file": "runs/part0-005.ndjson.zst",
         "cases": 134,
-        "sha256": "85a81f3961dbfa63feccbdfa18d07d1c1dc909539654161f428131e0e16392d4"
+        "sha256": "16ce8cea1db0a52bd68230e8b20100fc8ade5cf6594fcf3b699bcc52eba4db78"
       },
       {
         "file": "runs/part0-006.ndjson.zst",
         "cases": 119,
-        "sha256": "d315339f8a3d896a02e88701a91defa4edef46d2a835e4285e6f4faefae3828f"
+        "sha256": "b97e00cae9f5cd3d3d6f3cc56e4e3f6e18c44e0668b42a1d419e20bace57d661"
       },
       {
         "file": "runs/part0-007.ndjson.zst",
         "cases": 99,
-        "sha256": "7cd59d029735c0fe223be5d65aed22a8acd0f13d5a6bfcdc9f0adbc2cb347a49"
+        "sha256": "a61836346cb292bd61a20a20898288a6aac1518cd2ea9d81c154dc55babc5ebf"
       },
       {
         "file": "runs/part0-008.ndjson.zst",
         "cases": 113,
-        "sha256": "78807a45772873aaabf3d5641c48752028e2bfe5a8e49a90ce862539b9347720"
+        "sha256": "399a37c71d5bb3f649ff99f611b872129020d22c25589764f75f5ce5927cd6ed"
       },
       {
         "file": "runs/part0-009.ndjson.zst",
@@ -158,17 +164,17 @@
       {
         "file": "runs/part0-013.ndjson.zst",
         "cases": 125,
-        "sha256": "53be38ee2895af1cfee5ef50b0576e297e34af006552144ef7ff0294627407ea"
+        "sha256": "50a0e16c097b1a5a256bcc8c45289a05d802fd4be1953dae3cfed2543c94387b"
       },
       {
         "file": "runs/part0-014.ndjson.zst",
         "cases": 163,
-        "sha256": "a641060a92b0bb443a04e0661a57dbb9c3205c6aa79b76ff4d3f834f1747cdcb"
+        "sha256": "23f66083d7587f6385f342c57db2e1074fe0aac1dc5c1295b0a89c84eeb478e6"
       },
       {
         "file": "runs/part0-015.ndjson.zst",
         "cases": 161,
-        "sha256": "c8e3307cf905fe75de211861847892ceb45dd3265d3b514d60d7840ccc4c18bb"
+        "sha256": "fe8fd467a6024cb21a301799e0a2919cc68f7c8e935080ca7f63513048ae7602"
       },
       {
         "file": "runs/part0-016.ndjson.zst",
@@ -183,17 +189,17 @@
       {
         "file": "runs/part0-018.ndjson.zst",
         "cases": 141,
-        "sha256": "ab09c926a15816cf188a687ca46679b80148f9c5355dbe2aba264dbb7f8eb7f1"
+        "sha256": "f267449bd7be628bb19562a5d2de80b11f02f1481ab9caed45dac54d712128db"
       },
       {
         "file": "runs/part0-019.ndjson.zst",
         "cases": 140,
-        "sha256": "019e605506c209f0363bbecc38eb8aadc947da1751f98c55e04ed6c0a74b6611"
+        "sha256": "55dc7e46b2dd2e1d6b3725711ab6d7760961b99b875c8bfc223dbf889bf3283b"
       },
       {
         "file": "runs/part0-020.ndjson.zst",
         "cases": 134,
-        "sha256": "208f966f9a0f5a27b08257e586f5dc9563ee4e40d3b2dfe26551df1a60f88637"
+        "sha256": "08a81f10aa363be0435d0c841346a6b579988aea236679fe033a726743578992"
       },
       {
         "file": "runs/part0-021.ndjson.zst",
@@ -220,12 +226,12 @@
       {
         "file": "ws/part0-003.ndjson.zst",
         "cases": 188,
-        "sha256": "f15713c5adf57f4bf71d76861cacdf2028126b209a16afe8ebc2f1c6ef1f8896"
+        "sha256": "b544d1cdd64537ce188f9e55769355b1d30d450b61f6782b9022a41c73f52ebf"
       },
       {
         "file": "ws/part0-004.ndjson.zst",
         "cases": 172,
-        "sha256": "d09fe849cffe1563a293299d71a50351a42e7373f14ea31e87496395b5c8ed01"
+        "sha256": "a34cda646a8b90d69c6fd471026df86163a640c540abf62bb0e37a1bbb25dfd9"
       },
       {
         "file": "ws/part0-005.ndjson.zst",
@@ -329,7 +335,7 @@
       {
         "file": "rich-prewrap/part0-003.ndjson.zst",
         "cases": 198,
-        "sha256": "55426702bade4cd17b93aa18359bd69b7ba3b5474d23415a5be0fad1f94b9c51"
+        "sha256": "96eba3f7d23461c3c2b1551dd42c4d77bc9fe42beceee81bf6641f7e2be25e4e"
       },
       {
         "file": "rich-prewrap/part0-004.ndjson.zst",
@@ -893,7 +899,7 @@
       {
         "file": "suite-sample/part2-019.ndjson.zst",
         "cases": 161,
-        "sha256": "aaf56538f0e7f4a2e3de283f4e96c2c18acf4b516014824fa03fd7f69cf37b4d"
+        "sha256": "841c0dfa2f12387d07c92a6635d74795ea987eb47548cf2e2ecd15af54655175"
       },
       {
         "file": "suite-sample/part2-020.ndjson.zst",
@@ -1606,17 +1612,17 @@
       {
         "file": "heldout-runs/part0-005.ndjson.zst",
         "cases": 129,
-        "sha256": "1753d3cd6929cb8a6b15e6e85fe21a5b9731b7dfe4ee866a164213c7889e715d"
+        "sha256": "b5a2a9a19f0e114ee05ef7ea566a09785296d5839749a611b77d2910ce7673c7"
       },
       {
         "file": "heldout-runs/part0-006.ndjson.zst",
         "cases": 141,
-        "sha256": "062ebfac9b6ec056910eb4e77f5da56fd6d67ede28b40a1ec54df6e9e1539cc9"
+        "sha256": "8ecbd2650ed89f5cf0f0fb7c7be7a9aa2724e2b61fa08ca63b1090313ec98819"
       },
       {
         "file": "heldout-runs/part0-007.ndjson.zst",
         "cases": 126,
-        "sha256": "83993a0bda991b28071533231623fc610f82da3f56854ce20b126b83f55ab422"
+        "sha256": "797c206fe210cb5e641efcdd46d909c278bda1808cd456b6d7d32dfd76e4da50"
       },
       {
         "file": "heldout-runs/part0-008.ndjson.zst",
@@ -1641,22 +1647,22 @@
       {
         "file": "heldout-runs/part0-012.ndjson.zst",
         "cases": 107,
-        "sha256": "87ef864ece539711bc41bc32c9afafe0ad5b5668732e841eba0964ff2107ee6d"
+        "sha256": "37b27c21866eff3f0e73dffecda06339d859752b1d65915bb75f812f0d4844d2"
       },
       {
         "file": "heldout-runs/part0-013.ndjson.zst",
         "cases": 130,
-        "sha256": "93c515d1377b7e0557bb0677889b74bad248203a8498cd13f4824d876f42f5e5"
+        "sha256": "48111b57ea9523d640d7969a676b48ec2e97d6cfc9d0478e63d699123cb9ba7a"
       },
       {
         "file": "heldout-runs/part0-014.ndjson.zst",
         "cases": 113,
-        "sha256": "b4034dee81a2fbc4b49f82f463d591080d0a5b1c0d633550199aec7ecc18be56"
+        "sha256": "b9f8b111efadf2e32f548700cf3a1cdf32a562eb6cff330e8acfb43c139a813a"
       },
       {
         "file": "heldout-runs/part0-015.ndjson.zst",
         "cases": 157,
-        "sha256": "afd2fae18cd8f0693ab140c2cd7885cc6ccd09190a283160744cc1e2a2890bdb"
+        "sha256": "40c9a43c6643cc2f9048277ced8132b44942502f7d4be98c2998b9387f1e2ec2"
       },
       {
         "file": "heldout-runs/part0-016.ndjson.zst",
@@ -1666,22 +1672,22 @@
       {
         "file": "heldout-runs/part0-017.ndjson.zst",
         "cases": 134,
-        "sha256": "223798470d533fd4705038789219d8a0009c88d0f6a408a578b4136c71c2d7ef"
+        "sha256": "e3b0b93394df99e8bc1267ab487f7a48c6cca5ba63c8da6e8a68946f7793717f"
       },
       {
         "file": "heldout-runs/part0-018.ndjson.zst",
         "cases": 132,
-        "sha256": "9084ec6cbac7bd9d5125c8a16f37d146e818ebb357d932e10271de804d5c1b3e"
+        "sha256": "84379c15555e2d4bbb28274f05ff9ecc937d58a1ec52384ecd6a60d184879265"
       },
       {
         "file": "heldout-runs/part0-019.ndjson.zst",
         "cases": 138,
-        "sha256": "f9814195b85287fc3d9253563e8d45f856b052f9ea860524695d69d93081c8d5"
+        "sha256": "b00453699b8301c0b6c04ef58c469771b263ec717df4d09af471e5835ecbbc36"
       },
       {
         "file": "heldout-runs/part0-020.ndjson.zst",
         "cases": 140,
-        "sha256": "732f71e72470fbc28ef1dfe57b83fc13d6848122e510d985e7d9990691362222"
+        "sha256": "16f261e0c7d06fe4fa8009d08db0c9809e2b2f9ae218ae1ba4f17d4feec7abfc"
       }
     ],
     "heldout-ws": [
@@ -1698,17 +1704,17 @@
       {
         "file": "heldout-ws/part0-002.ndjson.zst",
         "cases": 162,
-        "sha256": "64c80024766d6816a2389cb9e990edce8b961ea43a966308f063337a0af8b3bb"
+        "sha256": "0652a5976c474de6a1871188d44aa72d4f04ab54956e2f397f5c57328fe7594d"
       },
       {
         "file": "heldout-ws/part0-003.ndjson.zst",
         "cases": 212,
-        "sha256": "1efc169bccc65328ad4e5335437105c632a9755297df1b9ac9baa036c3fc036d"
+        "sha256": "f4ea2148951d408a182f10b52da889450218940937fa0904f2ef63fc7b9f88d0"
       },
       {
         "file": "heldout-ws/part0-004.ndjson.zst",
         "cases": 147,
-        "sha256": "80d4bedc3ec7182c117af032e46665d47f5626cb650ff51f577a07d1b48949e0"
+        "sha256": "266f9a5639957721ea9c211ad7d441be4ce119af64dd00b141d158c37e71a584"
       },
       {
         "file": "heldout-ws/part0-005.ndjson.zst",
@@ -2098,7 +2104,7 @@
   },
   "cases": 67065,
   "ledger": {
-    "headerSha256": "f2e54a4a3e5333c6ec589364c3043d1f4fcb28f0c81f0d2ef5abfbc8f9de7b0b",
-    "entriesSha256": "03c48fb8e63c82dc5ae31d771db4116b750083286c5ae58a62a8bf065905e578"
+    "headerSha256": "dc0557bee86c7ec0d802053ac15460de04c23c3460b43e6cba180c6b904dd6dd",
+    "entriesSha256": "33e5e15902e6efe30154070656d327cc2c98bc276e655c8e7d657492efc6e741"
   }
 }

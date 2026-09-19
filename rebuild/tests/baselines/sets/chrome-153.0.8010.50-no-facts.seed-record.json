@@ -1,12 +1,12 @@
 {
-  "staged": ".artifacts/tests/staged-seeds-cr5-20260919/chrome-no-facts/chrome-153.0.8010.50-no-facts.json",
+  "staged": "../../pretext-rebuild/.artifacts/tests/staged-seeds-fu-20260919/chrome-153.0.8010.50-no-facts.json",
   "against": "rebuild/tests/baselines/sets/chrome-153.0.8010.50-no-facts.json",
   "counts": {
     "cases": 66244,
     "passPairs": {
       "lineCount": 65901,
-      "breaks": 65830,
-      "widths": 62371,
+      "breaks": 65831,
+      "widths": 62372,
       "painter": 59652
     },
     "historyDependentCases": 0,
@@ -20,15 +20,11 @@
   "leftWithTheirCase": [],
   "gained": [
     [
-      "c-bff5270008f33766",
-      "lineCount"
-    ],
-    [
-      "c-bff5270008f33766",
+      "c-a37545c096e939be",
       "breaks"
     ],
     [
-      "c-bff5270008f33766",
+      "c-a37545c096e939be",
       "widths"
     ]
   ],
