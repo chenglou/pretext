@@ -3,7 +3,7 @@
 // an inspected paragraph, what gaps.ts and history.ts keep of it. Cited at WebKit-7625.1.29.11.27 under Source/WebCore/:
 // IIB = layout/formattingContexts/inline/InlineItemsBuilder.cpp.
 import type { WebKitEnvironment } from '../../env.js'
-import { contextFor, width as canvasWidth } from '../../measure/canvas.js'
+import { contextFor, width as canvasWidth, type Context } from '../../measure/canvas.js'
 import { canvasFont } from '../../measure/font.js'
 import { familyNames, genericFamilyUnder, namedFamily, standardFamilyOf, type FamilyName } from './fonts.js'
 import { indexContent, langUnder, styleUnder } from '../../content.js'
@@ -211,13 +211,13 @@ function isEligibleForSimplifiedInlineLayoutByStyle(s: WebKitStyle): boolean {
 
 // `inspect` says whether inspectLine and paragraphGaps answer on this paragraph (index.ts): an inspected paragraph keeps what
 // gaps.ts and history.ts read, and a plain one measures what deciding its lines takes and nothing else.
-export function prepareWebKit(paragraph: Paragraph, env: WebKitEnvironment, inspect: boolean): WebKitPrepared {
+export function prepareWebKit(paragraph: Paragraph, env: WebKitEnvironment, inspect: boolean, contexts: Context[]): WebKitPrepared {
   const zoom = env.pageZoom ?? 1
   const style = webkitStyle(paragraph, paragraph, zoom)
   const index = indexContent(paragraph)
   const p: WebKitPrepared = {
     env, zoom, icuDefaultLocale: env.icuDefaultLocale ?? ICU_DEFAULT_LOCALE_WITHOUT_ENVIRONMENT, style, elements: [],
-    builder: 'line-builder', boxes: [], runStarts: [], items: [], contexts: [], inspect: inspect ? newInspection(env) : null,
+    builder: 'line-builder', boxes: [], runStarts: [], items: [], contexts, inspect: inspect ? newInspection(env) : null,
   }
   const styleOf = (parent: number): WebKitStyle => {
     if (parent < 0) return style

@@ -14,7 +14,7 @@ import type { WebKitLineGeometry, WebKitLineStart } from './engines/webkit/geome
 import * as webkit from './engines/webkit/index.js'
 import type { WebKitPrepared } from './engines/webkit/types.js'
 import { PINNED_BUILDS, SOURCE_IDENTICAL_BUILDS, type Environment } from './env.js'
-import { withLearnedFontFacts } from './measure/font-checks.js'
+import { newMeasurer, withLearnedFontFacts, type Measurer } from './measure/font-checks.js'
 import type { Gap, LineInspectionOf, LinePieces, LineSlot, Paragraph } from './model.js'
 
 export type {
@@ -28,6 +28,7 @@ export type {
   TextLeaf, TextStyle, TextStyleOf, VerticalAlign, WhiteSpace, WordBreak, WordBreakElement,
 } from './model.js'
 export { NO_BOX_EDGE, UNKNOWN_FONT_FACTS } from './model.js'
+export { newMeasurer, type Measurer } from './measure/font-checks.js'
 export type { BlinkGlyphCluster, BlinkItem, BlinkLineGeometry, BlinkMappingUnit } from './engines/blink/geometry.js'
 export type { GeckoCharacter, GeckoFrameGeometry, GeckoLineGeometry, GeckoTextFrame } from './engines/gecko/geometry.js'
 export type { WebKitDisplayBox, WebKitLineGeometry, WebKitTextBox } from './engines/webkit/geometry.js'
@@ -65,12 +66,14 @@ export type LineInspection = LineInspectionOf<BlinkLineGeometry> | LineInspectio
 // The one place a paragraph's fonts reach the engines. A font fact the caller left null is asked of Canvas first, where a
 // check is sound for the engine (measure/font-checks.ts, with what the engine's port asks for, engines/<engine>/checks.ts);
 // the engines read FontFacts as the caller had given them. `inspect` prepares the paragraph for inspectLine and
-// paragraphGaps, which the lab reads; a plain paragraph gives lines and pieces alone.
-export function prepare(paragraph: Paragraph, env: Environment, inspect: boolean): Prepared {
+// paragraphGaps, which the lab reads; a plain paragraph gives lines and pieces alone. `measurer` holds the Canvas contexts
+// and the checks' answers (measure/font-checks.ts Measurer, with its lifetime): a page makes one with newMeasurer() and
+// hands it to every call, and a call that is given none makes its own, so nothing outlives its prepared paragraph.
+export function prepare(paragraph: Paragraph, env: Environment, inspect: boolean, measurer: Measurer = newMeasurer()): Prepared {
   switch (env.engine) {
-    case 'blink': return { engine: 'blink', state: blink.prepare(withLearnedFontFacts(paragraph, blinkFontChecks(env)), env, inspect) }
-    case 'webkit': return { engine: 'webkit', state: webkit.prepare(withLearnedFontFacts(paragraph, webkitFontChecks), env, inspect) }
-    case 'gecko': return { engine: 'gecko', state: gecko.prepare(withLearnedFontFacts(paragraph, geckoFontChecks), env, inspect) }
+    case 'blink': return { engine: 'blink', state: blink.prepare(withLearnedFontFacts(paragraph, blinkFontChecks(env), measurer), env, inspect, measurer.contexts) }
+    case 'webkit': return { engine: 'webkit', state: webkit.prepare(withLearnedFontFacts(paragraph, webkitFontChecks, measurer), env, inspect, measurer.contexts) }
+    case 'gecko': return { engine: 'gecko', state: gecko.prepare(withLearnedFontFacts(paragraph, geckoFontChecks, measurer), env, inspect, measurer.contexts) }
   }
 }
 

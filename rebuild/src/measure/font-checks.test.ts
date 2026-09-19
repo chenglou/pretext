@@ -7,7 +7,7 @@ import { geckoFontChecks } from '../engines/gecko/checks.ts'
 import { webkitFontChecks } from '../engines/webkit/checks.ts'
 import { PINNED_BUILDS, type BlinkEnvironment, type Environment, type GeckoEnvironment, type WebKitEnvironment } from '../env.ts'
 import { UNKNOWN_FONT_FACTS, type FontDecl, type FontFacts, type InlineNode, type Paragraph } from '../model.ts'
-import { withLearnedFontFacts, type FontChecks } from './font-checks.ts'
+import { newMeasurer, withLearnedFontFacts, type FontChecks } from './font-checks.ts'
 import { prepare } from '../index.ts'
 
 const BEH = '\u0628'
@@ -104,7 +104,7 @@ function checksOf(env: Environment): FontChecks {
 }
 
 function learn(family: string, text: string, env: Environment, facts?: FontFacts): FontFacts {
-  return withLearnedFontFacts(paragraph(family, text, facts), checksOf(env)).font.facts
+  return withLearnedFontFacts(paragraph(family, text, facts), checksOf(env), newMeasurer()).font.facts
 }
 
 describe('primaryFamily', () => {
@@ -244,7 +244,7 @@ describe('the checks\' contexts', () => {
     for (let e = 0; e < envs.length; e++) {
       // The checks run before the engine, so their contexts are the first ones a prepare makes.
       made = []
-      withLearnedFontFacts(paragraph('Prop', everyCheck), checksOf(envs[e]!))
+      withLearnedFontFacts(paragraph('Prop', everyCheck), checksOf(envs[e]!), newMeasurer())
       const checks = made
       made = []
       prepare(paragraph('Prop', everyCheck), envs[e]!, false)
@@ -268,21 +268,36 @@ describe('one call', () => {
 
   test('resolves a declaration once, and declarations of several sizes share their questions', () => {
     const p = paragraph('Prop', everyCheck)
-    const first = withLearnedFontFacts(p, blinkFontChecks(blink(2))).font.facts
+    const first = withLearnedFontFacts(p, blinkFontChecks(blink(2)), newMeasurer()).font.facts
     const asked = calls
-    const same = withLearnedFontFacts({ ...p, content: [spanOf(p, { ...p.font }, null)] }, blinkFontChecks(blink(2)))
+    const same = withLearnedFontFacts({ ...p, content: [spanOf(p, { ...p.font }, null)] }, blinkFontChecks(blink(2)), newMeasurer())
     expect(same.content[0]!.kind === 'span' && same.content[0]!.font.facts).toEqual(first)
     expect(calls).toBe(2 * asked)
     // Another size asks only the check that reads the size.
-    withLearnedFontFacts({ ...p, content: [spanOf(p, { ...p.font, size: 20 }, null)] }, blinkFontChecks(blink(2)))
+    withLearnedFontFacts({ ...p, content: [spanOf(p, { ...p.font, size: 20 }, null)] }, blinkFontChecks(blink(2)), newMeasurer())
     expect(calls).toBe(3 * asked + 2)
+  })
+
+  test('a measurer that outlives the call answers the next paragraphs without Canvas, each by what its own text needs', () => {
+    const p = paragraph('Prop', everyCheck)
+    const plain = paragraph('Prop', 'ab')
+    const plainAlone = withLearnedFontFacts(plain, blinkFontChecks(blink(2)), newMeasurer()).font.facts
+    const measurer = newMeasurer()
+    const first = withLearnedFontFacts(p, blinkFontChecks(blink(2)), measurer).font.facts
+    const askedBefore = calls
+    const madeBefore = made.length
+    expect(withLearnedFontFacts(p, blinkFontChecks(blink(2)), measurer).font.facts).toEqual(first)
+    // A paragraph whose text asks less gets the facts a call of its own gives, not the first paragraph's.
+    expect(withLearnedFontFacts(plain, blinkFontChecks(blink(2)), measurer).font.facts).toEqual(plainAlone)
+    expect(plainAlone).not.toEqual(first)
+    expect([calls - askedBefore, made.length - madeBefore]).toEqual([0, 0])
   })
 
   test('a question several checks share is asked once', () => {
     // WebKit's fixed-pitch check reads the space under the list the primary family check measured it under, and both
     // declarations' primary family checks read the space under the two generics alone.
     const p = paragraph('"Mono"', 'ab')
-    withLearnedFontFacts({ ...p, content: [spanOf(p, { ...p.font, family: '"Prop"' }, null)] }, webkitFontChecks)
+    withLearnedFontFacts({ ...p, content: [spanOf(p, { ...p.font, family: '"Prop"' }, null)] }, webkitFontChecks, newMeasurer())
     const spaceUnder = (font: string): number => asked.filter(a => a.text === ' ' && a.context.font === font).length
     expect([spaceUnder('normal 400 16px "Mono", serif'), spaceUnder('normal 400 16px monospace'), spaceUnder('normal 400 16px serif')]).toEqual([1, 1, 1])
     for (let i = 0; i < asked.length; i++) for (let k = 0; k < i; k++) expect(asked[k]!.context === asked[i]!.context && asked[k]!.text === asked[i]!.text).toBe(false)
@@ -290,7 +305,7 @@ describe('one call', () => {
 
   test('spans take their own declaration and language', () => {
     const p = paragraph('Prop', 'ab')
-    const out = withLearnedFontFacts({ ...p, content: [spanOf(p, { ...p.font, family: 'Mono' }, 'ja')] }, blinkFontChecks(blink(2)))
+    const out = withLearnedFontFacts({ ...p, content: [spanOf(p, { ...p.font, family: 'Mono' }, 'ja')] }, blinkFontChecks(blink(2)), newMeasurer())
     const learned = out.content[0]!
     expect(learned.kind === 'span' && learned.font.facts.primaryFamily).toBe('Mono')
     expect(made.some(c => c.lang === 'ja' && c.font.includes('Mono'))).toBe(true)

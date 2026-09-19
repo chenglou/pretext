@@ -76,7 +76,7 @@ function paragraph(runs: Array<[string, FlatNode]>, overrides: Partial<Sized> = 
 }
 
 function layout(p: Sized, insets: Insets[] = [], environment: WebKitEnvironment = env): { lines: WebKitLine[]; gaps: string[]; belowFloats: number[]; fonts: string[] } {
-  const prepared = prepare(p, environment, true)
+  const prepared = prepare(p, environment, true, [])
   const { lines, belowFloats } = everyLine({
     first: firstLine(prepared), fill: (start, slot) => fillLine(prepared, start, slot), inspect: line => inspectLine(prepared, line), pieces: line => linePieces(prepared, line),
   }, p.width, insets)
@@ -223,7 +223,7 @@ describe('environment facts (DESIGN.md §1.4)', () => {
   })
 
   test('page zoom not given reports page-zoom on the paragraph', () => {
-    expect(paragraphGaps(prepare(paragraph([['a', 'text']]), { ...env, pageZoom: null }, true)).map(g => g.gap)).toContain('page-zoom')
+    expect(paragraphGaps(prepare(paragraph([['a', 'text']]), { ...env, pageZoom: null }, true, [])).map(g => g.gap)).toContain('page-zoom')
   })
 
   test('a quoted "system-ui" names a family, not the system design (research/CHARTER-CRITIC.md item 9)', () => {
@@ -505,7 +505,7 @@ describe('plain and inspected paragraphs (DESIGN.md §2.9; gaps.ts)', () => {
   // Every fill result with its pieces, and what the paragraph asked of Canvas.
   function walk(p: Sized, inspect: boolean, insets: Insets[] = []) {
     asked = []
-    const prepared = prepare(p, env, inspect)
+    const prepared = prepare(p, env, inspect, [])
     const out: unknown[] = []
     let row = 0
     for (let start = firstLine(prepared); start !== null;) {
@@ -527,7 +527,7 @@ describe('plain and inspected paragraphs (DESIGN.md §2.9; gaps.ts)', () => {
   }
 
   test('a plain paragraph answers neither inspectLine nor paragraphGaps', () => {
-    const prepared = prepare(paragraph([['foo bar', 'text']], { width: 30 }), env, false)
+    const prepared = prepare(paragraph([['foo bar', 'text']], { width: 30 }), env, false, [])
     const filled = fillLine(prepared, firstLine(prepared)!, { width: 30, left: 0, right: 0 })
     expect(filled.line.gaps).toBeNull()
     expect(() => inspectLine(prepared, filled.line)).toThrow('prepared plain')
@@ -570,7 +570,7 @@ describe('plain and inspected paragraphs (DESIGN.md §2.9; gaps.ts)', () => {
 
   test('reading a decided line twice, in either order, gives the same pieces, geometry and gaps', () => {
     const p = paragraph([['aaa bbb ccc.', 'text']], { width: 84 })
-    const prepared = prepare(p, env, true)
+    const prepared = prepare(p, env, true, [])
     for (let start = firstLine(prepared); start !== null;) {
       const filled = fillLine(prepared, start, { width: p.width, left: 0, right: 0 })
       if (filled.kind === 'line') {
@@ -590,7 +590,7 @@ describe('Canvas questions: every read asks Canvas, and a value needed twice in 
   // What a plain or an inspected paragraph asked of Canvas, preparing and filling every line at its width.
   function questions(p: Sized, inspect: boolean): string[] {
     asked = []
-    const prepared = prepare(p, env, inspect)
+    const prepared = prepare(p, env, inspect, [])
     for (let start = firstLine(prepared); start !== null;) {
       const filled = fillLine(prepared, start, { width: p.width, left: 0, right: 0 })
       if (inspect) inspectLine(prepared, filled.line)

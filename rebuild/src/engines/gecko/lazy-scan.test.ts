@@ -52,7 +52,7 @@ function lines(width: number, inspect: boolean): [number, number][] {
     font, letterSpacing: 0, wordSpacing: 0, lineHeight: 20, whiteSpace: 'normal', wordBreak: 'normal', overflowWrap: 'anywhere', lineBreak: 'auto',
     tabSize: 8, direction: 'ltr', lang: 'en', textIndent: 0, textAlign: 'start', content: [{ kind: 'text', text: 'Aff' }, span],
   }
-  const prepared = prepareGecko(p, env, inspect)
+  const prepared = prepareGecko(p, env, inspect, [])
   const out: [number, number][] = []
   for (let start = firstLine(prepared); start !== null;) {
     const filled = fillLine(prepared, start, { width, left: 0, right: 0 })
