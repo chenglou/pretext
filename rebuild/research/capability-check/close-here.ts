@@ -1,5 +1,6 @@
 // Capability g, "close the line here": fill a line from a start and end it at a break opportunity the application chose,
-// whatever the width. The function set has no such call. This script proves how near each port is, with two unmerged
+// whatever the width. The function set has no such call (close-by-width.ts gets the same line out of it by choosing the
+// slot's width). This script proves how near each port is to a direct call, with two unmerged
 // changes on this branch that reuse what the ports already have:
 // - WebKit: its builders take their layout range's end as data (Builder.rangeEnd, always the last item today). fillLine
 //   got an optional `endIndex` that is passed there: 3 changed lines in engines/webkit/lines.ts.
