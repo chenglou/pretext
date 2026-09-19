@@ -12,6 +12,121 @@ Earlier rounds (1-11, 2026-09-16) and their failure classes are in this file's g
 its own scorer, baseline and run folders. Since ceiling round 4 the port measures on an OffscreenCanvas always; round 3's
 section describes the detached canvas element it measured on then.
 
+## Correctness round 5, 2026-09-19: main's true passes, a boundary U+00A0, copied gaps
+
+research/MAIN-FACTS-ANALYSIS.md traced the cases main passes and the rebuild fails to three causes in Firefox. This round
+lands the two Canvas can settle, with no supplied font facts, and two parked items. Words: a *cut* is an offset inside a
+word where a line may break; *told* means Canvas decided a value, which then carries no gap; a *stand-in* is a value the
+port returns under an `in-word-prefix` gap. Pinned Firefox 156.0, DPR 2. Probes: `probes/gecko-mainfacts.ts` (M1 to M3 ran
+for the analysis, M4 and M5 this round; `.artifacts/session/cr5-gecko-20260919/probe-m4`, `probe-m5`).
+
+- **U+200D at the start of a Canvas string takes the first font** (a ported rule plus a Canvas recipe; `advance.ts`
+  `sidesAdvance`). `ComputeRanges` starts from the group's first valid font and a join control keeps the previous font
+  (gfxTextRun.cpp:3609-3613, :3311-3318); the letter after a join causer takes that font only where it has the letter
+  (:3320-3325). So a letter a fallback font draws shapes apart from the U+200D the port puts before a joined suffix, in
+  its word-initial form. Where joined sides don't add up, the suffix is measured once more behind its own first letter,
+  U+200C and U+200D, less that letter and U+200C; where the sides add up that way the prefix's side is the value. It stays
+  a stand-in (probe M2: 16 of 18 such cuts are the DOM's advance, 2 are 3 au off). Two questions per joined cut whose
+  sides don't add up.
+- **Which glyph of a kerned pair carries the adjustment, told by Canvas** (Canvas at runtime; `advance.ts`
+  `pairKernedShare`, `placedTotals`, `toldBy`, `askedPlacement`, `sameFace`). Gecko rounds each glyph's advance to app
+  units (gfxHarfBuzzShaper.cpp:1699-1702), so GPOS's whole adjustment on the first glyph (PairSet.hh:126-127), the kern
+  machine's halves (hb-kern.hh:102-106) and a state machine's whole adjustment on the second glyph
+  (hb-aat-layout-kerx-table.hh:296-333) give totals one app unit apart where the fractions fall so, and widths at the size
+  times 2^k give the fractions. A placement is told only where the other two are struck out; the third placement has no
+  value in the port and only keeps the other two honest. The cut's own pair is tried first. Else probe pairs measured
+  alone in the run's context strike placements out together, once per Canvas context of a prepared paragraph
+  (`GeckoPrepared.pairPlacements`); HarfBuzz chooses GPOS or the kern machine once per face, script and language
+  (hb-ot-shape.cc:131-187). What the probe pairs tell counts for a pair only where Canvas shows one face draws both: a
+  kerned pair is one face's, since a text run is shaped one font range at a time, so a cluster must be a probe letter or
+  measure together with one other than apart (probe M5: a first font that draws only the digits has `11` in halves and
+  `AV` on the first glyph under one declaration, and 0 au across all 30 digit and letter pairs). A stand-in beside a told
+  cut takes the told placement, so the cluster between them keeps one share of each pair.
+- **A plain paragraph's break scan leaves those questions out until they matter** (`advance.ts` `roughAdvanceBefore`,
+  `advanceSlack`; `lines.ts` `breakAndMeasureText`). Both recipes only move what crosses a cut to one side of it, so the
+  advance without them is within that amount, plus 2 au, of the whole one. The scan reads its candidates that way, asks
+  for the whole advance where the bound reaches a fit test, and a line's and a frame's own edges always take it. An
+  inspected paragraph reads everything whole, since its gaps need to know what was told. `overflow-wrap: break-word`
+  makes every cluster of a line's first word a candidate, so without this ordinary chat text paid 30.8 questions a
+  message more (the bench's 200-message smoke, mix: 110.67 → 141.49); with it 110.67 → 110.67.
+- **A boundary U+00A0 is measured as itself.** The DOM shapes it as a word of its own, the character U+00A0
+  (gfxFont.cpp:3834-3861), with the space glyph only where the font has none (gfxHarfBuzzShaper.cpp:113-118). The first
+  port did; a4f23b8 rewrote the literal into U+0020. Probe M4, 249 styles of 83 families: W(U+00A0) isn't W(U+0020) in
+  43 (16px "Hoefler Text" 754 au against 240, Charter 534 against 267, Thonburi 640 against 319, Marion, Skia, "Chalkboard
+  SE", "Myanmar MN"), it is the DOM's advance in 228 where W(U+0020) is in 197, and W(a U+00A0 b) is the sum of its parts
+  in all 249. Of the other 21, 18 are off for the space by the same amount (weight 700 in 15 families without a bold
+  face, the synthetic bold class, and system-ui's 3), and 3 are "Apple Color Emoji" as the first family, where the DOM
+  takes the glyph's device-size advance, 960 au against Canvas's 1260 at 16px: the space measured 960 there, so that
+  declaration was right before and isn't now. No tier case has U+00A0 under it. One question per text run that has a
+  boundary U+00A0.
+- **`paragraphGaps` hands out copies**, as Blink's and WebKit's do: the prepared list's gaps can share an `at`
+  (`prepare.ts` step 7), and a caller could write into the prepared paragraph through what it was handed.
+
+**Main's true passes** (the refresh's Firefox list, 768 cases, `.artifacts/session/main-check-20260919`; this round's
+runs in `.artifacts/session/cr5-gecko-20260919/list-5bf1104`, counted by `list-compare.py` with the refresh's rule):
+
+| | No facts | The lab's facts |
+|---|---|---|
+| Fails line count or breaks, before → after | 254 → 119 | 147 → 115 |
+| Of main's true passes (the rule on the rows), before → after | 202 → 76 | 95 → 72 |
+| The same by the triage's classes of 09-17 | 164 → 68 | 87 → 64 |
+| Passes lost | 0 | 0 |
+
+The 4 cases the headline still fails and the facts pass are under "Times New Roman": `1111({tail`, whose digits measure
+with no probe letter other than apart, and `waffles` under letter spacing three times, where `f` doesn't either. The
+same-face test refuses them; they keep their stand-in and gap. Everything else that remains is the contextual joined
+forms below.
+
+**Not knowable from Canvas, no code: contextual joined forms** (72 of main's true passes with either configuration, and
+the 14 cases lost since round 2). Amiri swaps both glyphs when two letters meet (`بب` is 237 + 741 au at 16px, 182 + 848
+with U+200D between them), so no Canvas string holds the first glyph in that form without the second, and Canvas gives
+totals only. Main's passes there are coincidences of width (research/MAIN-FACTS-ANALYSIS.md, probes 2 and M3), and round
+2's were too: its per-letter advances were about 100 au off, and only each lam-alef pair's sum was right. They stay
+stand-ins under `in-word-prefix`.
+
+**Cost, Canvas questions on the plain path** (no supplied facts):
+
+| | Before | After |
+|---|---|---|
+| The bench's chat smoke, mix, 200 messages from scratch, a message | 110.67 | 110.67 |
+| The same, plain Latin | 82.15 | 82.15 |
+| First layout at a new width, a layout (mix / Latin) | 28.2 / 31.86 | 28.2 / 31.86 |
+| Every tier set in pinned Firefox, the plain predictor's rows, a paragraph | 54.56 | 55.07 |
+| The lab path on the same sets, tier 2's forward rows, a paragraph (no facts / facts) | 114.54 / 115.70 | 120.23 / 117.03 |
+
+On the tier sets 2,822 of 63,771 cases ask more, 11.8 questions more on average, and a median of 0.7 more per line
+where a case asks more; the most is 1,032, a word of 134 letters cut at every letter. 121 ask less, the known two states
+of `suite-sample` part 2's process. Per unit: a kerned cut that a line's edge or a fit test needs asks 3 questions at
+the run's size and 5 at the size times 2^k (the fact's own odd `split` case asks those 5 now instead of 8: 1,444 facts
+cases repeat less); the probe pairs ask 3 questions a pair that doesn't kern and 6 a pair that does, once per Canvas
+context of a prepared paragraph, a median of 30 and 24 over the probed styles, and they end at the first pair that
+kerns where the font isn't linear in the size, as system-ui; the same-face test asks up to 8 per cluster, once. A page-lifetime home would pay the probe
+pairs and the same-face answers once per font declaration and language instead of once per paragraph; they depend on
+nothing else. It isn't built (the measurer's lifetime is the profiling phase's first item).
+
+**What the recipe rests on, and how it stays safe.**
+- *A third placement* (kerx and kern state machines, a GPOS second value record): it is one of the three totals, a
+  pair or a font whose total only it gives is never told, and a placement is told only where it is struck out.
+- *One face places its Latin pairs one way.* The source says so for GPOS against the kern machine (one plan), not for a
+  kerx table that holds both kinds of subtable. None of 1,008 installed faces does otherwise (the critic's offline
+  study). A told placement must also give the pair's own total where the fractions allow. This is the assumption left.
+- *The probe letters and the text's pair in two faces.* Probe M5 builds it. The same-face test refuses such a pair.
+- Offline over the rows of M1 and the critic's G1 (`recipe-offline-strike.py` in the session folder): 759 of 764 told
+  cuts of 881 are the DOM's advance in M1 and 4,231 of 4,245 of 5,114 in G1; of the 19 others 13 are 1 au off in words
+  whose DOM total is 1 au off Canvas's (`gecko/one-shaping-unit-one-app-unit`) and 6 sit in ligatures the ligature tests
+  take first. Today's stand-in is right at 242 and 2,511.
+- Not checked: another device pixel ratio or OS (advances rounded to pixels would fail the linearity test), and
+  `gfx.font_rendering.coretext.enabled`, off by default, under which AAT fonts truncate advances.
+
+| Check | Result |
+|---|---|
+| `bunx tsc --noEmit` for the six projects, `bun test rebuild` | clean; 828 pass (6 new Gecko tests) |
+| tier 1, all six references | Chrome and webkit-host: every case the same. Firefox exit 4, 0 predictions changed: without facts 54,427 the same and 9,344 ask a question the record lacks (by the first one: 5,099 the pair recipe, 2,672 the suffix behind its letter, 1,573 U+00A0); with facts 57,767 the same, 1,444 repeats only, 4,560 new (186, 2,801, 1,573) |
+| `function-set.ts plain`, `pure` | exit 0: 54,427 and 59,211 pass, 0 fail, the rest can't replay; `sweep` on the stand-in Canvas: 63,771 of 63,771 |
+| citations, painter differential | 0 lost; 0 paintings differ (54,427 and 59,211 painted, the rest ask new questions), exit 3 |
+| tier 2, both orders, both configurations (`.artifacts/tests/runs/cr5-gecko`, at 5bf1104; the one source commit after it changes a comment) | exit 0 twice. No facts: 943 transitions, 0 from a pass; line count 14, breaks 42 and widths 142 from a covered failure to a pass, 41 widths from unobserved to a pass and 1 to a covered failure (its breaks pass now), painter 2 to a pass, 289 to a failure covered without `in-word-prefix` and 2 to one that a line's new start adds `limit:script-at-line-start` to; differing predicted values 301 → 239, rect counts 134 → 112, limited values 162,069 → 116,389; gate lost 0, new 241. Facts: 453 transitions, 0 from a pass; 2, 2 and 13 to a pass, 2 widths from unobserved to a pass, one 1 au residual from signature to probed; 744 → 742, 102 → 100, 132,448 → 113,434; gate lost 0, new 19. In both, 74 and 86 cases (87 on widths) go from history-dependent to a pass: `suite-sample`'s and `heldout-suite-sample`'s fallback-font process (`gecko/process-font-fallback-state`), whose two orders saw the same native lines this time |
+| the plain predictor in pinned Firefox, `compare-sets.ts --prediction=line-ranges` | 0 line ranges differ in 63,771 cases; 7 native observations differ (exit 3), all history-dependent in the reference ledger |
+
 ## Re-architecture X3, 2026-09-19: the model clean-up
 
 research/ARCHITECTURE-PLAN-2.md §6 and §8 step 2. No rule, citation, gap condition or probe order moved, and neither a
