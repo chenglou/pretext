@@ -186,8 +186,9 @@ heuristic, or named here.
   a WebKit line where only the sum differs takes as units the nodes whose expected width the port marks limited. The
   scorer checks where a range or a stand-in is, not what the condition's source reading says.
 
-**Facts no check answers (tentpole 3).** `pairKerning` (Canvas totals don't show which glyph carries the adjustment), the
-per-family `coverage`, `ligatures` and `spacingInputs` sets, and `scriptLookups` have no Canvas check. `opticalSizeAxis`
+**Facts no check answers (tentpole 3).** `pairKerning` (in Blink and WebKit Canvas totals don't show which glyph carries
+the adjustment; Gecko asks per offset, below), the per-family `coverage`, `ligatures` and `spacingInputs` sets, and
+`scriptLookups` have no Canvas check. `opticalSizeAxis`
 is never learned as true, stays unknown for the system UI font and for primary families without Latin letters, and can't
 be learned in Gecko at all; `joining` stays unknown for fonts whose joined forms are as wide as isolated ones (Courier New,
 Menlo, Monaco). Without them the defaults stand under their gaps: Blink `script-context` fires on about a third of passing
@@ -197,6 +198,36 @@ font-run edges in Blink read the coverage fact; without it those edges report `f
 the engine's own kind of context (Blink: text-rendering `optimizeLegibility`, part of the font cache key,
 font_description.cc:308-331), so a platform font they make is shared only with the engine's contexts and with a page whose
 text sets `text-rendering: optimizeLegibility`, where the engine's contexts share it too (platform bug A).
+
+Gecko is the exception for `pairKerning` since correctness round 5 (2026-09-19; DESIGN.md §4.4,
+`engines/gecko/advance.ts` `pairKernedShare`). Where the fact isn't given, Canvas tells which glyph of a kerned pair
+carries the adjustment, per offset between two kerned glyphs and never as a fact of the declaration. Gecko rounds each
+glyph's advance to app units, so HarfBuzz's three placements (all on the first glyph, half on each, all on the second)
+can give totals one app unit apart. The adjustment R is what the unit's two measured sides show crossing the offset,
+which the pair measured alone must equal, or be within 2 app units of for halves; the two clusters and the one after
+them must be printable ASCII. Widths at the size times 2^k give the advances before rounding, and the pair's own total
+tells a placement where that one gives R and the other two don't: never near a rounding tie, in a font whose advances
+aren't linear in the size, or for the third placement, for which the port has no value. What it tells is about that pair
+alone. Where it doesn't tell, 16 probe pairs asked once per Canvas context of a prepared paragraph strike placements out
+together, and what they tell counts for a pair only where Canvas shows the probe letters' face draws one of its clusters
+(a kerned pair is one face's) and, where the fractions let it be computed, the told placement gives the pair's own R.
+That path rests on one inference Canvas can't close: a face places all its Latin pairs one way. HarfBuzz chooses between
+GPOS and the kern machine once per face, script and language (hb-ot-shape.cc:131-187); nothing says so for a kerx table
+that holds both subtable kinds or for a GPOS second value record, and a wrong answer there carries no gap
+(`gecko/pair-placement-one-way-per-face` in `rebuild/tests/known-tail.json`). A pair that isn't told stays a stand-in
+under `in-word-prefix`.
+
+WebKit and Blink got no such recipe in the round (DESIGN.md §5). WebKit: what is left of `letter-spacing-ligatures` is a
+pair adjustment no Canvas string gives, the one between two letters that the DOM leaves unligated under letter spacing
+(liga, clig, dlig and hlig off) and Canvas merges. The port measures them apart with U+200C where the measured string
+takes the simple font code path, which since the round is the string's own and not the box's
+(`engines/webkit/measure.ts` `mergedGlyphs`, `isComplexCodePath`), and reports the gap on the pair; a family the
+application declares again with the four features off would give the adjustment, and it is not built. Blink: it keeps
+16.16 advances and rounds no glyph, so no total moves with the placement, and the ink box, `direction`, a bidi override,
+letter spacing and the size times 2^k show neither the placement nor which letters one glyph cluster covers (probe
+blink-cr5 K and L). The round's wider pair window, which reaches past a cluster that holds only default-ignorable
+characters and marks (`engines/blink/shape.ts` `holdsNoBase`), changes which strings give the adjustment, not which
+glyph carries it.
 
 **Failing classes the ports can't settle from Canvas.** Blink: 4 ProbeShantell exact-fit rows depend on which offsets
 HarfBuzz left safe, and 3 `suite/space` Amiri rows on a contextual form's share of a joined pair; both report
@@ -277,7 +308,7 @@ Core Text glyph runs) and ligatures or pair adjustments across a box edge are st
 
 **Tests (tentpoles 4, 5).**
 
-- 21 rule ids carry a `// rule <id>` annotation in source, of 542 current rules, and ids an owner's report gave only as
+- 21 rule ids carry a `// rule <id>` annotation in source, of 549 current rules, and ids an owner's report gave only as
   a row stay provisional in the registry (`declaredBy` says which).
 - The lab's `obligations` family and G0 baselines are derived from main's tests and the final runs; they are measurement
   inputs until each obligation is triaged under tentpole 5. research/MAIN-TRIAGE.md and `rebuild/lab/triage/` hold the
