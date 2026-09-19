@@ -12,27 +12,26 @@ import { isMark } from './props.js'
 import { isSegmentEdge } from './shape.js'
 import type { BlinkPrepared } from './types.js'
 
-// What the facts say about the boundary before a text_content unit: nothing; no glyph cluster covers it; a ligature's
+// What the facts say about the boundary before a text_content unit: nothing (0); no glyph cluster covers it; a ligature's
 // cluster covers it; a listed ligature may cover it (one the facts don't settle: not formed in every context tried, not
 // shaped in every combination, marks between components the facts didn't try).
-export const LIGATURE_UNKNOWN = 0
 export const LIGATURE_NONE = 1
 export const LIGATURE_MERGED = 2
 export const LIGATURE_UNCERTAIN = 3
 
-let otTags: Map<string, string[]> | null = null
-
-// hb_ot_tags_from_language for a locale of one subtag (hb-ot-tag.cc:322-420).
-function otLanguageTags(language: string): string[] {
-  if (otTags === null) {
-    otTags = new Map()
-    const entries = blinkOtLanguageTags.split('|')
-    for (let i = 0; i < entries.length; i++) {
-      const eq = entries[i]!.indexOf('=')
-      otTags.set(entries[i]!.slice(0, eq), entries[i]!.slice(eq + 1).split(',').filter(tag => tag.length > 0))
-    }
+// hb_ot_tags_from_language for a locale of one subtag (hb-ot-tag.cc:322-420): whether `tag` is one of the language's tags,
+// in the generated records, [code, tag, ...] sorted by code.
+function languageHasOtTag(language: string, tag: string): boolean {
+  let lo = 0
+  let hi = blinkOtLanguageTags.length - 1
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1
+    const record = blinkOtLanguageTags[mid]!
+    if (record[0] === language) return record.indexOf(tag, 1) >= 0
+    if (record[0]! < language) lo = mid + 1
+    else hi = mid - 1
   }
-  return otTags.get(language) ?? []
+  return false
 }
 
 // Whether the locale HarfBuzz shapes under (LayoutLocale::HarfbuzzLanguage: the content locale, else the application's) may
@@ -43,10 +42,9 @@ function mayUseOtherLanguageSystem(facts: LigatureFacts, locale: string | null):
   if (locale === null) return true
   const subtags = locale.toLowerCase().split(/[-_]/)
   if (subtags.length > 1) return true
-  const tags = otLanguageTags(subtags[0]!)
   for (let i = 0; i < facts.languageSystems.length; i++) {
     const tag = facts.languageSystems[i]!.split('/')[2]
-    if (tag !== undefined && tags.includes(tag)) return true
+    if (tag !== undefined && languageHasOtTag(subtags[0]!, tag)) return true
   }
   return false
 }
@@ -184,11 +182,9 @@ export function fontFactsOfText(p: BlinkPrepared): { ligature: Uint8Array; fontR
       fontAt.push(f)
       fontRun.fill(f, starts[c]!, starts[c + 1]!)
     }
-    const usable = (f: number): LigatureFacts | null => {
-      if (f < 0) return null
-      const facts = fonts[f]!.ligatures
-      return facts === null || mayUseOtherLanguageSystem(facts, locale) ? null : facts
-    }
+    // Per listed family, its ligature facts where they hold under the locale.
+    const usableFacts = fonts.map(font => font.ligatures === null || mayUseOtherLanguageSystem(font.ligatures, locale) ? null : font.ligatures)
+    const usable = (f: number): LigatureFacts | null => f < 0 ? null : usableFacts[f]!
     // Lookups skip default-ignorable glyphs (hb-ot-layout-gsubgpos.hh:558-571), so a ligature can form over a cluster of
     // them, which the listed strings don't hold: the boundaries next to one stay unknown.
     const ignorable = (c: number): boolean => {

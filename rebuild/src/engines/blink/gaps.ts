@@ -166,10 +166,23 @@ function hasScriptNeutral(p: BlinkPrepared, from: number, to: number): boolean {
   return false
 }
 
-// Scripts HarfBuzz shapes with its default shaper (hb_ot_shaper_categorize, hb-ot-shaper.hh: none of them is in its
-// switch), as UScriptCode numbers with their ISO 15924 codes: Common, Inherited, Bopomofo, Cyrillic, Greek, Han, Hiragana,
-// Katakana, Latin.
-const DEFAULT_SHAPER_SCRIPTS = new Map<number, string>([[0, 'Zyyy'], [1, 'Zinh'], [5, 'Bopo'], [8, 'Cyrl'], [14, 'Grek'], [17, 'Hani'], [20, 'Hira'], [22, 'Kana'], [25, 'Latn']])
+// The ISO 15924 code of a script HarfBuzz shapes with its default shaper (hb_ot_shaper_categorize, hb-ot-shaper.hh: none
+// of them is in its switch), by UScriptCode number: Common, Inherited, Bopomofo, Cyrillic, Greek, Han, Hiragana, Katakana,
+// Latin. Null for every other script.
+function defaultShaperScript(script: number): string | null {
+  switch (script) {
+    case 0: return 'Zyyy'
+    case 1: return 'Zinh'
+    case 5: return 'Bopo'
+    case 8: return 'Cyrl'
+    case 14: return 'Grek'
+    case 17: return 'Hani'
+    case 20: return 'Hira'
+    case 22: return 'Kana'
+    case 25: return 'Latn'
+    default: return null
+  }
+}
 
 // Whether HarfBuzz shapes the character at text_content unit t alike under the two scripts: the font that draws it, by the
 // declaration's coverage facts, selects the same GSUB and GPOS lookups for both (ListedFontFacts.scriptLookups: scripts of
@@ -179,9 +192,9 @@ const DEFAULT_SHAPER_SCRIPTS = new Map<number, string>([[0, 'Zyyy'], [1, 'Zinh']
 // than the paragraph changes no glyph and no advance. Without the facts, or under a script with a shaper of its own
 // (Arabic, Hebrew, Thai, Hangul, the Indic and USE scripts), the difference stays a condition.
 function shapesAlike(p: BlinkPrepared, t: number, canvasScript: number, domScript: number): boolean {
-  const a = DEFAULT_SHAPER_SCRIPTS.get(canvasScript)
-  const b = DEFAULT_SHAPER_SCRIPTS.get(domScript)
-  if (a === undefined || b === undefined) return false
+  const a = defaultShaperScript(canvasScript)
+  const b = defaultShaperScript(domScript)
+  if (a === null || b === null) return false
   const f = p.fontRun[t]!
   if (f < 0) return false
   const g = p.groupOfUnit[t]!

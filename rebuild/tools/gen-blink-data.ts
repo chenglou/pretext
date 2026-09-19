@@ -196,7 +196,7 @@ for (const table of ['ot_languages2', 'ot_languages3']) {
   }
 }
 if (otLanguageTags.size < 900) throw new Error(`only ${otLanguageTags.size} languages parsed from hb-ot-tag-table.hh`)
-const otLanguageFlat = [...otLanguageTags.entries()].sort((a, b) => a[0] < b[0] ? -1 : 1).map(([language, tags]) => `${language}=${tags.join(',')}`).join('|')
+const otLanguageRecords = [...otLanguageTags.entries()].sort((a, b) => a[0] < b[0] ? -1 : 1).map(([language, tags]) => JSON.stringify([language, ...tags])).join(',')
 
 const hanKerningFlat: number[] = []
 for (const [cp, type] of [...hanKerning.entries()].sort((a, b) => a[0] - b[0])) if (type !== HAN_OTHER) hanKerningFlat.push(cp, type)
@@ -244,9 +244,9 @@ export const blinkScriptExtensions: readonly (readonly number[])[] = [${extensio
 // IsCursiveScript (shape_result.cc:977-990): Arab, Rohg, Mand, Mong, Nkoo, Phag, Syrc as UScriptCode numbers.
 export const blinkCursiveScripts: readonly number[] = [${cursiveScripts.join(',')}]
 
-// HarfBuzz's OpenType language system tags per ISO 639 code, 'code=TAG,TAG|...' (tags keep their trailing spaces), from
-// ot_languages2 and ot_languages3 of hb-ot-tag-table.hh at harfbuzz dfdc088c (sha256 ${OT_TAG_SHA256}).
-export const blinkOtLanguageTags = ${JSON.stringify(otLanguageFlat)}
+// HarfBuzz's OpenType language system tags per ISO 639 code, as [code, tag, ...] records sorted by code (tags keep their
+// trailing spaces), from ot_languages2 and ot_languages3 of hb-ot-tag-table.hh at harfbuzz dfdc088c (sha256 ${OT_TAG_SHA256}).
+export const blinkOtLanguageTags: readonly (readonly string[])[] = [${otLanguageRecords}]
 
 // Character::IsCjkIdeographOrSymbol as sorted inclusive [first, last] pairs: character_property_data.h (sha256 ${CPD_SHA256}),
 // Emoji_Presentation, and the Extended_Pictographic characters of RGI emoji ZWJ and modifier sequences (emoji-zwj-sequences.txt

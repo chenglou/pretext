@@ -59,12 +59,12 @@ function indicesInVisualOrder(levels: number[]): number[] {
 // order (viewFromSegments): `نِ` and a trimmed space at a wrapped line start in Geeza Pro keep the space's glyph in the cut
 // view, natively the letter reports the letter's and its mark's glyphs, 1640 units, and the mark the space's 959
 // (c-8768b30f8733ee4c).
-function shapeOf(sh: Shaper, view: View, a: number, b: number, partsKnown: boolean, rtl: boolean, justification: readonly Expansion[]): { clusters: BlinkGlyphCluster[]; runs: BlinkShapeRun[] } {
+// `added16` is what justification added to the clusters that start at the units of [a, b), by unit from a (Justified); empty
+// on a line it didn't apply to.
+function shapeOf(sh: Shaper, view: View, a: number, b: number, partsKnown: boolean, rtl: boolean, added16: readonly number[]): { clusters: BlinkGlyphCluster[]; runs: BlinkShapeRun[] } {
   const p = sh.p
   const clusters: BlinkGlyphCluster[] = []
   const runs: BlinkShapeRun[] = []
-  const extra = new Map<number, number>()
-  for (let i = 0; i < justification.length; i++) extra.set(justification[i]!.start, justification[i]!.add16)
   // PositionForOffset counts the characters from the item's visual start, the logical end in RTL: where the parts count
   // fewer characters than the item has, the ones left over are the first in RTL and the last in LTR, and no run holds them.
   let counted = 0
@@ -104,7 +104,7 @@ function shapeOf(sh: Shaper, view: View, a: number, b: number, partsKnown: boole
       for (let x = start + 1; x < k; x++) if (listed === null ? p.graphemeStarts[x] === 1 : listed[x - part.start] === 1) graphemeStarts.push(x + shift)
       // The part's last cluster takes every glyph the part still holds (a cluster cut by the part's end goes to the part
       // holding its start).
-      const advance = (k >= limit ? partWidth16(sh, part) : partPrefix16(sh, part, k)) - partPrefix16(sh, part, start) + (extra.get(start) ?? 0) + pending
+      const advance = (k >= limit ? partWidth16(sh, part) : partPrefix16(sh, part, k)) - partPrefix16(sh, part, start) + (added16[start - a] ?? 0) + pending
       pending = 0
       const cluster: BlinkGlyphCluster = { textStart: start + shift, textEnd: k + shift, graphemeStarts, advance }
       const startLimit = shift === 0 && start > a ? viewPositionLimit(sh, view, start) : null
@@ -166,12 +166,10 @@ function checkOpportunity(p: BlinkPrepared, state: JustifyState, c: number): [bo
   return [before, true]
 }
 
-// What JustifyResults added to a glyph cluster, by cluster start, 16.16 (justification_utils.cc:115-178).
-type Expansion = { start: number; add16: number }
-
-// An item result as justification leaves it: its clusters' expansions and its new size. Blink writes both into the item
-// result; the decided line isn't written to, so they live as long as the geometry being made.
-type Justified = { expansions: Expansion[]; inlineSize: number }
+// An item result as justification leaves it: what JustifyResults added to its glyph clusters, 16.16, by the cluster's start
+// as a unit of the item result (justification_utils.cc:115-178), and its new size. Blink writes both into the item result;
+// the decided line isn't written to, so they live as long as the geometry being made.
+type Justified = { added16: number[]; inlineSize: number }
 
 // ApplyJustification (justification_utils.cc:237-310): SetupJustificationOpportunity counts the opportunities of the item
 // results up to EndOffsetForJustify, ExpansionSetup drops the one after the last character and divides the space
@@ -232,7 +230,7 @@ function justificationOf(sh: Shaper, info: LineInfo, space: number, endOffset: n
     if (r.hasOnlyPreWrapTrailingSpaces) break
     const item = p.items[r.itemIndex]!
     if (r.shape === null) continue
-    const expansions: Expansion[] = []
+    const added16 = new Array<number>(r.end - r.start).fill(0)
     const starts: number[] = []
     for (let k = r.start; k < r.end; k++) if (k === r.start || p.continuations[k] !== 1 && p.graphemeStarts[k] === 1 && p.ligature[k] !== LIGATURE_MERGED) starts.push(k)
     const order = (item.bidiLevel & 1) === 1 ? starts.slice().reverse() : starts
@@ -246,14 +244,12 @@ function justificationOf(sh: Shaper, info: LineInfo, space: number, endOffset: n
       // FinalizeComputeExpansion (:171-187).
       if (before) spacing += next()
       if (after && remaining > 0) spacing += next()
-      if (spacing !== 0) {
-        add += spacing
-        expansions.push({ start: k, add16: spacing })
-      }
+      add += spacing
+      added16[k - r.start] = spacing
     }
     const view = r.shape
     const width16 = viewPrefix16(sh, view, r.end) - viewPrefix16(sh, view, r.start) + add
-    justified[i] = { expansions, inlineSize: Math.max(0, luCeil(widthOf16(width16))) + (r.isHyphenated ? r.hyphen!.inlineSize : 0) }
+    justified[i] = { added16, inlineSize: Math.max(0, luCeil(widthOf16(width16))) + (r.isHyphenated ? r.hyphen!.inlineSize : 0) }
   }
   return justified
 }
@@ -294,6 +290,8 @@ type BoxData = {
   mbpLineLeft: number
   mbpLineRight: number
   parent: number
+  // fragmented_box_data_index, 1-based, 0 for none: of a fragment that reordering cut off a box, the box it came from; of
+  // that box once its fragments are in the list, its last fragment.
   fragmentedFrom: number
   rectLeft: number
   rectRight: number
@@ -366,7 +364,7 @@ function itemsOf(sh: Shaper, info: LineInfo, justified: readonly (Justified | nu
     const item = p.items[r.itemIndex]!
     const expanded = justified === null ? null : justified[i]!
     const inlineSize = expanded === null ? r.inlineSize : expanded.inlineSize
-    const expansions = expanded === null ? [] : expanded.expansions
+    const added16 = expanded === null ? [] : expanded.added16
     // UAX #9 L1 for results holding only trailing spaces (:716-720).
     const level = r.hasOnlyBidiTrailingSpaces ? p.baseLevel : item.bidiLevel
     switch (item.type) {
@@ -374,7 +372,7 @@ function itemsOf(sh: Shaper, info: LineInfo, justified: readonly (Justified | nu
         // Empty or fully collapsed text makes no fragment item (:215-223).
         if (r.end === r.start) break
         const hyphen = r.isHyphenated ? r.hyphen!.inlineSize : 0
-        const shape = shapeOf(sh, r.shape!, r.start, r.end, r.partsKnown, (item.bidiLevel & 1) === 1, expansions)
+        const shape = shapeOf(sh, r.shape!, r.start, r.end, r.partsKnown, (item.bidiLevel & 1) === 1, added16)
         const sizeLimit = viewPositionLimit(sh, r.shape!, r.end)
         const textItem: BlinkItem = sizeLimit === null
           ? { kind: 'text', run: item.run, textStart: r.start, textEnd: r.end, level: item.bidiLevel, x: 0, inlineSize: inlineSize - hyphen, clusters: shape.clusters, runs: shape.runs, partsKnown: r.partsKnown }
@@ -388,7 +386,7 @@ function itemsOf(sh: Shaper, info: LineInfo, justified: readonly (Justified | nu
         switch (item.control) {
           case 'tab':
             if (r.end === r.start) break
-            leaf({ kind: 'tab', run: item.run, textStart: r.start, textEnd: r.end, level: item.bidiLevel, x: 0, inlineSize, clusters: shapeOf(sh, r.shape!, r.start, r.end, true, (item.bidiLevel & 1) === 1, expansions).clusters }, level, 0, inlineSize)
+            leaf({ kind: 'tab', run: item.run, textStart: r.start, textEnd: r.end, level: item.bidiLevel, x: 0, inlineSize, clusters: shapeOf(sh, r.shape!, r.start, r.end, true, (item.bidiLevel & 1) === 1, added16).clusters }, level, 0, inlineSize)
             break
           case 'br':
             if (r.end === r.start) break
@@ -485,19 +483,20 @@ function itemsOf(sh: Shaper, info: LineInfo, justified: readonly (Justified | nu
       return index
     }
     for (let index = 0; index < visual.length;) index = update(index)
-    // UpdateFragmentedBoxDataEdges (:784-826): fragments go right after their box, and the line-right edge moves to the last.
+    // UpdateFragmentedBoxDataEdges (:784-826): fragments go right after their box, last to first so that the places still
+    // to insert at stay, and a box that was fragmented keeps the place of its last fragment, where its line-right edge
+    // moves (UpdateFragmentEdges, :827-843).
     fragmented.sort((a, b) => a.fragmentedFrom !== b.fragmentedFrom ? a.fragmentedFrom - b.fragmentedFrom : a.start - b.start)
-    const lastOf = new Map<number, BoxData>()
     for (let f = fragmented.length - 1; f >= 0; f--) {
-      const frag = fragmented[f]!
-      const from = frag.fragmentedFrom
-      boxes.splice(from, 0, { ...frag, fragmentedFrom: 0 })
-      for (const [key, value] of [...lastOf]) if (key >= from) { lastOf.delete(key); lastOf.set(key + 1, value) }
-      if (!lastOf.has(from - 1)) lastOf.set(from - 1, boxes[from]!)
+      const insertAt = fragmented[f]!.fragmentedFrom
+      boxes.splice(insertAt, 0, { ...fragmented[f]!, fragmentedFrom: 0 })
+      for (let b = 0; b < boxes.length; b++) if (boxes[b]!.fragmentedFrom >= insertAt) boxes[b]!.fragmentedFrom++
+      if (boxes[insertAt - 1]!.fragmentedFrom === 0) boxes[insertAt - 1]!.fragmentedFrom = insertAt
     }
-    for (const [original, last] of lastOf) {
-      const box = boxes[original]!
-      if (!box.hasLineRightEdge) continue
+    for (let b = 0; b < boxes.length; b++) {
+      const box = boxes[b]!
+      if (box.fragmentedFrom === 0 || !box.hasLineRightEdge) continue
+      const last = boxes[box.fragmentedFrom]!
       last.hasLineRightEdge = true
       last.marginLineRight = box.marginLineRight
       last.mbpLineRight = box.mbpLineRight

@@ -56,19 +56,14 @@ function isHanScript(script: number): boolean {
   return script === USCRIPT_HAN || script === USCRIPT_HIRAGANA || script === USCRIPT_BOPOMOFO
 }
 
-let bracketPairs: Map<number, number> | null = null
-
-// u_getBidiPairedBracket (Bidi_Paired_Bracket).
+// u_getBidiPairedBracket (Bidi_Paired_Bracket), from the [opening, closing, canonical opening] triples.
 function pairedBracket(ch: number): number {
-  if (bracketPairs === null) {
-    bracketPairs = new Map()
-    const triples = blinkBidiData.brackets
-    for (let i = 0; i < triples.length; i += 3) {
-      bracketPairs.set(triples[i]!, triples[i + 1]!)
-      bracketPairs.set(triples[i + 1]!, triples[i]!)
-    }
+  const triples = blinkBidiData.brackets
+  for (let i = 0; i < triples.length; i += 3) {
+    if (triples[i] === ch) return triples[i + 1]!
+    if (triples[i + 1] === ch) return triples[i]!
   }
-  return bracketPairs.get(ch) ?? ch
+  return ch
 }
 
 class ScriptRunIterator {

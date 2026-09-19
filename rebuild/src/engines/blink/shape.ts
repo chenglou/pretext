@@ -751,8 +751,18 @@ export function measureGroups(sh: Shaper): void {
 // hb_script_get_horizontal_direction (hb-common.cc:520-612 at harfbuzz dfdc088c) over UScriptCode numbers
 // (unicode/uscript.h): the scripts HarfBuzz shapes right to left, and the ones it gives no direction (Old Hungarian, Old
 // Italic, Runic, Tifinagh). Every other script is left to right.
-const RTL_SCRIPTS = new Set([2, 19, 34, 37, 47, 57, 84, 86, 87, 88, 91, 108, 116, 117, 121, 122, 123, 125, 126, 133, 140, 141, 142, 143, 144, 162, 167, 182, 183, 184, 185, 189, 192, 194, 201, 209])
-const NO_DIRECTION_SCRIPTS = new Set([30, 32, 60, 76])
+function scriptDirection(script: number): 'ltr' | 'rtl' | 'none' {
+  switch (script) {
+    case 2: case 19: case 34: case 37: case 47: case 57: case 84: case 86: case 87: case 88: case 91: case 108: case 116: case 117: case 121: case 122:
+    case 123: case 125: case 126: case 133: case 140: case 141: case 142: case 143: case 144: case 162: case 167: case 182: case 183: case 184:
+    case 185: case 189: case 192: case 194: case 201: case 209:
+      return 'rtl'
+    case 30: case 32: case 60: case 76:
+      return 'none'
+    default:
+      return 'ltr'
+  }
+}
 
 // Whether HarfBuzz shapes the call holding offset k of group g over the reversed text. A buffer whose direction isn't its
 // script's own is reversed by graphemes and shaped in the script's direction (hb_ensure_native_direction,
@@ -762,9 +772,9 @@ const NO_DIRECTION_SCRIPTS = new Set([30, 32, 60, 76])
 // (harfbuzz_shaper.cc:341-342). General categories are the running JavaScript engine's.
 function shapedReversed(p: BlinkPrepared, g: number, k: number): boolean {
   const group = p.groups[g]!
-  const script = p.scripts[Math.min(k, group.end - 1)]!
-  if (NO_DIRECTION_SCRIPTS.has(script)) return false
-  let scriptRtl = RTL_SCRIPTS.has(script)
+  const direction = scriptDirection(p.scripts[Math.min(k, group.end - 1)]!)
+  if (direction === 'none') return false
+  let scriptRtl = direction === 'rtl'
   if (scriptRtl && !group.rtl) {
     let a = k
     while (a > group.start && !isSegmentEdge(p, a)) a--
