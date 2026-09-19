@@ -903,15 +903,25 @@ export function offsetForPosition(sh: Shaper, sr: ShapeResult, x: number, before
   let low = bounded && sr.rtl ? length - (before - sr.start) : 0
   let high = bounded && !sr.rtl ? before - sr.start - 1 : length - 1
   const last = high
+  // What the search has read at the two ends of what is left: the position at `low` once it moved up, and the one past
+  // `high` once it moved down. It comes back to those two indices and to no other, and doesn't measure them again.
+  let lowPosition: number | null = null
+  let pastHighPosition: number | null = null
   while (low <= high) {
     const mid = low + ((high - low) >> 1)
-    const position = xPosition(mid)
-    if (position <= x && (mid + 1 === length || (bounded && !sr.rtl && mid === last) || xPosition(mid + 1) > x)) {
+    const position: number = mid === low && lowPosition !== null ? lowPosition : xPosition(mid)
+    if (x < position) {
+      high = mid - 1
+      pastHighPosition = position
+      continue
+    }
+    const next: number | null = mid + 1 === length || (bounded && !sr.rtl && mid === last) ? null : mid === high && pastHighPosition !== null ? pastHighPosition : xPosition(mid + 1)
+    if (next === null || next > x) {
       if (!sr.rtl) return sr.start + mid
       return sr.start + (position === x ? length - mid : length - mid - 1)
     }
-    if (x < position) high = mid - 1
-    else low = mid + 1
+    low = mid + 1
+    lowPosition = next
   }
   return sr.start
 }
@@ -967,7 +977,7 @@ export function sliceEdge(p: BlinkPrepared, k: number, lo: number, hi: number): 
 }
 
 // The advance sum before slice edge k in the shaping call a part's glyphs come from: the item's result or a reshape.
-function slicePrefix16(sh: Shaper, part: Part, k: number): number {
+export function slicePrefix16(sh: Shaper, part: Part, k: number): number {
   switch (part.kind) {
     case 'range': return prefix16(sh, part.sr, part.sr.kind === 'group' ? sliceEdge(sh.p, k, part.sr.start, part.sr.end) : k)
     case 'reshape': return callPrefix16(sh, part.call, sliceEdge(sh.p, k, part.call.start, part.call.end))
@@ -1159,11 +1169,6 @@ export function viewPrefix16(sh: Shaper, view: View, k: number): number {
     break
   }
   return sum
-}
-
-// The advance sum of a part's glyphs before text_content offset k of the text they were shaped from.
-export function partPrefix16(sh: Shaper, part: Part, k: number): number {
-  return slicePrefix16(sh, part, k) - slicePrefix16(sh, part, part.start)
 }
 
 // Where Blink's caret code starts graphemes among the characters of a view's part: flags per character of the part, or

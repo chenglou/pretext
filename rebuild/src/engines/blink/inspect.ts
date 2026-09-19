@@ -12,7 +12,7 @@ import { viewPositionLimit } from './limits.js'
 import type { LineInfo } from './line-breaker.js'
 import { lineSourceRange, trailingSpacesOf, usedTextAlign } from './pieces.js'
 import { isCjkIdeographOrSymbol, isDefaultIgnorable } from './props.js'
-import { isFontRunEdge, luCeil, partGraphemeStarts, partPrefix16, partWidth16, viewPrefix16, widthOf16, type Shaper, type View } from './shape.js'
+import { isFontRunEdge, luCeil, partGraphemeStarts, partWidth16, slicePrefix16, viewPrefix16, widthOf16, type Shaper, type View } from './shape.js'
 import type { BlinkPrepared } from './types.js'
 
 // BidiParagraph::IndicesInVisualOrder, ubidi_reorderVisual (ubidi.cpp): runs at or above each level from the highest down
@@ -97,6 +97,10 @@ function shapeOf(sh: Shaper, view: View, a: number, b: number, partsKnown: boole
       fontsKnown = true
     }
     let start = part.start
+    // The advance sum before the part in its shaping call, and the part's own before the cluster being made: a cluster's end
+    // is the next one's start, so every edge is measured once.
+    const base16 = slicePrefix16(sh, part, part.start)
+    let before16 = 0
     for (let k = part.start + 1; k <= limit; k++) {
       if (k < limit && k < part.end && (p.continuations[k] === 1 || p.ligature[k] === LIGATURE_MERGED)) continue
       if (k < limit && k >= part.end) continue
@@ -105,7 +109,9 @@ function shapeOf(sh: Shaper, view: View, a: number, b: number, partsKnown: boole
       for (let x = start + 1; x < k; x++) if (listed === null ? p.graphemeStarts[x] === 1 : listed[x - part.start] === 1) graphemeStarts.push(x + shift)
       // The part's last cluster takes every glyph the part still holds (a cluster cut by the part's end goes to the part
       // holding its start).
-      const advance = (k >= limit ? partWidth16(sh, part) : partPrefix16(sh, part, k)) - partPrefix16(sh, part, start) + (added16[start - a] ?? 0) + pending
+      const at16 = slicePrefix16(sh, part, k >= limit ? part.end : k) - base16
+      const advance = at16 - before16 + (added16[start - a] ?? 0) + pending
+      before16 = at16
       pending = 0
       const cluster: BlinkGlyphCluster = { textStart: start + shift, textEnd: k + shift, graphemeStarts, advance }
       const startLimit = shift === 0 && start > a ? viewPositionLimit(sh, view, start) : null
