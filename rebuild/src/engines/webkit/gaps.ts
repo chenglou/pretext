@@ -1,28 +1,23 @@
 // WebKit's gaps (Safari 27.0): every Canvas-versus-DOM condition the port reports, with its test, its prose, its merge rule
-// and its order (DESIGN.md §2.8, §5). Nothing outside this file builds a Gap, and nothing in it decides a line. The rest of
-// the port calls it at the points where a condition shows:
-// - while the paragraph is prepared (content.ts): the code points makeBox's coverage test can't vouch for, then the
-//   paragraph's gaps, the facts of each box that only gaps read, and the history worlds (inspectParagraph);
-// - while a line is filled (lines.ts): the four conditions a break decision itself shows, raised into the fill's GapSink;
-// - on request, from a decided line (index.ts inspectLine): lineGaps, the fill's gaps followed by the conditions of every
-//   character the filling measured, then page-history from the line as each history world lays it out.
+// and its order (DESIGN.md §2.8, §5). Nothing outside this file builds a Gap, and nothing in it decides a line, fills one or
+// reads the rest of the port's stages: the rest of the port calls it at the points where a condition shows.
+// - While the paragraph is prepared (content.ts): the paragraph's gaps, the code points makeBox's coverage test can't vouch
+//   for, and the facts of each box that only gaps read.
+// - While a line is filled (lines.ts): the four conditions a break decision itself shows, raised into the fill's GapSink.
+// - On request, from a decided line (index.ts inspectLine): lineGaps, the fill's gaps followed by the conditions of every
+//   character the filling measured; then page-history, raised by history.ts from the line as each history world lays it out.
 // A paragraph prepared plain has `inspect` null and a null GapSink: every function here that takes one returns at once, so
 // the paragraph asks Canvas nothing that only a gap reads, and lineGaps and paragraphGaps throw on it.
+import type { WebKitEnvironment } from '../../env.js'
 import { contextFor, width as canvasWidth, type CanvasSettings, type Context } from '../../measure/canvas.js'
 import { canvasFont } from '../../measure/font.js'
-import type { FontFacts, Gap, GapName } from '../../model.js'
-import { AL, FSI, L, LRE, LRI, LRO, ON, PDF, PDI, R, RLE, RLI, RLO, bidiClassOf, type BidiData } from '../../unicode/bidi.js'
-import { resolveIcuBidi } from '../../unicode/ubidi.js'
+import type { FontDecl, Gap, GapName } from '../../model.js'
 import { canBreakBefore, dictionaryRangesStartingWithMark, hasDictionaryCharacter, inBetweenRangeStartingWithMark } from './breaks.js'
-import { bidiBoxContent, familyNames, whitespaceRun, type LeafInput } from './content.js'
-import { hasDelimiterData, isDelimiterQuote, isHanLocale, isPunctuation, lineRules, localeScript, webkitBidiData } from './data.js'
-import { hasEmojiPresentation } from './fonts.js'
-import type { WebKitLineGeometry, WebKitLineStart } from './geometry.js'
-import { fillLine, lineHasVisuallyNonEmptyContent, sourceOffset } from './lines.js'
-import { boxWidth, canvasString, controlIsAdjusted, fixedPitchWidth, isPiecedControl, itemWidth, measuredEnd, mergedGlyphs, singleSpaceWidth } from './measure.js'
-import { lineGeometry } from './output.js'
-import { preservesNewline, preservesSpacesAndTabs, tabsAllowed } from './style.js'
-import type { WebKitBox, WebKitFilledLine, WebKitHistoryWorld, WebKitInspect, WebKitItem, WebKitPrepared, WebKitRefusedSlot, WebKitTextItem } from './types.js'
+import { hasDelimiterData, isDelimiterQuote, isHanLocale, isPunctuation, lineRules, localeScript } from './data.js'
+import { hasEmojiPresentation, type FamilyName } from './fonts.js'
+import { boxWidth, canvasString, controlIsAdjusted, fixedPitchWidth, isPiecedControl, measuredEnd, mergedGlyphs, singleSpaceWidth } from './measure.js'
+import { preservesSpacesAndTabs, tabsAllowed } from './style.js'
+import type { WebKitBox, WebKitBoxInspect, WebKitFilledLine, WebKitInspect, WebKitPrepared, WebKitRefusedSlot, WebKitTextItem } from './types.js'
 
 const f32 = Math.fround
 
@@ -30,17 +25,30 @@ const f32 = Math.fround
 export type GapSink = Gap[] | null
 
 // What the paragraph keeps for inspection, which a paragraph prepared plain doesn't have.
-function inspectOf(p: WebKitPrepared, what: string): WebKitInspect {
+export function inspectOf(p: WebKitPrepared, what: string): WebKitInspect {
   if (p.inspect === null) throw new Error(`${what} reads an inspected paragraph, and this one was prepared plain`)
   return p.inspect
 }
 
-// The gaps of the paragraph's content, fonts and environment, whatever the slot (DESIGN.md §5).
+// The gaps of the paragraph's content, fonts and environment, whatever the slot (DESIGN.md §5): copies, so nothing the caller
+// holds is the prepared paragraph's.
 export function paragraphGaps(p: WebKitPrepared): Gap[] {
-  return inspectOf(p, 'paragraphGaps').gaps
+  const gaps = inspectOf(p, 'paragraphGaps').gaps
+  const out: Gap[] = []
+  for (let k = 0; k < gaps.length; k++) out.push({ ...gaps[k]! })
+  return out
 }
 
 // ---- While the paragraph is prepared ----
+
+// What an inspected paragraph keeps, as its preparing starts. The paragraph's gaps are conditions of the environment alone
+// (DESIGN.md §2.8, §5): page zoom not given. Every condition of the content and fonts concerns the characters some line
+// measures, so lineGaps reports it on the lines whose filling measured them, from the facts each box records (boxMade).
+export function newInspection(env: WebKitEnvironment): WebKitInspect {
+  const gaps: Gap[] = []
+  if (env.pageZoom === null) gaps.push({ gap: 'page-zoom', run: null, detail: "the page zoom isn't given; laid out at 1" })
+  return { gaps, boxes: [], worlds: [] }
+}
 
 // makeBox's primary-font coverage test can't vouch for a code point that measures as wide as LastResort's own box: a fallback
 // glyph of that advance looks covered (research/CHARTER-CRITIC.md item 1). Lines measuring such a code point report
@@ -57,26 +65,10 @@ export function coveredLikeLastResort(unverified: UnverifiedCoverage | null, cp:
   if (covered === canvasWidth(unverified.lastResortContext, s)) unverified.codePoints.push(cp)
 }
 
-// The box makeBox made, in box order: what its font facts leave unknown and the coverage above. inspectParagraph adds what the
-// box's locale and text give once every box exists.
-export function boxMade(inspect: WebKitInspect | null, facts: FontFacts, unverified: UnverifiedCoverage | null): void {
-  if (inspect === null) return
-  inspect.boxes.push({
-    monospaceUnknown: facts.monospace === null, hyphenUnknown: facts.mapsHyphen === null, unverifiedCoverage: unverified === null ? [] : unverified.codePoints,
-    primaryFamilyUnknown: facts.primaryFamily === null, pairKerningUnknown: facts.pairKerning === null, localeChoosesFonts: null, hanLocaleUnknown: false,
-    quoteLocaleUnknown: false, dictionaryRangesStartingWithMark: [],
-  })
-}
-
-// Once the paragraph's boxes, items and builder stand: its gaps, the rest of each box's facts, and its history worlds.
-export function inspectParagraph(p: WebKitPrepared, leaves: readonly LeafInput[]): void {
-  if (p.inspect === null) return
-  collectBoxFacts(p, p.inspect, leaves)
-  collectHistoryWorlds(p, p.inspect, webkitBidiData)
-}
-
 // The system design families CoreText resolves with the locale (FontCacheCoreText.cpp:585-598, SystemFontDatabaseCoreText.cpp:236).
 const SYSTEM_DESIGN_FAMILIES = ['system-ui', '-apple-system', 'ui-serif', 'ui-sans-serif', 'ui-monospace', 'ui-rounded']
+// localeToScriptCode's names (data.ts localeScript) of the Han, kana and Hangul scripts.
+const HAN_KANA_AND_HANGUL_SCRIPTS = ['HAN', 'SIMPLIFIED_HAN', 'TRADITIONAL_HAN', 'KATAKANA_OR_HIRAGANA', 'HANGUL']
 
 // Whether a family of a font list draws the code point: in Canvas the list followed by LastResort (`context`) doesn't give
 // LastResort's box (the recipe of makeBox's coverage test; a glyph as wide as LastResort's box can't be told from it and
@@ -104,7 +96,7 @@ function familyDraws(context: Context, lastResortContext: Context, cp: number): 
 // R14 (70 languages, three sample characters of each of 321 blocks after Helvetica, Times and Geeza Pro) found no other pair;
 // it sees a font change only where advances differ, and three samples don't stand for a block.
 function hasLanguageDependentFallback(cp: number, locale: string, script: string): boolean {
-  if (['HAN', 'SIMPLIFIED_HAN', 'TRADITIONAL_HAN', 'KATAKANA_OR_HIRAGANA', 'HANGUL'].includes(script)) {
+  if (HAN_KANA_AND_HANGUL_SCRIPTS.includes(script)) {
     return (cp >= 0x1100 && cp <= 0x11ff) || (cp >= 0x2460 && cp <= 0x257f) || (cp >= 0x25a0 && cp <= 0x25ff) || (cp >= 0x2e80 && cp <= 0x4dbf) || (cp >= 0x4e00 && cp <= 0x9fff)
       || (cp >= 0xa960 && cp <= 0xa97f) || (cp >= 0xac00 && cp <= 0xd7ff) || (cp >= 0xf900 && cp <= 0xfaff) || (cp >= 0xfe10 && cp <= 0xfe1f) || (cp >= 0xfe30 && cp <= 0xfe4f)
       || (cp >= 0xff00 && cp <= 0xffef) || (cp >= 0x1aff0 && cp <= 0x1b16f) || (cp >= 0x1f200 && cp <= 0x1f2ff) || (cp >= 0x20000 && cp <= 0x3ffff)
@@ -114,362 +106,70 @@ function hasLanguageDependentFallback(cp: number, locale: string, script: string
   return false
 }
 
-// The paragraph's gaps are conditions of the environment alone (DESIGN.md §2.8, §5): page zoom not given. Every condition of
-// the content and fonts concerns the characters some line measures, so lineGaps reports it on the lines whose filling
-// measured them, from the facts each box records here.
-function collectBoxFacts(p: WebKitPrepared, inspect: WebKitInspect, leaves: readonly LeafInput[]): void {
+// The box makeBox made, in box order: the facts of it that only gaps read (types.ts WebKitBoxInspect), from what its font
+// facts leave unknown, the coverage above, and its locale and text. `font` is the box's font as declared, `size` its size in
+// px at page zoom, `lang` its language, and `families` the list Canvas measures with, where `firstNamedGeneric` is the first
+// family named for Canvas (content.ts makeBox).
+export function boxMade(p: WebKitPrepared, box: WebKitBox, font: FontDecl, size: number, lang: string, families: readonly FamilyName[], firstNamedGeneric: number | null, unverified: UnverifiedCoverage | null): void {
+  if (p.inspect === null) return
   const env = p.env
-  if (env.pageZoom === null) {
-    inspect.gaps.push({ gap: 'page-zoom', run: null, detail: "the page zoom isn't given; laid out at 1" })
-  }
-  for (let b = 0; b < p.boxes.length; b++) {
-    const box = p.boxes[b]!
-    const facts = inspect.boxes[b]!
-    const leaf = leaves[box.run]!
-    const text = box.text
-    const script = localeScript(box.locale)
-    let languageFallback = false
-    let quote = false
-    for (let i = 0; i < text.length; i++) {
-      const cp = text.codePointAt(i)!
-      if (cp > 0xffff) i++
-      if (hasLanguageDependentFallback(cp, box.locale, script)) languageFallback = true
-      if (isDelimiterQuote(cp)) quote = true
-    }
-    // rule webkit/gap/canvas-language-scope
-    // OffscreenCanvas has a null locale (specs/webkit-canvas.md §1.3), so its font description's script is Common. The DOM
-    // passes the box's locale where fonts are chosen:
-    // - serif, sans-serif, cursive, fantasy, monospace and -webkit-standard: the family the locale resolves them to is named
-    //   in the list Canvas gets (makeBox, fonts.ts), which leaves characters with default emoji presentation: the DOM skips
-    //   a generic family's outline glyph for them, and Canvas doesn't know the named family for a generic one;
-    // - -webkit-standard under USCRIPT_HAN where the preferred languages that choose it aren't given
-    //   (FontGenericFamilies.cpp:56-60);
-    // - system-ui and the ui-* designs (FontCacheCoreText.cpp:585-598, SystemFontDatabaseCoreText.cpp:236);
-    // - system fallback after the list (FontCacheCoreText.cpp:822), for the characters hasLanguageDependentFallback lists.
-    // Nothing else reads it: a family named by a string is looked up by name (fontWithFamily, FontCacheCoreText.cpp:624-643;
-    // only fontDescriptorWithFamilySpecialCase's system names take the locale), its glyphs are CTFontGetGlyphsForCharacters
-    // of that font (GlyphPageCoreText.cpp:51-73), and a list draws a character with its first family that has a glyph
-    // (FontCascadeFonts::glyphDataForVariant, FontCascadeFonts.cpp:426-470). So a character a named family draws before the
-    // list reaches a family of the kinds above doesn't depend on the locale, under any locale (probe webkit-round4 R7: 663
-    // characters of 33 named families that Canvas says a named family draws measure the same in the DOM under no language,
-    // en, ja, ko, zh-Hans, zh-Hant and zh-HK as in Canvas, 4,641 of 4,641; of the 855 no named family draws, 468 differ under
-    // ko, 51 under ja, 48 under each zh, none under en or none; R12: 15 named families measure 18 strings the same under 10
-    // languages apart from such characters). Round 3 read `"PingFang SC"` drawing kana at Apple SD Gothic Neo's advance under
-    // ko as a named family that doesn't settle its own characters. It has no kana glyph here: the WebContent process resolves
-    // the name to the system's reserved PingFangUI.ttc, which holds Han and no kana or U+2027, and the kana comes from system
-    // fallback (R7; an unsandboxed process finds the downloaded PingFang.ttc asset, which the lab's coverage facts read, so
-    // Canvas decides what a named family draws).
-    const families = familyNames(box.canvasFamily)
-    const cjkLocale = ['HAN', 'SIMPLIFIED_HAN', 'TRADITIONAL_HAN', 'KATAKANA_OR_HIRAGANA', 'HANGUL'].includes(script)
-    let firstUnknownFamily = families.length
-    for (let i = 0; i < families.length && firstUnknownFamily === families.length; i++) {
-      const family = families[i]!
-      if (!family.quoted && ((family.name === '-webkit-standard' && cjkLocale) || SYSTEM_DESIGN_FAMILIES.includes(family.name))) firstUnknownFamily = i
-    }
-    const namedGeneric = box.firstNamedGeneric >= 0
-    if (box.locale !== '' && (firstUnknownFamily < families.length || namedGeneric || languageFallback)) {
-      const font = leaf.textStyle.font
-      const size = f32(f32(font.size) * f32(p.zoom))
-      const parts = box.canvasFamily.split(',').map(part => part.trim())
-      const named = parts.slice(0, Math.min(firstUnknownFamily, namedGeneric ? box.firstNamedGeneric : families.length))
-      const settings = { lang: '', letterSpacing: '0px', wordSpacing: '0px', fontKerning: 'auto' as const, textRendering: 'auto' as const, direction: 'ltr' as const, partition: '' }
-      const lastResortContext = contextFor(p.contexts, { ...settings, font: canvasFont({ ...font, family: 'LastResort' }, size) })
-      const namedContext = named.length === 0 ? lastResortContext : contextFor(p.contexts, { ...settings, font: canvasFont({ ...font, family: named.concat(['LastResort']).join(', ') }, size) })
-      const listContext = contextFor(p.contexts, { ...settings, font: canvasFont({ ...font, family: parts.concat(['LastResort']).join(', ') }, size) })
-      facts.localeChoosesFonts = { unknownFamily: firstUnknownFamily < families.length, namedGeneric, fallback: languageFallback, namedContext, listContext, lastResortContext }
-    }
-    facts.hanLocaleUnknown = env.preferredLanguages === null && leaf.lang !== '' && isHanLocale(leaf.lang)
-    facts.quoteLocaleUnknown = env.icuDefaultLocale === null && quote && box.locale !== '' && !hasDelimiterData(box.locale)
-    if (env.dictionaryBreaks.kind === 'intl-segmenter-word') {
-      facts.dictionaryRangesStartingWithMark = dictionaryRangesStartingWithMark(lineRules(box.locale, box.style.lineBreakMode, p.icuDefaultLocale).rules, text)
-    }
-  }
-}
-
-// ---- Page history: the break position cache ----
-// rule webkit/gap/page-history-worlds
-
-// TextBreakingPositionCache (InlineItemsBuilder.cpp:858-924, 936-939, 1082-1148; TextBreakingPositionCache.h:41-42): when a
-// block's line layout goes away (LineLayout::~LineLayout, LayoutIntegrationLineLayout.cpp:210-220), a box of at least 5 units
-// whose item list has at least 3 items stores its items' ends, taken after the bidi splits, under (content,
-// TextBreakingPositionContext, origin), unless the key is there already. A later box with the same key builds its items from
-// those ends instead of the break iterator (buildInlineItemListForTextFromBreakingPositionsCache, IIB:858-924), and then takes
-// its own bidi splits. The cache belongs to the process and is evicted at random past 500,000 units
-// (TextBreakingPositionCache.cpp:36-60). The context holds white-space collapse (pre, pre-wrap and break-spaces share a value),
-// overflow-wrap, line-break, word-break, nbsp mode and locale (TextBreakingPositionContext.h:30-80), so the cached ends are this
-// box's break iterator ends plus what the key leaves out:
-// - the other box's bidi splits, at the level boundaries its paragraph direction and neighbouring content give the same text;
-// - its preserved white space: whole under pre and pre-wrap, per unit under break-spaces (IIB:972-979), split before a TAB
-//   that follows a word separator under word spacing (IIB:964, moveToNextNonWhitespacePosition :54-73);
-// - a white-space item built from the cache is a word separator unless its first character is a preserved TAB (IIB:893),
-//   where the break iterator path asks whether the run holds any separator (IIB:66-72).
-// What the library lays out is the paragraph in a process that never saw the box's key. Each other item list the cache can
-// hand a box is a history world (WebKitHistoryWorld): the paragraph's items with that box built from the list. pageHistoryGaps
-// lays every line out in each world that changes an item the line read, from the same line start, and reports page-history
-// where the world's line differs: the effect of the cache on that line, computed instead of guessed.
-// Declared approximations: one box differs per world (boxes find their keys independently, so the true set is the product);
-// the other box's neighbours are the contexts below, not every text.
-
-// TextBreakingPositionCache::minimumRequiredTextLengthForContentBreakCache and minimumRequiredContentBreaks
-// (TextBreakingPositionCache.h:41-42).
-const TEXT_BREAKING_POSITION_CACHE_MINIMUM_LENGTH = 5
-const TEXT_BREAKING_POSITION_CACHE_MINIMUM_BREAKS = 3
-
-// Context around the box for the bidi rules that read across its edges: nothing (sos, eos and L1 at the paragraph end), a
-// strong L, R or AL, a European number alone, after L, after R or after AL (W2 makes it an Arabic number), and an Arabic
-// number. With paragraph level parity these stand for every resolved class W1-W7, N0-N2 and L1 read across an edge (UAX #9;
-// ICU 78.2 ubidi.cpp). Embeddings and isolates open around the box shift levels by parity, which the two directions cover;
-// a box whose own PDI or PDF closes one opened before it, or whose initiator is closed after it, also takes the contexts
-// that open or close one.
-const HISTORY_BEFORE = ['', 'a', 'א', 'ا', '1', 'a1', 'א1', 'ا1', '١']
-const HISTORY_AFTER = ['', 'a', 'א', '1', '١']
-const HISTORY_BEFORE_OPENING = ['\u2066', '\u2067', '\u202a', '\u202b', '\u202d', '\u202e']
-const HISTORY_AFTER_CLOSING = ['\u2069', '\u2069a', '\u2069א', '\u202c', '\u202ca', '\u202cא']
-// ubidi_setPara gives a text without RTL characters, or with nothing else, the paragraph level everywhere
-// (directionFromFlags, ICU 78.2 ubidi.cpp:1007-1018, :2684-2693), whatever embeddings and isolates it holds. The flags are the
-// whole text's, so other content of another box's paragraph makes it mixed (held-out c-7cc5e3e26ff7c30d: `a` SHY LRI `b` PDI
-// `c` takes level 2 on `b` once its paragraph holds an RTL character). A paragraph of its own before the context, ended by a
-// class-B character, sets those flags and nothing else: B resets the explicit stack and sos.
-const HISTORY_MIXED_PARAGRAPH = 'aא\n'
-
-// The level boundaries of text[from, to) under a direction, as offsets less `shift`.
-function levelBoundaries(text: string, direction: 'ltr' | 'rtl', bidi: BidiData, from: number, to: number, shift: number): number[] {
-  const levels = resolveIcuBidi(HISTORY_MIXED_PARAGRAPH + text, direction, bidi).levels
-  const offset = HISTORY_MIXED_PARAGRAPH.length
-  const out: number[] = []
-  for (let i = from + 1; i < to; i++) if (levels[offset + i] !== levels[offset + i - 1]) out.push(i - shift)
-  return out
-}
-
-// The sets of level boundaries other paragraphs give the box's text, each as sorted box offsets: per direction, every context
-// before the box with every context after it.
-function historyBoundarySets(box: WebKitBox, bidi: BidiData): number[][] {
+  const facts = font.facts
   const text = box.text
-  // The text as the bidi paragraph holds it (computeBidiLevels): white space that doesn't preserve newlines as spaces, and
-  // under preserved newlines U+2028 as a space and LF and U+2029 as paragraph separators.
-  let analysis = ''
-  if (preservesNewline(box.style)) {
-    for (let i = 0; i < text.length; i++) {
-      const c = text.charCodeAt(i)
-      analysis += c === 0x2028 ? ' ' : c === 0x2029 ? '\n' : text[i]!
-    }
-  } else {
-    analysis = bidiBoxContent(box)
-  }
-  const length = analysis.length
-  let firstStrong = -1
-  let lastStrong = -1
-  let closesOuter = false
-  let opensInner = false
-  // Bracket pairs resolve by the strong context before their opening bracket (N0): one that opens before the first strong
-  // character takes the context before the box wherever it closes, and one that closes after the last strong character needs
-  // its opening bracket to resolve at all. An explicit code's level reaches to its end. Such a box is resolved whole.
-  const brackets: number[] = []
-  for (let i = 0; i < length; i++) {
-    const cp = analysis.codePointAt(i)!
-    const c = bidiClassOf(bidi, cp)
-    if (c === L || c === R || c === AL) {
-      if (firstStrong < 0) firstStrong = i
-      lastStrong = i
-    }
-    if (c === PDF || c === PDI) closesOuter = true
-    if (c === LRE || c === RLE || c === LRO || c === RLO || c === LRI || c === RLI || c === FSI) opensInner = true
-    if (c === ON) for (let k = 0; k < bidi.brackets.length; k += 3) if (bidi.brackets[k] === cp || bidi.brackets[k + 1] === cp) brackets.push(i)
+  const script = localeScript(box.locale)
+  let languageFallback = false
+  let quote = false
+  for (let i = 0; i < text.length; i++) {
+    const cp = text.codePointAt(i)!
     if (cp > 0xffff) i++
+    if (hasLanguageDependentFallback(cp, box.locale, script)) languageFallback = true
+    if (isDelimiterQuote(cp)) quote = true
   }
-  const explicit = closesOuter || opensInner
-  let wholeBefore = explicit
-  let wholeAfter = explicit
-  for (let k = 0; k < brackets.length; k++) {
-    if (brackets[k]! < firstStrong) wholeBefore = true
-    if (brackets[k]! > lastStrong) wholeAfter = true
+  // rule webkit/gap/canvas-language-scope
+  // OffscreenCanvas has a null locale (specs/webkit-canvas.md §1.3), so its font description's script is Common. The DOM
+  // passes the box's locale where fonts are chosen:
+  // - serif, sans-serif, cursive, fantasy, monospace and -webkit-standard: the family the locale resolves them to is named
+  //   in the list Canvas gets (makeBox, fonts.ts), which leaves characters with default emoji presentation: the DOM skips
+  //   a generic family's outline glyph for them, and Canvas doesn't know the named family for a generic one;
+  // - -webkit-standard under USCRIPT_HAN where the preferred languages that choose it aren't given
+  //   (FontGenericFamilies.cpp:56-60);
+  // - system-ui and the ui-* designs (FontCacheCoreText.cpp:585-598, SystemFontDatabaseCoreText.cpp:236);
+  // - system fallback after the list (FontCacheCoreText.cpp:822), for the characters hasLanguageDependentFallback lists.
+  // Nothing else reads it: a family named by a string is looked up by name (fontWithFamily, FontCacheCoreText.cpp:624-643;
+  // only fontDescriptorWithFamilySpecialCase's system names take the locale), its glyphs are CTFontGetGlyphsForCharacters
+  // of that font (GlyphPageCoreText.cpp:51-73), and a list draws a character with its first family that has a glyph
+  // (FontCascadeFonts::glyphDataForVariant, FontCascadeFonts.cpp:426-470). So a character a named family draws before the
+  // list reaches a family of the kinds above doesn't depend on the locale, under any locale (probe webkit-round4 R7: 663
+  // characters of 33 named families that Canvas says a named family draws measure the same in the DOM under no language,
+  // en, ja, ko, zh-Hans, zh-Hant and zh-HK as in Canvas, 4,641 of 4,641; of the 855 no named family draws, 468 differ under
+  // ko, 51 under ja, 48 under each zh, none under en or none; R12: 15 named families measure 18 strings the same under 10
+  // languages apart from such characters). Round 3 read `"PingFang SC"` drawing kana at Apple SD Gothic Neo's advance under
+  // ko as a named family that doesn't settle its own characters. It has no kana glyph here: the WebContent process resolves
+  // the name to the system's reserved PingFangUI.ttc, which holds Han and no kana or U+2027, and the kana comes from system
+  // fallback (R7; an unsandboxed process finds the downloaded PingFang.ttc asset, which the lab's coverage facts read, so
+  // Canvas decides what a named family draws).
+  const cjkLocale = HAN_KANA_AND_HANGUL_SCRIPTS.includes(script)
+  let firstUnknownFamily = families.length
+  for (let i = 0; i < families.length && firstUnknownFamily === families.length; i++) {
+    const family = families[i]!
+    if (!family.quoted && ((family.name === '-webkit-standard' && cjkLocale) || SYSTEM_DESIGN_FAMILIES.includes(family.name))) firstUnknownFamily = i
   }
-  const before = closesOuter ? HISTORY_BEFORE.concat(HISTORY_BEFORE_OPENING) : HISTORY_BEFORE
-  const after = opensInner ? HISTORY_AFTER.concat(HISTORY_AFTER_CLOSING) : HISTORY_AFTER
-  const sets: number[][] = []
-  const directions = ['ltr', 'rtl'] as const
-  for (let d = 0; d < directions.length; d++) {
-    const direction = directions[d]!
-    if (firstStrong < 0 || (wholeBefore && wholeAfter)) {
-      // No strong character, or a box resolved whole at both edges: every context pair over the whole text.
-      for (let k = 0; k < before.length; k++) for (let j = 0; j < after.length; j++) {
-        sets.push(levelBoundaries(before[k]! + analysis + after[j]!, direction, bidi, before[k]!.length, before[k]!.length + length, before[k]!.length))
-      }
-      continue
-    }
-    // Before the first strong character the rules read the context before the box; after the last one, the context after it.
-    // Between them every rule finds its strong neighbours inside the box.
-    const interior = levelBoundaries(analysis, direction, bidi, 0, length, 0)
-    const leading: number[][] = []
-    if (firstStrong === 0) leading.push(interior.filter(position => position <= lastStrong))
-    else for (let k = 0; k < before.length; k++) {
-      const context = before[k]!
-      const found = wholeBefore
-        ? levelBoundaries(context + analysis, direction, bidi, context.length, context.length + length, context.length).filter(position => position <= lastStrong)
-        : levelBoundaries(context + analysis.slice(0, firstStrong + 1), direction, bidi, context.length, context.length + firstStrong + 1, context.length).concat(interior.filter(position => position > firstStrong && position <= lastStrong))
-      leading.push(found)
-    }
-    const trailing: number[][] = []
-    if (lastStrong === length - 1) trailing.push([])
-    else for (let j = 0; j < after.length; j++) {
-      const context = after[j]!
-      const found = wholeAfter
-        ? levelBoundaries(analysis + context, direction, bidi, 0, length, 0).filter(position => position > lastStrong)
-        : levelBoundaries(analysis.slice(lastStrong) + context, direction, bidi, 0, length - lastStrong, -lastStrong)
-      trailing.push(found)
-    }
-    for (let k = 0; k < leading.length; k++) for (let j = 0; j < trailing.length; j++) sets.push(leading[k]!.concat(trailing[j]!))
+  let localeChoosesFonts: WebKitBoxInspect['localeChoosesFonts'] = null
+  if (box.locale !== '' && (firstUnknownFamily < families.length || firstNamedGeneric !== null || languageFallback)) {
+    const parts = families.map(family => family.css)
+    const named = parts.slice(0, Math.min(firstUnknownFamily, firstNamedGeneric ?? families.length))
+    const settings = { lang: '', letterSpacing: '0px', wordSpacing: '0px', fontKerning: 'auto' as const, textRendering: 'auto' as const, direction: 'ltr' as const, partition: '' }
+    const lastResortContext = contextFor(p.contexts, { ...settings, font: canvasFont({ ...font, family: 'LastResort' }, size) })
+    const namedContext = named.length === 0 ? lastResortContext : contextFor(p.contexts, { ...settings, font: canvasFont({ ...font, family: named.concat(['LastResort']).join(', ') }, size) })
+    const listContext = contextFor(p.contexts, { ...settings, font: canvasFont({ ...font, family: parts.concat(['LastResort']).join(', ') }, size) })
+    localeChoosesFonts = { unknownFamily: firstUnknownFamily < families.length, namedGeneric: firstNamedGeneric !== null, fallback: languageFallback, namedContext, listContext, lastResortContext }
   }
-  return sets
-}
-
-type WhitespaceStructure = 'whole' | 'per-unit' | 'separators'
-
-// The ends of a preserved white-space run [start, end) under a structure (handleWhitespace, IIB:963-989).
-function whitespaceEnds(text: string, start: number, end: number, structure: WhitespaceStructure, preserveNewline: boolean): number[] {
-  const ends: number[] = []
-  if (structure === 'per-unit') {
-    for (let i = start + 1; i <= end; i++) ends.push(i)
-    return ends
-  }
-  for (let position = start; position < end;) {
-    const run = whitespaceRun(text.slice(0, end), position, preserveNewline, true, structure === 'separators')
-    if (run === null) break
-    position += run.length
-    ends.push(position)
-  }
-  return ends
-}
-
-// The paragraph's items with one box built from a cached list: the box's own ends (white space under `structure`) plus
-// `extra`, then its own bidi splits, which are the boundaries between its own items of different levels.
-function historyWorld(p: WebKitPrepared, inspect: WebKitInspect, boxIndex: number, extra: readonly number[], structure: WhitespaceStructure | null): WebKitHistoryWorld | null {
-  const box = p.boxes[boxIndex]!
-  const text = box.text
-  const preserve = preservesSpacesAndTabs(box.style)
-  const items: WebKitItem[] = []
-  const itemIndex: number[] = []
-  const changed: boolean[] = []
-  let differs = false
-  let boxItems = 0
-  const width = (item: WebKitTextItem, from: number, to: number): number | null => {
-    if (item.width === null) return null
-    return itemWidth(p, { ...item, start: from, end: to }, from, to, 0)
-  }
-  for (let i = 0; i < p.items.length; i++) {
-    const item = p.items[i]!
-    itemIndex.push(items.length)
-    changed.push(false)
-    if (item.kind !== 'text' || item.box !== boxIndex) {
-      if (item.kind === 'soft-line-break' && item.box === boxIndex) boxItems++
-      items.push(item)
-      continue
-    }
-    if (item.isWhitespace && preserve && structure !== null) {
-      // The run of this box's adjacent white-space items of one level: the cached structure, then the own bidi splits.
-      let last = i
-      while (last + 1 < p.items.length) {
-        const following = p.items[last + 1]!
-        if (following.kind !== 'text' || following.box !== boxIndex || !following.isWhitespace || following.level !== item.level || following.start !== (p.items[last] as WebKitTextItem).end) break
-        last++
-      }
-      const runEnd = (p.items[last] as WebKitTextItem).end
-      const ends = whitespaceEnds(text, item.start, runEnd, structure, preservesNewline(box.style))
-      for (let k = 0; k < extra.length; k++) if (extra[k]! > item.start && extra[k]! < runEnd && !ends.includes(extra[k]!)) ends.push(extra[k]!)
-      ends.sort((a, b) => a - b)
-      const first = items.length
-      let from = item.start
-      for (let k = 0; k < ends.length; k++) {
-        const to = ends[k]!
-        const isWordSeparator = text.charCodeAt(from) !== 0x09
-        items.push({ ...item, start: from, end: to, isWordSeparator, width: width(item, from, to) })
-        boxItems++
-        from = to
-      }
-      let ownMatches = ends.length === last - i + 1
-      for (let own = i, k = first; own <= last; own++) {
-        const ownItem = p.items[own] as WebKitTextItem
-        while (k + 1 < items.length && (items[k + 1] as WebKitTextItem).start <= ownItem.start) k++
-        const worldItem = items[k] as WebKitTextItem
-        if (worldItem.start !== ownItem.start || worldItem.end !== ownItem.end || worldItem.isWordSeparator !== ownItem.isWordSeparator) ownMatches = false
-        if (own > i) {
-          itemIndex.push(k)
-          changed.push(false)
-        }
-      }
-      if (!ownMatches) {
-        differs = true
-        for (let own = i; own <= last; own++) changed[own] = true
-      }
-      i = last
-      continue
-    }
-    const ends: number[] = []
-    for (let k = 0; k < extra.length; k++) if (extra[k]! > item.start && extra[k]! < item.end) ends.push(extra[k]!)
-    // A white-space item built from the cache is a word separator unless it starts with a preserved TAB (IIB:893).
-    const isWordSeparator = item.isWhitespace ? text.charCodeAt(item.start) !== 0x09 || !preserve : item.isWordSeparator
-    if (ends.length === 0 && isWordSeparator === item.isWordSeparator) {
-      items.push(item)
-      boxItems++
-      continue
-    }
-    differs = true
-    changed[i] = true
-    ends.push(item.end)
-    let from = item.start
-    for (let k = 0; k < ends.length; k++) {
-      const to = ends[k]!
-      // buildInlineItemListForTextFromBreakingPositionsCache reads the soft hyphen at each end (IIB:908).
-      items.push({ ...item, start: from, end: to, isWordSeparator, hasTrailingSoftHyphen: item.isWhitespace ? false : text.charCodeAt(to - 1) === 0xad, width: ends.length === 1 ? item.width : width(item, from, to) })
-      boxItems++
-      from = to
-    }
-  }
-  if (!differs || boxItems < TEXT_BREAKING_POSITION_CACHE_MINIMUM_BREAKS) return null
-  return { prepared: { ...p, items, inspect: { ...inspect, worlds: [] } }, box: boxIndex, itemIndex, changed }
-}
-
-function collectHistoryWorlds(p: WebKitPrepared, inspect: WebKitInspect, bidi: BidiData): void {
-  for (let b = 0; b < p.boxes.length; b++) {
-    const box = p.boxes[b]!
-    if (box.text.length < TEXT_BREAKING_POSITION_CACHE_MINIMUM_LENGTH) continue
-    const ownEnds = new Set<number>()
-    let hasLongWhitespace = false
-    let previousWhitespaceEnd = -1
-    for (let i = 0; i < p.items.length; i++) {
-      const item = p.items[i]!
-      if ((item.kind !== 'text' && item.kind !== 'soft-line-break') || item.box !== b) continue
-      ownEnds.add(item.kind === 'text' ? item.end : item.start + 1)
-      if (item.kind !== 'text' || !item.isWhitespace) continue
-      hasLongWhitespace ||= item.end - item.start > 1 || previousWhitespaceEnd === item.start
-      previousWhitespaceEnd = item.end
-    }
-    const extras: number[][] = [[]]
-    const seen = new Set<string>([''])
-    const sets = historyBoundarySets(box, bidi)
-    for (let k = 0; k < sets.length; k++) {
-      const extra = sets[k]!.filter(position => position > 0 && position < box.text.length && !ownEnds.has(position)).sort((x, y) => x - y)
-      const key = extra.join(',')
-      if (seen.has(key)) continue
-      seen.add(key)
-      extras.push(extra)
-    }
-    // Preserved white space of two units or more takes the three structures; a world that equals the own items is dropped.
-    const structures: Array<WhitespaceStructure | null> = preservesSpacesAndTabs(box.style) && hasLongWhitespace ? ['whole', 'per-unit', 'separators'] : [null]
-    const worldKeys = new Set<string>()
-    for (let k = 0; k < extras.length; k++) for (let j = 0; j < structures.length; j++) {
-      const world = historyWorld(p, inspect, b, extras[k]!, structures[j]!)
-      if (world === null) continue
-      let key = ''
-      for (let i = 0; i < world.prepared.items.length; i++) {
-        const item = world.prepared.items[i]!
-        if (item.kind === 'text' && item.box === b) key += `${item.start}-${item.end}${item.isWordSeparator ? 's' : ''},`
-      }
-      if (worldKeys.has(key)) continue
-      worldKeys.add(key)
-      inspect.worlds.push(world)
-    }
-  }
+  p.inspect.boxes.push({
+    monospaceUnknown: facts.monospace === null, hyphenUnknown: facts.mapsHyphen === null, unverifiedCoverage: unverified === null ? [] : unverified.codePoints,
+    primaryFamilyUnknown: facts.primaryFamily === null, pairKerningUnknown: facts.pairKerning === null, localeChoosesFonts,
+    hanLocaleUnknown: env.preferredLanguages === null && lang !== '' && isHanLocale(lang),
+    quoteLocaleUnknown: env.icuDefaultLocale === null && quote && box.locale !== '' && !hasDelimiterData(box.locale),
+    dictionaryRangesStartingWithMark: env.dictionaryBreaks.kind === 'intl-segmenter-word' ? dictionaryRangesStartingWithMark(lineRules(box.locale, box.style.lineBreakMode, p.icuDefaultLocale).rules, text) : [],
+  })
 }
 
 // ---- While a line is filled ----
@@ -533,8 +233,9 @@ export function shapedAcrossInlineBoxes(sink: GapSink, p: WebKitPrepared, firstI
 // covers a failure only where its range touches what differs (lab scorer 5). Ranges of one gap and leaf that touch are one
 // entry.
 // The list starts as the gaps the filling raised, in their order, which the merging below reads; the decided line keeps its
-// own. Merge rule: by gap, run and overlap, scanning from the end, with extension.
-function measuredGaps(p: WebKitPrepared, inspect: WebKitInspect, decided: WebKitFilledLine | WebKitRefusedSlot): Gap[] {
+// own. Merge rule: by gap, run and overlap, scanning from the end, with extension. It throws on a paragraph prepared plain.
+export function lineGaps(p: WebKitPrepared, decided: WebKitFilledLine | WebKitRefusedSlot): Gap[] {
+  const inspect = inspectOf(p, 'inspectLine')
   if (decided.gaps === null) throw new Error('the line was filled from a paragraph prepared plain, which raises no gaps')
   const env = p.env
   const start = decided.from
@@ -613,7 +314,7 @@ function measuredGaps(p: WebKitPrepared, inspect: WebKitInspect, decided: WebKit
           : "the string is too long to count its spacing-bearing glyphs exactly from two float32 totals, so Canvas can't show whether liga, clig, dlig or hlig, which the DOM turns off under letter-spacing, merged glyphs in it")
       }
     }
-    // OffscreenCanvas has a null locale (specs/webkit-canvas.md §1.3): collectBoxFacts. A control is measured as
+    // OffscreenCanvas has a null locale (specs/webkit-canvas.md §1.3): boxMade. A control is measured as
     // another character (canvasString) and draws no font's glyph of its own.
     const localeChooses = facts.localeChoosesFonts
     if (localeChooses !== null) {
@@ -720,125 +421,18 @@ function fixedPitchShortcutWidth(box: WebKitBox, from: number, to: number, trail
 }
 
 
-// ---- A decided line: page history ("Page history: the break position cache" above) ----
-// rule webkit/gap/page-history-worlds
-
-// What the comparison below reads of a decided line: its range, its line box and its display boxes; or that the slot was
-// refused.
-type ComparedLine = { kind: 'line'; start: number; end: number; hasLineBox: boolean; geometry: WebKitLineGeometry } | { kind: 'below-floats' }
-
-function comparedLine(p: WebKitPrepared, decided: WebKitFilledLine | WebKitRefusedSlot): ComparedLine {
-  switch (decided.kind) {
-    case 'line': return { kind: 'line', start: decided.start, end: decided.end, hasLineBox: lineHasVisuallyNonEmptyContent(p, decided.line), geometry: lineGeometry(p, decided) }
-    case 'below-floats': return { kind: 'below-floats' }
-  }
-}
-
-// Where a line of the paragraph and the same line in a history world differ, as a source range, or null where they agree in
-// everything the observation port reads: the line's range, its line box and its display boxes.
-function lineDifference(p: WebKitPrepared, a: ComparedLine, b: ComparedLine): { start: number; end: number } | null {
-  if (a.kind !== 'line' || b.kind !== 'line') return a.kind === b.kind ? null : a.kind === 'line' ? { start: a.start, end: a.end } : { start: 0, end: 0 }
-  let start = Infinity
-  let end = -Infinity
-  const mark = (from: number, to: number): void => {
-    start = Math.min(start, from)
-    end = Math.max(end, to)
-  }
-  // Another break: the text between the two breaks. What else differs on the line follows from the break.
-  if (a.end !== b.end) return { start: Math.min(a.end, b.end), end: Math.max(a.end, b.end) }
-  const ga = a.geometry
-  const gb = b.geometry
-  for (let k = 0; k < ga.boxes.length && k < gb.boxes.length; k++) {
-    const x = ga.boxes[k]!
-    const y = gb.boxes[k]!
-    let same = x.kind === y.kind && x.x === y.x && x.width === y.width
-    if (same && (x.kind === 'text' || x.kind === 'soft-line-break') && (y.kind === 'text' || y.kind === 'soft-line-break')) {
-      same = x.run === y.run && x.start === y.start && x.end === y.end && x.level === y.level && x.hyphen === y.hyphen && x.expansion === y.expansion
-    }
-    if (same) continue
-    if (x.kind === 'text' || x.kind === 'soft-line-break') mark(p.runStarts[x.run]! + x.start, p.runStarts[x.run]! + x.end)
-    else mark(a.start, a.end)
-  }
-  // The line's own sums alone: no box says where.
-  if (start === Infinity && (a.hasLineBox !== b.hasLineBox || ga.contentWidth !== gb.contentWidth || ga.hangingWidth !== gb.hangingWidth || ga.contentLogicalRight !== gb.contentLogicalRight || ga.alignmentOffset !== gb.alignmentOffset || ga.boxes.length !== gb.boxes.length)) mark(a.start, a.end)
-  return start === Infinity ? null : { start, end }
-}
-
-// The line start in a history world that stands where `start` stands, or null where the world can't be at that start: the
-// line begins inside an item with a width carried from the lines before it (overflowWidthAsLeadingForNextLine, ALB:54-98;
-// InlineTextItem::right, InlineTextItem.cpp:65-71), and the world's item there isn't the own one, so its rest started from
-// another whole (triage c-66ae4ab7d56cb0ae: line 6 keeps `ببب` at 16.27px, the rest of `بببب` alone, where the rest of
-// `((بببب` is 26.02px); or the world has no item boundary at a line start between two of the own items.
-function worldLineStart(p: WebKitPrepared, world: WebKitHistoryWorld, start: WebKitLineStart): WebKitLineStart | null {
-  if (start.itemIndex >= p.items.length) return { ...start, itemIndex: world.prepared.items.length }
-  const own = p.items[start.itemIndex]!
-  let index = world.itemIndex[start.itemIndex]!
-  if (own.kind !== 'text') return { ...start, itemIndex: index }
-  const position = own.start + start.offset
-  const items = world.prepared.items
-  let first = items[index] as WebKitTextItem
-  if (first.start > own.start) return null
-  while (first.end <= position) {
-    const following = items[index + 1]
-    if (following === undefined || following.kind !== 'text' || following.box !== own.box || following.start !== first.end) return null
-    first = following
-    index++
-  }
-  if (start.offset === 0) return first.start === position ? { ...start, itemIndex: index } : null
-  // A carried width is the whole item's less what the lines before took, so it stands in the world only where the world's
-  // item is the own one (suite c-19ccdb6bbbc8089c: `ببب((` broken after its first letter carries 32.4px for `بب((`, where a
-  // world that ends an item before `((` carries 10.416px for `بب`, which fits with nothing after it).
-  if (start.previousLine !== null && start.previousLine.carriedWidth !== null) return first.start === own.start && first.end === own.end ? { ...start, itemIndex: index } : null
-  if (first.start === own.start) return { ...start, itemIndex: index }
-  return { ...start, itemIndex: index, offset: position - first.start }
-}
+// ---- A decided line in a history world (history.ts) ----
 
 const PAGE_HISTORY_DETAIL = "the break position cache keys a box by its text and wrapping styles, not by its paragraph's direction, neighbouring content, white-space or word spacing, so a box of the same text laid out earlier in the process can hand this box other item ends, and with them this line differs here"
 
-// Each world that changes an item the line read lays the line out from the same start in the same slot, with the functions
-// that fill and inspect the paragraph's own line. Merge rule: by gap and run, with extension and no overlap test.
-function pageHistoryGaps(p: WebKitPrepared, inspect: WebKitInspect, decided: WebKitFilledLine | WebKitRefusedSlot, gaps: Gap[]): void {
-  const start = decided.from
-  const readEnd = Math.min(Math.max(decided.measuredEnd, start.itemIndex + 1), p.items.length)
-  let ownLine: ComparedLine | null = null
-  for (let w = 0; w < inspect.worlds.length; w++) {
-    const world = inspect.worlds[w]!
-    let reads = false
-    for (let i = start.itemIndex; i < readEnd && !reads; i++) reads = world.changed[i]!
-    if (!reads) continue
-    const worldStart = worldLineStart(p, world, start)
-    let at: { start: number; end: number } | null
-    if (worldStart === null) {
-      const from = start.itemIndex === 0 && start.offset === 0 ? 0 : sourceOffset(p, { index: start.itemIndex, offset: start.offset })
-      const own = p.items[start.itemIndex]!
-      at = { start: from, end: own.kind === 'text' ? p.boxes[own.box]!.sourceStart + own.end : from }
-    } else {
-      const inWorld = fillLine(world.prepared, worldStart, decided.slot).line
-      // The world's line gets the gap work of the paragraph's own, with the Canvas questions that takes, though the comparison
-      // reads none of it. A world shares its paragraph's box facts.
-      measuredGaps(world.prepared, inspect, inWorld)
-      ownLine ??= comparedLine(p, decided)
-      at = lineDifference(p, ownLine, comparedLine(world.prepared, inWorld))
-    }
-    if (at === null) continue
-    const run = p.boxes[world.box]!.run
-    let known = false
-    for (let k = 0; k < gaps.length && !known; k++) {
-      const gap = gaps[k]!
-      if (gap.gap !== 'page-history' || gap.run !== run || gap.at === undefined) continue
-      gap.at = { start: Math.min(gap.at.start, at.start), end: Math.max(gap.at.end, at.end) }
-      known = true
-    }
-    if (!known) gaps.push({ gap: 'page-history', run, detail: PAGE_HISTORY_DETAIL, at })
+// A history world that hands the text box of `run` another item list lays the line out otherwise at `at` (history.ts
+// pageHistoryGaps). Merge rule: by gap and run, with extension and no overlap test.
+export function lineDiffersInHistoryWorld(gaps: Gap[], run: number, at: { start: number; end: number }): void {
+  for (let k = 0; k < gaps.length; k++) {
+    const gap = gaps[k]!
+    if (gap.gap !== 'page-history' || gap.run !== run || gap.at === undefined) continue
+    gap.at = { start: Math.min(gap.at.start, at.start), end: Math.max(gap.at.end, at.end) }
+    return
   }
-}
-
-// The gaps of a decided line or a refused slot: what its filling raised, the conditions of what it measured, and page-history
-// where a history world lays the line (InlineFormattingContext::lineLayout) out otherwise. It throws on a paragraph prepared
-// plain.
-export function lineGaps(p: WebKitPrepared, decided: WebKitFilledLine | WebKitRefusedSlot): Gap[] {
-  const inspect = inspectOf(p, 'inspectLine')
-  const gaps = measuredGaps(p, inspect, decided)
-  pageHistoryGaps(p, inspect, decided, gaps)
-  return gaps
+  gaps.push({ gap: 'page-history', run, detail: PAGE_HISTORY_DETAIL, at })
 }

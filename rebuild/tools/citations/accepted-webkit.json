@@ -1,0 +1,3 @@
+[
+{"kind":"prose","token":"run ${} has no text box","where":"code","count":1,"reason":"output.ts boxOfRun, the reverse lookup from a display box's run to its text box, went with its one caller: the display box tree's leaves carry the word spacing they were placed with"}
+]

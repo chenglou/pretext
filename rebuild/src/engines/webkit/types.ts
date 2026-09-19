@@ -108,10 +108,8 @@ export type WebKitBox = {
   // both for every family that may realize (measure.ts mergedGlyphs).
   spacingFacts: ReadonlyArray<{ coverage: readonly number[]; inputs: readonly number[] }> | null
   // The font-family list Canvas is given: the declared list with each generic keyword the locale resolves to a family of its
-  // own named (fonts.ts), and the script's standard family appended where no listed family resolves. `firstNamedGeneric` is
-  // the index of the first family named that way, or -1.
+  // own named (fonts.ts), and the script's standard family appended where no listed family resolves.
   canvasFamily: string
-  firstNamedGeneric: number
 }
 
 // UBIDI_DEFAULT_LTR, the level of items built without bidi (IIB:907, 977, 987, 1031).
@@ -168,18 +166,18 @@ export type WebKitPrepared = {
   // and the box facts hold the ones they measure in. A world shares its paragraph's.
   contexts: Context[]
   // What the paragraph keeps only for inspectLine and paragraphGaps; null on a paragraph prepared plain, which computes no
-  // gap, asks Canvas nothing that only a gap reads, and answers neither (index.ts, gaps.ts). Nothing else says which of the
-  // two a paragraph is.
+  // gap, asks Canvas nothing that only a gap reads, and answers neither (index.ts, gaps.ts, history.ts). Nothing else says
+  // which of the two a paragraph is.
   inspect: WebKitInspect | null
 }
 
 export type WebKitInspect = {
-  // The paragraph's gaps: conditions of the environment alone (gaps.ts inspectParagraph).
+  // The paragraph's gaps: conditions of the environment alone (gaps.ts newInspection).
   gaps: Gap[]
   // Per box, in box order, what only gaps read of it.
   boxes: WebKitBoxInspect[]
-  // The paragraph as it lays out where the break position cache hands one of its boxes another item list (gaps.ts, "Page
-  // history"). Empty in a world.
+  // The paragraph as it lays out where the break position cache hands one of its boxes another item list (history.ts).
+  // Empty in a world.
   worlds: WebKitHistoryWorld[]
 }
 
@@ -198,7 +196,7 @@ export type WebKitBoxInspect = {
   // which decides the shaped advance of the U+0020 a text item is measured with (gap simplified-measuring).
   pairKerningUnknown: boolean
   // How the box's locale, which OffscreenCanvas doesn't have, chooses fonts beyond that (gap canvas-language; gaps.ts
-  // collectBoxFacts). A character is concerned unless a family of `namedContext` draws it (namedFamilyDraws: the families
+  // boxMade). A character is concerned unless a family of `namedContext` draws it (namedFamilyDraws: the families
   // before the first one below, followed by LastResort, against `lastResortContext`, LastResort alone):
   // - `unknownFamily`: the list holds a family the locale resolves in a way Canvas can't be given (a system design, or
   //   -webkit-standard under USCRIPT_HAN without the preferred languages);

@@ -54,6 +54,25 @@ export function genericFamilyUnder(keyword: string, locale: string, script: stri
   return name === '' ? null : name
 }
 
+// A font-family list as names, each marked quoted or not: a quoted keyword names a family of that name, not the generic family
+// (CSS Fonts 4 §4.2, research/CHARTER-CRITIC.md item 9). `css` is the name as the list writes it.
+export type FamilyName = { css: string; name: string; quoted: boolean }
+
+export function familyNames(family: string): FamilyName[] {
+  const out: FamilyName[] = []
+  const parts = family.split(',')
+  for (let i = 0; i < parts.length; i++) {
+    const css = parts[i]!.trim()
+    out.push({ css, name: css.replace(/^["']|["']$/g, '').toLowerCase(), quoted: /^["'].*["']$/.test(css) })
+  }
+  return out
+}
+
+// A family Canvas is given by name.
+export function namedFamily(name: string): FamilyName {
+  return { css: JSON.stringify(name), name: name.toLowerCase(), quoted: true }
+}
+
 export function hasEmojiPresentation(cp: number): boolean {
   const ranges = webkitEmojiPresentationRanges
   let low = 0

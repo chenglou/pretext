@@ -84,7 +84,9 @@ function expansionOpportunityCount(text: string, rtl: boolean, behavior: Expansi
 
 // InlineContentAligner::applyTextAlignJustify with computedExpansions and applyExpansionOnRange
 // (InlineContentAligner.cpp:150-267), without ruby, over the line's runs: returns the width the content grew by. The last
-// text run's hanging trailing white space, `hangingLength` units, counts no opportunity.
+// text run's hanging trailing white space, `hangingLength` units, counts no opportunity. A run keeps its expansion and its
+// behavior; how ComplexTextController::adjustGlyphsAndAdvances hands them to the run's glyphs (ComplexTextController.cpp:698-845
+// with expansionLocation :673-696) is for whoever reads glyph positions, the lab's observation port today.
 export function applyTextAlignJustify(boxes: readonly WebKitBox[], runs: LineRun[], hangingLength: number, spaceToDistribute: number): number {
   if (runs.length === 0 || spaceToDistribute <= 0) return 0
   let lastTextRun = -1
