@@ -271,6 +271,30 @@ doesn't depend on the old library in `src/`.
   configurations (`.artifacts/tests/runs/ra-x2-painter`), and check 8's list of exceptions is empty.
 - **The tripwire tripped once**, on Firefox's giants along the inspected path ("Baselines for the tripwire" below).
 
+## Landed in the re-architecture's X3 (2026-09-19)
+
+- **The ports' model clean-up moves no row** (DESIGN.md §3, "Each port's data since the re-architecture's X3"). On each
+  owner's branch tier 1 is the same on all six references with 0 questions changed, tier 2 in both orders and both
+  configurations shows 0 transitions in the owner's browser, and the giants' predictions equal the frozen rows'
+  (`.artifacts/tests/runs/ra-x3-blink`, `ra-x3-webkit`, `ra-x3-gecko`). The row's format didn't move.
+- **Three Blink jobs change Chrome's recorded rows**, each in its own commit: gap lists are handed out canonical, with
+  X2's two flows back (DESIGN.md §5); a painted line in an RTL block is segmented by script, which moves the limit
+  `script-at-line-start` and no painted DOM (§7); an inspected paragraph makes no unused one-byte hyphen contexts
+  (§4.6). At the merge tier 1 exits 1 for Chrome, as accounted (926 rows without facts and 756 with them differ byte
+  for byte: 473 and 303 by gap lists, 461 by painter limits, 8 by both), and 0 for Firefox and webkit-host. Chrome's
+  references were recorded again and frozen at the X3 merge.
+- **The proof behind the gap lists is a script under `.artifacts`, not a checked-in gate**:
+  `.artifacts/tests/runs/ra-x3-blink/tools/canonical-proof.ts`, with its reports beside it (`canonical-proof-*.json`,
+  `proof-after-b-*.json` with every case whose painter limits moved, `proof-after-c-*.json`). It defines canonical on
+  its own, replays every case of both Chrome references frozen at X2 and compares after making both sides' gap lists
+  canonical: 67,065 of 67,065 cases equal in each configuration, every new list already canonical. The orchestrator ran
+  it again on the merged tree with the painter's limits left out. rebuild/TESTS.md, "Tiers", says what it proves and
+  what it doesn't.
+- **Tier 1's string storage rule watches `engines/blink/contexts.ts` too** (`replay.ts` `STORAGE_PATHS`), where
+  `styleContexts` and `raw16Of` moved from `shape.ts`; `check --sites` names the site `raw16Of@engines/blink/contexts.ts`.
+- **The known tail**: the painter item for the two open `twins` rows is closed, and the plain predictor's five Firefox
+  cases went into `gecko/process-font-fallback-state` ("The known tail").
+
 ## Test tiers
 
 Four tiers by time, one command each. The first three give a signal in seconds to minutes; the fourth is the round's
@@ -433,6 +457,9 @@ bun rebuild/tests/replay.ts check --browser=chrome            # or --browser=all
   4.98). webkit-host asks 5.68 M for 2.04 M (2.79) without facts and 3.83 M for 1.23 M with them (3.12); the plain path
   2.52 M for 1.67 M (1.50) and 1.39 M for 0.79 M (1.75). Firefox asks 7.30 M without facts and 7.38 M with them (1.66
   and 1.67), and the plain path 3.48 M and 3.51 M (1.41 and 1.42).
+  Since Blink's X3 (2026-09-19; the two flows X2 took back are in, DESIGN.md §4.7): Chrome's headline reference asks
+  49.4 M questions for 6.69 M distinct ones (7.38; 8.46 with the lab's facts), and the plain path 234.3 a paragraph for
+  61.0 distinct (3.84; 224.3 for 48.3, 4.64). webkit-host's and Firefox's counts didn't move at X3.
 - `check --sites` adds asks and repeats by library call site: the innermost three library frames of the stack at every
   measureText call, read inside the replay's context (`lab/measurements.ts` `SiteTally`), so nothing in `rebuild/src` counts
   anything; `src/measure/canvas.ts` is left out of a site, since every call passes through it. The report's `sites.under`
@@ -445,7 +472,9 @@ bun rebuild/tests/replay.ts check --browser=chrome            # or --browser=all
   its two contexts (`ligatureAcross`, 1.24 M of 2.90 M repeats) and the cluster before an offset alone
   (`inWordAdvance`, 0.81 M), 62% under `inspectLine`; WebKit's is `mergedGlyphs` under `itemGaps` (1.5 M of 3.6 M
   without facts). The X2 sections of specs/blink-RESULTS.md, specs/webkit-RESULTS.md and specs/gecko-RESULTS.md list
-  every site.
+  every site. Since Blink's X3 its top site is `raw16Of < measure16 < pairAdjust16` still, with 29.5 M of 42.7 M
+  repeats (`raw16Of` is in `engines/blink/contexts.ts` now); `inspectLine` holds 51.7% of the repeats and `fillLine`
+  43.5%.
 - *The contexts are the replay's own count* of the contexts the prediction made; the library's call log isn't read. It
   equals the library's count in every frozen case, so the references frozen in format 1 still compare; their memo hits are
   ignored. `freeze` writes format 2, without them.
@@ -460,8 +489,8 @@ bun rebuild/tests/replay.ts check --browser=chrome            # or --browser=all
   can answer it); cases whose questions changed (Canvas answers can depend on what a context measured before: Blink caches
   shaped words per canvas); *unfaithful* cases, where `pack` found the replay of the recorded library giving another
   prediction than the browser's own run did (`inputs/unfaithful.json`); and, in Chrome, the *storage-sensitive* cases
-  whenever a file that builds the strings Canvas measures (`rebuild/src/measure`, `engines/blink/shape.ts`) differs from the
-  reference's commit. Blink's Canvas shapes an 8-bit string as one Latin segment and segments a 16-bit one, and keys that on
+  whenever a file that builds the strings Canvas measures (`rebuild/src/measure`, `engines/blink/shape.ts`, and since X3
+  `engines/blink/contexts.ts`, which makes the contexts' partitions) differs from the reference's commit. Blink's Canvas shapes an 8-bit string as one Latin segment and segments a 16-bit one, and keys that on
   V8's storage, which follows how a string was built (`canvasString` makes a Latin-1-only string of 13 units or more 16-bit
   by slicing it out of a 16-bit string); no record shows storage and bun has none, so a replay can't differ there. `pack`
   lists the cases that ask a Latin-1-only string of 13 units or more (`inputs/storage-sensitive.ids`: 4,528 of Chrome's
@@ -597,7 +626,11 @@ used the measurer's index; with `contextsOf` planted to give one set of contexts
 7, the painter differential (`bun rebuild/tools/painter-diff.ts check --browser=all --config=all`), is the offline check
 that reads `overflows` and the engines' paint facts, which tier 1 can't see: at the painter step it was byte-equal on
 389,646 of 389,646 cases against the painter of 81fd07d, and a planted flip of `overflows` in the adapter exits 1 with
-the differing cases.
+the differing cases. It paints a row offline only where the row's layout equals the frozen reference's byte for byte. So
+with Blink's canonical gap lists (X3) and the references of X2 it exits 3 for Chrome: 0 paintings differ, and 473 rows
+without facts and 303 with them aren't painted. Tier 2's painter observations cover those rows, and the differential's
+frozen side is bundled again with Chrome's new references. Blink's painter change of X3 alone, on the clean-up commit,
+is byte-equal on all 67,065 Chrome cases of both configurations.
 
 - **Checks 1 to 3 wait for the function set** (`prepare(paragraph, env, inspect)`, `firstLine`, `fillLine(prepared, start,
   { width, left, right })`, `linePieces`, `inspectLine`; the plan's §5.6), which step 1's S3 exports from
@@ -682,10 +715,17 @@ the differing cases.
   - Firefox, 63,771 cases: 63,651 equal in line ranges and native observations. The other 120 are in one browser process
     (`suite-sample` part 2), with fallback-font widths in another state, and line ranges moved with the native lines in
     14 of them. 115, the 14 among them, are already history-dependent in the ledger
-    (`gecko/process-font-fallback-state`). The other 5 differ in native widths alone and aren't marked there: known-tail
-    item `gecko/plain-predictor-fallback-state`. That set run again with the plain predictor gave 0 differences once and
-    the same 120 once; across X1 and X2 the usual predictor's five runs were never in the odd state, and the plain
-    predictor's were 3 times out of 5.
+    (`gecko/process-font-fallback-state`). The other 5 differ in native widths alone and aren't marked there; the same
+    known-tail item names them (it took the item `gecko/plain-predictor-fallback-state` in at X3). That set run again
+    with the plain predictor gave 0 differences once and the same 120 once; across X1 and X2 the usual predictor's five
+    runs were never in the odd state, and the plain predictor's were 3 times out of 5.
+
+  At X3, a clean-up that changed no question in WebKit and Gecko and only repeats on Blink's plain path (the runs are
+  under `.artifacts/tests/runs/ra-x3-blink`, `ra-x3-webkit` and `ra-x3-gecko`):
+  - Chrome, all 67,065 no-facts cases: 0 line ranges differ and 0 native observations differ, exit 0.
+  - webkit-host, all 63,987 no-facts cases: 0 line ranges differ; the same 3 native observations differ, exit 3.
+  - Firefox, 63,771 cases: 63,651 equal. The other 120 are X2's 120 case for case, with the same 14 moved line ranges
+    among the 115 marked history-dependent and the same 5 unmarked.
 - **Baselines for the tripwire** (X2: tier 2's wall time and the giants stay within 2× these), in
   `rebuild/tests/baselines/times-correctness-line.json`, headline configuration, 2026-09-18, from `rebuild/src` as at the
   correctness line. The giants under the exclusive lock, forward, one case a round trip: Chrome 119 s (the library's
@@ -701,6 +741,16 @@ the differing cases.
   47,000 words and the memo answered a word's later occurrences. Their plain path is 1.28× (4.0 s against 3.2 s), and
   the layouts are equal on all 9. The orchestrator accepted it: the tripped path is the inspected one, and what would
   answer it is a store found by string, which the plan keeps for after profiling (DESIGN.md §4.7).
+  At X3 (2026-09-19) other owners' jobs held the load average at 40 to 68, so a single wall time says little; each
+  owner ran its pairs back to back and read the rows' own prediction time. Nothing got slower. Chrome: the giants'
+  prediction 78.4 s against the start commit's 113.6 s under equal load (77.5 s for the clean-up alone), and tier 2
+  forward at a load average of 7, 88 s against 89 s with 73.8 s of prediction against 80.5 s. webkit-host: the giants'
+  library prediction 2.22 s against 3.41 s and forward tier 2's 21.4 s against 32.2 s; native observation, which the
+  step doesn't touch, carried the wall time the other way (giants 659 s against 487 s), so a wall-time comparison on a
+  quiet machine is still owed. Firefox: a first pair of single runs differed 1.6 times, with the lab's own native step
+  as much slower in the same run, so the owner ran alternating pairs under the exclusive lock: the giants' lab path
+  13,129 and 12,678 ms against 13,074 and 12,838 ms, the plain path 3,392 against 3,473 ms. One timed run isn't enough
+  on a shared machine; alternating pairs settled it.
 
 ### The known tail
 
@@ -738,7 +788,12 @@ After the line the Blink string storage fix added 3 named cases to the U+FFFC it
 configuration) and one painter item for the 2 open painter rows of `twins` (63 items, 594 named cases). At the X2 merge
 that painter item's note took its root cause (an RTL block enables bidi in Blink, so the painted line's brackets take
 script Common), and one history item was added for 5 Firefox `suite/measurement` cases whose native widths differ under
-the plain predictor without being marked history-dependent (64 items, 599 named cases).
+the plain predictor without being marked history-dependent (64 items, 599 named cases). At the X3 merge that painter
+item is closed: Blink's painting rule segments a painted line by script when its block is RTL, and the two rows are
+`fail covered by limit:script-at-line-start` in both configurations. A closed item stays in the file: its title says it
+is closed and at what, its note starts with "Closed on" and the date and says what would reopen it, and its conditions
+say what its rows sit under now. The 5 Firefox cases went into `gecko/process-font-fallback-state`, which already named
+them as moved by measure first, so one item carries both findings (63 items, 594 named cases).
 
 ## Running
 
