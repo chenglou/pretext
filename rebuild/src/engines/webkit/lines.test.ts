@@ -25,6 +25,8 @@ let contextual = (_s: string, _i: number): number | null => null
 // The code units the named families draw. In a list that ends with LastResort the others get LastResort's box, 16 wide, the
 // space too; in any other list they get a fallback glyph of the usual advance. A list of LastResort alone draws nothing else.
 let namedDraws = (c: number): boolean => c < 0x80
+// Every question the stand-in was asked since a test emptied the list, as font|letter spacing|text.
+let asked: string[] = []
 class StandInContext {
   font = ''
   lang = ''
@@ -34,6 +36,7 @@ class StandInContext {
   textRendering = 'auto'
   direction = 'ltr'
   measureText(raw: string): { width: number } {
+    asked.push(`${this.font}|${this.letterSpacing}|${raw}`)
     // Canvas turns U+0009-U+000D into spaces before it measures (CanvasRenderingContext2DBase.cpp:2847-2875).
     const s = raw.replace(/[\t\n\v\f\r]/g, ' ')
     const spacing = parseFloat(this.letterSpacing)
@@ -81,7 +84,7 @@ function layout(p: Sized, insets: Insets[] = [], environment: WebKitEnvironment 
   const gaps = paragraphGaps(prepared).map(g => g.gap)
   for (const line of lines) for (const gap of line.gaps) gaps.push(gap.gap)
   for (const refused of belowFloats) for (const gap of refused.gaps) gaps.push(gap.gap)
-  return { lines, gaps, belowFloats: belowFloats.map(refused => refused.row), fonts: prepared.measurer.log.contexts.map(context => context.font) }
+  return { lines, gaps, belowFloats: belowFloats.map(refused => refused.row), fonts: prepared.contexts.map(context => context.settings.font) }
 }
 
 function textBoxes(boxes: WebKitDisplayBox[]): WebKitTextBox[] {
@@ -469,6 +472,7 @@ describe('page history worlds (gaps.ts, "Page history")', () => {
 describe('plain and inspected paragraphs (DESIGN.md §2.9; gaps.ts)', () => {
   // Every fill result with its pieces, and what the paragraph asked of Canvas.
   function walk(p: Sized, inspect: boolean, insets: Insets[] = []) {
+    asked = []
     const prepared = prepare(p, env, inspect)
     const out: unknown[] = []
     let row = 0
@@ -487,8 +491,7 @@ describe('plain and inspected paragraphs (DESIGN.md §2.9; gaps.ts)', () => {
       }
       start = filled.next
     }
-    const log = prepared.measurer.log
-    return { prepared, lines: out, fonts: log.contexts.map(context => context.font), asked: log.calls.map(call => `${log.contexts[call.context]!.font}|${call.text}`) }
+    return { prepared, lines: out, fonts: prepared.contexts.map(context => context.settings.font), asked }
   }
 
   test('a plain paragraph answers neither inspectLine nor paragraphGaps', () => {
@@ -522,7 +525,7 @@ describe('plain and inspected paragraphs (DESIGN.md §2.9; gaps.ts)', () => {
   test('a plain paragraph asks nothing that only a gap reads: the other hyphen, LastResort beside the coverage test, a world\'s items', () => {
     advance = c => c === 0x2010 ? 6 : c === 0x20 ? 4 : 8
     const hyphenated = paragraph([['super\u00adcalifragilistic', 'text']], { width: 45 })
-    expect(walk(hyphenated, true).asked.filter(question => question.endsWith('|-')).length).toBe(1)
+    expect(walk(hyphenated, true).asked.filter(question => question.endsWith('|-')).length).toBeGreaterThan(0)
     expect(walk(hyphenated, false).asked.filter(question => question.endsWith('|-')).length).toBe(0)
     advance = c => c === 0x20 ? 4 : 8
     const fixedPitch = paragraph([['foo bar', 'text']], { width: 1000 }, { ...UNKNOWN_FONT_FACTS, monospace: true, primaryFamily: 'Menlo' })
@@ -548,6 +551,52 @@ describe('plain and inspected paragraphs (DESIGN.md §2.9; gaps.ts)', () => {
       }
       start = filled.next
     }
+  })
+})
+
+describe('Canvas questions: every read asks Canvas, and a value needed twice in one scope is asked once (measure.ts)', () => {
+  // What a plain or an inspected paragraph asked of Canvas, preparing and filling every line at its width.
+  function questions(p: Sized, inspect: boolean): string[] {
+    asked = []
+    const prepared = prepare(p, env, inspect)
+    for (let start = firstLine(prepared); start !== null;) {
+      const filled = fillLine(prepared, start, { width: p.width, left: 0, right: 0 })
+      if (inspect) inspectLine(prepared, filled.line)
+      start = filled.next
+    }
+    return asked
+  }
+  const times = (list: string[], question: string): number => list.filter(q => q === question).length
+
+  test('a box keeps the space its white-space items were measured with, so the space that follows a word is asked once', () => {
+    const list = questions(paragraph([['foo bar baz', 'text']], { width: 1000 }), false)
+    expect(times(list, 'normal 400 16px Arial|0px| ')).toBe(1)
+    // Every word with the space that follows it, once each.
+    expect(times(list, 'normal 400 16px Arial|0px|foo ')).toBe(1)
+    expect(times(list, 'normal 400 16px Arial|0px|bar ')).toBe(1)
+  })
+
+  test('a hyphen read asks the box\'s hyphen once, and the other hyphen beside it only where an inspected paragraph doesn\'t know the font\'s', () => {
+    advance = c => c === 0x2010 ? 6 : c === 0x20 ? 4 : 8
+    const hyphenated = paragraph([['super\u00adcalifragilistic', 'text']], { width: 45 })
+    const inspected = questions(hyphenated, true)
+    const plain = questions(hyphenated, false)
+    advance = c => c === 0x20 ? 4 : 8
+    expect(times(plain, 'normal 400 16px Arial|0px|-')).toBe(0)
+    expect(times(plain, 'normal 400 16px Arial|0px|\u2010')).toBeGreaterThan(0)
+    // Whatever asks for the hyphen's width on the inspected paragraph asks the other hyphen once beside it.
+    expect(times(inspected, 'normal 400 16px Arial|0px|-')).toBe(times(inspected, 'normal 400 16px Arial|0px|\u2010'))
+  })
+
+  test('the primary-font coverage test asks each code point of the text once', () => {
+    const list = questions(paragraph([['aab aab', 'text']], { width: 1000 }, { ...UNKNOWN_FONT_FACTS, monospace: true, primaryFamily: 'Menlo' }), false)
+    for (const letter of ['a', 'b', ' ']) expect(times(list, `normal 400 16px "Menlo", LastResort|0px|${letter}`)).toBe(1)
+  })
+
+  test('a letter-spaced string is totalled once in the count context, where the total says whether it can be counted and counts it', () => {
+    const list = questions(paragraph([['abc', 'text']], { width: 1000, letterSpacing: 2 }), false)
+    expect(times(list, 'normal 400 16px Arial|64px|abc')).toBe(1)
+    expect(times(list, 'normal 400 16px Arial|0px|abc')).toBe(1)
   })
 })
 

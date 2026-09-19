@@ -8,7 +8,7 @@
 //   character the filling measured, then page-history from the line as each history world lays it out.
 // A paragraph prepared plain has `inspect` null and a null GapSink: every function here that takes one returns at once, so
 // the paragraph asks Canvas nothing that only a gap reads, and lineGaps and paragraphGaps throw on it.
-import { measureContext, measureText, type CanvasSettings, type Measurer } from '../../measure/canvas.js'
+import { contextFor, width as canvasWidth, type CanvasSettings, type Context } from '../../measure/canvas.js'
 import { canvasFont } from '../../measure/font.js'
 import type { FontFacts, Gap, GapName } from '../../model.js'
 import { AL, FSI, L, LRE, LRI, LRO, ON, PDF, PDI, R, RLE, RLI, RLO, bidiClassOf, type BidiData } from '../../unicode/bidi.js'
@@ -44,17 +44,17 @@ export function paragraphGaps(p: WebKitPrepared): Gap[] {
 
 // makeBox's primary-font coverage test can't vouch for a code point that measures as wide as LastResort's own box: a fallback
 // glyph of that advance looks covered (research/CHARTER-CRITIC.md item 1). Lines measuring such a code point report
-// font-fallback. The test hands each code point it finds covered over with its width, and LastResort alone is measured beside
-// it.
-export type UnverifiedCoverage = { lastResortContext: number; codePoints: number[] }
+// font-fallback. The test hands each code point it finds covered over once, with its width, and LastResort alone is measured
+// beside it.
+export type UnverifiedCoverage = { lastResortContext: Context; codePoints: number[] }
 
-export function unverifiedCoverage(inspect: WebKitInspect | null, m: Measurer, lastResort: CanvasSettings): UnverifiedCoverage | null {
-  return inspect === null ? null : { lastResortContext: measureContext(m, lastResort), codePoints: [] }
+export function unverifiedCoverage(p: WebKitPrepared, lastResort: CanvasSettings): UnverifiedCoverage | null {
+  return p.inspect === null ? null : { lastResortContext: contextFor(p.contexts, lastResort), codePoints: [] }
 }
 
-export function coveredLikeLastResort(unverified: UnverifiedCoverage | null, m: Measurer, cp: number, s: string, covered: number): void {
+export function coveredLikeLastResort(unverified: UnverifiedCoverage | null, cp: number, s: string, covered: number): void {
   if (unverified === null) return
-  if (covered === measureText(m, unverified.lastResortContext, s) && !unverified.codePoints.includes(cp)) unverified.codePoints.push(cp)
+  if (covered === canvasWidth(unverified.lastResortContext, s)) unverified.codePoints.push(cp)
 }
 
 // The box makeBox made, in box order: what its font facts leave unknown and the coverage above. inspectParagraph adds what the
@@ -82,12 +82,12 @@ const SYSTEM_DESIGN_FAMILIES = ['system-ui', '-apple-system', 'ui-serif', 'ui-sa
 // LastResort's box (the recipe of makeBox's coverage test; a glyph as wide as LastResort's box can't be told from it and
 // counts as not drawn). A list draws a character with its first family that has a glyph, so what the families before some
 // point of the box's list draw there they draw in the whole list.
-function familyDraws(m: Measurer, context: number, lastResortContext: number, cp: number): boolean {
+function familyDraws(context: Context, lastResortContext: Context, cp: number): boolean {
   // FontCascade::treatAsZeroWidthSpace (FontCascadeInlines.h:160-176): drawn as a zero-width space whatever font has it,
   // so no font choice shows in a width. Controls below U+0020 and U+007F-U+009F never reach here.
   if (cp === 0xad || cp === 0x200b || cp === 0x200c || cp === 0x200d || cp === 0x200e || cp === 0x200f || (cp >= 0x202a && cp <= 0x202e) || cp === 0xfeff || cp === 0xfffc) return true
   const s = String.fromCodePoint(cp)
-  return measureText(m, context, s) !== measureText(m, lastResortContext, s)
+  return canvasWidth(context, s) !== canvasWidth(lastResortContext, s)
 }
 
 // Whether system fallback for the code point can change a width under the locale. lookupFallbackFont hands Core Text the
@@ -119,7 +119,6 @@ function hasLanguageDependentFallback(cp: number, locale: string, script: string
 // measured them, from the facts each box records here.
 function collectBoxFacts(p: WebKitPrepared, inspect: WebKitInspect, leaves: readonly LeafInput[]): void {
   const env = p.env
-  const m = p.measurer
   if (env.pageZoom === null) {
     inspect.gaps.push({ gap: 'page-zoom', run: null, detail: "the page zoom isn't given; laid out at 1" })
   }
@@ -174,9 +173,9 @@ function collectBoxFacts(p: WebKitPrepared, inspect: WebKitInspect, leaves: read
       const parts = box.canvasFamily.split(',').map(part => part.trim())
       const named = parts.slice(0, Math.min(firstUnknownFamily, namedGeneric ? box.firstNamedGeneric : families.length))
       const settings = { lang: '', letterSpacing: '0px', wordSpacing: '0px', fontKerning: 'auto' as const, textRendering: 'auto' as const, direction: 'ltr' as const, partition: '' }
-      const lastResortContext = measureContext(m, { ...settings, font: canvasFont({ ...font, family: 'LastResort' }, size) })
-      const namedContext = named.length === 0 ? lastResortContext : measureContext(m, { ...settings, font: canvasFont({ ...font, family: named.concat(['LastResort']).join(', ') }, size) })
-      const listContext = measureContext(m, { ...settings, font: canvasFont({ ...font, family: parts.concat(['LastResort']).join(', ') }, size) })
+      const lastResortContext = contextFor(p.contexts, { ...settings, font: canvasFont({ ...font, family: 'LastResort' }, size) })
+      const namedContext = named.length === 0 ? lastResortContext : contextFor(p.contexts, { ...settings, font: canvasFont({ ...font, family: named.concat(['LastResort']).join(', ') }, size) })
+      const listContext = contextFor(p.contexts, { ...settings, font: canvasFont({ ...font, family: parts.concat(['LastResort']).join(', ') }, size) })
       facts.localeChoosesFonts = { unknownFamily: firstUnknownFamily < families.length, namedGeneric, fallback: languageFallback, namedContext, listContext, lastResortContext }
     }
     facts.hanLocaleUnknown = env.preferredLanguages === null && leaf.lang !== '' && isHanLocale(leaf.lang)
@@ -345,7 +344,6 @@ function whitespaceEnds(text: string, start: number, end: number, structure: Whi
 // The paragraph's items with one box built from a cached list: the box's own ends (white space under `structure`) plus
 // `extra`, then its own bidi splits, which are the boundaries between its own items of different levels.
 function historyWorld(p: WebKitPrepared, inspect: WebKitInspect, boxIndex: number, extra: readonly number[], structure: WhitespaceStructure | null): WebKitHistoryWorld | null {
-  const m = p.measurer
   const box = p.boxes[boxIndex]!
   const text = box.text
   const preserve = preservesSpacesAndTabs(box.style)
@@ -356,7 +354,7 @@ function historyWorld(p: WebKitPrepared, inspect: WebKitInspect, boxIndex: numbe
   let boxItems = 0
   const width = (item: WebKitTextItem, from: number, to: number): number | null => {
     if (item.width === null) return null
-    return itemWidth(p, m, { ...item, start: from, end: to }, from, to, 0)
+    return itemWidth(p, { ...item, start: from, end: to }, from, to, 0)
   }
   for (let i = 0; i < p.items.length; i++) {
     const item = p.items[i]!
@@ -476,19 +474,15 @@ function collectHistoryWorlds(p: WebKitPrepared, inspect: WebKitInspect, bidi: B
 
 // ---- While a line is filled ----
 
-// TextUtil::hyphenWidth, read while filling a line (lines.ts lineHyphenWidth). Where FontFacts.mapsHyphen isn't given and U+2010
-// and U+002D measure differently, the fact decides this line's fit, so the line reports hyphen-glyph. Merge rule: by gap and run.
-export function hyphenWidthRead(sink: GapSink, p: WebKitPrepared, boxIndex: number): void {
+// TextUtil::hyphenWidth, read while filling a line (lines.ts lineHyphenWidth), which measured the box's hyphen string as
+// `hyphenTotal`. Where FontFacts.mapsHyphen isn't given the string is U+2010, and where U+002D measures differently in the
+// box's context the fact decides this line's fit, so the line reports hyphen-glyph. Merge rule: by gap and run.
+export function hyphenWidthRead(sink: GapSink, p: WebKitPrepared, boxIndex: number, hyphenTotal: number): void {
   if (sink === null) return
   const box = p.boxes[boxIndex]!
-  if (inspectOf(p, 'a line\'s filling').boxes[boxIndex]!.hyphenUnknown && hyphenGlyphsDiffer(p.measurer, box) && !sink.some(g => g.gap === 'hyphen-glyph' && g.run === box.run)) {
+  if (inspectOf(p, 'a line\'s filling').boxes[boxIndex]!.hyphenUnknown && hyphenTotal !== canvasWidth(box.context, '-') && !sink.some(g => g.gap === 'hyphen-glyph' && g.run === box.run)) {
     sink.push({ gap: 'hyphen-glyph', run: box.run, detail: `whether ${box.primaryFamily} maps U+2010 isn't given; laid out with U+2010, which measures differently from "-" here` })
   }
-}
-
-// Whether U+2010 and U+002D measure differently in the box's context: where FontFacts.mapsHyphen decides a width.
-function hyphenGlyphsDiffer(m: Measurer, box: WebKitBox): boolean {
-  return measureText(m, box.context, '‐') !== measureText(m, box.context, '-')
 }
 
 
@@ -543,7 +537,6 @@ export function shapedAcrossInlineBoxes(sink: GapSink, p: WebKitPrepared, firstI
 function measuredGaps(p: WebKitPrepared, inspect: WebKitInspect, decided: WebKitFilledLine | WebKitRefusedSlot): Gap[] {
   if (decided.gaps === null) throw new Error('the line was filled from a paragraph prepared plain, which raises no gaps')
   const env = p.env
-  const m = p.measurer
   const start = decided.from
   const gaps: Gap[] = []
   for (let k = 0; k < decided.gaps.length; k++) gaps.push({ ...decided.gaps[k]! })
@@ -593,7 +586,7 @@ function measuredGaps(p: WebKitPrepared, inspect: WebKitInspect, decided: WebKit
     for (let i = from; i < to; i++) {
       const c = text.charCodeAt(i)
       if (c === 0x0b || c === 0x0c || (c === 0x0d && box.simpleFontCodePath)) {
-        controlsExact ??= box.simpleFontCodePath && controlsMeasureExactly(m, box.spacedContext, measured)
+        controlsExact ??= box.simpleFontCodePath && controlsMeasureExactly(box.spacedContext, measured)
         if (!controlsExact) add('control-character-width', box, i, i + 1, box.simpleFontCodePath
           ? 'Core Text kerns the letter before VT, FF or CR as before a space and keeps an adjustment on CR itself; Canvas shapes another string, so the width is pieced together outside the DOM\'s float32 order'
           : 'VT, FF and CR on the complex path are measured as U+0001 and U+0000, which Core Text shapes otherwise than the control')
@@ -611,7 +604,7 @@ function measuredGaps(p: WebKitPrepared, inspect: WebKitInspect, decided: WebKit
     // separating leaves glyphs merged, the string is measured as Canvas shapes it, and a merge the DOM keeps too (a
     // required ligature) can't be told from one it turns off.
     if (box.letterSpacing !== 0 && !singleSpace) {
-      const merge = mergedGlyphs(m, box, measured)
+      const merge = mergedGlyphs(box, measured)
       if (merge.separated !== null) {
         for (let k = 0; k < merge.pairs.length; k++) add('letter-spacing-ligatures', box, from + merge.pairs[k]![0], Math.min(to, from + merge.pairs[k]![1]), 'Canvas merges this pair under liga, clig, dlig or hlig, which the DOM turns off under letter-spacing; measured with U+200C between the two, which leaves out a pair adjustment between them')
       } else if (merge.merged) {
@@ -628,11 +621,11 @@ function measuredGaps(p: WebKitPrepared, inspect: WebKitInspect, decided: WebKit
         const cp = text.codePointAt(i)!
         const length = cp > 0xffff ? 2 : 1
         if (cp > 0x1f && !(cp >= 0x7f && cp <= 0x9f)) {
-          if ((localeChooses.unknownFamily || (localeChooses.namedGeneric && hasEmojiPresentation(cp))) && !familyDraws(m, localeChooses.namedContext, localeChooses.lastResortContext, cp)) {
+          if ((localeChooses.unknownFamily || (localeChooses.namedGeneric && hasEmojiPresentation(cp))) && !familyDraws(localeChooses.namedContext, localeChooses.lastResortContext, cp)) {
             add('canvas-language', box, i, i + length, localeChooses.unknownFamily
               ? `no named family before the one locale ${box.locale} resolves draws this character; OffscreenCanvas has no locale`
               : `a character with default emoji presentation that no family before the generic one draws: the DOM skips the generic family's outline glyph, and Canvas measures the family locale ${box.locale} resolves it to by name`)
-          } else if (localeChooses.fallback && hasLanguageDependentFallback(cp, box.locale, localeScript(box.locale)) && !familyDraws(m, localeChooses.listContext, localeChooses.lastResortContext, cp)) {
+          } else if (localeChooses.fallback && hasLanguageDependentFallback(cp, box.locale, localeScript(box.locale)) && !familyDraws(localeChooses.listContext, localeChooses.lastResortContext, cp)) {
             add('canvas-language', box, i, i + length, `no family of the list draws this character, and locale ${box.locale} chooses its system fallback font; OffscreenCanvas has no locale`)
           }
         }
@@ -657,7 +650,7 @@ function measuredGaps(p: WebKitPrepared, inspect: WebKitInspect, decided: WebKit
     // the advances, the monospace trait decides it, and so does whether the realized family is Courier New
     // (FontCoreText.cpp:776-782), which the first listed family stands in for.
     if (box.simplifiedMeasuring && !singleSpace && (facts.monospaceUnknown || (box.fixedPitch && facts.primaryFamilyUnknown))) {
-      if (boxWidth(p, m, box, from, to, 0, !item.isWhitespace, false) !== fixedPitchShortcutWidth(p, m, box, from, to, !item.isWhitespace)) {
+      if (boxWidth(box, from, to, 0, !item.isWhitespace, false) !== fixedPitchShortcutWidth(box, from, to, !item.isWhitespace)) {
         add('fixed-pitch-path', box, from, to, facts.monospaceUnknown
           ? `whether ${box.primaryFamily} has the monospace trait isn't given, and the width shortcut of a fixed-pitch font gives this item another width (test T1)`
           : "the primary family isn't given, and whether it is Courier New decides the width shortcut, which gives this item another width (test T1)")
@@ -686,10 +679,10 @@ function measuredGaps(p: WebKitPrepared, inspect: WebKitInspect, decided: WebKit
         let unshaped = 0
         for (let i = 0; i < measured.length; i++) {
           const cp = measured.codePointAt(i)!
-          unshaped = f32(unshaped + measureText(m, box.context, canvasString(String.fromCodePoint(cp))))
+          unshaped = f32(unshaped + canvasWidth(box.context, canvasString(String.fromCodePoint(cp))))
           if (cp > 0xffff) i++
         }
-        const total = measureText(m, box.context, canvasString(measured))
+        const total = canvasWidth(box.context, canvasString(measured))
         moved = total !== unshaped && !(total > unshaped / 2 && total < 2 * unshaped)
       }
       if (moved) add('simplified-measuring', box, from, to, "the DOM keeps a space's shaped advance on the simplified path, where Canvas puts it back to the unshaped one")
@@ -705,12 +698,12 @@ function measuredGaps(p: WebKitPrepared, inspect: WebKitInspect, decided: WebKit
 }
 
 // Whether the width of a string holding VT, FF or CR is the DOM's own float32 sum (measure.ts, "VT, FF and CR").
-function controlsMeasureExactly(m: Measurer, context: number, text: string): boolean {
+function controlsMeasureExactly(context: Context, text: string): boolean {
   for (let i = 0; i < text.length; i++) {
     const c = text.charCodeAt(i)
     if (!isPiecedControl(c)) continue
     if (c === 0x0d && i + 1 < text.length) return false
-    if (controlIsAdjusted(m, context, text, i)) return false
+    if (controlIsAdjusted(context, text, i)) return false
   }
   return true
 }
@@ -718,11 +711,11 @@ function controlsMeasureExactly(m: Measurer, context: number, text: string): boo
 
 // The width shortcut's answer for the same range, which a fixed-pitch primary font would give (test T1 of
 // specs/webkit-gaps.md §2.5): where it differs from boxWidth, FontFacts.monospace decides the width.
-function fixedPitchShortcutWidth(p: WebKitPrepared, m: Measurer, box: WebKitBox, from: number, to: number, trailingSpace: boolean): number {
+function fixedPitchShortcutWidth(box: WebKitBox, from: number, to: number, trailingSpace: boolean): number {
   if (from === to) return 0
   const end = measuredEnd(box, to, trailingSpace)
-  let width = fixedPitchWidth(p, m, box, from, end)
-  if (end > to) width = f32(width - f32(singleSpaceWidth(m, box) + box.wordSpacing))
+  let width = fixedPitchWidth(box, from, end)
+  if (end > to) width = f32(width - f32(singleSpaceWidth(box) + box.wordSpacing))
   return Number.isNaN(width) ? 0 : Math.max(0, width)
 }
 

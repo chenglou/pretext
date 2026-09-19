@@ -6,7 +6,7 @@
 // TOS = TextOnlySimpleLineBuilder.cpp, ILB = InlineLineBuilder.cpp, IFU = InlineFormattingUtils.cpp,
 // ALB = AbstractLineBuilder.cpp, IDCB = display/InlineDisplayContentBuilder.cpp, IDLB = display/InlineDisplayLineBuilder.cpp,
 // LBB = InlineLineBoxBuilder.cpp.
-import { measureText, type Measurer } from '../../measure/canvas.js'
+import { width as canvasWidth } from '../../measure/canvas.js'
 import type { FillResultOf, Gap, LineSlot } from '../../model.js'
 import { canBreakBefore, findNextBreakablePosition, makeFactory, mayBreakInBetween } from './breaks.js'
 import { DEFAULT_BIDI_LEVEL, OPAQUE_BIDI_LEVEL } from './content.js'
@@ -14,7 +14,7 @@ import { applyTextAlignJustify, type ExpandableRun, type ExpansionBehavior } fro
 import { breakTestBetweenBoxes, emergencyBreakIn8BitText, hyphenWidthRead, shapedAcrossInlineBoxes, type GapSink } from './gaps.js'
 import type { WebKitLineStart } from './geometry.js'
 import { joinsAcross } from './joining.js'
-import { boxWidth, breakWord, canvasString, firstUserPerceivedCharacterLength, forwardOneCodePoint, hyphenWidth, itemWidth } from './measure.js'
+import { boxWidth, breakWord, canvasString, firstUserPerceivedCharacterLength, forwardOneCodePoint, itemWidth } from './measure.js'
 import { endEdgeWidth, layoutUnit, preservesSpacesAndTabs, startEdgeWidth, trailingWhitespaceHangs } from './style.js'
 import type { WebKitBox, WebKitBoxEdges, WebKitItem, WebKitLineBuilder, WebKitPrepared, WebKitStyle, WebKitTextItem } from './types.js'
 
@@ -25,7 +25,7 @@ const F32_MAX = 3.4028234663852886e38
 // filling decides, on an inspected paragraph (gaps.ts GapSink). `measuredEnd` is the item index past the last item the builder
 // read a width or a break opportunity of: the line's content and the candidate content that ended the line. `shapedCarry` says
 // the width carried to the next line comes from a candidate shaped across inline boxes.
-type Layout = { p: WebKitPrepared; m: Measurer; lineWidth: number; contentEdgeOffset: number; constrainedByFloat: boolean; gaps: GapSink; measuredEnd: number; shapedCarry: boolean }
+type Layout = { p: WebKitPrepared; lineWidth: number; contentEdgeOffset: number; constrainedByFloat: boolean; gaps: GapSink; measuredEnd: number; shapedCarry: boolean }
 type SoftLineBreakItem = Extract<WebKitItem, { kind: 'soft-line-break' }>
 type HardLineBreakItem = Extract<WebKitItem, { kind: 'hard-line-break' }>
 type LineBreakItem = SoftLineBreakItem | HardLineBreakItem
@@ -83,10 +83,13 @@ function itemStyle(p: WebKitPrepared, item: WebKitItem): WebKitStyle {
   }
 }
 
-// TextUtil::hyphenWidth, read while filling a line (gap hyphen-glyph).
+// TextUtil::hyphenWidth (TextUtil.cpp:621-624), read while filling a line: the hyphen string measured through the cascade.
+// gaps.ts gets the total, which it holds the other hyphen's against (gap hyphen-glyph).
 function lineHyphenWidth(L: Layout, boxIndex: number): number {
-  hyphenWidthRead(L.gaps, L.p, boxIndex)
-  return hyphenWidth(L.m, L.p.boxes[boxIndex]!)
+  const box = L.p.boxes[boxIndex]!
+  const total = canvasWidth(box.context, box.hyphen)
+  hyphenWidthRead(L.gaps, L.p, boxIndex, total)
+  return Math.max(0, total)
 }
 
 // ---- Line (IL, InlineLine.h) ----
@@ -441,7 +444,7 @@ function handleTrailingTrimmableContent(L: Layout, line: Line): void {
       const end = run.textStart + run.textLength
       // TextUtil::trailingWhitespaceWidth (TextUtil.cpp:124-130)
       if (box.text.charCodeAt(end - 1) === 0x20) {
-        whitespaceWidth = f32(boxWidth(L.p, L.m, box, start, end, 0, true) - boxWidth(L.p, L.m, box, start, end - 1, 0, false))
+        whitespaceWidth = f32(boxWidth(box, start, end, 0, true) - boxWidth(box, start, end - 1, 0, false))
       }
     }
     line.trimmedUnit = { box: run.box, offset: run.textStart + run.textLength - 1, level: run.level }
@@ -680,7 +683,7 @@ function isBreakableRun(L: Layout, run: ContentRun): boolean {
 // index counts from the box start, as in the source.
 function firstCharacterBreakRespectingLineStartProhibitions(L: Layout, item: WebKitTextItem, contentLogicalRight: number): PartialRun {
   const firstLength = firstUserPerceivedCharacterLength(L.p, item)
-  const firstWidth = itemWidth(L.p, L.m, item, item.start, item.start + firstLength, contentLogicalRight)
+  const firstWidth = itemWidth(L.p, item, item.start, item.start + firstLength, contentLogicalRight)
   const box = L.p.boxes[item.box]!
   if (box.is8Bit) {
     // One code unit of 8-bit text (:143-157; gap string-storage).
@@ -692,7 +695,7 @@ function firstCharacterBreakRespectingLineStartProhibitions(L: Layout, item: Web
   while (item.start + breakPosition < item.end) {
     if (canBreakBefore(box.text.charCodeAt(item.start + breakPosition), box.style.lineBreak)) break
     const next = forwardOneCodePoint(box.text, breakPosition, item.end - item.start)
-    breakWidth = itemWidth(L.p, L.m, item, item.start, item.start + next, contentLogicalRight)
+    breakWidth = itemWidth(L.p, item, item.start, item.start + next, contentLogicalRight)
     breakPosition = next
   }
   return { length: breakPosition, logicalWidth: breakWidth, hyphenWidth: null }
@@ -732,7 +735,7 @@ function lastValidBreakingPosition(L: Layout, runs: ContentRun[], index: number)
 function midWordBreak(L: Layout, run: ContentRun, logicalLeft: number, availableWidth: number): PartialRun | null {
   const item = run.item as WebKitTextItem
   const text = textOf(L, item)
-  const wb = breakWord(L.p, L.m, item, spaceRequired(run), availableWidth, logicalLeft)
+  const wb = breakWord(L.p, item, spaceRequired(run), availableWidth, logicalLeft)
   if (!wb.length || wb.length === item.end - item.start) return null
   const lineBreak = L.p.boxes[item.box]!.style.lineBreak
   if (canBreakBefore(text.charCodeAt(item.start + wb.length), lineBreak)) return { length: wb.length, logicalWidth: wb.logicalWidth, hyphenWidth: null }
@@ -742,7 +745,7 @@ function midWordBreak(L: Layout, run: ContentRun, logicalLeft: number, available
     if (canBreakBefore(text.charCodeAt(right), lineBreak)) break
   }
   if (right === item.start) return null
-  return { length: right - item.start, logicalWidth: itemWidth(L.p, L.m, item, item.start, right, logicalLeft), hyphenWidth: null }
+  return { length: right - item.start, logicalWidth: itemWidth(L.p, item, item.start, right, logicalLeft), hyphenWidth: null }
 }
 
 // InlineContentBreaker::tryBreakingTextRun (ICB:502-641)
@@ -772,24 +775,24 @@ function tryBreakingTextRun(L: Layout, runs: ContentRun[], index: number, isOver
           right = forwardOneCodePoint(text, right, length)
           if (canBreakBefore(text.charCodeAt(right), lineBreak)) {
             if (right === item.end) return null
-            return { length: right - item.start, logicalWidth: itemWidth(L.p, L.m, item, item.start, right, logicalLeft), hyphenWidth: null }
+            return { length: right - item.start, logicalWidth: itemWidth(L.p, item, item.start, right, logicalLeft), hyphenWidth: null }
           }
         }
         return null
       }
       const position = lastValidBreakingPosition(L, runs, index)
       if (position === null) return null
-      return { length: position - item.start, logicalWidth: itemWidth(L.p, L.m, item, item.start, position, logicalLeft), hyphenWidth: null }
+      return { length: position - item.start, logicalWidth: itemWidth(L.p, item, item.start, position, logicalLeft), hyphenWidth: null }
     }
     case 'arbitrary': {
       if (length === 0) return null
       if (!isOverflowingRun) {
-        if (nextTextRunIndex(runs, index) !== null) return { length, logicalWidth: itemWidth(L.p, L.m, item, item.start, item.end, logicalLeft), hyphenWidth: null }
-        if (length > 1) return { length: length - 1, logicalWidth: itemWidth(L.p, L.m, item, item.start, item.end - 1, logicalLeft), hyphenWidth: null }
+        if (nextTextRunIndex(runs, index) !== null) return { length, logicalWidth: itemWidth(L.p, item, item.start, item.end, logicalLeft), hyphenWidth: null }
+        if (length > 1) return { length: length - 1, logicalWidth: itemWidth(L.p, item, item.start, item.end - 1, logicalLeft), hyphenWidth: null }
         return null
       }
       if (!lineHasRoomForContent) return { length: 0, logicalWidth: 0, hyphenWidth: null }
-      const wb = breakWord(L.p, L.m, item, spaceRequired(run), availableWidth, logicalLeft)
+      const wb = breakWord(L.p, item, spaceRequired(run), availableWidth, logicalLeft)
       return { length: wb.length, logicalWidth: wb.logicalWidth, hyphenWidth: null }
     }
   }
@@ -1011,8 +1014,8 @@ function simpleAvailableWidth(b: Builder): number {
 // measured on its first character.
 function measuredItemWidth(L: Layout, item: WebKitTextItem, left: number): number {
   if (item.width !== null) return item.width
-  if (!item.isWhitespace || preservesSpacesAndTabs(L.p.boxes[item.box]!.style)) return itemWidth(L.p, L.m, item, item.start, item.end, left)
-  return itemWidth(L.p, L.m, item, item.start, item.start + 1, left)
+  if (!item.isWhitespace || preservesSpacesAndTabs(L.p.boxes[item.box]!.style)) return itemWidth(L.p, item, item.start, item.end, left)
+  return itemWidth(L.p, item, item.start, item.start + 1, left)
 }
 
 function revertToTrailingItem(b: Builder, target: ContentItem): number {
@@ -1437,7 +1440,8 @@ function collectShapeRanges(L: Layout, c: Content): Array<[number, number]> {
   while (contentList.length > 0 && contentList[contentList.length - 1]!.type !== 'content') contentList.pop()
   if (contentList.length === 0) return []
   const ranges: Array<[number, number]> = []
-  let lastFont = -1
+  // lastFontCascade (ILB:862): the root style's until a content run gives its own, and nothing compares it before one does.
+  let lastFontBox: WebKitBox | null = null
   let leading: number | null = null
   let trailing: number | null = null
   let hasBoundaryBetween = false
@@ -1458,13 +1462,14 @@ function collectShapeRanges(L: Layout, c: Content): Array<[number, number]> {
         const item = runs[entry.index]!.item as WebKitTextItem
         const box = p.boxes[item.box]!
         const isEligibleText = !box.simpleFontCodePath && item.level % 2 === 1 && item.level <= 125
-        // FontCascade equality: the box's Canvas settings (font, letter spacing) and word spacing and locale.
-        const font = box.context * 1000003 + box.wordSpacing
         if (leading === null) {
           if (isEligibleText) leading = entry.index
-          lastFont = font
+          lastFontBox = box
         } else if (hasBoundaryBetween) {
-          if (isEligibleText && font === lastFont && p.boxes[(runs[leading]!.item as WebKitTextItem).box]!.locale === box.locale) trailing = entry.index
+          // FontCascade equality: the box's Canvas settings (font, letter spacing), which one context stands for, and word
+          // spacing and locale.
+          const sameFont = lastFontBox !== null && box.context === lastFontBox.context && box.wordSpacing === lastFontBox.wordSpacing
+          if (isEligibleText && sameFont && p.boxes[(runs[leading]!.item as WebKitTextItem).box]!.locale === box.locale) trailing = entry.index
           else reset()
         } else if (!isEligibleText) {
           reset()
@@ -1516,13 +1521,13 @@ function applyShapingOnRunRange(L: Layout, c: Content, range: [number, number]):
   for (let k = texts.length - 1; k >= 0; k--) {
     const text = texts[k]!
     const joins = k > 0 && joinsAcross(texts[k - 1]!, text)
-    const total = measureText(L.m, firstBox.plainContext, canvasString((joins ? '\u200d' : '') + text + suffix))
+    const total = canvasWidth(firstBox.plainContext, canvasString((joins ? '\u200d' : '') + text + suffix))
     let share = f32(total - following)
     if (suffix !== '') {
       // The difference of two float32 totals isn't the float32 sum of the run's own advances, which the run alone in its
       // joining context is where nothing but joining crosses its edges. The two agree within the rounding of the three totals,
       // half a unit in the last place of the largest for every addition, where that holds: then the run alone stands.
-      const alone = measureText(L.m, firstBox.plainContext, canvasString((joins ? '\u200d' : '') + text + (followingJoins ? '\u200d' : '')))
+      const alone = canvasWidth(firstBox.plainContext, canvasString((joins ? '\u200d' : '') + text + (followingJoins ? '\u200d' : '')))
       const additions = 2 * (text.length + suffix.length) + 5
       if (Math.abs(alone - share) <= additions * 2 ** (Math.floor(Math.log2(total)) - 24)) share = alone
     }
@@ -1994,7 +1999,7 @@ export function fillLine(p: WebKitPrepared, start: WebKitLineStart, slot: LineSl
   // The paragraph's first build places the slot floats; a refused first build hands its start on with hasFloats set.
   const placesSlotFloats = start.previousLine === null && !start.hasFloats
   const rect = lineRect(p, builder === 'line-builder' ? slot : { width: slot.width, left: 0, right: 0 }, builder === 'line-builder' ? textIndent(p, start) : 0, placesSlotFloats)
-  const L: Layout = { p, m: p.measurer, lineWidth: rect.width, contentEdgeOffset: rect.contentEdgeOffset, constrainedByFloat: rect.constrainedByFloat, gaps: p.inspect === null ? null : [], measuredEnd: start.itemIndex, shapedCarry: false }
+  const L: Layout = { p, lineWidth: rect.width, contentEdgeOffset: rect.contentEdgeOffset, constrainedByFloat: rect.constrainedByFloat, gaps: p.inspect === null ? null : [], measuredEnd: start.itemIndex, shapedCarry: false }
   const items = p.items
   const itemsEnd: Position = { index: items.length, offset: 0 }
   const partialLeading = (index: number): WebKitTextItem | null => {
