@@ -313,7 +313,7 @@ function makeBox(p: WebKitPrepared, leaf: LeafInput, sourceStart: number, bidi: 
     primaryFamily,
     hyphen: facts.mapsHyphen === false ? '-' : '‐',
     locale, canvasFamily: font.family, firstNamedGeneric,
-    context, plainContext, spacedContext, countContext, letterSpacing, wordSpacing, cssLetterSpacing: leaf.textStyle.letterSpacing,
+    context, plainContext, spaceWidth: null, spacedContext, countContext, letterSpacing, wordSpacing, cssLetterSpacing: leaf.textStyle.letterSpacing,
     hasStrongDirectionality: hasStrongDirectionality(text, is8Bit, bidi),
     spacingFacts,
   }
@@ -348,7 +348,9 @@ function handleTextContent(p: WebKitPrepared, boxIndex: number, defer: boolean):
   const factory = makeFactory(text, box.is8Bit, box.locale, style.lineBreakMode, p.icuDefaultLocale, p.env.dictionaryBreaks)
   // canCacheWidthOnInlineTextItem (IIB:777-787): preserved white space in a box with a TAB depends on position.
   const deferWhitespace = defer || (preserveSpaces && text.includes('\t'))
-  const spaceWidth = deferWhitespace ? null : Math.max(0, singleSpaceWidth(box))
+  // The space measured for the white-space items is the box's from here on (WebKitBox.spaceWidth).
+  if (!deferWhitespace) box.spaceWidth = singleSpaceWidth(box)
+  const spaceWidth = box.spaceWidth === null ? null : Math.max(0, box.spaceWidth)
   let position = 0
   while (position < text.length) {
     const c = text.charCodeAt(position)

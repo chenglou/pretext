@@ -1440,6 +1440,7 @@ function collectShapeRanges(L: Layout, c: Content): Array<[number, number]> {
   while (contentList.length > 0 && contentList[contentList.length - 1]!.type !== 'content') contentList.pop()
   if (contentList.length === 0) return []
   const ranges: Array<[number, number]> = []
+  // lastFontCascade (ILB:828): the root style's until a content run gives its own, and nothing compares it before one does.
   let lastFontBox: WebKitBox | null = null
   let leading: number | null = null
   let trailing: number | null = null
@@ -1465,7 +1466,7 @@ function collectShapeRanges(L: Layout, c: Content): Array<[number, number]> {
           if (isEligibleText) leading = entry.index
           lastFontBox = box
         } else if (hasBoundaryBetween) {
-          // FontCascade equality: the box's Canvas settings (font, letter spacing), one context per distinct settings, and word
+          // FontCascade equality: the box's Canvas settings (font, letter spacing), which one context stands for, and word
           // spacing and locale.
           const sameFont = lastFontBox !== null && box.context === lastFontBox.context && box.wordSpacing === lastFontBox.wordSpacing
           if (isEligibleText && sameFont && p.boxes[(runs[leading]!.item as WebKitTextItem).box]!.locale === box.locale) trailing = entry.index

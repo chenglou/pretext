@@ -209,9 +209,10 @@ function measureDomString(box: WebKitBox, context: Context, text: string): numbe
 }
 
 // TextUtil::singleSpaceWidth (TextUtil.cpp:54-60): widthOfSpaceString, a TextRun of one space, which gets letter spacing
-// and no word spacing (index 0), or the primary font's space advance on the simplified path, which has no spacing.
+// and no word spacing (index 0), or the primary font's space advance on the simplified path, which has no spacing. The box
+// keeps it where its items were built with it (WebKitBox.spaceWidth).
 export function singleSpaceWidth(box: WebKitBox): number {
-  return canvasWidth(box.context, ' ')
+  return box.spaceWidth ?? canvasWidth(box.context, ' ')
 }
 
 // FontCascade::tabWidth (FontCascadeInlines.h:76-94) with a tab-size of spaces (TabSize.h:52-55): the stop counts from
@@ -369,7 +370,7 @@ export function breakWord(p: WebKitPrepared, item: WebKitTextItem, textWidth: nu
     const aligned = (index: number) => box.is8Bit ? index : codePointStart(text, start, index)
     // :265-280, the fixed-pitch shortcut.
     if (box.fixedPitch && box.simplifiedMeasuring) {
-      const characterWidth = canvasWidth(box.context, ' ')
+      const characterWidth = singleSpaceWidth(box)
       const estimatedCount = Math.floor(f32(availableWidth / characterWidth))
       const end = aligned(Math.min(start + estimatedCount, start + length - 1))
       const underflow = widthTo(end)
