@@ -8,7 +8,7 @@ import { canvasFont } from '../../measure/font.js'
 import { familyNames, genericFamilyUnder, namedFamily, standardFamilyOf, type FamilyName } from './fonts.js'
 import { indexContent, langUnder, styleUnder } from '../../content.js'
 import type { Paragraph, TextStyle } from '../../model.js'
-import { AL, LRE, LRO, PDF, R, RLE, RLO, bidiClassOf, type BidiData } from '../../unicode/bidi.js'
+import { AL, LRE, LRO, PDF, R, RLE, RLO, bidiClassOf } from '../../unicode/bidi.js'
 import { computedLocale, localeScript, webkitBidiData } from './data.js'
 import { boxMade, coveredLikeLastResort, newInspection, unverifiedCoverage, type UnverifiedCoverage } from './gaps.js'
 import { collectHistoryWorlds } from './history.js'
@@ -181,13 +181,13 @@ function cssFamilyName(name: string): string {
 }
 
 // TextUtil::isStrongDirectionalityCharacter (TextUtil.cpp:486-515), over the code points of 16-bit content.
-function hasStrongDirectionality(text: string, is8Bit: boolean, bidi: BidiData): boolean {
+function hasStrongDirectionality(text: string, is8Bit: boolean): boolean {
   if (is8Bit) return false
   for (let i = 0; i < text.length; i++) {
     const cp = text.codePointAt(i)!
     if (cp > 0xffff) i++
     if (cp < 0x0590 || (cp >= 0x2010 && cp <= 0x2029) || (cp >= 0x206a && cp <= 0xd7ff) || (cp >= 0xff00 && cp <= 0xffff)) continue
-    const c = bidiClassOf(bidi, cp)
+    const c = bidiClassOf(webkitBidiData, cp)
     if (c === R || c === AL || c === RLE || c === RLO || c === LRE || c === LRO || c === PDF) return true
   }
   return false
@@ -201,7 +201,7 @@ function familyList(families: readonly FamilyName[]): string {
   return families.map(family => family.css).join(', ')
 }
 
-function makeBox(p: WebKitPrepared, leaf: LeafInput, sourceStart: number, bidi: BidiData): WebKitBox {
+function makeBox(p: WebKitPrepared, leaf: LeafInput, sourceStart: number): WebKitBox {
   const declared = leaf.textStyle.font
   const facts = declared.facts
   const locale = computedLocale(leaf.lang, p.env.preferredLanguages)
@@ -298,7 +298,7 @@ function makeBox(p: WebKitPrepared, leaf: LeafInput, sourceStart: number, bidi: 
     hyphen: facts.mapsHyphen === false ? '-' : '‐',
     locale, canvasFamily: font.family,
     context, plainContext, spaceWidth: null, spacedContext, countContext, letterSpacing, wordSpacing, cssLetterSpacing: leaf.textStyle.letterSpacing,
-    hasStrongDirectionality: hasStrongDirectionality(text, is8Bit, bidi),
+    hasStrongDirectionality: hasStrongDirectionality(text, is8Bit),
     spacingFacts,
   }
   boxMade(p, box, declared, size, leaf.lang, families, firstNamedGeneric, unverified)
@@ -405,7 +405,7 @@ export function prepareWebKit(paragraph: Paragraph, env: WebKitEnvironment, insp
       boxOfRun.push(null)
       continue
     }
-    const box = makeBox(p, leaves[r]!, index.leaves[r]!.start, webkitBidiData)
+    const box = makeBox(p, leaves[r]!, index.leaves[r]!.start)
     reordering ||= box.hasStrongDirectionality
     boxOfRun.push(p.boxes.length)
     p.boxes.push(box)

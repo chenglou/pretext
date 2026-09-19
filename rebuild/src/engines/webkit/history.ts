@@ -3,7 +3,7 @@
 // history world, and a decided line is laid out again in the worlds that change what it read; where a world's line differs,
 // the line reports page-history (gaps.ts). Nothing here decides a line, and a paragraph prepared plain has no worlds.
 import type { Gap } from '../../model.js'
-import { AL, FSI, L, LRE, LRI, LRO, ON, PDF, PDI, R, RLE, RLI, RLO, bidiClassOf, type BidiData } from '../../unicode/bidi.js'
+import { AL, FSI, L, LRE, LRI, LRO, ON, PDF, PDI, R, RLE, RLI, RLO, bidiClassOf } from '../../unicode/bidi.js'
 import { resolveIcuBidi } from '../../unicode/ubidi.js'
 import { webkitBidiData } from './data.js'
 import { inspectOf, lineDiffersInHistoryWorld, lineGaps } from './gaps.js'
@@ -61,8 +61,8 @@ const HISTORY_AFTER_CLOSING = ['\u2069', '\u2069a', '\u2069א', '\u202c', '\u202
 const HISTORY_MIXED_PARAGRAPH = 'aא\n'
 
 // The level boundaries of text[from, to) under a direction, as offsets less `shift`.
-function levelBoundaries(text: string, direction: 'ltr' | 'rtl', bidi: BidiData, from: number, to: number, shift: number): number[] {
-  const levels = resolveIcuBidi(HISTORY_MIXED_PARAGRAPH + text, direction, bidi).levels
+function levelBoundaries(text: string, direction: 'ltr' | 'rtl', from: number, to: number, shift: number): number[] {
+  const levels = resolveIcuBidi(HISTORY_MIXED_PARAGRAPH + text, direction, webkitBidiData).levels
   const offset = HISTORY_MIXED_PARAGRAPH.length
   const out: number[] = []
   for (let i = from + 1; i < to; i++) if (levels[offset + i] !== levels[offset + i - 1]) out.push(i - shift)
@@ -71,7 +71,7 @@ function levelBoundaries(text: string, direction: 'ltr' | 'rtl', bidi: BidiData,
 
 // The sets of level boundaries other paragraphs give the box's text, each as sorted box offsets: per direction, every context
 // before the box with every context after it.
-function historyBoundarySets(box: WebKitBox, bidi: BidiData): number[][] {
+function historyBoundarySets(box: WebKitBox): number[][] {
   const text = box.text
   // The text as the bidi paragraph holds it (computeBidiLevels): white space that doesn't preserve newlines as spaces, and
   // under preserved newlines U+2028 as a space and LF and U+2029 as paragraph separators.
@@ -95,14 +95,14 @@ function historyBoundarySets(box: WebKitBox, bidi: BidiData): number[][] {
   const brackets: number[] = []
   for (let i = 0; i < length; i++) {
     const cp = analysis.codePointAt(i)!
-    const c = bidiClassOf(bidi, cp)
+    const c = bidiClassOf(webkitBidiData, cp)
     if (c === L || c === R || c === AL) {
       if (firstStrong < 0) firstStrong = i
       lastStrong = i
     }
     if (c === PDF || c === PDI) closesOuter = true
     if (c === LRE || c === RLE || c === LRO || c === RLO || c === LRI || c === RLI || c === FSI) opensInner = true
-    if (c === ON) for (let k = 0; k < bidi.brackets.length; k += 3) if (bidi.brackets[k] === cp || bidi.brackets[k + 1] === cp) brackets.push(i)
+    if (c === ON) for (let k = 0; k < webkitBidiData.brackets.length; k += 3) if (webkitBidiData.brackets[k] === cp || webkitBidiData.brackets[k + 1] === cp) brackets.push(i)
     if (cp > 0xffff) i++
   }
   const explicit = closesOuter || opensInner
@@ -121,20 +121,20 @@ function historyBoundarySets(box: WebKitBox, bidi: BidiData): number[][] {
     if (firstStrong < 0 || (wholeBefore && wholeAfter)) {
       // No strong character, or a box resolved whole at both edges: every context pair over the whole text.
       for (let k = 0; k < before.length; k++) for (let j = 0; j < after.length; j++) {
-        sets.push(levelBoundaries(before[k]! + analysis + after[j]!, direction, bidi, before[k]!.length, before[k]!.length + length, before[k]!.length))
+        sets.push(levelBoundaries(before[k]! + analysis + after[j]!, direction, before[k]!.length, before[k]!.length + length, before[k]!.length))
       }
       continue
     }
     // Before the first strong character the rules read the context before the box; after the last one, the context after it.
     // Between them every rule finds its strong neighbours inside the box.
-    const interior = levelBoundaries(analysis, direction, bidi, 0, length, 0)
+    const interior = levelBoundaries(analysis, direction, 0, length, 0)
     const leading: number[][] = []
     if (firstStrong === 0) leading.push(interior.filter(position => position <= lastStrong))
     else for (let k = 0; k < before.length; k++) {
       const context = before[k]!
       const found = wholeBefore
-        ? levelBoundaries(context + analysis, direction, bidi, context.length, context.length + length, context.length).filter(position => position <= lastStrong)
-        : levelBoundaries(context + analysis.slice(0, firstStrong + 1), direction, bidi, context.length, context.length + firstStrong + 1, context.length).concat(interior.filter(position => position > firstStrong && position <= lastStrong))
+        ? levelBoundaries(context + analysis, direction, context.length, context.length + length, context.length).filter(position => position <= lastStrong)
+        : levelBoundaries(context + analysis.slice(0, firstStrong + 1), direction, context.length, context.length + firstStrong + 1, context.length).concat(interior.filter(position => position > firstStrong && position <= lastStrong))
       leading.push(found)
     }
     const trailing: number[][] = []
@@ -142,8 +142,8 @@ function historyBoundarySets(box: WebKitBox, bidi: BidiData): number[][] {
     else for (let j = 0; j < after.length; j++) {
       const context = after[j]!
       const found = wholeAfter
-        ? levelBoundaries(analysis + context, direction, bidi, 0, length, 0).filter(position => position > lastStrong)
-        : levelBoundaries(analysis.slice(lastStrong) + context, direction, bidi, 0, length - lastStrong, -lastStrong)
+        ? levelBoundaries(analysis + context, direction, 0, length, 0).filter(position => position > lastStrong)
+        : levelBoundaries(analysis.slice(lastStrong) + context, direction, 0, length - lastStrong, -lastStrong)
       trailing.push(found)
     }
     for (let k = 0; k < leading.length; k++) for (let j = 0; j < trailing.length; j++) sets.push(leading[k]!.concat(trailing[j]!))
@@ -285,7 +285,7 @@ export function collectHistoryWorlds(p: WebKitPrepared): void {
     }
     // The distinct sets of ends other paragraphs add to the box's own, the empty one first.
     const extras: number[][] = [[]]
-    const sets = historyBoundarySets(box, webkitBidiData)
+    const sets = historyBoundarySets(box)
     for (let k = 0; k < sets.length; k++) {
       const extra = sets[k]!.filter(position => position > 0 && position < box.text.length && !isOwnEnd[position]!).sort((x, y) => x - y)
       if (!extras.some(known => sameNumbers(known, extra))) extras.push(extra)

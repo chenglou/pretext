@@ -437,7 +437,7 @@ function lineFragments(p: WebKitPrepared, line: Line, start: number, end: number
     return out
   }
   const runs = line.runs
-  let lastTextRun = -1
+  let lastTextRun: number | null = null
   for (let i = 0; i < runs.length; i++) if (runs[i]!.kind === 'text') lastTextRun = i
   // Each piece with the source offset it sits at. An element's run sits where its item does, the start of the first text box
   // at or after it in document order (types.ts WebKitItem), clamped to the line's cursor so fragments stay in logical order.

@@ -1298,8 +1298,8 @@ function boxItemWidth(p: WebKitPrepared, item: InlineBoxItem | AtomicItem): numb
   }
 }
 
-// LineBuilder::candidateContentForLine (ILB:1030-1170). Shaping across inline boxes (:780-1028) isn't ported; the
-// paragraph reports rtl-shaping-across-inline-boxes.
+// LineBuilder::candidateContentForLine (ILB:1030-1170), with shaping across inline boxes (:780-1028) at its end; a line that
+// holds such a run reports rtl-shaping-across-inline-boxes.
 function candidateContentForLine(b: Builder, startIndex: number, endIndex: number, currentLogicalRight: number): Candidate {
   const L = b.L
   const items = L.p.items
@@ -1524,9 +1524,9 @@ function shapePartialLineCandidate(L: Layout, c: Content, trailingRunIndex: numb
 }
 
 // LineBuilder::commitCandidateContent (ILB:1610-1724)
-function commitCandidateContent(b: Builder, candidate: Candidate, partial: PartialTrailingContent | null): void {
+function commitCandidateContent(b: Builder, content: Content, partial: PartialTrailingContent | null): void {
   const L = b.L
-  const runs = candidate.content.runs
+  const runs = content.runs
   if (runs.length === 0) return
   let shapingBoundaryStart: number | null = null
   const boundaryFor = (index: number): ShapingBoundary | null => {
@@ -1551,7 +1551,7 @@ function commitCandidateContent(b: Builder, candidate: Candidate, partial: Parti
       case 'atomic': appendAtomicInlineBox(L.p, b.line, run.item, run.contentWidth); break
     }
   }
-  if (partial !== null && candidate.content.hasShapedContent) shapePartialLineCandidate(L, candidate.content, partial.trailingRunIndex)
+  if (partial !== null && content.hasShapedContent) shapePartialLineCandidate(L, content, partial.trailingRunIndex)
   const endOfNonPartialContent = partial !== null ? Math.min(partial.trailingRunIndex, runs.length) : runs.length
   for (let i = 0; i < endOfNonPartialContent; i++) appendRun(runs[i]!, i)
   if (partial === null) return
@@ -1569,9 +1569,9 @@ function commitCandidateContent(b: Builder, candidate: Candidate, partial: Parti
 function rebuildLineWithInlineContent(b: Builder, lastItem: ContentItem): number {
   b.line = newLine(b.spanningInlineBoxes)
   if (b.partialLeadingTextItem !== null && b.partialLeadingTextItem === lastItem) {
-    const candidate: Candidate = { content: newContent(), trailingLineBreak: null, trailingWordBreakOpportunity: null, hasTrailingSoftWrapOpportunity: false }
-    appendTextContent(b.L, candidate.content, b.partialLeadingTextItem, measuredItemWidth(b.L, b.partialLeadingTextItem, 0))
-    commitCandidateContent(b, candidate, null)
+    const content = newContent()
+    appendTextContent(b.L, content, b.partialLeadingTextItem, measuredItemWidth(b.L, b.partialLeadingTextItem, 0))
+    commitCandidateContent(b, content, null)
     return 1
   }
   let end = b.rangeStart
@@ -1608,7 +1608,7 @@ function processLineBreakingResult(b: Builder, candidate: Candidate, r: BreakRes
   const runs = candidate.content.runs
   switch (r.action) {
     case 'keep': {
-      commitCandidateContent(b, candidate, null)
+      commitCandidateContent(b, candidate.content, null)
       if (candidate.hasTrailingSoftWrapOpportunity && hasContent(b.line)) {
         const trailingItem = runs[runs.length - 1]!.item
         // The parent's style drives wrapping, and an inline box's own style where the parent's doesn't allow it.
@@ -1639,7 +1639,7 @@ function processLineBreakingResult(b: Builder, candidate: Candidate, r: BreakRes
     }
     case 'break': {
       const t = r.partialTrailingContent
-      commitCandidateContent(b, candidate, t)
+      commitCandidateContent(b, candidate.content, t)
       const committed = t.trailingRunIndex + 1
       if (t.partialRun === null) return lineBuilderResult(true, committed)
       const item = runs[t.trailingRunIndex]!.item as WebKitTextItem

@@ -123,7 +123,7 @@ function computeBidiLevels(p: WebKitPrepared): void {
   const items = p.items
   let paragraph = ''
   const offsets: (number | null)[] = []
-  let lastBox = -1
+  let lastBox: number | null = null
   let boxOffset = 0
   const appendBoxContentOnce = (box: number) => {
     if (lastBox === box) return
@@ -162,12 +162,12 @@ function computeBidiLevels(p: WebKitPrepared): void {
       case 'hard-line-break':
         offsets.push(paragraph.length)
         paragraph += '\n'
-        lastBox = -1
+        lastBox = null
         break
       case 'atomic':
         offsets.push(paragraph.length)
         paragraph += '\ufffc'
-        lastBox = -1
+        lastBox = null
         break
       case 'inline-box-start':
       case 'inline-box-end':

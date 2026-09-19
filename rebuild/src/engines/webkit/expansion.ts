@@ -89,7 +89,7 @@ function expansionOpportunityCount(text: string, rtl: boolean, behavior: Expansi
 // with expansionLocation :673-696) is for whoever reads glyph positions, the lab's observation port today.
 export function applyTextAlignJustify(boxes: readonly WebKitBox[], runs: LineRun[], hangingLength: number, spaceToDistribute: number): number {
   if (runs.length === 0 || spaceToDistribute <= 0) return 0
-  let lastTextRun = -1
+  let lastTextRun: number | null = null
   for (let i = 0; i < runs.length; i++) if (runs[i]!.kind === 'text') lastTextRun = i
   const opportunities: number[] = []
   let opportunityCount = 0
