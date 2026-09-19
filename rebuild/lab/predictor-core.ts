@@ -1,27 +1,36 @@
-// The prediction adapter: the one lab file that imports library logic (tests/independence.test.ts). predictor.ts and
-// baselines/no-facts-predictor.ts make their predict(), paint() and limits() from it, each with its own rule for the font
+// The prediction adapter: the one lab file that imports library logic (tests/independence.test.ts). predictor.ts and the
+// predictors under baselines/ make their predict(), paint() and limits() from it, each with its own rule for the font
 // facts a case's fonts get, so neither copies the other and the facts-free bundle never holds the font table.
 //
 // predict() lays the paragraph out with rebuild/src for the running browser's engine, one line slot at a time, and returns
 // the library's input and the layout a row keeps (types.ts ParagraphLayout); the page runs the observation port over them.
 // paint() paints that layout, and limits() names, per painted line, what painting the line alone can't reproduce
-// (src/paint.ts painterLimits).
+// (src/paint.ts painterLimits). The row's format is the lab's and frozen, key order included: the adapter makes it from
+// what the library's function set returns (src/index.ts), and writes what the library doesn't carry: a line's slot as its
+// two insets, and the Canvas work counted below.
 //
 // A case describes the page, so its fonts carry no font facts; `factsFor` gives them (DESIGN.md §1.2). Facts it can't give
-// stay unknown and report their gaps. The build comes from the driver, which reads it from the app bundle. The browser
-// process's languages come from the driver too (types.ts ProcessLanguages): it launches Chrome with them, and reads the OS
-// settings Safari, webkit-host and Firefox's layout take them from, as research tooling may (DESIGN.md §8.3, stage 0). A
-// value the driver couldn't derive stays null and reports ui-language.
-import { blinkEngine } from '../src/engines/blink/index.ts'
-import { geckoEngine } from '../src/engines/gecko/index.ts'
-import { webkitEngine } from '../src/engines/webkit/index.ts'
+// stay unknown and report their gaps. The width is the case paragraph's, which every slot gets. The build comes from the
+// driver, which reads it from the app bundle. The browser process's languages come from the driver too (types.ts
+// ProcessLanguages): it launches Chrome with them, and reads the OS settings Safari, webkit-host and Firefox's layout take
+// them from, as research tooling may (DESIGN.md §8.3, stage 0). A value the driver couldn't derive stays null and reports
+// ui-language.
+import * as blink from '../src/engines/blink/index.ts'
+import * as gecko from '../src/engines/gecko/index.ts'
+import * as webkit from '../src/engines/webkit/index.ts'
+import type { BlinkLineGeometry, BlinkLineStart } from '../src/engines/blink/geometry.ts'
+import type { GeckoLineGeometry, GeckoLineStart } from '../src/engines/gecko/geometry.ts'
+import type { WebKitLineGeometry, WebKitLineStart } from '../src/engines/webkit/geometry.ts'
 import { detectEnvironment, type EngineName, type Environment, type GivenFacts } from '../src/env.ts'
-import { painterLimits, paragraphGaps, prepareParagraph, type LineResultOf } from '../src/index.ts'
-import { FULL_WIDTH, NO_BOX_EDGE, type FontDecl, type FontFacts, type InlineNode, type Paragraph as LayoutParagraph, type TextStyle } from '../src/model.ts'
+import { fillLine, firstLine, linePieces, painterLimits, paragraphGaps, prepare, type PaintableLayout } from '../src/index.ts'
+import {
+  NO_BOX_EDGE, type FillResultOf, type FontDecl, type FontFacts, type InlineNode, type LineInspectionOf, type LinePieces, type LineSlot as LayoutSlot,
+  type Paragraph as LayoutParagraph, type TextStyle,
+} from '../src/model.ts'
 import { paintLines } from '../src/paint.ts'
 import type {
-  BelowFloats, BrowserKind, Case, FontDecl as CaseFont, InlineNode as CaseInlineNode, LayoutPrediction, LineOf, LineSlot, PainterLimits, ParagraphLayout,
-  ProcessLanguages,
+  BelowFloats, BrowserKind, Case, FontDecl as CaseFont, InlineNode as CaseInlineNode, LayoutPrediction, LineOf, LineSlot, LinesPrediction, PainterLimits,
+  ParagraphLayout, PredictionLine, ProcessLanguages,
 } from './types.ts'
 
 // The font facts a predictor declares for one CSS font of a case, for the engine that lays it out, given the fixture web
@@ -99,7 +108,7 @@ function layoutInput(c: Case, engine: EngineName, factsFor: FactsFor): LayoutPar
   if (c.inline !== undefined) {
     return {
       ...style(paragraph.font, paragraph.letterSpacing, paragraph.wordSpacing), content: treeWithFacts(c.inline.content, engine, fixtures, factsFor), lang: paragraph.lang,
-      direction: paragraph.direction, width: paragraph.width, lineHeight: paragraph.lineHeight, textIndent: c.inline.textIndent, textAlign: c.inline.textAlign,
+      direction: paragraph.direction, lineHeight: paragraph.lineHeight, textIndent: c.inline.textIndent, textAlign: c.inline.textAlign,
     }
   }
   const content: InlineNode[] = []
@@ -116,76 +125,201 @@ function layoutInput(c: Case, engine: EngineName, factsFor: FactsFor): LayoutPar
   }
   return {
     ...style(paragraph.font, paragraph.letterSpacing, paragraph.wordSpacing), content, lang: paragraph.lang, direction: paragraph.direction,
-    width: paragraph.width, lineHeight: paragraph.lineHeight, textIndent: 0, textAlign: 'start',
+    lineHeight: paragraph.lineHeight, textIndent: 0, textAlign: 'start',
   }
 }
 
-// Lays out every line. The k-th line box goes in slots[k], and line boxes past the list at the full content width, which
+// The lab's own count of what a layout asks of Canvas, which the row keeps (types.ts EnginePrediction.measure): the
+// contexts made and the measureText calls, counted on the page's Canvas classes, so nothing in the library counts. The
+// arguments pass through untouched, so Canvas sees the library's own string objects (src/measure/canvas.ts). The page's
+// OffscreenCanvas is wrapped once, and a context's class when the first context of it is made; a replay installs new
+// classes for every case (measurements.ts).
+const canvasWork = { contexts: 0, calls: 0 }
+const counted = new WeakSet<object>()
+
+function countCanvasWork(): void {
+  const canvas = OffscreenCanvas.prototype as unknown as { getContext: (this: unknown, ...rest: unknown[]) => object | null }
+  if (counted.has(canvas)) return
+  counted.add(canvas)
+  const getContext = canvas.getContext
+  canvas.getContext = function (...rest) {
+    const context = getContext.apply(this, rest)
+    if (context === null) return null
+    canvasWork.contexts++
+    const proto = Object.getPrototypeOf(context) as { measureText: (this: unknown, text: string) => unknown }
+    if (!counted.has(proto)) {
+      counted.add(proto)
+      const measureText = proto.measureText
+      proto.measureText = function (text) {
+        canvasWork.calls++
+        return measureText.call(this, text)
+      }
+    }
+    return context
+  }
+}
+
+const FULL_WIDTH: LineSlot = { left: 0, right: 0 }
+
+// One engine's function set over a prepared paragraph, with its own types, so a row's lines keep the engine's.
+type Engine<Start, Line, Refused, Geometry> = {
+  first: Start | null
+  fill: (start: Start, slot: LayoutSlot) => FillResultOf<Start, Line, Refused>
+  inspect: (line: Line | Refused) => LineInspectionOf<Geometry>
+  pieces: (line: Line) => LinePieces<unknown>
+}
+
+// Fills every line at `width`. The k-th line box goes in insets[k], and line boxes past the list at the full width, which
 // is what a block with floats of one line height stacked at its start gives each line (DESIGN.md §2.9). A slot the engine
-// refuses because the line moves below its floats takes no line: the same line starts again in the next slot, and the
-// layout records the refusal. A line without a line box takes no block size, so the next line uses the same slot.
-export function layoutParagraph(paragraph: LayoutParagraph, env: Environment, slots: readonly LineSlot[] = []): ParagraphLayout {
-  const prepared = prepareParagraph(paragraph, env)
-  switch (prepared.engine) {
-    case 'blink': {
-      const { state, measurer } = prepared
-      const filled = fillLines(blinkEngine.firstLine(state), (start, slot) => blinkEngine.nextLine(state, start, slot, measurer), slots)
-      return { engine: 'blink', env: prepared.env, lines: filled.lines, belowFloats: filled.belowFloats, measure: measurer.log, gaps: paragraphGaps(prepared) }
-    }
-    case 'webkit': {
-      const { state, measurer } = prepared
-      const filled = fillLines(webkitEngine.firstLine(state), (start, slot) => webkitEngine.nextLine(state, start, slot, measurer), slots)
-      return { engine: 'webkit', env: prepared.env, lines: filled.lines, belowFloats: filled.belowFloats, measure: measurer.log, gaps: paragraphGaps(prepared) }
-    }
-    case 'gecko': {
-      const { state, measurer } = prepared
-      const filled = fillLines(geckoEngine.firstLine(state), (start, slot) => geckoEngine.nextLine(state, start, slot, measurer), slots)
-      return { engine: 'gecko', env: prepared.env, lines: filled.lines, belowFloats: filled.belowFloats, measure: measurer.log, gaps: paragraphGaps(prepared) }
-    }
-  }
-}
-
-// The engine's lines go into the row as they are: the row's LineOf (types.ts) is the lab's, and an engine's line must fit it.
-function fillLines<Start, Geometry>(
-  first: Start | null, nextLine: (start: Start, slot: LineSlot) => LineResultOf<Start, Geometry>, slots: readonly LineSlot[],
-): { lines: LineOf<Start, Geometry>[]; belowFloats: BelowFloats[] } {
+// refuses because the line moves below its floats takes no line: the next slot starts where the engine says, and the
+// layout records the refusal. A line without a line box takes no block size, so the next line uses the same slot. Per line
+// the calls are fillLine, inspectLine, then linePieces, the order in which the engines have asked Canvas since the rows
+// were first recorded; a refused slot is inspected alone.
+function fillLines<Start, Line, Refused, Geometry>(engine: Engine<Start, Line, Refused, Geometry>, width: number, insets: readonly LineSlot[]): { lines: LineOf<Start, Geometry>[]; belowFloats: BelowFloats[] } {
   const lines: LineOf<Start, Geometry>[] = []
   const belowFloats: BelowFloats[] = []
   let row = 0
-  for (let start = first; start !== null;) {
-    const slot = row < slots.length ? slots[row]! : FULL_WIDTH
-    const result = nextLine(start, slot)
-    if (result.kind === 'below-floats') {
-      if (row >= slots.length) throw new Error(`the engine moved a line below floats in slot row ${row}, which has none`)
-      belowFloats.push({ row, gaps: result.gaps })
-      row++
-      if (result.next !== undefined) start = result.next
-      continue
+  for (let start = engine.first; start !== null;) {
+    const slot = row < insets.length ? insets[row]! : FULL_WIDTH
+    const filled = engine.fill(start, { width, left: slot.left, right: slot.right })
+    switch (filled.kind) {
+      case 'below-floats':
+        if (row >= insets.length) throw new Error(`the engine moved a line below floats in slot row ${row}, which has none`)
+        belowFloats.push({ row, gaps: engine.inspect(filled.line).gaps })
+        row++
+        break
+      case 'line': {
+        const { geometry, gaps } = engine.inspect(filled.line)
+        if (geometry === null) throw new Error('the engine gave a filled line no geometry')
+        const pieces = engine.pieces(filled.line)
+        lines.push({
+          start: filled.start, end: filled.end, fragments: pieces.fragments, hasLineBox: filled.hasLineBox, joinsNextLine: pieces.joinsNextLine, slot,
+          indented: pieces.indented, align: pieces.align, geometry, gaps, next: filled.next,
+        })
+        if (filled.hasLineBox) row++
+        break
+      }
     }
-    const line = result.line
-    lines.push(line)
-    if (line.hasLineBox) row++
-    start = line.next
+    start = filled.next
   }
   return { lines, belowFloats }
 }
 
-export function makePredictor(factsFor: FactsFor): Predictor {
+// The layout a row keeps, from an inspected paragraph. `otherWidthsFirst` fills the paragraph at those widths before, with
+// the same calls, and keeps nothing of them: what an application does that lays one prepared paragraph out at several
+// widths, which Chrome's per-canvas cache of shaped words could show (specs/blink-canvas.md §1.7).
+function layoutParagraph(paragraph: LayoutParagraph, env: Environment, width: number, insets: readonly LineSlot[] = [], otherWidthsFirst: readonly number[] = []): ParagraphLayout {
+  countCanvasWork()
+  const before = { ...canvasWork }
+  const prepared = prepare(paragraph, env, true)
+  const fill = <Start, Line, Refused, Geometry>(engine: Engine<Start, Line, Refused, Geometry>) => {
+    for (let i = 0; i < otherWidthsFirst.length; i++) fillLines(engine, otherWidthsFirst[i]!, insets)
+    const filled = fillLines(engine, width, insets)
+    return { ...filled, measure: { contexts: canvasWork.contexts - before.contexts, calls: canvasWork.calls - before.calls, memoHits: 0 } }
+  }
+  switch (prepared.engine) {
+    case 'blink': {
+      const p = prepared.state
+      const filled = fill<BlinkLineStart, blink.BlinkFilledLine, blink.BlinkRefusedSlot, BlinkLineGeometry>({
+        first: blink.firstLine(p), fill: (start, slot) => blink.fillLine(p, start, slot), inspect: line => blink.inspectLine(p, line), pieces: line => blink.linePieces(p, line),
+      })
+      return { engine: 'blink', env: p.env, lines: filled.lines, belowFloats: filled.belowFloats, measure: filled.measure, gaps: paragraphGaps(prepared) }
+    }
+    case 'webkit': {
+      const p = prepared.state
+      const filled = fill<WebKitLineStart, webkit.WebKitFilledLine, webkit.WebKitRefusedSlot, WebKitLineGeometry>({
+        first: webkit.firstLine(p), fill: (start, slot) => webkit.fillLine(p, start, slot), inspect: line => webkit.inspectLine(p, line), pieces: line => webkit.linePieces(p, line),
+      })
+      return { engine: 'webkit', env: p.env, lines: filled.lines, belowFloats: filled.belowFloats, measure: filled.measure, gaps: paragraphGaps(prepared) }
+    }
+    case 'gecko': {
+      const p = prepared.state
+      const filled = fill<GeckoLineStart, gecko.GeckoFilledLine, gecko.GeckoRefusedSlot, GeckoLineGeometry>({
+        first: gecko.firstLine(p), fill: (start, slot) => gecko.fillLine(p, start, slot), inspect: line => gecko.inspectLine(p, line), pieces: line => gecko.linePieces(p, line),
+      })
+      return { engine: 'gecko', env: p.env, lines: filled.lines, belowFloats: filled.belowFloats, measure: filled.measure, gaps: paragraphGaps(prepared) }
+    }
+  }
+}
+
+// The line ranges of a plain paragraph: the lines with a line box, which are the lines a LinesPrediction lists (types.ts).
+// Nothing is inspected, so this is the path an application runs, with the Canvas questions of that path alone.
+function plainLines(paragraph: LayoutParagraph, env: Environment, width: number, insets: readonly LineSlot[] = []): LinesPrediction {
+  countCanvasWork()
+  const callsBefore = canvasWork.calls
+  const prepared = prepare(paragraph, env, false)
+  const lines: PredictionLine[] = []
+  let row = 0
+  for (let start = firstLine(prepared); start !== null;) {
+    const slot = row < insets.length ? insets[row]! : FULL_WIDTH
+    const filled = fillLine(prepared, start, { width, left: slot.left, right: slot.right })
+    switch (filled.kind) {
+      case 'below-floats':
+        row++
+        break
+      case 'line':
+        // Read as a painting application reads them, though only the range is kept.
+        linePieces(prepared, filled.line)
+        if (filled.hasLineBox) {
+          lines.push({ start: filled.start, end: filled.end })
+          row++
+        }
+        break
+    }
+    start = filled.next
+  }
+  return { lines, measureLog: canvasWork.calls - callsBefore }
+}
+
+// A row's layout as the painter takes it: the painter reads a line's slot with its width (src/model.ts LineSlot), and a row
+// keeps the two insets.
+function paintable(prediction: LayoutPrediction): PaintableLayout {
+  const { layout, width } = prediction
+  const sized = <Line extends { slot: LineSlot }>(lines: readonly Line[]) => lines.map(line => ({ ...line, slot: { width, left: line.slot.left, right: line.slot.right } }))
+  switch (layout.engine) {
+    case 'blink': return { engine: 'blink', belowFloats: layout.belowFloats, lines: sized(layout.lines) }
+    case 'webkit': return { engine: 'webkit', belowFloats: layout.belowFloats, lines: sized(layout.lines) }
+    case 'gecko': return { engine: 'gecko', belowFloats: layout.belowFloats, lines: sized(layout.lines) }
+  }
+}
+
+// `otherWidthFactors`: see layoutParagraph's `otherWidthsFirst`; the widths are these factors of the case's.
+export function makePredictor(factsFor: FactsFor, otherWidthFactors: readonly number[] = []): Predictor {
   return {
     predict(c, env) {
       const e = environment(env.browser, env.build, env.languages)
       if ('error' in e) return e
       if (c.pageLang !== e.pageLang) return { error: `Case ${c.id} needs <html lang="${c.pageLang}">; page has "${e.pageLang}"` }
       const paragraph = layoutInput(c, e.engine, factsFor)
-      return { paragraph, layout: layoutParagraph(paragraph, e, c.inline?.lineSlots ?? []) }
+      const width = c.paragraph.width
+      return { paragraph, width, layout: layoutParagraph(paragraph, e, width, c.inline?.lineSlots ?? [], otherWidthFactors.map(factor => width * factor)) }
     },
     // One element per line with a line box.
     paint(_c, prediction, host) {
-      return paintLines(prediction.paragraph, prediction.layout, host.ownerDocument)
+      return paintLines(prediction.paragraph, paintable(prediction), host.ownerDocument)
     },
     // One list per line with a line box, in paint()'s order.
     limits(prediction) {
-      return painterLimits(prediction.paragraph, prediction.layout)
+      return painterLimits(prediction.paragraph, paintable(prediction))
     },
+  }
+}
+
+// The predictor of line ranges from a plain paragraph (plainLines). It paints nothing: a row of it holds the native
+// observation and the ranges, which compare-rows.ts --prediction=line-ranges holds against a run of makePredictor's.
+type PlainPredictor = {
+  predict: (c: Case, env: PredictEnv) => LinesPrediction | { error: string }
+  paint: (c: Case, prediction: LinesPrediction, host: HTMLElement) => null
+}
+
+export function makePlainPredictor(factsFor: FactsFor): PlainPredictor {
+  return {
+    predict(c, env) {
+      const e = environment(env.browser, env.build, env.languages)
+      if ('error' in e) return e
+      if (c.pageLang !== e.pageLang) return { error: `Case ${c.id} needs <html lang="${c.pageLang}">; page has "${e.pageLang}"` }
+      return plainLines(layoutInput(c, e.engine, factsFor), e, c.paragraph.width, c.inline?.lineSlots ?? [])
+    },
+    paint: () => null,
   }
 }

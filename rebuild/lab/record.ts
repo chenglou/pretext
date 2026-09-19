@@ -13,9 +13,6 @@
 // The recorder wraps the prototypes' methods and passes every argument through untouched, so the browser sees the same
 // string objects (Blink's Canvas results depend on V8's 8-bit or 16-bit storage, which JS can't read). It is installed only
 // when the driver asks for it: timings of a recorded run aren't comparable with other runs.
-import type { CanvasSettings } from './observe/contract.ts'
-import type { MeasureLog } from './types.ts'
-
 // A context's drawing-state text settings as the context reports them; null where the browser's context lacks the
 // attribute (WebKit has no lang, fontKerning or textRendering; a value assigned there is an ordinary property, never read).
 const SETTING_KEYS = ['font', 'lang', 'letterSpacing', 'wordSpacing', 'fontKerning', 'textRendering', 'direction', 'fontStretch', 'fontVariantCaps', 'textAlign', 'textBaseline'] as const
@@ -32,9 +29,6 @@ export type RecordedContext = {
   document: number
   // fontBoundingBoxAscent and Descent of the entry's first call.
   fontBox: [number, number]
-  // The settings the library declared for this context (src/measure/canvas.ts CanvasSettings, with `partition`, which no
-  // context attribute shows), joined through the library's own call log; null for contexts the library didn't log.
-  declared: CanvasSettings | null
 }
 
 // [index into contexts, string, width, actualBoundingBoxLeft, Right, Ascent, Descent]
@@ -57,8 +51,6 @@ export type CaseMeasurements = {
   // Per phase, the half-open range of `calls` made in it. 'native' holds the lab's own font probe, never library calls.
   phases: Record<Phase, [number, number]>
   segmentations: RecordedSegmentation[]
-  // The library's call log against the predict phase: equal when both hold the same strings and widths in the same order.
-  library: { calls: number; agrees: boolean } | null
 }
 
 type AnyContext = (OffscreenCanvasRenderingContext2D | CanvasRenderingContext2D) & Partial<Record<typeof SETTING_KEYS[number], string>>
@@ -92,7 +84,7 @@ function record(ctx: AnyContext, kind: RecordedContext['kind'], text: string, me
     const settings = {} as RecordedSettings
     for (let i = 0; i < SETTING_KEYS.length; i++) settings[SETTING_KEYS[i]!] = values[i]!
     known = { index: current.contexts.length, key }
-    current.contexts.push({ kind, assigned: { ...assigned }, settings, document: number, fontBox: [metrics.fontBoundingBoxAscent, metrics.fontBoundingBoxDescent], declared: null })
+    current.contexts.push({ kind, assigned: { ...assigned }, settings, document: number, fontBox: [metrics.fontBoundingBoxAscent, metrics.fontBoundingBoxDescent] })
     current.byContext.set(ctx, known)
   }
   current.calls.push([known.index, text, metrics.width, metrics.actualBoundingBoxLeft, metrics.actualBoundingBoxRight, metrics.actualBoundingBoxAscent, metrics.actualBoundingBoxDescent])
@@ -187,7 +179,7 @@ export function installRecorder(): void {
 }
 
 export function beginCase(id: string): void {
-  active = { id, contexts: [], calls: [], phases: { native: [0, 0], predict: [0, 0], observe: [0, 0], paint: [0, 0] }, segmentations: [], library: null, byContext: new Map(), phase: 'native' }
+  active = { id, contexts: [], calls: [], phases: { native: [0, 0], predict: [0, 0], observe: [0, 0], paint: [0, 0] }, segmentations: [], byContext: new Map(), phase: 'native' }
 }
 
 // Phases run in PHASES order; entering one closes the one before it.
@@ -198,23 +190,11 @@ export function beginPhase(phase: Phase): void {
   current.phases[phase] = [current.calls.length, current.calls.length]
 }
 
-// Ends the case. With the library's call log, joins each library context's declared settings to the recorded context of
-// its calls: the log holds every measureText call of the layout in order (measure/canvas.ts), and so does the predict phase.
-export function endCase(log: MeasureLog | null): CaseMeasurements {
+// Ends the case.
+export function endCase(): CaseMeasurements {
   const current = active!
   active = null
   current.phases[current.phase][1] = current.calls.length
   const { byContext: _byContext, phase: _phase, ...result } = current
-  if (log !== null) {
-    const [start, end] = result.phases.predict
-    let agrees = end - start === log.calls.length
-    for (let i = 0; agrees && i < log.calls.length; i++) {
-      const call = result.calls[start + i]!
-      const logged = log.calls[i]!
-      if (call[1] !== logged.text || call[2] !== logged.width) agrees = false
-      else result.contexts[call[0]]!.declared = log.contexts[logged.context]!
-    }
-    result.library = { calls: log.calls.length, agrees }
-  }
   return result
 }

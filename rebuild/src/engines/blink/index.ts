@@ -2,11 +2,11 @@
 // inline tree and measures the groups; nextLine runs LineBreaker::NextLine for one line in one layout opportunity and
 // returns what LogicalLineBuilder and InlineLayoutAlgorithm make of its item results: the fragment items in visual order
 // at their LayoutUnit positions, with glyph clusters and the offset mapping (DESIGN.md §2.3), and the fragments in logical
-// order.
+// order. The exports are the function set index.ts dispatches to (DESIGN.md §2.9).
 import { indexContent } from '../../content.js'
 import type { BlinkEnvironment } from '../../env.js'
-import type { Measurer } from '../../measure/canvas.js'
-import type { Fragment, Gap, LineSlot, Paragraph, TextAlign } from '../../model.js'
+import { createMeasurer } from '../../measure/canvas.js'
+import type { FillResultOf, Fragment, Gap, LineInspectionOf, LinePieces, LineSlot, Paragraph, TextAlign } from '../../model.js'
 import { graphemeBoundaries } from '../../unicode/grapheme.js'
 import { hasDictionaryCharacters, lineTable } from './breaks.js'
 import { breaksShapingAfter, breaksShapingBefore, buildContent, collapsesWhiteSpace, lengthLU, segmentBidiRuns, stylesOf, wrapsLines } from './content.js'
@@ -1334,101 +1334,142 @@ function needsAccurateEndPosition(align: TextAlign): boolean {
   }
 }
 
-export const blinkEngine = {
-  prepare(paragraph: Paragraph, env: BlinkEnvironment, measurer: Measurer): BlinkPrepared {
-    const zoom = env.devicePixelRatio
-    const index = indexContent(paragraph)
-    const { styles, settings, styleOfLeaf, styleOfElement } = stylesOf(paragraph, index, zoom)
-    // BoxInfo::text_metrics compares FontHeight of the primary fonts (inline_items_builder.cc:236-266); equal font
-    // declarations have equal metrics. Different declarations are taken to differ, which only decides whether a span
-    // without box edges creates a box fragment for its element rects, never where lines break.
-    const fontHeightsDiffer = (a: number, b: number): boolean => {
-      const fa = styles[a]!.font
-      const fb = styles[b]!.font
-      return fa.family !== fb.family || fa.size !== fb.size || fa.weight !== fb.weight || fa.style !== fb.style
-    }
-    const content = buildContent(index, styles, styleOfLeaf, styleOfElement, fontHeightsDiffer)
-    const bidi = segmentBidiRuns(paragraph, content)
-    const text = content.text
-    let is8Bit = true
-    for (let i = 0; i < text.length; i++) if (text.charCodeAt(i) > 0xff) { is8Bit = false; break }
-    // SegmentScriptRuns (inline_node.cc:1256-1290): one Latin segment unless 16-bit text with a character other than
-    // U+FFFC, or bidi.
-    const segmented = !((is8Bit || !content.hasNonOrc16Bit) && !bidi.enabled)
-    const scripts = segmented ? scriptsPerUnit(text) : new Uint8Array(text.length).fill(USCRIPT_LATIN)
-    const priorities = segmented ? emojiPriorities(text) : new Uint8Array(text.length)
-    const sourceLength = index.text.length
-    const sourceRuns = new Int32Array(sourceLength)
-    for (let r = 0; r < index.leaves.length; r++) sourceRuns.fill(r, index.leaves[r]!.start, index.leaves[r]!.start + index.leaves[r]!.text.length)
-    const contentOffsets = new Int32Array(sourceLength).fill(-1)
-    for (let t = 0; t < text.length; t++) if (content.sourceOffsets[t]! >= 0) contentOffsets[content.sourceOffsets[t]!] = t
-    const collapsedAt = new Int32Array(sourceLength)
-    for (let s = 0, t = 0; s < sourceLength; s++) {
-      if (contentOffsets[s]! >= 0) t = contentOffsets[s]! + 1
-      else collapsedAt[s] = t
-    }
-    const graphemeStarts = new Uint8Array(text.length + 1)
-    if (is8Bit) {
-      for (let i = 0; i <= text.length; i++) if (!(i > 0 && text.charCodeAt(i - 1) === 0x0d && text.charCodeAt(i) === 0x0a)) graphemeStarts[i] = 1
-    } else {
-      const boundaries = graphemeBoundaries(text, blinkGraphemeRules)
-      for (let i = 0; i < boundaries.length; i++) graphemeStarts[boundaries[i]!] = 1
-    }
-    const contexts = []
-    for (let s = 0; s < styles.length; s++) contexts.push(styleContexts(measurer, styles[s]!, zoom, segmented ? '16bit' : '8bit'))
-    const rtl = paragraph.direction === 'rtl'
-    const p: BlinkPrepared = {
-      paragraph, env, index, layoutZoom: zoom, text, is8Bit, segmented, scripts, priorities, sourceOffsets: content.sourceOffsets, contentOffsets, collapsedAt,
-      sourceRuns, sourceLength, items: bidi.items, styles, settings, groups: [], contexts, bidiEnabled: bidi.enabled,
-      baseLevel: rtl ? 1 : 0, graphemeStarts, hanKerningCandidates: hanKerningCandidates(text),
-      continuations: new Uint8Array(text.length),
-      ligature: new Uint8Array(text.length + 1),
-      fontRun: new Int16Array(text.length).fill(-1),
-      groupOfUnit: new Int32Array(text.length).fill(-1),
-      wordSpacingAnywhere: !collapsesWhiteSpace(paragraph.whiteSpace),
-      oneByteContexts: styles.map(() => undefined),
-      canvasSplitsWords: styles.map(() => undefined),
-      hanKerning: styles.map(() => null),
-      textAlign: paragraph.textAlign, needsAccurateEndPosition: needsAccurateEndPosition(paragraph.textAlign),
-      gaps: [],
-    }
-    const sh: Shaper = { p, m: measurer, gaps: p.gaps }
-    shapingGroups(p)
-    markContinuations(p)
-    for (let g = 0; g < p.groups.length; g++) p.groupOfUnit.fill(g, p.groups[g]!.start, p.groups[g]!.end)
-    const fontFacts = fontFactsOfText(p)
-    p.ligature = fontFacts.ligature
-    p.fontRun = fontFacts.fontRun
-    for (let g = 0; g < p.groups.length; g++) {
-      const group = p.groups[g]!
-      if (hanKerningMayApply(p.hanKerningCandidates, group.start, group.end)) measureHanKerningFontData(sh, group.style)
-    }
-    measureGroups(sh)
-    prepareGaps(sh)
-    return p
-  },
+// `inspect` says whether inspectLine and paragraphGaps answer on this paragraph. Until the port computes its gaps and the
+// geometry only the lab reads on request, it computes them for every paragraph.
+export function prepare(paragraph: Paragraph, env: BlinkEnvironment, inspect: boolean): BlinkPrepared {
+  const measurer = createMeasurer()
+  const zoom = env.devicePixelRatio
+  const index = indexContent(paragraph)
+  const { styles, settings, styleOfLeaf, styleOfElement } = stylesOf(paragraph, index, zoom)
+  // BoxInfo::text_metrics compares FontHeight of the primary fonts (inline_items_builder.cc:236-266); equal font
+  // declarations have equal metrics. Different declarations are taken to differ, which only decides whether a span
+  // without box edges creates a box fragment for its element rects, never where lines break.
+  const fontHeightsDiffer = (a: number, b: number): boolean => {
+    const fa = styles[a]!.font
+    const fb = styles[b]!.font
+    return fa.family !== fb.family || fa.size !== fb.size || fa.weight !== fb.weight || fa.style !== fb.style
+  }
+  const content = buildContent(index, styles, styleOfLeaf, styleOfElement, fontHeightsDiffer)
+  const bidi = segmentBidiRuns(paragraph, content)
+  const text = content.text
+  let is8Bit = true
+  for (let i = 0; i < text.length; i++) if (text.charCodeAt(i) > 0xff) { is8Bit = false; break }
+  // SegmentScriptRuns (inline_node.cc:1256-1290): one Latin segment unless 16-bit text with a character other than
+  // U+FFFC, or bidi.
+  const segmented = !((is8Bit || !content.hasNonOrc16Bit) && !bidi.enabled)
+  const scripts = segmented ? scriptsPerUnit(text) : new Uint8Array(text.length).fill(USCRIPT_LATIN)
+  const priorities = segmented ? emojiPriorities(text) : new Uint8Array(text.length)
+  const sourceLength = index.text.length
+  const sourceRuns = new Int32Array(sourceLength)
+  for (let r = 0; r < index.leaves.length; r++) sourceRuns.fill(r, index.leaves[r]!.start, index.leaves[r]!.start + index.leaves[r]!.text.length)
+  const contentOffsets = new Int32Array(sourceLength).fill(-1)
+  for (let t = 0; t < text.length; t++) if (content.sourceOffsets[t]! >= 0) contentOffsets[content.sourceOffsets[t]!] = t
+  const collapsedAt = new Int32Array(sourceLength)
+  for (let s = 0, t = 0; s < sourceLength; s++) {
+    if (contentOffsets[s]! >= 0) t = contentOffsets[s]! + 1
+    else collapsedAt[s] = t
+  }
+  const graphemeStarts = new Uint8Array(text.length + 1)
+  if (is8Bit) {
+    for (let i = 0; i <= text.length; i++) if (!(i > 0 && text.charCodeAt(i - 1) === 0x0d && text.charCodeAt(i) === 0x0a)) graphemeStarts[i] = 1
+  } else {
+    const boundaries = graphemeBoundaries(text, blinkGraphemeRules)
+    for (let i = 0; i < boundaries.length; i++) graphemeStarts[boundaries[i]!] = 1
+  }
+  const contexts = []
+  for (let s = 0; s < styles.length; s++) contexts.push(styleContexts(measurer, styles[s]!, zoom, segmented ? '16bit' : '8bit'))
+  const rtl = paragraph.direction === 'rtl'
+  const p: BlinkPrepared = {
+    paragraph, env, index, layoutZoom: zoom, text, is8Bit, segmented, scripts, priorities, sourceOffsets: content.sourceOffsets, contentOffsets, collapsedAt,
+    sourceRuns, sourceLength, items: bidi.items, styles, settings, groups: [], contexts, bidiEnabled: bidi.enabled,
+    baseLevel: rtl ? 1 : 0, graphemeStarts, hanKerningCandidates: hanKerningCandidates(text),
+    continuations: new Uint8Array(text.length),
+    ligature: new Uint8Array(text.length + 1),
+    fontRun: new Int16Array(text.length).fill(-1),
+    groupOfUnit: new Int32Array(text.length).fill(-1),
+    wordSpacingAnywhere: !collapsesWhiteSpace(paragraph.whiteSpace),
+    oneByteContexts: styles.map(() => undefined),
+    canvasSplitsWords: styles.map(() => undefined),
+    hanKerning: styles.map(() => null),
+    textAlign: paragraph.textAlign, needsAccurateEndPosition: needsAccurateEndPosition(paragraph.textAlign),
+    gaps: [], measurer, inspect,
+  }
+  const sh: Shaper = { p, m: measurer, gaps: p.gaps }
+  shapingGroups(p)
+  markContinuations(p)
+  for (let g = 0; g < p.groups.length; g++) p.groupOfUnit.fill(g, p.groups[g]!.start, p.groups[g]!.end)
+  const fontFacts = fontFactsOfText(p)
+  p.ligature = fontFacts.ligature
+  p.fontRun = fontFacts.fontRun
+  for (let g = 0; g < p.groups.length; g++) {
+    const group = p.groups[g]!
+    if (hanKerningMayApply(p.hanKerningCandidates, group.start, group.end)) measureHanKerningFontData(sh, group.style)
+  }
+  measureGroups(sh)
+  prepareGaps(sh)
+  return p
+}
 
-  // A paragraph without inline items lays out no line; every other paragraph makes at least one line, with or without a
-  // line box (line_breaker.cc:945-975).
-  firstLine(p: BlinkPrepared): BlinkLineStart | null {
-    if (p.items.length === 0) return null
-    return { engine: 'blink', itemIndex: 0, textOffset: 0, style: 0, afterForcedBreak: false, isPastFirstFormattedLine: false, afterLeadingFloats: false }
-  },
+// A paragraph without inline items lays out no line; every other paragraph makes at least one line, with or without a
+// line box (line_breaker.cc:945-975).
+export function firstLine(p: BlinkPrepared): BlinkLineStart | null {
+  if (p.items.length === 0) return null
+  return { engine: 'blink', itemIndex: 0, textOffset: 0, style: 0, afterForcedBreak: false, isPastFirstFormattedLine: false, afterLeadingFloats: false }
+}
 
-  nextLine(p: BlinkPrepared, start: BlinkLineStart, slot: LineSlot, measurer: Measurer): BlinkLineResult {
-    const sh: Shaper = { p, m: measurer, gaps: [] as Gap[] }
-    const info = new LineBreaker(sh, start, slot).nextLine()
-    lineEdgeGaps(sh, info, start)
-    itemEdgeGaps(sh, info)
-    // A line that overflows a layout opportunity narrower than the container, in a block that wraps, moves to the next
-    // opportunity (inline_layout_algorithm.cc:1341-1367).
-    if (info.hasOverflow && info.availableWidth !== lengthLU(p.paragraph.width, p.layoutZoom) && wrapsLines(p.paragraph.whiteSpace)) {
-      return { kind: 'below-floats', gaps: sh.gaps }
-    }
-    return { kind: 'line', line: lineOutput(sh, info, start, slot) }
-  },
+function nextLine(p: BlinkPrepared, start: BlinkLineStart, slot: LineSlot): BlinkLineResult {
+  const sh: Shaper = { p, m: p.measurer, gaps: [] as Gap[] }
+  const info = new LineBreaker(sh, start, slot).nextLine()
+  lineEdgeGaps(sh, info, start)
+  itemEdgeGaps(sh, info)
+  // A line that overflows a layout opportunity narrower than the container, in a block that wraps, moves to the next
+  // opportunity (inline_layout_algorithm.cc:1341-1367).
+  if (info.hasOverflow && info.availableWidth !== lengthLU(slot.width, p.layoutZoom) && wrapsLines(p.paragraph.whiteSpace)) {
+    return { kind: 'below-floats', gaps: sh.gaps }
+  }
+  return { kind: 'line', line: lineOutput(sh, info, start, slot) }
+}
 
-  gaps(p: BlinkPrepared): Gap[] {
-    return p.gaps
-  },
+// The decided line: for now what nextLine returns, which computes the line's pieces, geometry and gaps while it fills, so
+// linePieces and inspectLine only read.
+export type BlinkFilledLine = { engine: 'blink'; kind: 'line'; line: BlinkLine }
+export type BlinkRefusedSlot = { engine: 'blink'; kind: 'below-floats'; gaps: Gap[] }
+export type BlinkFillResult = FillResultOf<BlinkLineStart, BlinkFilledLine, BlinkRefusedSlot>
+// What Blink's painting rules read beside the pieces.
+export type BlinkPaintFacts = { needsAccurateEndPosition: boolean }
+
+export function fillLine(p: BlinkPrepared, start: BlinkLineStart, slot: LineSlot): BlinkFillResult {
+  const result = nextLine(p, start, slot)
+  switch (result.kind) {
+    case 'line': return { kind: 'line', line: { engine: 'blink', kind: 'line', line: result.line }, start: result.line.start, end: result.line.end, next: result.line.next, hasLineBox: result.line.hasLineBox }
+    // The next opportunity lays the same line out again.
+    case 'below-floats': return { kind: 'below-floats', line: { engine: 'blink', kind: 'below-floats', gaps: result.gaps }, next: start }
+  }
+}
+
+export function linePieces(_p: BlinkPrepared, filled: BlinkFilledLine): LinePieces<BlinkPaintFacts> {
+  const line = filled.line
+  const g = line.geometry
+  return {
+    fragments: line.fragments, joinsNextLine: line.joinsNextLine, indented: line.indented, align: line.align,
+    overflows: g.width - g.hangWidth - g.availableWidth > 0, facts: { needsAccurateEndPosition: g.needsAccurateEndPosition },
+  }
+}
+
+function inspected(p: BlinkPrepared, what: string): void {
+  if (!p.inspect) throw new Error(`${what} reads an inspected paragraph, and this one was prepared plain`)
+}
+
+export function inspectLine(p: BlinkPrepared, decided: BlinkFilledLine | BlinkRefusedSlot): LineInspectionOf<BlinkLineGeometry> {
+  inspected(p, 'inspectLine')
+  switch (decided.kind) {
+    case 'line': return { geometry: decided.line.geometry, gaps: decided.line.gaps }
+    case 'below-floats': return { geometry: null, gaps: decided.gaps }
+  }
+}
+
+// The gaps of the paragraph's content, fonts and environment, whatever the slot (DESIGN.md §5).
+export function paragraphGaps(p: BlinkPrepared): Gap[] {
+  inspected(p, 'paragraphGaps')
+  return p.gaps
 }

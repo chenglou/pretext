@@ -11,7 +11,7 @@ function paragraph(runs: [string, 'span' | 'text'][], whiteSpace: Paragraph['whi
   const content: InlineNode[] = runs.map(([text, node]) => node === 'text'
     ? { kind: 'text', text }
     : { ...style, kind: 'span', lang: null, inlineStart: NO_BOX_EDGE, inlineEnd: NO_BOX_EDGE, verticalAlign: 'baseline', children: [{ kind: 'text', text }] })
-  return { ...style, content, width: 60, lineHeight: 20, direction, lang: 'en', textIndent: 0, textAlign: 'start' }
+  return { ...style, content, lineHeight: 20, direction, lang: 'en', textIndent: 0, textAlign: 'start' }
 }
 
 function content(p: Paragraph): Content {

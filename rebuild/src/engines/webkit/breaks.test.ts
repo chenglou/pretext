@@ -11,7 +11,6 @@ import { resolve } from 'node:path'
 import { DATA } from '../../../tools/gen-shared.ts'
 import { forEachLine } from '../../../tools/lines.ts'
 import { PINNED_BUILDS, type WebKitEnvironment } from '../../env.js'
-import { createMeasurer } from '../../measure/canvas.js'
 import { UNKNOWN_FONT_FACTS, type Paragraph } from '../../model.js'
 import { getCategory } from '../../breaks/rbbi.js'
 import { canBreakBefore, classify, computeFollowing, dictionaryRangeStartsWithMark, findNextBreakablePosition, makeFactory, mayBreakInBetween } from './breaks.js'
@@ -84,7 +83,7 @@ function opportunities(p: WebKitPrepared): { breaks: number[]; forced: number[] 
 }
 
 function breaksOf(runs: Array<[string, FlatNode]>, overrides: Partial<Paragraph> = {}): number[] {
-  return opportunities(prepareWebKit(paragraph(runs, overrides), env, createMeasurer())).breaks
+  return opportunities(prepareWebKit(paragraph(runs, overrides), env, true)).breaks
 }
 
 describe('BreakablePositions data', () => {
@@ -171,7 +170,7 @@ describe('installed-browser verdicts (specs/probes-safari.md)', () => {
     expect(breaksOf([['中.abc<d', 'text']])).toEqual([5])
   })
   test('H13: U+2028 and U+2029 force breaks in normal white space', () => {
-    const p = prepareWebKit(paragraph([['a b', 'text']]), env, createMeasurer())
+    const p = prepareWebKit(paragraph([['a b', 'text']]), env, true)
     expect(opportunities(p).forced).toEqual([2])
   })
   test('H15: keep-all breaks after punctuation only in 16-bit text', () => {
@@ -279,7 +278,7 @@ describe.skipIf(!existsSync(resolve(WORK, 'webkit-answers.jsonl')))('groundwork 
       }
       const p = prepareWebKit(paragraph(parts.map(part => [part, 'text'] as [string, FlatNode]), {
         whiteSpace: request.whiteSpace, wordBreak: request.wordBreak, direction: request.direction, lang: request.lang ?? 'en',
-      }), env, createMeasurer())
+      }), env, true)
       const actual = opportunities(p)
       compared++
       if (actual.breaks.join(' ') !== answer.breaks.join(' ') || actual.forced.join(' ') !== (answer.forced ?? []).join(' ')) {

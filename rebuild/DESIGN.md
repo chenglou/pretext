@@ -91,11 +91,14 @@ type InlineNodeOf<Font> =
   | { kind: 'wbr' }
 type ParagraphOf<Font> = TextStyleOf<Font> & {
   content: InlineNodeOf<Font>[]; lang: string; direction: 'ltr' | 'rtl'
-  width: number; lineHeight: number
+  lineHeight: number
   textIndent: number; textAlign: 'start' | 'end' | 'left' | 'right' | 'center' | 'justify'
 }
 type Paragraph = ParagraphOf<FontDecl>                            // what the library takes
 ```
+
+The block's content-box width isn't the paragraph's: it belongs to the slot each line is filled in (§2.9). A lab case
+keeps it on its own paragraph (`lab/types.ts`), and the lab's adapter gives it to every slot.
 
 A paragraph stands for one block element and its inline content: `<div lang style="…">content</div>`. The block and
 every span carry their computed inherited properties written out, the ones that decide lines: font, letter and word
@@ -128,10 +131,10 @@ and no box edges):
   ],
   "font": { "family": "Times New Roman", "size": 16, "weight": 400, "style": "normal" }, "letterSpacing": 0, "wordSpacing": 0,
   "whiteSpace": "normal", "wordBreak": "normal", "overflowWrap": "normal", "lineBreak": "auto", "tabSize": 8,
-  "lang": "en", "direction": "ltr", "width": 150, "lineHeight": 22, "textIndent": 0, "textAlign": "start" }
+  "lang": "en", "direction": "ltr", "lineHeight": 22, "textIndent": 0, "textAlign": "start" }
 ```
 
-It stands for `<div lang="en" style="…">` holding `<span>Hello </span><span>world</span> and <span>more text…</span>`.
+The case lays it out at 150px. It stands for `<div lang="en" style="…">` holding `<span>Hello </span><span>world</span> and <span>more text…</span>`.
 Source offsets: leaf 0 is [0, 6), leaf 1 [6, 11), leaf 2 [11, 16) and leaf 3 [16, 49). Elements 0, 1 and 2 are the spans.
 
 Example 2, the start of the rich note demo (`pages/demos/rich-note.model.ts`): `Ship `, a mention chip, `'s `, a code span
@@ -271,14 +274,14 @@ can cite, and a constant chosen by lab counts fits the lab's font mix. So each f
 declaration, and the headline configuration gives none (CHARTER.md, decisions of 2026-09-18).
 
 Four of them a dedicated Canvas check can answer, and the library asks before the engines run (`measure/font-checks.ts`,
-which cites each rule and says what it can't see; `prepareParagraph` in `index.ts` is the one call site, and the engines
+which cites each rule and says what it can't see; `prepare` in `index.ts` is the one call site, and the engines
 read `FontFacts` as before): the primary family and U+2010 coverage by the two-fallback test (a string measured under
 `F, monospace` and under `F, serif`), in Blink joining (U+0628 next to U+07FA, shaped in a call of its own with context)
 and `opticalSizeAxis: false` (advances scale between the CSS and the zoomed size), in WebKit `monospace` as a registered
 heuristic. A check runs only where the engine reads the fact and the paragraph's text can need it; a supplied fact is
 never checked; Gecko is asked nothing, since nothing it loses without facts is learnable. The checks name no engine: each
 port says which facts it reads, the layout zoom, whether its context takes `lang` and its contexts' text rendering
-(`engines/<engine>/checks.ts` `FontChecks`), and `prepareParagraph` hands that to the checks. When a fact is still null, the
+(`engines/<engine>/checks.ts` `FontChecks`), and `prepare` hands that to the checks. When a fact is still null, the
 engine uses a default that plain Canvas measurement gives, and reports the named gap wherever the fact decides a result.
 A given fact never produces a gap of its own.
 
@@ -510,34 +513,52 @@ widths.
 
 ### 2.1 The layout
 
-The layout is the lab's: the row format its predictions keep (`lab/types.ts`), which the lab's adapter makes from the
-library's lines, one slot at a time (`lab/predictor-core.ts` `layoutParagraph`, §2.9). The library returns a line, or a
-refusal, per slot: `LineResultOf`, with the engine's `LineOf`, in `src/model.ts`. Today the row's line has every
-field of the engine's line, so the two `LineOf` are the same shape, and an engine's line must fit the row's. Each
-engine's geometry (§2.3-§2.5) and the state its next line starts from (§2.7) are types of its own, in
-`src/engines/<engine>/geometry.ts`: types only, and the one engine file the lab imports, since a row keeps both whole.
+The layout is the lab's: the row format its predictions keep (`lab/types.ts`), frozen with its key order, which the
+lab's adapter makes from the library's function set, one slot at a time (`lab/predictor-core.ts` `layoutParagraph`, §2.9).
+Per slot the library returns a fill result (`FillResultOf`, `src/model.ts`): what filling the slot decided, and the engine's
+own record of the decided line. Two functions read that record and nothing writes it: `linePieces` gives what a painter
+takes (`LinePieces<Facts>`), and `inspectLine`, on a paragraph prepared for inspection, the engine's geometry and the gaps
+the line's breaks decide (`LineInspectionOf`). A row's line is the three together, with the two insets of its slot. Until a
+port keeps a record of its own, the record holds what its `nextLine` returns, a `LineOf` of `src/model.ts` with every one
+of those fields, computed while the line is filled. Each engine's geometry (§2.3-§2.5) and the state its next line starts
+from (§2.7) are types of its own, in `src/engines/<engine>/geometry.ts`: types only, and the one engine file the lab
+imports, since a row keeps both whole.
 
 ```ts
+// src/model.ts: what the function set returns (§2.9)
+type FillResultOf<Start, Line, Refused> =
+  | { kind: 'line'; line: Line; start: number; end: number; next: Start | null; hasLineBox: boolean }
+  | { kind: 'below-floats'; line: Refused; next: Start }
+type LinePieces<Facts> = { fragments: Fragment[]; joinsNextLine: boolean; indented: boolean; align: TextAlign; overflows: boolean; facts: Facts }
+type LineInspectionOf<Geometry> = { geometry: Geometry | null; gaps: Gap[] }   // a refused slot has no geometry
+
+// lab/types.ts: what a row keeps
 type ParagraphLayout =
-  | { engine: 'blink'; env: BlinkEnvironment; lines: LineOf<BlinkLineStart, BlinkLineGeometry>[]; belowFloats: BelowFloats[]; measure: MeasureLog; gaps: Gap[] }
-  | { engine: 'webkit'; env: WebKitEnvironment; lines: LineOf<WebKitLineStart, WebKitLineGeometry>[]; belowFloats: BelowFloats[]; measure: MeasureLog; gaps: Gap[] }
-  | { engine: 'gecko'; env: GeckoEnvironment; lines: LineOf<GeckoLineStart, GeckoLineGeometry>[]; belowFloats: BelowFloats[]; measure: MeasureLog; gaps: Gap[] }
+  | { engine: 'blink'; env: BlinkEnvironment; lines: LineOf<BlinkLineStart, BlinkLineGeometry>[]; belowFloats: BelowFloats[]; measure: CanvasWork; gaps: Gap[] }
+  | { engine: 'webkit'; env: WebKitEnvironment; lines: LineOf<WebKitLineStart, WebKitLineGeometry>[]; belowFloats: BelowFloats[]; measure: CanvasWork; gaps: Gap[] }
+  | { engine: 'gecko'; env: GeckoEnvironment; lines: LineOf<GeckoLineStart, GeckoLineGeometry>[]; belowFloats: BelowFloats[]; measure: CanvasWork; gaps: Gap[] }
 
 type LineOf<Start, Geometry> = {
-  start: number; end: number     // source offsets; consecutive lines tile the text
-  fragments: Fragment[]          // logical order, no widths (§2.2)
-  hasLineBox: boolean
-  joinsNextLine: boolean
-  slot: LineSlot                 // the slot the line was laid out in (§2.9)
-  indented: boolean              // the engine applied text-indent to this line
-  align: TextAlign               // the alignment the engine used for this line
-  geometry: Geometry             // the engine's own line (§2.3-§2.5)
-  gaps: Gap[]                    // gaps this line's breaks decide (§2.8)
-  next: Start | null             // null after the last line (§2.7)
+  start: number; end: number     // fill: source offsets; consecutive lines tile the text
+  fragments: Fragment[]          // pieces: logical order, no widths (§2.2)
+  hasLineBox: boolean            // fill
+  joinsNextLine: boolean         // pieces
+  slot: { left: number; right: number }   // the insets of the slot the line was filled in (§2.9)
+  indented: boolean              // pieces: the engine applied text-indent to this line
+  align: TextAlign               // pieces: the alignment the engine used for this line
+  geometry: Geometry             // inspection: the engine's own line (§2.3-§2.5)
+  gaps: Gap[]                    // inspection: gaps this line's breaks decide (§2.8)
+  next: Start | null             // fill: null after the last line (§2.7)
 }
-type LineResultOf<Start, Geometry> = { kind: 'line'; line: LineOf<Start, Geometry> } | { kind: 'below-floats'; gaps: Gap[]; next?: Start }
 type BelowFloats = { row: number; gaps: Gap[] }
+type CanvasWork = { contexts: number; calls: number; memoHits: number }   // counted by the adapter (§4.6)
 ```
+
+A filled line says where it breaks without its pieces: `start`, `end`, `next` and `hasLineBox` are the fill result's own,
+so counting lines or finding a height reads nothing else. `overflows` says the line's content reaches past its band by the
+engine's own widths, hanging white space left out. `facts` is what the engine's painting rules read of its own line beside
+the pieces: Blink's `needsAccurateEndPosition`, WebKit's width carried into the line's first text and whether the line
+holds an RTL run shaped across inline boxes; Gecko's are empty. The painter still reads them from a row's geometry (§7).
 
 What is shared and what isn't follows from who reads it. The painter and the lab's line ranges need the engine's
 classification of content per line, in source offsets: what it laid out, trimmed, collapsed or hung, and which line holds
@@ -885,9 +906,13 @@ where it may be wrong.
 - `layout.gaps` holds the conditions of the paragraph's content, fonts and environment: `engine-build`, null font facts,
   control characters, sizes Gecko can't match. `prepare` computes them, and `paragraphGaps` adds `engine-build`.
 - `line.gaps` holds the conditions its breaks decide: an unsafe offset or an in-word prefix at the chosen edge, a
-  shaping-call edge between joining letters. `belowFloats[k].gaps` holds what a refused slot rests on. `nextLine` never
-  changes the prepared paragraph, so a prepared paragraph can serve lines in other slots without mixing their gaps
-  (DESIGN-REVIEW.md §3.5).
+  shaping-call edge between joining letters. `belowFloats[k].gaps` holds what a refused slot rests on. Both come from
+  `inspectLine`. Filling a line never changes the prepared paragraph, so a prepared paragraph can serve lines in other
+  slots, and at other widths, without mixing their gaps (DESIGN-REVIEW.md §3.5).
+- Gaps are read from a paragraph prepared for inspection (`prepare(paragraph, env, true)`), which the lab always does.
+  `inspectLine` and `paragraphGaps` throw on a paragraph prepared plain. Until each port computes its gaps on request, a
+  plain paragraph computes them all the same and gives the same lines from the same Canvas questions
+  (`tests/function-set.ts plain`).
 - WebKit reports every condition of the content and fonts on the lines whose filling measured the characters it concerns,
   the content that ended the line included, with `at` naming them; its paragraph keeps only `page-zoom` (added in ceiling
   round 2).
@@ -898,28 +923,45 @@ where it may be wrong.
   line's gaps. Edge conditions (reshapes, pair adjustments at a chosen edge, positions inside graphemes) stay line gaps
   with `at` naming the offset (added in ceiling round 2).
 
-`measure` is the call log (§4.6).
+`measure` is the adapter's count of the layout's Canvas work (§4.6).
 
 ### 2.9 Line slots: an available width per line
 
 Demos flow text beside obstacles and between columns, and give each line its own width (`pages/demos/dynamic-layout.ts:305-331`,
 `editorial-engine.ts:446-471`). In a block, what gives line boxes different available widths is floats. A line slot is
-what floats do to one line box: the CSS px they take off the content box on each side.
+where one line box goes: the block's content-box width, and what floats do to that line box, the CSS px they take off the
+content box on each side. The width is the slot's and not the paragraph's, because every engine reads it only while it
+fills a line: one prepared paragraph serves any width, and a layout at another width prepares nothing again
+(`tests/function-set.ts sweep` fills one prepared paragraph at four widths and holds each against a paragraph prepared for
+that width alone, plain and inspected, on a stand-in Canvas).
 
 ```ts
-type LineSlot = { left: number; right: number }       // FULL_WIDTH = { left: 0, right: 0 }
-function prepareParagraph(paragraph: Paragraph, env: Environment): PreparedParagraph
-function firstLineStart(prepared: PreparedParagraph): LineStart | null
-function layoutLine(prepared: PreparedParagraph, start: LineStart, slot: LineSlot): LineResult
-function paragraphGaps(prepared: PreparedParagraph): Gap[]
-// lab/predictor-core.ts, over the engines' firstLine and nextLine:
-function layoutParagraph(paragraph: Paragraph, env: Environment, slots?: readonly LineSlot[]): ParagraphLayout
+type LineSlot = { width: number; left: number; right: number }
+// src/index.ts, the dispatch over the engines; each engines/<engine>/index.ts gives the same set with its own types
+function prepare(paragraph: Paragraph, env: Environment, inspect: boolean): Prepared
+function firstLine(prepared: Prepared): LineStart | null
+function fillLine(prepared: Prepared, start: LineStart, slot: LineSlot): FillResult          // FillResultOf, §2.1
+function linePieces(prepared: Prepared, line: FilledLine): Pieces                            // LinePieces<Facts>
+function inspectLine(prepared: Prepared, line: FilledLine | RefusedSlot): LineInspection    // inspected paragraphs only
+function paragraphGaps(prepared: Prepared): Gap[]                                            // inspected paragraphs only
+// lab/predictor-core.ts, over the function set; `insets` are a case's lineSlots
+function layoutParagraph(paragraph: Paragraph, env: Environment, width: number, insets?: readonly { left: number; right: number }[]): ParagraphLayout
 ```
 
+`prepare` decides once whether the paragraph is inspected. A plain paragraph gives lines and pieces, which is what an
+application runs; an inspected one also gives each line's geometry and gaps and the paragraph's gaps, which is what the lab
+reads. `linePieces` and `inspectLine` are pure functions of their arguments: the same result twice and in either order
+(`tests/function-set.ts pure`). A line start, `firstLine`'s or a fill result's `next`, is small plain data that names
+positions in the prepared paragraph's lists and holds nothing of it (§2.7), and a line's pieces are made for that line:
+two properties to keep, since a line start made from a source offset, and output an application may hold on to, rest on
+them (research/INCREMENTAL-API-READING.md §4). Each port's functions are today over its `nextLine`, which computes
+pieces, geometry and gaps while it fills a line, plain or inspected; a port's own decided line replaces that, function by
+function, without the set changing.
+
 The insets are the margin-box widths of the floats beside the line, and each engine turns them into its own line offsets
-with its own arithmetic, which is why a slot isn't a width: Blink truncates the content width and each float's edge to
-LayoutUnits separately, so `trunc(W) − trunc(w)` can differ from `trunc(W − w)` by a unit. `layoutLine` returns the line
-the engine places in the slot, or `below-floats` when a slot with an inset can't hold the line's first content and the
+with its own arithmetic, which is why a slot isn't one available width: Blink truncates the content width and each float's
+edge to LayoutUnits separately, so `trunc(W) − trunc(w)` can differ from `trunc(W − w)` by a unit. `fillLine` returns the
+line the engine places in the slot, or `below-floats` when a slot with an inset can't hold the line's first content and the
 engine moves the line box down past the floats instead (CSS 2.1 §9.5). A slot without insets never gives `below-floats`.
 
 Where each engine computes a line's available width with floats, and when it moves a line down:
@@ -930,8 +972,10 @@ Where each engine computes a line's available width with floats, and when it mov
 | WebKit | `InlineFormattingContext::lineLayout` starts each line rect at the container's horizontal constraints (`InlineFormattingContext.cpp:315-322`); `LineBuilder::initialize` narrows it by the floats intersecting the line's initial height (`floatAvoidingRect`, `InlineLineBuilder.cpp:463-476`, `:1185-1216`; `floatConstraintsForLine`, `InlineFormattingUtils.cpp:185-195`; half-open intersection, `floatContainsLine`, `FloatingContext.cpp:352-359`), then applies text-indent as a start margin (`:454-478`). Candidate content taller than the line queries the floats again (`:1218-1239`) | tab stops: `m_lineContentEdgeOffset` (`:478`, `:1042`, `:1076`), which floats placed while building the line don't move (`:1394-1396`): the lab's slot floats come before the content, so the first build places them and counts from the indent alone; box positions | a candidate whose minimum width doesn't fit while the line is constrained by a float wraps with nothing placed (`:1452-1457`), and the next line's top is the intrusive float's bottom (`logicalTopForNextLine`, `InlineFormattingUtils.cpp:54-103`) |
 | Gecko | `nsBlockFrame::ReflowInlineFrames` takes the band at the line's block position (`GetFloatAvailableSpace`, `nsBlockFrame.cpp:5137`; `BlockReflowState.cpp:348-365`; `nsFloatManager::GetFlowArea`, `nsFloatManager.cpp:113-182`) and begins the line at its start and inline size, impacted by floats when the band has them (`nsBlockFrame.cpp:5252-5273`); `PlaceLine` queries again with the line's final block size and redoes the line when more floats narrow it (`RedoMoreFloats`, `:5441`, `:5881-5917`) | tab stops: the frame's distance from the block's content edge (`nsTextFrame.cpp:11063-11067`); frame positions | with floats in the band the line start is a soft break (`nsBlockFrame.cpp:5289-5299`), a first frame that doesn't fit breaks before instead of being placed (`nsLineLayout.cpp:785`), and a break before the first frame redoes the line in the next band (`RedoNextBand`, `nsBlockFrame.cpp:5549-5555`, :5172-5196) |
 
-**The lab's loop.** `layoutParagraph(paragraph, env, slots)` (`lab/predictor-core.ts`) lays the k-th line box out in `slots[k]` and later ones at
-the full width. A refused slot records `{ row, gaps }` in `belowFloats`, and the same start is laid out in the next slot, or the refusal's `next` when the engine gives one because building the refused line changed its state (WebKit's first build places the slot floats).
+**The lab's loop.** `layoutParagraph(paragraph, env, width, insets)` (`lab/predictor-core.ts`) prepares the paragraph for
+inspection and fills the k-th line box in `{ width, ...insets[k] }` and later ones at the full width. Per line it calls
+`fillLine`, then `inspectLine`, then `linePieces`, and a refused slot is inspected alone. A refused slot records
+`{ row, gaps }` in `belowFloats`, and the next slot starts from the refusal's `next`: the same start, or another where building the refused line changed the engine's state (WebKit's first build places the slot floats).
 A line without a line box takes no block size, so the next line uses the same slot. This equals native layout for floats
 of one line height stacked at the block's start, because a line refused in one row is refused in every narrower row the
 engine skips at once: the fit tests are monotone in the available width.
@@ -943,7 +987,7 @@ Every row's float on a side has a positive width, since a row without a float wo
 and a zero-width float narrows nothing in WebKit (`floatContainsLine` refuses an empty rect) while it still marks a band
 impacted in Gecko. `lineHeight` is a whole px on the block and every element, so LayoutUnits, float32 px and app units all
 hold row edges exactly, and atomic inlines are top-aligned and no taller than a line. The predictor calls
-`layoutParagraph(paragraph, env, lineSlots)`. The declared slots describe the page only when every float sits in its row on
+`layoutParagraph(paragraph, env, width, lineSlots)` with the case paragraph's width. The declared slots describe the page only when every float sits in its row on
 its side, and the scorer checks that from the observed float rects (lab `score.ts` `slotProtocol`): a row whose floats
 moved is a protocol row, every metric unobserved. Gecko and WebKit place row 0's second float on the first line only where
 it fits beside the indented line (nsLineLayout.cpp:1485-1492, BlockReflowState.cpp:793-798; InlineLineBuilder.cpp:1317-1328,
@@ -983,13 +1027,16 @@ data as a parameter and each engine gives its own: its `BidiData`, grapheme rule
 run different algorithms, each algorithm is its own shared module, and each engine imports the one its browser runs:
 `breaks/rbbi.ts` or `breaks/icu4x.ts`, `unicode/ubidi.ts` or `unicode/unicode-bidi.ts`.
 
-Each engine's `index.ts` exports one object of four functions, which `src/index.ts` and the lab's adapter call:
+Each engine's `index.ts` exports the function set of §2.9 with its own types, which `src/index.ts` and the lab's adapter
+call; no function takes a measurer, and a prepared paragraph holds its own contexts:
 
 ```ts
-prepare(paragraph: Paragraph, env: Env, measurer: Measurer): Prepared
+prepare(paragraph: Paragraph, env: Env, inspect: boolean): Prepared
 firstLine(prepared: Prepared): Start | null
-nextLine(prepared: Prepared, start: Start, slot: LineSlot, measurer: Measurer): LineResultOf<Start, Geometry>
-gaps(prepared: Prepared): Gap[]
+fillLine(prepared: Prepared, start: Start, slot: LineSlot): FillResultOf<Start, FilledLine, RefusedSlot>
+linePieces(prepared: Prepared, line: FilledLine): LinePieces<PaintFacts>
+inspectLine(prepared: Prepared, line: FilledLine | RefusedSlot): LineInspectionOf<Geometry>
+paragraphGaps(prepared: Prepared): Gap[]
 ```
 
 Shared, working and tested (§8.2):
@@ -1154,7 +1201,7 @@ style system's arithmetic, and no Canvas call reads them.
 Engines measure when the engine does, because Chrome's cache makes order visible and because measuring what the engine
 never measures wastes calls. Engine-true output adds one kind of measurement: the advances inside placed content.
 
-| | before filling (`prepare`) | while filling (`nextLine`) | for the geometry of a placed line |
+| | before filling (`prepare`) | while filling (`fillLine`) | for the geometry of a placed line |
 |---|---|---|---|
 | Blink | every shaping group's words | [start, first safe) at a wrapped line start; [last safe, break) at a line end that isn't at a space, or at any line end where `NeedsAccurateEndPosition` holds; tab widths at their position; the hyphen, once per result | prefix widths at the cluster boundaries of the line's text and tab items |
 | WebKit | stored widths of word pieces and single spaces | `breakWord` prefixes from the item start (a bisection over O(log n) prefixes); widths deferred by bidi splits; preserved white space containing TAB; the hyphen string | nothing: boxes are sums of item widths |
@@ -1163,22 +1210,33 @@ never measures wastes calls. Engine-true output adds one kind of measurement: th
 The third column is what the charter's tentpole 8 asks to record: its calls are in the log and cost a Canvas call per
 cluster boundary of placed text in Blink and Gecko.
 
-### 4.6 Call log and memo
+### 4.6 Contexts, the memo and the call log
+
+`measure/canvas.ts` asks Canvas in two ways, over the same contexts. `contextFor(contexts, settings)` finds a context in
+a paragraph's few by comparing its settings, and `width(context, text)` and `bounds(context, text)` always ask Canvas:
+what is measured twice is asked twice, so a value needed twice is kept by the code that needs it. The index API
+(`measureContext`, `measureText`, `measureTextBounds`) names a context by its index in a `Measurer`, which also keeps the
+memo and the call log below; the ports measure through it until they hold their contexts themselves. Either way the string
+a port built reaches Canvas as the object it is, never as a key (research/BLINK-STRING-STORAGE.md).
 
 `MeasureLog = { contexts, calls, memoHits }`: every context's settings, every `measureText` call (context, text,
-width) in order, and how many lookups the memo answered. The lab records `calls.length` as `measureLog`, and the full
-log from stage 0 of §8.3, so a row can be laid out again offline.
+width) in order, and how many lookups the memo answered. It holds what went through the index API, which the ports' tests
+and probe `blink-storage` S5 read from the prepared paragraph. The lab doesn't read it: its adapter counts the contexts a
+layout makes and its `measureText` calls on the page's Canvas classes (`lab/predictor-core.ts`, `CanvasWork`), and
+`run.ts --record-measurements` records every call with its answer, so a row can be laid out again offline.
 
 The memo is an acceleration structure for one prepared paragraph. Key: (context index, text); value: the width.
 Measuring the same text in the same context again returns the same bits in all three engines (Blink returns its cached
 node for the whole string; WebKit and Gecko shape the same way), so the memo can't change a result. It lives as long as
-the `Measurer`, which `prepareParagraph()` creates per paragraph and every `layoutLine` from it shares.
+the `Measurer`, which a port's `prepare` creates per paragraph and every line filled from it shares, at any width.
 
-The runtime font checks (§1.2) measure through the same measurer, so their calls are in the log; their contexts carry
-`partition: 'font-checks'`, so no engine measurement shares a Blink word cache with them, and their answers are kept per
-check, declaration and language for the measurer's life. While a measurer lives one paragraph they cost about 14 calls a
-paragraph in Chrome and webkit-host; a measurer that outlives a paragraph pays them once per declaration. The Canvas
-checks of engine detection (§1.4) go through no measurer and are in no log.
+The runtime font checks (§1.2) run once per `prepare`, before the engine, through `contextFor` and `width`. What a call
+keeps is local to it: its contexts, which carry `partition: 'font-checks'`, so no engine measurement shares a Blink word
+cache with them; the declarations it resolved, each once under its language, compared field by field; and the questions
+it asked with Canvas's answers, because checks share questions (the two generics alone, a family's list at the probe size,
+which the primary family check and the fixed-pitch check both read, and which declarations of several sizes share). They
+cost about 14 calls a paragraph in Chrome and webkit-host; a resolver that outlives a paragraph would pay them once per
+declaration, which waits for profiling. The Canvas checks of engine detection (§1.4) make their own contexts.
 
 ## 5. Gaps
 
@@ -1293,10 +1351,13 @@ shared fields `fragments`, `hasLineBox`, `joinsNextLine`, `slot`, `indented`, `a
 per engine, the widths that say whether the line reaches past its band (Blink `width`, `hangWidth`, `availableWidth`;
 WebKit `contentWidth`, `hangingWidth`, `lineBoxWidth`; Gecko `width`, `hang`, `availableWidth`), Blink's
 `needsAccurateEndPosition`, and WebKit's `next.offset` and `next.previousLine.carriedWidth` and its boxes'
-`shapedAcrossBoxes`, which only the limits read. The plan turns the line into tokens (`lineTokens`: text nodes, element
+`shapedAcrossBoxes`, which only the limits read. `slot` is the library's, width included; a row keeps a slot's two
+insets, so the lab's adapter puts the width back before it paints (`lab/predictor-core.ts`). `linePieces` gives the same
+reads without a row: the shared fields, `overflows` for the three width triples' sign, and the per-engine reads as `facts`
+(§2.1); the painter takes them when it is split from the engines. The plan turns the line into tokens (`lineTokens`: text nodes, element
 opens and closes, the nodes the painter makes), which need no document, and `paintLines` builds the DOM from them.
 
-- **The line block** has the paragraph's content width, font, spacing, `lang`, `direction`, `white-space`, `word-break`,
+- **The line block** has its slot's width (the content-box width the line was filled at, §2.9), the paragraph's font, spacing, `lang`, `direction`, `white-space`, `word-break`,
   `overflow-wrap`, `line-break`, `tab-size`, `text-align` and fixed line height, the fixed styles of §1.1, the
   text-indent where the engine indented the line, and, when the paragraph isn't start-aligned, `text-align-last` set to
   the line's used alignment, since the painted line is its block's last line. Where the slot has insets, a
@@ -1678,11 +1739,12 @@ rebuild/
   tsconfig.json                   bunx tsc --noEmit -p rebuild/tsconfig.json
   knip.config.ts                  bunx knip --config rebuild/knip.config.ts (from the repository root)
   specs/ research/ data/ probes/  other owners
-  lab/                            lab owner; predictor-core.ts is the one file that imports library logic, and holds the
-                                  slot loop that makes a row's layout (types.ts ParagraphLayout)
+  lab/                            lab owner; predictor-core.ts is the one file that imports library logic: it makes a
+                                  row's layout from the function set, one slot at a time (types.ts ParagraphLayout),
+                                  and counts a layout's Canvas work
     observe/                      the observation ports of §9, one per engine, and their contract (contract.ts)
   tests/                          rule registry, families, facts, coverage, gate; the tiers (sets, replay, browser-sets, ledger)
-  bench/                          costs against main; page.ts doesn't run since the inline-tree model (bench/README.md)
+  bench/                          costs against main, with the rebuild in count, pieces and inspect modes (bench/README.md)
   platform-bugs/                  browser bug candidates: LEDGER.md, standalone pages, results, verify.ts
   tools/
     gen-shared.ts lines.ts ppucd.ts          generator helpers                         architect
@@ -1694,20 +1756,25 @@ rebuild/
     gen-webkit-fonts.ts gen-webkit-joining.ts  → src/engines/webkit/generated/{fonts,joining}.ts                        WebKit owner
     webkit-host/                             the WKWebView host on the system WebKit (build.sh, main.swift)             lab owner
   src/
-    index.ts        prepareParagraph, firstLineStart, layoutLine, paragraphGaps: the one switch over engines, the engine-build gap   architect
-    model.ts        input tree, font facts, line slots, fragments, gaps, LineOf and LineResultOf; names no engine     architect
+    index.ts        prepare, firstLine, fillLine, linePieces, inspectLine, paragraphGaps: the dispatch over the engines'
+                    function sets (§2.9), the engine-build gap                                                        architect
+    model.ts        input tree, font facts, line slots, fragments, gaps, what the function set returns (FillResultOf,
+                    LinePieces, LineInspectionOf), LineOf and LineResultOf while the ports' nextLine returns them;
+                    names no engine                                                                                   architect
     env.ts          Environment, process languages, GivenFacts, PINNED_BUILDS, detectEngine(), detectEnvironment()   architect
     content.ts      indexContent, styleUnder, langUnder, and its test                                               architect
     paint.ts        paintLines()                                                                                      architect
-    measure/        canvas.ts (contexts, memo), font.ts (font strings), log.ts, font-checks.ts (font facts asked of
-                    Canvas, §1.2), canvas-checks.ts (what the recipes assume of Canvas, §1.4)                        architect
+    measure/        canvas.ts (contexts, width and bounds; the index API with its memo and log, §4.6), font.ts (font
+                    strings), log.ts, font-checks.ts (font facts asked of Canvas, §1.2), canvas-checks.ts (what the
+                    recipes assume of Canvas, §1.4)                                                                   architect
+    test-lines.ts   test support: every line of a paragraph through one engine's function set                        architect
     unicode/        bidi.ts, ubidi.ts, unicode-bidi.ts, grapheme.ts, tests, generated/                                architect
     breaks/         rbbi.ts, icu4x.ts, pair-table.ts, rbbi.test.ts                                                    architect
     engines/
       blink/        index.ts, types.ts; the port's files and tests                                                   Blink owner
       webkit/       index.ts, types.ts                                                                                WebKit owner
       gecko/        index.ts, types.ts                                                                                Gecko owner
-                    and in each: geometry.ts (the line geometry and line start the rows keep: types only, the one
+                    and in each: index.ts exports the function set; geometry.ts (the line geometry and line start the rows keep: types only, the one
                     engine file the lab imports), data.ts (its break rules, grapheme rules and BidiData), checks.ts
                     (what it asks of measure/canvas-checks.ts and measure/font-checks.ts), generated/
 ```
@@ -1883,7 +1950,7 @@ its losses attributed in a seed diff.
 
 Performance comes after all of these (CHARTER tentpole 8), starting from the measure log: calls per paragraph, the
 cost of cluster and character tables, memo hits, table compaction, and a split between preparing a paragraph once and
-filling lines in many slots, which `prepareParagraph` and `layoutLine` already allow.
+filling lines in many slots and at many widths, which `prepare` and `fillLine` already allow.
 
 ## 9. Observation contract
 

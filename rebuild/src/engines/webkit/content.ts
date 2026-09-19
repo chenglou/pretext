@@ -3,7 +3,7 @@
 // builder choice and the paragraph's gaps (specs/webkit-text.md §2-§6, specs/webkit-lines.md §2-§3). Cited at
 // WebKit-7625.1.29.11.27 under Source/WebCore/: IIB = layout/formattingContexts/inline/InlineItemsBuilder.cpp.
 import type { WebKitEnvironment } from '../../env.js'
-import { measureContext, measureText, type Measurer } from '../../measure/canvas.js'
+import { createMeasurer, measureContext, measureText, type Measurer } from '../../measure/canvas.js'
 import { canvasFont } from '../../measure/font.js'
 import { genericFamilyUnder, standardFamilyOf } from './fonts.js'
 import { indexContent, langUnder, styleUnder } from '../../content.js'
@@ -932,13 +932,16 @@ function isEligibleForSimplifiedInlineLayoutByStyle(s: WebKitStyle): boolean {
   return s.wordSpacing === 0 && !s.rtl && s.textIndent === 0 && s.textAlign !== 'justify'
 }
 
-export function prepareWebKit(paragraph: Paragraph, env: WebKitEnvironment, m: Measurer): WebKitPrepared {
+// `inspect` says whether inspectLine and paragraphGaps answer on this paragraph (index.ts). Until the port computes its gaps,
+// its history worlds and the display boxes on request, it computes them for every paragraph.
+export function prepareWebKit(paragraph: Paragraph, env: WebKitEnvironment, inspect: boolean): WebKitPrepared {
+  const m = createMeasurer()
   const zoom = env.pageZoom ?? 1
   const style = webkitStyle(paragraph, paragraph, zoom)
   const index = indexContent(paragraph)
   const p: WebKitPrepared = {
     paragraph, env, zoom, icuDefaultLocale: env.icuDefaultLocale ?? ICU_DEFAULT_LOCALE_WITHOUT_ENVIRONMENT, style, elements: [],
-    builder: 'line-builder', boxes: [], runStarts: [], runTexts: [], items: [], gaps: [], historyWorlds: [],
+    builder: 'line-builder', boxes: [], runStarts: [], runTexts: [], items: [], gaps: [], historyWorlds: [], measurer: m, inspect,
   }
   const styleOf = (parent: number): WebKitStyle => {
     if (parent < 0) return style

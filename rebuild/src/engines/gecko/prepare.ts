@@ -3,7 +3,7 @@
 // specs/gecko-text.md §2-§12, specs/gecko-canvas.md §2-§3, specs/probes-firefox.md.
 import { indexContent, langUnder, styleUnder, type ContentIndex } from '../../content.js'
 import type { GeckoEnvironment } from '../../env.js'
-import { measureContext, measureText, measureTextBounds, type Measurer } from '../../measure/canvas.js'
+import { createMeasurer, measureContext, measureText, measureTextBounds, type Measurer } from '../../measure/canvas.js'
 import { canvasFont } from '../../measure/font.js'
 import type { BoxEdge, FontDecl, Gap, Paragraph, TextStyle } from '../../model.js'
 import { geckoBidiData, geckoGraphemeRules } from './data.js'
@@ -638,7 +638,10 @@ function borderAu(px: number, apd: number): number {
   return au === 0 ? 0 : Math.max(apd, Math.trunc(au / apd) * apd)
 }
 
-export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, measurer: Measurer): GeckoPrepared {
+// `inspect` says whether inspectLine and paragraphGaps answer on this paragraph (index.ts). Until the port computes its gaps
+// and the characters on request, it computes them for every paragraph.
+export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, inspect: boolean): GeckoPrepared {
+  const measurer = createMeasurer()
   const blockStyle = geckoStyle(paragraph)
   const apd = Math.max(1, Math.floor(60 / env.devicePixelRatio + 0.5)) // nsDeviceContext.cpp:52-63
   const index = indexContent(paragraph)
@@ -1568,7 +1571,7 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, measur
   return {
     paragraph, env, appUnitsPerDevPixel: apd, blockStyle, text, runStarts, runStyles, runParents, runLangs: langs, letterSpacingAu, frames, items,
     elements, textRuns, tUnits, tSource, breakFlags: g.breakFlags, clusterStart: g.clusterStart, isSpace: g.isSpace, kind: g.kind,
-    spacingPrefix, scanSpacingPrefix, tabSpacingPrefix, correctionPrefix, unitOf, units, sourceT, nextT, tabUnit, emergencyUnconfirmed, textIndentAu: pxToAu(paragraph.textIndent), bidi: resolveBidi, gaps,
+    spacingPrefix, scanSpacingPrefix, tabSpacingPrefix, correctionPrefix, unitOf, units, sourceT, nextT, tabUnit, emergencyUnconfirmed, textIndentAu: pxToAu(paragraph.textIndent), bidi: resolveBidi, gaps, measurer, inspect,
   }
 }
 

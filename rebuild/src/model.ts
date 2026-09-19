@@ -229,8 +229,6 @@ export type ParagraphOf<Font> = TextStyleOf<Font> & {
   // The block's lang attribute. '' is lang="": the language is unknown and doesn't inherit <html lang>.
   lang: string
   direction: Direction
-  // Content-box width in CSS px. Line slots narrow it per line (LineSlot).
-  width: number
   // Fixed line height in CSS px, on the block and every inline element.
   lineHeight: number
   // text-indent in CSS px (no percentages, each-line or hanging): applied to the first formatted line (Blink
@@ -247,14 +245,14 @@ export type Paragraph = ParagraphOf<FontDecl>
 
 // ---- Output: shared by every engine ----
 
-// Where a line box sits between floats: the CSS px its band takes off the paragraph's content box at the left and right
-// edges, the widths of the float margin boxes there (DESIGN.md §2.9). A zero inset is no float on that side. Each engine
-// turns the insets into its own line offsets with its own arithmetic: Blink's LineLayoutOpportunity (line_left_offset,
-// line_right_offset, line_layout_opportunity.h), WebKit's float-avoiding line rect (InlineLineBuilder.cpp:1185-1216),
-// Gecko's float available space (nsBlockFrame.cpp:5252-5273).
-export type LineSlot = { left: number; right: number }
-
-export const FULL_WIDTH: LineSlot = { left: 0, right: 0 }
+// Where a line box goes: the block's content-box width in CSS px, and where the line box sits between floats, as the CSS
+// px its band takes off the content box at the left and right edges, the widths of the float margin boxes there
+// (DESIGN.md §2.9). A zero inset is no float on that side. The width is the slot's and not the paragraph's, because every
+// engine reads it only while it fills a line, so one prepared paragraph serves any width. Each engine turns the insets
+// into its own line offsets with its own arithmetic: Blink's LineLayoutOpportunity (line_left_offset, line_right_offset,
+// line_layout_opportunity.h), WebKit's float-avoiding line rect (InlineLineBuilder.cpp:1185-1216), Gecko's float available
+// space (nsBlockFrame.cpp:5252-5273).
+export type LineSlot = { width: number; left: number; right: number }
 
 // A piece of a line in logical order, as the engine classifies its content. `run` indexes the paragraph's text leaves in
 // document order; `element` indexes its elements (span, atomic, br, wbr) in document order, the block excluded. Offsets
@@ -342,6 +340,33 @@ export type LineOf<Start, Geometry> = {
 export type LineResultOf<Start, Geometry> =
   | { kind: 'line'; line: LineOf<Start, Geometry> }
   | { kind: 'below-floats'; gaps: Gap[]; next?: Start }
+
+// ---- Output: the function set (each engine's index.ts gives it, index.ts dispatches; DESIGN.md §2.9) ----
+
+// What filling one slot decides. `line` is the engine's own record of the decided line, which linePieces and inspectLine
+// read and nothing writes. A filled line says where it breaks without them: [start, end) is the source range it consumed
+// (LineOf), `next` the state the next line starts from, null after the last line, and `hasLineBox` whether it takes a slot
+// (LineOf). A refused slot (LineResultOf's below-floats) takes no line: `line` records the refusal, and `next` is the start
+// the next slot lays out, the same one unless building the refused line changed the engine's state.
+export type FillResultOf<Start, Line, Refused> =
+  | { kind: 'line'; line: Line; start: number; end: number; next: Start | null; hasLineBox: boolean }
+  | { kind: 'below-floats'; line: Refused; next: Start }
+
+// What a painter takes of a decided line, beside its slot and whether it has a line box: the shared fields of LineOf, and
+// what the engine's painting rules read of its own geometry.
+export type LinePieces<Facts> = {
+  fragments: Fragment[]
+  joinsNextLine: boolean
+  indented: boolean
+  align: TextAlign
+  // The line's content reaches past its band by the engine's own widths, hanging white space left out.
+  overflows: boolean
+  facts: Facts
+}
+
+// What the lab reads of a decided line on an inspected paragraph: the engine's geometry and the gaps that depend on the
+// line's breaks (DESIGN.md §2.8). A refused slot has gaps and no geometry.
+export type LineInspectionOf<Geometry> = { geometry: Geometry | null; gaps: Gap[] }
 
 // A Canvas-versus-DOM gap a paragraph or line runs into: the prediction can be wrong where it applies (DESIGN.md §5).
 export type GapName =

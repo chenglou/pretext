@@ -23,7 +23,7 @@ const paragraph: ParagraphOf<CssFont> = {
     { kind: 'wbr' },
     { kind: 'text', text: 'e' },
   ],
-  lang: 'en', direction: 'ltr', width: 100, lineHeight: 20, textIndent: 0, textAlign: 'start',
+  lang: 'en', direction: 'ltr', lineHeight: 20, textIndent: 0, textAlign: 'start',
 }
 
 describe('indexContent', () => {

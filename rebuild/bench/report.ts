@@ -110,7 +110,7 @@ export function renderMarkdown(report: BenchReport): string {
       out.push(`${cell(e.userAgent)}; crossOriginIsolated ${e.crossOriginIsolated}; performance.now() step ${formatMs(e.timerResolutionMs)} (${e.timerSteps} steps seen); heap API ${e.heapApi ? 'yes' : 'no'}`)
       out.push('')
     }
-    out.push('| Row | Units | Variant | Median | p95 | vs main | Samples × reps | First | Outliers | Heap drops | measureText | Rebuild log contexts / calls | Lines |')
+    out.push('| Row | Units | Variant | Median | p95 | vs main | Samples × reps | First | Outliers | Heap drops | measureText | Contexts | Lines |')
     out.push('|---|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|')
     for (let r = 0; r < context.rows.length; r++) {
       const row = context.rows[r]!
@@ -121,13 +121,13 @@ export function renderMarkdown(report: BenchReport): string {
         const st = variant.stats
         const count = row.counts?.variants.find(entry => entry.variant === variant.variant) ?? null
         const base = variant.baseline === null ? Number.NaN : medians.get(variant.baseline) ?? Number.NaN
-        out.push(`| ${v === 0 ? cell(rowLabel(row)) : ''} | ${v === 0 ? row.units.toLocaleString('en-US') : ''} | ${cell(variant.variant)} | ${formatMs(st.medianMs)} | ${formatMs(st.p95Ms)} | ${ratio(st.medianMs, base)} | ${st.n} × ${st.reps} | ${formatMs(variant.firstMs)} | ${st.outliers} | ${st.heapDropSamples ?? 'n/a'} | ${count === null ? '' : count.measureTextCalls.toLocaleString('en-US')} | ${count === null || count.logContexts === null ? '' : `${count.logContexts} / ${count.logCalls!.toLocaleString('en-US')}`} | ${count === null ? '' : count.lines.toLocaleString('en-US')} |`)
+        out.push(`| ${v === 0 ? cell(rowLabel(row)) : ''} | ${v === 0 ? row.units.toLocaleString('en-US') : ''} | ${cell(variant.variant)} | ${formatMs(st.medianMs)} | ${formatMs(st.p95Ms)} | ${ratio(st.medianMs, base)} | ${st.n} × ${st.reps} | ${formatMs(variant.firstMs)} | ${st.outliers} | ${st.heapDropSamples ?? 'n/a'} | ${count === null ? '' : count.measureTextCalls.toLocaleString('en-US')} | ${count === null ? '' : count.contexts.toLocaleString('en-US')} | ${count === null ? '' : count.lines.toLocaleString('en-US')} |`)
       }
-      if (row.counts?.sharedMeasurerSameLines === false) out.push(`| | | shared measurer lines differ from layoutParagraph | | | | | | | | | | |`)
+      if (row.counts?.rebuildModesSameLines === false) out.push(`| | | the rebuild's modes gave different lines | | | | | | | | | | |`)
     }
   }
   out.push('')
-  out.push('Times are per repetition; a repetition is the variant\'s whole operation (see the JSON `desc`). "vs main" divides the median by its baseline\'s median in the same row. "First" is one repetition timed alone before calibration. measureText counts and lines come from one untimed repetition after all timing in the document.')
+  out.push('Times are per repetition; a repetition is the variant\'s whole operation (see the JSON `desc`). "vs main" divides the median by its baseline\'s median in the same row. "First" is one repetition timed alone before calibration. measureText calls, contexts and lines come from one untimed repetition after all timing in the document.')
   return out.join('\n') + '\n'
 }
 

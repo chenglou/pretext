@@ -15,7 +15,9 @@ import { formatMs, renderMarkdown, type BenchReport, type ContextReport, type Lo
 const BENCH_DIR = import.meta.dir
 const REPO = resolve(BENCH_DIR, '../..')
 const PROFILES_DIR = join(REPO, '.artifacts/profiles')
-const LOCK_OWNER = '/private/tmp/pretext-eng-20260912/browser-lock.owner'
+// The locks of .artifacts/session/with-browser-lock.py: the exclusive one, and the slots a browser's jobs take one of.
+const LOCK_ROOT = '/private/tmp/pretext-eng-20260912'
+const LOCK_SLOTS = 3
 // The bench launches the apps the lab launches (lab/browser-build.ts LAB_APPS): the pinned copies of Chrome and Firefox,
 // whose build readBuild reads. The installed browsers update themselves, so launching them would run one build under
 // another build's name (Chrome's user agent names the major version only).
@@ -105,15 +107,23 @@ function sh(command: string, commandArgs: string[]): string {
   }
 }
 
+// The lock this run sits under: the first of the browser's slots or the exclusive lock whose owner is this driver's
+// parent, the wrapper; else the exclusive lock's state, ours or not.
 function readLock(): LockState {
-  let owner: unknown = null
-  try {
-    owner = JSON.parse(readFileSync(LOCK_OWNER, 'utf8'))
-  } catch {
-    // No owner file: nobody holds the lock.
+  const files = [`${LOCK_ROOT}/browser-lock.owner`]
+  for (let k = 0; k < LOCK_SLOTS; k++) files.push(`${LOCK_ROOT}/browser-lock-${browser}-${k}.owner`)
+  let found: LockState = { ownerFile: files[0]!, owner: null, ours: false }
+  for (let i = 0; i < files.length && !found.ours; i++) {
+    let owner: unknown = null
+    try {
+      owner = JSON.parse(readFileSync(files[i]!, 'utf8'))
+    } catch {
+      // No owner file: nobody holds this lock.
+    }
+    const pid = typeof owner === 'object' && owner !== null && 'pid' in owner ? Number((owner as { pid: unknown }).pid) : null
+    if (i === 0 || pid === process.ppid) found = { ownerFile: files[i]!, owner, ours: pid !== null && pid === process.ppid }
   }
-  const pid = typeof owner === 'object' && owner !== null && 'pid' in owner ? Number((owner as { pid: unknown }).pid) : null
-  return { ownerFile: LOCK_OWNER, owner, ours: pid !== null && pid === process.ppid }
+  return found
 }
 
 // This driver and the processes that started it (the lock wrapper, shells), whose command lines name this script too.

@@ -124,20 +124,19 @@ export type RowTiming = {
 
 export type VariantCount = {
   variant: string
-  // OffscreenCanvasRenderingContext2D and CanvasRenderingContext2D measureText calls during one repetition.
+  // OffscreenCanvasRenderingContext2D and CanvasRenderingContext2D measureText calls during one repetition, and the
+  // contexts it made (getContext calls on OffscreenCanvas and <canvas>).
   measureTextCalls: number
-  // The rebuild's measure log: contexts created and calls logged in that repetition; null for main.
-  logContexts: number | null
-  logCalls: number | null
-  // Lines produced by that repetition, summed over widths or messages.
+  contexts: number
+  // Lines produced by that repetition, summed over widths or messages: main's line count, the rebuild's line boxes.
   lines: number
 }
 
 export type RowCount = {
   id: string
   variants: VariantCount[]
-  // many rows: whether the shared-measurer experiment gave the same line ranges as layoutParagraph for every message.
-  sharedMeasurerSameLines: boolean | null
+  // Whether the rebuild's three modes gave the same line ranges for every paragraph and width of the row.
+  rebuildModesSameLines: boolean
 }
 
 export type RowPost = { runId: string; context: number; row: RowTiming }

@@ -58,5 +58,6 @@ export type CanvasSettings = {
 // Canvas measureText in a context with these settings: live in the page, or answered from a recorded call log.
 export type CanvasMeasure = (settings: CanvasSettings, text: string) => number
 
-// `Layout` is the engine's member of the row's layout (types.ts BlinkLayout, WebKitLayout, GeckoLayout).
-export type ObservationPort<Layout> = (paragraph: Paragraph, layout: Layout, measure: CanvasMeasure) => ExpectedObservation
+// `Layout` is the engine's member of the row's layout (types.ts BlinkLayout, WebKitLayout, GeckoLayout). `width` is the
+// content-box width in CSS px the paragraph was laid out at, which every slot got (types.ts LayoutPrediction).
+export type ObservationPort<Layout> = (paragraph: Paragraph, width: number, layout: Layout, measure: CanvasMeasure) => ExpectedObservation

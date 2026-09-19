@@ -67,7 +67,7 @@ function walkContent(paragraph: Paragraph): { texts: string[]; elementKinds: Arr
   return { texts, elementKinds }
 }
 
-export const observeGecko: ObservationPort<GeckoLayout> = (paragraph, layout) => {
+export const observeGecko: ObservationPort<GeckoLayout> = (paragraph, _width, layout) => {
   const { texts, elementKinds } = walkContent(paragraph)
   let text = ''
   const runStarts: number[] = []

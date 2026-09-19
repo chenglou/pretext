@@ -437,7 +437,7 @@ function walk(paragraph: Paragraph): { leaves: Leaf[]; elements: Element[]; text
   return { leaves, elements, text: offset }
 }
 
-export const observeBlink: ObservationPort<BlinkLayout> = (paragraph: Paragraph, layout: BlinkLayout, _measure: CanvasMeasure): ExpectedObservation => {
+export const observeBlink: ObservationPort<BlinkLayout> = (paragraph: Paragraph, _width: number, layout: BlinkLayout, _measure: CanvasMeasure): ExpectedObservation => {
   const zoom = layout.env.devicePixelRatio
   const rtlStyle = paragraph.direction === 'rtl'
   const tree = walk(paragraph)

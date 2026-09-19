@@ -34,12 +34,12 @@ const doc = { createElement: (tag: string) => new Node(tag), createTextNode: (da
 const font: FontDecl = { family: 'Arial', size: 16, weight: 400, style: 'normal', facts: UNKNOWN_FONT_FACTS }
 const style = { font, letterSpacing: 0, wordSpacing: 0, whiteSpace: 'normal', wordBreak: 'normal', overflowWrap: 'normal', lineBreak: 'auto', tabSize: 8 } as const
 function paragraph(content: InlineNode[], more: Partial<Paragraph> = {}): Paragraph {
-  return { ...style, content, lang: 'en', direction: 'ltr', width: 100, lineHeight: 20, textIndent: 0, textAlign: 'start', ...more }
+  return { ...style, content, lang: 'en', direction: 'ltr', lineHeight: 20, textIndent: 0, textAlign: 'start', ...more }
 }
 function span(children: InlineNode[], more: Partial<InlineElement> = {}): InlineElement {
   return { ...style, kind: 'span', lang: null, inlineStart: NO_BOX_EDGE, inlineEnd: NO_BOX_EDGE, verticalAlign: 'baseline', children, ...more }
 }
-const shared = { hasLineBox: true, joinsNextLine: false, slot: { left: 0, right: 0 }, indented: false, align: 'start' } as const
+const shared = { hasLineBox: true, joinsNextLine: false, slot: { width: 100, left: 0, right: 0 }, indented: false, align: 'start' } as const
 const blinkGeometry = { needsAccurateEndPosition: false, width: 0, hangWidth: 0, availableWidth: 6400 }
 function blink(lines: { fragments: Fragment[]; geometry?: Partial<typeof blinkGeometry> }[]): PaintableLayout {
   return { engine: 'blink', belowFloats: [], lines: lines.map(line => ({ ...shared, fragments: line.fragments, geometry: { ...blinkGeometry, ...line.geometry } })) }

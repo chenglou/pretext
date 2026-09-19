@@ -32,9 +32,16 @@ commands, the numbers and what the line doesn't hold; the references they replac
 
 Tier 1 is a change detector, not an oracle: its expected values are the library's own at a commit. Its inputs are recorded
 per library, so a library that asks Canvas new questions needs a new recording (`browser-sets.ts --record`, `replay.ts
-pack`, `freeze --force --reason`). `replay.ts check` keeps its scratch folder inside the reference folder, so two checks of
-one reference at the same time collide; give each its own `--dir` that links the shared `inputs`, `reference`, `ledger` and
-`browser` folders.
+pack`, `freeze --force --reason`). `replay.ts check` only reads the reference folder and keeps its scratch files and report
+under `rebuild/tests/.check` in the working tree, so owners in several worktrees check one reference at once. `pack` finds
+a run's parts under `--runs`, whichever checkout recorded it, and reads them before it empties the folder it packs into.
+
+**The function set's checks** (since the re-architecture's S3, when `rebuild/src/index.ts` began to export the set of
+DESIGN.md §2.9; lab README "Test tiers"): `bun rebuild/tests/function-set.ts plain|pure|sweep --browser=all --config=all`
+holds the library to itself over every recorded case. *Plain*: a paragraph prepared plain gives the inspected one's fill
+results and pieces and asks Canvas nothing else. *Pure*: `linePieces` and `inspectLine` give the same result twice and in
+either order. *Sweep*: one prepared paragraph filled at four widths on a stand-in Canvas equals a paragraph prepared for
+each width alone. All three pass on the six references (389,646 cases in all), in about 1.5, 2 and 10 minutes.
 
 Terms:
 

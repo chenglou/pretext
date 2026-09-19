@@ -138,9 +138,6 @@ export type InputsManifest = {
   sets: Record<string, { protocol: SetProtocol; shards: Shard[] }>
   cases: number
   calls: number
-  // Cases where the library's own call log and the recorder disagree (record.ts `library.agrees`): the record may not
-  // hold what the library asked.
-  logDisagrees: string[]
 }
 // inputs/unfaithful.json, written by `pack` after the manifest: per `<set>/<case id>`, how the replay under the recorded
 // library differs from the browser's own prediction.
@@ -277,9 +274,9 @@ function observe(prediction: LayoutPrediction): ExpectedObservation {
   const layout = prediction.layout
   const measure = createPortMeasure()
   switch (layout.engine) {
-    case 'blink': return observeBlink(prediction.paragraph, layout, measure)
-    case 'webkit': return observeWebKit(prediction.paragraph, layout, measure)
-    case 'gecko': return observeGecko(prediction.paragraph, layout, measure)
+    case 'blink': return observeBlink(prediction.paragraph, prediction.width, layout, measure)
+    case 'webkit': return observeWebKit(prediction.paragraph, prediction.width, layout, measure)
+    case 'gecko': return observeGecko(prediction.paragraph, prediction.width, layout, measure)
   }
 }
 
@@ -451,7 +448,6 @@ async function packPart(): Promise<void> {
   const records = readMeasurements(measurementsPath)
   const shards: Shard[] = []
   const browserShards: Array<{ file: string; cases: number; sha256: string }> = []
-  const logDisagrees: string[] = []
   const storageSensitive: string[] = []
   let inputs: string[] = []
   let browserLines: string[] = []
@@ -474,7 +470,6 @@ async function packPart(): Promise<void> {
     const record = next.value
     if (record.id !== row.id) throw new Error(`Record ${record.id} doesn't belong to row ${row.id}: the files come from different runs`)
     if (row.build === undefined) throw new Error(`Row ${row.id} records no build`)
-    if (record.library !== null && !record.library.agrees) logDisagrees.push(row.id)
     if (row.browser === 'chrome') {
       for (let i = record.phases.predict[0]; i < record.phases.predict[1]; i++) {
         const asked = record.calls[i]![1]
@@ -487,7 +482,7 @@ async function packPart(): Promise<void> {
     const predict = record.calls.slice(record.phases.predict[0], record.phases.predict[1])
     const observed = record.calls.slice(record.phases.observe[0], record.phases.observe[1])
     const trimmed: CaseMeasurements = {
-      id: record.id, contexts: record.contexts, calls: [...predict, ...observed], segmentations: record.segmentations, library: record.library,
+      id: record.id, contexts: record.contexts, calls: [...predict, ...observed], segmentations: record.segmentations,
       phases: { native: [0, 0], predict: [0, predict.length], observe: [predict.length, predict.length + observed.length], paint: [predict.length + observed.length, predict.length + observed.length] },
     }
     const input: InputCase = { id: row.id, family: row.family, case: row.case, browser: row.browser, env: { userAgent: row.env.userAgent, devicePixelRatio: row.env.devicePixelRatio, pageLang: row.env.pageLang }, build: row.build, languages: row.languages?.given ?? null, record: trimmed }
@@ -499,7 +494,7 @@ async function packPart(): Promise<void> {
   }
   flush()
   await records.return(undefined)
-  writeFileSync(options.get('result')!, JSON.stringify({ shards, browserShards, logDisagrees, storageSensitive }))
+  writeFileSync(options.get('result')!, JSON.stringify({ shards, browserShards, storageSensitive }))
 }
 
 async function pack(): Promise<number> {
@@ -510,6 +505,17 @@ async function pack(): Promise<number> {
   if (run.sets.some(set => set.subset)) fail('A run of --ids-file subsets can\'t be packed: the inputs hold whole sets')
   if (existsSync(join(dir, 'inputs/manifest.json')) && !flags.has('force')) fail(`${relative(REPO, dir)}/inputs exists; --force replaces it (and makes the frozen reference stale: freeze again)`)
   const started = Date.now()
+  type Part = { set: string; part: number; rows: string; measurements: string; record: { bundleSha256: string | null } }
+  const parts: Part[] = []
+  // A part's folder is where browser-sets.ts put it under its --out, whichever checkout recorded the run; the run's record
+  // names it from that checkout.
+  for (const set of run.sets) for (const part of set.parts) {
+    const folder = join(runsDir, 'runs', set.name, 'forward', `part${part.part}`)
+    const measurements = join(folder, `${browser}-measurements.ndjson.zst`)
+    if (!existsSync(measurements)) fail(`${folder} holds no measurement record: run browser-sets.ts with --record`)
+    parts.push({ set: set.name, part: part.part, rows: join(folder, `${browser}-rows.ndjson`), measurements, record: JSON.parse(readFileSync(join(folder, `${browser}-run.json`), 'utf8')) as { bundleSha256: string | null } })
+  }
+  // Only a run that can be packed replaces what the folder holds.
   for (const name of ['inputs', 'browser', 'ledger']) if (existsSync(join(dir, name))) execFileSync('trash', [join(dir, name)])
   mkdirSync(join(dir, 'inputs'), { recursive: true })
   // The run's ledger goes beside the inputs: the statuses of the recording the inputs come from.
@@ -517,15 +523,7 @@ async function pack(): Promise<number> {
     mkdirSync(join(dir, 'ledger'))
     for (const name of ['ledger.json', 'entries.ndjson']) writeFileSync(join(dir, 'ledger', name), readFileSync(join(runsDir, 'ledger', name)))
   }
-  type Part = { set: string; part: number; rows: string; measurements: string; record: { bundleSha256: string | null } }
-  const parts: Part[] = []
-  for (const set of run.sets) for (const part of set.parts) {
-    const folder = resolve(REPO, part.forward)
-    const measurements = join(folder, `${browser}-measurements.ndjson.zst`)
-    if (!existsSync(measurements)) fail(`${part.forward} holds no measurement record: run browser-sets.ts with --record`)
-    parts.push({ set: set.name, part: part.part, rows: join(folder, `${browser}-rows.ndjson`), measurements, record: JSON.parse(readFileSync(join(folder, `${browser}-run.json`), 'utf8')) as { bundleSha256: string | null } })
-  }
-  const results: Array<{ shards: Shard[]; browserShards: Array<{ file: string; cases: number; sha256: string }>; logDisagrees: string[]; storageSensitive: string[] }> = []
+  const results: Array<{ shards: Shard[]; browserShards: Array<{ file: string; cases: number; sha256: string }>; storageSensitive: string[] }> = []
   const failures: string[] = []
   await pool(parts, jobsWidth(), async (part, index) => {
     const result = join(dir, 'inputs', `.part-${index}.json`)
@@ -537,7 +535,7 @@ async function pack(): Promise<number> {
   for (let i = 0; i < parts.length; i++) execFileSync('trash', [join(dir, 'inputs', `.part-${i}.json`)])
   const manifest: InputsManifest = {
     format: INPUTS_FORMAT, browser, config, predictor: PREDICTORS[config], build: run.build, bundles: [...new Set(parts.map(part => part.record.bundleSha256 ?? 'not recorded'))].sort(),
-    recordedFrom: relative(REPO, runsDir), sets: {}, cases: 0, calls: 0, logDisagrees: [],
+    recordedFrom: relative(REPO, runsDir), sets: {}, cases: 0, calls: 0,
   }
   const browserSets: ReferenceManifest['sets'] = {}
   const storageSensitive: string[] = []
@@ -550,7 +548,6 @@ async function pack(): Promise<number> {
       manifest.calls += shard.calls
     }
     for (const shard of results[i]!.browserShards) (browserSets[part.set] ??= []).push({ ...shard, file: relative(join(dir, 'browser'), shard.file) })
-    manifest.logDisagrees.push(...results[i]!.logDisagrees)
     storageSensitive.push(...results[i]!.storageSensitive)
   }
   // Chrome only: the cases `check` sends to tier 2 when the code that builds Canvas strings changed (STORAGE_PATHS).
@@ -562,7 +559,7 @@ async function pack(): Promise<number> {
     createdAt: new Date().toISOString(), reason: `the predictions the browser recorded in ${relative(REPO, runsDir)}`, replaced: [], sets: browserSets, cases: manifest.cases, ledger: ledgerHashes(dir),
   }
   writeFileSync(join(dir, 'browser/manifest.json'), `${JSON.stringify(browserManifest, null, 2)}\n`)
-  console.log(`[replay] packed ${manifest.cases} cases, ${manifest.calls} recorded calls, ${Object.values(manifest.sets).reduce((sum, set) => sum + set.shards.length, 0)} shards into ${relative(REPO, dir)}/inputs in ${Math.round((Date.now() - started) / 1000)} s; ${manifest.logDisagrees.length} cases where the library's call log and the recorder disagree`)
+  console.log(`[replay] packed ${manifest.cases} cases, ${manifest.calls} recorded calls, ${Object.values(manifest.sets).reduce((sum, set) => sum + set.shards.length, 0)} shards into ${relative(REPO, dir)}/inputs in ${Math.round((Date.now() - started) / 1000)} s`)
   // Fidelity: the working tree's replay against the browser's own predictions.
   const report = await compare(dir, manifest, 'browser', selectSets(browser, undefined, undefined).map(set => set.name), null)
   const unfaithful: Unfaithful = { checkedAt: new Date().toISOString(), commit: git('rev-parse', 'HEAD'), dirty: dirtyLibraryFiles(), cases: {} }
