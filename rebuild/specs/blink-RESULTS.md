@@ -147,7 +147,8 @@ declaration or per text run. The window's strings change; their number doesn't.
   accidental passes. The 5 of the 20 left: `c-b53dc153f250d155` (the Geeza Pro fallback under Shantell Sans, where
   U+2060 breaks the AAT joining Canvas measures, 2,683,064 units against 1,965,368 without it) and four `f` SHY `fi`
   cases in Shantell Sans, which pass with the ligature fact.
-- Tier 2, pinned Chrome, both orders, both configurations, at b4dbad6: 67,065 cases, 4 status transitions in each, all
+- Tier 2, pinned Chrome, both orders, both configurations, at b4dbad6 and again at cc549ca (which changes the window's
+  comment and this file), with the same result: 67,065 cases, 4 status transitions in each configuration, all
   on `c-bff5270008f33766` (suite/accepted-r; line count and breaks from `fail covered by glyph-clusters+unsafe-to-break`
   to pass, widths from unobserved to pass, exact from `not exact (rect counts 1)` to exact). 0 from a pass to a
   failure. Differing predicted values 266 to 266 and 552 to 552, rect counts 992 to 991 and 869 to 868, limited values
@@ -161,9 +162,10 @@ declaration or per text run. The window's strings change; their number doesn't.
   character, which Canvas resolves under another script), 2 `unsafe-to-break` entries come (a pair adjustment now seen
   across the cluster), and the cluster advances of 2 suite/cross-item cases move by that adjustment. All 129 and 265 pass
   line count, breaks and widths and are exact in the ledger, before and after.
-- Function set: plain passes on 66,496 and 66,649 cases, 0 fail, 569 and 416 skipped for their new questions; the plain
-  predictor's browser run over all 67,065 cases against the usual run, `compare-sets --prediction=line-ranges`: 0 line
-  ranges differ, 0 native observations differ, exit 0. Citations: 0 lost. Painter differential: exit 3, 0 paintings
+- Function set: plain and pure pass on 66,496 and 66,649 cases, 0 fail, 569 and 416 skipped for their new questions;
+  the sweep on the stand-in Canvas, which needs no record and so runs those cases too, passes on 67,065 of 67,065
+  without facts. The plain predictor's browser run over all 67,065 cases against the usual run, at both commits,
+  `compare-sets --prediction=line-ranges`: 0 line ranges differ, 0 native observations differ, exit 0. Citations: 0 lost. Painter differential: exit 3, 0 paintings
   differ, the 698 and 681 rows tier 1 names aren't painted offline and tier 2's painter column has 0 transitions.
 
 **Cost, plain path, Canvas questions a paragraph** (the plain predictor's browser runs, X3 merge against this commit):
