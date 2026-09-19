@@ -558,7 +558,7 @@ doesn't call `detectEngine()`, so neither the recorded Canvas answers nor the of
 
 | Field | Source | What reads it |
 |---|---|---|
-| `engine` | `navigator.userAgent`: `Firefox/`, `Chrome/` (not `Edg/` or `OPR/`), `Version/… Safari/`; `detectEngine()` also checks the running Canvas (above) | the one switch (§3) |
+| `engine` | `navigator.userAgent`, read for the engine and not the brand: `Firefox/` is Gecko; `Chrome/` is Blink, so Edge, Opera, Samsung Internet and an Android WebView are; `AppleWebKit/` without `Chrome/` is WebKit, so every iOS browser and a WKWebView are. Only Chrome, Firefox and Safari on one Mac are pinned and tested. `detectEngine()` also checks the running Canvas (above) | the one switch (§3) |
 | `build` | given: the app bundle version (Chrome's and Firefox's `CFBundleShortVersionString`, WebKit.framework's `CFBundleVersion`). Chrome's reduced user agent shows only the major version | `paragraphGaps` reports `engine-build` first when it isn't `PINNED_BUILDS[engine]`, null included, and the lab's layout records the environment it ran under |
 | `devicePixelRatio` | `window.devicePixelRatio` | Blink: the layout zoom, device scale factor times browser zoom (specs/blink-lines.md §2.1; an emulated DPR lays out at zoom 1). Gecko: app units per device pixel = max(1, round(60 / dpr)) (specs/gecko-lines.md §2.1). WebKit: nothing on the line-breaking path (specs/webkit-lines.md §1.6) |
 | `pageZoom` (WebKit) | given | Safari's page zoom multiplies lengths and font sizes, and no page API shows it. null: laid out at 1 with `page-zoom`. Blink and Gecko include browser zoom in the DPR |

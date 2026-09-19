@@ -6297,17 +6297,19 @@
    "engine": "shared",
    "area": "env",
    "kind": "heuristic",
-   "statement": "the engine comes from user-agent patterns (Firefox/; Chrome/ but not Edg/ or OPR/; Version/… Safari/); the build and the browser process's languages are given facts, and detectEngine also asks the running Canvas for what the engine's recipes assume (shared/env/canvas-checks)",
-   "source": "src/env.ts engineFromUserAgent; DESIGN.md §1.4",
+   "statement": "the engine comes from user-agent patterns, and it is the engine that lays the page out, not the browser's brand: Firefox/ is Gecko; Chrome/ is Blink, which takes in every Chromium browser (Edge, Opera, Samsung Internet, an Android WebView); AppleWebKit/ without Chrome/ is WebKit, which takes in every iOS browser (CriOS/, FxiOS/, EdgiOS/) and a WKWebView. Only Chrome, Firefox and Safari on one Mac are pinned and tested. The build and the browser process's languages are given facts, and detectEngine also asks the running Canvas for what the engine's recipes assume (shared/env/canvas-checks)",
+   "source": "src/env.ts engineOfUserAgent; DESIGN.md §1.4",
    "probes": [
     "cross X6: confirmed (Chrome)",
     "cross-cutting 6: recorded (Safari zh-CN)"
    ],
-   "tests": [],
+   "tests": [
+    "src/env.test.ts :: a browser is its engine: every Chromium browser is Blink, every iOS browser is WebKit"
+   ],
    "audit": null,
    "status": "current",
    "replacedBy": [],
-   "declaredBy": "catalogue 2026-09-16; restated by the shared owner (round 4b)"
+   "declaredBy": "catalogue 2026-09-16; restated by the shared owner (round 4b); restated 2026-09-19 when Edge, Opera and the iOS browsers stopped being refused (the maintainer: a prevalent browser on a modeled engine must not be shown nothing)"
   },
   {
    "id": "shared/painter/line-block-a-wrap",
@@ -9729,7 +9731,7 @@
   "shared/breaks/dictionary-category-count": "7df9ec6c654dac6e",
   "shared/breaks/icu4x-rule-iterator": "04aa6eab37ebe63d",
   "shared/data/pinned-tables-by-hash": "9838fcab6c53e651",
-  "shared/env/engine-from-user-agent": "0c92cfa825cdcf7a",
+  "shared/env/engine-from-user-agent": "f14aee6c40480823",
   "shared/painter/line-block-a-wrap": "fd97bded0d0406d9",
   "shared/painter/nowrap-hyphenated-or-joined": "591cb74e5456f7ce",
   "shared/painter/leading-ascii-space-slice-in-span": "8fcd3c4d8cca5d7b",
