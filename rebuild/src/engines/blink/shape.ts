@@ -22,7 +22,7 @@
 // joined forms on one-letter lines, Geeza Pro doesn't). Canvas can't tell the two apart, so the font declaration says
 // which (FontFacts.joining); when it doesn't, the edge is measured as an AAT font gives it and the layout reports
 // joining-technology there.
-import { measureContext, measureText, type Measurer } from '../../measure/canvas.js'
+import { contextFor, width, type Context } from '../../measure/canvas.js'
 import { canvasFont } from '../../measure/font.js'
 import { floatSum, hanKerningEndUnknown, hanKerningTrim, hyphenGlyph, measuredRange, tabStops, uncutCluster, unsafeCut, viewEdges, type GapSink, type UnknownRun } from './gaps.js'
 import { hanKerningFontData, hanKerningMayApply, resolvedCharType, shouldKern, shouldKernLast, trim16 } from './hankerning.js'
@@ -90,7 +90,7 @@ function cssSizeScale(size: number, zoom: number): number {
 // clean renderer). The scaled advances are stand-ins: Blink truncates each glyph's advance to 1/65536 px at its own size
 // (skia_text_metrics.cc:207-211), which the layout reports as optical-size (gaps.ts preparedContent). Other fonts are measured
 // at the zoomed size (specs/blink-lines.md §2.3).
-export function styleContexts(m: Measurer, style: BlinkStyle, zoom: number, partition: string): StyleContexts {
+export function styleContexts(canvases: Context[], style: BlinkStyle, zoom: number, partition: string): StyleContexts {
   const cssSize = style.measuresAtCssSize
   const scale = cssSize ? cssSizeScale(style.font.size, zoom) : 1
   // Computed font size f32(specified × zoom); DOM and Canvas both floor it to 1/100 (effectiveFontSize).
@@ -106,21 +106,20 @@ export function styleContexts(m: Measurer, style: BlinkStyle, zoom: number, part
   // which cancels in a pair adjustment's differences (edgeGap in gaps.ts).
   const noLigatures = `${NO_LIGATURES_SPACING_PX}px`
   return {
-    ltr: measureContext(m, { ...base, letterSpacing, direction: 'ltr' }),
-    rtl: measureContext(m, { ...base, letterSpacing, direction: 'rtl' }),
-    ltrNoLigatures: measureContext(m, { ...base, letterSpacing: noLigatures, direction: 'ltr' }),
-    rtlNoLigatures: measureContext(m, { ...base, letterSpacing: noLigatures, direction: 'rtl' }),
+    ltr: contextFor(canvases, { ...base, letterSpacing, direction: 'ltr' }),
+    rtl: contextFor(canvases, { ...base, letterSpacing, direction: 'rtl' }),
+    ltrNoLigatures: contextFor(canvases, { ...base, letterSpacing: noLigatures, direction: 'ltr' }),
+    rtlNoLigatures: contextFor(canvases, { ...base, letterSpacing: noLigatures, direction: 'rtl' }),
     // The hyphen is shaped alone without spacing (hyphen_result.cc:12-16).
-    hyphen: measureContext(m, { ...base, letterSpacing: '0px', direction: 'ltr' }),
+    hyphen: contextFor(canvases, { ...base, letterSpacing: '0px', direction: 'ltr' }),
     scale,
   }
 }
 
-// What measuring needs: the prepared paragraph, the layout's measurer, and where gaps go (gaps.ts GapSink: the paragraph's
-// in prepare, a line's while that line is filled or inspected, null on a paragraph prepared plain).
+// What measuring needs: the prepared paragraph, whose styles hold their Canvas contexts, and where gaps go (gaps.ts
+// GapSink: the paragraph's in prepare, a line's while that line is filled or inspected, null on a paragraph prepared plain).
 export type Shaper = {
   p: BlinkPrepared
-  m: Measurer
   gaps: GapSink
 }
 
@@ -137,14 +136,14 @@ export type Shaper = {
 export function contextsOf(sh: Shaper, style: number, twoByte: boolean): StyleContexts {
   const p = sh.p
   if (twoByte || !p.segmented) return p.contexts[style]!
-  return p.oneByteContexts[style] ??= styleContexts(sh.m, p.styles[style]!, p.layoutZoom, '8bit')
+  return p.oneByteContexts[style] ??= styleContexts(p.canvases, p.styles[style]!, p.layoutZoom, '8bit')
 }
 
 // W × 65536 of a Canvas string, a whole number of 16.16 units (a Canvas total is the float32 of one, blink-canvas §1.5),
 // times the style's scale: 16.16 units of the zoomed px. Whole where the scale is 1 or 2; under another scale the
 // fractions are exact, so sums and differences of measured totals are too.
-export function raw16Of(sh: Shaper, contexts: StyleContexts, context: number, s: string): number {
-  return Math.round(measureText(sh.m, context, s) * 65536) * contexts.scale
+export function raw16Of(contexts: StyleContexts, context: Context, s: string): number {
+  return Math.round(width(context, s) * 65536) * contexts.scale
 }
 
 const NO_LIGATURES_SPACING_PX = 0.015625
@@ -379,7 +378,7 @@ function canvasSplitsWords(sh: Shaper, style: number): boolean {
   if (known !== undefined) return known
   const contexts = p.contexts[style]!
   const probe = '\u0628\u3000\u0628'
-  const splits = measureText(sh.m, contexts.ltrNoLigatures, probe) - measureText(sh.m, contexts.hyphen, probe) > NO_LIGATURES_SPACING_PX / 2
+  const splits = width(contexts.ltrNoLigatures, probe) - width(contexts.hyphen, probe) > NO_LIGATURES_SPACING_PX / 2
   p.canvasSplitsWords[style] = splits
   return splits
 }
@@ -451,7 +450,7 @@ export function measure16(sh: Shaper, g: number, from: number, to: number, callS
   const cs = canvasString(p, from, to, joinedAtEdge(p, g, from, callStart, callEnd), joinedAtEdge(p, g, to, callStart, callEnd), p.scripts[from]!, spacesStay(sh, group.style, from, to))
   const contexts = contextsOf(sh, group.style, cs.twoByte)
   const context = noLigatures ? (group.rtl ? contexts.rtlNoLigatures : contexts.ltrNoLigatures) : (group.rtl ? contexts.rtl : contexts.ltr)
-  const w = cs.s.length === 0 ? 0 : raw16Of(sh, contexts, context, cs.s)
+  const w = cs.s.length === 0 ? 0 : raw16Of(contexts, context, cs.s)
   const st = p.styles[group.style]!
   const ls16 = st.letterSpacing === 0 ? 0 : raw16Trunc(f32(st.letterSpacing * p.layoutZoom))
   const adjust = wordSpacing16(p, group.style, from, to)
@@ -1310,7 +1309,7 @@ export function shapeHyphen(sh: Shaper, style: number): { text: string; inlineSi
   const text = hyphenText(sh.p.styles[style]!)
   // U+2010 is a two-byte string and U+002D a one-byte one, as the paragraph's own hyphen strings are.
   const contexts = contextsOf(sh, style, text !== '-')
-  const raw16 = raw16Of(sh, contexts, contexts.hyphen, text)
+  const raw16 = raw16Of(contexts, contexts.hyphen, text)
   hyphenGlyph(sh.gaps, sh, style, raw16)
   return { text, inlineSize: Math.max(0, luCeil(widthOf16(raw16))) }
 }
@@ -1326,7 +1325,7 @@ export function tabShapeResult(sh: Shaper, start: number, end: number, rtl: bool
   // TabSizeAncestor, inline_node.cc:2130-2140).
   const block = p.styles[0]!
   const contexts = contextsOf(sh, 0, false)
-  const space = widthOf16(raw16Of(sh, contexts, contexts.hyphen, ' '))
+  const space = widthOf16(raw16Of(contexts, contexts.hyphen, ' '))
   const ls = f32(block.letterSpacing * p.layoutZoom)
   const ws = f32(block.wordSpacing * p.layoutZoom)
   // TabWidthInternal: TabSize::GetPixelSize with TabSizeWithSpacing (stable, runtime_enabled_features.json5:6172), and the

@@ -11,22 +11,27 @@ import { fillLine, firstLine, inspectLine, linePieces, paragraphGaps, prepare, t
 // A line as the tests read it: what the function set gives of it, put together (test-lines.ts).
 type BlinkLine = ReturnType<typeof everyLine<BlinkLineStart, BlinkFilledLine, BlinkRefusedSlot, BlinkLineGeometry>>['lines'][number]
 
-beforeAll(() => {
-  class Context {
-    font = '16px x'
-    lang = ''
-    letterSpacing = '0px'
-    wordSpacing = '0px'
-    fontKerning = 'auto'
-    textRendering = 'auto'
-    direction = 'ltr'
-    measureText(text: string): { width: number; actualBoundingBoxLeft: number; actualBoundingBoxRight: number } {
-      const size = parseFloat(/([\d.]+)px/.exec(this.font)![1]!)
-      let n = 0
-      for (const c of text) if (c !== '‍' && c !== '​') n++
-      return { width: n * size * 10 / 16, actualBoundingBoxLeft: 0, actualBoundingBoxRight: 0 }
-    }
+class Context {
+  font = '16px x'
+  lang = ''
+  letterSpacing = '0px'
+  wordSpacing = '0px'
+  fontKerning = 'auto'
+  textRendering = 'auto'
+  direction = 'ltr'
+  measureText(text: string): { width: number; actualBoundingBoxLeft: number; actualBoundingBoxRight: number } {
+    asked.push({ context: this, text })
+    const size = parseFloat(/([\d.]+)px/.exec(this.font)![1]!)
+    let n = 0
+    for (const c of text) if (c !== '‍' && c !== '​') n++
+    return { width: n * size * 10 / 16, actualBoundingBoxLeft: 0, actualBoundingBoxRight: 0 }
   }
+}
+
+// Every question the stand-in Canvas was asked since a test last emptied the list, with the context that was asked.
+let asked: { context: Context; text: string }[] = []
+
+beforeAll(() => {
   ;(globalThis as { OffscreenCanvas?: unknown }).OffscreenCanvas = class { getContext(): Context { return new Context() } }
 })
 
@@ -540,6 +545,7 @@ describe('blink plain and inspected paragraphs', () => {
   // Every line of a paragraph through fillLine and linePieces alone, as an application reads them, with the Canvas
   // questions of the whole layout.
   function filled(p: Sized, inspect: boolean): { lines: unknown[]; asked: { letterSpacing: string; text: string }[] } {
+    asked = []
     const prepared = prepare(p, env, inspect)
     const lines: unknown[] = []
     for (let start = firstLine(prepared); start !== null;) {
@@ -547,8 +553,7 @@ describe('blink plain and inspected paragraphs', () => {
       if (result.kind === 'line') lines.push({ start: result.start, end: result.end, next: result.next, hasLineBox: result.hasLineBox, pieces: linePieces(prepared, result.line) })
       start = result.next
     }
-    const log = prepared.measurer.log
-    return { lines, asked: log.calls.map(call => ({ letterSpacing: log.contexts[call.context]!.letterSpacing, text: call.text })) }
+    return { lines, asked: asked.map(ask => ({ letterSpacing: ask.context.letterSpacing, text: ask.text })) }
   }
 
   test('a plain paragraph gives the inspected one\'s lines and pieces, and asks Canvas less', () => {
@@ -569,14 +574,14 @@ describe('blink plain and inspected paragraphs', () => {
     const p = paragraph([['xxxxxx xxxxxx', 'text']], 35)
     const noLigatures = (asked: { letterSpacing: string }[]): number => asked.filter(a => a.letterSpacing === '0.015625px').length
     expect(noLigatures(filled(p, false).asked)).toBe(0)
+    asked = []
     const prepared = prepare(p, env, true)
     for (let start = firstLine(prepared); start !== null;) {
       const result = fillLine(prepared, start, { width: p.width, left: 0, right: 0 })
       inspectLine(prepared, result.line)
       start = result.next
     }
-    const log = prepared.measurer.log
-    expect(noLigatures(log.calls.map(call => ({ letterSpacing: log.contexts[call.context]!.letterSpacing })))).toBeGreaterThan(0)
+    expect(noLigatures(asked.map(ask => ({ letterSpacing: ask.context.letterSpacing })))).toBeGreaterThan(0)
   })
 
   test('inspectLine and paragraphGaps throw on a plain paragraph', () => {
@@ -608,10 +613,11 @@ describe('blink plain and inspected paragraphs', () => {
 describe('blink string storage', () => {
   // Every string asked, with the partition of its context.
   function asks(p: Sized): { partition: string; text: string }[] {
+    asked = []
     const prepared = prepare(p, env, true)
     for (let start = firstLine(prepared); start !== null;) start = fillLine(prepared, start, { width: p.width, left: 0, right: 0 }).next
-    const log = prepared.measurer.log
-    return log.calls.map(call => ({ partition: log.contexts[call.context]!.partition, text: call.text }))
+    // The partition is the library's name for a canvas, which the paragraph's context list keeps with it.
+    return asked.map(ask => ({ partition: prepared.canvases.find(c => (c.ctx as unknown) === ask.context)!.settings.partition, text: ask.text }))
   }
   const latin1 = (text: string): boolean => /^[ -ÿ]*$/.test(text)
   const RUN = '((((((((((((('

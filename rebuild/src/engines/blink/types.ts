@@ -1,7 +1,7 @@
 // Blink's prepared paragraph and line state (Chrome 153.0.8010.48). The Blink port owns this file.
 import type { ContentIndex } from '../../content.js'
 import type { BlinkEnvironment } from '../../env.js'
-import type { Measurer } from '../../measure/canvas.js'
+import type { Context } from '../../measure/canvas.js'
 import type { FontDecl, FontFacts, Gap, LineBreak, OverflowWrap, Paragraph, TextAlign, VerticalAlign, WhiteSpace, WordBreak } from '../../model.js'
 import type { HanKerningFontData } from './hankerning.js'
 
@@ -61,7 +61,7 @@ export type BlinkStyle = {
 
 // Canvas contexts per style: shaping (LTR, RTL), shaping without liga, clig and calt (1/64 px letter spacing), the hyphen
 // (no spacing), and the factor from Canvas px to zoomed px (the layout zoom for fonts measured at the CSS size, else 1).
-export type StyleContexts = { ltr: number; rtl: number; ltrNoLigatures: number; rtlNoLigatures: number; hyphen: number; scale: number }
+export type StyleContexts = { ltr: Context; rtl: Context; ltrNoLigatures: Context; rtlNoLigatures: Context; hyphen: Context; scale: number }
 
 export type InlineItem = {
   type: InlineItemType
@@ -183,9 +183,9 @@ export type BlinkPrepared = {
   // The block's used text-align (text-align-last is auto) and NeedsAccurateEndPosition from it (line_info.cc:127-175).
   textAlign: TextAlign
   needsAccurateEndPosition: boolean
-  // The paragraph's Canvas contexts, with the memo and the call log of preparation and of every line filled from it
-  // (measure/canvas.ts).
-  measurer: Measurer
+  // The paragraph's Canvas contexts, one per settings (measure/canvas.ts contextFor): the styles' contexts above are
+  // references into it, and styles with equal settings share a context.
+  canvases: Context[]
   // Null on a paragraph prepared plain: it gives lines and their pieces, computes no gap, no limit, no glyph cluster and no
   // offset mapping, and asks Canvas nothing that only those read; inspectLine and paragraphGaps throw on it.
   inspect: BlinkInspect | null

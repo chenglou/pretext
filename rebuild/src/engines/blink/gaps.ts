@@ -317,7 +317,7 @@ export function hyphenGlyph(sink: GapSink, sh: Shaper, style: number, raw16: num
   // U+002D is a one-byte string. Its contexts are made whatever the fact says, as they have been since one-byte strings got
   // contexts of their own: the recorded questions of an inspected paragraph count its contexts (tests/replay.ts).
   const oneByte = contextsOf(sh, style, false)
-  if (st.font.facts.mapsHyphen === null && raw16 !== raw16Of(sh, oneByte, oneByte.hyphen, '-')) {
+  if (st.font.facts.mapsHyphen === null && raw16 !== raw16Of(oneByte, oneByte.hyphen, '-')) {
     addGap(sink, 'hyphen-glyph', st.run, 'a soft hyphen break the line breaker tried in a font the declaration gives no mapsHyphen fact for: Blink draws U+2010 when the primary font maps it and U+002D otherwise, and the two measure differently here (computed_style.cc:1804-1820)')
   }
 }
@@ -759,7 +759,7 @@ export function lineGaps(p: BlinkPrepared, line: { info: LineInfo; start: BlinkL
   if (line.gaps === null) throw new Error('inspectLine reads a line filled from an inspected paragraph, and this one was filled plain')
   const gaps: Gap[] = []
   for (let i = 0; i < line.gaps.length; i++) gaps.push({ ...line.gaps[i]! })
-  const sh: Shaper = { p, m: p.measurer, gaps }
+  const sh: Shaper = { p, gaps }
   lineEdgeGaps(gaps, sh, paragraph, line.info, line.start)
   itemEdgeGaps(gaps, sh, line.info)
   return gaps
