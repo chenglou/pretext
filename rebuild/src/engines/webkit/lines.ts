@@ -7,31 +7,28 @@
 // ALB = AbstractLineBuilder.cpp, IDCB = display/InlineDisplayContentBuilder.cpp, IDLB = display/InlineDisplayLineBuilder.cpp,
 // LBB = InlineLineBoxBuilder.cpp.
 import type { Measurer } from '../../measure/canvas.js'
-import type { Fragment, Gap, GapName, LineSlot, TextAlign } from '../../model.js'
+import type { FillResultOf, Fragment, Gap, GapName, LinePieces, LineSlot, TextAlign } from '../../model.js'
 import { canBreakBefore, findNextBreakablePosition, hasDictionaryCharacter, inBetweenRangeStartingWithMark, makeFactory, mayBreakInBetween } from './breaks.js'
 import { applyTextAlignJustify, type ExpandableRun, type ExpansionBehavior } from './expansion.js'
 import { DEFAULT_BIDI_LEVEL, familyDraws, hasLanguageDependentFallback } from './content.js'
 import { isDelimiterQuote, isPunctuation, lineRules, localeScript } from './data.js'
 import { hasEmojiPresentation } from './fonts.js'
-import type { WebKitDisplayBox, WebKitLineStart } from './geometry.js'
+import type { WebKitDisplayBox, WebKitLineGeometry, WebKitLineStart } from './geometry.js'
 import { joinsAcross } from './joining.js'
 import { measureText } from '../../measure/canvas.js'
 import { boxWidth, breakWord, canvasString, controlsMeasureExactly, firstUserPerceivedCharacterLength, fixedPitchShortcutWidth, forwardOneCodePoint, hyphenGlyphsDiffer, hyphenWidth, itemWidth, measuredEnd, mergedGlyphs } from './measure.js'
 import { collapsesWhiteSpace, endEdgeWidth, layoutUnit, preservesSpacesAndTabs, startEdgeWidth, tabsAllowed, trailingWhitespaceHangs } from './style.js'
-import type { WebKitBox, WebKitBoxEdges, WebKitHistoryWorld, WebKitItem, WebKitLineResult, WebKitPrepared, WebKitStyle, WebKitTextItem } from './types.js'
+import type { WebKitBox, WebKitBoxEdges, WebKitHistoryWorld, WebKitItem, WebKitLineBuilder, WebKitPrepared, WebKitStyle, WebKitTextItem } from './types.js'
 
 const f32 = Math.fround
 const F32_MAX = 3.4028234663852886e38
 const OPAQUE_BIDI_LEVEL = 255
 
-// `lineWidth` is m_lineLogicalRect.width(); `gaps` collects the gaps this line's filling decides. `measuredEnd` is the item
-// index past the last item the builder read a width or a break opportunity of: the line's content and the candidate content
-// that ended the line. `reverted` says the builder rebuilt the line back to an earlier wrap opportunity, so every wrap
-// opportunity of the line took part in its break decision. `decisionStart` is the item index where the last candidate content
-// the builder formed begins: from there to `measuredEnd` is the content whose fit ended the line. `overflowStart` is the
-// `decisionStart` of the last candidate that didn't fit (InlineContentBreaker ran on it), or null.
-// `shapedCarry` says the width carried to the next line comes from a candidate shaped across inline boxes.
-type Layout = { p: WebKitPrepared; m: Measurer; lineWidth: number; contentEdgeOffset: number; constrainedByFloat: boolean; gaps: Gap[]; measuredEnd: number; reverted: boolean; decisionStart: number; overflowStart: number | null; shapedCarry: boolean }
+// What filling one line reads and keeps. `lineWidth` is m_lineLogicalRect.width(); `gaps` collects the gaps this line's
+// filling decides. `measuredEnd` is the item index past the last item the builder read a width or a break opportunity of: the
+// line's content and the candidate content that ended the line. `shapedCarry` says the width carried to the next line comes
+// from a candidate shaped across inline boxes.
+type Layout = { p: WebKitPrepared; m: Measurer; lineWidth: number; contentEdgeOffset: number; constrainedByFloat: boolean; gaps: Gap[]; measuredEnd: number; shapedCarry: boolean }
 type SoftLineBreakItem = Extract<WebKitItem, { kind: 'soft-line-break' }>
 type HardLineBreakItem = Extract<WebKitItem, { kind: 'hard-line-break' }>
 type LineBreakItem = SoftLineBreakItem | HardLineBreakItem
@@ -956,7 +953,6 @@ function processOverflowingContent(L: Layout, c: Content, st: LineStatus): Break
 
 // InlineContentBreaker::processInlineContent (ICB:105-122)
 function processInlineContent(L: Layout, c: Content, st: LineStatus): BreakResult {
-  L.overflowStart = L.decisionStart
   const r = processOverflowingContent(L, c, st)
   if (r.action === 'wrap' && st.trailingSoftHyphenWidth !== null && hasLeadingTextContent(c)) {
     return result(st.trailingSoftHyphenWidth > st.availableWidth ? 'revert-to-last-non-overflowing-wrap-opportunity' : 'wrap-with-hyphen', true)
@@ -1030,7 +1026,6 @@ function measuredItemWidth(L: Layout, item: WebKitTextItem, left: number): numbe
 }
 
 function revertToTrailingItem(b: Builder, target: ContentItem): number {
-  b.L.reverted = true
   b.line = newLine([])
   let count = 0
   const append = (item: WebKitTextItem) => {
@@ -1168,7 +1163,6 @@ function placeInlineTextContent(b: Builder): { end: Position; overflowLogicalWid
     return breakInBetween(L, prevBox, nextBox)
   }
   const process = (): boolean => {
-    L.decisionStart = candidateStart
     r = simpleCommitCandidateContent(b, candidateStart, candidateEnd, candidateWidth)
     placed = r.isRevert ? r.committedCount : placed + r.committedCount
     candidateStart = candidateEnd
@@ -1209,7 +1203,6 @@ function placeNonWrappingInlineTextContent(b: Builder): { end: Position; overflo
   let trailingLineBreakIndex: number | null = null
   let nextIndex = b.rangeStart
   let isEndOfLine = false
-  L.decisionStart = b.rangeStart
   while (!isEndOfLine) {
     const item = items[nextIndex]!
     if (item.kind === 'text') {
@@ -1385,7 +1378,6 @@ function candidateContentForLine(b: Builder, startIndex: number, endIndex: numbe
   const items = L.p.items
   const candidate: Candidate = { content: newContent(), trailingLineBreak: null, trailingWordBreakOpportunity: null, hasTrailingSoftWrapOpportunity: false }
   L.measuredEnd = Math.max(L.measuredEnd, endIndex)
-  L.decisionStart = startIndex
   let right = currentLogicalRight
   let index = startIndex
   if (index === b.rangeStart && b.partialLeadingTextItem !== null) {
@@ -1653,7 +1645,6 @@ function commitCandidateContent(b: Builder, candidate: Candidate, partial: Parti
 
 // LineBuilder::rebuildLineWithInlineContent (ILB:1813-1858)
 function rebuildLineWithInlineContent(b: Builder, lastItem: ContentItem): number {
-  b.L.reverted = true
   b.line = newLine(b.spanningInlineBoxes)
   if (b.partialLeadingTextItem !== null && b.partialLeadingTextItem === lastItem) {
     const candidate: Candidate = { content: newContent(), trailingLineBreak: null, trailingWordBreakOpportunity: null, hasTrailingSoftWrapOpportunity: false }
@@ -2005,65 +1996,71 @@ function textDisplayBox(p: WebKitPrepared, run: LineRun, x: number): WebKitDispl
 //   f32(line box width - contentLogicalRightIncludingNegativeMargin) (IDLB:136-138): the alignment offset plus
 //   Line::contentLogicalRight(), the last run's logical right (InlineLine.h:71). Spans, atomic inlines and <br> on such a
 //   line take the display box tree walk of :1031-1070, which isn't ported.
-function displayBoxes(L: Layout, line: Line, lineLeft: number, alignmentOffset: number, hasContentfulInFlowContent: boolean): WebKitDisplayBox[] {
-  const p = L.p
+function displayBoxes(p: WebKitPrepared, filled: WebKitFilledLine, lineLeft: number, alignmentOffset: number, hasContentfulInFlowContent: boolean): WebKitDisplayBox[] {
+  if (!filled.line.hasNonDefaultBidiLevelRun) return nonBidiDisplayBoxes(p, filled, lineLeft, alignmentOffset, hasContentfulInFlowContent)
+  if (hasContentfulInFlowContent) return bidiDisplayBoxes(p, filled, lineLeft, alignmentOffset)
+  // A reordered line without contentful in-flow content (bidiDisplayBoxes' first rule).
+  const out = nonBidiDisplayBoxes(p, filled, lineLeft, alignmentOffset, hasContentfulInFlowContent)
+  if (p.style.rtl) for (let i = 0; i < out.length; i++) if (out[i]!.kind === 'inline-box') out[i]!.x = f32(lineLeft + filled.rect.width)
+  return out
+}
+
+function nonBidiDisplayBoxes(p: WebKitPrepared, filled: WebKitFilledLine, lineLeft: number, alignmentOffset: number, hasContentfulInFlowContent: boolean): WebKitDisplayBox[] {
+  const line = filled.line
   const runs = line.runs
   const out: WebKitDisplayBox[] = []
   const hanging = line.hanging === null ? 0 : line.hanging.width
-  if (!line.hasNonDefaultBidiLevelRun) {
-    // The root inline box: left at the alignment offset, width the content width less hanging content in LTR (LBB:51-63),
-    // which the initial width of an inline box adds back (LBB:488-495).
-    const contentLogicalWidth = p.style.rtl ? line.contentLogicalWidth : f32(line.contentLogicalWidth - hanging)
-    const rootRight = f32(alignmentOffset + contentLogicalWidth)
-    const openBoxes = new Map<number, number>()
-    for (let i = 0; i < runs.length; i++) {
-      const run = runs[i]!
-      switch (run.kind) {
-        case 'text':
-        case 'soft-line-break':
-          out.push(textDisplayBox(p, run, f32(lineLeft + f32(alignmentOffset + run.left))))
-          break
-        case 'hard-line-break':
-          out.push({ kind: 'line-break', element: run.element, x: f32(lineLeft + f32(alignmentOffset + run.left)), width: 0 })
-          break
-        case 'atomic': {
-          const e = p.elements[run.element]!
-          if (e.kind !== 'atomic') throw new Error(`element ${run.element} isn't atomic`)
-          const left = f32(f32(alignmentOffset + run.left) + Math.max(0, e.marginStart))
-          out.push({ kind: 'atomic', element: run.element, level: run.level === DEFAULT_BIDI_LEVEL || run.level === OPAQUE_BIDI_LEVEL ? (p.style.rtl ? 1 : 0) : run.level, x: f32(lineLeft + left), width: e.borderBoxWidth })
-          break
-        }
-        case 'inline-box-start':
-        case 'spanning-inline-box-start': {
-          // Line-spanning boxes on a line whose content floats pushed away get no display box (IDCB:603-609).
-          if (run.kind === 'spanning-inline-box-start' && !hasContentfulInFlowContent && L.constrainedByFloat) break
-          const marginStart = run.kind === 'inline-box-start' ? spanEdges(p, run.element).marginStart : 0
-          // Inline box runs are margin boxes: the border box starts past a positive margin, while a negative margin start
-          // already moved the run left (IL:300-305) and stays in the box (LBB:482-487).
-          const left = f32(f32(alignmentOffset + run.left) + Math.max(0, marginStart))
-          let width = Math.max(0, f32(rootRight - left))
-          if (!p.style.rtl) width = Math.max(0, f32(f32(rootRight + hanging) - left))
-          openBoxes.set(run.element, out.length)
-          out.push({ kind: 'inline-box', element: run.element, x: f32(lineLeft + left), width, hasStartEdge: run.kind === 'inline-box-start', hasEndEdge: false })
-          break
-        }
-        case 'inline-box-end': {
-          const index = openBoxes.get(run.element)
-          if (index === undefined) break
-          const boxOut = out[index]! as Extract<WebKitDisplayBox, { kind: 'inline-box' }>
-          const marginEnd = spanEdges(p, run.element).marginEnd
-          const right = f32(f32(alignmentOffset + run.left) + f32(run.width - marginEnd))
-          boxOut.width = Math.max(0, f32(right - f32(boxOut.x - lineLeft)))
-          boxOut.hasEndEdge = true
-          break
-        }
-        case 'word-break-opportunity':
-          break
+  // The root inline box: left at the alignment offset, width the content width less hanging content in LTR (LBB:51-63),
+  // which the initial width of an inline box adds back (LBB:488-495).
+  const contentLogicalWidth = p.style.rtl ? line.contentLogicalWidth : f32(line.contentLogicalWidth - hanging)
+  const rootRight = f32(alignmentOffset + contentLogicalWidth)
+  const openBoxes = new Map<number, number>()
+  for (let i = 0; i < runs.length; i++) {
+    const run = runs[i]!
+    switch (run.kind) {
+      case 'text':
+      case 'soft-line-break':
+        out.push(textDisplayBox(p, run, f32(lineLeft + f32(alignmentOffset + run.left))))
+        break
+      case 'hard-line-break':
+        out.push({ kind: 'line-break', element: run.element, x: f32(lineLeft + f32(alignmentOffset + run.left)), width: 0 })
+        break
+      case 'atomic': {
+        const e = p.elements[run.element]!
+        if (e.kind !== 'atomic') throw new Error(`element ${run.element} isn't atomic`)
+        const left = f32(f32(alignmentOffset + run.left) + Math.max(0, e.marginStart))
+        out.push({ kind: 'atomic', element: run.element, level: run.level === DEFAULT_BIDI_LEVEL || run.level === OPAQUE_BIDI_LEVEL ? (p.style.rtl ? 1 : 0) : run.level, x: f32(lineLeft + left), width: e.borderBoxWidth })
+        break
       }
+      case 'inline-box-start':
+      case 'spanning-inline-box-start': {
+        // Line-spanning boxes on a line whose content floats pushed away get no display box (IDCB:603-609).
+        if (run.kind === 'spanning-inline-box-start' && !hasContentfulInFlowContent && filled.rect.constrainedByFloat) break
+        const marginStart = run.kind === 'inline-box-start' ? spanEdges(p, run.element).marginStart : 0
+        // Inline box runs are margin boxes: the border box starts past a positive margin, while a negative margin start
+        // already moved the run left (IL:300-305) and stays in the box (LBB:482-487).
+        const left = f32(f32(alignmentOffset + run.left) + Math.max(0, marginStart))
+        let width = Math.max(0, f32(rootRight - left))
+        if (!p.style.rtl) width = Math.max(0, f32(f32(rootRight + hanging) - left))
+        openBoxes.set(run.element, out.length)
+        out.push({ kind: 'inline-box', element: run.element, x: f32(lineLeft + left), width, hasStartEdge: run.kind === 'inline-box-start', hasEndEdge: false })
+        break
+      }
+      case 'inline-box-end': {
+        const index = openBoxes.get(run.element)
+        if (index === undefined) break
+        const boxOut = out[index]! as Extract<WebKitDisplayBox, { kind: 'inline-box' }>
+        const marginEnd = spanEdges(p, run.element).marginEnd
+        const right = f32(f32(alignmentOffset + run.left) + f32(run.width - marginEnd))
+        boxOut.width = Math.max(0, f32(right - f32(boxOut.x - lineLeft)))
+        boxOut.hasEndEdge = true
+        break
+      }
+      case 'word-break-opportunity':
+        break
     }
-    return out
   }
-  return bidiDisplayBoxes(L, line, lineLeft, alignmentOffset, hasContentfulInFlowContent)
+  return out
 }
 
 // InlineDisplayContentBuilder::processBidiContent (IDCB:851-1088) for a line that needs visual reordering.
@@ -2079,20 +2076,12 @@ function displayBoxes(L: Layout, line: Line, lineLeft: number, alignmentOffset: 
 //   LTR (last in RTL) and its line-right ones on its last box in LTR (first in RTL) (:728-824).
 // - closeInlineBoxes (:1073-1087): trailing inline box starts at the opaque level get a zero-width box at the line's right.
 // The model's spans inherit the block's direction.
-function bidiDisplayBoxes(L: Layout, line: Line, lineLeft: number, alignmentOffset: number, hasContentfulInFlowContent: boolean): WebKitDisplayBox[] {
-  const p = L.p
+function bidiDisplayBoxes(p: WebKitPrepared, filled: WebKitFilledLine, lineLeft: number, alignmentOffset: number): WebKitDisplayBox[] {
+  const line = filled.line
   const runs = line.runs
   const rtlBlock = p.style.rtl
-  if (!hasContentfulInFlowContent) {
-    const saved = line.hasNonDefaultBidiLevelRun
-    line.hasNonDefaultBidiLevelRun = false
-    const out = displayBoxes(L, line, lineLeft, alignmentOffset, hasContentfulInFlowContent)
-    line.hasNonDefaultBidiLevelRun = saved
-    if (rtlBlock) for (let i = 0; i < out.length; i++) if (out[i]!.kind === 'inline-box') out[i]!.x = f32(lineLeft + L.lineWidth)
-    return out
-  }
-  const rootLevel = rtlBlock ? 1 : 0
-  const contentLineLeftEdge = rtlBlock ? f32(L.lineWidth - f32(alignmentOffset + lastRunLogicalRight(line))) : alignmentOffset
+  const lineWidth = filled.rect.width
+  const contentLineLeftEdge = rtlBlock ? f32(lineWidth - f32(alignmentOffset + lastRunLogicalRight(line))) : alignmentOffset
   // Which spans have content on this line (InlineLineBoxBuilder.cpp:448-472: text, soft and hard line breaks set their parent
   // inline box's content), and which have their first and last box here.
   const hasContentOnLine = new Set<number>()
@@ -2237,9 +2226,8 @@ function bidiDisplayBoxes(L: Layout, line: Line, lineLeft: number, alignmentOffs
     const run = runs[i]!
     if (run.kind !== 'inline-box-start' || run.level !== OPAQUE_BIDI_LEVEL) break
     if (out.some(b => b.kind === 'inline-box' && b.element === run.element)) continue
-    out.push({ kind: 'inline-box', element: run.element, x: f32(lineLeft + L.lineWidth), width: 0, hasStartEdge: firstBox.has(run.element), hasEndEdge: lastBox.has(run.element) })
+    out.push({ kind: 'inline-box', element: run.element, x: f32(lineLeft + lineWidth), width: 0, hasStartEdge: firstBox.has(run.element), hasEndEdge: lastBox.has(run.element) })
   }
-  void rootLevel
   return out
 }
 
@@ -2378,6 +2366,9 @@ function elementOffsetOnLine(p: WebKitPrepared, element: number, event: 'open' |
 }
 
 type LineRect = { left: number; width: number }
+// m_lineLogicalRect as LineBuilder::initialize and the slot floats leave it, with m_lineContentEdgeOffset and whether a float
+// narrowed it (lineRect).
+type LineLogicalRect = { left: number; width: number; contentEdgeOffset: number; constrainedByFloat: boolean }
 
 // LineBuilder::floatAvoidingRect (ILB:1185-1216) against the start and end float edges beside the line, the floats' margin
 // box edges in LayoutUnits (null where no float intersects the line). text-indent acts as a start margin, so the floats are
@@ -2410,7 +2401,7 @@ function floatAvoidingRect(rect: LineRect, marginStart: number, startX: number |
 //   them itself (placeInlineAndFloatContent, tryPlacingFloatBox, :1329-1400): initialize finds no floats, the offset is the
 //   indent alone, and each float then narrows the line with the indent as margin start (:1394-1396), in document order, the
 //   left float first.
-function lineRect(p: WebKitPrepared, slot: LineSlot, indent: number, placesSlotFloats: boolean): { left: number; width: number; contentEdgeOffset: number; constrainedByFloat: boolean } {
+function lineRect(p: WebKitPrepared, slot: LineSlot, indent: number, placesSlotFloats: boolean): LineLogicalRect {
   const containerWidth = layoutUnit(f32(f32(slot.width) * f32(p.zoom)))
   const startInset = layoutUnit(f32(f32(p.style.rtl ? slot.right : slot.left) * f32(p.zoom)))
   const endInset = layoutUnit(f32(f32(p.style.rtl ? slot.left : slot.right) * f32(p.zoom)))
@@ -2470,20 +2461,24 @@ function horizontalAlignmentOffset(s: WebKitStyle, contentLogicalRightIn: number
 // characters its condition concerns (`at`): one entry per gap, text leaf and stretch of concerned characters, since a gap
 // covers a failure only where its range touches what differs (lab scorer 5). Ranges of one gap and leaf that touch are one
 // entry.
-function lineGaps(L: Layout, start: WebKitLineStart): void {
-  const p = L.p
+// The list starts as the gaps the filling raised, in their order, which the merging below reads; the decided line keeps its own.
+function measuredGaps(p: WebKitPrepared, decided: WebKitFilledLine | WebKitRefusedSlot): Gap[] {
   const env = p.env
+  const m = p.measurer
+  const start = decided.from
+  const gaps: Gap[] = []
+  for (let k = 0; k < decided.gaps.length; k++) gaps.push({ ...decided.gaps[k]! })
   const add = (gap: GapName, box: WebKitBox, from: number, to: number, detail: string): void => {
     const at = { start: box.sourceStart + from, end: box.sourceStart + to }
-    for (let k = L.gaps.length - 1; k >= 0; k--) {
-      const known = L.gaps[k]!
+    for (let k = gaps.length - 1; k >= 0; k--) {
+      const known = gaps[k]!
       if (known.gap !== gap || known.run !== box.run || known.at === undefined || at.start > known.at.end || at.end < known.at.start) continue
       known.at = { start: Math.min(known.at.start, at.start), end: Math.max(known.at.end, at.end) }
       return
     }
-    L.gaps.push({ gap, run: box.run, detail, at })
+    gaps.push({ gap, run: box.run, detail, at })
   }
-  const end = Math.min(L.measuredEnd, p.items.length)
+  const end = Math.min(decided.measuredEnd, p.items.length)
   for (let index = start.itemIndex; index < end; index++) {
     const item = p.items[index]!
     if (item.kind !== 'text') continue
@@ -2501,6 +2496,7 @@ function lineGaps(L: Layout, start: WebKitLineStart): void {
       if (start.previousLine.carriedFromShaping) add('rtl-shaping-across-inline-boxes', p.boxes[item.box]!, lineFrom, item.end, 'the carried width of the rest comes from a run shaped across inline boxes, a difference of Canvas totals of the joined text')
     }
   }
+  return gaps
 
   function itemGaps(item: WebKitTextItem, from: number, to: number, add: (gap: GapName, box: WebKitBox, from: number, to: number, detail: string) => void): void {
     const box = p.boxes[item.box]!
@@ -2517,7 +2513,7 @@ function lineGaps(L: Layout, start: WebKitLineStart): void {
     for (let i = from; i < to; i++) {
       const c = text.charCodeAt(i)
       if (c === 0x0b || c === 0x0c || (c === 0x0d && box.simpleFontCodePath)) {
-        controlsExact ??= box.simpleFontCodePath && controlsMeasureExactly(L.m, box.spacedContext, measured)
+        controlsExact ??= box.simpleFontCodePath && controlsMeasureExactly(m, box.spacedContext, measured)
         if (!controlsExact) add('control-character-width', box, i, i + 1, box.simpleFontCodePath
           ? 'Core Text kerns the letter before VT, FF or CR as before a space and keeps an adjustment on CR itself; Canvas shapes another string, so the width is pieced together outside the DOM\'s float32 order'
           : 'VT, FF and CR on the complex path are measured as U+0001 and U+0000, which Core Text shapes otherwise than the control')
@@ -2535,7 +2531,7 @@ function lineGaps(L: Layout, start: WebKitLineStart): void {
     // separating leaves glyphs merged, the string is measured as Canvas shapes it, and a merge the DOM keeps too (a
     // required ligature) can't be told from one it turns off.
     if (box.letterSpacing !== 0 && !singleSpace) {
-      const merge = mergedGlyphs(L.m, box, measured)
+      const merge = mergedGlyphs(m, box, measured)
       if (merge.separated !== null) {
         for (let k = 0; k < merge.pairs.length; k++) add('letter-spacing-ligatures', box, from + merge.pairs[k]![0], Math.min(to, from + merge.pairs[k]![1]), 'Canvas merges this pair under liga, clig, dlig or hlig, which the DOM turns off under letter-spacing; measured with U+200C between the two, which leaves out a pair adjustment between them')
       } else if (merge.merged) {
@@ -2552,11 +2548,11 @@ function lineGaps(L: Layout, start: WebKitLineStart): void {
         const cp = text.codePointAt(i)!
         const length = cp > 0xffff ? 2 : 1
         if (cp > 0x1f && !(cp >= 0x7f && cp <= 0x9f)) {
-          if ((localeChooses.unknownFamily || (localeChooses.namedGeneric && hasEmojiPresentation(cp))) && !familyDraws(L.m, box, box.namedContext, cp)) {
+          if ((localeChooses.unknownFamily || (localeChooses.namedGeneric && hasEmojiPresentation(cp))) && !familyDraws(m, box, box.namedContext, cp)) {
             add('canvas-language', box, i, i + length, localeChooses.unknownFamily
               ? `no named family before the one locale ${box.locale} resolves draws this character; OffscreenCanvas has no locale`
               : `a character with default emoji presentation that no family before the generic one draws: the DOM skips the generic family's outline glyph, and Canvas measures the family locale ${box.locale} resolves it to by name`)
-          } else if (localeChooses.fallback && hasLanguageDependentFallback(cp, box.locale, localeScript(box.locale)) && !familyDraws(L.m, box, box.listContext, cp)) {
+          } else if (localeChooses.fallback && hasLanguageDependentFallback(cp, box.locale, localeScript(box.locale)) && !familyDraws(m, box, box.listContext, cp)) {
             add('canvas-language', box, i, i + length, `no family of the list draws this character, and locale ${box.locale} chooses its system fallback font; OffscreenCanvas has no locale`)
           }
         }
@@ -2581,7 +2577,7 @@ function lineGaps(L: Layout, start: WebKitLineStart): void {
     // the advances, the monospace trait decides it, and so does whether the realized family is Courier New
     // (FontCoreText.cpp:776-782), which the first listed family stands in for.
     if (box.simplifiedMeasuring && !singleSpace && (box.monospaceUnknown || (box.fixedPitch && box.primaryFamilyUnknown))) {
-      if (boxWidth(p, L.m, box, from, to, 0, !item.isWhitespace, false) !== fixedPitchShortcutWidth(p, L.m, box, from, to, !item.isWhitespace)) {
+      if (boxWidth(p, m, box, from, to, 0, !item.isWhitespace, false) !== fixedPitchShortcutWidth(p, m, box, from, to, !item.isWhitespace)) {
         add('fixed-pitch-path', box, from, to, box.monospaceUnknown
           ? `whether ${box.primaryFamily} has the monospace trait isn't given, and the width shortcut of a fixed-pitch font gives this item another width (test T1)`
           : "the primary family isn't given, and whether it is Courier New decides the width shortcut, which gives this item another width (test T1)")
@@ -2610,10 +2606,10 @@ function lineGaps(L: Layout, start: WebKitLineStart): void {
         let unshaped = 0
         for (let i = 0; i < measured.length; i++) {
           const cp = measured.codePointAt(i)!
-          unshaped = f32(unshaped + measureText(L.m, box.context, canvasString(String.fromCodePoint(cp))))
+          unshaped = f32(unshaped + measureText(m, box.context, canvasString(String.fromCodePoint(cp))))
           if (cp > 0xffff) i++
         }
-        const total = measureText(L.m, box.context, canvasString(measured))
+        const total = measureText(m, box.context, canvasString(measured))
         moved = total !== unshaped && !(total > unshaped / 2 && total < 2 * unshaped)
       }
       if (moved) add('simplified-measuring', box, from, to, "the DOM keeps a space's shaped advance on the simplified path, where Canvas puts it back to the unshaped one")
@@ -2631,12 +2627,21 @@ function lineGaps(L: Layout, start: WebKitLineStart): void {
 // ---- Page history (content.ts, "Page history") ----
 // rule webkit/gap/page-history-worlds
 
+// What the comparison below reads of a decided line: its range, its line box and its display boxes; or that the slot was
+// refused.
+type ComparedLine = { kind: 'line'; start: number; end: number; hasLineBox: boolean; geometry: WebKitLineGeometry } | { kind: 'below-floats' }
+
+function comparedLine(p: WebKitPrepared, decided: WebKitFilledLine | WebKitRefusedSlot): ComparedLine {
+  switch (decided.kind) {
+    case 'line': return { kind: 'line', start: decided.start, end: decided.end, hasLineBox: lineHasVisuallyNonEmptyContent(p, decided.line), geometry: lineGeometry(p, decided) }
+    case 'below-floats': return { kind: 'below-floats' }
+  }
+}
+
 // Where a line of the paragraph and the same line in a history world differ, as a source range, or null where they agree in
 // everything the observation port reads: the line's range, its line box and its display boxes.
-function lineDifference(p: WebKitPrepared, own: WebKitLineResult, world: WebKitLineResult): { start: number; end: number } | null {
-  if (own.kind !== 'line' || world.kind !== 'line') return own.kind === world.kind ? null : own.kind === 'line' ? { start: own.line.start, end: own.line.end } : { start: 0, end: 0 }
-  const a = own.line
-  const b = world.line
+function lineDifference(p: WebKitPrepared, a: ComparedLine, b: ComparedLine): { start: number; end: number } | null {
+  if (a.kind !== 'line' || b.kind !== 'line') return a.kind === b.kind ? null : a.kind === 'line' ? { start: a.start, end: a.end } : { start: 0, end: 0 }
   let start = Infinity
   let end = -Infinity
   const mark = (from: number, to: number): void => {
@@ -2694,9 +2699,12 @@ function worldLineStart(p: WebKitPrepared, world: WebKitHistoryWorld, start: Web
 
 const PAGE_HISTORY_DETAIL = "the break position cache keys a box by its text and wrapping styles, not by its paragraph's direction, neighbouring content, white-space or word spacing, so a box of the same text laid out earlier in the process can hand this box other item ends, and with them this line differs here"
 
-function pageHistoryGaps(p: WebKitPrepared, start: WebKitLineStart, slot: LineSlot, m: Measurer, measuredEnd: number, result: WebKitLineResult): void {
-  const gaps = result.kind === 'line' ? result.line.gaps : result.gaps
-  const readEnd = Math.min(Math.max(measuredEnd, start.itemIndex + 1), p.items.length)
+// Each world that changes an item the line read lays the line out from the same start in the same slot, with the functions
+// that filled and inspect the paragraph's own line; its gaps are computed as the paragraph's are, and dropped.
+function pageHistoryGaps(p: WebKitPrepared, decided: WebKitFilledLine | WebKitRefusedSlot, gaps: Gap[]): void {
+  const start = decided.from
+  const readEnd = Math.min(Math.max(decided.measuredEnd, start.itemIndex + 1), p.items.length)
+  let ownLine: ComparedLine | null = null
   for (let w = 0; w < p.historyWorlds.length; w++) {
     const world = p.historyWorlds[w]!
     let reads = false
@@ -2709,7 +2717,10 @@ function pageHistoryGaps(p: WebKitPrepared, start: WebKitLineStart, slot: LineSl
       const own = p.items[start.itemIndex]!
       at = { start: from, end: own.kind === 'text' ? p.boxes[own.box]!.sourceStart + own.end : from }
     } else {
-      at = lineDifference(p, result, buildLine(world.prepared, worldStart, slot, m).result)
+      const inWorld = fillLine(world.prepared, worldStart, decided.slot).line
+      measuredGaps(world.prepared, inWorld)
+      ownLine ??= comparedLine(p, decided)
+      at = lineDifference(p, ownLine, comparedLine(world.prepared, inWorld))
     }
     if (at === null) continue
     const run = p.boxes[world.box]!.run
@@ -2724,27 +2735,56 @@ function pageHistoryGaps(p: WebKitPrepared, start: WebKitLineStart, slot: LineSl
   }
 }
 
-// One line (InlineFormattingContext::lineLayout), and page-history where a history world lays it out otherwise.
-export function webkitNextLine(p: WebKitPrepared, start: WebKitLineStart, slot: LineSlot, m: Measurer): WebKitLineResult {
-  const built = buildLine(p, start, slot, m)
-  if (p.historyWorlds.length > 0) pageHistoryGaps(p, start, slot, m, built.measuredEnd, built.result)
-  return built.result
+// The gaps of a decided line or a refused slot: what its filling raised, the conditions of what it measured, and page-history
+// where a history world lays it out otherwise.
+export function lineGaps(p: WebKitPrepared, decided: WebKitFilledLine | WebKitRefusedSlot): Gap[] {
+  const gaps = measuredGaps(p, decided)
+  if (p.historyWorlds.length > 0) pageHistoryGaps(p, decided, gaps)
+  return gaps
+}
+
+// ---- The decided line ----
+
+// What filling one slot decides, which linePieces, lineGeometry and lineGaps read and nothing writes: the closed Line with
+// the start and the slot it was filled from and in, the builder that filled it, its rect, and its source range.
+// `isLastLineOrLineEndsWithForcedLineBreak` is what the alignment reads (IFU:198-276). `measuredEnd` and `gaps` are the
+// filling's (Layout).
+export type WebKitFilledLine = {
+  engine: 'webkit'
+  kind: 'line'
+  from: WebKitLineStart
+  slot: LineSlot
+  builder: WebKitLineBuilder
+  rect: LineLogicalRect
+  line: Line
+  start: number
+  end: number
+  isLastLineOrLineEndsWithForcedLineBreak: boolean
+  measuredEnd: number
+  gaps: Gap[]
+}
+// A slot the line moved below: what the refused build measured and raised.
+export type WebKitRefusedSlot = { engine: 'webkit'; kind: 'below-floats'; from: WebKitLineStart; slot: LineSlot; measuredEnd: number; gaps: Gap[] }
+export type WebKitFillResult = FillResultOf<WebKitLineStart, WebKitFilledLine, WebKitRefusedSlot>
+
+// computedTextIndent (IFU:143-179): the first formatted line of a non-anonymous block, the fixed amount in px at zoom.
+function textIndent(p: WebKitPrepared, start: WebKitLineStart): number {
+  return start.isFirstFormattedLine ? f32(f32(p.style.textIndent) * f32(p.zoom)) : 0
 }
 
 // One line of InlineFormattingContext::lineLayout (InlineFormattingContext.cpp:293-360) with the builder the paragraph
-// chose, then leadingInlineItemPositionForNextLine (IFU:278-298).
-function buildLine(p: WebKitPrepared, start: WebKitLineStart, slot: LineSlot, m: Measurer): { result: WebKitLineResult; measuredEnd: number } {
+// chose, then leadingInlineItemPositionForNextLine (IFU:278-298). It decides where the line breaks and what the next line
+// starts from; the line's fragments, display boxes and gaps are read from the decided line on request.
+export function fillLine(p: WebKitPrepared, start: WebKitLineStart, slot: LineSlot): WebKitFillResult {
   if (slot.left < 0 || slot.right < 0) throw new Error(`a line slot's insets are float widths and can't be negative (${slot.left}, ${slot.right})`)
   const hasFloats = start.hasFloats || slot.left > 0 || slot.right > 0
-  // computedTextIndent (IFU:143-179): the first formatted line of a non-anonymous block, the fixed amount in px at zoom.
-  const indent = start.isFirstFormattedLine ? f32(f32(p.style.textIndent) * f32(p.zoom)) : 0
   const builder = hasFloats ? 'line-builder' : p.builder
   // The simple builders take the initial line rect: no floats and no text-indent (TOS:136-162), since text-indent makes the
   // content ineligible for them.
   // The paragraph's first build places the slot floats; a refused first build hands its start on with hasFloats set.
   const placesSlotFloats = start.previousLine === null && !start.hasFloats
-  const rect = lineRect(p, builder === 'line-builder' ? slot : { width: slot.width, left: 0, right: 0 }, builder === 'line-builder' ? indent : 0, placesSlotFloats)
-  const L: Layout = { p, m, lineWidth: rect.width, contentEdgeOffset: rect.contentEdgeOffset, constrainedByFloat: rect.constrainedByFloat, gaps: [], measuredEnd: start.itemIndex, reverted: false, decisionStart: start.itemIndex, overflowStart: null, shapedCarry: false }
+  const rect = lineRect(p, builder === 'line-builder' ? slot : { width: slot.width, left: 0, right: 0 }, builder === 'line-builder' ? textIndent(p, start) : 0, placesSlotFloats)
+  const L: Layout = { p, m: p.measurer, lineWidth: rect.width, contentEdgeOffset: rect.contentEdgeOffset, constrainedByFloat: rect.constrainedByFloat, gaps: [], measuredEnd: start.itemIndex, shapedCarry: false }
   const items = p.items
   const itemsEnd: Position = { index: items.length, offset: 0 }
   const partialLeading = (index: number): WebKitTextItem | null => {
@@ -2779,7 +2819,6 @@ function buildLine(p: WebKitPrepared, start: WebKitLineStart, slot: LineSlot, m:
       } else if (!rangeBased && items.length === 1 && single !== undefined && single.kind === 'text' && single.end - single.start <= 1 && !single.isWhitespace) {
         // placeSingleCharacterContentIfApplicable (TOS:164-196): one line, the stored width, no fit test.
         L.measuredEnd = 1
-        L.decisionStart = 0
         appendTextFast(L, b.line, single, single.width ?? 0)
         lineContentEnd = itemsEnd
         overflowLogicalWidth = null
@@ -2818,12 +2857,11 @@ function buildLine(p: WebKitPrepared, start: WebKitLineStart, slot: LineSlot, m:
     }
   }
   const line = b.line
-  lineGaps(L, start)
   // Floats kept every content from the line: the next line box moves below them (IFU:54-103, :286-289).
   const placedNothing = lineContentEnd.index === start.itemIndex && lineContentEnd.offset === start.offset
   if (placedNothing && L.constrainedByFloat && !(lineContentEnd.index === itemsEnd.index && lineContentEnd.offset === 0)) {
     // The refused build placed the slot floats, so the next build finds them in the formatting context.
-    return { result: { kind: 'below-floats', gaps: L.gaps, next: { ...start, hasFloats: true } }, measuredEnd: L.measuredEnd }
+    return { kind: 'below-floats', line: { engine: 'webkit', kind: 'below-floats', from: start, slot, measuredEnd: L.measuredEnd, gaps: L.gaps }, next: { ...start, hasFloats: true } }
   }
   let next: Position = lineContentEnd
   if (start.previousLine !== null) {
@@ -2837,44 +2875,66 @@ function buildLine(p: WebKitPrepared, start: WebKitLineStart, slot: LineSlot, m:
   const lineStart = start.itemIndex === 0 && start.offset === 0 ? 0 : sourceOffset(p, { index: start.itemIndex, offset: start.offset })
   const lineEnd = isEnd ? p.runStarts[p.runStarts.length - 1]! : sourceOffset(p, next)
   const lastRun = line.runs[line.runs.length - 1]
+  // Line::close's isContentful (IL:87-110, 621-629): a run with content, or an inline box with decoration; undecorated
+  // spans aren't contentful, so a line of collapsed white space and span edges has no line box (LineLayoutResult.h:94-105).
+  const hasContentfulInFlowContent = lineHasVisuallyNonEmptyContent(p, line)
+  return {
+    kind: 'line',
+    line: { engine: 'webkit', kind: 'line', from: start, slot, builder, rect, line, start: lineStart, end: lineEnd, isLastLineOrLineEndsWithForcedLineBreak, measuredEnd: L.measuredEnd, gaps: L.gaps },
+    start: lineStart,
+    end: lineEnd,
+    next: isEnd ? null : {
+      engine: 'webkit', itemIndex: next.index, offset: next.offset,
+      previousLine: { carriedWidth: overflowLogicalWidth, endsWithLineBreak: lastRun !== undefined && (lastRun.kind === 'soft-line-break' || lastRun.kind === 'hard-line-break'), carriedFromShaping: overflowLogicalWidth !== null && L.shapedCarry },
+      isFirstFormattedLine: start.isFirstFormattedLine && !hasContentfulInFlowContent,
+      hasFloats,
+    },
+    hasLineBox: hasContentfulInFlowContent,
+  }
+}
+
+// ---- What is read from a decided line ----
+
+// What WebKit's painting rules read beside the pieces: the width the breaker carried into the line's first text, which
+// the painted line measures again, and whether the line holds an RTL run WebKit shaped across inline boxes.
+export type WebKitPaintFacts = { carriedWidth: number | null; shapedAcrossBoxes: boolean }
+
+// What a painter takes of the line (model.ts LinePieces).
+export function linePieces(p: WebKitPrepared, filled: WebKitFilledLine): LinePieces<WebKitPaintFacts> {
+  const { from, line } = filled
+  let shapedAcrossBoxes = false
+  for (let i = 0; i < line.runs.length; i++) {
+    const run = line.runs[i]!
+    if ((run.kind === 'text' || run.kind === 'soft-line-break') && run.shapingBoundary !== null) shapedAcrossBoxes = true
+  }
+  const hangingWidth = line.hanging === null ? 0 : line.hanging.width
+  return {
+    fragments: lineFragments(p, line, filled.start, filled.end),
+    joinsNextLine: false,
+    indented: from.isFirstFormattedLine && filled.builder === 'line-builder',
+    align: usedAlignment(p.style.textAlign, filled.isLastLineOrLineEndsWithForcedLineBreak),
+    overflows: line.contentLogicalWidth - hangingWidth - filled.rect.width > 0,
+    facts: { carriedWidth: from.offset > 0 && from.previousLine !== null ? from.previousLine.carriedWidth : null, shapedAcrossBoxes },
+  }
+}
+
+// The line's geometry: its rect and sums, the alignment offset, and the display boxes.
+export function lineGeometry(p: WebKitPrepared, filled: WebKitFilledLine): WebKitLineGeometry {
+  const { line, rect } = filled
   const hangingWidth = line.hanging === null ? 0 : line.hanging.width
   const contentLogicalRight = lastRunLogicalRight(line)
-  const hasContentfulInFlowContent = lineHasVisuallyNonEmptyContent(p, line)
-  const alignmentOffset = line.runs.length > 0 ? horizontalAlignmentOffset(p.style, contentLogicalRight, rect.width, hangingWidth, isLastLineOrLineEndsWithForcedLineBreak) : 0
+  const alignmentOffset = line.runs.length > 0 ? horizontalAlignmentOffset(p.style, contentLogicalRight, rect.width, hangingWidth, filled.isLastLineOrLineEndsWithForcedLineBreak) : 0
   // The display line's left edge (IDLB:124-129): the line rect's left, mirrored across the container in an RTL block.
-  const containerWidth = f32(layoutUnit(f32(f32(slot.width) * f32(p.zoom))))
+  const containerWidth = f32(layoutUnit(f32(f32(filled.slot.width) * f32(p.zoom))))
   const lineLeft = p.style.rtl ? f32(containerWidth - f32(rect.left + rect.width)) : rect.left
-  const result: WebKitLineResult = {
-    kind: 'line',
-    line: {
-      start: lineStart,
-      end: lineEnd,
-      fragments: lineFragments(p, line, lineStart, lineEnd),
-      // Line::close's isContentful (IL:87-110, 621-629): a run with content, or an inline box with decoration; undecorated
-      // spans aren't contentful, so a line of collapsed white space and span edges has no line box (LineLayoutResult.h:94-105).
-      hasLineBox: hasContentfulInFlowContent,
-      joinsNextLine: false,
-      slot,
-      indented: start.isFirstFormattedLine && builder === 'line-builder',
-      align: usedAlignment(p.style.textAlign, isLastLineOrLineEndsWithForcedLineBreak),
-      geometry: {
-        lineLeft: p.style.rtl ? f32(containerWidth - f32(rect.left + rect.width)) : f32(rect.left - indent),
-        contentEdgeOffset: rect.contentEdgeOffset,
-        lineBoxWidth: rect.width,
-        contentWidth: line.contentLogicalWidth,
-        hangingWidth,
-        contentLogicalRight,
-        alignmentOffset,
-        boxes: displayBoxes(L, line, lineLeft, alignmentOffset, hasContentfulInFlowContent),
-      },
-      gaps: L.gaps,
-      next: isEnd ? null : {
-        engine: 'webkit', itemIndex: next.index, offset: next.offset,
-        previousLine: { carriedWidth: overflowLogicalWidth, endsWithLineBreak: lastRun !== undefined && (lastRun.kind === 'soft-line-break' || lastRun.kind === 'hard-line-break'), carriedFromShaping: overflowLogicalWidth !== null && L.shapedCarry },
-        isFirstFormattedLine: start.isFirstFormattedLine && !hasContentfulInFlowContent,
-        hasFloats,
-      },
-    },
+  return {
+    lineLeft: p.style.rtl ? f32(containerWidth - f32(rect.left + rect.width)) : f32(rect.left - textIndent(p, filled.from)),
+    contentEdgeOffset: rect.contentEdgeOffset,
+    lineBoxWidth: rect.width,
+    contentWidth: line.contentLogicalWidth,
+    hangingWidth,
+    contentLogicalRight,
+    alignmentOffset,
+    boxes: displayBoxes(p, filled, lineLeft, alignmentOffset, lineHasVisuallyNonEmptyContent(p, line)),
   }
-  return { result, measuredEnd: L.measuredEnd }
 }

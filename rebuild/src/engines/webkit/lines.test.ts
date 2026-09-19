@@ -6,10 +6,12 @@ import { describe, expect, test } from 'bun:test'
 import { PINNED_BUILDS, type WebKitEnvironment } from '../../env.js'
 import { UNKNOWN_FONT_FACTS, type FontFacts } from '../../model.js'
 import { everyLine, type Insets, type Sized } from '../../test-lines.js'
-import type { WebKitDisplayBox, WebKitTextBox } from './geometry.js'
-import { fillLine, firstLine, inspectLine, linePieces, paragraphGaps, prepare } from './index.js'
+import type { WebKitDisplayBox, WebKitLineGeometry, WebKitLineStart, WebKitTextBox } from './geometry.js'
+import { fillLine, firstLine, inspectLine, linePieces, paragraphGaps, prepare, type WebKitFilledLine, type WebKitRefusedSlot } from './index.js'
 import { atomic, flatParagraph, span, treeParagraph, type FlatNode } from './test-paragraph.js'
-import type { WebKitLine } from './types.js'
+
+// A line as the tests read it: the fill result, the pieces and the inspection together (test-lines.ts everyLine).
+type WebKitLine = ReturnType<typeof everyLine<WebKitLineStart, WebKitFilledLine, WebKitRefusedSlot, WebKitLineGeometry>>['lines'][number]
 
 // Advance per code unit: SPACE 4, everything else 8, unless a test sets `advance`. `pairAdjust` stands in for shaping that
 // moves a string's total away from the sum of its parts, such as kerning.

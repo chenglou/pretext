@@ -1,8 +1,7 @@
 // WebKit's prepared paragraph and line state (Safari 27.0, WebKit 7625.1.29.11.27). The WebKit port owns this file.
 import type { WebKitEnvironment } from '../../env.js'
 import type { Measurer } from '../../measure/canvas.js'
-import type { AtomicInline, Gap, LineOf, LineResultOf, Paragraph, TextAlign } from '../../model.js'
-import type { WebKitLineGeometry, WebKitLineStart } from './geometry.js'
+import type { AtomicInline, Gap, Paragraph, TextAlign } from '../../model.js'
 
 // Which line builder InlineFormattingContext::layout picks (specs/webkit-lines.md §2, InlineFormattingContext.cpp:170-184).
 export type WebKitLineBuilder = 'text-only-simple' | 'range-based' | 'line-builder'
@@ -201,7 +200,3 @@ export type WebKitPrepared = {
 // item indices to the world's item that holds the own item's start, and `changed` marks the own items the world splits,
 // merges or flags otherwise.
 export type WebKitHistoryWorld = { prepared: WebKitPrepared; box: number; itemIndex: number[]; changed: boolean[] }
-
-// The line nextLine fills, and what it returns for a slot.
-export type WebKitLine = LineOf<WebKitLineStart, WebKitLineGeometry>
-export type WebKitLineResult = LineResultOf<WebKitLineStart, WebKitLineGeometry>
