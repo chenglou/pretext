@@ -1390,18 +1390,42 @@ opportunities and the paragraph reports `dictionary-breaks-unavailable`.
 
 ## 7. Painter
 
-`paintLines(paragraph, layout, document)` in `src/paint.ts` returns one `div` per line with a line box, in form A-wrap
-(specs/painter.md §1, §6), and `painterLimits(paragraph, layout)` returns, for the same lines, the named limits of what
-painting that line alone can't reproduce (tentpole 7; "Limits" below). Both plan a line first (`planLine`), from the
-shared fields `fragments`, `hasLineBox`, `joinsNextLine`, `slot`, `indented`, `align`, the layout's `belowFloats` and,
-per engine, the widths that say whether the line reaches past its band (Blink `width`, `hangWidth`, `availableWidth`;
-WebKit `contentWidth`, `hangingWidth`, `lineBoxWidth`; Gecko `width`, `hang`, `availableWidth`), Blink's
-`needsAccurateEndPosition`, and WebKit's `next.offset` and `next.previousLine.carriedWidth` and its boxes'
-`shapedAcrossBoxes`, which only the limits read. `slot` is the library's, width included; a row keeps a slot's two
-insets, so the lab's adapter puts the width back before it paints (`lab/predictor-core.ts`). `linePieces` gives the same
-reads without a row: the shared fields, `overflows` for the three width triples' sign, and the per-engine reads as `facts`
-(§2.1); the painter takes them when it is split from the engines. The plan turns the line into tokens (`lineTokens`: text nodes, element
-opens and closes, the nodes the painter makes), which need no document, and `paintLines` builds the DOM from them.
+`paintLines(paragraph, lines, refusedRows, rules, document)` in `src/paint.ts` returns one `div` per line with a line
+box, in form A-wrap (specs/painter.md §1, §6), and `painterLimits(paragraph, lines, rules)` returns, for the same lines,
+the named limits of what painting that line alone can't reproduce (tentpole 7; "Limits" below). `lines` holds every line
+of the paragraph, the ones without a line box too, as `PaintLine<Facts>`: `pieces`, which is what `linePieces` gives of
+the line (§2.1: `fragments`, `joinsNextLine`, `indented`, `align`, `overflows`, which says that the line's content reaches
+past its band by the engine's own widths, hanging white space left out, and the engine's own `facts`); the `slot` the line
+was filled in, width included; and `hasLineBox`, as `fillLine` says. `refusedRows` are the rows of the slot list the
+engine refused (`fillLine`'s below-floats). The painter reads no row and no engine geometry, so an application paints
+what it filled; the lab's adapter keeps each line's pieces and slot as it fills them and pairs them with the engine's
+rules where it dispatches (`lab/predictor-core.ts`, `LayoutPrediction.painter`). Both functions plan a line first
+(`planLine`). The plan turns the line into tokens (`lineTokens`: text nodes, element opens and closes, the nodes the
+painter makes), which need no document, and `paintLines` builds the DOM from them.
+
+**The painter names no engine.** What one engine's painted line needs and another's doesn't is a `PaintRules<Facts>`
+value, which each engine exports from `engines/<engine>/paint-rules.ts` with the source readings behind it: data where
+the engines differ by a value, and a function where they differ by what they read of a line. `Facts` is the engine's own
+(`LinePieces.facts`); the painter never looks inside and hands it back to the engine's rules. The bullets below say why
+each rule exists.
+
+| Rule | Blink | WebKit | Gecko |
+|---|---|---|---|
+| `Facts` | `needsAccurateEndPosition` | `carriedWidth`, `shapedAcrossBoxes` | none |
+| `bidi`, `graphemes` | `blinkBidiData`, `blinkGraphemeRules` | `webkitBidiData`, `webkitGraphemeRules` | `geckoBidiData`, `geckoGraphemeRules` (each engine's `data.ts`, §6) |
+| `hyphenSpan` | `ends-shaping-group` (`vertical-align: 0px`) | `plain` | `isolated` (`unicode-bidi: isolate`) |
+| `textNodesKeepLeafStorage` | no | yes | no |
+| `paintsSourceWhiteSpace` | no | yes | no |
+| `resolvesTrailingSpaceDirection` | yes | no | no |
+| `trimmedSpaceAtEnd` | by a rule of its own: the soft wrap box unless `needsAccurateEndPosition` | the box where the space would be reset | the box where the space would be reset |
+| `noBreakBeforeBoxAfter` | U+200D, U+2060, U+FEFF | none | none |
+| `lineEndWrapping` | the box holding the line's last character | the block | the block |
+| `hangingForm` | one of three forms | the text's node | the text's node |
+| `spacingAfterRunEnd` | no | no | yes |
+| `lineStartScript` | `arabic-letter-mark`, with the port's `ScriptRunIterator` and ICU levels | `none` | `limit-only` |
+| `trimsAtLineEnd` | a character HanKerning may trim | none | none |
+| `controlsBetweenPieces` | the limit `controls-between-pieces` | none | none |
+| `limits` | `edge-inside-shaped-text`, `script-at-line-start`, `space-shaped-with-next-line`, `han-kerning-at-edge`, `hanging-space-kern-share` | `carried-width`, `edge-inside-shaped-text`, `word-measured-with-next-space` | `edge-inside-shaped-text`, `script-at-line-start`, `spacing-at-run-end`, `frame-ended-at-break` |
 
 - **The line block** has its slot's width (the content-box width the line was filled at, §2.9), the paragraph's font, spacing, `lang`, `direction`, `white-space`, `word-break`,
   `overflow-wrap`, `line-break`, `tab-size`, `text-align` and fixed line height, the fixed styles of §1.1, the
@@ -1441,7 +1465,8 @@ opens and closes, the nodes the painter makes), which need no document, and `pai
   line's end reads whether more content follows, a line that ended at a soft wrap (another engine line follows, no
   `<br>` or forced break ended it) ends with an empty inline-block of width `calc(100% + 1px)`, which fits no band, so
   the browser wraps before it and the painted line is a wrapped line again. The box goes inside the spans that continue
-  on the next line, which carry their end edges there. It applies, in the painter's engine switch:
+  on the next line, which carry their end edges there. It applies (the rules `trimmedSpaceAtEnd`,
+  `noBreakBeforeBoxAfter` and `lineEndWrapping` hold what differs):
   - Every engine, a last character that a bidi paragraph's end resets and that the paragraph kept at another level than
     the base level: a boundary neutral such as U+200C or U+200D after a letter of another direction, Gecko's trailing
     white space, which has no line-end rule, and in WebKit and Gecko a trimmed space. ICU gives the run of white space,
@@ -1576,13 +1601,13 @@ opens and closes, the nodes the painter makes), which need no document, and `pai
     spaces lose their part of a pair adjustment that HarfBuzz splits between the two glyphs (limit
     `hanging-space-kern-share`).
   The forms probe has all three (`D-*`, `E-*`).
-- **The hyphen** is its own span with the letter spacing the engine gives it, styled in the painter's one engine switch:
+- **The hyphen** is its own span with the letter spacing the engine gives it, styled by the rule `hyphenSpan`:
   `vertical-align: 0px` in Blink, which ends the shaping group, so `‐` doesn't kern with the `r` of `super`;
   `unicode-bidi: isolate` in Gecko, which ends the text run; nothing in WebKit, whose layout measures the hyphen alone
   while paint shapes it with the word (painter.md R6).
 - **Joining at a line edge.** Where `joinsNextLine` is true, U+200D goes after line n's text and before the next painted
   line's, so joining scripts keep their joined forms (R7; painter.md probe 5 hasn't run). Engines set it only where their
-  shaping joined letters across the break, so the painter needs no engine switch for it. In Firefox the joiner doesn't
+  shaping joined letters across the break, so the painter needs no rule for it. In Firefox the joiner doesn't
   bring the paragraph's widths back in the lab rows, and under letter spacing it takes spacing itself (limit
   `edge-inside-shaped-text`).
 - **Text run ends in Gecko.** Gecko adds letter spacing after a text run's last character whatever it is, and after any
@@ -1679,7 +1704,10 @@ opens and closes, the nodes the painter makes), which need no document, and `pai
 
 `painterLimits` names, per line, why the painted line can differ from the paragraph's although the prediction is
 right. A limit is a condition on the layout read from the engine's source; it says the painted line can differ, not
-that it does. `PainterLimitName` in `src/paint.ts` has each condition with its citations. specs/PAINTER-RESULTS.md has,
+that it does. `PainterLimitName` in `src/paint.ts` has each condition with its citations. The painter names
+`edge-inside-cluster` and `overflowing-line-rebreaks` itself, for every engine; the others are the engine's own
+(`PaintRules.limits` and `controlsBetweenPieces`), from what the painter's plan says about the line's two edges
+(`LineEdges`), and a line's list keeps the order the lab has recorded since scorer 6. specs/PAINTER-RESULTS.md has,
 per limit, the failing lines it sits on and the share of passing lines it fires on (counted by
 `.artifacts/lab/painter-r3/tools/limits.ts` over round 3's rows). Since scorer 6 the lab records the limits per painted
 line (`EnginePrediction.painterLimits`), and a limit explains a painter failure (lab/README.md, "Painter limits").
@@ -1759,8 +1787,8 @@ before the trimmed space lost its pair adjustment with it in the paragraph altho
 position: `ShapeLine` reshapes a part whole when no offset before its end is safe to break (`first_safe.offset >=
 break_opportunity.offset`, `shaping_line_breaker.cc:500-507`), as after a space that kerns with the line's first letter
 (`A ` after `aaaa ` in Arial: 10.67 px natively, 9.79 px painted with the box, `c-0f0589498b1c5837`). The layout doesn't
-say which parts a line's shape came from, so the painter can't choose the form; `hangingForm` reads the same fact from
-the line's widths and styles instead. Since round 4 the geometry says it: a text item's `runs[].reshaped` (§2.3) is the
+say which parts a line's shape came from, so the painter can't choose the form; Blink's `hangingForm`
+(`engines/blink/paint-rules.ts`) reads the same fact from `overflows`, `needsAccurateEndPosition` and styles instead. Since round 4 the geometry says it: a text item's `runs[].reshaped` (§2.3) is the
 text each run was shaped from alone, which replaces `hangingForm`'s reading of widths and `needsAccurateEndPosition` for
 "was the text before the space reshaped". The painter doesn't read it yet, and needs one more limit: a wrapped line whose
 first run isn't reshaped and whose first cluster kept an adjustment with the previous line's last cluster (U+3000 in a
@@ -1773,7 +1801,7 @@ still start at the band's start and an RTL line's still end at its end. When the
 fails, the painting form is wrong, not the prediction, and the limits above name why. Positioning line blocks absolutely
 (form C) gives the same shaping and stays the fallback if a case class needs it.
 
-`lab/predictor.ts` calls `lab/predictor-core.ts`'s `layoutParagraph()` in `predict()`, and `paint()` paints the layout `predict()` returned.
+`lab/predictor.ts` calls `lab/predictor-core.ts`'s `layoutParagraph()` in `predict()`, and `paint()` paints the lines `predict()` filled, from the pieces it read of them.
 
 ## 8. Modules, tests and order
 

@@ -275,8 +275,17 @@ export type GeckoLayout = Extract<ParagraphLayout, { engine: 'gecko' }>
 
 // What predictor.ts gives the page for an engine prediction: the library's input, which is the paragraph with the font
 // facts the predictor gave and the width every slot got, and its layout. The page runs the observation port over them and
-// records an EnginePrediction.
-export type LayoutPrediction = { paragraph: LibraryParagraph; width: number; layout: ParagraphLayout }
+// records an EnginePrediction. `painter` is no part of a row: it paints the layout's lines, one element per line with a
+// line box, and names per painted line what painting it alone can't reproduce (PainterLimits). It is the library's painter
+// over what the library gives a painter of each line, which a row doesn't hold whole (a slot's width, whether the line
+// reaches past its band, the engine's own facts), with the painting rules of the engine that laid the lines out
+// (predictor-core.ts).
+export type LayoutPrediction = {
+  paragraph: LibraryParagraph
+  width: number
+  layout: ParagraphLayout
+  painter: { paint: (doc: Document) => HTMLElement[]; limits: () => PainterLimits }
+}
 
 // ParagraphLayout as a row keeps it: every engine line with its geometry, fragments and gaps, the environment and the
 // paragraph's gaps; the Canvas work is beside it (EnginePrediction.measure).
