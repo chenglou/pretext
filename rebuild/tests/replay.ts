@@ -205,7 +205,7 @@ export function dirtyFiles(paths: readonly string[]): string[] {
 
 // The files that build the strings Canvas measures and hand them to Canvas. A change there can change a string's V8
 // storage without changing its characters, which only Chrome shows (the file comment, "string storage").
-const STORAGE_PATHS = ['rebuild/src/measure', 'rebuild/src/engines/blink/shape.ts']
+const STORAGE_PATHS = ['rebuild/src/measure', 'rebuild/src/engines/blink/shape.ts', 'rebuild/src/engines/blink/contexts.ts']
 // V8 copies a shorter Latin-1-only substring into a one-byte string, so only longer ones keep their parent's storage
 // (SlicedString::kMinLength, v8 string.h:1181).
 const STORAGE_SENSITIVE_UNITS = 13
