@@ -662,3 +662,64 @@ describe('blink string storage', () => {
     expect(prepare(tree([{ kind: 'text', text: 'abc' }, atomic], 2000), env, true).segmented).toBe(false)
   })
 })
+
+describe('blink system font names', () => {
+  // The sizes in the font strings the stand-in Canvas was asked at a device pixel ratio of 2: 16 is the CSS size, 32 the
+  // zoomed one.
+  function sizesAsked(family: string, primaryFamily: string | null): number[] {
+    asked = []
+    const base = paragraph([['Hello world', 'text']], 400, { facts: { ...UNKNOWN_FONT_FACTS, primaryFamily } })
+    blink({ ...base, font: { ...base.font, family } }, { ...env, devicePixelRatio: 2 })
+    const sizes: number[] = []
+    for (let i = 0; i < asked.length; i++) {
+      const size = parseFloat(/([\d.]+)px/.exec(asked[i]!.context.font)![1]!)
+      if (!sizes.includes(size)) sizes.push(size)
+    }
+    return sizes
+  }
+
+  test('system-ui is a keyword in any case, unquoted; a family name is compared as written (css_property_parser.cc:387-406, style_builder_converter.cc:544-547, font_cache_mac.mm:408)', () => {
+    const cssSize = ['system-ui', 'System-UI', 'SYSTEM-UI', 'System-UI, Arial', '"system-ui"', 'BlinkMacSystemFont', '"BlinkMacSystemFont"']
+    for (let i = 0; i < cssSize.length; i++) expect([cssSize[i], sizesAsked(cssSize[i]!, null)]).toEqual([cssSize[i], [16]])
+    const zoomedSize = ['Arial', '"System-UI"', 'blinkmacsystemfont', 'BLINKMACSYSTEMFONT', '"blinkmacsystemfont"']
+    for (let i = 0; i < zoomedSize.length; i++) expect([zoomedSize[i], sizesAsked(zoomedSize[i]!, null)]).toEqual([zoomedSize[i], [32]])
+  })
+
+  test('a primary family the font checks found is the list\'s own spelling', () => {
+    expect(sizesAsked('Missing, SYSTEM-UI', 'SYSTEM-UI')).toEqual([16])
+    expect(sizesAsked('Missing, BlinkMacSystemFont', 'BlinkMacSystemFont')).toEqual([16])
+    expect(sizesAsked('Missing, Arial', 'Arial')).toEqual([32])
+  })
+})
+
+describe('blink boxes of spans that hold no text', () => {
+  // Per line, the box fragments: [element, x, inlineSize].
+  function boxes(content: InlineNode[], width: number): (number | string)[][][] {
+    return blink(tree(content, width)).lines.map(line => {
+      const out: (number | string)[][] = []
+      for (let i = 0; i < line.geometry.items.length; i++) {
+        const item = line.geometry.items[i]!
+        if (item.kind === 'inline-box') out.push([item.element, item.x, item.inlineSize])
+      }
+      return out
+    })
+  }
+
+  test('a span around one collapsible space creates a box fragment, of no width where the line end removes the space (inline_items_builder.cc:1660-1691)', () => {
+    // `aaaa` and the span's space fit in 50px, `bbbb` wraps: the box is on the first line, at the end of `aaaa`.
+    expect(boxes([{ kind: 'text', text: 'aaaa' }, span([{ kind: 'text', text: '  ' }]), { kind: 'text', text: 'bbbb' }], 50)).toEqual([[[0, 2560, 0]], []])
+    // Inside a line the box is the space's.
+    expect(boxes([{ kind: 'text', text: 'aa' }, span([{ kind: 'text', text: ' ' }]), { kind: 'text', text: 'bb' }], 400)).toEqual([[[0, 1280, 640]]])
+  })
+
+  test('an empty span, and a span whose space collapsed into the space before it, create an empty box fragment', () => {
+    expect(boxes([{ kind: 'text', text: 'aa' }, span([]), { kind: 'text', text: 'bb' }], 400)).toEqual([[[0, 1280, 0]]])
+    expect(boxes([{ kind: 'text', text: 'aa ' }, span([{ kind: 'text', text: ' ' }]), { kind: 'text', text: 'bb' }], 400)).toEqual([[[0, 1920, 0]]])
+  })
+
+  test('a span with a letter, a <wbr> or a preserved space in it stays culled', () => {
+    expect(boxes([{ kind: 'text', text: 'aa' }, span([{ kind: 'text', text: ' b' }]), { kind: 'text', text: 'bb' }], 400)).toEqual([[]])
+    expect(boxes([{ kind: 'text', text: 'aa' }, span([{ kind: 'wbr' }]), { kind: 'text', text: 'bb' }], 400)).toEqual([[]])
+    expect(boxes([{ kind: 'text', text: 'aa' }, span([{ kind: 'text', text: ' ' }], { whiteSpace: 'pre-wrap' }), { kind: 'text', text: 'bb' }], 400)).toEqual([[]])
+  })
+})
