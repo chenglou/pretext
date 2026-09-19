@@ -30,7 +30,8 @@
 //      or the painter differential left cases unpainted, or a function-set check skipped cases, which tier 1 settles
 //      first.
 // Tier 1's own exit 3 is fine for a pure refactoring when no case dropped a question: questions asked more or less often
-// (repeats only), or Chrome's string storage rule alone (replay.ts). Those cases still go to tier 2, and the row says so.
+// (repeats only), or Chrome's string storage rule alone (replay.ts). Those cases still go to tier 2: the row says so, and
+// the run's last line names how many cases are for tier 2, per tier 1 gate, so "every gate is fine" never reads as "done".
 //
 // Cores: every gate starts at once, and the gates share --cores (default: all but two) one child process at a time
 // (cores.ts): a process of tier 0 takes a core, and a gate that replays shards asks for one before each child it starts.
@@ -38,12 +39,14 @@
 // beside the next gate's first. A quarter of the cores go to groups of long paragraphs first, whichever gate asks: they
 // take up to two minutes each in the sweep and bound the run's end, so they start at once, and the other three quarters
 // keep the order. (With every core open to them the sweep's long groups held tier 1's result back for seven minutes.)
+// The socket is pretext-gates-<pid>.sock in the temporary folder. A run that is killed leaves its file, and listening fails
+// on a path that exists, so a run first removes the socket files of processes that are gone (removeStaleSockets).
 //
 // The type check is incremental: tsc keeps each project's state in node_modules/.cache/pretext-gates (untracked), keyed
 // by the hash of every file's text, the compiler options and the compiler's version, and checks in full when the state is
 // missing or doesn't fit. It prints the errors `bunx tsc --noEmit -p <project>` prints and exits 0 when that does; with
 // errors tsc exits 2 when it found them in this run and 1 when it kept them from the last one.
-import { mkdirSync, openSync, closeSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
+import { mkdirSync, openSync, closeSync, readdirSync, readFileSync, statSync, unlinkSync, writeFileSync } from 'node:fs'
 import { cpus, tmpdir } from 'node:os'
 import { basename, join, relative } from 'node:path'
 import { CONFIGS, REPO, SETS, partFiles, type Config, type TierBrowser } from './sets.ts'
@@ -57,6 +60,8 @@ const TSC_STATE = join(REPO, 'node_modules/.cache/pretext-gates')
 
 // What a gate's result counts as toward the exit code: 0 is fine for a pure refactoring.
 export type Verdict = { counts: string; meaning: string; as: number }
+// Tier 1's also says how many cases it sends to tier 2, which its exit 3 does even where it is fine for a pure refactoring.
+export type Tier1Verdict = Verdict & { tier2: number }
 type Gate = {
   name: string
   // One process a part, each the arguments after `bun`; the gate's exit code is its parts' largest. A sharded gate has
@@ -67,9 +72,10 @@ type Gate = {
   atMost?: number
   // The report the gate writes, or null when its log is all there is.
   report: string | null
-  read: (code: number, report: unknown, log: string) => Verdict
+  read: (code: number, report: unknown, log: string) => Verdict | Tier1Verdict
 }
-export type Row = { gate: string; exit: number; as: number; meaning: string; counts: string; wallSeconds: number; log: string }
+// `tier2`: the cases the gate sends to tier 2, which only a tier 1 gate does.
+export type Row = { gate: string; exit: number; as: number; meaning: string; counts: string; tier2: number; wallSeconds: number; log: string }
 
 const TOOL_FAILED = 'the tool failed, so nothing is known: read the log'
 const lastLine = (log: string): string => log.trimEnd().split('\n').pop()!.slice(0, 160)
@@ -78,20 +84,21 @@ const lastLine = (log: string): string => log.trimEnd().split('\n').pop()!.slice
 
 type Tier1Report = { counts: { cases: number; predictionChanged: number; repeatsOnly: number; droppedOnly: number; otherQuestions: number; newQuestion: number; unfaithful: number }; storage?: { cases: number }; needsBrowser: string[] }
 
-export function tier1Verdict(code: number, report: Tier1Report | null): Verdict {
-  if (report === null) return { counts: 'no report', meaning: TOOL_FAILED, as: 2 }
+export function tier1Verdict(code: number, report: Tier1Report | null): Tier1Verdict {
+  if (report === null) return { counts: 'no report', meaning: TOOL_FAILED, as: 2, tier2: 0 }
   const c = report.counts
-  const counts = `${c.cases} cases: ${c.predictionChanged} predictions changed; questions: ${c.repeatsOnly} repeats only, ${c.droppedOnly} dropped only, ${c.otherQuestions} other, ${c.newQuestion} new; ${report.needsBrowser.length} for tier 2`
-  const tier2 = `tier 2 runs the ${report.needsBrowser.length} listed cases (--ids-file)`
+  const tier2 = report.needsBrowser.length
+  const counts = `${c.cases} cases: ${c.predictionChanged} predictions changed; questions: ${c.repeatsOnly} repeats only, ${c.droppedOnly} dropped only, ${c.otherQuestions} other, ${c.newQuestion} new; ${tier2} for tier 2`
+  const runs = `tier 2 runs the ${tier2} listed cases (--ids-file)`
   switch (code) {
-    case 0: return { counts, meaning: 'every prediction and every Canvas question is the reference\'s. Fine for any step', as: 0 }
-    case 1: return { counts, meaning: 'a prediction changed. Only a step that means to move predictions accepts it, and it records, packs and freezes again', as: 1 }
+    case 0: return { counts, tier2, meaning: 'every prediction and every Canvas question is the reference\'s. Fine for any step', as: 0 }
+    case 1: return { counts, tier2, meaning: 'a prediction changed. Only a step that means to move predictions accepts it, and it records, packs and freezes again', as: 1 }
     case 3:
-      if (c.droppedOnly > 0) return { counts, meaning: `no prediction changed; cases dropped questions. Only a step that names what it drops accepts it; ${tier2}`, as: 3 }
-      if (c.repeatsOnly > 0) return { counts, meaning: `no prediction changed; questions are asked more or less often (repeats only). Fine for a refactoring; ${tier2}`, as: 0 }
-      return { counts, meaning: `nothing changed; a file that builds Canvas strings differs from the reference's commit, so Chrome's ${report.storage?.cases ?? 0} storage-sensitive cases go to tier 2 by rule. Fine for a refactoring; ${tier2}`, as: 0 }
-    case 4: return { counts, meaning: 'no prediction changed, but a case asks other questions or a new one. No step accepts it', as: 4 }
-    default: return { counts, meaning: TOOL_FAILED, as: 2 }
+      if (c.droppedOnly > 0) return { counts, tier2, meaning: `no prediction changed; cases dropped questions. Only a step that names what it drops accepts it; ${runs}`, as: 3 }
+      if (c.repeatsOnly > 0) return { counts, tier2, meaning: `no prediction changed; questions are asked more or less often (repeats only). Fine for a refactoring; ${runs}`, as: 0 }
+      return { counts, tier2, meaning: `nothing changed; a file that builds Canvas strings differs from the reference's commit, so Chrome's ${report.storage?.cases ?? 0} storage-sensitive cases go to tier 2 by rule. Fine for a refactoring; ${runs}`, as: 0 }
+    case 4: return { counts, tier2, meaning: 'no prediction changed, but a case asks other questions or a new one. No step accepts it', as: 4 }
+    default: return { counts, tier2, meaning: TOOL_FAILED, as: 2 }
   }
 }
 
@@ -166,6 +173,44 @@ export function unitTestsVerdict(code: number, files: number, log: string): Verd
 // The worst of two results: 1, 2, 5, 4, 3, then 0 (the file comment).
 const WORST_FIRST = [1, 2, 5, 4, 3, 0]
 export const worse = (a: number, b: number): number => (WORST_FIRST.indexOf(a) <= WORST_FIRST.indexOf(b) ? a : b)
+
+// The run's last line: whether every gate is fine for a pure refactoring, and how many cases tier 1 sends to tier 2, which
+// it does even where its row is fine (the file comment).
+export function closingLine(rows: readonly Row[], seconds: number, exit: number): string {
+  const failing = rows.filter(row => row.as !== 0)
+  const sending = rows.filter(row => row.tier2 > 0)
+  let cases = 0
+  for (let i = 0; i < sending.length; i++) cases += sending[i]!.tier2
+  const gates = failing.length === 0 ? 'every gate is fine for a pure refactoring' : `not fine for a pure refactoring: ${failing.map(row => `${row.gate} (exit ${row.exit}, log ${row.log})`).join('; ')}`
+  const tier2 = sending.length === 0 ? 'no case is for tier 2' : `${cases} cases are for tier 2, which a browser still has to run (${sending.map(row => `${row.gate}: ${row.tier2}`).join('; ')})`
+  return `${rows.length} gates in ${seconds} s: ${gates}; ${tier2}. Exit ${exit}`
+}
+
+// Whether a process with this pid exists: signal 0 tests for it and sends nothing. EPERM is a live process of another user.
+function processExists(pid: number): boolean {
+  try {
+    process.kill(pid, 0)
+    return true
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code === 'EPERM'
+  }
+}
+
+// Removes the socket files in `dir` whose process is gone, and the one of this pid, which a run that starts can only have
+// from an earlier process of the same pid. Returns the pids whose files went.
+export function removeStaleSockets(dir: string): number[] {
+  const names = readdirSync(dir)
+  const removed: number[] = []
+  for (let i = 0; i < names.length; i++) {
+    const match = /^pretext-gates-(\d+)\.sock$/.exec(names[i]!)
+    if (match === null) continue
+    const pid = Number(match[1])
+    if (pid !== process.pid && processExists(pid)) continue
+    unlinkSync(join(dir, names[i]!))
+    removed.push(pid)
+  }
+  return removed
+}
 
 // ---- The gates of a run ----
 
@@ -263,6 +308,7 @@ async function runAll(gates: readonly Gate[], cores: number): Promise<Row[]> {
       next.grant()
     }
   }
+  removeStaleSockets(tmpdir())
   const socketPath = join(tmpdir(), `pretext-gates-${process.pid}.sock`)
   const server = Bun.listen<{ waiter: Waiter | null; granted: boolean }>({
     unix: socketPath,
@@ -306,7 +352,7 @@ async function runAll(gates: readonly Gate[], cores: number): Promise<Row[]> {
     const report = written !== undefined && written.mtimeMs >= started ? JSON.parse(readFileSync(gate.report!, 'utf8')) as unknown : null
     const exit = Math.max(...codes)
     const verdict = gate.read(exit, report, readFileSync(log, 'utf8'))
-    const row: Row = { gate: gate.name, exit, as: verdict.as, meaning: verdict.meaning, counts: verdict.counts, wallSeconds: Math.round((Date.now() - started) / 100) / 10, log: relative(REPO, log) }
+    const row: Row = { gate: gate.name, exit, as: verdict.as, meaning: verdict.meaning, counts: verdict.counts, tier2: 'tier2' in verdict ? verdict.tier2 : 0, wallSeconds: Math.round((Date.now() - started) / 100) / 10, log: relative(REPO, log) }
     console.error(`[gates] ${row.gate}: exit ${row.exit}, ${row.wallSeconds} s${row.as === 0 ? '' : `: ${row.meaning}`}`)
     return row
   }
@@ -353,7 +399,6 @@ if (import.meta.main) {
   printTable(rows)
   let exit = 0
   for (let i = 0; i < rows.length; i++) exit = worse(exit, rows[i]!.as)
-  const failing = rows.filter(row => row.as !== 0)
-  console.log(`${rows.length} gates in ${Math.round((Date.now() - started) / 100) / 10} s: ${failing.length === 0 ? 'every gate is fine for a pure refactoring' : `not fine for a pure refactoring: ${failing.map(row => `${row.gate} (exit ${row.exit}, log ${row.log})`).join('; ')}`}. Exit ${exit}`)
+  console.log(closingLine(rows, Math.round((Date.now() - started) / 100) / 10, exit))
   process.exit(exit)
 }

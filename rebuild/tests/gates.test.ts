@@ -1,7 +1,9 @@
 // What gates.ts makes of each gate's exit code and report. These run no gate.
-import { describe, expect, test } from 'bun:test'
+import { afterAll, describe, expect, test } from 'bun:test'
+import { mkdtempSync, readdirSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { citationsVerdict, functionSetVerdict, nextWaiter, painterVerdict, tier1Verdict, tscVerdict, twinVerdict, unitTestsVerdict, worse } from './gates.ts'
+import { citationsVerdict, closingLine, functionSetVerdict, nextWaiter, painterVerdict, removeStaleSockets, tier1Verdict, tscVerdict, twinVerdict, unitTestsVerdict, worse, type Row } from './gates.ts'
 
 const tier1 = (counts: Partial<{ predictionChanged: number; repeatsOnly: number; droppedOnly: number; otherQuestions: number; newQuestion: number }>, storage?: { cases: number }) => ({
   counts: { cases: 100, predictionChanged: 0, repeatsOnly: 0, droppedOnly: 0, otherQuestions: 0, newQuestion: 0, unfaithful: 0, ...counts }, needsBrowser: [], ...(storage === undefined ? {} : { storage }),
@@ -25,6 +27,16 @@ describe('tier 1\'s exit codes', () => {
     expect(tier1Verdict(2, null).as).toBe(2)
     expect(tier1Verdict(0, null).as).toBe(2)
     expect(tier1Verdict(7, tier1({})).as).toBe(2)
+  })
+
+  test('the cases for tier 2 are counted whatever the exit code, and the run\'s last line names them beside "fine"', () => {
+    expect(tier1Verdict(3, { ...tier1({}, { cases: 2 }), needsBrowser: ['c-1', 'c-2'] })).toMatchObject({ as: 0, tier2: 2 })
+    expect(tier1Verdict(0, tier1({})).tier2).toBe(0)
+    const row = (gate: string, as: number, tier2: number): Row => ({ gate, exit: as === 0 && tier2 > 0 ? 3 : as, as, meaning: '', counts: '', tier2, wallSeconds: 1, log: `${gate}.log` })
+    expect(closingLine([row('tsc rebuild', 0, 0), row('tier 1 chrome no-facts', 0, 0)], 12.5, 0)).toBe('2 gates in 12.5 s: every gate is fine for a pure refactoring; no case is for tier 2. Exit 0')
+    expect(closingLine([row('tier 1 chrome no-facts', 0, 40), row('tier 1 chrome facts', 0, 2), row('tier 1 firefox facts', 0, 0)], 3, 0))
+      .toBe('3 gates in 3 s: every gate is fine for a pure refactoring; 42 cases are for tier 2, which a browser still has to run (tier 1 chrome no-facts: 40; tier 1 chrome facts: 2). Exit 0')
+    expect(closingLine([row('unit tests', 1, 0), row('tier 1 chrome facts', 0, 2)], 3, 1)).toBe('2 gates in 3 s: not fine for a pure refactoring: unit tests (exit 1, log unit tests.log); 2 cases are for tier 2, which a browser still has to run (tier 1 chrome facts: 2). Exit 1')
   })
 })
 
@@ -77,6 +89,17 @@ test('the next core goes by the table\'s order, then first come, first served; a
   expect(nextWaiter([waiter(false, 8), waiter(false, 7), waiter(false, 7)], true)).toBe(1)
   expect(nextWaiter([waiter(false, 7), waiter(true, 12), waiter(true, 9)], true)).toBe(2)
   expect(nextWaiter([waiter(false, 7), waiter(true, 12), waiter(true, 9)], false)).toBe(0)
+})
+
+const dir = mkdtempSync(join(tmpdir(), 'gates-test-'))
+afterAll(() => { Bun.spawnSync(['trash', dir]) })
+
+test('a run removes the socket files of processes that are gone, and its own pid\'s, which can only be an earlier process\'s', () => {
+  const gone = Bun.spawnSync(['true']).pid
+  const names = [`pretext-gates-${gone}.sock`, `pretext-gates-${process.pid}.sock`, `pretext-gates-${process.ppid}.sock`, 'pretext-gates-notes.txt']
+  for (let i = 0; i < names.length; i++) writeFileSync(join(dir, names[i]!), '')
+  expect(removeStaleSockets(dir).sort((a, b) => a - b)).toEqual([gone, process.pid].sort((a, b) => a - b))
+  expect(readdirSync(dir).sort()).toEqual([`pretext-gates-${process.ppid}.sock`, 'pretext-gates-notes.txt'].sort())
 })
 
 test('gates.ts refuses an unknown engine or argument before it runs anything', () => {
