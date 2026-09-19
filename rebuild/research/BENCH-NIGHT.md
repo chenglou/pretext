@@ -142,3 +142,84 @@ These are expectations from reading the code, checked against the smokes' counts
 - The default scenarios now include the chat rows (without the headline pass), so the older 'real run' commands take a few minutes longer.
 - report.ts held two literal NUL bytes that were meant as \0 escapes. They are now the escapes; behaviour is unchanged and the file is NUL-free.
 - Docs outside rebuild/bench (DESIGN.md's one-line bench description, the lab README) were not edited, because other worktrees are changing them. They are still accurate.
+
+## The real pass (2026-09-19, 07:03 to 07:37 PDT, library b3421fc, the X3 merge)
+
+One run of `rebuild/bench/chat-night.sh`, background windows, no supplied font facts, on AC power. Chrome started after its 15-minute wait for a quiet machine ran out, at a load average of 48 that fell to 5 during its run (the page's fixed arithmetic took 60.7 ms before and 29.1 ms after, so its early rows ran about twice as slow as its late ones; the three headline passes came late and agree: 9.02 s, 9.90 s, 9.59 s). Firefox and webkit-host ran on a quiet machine (load 5 and 3). Treat Chrome's timed rows as upper bounds until the quiet rerun; the counts don't depend on load.
+
+**Against the maintainer's bar** ("if 10k messages relaid from scratch is about 2 s after the perf work, drop the ideal that we can be stateless"), before any perf work, 10,000 chat messages from scratch:
+
+| | Chrome | Firefox | webkit-host |
+|---|---:|---:|---:|
+| the mix (27% of messages hold emoji, CJK, Arabic, a URL or a code span) | 9.59 s | 2.63 s | 11.7 s |
+| plain ASCII messages only | 4.16 s | 0.61 s | 8.83 s |
+| main, cold prepare, the mix | 0.72 s | 0.30 s | 1.53 s |
+| the same 10,000 kept and laid out at 3 new widths (the mix) | 4.04 s | 0.70 s | 0.21 s |
+| main, layout at 3 new widths | 0.008 s | 0.014 s | 0.014 s |
+
+**Where the time goes from scratch (the mix):**
+- Chrome: 31% the runtime font checks, 56% the engine's prepare, 13% the fill; 39% inside measureText, 43% MAKING CANVAS CONTEXTS (11 a message), 18% outside Canvas. 322 measureText calls a message against main's 7.
+- webkit-host: 26% the font checks, 74% prepare, under 1% the fill; 98% inside measureText at only 41 calls a message (main: 17 calls, 153 µs a message; the rebuild: 1.17 ms), so each call is about three times as dear as main's: the rebuild makes 5.4 new contexts a message, and a context's first measure pays for resolving its font.
+- Firefox: the fill is 88%; nothing to lift from the font checks (Gecko's ask nothing); CJK and Arabic messages carry the mix (plain ASCII is 0.61 s).
+
+**What this says for the profiling phase, in order of expected payoff:** (1) the measurer's lifetime: contexts and font-check answers made once per font declaration per page instead of per paragraph (Chrome's 43% + 31%, WebKit's 26% and most of its per-call cost); (2) Chrome's repeated questions inside one fill and at a new width (137 calls per relayout where Firefox asks 28 and WebKit 0.1): positions kept per fill, and widths kept on the prepared paragraph; (3) Firefox's CJK and Arabic fill; (4) the recipes `RECIPE-COSTS.md` found to buy nothing. Relayout in WebKit (7 µs a layout) and Firefox (23 µs at a new width, 6 µs at a width met before) is already in a usable range; Chrome's (135 µs) is not.
+
+### mix
+
+| | chrome | firefox | webkit-host |
+|---|---:|---:|---:|
+| A. rebuild from scratch, count mode, per message (1,000 messages) | 1.21 ms (whole set 1.21 s) | 279 µs (whole set 279 ms) | 1.12 ms (whole set 1.12 s) |
+| A. measureText calls per message | 322.13 | 120.44 | 41.15 |
+| A. contexts made per message | 11.07 | 3.56 | 5.38 |
+| A. headline: 10,000 messages from scratch, median of 3 passes | 9.59 s (959 µs per message; passes 9.02 s, 9.90 s, 9.59 s) | 2.63 s (263 µs per message; passes 2.70 s, 2.63 s, 2.61 s) | 11.7 s (1.17 ms per message; passes 11.5 s, 11.7 s, 11.8 s) |
+| A. the same with the pieces read | 1.34 ms (whole set 1.34 s) | 280 µs (whole set 280 ms) | 1.13 ms (whole set 1.13 s) |
+| A. measureText calls per message, pieces | 322.13 | 120.44 | 41.15 |
+| A. the same prepared for inspection and inspected | 4.30 ms (whole set 4.30 s) | 409 µs (whole set 409 ms) | 1.50 ms (whole set 1.50 s) |
+| A. measureText calls per message, inspected | 1,712.51 | 363.7 | 54.15 |
+| A. contexts made per message, inspected | 11.14 | 3.65 | 5.44 |
+| B. rebuild, first layout at a new width, per layout | 211 µs (whole set 632 ms) | 20.8 µs (whole set 62.3 ms) | 6.96 µs (whole set 20.9 ms) |
+| B. measureText calls per layout, new width | 136.8 | 28.09 | 0.12 |
+| B. rebuild, layout at a width met before, per layout | 116 µs (whole set 349 ms) | 5.67 µs (whole set 17.0 ms) | 6.70 µs (whole set 20.1 ms) |
+| B. measureText calls per layout, width met before | 136.79 | 0 | 0.12 |
+| B. headline: 10,000 kept paragraphs at 3 new widths, once | 4.04 s (135 µs per layout); main 8.31 ms (0.277 µs) | 703 ms (23.4 µs per layout); main 13.6 ms (0.455 µs) | 212 ms (7.05 µs per layout); main 13.5 ms (0.449 µs) |
+| C. main cold, per message | 86.5 µs (whole set 86.5 ms) | 34.5 µs (whole set 34.5 ms) | 502 µs (whole set 502 ms) |
+| C. main measureText calls per message | 6.71 | 6.69 | 17.14 |
+| C. headline: main cold, 10,000 messages | 724 ms (72.4 µs per message; passes 724 ms, 713 ms, 725 ms) | 301 ms (30.1 µs per message; passes 292 ms, 301 ms, 324 ms) | 1.53 s (153 µs per message; passes 1.59 s, 1.53 s, 1.53 s) |
+| C. main layout at another width, per layout | 0.528 µs (whole set 1.58 ms) | 0.347 µs (whole set 1.04 ms) | 0.290 µs (whole set 869 µs) |
+| A against C: rebuild from scratch over main cold | ×13.9 | ×8.10 | ×2.24 |
+| B against C: rebuild at a new width over main layout | ×399 | ×59.8 | ×24.0 |
+| D. from scratch with the font checks lifted out, per message | 838 µs (whole set 838 ms) | 277 µs (whole set 277 ms) | 858 µs (whole set 858 ms) |
+| D. share of from scratch: font checks / engine prepare / fill | 31.3% / 56.0% / 12.7% | 0.3% / 11.3% / 88.4% | 25.6% / 74.0% / 0.5% |
+| D. share of from scratch: inside measureText / making contexts / outside Canvas | 39.4% / 42.7% / 18.0% | 58.4% / 4.8% / 36.8% | 97.7% / 1.0% / 1.3% |
+| D. font checks: measureText calls and contexts per message | 10.78 and 6.38 | 0 and 0 | 9.51 and 4.25 |
+| Fixed arithmetic in the page, before and after | 60.7 ms, 29.1 ms | 31.8 ms, 27.2 ms | 27.6 ms, 27.4 ms |
+
+### latin
+
+| | chrome | firefox | webkit-host |
+|---|---:|---:|---:|
+| A. rebuild from scratch, count mode, per message (1,000 messages) | 1.02 ms (whole set 1.02 s) | 59.1 µs (whole set 59.1 ms) | 819 µs (whole set 819 ms) |
+| A. measureText calls per message | 281.86 | 78.35 | 30 |
+| A. contexts made per message | 10 | 2.94 | 5 |
+| A. headline: 10,000 messages from scratch, median of 3 passes | 4.16 s (416 µs per message; passes 7.59 s, 4.16 s, 4.04 s) | 610 ms (61.0 µs per message; passes 610 ms, 629 ms, 599 ms) | 8.83 s (883 µs per message; passes 8.80 s, 8.89 s, 8.83 s) |
+| A. the same with the pieces read | 785 µs (whole set 785 ms) | 62.5 µs (whole set 62.5 ms) | 828 µs (whole set 828 ms) |
+| A. measureText calls per message, pieces | 281.86 | 78.35 | 30 |
+| A. the same prepared for inspection and inspected | 2.17 ms (whole set 2.17 s) | 177 µs (whole set 177 ms) | 1.06 ms (whole set 1.06 s) |
+| A. measureText calls per message, inspected | 1,576.52 | 333.59 | 38.31 |
+| A. contexts made per message, inspected | 10 | 3 | 5 |
+| B. rebuild, first layout at a new width, per layout | 78.7 µs (whole set 236 ms) | 18.8 µs (whole set 56.5 ms) | 2.36 µs (whole set 7.08 ms) |
+| B. measureText calls per layout, new width | 112.92 | 29.55 | 0 |
+| B. rebuild, layout at a width met before, per layout | 68.1 µs (whole set 204 ms) | 4.74 µs (whole set 14.2 ms) | 2.15 µs (whole set 6.44 ms) |
+| B. measureText calls per layout, width met before | 112.91 | 0 | 0 |
+| B. headline: 10,000 kept paragraphs at 3 new widths, once | 3.26 s (109 µs per layout); main 6.82 ms (0.227 µs) | 645 ms (21.5 µs per layout); main 16.2 ms (0.541 µs) | 88.5 ms (2.95 µs per layout); main 11.6 ms (0.385 µs) |
+| C. main cold, per message | 36.1 µs (whole set 36.1 ms) | 21.7 µs (whole set 21.7 ms) | 417 µs (whole set 417 ms) |
+| C. main measureText calls per message | 4.57 | 4.57 | 14.42 |
+| C. headline: main cold, 10,000 messages | 201 ms (20.1 µs per message; passes 207 ms, 201 ms, 199 ms) | 195 ms (19.5 µs per message; passes 195 ms, 194 ms, 195 ms) | 1.00 s (100 µs per message; passes 1.00 s, 1.00 s, 1.01 s) |
+| C. main layout at another width, per layout | 0.321 µs (whole set 963 µs) | 0.292 µs (whole set 877 µs) | 0.247 µs (whole set 741 µs) |
+| A against C: rebuild from scratch over main cold | ×28.2 | ×2.73 | ×1.96 |
+| B against C: rebuild at a new width over main layout | ×245 | ×64.4 | ×9.55 |
+| D. from scratch with the font checks lifted out, per message | 625 µs (whole set 625 ms) | 59.5 µs (whole set 59.5 ms) | 571 µs (whole set 571 ms) |
+| D. share of from scratch: font checks / engine prepare / fill | 15.9% / 63.6% / 20.5% | 1.1% / 33.6% / 65.3% | 28.8% / 70.9% / 0.3% |
+| D. share of from scratch: inside measureText / making contexts / outside Canvas | 56.3% / 12.1% / 31.6% | 37.5% / 17.2% / 45.3% | 97.5% / 1.2% / 1.3% |
+| D. font checks: measureText calls and contexts per message | 10 and 6 | 0 and 0 | 9 and 4 |
+| Fixed arithmetic in the page, before and after | 60.7 ms, 29.1 ms | 31.8 ms, 27.2 ms | 27.6 ms, 27.4 ms |
