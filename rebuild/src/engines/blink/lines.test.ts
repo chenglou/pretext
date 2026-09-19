@@ -691,3 +691,35 @@ describe('blink system font names', () => {
     expect(sizesAsked('Missing, Arial', 'Arial')).toEqual([32])
   })
 })
+
+describe('blink boxes of spans that hold no text', () => {
+  // Per line, the box fragments: [element, x, inlineSize].
+  function boxes(content: InlineNode[], width: number): (number | string)[][][] {
+    return blink(tree(content, width)).lines.map(line => {
+      const out: (number | string)[][] = []
+      for (let i = 0; i < line.geometry.items.length; i++) {
+        const item = line.geometry.items[i]!
+        if (item.kind === 'inline-box') out.push([item.element, item.x, item.inlineSize])
+      }
+      return out
+    })
+  }
+
+  test('a span around one collapsible space creates a box fragment, of no width where the line end removes the space (inline_items_builder.cc:1660-1691)', () => {
+    // `aaaa` and the span's space fit in 50px, `bbbb` wraps: the box is on the first line, at the end of `aaaa`.
+    expect(boxes([{ kind: 'text', text: 'aaaa' }, span([{ kind: 'text', text: '  ' }]), { kind: 'text', text: 'bbbb' }], 50)).toEqual([[[0, 2560, 0]], []])
+    // Inside a line the box is the space's.
+    expect(boxes([{ kind: 'text', text: 'aa' }, span([{ kind: 'text', text: ' ' }]), { kind: 'text', text: 'bb' }], 400)).toEqual([[[0, 1280, 640]]])
+  })
+
+  test('an empty span, and a span whose space collapsed into the space before it, create an empty box fragment', () => {
+    expect(boxes([{ kind: 'text', text: 'aa' }, span([]), { kind: 'text', text: 'bb' }], 400)).toEqual([[[0, 1280, 0]]])
+    expect(boxes([{ kind: 'text', text: 'aa ' }, span([{ kind: 'text', text: ' ' }]), { kind: 'text', text: 'bb' }], 400)).toEqual([[[0, 1920, 0]]])
+  })
+
+  test('a span with a letter, a tab or a <wbr> in it stays culled', () => {
+    expect(boxes([{ kind: 'text', text: 'aa' }, span([{ kind: 'text', text: ' b' }]), { kind: 'text', text: 'bb' }], 400)).toEqual([[]])
+    expect(boxes([{ kind: 'text', text: 'aa' }, span([{ kind: 'wbr' }]), { kind: 'text', text: 'bb' }], 400)).toEqual([[]])
+    expect(boxes([{ kind: 'text', text: 'aa' }, span([{ kind: 'text', text: ' ' }], { whiteSpace: 'pre-wrap' }), { kind: 'text', text: 'bb' }], 400)).toEqual([[]])
+  })
+})

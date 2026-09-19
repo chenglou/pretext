@@ -511,7 +511,29 @@ class Builder {
     this.boxes.push(style)
   }
 
+  // InlineItem::IsEmptyItem as the builder sees it: an empty text item (AppendEmptyTextItem, 302-312, the one text item
+  // that is opaque to collapsing) and a tag whose side has no border, padding or margin (ComputeBoxProperties,
+  // inline_item.cc:118-151). A text item whose last space was removed is not one (1376-1410).
+  isEmptyItem(item: InlineItem): boolean {
+    switch (item.type) {
+      case 'text': return item.endCollapseType === 'opaque-to-collapsing'
+      case 'open-tag': return boxStartEmpty(this.styles[item.style]!)
+      case 'close-tag': return boxEndEmpty(this.styles[item.style]!)
+      case 'control': case 'atomic': return false
+    }
+  }
+
+  // ExitInline (1631-1694). A box that holds nothing but empty items and text items that are one collapsible space creates
+  // a box fragment, "so that we can compute its position/size correctly" (1660-1691): the space can't collapse until the
+  // next node comes. So a span around a space the line end removes still has a rect on that line, of no width (case
+  // c-d600d9b01c0ae9d7: natively a rect 0 wide at the end of `delta gamma`).
   exitInline(element: number, style: number): void {
+    const st = this.styles[style]!
+    for (let i = this.items.length - 1; !st.shouldCreateBoxFragment; i--) {
+      const item = this.items[i]!
+      if (item.type === 'open-tag' && item.element === element) st.shouldCreateBoxFragment = true
+      else if (!this.isEmptyItem(item) && !(item.type === 'text' && item.endCollapseType === 'collapsible' && item.end - item.start === 1)) break
+    }
     this.items.push({ ...this.span(this.units.length, style, 'opaque-to-collapsing'), type: 'close-tag', element })
     this.boxes.pop()
   }
