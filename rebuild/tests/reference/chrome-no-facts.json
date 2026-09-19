@@ -4,10 +4,10 @@
   "browser": "chrome",
   "config": "no-facts",
   "inputsSha256": "eb23313ecba2047070b596f907efae60ec82479ecd4434ebc4dc1925d333358d",
-  "commit": "880fb965a3da7ae92e2208a75abd09969390871b",
+  "commit": "9f4ef7533885d2e31bf44cbead510f44107eda26",
   "dirty": [],
-  "createdAt": "2026-09-19T02:07:08.311Z",
-  "reason": "The Blink string storage fix and its rule for a neutral Latin range with a space (research/BLINK-STRING-STORAGE.md): the measuring memo no longer uses the measured string as a key, so the port's two-byte strings reach Chrome's Canvas as built; segmented paragraphs measure one-byte strings on contexts of their own; a text node's U+FFFC is 16-bit content. Recorded again at the merge commit in both orders; ledger entries equal the fix owner's; 41 metric status transitions against the line's ledger, none from a pass; in the facts configuration 3 already-failing suite/U+FFFC cases hold one more differing predicted value (known tail lab/blink-x-after-a-fallback-cluster-reported-as-predicted); the twins set (380 cases) is new.",
+  "createdAt": "2026-09-19T04:56:51.682Z",
+  "reason": "Shared step S3 (research/ARCHITECTURE-PLAN-2.md): files under src/measure changed, so the string storage rule sent Chrome's cases to tier 2. Every prediction and every question is the same in tier 1 (0 changed, 0 repeats only, 0 dropped only, 0 other, 0 new); Chrome tier 2 ran forward in both configurations with 0 transitions and its rows equal the recording these inputs were packed from on all 67,065 cases. The reference moves to the merge commit so that tier 1 exits 0 again.",
   "replaced": [
     {
       "commit": "a2cfb9094e289e7076db28d5ef8de80ea1a10a6f",
@@ -26,6 +26,12 @@
       "createdAt": "2026-09-18T20:25:23.380Z",
       "reason": "correctness line, round 4: the references of the round 3 library are replaced by the library of 6b21b68 (round 4c's library with the font checks measuring in the engine's own kind of context), recorded on 2026-09-18 in .artifacts/tests/runs/line-20260918 with the rich-prewrap set, both orders, after research/ROUND4-CRITIC.md's two fixes",
       "cases": 66685
+    },
+    {
+      "commit": "880fb965a3da7ae92e2208a75abd09969390871b",
+      "createdAt": "2026-09-19T02:07:08.311Z",
+      "reason": "The Blink string storage fix and its rule for a neutral Latin range with a space (research/BLINK-STRING-STORAGE.md): the measuring memo no longer uses the measured string as a key, so the port's two-byte strings reach Chrome's Canvas as built; segmented paragraphs measure one-byte strings on contexts of their own; a text node's U+FFFC is 16-bit content. Recorded again at the merge commit in both orders; ledger entries equal the fix owner's; 41 metric status transitions against the line's ledger, none from a pass; in the facts configuration 3 already-failing suite/U+FFFC cases hold one more differing predicted value (known tail lab/blink-x-after-a-fallback-cluster-reported-as-predicted); the twins set (380 cases) is new.",
+      "cases": 67065
     }
   ],
   "sets": {
