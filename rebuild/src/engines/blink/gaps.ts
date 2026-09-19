@@ -327,12 +327,11 @@ export function floatSum(sink: GapSink, p: BlinkPrepared, total16: number, slack
 // context, that decision rests on the default, so the line being filled reports hyphen-glyph. `raw16` is the hyphen's
 // measured width.
 export function hyphenGlyph(sink: GapSink, p: BlinkPrepared, style: number, raw16: number): void {
-  if (sink === null) return
   const st = p.styles[style]!
-  // U+002D is a one-byte string. Its contexts are made whatever the fact says, as they have been since one-byte strings got
-  // contexts of their own: the recorded questions of an inspected paragraph count its contexts (tests/replay.ts).
+  if (sink === null || st.font.facts.mapsHyphen !== null) return
+  // U+002D is a one-byte string, measured on the style's one-byte contexts.
   const oneByte = contextsOf(p, style, false)
-  if (st.font.facts.mapsHyphen === null && raw16 !== raw16Of(oneByte, oneByte.hyphen, '-')) {
+  if (raw16 !== raw16Of(oneByte, oneByte.hyphen, '-')) {
     addGap(sink, 'hyphen-glyph', st.run, 'a soft hyphen break the line breaker tried in a font the declaration gives no mapsHyphen fact for: Blink draws U+2010 when the primary font maps it and U+002D otherwise, and the two measure differently here (computed_style.cc:1804-1820)')
   }
 }
