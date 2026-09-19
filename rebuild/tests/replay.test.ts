@@ -11,7 +11,7 @@ import type { PredictEnv } from '../lab/predictor-core.ts'
 import type { CaseMeasurements, RecordedCall } from '../lab/record.ts'
 import type { Case, LayoutPrediction } from '../lab/types.ts'
 import { BUILD, USER_AGENT, installFakeBrowser } from './fake-browser.ts'
-import { classifyAsked, classifyQuestions, firstDifference, replayCase, type InputCase, type ReferenceCase } from './replay.ts'
+import { classifyAsked, classifyQuestions, firstDifference, replayCase, shardGroups, type InputCase, type ReferenceCase } from './replay.ts'
 
 const globals = globalThis as Record<string, unknown>
 let restore = (): void => {}
@@ -219,5 +219,17 @@ describe('firstDifference', () => {
     expect(firstDifference({ a: [1, 2] }, { a: [1, 2, 3] })).toEqual({ path: 'a.length', before: '2', after: '3' })
     expect(firstDifference({ a: 1 }, { a: 1, gaps: [] })).toEqual({ path: 'gaps', before: 'absent', after: '[]' })
     expect(firstDifference({ a: 'x'.repeat(400) }, { a: 1 })!.before.length).toBe(160)
+  })
+})
+
+describe('shard groups', () => {
+  test('a set\'s shards go to a process by the group size in order, a shard of long paragraphs alone, and no group mixes sets', () => {
+    const job = (set: string, index: number, cases: number) => ({ set, index, shard: { cases } })
+    const jobs = [job('a', 0, 300), job('a', 1, 2), job('a', 2, 300), job('a', 3, 300), job('a', 4, 49), job('a', 5, 50), job('b', 0, 300), job('b', 1, 300)]
+    const groups = shardGroups(jobs, 3).map(group => group.map(value => `${value.set}${value.index}`).join(' '))
+    expect(groups).toEqual(['a0 a2 a3', 'a1', 'a4', 'a5', 'b0 b1'])
+    expect(shardGroups(jobs, 1).map(group => group.length)).toEqual([1, 1, 1, 1, 1, 1, 1, 1])
+    // A set's groups don't depend on which other sets are chosen.
+    expect(shardGroups(jobs.filter(value => value.set === 'b'), 3).map(group => group.map(value => `${value.set}${value.index}`).join(' '))).toEqual(['b0 b1'])
   })
 })

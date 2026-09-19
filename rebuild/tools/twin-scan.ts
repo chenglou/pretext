@@ -10,19 +10,25 @@
 // so tier 1 can't see a twin change hands; this scan says which cases ask a two-byte slice, so they are in the sets tier
 // 2 runs, and whether any context is asked both.
 //
-//   bun rebuild/tools/twin-scan.ts --cases=<cases.ndjson>[,<more>] [--tree=<checkout or commit>] [--limit=N] [--out=<report.json>]
+//   bun rebuild/tools/twin-scan.ts --cases=<cases.ndjson>[,<more>] [--tree=<checkout or commit>] [--limit=N] [--out=<report.json>] [--jobs=N]
 //
 // It works on a scratch copy of the tree's rebuild/src and rebuild/lab with one line added to measure16, after its
 // raw16Of call, which notes the context, the string and canvasString's `twoByte`. The anchor is that call's text: the scan
 // fails when it is gone, instead of scanning nothing. The cases run through the copy's Chrome predictor under the
 // stand-in Canvas (the strings a layout asks follow its own widths, so these are the stand-in's lines; a twin inside a
 // word is asked at prepare time whatever the lines are). Exit 0; the report is the result.
+//
+// Several case files are scanned by a child process each, --jobs at a time (default: all cores but two), over the one
+// scratch copy, and the report lists the cases in the files' order, as one process lists them: a case's result follows
+// from the case alone. One process took nine minutes over the 67,072 case lines of Chrome's set files. --limit counts
+// cases across the files, so with it one process scans them all.
 import { execFileSync } from 'node:child_process'
 import { existsSync, mkdtempSync, readFileSync, statSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { cpus, tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import type { PredictEnv } from '../lab/predictor-core.ts'
 import type { Case } from '../lab/types.ts'
+import { withCore } from '../tests/cores.ts'
 import { PREDICTORS } from '../tests/sets.ts'
 import { installStandInCanvas } from './stand-in-canvas.ts'
 
@@ -46,10 +52,21 @@ for (const raw of process.argv.slice(2)) {
   options.set(match[1]!, match[2]!)
 }
 const files = options.get('cases')?.split(',')
-if (files === undefined) throw new Error('Usage: bun rebuild/tools/twin-scan.ts --cases=<cases.ndjson>[,<more>] [--tree=<checkout or commit>] [--limit=N] [--out=<report.json>]')
+if (files === undefined) throw new Error('Usage: bun rebuild/tools/twin-scan.ts --cases=<cases.ndjson>[,<more>] [--tree=<checkout or commit>] [--limit=N] [--out=<report.json>] [--jobs=N]')
+
+const tree = options.get('tree') ?? REPO
+const report: Report = { format: 'pretext-twin-scan/1', tree, cases: 0, withTwoByteSlice: 0, withTwin: 0, slices: [], twins: [] }
+const limit = Number(options.get('limit') ?? Infinity)
+const jobs = Math.max(1, Number(options.get('jobs') ?? Math.max(1, cpus().length - 2)))
+// A child scans one file in its parent's scratch copy (the hidden option --scratch) and writes its report.
+const parentScratch = options.get('scratch')
+if (parentScratch !== undefined) {
+  await scan(parentScratch, files)
+  writeFileSync(resolve(options.get('out')!), JSON.stringify(report))
+  process.exit(0)
+}
 
 // The scratch copy: a commit through git archive, a checkout as an APFS clone of its two folders.
-const tree = options.get('tree') ?? REPO
 const scratch = mkdtempSync(join(tmpdir(), 'twin-scan-'))
 if (existsSync(tree) && statSync(tree).isDirectory()) {
   execFileSync('mkdir', ['-p', join(scratch, 'rebuild')])
@@ -64,13 +81,46 @@ if (shape.split(ANCHOR).length !== 2) {
 }
 writeFileSync(join(scratch, SHAPE), shape.replace(ANCHOR, `${ANCHOR}\n${TAP}`))
 
-const predictor = await import(join(scratch, PREDICTORS['no-facts'])) as { predict: (c: Case, env: PredictEnv) => unknown }
-const asked: Array<[number, string, boolean]> = []
-;(globalThis as { twinScan?: typeof asked }).twinScan = asked
-const report: Report = { format: 'pretext-twin-scan/1', tree, cases: 0, withTwoByteSlice: 0, withTwin: 0, slices: [], twins: [] }
-const limit = Number(options.get('limit') ?? Infinity)
-for (const file of files) {
-  for (const line of readFileSync(resolve(file), 'utf8').split('\n')) {
+if (files.length === 1 || jobs === 1 || limit !== Infinity) await scan(scratch, files)
+else {
+  // A child a file, the largest file first; their reports joined in the files' order.
+  const order = files.map((_, i) => i).sort((a, b) => statSync(resolve(files[b]!)).size - statSync(resolve(files[a]!)).size)
+  const failed: string[] = []
+  let next = 0
+  const workers: Promise<void>[] = []
+  for (let w = 0; w < Math.min(jobs, files.length); w++) workers.push((async () => {
+    while (next < order.length) {
+      const i = order[next++]!
+      const code = await withCore(false, () => Bun.spawn(['bun', import.meta.path, `--cases=${files[i]!}`, `--scratch=${scratch}`, `--out=${join(scratch, `report-${i}.json`)}`], { cwd: REPO, stdin: 'ignore', stdout: 'inherit', stderr: 'inherit' }).exited)
+      if (code !== 0) failed.push(files[i]!)
+    }
+  })())
+  await Promise.all(workers)
+  if (failed.length > 0) {
+    execFileSync('trash', [scratch])
+    throw new Error(`The scan failed on ${failed.sort().join(', ')}`)
+  }
+  for (let i = 0; i < files.length; i++) {
+    const part = JSON.parse(readFileSync(join(scratch, `report-${i}.json`), 'utf8')) as Report
+    report.cases += part.cases
+    report.withTwoByteSlice += part.withTwoByteSlice
+    report.withTwin += part.withTwin
+    for (let k = 0; k < part.slices.length; k++) report.slices.push(part.slices[k]!)
+    for (let k = 0; k < part.twins.length; k++) report.twins.push(part.twins[k]!)
+  }
+}
+execFileSync('trash', [scratch])
+console.log(`[twin-scan] ${report.cases} cases: ${report.withTwoByteSlice} ask a Latin-1-only string as a two-byte slice, ${report.withTwin} ask one context the same characters in both storages`)
+for (const entry of report.twins.slice(0, 12)) console.log(`  ${entry.id} ${entry.family}: ${entry.twins.map(twin => `${JSON.stringify(twin.text)} on context ${twin.context}, ${twin.first} first, ${twin.asks} asks`).join('; ')}`)
+const out = options.get('out')
+if (out !== undefined) writeFileSync(resolve(out), `${JSON.stringify(report, null, 1)}\n`)
+
+// The files' cases through the scratch copy's Chrome predictor, into `report`.
+async function scan(scratch: string, files: readonly string[]): Promise<void> {
+  const predictor = await import(join(scratch, PREDICTORS['no-facts'])) as { predict: (c: Case, env: PredictEnv) => unknown }
+  const asked: Array<[number, string, boolean]> = []
+  ;(globalThis as { twinScan?: typeof asked }).twinScan = asked
+  for (const file of files) for (const line of readFileSync(resolve(file), 'utf8').split('\n')) {
     if (line === '' || report.cases >= limit) continue
     const c = JSON.parse(line) as Case
     report.cases++
@@ -108,8 +158,3 @@ for (const file of files) {
     }
   }
 }
-execFileSync('trash', [scratch])
-console.log(`[twin-scan] ${report.cases} cases: ${report.withTwoByteSlice} ask a Latin-1-only string as a two-byte slice, ${report.withTwin} ask one context the same characters in both storages`)
-for (const entry of report.twins.slice(0, 12)) console.log(`  ${entry.id} ${entry.family}: ${entry.twins.map(twin => `${JSON.stringify(twin.text)} on context ${twin.context}, ${twin.first} first, ${twin.asks} asks`).join('; ')}`)
-const out = options.get('out')
-if (out !== undefined) writeFileSync(resolve(out), `${JSON.stringify(report, null, 1)}\n`)
