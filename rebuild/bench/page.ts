@@ -658,20 +658,25 @@ async function chatHeadline(c: Context, chat: ChatPlan): Promise<void> {
 async function chatHeadlineResize(c: Context, chat: ChatPlan): Promise<void> {
   const font = c.plan.style.mainFont
   const lineHeight = c.plan.style.lineHeight
+  // Every set with a page's measurer first, whose paragraphs hold a few contexts between them: the paragraphs that each
+  // hold their own leave about eleven canvases a message behind, which a later part would pay for collecting.
+  const keeping: { prepareAndFillMs: number; resizeMs: number }[] = []
+  for (let s = 0; s < chat.sets.length; s++) {
+    const inputs = chatInputs(c, chat.sets[s]!.id, chat.headline)
+    document.title = `bench headline resize ${chat.sets[s]!.id}, one measurer`
+    let start = performance.now()
+    const prepared = prepareAllChat(inputs, c.env, newMeasurer())
+    const prepareAndFillMs = performance.now() - start
+    start = performance.now()
+    sink += resizeChat(prepared, chat.resizeWidths)
+    keeping.push({ prepareAndFillMs, resizeMs: performance.now() - start })
+    await yieldTask()
+  }
   for (let s = 0; s < chat.sets.length; s++) {
     const inputs = chatInputs(c, chat.sets[s]!.id, chat.headline)
     document.title = `bench headline resize ${chat.sets[s]!.id}`
-    // With a page's measurer first: its paragraphs hold a few contexts between them, and they are dropped before the
-    // paragraphs that each hold their own are made.
     let start = performance.now()
-    let prepared = prepareAllChat(inputs, c.env, newMeasurer())
-    const rebuildKeepingPrepareAndFillMs = performance.now() - start
-    start = performance.now()
-    sink += resizeChat(prepared, chat.resizeWidths)
-    const rebuildKeepingResizeMs = performance.now() - start
-    await yieldTask()
-    start = performance.now()
-    prepared = prepareAllChat(inputs, c.env, undefined)
+    const prepared = prepareAllChat(inputs, c.env, undefined)
     const rebuildPrepareAndFillMs = performance.now() - start
     start = performance.now()
     sink += resizeChat(prepared, chat.resizeWidths)
@@ -689,8 +694,8 @@ async function chatHeadlineResize(c: Context, chat: ChatPlan): Promise<void> {
     for (let k = 0; k < chat.resizeWidths.length; k++) for (let i = 0; i < handles.length; i++) sink += mainLinesChat(handles[i]!, chat.resizeWidths[k]!, lineHeight)
     const mainResizeMs = performance.now() - start
     const result: ChatHeadlineResize = {
-      set: chat.sets[s]!.id, messages: chat.headline, widths: chat.resizeWidths, rebuildPrepareAndFillMs, rebuildResizeMs, rebuildKeepingPrepareAndFillMs,
-      rebuildKeepingResizeMs, mainPrepareAndLayoutMs, mainResizeMs,
+      set: chat.sets[s]!.id, messages: chat.headline, widths: chat.resizeWidths, rebuildPrepareAndFillMs, rebuildResizeMs,
+      rebuildKeepingPrepareAndFillMs: keeping[s]!.prepareAndFillMs, rebuildKeepingResizeMs: keeping[s]!.resizeMs, mainPrepareAndLayoutMs, mainResizeMs,
     }
     await post<{ kind: 'ok' }>('/api/chat', { runId, context: c.plan.index, part: { kind: 'headline-resize', result } } satisfies ChatPost)
   }
