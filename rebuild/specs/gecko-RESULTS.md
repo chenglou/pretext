@@ -12,6 +12,87 @@ Earlier rounds (1-11, 2026-09-16) and their failure classes are in this file's g
 its own scorer, baseline and run folders. Since ceiling round 4 the port measures on an OffscreenCanvas always; round 3's
 section describes the detached canvas element it measured on then.
 
+## Re-architecture X2, 2026-09-19: the memo goes
+
+research/ARCHITECTURE-PLAN-2.md §5.3, §6 and §8 step 2. No rule, citation, gap condition or probe order moved, and no
+prediction: tier 1 gives every case's layout, observation and painter limits as before, and every case whose questions
+changed asks the same questions again and nothing else (repeats only). What changed is who holds a measured value.
+
+- **The port holds its Canvas contexts and asks them directly.** `GeckoPrepared.contexts` is the paragraph's list, a text
+  run holds its `Context`, and the contexts a recipe needs beside it (ligatures off, 2px of letter spacing, the size times
+  2^k, the device size, "Apple Color Emoji" alone, weight 400, the block's for tabs) are made from its settings where they
+  were made before (`contextFor`). Every read is `width` or `bounds`; the measurer, its string memo and its call log are
+  gone from the port, with the measurer parameter of 33 functions. The six reads of `m.log.contexts` are
+  `run.context.settings`. `rangeAu` takes the context it measures in.
+- **What measuring finds about an offset inside a shaping unit is kept per offset**, in one array of records on the
+  prepared paragraph (`GeckoPrepared.inWord`, `advance.ts` `InWordEntry`): the advance before the offset with its reason,
+  whether Canvas shows an optional ligature over it and whether it shows a group that required shaping forms, the row of
+  ligature candidates that starts there, and the width of the unit's suffix from there. A unit keeps its ligature group
+  count (`GeckoUnit.groups`). They replace five module-level WeakMaps (`inWordMemo`, `spansMemo`, `rowMemo`, `groupMemo`
+  and `ligatureMemo`, the one keyed by string). The sixth, `groupEndMemo`, is gone without a successor: the spacing a frame
+  that starts inside a ligature group takes is read each time from the group at the frame's start, which the records
+  answer (a field set when the provider is made would ask Canvas before the break scan does, and one set on first use
+  would be written by a line's placement after its fill). The records and the unit's count are the only parts of a
+  prepared paragraph written after preparation; a fill, a placement or an inspection fills them where it reads, at any
+  width, so a second `placeLine`, `lineGaps` and a layout at another width ask nothing again.
+- **Flow instead of lookups**, from the sites `replay.ts check --sites` named with the memo off:
+  - An offset's suffix width is asked once. The advance before offset t measures W(suffix from t), and the advance before
+    the next cluster measures the same string with its own cluster in front; whichever comes first asks, and the other
+    reads the record (`suffixAlone`). This was 937,238 of the 3.16 M repeated questions and 188.7 M of their 223 M
+    characters: a unit of n clusters sent its suffixes to Canvas twice.
+  - A text run asks its space once, at its first boundary space (239,626 repeats).
+  - An emoji cluster's width and ink box come from one `measureText` in each of its two contexts, and its device-size
+    advance is asked once (about 30,000).
+  The ligature test's answer is the offset's, so the same pair at another offset is asked again (the plan's choice:
+  no lookup by string).
+
+| Check | Result |
+|---|---|
+| `bun test rebuild` | 807 pass (2 new Gecko tests: filling a paragraph again, or at another width, asks Canvas nothing; an offset's suffix is asked once). The tests count on the stand-in Canvas, since the library keeps no log |
+| tier 1, 63,771 cases, either configuration | exit 3: 0 predictions changed, 0 new questions, 0 other questions; 52,444 cases (52,498 with facts) are repeats only, 11,327 (11,273) the same. Chrome's and webkit-host's references: every case the same |
+| `tests/function-set.ts plain`, `pure`, `sweep` | every case passes in both configurations; 11,418 (11,422) cases first ask in another order on the plain path, as at X1 |
+| citations, painter differential | 0 lost; 63,771 of 63,771 painted byte-equal in both configurations |
+| string-keyed Maps in the port | none hold a measured value; `likely.ts` keeps its tables of language tags |
+| tier 2, pinned Firefox 156.0, both orders, both configurations (`.artifacts/tests/runs/ra-x2-gecko`) | exit 0 twice: 0 status transitions, 0 cases less exact, differing predicted values 301 and 744 and rect counts 134 and 102 as in the reference, gate lost 0. The forward rows equal X1's run on all 63,771 cases (native observation and prediction, `compare-sets.ts --prediction=without-measure`), and two runs of this library equal each other |
+| plain predictor in the browser | below |
+
+**Canvas questions per paragraph** (63,771 cases; without facts / with the lab's facts).
+
+| Path | X1 (memo on) | memo off, no flow | X2 | ask ratio at X2 |
+|---|---|---|---|---|
+| lab (inspected) | 74.2 / 74.5 | 134.9 / 136.1 | 114.5 / 115.7 | 1.66 / 1.67 |
+| plain | 40.7 / 40.8 | | 54.5 / 55.1 | 1.41 / 1.42 |
+
+What is left repeats because a string recurs in the paragraph, not because a value wasn't handed on: 2.90 M repeated
+questions of 5.7 M characters in all, two characters on average (the memo-off tree repeated 223 M characters). By site,
+without facts: the ligature test's pair in its two contexts 1,238,678; the cluster before an offset alone 813,807; a suffix
+373,594; a unit's group count 188,001; the script context's own width 130,329; a unit in `prepare` 56,904; a joined
+prefix 49,934; the space of a second run in one context 17,079. 62% of them sit under `inspectLine`. The plain path
+repeats at the same sites.
+
+**Time.** Tier 2 forward took 98 s of browser jobs against 64 s at step 0 on a quiet machine and 91 s at X1 beside the
+same neighbours; the rows' prediction times sum to 58 s against X1's 56 s. Runs of one library differ by more than that
+with the machine's load (46 s to 89 s over this step's five runs). The giants (9 cases, 107,000 to 270,000 units, alone on
+the machine) are where a recurring string costs: the lab path's prediction takes 15.3 s against 4.2 s, 3.6 times, above the
+plan's tripwire of 2; the plain path 4.0 s against 3.2 s at X1, 1.3 times; layouts and line ranges equal on all 9. A giant
+is one text of 18,000 to 47,000 words, a fifth to a half of them distinct, and `inspectLine` reads every offset of every
+word: the English one asks 843,386 questions for 54,673 distinct ones, 76% of them under `inspectLine`; the memo answered a
+word's second occurrence. No value flows from one occurrence of a word to the next except by its string, so this goes to
+the plan's §10 with its count. The engine's own structure there is the shaped word cache (gfxFont.cpp:3569-3577): units of
+one text in one run would share one record of what measuring found.
+
+**The plain predictor in pinned Firefox** (`compare-sets.ts --prediction=line-ranges`). Over all 63,771 no-facts cases
+against the usual run's forward order: 63,651 cases give its line ranges and native observation. The other 120 are all in
+one part, one browser process (`suite-sample` part 2), where a fallback character is 16px wide in one process and 17px in
+the other (`gecko/process-font-fallback-state`); the line ranges moved with the native lines in 14 of them, and within
+the plain run all 120 pass line count and visible breaks. 115 are history-dependent in the reference ledger and hold the 14;
+5 aren't marked there (`suite/measurement`: `c-2aa210f8d63d5a8b`, `c-56afde0f3d04b557`, `c-611182808d3e8130`,
+`c-6b2b36f2a34baeee`, `c-8048bdb9cbcba7a2`; native widths alone, the same line ranges). `suite-sample` run three more
+times: the plain predictor once equal to the usual run on all 19,888 cases and once differing in the same 120; the usual
+predictor as the first usual run. X1's odd plain run held 114 of the 120. So that process has two states, the usual
+predictor's five runs of X1 and X2 were all in one, and the plain predictor's were in the other three times out of five:
+it asks Canvas less and sooner, and Firefox loads character maps in the background.
+
 ## Re-architecture X1, 2026-09-18: gaps get their home, and a paragraph is plain or inspected
 
 research/ARCHITECTURE-PLAN-2.md §5.2, §6 and §8 step 2. No rule, citation, gap condition or probe order moved: tier 1 is
