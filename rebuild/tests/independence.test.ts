@@ -4,7 +4,7 @@
 //    test tooling, the lab's observer, scorer, gate and case generators, the observation ports and the probes may import
 //    from rebuild/src only the shared contract: types from src/model.ts and src/env.ts, and data constants from them that
 //    aren't functions (UNKNOWN_FONT_FACTS, PINNED_BUILDS); and, as types only, each engine's geometry
-//    (src/engines/<engine>/geometry.ts, which step 1's S2 makes from model.ts). The prediction adapter
+//    (src/engines/<engine>/geometry.ts). The prediction adapter
 //    lab/predictor-core.ts is the one exemption: the lab's predictors (lab/predictor.ts, lab/baselines/no-facts-predictor.ts)
 //    are made from it and import nothing else from rebuild/src but contract constants. tests/replay.ts and
 //    tests/function-set.ts load a predictor, and the second the library's function set, by path when they run: they compare
@@ -13,9 +13,9 @@
 //    index.ts (the one dispatch) or env.ts (whose serialized shape is part of the row), holds no import path containing
 //    `engines/`, no string literal 'blink', 'webkit' or 'gecko', and no identifier containing one of those names.
 //    src/measure/ is shared like the rest. Test files are left out: a shared algorithm is tested with an engine's data.
-//    SHARED_FILES_THAT_NAME_ENGINES lists the files that don't hold yet, with their count of such mentions at the
-//    correctness line: a count may only fall, the list may only shrink, and an entry that no longer matches its file fails
-//    too, so the list is what is left to do (S2 leaves paint.ts; step 3 empties it).
+//    SHARED_FILES_THAT_NAME_ENGINES lists the files that don't hold yet, with their count of such mentions: a count may
+//    only fall, the list may only shrink, and an entry that no longer matches its file fails too, so the list is what is
+//    left to do. Step 1's S2 left paint.ts alone, which step 3 takes off the list.
 // 3. An engine imports no other engine.
 import { describe, expect, test } from 'bun:test'
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
@@ -97,18 +97,11 @@ describe('independence from rebuild/src', () => {
   })
 })
 
-// Mentions at the correctness line (af50a11). Lower a count as mentions go; drop an entry when its file holds none.
+// Mentions after step 1's S2. At the correctness line (af50a11) ten files held 175; paint.ts held 53 of them, and now also
+// picks each engine's bidi data and grapheme rules itself and imports the geometry types from the engines. Lower a count as
+// mentions go; drop an entry when its file holds none.
 const SHARED_FILES_THAT_NAME_ENGINES: Record<string, number> = {
-  'breaks/generated/blink-break-tables.ts': 11,
-  'breaks/generated/gecko-break-data.ts': 2,
-  'breaks/generated/webkit-break-tables.ts': 15,
-  'breaks/tables.ts': 38,
-  'measure/canvas-checks.ts': 3,
-  'measure/font-checks.ts': 10,
-  'model.ts': 70,
-  'paint.ts': 53,
-  'unicode/bidi.ts': 3,
-  'unicode/grapheme.ts': 9,
+  'paint.ts': 74,
 }
 const ENGINE_NAME = /blink|webkit|gecko/i
 

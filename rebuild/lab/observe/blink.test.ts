@@ -2,8 +2,11 @@
 // geometry, so every expected value comes from the observation model and the recorded rows it cites, not from the
 // library.
 import { describe, expect, test } from 'bun:test'
-import type { BlinkItem, BlinkLayout, BlinkLine, BlinkMappingUnit, BlinkShapeRun, CssFont, ExpectedRect, Paragraph } from '../../src/model.ts'
+import type { BlinkItem, BlinkMappingUnit, BlinkShapeRun } from '../../src/engines/blink/geometry.ts'
+import type { CssFont, Paragraph } from '../../src/model.ts'
+import type { BlinkLayout, BlinkLine } from '../types.ts'
 import { observeBlink } from './blink.ts'
+import type { ExpectedRect } from './contract.ts'
 
 const font = { family: 'Arial', size: 16, weight: 400, style: 'normal' as const }
 const facts = { primaryFamily: null, mapsHyphen: null, monospace: null, opticalSizeAxis: null, joining: null, pairKerning: null }

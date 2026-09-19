@@ -8,10 +8,14 @@ export type BrowserKind = 'chrome' | 'safari' | 'firefox' | 'webkit-host'
 // The styled paragraph is defined once in rebuild/src/model.ts, as a tree of inline content (DESIGN.md §1.1). A case
 // describes the page, so its fonts are CSS fonts without the font facts the library also takes; predictor.ts adds those
 // (DESIGN.md §1.2), and they don't enter case ids.
+import type { BlinkLineGeometry, BlinkLineStart } from '../src/engines/blink/geometry.ts'
+import type { GeckoLineGeometry, GeckoLineStart } from '../src/engines/gecko/geometry.ts'
+import type { WebKitLineGeometry, WebKitLineStart } from '../src/engines/webkit/geometry.ts'
+import type { BlinkEnvironment, GeckoEnvironment, WebKitEnvironment } from '../src/env.ts'
 import type {
-  CssFont, ExpectedObservation, InlineElementOf, InlineNodeOf, LineSlot as LibraryLineSlot, Paragraph as LibraryParagraph, ParagraphLayout,
-  ParagraphOf,
+  CssFont, Fragment, Gap, InlineElementOf, InlineNodeOf, LineSlot as LibraryLineSlot, Paragraph as LibraryParagraph, ParagraphOf, TextAlign,
 } from '../src/model.ts'
+import type { CanvasSettings, ExpectedObservation } from './observe/contract.ts'
 export type FontDecl = CssFont
 // The tree the library takes, with the page's CSS fonts: what cases that use inline structure, atomic inlines, <br>,
 // <wbr>, text-indent or text-align describe (DESIGN.md §8.3 stage 5).
@@ -207,6 +211,64 @@ export type LinesPrediction = {
   // Number of measureText calls, when the predictor reports it.
   measureLog?: number
 }
+
+// ---- The layout a row keeps (predictor-core.ts makes it from the library's lines, one slot at a time) ----
+
+// A line as a row keeps it: today every field of the line the engine returns (src/model.ts LineOf).
+export type LineOf<Start, Geometry> = {
+  // [start, end) covers every source unit the line consumed; consecutive lines tile the text. Elements that hold no text
+  // are placed by fragments.
+  start: number
+  end: number
+  fragments: Fragment[]
+  // Whether the engine gives the line a line box that holds content: false for Blink's empty lines
+  // (LineInfo::ShouldCreateLineBox, line_breaker.cc:945-975), WebKit lines without contentful inline content
+  // (LineLayoutResult.h:94-105) and Gecko line boxes of block size 0 (nsLineLayout.cpp:1690-1712). A span's box edge,
+  // an atomic inline or a <br> makes content. Such a line is still a line of the engine and is returned; it paints
+  // nothing, takes no block size, and the lab and the painter skip it.
+  hasLineBox: boolean
+  // The paragraph's shaping joined the letters on both sides of this line's end: Blink reshaped the edge with HarfBuzz
+  // context under an OpenType joining font (FontFacts.joining), Gecko broke inside one shaped word. The painter puts
+  // U+200D on both sides of the edge (specs/painter.md R7). Always false in WebKit, which never shapes across a line
+  // edge (specs/painter.md §3.2 c).
+  joinsNextLine: boolean
+  // The slot the line was laid out in.
+  slot: LineSlot
+  // The engine applied the paragraph's text-indent to this line.
+  indented: boolean
+  // The alignment the engine used for this line: text-align, or start for the last line and a line ending at a forced
+  // break under justify (TextAlign).
+  align: TextAlign
+  geometry: Geometry
+  // Gaps that depend on this line's breaks (DESIGN.md §2.8).
+  gaps: Gap[]
+  // null after the paragraph's last line.
+  next: Start | null
+}
+
+// An engine's line in a row. `next` is the engine's own line start (DESIGN.md §2.7), which the row stores whole.
+export type BlinkLine = LineOf<BlinkLineStart, BlinkLineGeometry>
+export type WebKitLine = LineOf<WebKitLineStart, WebKitLineGeometry>
+export type GeckoLine = LineOf<GeckoLineStart, GeckoLineGeometry>
+
+// A slot the engine refused because it moved the line below the slot's floats (src/model.ts LineResultOf), with
+// the row of the slot list it was, and the gaps the decision rests on.
+export type BelowFloats = { row: number; gaps: Gap[] }
+
+// The library's Canvas call log of one layout (src/measure/log.ts): every context it used and every measureText call it
+// made, in order, and the lookups its memo answered.
+export type MeasureLog = { contexts: CanvasSettings[]; calls: { context: number; text: string; width: number }[]; memoHits: number }
+
+// `engine` is the environment's engine, the union's tag. `gaps` holds the conditions of the paragraph's content, fonts
+// and environment; lines hold the ones their breaks decide.
+export type ParagraphLayout =
+  | { engine: 'blink'; env: BlinkEnvironment; lines: BlinkLine[]; belowFloats: BelowFloats[]; measure: MeasureLog; gaps: Gap[] }
+  | { engine: 'webkit'; env: WebKitEnvironment; lines: WebKitLine[]; belowFloats: BelowFloats[]; measure: MeasureLog; gaps: Gap[] }
+  | { engine: 'gecko'; env: GeckoEnvironment; lines: GeckoLine[]; belowFloats: BelowFloats[]; measure: MeasureLog; gaps: Gap[] }
+
+export type BlinkLayout = Extract<ParagraphLayout, { engine: 'blink' }>
+export type WebKitLayout = Extract<ParagraphLayout, { engine: 'webkit' }>
+export type GeckoLayout = Extract<ParagraphLayout, { engine: 'gecko' }>
 
 // What predictor.ts gives the page for an engine prediction: the library's input, with the font facts the predictor gave,
 // and its layout. The page runs the observation port over them and records an EnginePrediction.

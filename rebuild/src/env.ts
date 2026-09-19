@@ -4,7 +4,10 @@
 // and whether its Canvas has what the engine's measuring recipes assume. Everything else is given, and a fact given as
 // null is laid out with its documented default and reported as a gap.
 // Tests, and predictions for another runtime, build an Environment directly.
-import { missingCanvasSupport } from './measure/canvas-checks.js'
+import { blinkCanvasNeeds } from './engines/blink/checks.js'
+import { geckoCanvasNeeds } from './engines/gecko/checks.js'
+import { webkitCanvasNeeds } from './engines/webkit/checks.js'
+import { missingCanvasSupport, type CanvasNeeds } from './measure/canvas-checks.js'
 
 export type EngineName = 'blink' | 'webkit' | 'gecko'
 
@@ -122,13 +125,22 @@ function engineFromUserAgent(): DetectedEngine {
   return { kind: 'unsupported', userAgent: ua, reason: 'unknown browser' }
 }
 
+// What each port's measuring recipes assume of Canvas, as the port lists it (engines/<engine>/checks.ts).
+function canvasNeedsOf(engine: EngineName): CanvasNeeds {
+  switch (engine) {
+    case 'blink': return blinkCanvasNeeds
+    case 'webkit': return webkitCanvasNeeds
+    case 'gecko': return geckoCanvasNeeds
+  }
+}
+
 // What can't change while the page lives, so a page asks once: the engine, and whether this browser's Canvas is one the
 // engine's measuring recipes can read (measure/canvas-checks.ts: two contexts and two measureText calls). A page learns
 // the engine here before it can give that engine's facts to detectEnvironment.
 export function detectEngine(): DetectedEngine {
   const detected = engineFromUserAgent()
   if (detected.kind === 'unsupported') return detected
-  const missing = missingCanvasSupport(detected.engine)
+  const missing = missingCanvasSupport(canvasNeedsOf(detected.engine))
   if (missing.length === 0) return detected
   return { kind: 'unsupported', userAgent: navigator.userAgent, reason: `this browser's Canvas lacks what the ${detected.engine} port measures with: ${missing.join('; ')}` }
 }

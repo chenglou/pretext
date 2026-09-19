@@ -3,8 +3,8 @@
 // and <wbr> (inline_items_builder.cc), bidi item splitting (§2.D) and the styles items are handled under.
 import type { ContentIndex } from '../../content.js'
 import type { FontDecl, Paragraph, TextStyle, WhiteSpace } from '../../model.js'
-import { bidiDataFor } from '../../unicode/bidi.js'
 import { resolveIcuBidi } from '../../unicode/ubidi.js'
+import { blinkBidiData } from './data.js'
 import type { BlinkBoxEdge, BlinkStyle, EndCollapseType, InlineItem, IteratorSettings } from './types.js'
 
 const SPACE = 0x20
@@ -588,7 +588,7 @@ function maybeBidiRtl(text: string): boolean {
 export function segmentBidiRuns(paragraph: Paragraph, content: Content): { items: InlineItem[]; enabled: boolean } {
   const rtlBlock = paragraph.direction === 'rtl' // EnterBlock sets has_bidi_controls_ for an RTL block
   if (!rtlBlock && !(content.hasNonOrc16Bit && maybeBidiRtl(content.text))) return { items: content.items, enabled: false }
-  const bidi = resolveIcuBidi(content.text, paragraph.direction, bidiDataFor('blink'))
+  const bidi = resolveIcuBidi(content.text, paragraph.direction, blinkBidiData)
   if (bidi.direction === 'ltr' && !rtlBlock) return { items: content.items, enabled: false }
   const levels = bidi.levels
   const out: InlineItem[] = []

@@ -1,6 +1,9 @@
 // detectEngine's Canvas checks against stand-in contexts. What the browsers answer, the pinned ones and one whose Canvas
 // lacks `lang` and keeps a 0.001px letter spacing as a fraction, is rebuild/probes/canvas-checks.ts.
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { blinkCanvasNeeds } from '../engines/blink/checks.ts'
+import { geckoCanvasNeeds } from '../engines/gecko/checks.ts'
+import { webkitCanvasNeeds } from '../engines/webkit/checks.ts'
 import { detectEngine, detectEnvironment, type EngineName } from '../env.ts'
 import { missingCanvasSupport } from './canvas-checks.ts'
 
@@ -99,29 +102,29 @@ describe('Canvas checks at engine detection', () => {
     expect(detected.reason).toContain('a letter spacing of 0.001px that leaves the ink box where it was')
     // With lang, the spacing alone refuses it.
     page('gecko', { ...GECKO, measure: FRACTION_KEPT })
-    expect(missingCanvasSupport('gecko')).toHaveLength(2)
+    expect(missingCanvasSupport(geckoCanvasNeeds)).toHaveLength(2)
   })
 
   test('each port names what its own recipes set', () => {
     page('blink', { attributes: ['direction'], inkBox: false, measure: BLINK.measure })
-    expect(missingCanvasSupport('blink')).toEqual(['the context attribute lang', 'the context attribute letterSpacing', 'the context attribute textRendering', 'TextMetrics.actualBoundingBoxLeft and actualBoundingBoxRight'])
+    expect(missingCanvasSupport(blinkCanvasNeeds)).toEqual(['the context attribute lang', 'the context attribute letterSpacing', 'the context attribute textRendering', 'TextMetrics.actualBoundingBoxLeft and actualBoundingBoxRight'])
     // Blink's recipes cancel the spacing in 16.16 units: a Canvas that adds anything but 1/64 px a character is refused.
     page('blink', { ...BLINK, measure: perCharacter(px => px * 2) })
-    expect(missingCanvasSupport('blink')).toEqual(["a letter spacing of 0.015625px that adds 0.015625px to each character's width (here it adds 0.03125px)"])
+    expect(missingCanvasSupport(blinkCanvasNeeds)).toEqual(["a letter spacing of 0.015625px that adds 0.015625px to each character's width (here it adds 0.03125px)"])
     // WebKit's context has no lang or textRendering, and its port doesn't need the ink box.
     page('webkit', { ...WEBKIT, inkBox: false })
-    expect(missingCanvasSupport('webkit')).toEqual([])
+    expect(missingCanvasSupport(webkitCanvasNeeds)).toEqual([])
     page('webkit', { attributes: ['direction'], inkBox: true, measure: WEBKIT.measure })
-    expect(missingCanvasSupport('webkit')).toEqual(['the context attribute letterSpacing', 'the context attribute wordSpacing'])
+    expect(missingCanvasSupport(webkitCanvasNeeds)).toEqual(['the context attribute letterSpacing', 'the context attribute wordSpacing'])
   })
 
   test("Blink's check measures at the port's own text rendering, off the font cache key of the page's default text", () => {
     page('blink', BLINK)
-    expect(missingCanvasSupport('blink')).toEqual([])
+    expect(missingCanvasSupport(blinkCanvasNeeds)).toEqual([])
     expect(renderingAtMeasure).toEqual(['optimizeLegibility', 'optimizeLegibility'])
     renderingAtMeasure = []
     page('gecko', GECKO)
-    expect(missingCanvasSupport('gecko')).toEqual([])
+    expect(missingCanvasSupport(geckoCanvasNeeds)).toEqual([])
     expect(renderingAtMeasure).toEqual(['', ''])
   })
 

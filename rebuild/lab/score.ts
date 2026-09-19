@@ -5,8 +5,9 @@
 // Imported as a module it runs nothing. It exports the per-row score, the native line grouping and the comparison of two
 // runs, so tools use the scorer's own rules instead of copying them.
 import { closeSync, openSync, readFileSync, readSync, writeFileSync, writeSync } from 'node:fs'
-import type { Expected, ExpectedObservation, ExpectedRect, Gap, GapName } from '../src/model.ts'
+import type { Gap, GapName } from '../src/model.ts'
 import { describeGiven } from './languages.ts'
+import type { Expected, ExpectedObservation, ExpectedRect } from './observe/contract.ts'
 import { plainRows, readLines } from './rows.ts'
 import type { BrowserKind, Case, EnginePrediction, FontDecl, LabRow, LinesPrediction, NativeObservation, PainterLine, Paragraph, Rect, RecordedLayout } from './types.ts'
 

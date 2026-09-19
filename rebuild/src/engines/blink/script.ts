@@ -3,7 +3,7 @@
 // Canvas shapes (harfbuzz_shaper.cc:1080-1101); an 8-bit string is one Latin segment in both (:1072-1077). HarfBuzz shapes
 // each run with its script, and letter spacing skips cursive runs (shape_result.cc:977-1024). The fast path through
 // GetSafeToExtendExistingRun (:293-372) only skips characters the slow path would merge, so it isn't ported.
-import { bidiDataFor } from '../../unicode/bidi.js'
+import { blinkBidiData } from './data.js'
 import {
   USCRIPT_BOPOMOFO, USCRIPT_COMMON, USCRIPT_HAN, USCRIPT_HIRAGANA, USCRIPT_INHERITED, USCRIPT_INVALID_CODE, USCRIPT_KATAKANA,
   USCRIPT_KATAKANA_OR_HIRAGANA, USCRIPT_LATIN, isEastAsianWide, pairedBracketType, scriptExtensionsOf, scriptOf,
@@ -62,7 +62,7 @@ let bracketPairs: Map<number, number> | null = null
 function pairedBracket(ch: number): number {
   if (bracketPairs === null) {
     bracketPairs = new Map()
-    const triples = bidiDataFor('blink').brackets
+    const triples = blinkBidiData.brackets
     for (let i = 0; i < triples.length; i += 3) {
       bracketPairs.set(triples[i]!, triples[i + 1]!)
       bracketPairs.set(triples[i + 1]!, triples[i]!)

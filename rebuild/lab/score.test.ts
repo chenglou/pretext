@@ -6,7 +6,8 @@ import { encodeEdges } from './observe/gecko.ts'
 import {
   abcd, abcdExpected, abcdLayout, abcdNative, abcdOneLine, abcdOneLineExpected, at, blink, expect32, gecko, linesRow, native, observation, paragraph, row, webkit,
 } from './row-fixtures.ts'
-import type { ExpectedObservation, Gap, GapName } from '../src/model.ts'
+import type { Gap, GapName } from '../src/model.ts'
+import type { ExpectedObservation } from './observe/contract.ts'
 import { environmentKey, indexRows, lineLocalGaps, lineRangeDiagnostics, nativeDifference, nativeLines, nativeView, readRowAt, residualMembership, RESIDUAL_CLASSES, scoreRow, slotProtocol, syntheticBoldStep, withNativeRow, type CaseScore } from './score.ts'
 import type { BrowserKind, EnginePrediction, LabRow, NativeObservation, PainterLimits, PainterLine, Rect, RecordedLayout } from './types.ts'
 

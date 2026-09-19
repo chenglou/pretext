@@ -8,10 +8,10 @@ import { canvasFont } from '../../measure/font.js'
 import { genericFamilyUnder, standardFamilyOf } from './fonts.js'
 import { indexContent, langUnder, styleUnder } from '../../content.js'
 import type { Paragraph, TextStyle } from '../../model.js'
-import { AL, FSI, L, LRE, LRI, LRO, ON, PDF, PDI, R, RLE, RLI, RLO, bidiClassOf, bidiDataFor, type BidiData } from '../../unicode/bidi.js'
+import { AL, FSI, L, LRE, LRI, LRO, ON, PDF, PDI, R, RLE, RLI, RLO, bidiClassOf, type BidiData } from '../../unicode/bidi.js'
 import { resolveIcuBidi } from '../../unicode/ubidi.js'
 import { dictionaryRangesStartingWithMark, makeFactory, moveToNextBreakablePosition } from './breaks.js'
-import { computedLocale, hasDelimiterData, isDelimiterQuote, isHanLocale, lineRules, localeScript } from './data.js'
+import { computedLocale, hasDelimiterData, isDelimiterQuote, isHanLocale, lineRules, localeScript, webkitBidiData } from './data.js'
 import { boxWidth, itemWidth, singleSpaceWidth } from './measure.js'
 import { boxEdges, layoutUnit, preservesNewline, preservesSpacesAndTabs, webkitStyle } from './style.js'
 import type { WebKitBox, WebKitHistoryWorld, WebKitItem, WebKitPrepared, WebKitStyle, WebKitTextItem } from './types.js'
@@ -462,7 +462,7 @@ function computeBidiLevels(p: WebKitPrepared): void {
     }
   }
   if (paragraph.length === 0) return
-  const levels = resolveIcuBidi(paragraph, p.style.rtl ? 'rtl' : 'ltr', bidiDataFor('webkit')).levels
+  const levels = resolveIcuBidi(paragraph, p.style.rtl ? 'rtl' : 'ltr', webkitBidiData).levels
   let itemIndex = 0
   let hasSeenOpaqueItem = false
   for (let position = 0; position < paragraph.length;) {
@@ -936,7 +936,6 @@ export function prepareWebKit(paragraph: Paragraph, env: WebKitEnvironment, m: M
   const zoom = env.pageZoom ?? 1
   const style = webkitStyle(paragraph, paragraph, zoom)
   const index = indexContent(paragraph)
-  const bidi = bidiDataFor('webkit')
   const p: WebKitPrepared = {
     paragraph, env, zoom, icuDefaultLocale: env.icuDefaultLocale ?? ICU_DEFAULT_LOCALE_WITHOUT_ENVIRONMENT, style, elements: [],
     builder: 'line-builder', boxes: [], runStarts: [], runTexts: [], items: [], gaps: [], historyWorlds: [],
@@ -1024,7 +1023,7 @@ export function prepareWebKit(paragraph: Paragraph, env: WebKitEnvironment, m: M
     p.runTexts.push(leaves[r]!.text)
     boxOfRun.push(-1)
     if (!rendered[r]) continue
-    const box = makeBox(p, m, leaves[r]!, index.leaves[r]!.start, bidi)
+    const box = makeBox(p, m, leaves[r]!, index.leaves[r]!.start, webkitBidiData)
     reordering ||= box.hasStrongDirectionality
     boxOfRun[r] = p.boxes.length
     p.boxes.push(box)
@@ -1053,7 +1052,7 @@ export function prepareWebKit(paragraph: Paragraph, env: WebKitEnvironment, m: M
     p.builder = 'range-based'
   }
   collectBoxFacts(p, m, leaves)
-  collectHistoryWorlds(p, m, bidi)
+  collectHistoryWorlds(p, m, webkitBidiData)
   return p
 }
 

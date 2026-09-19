@@ -2,7 +2,8 @@
 // stops, word spacing, the fixed-pitch shortcut, breakWord's probe sequence and firstUserPerceivedCharacterLength
 // (specs/webkit-lines.md §3.3, §8.1; specs/webkit-canvas.md §(e); specs/webkit-gaps.md §2, §5). Every width is float32.
 import { measureText, type Measurer } from '../../measure/canvas.js'
-import { graphemeBoundaries, graphemeRulesFor } from '../../unicode/grapheme.js'
+import { graphemeBoundaries } from '../../unicode/grapheme.js'
+import { webkitGraphemeRules } from './data.js'
 import { collapsesWhiteSpace, preservesSpacesAndTabs, tabsAllowed } from './style.js'
 import type { WebKitBox, WebKitPrepared, WebKitTextItem } from './types.js'
 
@@ -110,7 +111,7 @@ export function mergedGlyphs(m: Measurer, box: WebKitBox, text: string): MergedG
   if (spacingCanChangeShaping(box, text) === false) return NOTHING_MERGED
   const s = canvasString(text)
   if (!glyphCountIsExact(m, box, s)) return { merged: true, pairs: [], separated: null, counted: false }
-  const starts = graphemeBoundaries(s, graphemeRulesFor('webkit'))
+  const starts = graphemeBoundaries(s, webkitGraphemeRules)
   const counts: number[] = []
   let alone = 0
   for (let k = 0; k + 1 < starts.length; k++) {
@@ -441,7 +442,7 @@ export function breakWord(p: WebKitPrepared, m: Measurer, item: WebKitTextItem, 
     return { length: right - start, logicalWidth: leftSideWidth }
   }
   // :354-364, the complex font path walks grapheme clusters.
-  const boundaries = graphemeBoundaries(text.slice(start, start + length), graphemeRulesFor('webkit'))
+  const boundaries = graphemeBoundaries(text.slice(start, start + length), webkitGraphemeRules)
   let result: WordBreakLeft = { length: 0, logicalWidth: 0 }
   for (let k = 1; k < boundaries.length; k++) {
     const w = widthTo(start + boundaries[k]!)
@@ -458,7 +459,7 @@ export function firstUserPerceivedCharacterLength(p: WebKitPrepared, item: WebKi
   const itemLength = item.end - item.start
   if (box.is8Bit) return Math.min(itemLength, 1)
   if (box.simpleFontCodePath) return Math.min(itemLength, forwardOneCodePoint(box.text, item.start, box.text.length) - item.start)
-  const boundaries = graphemeBoundaries(box.text, graphemeRulesFor('webkit'))
+  const boundaries = graphemeBoundaries(box.text, webkitGraphemeRules)
   for (let k = 0; k < boundaries.length; k++) {
     if (boundaries[k]! > item.start) return Math.min(itemLength, boundaries[k]! - item.start)
   }

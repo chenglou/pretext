@@ -32,7 +32,8 @@ import {
   isDefaultIgnorable, isEmojiComponent, isExtendedPictographic, isMarkOrModifier, isWhiteSpace, joiningType, scriptExtensionsOf, scriptOf,
 } from './props.js'
 import { LIGATURE_MERGED, LIGATURE_NONE, listedFontCovers } from './ligatures.js'
-import { graphemeBoundaries, graphemeRulesFor } from '../../unicode/grapheme.js'
+import { graphemeBoundaries } from '../../unicode/grapheme.js'
+import { blinkGraphemeRules } from './data.js'
 import { scriptsPerUnit } from './script.js'
 import type { BlinkPrepared, BlinkStyle, StyleContexts } from './types.js'
 
@@ -1347,7 +1348,7 @@ export function partGraphemeStarts(sh: Shaper, view: View, part: Part, position:
   if (p.is8Bit) {
     for (let j = 0; j < part.length; j++) if (!(j > 0 && window.charCodeAt(j - 1) === 0x0d && window.charCodeAt(j) === 0x0a)) starts[j] = 1
   } else {
-    const boundaries = graphemeBoundaries(window, graphemeRulesFor('blink'))
+    const boundaries = graphemeBoundaries(window, blinkGraphemeRules)
     for (let j = 0; j < boundaries.length; j++) if (boundaries[j]! < part.length) starts[boundaries[j]!] = 1
   }
   starts[0] = 1

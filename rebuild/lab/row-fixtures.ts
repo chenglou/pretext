@@ -1,8 +1,13 @@
 // Small hand-built lab rows for the scorer's and the triage tool's tests: rects in CSS px on 20px lines, layouts with the
 // fields the scorer reads, and expected observations by hand.
 import type { BlinkEnvironment, GeckoEnvironment, WebKitEnvironment } from '../src/env.ts'
-import type { BlinkLine, BlinkLineGeometry, Expected, ExpectedObservation, ExpectedRect, GeckoLine, GeckoLineGeometry, LineSlot, WebKitLine, WebKitLineGeometry } from '../src/model.ts'
-import type { BrowserKind, CodePointObservation, FontDecl, LabRow, NativeObservation, PainterLine, Paragraph, RecordedLayout, Rect, TextRun } from './types.ts'
+import type { BlinkLineGeometry } from '../src/engines/blink/geometry.ts'
+import type { GeckoLineGeometry } from '../src/engines/gecko/geometry.ts'
+import type { WebKitLineGeometry } from '../src/engines/webkit/geometry.ts'
+import type { Expected, ExpectedObservation, ExpectedRect } from './observe/contract.ts'
+import type {
+  BlinkLine, BrowserKind, CodePointObservation, FontDecl, GeckoLine, LabRow, LineSlot, NativeObservation, PainterLine, Paragraph, RecordedLayout, Rect, TextRun, WebKitLine,
+} from './types.ts'
 
 export const arial: FontDecl = { family: 'Arial', size: 16, weight: 400, style: 'normal' }
 

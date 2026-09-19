@@ -1,6 +1,9 @@
 // The stand-in Canvas: the engines' capability checks pass on it, and its widths depend on what a wrong data flow would
 // mix up (the text around a character, U+200D, the context's letter spacing, language and font list).
 import { afterEach, describe, expect, test } from 'bun:test'
+import { blinkCanvasNeeds } from '../src/engines/blink/checks.ts'
+import { geckoCanvasNeeds } from '../src/engines/gecko/checks.ts'
+import { webkitCanvasNeeds } from '../src/engines/webkit/checks.ts'
 import { missingCanvasSupport } from '../src/measure/canvas-checks.ts'
 import { installStandInCanvas, type StandIn } from './stand-in-canvas.ts'
 
@@ -29,9 +32,9 @@ function canvas(engine: Engine, pageLang = 'en'): (text: string, settings?: Reco
 
 describe('the stand-in Canvas', () => {
   test('every engine\'s capability checks pass, and WebKit\'s context has no lang', () => {
-    for (const engine of ['blink', 'gecko', 'webkit'] as const) {
+    for (const [engine, needs] of [['blink', blinkCanvasNeeds], ['gecko', geckoCanvasNeeds], ['webkit', webkitCanvasNeeds]] as const) {
       canvas(engine)
-      expect(missingCanvasSupport(engine)).toEqual([])
+      expect(missingCanvasSupport(needs)).toEqual([])
       expect('lang' in new OffscreenCanvas(1, 1).getContext('2d')!).toBe(engine !== 'webkit')
       installed!.restore()
     }

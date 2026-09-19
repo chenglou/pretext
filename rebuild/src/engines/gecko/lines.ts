@@ -4,13 +4,14 @@
 // TextAlignLine and nsBidiPresUtils::ReorderFrames. specs/gecko-lines.md §4-§6; widths are integer app units throughout
 // (§2.8). A line returns the frames Gecko placed on it (DESIGN.md §2.5), and fragments classified by the frames' own flags.
 import { measureContext, measureText, measureTextBounds, type Measurer } from '../../measure/canvas.js'
-import type { Fragment, Gap, GapName, GeckoCharacter, GeckoFrameGeometry, GeckoLine, GeckoLineResult, LineSlot, TextAlign } from '../../model.js'
+import type { Fragment, Gap, GapName, LineSlot, TextAlign } from '../../model.js'
 import { listedFontOf } from './fonts.js'
+import type { GeckoCharacter, GeckoFrameGeometry, GeckoLineStart } from './geometry.js'
 import { addLikelySubtags, tryParseLocale } from './likely.js'
 import { BREAK_EMERGENCY_WRAP, BREAK_NORMAL } from './linebreak.js'
 import { CANVAS_AU_PER_PX, frameOfSource, isTrimmableChar, pxToAu, rangeAu } from './prepare.js'
 import { generalCategory, isBidiControl, isClusterExtenderExcludingJoiners, isCursiveScript, joiningType } from './props.js'
-import { KIND_NEWLINE, KIND_TAB, type GeckoElement, type GeckoLineStart, type GeckoPrepared, type GeckoTextRun } from './types.js'
+import { KIND_NEWLINE, KIND_TAB, type GeckoElement, type GeckoLine, type GeckoLineResult, type GeckoPrepared, type GeckoTextRun } from './types.js'
 
 const SHY = 0x00ad
 const NO_BREAK = 0 // gfxBreakPriority (gfxTypes.h:48)

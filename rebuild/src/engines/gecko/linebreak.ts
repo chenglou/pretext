@@ -2,9 +2,9 @@
 // accumulating words across mapped flows, LineBreaker::ComputeBreakPositions (intl/lwbrk/LineBreaker.cpp:112-194)
 // calling ICU4X icu_segmenter 2.1.2's LineBreakIterator per word (third_party/rust/icu_segmenter/src/line.rs), and
 // gfxTextRun::SetPotentialLineBreaks (gfxTextRun.cpp:210-236). specs/gecko-text.md §8-§10.
-import { geckoLineRules } from '../../breaks/tables.js'
 import { BREAK, INTERMEDIATE, KEEP, NO_MATCH, icu4xProperty, type Icu4xRuleData } from '../../breaks/icu4x.js'
 import type { GeckoEnvironment } from '../../env.js'
+import { geckoLineRules } from './data.js'
 import { scriptIsChineseOrJapanese } from './likely.js'
 
 type DictionaryBreaks = GeckoEnvironment['dictionaryBreaks']
@@ -88,7 +88,7 @@ function looseBreak(rightCp: number, left: number, right: number, jaZh: boolean)
 // LineBreakIterator over UTF-16 (line.rs:833-1080, Utf16 handling at :1249-1340). Returns every boundary, including 0
 // and text.length.
 export function icu4xLineBoundaries(text: string, options: SegmenterOptions, dictionary: DictionaryBreaks): number[] {
-  const d: Icu4xRuleData = geckoLineRules()
+  const d: Icu4xRuleData = geckoLineRules
   const out: number[] = []
   const len = text.length
   let front = 0

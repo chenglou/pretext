@@ -1,10 +1,12 @@
 // LazyLineBreakIterator (text_break_iterator.cc/.h at Chrome 153; specs/blink-text.md §2.F): one iterator over the
 // whole text_content, the ICU text restarted at every line start, the space rule, Blink's generated Latin-1 pair table,
 // break-all and keep-all, soft hyphens, and grapheme boundaries for kBreakCharacter.
+import { pairCanBreak } from '../../breaks/pair-table.js'
 import { DONE, NO_OVERRIDES, RuleBreakIterator, getCategory, type BreakRules } from '../../breaks/rbbi.js'
-import { blinkBreakRules, blinkLinePairs, pairCanBreak, type BlinkBreakTable } from '../../breaks/tables.js'
 import type { BlinkEnvironment } from '../../env.js'
-import { graphemeBoundaries, graphemeRulesFor } from '../../unicode/grapheme.js'
+import { graphemeBoundaries } from '../../unicode/grapheme.js'
+import { blinkBreakRules, blinkGraphemeRules, blinkLinePairs } from './data.js'
+import type { BlinkBreakTable } from './generated/break-tables.js'
 import { LB_AL, LB_BA, LB_CM, LB_ID, LB_NU, LB_SA, isLetterOrNumber, isMark, lineBreakClass } from './props.js'
 import type { IteratorSettings } from './types.js'
 
@@ -43,7 +45,7 @@ export function lineTable(locale: string | null, strictness: IteratorSettings['s
 // Whether text_content[from, to) holds a character the line table hands to a dictionary engine (ICU's dictionary
 // categories, rbbi.ts), where interior boundaries come from the running browser (DESIGN.md §6.3).
 export function hasDictionaryCharacters(text: string, from: number, to: number, table: BlinkBreakTable): boolean {
-  const rules = blinkBreakRules(table)
+  const rules = blinkBreakRules[table]
   for (let i = from; i < to;) {
     const cp = text.codePointAt(i)!
     if (getCategory(rules, cp) >= rules.dictCategoriesStart) return true
@@ -137,7 +139,7 @@ export class LineBreakIterator {
     const start = this.startOffset
     const sub = this.text.slice(start)
     const flags = new Uint8Array(this.text.length + 1)
-    const rules = blinkBreakRules(table)
+    const rules = blinkBreakRules[table]
     const iterator = new RuleBreakIterator(rules, NO_OVERRIDES)
     iterator.setText(sub)
     let previous = 0
@@ -208,7 +210,7 @@ export class LineBreakIterator {
         if (!(this.text.charCodeAt(i - 1) === 0x0d && this.text.charCodeAt(i) === LF)) flags[i] = 1
       }
     } else {
-      const boundaries = graphemeBoundaries(this.text.slice(start), graphemeRulesFor('blink'))
+      const boundaries = graphemeBoundaries(this.text.slice(start), blinkGraphemeRules)
       for (let i = 1; i < boundaries.length; i++) flags[start + boundaries[i]!] = 1
     }
     this.graphemes = { start, flags }
@@ -315,7 +317,7 @@ function shouldBreakFast(last: number, lastLast: number, ch: number, disableSoft
     }
   }
   if (last <= 0xff && ch <= 0xff) {
-    if (!pairCanBreak(blinkLinePairs(), last, ch)) return NO_BREAK
+    if (!pairCanBreak(blinkLinePairs, last, ch)) return NO_BREAK
     if (disableSoftHyphen && last === SHY) return NO_BREAK
     return CAN_BREAK
   }

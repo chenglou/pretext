@@ -2,7 +2,7 @@
 // library's measure/canvas.ts uses (lang before font). Only the WebKit port measures (research/observe-webkit.md §7). The
 // page and the offline replay (rebuild/tests/replay.ts) share this, so a replayed port asks its questions of contexts that
 // were assigned the same settings, spelled the same way, as the recorded ones (record.ts RecordedContext.assigned).
-import type { CanvasMeasure } from '../src/model.ts'
+import type { CanvasMeasure } from './observe/contract.ts'
 
 type ContextWithLang = OffscreenCanvasRenderingContext2D & { lang: string }
 

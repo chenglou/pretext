@@ -1,6 +1,7 @@
 // The library's runtime font checks (rebuild/src/measure/font-checks.ts) in the browsers, over every font declaration the
-// lab's case files name, beside what the DOM does with the same declaration. The page runs the library's own module,
-// bundled here, so the answers are the ones a layout gets. Raw values only: the verdict tool compares them with the lab's
+// lab's case files name, beside what the DOM does with the same declaration. The page runs the library's own module with
+// what the running engine's port asks of it (src/engines/<engine>/checks.ts), both bundled here, so the answers are the
+// ones a layout gets. Raw values only: the verdict tool compares them with the lab's
 // font table (rebuild/lab/font-facts.ts) and the DOM observations.
 //
 // Per declaration (16px, lang en), with a measurer of its own each time:
@@ -30,6 +31,8 @@ const lib = await import('data:text/javascript;base64,' + LIBRARY);
 const ua = navigator.userAgent;
 const engine = /\bFirefox\//.test(ua) ? 'gecko' : /\bChrome\//.test(ua) ? 'blink' : 'webkit';
 const env = { engine, devicePixelRatio: window.devicePixelRatio };
+const port = await import('data:text/javascript;base64,' + CHECKS[engine]);
+const checks = engine === 'blink' ? port.blinkFontChecks(env) : engine === 'webkit' ? port.webkitFontChecks : port.geckoFontChecks;
 const SAMPLE = 'Hamburgefonstiv', BEH = '\u0628', ZWNJ = '\u200c';
 const measurer = () => ({ log: { contexts: [], calls: [], memoHits: 0 }, keys: new Map(), contexts: [], memo: [] });
 const paragraph = (d, text) => ({
@@ -38,7 +41,7 @@ const paragraph = (d, text) => ({
   content: [{ kind: 'text', text }], lang: 'en', direction: 'ltr', width: 300, lineHeight: 20, textIndent: 0, textAlign: 'start',
 });
 const learn = (d, text, m) => {
-  const facts = lib.withLearnedFontFacts(paragraph(d, text), env, m).font.facts;
+  const facts = lib.withLearnedFontFacts(paragraph(d, text), checks, m).font.facts;
   return { facts, calls: m.log.calls.length, contexts: m.log.contexts.length };
 };
 const domWidth = (font, html, extra) => {
@@ -88,12 +91,17 @@ for (const d of DECLARATIONS) {
 return out;
 `
 
+async function bundled(path: string): Promise<string> {
+  const built = await Bun.build({ entrypoints: [join(import.meta.dir, path)], format: 'esm', target: 'browser' })
+  if (!built.success) throw new Error(`${path} didn't bundle: ${built.logs.join('\n')}`)
+  return Buffer.from(await built.outputs[0]!.text()).toString('base64')
+}
+
 export default async function probes(): Promise<Probe[]> {
-  const built = await Bun.build({ entrypoints: [join(import.meta.dir, '../src/measure/font-checks.ts')], format: 'esm', target: 'browser' })
-  if (!built.success) throw new Error(`the font checks didn't bundle: ${built.logs.join('\n')}`)
-  const library = Buffer.from(await built.outputs[0]!.text()).toString('base64')
+  const library = await bundled('../src/measure/font-checks.ts')
+  const checks = { blink: await bundled('../src/engines/blink/checks.ts'), webkit: await bundled('../src/engines/webkit/checks.ts'), gecko: await bundled('../src/engines/gecko/checks.ts') }
   const declarations = labDeclarations().map(d => ({ family: d.family, weight: d.weight, style: d.style }))
-  const source = `const LIBRARY = ${JSON.stringify(library)};\nconst DECLARATIONS = ${JSON.stringify(declarations)};\n${PAGE}`
+  const source = `const LIBRARY = ${JSON.stringify(library)};\nconst CHECKS = ${JSON.stringify(checks)};\nconst DECLARATIONS = ${JSON.stringify(declarations)};\n${PAGE}`
   return [{
     id: 'font-checks/lab-declarations',
     spec: 'rebuild/src/measure/font-checks.ts: every check, per lab font declaration, beside the DOM',

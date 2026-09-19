@@ -30,14 +30,12 @@
 //   the engine refused on a gap (BelowFloats.gaps) moves every line after it;
 // - a paragraph gap concerns the lines its range meets, and every line without a range.
 // The width of a soft line break's box and of a <br>'s stays predicted: it is 0 by rule, wherever the box sits.
-import type {
-  CanvasMeasure, Expected, ExpectedObservation, ExpectedRect, GapName, InlineNode, ObservationPort, Paragraph, TextStyle, UnobservableFact,
-  WebKitDisplayBox, WebKitLayout, WebKitTextBox,
-} from '../../src/model.ts'
+import type { WebKitDisplayBox, WebKitTextBox } from '../../src/engines/webkit/geometry.ts'
+import type { GapName, InlineNode, Paragraph, TextStyle } from '../../src/model.ts'
+import type { WebKitLayout } from '../types.ts'
+import type { CanvasMeasure, CanvasSettings, Expected, ExpectedObservation, ExpectedRect, ObservationPort, UnobservableFact } from './contract.ts'
 
 const f32 = Math.fround
-
-type Settings = Parameters<CanvasMeasure>[0]
 
 type Limit = GapName | null
 
@@ -56,7 +54,7 @@ function toLayoutUnitCeil(v: number): number {
 
 // What the port knows about a leaf: the Canvas settings of its box and the white-space facts the complex text controller
 // reads, from the style the leaf takes from its parent.
-type LeafCanvas = { text: string; context: Settings; plain: Settings; letterSpacing: number; wordSpacing: number; allowTabs: boolean; tabSize: number }
+type LeafCanvas = { text: string; context: CanvasSettings; plain: CanvasSettings; letterSpacing: number; wordSpacing: number; allowTabs: boolean; tabSize: number }
 type Port = {
   paragraph: Paragraph
   measure: CanvasMeasure
@@ -98,7 +96,7 @@ function walkTree(paragraph: Paragraph): { leaves: { text: string; style: TextSt
 function leafCanvas(text: string, style: TextStyle, family: string, zoom: number): LeafCanvas {
   const size = f32(f32(style.font.size) * f32(zoom))
   const letterSpacing = f32(f32(style.letterSpacing) * f32(zoom))
-  const context: Settings = {
+  const context: CanvasSettings = {
     font: `${style.font.style} ${style.font.weight} ${String(size)}px ${family}`, lang: '', letterSpacing: `${letterSpacing}px`,
     wordSpacing: '0px', fontKerning: 'auto', textRendering: 'auto', direction: 'ltr', partition: '',
   }

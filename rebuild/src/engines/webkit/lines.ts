@@ -7,17 +7,18 @@
 // ALB = AbstractLineBuilder.cpp, IDCB = display/InlineDisplayContentBuilder.cpp, IDLB = display/InlineDisplayLineBuilder.cpp,
 // LBB = InlineLineBoxBuilder.cpp.
 import type { Measurer } from '../../measure/canvas.js'
-import type { Fragment, Gap, GapName, LineResultOf, LineSlot, TextAlign, WebKitDisplayBox, WebKitLineGeometry } from '../../model.js'
+import type { Fragment, Gap, GapName, LineSlot, TextAlign } from '../../model.js'
 import { canBreakBefore, findNextBreakablePosition, hasDictionaryCharacter, inBetweenRangeStartingWithMark, makeFactory, mayBreakInBetween } from './breaks.js'
 import { applyTextAlignJustify, type ExpandableRun, type ExpansionBehavior } from './expansion.js'
 import { DEFAULT_BIDI_LEVEL, familyDraws, hasLanguageDependentFallback } from './content.js'
 import { isDelimiterQuote, isPunctuation, lineRules, localeScript } from './data.js'
 import { hasEmojiPresentation } from './fonts.js'
+import type { WebKitDisplayBox, WebKitLineStart } from './geometry.js'
 import { joinsAcross } from './joining.js'
 import { measureText } from '../../measure/canvas.js'
 import { boxWidth, breakWord, canvasString, controlsMeasureExactly, firstUserPerceivedCharacterLength, fixedPitchShortcutWidth, forwardOneCodePoint, hyphenGlyphsDiffer, hyphenWidth, itemWidth, measuredEnd, mergedGlyphs } from './measure.js'
 import { collapsesWhiteSpace, endEdgeWidth, layoutUnit, preservesSpacesAndTabs, startEdgeWidth, tabsAllowed, trailingWhitespaceHangs } from './style.js'
-import type { WebKitBox, WebKitBoxEdges, WebKitHistoryWorld, WebKitItem, WebKitLineStart, WebKitPrepared, WebKitStyle, WebKitTextItem } from './types.js'
+import type { WebKitBox, WebKitBoxEdges, WebKitHistoryWorld, WebKitItem, WebKitLineResult, WebKitPrepared, WebKitStyle, WebKitTextItem } from './types.js'
 
 const f32 = Math.fround
 const F32_MAX = 3.4028234663852886e38
@@ -2629,8 +2630,6 @@ function lineGaps(L: Layout, start: WebKitLineStart): void {
 
 // ---- Page history (content.ts, "Page history") ----
 // rule webkit/gap/page-history-worlds
-
-type WebKitLineResult = LineResultOf<WebKitLineStart, WebKitLineGeometry>
 
 // Where a line of the paragraph and the same line in a history world differ, as a source range, or null where they agree in
 // everything the observation port reads: the line's range, its line box and its display boxes.

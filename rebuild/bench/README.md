@@ -1,6 +1,6 @@
 # Bench
 
-Compares the cost of the rebuild (`rebuild/src`, `layoutParagraph`) and main (`src/`, `prepare` / `layout`) in each
+Compares the cost of the rebuild (`rebuild/src`, through the lab's `layoutParagraph`, `lab/predictor-core.ts`) and main (`src/`, `prepare` / `layout`) in each
 installed browser, on inputs both can express. Performance comes after correctness here (`rebuild/CHARTER.md`), so these
 are recorded costs, not targets.
 

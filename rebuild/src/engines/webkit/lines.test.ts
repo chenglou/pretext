@@ -5,9 +5,11 @@
 import { describe, expect, test } from 'bun:test'
 import { PINNED_BUILDS, type WebKitEnvironment } from '../../env.js'
 import { createMeasurer } from '../../measure/canvas.js'
-import { FULL_WIDTH, UNKNOWN_FONT_FACTS, type FontFacts, type LineSlot, type Paragraph, type WebKitDisplayBox, type WebKitLine, type WebKitTextBox } from '../../model.js'
+import { FULL_WIDTH, UNKNOWN_FONT_FACTS, type FontFacts, type LineSlot, type Paragraph } from '../../model.js'
+import type { WebKitDisplayBox, WebKitTextBox } from './geometry.js'
 import { webkitEngine } from './index.js'
 import { atomic, flatParagraph, span, treeParagraph, type FlatNode } from './test-paragraph.js'
+import type { WebKitLine } from './types.js'
 
 // Advance per code unit: SPACE 4, everything else 8, unless a test sets `advance`. `pairAdjust` stands in for shaping that
 // moves a string's total away from the sum of its parts, such as kerning.

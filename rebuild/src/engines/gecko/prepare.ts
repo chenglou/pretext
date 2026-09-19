@@ -6,10 +6,11 @@ import type { GeckoEnvironment } from '../../env.js'
 import { measureContext, measureText, measureTextBounds, type Measurer } from '../../measure/canvas.js'
 import { canvasFont } from '../../measure/font.js'
 import type { BoxEdge, FontDecl, Gap, Paragraph, TextStyle } from '../../model.js'
+import { geckoBidiData, geckoGraphemeRules } from './data.js'
 import { extenderFontOf, firstFontScriptLookups, listedFontOf, opticalSizeAxisOf, quantize10, sameFontForTextRun } from './fonts.js'
 import { canonicalLanguageTag } from './likely.js'
-import { AL, R, bidiClassOf, bidiDataFor } from '../../unicode/bidi.js'
-import { graphemeBoundaries, graphemeRulesFor } from '../../unicode/grapheme.js'
+import { AL, R, bidiClassOf } from '../../unicode/bidi.js'
+import { graphemeBoundaries } from '../../unicode/grapheme.js'
 import { resolveUnicodeBidi } from '../../unicode/unicode-bidi.js'
 import {
   BREAK_EMERGENCY_WRAP, BREAK_NONE, BREAK_NORMAL, BREAK_SKIP_SETTING_NO_BREAKS, BREAK_SUPPRESS_INITIAL, BREAK_SUPPRESS_INSIDE,
@@ -249,7 +250,6 @@ function transformFlow(text: string, start: number, end: number, is8bit: boolean
 // Glyph flags a text run records while it is shaped (gfxFont::SplitAndInitTextRun, gfxShapedText::
 // SetupClusterBoundaries, gfxFontGroup::InitTextRun; gfxFont.cpp:708-795, :3708-3900, gfxTextRun.cpp:2673-2831).
 type Glyphs = { units: Uint16Array; breakFlags: Uint8Array; clusterStart: Uint8Array; isSpace: Uint8Array; kind: Uint8Array }
-const graphemeRules = graphemeRulesFor('gecko')
 
 function extendCluster(g: Glyphs, i: number): void {
   g.breakFlags[i] = BREAK_NONE
@@ -274,7 +274,7 @@ function setupClusterBoundaries16(g: Glyphs, from: number, to: number): void {
   if (isClusterExtender(ch0)) extendCluster(g, from)
   let word = ''
   for (let i = from; i < to; i++) word += String.fromCharCode(g.units[i]!)
-  const boundaries = graphemeBoundaries(word, graphemeRules)
+  const boundaries = graphemeBoundaries(word, geckoGraphemeRules)
   let next = 1
   let pos = 0
   let prevWasHyphen = false
@@ -523,7 +523,7 @@ export function rangeAu(m: Measurer, run: Pick<GeckoTextRun, 'context' | 'script
   // 480 au natively and alone in Canvas, and nothing with U+200C after it).
   if (m.log.contexts[run.context]!.direction === 'rtl' && (piece.length === 1 || (piece.length === 2 && isSurrogatePair(piece.charCodeAt(0), piece.charCodeAt(1))))) {
     const cp = piece.codePointAt(0)!
-    const bidiClass = bidiClassOf(bidiDataFor('gecko'), cp)
+    const bidiClass = bidiClassOf(geckoBidiData, cp)
     if (bidiClass !== R && bidiClass !== AL && isBidiMirrored(cp)) piece += '\u200c'
   }
   const w = (s: string) => Math.round(measureText(m, run.context, s) * CANVAS_AU_PER_PX)
@@ -765,7 +765,6 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, measur
   let paraCount = 0
   const elementPara = new Map<number, number>()
   if (resolveBidi) {
-    const data = bidiDataFor('gecko')
     const split: Piece[] = []
     // TraverseFrames' paragraph buffer in document order (nsBidiPresUtils.cpp:1169-1429): each text piece's text, and one
     // character per other leaf, whose run gives that frame its level (ResolveParagraph :975-982, :1027). A <br> appends
@@ -777,7 +776,7 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, measur
     let chunkText = ''
     const flush = (): void => {
       if (chunk.length === 0) return
-      const levels = resolveUnicodeBidi(replaceSeparators(chunkText), paragraph.direction, data).levels
+      const levels = resolveUnicodeBidi(replaceSeparators(chunkText), paragraph.direction, geckoBidiData).levels
       const para = paraCount++
       let offset = 0
       for (let c = 0; c < chunk.length; c++) {
@@ -1378,7 +1377,7 @@ export function prepareGecko(paragraph: Paragraph, env: GeckoEnvironment, measur
           const emojiFontContext = (size: number) => measureContext(measurer, { ...settings, font: canvasFont({ ...font, family: COLOR_EMOJI_FAMILY }, size) })
           let word = ''
           for (let k = t; k < e; k++) word += String.fromCharCode(tUnits[k]!)
-          const boundaries = graphemeBoundaries(word, graphemeRules)
+          const boundaries = graphemeBoundaries(word, geckoGraphemeRules)
           for (let c = 0; c + 1 < boundaries.length; c++) {
             const cluster = word.slice(boundaries[c]!, boundaries[c + 1]!)
             const first = cluster.codePointAt(0)!

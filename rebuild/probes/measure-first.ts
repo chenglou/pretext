@@ -76,7 +76,7 @@ const FIRSTS: Record<string, First> = {
   // generic, asked about a space and U+2010, and about a word. The key of the page's own text, which is why they don't now.
   'font-check': { label: "a font check's context at text-rendering auto", font: 'normal 400 SIZEpx system-ui, monospace', props: { ...LIBRARY, textRendering: 'auto' }, texts: [' ', '‐'], domStyle: '', expectShared: true },
   'font-check-word': { label: "a font check's context at text-rendering auto, asked about a word", font: 'normal 400 SIZEpx system-ui, monospace', props: { ...LIBRARY, textRendering: 'auto' }, texts: ['Hello world'], domStyle: '', expectShared: true },
-  // The runtime font checks' contexts (src/measure/font-checks.ts checkTextRendering): text-rendering optimizeLegibility, as
+  // The runtime font checks' contexts (src/measure/font-checks.ts FontChecks.textRendering): text-rendering optimizeLegibility, as
   // the library's other contexts.
   'font-check-legibility': { label: "the font checks' context", font: 'normal 400 SIZEpx system-ui, monospace', props: { ...LIBRARY, textRendering: 'optimizeLegibility' }, texts: [' ', '‐'], domStyle: '', expectShared: false },
   'font-check-legibility-word': { label: "the font checks' context, asked about a word", font: 'normal 400 SIZEpx system-ui, monospace', props: { ...LIBRARY, textRendering: 'optimizeLegibility' }, texts: ['Hello world'], domStyle: '', expectShared: false },

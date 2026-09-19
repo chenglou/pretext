@@ -544,9 +544,12 @@ Main-derived families are a measurement corpus. In this gate they are the report
 `rebuild/tests/independence.test.ts` checks every file under `rebuild/tests`, `rebuild/lab` and `rebuild/probes` except `lab/predictor-core.ts`, the prediction adapter; `lab/predictor.ts` and `lab/baselines/no-facts-predictor.ts` are made from it and import only contract constants from `rebuild/src`. They may import from `rebuild/src` only:
 
 - types from `src/model.ts` and `src/env.ts`;
-- constants from those two files that aren't functions, such as `UNKNOWN_FONT_FACTS` and `PINNED_BUILDS`.
+- constants from those two files that aren't functions, such as `UNKNOWN_FONT_FACTS` and `PINNED_BUILDS`;
+- types from an engine's `src/engines/<engine>/geometry.ts`: its line geometry and the state its next line starts from, which a row keeps whole.
 
-Engine or library logic fails the test. It passes since round 4. Two probes bundle a library module into their page to run it in a browser (`probes/font-checks.ts`, `probes/canvas-checks.ts`); they import nothing from it, and their expected values aren't the library's.
+Engine or library logic fails the test. It passes since round 4. The layout a row keeps and the observation contract are the lab's own types (`lab/types.ts`, `lab/observe/contract.ts`) since the re-architecture's S1, so the lab takes from `src/model.ts` the input tree, fragments and gaps, from the three `geometry.ts` the engines' geometry and line starts (S2), and nothing about rows. Two probes bundle library modules into their page to run them in a browser (`probes/font-checks.ts`, which also bundles each port's `checks.ts`, and `probes/canvas-checks.ts`); they import nothing from them, and their expected values aren't the library's.
+
+The same test holds the library's own rule (research/ARCHITECTURE-PLAN-2.md §5.4): outside comments, a file of `rebuild/src` that isn't under `engines/` and isn't `index.ts` (the one dispatch) or `env.ts` (whose shape is per engine) imports nothing from `engines/` and holds no engine's name as a string or in an identifier. Since S2 every shared file holds but `paint.ts`, listed with its 74 mentions until the painter's split; and an engine imports no other engine. What differs by engine reaches shared code as data the engine gives: its `BidiData`, grapheme rules and break rules (`engines/<engine>/data.ts`), and what it asks of the Canvas checks and the font checks (`engines/<engine>/checks.ts`).
 
 ## 12. Per browser release
 

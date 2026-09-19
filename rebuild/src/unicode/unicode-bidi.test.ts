@@ -8,7 +8,8 @@ import { describe, expect, test } from 'bun:test'
 import { resolve } from 'node:path'
 import { BROWSER_ENGINES } from '../../tools/gen-shared.ts'
 import { forEachLine } from '../../tools/lines.ts'
-import { bidiDataFor, type ParagraphDirection } from './bidi.js'
+import { geckoBidiData } from '../engines/gecko/data.js'
+import type { ParagraphDirection } from './bidi.js'
 import { resolveUnicodeBidi } from './unicode-bidi.js'
 
 const BIDI_TEST = resolve(BROWSER_ENGINES, 'chromium-152/src/third_party/icu/source/test/testdata/BidiTest.txt')
@@ -17,7 +18,7 @@ const CRATE_BIDI_CHARACTER_TEST = resolve(BROWSER_ENGINES, 'pretext-emulation-20
 const CLASS_NAMES = ['L', 'R', 'EN', 'ES', 'ET', 'AN', 'CS', 'B', 'S', 'WS', 'ON', 'LRE', 'LRO', 'AL', 'RLE', 'RLO', 'PDF', 'NSM', 'BN', 'FSI', 'LRI', 'RLI', 'PDI']
 const REPRESENTATIVES = [0x02b8, 0x0590, 0x06f9, 0x208b, 0x20cf, 0x0605, 0x2044, 0x000a, 0x001f, 0x200a, 0x03f6, 0x202a, 0x202d, 0x060b, 0x202b, 0x202e, 0x202c, 0x0300, 0x2060, 0x2068, 0x2066, 0x2067, 0x2069]
 
-const data = bidiDataFor('gecko')
+const data = geckoBidiData
 
 // Compares levels per code point, skipping x.
 function matches(text: string, direction: ParagraphDirection, expected: readonly string[], expectedLevel: number | null): boolean {

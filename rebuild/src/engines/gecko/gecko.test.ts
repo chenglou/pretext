@@ -5,13 +5,15 @@
 // own line boxes and frames; what a Range reports is lab/observe/gecko.ts's business.
 import { beforeAll, describe, expect, test } from 'bun:test'
 import { PINNED_BUILDS, type GeckoEnvironment } from '../../env.js'
-import { layoutParagraph } from '../../index.js'
-import { createMeasurer } from '../../measure/canvas.js'
-import { FULL_WIDTH, NO_BOX_EDGE, UNKNOWN_FONT_FACTS, type FontDecl, type Gap, type GeckoLayout, type GeckoTextFrame, type InlineNode, type Paragraph } from '../../model.js'
+import { paragraphGaps, prepareParagraph } from '../../index.js'
+import { createMeasurer, type Measurer } from '../../measure/canvas.js'
+import { FULL_WIDTH, NO_BOX_EDGE, UNKNOWN_FONT_FACTS, type FontDecl, type Gap, type InlineNode, type LineSlot, type Paragraph } from '../../model.js'
 import { parseFamilyList, sameFontForTextRun } from './fonts.js'
+import type { GeckoTextFrame } from './geometry.js'
 import { geckoEngine } from './index.js'
 import { BREAK_EMERGENCY_WRAP, BREAK_NORMAL } from './linebreak.js'
 import { prepareGecko } from './prepare.js'
+import type { GeckoLine } from './types.js'
 
 // The stand-in's widths in au at apd 60. Any code point is 576 au at 16px, scaled with the size, with these exceptions,
 // each modelled on an installed-Firefox measurement:
@@ -145,14 +147,32 @@ function paragraph(runs: Run[], width: number, extra: Partial<Flat> = {}): Parag
   return { ...block, content }
 }
 
-function textFrames(l: GeckoLayout['lines'][number]): GeckoTextFrame[] {
+function textFrames(l: GeckoLine): GeckoTextFrame[] {
   return l.geometry.frames.filter((f): f is GeckoTextFrame => f.kind === 'text')
 }
 
-function layout(p: Paragraph): GeckoLayout {
-  const l = layoutParagraph(p, env)
-  if (l.engine !== 'gecko') throw new Error('expected a gecko layout')
-  return l
+type GeckoLayout = { lines: GeckoLine[]; belowFloats: { row: number; gaps: Gap[] }[]; measure: Measurer['log']; gaps: Gap[] }
+
+// The lab's line loop (lab/predictor-core.ts) over a paragraph prepared through src/index.ts, font checks included.
+function layout(p: Paragraph, e: GeckoEnvironment = env, slots: LineSlot[] = []): GeckoLayout {
+  const prepared = prepareParagraph(p, e)
+  if (prepared.engine !== 'gecko') throw new Error('expected a gecko paragraph')
+  const lines: GeckoLine[] = []
+  const belowFloats: GeckoLayout['belowFloats'] = []
+  let row = 0
+  for (let start = geckoEngine.firstLine(prepared.state); start !== null;) {
+    const result = geckoEngine.nextLine(prepared.state, start, row < slots.length ? slots[row]! : FULL_WIDTH, prepared.measurer)
+    if (result.kind === 'below-floats') {
+      belowFloats.push({ row, gaps: result.gaps })
+      row++
+      if (result.next !== undefined) start = result.next
+      continue
+    }
+    lines.push(result.line)
+    if (result.line.hasLineBox) row++
+    start = result.line.next
+  }
+  return { lines, belowFloats, measure: prepared.measurer.log, gaps: paragraphGaps(prepared) }
 }
 
 // The first laid-out character of each line with a line box.
@@ -703,15 +723,13 @@ describe('gecko inline structure', () => {
 
   test('a slot too narrow for the first word moves the line below the floats (nsBlockFrame.cpp:5289-5299, :5549-5555)', () => {
     const p = paragraph([run('aaaa bbbb')], 57.6)
-    const l = layoutParagraph(p, env, [{ left: 38.4, right: 0 }])
-    if (l.engine !== 'gecko') throw new Error('expected a gecko layout')
+    const l = layout(p, env, [{ left: 38.4, right: 0 }])
     expect(l.belowFloats.map(b => b.row)).toEqual([0])
     expect(l.lines.map(line => [line.start, line.geometry.lineLeft, line.geometry.availableWidth, line.geometry.impactedByFloats])).toEqual([[0, 0, 3456, false], [5, 0, 3456, false]])
   })
 
   test('a slot that holds the line places it after the float', () => {
-    const l = layoutParagraph(paragraph([run('aa bb')], 57.6), env, [{ left: 19.2, right: 0 }])
-    if (l.engine !== 'gecko') throw new Error('expected a gecko layout')
+    const l = layout(paragraph([run('aa bb')], 57.6), env, [{ left: 19.2, right: 0 }])
     expect(l.belowFloats).toEqual([])
     expect(l.lines.map(line => [line.start, line.geometry.lineLeft, line.geometry.availableWidth])).toEqual([[0, 1152, 2304], [3, 0, 3456]])
     expect(textFrames(l.lines[0]!)[0]!.x).toBe(1152)
@@ -761,7 +779,7 @@ describe('ceiling round 2', () => {
     const given = layout(p)
     expect(allGaps(given).some(g => g.gap === 'ui-language')).toBe(false)
     expect(given.measure.contexts.some(c => c.lang === 'en-us')).toBe(true)
-    const unknown = layoutParagraph(p, { ...env, regionalPrefsLocale: null })
+    const unknown = layout(p, { ...env, regionalPrefsLocale: null })
     expect(unknown.gaps.filter(g => g.gap === 'ui-language').map(g => g.at)).toEqual([{ start: 0, end: 3 }])
   })
 

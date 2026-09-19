@@ -2,9 +2,11 @@
 // specs/blink-gaps.md §4), with ShapingLineBreaker::ShapeLine (shaping_line_breaker.cc:256-612). Positions and widths
 // are LayoutUnits: integers counting 1/64 of a zoomed px.
 import type { GapName, LineSlot } from '../../model.js'
-import { WS, bidiClassOf, bidiDataFor } from '../../unicode/bidi.js'
+import { WS, bidiClassOf } from '../../unicode/bidi.js'
 import { LineBreakIterator } from './breaks.js'
 import { collapsesWhiteSpace, hasBorder, lengthLU, mayHaveMargin, mayHavePadding, wrapsLines } from './content.js'
+import { blinkBidiData } from './data.js'
+import type { BlinkLineStart } from './geometry.js'
 import { maybeHanKerningClose } from './hankerning.js'
 import { addGap, sourceRange } from './gaps.js'
 import {
@@ -12,7 +14,7 @@ import {
   prefix16, previousSafeToBreak, reshape, reshapeHanKerningEnd, shapeHyphen, snappedWidth, tabShapeResult, truncateView, viewOf, widthOf16,
   viewFromSegments, WHOLE, type ReshapePart, type Segment, type ShapeResult, type Shaper, type View,
 } from './shape.js'
-import type { BlinkLineStart, BlinkStyle, InlineItem } from './types.js'
+import type { BlinkStyle, InlineItem } from './types.js'
 
 const CANDIDATE_DETAIL = 'the break candidate came from a paragraph position the port can\'t place: the shaping adjusts the glyphs on both sides of the offset (joined forms that change each other, a kern no fact places), Canvas totals show the sum and not which glyph carries it, and the space left ends between the two places it could be (CachedOffsetForPosition, shaping_line_breaker.cc:326-329)'
 
@@ -1379,5 +1381,5 @@ export class LineBreaker {
 
 // u_charDirection(c) == U_WHITE_SPACE_NEUTRAL (line_breaker.cc:202-204), per code unit.
 function isBidiWhiteSpace(c: number): boolean {
-  return bidiClassOf(bidiDataFor('blink'), c) === WS
+  return bidiClassOf(blinkBidiData, c) === WS
 }
