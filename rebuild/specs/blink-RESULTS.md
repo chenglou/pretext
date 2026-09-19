@@ -53,7 +53,7 @@ row, and anything that answers from stored positions has to measure again under 
 |---|---|
 | tier 0 | `tsc` clean for the six projects; 805 tests pass |
 | tier 1, all six references | Chrome: 0 predictions changed, 0 new questions, 0 other questions; 65,900 cases without facts and 65,898 with them ask again what they asked (repeats only), exit 3. Firefox and webkit-host: every case the same, exit 0 |
-| tier 2, both orders, no facts and facts | 0 status transitions and 0 exact-value changes in both (differing predicted values 266 and 552, rect counts 992 and 869, limited values 149,318 and 108,919, all as the references); gate lost 0. Row for row against X1's runs in both orders (134,130 rows a configuration): 0 native observations, predictions or painted lines differ |
+| tier 2, both orders, no facts and facts | 0 status transitions and 0 exact-value changes in both (differing predicted values 266 and 552, rect counts 992 and 869, limited values 149,318 and 108,919, all as the references); gate lost 0. Row for row against X1's runs in both orders (134,130 rows a configuration): 0 native observations, predictions or painted lines differ. Forward again in both configurations after the last two signature changes: the same |
 | plain predictor, forward, all 67,065 no-facts cases | line ranges equal the usual run's in every case; 0 native observations differ |
 | other widths first, forward, all 67,065 no-facts cases | layouts equal the usual run's in every case: 0 native observations, predictions or painted lines differ |
 | `function-set.ts plain`, `pure` | 67,065 of 67,065 in both configurations; 26,035 and 21,826 cases first ask in another order than the lab's path, as before |
