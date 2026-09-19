@@ -308,7 +308,7 @@ Core Text glyph runs) and ligatures or pair adjustments across a box edge are st
 
 **Tests (tentpoles 4, 5).**
 
-- 21 rule ids carry a `// rule <id>` annotation in source, of 549 current rules, and ids an owner's report gave only as
+- 21 rule ids carry a `// rule <id>` annotation in source, of 550 current rules, and ids an owner's report gave only as
   a row stay provisional in the registry (`declaredBy` says which).
 - The lab's `obligations` family and G0 baselines are derived from main's tests and the final runs; they are measurement
   inputs until each obligation is triaged under tentpole 5. research/MAIN-TRIAGE.md and `rebuild/lab/triage/` hold the

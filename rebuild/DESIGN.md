@@ -60,11 +60,12 @@ paragraphGaps(prepared): Gap[]                    // inspected paragraphs only
   which no width and no line changes, filled on first read only because asking earlier would ask Canvas questions no
   line needs and would move the order of first asks; they go with the paragraph. The list of contexts grows where a
   recipe first asks in a context of its own (Blink's one-byte contexts in a segmented paragraph, §4.2; the contexts of
-  Gecko's in-word recipes, §4.6). A Blink style keeps two lazy answers (those one-byte contexts, and whether Canvas
-  shapes its font word by word; §3). A Gecko shaping unit keeps what measuring found inside it (§4.6). Since
-  correctness round 5 a Gecko prepared paragraph also keeps what Canvas told of each context's pair placement, and an
-  offset's record inside a unit can hold its advance without two recipes' questions until a line's edge or a fit test
-  asks for them, so that record's value can move once, from the rough advance to the whole one; both were accepted as
+  Gecko's in-word recipes, §4.6, each kept from then on by the record its text runs share). A Blink style keeps two
+  lazy answers (those one-byte contexts, and whether Canvas shapes its font word by word; §3). A Gecko shaping unit
+  keeps what measuring found inside it (§4.6). Since correctness round 5 a Gecko prepared paragraph also keeps what
+  Canvas told of each context's pair placement (on the same record since the fresh-eyes follow-up), and an offset's
+  record inside a unit can hold its advance without two recipes' questions until a line's edge or a fit test asks for
+  them, so that record's value can move once, from the rough advance to the whole one; both were accepted as
   exceptions and are written down in §4.6.
 - Nothing handed to the caller aliases prepared data: a line start is plain data, and pieces are made for their line
   (research/INCREMENTAL-API-READING.md §4; its appendix lists every prepared fact that reads across a forced break or
@@ -176,6 +177,19 @@ itself. `src/content.ts` indexes the tree in document order: the leaves with the
 elements, and the open, close and item events of a DOM walk. Engines build their items from that walk; the painter
 replays it.
 
+`CssFont.family` is a CSS font-family list, the string the page sets. One parser reads it, `src/font-family.ts`
+`listedFamilies`, for the font checks and the three ports, because quotes, escapes and commas are CSS syntax and the
+same in every engine (CSS Fonts 4 §4.2, CSS Syntax §4.3.5 and §4.3.7; probe `font-family-syntax`: the browsers' own
+parsers read the probed lists the same way, 95 of 95 checks in each of the three). An entry is `{ name, quoted, css }`,
+with `identifiers` for an unquoted name. What differs per engine is which unquoted names are its keywords and how it
+compares names, and each port owns that (Blink's `styleOf`, WebKit's `familyNames`, Gecko's `parseFamilyList`).
+`family` stays the string, which Canvas and the painter are given as it is, so the list is read where a name is
+needed and kept nowhere. `css` is the family as the list writes it, for a list Canvas is given again; a family the
+list leaves open at its end (an unclosed string, a last backslash) is handed on as a closed string, so what a caller
+appends can't join the name. A list CSS rejects throws (an empty family, a comma at the end, anything but a comma
+after a string). It throws where a port happens to read a name, not at the library's boundary: making the list the
+model's field, read once, is left for the API phase.
+
 A lab case describes the page, so the case's paragraph has CSS fonts (`lab/types.ts`). The fonts on the page are the
 machine's, so their facts belong to the environment the case runs in, not to the case: `lab/predictor.ts` adds them,
 and they don't enter case ids (`lab/cases/case.ts` hashes the page content).
@@ -244,7 +258,10 @@ A bare leaf takes its parent's styles, so it adds a text node edge without an el
   (`:3996-4005`). A shaping group ends at a tag with a nonzero margin, border or padding on that side or a
   `vertical-align` other than baseline (`ShouldBreakShapingBeforeBox`, `ShouldBreakShapingAfterBox`,
   `inline_node.cc:494-527`). An atomic inline inside a span makes the span create a box fragment
-  (`inline_items_builder.cc:1269-1283`).
+  (`inline_items_builder.cc:1269-1283`). So does a span that holds nothing but empty items and text items that are
+  one collapsible space (`ExitInline`, `inline_items_builder.cc:1660-1691`; an empty item is an empty text item or a
+  tag whose side has no border, padding or margin, `inline_item.cc:118-151`): such a span has a rect on its line even
+  when the line end removes the space (`content.ts` `exitInline`, since the fresh-eyes follow-up).
 - WebKit: a soft wrap opportunity between two text items follows the `white-space` of their nearest common ancestor
   (`nearestCommonAncestor`, `InlineFormattingUtils.cpp:357-383`, `:436`). Inline box start and end items are margin +
   border + padding wide (`inlineItemWidth`, `:321-325`). Spans that cross a line start are opened again on the next line
@@ -415,6 +432,19 @@ ligates `fi`, `fl`, `ff`, `ffi` and `ffl` under common ligatures (`spaced: false
 
 The keyword defaults of `opticalSizeAxis` aren't name keys. `system-ui` is CSS, each engine resolves it in source to the
 platform UI font, and that font's axis is a recorded browser fact (probes-chrome correction 7, probe cross-cutting 5).
+
+Blink compares its two names as its own code does (`engines/blink/content.ts` `isSystemFontKeyword`, probe
+`blink-sysui-spellings`). Unquoted, `system-ui` is a CSS value keyword and matches in any ASCII case. Quoted, it matches
+as written, because on macOS the font cache gives the system UI font to the name `system-ui` wherever it came from.
+`BlinkMacSystemFont` matches exactly, quoted or not; `blinkmacsystemfont` names no font in Chrome. A quoted
+`"System-UI"` names none in a clean renderer and gets the system UI font once `system-ui` exists at its size; the port
+gives the clean renderer's answer. Known and not fixed, since system-ui accuracy is postponed (issue #336): a quoted
+`"system-ui"` draws the system UI font in webkit-host too, where the WebKit port's system design families require the
+name unquoted (`engines/webkit/gaps.ts`); Firefox resolves `-apple-system` quoted too, where the Gecko port requires
+identifiers (`engines/gecko/fonts.ts` `opticalSizeAxisOf`); and the font checks answer `primaryFamily` null for a
+quoted generic that draws, since the fact has no quoted flag, so for `Missing, "system-ui"` Blink falls back to the
+list's first family and measures at the zoomed size, where Chrome draws the system UI font (read from the code, not
+run).
 
 Where the facts come from is the caller's business. The lab takes them from a pinned table per OS build, generated
 offline from the installed fonts and checked by hash (§8.3, stage 3). The table's columns are the monospace trait, cmap
@@ -1204,15 +1234,17 @@ records and tagged unions, with no sentinel for "doesn't have one", and Map and 
   `sourceOffset`, a line-spanning inline box start), so no run holds `-1` for a box or an element it doesn't have, or text
   fields without text. A run's trailing white space and a line's trimmable content are a record or null, and the
   breaker's result is a union on its action. A box's inspection record is made in one step, with the box (`gaps.ts`
-  `boxMade`, from a family list parsed once, `fonts.ts` `familyNames`). The item builder is `items.ts`; the history
-  worlds and a decided line laid out in them are `history.ts`. No import cycle is left, type imports included: `gaps.ts`
-  imports neither the fill nor the content stage, `history.ts` imports the fill, the output and `gaps.ts`, and
-  `content.ts` (which collects the worlds when it prepares an inspected paragraph) and `index.ts` import `history.ts`.
+  `boxMade`, from a family list parsed once, `fonts.ts` `familyNames` over the shared list, `src/font-family.ts`). The
+  item builder is `items.ts`; the history worlds and a decided line laid out in them are `history.ts`. No import cycle
+  is left, type imports included: `gaps.ts` imports neither the fill nor the content stage, `history.ts` imports the
+  fill, the output and `gaps.ts`, and `content.ts` (which collects the worlds when it prepares an inspected paragraph)
+  and `index.ts` import `history.ts`.
 - Gecko. A text leaf is one record (`GeckoLeaf`: its source range, parent, style, font, language, 8-bit storage, and
   letter and word spacing in au). A text run is cut into shaping units once, where the port of
   `gfxFont::SplitAndInitTextRun` sets the glyph flags (`prepare.ts` `splitAndInitTextRun`), and the measuring step reads
-  those units. What measuring found inside a unit is on the unit (`GeckoUnit.inWord`, §4.6), and what Canvas told of a
-  context's pair placement is on the prepared paragraph (`GeckoPrepared.pairPlacements`, §4.6). A frame's tabs are one
+  those units. What measuring found inside a unit is on the unit (`GeckoUnit.inWord`, §4.6). Text runs that measure
+  alike share one record of their Canvas contexts (`RunContexts`, held as `GeckoTextRun.contexts`), and what Canvas told
+  of a context's pair placement is on that record (`RunContexts.pairPlacement`, §4.6). A frame's tabs are one
   ordered list with each tab's stand-in reason (`lines.ts` `Tab`), one shared empty list where a run has no tab. Reflow's
   frame records and placement's are separate types (§2.9). Of the Maps and Sets that held a paragraph's data one is
   left, in `inspect.ts`, which mirrors Gecko's own `nsContinuationStates` (constant lookup sets and the likely-subtags
@@ -1225,7 +1257,11 @@ end: the shared layer 5,066 to 4,595, Blink 6,470 to 7,195, WebKit 5,699 to 6,03
 cut across stages (the string memo as data flow, gap building threaded through measuring, lab-only output computed on
 every line, engine names in shared code, parallel arrays, sentinels, per-line scans of the whole paragraph), and typed
 records with their comments cost about what the removed structures saved. The ports are mostly ported logic with its
-citations, and no owner found a larger cut that keeps every rule, citation and gap.
+citations, and no owner found a larger cut that keeps every rule, citation and gap. Counted the same way after
+correctness round 5 and the fresh-eyes follow-up (2026-09-19): the shared layer 4,672, Blink 7,229, WebKit 6,055, Gecko
+6,134; 24,196 in all, with the same 106 lines of test support. Round 5 added 312 of the 417 lines (Gecko 281). The
+follow-up added the other 105: the one font-family parser (99 lines, where the font checks lost 23 and Gecko's
+`fonts.ts` 40), the record Gecko's text runs share (43) and Blink's two rules (25).
 
 Shared, working and tested (§8.2):
 
@@ -1533,10 +1569,17 @@ serves every line filled from it, at any width. The records that measure hold th
   `countContext`), an inspected paragraph's box facts hold theirs (`WebKitBoxInspect.localeChoosesFonts`), and the list
   is `WebKitPrepared.contexts`, all made while the paragraph is prepared, which a history world shares. Every read is
   `width`.
-- Gecko: a text run holds its context (`GeckoTextRun.context`), and the list is `GeckoPrepared.contexts`. The contexts a
-  recipe needs beside a run's (ligatures off, 2px of letter spacing, the size times a power of two, the device size,
-  "Apple Color Emoji" alone, weight 400, the block's context for tabs) are made from the run's settings where the recipe
-  asks.
+- Gecko: text runs that measure alike share one record of their contexts (`types.ts` `RunContexts`, held as
+  `GeckoTextRun.contexts`): one per distinct own context of the paragraph, so per font declaration, language, direction
+  and ligature state. It holds the run's own context, and the three a recipe makes from it: letter spacing 0.001px
+  (ligatures off), letter spacing 2px (which counts ligature groups), and the size times a power of two. Each of the
+  three is found in `GeckoPrepared.contexts` or made at its end where a recipe first asks, and read from the record from
+  then on (until the fresh-eyes follow-up a recipe found its context by its settings at every ask). They aren't made in
+  `prepare`, because most paragraphs never ask them and the replay counts every context made. The size a larger context
+  is made at comes from the run's font declaration, not from the context's font string. The record also holds what
+  Canvas told of the context's pair placement (`pairPlacement`, below), asked once per context. The contexts only
+  `prepare`'s step 7 reads (the device size, "Apple Color Emoji" alone, weight 400) are made from the run's settings
+  where a word or a cluster asks, and the block's context for tabs once per paragraph.
 
 What a port needs twice it keeps as a value in a plain place: a local, a value handed from the step that measured it to
 the step that uses it, a field set where `prepare` already measures, and in Gecko one record per offset, on the offset's
@@ -1577,11 +1620,18 @@ the space of a WebKit box that never reads it (§4.7).
     again. So which of the two values a record holds follows who asked first, and a value read twice can differ: a
     break scan keeps what it read at its last candidate in a local (`lines.ts` `pendingRead`), because the record can
     become whole before the next candidate reads it as its start.
-  - `GeckoPrepared.pairPlacements`: what Canvas told of each context's pair placement (`types.ts` `PairPlacement`), one
-    record per Canvas context that an offset at a kerned pair asked for, found by the context's reference: the
-    placement, the probe letters that told it with their widths alone (`tellers`, `tellerAu`), and the clusters Canvas
-    showed to be drawn by the probe letters' face, or didn't (`sameFace`, `otherFace`). The answer depends on the
-    context alone, so whichever offset asks first gets what any other would.
+  - `RunContexts.pairPlacement`: what Canvas told of a context's pair placement (`types.ts` `PairPlacement`), null
+    until an offset at a kerned pair asks: the placement, the probe letters that told it with their widths alone
+    (`tellers`, `tellerAu`), and the clusters Canvas showed to be drawn by the probe letters' face, or didn't
+    (`sameFace`, `otherFace`). The answer depends on the context alone, so whichever offset asks first gets what any
+    other would. It sits on the record the context's text runs share (above) since the fresh-eyes follow-up; round 5
+    kept a list on the prepared paragraph, `GeckoPrepared.pairPlacements`, searched by the context's reference at
+    every ask.
+
+  The record's three recipe contexts are filled after preparation too. They are references to contexts the list got
+  at the same points as before, so no new fact is written: the follow-up's critic compared what is written after
+  `prepare` before and after the change, and found the context list, `pairPlacements` and the units' `inWord` before,
+  and the context list, the record's four fields and `inWord` after.
 
   `PairPlacement.sameFace` and `otherFace` are found by a cluster's string, which is the second accepted exception.
   They are two lists of cluster strings per Canvas context of a prepared paragraph, searched with `includes`
@@ -2428,6 +2478,8 @@ rebuild/
                     (FillResultOf, LinePieces, LineInspectionOf); names no engine                                     architect
     env.ts          Environment, process languages, GivenFacts, PINNED_BUILDS, detectEngine(), detectEnvironment()   architect
     content.ts      indexContent, styleUnder, langUnder, and its test                                               architect
+    font-family.ts  listedFamilies: a CSS font-family list as the families it names, the one parser the font checks
+                    and the three ports read (§1.1), and its test                                                   architect
     paint.ts        paintLines(), painterLimits(), PaintRules and PaintLine: the painter, which names no engine (§7)  architect
     measure/        canvas.ts (contexts, width and bounds, §4.6), font.ts (font strings), font-checks.ts (font facts
                     asked of Canvas, §1.2), canvas-checks.ts (what the recipes assume of Canvas, §1.4)                architect
@@ -2471,7 +2523,7 @@ lab's own types (`lab/types.ts`, `lab/observe/contract.ts`). The ports walk the 
 
 ### 8.2 Tests
 
-`bun test rebuild` runs 819 tests in 59 files (2026-09-19; TESTS.md has the tiers above unit tests). `src/content.test.ts` checks the document-order index:
+`bun test rebuild` runs 862 tests in 64 files (2026-09-19, after the fresh-eyes follow-up; TESTS.md has the tiers above unit tests). `src/content.test.ts` checks the document-order index:
 leaf offsets and parents, preorder element numbering with their events, style and language lookup, and empty leaves.
 The bidi tests build `tools/icu-bidi-oracle.c` with clang against Homebrew `icu4c@78` and the system libicucore:
 
@@ -2573,6 +2625,16 @@ string and measures a box's space once; Blink's pair window reaches past a clust
 and marks (§4.4). Main's true passes that still fail without facts went from 202 to 76 in Firefox and from 263 to 252
 in webkit-host, and stayed 344 in Chrome, where no sound Canvas recipe exists (§5). Two exceptions to §4.6 were accepted
 with it, and Gecko's lazy plain scan came with a note for the maintainer (§4.6).
+
+**The fresh-eyes follow-up** (2026-09-19; research/FRESH-EYES-REVIEW.md, SHARED-CHANGES.md). A reviewer who hadn't
+worked on the code read the library against the engineering guide, and three owners and a critic took up what it
+found. One parser reads a font-family list for the font checks and the three ports (§1.1). Gecko's text runs hold
+their recipe contexts by reference, on a record that also holds the context's pair placement (§4.6). Blink compares its
+two system font names as Chromium does (§1.2), and a span that holds nothing but empty items and a collapsible space
+creates a box fragment (§1.1), which was the review's one open row and a known-tail class that had blamed the lab.
+That rule changed the predictions of 494 Chrome cases per configuration by design, so Chrome's references were
+recorded again at the merge (TESTS.md, "Tiers"). What the review found and nobody took up is in its §8 and in the
+owners' entries of SHARED-CHANGES.md.
 
 **Next**: profiling and optimization, which may add complexity back where numbers ask for it
 (research/PROFILING-START.md: the measurer's lifetime first, then the two stores of §4.7, then the recipes that buy

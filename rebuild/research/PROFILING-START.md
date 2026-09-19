@@ -106,6 +106,13 @@ holds the contexts by their settings and the checks' answers by declaration and 
 engine sites and the checks' resolution take a list from outside (CAPABILITY-CHECK: Blink `index.ts`, WebKit
 `content.ts`, Gecko `prepare.ts`, `measure/font-checks.ts`); the records that hold contexts by reference don't change.
 The orchestrator kept it out of the re-architecture's last step so that it is measured against the baseline above.
+Since the fresh-eyes follow-up (2026-09-19) Gecko's recipes hold their contexts by reference too, which the review
+named as the precondition: `RunContexts` is the record per font declaration, language, direction and ligature state,
+and `prepareGecko`'s two lists, the contexts and those records, are what would come from outside. Each lazy fill would
+then search the page's list once per record and not at every ask. With a page's lifetime the recipe contexts could be
+made eagerly and the record's nullable fields could go, which changes the context count and so needs a new recording.
+The language parse in `advance.ts` `pairFactDescribes`, which runs at each ask for a script run of Common characters
+alone, belongs on the record once the record is the page's.
 
 *Why first.* By measured share, not opinion: Chrome's 43% making contexts plus 31% font checks (the two overlap: 6.4 of
 the 11.1 contexts are the checks'), webkit-host's 26% font checks plus most of its per-call cost. It also ends the
@@ -298,6 +305,14 @@ research/CAPABILITY-CHECK.md found no door closed and three cheap openers. They 
 3. **A contexts list handed to `prepare`**, with font checks that outlive one prepare: four sites. This is item 1 above
    seen from the API side; the profiling phase measures it and proves it in the browsers, and the API phase decides how
    an application holds the object.
+
+Also for that phase, from the fresh-eyes follow-up (2026-09-19): **a font-family list read once, at the library's
+boundary**. One parser reads the list today (`src/font-family.ts`), but where a port happens to need a name: Blink per
+style, WebKit per text box, Gecko per comparison of two declarations, and the font checks. So a list CSS rejects
+throws in one engine and not in another, and a plain Gecko paragraph with one declaration never reads its own.
+`CssFont.family` has to stay the string while recorded Canvas font strings and the painter's `font-family` must stay
+byte-equal; making the parsed list the model's field, validated once, is this phase's call. `FontFacts.primaryFamily`
+has no quoted flag either, so the font checks answer null for a quoted generic that draws (DESIGN.md §1.2).
 
 Next in line there: a line start made from a source offset (8 to 20 lines per engine), which no demo needs yet. Two
 properties keep it and streaming text cheap, and hold today: a line start is small plain data that doesn't depend on the

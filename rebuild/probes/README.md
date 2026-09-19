@@ -47,7 +47,19 @@ may read the DOM freely; this is research, not the library.
   white space, U+00A0, keyword case, an unclosed string, and the lists CSS rejects. It returns `checks`, and beside them
   `classification`: which reference a list measures as where that is the engine's choice of keywords and not syntax (a
   quoted `"system-ui"`, `BlinkMacSystemFont` in small letters, `-apple-system` quoted). On 2026-09-19 all 95 checks held in
-  Chrome 153, Firefox 156 and webkit-host (`.artifacts/probes/font-family-syntax/`).
+  Chrome 153, Firefox 156 and webkit-host (`.artifacts/probes/font-family-syntax/`). It doesn't hold the six lists the
+  fresh-eyes follow-up's critic probed: an escaped newline in a string, a last backslash, an unclosed string and a
+  backslash that take a comma and a generic after them into the name, U+3000, and an empty string. That probe isn't
+  tracked (`.artifacts/probes/critic-family-edges/`: 34 of 34 checks in Chrome 153 and in Firefox 156, webkit-host not
+  run).
+
+- `blink-sysui-spellings.ts`: how Chrome's DOM reads other spellings of its two system font names. One probe,
+  meaningful alone in a fresh browser at DPR 2; it returns `checks`. On 2026-09-19 in the pinned Chrome (20 of 20
+  checks, `.artifacts/probes/fu-blink/sysui-spellings/`): unquoted `system-ui` in any case, a quoted `"system-ui"` and
+  `BlinkMacSystemFont`, quoted or not, lay out as the system font. `blinkmacsystemfont`, `BLINKMACSYSTEMFONT` and a
+  quoted `"System-UI"` laid out before `system-ui` fall to the standard font. A quoted `"System-UI"` laid out after
+  `system-ui` at the same size gets the system font from the platform font cache. It needs a process of its own if it
+  is added to `rebuild/tests/rerun-probes.sh`.
 
 - `measure-first.ts`: six Chrome probes of which Canvas contexts share a platform font with DOM text of the same zoomed
   size (a context with default settings, the library's measuring context, the font checks' contexts, a page at
