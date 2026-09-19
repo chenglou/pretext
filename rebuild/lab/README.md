@@ -290,6 +290,18 @@ upper bounds. `--config=facts` selects the other configuration in tier 2; tier 1
 Run tier 2 in both: with no supplied facts most values are limited, so a change that makes values wrong blocks in the
 facts configuration, where they are predicted ("The ledger", the exact-value status).
 
+**One command for the offline gates**: `bun rebuild/tests/gates.ts [--engine=blink|webkit|gecko|all] [--quick]` runs
+every check that needs no browser side by side, reads each exit code from the child process itself, and prints one
+table: gate, exit code, whether a pure refactoring may go on with it, wall time, the report's key counts, and what the
+code means in words and which kind of step accepts it. `--quick` is for after every small edit: tier 0 (the six `tsc`
+projects, incremental, and the unit tests a process a file), tier 1, and the function set's plain and pure checks, for
+that engine's browser in both configurations. Without it the sweep, the painter differential, the citation ledger and
+(for Blink) the twin scan run too. It exits 0 only when every gate is fine for a step that means to change no prediction
+and no Canvas question; otherwise the worst result, in the order 1, 2, 5, 4, 3 (the file's header). Tier 1's exit 3 is
+fine there when no case dropped a question (repeats only, or Chrome's string storage rule alone), and the row still
+sends the listed cases to tier 2. Logs and the rows as JSON are in `rebuild/tests/.check/gates`. Tier 2 stays its own
+command.
+
 **The sets** (`rebuild/tests/sets.ts`): `smoke-hand` (the 25 cases of `smoke-cases.ndjson`) and `smoke`; the development
 sets `runs`, `ws`, `policy`, `rich-prewrap`, `twins` (Chrome alone) and `suite-sample`; the rule and feature families
 derived in round 3 (`families`, `features`, and Chrome's `features-en-US` under its second locale;
