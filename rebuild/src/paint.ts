@@ -166,13 +166,13 @@ export type PaintRules<Facts> = {
   spacingAfterRunEnd: boolean
   // How the painter learns that characters at a line's start had another script in the paragraph than the line painted
   // alone gives them. 'arabic-letter-mark': the port's script itemizer says so exactly (`scriptsOf`: the script run of
-  // every unit of a text laid out alone; `sixteenBit` says the painted text holds characters above U+00FF beside the
-  // text's own), and where U+061C at the line's start gives the scripts back without moving a level (`levelsOf`: the
+  // every unit of a text laid out alone in a block of `direction`; `sixteenBit` says the painted text holds characters
+  // above U+00FF beside the text's own), and where U+061C at the line's start gives the scripts back without moving a level (`levelsOf`: the
   // resolved levels of a text as a paragraph of that direction) the line is painted with it. 'limit-only': the Script
   // property of the line's first characters against the text before the line, for the limit alone. 'none': the engine
   // has no such limit.
   lineStartScript:
-    | { form: 'arabic-letter-mark'; scriptsOf: (text: string, sixteenBit: boolean) => Uint8Array; levelsOf: (text: string, direction: Direction) => Uint8Array }
+    | { form: 'arabic-letter-mark'; scriptsOf: (text: string, sixteenBit: boolean, direction: Direction) => Uint8Array; levelsOf: (text: string, direction: Direction) => Uint8Array }
     | { form: 'limit-only' }
     | { form: 'none' }
   // The line's end that the engine may trim only while it breaks lines, so that a line ending so keeps wrapping although
@@ -450,7 +450,7 @@ function contextOf<Facts>(paragraph: Paragraph, lines: readonly PaintLine<Facts>
         }
       }
       lineStarts.push(text.length)
-      scripts = { ...rules.lineStartScript, before: scriptBeforeLines(lines), text, lineStarts, scripts: rules.lineStartScript.scriptsOf(text, false) }
+      scripts = { ...rules.lineStartScript, before: scriptBeforeLines(lines), text, lineStarts, scripts: rules.lineStartScript.scriptsOf(text, false, paragraph.direction) }
       break
     }
     case 'limit-only': scripts = { form: 'limit-only', before: scriptBeforeLines(lines) }; break
@@ -826,7 +826,7 @@ function planLine<Facts>(c: Context<Facts>, l: number, joinsPreviousLine: boolea
         return true
       }
       // A line under override spans holds their bidi controls, so its text is 16-bit whatever its characters.
-      if (!same(scriptsOf(lineText, reorders), 0)) {
+      if (!same(scriptsOf(lineText, reorders, paragraph.direction), 0)) {
         // The mark is a strong character of class AL, which turns the European numbers after it into Arabic numbers (UAX #9
         // W2) and neutrals its way. It changes nothing where override spans hold all the line's text; elsewhere the line
         // takes it only if every character after it still resolves to the base level (c-bef92f5d154ec2f9: digits at the
@@ -837,7 +837,7 @@ function planLine<Facts>(c: Context<Facts>, l: number, joinsPreviousLine: boolea
           keepsLevels = true
           for (let k = 1; k < levels.length; k++) if (levels[k] !== base) keepsLevels = false
         }
-        if (keepsLevels && same(scriptsOf(ARABIC_LETTER_MARK + lineText, true), 1)) marksScript = true
+        if (keepsLevels && same(scriptsOf(ARABIC_LETTER_MARK + lineText, true, paragraph.direction), 1)) marksScript = true
         else leadingScript = c.scripts.before[l] ?? 'other'
       }
       break
